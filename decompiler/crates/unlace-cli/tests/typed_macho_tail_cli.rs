@@ -62,8 +62,7 @@ fn explicit_function_pointer_prototype_types_the_tail_call() {
     ]);
     assert!(ok, "explicit typed decompile failed: {stderr}");
     assert!(
-        stdout.contains("int printf(char *fmt,int value)")
-            && stdout.contains("printf(fmt,value)"),
+        stdout.contains("int printf(char *fmt,int value)") && stdout.contains("printf(fmt,value)"),
         "the function-pointer prototype did not reach the CALLIND:\n{stdout}"
     );
     assert!(
@@ -132,10 +131,7 @@ fn default_single_batch_and_project_surfaces_keep_the_import_argument() {
         &sp,
     ]);
     assert!(ok, "batch decompile failed: {stderr}");
-    assert!(
-        batch.contains("printf(a0)"),
-        "batch call lost a0:\n{batch}"
-    );
+    assert!(batch.contains("printf(a0)"), "batch call lost a0:\n{batch}");
 
     let out_dir = std::env::temp_dir().join(format!(
         "kuna_typed_macho_tail_{}_{}",
@@ -158,8 +154,5 @@ fn default_single_batch_and_project_surfaces_keep_the_import_argument() {
     assert!(ok, "project decompile failed: {stderr}");
     let c = std::fs::read_to_string(out_dir.join("macho_imports.c")).expect("project C artifact");
     let _ = std::fs::remove_dir_all(&out_dir);
-    assert!(
-        c.contains("printf(a0)"),
-        "project call lost a0:\n{c}"
-    );
+    assert!(c.contains("printf(a0)"), "project call lost a0:\n{c}");
 }

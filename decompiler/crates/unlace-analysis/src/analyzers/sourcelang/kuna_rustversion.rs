@@ -30,9 +30,12 @@ pub fn fmt_pieces_layout(bytes: &[u8], paths: bool) -> Option<RustFmtPieces> {
         )
         || !match comment_records(&file) {
             Some(comment) => pieces_version(comment),
-            None => paths && path_commit(bytes).is_some_and(|commit| {
-                commit == PIECES_NIGHTLY || matches!(release(commit), Some((1, 89 | 90, 0)))
-            }),
+            None => {
+                paths
+                    && path_commit(bytes).is_some_and(|commit| {
+                        commit == PIECES_NIGHTLY || matches!(release(commit), Some((1, 89 | 90, 0)))
+                    })
+            }
         }
     {
         return None;
@@ -126,7 +129,9 @@ fn path_commit(bytes: &[u8]) -> Option<&[u8; 40]> {
         };
         let (commit, end) = rest.split_first_chunk::<40>()?;
         if !matches!(end, [b'/' | b'\\'])
-            || !commit.iter().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+            || !commit
+                .iter()
+                .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
         {
             continue;
         }
@@ -174,25 +179,44 @@ fn from_comment(bytes: &[u8]) -> Option<(u16, u16, u16)> {
 
 #[cfg(test)]
 mod tests {
-    use super::{comment_label, from_comment, path_commit, pieces_version, release, RELEASES};
+    use super::{RELEASES, comment_label, from_comment, path_commit, pieces_version, release};
 
     #[test]
     fn release_table_is_sorted_and_maps_commits() {
         assert!(RELEASES.windows(2).all(|pair| pair[0].0 < pair[1].0));
-        assert_eq!(release(b"59807616e1fa2540724bfbac14d7976d7e4a3860"), Some((1, 95, 0)));
-        assert_eq!(release(b"01f6ddf7588f42ae2d7eb0a2f21d44e8e96674cf"), Some((1, 93, 1)));
-        assert_eq!(release(b"a59de37e99060162a2674e3ff45409ac73595c0e"), Some((1, 0, 0)));
+        assert_eq!(
+            release(b"59807616e1fa2540724bfbac14d7976d7e4a3860"),
+            Some((1, 95, 0))
+        );
+        assert_eq!(
+            release(b"01f6ddf7588f42ae2d7eb0a2f21d44e8e96674cf"),
+            Some((1, 93, 1))
+        );
+        assert_eq!(
+            release(b"a59de37e99060162a2674e3ff45409ac73595c0e"),
+            Some((1, 0, 0))
+        );
         assert_eq!(release(b"bf64d66bd58719fac2585eae5e546e5e1d9947f5"), None);
     }
 
     #[test]
     fn path_commit_requires_one_full_hash() {
-        let one = b"x\0/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/fmt/mod.rs\0";
-        assert_eq!(path_commit(one), Some(b"59807616e1fa2540724bfbac14d7976d7e4a3860"));
+        let one =
+            b"x\0/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/fmt/mod.rs\0";
+        assert_eq!(
+            path_commit(one),
+            Some(b"59807616e1fa2540724bfbac14d7976d7e4a3860")
+        );
         let windows = b"/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860\\library\\std\\src\\io.rs";
-        assert_eq!(path_commit(windows), Some(b"59807616e1fa2540724bfbac14d7976d7e4a3860"));
+        assert_eq!(
+            path_commit(windows),
+            Some(b"59807616e1fa2540724bfbac14d7976d7e4a3860")
+        );
         let twice = [&one[..], &one[..]].concat();
-        assert_eq!(path_commit(&twice), Some(b"59807616e1fa2540724bfbac14d7976d7e4a3860"));
+        assert_eq!(
+            path_commit(&twice),
+            Some(b"59807616e1fa2540724bfbac14d7976d7e4a3860")
+        );
         let mixed = [
             &one[..],
             b"/rustc/01f6ddf7588f42ae2d7eb0a2f21d44e8e96674cf/library/alloc/src/vec/mod.rs",

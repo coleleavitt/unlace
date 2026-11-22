@@ -123,15 +123,24 @@ fn unrelated_computed_returns_are_not_calls() {
     // `pushimmediateret` rule owns; it derives none of the dispatch calls.
     let code = decompile("constant_ret");
     for call in CALLS {
-        assert!(!code.contains(call), "constant_ret recovered unrelated {call}:\n{code}");
+        assert!(
+            !code.contains(call),
+            "constant_ret recovered unrelated {call}:\n{code}"
+        );
     }
 }
 
 #[test]
 fn explicit_return_cleanly_vetoes_the_automatic_call() {
     let code = decompile_with("entry_dispatch", &["--assert", "flow 0x804900b return"]);
-    assert!(code.contains("return;"), "explicit return did not win:\n{code}");
+    assert!(
+        code.contains("return;"),
+        "explicit return did not win:\n{code}"
+    );
     for call in CALLS {
-        assert!(!code.contains(call), "explicit return was overridden by {call}:\n{code}");
+        assert!(
+            !code.contains(call),
+            "explicit return was overridden by {call}:\n{code}"
+        );
     }
 }

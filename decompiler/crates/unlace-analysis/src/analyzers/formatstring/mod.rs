@@ -72,7 +72,7 @@ use std::rc::Rc;
 
 use unlace_base::error::KunaResult;
 use unlace_base::types::{int4, uint4};
-use unlace_decomp::dtype::{type_metatype, Datatype, TypeFactory};
+use unlace_decomp::dtype::{Datatype, TypeFactory, type_metatype};
 
 /// A single parsed format argument: the optional length modifier plus the
 /// conversion specifier. Faithful mirror of Ghidra's `FormatArgument` (the
@@ -344,11 +344,7 @@ fn emit_percent(fmt: &[char], i: usize) -> bool {
 // Returns false on any malformed branch.
 // ---------------------------------------------------------------------------
 
-fn convert_to_format_arguments(
-    fmt: &[char],
-    out: &mut Vec<FmtArg>,
-    is_output_type: bool,
-) -> bool {
+fn convert_to_format_arguments(fmt: &[char], out: &mut Vec<FmtArg>, is_output_type: bool) -> bool {
     let mut data = FormatParsingData::default();
     let mut i = 0usize;
     while i < fmt.len() {
@@ -784,8 +780,10 @@ fn verify_conversion_pair(length_modifier: Option<&str>, conversion_specifier: &
         None => true,
         Some("l") => true,
         Some("L") if is_double(conversion_specifier) => true,
-        Some(lm) if lm != "L" && (is_integer(conversion_specifier)
-            || is_integer_pointer(conversion_specifier)) =>
+        Some(lm)
+            if lm != "L"
+                && (is_integer(conversion_specifier)
+                    || is_integer_pointer(conversion_specifier)) =>
         {
             true
         }
@@ -795,8 +793,7 @@ fn verify_conversion_pair(length_modifier: Option<&str>, conversion_specifier: &
 
 /// `extendLengthModifier` — `FormatStringParser.java:861`. Only `h→hh`, `l→ll`.
 fn extend_length_modifier(length_modifier: &str, next_char: char) -> Option<String> {
-    if (length_modifier == "h" && next_char == 'h')
-        || (length_modifier == "l" && next_char == 'l')
+    if (length_modifier == "h" && next_char == 'h') || (length_modifier == "l" && next_char == 'l')
     {
         Some(format!("{length_modifier}{next_char}"))
     } else {
@@ -846,7 +843,11 @@ pub fn convert_to_format_argument_list(fmt: &str, is_output_type: bool) -> Optio
 fn convert_pair_to_spec(length_modifier: Option<&str>, conversion_specifier: &str) -> Option<Spec> {
     let cs = conversion_specifier;
     if length_modifier == Some("l") && (cs == "c" || cs == "s") {
-        return Some(if cs == "c" { Spec::WideCharValue } else { Spec::WideCharPtr });
+        return Some(if cs == "c" {
+            Spec::WideCharValue
+        } else {
+            Spec::WideCharPtr
+        });
     }
     if length_modifier.is_none() || cs == "c" || cs == "s" || cs == "C" || cs == "S" {
         return conversion_specifier_to_spec(cs);
@@ -1233,7 +1234,10 @@ mod tests {
         assert_eq!(parse_output_types("%p"), vec![Spec::VoidPtr]);
         assert!(parse_output_types("%%").is_empty());
         // The brief's named alias agrees with parse_output_types.
-        assert_eq!(parse_format_specifiers("%d %s"), vec![Spec::Int, Spec::CharPtr]);
+        assert_eq!(
+            parse_format_specifiers("%d %s"),
+            vec![Spec::Int, Spec::CharPtr]
+        );
     }
 
     #[test]
@@ -1243,7 +1247,10 @@ mod tests {
         // "%5.2f" → [Double]
         assert_eq!(parse_output_types("%5.2f"), vec![Spec::Double]);
         // "%ld%%%p" → [Long, VoidPtr]  (the %% is a literal, no arg)
-        assert_eq!(parse_output_types("%ld%%%p"), vec![Spec::Long, Spec::VoidPtr]);
+        assert_eq!(
+            parse_output_types("%ld%%%p"),
+            vec![Spec::Long, Spec::VoidPtr]
+        );
         // "%*d" → [Int(width), Int]
         assert_eq!(parse_output_types("%*d"), vec![Spec::Int, Spec::Int]);
         // "%2$s %1$d" → positional, ordered by parameter index → [Int, CharPtr]
@@ -1298,7 +1305,10 @@ mod tests {
         assert_eq!(parse_input_types("%C"), vec![Spec::WideCharPtr]);
         assert_eq!(parse_input_types("%ls"), vec![Spec::WideCharPtr]);
         // The plain conversions are unchanged.
-        assert_eq!(parse_output_types("%c %s"), vec![Spec::CharValue, Spec::CharPtr]);
+        assert_eq!(
+            parse_output_types("%c %s"),
+            vec![Spec::CharValue, Spec::CharPtr]
+        );
     }
 
     #[test]
@@ -1310,9 +1320,15 @@ mod tests {
 
     #[test]
     fn l_on_a_floating_conversion_is_still_a_double() {
-        for spec in ["%lf", "%lF", "%le", "%lE", "%lg", "%lG", "%la", "%lA", "%10lf"] {
+        for spec in [
+            "%lf", "%lF", "%le", "%lE", "%lg", "%lG", "%la", "%lA", "%10lf",
+        ] {
             assert_eq!(parse_output_types(spec), vec![Spec::Double], "spec {spec}");
-            assert_eq!(parse_input_types(spec), vec![Spec::DoublePtr], "spec {spec}");
+            assert_eq!(
+                parse_input_types(spec),
+                vec![Spec::DoublePtr],
+                "spec {spec}"
+            );
         }
         assert_eq!(parse_output_types("%16.4lf"), vec![Spec::Double]);
         assert_eq!(
@@ -1351,7 +1367,9 @@ mod tests {
         let pointee = |types: &unlace_decomp::dtype::TypeFactoryImpl, fmt: &str| {
             let spec = parse_input_types(fmt)[0];
             let ty = spec_to_datatype(spec, types, 1).unwrap();
-            ty.get_ptr_to().expect("a scanf conversion is a pointer").get_size()
+            ty.get_ptr_to()
+                .expect("a scanf conversion is a pointer")
+                .get_size()
         };
         let llp64 = sized_factory(4, 8);
         for fmt in ["%zu", "%zd", "%zx", "%td", "%tu"] {
@@ -1436,20 +1454,20 @@ mod tests {
     fn malformed_truncated_no_panic() {
         // Truncated specs / garbage must not panic and yield empty.
         for bad in [
-            "%",      // dangling percent
-            "%l",     // length modifier, no conversion
-            "%ll",    // double length modifier, no conversion
-            "%5",     // width, no conversion
-            "%5.",    // precision dot, no conversion
-            "%.",     // dot, nothing
-            "%#",     // flag only
-            "%z",     // length modifier only
-            "%hZ",    // bad conversion after modifier
-            "%*",     // width star, no conversion
-            "%1$",    // positional, no conversion
-            "%$d",    // positional with empty index
-            "%0$d",   // positional index zero
-            "abc%",   // text then dangling percent
+            "%",    // dangling percent
+            "%l",   // length modifier, no conversion
+            "%ll",  // double length modifier, no conversion
+            "%5",   // width, no conversion
+            "%5.",  // precision dot, no conversion
+            "%.",   // dot, nothing
+            "%#",   // flag only
+            "%z",   // length modifier only
+            "%hZ",  // bad conversion after modifier
+            "%*",   // width star, no conversion
+            "%1$",  // positional, no conversion
+            "%$d",  // positional with empty index
+            "%0$d", // positional index zero
+            "abc%", // text then dangling percent
         ] {
             let out = parse_output_types(bad);
             // Either empty (rejected) — must never panic.
@@ -1548,7 +1566,11 @@ mod tests {
             ("z", Spec::SizeT, Spec::SizeT),
             ("t", Spec::PtrDiffT, Spec::SizeT),
         ] {
-            assert_eq!(parse_output_types(&format!("%{modifier}d")), vec![signed], "%{modifier}d");
+            assert_eq!(
+                parse_output_types(&format!("%{modifier}d")),
+                vec![signed],
+                "%{modifier}d"
+            );
             assert_eq!(
                 parse_output_types(&format!("%{modifier}u")),
                 vec![unsigned],

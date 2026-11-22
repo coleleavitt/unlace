@@ -5,7 +5,9 @@
 use crate::common;
 
 use object::write::{Object, Symbol, SymbolSection};
-use object::{Architecture, BinaryFormat, Endianness, SectionKind, SymbolFlags, SymbolKind, SymbolScope};
+use object::{
+    Architecture, BinaryFormat, Endianness, SectionKind, SymbolFlags, SymbolKind, SymbolScope,
+};
 
 const ALL: &str = "line_mappings,variables,types";
 
@@ -33,8 +35,13 @@ fn many_names() -> (String, String) {
     let name = |i: usize| format!("audit_alias_{i:04}_{}", "x".repeat(160));
     for i in 0..600 {
         o.add_symbol(Symbol {
-            name: name(i).into_bytes(), value: 0, size: 6, kind: SymbolKind::Text,
-            scope: SymbolScope::Linkage, weak: false, section: SymbolSection::Section(text),
+            name: name(i).into_bytes(),
+            value: 0,
+            size: 6,
+            kind: SymbolKind::Text,
+            scope: SymbolScope::Linkage,
+            weak: false,
+            section: SymbolSection::Section(text),
             flags: SymbolFlags::None,
         });
     }
@@ -44,7 +51,9 @@ fn many_names() -> (String, String) {
 }
 
 fn record(doc: &serde_json::Value) -> &serde_json::Map<String, serde_json::Value> {
-    doc["functions"][0].as_object().expect("one function record")
+    doc["functions"][0]
+        .as_object()
+        .expect("one function record")
 }
 
 #[test]
@@ -52,8 +61,16 @@ fn omitted_collections_are_absent_and_named_and_the_rest_is_unchanged() {
     let bin = common::fixture("fauxware");
     let (full, code) = json(&["decompile", &bin, "main", "--json"]);
     assert_eq!(code, 0);
-    assert!(full.get("omitted").is_none(), "the default document carries no marker");
-    assert!(!record(&full)["line_mappings"].as_array().unwrap().is_empty());
+    assert!(
+        full.get("omitted").is_none(),
+        "the default document carries no marker"
+    );
+    assert!(
+        !record(&full)["line_mappings"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
 
     let (compact, code) = json(&["decompile", &bin, "main", "--json", "--omit", ALL]);
     assert_eq!(code, 0);
@@ -63,21 +80,39 @@ fn omitted_collections_are_absent_and_named_and_the_rest_is_unchanged() {
     );
     let (full_record, compact_record) = (record(&full), record(&compact));
     for key in ["line_mappings", "variables", "types", "stack_objects"] {
-        assert!(!compact_record.contains_key(key), "{key} must be absent, not emptied");
+        assert!(
+            !compact_record.contains_key(key),
+            "{key} must be absent, not emptied"
+        );
     }
     for (key, value) in full_record {
-        if !matches!(key.as_str(), "line_mappings" | "variables" | "types" | "stack_objects") {
-            assert_eq!(compact_record.get(key), Some(value), "{key} must not change");
+        if !matches!(
+            key.as_str(),
+            "line_mappings" | "variables" | "types" | "stack_objects"
+        ) {
+            assert_eq!(
+                compact_record.get(key),
+                Some(value),
+                "{key} must not change"
+            );
         }
     }
     for key in ["binary", "language", "count", "error", "assertions"] {
         assert_eq!(compact[key], full[key], "run-level {key} must not change");
     }
 
-    let (lines_only, _) = json(&["decompile", &bin, "main", "--json", "--omit", "line_mappings"]);
+    let (lines_only, _) = json(&[
+        "decompile",
+        &bin,
+        "main",
+        "--json",
+        "--omit",
+        "line_mappings",
+    ]);
     assert_eq!(lines_only["omitted"], serde_json::json!(["line_mappings"]));
     assert_eq!(
-        record(&lines_only)["variables"], full_record["variables"],
+        record(&lines_only)["variables"],
+        full_record["variables"],
         "variables keep their line evidence when only the mappings are omitted"
     );
 }
@@ -88,26 +123,55 @@ fn decompile_and_decompile_all_answer_with_one_compact_document() {
     let (single, code) = json(&["decompile", &bin, "main", "--json", "--omit", ALL]);
     assert_eq!(code, 0);
     let (batch, code) = json(&[
-        "decompile-all", &bin, "--functions", "main", "--json",
-        "--omit", "types", "--omit", "line_mappings,variables",
+        "decompile-all",
+        &bin,
+        "--functions",
+        "main",
+        "--json",
+        "--omit",
+        "types",
+        "--omit",
+        "line_mappings,variables",
     ]);
     assert_eq!(code, 0);
     assert_eq!(single, batch);
 
     let (single, _) = json(&["decompile", &bin, "main", "--json", "--no-vars"]);
-    let (batch, _) = json(&["decompile-all", &bin, "--functions", "main", "--json", "--no-vars"]);
+    let (batch, _) = json(&[
+        "decompile-all",
+        &bin,
+        "--functions",
+        "main",
+        "--json",
+        "--no-vars",
+    ]);
     assert_eq!(single, batch, "--no-vars means the same on both commands");
     assert!(single.get("omitted").is_none());
     assert_eq!(record(&single)["variables"], serde_json::json!([]));
-    assert!(!record(&single)["line_mappings"].as_array().unwrap().is_empty());
+    assert!(
+        !record(&single)["line_mappings"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[test]
 fn a_failed_selection_keeps_its_error_and_exit_status() {
     let bin = common::fixture("fauxware");
-    let (doc, code) = json(&["decompile", &bin, "no_such_function", "--json", "--omit", ALL]);
+    let (doc, code) = json(&[
+        "decompile",
+        &bin,
+        "no_such_function",
+        "--json",
+        "--omit",
+        ALL,
+    ]);
     assert_eq!(code, 1);
-    assert!(doc["error"].as_str().unwrap().contains("no_such_function"), "{doc}");
+    assert!(
+        doc["error"].as_str().unwrap().contains("no_such_function"),
+        "{doc}"
+    );
     assert_eq!(doc["count"], 0);
     assert!(doc["omitted"].is_array());
 }
@@ -119,14 +183,24 @@ fn record_selection_is_refused_without_json_or_with_an_unknown_key() {
         vec!["decompile", bin.as_str(), "main", "--omit", "types"],
         vec!["decompile", bin.as_str(), "main", "--no-vars"],
         vec!["decompile-all", bin.as_str(), "--omit", "types"],
-        vec!["decompile", bin.as_str(), "main", "--json", "--omit", "lines"],
+        vec![
+            "decompile",
+            bin.as_str(),
+            "main",
+            "--json",
+            "--omit",
+            "lines",
+        ],
         vec!["decompile-all", bin.as_str(), "--json", "--omit", ""],
         vec!["functions", bin.as_str(), "--json", "--omit", "types"],
     ] {
         let (stdout, stderr, code) = common::run_kuna(&args);
         assert_eq!(code, 2, "{args:?}: {stderr}");
         assert!(stdout.is_empty(), "{args:?} must not render a document");
-        assert!(stderr.contains("--omit") || stderr.contains("--no-vars"), "{args:?}: {stderr}");
+        assert!(
+            stderr.contains("--omit") || stderr.contains("--no-vars"),
+            "{args:?}: {stderr}"
+        );
     }
 }
 
@@ -143,26 +217,69 @@ fn omitted_aliases_leave_the_name_address_and_code() {
     assert_eq!(code, 0);
     assert_eq!(compact["omitted"], serde_json::json!(["aliases"]));
     let (full_record, compact_record) = (record(&full), record(&compact));
-    assert!(!compact_record.contains_key("aliases"), "aliases must be absent, not emptied");
+    assert!(
+        !compact_record.contains_key("aliases"),
+        "aliases must be absent, not emptied"
+    );
     for (key, value) in full_record {
         if key != "aliases" {
-            assert_eq!(compact_record.get(key), Some(value), "{key} must not change");
+            assert_eq!(
+                compact_record.get(key),
+                Some(value),
+                "{key} must not change"
+            );
         }
     }
-    assert!(compact_record["name"].as_str().unwrap().starts_with("audit_alias_"));
-    assert!(compact_record["code"].as_str().unwrap().contains("return 0x2a;"));
-    assert!(compact_text.len() * 20 < full_text.len(), "{} vs {}", compact_text.len(), full_text.len());
+    assert!(
+        compact_record["name"]
+            .as_str()
+            .unwrap()
+            .starts_with("audit_alias_")
+    );
+    assert!(
+        compact_record["code"]
+            .as_str()
+            .unwrap()
+            .contains("return 0x2a;")
+    );
+    assert!(
+        compact_text.len() * 20 < full_text.len(),
+        "{} vs {}",
+        compact_text.len(),
+        full_text.len()
+    );
 
-    let (all, code) = json(&["decompile", &bin, &alias, "--json", "--omit", "aliases", "--omit", ALL]);
+    let (all, code) = json(&[
+        "decompile",
+        &bin,
+        &alias,
+        "--json",
+        "--omit",
+        "aliases",
+        "--omit",
+        ALL,
+    ]);
     assert_eq!(code, 0);
     assert_eq!(
         all["omitted"],
-        serde_json::json!(["aliases", "line_mappings", "variables", "types", "stack_objects"])
+        serde_json::json!([
+            "aliases",
+            "line_mappings",
+            "variables",
+            "types",
+            "stack_objects"
+        ])
     );
     assert_eq!(record(&all)["code"], full_record["code"]);
 
     let (batch, code) = json(&[
-        "decompile-all", &bin, "--functions", &alias, "--json", "--omit", "aliases",
+        "decompile-all",
+        &bin,
+        "--functions",
+        &alias,
+        "--json",
+        "--omit",
+        "aliases",
     ]);
     assert_eq!(code, 0);
     assert_eq!(batch, compact);
@@ -172,7 +289,11 @@ fn omitted_aliases_leave_the_name_address_and_code() {
     assert_eq!(code, 2, "the inventory keeps every name: {stderr}");
     assert!(stdout.is_empty());
 
-    let (_, stderr, code) = common::run_kuna(&["decompile", &bin, &alias, "--json", "--omit", "alias"]);
+    let (_, stderr, code) =
+        common::run_kuna(&["decompile", &bin, &alias, "--json", "--omit", "alias"]);
     assert_eq!(code, 2);
-    assert!(stderr.contains("aliases, line_mappings, variables, types"), "{stderr}");
+    assert!(
+        stderr.contains("aliases, line_mappings, variables, types"),
+        "{stderr}"
+    );
 }

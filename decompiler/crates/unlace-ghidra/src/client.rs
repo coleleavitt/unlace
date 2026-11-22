@@ -40,8 +40,8 @@ use unlace_base::address::Address;
 use unlace_base::address::{ATTRIB_FIRST, ATTRIB_LAST};
 use unlace_base::error::KunaError;
 use unlace_base::marshal::{
-    Decoder, Encoder, PackedEncode, ATTRIB_CONTENT, ATTRIB_ID, ATTRIB_INDEX, ATTRIB_NAME,
-    ATTRIB_SIZE, ATTRIB_TYPE, ELEM_VALUE,
+    ATTRIB_CONTENT, ATTRIB_ID, ATTRIB_INDEX, ATTRIB_NAME, ATTRIB_SIZE, ATTRIB_TYPE, Decoder,
+    ELEM_VALUE, Encoder, PackedEncode,
 };
 use unlace_base::space::VarnodeStorage;
 
@@ -55,10 +55,10 @@ use crate::ids::{
     ELEM_COMMAND_ISNAMEUSED,
 };
 use crate::protocol::{
-    java_alignment, nibble_condense, read_all, read_bool_stream, read_response_end,
-    read_string_stream, read_to_any_burst, read_to_response, string_data_size, write_burst,
-    WireError, WireResult, BURST_BYTES_CLOSE, BURST_BYTES_OPEN, BURST_QUERY_CLOSE,
-    BURST_QUERY_OPEN, BURST_STRING_CLOSE, BURST_STRING_OPEN,
+    BURST_BYTES_CLOSE, BURST_BYTES_OPEN, BURST_QUERY_CLOSE, BURST_QUERY_OPEN, BURST_STRING_CLOSE,
+    BURST_STRING_OPEN, WireError, WireResult, java_alignment, nibble_condense, read_all,
+    read_bool_stream, read_response_end, read_string_stream, read_to_any_burst, read_to_response,
+    string_data_size, write_burst,
 };
 
 /// The injection variety of a getPcodeInject query — selects the command

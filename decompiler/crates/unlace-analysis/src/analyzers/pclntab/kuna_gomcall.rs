@@ -15,7 +15,9 @@ pub(crate) fn resuming_entry(ctx: &AnalysisCtx<'_>, listing: &Listing) -> Option
         return None;
     }
     let (functions, _) = recover_go_table(ctx.file);
-    let mut entries = functions.iter().filter(|function| function.name == "runtime.mcall");
+    let mut entries = functions
+        .iter()
+        .filter(|function| function.name == "runtime.mcall");
     let entry = entries.next()?.addr;
     if entries.next().is_some()
         || functions

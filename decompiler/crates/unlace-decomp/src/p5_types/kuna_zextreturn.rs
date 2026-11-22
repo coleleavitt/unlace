@@ -35,7 +35,7 @@ use unlace_base::address::Address;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::fspec::ParamListStandard;
 use crate::funcdata::Funcdata;
 use crate::op::pcodeop_addlflags::kuna_zextreturn;
@@ -45,11 +45,19 @@ use crate::op::pcodeop_addlflags::kuna_zextreturn;
 /// or where the function's callers compute with up to four bytes of the
 /// register ([`read_width`])? `storage` is a non-constant input of a RETURN,
 /// which names the register.
-pub(crate) fn unsigned_trim(data: &Funcdata, vn: VarnodeId, storage: VarnodeId, mask: u64, size: i32) -> bool {
+pub(crate) fn unsigned_trim(
+    data: &Funcdata,
+    vn: VarnodeId,
+    storage: VarnodeId,
+    mask: u64,
+    size: i32,
+) -> bool {
     if !crate::kuna_truncarg::drops_only_zero_bits(data, vn, mask) {
         return false;
     }
-    let Some((narrow, list)) = narrow_output(data, storage, size) else { return false };
+    let Some((narrow, list)) = narrow_output(data, storage, size) else {
+        return false;
+    };
     crate::kuna_narrowext::extends_by_sign(data.get_arch().narrow_ext.output, list, &narrow, size)
         || read_width(data, &narrow, size).is_some_and(|w| w <= 4)
 }
@@ -64,11 +72,20 @@ pub(crate) fn unsigned_trim(data: &Funcdata, vn: VarnodeId, storage: VarnodeId, 
 /// narrow type where the binary computes in 64 bits. The RETURN must then keep
 /// the whole register. Such a trim that no caller has yet computed with wider
 /// is noted on `data`, so that `voidret` can ask the callers.
-pub(crate) fn zero_extended_word(data: &mut Funcdata, vn: VarnodeId, storage: VarnodeId, mask: u64, size: i32) -> bool {
+pub(crate) fn zero_extended_word(
+    data: &mut Funcdata,
+    vn: VarnodeId,
+    storage: VarnodeId,
+    mask: u64,
+    size: i32,
+) -> bool {
     if !(1..8).contains(&size) || !crate::kuna_truncarg::drops_only_zero_bits(data, vn, mask) {
         return false;
     }
-    let sign = data.vbank().get(vn).is_some_and(|v| v.get_nz_mask() >> (size * 8 - 1) & 1 != 0);
+    let sign = data
+        .vbank()
+        .get(vn)
+        .is_some_and(|v| v.get_nz_mask() >> (size * 8 - 1) & 1 != 0);
     let rule = data.get_arch().narrow_ext.output;
     let Some((narrow, any, by_type)) = narrow_output(data, storage, size).map(|(narrow, list)| {
         let any = crate::kuna_narrowext::sign_extends_any(rule, list, &narrow, size);
@@ -93,12 +110,16 @@ pub(crate) fn zero_extended_word(data: &mut Funcdata, vn: VarnodeId, storage: Va
 /// narrow type to `int` extends it as the binary does; beyond, only a 64-bit
 /// type does.
 fn read_width(data: &Funcdata, narrow: &Address, size: i32) -> Option<i32> {
-    data.kuna_wide_return().filter(|(addr, width)| wider_over(addr, *width, narrow, size)).map(|(_, width)| *width)
+    data.kuna_wide_return()
+        .filter(|(addr, width)| wider_over(addr, *width, narrow, size))
+        .map(|(_, width)| *width)
 }
 
 /// Does `[addr, addr+width)` hold `[narrow, narrow+size)` and more?
 pub(crate) fn wider_over(addr: &Address, width: i32, narrow: &Address, size: i32) -> bool {
-    let (Some(a), Some(n)) = (addr.get_space(), narrow.get_space()) else { return false };
+    let (Some(a), Some(n)) = (addr.get_space(), narrow.get_space()) else {
+        return false;
+    };
     a.get_index() == n.get_index()
         && width > size
         && addr.get_offset() <= narrow.get_offset()
@@ -107,23 +128,36 @@ pub(crate) fn wider_over(addr: &Address, width: i32, narrow: &Address, size: i32
 
 /// The low `size` bytes of the non-constant RETURN input `storage`, and the
 /// prototype's output list they are read against.
-fn narrow_output(data: &Funcdata, storage: VarnodeId, size: i32) -> Option<(Address, &ParamListStandard)> {
+fn narrow_output(
+    data: &Funcdata,
+    storage: VarnodeId,
+    size: i32,
+) -> Option<(Address, &ParamListStandard)> {
     let v = data.vbank().get(storage)?;
     let addr = v.get_addr();
     let space = addr.get_space()?;
     if v.is_constant() || addr.is_join() || size >= v.get_size() {
         return None;
     }
-    let skip = if space.is_big_endian() { (v.get_size() - size) as u64 } else { 0 };
+    let skip = if space.is_big_endian() {
+        (v.get_size() - size) as u64
+    } else {
+        0
+    };
     let narrow = Address::new(Rc::clone(space), addr.get_offset() + skip);
     let proto = data.get_func_proto();
-    let list = proto.has_model().then(|| proto.model().output_list()).flatten()?;
+    let list = proto
+        .has_model()
+        .then(|| proto.model().output_list())
+        .flatten()?;
     Some((narrow, list))
 }
 
 /// Record on the RETURN `op`, just trimmed, whether the trim was [`unsigned_trim`].
 pub(crate) fn note_trimmed_return(data: &mut Funcdata, op: OpId, unsigned: bool) {
-    let Some(o) = data.obank_mut().get_mut(op) else { return };
+    let Some(o) = data.obank_mut().get_mut(op) else {
+        return;
+    };
     if o.code() != OpCode::CPUI_RETURN {
         return;
     }
@@ -139,24 +173,39 @@ pub(crate) fn note_trimmed_return(data: &mut Funcdata, op: OpId, unsigned: bool)
 /// Also when the function keeps the whole register for callers that compute
 /// with it ([`zero_extended_word`]) and `vn`, returned in it, is a word its
 /// upper half leaves zero.
-pub(crate) fn unsigned_return_vote(data: &Funcdata, vn: VarnodeId, ct: &Rc<Datatype>) -> Option<Rc<Datatype>> {
+pub(crate) fn unsigned_return_vote(
+    data: &Funcdata,
+    vn: VarnodeId,
+    ct: &Rc<Datatype>,
+) -> Option<Rc<Datatype>> {
     let v = data.vbank().get(vn)?;
     let size = v.get_size();
-    if !matches!(ct.get_metatype(), type_metatype::TYPE_INT | type_metatype::TYPE_UNKNOWN) {
+    if !matches!(
+        ct.get_metatype(),
+        type_metatype::TYPE_INT | type_metatype::TYPE_UNKNOWN
+    ) {
         return None;
     }
     if v.is_type_lock() || data.get_func_proto().is_output_locked() {
         return None;
     }
     let returned = v.descend_iter().any(|op| {
-        data.obank().get(op).is_some_and(|o| o.code() == OpCode::CPUI_RETURN && o.get_in(1) == Some(vn))
+        data.obank()
+            .get(op)
+            .is_some_and(|o| o.code() == OpCode::CPUI_RETURN && o.get_in(1) == Some(vn))
     });
     if !returned {
         return None;
     }
-    let whole = data.kuna_wide_return().is_some_and(|(addr, width)| *width == size && addr == v.get_addr());
+    let whole = data
+        .kuna_wide_return()
+        .is_some_and(|(addr, width)| *width == size && addr == v.get_addr());
     if whole && size > 4 && v.get_nz_mask() >> 32 == 0 {
-        return data.get_arch().types()?.get_base(size, type_metatype::TYPE_UINT).ok();
+        return data
+            .get_arch()
+            .types()?
+            .get_base(size, type_metatype::TYPE_UINT)
+            .ok();
     }
     if !(1..8).contains(&size) || v.get_nz_mask() >> (size * 8 - 1) & 1 == 0 {
         return None;
@@ -167,7 +216,10 @@ pub(crate) fn unsigned_return_vote(data: &Funcdata, vn: VarnodeId, ct: &Rc<Datat
         if o.is_dead() || o.get_halt_type() != 0 || o.num_input() < 2 {
             continue;
         }
-        let width = o.get_in(1).and_then(|r| data.vbank().get(r)).map(|r| r.get_size());
+        let width = o
+            .get_in(1)
+            .and_then(|r| data.vbank().get(r))
+            .map(|r| r.get_size());
         if o.get_addlflags() & kuna_zextreturn == 0 || width != Some(size) {
             return None;
         }
@@ -176,5 +228,8 @@ pub(crate) fn unsigned_return_vote(data: &Funcdata, vn: VarnodeId, ct: &Rc<Datat
     if !any {
         return None;
     }
-    data.get_arch().types()?.get_base(size, type_metatype::TYPE_UINT).ok()
+    data.get_arch()
+        .types()?
+        .get_base(size, type_metatype::TYPE_UINT)
+        .ok()
 }

@@ -56,12 +56,19 @@ use object::read::{Object, ObjectSection};
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
 use super::{
-    decode_eh_pointer_ordered, encoded_size, existing_function_addrs, parse_cie_fde_encoding, read_u32,
-    read_u64, DW_EH_PE_ABSPTR,
+    DW_EH_PE_ABSPTR, decode_eh_pointer_ordered, encoded_size, existing_function_addrs,
+    parse_cie_fde_encoding, read_u32, read_u64,
 };
 
 /// Section names whose contents are linker-generated stubs sharing one FDE.
-pub(crate) const STUB_SECTIONS: &[&str] = &[".plt", ".plt.sec", ".plt.got", ".iplt", ".MIPS.stubs", ".glink"];
+pub(crate) const STUB_SECTIONS: &[&str] = &[
+    ".plt",
+    ".plt.sec",
+    ".plt.got",
+    ".iplt",
+    ".MIPS.stubs",
+    ".glink",
+];
 
 /// (kuna) The FDE-interior entry-suppression pass (`fdeinterior`).
 ///
@@ -151,7 +158,11 @@ fn contains_strictly(addrs: &[u64], start: u64, end: u64) -> bool {
 /// `[address, address + size)` of every linker-stub section.
 fn stub_ranges(file: &object::File) -> Vec<(u64, u64)> {
     file.sections()
-        .filter(|s| s.name().map(|n| STUB_SECTIONS.contains(&n)).unwrap_or(false))
+        .filter(|s| {
+            s.name()
+                .map(|n| STUB_SECTIONS.contains(&n))
+                .unwrap_or(false)
+        })
         .map(|s| (s.address(), s.address() + s.size()))
         .filter(|&(lo, hi)| hi > lo)
         .collect()
@@ -312,9 +323,15 @@ mod tests {
     #[test]
     fn interior_is_strict() {
         let bodies = vec![(0x1000, 0x1100), (0x2000, 0x2010)];
-        assert!(!is_interior(&bodies, 0x1000), "an FDE start is a function, not an interior");
+        assert!(
+            !is_interior(&bodies, 0x1000),
+            "an FDE start is a function, not an interior"
+        );
         assert!(is_interior(&bodies, 0x1080));
-        assert!(!is_interior(&bodies, 0x1100), "the open end belongs to the next function");
+        assert!(
+            !is_interior(&bodies, 0x1100),
+            "the open end belongs to the next function"
+        );
         assert!(!is_interior(&bodies, 0x1200));
         assert!(is_interior(&bodies, 0x2008));
     }

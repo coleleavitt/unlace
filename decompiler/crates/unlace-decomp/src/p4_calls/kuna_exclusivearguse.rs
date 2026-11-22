@@ -105,12 +105,7 @@ pub(crate) const MAX_VISIT: usize = 4096;
 
 /// Whether the `CPUI_LOAD`/`CPUI_STORE` at `op` may be skipped while scoring the
 /// input trial matched at `opmatch`.
-pub fn access_cannot_reach_call(
-    data: &Funcdata,
-    opmatch: OpId,
-    op: OpId,
-    vn: VarnodeId,
-) -> bool {
+pub fn access_cannot_reach_call(data: &Funcdata, opmatch: OpId, op: OpId, vn: VarnodeId) -> bool {
     if !matches!(
         data.obank().get(opmatch).map(|o| o.code()),
         Some(OpCode::CPUI_CALL) | Some(OpCode::CPUI_CALLIND)
@@ -126,8 +121,10 @@ pub fn access_cannot_reach_call(
     if o.get_in(ADDRESS_SLOT) != Some(vn) {
         return false;
     }
-    let (Some(useblk), Some(matchblk)) = (o.get_parent(), data.obank().get(opmatch).and_then(|m| m.get_parent()))
-    else {
+    let (Some(useblk), Some(matchblk)) = (
+        o.get_parent(),
+        data.obank().get(opmatch).and_then(|m| m.get_parent()),
+    ) else {
         return false;
     };
     if useblk == matchblk {

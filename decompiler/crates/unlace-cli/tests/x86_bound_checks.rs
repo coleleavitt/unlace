@@ -212,7 +212,11 @@ static LONG CALLBACK exception_handler(EXCEPTION_POINTERS *e) {
 /// The native Windows replay needs a MinGW sysroot behind the i686 Windows target, not just wine.
 fn windows_sysroot_available(compiler: &str) -> bool {
     let probe = common::scratch_file("bound-checks-sysroot", "c");
-    std::fs::write(&probe, "#include <limits.h>\n#include <windows.h>\nint main(void) { return 0; }\n").unwrap();
+    std::fs::write(
+        &probe,
+        "#include <limits.h>\n#include <windows.h>\nint main(void) { return 0; }\n",
+    )
+    .unwrap();
     let status = Command::new(compiler)
         .args(["--target=i686-w64-windows-gnu", "-fsyntax-only"])
         .arg(&probe)

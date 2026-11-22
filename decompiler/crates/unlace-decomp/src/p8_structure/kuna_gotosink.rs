@@ -24,7 +24,7 @@
 //! reaches any more is released (`kuna_gotolabel::release_converted_labels`).
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
-use crate::block::{block_flags, BlockGraph, BlockKind, BlockType};
+use crate::block::{BlockGraph, BlockKind, BlockType, block_flags};
 use crate::context::BlockId;
 use crate::funcdata::Funcdata;
 
@@ -33,14 +33,18 @@ const MAX_SUNK: usize = 16;
 
 fn if_goto(graph: &BlockGraph, id: BlockId) -> Option<BlockId> {
     let b = graph.block(id);
-    (b.get_type() == BlockType::If && b.get_size() == 1 && b.get_if_goto_type() == block_flags::f_goto_goto)
+    (b.get_type() == BlockType::If
+        && b.get_size() == 1
+        && b.get_if_goto_type() == block_flags::f_goto_goto)
         .then(|| b.get_if_goto_target())
         .flatten()
 }
 
 fn plain_goto(graph: &BlockGraph, id: BlockId) -> Option<BlockId> {
     let b = graph.block(id);
-    (b.get_type() == BlockType::Goto && b.get_goto_type() == block_flags::f_goto_goto).then(|| b.get_goto_target()).flatten()
+    (b.get_type() == BlockType::Goto && b.get_goto_type() == block_flags::f_goto_goto)
+        .then(|| b.get_goto_target())
+        .flatten()
 }
 
 /// Is the `if` `id` an exceptional edge (`eh_unwinding()`, `java_try()`,
@@ -50,23 +54,39 @@ fn exceptional_if(data: &Funcdata, id: BlockId) -> bool {
     use unlace_num::opcodes::OpCode;
     let graph = data.sblocks_ref();
     let cond = graph.block(id).get_block(0);
-    let Some(bb) = graph.get_exit_leaf(cond).and_then(|l| graph.block(l).get_copy()) else { return false };
-    let Some(op) = data.bb_op_tail(bb).and_then(|o| data.obank().get(o)) else { return false };
+    let Some(bb) = graph
+        .get_exit_leaf(cond)
+        .and_then(|l| graph.block(l).get_copy())
+    else {
+        return false;
+    };
+    let Some(op) = data.bb_op_tail(bb).and_then(|o| data.obank().get(o)) else {
+        return false;
+    };
     if op.code() != OpCode::CPUI_CBRANCH {
         return false;
     }
     let mut vn = op.get_in(1);
     for _ in 0..4 {
-        let Some(def) = vn.and_then(|v| data.vbank().get(v)).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d)) else {
+        let Some(def) = vn
+            .and_then(|v| data.vbank().get(v))
+            .and_then(|v| v.get_def())
+            .and_then(|d| data.obank().get(d))
+        else {
             return false;
         };
         match def.code() {
             OpCode::CPUI_BOOL_NEGATE | OpCode::CPUI_COPY => vn = def.get_in(0),
             OpCode::CPUI_CALLOTHER => {
-                return def.get_in(0).and_then(|v| data.vbank().get(v)).is_some_and(|v| {
-                    v.is_constant()
-                        && [BUILTIN_EH_UNWINDING, BUILTIN_JAVA_TRY, BUILTIN_JAVA_THROWS].iter().any(|&b| v.get_offset() == b as u64)
-                })
+                return def
+                    .get_in(0)
+                    .and_then(|v| data.vbank().get(v))
+                    .is_some_and(|v| {
+                        v.is_constant()
+                            && [BUILTIN_EH_UNWINDING, BUILTIN_JAVA_TRY, BUILTIN_JAVA_THROWS]
+                                .iter()
+                                .any(|&b| v.get_offset() == b as u64)
+                    });
             }
             _ => return false,
         }
@@ -126,7 +146,12 @@ fn continues_to(graph: &mut BlockGraph, loop_id: BlockId, head: BlockId) {
     let mut hits = Vec::new();
     while let Some(id) = stack.pop() {
         let b = graph.block(id);
-        if id != loop_id && matches!(b.get_type(), BlockType::WhileDo | BlockType::DoWhile | BlockType::InfLoop) {
+        if id != loop_id
+            && matches!(
+                b.get_type(),
+                BlockType::WhileDo | BlockType::DoWhile | BlockType::InfLoop
+            )
+        {
             continue;
         }
         let target = plain_goto(graph, id).or_else(|| if_goto(graph, id));
@@ -139,7 +164,9 @@ fn continues_to(graph: &mut BlockGraph, loop_id: BlockId, head: BlockId) {
     }
     for id in hits {
         match graph.block_mut(id).kind_mut() {
-            BlockKind::Goto { gototype, .. } | BlockKind::If { gototype, .. } => *gototype = block_flags::f_continue_goto,
+            BlockKind::Goto { gototype, .. } | BlockKind::If { gototype, .. } => {
+                *gototype = block_flags::f_continue_goto
+            }
             _ => {}
         }
     }
@@ -157,11 +184,18 @@ fn loop_once(data: &mut Funcdata, list: BlockId) -> Option<BlockId> {
             _ => continue,
         };
         let head = graph.get_front_leaf(target)?;
-        let Some(i) = comps[..j].iter().position(|&c| graph.get_front_leaf(c) == Some(head)) else { continue };
+        let Some(i) = comps[..j]
+            .iter()
+            .position(|&c| graph.get_front_leaf(c) == Some(head))
+        else {
+            continue;
+        };
         if free_jumps(graph, &comps[i..j]) {
             continue;
         }
-        if conditional && graph.block(graph.block(comps[j]).get_block(0)).get_type() != BlockType::Copy {
+        if conditional
+            && graph.block(graph.block(comps[j]).get_block(0)).get_type() != BlockType::Copy
+        {
             continue;
         }
         let graph = data.sblocks_mut();
@@ -187,12 +221,21 @@ fn sink_once(data: &mut Funcdata, list: BlockId) -> Option<BlockId> {
     let graph = data.sblocks_ref();
     let comps: Vec<BlockId> = graph.block(list).get_list().to_vec();
     for i in 0..comps.len() {
-        let Some(target) = if_goto(graph, comps[i]) else { continue };
+        let Some(target) = if_goto(graph, comps[i]) else {
+            continue;
+        };
         if exceptional_if(data, comps[i]) {
             continue;
         }
         let head = graph.get_front_leaf(target)?;
-        let Some(j) = comps.iter().skip(i + 2).position(|&c| graph.get_front_leaf(c) == Some(head)).map(|p| p + i + 2) else { continue };
+        let Some(j) = comps
+            .iter()
+            .skip(i + 2)
+            .position(|&c| graph.get_front_leaf(c) == Some(head))
+            .map(|p| p + i + 2)
+        else {
+            continue;
+        };
         if j - i - 1 > MAX_SUNK {
             continue;
         }
@@ -200,7 +243,9 @@ fn sink_once(data: &mut Funcdata, list: BlockId) -> Option<BlockId> {
         if graph.block(cond).get_type() != BlockType::Copy {
             continue;
         }
-        let Some(bb) = graph.block(cond).get_copy() else { continue };
+        let Some(bb) = graph.block(cond).get_copy() else {
+            continue;
+        };
         let graph = data.sblocks_mut();
         let clause = if j - i - 1 == 1 {
             comps[i + 1]
@@ -208,7 +253,11 @@ fn sink_once(data: &mut Funcdata, list: BlockId) -> Option<BlockId> {
             graph.kuna_wrap_components(list, i + 1, j - 1, BlockKind::Ls)
         };
         graph.kuna_move_component(list, i + 1, comps[i]);
-        if let BlockKind::If { gototarget, gototype } = graph.block_mut(comps[i]).kind_mut() {
+        if let BlockKind::If {
+            gototarget,
+            gototype,
+        } = graph.block_mut(comps[i]).kind_mut()
+        {
             *gototarget = None;
             *gototype = block_flags::f_goto_goto;
         }
@@ -272,7 +321,9 @@ pub struct ActionGotoSink {
 
 impl ActionGotoSink {
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionGotoSink { base: ActionBase::new(0, "gotosink", g) })
+        Box::new(ActionGotoSink {
+            base: ActionBase::new(0, "gotosink", g),
+        })
     }
 }
 
@@ -284,9 +335,11 @@ impl Action for ActionGotoSink {
         &mut self.base
     }
     fn clone_filtered(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Action>> {
-        grouplist
-            .contains(self.get_group())
-            .then(|| Box::new(ActionGotoSink { base: self.base.clone() }) as Box<dyn Action>)
+        grouplist.contains(self.get_group()).then(|| {
+            Box::new(ActionGotoSink {
+                base: self.base.clone(),
+            }) as Box<dyn Action>
+        })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data.get_arch().goto_sink || data.sblocks_get_size() == 0 {

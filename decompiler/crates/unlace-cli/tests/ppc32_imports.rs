@@ -15,16 +15,21 @@ fn assert_pic_proof_runs() {
             let file = object::File::parse(bytes.as_slice()).unwrap();
             assert!(unlace_analysis::loader::format::resolve_imports(&file, &bytes).is_empty());
             let enabled = unlace_analysis::loader::kuna_ppc32_imports::resolve_with_pic_abi(&file);
-            assert_eq!(enabled.len(), 1, "{plt:?} little={little}: enabled proof must run");
+            assert_eq!(
+                enabled.len(),
+                1,
+                "{plt:?} little={little}: enabled proof must run"
+            );
             assert_eq!(enabled[0].addr, u64::from(fixture.target()));
             assert_eq!(enabled[0].name, b"extra");
         }
     }
 }
 
-fn resolve_imports_in_both_modes(file: &object::File, bytes: &[u8])
-    -> Vec<unlace_analysis::loader::format::ImportSym>
-{
+fn resolve_imports_in_both_modes(
+    file: &object::File,
+    bytes: &[u8],
+) -> Vec<unlace_analysis::loader::format::ImportSym> {
     let mut imports = unlace_analysis::loader::format::resolve_imports(file, bytes);
     imports.extend(unlace_analysis::loader::kuna_ppc32_imports::resolve_with_pic_abi(file));
     imports
@@ -259,8 +264,10 @@ fn ppc32_caller_r30_cannot_be_replaced_by_dt_ppc_got() {
                 assert_eq!(file.dynamic_relocations().unwrap().count(), 2);
                 let imports = resolve_imports_in_both_modes(&file, &bytes);
                 assert!(
-                    !imports.iter().any(|s| s.addr == u64::from(fixture.target())
-                        && s.name == b"__stack_chk_fail"),
+                    !imports
+                        .iter()
+                        .any(|s| s.addr == u64::from(fixture.target())
+                            && s.name == b"__stack_chk_fail"),
                     "{plt:?} little={little} missing_got2={missing_got2}: caller uses the other slot"
                 );
             }
@@ -432,25 +439,37 @@ fn ppc32_pic_recovery_leaves_default_fde_filtering_alone() {
     let mut f = Fixture::new(Plt::Short);
     f.little = true;
     f.unwind_only = true;
-    f.caller = Some(vec![0x38600001, 0x4e800020, 0x38600002, 0x4e800020,
-        0x817e0800, 0x7d6903a6, 0x4e800420, 0x60000000]);
+    f.caller = Some(vec![
+        0x38600001, 0x4e800020, 0x38600002, 0x4e800020, 0x817e0800, 0x7d6903a6, 0x4e800420,
+        0x60000000,
+    ]);
     f.second_caller = Some(vec![0x7c0802a6, 0x4bffffe5, 0x4e800020]);
     let bytes = f.bytes();
     let file = object::File::parse(bytes.as_slice()).unwrap();
     assert_eq!(eligible_fde_bodies(&file, &bytes), vec![(0x1000, 0x1020)]);
     let path = common::scratch_file("ppc32-stub-shaped-tail", "so");
     std::fs::write(&path, &bytes).unwrap();
-    let inventories: Vec<String> = ["off", "on", "abi"].iter().map(|mode| {
-        let (out, err, status) = common::run_kuna(&["functions", path.to_str().unwrap(),
-            "--option", "ppc32picimports", mode]);
-        assert_eq!(status, 0, "{out}\n{err}");
-        out
-    }).collect();
+    let inventories: Vec<String> = ["off", "on", "abi"]
+        .iter()
+        .map(|mode| {
+            let (out, err, status) = common::run_kuna(&[
+                "functions",
+                path.to_str().unwrap(),
+                "--option",
+                "ppc32picimports",
+                mode,
+            ]);
+            assert_eq!(status, 0, "{out}\n{err}");
+            out
+        })
+        .collect();
     std::fs::remove_file(path).unwrap();
     assert!(!inventories[0].contains("0x1008"), "{}", inventories[0]);
-    assert!(inventories.iter().all(|i| i == &inventories[0]), "{inventories:?}");
+    assert!(
+        inventories.iter().all(|i| i == &inventories[0]),
+        "{inventories:?}"
+    );
 }
-
 
 #[test]
 fn ppc32_pic_stage_fixture_matches_authored_bytes() {
@@ -645,19 +664,36 @@ fn ppc32_default_unwind_retains_the_pc_read_body() {
     use object::ObjectSection;
     let mut f = Fixture::new(Plt::Short);
     f.unwind_only = true;
-    f.caller = Some(vec![0x7c0802a6, 0x429f0009, 7, 0x7d2802a6, 0x81290000,
-        0x1c630003, 0x7c634a14, 0x7c0803a6, 0x4e800020]);
+    f.caller = Some(vec![
+        0x7c0802a6, 0x429f0009, 7, 0x7d2802a6, 0x81290000, 0x1c630003, 0x7c634a14, 0x7c0803a6,
+        0x4e800020,
+    ]);
     let mut bytes = f.bytes();
     let file = object::File::parse(bytes.as_slice()).unwrap();
-    let frame = file.section_by_name(".eh_frame").unwrap().file_range().unwrap().0 as usize;
+    let frame = file
+        .section_by_name(".eh_frame")
+        .unwrap()
+        .file_range()
+        .unwrap()
+        .0 as usize;
     bytes[frame + 32..frame + 36].copy_from_slice(&f.word(36));
     let path = common::scratch_file("ppc32-unwind-default", "so");
     std::fs::write(&path, bytes).unwrap();
-    let (out, err, status) = common::run_kuna(&["decompile-all", path.to_str().unwrap(),
-        "--mode", "fast", "--json"]);
+    let (out, err, status) = common::run_kuna(&[
+        "decompile-all",
+        path.to_str().unwrap(),
+        "--mode",
+        "fast",
+        "--json",
+    ]);
     assert_eq!(status, 0, "{out}\n{err}");
     let result: serde_json::Value = serde_json::from_str(&out).unwrap();
     let bodies = result["functions"].as_array().unwrap();
-    assert!(bodies.iter().any(|f| f["code"].as_str().is_some_and(|c| c.contains("return a0 * 3 +"))), "{out}");
+    assert!(
+        bodies.iter().any(|f| f["code"]
+            .as_str()
+            .is_some_and(|c| c.contains("return a0 * 3 +"))),
+        "{out}"
+    );
     std::fs::remove_file(path).unwrap();
 }

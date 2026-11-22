@@ -57,7 +57,13 @@ fn every_case_body_callee_has_the_dispatcher_as_caller() {
         }
         for opt in [&["-O0"][..], &["-O2", "-fno-inline"][..]] {
             let binary = dir.join(format!("sw-{cc}{}", opt[0]));
-            process::required_output(Command::new(cc).args(opt).arg(&source).arg("-o").arg(&binary));
+            process::required_output(
+                Command::new(cc)
+                    .args(opt)
+                    .arg(&source)
+                    .arg("-o")
+                    .arg(&binary),
+            );
             for callee in ["fa", "fb", "fc", "fd", "fe"] {
                 let found = callers(&binary, callee, &[]);
                 assert!(
@@ -89,6 +95,9 @@ fn aarch64_compact_table_cases_reach_their_callees() {
     let binary = common::fixture("compacttable_aarch64");
     let path = std::path::Path::new(&binary);
     for callee in ["c0", "c1", "c2", "c3", "c4", "c5"] {
-        assert!(callers(path, callee, &[]).iter().any(|c| c == "dispatch"), "{callee}");
+        assert!(
+            callers(path, callee, &[]).iter().any(|c| c == "dispatch"),
+            "{callee}"
+        );
     }
 }

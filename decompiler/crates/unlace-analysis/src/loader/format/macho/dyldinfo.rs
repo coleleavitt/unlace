@@ -13,8 +13,8 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use object::read::macho::{LoadCommandVariant, MachHeader, Segment};
 use object::FileKind;
+use object::read::macho::{LoadCommandVariant, MachHeader, Segment};
 
 const OPCODE_MASK: u8 = 0xF0;
 const IMMEDIATE_MASK: u8 = 0x0F;
@@ -43,18 +43,28 @@ const MAX_BINDS: usize = 1 << 20;
 /// `LC_DYLD_INFO` Mach-O. Empty for a chained-fixup image (which has no bind
 /// opcodes), a non-Mach-O, or an unparsable program.
 pub fn resolve_dyld_info_binds(file: &object::File, bytes: &[u8]) -> HashMap<u64, Rc<str>> {
-    resolve_dyld_info_bind_slots(file, bytes).into_iter().map(|(slot, (name, _))| (slot, name)).collect()
+    resolve_dyld_info_bind_slots(file, bytes)
+        .into_iter()
+        .map(|(slot, (name, _))| (slot, name))
+        .collect()
 }
 
 /// As [`resolve_dyld_info_binds`], with each bind's addend: the slot holds
 /// `&symbol + addend` at run time.
-pub fn resolve_dyld_info_bind_slots(file: &object::File, bytes: &[u8]) -> HashMap<u64, (Rc<str>, i64)> {
+pub fn resolve_dyld_info_bind_slots(
+    file: &object::File,
+    bytes: &[u8],
+) -> HashMap<u64, (Rc<str>, i64)> {
     if file.format() != object::BinaryFormat::MachO {
         return HashMap::new();
     }
     match FileKind::parse(bytes) {
-        Ok(FileKind::MachO64) => collect::<object::macho::MachHeader64<object::Endianness>>(bytes, 8),
-        Ok(FileKind::MachO32) => collect::<object::macho::MachHeader32<object::Endianness>>(bytes, 4),
+        Ok(FileKind::MachO64) => {
+            collect::<object::macho::MachHeader64<object::Endianness>>(bytes, 8)
+        }
+        Ok(FileKind::MachO32) => {
+            collect::<object::macho::MachHeader32<object::Endianness>>(bytes, 4)
+        }
         _ => HashMap::new(),
     }
 }
@@ -64,9 +74,15 @@ where
     Mach: MachHeader<Endian = object::Endianness>,
 {
     let mut out = HashMap::new();
-    let Ok(header) = Mach::parse(bytes, 0) else { return out };
-    let Ok(endian) = header.endian() else { return out };
-    let Ok(mut commands) = header.load_commands(endian, bytes, 0) else { return out };
+    let Ok(header) = Mach::parse(bytes, 0) else {
+        return out;
+    };
+    let Ok(endian) = header.endian() else {
+        return out;
+    };
+    let Ok(mut commands) = header.load_commands(endian, bytes, 0) else {
+        return out;
+    };
     let mut segments: Vec<u64> = Vec::new();
     let mut programs: Vec<(u32, u32)> = Vec::new();
     while let Ok(Some(command)) = commands.next() {
@@ -74,12 +90,16 @@ where
             segments.push(segment.vmaddr(endian).into());
         } else if let Ok(LoadCommandVariant::DyldInfo(info)) = command.variant() {
             programs.push((info.bind_off.get(endian), info.bind_size.get(endian)));
-            programs.push((info.weak_bind_off.get(endian), info.weak_bind_size.get(endian)));
+            programs.push((
+                info.weak_bind_off.get(endian),
+                info.weak_bind_size.get(endian),
+            ));
         }
     }
     let mut left = MAX_BINDS;
     for (off, size) in programs {
-        if let Some(program) = bytes.get(off as usize..(off as usize).saturating_add(size as usize)) {
+        if let Some(program) = bytes.get(off as usize..(off as usize).saturating_add(size as usize))
+        {
             replay(program, &segments, ptr_size, &mut out, &mut left);
         }
     }
@@ -121,7 +141,9 @@ fn replay(
         let imm = byte & IMMEDIATE_MASK;
         match byte & OPCODE_MASK {
             BIND_OPCODE_DONE => {}
-            BIND_OPCODE_SET_DYLIB_ORDINAL_IMM | BIND_OPCODE_SET_DYLIB_SPECIAL_IMM | BIND_OPCODE_SET_TYPE_IMM => {}
+            BIND_OPCODE_SET_DYLIB_ORDINAL_IMM
+            | BIND_OPCODE_SET_DYLIB_SPECIAL_IMM
+            | BIND_OPCODE_SET_TYPE_IMM => {}
             BIND_OPCODE_SET_DYLIB_ORDINAL_ULEB => {
                 uleb(program, &mut p)?;
             }
@@ -217,17 +239,32 @@ mod tests {
         let program = [
             BIND_OPCODE_SET_DYLIB_ORDINAL_IMM | 1,
             BIND_OPCODE_SET_TYPE_IMM | 1,
-            BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM, b'_', b'a', 0,
-            BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB | 1, 0x10,
+            BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM,
+            b'_',
+            b'a',
+            0,
+            BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB | 1,
+            0x10,
             BIND_OPCODE_DO_BIND_ADD_ADDR_IMM_SCALED | 1,
             BIND_OPCODE_DO_BIND,
-            BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM, b'_', b'b', 0,
-            BIND_OPCODE_ADD_ADDR_ULEB, 0x80, 0x01,
+            BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM,
+            b'_',
+            b'b',
+            0,
+            BIND_OPCODE_ADD_ADDR_ULEB,
+            0x80,
+            0x01,
             BIND_OPCODE_DO_BIND,
             BIND_OPCODE_DONE,
         ];
         let mut out = HashMap::new();
-        replay(&program, &[0x1000, 0x2000], 8, &mut out, &mut MAX_BINDS.clone());
+        replay(
+            &program,
+            &[0x1000, 0x2000],
+            8,
+            &mut out,
+            &mut MAX_BINDS.clone(),
+        );
         assert_eq!(out.get(&0x2010).map(|(n, _)| n.as_ref()), Some("_a"));
         assert_eq!(out.get(&0x2020).map(|(n, _)| n.as_ref()), Some("_a"));
         assert_eq!(out.get(&0x20a8).map(|(n, _)| n.as_ref()), Some("_b"));
@@ -245,7 +282,10 @@ mod tests {
             let binds = resolve_dyld_info_binds(&file, &bytes);
             assert_eq!(!binds.is_empty(), expect_some, "{name}");
             if expect_some {
-                assert!(binds.values().any(|n| n.as_ref() == "__objc_empty_cache"), "{name}: {binds:?}");
+                assert!(
+                    binds.values().any(|n| n.as_ref() == "__objc_empty_cache"),
+                    "{name}: {binds:?}"
+                );
             }
         }
     }
@@ -253,9 +293,22 @@ mod tests {
     /// A program that repeats a bind past the budget is cut off there.
     #[test]
     fn a_repeating_program_is_bounded() {
-        let mut program = vec![BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM, b'_', b'a', 0, BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB, 0];
+        let mut program = vec![
+            BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM,
+            b'_',
+            b'a',
+            0,
+            BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB,
+            0,
+        ];
         for _ in 0..40 {
-            program.extend_from_slice(&[BIND_OPCODE_DO_BIND_ULEB_TIMES_SKIPPING_ULEB, 0xff, 0xff, 0x03, 0]);
+            program.extend_from_slice(&[
+                BIND_OPCODE_DO_BIND_ULEB_TIMES_SKIPPING_ULEB,
+                0xff,
+                0xff,
+                0x03,
+                0,
+            ]);
         }
         let mut out = HashMap::new();
         replay(&program, &[0x1000], 8, &mut out, &mut MAX_BINDS.clone());
@@ -274,7 +327,10 @@ mod tests {
         let mut out = HashMap::new();
         replay(&program, &[0x1000], 8, &mut out, &mut MAX_BINDS.clone());
         assert_eq!(out.len(), 0x800);
-        assert!(out.values().all(|(n, _)| Rc::ptr_eq(n, &out.values().next().unwrap().0)));
+        assert!(
+            out.values()
+                .all(|(n, _)| Rc::ptr_eq(n, &out.values().next().unwrap().0))
+        );
     }
 
     /// A run longer than 65,536 slots (ld64 folds every same-symbol, same-stride
@@ -283,18 +339,38 @@ mod tests {
     #[test]
     fn a_long_uniform_run_is_replayed_whole() {
         let program = [
-            BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM, b'_', b'a', 0,
-            BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB, 0,
-            BIND_OPCODE_DO_BIND_ULEB_TIMES_SKIPPING_ULEB, 0xf0, 0xa2, 0x04, 0x18,
-            BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM, b'_', b'b', 0,
+            BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM,
+            b'_',
+            b'a',
+            0,
+            BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB,
+            0,
+            BIND_OPCODE_DO_BIND_ULEB_TIMES_SKIPPING_ULEB,
+            0xf0,
+            0xa2,
+            0x04,
+            0x18,
+            BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM,
+            b'_',
+            b'b',
+            0,
             BIND_OPCODE_DO_BIND,
             BIND_OPCODE_DONE,
         ];
         let mut out = HashMap::new();
-        assert_eq!(replay(&program, &[0x1000], 8, &mut out, &mut MAX_BINDS.clone()), Some(()));
+        assert_eq!(
+            replay(&program, &[0x1000], 8, &mut out, &mut MAX_BINDS.clone()),
+            Some(())
+        );
         assert_eq!(out.len(), 70_001);
-        assert_eq!(out.get(&(0x1000 + 69_999 * 32)).map(|(n, _)| n.as_ref()), Some("_a"));
-        assert_eq!(out.get(&(0x1000 + 70_000 * 32)).map(|(n, _)| n.as_ref()), Some("_b"));
+        assert_eq!(
+            out.get(&(0x1000 + 69_999 * 32)).map(|(n, _)| n.as_ref()),
+            Some("_a")
+        );
+        assert_eq!(
+            out.get(&(0x1000 + 70_000 * 32)).map(|(n, _)| n.as_ref()),
+            Some("_b")
+        );
     }
 
     /// A program that rebinds one slot over and over spends the budget though
@@ -302,7 +378,12 @@ mod tests {
     #[test]
     fn rebinding_one_slot_spends_the_budget() {
         let skip = (2u128.pow(64) - 8) as u64;
-        let mut unit = vec![BIND_OPCODE_DO_BIND_ULEB_TIMES_SKIPPING_ULEB, 0xff, 0xff, 0x03];
+        let mut unit = vec![
+            BIND_OPCODE_DO_BIND_ULEB_TIMES_SKIPPING_ULEB,
+            0xff,
+            0xff,
+            0x03,
+        ];
         let mut v = skip;
         loop {
             let byte = (v & 0x7f) as u8;
@@ -312,7 +393,14 @@ mod tests {
                 break;
             }
         }
-        let mut program = vec![BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM, b'_', b'a', 0, BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB, 0];
+        let mut program = vec![
+            BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM,
+            b'_',
+            b'a',
+            0,
+            BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB,
+            0,
+        ];
         for _ in 0..40 {
             program.extend_from_slice(&unit);
         }

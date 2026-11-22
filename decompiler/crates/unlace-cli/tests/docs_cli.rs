@@ -28,7 +28,9 @@ fn spawn_docs(args: &[&str]) -> Child {
 }
 
 fn run_docs(args: &[&str]) -> Output {
-    spawn_docs(args).wait_with_output().expect("wait for unlace docs")
+    spawn_docs(args)
+        .wait_with_output()
+        .expect("wait for unlace docs")
 }
 
 fn docs(args: &[&str]) -> String {
@@ -132,10 +134,7 @@ fn all_concatenates_every_document_verbatim() {
             all.contains(source(topic).trim_end_matches('\n')),
             "missing {topic}"
         );
-        assert!(
-            all.contains(&path(topic)),
-            "missing {topic} label"
-        );
+        assert!(all.contains(&path(topic)), "missing {topic} label");
     }
 }
 

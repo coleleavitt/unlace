@@ -54,7 +54,7 @@ use unlace_base::space::spacetype;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{BlockId, OpId, VarnodeId};
-use crate::fspec::{FuncCallSpecs, ParamTrial, ProtoParameter, OFFSET_UNKNOWN};
+use crate::fspec::{FuncCallSpecs, OFFSET_UNKNOWN, ParamTrial, ProtoParameter};
 use crate::funcdata::Funcdata;
 use crate::p4_calls::kuna_exclusivearguse::MAX_VISIT;
 
@@ -85,7 +85,10 @@ pub(crate) fn declared_arm_shares(
     let Some(sv) = data.vbank().get(slot) else {
         return false;
     };
-    if j <= 0 || space.get_type() != spacetype::IPTR_SPACEBASE || sv.get_space().get_index() != space.get_index() {
+    if j <= 0
+        || space.get_type() != spacetype::IPTR_SPACEBASE
+        || sv.get_space().get_index() != space.get_index()
+    {
         return false;
     }
     let Some(push) = sv
@@ -100,13 +103,19 @@ pub(crate) fn declared_arm_shares(
         .get(vn)
         .and_then(|v| v.get_def())
         .and_then(|d| data.obank().get(d))
-        .is_some_and(|d| d.code() == OpCode::CPUI_COPY && d.get_in(0) == Some(slot) && d.get_parent() == o.get_parent());
+        .is_some_and(|d| {
+            d.code() == OpCode::CPUI_COPY
+                && d.get_in(0) == Some(slot)
+                && d.get_parent() == o.get_parent()
+        });
     if slot != vn && !copies_slot {
         return false;
     }
     let (Some(fc), Some(matchfc)) = (
-        data.get_call_specs_index(op).map(|i| data.get_call_specs(i)),
-        data.get_call_specs_index(opmatch).map(|i| data.get_call_specs(i)),
+        data.get_call_specs_index(op)
+            .map(|i| data.get_call_specs(i)),
+        data.get_call_specs_index(opmatch)
+            .map(|i| data.get_call_specs(i)),
     ) else {
         return false;
     };
@@ -120,13 +129,18 @@ pub(crate) fn declared_arm_shares(
     {
         return false;
     }
-    if !fc.proto().get_param(j - 1).is_some_and(|p| p.get_address() == *addr && p.get_size() == trial.get_size()) {
+    if !fc
+        .proto()
+        .get_param(j - 1)
+        .is_some_and(|p| p.get_address() == *addr && p.get_size() == trial.get_size())
+    {
         return false;
     }
     if !within_stack_arguments(fc, addr.get_offset()) {
         return false;
     }
-    let (Some(mb), Some(ob), Some(wall)) = (m.get_parent(), o.get_parent(), push.get_parent()) else {
+    let (Some(mb), Some(ob), Some(wall)) = (m.get_parent(), o.get_parent(), push.get_parent())
+    else {
         return false;
     };
     mb != wall && apart(data, mb, ob, wall) && only_reader(data, slot, opmatch, op, mb, wall)
@@ -140,25 +154,44 @@ pub(crate) fn declared_arm_shares(
 fn within_stack_arguments(fc: &FuncCallSpecs, offset: u64) -> bool {
     let registers = usize::from(fc.callee_arg_registers());
     let proto = fc.proto();
-    let params: Vec<_> = (0..proto.num_params()).filter_map(|i| proto.get_param(i)).collect();
-    let in_register =
-        |p: &&dyn ProtoParameter| p.get_address().get_space().is_some_and(|s| s.get_type() != spacetype::IPTR_SPACEBASE);
+    let params: Vec<_> = (0..proto.num_params())
+        .filter_map(|i| proto.get_param(i))
+        .collect();
+    let in_register = |p: &&dyn ProtoParameter| {
+        p.get_address()
+            .get_space()
+            .is_some_and(|s| s.get_type() != spacetype::IPTR_SPACEBASE)
+    };
     if registers == 0 || params.iter().any(in_register) {
         return true;
     }
-    let stack: u64 = params.iter().skip(registers).map(|p| (p.get_size().max(0) as u64).div_ceil(4) * 4).sum();
+    let stack: u64 = params
+        .iter()
+        .skip(registers)
+        .map(|p| (p.get_size().max(0) as u64).div_ceil(4) * 4)
+        .sum();
     offset < 4 + stack
 }
 
 /// Distinct blocks, neither reaching the other without entering `wall`.
 fn apart(data: &Funcdata, a: BlockId, b: BlockId, wall: BlockId) -> bool {
-    a != b && b != wall && !reaches_avoiding(data, a, b, wall) && !reaches_avoiding(data, b, a, wall)
+    a != b
+        && b != wall
+        && !reaches_avoiding(data, a, b, wall)
+        && !reaches_avoiding(data, b, a, wall)
 }
 
 /// Whether every call other than `opmatch` and `op` that reads `slot`, or a
 /// copy, merge or call-crossing of it, as an argument is apart from `opmatch`'s
 /// block `mb`. Declines once [`MAX_VALUES`] Varnodes are seen.
-fn only_reader(data: &Funcdata, slot: VarnodeId, opmatch: OpId, op: OpId, mb: BlockId, wall: BlockId) -> bool {
+fn only_reader(
+    data: &Funcdata,
+    slot: VarnodeId,
+    opmatch: OpId,
+    op: OpId,
+    mb: BlockId,
+    wall: BlockId,
+) -> bool {
     let mut seen: HashSet<VarnodeId> = HashSet::new();
     let mut stack = vec![slot];
     while let Some(v) = stack.pop() {
@@ -177,7 +210,11 @@ fn only_reader(data: &Funcdata, slot: VarnodeId, opmatch: OpId, op: OpId, mb: Bl
             };
             match o.code() {
                 OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => {
-                    if d != opmatch && d != op && o.get_slot(v) > 0 && !o.get_parent().is_some_and(|b| apart(data, mb, b, wall)) {
+                    if d != opmatch
+                        && d != op
+                        && o.get_slot(v) > 0
+                        && !o.get_parent().is_some_and(|b| apart(data, mb, b, wall))
+                    {
                         return false;
                     }
                 }
@@ -222,7 +259,9 @@ mod tests {
     use std::rc::Rc;
 
     use unlace_base::address::Address;
-    use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace};
+    use unlace_base::space::{
+        AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
+    };
 
     use super::*;
     use crate::context::ArchContext;
@@ -230,7 +269,8 @@ mod tests {
     fn build_fd() -> Funcdata {
         let mut m = AddrSpaceManager::new();
         m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+            .unwrap();
         m.insert_space(Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
             "ram",
@@ -268,8 +308,14 @@ mod tests {
         assert!(!apart(&fd, left, left, push));
         assert!(!apart(&fd, left, push, push));
         fd.bblocks_mut().add_edge(join, push);
-        assert!(apart(&fd, left, right, push), "a loop back through the push re-pushes");
-        assert!(!apart(&fd, left, right, entry), "the back edge reaches the other arm");
+        assert!(
+            apart(&fd, left, right, push),
+            "a loop back through the push re-pushes"
+        );
+        assert!(
+            !apart(&fd, left, right, entry),
+            "the back edge reaches the other arm"
+        );
         fd.bblocks_mut().add_edge(left, right);
         assert!(!apart(&fd, left, right, push));
         assert!(!apart(&fd, right, left, push));

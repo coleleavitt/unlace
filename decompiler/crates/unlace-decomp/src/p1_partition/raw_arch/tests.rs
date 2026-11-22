@@ -6,11 +6,11 @@
 
 use super::*;
 use crate::capability::ArchitectureCapability;
-use crate::sleigh_arch::{register_sleigh_arch_ids, LanguageDatabase};
+use crate::sleigh_arch::{LanguageDatabase, register_sleigh_arch_ids};
+use std::rc::Rc;
 use unlace_base::marshal::IdRegistry;
 use unlace_base::xml::Element;
 use unlace_sleigh::translate::register_translate_ids;
-use std::rc::Rc;
 
 fn named(name: &str) -> Rc<Element> {
     let mut el = Element::new();
@@ -93,7 +93,9 @@ fn resolve_architecture_unknown_target_errors() {
 fn restore_xml_registers_coretypes_then_rest() {
     let mut arch = RawBinaryArchitecture::new("file", "");
     let children = vec![named("coretypes"), named("save_state")];
-    let res = arch.restore_xml("/raw", "x86:LE:64:default:gcc", "0x400000", &children).unwrap();
+    let res = arch
+        .restore_xml("/raw", "x86:LE:64:default:gcc", "0x400000", &children)
+        .unwrap();
     assert_eq!(arch.sleigh().get_filename(), "/raw");
     assert_eq!(arch.sleigh().get_target(), "x86:LE:64:default:gcc");
     assert_eq!(arch.adjustvma(), 0x400000);

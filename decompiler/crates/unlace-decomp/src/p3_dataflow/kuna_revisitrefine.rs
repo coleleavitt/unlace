@@ -69,7 +69,11 @@ mod tests {
     #[test]
     fn a_cut_span_is_widened_to_the_partitions_it_touches() {
         let parts = Partitions::new(&[3, 0, 0, 5, 0, 0, 0, 0, 3, 0, 0, 5, 0, 0, 0, 0]);
-        assert_eq!(parts.cut_span(0, 8), Some((0, 8)), "an 8-byte marker over a 3+5 split");
+        assert_eq!(
+            parts.cut_span(0, 8),
+            Some((0, 8)),
+            "an 8-byte marker over a 3+5 split"
+        );
         assert_eq!(parts.cut_span(8, 8), Some((8, 16)));
         assert_eq!(parts.cut_span(2, 4), Some((0, 8)));
         assert_eq!(parts.cut_span(3, 5), None);
@@ -97,7 +101,11 @@ mod tests {
     #[test]
     fn a_healed_one_three_junction_is_one_partition() {
         let parts = Partitions::new(&[4, 3, 0, 0, 4, 0, 0, 0]);
-        assert_eq!(parts.cut_span(1, 3), None, "the stale size at the junction is not a cut");
+        assert_eq!(
+            parts.cut_span(1, 3),
+            None,
+            "the stale size at the junction is not a cut"
+        );
         assert_eq!(parts.cut_span(2, 4), Some((0, 8)));
     }
 }

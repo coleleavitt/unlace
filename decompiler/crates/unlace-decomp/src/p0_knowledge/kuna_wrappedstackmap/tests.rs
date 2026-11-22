@@ -2,8 +2,8 @@ use super::*;
 use crate::p0_knowledge::kuna_wrappedstackmap::{is_wrapped_join, pieces};
 use unlace_base::marshal::{Decoder, IdRegistry, XmlDecode, XmlEncode};
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, JoinSpace,
-    SpacebaseSpace, UniqueSpace, VarnodeStorage,
+    AddrSpace, AddrSpaceManager, ConstantSpace, JoinSpace, SpacebaseSpace, UniqueSpace,
+    VarnodeStorage, addrspace_flags, spacetype,
 };
 
 fn manager(big: bool) -> (AddrSpaceManager, Rc<AddrSpace>) {
@@ -108,9 +108,10 @@ fn wrapped_maps_keep_one_main_entry_and_roundtrip_the_join() {
             assert_eq!(specs.len(), 1);
             assert_eq!(specs[0].2, addr);
             assert!(Rc::ptr_eq(&specs[0].1, &ty));
-            assert!(db
-                .scope_nonstack_addrtied_specs(local, stack.get_index() as usize)
-                .is_empty());
+            assert!(
+                db.scope_nonstack_addrtied_specs(local, stack.get_index() as usize)
+                    .is_empty()
+            );
             let (mut restored, scope) = local_db();
             let (copy, _) = restored
                 .add_symbol_mapped(
@@ -185,9 +186,10 @@ fn wrapped_maps_retype_and_remove_all_physical_entries() {
         &same_size
     ));
     assert_layout(&db, local, sym, &stack, &addr, 16);
-    assert!(db
-        .retype_symbol(sym, Rc::new(Datatype::new(76, type_metatype::TYPE_STRUCT)))
-        .is_err());
+    assert!(
+        db.retype_symbol(sym, Rc::new(Datatype::new(76, type_metatype::TYPE_STRUCT)))
+            .is_err()
+    );
     assert!(Rc::ptr_eq(
         db.symbol(sym).dtype.as_ref().unwrap(),
         &same_size
@@ -204,15 +206,17 @@ fn wrapped_maps_retype_and_remove_all_physical_entries() {
     assert_eq!(specs.len(), 2);
     assert!(specs.iter().any(|spec| spec.2 == addr));
     assert!(specs.iter().any(|spec| spec.2 == second));
-    assert!(db
-        .scope_nonstack_addrtied_specs(local, stack.get_index() as usize)
-        .is_empty());
+    assert!(
+        db.scope_nonstack_addrtied_specs(local, stack.get_index() as usize)
+            .is_empty()
+    );
     db.remove_symbol(sym);
     assert!(db.scopes[local].multi_entry_set.is_empty());
     for offset in [stack.wrap_offset((-16i64) as u64), 0, 59] {
-        assert!(db
-            .find_overlap(local, &Address::new(Rc::clone(&stack), offset), 1)
-            .is_none());
+        assert!(
+            db.find_overlap(local, &Address::new(Rc::clone(&stack), offset), 1)
+                .is_none()
+        );
     }
     assert!(db.find_overlap(local, &addr, 1).is_none());
     assert!(db.find_overlap(local, &second, 1).is_none());
@@ -304,16 +308,20 @@ fn wire_storage_keeps_same_size_join_identities_distinct() {
     super::super::kuna_wrappedstackmap::reserve_wire_storage(&mut fd, first_id, 76);
     let grown = fd.kuna_wrapped_wire_storage[&first_id].clone();
     assert_eq!(grown.1, 76);
-    assert!(locations
-        .iter()
-        .all(|addr| grown.0.get_offset() >= addr.get_offset() + 72));
+    assert!(
+        locations
+            .iter()
+            .all(|addr| grown.0.get_offset() >= addr.get_offset() + 72)
+    );
     super::super::kuna_wrappedstackmap::reserve_wire_storage(&mut fd, first_id, 76);
     assert_eq!(fd.kuna_wrapped_wire_storage[&first_id], grown);
     let next = fd.new_unique(4, None);
     let next_addr = fd.vbank().get(next).unwrap().get_addr();
-    assert!(locations
-        .iter()
-        .all(|addr| next_addr.get_offset() >= addr.get_offset() + 72));
+    assert!(
+        locations
+            .iter()
+            .all(|addr| next_addr.get_offset() >= addr.get_offset() + 72)
+    );
     if let Some(path) = std::env::var_os("KUNA_WRAPPED_WIRE_DUMP") {
         std::fs::write(path, wire).unwrap();
     }

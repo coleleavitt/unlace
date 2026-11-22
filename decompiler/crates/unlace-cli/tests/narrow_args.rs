@@ -8,13 +8,18 @@ use std::process::Command;
 // Authored ARM: put8(p, c) stores the low byte of r1; fwd(p, c) passes
 // c + 1 to put8 and returns 0 (`add r1, r1, #1; bl put8`).
 fn image() -> Vec<u8> {
-    let words: [u32; 7] =
-        [0xe5c01000, 0xe12fff1e, 0xe92d4010, 0xe2811001, 0xebfffffa, 0xe3a00000, 0xe8bd8010];
+    let words: [u32; 7] = [
+        0xe5c01000, 0xe12fff1e, 0xe92d4010, 0xe2811001, 0xebfffffa, 0xe3a00000, 0xe8bd8010,
+    ];
     let mut obj = Object::new(BinaryFormat::Elf, Architecture::Arm, Endianness::Little);
     let text = obj.add_section(Vec::new(), b".text".to_vec(), SectionKind::Text);
     obj.append_section_data(
         text,
-        &words.iter().copied().flat_map(u32::to_le_bytes).collect::<Vec<_>>(),
+        &words
+            .iter()
+            .copied()
+            .flat_map(u32::to_le_bytes)
+            .collect::<Vec<_>>(),
         4,
     );
     for (name, value, size) in [("put8", 0, 8), ("fwd", 8, 20)] {
@@ -35,12 +40,24 @@ fn image() -> Vec<u8> {
 fn decompile(options: &[&str]) -> String {
     let path = common::scratch_file("narrow-args", "o");
     std::fs::write(&path, image()).unwrap();
-    let mut args = vec!["decompile-all", path.to_str().unwrap(), "--mode", "aggressive"];
+    let mut args = vec![
+        "decompile-all",
+        path.to_str().unwrap(),
+        "--mode",
+        "aggressive",
+    ];
     for pair in options.chunks(2) {
         args.extend(["--option", pair[0], pair[1]]);
     }
-    let output = Command::new(env!("CARGO_BIN_EXE_unlace")).args(&args).output().unwrap();
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
+        .args(&args)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     String::from_utf8(output.stdout).unwrap()
 }
 

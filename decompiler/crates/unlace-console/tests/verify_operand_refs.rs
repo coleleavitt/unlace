@@ -30,11 +30,16 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// The vendored operand-refs fixture: `main`=0x40112e materializes the address of
@@ -51,7 +56,10 @@ fn decompile_main(operand_refs_on: bool) -> String {
     let specs = root.join("specs");
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
 
-    let bin = operand_refs_bin().to_str().expect("UTF-8 fixture path").to_string();
+    let bin = operand_refs_bin()
+        .to_str()
+        .expect("UTF-8 fixture path")
+        .to_string();
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     // The operand_refs pass runs DEFERRED at the commit point (it decodes through
@@ -62,10 +70,15 @@ fn decompile_main(operand_refs_on: bool) -> String {
             .set_kuna_option("operand_refs", "on")
             .expect("operand_refs option flips on");
     }
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
-    let cmds: Vec<String> =
-        ["load function main".into(), "decompile".into(), "print C".into()].to_vec();
+    let cmds: Vec<String> = [
+        "load function main".into(),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .to_vec();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -83,7 +96,10 @@ fn decompile_main(operand_refs_on: bool) -> String {
 #[test]
 fn default_off_renders_bare_address() {
     let out = decompile_main(false);
-    assert!(out.contains("main"), "expected a decompiled body for `main`, got:\n{out}");
+    assert!(
+        out.contains("main"),
+        "expected a decompiled body for `main`, got:\n{out}"
+    );
     // Default-off: the scalar immediate is an untyped bare absolute address.
     assert!(
         out.contains("mystery(0x402004)"),
@@ -99,7 +115,10 @@ fn default_off_renders_bare_address() {
 #[test]
 fn operand_refs_on_renders_string_literal() {
     let out = decompile_main(true);
-    assert!(out.contains("main"), "expected a decompiled body for `main`, got:\n{out}");
+    assert!(
+        out.contains("main"),
+        "expected a decompiled body for `main`, got:\n{out}"
+    );
     // operand_refs on: the read-only-data scalar is typed as a string and renders
     // as the literal (the planted char[N] + the printer's readonly-char-array route).
     assert!(

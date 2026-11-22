@@ -38,9 +38,9 @@
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
-use unlace_base::address::{mostsigbit_set, Address};
+use unlace_base::address::{Address, mostsigbit_set};
 use unlace_base::error::{KunaError, KunaResult};
-use unlace_base::marshal::{AttributeId, Decoder, ElementId, Encoder, ATTRIB_CONTENT};
+use unlace_base::marshal::{ATTRIB_CONTENT, AttributeId, Decoder, ElementId, Encoder};
 use unlace_base::space::AddrSpaceManager;
 use unlace_base::types::{int4, uint1, uint8};
 use unlace_sleigh::loadimage::LoadImage;
@@ -272,7 +272,14 @@ impl StringManager {
         // assignStringData borrows `self` immutably while mutating `data`; build
         // the StringData detached, then insert it (one `stringMap[constAddr]`
         // slot, matching the C++ which mutates the single map entry in place).
-        self.assign_string_data(&mut data, buf, size, charsize, num_chars, addr.is_big_endian());
+        self.assign_string_data(
+            &mut data,
+            buf,
+            size,
+            charsize,
+            num_chars,
+            addr.is_big_endian(),
+        );
         self.string_map.insert(const_addr, data);
         hash
     }
@@ -312,7 +319,10 @@ impl StringManager {
             StringData {
                 is_truncated: false,
                 byte_data: bytes.to_vec(),
-                decode_key: Some(StringDecodeKey { char_size, opaque: false }),
+                decode_key: Some(StringDecodeKey {
+                    char_size,
+                    opaque: false,
+                }),
             },
         );
     }
@@ -382,9 +392,9 @@ impl StringManager {
                     opaque = Some(decoder.read_bool()?);
                 }
             }
-            string_data.decode_key = char_size.zip(opaque).map(|(char_size, opaque)| {
-                StringDecodeKey { char_size, opaque }
-            });
+            string_data.decode_key = char_size
+                .zip(opaque)
+                .map(|(char_size, opaque)| StringDecodeKey { char_size, opaque });
             let content = decoder.read_string_id(&ATTRIB_CONTENT)?;
             decode_hex_bytes(&content, &mut string_data.byte_data);
             decoder.close_element(sub_id2)?;
@@ -542,8 +552,10 @@ impl StringManager {
                 if ((val2 & 0xc0) != 0x80) || ((val3 & 0xc0) != 0x80) || ((val4 & 0xc0) != 0x80) {
                     return -1; // invalid encoding
                 }
-                codepoint =
-                    ((val & 7) << 18) | ((val2 & 0x3f) << 12) | ((val3 & 0x3f) << 6) | (val4 & 0x3f);
+                codepoint = ((val & 7) << 18)
+                    | ((val2 & 0x3f) << 12)
+                    | ((val3 & 0x3f) << 6)
+                    | (val4 & 0x3f);
             } else {
                 return -1;
             }

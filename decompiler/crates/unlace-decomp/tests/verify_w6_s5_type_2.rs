@@ -31,9 +31,7 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use unlace_decomp::dtype::{
-    flags, type_metatype, Datatype, DatatypeKind, TypeBitField, TypeField,
-};
+use unlace_decomp::dtype::{Datatype, DatatypeKind, TypeBitField, TypeField, flags, type_metatype};
 
 /// Build an interned scalar with explicit alignment (and align_size = aligned
 /// size), the way the TypeFactory would.
@@ -67,7 +65,13 @@ fn make_enum(size: i32, entries: &[(u64, &str)]) -> Datatype {
 fn enum_matching_enum3() {
     let enum3 = make_enum(
         8,
-        &[(0, "ZERO"), (1, "ONE"), (2, "TWO"), (4, "FOUR"), (8, "EIGHT")],
+        &[
+            (0, "ZERO"),
+            (1, "ONE"),
+            (2, "TWO"),
+            (4, "FOUR"),
+            (8, "EIGHT"),
+        ],
     );
 
     let rep = enum3.get_matches(5).unwrap();
@@ -106,7 +110,10 @@ fn enum_matching_enum4() {
     );
 
     let rep = enum4.get_matches(12).unwrap();
-    assert_eq!(rep.match_name, vec!["EIGHT".to_string(), "FOUR".to_string()]);
+    assert_eq!(
+        rep.match_name,
+        vec!["EIGHT".to_string(), "FOUR".to_string()]
+    );
     assert!(!rep.complement);
 
     let rep = enum4.get_matches(7).unwrap();
@@ -186,8 +193,7 @@ fn struct_field_offsets_preset_skipped() {
         TypeField::new(-1, -1, "auto", Rc::clone(&int_t)),
     ];
     let mut bitlist: Vec<TypeBitField> = vec![];
-    let (_size, _align, _fl) =
-        Datatype::assign_field_offsets(&mut list, &mut bitlist).unwrap();
+    let (_size, _align, _fl) = Datatype::assign_field_offsets(&mut list, &mut bitlist).unwrap();
     assert_eq!(list[0].offset, 100); // untouched
     assert_eq!(list[1].offset, 0); // first auto-placed field at 0
 }
@@ -293,8 +299,7 @@ fn union_assign_field_offsets() {
         TypeField::new(0, 0, "i", Rc::clone(&int_t)),
         TypeField::new(0, 0, "d", Rc::clone(&dbl_t)),
     ];
-    let (new_size, new_align) =
-        Datatype::assign_union_field_offsets(&mut list, "U").unwrap();
+    let (new_size, new_align) = Datatype::assign_union_field_offsets(&mut list, "U").unwrap();
     assert_eq!(new_size, 8); // max(4, 8)
     assert_eq!(new_align, 8); // max(4, 8)
     assert!(list.iter().all(|f| f.offset == 0));
@@ -317,11 +322,7 @@ fn union_assign_field_offsets_validation() {
 fn union_set_fields() {
     let int_t = scalar(4, 4, type_metatype::TYPE_INT);
     let mut u = Datatype::new_with_align(0, -1, type_metatype::TYPE_UNION);
-    u.set_union_fields(
-        vec![TypeField::new(0, 0, "i", Rc::clone(&int_t))],
-        4,
-        4,
-    );
+    u.set_union_fields(vec![TypeField::new(0, 0, "i", Rc::clone(&int_t))], 4, 4);
     assert_eq!(u.get_size(), 4);
     assert_eq!(u.get_align_size(), 4);
     assert_eq!(u.get_field(0).unwrap().name, "i");
@@ -355,7 +356,10 @@ fn union_find_compatible_resolve_direct() {
 fn make_struct(size: i32, align: i32, fields: Vec<TypeField>) -> Datatype {
     let mut s = Datatype::new_with_align(size, align, type_metatype::TYPE_STRUCT);
     s.align_size = Datatype::calc_align_size(size, align);
-    s.kind = DatatypeKind::Struct { field: fields, bitfield: vec![] };
+    s.kind = DatatypeKind::Struct {
+        field: fields,
+        bitfield: vec![],
+    };
     s
 }
 

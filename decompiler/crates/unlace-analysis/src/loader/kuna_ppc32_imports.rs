@@ -6,20 +6,27 @@ use object::{
     Architecture, Object, ObjectKind, ObjectSection, ObjectSymbol, RelocationFlags,
     RelocationTarget, SectionFlags, SectionKind, SymbolKind,
 };
-use unlace_decomp::kuna_ppc32piccalls::{stub, Stub};
 use std::collections::{BTreeMap, HashSet};
+use unlace_decomp::kuna_ppc32piccalls::{Stub, stub};
 
 /// Relocation slots for caller-local PIC recovery. These are data, not executable
 /// function symbols; no r30-relative stub receives a global identity.
 pub fn pic_slots(file: &object::File<'_>) -> Vec<unlace_decomp::kuna_ppc32piccalls::ImportSlot> {
     let (bss, slots) = slots(file);
-    if bss { return Vec::new(); }
-    slots.into_iter().filter_map(|(address, name)| {
-        let name = String::from_utf8(name).ok()?;
-        Some(unlace_decomp::kuna_ppc32piccalls::ImportSlot {
-            address, no_return: super::noreturn::elf_name_is_noreturn(&name), name,
+    if bss {
+        return Vec::new();
+    }
+    slots
+        .into_iter()
+        .filter_map(|(address, name)| {
+            let name = String::from_utf8(name).ok()?;
+            Some(unlace_decomp::kuna_ppc32piccalls::ImportSlot {
+                address,
+                no_return: super::noreturn::elf_name_is_noreturn(&name),
+                name,
+            })
         })
-    }).collect()
+        .collect()
 }
 
 fn slots(file: &object::File<'_>) -> (bool, BTreeMap<u64, Vec<u8>>) {
@@ -94,9 +101,14 @@ fn slots(file: &object::File<'_>) -> (bool, BTreeMap<u64, Vec<u8>>) {
 /// Resolve global PIC stub identities under the compiler and ABI assumptions
 /// documented for `ppc32picimports abi`. This is not the caller-local `on` mode.
 pub fn resolve_with_pic_abi(file: &object::File<'_>) -> Vec<super::format::ImportSym> {
-    resolve_impl(file, true).into_iter().map(|s| super::format::ImportSym {
-        addr: s.addr, name: s.name, kind: super::format::ImportSymKind::Import,
-    }).collect()
+    resolve_impl(file, true)
+        .into_iter()
+        .map(|s| super::format::ImportSym {
+            addr: s.addr,
+            name: s.name,
+            kind: super::format::ImportSymKind::Import,
+        })
+        .collect()
 }
 
 pub(super) fn resolve(file: &object::File<'_>) -> Vec<PltSym> {
@@ -108,7 +120,11 @@ fn resolve_impl(file: &object::File<'_>, prove_pic: bool) -> Vec<PltSym> {
     if bss {
         return slots
             .into_iter()
-            .map(|(addr, name)| PltSym { addr, name, slot: None })
+            .map(|(addr, name)| PltSym {
+                addr,
+                name,
+                slot: None,
+            })
             .collect();
     }
     if slots.is_empty() {
@@ -159,7 +175,10 @@ fn stubs(file: &object::File<'_>) -> Vec<(u64, Stub)> {
             let Some(code) = bytes.get(off..off.saturating_add(16)) else {
                 break;
             };
-            if !matches!(word(file, code) & 0xffff_0000, 0x817e_0000 | 0x3d7e_0000 | 0x3d60_0000) {
+            if !matches!(
+                word(file, code) & 0xffff_0000,
+                0x817e_0000 | 0x3d7e_0000 | 0x3d60_0000
+            ) {
                 continue;
             }
             let words: [u32; 4] = std::array::from_fn(|i| word(file, &code[4 * i..]));
@@ -183,9 +202,16 @@ pub(crate) fn stub_starts(file: &object::File<'_>) -> Vec<u64> {
 /// Collect metadata even with recovery disabled, so console options remain live.
 pub struct PicSlotsPass;
 impl crate::pass::AnalysisPass for PicSlotsPass {
-    fn phase(&self) -> crate::pass::Phase { crate::pass::Phase::P1 }
-    fn id(&self) -> &'static str { "ppc32_pic_slots" }
+    fn phase(&self) -> crate::pass::Phase {
+        crate::pass::Phase::P1
+    }
+    fn id(&self) -> &'static str {
+        "ppc32_pic_slots"
+    }
     fn run(&self, ctx: &crate::pass::AnalysisCtx) -> crate::pass::AnalysisOutput {
-        crate::pass::AnalysisOutput { ppc32_pic_slots: pic_slots(ctx.file), ..Default::default() }
+        crate::pass::AnalysisOutput {
+            ppc32_pic_slots: pic_slots(ctx.file),
+            ..Default::default()
+        }
     }
 }

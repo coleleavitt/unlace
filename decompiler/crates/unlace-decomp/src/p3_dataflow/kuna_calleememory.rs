@@ -191,15 +191,30 @@ impl CalleeMemory {
         self.frame_return_read
     }
 
-    pub(super) fn global_accesses(&self) -> Option<impl Iterator<Item = (i32, u64, u32, i64, u32)> + '_> {
-        if !self.complete || self.global_ineligible
-            || self.reads.iter().chain(&self.writes).any(|effect| !matches!(effect.root, Origin::Register(_)))
+    pub(super) fn global_accesses(
+        &self,
+    ) -> Option<impl Iterator<Item = (i32, u64, u32, i64, u32)> + '_> {
+        if !self.complete
+            || self.global_ineligible
+            || self
+                .reads
+                .iter()
+                .chain(&self.writes)
+                .any(|effect| !matches!(effect.root, Origin::Register(_)))
         {
             return None;
         }
         Some(self.reads.iter().chain(&self.writes).map(|effect| {
-            let Origin::Register(root) = effect.root else { unreachable!() };
-            (root.space, root.offset, root.size, effect.offset, effect.size)
+            let Origin::Register(root) = effect.root else {
+                unreachable!()
+            };
+            (
+                root.space,
+                root.offset,
+                root.size,
+                effect.offset,
+                effect.size,
+            )
         }))
     }
 
@@ -357,7 +372,8 @@ fn memory(
     if let Value::Pointer(root, offset) = pointer {
         let end = offset.checked_add(i64::from(size))?;
         if root == Origin::Frame {
-            summary.global_ineligible |= writing || offset != 0 || size != stack.size || state.return_clobbered;
+            summary.global_ineligible |=
+                writing || offset != 0 || size != stack.size || state.return_clobbered;
             if offset < -MAX_EXTENT || end > MAX_EXTENT {
                 return None;
             }
@@ -541,7 +557,10 @@ fn walk(
             result.global_ineligible |= op.inputs.iter().chain(op.out.iter()).any(|value| {
                 value.space.as_ref().is_none_or(|space| {
                     space.get_index() != register
-                        && !matches!(space.get_type(), spacetype::IPTR_INTERNAL | spacetype::IPTR_CONSTANT)
+                        && !matches!(
+                            space.get_type(),
+                            spacetype::IPTR_INTERNAL | spacetype::IPTR_CONSTANT
+                        )
                 })
             });
             match op.code {
@@ -610,13 +629,20 @@ fn walk(
                     );
                     let mut value = match op.code {
                         OpCode::CPUI_INT_XOR
-                            if Storage::raw(op.inputs.first()?).zip(Storage::raw(op.inputs.get(1)?)).is_some_and(|(a, b)| a == b) =>
+                            if Storage::raw(op.inputs.first()?)
+                                .zip(Storage::raw(op.inputs.get(1)?))
+                                .is_some_and(|(a, b)| a == b) =>
                         {
                             Value::Constant(0)
                         }
                         OpCode::CPUI_INT_ZEXT if out.size >= op.inputs.first()?.size => {
                             match input(0)? {
-                                Value::Constant(value) => Value::Constant(value & unlace_base::address::calc_mask(op.inputs.first()?.size as i32)),
+                                Value::Constant(value) => Value::Constant(
+                                    value
+                                        & unlace_base::address::calc_mask(
+                                            op.inputs.first()?.size as i32,
+                                        ),
+                                ),
                                 _ => Value::Unknown,
                             }
                         }
@@ -683,7 +709,10 @@ fn walk(
 }
 
 pub fn seed(arch: &mut crate::architecture::Architecture, fd: &mut Funcdata) {
-    if !arch.stack_views && !arch.stack_alias_deadstore && !super::kuna_globalcallranges::should_seed(fd) {
+    if !arch.stack_views
+        && !arch.stack_alias_deadstore
+        && !super::kuna_globalcallranges::should_seed(fd)
+    {
         return;
     }
     let Some(stack_space) = arch.manage().get_stack_space() else {
@@ -852,7 +881,9 @@ fn for_call<'a>(
         return None;
     }
     let space = fd.get_scope_local()?.get_space_id();
-    let mut floor = i64::from(crate::kuna_calleeprotostack::declared_caller_frame_floor(call.proto())?);
+    let mut floor = i64::from(crate::kuna_calleeprotostack::declared_caller_frame_floor(
+        call.proto(),
+    )?);
     for slot in 0..call.proto().num_params() {
         let param = call.proto().get_param(slot)?;
         let address = param.get_address();
@@ -1174,12 +1205,12 @@ fn unobserved_inner(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dtype::{type_metatype, Datatype};
+    use crate::dtype::{Datatype, type_metatype};
     use crate::fspec::ParameterPieces;
     use crate::p3_dataflow::kuna_calleehomes::tests::{
-        call_with_r8_argument, locked_home_call_on, Fx, Out,
+        Fx, Out, call_with_r8_argument, locked_home_call_on,
     };
-    use unlace_base::space::{addrspace_flags, AddrSpace};
+    use unlace_base::space::{AddrSpace, addrspace_flags};
 
     struct Program {
         code: Rc<AddrSpace>,
@@ -1328,13 +1359,14 @@ mod tests {
             .unwrap();
         assert_eq!(summary.reads.len(), 2);
         assert!(p.run(vec![vec![branch], first]).is_none());
-        assert!(p
-            .run(vec![vec![p.op(
+        assert!(
+            p.run(vec![vec![p.op(
                 OpCode::CPUI_BRANCH,
                 None,
                 vec![p.value(&p.code, 0, 8)]
             )]])
-            .is_none());
+            .is_none()
+        );
     }
 
     #[test]
@@ -1509,19 +1541,23 @@ mod tests {
             size: 4,
         };
         assert!(summary.deferred_frame_escapes.contains(&home));
-        assert!(summary
-            .home_write_conditions
-            .contains(&(home, through_destination)));
+        assert!(
+            summary
+                .home_write_conditions
+                .contains(&(home, through_destination))
+        );
         assert!(summary.writes.contains(&Effect {
             root: Origin::Frame,
             offset: 20,
             size: 4,
         }));
         assert!(summary.reads.contains(&through_destination));
-        assert!(summary
-            .returns
-            .iter()
-            .any(|state| state.arguments_clobbered));
+        assert!(
+            summary
+                .returns
+                .iter()
+                .any(|state| state.arguments_clobbered)
+        );
 
         assert!(p.run(vec![body(&p, 40)]).is_none());
     }
@@ -1530,8 +1566,8 @@ mod tests {
     fn unknown_full_width_positive_stores_still_decline_the_summary() {
         let p = Program::new();
         let slot = p.value(&p.unique, 0, 8);
-        assert!(p
-            .run(vec![vec![
+        assert!(
+            p.run(vec![vec![
                 p.op(
                     OpCode::CPUI_INT_ADD,
                     Some(slot.clone()),
@@ -1544,7 +1580,8 @@ mod tests {
                 ),
                 p.ret(),
             ]])
-            .is_none());
+            .is_none()
+        );
     }
 
     fn private_pointer_reload_summary(p: &Program, partial: bool) -> Option<CalleeMemory> {
@@ -1893,16 +1930,18 @@ mod tests {
             OpCode::CPUI_CALLOTHER,
             OpCode::CPUI_BRANCHIND,
         ] {
-            assert!(p
-                .run(vec![vec![p.op(code, None, vec![p.reg(0x20)]), p.ret()]])
-                .is_none());
+            assert!(
+                p.run(vec![vec![p.op(code, None, vec![p.reg(0x20)]), p.ret()]])
+                    .is_none()
+            );
         }
-        assert!(p
-            .run(vec![vec![
+        assert!(
+            p.run(vec![vec![
                 p.op(OpCode::CPUI_CBRANCH, None, vec![p.c(1)]),
                 p.ret()
             ]])
-            .is_none());
+            .is_none()
+        );
     }
 
     #[test]
@@ -1914,17 +1953,18 @@ mod tests {
             vec![p.c(1), p.reg(0x30)],
         );
         assert!(p.run(vec![vec![p.ret()]]).is_none());
-        assert!(p
-            .run(vec![vec![
+        assert!(
+            p.run(vec![vec![
                 p.op(OpCode::CPUI_COPY, Some(p.reg(0)), vec![p.c(1)]),
                 return_load.clone(),
                 p.ret(),
             ]])
-            .is_some());
+            .is_some()
+        );
         for (offset, value) in [(0, p.reg(0x20)), (1, p.value(&p.constant, 1, 1))] {
             let slot = p.value(&p.unique, 0, 8);
-            assert!(p
-                .run(vec![vec![
+            assert!(
+                p.run(vec![vec![
                     p.op(
                         OpCode::CPUI_INT_ADD,
                         Some(slot.clone()),
@@ -1934,14 +1974,16 @@ mod tests {
                     return_load.clone(),
                     p.ret(),
                 ]])
-                .is_none());
+                .is_none()
+            );
         }
-        assert!(p
-            .run(vec![vec![
+        assert!(
+            p.run(vec![vec![
                 p.op(OpCode::CPUI_COPY, Some(p.reg(0x40)), vec![p.reg(0x20)]),
                 p.ret()
             ]])
-            .is_none());
+            .is_none()
+        );
     }
 
     #[test]
@@ -1971,8 +2013,8 @@ mod tests {
             .unwrap();
         assert_eq!(summary.reads.len(), 1);
         assert!(summary.escapes.is_empty());
-        assert!(p
-            .run(vec![vec![
+        assert!(
+            p.run(vec![vec![
                 p.op(OpCode::CPUI_COPY, Some(p.reg(0)), vec![p.reg(0x20)]),
                 p.op(
                     OpCode::CPUI_COPY,
@@ -1986,7 +2028,8 @@ mod tests {
                 ),
                 p.ret(),
             ]])
-            .is_none());
+            .is_none()
+        );
     }
 
     #[test]
@@ -2094,8 +2137,8 @@ mod tests {
                 vec![p.c(1), p.reg(0x20), p.value(&p.constant, 1, 4)],
             ),
         ] {
-            assert!(p
-                .run(vec![vec![
+            assert!(
+                p.run(vec![vec![
                     p.op(
                         OpCode::CPUI_INT_ADD,
                         Some(slot.clone()),
@@ -2114,7 +2157,8 @@ mod tests {
                     ),
                     p.ret(),
                 ]])
-                .is_none());
+                .is_none()
+            );
         }
     }
 
@@ -2208,15 +2252,21 @@ mod tests {
         let mut fx = Fx::with_stack_views();
         let actual = fx.frame_pointer(-64);
         let call = make_call_site(&mut fx, actual);
-        fx.fd.callee_memory.insert((fx.reg.get_index(), 0x2000), Rc::new(CalleeMemory {
-            complete: true,
-            ..Default::default()
-        }));
+        fx.fd.callee_memory.insert(
+            (fx.reg.get_index(), 0x2000),
+            Rc::new(CalleeMemory {
+                complete: true,
+                ..Default::default()
+            }),
+        );
         let query = (-32i64) as u64;
         assert!(test_call_summary_is_usable(&fx.fd, call, query, 8));
         assert_eq!(unobserved(&fx.fd, call, query, 8, 0xff), Some(0xff));
         let index = fx.fd.get_call_specs_index(call).unwrap();
-        fx.fd.get_call_specs_mut(index).proto_mut().copy(&crate::fspec::FuncProto::new());
+        fx.fd
+            .get_call_specs_mut(index)
+            .proto_mut()
+            .copy(&crate::fspec::FuncProto::new());
         assert!(!fx.fd.get_call_specs(index).proto().has_store());
         assert!(!test_call_summary_is_usable(&fx.fd, call, query, 8));
         assert_eq!(unobserved(&fx.fd, call, query, 8, 0xff), None);
@@ -2261,20 +2311,24 @@ mod tests {
             crate::p3_dataflow::kuna_calleehomes::caller_home_cell(&fx.fd, call_specs, 16, 8,)
                 .is_none()
         );
-        assert!(crate::p3_dataflow::kuna_calleehomes::callee_frame_cell(
-            &fx.fd,
-            call_specs,
-            i64::MIN,
-            8,
-        )
-        .is_none());
-        assert!(crate::p3_dataflow::kuna_calleehomes::callee_frame_cell(
-            &fx.fd,
-            call_specs,
-            16,
-            u32::MAX,
-        )
-        .is_none());
+        assert!(
+            crate::p3_dataflow::kuna_calleehomes::callee_frame_cell(
+                &fx.fd,
+                call_specs,
+                i64::MIN,
+                8,
+            )
+            .is_none()
+        );
+        assert!(
+            crate::p3_dataflow::kuna_calleehomes::callee_frame_cell(
+                &fx.fd,
+                call_specs,
+                16,
+                u32::MAX,
+            )
+            .is_none()
+        );
         assert!(test_call_summary_is_usable(&fx.fd, call, query, 8));
         assert_eq!(unobserved(&fx.fd, call, query, 8, 0xff), None);
 
@@ -2392,10 +2446,12 @@ mod tests {
         for width in [4, 16] {
             let p = Program::new();
             let summary = home_reload_summary(&p, width);
-            assert!(summary
-                .deferred_frame_escapes
-                .iter()
-                .any(|home| home.offset == 16));
+            assert!(
+                summary
+                    .deferred_frame_escapes
+                    .iter()
+                    .any(|home| home.offset == 16)
+            );
             let mut fx = Fx::with_stack_views();
             let actual = fx.frame_pointer(-64);
             let call = make_call_site(&mut fx, actual);
@@ -2786,10 +2842,12 @@ mod tests {
                 offset: 0x20,
                 size: 8,
             });
-            assert!(summary
-                .deferred_frame_escapes
-                .iter()
-                .any(|home| home.root == root));
+            assert!(
+                summary
+                    .deferred_frame_escapes
+                    .iter()
+                    .any(|home| home.root == root)
+            );
             assert!(summary.lossy_pointer_roots.contains(&root));
 
             let mut fx = Fx::with_stack_views();
@@ -2847,14 +2905,18 @@ mod tests {
                 offset: 0x20,
                 size: 8,
             });
-            assert!(summary
-                .deferred_frame_escapes
-                .iter()
-                .any(|home| home.root == root));
-            assert!(summary
-                .lossy_pointer_ranges
-                .iter()
-                .any(|range| { range.space == 2 && range.offset == 0x20 && range.size == 4 }));
+            assert!(
+                summary
+                    .deferred_frame_escapes
+                    .iter()
+                    .any(|home| home.root == root)
+            );
+            assert!(
+                summary
+                    .lossy_pointer_ranges
+                    .iter()
+                    .any(|range| { range.space == 2 && range.offset == 0x20 && range.size == 4 })
+            );
 
             let mut fx = Fx::with_stack_views();
             let actual = fx.frame_pointer(-64);
@@ -2919,10 +2981,12 @@ mod tests {
                 summary.lossy_pointer_roots.contains(&Origin::Frame),
                 publish_frame,
             );
-            assert!(summary
-                .deferred_frame_escapes
-                .iter()
-                .all(|home| home.root != Origin::Frame));
+            assert!(
+                summary
+                    .deferred_frame_escapes
+                    .iter()
+                    .all(|home| home.root != Origin::Frame)
+            );
 
             for constant_actual in [false, true] {
                 let mut fx = Fx::with_stack_views();
@@ -3013,15 +3077,21 @@ mod tests {
             ]])
             .unwrap();
         assert!(summary.deferred_frame_escapes.is_empty());
-        assert!(summary
-            .lossy_pointer_ranges
-            .iter()
-            .any(|range| { range.space == 2 && range.offset == 0x20 && range.size == 4 }));
+        assert!(
+            summary
+                .lossy_pointer_ranges
+                .iter()
+                .any(|range| { range.space == 2 && range.offset == 0x20 && range.size == 4 })
+        );
     }
     #[test]
     fn global_access_proof_rejects_unrecorded_memory_and_frame_accesses() {
         let p = Program::new();
-        let direct = p.op(OpCode::CPUI_COPY, Some(p.reg(0)), vec![p.value(&p.code, 0x8000, 8)]);
+        let direct = p.op(
+            OpCode::CPUI_COPY,
+            Some(p.reg(0)),
+            vec![p.value(&p.code, 0x8000, 8)],
+        );
         let absolute = p.op(OpCode::CPUI_STORE, None, vec![p.c(1), p.c(0x8000), p.c(7)]);
         let frame = p.op(OpCode::CPUI_LOAD, Some(p.reg(0)), vec![p.c(1), p.reg(0x30)]);
         for operation in [direct, absolute, frame] {
@@ -3031,15 +3101,25 @@ mod tests {
         let mut operations = p.load(8);
         operations.push(p.ret());
         let summary = p.run(vec![operations]).unwrap();
-        assert_eq!(summary.global_accesses().unwrap().collect::<Vec<_>>(), vec![(2, 0x20, 8, 8, 4)]);
+        assert_eq!(
+            summary.global_accesses().unwrap().collect::<Vec<_>>(),
+            vec![(2, 0x20, 8, 8, 4)]
+        );
     }
 
     #[test]
     fn global_access_proof_rejects_direct_load_outputs_and_other_processor_spaces() {
         let p = Program::new();
         let overlay = Rc::new(AddrSpace::new(
-            spacetype::IPTR_PROCESSOR, "overlay", false, 8, 1, 4,
-            addrspace_flags::hasphysical, 1, 1,
+            spacetype::IPTR_PROCESSOR,
+            "overlay",
+            false,
+            8,
+            1,
+            4,
+            addrspace_flags::hasphysical,
+            1,
+            1,
         ));
         for space in [&p.code, &overlay] {
             let direct_output = p.op(
@@ -3048,12 +3128,16 @@ mod tests {
                 vec![p.c(1), p.reg(0x20)],
             );
             let substantive = p.op(OpCode::CPUI_COPY, Some(p.reg(0)), vec![p.c(7)]);
-            let summary = p.run(vec![vec![direct_output, substantive, p.ret()]]).unwrap();
+            let summary = p
+                .run(vec![vec![direct_output, substantive, p.ret()]])
+                .unwrap();
             assert!(summary.complete);
             assert!(summary.global_accesses().is_none());
 
             let direct_input = p.op(
-                OpCode::CPUI_COPY, Some(p.reg(0)), vec![p.value(space, 0x8000, 8)],
+                OpCode::CPUI_COPY,
+                Some(p.reg(0)),
+                vec![p.value(space, 0x8000, 8)],
             );
             let summary = p.run(vec![vec![direct_input, p.ret()]]).unwrap();
             assert!(summary.global_accesses().is_none());
@@ -3064,24 +3148,54 @@ mod tests {
     fn zero_constructor_keeps_complete_global_memory_effects() {
         let p = Program::new();
         let eax = p.value(&p.register, 0, 4);
-        let summary = p.run(vec![vec![
-            p.op(OpCode::CPUI_INT_XOR, Some(eax.clone()), vec![eax.clone(), eax.clone()]),
-            p.op(OpCode::CPUI_INT_ZEXT, Some(p.reg(0)), vec![eax]),
-            p.op(OpCode::CPUI_STORE, None, vec![p.c(1), p.reg(0x20), p.reg(0)]),
-            p.ret(),
-        ]]).unwrap();
-        assert_eq!(summary.global_accesses().unwrap().collect::<Vec<_>>(), vec![(2, 0x20, 8, 0, 8)]);
+        let summary = p
+            .run(vec![vec![
+                p.op(
+                    OpCode::CPUI_INT_XOR,
+                    Some(eax.clone()),
+                    vec![eax.clone(), eax.clone()],
+                ),
+                p.op(OpCode::CPUI_INT_ZEXT, Some(p.reg(0)), vec![eax]),
+                p.op(
+                    OpCode::CPUI_STORE,
+                    None,
+                    vec![p.c(1), p.reg(0x20), p.reg(0)],
+                ),
+                p.ret(),
+            ]])
+            .unwrap();
+        assert_eq!(
+            summary.global_accesses().unwrap().collect::<Vec<_>>(),
+            vec![(2, 0x20, 8, 0, 8)]
+        );
     }
 
     fn global_call_site(actual: u64, effect_offset: i64) -> (Fx, OpId) {
         let mut fx = Fx::new();
         let value = fx.constant(8, actual);
         let op = make_call_site_with_stack_base(&mut fx, value, 40);
-        let root = Origin::Register(Storage { space: fx.reg.get_index(), offset: 0x20, size: 8 });
-        let mut summary = CalleeMemory { complete: true, ..Default::default() };
-        summary.writes.insert(Effect { root, offset: effect_offset, size: 16 });
-        summary.reads.insert(Effect { root, offset: 32, size: 4 });
-        fx.fd.callee_memory.insert((fx.reg.get_index(), 0x2000), Rc::new(summary));
+        let root = Origin::Register(Storage {
+            space: fx.reg.get_index(),
+            offset: 0x20,
+            size: 8,
+        });
+        let mut summary = CalleeMemory {
+            complete: true,
+            ..Default::default()
+        };
+        summary.writes.insert(Effect {
+            root,
+            offset: effect_offset,
+            size: 16,
+        });
+        summary.reads.insert(Effect {
+            root,
+            offset: 32,
+            size: 4,
+        });
+        fx.fd
+            .callee_memory
+            .insert((fx.reg.get_index(), 0x2000), Rc::new(summary));
         (fx, op)
     }
 
@@ -3092,12 +3206,30 @@ mod tests {
         let index = fx.fd.get_call_specs_index(op).unwrap();
         let call = fx.fd.replace_call_specs(index);
         let mut cache = super::super::kuna_globalcallranges::Calls::default();
-        for (offset, size, expected) in [(0x7000, 8, true), (0x7ff8, 8, true), (0x7ff9, 8, false),
-            (0x8000, 8, false), (0x800f, 8, false), (0x8010, 8, true), (0x8020, 4, false), (0x8024, 8, true)]
-        {
-            assert_eq!(cache.preserves(&fx.fd, &call, &Address::new(Rc::clone(&space), offset), size), expected);
+        for (offset, size, expected) in [
+            (0x7000, 8, true),
+            (0x7ff8, 8, true),
+            (0x7ff9, 8, false),
+            (0x8000, 8, false),
+            (0x800f, 8, false),
+            (0x8010, 8, true),
+            (0x8020, 4, false),
+            (0x8024, 8, true),
+        ] {
+            assert_eq!(
+                cache.preserves(
+                    &fx.fd,
+                    &call,
+                    &Address::new(Rc::clone(&space), offset),
+                    size
+                ),
+                expected
+            );
         }
-        assert!(for_call(&fx.fd, &call, (-16i64) as u64, 8).is_none(), "global seeding cannot enable frame proofs");
+        assert!(
+            for_call(&fx.fd, &call, (-16i64) as u64, 8).is_none(),
+            "global seeding cannot enable frame proofs"
+        );
         fx.fd.restore_call_specs_at(index, call);
     }
 
@@ -3114,7 +3246,9 @@ mod tests {
         }
         let (mut fx, op) = global_call_site(0x8000, 0);
         let space = Rc::clone(fx.fd.get_arch().manage().get_default_data_space().unwrap());
-        let unknown = fx.fd.new_varnode(8, &Address::new(Rc::clone(&fx.reg), 0x70), None);
+        let unknown = fx
+            .fd
+            .new_varnode(8, &Address::new(Rc::clone(&fx.reg), 0x70), None);
         fx.fd.op_set_input(op, unknown, 1).unwrap();
         let index = fx.fd.get_call_specs_index(op).unwrap();
         let call = fx.fd.replace_call_specs(index);
@@ -3142,7 +3276,10 @@ mod tests {
             call.init_active_input();
             let active = call.get_active_input();
             active.register_trial(&Address::new(Rc::clone(&fx.reg), 0x10), 8);
-            active.register_trial(&Address::new(Rc::clone(&fx.reg), 0x20), if mode == 2 { 4 } else { 8 });
+            active.register_trial(
+                &Address::new(Rc::clone(&fx.reg), 0x20),
+                if mode == 2 { 4 } else { 8 },
+            );
             let trial = active.get_trial_mut(1);
             trial.set_slot(if mode == 1 { 99 } else { 3 });
             match mode {
@@ -3152,11 +3289,14 @@ mod tests {
                 _ => (),
             }
             let mut cache = super::super::kuna_globalcallranges::Calls::default();
-            assert_eq!(cache.preserves(&fx.fd, &call, &Address::new(space, 0x9000), 8), mode == 0, "mode {mode}");
+            assert_eq!(
+                cache.preserves(&fx.fd, &call, &Address::new(space, 0x9000), 8),
+                mode == 0,
+                "mode {mode}"
+            );
             fx.fd.restore_call_specs_at(index, call);
         }
     }
-
 
     #[test]
     fn global_return_memory_needs_a_solved_frame_and_effect_overrides_remain_authoritative() {
@@ -3171,17 +3311,22 @@ mod tests {
         let mut call = fx.fd.replace_call_specs(index);
         let mut cache = super::super::kuna_globalcallranges::Calls::default();
         assert!(cache.preserves(&fx.fd, &call, &watched, 8));
-        let mut unknown_frame = crate::fspec::FuncCallSpecs::new(op, call.get_entry_address().clone());
+        let mut unknown_frame =
+            crate::fspec::FuncCallSpecs::new(op, call.get_entry_address().clone());
         unknown_frame.proto_mut().copy(call.proto());
         cache.clear();
         assert!(!cache.preserves(&fx.fd, &unknown_frame, &watched, 8));
-        call.proto_mut().push_effect_override(crate::fspec::EffectRecord::from_varnode(
-            VarnodeData { space: Some(space), offset: 0x9000, size: 8 },
-            crate::fspec::effect_type::UNKNOWN_EFFECT,
-        ));
+        call.proto_mut()
+            .push_effect_override(crate::fspec::EffectRecord::from_varnode(
+                VarnodeData {
+                    space: Some(space),
+                    offset: 0x9000,
+                    size: 8,
+                },
+                crate::fspec::effect_type::UNKNOWN_EFFECT,
+            ));
         cache.clear();
         assert!(!cache.preserves(&fx.fd, &call, &watched, 8));
         fx.fd.restore_call_specs_at(index, call);
     }
-
 }

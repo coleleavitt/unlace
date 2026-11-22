@@ -19,12 +19,12 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_num::opcodes::OpCode;
 
 use super::*;
-use crate::action::{ruleflags, ActionContext, ActionGroupList};
+use crate::action::{ActionContext, ActionGroupList, ruleflags};
 use crate::context::{ArchContext, BlockId, OpId, TypeOp};
 
 // -----------------------------------------------------------------------------
@@ -34,7 +34,8 @@ use crate::context::{ArchContext, BlockId, OpId, TypeOp};
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -89,11 +90,19 @@ fn names_groups_and_flags_match_cpp() {
         (ActionNonzeroMask::boxed("g"), "nonzeromask", 0),
         (ActionVarnodeProps::boxed("g"), "varnodeprops", 0),
         (ActionUnreachable::boxed("g"), "unreachable", 0),
-        (ActionDoNothing::boxed("g"), "donothing", ruleflags::rule_repeatapply),
+        (
+            ActionDoNothing::boxed("g"),
+            "donothing",
+            ruleflags::rule_repeatapply,
+        ),
         (ActionLateDoNothing::boxed("g"), "latedonothing", 0),
         (ActionRedundBranch::boxed("g"), "redundbranch", 0),
         (ActionDeterminedBranch::boxed("g"), "determinedbranch", 0),
-        (ActionNormalizeSetup::boxed("g"), "normalizesetup", ruleflags::rule_onceperfunc),
+        (
+            ActionNormalizeSetup::boxed("g"),
+            "normalizesetup",
+            ruleflags::rule_onceperfunc,
+        ),
     ];
     for (act, name, flags) in cases {
         assert_eq!(act.get_name(), name, "name mismatch for {name}");
@@ -106,7 +115,9 @@ fn names_groups_and_flags_match_cpp() {
 fn clone_filtered_respects_grouplist() {
     let act = ActionHeritage::boxed("ssa");
     // In-group => clone present and preserves name+group.
-    let cloned = act.clone_filtered(&glist("ssa")).expect("should clone in-group");
+    let cloned = act
+        .clone_filtered(&glist("ssa"))
+        .expect("should clone in-group");
     assert_eq!(cloned.get_name(), "heritage");
     assert_eq!(cloned.get_group(), "ssa");
     // Out-of-group => filtered out.
@@ -181,7 +192,10 @@ fn normalizesetup_reset_sets_normalization() {
 
     assert!(!fd.is_normalization_on());
     act.reset(&mut fd);
-    assert!(fd.is_normalization_on(), "reset must setNormalization(true)");
+    assert!(
+        fd.is_normalization_on(),
+        "reset must setNormalization(true)"
+    );
 
     // apply body is the W4-stubbed lock-stripping => no change count.
     let res = act.apply(&mut fd, &mut ctx);
@@ -319,7 +333,10 @@ fn redundbranch_splices_single_in_single_out_chain() {
     let res = act.apply(&mut fd, &mut ctx);
     assert_eq!(res, 0, "ActionRedundBranch returns 0 (full rule applied)");
     // The bl->out splice merged out into bl, removing one block and counting it.
-    assert!(act.base().count >= 1, "single-out chain should splice at least once");
+    assert!(
+        act.base().count >= 1,
+        "single-out chain should splice at least once"
+    );
     assert!(
         fd.bblocks_get_size() < size_before,
         "splice removed at least one block"
@@ -409,6 +426,11 @@ fn stubbed_wrappers_apply_cleanly() {
     ] {
         let res = act.apply(&mut fd, &mut ctx);
         assert_eq!(res, 0, "{} should apply cleanly", act.get_name());
-        assert_eq!(act.base().count, 0, "{} should make no change yet", act.get_name());
+        assert_eq!(
+            act.base().count,
+            0,
+            "{} should make no change yet",
+            act.get_name()
+        );
     }
 }

@@ -23,10 +23,11 @@ fn fixture_variant(tag: &str, isa: &str, endian: &str, symbols: bool, options: &
     if symbols {
         cmd.arg("symbols");
     }
-    assert!(cmd
-        .status()
-        .expect("run authored fixture generator")
-        .success());
+    assert!(
+        cmd.status()
+            .expect("run authored fixture generator")
+            .success()
+    );
     path
 }
 
@@ -119,17 +120,45 @@ fn arm_to_query_recovers_the_direct_call_in_an_unreferenced_caller() {
 fn arm_frame_recovery_is_explicitly_opt_in() {
     let path = fixture("armframes-gate", "arm", "little", false);
     let base = [
-        "xrefs", path.to_str().unwrap(), "--to", "0x1100", "--json",
-        "--target", "ARM:LE:32:v4t", "--isa", "arm", "--option", "aif", "off",
+        "xrefs",
+        path.to_str().unwrap(),
+        "--to",
+        "0x1100",
+        "--json",
+        "--target",
+        "ARM:LE:32:v4t",
+        "--isa",
+        "arm",
+        "--option",
+        "aif",
+        "off",
     ];
     for extra in [&[][..], &["--option", "armframes", "off"][..]] {
-        let out = Command::new(env!("CARGO_BIN_EXE_unlace")).args(base).args(extra).output().unwrap();
-        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
+            .args(base)
+            .args(extra)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
         let doc: Value = serde_json::from_slice(&out.stdout).unwrap();
         assert!(!calls(&doc).contains(&(0x1508, 0x1100, 0x1500)), "{doc}");
     }
-    let enabled = query(&path, "--to", "0x1100", "arm", "little", &["--option", "aif", "off"]);
-    assert!(calls(&enabled).contains(&(0x1508, 0x1100, 0x1500)), "{enabled}");
+    let enabled = query(
+        &path,
+        "--to",
+        "0x1100",
+        "arm",
+        "little",
+        &["--option", "aif", "off"],
+    );
+    assert!(
+        calls(&enabled).contains(&(0x1508, 0x1100, 0x1500)),
+        "{enabled}"
+    );
     std::fs::remove_file(path).unwrap();
 }
 
@@ -243,13 +272,15 @@ fn mapping_symbols_select_thumb_roots_and_explicit_arm_takes_precedence() {
     let path = fixture("mixed", "arm", "little", false);
     let generator = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../unlace-analysis/tests/fixtures/arm_xref_roots.py");
-    assert!(Command::new("python3")
-        .arg(generator)
-        .arg(&path)
-        .arg("mixed")
-        .status()
-        .unwrap()
-        .success());
+    assert!(
+        Command::new("python3")
+            .arg(generator)
+            .arg(&path)
+            .arg("mixed")
+            .status()
+            .unwrap()
+            .success()
+    );
     let auto = query(&path, "--to", "0x1740", "auto", "little", &[]);
     assert_eq!(calls(&auto), vec![(0x1704, 0x1740, 0x1700)], "{auto}");
     let arm = query(&path, "--to", "0x1740", "arm", "little", &[]);
@@ -611,7 +642,12 @@ fn speculative_blx_cannot_repaint_corpus_fingerprints() {
         );
         for patterns in ["off", "on"] {
             let options = [
-                "--option", "aif", "on", "--option", "funcstart_patterns", patterns,
+                "--option",
+                "aif",
+                "on",
+                "--option",
+                "funcstart_patterns",
+                patterns,
             ];
             let to = query_language(&path, "--to", "0x1100", "thumb", language, &options);
             assert_eq!(
@@ -679,7 +715,12 @@ fn provisional_calls_to_prefixes_cannot_protect_frame_interiors() {
             );
             for patterns in ["off", "on"] {
                 let options = [
-                    "--option", "aif", "on", "--option", "funcstart_patterns", patterns,
+                    "--option",
+                    "aif",
+                    "on",
+                    "--option",
+                    "funcstart_patterns",
+                    patterns,
                 ];
                 let to = query_language(&path, "--to", "0x1100", "thumb", language, &options);
                 assert_eq!(
@@ -688,7 +729,10 @@ fn provisional_calls_to_prefixes_cannot_protect_frame_interiors() {
                     "{variant}/{endian}/{patterns}: {to}"
                 );
                 let from = query_language(&path, "--from", "0x1500", "thumb", language, &options);
-                assert!(calls(&from).is_empty(), "{variant}/{endian}/{patterns}: {from}");
+                assert!(
+                    calls(&from).is_empty(),
+                    "{variant}/{endian}/{patterns}: {from}"
+                );
             }
             std::fs::remove_file(path).unwrap();
         }
@@ -741,7 +785,14 @@ fn interworking_callees_supply_fingerprints_in_their_decoded_mode() {
                 flags.push("latecallee");
             }
             let path = fixture_variant("interwork-fingerprint", "arm", endian, false, &flags);
-            let options = ["--option", "aif", "on", "--option", "funcstart_patterns", "on"];
+            let options = [
+                "--option",
+                "aif",
+                "on",
+                "--option",
+                "funcstart_patterns",
+                "on",
+            ];
             let to = query_language(&path, "--to", "0x1100", "auto", language, &options);
             assert_eq!(
                 calls(&to),
@@ -855,7 +906,8 @@ fn inventory_discards_callees_invalidated_by_gap_interworking() {
                 "aif",
                 "on",
             ])
-            .args(["--option", "armframes", "on"]).output()
+            .args(["--option", "armframes", "on"])
+            .output()
             .unwrap();
         assert!(
             out.status.success(),
@@ -885,13 +937,15 @@ fn inventory_checks_gap_entries_before_rewalking_aif_candidates() {
         .join("../unlace-analysis/tests/fixtures/cortexm_poolentry_le32.py");
     let path = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
         .join(format!("arm-entry-checks-{}.elf", std::process::id()));
-    assert!(Command::new("python3")
-        .arg(generator)
-        .arg(&path)
-        .args(["--frame", "--pointer"])
-        .status()
-        .unwrap()
-        .success());
+    assert!(
+        Command::new("python3")
+            .arg(generator)
+            .arg(&path)
+            .args(["--frame", "--pointer"])
+            .status()
+            .unwrap()
+            .success()
+    );
     for (pool, pointers) in [("on", "off"), ("off", "on"), ("on", "on")] {
         let result = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args([
@@ -917,7 +971,8 @@ fn inventory_checks_gap_entries_before_rewalking_aif_candidates() {
                 "ptrentry",
                 pointers,
             ])
-            .args(["--option", "armframes", "on"]).output()
+            .args(["--option", "armframes", "on"])
+            .output()
             .unwrap();
         assert!(
             result.status.success(),
@@ -998,20 +1053,52 @@ fn stale_aif_modes_do_not_restart_inventory_forever() {
         for patterns in ["off", "on"] {
             let out = common::process::output_with_timeout(
                 Command::new(env!("CARGO_BIN_EXE_unlace")).args([
-                    "functions", path.to_str().unwrap(), "--json", "--target", language,
-                    "--mode", "reliable", "--option", "listing", "on", "--option", "aif", "on",
-                    "--option", "funcstart_patterns", patterns, "--option", "armframes", "on",
+                    "functions",
+                    path.to_str().unwrap(),
+                    "--json",
+                    "--target",
+                    language,
+                    "--mode",
+                    "reliable",
+                    "--option",
+                    "listing",
+                    "on",
+                    "--option",
+                    "aif",
+                    "on",
+                    "--option",
+                    "funcstart_patterns",
+                    patterns,
+                    "--option",
+                    "armframes",
+                    "on",
                 ]),
-                Duration::from_secs(20), Duration::from_millis(10),
-            ).unwrap_or_else(|| panic!("inventory did not terminate: {endian}/{patterns}"));
-            assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+                Duration::from_secs(20),
+                Duration::from_millis(10),
+            )
+            .unwrap_or_else(|| panic!("inventory did not terminate: {endian}/{patterns}"));
+            assert!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
             let doc: Value = serde_json::from_slice(&out.stdout).unwrap();
-            let entries: Vec<_> = doc["functions"].as_array().unwrap().iter()
-                .map(|f| f["address"].as_u64().unwrap()).collect();
-            assert!(entries.contains(&0x1300), "independent AIF entry lost: {doc}");
+            let entries: Vec<_> = doc["functions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|f| f["address"].as_u64().unwrap())
+                .collect();
+            assert!(
+                entries.contains(&0x1300),
+                "independent AIF entry lost: {doc}"
+            );
             if patterns == "on" {
                 assert!(entries.contains(&0x160c), "direct Thumb callee lost: {doc}");
-                assert!(!entries.contains(&0x1600), "stale AIF entry readmitted: {doc}");
+                assert!(
+                    !entries.contains(&0x1600),
+                    "stale AIF entry readmitted: {doc}"
+                );
             }
         }
         std::fs::remove_file(path).unwrap();
@@ -1021,22 +1108,69 @@ fn stale_aif_modes_do_not_restart_inventory_forever() {
 #[test]
 fn recovered_xrefs_preserve_established_modes_for_callee_first_decompilation() {
     for (endian, language) in [("little", "ARM:LE:32:v8"), ("big", "ARM:BE:32:v8")] {
-        let path = fixture_variant("xref-published-mode", "arm", endian, false,
-            &["focusmode", "rootmode", "splitframe", "focusblocks", "xrefpublish"]);
+        let path = fixture_variant(
+            "xref-published-mode",
+            "arm",
+            endian,
+            false,
+            &[
+                "focusmode",
+                "rootmode",
+                "splitframe",
+                "focusblocks",
+                "xrefpublish",
+            ],
+        );
         for protoorder in ["off", "types"] {
             for patterns in ["off", "on"] {
                 let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
-                    .args(["decompile-all", path.to_str().unwrap(), "--json", "--addr", "0x1500", "--addr", "0x1100",
-                        "--target", language, "--mode", "reliable", "--option", "listing", "off",
-                        "--option", "aif", "off", "--option", "protoorder", protoorder,
-                        "--option", "funcstart_patterns", patterns])
-                    .args(["--option", "armframes", "on"]).output().unwrap();
-                assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+                    .args([
+                        "decompile-all",
+                        path.to_str().unwrap(),
+                        "--json",
+                        "--addr",
+                        "0x1500",
+                        "--addr",
+                        "0x1100",
+                        "--target",
+                        language,
+                        "--mode",
+                        "reliable",
+                        "--option",
+                        "listing",
+                        "off",
+                        "--option",
+                        "aif",
+                        "off",
+                        "--option",
+                        "protoorder",
+                        protoorder,
+                        "--option",
+                        "funcstart_patterns",
+                        patterns,
+                    ])
+                    .args(["--option", "armframes", "on"])
+                    .output()
+                    .unwrap();
+                assert!(
+                    out.status.success(),
+                    "{}",
+                    String::from_utf8_lossy(&out.stderr)
+                );
                 let doc: Value = serde_json::from_slice(&out.stdout).unwrap();
-                let caller = doc["functions"].as_array().unwrap().iter()
-                    .find(|f| f["address"].as_u64() == Some(0x1500)).unwrap();
-                let code = caller["code"].as_str().unwrap_or_else(|| panic!("{caller}"));
-                assert!(code.contains("sub_1100("), "{endian}/{protoorder}/{patterns}: {code}");
+                let caller = doc["functions"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|f| f["address"].as_u64() == Some(0x1500))
+                    .unwrap();
+                let code = caller["code"]
+                    .as_str()
+                    .unwrap_or_else(|| panic!("{caller}"));
+                assert!(
+                    code.contains("sub_1100("),
+                    "{endian}/{protoorder}/{patterns}: {code}"
+                );
                 assert!(!code.contains("halt_"), "{code}");
             }
         }
@@ -1050,12 +1184,36 @@ fn recovered_inventory_preserves_independent_aif_body_modes() {
         let path = fixture_variant("aif-seeded-mode", "arm", endian, false, &["aifseedmode"]);
         for patterns in ["off", "on"] {
             for direction in ["--from", "--to"] {
-                let address = if direction == "--from" { "0x1500" } else { "0x1200" };
-                let doc = query_language(&path, direction, address, "auto", language,
-                    &["--option", "listing", "on", "--option", "aif", "on",
-                        "--option", "funcstart_patterns", patterns, "--option", "tailcallentry", "off"]);
-                assert!(calls(&doc).contains(&(0x1750, 0x1200, 0x1500)),
-                    "{endian}/{direction}/{patterns}: {doc}");
+                let address = if direction == "--from" {
+                    "0x1500"
+                } else {
+                    "0x1200"
+                };
+                let doc = query_language(
+                    &path,
+                    direction,
+                    address,
+                    "auto",
+                    language,
+                    &[
+                        "--option",
+                        "listing",
+                        "on",
+                        "--option",
+                        "aif",
+                        "on",
+                        "--option",
+                        "funcstart_patterns",
+                        patterns,
+                        "--option",
+                        "tailcallentry",
+                        "off",
+                    ],
+                );
+                assert!(
+                    calls(&doc).contains(&(0x1750, 0x1200, 0x1500)),
+                    "{endian}/{direction}/{patterns}: {doc}"
+                );
             }
         }
         std::fs::remove_file(path).unwrap();
@@ -1065,22 +1223,58 @@ fn recovered_inventory_preserves_independent_aif_body_modes() {
 #[test]
 fn recovered_modes_do_not_escape_into_unclaimed_decompilation() {
     for (endian, language) in [("little", "ARM:LE:32:v8"), ("big", "ARM:BE:32:v8")] {
-        let path = fixture_variant("unclaimed-mode", "arm", endian, false,
-            &["focusmode", "rootmode", "splitframe", "unclaimedmode"]);
+        let path = fixture_variant(
+            "unclaimed-mode",
+            "arm",
+            endian,
+            false,
+            &["focusmode", "rootmode", "splitframe", "unclaimedmode"],
+        );
         for aif in ["off", "on"] {
             for patterns in ["off", "on"] {
                 let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
-                    .args(["decompile", path.to_str().unwrap(), "0x1750", "--addr",
-                        "--target", language, "--mode", "reliable", "--option", "listing", "on",
-                        "--option", "funcstart_patterns", patterns, "--option", "aif", aif])
-                    .args(["--option", "armframes", "on"]).output().unwrap();
-                assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+                    .args([
+                        "decompile",
+                        path.to_str().unwrap(),
+                        "0x1750",
+                        "--addr",
+                        "--target",
+                        language,
+                        "--mode",
+                        "reliable",
+                        "--option",
+                        "listing",
+                        "on",
+                        "--option",
+                        "funcstart_patterns",
+                        patterns,
+                        "--option",
+                        "aif",
+                        aif,
+                    ])
+                    .args(["--option", "armframes", "on"])
+                    .output()
+                    .unwrap();
+                assert!(
+                    out.status.success(),
+                    "{}",
+                    String::from_utf8_lossy(&out.stderr)
+                );
                 let code = String::from_utf8(out.stdout).unwrap();
-                assert!(code.contains("sub_1100("), "{endian}/{aif}/{patterns}: {code}");
+                assert!(
+                    code.contains("sub_1100("),
+                    "{endian}/{aif}/{patterns}: {code}"
+                );
                 assert!(!code.contains("halt_"), "{code}");
             }
-            let callee = query_language(&path, "--to", "0x1300", "auto", language,
-                &["--option", "listing", "on", "--option", "aif", aif]);
+            let callee = query_language(
+                &path,
+                "--to",
+                "0x1300",
+                "auto",
+                language,
+                &["--option", "listing", "on", "--option", "aif", aif],
+            );
             assert_eq!(calls(&callee), vec![(0x1684, 0x1300, 0x1680)], "{callee}");
         }
         std::fs::remove_file(path).unwrap();
@@ -1090,16 +1284,39 @@ fn recovered_modes_do_not_escape_into_unclaimed_decompilation() {
 #[test]
 fn recovered_modes_preserve_unframed_focus_blocks() {
     for (endian, language) in [("little", "ARM:LE:32:v8"), ("big", "ARM:BE:32:v8")] {
-        let path = fixture_variant("unframed-focus-mode", "arm", endian, false,
-            &["focusmode", "rootmode", "splitframe", "focusblocks"]);
+        let path = fixture_variant(
+            "unframed-focus-mode",
+            "arm",
+            endian,
+            false,
+            &["focusmode", "rootmode", "splitframe", "focusblocks"],
+        );
         for aif in ["off", "on"] {
             for patterns in ["off", "on"] {
                 for isa in ["auto", "arm"] {
-                    let doc = query_language(&path, "--from", "0x1500", isa, language,
-                        &["--option", "listing", "off", "--option", "aif", aif,
-                            "--option", "funcstart_patterns", patterns]);
-                    assert_eq!(calls(&doc), vec![(0x1750, 0x1100, 0x1500)],
-                        "{endian}/{aif}/{patterns}/{isa}: {doc}");
+                    let doc = query_language(
+                        &path,
+                        "--from",
+                        "0x1500",
+                        isa,
+                        language,
+                        &[
+                            "--option",
+                            "listing",
+                            "off",
+                            "--option",
+                            "aif",
+                            aif,
+                            "--option",
+                            "funcstart_patterns",
+                            patterns,
+                        ],
+                    );
+                    assert_eq!(
+                        calls(&doc),
+                        vec![(0x1750, 0x1100, 0x1500)],
+                        "{endian}/{aif}/{patterns}/{isa}: {doc}"
+                    );
                 }
             }
         }
@@ -1114,23 +1331,47 @@ fn recovered_frame_modes_cover_discontiguous_blocks() {
             &["focusmode", "rootmode", "splitframe"][..],
             &["focusmode", "rootmode", "splitframe", "armcallee"][..],
             &["focusmode", "rootmode", "splitframe", "backwardframe"][..],
-            &["focusmode", "rootmode", "splitframe", "backwardframe", "armcallee"][..],
+            &[
+                "focusmode",
+                "rootmode",
+                "splitframe",
+                "backwardframe",
+                "armcallee",
+            ][..],
         ] {
             let path = fixture_variant("split-frame-mode", "arm", endian, false, variants);
             for aif in ["off", "on"] {
                 for listing in ["off", "on"] {
-                    let options = ["--option", "aif", aif, "--option", "listing", listing,
-                        "--option", "tailcallentry", "off"];
-                    let explicit = query_language(&path, "--from", "0x1600", "arm", language, &options);
-                    assert_eq!(calls(&explicit), vec![(0x1750, 0x1100, 0x1600)], "{explicit}");
+                    let options = [
+                        "--option",
+                        "aif",
+                        aif,
+                        "--option",
+                        "listing",
+                        listing,
+                        "--option",
+                        "tailcallentry",
+                        "off",
+                    ];
+                    let explicit =
+                        query_language(&path, "--from", "0x1600", "arm", language, &options);
+                    assert_eq!(
+                        calls(&explicit),
+                        vec![(0x1750, 0x1100, 0x1600)],
+                        "{explicit}"
+                    );
                     for (direction, target, expected) in [
                         ("--from", "0x1600", (0x1750, 0x1100, 0x1600)),
                         ("--to", "0x1100", (0x1750, 0x1100, 0x1600)),
                         ("--to", "0x1300", (0x1684, 0x1300, 0x1680)),
                     ] {
-                        let doc = query_language(&path, direction, target, "auto", language, &options);
-                        assert_eq!(calls(&doc), vec![expected],
-                            "{endian}/{aif}/{listing}/{variants:?}/{direction}/{target}: {doc}");
+                        let doc =
+                            query_language(&path, direction, target, "auto", language, &options);
+                        assert_eq!(
+                            calls(&doc),
+                            vec![expected],
+                            "{endian}/{aif}/{listing}/{variants:?}/{direction}/{target}: {doc}"
+                        );
                     }
                 }
             }
@@ -1142,17 +1383,34 @@ fn recovered_frame_modes_cover_discontiguous_blocks() {
 #[test]
 fn a_recursive_frame_retains_its_validated_distant_block_mode() {
     for (endian, language) in [("little", "ARM:LE:32:v8"), ("big", "ARM:BE:32:v8")] {
-        let path = fixture_variant("recursive-split-frame-mode", "arm", endian, false,
-            &["focusmode", "rootmode", "splitframe", "recursiveframe"]);
+        let path = fixture_variant(
+            "recursive-split-frame-mode",
+            "arm",
+            endian,
+            false,
+            &["focusmode", "rootmode", "splitframe", "recursiveframe"],
+        );
         for aif in ["off", "on"] {
             for listing in ["off", "on"] {
-                let options = ["--option", "aif", aif, "--option", "listing", listing,
-                    "--option", "tailcallentry", "off"];
+                let options = [
+                    "--option",
+                    "aif",
+                    aif,
+                    "--option",
+                    "listing",
+                    listing,
+                    "--option",
+                    "tailcallentry",
+                    "off",
+                ];
                 let doc = query_language(&path, "--from", "0x1600", "arm", language, &options);
                 let mut actual = calls(&doc);
                 actual.sort_unstable();
-                assert_eq!(actual, vec![(0x1604, 0x1600, 0x1600), (0x1750, 0x1100, 0x1600)],
-                    "{endian}/{aif}/{listing}: {doc}");
+                assert_eq!(
+                    actual,
+                    vec![(0x1604, 0x1600, 0x1600), (0x1750, 0x1100, 0x1600)],
+                    "{endian}/{aif}/{listing}: {doc}"
+                );
             }
         }
         std::fs::remove_file(path).unwrap();
@@ -1170,14 +1428,39 @@ fn inventory_restores_pending_frame_modes_after_backward_interworking() {
             for aif in ["off", "on"] {
                 for listing in ["off", "on"] {
                     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
-                        .args(["xrefs", path.to_str().unwrap(), "--from", "0x1500",
-                            "--kind", "call", "--json", "--target", language, "--mode", "reliable",
-                            "--option", "aif", aif, "--option", "listing", listing])
-                        .args(["--option", "armframes", "on"]).output().unwrap();
-                    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+                        .args([
+                            "xrefs",
+                            path.to_str().unwrap(),
+                            "--from",
+                            "0x1500",
+                            "--kind",
+                            "call",
+                            "--json",
+                            "--target",
+                            language,
+                            "--mode",
+                            "reliable",
+                            "--option",
+                            "aif",
+                            aif,
+                            "--option",
+                            "listing",
+                            listing,
+                        ])
+                        .args(["--option", "armframes", "on"])
+                        .output()
+                        .unwrap();
+                    assert!(
+                        out.status.success(),
+                        "{}",
+                        String::from_utf8_lossy(&out.stderr)
+                    );
                     let doc: Value = serde_json::from_slice(&out.stdout).unwrap();
-                    assert_eq!(calls(&doc), vec![(0x1504, 0x1200, 0x1500)],
-                        "{endian}/{aif}/{listing}/{variants:?}: {doc}");
+                    assert_eq!(
+                        calls(&doc),
+                        vec![(0x1504, 0x1200, 0x1500)],
+                        "{endian}/{aif}/{listing}/{variants:?}: {doc}"
+                    );
                 }
             }
             std::fs::remove_file(path).unwrap();
@@ -1197,15 +1480,19 @@ fn inventory_seeds_retain_independent_frame_modes() {
                 for listing in ["off", "on"] {
                     let options = ["--option", "aif", aif, "--option", "listing", listing];
                     for (direction, target) in [("--from", "0x1600"), ("--to", "0x1200")] {
-                        let doc = query_language(&path, direction, target, "arm", language, &options);
+                        let doc =
+                            query_language(&path, direction, target, "arm", language, &options);
                         assert_eq!(
-                            calls(&doc), vec![(0x1604, 0x1200, 0x1600)],
+                            calls(&doc),
+                            vec![(0x1604, 0x1200, 0x1600)],
                             "{endian}/{aif}/{listing}/{variants:?}: {doc}"
                         );
                     }
-                    let callee = query_language(&path, "--from", "0x1580", "arm", language, &options);
+                    let callee =
+                        query_language(&path, "--from", "0x1580", "arm", language, &options);
                     assert_eq!(
-                        calls(&callee), vec![(0x1584, 0x1300, 0x1580)],
+                        calls(&callee),
+                        vec![(0x1584, 0x1300, 0x1580)],
                         "direct interworking must override the saved seed mode: {callee}"
                     );
                 }

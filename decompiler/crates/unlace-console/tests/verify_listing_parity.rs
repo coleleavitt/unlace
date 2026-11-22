@@ -23,11 +23,16 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// The vendored non-PIE x86-64 fauxware fixture (shared with `verify_listing_core`).
@@ -55,15 +60,20 @@ fn decompile_main(mode: ListingMode) -> String {
     let bin = fauxware().to_str().expect("UTF-8 fixture path").to_string();
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     if let ListingMode::OnAfterBootstrap = mode {
         prog.arch_mut()
             .set_kuna_option("listing", "on")
             .expect("listing option flips on");
     }
 
-    let cmds: Vec<String> =
-        ["load function main".into(), "decompile".into(), "print C".into()].to_vec();
+    let cmds: Vec<String> = [
+        "load function main".into(),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .to_vec();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -86,8 +96,14 @@ fn listing_on_is_byte_identical_to_off() {
     let off = decompile_main(ListingMode::Off);
     let on = decompile_main(ListingMode::OnAfterBootstrap);
 
-    assert!(!off.trim().is_empty(), "expected non-empty C for fauxware main");
-    assert!(off.contains("main") || off.contains("undefined"), "expected a function body:\n{off}");
+    assert!(
+        !off.trim().is_empty(),
+        "expected non-empty C for fauxware main"
+    );
+    assert!(
+        off.contains("main") || off.contains("undefined"),
+        "expected a function body:\n{off}"
+    );
     assert_eq!(
         on, off,
         "`--option listing on` must produce byte-identical C to the default (flag off): \

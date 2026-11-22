@@ -14,14 +14,19 @@ use std::path::PathBuf;
 use unlace_console::engine::bootstrap_from_object;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn bootstrap(slide: bool) -> unlace_console::engine::ConsoleProgram {
     let specs = repo_root().join("specs");
-    let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/cortexm_poolentry_le32");
-    let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &[specs.to_str().unwrap().into()])
-        .expect("bootstrap fixture with built processor specs");
+    let bin =
+        repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/cortexm_poolentry_le32");
+    let mut prog =
+        bootstrap_from_object(bin.to_str().unwrap(), "", &[specs.to_str().unwrap().into()])
+            .expect("bootstrap fixture with built processor specs");
     for (name, on) in [
         ("listing", true),
         ("funcstart_patterns", true),
@@ -30,9 +35,12 @@ fn bootstrap(slide: bool) -> unlace_console::engine::ConsoleProgram {
         ("aifpoolslide", slide),
         ("aifdataveto", false),
     ] {
-        prog.arch_mut().set_kuna_option(name, if on { "on" } else { "off" }).unwrap();
+        prog.arch_mut()
+            .set_kuna_option(name, if on { "on" } else { "off" })
+            .unwrap();
     }
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
@@ -42,15 +50,27 @@ fn listed(prog: &unlace_console::engine::ConsoleProgram, names: [&str; 6]) -> [b
 
 /// `sub_800014a` and `sub_800015e` sit one halfword into `POOL1` and `POOL2`; `B`
 /// (`sub_800014c`) and `D` (`sub_8000160`) are the functions behind them.
-const SHAPES: [&str; 6] =
-    ["sub_800014a", "sub_800014c", "sub_800015e", "sub_8000160", "sub_8000170", "sub_8000174"];
+const SHAPES: [&str; 6] = [
+    "sub_800014a",
+    "sub_800014c",
+    "sub_800015e",
+    "sub_8000160",
+    "sub_8000170",
+    "sub_8000174",
+];
 
 #[test]
 fn off_plants_both_entries_inside_the_pools() {
-    assert_eq!(listed(&bootstrap(false), SHAPES), [true, false, true, false, true, false]);
+    assert_eq!(
+        listed(&bootstrap(false), SHAPES),
+        [true, false, true, false, true, false]
+    );
 }
 
 #[test]
 fn on_plants_both_entries_on_the_functions_after_the_pools() {
-    assert_eq!(listed(&bootstrap(true), SHAPES), [false, true, false, true, false, true]);
+    assert_eq!(
+        listed(&bootstrap(true), SHAPES),
+        [false, true, false, true, false, true]
+    );
 }

@@ -66,7 +66,10 @@ fn lift_diff_b2_structural() {
         report.npass,
         corpus::CASES.len()
     );
-    assert!(report.passed(), "the aggregate self-test predicate must hold");
+    assert!(
+        report.passed(),
+        "the aggregate self-test predicate must hold"
+    );
 }
 
 /// F3 (review): the per-DivergentBy op-count delta is a CHECKED invariant, not a
@@ -87,11 +90,17 @@ fn divergent_cases_have_pinned_count_deltas() {
         ("ccmp", "block#3 @0x42cb04: op count differs rust=2 cpp=4"),
         // x86-64 convert: the entry block (block#0) gains 51 call placeholders:
         // 79 -> 130.
-        ("convert", "block#0 @0x1006b9: op count differs rust=79 cpp=130"),
+        (
+            "convert",
+            "block#0 @0x1006b9: op count differs rust=79 cpp=130",
+        ),
         // x86-64 nan: the call block (block#3 @0x1011d8) gains 6 ops: 39 -> 45.
         ("nan", "block#3 @0x1011d8: op count differs rust=39 cpp=45"),
         // 8051: the non-entry block#2 @0xb gains the write_volatile_1 inject: 28 -> 29.
-        ("gh1243-8051-addc", "block#2 @0xb: op count differs rust=28 cpp=29"),
+        (
+            "gh1243-8051-addc",
+            "block#2 @0xb: op count differs rust=28 cpp=29",
+        ),
         // ARM condexe: the recovered CFG splits differently — block COUNT diverges
         // (Rust 1 block vs the C++ 9-block condexe lattice).
         ("condexesub", "block count differs: rust=1 cpp=9"),
@@ -135,13 +144,26 @@ fn gh6990_is_a_validated_five_block_pass() {
         eprintln!("all cases skipped (no specs built) — gh6990 pass not exercised");
         return;
     }
-    let (_, _, outcome) =
-        report.rows.iter().find(|(s, _, _)| *s == "gh6990-returnpair").expect("gh6990 case");
+    let (_, _, outcome) = report
+        .rows
+        .iter()
+        .find(|(s, _, _)| *s == "gh6990-returnpair")
+        .expect("gh6990 case");
     match outcome {
-        Outcome::Pass { blocks, ops, excluded_tracked } => {
+        Outcome::Pass {
+            blocks,
+            ops,
+            excluded_tracked,
+        } => {
             assert_eq!(*blocks, 5, "gh6990 must compare all 5 blocks (F1 fix)");
-            assert_eq!(*ops, 209, "gh6990 compares 209 ops (211 lines - 2 entry-head COPYs)");
-            assert_eq!(*excluded_tracked, 2, "the two entry-head tracked COPYs are excluded");
+            assert_eq!(
+                *ops, 209,
+                "gh6990 compares 209 ops (211 lines - 2 entry-head COPYs)"
+            );
+            assert_eq!(
+                *excluded_tracked, 2,
+                "the two entry-head tracked COPYs are excluded"
+            );
         }
         other => panic!("gh6990 must be a 5-block PASS, got {other:?}"),
     }

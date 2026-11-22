@@ -24,10 +24,10 @@ use unlace_base::types::{int4, uint4, uintb};
 use unlace_decomp::cast::{
     CastContext, CastStrategy, CastStrategyC, IntPromotionCode, OpRef, VnRef,
 };
-use unlace_decomp::dtype::{type_metatype, Datatype, DatatypeKind, TypeFactoryImpl};
+use unlace_decomp::dtype::{Datatype, DatatypeKind, TypeFactoryImpl, type_metatype};
 use unlace_decomp::printlanguage::{
-    format_binary, most_natural_base, parentheses, unicode_needs_escape, OpToken, ReversePolish,
-    TokenType,
+    OpToken, ReversePolish, TokenType, format_binary, most_natural_base, parentheses,
+    unicode_needs_escape,
 };
 use unlace_num::opcodes::OpCode;
 
@@ -47,7 +47,12 @@ fn uint_t(size: int4) -> Rc<Datatype> {
 
 fn ptr_to(ptrto: Rc<Datatype>, wordsize: uint4) -> Rc<Datatype> {
     let mut t = Datatype::new_with_align(8, -1, type_metatype::TYPE_PTR);
-    t.kind = DatatypeKind::Pointer { ptrto, spaceid: None, truncate: None, wordsize };
+    t.kind = DatatypeKind::Pointer {
+        ptrto,
+        spaceid: None,
+        truncate: None,
+        wordsize,
+    };
     Rc::new(t)
 }
 
@@ -172,7 +177,13 @@ impl CastContext for LongCtx {
 fn long_size_marked(meta: type_metatype, size: int4, offset: uintb) -> bool {
     let s = strategy_c();
     let ty = base(size, meta);
-    let mut ctx = LongCtx { size, offset, ty, is_shift: true, marked: std::cell::Cell::new(false) };
+    let mut ctx = LongCtx {
+        size,
+        offset,
+        ty,
+        is_shift: true,
+        marked: std::cell::Cell::new(false),
+    };
     s.mark_explicit_long_size(&mut ctx, OpRef(0), 0)
 }
 
@@ -181,13 +192,25 @@ fn mark_explicit_long_size_negative_int_boundary() {
     // promoteSize == 4, so the negative-INT guard is `bit >= 31`.
     // val 0xffffffff7fffffff: one's-complement negate -> 0x80000000, msb = 31,
     // `31 >= 31` -> NOT long.
-    assert!(!long_size_marked(type_metatype::TYPE_INT, 8, 0xffffffff7fffffff));
+    assert!(!long_size_marked(
+        type_metatype::TYPE_INT,
+        8,
+        0xffffffff7fffffff
+    ));
     // val 0xffffffff80000000: negate -> 0x7fffffff, msb = 30, `30 >= 31` false
     // -> long.
-    assert!(long_size_marked(type_metatype::TYPE_INT, 8, 0xffffffff80000000));
+    assert!(long_size_marked(
+        type_metatype::TYPE_INT,
+        8,
+        0xffffffff80000000
+    ));
     // val 0xffffffffc0000000: negate -> 0x3fffffff, msb = 29, `29 >= 31` false
     // -> long.
-    assert!(long_size_marked(type_metatype::TYPE_INT, 8, 0xffffffffc0000000));
+    assert!(long_size_marked(
+        type_metatype::TYPE_INT,
+        8,
+        0xffffffffc0000000
+    ));
 }
 
 #[test]
@@ -204,8 +227,13 @@ fn mark_explicit_long_size_unsigned_boundary_and_size_guard() {
     // Non-shift op -> never long.
     let s = strategy_c();
     let ty = base(8, type_metatype::TYPE_UINT);
-    let mut ctx =
-        LongCtx { size: 8, offset: 0xffff, ty, is_shift: false, marked: std::cell::Cell::new(false) };
+    let mut ctx = LongCtx {
+        size: 8,
+        offset: 0xffff,
+        ty,
+        is_shift: false,
+        marked: std::cell::Cell::new(false),
+    };
     assert!(!s.mark_explicit_long_size(&mut ctx, OpRef(0), 0));
 }
 
@@ -300,10 +328,16 @@ fn mk(print1: &'static str, prec: int4, assoc: bool, tt: TokenType) -> OpToken {
 
 #[test]
 fn parentheses_hiddenfunction_equal_precedence_keeps_parens() {
-    let hidden: &'static OpToken =
-        Box::leak(Box::new(mk("", 0, false, TokenType::HiddenFunction)));
+    let hidden: &'static OpToken = Box::leak(Box::new(mk("", 0, false, TokenType::HiddenFunction)));
     let op2: &'static OpToken = Box::leak(Box::new(mk("+", 40, true, TokenType::Binary)));
-    let top = ReversePolish { tok: hidden, visited: 0, paren: false, op: None, id: 0, id2: 0 };
+    let top = ReversePolish {
+        tok: hidden,
+        visited: 0,
+        paren: false,
+        op: None,
+        id: 0,
+        id2: 0,
+    };
 
     // prev binary with EQUAL precedence to op2: C++ falls through (no `return
     // false`) to `return true` -> parens.  (The boundary the `<` guard guards.)
@@ -327,8 +361,14 @@ fn parentheses_hiddenfunction_equal_precedence_keeps_parens() {
     assert!(parentheses(&top, op2, None));
 
     // stage != 0 -> the inner block is skipped, always true regardless of prev.
-    let top_stage1 =
-        ReversePolish { tok: hidden, visited: 1, paren: false, op: None, id: 0, id2: 0 };
+    let top_stage1 = ReversePolish {
+        tok: hidden,
+        visited: 1,
+        paren: false,
+        op: None,
+        id: 0,
+        id2: 0,
+    };
     assert!(parentheses(&top_stage1, op2, Some(&prev_lo)));
 }
 
@@ -337,7 +377,14 @@ fn parentheses_binary_associative_pointer_identity() {
     // Equal precedence, associative, and the SAME static token pointer -> the
     // C++ `topToken == op2` pointer-identity check fires -> no parens.
     let mult: &'static OpToken = Box::leak(Box::new(mk("*", 50, true, TokenType::Binary)));
-    let top = ReversePolish { tok: mult, visited: 1, paren: false, op: None, id: 0, id2: 0 };
+    let top = ReversePolish {
+        tok: mult,
+        visited: 1,
+        paren: false,
+        op: None,
+        id: 0,
+        id2: 0,
+    };
     assert!(!parentheses(&top, mult, None));
 
     // A DIFFERENT token of equal precedence (distinct pointer) -> parens, even if
@@ -362,15 +409,24 @@ fn cast_standard_pointer_chain_forces_care_uint_int() {
 
     // Same two base types NOT under a pointer, care_uint_int=false: no cast
     // (the reset only happens inside the pointer loop).
-    assert!(s.cast_standard(&uint_t(4), &int_t(4), false, true).is_none());
+    assert!(
+        s.cast_standard(&uint_t(4), &int_t(4), false, true)
+            .is_none()
+    );
 
     // care_ptr_uint=false with a UINT requirement and a PTR current at top level
     // (no pointer descent on req side): the `!care_ptr_uint && PTR` arm -> no
     // cast (cast.cc:359-360).
-    assert!(s.cast_standard(&uint_t(8), &ptr_to(int_t(4), 1), false, false).is_none());
+    assert!(
+        s.cast_standard(&uint_t(8), &ptr_to(int_t(4), 1), false, false)
+            .is_none()
+    );
     // ...but care_ptr_uint=true -> the size matches (both 8) and PTR is not in
     // the UINT no-cast set -> default arm -> cast.
-    assert!(s.cast_standard(&uint_t(8), &ptr_to(int_t(4), 1), false, true).is_some());
+    assert!(
+        s.cast_standard(&uint_t(8), &ptr_to(int_t(4), 1), false, true)
+            .is_some()
+    );
 }
 
 #[test]

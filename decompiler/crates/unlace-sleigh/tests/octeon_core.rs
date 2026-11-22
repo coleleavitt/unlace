@@ -114,7 +114,8 @@ impl unlace_sleigh::emulate::BreakCallBack for AtomicCapture {
     ) -> KunaResult<bool> {
         let state = emulator.get_memory_state();
         let inputs = (1..op.num_input())
-            .map(|i| state.borrow().get_value_data(op.get_input(i))).collect::<KunaResult<Vec<_>>>()?;
+            .map(|i| state.borrow().get_value_data(op.get_input(i)))
+            .collect::<KunaResult<Vec<_>>>()?;
         self.inputs.borrow_mut().push(inputs);
         if let Some(output) = op.get_output() {
             state.borrow_mut().set_value_data(output, self.old)?;
@@ -143,20 +144,66 @@ fn atomic_operands_are_captured_before_aliased_outputs_and_word_results_sign_ext
             (0x700005df, "octeon_exchange64", 8, None),
         ] {
             for dest in [0u32, 4, 5, 8] {
-                for source in if constant.is_some() { vec![0] } else { vec![0, 4, 5] } {
-                    let mut machine = Machine::new(spec, word | (4 << 21) | (source << 16) | (dest << 11), 0);
+                for source in if constant.is_some() {
+                    vec![0]
+                } else {
+                    vec![0, 4, 5]
+                } {
+                    let mut machine =
+                        Machine::new(spec, word | (4 << 21) | (source << 16) | (dest << 11), 0);
                     let inputs = Rc::new(RefCell::new(Vec::new()));
-                    let old = if width == 4 { 0x80000001 } else { 0x8000000144556677 };
-                    machine.breaks.borrow_mut().register_pcode_callback(name,
-                        Rc::new(RefCell::new(AtomicCapture { inputs: Rc::clone(&inputs), old }))).unwrap();
-                    machine.step(&[("zero",37), ("a0",0x2000), ("a1",0xfedcba9876543210), ("t0",99)]);
-                    let operand = constant.unwrap_or(match source { 0 => 0, 4 => 0x2000, _ => 0xfedcba9876543210 });
-                    let operand = if width == 4 { operand & 0xffffffff } else { operand };
-                    assert_eq!(*inputs.borrow(), vec![vec![0x2000, operand]], "{spec} {word:08x}");
+                    let old = if width == 4 {
+                        0x80000001
+                    } else {
+                        0x8000000144556677
+                    };
+                    machine
+                        .breaks
+                        .borrow_mut()
+                        .register_pcode_callback(
+                            name,
+                            Rc::new(RefCell::new(AtomicCapture {
+                                inputs: Rc::clone(&inputs),
+                                old,
+                            })),
+                        )
+                        .unwrap();
+                    machine.step(&[
+                        ("zero", 37),
+                        ("a0", 0x2000),
+                        ("a1", 0xfedcba9876543210),
+                        ("t0", 99),
+                    ]);
+                    let operand = constant.unwrap_or(match source {
+                        0 => 0,
+                        4 => 0x2000,
+                        _ => 0xfedcba9876543210,
+                    });
+                    let operand = if width == 4 {
+                        operand & 0xffffffff
+                    } else {
+                        operand
+                    };
+                    assert_eq!(
+                        *inputs.borrow(),
+                        vec![vec![0x2000, operand]],
+                        "{spec} {word:08x}"
+                    );
                     let expected = if width == 4 { 0xffffffff80000001 } else { old };
-                    assert_eq!(machine.read("zero"), 37, "architectural zero must discard only the output");
-                    for (reg, number, initial) in [("a0",4,0x2000), ("a1",5,0xfedcba9876543210), ("t0",8,99)] {
-                        assert_eq!(machine.read(reg), if dest == number { expected } else { initial });
+                    assert_eq!(
+                        machine.read("zero"),
+                        37,
+                        "architectural zero must discard only the output"
+                    );
+                    for (reg, number, initial) in [
+                        ("a0", 4, 0x2000),
+                        ("a1", 5, 0xfedcba9876543210),
+                        ("t0", 8, 99),
+                    ] {
+                        assert_eq!(
+                            machine.read(reg),
+                            if dest == number { expected } else { initial }
+                        );
                     }
                 }
             }
@@ -172,16 +219,29 @@ fn reserved_atomic_fields_do_not_acquire_another_instruction_meaning() {
         fn dump(&mut self, _: &Address, _: &str, _: &str) {}
     }
     for spec in ["octeonplusbe", "octeon2be", "octeon3be"] {
-        for (word, reserved) in [(0x70850018u32, 6..16), (0x70850019, 6..16),
-            (0x7080409f, 16..21), (0x708043df, 16..21),
-            (0x7080071f, 11..21), (0x7080075f, 11..21), (0x10f, 11..26)] {
+        for (word, reserved) in [
+            (0x70850018u32, 6..16),
+            (0x70850019, 6..16),
+            (0x7080409f, 16..21),
+            (0x708043df, 16..21),
+            (0x7080071f, 11..21),
+            (0x7080075f, 11..21),
+            (0x10f, 11..26),
+        ] {
             for bit in reserved {
                 let word = word | (1 << bit);
-                let mut sleigh = Sleigh::new(Box::new(Bytes(word.to_be_bytes().to_vec())), Box::new(ContextInternal::new()));
+                let mut sleigh = Sleigh::new(
+                    Box::new(Bytes(word.to_be_bytes().to_vec())),
+                    Box::new(ContextInternal::new()),
+                );
                 sleigh.initialize_from_sla(&read_sla(spec)).unwrap();
                 let ram = Rc::clone(sleigh.base().manager().get_space_by_name("ram").unwrap());
-                assert!(sleigh.print_assembly(&mut Discard, &Address::new(ram, 0x1000)).is_err(),
-                    "{spec} accepted reserved encoding {word:08x}");
+                assert!(
+                    sleigh
+                        .print_assembly(&mut Discard, &Address::new(ram, 0x1000))
+                        .is_err(),
+                    "{spec} accepted reserved encoding {word:08x}"
+                );
             }
         }
     }
@@ -226,8 +286,10 @@ fn atomic_generation_gates_never_admit_generic_save_restore() {
         0x7080609f,
         0x7085649f,
     ];
-    let mnemonics = ["lai", "laid", "lad", "ladd", "las", "lasd", "lac", "lacd",
-        "laa", "laad", "law", "lawd", "saa", "saad", "lai", "laa"];
+    let mnemonics = [
+        "lai", "laid", "lad", "ladd", "las", "lasd", "lac", "lacd", "laa", "laad", "law", "lawd",
+        "saa", "saad", "lai", "laa",
+    ];
     for spec in SPECS {
         let bytes = words.iter().flat_map(|w| w.to_be_bytes()).collect();
         let mut sleigh = Sleigh::new(Box::new(Bytes(bytes)), Box::new(ContextInternal::new()));

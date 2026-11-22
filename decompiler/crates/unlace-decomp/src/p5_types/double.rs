@@ -55,14 +55,14 @@
 //! `TypeOp` with the correct opcode value and an empty flag word — correct for
 //! the rule's own dispatch, flags deferred.  // STUB(W6)
 
-use unlace_base::address::{calc_mask, Address};
+use unlace_base::address::{Address, calc_mask};
 use unlace_base::space::spacetype;
-use unlace_base::types::{int4, uintb, Wrap};
+use unlace_base::types::{Wrap, int4, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{ActionGroupList, Rule, RuleSpec};
-use crate::funcdata::Funcdata;
 use crate::context::{BlockId, OpId, VarnodeId};
+use crate::funcdata::Funcdata;
 
 /// `sizeof(uintb)` from the C++ — constants cannot exceed 8-byte precision.
 const SIZEOF_UINTB: int4 = 8;
@@ -86,7 +86,10 @@ fn set_opcode_typed(data: &mut Funcdata, op: OpId, opc: OpCode) {
 // dereferences a live pointer).
 #[inline]
 fn vn_is_constant(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).expect("double: stale vn").is_constant()
+    data.vbank()
+        .get(vn)
+        .expect("double: stale vn")
+        .is_constant()
 }
 #[inline]
 fn vn_is_written(data: &Funcdata, vn: VarnodeId) -> bool {
@@ -114,27 +117,46 @@ fn vn_get_offset(data: &Funcdata, vn: VarnodeId) -> uintb {
 }
 #[inline]
 fn vn_get_addr(data: &Funcdata, vn: VarnodeId) -> Address {
-    data.vbank().get(vn).expect("double: stale vn").get_addr().clone()
+    data.vbank()
+        .get(vn)
+        .expect("double: stale vn")
+        .get_addr()
+        .clone()
 }
 #[inline]
 fn vn_is_addr_tied(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).expect("double: stale vn").is_addr_tied()
+    data.vbank()
+        .get(vn)
+        .expect("double: stale vn")
+        .is_addr_tied()
 }
 #[inline]
 fn vn_is_addr_force(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).expect("double: stale vn").is_addr_force()
+    data.vbank()
+        .get(vn)
+        .expect("double: stale vn")
+        .is_addr_force()
 }
 #[inline]
 fn vn_is_precis_lo(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).expect("double: stale vn").is_precis_lo()
+    data.vbank()
+        .get(vn)
+        .expect("double: stale vn")
+        .is_precis_lo()
 }
 #[inline]
 fn vn_is_precis_hi(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).expect("double: stale vn").is_precis_hi()
+    data.vbank()
+        .get(vn)
+        .expect("double: stale vn")
+        .is_precis_hi()
 }
 #[inline]
 fn vn_has_no_descend(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).expect("double: stale vn").has_no_descend()
+    data.vbank()
+        .get(vn)
+        .expect("double: stale vn")
+        .has_no_descend()
 }
 #[inline]
 fn vn_is_persist(data: &Funcdata, vn: VarnodeId) -> bool {
@@ -142,13 +164,20 @@ fn vn_is_persist(data: &Funcdata, vn: VarnodeId) -> bool {
 }
 #[inline]
 fn vn_is_type_lock(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).expect("double: stale vn").is_type_lock()
+    data.vbank()
+        .get(vn)
+        .expect("double: stale vn")
+        .is_type_lock()
 }
 /// Snapshot a Varnode's descendant op ids in `beginDescend` order (the C++ holds
 /// a `list::const_iterator` and advances it before mutating).
 #[inline]
 fn descend_ops(data: &Funcdata, vn: VarnodeId) -> Vec<OpId> {
-    data.vbank().get(vn).expect("double: stale vn").descend_iter().collect()
+    data.vbank()
+        .get(vn)
+        .expect("double: stale vn")
+        .descend_iter()
+        .collect()
 }
 /// `Varnode::loneDescend` — the single reading op, or `None`.
 #[inline]
@@ -192,11 +221,19 @@ fn op_get_parent(data: &Funcdata, op: OpId) -> Option<BlockId> {
 }
 #[inline]
 fn op_get_order(data: &Funcdata, op: OpId) -> u32 {
-    data.obank().get(op).expect("double: stale op").get_seq_num().get_order()
+    data.obank()
+        .get(op)
+        .expect("double: stale op")
+        .get_seq_num()
+        .get_order()
 }
 #[inline]
 fn op_get_addr(data: &Funcdata, op: OpId) -> Address {
-    data.obank().get(op).expect("double: stale op").get_addr().clone()
+    data.obank()
+        .get(op)
+        .expect("double: stale op")
+        .get_addr()
+        .clone()
 }
 #[inline]
 fn op_is_dead(data: &Funcdata, op: OpId) -> bool {
@@ -204,7 +241,10 @@ fn op_is_dead(data: &Funcdata, op: OpId) -> bool {
 }
 #[inline]
 fn op_is_return_copy(data: &Funcdata, op: OpId) -> bool {
-    data.obank().get(op).expect("double: stale op").is_return_copy()
+    data.obank()
+        .get(op)
+        .expect("double: stale op")
+        .is_return_copy()
 }
 
 // --- block read helpers (C++ FlowBlock/BlockBasic accessors) --------------
@@ -281,19 +321,31 @@ fn dominates(data: &Funcdata, defblock: BlockId, mut curbl: Option<BlockId>) -> 
 
 #[inline]
 fn vn_set_precis_lo(data: &mut Funcdata, vn: VarnodeId) {
-    data.vbank_mut().get_mut(vn).expect("double: stale vn").set_precis_lo();
+    data.vbank_mut()
+        .get_mut(vn)
+        .expect("double: stale vn")
+        .set_precis_lo();
 }
 #[inline]
 fn vn_set_precis_hi(data: &mut Funcdata, vn: VarnodeId) {
-    data.vbank_mut().get_mut(vn).expect("double: stale vn").set_precis_hi();
+    data.vbank_mut()
+        .get_mut(vn)
+        .expect("double: stale vn")
+        .set_precis_hi();
 }
 #[inline]
 fn vn_set_addr_force(data: &mut Funcdata, vn: VarnodeId) {
-    data.vbank_mut().get_mut(vn).expect("double: stale vn").set_addr_force();
+    data.vbank_mut()
+        .get_mut(vn)
+        .expect("double: stale vn")
+        .set_addr_force();
 }
 #[inline]
 fn vn_set_write_mask(data: &mut Funcdata, vn: VarnodeId) {
-    data.vbank_mut().get_mut(vn).expect("double: stale vn").set_write_mask();
+    data.vbank_mut()
+        .get_mut(vn)
+        .expect("double: stale vn")
+        .set_write_mask();
 }
 /// `data.opSetOutput(op,vn)` — the C++ never fails here on a well-formed graph.
 #[inline]
@@ -303,12 +355,14 @@ fn op_set_output(data: &mut Funcdata, op: OpId, vn: VarnodeId) {
 /// `data.opSetInput(op,vn,slot)`.
 #[inline]
 fn op_set_input(data: &mut Funcdata, op: OpId, vn: VarnodeId, slot: int4) {
-    data.op_set_input(op, vn, slot).expect("double: op_set_input");
+    data.op_set_input(op, vn, slot)
+        .expect("double: op_set_input");
 }
 /// `data.opSetAllInput(op,inlist)`.
 #[inline]
 fn op_set_all_input(data: &mut Funcdata, op: OpId, vvec: &[VarnodeId]) {
-    data.op_set_all_input(op, vvec).expect("double: op_set_all_input");
+    data.op_set_all_input(op, vvec)
+        .expect("double: op_set_all_input");
 }
 
 // =============================================================================
@@ -387,7 +441,13 @@ impl SplitVarnode {
     /// `initPartial(int4 sz,Varnode *l,Varnode *h)`).
     ///
     /// `l` is required (the C++ dereferences it); `h` may be null (implied zero).
-    fn init_partial_pieces(&mut self, data: &Funcdata, sz: int4, l: Option<VarnodeId>, h: Option<VarnodeId>) {
+    fn init_partial_pieces(
+        &mut self,
+        data: &Funcdata,
+        sz: int4,
+        l: Option<VarnodeId>,
+        h: Option<VarnodeId>,
+    ) {
         let l = l.expect("init_partial: lo piece is required");
         match h {
             None => {
@@ -475,7 +535,6 @@ impl SplitVarnode {
 
     // --- discovery / feasibility (double.cc:106-694) -----------------------
 
-
     /// Verify the least significant piece is a SUBPIECE and search for the most
     /// significant piece off the same whole (C++ `inHandLo`).
     fn in_hand_lo(&mut self, data: &Funcdata, l: VarnodeId) -> bool {
@@ -503,7 +562,9 @@ impl SplitVarnode {
                     if vn_get_size(data, tmphi) + vn_get_size(data, l) != vn_get_size(data, w) {
                         continue;
                     }
-                    if vn_get_offset(data, op_get_in(data, tmpop, 1)) != vn_get_size(data, l) as uintb {
+                    if vn_get_offset(data, op_get_in(data, tmpop, 1))
+                        != vn_get_size(data, l) as uintb
+                    {
                         continue;
                     }
                     self.init_all(data, w, l, Some(tmphi));
@@ -513,7 +574,6 @@ impl SplitVarnode {
         }
         false
     }
-
 
     /// Initialize given the least significant piece if immediately concatenated
     /// with its most significant piece (C++ `inHandLoOut`).
@@ -538,7 +598,12 @@ impl SplitVarnode {
             outvn = op_get_out(data, pieceop);
         }
         if let Some(h) = hi_tmp {
-            self.init_all(data, outvn.expect("in_hand_lo_out: piece has out"), l, Some(h));
+            self.init_all(
+                data,
+                outvn.expect("in_hand_lo_out: piece has out"),
+                l,
+                Some(h),
+            );
             return true;
         }
         false
@@ -1091,11 +1156,7 @@ fn space_from_const_index(data: &Funcdata, vn: VarnodeId) -> Option<i32> {
 /// STUB(W4): the space resolution goes through [`space_from_const_index`], which
 /// is deferred, so this always returns `None` today.  The full pointer-adjacency
 /// logic is transcribed for when the space surface lands.
-fn test_contiguous_pointers(
-    data: &Funcdata,
-    most: OpId,
-    least: OpId,
-) -> Option<(OpId, OpId, i32)> {
+fn test_contiguous_pointers(data: &Funcdata, most: OpId, least: OpId) -> Option<(OpId, OpId, i32)> {
     let spc = space_from_const_index(data, op_get_in(data, least, 0))?;
     if space_from_const_index(data, op_get_in(data, most, 0)) != Some(spc) {
         return None;
@@ -1167,7 +1228,8 @@ fn is_addr_tied_contiguous(data: &Funcdata, lo: VarnodeId, hi: VarnodeId) -> Opt
     let lo_v = data.vbank().get(lo).expect("iatc: lo");
     let hi_v = data.vbank().get(hi).expect("iatc: hi");
     let spc = lo_v.get_space().clone();
-    if !std::rc::Rc::ptr_eq(&spc, hi_v.get_space()) && spc.get_index() != hi_v.get_space().get_index()
+    if !std::rc::Rc::ptr_eq(&spc, hi_v.get_space())
+        && spc.get_index() != hi_v.get_space().get_index()
     {
         return None;
     }
@@ -1276,7 +1338,12 @@ fn find_copies(data: &Funcdata, in_: &SplitVarnode, splitvec: &mut Vec<SplitVarn
                 continue;
             }
             let mut newsplit = SplitVarnode::empty();
-            newsplit.init_all(data, in_.get_whole().expect("find_copies: whole"), locpy, Some(hicpy));
+            newsplit.init_all(
+                data,
+                in_.get_whole().expect("find_copies: whole"),
+                locpy,
+                Some(hicpy),
+            );
             splitvec.push(newsplit);
         }
     }
@@ -1395,7 +1462,11 @@ fn create_binary_op(
 
 /// Check that a double-precision shift op's operands are compatible; return the
 /// PcodeOp where the output whole must exist (C++ `prepareShiftOp`).
-fn prepare_shift_op(data: &Funcdata, out: &mut SplitVarnode, in_: &mut SplitVarnode) -> Option<OpId> {
+fn prepare_shift_op(
+    data: &Funcdata,
+    out: &mut SplitVarnode,
+    in_: &mut SplitVarnode,
+) -> Option<OpId> {
     let existop = out.find_out_exist(data)?;
     if !in_.is_whole_feasible(data, existop) {
         return None;
@@ -1487,7 +1558,9 @@ fn create_bool_op(
     let addr = op_get_addr(data, addrop);
     let newop = data.new_op(2, addr);
     set_opcode_typed(data, newop, opc);
-    let newbool = data.new_unique_out(1, newop).expect("create_bool_op: newbool");
+    let newbool = data
+        .new_unique_out(1, newop)
+        .expect("create_bool_op: newbool");
     op_set_input(data, newop, in1.get_whole().expect("cbo2: in1 whole"), 0);
     op_set_input(data, newop, in2.get_whole().expect("cbo2: in2 whole"), 1);
     data.op_insert_before(newop, cbranch);
@@ -1536,9 +1609,18 @@ fn create_phi_op(
     let addr = op_get_addr(data, existop);
     let newop = data.new_op(numin as int4, addr);
     set_opcode_typed(data, newop, OpCode::CPUI_MULTIEQUAL);
-    op_set_output(data, newop, out.get_whole().expect("create_phi_op: out whole"));
+    op_set_output(
+        data,
+        newop,
+        out.get_whole().expect("create_phi_op: out whole"),
+    );
     for (i, item) in inlist.iter().enumerate().take(numin) {
-        op_set_input(data, newop, item.get_whole().expect("create_phi_op: in whole"), i as int4);
+        op_set_input(
+            data,
+            newop,
+            item.get_whole().expect("create_phi_op: in whole"),
+            i as int4,
+        );
     }
     data.op_insert_before(newop, existop);
     out.build_lo_from_whole(data);
@@ -2022,7 +2104,13 @@ impl AddForm {
         false
     }
 
-    fn apply_rule(&mut self, i: &SplitVarnode, op: OpId, workishi: bool, data: &mut Funcdata) -> bool {
+    fn apply_rule(
+        &mut self,
+        i: &SplitVarnode,
+        op: OpId,
+        workishi: bool,
+        data: &mut Funcdata,
+    ) -> bool {
         if !workishi {
             return false;
         }
@@ -2036,23 +2124,28 @@ impl AddForm {
             return false;
         }
 
-        self.indoub.init_partial_pieces(data, self.in_.get_size(), self.lo2, self.hi2);
+        self.indoub
+            .init_partial_pieces(data, self.in_.get_size(), self.lo2, self.hi2);
         if self.indoub.exceeds_const_precision() {
             return false;
         }
-        self.outdoub.init_partial_pieces(
-            data,
-            self.in_.get_size(),
-            self.reslo,
-            self.reshi,
-        );
-        let existop = match prepare_binary_op(data, &mut self.outdoub, &mut self.in_, &mut self.indoub) {
-            Some(e) => e,
-            None => return false,
-        };
+        self.outdoub
+            .init_partial_pieces(data, self.in_.get_size(), self.reslo, self.reshi);
+        let existop =
+            match prepare_binary_op(data, &mut self.outdoub, &mut self.in_, &mut self.indoub) {
+                Some(e) => e,
+                None => return false,
+            };
         let (mut out, mut in1, mut in2) =
             (self.outdoub.clone(), self.in_.clone(), self.indoub.clone());
-        create_binary_op(data, &mut out, &mut in1, &mut in2, existop, OpCode::CPUI_INT_ADD);
+        create_binary_op(
+            data,
+            &mut out,
+            &mut in1,
+            &mut in2,
+            existop,
+            OpCode::CPUI_INT_ADD,
+        );
         true
     }
 }
@@ -2147,14 +2240,28 @@ impl SubForm {
             if !vn_is_written(data, hineg2) {
                 continue;
             }
-            if !verify_mult_neg_one(data, vn_get_def(data, hineg1).expect("subverify: hineg1 def")) {
+            if !verify_mult_neg_one(
+                data,
+                vn_get_def(data, hineg1).expect("subverify: hineg1 def"),
+            ) {
                 continue;
             }
-            if !verify_mult_neg_one(data, vn_get_def(data, hineg2).expect("subverify: hineg2 def")) {
+            if !verify_mult_neg_one(
+                data,
+                vn_get_def(data, hineg2).expect("subverify: hineg2 def"),
+            ) {
                 continue;
             }
-            self.hizext1 = Some(op_get_in(data, vn_get_def(data, hineg1).expect("subverify"), 0));
-            self.hizext2 = Some(op_get_in(data, vn_get_def(data, hineg2).expect("subverify"), 0));
+            self.hizext1 = Some(op_get_in(
+                data,
+                vn_get_def(data, hineg1).expect("subverify"),
+                0,
+            ));
+            self.hizext2 = Some(op_get_in(
+                data,
+                vn_get_def(data, hineg2).expect("subverify"),
+                0,
+            ));
             for j in 0..2 {
                 if j == 0 {
                     let hz1 = self.hizext1.expect("subverify: hizext1");
@@ -2212,7 +2319,13 @@ impl SubForm {
         false
     }
 
-    fn apply_rule(&mut self, i: &SplitVarnode, op: OpId, workishi: bool, data: &mut Funcdata) -> bool {
+    fn apply_rule(
+        &mut self,
+        i: &SplitVarnode,
+        op: OpId,
+        workishi: bool,
+        data: &mut Funcdata,
+    ) -> bool {
         if !workishi {
             return false;
         }
@@ -2226,18 +2339,28 @@ impl SubForm {
             return false;
         }
 
-        self.indoub.init_partial_pieces(data, self.in_.get_size(), self.lo2, self.hi2);
+        self.indoub
+            .init_partial_pieces(data, self.in_.get_size(), self.lo2, self.hi2);
         if self.indoub.exceeds_const_precision() {
             return false;
         }
-        self.outdoub.init_partial_pieces(data, self.in_.get_size(), self.reslo, self.reshi);
-        let existop = match prepare_binary_op(data, &mut self.outdoub, &mut self.in_, &mut self.indoub) {
-            Some(e) => e,
-            None => return false,
-        };
+        self.outdoub
+            .init_partial_pieces(data, self.in_.get_size(), self.reslo, self.reshi);
+        let existop =
+            match prepare_binary_op(data, &mut self.outdoub, &mut self.in_, &mut self.indoub) {
+                Some(e) => e,
+                None => return false,
+            };
         let (mut out, mut in1, mut in2) =
             (self.outdoub.clone(), self.in_.clone(), self.indoub.clone());
-        create_binary_op(data, &mut out, &mut in1, &mut in2, existop, OpCode::CPUI_INT_SUB);
+        create_binary_op(
+            data,
+            &mut out,
+            &mut in1,
+            &mut in2,
+            existop,
+            OpCode::CPUI_INT_SUB,
+        );
         true
     }
 }
@@ -2289,12 +2412,15 @@ impl LogicalForm {
                 let maybeop = vn_get_def(data, hi).expect("fhm: hi def");
                 if op_code(data, maybeop) == op_code(data, loop_) {
                     if op_get_in(data, maybeop, 0) == hi1 {
-                        if vn_is_constant(data, op_get_in(data, maybeop, 1)) == vn_is_constant(data, vn2) {
+                        if vn_is_constant(data, op_get_in(data, maybeop, 1))
+                            == vn_is_constant(data, vn2)
+                        {
                             self.hiop = Some(maybeop);
                             return 0;
                         }
                     } else if op_get_in(data, maybeop, 1) == hi1
-                        && vn_is_constant(data, op_get_in(data, maybeop, 0)) == vn_is_constant(data, vn2)
+                        && vn_is_constant(data, op_get_in(data, maybeop, 0))
+                            == vn_is_constant(data, vn2)
                     {
                         self.hiop = Some(maybeop);
                         return 0;
@@ -2310,7 +2436,8 @@ impl LogicalForm {
                 let in2hi = in2.get_hi().expect("fhm: in2 hi");
                 for maybeop in descend_ops(data, in2hi) {
                     if op_code(data, maybeop) == op_code(data, loop_)
-                        && (op_get_in(data, maybeop, 0) == hi1 || op_get_in(data, maybeop, 1) == hi1)
+                        && (op_get_in(data, maybeop, 0) == hi1
+                            || op_get_in(data, maybeop, 1) == hi1)
                     {
                         self.hiop = Some(maybeop);
                         return 0;
@@ -2371,7 +2498,13 @@ impl LogicalForm {
         false
     }
 
-    fn apply_rule(&mut self, i: &SplitVarnode, lop: OpId, workishi: bool, data: &mut Funcdata) -> bool {
+    fn apply_rule(
+        &mut self,
+        i: &SplitVarnode,
+        lop: OpId,
+        workishi: bool,
+        data: &mut Funcdata,
+    ) -> bool {
         if workishi {
             return false;
         }
@@ -2393,14 +2526,16 @@ impl LogicalForm {
             op_get_out(data, loop_),
             op_get_out(data, hiop),
         );
-        self.indoub.init_partial_pieces(data, self.in_.get_size(), self.lo2, self.hi2);
+        self.indoub
+            .init_partial_pieces(data, self.in_.get_size(), self.lo2, self.hi2);
         if self.indoub.exceeds_const_precision() {
             return false;
         }
-        let existop = match prepare_binary_op(data, &mut self.outdoub, &mut self.in_, &mut self.indoub) {
-            Some(e) => e,
-            None => return false,
-        };
+        let existop =
+            match prepare_binary_op(data, &mut self.outdoub, &mut self.in_, &mut self.indoub) {
+                Some(e) => e,
+                None => return false,
+            };
 
         let opc = op_code(data, loop_);
         let (mut out, mut in1, mut in2) =
@@ -2451,7 +2586,13 @@ impl Equal1Form {
         }
     }
 
-    fn apply_rule(&mut self, i: &SplitVarnode, hop: OpId, workishi: bool, data: &mut Funcdata) -> bool {
+    fn apply_rule(
+        &mut self,
+        i: &SplitVarnode,
+        hop: OpId,
+        workishi: bool,
+        data: &mut Funcdata,
+    ) -> bool {
         if !workishi {
             return false;
         }
@@ -2483,7 +2624,8 @@ impl Equal1Form {
             let loop_out = op_get_out(data, loop_).expect("eq1: loop out");
             for hibool in descend_ops(data, hiop_out) {
                 for lobool in descend_ops(data, loop_out) {
-                    self.in2.init_partial_pieces(data, self.in1.get_size(), self.lo2, self.hi2);
+                    self.in2
+                        .init_partial_pieces(data, self.in1.get_size(), self.lo2, self.hi2);
                     if self.in2.exceeds_const_precision() {
                         continue;
                     }
@@ -2512,7 +2654,8 @@ impl Equal1Form {
                                 };
                                 create_bool_op(data, hibool, &mut a, &mut b, opc);
                                 // Change lobool to always go to the original TRUE block
-                                let c = data.new_constant(1, if self.notequalformlo { 0 } else { 1 });
+                                let c =
+                                    data.new_constant(1, if self.notequalformlo { 0 } else { 1 });
                                 op_set_input(data, lobool, c, 1);
                                 self.in1 = a;
                                 self.in2 = b;
@@ -2533,7 +2676,8 @@ impl Equal1Form {
                                 };
                                 create_bool_op(data, lobool, &mut a, &mut b, opc);
                                 // Change hibool to always go to the original TRUE block
-                                let c = data.new_constant(1, if self.notequalformhi { 0 } else { 1 });
+                                let c =
+                                    data.new_constant(1, if self.notequalformhi { 0 } else { 1 });
                                 op_set_input(data, hibool, c, 1);
                                 self.in1 = a;
                                 self.in2 = b;
@@ -2600,7 +2744,8 @@ impl Equal2Form {
             // Some kind of mixed form
             return false;
         }
-        self.param2.init_partial_pieces(data, self.in_.get_size(), self.lo2, self.hi2);
+        self.param2
+            .init_partial_pieces(data, self.in_.get_size(), self.lo2, self.hi2);
         // Same threading as the constant branch (C++ prepareBoolOp(in,param2,...); double.cc:1933).
         let (mut a, mut b) = (self.in_.clone(), self.param2.clone());
         let res = prepare_bool_op(data, &mut a, &mut b, boolandor);
@@ -2609,7 +2754,13 @@ impl Equal2Form {
         res
     }
 
-    fn apply_rule(&mut self, i: &SplitVarnode, op: OpId, workishi: bool, data: &mut Funcdata) -> bool {
+    fn apply_rule(
+        &mut self,
+        i: &SplitVarnode,
+        op: OpId,
+        workishi: bool,
+        data: &mut Funcdata,
+    ) -> bool {
         if !workishi {
             return false;
         }
@@ -2627,10 +2778,14 @@ impl Equal2Form {
         let outvn = op_get_out(data, op).expect("eq2: op out");
         for boolandor in descend_ops(data, outvn) {
             self.bool_and_or = Some(boolandor);
-            if eq_code == OpCode::CPUI_INT_EQUAL && op_code(data, boolandor) != OpCode::CPUI_BOOL_AND {
+            if eq_code == OpCode::CPUI_INT_EQUAL
+                && op_code(data, boolandor) != OpCode::CPUI_BOOL_AND
+            {
                 continue;
             }
-            if eq_code == OpCode::CPUI_INT_NOTEQUAL && op_code(data, boolandor) != OpCode::CPUI_BOOL_OR {
+            if eq_code == OpCode::CPUI_INT_NOTEQUAL
+                && op_code(data, boolandor) != OpCode::CPUI_BOOL_OR
+            {
                 continue;
             }
             let slot = op_get_slot(data, boolandor, outvn);
@@ -2728,7 +2883,13 @@ impl Equal3Form {
         true
     }
 
-    fn apply_rule(&mut self, i: &SplitVarnode, op: OpId, workishi: bool, data: &mut Funcdata) -> bool {
+    fn apply_rule(
+        &mut self,
+        i: &SplitVarnode,
+        op: OpId,
+        workishi: bool,
+        data: &mut Funcdata,
+    ) -> bool {
         if !workishi {
             return false;
         }
@@ -2743,7 +2904,8 @@ impl Equal3Form {
         }
 
         // Create the -1 value
-        let mut in2 = SplitVarnode::new_constant(self.in_.get_size(), calc_mask(self.in_.get_size()));
+        let mut in2 =
+            SplitVarnode::new_constant(self.in_.get_size(), calc_mask(self.in_.get_size()));
         if in2.exceeds_const_precision() {
             return false;
         }
@@ -3030,7 +3192,8 @@ impl LessThreeWay {
             }
             self.hiconstform = true;
             self.hival = vn_get_offset(data, self.vnhil2.expect("nh: vnhil2"));
-            let (t, f) = get_true_false(data, self.hilessbool.expect("nh: hilessbool"), self.hiflip);
+            let (t, f) =
+                get_true_false(data, self.hilessbool.expect("nh: hilessbool"), self.hiflip);
             self.hilesstrue = Some(t);
             self.hilessfalse = Some(f);
             let mut inc: i64 = 1;
@@ -3047,7 +3210,9 @@ impl LessThreeWay {
                 self.hival &= calc_mask(self.in_.get_size());
                 self.hilessequalform = false;
             }
-            self.hival = self.hival.wshr((vn_get_size(data, self.in_.get_lo().expect("nh: lo")) * 8) as u32);
+            self.hival = self
+                .hival
+                .wshr((vn_get_size(data, self.in_.get_lo().expect("nh: lo")) * 8) as u32);
         } else if self.hilessequalform {
             // Make sure the false branch contains the equal case
             self.hilessequalform = false;
@@ -3098,9 +3263,11 @@ impl LessThreeWay {
                 if !self.midlessform {
                     return false;
                 }
-                self.midval = self
-                    .midval
-                    .wrapping_add(if self.midlessequal { 1 } else { (-1i64) as uintb });
+                self.midval = self.midval.wrapping_add(if self.midlessequal {
+                    1
+                } else {
+                    (-1i64) as uintb
+                });
                 self.midval &= calc_mask(losize);
                 self.midlessequal = !self.midlessequal;
                 if self.midval != self.hival {
@@ -3363,7 +3530,8 @@ impl LessThreeWay {
                 return false;
             }
         } else {
-            self.in2.init_partial_pieces(data, self.in_.get_size(), self.lo2, self.hi2);
+            self.in2
+                .init_partial_pieces(data, self.in_.get_size(), self.lo2, self.hi2);
             if !self.set_bool_op(data) {
                 return false;
             }
@@ -3371,7 +3539,13 @@ impl LessThreeWay {
         true
     }
 
-    fn apply_rule(&mut self, i: &SplitVarnode, loop_: OpId, workishi: bool, data: &mut Funcdata) -> bool {
+    fn apply_rule(
+        &mut self,
+        i: &SplitVarnode,
+        loop_: OpId,
+        workishi: bool,
+        data: &mut Funcdata,
+    ) -> bool {
         if workishi {
             return false;
         }
@@ -3441,7 +3615,13 @@ impl LessConstForm {
         }
     }
 
-    fn apply_rule(&mut self, i: &SplitVarnode, op: OpId, workishi: bool, data: &mut Funcdata) -> bool {
+    fn apply_rule(
+        &mut self,
+        i: &SplitVarnode,
+        op: OpId,
+        workishi: bool,
+        data: &mut Funcdata,
+    ) -> bool {
         if !workishi {
             return false;
         }
@@ -3462,7 +3642,8 @@ impl LessConstForm {
 
         let opc = op_code(data, op);
         self.signcompare = opc == OpCode::CPUI_INT_SLESSEQUAL || opc == OpCode::CPUI_INT_SLESS;
-        self.hilessequalform = opc == OpCode::CPUI_INT_SLESSEQUAL || opc == OpCode::CPUI_INT_LESSEQUAL;
+        self.hilessequalform =
+            opc == OpCode::CPUI_INT_SLESSEQUAL || opc == OpCode::CPUI_INT_LESSEQUAL;
 
         let mut val = vn_get_offset(data, cvn).wshl((8 * losize) as u32);
         if self.hilessequalform != (self.inslot == 1) {
@@ -3646,7 +3827,8 @@ impl ShiftForm {
         if !vn_is_written(data, midhi) {
             return false;
         }
-        if op_code(data, vn_get_def(data, midlo).expect("mr: midlo def")) != OpCode::CPUI_INT_RIGHT {
+        if op_code(data, vn_get_def(data, midlo).expect("mr: midlo def")) != OpCode::CPUI_INT_RIGHT
+        {
             // Must be unsigned RIGHT
             std::mem::swap(&mut self.midhi, &mut self.midlo);
         }
@@ -3776,7 +3958,13 @@ impl ShiftForm {
         false
     }
 
-    fn apply_rule_left(&mut self, i: &SplitVarnode, loop_: OpId, workishi: bool, data: &mut Funcdata) -> bool {
+    fn apply_rule_left(
+        &mut self,
+        i: &SplitVarnode,
+        loop_: OpId,
+        workishi: bool,
+        data: &mut Funcdata,
+    ) -> bool {
         if workishi {
             return false;
         }
@@ -3791,7 +3979,8 @@ impl ShiftForm {
             return false;
         }
 
-        self.out.init_partial_pieces(data, self.in_.get_size(), self.reslo, self.reshi);
+        self.out
+            .init_partial_pieces(data, self.in_.get_size(), self.reslo, self.reshi);
         let existop = match prepare_shift_op(data, &mut self.out, &mut self.in_) {
             Some(e) => e,
             None => return false,
@@ -3802,7 +3991,13 @@ impl ShiftForm {
         true
     }
 
-    fn apply_rule_right(&mut self, i: &SplitVarnode, hiop: OpId, workishi: bool, data: &mut Funcdata) -> bool {
+    fn apply_rule_right(
+        &mut self,
+        i: &SplitVarnode,
+        hiop: OpId,
+        workishi: bool,
+        data: &mut Funcdata,
+    ) -> bool {
         if !workishi {
             return false;
         }
@@ -3817,7 +4012,8 @@ impl ShiftForm {
             return false;
         }
 
-        self.out.init_partial_pieces(data, self.in_.get_size(), self.reslo, self.reshi);
+        self.out
+            .init_partial_pieces(data, self.in_.get_size(), self.reslo, self.reshi);
         let existop = match prepare_shift_op(data, &mut self.out, &mut self.in_) {
             Some(e) => e,
             None => return false,
@@ -4191,17 +4387,28 @@ impl MultForm {
 
     fn replace(&mut self, data: &mut Funcdata) -> bool {
         // We matched a double precision multiply, now transform to logical vars
-        self.outdoub.init_partial_pieces(data, self.in_.get_size(), self.reslo, self.reshi);
-        self.in2.init_partial_pieces(data, self.in_.get_size(), self.lo2, self.hi2);
+        self.outdoub
+            .init_partial_pieces(data, self.in_.get_size(), self.reslo, self.reshi);
+        self.in2
+            .init_partial_pieces(data, self.in_.get_size(), self.lo2, self.hi2);
         if self.in2.exceeds_const_precision() {
             return false;
         }
-        let existop = match prepare_binary_op(data, &mut self.outdoub, &mut self.in_, &mut self.in2) {
+        let existop = match prepare_binary_op(data, &mut self.outdoub, &mut self.in_, &mut self.in2)
+        {
             Some(e) => e,
             None => return false,
         };
-        let (mut out, mut in1, mut in2) = (self.outdoub.clone(), self.in_.clone(), self.in2.clone());
-        create_binary_op(data, &mut out, &mut in1, &mut in2, existop, OpCode::CPUI_INT_MULT);
+        let (mut out, mut in1, mut in2) =
+            (self.outdoub.clone(), self.in_.clone(), self.in2.clone());
+        create_binary_op(
+            data,
+            &mut out,
+            &mut in1,
+            &mut in2,
+            existop,
+            OpCode::CPUI_INT_MULT,
+        );
         true
     }
 
@@ -4227,14 +4434,23 @@ impl MultForm {
             if self.map_from_in(data, op_get_out(data, add1).expect("multverify: add1 out2")) {
                 return true;
             }
-            if self.map_from_in_small_const(data, op_get_out(data, add1).expect("multverify: add1 out3")) {
+            if self.map_from_in_small_const(
+                data,
+                op_get_out(data, add1).expect("multverify: add1 out3"),
+            ) {
                 return true;
             }
         }
         false
     }
 
-    fn apply_rule(&mut self, i: &SplitVarnode, hop: OpId, workishi: bool, data: &mut Funcdata) -> bool {
+    fn apply_rule(
+        &mut self,
+        i: &SplitVarnode,
+        hop: OpId,
+        workishi: bool,
+        data: &mut Funcdata,
+    ) -> bool {
         if !workishi {
             return false;
         }
@@ -4313,7 +4529,13 @@ impl PhiForm {
         false
     }
 
-    fn apply_rule(&mut self, i: &SplitVarnode, hphi: OpId, workishi: bool, data: &mut Funcdata) -> bool {
+    fn apply_rule(
+        &mut self,
+        i: &SplitVarnode,
+        hphi: OpId,
+        workishi: bool,
+        data: &mut Funcdata,
+    ) -> bool {
         if !workishi {
             return false;
         }
@@ -4362,7 +4584,11 @@ impl PhiForm {
 /// operand — is it in the IOP space?  The IOP-space annotation is read directly
 /// off the Varnode's space (the W3 IR carries it), so this is **not** a stub.
 fn vn_space_type(data: &Funcdata, vn: VarnodeId) -> spacetype {
-    data.vbank().get(vn).expect("vn_space_type").get_space().get_type()
+    data.vbank()
+        .get(vn)
+        .expect("vn_space_type")
+        .get_space()
+        .get_type()
 }
 
 /// `PcodeOp::getOpFromConst(vn->getAddr())` — decode an IOP-space annotation back
@@ -4459,7 +4685,13 @@ impl IndirectForm {
         false
     }
 
-    fn apply_rule(&mut self, i: &SplitVarnode, ind: OpId, workishi: bool, data: &mut Funcdata) -> bool {
+    fn apply_rule(
+        &mut self,
+        i: &SplitVarnode,
+        ind: OpId,
+        workishi: bool,
+        data: &mut Funcdata,
+    ) -> bool {
         if !workishi {
             return false;
         }
@@ -4473,7 +4705,8 @@ impl IndirectForm {
             return false;
         }
 
-        self.outvn.init_partial_pieces(data, self.in_.get_size(), self.reslo, self.reshi);
+        self.outvn
+            .init_partial_pieces(data, self.in_.get_size(), self.reslo, self.reshi);
 
         let affector = self.affector.expect("indrule: affector");
         if !prepare_indirect_op(data, &mut self.in_, affector) {
@@ -4583,7 +4816,13 @@ impl CopyForceForm {
         false
     }
 
-    fn apply_rule(&mut self, i: &SplitVarnode, cpy: OpId, workishi: bool, data: &mut Funcdata) -> bool {
+    fn apply_rule(
+        &mut self,
+        i: &SplitVarnode,
+        cpy: OpId,
+        workishi: bool,
+        data: &mut Funcdata,
+    ) -> bool {
         if !workishi {
             return false;
         }
@@ -4786,7 +5025,13 @@ impl RuleDoubleOut {
 
     /// Determine if inputs to a PIECE should be marked as double precision pieces
     /// (C++ `attemptMarking`).
-    fn attempt_marking(&self, data: &mut Funcdata, vnhi: VarnodeId, vnlo: VarnodeId, piece_op: OpId) -> int4 {
+    fn attempt_marking(
+        &self,
+        data: &mut Funcdata,
+        vnhi: VarnodeId,
+        vnlo: VarnodeId,
+        piece_op: OpId,
+    ) -> int4 {
         let whole = op_get_out(data, piece_op).expect("doubleout: piece out");
         if vn_is_type_lock(data, whole) && !vn_type_is_primitive_whole(data, whole) {
             return 0; // Don't mark for double precision if not a primitive type
@@ -4904,8 +5149,14 @@ impl RuleDoubleLoad {
         }
         // Ordered ops of the block, used to model getBasicIter / previousOp.
         let ops = data.bb_ops(bb);
-        let idx1 = ops.iter().position(|&o| o == op1).expect("nwc: op1 in block");
-        let idx2 = ops.iter().position(|&o| o == op2).expect("nwc: op2 in block");
+        let idx1 = ops
+            .iter()
+            .position(|&o| o == op1)
+            .expect("nwc: op1 in block");
+        let idx2 = ops
+            .iter()
+            .position(|&o| o == op2)
+            .expect("nwc: op2 in block");
 
         let mut start_idx = idx1;
         if op_code(data, op1) == OpCode::CPUI_STORE {
@@ -4969,7 +5220,11 @@ impl RuleDoubleLoad {
 /// `vn->getSpace()->getIndex()` (the space the Varnode is stored in).
 #[inline]
 fn vn_space_index(data: &Funcdata, vn: VarnodeId) -> i32 {
-    data.vbank().get(vn).expect("vn_space_index").get_space().get_index()
+    data.vbank()
+        .get(vn)
+        .expect("vn_space_index")
+        .get_space()
+        .get_index()
 }
 
 impl Rule for RuleDoubleLoad {
@@ -5096,7 +5351,12 @@ impl RuleDoubleStore {
 
     /// Test if outputs from `indirects` are used within the range bounded by
     /// `op1`/`op2` (C++ `RuleDoubleStore::testIndirectUse`).
-    fn test_indirect_use(data: &Funcdata, mut op1: OpId, mut op2: OpId, indirects: &[OpId]) -> bool {
+    fn test_indirect_use(
+        data: &Funcdata,
+        mut op1: OpId,
+        mut op2: OpId,
+        indirects: &[OpId],
+    ) -> bool {
         if op_get_order(data, op2) < op_get_order(data, op1) {
             std::mem::swap(&mut op1, &mut op2);
         }
@@ -5223,8 +5483,7 @@ impl Rule for RuleDoubleStore {
                 if op_get_in(data, store_op2, 2) != vnhi {
                     continue;
                 }
-                if let Some((storelo, storehi, spc)) =
-                    test_contiguous_pointers(data, store_op2, op)
+                if let Some((storelo, storehi, spc)) = test_contiguous_pointers(data, store_op2, op)
                 {
                     let mut indirects: Vec<OpId> = Vec::new();
                     let latest = match RuleDoubleLoad::no_write_conflict(
@@ -5248,8 +5507,8 @@ impl Rule for RuleDoubleStore {
                     op_set_input(data, newstore, spcvn, 0);
                     let mut addrvn = op_get_in(data, storelo, 1);
                     if vn_is_constant(data, addrvn) {
-                        addrvn =
-                            data.new_constant(vn_get_size(data, addrvn), vn_get_offset(data, addrvn));
+                        addrvn = data
+                            .new_constant(vn_get_size(data, addrvn), vn_get_offset(data, addrvn));
                     }
                     op_set_input(data, newstore, addrvn, 1);
                     op_set_input(data, newstore, whole, 2);
@@ -5281,10 +5540,22 @@ impl Rule for RuleDoubleStore {
 /// [`crate::action`] convention.
 pub fn specs() -> Vec<RuleSpec> {
     vec![
-        RuleSpec { group: "doubleload", ctor: || Box::new(RuleDoubleLoad::new("doubleload")) },
-        RuleSpec { group: "doubleprecis", ctor: || Box::new(RuleDoubleStore::new("doubleprecis")) },
-        RuleSpec { group: "doubleprecis", ctor: || Box::new(RuleDoubleIn::new("doubleprecis")) },
-        RuleSpec { group: "doubleprecis", ctor: || Box::new(RuleDoubleOut::new("doubleprecis")) },
+        RuleSpec {
+            group: "doubleload",
+            ctor: || Box::new(RuleDoubleLoad::new("doubleload")),
+        },
+        RuleSpec {
+            group: "doubleprecis",
+            ctor: || Box::new(RuleDoubleStore::new("doubleprecis")),
+        },
+        RuleSpec {
+            group: "doubleprecis",
+            ctor: || Box::new(RuleDoubleIn::new("doubleprecis")),
+        },
+        RuleSpec {
+            group: "doubleprecis",
+            ctor: || Box::new(RuleDoubleOut::new("doubleprecis")),
+        },
     ]
 }
 
@@ -5303,17 +5574,18 @@ mod tests {
 
     use unlace_base::address::Address;
     use unlace_base::space::{
-        addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+        AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
     };
 
-    use crate::dtype::{type_metatype, Datatype};
-    use crate::op::pcodeop_flags;
     use crate::context::{ArchContext, TypeOp};
+    use crate::dtype::{Datatype, type_metatype};
+    use crate::op::pcodeop_flags;
 
     fn build_manager() -> AddrSpaceManager {
         let mut m = AddrSpaceManager::new();
         m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+            .unwrap();
         m.insert_space(Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
             "ram",
@@ -5353,7 +5625,8 @@ mod tests {
             }
             _ => 0,
         };
-        fd.obank_mut().change_opcode(op, TypeOp::new(opc, fl, format!("{opc:?}")));
+        fd.obank_mut()
+            .change_opcode(op, TypeOp::new(opc, fl, format!("{opc:?}")));
         op
     }
 
@@ -5391,7 +5664,9 @@ mod tests {
         bl: crate::context::BlockId,
     ) -> VarnodeId {
         let r = ram(fd);
-        let out = fd.new_varnode_out(outsize, &Address::new(r, out_off), op).unwrap();
+        let out = fd
+            .new_varnode_out(outsize, &Address::new(r, out_off), op)
+            .unwrap();
         fd.op_set_input(op, whole, 0).unwrap();
         let c = mk_const(fd, 4, off);
         fd.op_set_input(op, c, 1).unwrap();
@@ -5558,13 +5833,17 @@ mod tests {
         let r = ram(fd);
         // lo/hi are COPY outputs so they are "written" in block `bl`.
         let cpylo = mk_op(fd, 1, 0x4f0, OpCode::CPUI_COPY);
-        let lo = fd.new_varnode_out(4, &Address::new(Rc::clone(&r), 0x400), cpylo).unwrap();
+        let lo = fd
+            .new_varnode_out(4, &Address::new(Rc::clone(&r), 0x400), cpylo)
+            .unwrap();
         let lsrc = mk_vn(fd, 0x4a0, 4);
         fd.op_set_input(cpylo, lsrc, 0).unwrap();
         fd.op_insert_end(cpylo, bl);
 
         let cpyhi = mk_op(fd, 1, 0x4f8, OpCode::CPUI_COPY);
-        let hi = fd.new_varnode_out(4, &Address::new(Rc::clone(&r), 0x408), cpyhi).unwrap();
+        let hi = fd
+            .new_varnode_out(4, &Address::new(Rc::clone(&r), 0x408), cpyhi)
+            .unwrap();
         let hsrc = mk_vn(fd, 0x4a8, 4);
         fd.op_set_input(cpyhi, hsrc, 0).unwrap();
         fd.op_insert_end(cpyhi, bl);
@@ -5572,7 +5851,9 @@ mod tests {
         fd.vbank_mut().get_mut(lo).unwrap().set_precis_lo();
         fd.vbank_mut().get_mut(hi).unwrap().set_precis_hi();
         let piece = mk_op(fd, 2, 0x500, OpCode::CPUI_PIECE);
-        let whole = fd.new_varnode_out(8, &Address::new(r, 0x410), piece).unwrap();
+        let whole = fd
+            .new_varnode_out(8, &Address::new(r, 0x410), piece)
+            .unwrap();
         fd.op_set_input(piece, hi, 0).unwrap(); // most significant
         fd.op_set_input(piece, lo, 1).unwrap(); // least significant
         fd.op_insert_end(piece, bl);
@@ -5621,14 +5902,18 @@ mod tests {
 
         // reslo = lo1 & lo2c
         let loand = mk_op(&mut fd, 2, 0x700, OpCode::CPUI_INT_AND);
-        let _reslo = fd.new_varnode_out(4, &Address::new(Rc::clone(&r), 0x610), loand).unwrap();
+        let _reslo = fd
+            .new_varnode_out(4, &Address::new(Rc::clone(&r), 0x610), loand)
+            .unwrap();
         fd.op_set_input(loand, lo1, 0).unwrap();
         fd.op_set_input(loand, lo2, 1).unwrap();
         fd.op_insert_end(loand, bl);
 
         // reshi = hi1 & hi2c  (the single AND-by-const off hi1)
         let hiand = mk_op(&mut fd, 2, 0x708, OpCode::CPUI_INT_AND);
-        let _reshi = fd.new_varnode_out(4, &Address::new(Rc::clone(&r), 0x618), hiand).unwrap();
+        let _reshi = fd
+            .new_varnode_out(4, &Address::new(Rc::clone(&r), 0x618), hiand)
+            .unwrap();
         fd.op_set_input(hiand, hi1, 0).unwrap();
         fd.op_set_input(hiand, hi2, 1).unwrap();
         fd.op_insert_end(hiand, bl);
@@ -5656,20 +5941,26 @@ mod tests {
         let hi2b = mk_const(&mut fd, 4, 0xff00ff00);
 
         let loand = mk_op(&mut fd, 2, 0x700, OpCode::CPUI_INT_AND);
-        let _reslo = fd.new_varnode_out(4, &Address::new(Rc::clone(&r), 0x610), loand).unwrap();
+        let _reslo = fd
+            .new_varnode_out(4, &Address::new(Rc::clone(&r), 0x610), loand)
+            .unwrap();
         fd.op_set_input(loand, lo1, 0).unwrap();
         fd.op_set_input(loand, lo2, 1).unwrap();
         fd.op_insert_end(loand, bl);
 
         // first AND off hi1
         let hiand1 = mk_op(&mut fd, 2, 0x708, OpCode::CPUI_INT_AND);
-        let _r1 = fd.new_varnode_out(4, &Address::new(Rc::clone(&r), 0x618), hiand1).unwrap();
+        let _r1 = fd
+            .new_varnode_out(4, &Address::new(Rc::clone(&r), 0x618), hiand1)
+            .unwrap();
         fd.op_set_input(hiand1, hi1, 0).unwrap();
         fd.op_set_input(hiand1, hi2a, 1).unwrap();
         fd.op_insert_end(hiand1, bl);
         // second AND off hi1 (ambiguity)
         let hiand2 = mk_op(&mut fd, 2, 0x710, OpCode::CPUI_INT_AND);
-        let _r2 = fd.new_varnode_out(4, &Address::new(Rc::clone(&r), 0x620), hiand2).unwrap();
+        let _r2 = fd
+            .new_varnode_out(4, &Address::new(Rc::clone(&r), 0x620), hiand2)
+            .unwrap();
         fd.op_set_input(hiand2, hi1, 0).unwrap();
         fd.op_set_input(hiand2, hi2b, 1).unwrap();
         fd.op_insert_end(hiand2, bl);
@@ -5741,7 +6032,11 @@ mod tests {
 
         let pieces_before = fd.obank().iter_code(OpCode::CPUI_PIECE).count();
         assert!(s.is_whole_feasible(&fd, existop), "feasible: whole exists");
-        assert_eq!(s.whole, Some(whole), "isWholeFeasible found the existing whole");
+        assert_eq!(
+            s.whole,
+            Some(whole),
+            "isWholeFeasible found the existing whole"
+        );
         // Threaded: find_create_whole on the SAME object reuses `whole`.
         s.find_create_whole(&mut fd);
         assert_eq!(s.get_whole(), Some(whole), "reused the existing whole");
@@ -5786,7 +6081,11 @@ mod tests {
         // Equal2Form/LessThreeWay shape: prepare runs on a throwaway clone ...
         let mut throwaway = s.clone();
         assert!(throwaway.is_whole_feasible(&fd, existop));
-        assert_eq!(throwaway.whole, Some(whole), "discovery happened on the clone");
+        assert_eq!(
+            throwaway.whole,
+            Some(whole),
+            "discovery happened on the clone"
+        );
         // ... and the original `s` never received the discovered fields.
         assert_eq!(s.whole, None, "the prepare-step mutation was discarded");
 
@@ -5813,7 +6112,11 @@ mod tests {
         // (wrong) start block because defblock/defpoint were discarded.
         let fab = fresh.get_whole().unwrap();
         let fabdef = vn_get_def(&fd, fab).expect("fabricated whole has a def");
-        assert_eq!(op_code(&fd, fabdef), OpCode::CPUI_PIECE, "fabricated concat is a PIECE");
+        assert_eq!(
+            op_code(&fd, fabdef),
+            OpCode::CPUI_PIECE,
+            "fabricated concat is a PIECE"
+        );
     }
 
     /// F1 FIX (Equal2Form): `replace` now threads ONE clone pair (in,param2)
@@ -5854,7 +6157,11 @@ mod tests {
         // apply_rule's rewrite step reuses the persisted member -> no fabrication.
         let (mut a, mut b) = (form.in_.clone(), form.param2.clone());
         replace_bool_op(&mut fd, boolandor, &mut a, &mut b, OpCode::CPUI_INT_EQUAL);
-        assert_eq!(b.get_whole(), Some(whole), "rewrite reused the existing whole");
+        assert_eq!(
+            b.get_whole(),
+            Some(whole),
+            "rewrite reused the existing whole"
+        );
         let pieces_after = fd.obank().iter_code(OpCode::CPUI_PIECE).count();
         assert_eq!(
             pieces_before, pieces_after,
@@ -5891,7 +6198,10 @@ mod tests {
         form.hislot = 0; // (in, in2) ordering
 
         let pieces_before = fd.obank().iter_code(OpCode::CPUI_PIECE).count();
-        assert!(form.set_bool_op(&fd), "set_bool_op must prepare both operands");
+        assert!(
+            form.set_bool_op(&fd),
+            "set_bool_op must prepare both operands"
+        );
         assert_eq!(
             form.in2.get_whole(),
             Some(whole),
@@ -5901,7 +6211,11 @@ mod tests {
         // apply_rule's create step reuses the persisted member -> no fabrication.
         let (mut a, mut b) = (form.in_.clone(), form.in2.clone());
         create_bool_op(&mut fd, hilessbool, &mut a, &mut b, OpCode::CPUI_INT_LESS);
-        assert_eq!(b.get_whole(), Some(whole), "create reused the existing whole");
+        assert_eq!(
+            b.get_whole(),
+            Some(whole),
+            "create reused the existing whole"
+        );
         let pieces_after = fd.obank().iter_code(OpCode::CPUI_PIECE).count();
         assert_eq!(
             pieces_before, pieces_after,
@@ -5940,7 +6254,9 @@ mod tests {
         let lo1 = mk_vn(&mut fd, 0x80, 4);
         // carryop = (CONST 5) INT_LESS lo1   -> the "constant on the left" CARRY form
         let lessop = mk_op(&mut fd, 2, 0xA00, OpCode::CPUI_INT_LESS);
-        let lessout = fd.new_varnode_out(1, &Address::new(Rc::clone(&r), 0x90), lessop).unwrap();
+        let lessout = fd
+            .new_varnode_out(1, &Address::new(Rc::clone(&r), 0x90), lessop)
+            .unwrap();
         let c5 = mk_const(&mut fd, 4, 5);
         fd.op_set_input(lessop, c5, 0).unwrap();
         fd.op_set_input(lessop, lo1, 1).unwrap();
@@ -5953,14 +6269,20 @@ mod tests {
 
         let mut form = AddForm::new();
         form.lo1 = Some(lo1);
-        assert!(form.check_for_carry(&fd, zext), "constant-left CARRY form matches");
+        assert!(
+            form.check_for_carry(&fd, zext),
+            "constant-left CARRY form matches"
+        );
         assert_eq!(
             form.negconst,
             (!5u64) & calc_mask(4),
             "negconst masked to lo1's 4-byte width"
         );
         assert_eq!(form.negconst, 0xFFFF_FFFA, "explicit expected value");
-        assert!(form.negconst <= 0xFFFF_FFFF, "must NOT carry high u64 bits past the mask");
+        assert!(
+            form.negconst <= 0xFFFF_FFFF,
+            "must NOT carry high u64 bits past the mask"
+        );
     }
 
     /// A discovered function can start mid-stream, leaving the block registered as the

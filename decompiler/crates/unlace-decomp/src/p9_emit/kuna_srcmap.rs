@@ -60,8 +60,11 @@ pub struct CookieRewrite {
 /// (the text rule could not have fired on it; [`verify`] then says so).
 pub fn apply_cookie_rewrites(tokens: &mut Vec<EmitToken>, rewrites: &[CookieRewrite]) {
     for rw in rewrites {
-        let returned: Vec<&EmitToken> = tokens.iter().filter(|t| t.line == rw.return_line).collect();
-        let [keyword, _, semi] = returned.as_slice() else { continue };
+        let returned: Vec<&EmitToken> =
+            tokens.iter().filter(|t| t.line == rw.return_line).collect();
+        let [keyword, _, semi] = returned.as_slice() else {
+            continue;
+        };
         if keyword.text != "return" || semi.text != ";" {
             continue;
         }
@@ -86,7 +89,10 @@ pub fn apply_cookie_rewrites(tokens: &mut Vec<EmitToken>, rewrites: &[CookieRewr
         value.line = rw.return_line;
         value.col = rw.indent + 7;
         semi.col = rw.indent + 8;
-        let at = tokens.iter().position(|t| t.line > rw.return_line).unwrap_or(tokens.len());
+        let at = tokens
+            .iter()
+            .position(|t| t.line > rw.return_line)
+            .unwrap_or(tokens.len());
         tokens.splice(at..at, [keyword, value, semi]);
     }
 }
@@ -105,7 +111,9 @@ pub fn resolve(
 ) -> Vec<CodeToken> {
     let mut op_addresses: BTreeMap<u64, u64> = BTreeMap::new();
     for (_, op_id) in fd.obank().iter_all() {
-        let Some(op) = fd.obank().get(op_id) else { continue };
+        let Some(op) = fd.obank().get(op_id) else {
+            continue;
+        };
         if op.get_addr().get_space().is_some() {
             op_addresses.insert(op.get_time() as u64, op.get_addr().get_offset());
         }
@@ -113,7 +121,9 @@ pub fn resolve(
     let mut callees: BTreeMap<u64, u64> = BTreeMap::new();
     for i in 0..fd.num_calls() {
         let spec = fd.get_call_specs(i);
-        let Some(op) = fd.obank().get(spec.get_op()) else { continue };
+        let Some(op) = fd.obank().get(spec.get_op()) else {
+            continue;
+        };
         if op.code() != OpCode::CPUI_CALL {
             continue;
         }
@@ -149,17 +159,20 @@ pub fn resolve(
                     .and_then(|r| by_ref.get(&r).copied())
                     .filter(|&i| variables[i].name == t.text)
                     .or_else(|| {
-                        matches!(t.color, SyntaxHighlight::VarColor | SyntaxHighlight::ParamColor)
-                            .then(|| unique_name(&t.text, t.in_proto && !t.in_return_type))
-                            .flatten()
+                        matches!(
+                            t.color,
+                            SyntaxHighlight::VarColor | SyntaxHighlight::ParamColor
+                        )
+                        .then(|| unique_name(&t.text, t.in_proto && !t.in_return_type))
+                        .flatten()
                     }),
                 _ => None,
             };
             let address = match t.kind {
-                TokenKind::Comment | TokenKind::Label => t
-                    .at
-                    .filter(|&(space, _)| Some(space) == code_space)
-                    .map(|(_, offset)| offset),
+                TokenKind::Comment | TokenKind::Label => {
+                    t.at.filter(|&(space, _)| Some(space) == code_space)
+                        .map(|(_, offset)| offset)
+                }
                 _ => t.opref.and_then(|o| op_addresses.get(&o).copied()),
             };
             let callee = match t.kind {
@@ -214,39 +227,70 @@ fn code_line(line: usize, skip: usize) -> Option<usize> {
 /// Check that `tokens` rebuild `code`: in order, inside their line, each slice
 /// equal to its text, and every code unit between them a space.
 pub fn verify(tokens: &[CodeToken], code: &str) -> Result<(), String> {
-    let lines: Vec<Vec<u16>> = code.split('\n').map(|l| l.encode_utf16().collect()).collect();
+    let lines: Vec<Vec<u16>> = code
+        .split('\n')
+        .map(|l| l.encode_utf16().collect())
+        .collect();
     let mut cursor: Vec<usize> = vec![0; lines.len()];
     let mut last = (0usize, 0usize);
     for t in tokens {
         if t.line == 0 || t.line > lines.len() {
-            return Err(format!("token {:?} on line {} outside 1..={}", t.text, t.line, lines.len()));
+            return Err(format!(
+                "token {:?} on line {} outside 1..={}",
+                t.text,
+                t.line,
+                lines.len()
+            ));
         }
         if (t.line, t.col) < last {
-            return Err(format!("token {:?} at {}:{} is out of order", t.text, t.line, t.col));
+            return Err(format!(
+                "token {:?} at {}:{} is out of order",
+                t.text, t.line, t.col
+            ));
         }
         let units: Vec<u16> = t.text.encode_utf16().collect();
         if units.is_empty() || units.len() != t.len {
-            return Err(format!("token {:?} at {}:{} has length {}", t.text, t.line, t.col, t.len));
+            return Err(format!(
+                "token {:?} at {}:{} has length {}",
+                t.text, t.line, t.col, t.len
+            ));
         }
         let line = &lines[t.line - 1];
         let start = cursor[t.line - 1];
         if t.col < start {
-            return Err(format!("token {:?} at {}:{} overlaps the previous one", t.text, t.line, t.col));
+            return Err(format!(
+                "token {:?} at {}:{} overlaps the previous one",
+                t.text, t.line, t.col
+            ));
         }
         let end = t.col + t.len;
         if end > line.len() || line[t.col..end] != units[..] {
             let found = String::from_utf16_lossy(&line[t.col.min(line.len())..end.min(line.len())]);
-            return Err(format!("token {:?} at {}:{} reads {found:?} in the code", t.text, t.line, t.col));
+            return Err(format!(
+                "token {:?} at {}:{} reads {found:?} in the code",
+                t.text, t.line, t.col
+            ));
         }
-        if let Some(gap) = line[start..t.col].iter().position(|&u| u != u16::from(b' ')) {
-            return Err(format!("line {} col {} is not covered by a token", t.line, start + gap));
+        if let Some(gap) = line[start..t.col]
+            .iter()
+            .position(|&u| u != u16::from(b' '))
+        {
+            return Err(format!(
+                "line {} col {} is not covered by a token",
+                t.line,
+                start + gap
+            ));
         }
         cursor[t.line - 1] = end;
         last = (t.line, end);
     }
     for (i, line) in lines.iter().enumerate() {
         if let Some(gap) = line[cursor[i]..].iter().position(|&u| u != u16::from(b' ')) {
-            return Err(format!("line {} col {} is not covered by a token", i + 1, cursor[i] + gap));
+            return Err(format!(
+                "line {} col {} is not covered by a token",
+                i + 1,
+                cursor[i] + gap
+            ));
         }
     }
     Ok(())

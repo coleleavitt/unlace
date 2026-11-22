@@ -46,11 +46,16 @@ const BRANCHES: [(u64, u64); 2] = [(0x10588, 0x1058c), (0x103f4, 0x10404)];
 const SKIP_INTO_ENTRY: (u64, u64) = (0x10430, 0x10434);
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture(name: &str) -> PathBuf {
-    repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(name)
+    repo_root()
+        .join("decompiler/crates/unlace-analysis/tests/fixtures")
+        .join(name)
 }
 
 /// The reference index of fixture `name` under the default options.
@@ -65,11 +70,15 @@ fn build_with(name: &str, configure: fn(&mut Architecture)) -> XrefIndex {
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     configure(prog.arch_mut());
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     let bytes = std::fs::read(&bin).expect("fixture readable");
     let file = object::File::parse(&*bytes).expect("fixture parses");
-    let seeds: Vec<u64> =
-        prog.function_entries_canonical().iter().map(|e| e.addr.get_offset()).collect();
+    let seeds: Vec<u64> = prog
+        .function_entries_canonical()
+        .iter()
+        .map(|e| e.addr.get_offset())
+        .collect();
     xrefs::build(&file, prog.arch(), prog.arch().translate(), &seeds)
 }
 
@@ -80,7 +89,10 @@ fn index() -> &'static XrefIndex {
 }
 
 fn from(idx: &XrefIndex, at: u64) -> Vec<(u64, XrefKind)> {
-    idx.refs_from_instruction(at).iter().map(|r| (r.to, r.kind)).collect()
+    idx.refs_from_instruction(at)
+        .iter()
+        .map(|r| (r.to, r.kind))
+        .collect()
 }
 
 /// A PLT stub files the slot it jumps through, from its `ldr pc`, and nothing
@@ -91,9 +103,17 @@ fn a_plt_stub_files_its_slot_and_no_partial_address() {
     for (stub, slot) in STUBS {
         let rows: Vec<_> = (0..3).flat_map(|i| from(idx, stub + 4 * i)).collect();
         assert_eq!(rows, vec![(slot, XrefKind::Read)], "{stub:#x}");
-        assert_eq!(from(idx, stub + 8), vec![(slot, XrefKind::Read)], "{stub:#x}");
+        assert_eq!(
+            from(idx, stub + 8),
+            vec![(slot, XrefKind::Read)],
+            "{stub:#x}"
+        );
     }
-    assert!(idx.refs_to(STUB_ADD).is_empty(), "{:?}", idx.refs_to(STUB_ADD));
+    assert!(
+        idx.refs_to(STUB_ADD).is_empty(),
+        "{:?}",
+        idx.refs_to(STUB_ADD)
+    );
 }
 
 /// A static image's IFUNC stub lies in `.iplt`, in the `.plt` template: it
@@ -102,7 +122,11 @@ fn a_plt_stub_files_its_slot_and_no_partial_address() {
 fn an_iplt_stub_files_its_slot_and_no_partial_address() {
     let (stub, slot) = (0x1007c, 0x110a4);
     let idx = build("xrefiplt_arm_le32");
-    assert!(from(&idx, 0x10088).contains(&(stub, XrefKind::Call)), "{:?}", from(&idx, 0x10088));
+    assert!(
+        from(&idx, 0x10088).contains(&(stub, XrefKind::Call)),
+        "{:?}",
+        from(&idx, 0x10088)
+    );
     let rows: Vec<_> = (0..3).flat_map(|i| from(&idx, stub + 4 * i)).collect();
     assert_eq!(rows, vec![(slot, XrefKind::Read)]);
 }
@@ -113,10 +137,18 @@ fn an_iplt_stub_files_its_slot_and_no_partial_address() {
 fn calls_to_plt_stubs_and_pc_relative_strings_keep_their_rows() {
     let idx = index();
     for (call, stub) in STUB_CALLS {
-        assert!(from(idx, call).contains(&(stub, XrefKind::Call)), "{call:#x}: {:?}", from(idx, call));
+        assert!(
+            from(idx, call).contains(&(stub, XrefKind::Call)),
+            "{call:#x}: {:?}",
+            from(idx, call)
+        );
     }
     for (add, string) in STRINGS {
-        assert!(from(idx, add).contains(&(string, XrefKind::Data)), "{add:#x}: {:?}", from(idx, add));
+        assert!(
+            from(idx, add).contains(&(string, XrefKind::Data)),
+            "{add:#x}: {:?}",
+            from(idx, add)
+        );
     }
 }
 
@@ -127,7 +159,12 @@ fn a_predicated_instruction_files_no_jump_to_the_next_one() {
     let idx = index();
     for (at, len) in PREDICATED {
         assert!(from(idx, at).is_empty(), "{at:#x}: {:?}", from(idx, at));
-        assert!(idx.refs_to(at + len).is_empty(), "{:#x}: {:?}", at + len, idx.refs_to(at + len));
+        assert!(
+            idx.refs_to(at + len).is_empty(),
+            "{:#x}: {:?}",
+            at + len,
+            idx.refs_to(at + len)
+        );
     }
 }
 
@@ -170,14 +207,18 @@ fn a_condition_skip_off_arm_keeps_its_jump() {
 #[test]
 fn a_skip_that_falls_through_into_an_entry_found_from_a_call_files_nothing() {
     let (at, entry) = (0x10074, 0x10078);
-    for idx in [build("xreffp_strip_arm_le32"), build_with("xreffp_strip_arm_le32", armframes_off)] {
+    for idx in [
+        build("xreffp_strip_arm_le32"),
+        build_with("xreffp_strip_arm_le32", armframes_off),
+    ] {
         assert!(idx.is_function_entry(entry));
         assert_eq!(from(&idx, at), vec![]);
     }
 }
 
 fn armframes_off(arch: &mut Architecture) {
-    arch.set_kuna_option("armframes", "off").expect("armframes flips off");
+    arch.set_kuna_option("armframes", "off")
+        .expect("armframes flips off");
 }
 
 /// An A32 table dispatch's skip is a condition skip like any other, and a
@@ -188,9 +229,15 @@ fn armframes_off(arch: &mut Architecture) {
 #[test]
 fn a_dispatch_skip_into_an_entry_keeps_its_jump() {
     let (at, entry) = (0x10084, 0x10088);
-    for idx in [build("xreffp_strip_arm_le32"), build_with("xreffp_strip_arm_le32", armframes_off)] {
+    for idx in [
+        build("xreffp_strip_arm_le32"),
+        build_with("xreffp_strip_arm_le32", armframes_off),
+    ] {
         assert!(idx.is_function_entry(entry));
-        let jumps: Vec<_> = from(&idx, at).into_iter().filter(|&(_, kind)| kind == XrefKind::Jump).collect();
+        let jumps: Vec<_> = from(&idx, at)
+            .into_iter()
+            .filter(|&(_, kind)| kind == XrefKind::Jump)
+            .collect();
         assert!(jumps.contains(&(entry, XrefKind::Jump)), "{jumps:?}");
     }
 }
@@ -201,8 +248,15 @@ fn a_dispatch_skip_into_an_entry_keeps_its_jump() {
 #[test]
 fn a_predicated_branch_to_the_next_instruction_keeps_its_jump() {
     let idx = build("xreffp_strip_arm_le32");
-    let rows: Vec<_> = idx.refs_from_instruction(0x100a8).iter().map(|r| (r.to, r.kind, r.instruction.to_string())).collect();
-    assert_eq!(rows, vec![(0x100ac, XrefKind::Jump, "b.eq.w 0x100ac".to_string())]);
+    let rows: Vec<_> = idx
+        .refs_from_instruction(0x100a8)
+        .iter()
+        .map(|r| (r.to, r.kind, r.instruction.to_string()))
+        .collect();
+    assert_eq!(
+        rows,
+        vec![(0x100ac, XrefKind::Jump, "b.eq.w 0x100ac".to_string())]
+    );
 }
 
 /// A kept skip carries the text of the instruction in the mode the walk
@@ -212,15 +266,23 @@ fn a_predicated_branch_to_the_next_instruction_keeps_its_jump() {
 #[test]
 fn a_kept_thumb_skip_is_rendered_as_the_walk_decoded_it() {
     let (at, entry) = (0x100be, 0x100c0);
-    for idx in [build("xreffp_strip_arm_le32"), build_with("xreffp_strip_arm_le32", armframes_on)] {
+    for idx in [
+        build("xreffp_strip_arm_le32"),
+        build_with("xreffp_strip_arm_le32", armframes_on),
+    ] {
         assert!(idx.is_function_entry(entry));
-        let rows: Vec<_> = idx.refs_from_instruction(at).iter().map(|r| (r.to, r.kind, r.instruction.to_string())).collect();
+        let rows: Vec<_> = idx
+            .refs_from_instruction(at)
+            .iter()
+            .map(|r| (r.to, r.kind, r.instruction.to_string()))
+            .collect();
         assert_eq!(rows, vec![(entry, XrefKind::Jump, "bx.ne lr".to_string())]);
     }
 }
 
 fn armframes_on(arch: &mut Architecture) {
-    arch.set_kuna_option("armframes", "on").expect("armframes flips on");
+    arch.set_kuna_option("armframes", "on")
+        .expect("armframes flips on");
 }
 
 /// The condition-skip rule leaves A32 table reading alone: `dispatch_last`'s
@@ -228,7 +290,11 @@ fn armframes_on(arch: &mut Architecture) {
 #[test]
 fn a32_tables_are_read_with_condition_skips() {
     let idx = build("xreffp_strip_arm_le32");
-    let tables: Vec<_> = idx.switch_tables().iter().map(|t| (t.dispatch, t.cases.clone())).collect();
+    let tables: Vec<_> = idx
+        .switch_tables()
+        .iter()
+        .map(|t| (t.dispatch, t.cases.clone()))
+        .collect();
     assert_eq!(tables.len(), 1, "{tables:?}");
     assert_eq!(tables[0].0, 0x10084);
 }

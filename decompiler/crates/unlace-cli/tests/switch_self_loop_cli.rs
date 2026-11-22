@@ -6,8 +6,18 @@ use common::process;
 
 use std::process::Command;
 
-const FUNCTIONS: [&str; 6] = ["self_loop", "self_loop_exit", "mixed_loop", "direct_mixed", "direct_loop", "nested_switch"];
-const OBJECTS: [&str; 2] = ["switch_self_loop_gcc_x86_64.o", "switch_self_loop_clang_x86_64.o"];
+const FUNCTIONS: [&str; 6] = [
+    "self_loop",
+    "self_loop_exit",
+    "mixed_loop",
+    "direct_mixed",
+    "direct_loop",
+    "nested_switch",
+];
+const OBJECTS: [&str; 2] = [
+    "switch_self_loop_gcc_x86_64.o",
+    "switch_self_loop_clang_x86_64.o",
+];
 
 fn kuna() -> Command {
     Command::new(
@@ -18,9 +28,17 @@ fn kuna() -> Command {
 fn decompile(object: &str, function: &str) -> String {
     let mut command = kuna();
     command
-        .args(["decompile", &common::fixture(object), function, "--sleighpath"])
+        .args([
+            "decompile",
+            &common::fixture(object),
+            function,
+            "--sleighpath",
+        ])
         .arg(common::repo_root().join("specs"))
-        .args(["--assert", &format!("prototype {function} void {function}(int x)")]);
+        .args([
+            "--assert",
+            &format!("prototype {function} void {function}(int x)"),
+        ]);
     String::from_utf8(process::required_output(&mut command).stdout).unwrap()
 }
 
@@ -105,7 +123,11 @@ fn a_switch_that_heads_its_own_loop_keeps_every_iteration() {
                 format!(
                     "#include <stdbool.h>\nextern int next_selector(int);\n\
                      extern void t0(void), t1(void), t2(void), t3(void), t4(void), t5(void);\n{}",
-                    printed.lines().filter(|l| !l.starts_with("// ")).collect::<Vec<_>>().join("\n")
+                    printed
+                        .lines()
+                        .filter(|l| !l.starts_with("// "))
+                        .collect::<Vec<_>>()
+                        .join("\n")
                 ),
             )
             .unwrap();

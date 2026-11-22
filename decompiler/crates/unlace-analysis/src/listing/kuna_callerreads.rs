@@ -7,15 +7,17 @@
 //! through to. The decompile step decodes the callers from those addresses only
 //! for a function it recovered `void`.
 
-use super::model::RefKind;
 use super::Listing;
+use super::model::RefKind;
 
 /// Every direct call of the walk as `(callee entry, return address)`, sorted
 /// and de-duplicated.
 pub fn call_returns(listing: &Listing) -> Vec<(u64, u64)> {
     let mut out: Vec<(u64, u64)> = Vec::new();
     for from in listing.ref_source_iter() {
-        let Some(back) = listing.instruction_at(from).and_then(|i| i.fall_through) else { continue };
+        let Some(back) = listing.instruction_at(from).and_then(|i| i.fall_through) else {
+            continue;
+        };
         for r in listing.refs_from(from) {
             if r.kind == RefKind::Call {
                 out.push((r.to, back));

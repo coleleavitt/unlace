@@ -4,10 +4,10 @@ use std::rc::Rc;
 
 use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype, TypeFactory};
+use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::kuna_langtypes::SpellCtx;
-use crate::printc::{op_key, op_token, tokens, PrintC};
+use crate::printc::{PrintC, op_key, op_token, tokens};
 use crate::printlanguage::{Atom, OpToken, SyntaxHighlight, TagType, TokenType};
 use unlace_num::opcodes::OpCode;
 
@@ -139,8 +139,7 @@ impl PrintC {
                 field.get_metatype(),
                 type_metatype::TYPE_INT | type_metatype::TYPE_UINT
             )
-        })
-            || names(&source) == [low, high]
+        }) || names(&source) == [low, high]
             || fd.vbank().get(value).is_none_or(|node| {
                 node.get_size() != 16 || node.is_constant() || node.is_volatile()
             })

@@ -1,11 +1,11 @@
 //! Address-width normalization must preserve independent full-width values.
 use super::*;
 use crate::context::ArchContext;
+use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
-use std::rc::Rc;
 
 fn fixture(big_endian: bool) -> (Funcdata, BlockId) {
     let mut manager = AddrSpaceManager::new();
@@ -32,15 +32,7 @@ fn fixture(big_endian: bool) -> (Funcdata, BlockId) {
     manager.truncate_space("ram", 4).unwrap();
     let entry = Address::new(Rc::clone(manager.get_default_code_space().unwrap()), 0x1000);
     let arch = ArchContext::new(manager);
-    let mut fd = Funcdata::new(
-        "probe",
-        "probe",
-        Rc::new(arch),
-        entry,
-        0x10000000,
-        0x40,
-    )
-    .unwrap();
+    let mut fd = Funcdata::new("probe", "probe", Rc::new(arch), entry, 0x10000000, 0x40).unwrap();
     let root = fd.bblocks_ref().root.unwrap();
     let block = fd.bblocks_mut().new_block_basic(root);
     (fd, block)

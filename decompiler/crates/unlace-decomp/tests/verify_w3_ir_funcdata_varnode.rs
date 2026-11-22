@@ -31,21 +31,22 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace,
-    UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace, addrspace_flags,
+    spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
-use unlace_decomp::dtype::{type_metatype, Datatype};
-use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
+use unlace_decomp::dtype::{Datatype, type_metatype};
+use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::varnode::{DefOpInfo, VarnodeBank};
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(IopSpace::new(2))).unwrap();
     m.insert_space(Rc::new(FspecSpace::new(3))).unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
@@ -97,10 +98,14 @@ fn make_written(fd: &mut Funcdata, off: u64, size: int4) -> (VarnodeId, OpId) {
     let r = ram(fd);
     let pc = Address::new(Rc::clone(&r), off);
     let defop = fd.obank_mut().create_at(1, pc);
-    fd.obank_mut().change_opcode(defop, TypeOp::new(OpCode::CPUI_COPY, 0, "COPY"));
+    fd.obank_mut()
+        .change_opcode(defop, TypeOp::new(OpCode::CPUI_COPY, 0, "COPY"));
     let vn = fd.new_varnode(size, &Address::new(r, off), Some(unk(size)));
     let seq = fd.obank().get(defop).unwrap().get_seq_num().clone();
-    let info = DefOpInfo { id: defop, seqnum: seq };
+    let info = DefOpInfo {
+        id: defop,
+        seqnum: seq,
+    };
     let vn = fd.vbank_mut().set_def(vn, info, &mut no_replace()).unwrap();
     fd.obank_mut().get_mut(defop).unwrap().set_output(Some(vn));
     (vn, defop)
@@ -110,7 +115,10 @@ fn make_written(fd: &mut Funcdata, off: u64, size: int4) -> (VarnodeId, OpId) {
 /// would maintain.
 fn wire_read(fd: &mut Funcdata, vn: VarnodeId, op: OpId, slot: int4) {
     fd.vbank_mut().add_descend(vn, op).unwrap();
-    fd.obank_mut().get_mut(op).unwrap().set_input(Some(vn), slot);
+    fd.obank_mut()
+        .get_mut(op)
+        .unwrap()
+        .set_input(Some(vn), slot);
 }
 
 // ===========================================================================
@@ -242,19 +250,40 @@ fn total_replace_double_reader_repoints_both_slots_in_order() {
     // One op reading vn in BOTH input slots.
     let pc = Address::new(r, 0x1000);
     let op = fd.obank_mut().create_at(2, pc);
-    fd.obank_mut().change_opcode(op, TypeOp::new(OpCode::CPUI_INT_ADD, 0, "INT_ADD"));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(OpCode::CPUI_INT_ADD, 0, "INT_ADD"));
     wire_read(&mut fd, vn, op, 0);
     wire_read(&mut fd, vn, op, 1);
-    assert_eq!(fd.vbank().get(vn).unwrap().num_descend(), 2, "vn read twice (one descend per read)");
+    assert_eq!(
+        fd.vbank().get(vn).unwrap().num_descend(),
+        2,
+        "vn read twice (one descend per read)"
+    );
 
     fd.total_replace(vn, newvn).unwrap();
 
     // Both slots now read newvn (C++ funcdata_varnode.cc:1506 per iteration).
-    assert_eq!(fd.obank().get(op).unwrap().get_in(0), Some(newvn), "slot 0 -> newvn");
-    assert_eq!(fd.obank().get(op).unwrap().get_in(1), Some(newvn), "slot 1 -> newvn");
+    assert_eq!(
+        fd.obank().get(op).unwrap().get_in(0),
+        Some(newvn),
+        "slot 0 -> newvn"
+    );
+    assert_eq!(
+        fd.obank().get(op).unwrap().get_in(1),
+        Some(newvn),
+        "slot 1 -> newvn"
+    );
     // vn lost both descend links; newvn gained both.
-    assert_eq!(fd.vbank().get(vn).unwrap().num_descend(), 0, "vn fully unhooked");
-    assert_eq!(fd.vbank().get(newvn).unwrap().num_descend(), 2, "newvn gains both reads");
+    assert_eq!(
+        fd.vbank().get(vn).unwrap().num_descend(),
+        0,
+        "vn fully unhooked"
+    );
+    assert_eq!(
+        fd.vbank().get(newvn).unwrap().num_descend(),
+        2,
+        "newvn gains both reads"
+    );
 }
 
 #[test]
@@ -265,7 +294,11 @@ fn total_replace_empty_descend_is_noop() {
     let (newvn, _d2) = make_written(&mut fd, 0x20, 4);
     assert_eq!(fd.vbank().get(vn).unwrap().num_descend(), 0);
     fd.total_replace(vn, newvn).unwrap();
-    assert_eq!(fd.vbank().get(newvn).unwrap().num_descend(), 0, "no readers -> newvn untouched");
+    assert_eq!(
+        fd.vbank().get(newvn).unwrap().num_descend(),
+        0,
+        "no readers -> newvn untouched"
+    );
 }
 
 // ===========================================================================
@@ -283,20 +316,40 @@ fn destroy_varnode_written_clears_def_output_and_readers() {
     let r = ram(&fd);
     // A WRITTEN varnode (output of defop) read by two ops.
     let (vn, defop) = make_written(&mut fd, 0x10, 4);
-    let r0 = fd.obank_mut().create_at(1, Address::new(Rc::clone(&r), 0x1000));
-    fd.obank_mut().change_opcode(r0, TypeOp::new(OpCode::CPUI_COPY, 0, "COPY"));
+    let r0 = fd
+        .obank_mut()
+        .create_at(1, Address::new(Rc::clone(&r), 0x1000));
+    fd.obank_mut()
+        .change_opcode(r0, TypeOp::new(OpCode::CPUI_COPY, 0, "COPY"));
     let r1 = fd.obank_mut().create_at(1, Address::new(r, 0x1004));
-    fd.obank_mut().change_opcode(r1, TypeOp::new(OpCode::CPUI_COPY, 0, "COPY"));
+    fd.obank_mut()
+        .change_opcode(r1, TypeOp::new(OpCode::CPUI_COPY, 0, "COPY"));
     wire_read(&mut fd, vn, r0, 0);
     wire_read(&mut fd, vn, r1, 0);
-    assert_eq!(fd.obank().get(defop).unwrap().get_out(), Some(vn), "defop output is vn pre-destroy");
+    assert_eq!(
+        fd.obank().get(defop).unwrap().get_out(),
+        Some(vn),
+        "defop output is vn pre-destroy"
+    );
 
     fd.destroy_varnode(vn).unwrap();
 
     // Both readers' slots null (clearInput), def op output cleared, vn gone.
-    assert_eq!(fd.obank().get(r0).unwrap().get_in(0), None, "reader 0 slot nulled");
-    assert_eq!(fd.obank().get(r1).unwrap().get_in(0), None, "reader 1 slot nulled");
-    assert_eq!(fd.obank().get(defop).unwrap().get_out(), None, "def op output cleared (vn->def->setOutput(0))");
+    assert_eq!(
+        fd.obank().get(r0).unwrap().get_in(0),
+        None,
+        "reader 0 slot nulled"
+    );
+    assert_eq!(
+        fd.obank().get(r1).unwrap().get_in(0),
+        None,
+        "reader 1 slot nulled"
+    );
+    assert_eq!(
+        fd.obank().get(defop).unwrap().get_out(),
+        None,
+        "def op output cleared (vn->def->setOutput(0))"
+    );
     assert!(fd.vbank().get(vn).is_none(), "varnode freed from the bank");
 }
 
@@ -309,12 +362,17 @@ fn destroy_varnode_input_no_def_unhooks_and_frees() {
     let r = ram(&fd);
     let inp = make_input(&mut fd, 0x100, 4);
     let op = fd.obank_mut().create_at(1, Address::new(r, 0x1000));
-    fd.obank_mut().change_opcode(op, TypeOp::new(OpCode::CPUI_COPY, 0, "COPY"));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(OpCode::CPUI_COPY, 0, "COPY"));
     wire_read(&mut fd, inp, op, 0);
 
     fd.destroy_varnode(inp).unwrap();
 
-    assert_eq!(fd.obank().get(op).unwrap().get_in(0), None, "reader slot nulled");
+    assert_eq!(
+        fd.obank().get(op).unwrap().get_in(0),
+        None,
+        "reader slot nulled"
+    );
     assert!(fd.vbank().get(inp).is_none(), "input varnode freed");
 }
 
@@ -351,9 +409,25 @@ fn nonzero_masks_reach_a_loop_fixpoint_and_preserve_duplicate_readers() {
 
     for _ in 0..3 {
         fd.calc_nz_mask();
-        assert_eq!(values.map(|id| fd.vbank().get(id).unwrap().get_nz_mask()), [1, 255, 254, 255]);
-        assert_eq!(values.map(|id| fd.vbank().get(id).unwrap().get_flags()), flags);
-        assert_eq!(ops.map(|id| fd.obank().get(id).unwrap().get_flags()), op_flags);
-        assert_eq!(fd.vbank().get(merged).unwrap().descend_iter().collect::<Vec<_>>(), descendants);
+        assert_eq!(
+            values.map(|id| fd.vbank().get(id).unwrap().get_nz_mask()),
+            [1, 255, 254, 255]
+        );
+        assert_eq!(
+            values.map(|id| fd.vbank().get(id).unwrap().get_flags()),
+            flags
+        );
+        assert_eq!(
+            ops.map(|id| fd.obank().get(id).unwrap().get_flags()),
+            op_flags
+        );
+        assert_eq!(
+            fd.vbank()
+                .get(merged)
+                .unwrap()
+                .descend_iter()
+                .collect::<Vec<_>>(),
+            descendants
+        );
     }
 }

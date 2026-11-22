@@ -65,7 +65,9 @@ fn union_array_interior_keeps_later_stack_references_declared() {
          load function sample\n\
          map addr s0xffffffffffffffc8 PairStorage storage\n\
          map addr s0xffffffffffffffcc float neighbor\n\
-         decompile\nprint C\nquit\n", original.display());
+         decompile\nprint C\nquit\n",
+        original.display()
+    );
     child
         .stdin
         .take()

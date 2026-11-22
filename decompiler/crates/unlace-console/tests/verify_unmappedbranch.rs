@@ -16,7 +16,7 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::project::decompile_targets;
 
 /// `e_entry`, and the only function in the image.
@@ -25,18 +25,21 @@ const ENTRY: u64 = 0x401000;
 const BRANCH_SITE: u64 = 0x40100c;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn boot() -> ConsoleProgram {
     let root = repo_root();
     let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
-    let path = root
-        .join("decompiler/crates/unlace-analysis/tests/fixtures/unmapped_branch_x86_64");
+    let path = root.join("decompiler/crates/unlace-analysis/tests/fixtures/unmapped_branch_x86_64");
     assert!(path.exists(), "missing fixture {path:?}");
     let mut prog = bootstrap_from_object(path.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
@@ -57,7 +60,11 @@ fn a_function_that_branches_into_unmapped_memory_still_decompiles() {
     let out = decompile_targets(&mut prog, vec![target], true, false, false);
     assert_eq!(out.len(), 1);
     let r = &out[0];
-    assert!(r.error.is_none(), "the selection must not fail, got: {:?}", r.error);
+    assert!(
+        r.error.is_none(),
+        "the selection must not fail, got: {:?}",
+        r.error
+    );
     let code = r.code.as_deref().unwrap_or("");
     assert!(
         code.contains("0x539"),
@@ -96,7 +103,13 @@ fn the_lost_edge_is_reported_at_its_branch_site() {
 #[test]
 fn the_entry_itself_is_mapped_and_the_branch_target_is_not() {
     let prog = boot();
-    assert!(prog.vma_bytes_mapped(ENTRY), "the entry has bytes behind it");
-    assert!(prog.vma_bytes_mapped(BRANCH_SITE), "so does the branch instruction");
+    assert!(
+        prog.vma_bytes_mapped(ENTRY),
+        "the entry has bytes behind it"
+    );
+    assert!(
+        prog.vma_bytes_mapped(BRANCH_SITE),
+        "so does the branch instruction"
+    );
     assert!(!prog.vma_bytes_mapped(0), "the branch target does not");
 }

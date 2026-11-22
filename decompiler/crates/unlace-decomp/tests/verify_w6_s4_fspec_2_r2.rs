@@ -29,13 +29,13 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
-use unlace_base::space::{spacetype, AddrSpace, AddrSpaceManager};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, spacetype};
 use unlace_base::types::{int4, uint4};
 
-use unlace_decomp::dtype::{type_class, type_metatype, Datatype, TypeFactory};
+use unlace_decomp::dtype::{Datatype, TypeFactory, type_class, type_metatype};
 use unlace_decomp::fspec::{
-    parameter_pieces_flags, FuncProto, ParamEntry, ParameterPieces, ProtoModel, PrototypePieces,
-    ScoreProtoModel,
+    FuncProto, ParamEntry, ParameterPieces, ProtoModel, PrototypePieces, ScoreProtoModel,
+    parameter_pieces_flags,
 };
 
 // --- shared builders (mirror the porter's harness) --------------------------
@@ -188,7 +188,12 @@ impl TypeFactory for VoidTypeFactory {
     ) -> KunaResult<Rc<Datatype>> {
         unreached!()
     }
-    fn get_type_pointer(&self, _s: int4, _pt: Rc<Datatype>, _ws: uint4) -> KunaResult<Rc<Datatype>> {
+    fn get_type_pointer(
+        &self,
+        _s: int4,
+        _pt: Rc<Datatype>,
+        _ws: uint4,
+    ) -> KunaResult<Rc<Datatype>> {
         unreached!()
     }
     fn get_type_pointer_named(
@@ -422,7 +427,11 @@ fn do_score_penaltyfinal_used_past_slot_index_4_w6s4_r2() {
     let mut score = ScoreProtoModel::new(true, 1);
     score.add_parameter(&model, &addr(&reg, 0x60), 4);
     score.do_score();
-    assert_eq!(score.get_num_mismatch(), 0, "0x60 is a possible param (slot 5)");
+    assert_eq!(
+        score.get_num_mismatch(),
+        0,
+        "0x60 is a possible param (slot 5)"
+    );
     assert_eq!(
         score.get_score(),
         16 + 10 + 7 + 5 + 3,
@@ -465,7 +474,10 @@ fn resolve_extra_pop_near_i32_max_offset_w6s4f2_r2() {
     };
     fp.set_param(0, "p", &piece);
     fp.set_input_lock(true);
-    assert!(fp.is_input_locked(), "input must be locked for resolveExtraPop");
+    assert!(
+        fp.is_input_locked(),
+        "input must be locked for resolveExtraPop"
+    );
     assert!(!fp.is_dotdotdot());
 
     // C++ computes `cur = (cur+3)&0x0ffffffc` with SILENT WRAP and never panics.

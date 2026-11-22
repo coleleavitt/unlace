@@ -37,7 +37,9 @@ fn an_unreadable_neighbourhood_is_not_evidence() {
 
 #[test]
 fn string_charset_is_printable_ascii_plus_the_c_whitespace_controls() {
-    assert!(reads_as_string_data(&[0x00, b'\t', b'\n', b'\r', b' ', b'~']));
+    assert!(reads_as_string_data(&[
+        0x00, b'\t', b'\n', b'\r', b' ', b'~'
+    ]));
     assert!(!reads_as_string_data(&[b'a', 0x7f]));
     assert!(!reads_as_string_data(&[b'a', 0x1b]));
     assert!(!reads_as_string_data(&[b'a', 0x80]));
@@ -49,7 +51,9 @@ fn only_the_run_after_the_terminator_is_judged() {
     // pointer opens ends at its own NUL, and what lies past it is somebody
     // else's business.  This is `du`'s `fts_alloc(sp,"",0)`, whose "" is the
     // head of `"" "." ".."` and is followed by relocation-shaped bytes.
-    assert!(reads_as_string_data(&[0x00, 0x2e, 0x00, 0x2e, 0x2e, 0x00, 0x00, 0x00, 0x89, 0x1c]));
+    assert!(reads_as_string_data(&[
+        0x00, 0x2e, 0x00, 0x2e, 0x2e, 0x00, 0x00, 0x00, 0x89, 0x1c
+    ]));
     // And the blob is rejected on the first byte of its run that no string holds.
     assert!(!reads_as_string_data(&[0x00, 0x00, 0x77, 0xdf]));
 }

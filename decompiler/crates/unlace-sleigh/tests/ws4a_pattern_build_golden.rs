@@ -26,7 +26,9 @@ fn encode_pattern(p: &Pattern) -> String {
     // begins with the leading newline of the first `open_element`.  We strip
     // that single leading newline so the constants read cleanly; both encoders
     // are otherwise byte-identical (same XmlEncode indentation).
-    xml_encode(|e| p.encode(e)).trim_start_matches('\n').to_string()
+    xml_encode(|e| p.encode(e))
+        .trim_start_matches('\n')
+        .to_string()
 }
 
 /// `cval` / `ctx` helpers for building expressions.

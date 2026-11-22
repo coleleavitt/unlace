@@ -14,7 +14,11 @@ fn a_global_entry_resolves_its_toc_relative_global() {
         .args(["decompile", &binary, "publish"])
         .output()
         .unwrap();
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let code = String::from_utf8(output.stdout).unwrap();
     assert!(code.contains("escaped = a0;"), "{code}");
 }

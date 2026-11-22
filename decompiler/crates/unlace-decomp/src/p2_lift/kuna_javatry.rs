@@ -28,7 +28,7 @@ use unlace_num::opcodes::OpCode;
 
 use crate::context::OpId;
 use crate::funcdata::Funcdata;
-use crate::kuna_dex::{DexModel, TryBlock, REGISTER_START};
+use crate::kuna_dex::{DexModel, REGISTER_START, TryBlock};
 use crate::op::pcodeop_flags;
 use crate::userop::{BUILTIN_JAVA_CAUGHT, BUILTIN_JAVA_THROWS, BUILTIN_JAVA_TRY};
 
@@ -36,7 +36,11 @@ use crate::userop::{BUILTIN_JAVA_CAUGHT, BUILTIN_JAVA_THROWS, BUILTIN_JAVA_TRY};
 /// the handler continues after it (through one `goto`, or falling through).
 fn handler_stub(model: &DexModel, handler: u64) -> Option<(Option<u8>, u64)> {
     let head = model.bytes_at(handler, 2)?;
-    let (register, at) = if head[0] == 0x0d { (Some(head[1]), handler + 2) } else { (None, handler) };
+    let (register, at) = if head[0] == 0x0d {
+        (Some(head[1]), handler + 2)
+    } else {
+        (None, handler)
+    };
     let op = model.bytes_at(at, 1)?[0];
     let target = match op {
         0x28 => at.wrapping_add_signed(2 * i64::from(model.bytes_at(at + 1, 1)?[0] as i8)),
@@ -56,7 +60,11 @@ fn handler_stub(model: &DexModel, handler: u64) -> Option<(Option<u8>, u64)> {
 pub fn canonical_blocks(model: &DexModel, entry: u64) -> Vec<TryBlock> {
     let mut blocks = model.try_blocks(entry);
     for block in &mut blocks {
-        let stubs: Vec<Option<(Option<u8>, u64)>> = block.handlers.iter().map(|&(_, h)| handler_stub(model, h)).collect();
+        let stubs: Vec<Option<(Option<u8>, u64)>> = block
+            .handlers
+            .iter()
+            .map(|&(_, h)| handler_stub(model, h))
+            .collect();
         for k in 1..block.handlers.len() {
             let Some(stub) = &stubs[k] else { continue };
             if let Some(j) = (0..k).find(|&j| stubs[j].as_ref() == Some(stub)) {
@@ -84,7 +92,9 @@ impl JavaTryPlan {
         let mut order = 0;
         for block in &blocks {
             for &(_, handler) in &block.handlers {
-                let span = spans.entry(handler).or_insert((block.start, block.end, order));
+                let span = spans
+                    .entry(handler)
+                    .or_insert((block.start, block.end, order));
                 span.0 = span.0.min(block.start);
                 span.1 = span.1.max(block.end);
                 order += 1;
@@ -92,7 +102,10 @@ impl JavaTryPlan {
         }
         let mut dispatch: BTreeMap<u64, Vec<(u64, u64, usize)>> = BTreeMap::new();
         for (&handler, &(start, end, first)) in &spans {
-            dispatch.entry(start).or_default().push((handler, end, first));
+            dispatch
+                .entry(start)
+                .or_default()
+                .push((handler, end, first));
         }
         let dispatch = dispatch
             .into_iter()
@@ -124,7 +137,13 @@ pub fn can_throw(op: u8) -> bool {
     match op {
         0x00..=0x1b => false,
         0x28..=0x3d => false,
-        0x7b..=0x92 | 0x95..=0x9d | 0xa0..=0xb2 | 0xb5..=0xbd | 0xc0..=0xd2 | 0xd5..=0xda | 0xdd..=0xe2 => false,
+        0x7b..=0x92
+        | 0x95..=0x9d
+        | 0xa0..=0xb2
+        | 0xb5..=0xbd
+        | 0xc0..=0xd2
+        | 0xd5..=0xda
+        | 0xdd..=0xe2 => false,
         _ => true,
     }
 }
@@ -149,7 +168,10 @@ fn edge(data: &mut Funcdata, at: &Address, id: u32, handler: u64) -> KunaResult<
     let flag = data.new_unique_out(1, test)?;
     let branch = data.new_op(2, at.clone());
     data.op_set_opcode_code(branch, OpCode::CPUI_CBRANCH);
-    let dest = data.new_code_ref(&Address::new(at.get_space().expect("code space").clone(), handler));
+    let dest = data.new_code_ref(&Address::new(
+        at.get_space().expect("code space").clone(),
+        handler,
+    ));
     data.op_set_input(branch, dest, 0)?;
     data.op_set_input(branch, flag, 1)?;
     Ok(test)
@@ -160,15 +182,26 @@ fn edge(data: &mut Funcdata, at: &Address, id: u32, handler: u64) -> KunaResult<
 /// starting here, then the exceptional edges of a throwing instruction.
 /// Returns the first op of the dispatches, which flow makes a basic block of
 /// its own so the statements before the `try` stay out of its condition.
-pub fn before_instruction(data: &mut Funcdata, plan: &JavaTryPlan, model: &DexModel, curaddr: &Address) -> KunaResult<Option<OpId>> {
+pub fn before_instruction(
+    data: &mut Funcdata,
+    plan: &JavaTryPlan,
+    model: &DexModel,
+    curaddr: &Address,
+) -> KunaResult<Option<OpId>> {
     if plan.is_empty() {
         return Ok(None);
     }
     let off = curaddr.get_offset();
-    let Some(&[opcode, operand]) = model.bytes_at(off, 2).map(|b| <&[u8; 2]>::try_from(b).unwrap()) else {
+    let Some(&[opcode, operand]) = model
+        .bytes_at(off, 2)
+        .map(|b| <&[u8; 2]>::try_from(b).unwrap())
+    else {
         return Ok(None);
     };
-    let is_handler = plan.blocks.iter().any(|b| b.handlers.iter().any(|h| h.1 == off));
+    let is_handler = plan
+        .blocks
+        .iter()
+        .any(|b| b.handlers.iter().any(|h| h.1 == off));
     if is_handler && opcode == 0x0d {
         let op = callother(data, curaddr, BUILTIN_JAVA_CAUGHT, &[off])?;
         let register = data
@@ -176,8 +209,14 @@ pub fn before_instruction(data: &mut Funcdata, plan: &JavaTryPlan, model: &DexMo
             .manage
             .get_space_by_name("register")
             .cloned()
-            .ok_or_else(|| unlace_base::error::KunaError::lowlevel("Dalvik spec has no register space"))?;
-        data.new_varnode_out(4, &Address::new(register, REGISTER_START + 4 * u64::from(operand)), op)?;
+            .ok_or_else(|| {
+                unlace_base::error::KunaError::lowlevel("Dalvik spec has no register space")
+            })?;
+        data.new_varnode_out(
+            4,
+            &Address::new(register, REGISTER_START + 4 * u64::from(operand)),
+            op,
+        )?;
     }
     let dispatched: &[u64] = plan.dispatch.get(&off).map_or(&[], Vec::as_slice);
     let mut first = None;
@@ -202,11 +241,15 @@ pub fn before_instruction(data: &mut Funcdata, plan: &JavaTryPlan, model: &DexMo
 
 /// Does basic block `bb` hold nothing but `java_try` dispatches?
 pub fn is_dispatch_only(data: &Funcdata, bb: crate::context::BlockId) -> bool {
-    data.bb_op_tail(bb).is_some_and(|tail| dispatch_handler(data, tail).is_some())
+    data.bb_op_tail(bb)
+        .is_some_and(|tail| dispatch_handler(data, tail).is_some())
         && data.bb_ops(bb).iter().all(|&op| {
             data.obank().get(op).is_some_and(|o| match o.code() {
                 OpCode::CPUI_CBRANCH => true,
-                OpCode::CPUI_CALLOTHER => data.vbank().get(o.get_in(0).unwrap_or_default()).is_some_and(|v| v.get_offset() == u64::from(BUILTIN_JAVA_TRY)),
+                OpCode::CPUI_CALLOTHER => data
+                    .vbank()
+                    .get(o.get_in(0).unwrap_or_default())
+                    .is_some_and(|v| v.get_offset() == u64::from(BUILTIN_JAVA_TRY)),
                 OpCode::CPUI_BOOL_NEGATE | OpCode::CPUI_COPY => true,
                 _ => false,
             })
@@ -282,32 +325,50 @@ impl CatchTable {
             let mut merged: Vec<(u64, u64)> = Vec::with_capacity(ranges.len());
             for &(start, end) in ranges.iter() {
                 match merged.last_mut() {
-                    Some(last) if start <= last.1 || !throws_between(model, last.1, start) => last.1 = last.1.max(end),
+                    Some(last) if start <= last.1 || !throws_between(model, last.1, start) => {
+                        last.1 = last.1.max(end)
+                    }
                     _ => merged.push((start, end)),
                 }
             }
             *ranges = merged;
         }
-        (!handlers.is_empty()).then(|| CatchTable { handlers, model: std::rc::Rc::clone(model) })
+        (!handlers.is_empty()).then(|| CatchTable {
+            handlers,
+            model: std::rc::Rc::clone(model),
+        })
     }
 
     /// The ranges whose clauses name `handler`, sorted.
     pub fn ranges(&self, handler: u64) -> Vec<(u64, u64)> {
-        let mut ranges = self.handlers.get(&handler).map(|h| h.0.clone()).unwrap_or_default();
+        let mut ranges = self
+            .handlers
+            .get(&handler)
+            .map(|h| h.0.clone())
+            .unwrap_or_default();
         ranges.sort_unstable();
         ranges
     }
 
     /// Is `addr` inside a range whose clauses name `handler`?
     pub fn covers(&self, handler: u64, addr: u64) -> bool {
-        self.handlers.get(&handler).is_some_and(|h| h.0.iter().any(|&(s, e)| s <= addr && addr < e))
+        self.handlers
+            .get(&handler)
+            .is_some_and(|h| h.0.iter().any(|&(s, e)| s <= addr && addr < e))
     }
 
     /// The Java spelling of what `handler` catches: `IOException`, or
     /// `A | B` for a handler several clauses share.
     pub fn type_text(&self, handler: u64) -> String {
-        let types = self.handlers.get(&handler).map(|h| h.1.clone()).unwrap_or_default();
-        let names: Vec<String> = types.iter().map(|&t| self.model.catch_type_name(t)).collect();
+        let types = self
+            .handlers
+            .get(&handler)
+            .map(|h| h.1.clone())
+            .unwrap_or_default();
+        let names: Vec<String> = types
+            .iter()
+            .map(|&t| self.model.catch_type_name(t))
+            .collect();
         if names.is_empty() {
             "Throwable".to_string()
         } else {
@@ -326,7 +387,9 @@ impl CatchTable {
 
     /// Can the instruction at `addr` throw?
     pub fn can_throw_at(&self, addr: u64) -> bool {
-        self.model.bytes_at(addr, 1).is_some_and(|b| can_throw(b[0]))
+        self.model
+            .bytes_at(addr, 1)
+            .is_some_and(|b| can_throw(b[0]))
     }
 }
 
@@ -334,11 +397,15 @@ impl CatchTable {
 fn throws_between(model: &DexModel, from: u64, to: u64) -> bool {
     let mut at = from;
     while at < to {
-        let Some(op) = model.bytes_at(at, 1).map(|b| b[0]) else { return true };
+        let Some(op) = model.bytes_at(at, 1).map(|b| b[0]) else {
+            return true;
+        };
         if can_throw(op) {
             return true;
         }
-        let Some(size) = model.instruction_size(at) else { return true };
+        let Some(size) = model.instruction_size(at) else {
+            return true;
+        };
         at += size;
     }
     false
@@ -361,7 +428,10 @@ pub fn caught_handler(data: &Funcdata, op: OpId) -> Option<u64> {
 pub fn dispatch_blocks(data: &Funcdata) -> Vec<crate::context::BlockId> {
     (0..data.bblocks_get_size())
         .map(|i| data.bblocks_get_block(i))
-        .filter(|&bb| data.bb_op_tail(bb).is_some_and(|op| dispatch_handler(data, op).is_some()))
+        .filter(|&bb| {
+            data.bb_op_tail(bb)
+                .is_some_and(|op| dispatch_handler(data, op).is_some())
+        })
         .collect()
 }
 
@@ -371,7 +441,11 @@ pub fn dispatch_targets(data: &Funcdata) -> std::collections::BTreeSet<crate::co
         .into_iter()
         .filter_map(|bb| {
             let tail = data.bb_op_tail(bb)?;
-            let taken = if data.obank().get(tail)?.is_fallthru_true() { 0 } else { 1 };
+            let taken = if data.obank().get(tail)?.is_fallthru_true() {
+                0
+            } else {
+                1
+            };
             let block = data.bblocks_ref().block(bb);
             (block.size_out() == 2).then(|| block.get_out(taken))
         })
@@ -385,18 +459,25 @@ pub fn drop_throws_edges(data: &mut Funcdata) {
     let mut drops = Vec::new();
     for i in 0..data.bblocks_get_size() {
         let bb = data.bblocks_get_block(i);
-        let Some(tail) = data.bb_op_tail(bb) else { continue };
+        let Some(tail) = data.bb_op_tail(bb) else {
+            continue;
+        };
         if !is_throws_edge(data, tail) {
             continue;
         }
-        let taken = if data.obank().get(tail).is_some_and(|o| o.is_fallthru_true()) { 0 } else { 1 };
+        let taken = if data.obank().get(tail).is_some_and(|o| o.is_fallthru_true()) {
+            0
+        } else {
+            1
+        };
         let blocks = data.bblocks_ref();
         let block = blocks.block(bb);
         if block.size_out() != 2 {
             continue;
         }
         let target = block.get_out(taken);
-        if let (Some(from), Some(to)) = (block.get_copy_map(), blocks.block(target).get_copy_map()) {
+        if let (Some(from), Some(to)) = (block.get_copy_map(), blocks.block(target).get_copy_map())
+        {
             drops.push((from, to));
         }
     }
@@ -415,22 +496,35 @@ pub struct ActionJavaThrowPrune {
 
 impl ActionJavaThrowPrune {
     pub fn boxed(group: &str) -> Box<dyn crate::action::Action> {
-        Box::new(ActionJavaThrowPrune { base: crate::action::ActionBase::new(0, "javathrowprune", group) })
+        Box::new(ActionJavaThrowPrune {
+            base: crate::action::ActionBase::new(0, "javathrowprune", group),
+        })
     }
 }
 
 /// The exceptional edges of the function, by the handler block they enter:
 /// `(block, out-index)` of each.
-fn throws_edges(data: &Funcdata) -> std::collections::BTreeMap<crate::context::BlockId, Vec<(crate::context::BlockId, i32)>> {
+fn throws_edges(
+    data: &Funcdata,
+) -> std::collections::BTreeMap<crate::context::BlockId, Vec<(crate::context::BlockId, i32)>> {
     let mut by_handler: std::collections::BTreeMap<_, Vec<_>> = std::collections::BTreeMap::new();
     for i in 0..data.bblocks_get_size() {
         let bb = data.bblocks_get_block(i);
-        let Some(tail) = data.bb_op_tail(bb) else { continue };
+        let Some(tail) = data.bb_op_tail(bb) else {
+            continue;
+        };
         if !is_throws_edge(data, tail) || data.bblocks_ref().block(bb).size_out() != 2 {
             continue;
         }
-        let taken = if data.obank().get(tail).is_some_and(|o| o.is_fallthru_true()) { 0 } else { 1 };
-        by_handler.entry(data.bblocks_ref().block(bb).get_out(taken)).or_default().push((bb, taken));
+        let taken = if data.obank().get(tail).is_some_and(|o| o.is_fallthru_true()) {
+            0
+        } else {
+            1
+        };
+        by_handler
+            .entry(data.bblocks_ref().block(bb).get_out(taken))
+            .or_default()
+            .push((bb, taken));
     }
     by_handler
 }
@@ -442,12 +536,21 @@ impl crate::action::Action for ActionJavaThrowPrune {
     fn base_mut(&mut self) -> &mut crate::action::ActionBase {
         &mut self.base
     }
-    fn clone_filtered(&self, grouplist: &crate::action::ActionGroupList) -> Option<Box<dyn crate::action::Action>> {
+    fn clone_filtered(
+        &self,
+        grouplist: &crate::action::ActionGroupList,
+    ) -> Option<Box<dyn crate::action::Action>> {
         grouplist.contains(self.get_group()).then(|| {
-            Box::new(ActionJavaThrowPrune { base: self.base.clone() }) as Box<dyn crate::action::Action>
+            Box::new(ActionJavaThrowPrune {
+                base: self.base.clone(),
+            }) as Box<dyn crate::action::Action>
         })
     }
-    fn apply(&mut self, data: &mut Funcdata, _ctx: &mut crate::action::ActionContext) -> crate::action::ApplyResult {
+    fn apply(
+        &mut self,
+        data: &mut Funcdata,
+        _ctx: &mut crate::action::ActionContext,
+    ) -> crate::action::ApplyResult {
         if !data.get_arch().java_try {
             return 0;
         }
@@ -457,7 +560,11 @@ impl crate::action::Action for ActionJavaThrowPrune {
             let phis: Vec<OpId> = data
                 .bb_ops(handler)
                 .into_iter()
-                .filter(|&op| data.obank().get(op).is_some_and(|o| o.code() == OpCode::CPUI_MULTIEQUAL))
+                .filter(|&op| {
+                    data.obank()
+                        .get(op)
+                        .is_some_and(|o| o.code() == OpCode::CPUI_MULTIEQUAL)
+                })
                 .collect();
             let mut counts: Vec<std::collections::HashMap<crate::context::VarnodeId, usize>> = phis
                 .iter()
@@ -480,7 +587,10 @@ impl crate::action::Action for ActionJavaThrowPrune {
                 let brings: Vec<Option<crate::context::VarnodeId>> = phis
                     .iter()
                     .map(|&op| {
-                        data.obank().get(op).filter(|o| o.code() == OpCode::CPUI_MULTIEQUAL).and_then(|o| o.get_in(slot))
+                        data.obank()
+                            .get(op)
+                            .filter(|o| o.code() == OpCode::CPUI_MULTIEQUAL)
+                            .and_then(|o| o.get_in(slot))
                     })
                     .collect();
                 let redundant = brings

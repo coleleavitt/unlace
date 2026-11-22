@@ -30,10 +30,10 @@
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
+use crate::context::{BlockId, OpId, VarnodeId};
 use crate::expression::PcodeOpNode;
 use crate::funcdata::Funcdata;
 use crate::op::pcodeop_flags;
-use crate::context::{BlockId, OpId, VarnodeId};
 
 /// Description of a point in control-flow where a Varnode can propagate as a
 /// constant down a conditional branch (C++ `ActionConditionalConst::ConstPoint`,
@@ -64,13 +64,31 @@ impl ConstPoint {
         slot: int4,
         is_dom: bool,
     ) -> ConstPoint {
-        let value = data.vbank().get(c).expect("ConstPoint: stale const vn").get_offset();
-        ConstPoint { vn: v, const_vn: Some(c), value, const_block: bl, in_slot: slot, block_is_dom: is_dom }
+        let value = data
+            .vbank()
+            .get(c)
+            .expect("ConstPoint: stale const vn")
+            .get_offset();
+        ConstPoint {
+            vn: v,
+            const_vn: Some(c),
+            value,
+            const_block: bl,
+            in_slot: slot,
+            block_is_dom: is_dom,
+        }
     }
 
     /// Construct from a constant value (C++ second ctor): `constVn = 0`.
     fn from_value(v: VarnodeId, val: uintb, bl: BlockId, slot: int4, is_dom: bool) -> ConstPoint {
-        ConstPoint { vn: v, const_vn: None, value: val, const_block: bl, in_slot: slot, block_is_dom: is_dom }
+        ConstPoint {
+            vn: v,
+            const_vn: None,
+            value: val,
+            const_block: bl,
+            in_slot: slot,
+            block_is_dom: is_dom,
+        }
     }
 }
 
@@ -90,7 +108,10 @@ fn lone_descend(data: &Funcdata, vn: VarnodeId) -> Option<OpId> {
 /// `ActionConditionalConst::clearMarks`, `coreaction.cc:4295`).
 fn clear_marks(data: &mut Funcdata, op_list: &[OpId]) {
     for &op in op_list {
-        data.obank_mut().get_mut(op).expect("clearMarks: stale op").clear_mark();
+        data.obank_mut()
+            .get_mut(op)
+            .expect("clearMarks: stale op")
+            .clear_mark();
     }
 }
 
@@ -115,28 +136,70 @@ fn collect_reachable(
     });
     let mut count: usize = 0;
     let mut vn = vn;
-    if data.vbank().get(vn).expect("collectReachable: stale vn").is_written() {
-        let op = data.vbank().get(vn).expect("collectReachable: stale vn").get_def().unwrap();
-        if data.obank().get(op).expect("collectReachable: stale def").code() == OpCode::CPUI_MULTIEQUAL {
-            data.obank_mut().get_mut(op).expect("collectReachable: stale def").set_mark();
+    if data
+        .vbank()
+        .get(vn)
+        .expect("collectReachable: stale vn")
+        .is_written()
+    {
+        let op = data
+            .vbank()
+            .get(vn)
+            .expect("collectReachable: stale vn")
+            .get_def()
+            .unwrap();
+        if data
+            .obank()
+            .get(op)
+            .expect("collectReachable: stale def")
+            .code()
+            == OpCode::CPUI_MULTIEQUAL
+        {
+            data.obank_mut()
+                .get_mut(op)
+                .expect("collectReachable: stale def")
+                .set_mark();
             reachable.push(op);
         }
     }
     loop {
-        let descend: Vec<OpId> =
-            data.vbank().get(vn).expect("collectReachable: stale vn").descend_iter().collect();
+        let descend: Vec<OpId> = data
+            .vbank()
+            .get(vn)
+            .expect("collectReachable: stale vn")
+            .descend_iter()
+            .collect();
         for op in descend {
-            if data.obank().get(op).expect("collectReachable: stale op").is_mark() {
+            if data
+                .obank()
+                .get(op)
+                .expect("collectReachable: stale op")
+                .is_mark()
+            {
                 continue;
             }
-            let opc = data.obank().get(op).expect("collectReachable: stale op").code();
+            let opc = data
+                .obank()
+                .get(op)
+                .expect("collectReachable: stale op")
+                .code();
             if opc == OpCode::CPUI_MULTIEQUAL {
-                let num_input = data.obank().get(op).expect("collectReachable: stale op").num_input();
+                let num_input = data
+                    .obank()
+                    .get(op)
+                    .expect("collectReachable: stale op")
+                    .num_input();
                 // Find the incoming slot for the current Varnode, then test if it
                 // is *not* an excised edge (binary_search of phiNodeEdges).
                 let mut slot = 0;
                 while slot < num_input {
-                    if data.obank().get(op).expect("collectReachable: stale op").get_in(slot) != Some(vn) {
+                    if data
+                        .obank()
+                        .get(op)
+                        .expect("collectReachable: stale op")
+                        .get_in(slot)
+                        != Some(vn)
+                    {
                         slot += 1;
                         continue;
                     }
@@ -154,12 +217,20 @@ fn collect_reachable(
                 continue;
             }
             reachable.push(op);
-            data.obank_mut().get_mut(op).expect("collectReachable: stale op").set_mark();
+            data.obank_mut()
+                .get_mut(op)
+                .expect("collectReachable: stale op")
+                .set_mark();
         }
         if count >= reachable.len() {
             break;
         }
-        vn = data.obank().get(reachable[count]).expect("collectReachable: stale op").get_out().unwrap();
+        vn = data
+            .obank()
+            .get(reachable[count])
+            .expect("collectReachable: stale op")
+            .get_out()
+            .unwrap();
         count += 1;
     }
 }
@@ -187,35 +258,74 @@ fn binary_search_edge(data: &Funcdata, edges: &[PcodeOpNode], target: &PcodeOpNo
 /// Does the output of the given op reunite with the alternate flow (C++
 /// `ActionConditionalConst::flowToAlternatePath`, `coreaction.cc:4355`).
 fn flow_to_alternate_path(data: &mut Funcdata, op: OpId) -> bool {
-    if data.obank().get(op).expect("flowToAlternatePath: stale op").is_mark() {
+    if data
+        .obank()
+        .get(op)
+        .expect("flowToAlternatePath: stale op")
+        .is_mark()
+    {
         return true;
     }
     let mut mark_set: Vec<VarnodeId> = Vec::new();
-    let vn = data.obank().get(op).expect("flowToAlternatePath: stale op").get_out().unwrap();
+    let vn = data
+        .obank()
+        .get(op)
+        .expect("flowToAlternatePath: stale op")
+        .get_out()
+        .unwrap();
     mark_set.push(vn);
-    data.vbank_mut().get_mut(vn).expect("flowToAlternatePath: stale vn").set_mark();
+    data.vbank_mut()
+        .get_mut(vn)
+        .expect("flowToAlternatePath: stale vn")
+        .set_mark();
     let mut count: usize = 0;
     let mut found_path = false;
     while count < mark_set.len() {
         let vn = mark_set[count];
         count += 1;
-        let descend: Vec<OpId> =
-            data.vbank().get(vn).expect("flowToAlternatePath: stale vn").descend_iter().collect();
+        let descend: Vec<OpId> = data
+            .vbank()
+            .get(vn)
+            .expect("flowToAlternatePath: stale vn")
+            .descend_iter()
+            .collect();
         for next_op in descend {
-            let opc = data.obank().get(next_op).expect("flowToAlternatePath: stale op").code();
+            let opc = data
+                .obank()
+                .get(next_op)
+                .expect("flowToAlternatePath: stale op")
+                .code();
             if opc == OpCode::CPUI_MULTIEQUAL {
-                if data.obank().get(next_op).expect("flowToAlternatePath: stale op").is_mark() {
+                if data
+                    .obank()
+                    .get(next_op)
+                    .expect("flowToAlternatePath: stale op")
+                    .is_mark()
+                {
                     found_path = true;
                     break;
                 }
             } else if opc != OpCode::CPUI_COPY && opc != OpCode::CPUI_INDIRECT {
                 continue;
             }
-            let out_vn = data.obank().get(next_op).expect("flowToAlternatePath: stale op").get_out().unwrap();
-            if data.vbank().get(out_vn).expect("flowToAlternatePath: stale out").is_mark() {
+            let out_vn = data
+                .obank()
+                .get(next_op)
+                .expect("flowToAlternatePath: stale op")
+                .get_out()
+                .unwrap();
+            if data
+                .vbank()
+                .get(out_vn)
+                .expect("flowToAlternatePath: stale out")
+                .is_mark()
+            {
                 continue;
             }
-            data.vbank_mut().get_mut(out_vn).expect("flowToAlternatePath: stale out").set_mark();
+            data.vbank_mut()
+                .get_mut(out_vn)
+                .expect("flowToAlternatePath: stale out")
+                .set_mark();
             mark_set.push(out_vn);
         }
         if found_path {
@@ -223,7 +333,10 @@ fn flow_to_alternate_path(data: &mut Funcdata, op: OpId) -> bool {
         }
     }
     for &v in &mark_set {
-        data.vbank_mut().get_mut(v).expect("flowToAlternatePath: stale vn").clear_mark();
+        data.vbank_mut()
+            .get_mut(v)
+            .expect("flowToAlternatePath: stale vn")
+            .clear_mark();
     }
     found_path
 }
@@ -238,7 +351,12 @@ fn flow_together(
 ) -> bool {
     let mut reachable: Vec<OpId> = Vec::new();
     let mut excise: Vec<PcodeOpNode> = Vec::new(); // No edge excised
-    let start = data.obank().get(edges[i].op).expect("flowTogether: stale op").get_out().unwrap();
+    let start = data
+        .obank()
+        .get(edges[i].op)
+        .expect("flowTogether: stale op")
+        .get_out()
+        .unwrap();
     collect_reachable(data, start, &mut excise, &mut reachable);
     let mut res = false;
     for j in 0..edges.len() {
@@ -248,7 +366,12 @@ fn flow_together(
         if result[j] == 0 {
             continue; // Check for disconnected path
         }
-        if data.obank().get(edges[j].op).expect("flowTogether: stale op").is_mark() {
+        if data
+            .obank()
+            .get(edges[j].op)
+            .expect("flowTogether: stale op")
+            .is_mark()
+        {
             result[i] = 2; // Disconnected paths, which flow together
             result[j] = 2;
             res = true;
@@ -264,22 +387,52 @@ fn place_copy(data: &mut Funcdata, op: OpId, bl: BlockId, const_vn: VarnodeId) -
     let last_op = last_op_of(data, bl);
     // Decide insertion point + the address to stamp on the new COPY.
     let (before, addr) = match last_op {
-        None => {
-            (None, data.obank().get(op).expect("placeCopy: stale op").get_addr().clone())
-        }
-        Some(lop) if data.obank().get(lop).expect("placeCopy: stale lastOp").is_branch() => {
+        None => (
+            None,
+            data.obank()
+                .get(op)
+                .expect("placeCopy: stale op")
+                .get_addr()
+                .clone(),
+        ),
+        Some(lop)
+            if data
+                .obank()
+                .get(lop)
+                .expect("placeCopy: stale lastOp")
+                .is_branch() =>
+        {
             // Insert before the branch.
-            (Some(lop), data.obank().get(lop).expect("placeCopy: stale lastOp").get_addr().clone())
+            (
+                Some(lop),
+                data.obank()
+                    .get(lop)
+                    .expect("placeCopy: stale lastOp")
+                    .get_addr()
+                    .clone(),
+            )
         }
-        Some(lop) => {
-            (None, data.obank().get(lop).expect("placeCopy: stale lastOp").get_addr().clone())
-        }
+        Some(lop) => (
+            None,
+            data.obank()
+                .get(lop)
+                .expect("placeCopy: stale lastOp")
+                .get_addr()
+                .clone(),
+        ),
     };
     let copy_op = data.new_op(1, addr);
     data.op_set_opcode(copy_op, crate::typeop::type_op_for(OpCode::CPUI_COPY));
-    let const_size = data.vbank().get(const_vn).expect("placeCopy: stale const vn").get_size();
-    let out_vn = data.new_unique_out(const_size, copy_op).expect("placeCopy: newUniqueOut");
-    data.op_set_input(copy_op, const_vn, 0).expect("placeCopy: opSetInput");
+    let const_size = data
+        .vbank()
+        .get(const_vn)
+        .expect("placeCopy: stale const vn")
+        .get_size();
+    let out_vn = data
+        .new_unique_out(const_size, copy_op)
+        .expect("placeCopy: newUniqueOut");
+    data.op_set_input(copy_op, const_vn, 0)
+        .expect("placeCopy: opSetInput");
     data.op_insert(copy_op, bl, before);
     out_vn
 }
@@ -299,17 +452,31 @@ fn place_multiple_constants(
             continue; // Check that the MULTIEQUAL is marked as flowing together
         }
         op = Some(phi_node_edges[i].op);
-        let parent = data.obank().get(phi_node_edges[i].op).expect("placeMultiple: stale op").get_parent().unwrap();
-        let bl = data.bblocks_ref().block(parent).get_in(phi_node_edges[i].slot);
+        let parent = data
+            .obank()
+            .get(phi_node_edges[i].op)
+            .expect("placeMultiple: stale op")
+            .get_parent()
+            .unwrap();
+        let bl = data
+            .bblocks_ref()
+            .block(parent)
+            .get_in(phi_node_edges[i].slot);
         blocks.push(bl);
     }
     let root_block = data.bblocks_mut().find_common_block_set(&blocks);
-    let out_vn = place_copy(data, op.expect("placeMultiple: no flow-together op"), root_block, const_vn);
+    let out_vn = place_copy(
+        data,
+        op.expect("placeMultiple: no flow-together op"),
+        root_block,
+        const_vn,
+    );
     for i in 0..phi_node_edges.len() {
         if marks[i] != 2 {
             continue;
         }
-        data.op_set_input(phi_node_edges[i].op, out_vn, phi_node_edges[i].slot).expect("placeMultiple: opSetInput");
+        data.op_set_input(phi_node_edges[i].op, out_vn, phi_node_edges[i].slot)
+            .expect("placeMultiple: opSetInput");
     }
 }
 
@@ -320,18 +487,30 @@ fn execute_simple(data: &Funcdata, op: OpId, in_vals: &[uintb]) -> Option<uintb>
     let (eval_type, opc, out_size, in0_size) = {
         let o = data.obank().get(op).expect("executeSimple: stale op");
         let out = o.get_out().expect("executeSimple: op has no output");
-        let out_size = data.vbank().get(out).expect("executeSimple: stale out").get_size();
+        let out_size = data
+            .vbank()
+            .get(out)
+            .expect("executeSimple: stale out")
+            .get_size();
         let in0 = o.get_in(0).expect("executeSimple: op has no input 0");
-        let in0_size = data.vbank().get(in0).expect("executeSimple: stale in0").get_size();
+        let in0_size = data
+            .vbank()
+            .get(in0)
+            .expect("executeSimple: stale in0")
+            .get_size();
         (o.get_eval_type(), o.code(), out_size, in0_size)
     };
     let behave = data.get_arch().op_behavior(opc)?;
     if (eval_type & pcodeop_flags::unary) != 0 {
         behave.evaluate_unary(out_size, in0_size, in_vals[0]).ok()
     } else if (eval_type & pcodeop_flags::binary) != 0 {
-        behave.evaluate_binary(out_size, in0_size, in_vals[0], in_vals[1]).ok()
+        behave
+            .evaluate_binary(out_size, in0_size, in_vals[0], in_vals[1])
+            .ok()
     } else if (eval_type & pcodeop_flags::ternary) != 0 {
-        behave.evaluate_ternary(out_size, in0_size, in_vals[0], in_vals[1], in_vals[2]).ok()
+        behave
+            .evaluate_ternary(out_size, in0_size, in_vals[0], in_vals[1], in_vals[2])
+            .ok()
     } else {
         None // C++ throws LowlevelError -> not simply executable
     }
@@ -341,7 +520,14 @@ fn execute_simple(data: &Funcdata, op: OpId, in_vals: &[uintb]) -> Option<uintb>
 /// given PcodeOp (C++ `ActionConditionalConst::pushConstant`,
 /// `coreaction.cc:4487`).
 fn push_constant(data: &mut Funcdata, points: &mut Vec<ConstPoint>, op: OpId) {
-    if (data.obank().get(op).expect("pushConstant: stale op").get_eval_type() & pcodeop_flags::special) != 0 {
+    if (data
+        .obank()
+        .get(op)
+        .expect("pushConstant: stale op")
+        .get_eval_type()
+        & pcodeop_flags::special)
+        != 0
+    {
         return;
     }
     let opc = data.obank().get(op).expect("pushConstant: stale op").code();
@@ -355,22 +541,46 @@ fn push_constant(data: &mut Funcdata, points: &mut Vec<ConstPoint>, op: OpId) {
     // `outvn->getSize()` reads past a null pointer; the practical effect is the
     // size compares `> sizeof(uintb)` and the function returns.  The defined
     // transcription reaches that same "no constant pushed" outcome directly.)
-    let out_vn = match data.obank().get(op).expect("pushConstant: stale op").get_out() {
+    let out_vn = match data
+        .obank()
+        .get(op)
+        .expect("pushConstant: stale op")
+        .get_out()
+    {
         Some(v) => v,
         None => return,
     };
-    if data.vbank().get(out_vn).expect("pushConstant: stale out").get_size() as usize > std::mem::size_of::<uintb>() {
+    if data
+        .vbank()
+        .get(out_vn)
+        .expect("pushConstant: stale out")
+        .get_size() as usize
+        > std::mem::size_of::<uintb>()
+    {
         return;
     }
     let front = points[0];
-    let slot = data.obank().get(op).expect("pushConstant: stale op").get_slot(front.vn);
-    let num_input = data.obank().get(op).expect("pushConstant: stale op").num_input();
+    let slot = data
+        .obank()
+        .get(op)
+        .expect("pushConstant: stale op")
+        .get_slot(front.vn);
+    let num_input = data
+        .obank()
+        .get(op)
+        .expect("pushConstant: stale op")
+        .num_input();
     let mut in_vals = [0u64; 3];
     for i in 0..num_input {
         if i == slot {
             in_vals[i as usize] = front.value;
         } else {
-            let in_vn = data.obank().get(op).expect("pushConstant: stale op").get_in(i).unwrap();
+            let in_vn = data
+                .obank()
+                .get(op)
+                .expect("pushConstant: stale op")
+                .get_in(i)
+                .unwrap();
             let v = data.vbank().get(in_vn).expect("pushConstant: stale in");
             if v.get_size() as usize > std::mem::size_of::<uintb>() {
                 return;
@@ -386,7 +596,13 @@ fn push_constant(data: &mut Funcdata, points: &mut Vec<ConstPoint>, op: OpId) {
         Some(v) => v,
         None => return, // evalError
     };
-    points.push(ConstPoint::from_value(out_vn, outval, front.const_block, front.in_slot, front.block_is_dom));
+    points.push(ConstPoint::from_value(
+        out_vn,
+        outval,
+        front.const_block,
+        front.in_slot,
+        front.block_is_dom,
+    ));
 }
 
 /// Replace MULTIEQUAL edges with a constant if there is no alternate flow (C++
@@ -432,7 +648,12 @@ fn handle_phi_nodes(
         }
         let op = phi_node_edges[i].op;
         let slot = phi_node_edges[i].slot;
-        let parent = data.obank().get(op).expect("handlePhiNodes: stale op").get_parent().unwrap();
+        let parent = data
+            .obank()
+            .get(op)
+            .expect("handlePhiNodes: stale op")
+            .get_parent()
+            .unwrap();
         let bl = data.bblocks_ref().block(parent).get_in(slot);
         // (kuna) GH-9203: decline placing a const COPY in a loop block.
         if data.bblocks_ref().block(bl).has_loop_in() {
@@ -440,7 +661,8 @@ fn handle_phi_nodes(
             continue;
         }
         let out_vn = place_copy(data, op, bl, const_vn);
-        data.op_set_input(op, out_vn, slot).expect("handlePhiNodes: opSetInput");
+        data.op_set_input(op, out_vn, slot)
+            .expect("handlePhiNodes: opSetInput");
         count += 1;
     }
     if has_flow_together {
@@ -454,21 +676,55 @@ fn handle_phi_nodes(
 /// immediate edge (C++ `ActionConditionalConst::testAlternatePath`,
 /// `coreaction.cc:4583`).
 fn test_alternate_path(data: &Funcdata, vn: VarnodeId, op: OpId, slot: int4, depth: int4) -> bool {
-    let num_input = data.obank().get(op).expect("testAlternatePath: stale op").num_input();
+    let num_input = data
+        .obank()
+        .get(op)
+        .expect("testAlternatePath: stale op")
+        .num_input();
     for i in 0..num_input {
         if i == slot {
             continue;
         }
-        let in_vn = data.obank().get(op).expect("testAlternatePath: stale op").get_in(i).unwrap();
+        let in_vn = data
+            .obank()
+            .get(op)
+            .expect("testAlternatePath: stale op")
+            .get_in(i)
+            .unwrap();
         if in_vn == vn {
             return true;
         }
-        if data.vbank().get(in_vn).expect("testAlternatePath: stale in").is_written() {
-            let cur_op = data.vbank().get(in_vn).expect("testAlternatePath: stale in").get_def().unwrap();
-            let opc = data.obank().get(cur_op).expect("testAlternatePath: stale def").code();
-            if opc == OpCode::CPUI_INT_ADD || opc == OpCode::CPUI_PTRSUB || opc == OpCode::CPUI_PTRADD {
-                let in0 = data.obank().get(cur_op).expect("testAlternatePath: stale def").get_in(0);
-                let in1 = data.obank().get(cur_op).expect("testAlternatePath: stale def").get_in(1);
+        if data
+            .vbank()
+            .get(in_vn)
+            .expect("testAlternatePath: stale in")
+            .is_written()
+        {
+            let cur_op = data
+                .vbank()
+                .get(in_vn)
+                .expect("testAlternatePath: stale in")
+                .get_def()
+                .unwrap();
+            let opc = data
+                .obank()
+                .get(cur_op)
+                .expect("testAlternatePath: stale def")
+                .code();
+            if opc == OpCode::CPUI_INT_ADD
+                || opc == OpCode::CPUI_PTRSUB
+                || opc == OpCode::CPUI_PTRADD
+            {
+                let in0 = data
+                    .obank()
+                    .get(cur_op)
+                    .expect("testAlternatePath: stale def")
+                    .get_in(0);
+                let in1 = data
+                    .obank()
+                    .get(cur_op)
+                    .expect("testAlternatePath: stale def")
+                    .get_in(1);
                 if in0 == Some(vn) || in1 == Some(vn) {
                     return true;
                 }
@@ -488,7 +744,11 @@ fn test_alternate_path(data: &Funcdata, vn: VarnodeId, op: OpId, slot: int4, dep
 /// At each ConstPoint, replace reads of the Varnode down the constant path with
 /// a constant Varnode (C++ `ActionConditionalConst::propagateConstant`,
 /// `coreaction.cc:4617`).  Returns the number of rewrites made.
-fn propagate_constant(data: &mut Funcdata, points: &mut Vec<ConstPoint>, use_multiequal: bool) -> int4 {
+fn propagate_constant(
+    data: &mut Funcdata,
+    points: &mut Vec<ConstPoint>,
+    use_multiequal: bool,
+) -> int4 {
     let mut count: int4 = 0;
     let mut phi_node_edges: Vec<PcodeOpNode> = Vec::new();
     while !points.is_empty() {
@@ -501,8 +761,12 @@ fn propagate_constant(data: &mut Funcdata, points: &mut Vec<ConstPoint>, use_mul
 
         // Snapshot the descend list (the C++ advances an iterator while erasing
         // descendants, which it handles by skipping duplicate `*iter == op`).
-        let descend: Vec<OpId> =
-            data.vbank().get(var_vn).expect("propagateConstant: stale vn").descend_iter().collect();
+        let descend: Vec<OpId> = data
+            .vbank()
+            .get(var_vn)
+            .expect("propagateConstant: stale vn")
+            .descend_iter()
+            .collect();
         let mut di = 0usize;
         while di < descend.len() {
             let op = descend[di];
@@ -510,33 +774,75 @@ fn propagate_constant(data: &mut Funcdata, points: &mut Vec<ConstPoint>, use_mul
             while di < descend.len() && descend[di] == op {
                 di += 1;
             }
-            let opc = data.obank().get(op).expect("propagateConstant: stale op").code();
+            let opc = data
+                .obank()
+                .get(op)
+                .expect("propagateConstant: stale op")
+                .code();
             if opc == OpCode::CPUI_INDIRECT {
                 continue; // Don't propagate constant into these
             } else if opc == OpCode::CPUI_MULTIEQUAL {
                 if !use_multiequal {
                     continue;
                 }
-                let var_addr_tied = data.vbank().get(var_vn).expect("propagateConstant: stale vn").is_addr_tied();
+                let var_addr_tied = data
+                    .vbank()
+                    .get(var_vn)
+                    .expect("propagateConstant: stale vn")
+                    .is_addr_tied();
                 if var_addr_tied {
-                    let out = data.obank().get(op).expect("propagateConstant: stale op").get_out().unwrap();
-                    let var_addr = data.vbank().get(var_vn).expect("propagateConstant: stale vn").get_addr().clone();
-                    let out_addr = data.vbank().get(out).expect("propagateConstant: stale out").get_addr().clone();
+                    let out = data
+                        .obank()
+                        .get(op)
+                        .expect("propagateConstant: stale op")
+                        .get_out()
+                        .unwrap();
+                    let var_addr = data
+                        .vbank()
+                        .get(var_vn)
+                        .expect("propagateConstant: stale vn")
+                        .get_addr()
+                        .clone();
+                    let out_addr = data
+                        .vbank()
+                        .get(out)
+                        .expect("propagateConstant: stale out")
+                        .get_addr()
+                        .clone();
                     if var_addr == out_addr {
                         continue;
                     }
                 }
-                let bl = data.obank().get(op).expect("propagateConstant: stale op").get_parent().unwrap();
+                let bl = data
+                    .obank()
+                    .get(op)
+                    .expect("propagateConstant: stale op")
+                    .get_parent()
+                    .unwrap();
                 if bl == const_block {
                     // The immediate edge from the conditional block, into a MULTIEQUAL.
-                    let in_at_slot = data.obank().get(op).expect("propagateConstant: stale op").get_in(point_in_slot);
+                    let in_at_slot = data
+                        .obank()
+                        .get(op)
+                        .expect("propagateConstant: stale op")
+                        .get_in(point_in_slot);
                     if in_at_slot == Some(var_vn) {
                         // The compiler may still intend the constant to be the same variable.
                         if point_value > 1 {
                             continue;
                         }
-                        let out = data.obank().get(op).expect("propagateConstant: stale op").get_out().unwrap();
-                        if data.vbank().get(out).expect("propagateConstant: stale out").is_addr_tied() {
+                        let out = data
+                            .obank()
+                            .get(op)
+                            .expect("propagateConstant: stale op")
+                            .get_out()
+                            .unwrap();
+                        if data
+                            .vbank()
+                            .get(out)
+                            .expect("propagateConstant: stale out")
+                            .is_addr_tied()
+                        {
                             continue;
                         }
                         if test_alternate_path(data, var_vn, op, point_in_slot, 2) {
@@ -545,9 +851,19 @@ fn propagate_constant(data: &mut Funcdata, points: &mut Vec<ConstPoint>, use_mul
                         phi_node_edges.push(PcodeOpNode::new(op, point_in_slot));
                     }
                 } else if point_block_is_dom {
-                    let num_input = data.obank().get(op).expect("propagateConstant: stale op").num_input();
+                    let num_input = data
+                        .obank()
+                        .get(op)
+                        .expect("propagateConstant: stale op")
+                        .num_input();
                     for slot in 0..num_input {
-                        if data.obank().get(op).expect("propagateConstant: stale op").get_in(slot) == Some(var_vn) {
+                        if data
+                            .obank()
+                            .get(op)
+                            .expect("propagateConstant: stale op")
+                            .get_in(slot)
+                            == Some(var_vn)
+                        {
                             let in_block = data.bblocks_ref().block(bl).get_in(slot);
                             if data.bblocks_ref().dominates(const_block, Some(in_block)) {
                                 phi_node_edges.push(PcodeOpNode::new(op, slot));
@@ -558,16 +874,32 @@ fn propagate_constant(data: &mut Funcdata, points: &mut Vec<ConstPoint>, use_mul
                 continue;
             } else if opc == OpCode::CPUI_COPY {
                 // Don't propagate into COPY unless it feeds something interesting.
-                let out = data.obank().get(op).expect("propagateConstant: stale op").get_out().unwrap();
+                let out = data
+                    .obank()
+                    .get(op)
+                    .expect("propagateConstant: stale op")
+                    .get_out()
+                    .unwrap();
                 let lone = lone_descend(data, out);
                 let follow = match lone {
                     None => continue,
                     Some(f) => f,
                 };
-                if data.obank().get(follow).expect("propagateConstant: stale follow").is_marker() {
+                if data
+                    .obank()
+                    .get(follow)
+                    .expect("propagateConstant: stale follow")
+                    .is_marker()
+                {
                     continue;
                 }
-                if data.obank().get(follow).expect("propagateConstant: stale follow").code() == OpCode::CPUI_COPY {
+                if data
+                    .obank()
+                    .get(follow)
+                    .expect("propagateConstant: stale follow")
+                    .code()
+                    == OpCode::CPUI_COPY
+                {
                     continue;
                 }
                 // ...fall through: COPY into something more interesting.
@@ -575,35 +907,72 @@ fn propagate_constant(data: &mut Funcdata, points: &mut Vec<ConstPoint>, use_mul
             if !point_block_is_dom {
                 continue;
             }
-            let op_parent = data.obank().get(op).expect("propagateConstant: stale op").get_parent().unwrap();
+            let op_parent = data
+                .obank()
+                .get(op)
+                .expect("propagateConstant: stale op")
+                .get_parent()
+                .unwrap();
             if data.bblocks_ref().dominates(const_block, Some(op_parent)) {
                 if const_vn.is_none() {
-                    let size = data.vbank().get(var_vn).expect("propagateConstant: stale vn").get_size();
+                    let size = data
+                        .vbank()
+                        .get(var_vn)
+                        .expect("propagateConstant: stale vn")
+                        .get_size();
                     const_vn = Some(data.new_constant(size, point_value));
                 }
                 let cvn = const_vn.unwrap();
                 if opc == OpCode::CPUI_RETURN {
                     // CPUI_RETURN can't directly take constants as inputs.
-                    let addr = data.obank().get(op).expect("propagateConstant: stale op").get_addr().clone();
+                    let addr = data
+                        .obank()
+                        .get(op)
+                        .expect("propagateConstant: stale op")
+                        .get_addr()
+                        .clone();
                     let copy_before_ret = data.new_op(1, addr);
-                    data.op_set_opcode(copy_before_ret, crate::typeop::type_op_for(OpCode::CPUI_COPY));
-                    data.op_set_input(copy_before_ret, cvn, 0).expect("propagateConstant: opSetInput RETURN");
+                    data.op_set_opcode(
+                        copy_before_ret,
+                        crate::typeop::type_op_for(OpCode::CPUI_COPY),
+                    );
+                    data.op_set_input(copy_before_ret, cvn, 0)
+                        .expect("propagateConstant: opSetInput RETURN");
                     let (var_size, var_addr) = {
-                        let v = data.vbank().get(var_vn).expect("propagateConstant: stale vn");
+                        let v = data
+                            .vbank()
+                            .get(var_vn)
+                            .expect("propagateConstant: stale vn");
                         (v.get_size(), v.get_addr().clone())
                     };
-                    data.new_varnode_out(var_size, &var_addr, copy_before_ret).expect("propagateConstant: newVarnodeOut");
-                    let cb_out = data.obank().get(copy_before_ret).expect("propagateConstant: stale copy").get_out().unwrap();
+                    data.new_varnode_out(var_size, &var_addr, copy_before_ret)
+                        .expect("propagateConstant: newVarnodeOut");
+                    let cb_out = data
+                        .obank()
+                        .get(copy_before_ret)
+                        .expect("propagateConstant: stale copy")
+                        .get_out()
+                        .unwrap();
                     // (kuna) Upstream writes slot 1, the return value once return
                     // recovery has trimmed the RETURN; while its output trials are
                     // still open the RETURN reads every trial register, so replace
                     // the slot that actually reads `var_vn`.
-                    let slot = data.obank().get(op).expect("propagateConstant: stale op").get_slot(var_vn);
-                    data.op_set_input(op, cb_out, slot).expect("propagateConstant: opSetInput RETURN2");
+                    let slot = data
+                        .obank()
+                        .get(op)
+                        .expect("propagateConstant: stale op")
+                        .get_slot(var_vn);
+                    data.op_set_input(op, cb_out, slot)
+                        .expect("propagateConstant: opSetInput RETURN2");
                     data.op_insert_before(copy_before_ret, op);
                 } else {
-                    let slot = data.obank().get(op).expect("propagateConstant: stale op").get_slot(var_vn);
-                    data.op_set_input(op, cvn, slot).expect("propagateConstant: opSetInput"); // Replace ref with constant!
+                    let slot = data
+                        .obank()
+                        .get(op)
+                        .expect("propagateConstant: stale op")
+                        .get_slot(var_vn);
+                    data.op_set_input(op, cvn, slot)
+                        .expect("propagateConstant: opSetInput"); // Replace ref with constant!
                 }
                 count += 1; // We made a change
             } else {
@@ -612,7 +981,11 @@ fn propagate_constant(data: &mut Funcdata, points: &mut Vec<ConstPoint>, use_mul
         }
         if !phi_node_edges.is_empty() {
             if const_vn.is_none() {
-                let size = data.vbank().get(var_vn).expect("propagateConstant: stale vn").get_size();
+                let size = data
+                    .vbank()
+                    .get(var_vn)
+                    .expect("propagateConstant: stale vn")
+                    .get_size();
                 const_vn = Some(data.new_constant(size, point_value));
             }
             count += handle_phi_nodes(data, var_vn, const_vn.unwrap(), &mut phi_node_edges);
@@ -636,19 +1009,52 @@ fn find_const_compare(
 ) {
     let mut bool_vn = bool_vn;
     let mut flip_edge = flip_edge;
-    if !data.vbank().get(bool_vn).expect("findConstCompare: stale bool").is_written() {
+    if !data
+        .vbank()
+        .get(bool_vn)
+        .expect("findConstCompare: stale bool")
+        .is_written()
+    {
         return;
     }
-    let mut comp_op = data.vbank().get(bool_vn).expect("findConstCompare: stale bool").get_def().unwrap();
-    let mut opc = data.obank().get(comp_op).expect("findConstCompare: stale comp").code();
+    let mut comp_op = data
+        .vbank()
+        .get(bool_vn)
+        .expect("findConstCompare: stale bool")
+        .get_def()
+        .unwrap();
+    let mut opc = data
+        .obank()
+        .get(comp_op)
+        .expect("findConstCompare: stale comp")
+        .code();
     if opc == OpCode::CPUI_BOOL_NEGATE {
         flip_edge = !flip_edge;
-        bool_vn = data.obank().get(comp_op).expect("findConstCompare: stale comp").get_in(0).unwrap();
-        if !data.vbank().get(bool_vn).expect("findConstCompare: stale bool2").is_written() {
+        bool_vn = data
+            .obank()
+            .get(comp_op)
+            .expect("findConstCompare: stale comp")
+            .get_in(0)
+            .unwrap();
+        if !data
+            .vbank()
+            .get(bool_vn)
+            .expect("findConstCompare: stale bool2")
+            .is_written()
+        {
             return;
         }
-        comp_op = data.vbank().get(bool_vn).expect("findConstCompare: stale bool2").get_def().unwrap();
-        opc = data.obank().get(comp_op).expect("findConstCompare: stale comp2").code();
+        comp_op = data
+            .vbank()
+            .get(bool_vn)
+            .expect("findConstCompare: stale bool2")
+            .get_def()
+            .unwrap();
+        opc = data
+            .obank()
+            .get(comp_op)
+            .expect("findConstCompare: stale comp2")
+            .code();
     }
     // Out edge where the value is constant.
     let mut const_edge: int4 = if opc == OpCode::CPUI_INT_EQUAL {
@@ -659,10 +1065,30 @@ fn find_const_compare(
         return;
     };
     // Find the variable and verify it is compared to a constant.
-    let mut var_vn = data.obank().get(comp_op).expect("findConstCompare: stale comp").get_in(0).unwrap();
-    let mut const_vn = data.obank().get(comp_op).expect("findConstCompare: stale comp").get_in(1).unwrap();
-    if !data.vbank().get(const_vn).expect("findConstCompare: stale const").is_constant() {
-        if !data.vbank().get(var_vn).expect("findConstCompare: stale var").is_constant() {
+    let mut var_vn = data
+        .obank()
+        .get(comp_op)
+        .expect("findConstCompare: stale comp")
+        .get_in(0)
+        .unwrap();
+    let mut const_vn = data
+        .obank()
+        .get(comp_op)
+        .expect("findConstCompare: stale comp")
+        .get_in(1)
+        .unwrap();
+    if !data
+        .vbank()
+        .get(const_vn)
+        .expect("findConstCompare: stale const")
+        .is_constant()
+    {
+        if !data
+            .vbank()
+            .get(var_vn)
+            .expect("findConstCompare: stale var")
+            .is_constant()
+        {
             return;
         }
         std::mem::swap(&mut const_vn, &mut var_vn);
@@ -720,7 +1146,13 @@ pub(crate) fn condconst_apply(data: &mut Funcdata) -> int4 {
             Some(op) => op,
             None => continue,
         };
-        if data.obank().get(c_branch).expect("condconst: stale cbranch").code() != OpCode::CPUI_CBRANCH {
+        if data
+            .obank()
+            .get(c_branch)
+            .expect("condconst: stale cbranch")
+            .code()
+            != OpCode::CPUI_CBRANCH
+        {
             continue;
         }
         // A CBRANCH block with fewer than two out-edges is a malformed CFG; skip
@@ -728,7 +1160,12 @@ pub(crate) fn condconst_apply(data: &mut Funcdata) -> int4 {
         if data.bblocks_ref().block(bl).size_out() < 2 {
             continue;
         }
-        let bool_vn = data.obank().get(c_branch).expect("condconst: stale cbranch").get_in(1).unwrap();
+        let bool_vn = data
+            .obank()
+            .get(c_branch)
+            .expect("condconst: stale cbranch")
+            .get_in(1)
+            .unwrap();
         // Make sure the boolean constant holds down each branch.
         let out0 = data.bblocks_ref().block(bl).get_out(0);
         let out1 = data.bblocks_ref().block(bl).get_out(1);
@@ -736,7 +1173,11 @@ pub(crate) fn condconst_apply(data: &mut Funcdata) -> int4 {
             data.bblocks_ref().restricted_by_conditional(out0, bl),
             data.bblocks_ref().restricted_by_conditional(out1, bl),
         ];
-        let flip_edge = data.obank().get(c_branch).expect("condconst: stale cbranch").is_boolean_flip();
+        let flip_edge = data
+            .obank()
+            .get(c_branch)
+            .expect("condconst: stale cbranch")
+            .is_boolean_flip();
         // The boolean is read more than once.
         if lone_descend(data, bool_vn).is_none() {
             // Implied constants: bool=0 down false branch, bool=1 down true branch.

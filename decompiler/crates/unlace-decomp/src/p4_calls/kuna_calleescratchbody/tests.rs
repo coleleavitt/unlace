@@ -12,11 +12,11 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 
 use crate::context::{ArchContext, TypeOp};
-use crate::fspec::{effect_type, EffectRecord, FuncCallSpecs, ProtoModel};
+use crate::fspec::{EffectRecord, FuncCallSpecs, ProtoModel, effect_type};
 use crate::kuna_rustabi::CalleeReturnWrites;
 use crate::p4_calls::kuna_calleepreserves::callee_preserves_range;
 use unlace_num::opcodes::OpCode;
@@ -28,7 +28,10 @@ use unlace_num::opcodes::OpCode;
 fn with_convention(fd: &Funcdata, fc: &mut FuncCallSpecs) {
     let ram = space(fd, "ram");
     let mut model = ProtoModel::new(fd.get_arch().manage());
-    for (off, ty) in [(0x18u64, effect_type::UNAFFECTED), (0x00, effect_type::KILLEDBYCALL)] {
+    for (off, ty) in [
+        (0x18u64, effect_type::UNAFFECTED),
+        (0x00, effect_type::KILLEDBYCALL),
+    ] {
         let mut vd = unlace_num::pcoderaw::VarnodeData::default();
         vd.space = Some(Rc::clone(&ram));
         vd.offset = off;
@@ -43,7 +46,8 @@ fn with_convention(fd: &Funcdata, fc: &mut FuncCallSpecs) {
 fn build_fd() -> Funcdata {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -86,8 +90,10 @@ fn build_call(fd: &mut Funcdata, entry_off: u64) -> (FuncCallSpecs, Address) {
     let bl = fd.bblocks_mut().new_block_basic(root);
     fd.bblocks_mut().set_start_block(root, bl);
     let call = fd.new_op(1, Address::new(Rc::clone(&ram), 0x1010));
-    fd.obank_mut()
-        .change_opcode(call, TypeOp::new(OpCode::CPUI_CALL, 0, "CPUI_CALL".to_string()));
+    fd.obank_mut().change_opcode(
+        call,
+        TypeOp::new(OpCode::CPUI_CALL, 0, "CPUI_CALL".to_string()),
+    );
     let entry = Address::new(Rc::clone(&ram), entry_off);
     let target = fd.new_code_ref(&entry);
     let _ = fd.op_set_input(call, target, 0);
@@ -104,7 +110,11 @@ fn probe_summary(fd: &Funcdata, instructions: u32, stores: bool) -> Rc<CalleeRet
     // The spill lands in memory, not in the register file -- as it does on a
     // real processor, where `proves_untouched` would otherwise read a STORE
     // into the queried space as "may write anything here".
-    let store_spaces = if stores { vec![space(fd, "stack").get_index()] } else { Vec::new() };
+    let store_spaces = if stores {
+        vec![space(fd, "stack").get_index()]
+    } else {
+        Vec::new()
+    };
     Rc::new(CalleeReturnWrites::from_parts_sized(
         vec![(ram, 0x90, 8)],
         store_spaces,
@@ -159,7 +169,12 @@ fn an_incomplete_walk_still_proves_nothing() {
     let ram = space(&fd, "ram").get_index();
     fd.kuna_set_callee_ret_writes(
         &entry,
-        Rc::new(CalleeReturnWrites::from_parts_sized(Vec::new(), Vec::new(), false, 19)),
+        Rc::new(CalleeReturnWrites::from_parts_sized(
+            Vec::new(),
+            Vec::new(),
+            false,
+            19,
+        )),
     );
     let rax = Address::new(space(&fd, "ram"), 0x00);
     assert!(!callee_preserves_range(&fd, &fc, &rax, 8));

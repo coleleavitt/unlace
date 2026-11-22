@@ -105,10 +105,7 @@ mod tests {
         // 0F 1F 00  (3-byte)
         assert!(s.should_skip(&[0x0f, 0x1f, 0x00], 3));
         // 66 0F 1F 84 00 00 00 00 00  (9-byte, the longest)
-        assert!(s.should_skip(
-            &[0x66, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00],
-            9
-        ));
+        assert!(s.should_skip(&[0x66, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00], 9));
         // 8B C0  (self-mov idiom)
         assert!(s.should_skip(&[0x8b, 0xc0], 2));
     }

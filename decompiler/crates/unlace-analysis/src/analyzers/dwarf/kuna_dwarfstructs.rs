@@ -90,10 +90,10 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use unlace_base::types::{int4, uint4};
-use unlace_decomp::dtype::{type_metatype, Datatype, TypeBitField, TypeField, TypeFactory};
+use unlace_decomp::dtype::{Datatype, TypeBitField, TypeFactory, TypeField, type_metatype};
 
-use super::kuna_typedepth::TypeWalk;
 use super::DieSnap;
+use super::kuna_typedepth::TypeWalk;
 
 /// Ancestry-walk bound for [`qualified_name`] (a nesting depth no real program
 /// reaches).
@@ -122,7 +122,11 @@ pub(super) fn intern_aggregate(
     cpp: bool,
     union: bool,
 ) -> Option<Rc<Datatype>> {
-    let want = if union { type_metatype::TYPE_UNION } else { type_metatype::TYPE_STRUCT };
+    let want = if union {
+        type_metatype::TYPE_UNION
+    } else {
+        type_metatype::TYPE_STRUCT
+    };
     let size = aggregate_size(die);
     let base = qualified_name(die, dies, alias, fallback, size);
     let name = resolve_name(types, &base, size, fallback, want)?;
@@ -145,7 +149,11 @@ pub(super) fn intern_aggregate(
     let shell = match existing {
         Some(t) => t,
         None => {
-            let built = if union { types.get_type_union(&name) } else { types.get_type_struct(&name) };
+            let built = if union {
+                types.get_type_union(&name)
+            } else {
+                types.get_type_struct(&name)
+            };
             built.ok().filter(|t| t.get_metatype() == want)?
         }
     };
@@ -169,7 +177,11 @@ pub(super) fn intern_aggregate(
     let done = if union {
         types.set_fields_union_raw(&shell, fields, size, align)
     } else {
-        let extra = if bits.is_empty() { 0 } else { unlace_decomp::dtype::flags::has_bitfields };
+        let extra = if bits.is_empty() {
+            0
+        } else {
+            unlace_decomp::dtype::flags::has_bitfields
+        };
         types.set_fields_struct_raw(&shell, fields, bits, size, align, extra)
     };
     // A refused completion (a name the factory will not re-key) costs the layout,
@@ -311,7 +323,10 @@ fn collect_members(
     let mut fields: Vec<TypeField> = Vec::new();
     let mut raw_bits: Vec<(i64, int4, String, Rc<Datatype>)> = Vec::new();
     let big_endian = types.is_big_endian();
-    let end_bit = die.byte_size.and_then(|s| i64::try_from(s).ok()).and_then(|s| s.checked_mul(8));
+    let end_bit = die
+        .byte_size
+        .and_then(|s| i64::try_from(s).ok())
+        .and_then(|s| s.checked_mul(8));
     for &coff in &die.children {
         let Some(m) = dies.get(&coff) else { continue };
         if m.tag != gimli::DW_TAG_member || m.name.is_empty() || is_static_member(m) {
@@ -337,7 +352,9 @@ fn collect_members(
             fields.push(TypeField::new(fields.len() as int4, 0, m.name.clone(), ty));
             continue;
         }
-        let Some(off) = member_offset(m) else { continue };
+        let Some(off) = member_offset(m) else {
+            continue;
+        };
         if off < 0 || off > int4::MAX as i64 {
             continue;
         }
@@ -475,7 +492,10 @@ pub(super) fn aggregate_alignment(
     fields: &[TypeField],
     bits: &[TypeBitField],
 ) -> int4 {
-    let stated = die.alignment.filter(|&a| a > 0 && a <= 64).map(|a| a as int4);
+    let stated = die
+        .alignment
+        .filter(|&a| a > 0 && a <= 64)
+        .map(|a| a as int4);
     let derived = fields
         .iter()
         .map(|f| f.field_type.get_alignment())
@@ -538,11 +558,26 @@ mod tests {
         let mut declared = member("declared");
         declared.declaration = true;
         dies.insert(6, declared);
-        let ty = intern_aggregate(&types, &dies[&10], &dies, None, "Layout",
-            &mut TypeWalk::with_gate(false), 8, false, false).unwrap();
-        let fields: Vec<_> = (0..ty.num_depend()).filter_map(|i| ty.get_field(i))
-            .map(|f| (f.offset, f.name.clone())).collect();
-        assert_eq!(fields, vec![(0, "first".to_string()), (4, "second".to_string())]);
+        let ty = intern_aggregate(
+            &types,
+            &dies[&10],
+            &dies,
+            None,
+            "Layout",
+            &mut TypeWalk::with_gate(false),
+            8,
+            false,
+            false,
+        )
+        .unwrap();
+        let fields: Vec<_> = (0..ty.num_depend())
+            .filter_map(|i| ty.get_field(i))
+            .map(|f| (f.offset, f.name.clone()))
+            .collect();
+        assert_eq!(
+            fields,
+            vec![(0, "first".to_string()), (4, "second".to_string())]
+        );
     }
 
     type Layout = (Vec<(int4, int4, String)>, Vec<(String, int4, int4, int4)>);
@@ -559,7 +594,11 @@ mod tests {
         } else {
             let within = (start % 32) as i64;
             m.byte_size = Some(4);
-            m.bit_offset = Some(if big_endian { within } else { 32 - within - width as i64 });
+            m.bit_offset = Some(if big_endian {
+                within
+            } else {
+                32 - within - width as i64
+            });
             m.data_member_location = Some((start / 32 * 4) as i64);
         }
         m
@@ -585,30 +624,77 @@ mod tests {
         for (i, m) in members.into_iter().enumerate() {
             dies.insert(2 + i, m);
         }
-        let (fields, bits) = collect_members(&record, &dies, &types, 8,
-            &mut TypeWalk::with_gate(false), false, false);
-        (fields.iter().map(|f| (f.offset, f.field_type.get_size(), f.name.clone())).collect(),
-         bits.iter()
-            .map(|b| (b.name.clone(), b.byte_offset, b.byte_size, b.least_sig_bit))
-            .collect())
+        let (fields, bits) = collect_members(
+            &record,
+            &dies,
+            &types,
+            8,
+            &mut TypeWalk::with_gate(false),
+            false,
+            false,
+        );
+        (
+            fields
+                .iter()
+                .map(|f| (f.offset, f.field_type.get_size(), f.name.clone()))
+                .collect(),
+            bits.iter()
+                .map(|b| (b.name.clone(), b.byte_offset, b.byte_size, b.least_sig_bit))
+                .collect(),
+        )
     }
 
     #[test]
     fn bitfields_follow_the_target_bit_order_in_either_spelling() {
         // struct { unsigned lo:3, hi:5, wide:16, top:8; unsigned a:4, b:12, c:16; }
-        let declared = [("lo", 0, 3), ("hi", 3, 5), ("wide", 8, 16), ("top", 24, 8),
-            ("a", 32, 4), ("b", 36, 12), ("c", 48, 16)];
-        let fields = vec![(1, 2, "wide".to_string()), (3, 1, "top".into()), (6, 2, "c".into())];
+        let declared = [
+            ("lo", 0, 3),
+            ("hi", 3, 5),
+            ("wide", 8, 16),
+            ("top", 24, 8),
+            ("a", 32, 4),
+            ("b", 36, 12),
+            ("c", 48, 16),
+        ];
+        let fields = vec![
+            (1, 2, "wide".to_string()),
+            (3, 1, "top".into()),
+            (6, 2, "c".into()),
+        ];
         for (big_endian, bits) in [
-            (true, [("lo", 0, 1, 5), ("hi", 0, 1, 0), ("a", 4, 1, 4), ("b", 4, 2, 0)]),
-            (false, [("lo", 0, 1, 0), ("hi", 0, 1, 3), ("a", 4, 1, 0), ("b", 4, 2, 4)]),
+            (
+                true,
+                [
+                    ("lo", 0, 1, 5),
+                    ("hi", 0, 1, 0),
+                    ("a", 4, 1, 4),
+                    ("b", 4, 2, 0),
+                ],
+            ),
+            (
+                false,
+                [
+                    ("lo", 0, 1, 0),
+                    ("hi", 0, 1, 3),
+                    ("a", 4, 1, 0),
+                    ("b", 4, 2, 4),
+                ],
+            ),
         ] {
-            let bits: Vec<_> = bits.iter().map(|&(n, o, s, l)| (n.to_string(), o, s, l)).collect();
+            let bits: Vec<_> = bits
+                .iter()
+                .map(|&(n, o, s, l)| (n.to_string(), o, s, l))
+                .collect();
             for dwarf5 in [false, true] {
-                let members = declared.iter()
-                    .map(|&(n, s, w)| bitfield(n, s, w, big_endian, dwarf5)).collect();
-                assert_eq!(layout(big_endian, members), (fields.clone(), bits.clone()),
-                    "big_endian={big_endian} dwarf5={dwarf5}");
+                let members = declared
+                    .iter()
+                    .map(|&(n, s, w)| bitfield(n, s, w, big_endian, dwarf5))
+                    .collect();
+                assert_eq!(
+                    layout(big_endian, members),
+                    (fields.clone(), bits.clone()),
+                    "big_endian={big_endian} dwarf5={dwarf5}"
+                );
             }
         }
     }
@@ -620,11 +706,19 @@ mod tests {
             (true, [("a", 0, 1, 2), ("c", 0, 2, 6), ("d", 1, 1, 0)]),
             (false, [("a", 0, 1, 0), ("c", 0, 2, 6), ("d", 1, 1, 2)]),
         ] {
-            let members = [("a", 0, 6), ("c", 6, 4), ("d", 10, 6)].iter()
-                .map(|&(n, s, w)| bitfield(n, s, w, big_endian, true)).collect();
-            let expected: Vec<_> =
-                expected.iter().map(|&(n, o, s, l)| (n.to_string(), o, s, l)).collect();
-            assert_eq!(layout(big_endian, members).1, expected, "big_endian={big_endian}");
+            let members = [("a", 0, 6), ("c", 6, 4), ("d", 10, 6)]
+                .iter()
+                .map(|&(n, s, w)| bitfield(n, s, w, big_endian, true))
+                .collect();
+            let expected: Vec<_> = expected
+                .iter()
+                .map(|&(n, o, s, l)| (n.to_string(), o, s, l))
+                .collect();
+            assert_eq!(
+                layout(big_endian, members).1,
+                expected,
+                "big_endian={big_endian}"
+            );
         }
     }
 
@@ -641,7 +735,13 @@ mod tests {
         let past_the_end = bitfield("past_the_end", 92, 8, false, true);
         let (fields, bits) = layout(false, vec![packed, bare.clone(), too_wide, past_the_end]);
         assert!(fields.is_empty(), "{fields:?}");
-        assert_eq!(bits, vec![("packed".to_string(), 1, 4, 0), ("bare".into(), 8, 1, 0)]);
-        assert_eq!(layout(true, vec![bare]).1, vec![("bare".to_string(), 8, 1, 4)]);
+        assert_eq!(
+            bits,
+            vec![("packed".to_string(), 1, 4, 0), ("bare".into(), 8, 1, 0)]
+        );
+        assert_eq!(
+            layout(true, vec![bare]).1,
+            vec![("bare".to_string(), 8, 1, 4)]
+        );
     }
 }

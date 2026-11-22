@@ -8,15 +8,15 @@ mod common;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Barrier, Mutex};
 
-use unlace_console::engine::{
-    bootstrap_from_object, ArmIsa, Bootstrap, ConsoleProgram, ARM_ISA_ENV,
-};
-use unlace_decomp::kuna_loadoptions::LoadOptions;
-use unlace_decomp::kuna_sourcelang::SourceLang;
 use object::write::{Object, StandardSection, Symbol, SymbolSection};
 use object::{
     Architecture, BinaryFormat, Endianness, SectionKind, SymbolFlags, SymbolKind, SymbolScope,
 };
+use unlace_console::engine::{
+    ARM_ISA_ENV, ArmIsa, Bootstrap, ConsoleProgram, bootstrap_from_object,
+};
+use unlace_decomp::kuna_loadoptions::LoadOptions;
+use unlace_decomp::kuna_sourcelang::SourceLang;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -235,9 +235,16 @@ fn explicit_options_neither_read_nor_write_the_environment() {
         ("golang".into(), SourceLang::Go, Some((1, 25)))
     );
     let explicit = load_pass_facts(|path| {
-        Bootstrap::new(&[specs()]).options(&LoadOptions::default()).object(path).unwrap()
+        Bootstrap::new(&[specs()])
+            .options(&LoadOptions::default())
+            .object(path)
+            .unwrap()
     });
-    assert_eq!(explicit, (true, true), "an explicit load runs the passes the environment skips");
+    assert_eq!(
+        explicit,
+        (true, true),
+        "an explicit load runs the passes the environment skips"
+    );
     assert_eq!(
         snapshot(),
         before,
@@ -289,7 +296,7 @@ fn an_explicit_load_picks_its_own_fat_slice() {
 /// Decompile and print `name` through the console, as a session would.
 fn console_decompile(prog: ConsoleProgram, name: &str) -> String {
     use unlace_console::ifacedecomp::{
-        execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+        DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
     };
     use unlace_console::ifaceterm::ConsoleCommands;
     let cmds: Vec<String> = [
@@ -315,7 +322,7 @@ fn console_decompile(prog: ConsoleProgram, name: &str) -> String {
 /// reads the program's own options, never a gate's environment fallback.
 #[test]
 fn an_explicit_program_never_reads_the_environment() {
-    use unlace_console::project::{decompile_entry, DecompileOptions};
+    use unlace_console::project::{DecompileOptions, decompile_entry};
     use unlace_decomp::kuna_loadoptions::environment_fallbacks;
     let go = go_image();
     let fat = root().join("decompiler/crates/unlace-analysis/tests/fixtures/macho_fat");
@@ -328,7 +335,11 @@ fn an_explicit_program_never_reads_the_environment() {
             assert!(prog.find_entry_at(entry.addr.get_offset()).is_some());
             prog.has_symbol_named(&entry.name);
             let result = decompile_entry(&mut prog, entry.clone(), &DecompileOptions::default());
-            assert!(result.code.is_some_and(|c| !c.is_empty()), "{:?}", result.error);
+            assert!(
+                result.code.is_some_and(|c| !c.is_empty()),
+                "{:?}",
+                result.error
+            );
         }
         let first = entries[0].clone();
         prog.ensure_function_symbol(first.addr.clone()).unwrap();
@@ -377,10 +388,15 @@ fn an_explicit_program_ignores_a_later_environment_change() {
     let explicit = load(&fauxware(), &LoadOptions::default());
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var("KUNA_KERNELCACHE", "off") };
-    let explicit_value = kuna_live_value(explicit.arch(), "kernelcache").unwrap().into_owned();
+    let explicit_value = kuna_live_value(explicit.arch(), "kernelcache")
+        .unwrap()
+        .into_owned();
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var("KUNA_KERNELCACHE") };
-    assert_eq!(explicit_value, "auto", "the explicit program kept its options");
+    assert_eq!(
+        explicit_value, "auto",
+        "the explicit program kept its options"
+    );
 }
 
 /// A `Bootstrap` without options reads the environment: its load options,
@@ -389,13 +405,15 @@ fn an_explicit_program_ignores_a_later_environment_change() {
 #[test]
 fn a_bootstrap_without_options_reads_the_environment() {
     use unlace_analysis::loadimage_te::synthetic::TeImage;
-    use unlace_console::project::{decompile_entry, DecompileOptions};
+    use unlace_console::project::{DecompileOptions, decompile_entry};
 
     fn first_function(load: unlace_base::error::KunaResult<ConsoleProgram>) -> String {
         let mut prog = load.expect("bootstrap");
         prog.commit_pending_analysis().unwrap();
         let entry = prog.function_entries_executable()[0].clone();
-        decompile_entry(&mut prog, entry, &DecompileOptions::default()).code.unwrap()
+        decompile_entry(&mut prog, entry, &DecompileOptions::default())
+            .code
+            .unwrap()
     }
 
     struct ClearOnDrop;
@@ -415,7 +433,11 @@ fn a_bootstrap_without_options_reads_the_environment() {
     let specs = [specs()];
     let roots = Bootstrap::new(&specs);
     let te = common::scratch_file("loadoptions-te", "te");
-    std::fs::write(&te, TeImage::arm(&[0x07, 0x20, 0x70, 0x47, 0x1e, 0xff, 0x2f, 0xe1]).build()).unwrap();
+    std::fs::write(
+        &te,
+        TeImage::arm(&[0x07, 0x20, 0x70, 0x47, 0x1e, 0xff, 0x2f, 0xe1]).build(),
+    )
+    .unwrap();
     let te = te.to_str().unwrap();
     let options = LoadOptions::default();
 
@@ -423,9 +445,15 @@ fn a_bootstrap_without_options_reads_the_environment() {
     unsafe { std::env::set_var(ARM_ISA_ENV, "thumb") };
     let from_env = first_function(roots.image(te));
     assert!(from_env.contains("return 7"), "{from_env}");
-    assert_eq!(first_function(roots.arm_isa(Some(ArmIsa::Thumb)).image(te)), from_env);
+    assert_eq!(
+        first_function(roots.arm_isa(Some(ArmIsa::Thumb)).image(te)),
+        from_env
+    );
     let explicit = first_function(roots.options(&options).image(te));
-    assert_eq!(explicit, first_function(roots.arm_isa(None).options(&options).image(te)));
+    assert_eq!(
+        explicit,
+        first_function(roots.arm_isa(None).options(&options).image(te))
+    );
     assert_ne!(explicit, from_env, "an explicit load ignored KUNA_ARM_ISA");
 
     // FIXME: Audit that the environment access only happens in single-threaded code.
@@ -447,7 +475,10 @@ fn a_bootstrap_without_options_reads_the_environment() {
     let mut prog = roots.object(go.to_str().unwrap()).unwrap();
     prog.commit_pending_analysis().unwrap();
     assert_eq!(compiler(&prog), "gcc");
-    let mut prog = roots.options(&options).object(go.to_str().unwrap()).unwrap();
+    let mut prog = roots
+        .options(&options)
+        .object(go.to_str().unwrap())
+        .unwrap();
     prog.commit_pending_analysis().unwrap();
     assert_eq!(compiler(&prog), "golang");
     std::fs::remove_file(go).unwrap();
@@ -497,7 +528,12 @@ fn a_load_without_options_ignores_options_held_on_the_thread() {
         ("te bytes", roots.te_bytes(te_path, &te_bytes)),
         ("image", roots.image(te_path)),
         ("file", roots.file(te_path)),
-        ("raw", roots.target("x86:LE:64:default").raw(raw_path, 0x1000, &[0x1000])),
+        (
+            "raw",
+            roots
+                .target("x86:LE:64:default")
+                .raw(raw_path, 0x1000, &[0x1000]),
+        ),
         ("xml root", roots.xml_root(&xml)),
     ];
     for (input, prog) in loads {
@@ -509,7 +545,9 @@ fn a_load_without_options_ignores_options_held_on_the_thread() {
         );
         // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::set_var("KUNA_KERNELCACHE", "off") };
-        let live = kuna_live_value(prog.arch(), "kernelcache").unwrap().into_owned();
+        let live = kuna_live_value(prog.arch(), "kernelcache")
+            .unwrap()
+            .into_owned();
         // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::remove_var("KUNA_KERNELCACHE") };
         assert_eq!(live, "off", "{input} reads the environment live");
@@ -524,8 +562,8 @@ fn a_load_without_options_ignores_options_held_on_the_thread() {
 fn the_console_loads_the_next_image_from_the_environment() {
     use unlace_analysis::loadimage_te::synthetic::TeImage;
     use unlace_console::ifacedecomp::{
-        execute, register_console_commands, register_decomp_commands, IfaceDecompData,
-        DECOMPILE_MODULE,
+        DECOMPILE_MODULE, IfaceDecompData, execute, register_console_commands,
+        register_decomp_commands,
     };
     use unlace_console::ifaceterm::ConsoleCommands;
     use unlace_decomp::kuna_kernelcache::KernelcacheChoice;
@@ -570,8 +608,15 @@ fn the_console_loads_the_next_image_from_the_environment() {
     for _ in 0..count {
         execute(&mut status);
     }
-    assert!(status.optr.contains("Load image already present"), "{}", status.optr);
+    assert!(
+        status.optr.contains("Load image already present"),
+        "{}",
+        status.optr
+    );
     let next = dcp(&mut status).expect("the second load file built a program");
-    assert_eq!(next.arch().load_options().kernelcache, KernelcacheChoice::default());
+    assert_eq!(
+        next.arch().load_options().kernelcache,
+        KernelcacheChoice::default()
+    );
     std::fs::remove_file(te).unwrap();
 }

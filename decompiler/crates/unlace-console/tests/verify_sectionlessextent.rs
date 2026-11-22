@@ -22,7 +22,7 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_sleigh::loadimage::section_flags;
 
 /// `e_entry`, which calls the second function.
@@ -31,22 +31,33 @@ const FIRST: &str = "sub_100";
 const SECOND: &str = "sub_110";
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn bootstrap(name: &str) -> ConsoleProgram {
-    let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(name);
+    let bin = repo_root()
+        .join("decompiler/crates/unlace-analysis/tests/fixtures")
+        .join(name);
     let specs = repo_root().join("specs");
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.arch_mut().set_kuna_option("fast_funcdisc", "on").expect("fast_funcdisc flips");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.arch_mut()
+        .set_kuna_option("fast_funcdisc", "on")
+        .expect("fast_funcdisc flips");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
 fn sizes(prog: &ConsoleProgram) -> Vec<(String, u64)> {
-    prog.function_entries_canonical().into_iter().map(|e| (e.name, e.size)).collect()
+    prog.function_entries_canonical()
+        .into_iter()
+        .map(|e| (e.name, e.size))
+        .collect()
 }
 
 /// The premise: this image really does publish no section at all, so the
@@ -54,9 +65,17 @@ fn sizes(prog: &ConsoleProgram) -> Vec<(String, u64)> {
 #[test]
 fn the_fixture_publishes_no_sections_and_three_segments() {
     let prog = bootstrap("noshdr_x86_64");
-    assert_eq!(prog.sections(), Vec::new(), "e_shoff is zero — there is no section table");
+    assert_eq!(
+        prog.sections(),
+        Vec::new(),
+        "e_shoff is zero — there is no section table"
+    );
     let segments = prog.segments();
-    assert_eq!(segments.len(), 3, "the three PT_LOADs are the whole story; got {segments:?}");
+    assert_eq!(
+        segments.len(),
+        3,
+        "the three PT_LOADs are the whole story; got {segments:?}"
+    );
     let code: Vec<(u64, u64, u32)> = segments
         .iter()
         .copied()
@@ -88,10 +107,26 @@ fn a_sectionless_image_still_reports_function_extents() {
 #[test]
 fn the_single_address_path_agrees_and_data_keeps_no_extent() {
     let prog = bootstrap("noshdr_x86_64");
-    assert_eq!(prog.function_extent_at(0x110), 6, "the last entry runs to the segment end");
-    assert_eq!(prog.function_extent_at(0x108), 8, "an interior address clips at the next entry");
-    assert_eq!(prog.function_extent_at(0x120), 0, "the data segment is not a body");
-    assert_eq!(prog.function_extent_at(0x9000), 0, "nor is an address in no segment at all");
+    assert_eq!(
+        prog.function_extent_at(0x110),
+        6,
+        "the last entry runs to the segment end"
+    );
+    assert_eq!(
+        prog.function_extent_at(0x108),
+        8,
+        "an interior address clips at the next entry"
+    );
+    assert_eq!(
+        prog.function_extent_at(0x120),
+        0,
+        "the data segment is not a body"
+    );
+    assert_eq!(
+        prog.function_extent_at(0x9000),
+        0,
+        "nor is an address in no segment at all"
+    );
 }
 
 /// A sectioned image is untouched: the section table still wins where there is

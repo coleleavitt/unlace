@@ -6,8 +6,8 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace,
-    UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace, addrspace_flags,
+    spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
@@ -15,7 +15,7 @@ use unlace_num::opcodes::OpCode;
 use super::*;
 use crate::action::Rule;
 use crate::context::{ArchContext, TypeOp, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::varnode::{DefOpInfo, VarnodeBank};
 
 /// The user-op id the fixture registers as `pshufb`.
@@ -72,7 +72,8 @@ fn an_out_of_range_lane_is_declined() {
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(IopSpace::new(2))).unwrap();
     m.insert_space(Rc::new(FspecSpace::new(3))).unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
@@ -108,8 +109,8 @@ fn unk(size: int4) -> Rc<Datatype> {
     Rc::new(Datatype::new(size, type_metatype::TYPE_UNKNOWN))
 }
 
-fn no_replace(
-) -> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> unlace_base::error::KunaResult<()> {
+fn no_replace()
+-> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> unlace_base::error::KunaResult<()> {
     |_: &mut VarnodeBank, _: VarnodeId, _: VarnodeId| Ok(())
 }
 
@@ -118,13 +119,17 @@ fn mk_op(fd: &mut Funcdata, off: u64, inputs: int4, opc: OpCode) -> OpId {
     let pc = Address::new(r, off);
     let op = fd.obank_mut().create_at(inputs, pc);
     fd.obank_mut().mark_alive(op);
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
     op
 }
 
 fn set_def(fd: &mut Funcdata, vn: VarnodeId, defop: OpId) -> VarnodeId {
     let seq = fd.obank().get(defop).unwrap().get_seq_num().clone();
-    let info = DefOpInfo { id: defop, seqnum: seq };
+    let info = DefOpInfo {
+        id: defop,
+        seqnum: seq,
+    };
     let vn = fd.vbank_mut().set_def(vn, info, &mut no_replace()).unwrap();
     fd.obank_mut().get_mut(defop).unwrap().set_output(Some(vn));
     vn
@@ -132,11 +137,17 @@ fn set_def(fd: &mut Funcdata, vn: VarnodeId, defop: OpId) -> VarnodeId {
 
 fn wire(fd: &mut Funcdata, vn: VarnodeId, op: OpId, slot: int4) {
     fd.vbank_mut().add_descend(vn, op).unwrap();
-    fd.obank_mut().get_mut(op).unwrap().set_input(Some(vn), slot);
+    fd.obank_mut()
+        .get_mut(op)
+        .unwrap()
+        .set_input(Some(vn), slot);
 }
 
 fn wire_no_descend(fd: &mut Funcdata, vn: VarnodeId, op: OpId, slot: int4) {
-    fd.obank_mut().get_mut(op).unwrap().set_input(Some(vn), slot);
+    fd.obank_mut()
+        .get_mut(op)
+        .unwrap()
+        .set_input(Some(vn), slot);
 }
 
 /// Build `out = SUBPIECE(CALLOTHER(#userop, src, #mask), k)` and return
@@ -252,4 +263,3 @@ fn the_rule_registers_in_the_analysis_group() {
     assert_eq!(specs.len(), 1);
     assert_eq!(specs[0].group, "analysis");
 }
-

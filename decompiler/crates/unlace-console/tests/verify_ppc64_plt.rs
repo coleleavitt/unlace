@@ -28,11 +28,16 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// The vendored linked PPC64le fixture (shared with the unlace-analysis loader gates).
@@ -57,9 +62,18 @@ fn ppc64_plt_calls_are_named_in_decompiled_c() {
 
     // The PLT imports are resolvable as functions (the elf_plt PPC64 markup), and
     // the local `.symtab` `main` resolves.
-    assert!(prog.lookup_symbol("puts").is_some(), "PPC64 PLT import `puts` not resolved by the loader");
-    assert!(prog.lookup_symbol("printf").is_some(), "PPC64 PLT import `printf` not resolved by the loader");
-    assert!(prog.lookup_symbol("main").is_some(), "defined `main` not resolved by the loader");
+    assert!(
+        prog.lookup_symbol("puts").is_some(),
+        "PPC64 PLT import `puts` not resolved by the loader"
+    );
+    assert!(
+        prog.lookup_symbol("printf").is_some(),
+        "PPC64 PLT import `printf` not resolved by the loader"
+    );
+    assert!(
+        prog.lookup_symbol("main").is_some(),
+        "defined `main` not resolved by the loader"
+    );
 
     // Drive `load function main` → `decompile` → `print C`.
     let cmds: Vec<String> = ["load function main", "decompile", "print C"]
@@ -83,11 +97,20 @@ fn ppc64_plt_calls_are_named_in_decompiled_c() {
     // function body. If the PowerPC `.sla` were missing the bootstrap would have
     // returned early above; reaching here means the engine actually decoded the
     // PPC64 instruction stream.
-    assert!(out.contains("main"), "expected a decompiled `main` body, got:\n{out}");
+    assert!(
+        out.contains("main"),
+        "expected a decompiled `main` body, got:\n{out}"
+    );
 
     // The library calls are named...
-    assert!(out.contains("puts("), "expected a `puts(` call, got:\n{out}");
-    assert!(out.contains("printf("), "expected a `printf(` call, got:\n{out}");
+    assert!(
+        out.contains("puts("),
+        "expected a `puts(` call, got:\n{out}"
+    );
+    assert!(
+        out.contains("printf("),
+        "expected a `printf(` call, got:\n{out}"
+    );
     // ...and the old PLT-stub placeholders are gone for those call sites
     // (`puts@plt` stub = 0x680, `printf@plt` stub = 0x660).
     assert!(

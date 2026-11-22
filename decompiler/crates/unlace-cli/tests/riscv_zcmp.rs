@@ -17,7 +17,12 @@ fn rows(stdout: &str) -> Vec<String> {
     stdout
         .lines()
         .filter(|line| !line.starts_with('#') && !line.is_empty())
-        .map(|line| line.split_whitespace().skip(2).collect::<Vec<_>>().join(" "))
+        .map(|line| {
+            line.split_whitespace()
+                .skip(2)
+                .collect::<Vec<_>>()
+                .join(" ")
+        })
         .collect()
 }
 
@@ -68,8 +73,14 @@ fn every_zc_encoding_shape_decodes_as_llvm_names_it() {
 fn zcmp_prologue_and_epilogue_recover_an_ordinary_function() {
     let elf = fixture("keep.elf");
     let listing = disassemble(&[&elf, "keep"]);
-    assert_eq!(listing.first().map(String::as_str), Some("cm.push {ra,s0-s1},-0x10"));
-    assert_eq!(listing.last().map(String::as_str), Some("cm.popret {ra,s0-s1},0x10"));
+    assert_eq!(
+        listing.first().map(String::as_str),
+        Some("cm.push {ra,s0-s1},-0x10")
+    );
+    assert_eq!(
+        listing.last().map(String::as_str),
+        Some("cm.popret {ra,s0-s1},0x10")
+    );
     let (stdout, stderr, code) = run_kuna(&["decompile", &elf, "keep"]);
     assert_eq!(code, 0, "{stderr}");
     assert!(!stdout.contains("jump-as-call"), "{stdout}");
@@ -83,7 +94,10 @@ fn zcmp_prologue_and_epilogue_recover_an_ordinary_function() {
 fn rv64_zcmp_saves_eight_byte_registers() {
     let elf = fixture("zc_ops64.elf");
     let listing = disassemble(&[&elf, "swapcall"]);
-    assert_eq!(listing.first().map(String::as_str), Some("cm.push {ra,s0-s1},-0x20"));
+    assert_eq!(
+        listing.first().map(String::as_str),
+        Some("cm.push {ra,s0-s1},-0x20")
+    );
     for (function, body) in [
         ("swapcall", "return ext2(a1,a0) + 1;"),
         ("zret", "return 0;"),

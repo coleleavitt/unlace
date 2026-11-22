@@ -1,8 +1,8 @@
 //! A stack object spanning entry SP=0 has two physical ranges in one symbol.
 
+use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::types::int4;
-use std::rc::Rc;
 
 pub(crate) fn pieces(addr: &Address, size: int4) -> Option<[(Address, int4, int4); 2]> {
     let space = addr.get_space()?;

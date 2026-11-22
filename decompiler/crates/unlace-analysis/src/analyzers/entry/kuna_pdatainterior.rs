@@ -44,8 +44,8 @@
 //! [`super::kuna_pereloccode`] takes.
 
 use object::pe::{IMAGE_FILE_MACHINE_AMD64, IMAGE_FILE_MACHINE_I386};
-use object::read::pe::{ImageNtHeaders, PeFile, PeFile32, PeFile64};
 use object::read::Object;
+use object::read::pe::{ImageNtHeaders, PeFile, PeFile32, PeFile64};
 use object::{FileKind, LittleEndian as LE};
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
@@ -105,7 +105,10 @@ fn bodies_typed<Pe: ImageNtHeaders>(pe: &PeFile<Pe>, bytes: &[u8]) -> Vec<(u64, 
         IMAGE_FILE_MACHINE_I386 | IMAGE_FILE_MACHINE_AMD64 => {}
         _ => return Vec::new(),
     }
-    let dir = match pe.data_directories().get(object::pe::IMAGE_DIRECTORY_ENTRY_EXCEPTION) {
+    let dir = match pe
+        .data_directories()
+        .get(object::pe::IMAGE_DIRECTORY_ENTRY_EXCEPTION)
+    {
         Some(d) if d.size.get(LE) != 0 => d,
         _ => return Vec::new(),
     };
@@ -183,7 +186,10 @@ mod tests {
     fn interior_of_a_runtime_function_is_not_a_start() {
         let bodies = eligible_pdata_bodies(&fixture());
         assert_eq!(bodies.len(), 3, "expected three bodies, got {bodies:#x?}");
-        assert!(is_interior(&bodies, LABEL), "{LABEL:#x} not seen as interior");
+        assert!(
+            is_interior(&bodies, LABEL),
+            "{LABEL:#x} not seen as interior"
+        );
         assert!(!is_interior(&bodies, DISPATCH), "a BeginAddress is a start");
         assert!(!is_interior(&bodies, HANDLER), "an EndAddress is exclusive");
         assert!(!is_interior(&bodies, PAYLOAD), "outside every body");
@@ -206,7 +212,10 @@ mod tests {
     #[test]
     fn range_containing_another_start_is_not_eligible() {
         let all = [(0x1000, 0x2000), (0x1400, 0x1500), (0x3000, 0x3100)];
-        assert_eq!(eligible(&all, &[]), vec![(0x1400, 0x1500), (0x3000, 0x3100)]);
+        assert_eq!(
+            eligible(&all, &[]),
+            vec![(0x1400, 0x1500), (0x3000, 0x3100)]
+        );
     }
 
     /// A named function inside a range means the range covers more than one

@@ -7,7 +7,7 @@
 use std::path::PathBuf;
 
 use unlace_console::assertions::{self, Body, Directive};
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram, EntrySelector};
+use unlace_console::engine::{ConsoleProgram, EntrySelector, bootstrap_from_object};
 use unlace_console::project::decompile_targets;
 
 fn repo_root() -> PathBuf {

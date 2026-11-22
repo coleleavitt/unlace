@@ -118,13 +118,21 @@ pub fn callee_moves_stack(arch: &Architecture, entry: &Address) -> bool {
 /// take the value as an argument (an indirect call, one whose window covers the
 /// slot) does not hold it back: there the freed push is its argument.
 pub(crate) fn contested(data: &Funcdata, idx: int4, vn: VarnodeId, held: &mut Contenders) -> bool {
-    let Some(off) = data.vbank().get(vn).map(|v| v.get_offset()) else { return false };
-    let slots = held.slots.get_or_insert_with(|| unbounded_stack_inputs(data));
-    let Some(slot) = slots.get_mut(&off) else { return false };
+    let Some(off) = data.vbank().get(vn).map(|v| v.get_offset()) else {
+        return false;
+    };
+    let slots = held
+        .slots
+        .get_or_insert_with(|| unbounded_stack_inputs(data));
+    let Some(slot) = slots.get_mut(&off) else {
+        return false;
+    };
     let Slot { inputs, reach } = slot;
     let reach = reach.get_or_insert_with(|| reached_from(data, inputs));
     let root = stored(data, vn);
-    reach.get(&root).is_some_and(|ins| ins.iter().any(|&i| inputs[i].holds(data, idx)))
+    reach
+        .get(&root)
+        .is_some_and(|ins| ins.iter().any(|&i| inputs[i].holds(data, idx)))
 }
 
 /// What [`contested`] reads, gathered once per pass of the active-parameter
@@ -162,7 +170,10 @@ impl Held {
             return false;
         }
         let fc = data.get_call_specs(self.call);
-        if !fc.is_input_active() || fc.callee_stack_arg_bytes().is_some() || fc.callee_stack_window() != Some(self.window) {
+        if !fc.is_input_active()
+            || fc.callee_stack_arg_bytes().is_some()
+            || fc.callee_stack_window() != Some(self.window)
+        {
             return false;
         }
         if self.trial >= fc.active_input().get_num_trials() {
@@ -171,7 +182,11 @@ impl Held {
         let trial = fc.active_input().get_trial(self.trial);
         trial.get_slot() == self.slot
             && trial.get_address().get_offset() as i64 >= 4 + self.window as i64
-            && data.obank().get(fc.get_op()).and_then(|op| op.get_in(self.slot)) == Some(self.vn)
+            && data
+                .obank()
+                .get(fc.get_op())
+                .and_then(|op| op.get_in(self.slot))
+                == Some(self.vn)
     }
 }
 
@@ -202,10 +217,19 @@ fn reached(data: &Funcdata, vn: VarnodeId) -> Vec<VarnodeId> {
             continue;
         }
         seen.push(v);
-        let Some(op) = data.vbank().get(v).and_then(|x| x.get_def()).and_then(|d| data.obank().get(d)) else { continue };
+        let Some(op) = data
+            .vbank()
+            .get(v)
+            .and_then(|x| x.get_def())
+            .and_then(|d| data.obank().get(d))
+        else {
+            continue;
+        };
         match op.code() {
             OpCode::CPUI_INDIRECT => work.extend(op.get_in(0)),
-            OpCode::CPUI_MULTIEQUAL => work.extend((0..op.num_input()).filter_map(|i| op.get_in(i))),
+            OpCode::CPUI_MULTIEQUAL => {
+                work.extend((0..op.num_input()).filter_map(|i| op.get_in(i)))
+            }
             _ => {}
         }
     }
@@ -221,17 +245,31 @@ fn unbounded_stack_inputs(data: &Funcdata) -> HashMap<uintb, Slot> {
         if !fc.is_input_active() || fc.callee_stack_arg_bytes().is_some() {
             continue;
         }
-        let Some(window) = fc.callee_stack_window() else { continue };
-        let Some(op) = data.obank().get(fc.get_op()) else { continue };
+        let Some(window) = fc.callee_stack_window() else {
+            continue;
+        };
+        let Some(op) = data.obank().get(fc.get_op()) else {
+            continue;
+        };
         for t in 0..fc.active_input().get_num_trials() {
             let trial = fc.active_input().get_trial(t);
             if (trial.get_address().get_offset() as i64) < 4 + window as i64 {
                 continue;
             }
-            let Some(vn) = op.get_in(trial.get_slot()) else { continue };
-            let Some(v) = data.vbank().get(vn) else { continue };
+            let Some(vn) = op.get_in(trial.get_slot()) else {
+                continue;
+            };
+            let Some(v) = data.vbank().get(vn) else {
+                continue;
+            };
             if v.get_space().get_type() == spacetype::IPTR_SPACEBASE {
-                let held = Held { call: j, trial: t, slot: trial.get_slot(), window, vn };
+                let held = Held {
+                    call: j,
+                    trial: t,
+                    slot: trial.get_slot(),
+                    window,
+                    vn,
+                };
                 slots.entry(v.get_offset()).or_default().inputs.push(held);
             }
         }
@@ -242,7 +280,14 @@ fn unbounded_stack_inputs(data: &Funcdata) -> HashMap<uintb, Slot> {
 /// The stored value `vn` carries, past the INDIRECTs calls put on it.
 fn stored(data: &Funcdata, mut vn: VarnodeId) -> VarnodeId {
     for _ in 0..64 {
-        let Some(op) = data.vbank().get(vn).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d)) else { break };
+        let Some(op) = data
+            .vbank()
+            .get(vn)
+            .and_then(|v| v.get_def())
+            .and_then(|d| data.obank().get(d))
+        else {
+            break;
+        };
         if op.code() != OpCode::CPUI_INDIRECT {
             break;
         }

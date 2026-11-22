@@ -155,7 +155,10 @@ impl KunaError {
 
     /// `throw UnimplError(s, l)`
     pub fn unimpl(s: impl Into<String>, instruction_length: i32) -> Self {
-        KunaError::Unimpl { explain: s.into(), instruction_length }
+        KunaError::Unimpl {
+            explain: s.into(),
+            instruction_length,
+        }
     }
 
     /// `throw BadDataError(s)`
@@ -185,7 +188,10 @@ impl KunaError {
 
     /// `throw JavaError(tp, message)`
     pub fn java(type_name: impl Into<String>, s: impl Into<String>) -> Self {
-        KunaError::Java { type_name: type_name.into(), explain: s.into() }
+        KunaError::Java {
+            type_name: type_name.into(),
+            explain: s.into(),
+        }
     }
 
     /// The explanatory string — C++ `LowlevelError::explain` /
@@ -228,7 +234,9 @@ mod tests {
         let e = KunaError::unimpl("Unable to translate instruction", 4);
         assert_eq!(e.to_string(), "Unable to translate instruction");
         match e {
-            KunaError::Unimpl { instruction_length, .. } => assert_eq!(instruction_length, 4),
+            KunaError::Unimpl {
+                instruction_length, ..
+            } => assert_eq!(instruction_length, 4),
             _ => panic!("wrong variant"),
         }
     }

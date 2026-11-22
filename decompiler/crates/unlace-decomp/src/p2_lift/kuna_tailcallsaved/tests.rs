@@ -5,14 +5,14 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
-    VarnodeStorage,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, VarnodeStorage, addrspace_flags,
+    spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{ArchContext, TypeOp};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 
 use super::*;
@@ -20,7 +20,8 @@ use super::*;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -65,22 +66,29 @@ fn space_of(fd: &Funcdata, name: &str) -> Rc<AddrSpace> {
 }
 
 fn sp_loc(fd: &Funcdata) -> VarnodeStorage {
-    VarnodeStorage { space: Some(space_of(fd, "register")), offset: 0x20, size: 8 }
+    VarnodeStorage {
+        space: Some(space_of(fd, "register")),
+        offset: 0x20,
+        size: 8,
+    }
 }
 
 fn sp_vn(fd: &mut Funcdata) -> crate::context::VarnodeId {
     let reg = space_of(fd, "register");
-    fd.vbank_mut().create(8, Address::new(reg, 0x20), unk_type(8))
+    fd.vbank_mut()
+        .create(8, Address::new(reg, 0x20), unk_type(8))
 }
 
 fn const_vn(fd: &mut Funcdata, val: u64) -> crate::context::VarnodeId {
     let cst = space_of(fd, "const");
-    fd.vbank_mut().create(8, Address::new(cst, val), unk_type(8))
+    fd.vbank_mut()
+        .create(8, Address::new(cst, val), unk_type(8))
 }
 
 fn reg_vn(fd: &mut Funcdata, off: u64, size: int4) -> crate::context::VarnodeId {
     let reg = space_of(fd, "register");
-    fd.vbank_mut().create(size, Address::new(reg, off), unk_type(size))
+    fd.vbank_mut()
+        .create(size, Address::new(reg, off), unk_type(size))
 }
 
 fn at(fd: &Funcdata, off: u64) -> Address {
@@ -103,10 +111,15 @@ fn emit_sp_arith(fd: &mut Funcdata, addr: u64, opc: OpCode, k: u64) {
 /// `*(ram, ptr) = <register of `size` bytes>` at instruction address `addr`.
 fn emit_store(fd: &mut Funcdata, addr: u64, ptr: crate::context::VarnodeId, size: int4) {
     let ram = space_of(fd, "ram");
-    let op = fd.obank_mut().create_at(3, Address::new(Rc::clone(&ram), addr));
-    fd.obank_mut().change_opcode(op, TypeOp::new(OpCode::CPUI_STORE, 0, "op"));
+    let op = fd
+        .obank_mut()
+        .create_at(3, Address::new(Rc::clone(&ram), addr));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(OpCode::CPUI_STORE, 0, "op"));
     let cst = space_of(fd, "const");
-    let spc = fd.vbank_mut().create(8, Address::new(cst, ram.get_index() as u64), unk_type(8));
+    let spc = fd
+        .vbank_mut()
+        .create(8, Address::new(cst, ram.get_index() as u64), unk_type(8));
     let val = reg_vn(fd, 0x08, size);
     fd.obank_mut().get_mut(op).unwrap().set_input(Some(spc), 0);
     fd.obank_mut().get_mut(op).unwrap().set_input(Some(ptr), 1);
@@ -116,10 +129,15 @@ fn emit_store(fd: &mut Funcdata, addr: u64, ptr: crate::context::VarnodeId, size
 /// `<register of `size` bytes> = *(ram, ptr)` at instruction address `addr`.
 fn emit_load(fd: &mut Funcdata, addr: u64, ptr: crate::context::VarnodeId, size: int4) {
     let ram = space_of(fd, "ram");
-    let op = fd.obank_mut().create_at(2, Address::new(Rc::clone(&ram), addr));
-    fd.obank_mut().change_opcode(op, TypeOp::new(OpCode::CPUI_LOAD, 0, "op"));
+    let op = fd
+        .obank_mut()
+        .create_at(2, Address::new(Rc::clone(&ram), addr));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(OpCode::CPUI_LOAD, 0, "op"));
     let cst = space_of(fd, "const");
-    let spc = fd.vbank_mut().create(8, Address::new(cst, ram.get_index() as u64), unk_type(8));
+    let spc = fd
+        .vbank_mut()
+        .create(8, Address::new(cst, ram.get_index() as u64), unk_type(8));
     let out = reg_vn(fd, 0x08, size);
     fd.obank_mut().get_mut(op).unwrap().set_input(Some(spc), 0);
     fd.obank_mut().get_mut(op).unwrap().set_input(Some(ptr), 1);

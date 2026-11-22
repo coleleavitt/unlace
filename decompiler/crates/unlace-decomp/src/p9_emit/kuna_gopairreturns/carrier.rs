@@ -28,9 +28,15 @@ fn carrier(fd: &Funcdata, mut value: VarnodeId) -> Option<Carrier> {
             OpCode::CPUI_COPY | OpCode::CPUI_CAST if operation.num_input() == 1 => {
                 value = input;
             }
-            OpCode::CPUI_INT_ZEXT if source.get_size() == 8
-                && matches!(fd.vn_type_read_facing(input, id).get_metatype(),
-                    type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN) => {
+            OpCode::CPUI_INT_ZEXT
+                if source.get_size() == 8
+                    && matches!(
+                        fd.vn_type_read_facing(input, id).get_metatype(),
+                        type_metatype::TYPE_INT
+                            | type_metatype::TYPE_UINT
+                            | type_metatype::TYPE_UNKNOWN
+                    ) =>
+            {
                 return Some(Carrier::ZeroExtend(input, id));
             }
             OpCode::CPUI_INT_LEFT if source.get_size() == 16 => {
@@ -55,31 +61,43 @@ pub(crate) fn is_zero_word_carrier(fd: &Funcdata, value: VarnodeId) -> bool {
 
 fn raw_carrier(fd: &Funcdata, mut value: VarnodeId) -> bool {
     for _ in 0..8 {
-        let Some(vn) = fd.vbank().get(value) else { return false };
+        let Some(vn) = fd.vbank().get(value) else {
+            return false;
+        };
         if vn.get_size() != 16 || vn.is_volatile() || vn.is_constant() {
             return false;
         }
-        if !vn.is_implied() { return true; }
+        if !vn.is_implied() {
+            return true;
+        }
         let Some(id) = vn.get_def() else { return false };
-        let Some(operation) = fd.obank().get(id) else { return false };
+        let Some(operation) = fd.obank().get(id) else {
+            return false;
+        };
         match operation.code() {
             OpCode::CPUI_COPY | OpCode::CPUI_CAST if operation.num_input() == 1 => {
-                let Some(input) = operation.get_in(0) else { return false };
+                let Some(input) = operation.get_in(0) else {
+                    return false;
+                };
                 value = input;
             }
             OpCode::CPUI_LOAD => return true,
             OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => {
-                return fd.get_call_specs_index(id)
-                    .is_some_and(|index| {
-                        let proto = fd.get_call_specs(index).proto();
-                        proto.get_output_type().is_some_and(|ty| {
-                            (ty.get_size() == 16 && matches!(ty.get_metatype(),
-                                type_metatype::TYPE_INT | type_metatype::TYPE_UINT
-                                    | type_metatype::TYPE_UNKNOWN | type_metatype::TYPE_ARRAY))
-                                || (!proto.is_output_locked()
-                                    && ty.get_metatype() == type_metatype::TYPE_VOID)
-                        })
-                    });
+                return fd.get_call_specs_index(id).is_some_and(|index| {
+                    let proto = fd.get_call_specs(index).proto();
+                    proto.get_output_type().is_some_and(|ty| {
+                        (ty.get_size() == 16
+                            && matches!(
+                                ty.get_metatype(),
+                                type_metatype::TYPE_INT
+                                    | type_metatype::TYPE_UINT
+                                    | type_metatype::TYPE_UNKNOWN
+                                    | type_metatype::TYPE_ARRAY
+                            ))
+                            || (!proto.is_output_locked()
+                                && ty.get_metatype() == type_metatype::TYPE_VOID)
+                    })
+                });
             }
             _ => return false,
         }
@@ -89,14 +107,26 @@ fn raw_carrier(fd: &Funcdata, mut value: VarnodeId) -> bool {
 
 impl PrintC {
     fn push_raw_pair_carrier(
-        &mut self, fd: &Funcdata, arch: &Architecture, value: VarnodeId,
-        op: OpId, target: &Rc<Datatype>, results: &[Rc<Datatype>; 2],
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        value: VarnodeId,
+        op: OpId,
+        target: &Rc<Datatype>,
+        results: &[Rc<Datatype>; 2],
     ) -> bool {
-        if !raw_carrier(fd, value) { return false; }
+        if !raw_carrier(fd, value) {
+            return false;
+        }
         let source = self.go_value_type(fd, arch, value, op);
-        if source.get_size() != 16 || !matches!(source.get_metatype(),
-            type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN
-                | type_metatype::TYPE_ARRAY)
+        if source.get_size() != 16
+            || !matches!(
+                source.get_metatype(),
+                type_metatype::TYPE_INT
+                    | type_metatype::TYPE_UINT
+                    | type_metatype::TYPE_UNKNOWN
+                    | type_metatype::TYPE_ARRAY
+            )
         {
             return false;
         }
@@ -113,11 +143,18 @@ impl PrintC {
                 self.push_vn_ir(fd, arch, value, op);
             }
             OutLang::C => {
-                static UNION: OpToken = op_token("", "}).value", 2, 66, false, TokenType::Postsurround, 0, 0);
+                static UNION: OpToken =
+                    op_token("", "}).value", 2, 66, false, TokenType::Postsurround, 0, 0);
                 self.push_op(&UNION, Some(op_key(op)));
-                self.push_atom(&Atom::with_op(format!(
-                    "((union {{ unsigned __int128 carrier; {} value; }}){{.carrier = ", target.get_name()),
-                    TagType::Syntax, SyntaxHighlight::type_color, op_key(op)));
+                self.push_atom(&Atom::with_op(
+                    format!(
+                        "((union {{ unsigned __int128 carrier; {} value; }}){{.carrier = ",
+                        target.get_name()
+                    ),
+                    TagType::Syntax,
+                    SyntaxHighlight::type_color,
+                    op_key(op),
+                ));
                 self.push_vn_ir(fd, arch, value, op);
             }
             _ => return false,
@@ -139,8 +176,13 @@ impl PrintC {
         {
             return false;
         }
-        let Some(results) = arch.types().kuna_lang_facet(target.get_name())
-            .and_then(|facet| facet.go_pair_fields(target)) else { return false };
+        let Some(results) = arch
+            .types()
+            .kuna_lang_facet(target.get_name())
+            .and_then(|facet| facet.go_pair_fields(target))
+        else {
+            return false;
+        };
         let Some(plan) = carrier(fd, value) else {
             return self.push_raw_pair_carrier(fd, arch, value, op, target, &results);
         };
@@ -155,13 +197,15 @@ impl PrintC {
                 pair_source = fields(&self.rt_ctx, &source);
                 if pair_source.is_none() {
                     let vn = fd.vbank().get(input).unwrap();
-                    if vn.is_implied() || vn.is_constant()
+                    if vn.is_implied()
+                        || vn.is_constant()
                         || GO_SPELLER.declarator(&self.rt_ctx, &source).0 != "[16]byte"
                     {
                         return false;
                     }
-                    let Ok(ty) = arch.types().get_type_pointer(8, results[1].clone(), 1)
-                        else { return false };
+                    let Ok(ty) = arch.types().get_type_pointer(8, results[1].clone(), 1) else {
+                        return false;
+                    };
                     pointer = Some(ty);
                 }
             }
@@ -175,14 +219,19 @@ impl PrintC {
                 OutLang::Rust => format!("{} {{", target.get_name()),
                 _ => format!("({}){{", target.get_name()),
             },
-            TagType::TypeToken, SyntaxHighlight::type_color, op_key(op),
+            TagType::TypeToken,
+            SyntaxHighlight::type_color,
+            op_key(op),
         ));
         self.push_op(&tokens::COMMA, Some(op_key(op)));
         for index in 0..2 {
             if self.out_lang == OutLang::Rust {
                 self.push_op(&FIELD, Some(op_key(op)));
-                self.push_atom(&Atom::syntax(format!("result{index}"), TagType::Syntax,
-                    SyntaxHighlight::var_color));
+                self.push_atom(&Atom::syntax(
+                    format!("result{index}"),
+                    TagType::Syntax,
+                    SyntaxHighlight::var_color,
+                ));
             }
             match (plan, index) {
                 (Carrier::ZeroExtend(input, read_op), 0) => {
@@ -213,8 +262,11 @@ impl PrintC {
                         self.push_vn_ir(fd, arch, input, read_op);
                     }
                 }
-                _ => self.push_atom(&Atom::syntax("0", TagType::Syntax,
-                    SyntaxHighlight::const_color)),
+                _ => self.push_atom(&Atom::syntax(
+                    "0",
+                    TagType::Syntax,
+                    SyntaxHighlight::const_color,
+                )),
             }
         }
         true

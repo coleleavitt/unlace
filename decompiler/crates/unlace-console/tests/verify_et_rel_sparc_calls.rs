@@ -26,7 +26,8 @@ fn sparc_calls_and_split_immediates_resolve_to_their_targets() {
             .is_file(),
         "required processor specs must be available"
     );
-    let path = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/et_rel_calls_sparc.o");
+    let path =
+        repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/et_rel_calls_sparc.o");
     let roots = vec![specs.to_string_lossy().into_owned()];
     let mut program = bootstrap_from_object(path.to_str().unwrap(), "", &roots)
         .unwrap_or_else(|error| panic!("bootstrap failed: {}", error.explain()));
@@ -71,5 +72,8 @@ fn sparc_calls_and_split_immediates_resolve_to_their_targets() {
         caller.contains("printf(\"total %d\\n\""),
         "WDISP30 extern call or HI22/LO10 literal address did not resolve:\n{caller}"
     );
-    assert!(!caller.contains("sub_"), "a relocated call lost callee identity:\n{caller}");
+    assert!(
+        !caller.contains("sub_"),
+        "a relocated call lost callee identity:\n{caller}"
+    );
 }

@@ -18,8 +18,8 @@ use std::rc::Rc;
 use unlace_base::address::{Address, RangeList};
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::marshal::{
-    AttributeId, Decoder, ElementId, Encoder, IdRegistry, XmlDecode, ATTRIB_CONTENT, ATTRIB_NAME,
-    ATTRIB_READONLY, ATTRIB_SPACE, ELEM_SYMBOL,
+    ATTRIB_CONTENT, ATTRIB_NAME, ATTRIB_READONLY, ATTRIB_SPACE, AttributeId, Decoder, ELEM_SYMBOL,
+    ElementId, Encoder, IdRegistry, XmlDecode,
 };
 use unlace_base::space::{AddrSpace, AddrSpaceManager};
 use unlace_base::types::Wrap;
@@ -47,7 +47,8 @@ pub fn register_loadimage_xml_ids(registry: &mut IdRegistry) {
 /// from `Address::new` over a registered space; C++ would dereference a null
 /// space pointer here (UB, ADR 0004).
 fn addr_space(a: &Address) -> &Rc<AddrSpace> {
-    a.get_space().expect("LoadImageXml: address with null space pointer (C++ UB)")
+    a.get_space()
+        .expect("LoadImageXml: address with null space pointer (C++ UB)")
 }
 
 /// Move entries in address order using the signed i32 byte adjustment.
@@ -128,7 +129,9 @@ impl LoadImageXml {
     pub fn new(f: &str, el: Rc<Element>) -> KunaResult<LoadImageXml> {
         // Extract architecture information
         if el.get_name() != "binaryimage" {
-            return Err(KunaError::lowlevel(format!("Missing binaryimage tag in {f}")));
+            return Err(KunaError::lowlevel(format!(
+                "Missing binaryimage tag in {f}"
+            )));
         }
         let archtype = el.get_attribute_value("arch")?.to_vec();
         Ok(LoadImageXml {
@@ -205,14 +208,18 @@ impl LoadImageXml {
             }
             if sub_id == ELEM_SYMBOL {
                 let base = decoder.read_space_id(&ATTRIB_SPACE)?;
-                let addr =
-                    Address::new(Rc::clone(&base), base.decode_attributes(&mut decoder, &mut sz)?);
+                let addr = Address::new(
+                    Rc::clone(&base),
+                    base.decode_attributes(&mut decoder, &mut sz)?,
+                );
                 let nm = decoder.read_string_id(&ATTRIB_NAME)?;
                 self.addrtosymbol.insert(addr, nm);
             } else if sub_id == ELEM_BYTECHUNK {
                 let base = decoder.read_space_id(&ATTRIB_SPACE)?;
-                let addr =
-                    Address::new(Rc::clone(&base), base.decode_attributes(&mut decoder, &mut sz)?);
+                let addr = Address::new(
+                    Rc::clone(&base),
+                    base.decode_attributes(&mut decoder, &mut sz)?,
+                );
                 let vec = self.chunk.entry(addr.clone()).or_default();
                 vec.clear();
                 decoder.rewind_attributes();
@@ -289,8 +296,10 @@ impl LoadImageXml {
                 continue; // All the way to end of space
             }
             let mut maxsize: i32 = 512;
-            let mut room: u64 =
-                addr_space(&endaddr).get_highest().wsub(endaddr.get_offset()).wadd(1);
+            let mut room: u64 = addr_space(&endaddr)
+                .get_highest()
+                .wsub(endaddr.get_offset())
+                .wadd(1);
             // (uintb)maxsize: the int4 sign-extends into the comparison
             if maxsize as i64 as u64 > room {
                 maxsize = room as i32; // cast: (int4)room truncation as in C++
@@ -325,13 +334,12 @@ impl LoadImage for LoadImageXml {
 
         let mut curaddr: Address = addr.clone();
         // C++: the last chunk with key <= curaddr (upper_bound, then --iter)
-        let mut iter_key: Option<Address> =
-            match self.chunk.range(..=curaddr.clone()).next_back() {
-                Some((k, _)) => Some(k.clone()),
-                // upper_bound == begin(): the iterator stays at begin(),
-                // which may be a chunk above curaddr or end() (empty map)
-                None => self.chunk.keys().next().cloned(),
-            };
+        let mut iter_key: Option<Address> = match self.chunk.range(..=curaddr.clone()).next_back() {
+            Some((k, _)) => Some(k.clone()),
+            // upper_bound == begin(): the iterator stays at begin(),
+            // which may be a chunk above curaddr or end() (empty map)
+            None => self.chunk.keys().next().cloned(),
+        };
         while size > 0 {
             let Some(key) = iter_key else {
                 break; // iter == chunk.end()
@@ -423,7 +431,7 @@ impl LoadImage for LoadImageXml {
 mod tests {
     use super::*;
     use unlace_base::marshal::XmlEncode;
-    use unlace_base::space::{addrspace_flags, spacetype, ConstantSpace};
+    use unlace_base::space::{ConstantSpace, addrspace_flags, spacetype};
     use unlace_base::xml::xml_tree;
 
     /// Build a manager with const(0) + one processor space.
@@ -471,11 +479,7 @@ mod tests {
         Rc::clone(el)
     }
 
-    fn open_fixture(
-        name: &str,
-        m: &AddrSpaceManager,
-        registry: &IdRegistry,
-    ) -> LoadImageXml {
+    fn open_fixture(name: &str, m: &AddrSpaceManager, registry: &IdRegistry) -> LoadImageXml {
         let el = fixture_binaryimage(name);
         let mut img = LoadImageXml::new(name, el).unwrap();
         img.open(m, registry).unwrap();
@@ -501,29 +505,39 @@ mod tests {
         assert_eq!(img.get_arch_type(), b"AARCH64:LE:64:v8A:default".to_vec());
 
         // Exact bytes at the start of the first chunk
-        let got = img.load(12, &Address::new(Rc::clone(&ram), 0x455c14)).unwrap();
+        let got = img
+            .load(12, &Address::new(Rc::clone(&ram), 0x455c14))
+            .unwrap();
         assert_eq!(got, hex("ff4300d1e10308aae00f00b9"));
 
         // Read crossing a line boundary inside the chunk
-        let got = img.load(8, &Address::new(Rc::clone(&ram), 0x455c1c)).unwrap();
+        let got = img
+            .load(8, &Address::new(Rc::clone(&ram), 0x455c1c))
+            .unwrap();
         assert_eq!(got, hex("e00f00b9400180d2"));
 
         // Chunk 1 covers [0x455c14,0x455c44); the 12-byte gap to chunk 2 at
         // 0x455c50 is padded with zeroes; read straddling chunk1 tail ->
         // gap -> chunk2 head
-        let got = img.load(20, &Address::new(Rc::clone(&ram), 0x455c40)).unwrap();
+        let got = img
+            .load(20, &Address::new(Rc::clone(&ram), 0x455c40))
+            .unwrap();
         let mut expect = hex("c0035fd6");
         expect.extend(std::iter::repeat_n(0u8, 12));
         expect.extend(hex("fd7bbda9"));
         assert_eq!(got, expect);
 
         // Chunk 2 ends at 0x455c6c and is followed by exactly 512 pad bytes
-        let got = img.load(4, &Address::new(Rc::clone(&ram), 0x455c6c + 508)).unwrap();
+        let got = img
+            .load(4, &Address::new(Rc::clone(&ram), 0x455c6c + 508))
+            .unwrap();
         assert_eq!(got, vec![0, 0, 0, 0]);
 
         // One byte past the pad: unfilled error with the exact message
         // (sz drops to 4 bytes for an offset below 2^32 in printRaw)
-        let err = img.load(1, &Address::new(Rc::clone(&ram), 0x455c6c + 512)).unwrap_err();
+        let err = img
+            .load(1, &Address::new(Rc::clone(&ram), 0x455c6c + 512))
+            .unwrap_err();
         match &err {
             KunaError::DataUnavail { explain } => {
                 assert_eq!(explain, "Bytes at 0x00455e6c are not mapped");
@@ -533,7 +547,9 @@ mod tests {
 
         // A read that *starts* mapped but overruns the pad also fails, with
         // curaddr advanced to the first unmapped byte
-        let err = img.load(0x300, &Address::new(Rc::clone(&ram), 0x455c50)).unwrap_err();
+        let err = img
+            .load(0x300, &Address::new(Rc::clone(&ram), 0x455c50))
+            .unwrap_err();
         match &err {
             KunaError::DataUnavail { explain } => {
                 assert_eq!(explain, "Bytes at 0x00455e6c are not mapped");
@@ -543,7 +559,9 @@ mod tests {
 
         // A read entirely below the image: emptyhit error at the original
         // address
-        let err = img.load(4, &Address::new(Rc::clone(&ram), 0x1000)).unwrap_err();
+        let err = img
+            .load(4, &Address::new(Rc::clone(&ram), 0x1000))
+            .unwrap_err();
         match &err {
             KunaError::DataUnavail { explain } => {
                 assert_eq!(explain, "Bytes at 0x00001000 are not mapped");
@@ -593,18 +611,24 @@ mod tests {
 
         assert_eq!(img.get_arch_type(), b"MIPS:BE:32:default:default".to_vec());
 
-        let got = img.load(16, &Address::new(Rc::clone(&ram), 0x100000)).unwrap();
+        let got = img
+            .load(16, &Address::new(Rc::clone(&ram), 0x100000))
+            .unwrap();
         assert_eq!(got, hex("0005110028a3000a3442000400431025"));
 
         // Tail of chunk 1, the zero-filled gap, and the head of chunk 2
-        let got = img.load(16 + 192 + 4, &Address::new(Rc::clone(&ram), 0x100030)).unwrap();
+        let got = img
+            .load(16 + 192 + 4, &Address::new(Rc::clone(&ram), 0x100030))
+            .unwrap();
         let mut expect = hex("3442006403e00008a482000800000000");
         expect.extend(std::iter::repeat_n(0u8, 192));
         expect.extend(hex("24020001"));
         assert_eq!(got, expect);
 
         // Unfilled error in a 4-byte space prints 8 hex digits
-        let err = img.load(1, &Address::new(Rc::clone(&ram), 0x10)).unwrap_err();
+        let err = img
+            .load(1, &Address::new(Rc::clone(&ram), 0x10))
+            .unwrap_err();
         match &err {
             KunaError::DataUnavail { explain } => {
                 assert_eq!(explain, "Bytes at 0x00000010 are not mapped");
@@ -625,14 +649,20 @@ mod tests {
 
         assert_eq!(img.get_arch_type(), b"8051:BE:16:default:default".to_vec());
 
-        let got = img.load(10, &Address::new(Rc::clone(&code), 0xa000)).unwrap();
+        let got = img
+            .load(10, &Address::new(Rc::clone(&code), 0xa000))
+            .unwrap();
         assert_eq!(got, hex("e552b40b005002740122"));
 
         // 512 bytes of pad fit in the 16-bit space; past them: error with
         // the 2-byte-space (4 hex digit) rendering
-        let got = img.load(2, &Address::new(Rc::clone(&code), 0xa00a + 510)).unwrap();
+        let got = img
+            .load(2, &Address::new(Rc::clone(&code), 0xa00a + 510))
+            .unwrap();
         assert_eq!(got, vec![0, 0]);
-        let err = img.load(1, &Address::new(Rc::clone(&code), 0xa00a + 512)).unwrap_err();
+        let err = img
+            .load(1, &Address::new(Rc::clone(&code), 0xa00a + 512))
+            .unwrap_err();
         match &err {
             KunaError::DataUnavail { explain } => {
                 assert_eq!(explain, "Bytes at 0xa20a are not mapped");
@@ -737,7 +767,9 @@ mod tests {
         // around to 0x0000 is unmapped
         let got = img.load(1, &Address::new(Rc::clone(&ram), 0xffff)).unwrap();
         assert_eq!(got, vec![0]);
-        let err = img.load(1, &Address::new(Rc::clone(&ram), 0x0)).unwrap_err();
+        let err = img
+            .load(1, &Address::new(Rc::clone(&ram), 0x0))
+            .unwrap_err();
         assert!(matches!(err, KunaError::DataUnavail { .. }));
     }
 
@@ -806,16 +838,24 @@ mod tests {
 
         assert_eq!(img2.get_arch_type(), b"test:arch".to_vec());
         let a = img.load(22, &Address::new(Rc::clone(&ram), 0x100)).unwrap();
-        let b = img2.load(22, &Address::new(Rc::clone(&ram), 0x100)).unwrap();
+        let b = img2
+            .load(22, &Address::new(Rc::clone(&ram), 0x100))
+            .unwrap();
         assert_eq!(a, b);
         assert_eq!(b, hex("000102030405060708090a0b0c0d0e0f101112131415"));
 
         let mut rec = LoadImageFunc::default();
         img2.open_symbols();
         assert!(img2.get_next_symbol(&mut rec));
-        assert_eq!((rec.address.get_offset(), rec.name.clone()), (0x100, b"main".to_vec()));
+        assert_eq!(
+            (rec.address.get_offset(), rec.name.clone()),
+            (0x100, b"main".to_vec())
+        );
         assert!(img2.get_next_symbol(&mut rec));
-        assert_eq!((rec.address.get_offset(), rec.name.clone()), (0x110, b"helper".to_vec()));
+        assert_eq!(
+            (rec.address.get_offset(), rec.name.clone()),
+            (0x110, b"helper".to_vec())
+        );
         assert!(!img2.get_next_symbol(&mut rec));
 
         // readonly survives the round trip on the original chunk extent
@@ -846,7 +886,9 @@ mod tests {
         img.adjust_vma(0x10);
         let got = img.load(4, &Address::new(Rc::clone(&ram), 0x110)).unwrap();
         assert_eq!(got, hex("a1b2c3d4"));
-        let err = img.load(4, &Address::new(Rc::clone(&ram), 0x100)).unwrap_err();
+        let err = img
+            .load(4, &Address::new(Rc::clone(&ram), 0x100))
+            .unwrap_err();
         assert!(matches!(err, KunaError::DataUnavail { .. }));
 
         let mut rec = LoadImageFunc::default();
@@ -879,7 +921,9 @@ mod tests {
         let ram = Rc::clone(m.get_space_by_name("ram").unwrap());
         img.clear();
         assert_eq!(img.get_arch_type(), Vec::<u8>::new());
-        let err = img.load(1, &Address::new(Rc::clone(&ram), 0x100)).unwrap_err();
+        let err = img
+            .load(1, &Address::new(Rc::clone(&ram), 0x100))
+            .unwrap_err();
         assert!(matches!(err, KunaError::DataUnavail { .. }));
         let mut rec = LoadImageFunc::default();
         img.open_symbols();

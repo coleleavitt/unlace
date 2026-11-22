@@ -23,8 +23,8 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_console::decompile_step::{decompile_one, DecompileSeed};
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::decompile_step::{DecompileSeed, decompile_one};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 /// The merged blob's entry, and a bound just past its first (indirect) call.
 const ENTRY: u64 = 0x13c9;
@@ -48,7 +48,10 @@ const LEAF_END: u64 = 0x1141;
 const CALLBACK_ENTRY: u64 = 0x8048820;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Bootstrap the fixture.
@@ -56,14 +59,21 @@ fn load() -> ConsoleProgram {
     let root = repo_root();
     let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
     let bin = root.join("decompiler/crates/unlace-analysis/tests/fixtures/aif_gap_x86_64");
-    let mut prog = bootstrap_from_object(bin.to_str().expect("UTF-8 fixture path"), "", &spec_roots)
-        .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    let mut prog =
+        bootstrap_from_object(bin.to_str().expect("UTF-8 fixture path"), "", &spec_roots)
+            .expect("bootstrap fixture with built processor specs");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
 fn code_addr(prog: &ConsoleProgram, vma: u64) -> Address {
-    let space = prog.arch().manage().get_default_code_space().expect("code space").clone();
+    let space = prog
+        .arch()
+        .manage()
+        .get_default_code_space()
+        .expect("code space")
+        .clone();
     Address::new(Rc::clone(&space), vma)
 }
 
@@ -123,7 +133,10 @@ fn a_declared_boundary_bounds_the_flow_and_the_reported_extent() {
     assert_eq!(reported_extent(&prog), DECLARED_END - ENTRY);
 
     let body = body_at_entry(&mut prog, &name);
-    assert!(body.contains("stage1"), "the declared name renders, got:\n{body}");
+    assert!(
+        body.contains("stage1"),
+        "the declared name renders, got:\n{body}"
+    );
     assert!(
         !body.contains(PAST_THE_END),
         "flow past the declared end must be cut, got:\n{body}"
@@ -142,8 +155,12 @@ fn a_declared_boundary_bounds_the_flow_and_the_reported_extent() {
 fn a_declared_end_a_branch_targets_clips_instead_of_aborting() {
     let mut prog = load();
     let addr = code_addr(&prog, BRANCH_ENTRY);
-    prog.declare_function(addr.clone(), Some("deregister"), (BRANCH_END - BRANCH_ENTRY) as i32)
-        .expect("the declaration is accepted");
+    prog.declare_function(
+        addr.clone(),
+        Some("deregister"),
+        (BRANCH_END - BRANCH_ENTRY) as i32,
+    )
+    .expect("the declaration is accepted");
     let step = decompile_one(
         prog.arch_mut(),
         "deregister",
@@ -154,7 +171,10 @@ fn a_declared_end_a_branch_targets_clips_instead_of_aborting() {
     );
     let fd = step.result.expect("the clipped function decompiles");
     let body = unlace_decomp::decompile_drive::print_c(prog.arch_mut(), &fd);
-    assert!(body.contains("deregister"), "the declared name renders, got:\n{body}");
+    assert!(
+        body.contains("deregister"),
+        "the declared name renders, got:\n{body}"
+    );
     assert!(
         body.contains("Function flows out of bounds"),
         "the cut is reported, not hidden, got:\n{body}"
@@ -189,13 +209,17 @@ fn declaring_the_derived_extent_reproduces_the_undeclared_body() {
     );
 
     let size = (LEAF_END - LEAF_ENTRY) as i32;
-    prog.declare_function(addr.clone(), None, size).expect("the declaration is accepted");
+    prog.declare_function(addr.clone(), None, size)
+        .expect("the declaration is accepted");
     let bounded = decompile_one(prog.arch_mut(), "sub_1129", addr, size, &seed, &[])
         .result
         .expect("the declared function decompiles");
     let declared = unlace_decomp::decompile_drive::print_c(prog.arch_mut(), &bounded);
 
-    assert_eq!(undeclared, declared, "asserting the derived extent is inert");
+    assert_eq!(
+        undeclared, declared,
+        "asserting the derived extent is inert"
+    );
     assert!(
         !declared.contains("out of bounds"),
         "nothing left the extent, so nothing is warned about, got:\n{declared}"
@@ -213,7 +237,8 @@ fn a_declared_entry_becomes_resolvable_by_name() {
     assert!(prog.lookup_symbol("hidden_stage").is_none());
     let before = prog.function_entries_canonical().len();
     let addr = code_addr(&prog, interior);
-    prog.declare_function(addr, Some("hidden_stage"), 0x80).expect("declared");
+    prog.declare_function(addr, Some("hidden_stage"), 0x80)
+        .expect("declared");
     assert_eq!(
         prog.lookup_symbol("hidden_stage").map(|a| a.get_offset()),
         Some(interior),
@@ -239,10 +264,11 @@ fn an_unnamed_declaration_does_not_overwrite_an_existing_name() {
     let back = prog.declare_function(addr, None, 4).expect("declared");
     assert_eq!(back, "_DT_FINI");
     assert_eq!(prog.declared_extent(named), 4);
-    assert!(prog
-        .function_entries_canonical()
-        .iter()
-        .any(|e| e.addr.get_offset() == named && e.name == "_DT_FINI"));
+    assert!(
+        prog.function_entries_canonical()
+            .iter()
+            .any(|e| e.addr.get_offset() == named && e.name == "_DT_FINI")
+    );
 }
 
 /// Bootstrap an arbitrary fixture with analysis options set before the deferred analysis
@@ -250,15 +276,19 @@ fn an_unnamed_declaration_does_not_overwrite_an_existing_name() {
 fn load_fixture_with_options(rel: &str, options: &[(&str, &str)]) -> ConsoleProgram {
     let root = repo_root();
     let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
-    let bin = root.join("decompiler/crates/unlace-analysis/tests/fixtures").join(rel);
-    let mut prog = bootstrap_from_object(bin.to_str().expect("UTF-8 fixture path"), "", &spec_roots)
-        .expect("bootstrap fixture with built processor specs");
+    let bin = root
+        .join("decompiler/crates/unlace-analysis/tests/fixtures")
+        .join(rel);
+    let mut prog =
+        bootstrap_from_object(bin.to_str().expect("UTF-8 fixture path"), "", &spec_roots)
+            .expect("bootstrap fixture with built processor specs");
     for (name, value) in options {
         prog.arch_mut()
             .set_kuna_option(name, value)
             .unwrap_or_else(|e| panic!("option {name}={value} applies: {}", e.explain()));
     }
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
@@ -278,7 +308,8 @@ fn declaring_an_import_keeps_its_external_provenance() {
     let import = prog
         .function_entries_canonical()
         .into_iter()
-        .find(|e| e.provenance == unlace_console::engine::EntryProvenance::UndefinedExternal).expect("required fixture setup");
+        .find(|e| e.provenance == unlace_console::engine::EntryProvenance::UndefinedExternal)
+        .expect("required fixture setup");
     let vma = import.addr.get_offset();
     let addr = code_addr(&prog, vma);
     prog.declare_function(addr, None, 0).expect("declared");
@@ -303,13 +334,26 @@ fn a_thumb_declaration_folds_the_mode_bit() {
     let entry = prog
         .function_entries_canonical()
         .into_iter()
-        .find(|e| e.name == "compute").expect("required fixture setup");
-    assert_eq!(entry.addr.get_offset() % 2, 0, "the enumeration reports the even entry");
+        .find(|e| e.name == "compute")
+        .expect("required fixture setup");
+    assert_eq!(
+        entry.addr.get_offset() % 2,
+        0,
+        "the enumeration reports the even entry"
+    );
     let even = entry.addr.get_offset();
     let addr = code_addr(&prog, even | 1);
     prog.declare_function(addr, None, 0x10).expect("declared");
-    assert_eq!(prog.declared_extent(even), 0x10, "the extent missed the real entry");
-    assert_eq!(prog.declared_extent(even | 1), 0, "an odd shadow entry was declared");
+    assert_eq!(
+        prog.declared_extent(even),
+        0x10,
+        "the extent missed the real entry"
+    );
+    assert_eq!(
+        prog.declared_extent(even | 1),
+        0,
+        "an odd shadow entry was declared"
+    );
 }
 
 /// `funcboundflow` establishes an effective upper cutoff even though the
@@ -341,7 +385,9 @@ fn a_pcode_free_branch_resolves_at_a_discovered_funcbound_cutoff() {
         &DecompileSeed::plain(&[], &[]),
         &[],
     );
-    let fd = step.result.expect("the funcboundflow-clipped callback decompiles");
+    let fd = step
+        .result
+        .expect("the funcboundflow-clipped callback decompiles");
     let body = unlace_decomp::decompile_drive::print_c(prog.arch_mut(), &fd);
     assert!(
         body.contains("0x80492e3") && body.contains("0x8049301"),

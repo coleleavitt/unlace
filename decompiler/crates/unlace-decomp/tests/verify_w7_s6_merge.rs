@@ -28,19 +28,19 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
+use slotmap::{Key, KeyData};
 use unlace_base::address::Address;
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, addrspace_flags, spacetype};
 use unlace_base::types::{int4, uintm};
 use unlace_num::opcodes::OpCode;
-use slotmap::{Key, KeyData};
 
-use unlace_decomp::cover::{Cover, CoverPoint, PcodeOpSet};
-use unlace_decomp::dtype::{type_metatype, Datatype};
-use unlace_decomp::merge::{
-    compare_copy_by_in_varnode, compare_high_by_block, AddrTiedRange, BlockVarnode,
-    HighGroupInfo, Merge, MergeContext, MergeIntersect, MergePieceId,
-};
 use unlace_decomp::context::{BlockId, HighVariableId, OpId, VarnodeId};
+use unlace_decomp::cover::{Cover, CoverPoint, PcodeOpSet};
+use unlace_decomp::dtype::{Datatype, type_metatype};
+use unlace_decomp::merge::{
+    AddrTiedRange, BlockVarnode, HighGroupInfo, Merge, MergeContext, MergeIntersect, MergePieceId,
+    compare_copy_by_in_varnode, compare_high_by_block,
+};
 use unlace_decomp::variable::{
     CompareNameView, HighContext, HighIntersectTest, VarnodeView, VarnodeViewLoc,
 };
@@ -84,7 +84,10 @@ fn addr(space: &Rc<AddrSpace>, off: u64) -> Address {
 }
 
 fn op_point(uindex: uintm) -> CoverPoint {
-    CoverPoint::Op { uindex, multiequal: false }
+    CoverPoint::Op {
+        uindex,
+        multiequal: false,
+    }
 }
 
 /// A one-block cover spanning `[start,stop]` on block `blk` (an instance's
@@ -312,7 +315,10 @@ impl MergeContext for Mock {
         4
     }
     fn vn_cover_ref(&self, vn: VarnodeId) -> Cow<'_, Cover> {
-        self.vn_cover.get(&vkey(vn)).map(Cow::Borrowed).unwrap_or_default()
+        self.vn_cover
+            .get(&vkey(vn))
+            .map(Cow::Borrowed)
+            .unwrap_or_default()
     }
     fn vn_create_index(&self, vn: VarnodeId) -> u64 {
         self.vn_create.get(&vkey(vn)).copied().unwrap_or(0)
@@ -478,7 +484,11 @@ impl MergeContext for Mock {
     ) -> unlace_base::error::KunaResult<OpId> {
         unimplemented!("copy_trim_op not under test")
     }
-    fn snip_reads_insert_point(&self, _vn: VarnodeId, _reads: &[OpId]) -> (BlockId, Address, Option<OpId>) {
+    fn snip_reads_insert_point(
+        &self,
+        _vn: VarnodeId,
+        _reads: &[OpId],
+    ) -> (BlockId, Address, Option<OpId>) {
         unimplemented!("snip_reads_insert_point not under test")
     }
     fn build_dominant_copy(
@@ -593,7 +603,10 @@ fn w7_s6_merge_compare_high_by_block_tiebreaks() {
     // a: earliest block 1; b: earliest block 2 -> cover decides, a before b.
     reg_high(&mut m, &sp, 1, 10, 0x100, 1, Some((1, 0x100)));
     reg_high(&mut m, &sp, 2, 11, 0x100, 2, Some((2, 0x100)));
-    assert!(compare_high_by_block(&m, hid(1), hid(2)), "lower block first");
+    assert!(
+        compare_high_by_block(&m, hid(1), hid(2)),
+        "lower block first"
+    );
     assert!(!compare_high_by_block(&m, hid(2), hid(1)), "antisymmetric");
 
     // Equal cover block, different first-instance addr -> addr decides.
@@ -610,7 +623,10 @@ fn w7_s6_merge_compare_high_by_block_tiebreaks() {
     let mut m = Mock::new();
     reg_high(&mut m, &sp, 1, 10, 0x100, 3, Some((1, 0x10)));
     reg_high(&mut m, &sp, 2, 11, 0x100, 3, Some((2, 0x20)));
-    assert!(compare_high_by_block(&m, hid(1), hid(2)), "smaller def addr first");
+    assert!(
+        compare_high_by_block(&m, hid(1), hid(2)),
+        "smaller def addr first"
+    );
     assert!(!compare_high_by_block(&m, hid(2), hid(1)));
 
     // Equal cover + equal instance addr, a has NO def, b has a def.
@@ -634,7 +650,10 @@ fn w7_s6_merge_compare_high_by_block_tiebreaks() {
     reg_high(&mut m, &sp, 1, 10, 0x100, 3, None);
     reg_high(&mut m, &sp, 2, 11, 0x100, 3, None);
     assert!(!compare_high_by_block(&m, hid(1), hid(2)), "tie is not <");
-    assert!(!compare_high_by_block(&m, hid(2), hid(1)), "tie is not > either");
+    assert!(
+        !compare_high_by_block(&m, hid(2), hid(1)),
+        "tie is not > either"
+    );
 }
 
 // ============================================================================
@@ -663,7 +682,10 @@ fn w7_s6_merge_compare_copy_by_in_varnode_chain() {
     m.op_in0.insert(okey(o2), v);
     m.op_parent_idx.insert(okey(o1), 3);
     m.op_parent_idx.insert(okey(o2), 1);
-    assert!(compare_copy_by_in_varnode(&m, o2, o1), "lower block index first");
+    assert!(
+        compare_copy_by_in_varnode(&m, o2, o1),
+        "lower block index first"
+    );
     assert!(!compare_copy_by_in_varnode(&m, o1, o2));
 
     // Same input + same block -> compare by SeqNum order.
@@ -676,7 +698,10 @@ fn w7_s6_merge_compare_copy_by_in_varnode_chain() {
     m.op_parent_idx.insert(okey(o2), 2);
     m.op_order.insert(okey(o1), 9);
     m.op_order.insert(okey(o2), 4);
-    assert!(compare_copy_by_in_varnode(&m, o2, o1), "lower seqnum order first");
+    assert!(
+        compare_copy_by_in_varnode(&m, o2, o1),
+        "lower seqnum order first"
+    );
     assert!(!compare_copy_by_in_varnode(&m, o1, o2));
     // Full tie: identical key triple is not <.
     m.op_order.insert(okey(o1), 4);
@@ -729,7 +754,11 @@ fn w7_s6_merge_by_datatype_preserves_discovery_order() {
         .filter(|(dst, _, _)| *dst == hid(1))
         .map(|(_, src, _)| src.0)
         .collect();
-    assert_eq!(a_targets, vec![3, 5], "A group merged in discovery order h3 then h5");
+    assert_eq!(
+        a_targets,
+        vec![3, 5],
+        "A group merged in discovery order h3 then h5"
+    );
 
     let b = log.iter().find(|(dst, _, _)| *dst == hid(2));
     assert!(b.is_some(), "B group produced its merge");
@@ -760,11 +789,26 @@ fn w7_s6_merge_intersection_self_and_disjoint_and_overlap() {
     let mut cache = fresh_cache();
 
     // self never intersects.
-    assert!(!MergeIntersect::intersection(&mut m, &mut cache, hid(1), hid(1)));
+    assert!(!MergeIntersect::intersection(
+        &mut m,
+        &mut cache,
+        hid(1),
+        hid(1)
+    ));
 
     // disjoint blocks: no intersection, symmetric.
-    assert!(!MergeIntersect::intersection(&mut m, &mut cache, hid(1), hid(2)));
-    assert!(!MergeIntersect::intersection(&mut m, &mut cache, hid(2), hid(1)));
+    assert!(!MergeIntersect::intersection(
+        &mut m,
+        &mut cache,
+        hid(1),
+        hid(2)
+    ));
+    assert!(!MergeIntersect::intersection(
+        &mut m,
+        &mut cache,
+        hid(2),
+        hid(1)
+    ));
 
     // h1 vs h3: same block, overlapping instance covers -> intersection true,
     // symmetric.
@@ -786,7 +830,12 @@ fn w7_s6_merge_intersection_cache_reused_when_clean() {
     m.make_high(2, 2, dt(4, type_metatype::TYPE_INT), cover_block(2, 0, 5));
 
     let mut cache = fresh_cache();
-    assert!(!MergeIntersect::intersection(&mut m, &mut cache, hid(1), hid(2)));
+    assert!(!MergeIntersect::intersection(
+        &mut m,
+        &mut cache,
+        hid(1),
+        hid(2)
+    ));
 
     // Now make their covers actually overlap, but leave cover_dirty=false.
     m.hs_mut(hid(2)).cover = cover_block(1, 1, 4);
@@ -798,7 +847,12 @@ fn w7_s6_merge_intersection_cache_reused_when_clean() {
         "clean highs reuse the cached result"
     );
     // Both (a,b) and (b,a) cached -> reverse query also reuses.
-    assert!(!MergeIntersect::intersection(&mut m, &mut cache, hid(2), hid(1)));
+    assert!(!MergeIntersect::intersection(
+        &mut m,
+        &mut cache,
+        hid(2),
+        hid(1)
+    ));
 
     // Marking dirty forces a re-walk: now the real overlap is seen.
     m.hs_mut(hid(2)).cover_dirty = true;

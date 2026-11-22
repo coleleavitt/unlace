@@ -18,7 +18,10 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture() -> String {
@@ -36,10 +39,19 @@ fn specs() -> String {
 fn decompile(extra: &[&str]) -> String {
     let binary = fixture();
     let sleigh = specs();
-    let mut args: Vec<&str> =
-        vec!["decompile", &binary, "0x804881c", "--addr", "--sleighpath", &sleigh];
+    let mut args: Vec<&str> = vec![
+        "decompile",
+        &binary,
+        "0x804881c",
+        "--addr",
+        "--sleighpath",
+        &sleigh,
+    ];
     args.extend_from_slice(extra);
-    let out = Command::new(env!("CARGO_BIN_EXE_unlace")).args(&args).output().expect("spawn kuna");
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
+        .args(&args)
+        .output()
+        .expect("spawn kuna");
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
     if !out.status.success() {
@@ -62,7 +74,10 @@ fn default_emits_neither_artefact_of_the_swallowed_decode() {
         "the swallowed decode's invented dat_<hex> global is still emitted:\n{c}"
     );
     // ... and the real stream the branch target owns is what is recovered.
-    assert!(c.contains("a0 + 7"), "the real add-chain stream was not recovered:\n{c}");
+    assert!(
+        c.contains("a0 + 7"),
+        "the real add-chain stream was not recovered:\n{c}"
+    );
     assert!(
         c.contains("overlapbranch:"),
         "the truncation must be attributable by a warning:\n{c}"
@@ -74,15 +89,24 @@ fn default_emits_neither_artefact_of_the_swallowed_decode() {
 #[test]
 fn option_off_reproduces_both_artefacts() {
     let c = decompile(&["--option", "overlapbranch", "off"]);
-    assert!(regex_sub_call(&c), "expected the out-of-image call with the option off:\n{c}");
-    assert!(regex_dat_add(&c), "expected the invented global with the option off:\n{c}");
+    assert!(
+        regex_sub_call(&c),
+        "expected the out-of-image call with the option off:\n{c}"
+    );
+    assert!(
+        regex_dat_add(&c),
+        "expected the invented global with the option off:\n{c}"
+    );
 }
 
 /// `sub_[0-9a-f]{7}\(\)` — a call, with no arguments, to a seven-hex-digit address.
 fn regex_sub_call(c: &str) -> bool {
     c.match_indices("sub_").any(|(i, _)| {
         let rest = &c[i + 4..];
-        let hex: String = rest.chars().take_while(|ch| ch.is_ascii_hexdigit()).collect();
+        let hex: String = rest
+            .chars()
+            .take_while(|ch| ch.is_ascii_hexdigit())
+            .collect();
         hex.len() == 7 && rest[7..].starts_with("()")
     })
 }
@@ -91,7 +115,10 @@ fn regex_sub_call(c: &str) -> bool {
 fn regex_dat_add(c: &str) -> bool {
     c.match_indices("dat_").any(|(i, _)| {
         let rest = &c[i + 4..];
-        let hex: String = rest.chars().take_while(|ch| ch.is_ascii_hexdigit()).collect();
+        let hex: String = rest
+            .chars()
+            .take_while(|ch| ch.is_ascii_hexdigit())
+            .collect();
         hex.len() == 8 && rest[8..].starts_with(" +=")
     })
 }

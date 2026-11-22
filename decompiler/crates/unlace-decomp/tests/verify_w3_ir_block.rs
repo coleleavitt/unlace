@@ -20,9 +20,9 @@
 use std::rc::Rc;
 
 use unlace_base::marshal::{Decoder, PackedDecode, PackedEncode};
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, ConstantSpace, addrspace_flags, spacetype};
 use unlace_base::types::int4;
-use unlace_decomp::block::{block_flags, BlockEdge, BlockGraph, BlockKind, BlockMap, FlowBlock};
+use unlace_decomp::block::{BlockEdge, BlockGraph, BlockKind, BlockMap, FlowBlock, block_flags};
 use unlace_decomp::context::BlockId;
 
 fn build_manager() -> AddrSpaceManager {
@@ -106,7 +106,11 @@ fn w3_ir_block_half_delete_corrects_mirror_reverse_index() {
     // c -> h reverse index must now be 1 (slid down from 2)
     let cslot = g.arena[c].get_out_index(h);
     assert!(cslot >= 0);
-    assert_eq!(g.arena[c].get_out_rev_index(cslot), 1, "c's mirror reverse_index slid");
+    assert_eq!(
+        g.arena[c].get_out_rev_index(cslot),
+        1,
+        "c's mirror reverse_index slid"
+    );
     // The whole graph mirror invariant must hold (this is what a wrong-slot
     // decrement would corrupt).
     assert_edges_consistent(&g, root);
@@ -131,7 +135,9 @@ fn w3_ir_block_remove_from_flow_reroutes_all_inedges() {
     // q now has both predecessors. C++ replaces via intothis[0].reverse_index
     // repeatedly, so the order q sees is the order the edges were rerouted.
     assert_eq!(g.arena[q].size_in(), 2);
-    let preds: Vec<BlockId> = (0..g.arena[q].size_in()).map(|i| g.arena[q].get_in(i)).collect();
+    let preds: Vec<BlockId> = (0..g.arena[q].size_in())
+        .map(|i| g.arena[q].get_in(i))
+        .collect();
     assert!(preds.contains(&p0) && preds.contains(&p1));
     // bl stays in the component list (removeFromFlow does NOT remove it)
     assert!(g.arena[root].get_list().contains(&bl));
@@ -167,9 +173,21 @@ fn w3_ir_block_splice_block_inherits_flags_and_out_edges() {
     assert_eq!(g.arena[head].get_out(1), y);
     // flags: exactly f_entry_point | f_switch_out (C++ `bl->flags = fl1 | fl2`)
     let fl = g.arena[head].get_flags();
-    assert_eq!(fl & block_flags::f_entry_point, block_flags::f_entry_point, "kept entry_point");
-    assert_eq!(fl & block_flags::f_switch_out, block_flags::f_switch_out, "inherited switch_out");
-    assert_eq!(fl & block_flags::f_donothing_loop, 0, "dropped donothing_loop");
+    assert_eq!(
+        fl & block_flags::f_entry_point,
+        block_flags::f_entry_point,
+        "kept entry_point"
+    );
+    assert_eq!(
+        fl & block_flags::f_switch_out,
+        block_flags::f_switch_out,
+        "inherited switch_out"
+    );
+    assert_eq!(
+        fl & block_flags::f_donothing_loop,
+        0,
+        "dropped donothing_loop"
+    );
     assert_edges_consistent(&g, root);
 }
 
@@ -247,21 +265,31 @@ fn w3_ir_block_nested_graph_encode_decode_roundtrip() {
 
     // Same component count + indices preserved.
     assert_eq!(g2.arena[top2].get_size(), 3);
-    let by_index: Vec<int4> =
-        g2.arena[top2].get_list().iter().map(|&c| g2.arena[c].get_index()).collect();
+    let by_index: Vec<int4> = g2.arena[top2]
+        .get_list()
+        .iter()
+        .map(|&c| g2.arena[c].get_index())
+        .collect();
     assert!(by_index.contains(&0) && by_index.contains(&1) && by_index.contains(&2));
 
     // Resolve each decoded block by index and verify the edge topology survived:
     // index 0 -> index 1, index 1 -> index 2, index 2 -> index 0.
     let find = |g: &BlockGraph, idx: int4| -> BlockId {
-        *g.arena[top2].get_list().iter().find(|&&c| g.arena[c].get_index() == idx).unwrap()
+        *g.arena[top2]
+            .get_list()
+            .iter()
+            .find(|&&c| g.arena[c].get_index() == idx)
+            .unwrap()
     };
     let d0 = find(&g2, 0);
     let d1 = find(&g2, 1);
     let d2 = find(&g2, 2);
     assert!(g2.arena[d0].get_out_index(d1) >= 0, "0 -> 1 survived");
     assert!(g2.arena[d1].get_out_index(d2) >= 0, "1 -> 2 survived");
-    assert!(g2.arena[d2].get_out_index(d0) >= 0, "2 -> 0 (back) survived");
+    assert!(
+        g2.arena[d2].get_out_index(d0) >= 0,
+        "2 -> 0 (back) survived"
+    );
     assert_edges_consistent(&g2, top2);
 }
 

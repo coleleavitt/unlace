@@ -17,8 +17,8 @@
 
 use std::collections::HashMap;
 
-use object::read::{Object, ObjectSymbol, ObjectSymbolTable};
 use object::RelocationTarget;
+use object::read::{Object, ObjectSymbol, ObjectSymbolTable};
 
 use super::elf_plt::PltSym;
 
@@ -31,7 +31,8 @@ pub(crate) fn bind(file: &object::File, syms: &[PltSym]) -> Vec<(u64, u64)> {
     if !syms.iter().any(|s| s.slot.is_some()) {
         return Vec::new();
     }
-    let (Some(relocs), Some(table)) = (file.dynamic_relocations(), file.dynamic_symbol_table()) else {
+    let (Some(relocs), Some(table)) = (file.dynamic_relocations(), file.dynamic_symbol_table())
+    else {
         return Vec::new();
     };
     let mut by_slot: HashMap<u64, usize> = HashMap::new();
@@ -43,13 +44,23 @@ pub(crate) fn bind(file: &object::File, syms: &[PltSym]) -> Vec<(u64, u64)> {
     let thumb = file.architecture() == object::Architecture::Arm;
     let mut out: Vec<(u64, u64)> = Vec::new();
     for sym in syms {
-        let Some(&index) = sym.slot.as_ref().and_then(|slot| by_slot.get(slot)) else { continue };
-        let Ok(def) = table.symbol_by_index(object::SymbolIndex(index)) else { continue };
-        let object::SymbolFlags::Elf { st_info, .. } = def.flags() else { continue };
+        let Some(&index) = sym.slot.as_ref().and_then(|slot| by_slot.get(slot)) else {
+            continue;
+        };
+        let Ok(def) = table.symbol_by_index(object::SymbolIndex(index)) else {
+            continue;
+        };
+        let object::SymbolFlags::Elf { st_info, .. } = def.flags() else {
+            continue;
+        };
         if !def.is_definition() || st_info & 0xf != STT_FUNC || def.address() == 0 {
             continue;
         }
-        let target = if thumb { def.address() & !1 } else { def.address() };
+        let target = if thumb {
+            def.address() & !1
+        } else {
+            def.address()
+        };
         let stub = if thumb { sym.addr & !1 } else { sym.addr };
         if target != stub {
             out.push((stub, target));

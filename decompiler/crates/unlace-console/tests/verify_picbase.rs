@@ -28,7 +28,7 @@
 use std::path::PathBuf;
 
 use unlace_analysis::listing::xrefs::{self, XrefIndex, XrefKind};
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 /// `"Password: "` — formed by the function that runs the base idiom itself.
 const PROMPT: u64 = 0x804a000;
@@ -44,7 +44,10 @@ const UNUSED: u64 = 0x804a04e;
 const COUNTER: u64 = 0x804b074;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture() -> PathBuf {
@@ -59,12 +62,16 @@ fn index() -> (ConsoleProgram, Vec<u8>, XrefIndex) {
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
     let bytes = std::fs::read(&bin).expect("fixture readable");
     let file = object::File::parse(&*bytes).expect("fixture parses");
-    let seeds: Vec<u64> =
-        prog.function_entries_canonical().iter().map(|e| e.addr.get_offset()).collect();
+    let seeds: Vec<u64> = prog
+        .function_entries_canonical()
+        .iter()
+        .map(|e| e.addr.get_offset())
+        .collect();
     let idx = xrefs::build(&file, prog.arch(), prog.arch().translate(), &seeds);
     (prog, bytes, idx)
 }
@@ -75,7 +82,10 @@ fn owners(prog: &ConsoleProgram, idx: &XrefIndex, vma: u64) -> Vec<String> {
     let mut out: Vec<String> = idx
         .refs_to(vma)
         .iter()
-        .filter_map(|r| idx.function_containing(r.from).or_else(|| prog.find_entry_at(r.from).map(|e| e.addr.get_offset())))
+        .filter_map(|r| {
+            idx.function_containing(r.from)
+                .or_else(|| prog.find_entry_at(r.from).map(|e| e.addr.get_offset()))
+        })
         .filter_map(|e| prog.find_entry_at(e).map(|e| e.name))
         .collect();
     out.sort();
@@ -139,4 +149,3 @@ fn an_unreferenced_literal_stays_unreferenced() {
         idx.refs_to(UNUSED)
     );
 }
-

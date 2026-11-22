@@ -499,7 +499,9 @@ mod tests {
 
     /// Every actual operation, in enum order (no BLANK/UNUSED1/CPUI_MAX).
     fn all_ops() -> Vec<OpCode> {
-        (1..OpCode::CPUI_MAX as i32).filter_map(OpCode::from_i32).collect()
+        (1..OpCode::CPUI_MAX as i32)
+            .filter_map(OpCode::from_i32)
+            .collect()
     }
 
     #[test]
@@ -576,7 +578,11 @@ mod tests {
             assert_eq!(get_booleanflip(opc, &mut reorder), flip);
             assert_eq!(reorder, expect_reorder, "reorder flag for {opc:?}");
         }
-        for opc in [OpCode::CPUI_INT_ADD, OpCode::CPUI_FLOAT_LESS, OpCode::CPUI_FLOAT_LESSEQUAL] {
+        for opc in [
+            OpCode::CPUI_INT_ADD,
+            OpCode::CPUI_FLOAT_LESS,
+            OpCode::CPUI_FLOAT_LESSEQUAL,
+        ] {
             let mut reorder = true;
             assert_eq!(get_booleanflip(opc, &mut reorder), OpCode::CPUI_MAX);
             assert!(reorder);

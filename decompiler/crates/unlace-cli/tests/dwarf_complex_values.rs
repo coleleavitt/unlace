@@ -71,7 +71,9 @@ fn complex_values_and_imported_exponential_round_trip() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let mut code = String::from("#include <string.h>\n#include <stdint.h>\ntypedef struct { float real,imag; } kuna_complex_float;\ntypedef struct { double real,imag; } kuna_complex_double;\nextern kuna_complex_float cexpf(kuna_complex_float);\nextern kuna_complex_double cexp(kuna_complex_double);\nextern void touch_pair(kuna_complex_float *);\n");
+    let mut code = String::from(
+        "#include <string.h>\n#include <stdint.h>\ntypedef struct { float real,imag; } kuna_complex_float;\ntypedef struct { double real,imag; } kuna_complex_double;\nextern kuna_complex_float cexpf(kuna_complex_float);\nextern kuna_complex_double cexp(kuna_complex_double);\nextern void touch_pair(kuna_complex_float *);\n",
+    );
     for name in [
         "pass_pair",
         "pass_wide",
@@ -147,7 +149,9 @@ fn pe_complex_values_keep_their_complete_types() {
             ("pass_pair", "kuna_complex_float"),
             ("pass_wide", "kuna_complex_double"),
         ] {
-            if compiler == "i686-w64-mingw32-gcc" && name == "pass_wide" { continue; }
+            if compiler == "i686-w64-mingw32-gcc" && name == "pass_wide" {
+                continue;
+            }
             let (body, err, status) =
                 common::run_kuna(&["decompile", binary.to_str().unwrap(), name]);
             assert_eq!(status, 0, "{err}");

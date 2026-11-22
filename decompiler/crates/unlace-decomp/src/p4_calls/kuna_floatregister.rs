@@ -1,6 +1,6 @@
 //! Allocate scalar floating register payloads independently of object padding.
 
-use crate::dtype::{type_class, type_metatype, Datatype};
+use crate::dtype::{Datatype, type_class, type_metatype};
 use crate::fspec::ParamEntry;
 use unlace_base::space::AddrSpaceManager;
 

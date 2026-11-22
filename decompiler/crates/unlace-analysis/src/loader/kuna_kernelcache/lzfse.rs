@@ -22,11 +22,13 @@ const LITERALS_PER_BLOCK: usize = 4 * MATCHES_PER_BLOCK;
 const V2_FIXED_HEADER: usize = 32;
 
 const L_EXTRA_BITS: [u8; L_SYMBOLS] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 3, 5, 8];
-const L_BASE_VALUE: [u32; L_SYMBOLS] =
-    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 20, 28, 60];
+const L_BASE_VALUE: [u32; L_SYMBOLS] = [
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 20, 28, 60,
+];
 const M_EXTRA_BITS: [u8; M_SYMBOLS] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 5, 8, 11];
-const M_BASE_VALUE: [u32; M_SYMBOLS] =
-    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 24, 56, 312];
+const M_BASE_VALUE: [u32; M_SYMBOLS] = [
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 24, 56, 312,
+];
 const D_EXTRA_BITS: [u8; D_SYMBOLS] = [
     0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7,
     8, 8, 8, 8, 9, 9, 9, 9, 10, 10, 10, 10, 11, 11, 11, 11, 12, 12, 12, 12, 13, 13, 13, 13, 14, 14,
@@ -43,9 +45,8 @@ pub(super) type Error = &'static str;
 
 /// Whether `bytes` starts with an LZFSE block magic.
 pub(super) fn is_lzfse(bytes: &[u8]) -> bool {
-    rd_u32(bytes, 0).is_some_and(|m| {
-        matches!(m, MAGIC_END | MAGIC_RAW | MAGIC_V1 | MAGIC_V2 | MAGIC_LZVN)
-    })
+    rd_u32(bytes, 0)
+        .is_some_and(|m| matches!(m, MAGIC_END | MAGIC_RAW | MAGIC_V1 | MAGIC_V2 | MAGIC_LZVN))
 }
 
 /// Decode a whole LZFSE stream. `limit` caps the decoded size; the declared
@@ -100,7 +101,8 @@ pub(super) fn decode(src: &[u8], size_hint: usize, limit: usize) -> Result<Vec<u
 const TRUNCATED: Error = "truncated LZFSE block";
 
 fn slice(src: &[u8], start: usize, len: usize) -> Result<&[u8], Error> {
-    src.get(start..start.checked_add(len).ok_or(TRUNCATED)?).ok_or(TRUNCATED)
+    src.get(start..start.checked_add(len).ok_or(TRUNCATED)?)
+        .ok_or(TRUNCATED)
 }
 
 fn reserve(out: &[u8], n: usize, limit: usize) -> Result<(), Error> {
@@ -170,7 +172,10 @@ impl BlockV2 {
         block.read_freqs(packed)?;
         if block.n_literals > LITERALS_PER_BLOCK
             || block.n_matches > MATCHES_PER_BLOCK
-            || block.literal_state.iter().any(|&s| s as usize >= LITERAL_STATES)
+            || block
+                .literal_state
+                .iter()
+                .any(|&s| s as usize >= LITERAL_STATES)
             || block.l_state as usize >= L_STATES
             || block.m_state as usize >= M_STATES
             || block.d_state as usize >= D_STATES
@@ -188,8 +193,12 @@ impl BlockV2 {
         let mut accum = 0u32;
         let mut accum_nbits = 0u32;
         let mut src = packed.iter();
-        let tables: [&mut [u16]; 4] =
-            [&mut self.l_freq, &mut self.m_freq, &mut self.d_freq, &mut self.literal_freq];
+        let tables: [&mut [u16]; 4] = [
+            &mut self.l_freq,
+            &mut self.m_freq,
+            &mut self.d_freq,
+            &mut self.literal_freq,
+        ];
         for table in tables {
             for slot in table.iter_mut() {
                 while accum_nbits + 8 <= 32 {
@@ -220,8 +229,11 @@ impl BlockV2 {
         let m_table = ValueTable::new(M_STATES, &self.m_freq, &M_EXTRA_BITS, &M_BASE_VALUE)?;
         let d_table = ValueTable::new(D_STATES, &self.d_freq, &D_EXTRA_BITS, &D_BASE_VALUE)?;
         let mut bits = BitIn::new(lmd, self.lmd_bits)?;
-        let (mut l_state, mut m_state, mut d_state) =
-            (self.l_state as usize, self.m_state as usize, self.d_state as usize);
+        let (mut l_state, mut m_state, mut d_state) = (
+            self.l_state as usize,
+            self.m_state as usize,
+            self.d_state as usize,
+        );
         let mut lit = 0usize;
         let mut d = 0usize;
         for _ in 0..self.n_matches {
@@ -232,7 +244,9 @@ impl BlockV2 {
             if new_d != 0 {
                 d = new_d;
             }
-            let run = literals.get(lit..lit + l).ok_or("LZFSE literal run past its block")?;
+            let run = literals
+                .get(lit..lit + l)
+                .ok_or("LZFSE literal run past its block")?;
             out.extend_from_slice(run);
             lit += l;
             copy_match(out, d, m)?;
@@ -286,8 +300,8 @@ fn freq_value(bits: u32) -> (u16, u32) {
         2, 14,
     ];
     const VALUE: [u8; 32] = [
-        0, 2, 1, 4, 0, 3, 1, 0, 0, 2, 1, 5, 0, 3, 1, 0, 0, 2, 1, 6, 0, 3, 1, 0, 0, 2, 1, 7, 0, 3, 1,
-        0,
+        0, 2, 1, 4, 0, 3, 1, 0, 0, 2, 1, 5, 0, 3, 1, 0, 0, 2, 1, 6, 0, 3, 1, 0, 0, 2, 1, 7, 0, 3,
+        1, 0,
     ];
     let b = (bits & 31) as usize;
     let n = NBITS[b] as u32;
@@ -301,7 +315,11 @@ fn freq_value(bits: u32) -> (u16, u32) {
 
 /// One `(symbol, k, delta)` decoder entry per state, laid out the way the
 /// encoder spreads states over symbols in frequency order.
-fn spread(nstates: usize, freq: &[u16], mut f_entry: impl FnMut(usize, u32, i32)) -> Result<(), Error> {
+fn spread(
+    nstates: usize,
+    freq: &[u16],
+    mut f_entry: impl FnMut(usize, u32, i32),
+) -> Result<(), Error> {
     let n_clz = (nstates as u32).leading_zeros();
     let mut total = 0usize;
     for (symbol, &f) in freq.iter().enumerate() {
@@ -331,7 +349,9 @@ struct SymbolTable(Vec<(u8, u8, i32)>);
 impl SymbolTable {
     fn new(nstates: usize, freq: &[u16]) -> Result<Self, Error> {
         let mut entries = Vec::with_capacity(nstates);
-        spread(nstates, freq, |symbol, k, delta| entries.push((symbol as u8, k as u8, delta)))?;
+        spread(nstates, freq, |symbol, k, delta| {
+            entries.push((symbol as u8, k as u8, delta))
+        })?;
         entries.resize(nstates, (0, 0, 0));
         Ok(Self(entries))
     }
@@ -365,7 +385,12 @@ impl ValueTable {
                 vbase: vbase[symbol],
             })
         })?;
-        entries.resize_with(nstates, || ValueEntry { total_bits: 0, value_bits: 0, delta: 0, vbase: 0 });
+        entries.resize_with(nstates, || ValueEntry {
+            total_bits: 0,
+            value_bits: 0,
+            delta: 0,
+            vbase: 0,
+        });
         Ok(Self(entries))
     }
 
@@ -401,7 +426,13 @@ impl<'a> BitIn<'a> {
         if nbits < 64 && accum >> nbits != 0 {
             return Err("bad LZFSE bit-stream header");
         }
-        Ok(Self { buf, pos, accum, nbits, phantom: 8 * missing })
+        Ok(Self {
+            buf,
+            pos,
+            accum,
+            nbits,
+            phantom: 8 * missing,
+        })
     }
 
     /// Refill to at least 56 bits. Near the start of the payload the encoder's
@@ -450,7 +481,7 @@ fn lzvn_decode(src: &[u8], out: &mut Vec<u8>, n_raw: usize) -> Result<(), Error>
             0x06 => break,
             0x0e | 0x16 => (1, 0, 0),
             0x1e | 0x26 | 0x2e | 0x36 | 0x3e | 0x70..=0x7f | 0xd0..=0xdf => {
-                return Err("undefined LZVN opcode")
+                return Err("undefined LZVN opcode");
             }
             0xa0..=0xbf => {
                 let (b1, b2) = (byte(i + 1)?, byte(i + 2)?);
@@ -487,11 +518,13 @@ fn lzvn_decode(src: &[u8], out: &mut Vec<u8>, n_raw: usize) -> Result<(), Error>
 }
 
 fn rd_u32(b: &[u8], off: usize) -> Option<u32> {
-    b.get(off..off.checked_add(4)?).map(|s| u32::from_le_bytes(s.try_into().unwrap()))
+    b.get(off..off.checked_add(4)?)
+        .map(|s| u32::from_le_bytes(s.try_into().unwrap()))
 }
 
 fn rd_u64(b: &[u8], off: usize) -> Option<u64> {
-    b.get(off..off.checked_add(8)?).map(|s| u64::from_le_bytes(s.try_into().unwrap()))
+    b.get(off..off.checked_add(8)?)
+        .map(|s| u64::from_le_bytes(s.try_into().unwrap()))
 }
 
 #[cfg(test)]
@@ -513,8 +546,15 @@ mod tests {
         let mut stream = block.repeat(100_000);
         stream.extend_from_slice(b"bvx$");
         let start = std::time::Instant::now();
-        assert_eq!(decode(&stream, 0, usize::MAX), Err("LZFSE blocks claim far more symbols than they decode"));
-        assert!(start.elapsed() < std::time::Duration::from_secs(1), "took {:?}", start.elapsed());
+        assert_eq!(
+            decode(&stream, 0, usize::MAX),
+            Err("LZFSE blocks claim far more symbols than they decode")
+        );
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(1),
+            "took {:?}",
+            start.elapsed()
+        );
     }
 
     /// Bits loaded from before the payload's start read as zero but cannot be

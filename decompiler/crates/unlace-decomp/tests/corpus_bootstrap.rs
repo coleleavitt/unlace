@@ -65,29 +65,32 @@ use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::marshal::IdRegistry;
 use unlace_base::space::AddrSpaceManager;
 use unlace_base::xml::{DocumentStorage, Element};
-use unlace_num::opcodes::{get_opname, OpCode};
+use unlace_num::opcodes::{OpCode, get_opname};
 use unlace_num::pcoderaw::VarnodeData;
 
-use unlace_decomp::funcdata::Funcdata;
-use unlace_decomp::flow::{FlowEnvironment, FlowInfo};
 use unlace_decomp::context::{ArchContext as IrArch, TypeOp};
+use unlace_decomp::flow::{FlowEnvironment, FlowInfo};
+use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::op::pcodeop_flags;
 use unlace_decomp::sleigh_arch::{
-    normalize_architecture, register_sleigh_arch_ids, LanguageDatabase,
+    LanguageDatabase, normalize_architecture, register_sleigh_arch_ids,
 };
 use unlace_decomp::xml_arch::{XmlArchitecture, XmlArchitectureCapability};
 
 use unlace_sleigh::loadimage::LoadImage;
 use unlace_sleigh::loadimage_xml::register_loadimage_xml_ids;
 use unlace_sleigh::sleigh::Sleigh;
-use unlace_sleigh::translate::{register_translate_ids, Translate, UniqueLayout};
+use unlace_sleigh::translate::{Translate, UniqueLayout, register_translate_ids};
 
 // ===========================================================================
 // Repo / fixture plumbing
 // ===========================================================================
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// The pinned lift-fixture set (one per distinct SLEIGH language id), from
@@ -125,8 +128,12 @@ fn base_id(archid: &str) -> &str {
 /// required by the gate).  `floatprint`/`promotecompare`/`condexesub` are large
 /// functions whose prologues are straight-line for well over 20 ops; `gp`'s
 /// decodable function (`test_gp`) likewise.
-const OPCODE_SEQ_FIXTURES: &[&str] =
-    &["floatprint.txt", "gp.txt", "promotecompare.txt", "condexesub.txt"];
+const OPCODE_SEQ_FIXTURES: &[&str] = &[
+    "floatprint.txt",
+    "gp.txt",
+    "promotecompare.txt",
+    "condexesub.txt",
+];
 
 /// Parsed fixture metadata (header) + the verbatim expected lift body (for the
 /// opcode-sequence comparison).
@@ -162,7 +169,13 @@ fn parse_fixture(text: &str) -> Fixture {
         if let Some(rest) = line.strip_prefix("# corpus:") {
             corpus = rest.trim().to_string();
         } else if let Some(rest) = line.strip_prefix("# sla:") {
-            sla_rel = rest.trim().split(" (relative").next().unwrap().trim().to_string();
+            sla_rel = rest
+                .trim()
+                .split(" (relative")
+                .next()
+                .unwrap()
+                .trim()
+                .to_string();
         } else if line.starts_with("# lift-points") {
             let after = line.split("): ").nth(1).unwrap_or("");
             for tok in after.split_whitespace() {
@@ -186,7 +199,13 @@ fn parse_fixture(text: &str) -> Fixture {
             in_body = false;
         }
     }
-    Fixture { corpus, sla_rel, lift_points, context, body }
+    Fixture {
+        corpus,
+        sla_rel,
+        lift_points,
+        context,
+        body,
+    }
 }
 
 fn find_binaryimage(el: &Rc<Element>) -> Option<Rc<Element>> {
@@ -244,7 +263,10 @@ fn bootstrap(fix: &Fixture) -> Result<Bootstrap, String> {
     let corpus_path = root.join(&fix.corpus);
     let sla_path = root.join("specs").join(&fix.sla_rel);
     if !sla_path.is_file() {
-        return Err(format!("{} not built (run `make specs`)", sla_path.display()));
+        return Err(format!(
+            "{} not built (run `make specs`)",
+            sla_path.display()
+        ));
     }
 
     let registry = build_registry();
@@ -263,10 +285,14 @@ fn bootstrap(fix: &Fixture) -> Result<Bootstrap, String> {
     // --- 3. Parse the corpus + extract <binaryimage>; build the loader -----
     let xml = std::fs::read(&corpus_path).map_err(|e| format!("read corpus: {e}"))?;
     let mut store = DocumentStorage::new();
-    let doc_root =
-        store.parse_document(&xml).map_err(|e| format!("parse corpus: {e}"))?.get_root().clone();
+    let doc_root = store
+        .parse_document(&xml)
+        .map_err(|e| format!("parse corpus: {e}"))?
+        .get_root()
+        .clone();
     let bi = find_binaryimage(&doc_root).ok_or("corpus has no <binaryimage>")?;
-    arch.build_loader(Rc::clone(&bi)).map_err(|e| format!("build_loader: {e}"))?;
+    arch.build_loader(Rc::clone(&bi))
+        .map_err(|e| format!("build_loader: {e}"))?;
 
     // --- 4. Scan the .ldefs into a LanguageDatabase ------------------------
     // The corpus pins the language via the <binaryimage arch="..."> attribute,
@@ -279,7 +305,8 @@ fn bootstrap(fix: &Fixture) -> Result<Bootstrap, String> {
     // `specs/Ghidra`).
     let specs_root = root.join("specs");
     db.scan_for_sleigh_directories(specs_root.to_str().unwrap());
-    db.get_descriptions(&registry).map_err(|e| format!("collect ldefs: {e}"))?;
+    db.get_descriptions(&registry)
+        .map_err(|e| format!("collect ldefs: {e}"))?;
 
     // The arch="..." attribute on <binaryimage> is the corpus language id.
     let archattr = bi
@@ -300,11 +327,20 @@ fn bootstrap(fix: &Fixture) -> Result<Bootstrap, String> {
     }
 
     // --- 6. buildSpecFile: locate pspec/cspec/sla --------------------------
-    let specs = arch.sleigh().build_spec_file(&db).map_err(|e| format!("build_spec_file: {e}"))?;
-    let resolved_sla = specs.slafile.ok_or("build_spec_file did not resolve a .sla")?;
+    let specs = arch
+        .sleigh()
+        .build_spec_file(&db)
+        .map_err(|e| format!("build_spec_file: {e}"))?;
+    let resolved_sla = specs
+        .slafile
+        .ok_or("build_spec_file did not resolve a .sla")?;
     // Sanity: the resolved sla file basename matches the fixture's sla.
     if !resolved_sla.ends_with(
-        std::path::Path::new(&fix.sla_rel).file_name().unwrap().to_str().unwrap(),
+        std::path::Path::new(&fix.sla_rel)
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap(),
     ) {
         return Err(format!(
             "build_spec_file resolved {resolved_sla}, expected basename of {}",
@@ -324,7 +360,10 @@ fn bootstrap(fix: &Fixture) -> Result<Bootstrap, String> {
     // --- 8. Apply the per-fixture context defaults (the .pspec <context_data>
     //        paints; the W4 buildContext seam — applied directly to the engine).
     {
-        let base = arch.sleigh_mut().base_mut().ok_or("translator base missing")?;
+        let base = arch
+            .sleigh_mut()
+            .base_mut()
+            .ok_or("translator base missing")?;
         for (name, val) in &fix.context {
             base.translate_mut().set_context_default(name, *val);
         }
@@ -339,7 +378,11 @@ fn bootstrap(fix: &Fixture) -> Result<Bootstrap, String> {
 
     // Hand the opened image to the engine (so decode reads the corpus bytes).
     let img = arch.take_loader().ok_or("loader vanished after open")?;
-    arch.sleigh_mut().base_mut().unwrap().translate_mut().set_loader(Box::new(img));
+    arch.sleigh_mut()
+        .base_mut()
+        .unwrap()
+        .translate_mut()
+        .set_loader(Box::new(img));
 
     let _ = registry; // consumed by open_image above; not needed afterward
     Ok(Bootstrap { arch })
@@ -398,7 +441,11 @@ struct BootstrapEmit<'f> {
 
 impl<'f> BootstrapEmit<'f> {
     fn new(fd: &'f mut Funcdata, manager: *const AddrSpaceManager) -> BootstrapEmit<'f> {
-        BootstrapEmit { fd, lines: Vec::new(), manager }
+        BootstrapEmit {
+            fd,
+            lines: Vec::new(),
+            manager,
+        }
     }
 
     fn render_varnode(&self, vn: &VarnodeData, spaceid_const: bool) -> String {
@@ -449,8 +496,14 @@ impl unlace_sleigh::translate::PcodeEmit for BootstrapEmit<'_> {
             let vd = &vars[0];
             s.push(' ');
             s.push_str(&self.render_varnode(vd, false));
-            let space = vd.space.as_ref().expect("code-ref varnode has a space").clone();
-            let vn = self.fd.new_varnode_space_off(vd.size as int4, space, vd.offset);
+            let space = vd
+                .space
+                .as_ref()
+                .expect("code-ref varnode has a space")
+                .clone();
+            let vn = self
+                .fd
+                .new_varnode_space_off(vd.size as int4, space, vd.offset);
             let _ = self.fd.op_set_input(op, vn, 0);
             i += 1;
         }
@@ -461,8 +514,14 @@ impl unlace_sleigh::translate::PcodeEmit for BootstrapEmit<'_> {
             // Slot 0 of LOAD/STORE is a spaceid constant (rendered by name).
             let spaceid = i == 0 && (opc == OpCode::CPUI_LOAD || opc == OpCode::CPUI_STORE);
             s.push_str(&self.render_varnode(vd, spaceid));
-            let space = vd.space.as_ref().expect("input varnode has a space").clone();
-            let vn = self.fd.new_varnode_space_off(vd.size as int4, space, vd.offset);
+            let space = vd
+                .space
+                .as_ref()
+                .expect("input varnode has a space")
+                .clone();
+            let vn = self
+                .fd
+                .new_varnode_space_off(vd.size as int4, space, vd.offset);
             let _ = self.fd.op_set_input(op, vn, i as int4);
             i += 1;
         }
@@ -480,8 +539,11 @@ impl unlace_sleigh::translate::PcodeEmit for BootstrapEmit<'_> {
 /// coexist; the entry address uses the engine space).
 fn build_funcdata(bs: &Bootstrap, name: &str, space_name: &str, off: u64) -> Funcdata {
     let base = bs.arch.sleigh().base().unwrap();
-    let engine_space =
-        Rc::clone(base.manage().get_space_by_name(space_name).expect("entry space"));
+    let engine_space = Rc::clone(
+        base.manage()
+            .get_space_by_name(space_name)
+            .expect("entry space"),
+    );
     let entry = Address::new(engine_space, off);
     let uniq_start = base.translate().get_unique_start(UniqueLayout::ANALYSIS);
     let ir_arch = Rc::new(IrArch::new(ir_boundary_manager(base.manage())));
@@ -494,13 +556,18 @@ fn build_funcdata(bs: &Bootstrap, name: &str, space_name: &str, off: u64) -> Fun
 /// carry their own (engine) spaces, so the two managers coexist.
 fn ir_boundary_manager(src: &AddrSpaceManager) -> AddrSpaceManager {
     use unlace_base::space::{
-        addrspace_flags, spacetype, AddrSpace, ConstantSpace, FspecSpace, IopSpace, UniqueSpace,
+        AddrSpace, ConstantSpace, FspecSpace, IopSpace, UniqueSpace, addrspace_flags, spacetype,
     };
     let mut m = AddrSpaceManager::new();
-    m.insert_space(Rc::new(ConstantSpace::new())).expect("const");
-    let big_end = src.get_default_code_space().map(|s| s.is_big_endian()).unwrap_or(false);
+    m.insert_space(Rc::new(ConstantSpace::new()))
+        .expect("const");
+    let big_end = src
+        .get_default_code_space()
+        .map(|s| s.is_big_endian())
+        .unwrap_or(false);
     let uniq_index = m.num_spaces();
-    m.insert_space(Rc::new(UniqueSpace::new(uniq_index, 0, big_end))).expect("unique");
+    m.insert_space(Rc::new(UniqueSpace::new(uniq_index, 0, big_end)))
+        .expect("unique");
     if let Some(code) = src.get_default_code_space() {
         let ram = AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
@@ -532,7 +599,14 @@ fn ir_boundary_manager(src: &AddrSpaceManager) -> AddrSpaceManager {
 /// into the flow engine end-to-end.
 fn real_flow_links_ops(bs: &Bootstrap, fd: Funcdata) -> bool {
     let env = BootstrapEnv {
-        sleigh: bs.arch.sleigh().base().unwrap().translate().as_sleigh().expect("standalone Sleigh"),
+        sleigh: bs
+            .arch
+            .sleigh()
+            .base()
+            .unwrap()
+            .translate()
+            .as_sleigh()
+            .expect("standalone Sleigh"),
     };
     let mut flow = FlowInfo::new(fd, &env);
     let entry = flow.data.get_address().clone();
@@ -613,14 +687,23 @@ fn drive_lift_into_funcdata(
     let base = bs.arch.sleigh().base().unwrap();
     let sleigh = base.translate();
     let manager_ptr: *const AddrSpaceManager = base.manage();
-    let space = Rc::clone(base.manage().get_space_by_name(space_name).expect("lift space"));
+    let space = Rc::clone(
+        base.manage()
+            .get_space_by_name(space_name)
+            .expect("lift space"),
+    );
     let mut addr = Address::new(space, start_off);
     let mut out: Vec<String> = Vec::new();
     for _ in 0..max_insn {
         let mut emit = BootstrapEmit::new(fd, manager_ptr);
         match sleigh.one_instruction(&mut emit, &addr) {
             Ok(len) => {
-                out.push(format!("insn {}:0x{:x} {}", space_name, addr.get_offset(), len));
+                out.push(format!(
+                    "insn {}:0x{:x} {}",
+                    space_name,
+                    addr.get_offset(),
+                    len
+                ));
                 out.extend(std::mem::take(&mut emit.lines));
                 addr = &addr + i64::from(len);
             }
@@ -778,7 +861,10 @@ fn first_twenty_ops_match_lift_fixture() {
     // The gate requires >= 3 fixtures asserted on opcode sequence, but only when
     // specs are built; an all-skipped run (no specs) still passes structurally.
     if checked > 0 {
-        assert!(checked >= 3, "gate requires opcode-sequence check on >= 3 fixtures (got {checked})");
+        assert!(
+            checked >= 3,
+            "gate requires opcode-sequence check on >= 3 fixtures (got {checked})"
+        );
     }
 }
 
@@ -830,8 +916,14 @@ fn ldefs_pspec_cspec_parse_matrix() {
     let registry = build_registry();
     let mut db = LanguageDatabase::new();
     db.scan_for_sleigh_directories(root.join("specs").to_str().unwrap());
-    let descs = db.get_descriptions(&registry).expect("collect ldefs").to_vec();
-    assert!(!descs.is_empty(), "ldefs scan found no language descriptions");
+    let descs = db
+        .get_descriptions(&registry)
+        .expect("collect ldefs")
+        .to_vec();
+    assert!(
+        !descs.is_empty(),
+        "ldefs scan found no language descriptions"
+    );
 
     // Three processors, by exact base language id.
     let targets = ["x86:LE:64:default", "ARM:LE:32:v8", "MIPS:BE:32:default"];
@@ -848,7 +940,10 @@ fn ldefs_pspec_cspec_parse_matrix() {
             panic!("build_spec_file({target}) failed: {e}");
         });
         // The pspec is a <processor_spec>, the cspec a <compiler_spec>.
-        assert!(!specs.processorfile.is_empty(), "{target}: pspec path empty");
+        assert!(
+            !specs.processorfile.is_empty(),
+            "{target}: pspec path empty"
+        );
         assert!(!specs.compilerfile.is_empty(), "{target}: cspec path empty");
         let pname = root_element_name(std::path::Path::new(&specs.processorfile))
             .unwrap_or_else(|e| panic!("{target}: pspec parse: {e}"));
@@ -885,11 +980,17 @@ fn ldefs_scan_decodes_all_pinned_languages() {
         let d = found.unwrap_or_else(|| panic!("ldefs scan missing language {lang}"));
         // Core fields are non-trivial: a .sla name, a .pspec name, >= 1 compiler.
         assert!(!d.get_sla_file().is_empty(), "{lang}: empty slafile");
-        assert!(!d.get_processor_spec().is_empty(), "{lang}: empty processorspec");
+        assert!(
+            !d.get_processor_spec().is_empty(),
+            "{lang}: empty processorspec"
+        );
         assert!(d.num_compilers() >= 1, "{lang}: no compilers");
         // getCompiler with an unknown id falls back to "default" then the first.
         let c = d.get_compiler("nonexistent-compiler-id");
-        assert!(!c.get_spec().is_empty(), "{lang}: fallback compiler has no spec");
+        assert!(
+            !c.get_spec().is_empty(),
+            "{lang}: fallback compiler has no spec"
+        );
     }
 }
 

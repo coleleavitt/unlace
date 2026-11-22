@@ -57,7 +57,9 @@ fn floating_loads_survive_full_and_partial_stack_byte_writes() {
         "prototype observe_float void observe_float(float *value)",
         "prototype observe_double void observe_double(double *value)",
     ];
-    let mut regenerated = String::from("typedef unsigned char undefined1;\nvoid observe_float(float *value) {(void)value;}\nvoid observe_double(double *value) {(void)value;}\n");
+    let mut regenerated = String::from(
+        "typedef unsigned char undefined1;\nvoid observe_float(float *value) {(void)value;}\nvoid observe_double(double *value) {(void)value;}\n",
+    );
     for name in [
         "read_float_bits",
         "read_double_bits",

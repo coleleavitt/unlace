@@ -66,7 +66,10 @@ fn decode_recipe_requires_both_bootstrap_inputs() {
 }
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 // --- Strand 1: defaults + flags + naming -----------------------------------
@@ -85,7 +88,9 @@ fn reset_defaults_internal_matches_cpp() {
     assert_eq!(arch.alias_block_level, 2);
     assert_eq!(
         arch.split_datatype_config,
-        split_datatype::OPTION_STRUCT | split_datatype::OPTION_ARRAY | split_datatype::OPTION_POINTER
+        split_datatype::OPTION_STRUCT
+            | split_datatype::OPTION_ARRAY
+            | split_datatype::OPTION_POINTER
     );
     // ctor one-offs.
     assert_eq!(arch.min_funcsymbol_size, 1);
@@ -118,7 +123,10 @@ fn kuna_anchor_flags_default_to_div_values() {
     assert!(arch.tail_call_tables);
     assert!(arch.switch_multi_pred);
     assert!(arch.region_loop_refine);
-    assert_eq!(arch.goto_reduce, crate::p8_structure::kuna_gotoreduce::GotoReduceMode::On);
+    assert_eq!(
+        arch.goto_reduce,
+        crate::p8_structure::kuna_gotoreduce::GotoReduceMode::On
+    );
     assert!(arch.flatten_ifelse);
     assert!(arch.revert_cross_jumps);
     assert!(arch.dedup_ite_tail);
@@ -163,7 +171,8 @@ fn apply_mode_aggressive_flips_offdefault_flags_but_not_dwarf_lines() {
     assert!(!arch.switch_guard_bound);
     assert!(!arch.analysis_dwarf_lines);
 
-    arch.apply_mode("aggressive").expect("aggressive mode applies");
+    arch.apply_mode("aggressive")
+        .expect("aggressive mode applies");
 
     // Representative aggressive members turned on.
     assert!(arch.analysis_listing);
@@ -308,7 +317,9 @@ fn build_arch_from_sla(sla_rel: &str) -> Option<Architecture> {
     }
     let sla = std::fs::read(&sla_path).expect("read .sla");
     let mut sleigh = Sleigh::new(Box::new(DummyImg), Box::new(ContextInternal::new()));
-    sleigh.initialize_from_sla(&sla).expect("initialize from sla");
+    sleigh
+        .initialize_from_sla(&sla)
+        .expect("initialize from sla");
     Some(Architecture::new("ARM:LE:32:v7", sleigh))
 }
 
@@ -318,7 +329,10 @@ fn real_sla_bootstraps_subsystems_and_global_scope() {
         return;
     };
     // The manager has real spaces from the .sla (ram, register, unique, ...).
-    assert!(arch.manage().num_spaces() > 2, "decoded .sla yields multiple spaces");
+    assert!(
+        arch.manage().num_spaces() > 2,
+        "decoded .sla yields multiple spaces"
+    );
     assert!(arch.manage().get_constant_space().is_some());
     assert!(arch.manage().get_unique_space().is_some());
     // The symbol table has a global scope attached (buildDatabase).
@@ -337,9 +351,15 @@ fn real_sla_creates_funcdata_at_entry() {
     // const/unique/iop/fspec exactly as the lift+analyze path sees them.
     arch.init_post_engine().expect("init_post_engine");
     // Pick the default code space for the function entry.
-    let code = Rc::clone(arch.manage().get_default_code_space().expect("default code space"));
+    let code = Rc::clone(
+        arch.manage()
+            .get_default_code_space()
+            .expect("default code space"),
+    );
     let entry = Address::new(code, 0x8000);
-    let fd = arch.new_funcdata("main", entry.clone(), 0x40).expect("create funcdata");
+    let fd = arch
+        .new_funcdata("main", entry.clone(), 0x40)
+        .expect("create funcdata");
     assert_eq!(fd.get_name(), "main");
     assert_eq!(fd.get_address(), &entry);
     assert_eq!(fd.get_size(), 0x40);
@@ -381,8 +401,8 @@ fn owned_subsystems_are_constructed_and_accessible() {
 
 #[test]
 fn build_instructions_populates_the_inst_table() {
-    use unlace_num::opcodes::OpCode;
     use crate::op::pcodeop_flags;
+    use unlace_num::opcodes::OpCode;
     let mut arch = Architecture::new("t", bare_sleigh());
     arch.build_instructions();
     // A BRANCH resolves to a TypeOp carrying the branch + coderef flags.
@@ -454,8 +474,21 @@ fn jumptablemax_defaults_to_1024_and_parses_strictly() {
     assert_eq!(arch.max_jumptable_size, 1024);
     arch.set_kuna_option("jumptablemax", "100000").unwrap();
     assert_eq!(arch.max_jumptable_size, 100000);
-    for bad in ["", "0", "wide", "12abc", "1.5", "-5", "+5", "0x10", "4294967296"] {
-        assert!(arch.set_kuna_option("jumptablemax", bad).is_err(), "{bad:?} was accepted");
+    for bad in [
+        "",
+        "0",
+        "wide",
+        "12abc",
+        "1.5",
+        "-5",
+        "+5",
+        "0x10",
+        "4294967296",
+    ] {
+        assert!(
+            arch.set_kuna_option("jumptablemax", bad).is_err(),
+            "{bad:?} was accepted"
+        );
     }
     assert_eq!(arch.max_jumptable_size, 100000);
 }
@@ -466,8 +499,8 @@ fn jumptablemax_defaults_to_1024_and_parses_strictly() {
 /// panic hit between a modifier's save and restore with nothing pushed.
 #[test]
 fn with_print_hands_back_the_configured_printer_after_a_render_panic() {
-    use crate::printlanguage::modifiers;
     use crate::prettyprint::Emit;
+    use crate::printlanguage::modifiers;
     let mut arch = Architecture::new("t", bare_sleigh());
     arch.print_mut().context.set_integer_format("hex").unwrap();
     arch.print_mut().emit.set_indent_increment(4);
@@ -486,7 +519,11 @@ fn with_print_hands_back_the_configured_printer_after_a_render_panic() {
         }));
         assert!(caught.is_err(), "the panic resumes");
         let print = arch.print();
-        assert_eq!(print.context.mods(), modifiers::FORCE_HEX, "pushed {pushed}");
+        assert_eq!(
+            print.context.mods(),
+            modifiers::FORCE_HEX,
+            "pushed {pushed}"
+        );
         assert_eq!(print.emit.get_indent_increment(), 4);
         assert_eq!(print.emit.state().indentlevel, 0);
     }

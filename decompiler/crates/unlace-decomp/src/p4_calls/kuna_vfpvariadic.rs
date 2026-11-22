@@ -18,11 +18,11 @@ use crate::{
     dtype::type_metatype,
     fspec::{FuncProto, ParameterPieces, ProtoModel, PrototypePieces},
     infra::architecture::Architecture,
-    modelrules::{register_ids, ModelRule},
+    modelrules::{ModelRule, register_ids},
 };
+use std::rc::Rc;
 use unlace_base::marshal::{IdRegistry, XmlDecode};
 use unlace_base::space::AddrSpaceManager;
-use std::rc::Rc;
 
 const OUTPUT_RULES: &str = concat!(
     "<output>",

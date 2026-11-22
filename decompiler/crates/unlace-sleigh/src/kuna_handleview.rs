@@ -11,10 +11,18 @@ use crate::context::FixedHandle;
 pub(crate) fn resolved_space(handle: Cow<'_, FixedHandle>) -> Option<Rc<AddrSpace>> {
     match handle {
         Cow::Borrowed(handle) => {
-            if handle.offset_space.is_none() { handle.space.clone() } else { handle.temp_space.clone() }
+            if handle.offset_space.is_none() {
+                handle.space.clone()
+            } else {
+                handle.temp_space.clone()
+            }
         }
         Cow::Owned(handle) => {
-            if handle.offset_space.is_none() { handle.space } else { handle.temp_space }
+            if handle.offset_space.is_none() {
+                handle.space
+            } else {
+                handle.temp_space
+            }
         }
     }
 }

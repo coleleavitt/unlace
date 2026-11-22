@@ -1,4 +1,5 @@
 //! Execute BOUND p-code over signed boundary cases.
+use std::{path::PathBuf, rc::Rc};
 use unlace_base::{address::Address, error::KunaResult};
 use unlace_num::{opcodes::OpCode, pcoderaw::VarnodeData};
 use unlace_sleigh::{
@@ -7,7 +8,6 @@ use unlace_sleigh::{
     sleigh::Sleigh,
     translate::{PcodeEmit, Translate},
 };
-use std::{path::PathBuf, rc::Rc};
 
 struct Bytes(Vec<u8>);
 impl LoadImage for Bytes {
@@ -71,9 +71,11 @@ fn run_bound(bits: u32, value: i64, lower: i64, upper: i64) -> bool {
         .filter(|(op, _, _)| *op == OpCode::CPUI_LOAD)
         .collect();
     assert_eq!(loads.len(), 2, "{:?}", ops.0);
-    assert!(loads
-        .iter()
-        .all(|(_, out, _)| out.as_ref().unwrap().size == bits / 8));
+    assert!(
+        loads
+            .iter()
+            .all(|(_, out, _)| out.as_ref().unwrap().size == bits / 8)
+    );
     let mut userops = Vec::new();
     sleigh.get_user_op_names(&mut userops);
     let fault = ops
@@ -88,10 +90,11 @@ fn run_bound(bits: u32, value: i64, lower: i64, upper: i64) -> bool {
     assert!(fault.1.is_none());
     assert_eq!(fault.2.len(), 4);
     assert!(fault.2[1..].iter().all(|v| v.size == bits / 8));
-    assert!(!ops
-        .0
-        .iter()
-        .any(|(op, _, _)| matches!(op, OpCode::CPUI_CALL | OpCode::CPUI_CALLIND)));
+    assert!(
+        !ops.0
+            .iter()
+            .any(|(op, _, _)| matches!(op, OpCode::CPUI_CALL | OpCode::CPUI_CALLIND))
+    );
     let key = |v: &VarnodeData| (v.space.as_ref().unwrap().get_index(), v.offset);
     let mut state = HashMap::new();
     state.insert(

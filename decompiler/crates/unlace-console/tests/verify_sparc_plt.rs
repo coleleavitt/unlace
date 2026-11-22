@@ -36,11 +36,16 @@ use crate::common;
 mod sparc32;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// The vendored linked SPARC64 fixture (shared with the unlace-analysis loader gates).
@@ -65,9 +70,18 @@ fn sparc_plt_calls_are_named_in_decompiled_c() {
 
     // The PLT imports are resolvable as functions (the elf_plt SPARC markup), and
     // the local `.symtab` `main` resolves.
-    assert!(prog.lookup_symbol("puts").is_some(), "SPARC PLT import `puts` not resolved by the loader");
-    assert!(prog.lookup_symbol("printf").is_some(), "SPARC PLT import `printf` not resolved by the loader");
-    assert!(prog.lookup_symbol("main").is_some(), "defined `main` not resolved by the loader");
+    assert!(
+        prog.lookup_symbol("puts").is_some(),
+        "SPARC PLT import `puts` not resolved by the loader"
+    );
+    assert!(
+        prog.lookup_symbol("printf").is_some(),
+        "SPARC PLT import `printf` not resolved by the loader"
+    );
+    assert!(
+        prog.lookup_symbol("main").is_some(),
+        "defined `main` not resolved by the loader"
+    );
 
     // Drive `load function main` → `decompile` → `print C`.
     let cmds: Vec<String> = ["load function main", "decompile", "print C"]
@@ -97,8 +111,14 @@ fn sparc_plt_calls_are_named_in_decompiled_c() {
     );
 
     // The library calls are named...
-    assert!(out.contains("puts("), "expected a `puts(` call, got:\n{out}");
-    assert!(out.contains("printf("), "expected a `printf(` call, got:\n{out}");
+    assert!(
+        out.contains("puts("),
+        "expected a `puts(` call, got:\n{out}"
+    );
+    assert!(
+        out.contains("printf("),
+        "expected a `printf(` call, got:\n{out}"
+    );
     // ...and the old PLT-stub placeholders are gone for those call sites
     // (`puts@plt`=0x2021c0, `printf@plt`=0x2021a0).
     assert!(
@@ -115,11 +135,18 @@ fn decompile_sparc32(machine: u16) -> String {
     std::fs::remove_file(path).unwrap();
     let prog = result.expect("bootstrap deterministic SPARC32 ELF");
     let mut status = ConsoleCommands::into_status(
-        ["load function main", "decompile", "print C"].map(String::from).to_vec(),
+        ["load function main", "decompile", "print C"]
+            .map(String::from)
+            .to_vec(),
     );
     register_decomp_commands(&mut status);
-    status.get_data_mut(DECOMPILE_MODULE).unwrap()
-        .as_any_mut().downcast_mut::<IfaceDecompData>().unwrap().conf = Some(prog);
+    status
+        .get_data_mut(DECOMPILE_MODULE)
+        .unwrap()
+        .as_any_mut()
+        .downcast_mut::<IfaceDecompData>()
+        .unwrap()
+        .conf = Some(prog);
     for _ in 0..3 {
         execute(&mut status);
     }
@@ -129,8 +156,14 @@ fn decompile_sparc32(machine: u16) -> String {
 fn assert_sparc32_calls(machine: u16) {
     let out = decompile_sparc32(machine);
     assert!(out.contains("main"), "expected a decoded function:\n{out}");
-    assert!(out.contains("puts(") && out.contains("printf("), "expected both imports:\n{out}");
-    assert!(!out.contains("sub_10230") && !out.contains("sub_1023c"), "{out}");
+    assert!(
+        out.contains("puts(") && out.contains("printf("),
+        "expected both imports:\n{out}"
+    );
+    assert!(
+        !out.contains("sub_10230") && !out.contains("sub_1023c"),
+        "{out}"
+    );
 }
 
 #[test]
@@ -145,8 +178,8 @@ fn sparc32plus_12_byte_plt_calls_are_named_in_c() {
 
 #[test]
 fn sparc32_plt_requires_a_relocation_and_a_complete_valid_slot() {
+    use sparc32::{PLT_OFFSET, PLT_VMA, SECTION_HEADERS, elf, put32};
     use unlace_analysis::loadimage_object::ObjectLoadImage;
-    use sparc32::{elf, put32, PLT_OFFSET, PLT_VMA, SECTION_HEADERS};
 
     for machine in [2, 18] {
         for case in ["valid", "no relocations", "bad opcode", "truncated slot"] {
@@ -158,13 +191,17 @@ fn sparc32_plt_requires_a_relocation_and_a_complete_valid_slot() {
                 _ => {}
             }
             let image = ObjectLoadImage::from_bytes("synthetic-sparc32-plt", &bytes).unwrap();
-            let imports: Vec<_> = image.func_symbols().into_iter()
+            let imports: Vec<_> = image
+                .func_symbols()
+                .into_iter()
                 .filter(|(_, name)| name == "puts" || name == "printf")
                 .collect();
             let expected = match case {
                 "no relocations" => vec![],
-                "valid" => vec![(u64::from(PLT_VMA + 48), "puts".to_string()),
-                    (u64::from(PLT_VMA + 60), "printf".to_string())],
+                "valid" => vec![
+                    (u64::from(PLT_VMA + 48), "puts".to_string()),
+                    (u64::from(PLT_VMA + 60), "printf".to_string()),
+                ],
                 _ => vec![(u64::from(PLT_VMA + 48), "puts".to_string())],
             };
             assert_eq!(imports, expected, "machine {machine}, {case}");

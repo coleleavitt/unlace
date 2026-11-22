@@ -1,13 +1,13 @@
 //! Compare emitted Rust integer extensions against native compiler execution.
 
 use crate::common;
-use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
-};
-use unlace_console::ifaceterm::ConsoleCommands;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use unlace_console::engine::bootstrap_from_object;
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
+use unlace_console::ifaceterm::ConsoleCommands;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
@@ -62,13 +62,33 @@ fn signed_text_storage_widens_before_arithmetic() {
     let source = root().join("tests/fixtures/rust-extensions/extensions.rs");
     let native = common::scratch_file("rustextensions-native", "elf");
     run(Command::new("rustc")
-        .args(["--crate-name", "extensions", "-C", "opt-level=3", "-C", "debuginfo=2", "-C", "overflow-checks=off", "-o"])
+        .args([
+            "--crate-name",
+            "extensions",
+            "-C",
+            "opt-level=3",
+            "-C",
+            "debuginfo=2",
+            "-C",
+            "overflow-checks=off",
+            "-o",
+        ])
         .arg(&native)
         .arg(&source));
     let expected = run(&mut Command::new(&native));
-    assert_eq!(String::from_utf8_lossy(&expected.stdout).lines().count(), 1578);
+    assert_eq!(
+        String::from_utf8_lossy(&expected.stdout).lines().count(),
+        1578
+    );
     let mut emitted = String::from("use std::hint::black_box;\n");
-    for name in ["sign8", "sign16", "sign32", "narrow_sum", "narrow_product", "zero8"] {
+    for name in [
+        "sign8",
+        "sign16",
+        "sign32",
+        "narrow_sum",
+        "narrow_product",
+        "zero8",
+    ] {
         emitted.push_str(&body(&native, name));
         emitted.push('\n');
     }
@@ -78,7 +98,15 @@ fn signed_text_storage_widens_before_arithmetic() {
     let binary = common::scratch_file("rustextensions-execute", "elf");
     std::fs::write(&code, &emitted).unwrap();
     run(Command::new("rustc")
-        .args(["--crate-name", "extensions_emitted", "-C", "opt-level=3", "-C", "overflow-checks=off", "-o"])
+        .args([
+            "--crate-name",
+            "extensions_emitted",
+            "-C",
+            "opt-level=3",
+            "-C",
+            "overflow-checks=off",
+            "-o",
+        ])
         .arg(&binary)
         .arg(&code));
     let actual = run(&mut Command::new(binary));

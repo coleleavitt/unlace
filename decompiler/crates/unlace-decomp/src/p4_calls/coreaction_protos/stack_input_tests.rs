@@ -2,8 +2,8 @@ use super::*;
 use crate::context::{ArchContext, OpId};
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, SpacebaseSpace,
-    UniqueSpace, VarnodeStorage,
+    AddrSpace, AddrSpaceManager, ConstantSpace, SpacebaseSpace, UniqueSpace, VarnodeStorage,
+    addrspace_flags, spacetype,
 };
 
 fn stack_fixture(big: bool) -> Funcdata {
@@ -108,4 +108,3 @@ fn narrow_stack_base_retains_every_physical_input_bit() {
         }
     }
 }
-

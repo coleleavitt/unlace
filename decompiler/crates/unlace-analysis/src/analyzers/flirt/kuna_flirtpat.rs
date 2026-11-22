@@ -66,7 +66,12 @@ impl FuncPattern {
 
     /// The fixed bytes after the leading pattern that the CRC covers.
     pub fn crc_bytes(&self) -> Vec<u8> {
-        self.bytes.iter().skip(PATTERN_LEN).take(MAX_CRC_LEN).map_while(|b| *b).collect()
+        self.bytes
+            .iter()
+            .skip(PATTERN_LEN)
+            .take(MAX_CRC_LEN)
+            .map_while(|b| *b)
+            .collect()
     }
 
     /// The CRC-16 of [`Self::crc_bytes`].
@@ -76,7 +81,9 @@ impl FuncPattern {
 
     /// The bytes after the CRC region.
     pub fn tail(&self) -> &[Option<u8>] {
-        self.bytes.get(PATTERN_LEN + self.crc_bytes().len()..).unwrap_or(&[])
+        self.bytes
+            .get(PATTERN_LEN + self.crc_bytes().len()..)
+            .unwrap_or(&[])
     }
 }
 
@@ -84,14 +91,20 @@ impl FuncPattern {
 pub fn patterns_from_object(data: &[u8]) -> Result<ObjectPatterns, String> {
     let file = object::File::parse(data).map_err(|e| format!("not an object file: {e}"))?;
     let architecture = file.architecture();
-    let target = Target { architecture, format: file.format(), little_endian: file.is_little_endian() };
+    let target = Target {
+        architecture,
+        format: file.format(),
+        little_endian: file.is_little_endian(),
+    };
     let thumb_bit = u64::from(architecture == Architecture::Arm);
     let mut data_names = BTreeSet::new();
     let mut starts: BTreeMap<(usize, u64), Vec<(bool, String)>> = BTreeMap::new();
     let mut bounds: BTreeMap<usize, BTreeSet<u64>> = BTreeMap::new();
     let mut sizes: BTreeMap<(usize, u64), u64> = BTreeMap::new();
     for sym in file.symbols() {
-        let (Some(index), Ok(name)) = (sym.section_index(), sym.name()) else { continue };
+        let (Some(index), Ok(name)) = (sym.section_index(), sym.name()) else {
+            continue;
+        };
         if !sym.is_definition() {
             continue;
         }
@@ -108,27 +121,49 @@ pub fn patterns_from_object(data: &[u8]) -> Result<ObjectPatterns, String> {
             *size = (*size).max(sym.size());
         }
         if sym.is_global() && !is_generated(name) {
-            starts.entry((index.0, addr)).or_default().push((sym.is_weak(), name.to_string()));
+            starts
+                .entry((index.0, addr))
+                .or_default()
+                .push((sym.is_weak(), name.to_string()));
         }
     }
-    let mut out = ObjectPatterns { target, patterns: Vec::new(), data_names, short: 0 };
+    let mut out = ObjectPatterns {
+        target,
+        patterns: Vec::new(),
+        data_names,
+        short: 0,
+    };
     for section in file.sections().filter(|s| s.kind() == SectionKind::Text) {
         let Ok(code) = section.data() else { continue };
         let index = section.index().0;
         let base = section.address();
         let relocs = section_relocs(&file, &section, code.len());
         for (&(_, addr), names) in starts.range((index, 0)..=(index, u64::MAX)) {
-            let Some(start) = addr.checked_sub(base).and_then(|o| usize::try_from(o).ok()) else { continue };
-            let next = bounds[&index].range(addr + 1..).next().and_then(|n| usize::try_from(n - base).ok());
-            let sized = sizes.get(&(index, addr)).and_then(|s| start.checked_add(usize::try_from(*s).ok()?));
+            let Some(start) = addr.checked_sub(base).and_then(|o| usize::try_from(o).ok()) else {
+                continue;
+            };
+            let next = bounds[&index]
+                .range(addr + 1..)
+                .next()
+                .and_then(|n| usize::try_from(n - base).ok());
+            let sized = sizes
+                .get(&(index, addr))
+                .and_then(|s| start.checked_add(usize::try_from(*s).ok()?));
             let end = sized.or(next).unwrap_or(code.len()).min(code.len());
             if start >= end {
                 continue;
             }
             let mut bytes: Vec<Option<u8>> = code[start..end].iter().map(|&b| Some(b)).collect();
             let mut refs = Vec::new();
-            for r in relocs.range(start.saturating_sub(MAX_RELAX)..end).map(|(_, r)| r) {
-                for b in bytes.iter_mut().take(r.end.saturating_sub(start)).skip(r.start.saturating_sub(start)) {
+            for r in relocs
+                .range(start.saturating_sub(MAX_RELAX)..end)
+                .map(|(_, r)| r)
+            {
+                for b in bytes
+                    .iter_mut()
+                    .take(r.end.saturating_sub(start))
+                    .skip(r.start.saturating_sub(start))
+                {
                     *b = None;
                 }
                 if let (Some(name), true) = (&r.name, r.offset >= start) {
@@ -140,9 +175,15 @@ pub fn patterns_from_object(data: &[u8]) -> Result<ObjectPatterns, String> {
                 continue;
             }
             let mut names = names.clone();
-            names.sort_by_key(|(weak, n)| (*weak, n.len() - n.trim_start_matches('_').len(), n.clone()));
+            names.sort_by_key(|(weak, n)| {
+                (*weak, n.len() - n.trim_start_matches('_').len(), n.clone())
+            });
             names.dedup();
-            out.patterns.push(FuncPattern { bytes, publics: names.into_iter().map(|(_, n)| n).collect(), refs });
+            out.patterns.push(FuncPattern {
+                bytes,
+                publics: names.into_iter().map(|(_, n)| n).collect(),
+                refs,
+            });
         }
     }
     Ok(out)
@@ -176,10 +217,15 @@ fn section_relocs<'a>(
             | Architecture::Sparc64
             | Architecture::LoongArch64
     );
-    let x86 = matches!(file.architecture(), Architecture::X86_64 | Architecture::I386);
+    let x86 = matches!(
+        file.architecture(),
+        Architecture::X86_64 | Architecture::I386
+    );
     let mut out = BTreeMap::new();
     for (offset, reloc) in section.relocations() {
-        let Ok(offset) = usize::try_from(offset) else { continue };
+        let Ok(offset) = usize::try_from(offset) else {
+            continue;
+        };
         let field = match usize::from(reloc.size()).div_ceil(8) {
             0 => 4,
             n if x86 => n,
@@ -203,7 +249,15 @@ fn section_relocs<'a>(
             }),
             _ => None,
         };
-        out.insert(offset, Reloc { offset, start, end: end.min(len), name });
+        out.insert(
+            offset,
+            Reloc {
+                offset,
+                start,
+                end: end.min(len),
+                name,
+            },
+        );
     }
     out
 }
@@ -214,7 +268,9 @@ fn section_relocs<'a>(
 fn x86_relaxation(architecture: Architecture, r_type: u32) -> (usize, usize) {
     use object::elf::*;
     match (architecture, r_type) {
-        (Architecture::X86_64, R_X86_64_GOTPCRELX | R_X86_64_REX_GOTPCRELX | R_X86_64_GOTTPOFF) => (3, 0),
+        (Architecture::X86_64, R_X86_64_GOTPCRELX | R_X86_64_REX_GOTPCRELX | R_X86_64_GOTTPOFF) => {
+            (3, 0)
+        }
         (Architecture::X86_64, R_X86_64_GOTPC32_TLSDESC) => (3, 0),
         (Architecture::X86_64, R_X86_64_TLSGD) => (4, 8),
         (Architecture::X86_64, R_X86_64_TLSLD) => (3, 6),
@@ -228,9 +284,23 @@ fn x86_relaxation(architecture: Architecture, r_type: u32) -> (usize, usize) {
 /// written in the source: local labels, mapping symbols, outlined and cloned
 /// function parts, PC thunks and static-initialization stubs.
 pub fn is_generated(name: &str) -> bool {
-    const PREFIXES: [&str; 7] =
-        [".L", "$", "__x86.get_pc_thunk.", "_GLOBAL__", "__cxx_global_", "__tls_init", "OUTLINED_FUNCTION_"];
-    const PARTS: [&str; 6] = [".cold", ".part.", ".isra.", ".constprop.", ".lto_priv.", ".llvm."];
+    const PREFIXES: [&str; 7] = [
+        ".L",
+        "$",
+        "__x86.get_pc_thunk.",
+        "_GLOBAL__",
+        "__cxx_global_",
+        "__tls_init",
+        "OUTLINED_FUNCTION_",
+    ];
+    const PARTS: [&str; 6] = [
+        ".cold",
+        ".part.",
+        ".isra.",
+        ".constprop.",
+        ".lto_priv.",
+        ".llvm.",
+    ];
     name.is_empty()
         || name.bytes().any(|b| b <= 0x20 || b == 0x7f)
         || PREFIXES.iter().any(|p| name.starts_with(p))
@@ -253,7 +323,14 @@ pub fn write_pat(patterns: &[FuncPattern]) -> String {
     };
     for p in patterns {
         hex(&mut out, &p.head());
-        write!(out, " {:02X} {:04X} {:04X}", p.crc_bytes().len(), p.crc(), p.bytes.len()).unwrap();
+        write!(
+            out,
+            " {:02X} {:04X} {:04X}",
+            p.crc_bytes().len(),
+            p.crc(),
+            p.bytes.len()
+        )
+        .unwrap();
         for name in &p.publics {
             write!(out, " :0000 {name}").unwrap();
         }

@@ -147,7 +147,7 @@ const AGGRESSIVE_OVERRIDES: &[(&str, &str)] = &[
     ("unrolledguard", "on"),    // speed-expensive
     ("globalarrayanchor", "on"),
     ("opaquepredicate", "on"),
-    ("sparcstructret", "on"), // SPARC-idiom-gated; no-op off-SPARC
+    ("sparcstructret", "on"),     // SPARC-idiom-gated; no-op off-SPARC
     ("v850indirectbranch", "on"), // V850-gated (kuna_v850indbranch::applies); no-op off-V850
     ("regionedgeorder", "on"),
     ("returndup", "on"), // default-ON since DIV-54; kept so the preset owns it
@@ -233,9 +233,9 @@ const AGGRESSIVE_OVERRIDES: &[(&str, &str)] = &[
     // a 4-byte mergeable string section).
     ("widestrings32", "on"),
     ("fid", "on"),
-    ("flirt", "on"),         // inert without KUNA_FLIRT_SIGS
-    ("rtti", "on"),          // PE-only; no-op off-PE
-    ("itaniumrtti", "on"),   // ELF and Mach-O, inert without __cxxabiv1 typeinfo anchors
+    ("flirt", "on"),       // inert without KUNA_FLIRT_SIGS
+    ("rtti", "on"),        // PE-only; no-op off-PE
+    ("itaniumrtti", "on"), // ELF and Mach-O, inert without __cxxabiv1 typeinfo anchors
     // The speculative gap-walk ("may create bad code") with the aligned gap cursor
     // (GH-299). Every number in its catalog row was measured under this preset,
     // and the aligned cursor is a net win in BOTH directions there (mid-body
@@ -314,10 +314,7 @@ pub fn auto_mode_for_size(size_bytes: u64) -> &'static str {
 ///
 /// Omission selects `auto`. Explicit concrete presets ignore `size_bytes`.
 /// Returns `None` for an unknown name.
-pub fn resolve_mode_for_size(
-    requested: Option<&str>,
-    size_bytes: u64,
-) -> Option<&'static str> {
+pub fn resolve_mode_for_size(requested: Option<&str>, size_bytes: u64) -> Option<&'static str> {
     let requested = requested.unwrap_or("auto");
     let mode = MODE_TABLE.iter().find(|mode| mode.name == requested)?;
     if mode.automatic {
@@ -337,7 +334,11 @@ pub fn resolve_overrides_for_size(
     let requested = requested.unwrap_or("auto");
     let mode = MODE_TABLE.iter().find(|mode| mode.name == requested)?;
     let concrete = resolve_mode_for_size(Some(requested), size_bytes)?;
-    let mut overrides = if mode.automatic { mode.overrides.to_vec() } else { Vec::new() };
+    let mut overrides = if mode.automatic {
+        mode.overrides.to_vec()
+    } else {
+        Vec::new()
+    };
     overrides.extend_from_slice(mode_overrides(concrete)?);
     Some((concrete, overrides))
 }
@@ -351,7 +352,10 @@ pub fn mode_is_automatic(name: &str) -> bool {
 /// automatic. A frontend applies [`resolve_overrides_for_size`] instead, which
 /// also carries `auto`'s own overrides; this list alone drops them.
 pub fn mode_overrides(name: &str) -> Option<&'static [(&'static str, &'static str)]> {
-    MODE_TABLE.iter().find(|m| m.name == name && !m.automatic).map(|m| m.overrides)
+    MODE_TABLE
+        .iter()
+        .find(|m| m.name == name && !m.automatic)
+        .map(|m| m.overrides)
 }
 
 /// The shipped mode names, in table order.
@@ -386,7 +390,10 @@ mod tests {
     #[test]
     fn auto_uses_exact_binary_size_boundaries() {
         assert_eq!(auto_mode_for_size(0), "aggressive");
-        assert_eq!(auto_mode_for_size(AUTO_RELIABLE_MIN_BYTES - 1), "aggressive");
+        assert_eq!(
+            auto_mode_for_size(AUTO_RELIABLE_MIN_BYTES - 1),
+            "aggressive"
+        );
         assert_eq!(auto_mode_for_size(AUTO_RELIABLE_MIN_BYTES), "reliable");
         assert_eq!(auto_mode_for_size(AUTO_FAST_MIN_BYTES - 1), "reliable");
         assert_eq!(auto_mode_for_size(AUTO_FAST_MIN_BYTES), "fast");
@@ -440,8 +447,13 @@ mod tests {
         }
         // Every aggressive override turns its option on; `aif` takes its aligned cursor
         // and `itaniumeh` its cheap level (pads with a catch clause only).
-        assert!(agg.contains(&("aif", "strict")), "aggressive must set `aif strict`");
-        assert!(agg.iter().all(|(o, v)| *v == "on" || (*o, *v) == ("aif", "strict") || (*o, *v) == ("itaniumeh", "catch")));
+        assert!(
+            agg.contains(&("aif", "strict")),
+            "aggressive must set `aif strict`"
+        );
+        assert!(agg.iter().all(|(o, v)| *v == "on"
+            || (*o, *v) == ("aif", "strict")
+            || (*o, *v) == ("itaniumeh", "catch")));
     }
 
     /// The preset's headline contract, enforced rather than sampled: **every**
@@ -560,45 +572,64 @@ mod tests {
         /// `rustarrayzero` missed the initial default-on CPU median budget.
         /// `ppcapu` selects the e500 model, whose scalar call arguments are not
         /// yet recovered, so it requires an explicit option.
-        const EXCLUDED_ON_PURPOSE: &[&str] =
-            &["dwarf_lines",
-              "nulterminator", "msvcstrappend",
-              "structdefs", "indirectonly", "protoorder", "stackalias", "stackviews", "bejoin",
-              "mixedtailret", "varargsharedfloat", "callarrayextent",
-              "armconstshift", "wrapadd", "regsigned", "x86listingswitch", "callwide", "ppc32picimports", "ppcapu", "rustprobestack", "highsliceguard", "rustarrayzero",
-              // `lazyfuncs` changes no output, but its saving is a single-function
-              // property: the whole-binary surfaces the presets drive (decompile-all,
-              // the web front-end, the benchmark) materialize every target they walk
-              // anyway, so preset membership would buy nothing there and has not been
-              // measured on them. Flip it into the preset with that measurement.
-              "lazyfuncs",
-              // `libgccsigs` costs a SPARC32 caller that returns arithmetic on
-              // the `__divdi3` quotient its low word or its whole return (see its
-              // catalog row), so the preset must not turn it on.
-              "libgccsigs",
-              // `latecse` lengthens the output (shared values become temporaries)
-              // and `dirtypool` reaches a different fixpoint (stage folds lost);
-              // see their catalog rows.
-              "latecse", "dirtypool",
-              // `relronoreturn` trades structure for speed (it skips a restart
-              // whose second pass renders better), the opposite of this preset.
-              "relronoreturn",
-              // `mba` targets obfuscated code; on ordinary code it can only
-              // refold arithmetic the compiler already chose.
-              "mba",
-              // `contextnames` renames loop counters and returned locals that the
-              // CLI tests of other features, which run under `auto`, spell as
-              // `vN`; it joins the preset once those are re-pinned.
-              "contextnames",
-              // `mapglobalsyms` makes a function's output depend on which functions
-              // were decompiled before it in the same run; in the preset that would
-              // make every `decompile-all` under 500 KiB order-dependent.
-              "mapglobalsyms",
-              // `varargsave` and `dynalloca` are fallbacks for the default-on
-              // `vastart` and `alloca`, which fold the same code; turning both on
-              // only adds a second pass over it.
-              "varargsave",
-              "dynalloca"];
+        const EXCLUDED_ON_PURPOSE: &[&str] = &[
+            "dwarf_lines",
+            "nulterminator",
+            "msvcstrappend",
+            "structdefs",
+            "indirectonly",
+            "protoorder",
+            "stackalias",
+            "stackviews",
+            "bejoin",
+            "mixedtailret",
+            "varargsharedfloat",
+            "callarrayextent",
+            "armconstshift",
+            "wrapadd",
+            "regsigned",
+            "x86listingswitch",
+            "callwide",
+            "ppc32picimports",
+            "ppcapu",
+            "rustprobestack",
+            "highsliceguard",
+            "rustarrayzero",
+            // `lazyfuncs` changes no output, but its saving is a single-function
+            // property: the whole-binary surfaces the presets drive (decompile-all,
+            // the web front-end, the benchmark) materialize every target they walk
+            // anyway, so preset membership would buy nothing there and has not been
+            // measured on them. Flip it into the preset with that measurement.
+            "lazyfuncs",
+            // `libgccsigs` costs a SPARC32 caller that returns arithmetic on
+            // the `__divdi3` quotient its low word or its whole return (see its
+            // catalog row), so the preset must not turn it on.
+            "libgccsigs",
+            // `latecse` lengthens the output (shared values become temporaries)
+            // and `dirtypool` reaches a different fixpoint (stage folds lost);
+            // see their catalog rows.
+            "latecse",
+            "dirtypool",
+            // `relronoreturn` trades structure for speed (it skips a restart
+            // whose second pass renders better), the opposite of this preset.
+            "relronoreturn",
+            // `mba` targets obfuscated code; on ordinary code it can only
+            // refold arithmetic the compiler already chose.
+            "mba",
+            // `contextnames` renames loop counters and returned locals that the
+            // CLI tests of other features, which run under `auto`, spell as
+            // `vN`; it joins the preset once those are re-pinned.
+            "contextnames",
+            // `mapglobalsyms` makes a function's output depend on which functions
+            // were decompiled before it in the same run; in the preset that would
+            // make every `decompile-all` under 500 KiB order-dependent.
+            "mapglobalsyms",
+            // `varargsave` and `dynalloca` are fallbacks for the default-on
+            // `vastart` and `alloca`, which fold the same code; turning both on
+            // only adds a second pass over it.
+            "varargsave",
+            "dynalloca",
+        ];
 
         /// Default-off options that predate this test and are **not** in the preset,
         /// i.e. are currently unreachable on the default path. Each is a genuine open
@@ -741,8 +772,7 @@ mod tests {
     fn auto_spells_c_at_every_size_and_explicit_presets_keep_their_lists() {
         for size in [0, AUTO_RELIABLE_MIN_BYTES, AUTO_FAST_MIN_BYTES, u64::MAX] {
             for requested in [None, Some("auto")] {
-                let (concrete, overrides) =
-                    resolve_overrides_for_size(requested, size).unwrap();
+                let (concrete, overrides) = resolve_overrides_for_size(requested, size).unwrap();
                 assert_eq!(concrete, auto_mode_for_size(size));
                 let own = AUTO_OVERRIDES.len();
                 assert_eq!(&overrides[..own], AUTO_OVERRIDES, "auto at {size}");

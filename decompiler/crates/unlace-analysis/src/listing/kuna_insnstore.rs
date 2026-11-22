@@ -44,9 +44,9 @@ impl InstructionStore {
         let Self { index, chunks, .. } = self;
         let mut pending = Some(insn);
         let replaced = index.insert_with(address, || {
-            let slot = chunks
-                .last()
-                .map_or(0, |chunk| (chunks.len() - 1) * CHUNK_ROWS + chunk.rows.len());
+            let slot = chunks.last().map_or(0, |chunk| {
+                (chunks.len() - 1) * CHUNK_ROWS + chunk.rows.len()
+            });
             if slot % CHUNK_ROWS == 0 {
                 chunks.push(Rc::new(InstructionChunk {
                     rows: Vec::with_capacity(CHUNK_ROWS),
@@ -89,9 +89,9 @@ impl InstructionStore {
 
     pub fn iter(&self) -> impl DoubleEndedIterator<Item = (&u64, &Insn)> {
         let chunks = &self.chunks;
-        self.index
-            .iter()
-            .map(move |(address, &slot)| (address, &chunks[slot / CHUNK_ROWS].rows[slot % CHUNK_ROWS]))
+        self.index.iter().map(move |(address, &slot)| {
+            (address, &chunks[slot / CHUNK_ROWS].rows[slot % CHUNK_ROWS])
+        })
     }
 
     pub fn range(
@@ -99,9 +99,9 @@ impl InstructionStore {
         bounds: impl RangeBounds<u64>,
     ) -> impl DoubleEndedIterator<Item = (&u64, &Insn)> {
         let chunks = &self.chunks;
-        self.index
-            .range(bounds)
-            .map(move |(address, &slot)| (address, &chunks[slot / CHUNK_ROWS].rows[slot % CHUNK_ROWS]))
+        self.index.range(bounds).map(move |(address, &slot)| {
+            (address, &chunks[slot / CHUNK_ROWS].rows[slot % CHUNK_ROWS])
+        })
     }
 }
 
@@ -119,9 +119,9 @@ impl FromIterator<(u64, Insn)> for InstructionStore {
 mod tests {
     use super::super::model::{FlowType, RawOp};
     use super::*;
-    use unlace_num::opcodes::OpCode;
     use std::collections::BTreeMap;
     use std::ops::Bound;
+    use unlace_num::opcodes::OpCode;
 
     fn insn(addr: u64) -> Insn {
         Insn {
@@ -217,10 +217,12 @@ mod tests {
                 .sum::<usize>(),
             store.len()
         );
-        assert!(store
-            .chunks
-            .iter()
-            .all(|chunk| chunk.rows.capacity() == CHUNK_ROWS));
+        assert!(
+            store
+                .chunks
+                .iter()
+                .all(|chunk| chunk.rows.capacity() == CHUNK_ROWS)
+        );
     }
 
     #[test]
@@ -292,13 +294,15 @@ mod tests {
             next.get(&((CHUNK_ROWS * 2) as u64)).unwrap().operands,
             format!("target_{}", CHUNK_ROWS * 2)
         );
-        assert!(prior
-            .get(&((CHUNK_ROWS * 2) as u64))
-            .unwrap()
-            .pcode
-            .as_ref()
-            .unwrap()
-            .is_empty());
+        assert!(
+            prior
+                .get(&((CHUNK_ROWS * 2) as u64))
+                .unwrap()
+                .pcode
+                .as_ref()
+                .unwrap()
+                .is_empty()
+        );
         assert_eq!(
             next.get(&((CHUNK_ROWS * 2) as u64))
                 .unwrap()
@@ -521,7 +525,7 @@ mod tests {
 
     #[test]
     fn range_bound_validation_matches_btree_map_on_empty_and_populated_stores() {
-        use std::panic::{catch_unwind, AssertUnwindSafe};
+        use std::panic::{AssertUnwindSafe, catch_unwind};
 
         let invalid_bounds = [
             (Bound::Included(8), Bound::Included(3)),

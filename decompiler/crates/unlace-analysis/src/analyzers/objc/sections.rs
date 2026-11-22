@@ -113,16 +113,29 @@ impl<'a> MachoImage<'a> {
     /// `class`, under any category name. The linker merges the categories of a
     /// class into one and the metadata names only the merged one, so the symbol
     /// is the spelling to keep.
-    pub fn method_symbol(&self, imp: u64, kind: char, class: &str, selector: &str) -> Option<&'a str> {
+    pub fn method_symbol(
+        &self,
+        imp: u64,
+        kind: char,
+        class: &str,
+        selector: &str,
+    ) -> Option<&'a str> {
         let name = *self.method_symbols.get(&imp)?;
-        let stem = name.strip_prefix(kind)?.strip_prefix('[')?.strip_suffix(']')?.strip_suffix(selector)?.strip_suffix(' ')?;
+        let stem = name
+            .strip_prefix(kind)?
+            .strip_prefix('[')?
+            .strip_suffix(']')?
+            .strip_suffix(selector)?
+            .strip_suffix(' ')?;
         let owner = stem.split_once('(').map_or(stem, |(owner, _)| owner);
         (owner == class).then_some(name)
     }
 
     /// Every method symbol of the image with its address.
     pub fn method_symbols(&self) -> impl Iterator<Item = (u64, &'a str)> + '_ {
-        self.method_symbols.iter().map(|(&addr, &name)| (addr, name))
+        self.method_symbols
+            .iter()
+            .map(|(&addr, &name)| (addr, name))
     }
 
     /// Whether the image was loaded from a dyld shared cache.
@@ -254,7 +267,9 @@ impl<'a> MachoImage<'a> {
     /// from the chained-fixup imports or the classic bind program; `None` for any
     /// other slot.
     pub fn bind_name(&self, va: u64) -> Option<&str> {
-        self.fixups.bind_name(va).or_else(|| self.binds.get(&va).map(Rc::as_ref))
+        self.fixups
+            .bind_name(va)
+            .or_else(|| self.binds.get(&va).map(Rc::as_ref))
     }
 
     /// Whether the image carries chained fixups (`LC_DYLD_CHAINED_FIXUPS`), a
@@ -311,15 +326,20 @@ impl<'a> MachoImage<'a> {
         if left == 0 {
             return None;
         }
-        let Some(&(lo, hi, data)) = self.spans.iter().find(|&&(lo, hi, _)| va >= lo && va < hi) else {
+        let Some(&(lo, hi, data)) = self.spans.iter().find(|&&(lo, hi, _)| va >= lo && va < hi)
+        else {
             return [64usize, 4096].into_iter().find_map(|n| {
                 let bytes = self.read_outside(va, n)?;
                 let s = &bytes[..bytes.iter().position(|&b| b == 0)?];
-                s.iter().all(|b| (0x20..0x7f).contains(b)).then(|| String::from_utf8_lossy(s).into_owned())
+                s.iter()
+                    .all(|b| (0x20..0x7f).contains(b))
+                    .then(|| String::from_utf8_lossy(s).into_owned())
             });
         };
         let start = (va - lo) as usize;
-        let max = usize::try_from(hi - lo).unwrap_or(usize::MAX).min(data.len());
+        let max = usize::try_from(hi - lo)
+            .unwrap_or(usize::MAX)
+            .min(data.len());
         let max = max.min(start.saturating_add(usize::try_from(left).unwrap_or(usize::MAX)));
         let mut s = String::new();
         let mut i = start;
@@ -359,7 +379,8 @@ pub fn sections_named<'data, 'file>(
     file: &'file object::File<'data>,
     name: &'file str,
 ) -> impl Iterator<Item = object::Section<'data, 'file>> + 'file {
-    file.sections().filter(move |sec| sec.name_bytes() == Ok(name.as_bytes()))
+    file.sections()
+        .filter(move |sec| sec.name_bytes() == Ok(name.as_bytes()))
 }
 
 #[cfg(test)]
@@ -403,14 +424,30 @@ mod tests {
     #[test]
     fn method_symbol_matches_class_and_selector_under_any_category() {
         let mut img = image(&[0; 8], 0);
-        img.method_symbols.insert(0x1000, "-[NSObject(NSKeyValueCoding) valueForKey:]");
+        img.method_symbols
+            .insert(0x1000, "-[NSObject(NSKeyValueCoding) valueForKey:]");
         img.method_symbols.insert(0x1004, "+[Greeter make]");
-        assert_eq!(img.method_symbol(0x1000, '-', "NSObject", "valueForKey:"), Some("-[NSObject(NSKeyValueCoding) valueForKey:]"));
-        assert_eq!(img.method_symbol(0x1004, '+', "Greeter", "make"), Some("+[Greeter make]"));
-        assert_eq!(img.method_symbol(0x1000, '+', "NSObject", "valueForKey:"), None);
-        assert_eq!(img.method_symbol(0x1000, '-', "NSObj", "valueForKey:"), None);
+        assert_eq!(
+            img.method_symbol(0x1000, '-', "NSObject", "valueForKey:"),
+            Some("-[NSObject(NSKeyValueCoding) valueForKey:]")
+        );
+        assert_eq!(
+            img.method_symbol(0x1004, '+', "Greeter", "make"),
+            Some("+[Greeter make]")
+        );
+        assert_eq!(
+            img.method_symbol(0x1000, '+', "NSObject", "valueForKey:"),
+            None
+        );
+        assert_eq!(
+            img.method_symbol(0x1000, '-', "NSObj", "valueForKey:"),
+            None
+        );
         assert_eq!(img.method_symbol(0x1000, '-', "NSObject", "Key:"), None);
-        assert_eq!(img.method_symbol(0x1008, '-', "NSObject", "valueForKey:"), None);
+        assert_eq!(
+            img.method_symbol(0x1008, '-', "NSObject", "valueForKey:"),
+            None
+        );
     }
 
     /// Bytes outside the image come from the cache and are charged to the
@@ -430,7 +467,11 @@ mod tests {
         assert_eq!(img.read_cstr(0x9000).as_deref(), Some("sss"));
         assert_eq!(img.read_cstr(0x9004).map(|s| s.len()), Some(196));
         assert_eq!(img.read_ptr(0x9000 + 201), Some(0x1122_3344_5566_7788));
-        assert_eq!(img.read_ptr(0x9000 + 205), None, "a short read is no pointer");
+        assert_eq!(
+            img.read_ptr(0x9000 + 205),
+            None,
+            "a short read is no pointer"
+        );
         assert_eq!(img.read_cstr(0x8000), None);
         let spent = image(&[0; 8], 10).with_cache(Rc::new(|_, n| Some(vec![0; n])), None);
         assert_eq!(spent.read_u32(0x9000), Some(0));

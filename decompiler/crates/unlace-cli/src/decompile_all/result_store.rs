@@ -42,20 +42,31 @@ impl ResultStore {
     }
 
     fn over(file: Option<std::fs::File>, len: usize) -> Self {
-        Self { file, end: 0, full: false, slots: (0..len).map(|_| None).collect() }
+        Self {
+            file,
+            end: 0,
+            full: false,
+            slots: (0..len).map(|_| None).collect(),
+        }
     }
 
     /// Keep `r` as slot `index`'s result, replacing any earlier one.
     pub(crate) fn put(&mut self, index: usize, r: FuncResult) {
         let lines = super::callee_first::redo_charge(r.code.as_deref());
         if r.detail.is_some() {
-            self.slots[index] = Some(Slot { body: Body::Value(Box::new(r)), lines });
+            self.slots[index] = Some(Slot {
+                body: Body::Value(Box::new(r)),
+                lines,
+            });
             return;
         }
         let encoded = encode_result(&r);
         drop(r);
         let body = match self.write(&encoded) {
-            Some(at) => Body::File { at, len: encoded.len() },
+            Some(at) => Body::File {
+                at,
+                len: encoded.len(),
+            },
             None => Body::Memory(encoded.into_boxed_slice()),
         };
         self.slots[index] = Some(Slot { body, lines });
@@ -100,7 +111,10 @@ impl ResultStore {
     fn write(&mut self, encoded: &[u8]) -> Option<u64> {
         let file = self.file.as_mut().filter(|_| !self.full)?;
         let at = self.end;
-        match file.seek(SeekFrom::Start(at)).and_then(|_| file.write_all(encoded)) {
+        match file
+            .seek(SeekFrom::Start(at))
+            .and_then(|_| file.write_all(encoded))
+        {
             Ok(()) => {
                 self.end += encoded.len() as u64;
                 Some(at)
@@ -160,9 +174,17 @@ mod tests {
 
     fn check(mut store: ResultStore) {
         let warning = unlace_decomp::kuna_functionwarnings::Warning {
-            address: Some(0x1004), text: "WARNING: Bad instruction".into(), line: 2,
+            address: Some(0x1004),
+            text: "WARNING: Bad instruction".into(),
+            line: 2,
         };
-        store.put(2, FuncResult { warnings: vec![warning.clone()], ..result("c", Some("int c(void)\n{\n}")) });
+        store.put(
+            2,
+            FuncResult {
+                warnings: vec![warning.clone()],
+                ..result("c", Some("int c(void)\n{\n}"))
+            },
+        );
         store.put(0, result("a", None));
         store.put(0, result("a2", Some("void a(void)")));
         let mut tokens = result("d", Some("void d(void)"));
@@ -170,9 +192,20 @@ mod tests {
         store.put(3, tokens);
         assert_eq!(store.get(1).map(|r| r.name), None);
         assert_eq!(store.get(0).map(|r| r.name).as_deref(), Some("a2"));
-        assert_eq!((store.lines(0), store.lines(1), store.lines(2), store.printed()), (1, 0, 3, 5));
+        assert_eq!(
+            (
+                store.lines(0),
+                store.lines(1),
+                store.lines(2),
+                store.printed()
+            ),
+            (1, 0, 3, 5)
+        );
         let all = store.into_results();
-        assert_eq!(all.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(), ["a2", "c", "d"]);
+        assert_eq!(
+            all.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(),
+            ["a2", "c", "d"]
+        );
         assert_eq!(all[1].code.as_deref(), Some("int c(void)\n{\n}"));
         assert_eq!(all[1].aliases, ["alias"]);
         assert_eq!(all[1].warnings, [warning]);
@@ -192,13 +225,22 @@ mod tests {
         let spool = tempfile::NamedTempFile::new().unwrap();
         let mut store = ResultStore::over(Some(spool.reopen().unwrap()), 3);
         store.put(0, result("a", Some("void a(void)")));
-        assert!(matches!(store.slots[0].as_ref().map(|s| &s.body), Some(Body::File { .. })));
+        assert!(matches!(
+            store.slots[0].as_ref().map(|s| &s.body),
+            Some(Body::File { .. })
+        ));
         store.file = Some(std::fs::File::open(spool.path()).unwrap());
         store.put(1, result("b", Some("void b(void)")));
-        assert!(matches!(store.slots[1].as_ref().map(|s| &s.body), Some(Body::Memory(_))));
+        assert!(matches!(
+            store.slots[1].as_ref().map(|s| &s.body),
+            Some(Body::Memory(_))
+        ));
         store.put(2, result("c", None));
         assert_eq!(store.get(0).map(|r| r.name).as_deref(), Some("a"));
         let all = store.into_results();
-        assert_eq!(all.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(), ["a", "b", "c"]);
+        assert_eq!(
+            all.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(),
+            ["a", "b", "c"]
+        );
     }
 }

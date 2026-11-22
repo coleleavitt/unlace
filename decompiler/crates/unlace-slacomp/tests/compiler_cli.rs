@@ -159,10 +159,7 @@ fn consistency_error_uses_included_constructor_location() {
 
 #[test]
 fn a_temporary_must_be_written_before_its_only_read() {
-    for body in [
-        "local tmp:4; r0=tmp; tmp=1;",
-        "local tmp:4; tmp=tmp+1;",
-    ] {
+    for body in ["local tmp:4; r0=tmp; tmp=1;", "local tmp:4; tmp=tmp+1;"] {
         let scratch = tempfile::tempdir().unwrap();
         write_diagnostic_spec(scratch.path(), body);
         let destination = scratch.path().join("compiled.sla");

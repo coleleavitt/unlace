@@ -107,10 +107,15 @@ pub fn parse_fatstr_mode(value: &str) -> Result<(FatStrMode, String), String> {
         "auto" | "" => FatStrMode::Auto,
         "always" | "on" | "1" | "true" => FatStrMode::Always,
         other => {
-            return Err(format!("unknown fatstr value {other:?} (expected off, auto or always)"))
+            return Err(format!(
+                "unknown fatstr value {other:?} (expected off, auto or always)"
+            ));
         }
     };
-    Ok((mode, format!("Length-carried string literals set to {}", mode.as_str())))
+    Ok((
+        mode,
+        format!("Length-carried string literals set to {}", mode.as_str()),
+    ))
 }
 
 /// Is the rewrite live for this function?
@@ -135,7 +140,9 @@ pub const MAX_LEN: u64 = 4096;
 /// `\n`/`\t`/`\r`, and at least one alphanumeric so pad bytes never read as a
 /// string.
 pub fn bytes_are_text(bytes: &[u8]) -> bool {
-    let Ok(s) = core::str::from_utf8(bytes) else { return false };
+    let Ok(s) = core::str::from_utf8(bytes) else {
+        return false;
+    };
     let mut has_alnum = false;
     for c in s.chars() {
         if c.is_control() && !matches!(c, '\n' | '\t' | '\r') {
@@ -159,7 +166,10 @@ impl RuleFatStr {
     /// `enabled` forces the rule on regardless of the architecture gate (unit
     /// tests); the scheduled instance passes `false`.
     pub fn with_group(enabled: bool, g: impl Into<String>) -> RuleFatStr {
-        RuleFatStr { enabled, group: g.into() }
+        RuleFatStr {
+            enabled,
+            group: g.into(),
+        }
     }
 }
 
@@ -172,14 +182,19 @@ impl Rule for RuleFatStr {
         if !grouplist.contains(&self.group) {
             return None;
         }
-        Some(Box::new(RuleFatStr { enabled: self.enabled, group: self.group.clone() }))
+        Some(Box::new(RuleFatStr {
+            enabled: self.enabled,
+            group: self.group.clone(),
+        }))
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         if !self.enabled && !live(data) {
             return 0;
         }
-        let Some(o) = data.obank().get(op) else { return 0 };
+        let Some(o) = data.obank().get(op) else {
+            return 0;
+        };
         let nin = o.num_input();
         if nin < 3 {
             return 0;
@@ -192,14 +207,18 @@ impl Rule for RuleFatStr {
         };
         let ptr_size = spc.get_addr_size() as int4;
         for i in 1..nin - 1 {
-            let Some((ptr_val, len_val)) = constant_pair(data, op, i, ptr_size) else { continue };
+            let Some((ptr_val, len_val)) = constant_pair(data, op, i, ptr_size) else {
+                continue;
+            };
             if !(MIN_LEN..=MAX_LEN).contains(&len_val) {
                 continue;
             }
             let addr = Address::new(Rc::clone(&spc), ptr_val);
             // The literal must be a fact of the image: read-only, and
             // readable.
-            if data.get_arch().query_global_properties(&addr, len_val as int4, &call_addr)
+            if data
+                .get_arch()
+                .query_global_properties(&addr, len_val as int4, &call_addr)
                 & varnode_flags::readonly
                 == 0
             {
@@ -213,8 +232,12 @@ impl Rule for RuleFatStr {
             if !bytes_are_text(&buf) && !pointer_has_text_facet(data, op, i) {
                 continue;
             }
-            let Some(tf) = data.get_arch().types() else { return 0 };
-            let Ok(ch) = tf.get_type_char(1) else { return 0 };
+            let Some(tf) = data.get_arch().types() else {
+                return 0;
+            };
+            let Ok(ch) = tf.get_type_char(1) else {
+                return 0;
+            };
             let Ok(char_ptr) = tf.get_type_pointer(ptr_size, ch, spc.get_word_size()) else {
                 return 0;
             };
@@ -246,7 +269,11 @@ fn constant_pair(data: &Funcdata, op: OpId, i: int4, ptr_size: int4) -> Option<(
     if ptr_vn.get_size() != ptr_size {
         return None;
     }
-    let ptr = if ptr_vn.is_constant() { ptr_vn.get_offset() } else { global_ptrsub(data, ptr_vn)? };
+    let ptr = if ptr_vn.is_constant() {
+        ptr_vn.get_offset()
+    } else {
+        global_ptrsub(data, ptr_vn)?
+    };
     let len_vn = data.vbank().get(o.get_in(i + 1)?)?;
     if !len_vn.is_constant() {
         return None;
@@ -258,7 +285,9 @@ fn constant_pair(data: &Funcdata, op: OpId, i: int4, ptr_size: int4) -> Option<(
 /// once a symbol (here, typically the NUL-scan string row that glues this
 /// literal to the next) covers its target.
 fn global_ptrsub(data: &Funcdata, vn: &crate::varnode::Varnode) -> Option<u64> {
-    let def = data.obank().get(vn.get_def().filter(|_| vn.is_written())?)?;
+    let def = data
+        .obank()
+        .get(vn.get_def().filter(|_| vn.is_written())?)?;
     if def.code() != OpCode::CPUI_PTRSUB {
         return None;
     }
@@ -269,14 +298,20 @@ fn global_ptrsub(data: &Funcdata, vn: &crate::varnode::Varnode) -> Option<u64> {
 
 /// Does the pointer argument's facing type carry a text facet (W3)?
 fn pointer_has_text_facet(data: &Funcdata, op: OpId, i: int4) -> bool {
-    let Some(o) = data.obank().get(op) else { return false };
-    let Some(vn) = o.get_in(i).and_then(|v| data.vbank().get(v)) else { return false };
+    let Some(o) = data.obank().get(op) else {
+        return false;
+    };
+    let Some(vn) = o.get_in(i).and_then(|v| data.vbank().get(v)) else {
+        return false;
+    };
     let dt = vn.get_type_read_facing(op);
     let name = dt.get_name();
     if name.is_empty() {
         return false;
     }
-    let Some(tf) = data.get_arch().types() else { return false };
+    let Some(tf) = data.get_arch().types() else {
+        return false;
+    };
     tf.kuna_lang_facet(name).is_some_and(|f| f.is_text())
 }
 

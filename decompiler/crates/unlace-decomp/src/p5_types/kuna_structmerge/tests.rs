@@ -8,8 +8,14 @@ const OFF: StructMergeMode = StructMergeMode::Off;
 
 #[test]
 fn option_parses_both_values_and_rejects_anything_else() {
-    assert_eq!(OptionStructMerge.apply("off").unwrap().0, StructMergeMode::Off);
-    assert_eq!(OptionStructMerge.apply("siblings").unwrap().0, StructMergeMode::Siblings);
+    assert_eq!(
+        OptionStructMerge.apply("off").unwrap().0,
+        StructMergeMode::Off
+    );
+    assert_eq!(
+        OptionStructMerge.apply("siblings").unwrap().0,
+        StructMergeMode::Siblings
+    );
     assert!(OptionStructMerge.apply("on").is_err());
     assert!(OptionStructMerge.apply("all").is_err());
     assert!(!StructMergeMode::Off.fires() && StructMergeMode::Siblings.fires());
@@ -37,18 +43,29 @@ fn core_factory() -> crate::dtype::TypeFactoryImpl {
 
 /// A pointer to `char`, the one field type that carries a pointee.
 fn charptr(f: &crate::dtype::TypeFactoryImpl) -> Rc<Datatype> {
-    f.get_type_pointer(8, f.get_base(1, type_metatype::TYPE_INT).unwrap(), 1).unwrap()
+    f.get_type_pointer(8, f.get_base(1, type_metatype::TYPE_INT).unwrap(), 1)
+        .unwrap()
 }
 
 /// The claimed offsets of a completed structure, filler dropped.
 fn claimed(ct: &Datatype) -> Vec<int4> {
-    ledger::layout_of(ct).unwrap().fields.iter().map(|k| k.offset).collect()
+    ledger::layout_of(ct)
+        .unwrap()
+        .fields
+        .iter()
+        .map(|k| k.offset)
+        .collect()
 }
 
 /// `undefined1[n]` filler at `off`, the member a hole becomes.
 fn filler(f: &crate::dtype::TypeFactoryImpl, ident: int4, off: int4, n: int4) -> TypeField {
     let byte = f.get_base(1, type_metatype::TYPE_UNKNOWN).unwrap();
-    TypeField::new(ident, off, format!("field_0x{off:x}"), f.get_type_array(n, byte).unwrap())
+    TypeField::new(
+        ident,
+        off,
+        format!("field_0x{off:x}"),
+        f.get_type_array(n, byte).unwrap(),
+    )
 }
 
 /// Two readers of one record that measured overlapping-but-different parts of
@@ -87,15 +104,27 @@ fn two_readers_of_one_record_are_answered_by_the_union_of_their_claims() {
     let a = ledger::lookup_or_mint(&f, build(&f, (0x18, true)), 0x20, &[], &[], OFF).unwrap();
     let b = ledger::lookup_or_mint(&f, build(&f, (0x10, false)), 0x18, &[], &[], OFF).unwrap();
     assert_eq!(claimed(&a), vec![0, 8, 0x18]);
-    assert_eq!(claimed(&b), vec![0, 8, 0x10], "off, each reader keeps only its own claims");
+    assert_eq!(
+        claimed(&b),
+        vec![0, 8, 0x10],
+        "off, each reader keeps only its own claims"
+    );
     assert_ne!(a.get_name(), b.get_name());
 
     let g = core_factory();
     let ga = ledger::lookup_or_mint(&g, build(&g, (0x18, true)), 0x20, &[], &[], ON).unwrap();
     let union = ledger::lookup_or_mint(&g, build(&g, (0x10, false)), 0x18, &[], &[], ON).unwrap();
-    assert_eq!(claimed(&union), vec![0, 8, 0x10, 0x18], "the union carries both readers' claims");
+    assert_eq!(
+        claimed(&union),
+        vec![0, 8, 0x10, 0x18],
+        "the union carries both readers' claims"
+    );
     assert_eq!(union.get_size(), 0x20);
-    assert_ne!(union.get_name(), ga.get_name(), "a held structure is never widened in place");
+    assert_ne!(
+        union.get_name(),
+        ga.get_name(),
+        "a held structure is never widened in place"
+    );
     assert_eq!(
         ledger::superseded_names(&g),
         vec![ga.get_name().to_string()],
@@ -138,14 +167,21 @@ fn a_contradicted_claim_refuses_the_union() {
             3,
             off,
             format!("field_0x{off:x}"),
-            if width == 8 { Rc::clone(&int8t) } else { Rc::clone(&int4t) },
+            if width == 8 {
+                Rc::clone(&int8t)
+            } else {
+                Rc::clone(&int4t)
+            },
         ));
         if width == 4 {
             second.push(filler(&f, 4, off + 4, 4));
         }
         let b = ledger::lookup_or_mint(&f, second, off + 8, &[], &[], ON).unwrap();
         assert_ne!(b.get_name(), a.get_name());
-        assert!(!claimed(&b).contains(&0x14) || off == 0x14, "each keeps what it measured");
+        assert!(
+            !claimed(&b).contains(&0x14) || off == 0x14,
+            "each keeps what it measured"
+        );
         assert!(claimed(&b).len() <= 4);
     }
 }
@@ -156,10 +192,11 @@ fn a_contradicted_claim_refuses_the_union() {
 #[test]
 fn a_single_shared_claim_is_not_evidence_of_one_record() {
     let f = core_factory();
-    let (int4t, int8t, cp) =
-        (f.get_base(4, type_metatype::TYPE_INT).unwrap(),
-         f.get_base(8, type_metatype::TYPE_INT).unwrap(),
-         charptr(&f));
+    let (int4t, int8t, cp) = (
+        f.get_base(4, type_metatype::TYPE_INT).unwrap(),
+        f.get_base(8, type_metatype::TYPE_INT).unwrap(),
+        charptr(&f),
+    );
     let first = vec![
         TypeField::new(0, 0, "field_0x0", Rc::clone(&cp)),
         filler(&f, 1, 8, 8),
@@ -175,7 +212,11 @@ fn a_single_shared_claim_is_not_evidence_of_one_record() {
     ];
     let b = ledger::lookup_or_mint(&f, second, 0x20, &[], &[], ON).unwrap();
     assert_ne!(b.get_name(), a.get_name());
-    assert_eq!(claimed(&b), vec![0, 8, 0x18], "only offset 0 agreed, so nothing is merged");
+    assert_eq!(
+        claimed(&b),
+        vec![0, 8, 0x18],
+        "only offset 0 agreed, so nothing is merged"
+    );
 }
 
 /// A reader is never declared to hold more than twice the fields it measured:
@@ -184,12 +225,15 @@ fn a_single_shared_claim_is_not_evidence_of_one_record() {
 #[test]
 fn the_union_may_not_outgrow_either_reader() {
     let f = core_factory();
-    let (int8t, cp) =
-        (f.get_base(8, type_metatype::TYPE_INT).unwrap(), charptr(&f));
+    let (int8t, cp) = (f.get_base(8, type_metatype::TYPE_INT).unwrap(), charptr(&f));
     let mut wide = Vec::new();
     for i in 0..8 {
         let off = i * 8;
-        let ty = if i == 0 { Rc::clone(&cp) } else { Rc::clone(&int8t) };
+        let ty = if i == 0 {
+            Rc::clone(&cp)
+        } else {
+            Rc::clone(&int8t)
+        };
         wide.push(TypeField::new(i, off, format!("field_0x{off:x}"), ty));
     }
     let a = ledger::lookup_or_mint(&f, wide, 0x40, &[], &[], ON).unwrap();
@@ -220,8 +264,18 @@ fn a_union_may_not_split_bytes_the_reader_accessed_without_claiming() {
     let held = |f: &crate::dtype::TypeFactoryImpl| {
         vec![
             TypeField::new(0, 0, "field_0x0", charptr(f)),
-            TypeField::new(1, 8, "field_0x8", f.get_base(8, type_metatype::TYPE_INT).unwrap()),
-            TypeField::new(2, 0x10, "field_0x10", f.get_base(4, type_metatype::TYPE_INT).unwrap()),
+            TypeField::new(
+                1,
+                8,
+                "field_0x8",
+                f.get_base(8, type_metatype::TYPE_INT).unwrap(),
+            ),
+            TypeField::new(
+                2,
+                0x10,
+                "field_0x10",
+                f.get_base(4, type_metatype::TYPE_INT).unwrap(),
+            ),
             filler(f, 3, 0x14, 4),
         ]
     };
@@ -230,9 +284,19 @@ fn a_union_may_not_split_bytes_the_reader_accessed_without_claiming() {
     let reader = |f: &crate::dtype::TypeFactoryImpl| {
         vec![
             TypeField::new(0, 0, "field_0x0", charptr(f)),
-            TypeField::new(1, 8, "field_0x8", f.get_base(8, type_metatype::TYPE_INT).unwrap()),
+            TypeField::new(
+                1,
+                8,
+                "field_0x8",
+                f.get_base(8, type_metatype::TYPE_INT).unwrap(),
+            ),
             filler(f, 2, 0x10, 8),
-            TypeField::new(3, 0x18, "field_0x18", f.get_base(8, type_metatype::TYPE_INT).unwrap()),
+            TypeField::new(
+                3,
+                0x18,
+                "field_0x18",
+                f.get_base(8, type_metatype::TYPE_INT).unwrap(),
+            ),
         ]
     };
 
@@ -245,7 +309,10 @@ fn a_union_may_not_split_bytes_the_reader_accessed_without_claiming() {
         vec![0, 8, 0x10, 0x18],
         "with nothing unclaimed the two merge, and the union claims the held `int4` at 0x10"
     );
-    assert_eq!(ledger::superseded_names(&g), vec![ga.get_name().to_string()]);
+    assert_eq!(
+        ledger::superseded_names(&g),
+        vec![ga.get_name().to_string()]
+    );
 
     let f = core_factory();
     let a = ledger::lookup_or_mint(&f, held(&f), 0x18, &[], &[], ON).unwrap();
@@ -267,10 +334,11 @@ fn a_union_may_not_split_bytes_the_reader_accessed_without_claiming() {
 #[test]
 fn off_mints_a_record_per_reader() {
     let f = core_factory();
-    let (int4t, int8t, cp) =
-        (f.get_base(4, type_metatype::TYPE_INT).unwrap(),
-         f.get_base(8, type_metatype::TYPE_INT).unwrap(),
-         charptr(&f));
+    let (int4t, int8t, cp) = (
+        f.get_base(4, type_metatype::TYPE_INT).unwrap(),
+        f.get_base(8, type_metatype::TYPE_INT).unwrap(),
+        charptr(&f),
+    );
     let first = vec![
         TypeField::new(0, 0, "field_0x0", Rc::clone(&cp)),
         filler(&f, 1, 8, 8),

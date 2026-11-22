@@ -1,6 +1,8 @@
 use super::*;
 use crate::context::{ArchContext, BlockId};
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpaceManager, ConstantSpace, UniqueSpace};
+use unlace_base::space::{
+    AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
+};
 
 struct Fixture {
     fd: Funcdata,
@@ -143,7 +145,13 @@ fn synthetic_widening_retains_only_the_native_store_extent() {
     let block = f.block();
     f.store(block, 0x1001, 0x22, 1);
     let constant = f.fd.new_constant(8, 0xff0000);
-    f.op(block, 0x1001, OpCode::CPUI_COPY, &[constant], Some((0x20, 8)));
+    f.op(
+        block,
+        0x1001,
+        OpCode::CPUI_COPY,
+        &[constant],
+        Some((0x20, 8)),
+    );
     let point = f.point(block, 0x1002);
     let mut expected = vec![BTreeSet::from([ByteSource::Unknown]); 8];
     expected[2] = BTreeSet::from([write(0x1001)]);
@@ -156,9 +164,18 @@ fn synthetic_slice_retains_the_native_store_identity() {
     let block = f.block();
     f.store(block, 0x1001, 0x20, 4);
     let constant = f.fd.new_constant(3, 5);
-    f.op(block, 0x1001, OpCode::CPUI_COPY, &[constant], Some((0x20, 3)));
+    f.op(
+        block,
+        0x1001,
+        OpCode::CPUI_COPY,
+        &[constant],
+        Some((0x20, 3)),
+    );
     let point = f.point(block, 0x1002);
-    assert_eq!(f.bytes(point, 0x20, 4), vec![BTreeSet::from([write(0x1001)]); 4]);
+    assert_eq!(
+        f.bytes(point, 0x20, 4),
+        vec![BTreeSet::from([write(0x1001)]); 4]
+    );
 }
 
 #[test]
@@ -345,7 +362,10 @@ fn integer_frame_addresses_keep_unbounded_positive_parameter_aliases() {
     for width in [4, 8] {
         let mut f = Fixture::new(false, width);
         let block = f.block();
-        let ty = Rc::new(Datatype::new(width as i32, crate::dtype::type_metatype::TYPE_UINT));
+        let ty = Rc::new(Datatype::new(
+            width as i32,
+            crate::dtype::type_metatype::TYPE_UINT,
+        ));
         let base = f.fd.new_varnode(
             width as i32,
             &Address::new(Rc::clone(&f.ram), 0x80),
@@ -369,7 +389,9 @@ fn integer_frame_addresses_keep_unbounded_positive_parameter_aliases() {
         assert!(!may_alias(&f.fd, address, 8, 8));
         f.fd.vbank_mut().get_mut(index).unwrap().set_nz_mask(15);
         assert!(may_alias(&f.fd, address, 8, 8));
-        f.fd.vbank_mut().get_mut(index).unwrap()
+        f.fd.vbank_mut()
+            .get_mut(index)
+            .unwrap()
             .set_nz_mask(unlace_base::address::calc_mask(width as i32));
         assert!(frame_address(&f.fd, address).is_none());
         assert!(may_alias(&f.fd, address, 8, 8));
@@ -381,14 +403,20 @@ fn wide_duplicate_pointer_choices_exhaust_the_alias_proof() {
     let mut f = Fixture::new(false, 8);
     let block = f.block();
     let global = f.fd.new_constant(8, 0x4000);
-    let (op, _) = f.op(block, 0x1001, OpCode::CPUI_MULTIEQUAL, &vec![global; 1024], None);
+    let (op, _) = f.op(
+        block,
+        0x1001,
+        OpCode::CPUI_MULTIEQUAL,
+        &vec![global; 1024],
+        None,
+    );
     let address = f.fd.new_unique_out(8, op).unwrap();
     assert!(crate::kuna_stackranges::may_alias(&f.fd, address, 8, 8));
 }
 
 #[test]
 fn absent_call_contracts_keep_frame_effects_and_later_locked_views() {
-    use crate::dtype::{type_metatype, DatatypeKind};
+    use crate::dtype::{DatatypeKind, type_metatype};
     use crate::fspec::{FuncCallSpecs, ParameterPieces};
     for opcode in [OpCode::CPUI_CALL, OpCode::CPUI_CALLIND] {
         let mut f = Fixture::new(false, 8);
@@ -399,12 +427,20 @@ fn absent_call_contracts_keep_frame_effects_and_later_locked_views() {
         let (call, _) = f.op(block, 0x1002, opcode, &[target, argument], None);
         f.fd.obank_mut().mark_alive(call);
         let index = f.fd.push_call_specs(FuncCallSpecs::new(
-            call, Address::new(Rc::clone(&f.ram), 0x2000),
+            call,
+            Address::new(Rc::clone(&f.ram), 0x2000),
         ));
         let point = f.point(block, 0x1003);
-        let expected = vec![BTreeSet::from([
-            write(0x1001), ByteSource::Effect(SourcePoint { space: 2, address: 0x1002 }),
-        ]); 4];
+        let expected = vec![
+            BTreeSet::from([
+                write(0x1001),
+                ByteSource::Effect(SourcePoint {
+                    space: 2,
+                    address: 0x1002
+                }),
+            ]);
+            4
+        ];
         assert!(crate::kuna_stackuses::declared_view(&f.fd, call, 1).is_none());
         assert!(!f.fd.get_call_specs(index).proto().has_store());
         assert_eq!(f.bytes(point, 0x20, 4), expected);
@@ -412,16 +448,27 @@ fn absent_call_contracts_keep_frame_effects_and_later_locked_views() {
         let value_type = Rc::new(Datatype::new(4, type_metatype::TYPE_INT));
         let mut pointer = Datatype::new(8, type_metatype::TYPE_PTR);
         pointer.kind = DatatypeKind::Pointer {
-            ptrto: Rc::clone(&value_type), spaceid: None, truncate: None, wordsize: 1,
+            ptrto: Rc::clone(&value_type),
+            spaceid: None,
+            truncate: None,
+            wordsize: 1,
         };
         let parameter_address = Address::new(Rc::clone(&f.ram), 0x80);
         let proto = f.fd.get_call_specs_mut(index).proto_mut();
         proto.attach_internal_store(Rc::new(Datatype::new(0, type_metatype::TYPE_VOID)));
-        proto.set_param(0, "value", &ParameterPieces {
-            addr: parameter_address, type_: Some(Rc::new(pointer)), flags: 0,
-        });
+        proto.set_param(
+            0,
+            "value",
+            &ParameterPieces {
+                addr: parameter_address,
+                type_: Some(Rc::new(pointer)),
+                flags: 0,
+            },
+        );
         assert!(crate::kuna_stackuses::declared_view(&f.fd, call, 1).is_none());
-        f.fd.get_call_specs_mut(index).proto_mut().set_input_lock(true);
+        f.fd.get_call_specs_mut(index)
+            .proto_mut()
+            .set_input_lock(true);
         let view = crate::kuna_stackuses::declared_view(&f.fd, call, 1).unwrap();
         assert!(Rc::ptr_eq(&view, &value_type));
         assert_eq!(f.bytes(point, 0x20, 4), expected);

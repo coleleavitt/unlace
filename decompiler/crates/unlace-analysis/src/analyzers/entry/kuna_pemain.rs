@@ -86,30 +86,37 @@ pub(crate) fn pe_main(file: &object::File, bytes: &[u8]) -> Option<(u64, &'stati
     import_addrs.dedup();
     let named = |n: &str| imports.iter().any(|(_, i)| i == n);
 
-    let local = |t: u64| in_executable_section(&execs, t) && import_addrs.binary_search(&t).is_err();
-    let (site_target, name) = if let Some((t, _)) =
-        super::kuna_entrymainproto::ucrt_main_call(file, bytes, &execs)
-    {
-        let wide = named("__p___wargv") || named("_get_initial_wide_environment");
-        (t, if wide { "wmain" } else { "main" })
-    } else if let Some(hit) = winmain_call(file, &execs, &imports, &local) {
-        hit
-    } else if let Some(hit) = mingw_main_call(file, &execs, &imports, &local) {
-        hit
-    } else if file.architecture() == object::Architecture::X86_64 {
-        (static_invoke_main(&execs, &local)?, "main")
-    } else {
-        return None;
-    };
+    let local =
+        |t: u64| in_executable_section(&execs, t) && import_addrs.binary_search(&t).is_err();
+    let (site_target, name) =
+        if let Some((t, _)) = super::kuna_entrymainproto::ucrt_main_call(file, bytes, &execs) {
+            let wide = named("__p___wargv") || named("_get_initial_wide_environment");
+            (t, if wide { "wmain" } else { "main" })
+        } else if let Some(hit) = winmain_call(file, &execs, &imports, &local) {
+            hit
+        } else if let Some(hit) = mingw_main_call(file, &execs, &imports, &local) {
+            hit
+        } else if file.architecture() == object::Architecture::X86_64 {
+            (static_invoke_main(&execs, &local)?, "main")
+        } else {
+            return None;
+        };
 
     let vma = follow_jmp_thunks(&execs, site_target);
     if !local(vma) {
         return None;
     }
-    if existing_function_addrs(file, bytes).binary_search(&vma).is_ok() {
+    if existing_function_addrs(file, bytes)
+        .binary_search(&vma)
+        .is_ok()
+    {
         return None;
     }
-    if file.symbols().chain(file.dynamic_symbols()).any(|s| s.name() == Ok(name)) {
+    if file
+        .symbols()
+        .chain(file.dynamic_symbols())
+        .any(|s| s.name() == Ok(name))
+    {
         return None;
     }
     if let Ok(exports) = file.exports() {
@@ -141,9 +148,10 @@ fn calls(execs: &[(u64, u64, Vec<u8>)]) -> Vec<(u64, u64)> {
 
 /// The bytes of `[from, to)` if both ends lie in one executable section.
 fn span(execs: &[(u64, u64, Vec<u8>)], from: u64, to: u64) -> Option<&[u8]> {
-    execs.iter().find(|(lo, hi, _)| from >= *lo && to <= *hi && from <= to).map(|(lo, _, d)| {
-        &d[(from - lo) as usize..(to - lo) as usize]
-    })
+    execs
+        .iter()
+        .find(|(lo, hi, _)| from >= *lo && to <= *hi && from <= to)
+        .map(|(lo, _, d)| &d[(from - lo) as usize..(to - lo) as usize])
 }
 
 /// Does `[from, to)` hold a reference to one of `targets` — RIP-relative on
@@ -207,18 +215,24 @@ fn winmain_call(
         ("_get_narrow_winmain_command_line", "WinMain"),
         ("_get_wide_winmain_command_line", "wWinMain"),
     ] {
-        let addrs: Vec<u64> =
-            imports.iter().filter(|(_, n)| n == accessor).map(|(a, _)| *a).collect();
+        let addrs: Vec<u64> = imports
+            .iter()
+            .filter(|(_, n)| n == accessor)
+            .map(|(a, _)| *a)
+            .collect();
         if addrs.is_empty() {
             continue;
         }
-        let hits = all.iter().filter(|(_, t)| addrs.contains(t)).filter_map(|(site, _)| {
-            let after = site + 5;
-            next_local_call(&all, after, local, &|call| {
-                references(execs, after, call, &[image_base], rip)
-            })
-            .map(|(_, t)| t)
-        });
+        let hits = all
+            .iter()
+            .filter(|(_, t)| addrs.contains(t))
+            .filter_map(|(site, _)| {
+                let after = site + 5;
+                next_local_call(&all, after, local, &|call| {
+                    references(execs, after, call, &[image_base], rip)
+                })
+                .map(|(_, t)| t)
+            });
         if let Some(t) = unique(hits) {
             return Some((t, name));
         }
@@ -237,8 +251,11 @@ fn mingw_main_call(
     let ptr = if rip { 8 } else { 4 };
     let all = calls(execs);
     for (slot_name, name) in [("__initenv", "main"), ("__winitenv", "wmain")] {
-        let mut markers: Vec<u64> =
-            imports.iter().filter(|(_, n)| n == slot_name).map(|(a, _)| *a).collect();
+        let mut markers: Vec<u64> = imports
+            .iter()
+            .filter(|(_, n)| n == slot_name)
+            .map(|(a, _)| *a)
+            .collect();
         if markers.is_empty() {
             continue;
         }
@@ -293,12 +310,12 @@ fn refptrs(file: &object::File, slots: &[u64], ptr: usize) -> Vec<u64> {
 fn static_invoke_main(execs: &[(u64, u64, Vec<u8>)], local: &dyn Fn(u64) -> bool) -> Option<u64> {
     let all = calls(execs);
     let qword_deref_rax = |b: &[u8]| {
-        b.windows(3).any(|w| (w[0] == 0x48 || w[0] == 0x4C) && w[1] == 0x8B && w[2] & 0xC7 == 0)
+        b.windows(3)
+            .any(|w| (w[0] == 0x48 || w[0] == 0x4C) && w[1] == 0x8B && w[2] & 0xC7 == 0)
     };
     let dword_deref_rax = |b: &[u8]| {
-        (0..b.len().saturating_sub(1)).any(|i| {
-            b[i] == 0x8B && b[i + 1] & 0xC7 == 0 && (i == 0 || b[i - 1] & 0xF8 != 0x48)
-        })
+        (0..b.len().saturating_sub(1))
+            .any(|i| b[i] == 0x8B && b[i + 1] & 0xC7 == 0 && (i == 0 || b[i - 1] & 0xF8 != 0x48))
     };
     let hits = all.windows(4).filter_map(|w| {
         let [(c1, t1), (c2, t2), (c3, t3), (x, m)] = [w[0], w[1], w[2], w[3]];
@@ -322,7 +339,9 @@ fn static_invoke_main(execs: &[(u64, u64, Vec<u8>)], local: &dyn Fn(u64) -> bool
 /// Follow up to four `E9 rel32` incremental-link thunks from `vma`.
 fn follow_jmp_thunks(execs: &[(u64, u64, Vec<u8>)], mut vma: u64) -> u64 {
     for _ in 0..4 {
-        let Some(b) = span(execs, vma, vma + 5) else { break };
+        let Some(b) = span(execs, vma, vma + 5) else {
+            break;
+        };
         if b[0] != 0xE9 {
             break;
         }
@@ -356,7 +375,10 @@ mod tests {
     /// `pe_imports.exe` names at the same address.
     #[test]
     fn names_the_mingw_main_of_a_stripped_image() {
-        assert_eq!(claim("pe_imports_stripped.exe"), Some((0x140001592, "main")));
+        assert_eq!(
+            claim("pe_imports_stripped.exe"),
+            Some((0x140001592, "main"))
+        );
     }
 
     /// The unstripped twin already names `main` from its COFF symbols.

@@ -11,7 +11,7 @@
 use std::path::Path;
 
 use unlace_decomp::architecture::Architecture;
-use unlace_decomp::kuna_langfamily::{language_id, LanguageFamily};
+use unlace_decomp::kuna_langfamily::{LanguageFamily, language_id};
 
 use super::db::{FidDatabase, FidDb};
 
@@ -61,7 +61,10 @@ impl FidDbReport {
             FidDbStatus::Invalid => format!("not a kuna .fid database ({reason})"),
             FidDbStatus::Incompatible => reason.to_string(),
         };
-        Some(format!("{WARNING_PREFIX}{}: {what}; no function was matched against it", self.path))
+        Some(format!(
+            "{WARNING_PREFIX}{}: {what}; no function was matched against it",
+            self.path
+        ))
     }
 }
 
@@ -157,7 +160,10 @@ fn differences(a: &LanguageFamily, b: &LanguageFamily) -> Vec<&'static str> {
     [
         (a.processor != b.processor, "processor"),
         (a.size != b.size, "address size"),
-        (a.instruction_big_endian != b.instruction_big_endian, "instruction byte order"),
+        (
+            a.instruction_big_endian != b.instruction_big_endian,
+            "instruction byte order",
+        ),
     ]
     .into_iter()
     .filter_map(|(differ, what)| differ.then_some(what))
@@ -165,8 +171,15 @@ fn differences(a: &LanguageFamily, b: &LanguageFamily) -> Vec<&'static str> {
 }
 
 fn describe(f: &LanguageFamily) -> String {
-    let order = if f.instruction_big_endian { "big" } else { "little" };
-    format!("{} {}-bit, {order}-endian instructions", f.processor, f.size)
+    let order = if f.instruction_big_endian {
+        "big"
+    } else {
+        "little"
+    };
+    format!(
+        "{} {}-bit, {order}-endian instructions",
+        f.processor, f.size
+    )
 }
 
 #[cfg(test)]
@@ -174,15 +187,25 @@ mod tests {
     use super::*;
 
     fn family(processor: &str, size: i32, big: bool) -> LanguageFamily {
-        LanguageFamily { processor: processor.into(), size, instruction_big_endian: big }
+        LanguageFamily {
+            processor: processor.into(),
+            size,
+            instruction_big_endian: big,
+        }
     }
 
     #[test]
     fn processor_size_and_instruction_order_decide() {
         let x86_64 = family("x86", 64, false);
         assert!(differences(&x86_64, &family("x86", 64, false)).is_empty());
-        assert_eq!(differences(&x86_64, &family("x86", 32, false)), ["address size"]);
-        assert_eq!(differences(&x86_64, &family("AARCH64", 64, false)), ["processor"]);
+        assert_eq!(
+            differences(&x86_64, &family("x86", 32, false)),
+            ["address size"]
+        );
+        assert_eq!(
+            differences(&x86_64, &family("AARCH64", 64, false)),
+            ["processor"]
+        );
         assert_eq!(
             differences(&family("ARM", 32, false), &family("PowerPC", 64, true)),
             ["processor", "address size", "instruction byte order"]

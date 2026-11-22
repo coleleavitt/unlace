@@ -20,14 +20,20 @@ fn factory() -> TypeFactoryImpl {
     types.set_default_alignment_map();
     types.set_max_basetype_size(8);
     types.setup_sizes(Some(4), 4, 4);
-    types.set_core_type("char", 1, type_metatype::TYPE_INT, true).expect("char core type");
+    types
+        .set_core_type("char", 1, type_metatype::TYPE_INT, true)
+        .expect("char core type");
     types.cache_core_types().expect("cache core types");
     types
 }
 
 /// Build `mangled` as an x86-32 import (or definition) against `evidence`, and
 /// render each input as `name:size`.
-fn shape(mangled: &str, evidence: &[&str], import: bool) -> Option<(Vec<String>, Option<i32>, i32, Option<&'static str>)> {
+fn shape(
+    mangled: &str,
+    evidence: &[&str],
+    import: bool,
+) -> Option<(Vec<String>, Option<i32>, i32, Option<&'static str>)> {
     let types = factory();
     let nontrivial = nontrivial_classes(evidence.iter().copied());
     let sig = build(&decl(mangled), &nontrivial, import, true, &types, 4, 1)?;
@@ -40,7 +46,12 @@ fn shape(mangled: &str, evidence: &[&str], import: bool) -> Option<(Vec<String>,
             None => format!("{}:{}", t.get_name(), t.get_size()),
         })
         .collect();
-    Some((ins, sig.pieces.outtype.map(|t| t.get_size()), sig.pieces.first_var_arg_slot, sig.model))
+    Some((
+        ins,
+        sig.pieces.outtype.map(|t| t.get_size()),
+        sig.pieces.first_var_arg_slot,
+        sig.model,
+    ))
 }
 
 #[test]
@@ -110,7 +121,12 @@ fn free_function_returning_a_class_needs_evidence() {
     // back in EAX, so with nothing to say otherwise the declaration is refused.
     assert!(shape("?Load@@YA?AVArr@@J@Z", &[], true).is_none());
     // The copy constructor, the destructor and the vftable each prove it cannot.
-    for witness in ["??0Arr@@QAE@ABV0@@Z", "??1Arr@@QAE@XZ", "??_7Arr@@6B@", "??_GArr@@UAEPAXI@Z"] {
+    for witness in [
+        "??0Arr@@QAE@ABV0@@Z",
+        "??1Arr@@QAE@XZ",
+        "??_7Arr@@6B@",
+        "??_GArr@@UAEPAXI@Z",
+    ] {
         let (ins, out, _, model) = shape("?Load@@YA?AVArr@@J@Z", &[witness], true)
             .unwrap_or_else(|| panic!("{witness} proves a hidden return"));
         assert_eq!(ins.len(), 2, "hidden pointer, then the long: {ins:?}");
@@ -128,7 +144,8 @@ fn free_function_returning_a_class_needs_evidence() {
 fn by_value_parameter_opens_the_tail_of_a_cdecl_import() {
     // `class Arr __cdecl MakeStack(class Arr,class Arr &,class Arr &)`.
     let witness = ["??0Arr@@QAE@ABV0@@Z"];
-    let (ins, out, slot, model) = shape("?MakeStack@@YA?AVArr@@V1@AAV1@1@Z", &witness, true).unwrap();
+    let (ins, out, slot, model) =
+        shape("?MakeStack@@YA?AVArr@@V1@AAV1@1@Z", &witness, true).unwrap();
     assert_eq!(ins.len(), 1, "only the hidden pointer is placed: {ins:?}");
     assert_eq!(out, Some(4));
     assert_eq!(slot, 1, "everything from the by-value class on is open");
@@ -141,19 +158,56 @@ fn by_value_parameter_opens_the_tail_of_a_cdecl_import() {
 fn an_open_cdecl_import_keeps_its_whole_declaration_for_the_call_sites() {
     let types = factory();
     let nontrivial = nontrivial_classes(["??0Arr@@QAE@ABV0@@Z"].into_iter());
-    let sig = build(&decl("?MakeStack@@YA?AVArr@@V1@AAV1@1@Z"), &nontrivial, true, true, &types, 4, 1)
-        .expect("MakeStack is applied open");
-    let byval = sig.byval.expect("the one by-value class is all that is unstated");
+    let sig = build(
+        &decl("?MakeStack@@YA?AVArr@@V1@AAV1@1@Z"),
+        &nontrivial,
+        true,
+        true,
+        &types,
+        4,
+        1,
+    )
+    .expect("MakeStack is applied open");
+    let byval = sig
+        .byval
+        .expect("the one by-value class is all that is unstated");
     assert_eq!(byval.at, 1, "after the hidden return pointer");
-    assert_eq!(byval.pieces.intypes.len(), 4, "hidden pointer, the class, x and y");
+    assert_eq!(
+        byval.pieces.intypes.len(),
+        4,
+        "hidden pointer, the class, x and y"
+    );
     assert_eq!(byval.pieces.innames.len(), 4);
     assert_eq!(byval.pieces.first_var_arg_slot, -1);
-    assert!(byval.pieces.intypes[2].get_ptr_to().is_some(), "Arr & is a pointer");
+    assert!(
+        byval.pieces.intypes[2].get_ptr_to().is_some(),
+        "Arr & is a pointer"
+    );
     // Two classes by value, or a variadic tail, leave two sizes unknown.
-    assert!(build(&decl("?f@@YAXVArr@@V1@@Z"), &nontrivial, true, true, &types, 4, 1)
-        .is_some_and(|s| s.byval.is_none()));
-    assert!(build(&decl("?f@@YAXVArr@@ZZ"), &nontrivial, true, true, &types, 4, 1)
-        .is_some_and(|s| s.byval.is_none()));
+    assert!(
+        build(
+            &decl("?f@@YAXVArr@@V1@@Z"),
+            &nontrivial,
+            true,
+            true,
+            &types,
+            4,
+            1
+        )
+        .is_some_and(|s| s.byval.is_none())
+    );
+    assert!(
+        build(
+            &decl("?f@@YAXVArr@@ZZ"),
+            &nontrivial,
+            true,
+            true,
+            &types,
+            4,
+            1
+        )
+        .is_some_and(|s| s.byval.is_none())
+    );
 }
 
 #[test]
@@ -201,7 +255,10 @@ fn template_class_destructor_and_constructor_parse() {
     assert_eq!(d.ret, Ret::Unstated);
     assert_eq!(d.class, "basic_ios");
     let ev = nontrivial_classes(["??1?$basic_ios@DU?$char_traits@D@std@@@std@@UAE@XZ"].into_iter());
-    assert!(ev.contains("std::basic_ios<char,struct std::char_traits<char> >"), "{ev:?}");
+    assert!(
+        ev.contains("std::basic_ios<char,struct std::char_traits<char> >"),
+        "{ev:?}"
+    );
 }
 
 #[test]
@@ -236,8 +293,14 @@ fn real_varargs_are_recorded() {
 #[test]
 fn special_names_and_data_are_not_declarations() {
     assert!(try_decl("??_7Arr@@6B@").is_none(), "vftable");
-    assert!(try_decl("??_GArr@@UAEPAXI@Z").is_none(), "scalar deleting destructor");
-    assert!(try_decl("?cout@std@@3V?$basic_ostream@DU?$char_traits@D@std@@@1@A").is_none(), "data");
+    assert!(
+        try_decl("??_GArr@@UAEPAXI@Z").is_none(),
+        "scalar deleting destructor"
+    );
+    assert!(
+        try_decl("?cout@std@@3V?$basic_ostream@DU?$char_traits@D@std@@@1@A").is_none(),
+        "data"
+    );
     assert!(try_decl("?f@A@@W3AEXXZ").is_none(), "adjustor thunk");
 }
 
@@ -255,17 +318,38 @@ fn x64_keeps_the_default_model() {
     types.set_default_alignment_map();
     types.set_max_basetype_size(8);
     types.setup_sizes(Some(8), 8, 4);
-    types.set_core_type("char", 1, type_metatype::TYPE_INT, true).unwrap();
+    types
+        .set_core_type("char", 1, type_metatype::TYPE_INT, true)
+        .unwrap();
     types.cache_core_types().unwrap();
-    let sig = build(&decl("?f@A@@QEAA?AVB@@H@Z"), &HashSet::new(), true, false, &types, 8, 1).unwrap();
+    let sig = build(
+        &decl("?f@A@@QEAA?AVB@@H@Z"),
+        &HashSet::new(),
+        true,
+        false,
+        &types,
+        8,
+        1,
+    )
+    .unwrap();
     assert_eq!(sig.model, None);
     assert_eq!(sig.pieces.intypes.len(), 3);
     // A by-value parameter is refused off x86-32, import or not.
-    assert!(build(&decl("?MakeStack@@YA?AVArr@@V1@AAV1@1@Z"), &HashSet::new(), true, false, &types, 8, 1).is_none());
+    assert!(
+        build(
+            &decl("?MakeStack@@YA?AVArr@@V1@AAV1@1@Z"),
+            &HashSet::new(),
+            true,
+            false,
+            &types,
+            8,
+            1
+        )
+        .is_none()
+    );
 }
 
 #[test]
 fn unknown_conventions_are_refused() {
     assert!(try_decl("?f@@YQXH@Z").is_none(), "__vectorcall");
 }
-

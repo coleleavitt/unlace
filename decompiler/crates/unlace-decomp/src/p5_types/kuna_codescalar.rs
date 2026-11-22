@@ -27,7 +27,7 @@
 //! the indirect call still renders `(*v1)()`; only the value side falls back to
 //! the size-correct default (`undefined1`/`char`).
 
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 
 /// Whether `ptrto` — the target of a pointer being dereferenced — must not be
 /// adopted as the value's data-type.

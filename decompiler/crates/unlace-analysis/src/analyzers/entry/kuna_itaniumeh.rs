@@ -9,10 +9,10 @@
 
 use std::collections::HashMap;
 
-use unlace_decomp::kuna_itaniumeh::{EhCallSite, EhClause};
 use object::{Object, ObjectSection, ObjectSymbol, ObjectSymbolTable};
+use unlace_decomp::kuna_itaniumeh::{EhCallSite, EhClause};
 
-use super::{decode_lsda, encoded_size, for_each_fde_lsda, read_sleb128, Lsda, DW_EH_PE_OMIT};
+use super::{DW_EH_PE_OMIT, Lsda, decode_lsda, encoded_size, for_each_fde_lsda, read_sleb128};
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
 /// Itanium call sites for the `itaniumeh` exceptional edges. Facts are computed
@@ -29,7 +29,10 @@ impl AnalysisPass for ItaniumEhPass {
     }
 
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
-        AnalysisOutput { eh_call_sites: collect_call_sites(ctx.file), ..AnalysisOutput::default() }
+        AnalysisOutput {
+            eh_call_sites: collect_call_sites(ctx.file),
+            ..AnalysisOutput::default()
+        }
     }
 }
 
@@ -46,12 +49,28 @@ pub fn collect_call_sites(file: &object::File) -> Vec<EhCallSite> {
     let ptr_size = if file.is_64() { 8 } else { 4 };
     let names = TypeNames::new(file);
     for_each_fde_lsda(file, ptr_size, &mut |pc_begin, lsda_ptr| {
-        let Some(lsda) = decode_lsda(gcc_data, gcc_vma, lsda_ptr, pc_begin, ptr_size, file.is_little_endian()) else {
+        let Some(lsda) = decode_lsda(
+            gcc_data,
+            gcc_vma,
+            lsda_ptr,
+            pc_begin,
+            ptr_size,
+            file.is_little_endian(),
+        ) else {
             return;
         };
-        for cs in lsda.call_sites.iter().filter(|cs| cs.pad != 0 && cs.len != 0) {
+        for cs in lsda
+            .call_sites
+            .iter()
+            .filter(|cs| cs.pad != 0 && cs.len != 0)
+        {
             let clauses = clauses(gcc_data, gcc_vma, &lsda, cs.action, ptr_size, &names);
-            out.push(EhCallSite { start: cs.start, end: cs.start + cs.len, pad: cs.pad, clauses });
+            out.push(EhCallSite {
+                start: cs.start,
+                end: cs.start + cs.len,
+                pad: cs.pad,
+                clauses,
+            });
         }
     });
     out.sort_by_key(|s| (s.start, s.end));
@@ -60,22 +79,42 @@ pub fn collect_call_sites(file: &object::File) -> Vec<EhCallSite> {
 }
 
 /// The clauses of the action chain starting at 1-based `action` (0 = cleanup).
-fn clauses(gcc: &[u8], gcc_vma: u64, lsda: &Lsda, action: u64, ptr_size: usize, names: &TypeNames) -> Vec<EhClause> {
+fn clauses(
+    gcc: &[u8],
+    gcc_vma: u64,
+    lsda: &Lsda,
+    action: u64,
+    ptr_size: usize,
+    names: &TypeNames,
+) -> Vec<EhClause> {
     if action == 0 {
         return vec![EhClause::Cleanup];
     }
     let mut out = Vec::new();
     let mut p = lsda.action_table + (action as usize - 1);
     for _ in 0..64 {
-        let Some((filter, np)) = read_sleb128(gcc, p) else { break };
-        let Some((disp, _)) = read_sleb128(gcc, np) else { break };
+        let Some((filter, np)) = read_sleb128(gcc, p) else {
+            break;
+        };
+        let Some((disp, _)) = read_sleb128(gcc, np) else {
+            break;
+        };
         let clause = match filter {
             0 => EhClause::Cleanup,
             f if f < 0 => EhClause::Filter { selector: f },
-            f => match lsda.ttype.and_then(|(enc, end)| type_entry(gcc, gcc_vma, enc, end, f as usize, ptr_size)) {
+            f => match lsda
+                .ttype
+                .and_then(|(enc, end)| type_entry(gcc, gcc_vma, enc, end, f as usize, ptr_size))
+            {
                 Some(0) => EhClause::CatchAll { selector: f },
-                Some(ti) => EhClause::Catch { selector: f, type_name: names.type_name(ti) },
-                None => EhClause::Catch { selector: f, type_name: None },
+                Some(ti) => EhClause::Catch {
+                    selector: f,
+                    type_name: names.type_name(ti),
+                },
+                None => EhClause::Catch {
+                    selector: f,
+                    type_name: None,
+                },
             },
         };
         if !out.contains(&clause) {
@@ -92,7 +131,14 @@ fn clauses(gcc: &[u8], gcc_vma: u64, lsda: &Lsda, action: u64, ptr_size: usize, 
 /// The type-table entry `filter` (counted back from the table's end): the
 /// address of the `typeinfo`, or of its GOT-style slot when the encoding is
 /// indirect (`TypeNames` resolves both). 0 is `catch (...)`.
-fn type_entry(gcc: &[u8], gcc_vma: u64, enc: u8, end: usize, filter: usize, ptr_size: usize) -> Option<u64> {
+fn type_entry(
+    gcc: &[u8],
+    gcc_vma: u64,
+    enc: u8,
+    end: usize,
+    filter: usize,
+    ptr_size: usize,
+) -> Option<u64> {
     if enc == DW_EH_PE_OMIT {
         return None;
     }
@@ -135,11 +181,17 @@ impl TypeNames {
             }
         }
         let mut slot = HashMap::new();
-        if let (Some(relocs), Some(dynsym)) = (file.dynamic_relocations(), file.dynamic_symbol_table()) {
+        if let (Some(relocs), Some(dynsym)) =
+            (file.dynamic_relocations(), file.dynamic_symbol_table())
+        {
             for (off, r) in relocs {
                 match r.target() {
                     object::RelocationTarget::Symbol(idx) => {
-                        if let Some(name) = dynsym.symbol_by_index(idx).ok().and_then(|s| s.name().ok().map(str::to_string)) {
+                        if let Some(name) = dynsym
+                            .symbol_by_index(idx)
+                            .ok()
+                            .and_then(|s| s.name().ok().map(str::to_string))
+                        {
                             slot.insert(off, name);
                         }
                     }
@@ -157,7 +209,11 @@ impl TypeNames {
 
     fn type_name(&self, v: u64) -> Option<String> {
         let addr = v & !INDIRECT;
-        let sym = if v & INDIRECT != 0 { self.slot.get(&addr).or_else(|| self.at.get(&addr)) } else { self.at.get(&addr) }?;
+        let sym = if v & INDIRECT != 0 {
+            self.slot.get(&addr).or_else(|| self.at.get(&addr))
+        } else {
+            self.at.get(&addr)
+        }?;
         let d = crate::demangle::demangle_raw(sym)?;
         d.strip_prefix("typeinfo for ").map(str::to_string)
     }
@@ -179,7 +235,10 @@ impl AnalysisPass for EhNotePass {
     }
 
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
-        AnalysisOutput { header_comments: eh_notes(ctx.file), ..AnalysisOutput::default() }
+        AnalysisOutput {
+            header_comments: eh_notes(ctx.file),
+            ..AnalysisOutput::default()
+        }
     }
 }
 
@@ -200,14 +259,26 @@ pub fn eh_notes(file: &object::File) -> Vec<crate::pass::CommentFact> {
             out.push(crate::pass::CommentFact {
                 func_addr: pc_begin,
                 addr: pc_begin,
-                text: "eh: SjLj exception table (call-site indices); landing pads not shown".to_string(),
+                text: "eh: SjLj exception table (call-site indices); landing pads not shown"
+                    .to_string(),
             });
             return;
         }
-        let Some(lsda) = decode_lsda(gcc_data, gcc_vma, lsda_ptr, pc_begin, ptr_size, file.is_little_endian()) else {
+        let Some(lsda) = decode_lsda(
+            gcc_data,
+            gcc_vma,
+            lsda_ptr,
+            pc_begin,
+            ptr_size,
+            file.is_little_endian(),
+        ) else {
             return;
         };
-        let sites: Vec<_> = lsda.call_sites.iter().filter(|cs| cs.pad != 0 && cs.len != 0).collect();
+        let sites: Vec<_> = lsda
+            .call_sites
+            .iter()
+            .filter(|cs| cs.pad != 0 && cs.len != 0)
+            .collect();
         if sites.is_empty() {
             return;
         }
@@ -221,7 +292,9 @@ pub fn eh_notes(file: &object::File) -> Vec<crate::pass::CommentFact> {
                         cleanup += 1;
                         continue;
                     }
-                    EhClause::Catch { type_name, .. } => type_name.unwrap_or_else(|| "?".to_string()),
+                    EhClause::Catch { type_name, .. } => {
+                        type_name.unwrap_or_else(|| "?".to_string())
+                    }
                     EhClause::CatchAll { .. } => "...".to_string(),
                     EhClause::Filter { .. } => {
                         filters += 1;
@@ -253,7 +326,11 @@ pub fn eh_notes(file: &object::File) -> Vec<crate::pass::CommentFact> {
             text: format!(
                 "eh: {} call site{} to {}landing pads ({}); not shown",
                 sites.len(),
-                if sites.len() == 1 { " unwinds" } else { "s unwind" },
+                if sites.len() == 1 {
+                    " unwinds"
+                } else {
+                    "s unwind"
+                },
                 runtime,
                 what.join("; ")
             ),
@@ -268,20 +345,41 @@ mod tests {
 
     #[test]
     fn notes_name_the_hidden_pads() {
-        let bytes = std::fs::read(format!("{}/tests/fixtures/ehcold_x86_64", env!("CARGO_MANIFEST_DIR"))).unwrap();
+        let bytes = std::fs::read(format!(
+            "{}/tests/fixtures/ehcold_x86_64",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap();
         let file = object::File::parse(bytes.as_slice()).unwrap();
         let notes: Vec<String> = eh_notes(&file).into_iter().map(|n| n.text).collect();
-        assert!(notes.contains(&"eh: 1 call site unwinds to C++ landing pads (catch int); not shown".to_string()), "{notes:?}");
-        assert!(notes.contains(&"eh: 3 call sites unwind to C++ landing pads (3 cleanup); not shown".to_string()), "{notes:?}");
+        assert!(
+            notes.contains(
+                &"eh: 1 call site unwinds to C++ landing pads (catch int); not shown".to_string()
+            ),
+            "{notes:?}"
+        );
+        assert!(
+            notes.contains(
+                &"eh: 3 call sites unwind to C++ landing pads (3 cleanup); not shown".to_string()
+            ),
+            "{notes:?}"
+        );
     }
 
     #[test]
     fn a_rust_image_reads_rust_eh_personality() {
-        let bytes = std::fs::read(format!("{}/tests/fixtures/rust_eh_x86_64", env!("CARGO_MANIFEST_DIR"))).unwrap();
+        let bytes = std::fs::read(format!(
+            "{}/tests/fixtures/rust_eh_x86_64",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap();
         let file = object::File::parse(bytes.as_slice()).unwrap();
         let mut seen = Vec::new();
         super::super::for_each_fde_lsda_classified(&file, 8, &mut |_, _, p| seen.push(p));
-        assert!(!seen.is_empty() && seen.iter().all(|&p| p == super::super::Personality::Rust), "{seen:?}");
+        assert!(
+            !seen.is_empty() && seen.iter().all(|&p| p == super::super::Personality::Rust),
+            "{seen:?}"
+        );
     }
 
     #[test]
@@ -301,15 +399,24 @@ mod tests {
     /// (selector 2) around one call; `cleanup` runs a destructor around two.
     #[test]
     fn decodes_catch_and_cleanup_pads() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../unlace-cli/tests/fixtures/itaniumeh/eh_x86_64.elf");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../unlace-cli/tests/fixtures/itaniumeh/eh_x86_64.elf"
+        );
         let bytes = std::fs::read(path).expect("fixture");
         let file = object::File::parse(&*bytes).expect("elf");
         let sites = collect_call_sites(&file);
-        let catch = sites.iter().find(|s| s.clauses.len() == 2).expect("catch site");
+        let catch = sites
+            .iter()
+            .find(|s| s.clauses.len() == 2)
+            .expect("catch site");
         assert_eq!(
             catch.clauses,
             vec![
-                EhClause::Catch { selector: 1, type_name: Some("std::runtime_error".into()) },
+                EhClause::Catch {
+                    selector: 1,
+                    type_name: Some("std::runtime_error".into())
+                },
                 EhClause::CatchAll { selector: 2 },
             ]
         );

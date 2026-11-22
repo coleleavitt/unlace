@@ -47,11 +47,7 @@ fn eval(op: char, a: i128, b: i128, t: u8) -> Option<i128> {
                 return None;
             }
             let q = a / b;
-            if op == '/' {
-                q
-            } else {
-                a - q * b
-            }
+            if op == '/' { q } else { a - q * b }
         }
         _ => unreachable!(),
     };
@@ -65,7 +61,21 @@ fn samples(t: u8) -> Vec<i128> {
     } else {
         (0, (1i128 << bits) - 1)
     };
-    let mut v = vec![lo, lo + 1, -7, -1, 0, 1, 3, 0x7fff_ffff, 0x8000_0000, 0xffff_ffff, 0x1_0000_0000, hi - 1, hi];
+    let mut v = vec![
+        lo,
+        lo + 1,
+        -7,
+        -1,
+        0,
+        1,
+        3,
+        0x7fff_ffff,
+        0x8000_0000,
+        0xffff_ffff,
+        0x1_0000_0000,
+        hi - 1,
+        hi,
+    ];
     v.retain(|x| (lo..=hi).contains(x));
     v
 }
@@ -77,7 +87,12 @@ fn fits_is_exactly_an_unchanged_type_and_value() {
             // The extension C performs on `from`: a value `from` keeps under `to`
             // unless `to` cannot hold its negative values.
             let keeps = !(from == INT && to == ULONG);
-            let w = Widening { op: OpId::default(), to, from, keeps };
+            let w = Widening {
+                op: OpId::default(),
+                to,
+                from,
+                keeps,
+            };
             for y in [INT, UINT, LONG, ULONG] {
                 let with_t = usual(to, y);
                 let bare_t = usual(from, y);
@@ -101,7 +116,12 @@ fn fits_is_exactly_an_unchanged_type_and_value() {
 
 #[test]
 fn of_several_possible_types_every_one_must_fit() {
-    let w = Widening { op: OpId::default(), to: LONG, from: INT, keeps: true };
+    let w = Widening {
+        op: OpId::default(),
+        to: LONG,
+        from: INT,
+        keeps: true,
+    };
     assert!(fits(&w, LONG));
     assert!(fits(&w, ULONG));
     assert!(!fits(&w, LONG | INT));

@@ -29,7 +29,10 @@ const CASES: &[Case] = &[
         stage: include_str!("../../../../tests/stages/kuna-labelstmt-arm.xml"),
         symbols: &[("probe", 0, 52), ("probe_control", 0x40, 56)],
         prototypes: &[
-            ("probe", "void probe(unsigned int selector, unsigned int *output)"),
+            (
+                "probe",
+                "void probe(unsigned int selector, unsigned int *output)",
+            ),
             (
                 "probe_control",
                 "void probe_control(unsigned int selector, unsigned int *output)",
@@ -67,7 +70,10 @@ fn main() { unsafe {
         stage: include_str!("../../../../tests/stages/kuna-labelstmt-x64.xml"),
         symbols: &[("last_case", 0, 0x82), ("skip_blanks", 0x90, 0x26)],
         prototypes: &[
-            ("last_case", "void last_case(unsigned int selector, unsigned int *out)"),
+            (
+                "last_case",
+                "void last_case(unsigned int selector, unsigned int *out)",
+            ),
             ("skip_blanks", "void skip_blanks(char **cpp)"),
         ],
         rust_functions: &["last_case"],
@@ -193,7 +199,10 @@ fn labels_are_followed_by_statements_and_compile_as_c11() {
         .into_iter()
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
-    assert!(!compilers.is_empty(), "the round trip requires a C compiler");
+    assert!(
+        !compilers.is_empty(),
+        "the round trip requires a C compiler"
+    );
     for case in CASES {
         let input = common::scratch_file("label-statements", "o");
         let src = common::scratch_file("label-statements", "c");
@@ -219,7 +228,11 @@ fn labels_are_followed_by_statements_and_compile_as_c11() {
                     String::from_utf8_lossy(&compile.stderr)
                 );
                 let status = Command::new(&exe).status().unwrap();
-                assert!(status.success(), "{} {cc} {level}: {status}\n{printed}", case.name);
+                assert!(
+                    status.success(),
+                    "{} {cc} {level}: {status}\n{printed}",
+                    case.name
+                );
             }
         }
         let rust = decompile(case, &input, case.rust_functions, "rust");
@@ -238,7 +251,11 @@ fn labels_are_followed_by_statements_and_compile_as_c11() {
             case.name,
             String::from_utf8_lossy(&compile.stderr)
         );
-        assert!(Command::new(&exe).status().unwrap().success(), "{} rustc: {rust}", case.name);
+        assert!(
+            Command::new(&exe).status().unwrap().success(),
+            "{} rustc: {rust}",
+            case.name
+        );
         for file in [input, src, exe, rust_src] {
             std::fs::remove_file(file).unwrap();
         }

@@ -3,8 +3,8 @@
 //! and the clamped image keeps the real import table rather than a fabricated one.
 
 use super::*;
-use object::read::pe::{PeFile32, PeFile64};
 use object::read::Object;
+use object::read::pe::{PeFile32, PeFile64};
 
 /// The count the reported Invius-packed image carried at file offset 0xf4.
 const TRASHED: u32 = 1_531_532_893;
@@ -112,7 +112,10 @@ fn count_that_fits_is_returned_verbatim() {
         );
         let (out, note) = tolerate_oversized_data_directories(bytes.clone());
         assert_eq!(out, bytes, "a parseable image must not be rewritten");
-        assert!(note.is_none(), "no diagnostic for a healthy image, got {note:?}");
+        assert!(
+            note.is_none(),
+            "no diagnostic for a healthy image, got {note:?}"
+        );
     }
 }
 
@@ -128,9 +131,18 @@ fn trashed_count_is_clamped_and_the_real_import_directory_survives() {
 
     let (out, note) = tolerate_oversized_data_directories(bytes);
     let note = note.expect("the clamp must report what it did");
-    assert!(note.contains(&TRASHED.to_string()), "note names the bad count: {note}");
-    assert!(note.contains("clamped to 16"), "note names the clamp: {note}");
-    assert!(note.contains("0x401000"), "note reports the surviving entry: {note}");
+    assert!(
+        note.contains(&TRASHED.to_string()),
+        "note names the bad count: {note}"
+    );
+    assert!(
+        note.contains("clamped to 16"),
+        "note names the clamp: {note}"
+    );
+    assert!(
+        note.contains("0x401000"),
+        "note reports the surviving entry: {note}"
+    );
 
     let file = PeFile32::parse(out.as_slice()).expect("clamped image parses");
     assert_eq!(file.entry(), 0x40_0000 + u64::from(ENTRY_RVA));
@@ -138,7 +150,8 @@ fn trashed_count_is_clamped_and_the_real_import_directory_survives() {
     let dirs = file.data_directories();
     assert_eq!(dirs.len(), 16, "the directories that fit are all kept");
     assert_eq!(
-        dirs.get(1).map(|d| d.virtual_address.get(object::LittleEndian)),
+        dirs.get(1)
+            .map(|d| d.virtual_address.get(object::LittleEndian)),
         Some(IMPORT_RVA),
         "the real import directory must be read, not fabricated"
     );
@@ -163,7 +176,10 @@ fn the_clamp_boundary_is_what_the_optional_header_holds() {
 
     let over = pe(false, |b| set_nrva(b, false, 17));
     let (out, note) = tolerate_oversized_data_directories(over);
-    assert!(note.is_some(), "one directory too many is still a rejection");
+    assert!(
+        note.is_some(),
+        "one directory too many is still a rejection"
+    );
     assert_eq!(read_u32(&out, nrva_off(false)), 16);
 }
 
@@ -204,6 +220,9 @@ fn an_unrepairable_image_keeps_the_clamp_and_reports_no_note() {
     let (out, note) = tolerate_oversized_data_directories(bytes.clone());
     assert_ne!(out, bytes, "the clamp is kept");
     assert_eq!(read_u32(&out, nrva_off(false)), 16);
-    assert!(note.is_none(), "no recovery claim for an image that still fails");
+    assert!(
+        note.is_none(),
+        "no recovery claim for an image that still fails"
+    );
     assert!(object::File::parse(out.as_slice()).is_err());
 }

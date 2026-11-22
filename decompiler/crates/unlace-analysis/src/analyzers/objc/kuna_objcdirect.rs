@@ -43,14 +43,26 @@ pub(super) fn emit(
     structs: Option<&Structs>,
     out: &mut AnalysisOutput,
 ) {
-    let Some(reg) = self_register(architecture) else { return };
+    let Some(reg) = self_register(architecture) else {
+        return;
+    };
     let listed: std::collections::HashSet<u64> = out.fid_names.iter().map(|m| m.addr).collect();
-    let mut direct: Vec<(u64, &str)> = img.method_symbols().filter(|(addr, _)| !listed.contains(addr)).collect();
+    let mut direct: Vec<(u64, &str)> = img
+        .method_symbols()
+        .filter(|(addr, _)| !listed.contains(addr))
+        .collect();
     direct.sort_unstable();
     for (func_addr, symbol) in direct {
         let Some(class) = owner(symbol) else { continue };
-        let type_ = structs.filter(|_| symbol.starts_with('-')).and_then(|s| s.self_type(tctx, class));
-        out.objc_self_hints.push(InputHintFact { func_addr, reg, name: "self".to_string(), type_ });
+        let type_ = structs
+            .filter(|_| symbol.starts_with('-'))
+            .and_then(|s| s.self_type(tctx, class));
+        out.objc_self_hints.push(InputHintFact {
+            func_addr,
+            reg,
+            name: "self".to_string(),
+            type_,
+        });
     }
 }
 
@@ -61,7 +73,11 @@ mod tests {
     #[test]
     fn only_aarch64_has_a_fixed_receiver_register() {
         assert_eq!(self_register(Architecture::Aarch64), Some("x0"));
-        assert_eq!(self_register(Architecture::X86_64), None, "a struct return moves self to RSI");
+        assert_eq!(
+            self_register(Architecture::X86_64),
+            None,
+            "a struct return moves self to RSI"
+        );
     }
 
     #[test]

@@ -304,4 +304,3 @@ fn short_copies_keep_their_bytes_in_each_storage_mode() {
         }
     }
 }
-

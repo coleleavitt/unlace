@@ -269,9 +269,15 @@ fn is_division_byproduct(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
     if depth == 0 {
         return false;
     }
-    let Some(vv) = data.vbank().get(vn) else { return false };
-    let Some(def) = vv.get_def() else { return false };
-    let Some(op) = data.obank().get(def) else { return false };
+    let Some(vv) = data.vbank().get(vn) else {
+        return false;
+    };
+    let Some(def) = vv.get_def() else {
+        return false;
+    };
+    let Some(op) = data.obank().get(def) else {
+        return false;
+    };
     match op.code() {
         OpCode::CPUI_INT_REM | OpCode::CPUI_INT_SREM => true,
         OpCode::CPUI_COPY | OpCode::CPUI_INT_ZEXT | OpCode::CPUI_INT_SEXT => op
@@ -343,8 +349,12 @@ fn clobber_of_this_register_reaches(data: &Funcdata, vn: VarnodeId, addr: &Addre
         }
         Some(vv.get_addr() == addr)
     };
-    let Some(def) = data.vbank().get(vn).and_then(|v| v.get_def()) else { return false };
-    let Some(op) = data.obank().get(def) else { return false };
+    let Some(def) = data.vbank().get(vn).and_then(|v| v.get_def()) else {
+        return false;
+    };
+    let Some(op) = data.obank().get(def) else {
+        return false;
+    };
     if op.is_indirect_creation() {
         return is_creation_here(vn) == Some(true);
     }
@@ -354,8 +364,12 @@ fn clobber_of_this_register_reaches(data: &Funcdata, vn: VarnodeId, addr: &Addre
     let n = op.num_input();
     let mut saw_clobber = false;
     for i in 0..n {
-        let Some(iv) = data.obank().get(def).and_then(|o| o.get_in(i)) else { return false };
-        let Some(vv) = data.vbank().get(iv) else { return false };
+        let Some(iv) = data.obank().get(def).and_then(|o| o.get_in(i)) else {
+            return false;
+        };
+        let Some(vv) = data.vbank().get(iv) else {
+            return false;
+        };
         let creation = vv
             .get_def()
             .and_then(|d| data.obank().get(d))
@@ -409,7 +423,9 @@ fn callee_prototype_is_the_argument_list(
     size: int4,
     surviving: &[(Address, int4)],
 ) -> bool {
-    let Some(stated) = data.kuna_protoorder_types(entry) else { return false };
+    let Some(stated) = data.kuna_protoorder_types(entry) else {
+        return false;
+    };
     if size <= 0 || stated.inputs.is_empty() {
         return false;
     }
@@ -425,7 +441,10 @@ fn callee_prototype_is_the_argument_list(
         if storage_overlaps(paddr, *psize, addr, size) {
             return false;
         }
-        if !surviving.iter().any(|(a, sz)| storage_overlaps(paddr, *psize, a, *sz)) {
+        if !surviving
+            .iter()
+            .any(|(a, sz)| storage_overlaps(paddr, *psize, a, *sz))
+        {
             return false;
         }
     }
@@ -433,7 +452,11 @@ fn callee_prototype_is_the_argument_list(
         if *sz <= 0 || a.get_space().is_none() {
             return false;
         }
-        if !stated.inputs.iter().any(|(p, ps, _)| storage_overlaps(p, *ps, a, *sz)) {
+        if !stated
+            .inputs
+            .iter()
+            .any(|(p, ps, _)| storage_overlaps(p, *ps, a, *sz))
+        {
             return false;
         }
     }
@@ -449,7 +472,10 @@ fn storage_overlaps(a: &Address, asize: int4, b: &Address, bsize: int4) -> bool 
         return false;
     }
     let (alo, blo) = (a.get_offset(), b.get_offset());
-    let (ahi, bhi) = (alo.wrapping_add(asize as u64), blo.wrapping_add(bsize as u64));
+    let (ahi, bhi) = (
+        alo.wrapping_add(asize as u64),
+        blo.wrapping_add(bsize as u64),
+    );
     alo < bhi && blo < ahi
 }
 
@@ -494,7 +520,11 @@ pub fn drop_clobber_tail_arg(fc: &mut FuncCallSpecs, data: &mut Funcdata) {
 
     let (addr, slot, is_ind_create) = {
         let t = fc.active_input().get_trial(idx);
-        (t.get_address().clone(), t.get_slot(), t.is_ind_create_formed())
+        (
+            t.get_address().clone(),
+            t.get_slot(),
+            t.is_ind_create_formed(),
+        )
     };
     if !is_ind_create {
         return;

@@ -24,7 +24,10 @@ use std::path::PathBuf;
 use unlace_harness::testfunction::run_test_files_with_specs;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn specs_dir() -> PathBuf {
@@ -32,7 +35,12 @@ fn specs_dir() -> PathBuf {
 }
 
 fn datatest(name: &str) -> String {
-    repo_root().join("tests/datatests").join(name).to_str().unwrap().to_string()
+    repo_root()
+        .join("tests/datatests")
+        .join(name)
+        .to_str()
+        .unwrap()
+        .to_string()
 }
 
 /// Returns `Some(results_text)` when the x86-64 spec is available, else `None`
@@ -53,7 +61,9 @@ fn run_one(file_name: &str) -> Option<String> {
 /// Assert the file ran (no execution failure) and every named assertion is a
 /// `Success -- <name>` line in the results.
 fn assert_passes(file_name: &str, names: &[&str]) {
-    let Some(out) = run_one(file_name) else { return };
+    let Some(out) = run_one(file_name) else {
+        return;
+    };
     assert!(
         !out.contains("Error executing") && !out.contains("Error parsing"),
         "{file_name} EXEC/PARSE-FAILED — the console command family did not run:\n{out}"
@@ -79,7 +89,11 @@ fn assert_passes(file_name: &str, names: &[&str]) {
 fn pointerrel_retype_lines_are_real_parity() {
     assert_passes(
         "pointerrel.xml",
-        &["Relative pointers #4", "Relative pointers #5", "Relative pointers #6"],
+        &[
+            "Relative pointers #4",
+            "Relative pointers #5",
+            "Relative pointers #6",
+        ],
     );
 }
 
@@ -118,6 +132,10 @@ fn revisit_printraw_negative_guards_pass_with_real_listing() {
 fn pointerrel_adj_relative_pointer_body_is_real_parity() {
     assert_passes(
         "pointerrel.xml",
-        &["Relative pointers #1", "Relative pointers #2", "Relative pointers #3"],
+        &[
+            "Relative pointers #1",
+            "Relative pointers #2",
+            "Relative pointers #3",
+        ],
     );
 }

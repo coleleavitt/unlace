@@ -48,14 +48,17 @@
 use std::path::PathBuf;
 use std::time::Instant;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixtures() -> PathBuf {
@@ -78,7 +81,9 @@ fn boot(name: &str) -> ConsoleProgram {
 /// this binary without its debug info.
 fn boot_dwarf_off(name: &str) -> ConsoleProgram {
     let mut prog = boot(name);
-    prog.arch_mut().set_kuna_option("dwarf", "off").expect("the dwarf gate flips off");
+    prog.arch_mut()
+        .set_kuna_option("dwarf", "off")
+        .expect("the dwarf gate flips off");
     prog
 }
 

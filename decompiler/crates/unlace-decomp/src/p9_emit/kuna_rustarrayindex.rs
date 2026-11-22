@@ -5,7 +5,7 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::type_metatype;
 use crate::funcdata::Funcdata;
 use crate::kuna_rustintegers::needs_integer_context;
-use crate::printc::{op_key, PrintC};
+use crate::printc::{PrintC, op_key};
 use crate::printlanguage::{Atom, SyntaxHighlight, TagType};
 
 impl PrintC {
@@ -17,16 +17,22 @@ impl PrintC {
         op: OpId,
         mods: u32,
     ) -> bool {
-        let Some(node) = fd.vbank().get(index) else { return false; };
+        let Some(node) = fd.vbank().get(index) else {
+            return false;
+        };
         let source = self.rust_integer_value_type(fd, arch, index, op);
         if node.is_constant()
             || !matches!(source.get_size(), 1 | 2 | 4 | 8)
             || source.get_size() != node.get_size()
             || source.is_enum_type()
-            || !matches!(source.get_metatype(), type_metatype::TYPE_INT
-                | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN)
+            || !matches!(
+                source.get_metatype(),
+                type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN
+            )
             || node.is_implied() && needs_integer_context(fd, index, op, 8).is_none()
-        { return false; }
+        {
+            return false;
+        }
         self.push_op(self.lang().tok_typecast, Some(op_key(op)));
         let saved = self.context.mods();
         self.context.set_mods(mods);
@@ -34,7 +40,11 @@ impl PrintC {
             self.push_vn_ir(fd, arch, index, op);
         }
         self.context.set_mods(saved);
-        self.push_atom(&Atom::syntax("usize", TagType::TypeToken, SyntaxHighlight::type_color));
+        self.push_atom(&Atom::syntax(
+            "usize",
+            TagType::TypeToken,
+            SyntaxHighlight::type_color,
+        ));
         true
     }
 }

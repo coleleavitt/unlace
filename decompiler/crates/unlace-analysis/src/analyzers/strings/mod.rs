@@ -43,15 +43,15 @@
 
 pub mod kuna_panicloc;
 pub mod kuna_ptrslot;
-pub mod kuna_stringinv;
-pub mod kuna_utf8strings;
 pub mod kuna_strcodelen;
+pub mod kuna_stringinv;
 pub mod kuna_strrecords;
+pub mod kuna_utf8strings;
 pub mod kuna_widestrings;
 pub mod kuna_widestrings32;
 
-use object::read::{Object, ObjectSection};
 use object::SectionKind;
+use object::read::{Object, ObjectSection};
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase, StringFact};
 
@@ -111,7 +111,11 @@ pub(crate) fn scan_runs(data: &[u8], vma: u64, min_len: usize, term: Termination
     let close = |out: &mut Vec<Run>, start: usize, end: usize, nul: bool| {
         let visible_len = end - start;
         if visible_len >= min_len && (nul || term == Termination::Any) {
-            out.push(Run { addr: vma + start as u64, visible_len, nul_terminated: nul });
+            out.push(Run {
+                addr: vma + start as u64,
+                visible_len,
+                nul_terminated: nul,
+            });
         }
     };
     for (i, &b) in data.iter().enumerate() {
@@ -142,7 +146,10 @@ pub(crate) fn scan_runs(data: &[u8], vma: u64, min_len: usize, term: Termination
 pub(crate) fn scan_run(data: &[u8], vma: u64, min_len: usize) -> Vec<StringFact> {
     scan_runs(data, vma, min_len, Termination::Nul)
         .into_iter()
-        .map(|r| StringFact { addr: r.addr, len: (r.visible_len + 1) as u32 })
+        .map(|r| StringFact {
+            addr: r.addr,
+            len: (r.visible_len + 1) as u32,
+        })
         .collect()
 }
 
@@ -200,7 +207,11 @@ pub(crate) fn is_loaded_initialized<'a>(sec: &impl ObjectSection<'a>) -> bool {
 /// ([`SectionKind::UninitializedData`]) and any non-loaded metadata section is
 /// skipped. The string addresses are `section_vma + run_start`. Format-agnostic
 /// (ELF/PE/COFF/Mach-O), with the ELF path byte-identical to before.
-pub(crate) fn scan_strings(file: &object::File, min_len: usize, code_rule: bool) -> Vec<StringFact> {
+pub(crate) fn scan_strings(
+    file: &object::File,
+    min_len: usize,
+    code_rule: bool,
+) -> Vec<StringFact> {
     let mut out = Vec::new();
     for sec in file.sections() {
         if !is_loaded_initialized(&sec) {
@@ -212,7 +223,9 @@ pub(crate) fn scan_strings(file: &object::File, min_len: usize, code_rule: bool)
         };
         let mut found = scan_run(data, sec.address(), min_len);
         if code_rule && sec.kind() == SectionKind::Text {
-            found.retain(|f| code_section_string(data, (f.addr - sec.address()) as usize, f.len as usize - 1));
+            found.retain(|f| {
+                code_section_string(data, (f.addr - sec.address()) as usize, f.len as usize - 1)
+            });
         }
         out.extend(found);
     }
@@ -230,21 +243,40 @@ pub(crate) fn code_section_string(data: &[u8], at: usize, visible: usize) -> boo
     if visible >= 16 {
         return true;
     }
-    let zeros = data[..at].iter().rev().take(4).take_while(|&&b| b == 0).count();
+    let zeros = data[..at]
+        .iter()
+        .rev()
+        .take(4)
+        .take_while(|&&b| b == 0)
+        .count();
     visible >= 4 && ((1..=3).contains(&zeros) || called_over(data, at, visible))
 }
 
 /// Does a `call rel32` end at most three `nop`/zero bytes before `at` and land
 /// past the run's NUL?
 fn called_over(data: &[u8], at: usize, visible: usize) -> bool {
-    let pad = data[..at].iter().rev().take(3).take_while(|&&b| b == 0 || b == 0x90).count();
+    let pad = data[..at]
+        .iter()
+        .rev()
+        .take(3)
+        .take_while(|&&b| b == 0 || b == 0x90)
+        .count();
     (0..=pad).any(|skip| {
-        let Some(end) = at.checked_sub(skip) else { return false };
-        let Some(call) = end.checked_sub(5) else { return false };
+        let Some(end) = at.checked_sub(skip) else {
+            return false;
+        };
+        let Some(call) = end.checked_sub(5) else {
+            return false;
+        };
         if data[call] != 0xe8 {
             return false;
         }
-        let rel = i32::from_le_bytes([data[call + 1], data[call + 2], data[call + 3], data[call + 4]]);
+        let rel = i32::from_le_bytes([
+            data[call + 1],
+            data[call + 2],
+            data[call + 3],
+            data[call + 4],
+        ]);
         (end as i64 + i64::from(rel)) > (at + visible) as i64
     })
 }
@@ -331,23 +363,44 @@ mod tests {
 
         // "Username: " begins at index 4 (after \x00 Hi \x00).
         let username_off = 4u64;
-        assert_eq!(out[0], StringFact { addr: vma + username_off, len: 11 });
+        assert_eq!(
+            out[0],
+            StringFact {
+                addr: vma + username_off,
+                len: 11
+            }
+        );
 
         // "abcdefgh" begins after "...: \x00\x01\x02": index 4+11+2 = 17.
         let abc_off = (4 + 11 + 2) as u64;
-        assert_eq!(out[1], StringFact { addr: vma + abc_off, len: 9 });
+        assert_eq!(
+            out[1],
+            StringFact {
+                addr: vma + abc_off,
+                len: 9
+            }
+        );
     }
 
     #[test]
     fn code_section_strings_need_length_or_leading_padding() {
         let data = b"\x48\x8bD$x%\x00\x00\x00Hello\x00\x90abcdefghijklmnop\x00";
-        assert!(!code_section_string(data, 2, 4), "D$x% after instruction bytes");
+        assert!(
+            !code_section_string(data, 2, 4),
+            "D$x% after instruction bytes"
+        );
         assert!(code_section_string(data, 9, 5), "Hello after zero padding");
         assert!(code_section_string(data, 16, 16), "a 16-character run");
         let over = b"\xe8\x0f\x00\x00\x00\x90kern\x00pad\x00\x58";
-        assert!(code_section_string(over, 6, 4), "a string a call jumps over");
+        assert!(
+            code_section_string(over, 6, 4),
+            "a string a call jumps over"
+        );
         let back = b"\xe8\xf0\xff\xff\xff\x90kern\x00";
-        assert!(!code_section_string(back, 6, 4), "a backward call target is not past the run");
+        assert!(
+            !code_section_string(back, 6, 4),
+            "a backward call target is not past the run"
+        );
     }
 
     #[test]
@@ -358,14 +411,23 @@ mod tests {
         assert!(out.is_empty(), "non-NUL-terminated run must be rejected");
         // Terminated by a non-NUL out-of-charset byte is also rejected.
         let out2 = scan_run(b"abcdefghij\x01", 0, 5);
-        assert!(out2.is_empty(), "run ended by a non-NUL byte must be rejected");
+        assert!(
+            out2.is_empty(),
+            "run ended by a non-NUL byte must be rejected"
+        );
     }
 
     #[test]
     fn min_length_boundary() {
         // Exactly 5 visible chars + NUL -> accepted (len 6).
         let out5 = scan_run(b"abcde\x00", 0x2000, 5);
-        assert_eq!(out5, vec![StringFact { addr: 0x2000, len: 6 }]);
+        assert_eq!(
+            out5,
+            vec![StringFact {
+                addr: 0x2000,
+                len: 6
+            }]
+        );
         // 4 visible chars + NUL -> rejected (< min 5).
         let out4 = scan_run(b"abcd\x00", 0x2000, 5);
         assert!(out4.is_empty(), "4-char string must be rejected at min 5");
@@ -374,7 +436,13 @@ mod tests {
     #[test]
     fn ascii_default_accepts_four_visible_characters() {
         let out = scan_run(b"quit\0abc\0", 0x2000, DEFAULT_ASCII_MIN_LEN);
-        assert_eq!(out, vec![StringFact { addr: 0x2000, len: 5 }]);
+        assert_eq!(
+            out,
+            vec![StringFact {
+                addr: 0x2000,
+                len: 5
+            }]
+        );
     }
 
     #[test]
@@ -388,11 +456,20 @@ mod tests {
 
         let has = |addr: u64, len: u32| out.contains(&StringFact { addr, len });
         // "SOSNEAKY"   @ 0x4008d0 (8 visible + NUL = 9)
-        assert!(has(0x4008d0, 9), "SOSNEAKY @ 0x4008d0 len 9 not detected: {out:?}");
+        assert!(
+            has(0x4008d0, 9),
+            "SOSNEAKY @ 0x4008d0 len 9 not detected: {out:?}"
+        );
         // "Username: " @ 0x400915 (10 visible + NUL = 11)
-        assert!(has(0x400915, 11), "\"Username: \" @ 0x400915 len 11 not detected: {out:?}");
+        assert!(
+            has(0x400915, 11),
+            "\"Username: \" @ 0x400915 len 11 not detected: {out:?}"
+        );
         // "Password: " @ 0x400920 (10 visible + NUL = 11)
-        assert!(has(0x400920, 11), "\"Password: \" @ 0x400920 len 11 not detected: {out:?}");
+        assert!(
+            has(0x400920, 11),
+            "\"Password: \" @ 0x400920 len 11 not detected: {out:?}"
+        );
     }
 
     #[test]
@@ -408,7 +485,10 @@ mod tests {
         assert_eq!(file.format(), object::BinaryFormat::Pe, "fixture is a PE");
         let out = scan_strings(&file, DEFAULT_ASCII_MIN_LEN, false);
         assert!(
-            out.contains(&StringFact { addr: 0x140009000, len: 6 }),
+            out.contains(&StringFact {
+                addr: 0x140009000,
+                len: 6
+            }),
             "\"hello\" @ 0x140009000 len 6 not detected in PE .rdata: {out:?}"
         );
     }

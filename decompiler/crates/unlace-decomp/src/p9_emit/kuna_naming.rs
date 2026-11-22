@@ -41,7 +41,7 @@
 
 use unlace_base::address::sign_extend;
 use unlace_base::error::{KunaError, KunaResult};
-use unlace_base::space::{spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::{int4, intb, uintb};
 
 // Re-export the pure address-rendering helpers ported into `database.rs`
@@ -170,8 +170,7 @@ pub fn kuna_storage_comment(view: &StorageView) -> String {
 
     // Stack-backed storage -> a frame-relative signed offset ("stack - 0x10").
     if view.is_stack {
-        let mut soff: intb =
-            AddrSpace::byte_to_address(view.offset, view.word_size as u32) as intb;
+        let mut soff: intb = AddrSpace::byte_to_address(view.offset, view.word_size as u32) as intb;
         soff = sign_extend(soff, view.addr_size * 8 - 1);
         if soff < 0 {
             return format!("stack - 0x{:x}", soff.unsigned_abs());

@@ -1,14 +1,14 @@
 //! Hide split-lane stack saves only when the ABI and memory uses prove them
 //! to be bookkeeping.
 
-use crate::action::{ruleflags, Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
+use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult, ruleflags};
 use crate::context::{OpId, VarnodeId};
 use crate::fspec::effect_type;
 use crate::funcdata::Funcdata;
-use unlace_base::address::{sign_extend, Address};
+use std::rc::Rc;
+use unlace_base::address::{Address, sign_extend};
 use unlace_base::space::AddrSpace;
 use unlace_num::opcodes::OpCode;
-use std::rc::Rc;
 
 #[derive(Clone)]
 struct EffectRange {
@@ -303,19 +303,19 @@ fn proven_unobserved(fd: &Funcdata, saves: &[Save], stack_space: &Rc<AddrSpace>)
             let Some(pointer) = op.get_in(1) else {
                 return false;
             };
-            let literal_global = fd
-                .vbank()
-                .get(pointer)
-                .is_some_and(|value| value.is_constant())
-                && op
-                    .get_in(0)
-                    .and_then(|id| fd.vbank().get(id))
-                    .is_some_and(|space| {
-                        space.is_constant()
-                            && fd.get_arch().manage().get_default_data_space().is_some_and(
-                                |data| space.get_offset() == data.get_index() as u64,
-                            )
-                    });
+            let literal_global =
+                fd.vbank()
+                    .get(pointer)
+                    .is_some_and(|value| value.is_constant())
+                    && op
+                        .get_in(0)
+                        .and_then(|id| fd.vbank().get(id))
+                        .is_some_and(|space| {
+                            space.is_constant()
+                                && fd.get_arch().manage().get_default_data_space().is_some_and(
+                                    |data| space.get_offset() == data.get_index() as u64,
+                                )
+                        });
             if !literal_global && frame_range(fd, pointer, access_width(fd, id, 1)).is_none() {
                 return false;
             }

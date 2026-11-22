@@ -43,21 +43,36 @@ pub struct MzDataSegment {
 /// other tracked register keeps its value; a load without the segment is left
 /// untouched.
 pub fn apply(arch: &Architecture) {
-    let Some(seg) = arch.mz_dgroup.as_ref() else { return };
-    let Some(space) = arch.manage().get_default_code_space().cloned() else { return };
-    let Ok(loc) = arch.get_register_varnode(b"DS") else { return };
+    let Some(seg) = arch.mz_dgroup.as_ref() else {
+        return;
+    };
+    let Some(space) = arch.manage().get_default_code_space().cloned() else {
+        return;
+    };
+    let Ok(loc) = arch.get_register_varnode(b"DS") else {
+        return;
+    };
     let on = arch.mz_dgroup_on;
     let at = |offset: u64| Address::new(Rc::clone(&space), offset);
     arch.with_context_db_mut(|db| {
-        let unstated = |offset: u64| offset == seg.entry || seg.others.binary_search(&offset).is_ok();
+        let unstated =
+            |offset: u64| offset == seg.entry || seg.others.binary_search(&offset).is_ok();
         let mut points = vec![seg.start, seg.entry, seg.entry + 1, seg.end];
         let inside = |offset: &u64| *offset > seg.start && *offset < seg.end;
-        points.extend(seg.others.iter().flat_map(|&other| [other, other + 1]).filter(inside));
+        points.extend(
+            seg.others
+                .iter()
+                .flat_map(|&other| [other, other + 1])
+                .filter(inside),
+        );
         points.extend(
             db.clone_trackbase()
                 .iter()
                 .map(|(addr, _)| addr)
-                .filter(|addr| addr.get_space().is_some_and(|other| Rc::ptr_eq(other, &space)))
+                .filter(|addr| {
+                    addr.get_space()
+                        .is_some_and(|other| Rc::ptr_eq(other, &space))
+                })
                 .map(Address::get_offset)
                 .filter(|&offset| offset > seg.start && offset < seg.end),
         );
@@ -67,7 +82,10 @@ pub fn apply(arch: &Architecture) {
             let mut set = db.get_tracked_set(&at(span[0])).clone();
             set.retain(|tracked| tracked.loc != loc);
             if on && !unstated(span[0]) {
-                set.push(TrackedContext { loc: loc.clone(), val: u64::from(seg.ds) });
+                set.push(TrackedContext {
+                    loc: loc.clone(),
+                    val: u64::from(seg.ds),
+                });
             }
             *db.create_set(&at(span[0]), &at(span[1])) = set;
         }

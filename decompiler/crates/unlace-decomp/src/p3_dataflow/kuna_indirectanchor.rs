@@ -104,7 +104,11 @@ pub fn anchor_of(data: &Funcdata, prev: OpId) -> Option<OpId> {
         return None;
     }
     let targ = crate::funcdata_varnode::op_iop_decode(invn.get_offset());
-    let alive = data.obank().get(targ).map(|o| !o.is_dead()).unwrap_or(false);
+    let alive = data
+        .obank()
+        .get(targ)
+        .map(|o| !o.is_dead())
+        .unwrap_or(false);
     alive.then_some(targ)
 }
 

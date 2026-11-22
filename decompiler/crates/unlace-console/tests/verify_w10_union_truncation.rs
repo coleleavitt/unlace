@@ -30,22 +30,29 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_file, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_file};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn boot(stem: &str) -> ConsoleProgram {
     let root = repo_root();
     let xml = root.join(format!("tests/datatests/{stem}.xml"));
     let specs = root.join("specs");
-    bootstrap_from_file(xml.to_str().unwrap(), "", &[specs.to_str().unwrap().to_string()])
-        .expect("bootstrap fixture with built processor specs")
+    bootstrap_from_file(
+        xml.to_str().unwrap(),
+        "",
+        &[specs.to_str().unwrap().to_string()],
+    )
+    .expect("bootstrap fixture with built processor specs")
 }
 
 /// Drive `commands` through a console with `program` installed as current, then
@@ -56,7 +63,9 @@ fn drive(program: ConsoleProgram, commands: &[&str]) -> String {
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
     {
-        let data = status.get_data_mut(DECOMPILE_MODULE).expect("decompile module data");
+        let data = status
+            .get_data_mut(DECOMPILE_MODULE)
+            .expect("decompile module data");
         let dcp = data
             .as_any_mut()
             .downcast_mut::<IfaceDecompData>()

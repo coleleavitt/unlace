@@ -93,22 +93,30 @@ pub trait ImageBytes: Send + Sync + std::fmt::Debug {
 /// during initialization; byte reads continue during analysis.
 pub trait LoadImage {
     /// The container explicitly selects the ARM VFP procedure-call standard.
-    fn arm_vfp_args(&self) -> bool { false }
+    fn arm_vfp_args(&self) -> bool {
+        false
+    }
 
     /// What the container says about floating-point arguments: `Some(true)` they
     /// travel in floating-point registers, `Some(false)` in integer registers
     /// (a soft-float procedure-call standard), `None` it says nothing.
-    fn float_arg_registers(&self) -> Option<bool> { None }
+    fn float_arg_registers(&self) -> Option<bool> {
+        None
+    }
 
     /// Whether the container states floating-point register hardware:
     /// `Some(false)` when it states none, `None` when it says nothing.
-    fn float_hardware(&self) -> Option<bool> { None }
+    fn float_hardware(&self) -> Option<bool> {
+        None
+    }
 
     /// Whether the platform's callee extends a return value narrower than 32
     /// bits to 32 bits, so its caller reads that register unextended:
     /// `Some(true)` on Apple arm64, `Some(false)` on another stated arm64
     /// platform, `None` when the container says nothing.
-    fn callee_extends_returns(&self) -> Option<bool> { None }
+    fn callee_extends_returns(&self) -> Option<bool> {
+        None
+    }
 
     /// Get the name of the LoadImage.
     ///
@@ -216,7 +224,9 @@ pub trait LoadImage {
     /// A loader that cannot take one says so rather than accepting it silently.
     fn kuna_overlay_bytes(&mut self, addr: &Address, data: &[u8]) -> KunaResult<()> {
         let _ = (addr, data);
-        Err(KunaError::lowlevel("this load image does not support byte overlays"))
+        Err(KunaError::lowlevel(
+            "this load image does not support byte overlays",
+        ))
     }
 
     /// (kuna) The mapped **load segments** as `(vma, size, flags)`, `flags` per
@@ -513,7 +523,7 @@ impl LoadImage for RawLoadImage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use unlace_base::space::{addrspace_flags, spacetype, AddrSpaceManager, ConstantSpace};
+    use unlace_base::space::{AddrSpaceManager, ConstantSpace, addrspace_flags, spacetype};
 
     /// const(0) + ram(1), little endian, 4-byte addresses.
     fn manager(wordsize: u32) -> AddrSpaceManager {
@@ -565,14 +575,17 @@ mod tests {
 
         // vma defaults to 0: address == file offset
         let mut buf = [0xaau8; 4];
-        img.load_fill(&mut buf, &Address::new(Rc::clone(&ram), 0)).unwrap();
+        img.load_fill(&mut buf, &Address::new(Rc::clone(&ram), 0))
+            .unwrap();
         assert_eq!(buf, [0, 1, 2, 3]);
-        img.load_fill(&mut buf, &Address::new(Rc::clone(&ram), 12)).unwrap();
+        img.load_fill(&mut buf, &Address::new(Rc::clone(&ram), 12))
+            .unwrap();
         assert_eq!(buf, [12, 13, 14, 15]);
 
         // Read straddling EOF: bytes from the file, then zero fill
         let mut buf = [0xaau8; 8];
-        img.load_fill(&mut buf, &Address::new(Rc::clone(&ram), 12)).unwrap();
+        img.load_fill(&mut buf, &Address::new(Rc::clone(&ram), 12))
+            .unwrap();
         assert_eq!(buf, [12, 13, 14, 15, 0, 0, 0, 0]);
 
         // load() convenience wrapper
@@ -592,10 +605,14 @@ mod tests {
         assert!(img.open().is_err(), "an in-memory image is already open");
         assert_eq!(img.file_size(), 16);
         let mut buf = [0xaau8; 8];
-        img.load_fill(&mut buf, &Address::new(Rc::clone(&ram), 0x1000c)).unwrap();
+        img.load_fill(&mut buf, &Address::new(Rc::clone(&ram), 0x1000c))
+            .unwrap();
         assert_eq!(buf, [12, 13, 14, 15, 0, 0, 0, 0]);
         let mut buf = [0xaau8; 2];
-        assert!(img.load_fill(&mut buf, &Address::new(Rc::clone(&ram), 0xfffe)).is_err());
+        assert!(
+            img.load_fill(&mut buf, &Address::new(Rc::clone(&ram), 0xfffe))
+                .is_err()
+        );
     }
 
     #[test]
@@ -610,7 +627,9 @@ mod tests {
         // Initial address entirely past EOF: DataUnavailError with the
         // exact C++ message (shortcut 'r' for "ram", 4-byte space printRaw)
         let mut buf = [0u8; 4];
-        let err = img.load_fill(&mut buf, &Address::new(Rc::clone(&ram), 0x20)).unwrap_err();
+        let err = img
+            .load_fill(&mut buf, &Address::new(Rc::clone(&ram), 0x20))
+            .unwrap_err();
         match &err {
             KunaError::DataUnavail { explain } => {
                 assert_eq!(explain, "Unable to load 4 bytes at r0x00000020");
@@ -636,7 +655,10 @@ mod tests {
         let err = img.open().unwrap_err();
         match &err {
             KunaError::Lowlevel { explain } => {
-                assert_eq!(explain, "Unable to open raw image file: /nonexistent/kuna_raw_image");
+                assert_eq!(
+                    explain,
+                    "Unable to open raw image file: /nonexistent/kuna_raw_image"
+                );
             }
             other => panic!("expected Lowlevel, got {other:?}"),
         }
@@ -649,11 +671,14 @@ mod tests {
         img.open().unwrap();
         img.adjust_vma(0x100);
         let mut buf = [0u8; 2];
-        img.load_fill(&mut buf, &Address::new(Rc::clone(&ram), 0x100)).unwrap();
+        img.load_fill(&mut buf, &Address::new(Rc::clone(&ram), 0x100))
+            .unwrap();
         assert_eq!(buf, [0, 1]);
         // Address below the vma wraps negative in the uintb subtraction and
         // lands past filesize with offset==0: unfilled error
-        let err = img.load_fill(&mut buf, &Address::new(Rc::clone(&ram), 0x80)).unwrap_err();
+        let err = img
+            .load_fill(&mut buf, &Address::new(Rc::clone(&ram), 0x80))
+            .unwrap_err();
         assert!(matches!(err, KunaError::DataUnavail { .. }));
 
         std::fs::remove_file(&path).unwrap();
@@ -671,7 +696,8 @@ mod tests {
         img.open().unwrap();
         img.adjust_vma(0x10); // 0x10 words -> 0x20 bytes
         let mut buf = [0u8; 2];
-        img.load_fill(&mut buf, &Address::new(Rc::clone(&ram), 0x20)).unwrap();
+        img.load_fill(&mut buf, &Address::new(Rc::clone(&ram), 0x20))
+            .unwrap();
         assert_eq!(buf, [0, 1]);
 
         std::fs::remove_file(&path).unwrap();

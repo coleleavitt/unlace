@@ -13,8 +13,20 @@ use crate::common;
 
 fn read_in(binary: &str, start: &str, bytes: &str, extra: &[&str]) -> (serde_json::Value, String) {
     let (doc, stderr) = read_path(&common::fixture(binary), start, bytes, extra);
-    assert!(doc["provenance"].as_array().unwrap().iter().all(|r| r["overlaps"] == serde_json::json!([])), "{doc}");
-    assert!(notes(&doc).iter().all(|n| !n.contains("overlapping segments")), "{doc}");
+    assert!(
+        doc["provenance"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|r| r["overlaps"] == serde_json::json!([])),
+        "{doc}"
+    );
+    assert!(
+        notes(&doc)
+            .iter()
+            .all(|n| !n.contains("overlapping segments")),
+        "{doc}"
+    );
     (doc, stderr)
 }
 
@@ -53,7 +65,12 @@ fn assert_tiles_and_matches_the_file(doc: &serde_json::Value, path: &str) {
             }
             "repaired" => {
                 let off = r["file_offset"].as_u64().unwrap() as usize;
-                assert!(got.iter().zip(&file[off..off + got.len()]).all(|(a, b)| a != b), "{r}");
+                assert!(
+                    got.iter()
+                        .zip(&file[off..off + got.len()])
+                        .all(|(a, b)| a != b),
+                    "{r}"
+                );
             }
             "zero-fill" => assert!(got.iter().all(|&b| b == 0), "{r}"),
             other => assert_eq!(other, "unknown"),
@@ -62,8 +79,12 @@ fn assert_tiles_and_matches_the_file(doc: &serde_json::Value, path: &str) {
             let seg = &o["segment"];
             assert_ne!(seg, &r["segment"], "{r}");
             if let Some(off) = o["file_offset"].as_u64() {
-                let file_end = seg["file_offset"].as_u64().unwrap() + seg["file_size"].as_u64().unwrap();
-                assert!(off + (hi - lo) <= file_end && file_end <= file.len() as u64, "{r}");
+                let file_end =
+                    seg["file_offset"].as_u64().unwrap() + seg["file_size"].as_u64().unwrap();
+                assert!(
+                    off + (hi - lo) <= file_end && file_end <= file.len() as u64,
+                    "{r}"
+                );
             }
         }
         at = hi;
@@ -72,11 +93,21 @@ fn assert_tiles_and_matches_the_file(doc: &serde_json::Value, path: &str) {
 }
 
 fn hex_bytes(hex: &str) -> Vec<u8> {
-    (0..hex.len()).step_by(2).map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap()).collect()
+    (0..hex.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
+        .collect()
 }
 
 /// `(start, end, source, file_offset, segment name, permissions)`.
-type Row = (u64, u64, String, Option<u64>, Option<String>, Option<String>);
+type Row = (
+    u64,
+    u64,
+    String,
+    Option<u64>,
+    Option<String>,
+    Option<String>,
+);
 
 fn ranges(doc: &serde_json::Value) -> Vec<Row> {
     let text = |v: &serde_json::Value| v.as_str().map(str::to_owned);
@@ -97,12 +128,31 @@ fn ranges(doc: &serde_json::Value) -> Vec<Row> {
         .collect()
 }
 
-fn row(start: u64, end: u64, source: &str, offset: Option<u64>, name: Option<&str>, perms: &str) -> Row {
-    (start, end, source.to_owned(), offset, name.map(str::to_owned), Some(perms.to_owned()))
+fn row(
+    start: u64,
+    end: u64,
+    source: &str,
+    offset: Option<u64>,
+    name: Option<&str>,
+    perms: &str,
+) -> Row {
+    (
+        start,
+        end,
+        source.to_owned(),
+        offset,
+        name.map(str::to_owned),
+        Some(perms.to_owned()),
+    )
 }
 
 fn notes(doc: &serde_json::Value) -> Vec<String> {
-    doc["notes"].as_array().unwrap().iter().map(|n| n.as_str().unwrap().to_owned()).collect()
+    doc["notes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|n| n.as_str().unwrap().to_owned())
+        .collect()
 }
 
 /// The issue's first read: `__PAGEZERO` holds nothing in the file and grants
@@ -113,13 +163,32 @@ fn pagezero_is_zero_fill_with_no_access() {
     let (doc, stderr) = read_in("readprov_macho_arm64", "0x0", "16", &[]);
     assert_eq!(doc["hex"], "00000000000000000000000000000000");
     assert_eq!(doc["truncated"], false);
-    assert_eq!(ranges(&doc), [row(0, 0x10, "zero-fill", None, Some("__PAGEZERO"), "---")]);
+    assert_eq!(
+        ranges(&doc),
+        [row(0, 0x10, "zero-fill", None, Some("__PAGEZERO"), "---")]
+    );
     let seg = &doc["provenance"][0]["segment"];
-    assert_eq!((seg["start"].as_u64(), seg["size"].as_u64()), (Some(0), Some(0x1_0000_0000)));
-    assert_eq!((seg["file_offset"].as_u64(), seg["file_size"].as_u64()), (Some(0), Some(0)));
+    assert_eq!(
+        (seg["start"].as_u64(), seg["size"].as_u64()),
+        (Some(0), Some(0x1_0000_0000))
+    );
+    assert_eq!(
+        (seg["file_offset"].as_u64(), seg["file_size"].as_u64()),
+        (Some(0), Some(0))
+    );
     let notes = notes(&doc);
-    assert!(notes.iter().any(|n| n.starts_with("zero fill, not file bytes: 0x0..0x10 in __PAGEZERO")), "{notes:?}");
-    assert!(notes.iter().any(|n| n.starts_with("no read access: 0x0..0x10 in __PAGEZERO (permissions ---)")), "{notes:?}");
+    assert!(
+        notes
+            .iter()
+            .any(|n| n.starts_with("zero fill, not file bytes: 0x0..0x10 in __PAGEZERO")),
+        "{notes:?}"
+    );
+    assert!(
+        notes
+            .iter()
+            .any(|n| n.starts_with("no read access: 0x0..0x10 in __PAGEZERO (permissions ---)")),
+        "{notes:?}"
+    );
     assert!(stderr.contains("no read access"), "{stderr}");
 }
 
@@ -131,19 +200,48 @@ fn a_read_past_linkedits_file_content_is_cut_where_it_ends() {
     assert_eq!(
         ranges(&doc),
         [
-            row(0x1000102d8, 0x1000102e0, "file", Some(0x82d8), Some("__LINKEDIT"), "r--"),
-            row(0x1000102e0, 0x1000102e8, "zero-fill", None, Some("__LINKEDIT"), "r--"),
+            row(
+                0x1000102d8,
+                0x1000102e0,
+                "file",
+                Some(0x82d8),
+                Some("__LINKEDIT"),
+                "r--"
+            ),
+            row(
+                0x1000102e0,
+                0x1000102e8,
+                "zero-fill",
+                None,
+                Some("__LINKEDIT"),
+                "r--"
+            ),
         ]
     );
     let notes = notes(&doc);
     assert!(
-        notes.iter().any(|n| n.contains("0x1000102e0..0x1000102e8 in __LINKEDIT (0x2e0 bytes in the file, 0x4000 in memory)")),
+        notes.iter().any(|n| n.contains(
+            "0x1000102e0..0x1000102e8 in __LINKEDIT (0x2e0 bytes in the file, 0x4000 in memory)"
+        )),
         "{notes:?}"
     );
-    assert!(notes.iter().all(|n| !n.contains("no read access")), "{notes:?}");
+    assert!(
+        notes.iter().all(|n| !n.contains("no read access")),
+        "{notes:?}"
+    );
 
     let tail = read("readprov_macho_arm64", "0x100013ff8", "16");
-    assert_eq!(ranges(&tail), [row(0x100013ff8, 0x100014000, "zero-fill", None, Some("__LINKEDIT"), "r--")]);
+    assert_eq!(
+        ranges(&tail),
+        [row(
+            0x100013ff8,
+            0x100014000,
+            "zero-fill",
+            None,
+            Some("__LINKEDIT"),
+            "r--"
+        )]
+    );
 }
 
 /// A zerofill `__bss` past `__DATA`'s file content, and the run from
@@ -155,20 +253,58 @@ fn macho_ranges_follow_the_segments_they_cross() {
     assert_eq!(
         ranges(&bss),
         [
-            row(0x100007ff8, 0x100008000, "file", Some(0x7ff8), Some("__DATA"), "rw-"),
-            row(0x100008000, 0x100008008, "zero-fill", None, Some("__DATA"), "rw-"),
+            row(
+                0x100007ff8,
+                0x100008000,
+                "file",
+                Some(0x7ff8),
+                Some("__DATA"),
+                "rw-"
+            ),
+            row(
+                0x100008000,
+                0x100008008,
+                "zero-fill",
+                None,
+                Some("__DATA"),
+                "rw-"
+            ),
         ]
     );
     let across = read("readprov_macho_arm64", "0xfffffff8", "16");
     assert_eq!(
         ranges(&across),
         [
-            row(0xfffffff8, 0x100000000, "zero-fill", None, Some("__PAGEZERO"), "---"),
-            row(0x100000000, 0x100000008, "file", Some(0), Some("__TEXT"), "r-x"),
+            row(
+                0xfffffff8,
+                0x100000000,
+                "zero-fill",
+                None,
+                Some("__PAGEZERO"),
+                "---"
+            ),
+            row(
+                0x100000000,
+                0x100000008,
+                "file",
+                Some(0),
+                Some("__TEXT"),
+                "r-x"
+            ),
         ]
     );
     let code = read("readprov_macho_arm64", "0x1000003d8", "16");
-    assert_eq!(ranges(&code), [row(0x1000003d8, 0x1000003e8, "file", Some(0x3d8), Some("__TEXT"), "r-x")]);
+    assert_eq!(
+        ranges(&code),
+        [row(
+            0x1000003d8,
+            0x1000003e8,
+            "file",
+            Some(0x3d8),
+            Some("__TEXT"),
+            "r-x"
+        )]
+    );
     assert!(notes(&code).is_empty(), "{:?}", notes(&code));
 }
 
@@ -186,17 +322,29 @@ fn elf_bss_is_zero_fill_and_a_flagless_load_is_unreadable() {
     );
     assert_eq!(bss["provenance"][1]["segment"]["size"], 0x48);
     assert_eq!(bss["provenance"][1]["segment"]["file_size"], 8);
-    assert!(notes(&bss).iter().any(|n| n.contains("0x402008..0x402010 in the PT_LOAD at 0x402000")), "{:?}", notes(&bss));
+    assert!(
+        notes(&bss)
+            .iter()
+            .any(|n| n.contains("0x402008..0x402010 in the PT_LOAD at 0x402000")),
+        "{:?}",
+        notes(&bss)
+    );
 
     let sealed = read("readprov_elf_x86_64", "0x401000", "8");
     assert_eq!(sealed["hex"], "efcdab8967452301");
-    assert_eq!(ranges(&sealed), [row(0x401000, 0x401008, "file", Some(0x1000), None, "---")]);
+    assert_eq!(
+        ranges(&sealed),
+        [row(0x401000, 0x401008, "file", Some(0x1000), None, "---")]
+    );
     let notes = notes(&sealed);
     assert!(notes.iter().any(|n| n.starts_with("no read access: 0x401000..0x401008 in the PT_LOAD at 0x401000")), "{notes:?}");
     assert!(notes.iter().all(|n| !n.contains("zero fill")), "{notes:?}");
 
     let text = read("readprov_elf_x86_64", "0x4000e8", "7");
-    assert_eq!(ranges(&text), [row(0x4000e8, 0x4000ef, "file", Some(0xe8), None, "r-x")]);
+    assert_eq!(
+        ranges(&text),
+        [row(0x4000e8, 0x4000ef, "file", Some(0xe8), None, "r-x")]
+    );
 }
 
 /// And on a PE: `VirtualSize` past the raw data is zero fill, a section with
@@ -207,16 +355,47 @@ fn pe_virtual_size_is_zero_fill_and_a_section_without_mem_read_is_unreadable() {
     assert_eq!(
         ranges(&data),
         [
-            row(0x1400031f8, 0x140003200, "file", Some(0x9f8), Some(".data"), "rw-"),
-            row(0x140003200, 0x140003208, "zero-fill", None, Some(".data"), "rw-"),
+            row(
+                0x1400031f8,
+                0x140003200,
+                "file",
+                Some(0x9f8),
+                Some(".data"),
+                "rw-"
+            ),
+            row(
+                0x140003200,
+                0x140003208,
+                "zero-fill",
+                None,
+                Some(".data"),
+                "rw-"
+            ),
         ]
     );
     let sealed = read("readprov_pe_x86_64.exe", "0x140006000", "8");
-    assert_eq!(ranges(&sealed), [row(0x140006000, 0x140006008, "file", Some(0xa00), Some(".sealed"), "---")]);
-    assert!(notes(&sealed).iter().any(|n| n.starts_with("no read access: 0x140006000..0x140006008 in .sealed")));
+    assert_eq!(
+        ranges(&sealed),
+        [row(
+            0x140006000,
+            0x140006008,
+            "file",
+            Some(0xa00),
+            Some(".sealed"),
+            "---"
+        )]
+    );
+    assert!(
+        notes(&sealed)
+            .iter()
+            .any(|n| n.starts_with("no read access: 0x140006000..0x140006008 in .sealed"))
+    );
     let header = read("readprov_pe_x86_64.exe", "0x140000000", "2");
     assert_eq!(header["hex"], "4d5a");
-    assert_eq!(ranges(&header), [row(0x140000000, 0x140000002, "file", Some(0), None, "r--")]);
+    assert_eq!(
+        ranges(&header),
+        [row(0x140000000, 0x140000002, "file", Some(0), None, "r--")]
+    );
 }
 
 /// A header field the loader rewrote so the image parses is cut out of the
@@ -283,7 +462,11 @@ fn a_relocatable_objects_layout_is_unknown() {
     assert_eq!(doc["provenance"].as_array().unwrap().len(), 1);
     assert_eq!(doc["provenance"][0]["source"], "unknown");
     assert_eq!(doc["provenance"][0]["segment"], serde_json::Value::Null);
-    assert!(notes(&doc).iter().all(|n| !n.contains("zero fill") && !n.contains("no read access")));
+    assert!(
+        notes(&doc)
+            .iter()
+            .all(|n| !n.contains("zero fill") && !n.contains("no read access"))
+    );
 }
 
 /// The text view is unchanged: the notes go to stderr, the hexdump to stdout.
@@ -292,9 +475,17 @@ fn the_text_view_keeps_its_rows_and_says_it_on_stderr() {
     let path = common::fixture("readprov_macho_arm64");
     let (stdout, stderr, rc) = common::run_kuna(&["read", &path, "0x0", "--addr", "--bytes", "16"]);
     assert_eq!(rc, 0, "{stderr}");
-    assert!(stdout.contains("0x0           00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|"), "{stdout}");
+    assert!(
+        stdout.contains(
+            "0x0           00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|"
+        ),
+        "{stdout}"
+    );
     assert!(!stdout.contains("zero fill"), "{stdout}");
-    assert!(stderr.contains("note: zero fill, not file bytes: 0x0..0x10 in __PAGEZERO"), "{stderr}");
+    assert!(
+        stderr.contains("note: zero fill, not file bytes: 0x0..0x10 in __PAGEZERO"),
+        "{stderr}"
+    );
 }
 
 /// A static x86-64 ELF with one `PT_LOAD` per `(p_flags, p_offset, p_vaddr,
@@ -303,16 +494,31 @@ fn the_text_view_keeps_its_rows_and_says_it_on_stderr() {
 fn elf(loads: &[(u32, u64, u64, u64, u64)], fill: &[(usize, &str)], len: usize) -> String {
     let mut b = vec![0u8; len];
     b[..7].copy_from_slice(b"\x7fELF\x02\x01\x01");
-    let mut put = |at: usize, v: u64, n: usize| b[at..at + n].copy_from_slice(&v.to_le_bytes()[..n]);
+    let mut put =
+        |at: usize, v: u64, n: usize| b[at..at + n].copy_from_slice(&v.to_le_bytes()[..n]);
     let entry = loads[0].2;
-    for (at, v, n) in [(16, 2, 2), (18, 62, 2), (20, 1, 4), (24, entry, 8), (32, 64, 8), (52, 64, 2), (54, 56, 2)] {
+    for (at, v, n) in [
+        (16, 2, 2),
+        (18, 62, 2),
+        (20, 1, 4),
+        (24, entry, 8),
+        (32, 64, 8),
+        (52, 64, 2),
+        (54, 56, 2),
+    ] {
         put(at, v, n);
     }
     put(56, loads.len() as u64, 2);
     put(58, 64, 2);
     for (i, &(flags, offset, vaddr, filesz, memsz)) in loads.iter().enumerate() {
         let h = 64 + 56 * i;
-        for (at, v, n) in [(0, 1, 4), (4, u64::from(flags), 4), (8, offset, 8), (16, vaddr, 8), (24, vaddr, 8)] {
+        for (at, v, n) in [
+            (0, 1, 4),
+            (4, u64::from(flags), 4),
+            (8, offset, 8),
+            (16, vaddr, 8),
+            (24, vaddr, 8),
+        ] {
             put(h + at, v, n);
         }
         for (at, v) in [(32, filesz), (40, memsz), (48, 0x1000)] {
@@ -333,7 +539,12 @@ fn overlaps(r: &serde_json::Value) -> Vec<(String, Option<u64>, Option<u64>, Opt
     let list = r["overlaps"].as_array().unwrap().iter();
     list.map(|o| {
         let seg = &o["segment"];
-        (o["source"].as_str().unwrap().to_owned(), o["file_offset"].as_u64(), seg["index"].as_u64(), seg["file_offset"].as_u64())
+        (
+            o["source"].as_str().unwrap().to_owned(),
+            o["file_offset"].as_u64(),
+            seg["index"].as_u64(),
+            seg["file_offset"].as_u64(),
+        )
     })
     .collect()
 }
@@ -347,16 +558,37 @@ const R_X: u32 = 5;
 /// note says the address is mapped twice and which rule picked the bytes.
 #[test]
 fn two_loads_of_one_address_list_the_one_not_read() {
-    let fill = [(0x1000, "112233445566778899aabbccddeeffc3"), (0x2000, "ffeeddccbbaa998877665544332211c3")];
+    let fill = [
+        (0x1000, "112233445566778899aabbccddeeffc3"),
+        (0x2000, "ffeeddccbbaa998877665544332211c3"),
+    ];
     for (offsets, hex) in [([0x1000, 0x2000], fill[0].1), ([0x2000, 0x1000], fill[1].1)] {
         let loads = offsets.map(|off| (R_X, off, 0x401000, 0x10, 0x10));
         let path = elf(&loads, &fill, 0x2010);
         let (doc, stderr) = read_path(&path, "0x401000", "16", &[]);
         assert_eq!(doc["hex"], hex);
-        assert_eq!(ranges(&doc), [row(0x401000, 0x401010, "file", Some(offsets[0]), None, "r-x")]);
+        assert_eq!(
+            ranges(&doc),
+            [row(
+                0x401000,
+                0x401010,
+                "file",
+                Some(offsets[0]),
+                None,
+                "r-x"
+            )]
+        );
         let range = &doc["provenance"][0];
         assert_eq!(range["segment"]["index"], 0);
-        assert_eq!(overlaps(range), [("file".to_owned(), Some(offsets[1]), Some(1), Some(offsets[1]))]);
+        assert_eq!(
+            overlaps(range),
+            [(
+                "file".to_owned(),
+                Some(offsets[1]),
+                Some(1),
+                Some(offsets[1])
+            )]
+        );
         assert_eq!(range["overlaps"][0]["segment"]["permissions"], "r-x");
         let want = format!(
             "overlapping segments: 0x401000..0x401010 is read from file offset 0x{:x} in the PT_LOAD at 0x401000 \
@@ -364,13 +596,25 @@ fn two_loads_of_one_address_list_the_one_not_read() {
             offsets[0], offsets[1]
         );
         let notes = notes(&doc);
-        assert!(notes.iter().any(|n| n.starts_with(&want) && n.contains("equal starts in table order")), "{notes:?}");
-        assert!(stderr.contains("note: overlapping segments: 0x401000..0x401010"), "{stderr}");
+        assert!(
+            notes
+                .iter()
+                .any(|n| n.starts_with(&want) && n.contains("equal starts in table order")),
+            "{notes:?}"
+        );
+        assert!(
+            stderr.contains("note: overlapping segments: 0x401000..0x401010"),
+            "{stderr}"
+        );
 
-        let (stdout, _, rc) = common::run_kuna(&["read", &path, "0x401000", "--addr", "--bytes", "16"]);
+        let (stdout, _, rc) =
+            common::run_kuna(&["read", &path, "0x401000", "--addr", "--bytes", "16"]);
         assert_eq!(rc, 0);
         let spaced: Vec<String> = hex_bytes(hex).iter().map(|b| format!("{b:02x}")).collect();
-        assert!(stdout.contains(&format!("0x401000      {}", spaced.join(" "))), "{stdout}");
+        assert!(
+            stdout.contains(&format!("0x401000      {}", spaced.join(" "))),
+            "{stdout}"
+        );
     }
 }
 
@@ -379,7 +623,14 @@ fn two_loads_of_one_address_list_the_one_not_read() {
 /// segment's file bytes stops there, and still declares those addresses.
 #[test]
 fn an_overlap_is_cut_to_the_addresses_both_segments_declare() {
-    let path = elf(&[(R_X, 0x1000, 0x401000, 0x20, 0x20), (R_X, 0x2000, 0x401010, 0x20, 0x20)], &[], 0x2020);
+    let path = elf(
+        &[
+            (R_X, 0x1000, 0x401000, 0x20, 0x20),
+            (R_X, 0x2000, 0x401010, 0x20, 0x20),
+        ],
+        &[],
+        0x2020,
+    );
     let (doc, _) = read_path(&path, "0x401000", "48", &[]);
     assert_eq!(
         ranges(&doc),
@@ -389,10 +640,30 @@ fn an_overlap_is_cut_to_the_addresses_both_segments_declare() {
             row(0x401020, 0x401030, "file", Some(0x2010), None, "r-x"),
         ]
     );
-    let shared: Vec<_> = doc["provenance"].as_array().unwrap().iter().map(overlaps).collect();
-    assert_eq!(shared, [vec![], vec![("file".to_owned(), Some(0x2000), Some(1), Some(0x2000))], vec![]]);
+    let shared: Vec<_> = doc["provenance"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(overlaps)
+        .collect();
+    assert_eq!(
+        shared,
+        [
+            vec![],
+            vec![("file".to_owned(), Some(0x2000), Some(1), Some(0x2000))],
+            vec![]
+        ]
+    );
 
-    let path = elf(&[(R_X, 0x1000, 0x401000, 0x10, 0x10), (6, 0x2000, 0x601000, 0x10, 0x100), (4, 0x3000, 0x601080, 0x10, 0x10)], &[], 0x3010);
+    let path = elf(
+        &[
+            (R_X, 0x1000, 0x401000, 0x10, 0x10),
+            (6, 0x2000, 0x601000, 0x10, 0x100),
+            (4, 0x3000, 0x601080, 0x10, 0x10),
+        ],
+        &[],
+        0x3010,
+    );
     let (doc, _) = read_path(&path, "0x601078", "16", &[]);
     assert_eq!(
         ranges(&doc),
@@ -402,7 +673,10 @@ fn an_overlap_is_cut_to_the_addresses_both_segments_declare() {
         ]
     );
     assert!(overlaps(&doc["provenance"][0]).is_empty());
-    assert_eq!(overlaps(&doc["provenance"][1]), [("zero-fill".to_owned(), None, Some(1), Some(0x2000))]);
+    assert_eq!(
+        overlaps(&doc["provenance"][1]),
+        [("zero-fill".to_owned(), None, Some(1), Some(0x2000))]
+    );
     let notes = notes(&doc);
     assert!(
         notes.iter().any(|n| n.starts_with(
@@ -418,27 +692,63 @@ fn an_overlap_is_cut_to_the_addresses_both_segments_declare() {
 #[test]
 fn neighbours_that_meet_or_share_a_page_do_not_overlap() {
     let path = elf(
-        &[(R_X, 0x1000, 0x401000, 0x1000, 0x1000), (6, 0x2000, 0x402000, 0x10, 0x1000), (4, 0x3000, 0x403000, 0x10, 0x10)],
+        &[
+            (R_X, 0x1000, 0x401000, 0x1000, 0x1000),
+            (6, 0x2000, 0x402000, 0x10, 0x1000),
+            (4, 0x3000, 0x403000, 0x10, 0x10),
+        ],
         &[],
         0x3010,
     );
     for start in ["0x401ff8", "0x402ff8"] {
         let (doc, _) = read_path(&path, start, "16", &[]);
         assert_eq!(doc["provenance"].as_array().unwrap().len(), 2, "{doc}");
-        assert!(doc["provenance"].as_array().unwrap().iter().all(|r| overlaps(r).is_empty()), "{doc}");
-        assert!(notes(&doc).iter().all(|n| !n.contains("overlapping")), "{doc}");
+        assert!(
+            doc["provenance"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|r| overlaps(r).is_empty()),
+            "{doc}"
+        );
+        assert!(
+            notes(&doc).iter().all(|n| !n.contains("overlapping")),
+            "{doc}"
+        );
     }
     let path = elf(
-        &[(R_X, 0x1000, 0x401000, 0x10, 0x10), (4, 0x1010, 0x401010, 0x10, 0x10), (6, 0x1800, 0x401800, 0x10, 0x10)],
+        &[
+            (R_X, 0x1000, 0x401000, 0x10, 0x10),
+            (4, 0x1010, 0x401010, 0x10, 0x10),
+            (6, 0x1800, 0x401800, 0x10, 0x10),
+        ],
         &[],
         0x1810,
     );
-    for (start, bytes, want) in [("0x401000", "32", vec![Some(0), Some(1)]), ("0x401800", "16", vec![Some(2)])] {
+    for (start, bytes, want) in [
+        ("0x401000", "32", vec![Some(0), Some(1)]),
+        ("0x401800", "16", vec![Some(2)]),
+    ] {
         let (doc, _) = read_path(&path, start, bytes, &[]);
-        let segments: Vec<_> = doc["provenance"].as_array().unwrap().iter().map(|r| r["segment"]["index"].as_u64()).collect();
+        let segments: Vec<_> = doc["provenance"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["segment"]["index"].as_u64())
+            .collect();
         assert_eq!(segments, want);
-        assert!(doc["provenance"].as_array().unwrap().iter().all(|r| overlaps(r).is_empty()), "{doc}");
-        assert!(notes(&doc).iter().all(|n| !n.contains("overlapping")), "{doc}");
+        assert!(
+            doc["provenance"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|r| overlaps(r).is_empty()),
+            "{doc}"
+        );
+        assert!(
+            notes(&doc).iter().all(|n| !n.contains("overlapping")),
+            "{doc}"
+        );
     }
 }
 
@@ -459,14 +769,31 @@ fn macho_segments_and_pe_sections_overlap_the_same_way() {
     let path = common::scratch_file("readprov-macho-overlap", "bin");
     std::fs::write(&path, &macho).unwrap();
     let (doc, _) = read_path(path.to_str().unwrap(), "0x100006000", "8", &[]);
-    assert_eq!(ranges(&doc), [row(0x100006000, 0x100006008, "file", Some(0x6000), Some("__DATA"), "rw-")]);
+    assert_eq!(
+        ranges(&doc),
+        [row(
+            0x100006000,
+            0x100006008,
+            "file",
+            Some(0x6000),
+            Some("__DATA"),
+            "rw-"
+        )]
+    );
     assert_eq!(doc["provenance"][0]["segment"]["index"], 2);
-    assert_eq!(overlaps(&doc["provenance"][0]), [("file".to_owned(), Some(0x8000), Some(3), Some(0x8000))]);
-    assert_eq!(doc["provenance"][0]["overlaps"][0]["segment"]["name"], "__LINKEDIT");
+    assert_eq!(
+        overlaps(&doc["provenance"][0]),
+        [("file".to_owned(), Some(0x8000), Some(3), Some(0x8000))]
+    );
+    assert_eq!(
+        doc["provenance"][0]["overlaps"][0]["segment"]["name"],
+        "__LINKEDIT"
+    );
 
     let mut pe = std::fs::read(common::fixture("readprov_pe_x86_64.exe")).unwrap();
     let lfanew = u32::from_le_bytes(pe[0x3c..0x40].try_into().unwrap()) as usize;
-    let table = lfanew + 24 + u16::from_le_bytes(pe[lfanew + 20..lfanew + 22].try_into().unwrap()) as usize;
+    let table =
+        lfanew + 24 + u16::from_le_bytes(pe[lfanew + 20..lfanew + 22].try_into().unwrap()) as usize;
     let sections = u16::from_le_bytes(pe[lfanew + 6..lfanew + 8].try_into().unwrap()) as usize;
     for h in (0..sections).map(|i| table + 40 * i) {
         if pe[h..h + 7] == *b".sealed" {
@@ -476,9 +803,25 @@ fn macho_segments_and_pe_sections_overlap_the_same_way() {
     let path = common::scratch_file("readprov-pe-overlap", "exe");
     std::fs::write(&path, &pe).unwrap();
     let (doc, _) = read_path(path.to_str().unwrap(), "0x140003000", "8", &[]);
-    assert_eq!(ranges(&doc), [row(0x140003000, 0x140003008, "file", Some(0x800), Some(".data"), "rw-")]);
-    assert_eq!(overlaps(&doc["provenance"][0]), [("file".to_owned(), Some(0xa00), Some(3), Some(0xa00))]);
-    assert_eq!(doc["provenance"][0]["overlaps"][0]["segment"]["name"], ".sealed");
+    assert_eq!(
+        ranges(&doc),
+        [row(
+            0x140003000,
+            0x140003008,
+            "file",
+            Some(0x800),
+            Some(".data"),
+            "rw-"
+        )]
+    );
+    assert_eq!(
+        overlaps(&doc["provenance"][0]),
+        [("file".to_owned(), Some(0xa00), Some(3), Some(0xa00))]
+    );
+    assert_eq!(
+        doc["provenance"][0]["overlaps"][0]["segment"]["name"],
+        ".sealed"
+    );
     assert!(notes(&doc).iter().any(|n| n.starts_with(
         "overlapping segments: 0x140003000..0x140003008 is read from file offset 0x800 in .data, and .sealed maps it from file offset 0xa00"
     )));

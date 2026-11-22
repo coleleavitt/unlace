@@ -25,7 +25,14 @@ fn table_slots_are_data_references_under_addrtable() {
     std::fs::write(&source, SOURCE).unwrap();
     process::required_output(
         Command::new("clang")
-            .args(["-O1", "-fno-inline", "-ffreestanding", "-fno-pic", "-nostdlib", "-no-pie"])
+            .args([
+                "-O1",
+                "-fno-inline",
+                "-ffreestanding",
+                "-fno-pic",
+                "-nostdlib",
+                "-no-pie",
+            ])
             .args(["-fuse-ld=lld", "-Wl,--no-dynamic-linker"])
             .arg(&source)
             .arg("-o")
@@ -34,7 +41,11 @@ fn table_slots_are_data_references_under_addrtable() {
     let bytes = std::fs::read(&binary).unwrap();
     let image = object::File::parse(bytes.as_slice()).unwrap();
     let address = |name: &str| {
-        image.symbols().find(|s| s.name() == Ok(name)).unwrap().address()
+        image
+            .symbols()
+            .find(|s| s.name() == Ok(name))
+            .unwrap()
+            .address()
     };
     let (table, h2) = (address("table"), address("h2"));
     let path = binary.to_str().unwrap();
@@ -46,7 +57,11 @@ fn table_slots_are_data_references_under_addrtable() {
     let (on, err, status) =
         common::run_kuna(&["xrefs", path, "--to", "h2", "--option", "addrtable", "on"]);
     assert_eq!(status, 0, "{err}");
-    let row = format!("0x{:x}\tdata\t0x{:x}\taddr 0x{h2:x}", table + 16, table + 16);
+    let row = format!(
+        "0x{:x}\tdata\t0x{:x}\taddr 0x{h2:x}",
+        table + 16,
+        table + 16
+    );
     assert!(on.lines().any(|line| line == row), "want {row:?}:\n{on}");
     std::fs::remove_dir_all(root).unwrap();
 }

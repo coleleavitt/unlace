@@ -158,7 +158,10 @@ impl Matcher<'_> {
         }
     }
 
-    #[allow(clippy::if_same_then_else, reason = "Short-circuit order controls callbacks and backtracking budget.")]
+    #[allow(
+        clippy::if_same_then_else,
+        reason = "Short-circuit order controls callbacks and backtracking budget."
+    )]
     fn repeat(
         &self,
         repetition: &Repetition,

@@ -9,8 +9,8 @@ fn boolean_conversions_preserve_narrowing_and_single_call_evaluation() {
     if process::optional_output(Command::new("cc").arg("--version")).is_none() {
         return;
     }
-    let kuna = std::env::var_os("KUNA_TEST_BIN")
-        .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
+    let kuna =
+        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let declarations = [
         "prototype as_unsigned8 bool as_unsigned8(uint1 value)",
         "prototype as_signed8 bool as_signed8(int1 value)",
@@ -24,8 +24,13 @@ fn boolean_conversions_preserve_narrowing_and_single_call_evaluation() {
     let bodies = |language: &str| {
         let mut command = Command::new(&kuna);
         command.args([
-            "decompile-all", &common::fixture("rust_integer_conversions_x86_64"),
-            "--functions", names, "--language", language, "--json",
+            "decompile-all",
+            &common::fixture("rust_integer_conversions_x86_64"),
+            "--functions",
+            names,
+            "--language",
+            language,
+            "--json",
         ]);
         for declaration in declarations {
             command.args(["--assert", declaration]);
@@ -37,10 +42,14 @@ fn boolean_conversions_preserve_narrowing_and_single_call_evaluation() {
         }
         let functions = document["functions"].as_array().unwrap();
         assert_eq!(functions.len(), 5);
-        functions.iter().map(|function| {
-            assert!(function["error"].is_null(), "{function}");
-            function["code"].as_str().unwrap()
-        }).collect::<Vec<_>>().join("\n")
+        functions
+            .iter()
+            .map(|function| {
+                assert!(function["error"].is_null(), "{function}");
+                function["code"].as_str().unwrap()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     };
     let c = bodies("c");
     let rust = bodies("rust");
@@ -49,7 +58,10 @@ fn boolean_conversions_preserve_narrowing_and_single_call_evaluation() {
     assert_eq!(rust.matches("counted_signed(value)").count(), 1);
     let c_source = common::scratch_file("rust_boolean_reference", "c");
     let rust_source = common::scratch_file("rust_boolean_emitted", "rs");
-    std::fs::write(&c_source, format!(r#"
+    std::fs::write(
+        &c_source,
+        format!(
+            r#"
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -73,8 +85,14 @@ int main(void) {{
     printf("%u %u %u %u %u %u\n",a,b,c,d,e,calls);
   }}
 }}
-"#)).unwrap();
-    std::fs::write(&rust_source, format!(r#"
+"#
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        &rust_source,
+        format!(
+            r#"
 use std::sync::atomic::{{AtomicUsize,Ordering}};
 static CALLS:AtomicUsize=AtomicUsize::new(0);
 unsafe fn counted_unsigned(value:u64)->u64 {{CALLS.fetch_add(1,Ordering::SeqCst);value}}
@@ -92,25 +110,52 @@ fn main() {{unsafe {{
     }}
   }}
 }}}}
-"#)).unwrap();
+"#
+        ),
+    )
+    .unwrap();
     let c_binary = c_source.with_extension("out");
     let rust_binary = rust_source.with_extension("out");
     let mut expected = None;
     for optimization in ["0", "2"] {
-        process::required_output(Command::new("cc")
-            .args(["-std=c11", "-Wall", "-Wextra", "-Werror", &format!("-O{optimization}")])
-            .arg(&c_source).arg("-o").arg(&c_binary));
+        process::required_output(
+            Command::new("cc")
+                .args([
+                    "-std=c11",
+                    "-Wall",
+                    "-Wextra",
+                    "-Werror",
+                    &format!("-O{optimization}"),
+                ])
+                .arg(&c_source)
+                .arg("-o")
+                .arg(&c_binary),
+        );
         let reference = process::required_output(&mut Command::new(&c_binary)).stdout;
         assert_eq!(String::from_utf8_lossy(&reference).lines().count(), 1024);
-        if let Some(previous) = &expected { assert_eq!(&reference, previous); }
-        process::required_output(Command::new("rustc")
-            .args(["--edition=2021", "--crate-name", "rust_boolean_emitted", "-C", &format!("opt-level={optimization}"), "-C", "overflow-checks=yes"])
-            .arg(&rust_source).arg("-o").arg(&rust_binary));
+        if let Some(previous) = &expected {
+            assert_eq!(&reference, previous);
+        }
+        process::required_output(
+            Command::new("rustc")
+                .args([
+                    "--edition=2021",
+                    "--crate-name",
+                    "rust_boolean_emitted",
+                    "-C",
+                    &format!("opt-level={optimization}"),
+                    "-C",
+                    "overflow-checks=yes",
+                ])
+                .arg(&rust_source)
+                .arg("-o")
+                .arg(&rust_binary),
+        );
         let actual = process::required_output(&mut Command::new(&rust_binary)).stdout;
         assert_eq!(actual, reference);
         expected = Some(reference);
     }
-    for path in [c_source,rust_source,c_binary,rust_binary] {
+    for path in [c_source, rust_source, c_binary, rust_binary] {
         std::fs::remove_file(path).unwrap();
     }
 }

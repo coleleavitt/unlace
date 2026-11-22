@@ -7,10 +7,10 @@ pub mod kuna_msvcstackguard;
 pub mod kuna_securitycheck;
 // (kuna) post-SSA Go write-barrier arm fold (shared/phi-feeding shapes;
 // rides option gowritebarrier).
-pub mod kuna_gowbphi;
-pub mod kuna_stackguard;
 pub mod kuna_dynalloca;
+pub mod kuna_gowbphi;
 pub mod kuna_regiongraph;
 pub mod kuna_regionid;
+pub mod kuna_stackguard;
 
 pub mod kuna_gobounds;

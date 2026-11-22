@@ -9,9 +9,9 @@ use std::rc::Rc;
 use unlace_analysis::loadimage_te::synthetic::TeImage;
 use unlace_base::error::KunaResult;
 use unlace_base::xml::{DocumentStorage, Element};
-use unlace_console::engine::{language_database, Bootstrap, ConsoleProgram};
-use unlace_console::project::{decompile_entry, DecompileOptions};
-use unlace_decomp::kuna_loadoptions::{environment_fallbacks, LoadOptions};
+use unlace_console::engine::{Bootstrap, ConsoleProgram, language_database};
+use unlace_console::project::{DecompileOptions, decompile_entry};
+use unlace_decomp::kuna_loadoptions::{LoadOptions, environment_fallbacks};
 
 const X86_64: &str = "x86:LE:64:default";
 /// `lea rax, [rdi+rbx]; ret`
@@ -210,7 +210,11 @@ fn a_program_reenters_its_own_options_after_another_load() {
     let specs = specs();
     let db = language_database(&specs).unwrap();
     let thumb_then_a32 = [0x07, 0x20, 0x70, 0x47, 0x1e, 0xff, 0x2f, 0xe1];
-    let te = Scratch::new("bootstrap-reenter-te", "te", &TeImage::arm(&thumb_then_a32).build());
+    let te = Scratch::new(
+        "bootstrap-reenter-te",
+        "te",
+        &TeImage::arm(&thumb_then_a32).build(),
+    );
     let fauxware = fixture("fauxware");
     let a_options = LoadOptions {
         kernelcache: KernelcacheChoice::Off,
@@ -250,19 +254,29 @@ fn a_program_reenters_its_own_options_after_another_load() {
             unlace_decomp::kuna_dyldcache::selected_image().as_deref(),
             Some("libA.dylib")
         );
-        assert_eq!(scoped(|o| o.macho_slice.clone()), Some(Some("arm64".into())));
+        assert_eq!(
+            scoped(|o| o.macho_slice.clone()),
+            Some(Some("arm64".into()))
+        );
         assert_eq!(
             unlace_analysis::pdb::locate::explicit_pdb_path(),
             Some(PathBuf::from("/a.pdb"))
         );
-        assert_eq!(unlace_decomp::kuna_objcsdk::sdk_path(), Some(PathBuf::from("/sdk-a")));
+        assert_eq!(
+            unlace_decomp::kuna_objcsdk::sdk_path(),
+            Some(PathBuf::from("/sdk-a"))
+        );
     }
     assert_eq!(a.arch().load_options().go_version, Some((1, 22)));
     let before = environment_fallbacks();
     assert_eq!(fingerprint(Ok(a)), alone);
     assert_eq!(fingerprint(Ok(thumb)), thumb_alone);
     assert!(thumb_alone.contains("return 7"), "{thumb_alone}");
-    assert_eq!(environment_fallbacks(), before, "A's analysis read the environment");
+    assert_eq!(
+        environment_fallbacks(),
+        before,
+        "A's analysis read the environment"
+    );
 }
 
 /// A load that fails, before or after its options are in force, leaves the
@@ -281,8 +295,15 @@ fn a_failed_load_leaves_no_options_in_force() {
         ("missing object", load.object("/nonexistent/kuna/image")),
         ("unknown format", load.object(junk.path())),
         ("missing file", load.file("/nonexistent/kuna/image")),
-        ("raw without a language", load.target("nosuch:LE:64:default").raw(raw.path(), 0x1000, &[0x1000])),
-        ("raw without a target", load.raw(raw.path(), 0x1000, &[0x1000])),
+        (
+            "raw without a language",
+            load.target("nosuch:LE:64:default")
+                .raw(raw.path(), 0x1000, &[0x1000]),
+        ),
+        (
+            "raw without a target",
+            load.raw(raw.path(), 0x1000, &[0x1000]),
+        ),
         ("te of junk", load.te(junk.path())),
     ];
     for (input, result) in failures {

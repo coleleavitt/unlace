@@ -6,12 +6,22 @@ use super::kuna_overlaps_pending_branch;
 /// decoding as a 5-byte `CALL` that runs to 0x804883c and swallows the target.
 #[test]
 fn fires_on_the_anti_disassembly_overlap() {
-    assert!(kuna_overlaps_pending_branch(true, 0x8048837, 5, Some((0x8048837, 0x8048838))));
+    assert!(kuna_overlaps_pending_branch(
+        true,
+        0x8048837,
+        5,
+        Some((0x8048837, 0x8048838))
+    ));
 }
 
 #[test]
 fn gate_off_never_fires() {
-    assert!(!kuna_overlaps_pending_branch(false, 0x8048837, 5, Some((0x8048837, 0x8048838))));
+    assert!(!kuna_overlaps_pending_branch(
+        false,
+        0x8048837,
+        5,
+        Some((0x8048837, 0x8048838))
+    ));
 }
 
 #[test]
@@ -24,26 +34,61 @@ fn no_pending_branch_never_fires() {
 #[test]
 fn ordinary_forward_branches_do_not_fire() {
     // target == fall-through
-    assert!(!kuna_overlaps_pending_branch(true, 0x1000, 5, Some((0x1000, 0x1000))));
+    assert!(!kuna_overlaps_pending_branch(
+        true,
+        0x1000,
+        5,
+        Some((0x1000, 0x1000))
+    ));
     // target == end of the fall-through instruction (skip one instruction)
-    assert!(!kuna_overlaps_pending_branch(true, 0x1000, 5, Some((0x1000, 0x1005))));
+    assert!(!kuna_overlaps_pending_branch(
+        true,
+        0x1000,
+        5,
+        Some((0x1000, 0x1005))
+    ));
     // target well past the fall-through instruction
-    assert!(!kuna_overlaps_pending_branch(true, 0x1000, 5, Some((0x1000, 0x1020))));
+    assert!(!kuna_overlaps_pending_branch(
+        true,
+        0x1000,
+        5,
+        Some((0x1000, 0x1020))
+    ));
     // a backward branch
-    assert!(!kuna_overlaps_pending_branch(true, 0x1000, 5, Some((0x1000, 0x0f00))));
+    assert!(!kuna_overlaps_pending_branch(
+        true,
+        0x1000,
+        5,
+        Some((0x1000, 0x0f00))
+    ));
 }
 
 /// The watch is only valid for the branch's own fall-through instruction.
 #[test]
 fn a_different_instruction_does_not_consume_the_watch() {
-    assert!(!kuna_overlaps_pending_branch(true, 0x2000, 5, Some((0x8048837, 0x8048838))));
+    assert!(!kuna_overlaps_pending_branch(
+        true,
+        0x2000,
+        5,
+        Some((0x8048837, 0x8048838))
+    ));
 }
 
 /// A one-byte instruction cannot contain another instruction's start.
 #[test]
 fn single_byte_instruction_never_fires() {
-    assert!(!kuna_overlaps_pending_branch(true, 0x1000, 1, Some((0x1000, 0x1001))));
-    assert!(!kuna_overlaps_pending_branch(true, 0x1000, 0, Some((0x1000, 0x1001))));
+    assert!(!kuna_overlaps_pending_branch(
+        true,
+        0x1000,
+        1,
+        Some((0x1000, 0x1001))
+    ));
+    assert!(!kuna_overlaps_pending_branch(
+        true,
+        0x1000,
+        0,
+        Some((0x1000, 0x1001))
+    ));
 }
 
 /// A wide instruction with the target one byte in and one byte short of the end.
@@ -55,7 +100,12 @@ fn fires_anywhere_strictly_inside() {
             "target +{t} inside a 7-byte instruction must fire"
         );
     }
-    assert!(!kuna_overlaps_pending_branch(true, 0x1000, 7, Some((0x1000, 0x1007))));
+    assert!(!kuna_overlaps_pending_branch(
+        true,
+        0x1000,
+        7,
+        Some((0x1000, 0x1007))
+    ));
 }
 
 // --- the reconvergence exclusion ------------------------------------------

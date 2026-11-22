@@ -3,15 +3,15 @@
 use std::collections::HashSet;
 use std::rc::Rc;
 
-use unlace_base::address::{sign_extend, Address};
+use unlace_base::address::{Address, sign_extend};
 use unlace_base::space::AddrSpace;
 use unlace_base::types::{int4, intb, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype, TypeFactory};
+use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::varmap::{MapState, RangeHint, RangeType, COPY_CONSTANT};
+use crate::varmap::{COPY_CONSTANT, MapState, RangeHint, RangeType};
 
 const MAX_BYTES: intb = 4096;
 
@@ -289,9 +289,13 @@ pub(super) fn coalesce_delay_slot_init(fd: &Funcdata, state: &mut MapState, spac
     if fd.get_arch().array_extent < super::kuna_arrayextent::LEVEL_ON
         || space.get_addr_size() != 4
         || !space.is_big_endian()
-        || !fd.get_arch().manage().register_lookup().is_some_and(|regs| {
-            regs.probe_register("o7").is_some() && regs.probe_register("i7").is_some()
-        })
+        || !fd
+            .get_arch()
+            .manage()
+            .register_lookup()
+            .is_some_and(|regs| {
+                regs.probe_register("o7").is_some() && regs.probe_register("i7").is_some()
+            })
     {
         return;
     }
@@ -307,10 +311,14 @@ pub(super) fn coalesce_delay_slot_init(fd: &Funcdata, state: &mut MapState, spac
         if base.index.is_some()
             || end > 0
             || start % 4 != 0
-            || checker.get_alias().iter().zip(checker.get_add_base()).any(|(&other, base)| {
-                let delta = other.wrapping_sub(offset);
-                (0 < delta && delta < 8) || (delta == 0 && base.index.is_some())
-            })
+            || checker
+                .get_alias()
+                .iter()
+                .zip(checker.get_add_base())
+                .any(|(&other, base)| {
+                    let delta = other.wrapping_sub(offset);
+                    (0 < delta && delta < 8) || (delta == 0 && base.index.is_some())
+                })
         {
             continue;
         }
@@ -322,9 +330,13 @@ pub(super) fn coalesce_delay_slot_init(fd: &Funcdata, state: &mut MapState, spac
         let lo = Address::new(Rc::clone(space), offset);
         let hi = Address::new(Rc::clone(space), space.wrap_offset(end as uintb));
         let slots = || fd.vbank().iter_loc_addr_range(&lo, &hi);
-        let Some(ptr) = fd.vbank().get(base) else { continue };
+        let Some(ptr) = fd.vbank().get(base) else {
+            continue;
+        };
         if !ptr.descend_iter().any(|call| {
-            let Some(op) = fd.obank().get(call) else { return false };
+            let Some(op) = fd.obank().get(call) else {
+                return false;
+            };
             if op.is_dead()
                 || op.code() != OpCode::CPUI_CALL
                 || !(1..op.num_input()).any(|slot| op.get_in(slot) == Some(base))
@@ -347,21 +359,33 @@ pub(super) fn coalesce_delay_slot_init(fd: &Funcdata, state: &mut MapState, spac
                         && store.get_parent() == op.get_parent()
                         && store.get_seq_num().get_order() < op.get_seq_num().get_order()
                         && (store.get_addr() == op.get_addr()) == delay
-                        && store.get_in(0).and_then(|input| fd.vbank().get(input))
+                        && store
+                            .get_in(0)
+                            .and_then(|input| fd.vbank().get(input))
                             .is_some_and(|value| value.is_constant() && value.get_offset() == 0)
                 })
             };
             initialized(offset, false) && initialized(tail_off, true)
-        }) || slots().any(|id| super::kuna_storereach::is_read(fd, id)) {
+        }) || slots().any(|id| super::kuna_storereach::is_read(fd, id))
+        {
             continue;
         }
         let hints = state.hints_mut();
-        let overlaps = |h: &RangeHint| h.sstart < end && minimum_end(h).is_none_or(|last| start < last);
-        if hints.iter().filter(|h| overlaps(h)).any(|h| !compatible(h, start, end, 4)) {
+        let overlaps =
+            |h: &RangeHint| h.sstart < end && minimum_end(h).is_none_or(|last| start < last);
+        if hints
+            .iter()
+            .filter(|h| overlaps(h))
+            .any(|h| !compatible(h, start, end, 4))
+        {
             continue;
         }
-        let Ok(word) = types.get_base(4, type_metatype::TYPE_UINT) else { continue };
-        let Ok(array) = types.get_type_array(2, word) else { continue };
+        let Ok(word) = types.get_base(4, type_metatype::TYPE_UINT) else {
+            continue;
+        };
+        let Ok(array) = types.get_type_array(2, word) else {
+            continue;
+        };
         hints.retain(|h| !overlaps(h));
         state.add_range_pub(offset, Some(array), 0, RangeType::Fixed, -1);
     }

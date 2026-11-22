@@ -37,8 +37,8 @@
 use unlace_base::address::ELEM_ADDR;
 use unlace_base::error::KunaResult;
 use unlace_base::marshal::{
-    AttributeId, ElementId, Encoder, ATTRIB_ID, ATTRIB_INDEX, ATTRIB_NAME, ATTRIB_REF, ATTRIB_SIZE,
-    ATTRIB_VALUE, ELEM_VOID,
+    ATTRIB_ID, ATTRIB_INDEX, ATTRIB_NAME, ATTRIB_REF, ATTRIB_SIZE, ATTRIB_VALUE, AttributeId,
+    ELEM_VOID, ElementId, Encoder,
 };
 use unlace_base::space::spacetype;
 use unlace_num::opcodes::OpCode;
@@ -46,8 +46,8 @@ use unlace_num::pcoderaw::{ATTRIB_CODE, ELEM_SPACEID};
 use unlace_sleigh::translate::ELEM_OP;
 
 use crate::block::{ELEM_BLOCK, ELEM_BLOCKEDGE};
-use crate::funcdata::Funcdata;
 use crate::context::{OpId, VarnodeId};
+use crate::funcdata::Funcdata;
 
 // ---------------------------------------------------------------------------
 // New marshaling ids (DECOMPILER scope).
@@ -142,7 +142,10 @@ impl Funcdata {
                 // `encodable` stays EMPTY and every symref — wire ids included
                 // — is withheld: there is no `<localdb>` to resolve against.
                 encodable.extend(
-                    wire_symbols.iter().filter(|w| w.is_encodable()).map(|w| w.id),
+                    wire_symbols
+                        .iter()
+                        .filter(|w| w.is_encodable())
+                        .map(|w| w.id),
                 );
             }
             self.kuna_wire_symbols = wire_symbols;
@@ -236,7 +239,10 @@ impl Funcdata {
                     let dtype = h.get_type(ctx, None);
                     let n = h.num_instances();
                     let insts: Vec<VarnodeId> = (0..n).map(|i| h.get_instance(i)).collect();
-                    (rep, spacebase, implied, persist, addrtied, constant, typelock, dtype, insts)
+                    (
+                        rep, spacebase, implied, persist, addrtied, constant, typelock, dtype,
+                        insts,
+                    )
                 });
             let rep_index = self
                 .vbank()
@@ -318,9 +324,10 @@ impl Funcdata {
                     &unlace_base::address::Address::new_invalid(),
                 ) {
                     Some(gc) if gc.symbol_id != 0 => {
-                        let delta = rep_addr.get_offset().wrapping_sub(
-                            gc.entry_addr.get_offset(),
-                        ) as i64;
+                        let delta = rep_addr
+                            .get_offset()
+                            .wrapping_sub(gc.entry_addr.get_offset())
+                            as i64;
                         if delta != 0 || gc.symbol_offset != 0 {
                             symbol_offset = delta + gc.symbol_offset as i64;
                         }
@@ -523,7 +530,11 @@ impl Funcdata {
                 id,
                 name,
                 dtype,
-                addr: if hash != 0 { Address::new_invalid() } else { rep_addr },
+                addr: if hash != 0 {
+                    Address::new_invalid()
+                } else {
+                    rep_addr
+                },
                 hash,
                 // A mapped addr-tied storage is valid function-wide (empty
                 // uselimit); everything else is scoped to its use point, which
@@ -550,7 +561,10 @@ impl Funcdata {
         // instead from inside its <op> as <iop value=time/>, never as an <addr>.
         enc.open_element(&ELEM_VARNODES);
         for vn in self.vbank().iter_loc() {
-            let v = self.vbank().get(vn).expect("encode_tree: stale loc Varnode");
+            let v = self
+                .vbank()
+                .get(vn)
+                .expect("encode_tree: stale loc Varnode");
             if v.get_space().get_type() == spacetype::IPTR_IOP {
                 continue;
             }
@@ -565,7 +579,10 @@ impl Funcdata {
             enc.open_element(&ELEM_BLOCK);
             // The block's OWN index (Java places blocks by it), not the loop
             // counter `i` — they can differ.
-            enc.write_signed_integer(&ATTRIB_INDEX, self.bblocks_ref().block(bl).get_index() as i64);
+            enc.write_signed_integer(
+                &ATTRIB_INDEX,
+                self.bblocks_ref().block(bl).get_index() as i64,
+            );
             // BlockBasic::encodeBody: the cover <rangelist> (mandatory — emitted
             // even when empty).
             self.bblocks_ref().encode_body(bl, enc);
@@ -600,7 +617,8 @@ impl Funcdata {
     fn encode_varnode(&self, enc: &mut dyn Encoder, vn: VarnodeId) -> KunaResult<()> {
         let v = self.vbank().get(vn).expect("encode_varnode: stale Varnode");
         enc.open_element(&ELEM_ADDR);
-        v.get_space().encode_attributes_sized(enc, v.get_offset(), v.get_size())?;
+        v.get_space()
+            .encode_attributes_sized(enc, v.get_offset(), v.get_size())?;
         enc.write_unsigned_integer(&ATTRIB_REF, v.get_create_index() as u64);
         let mergegroup = v.get_merge_group();
         if mergegroup != 0 {
@@ -640,8 +658,11 @@ impl Funcdata {
         // Output: <addr ref/> (bare back-reference) or <void/>.
         match o.get_out() {
             Some(out) => {
-                let create =
-                    self.vbank().get(out).expect("encode_op: stale output").get_create_index();
+                let create = self
+                    .vbank()
+                    .get(out)
+                    .expect("encode_op: stale output")
+                    .get_create_index();
                 self.encode_bare_ref(enc, create);
             }
             None => self.encode_void(enc),
@@ -723,11 +744,11 @@ mod tests {
     use std::collections::BTreeSet;
     use std::rc::Rc;
 
-    use unlace_base::address::{Address, ATTRIB_UNIQ, ELEM_RANGELIST, ELEM_SEQNUM};
+    use unlace_base::address::{ATTRIB_UNIQ, Address, ELEM_RANGELIST, ELEM_SEQNUM};
     use unlace_base::marshal::{Decoder, PackedDecode, PackedEncode};
     use unlace_base::space::{
-        addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace,
-        IopSpace, UniqueSpace,
+        AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace,
+        addrspace_flags, spacetype,
     };
     use unlace_base::types::int4;
     use unlace_num::opcodes::OpCode;
@@ -741,7 +762,8 @@ mod tests {
     fn build_manager() -> AddrSpaceManager {
         let mut m = AddrSpaceManager::new();
         m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+            .unwrap();
         m.insert_space(Rc::new(IopSpace::new(2))).unwrap();
         m.insert_space(Rc::new(FspecSpace::new(3))).unwrap();
         m.insert_space(Rc::new(AddrSpace::new(
@@ -838,7 +860,8 @@ mod tests {
                     }
                     assert_eq!(a, ELEM_ADDR.get_id(), "<varnodes> child is not <addr>");
                     let aid = dec.open_element()?;
-                    obs.varnode_refs.insert(dec.read_unsigned_integer_id(&ATTRIB_REF)?);
+                    obs.varnode_refs
+                        .insert(dec.read_unsigned_integer_id(&ATTRIB_REF)?);
                     dec.close_element(aid)?;
                 }
                 dec.close_element(vid)?;
@@ -876,7 +899,8 @@ mod tests {
                     if first {
                         assert_eq!(oc, ELEM_SEQNUM.get_id(), "first <op> child is not <seqnum>");
                         let sid = dec.open_element()?;
-                        obs.op_uniqs.insert(dec.read_unsigned_integer_id(&ATTRIB_UNIQ)?);
+                        obs.op_uniqs
+                            .insert(dec.read_unsigned_integer_id(&ATTRIB_UNIQ)?);
                         dec.close_element(sid)?;
                         first = false;
                     } else {
@@ -974,9 +998,7 @@ mod tests {
         let expected_refs: BTreeSet<u64> = fd
             .vbank()
             .iter_loc()
-            .filter(|&vn| {
-                fd.vbank().get(vn).unwrap().get_space().get_type() != spacetype::IPTR_IOP
-            })
+            .filter(|&vn| fd.vbank().get(vn).unwrap().get_space().get_type() != spacetype::IPTR_IOP)
             .map(|vn| fd.vbank().get(vn).unwrap().get_create_index() as u64)
             .collect();
         let expected_uniqs: BTreeSet<u64> = fd
@@ -1012,7 +1034,10 @@ mod tests {
 
         // The load-bearing invariant: <addr ref> == get_create_index(),
         // <seqnum uniq> == get_time(), for every Varnode / op.
-        assert_eq!(obs.varnode_refs, expected_refs, "<varnodes> refs != create indices");
+        assert_eq!(
+            obs.varnode_refs, expected_refs,
+            "<varnodes> refs != create indices"
+        );
         assert_eq!(obs.op_uniqs, expected_uniqs, "<op> uniqs != op times");
 
         // The iop annotation Varnode must NOT appear in <varnodes>.

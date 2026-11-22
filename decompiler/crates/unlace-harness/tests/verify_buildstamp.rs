@@ -3,7 +3,7 @@
 
 use std::process::Command;
 
-use unlace_console::kuna_buildstamp::{identity, ChildKind, PARENT_ENV, REPLY};
+use unlace_console::kuna_buildstamp::{ChildKind, PARENT_ENV, REPLY, identity};
 
 fn run(parent: Option<&str>) -> String {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_decomp_test_dbg"));

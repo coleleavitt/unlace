@@ -5,8 +5,7 @@
 use std::path::PathBuf;
 
 use unlace_console::ifacedecomp::{
-    execute, register_console_commands, register_decomp_commands, IfaceDecompData,
-    DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_console_commands, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_console::kuna_console::register_kuna_commands;
@@ -32,21 +31,40 @@ fn run(commands: &[String]) -> String {
 }
 
 fn signature(output: &str) -> &str {
-    output.lines().find(|line| line.contains("main(")).unwrap_or_else(|| panic!("no signature:\n{output}"))
+    output
+        .lines()
+        .find(|line| line.contains("main("))
+        .unwrap_or_else(|| panic!("no signature:\n{output}"))
 }
 
 #[test]
 fn parse_line_prototype_does_not_survive_clear_architecture() {
     let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../unlace-analysis/tests/fixtures/aif_gap_x86_64");
-    let load = vec![format!("load file {}", fixture.to_str().unwrap()), "read symbols".to_string()];
+    let load = vec![
+        format!("load file {}", fixture.to_str().unwrap()),
+        "read symbols".to_string(),
+    ];
     let declare = "parse line extern double main(double a,double b,double c);".to_string();
     let tail = ["load function main", "decompile", "print C"].map(String::from);
 
     let fresh = run(&[load.clone(), tail.to_vec()].concat());
     let declared = run(&[load.clone(), vec![declare.clone()], tail.to_vec()].concat());
-    let cleared = run(&[load.clone(), vec![declare, "clear architecture".into()], load, tail.to_vec()].concat());
+    let cleared = run(&[
+        load.clone(),
+        vec![declare, "clear architecture".into()],
+        load,
+        tail.to_vec(),
+    ]
+    .concat());
 
-    assert!(signature(&declared).contains("main(float8 a"), "declaration must apply:\n{declared}");
-    assert_eq!(signature(&cleared), signature(&fresh), "cleared session:\n{cleared}");
+    assert!(
+        signature(&declared).contains("main(float8 a"),
+        "declaration must apply:\n{declared}"
+    );
+    assert_eq!(
+        signature(&cleared),
+        signature(&fresh),
+        "cleared session:\n{cleared}"
+    );
 }

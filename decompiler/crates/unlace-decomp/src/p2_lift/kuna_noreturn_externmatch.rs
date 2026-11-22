@@ -176,15 +176,26 @@ pub fn is_proxy_noreturn_name(name: &str) -> bool {
 /// states a size, and those bytes, all mapped, decode as exactly one instruction
 /// that is an unconditional return or jump with no control transfer before it.
 pub fn is_stub_body(arch: &Architecture, entry: &Address) -> bool {
-    let code = arch.manage().get_default_code_space().map(|space| space.get_index());
+    let code = arch
+        .manage()
+        .get_default_code_space()
+        .map(|space| space.get_index());
     if entry.get_space().map(|space| space.get_index()) != code {
         return false;
     }
-    let Ok(at) = arch.func_sizes.binary_search_by_key(&entry.get_offset(), |&(addr, _)| addr) else {
+    let Ok(at) = arch
+        .func_sizes
+        .binary_search_by_key(&entry.get_offset(), |&(addr, _)| addr)
+    else {
         return false;
     };
     let translate = arch.translate();
-    let Some(image) = translate.loader_rc().try_borrow().ok().and_then(|loader| loader.shared_bytes()) else {
+    let Some(image) = translate
+        .loader_rc()
+        .try_borrow()
+        .ok()
+        .and_then(|loader| loader.shared_bytes())
+    else {
         return false;
     };
     let mut ops = EntryOps::default();
@@ -193,7 +204,10 @@ pub fn is_stub_body(arch: &Architecture, entry: &Address) -> bool {
         return false;
     };
     len.is_ok_and(|len| u64::try_from(len) == Ok(arch.func_sizes[at].1))
-        && matches!(last, OpCode::CPUI_RETURN | OpCode::CPUI_BRANCH | OpCode::CPUI_BRANCHIND)
+        && matches!(
+            last,
+            OpCode::CPUI_RETURN | OpCode::CPUI_BRANCH | OpCode::CPUI_BRANCHIND
+        )
         && !relative
         && !rest.iter().any(|&(op, _)| is_transfer(op))
 }
@@ -201,11 +215,16 @@ pub fn is_stub_body(arch: &Architecture, entry: &Address) -> bool {
 /// `true` if `call`, falling through to `fallthrough`, is the last instruction of
 /// the sized function symbol holding it.
 pub fn call_ends_function(arch: &Architecture, call: &Address, fallthrough: &Address) -> bool {
-    let code = arch.manage().get_default_code_space().map(|space| space.get_index());
+    let code = arch
+        .manage()
+        .get_default_code_space()
+        .map(|space| space.get_index());
     if call.get_space().map(|space| space.get_index()) != code {
         return false;
     }
-    let at = arch.func_sizes.partition_point(|&(addr, _)| addr <= call.get_offset());
+    let at = arch
+        .func_sizes
+        .partition_point(|&(addr, _)| addr <= call.get_offset());
     at.checked_sub(1).is_some_and(|at| {
         let (start, size) = arch.func_sizes[at];
         let end = start.saturating_add(size);
@@ -232,7 +251,13 @@ fn is_transfer(op: OpCode) -> bool {
 struct EntryOps(Vec<(OpCode, bool)>);
 
 impl PcodeEmit for EntryOps {
-    fn dump(&mut self, _addr: &Address, opc: OpCode, _outvar: Option<&VarnodeData>, vars: &[VarnodeData]) {
+    fn dump(
+        &mut self,
+        _addr: &Address,
+        opc: OpCode,
+        _outvar: Option<&VarnodeData>,
+        vars: &[VarnodeData],
+    ) {
         let relative = vars
             .first()
             .and_then(|v| v.space.as_ref())
@@ -244,13 +269,13 @@ impl PcodeEmit for EntryOps {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::rc::Rc;
+    use std::sync::Arc;
     use unlace_base::error::KunaResult;
     use unlace_sleigh::globalcontext::ContextInternal;
     use unlace_sleigh::loadimage::{ImageBytes, LoadImage};
     use unlace_sleigh::sleigh::Sleigh;
     use unlace_sleigh::translate::Translate;
-    use std::rc::Rc;
-    use std::sync::Arc;
 
     #[test]
     fn matches_canary_and_abort_family() {
@@ -317,7 +342,10 @@ mod tests {
             "stub__stack_chk_fail_count",
             "Menu::stub___stack_chk_fail",
         ] {
-            assert!(!is_proxy_noreturn_name(keep), "{keep} is not a proxy spelling");
+            assert!(
+                !is_proxy_noreturn_name(keep),
+                "{keep} is not a proxy spelling"
+            );
         }
     }
 
@@ -368,7 +396,9 @@ mod tests {
         let sla = std::fs::read(&sla).expect("x86-64.sla is built");
         let image = StubImage(Arc::new(Mapped(bytes.to_vec())));
         let mut sleigh = Sleigh::new(Box::new(image), Box::new(ContextInternal::new()));
-        sleigh.initialize_from_sla(&sla).expect("x86-64.sla initializes");
+        sleigh
+            .initialize_from_sla(&sla)
+            .expect("x86-64.sla initializes");
         for (name, val) in [("addrsize", 2), ("opsize", 1), ("longMode", 1)] {
             sleigh.set_context_default(name, val);
         }
@@ -378,7 +408,14 @@ mod tests {
     }
 
     fn ram(arch: &Architecture, offset: u64) -> Address {
-        Address::new(Rc::clone(arch.manage().get_default_code_space().expect("default code space")), offset)
+        Address::new(
+            Rc::clone(
+                arch.manage()
+                    .get_default_code_space()
+                    .expect("default code space"),
+            ),
+            offset,
+        )
     }
 
     /// [`is_stub_body`] for an x86-64 function of `size` bytes at 0x1000 over `bytes`.
@@ -390,15 +427,26 @@ mod tests {
     #[test]
     fn a_stub_body_is_mapped_in_full() {
         assert!(stub_body(&[0xc2, 0, 0], 3), "a mapped ret imm16 is a stub");
-        assert!(!stub_body(&[0xc2], 3), "a ret imm16 past the mapping is not");
+        assert!(
+            !stub_body(&[0xc2], 3),
+            "a ret imm16 past the mapping is not"
+        );
     }
 
     #[test]
     fn only_the_last_instruction_of_a_sized_function_ends_it() {
         let arch = x86_64(&[], vec![(0x1000, 0x14), (0x1020, 0x10)]);
-        let ends = |call: u64, fallthrough: u64| call_ends_function(&arch, &ram(&arch, call), &ram(&arch, fallthrough));
-        assert!(ends(0x100f, 0x1014), "a call whose fall-through is the symbol end");
-        assert!(!ends(0x1004, 0x1009), "a call with code after it inside the symbol");
+        let ends = |call: u64, fallthrough: u64| {
+            call_ends_function(&arch, &ram(&arch, call), &ram(&arch, fallthrough))
+        };
+        assert!(
+            ends(0x100f, 0x1014),
+            "a call whose fall-through is the symbol end"
+        );
+        assert!(
+            !ends(0x1004, 0x1009),
+            "a call with code after it inside the symbol"
+        );
         assert!(!ends(0x1016, 0x101b), "a call in the gap between symbols");
         assert!(!ends(0x0ff0, 0x0ff5), "a call before every symbol");
         assert!(ends(0x102b, 0x1030), "the second symbol's last call");

@@ -25,7 +25,10 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn specs_root() -> PathBuf {
@@ -52,7 +55,10 @@ fn rust_oracle() -> Option<PathBuf> {
         return pb.exists().then_some(pb);
     }
     for profile in ["debug", "release"] {
-        let pb = repo_root().join("decompiler/target").join(profile).join("decomp_test_dbg");
+        let pb = repo_root()
+            .join("decompiler/target")
+            .join(profile)
+            .join("decomp_test_dbg");
         if pb.exists() {
             return Some(pb);
         }
@@ -124,8 +130,14 @@ fn w10_dc_condconst_conn_hoist_is_real_v1_eq_x() {
          (Conditional Constant #10), got:\n{body}"
     );
     // The hoist folded into the SAME merged local (also assigned 0x14, returned).
-    assert!(body.contains("v1 = 0x14;"), "merged local must receive the 0x14 store:\n{body}");
-    assert!(body.contains("return v1;"), "merged local must be returned:\n{body}");
+    assert!(
+        body.contains("v1 = 0x14;"),
+        "merged local must receive the 0x14 store:\n{body}"
+    );
+    assert!(
+        body.contains("return v1;"),
+        "merged local must be returned:\n{body}"
+    );
 }
 
 /// TEST B — a NON-dominant single-source body is NOT over-merged.
@@ -147,8 +159,14 @@ fn w10_dc_boolless_not_over_merged_byte_identical() {
         normalize_sources(CPP).trim_end(),
         "the dominant-copy hoist must not perturb boolless (source diagnostics normalized):\n--- rust ---\n{block}\n--- cpp ---\n{CPP}"
     );
-    assert!(block.contains("dat_52"), "the global must stay dat_52:\n{block}");
-    assert!(!block.contains("dat_52 = "), "dat_52 must remain read-only (not a hoist target):\n{block}");
+    assert!(
+        block.contains("dat_52"),
+        "the global must stay dat_52:\n{block}"
+    );
+    assert!(
+        !block.contains("dat_52 = "),
+        "dat_52 must remain read-only (not a hoist target):\n{block}"
+    );
 }
 
 /// TEST C — distinct sources into the merged local both survive grouping.

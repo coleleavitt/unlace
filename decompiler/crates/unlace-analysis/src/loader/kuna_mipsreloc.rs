@@ -134,7 +134,12 @@ pub(super) fn is_local(file: &object::File, target: RelocationTarget) -> bool {
 pub(super) fn is_small_data(name: &str) -> bool {
     [".sdata", ".sbss", ".lit4", ".lit8", ".srdata", ".scommon"]
         .iter()
-        .any(|p| name == *p || name.strip_prefix(p).is_some_and(|rest| rest.starts_with('.')))
+        .any(|p| {
+            name == *p
+                || name
+                    .strip_prefix(p)
+                    .is_some_and(|rest| rest.starts_with('.'))
+        })
 }
 
 /// How many GOT entries the relocations of the `laid` sections (index, size)
@@ -146,9 +151,13 @@ pub(super) fn entry_bound(file: &object::File, laid: &[(SectionIndex, u64)]) -> 
     let mut extern_pages = 0usize;
     let mut pages = false;
     for &(index, _) in laid {
-        let Ok(section) = file.section_by_index(index) else { continue };
+        let Ok(section) = file.section_by_index(index) else {
+            continue;
+        };
         for (_, reloc) in section.relocations() {
-            let Some(r_type) = r_type_of(&reloc) else { continue };
+            let Some(r_type) = r_type_of(&reloc) else {
+                continue;
+            };
             let target = reloc.target();
             match got_entry(r_type, is_local(file, target)) {
                 Some(true) => {
@@ -162,7 +171,8 @@ pub(super) fn entry_bound(file: &object::File, laid: &[(SectionIndex, u64)]) -> 
                 Some(false) => {
                     pages = true;
                     if let RelocationTarget::Symbol(i) = target {
-                        extern_pages += usize::from(file.symbol_by_index(i).is_ok_and(|s| s.is_undefined()));
+                        extern_pages +=
+                            usize::from(file.symbol_by_index(i).is_ok_and(|s| s.is_undefined()));
                     }
                 }
                 None => {}
@@ -170,7 +180,10 @@ pub(super) fn entry_bound(file: &object::File, laid: &[(SectionIndex, u64)]) -> 
         }
     }
     let spans: usize = if pages {
-        laid.iter().map(|&(_, size)| (size / GOT_WINDOW) as usize + 2).sum::<usize>() + extern_pages
+        laid.iter()
+            .map(|&(_, size)| (size / GOT_WINDOW) as usize + 2)
+            .sum::<usize>()
+            + extern_pages
     } else {
         0
     };
@@ -199,7 +212,9 @@ pub(super) fn lo_halves(
         }
         let lo = relocs[i + 1..]
             .iter()
-            .find(|(_, r)| r_type_of(r).map(|t| ops(t)[0]) == Some(LO16) && r.target() == reloc.target())
+            .find(|(_, r)| {
+                r_type_of(r).map(|t| ops(t)[0]) == Some(LO16) && r.target() == reloc.target()
+            })
             .and_then(|(off, _)| word(data, *off as usize, little_endian))
             .map_or(0, |w| i64::from(w as u16 as i16));
         out[i] = Some(lo);
@@ -209,7 +224,11 @@ pub(super) fn lo_halves(
 
 fn word(data: &[u8], at: usize, little_endian: bool) -> Option<u32> {
     let b: [u8; 4] = data.get(at..at.checked_add(4)?)?.try_into().ok()?;
-    Some(if little_endian { u32::from_le_bytes(b) } else { u32::from_be_bytes(b) })
+    Some(if little_endian {
+        u32::from_le_bytes(b)
+    } else {
+        u32::from_be_bytes(b)
+    })
 }
 
 /// The symbols the linker defines for `$gp`: `Some(None)` for `_gp_disp`
@@ -217,7 +236,11 @@ fn word(data: &[u8], at: usize, little_endian: bool) -> Option<u32> {
 /// linker script's assignment defines over any global definition the object
 /// has, and for an undefined `__gnu_local_gp`; `None` for any other, a local
 /// `_gp` included.
-pub(super) fn special_symbol(file: &object::File, idx: object::SymbolIndex, gp: u64) -> Option<Option<u64>> {
+pub(super) fn special_symbol(
+    file: &object::File,
+    idx: object::SymbolIndex,
+    gp: u64,
+) -> Option<Option<u64>> {
     let sym = file.symbol_by_index(idx).ok()?;
     match sym.name().ok()? {
         "_gp_disp" => Some(None),
@@ -253,7 +276,14 @@ impl Gp {
     /// A GOT of `entries` entries of `entry` bytes at `base`.
     pub(super) fn new(base: u64, entry: u64, entries: usize, little_endian: bool) -> Gp {
         let capacity = (entries as u64).min(GOT_WINDOW / entry);
-        Gp { base, entry, capacity, entries: BTreeMap::new(), little_endian, imports: BTreeMap::new() }
+        Gp {
+            base,
+            entry,
+            capacity,
+            entries: BTreeMap::new(),
+            little_endian,
+            imports: BTreeMap::new(),
+        }
     }
 
     pub(super) fn gp(&self) -> u64 {
@@ -268,7 +298,9 @@ impl Gp {
     /// Each import slot `(symbol, slot)`: an undefined weak symbol's GOT entry,
     /// which holds 0 until the run-time loader binds the symbol.
     pub(super) fn imports(&self) -> impl Iterator<Item = (SymbolIndex, u64)> + '_ {
-        self.imports.iter().map(|(&symbol, &slot)| (SymbolIndex(symbol), slot))
+        self.imports
+            .iter()
+            .map(|(&symbol, &slot)| (SymbolIndex(symbol), slot))
     }
 
     /// How many bytes one GOT entry spans.
@@ -287,15 +319,27 @@ impl Gp {
         for (&value, &slot) in &self.entries {
             let at = (slot - self.base) as usize;
             let n = self.entry as usize;
-            let bytes = if self.little_endian { value.to_le_bytes() } else { value.to_be_bytes() };
-            let src = if self.little_endian { &bytes[..n] } else { &bytes[8 - n..] };
+            let bytes = if self.little_endian {
+                value.to_le_bytes()
+            } else {
+                value.to_be_bytes()
+            };
+            let src = if self.little_endian {
+                &bytes[..n]
+            } else {
+                &bytes[8 - n..]
+            };
             out[at..at + n].copy_from_slice(src);
         }
         out
     }
 
     fn slot(&mut self, value: i128) -> Result<i128, RelocationFailure> {
-        let mask = if self.entry == 8 { u64::MAX } else { 0xffff_ffff };
+        let mask = if self.entry == 8 {
+            u64::MAX
+        } else {
+            0xffff_ffff
+        };
         let value = (value as u64) & mask;
         if let Some(&slot) = self.entries.get(&value) {
             return Ok(slot as i128 - self.gp() as i128);
@@ -344,18 +388,29 @@ impl Gp {
         resolve: &mut dyn FnMut(RelocationTarget) -> Option<Target>,
     ) -> Applied {
         let mut applied = Applied::default();
-        let input = Inputs { arch, base, input_gp, weak };
+        let input = Inputs {
+            arch,
+            base,
+            input_gp,
+            weak,
+        };
         let (ops, bounds) = expressions(arch, records);
         for bound in bounds {
             let expression = &ops[bound];
             let first = expression[0].record;
             let result = (|| {
-                let offset = usize::try_from(records[first].0).map_err(|_| RelocationFailure::PastSectionEnd)?;
+                let offset = usize::try_from(records[first].0)
+                    .map_err(|_| RelocationFailure::PastSectionEnd)?;
                 let width = field_width(expression.last().map_or(NONE, |op| op.op))?;
-                let end = offset.checked_add(width).ok_or(RelocationFailure::PastSectionEnd)?;
-                let field = data.get(offset..end).ok_or(RelocationFailure::PastSectionEnd)?;
+                let end = offset
+                    .checked_add(width)
+                    .ok_or(RelocationFailure::PastSectionEnd)?;
+                let field = data
+                    .get(offset..end)
+                    .ok_or(RelocationFailure::PastSectionEnd)?;
                 let lo = lo_halves.get(first).copied().flatten();
-                let (value, callee) = self.evaluate(&input, field, offset, records, expression, lo, resolve)?;
+                let (value, callee) =
+                    self.evaluate(&input, field, offset, records, expression, lo, resolve)?;
                 Ok((offset..end, value, callee))
             })();
             match result {
@@ -394,13 +449,21 @@ impl Gp {
         let place = input.base.wrapping_add(offset as u64);
         let first = &records[expression[0].record].1;
         let import_of = |op: &Op, reloc: &Relocation| {
-            Some(reloc.target()).filter(|&t| op.special.is_none() && (got_entry(op.op, false).is_some() || op.op == GOT_OFST) && (input.weak)(t))
+            Some(reloc.target()).filter(|&t| {
+                op.special.is_none()
+                    && (got_entry(op.op, false).is_some() || op.op == GOT_OFST)
+                    && (input.weak)(t)
+            })
         };
         let first_import = import_of(&expression[0], first);
         let first_target = match first_import {
             Some(import) => {
                 resolve(import);
-                Target { address: 0, local: false, gp_disp: false }
+                Target {
+                    address: 0,
+                    local: false,
+                    gp_disp: false,
+                }
             }
             None => resolve(first.target()).ok_or(RelocationFailure::UnresolvedTarget)?,
         };
@@ -413,14 +476,28 @@ impl Gp {
         let mut callee = None;
         for (index, op) in expression.iter().enumerate() {
             let reloc = &records[op.record].1;
-            let import = if index == 0 { first_import } else { import_of(op, reloc) };
+            let import = if index == 0 {
+                first_import
+            } else {
+                import_of(op, reloc)
+            };
             let (mut target, named) = match (index, op.special) {
                 (_, None) if import.is_some() => {
                     import.and_then(&mut *resolve);
-                    (Target { address: 0, local: false, gp_disp: false }, import)
+                    (
+                        Target {
+                            address: 0,
+                            local: false,
+                            gp_disp: false,
+                        },
+                        import,
+                    )
                 }
                 (0, _) => (first_target, Some(first.target())),
-                (_, None) => (resolve(reloc.target()).ok_or(RelocationFailure::UnresolvedTarget)?, Some(reloc.target())),
+                (_, None) => (
+                    resolve(reloc.target()).ok_or(RelocationFailure::UnresolvedTarget)?,
+                    Some(reloc.target()),
+                ),
                 (_, Some(ssym)) => (self.special(ssym, place, input)?, None),
             };
             if input.arch != object::Architecture::Mips64 {
@@ -458,11 +535,21 @@ impl Gp {
             RSS_LOC => place,
             _ => return Err(RelocationFailure::Unsupported),
         };
-        Ok(Target { address, local: true, gp_disp: false })
+        Ok(Target {
+            address,
+            local: true,
+            gp_disp: false,
+        })
     }
 
     /// The addend an o32 instruction or data word holds for operation `op`.
-    fn implicit(&self, op: u32, old: u64, local: bool, lo_half: Option<i64>) -> Result<i128, RelocationFailure> {
+    fn implicit(
+        &self,
+        op: u32,
+        old: u64,
+        local: bool,
+        lo_half: Option<i64>,
+    ) -> Result<i128, RelocationFailure> {
         let w = old as u32;
         let half = i128::from(w as u16 as i16);
         Ok(match op {
@@ -499,8 +586,15 @@ impl Gp {
         let gp = self.gp();
         let s = t.address;
         let sum = s.wrapping_add(a);
-        let fits = |v: u64, bits: u32| sign_extend(i128::from(v as i64), bits) == i128::from(v as i64);
-        let checked = |v: u64, bits: u32| if last && !fits(v, bits) { Err(RelocationFailure::OutOfRange) } else { Ok(v) };
+        let fits =
+            |v: u64, bits: u32| sign_extend(i128::from(v as i64), bits) == i128::from(v as i64);
+        let checked = |v: u64, bits: u32| {
+            if last && !fits(v, bits) {
+                Err(RelocationFailure::OutOfRange)
+            } else {
+                Ok(v)
+            }
+        };
         if t.gp_disp && !matches!(op, HI16 | LO16) {
             return Err(RelocationFailure::UnresolvedTarget);
         }
@@ -518,11 +612,17 @@ impl Gp {
             SUB => s.wrapping_sub(a),
             HI16 | LO16 => {
                 let v = if t.gp_disp {
-                    gp.wrapping_add(a).wrapping_sub(place).wrapping_add(if op == LO16 { 4 } else { 0 })
+                    gp.wrapping_add(a)
+                        .wrapping_sub(place)
+                        .wrapping_add(if op == LO16 { 4 } else { 0 })
                 } else {
                     sum
                 };
-                if op == HI16 { v.wrapping_add(0x8000) >> 16 & 0xffff } else { v & 0xffff }
+                if op == HI16 {
+                    v.wrapping_add(0x8000) >> 16 & 0xffff
+                } else {
+                    v & 0xffff
+                }
             }
             HIGHER => sum.wrapping_add(0x8000_8000) >> 32 & 0xffff,
             HIGHEST => sum.wrapping_add(0x8000_8000_8000) >> 48 & 0xffff,
@@ -543,9 +643,17 @@ impl Gp {
                 checked(v, 18)? >> 2 & 0xffff
             }
             GPREL16 | LITERAL | GPREL32 => {
-                let gp0 = if t.local || op == GPREL32 { input.input_gp? } else { 0 };
+                let gp0 = if t.local || op == GPREL32 {
+                    input.input_gp?
+                } else {
+                    0
+                };
                 let v = sum.wrapping_add(gp0).wrapping_sub(gp);
-                if op == GPREL32 { v & if last { 0xffff_ffff } else { u64::MAX } } else { checked(v, 16)? }
+                if op == GPREL32 {
+                    v & if last { 0xffff_ffff } else { u64::MAX }
+                } else {
+                    checked(v, 16)?
+                }
             }
             GOT16 if t.local => checked(got(self, page(sum))?, 16)?,
             GOT_PAGE => checked(got(self, page(sum))?, 16)?,
@@ -613,7 +721,10 @@ fn special_of(i: usize, r_type: u32) -> Option<u8> {
 /// `NONE`, or a record without an ELF type, is malformed: it ends the chain
 /// before it and is an expression of its own that cannot be applied and that
 /// nothing continues. A JALR alone is only a hint and is dropped.
-fn expressions(arch: object::Architecture, records: &[(u64, Relocation)]) -> (Vec<Op>, Vec<Range<usize>>) {
+fn expressions(
+    arch: object::Architecture,
+    records: &[(u64, Relocation)],
+) -> (Vec<Op>, Vec<Range<usize>>) {
     let packed = arch == object::Architecture::Mips64;
     let mut out: Vec<Op> = Vec::with_capacity(records.len());
     let mut bounds: Vec<Range<usize>> = Vec::with_capacity(records.len());
@@ -626,21 +737,39 @@ fn expressions(arch: object::Architecture, records: &[(u64, Relocation)]) -> (Ve
     };
     for (record, (offset, reloc)) in records.iter().enumerate() {
         let r_type = r_type_of(reloc).unwrap_or(MALFORMED);
-        let kinds = if packed { ops(r_type) } else { [r_type, NONE, NONE] };
+        let kinds = if packed {
+            ops(r_type)
+        } else {
+            [r_type, NONE, NONE]
+        };
         let malformed = r_type == MALFORMED
-            || packed && (kinds[0] == NONE && kinds[1..] != [NONE, NONE] || kinds[1] == NONE && kinds[2] != NONE);
+            || packed
+                && (kinds[0] == NONE && kinds[1..] != [NONE, NONE]
+                    || kinds[1] == NONE && kinds[2] != NONE);
         if malformed {
             close(&out, &mut bounds, &mut start);
-            out.push(Op { record, op: MALFORMED, special: None });
+            out.push(Op {
+                record,
+                op: MALFORMED,
+                special: None,
+            });
             close(&out, &mut bounds, &mut start);
             continue;
         }
         for (i, &op) in kinds.iter().enumerate().take(if packed { 3 } else { 1 }) {
-            if op == NONE || out.get(start).is_some_and(|first| records[first.record].0 != *offset) {
+            if op == NONE
+                || out
+                    .get(start)
+                    .is_some_and(|first| records[first.record].0 != *offset)
+            {
                 close(&out, &mut bounds, &mut start);
             }
             if op != NONE {
-                out.push(Op { record, op, special: if packed { special_of(i, r_type) } else { None } });
+                out.push(Op {
+                    record,
+                    op,
+                    special: if packed { special_of(i, r_type) } else { None },
+                });
             }
         }
     }
@@ -661,7 +790,11 @@ pub(super) fn input_gp(file: &object::File) -> Result<u64, RelocationFailure> {
     let gp_of = |data: &[u8]| -> Option<u64> {
         if wide {
             let b: [u8; 8] = data.get(24..32)?.try_into().ok()?;
-            Some(if le { u64::from_le_bytes(b) } else { u64::from_be_bytes(b) })
+            Some(if le {
+                u64::from_le_bytes(b)
+            } else {
+                u64::from_be_bytes(b)
+            })
         } else {
             word(data, 20, le).map(|w| w as i32 as i64 as u64)
         }
@@ -683,7 +816,10 @@ pub(super) fn input_gp(file: &object::File) -> Result<u64, RelocationFailure> {
                 let mut rest = data;
                 while !rest.is_empty() {
                     let len = usize::from(*rest.get(1).ok_or(RelocationFailure::UnresolvedTarget)?);
-                    let entry = rest.get(..len).filter(|_| len >= 8).ok_or(RelocationFailure::UnresolvedTarget)?;
+                    let entry = rest
+                        .get(..len)
+                        .filter(|_| len >= 8)
+                        .ok_or(RelocationFailure::UnresolvedTarget)?;
                     if entry[0] == 1 {
                         note((len == 8 + size).then(|| gp_of(&entry[8..])).flatten())?;
                     }
@@ -700,8 +836,9 @@ pub(super) fn input_gp(file: &object::File) -> Result<u64, RelocationFailure> {
 fn field_width(op: u32) -> Result<usize, RelocationFailure> {
     match op {
         R64 | SUB => Ok(8),
-        R16 | R32 | REL32 | R26 | HI16 | LO16 | GPREL16 | LITERAL | GOT16 | PC16 | CALL16 | GPREL32 | GOT_DISP
-        | GOT_PAGE | GOT_OFST | GOT_HI16 | GOT_LO16 | HIGHER | HIGHEST | CALL_HI16 | CALL_LO16 | PC32 => Ok(4),
+        R16 | R32 | REL32 | R26 | HI16 | LO16 | GPREL16 | LITERAL | GOT16 | PC16 | CALL16
+        | GPREL32 | GOT_DISP | GOT_PAGE | GOT_OFST | GOT_HI16 | GOT_LO16 | HIGHER | HIGHEST
+        | CALL_HI16 | CALL_LO16 | PC32 => Ok(4),
         _ => Err(RelocationFailure::Unsupported),
     }
 }
@@ -740,7 +877,9 @@ impl Origin {
 
     fn negate(self) -> Self {
         match self {
-            Self::Symbol(t, n) => n.checked_neg().map_or(Self::Unknown, |n| Self::Symbol(t, n)),
+            Self::Symbol(t, n) => n
+                .checked_neg()
+                .map_or(Self::Unknown, |n| Self::Symbol(t, n)),
             v => v,
         }
     }
@@ -754,7 +893,11 @@ impl Origin {
     }
 
     fn transformed(self) -> Self {
-        if self == Self::Constant { self } else { Self::Unknown }
+        if self == Self::Constant {
+            self
+        } else {
+            Self::Unknown
+        }
     }
 
     fn callee(self) -> Option<RelocationTarget> {

@@ -44,9 +44,9 @@ use unlace_base::types::{int4, uintb};
 
 use unlace_num::opcodes::OpCode;
 
-use crate::block::{block_flags, BlockKind};
-use crate::funcdata::Funcdata;
+use crate::block::{BlockKind, block_flags};
 use crate::context::{BlockId, OpId, VarnodeId};
+use crate::funcdata::Funcdata;
 
 /// The deepest component that performs a conditional split (C++
 /// `FlowBlock::getSplitPoint`), tagged by which arena it lives in.  A leaf
@@ -90,10 +90,15 @@ impl crate::comment::SorterFuncdata for Funcdata {
         // C++ `--opiter`, guarded by `opiter != beginOpAll()`.
         match probe {
             // At-end on a non-empty tree -> the last op.
-            OpProbe::AtEnd => self.obank().last_op_all().map(|op| OpCursor(op_to_cursor(op))),
+            OpProbe::AtEnd => self
+                .obank()
+                .last_op_all()
+                .map(|op| OpCursor(op_to_cursor(op))),
             OpProbe::At(c) => {
                 let op = cursor_to_op(c.0);
-                self.obank().op_before(op).map(|p| OpCursor(op_to_cursor(p)))
+                self.obank()
+                    .op_before(op)
+                    .map(|p| OpCursor(op_to_cursor(p)))
             }
         }
     }
@@ -103,9 +108,10 @@ impl crate::comment::SorterFuncdata for Funcdata {
         addr: &Address,
     ) -> KunaResult<crate::comment::OpBlockInfo> {
         let op = cursor_to_op(cursor.0);
-        let o = self.obank().get(op).ok_or_else(|| {
-            KunaError::lowlevel("CommentSorter: stale op cursor")
-        })?;
+        let o = self
+            .obank()
+            .get(op)
+            .ok_or_else(|| KunaError::lowlevel("CommentSorter: stale op cursor"))?;
         // A dead op (no parent) is a C++ LowlevelError.
         let parent = o
             .get_parent()
@@ -117,11 +123,19 @@ impl crate::comment::SorterFuncdata for Funcdata {
             BlockKind::Basic(b) => b.cover.in_range(addr, 1),
             _ => false,
         };
-        Ok(crate::comment::OpBlockInfo { block_index, order, block_contains_comment })
+        Ok(crate::comment::OpBlockInfo {
+            block_index,
+            order,
+            block_contains_comment,
+        })
     }
     fn op_addr(&self, cursor: &crate::comment::OpCursor) -> Address {
         let op = cursor_to_op(cursor.0);
-        self.obank().get(op).expect("op_addr: stale cursor").get_addr().clone()
+        self.obank()
+            .get(op)
+            .expect("op_addr: stale cursor")
+            .get_addr()
+            .clone()
     }
 }
 
@@ -162,7 +176,9 @@ impl Funcdata {
         let mut ret_terminated: std::collections::BTreeSet<BlockId> =
             std::collections::BTreeSet::new();
         for bl in comps {
-            let last_op = self.sblocks_ref().struct_last_op_with(Some(self.bblocks_ref()), bl);
+            let last_op = self
+                .sblocks_ref()
+                .struct_last_op_with(Some(self.bblocks_ref()), bl);
             if let Some(op) = last_op {
                 if self.obank().get(op).map(|o| o.code()) == Some(OpCode::CPUI_RETURN) {
                     ret_terminated.insert(bl);
@@ -208,7 +224,10 @@ impl Funcdata {
             if cases[i].gototype != 0 || blk.get_type() != crate::block::BlockType::Goto {
                 continue;
             }
-            let target = blk.get_goto_target().and_then(|t| sb.get_front_leaf(t)).and_then(|f| sb.sub_block(f, 0));
+            let target = blk
+                .get_goto_target()
+                .and_then(|t| sb.get_front_leaf(t))
+                .and_then(|f| sb.sub_block(f, 0));
             cases[i].chain = match target {
                 Some(t) => cases
                     .iter()
@@ -228,7 +247,11 @@ impl Funcdata {
         };
         // Snapshot the case list (block ids + basicblocks + chains) for the label
         // computation, which needs &Funcdata for the JumpTable queries.
-        let mut cases = match self.sblocks_ref().block(sw).switch_caseblocks_mut_snapshot() {
+        let mut cases = match self
+            .sblocks_ref()
+            .block(sw)
+            .switch_caseblocks_mut_snapshot()
+        {
             Some(c) => c,
             None => return,
         };
@@ -264,7 +287,9 @@ impl Funcdata {
                         .get_jump_table(jt_index as int4)
                         .get_index_by_block(self, bb, 0)
                         .unwrap_or(0);
-                    let label = self.get_jump_table(jt_index as int4).get_label_by_index(ind);
+                    let label = self
+                        .get_jump_table(jt_index as int4)
+                        .get_label_by_index(ind);
                     cases[i].label = label;
                     let mut j = cases[i].chain;
                     let mut depthcount = 1;
@@ -368,7 +393,12 @@ impl Funcdata {
             return;
         }
         // If lastOp is a branch, step back: iterateOp must appear after it.
-        if self.obank().get(last_op).map(|o| o.is_branch()).unwrap_or(false) {
+        if self
+            .obank()
+            .get(last_op)
+            .map(|o| o.is_branch())
+            .unwrap_or(false)
+        {
             last_op = match self.op_previous_op(last_op) {
                 Some(p) => p,
                 None => return,
@@ -383,8 +413,12 @@ impl Funcdata {
         };
         let loop_def = loop_def.expect("find_loop_variable sets loopDef with iterateOp");
         // Record loopDef + iterateOp on the whiledo node.
-        self.sblocks_mut().block_mut(wd).set_loop_def(Some(loop_def));
-        self.sblocks_mut().block_mut(wd).set_iterate_op(Some(iterate_op));
+        self.sblocks_mut()
+            .block_mut(wd)
+            .set_loop_def(Some(loop_def));
+        self.sblocks_mut()
+            .block_mut(wd)
+            .set_iterate_op(Some(iterate_op));
 
         // Move iterateOp to be the last op if it isn't (allow_op_moves gates it).
         if iterate_op != last_op {
@@ -403,8 +437,11 @@ impl Funcdata {
             Some(o) => o,
             None => return,
         };
-        let initialize_op =
-            self.sblocks_ref().block(wd).get_initialize_op().expect("findInitializer sets it");
+        let initialize_op = self
+            .sblocks_ref()
+            .block(wd)
+            .get_initialize_op()
+            .expect("findInitializer sets it");
         if !self.op_is_moveable(initialize_op, init_last_op) {
             self.sblocks_mut().block_mut(wd).set_initialize_op(None); // Turn it off
             return;
@@ -434,7 +471,12 @@ impl Funcdata {
             Some(v) => v,
             None => return (None, None),
         };
-        if !self.vbank().get(vn).map(|v| v.is_written()).unwrap_or(false) {
+        if !self
+            .vbank()
+            .get(vn)
+            .map(|v| v.is_written())
+            .unwrap_or(false)
+        {
             return (None, None); // No loop variable found
         }
         let op = self.vbank().get(vn).unwrap().get_def().unwrap();
@@ -442,7 +484,12 @@ impl Funcdata {
 
         // path[4] of (op, slot); count starts at 0.
         let mut path: Vec<(OpId, int4)> = Vec::with_capacity(4);
-        if self.obank().get(op).map(|o| o.is_call() || o.is_marker()).unwrap_or(true) {
+        if self
+            .obank()
+            .get(op)
+            .map(|o| o.is_call() || o.is_marker())
+            .unwrap_or(true)
+        {
             return (None, None);
         }
         path.push((op, 0));
@@ -460,7 +507,12 @@ impl Funcdata {
                 Some(v) => v,
                 None => continue,
             };
-            if !self.vbank().get(next_vn).map(|v| v.is_written()).unwrap_or(false) {
+            if !self
+                .vbank()
+                .get(next_vn)
+                .map(|v| v.is_written())
+                .unwrap_or(false)
+            {
                 continue;
             }
             let def_op = self.vbank().get(next_vn).unwrap().get_def().unwrap();
@@ -472,13 +524,28 @@ impl Funcdata {
                     Some(v) => v,
                     None => continue,
                 };
-                if !self.vbank().get(itvn).map(|v| v.is_written()).unwrap_or(false) {
+                if !self
+                    .vbank()
+                    .get(itvn)
+                    .map(|v| v.is_written())
+                    .unwrap_or(false)
+                {
                     continue;
                 }
                 let possible_iterate = self.vbank().get(itvn).unwrap().get_def().unwrap();
-                if self.obank().get(possible_iterate).and_then(|o| o.get_parent()) == Some(tail) {
+                if self
+                    .obank()
+                    .get(possible_iterate)
+                    .and_then(|o| o.get_parent())
+                    == Some(tail)
+                {
                     // Found proper head/tail configuration.
-                    if self.obank().get(possible_iterate).map(|o| o.is_marker()).unwrap_or(true) {
+                    if self
+                        .obank()
+                        .get(possible_iterate)
+                        .map(|o| o.is_marker())
+                        .unwrap_or(true)
+                    {
                         continue; // No iteration in tail
                     }
                     if !self.op_is_moveable(possible_iterate, last_op) {
@@ -490,7 +557,12 @@ impl Funcdata {
                 if count == 3 {
                     continue;
                 }
-                if self.obank().get(def_op).map(|o| o.is_call() || o.is_marker()).unwrap_or(true) {
+                if self
+                    .obank()
+                    .get(def_op)
+                    .map(|o| o.is_call() || o.is_marker())
+                    .unwrap_or(true)
+                {
                     continue;
                 }
                 path.push((def_op, 0));
@@ -510,7 +582,12 @@ impl Funcdata {
         let slot = 1 - slot;
         let loop_def = self.sblocks_ref().block(wd).get_loop_def()?;
         let init_vn = self.obank().get(loop_def).and_then(|o| o.get_in(slot))?;
-        if !self.vbank().get(init_vn).map(|v| v.is_written()).unwrap_or(false) {
+        if !self
+            .vbank()
+            .get(init_vn)
+            .map(|v| v.is_written())
+            .unwrap_or(false)
+        {
             return None;
         }
         let res = self.vbank().get(init_vn).unwrap().get_def().unwrap();
@@ -526,10 +603,17 @@ impl Funcdata {
         if self.bblocks_ref().block(initial_block).size_out() != 1 {
             return None; // Initializer block must flow only to the for loop
         }
-        if self.obank().get(last_op).map(|o| o.is_branch()).unwrap_or(false) {
+        if self
+            .obank()
+            .get(last_op)
+            .map(|o| o.is_branch())
+            .unwrap_or(false)
+        {
             last_op = self.op_previous_op(last_op)?;
         }
-        self.sblocks_mut().block_mut(wd).set_initialize_op(Some(res));
+        self.sblocks_mut()
+            .block_mut(wd)
+            .set_initialize_op(Some(res));
         Some(last_op)
     }
 
@@ -610,7 +694,12 @@ impl Funcdata {
     fn while_test_terminal(&mut self, wd: BlockId, slot: int4) -> Option<OpId> {
         let loop_def = self.sblocks_ref().block(wd).get_loop_def()?;
         let vn = self.obank().get(loop_def).and_then(|o| o.get_in(slot))?;
-        if !self.vbank().get(vn).map(|v| v.is_written()).unwrap_or(false) {
+        if !self
+            .vbank()
+            .get(vn)
+            .map(|v| v.is_written())
+            .unwrap_or(false)
+        {
             return None;
         }
         let final_op = self.vbank().get(vn).unwrap().get_def().unwrap();
@@ -618,12 +707,25 @@ impl Funcdata {
         let parent_block = self.bblocks_ref().block(loop_parent).get_in(slot);
         let mut res_op = final_op;
         let mut vn = vn;
-        if self.obank().get(final_op).map(|o| o.code()).unwrap_or(OpCode::CPUI_COPY)
+        if self
+            .obank()
+            .get(final_op)
+            .map(|o| o.code())
+            .unwrap_or(OpCode::CPUI_COPY)
             == OpCode::CPUI_COPY
-            && self.obank().get(final_op).map(|o| o.not_printed()).unwrap_or(false)
+            && self
+                .obank()
+                .get(final_op)
+                .map(|o| o.not_printed())
+                .unwrap_or(false)
         {
             vn = self.obank().get(final_op).and_then(|o| o.get_in(0))?;
-            if !self.vbank().get(vn).map(|v| v.is_written()).unwrap_or(false) {
+            if !self
+                .vbank()
+                .get(vn)
+                .map(|v| v.is_written())
+                .unwrap_or(false)
+            {
                 return None;
             }
             res_op = self.vbank().get(vn).unwrap().get_def().unwrap();
@@ -631,16 +733,31 @@ impl Funcdata {
                 return None;
             }
         }
-        if !self.vbank().get(vn).map(|v| v.is_explicit()).unwrap_or(false) {
+        if !self
+            .vbank()
+            .get(vn)
+            .map(|v| v.is_explicit())
+            .unwrap_or(false)
+        {
             return None;
         }
-        if self.obank().get(res_op).map(|o| o.not_printed()).unwrap_or(true) {
+        if self
+            .obank()
+            .get(res_op)
+            .map(|o| o.not_printed())
+            .unwrap_or(true)
+        {
             return None; // Statement MUST be printed
         }
         // finalOp MUST be the last op in the block (except for the branch).
         let fparent = self.obank().get(final_op).and_then(|o| o.get_parent())?;
         let mut last_op = self.bblocks_ref().struct_last_op(fparent)?;
-        if self.obank().get(last_op).map(|o| o.is_branch()).unwrap_or(false) {
+        if self
+            .obank()
+            .get(last_op)
+            .map(|o| o.is_branch())
+            .unwrap_or(false)
+        {
             last_op = self.op_previous_op(last_op)?;
         }
         if !self.op_move_respecting_cover(final_op, last_op) {
@@ -676,7 +793,11 @@ impl Funcdata {
         let mut path: Vec<(OpId, int4)> = Vec::new();
         path.push((iterate_op, 0));
         while let Some(&(node_op, node_slot)) = path.last() {
-            let num_in = self.obank().get(node_op).map(|o| o.num_input()).unwrap_or(0);
+            let num_in = self
+                .obank()
+                .get(node_op)
+                .map(|o| o.num_input())
+                .unwrap_or(0);
             if num_in <= node_slot {
                 path.pop();
                 continue;
@@ -687,7 +808,10 @@ impl Funcdata {
                 Some(v) => v,
                 None => continue,
             };
-            let v = self.vbank().get(vn).expect("while_test_iterate_form: stale vn");
+            let v = self
+                .vbank()
+                .get(vn)
+                .expect("while_test_iterate_form: stale vn");
             if v.is_annotation() {
                 continue;
             }
@@ -789,7 +913,9 @@ impl Funcdata {
             .bb_op_tail(bbnew)
             .ok_or_else(|| KunaError::lowlevel("pushBranch: target block has no terminator"))?;
         if self.obank().get(indop).map(|o| o.code()) != Some(OpCode::CPUI_BRANCHIND) {
-            return Err(KunaError::lowlevel("Can only push branch into indirect jump"));
+            return Err(KunaError::lowlevel(
+                "Can only push branch into indirect jump",
+            ));
         }
         // Turn the conditional branch into an unconditional branch.
         self.op_remove_input(cbranch, 1); // Remove the conditional variable
@@ -808,7 +934,11 @@ impl Funcdata {
     /// varnode (the value is now an input to the function); with a single branch
     /// it becomes a plain COPY of its sole input.
     pub fn op_zero_multi(&mut self, op: OpId) -> KunaResult<()> {
-        let nin = self.obank().get(op).expect("opZeroMulti: stale op").num_input();
+        let nin = self
+            .obank()
+            .get(op)
+            .expect("opZeroMulti: stale op")
+            .num_input();
         if nin == 0 {
             let out = self
                 .obank()
@@ -816,11 +946,25 @@ impl Funcdata {
                 .expect("opZeroMulti: stale op")
                 .get_out()
                 .expect("opZeroMulti: MULTIEQUAL with no output");
-            let sz = self.vbank().get(out).expect("opZeroMulti: stale out").get_size();
-            let m = self.vbank().get(out).expect("opZeroMulti: stale out").get_addr().clone();
+            let sz = self
+                .vbank()
+                .get(out)
+                .expect("opZeroMulti: stale out")
+                .get_size();
+            let m = self
+                .vbank()
+                .get(out)
+                .expect("opZeroMulti: stale out")
+                .get_addr()
+                .clone();
             let nv = self.new_varnode(sz, &m, None);
             self.op_insert_input(op, nv, 0)?;
-            let in0 = self.obank().get(op).expect("opZeroMulti: stale op").get_in(0).expect("opZeroMulti: just-inserted in0");
+            let in0 = self
+                .obank()
+                .get(op)
+                .expect("opZeroMulti: stale op")
+                .get_in(0)
+                .expect("opZeroMulti: just-inserted in0");
             self.set_input_varnode(in0)?;
             self.op_set_opcode(op, crate::typeop::type_op_for(OpCode::CPUI_COPY));
         } else if nin == 1 {
@@ -887,7 +1031,11 @@ impl Funcdata {
         }
         // Don't remove single-out indirect jumps (BRANCHIND last op).
         if let Some(lastop) = self.bb_op_tail(bb) {
-            if self.obank().get(lastop).expect("bb_is_do_nothing: stale op").code()
+            if self
+                .obank()
+                .get(lastop)
+                .expect("bb_is_do_nothing: stale op")
+                .code()
                 == OpCode::CPUI_BRANCHIND
             {
                 return false;
@@ -919,7 +1067,10 @@ impl Funcdata {
         }
         let in_index_to_this = g.block(blout).get_in_index(bb);
         for multiop in self.bb_ops(blout) {
-            let mop = self.obank().get(multiop).expect("bb_unblocked_multi: stale op");
+            let mop = self
+                .obank()
+                .get(multiop)
+                .expect("bb_unblocked_multi: stale op");
             if mop.code() != OpCode::CPUI_MULTIEQUAL {
                 continue;
             }
@@ -931,13 +1082,14 @@ impl Funcdata {
                 if let Some(vr) = vnremove {
                     let vnobj = self.vbank().get(vr).expect("bb_unblocked_multi: stale vn");
                     if vnobj.is_written() {
-                        let othermulti =
-                            vnobj.get_def().expect("bb_unblocked_multi: written vn has def");
-                        let omop =
-                            self.obank().get(othermulti).expect("bb_unblocked_multi: stale def");
-                        if omop.code() == OpCode::CPUI_MULTIEQUAL
-                            && omop.get_parent() == Some(bb)
-                        {
+                        let othermulti = vnobj
+                            .get_def()
+                            .expect("bb_unblocked_multi: written vn has def");
+                        let omop = self
+                            .obank()
+                            .get(othermulti)
+                            .expect("bb_unblocked_multi: stale def");
+                        if omop.code() == OpCode::CPUI_MULTIEQUAL && omop.get_parent() == Some(bb) {
                             vnremove = omop.get_in(g.block(bb).get_in_index(bl));
                         }
                     }
@@ -961,7 +1113,10 @@ impl Funcdata {
         let blout = g.block(bb).get_out(outslot);
         let in_index_to_this = g.block(blout).get_in_index(bb);
         for op in self.bb_ops(blout) {
-            let mop = self.obank().get(op).expect("bb_has_no_immediate_copy: stale op");
+            let mop = self
+                .obank()
+                .get(op)
+                .expect("bb_has_no_immediate_copy: stale op");
             if mop.code() != OpCode::CPUI_MULTIEQUAL {
                 continue;
             }
@@ -1005,7 +1160,10 @@ impl Funcdata {
             } else {
                 // A calculation with output: conservative Varnode::calc_explicit.
                 let outvn = vn.expect("bb_is_complex: out present");
-                let vnobj = self.vbank().get(outvn).expect("bb_is_complex: stale out vn");
+                let vnobj = self
+                    .vbank()
+                    .get(outvn)
+                    .expect("bb_is_complex: stale out vn");
                 let mut yesstatement = false;
                 if vnobj.has_no_descend() {
                     yesstatement = true;
@@ -1015,7 +1173,10 @@ impl Funcdata {
                 } else {
                     let mut totalref: int4 = 0;
                     for d_op in vnobj.descend_iter() {
-                        let dobj = self.obank().get(d_op).expect("bb_is_complex: stale descend");
+                        let dobj = self
+                            .obank()
+                            .get(d_op)
+                            .expect("bb_is_complex: stale descend");
                         if dobj.is_marker() || dobj.get_parent() != Some(bb) {
                             // Variable used outside of block.
                             yesstatement = true;
@@ -1114,7 +1275,10 @@ impl Funcdata {
         };
         let (inbl, outedge) = {
             let g = self.bblocks_ref();
-            (g.block(parent).get_in(slot), g.block(parent).get_in_rev_index(slot))
+            (
+                g.block(parent).get_in(slot),
+                g.block(parent).get_in_rev_index(slot),
+            )
         };
         self.bblocks_mut().set_immed_copy_edge(inbl, outedge);
         if let Some(o) = self.obank_mut().get_mut(op) {
@@ -1146,7 +1310,13 @@ impl Funcdata {
         // Sever (one) connection.
         self.bblocks_mut().remove_edge(bb, bbout);
         for op in self.bb_ops(bbout) {
-            if self.obank().get(op).expect("branchRemoveInternal: stale op").code() != OpCode::CPUI_MULTIEQUAL {
+            if self
+                .obank()
+                .get(op)
+                .expect("branchRemoveInternal: stale op")
+                .code()
+                != OpCode::CPUI_MULTIEQUAL
+            {
                 continue;
             }
             self.op_remove_input(op, blocknum);
@@ -1168,18 +1338,29 @@ impl Funcdata {
     /// MULTIEQUAL output is read beyond the block being removed.
     fn create_replace_varnode(&mut self, origvn: VarnodeId, make_unique: bool) -> VarnodeId {
         let (sz, ty) = {
-            let v = self.vbank().get(origvn).expect("createReplaceVarnode: stale origvn");
+            let v = self
+                .vbank()
+                .get(origvn)
+                .expect("createReplaceVarnode: stale origvn");
             (v.get_size(), v.get_type().clone())
         };
         let replacevn = if make_unique {
             self.new_unique(sz, Some(ty))
         } else {
-            let m = self.vbank().get(origvn).expect("createReplaceVarnode: stale origvn").get_addr().clone();
+            let m = self
+                .vbank()
+                .get(origvn)
+                .expect("createReplaceVarnode: stale origvn")
+                .get_addr()
+                .clone();
             self.new_varnode(sz, &m, Some(ty))
         };
         if self.is_high_on() {
             self.vn_replace_in_high(origvn, replacevn);
-            self.vbank_mut().get_mut(replacevn).expect("createReplaceVarnode").set_explicit();
+            self.vbank_mut()
+                .get_mut(replacevn)
+                .expect("createReplaceVarnode")
+                .set_explicit();
         }
         replacevn
     }
@@ -1197,13 +1378,19 @@ impl Funcdata {
             Some(h) => h,
             None => return,
         };
-        let orig_mergegroup =
-            self.vbank().get(origvn).expect("vn_replace_in_high: stale origvn").get_merge_group();
+        let orig_mergegroup = self
+            .vbank()
+            .get(origvn)
+            .expect("vn_replace_in_high: stale origvn")
+            .get_merge_group();
         // vn->getSymbolEntry() is a W4 surface (no Varnode-Symbol link in the
         // merged tree), so the symbol-dirty trigger is conservatively false.
         let vn_has_symbol_entry = false;
-        let mut set_high_log: Vec<(VarnodeId, crate::context::HighVariableId, unlace_base::types::int2)> =
-            Vec::new();
+        let mut set_high_log: Vec<(
+            VarnodeId,
+            crate::context::HighVariableId,
+            unlace_base::types::int2,
+        )> = Vec::new();
         self.with_high_split(|hb, ctx| {
             hb.replace_in_high(
                 origvn,
@@ -1239,7 +1426,11 @@ impl Funcdata {
         let outblock_ind = self.bblocks_ref().block(bb).get_out_rev_index(0);
 
         for origop in self.bb_ops(bb) {
-            if self.obank().get(origop).expect("pushMultiequals: stale op").code()
+            if self
+                .obank()
+                .get(origop)
+                .expect("pushMultiequals: stale op")
+                .code()
                 != OpCode::CPUI_MULTIEQUAL
             {
                 continue;
@@ -1250,14 +1441,27 @@ impl Funcdata {
                 .expect("pushMultiequals")
                 .get_out()
                 .expect("pushMultiequals: MULTIEQUAL with no output");
-            if self.vbank().get(origvn).expect("pushMultiequals: stale origvn").has_no_descend() {
+            if self
+                .vbank()
+                .get(origvn)
+                .expect("pushMultiequals: stale origvn")
+                .has_no_descend()
+            {
                 continue;
             }
             // Scan descendants: does anything read origvn NOT through the dead edge?
             let mut needreplace = false;
             let mut neednewunique = false;
-            for op in self.vbank().get(origvn).expect("pushMultiequals").descend_iter() {
-                let opobj = self.obank().get(op).expect("pushMultiequals: stale descend op");
+            for op in self
+                .vbank()
+                .get(origvn)
+                .expect("pushMultiequals")
+                .descend_iter()
+            {
+                let opobj = self
+                    .obank()
+                    .get(op)
+                    .expect("pushMultiequals: stale descend op");
                 if opobj.code() == OpCode::CPUI_MULTIEQUAL && opobj.get_parent() == Some(outblock) {
                     let mut dead_edge = true; // ref to origvn NOT thru the dead edge?
                     let ni = opobj.num_input();
@@ -1274,12 +1478,20 @@ impl Funcdata {
                         // If origvn is addrtied and feeds a same-address MULTIEQUAL
                         // in outblock, the new MULTIEQUAL must write a fresh unique.
                         let out_of_op = opobj.get_out();
-                        let origvn_addr_tied =
-                            self.vbank().get(origvn).expect("pushMultiequals").is_addr_tied();
+                        let origvn_addr_tied = self
+                            .vbank()
+                            .get(origvn)
+                            .expect("pushMultiequals")
+                            .is_addr_tied();
                         if origvn_addr_tied {
                             if let Some(oo) = out_of_op {
-                                let same_addr = self.vbank().get(oo).expect("pushMultiequals").get_addr()
-                                    == self.vbank().get(origvn).expect("pushMultiequals").get_addr();
+                                let same_addr =
+                                    self.vbank().get(oo).expect("pushMultiequals").get_addr()
+                                        == self
+                                            .vbank()
+                                            .get(origvn)
+                                            .expect("pushMultiequals")
+                                            .get_addr();
                                 if same_addr {
                                     neednewunique = true;
                                 }
@@ -1307,18 +1519,28 @@ impl Funcdata {
             }
             let start = self.bb_get_start(outblock);
             let replaceop = self.new_op(branches.len() as int4, start);
-            self.op_set_opcode(replaceop, crate::typeop::type_op_for(OpCode::CPUI_MULTIEQUAL));
+            self.op_set_opcode(
+                replaceop,
+                crate::typeop::type_op_for(OpCode::CPUI_MULTIEQUAL),
+            );
             self.op_set_output(replaceop, replacevn)?;
             self.op_set_all_input(replaceop, &branches)?;
             self.op_insert_begin(replaceop, outblock);
 
             // Replace obsolete origvn with replacevn in all descendant reads,
             // except the dead-edge slot of the outblock MULTIEQUAL itself.
-            let descenders: Vec<OpId> =
-                self.vbank().get(origvn).expect("pushMultiequals").descend_iter().collect();
+            let descenders: Vec<OpId> = self
+                .vbank()
+                .get(origvn)
+                .expect("pushMultiequals")
+                .descend_iter()
+                .collect();
             for op in descenders {
                 let (ni, parent, opc) = {
-                    let o = self.obank().get(op).expect("pushMultiequals: stale descend");
+                    let o = self
+                        .obank()
+                        .get(op)
+                        .expect("pushMultiequals: stale descend");
                     (o.num_input(), o.get_parent(), o.code())
                 };
                 for i in 0..ni {
@@ -1350,15 +1572,28 @@ impl Funcdata {
     /// in a block that is not itself fully orphaned (i.e. has in-edges), which the
     /// caller turns into a one-time "creating undefined varnodes" warning.
     pub fn descend2_undef(&mut self, vn: VarnodeId) -> KunaResult<bool> {
-        let sz = self.vbank().get(vn).expect("descend2Undef: stale vn").get_size();
+        let sz = self
+            .vbank()
+            .get(vn)
+            .expect("descend2Undef: stale vn")
+            .get_size();
         // Snapshot the descendant list: we rewrite reads (and create new ops)
         // while walking, so we cannot hold the live iterator (C++ advances the
         // iterator past the current op before mutating).
-        let descend: Vec<OpId> =
-            self.vbank().get(vn).expect("descend2Undef: stale vn").descend_iter().collect();
+        let descend: Vec<OpId> = self
+            .vbank()
+            .get(vn)
+            .expect("descend2Undef: stale vn")
+            .descend_iter()
+            .collect();
         let mut res = false;
         for op in descend {
-            let parent = match self.obank().get(op).expect("descend2Undef: stale op").get_parent() {
+            let parent = match self
+                .obank()
+                .get(op)
+                .expect("descend2Undef: stale op")
+                .get_parent()
+            {
                 Some(p) => p,
                 None => continue,
             };
@@ -1368,8 +1603,16 @@ impl Funcdata {
             if self.bblocks_ref().block(parent).size_in() != 0 {
                 res = true;
             }
-            let i = self.obank().get(op).expect("descend2Undef: stale op").get_slot(vn);
-            let opc = self.obank().get(op).expect("descend2Undef: stale op").code();
+            let i = self
+                .obank()
+                .get(op)
+                .expect("descend2Undef: stale op")
+                .get_slot(vn);
+            let opc = self
+                .obank()
+                .get(op)
+                .expect("descend2Undef: stale op")
+                .code();
             let badconst = self.new_constant(sz, 0xBADDEF);
             match opc {
                 OpCode::CPUI_MULTIEQUAL => {
@@ -1387,8 +1630,12 @@ impl Funcdata {
                 OpCode::CPUI_INDIRECT => {
                     // Cannot put a constant directly into an INDIRECT: interpose a
                     // COPY just before the INDIRECT op.
-                    let addr =
-                        self.obank().get(op).expect("descend2Undef: stale op").get_addr().clone();
+                    let addr = self
+                        .obank()
+                        .get(op)
+                        .expect("descend2Undef: stale op")
+                        .get_addr()
+                        .clone();
                     let copyop = self.new_op(1, addr);
                     let inputvn = self.new_unique_out(sz, copyop)?;
                     self.op_set_opcode_code(copyop, OpCode::CPUI_COPY);
@@ -1407,8 +1654,17 @@ impl Funcdata {
     /// Does the given Varnode have any descendant op in a block \e not marked
     /// dead (C++ `Funcdata::descendantsOutside`, `funcdata_block.cc:251`)?
     fn descendants_outside(&self, vn: VarnodeId) -> bool {
-        for op in self.vbank().get(vn).expect("descendantsOutside: stale vn").descend_iter() {
-            let parent = self.obank().get(op).expect("descendantsOutside: stale op").get_parent();
+        for op in self
+            .vbank()
+            .get(vn)
+            .expect("descendantsOutside: stale vn")
+            .descend_iter()
+        {
+            let parent = self
+                .obank()
+                .get(op)
+                .expect("descendantsOutside: stale op")
+                .get_parent();
             match parent {
                 Some(p) => {
                     if !self.bblocks_ref().block(p).is_dead() {
@@ -1430,7 +1686,11 @@ impl Funcdata {
         // BRANCHIND last op -> drop its jump table: the ops below are destroyed,
         // so a surviving table would point at a dead BRANCHIND.
         if let Some(op) = self.bb_op_tail(bb) {
-            if self.obank().get(op).expect("blockRemoveInternal: stale op").code()
+            if self
+                .obank()
+                .get(op)
+                .expect("blockRemoveInternal: stale op")
+                .code()
                 == OpCode::CPUI_BRANCHIND
             {
                 if let Some(idx) = self.find_jump_table_index(op) {
@@ -1461,9 +1721,16 @@ impl Funcdata {
                         .get_in(blocknum)
                         .expect("blockRemoveInternal: MULTIEQUAL slot");
                     self.op_remove_input(op, blocknum); // Remove the deleted block's branch
-                    let deadop = self.vbank().get(deadvn).expect("blockRemoveInternal").get_def();
-                    let written =
-                        self.vbank().get(deadvn).expect("blockRemoveInternal").is_written();
+                    let deadop = self
+                        .vbank()
+                        .get(deadvn)
+                        .expect("blockRemoveInternal")
+                        .get_def();
+                    let written = self
+                        .vbank()
+                        .get(deadvn)
+                        .expect("blockRemoveInternal")
+                        .is_written();
                     let dead_is_multi_in_bb = match deadop {
                         Some(dop) => {
                             let d = self.obank().get(dop).expect("blockRemoveInternal");
@@ -1482,13 +1749,21 @@ impl Funcdata {
                                 .expect("blockRemoveInternal")
                                 .get_in(j)
                                 .expect("blockRemoveInternal: deadop slot");
-                            let ni = self.obank().get(op).expect("blockRemoveInternal").num_input();
+                            let ni = self
+                                .obank()
+                                .get(op)
+                                .expect("blockRemoveInternal")
+                                .num_input();
                             self.op_insert_input(op, v, ni)?;
                         }
                     } else {
                         // Otherwise make copies of deadvn.
                         for _j in 0..bb_size_in {
-                            let ni = self.obank().get(op).expect("blockRemoveInternal").num_input();
+                            let ni = self
+                                .obank()
+                                .get(op)
+                                .expect("blockRemoveInternal")
+                                .num_input();
                             self.op_insert_input(op, deadvn, ni)?;
                         }
                     }
@@ -1501,7 +1776,12 @@ impl Funcdata {
         // Finally remove all the ops in -bb-.
         let mut desc_warning = false;
         for op in self.bb_ops(bb) {
-            if self.obank().get(op).expect("blockRemoveInternal").is_assignment() {
+            if self
+                .obank()
+                .get(op)
+                .expect("blockRemoveInternal")
+                .is_assignment()
+            {
                 let deadvn = self
                     .obank()
                     .get(op)
@@ -1606,7 +1886,8 @@ impl Funcdata {
         // Collect the unreachable blocks (everything not reachable from entry).
         let graph = self.bblocks_root_pub();
         let mut list: Vec<BlockId> = Vec::new();
-        self.bblocks_mut().collect_reachable(graph, &mut list, entry, true);
+        self.bblocks_mut()
+            .collect_reachable(graph, &mut list, entry, true);
         if list.is_empty() {
             return Ok(false);
         }
@@ -1640,7 +1921,10 @@ impl Funcdata {
     /// the underlying `BlockBasic` (the dual-arena `BlockCopy::copy` target).
     pub fn block_basic_negate_lastop(&mut self, bb: BlockId) {
         if let Some(lastop) = self.bb_op_tail(bb) {
-            let o = self.obank_mut().get_mut(lastop).expect("negate_lastop: stale op");
+            let o = self
+                .obank_mut()
+                .get_mut(lastop)
+                .expect("negate_lastop: stale op");
             o.flip_flag(crate::op::pcodeop_flags::boolean_flip);
             o.flip_flag(crate::op::pcodeop_flags::fallthru_true);
         }
@@ -1655,7 +1939,9 @@ impl Funcdata {
     pub fn set_basic_block_range(&mut self, bb: BlockId, beg: &Address, end: &Address) {
         let cover = &mut self.basic_cover_mut(bb);
         cover.clear();
-        let spc = beg.get_space().expect("setBasicBlockRange: invalid address (C++ UB)");
+        let spc = beg
+            .get_space()
+            .expect("setBasicBlockRange: invalid address (C++ UB)");
         cover.insert_range(spc.clone(), beg.get_offset(), end.get_offset());
     }
 
@@ -1707,7 +1993,9 @@ impl Funcdata {
     /// The given block must have 2 inputs / 2 outputs and \b no operations.
     pub fn remove_from_flow_split(&mut self, bl: BlockId, swap: bool) -> KunaResult<()> {
         if !self.bb_empty_op(bl) {
-            return Err(KunaError::lowlevel("Can only split the flow for an empty block"));
+            return Err(KunaError::lowlevel(
+                "Can only split the flow for an empty block",
+            ));
         }
         self.bblocks_mut().remove_from_flow_split(bl, swap);
         let graph = self.bblocks_root_pub();
@@ -1747,7 +2035,10 @@ impl Funcdata {
     /// Returns its index in `jumpvec`.
     pub fn link_jump_table(&mut self, op: OpId) -> Option<usize> {
         let addr = self.obank().get(op)?.get_addr().clone();
-        let idx = self.jumpvec_ref().iter().position(|jt| *jt.get_op_address() == addr)?;
+        let idx = self
+            .jumpvec_ref()
+            .iter()
+            .position(|jt| *jt.get_op_address() == addr)?;
         // The op's address is `addr` (same op-address).
         self.jumpvec_mut()[idx].set_indirect_op_addr(op, addr);
         Some(idx)
@@ -1771,8 +2062,14 @@ impl Funcdata {
                 "Cannot install jumptable if flow is already traced",
             ));
         }
-        if self.jumpvec_ref().iter().any(|jt| *jt.get_op_address() == addr) {
-            return Err(KunaError::lowlevel("Trying to install over existing jumptable"));
+        if self
+            .jumpvec_ref()
+            .iter()
+            .any(|jt| *jt.get_op_address() == addr)
+        {
+            return Err(KunaError::lowlevel(
+                "Trying to install over existing jumptable",
+            ));
         }
         let newjt = crate::jumptable::JumpTable::new(addr);
         self.jumpvec_mut().push(newjt);
@@ -1858,10 +2155,9 @@ impl Funcdata {
                 None => continue, // unlinked override not reached by flow yet
             };
             let seq = src.obank().get(indop).unwrap().get_seq_num().clone();
-            let newop = self
-                .obank()
-                .find_op(&seq)
-                .ok_or_else(|| KunaError::lowlevel("Could not trace jumptable across partial clone"))?;
+            let newop = self.obank().find_op(&seq).ok_or_else(|| {
+                KunaError::lowlevel("Could not trace jumptable across partial clone")
+            })?;
             let mut jtclone = crate::jumptable::JumpTable::new_clone(srcjt);
             let opaddr = self.obank().get(newop).unwrap().get_addr().clone();
             jtclone.set_indirect_op_addr(newop, opaddr);
@@ -1886,7 +2182,12 @@ impl Funcdata {
         let v0 = self.obank().get(cmp)?.get_in(0)?;
         let v1 = self.obank().get(cmp)?.get_in(1)?;
         // The switch variable is the non-constant operand.
-        let mut vn = if self.vbank().get(v0).map(|v| v.is_constant()).unwrap_or(false) {
+        let mut vn = if self
+            .vbank()
+            .get(v0)
+            .map(|v| v.is_constant())
+            .unwrap_or(false)
+        {
             v1
         } else {
             v0
@@ -2011,7 +2312,11 @@ impl Funcdata {
         use unlace_base::types::uintb;
 
         // Don't re-install if a table already exists for this branch address.
-        if self.jumpvec_ref().iter().any(|jt| jt.get_op_address() == branch_addr) {
+        if self
+            .jumpvec_ref()
+            .iter()
+            .any(|jt| jt.get_op_address() == branch_addr)
+        {
             return Ok(None);
         }
 
@@ -2071,7 +2376,11 @@ impl Funcdata {
         }
         // (kuna `loweredswitchexact`) Nothing a deleted compare block writes may be
         // read again on the raw p-code this edits.
-        if !crate::p2_lift::kuna_loweredswitchexact::raw_install_keeps_values(self, head, &out_blocks) {
+        if !crate::p2_lift::kuna_loweredswitchexact::raw_install_keeps_values(
+            self,
+            head,
+            &out_blocks,
+        ) {
             return Ok(None);
         }
 
@@ -2091,7 +2400,7 @@ impl Funcdata {
         // intact so heritage threads SSA through it and the printer names it.
         // (kuna `loweredswitchvalue`) Prefer what the head compare itself reads:
         // `var_addr` need not hold the compared value at the head.
-        use crate::p2_lift::kuna_loweredswitchvalue::{head_compare_operand, HeadOperand};
+        use crate::p2_lift::kuna_loweredswitchvalue::{HeadOperand, head_compare_operand};
         let head_operand = if prefer_head_operand {
             head_compare_operand(self, head, cbranch, var_addr, var_size)
                 .filter(|op| *op != HeadOperand::Storage(var_addr.clone()))
@@ -2380,12 +2689,7 @@ impl Funcdata {
     ///
     /// Used only by [`kuna_repair_lowered_switch_inputs`]; an exact-size match is
     /// required so we never re-point a BRANCHIND at a mis-sized value.
-    fn kuna_reaching_def_at(
-        &self,
-        op: OpId,
-        addr: &Address,
-        size: int4,
-    ) -> Option<VarnodeId> {
+    fn kuna_reaching_def_at(&self, op: OpId, addr: &Address, size: int4) -> Option<VarnodeId> {
         let want_space = addr.get_space()?.get_index();
         let want_off = addr.get_offset();
         let matches = |this: &Self, vn: VarnodeId| -> bool {
@@ -2449,7 +2753,12 @@ impl Funcdata {
         };
         let mut cur = vn;
         // Follow the def chain while the Varnode is written.
-        while self.vbank().get(cur).map(|v| v.is_written()).unwrap_or(false) {
+        while self
+            .vbank()
+            .get(cur)
+            .map(|v| v.is_written())
+            .unwrap_or(false)
+        {
             let op = self.vbank().get(cur).unwrap().get_def().unwrap();
             let opc = self.obank().get(op).map(|o| o.code());
             match opc {
@@ -2465,7 +2774,12 @@ impl Funcdata {
                         Some(v) => v,
                         None => return false,
                     };
-                    if !self.vbank().get(in1).map(|v| v.is_constant()).unwrap_or(false) {
+                    if !self
+                        .vbank()
+                        .get(in1)
+                        .map(|v| v.is_constant())
+                        .unwrap_or(false)
+                    {
                         return false;
                     }
                     cur = match self.obank().get(op).and_then(|o| o.get_in(0)) {
@@ -2514,14 +2828,14 @@ impl Funcdata {
         let encoding = crate::kuna_indirectreturn::target_encoding(self, op);
         // linkJumpTable: search for a pre-existing table.
         if let Some(idx) = self.link_jump_table(op) {
-            self.get_jump_table_mut(idx as int4).kuna_set_target_encoding(encoding);
+            self.get_jump_table_mut(idx as int4)
+                .kuna_set_target_encoding(encoding);
             let jt = self.get_jump_table(idx as int4);
             if !jt.is_override() && !jt.is_partial() && jt.num_entries() != 0 {
                 return Ok(Some(idx)); // Previously calculated, complete, non-override
             }
             // Recover empty/override table.
-            let mode =
-                self.stage_jump_table(idx, op, record_loads, visited, run_pipeline, shared);
+            let mode = self.stage_jump_table(idx, op, record_loads, visited, run_pipeline, shared);
             if mode != RecoveryMode::Success {
                 return Err(mode);
             }
@@ -2595,9 +2909,13 @@ impl Funcdata {
             }
         }
         let partial: &mut Funcdata = if share {
-            shared.as_mut().expect("stage_jump_table: shared partial just built")
+            shared
+                .as_mut()
+                .expect("stage_jump_table: shared partial just built")
         } else {
-            owned.as_mut().expect("stage_jump_table: owned partial just built")
+            owned
+                .as_mut()
+                .expect("stage_jump_table: owned partial just built")
         };
 
         // findOp(op->getSeqNum()) on the partial.
@@ -2607,9 +2925,11 @@ impl Funcdata {
             Some(p) => p,
             None => return RecoveryMode::FailNormal, // Bad partial clone
         };
-        let partop_ok = partial.obank().get(partop).map(|o| {
-            o.code() == OpCode::CPUI_BRANCHIND && *o.get_addr() == addr
-        }).unwrap_or(false);
+        let partop_ok = partial
+            .obank()
+            .get(partop)
+            .map(|o| o.code() == OpCode::CPUI_BRANCHIND && *o.get_addr() == addr)
+            .unwrap_or(false);
         if !partop_ok {
             return RecoveryMode::FailNormal;
         }
@@ -2632,7 +2952,10 @@ impl Funcdata {
         let addr2 = partial.obank().get(partop).unwrap().get_addr().clone();
         jt.set_indirect_op_addr(partop, addr2);
         let res = if jt.is_partial() {
-            let targets = self.get_override().multistage_targets(&addr).map(<[Address]>::to_vec);
+            let targets = self
+                .get_override()
+                .multistage_targets(&addr)
+                .map(<[Address]>::to_vec);
             jt.recover_multistage(partial).map(|()| {
                 if let Some(targets) = targets {
                     jt.kuna_adopt_multistage_targets(targets);
@@ -2814,7 +3137,9 @@ impl Funcdata {
     ) -> BlockId {
         let graph = self.bblocks_root_pub();
         let newblock = self.bblocks_mut().new_block_basic(graph);
-        self.bblocks_mut().block_mut(newblock).set_flag(block_flags::f_joined_block);
+        self.bblocks_mut()
+            .block_mut(newblock)
+            .set_flag(block_flags::f_joined_block);
         self.set_basic_block_range(newblock, addr, addr);
 
         // Delete 2 of the original edges into exita and exitb, picking the swap.
@@ -2855,7 +3180,9 @@ impl Funcdata {
         let a = self.bblocks_ref().block(b).get_in(inedge);
         let graph = self.bblocks_root_pub();
         let bprime = self.bblocks_mut().new_block_basic(graph);
-        self.bblocks_mut().block_mut(bprime).set_flag(block_flags::f_duplicate_block);
+        self.bblocks_mut()
+            .block_mut(bprime)
+            .set_flag(block_flags::f_duplicate_block);
         self.copy_basic_range(b, bprime);
         self.bblocks_mut().switch_edge(a, b, bprime);
         let sizeout = self.bblocks_ref().block(b).size_out();
@@ -2892,7 +3219,9 @@ impl Funcdata {
         }
         let size_in = self.bblocks_ref().block(b).size_in();
         if size_in <= 1 {
-            return Err(KunaError::lowlevel("Cannot nodesplit block with only 1 in edge"));
+            return Err(KunaError::lowlevel(
+                "Cannot nodesplit block with only 1 in edge",
+            ));
         }
         // Detect redundant (duplicate) in edges via the mark bit, mirroring the
         // C++ setMark/clearMark pass.
@@ -2924,11 +3253,7 @@ impl Funcdata {
     /// the output Varnode of the last cloned op (drives `CloneBlockOps::
     /// cloneExpression`).  Used by `RuleConditionalMove::constructBool` to pull a
     /// boolean expression out of a conditional block via duplication.
-    pub fn clone_expression(
-        &mut self,
-        ops: &[OpId],
-        follow_op: OpId,
-    ) -> KunaResult<VarnodeId> {
+    pub fn clone_expression(&mut self, ops: &[OpId], follow_op: OpId) -> KunaResult<VarnodeId> {
         let mut cloner = CloneBlockOps::new();
         cloner.clone_expression(self, ops, follow_op)
     }
@@ -3021,11 +3346,11 @@ impl Funcdata {
                     // as a bare epilogue and gets cloned into every predecessor.
                     // See `crate::p8_structure::kuna_retsplitglobal`.
                     let outvn = o.get_out().and_then(|ov| self.vbank().get(ov));
-                    let same_storage = match (outvn, o.get_in(0).and_then(|iv| self.vbank().get(iv)))
-                    {
-                        (Some(ov), Some(iv)) => ov.get_addr() == iv.get_addr(),
-                        _ => false,
-                    };
+                    let same_storage =
+                        match (outvn, o.get_in(0).and_then(|iv| self.vbank().get(iv))) {
+                            (Some(ov), Some(iv)) => ov.get_addr() == iv.get_addr(),
+                            _ => false,
+                        };
                     if crate::p8_structure::kuna_retsplitglobal::is_global_store(
                         opc == OpCode::CPUI_COPY,
                         outvn.map(|v| v.is_persist()).unwrap_or(false),
@@ -3082,7 +3407,12 @@ impl Funcdata {
 
         let return_ops: Vec<OpId> = self.obank().iter_code(OpCode::CPUI_RETURN).collect();
         for op in return_ops {
-            if self.obank().get(op).expect("returnsplit: stale op").is_dead() {
+            if self
+                .obank()
+                .get(op)
+                .expect("returnsplit: stale op")
+                .is_dead()
+            {
                 continue;
             }
             let parent = match self.obank().get(op).expect("returnsplit").get_parent() {
@@ -3142,7 +3472,8 @@ impl Funcdata {
         }
 
         for i in 0..splitedge.len() {
-            self.node_split(retnode[i], splitedge[i]).expect("ActionReturnSplit: nodeSplit");
+            self.node_split(retnode[i], splitedge[i])
+                .expect("ActionReturnSplit: nodeSplit");
             count += 1;
         }
         count
@@ -3574,7 +3905,12 @@ impl Funcdata {
         // `op_destroy` is now available (used by condexe.execute), so the
         // W3-op boundary is closed.
         if let Some(jumpop) = self.bb_op_tail(bl) {
-            if self.obank().get(jumpop).expect("spliceBlockBasic").is_branch() {
+            if self
+                .obank()
+                .get(jumpop)
+                .expect("spliceBlockBasic")
+                .is_branch()
+            {
                 self.op_destroy(jumpop);
             }
         }
@@ -3617,7 +3953,9 @@ impl Funcdata {
     /// The root graph node of `bblocks` (public-within-crate wrapper so the
     /// funcdata_block methods can reach it without re-deriving).
     pub(crate) fn bblocks_root_pub(&self) -> BlockId {
-        self.bblocks_ref().root.expect("bblocks root not constructed (internal invariant)")
+        self.bblocks_ref()
+            .root
+            .expect("bblocks root not constructed (internal invariant)")
     }
 
     // -----------------------------------------------------------------------
@@ -3685,10 +4023,21 @@ impl Funcdata {
                     Some(op) => op,
                     None => return 2,
                 };
-                if self.obank().get(lastop).expect("flip_test: stale op").code() != OpCode::CPUI_CBRANCH {
+                if self
+                    .obank()
+                    .get(lastop)
+                    .expect("flip_test: stale op")
+                    .code()
+                    != OpCode::CPUI_CBRANCH
+                {
                     return 2;
                 }
-                if self.obank().get(lastop).expect("flip_test: stale op").is_boolean_flip() {
+                if self
+                    .obank()
+                    .get(lastop)
+                    .expect("flip_test: stale op")
+                    .is_boolean_flip()
+                {
                     // Flip bit set: don't change any ops (use a throwaway list).
                     let mut unused: Vec<OpId> = Vec::new();
                     self.op_flip_in_place_test(lastop, &mut unused, allow_op_removal)
@@ -3728,7 +4077,10 @@ impl Funcdata {
         match split {
             SplitPoint::Basic(bb) => {
                 if let Some(lastop) = self.bb_op_tail(bb) {
-                    let o = self.obank_mut().get_mut(lastop).expect("flip_exec: stale op");
+                    let o = self
+                        .obank_mut()
+                        .get_mut(lastop)
+                        .expect("flip_exec: stale op");
                     o.flip_flag(crate::op::pcodeop_flags::fallthru_true);
                     if o.is_boolean_flip() {
                         o.flip_flag(crate::op::pcodeop_flags::boolean_flip);
@@ -3755,7 +4107,11 @@ impl Funcdata {
     /// if/else, rearrange to the complementary (preferred) boolean form when the
     /// condition's split point can be flipped to a normalized comparison.  `sif`
     /// is the sblocks `BlockIf`.  Returns `true` if a change was made.
-    fn block_if_prefer_complement(&mut self, sif: BlockId, allow_op_removal: bool) -> KunaResult<bool> {
+    fn block_if_prefer_complement(
+        &mut self,
+        sif: BlockId,
+        allow_op_removal: bool,
+    ) -> KunaResult<bool> {
         // Only if/else collapses.
         if self.sblocks_ref().block(sif).get_size() != 3 {
             return Ok(false);
@@ -3879,7 +4235,11 @@ impl Funcdata {
     /// compare guard that `preferComplement` leaves alone — the one whose positive
     /// reading angr produces.  `sif` is the sblocks `BlockIf`.  Returns `true` if a
     /// flip was made (and logs a `branchflip:` warning at the guard).
-    fn block_if_flip_negated_guard(&mut self, sif: BlockId, allow_op_removal: bool) -> KunaResult<bool> {
+    fn block_if_flip_negated_guard(
+        &mut self,
+        sif: BlockId,
+        allow_op_removal: bool,
+    ) -> KunaResult<bool> {
         // Only if/else (3-component) collapses can swap arms in place.
         if self.sblocks_ref().block(sif).get_size() != 3 {
             return Ok(false);
@@ -3994,7 +4354,11 @@ impl Funcdata {
             return false;
         }
         match o.get_in(0) {
-            Some(i0) => self.vbank().get(i0).map(|v| v.is_constant()).unwrap_or(false),
+            Some(i0) => self
+                .vbank()
+                .get(i0)
+                .map(|v| v.is_constant())
+                .unwrap_or(false),
             None => false,
         }
     }
@@ -4060,7 +4424,11 @@ impl Funcdata {
             None => return,
         };
         loop {
-            let written = self.vbank().get(cur_vn).map(|v| v.is_written()).unwrap_or(false);
+            let written = self
+                .vbank()
+                .get(cur_vn)
+                .map(|v| v.is_written())
+                .unwrap_or(false);
             if !written {
                 break;
             }
@@ -4128,7 +4496,12 @@ impl Funcdata {
                         Some(v) => v,
                         None => continue,
                     };
-                    if !self.vbank().get(inv).map(|v| v.is_written()).unwrap_or(false) {
+                    if !self
+                        .vbank()
+                        .get(inv)
+                        .map(|v| v.is_written())
+                        .unwrap_or(false)
+                    {
                         continue;
                     }
                     let indef = match self.vbank().get(inv).and_then(|v| v.get_def()) {
@@ -4148,7 +4521,12 @@ impl Funcdata {
             }
         }
         // Exactly one path, from a constant to a switch.
-        if !self.vbank().get(cur_vn).map(|v| v.is_constant()).unwrap_or(false) {
+        if !self
+            .vbank()
+            .get(cur_vn)
+            .map(|v| v.is_constant())
+            .unwrap_or(false)
+        {
             return;
         }
         if let Some(li) = last_indirect {
@@ -4208,7 +4586,11 @@ struct CloneBlockOps {
 
 impl CloneBlockOps {
     fn new() -> Self {
-        CloneBlockOps { clone_list: Vec::new(), orig_to_clone: std::collections::BTreeMap::new(), calls: false }
+        CloneBlockOps {
+            clone_list: Vec::new(),
+            orig_to_clone: std::collections::BTreeMap::new(),
+            calls: false,
+        }
     }
 
     /// Make a basic clone of the p-code op copying its basic control-flow
@@ -4217,7 +4599,14 @@ impl CloneBlockOps {
     fn build_op_clone(&mut self, data: &mut Funcdata, op: OpId) -> KunaResult<Option<OpId>> {
         let (is_branch, opc, num_input, addr, op_flags, op_addl) = {
             let o = data.obank().get(op).expect("buildOpClone: stale op");
-            (o.is_branch(), o.code(), o.num_input(), o.get_addr().clone(), o.get_flags(), o.get_addlflags())
+            (
+                o.is_branch(),
+                o.code(),
+                o.num_input(),
+                o.get_addr().clone(),
+                o.get_flags(),
+                o.get_addlflags(),
+            )
         };
         if is_branch {
             if opc != OpCode::CPUI_BRANCH {
@@ -4270,7 +4659,10 @@ impl CloneBlockOps {
                 | opaf::kuna_exactfloat);
         let error_flag = crate::kuna_syscallregs::is_error_flag(data, op);
         {
-            let o = data.obank_mut().get_mut(dup).expect("buildOpClone: stale dup");
+            let o = data
+                .obank_mut()
+                .get_mut(dup)
+                .expect("buildOpClone: stale dup");
             o.set_flag(fl);
             o.set_additional_flag(afl);
             if error_flag {
@@ -4290,14 +4682,26 @@ impl CloneBlockOps {
         orig_op: OpId,
         clone_op: OpId,
     ) -> KunaResult<()> {
-        let opvn = match data.obank().get(orig_op).expect("buildVarnodeOutput: stale op").get_out()
+        let opvn = match data
+            .obank()
+            .get(orig_op)
+            .expect("buildVarnodeOutput: stale op")
+            .get_out()
         {
             Some(v) => v,
             None => return Ok(()),
         };
         let (size, addr, src_flags, src_addl) = {
-            let v = data.vbank().get(opvn).expect("buildVarnodeOutput: stale vn");
-            (v.get_size(), v.get_addr().clone(), v.get_flags(), v.get_addlflags())
+            let v = data
+                .vbank()
+                .get(opvn)
+                .expect("buildVarnodeOutput: stale vn");
+            (
+                v.get_size(),
+                v.get_addr().clone(),
+                v.get_flags(),
+                v.get_addlflags(),
+            )
         };
         let newvn = data.new_varnode_out(size, &addr, clone_op)?;
         data.vbank_mut()
@@ -4321,7 +4725,12 @@ impl CloneBlockOps {
         let mut cur = data.bb_op_head(b);
         while let Some(o) = cur {
             ops.push(o);
-            cur = data.obank().get(o).expect("cloneBlock: stale op").basic_neighbours().1;
+            cur = data
+                .obank()
+                .get(o)
+                .expect("cloneBlock: stale op")
+                .basic_neighbours()
+                .1;
         }
         crate::p8_structure::kuna_clonephiorder::order_global_phis(data, &mut ops);
         for orig_op in ops {
@@ -4356,7 +4765,11 @@ impl CloneBlockOps {
             return Err(KunaError::lowlevel("No expression to clone"));
         }
         self.patch_inputs(data, 0)?;
-        let last_clone = self.clone_list.last().expect("cloneExpression: non-empty cloneList").1;
+        let last_clone = self
+            .clone_list
+            .last()
+            .expect("cloneExpression: non-empty cloneList")
+            .1;
         Ok(data
             .obank()
             .get(last_clone)
@@ -4373,7 +4786,8 @@ impl CloneBlockOps {
         let new_idx = data.push_call_specs(spec);
         let handle = crate::flow::next_fspec_handle();
         let style = data.get_arch().kuna_name_style();
-        data.get_call_specs(new_idx).register_in_fspec_space(handle, style);
+        data.get_call_specs(new_idx)
+            .register_in_fspec_space(handle, style);
         Some(handle)
     }
 
@@ -4383,13 +4797,24 @@ impl CloneBlockOps {
         let mut one_input_phis: Vec<OpId> = Vec::new();
         for pos in 0..self.clone_list.len() {
             let (orig_op, clone_op) = self.clone_list[pos];
-            let orig_code = data.obank().get(orig_op).expect("patchInputs: stale orig").code();
+            let orig_code = data
+                .obank()
+                .get(orig_op)
+                .expect("patchInputs: stale orig")
+                .code();
             if orig_code == OpCode::CPUI_MULTIEQUAL {
                 // One edge now goes into the new block.
-                data.obank_mut().get_mut(clone_op).expect("patchInputs: stale clone").set_num_inputs(1);
+                data.obank_mut()
+                    .get_mut(clone_op)
+                    .expect("patchInputs: stale clone")
+                    .set_num_inputs(1);
                 data.op_set_opcode_code(clone_op, OpCode::CPUI_COPY);
-                let in_vn =
-                    data.obank().get(orig_op).expect("patchInputs").get_in(inedge).expect("MULTIEQUAL in");
+                let in_vn = data
+                    .obank()
+                    .get(orig_op)
+                    .expect("patchInputs")
+                    .get_in(inedge)
+                    .expect("MULTIEQUAL in");
                 data.op_set_input(clone_op, in_vn, 0)?;
                 one_input_phis.push(clone_op);
                 // One edge is removed from the original block.
@@ -4403,7 +4828,11 @@ impl CloneBlockOps {
             } else if data.obank().get(orig_op).expect("patchInputs").is_call() && !self.calls {
                 return Err(KunaError::lowlevel("Can't clone CALLs"));
             } else {
-                let fspec = if self.calls { self.clone_call_spec(data, orig_op, clone_op) } else { None };
+                let fspec = if self.calls {
+                    self.clone_call_spec(data, orig_op, clone_op)
+                } else {
+                    None
+                };
                 let n_in = data.obank().get(clone_op).expect("patchInputs").num_input();
                 for i in 0..n_in {
                     let orig_vn = data
@@ -4426,7 +4855,10 @@ impl CloneBlockOps {
                     let space_type = vaddr.get_space().map(|s| s.get_type());
                     let clone_vn = if is_const {
                         orig_vn
-                    } else if is_annot && fspec.is_some() && space_type == Some(spacetype::IPTR_FSPEC) {
+                    } else if is_annot
+                        && fspec.is_some()
+                        && space_type == Some(spacetype::IPTR_FSPEC)
+                    {
                         data.new_varnode_call_specs(fspec.unwrap())
                     } else if is_annot && self.calls && space_type == Some(spacetype::IPTR_IOP) {
                         let target = crate::funcdata_varnode::op_iop_decode(vaddr.get_offset());
@@ -4482,7 +4914,11 @@ impl CloneBlockOps {
         if data.vbank().get(out).is_some_and(|v| v.is_persist()) {
             return Ok(());
         }
-        let readers: Vec<OpId> = data.vbank().get(out).map(|v| v.descend_iter().collect()).unwrap_or_default();
+        let readers: Vec<OpId> = data
+            .vbank()
+            .get(out)
+            .map(|v| v.descend_iter().collect())
+            .unwrap_or_default();
         let guard_of = |data: &Funcdata, reader: OpId| {
             data.obank()
                 .get(reader)
@@ -4518,18 +4954,19 @@ mod tests {
 
     use unlace_base::address::Address;
     use unlace_base::space::{
-        addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+        AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
     };
     use unlace_num::opcodes::OpCode;
 
+    use crate::context::{ArchContext, BlockId, OpId, TypeOp};
     use crate::funcdata::Funcdata;
     use crate::op::pcodeop_flags;
-    use crate::context::{ArchContext, BlockId, OpId, TypeOp};
 
     fn build_manager() -> AddrSpaceManager {
         let mut m = AddrSpaceManager::new();
         m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+            .unwrap();
         m.insert_space(Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
             "ram",
@@ -4567,7 +5004,8 @@ mod tests {
     /// flags) at address `pc` into basic block `bl`; returns the op.
     fn term_op(fd: &mut Funcdata, bl: BlockId, opc: OpCode, flags: u32, pc: Address) -> OpId {
         let op = fd.obank_mut().create_at(1, pc);
-        fd.obank_mut().change_opcode(op, TypeOp::new(opc, flags, format!("{opc:?}")));
+        fd.obank_mut()
+            .change_opcode(op, TypeOp::new(opc, flags, format!("{opc:?}")));
         // A block op is alive in the real pipeline (create_at starts it dead, the
         // flow lift `mark_alive`s on integration); mark it so `op_destroy`'s
         // `mark_dead` can move it off the alive list.
@@ -4651,9 +5089,27 @@ mod tests {
         fd.bblocks_mut().add_edge(bl0, bl1);
         fd.bblocks_mut().add_edge(bl0, bl2);
         // bl0's tail op at 0x1000, bl1's tail op at 0x2000.
-        term_op(&mut fd, bl0, OpCode::CPUI_CBRANCH, pcodeop_flags::branch, addr(&rs, 0x1000));
-        term_op(&mut fd, bl1, OpCode::CPUI_BRANCH, pcodeop_flags::branch, addr(&rs, 0x2000));
-        term_op(&mut fd, bl2, OpCode::CPUI_BRANCH, pcodeop_flags::branch, addr(&rs, 0x3000));
+        term_op(
+            &mut fd,
+            bl0,
+            OpCode::CPUI_CBRANCH,
+            pcodeop_flags::branch,
+            addr(&rs, 0x1000),
+        );
+        term_op(
+            &mut fd,
+            bl1,
+            OpCode::CPUI_BRANCH,
+            pcodeop_flags::branch,
+            addr(&rs, 0x2000),
+        );
+        term_op(
+            &mut fd,
+            bl2,
+            OpCode::CPUI_BRANCH,
+            pcodeop_flags::branch,
+            addr(&rs, 0x3000),
+        );
 
         let pcop = addr(&rs, 0x1000);
         let pcdest = addr(&rs, 0x2000);
@@ -4729,7 +5185,13 @@ mod tests {
         fd.bblocks_mut().add_edge(outbl, succ);
         fd.set_basic_block_range(bl, &addr(&rs, 0x1000), &addr(&rs, 0x1004));
         fd.set_basic_block_range(outbl, &addr(&rs, 0x1008), &addr(&rs, 0x100c));
-        let br = term_op(&mut fd, bl, OpCode::CPUI_BRANCH, pcodeop_flags::branch, addr(&rs, 0x1000));
+        let br = term_op(
+            &mut fd,
+            bl,
+            OpCode::CPUI_BRANCH,
+            pcodeop_flags::branch,
+            addr(&rs, 0x1000),
+        );
         let op_out = term_op(&mut fd, outbl, OpCode::CPUI_COPY, 0, addr(&rs, 0x1008));
 
         fd.splice_block_basic(bl).unwrap();
@@ -4802,8 +5264,20 @@ mod tests {
         fd.bblocks_mut().add_edge(bb, succ);
 
         // MULTIEQUAL marker (flags=marker) + BRANCH (flags=branch).
-        let _mq = term_op(&mut fd, bb, OpCode::CPUI_MULTIEQUAL, pcodeop_flags::marker, addr(&rs, 0x2000));
-        let _br = term_op(&mut fd, bb, OpCode::CPUI_BRANCH, pcodeop_flags::branch, addr(&rs, 0x2004));
+        let _mq = term_op(
+            &mut fd,
+            bb,
+            OpCode::CPUI_MULTIEQUAL,
+            pcodeop_flags::marker,
+            addr(&rs, 0x2000),
+        );
+        let _br = term_op(
+            &mut fd,
+            bb,
+            OpCode::CPUI_BRANCH,
+            pcodeop_flags::branch,
+            addr(&rs, 0x2004),
+        );
         assert!(fd.bb_has_only_markers(bb));
         assert!(fd.bb_is_do_nothing(bb));
         assert!(!fd.bb_is_complex(bb)); // marker + single branch -> statement <= 1
@@ -4823,7 +5297,13 @@ mod tests {
         let start = fd.bblocks_mut().new_block_basic(root);
         let s_out = fd.bblocks_mut().new_block_basic(root);
         fd.bblocks_mut().add_edge(start, s_out);
-        let _br = term_op(&mut fd, start, OpCode::CPUI_BRANCH, pcodeop_flags::branch, addr(&rs, 0x3000));
+        let _br = term_op(
+            &mut fd,
+            start,
+            OpCode::CPUI_BRANCH,
+            pcodeop_flags::branch,
+            addr(&rs, 0x3000),
+        );
         assert!(!fd.bb_is_do_nothing(start)); // sizeIn() == 0
 
         // A two-out block (CBRANCH) is never do-nothing (sizeOut != 1).
@@ -4852,7 +5332,13 @@ mod tests {
         fd.bblocks_mut().add_edge(bb, succ);
         // A bare BRANCH (no MULTIEQUAL: no data flow to patch) keeps this test
         // focused on the control-flow splice.
-        let _br = term_op(&mut fd, bb, OpCode::CPUI_BRANCH, pcodeop_flags::branch, addr(&rs, 0x4000));
+        let _br = term_op(
+            &mut fd,
+            bb,
+            OpCode::CPUI_BRANCH,
+            pcodeop_flags::branch,
+            addr(&rs, 0x4000),
+        );
         assert!(fd.bb_is_do_nothing(bb));
         assert!(fd.bb_unblocked_multi(bb, 0));
 
@@ -4894,12 +5380,7 @@ mod tests {
     /// Append a COPY op at `pc` into `bb` whose output is a fresh, no-descend
     /// `ram` Varnode at `out_off`.  In `BlockBasic::isComplex` such a calculation
     /// (output with `hasNoDescend()`) counts as one statement.
-    fn copy_with_dead_out(
-        fd: &mut Funcdata,
-        bb: BlockId,
-        pc: Address,
-        out_off: u64,
-    ) -> OpId {
+    fn copy_with_dead_out(fd: &mut Funcdata, bb: BlockId, pc: Address, out_off: u64) -> OpId {
         let rs = ramspace(fd);
         let op = fd.new_op(1, pc);
         fd.op_set_opcode(op, crate::typeop::type_op_for(OpCode::CPUI_COPY));
@@ -4929,11 +5410,17 @@ mod tests {
         // Two calculations (statement == 2): NOT complex (2 is not > 2).
         let _c1 = copy_with_dead_out(&mut fd, bb, addr(&rs, 0x5000), 0x90);
         let _c2 = copy_with_dead_out(&mut fd, bb, addr(&rs, 0x5004), 0x98);
-        assert!(!fd.bb_is_complex(bb), "two statements must NOT be complex (2 !> 2)");
+        assert!(
+            !fd.bb_is_complex(bb),
+            "two statements must NOT be complex (2 !> 2)"
+        );
 
         // A third calculation (statement == 3): complex (3 > 2).
         let _c3 = copy_with_dead_out(&mut fd, bb, addr(&rs, 0x5008), 0xa0);
-        assert!(fd.bb_is_complex(bb), "three statements MUST be complex (3 > 2)");
+        assert!(
+            fd.bb_is_complex(bb),
+            "three statements MUST be complex (3 > 2)"
+        );
     }
 
     /// VF2 — `bb_is_complex` two-out branch counts as the first statement.  A
@@ -4955,15 +5442,27 @@ mod tests {
         fd.bblocks_mut().add_edge(bb, o2); // two out -> statement seeded to 1
 
         // A MULTIEQUAL marker must be SKIPPED (not counted) — add one to prove it.
-        let _mq = term_op(&mut fd, bb, OpCode::CPUI_MULTIEQUAL, pcodeop_flags::marker, addr(&rs, 0x6000));
+        let _mq = term_op(
+            &mut fd,
+            bb,
+            OpCode::CPUI_MULTIEQUAL,
+            pcodeop_flags::marker,
+            addr(&rs, 0x6000),
+        );
         // One calculation: statement == 1 (seed) + 1 == 2 -> NOT complex.
         let _c1 = copy_with_dead_out(&mut fd, bb, addr(&rs, 0x6004), 0xb0);
-        assert!(!fd.bb_is_complex(bb), "branch-seed 1 + 1 calc == 2, marker skipped, NOT complex");
+        assert!(
+            !fd.bb_is_complex(bb),
+            "branch-seed 1 + 1 calc == 2, marker skipped, NOT complex"
+        );
 
         // Second calculation: 1 + 2 == 3 -> complex.  (If the marker had been
         // miscounted, the block would already be complex above.)
         let _c2 = copy_with_dead_out(&mut fd, bb, addr(&rs, 0x6008), 0xb8);
-        assert!(fd.bb_is_complex(bb), "branch-seed 1 + 2 calcs == 3 -> complex");
+        assert!(
+            fd.bb_is_complex(bb),
+            "branch-seed 1 + 2 calcs == 3 -> complex"
+        );
     }
 
     /// VF3 — `bb_unblocked_multi` rejects a redundant branch carrying a DIFFERENT
@@ -5072,7 +5571,11 @@ mod tests {
         // Split the edge from p0 (inedge index in0).
         fd.node_split(ret, in0).expect("node_split");
         // A duplicate block was created.
-        assert_eq!(fd.bblocks_get_size(), n_before + 1, "nodeSplit adds the duplicate block");
+        assert_eq!(
+            fd.bblocks_get_size(),
+            n_before + 1,
+            "nodeSplit adds the duplicate block"
+        );
         // p0 now flows to the duplicate, not the original ret.
         let p0_out = fd.bblocks_ref().block(p0).get_out(0);
         assert_ne!(p0_out, ret, "p0 re-routed onto the duplicate");
@@ -5112,14 +5615,20 @@ mod tests {
         fd.bblocks_mut().add_edge(p1, b);
         fd.bblocks_mut().add_edge(b, out); // out flow
         let err = fd.node_split(b, 0).unwrap_err();
-        assert!(err.to_string().contains("out flow"), "out-flow block rejected");
+        assert!(
+            err.to_string().contains("out flow"),
+            "out-flow block rejected"
+        );
 
         // Block with a single in edge -> rejected.
         let q0 = fd.bblocks_mut().new_block_basic(root);
         let single = fd.bblocks_mut().new_block_basic(root);
         fd.bblocks_mut().add_edge(q0, single);
         let err2 = fd.node_split(single, 0).unwrap_err();
-        assert!(err2.to_string().contains("only 1 in edge"), "single-in-edge block rejected");
+        assert!(
+            err2.to_string().contains("only 1 in edge"),
+            "single-in-edge block rejected"
+        );
     }
 
     /// NS3 — `CloneBlockOps` clones a generic calculation op verbatim (opcode,
@@ -5183,12 +5692,22 @@ mod tests {
                 found_add = true;
                 let kin = oref.get_in(1).expect("clone INT_ADD second input");
                 let kv = fd.vbank().get(kin).expect("const in");
-                assert!(kv.is_constant(), "constant input shared verbatim on the clone");
-                assert_eq!(kv.get_offset(), 7, "constant value preserved (no special-casing)");
+                assert!(
+                    kv.is_constant(),
+                    "constant input shared verbatim on the clone"
+                );
+                assert_eq!(
+                    kv.get_offset(),
+                    7,
+                    "constant value preserved (no special-casing)"
+                );
             }
             op = fd.obank().get(o).unwrap().basic_neighbours().1;
         }
-        assert!(found_add, "the generic INT_ADD was cloned into the duplicate block");
+        assert!(
+            found_add,
+            "the generic INT_ADD was cloned into the duplicate block"
+        );
     }
 
     /// A MULTIEQUAL that sits behind a non-MULTIEQUAL op still has its input
@@ -5240,9 +5759,14 @@ mod tests {
         fd.bb_insert_op(add, tgt, None);
         let phi_tail = make_phi(&mut fd, 0x60);
 
-        fd.branch_remove_internal(p0, 0).expect("branch_remove_internal");
+        fd.branch_remove_internal(p0, 0)
+            .expect("branch_remove_internal");
 
-        assert_eq!(fd.bblocks_ref().block(tgt).size_in(), 1, "the p0 edge is gone");
+        assert_eq!(
+            fd.bblocks_ref().block(tgt).size_in(),
+            1,
+            "the p0 edge is gone"
+        );
         for (name, mq) in [("leading", phi_head), ("trailing", phi_tail)] {
             let o = fd.obank().get(mq).unwrap();
             assert_eq!(
@@ -5250,8 +5774,16 @@ mod tests {
                 1,
                 "{name} MULTIEQUAL must drop the severed edge's slot"
             );
-            assert_eq!(o.code(), OpCode::CPUI_COPY, "{name} 1-input phi collapses to COPY");
-            assert_eq!(o.get_in(0), Some(v1), "{name} keeps the surviving edge's value");
+            assert_eq!(
+                o.code(),
+                OpCode::CPUI_COPY,
+                "{name} 1-input phi collapses to COPY"
+            );
+            assert_eq!(
+                o.get_in(0),
+                Some(v1),
+                "{name} keeps the surviving edge's value"
+            );
         }
     }
 }

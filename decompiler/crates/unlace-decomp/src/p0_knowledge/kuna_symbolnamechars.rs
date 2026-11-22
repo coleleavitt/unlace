@@ -295,9 +295,10 @@ pub fn sanitize_symbol_name(name: &str, mode: NameChars) -> Cow<'_, str> {
         Cow::Borrowed(_) => Cow::Borrowed(name),
         // `safe`/`ident` only ever emit ASCII in place of a bad byte, so the
         // result is valid UTF-8 by construction.
-        Cow::Owned(v) => Cow::Owned(String::from_utf8(v).unwrap_or_else(|e| {
-            String::from_utf8_lossy(e.as_bytes()).into_owned()
-        })),
+        Cow::Owned(v) => Cow::Owned(
+            String::from_utf8(v)
+                .unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned()),
+        ),
     }
 }
 

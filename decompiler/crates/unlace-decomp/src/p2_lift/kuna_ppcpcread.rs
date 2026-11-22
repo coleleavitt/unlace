@@ -53,14 +53,23 @@ pub(crate) fn is_pc_capture(
     }
     word_at(fd, site).is_some_and(|w| w & 0xffff_0003 == 0x429f_0001)
         && (dest.get_offset() == site.get_offset() + 4
-            || loads_literal(fd, dest.get_addr(), (start, end), dest.get_offset() - site.get_offset() - 4))
+            || loads_literal(
+                fd,
+                dest.get_addr(),
+                (start, end),
+                dest.get_offset() - site.get_offset() - 4,
+            ))
 }
 
 /// The fall-through path from `target` reads LR before anything could consume or
 /// replace it, then loads one of the `skip` bytes after the `bcl` through the
 /// register that read.
 fn loads_literal(fd: &Funcdata, target: &Address, body: (u64, u64), skip: u64) -> bool {
-    let mut path = FallThrough { fd, pc: Some(target.clone()), body };
+    let mut path = FallThrough {
+        fd,
+        pc: Some(target.clone()),
+        body,
+    };
     for word in path.by_ref().take(LR_READ_WINDOW) {
         if word & LR_MOVE_MASK == MFLR {
             return reads_skipped_word(path.take(LITERAL_LOAD_WINDOW), (word >> 21) & 31, skip);
@@ -118,13 +127,24 @@ fn is_load_from(word: u32, reg: u32, skip: u64) -> bool {
 /// Whether `word` may write general register `reg`; unlisted forms are assumed to
 /// write both register fields.
 fn writes_gpr(word: u32, reg: u32) -> bool {
-    let (op, rt, ra, xo) = (word >> 26, (word >> 21) & 31, (word >> 16) & 31, (word >> 1) & 0x3ff);
+    let (op, rt, ra, xo) = (
+        word >> 26,
+        (word >> 21) & 31,
+        (word >> 16) & 31,
+        (word >> 1) & 0x3ff,
+    );
     match op {
         3 | 10 | 11 | 16..=19 | 36 | 38 | 44 | 47 | 48 | 50 | 52 | 54 | 59 | 63 => false,
         37 | 39 | 45 | 49 | 51 | 53 | 55 => ra == reg,
         7 | 8 | 12..=15 | 32 | 34 | 40 | 42 => rt == reg,
         46 => rt <= reg,
-        31 if matches!(xo, 0 | 4 | 32 | 150 | 151 | 215 | 407 | 467 | 661..=663 | 725 | 727 | 918 | 983) => false,
+        31 if matches!(
+            xo,
+            0 | 4 | 32 | 150 | 151 | 215 | 407 | 467 | 661..=663 | 725 | 727 | 918 | 983
+        ) =>
+        {
+            false
+        }
         31 if matches!(xo, 339 | 371) => rt == reg,
         31 if matches!(xo, 183 | 247 | 439 | 695 | 759) => ra == reg,
         31 if matches!(xo, 533 | 597) => true,

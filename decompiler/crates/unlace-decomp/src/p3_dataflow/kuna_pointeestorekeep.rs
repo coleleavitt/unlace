@@ -32,7 +32,7 @@ use std::collections::BTreeSet;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
-use crate::block::{DominatesMemo, DOMINATES_SHORT_WALK};
+use crate::block::{DOMINATES_SHORT_WALK, DominatesMemo};
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::varnode::Varnode;
@@ -229,7 +229,12 @@ fn old_value_read_after(data: &Funcdata, vn: VarnodeId, by_register: bool) -> bo
         };
         let mut carried = false;
         for r in wv.descend_iter() {
-            match data.obank().get(r).filter(|o| !o.is_dead()).map(|o| o.code()) {
+            match data
+                .obank()
+                .get(r)
+                .filter(|o| !o.is_dead())
+                .map(|o| o.code())
+            {
                 Some(OpCode::CPUI_MULTIEQUAL) => joins.push((r, w)),
                 Some(OpCode::CPUI_INDIRECT) => {
                     carried = carried || store.indirect_after(data, r, w);
@@ -243,7 +248,9 @@ fn old_value_read_after(data: &Funcdata, vn: VarnodeId, by_register: bool) -> bo
     }
     joins.sort_unstable();
     joins.dedup();
-    joins.chunk_by(|a, b| a.0 == b.0).any(|reads| store.join_after(data, reads))
+    joins
+        .chunk_by(|a, b| a.0 == b.0)
+        .any(|reads| store.join_after(data, reads))
 }
 
 /// The store [`old_value_read_after`] asks about, with the dominator-tree
@@ -259,13 +266,22 @@ impl Store {
     fn new(data: &Funcdata, op: OpId, out: VarnodeId) -> Option<Store> {
         let o = data.obank().get(op)?;
         let block = o.get_parent().map(|b| (b, DominatesMemo::new(b)));
-        Some(Store { op, out, order: o.get_seq_num().get_order(), block })
+        Some(Store {
+            op,
+            out,
+            order: o.get_seq_num().get_order(),
+            block,
+        })
     }
 
     /// Does the store come before `op`: earlier in its block, or in a block
     /// that dominates `op`'s?
     fn before(&mut self, data: &Funcdata, op: OpId) -> bool {
-        let Some((o, q)) = data.obank().get(op).and_then(|o| Some((o, o.get_parent()?))) else {
+        let Some((o, q)) = data
+            .obank()
+            .get(op)
+            .and_then(|o| Some((o, o.get_parent()?)))
+        else {
             return false;
         };
         match &self.block {
@@ -292,7 +308,10 @@ impl Store {
         let Some(wv) = data.vbank().get(w) else {
             return false;
         };
-        w != self.out && !wv.get_def().is_some_and(|d| d == self.op || self.before(data, d))
+        w != self.out
+            && !wv
+                .get_def()
+                .is_some_and(|d| d == self.op || self.before(data, d))
     }
 
     /// Is `r` a live `INDIRECT` of `w` after the store?

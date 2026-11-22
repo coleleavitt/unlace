@@ -4,7 +4,7 @@
 //! real `rustc 1.90` binary (`private/FakeCrypt`), so the escaped forms the
 //! matcher has to survive are the ones it actually meets.
 
-use super::{is_cleanup_call_name, normalize_rust_name, CLEANUP_FUNCTIONS};
+use super::{CLEANUP_FUNCTIONS, is_cleanup_call_name, normalize_rust_name};
 
 #[test]
 fn legacy_escapes_and_generic_args_normalize_to_the_bare_path() {
@@ -98,7 +98,11 @@ fn c_and_user_rust_names_are_never_matched() {
 #[test]
 fn the_list_is_already_normalized() {
     for entry in CLEANUP_FUNCTIONS {
-        assert_eq!(&normalize_rust_name(entry), entry, "{entry} must be canonical");
+        assert_eq!(
+            &normalize_rust_name(entry),
+            entry,
+            "{entry} must be canonical"
+        );
         assert!(is_cleanup_call_name(entry), "{entry} must match itself");
     }
     // Oxidizer's C-name entries stay out (see the module doc).
@@ -145,7 +149,12 @@ fn malformed_names_terminate() {
 
 #[test]
 fn uppercase_hash_shaped_user_calls_are_not_cleanup() {
-    for suffix in ["hABCDEF0123456789", "hAbCdE0123456789f", "h0123456789abcdez", "h12"] {
+    for suffix in [
+        "hABCDEF0123456789",
+        "hAbCdE0123456789f",
+        "h0123456789abcdez",
+        "h12",
+    ] {
         let name = format!("core::ptr::drop_in_place::{suffix}");
         assert_eq!(normalize_rust_name(&name), name);
         assert!(!is_cleanup_call_name(&name));

@@ -89,10 +89,13 @@ impl BeJoinPassMode {
             other => {
                 return Err(KunaError::parse(format!(
                     "Unknown bejoinpass value: {other} (expected off|whole|high)"
-                )))
+                )));
             }
         };
-        Ok((mode, format!("Handed-back register pair join set to {}", mode.as_str())))
+        Ok((
+            mode,
+            format!("Handed-back register pair join set to {}", mode.as_str()),
+        ))
     }
 }
 
@@ -133,11 +136,23 @@ fn strip(data: &Funcdata, vn: VarnodeId) -> VarnodeId {
 /// [`strip`], and how many of the moves it stripped put a value back into
 /// `vn`'s own register from another location.
 fn strip_counted(data: &Funcdata, mut vn: VarnodeId) -> (VarnodeId, usize) {
-    let home = data.vbank().get(vn).map(|v| (v.get_addr().clone(), v.get_size()));
-    let at = |v: VarnodeId| data.vbank().get(v).map(|v| (v.get_addr().clone(), v.get_size()));
+    let home = data
+        .vbank()
+        .get(vn)
+        .map(|v| (v.get_addr().clone(), v.get_size()));
+    let at = |v: VarnodeId| {
+        data.vbank()
+            .get(v)
+            .map(|v| (v.get_addr().clone(), v.get_size()))
+    };
     let mut copies = 0;
     for _ in 0..data.vbank().num_varnodes() {
-        let Some(op) = data.vbank().get(vn).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d)) else {
+        let Some(op) = data
+            .vbank()
+            .get(vn)
+            .and_then(|v| v.get_def())
+            .and_then(|d| data.obank().get(d))
+        else {
             return (vn, copies);
         };
         match op.code() {
@@ -165,7 +180,13 @@ fn phi(data: &Funcdata, vn: VarnodeId) -> Option<OpId> {
 /// Walk `hi` and `lo` back together through moves and phis, calling `end` on
 /// each pair of sources. `false` when a walk cannot be followed or `end`
 /// refuses a pair.
-fn lockstep(data: &Funcdata, hi: VarnodeId, lo: VarnodeId, depth: u32, end: &mut dyn FnMut(VarnodeId, VarnodeId) -> bool) -> bool {
+fn lockstep(
+    data: &Funcdata,
+    hi: VarnodeId,
+    lo: VarnodeId,
+    depth: u32,
+    end: &mut dyn FnMut(VarnodeId, VarnodeId) -> bool,
+) -> bool {
     if depth == 0 {
         return false;
     }
@@ -185,27 +206,51 @@ fn lockstep(data: &Funcdata, hi: VarnodeId, lo: VarnodeId, depth: u32, end: &mut
 /// The call whose output `hi` and `lo` are, high word first in the model's
 /// pair: either both of its trials' INDIRECT creations, before its output is
 /// built, or the most and least significant words of the output it was given.
-fn handing_call(data: &Funcdata, hi: VarnodeId, lo: VarnodeId, pair: &crate::kuna_bejoin::WidePair) -> Option<(OpId, bool)> {
-    let def = |vn: VarnodeId| data.vbank().get(vn)?.get_def().and_then(|d| data.obank().get(d).map(|o| (d, o)));
+fn handing_call(
+    data: &Funcdata,
+    hi: VarnodeId,
+    lo: VarnodeId,
+    pair: &crate::kuna_bejoin::WidePair,
+) -> Option<(OpId, bool)> {
+    let def = |vn: VarnodeId| {
+        data.vbank()
+            .get(vn)?
+            .get_def()
+            .and_then(|d| data.obank().get(d).map(|o| (d, o)))
+    };
     let (_, hop) = def(hi)?;
     let (_, lop) = def(lo)?;
     let at = |vn: VarnodeId, loc: &(unlace_base::address::Address, int4)| {
-        data.vbank().get(vn).is_some_and(|v| v.get_addr() == &loc.0 && v.get_size() == loc.1)
+        data.vbank()
+            .get(vn)
+            .is_some_and(|v| v.get_addr() == &loc.0 && v.get_size() == loc.1)
     };
     if hop.is_indirect_creation() && lop.is_indirect_creation() {
         let call = |o: &crate::op::PcodeOp| {
             let iop = data.vbank().get(o.get_in(1)?)?;
             let c = OpId::from(slotmap::KeyData::from_ffi(iop.get_offset()));
-            matches!(data.obank().get(c)?.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND).then_some(c)
+            matches!(
+                data.obank().get(c)?.code(),
+                OpCode::CPUI_CALL | OpCode::CPUI_CALLIND
+            )
+            .then_some(c)
         };
         let c = call(hop)?;
         return (call(lop)? == c && at(hi, &pair.hi) && at(lo, &pair.lo)).then_some((c, false));
     }
-    if hop.code() != OpCode::CPUI_SUBPIECE || lop.code() != OpCode::CPUI_SUBPIECE || hop.get_in(0) != lop.get_in(0) {
+    if hop.code() != OpCode::CPUI_SUBPIECE
+        || lop.code() != OpCode::CPUI_SUBPIECE
+        || hop.get_in(0) != lop.get_in(0)
+    {
         return None;
     }
     let whole = hop.get_in(0)?;
-    let offset = |o: &crate::op::PcodeOp| data.vbank().get(o.get_in(1)?).filter(|c| c.is_constant()).map(|c| c.get_offset());
+    let offset = |o: &crate::op::PcodeOp| {
+        data.vbank()
+            .get(o.get_in(1)?)
+            .filter(|c| c.is_constant())
+            .map(|c| c.get_offset())
+    };
     let w = data.vbank().get(whole)?;
     let call = w.get_def()?;
     let code = data.obank().get(call)?.code();
@@ -213,8 +258,14 @@ fn handing_call(data: &Funcdata, hi: VarnodeId, lo: VarnodeId, pair: &crate::kun
         && matches!(code, OpCode::CPUI_CALL | OpCode::CPUI_CALLIND)
         && offset(hop)? == pair.lo.1 as u64
         && offset(lop)? == 0
-        && data.vbank().get(hi).is_some_and(|v| v.get_size() == pair.hi.1)
-        && data.vbank().get(lo).is_some_and(|v| v.get_size() == pair.lo.1))
+        && data
+            .vbank()
+            .get(hi)
+            .is_some_and(|v| v.get_size() == pair.hi.1)
+        && data
+            .vbank()
+            .get(lo)
+            .is_some_and(|v| v.get_size() == pair.lo.1))
     .then_some((call, true))
 }
 
@@ -225,28 +276,40 @@ fn handing_call(data: &Funcdata, hi: VarnodeId, lo: VarnodeId, pair: &crate::kun
 /// the pair is moved back), the second register is made inactive instead. Runs after the
 /// trials are scored, before the output map is derived.
 pub fn settle_return(data: &Funcdata, active: &mut ParamActive, return_ops: &[OpId]) -> bool {
-    let Some(pair) = word_pair(data) else { return false };
+    let Some(pair) = word_pair(data) else {
+        return false;
+    };
     if data.get_func_proto().is_output_locked() {
         return false;
     }
     let proven = crate::kuna_bejoin::proven_here(data);
-    let (Some(hi), Some(lo)) = (trial_on(active, &pair.hi), trial_on(active, &pair.lo)) else { return false };
+    let (Some(hi), Some(lo)) = (trial_on(active, &pair.hi), trial_on(active, &pair.lo)) else {
+        return false;
+    };
     let other = |i: int4| i != hi && i != lo;
     if (0..active.get_num_trials()).any(|i| active.get_trial(i).is_active() && other(i))
         || (!proven && !(active.get_trial(hi).is_active() && active.get_trial(lo).is_active()))
     {
         return false;
     }
-    let (hslot, lslot) = (active.get_trial(hi).get_slot(), active.get_trial(lo).get_slot());
+    let (hslot, lslot) = (
+        active.get_trial(hi).get_slot(),
+        active.get_trial(lo).get_slot(),
+    );
     let mut live = 0;
     let mut high_moved = false;
     for &op in return_ops {
-        let Some(ret) = data.obank().get(op) else { return false };
-        if ret.is_dead() || ret.get_halt_type() != 0 || crate::kuna_bejoin::never_reached(data, op) {
+        let Some(ret) = data.obank().get(op) else {
+            return false;
+        };
+        if ret.is_dead() || ret.get_halt_type() != 0 || crate::kuna_bejoin::never_reached(data, op)
+        {
             continue;
         }
         live += 1;
-        let (Some(h), Some(l)) = (ret.get_in(hslot), ret.get_in(lslot)) else { return false };
+        let (Some(h), Some(l)) = (ret.get_in(hslot), ret.get_in(lslot)) else {
+            return false;
+        };
         high_moved |= strip_counted(data, h).1 > strip_counted(data, l).1;
         let proven_call = &mut |h: VarnodeId, l: VarnodeId| match handing_call(data, h, l, &pair) {
             Some((_, true)) => true,
@@ -286,10 +349,20 @@ pub fn settle_return(data: &Funcdata, active: &mut ParamActive, return_ops: &[Op
 /// ABI's order when the function's RETURN reads the call's two registers, untouched, as
 /// the high and low words of the pair it returns. `trialvn` holds each trial's INDIRECT
 /// creation by original slot, as in `buildOutputFromTrials`.
-pub fn call_order(data: &Funcdata, active: &ParamActive, trialvn: &[Option<VarnodeId>], order: (int4, int4)) -> (int4, int4) {
-    let Some(pair) = word_pair(data) else { return order };
+pub fn call_order(
+    data: &Funcdata,
+    active: &ParamActive,
+    trialvn: &[Option<VarnodeId>],
+    order: (int4, int4),
+) -> (int4, int4) {
+    let Some(pair) = word_pair(data) else {
+        return order;
+    };
     let abi = active.join_pair_order();
-    if order == abi || active.get_num_trials() != 2 || !(0..2).all(|i| active.get_trial(i).is_used()) {
+    if order == abi
+        || active.get_num_trials() != 2
+        || !(0..2).all(|i| active.get_trial(i).is_used())
+    {
         return order;
     }
     let creation = |i: int4, loc: &(unlace_base::address::Address, int4)| {
@@ -299,19 +372,30 @@ pub fn call_order(data: &Funcdata, active: &ParamActive, trialvn: &[Option<Varno
         }
         trialvn.get((t.get_slot() - 1) as usize).copied().flatten()
     };
-    let (Some(hv), Some(lv)) = (creation(abi.1, &pair.hi), creation(abi.0, &pair.lo)) else { return order };
+    let (Some(hv), Some(lv)) = (creation(abi.1, &pair.hi), creation(abi.0, &pair.lo)) else {
+        return order;
+    };
     let returned = data.obank().iter_code(OpCode::CPUI_RETURN).any(|op| {
-        let Some(ret) = data.obank().get(op) else { return false };
+        let Some(ret) = data.obank().get(op) else {
+            return false;
+        };
         if ret.is_dead() || ret.get_halt_type() != 0 || ret.num_input() != 2 {
             return false;
         }
-        let Some(piece) = ret.get_in(1).and_then(|v| data.vbank().get(v)).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d)) else {
+        let Some(piece) = ret
+            .get_in(1)
+            .and_then(|v| data.vbank().get(v))
+            .and_then(|v| v.get_def())
+            .and_then(|d| data.obank().get(d))
+        else {
             return false;
         };
         if piece.code() != OpCode::CPUI_PIECE {
             return false;
         }
-        let (Some(h), Some(l)) = (piece.get_in(0), piece.get_in(1)) else { return false };
+        let (Some(h), Some(l)) = (piece.get_in(0), piece.get_in(1)) else {
+            return false;
+        };
         let mut found = false;
         lockstep(data, h, l, MAX_DEPTH, &mut |a, b| {
             found |= a == hv && b == lv;
@@ -319,9 +403,5 @@ pub fn call_order(data: &Funcdata, active: &ParamActive, trialvn: &[Option<Varno
         });
         found
     });
-    if returned {
-        abi
-    } else {
-        order
-    }
+    if returned { abi } else { order }
 }

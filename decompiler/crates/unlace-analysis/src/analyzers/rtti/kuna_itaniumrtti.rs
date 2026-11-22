@@ -99,7 +99,10 @@ use super::vftable::TextRanges;
 const ABI_TYPEINFO_VTABLES: [(&str, Flavor); 3] = [
     ("_ZTVN10__cxxabiv117__class_type_infoE", Flavor::Class),
     ("_ZTVN10__cxxabiv120__si_class_type_infoE", Flavor::SiClass),
-    ("_ZTVN10__cxxabiv121__vmi_class_type_infoE", Flavor::VmiClass),
+    (
+        "_ZTVN10__cxxabiv121__vmi_class_type_infoE",
+        Flavor::VmiClass,
+    ),
 ];
 
 /// The Itanium typeinfo-name symbol prefix (`_ZTI<mangled-name>`), the second
@@ -140,7 +143,10 @@ impl Flavor {
     fn from_abi_vtable(name: &str) -> Option<Flavor> {
         // A versioned dynamic symbol can carry an `@VER` suffix in some readers.
         let bare = name.split('@').next().unwrap_or(name);
-        ABI_TYPEINFO_VTABLES.iter().find(|(s, _)| *s == bare).map(|(_, f)| *f)
+        ABI_TYPEINFO_VTABLES
+            .iter()
+            .find(|(s, _)| *s == bare)
+            .map(|(_, f)| *f)
     }
 }
 
@@ -236,7 +242,11 @@ pub(super) fn recover(ctx: &AnalysisCtx) -> Option<Recovery> {
     let rk = RefKind::new(
         ctx.file.is_64(),
         0,
-        if ctx.file.is_little_endian() { End::Little } else { End::Big },
+        if ctx.file.is_little_endian() {
+            End::Little
+        } else {
+            End::Big
+        },
     );
     // Discovery first, and bail before building anything else: a plain-C binary
     // and a `-fno-rtti` C++ build both have no typeinfo, and that is the common
@@ -256,7 +266,9 @@ pub(super) fn recover(ctx: &AnalysisCtx) -> Option<Recovery> {
     let macho_sections = macho.as_ref().map(|m| m.sections(ctx.file));
     let img = match &macho_sections {
         None => ImageBytes::new(ctx.file),
-        Some(sections) => ImageBytes::from_spans(sections.iter().map(|(a, d)| (*a, d.as_slice())).collect()),
+        Some(sections) => {
+            ImageBytes::from_spans(sections.iter().map(|(a, d)| (*a, d.as_slice())).collect())
+        }
     };
     if !copied.is_empty() {
         let points: HashMap<u64, Flavor> = copied.iter().map(|&(a, f)| (a + 2 * ptr, f)).collect();
@@ -279,7 +291,11 @@ pub(super) fn recover(ctx: &AnalysisCtx) -> Option<Recovery> {
     };
     let subs = recover_subvtables(&img, &rk, &text, &relocated, &typeinfos);
     resolve_virtual_bases(&img, &rk, &mut typeinfos, &subs);
-    Some(Recovery { typeinfos, subs, rk })
+    Some(Recovery {
+        typeinfos,
+        subs,
+        rk,
+    })
 }
 
 /// The `__cxxabiv1` typeinfo vtables a non-PIE executable defines itself: its
@@ -312,7 +328,13 @@ impl MachoSlots {
         let named_binds = if fixups.is_chained() {
             fixups
                 .binds()
-                .map(|(va, bind)| (va, String::from_utf8_lossy(&bind.name).into_owned(), Some(bind.addend)))
+                .map(|(va, bind)| {
+                    (
+                        va,
+                        String::from_utf8_lossy(&bind.name).into_owned(),
+                        Some(bind.addend),
+                    )
+                })
                 .collect()
         } else {
             let mut binds: Vec<(u64, String, Option<i64>)> =
@@ -323,7 +345,10 @@ impl MachoSlots {
             binds.sort_by_key(|(va, ..)| *va);
             binds
         };
-        MachoSlots { fixups, named_binds }
+        MachoSlots {
+            fixups,
+            named_binds,
+        }
     }
 
     /// The sections as dyld leaves them, sorted by address.
@@ -340,8 +365,12 @@ impl MachoSlots {
             let mut data = data.to_vec();
             if self.fixups.is_chained() {
                 let mut patch = |va: u64, value: u64| {
-                    let Some(at) = va.checked_sub(addr).and_then(|at| usize::try_from(at).ok()) else { return };
-                    if let Some(slot) = at.checked_add(width).and_then(|end| data.get_mut(at..end)) {
+                    let Some(at) = va.checked_sub(addr).and_then(|at| usize::try_from(at).ok())
+                    else {
+                        return;
+                    };
+                    if let Some(slot) = at.checked_add(width).and_then(|end| data.get_mut(at..end))
+                    {
                         slot.copy_from_slice(&value.to_le_bytes()[..width]);
                     }
                 };
@@ -363,13 +392,17 @@ impl MachoSlots {
     fn discover_typeinfos(&self, file: &object::File, ptr: u64) -> Vec<(u64, Option<Flavor>)> {
         let mut found: HashMap<u64, Option<Flavor>> = HashMap::new();
         for (va, name, addend) in &self.named_binds {
-            let Some(flavor) = name.strip_prefix('_').and_then(Flavor::from_abi_vtable) else { continue };
+            let Some(flavor) = name.strip_prefix('_').and_then(Flavor::from_abi_vtable) else {
+                continue;
+            };
             if addend.is_none_or(|a| a == 2 * ptr as i64) {
                 found.insert(*va, Some(flavor));
             }
         }
         for sym in file.symbols() {
-            let Some(name) = sym.name().ok().and_then(|n| n.strip_prefix('_')) else { continue };
+            let Some(name) = sym.name().ok().and_then(|n| n.strip_prefix('_')) else {
+                continue;
+            };
             if name.starts_with(ZTI_PREFIX) && !name.contains("__cxxabiv1") && sym.address() != 0 {
                 found.entry(sym.address()).or_insert(None);
             }
@@ -392,8 +425,11 @@ pub(super) fn recovered_classes(ctx: &AnalysisCtx) -> Vec<ClassVtables> {
 /// reads.
 fn class_vtables(typeinfos: &[TypeInfo], subs: &[SubVtable]) -> Vec<ClassVtables> {
     let by_addr: HashMap<u64, &TypeInfo> = typeinfos.iter().map(|t| (t.addr, t)).collect();
-    let index: HashMap<u64, usize> =
-        typeinfos.iter().enumerate().map(|(i, t)| (t.addr, i)).collect();
+    let index: HashMap<u64, usize> = typeinfos
+        .iter()
+        .enumerate()
+        .map(|(i, t)| (t.addr, i))
+        .collect();
     typeinfos
         .iter()
         .map(|ti| {
@@ -508,7 +544,9 @@ fn decode_typeinfos(
         // Apple's arm64 ABI sets bit 63 of the name pointer on a type whose
         // typeinfo may be duplicated across images (compared by string, not by
         // address); the address is the low 63 bits.
-        let Some(name_addr) = read_ptr(img, rk, addr + ptr).map(|p| if ptr == 8 { p & !(1 << 63) } else { p }) else {
+        let Some(name_addr) =
+            read_ptr(img, rk, addr + ptr).map(|p| if ptr == 8 { p & !(1 << 63) } else { p })
+        else {
             continue;
         };
         let Some(mangled) = img.read_cstr(name_addr, MAX_NAME) else {
@@ -529,7 +567,15 @@ fn decode_typeinfos(
     for (addr, flavor, name_addr, class, demangled) in named {
         let flavor = flavor.unwrap_or_else(|| sniff_flavor(img, rk, addr, &accepted));
         let (bases, virtual_bases, size) = read_bases(img, rk, addr, flavor, &accepted);
-        out.push(TypeInfo { addr, name_addr, class, demangled, bases, virtual_bases, size });
+        out.push(TypeInfo {
+            addr,
+            name_addr,
+            class,
+            demangled,
+            bases,
+            virtual_bases,
+            size,
+        });
     }
     out
 }
@@ -575,7 +621,11 @@ fn read_bases(
         Flavor::SiClass => {
             let base = read_ptr(img, rk, addr + 2 * ptr).filter(|b| accepted.contains(b));
             // An si base is by definition at displacement 0.
-            (base.map(|b| vec![(b, 0)]).unwrap_or_default(), Vec::new(), 3 * ptr)
+            (
+                base.map(|b| vec![(b, 0)]).unwrap_or_default(),
+                Vec::new(),
+                3 * ptr,
+            )
         }
         Flavor::VmiClass => {
             let Some(count) = read_u32(img, rk, addr + 2 * ptr + 4) else {
@@ -617,12 +667,21 @@ fn read_bases(
 /// typeinfo names virtual base V at vtable offset `slot`, V lies at `disp` plus
 /// the signed word at `slot` from the address point of the sub-vtable D keeps
 /// for that subobject (offset-to-top `-disp`).
-fn resolve_virtual_bases(img: &ImageBytes, rk: &RefKind, typeinfos: &mut [TypeInfo], subs: &[SubVtable]) {
-    let shape: HashMap<u64, (Vec<(u64, i64)>, Vec<(u64, i64)>)> =
-        typeinfos.iter().map(|t| (t.addr, (t.bases.clone(), t.virtual_bases.clone()))).collect();
+fn resolve_virtual_bases(
+    img: &ImageBytes,
+    rk: &RefKind,
+    typeinfos: &mut [TypeInfo],
+    subs: &[SubVtable],
+) {
+    let shape: HashMap<u64, (Vec<(u64, i64)>, Vec<(u64, i64)>)> = typeinfos
+        .iter()
+        .map(|t| (t.addr, (t.bases.clone(), t.virtual_bases.clone())))
+        .collect();
     for ti in typeinfos.iter_mut() {
         let vbase_at = |disp: i64, slot: i64| -> Option<i64> {
-            let sub = subs.iter().find(|s| s.typeinfo == ti.addr && s.offset_to_top == -disp)?;
+            let sub = subs
+                .iter()
+                .find(|s| s.typeinfo == ti.addr && s.offset_to_top == -disp)?;
             read_ptr(img, rk, sub.first_slot.wrapping_add(slot as u64)).map(|v| sign_extend(v, rk))
         };
         let mut found: Vec<(u64, i64)> = ti.bases.clone();
@@ -632,7 +691,9 @@ fn resolve_virtual_bases(img: &ImageBytes, rk: &RefKind, typeinfos: &mut [TypeIn
             if !seen.insert(b) || depth > MAX_BASES {
                 continue;
             }
-            let Some((nonvirtual, virtuals)) = shape.get(&b) else { continue };
+            let Some((nonvirtual, virtuals)) = shape.get(&b) else {
+                continue;
+            };
             for &(b2, d2) in nonvirtual {
                 work.push((b2, disp + d2, depth + 1));
             }
@@ -676,7 +737,10 @@ fn recover_subvtables(
         };
         // Reject a pointer that lies INSIDE a typeinfo object: a base-class pointer
         // in an si/vmi typeinfo also holds a typeinfo address, but is not a vtable.
-        if typeinfos.iter().any(|t| header >= t.addr && header < t.addr + t.size) {
+        if typeinfos
+            .iter()
+            .any(|t| header >= t.addr && header < t.addr + t.size)
+        {
             continue;
         }
         let Some(raw_top) = read_ptr(img, rk, header) else {
@@ -693,7 +757,13 @@ fn recover_subvtables(
         if !slots.iter().any(|s| s.is_some()) {
             continue;
         }
-        out.push(SubVtable { header, first_slot, offset_to_top, typeinfo: ti_addr, slots });
+        out.push(SubVtable {
+            header,
+            first_slot,
+            offset_to_top,
+            typeinfo: ti_addr,
+            slots,
+        });
     }
     out.sort_by_key(|s| s.header);
     out
@@ -782,7 +852,11 @@ fn emit(typeinfos: &[TypeInfo], subs: &[SubVtable], rk: &RefKind, out: &mut Anal
     }
 
     for (addr, name) in attribute_slots(typeinfos, &labelled) {
-        out.symbols.push(SymFact { addr, name, kind: SymKind::Function });
+        out.symbols.push(SymFact {
+            addr,
+            name,
+            kind: SymKind::Function,
+        });
     }
 }
 
@@ -805,11 +879,7 @@ fn data_label(class: &str, suffix: &str) -> String {
 /// straight off the recovered inheritance displacements (the datum the MSVC sibling
 /// pass discards with its `pmd` fields). A displacement no declared base claims
 /// falls back to the raw offset so the label stays unique.
-fn subvtable_suffix(
-    ti: &TypeInfo,
-    sub: &SubVtable,
-    by_addr: &HashMap<u64, &TypeInfo>,
-) -> String {
+fn subvtable_suffix(ti: &TypeInfo, sub: &SubVtable, by_addr: &HashMap<u64, &TypeInfo>) -> String {
     if sub.offset_to_top == 0 {
         return "vtable".to_string();
     }
@@ -867,8 +937,10 @@ fn attribute_slots(
     subs: &[(&SubVtable, &str, String)],
 ) -> Vec<(u64, String)> {
     let by_addr: HashMap<u64, &TypeInfo> = typeinfos.iter().map(|t| (t.addr, t)).collect();
-    let ancestors: HashMap<u64, HashSet<u64>> =
-        typeinfos.iter().map(|t| (t.addr, ancestors_of(t.addr, &by_addr))).collect();
+    let ancestors: HashMap<u64, HashSet<u64>> = typeinfos
+        .iter()
+        .map(|t| (t.addr, ancestors_of(t.addr, &by_addr)))
+        .collect();
 
     // fn addr -> the claims on it, as (typeinfo addr, class, suffix, slot index).
     let mut claims: HashMap<u64, Vec<(u64, &str, &str, usize)>> = HashMap::new();
@@ -1003,7 +1075,10 @@ mod tests {
             Some(Flavor::VmiClass)
         );
         // A non-class type-information flavour names no class.
-        assert_eq!(Flavor::from_abi_vtable("_ZTVN10__cxxabiv123__fundamental_type_infoE"), None);
+        assert_eq!(
+            Flavor::from_abi_vtable("_ZTVN10__cxxabiv123__fundamental_type_infoE"),
+            None
+        );
         assert_eq!(Flavor::from_abi_vtable("_ZTV5Shape"), None);
     }
 
@@ -1018,9 +1093,8 @@ mod tests {
         rodata[0x10..0x18].copy_from_slice(b"6Circle\0");
         // .data.rel.ro @ 0x7000.
         let mut rel = vec![0u8; 0x100];
-        let put = |v: &mut [u8], off: usize, x: u64| {
-            v[off..off + 8].copy_from_slice(&x.to_le_bytes())
-        };
+        let put =
+            |v: &mut [u8], off: usize, x: u64| v[off..off + 8].copy_from_slice(&x.to_le_bytes());
         // Shape vtable object @0x7000: top=0, ti=0x7080, slots 0x1000, 0x1010.
         put(&mut rel, 0x00, 0);
         put(&mut rel, 0x08, 0x7080);
@@ -1044,8 +1118,10 @@ mod tests {
     fn decode_synth() -> (Vec<TypeInfo>, Vec<SubVtable>, RefKind) {
         let (rodata, rel, rk) = synth();
         let img = ImageBytes::from_spans(vec![(0x5000, &rodata), (0x7000, &rel)]);
-        let cands =
-            vec![(0x7080u64, Some(Flavor::Class)), (0x70a0u64, Some(Flavor::SiClass))];
+        let cands = vec![
+            (0x7080u64, Some(Flavor::Class)),
+            (0x70a0u64, Some(Flavor::SiClass)),
+        ];
         let tis = decode_typeinfos(&img, &rk, &cands);
         let text = TextRanges::for_test(vec![(0x1000, 0x2000)]);
         let subs = recover_subvtables(&img, &rk, &text, &HashSet::new(), &tis);
@@ -1083,8 +1159,7 @@ mod tests {
                 (s, ti.class.as_str(), subvtable_suffix(ti, s, &by_addr))
             })
             .collect();
-        let named: HashMap<u64, String> =
-            attribute_slots(&tis, &labelled).into_iter().collect();
+        let named: HashMap<u64, String> = attribute_slots(&tis, &labelled).into_iter().collect();
         assert_eq!(named[&0x1000], "Shape::vfunc_0");
         assert_eq!(named[&0x1020], "Circle::vfunc_0");
         // 0x1010 is slot 1 of BOTH vtables; Shape defines it, Circle inherits it.
@@ -1102,7 +1177,8 @@ mod tests {
         rodata[0x00..0x03].copy_from_slice(b"1B\0");
         rodata[0x10..0x13].copy_from_slice(b"1D\0");
         let mut rel = vec![0u8; 0x100];
-        let put = |v: &mut [u8], off: usize, x: u64| v[off..off + 8].copy_from_slice(&x.to_le_bytes());
+        let put =
+            |v: &mut [u8], off: usize, x: u64| v[off..off + 8].copy_from_slice(&x.to_le_bytes());
         put(&mut rel, 0x00, 0);
         put(&mut rel, 0x08, 0x7080);
         put(&mut rel, 0x10, 0x1000);
@@ -1121,7 +1197,10 @@ mod tests {
         put(&mut rel, 0xb8, 0x7080);
         put(&mut rel, 0xc0, (((-24i64) << 8) | 3) as u64);
         let img = ImageBytes::from_spans(vec![(0x5000, &rodata), (0x7000, &rel)]);
-        let cands = vec![(0x7080u64, Some(Flavor::Class)), (0x70a0u64, Some(Flavor::VmiClass))];
+        let cands = vec![
+            (0x7080u64, Some(Flavor::Class)),
+            (0x70a0u64, Some(Flavor::VmiClass)),
+        ];
         let mut tis = decode_typeinfos(&img, &rk, &cands);
         assert_eq!(tis[1].bases, vec![]);
         assert_eq!(tis[1].virtual_bases, vec![(0x7080, -24)]);
@@ -1130,8 +1209,14 @@ mod tests {
         resolve_virtual_bases(&img, &rk, &mut tis, &subs);
         assert_eq!(tis[1].bases, vec![(0x7080, 16)]);
         let by_addr: HashMap<u64, &TypeInfo> = tis.iter().map(|t| (t.addr, t)).collect();
-        let secondary = subs.iter().find(|s| s.typeinfo == 0x70a0 && s.offset_to_top == -16).unwrap();
-        assert_eq!(subvtable_suffix(&tis[1], secondary, &by_addr), "vtable_for_B");
+        let secondary = subs
+            .iter()
+            .find(|s| s.typeinfo == 0x70a0 && s.offset_to_top == -16)
+            .unwrap();
+        assert_eq!(
+            subvtable_suffix(&tis[1], secondary, &by_addr),
+            "vtable_for_B"
+        );
     }
 
     /// A secondary sub-vtable takes the NAME of the base subobject its
@@ -1158,8 +1243,9 @@ mod tests {
             virtual_bases: vec![],
             size: 56,
         };
-        let by_addr: HashMap<u64, &TypeInfo> =
-            [(shape.addr, &shape), (widget.addr, &widget)].into_iter().collect();
+        let by_addr: HashMap<u64, &TypeInfo> = [(shape.addr, &shape), (widget.addr, &widget)]
+            .into_iter()
+            .collect();
         let sub = SubVtable {
             header: 0x7000,
             first_slot: 0x7010,
@@ -1168,18 +1254,27 @@ mod tests {
             slots: vec![],
         };
         assert_eq!(subvtable_suffix(&widget, &sub, &by_addr), "vtable");
-        let secondary = SubVtable { offset_to_top: -16, ..sub.clone() };
+        let secondary = SubVtable {
+            offset_to_top: -16,
+            ..sub.clone()
+        };
         assert_eq!(
             subvtable_suffix(&widget, &secondary, &by_addr),
             "vtable_for_Drawable"
         );
         // A displacement no declared base claims keeps a unique, raw-offset label.
-        let orphan = SubVtable { offset_to_top: -32, ..sub };
+        let orphan = SubVtable {
+            offset_to_top: -32,
+            ..sub
+        };
         assert_eq!(subvtable_suffix(&widget, &orphan, &by_addr), "vtable_at_20");
         // A DATA label puts the class in the leaf (the printer emits a global by its
         // leaf name), while a namespace qualification is preserved as scope.
         assert_eq!(data_label("Widget", "vtable"), "Widget_vtable");
-        assert_eq!(data_label("leveldb::Env", "typeinfo"), "leveldb::Env_typeinfo");
+        assert_eq!(
+            data_label("leveldb::Env", "typeinfo"),
+            "leveldb::Env_typeinfo"
+        );
     }
 
     /// Distinct classes must stay distinct after sanitization — the defect an
@@ -1193,7 +1288,10 @@ mod tests {
         // Template arguments are FOLDED IN, never deleted.
         assert_eq!(sanitize_class_name("Vec<int>"), "Vec_int");
         assert_eq!(sanitize_class_name("Vec<double>"), "Vec_double");
-        assert_ne!(sanitize_class_name("Vec<int>"), sanitize_class_name("Vec<double>"));
+        assert_ne!(
+            sanitize_class_name("Vec<int>"),
+            sanitize_class_name("Vec<double>")
+        );
         // An anonymous namespace is not an identifier; it becomes one.
         assert_eq!(
             sanitize_class_name("(anonymous namespace)::Hidden"),

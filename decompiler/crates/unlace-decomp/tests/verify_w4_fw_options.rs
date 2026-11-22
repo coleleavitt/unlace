@@ -19,9 +19,9 @@
 use unlace_base::error::KunaError;
 use unlace_base::types::{int4, uint4};
 use unlace_decomp::options::{
-    split_datatype, ArchOption, ArchOptionContext, NamespaceStrategy, OptionDatabase,
+    ArchOption, ArchOptionContext, BraceCategory, BraceStyle, NamespaceStrategy, OptionDatabase,
     OptionExtraPop, OptionJumpTableMax, OptionMaxInstruction, OptionMaxLineWidth,
-    OptionSplitDatatypes, BraceCategory, BraceStyle,
+    OptionSplitDatatypes, split_datatype,
 };
 
 /// A minimal recording context: enough to observe the value handed to the
@@ -247,10 +247,12 @@ fn extrapop_width_overflow_value_matches_cpp() {
 fn maxlinewidth_in_range_bases_roundtrip() {
     let opt = OptionMaxLineWidth;
     for (input, want) in [("127", 127i32), ("0x7f", 127), ("0177", 127), ("+50", 50)] {
-        let mut g = Ctx { is_c_language: true, ..Default::default() };
-        opt.apply(&mut g, input, "", "").unwrap_or_else(|e| {
-            panic!("maxlinewidth {input:?} should parse: {}", e.explain())
-        });
+        let mut g = Ctx {
+            is_c_language: true,
+            ..Default::default()
+        };
+        opt.apply(&mut g, input, "", "")
+            .unwrap_or_else(|e| panic!("maxlinewidth {input:?} should parse: {}", e.explain()));
         assert!(
             g.log.iter().any(|s| *s == format!("max_line={want}")),
             "maxlinewidth {input:?} expected {want}, log={:?}",
@@ -258,7 +260,10 @@ fn maxlinewidth_in_range_bases_roundtrip() {
         );
     }
     // literal "-1" hits the sentinel and is rejected (C++ parses -1, val==-1).
-    let mut g = Ctx { is_c_language: true, ..Default::default() };
+    let mut g = Ctx {
+        is_c_language: true,
+        ..Default::default()
+    };
     let e = opt.apply(&mut g, "-1", "", "").unwrap_err();
     assert_eq!(e.explain(), "Must specify integer linewidth");
 }
@@ -273,8 +278,14 @@ fn maxlinewidth_in_range_bases_roundtrip() {
 fn dispatch_unknown_id_is_parse_error_and_stable() {
     let db1 = OptionDatabase::new();
     let db2 = OptionDatabase::new();
-    let mut g1 = Ctx { is_c_language: true, ..Default::default() };
-    let mut g2 = Ctx { is_c_language: true, ..Default::default() };
+    let mut g1 = Ctx {
+        is_c_language: true,
+        ..Default::default()
+    };
+    let mut g2 = Ctx {
+        is_c_language: true,
+        ..Default::default()
+    };
     let e1 = db1.set(&mut g1, 123_456_789, "", "", "").unwrap_err();
     let e2 = db2.set(&mut g2, 123_456_789, "", "", "").unwrap_err();
     assert_eq!(e1.explain(), "Unknown option");
@@ -388,7 +399,10 @@ fn above_u64_still_saturates_after_rework() {
 /// returns `Err("Must specify integer linewidth")`.
 #[test]
 fn maxlinewidth_nonnumeric_input_accepts_as_zero_like_cpp() {
-    let mut g = Ctx { is_c_language: true, ..Default::default() };
+    let mut g = Ctx {
+        is_c_language: true,
+        ..Default::default()
+    };
     let res = OptionMaxLineWidth.apply(&mut g, "abc", "", "");
     assert!(
         res.is_ok(),
@@ -442,7 +456,10 @@ fn extrapop_nonnumeric_input_accepts_as_zero_like_cpp() {
 /// case the port's model is correct for, and isolates F3 to the non-empty case.
 #[test]
 fn maxlinewidth_empty_input_errors_in_both() {
-    let mut g = Ctx { is_c_language: true, ..Default::default() };
+    let mut g = Ctx {
+        is_c_language: true,
+        ..Default::default()
+    };
     let res = OptionMaxLineWidth.apply(&mut g, "", "", "");
     assert!(
         res.is_err(),
@@ -559,7 +576,9 @@ fn jumptablemax_zero_and_nonnumeric_both_reject_via_zero_sentinel() {
     }
     // a real value still gets through and is stored.
     let mut g = Ctx::default();
-    OptionJumpTableMax.apply(&mut g, "5", "", "").expect("5 != 0");
+    OptionJumpTableMax
+        .apply(&mut g, "5", "", "")
+        .expect("5 != 0");
     assert_eq!(g.max_jumptable_size, 5);
 }
 

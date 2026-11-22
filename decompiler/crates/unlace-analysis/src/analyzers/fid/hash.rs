@@ -60,7 +60,9 @@ impl Default for Fnv1a64 {
 impl Fnv1a64 {
     /// `new FNV1a64MessageDigest()` — seeds the hash to the offset basis.
     pub fn new() -> Self {
-        Self { hashvalue: FNV_64_OFFSET_BASIS }
+        Self {
+            hashvalue: FNV_64_OFFSET_BASIS,
+        }
     }
 
     /// `update(byte input)`: `hashvalue ^= input & 0xff; hashvalue *= FNV_64_PRIME;`.
@@ -189,7 +191,11 @@ pub enum OpObject {
     /// `whole_operand` is `OperandType.isScalar(operandType)` (the scalar is the
     /// whole operand, not a sub-field); `is_address` is
     /// `OperandType.isAddress(operandType)`.
-    Scalar { signed: i64, whole_operand: bool, is_address: bool },
+    Scalar {
+        signed: i64,
+        whole_operand: bool,
+        is_address: bool,
+    },
     /// A register at the given register-space offset (`reg.getOffset()`).
     Register { offset: u64 },
     /// A code/data address object (hashed as a value-suppressed placeholder).
@@ -357,16 +363,16 @@ impl FidHasher {
 
                 for obj in &operand.objects {
                     match *obj {
-                        OpObject::Scalar { signed, whole_operand, is_address } => {
+                        OpObject::Scalar {
+                            signed,
+                            whole_operand,
+                            is_address,
+                        } => {
                             // `long val = scalar.getSignedValue();`
                             let mut val: i64 = signed;
                             // 4-way rule, in order:
-                            if has_relocation(
-                                &operand.value_mask,
-                                min_address,
-                                max_address,
-                                relocs,
-                            ) {
+                            if has_relocation(&operand.value_mask, min_address, max_address, relocs)
+                            {
                                 // (1) relocation-bound → placeholder.
                                 val = i64::from(FEEDDEAD);
                             } else if whole_operand {
@@ -388,9 +394,7 @@ impl FidHasher {
                             // `specificUpdate = specificUpdate + ((int) val + 1234567) * 67999;`
                             // The `(int) val` truncation of the 64-bit value is
                             // observable — reproduce it (`as i32`).
-                            let mixed = (val as i32)
-                                .wrapping_add(1234567)
-                                .wrapping_mul(67999);
+                            let mixed = (val as i32).wrapping_add(1234567).wrapping_mul(67999);
                             specific_update = specific_update.wrapping_add(mixed);
                             // `fullUpdate += 0xfeeddead;`  (the full hash never
                             // sees a scalar value).
@@ -400,9 +404,7 @@ impl FidHasher {
                             // `int val = reg.getOffset();` — Java `int`, so the
                             // 64-bit register offset truncates to 32 bits.
                             // `val = (val + 7654321) * 98777;`
-                            let val = (offset as i32)
-                                .wrapping_add(7654321)
-                                .wrapping_mul(98777);
+                            let val = (offset as i32).wrapping_add(7654321).wrapping_mul(98777);
                             // Registers are structural — into BOTH hashes.
                             full_update = full_update.wrapping_add(val);
                             specific_update = specific_update.wrapping_add(val);
@@ -411,9 +413,7 @@ impl FidHasher {
                             // Address object: placeholder value into both
                             // (the `obj instanceof Address` arm).
                             // `specificUpdate = specificUpdate + (0xfeeddead + 1234567) * 67999;`
-                            let mixed = FEEDDEAD
-                                .wrapping_add(1234567)
-                                .wrapping_mul(67999);
+                            let mixed = FEEDDEAD.wrapping_add(1234567).wrapping_mul(67999);
                             specific_update = specific_update.wrapping_add(mixed);
                             // `fullUpdate += 0xfeeddead;`
                             full_update = full_update.wrapping_add(FEEDDEAD);
@@ -428,8 +428,7 @@ impl FidHasher {
             // --- Mask the opcode bytes: `instructMask.applyMask(buffer, buffer)`.
             // An empty/absent mask is Ghidra's NullPointerException arm: fill the
             // whole code unit with 0xa5 (it cannot give reliable mask info).
-            if insn.fixed_mask.len() >= actual_number_read && !insn.fixed_mask.is_empty()
-            {
+            if insn.fixed_mask.len() >= actual_number_read && !insn.fixed_mask.is_empty() {
                 for i in 0..actual_number_read {
                     buffer[i] &= insn.fixed_mask[i];
                 }
@@ -442,7 +441,8 @@ impl FidHasher {
             // --- Feed the masked bytes to BOTH digests (AFTER the operand
             // updates above — the critical interleave invariant).
             self.full_digest.update_bytes(&buffer[..actual_number_read]);
-            self.specific_digest.update_bytes(&buffer[..actual_number_read]);
+            self.specific_digest
+                .update_bytes(&buffer[..actual_number_read]);
         }
 
         // `++codeUnitIndex;` — now a length, not the last index.
@@ -574,7 +574,11 @@ mod tests {
                 let mut fu = base;
                 for obj in &op.objects {
                     match *obj {
-                        OpObject::Scalar { signed, whole_operand, is_address } => {
+                        OpObject::Scalar {
+                            signed,
+                            whole_operand,
+                            is_address,
+                        } => {
                             let mut val = signed;
                             let _ = no_reloc;
                             if whole_operand {
@@ -594,16 +598,13 @@ mod tests {
                             fu = fu.wrapping_add(FEEDDEAD);
                         }
                         OpObject::Register { offset } => {
-                            let v = (offset as i32)
-                                .wrapping_add(7654321)
-                                .wrapping_mul(98777);
+                            let v = (offset as i32).wrapping_add(7654321).wrapping_mul(98777);
                             fu = fu.wrapping_add(v);
                             su = su.wrapping_add(v);
                         }
                         OpObject::Address => {
-                            su = su.wrapping_add(
-                                FEEDDEAD.wrapping_add(1234567).wrapping_mul(67999),
-                            );
+                            su =
+                                su.wrapping_add(FEEDDEAD.wrapping_add(1234567).wrapping_mul(67999));
                             fu = fu.wrapping_add(FEEDDEAD);
                         }
                     }

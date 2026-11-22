@@ -1,9 +1,9 @@
 //! Exact caller-side memory intervals of a completely decoded leaf callee.
 
+use slotmap::SecondaryMap;
 use unlace_base::address::Address;
 use unlace_base::space::spacetype;
 use unlace_num::opcodes::OpCode;
-use slotmap::SecondaryMap;
 
 use crate::context::{OpId, VarnodeId};
 use crate::fspec::{FuncCallSpecs, OFFSET_UNKNOWN};

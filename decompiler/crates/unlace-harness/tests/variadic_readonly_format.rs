@@ -1,5 +1,5 @@
-use unlace_harness::testfunction::run_test_files_with_specs;
 use std::path::PathBuf;
+use unlace_harness::testfunction::run_test_files_with_specs;
 
 #[test]
 fn variadic_format_evidence_requires_an_immutable_conversion_and_terminator() {

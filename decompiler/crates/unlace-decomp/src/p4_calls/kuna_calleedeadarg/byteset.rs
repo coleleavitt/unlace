@@ -40,7 +40,8 @@ impl ByteSet {
 
     /// The index of the first run that starts after `(idx, b)`.
     fn after(&self, idx: int4, b: u64) -> usize {
-        self.runs.partition_point(|&(i, first, _)| (i, first) <= (idx, b))
+        self.runs
+            .partition_point(|&(i, first, _)| (i, first) <= (idx, b))
     }
 
     pub(super) fn contains(&self, &(idx, b): &(int4, u64)) -> bool {
@@ -129,7 +130,8 @@ impl ByteSet {
             *self = other.clone();
             return;
         }
-        let mut merged: Vec<(int4, u64, u64)> = Vec::with_capacity(self.runs.len() + other.runs.len());
+        let mut merged: Vec<(int4, u64, u64)> =
+            Vec::with_capacity(self.runs.len() + other.runs.len());
         let (mut a, mut b) = (self.runs.iter().peekable(), other.runs.iter().peekable());
         loop {
             let next = match (a.peek(), b.peek()) {
@@ -153,7 +155,10 @@ impl ByteSet {
                 (None, None) => break,
             };
             match merged.last_mut() {
-                Some(last) if last.0 == next.0 && last.2.checked_add(1).is_none_or(|end| next.1 <= end) => {
+                Some(last)
+                    if last.0 == next.0
+                        && last.2.checked_add(1).is_none_or(|end| next.1 <= end) =>
+                {
                     last.2 = last.2.max(next.2);
                 }
                 _ => merged.push(next),
@@ -232,7 +237,9 @@ impl ByteSet {
 
     /// Every byte, in `(space index, offset)` order.
     pub(super) fn iter(&self) -> impl Iterator<Item = (int4, u64)> + '_ {
-        self.runs.iter().flat_map(|&(idx, first, last)| (first..=last).map(move |b| (idx, b)))
+        self.runs
+            .iter()
+            .flat_map(|&(idx, first, last)| (first..=last).map(move |b| (idx, b)))
     }
 }
 

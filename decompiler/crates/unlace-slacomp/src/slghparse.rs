@@ -40,16 +40,65 @@ pub const ACTIONON_ACTION: i32 = 1;
 /// `unlace_sleigh::opcodes::OpCode`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PcodeOpc {
-    IntAdd, IntSub, IntEqual, IntNotEqual, IntLess, IntLessEqual,
-    IntSless, IntSlessEqual, Int2Comp, IntNegate, IntXor, IntAnd, IntOr,
-    IntLeft, IntRight, IntSright, IntMult, IntDiv, IntSdiv, IntRem, IntSrem,
-    BoolNegate, BoolXor, BoolAnd, BoolOr,
-    FloatEqual, FloatNotEqual, FloatLess, FloatLessEqual,
-    FloatAdd, FloatSub, FloatMult, FloatDiv, FloatNeg, FloatAbs, FloatSqrt,
-    IntSext, IntZext, IntCarry, IntScarry, IntSborrow,
-    FloatFloat2Float, FloatInt2Float, FloatNan, FloatTrunc, FloatCeil,
-    FloatFloor, FloatRound, New, Popcount, Lzcount, Subpiece, Cpoolref,
-    Branch, Cbranch, BranchInd, Call, CallInd, Return,
+    IntAdd,
+    IntSub,
+    IntEqual,
+    IntNotEqual,
+    IntLess,
+    IntLessEqual,
+    IntSless,
+    IntSlessEqual,
+    Int2Comp,
+    IntNegate,
+    IntXor,
+    IntAnd,
+    IntOr,
+    IntLeft,
+    IntRight,
+    IntSright,
+    IntMult,
+    IntDiv,
+    IntSdiv,
+    IntRem,
+    IntSrem,
+    BoolNegate,
+    BoolXor,
+    BoolAnd,
+    BoolOr,
+    FloatEqual,
+    FloatNotEqual,
+    FloatLess,
+    FloatLessEqual,
+    FloatAdd,
+    FloatSub,
+    FloatMult,
+    FloatDiv,
+    FloatNeg,
+    FloatAbs,
+    FloatSqrt,
+    IntSext,
+    IntZext,
+    IntCarry,
+    IntScarry,
+    IntSborrow,
+    FloatFloat2Float,
+    FloatInt2Float,
+    FloatNan,
+    FloatTrunc,
+    FloatCeil,
+    FloatFloor,
+    FloatRound,
+    New,
+    Popcount,
+    Lzcount,
+    Subpiece,
+    Cpoolref,
+    Branch,
+    Cbranch,
+    BranchInd,
+    Call,
+    CallInd,
+    Return,
 }
 
 /// Constant-op constants the grammar passes to `pcode.createOpConst`
@@ -101,7 +150,13 @@ pub trait ParserActions {
     fn add_syntax(&mut self, ct: u32, syntax: &[u8]);
     fn new_operand(&mut self, ct: u32, nm: &[u8]);
     fn is_in_root(&self, ct: u32) -> bool;
-    fn build_constructor(&mut self, big: u32, pateq: Option<u32>, contvec: Option<Vec<u32>>, vec: u32);
+    fn build_constructor(
+        &mut self,
+        big: u32,
+        pateq: Option<u32>,
+        contvec: Option<Vec<u32>>,
+        vec: u32,
+    );
 
     // --- p-code sections ---
     fn standalone_section(&mut self, main: u32) -> u32;
@@ -159,7 +214,8 @@ pub trait ParserActions {
 
     // --- statements / expr / varnodes (all arena builders via the driver) ---
     fn pcode_new_local_definition(&mut self, name: &[u8], size: Option<u64>);
-    fn pcode_new_output(&mut self, islocal: bool, expr: u32, name: &[u8], size: Option<u64>) -> u32;
+    fn pcode_new_output(&mut self, islocal: bool, expr: u32, name: &[u8], size: Option<u64>)
+    -> u32;
     fn stmt_assign(&mut self, lhs: u32, expr: u32) -> u32;
     fn pcode_create_store(&mut self, star: u32, ptr: u32, val: u32) -> u32;
     fn pcode_create_user_op_noout(&mut self, sym: SymId, params: Vec<u32>) -> u32;
@@ -232,7 +288,14 @@ impl FieldQual {
     /// `new FieldQuality(name, low, high)` (slgh_compile.cc:102): defaults
     /// signext=false, flow=true, hex=true.
     fn new(name: Vec<u8>, low: u64, high: u64) -> FieldQual {
-        FieldQual { name, low, high, signext: false, flow: true, hex: true }
+        FieldQual {
+            name,
+            low,
+            high,
+            signext: false,
+            flow: true,
+            hex: true,
+        }
     }
 }
 
@@ -252,7 +315,13 @@ impl SpaceQual {
     /// `new SpaceQuality(name)` (slgh_compile.cc:87): defaults ramtype, size 0,
     /// wordsize 1, not default.
     fn new(name: Vec<u8>) -> SpaceQual {
-        SpaceQual { name, is_register: false, size: 0, wordsize: 1, isdefault: false }
+        SpaceQual {
+            name,
+            is_register: false,
+            size: 0,
+            wordsize: 1,
+            isdefault: false,
+        }
     }
 }
 
@@ -285,7 +354,10 @@ pub struct SleighParser {
 impl SleighParser {
     /// Construct a parser over the given (already-opened) scanner.
     pub fn new(scanner: SleighScanner) -> SleighParser {
-        SleighParser { scanner, lookahead: None }
+        SleighParser {
+            scanner,
+            lookahead: None,
+        }
     }
 
     /// Parse a whole `.slaspec`, driving the builders on `compiler`.
@@ -395,7 +467,7 @@ impl SleighParser {
             other => {
                 return Err(KunaError::parse(format!(
                     "SLEIGH: expected big/little endian, got {other:?}"
-                )))
+                )));
             }
         }
         self.expect(d, TokenKind::Char1(b';'))?;
@@ -454,7 +526,11 @@ impl SleighParser {
             match self.next(d)?.kind {
                 TokenKind::LittleKey => -1,
                 TokenKind::BigKey => 1,
-                other => return Err(KunaError::parse(format!("SLEIGH: bad token endian {other:?}"))),
+                other => {
+                    return Err(KunaError::parse(format!(
+                        "SLEIGH: bad token endian {other:?}"
+                    )));
+                }
             }
         } else {
             0
@@ -505,15 +581,33 @@ impl SleighParser {
         self.expect(d, TokenKind::Char1(b','))?;
         let high = self.expect_integer(d)?;
         self.expect(d, TokenKind::Char1(b')'))?;
-        d.trace(if context { "FieldQuality/ctx" } else { "FieldQuality" });
+        d.trace(if context {
+            "FieldQuality/ctx"
+        } else {
+            "FieldQuality"
+        });
         let mut qual = FieldQual::new(name, low, high);
         loop {
             match self.peek(d)? {
-                TokenKind::SignedKey => { self.next(d)?; d.trace("field.signext"); qual.signext = true; }
-                TokenKind::HexKey => { self.next(d)?; d.trace("field.hex"); qual.hex = true; }
-                TokenKind::DecKey => { self.next(d)?; d.trace("field.dec"); qual.hex = false; }
+                TokenKind::SignedKey => {
+                    self.next(d)?;
+                    d.trace("field.signext");
+                    qual.signext = true;
+                }
+                TokenKind::HexKey => {
+                    self.next(d)?;
+                    d.trace("field.hex");
+                    qual.hex = true;
+                }
+                TokenKind::DecKey => {
+                    self.next(d)?;
+                    d.trace("field.dec");
+                    qual.hex = false;
+                }
                 TokenKind::NoflowKey if context => {
-                    self.next(d)?; d.trace("field.noflow"); qual.flow = false;
+                    self.next(d)?;
+                    d.trace("field.noflow");
+                    qual.flow = false;
                 }
                 _ => break,
             }
@@ -537,9 +631,19 @@ impl SleighParser {
                     self.next(d)?;
                     self.expect(d, TokenKind::Char1(b'='))?;
                     match self.next(d)?.kind {
-                        TokenKind::RamKey => { d.trace("space.type=ram"); qual.is_register = false; }
-                        TokenKind::RegisterKey => { d.trace("space.type=register"); qual.is_register = true; }
-                        other => return Err(KunaError::parse(format!("SLEIGH: bad space type {other:?}"))),
+                        TokenKind::RamKey => {
+                            d.trace("space.type=ram");
+                            qual.is_register = false;
+                        }
+                        TokenKind::RegisterKey => {
+                            d.trace("space.type=register");
+                            qual.is_register = true;
+                        }
+                        other => {
+                            return Err(KunaError::parse(format!(
+                                "SLEIGH: bad space type {other:?}"
+                            )));
+                        }
                     }
                 }
                 TokenKind::SizeKey => {
@@ -697,12 +801,19 @@ impl SleighParser {
         d.push_with(ss, pateq, contblock);
         loop {
             match self.peek(d)? {
-                TokenKind::Char1(b'}') => { self.next(d)?; break; }
+                TokenKind::Char1(b'}') => {
+                    self.next(d)?;
+                    break;
+                }
                 TokenKind::DefineKey => self.after_define(d)?,
                 TokenKind::AttachKey => self.attach(d)?,
                 TokenKind::MacroKey => self.macrodef(d)?,
                 TokenKind::WithKey => self.withblock(d)?,
-                TokenKind::Eof => return Err(KunaError::parse("SLEIGH: EOF inside with-block".to_string())),
+                TokenKind::Eof => {
+                    return Err(KunaError::parse(
+                        "SLEIGH: EOF inside with-block".to_string(),
+                    ));
+                }
                 _ => self.constructor(d)?,
             }
         }
@@ -789,7 +900,7 @@ impl SleighParser {
             other => {
                 return Err(KunaError::parse(format!(
                     "SLEIGH: expected subtable start, got {other:?}"
-                )))
+                )));
             }
         };
         // `subtablestart ' '` (slghparse.y:288): absorb a leading run of
@@ -865,7 +976,7 @@ impl SleighParser {
                 other => {
                     return Err(KunaError::parse(format!(
                         "SLEIGH: unexpected token in display section: {other:?}"
-                    )))
+                    )));
                 }
             }
             first = false;
@@ -1286,13 +1397,21 @@ impl SleighParser {
     fn pequation_bp(&mut self, d: &mut dyn ParseDriver, min_bp: u8) -> KunaResult<u32> {
         let mut lhs = self.pequation_atom(d)?;
         loop {
-            let (lbp, op): (u8, fn(&mut dyn ParserActions, u32, u32) -> u32) =
-                match self.peek(d)? {
-                    TokenKind::Char1(b'|') => (1, |a, l, r| { a.trace("peq/Or"); a.peq_or(l, r) }),
-                    TokenKind::Char1(b';') => (2, |a, l, r| { a.trace("peq/Cat"); a.peq_cat(l, r) }),
-                    TokenKind::Char1(b'&') => (3, |a, l, r| { a.trace("peq/And"); a.peq_and(l, r) }),
-                    _ => break,
-                };
+            let (lbp, op): (u8, fn(&mut dyn ParserActions, u32, u32) -> u32) = match self.peek(d)? {
+                TokenKind::Char1(b'|') => (1, |a, l, r| {
+                    a.trace("peq/Or");
+                    a.peq_or(l, r)
+                }),
+                TokenKind::Char1(b';') => (2, |a, l, r| {
+                    a.trace("peq/Cat");
+                    a.peq_cat(l, r)
+                }),
+                TokenKind::Char1(b'&') => (3, |a, l, r| {
+                    a.trace("peq/And");
+                    a.peq_and(l, r)
+                }),
+                _ => break,
+            };
             if lbp < min_bp {
                 break;
             }
@@ -1420,7 +1539,9 @@ impl SleighParser {
                 d.trace("defineInvisibleOperand/sub");
                 match d.define_invisible_operand(sym) {
                     Some(id) => Ok(id),
-                    None => Err(KunaError::parse("invisible operand (subtable) failed".to_string())),
+                    None => Err(KunaError::parse(
+                        "invisible operand (subtable) failed".to_string(),
+                    )),
                 }
             }
             other => Err(KunaError::parse(format!(
@@ -1439,19 +1560,45 @@ impl SleighParser {
         loop {
             // %left table (slghparse.y:82-93): `|`=1, `^`=2, `&`=3, shifts=4,
             // `+`/`-`=5, `*`/`/`=6.
-            let (lbp, op): (u8, fn(&mut dyn ParserActions, u32, u32) -> u32) =
-                match self.peek(d)? {
-                    TokenKind::OpOr => (1, |a, l, r| { a.trace("pexp/Or"); a.pexp_or(l, r) }),
-                    TokenKind::OpXor => (2, |a, l, r| { a.trace("pexp/Xor"); a.pexp_xor(l, r) }),
-                    TokenKind::OpAnd => (3, |a, l, r| { a.trace("pexp/And"); a.pexp_and(l, r) }),
-                    TokenKind::OpLeft => (4, |a, l, r| { a.trace("pexp/LeftShift"); a.pexp_leftshift(l, r) }),
-                    TokenKind::OpRight => (4, |a, l, r| { a.trace("pexp/RightShift"); a.pexp_rightshift(l, r) }),
-                    TokenKind::Char1(b'+') => (5, |a, l, r| { a.trace("pexp/Plus"); a.pexp_plus(l, r) }),
-                    TokenKind::Char1(b'-') => (5, |a, l, r| { a.trace("pexp/Sub"); a.pexp_sub(l, r) }),
-                    TokenKind::Char1(b'*') => (6, |a, l, r| { a.trace("pexp/Mult"); a.pexp_mult(l, r) }),
-                    TokenKind::Char1(b'/') => (6, |a, l, r| { a.trace("pexp/Div"); a.pexp_div(l, r) }),
-                    _ => break,
-                };
+            let (lbp, op): (u8, fn(&mut dyn ParserActions, u32, u32) -> u32) = match self.peek(d)? {
+                TokenKind::OpOr => (1, |a, l, r| {
+                    a.trace("pexp/Or");
+                    a.pexp_or(l, r)
+                }),
+                TokenKind::OpXor => (2, |a, l, r| {
+                    a.trace("pexp/Xor");
+                    a.pexp_xor(l, r)
+                }),
+                TokenKind::OpAnd => (3, |a, l, r| {
+                    a.trace("pexp/And");
+                    a.pexp_and(l, r)
+                }),
+                TokenKind::OpLeft => (4, |a, l, r| {
+                    a.trace("pexp/LeftShift");
+                    a.pexp_leftshift(l, r)
+                }),
+                TokenKind::OpRight => (4, |a, l, r| {
+                    a.trace("pexp/RightShift");
+                    a.pexp_rightshift(l, r)
+                }),
+                TokenKind::Char1(b'+') => (5, |a, l, r| {
+                    a.trace("pexp/Plus");
+                    a.pexp_plus(l, r)
+                }),
+                TokenKind::Char1(b'-') => (5, |a, l, r| {
+                    a.trace("pexp/Sub");
+                    a.pexp_sub(l, r)
+                }),
+                TokenKind::Char1(b'*') => (6, |a, l, r| {
+                    a.trace("pexp/Mult");
+                    a.pexp_mult(l, r)
+                }),
+                TokenKind::Char1(b'/') => (6, |a, l, r| {
+                    a.trace("pexp/Div");
+                    a.pexp_div(l, r)
+                }),
+                _ => break,
+            };
             if lbp < min_bp {
                 break;
             }
@@ -1523,7 +1670,10 @@ impl SleighParser {
         let mut vec: Vec<u32> = Vec::new();
         loop {
             match self.peek(d)? {
-                TokenKind::Char1(b']') => { self.next(d)?; break; }
+                TokenKind::Char1(b']') => {
+                    self.next(d)?;
+                    break;
+                }
                 TokenKind::ContextSym => {
                     let sym = self.expect_symbol(d, TokenKind::ContextSym)?;
                     self.expect(d, TokenKind::Char1(b'='))?;
@@ -1531,7 +1681,9 @@ impl SleighParser {
                     self.expect(d, TokenKind::Char1(b';'))?;
                     d.trace("contextMod");
                     if !d.context_mod(&mut vec, sym, pe) {
-                        d.report_error("Cannot use 'inst_next' or 'inst_next2' to set context variable");
+                        d.report_error(
+                            "Cannot use 'inst_next' or 'inst_next2' to set context variable",
+                        );
                         return Err(KunaError::parse("bad context mod".to_string()));
                     }
                 }
@@ -1548,7 +1700,11 @@ impl SleighParser {
                     let cvar = self.expect_symbol(d, TokenKind::ContextSym)?;
                     self.expect(d, TokenKind::Char1(b')'))?;
                     self.expect(d, TokenKind::Char1(b';'))?;
-                    d.trace(if is_spec { "contextSet/spec" } else { "contextSet" });
+                    d.trace(if is_spec {
+                        "contextSet/spec"
+                    } else {
+                        "contextSet"
+                    });
                     d.context_set(&mut vec, sym, cvar);
                 }
                 TokenKind::OperandSym => {
@@ -1598,20 +1754,38 @@ impl SleighParser {
                 TokenKind::Char1(b'&') => (6, PcodeOpc::IntAnd, "pcode.createOp/CPUI_INT_AND"),
                 TokenKind::OpAnd => (6, PcodeOpc::IntAnd, "pcode.createOp/CPUI_INT_AND"),
                 TokenKind::OpEqual => (7, PcodeOpc::IntEqual, "pcode.createOp/CPUI_INT_EQUAL"),
-                TokenKind::OpNotEqual => (7, PcodeOpc::IntNotEqual, "pcode.createOp/CPUI_INT_NOTEQUAL"),
+                TokenKind::OpNotEqual => {
+                    (7, PcodeOpc::IntNotEqual, "pcode.createOp/CPUI_INT_NOTEQUAL")
+                }
                 TokenKind::OpFEqual => (7, PcodeOpc::FloatEqual, "pcode.createOp/CPUI_FLOAT_EQUAL"),
-                TokenKind::OpFNotEqual => (7, PcodeOpc::FloatNotEqual, "pcode.createOp/CPUI_FLOAT_NOTEQUAL"),
+                TokenKind::OpFNotEqual => (
+                    7,
+                    PcodeOpc::FloatNotEqual,
+                    "pcode.createOp/CPUI_FLOAT_NOTEQUAL",
+                ),
                 TokenKind::Char1(b'<') => (8, PcodeOpc::IntLess, "pcode.createOp/CPUI_INT_LESS"),
                 TokenKind::Char1(b'>') => (8, PcodeOpc::IntLess, "<>swap"),
                 TokenKind::OpGreatEqual => (8, PcodeOpc::IntLessEqual, "<>swap"),
-                TokenKind::OpLessEqual => (8, PcodeOpc::IntLessEqual, "pcode.createOp/CPUI_INT_LESSEQUAL"),
+                TokenKind::OpLessEqual => (
+                    8,
+                    PcodeOpc::IntLessEqual,
+                    "pcode.createOp/CPUI_INT_LESSEQUAL",
+                ),
                 TokenKind::OpSless => (8, PcodeOpc::IntSless, "pcode.createOp/CPUI_INT_SLESS"),
                 TokenKind::OpSgreatEqual => (8, PcodeOpc::IntSlessEqual, "<>swap"),
-                TokenKind::OpSlessEqual => (8, PcodeOpc::IntSlessEqual, "pcode.createOp/CPUI_INT_SLESSEQUAL"),
+                TokenKind::OpSlessEqual => (
+                    8,
+                    PcodeOpc::IntSlessEqual,
+                    "pcode.createOp/CPUI_INT_SLESSEQUAL",
+                ),
                 TokenKind::OpSgreat => (8, PcodeOpc::IntSless, "<>swap"),
                 TokenKind::OpFless => (8, PcodeOpc::FloatLess, "pcode.createOp/CPUI_FLOAT_LESS"),
                 TokenKind::OpFgreat => (8, PcodeOpc::FloatLess, "<>swap"),
-                TokenKind::OpFlessEqual => (8, PcodeOpc::FloatLessEqual, "pcode.createOp/CPUI_FLOAT_LESSEQUAL"),
+                TokenKind::OpFlessEqual => (
+                    8,
+                    PcodeOpc::FloatLessEqual,
+                    "pcode.createOp/CPUI_FLOAT_LESSEQUAL",
+                ),
                 TokenKind::OpFgreatEqual => (8, PcodeOpc::FloatLessEqual, "<>swap"),
                 TokenKind::OpLeft => (9, PcodeOpc::IntLeft, "pcode.createOp/CPUI_INT_LEFT"),
                 TokenKind::OpRight => (9, PcodeOpc::IntRight, "pcode.createOp/CPUI_INT_RIGHT"),
@@ -1692,23 +1866,59 @@ impl SleighParser {
                 Ok(d.pcode_create_op(PcodeOpc::FloatNeg, e, None))
             }
             // intrinsic one-arg ops (slghparse.y:435-452).
-            TokenKind::OpAbs => self.intrinsic1(d, PcodeOpc::FloatAbs, "pcode.createOp/CPUI_FLOAT_ABS"),
-            TokenKind::OpSqrt => self.intrinsic1(d, PcodeOpc::FloatSqrt, "pcode.createOp/CPUI_FLOAT_SQRT"),
-            TokenKind::OpSext => self.intrinsic1(d, PcodeOpc::IntSext, "pcode.createOp/CPUI_INT_SEXT"),
-            TokenKind::OpZext => self.intrinsic1(d, PcodeOpc::IntZext, "pcode.createOp/CPUI_INT_ZEXT"),
-            TokenKind::OpFloat2Float => self.intrinsic1(d, PcodeOpc::FloatFloat2Float, "pcode.createOp/CPUI_FLOAT_FLOAT2FLOAT"),
-            TokenKind::OpInt2Float => self.intrinsic1(d, PcodeOpc::FloatInt2Float, "pcode.createOp/CPUI_FLOAT_INT2FLOAT"),
-            TokenKind::OpNan => self.intrinsic1(d, PcodeOpc::FloatNan, "pcode.createOp/CPUI_FLOAT_NAN"),
-            TokenKind::OpTrunc => self.intrinsic1(d, PcodeOpc::FloatTrunc, "pcode.createOp/CPUI_FLOAT_TRUNC"),
-            TokenKind::OpCeil => self.intrinsic1(d, PcodeOpc::FloatCeil, "pcode.createOp/CPUI_FLOAT_CEIL"),
-            TokenKind::OpFloor => self.intrinsic1(d, PcodeOpc::FloatFloor, "pcode.createOp/CPUI_FLOAT_FLOOR"),
-            TokenKind::OpRound => self.intrinsic1(d, PcodeOpc::FloatRound, "pcode.createOp/CPUI_FLOAT_ROUND"),
-            TokenKind::OpPopcount => self.intrinsic1(d, PcodeOpc::Popcount, "pcode.createOp/CPUI_POPCOUNT"),
-            TokenKind::OpLzcount => self.intrinsic1(d, PcodeOpc::Lzcount, "pcode.createOp/CPUI_LZCOUNT"),
+            TokenKind::OpAbs => {
+                self.intrinsic1(d, PcodeOpc::FloatAbs, "pcode.createOp/CPUI_FLOAT_ABS")
+            }
+            TokenKind::OpSqrt => {
+                self.intrinsic1(d, PcodeOpc::FloatSqrt, "pcode.createOp/CPUI_FLOAT_SQRT")
+            }
+            TokenKind::OpSext => {
+                self.intrinsic1(d, PcodeOpc::IntSext, "pcode.createOp/CPUI_INT_SEXT")
+            }
+            TokenKind::OpZext => {
+                self.intrinsic1(d, PcodeOpc::IntZext, "pcode.createOp/CPUI_INT_ZEXT")
+            }
+            TokenKind::OpFloat2Float => self.intrinsic1(
+                d,
+                PcodeOpc::FloatFloat2Float,
+                "pcode.createOp/CPUI_FLOAT_FLOAT2FLOAT",
+            ),
+            TokenKind::OpInt2Float => self.intrinsic1(
+                d,
+                PcodeOpc::FloatInt2Float,
+                "pcode.createOp/CPUI_FLOAT_INT2FLOAT",
+            ),
+            TokenKind::OpNan => {
+                self.intrinsic1(d, PcodeOpc::FloatNan, "pcode.createOp/CPUI_FLOAT_NAN")
+            }
+            TokenKind::OpTrunc => {
+                self.intrinsic1(d, PcodeOpc::FloatTrunc, "pcode.createOp/CPUI_FLOAT_TRUNC")
+            }
+            TokenKind::OpCeil => {
+                self.intrinsic1(d, PcodeOpc::FloatCeil, "pcode.createOp/CPUI_FLOAT_CEIL")
+            }
+            TokenKind::OpFloor => {
+                self.intrinsic1(d, PcodeOpc::FloatFloor, "pcode.createOp/CPUI_FLOAT_FLOOR")
+            }
+            TokenKind::OpRound => {
+                self.intrinsic1(d, PcodeOpc::FloatRound, "pcode.createOp/CPUI_FLOAT_ROUND")
+            }
+            TokenKind::OpPopcount => {
+                self.intrinsic1(d, PcodeOpc::Popcount, "pcode.createOp/CPUI_POPCOUNT")
+            }
+            TokenKind::OpLzcount => {
+                self.intrinsic1(d, PcodeOpc::Lzcount, "pcode.createOp/CPUI_LZCOUNT")
+            }
             // two-arg intrinsics (slghparse.y:439-441).
-            TokenKind::OpCarry => self.intrinsic2(d, PcodeOpc::IntCarry, "pcode.createOp/CPUI_INT_CARRY"),
-            TokenKind::OpScarry => self.intrinsic2(d, PcodeOpc::IntScarry, "pcode.createOp/CPUI_INT_SCARRY"),
-            TokenKind::OpSborrow => self.intrinsic2(d, PcodeOpc::IntSborrow, "pcode.createOp/CPUI_INT_SBORROW"),
+            TokenKind::OpCarry => {
+                self.intrinsic2(d, PcodeOpc::IntCarry, "pcode.createOp/CPUI_INT_CARRY")
+            }
+            TokenKind::OpScarry => {
+                self.intrinsic2(d, PcodeOpc::IntScarry, "pcode.createOp/CPUI_INT_SCARRY")
+            }
+            TokenKind::OpSborrow => {
+                self.intrinsic2(d, PcodeOpc::IntSborrow, "pcode.createOp/CPUI_INT_SBORROW")
+            }
             // `OP_NEW '(' expr ')' | OP_NEW '(' expr ',' expr ')'`
             // (slghparse.y:449-450).
             TokenKind::OpNew => {
@@ -1802,7 +2012,12 @@ impl SleighParser {
         }
     }
 
-    fn intrinsic1(&mut self, d: &mut dyn ParseDriver, opc: PcodeOpc, trace: &str) -> KunaResult<u32> {
+    fn intrinsic1(
+        &mut self,
+        d: &mut dyn ParseDriver,
+        opc: PcodeOpc,
+        trace: &str,
+    ) -> KunaResult<u32> {
         self.next(d)?; // the OP_* keyword
         self.expect(d, TokenKind::Char1(b'('))?;
         let a = self.expr(d)?;
@@ -1811,7 +2026,12 @@ impl SleighParser {
         Ok(d.pcode_create_op(opc, a, None))
     }
 
-    fn intrinsic2(&mut self, d: &mut dyn ParseDriver, opc: PcodeOpc, trace: &str) -> KunaResult<u32> {
+    fn intrinsic2(
+        &mut self,
+        d: &mut dyn ParseDriver,
+        opc: PcodeOpc,
+        trace: &str,
+    ) -> KunaResult<u32> {
         self.next(d)?;
         self.expect(d, TokenKind::Char1(b'('))?;
         let a = self.expr(d)?;
@@ -2070,7 +2290,10 @@ impl SleighParser {
             let mut v = Vec::new();
             loop {
                 match self.peek(d)? {
-                    TokenKind::Char1(b']') => { self.next(d)?; break; }
+                    TokenKind::Char1(b']') => {
+                        self.next(d)?;
+                        break;
+                    }
                     TokenKind::Char1(b'-') => {
                         self.next(d)?;
                         let n = self.expect_integer(d)?;
@@ -2089,7 +2312,9 @@ impl SleighParser {
                         }
                         v.push(0xBADBEEF);
                     }
-                    other => return Err(KunaError::parse(format!("SLEIGH: bad intblist {other:?}"))),
+                    other => {
+                        return Err(KunaError::parse(format!("SLEIGH: bad intblist {other:?}")));
+                    }
                 }
             }
             Ok(v)
@@ -2110,16 +2335,24 @@ impl SleighParser {
             let mut v = Vec::new();
             loop {
                 match self.peek(d)? {
-                    TokenKind::Char1(b']') => { self.next(d)?; break; }
+                    TokenKind::Char1(b']') => {
+                        self.next(d)?;
+                        break;
+                    }
                     TokenKind::String => v.push(self.expect_string(d)?),
                     other => {
                         if is_anysymbol(other) {
                             let tok = self.next(d)?;
                             let name = self.sym_name(&tok);
-                            d.report_error(&format!("{}: redefined", String::from_utf8_lossy(&name)));
+                            d.report_error(&format!(
+                                "{}: redefined",
+                                String::from_utf8_lossy(&name)
+                            ));
                             return Err(KunaError::parse("stringpart redefined".to_string()));
                         }
-                        return Err(KunaError::parse(format!("SLEIGH: bad stringlist {other:?}")));
+                        return Err(KunaError::parse(format!(
+                            "SLEIGH: bad stringlist {other:?}"
+                        )));
                     }
                 }
             }
@@ -2135,13 +2368,20 @@ impl SleighParser {
         let mut v = Vec::new();
         loop {
             match self.peek(d)? {
-                TokenKind::Char1(b']') => { self.next(d)?; break; }
+                TokenKind::Char1(b']') => {
+                    self.next(d)?;
+                    break;
+                }
                 TokenKind::String => v.push(self.expect_string(d)?),
                 k if is_anysymbol(k) => {
                     let tok = self.next(d)?;
                     v.push(self.sym_name(&tok));
                 }
-                other => return Err(KunaError::parse(format!("SLEIGH: bad anystringlist {other:?}"))),
+                other => {
+                    return Err(KunaError::parse(format!(
+                        "SLEIGH: bad anystringlist {other:?}"
+                    )));
+                }
             }
         }
         Ok(v)
@@ -2154,15 +2394,23 @@ impl SleighParser {
             let mut v = Vec::new();
             loop {
                 match self.peek(d)? {
-                    TokenKind::Char1(b']') => { self.next(d)?; break; }
+                    TokenKind::Char1(b']') => {
+                        self.next(d)?;
+                        break;
+                    }
                     TokenKind::ValueSym => v.push(self.expect_symbol(d, TokenKind::ValueSym)?),
                     TokenKind::ContextSym => v.push(self.expect_symbol(d, TokenKind::ContextSym)?),
                     TokenKind::String => {
                         let s = self.expect_string(d)?;
-                        d.report_error(&format!("{}: is not a value pattern", String::from_utf8_lossy(&s)));
+                        d.report_error(&format!(
+                            "{}: is not a value pattern",
+                            String::from_utf8_lossy(&s)
+                        ));
                         return Err(KunaError::parse("valuepart non-value".to_string()));
                     }
-                    other => return Err(KunaError::parse(format!("SLEIGH: bad valuelist {other:?}"))),
+                    other => {
+                        return Err(KunaError::parse(format!("SLEIGH: bad valuelist {other:?}")));
+                    }
                 }
             }
             Ok(v)
@@ -2170,7 +2418,9 @@ impl SleighParser {
             match self.peek(d)? {
                 TokenKind::ValueSym => Ok(vec![self.expect_symbol(d, TokenKind::ValueSym)?]),
                 TokenKind::ContextSym => Ok(vec![self.expect_symbol(d, TokenKind::ContextSym)?]),
-                other => Err(KunaError::parse(format!("SLEIGH: bad valuelist head {other:?}"))),
+                other => Err(KunaError::parse(format!(
+                    "SLEIGH: bad valuelist head {other:?}"
+                ))),
             }
         }
     }
@@ -2182,18 +2432,26 @@ impl SleighParser {
             let mut v = Vec::new();
             loop {
                 match self.peek(d)? {
-                    TokenKind::Char1(b']') => { self.next(d)?; break; }
+                    TokenKind::Char1(b']') => {
+                        self.next(d)?;
+                        break;
+                    }
                     TokenKind::VarSym => v.push(self.expect_symbol(d, TokenKind::VarSym)?),
                     TokenKind::String => {
                         let s = self.expect_string(d)?;
                         if s != b"_" {
-                            d.report_error(&format!("{}: is not a varnode symbol", String::from_utf8_lossy(&s)));
+                            d.report_error(&format!(
+                                "{}: is not a varnode symbol",
+                                String::from_utf8_lossy(&s)
+                            ));
                             return Err(KunaError::parse("varpart non-_".to_string()));
                         }
                         // `_` -> the null-varnode sentinel (slghparse.y:553).
                         v.push(SymId::MAX);
                     }
-                    other => return Err(KunaError::parse(format!("SLEIGH: bad varlist {other:?}"))),
+                    other => {
+                        return Err(KunaError::parse(format!("SLEIGH: bad varlist {other:?}")));
+                    }
                 }
             }
             Ok(v)
@@ -2236,7 +2494,9 @@ impl SleighParser {
         let tok = self.expect(d, TokenKind::Integer)?;
         match tok.value {
             TokenValue::Integer(i) => Ok(i),
-            _ => Err(KunaError::parse("SLEIGH: INTEGER without value".to_string())),
+            _ => Err(KunaError::parse(
+                "SLEIGH: INTEGER without value".to_string(),
+            )),
         }
     }
 
@@ -2290,7 +2550,9 @@ fn token_str(tok: &Token) -> KunaResult<Vec<u8>> {
     match &tok.value {
         TokenValue::Str(s) => Ok(s.clone()),
         TokenValue::SymbolName(s) => Ok(s.clone()),
-        _ => Err(KunaError::parse("SLEIGH: string token without value".to_string())),
+        _ => Err(KunaError::parse(
+            "SLEIGH: string token without value".to_string(),
+        )),
     }
 }
 

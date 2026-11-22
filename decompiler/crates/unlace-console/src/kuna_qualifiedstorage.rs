@@ -1,8 +1,8 @@
 //! Keep qualified storage declarations bound to the same target as prototypes.
 use crate::engine::ConsoleProgram;
 use crate::interface::{IfaceError, IfaceResult};
-use unlace_decomp::fspec::PrototypePieces;
 use std::collections::BTreeMap;
+use unlace_decomp::fspec::PrototypePieces;
 
 pub(crate) fn update(
     program: &mut ConsoleProgram,
@@ -34,7 +34,9 @@ pub(crate) fn update(
             .cloned();
         crate::assertions::lock_prototype_on_symbol(program, &target, &pieces, model.as_ref());
     }
-    program.callwide_unavailable("partial storage declarations are not complete declaration provenance");
+    program.callwide_unavailable(
+        "partial storage declarations are not complete declaration provenance",
+    );
     remember(pending, addressed, &target, pieces);
     Ok(())
 }

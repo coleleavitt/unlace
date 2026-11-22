@@ -50,33 +50,74 @@ fn the_signedness_sensitive_operators_demand_what_the_c_operator_means() {
     // Ordered comparisons: both operands carry the sign, and the result is a
     // condition, so the walk ends there.
     for opc in [CPUI_INT_SLESS, CPUI_INT_SLESSEQUAL] {
-        assert_eq!(classify_reader(opc, 0), Demands(Evidence::Signed), "{opc:?}");
-        assert_eq!(classify_reader(opc, 1), Demands(Evidence::Signed), "{opc:?}");
+        assert_eq!(
+            classify_reader(opc, 0),
+            Demands(Evidence::Signed),
+            "{opc:?}"
+        );
+        assert_eq!(
+            classify_reader(opc, 1),
+            Demands(Evidence::Signed),
+            "{opc:?}"
+        );
     }
     for opc in [CPUI_INT_LESS, CPUI_INT_LESSEQUAL] {
-        assert_eq!(classify_reader(opc, 0), Demands(Evidence::Unsigned), "{opc:?}");
-        assert_eq!(classify_reader(opc, 1), Demands(Evidence::Unsigned), "{opc:?}");
+        assert_eq!(
+            classify_reader(opc, 0),
+            Demands(Evidence::Unsigned),
+            "{opc:?}"
+        );
+        assert_eq!(
+            classify_reader(opc, 1),
+            Demands(Evidence::Unsigned),
+            "{opc:?}"
+        );
     }
     // Division and remainder: both operands carry the sign, and the quotient is
     // printed at their converted type, so the demand does not end the walk.
     for opc in [CPUI_INT_SDIV, CPUI_INT_SREM] {
-        assert_eq!(classify_reader(opc, 0), DemandsCarrying(Evidence::Signed), "{opc:?}");
-        assert_eq!(classify_reader(opc, 1), DemandsCarrying(Evidence::Signed), "{opc:?}");
+        assert_eq!(
+            classify_reader(opc, 0),
+            DemandsCarrying(Evidence::Signed),
+            "{opc:?}"
+        );
+        assert_eq!(
+            classify_reader(opc, 1),
+            DemandsCarrying(Evidence::Signed),
+            "{opc:?}"
+        );
     }
     for opc in [CPUI_INT_DIV, CPUI_INT_REM] {
-        assert_eq!(classify_reader(opc, 0), DemandsCarrying(Evidence::Unsigned), "{opc:?}");
-        assert_eq!(classify_reader(opc, 1), DemandsCarrying(Evidence::Unsigned), "{opc:?}");
+        assert_eq!(
+            classify_reader(opc, 0),
+            DemandsCarrying(Evidence::Unsigned),
+            "{opc:?}"
+        );
+        assert_eq!(
+            classify_reader(opc, 1),
+            DemandsCarrying(Evidence::Unsigned),
+            "{opc:?}"
+        );
     }
     // A right shift carries the sign on the shiftee only, and prints at the
     // shiftee's type, so it demands and keeps walking; the count converts
     // identically either way.
-    assert_eq!(classify_reader(CPUI_INT_SRIGHT, 0), DemandsCarrying(Evidence::Signed));
+    assert_eq!(
+        classify_reader(CPUI_INT_SRIGHT, 0),
+        DemandsCarrying(Evidence::Signed)
+    );
     assert_eq!(classify_reader(CPUI_INT_SRIGHT, 1), Opaque);
-    assert_eq!(classify_reader(CPUI_INT_RIGHT, 0), DemandsCarrying(Evidence::Unsigned));
+    assert_eq!(
+        classify_reader(CPUI_INT_RIGHT, 0),
+        DemandsCarrying(Evidence::Unsigned)
+    );
     assert_eq!(classify_reader(CPUI_INT_RIGHT, 1), Opaque);
     // Widening: the printed cast re-establishes the type, so no walk.
     assert_eq!(classify_reader(CPUI_INT_SEXT, 0), Demands(Evidence::Signed));
-    assert_eq!(classify_reader(CPUI_INT_ZEXT, 0), Demands(Evidence::Unsigned));
+    assert_eq!(
+        classify_reader(CPUI_INT_ZEXT, 0),
+        Demands(Evidence::Unsigned)
+    );
 }
 
 /// `<<` prefers unsigned and carries: the shifted bits are the same under either
@@ -86,7 +127,10 @@ fn the_signedness_sensitive_operators_demand_what_the_c_operator_means() {
 fn a_left_shift_prefers_unsigned_and_still_carries() {
     use OpCode::*;
     use ReaderClass::*;
-    assert_eq!(classify_reader(CPUI_INT_LEFT, 0), DemandsCarrying(Evidence::Unsigned));
+    assert_eq!(
+        classify_reader(CPUI_INT_LEFT, 0),
+        DemandsCarrying(Evidence::Unsigned)
+    );
     assert_eq!(classify_reader(CPUI_INT_LEFT, 1), Opaque);
 }
 

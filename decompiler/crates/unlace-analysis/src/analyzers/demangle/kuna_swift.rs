@@ -124,7 +124,11 @@ pub fn demangle_swift_name(raw: &str) -> Option<String> {
 pub fn is_data_symbol(raw: &str) -> Option<bool> {
     let tree = demangle_swift_tree(raw)?;
     let top = tree.first()?;
-    let kind = if top.kind == Kind::Static { top.first()?.kind } else { top.kind };
+    let kind = if top.kind == Kind::Static {
+        top.first()?.kind
+    } else {
+        top.kind
+    };
     Some(matches!(
         kind,
         Kind::Variable

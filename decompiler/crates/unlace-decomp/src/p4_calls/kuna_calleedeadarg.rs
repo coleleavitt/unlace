@@ -260,7 +260,9 @@ impl CalleeEntryDead {
         if self.cuts.is_empty() {
             return false;
         }
-        let Some(sp) = addr.get_space() else { return false };
+        let Some(sp) = addr.get_space() else {
+            return false;
+        };
         if self.reg_idx < 0 || sp.get_index() != self.reg_idx {
             return false;
         }
@@ -276,7 +278,9 @@ impl CalleeEntryDead {
         {
             return false;
         }
-        self.cuts.iter().all(|c| (off..end).all(|b| c.contains(&(idx, b))))
+        self.cuts
+            .iter()
+            .all(|c| (off..end).all(|b| c.contains(&(idx, b))))
     }
 
     /// Does this summary show some path READING any byte of `[addr, addr+size)`
@@ -289,7 +293,9 @@ impl CalleeEntryDead {
         if !self.complete || size <= 0 {
             return false;
         }
-        let Some(sp) = addr.get_space() else { return false };
+        let Some(sp) = addr.get_space() else {
+            return false;
+        };
         if self.reg_idx < 0 || sp.get_index() != self.reg_idx {
             return false;
         }
@@ -317,7 +323,9 @@ impl CalleeEntryDead {
         if !self.complete || size <= 0 {
             return false;
         }
-        let Some(sp) = addr.get_space() else { return false };
+        let Some(sp) = addr.get_space() else {
+            return false;
+        };
         if self.reg_idx < 0 || sp.get_index() != self.reg_idx {
             return false;
         }
@@ -347,7 +355,9 @@ impl CalleeEntryDead {
         if !self.complete || self.undecodable || size <= 0 {
             return false;
         }
-        let Some(sp) = addr.get_space() else { return false };
+        let Some(sp) = addr.get_space() else {
+            return false;
+        };
         if self.reg_idx < 0 || sp.get_index() != self.reg_idx {
             return false;
         }
@@ -356,7 +366,11 @@ impl CalleeEntryDead {
         } else {
             addr.get_offset()
         };
-        let live = if pads { &self.unpadded_read_bytes } else { &self.live_read_bytes };
+        let live = if pads {
+            &self.unpadded_read_bytes
+        } else {
+            &self.live_read_bytes
+        };
         live.contains(&(self.reg_idx, low))
             || (stores && self.stored_read_bytes.contains(&(self.reg_idx, low)))
     }
@@ -368,12 +382,17 @@ impl CalleeEntryDead {
         if !self.reads_low_byte(addr, size, true, false) {
             return None;
         }
-        let (off, end) = (addr.get_offset(), addr.get_offset().wrapping_add(size as u64));
+        let (off, end) = (
+            addr.get_offset(),
+            addr.get_offset().wrapping_add(size as u64),
+        );
         let low = if addr.is_big_endian() { end - 1 } else { off };
         let width = self
             .reads_live
             .iter()
-            .filter(|&&(idx, roff, rsz)| idx == self.reg_idx && roff <= low && low < roff + rsz as u64)
+            .filter(|&&(idx, roff, rsz)| {
+                idx == self.reg_idx && roff <= low && low < roff + rsz as u64
+            })
             .map(|&(_, roff, rsz)| {
                 if addr.is_big_endian() {
                     end - roff.max(off)
@@ -467,7 +486,9 @@ impl CalleeEntryDead {
     /// `[addr, addr+size)` unread on the way? A user op that leads straight to
     /// an unconditional return hands nothing on.
     pub fn returns_untouched(&self, addr: &Address, size: int4) -> bool {
-        let Some(sp) = addr.get_space() else { return false };
+        let Some(sp) = addr.get_space() else {
+            return false;
+        };
         let (idx, off) = (self.reg_idx, addr.get_offset());
         let end = off.wrapping_add(size.max(0) as u64);
         size > 0
@@ -481,7 +502,9 @@ impl CalleeEntryDead {
     /// code the walk did not read with any of those bytes still unwritten? A
     /// RETURN hands the register back unread, so it needs no write first.
     pub fn never_takes(&self, addr: &Address, size: int4) -> bool {
-        let Some(sp) = addr.get_space() else { return false };
+        let Some(sp) = addr.get_space() else {
+            return false;
+        };
         let (idx, off) = (self.reg_idx, addr.get_offset());
         let end = off.wrapping_add(size.max(0) as u64);
         size > 0
@@ -512,11 +535,16 @@ impl CalleeEntryDead {
     /// Does some path reach a system call with a byte of `[addr, addr+size)`
     /// still holding the caller's value, so the kernel may read it?
     pub fn traps_unwritten(&self, addr: &Address, size: int4) -> bool {
-        let Some(sp) = addr.get_space() else { return false };
+        let Some(sp) = addr.get_space() else {
+            return false;
+        };
         let (idx, off) = (self.reg_idx, addr.get_offset());
         let end = off.wrapping_add(size.max(0) as u64);
         sp.get_index() == idx
-            && self.trap_cuts.iter().any(|c| (off..end).any(|b| !c.contains(&(idx, b))))
+            && self
+                .trap_cuts
+                .iter()
+                .any(|c| (off..end).any(|b| !c.contains(&(idx, b))))
     }
 
     /// [`Self::never_takes`] over register bytes `[off, end)`, including the
@@ -535,7 +563,10 @@ impl CalleeEntryDead {
             && !(off..end).any(|b| self.cond_written.contains(&(idx, b)))
             && self.opaque_cuts.iter().all(written)
             && self.named_cuts.iter().all(|(_, c)| written(c))
-            && self.skipped.as_deref().map_or(true, |s| s.takes_none(idx, off, end))
+            && self
+                .skipped
+                .as_deref()
+                .map_or(true, |s| s.takes_none(idx, off, end))
     }
 
     /// Does every path this walk covered, and every path past a conditional
@@ -554,7 +585,10 @@ impl CalleeEntryDead {
             && !overlaps(&self.reads)
             && !overlaps(&self.return_reads)
             && !(off..end).any(|b| self.cond_written.contains(&(idx, b)))
-            && self.skipped.as_deref().map_or(true, |s| s.leaves_untouched(idx, off, end))
+            && self
+                .skipped
+                .as_deref()
+                .map_or(true, |s| s.leaves_untouched(idx, off, end))
     }
 
     /// Drop the spare capacity the walk left, since the run keeps the summary
@@ -569,7 +603,12 @@ impl CalleeEntryDead {
         for set in sets {
             set.shrink_to_fit();
         }
-        for cut in self.cuts.iter_mut().chain(&mut self.opaque_cuts).chain(&mut self.trap_cuts) {
+        for cut in self
+            .cuts
+            .iter_mut()
+            .chain(&mut self.opaque_cuts)
+            .chain(&mut self.trap_cuts)
+        {
             cut.shrink_to_fit();
         }
         for (_, cut) in &mut self.named_cuts {
@@ -608,7 +647,8 @@ impl CalleeEntryDead {
     /// Record one direct-call terminator, for the same reason.
     #[cfg(test)]
     pub(crate) fn with_named_cut(mut self, target: Address, written: Vec<(int4, u64)>) -> Self {
-        self.named_cuts.push((target, written.into_iter().collect()));
+        self.named_cuts
+            .push((target, written.into_iter().collect()));
         self
     }
 
@@ -701,7 +741,11 @@ impl ForwardTransfer {
     /// The answer that proves nothing: a single empty cut set leaves no range
     /// transfer free.
     fn denied(reg_idx: int4) -> Self {
-        ForwardTransfer { reg_idx, cut_meet: Some(ByteSet::new()), forbidden: ByteSet::new() }
+        ForwardTransfer {
+            reg_idx,
+            cut_meet: Some(ByteSet::new()),
+            forbidden: ByteSet::new(),
+        }
     }
 
     /// Add one terminator that had written `written` on the way to it.
@@ -721,7 +765,9 @@ impl ForwardTransfer {
         if size <= 0 {
             return false;
         }
-        let Some(sp) = addr.get_space() else { return false };
+        let Some(sp) = addr.get_space() else {
+            return false;
+        };
         if self.reg_idx < 0 || sp.get_index() != self.reg_idx {
             return false;
         }
@@ -733,7 +779,9 @@ impl ForwardTransfer {
         if (off..end).any(|b| self.forbidden.contains(&(idx, b))) {
             return false;
         }
-        self.cut_meet.as_ref().is_none_or(|c| (off..end).all(|b| c.contains(&(idx, b))))
+        self.cut_meet
+            .as_ref()
+            .is_none_or(|c| (off..end).all(|b| c.contains(&(idx, b))))
     }
 }
 
@@ -795,7 +843,11 @@ fn fold_node(
     if !dead.is_complete() || dead.reg_idx != reg_idx {
         return ForwardTransfer::denied(reg_idx);
     }
-    let mut out = ForwardTransfer { reg_idx, cut_meet: None, forbidden: dead.read_bytes() };
+    let mut out = ForwardTransfer {
+        reg_idx,
+        cut_meet: None,
+        forbidden: dead.read_bytes(),
+    };
     for c in dead.opaque_cuts() {
         out.cut(c);
     }
@@ -822,7 +874,9 @@ fn resolve_node(
     visiting: &mut Vec<(int4, u64)>,
     budget: &mut usize,
 ) -> ForwardTransfer {
-    let Some(sp) = entry.get_space() else { return ForwardTransfer::denied(reg_idx) };
+    let Some(sp) = entry.get_space() else {
+        return ForwardTransfer::denied(reg_idx);
+    };
     let key = (sp.get_index(), entry.get_offset());
     // A cycle in the closure is a recursive component: the recovery of every
     // member of it is short about the others, so nothing is proven.
@@ -896,9 +950,14 @@ pub fn reads_through_calls(
     memo: &mut ThroughMemo,
 ) -> Option<Rc<CalleeEntryDead>> {
     let dead = probe_cached(arch, entry, reg_idx)?;
-    let reads = add_reads_through(&dead, |t| taken_reads(arch, t, reg_idx, MAX_THROUGH_DEPTH - 1, memo));
+    let reads = add_reads_through(&dead, |t| {
+        taken_reads(arch, t, reg_idx, MAX_THROUGH_DEPTH - 1, memo)
+    });
     Some(match reads {
-        Some(reads_live) => Rc::new(CalleeEntryDead { reads_live, ..(*dead).clone() }),
+        Some(reads_live) => Rc::new(CalleeEntryDead {
+            reads_live,
+            ..(*dead).clone()
+        }),
         None => dead,
     })
 }
@@ -962,8 +1021,14 @@ pub(crate) fn probe_cached(
             &arch.userops,
             crate::kuna_syscallregs::SyscallFamily::from_archid(&arch.archid),
         );
-        let probed =
-            probe_entry_with(arch.translate(), entry, reg_idx, follow, &traps, &arch.format_stack_args);
+        let probed = probe_entry_with(
+            arch.translate(),
+            entry,
+            reg_idx,
+            follow,
+            &traps,
+            &arch.format_stack_args,
+        );
         arch.kuna_callee_dead_cache.insert(key, Rc::new(probed));
     }
     arch.kuna_callee_dead_cache.get(&key).cloned()
@@ -1034,7 +1099,11 @@ impl unlace_sleigh::translate::PcodeEmit for EntryEmit {
                 }
             }
         }
-        self.ops.push(RawOp { opc, out: outvar.cloned(), ins: vars.to_vec() });
+        self.ops.push(RawOp {
+            opc,
+            out: outvar.cloned(),
+            ins: vars.to_vec(),
+        });
     }
 }
 
@@ -1066,8 +1135,10 @@ impl Pushed {
 
     /// Count the pushes in `[off, off+size)` as reads: the stack was read there.
     fn read_back(&mut self, res: &mut CalleeEntryDead, off: i64, size: i64) {
-        let (hit, keep): (Vec<_>, Vec<_>) =
-            self.slots.drain(..).partition(|(o, w, _)| *o < off + size && off < *o + *w);
+        let (hit, keep): (Vec<_>, Vec<_>) = self
+            .slots
+            .drain(..)
+            .partition(|(o, w, _)| *o < off + size && off < *o + *w);
         self.slots = keep;
         for (_, _, mut bytes) in hit {
             res.unpadded_read_bytes.append(&mut bytes);
@@ -1086,7 +1157,9 @@ impl Pushed {
     /// Is `v` the stack pointer itself?
     fn is_sp(&self, v: &VarnodeData, reg_idx: int4) -> bool {
         self.sp.is_some_and(|(off, size)| {
-            v.offset == off && v.size == size && v.space.as_ref().is_some_and(|s| s.get_index() == reg_idx)
+            v.offset == off
+                && v.size == size
+                && v.space.as_ref().is_some_and(|s| s.get_index() == reg_idx)
         })
     }
 
@@ -1103,7 +1176,11 @@ impl Pushed {
         moved: &mut i64,
     ) {
         let reg_idx = res.reg_idx;
-        let unique = |v: &VarnodeData| v.space.as_ref().is_some_and(|s| s.get_type() == spacetype::IPTR_INTERNAL);
+        let unique = |v: &VarnodeData| {
+            v.space
+                .as_ref()
+                .is_some_and(|s| s.get_type() == spacetype::IPTR_INTERNAL)
+        };
         let at = |v: &VarnodeData| -> Option<Option<i64>> {
             if self.is_sp(v, reg_idx) {
                 Some(Some(0))
@@ -1114,10 +1191,13 @@ impl Pushed {
             }
         };
         let constant = |v: &VarnodeData| {
-            v.space.as_ref().filter(|s| s.get_type() == spacetype::IPTR_CONSTANT).map(|_| {
-                let bits = 64 - 8 * v.size.min(8);
-                ((v.offset << bits) as i64) >> bits
-            })
+            v.space
+                .as_ref()
+                .filter(|s| s.get_type() == spacetype::IPTR_CONSTANT)
+                .map(|_| {
+                    let bits = 64 - 8 * v.size.min(8);
+                    ((v.offset << bits) as i64) >> bits
+                })
         };
         // The constant operand of `base + c` or `c + base`, and `base - c`.
         let offset = |op: &RawOp, base: &dyn Fn(&VarnodeData) -> bool| -> Option<i64> {
@@ -1153,9 +1233,11 @@ impl Pushed {
                     self.flush(res);
                     return;
                 }
-                if let (Some(Some(off)), Some(value)) = (op.ins.get(1).and_then(at), op.ins.get(2)) {
+                if let (Some(Some(off)), Some(value)) = (op.ins.get(1).and_then(at), op.ins.get(2))
+                {
                     let size = value.size as i64;
-                    self.slots.retain(|(o, w, _)| !(*o < off + size && off < *o + *w));
+                    self.slots
+                        .retain(|(o, w, _)| !(*o < off + size && off < *o + *w));
                     if unique(value) {
                         self.slots.push((off, size, std::mem::take(pushing)));
                     }
@@ -1235,7 +1317,14 @@ pub fn probe_entry<T: unlace_sleigh::translate::Translate + ?Sized>(
     reg_idx: int4,
     follow: bool,
 ) -> CalleeEntryDead {
-    probe_entry_with(tr, entry, reg_idx, follow, &[], &std::collections::BTreeMap::new())
+    probe_entry_with(
+        tr,
+        entry,
+        reg_idx,
+        follow,
+        &[],
+        &std::collections::BTreeMap::new(),
+    )
 }
 
 /// [`probe_entry`], recording where a path reaches one of the system-call user
@@ -1251,7 +1340,11 @@ pub fn probe_entry_with<T: unlace_sleigh::translate::Translate + ?Sized>(
     traps: &[uint4],
     stack_args: &std::collections::BTreeMap<u64, usize>,
 ) -> CalleeEntryDead {
-    let mut res = CalleeEntryDead { reg_idx, complete: true, ..CalleeEntryDead::default() };
+    let mut res = CalleeEntryDead {
+        reg_idx,
+        complete: true,
+        ..CalleeEntryDead::default()
+    };
     let Some(entry_space) = entry.get_space() else {
         res.complete = false;
         return res;
@@ -1260,11 +1353,30 @@ pub fn probe_entry_with<T: unlace_sleigh::translate::Translate + ?Sized>(
         res.complete = false;
         return res;
     }
-    let start = vec![Frame { at: entry.clone(), written: ByteSet::new(), pushed: Pushed::default() }];
+    let start = vec![Frame {
+        at: entry.clone(),
+        written: ByteSet::new(),
+        pushed: Pushed::default(),
+    }];
     let mut skips = Vec::new();
-    walk(tr, &mut res, start, if follow { Skips::Aside(&mut skips) } else { Skips::Dropped }, traps, stack_args);
+    walk(
+        tr,
+        &mut res,
+        start,
+        if follow {
+            Skips::Aside(&mut skips)
+        } else {
+            Skips::Dropped
+        },
+        traps,
+        stack_args,
+    );
     if res.complete && !skips.is_empty() {
-        let mut late = CalleeEntryDead { reg_idx, complete: true, ..CalleeEntryDead::default() };
+        let mut late = CalleeEntryDead {
+            reg_idx,
+            complete: true,
+            ..CalleeEntryDead::default()
+        };
         walk(tr, &mut late, skips, Skips::Walked, traps, stack_args);
         res.skipped = Some(Box::new(late));
     }
@@ -1344,7 +1456,17 @@ fn walk<T: unlace_sleigh::translate::Translate + ?Sized>(
             }
         };
         let skip = if follow { Some(&mut found) } else { None };
-        match step_instruction(res, &emit, frame.written, frame.pushed, &frame.at, len, skip, traps, stack_args) {
+        match step_instruction(
+            res,
+            &emit,
+            frame.written,
+            frame.pushed,
+            &frame.at,
+            len,
+            skip,
+            traps,
+            stack_args,
+        ) {
             Some(next) => todo.extend(next),
             None => break,
         }
@@ -1380,8 +1502,12 @@ fn note_returning_user_op(res: &mut CalleeEntryDead, rest: &[RawOp]) -> bool {
     res.returning_opaque += 1;
     for o in rest {
         for v in &o.ins {
-            if v.space.as_ref().is_some_and(|sp| sp.get_index() == res.reg_idx) {
-                res.return_reads.push((res.reg_idx, v.offset, v.size as int4));
+            if v.space
+                .as_ref()
+                .is_some_and(|sp| sp.get_index() == res.reg_idx)
+            {
+                res.return_reads
+                    .push((res.reg_idx, v.offset, v.size as int4));
             }
         }
     }
@@ -1398,12 +1524,13 @@ fn end_at_return(
     skip: Option<&mut Vec<Frame>>,
 ) -> Option<Vec<Frame>> {
     match skip {
-        Some(out) if targets.len() == before.len() => out.extend(
-            targets
-                .iter()
-                .zip(before)
-                .map(|(t, w)| Frame { at: t.clone(), written: w.clone(), pushed: Pushed::default() }),
-        ),
+        Some(out) if targets.len() == before.len() => {
+            out.extend(targets.iter().zip(before).map(|(t, w)| Frame {
+                at: t.clone(),
+                written: w.clone(),
+                pushed: Pushed::default(),
+            }))
+        }
         _ => res.lost |= !targets.is_empty(),
     }
     Some(Vec::new())
@@ -1429,11 +1556,18 @@ fn is_value_erasing(op: &RawOp) -> bool {
             _ => false,
         };
     let constant = |v: &VarnodeData, want: u64| {
-        v.space.as_ref().map(|s| s.get_type() == spacetype::IPTR_CONSTANT).unwrap_or(false)
+        v.space
+            .as_ref()
+            .map(|s| s.get_type() == spacetype::IPTR_CONSTANT)
+            .unwrap_or(false)
             && v.offset == want
     };
     let all_ones = |v: &VarnodeData| {
-        let mask = if v.size >= 8 { u64::MAX } else { (1u64 << (v.size * 8)) - 1 };
+        let mask = if v.size >= 8 {
+            u64::MAX
+        } else {
+            (1u64 << (v.size * 8)) - 1
+        };
         constant(v, mask)
     };
     match op.opc {
@@ -1448,7 +1582,9 @@ fn is_value_erasing(op: &RawOp) -> bool {
 /// whatever the value is? x86 `sbb %ecx,%ecx` computes its carry and overflow
 /// from `ecx < ecx` and `sborrow(ecx,ecx)` and its result from `ecx - ecx`.
 fn compares_with_itself(op: &RawOp) -> bool {
-    let [a, b] = op.ins.as_slice() else { return false };
+    let [a, b] = op.ins.as_slice() else {
+        return false;
+    };
     let same = a.size == b.size
         && a.offset == b.offset
         && matches!((a.space.as_ref(), b.space.as_ref()), (Some(x), Some(y)) if x.get_index() == y.get_index());
@@ -1492,7 +1628,10 @@ fn step_instruction(
         .iter()
         .filter(|o| {
             o.opc == OpCode::CPUI_STORE
-                && o.ins.get(2).and_then(|v| v.space.as_ref()).is_some_and(|s| s.get_index() == res.reg_idx)
+                && o.ins
+                    .get(2)
+                    .and_then(|v| v.space.as_ref())
+                    .is_some_and(|s| s.get_index() == res.reg_idx)
         })
         .count()
         >= 2;
@@ -1530,12 +1669,20 @@ fn step_instruction(
                 }
                 let stored = op.opc == OpCode::CPUI_STORE && i == 2;
                 if !formal && !(stored && multi_store) {
-                    let into = if stored { &mut res.stored_read_bytes } else { &mut res.live_read_bytes };
+                    let into = if stored {
+                        &mut res.stored_read_bytes
+                    } else {
+                        &mut res.live_read_bytes
+                    };
                     for b in off..off + v.size as u64 {
                         if !base.contains(&(idx, b)) {
                             into.insert((idx, b));
                             if !stored {
-                                let unpadded = if pushing { &mut this_push } else { &mut res.unpadded_read_bytes };
+                                let unpadded = if pushing {
+                                    &mut this_push
+                                } else {
+                                    &mut res.unpadded_read_bytes
+                                };
                                 unpadded.insert((idx, b));
                             }
                         }
@@ -1573,7 +1720,10 @@ fn step_instruction(
             OpCode::CPUI_CALLIND | OpCode::CPUI_CALLOTHER | OpCode::CPUI_BRANCHIND => {
                 pushed.flush(res);
                 if op.opc == OpCode::CPUI_CALLOTHER
-                    && op.ins.first().is_some_and(|v| traps.contains(&(v.offset as uint4)))
+                    && op
+                        .ins
+                        .first()
+                        .is_some_and(|v| traps.contains(&(v.offset as uint4)))
                 {
                     res.trap_cuts.push(cur.clone());
                 }
@@ -1657,10 +1807,18 @@ fn step_instruction(
     }
     let mut next: Vec<Frame> = targets
         .into_iter()
-        .map(|t| Frame { at: t, written: cur.clone(), pushed: pushed.clone() })
+        .map(|t| Frame {
+            at: t,
+            written: cur.clone(),
+            pushed: pushed.clone(),
+        })
         .collect();
     if !ends_flow {
-        next.push(Frame { at: at + len as i64, written: cur, pushed });
+        next.push(Frame {
+            at: at + len as i64,
+            written: cur,
+            pushed,
+        });
     }
     Some(next)
 }
@@ -1680,7 +1838,9 @@ fn push_copies(emit: &EntryEmit, reg_idx: int4) -> Option<((u64, u32), Vec<usize
     };
     let mut found: Option<((u64, u32), Vec<usize>)> = None;
     for (j, store) in emit.ops.iter().enumerate() {
-        let [_, addr, value] = store.ins.as_slice() else { continue };
+        let [_, addr, value] = store.ins.as_slice() else {
+            continue;
+        };
         if store.opc != OpCode::CPUI_STORE || !in_regs(addr) || in_regs(value) {
             continue;
         }
@@ -1689,27 +1849,45 @@ fn push_copies(emit: &EntryEmit, reg_idx: int4) -> Option<((u64, u32), Vec<usize
                 && o.out.as_ref().is_some_and(|out| same(out, addr))
                 && o.ins.first().is_some_and(|i| same(i, addr))
         });
-        let copy = emit.ops[..j].iter().rposition(|o| o.out.as_ref().is_some_and(|out| same(out, value)));
-        let Some(k) = copy.filter(|_| moved) else { continue };
+        let copy = emit.ops[..j]
+            .iter()
+            .rposition(|o| o.out.as_ref().is_some_and(|out| same(out, value)));
+        let Some(k) = copy.filter(|_| moved) else {
+            continue;
+        };
         let copied = &emit.ops[k];
-        if copied.opc != OpCode::CPUI_COPY || !copied.ins.first().is_some_and(|i| in_regs(i) && !same(i, addr)) {
+        if copied.opc != OpCode::CPUI_COPY
+            || !copied
+                .ins
+                .first()
+                .is_some_and(|i| in_regs(i) && !same(i, addr))
+        {
             continue;
         }
-        if found.as_ref().is_some_and(|(sp, _)| *sp != (addr.offset, addr.size)) {
+        if found
+            .as_ref()
+            .is_some_and(|(sp, _)| *sp != (addr.offset, addr.size))
+        {
             return None;
         }
-        found.get_or_insert_with(|| ((addr.offset, addr.size), Vec::new())).1.push(k);
+        found
+            .get_or_insert_with(|| ((addr.offset, addr.size), Vec::new()))
+            .1
+            .push(k);
     }
     found
 }
-
 
 /// Is input `i` of `opc` an address/annotation operand rather than a data read?
 fn skip_input(opc: OpCode, i: usize) -> bool {
     match opc {
         // Slot 0 is the branch/call destination.
-        OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH | OpCode::CPUI_BRANCHIND
-        | OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_RETURN => i == 0,
+        OpCode::CPUI_BRANCH
+        | OpCode::CPUI_CBRANCH
+        | OpCode::CPUI_BRANCHIND
+        | OpCode::CPUI_CALL
+        | OpCode::CPUI_CALLIND
+        | OpCode::CPUI_RETURN => i == 0,
         // Slot 0 is the userop id; slot 0 of LOAD/STORE is the space id.
         OpCode::CPUI_CALLOTHER | OpCode::CPUI_LOAD | OpCode::CPUI_STORE => i == 0,
         _ => false,
@@ -1725,15 +1903,18 @@ fn skip_input(opc: OpCode, i: usize) -> bool {
 /// translator, so the probe cannot be taken lazily at the seam. Results are
 /// cached on the `Architecture`, so each distinct callee body is decoded once per
 /// run.
-pub fn seed_callee_entry_dead(
-    arch: &mut crate::architecture::Architecture,
-    data: &mut Funcdata,
-) {
+pub fn seed_callee_entry_dead(arch: &mut crate::architecture::Architecture, data: &mut Funcdata) {
     if crate::kuna_armfloatargs::applies(arch) && !data.get_address().is_invalid() {
-        let reg_idx =
-            arch.manage().get_space_by_name("register").map(|s| s.get_index()).unwrap_or(-1);
+        let reg_idx = arch
+            .manage()
+            .get_space_by_name("register")
+            .map(|s| s.get_index())
+            .unwrap_or(-1);
         let own = data.get_address().clone();
-        if let Some(d) = (reg_idx >= 0).then(|| probe_cached(arch, &own, reg_idx)).flatten() {
+        if let Some(d) = (reg_idx >= 0)
+            .then(|| probe_cached(arch, &own, reg_idx))
+            .flatten()
+        {
             data.kuna_set_own_entry_dead(d);
         }
     }
@@ -1742,8 +1923,11 @@ pub fn seed_callee_entry_dead(
     // consult it and the decode is pure cost.
     let clobber_veto = arch.arg_clobber && !arch.kuna_protoorder_types.is_empty();
     let pass_through = arch.pass_through && !arch.kuna_protoorder_types.is_empty();
-    let reg_idx =
-        arch.manage().get_space_by_name("register").map(|s| s.get_index()).unwrap_or(-1);
+    let reg_idx = arch
+        .manage()
+        .get_space_by_name("register")
+        .map(|s| s.get_index())
+        .unwrap_or(-1);
     if reg_idx < 0 {
         return;
     }
@@ -1772,7 +1956,12 @@ pub fn seed_callee_entry_dead(
         if let Some(d) = probe_cached(arch, &e, reg_idx) {
             data.kuna_set_callee_entry_dead(&e, d);
         }
-        if pass_through && arch.kuna_protoorder_types.get(&key).is_some_and(|s| !s.inputs.is_empty()) {
+        if pass_through
+            && arch
+                .kuna_protoorder_types
+                .get(&key)
+                .is_some_and(|s| !s.inputs.is_empty())
+        {
             if let Some(t) = reads_through_calls(arch, &e, reg_idx, &mut through_memo) {
                 data.kuna_set_callee_entry_through(&e, t);
             }
@@ -1814,12 +2003,16 @@ pub(crate) fn is_leftover_call_result(data: &Funcdata, vn: VarnodeId, depth: u32
     if depth >= MAX_LEFTOVER_DEPTH {
         return false;
     }
-    let Some(v) = data.vbank().get(vn) else { return false };
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
     if !v.is_written() {
         return false;
     }
     let Some(def) = v.get_def() else { return false };
-    let Some(op) = data.obank().get(def) else { return false };
+    let Some(op) = data.obank().get(def) else {
+        return false;
+    };
     let all_inputs = |n: int4| -> bool {
         (0..n).all(|i| match data.obank().get(def).and_then(|o| o.get_in(i)) {
             Some(x) => is_leftover_call_result(data, x, depth + 1),

@@ -103,7 +103,10 @@ impl MockDriver {
 
     /// Replace the kind of every symbol in `symlist` (the attach* targets).
     fn replace_symlist(&mut self, symlist: &[SymId], kind: SymbolTokenKind) {
-        let names: Vec<Vec<u8>> = symlist.iter().filter_map(|id| self.name_for_id(*id)).collect();
+        let names: Vec<Vec<u8>> = symlist
+            .iter()
+            .filter_map(|id| self.name_for_id(*id))
+            .collect();
         for name in names {
             self.replace(&name, kind);
         }
@@ -302,7 +305,13 @@ impl ParserActions for MockDriver {
     fn is_in_root(&self, ct: u32) -> bool {
         *self.ctor_in_root.get(&ct).unwrap_or(&true)
     }
-    fn build_constructor(&mut self, _big: u32, _pateq: Option<u32>, _contvec: Option<Vec<u32>>, _vec: u32) {
+    fn build_constructor(
+        &mut self,
+        _big: u32,
+        _pateq: Option<u32>,
+        _contvec: Option<Vec<u32>>,
+        _vec: u32,
+    ) {
         self.pop_scope();
     }
 
@@ -338,23 +347,49 @@ impl ParserActions for MockDriver {
         true
     }
 
-    fn peq_and(&mut self, _l: u32, _r: u32) -> u32 { self.fresh() }
-    fn peq_or(&mut self, _l: u32, _r: u32) -> u32 { self.fresh() }
-    fn peq_cat(&mut self, _l: u32, _r: u32) -> u32 { self.fresh() }
-    fn peq_left_ellipsis(&mut self, _e: u32) -> u32 { self.fresh() }
-    fn peq_right_ellipsis(&mut self, _e: u32) -> u32 { self.fresh() }
-    fn peq_equal(&mut self, _fam: SymId, _rhs: u32) -> u32 { self.fresh() }
-    fn peq_notequal(&mut self, _fam: SymId, _rhs: u32) -> u32 { self.fresh() }
-    fn peq_less(&mut self, _fam: SymId, _rhs: u32) -> u32 { self.fresh() }
-    fn peq_lessequal(&mut self, _fam: SymId, _rhs: u32) -> u32 { self.fresh() }
-    fn peq_greater(&mut self, _fam: SymId, _rhs: u32) -> u32 { self.fresh() }
-    fn peq_greaterequal(&mut self, _fam: SymId, _rhs: u32) -> u32 { self.fresh() }
+    fn peq_and(&mut self, _l: u32, _r: u32) -> u32 {
+        self.fresh()
+    }
+    fn peq_or(&mut self, _l: u32, _r: u32) -> u32 {
+        self.fresh()
+    }
+    fn peq_cat(&mut self, _l: u32, _r: u32) -> u32 {
+        self.fresh()
+    }
+    fn peq_left_ellipsis(&mut self, _e: u32) -> u32 {
+        self.fresh()
+    }
+    fn peq_right_ellipsis(&mut self, _e: u32) -> u32 {
+        self.fresh()
+    }
+    fn peq_equal(&mut self, _fam: SymId, _rhs: u32) -> u32 {
+        self.fresh()
+    }
+    fn peq_notequal(&mut self, _fam: SymId, _rhs: u32) -> u32 {
+        self.fresh()
+    }
+    fn peq_less(&mut self, _fam: SymId, _rhs: u32) -> u32 {
+        self.fresh()
+    }
+    fn peq_lessequal(&mut self, _fam: SymId, _rhs: u32) -> u32 {
+        self.fresh()
+    }
+    fn peq_greater(&mut self, _fam: SymId, _rhs: u32) -> u32 {
+        self.fresh()
+    }
+    fn peq_greaterequal(&mut self, _fam: SymId, _rhs: u32) -> u32 {
+        self.fresh()
+    }
     fn constrain_operand(&mut self, _sym: SymId, _patexp: u32) -> Option<u32> {
         Some(self.fresh())
     }
-    fn peq_operand_equation(&mut self, _sym: SymId) -> u32 { self.fresh() }
+    fn peq_operand_equation(&mut self, _sym: SymId) -> u32 {
+        self.fresh()
+    }
     fn self_define(&mut self, _sym: SymId) {}
-    fn peq_unconstrained(&mut self, _spec: SymId) -> u32 { self.fresh() }
+    fn peq_unconstrained(&mut self, _spec: SymId) -> u32 {
+        self.fresh()
+    }
     fn define_invisible_operand(&mut self, sym: SymId) -> Option<u32> {
         // defineInvisibleOperand adds an OperandSymbol named after the inner symbol
         // into the current constructor scope (slgh_compile.cc:3044), shadowing it,
@@ -365,20 +400,48 @@ impl ParserActions for MockDriver {
         Some(self.fresh())
     }
 
-    fn pexp_constant(&mut self, _val: i64) -> u32 { self.fresh() }
-    fn pexp_family_value(&mut self, _fam: SymId) -> u32 { self.fresh() }
-    fn pexp_spec_expression(&mut self, _spec: SymId) -> u32 { self.fresh() }
-    fn pexp_plus(&mut self, _l: u32, _r: u32) -> u32 { self.fresh() }
-    fn pexp_sub(&mut self, _l: u32, _r: u32) -> u32 { self.fresh() }
-    fn pexp_mult(&mut self, _l: u32, _r: u32) -> u32 { self.fresh() }
-    fn pexp_leftshift(&mut self, _l: u32, _r: u32) -> u32 { self.fresh() }
-    fn pexp_rightshift(&mut self, _l: u32, _r: u32) -> u32 { self.fresh() }
-    fn pexp_and(&mut self, _l: u32, _r: u32) -> u32 { self.fresh() }
-    fn pexp_or(&mut self, _l: u32, _r: u32) -> u32 { self.fresh() }
-    fn pexp_xor(&mut self, _l: u32, _r: u32) -> u32 { self.fresh() }
-    fn pexp_div(&mut self, _l: u32, _r: u32) -> u32 { self.fresh() }
-    fn pexp_minus(&mut self, _e: u32) -> u32 { self.fresh() }
-    fn pexp_not(&mut self, _e: u32) -> u32 { self.fresh() }
+    fn pexp_constant(&mut self, _val: i64) -> u32 {
+        self.fresh()
+    }
+    fn pexp_family_value(&mut self, _fam: SymId) -> u32 {
+        self.fresh()
+    }
+    fn pexp_spec_expression(&mut self, _spec: SymId) -> u32 {
+        self.fresh()
+    }
+    fn pexp_plus(&mut self, _l: u32, _r: u32) -> u32 {
+        self.fresh()
+    }
+    fn pexp_sub(&mut self, _l: u32, _r: u32) -> u32 {
+        self.fresh()
+    }
+    fn pexp_mult(&mut self, _l: u32, _r: u32) -> u32 {
+        self.fresh()
+    }
+    fn pexp_leftshift(&mut self, _l: u32, _r: u32) -> u32 {
+        self.fresh()
+    }
+    fn pexp_rightshift(&mut self, _l: u32, _r: u32) -> u32 {
+        self.fresh()
+    }
+    fn pexp_and(&mut self, _l: u32, _r: u32) -> u32 {
+        self.fresh()
+    }
+    fn pexp_or(&mut self, _l: u32, _r: u32) -> u32 {
+        self.fresh()
+    }
+    fn pexp_xor(&mut self, _l: u32, _r: u32) -> u32 {
+        self.fresh()
+    }
+    fn pexp_div(&mut self, _l: u32, _r: u32) -> u32 {
+        self.fresh()
+    }
+    fn pexp_minus(&mut self, _e: u32) -> u32 {
+        self.fresh()
+    }
+    fn pexp_not(&mut self, _e: u32) -> u32 {
+        self.fresh()
+    }
 
     fn context_mod(&mut self, _vec: &mut Vec<u32>, _sym: SymId, _pe: u32) -> bool {
         true
@@ -391,53 +454,131 @@ impl ParserActions for MockDriver {
         // constructor scope so later references resolve to VARSYM.
         self.add(name, SymbolTokenKind::Varnode);
     }
-    fn pcode_new_output(&mut self, _islocal: bool, _expr: u32, name: &[u8], _size: Option<u64>) -> u32 {
+    fn pcode_new_output(
+        &mut self,
+        _islocal: bool,
+        _expr: u32,
+        name: &[u8],
+        _size: Option<u64>,
+    ) -> u32 {
         // newOutput defines the named temporary as a VarnodeSymbol (the local
         // declaration side-effect) so later references resolve to VARSYM.
         self.add(name, SymbolTokenKind::Varnode);
         self.fresh()
     }
-    fn stmt_assign(&mut self, _lhs: u32, _expr: u32) -> u32 { self.fresh() }
-    fn pcode_create_store(&mut self, _star: u32, _ptr: u32, _val: u32) -> u32 { self.fresh() }
-    fn pcode_create_user_op_noout(&mut self, _sym: SymId, _params: Vec<u32>) -> u32 { self.fresh() }
-    fn pcode_assign_bitrange_idx(&mut self, _lhs: u32, _off: u32, _size: u32, _expr: u32) -> u32 { self.fresh() }
-    fn pcode_assign_bitrange_bitsym(&mut self, _bitsym: SymId, _expr: u32) -> u32 { self.fresh() }
-    fn pcode_create_op_const(&mut self, _op: ConstOp, _val: u64) -> u32 { self.fresh() }
-    fn create_cross_build(&mut self, _addr: u32, _sym: SymId) -> u32 { self.fresh() }
-    fn pcode_create_op_noout(&mut self, _opc: PcodeOpc, _a: u32, _cond: Option<u32>) -> u32 { self.fresh() }
-    fn create_macro_use_stmt(&mut self, _sym: SymId, _param: Vec<u32>) -> u32 { self.fresh() }
-    fn pcode_place_label(&mut self, _label: SymId) -> u32 { self.fresh() }
+    fn stmt_assign(&mut self, _lhs: u32, _expr: u32) -> u32 {
+        self.fresh()
+    }
+    fn pcode_create_store(&mut self, _star: u32, _ptr: u32, _val: u32) -> u32 {
+        self.fresh()
+    }
+    fn pcode_create_user_op_noout(&mut self, _sym: SymId, _params: Vec<u32>) -> u32 {
+        self.fresh()
+    }
+    fn pcode_assign_bitrange_idx(&mut self, _lhs: u32, _off: u32, _size: u32, _expr: u32) -> u32 {
+        self.fresh()
+    }
+    fn pcode_assign_bitrange_bitsym(&mut self, _bitsym: SymId, _expr: u32) -> u32 {
+        self.fresh()
+    }
+    fn pcode_create_op_const(&mut self, _op: ConstOp, _val: u64) -> u32 {
+        self.fresh()
+    }
+    fn create_cross_build(&mut self, _addr: u32, _sym: SymId) -> u32 {
+        self.fresh()
+    }
+    fn pcode_create_op_noout(&mut self, _opc: PcodeOpc, _a: u32, _cond: Option<u32>) -> u32 {
+        self.fresh()
+    }
+    fn create_macro_use_stmt(&mut self, _sym: SymId, _param: Vec<u32>) -> u32 {
+        self.fresh()
+    }
+    fn pcode_place_label(&mut self, _label: SymId) -> u32 {
+        self.fresh()
+    }
 
-    fn expr_from_varnode(&mut self, _vn: u32) -> u32 { self.fresh() }
-    fn pcode_create_load(&mut self, _star: u32, _ptr: u32) -> u32 { self.fresh() }
-    fn pcode_create_op(&mut self, _opc: PcodeOpc, _a: u32, _b: Option<u32>) -> u32 { self.fresh() }
-    fn pcode_create_bitrange_colon(&mut self, _spec: SymId, _nbytes: u64) -> u32 { self.fresh() }
-    fn pcode_create_bitrange_idx(&mut self, _spec: SymId, _off: u32, _size: u32) -> u32 { self.fresh() }
-    fn pcode_create_bitrange_bitsym(&mut self, _bitsym: SymId) -> u32 { self.fresh() }
-    fn pcode_create_user_op(&mut self, _sym: SymId, _params: Vec<u32>) -> u32 { self.fresh() }
-    fn pcode_create_variadic_cpoolref(&mut self, _params: Vec<u32>) -> u32 { self.fresh() }
-    fn pcode_create_subpiece(&mut self, _spec: SymId, _off: u32) -> u32 { self.fresh() }
+    fn expr_from_varnode(&mut self, _vn: u32) -> u32 {
+        self.fresh()
+    }
+    fn pcode_create_load(&mut self, _star: u32, _ptr: u32) -> u32 {
+        self.fresh()
+    }
+    fn pcode_create_op(&mut self, _opc: PcodeOpc, _a: u32, _b: Option<u32>) -> u32 {
+        self.fresh()
+    }
+    fn pcode_create_bitrange_colon(&mut self, _spec: SymId, _nbytes: u64) -> u32 {
+        self.fresh()
+    }
+    fn pcode_create_bitrange_idx(&mut self, _spec: SymId, _off: u32, _size: u32) -> u32 {
+        self.fresh()
+    }
+    fn pcode_create_bitrange_bitsym(&mut self, _bitsym: SymId) -> u32 {
+        self.fresh()
+    }
+    fn pcode_create_user_op(&mut self, _sym: SymId, _params: Vec<u32>) -> u32 {
+        self.fresh()
+    }
+    fn pcode_create_variadic_cpoolref(&mut self, _params: Vec<u32>) -> u32 {
+        self.fresh()
+    }
+    fn pcode_create_subpiece(&mut self, _spec: SymId, _off: u32) -> u32 {
+        self.fresh()
+    }
 
-    fn sizedstar_space_sz(&mut self, _spacesym: SymId, _size: u64) -> u32 { self.fresh() }
-    fn sizedstar_space(&mut self, _spacesym: SymId) -> u32 { self.fresh() }
-    fn sizedstar_default_sz(&mut self, _size: u64) -> u32 { self.fresh() }
-    fn sizedstar_default(&mut self) -> u32 { self.fresh() }
+    fn sizedstar_space_sz(&mut self, _spacesym: SymId, _size: u64) -> u32 {
+        self.fresh()
+    }
+    fn sizedstar_space(&mut self, _spacesym: SymId) -> u32 {
+        self.fresh()
+    }
+    fn sizedstar_default_sz(&mut self, _size: u64) -> u32 {
+        self.fresh()
+    }
+    fn sizedstar_default(&mut self) -> u32 {
+        self.fresh()
+    }
 
-    fn jumpdest_jumpsym(&mut self, _sym: SymId) -> u32 { self.fresh() }
-    fn jumpdest_integer(&mut self, _val: u64) -> u32 { self.fresh() }
-    fn jumpdest_operandsym(&mut self, _sym: SymId) -> u32 { self.fresh() }
-    fn jumpdest_integer_space(&mut self, _val: u64, _spacesym: SymId) -> u32 { self.fresh() }
-    fn jumpdest_label(&mut self, _label: SymId) -> u32 { self.fresh() }
+    fn jumpdest_jumpsym(&mut self, _sym: SymId) -> u32 {
+        self.fresh()
+    }
+    fn jumpdest_integer(&mut self, _val: u64) -> u32 {
+        self.fresh()
+    }
+    fn jumpdest_operandsym(&mut self, _sym: SymId) -> u32 {
+        self.fresh()
+    }
+    fn jumpdest_integer_space(&mut self, _val: u64, _spacesym: SymId) -> u32 {
+        self.fresh()
+    }
+    fn jumpdest_label(&mut self, _label: SymId) -> u32 {
+        self.fresh()
+    }
 
-    fn varnode_spec(&mut self, _spec: SymId) -> u32 { self.fresh() }
-    fn intvn_integer(&mut self, _val: u64) -> u32 { self.fresh() }
-    fn intvn_integer_colon(&mut self, _val: u64, _size: u64) -> u32 { self.fresh() }
-    fn pcode_address_of(&mut self, _vn: u32, _size: u64) -> u32 { self.fresh() }
-    fn lhsvarnode_spec(&mut self, _spec: SymId) -> u32 { self.fresh() }
-    fn exportvarnode_spec(&mut self, _spec: SymId) -> u32 { self.fresh() }
-    fn exportvarnode_integer_colon(&mut self, _val: u64, _size: u64) -> u32 { self.fresh() }
+    fn varnode_spec(&mut self, _spec: SymId) -> u32 {
+        self.fresh()
+    }
+    fn intvn_integer(&mut self, _val: u64) -> u32 {
+        self.fresh()
+    }
+    fn intvn_integer_colon(&mut self, _val: u64, _size: u64) -> u32 {
+        self.fresh()
+    }
+    fn pcode_address_of(&mut self, _vn: u32, _size: u64) -> u32 {
+        self.fresh()
+    }
+    fn lhsvarnode_spec(&mut self, _spec: SymId) -> u32 {
+        self.fresh()
+    }
+    fn exportvarnode_spec(&mut self, _spec: SymId) -> u32 {
+        self.fresh()
+    }
+    fn exportvarnode_integer_colon(&mut self, _val: u64, _size: u64) -> u32 {
+        self.fresh()
+    }
 
-    fn label_sym(&mut self, _sym: SymId) -> u32 { self.fresh() }
+    fn label_sym(&mut self, _sym: SymId) -> u32 {
+        self.fresh()
+    }
     fn pcode_define_label(&mut self, name: &[u8]) -> u32 {
         // defineLabel adds a LabelSymbol into the constructor scope.
         self.add(name, SymbolTokenKind::Label);
@@ -490,7 +631,8 @@ fn check_golden(name: &str, spec_rel: &str) {
     let got_lines: Vec<&str> = got.lines().collect();
     for (i, (g, r)) in gold_lines.iter().zip(got_lines.iter()).enumerate() {
         assert_eq!(
-            g, r,
+            g,
+            r,
             "[{name}] action {i} mismatch:\n  golden: {g}\n  rust:   {r}\n  (context golden[{}..{}]: {:?})",
             i.saturating_sub(3),
             (i + 1).min(gold_lines.len()),
@@ -512,12 +654,18 @@ fn check_golden(name: &str, spec_rel: &str) {
 
 #[test]
 fn golden_data_le_64() {
-    check_golden("data_le_64", "specs/Ghidra/Processors/DATA/data/languages/data-le-64.slaspec");
+    check_golden(
+        "data_le_64",
+        "specs/Ghidra/Processors/DATA/data/languages/data-le-64.slaspec",
+    );
 }
 
 #[test]
 fn golden_data_be_64() {
-    check_golden("data_be_64", "specs/Ghidra/Processors/DATA/data/languages/data-be-64.slaspec");
+    check_golden(
+        "data_be_64",
+        "specs/Ghidra/Processors/DATA/data/languages/data-be-64.slaspec",
+    );
 }
 
 // --- Toy builder: smallest real constructors/patterns/p-code, with-blocks,
@@ -525,39 +673,60 @@ fn golden_data_be_64() {
 
 #[test]
 fn golden_toy_builder_le() {
-    check_golden("toy_builder_le", "specs/Ghidra/Processors/Toy/data/languages/toy_builder_le.slaspec");
+    check_golden(
+        "toy_builder_le",
+        "specs/Ghidra/Processors/Toy/data/languages/toy_builder_le.slaspec",
+    );
 }
 
 #[test]
 fn golden_toy_builder_be() {
-    check_golden("toy_builder_be", "specs/Ghidra/Processors/Toy/data/languages/toy_builder_be.slaspec");
+    check_golden(
+        "toy_builder_be",
+        "specs/Ghidra/Processors/Toy/data/languages/toy_builder_be.slaspec",
+    );
 }
 
 #[test]
 fn golden_toy_builder_le_align2() {
-    check_golden("toy_builder_le_align2", "specs/Ghidra/Processors/Toy/data/languages/toy_builder_le_align2.slaspec");
+    check_golden(
+        "toy_builder_le_align2",
+        "specs/Ghidra/Processors/Toy/data/languages/toy_builder_le_align2.slaspec",
+    );
 }
 
 // --- full Toy ISA (attaches, with-blocks, macros, contexts) ---
 
 #[test]
 fn golden_toy_le() {
-    check_golden("toy_le", "specs/Ghidra/Processors/Toy/data/languages/toy_le.slaspec");
+    check_golden(
+        "toy_le",
+        "specs/Ghidra/Processors/Toy/data/languages/toy_le.slaspec",
+    );
 }
 
 #[test]
 fn golden_toy64_be() {
-    check_golden("toy64_be", "specs/Ghidra/Processors/Toy/data/languages/toy64_be.slaspec");
+    check_golden(
+        "toy64_be",
+        "specs/Ghidra/Processors/Toy/data/languages/toy64_be.slaspec",
+    );
 }
 
 // --- small real ISAs ---
 
 #[test]
 fn golden_bpf_le() {
-    check_golden("bpf_le", "specs/Ghidra/Processors/BPF/data/languages/BPF_le.slaspec");
+    check_golden(
+        "bpf_le",
+        "specs/Ghidra/Processors/BPF/data/languages/BPF_le.slaspec",
+    );
 }
 
 #[test]
 fn golden_m6502() {
-    check_golden("m6502", "specs/Ghidra/Processors/6502/data/languages/6502.slaspec");
+    check_golden(
+        "m6502",
+        "specs/Ghidra/Processors/6502/data/languages/6502.slaspec",
+    );
 }

@@ -29,9 +29,9 @@ use unlace_base::space::AddrSpace;
 use unlace_base::types::{int4, int8, uint4, uintb};
 use unlace_num::opcodes::OpCode;
 
-use crate::dtype::{type_metatype, Datatype};
-use crate::funcdata::Funcdata;
 use crate::context::{OpId, VarnodeId};
+use crate::dtype::{Datatype, type_metatype};
+use crate::funcdata::Funcdata;
 
 /// The mutable analysis state for one `RulePtrArith` application
 /// (C++ `class AddTreeState`).
@@ -152,8 +152,7 @@ impl<'a> AddTreeState<'a> {
         self.nonmultsum = 0;
         self.biggest_non_mult_coeff = 0;
         if let Some(rel) = &self.p_rel_type {
-            self.nonmultsum =
-                (rel.get_address_offset().unwrap_or(0) as uintb) & self.ptrmask;
+            self.nonmultsum = (rel.get_address_offset().unwrap_or(0) as uintb) & self.ptrmask;
         }
         self.multiple.clear();
         self.coeff.clear();
@@ -180,7 +179,8 @@ impl<'a> AddTreeState<'a> {
         self.size = if self.base_type.is_variable_length() {
             0
         } else {
-            AddrSpace::byte_to_address_int(self.base_type.get_align_size() as i64, word_size) as int8
+            AddrSpace::byte_to_address_int(self.base_type.get_align_size() as i64, word_size)
+                as int8
         };
         let unitsize = AddrSpace::address_to_byte_int(1, word_size);
         let align = self.base_type.get_align_size();
@@ -193,25 +193,45 @@ impl<'a> AddTreeState<'a> {
     // --- small IR accessors -------------------------------------------------
 
     fn vn_is_constant(&self, vn: VarnodeId) -> bool {
-        self.data.vbank().get(vn).map(|v| v.is_constant()).unwrap_or(false)
+        self.data
+            .vbank()
+            .get(vn)
+            .map(|v| v.is_constant())
+            .unwrap_or(false)
     }
     fn vn_offset(&self, vn: VarnodeId) -> uintb {
-        self.data.vbank().get(vn).map(|v| v.get_offset()).unwrap_or(0)
+        self.data
+            .vbank()
+            .get(vn)
+            .map(|v| v.get_offset())
+            .unwrap_or(0)
     }
     fn vn_size(&self, vn: VarnodeId) -> int4 {
         self.data.vbank().get(vn).map(|v| v.get_size()).unwrap_or(1)
     }
     fn vn_is_written(&self, vn: VarnodeId) -> bool {
-        self.data.vbank().get(vn).map(|v| v.is_written()).unwrap_or(false)
+        self.data
+            .vbank()
+            .get(vn)
+            .map(|v| v.is_written())
+            .unwrap_or(false)
     }
     fn vn_is_free(&self, vn: VarnodeId) -> bool {
-        self.data.vbank().get(vn).map(|v| v.is_free()).unwrap_or(true)
+        self.data
+            .vbank()
+            .get(vn)
+            .map(|v| v.is_free())
+            .unwrap_or(true)
     }
     fn vn_def(&self, vn: VarnodeId) -> Option<OpId> {
         self.data.vbank().get(vn).and_then(|v| v.get_def())
     }
     fn op_code(&self, op: OpId) -> OpCode {
-        self.data.obank().get(op).map(|o| o.code()).unwrap_or(OpCode::CPUI_MAX)
+        self.data
+            .obank()
+            .get(op)
+            .map(|o| o.code())
+            .unwrap_or(OpCode::CPUI_MAX)
     }
     fn op_in(&self, op: OpId, slot: int4) -> VarnodeId {
         self.data
@@ -255,7 +275,9 @@ impl<'a> AddTreeState<'a> {
             }
             return (-1, off, 0);
         }
-        self.base_type.nearest_arrayed_component_backward(off, max).unwrap_or((-1, off, 0))
+        self.base_type
+            .nearest_arrayed_component_backward(off, max)
+            .unwrap_or((-1, off, 0))
     }
 
     /// `base_type->nearestArrayedComponentForward(off, max)`, with the
@@ -267,7 +289,9 @@ impl<'a> AddTreeState<'a> {
             }
             return (-1, off, 0);
         }
-        self.base_type.nearest_arrayed_component_forward(off, max).unwrap_or((-1, off, 0))
+        self.base_type
+            .nearest_arrayed_component_forward(off, max)
+            .unwrap_or((-1, off, 0))
     }
 
     /// C++ `AddTreeState::hasMatchingSubType(off, arrayHint, &newoff)`.
@@ -310,9 +334,21 @@ impl<'a> AddTreeState<'a> {
                 return (true, newoff); // Offset is contained in an arrayed component
             }
         }
-        let dist_before = if off_before < 0 { (-off_before) as uintb } else { off_before as uintb };
-        let dist_after = if off_after < 0 { (-off_after) as uintb } else { off_after as uintb };
-        let newoff = if dist_after < dist_before { off_after } else { off_before };
+        let dist_before = if off_before < 0 {
+            (-off_before) as uintb
+        } else {
+            off_before as uintb
+        };
+        let dist_after = if off_after < 0 {
+            (-off_after) as uintb
+        } else {
+            off_after as uintb
+        };
+        let newoff = if dist_after < dist_before {
+            off_after
+        } else {
+            off_before
+        };
         (true, newoff)
     }
 
@@ -327,7 +363,11 @@ impl<'a> AddTreeState<'a> {
         if self.vn_is_constant(vnconst) {
             let val = self.vn_offset(vnconst).wrapping_mul(tree_coeff) & self.ptrmask;
             let sval = sign_extend(val as i64, self.vn_size(vn) * 8 - 1);
-            let rem = if self.size == 0 { sval } else { sval % self.size };
+            let rem = if self.size == 0 {
+                sval
+            } else {
+                sval % self.size
+            };
             if rem != 0 {
                 if (val >= self.size as uintb) && self.size != 0 {
                     self.valid = false; // Size too big: pointer type must be wrong
@@ -379,10 +419,14 @@ impl<'a> AddTreeState<'a> {
             return false;
         }
         if self.vn_is_constant(vn) {
-        // val is NOT masked here in C++ (unlike checkMultTerm, which masks).
+            // val is NOT masked here in C++ (unlike checkMultTerm, which masks).
             let val = self.vn_offset(vn).wrapping_mul(tree_coeff);
             let sval = sign_extend(val as i64, self.vn_size(vn) * 8 - 1);
-            let rem = if self.size == 0 { sval } else { sval % self.size };
+            let rem = if self.size == 0 {
+                sval
+            } else {
+                sval % self.size
+            };
             if rem != 0 {
                 // constant is not a multiple of size
                 if tree_coeff != 1 {
@@ -490,7 +534,8 @@ impl<'a> AddTreeState<'a> {
             self.is_subtype = false;
         } else if self.base_type.get_metatype() == type_metatype::TYPE_SPACEBASE {
             let offsetbytes = AddrSpace::address_to_byte_int(self.offset as i64, word_size);
-            let (matched, extra) = self.has_matching_sub_type(offsetbytes, self.biggest_non_mult_coeff);
+            let (matched, extra) =
+                self.has_matching_sub_type(offsetbytes, self.biggest_non_mult_coeff);
             if !matched {
                 self.valid = false;
                 return;
@@ -502,7 +547,8 @@ impl<'a> AddTreeState<'a> {
         } else if self.base_type.get_metatype() == type_metatype::TYPE_STRUCT {
             let soffset = sign_extend(self.offset as i64, self.ptrsize * 8 - 1);
             let offsetbytes = AddrSpace::address_to_byte_int(soffset, word_size);
-            let (matched, mut extra) = self.has_matching_sub_type(offsetbytes, self.biggest_non_mult_coeff);
+            let (matched, mut extra) =
+                self.has_matching_sub_type(offsetbytes, self.biggest_non_mult_coeff);
             if !matched {
                 // Compare as bytes, not address units.
                 if offsetbytes < 0 || offsetbytes >= self.base_type.get_size() as int8 {
@@ -543,7 +589,11 @@ impl<'a> AddTreeState<'a> {
     /// data-type to the output of the newly created PTRADD/PTRSUB.
     fn assign_propagated_type(&mut self, op: OpId) {
         let vn = self.op_in(op, 0);
-        let in_type = self.data.vbank().get(vn).map(|v| v.get_type_read_facing(op).clone());
+        let in_type = self
+            .data
+            .vbank()
+            .get(vn)
+            .map(|v| v.get_type_read_facing(op).clone());
         let out = match self.data.obank().get(op).and_then(|o| o.get_out()) {
             Some(o) => o,
             None => return,
@@ -570,8 +620,11 @@ impl<'a> AddTreeState<'a> {
         } else {
             ((smultsum / self.size) as uintb) & self.ptrmask
         };
-        let mut res_node: Option<VarnodeId> =
-            if const_coeff == 0 { None } else { Some(self.data.new_constant(self.ptrsize, const_coeff)) };
+        let mut res_node: Option<VarnodeId> = if const_coeff == 0 {
+            None
+        } else {
+            Some(self.data.new_constant(self.ptrsize, const_coeff))
+        };
         for i in 0..self.multiple.len() {
             let final_coeff: uintb = if self.size == 0 {
                 0
@@ -581,14 +634,29 @@ impl<'a> AddTreeState<'a> {
             let mut vn = self.multiple[i];
             if final_coeff != 1 {
                 let c = self.data.new_constant(self.ptrsize, final_coeff);
-                let op = self.data.new_op_before(self.base_op, OpCode::CPUI_INT_MULT, vn, c, None);
-                vn = self.data.obank().get(op).and_then(|o| o.get_out()).expect("build_multiples: mult out");
+                let op = self
+                    .data
+                    .new_op_before(self.base_op, OpCode::CPUI_INT_MULT, vn, c, None);
+                vn = self
+                    .data
+                    .obank()
+                    .get(op)
+                    .and_then(|o| o.get_out())
+                    .expect("build_multiples: mult out");
             }
             res_node = match res_node {
                 None => Some(vn),
                 Some(rn) => {
-                    let op = self.data.new_op_before(self.base_op, OpCode::CPUI_INT_ADD, vn, rn, None);
-                    Some(self.data.obank().get(op).and_then(|o| o.get_out()).expect("build_multiples: add out"))
+                    let op =
+                        self.data
+                            .new_op_before(self.base_op, OpCode::CPUI_INT_ADD, vn, rn, None);
+                    Some(
+                        self.data
+                            .obank()
+                            .get(op)
+                            .and_then(|o| o.get_out())
+                            .expect("build_multiples: add out"),
+                    )
                 }
             };
         }
@@ -608,21 +676,38 @@ impl<'a> AddTreeState<'a> {
             res_node = match res_node {
                 None => Some(vn),
                 Some(rn) => {
-                    let op = self.data.new_op_before(self.base_op, OpCode::CPUI_INT_ADD, vn, rn, None);
-                    Some(self.data.obank().get(op).and_then(|o| o.get_out()).expect("build_extra: add out"))
+                    let op =
+                        self.data
+                            .new_op_before(self.base_op, OpCode::CPUI_INT_ADD, vn, rn, None);
+                    Some(
+                        self.data
+                            .obank()
+                            .get(op)
+                            .and_then(|o| o.get_out())
+                            .expect("build_extra: add out"),
+                    )
                 }
             };
         }
         self.correct &= self.ptrmask;
         if self.correct != 0 {
-            let vn = self
-                .data
-                .new_constant(self.ptrsize, uintb_negate(self.correct.wrapping_sub(1), self.ptrsize));
+            let vn = self.data.new_constant(
+                self.ptrsize,
+                uintb_negate(self.correct.wrapping_sub(1), self.ptrsize),
+            );
             res_node = match res_node {
                 None => Some(vn),
                 Some(rn) => {
-                    let op = self.data.new_op_before(self.base_op, OpCode::CPUI_INT_ADD, vn, rn, None);
-                    Some(self.data.obank().get(op).and_then(|o| o.get_out()).expect("build_extra: corr add out"))
+                    let op =
+                        self.data
+                            .new_op_before(self.base_op, OpCode::CPUI_INT_ADD, vn, rn, None);
+                    Some(
+                        self.data
+                            .obank()
+                            .get(op)
+                            .and_then(|o| o.get_out())
+                            .expect("build_extra: corr add out"),
+                    )
                 }
             };
         }
@@ -635,7 +720,12 @@ impl<'a> AddTreeState<'a> {
         if self.base_type.get_align_size() < word_size {
             return false; // Probably padding; don't transform
         }
-        let out = match self.data.obank().get(self.base_op).and_then(|o| o.get_out()) {
+        let out = match self
+            .data
+            .obank()
+            .get(self.base_op)
+            .and_then(|o| o.get_out())
+        {
             Some(o) => o,
             None => return false,
         };
@@ -648,12 +738,18 @@ impl<'a> AddTreeState<'a> {
         if out_meta != type_metatype::TYPE_PTR {
             return false;
         }
-        let slot = self.data.obank().get(self.base_op).map(|o| o.get_slot(self.ptr)).unwrap_or(0);
+        let slot = self
+            .data
+            .obank()
+            .get(self.base_op)
+            .map(|o| o.get_slot(self.ptr))
+            .unwrap_or(0);
         let other = self.op_in(self.base_op, 1 - slot);
         let one = self.data.new_constant(self.ct.get_size(), 1);
         let newparams = [self.ptr, other, one];
         let _ = self.data.op_set_all_input(self.base_op, &newparams);
-        self.data.op_set_opcode_code(self.base_op, OpCode::CPUI_PTRADD);
+        self.data
+            .op_set_opcode_code(self.base_op, OpCode::CPUI_PTRADD);
         true
     }
 
@@ -725,20 +821,31 @@ impl<'a> AddTreeState<'a> {
             // When ptr's type needs union resolution: hold off resolving
             // before indexing (forceFacingType) when ptrto size == base size,
             // else inheritUnionField.
-            let ptr_ty = Rc::clone(self.data.vbank().get(self.ptr).expect("build_tree: stale ptr").get_type());
+            let ptr_ty = Rc::clone(
+                self.data
+                    .vbank()
+                    .get(self.ptr)
+                    .expect("build_tree: stale ptr")
+                    .get_type(),
+            );
             if ptr_ty.needs_resolution() {
                 let ptrto_size = ptr_ty.get_ptr_to().map(|p| p.get_size());
                 if ptrto_size == Some(self.base_type.get_size()) {
                     let _ = self.data.force_facing_type(ptr_ty, -1, op, 0);
                 } else {
-                    self.data.inherit_union_field(&ptr_ty, op, 0, self.base_op, self.base_slot);
+                    self.data
+                        .inherit_union_field(&ptr_ty, op, 0, self.base_op, self.base_slot);
                 }
             }
             if self.data.is_type_recovery_exceeded() {
                 self.assign_propagated_type(op);
             }
             newop = Some(op);
-            self.data.obank().get(op).and_then(|o| o.get_out()).expect("build_tree: ptradd out")
+            self.data
+                .obank()
+                .get(op)
+                .and_then(|o| o.get_out())
+                .expect("build_tree: ptradd out")
         } else {
             self.ptr // Zero multiple terms
         };
@@ -754,10 +861,15 @@ impl<'a> AddTreeState<'a> {
                 None,
             );
             let mult_ty = Rc::clone(
-                self.data.vbank().get(mult_node).expect("build_tree: stale multNode").get_type(),
+                self.data
+                    .vbank()
+                    .get(mult_node)
+                    .expect("build_tree: stale multNode")
+                    .get_type(),
             );
             if mult_ty.needs_resolution() {
-                self.data.inherit_union_field(&mult_ty, op, 0, self.base_op, self.base_slot);
+                self.data
+                    .inherit_union_field(&mult_ty, op, 0, self.base_op, self.base_slot);
             }
             if self.data.is_type_recovery_exceeded() {
                 self.assign_propagated_type(op);
@@ -766,12 +878,19 @@ impl<'a> AddTreeState<'a> {
                 self.data.op_set_stop_type_propagation(op);
             }
             newop = Some(op);
-            mult_node = self.data.obank().get(op).and_then(|o| o.get_out()).expect("build_tree: ptrsub out");
+            mult_node = self
+                .data
+                .obank()
+                .get(op)
+                .and_then(|o| o.get_out())
+                .expect("build_tree: ptrsub out");
         }
 
         // Add back any remaining terms.
         if let Some(en) = extra_node {
-            let op = self.data.new_op_before(self.base_op, OpCode::CPUI_INT_ADD, mult_node, en, None);
+            let op =
+                self.data
+                    .new_op_before(self.base_op, OpCode::CPUI_INT_ADD, mult_node, en, None);
             newop = Some(op);
         }
 
@@ -783,7 +902,11 @@ impl<'a> AddTreeState<'a> {
                 return;
             }
         };
-        let base_out = self.data.obank().get(self.base_op).and_then(|o| o.get_out())
+        let base_out = self
+            .data
+            .obank()
+            .get(self.base_op)
+            .and_then(|o| o.get_out())
             .expect("build_tree: base_op has output");
         let _ = self.data.op_set_output(newop, base_out);
         self.data.op_destroy(self.base_op);

@@ -17,16 +17,16 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{Action, ActionGroupList, Rule};
-use crate::dtype::{type_metatype, Datatype};
+use crate::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::op::pcodeop_flags;
-use crate::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
 use crate::varnode::DefOpInfo;
 
 use super::{ActionConditionalExe, ConditionalExecution, MultiPredicate, RuleOrPredicate};
@@ -38,7 +38,8 @@ use super::{ActionConditionalExe, ConditionalExecution, MultiPredicate, RuleOrPr
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -77,7 +78,9 @@ fn dt(size: int4) -> Rc<Datatype> {
 
 fn opcode_flags(opc: OpCode) -> unlace_base::types::uint4 {
     match opc {
-        OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH | OpCode::CPUI_BRANCHIND => pcodeop_flags::branch,
+        OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH | OpCode::CPUI_BRANCHIND => {
+            pcodeop_flags::branch
+        }
         OpCode::CPUI_RETURN => pcodeop_flags::returns,
         OpCode::CPUI_INT_EQUAL | OpCode::CPUI_INT_NOTEQUAL => {
             pcodeop_flags::booloutput | pcodeop_flags::commutative
@@ -90,18 +93,22 @@ fn opcode_flags(opc: OpCode) -> unlace_base::types::uint4 {
 fn new_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
     let ram = ram_space(fd);
     let op = fd.new_op(inputs, Address::new(ram, off));
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, opcode_flags(opc), format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, opcode_flags(opc), format!("{opc:?}")));
     op
 }
 
 /// A formal input varnode (multiple descendants allowed).
 fn mk_input(fd: &mut Funcdata, off: u64, size: int4) -> VarnodeId {
     let ram = ram_space(fd);
-    let vn = fd.vbank_mut().create(size, Address::new(ram, off), dt(size));
-    let mut noop_thunk = |_b: &mut crate::varnode::VarnodeBank,
-                          _o: VarnodeId,
-                          _n: VarnodeId|
-     -> unlace_base::error::KunaResult<()> { panic!("mk_input: collision") };
+    let vn = fd
+        .vbank_mut()
+        .create(size, Address::new(ram, off), dt(size));
+    let mut noop_thunk =
+        |_b: &mut crate::varnode::VarnodeBank,
+         _o: VarnodeId,
+         _n: VarnodeId|
+         -> unlace_base::error::KunaResult<()> { panic!("mk_input: collision") };
     fd.vbank_mut().set_input(vn, &mut noop_thunk).unwrap()
 }
 
@@ -115,12 +122,16 @@ fn mk_const(fd: &mut Funcdata, val: u64, size: int4) -> VarnodeId {
 fn mk_out(fd: &mut Funcdata, op: OpId, off: u64, size: int4) -> VarnodeId {
     let ram = ram_space(fd);
     let seq = fd.obank().get(op).unwrap().get_seq_num().clone();
-    let def = DefOpInfo { id: op, seqnum: seq };
+    let def = DefOpInfo {
+        id: op,
+        seqnum: seq,
+    };
     let vn = {
-        let mut noop_thunk = |_b: &mut crate::varnode::VarnodeBank,
-                              _o: VarnodeId,
-                              _n: VarnodeId|
-         -> unlace_base::error::KunaResult<()> { panic!("mk_out: collision") };
+        let mut noop_thunk =
+            |_b: &mut crate::varnode::VarnodeBank,
+             _o: VarnodeId,
+             _n: VarnodeId|
+             -> unlace_base::error::KunaResult<()> { panic!("mk_out: collision") };
         fd.vbank_mut()
             .create_def(size, Address::new(ram, off), dt(size), def, &mut noop_thunk)
             .unwrap()
@@ -130,7 +141,10 @@ fn mk_out(fd: &mut Funcdata, op: OpId, off: u64, size: int4) -> VarnodeId {
 }
 
 fn wire_read(fd: &mut Funcdata, reader: OpId, vn: VarnodeId, slot: int4) {
-    fd.obank_mut().get_mut(reader).unwrap().set_input(Some(vn), slot);
+    fd.obank_mut()
+        .get_mut(reader)
+        .unwrap()
+        .set_input(Some(vn), slot);
     fd.vbank_mut().add_descend(vn, reader).unwrap();
 }
 
@@ -174,7 +188,14 @@ fn trial_rejects_iblock_without_cbranch() {
     let iblock = new_bb(&mut fd);
     let x = new_bb(&mut fd);
     let y = new_bb(&mut fd);
-    for (bl, s) in [(init, 0x1000), (a, 0x2000), (b, 0x3000), (iblock, 0x4000), (x, 0x5000), (y, 0x6000)] {
+    for (bl, s) in [
+        (init, 0x1000),
+        (a, 0x2000),
+        (b, 0x3000),
+        (iblock, 0x4000),
+        (x, 0x5000),
+        (y, 0x6000),
+    ] {
         set_cover(&mut fd, bl, s);
     }
     // init two-way; a/b funnel into iblock; iblock two-way out.
@@ -194,7 +215,10 @@ fn trial_rejects_iblock_without_cbranch() {
 
     fd.structure_reset();
     let mut ce = ConditionalExecution::new(&fd);
-    assert!(!ce.trial(iblock, &fd), "iblock without final CBRANCH must be rejected");
+    assert!(
+        !ce.trial(iblock, &fd),
+        "iblock without final CBRANCH must be rejected"
+    );
 }
 
 /// A block with the wrong in/out arity is rejected by testIBlock.
@@ -233,8 +257,14 @@ fn trial_rejects_when_inpaths_diverge() {
     let y = new_bb(&mut fd);
     let entry = new_bb(&mut fd);
     for (bl, s) in [
-        (entry, 0x900), (p1, 0x1000), (p1b, 0x1100), (p2, 0x2000), (p2b, 0x2100),
-        (iblock, 0x4000), (x, 0x5000), (y, 0x6000),
+        (entry, 0x900),
+        (p1, 0x1000),
+        (p1b, 0x1100),
+        (p2, 0x2000),
+        (p2b, 0x2100),
+        (iblock, 0x4000),
+        (x, 0x5000),
+        (y, 0x6000),
     ] {
         set_cover(&mut fd, bl, s);
     }
@@ -266,7 +296,10 @@ fn trial_rejects_when_inpaths_diverge() {
     let mut ce = ConditionalExecution::new(&fd);
     // testIBlock passes (2-in/2-out + CBRANCH) but findInitPre must reject: the
     // two predecessors p1,p2 are distinct initblocks.
-    assert!(!ce.trial(iblock, &fd), "divergent in-paths => no common initblock");
+    assert!(
+        !ce.trial(iblock, &fd),
+        "divergent in-paths => no common initblock"
+    );
 }
 
 // =============================================================================
@@ -287,8 +320,12 @@ fn trial_accepts_same_condition_diamond() {
     let posta = new_bb(&mut fd);
     let postb = new_bb(&mut fd);
     for (bl, s) in [
-        (init, 0x1000), (prea, 0x2000), (preb, 0x3000),
-        (iblock, 0x4000), (posta, 0x5000), (postb, 0x6000),
+        (init, 0x1000),
+        (prea, 0x2000),
+        (preb, 0x3000),
+        (iblock, 0x4000),
+        (posta, 0x5000),
+        (postb, 0x6000),
     ] {
         set_cover(&mut fd, bl, s);
     }
@@ -342,8 +379,12 @@ fn trial_rejects_unrelated_conditions() {
     let posta = new_bb(&mut fd);
     let postb = new_bb(&mut fd);
     for (bl, s) in [
-        (init, 0x1000), (prea, 0x2000), (preb, 0x3000),
-        (iblock, 0x4000), (posta, 0x5000), (postb, 0x6000),
+        (init, 0x1000),
+        (prea, 0x2000),
+        (preb, 0x3000),
+        (iblock, 0x4000),
+        (posta, 0x5000),
+        (postb, 0x6000),
     ] {
         set_cover(&mut fd, bl, s);
     }
@@ -384,7 +425,10 @@ fn trial_rejects_unrelated_conditions() {
 
     fd.structure_reset();
     let mut ce = ConditionalExecution::new(&fd);
-    assert!(!ce.trial(iblock, &fd), "unrelated conditions => not removable");
+    assert!(
+        !ce.trial(iblock, &fd),
+        "unrelated conditions => not removable"
+    );
 }
 
 // =============================================================================
@@ -411,14 +455,20 @@ fn multipredicate_discovers_zero_slot() {
     wire_read(&mut fd, defop, src, 0);
 
     let me = new_op(&mut fd, 2, 0x4000, OpCode::CPUI_MULTIEQUAL);
-    fd.obank_mut().get_mut(me).unwrap().set_flag(pcodeop_flags::marker);
+    fd.obank_mut()
+        .get_mut(me)
+        .unwrap()
+        .set_flag(pcodeop_flags::marker);
     let me_out = mk_out(&mut fd, me, 0x80, 4);
     wire_read(&mut fd, me, tmp0, 0); // zero slot = 0
     wire_read(&mut fd, me, other, 1);
     place(&mut fd, me, join);
 
     let mut mp = MultiPredicate::new();
-    assert!(mp.discover_zero_slot(me_out, &fd), "2-input MULTIEQUAL with COPY(#0) input recognized");
+    assert!(
+        mp.discover_zero_slot(me_out, &fd),
+        "2-input MULTIEQUAL with COPY(#0) input recognized"
+    );
     assert_eq!(mp.zero_slot, 0, "slot 0 is the zero path");
     assert_eq!(mp.other_vn, Some(other), "otherVn is the non-zero input");
 }
@@ -444,7 +494,10 @@ fn multipredicate_rejects_nonzero_copy() {
     wire_read(&mut fd, me, other, 1);
 
     let mut mp = MultiPredicate::new();
-    assert!(!mp.discover_zero_slot(me_out, &fd), "copy of #5 is not a zero set");
+    assert!(
+        !mp.discover_zero_slot(me_out, &fd),
+        "copy of #5 is not a zero set"
+    );
 }
 
 /// discoverCbranch + discoverPathIsTrue + discoverConditionalZero on a small
@@ -456,7 +509,12 @@ fn multipredicate_discovers_cbranch_and_path() {
     let zero_bl = new_bb(&mut fd);
     let other_bl = new_bb(&mut fd);
     let join = new_bb(&mut fd);
-    for (bl, s) in [(cond, 0x1000), (zero_bl, 0x2000), (other_bl, 0x3000), (join, 0x4000)] {
+    for (bl, s) in [
+        (cond, 0x1000),
+        (zero_bl, 0x2000),
+        (other_bl, 0x3000),
+        (join, 0x4000),
+    ] {
         set_cover(&mut fd, bl, s);
     }
     // condBlock: out0=false=>other_bl, out1=true=>zero_bl (true path sets zero).
@@ -495,7 +553,10 @@ fn multipredicate_discovers_cbranch_and_path() {
 
     // me = MULTIEQUAL(tmp0[from zero_bl, slot0], other[from other_bl, slot1]).
     let me = new_op(&mut fd, 2, 0x4000, OpCode::CPUI_MULTIEQUAL);
-    fd.obank_mut().get_mut(me).unwrap().set_flag(pcodeop_flags::marker);
+    fd.obank_mut()
+        .get_mut(me)
+        .unwrap()
+        .set_flag(pcodeop_flags::marker);
     let me_out = mk_out(&mut fd, me, 0x88, 4);
     wire_read(&mut fd, me, tmp0, 0);
     wire_read(&mut fd, me, other, 1);
@@ -510,7 +571,10 @@ fn multipredicate_discovers_cbranch_and_path() {
     assert_eq!(mp.zero_block, Some(zero_bl));
     mp.discover_path_is_true(&fd);
     // condBlock true-out is zero_bl => zeroPathIsTrue = true.
-    assert!(mp.zero_path_is_true, "true path of condBlock flows to the zero set");
+    assert!(
+        mp.zero_path_is_true,
+        "true path of condBlock flows to the zero set"
+    );
     // a==0 via INT_EQUAL, no boolean flip => zeroPathIsTrue stays true.
     assert!(mp.discover_conditional_zero(a, &fd));
     assert!(mp.zero_path_is_true);
@@ -523,11 +587,18 @@ fn multipredicate_discovers_cbranch_and_path() {
 #[test]
 fn specs_lists_orpredicate_in_condexe_group() {
     let specs = super::specs();
-    assert_eq!(specs.len(), 1, "condexe.cc defines exactly one Rule (RuleOrPredicate)");
+    assert_eq!(
+        specs.len(),
+        1,
+        "condexe.cc defines exactly one Rule (RuleOrPredicate)"
+    );
     assert_eq!(specs[0].group, "condexe");
     // The ctor builds a working RuleOrPredicate offered on INT_OR/INT_XOR only.
     let rule = (specs[0].ctor)();
-    assert_eq!(rule.get_op_list(), vec![OpCode::CPUI_INT_OR, OpCode::CPUI_INT_XOR]);
+    assert_eq!(
+        rule.get_op_list(),
+        vec![OpCode::CPUI_INT_OR, OpCode::CPUI_INT_XOR]
+    );
 }
 
 #[test]
@@ -599,7 +670,11 @@ fn orpredicate_noop_on_nonpredicate_inputs() {
     place(&mut fd, or, bl);
 
     let mut rule = RuleOrPredicate::new("condexe");
-    assert_eq!(rule.apply_op(or, &mut fd), 0, "no predicate form => no change");
+    assert_eq!(
+        rule.apply_op(or, &mut fd),
+        0,
+        "no predicate form => no change"
+    );
 }
 
 /// PIN the W6 opcode-resolution stub: building the predicate form and driving
@@ -619,7 +694,12 @@ fn orpredicate_single_form_applies_w6_stub_closed() {
     let zero_bl = new_bb(&mut fd);
     let other_bl = new_bb(&mut fd);
     let join = new_bb(&mut fd);
-    for (bl, s) in [(condb, 0x1000), (zero_bl, 0x2000), (other_bl, 0x3000), (join, 0x4000)] {
+    for (bl, s) in [
+        (condb, 0x1000),
+        (zero_bl, 0x2000),
+        (other_bl, 0x3000),
+        (join, 0x4000),
+    ] {
         set_cover(&mut fd, bl, s);
     }
     // condBlock: out0=false=>other_bl, out1=true=>zero_bl.  (val2==0) is true on
@@ -655,7 +735,10 @@ fn orpredicate_single_form_applies_w6_stub_closed() {
 
     // tmp1 = MULTIEQUAL(tmp0 [zero, slot 0], val1 [other path, slot 1]).
     let me = new_op(&mut fd, 2, 0x4000, OpCode::CPUI_MULTIEQUAL);
-    fd.obank_mut().get_mut(me).unwrap().set_flag(pcodeop_flags::marker);
+    fd.obank_mut()
+        .get_mut(me)
+        .unwrap()
+        .set_flag(pcodeop_flags::marker);
     let tmp1 = mk_out(&mut fd, me, 0x88, 4);
     wire_read(&mut fd, me, tmp0, 0);
     wire_read(&mut fd, me, val1, 1);
@@ -673,7 +756,10 @@ fn orpredicate_single_form_applies_w6_stub_closed() {
     let rule = RuleOrPredicate::new("condexe");
     // apply_op_inner now runs to completion (the W6 resolve_typeop stub is closed).
     let res = rule.apply_op_inner(or, &mut fd);
-    assert!(res.is_ok(), "discovery reaches opSetOpcode and now completes: {res:?}");
+    assert!(
+        res.is_ok(),
+        "discovery reaches opSetOpcode and now completes: {res:?}"
+    );
     assert_eq!(res.unwrap(), 1, "the OR-predicate rewrite reports a change");
 }
 
@@ -690,10 +776,20 @@ fn condexe_new_unique_out_links_unique_output() {
     fd.structure_reset();
     let ce = ConditionalExecution::new(&fd);
     let op = new_op(&mut fd, 1, 0x1000, OpCode::CPUI_COPY);
-    let outvn = ce.new_unique_out(4, op, &mut fd).expect("newUniqueOut real since w4x-flow-linkage");
+    let outvn = ce
+        .new_unique_out(4, op, &mut fd)
+        .expect("newUniqueOut real since w4x-flow-linkage");
     let v = fd.vbank().get(outvn).expect("fresh output varnode");
     assert_eq!(v.get_size(), 4);
-    assert_eq!(v.get_space().get_name(), "unique", "output lives in the unique space");
-    assert_eq!(fd.obank().get(op).expect("op").get_out(), Some(outvn), "op output linked");
+    assert_eq!(
+        v.get_space().get_name(),
+        "unique",
+        "output lives in the unique space"
+    );
+    assert_eq!(
+        fd.obank().get(op).expect("op").get_out(),
+        Some(outvn),
+        "op output linked"
+    );
     assert_eq!(v.get_def(), Some(op), "output defined by the op");
 }

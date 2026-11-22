@@ -25,7 +25,10 @@ struct PrefixScan {
 impl ArmFrames {
     /// Frames whose recovery shares every decode through `memo`.
     pub(super) fn sharing(memo: &Rc<crate::listing::kuna_decodememo::DecodeMemo>) -> Self {
-        ArmFrames { memo: Some(Rc::clone(memo)), ..ArmFrames::default() }
+        ArmFrames {
+            memo: Some(Rc::clone(memo)),
+            ..ArmFrames::default()
+        }
     }
 
     pub(crate) fn replay(
@@ -109,10 +112,14 @@ impl ArmFrames {
     /// True iff `root` lies strictly inside an instruction of the body the last
     /// reconciliation validated for `prefix`.
     pub(crate) fn splits(&self, root: u64, prefix: u64) -> bool {
-        let Some(scan) = &self.prefixes else { return false };
+        let Some(scan) = &self.prefixes else {
+            return false;
+        };
         scan.bodies.get(&prefix).is_some_and(|body| {
             body.range(..root).any(|at| {
-                scan.instructions.get(at).is_some_and(|insn| root < at + u64::from(insn.len))
+                scan.instructions
+                    .get(at)
+                    .is_some_and(|insn| root < at + u64::from(insn.len))
             })
         })
     }
@@ -132,7 +139,8 @@ impl ArmFrames {
             .map(|(fp, count)| {
                 (
                     fp,
-                    if policy.corroborate && count >= kuna_aifcorroborate::UNCORROBORATED_THRESHOLD {
+                    if policy.corroborate && count >= kuna_aifcorroborate::UNCORROBORATED_THRESHOLD
+                    {
                         kuna_aifcorroborate::UNCORROBORATED_THRESHOLD
                     } else {
                         FINGERPRINT_THRESHOLD
@@ -165,9 +173,13 @@ impl ArmFrames {
                     let gap_hi = listing
                         .next_instruction_start_after(root)
                         .unwrap_or(u64::MAX);
-                    if let Some(body) = check_valid_subroutine_strict(decoder, listing, root, root, gap_hi) {
-                        let spans = body.into_iter()
-                            .map(|at| (at, decoder.probe(at).unwrap().len)).collect();
+                    if let Some(body) =
+                        check_valid_subroutine_strict(decoder, listing, root, root, gap_hi)
+                    {
+                        let spans = body
+                            .into_iter()
+                            .map(|at| (at, decoder.probe(at).unwrap().len))
+                            .collect();
                         self.validated(root, spans, decoder);
                     } else {
                         self.bodies.insert(root, None);

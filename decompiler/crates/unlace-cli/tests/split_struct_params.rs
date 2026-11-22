@@ -375,8 +375,7 @@ fn riscv_reused_register_is_not_written_into_the_split_struct() {
     assert_not_written(body, &["a", "b"]);
 }
 
-const SEVEN: &str =
-    "long long a1, long long a2, long long a3, long long a4, long long a5, long long a6, long long a7";
+const SEVEN: &str = "long long a1, long long a2, long long a3, long long a4, long long a5, long long a6, long long a7";
 
 fn pair_asserts(prefix: &str) -> Vec<String> {
     vec![

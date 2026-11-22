@@ -1,8 +1,8 @@
 //! C declarations for named calls with complete locked prototypes.
-use crate::dtype::{type_metatype, Datatype, DatatypeKind};
+use crate::dtype::{Datatype, DatatypeKind, type_metatype};
 use crate::{architecture::Architecture, funcdata::Funcdata};
-use unlace_num::opcodes::OpCode;
 use std::{collections::BTreeSet, rc::Rc};
+use unlace_num::opcodes::OpCode;
 
 #[derive(Default)]
 pub struct Declarations {
@@ -57,16 +57,21 @@ pub fn declarations(arch: &Architecture, fd: &Funcdata) -> Result<Declarations, 
         };
         if !has_wide_contract {
             let parked = fd.get_arch().callee_proto_pieces(call.get_entry_address());
-            match parked.filter(|pieces| pieces.first_var_arg_slot >= 0) { Some(pieces) => {
-                if snapshot
-                    .set_pieces(&pieces, None, arch.types(), arch.manage())
-                    .is_err()
-                {
-                    continue;
+            match parked.filter(|pieces| pieces.first_var_arg_slot >= 0) {
+                Some(pieces) => {
+                    if snapshot
+                        .set_pieces(&pieces, None, arch.types(), arch.manage())
+                        .is_err()
+                    {
+                        continue;
+                    }
                 }
-            } _ => if call.format_arity().is_some() {
-                continue;
-            }}
+                _ => {
+                    if call.format_arity().is_some() {
+                        continue;
+                    }
+                }
+            }
         }
         if snapshot.get_output_type().is_some_and(|t| {
             matches!(

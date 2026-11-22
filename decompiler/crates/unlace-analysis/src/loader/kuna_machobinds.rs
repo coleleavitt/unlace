@@ -24,18 +24,31 @@ pub(crate) fn bound_slots(file: &object::File, bytes: &[u8]) -> Vec<(u64, String
     }
     let owned: Vec<(u64, u64)> = file
         .sections()
-        .filter(|s| s.name().is_ok_and(|n| n.starts_with("__objc_") || n == "__cfstring"))
+        .filter(|s| {
+            s.name()
+                .is_ok_and(|n| n.starts_with("__objc_") || n == "__cfstring")
+        })
         .map(|s| (s.address(), s.address() + s.size()))
         .collect();
     let named: std::collections::HashSet<u64> =
-        super::macho_stubs::resolve_macho_imports(file, bytes).into_iter().map(|i| i.addr).collect();
+        super::macho_stubs::resolve_macho_imports(file, bytes)
+            .into_iter()
+            .map(|i| i.addr)
+            .collect();
     let chained = resolve_chained_fixups(file, bytes);
     let classic = resolve_dyld_info_bind_slots(file, bytes);
     let mut binds: Vec<(u64, &str)> = chained
         .named_binds()
         .filter(|&(slot, _)| chained.bind(slot).is_some_and(|(_, addend)| addend == 0))
-        .chain(classic.iter().filter(|(_, (_, addend))| *addend == 0).map(|(&slot, (name, _))| (slot, name.as_ref())))
-        .filter(|&(slot, _)| !named.contains(&slot) && !owned.iter().any(|&(lo, hi)| slot >= lo && slot < hi))
+        .chain(
+            classic
+                .iter()
+                .filter(|(_, (_, addend))| *addend == 0)
+                .map(|(&slot, (name, _))| (slot, name.as_ref())),
+        )
+        .filter(|&(slot, _)| {
+            !named.contains(&slot) && !owned.iter().any(|&(lo, hi)| slot >= lo && slot < hi)
+        })
         .collect();
     binds.sort_unstable();
     binds.dedup_by_key(|b| b.0);
@@ -75,12 +88,18 @@ mod tests {
 
     #[test]
     fn the_fixture_binds_name_their_data_pointers() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/macho_bindslots_arm64");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/macho_bindslots_arm64"
+        );
         let bytes = std::fs::read(path).unwrap();
         let file = object::File::parse(bytes.as_slice()).unwrap();
         assert_eq!(
             bound_slots(&file, &bytes),
-            [(0x1_0000_4000, "ext_handler".to_string()), (0x1_0000_4008, "ext_counter".to_string())]
+            [
+                (0x1_0000_4000, "ext_handler".to_string()),
+                (0x1_0000_4008, "ext_counter".to_string())
+            ]
         );
     }
 }

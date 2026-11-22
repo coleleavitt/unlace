@@ -87,13 +87,20 @@ pub fn has_register_hidden_return(model: &ProtoModel, reg_idx: int4) -> bool {
 /// Is `[addr, addr+size)` the call model's hidden-return input REGISTER,
 /// storage no other input entry shares? SPARC's stack-slot entry is not one.
 pub fn hidden_return_slot(call: &FuncCallSpecs, addr: &Address, size: int4) -> bool {
-    let Some(sp) = addr.get_space() else { return false };
+    let Some(sp) = addr.get_space() else {
+        return false;
+    };
     if sp.get_type() == spacetype::IPTR_SPACEBASE || !call.proto().has_model() {
         return false;
     }
     let entries = call.proto().model().input().get_entry();
-    let (off, end) = (addr.get_offset(), addr.get_offset().wrapping_add(size.max(0) as u64));
-    entries.iter().any(|e| e.get_type() == TYPECLASS_HIDDENRET && e.justified_contain(addr, size) >= 0)
+    let (off, end) = (
+        addr.get_offset(),
+        addr.get_offset().wrapping_add(size.max(0) as u64),
+    );
+    entries
+        .iter()
+        .any(|e| e.get_type() == TYPECLASS_HIDDENRET && e.justified_contain(addr, size) >= 0)
         && !entries.iter().any(|e| {
             e.get_type() != TYPECLASS_HIDDENRET
                 && e.get_space().get_index() == sp.get_index()
@@ -118,7 +125,11 @@ pub fn value_leaves(data: &Funcdata, vn: VarnodeId) -> Vec<VarnodeId> {
             continue;
         }
         seen.push(v);
-        let def = data.vbank().get(v).and_then(|x| x.get_def()).and_then(|d| data.obank().get(d));
+        let def = data
+            .vbank()
+            .get(v)
+            .and_then(|x| x.get_def())
+            .and_then(|d| data.obank().get(d));
         let inputs = match def {
             Some(op) if depth < MAX_DEPTH && seen.len() < MAX_VISITED => match op.code() {
                 OpCode::CPUI_INDIRECT if op.is_indirect_creation() => 0,
@@ -133,7 +144,11 @@ pub fn value_leaves(data: &Funcdata, vn: VarnodeId) -> Vec<VarnodeId> {
             continue;
         }
         let op = def.expect("an op with inputs");
-        todo.extend((0..inputs).filter_map(|i| op.get_in(i)).map(|x| (x, depth + 1)));
+        todo.extend(
+            (0..inputs)
+                .filter_map(|i| op.get_in(i))
+                .map(|x| (x, depth + 1)),
+        );
     }
     leaves
 }
@@ -145,10 +160,14 @@ fn frame_address(data: &Funcdata, vn: VarnodeId) -> bool {
     let Some(sp) = crate::p4_calls::kuna_spillargtrial::stack_pointer_storage(data) else {
         return false;
     };
-    let Some(spspace) = sp.space.as_ref() else { return false };
+    let Some(spspace) = sp.space.as_ref() else {
+        return false;
+    };
     let mut cur = vn;
     for _ in 0..2 * MAX_DEPTH {
-        let Some(v) = data.vbank().get(cur) else { return false };
+        let Some(v) = data.vbank().get(cur) else {
+            return false;
+        };
         if !v.is_constant()
             && v.get_space().get_index() == spspace.get_index()
             && v.get_addr().get_offset() == sp.offset
@@ -156,7 +175,9 @@ fn frame_address(data: &Funcdata, vn: VarnodeId) -> bool {
         {
             return true;
         }
-        let Some(op) = v.get_def().and_then(|d| data.obank().get(d)) else { return false };
+        let Some(op) = v.get_def().and_then(|d| data.obank().get(d)) else {
+            return false;
+        };
         match op.code() {
             OpCode::CPUI_INDIRECT if op.is_indirect_creation() => return false,
             OpCode::CPUI_COPY
@@ -194,14 +215,23 @@ fn mixed_address_sign((known, value): Bits) -> bool {
 /// The known bits of `vn`, through copies and ANDs and ORs, [`MAX_DEPTH`]
 /// links deep.
 fn known_bits(data: &Funcdata, vn: VarnodeId, depth: u32) -> Bits {
-    let Some(v) = data.vbank().get(vn) else { return (0, 0) };
+    let Some(v) = data.vbank().get(vn) else {
+        return (0, 0);
+    };
     if v.is_constant() {
         return (u64::MAX, v.get_offset());
     }
-    let Some(op) = v.get_def().and_then(|d| data.obank().get(d)).filter(|_| depth < MAX_DEPTH) else {
+    let Some(op) = v
+        .get_def()
+        .and_then(|d| data.obank().get(d))
+        .filter(|_| depth < MAX_DEPTH)
+    else {
         return (0, 0);
     };
-    let input = |i| op.get_in(i).map_or((0, 0), |x| known_bits(data, x, depth + 1));
+    let input = |i| {
+        op.get_in(i)
+            .map_or((0, 0), |x| known_bits(data, x, depth + 1))
+    };
     match op.code() {
         OpCode::CPUI_COPY => input(0),
         OpCode::CPUI_INT_AND => and_bits(input(0), input(1)),
@@ -233,7 +263,10 @@ fn not_a_result_buffer(
     leaves: &[VarnodeId],
 ) -> bool {
     let entry = call.get_entry_address();
-    if let Some(d) = (!entry.is_invalid()).then(|| data.kuna_callee_entry_dead(entry)).flatten() {
+    if let Some(d) = (!entry.is_invalid())
+        .then(|| data.kuna_callee_entry_dead(entry))
+        .flatten()
+    {
         if d.never_takes(addr, size) {
             return true;
         }
@@ -242,11 +275,14 @@ fn not_a_result_buffer(
         }
     }
     let null_page = |l: &VarnodeId| {
-        data.vbank().get(*l).is_some_and(|v| v.is_constant() && v.get_offset() < NULL_PAGE)
+        data.vbank()
+            .get(*l)
+            .is_some_and(|v| v.is_constant() && v.get_offset() < NULL_PAGE)
     };
     leaves.iter().any(|&l| data.kuna_hiddenret_vetoed(l))
         || (!leaves.is_empty()
-            && (leaves.iter().all(null_page) || leaves.iter().all(|&l| not_an_arm64e_address(data, l))))
+            && (leaves.iter().all(null_page)
+                || leaves.iter().all(|&l| not_an_arm64e_address(data, l))))
         || branches_through(data, call, addr, size)
 }
 
@@ -254,11 +290,26 @@ fn not_a_result_buffer(
 /// call branched through? It holds the callee's own address (`ldr x8, [x16];
 /// blraa x8, x17`), which no callee returns through.
 fn branches_through(data: &Funcdata, call: &FuncCallSpecs, addr: &Address, size: int4) -> bool {
-    let Some(site) = data.obank().get(call.get_op()).map(|o| o.get_addr().get_offset()) else { return false };
+    let Some(site) = data
+        .obank()
+        .get(call.get_op())
+        .map(|o| o.get_addr().get_offset())
+    else {
+        return false;
+    };
     let arch = data.get_arch();
-    let Some(vcall) = arch.vcall_targets.get(&site).filter(|v| v.targets.len() == 1) else { return false };
-    let Some(space) = addr.get_space() else { return false };
-    arch.get_register_name(space, addr.get_offset(), size).eq_ignore_ascii_case(&format!("x{}", vcall.register))
+    let Some(vcall) = arch
+        .vcall_targets
+        .get(&site)
+        .filter(|v| v.targets.len() == 1)
+    else {
+        return false;
+    };
+    let Some(space) = addr.get_space() else {
+        return false;
+    };
+    arch.get_register_name(space, addr.get_offset(), size)
+        .eq_ignore_ascii_case(&format!("x{}", vcall.register))
 }
 
 /// Rescore trial `trial` of call `call_idx` no-use when it is an ACTIVE trial on
@@ -278,17 +329,27 @@ pub fn rescore_active_trial(data: &mut Funcdata, call_idx: int4, trial: int4) ->
         if !t.is_active() || !hidden_return_slot(call, t.get_address(), t.get_size()) {
             return false;
         }
-        let Some(vn) = data.obank().get(call.get_op()).and_then(|o| o.get_in(t.get_slot())) else {
+        let Some(vn) = data
+            .obank()
+            .get(call.get_op())
+            .and_then(|o| o.get_in(t.get_slot()))
+        else {
             return false;
         };
         let leaves = value_leaves(data, vn);
         if !not_a_result_buffer(data, call, t.get_address(), t.get_size(), &leaves) {
             return false;
         }
-        leaves.into_iter().filter(|&l| !frame_address(data, l)).collect::<Vec<_>>()
+        leaves
+            .into_iter()
+            .filter(|&l| !frame_address(data, l))
+            .collect::<Vec<_>>()
     };
     data.kuna_note_hiddenret_vetoed(&leaves);
-    data.get_call_specs_mut(call_idx).get_active_input().get_trial_mut(trial).mark_no_use();
+    data.get_call_specs_mut(call_idx)
+        .get_active_input()
+        .get_trial_mut(trial)
+        .mark_no_use();
     true
 }
 

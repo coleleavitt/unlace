@@ -130,7 +130,9 @@ fn weak_imports_remain_nullable_across_non_pic_and_mixed_forms() {
                 } else {
                     ""
                 };
-                format!("int main(void){{uint64_t values[]={{{values}}};for(unsigned i=0;i<sizeof(values)/sizeof(values[0]);i++){{uint64_t bits=values[i];{setters}if(address_value()!=({result})bits||address_offset()!=({result})(bits+0x8000u)||address_negative()!=({result})(bits-0x8000u)||unrelated_literal()!=0x402000u{register})return 1;}}return 0;}}")
+                format!(
+                    "int main(void){{uint64_t values[]={{{values}}};for(unsigned i=0;i<sizeof(values)/sizeof(values[0]);i++){{uint64_t bits=values[i];{setters}if(address_value()!=({result})bits||address_offset()!=({result})(bits+0x8000u)||address_negative()!=({result})(bits-0x8000u)||unrelated_literal()!=0x402000u{register})return 1;}}return 0;}}"
+                )
             } else {
                 let checks = if kind == "mixed" {
                     "||pic_guard(x)!=want||pic_defined_guard(x)!=x+11||pic_offset_guard()!=!BOUND"
@@ -138,7 +140,9 @@ fn weak_imports_remain_nullable_across_non_pic_and_mixed_forms() {
                     ""
                 };
                 let calls = if kind == "mixed" { 20000 } else { 10000 };
-                format!("int calls,seen;\n#if BOUND\n__attribute__((section(\".weakbinding\"))) int optional(int x){{calls++;seen=x;return x+11;}}\n#else\nextern int optional(int) __attribute__((weak));\n#endif\nint main(void){{uintptr_t bits=(uintptr_t)optional;{setters}for(int x=-5000;x<5000;x++){{int want=x+(BOUND?11:7);if(guard(x)!=want||defined_guard(x)!=x+11||offset_guard()!=!BOUND{checks})return 1;}}return calls!=(BOUND?{calls}:0)||(BOUND&&seen!=4999);}}")
+                format!(
+                    "int calls,seen;\n#if BOUND\n__attribute__((section(\".weakbinding\"))) int optional(int x){{calls++;seen=x;return x+11;}}\n#else\nextern int optional(int) __attribute__((weak));\n#endif\nint main(void){{uintptr_t bits=(uintptr_t)optional;{setters}for(int x=-5000;x<5000;x++){{int want=x+(BOUND?11:7);if(guard(x)!=want||defined_guard(x)!=x+11||offset_guard()!=!BOUND{checks})return 1;}}return calls!=(BOUND?{calls}:0)||(BOUND&&seen!=4999);}}"
+                )
             };
             std::fs::write(
                 &driver,
@@ -315,7 +319,10 @@ fn weak_slots_leave_common_storage_and_direct_references_intact() {
             .unwrap()
             .iter()
             .map(|row| {
-                assert!(matches!(row["kind"].as_str(), Some("call" | "jump")), "{file}: {row}");
+                assert!(
+                    matches!(row["kind"].as_str(), Some("call" | "jump")),
+                    "{file}: {row}"
+                );
                 assert_eq!(row["to_address"].as_u64(), Some(entry), "{file}: {row}");
                 row["from_function"]["name"].as_str().unwrap().to_string()
             })
@@ -334,7 +341,10 @@ fn weak_slots_leave_common_storage_and_direct_references_intact() {
                 .filter(|row| row["name"] == name)
                 .collect();
             assert_eq!(rows.len(), 1, "{file}: {name}");
-            (rows[0]["address"].as_u64().unwrap(), rows[0]["kind"].as_str().unwrap().to_string())
+            (
+                rows[0]["address"].as_u64().unwrap(),
+                rows[0]["kind"].as_str().unwrap().to_string(),
+            )
         };
         let (optional, kind) = address("optional");
         assert_eq!((optional, kind.as_str()), (entry, "external"), "{file}");
@@ -350,7 +360,11 @@ fn weak_slots_leave_common_storage_and_direct_references_intact() {
         }
 
         let word = if abi == "n32" { "uint32_t" } else { "uint64_t" };
-        let candidate = if abi == "n32" { "unsigned int" } else { "unsigned long" };
+        let candidate = if abi == "n32" {
+            "unsigned int"
+        } else {
+            "unsigned long"
+        };
         let functions = [
             ("guard", "int guard(int value)".to_string()),
             ("call_only", "int call_only(int value)".to_string()),
@@ -360,7 +374,11 @@ fn weak_slots_leave_common_storage_and_direct_references_intact() {
             .iter()
             .map(|(name, prototype)| decompile(&root, &file, name, prototype))
             .collect();
-        assert!(codes[0].contains("counter += value;"), "{file}: {}", codes[0]);
+        assert!(
+            codes[0].contains("counter += value;"),
+            "{file}: {}",
+            codes[0]
+        );
         assert!(codes[0].contains("limit + 7"), "{file}: {}", codes[0]);
         let code = codes.join("\n");
         assert!(!code.contains("CONCAT"), "{file}: {code}");

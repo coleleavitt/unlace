@@ -36,7 +36,9 @@ use crate::funcdata::Funcdata;
 /// `"%f ... %d"` call leaves unused, so the locked stack trial would otherwise
 /// be dropped.
 pub fn keep_declared_trials(fc: &mut FuncCallSpecs) {
-    let Some(arity) = fc.format_arity() else { return };
+    let Some(arity) = fc.format_arity() else {
+        return;
+    };
     let active = fc.get_active_input();
     for i in 0..active.get_num_trials() {
         let trial = active.get_trial_mut(i);

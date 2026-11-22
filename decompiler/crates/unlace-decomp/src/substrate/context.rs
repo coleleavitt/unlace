@@ -10,12 +10,12 @@
 
 use std::rc::Rc;
 
+use slotmap::new_key_type;
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::space::{AddrSpace, AddrSpaceManager};
 use unlace_base::types::{int4, uint4};
 use unlace_num::opcodes::OpCode;
-use slotmap::new_key_type;
 
 new_key_type! {
     /// Arena key for a `Varnode` (ADR 0001).  Generational, so a stale handle
@@ -54,8 +54,16 @@ pub struct TypeOp {
 
 impl TypeOp {
     /// Construct an opcode descriptor.
-    pub fn new(opcode: OpCode, flags: uint4, name: impl Into<std::borrow::Cow<'static, str>>) -> TypeOp {
-        TypeOp { opcode, flags, name: name.into() }
+    pub fn new(
+        opcode: OpCode,
+        flags: uint4,
+        name: impl Into<std::borrow::Cow<'static, str>>,
+    ) -> TypeOp {
+        TypeOp {
+            opcode,
+            flags,
+            name: name.into(),
+        }
     }
 
     /// Get the op-code value (C++ `TypeOp::getOpcode`).
@@ -239,10 +247,20 @@ impl GlobalSpaceIndex {
     }
 
     /// The entries that start exactly at `start`, in their original order.
-    fn starting_at<'a>(&'a self, entries: &'a [GlobalEntry], start: u64) -> impl Iterator<Item = &'a GlobalEntry> + 'a {
-        let lo = self.interval_order.partition_point(|&entry_index| entries[entry_index].first < start);
-        let hi = self.interval_order.partition_point(|&entry_index| entries[entry_index].first <= start);
-        self.interval_order[lo..hi].iter().map(move |&entry_index| &entries[entry_index])
+    fn starting_at<'a>(
+        &'a self,
+        entries: &'a [GlobalEntry],
+        start: u64,
+    ) -> impl Iterator<Item = &'a GlobalEntry> + 'a {
+        let lo = self
+            .interval_order
+            .partition_point(|&entry_index| entries[entry_index].first < start);
+        let hi = self
+            .interval_order
+            .partition_point(|&entry_index| entries[entry_index].first <= start);
+        self.interval_order[lo..hi]
+            .iter()
+            .map(move |&entry_index| &entries[entry_index])
     }
 
     fn for_each_candidate(
@@ -294,8 +312,7 @@ impl GlobalQuery {
         while entry_start < entries.len() {
             let space_index = entries[entry_start].space_index;
             let entry_end = entry_start
-                + entries[entry_start..]
-                    .partition_point(|entry| entry.space_index == space_index);
+                + entries[entry_start..].partition_point(|entry| entry.space_index == space_index);
             space_indexes.push(GlobalSpaceIndex::new(
                 space_index,
                 entry_start,
@@ -370,7 +387,9 @@ impl GlobalQuery {
     /// The entry of the first function symbol after `offset` in `space_index`.
     pub fn function_entry_after(&self, space_index: int4, offset: u64) -> Option<u64> {
         let starts = self.function_starts(space_index)?;
-        starts.get(starts.partition_point(|&start| start <= offset)).copied()
+        starts
+            .get(starts.partition_point(|&start| start <= offset))
+            .copied()
     }
 
     fn index_for_space(&self, space_index: int4) -> Option<&GlobalSpaceIndex> {
@@ -384,8 +403,12 @@ impl GlobalQuery {
 
     #[cfg(test)]
     fn entries_for_space(&self, space_index: int4) -> &[GlobalEntry] {
-        let start = self.entries.partition_point(|entry| entry.space_index < space_index);
-        let end = self.entries.partition_point(|entry| entry.space_index <= space_index);
+        let start = self
+            .entries
+            .partition_point(|entry| entry.space_index < space_index);
+        let end = self
+            .entries
+            .partition_point(|entry| entry.space_index <= space_index);
         &self.entries[start..end]
     }
 
@@ -411,7 +434,12 @@ impl GlobalQuery {
     /// C++ `Scope::findContainer` (`database.cc:2278-2310`) restricted to the
     /// global scope: the smallest mapped storage containing `[addr, addr+size-1]`
     /// that is in-use at `usepoint`.  Returns its `getAllFlags()`.
-    fn find_container_flags(&self, addr: &Address, size: int4, usepoint: &Address) -> Option<uint4> {
+    fn find_container_flags(
+        &self,
+        addr: &Address,
+        size: int4,
+        usepoint: &Address,
+    ) -> Option<uint4> {
         self.find_container_entry(addr, size, usepoint)
             .map(|entry| entry.all_flags)
     }
@@ -531,10 +559,12 @@ impl GlobalQuery {
 
         let starting_at = || self.entries_starting_at(space_index, start);
         let active = |entry: &GlobalEntry| {
-            entry.addrtied
-                || (!usepoint.is_invalid() && entry.uselimit.in_range(usepoint, 1))
+            entry.addrtied || (!usepoint.is_invalid() && entry.uselimit.in_range(usepoint, 1))
         };
-        if let Some(entry) = starting_at().filter(|entry| !entry.is_function && active(entry)).last() {
+        if let Some(entry) = starting_at()
+            .filter(|entry| !entry.is_function && active(entry))
+            .last()
+        {
             return Some(classify_data(entry));
         }
 
@@ -555,7 +585,11 @@ impl GlobalQuery {
                     .as_ref()
                     .is_some_and(|ty| ty.get_metatype() == crate::dtype::type_metatype::TYPE_CODE)
         })?;
-        match entry.symbol_type.as_ref().and_then(|ty| ty.get_code_prototype()) {
+        match entry
+            .symbol_type
+            .as_ref()
+            .and_then(|ty| ty.get_code_prototype())
+        {
             Some(proto) => Some(IndirectSlotType::Prototype(Rc::clone(proto))),
             None => Some(IndirectSlotType::FunctionCode),
         }
@@ -589,7 +623,12 @@ impl GlobalQuery {
         addr: &Address,
         size: int4,
         usepoint: &Address,
-    ) -> Option<(String, int4, Option<std::rc::Rc<crate::dtype::Datatype>>, Vec<String>)> {
+    ) -> Option<(
+        String,
+        int4,
+        Option<std::rc::Rc<crate::dtype::Datatype>>,
+        Vec<String>,
+    )> {
         if addr.is_constant() {
             return None;
         }
@@ -597,9 +636,14 @@ impl GlobalQuery {
         // sym_off = (access_addr - entry_addr) + entry_offset (C++
         // ScopeLocal::name_for_varnode / SymbolEntry geometry).  `e.first` is the
         // entry's starting offset (== entry addr offset).
-        let sym_off = (addr.get_offset().wrapping_sub(e.first) as int4)
-            .wrapping_add(e.symbol_offset);
-        Some((e.symbol_name.clone(), sym_off, e.symbol_type.clone(), e.scope_path.clone()))
+        let sym_off =
+            (addr.get_offset().wrapping_sub(e.first) as int4).wrapping_add(e.symbol_offset);
+        Some((
+            e.symbol_name.clone(),
+            sym_off,
+            e.symbol_type.clone(),
+            e.scope_path.clone(),
+        ))
     }
 
     /// The type-locked covering Symbol's sized geometry for a Varnode — the input
@@ -1450,8 +1494,7 @@ pub struct ArchContext {
     /// transform) registers the assembled byte-array as an internal string here;
     /// the printer reads it back through the same shared instance on the real
     /// architecture.  `None` for hand-built fixtures (no internal strings).
-    pub internal_strings:
-        Option<Rc<std::cell::RefCell<crate::stringmanage::StringManagerUnicode>>>,
+    pub internal_strings: Option<Rc<std::cell::RefCell<crate::stringmanage::StringManagerUnicode>>>,
     /// Maximum number of entries in a single JumpTable (C++
     /// `Architecture::max_jumptable_size`), shared from the real architecture.
     /// Read by `JumpTable::recoverModel`.  `0` for hand-built fixtures.
@@ -1639,13 +1682,20 @@ pub struct ArchContext {
     /// hand-built fixtures and undeclared callees.  Shared behind an `Rc`
     /// because `build_arch_handle` hands the same snapshot to every function of
     /// a run.
-    pub callee_protos: Rc<Vec<(int4, unlace_base::types::uintb, crate::fspec::PrototypePieces)>>,
+    pub callee_protos: Rc<
+        Vec<(
+            int4,
+            unlace_base::types::uintb,
+            crate::fspec::PrototypePieces,
+        )>,
+    >,
     /// Loader-proven tail transfers, flowed as a call and return; explicit
     /// per-function flow overrides take precedence.
     pub loader_transfer_sites: Rc<std::collections::BTreeSet<Address>>,
     /// MIPS GOT import entries identified by the loader, never ordinary definitions.
     pub loader_mips_imports: Rc<std::collections::BTreeSet<Address>>,
-    pub nullable_relocations: Rc<std::collections::BTreeMap<u64, Vec<crate::kuna_nullable_reloc::NullableRelocation>>>,
+    pub nullable_relocations:
+        Rc<std::collections::BTreeMap<u64, Vec<crate::kuna_nullable_reloc::NullableRelocation>>>,
     pub nullable_literal_values: Rc<std::collections::BTreeSet<u64>>,
     /// The calling convention each declared callee was declared under, keyed the
     /// same way [`Self::callee_protos`] is.  Snapshotted at `build_arch_handle`
@@ -1653,28 +1703,38 @@ pub struct ArchContext {
     /// [`Self::callee_proto_model`], so `ActionDefaultParams` seeds the locked
     /// callee pieces under the declared convention rather than `defaultfp`.
     /// Empty when no declaration named a convention.
-    pub callee_proto_models:
-        Vec<(int4, unlace_base::types::uintb, Rc<crate::fspec::ProtoModel>)>,
+    pub callee_proto_models: Vec<(
+        int4,
+        unlace_base::types::uintb,
+        Rc<crate::fspec::ProtoModel>,
+    )>,
     /// (kuna) The calling convention bound to a function with no declared
     /// signature, by entry `(space index, offset)`: the analysis tier's
     /// model-only facts ([`crate::Architecture::loader_proto_models`]). The
     /// function's own decompile recovers its parameters under it, and a call
     /// to it does the same at the call site.
-    pub bound_proto_models:
-        Rc<std::collections::BTreeMap<(int4, unlace_base::types::uintb), Rc<crate::fspec::ProtoModel>>>,
+    pub bound_proto_models: Rc<
+        std::collections::BTreeMap<(int4, unlace_base::types::uintb), Rc<crate::fspec::ProtoModel>>,
+    >,
     /// (kuna `swiftcall`) The Swift registers and the throwing model, when the
     /// image binds the Swift convention ([`crate::kuna_swiftcall`]).
     pub swift_abi: Option<Rc<crate::kuna_swiftcall::SwiftAbi>>,
     /// (kuna `calleereginputs`) The `__thiscall` model, the ECX storage a
     /// virtual call reads its `this` from and EAX's, when the option applies.
-    pub virtual_this: Option<(Rc<crate::fspec::ProtoModel>, unlace_base::address::Address, int4, unlace_base::address::Address)>,
+    pub virtual_this: Option<(
+        Rc<crate::fspec::ProtoModel>,
+        unlace_base::address::Address,
+        int4,
+        unlace_base::address::Address,
+    )>,
     /// Snapshot of the engine's tracked-register database (C++ `glb->context`'s
     /// track base, populated by `set track <reg> <val> [start end]`).  The
     /// per-function `glb` skeleton does not hold the `ContextDatabase`, so
     /// `build_arch_handle` clones the part-map here; [`ActionConstbase`](crate::coreaction_early::ActionConstbase) queries it for the entry address to emit
     /// the `COPY #val -> reg` ops (`coreaction.cc:707`).  Empty for hand-built
     /// fixtures and when no register is tracked.
-    pub tracked_sets: unlace_base::partmap::PartMap<Address, unlace_sleigh::globalcontext::TrackedSet>,
+    pub tracked_sets:
+        unlace_base::partmap::PartMap<Address, unlace_sleigh::globalcontext::TrackedSet>,
 }
 
 impl ArchContext {
@@ -1777,7 +1837,6 @@ impl ArchContext {
             // hand-built fixtures (no `build_arch_handle`) get `false`, so a rule
             // registered `enabled=false` is inert there — matching the gate-off
             // unit tests.
-
             mba: false,
             bit_idioms: false,
             helper_roles: false,
@@ -1789,8 +1848,8 @@ impl ArchContext {
             switch_guard_merge: false,
             global_array_anchor: false,
             opaque_predicate: false,
-            ret_split_global: false,     // retsplitglobal (the ArchSeam carries the real default)
-            ret_split_limit: None,       // retsplitlimit (the ArchSeam carries the real default)
+            ret_split_global: false, // retsplitglobal (the ArchSeam carries the real default)
+            ret_split_limit: None,   // retsplitlimit (the ArchSeam carries the real default)
             simd_shuffle_userops: Vec::new(),
             x87_float_to_int_userops: Vec::new(),
             x87_integer_userops: Vec::new(),
@@ -1803,7 +1862,7 @@ impl ArchContext {
             call_target_type: false,     // (kuna) option calltargettype
             call_target_c: false,        // (kuna) option calltargettype, C output
             java_casts: false,
-            float_globals: None,         // (kuna) option floatglobals
+            float_globals: None, // (kuna) option floatglobals
             float_globals_pending: false,
             float_globals_wanted: std::cell::Cell::new(false),
             struct_synth: crate::p5_types::kuna_structsynth::StructSynthMode::Locals, // (kuna) option structsynth, default `locals`; the real value is copied from the engine Architecture in `build_arch_handle`
@@ -1811,11 +1870,11 @@ impl ArchContext {
             struct_merge: crate::p5_types::kuna_structmerge::StructMergeMode::Off, // (kuna) option structmerge, default `off`; the real value is copied from the engine Architecture in `build_arch_handle`
             struct_headless: crate::p5_types::kuna_structheadless::StructHeadlessMode::Off, // (kuna) option structheadless, default `off`; the real value is copied from the engine Architecture in `build_arch_handle`
             field_type: false, // (kuna) option fieldtype, copied from Architecture
-            bool_byte: true, // (kuna) option boolbyte (default on)
+            bool_byte: true,   // (kuna) option boolbyte (default on)
             unknown_byte_is_char: false, // (kuna) realtypes + C output
             unknown_is_integer: false, // (kuna) realtypes, or not C output
-            int_promotion: true,         // (kuna) LangCaps::integer_promotion (C)
-            char_byte: true, // (kuna) option charbyte
+            int_promotion: true, // (kuna) LangCaps::integer_promotion (C)
+            char_byte: true,   // (kuna) option charbyte
             cast_arith: false, // (kuna) option castarith
             cast_index: false, // (kuna) option castindex
             ptr_from_use: crate::p5_types::kuna_ptrfromuse::PtrFromUseMode::Void, // (kuna) option ptrfromuse (default void)
@@ -1837,8 +1896,8 @@ impl ArchContext {
             // recovered prototype says it never reads, and declines outright
             // when there is no callee to ask, so the fixture seam carries the
             // shipped default.
-            arg_clobber: true, // (kuna) option argclobber (default on)
-            arm_float_args: false, // (kuna) option armfloatargs (default off)
+            arg_clobber: true,       // (kuna) option argclobber (default on)
+            arm_float_args: false,   // (kuna) option armfloatargs (default off)
             arm_float_return: false, // (kuna) option armfloatreturn (default off)
             arm_base_model: None,
             arm_helper_model: None,
@@ -1850,7 +1909,7 @@ impl ArchContext {
             caller_extends_returns_from: i32::MAX,
             vararg_floats: Default::default(),
             narrow_ext: crate::kuna_narrowext::Rules::default(),
-            pass_through: true, // (kuna) option passthrough (default on)
+            pass_through: true,    // (kuna) option passthrough (default on)
             mixed_tail_ret: false, // (kuna) option mixedtailret (default off)
 
             vtable_types: false,
@@ -1862,33 +1921,33 @@ impl ArchContext {
             narrow_locals: true,
             narrow_ret: true,
             narrow_signed: false,
-            vararg_shared_float: false,  // varargsharedfloat (default-off)
+            vararg_shared_float: false, // varargsharedfloat (default-off)
             call_overlap: crate::kuna_calloverlap::LEVEL_AUTO, // calloverlap (default auto)
-            spill_arg_trial: 0,          // spillargtrial (0 = upstream: every STORE rejects)
-            index_alias_guard: 2,        // indexaliasguard (global; Architecture::reset_defaults sets the shipped default)
+            spill_arg_trial: 0,         // spillargtrial (0 = upstream: every STORE rejects)
+            index_alias_guard: 2, // indexaliasguard (global; Architecture::reset_defaults sets the shipped default)
             call_array_extent: false,
             stack_struct: false,
-            array_extent: 0,             // arrayextent (Architecture::reset_defaults sets the shipped default)
-            array_size: 0,               // arraysize (Architecture::reset_defaults sets the shipped default)
+            array_extent: 0, // arrayextent (Architecture::reset_defaults sets the shipped default)
+            array_size: 0,   // arraysize (Architecture::reset_defaults sets the shipped default)
             stack_alias_deadstore: false,
             stack_views: false, // stackviews (opt-in)
-            libc_names: false, // libcnames; set from the Architecture
+            libc_names: false,  // libcnames; set from the Architecture
 
-            context_names: false, // contextnames (opt-in)
+            context_names: false,         // contextnames (opt-in)
             devectorize_reduction: false, // devectorize (opt-in default-off)
-            strlen_scan: false, // strlenscan (live value copied from the Architecture)
+            strlen_scan: false,           // strlenscan (live value copied from the Architecture)
 
             dirty_pool: false, // dirtypool (live value copied from the Architecture)
-            late_cse: false, // latecse (live value copied from the Architecture)
-            goto_sink: false, // gotosink (live value copied from the Architecture)
-            cmp_merge: false, // cmpmerge (live value copied from the Architecture)
-            impl_weight: 0, // implweight (live value copied from the Architecture)
+            late_cse: false,   // latecse (live value copied from the Architecture)
+            goto_sink: false,  // gotosink (live value copied from the Architecture)
+            cmp_merge: false,  // cmpmerge (live value copied from the Architecture)
+            impl_weight: 0,    // implweight (live value copied from the Architecture)
             range_fold: false, // rangefold (live value copied from the Architecture)
             pow2_select: false, // pow2select (live value copied from the Architecture)
-            copy_run: false, // copyrun (live value copied from the Architecture)
+            copy_run: false,   // copyrun (live value copied from the Architecture)
             rep_string: false, // repstring (live value copied from the Architecture)
-            region_structure: false,     // regionstructure (opt-in default-off)
-            guard_arm: false,            // guardarm (opt-in default-off)
+            region_structure: false, // regionstructure (opt-in default-off)
+            guard_arm: false,  // guardarm (opt-in default-off)
             loop_continue: true,
             do_while_continue: true,
             goto_next: false,
@@ -1897,9 +1956,9 @@ impl ArchContext {
             region_loop_refine: false,   // regionlooprefine (opt-in default-off)
             region_edge_order: false,    // regionedgeorder (opt-in default-off)
             outline_spec: String::new(), // outline (opt-in default-off; empty = off)
-            remove_cleanup_code: true,   // cleanupcode (DIV-81 default-on; inert on a non-Rust binary)
-            linux_syscall: false,        // linuxsyscall (the mode resolves against the Linux-ELF fact in build_arch_handle)
-            msvc_str_append: false,      // msvcstrappend (opt-in default-off)
+            remove_cleanup_code: true, // cleanupcode (DIV-81 default-on; inert on a non-Rust binary)
+            linux_syscall: false, // linuxsyscall (the mode resolves against the Linux-ELF fact in build_arch_handle)
+            msvc_str_append: false, // msvcstrappend (opt-in default-off)
             x64_syscall: crate::p2_lift::kuna_x64syscall::X64SyscallMode::Off, // x64syscall (Architecture::reset_defaults sets the shipped default: on)
             x64_syscall_memory_target: false,
             x64_syscall_userops: Vec::new(),
@@ -1913,26 +1972,26 @@ impl ArchContext {
             tls_layout: None,
             switch_selector_guard: false, // switchselector (opt-in default-off)
             lowered_switch_linear: false, // loweredswitch linear|all
-            lowered_switch_tree: false, // loweredswitch tree|all
-            cond_fold: 0,                // condfold (opt-in default-off; 0 = off)
-            cond_stmts: -1,              // condstmts (-1 = off)
+            lowered_switch_tree: false,   // loweredswitch tree|all
+            cond_fold: 0,                 // condfold (opt-in default-off; 0 = off)
+            cond_stmts: -1,               // condstmts (-1 = off)
             goto_reduce: crate::p8_structure::kuna_gotoreduce::GotoReduceMode::Off, // gotoreduce
-            flatten_ifelse: false,  // ifelseflatten (opt-in default-off)
-            revert_cross_jumps: false,   // crossjumprevert (opt-in default-off)
+            flatten_ifelse: false,        // ifelseflatten (opt-in default-off)
+            revert_cross_jumps: false,    // crossjumprevert (opt-in default-off)
             dedup_ite_tail: false,        // dedupitetail (opt-in default-off)
             iteregion: false,             // iteregion (opt-in default-off, runtime-choice)
             iteexpr: false,               // iteexpr (computed-arm ?: extension, default-off)
             iteboolean: false,            // iteboolean (0/1 select -> boolean assignment)
             param_copy_hoist: false,      // paramcopyhoist (parameter copy-shadow -> entry block)
-            returndup_triangle: false,    // rettriangle (one-block-if join, copied from the Architecture)
+            returndup_triangle: false, // rettriangle (one-block-if join, copied from the Architecture)
             duplicate_shared_returns: false, // returndup (opt-in default-off)
             duplicate_call_returns: false, // returndup calls
-            early_return: false, // earlyreturn (opt-in default-off)
-            switch_return: false, // switchreturn (opt-in default-off)
-            recover_loop_break: false,   // loopbreak_recovery (opt-in default-off)
+            early_return: false,       // earlyreturn (opt-in default-off)
+            switch_return: false,      // switchreturn (opt-in default-off)
+            recover_loop_break: false, // loopbreak_recovery (opt-in default-off)
             fold_call_returns: false, // foldcallret (Architecture::reset_defaults sets the shipped default: on)
             mark_indirect_only: false, // indirectonly (opt-in default-off)
-            strip_stack_guard: false,    // stackguard (opt-in default-off)
+            strip_stack_guard: false, // stackguard (opt-in default-off)
             strip_msvc_stack_guard: true, // msvcstackguard (the live gate rides build_arch_handle)
 
             canary_global: false,
@@ -1959,7 +2018,7 @@ impl ArchContext {
             highslice_guard: false,
             switch_guard_bound: false, // (kuna) angr opt-in default off (upstream byte-identical)
             switch_shared_case: false, // (kuna) angr opt-in default off (upstream byte-identical)
-            switch_multi_pred: false, // (kuna) angr opt-in default off (upstream byte-identical)
+            switch_multi_pred: false,  // (kuna) angr opt-in default off (upstream byte-identical)
             switch_trim: false,
             stack_exit_anchor: false,
             fde_flow_bound: false,
@@ -2115,7 +2174,9 @@ impl ArchContext {
     }
 
     pub fn types(&self) -> Option<&dyn crate::dtype::TypeFactory> {
-        self.types.as_deref().map(|t| t as &dyn crate::dtype::TypeFactory)
+        self.types
+            .as_deref()
+            .map(|t| t as &dyn crate::dtype::TypeFactory)
     }
 
     /// (kuna `dexmodel`) The constant-pool record for `refs` (C++
@@ -2180,14 +2241,20 @@ impl ArchContext {
 
     /// The model-only binding of the function at `addr` (see
     /// [`Self::bound_proto_models`]).
-    pub fn bound_proto_model(&self, addr: &Address) -> Option<std::rc::Rc<crate::fspec::ProtoModel>> {
+    pub fn bound_proto_model(
+        &self,
+        addr: &Address,
+    ) -> Option<std::rc::Rc<crate::fspec::ProtoModel>> {
         let key = (addr.get_space()?.get_index(), addr.get_offset());
         self.bound_proto_models.get(&key).cloned()
     }
 
     /// (kuna `libcnames`) The library names the prototype parked on the
     /// callee at `addr` carries, without copying the prototype.
-    pub fn callee_library_names(&self, addr: &Address) -> Option<&'static crate::kuna_libcnames::LibraryNames> {
+    pub fn callee_library_names(
+        &self,
+        addr: &Address,
+    ) -> Option<&'static crate::kuna_libcnames::LibraryNames> {
         if self.remote_scope.is_some() {
             return None;
         }
@@ -2310,8 +2377,10 @@ impl ArchContext {
     /// The first offset and size of the smallest global Symbol whose storage
     /// holds `addr`, if any.
     pub(crate) fn global_symbol_extent(&self, addr: &Address) -> Option<(u64, int4)> {
-        self.effective_global_query(addr)
-            .and_then(|gq| gq.find_container_entry(addr, 1, &Address::default()).map(|e| (e.first, e.size)))
+        self.effective_global_query(addr).and_then(|gq| {
+            gq.find_container_entry(addr, 1, &Address::default())
+                .map(|e| (e.first, e.size))
+        })
     }
 
     /// The first offset, size and name of the smallest global data Symbol
@@ -2330,7 +2399,12 @@ impl ArchContext {
         addr: &Address,
         size: int4,
         usepoint: &Address,
-    ) -> Option<(String, int4, Option<std::rc::Rc<crate::dtype::Datatype>>, Vec<String>)> {
+    ) -> Option<(
+        String,
+        int4,
+        Option<std::rc::Rc<crate::dtype::Datatype>>,
+        Vec<String>,
+    )> {
         self.effective_global_query(addr)
             .and_then(|gq| gq.name_for_varnode_scoped(addr, size, usepoint))
     }
@@ -2402,7 +2476,6 @@ impl ArchContext {
         self.infer_pointers
     }
 
-
     /// The ordered inferable-pointer spaces (C++ `glb->inferPtrSpaces`), iterated
     /// by `ActionConstantPtr::selectInferSpace`.
     pub fn infer_ptr_spaces(&self) -> &[Rc<AddrSpace>] {
@@ -2423,9 +2496,12 @@ impl ArchContext {
         full_encoding: &mut u64,
     ) -> KunaResult<Address> {
         if let Some(seg) = self.get_segment_op(spc.get_index()) {
-            return Ok(seg.resolve(val, sz, point, full_encoding, |mem, at| self.get_tracked_value(mem, at)));
+            return Ok(seg.resolve(val, sz, point, full_encoding, |mem, at| {
+                self.get_tracked_value(mem, at)
+            }));
         }
-        self.manage.resolve_constant(spc, val, sz, point, full_encoding)
+        self.manage
+            .resolve_constant(spc, val, sz, point, full_encoding)
     }
 
     /// Number of segment operations supported (C++ `userops.numSegmentOps`).
@@ -2436,11 +2512,18 @@ impl ArchContext {
     /// The segment operation for the space with index `i` (C++
     /// `userops.getSegmentOp`).
     pub fn get_segment_op(&self, i: int4) -> Option<&Rc<crate::kuna_segmentize::SegmentDef>> {
-        usize::try_from(i).ok().and_then(|i| self.segment_ops.get(i)).and_then(|s| s.as_ref())
+        usize::try_from(i)
+            .ok()
+            .and_then(|i| self.segment_ops.get(i))
+            .and_then(|s| s.as_ref())
     }
 
     /// The tracked value of `mem` at `point` (C++ `glb->context->getTrackedValue`).
-    pub fn get_tracked_value(&self, mem: &unlace_num::pcoderaw::VarnodeData, point: &Address) -> u64 {
+    pub fn get_tracked_value(
+        &self,
+        mem: &unlace_num::pcoderaw::VarnodeData,
+        point: &Address,
+    ) -> u64 {
         unlace_sleigh::globalcontext::tracked_value(self.get_tracked_set(point), mem)
     }
 
@@ -2508,7 +2591,9 @@ impl ArchContext {
     /// `queryFunction(entry)->getFuncProto().getExtraPop()` after
     /// `option extrapop <n> <name>`), or `None` when unset.
     pub fn query_function_extra_pop(&self, entry: &Address) -> Option<int4> {
-        let gq = self.effective_global_query(entry).filter(|gq| gq.has_extra_pop)?;
+        let gq = self
+            .effective_global_query(entry)
+            .filter(|gq| gq.has_extra_pop)?;
         let space_index = entry.get_space()?.get_index();
         let extra_pop = gq
             .entries_starting_at(space_index, entry.get_offset())
@@ -2551,7 +2636,9 @@ impl ArchContext {
         let space_index = addr.get_space()?.get_index();
         let offset = addr.get_offset();
         let named = query.function_entry_after(space_index, offset);
-        let at = self.lazy_entry_starts.partition_point(|&start| start <= offset);
+        let at = self
+            .lazy_entry_starts
+            .partition_point(|&start| start <= offset);
         let parked = self.lazy_entry_starts.get(at).copied();
         match (named, parked) {
             (Some(a), Some(b)) => Some(a.min(b)),
@@ -2562,8 +2649,12 @@ impl ArchContext {
     /// (kuna `switchrunon`) Whether `b` lies in the load-image section that
     /// holds `a`; true when no section holds `a` or the image reports none.
     pub fn in_section_of(&self, a: &Address, b: &Address) -> bool {
-        let Some(loader) = self.loader.as_ref() else { return true };
-        let Ok(loader) = loader.try_borrow() else { return true };
+        let Some(loader) = self.loader.as_ref() else {
+            return true;
+        };
+        let Ok(loader) = loader.try_borrow() else {
+            return true;
+        };
         let holds = |section: &unlace_sleigh::loadimage::LoadImageSection, addr: &Address| {
             addr.get_offset().wrapping_sub(section.address.get_offset()) < section.size
         };
@@ -2665,7 +2756,11 @@ impl ArchContext {
                             p.set_no_return(true);
                             return Some((e.symbol_name.clone(), entry_addr, std::rc::Rc::new(p)));
                         }
-                        return Some((e.symbol_name.clone(), entry_addr, std::rc::Rc::clone(proto)));
+                        return Some((
+                            e.symbol_name.clone(),
+                            entry_addr,
+                            std::rc::Rc::clone(proto),
+                        ));
                     }
                 }
             }
@@ -2698,7 +2793,6 @@ impl ArchContext {
         }
         None
     }
-
 }
 
 /// The fields of a global [`SymbolEntry`](crate::database::SymbolEntry) that C++ `ActionConstantPtr::isPointer` /
@@ -2795,9 +2889,15 @@ impl crate::database::TypeFactoryAccess for ArchContext {
         use crate::dtype::TypeFactory;
         match self.types.as_deref() {
             Some(tf) => tf.get_type_code().unwrap_or_else(|_| {
-                Rc::new(crate::dtype::Datatype::new(1, crate::dtype::type_metatype::TYPE_CODE))
+                Rc::new(crate::dtype::Datatype::new(
+                    1,
+                    crate::dtype::type_metatype::TYPE_CODE,
+                ))
             }),
-            None => Rc::new(crate::dtype::Datatype::new(1, crate::dtype::type_metatype::TYPE_CODE)),
+            None => Rc::new(crate::dtype::Datatype::new(
+                1,
+                crate::dtype::type_metatype::TYPE_CODE,
+            )),
         }
     }
 }

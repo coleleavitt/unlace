@@ -11,8 +11,8 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, SpacebaseSpace,
-    UniqueSpace, VarnodeStorage,
+    AddrSpace, AddrSpaceManager, ConstantSpace, SpacebaseSpace, UniqueSpace, VarnodeStorage,
+    addrspace_flags, spacetype,
 };
 
 use unlace_base::types::int4;
@@ -33,7 +33,8 @@ const SP_SIZE: int4 = 8;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     let regspc = Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "register",
@@ -48,8 +49,10 @@ fn build_manager() -> AddrSpaceManager {
     m.insert_space(Rc::clone(&regspc)).unwrap();
     // The "stack" spacebase space (index 3) contained in "register" — becomes
     // get_stack_space().
-    m.insert_space(Rc::new(SpacebaseSpace::new("stack", 3, 8, &regspc, 1, true, false)))
-        .unwrap();
+    m.insert_space(Rc::new(SpacebaseSpace::new(
+        "stack", 3, 8, &regspc, 1, true, false,
+    )))
+    .unwrap();
     m
 }
 
@@ -61,8 +64,14 @@ fn build_fd() -> Funcdata {
     let manage = build_manager();
     let regspc = register_space(&manage);
     let stackspc = Rc::clone(manage.get_stack_space().unwrap());
-    let sp_data = VarnodeStorage { space: Some(regspc), offset: SP_OFF, size: SP_SIZE as u32 };
-    manage.add_spacebase_pointer(&stackspc, &sp_data, SP_SIZE, true).unwrap();
+    let sp_data = VarnodeStorage {
+        space: Some(regspc),
+        offset: SP_OFF,
+        size: SP_SIZE as u32,
+    };
+    manage
+        .add_spacebase_pointer(&stackspc, &sp_data, SP_SIZE, true)
+        .unwrap();
 
     let glb = Rc::new(ArchContext::new(manage));
     let code = Rc::clone(glb.manage().get_space_by_name("register").unwrap());
@@ -243,7 +252,10 @@ fn stacksolver_solution_65535_is_solved_once() {
     assert!(solver.build(&fd, &stackspc, 0).is_ok());
     assert_eq!(solver.vnlist.len(), 4);
     solver.solve();
-    assert_eq!(solver.soln, [Some(0), Some(65535), Some(65535), Some(65535)]);
+    assert_eq!(
+        solver.soln,
+        [Some(0), Some(65535), Some(65535), Some(65535)]
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -328,7 +340,10 @@ fn check_clog_no_store_is_noop() {
     let repaired = super::check_clog(&mut fd, &stackspc, 0);
     assert_eq!(repaired, 0);
     // The LOAD is unchanged.
-    assert_eq!(fd.obank().get(loadop).map(|o| o.code()), Some(OpCode::CPUI_LOAD));
+    assert_eq!(
+        fd.obank().get(loadop).map(|o| o.code()),
+        Some(OpCode::CPUI_LOAD)
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -349,17 +364,32 @@ fn check_clog_no_store_is_noop() {
 fn adv_w10_stacksolver_duplicate_negates_and_stable_sorts() {
     let mut solver = super::StackSolver::new();
     solver.vnlist = vec![]; // not used by duplicate
-                            // Two equations sharing var1==2 (order-stability probe) plus one more.
-    solver.eqs.push(super::StackEqn { var1: 2, var2: 0, rhs: 8 });
-    solver.eqs.push(super::StackEqn { var1: 2, var2: 1, rhs: -4 });
-    solver.eqs.push(super::StackEqn { var1: 1, var2: 0, rhs: 12 });
+    // Two equations sharing var1==2 (order-stability probe) plus one more.
+    solver.eqs.push(super::StackEqn {
+        var1: 2,
+        var2: 0,
+        rhs: 8,
+    });
+    solver.eqs.push(super::StackEqn {
+        var1: 2,
+        var2: 1,
+        rhs: -4,
+    });
+    solver.eqs.push(super::StackEqn {
+        var1: 1,
+        var2: 0,
+        rhs: 12,
+    });
     solver.duplicate();
 
     // 3 originals + 3 mirrors = 6.
     assert_eq!(solver.eqs.len(), 6);
     // Every (var1,var2,rhs) original has its mirror (var2,var1,-rhs) present.
     let has = |v1: int4, v2: int4, r: int4| {
-        solver.eqs.iter().any(|e| e.var1 == v1 && e.var2 == v2 && e.rhs == r)
+        solver
+            .eqs
+            .iter()
+            .any(|e| e.var1 == v1 && e.var2 == v2 && e.rhs == r)
     };
     assert!(has(0, 2, -8), "mirror of (2,0,8) with negated rhs");
     assert!(has(1, 2, 4), "mirror of (2,1,-4) negates -4 -> +4");
@@ -370,9 +400,20 @@ fn adv_w10_stacksolver_duplicate_negates_and_stable_sorts() {
     }
     // Stability: among the two var1==2 rows, the (2,0,8) row precedes (2,1,-4)
     // exactly as inserted (stable_sort preserves equal-key input order).
-    let idx_20 = solver.eqs.iter().position(|e| e.var1 == 2 && e.var2 == 0).unwrap();
-    let idx_21 = solver.eqs.iter().position(|e| e.var1 == 2 && e.var2 == 1).unwrap();
-    assert!(idx_20 < idx_21, "stable_sort preserves insertion order for equal var1");
+    let idx_20 = solver
+        .eqs
+        .iter()
+        .position(|e| e.var1 == 2 && e.var2 == 0)
+        .unwrap();
+    let idx_21 = solver
+        .eqs
+        .iter()
+        .position(|e| e.var1 == 2 && e.var2 == 1)
+        .unwrap();
+    assert!(
+        idx_20 < idx_21,
+        "stable_sort preserves insertion order for equal var1"
+    );
 }
 
 /// A negative-offset add chain (`sp -= 0x18`) must solve to a NEGATIVE `int4`
@@ -400,14 +441,21 @@ fn adv_w10_stacksolver_negative_solution_sign_extends() {
     solver.solve();
     // rhs was stored as the truncated int4 of -0x18; the solution is negative.
     assert_eq!(solver.soln[0], Some(0));
-    assert_eq!(solver.soln[1], Some(-0x18), "negative stack adjustment solves negative");
+    assert_eq!(
+        solver.soln[1],
+        Some(-0x18),
+        "negative stack adjustment solves negative"
+    );
 
     // The C++ const value written by analyzeExtraPop is `soln & calc_mask(8)`.
     // Reproduce exactly the Rust expression and pin the sign-extended result.
     let soln: int4 = solver.soln[1].unwrap();
     let cmask = unlace_base::address::calc_mask(8);
     let cval = (soln as unlace_base::types::uintb) & cmask;
-    assert_eq!(cval, 0xffff_ffff_ffff_ffe8, "int4 -0x18 sign-extends under & mask");
+    assert_eq!(
+        cval, 0xffff_ffff_ffff_ffe8,
+        "int4 -0x18 sign-extends under & mask"
+    );
 }
 
 /// `repair`'s overlapping-store branch (`coreaction.cc:419`) must REJECT (return
@@ -457,7 +505,10 @@ fn adv_w10_repair_overlapping_store_rejects_fold() {
     fd.op_set_output(addop, newsp).unwrap();
 
     let repaired = super::check_clog(&mut fd, &stackspc, 0);
-    assert_eq!(repaired, 0, "overlapping (non-matching) store must block the fold");
+    assert_eq!(
+        repaired, 0,
+        "overlapping (non-matching) store must block the fold"
+    );
     // The LOAD stays a LOAD — NOT folded to COPY.
     assert_eq!(
         fd.obank().get(loadop).map(|o| o.code()),
@@ -504,8 +555,16 @@ fn adv_w10_rspelim_extrapop_constant_widening_sign_extends() {
     // (newConstant does NOT mask — getConstant wraps the raw value).
     let mut fd = build_fd();
     let cval = fd.new_constant(SP_SIZE, widen(-0x18));
-    let off = fd.vbank().get(cval).expect("const vn").get_addr().get_offset();
-    assert_eq!(off, 0xffff_ffff_ffff_ffe8u64, "newConstant stored the sign-extended pattern unmasked");
+    let off = fd
+        .vbank()
+        .get(cval)
+        .expect("const vn")
+        .get_addr()
+        .get_offset();
+    assert_eq!(
+        off, 0xffff_ffff_ffff_ffe8u64,
+        "newConstant stored the sign-extended pattern unmasked"
+    );
 }
 
 /// VERIFIER (w10-rsp-elim).  The diff rewrites `analyzeExtraPop`'s model guard to
@@ -522,8 +581,14 @@ fn adv_w10_rspelim_analyze_extrapop_known_defaultfp_suppresses_solve() {
     let manage = build_manager();
     let regspc = register_space(&manage);
     let stackspc = Rc::clone(manage.get_stack_space().unwrap());
-    let sp_data = VarnodeStorage { space: Some(regspc), offset: SP_OFF, size: SP_SIZE as u32 };
-    manage.add_spacebase_pointer(&stackspc, &sp_data, SP_SIZE, true).unwrap();
+    let sp_data = VarnodeStorage {
+        space: Some(regspc),
+        offset: SP_OFF,
+        size: SP_SIZE as u32,
+    };
+    manage
+        .add_spacebase_pointer(&stackspc, &sp_data, SP_SIZE, true)
+        .unwrap();
 
     // Build an arch carrying a defaultfp with a KNOWN (non-unknown) extrapop.
     let mut arch = ArchContext::new(manage);
@@ -539,8 +604,14 @@ fn adv_w10_rspelim_analyze_extrapop_known_defaultfp_suppresses_solve() {
     let before = fd.obank().iter_all().count();
     let r = super::analyze_extra_pop(&mut fd, &stackspc, 0);
     let after = fd.obank().iter_all().count();
-    assert_eq!(r, 0, "known defaultfp extrapop suppresses the solve (returns 0)");
-    assert_eq!(before, after, "suppressed path must create no ops / touch nothing");
+    assert_eq!(
+        r, 0,
+        "known defaultfp extrapop suppresses the solve (returns 0)"
+    );
+    assert_eq!(
+        before, after,
+        "suppressed path must create no ops / touch nothing"
+    );
 }
 
 /// VERIFIER (w10-rsp-elim).  Counter-case for the guard above: when the
@@ -556,8 +627,14 @@ fn adv_w10_rspelim_analyze_extrapop_unknown_defaultfp_does_not_suppress() {
     let manage = build_manager();
     let regspc = register_space(&manage);
     let stackspc = Rc::clone(manage.get_stack_space().unwrap());
-    let sp_data = VarnodeStorage { space: Some(regspc), offset: SP_OFF, size: SP_SIZE as u32 };
-    manage.add_spacebase_pointer(&stackspc, &sp_data, SP_SIZE, true).unwrap();
+    let sp_data = VarnodeStorage {
+        space: Some(regspc),
+        offset: SP_OFF,
+        size: SP_SIZE as u32,
+    };
+    manage
+        .add_spacebase_pointer(&stackspc, &sp_data, SP_SIZE, true)
+        .unwrap();
 
     let mut arch = ArchContext::new(manage);
     let mut fp = crate::fspec::ProtoModel::new(arch.manage());

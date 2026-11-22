@@ -34,7 +34,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use unlace_decomp::dtype::{type_metatype, Datatype, TypeFactory, TypeField};
+use unlace_decomp::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
 use unlace_decomp::fspec::PrototypePieces;
 
 /// Decode one ObjC method type encoding into a [`PrototypePieces`] named `name`
@@ -114,7 +114,9 @@ pub fn struct_type(encoding: &str, tctx: &TypeCtx) -> Option<Rc<Datatype>> {
     let types = tctx.types;
     let shell = match types.find_by_name(name).ok().flatten() {
         Some(t) if t.get_metatype() == type_metatype::TYPE_STRUCT && !t.is_incomplete() => {
-            tctx.structs.borrow_mut().insert(name.to_string(), Rc::clone(&t));
+            tctx.structs
+                .borrow_mut()
+                .insert(name.to_string(), Rc::clone(&t));
             return Some(t);
         }
         Some(_) => return None,
@@ -140,8 +142,12 @@ pub fn struct_type(encoding: &str, tctx: &TypeCtx) -> Option<Rc<Datatype>> {
         offset += size;
     }
     let size = (offset + tctx.ptr_size - 1) / tctx.ptr_size * tctx.ptr_size;
-    let done = types.set_fields_struct_raw(&shell, fields, Vec::new(), size, tctx.ptr_size, 0).ok()?;
-    tctx.structs.borrow_mut().insert(name.to_string(), Rc::clone(&done));
+    let done = types
+        .set_fields_struct_raw(&shell, fields, Vec::new(), size, tctx.ptr_size, 0)
+        .ok()?;
+    tctx.structs
+        .borrow_mut()
+        .insert(name.to_string(), Rc::clone(&done));
     Some(done)
 }
 
@@ -158,7 +164,12 @@ pub fn struct_name(encoding: &str) -> Option<&str> {
 /// member whatever it points to (`{S=^{T=ii}q}` → `^{T=ii} q`). `None` for a
 /// malformed layout or one nested deeper than [`MAX_STRUCT_DEPTH`].
 pub fn struct_members(encoding: &str) -> Option<Vec<String>> {
-    Some(struct_leaves(encoding)?.into_iter().map(|(_, c)| c).collect())
+    Some(
+        struct_leaves(encoding)?
+            .into_iter()
+            .map(|(_, c)| c)
+            .collect(),
+    )
 }
 
 /// The leaf members of a struct encoding with the names an ivar encoding
@@ -189,7 +200,11 @@ fn struct_leaves_at(encoding: &str, level: usize) -> Option<Vec<(Option<String>,
             p.pos += 1;
             p.skip_balanced(b'{', b'}');
             let inner = struct_leaves_at(&members[start..p.pos], level + 1)?;
-            out.extend(inner.into_iter().map(|(n, c)| (n.or_else(|| name.clone()), c)));
+            out.extend(
+                inner
+                    .into_iter()
+                    .map(|(n, c)| (n.or_else(|| name.clone()), c)),
+            );
         } else {
             out.push((name, p.type_text()?));
         }
@@ -267,8 +282,13 @@ impl<'a> TypeCtx<'a> {
             .filter(|t| t.get_metatype() == type_metatype::TYPE_STRUCT)
             .or_else(|| self.types.kuna_declare_record(&shown, false).ok())
             .or_else(|| self.types.get_type_void().ok())?;
-        let ptr = self.types.get_type_pointer(self.ptr_size, pointee, self.word_size).ok()?;
-        self.opaque.borrow_mut().insert(struct_name.to_string(), Rc::clone(&ptr));
+        let ptr = self
+            .types
+            .get_type_pointer(self.ptr_size, pointee, self.word_size)
+            .ok()?;
+        self.opaque
+            .borrow_mut()
+            .insert(struct_name.to_string(), Rc::clone(&ptr));
         Some(ptr)
     }
 }
@@ -290,7 +310,11 @@ const MAX_STRUCT_DEPTH: usize = 32;
 
 impl<'a> Parser<'a> {
     fn new(s: &'a str) -> Parser<'a> {
-        Parser { bytes: s.as_bytes(), pos: 0, depth: 0 }
+        Parser {
+            bytes: s.as_bytes(),
+            pos: 0,
+            depth: 0,
+        }
     }
 
     /// At (or past) the end of the encoding.
@@ -327,8 +351,11 @@ impl<'a> Parser<'a> {
         let name = std::str::from_utf8(&rest[..end]).ok()?;
         self.pos += end + 2;
         let class = name.split('<').next().unwrap_or("");
-        (!class.is_empty() && class.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'$'))
-            .then(|| class.to_string())
+        (!class.is_empty()
+            && class
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'$'))
+        .then(|| class.to_string())
     }
 
     /// Skip the decimal frame-offset digits trailing a type code in a *method*
@@ -366,8 +393,8 @@ impl<'a> Parser<'a> {
             b'Q' => types.get_base(8, type_metatype::TYPE_UINT).ok()?,
             b'f' => types.get_base(4, type_metatype::TYPE_FLOAT).ok()?, // float
             b'd' => types.get_base(8, type_metatype::TYPE_FLOAT).ok()?, // double
-            b'B' => types.get_base(1, type_metatype::TYPE_BOOL).ok()?, // C99 _Bool
-            b'v' => types.get_type_void().ok()?,                       // void
+            b'B' => types.get_base(1, type_metatype::TYPE_BOOL).ok()?,  // C99 _Bool
+            b'v' => types.get_type_void().ok()?,                        // void
             // `*` = char* (a C string).
             b'*' => {
                 let ch = types.get_type_char(1).ok()?;
@@ -435,7 +462,12 @@ impl<'a> Parser<'a> {
                 let digits = inner.bytes().take_while(u8::is_ascii_digit).count();
                 let count: i32 = inner[..digits].parse().ok()?;
                 let elem = Parser::new(&inner[digits..]).next_type(tctx)?;
-                if count <= 0 || elem.get_size() <= 0 || count.checked_mul(elem.get_size()).is_none_or(|n| n > 1 << 20) {
+                if count <= 0
+                    || elem.get_size() <= 0
+                    || count
+                        .checked_mul(elem.get_size())
+                        .is_none_or(|n| n > 1 << 20)
+                {
                     return None;
                 }
                 types.get_type_array(count, elem).ok()?
@@ -493,11 +525,15 @@ impl<'a> Parser<'a> {
                     self.pos += 1;
                 }
             }
-            b'c' | b'C' | b's' | b'S' | b'i' | b'I' | b'l' | b'L' | b'q' | b'Q' | b'f' | b'd' | b'B' | b'v'
-            | b'*' | b'#' | b':' | b'?' => {}
+            b'c' | b'C' | b's' | b'S' | b'i' | b'I' | b'l' | b'L' | b'q' | b'Q' | b'f' | b'd'
+            | b'B' | b'v' | b'*' | b'#' | b':' | b'?' => {}
             _ => return None,
         }
-        Some(std::str::from_utf8(&self.bytes[start..self.pos]).ok()?.to_string())
+        Some(
+            std::str::from_utf8(&self.bytes[start..self.pos])
+                .ok()?
+                .to_string(),
+        )
     }
 
     /// Skip a balanced `open`…`close` run (for `{...}` / `(...)` / `[...]`),
@@ -546,8 +582,13 @@ mod tests {
     fn decode_greet_method() {
         let f = factory();
         let (ptr, ws): (i32, u32) = (8, 1);
-        let p = decode_method("-[Greeter greet:]", "i20@0:8i16", &TypeCtx::new(&f, ptr, ws), None)
-            .expect("the greet: encoding decodes");
+        let p = decode_method(
+            "-[Greeter greet:]",
+            "i20@0:8i16",
+            &TypeCtx::new(&f, ptr, ws),
+            None,
+        )
+        .expect("the greet: encoding decodes");
         assert_eq!(p.name, "-[Greeter greet:]");
         assert_eq!(p.intypes.len(), 3, "self + _cmd + n");
         assert_eq!(p.innames, vec!["self", "_cmd", "arg1"]);
@@ -566,7 +607,11 @@ mod tests {
         let f = factory();
         let (ptr, ws): (i32, u32) = (8, 1);
         let p = decode_method("-[C set:]", "v24@0:8d16", &TypeCtx::new(&f, ptr, ws), None).unwrap();
-        assert_eq!(p.outtype.as_ref().unwrap().get_size(), 0, "void is the size-0 void type");
+        assert_eq!(
+            p.outtype.as_ref().unwrap().get_size(),
+            0,
+            "void is the size-0 void type"
+        );
         assert_eq!(p.intypes.len(), 3);
         assert_eq!(p.intypes[2].get_size(), 8, "double arg");
     }
@@ -586,8 +631,20 @@ mod tests {
     #[test]
     fn decode_pointers() {
         let f = factory();
-        assert_eq!(decode_ivar_type("^i", &TypeCtx::new(&f, 8, 1)).unwrap().get_size(), 8, "int*");
-        assert_eq!(decode_ivar_type("^v", &TypeCtx::new(&f, 8, 1)).unwrap().get_size(), 8, "void*");
+        assert_eq!(
+            decode_ivar_type("^i", &TypeCtx::new(&f, 8, 1))
+                .unwrap()
+                .get_size(),
+            8,
+            "int*"
+        );
+        assert_eq!(
+            decode_ivar_type("^v", &TypeCtx::new(&f, 8, 1))
+                .unwrap()
+                .get_size(),
+            8,
+            "void*"
+        );
     }
 
     /// An empty / garbage encoding yields `None` — the IMP keeps its name, only the
@@ -619,7 +676,10 @@ mod tests {
         let f = factory();
         f.get_type_enum("Foo").unwrap();
         let t = decode_ivar_type("@\"Foo\"", &TypeCtx::new(&f, 8, 1)).unwrap();
-        assert_eq!(t.get_ptr_to().unwrap().get_metatype(), type_metatype::TYPE_VOID);
+        assert_eq!(
+            t.get_ptr_to().unwrap().get_metatype(),
+            type_metatype::TYPE_VOID
+        );
     }
 
     /// A block (`@?`) is one pointer, and pointer nesting is bounded.
@@ -628,7 +688,11 @@ mod tests {
         let f = factory();
         let tctx = TypeCtx::new(&f, 8, 1);
         let p = decode_method("-[C a:]", "v24@0:8@?16", &tctx, None).unwrap();
-        assert_eq!(p.intypes.len(), 3, "the block is one argument, not `@` then `?`");
+        assert_eq!(
+            p.intypes.len(),
+            3,
+            "the block is one argument, not `@` then `?`"
+        );
         let deep = format!("{}i", "^".repeat(MAX_POINTER_DEPTH + 1));
         assert!(decode_ivar_type(&deep, &tctx).is_none());
         assert!(decode_ivar_type("^^i", &tctx).is_some());
@@ -644,17 +708,39 @@ mod tests {
         assert_eq!(t.get_name(), "CGRect");
         assert_eq!(t.get_size(), 32);
         let leaves = struct_leaves("{Pair=\"lo\"{Half=\"a\"i\"b\"i}\"hi\"q}").unwrap();
-        assert_eq!(leaves, vec![(Some("a".into()), "i".into()), (Some("b".into()), "i".into()), (Some("hi".into()), "q".into())]);
-        assert_eq!(struct_members("{CGRect=\"origin\"{CGPoint=\"x\"d\"y\"d}\"size\"{CGSize=\"width\"d\"height\"d}}").unwrap(), vec!["d".to_string(); 4]);
+        assert_eq!(
+            leaves,
+            vec![
+                (Some("a".into()), "i".into()),
+                (Some("b".into()), "i".into()),
+                (Some("hi".into()), "q".into())
+            ]
+        );
+        assert_eq!(
+            struct_members(
+                "{CGRect=\"origin\"{CGPoint=\"x\"d\"y\"d}\"size\"{CGSize=\"width\"d\"height\"d}}"
+            )
+            .unwrap(),
+            vec!["d".to_string(); 4]
+        );
         let a = decode_ivar_type("[4i]", &tctx).unwrap();
         assert_eq!(a.get_metatype(), type_metatype::TYPE_ARRAY);
         assert_eq!(a.get_size(), 16);
         let p = decode_method("-[C setFrame:]", "v48@0:8{CGRect=dddd}16", &tctx, None).unwrap();
         assert_eq!(p.intypes[2].get_name(), "CGRect");
-        assert_eq!(decode_ivar_type("{?=ii}", &tctx).unwrap().get_metatype(), type_metatype::TYPE_VOID);
-        assert_eq!(decode_ivar_type("(u=id)", &tctx).unwrap().get_metatype(), type_metatype::TYPE_VOID);
+        assert_eq!(
+            decode_ivar_type("{?=ii}", &tctx).unwrap().get_metatype(),
+            type_metatype::TYPE_VOID
+        );
+        assert_eq!(
+            decode_ivar_type("(u=id)", &tctx).unwrap().get_metatype(),
+            type_metatype::TYPE_VOID
+        );
         assert!(decode_ivar_type("[0i]", &tctx).is_none());
-        assert!(decode_ivar_type("[", &tctx).is_none(), "an unterminated array");
+        assert!(
+            decode_ivar_type("[", &tctx).is_none(),
+            "an unterminated array"
+        );
         assert!(decode_ivar_type("[4", &tctx).is_none());
     }
 
@@ -676,7 +762,10 @@ mod tests {
         assert_eq!(split_method("^^^i16@0:8").unwrap().0, "^^^i");
         let nested = format!("{}i{}", "{S=".repeat(n), "}".repeat(n));
         assert_eq!(struct_members(&nested), None);
-        assert!(split_method(&format!("v@:{nested}")).is_some(), "a by-value struct is skipped linearly");
+        assert!(
+            split_method(&format!("v@:{nested}")).is_some(),
+            "a by-value struct is skipped linearly"
+        );
         let deep = format!("{}d{}", "{S=".repeat(8), "}".repeat(8));
         assert_eq!(struct_members(&deep), Some(vec!["d".to_string()]));
     }
@@ -687,11 +776,17 @@ mod tests {
         let tctx = TypeCtx::new(&f, 8, 1);
         let rect = struct_type("{CGRect={CGPoint=dd}{CGSize=dd}}", &tctx).unwrap();
         assert_eq!((rect.get_name(), rect.get_size()), ("CGRect", 32));
-        assert_eq!(struct_members("{CGRect={CGPoint=dd}{CGSize=dd}}"), Some(vec!["d".to_string(); 4]));
+        assert_eq!(
+            struct_members("{CGRect={CGPoint=dd}{CGSize=dd}}"),
+            Some(vec!["d".to_string(); 4])
+        );
         assert_eq!(struct_members("{CGRect=dd"), None);
         let range = struct_type("{_NSRange=QQ}", &tctx).unwrap();
         assert_eq!(range.get_size(), 16);
-        assert!(Rc::ptr_eq(&rect, &struct_type("{CGRect={CGPoint=dd}{CGSize=dd}}", &tctx).unwrap()));
+        assert!(Rc::ptr_eq(
+            &rect,
+            &struct_type("{CGRect={CGPoint=dd}{CGSize=dd}}", &tctx).unwrap()
+        ));
         assert!(struct_type("{?=dd}", &tctx).is_none());
     }
 
@@ -702,7 +797,11 @@ mod tests {
         assert_eq!(struct_members("{S=^i}"), Some(vec!["^i".to_string()]));
         assert_eq!(
             struct_members("{S=^{T=ii}q@\"NSString\"}"),
-            Some(vec!["^{T=ii}".to_string(), "q".to_string(), "@\"NSString\"".to_string()])
+            Some(vec![
+                "^{T=ii}".to_string(),
+                "q".to_string(),
+                "@\"NSString\"".to_string()
+            ])
         );
         let f = factory();
         let tctx = TypeCtx::new(&f, 8, 1);

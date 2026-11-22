@@ -1,20 +1,30 @@
 //! Static DWARF int/error contracts preserve each raw result word through calls.
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use std::path::PathBuf;
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_decomp::kuna_langfacet::LangFacet;
-use std::path::PathBuf;
 
 const CARRIER: &str = "__kuna_go_int_error_result";
 
 fn program(image: &str, enabled: bool) -> ConsoleProgram {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let mut program = bootstrap_from_object(
-        root.join("tests/fixtures/go-int-error-results").join(image).to_str().unwrap(),
-        "", &[root.join("specs").display().to_string()],
-    ).unwrap();
-    program.arch_mut().set_kuna_option("godwarfsig", if enabled { "on" } else { "off" }).unwrap();
+        root.join("tests/fixtures/go-int-error-results")
+            .join(image)
+            .to_str()
+            .unwrap(),
+        "",
+        &[root.join("specs").display().to_string()],
+    )
+    .unwrap();
+    program
+        .arch_mut()
+        .set_kuna_option("godwarfsig", if enabled { "on" } else { "off" })
+        .unwrap();
     program
 }
 
@@ -22,25 +32,37 @@ fn bodies(mut program: ConsoleProgram, names: &[&str]) -> Vec<String> {
     program.commit_pending_analysis().unwrap();
     let mut commands = vec!["option outlang c".to_string()];
     for name in names {
-        commands.extend([format!("load function main.{name}"), "decompile".into(), "print C".into()]);
+        commands.extend([
+            format!("load function main.{name}"),
+            "decompile".into(),
+            "print C".into(),
+        ]);
     }
     let mut status = ConsoleCommands::into_status(commands);
     register_decomp_commands(&mut status);
     unlace_console::kuna_console::register_kuna_commands(&mut status);
-    status.get_data_mut(DECOMPILE_MODULE).unwrap().as_any_mut()
-        .downcast_mut::<IfaceDecompData>().unwrap().conf = Some(program);
+    status
+        .get_data_mut(DECOMPILE_MODULE)
+        .unwrap()
+        .as_any_mut()
+        .downcast_mut::<IfaceDecompData>()
+        .unwrap()
+        .conf = Some(program);
     execute(&mut status);
     assert!(!status.inerror, "{}", status.optr);
-    names.iter().map(|name| {
-        for _ in 0..2 {
+    names
+        .iter()
+        .map(|name| {
+            for _ in 0..2 {
+                execute(&mut status);
+                assert!(!status.inerror, "{name}: {}", status.optr);
+            }
+            let start = status.optr.len();
             execute(&mut status);
             assert!(!status.inerror, "{name}: {}", status.optr);
-        }
-        let start = status.optr.len();
-        execute(&mut status);
-        assert!(!status.inerror, "{name}: {}", status.optr);
-        status.optr[start..].trim().to_string()
-    }).collect()
+            status.optr[start..].trim().to_string()
+        })
+        .collect()
 }
 
 #[test]
@@ -54,8 +76,18 @@ fn int_error_contract_binds_three_words_through_forwarding() {
             assert!(body.contains(CARRIER), "{image}: {body}");
         }
         assert!(on[1].contains("main.check(n)"), "{}", on[1]);
-        assert!(on[0].contains("v1.error_tab = &dat_403030;\n    v1.result0 = 0x11;\n    v1.error_data = NULL;"), "typed nil: {}", on[0]);
-        assert!(on[0].contains("return (__kuna_go_int_error_result)ZEXT824(n + 1ULL);"), "nil: {}", on[0]);
+        assert!(
+            on[0].contains(
+                "v1.error_tab = &dat_403030;\n    v1.result0 = 0x11;\n    v1.error_data = NULL;"
+            ),
+            "typed nil: {}",
+            on[0]
+        );
+        assert!(
+            on[0].contains("return (__kuna_go_int_error_result)ZEXT824(n + 1ULL);"),
+            "nil: {}",
+            on[0]
+        );
         for field in ["result0", "error_tab", "error_data"] {
             assert!(on[3].contains(field), "{image} lost {field}: {}", on[3]);
         }
@@ -66,8 +98,18 @@ fn int_error_contract_binds_three_words_through_forwarding() {
 
 #[test]
 fn incomplete_int_error_contracts_retain_inference() {
-    let names = ["wrongFirst", "badKind", "badOffset", "singleRegister", "missingLocation",
-        "thirdResult", "interfaceInput", "wrongProducer", "duplicate", "forward.abi0"];
+    let names = [
+        "wrongFirst",
+        "badKind",
+        "badOffset",
+        "singleRegister",
+        "missingLocation",
+        "thirdResult",
+        "interfaceInput",
+        "wrongProducer",
+        "duplicate",
+        "forward.abi0",
+    ];
     for image in ["contracts", "contracts-plain"] {
         let off = bodies(program(image, false), &names);
         let on = bodies(program(image, true), &names);
@@ -87,8 +129,15 @@ fn int_error_metadata_is_deferred_and_collision_guarded() {
     on.commit_pending_analysis().unwrap();
     let types = on.arch().types();
     let ty = types.find_by_name(CARRIER).unwrap().unwrap();
-    assert_eq!(types.kuna_lang_facet(CARRIER), Some(LangFacet::GoIntErrorResults));
-    assert!(LangFacet::GoIntErrorResults.go_int_error_fields(&ty).is_some());
+    assert_eq!(
+        types.kuna_lang_facet(CARRIER),
+        Some(LangFacet::GoIntErrorResults)
+    );
+    assert!(
+        LangFacet::GoIntErrorResults
+            .go_int_error_fields(&ty)
+            .is_some()
+    );
     for collision in 0..3 {
         let program = program("contracts", true);
         let types = program.arch().types();
@@ -96,9 +145,15 @@ fn int_error_metadata_is_deferred_and_collision_guarded() {
             types.get_type_struct(CARRIER).unwrap();
         }
         if collision != 0 {
-            types.kuna_register_lang_facet(CARRIER, LangFacet::GoIntErrorResults).unwrap();
+            types
+                .kuna_register_lang_facet(CARRIER, LangFacet::GoIntErrorResults)
+                .unwrap();
         }
         let output = bodies(program, &["forward"]);
-        assert!(!output[0].contains(CARRIER), "collision {collision}: {}", output[0]);
+        assert!(
+            !output[0].contains(CARRIER),
+            "collision {collision}: {}",
+            output[0]
+        );
     }
 }

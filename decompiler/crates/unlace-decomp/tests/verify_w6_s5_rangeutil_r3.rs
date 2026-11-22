@@ -200,14 +200,26 @@ fn r3_wto_two_sibling_loops_deterministic_and_nested() {
         assert!(order1.contains(&n), "node {n} present in iteration order");
     }
     // Both loop heads are partition heads.
-    assert!(s1.part_head_of(n1).is_some(), "loop-A head (1) is a partition head");
-    assert!(s1.part_head_of(n3).is_some(), "loop-B head (3) is a partition head");
+    assert!(
+        s1.part_head_of(n1).is_some(),
+        "loop-A head (1) is a partition head"
+    );
+    assert!(
+        s1.part_head_of(n3).is_some(),
+        "loop-B head (3) is a partition head"
+    );
     // Non-head loop bodies are NOT partition heads (single-entry loops).
-    assert!(s1.part_head_of(n0).is_none(), "node 0 is acyclic, not a head");
+    assert!(
+        s1.part_head_of(n0).is_none(),
+        "node 0 is acyclic, not a head"
+    );
     // Each head precedes its body.
     let pos = |x: usize| order1.iter().position(|&y| y == x).unwrap();
     assert!(pos(n1) < pos(n2), "loop-A head precedes its body");
     assert!(pos(n3) < pos(n4), "loop-B head precedes its body");
     // The acyclic predecessor 0 comes before both loops.
-    assert!(pos(n0) < pos(n1) && pos(n0) < pos(n3), "0 iterates before both loops");
+    assert!(
+        pos(n0) < pos(n1) && pos(n0) < pos(n3),
+        "0 iterates before both loops"
+    );
 }

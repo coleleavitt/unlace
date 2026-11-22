@@ -27,7 +27,7 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 /// A `__class_type_info` (base-less) class: its four slots are `~Shape` (complete),
 /// `~Shape` (deleting), `area`, `perimeter`.
@@ -63,14 +63,17 @@ const HIDDEN_SCALED: &str = "anonymous_namespace::Hidden::vfunc_2";
 const EXPORTED: &str = "probe_shapes";
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Bootstrap the stripped hidden-visibility C++ fixture with `itaniumrtti` in the requested
 /// state, then commit the (deferred) analysis facts.
 fn bootstrap(on: bool) -> ConsoleProgram {
-    let bin = repo_root()
-        .join("decompiler/crates/unlace-analysis/tests/fixtures/itaniumrtti_x86_64.so");
+    let bin =
+        repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/itaniumrtti_x86_64.so");
     let specs = repo_root().join("specs");
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
@@ -78,7 +81,8 @@ fn bootstrap(on: bool) -> ConsoleProgram {
     prog.arch_mut()
         .set_kuna_option("itaniumrtti", if on { "on" } else { "off" })
         .expect("itaniumrtti flips");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
@@ -107,7 +111,10 @@ fn nothing_is_recovered_with_the_option_off() {
             "with itaniumrtti off nothing may name the RTTI graph, but {name} exists"
         );
     }
-    assert!(prog.lookup_symbol(EXPORTED).is_some(), "the exported entry point exists");
+    assert!(
+        prog.lookup_symbol(EXPORTED).is_some(),
+        "the exported entry point exists"
+    );
 }
 
 /// AFTER (`--option itaniumrtti on`): every virtual method the five classes declare
@@ -133,7 +140,10 @@ fn a_virtual_method_is_not_named_after_its_vtable() {
         "shapes::Circle::vtable_2",
         "shapes::Widget::vtable_for_Drawable_2",
     ] {
-        assert!(!prog.has_symbol_named(stale), "{stale} names a function after its vtable");
+        assert!(
+            !prog.has_symbol_named(stale),
+            "{stale} names a function after its vtable"
+        );
     }
 }
 
@@ -167,7 +177,9 @@ fn a_secondary_subvtable_is_named_for_its_base_subobject() {
         "the Drawable subobject's thunk block must be named {WIDGET_THUNK}"
     );
     let thunk = prog.lookup_symbol(WIDGET_THUNK).unwrap();
-    let direct = prog.lookup_symbol(WIDGET_RENDER).expect("the primary override exists");
+    let direct = prog
+        .lookup_symbol(WIDGET_RENDER)
+        .expect("the primary override exists");
     assert_ne!(
         thunk, direct,
         "the thunk and the method it forwards to are different functions and must \
@@ -235,11 +247,20 @@ fn typeinfo_and_vtable_objects_are_labelled() {
 #[test]
 fn the_function_set_and_real_names_are_untouched() {
     let (off, on) = (bootstrap(false), bootstrap(true));
-    let before: Vec<u64> =
-        off.function_entries_canonical().into_iter().map(|e| e.addr.get_offset()).collect();
-    let after: Vec<u64> =
-        on.function_entries_canonical().into_iter().map(|e| e.addr.get_offset()).collect();
-    assert_eq!(before, after, "itaniumrtti must not add or remove a function entry");
+    let before: Vec<u64> = off
+        .function_entries_canonical()
+        .into_iter()
+        .map(|e| e.addr.get_offset())
+        .collect();
+    let after: Vec<u64> = on
+        .function_entries_canonical()
+        .into_iter()
+        .map(|e| e.addr.get_offset())
+        .collect();
+    assert_eq!(
+        before, after,
+        "itaniumrtti must not add or remove a function entry"
+    );
     assert!(
         on.lookup_symbol(EXPORTED).is_some(),
         "a real .dynsym name must never be replaced by a vtable-slot name"

@@ -50,12 +50,12 @@
 
 use std::rc::Rc;
 
-use unlace_base::address::{sign_extend, Address};
+use unlace_base::address::{Address, sign_extend};
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::space::AddrSpace;
-use unlace_base::types::{int4, int8, intb, uint4, uint8, uintb, Wrap};
+use unlace_base::types::{Wrap, int4, int8, intb, uint4, uint8, uintb};
 
-use crate::dtype::{type_metatype, Datatype, TypeFactory};
+use crate::dtype::{Datatype, TypeFactory, type_metatype};
 
 // ===========================================================================
 // RangeType + RangeHint flag constants (varmap.hh:95-104)
@@ -130,7 +130,15 @@ impl RangeHint {
         rt: RangeType,
         hi: int4,
     ) -> RangeHint {
-        RangeHint { start: st, size: sz, sstart: sst, type_: ct, flags: fl, range_type: rt, highind: hi }
+        RangeHint {
+            start: st,
+            size: sz,
+            sstart: sst,
+            type_: ct,
+            flags: fl,
+            range_type: rt,
+            highind: hi,
+        }
     }
 
     /// Is the data-type for this range locked (C++ `isTypeLock`,
@@ -192,7 +200,11 @@ impl RangeHint {
     pub fn reconcile(&self, b: &RangeHint) -> KunaResult<bool> {
         // C++ swaps `a`/`b` so that `b` is the smaller-aligned of the two.
         let (a, b): (&RangeHint, &RangeHint) =
-            if self.type_.get_align_size() < b.type_.get_align_size() { (b, self) } else { (self, b) };
+            if self.type_.get_align_size() < b.type_.get_align_size() {
+                (b, self)
+            } else {
+                (self, b)
+            };
         if a.can_join_piece(b) {
             return Ok(true);
         }
@@ -219,8 +231,7 @@ impl RangeHint {
         let meta = a.type_.get_metatype();
         if meta != type_metatype::TYPE_STRUCT && meta != type_metatype::TYPE_UNION {
             let array_base_unknown = meta == type_metatype::TYPE_ARRAY
-                && a
-                    .type_
+                && a.type_
                     .get_array_base()
                     .map(|bt| bt.get_metatype() == type_metatype::TYPE_UNKNOWN)
                     .unwrap_or(false);
@@ -502,7 +513,11 @@ impl RangeHint {
             if !did_reconcile && self.start != b.start {
                 res_type = 2;
             } else {
-                res_type = if self.preferred(b, did_reconcile)? { 0 } else { 1 };
+                res_type = if self.preferred(b, did_reconcile)? {
+                    0
+                } else {
+                    1
+                };
             }
         } else {
             did_reconcile = false;
@@ -565,7 +580,11 @@ impl RangeHint {
             return if self.size < op2.size { -1 } else { 1 }; // Small sizes come first
         }
         if self.range_type != op2.range_type {
-            return if self.range_type < op2.range_type { -1 } else { 1 };
+            return if self.range_type < op2.range_type {
+                -1
+            } else {
+                1
+            };
         }
         if self.flags != op2.flags {
             return if self.flags < op2.flags { -1 } else { 1 };
@@ -588,7 +607,12 @@ impl RangeHint {
 /// only needs a member whose component boundaries fit the smaller hint.
 /// Outside union alternatives, preserve the existing align-size comparison
 /// used for partial scalar and structure hints.
-fn component_aligns(ct: &Rc<Datatype>, offset: int8, align_size: int4, union_path: bool) -> KunaResult<bool> {
+fn component_aligns(
+    ct: &Rc<Datatype>,
+    offset: int8,
+    align_size: int4,
+    union_path: bool,
+) -> KunaResult<bool> {
     if ct.get_align_size() <= align_size {
         return Ok(ct.get_align_size() == align_size && (!union_path || offset == 0));
     }
@@ -632,7 +656,10 @@ pub struct AddBase {
 
 impl AddBase {
     /// C++ constructor `AddBase(Varnode *b,Varnode *i)` (`varmap.hh:143`).
-    pub fn new(base: crate::context::VarnodeId, index: Option<crate::context::VarnodeId>) -> AddBase {
+    pub fn new(
+        base: crate::context::VarnodeId,
+        index: Option<crate::context::VarnodeId>,
+    ) -> AddBase {
         AddBase { base, index }
     }
 }
@@ -771,7 +798,8 @@ impl AliasChecker {
         access.gather_additive_base(spacebase, &mut self.add_base);
         // C++ iterates addBase, computing one alias offset per AddBase.
         let word_size = space.get_word_size();
-        let entries: Vec<crate::context::VarnodeId> = self.add_base.iter().map(|ab| ab.base).collect();
+        let entries: Vec<crate::context::VarnodeId> =
+            self.add_base.iter().map(|ab| ab.base).collect();
         for base in entries {
             let mut offset = access.gather_offset(base);
             offset = AddrSpace::address_to_byte(offset, word_size); // Convert to byte offset
@@ -825,7 +853,10 @@ impl AliasChecker {
     /// each it accepts. Computed once per gather, and again after
     /// [`Self::refresh_split_for`] finds a pointer's answer changed; call after
     /// `has_local_alias` gathered them.
-    pub fn split_direct(&mut self, direct: impl Fn(&AddBase) -> Option<uintb>) -> &(uintb, Vec<(uintb, uintb)>) {
+    pub fn split_direct(
+        &mut self,
+        direct: impl Fn(&AddBase) -> Option<uintb>,
+    ) -> &(uintb, Vec<(uintb, uintb)>) {
         let (alias, add_base, direction) = (&self.alias, &self.add_base, self.direction);
         let (local_boundary, local_extreme, alias_boundary) =
             (self.local_boundary, self.local_extreme, self.alias_boundary);
@@ -841,7 +872,11 @@ impl AliasChecker {
                 if let Some(bytes) = direct(base) {
                     direct_bases.push((base.base, bytes));
                     ranges.push((start, bytes));
-                } else if if direction == 1 { start >= local_boundary } else { start <= local_boundary } {
+                } else if if direction == 1 {
+                    start >= local_boundary
+                } else {
+                    start <= local_boundary
+                } {
                     boundary = boundary.min(start);
                 }
             }
@@ -857,11 +892,19 @@ impl AliasChecker {
     /// (kuna) `vn` gained or lost a use: drop [`Self::split_direct`]'s answer
     /// when `vn` is a gathered pointer whose `direct` answer, `now`, is no
     /// longer the one the split was drawn with.
-    pub fn refresh_split_for(&mut self, vn: crate::context::VarnodeId, now: impl FnOnce() -> Option<uintb>) {
+    pub fn refresh_split_for(
+        &mut self,
+        vn: crate::context::VarnodeId,
+        now: impl FnOnce() -> Option<uintb>,
+    ) {
         if self.direct_split.is_none() {
             return;
         }
-        let was = self.direct_bases.iter().find(|&&(id, _)| id == vn).map(|&(_, bytes)| bytes);
+        let was = self
+            .direct_bases
+            .iter()
+            .find(|&&(id, _)| id == vn)
+            .map(|&(_, bytes)| bytes);
         if was != now() && (was.is_some() || self.add_base.iter().any(|b| b.base == vn)) {
             self.direct_split = None;
         }
@@ -871,7 +914,11 @@ impl AliasChecker {
     /// slot at `offset`: an address taken there at or below it.  `hasLocalAlias`
     /// answers only for locals, so a caller slot above the return address whose
     /// address is passed on (an MSVC home slot) needs this test.
-    pub fn has_parameter_alias(&mut self, offset: uintb, access: &mut dyn AliasGatherAccess) -> bool {
+    pub fn has_parameter_alias(
+        &mut self,
+        offset: uintb,
+        access: &mut dyn AliasGatherAccess,
+    ) -> bool {
         if !self.calculated {
             self.gather_internal(access);
         }
@@ -934,7 +981,11 @@ pub trait AliasGatherAccess {
     fn find_spacebase_input(&self, space: &Rc<AddrSpace>) -> Option<crate::context::VarnodeId>;
     /// C++ `AliasChecker::gatherAdditiveBase(startvn, addbase)` — collect the
     /// roots of every additive expression tree rooted at `startvn`.
-    fn gather_additive_base(&mut self, startvn: crate::context::VarnodeId, addbase: &mut Vec<AddBase>);
+    fn gather_additive_base(
+        &mut self,
+        startvn: crate::context::VarnodeId,
+        addbase: &mut Vec<AddBase>,
+    );
     /// C++ `AliasChecker::gatherOffset(vn)` — the constant portion of the sum
     /// the given Varnode is the result of.
     fn gather_offset(&mut self, vn: crate::context::VarnodeId) -> uintb;
@@ -1098,7 +1149,12 @@ impl ScopeLocal {
     /// `num_spaces` sizes the per-space `maptable` (the C++ `ScopeInternal`
     /// constructor's `maptable.resize(numSpaces, null)`); it must cover the stack
     /// space's index so `addSymbol` on a stack address can allocate its slot.
-    pub fn new(id: uint8, spc: Rc<AddrSpace>, fname: &str, num_spaces: int4) -> KunaResult<ScopeLocal> {
+    pub fn new(
+        id: uint8,
+        spc: Rc<AddrSpace>,
+        fname: &str,
+        num_spaces: int4,
+    ) -> KunaResult<ScopeLocal> {
         let mut db = crate::database::Database::new(true);
         // The local scope is the *global* scope of this private database (empty
         // parent), but it IS functional (C++ ScopeLocal has a non-null `fd`).
@@ -1203,8 +1259,14 @@ impl ScopeLocal {
                 self.max_param_offset = last;
             }
         }
-        self.db
-            .mark_not_mapped_core(self.scope, Rc::clone(&self.space), first, last, sz, parameter);
+        self.db.mark_not_mapped_core(
+            self.scope,
+            Rc::clone(&self.space),
+            first,
+            last,
+            sz,
+            parameter,
+        );
     }
 
     /// C++ `ScopeLocal::addTypeRecommendation` (`varmap.cc:1590`): associate a
@@ -1226,13 +1288,7 @@ impl ScopeLocal {
     /// the host `<localdb>`'s namelocked-but-not-typelocked locals (the shape
     /// a GUI rename produces), the same identities C++ `collectNameRecs`
     /// would harvest before restructure clears the unlocked symbols.
-    pub fn add_recommend_name(
-        &mut self,
-        addr: Address,
-        usepoint: Address,
-        size: int4,
-        name: &str,
-    ) {
+    pub fn add_recommend_name(&mut self, addr: Address, usepoint: Address, size: int4, name: &str) {
         self.name_recommend.push(NameRecommend::new(
             addr,
             usepoint,
@@ -1261,7 +1317,9 @@ impl ScopeLocal {
             .map(|r| (r.addr.clone(), r.size, r.name.clone()))
             .collect();
         for (addr, size, name) in recs {
-            let Some(eref) = self.db.find_overlap(self.scope, &addr, size) else { continue };
+            let Some(eref) = self.db.find_overlap(self.scope, &addr, size) else {
+                continue;
+            };
             let entry = self.db.entry(self.scope, eref);
             if *entry.get_addr() != addr {
                 continue;
@@ -1275,7 +1333,8 @@ impl ScopeLocal {
             }
             let unique = self.db.public_make_name_unique(self.scope, &name);
             if self.db.rename_symbol(sym, &unique).is_ok() {
-                self.db.set_attribute(sym, crate::varnode::varnode_flags::namelock);
+                self.db
+                    .set_attribute(sym, crate::varnode::varnode_flags::namelock);
             }
         }
     }
@@ -1343,7 +1402,8 @@ impl ScopeLocal {
         encoder.open_element(&ELEM_LOCALDB);
         encoder.write_space(&ATTRIB_MAIN, &self.space);
         encoder.write_bool(&ATTRIB_LOCK, self.range_locked);
-        self.db.encode_scope_with_storage(self.scope, wire_symbols, wrapped_storage, encoder)?;
+        self.db
+            .encode_scope_with_storage(self.scope, wire_symbols, wrapped_storage, encoder)?;
         encoder.close_element(&ELEM_LOCALDB);
         Ok(())
     }
@@ -1372,11 +1432,14 @@ impl ScopeLocal {
                 continue;
             }
             let mut number = *base;
-            if self.db.symbol(sym).get_category() != crate::database::symbol_category::FUNCTION_PARAMETER {
+            if self.db.symbol(sym).get_category()
+                != crate::database::symbol_category::FUNCTION_PARAMETER
+            {
                 self.prefer_symbol_names(sym);
                 number = self.pick_default_number(&|i| format!("v{i}"));
             }
-            self.db.assign_default_name(self.scope, sym, &mut number, arch)?;
+            self.db
+                .assign_default_name(self.scope, sym, &mut number, arch)?;
         }
         Ok(())
     }
@@ -1445,7 +1508,9 @@ impl ScopeLocal {
         addr: &Address,
         usepoint: &Address,
     ) -> KunaResult<crate::database::SymbolId> {
-        let (sym, _eref) = self.db.add_symbol_mapped(self.scope, name, ct, addr, usepoint)?;
+        let (sym, _eref) = self
+            .db
+            .add_symbol_mapped(self.scope, name, ct, addr, usepoint)?;
         Ok(sym)
     }
 
@@ -1474,7 +1539,10 @@ impl ScopeLocal {
             return Ok(None);
         }
         // A register local mapped at a later definition must not replace the input.
-        if let Some(eref) = self.db.find_container(self.scope, addr, ct.get_size(), restricted_usepoint) {
+        if let Some(eref) =
+            self.db
+                .find_container(self.scope, addr, ct.get_size(), restricted_usepoint)
+        {
             // (kuna, ghidra Phase 4) An EXACT-storage match is this parameter's
             // own symbol under another guise — a host local seeded at the very
             // same address and width, or a prior call's creation — so it carries
@@ -1544,13 +1612,18 @@ impl ScopeLocal {
                 .get_space()
                 .is_some_and(|s| s.get_type() == unlace_base::space::spacetype::IPTR_PROCESSOR);
         let usepoint = if restrict
-            && self.db.discover_scope(self.scope, addr, ct.get_size(), &Address::new_invalid()).is_none()
+            && self
+                .db
+                .discover_scope(self.scope, addr, ct.get_size(), &Address::new_invalid())
+                .is_none()
         {
             restricted_usepoint.clone()
         } else {
             Address::new_invalid()
         };
-        let (sym, _eref) = self.db.add_symbol_mapped(self.scope, name, ct, addr, &usepoint)?;
+        let (sym, _eref) = self
+            .db
+            .add_symbol_mapped(self.scope, name, ct, addr, &usepoint)?;
         self.db.set_category(
             self.scope,
             sym,
@@ -1569,17 +1642,18 @@ impl ScopeLocal {
         addr: &Address,
         restricted_usepoint: &Address,
     ) -> KunaResult<Option<crate::database::SymbolId>> {
-        if addr.get_space().is_none_or(|space| space.get_index() != self.space.get_index()) {
+        if addr
+            .get_space()
+            .is_none_or(|space| space.get_index() != self.space.get_index())
+        {
             return self.add_param_symbol(i, name, ct, addr, restricted_usepoint);
         }
         let invalid = Address::new_invalid();
-        let parameter = self.db.find_container_matching(
-            self.scope,
-            addr,
-            ct.get_size(),
-            &invalid,
-            |symbol| symbol.get_category() == crate::database::symbol_category::FUNCTION_PARAMETER,
-        );
+        let parameter =
+            self.db
+                .find_container_matching(self.scope, addr, ct.get_size(), &invalid, |symbol| {
+                    symbol.get_category() == crate::database::symbol_category::FUNCTION_PARAMETER
+                });
         if let Some(parameter) = parameter {
             let entry = self.db.entry(self.scope, parameter);
             if entry.get_addr() == addr && entry.get_size() == ct.get_size() {
@@ -1593,19 +1667,28 @@ impl ScopeLocal {
                 return Ok(Some(symbol));
             }
         }
-        let existing = self.db
+        let existing = self
+            .db
             .find_container(self.scope, addr, ct.get_size(), &invalid)
             .filter(|&entry| {
                 let entry = self.db.entry(self.scope, entry);
                 entry.get_addr() == addr
                     && entry.get_size() == ct.get_size()
-                    && self.db.symbol(entry.symbol).dtype.as_ref()
+                    && self
+                        .db
+                        .symbol(entry.symbol)
+                        .dtype
+                        .as_ref()
                         .is_some_and(|ty| Rc::ptr_eq(ty, &ct))
             })
             .map(|entry| self.db.entry(self.scope, entry).symbol);
         let symbol = match existing {
             Some(symbol) => symbol,
-            None => self.db.add_symbol_mapped(self.scope, name, ct, addr, &invalid)?.0,
+            None => {
+                self.db
+                    .add_symbol_mapped(self.scope, name, ct, addr, &invalid)?
+                    .0
+            }
         };
         self.db.set_category(
             self.scope,
@@ -1637,7 +1720,8 @@ impl ScopeLocal {
         caddr: &Address,
         hash: uint8,
     ) -> KunaResult<crate::database::SymbolId> {
-        self.db.add_dynamic_symbol(self.scope, name, ct, caddr, hash)
+        self.db
+            .add_dynamic_symbol(self.scope, name, ct, caddr, hash)
     }
 
     /// C++ `Scope::addUnionFacetSymbol` reached via
@@ -1652,7 +1736,8 @@ impl ScopeLocal {
         addr: &Address,
         hash: uint8,
     ) -> KunaResult<crate::database::SymbolId> {
-        self.db.add_union_facet_symbol(self.scope, name, dt, field_num, addr, hash)
+        self.db
+            .add_union_facet_symbol(self.scope, name, dt, field_num, addr, hash)
     }
 
     /// C++ `ScopeInternal::setAttribute` reached via the `map` commands
@@ -1750,7 +1835,8 @@ impl ScopeLocal {
         hash: uint8,
         base1: Rc<Datatype>,
     ) -> KunaResult<crate::database::SymbolId> {
-        self.db.add_equate_symbol(self.scope, nm, format, value, addr, hash, base1)
+        self.db
+            .add_equate_symbol(self.scope, nm, format, value, addr, hash, base1)
     }
 
     /// C++ `ScopeLocal::adjustFit` (`varmap.cc:587`): shrink `a` so it fits the
@@ -1764,7 +1850,11 @@ impl ScopeLocal {
             return false; // Already entered
         }
         let addr = Address::new(self.space.clone(), a.start);
-        let mut maxsize = self.db.scope(self.scope).get_range_tree().longest_fit(&addr, a.size as u64);
+        let mut maxsize = self
+            .db
+            .scope(self.scope)
+            .get_range_tree()
+            .longest_fit(&addr, a.size as u64);
         if maxsize == 0 {
             return false;
         }
@@ -1810,7 +1900,8 @@ impl ScopeLocal {
         let num = if align != 0 { a.size / align } else { a.size };
         // (kuna `vtabletypes`) A record of open-ended size (a C++ class whose
         // object size nothing states) cannot be an array element.
-        let open_record = ct.get_metatype() == type_metatype::TYPE_STRUCT && ct.is_variable_length();
+        let open_record =
+            ct.get_metatype() == type_metatype::TYPE_STRUCT && ct.is_variable_length();
         if num > 1 && !open_record {
             ct = types.get_type_array(num, ct)?;
         }
@@ -1821,7 +1912,11 @@ impl ScopeLocal {
     /// C++ `ScopeLocal::restructure` (`varmap.cc:1294`): merge the collected
     /// `RangeHint`s into a disjoint cover of Symbols.  Returns true if there were
     /// overlaps that could not be reconciled.
-    pub fn restructure(&mut self, state: &mut MapState, types: &dyn TypeFactory) -> KunaResult<bool> {
+    pub fn restructure(
+        &mut self,
+        state: &mut MapState,
+        types: &dyn TypeFactory,
+    ) -> KunaResult<bool> {
         let mut overlap_problems = false;
         if !state.initialize()? {
             return Ok(overlap_problems); // No references to stack at all
@@ -1843,7 +1938,9 @@ impl ScopeLocal {
                 cur_end = cur_end.max(next_end);
                 let aggregate = matches!(
                     cur.type_.get_metatype(),
-                    type_metatype::TYPE_STRUCT | type_metatype::TYPE_UNION | type_metatype::TYPE_ARRAY
+                    type_metatype::TYPE_STRUCT
+                        | type_metatype::TYPE_UNION
+                        | type_metatype::TYPE_ARRAY
                 );
                 if absorbing && was_open && !cur.is_type_lock() && !aggregate {
                     cur.range_type = RangeType::Open;
@@ -1880,9 +1977,12 @@ impl ScopeLocal {
                 }
                 if self.adjust_fit(&mut cur) {
                     if open {
-                        if let Some(size) =
-                            crate::p6_variables::kuna_arraysize::fit(&cur, cur_end, cur.size as intb, state)
-                        {
+                        if let Some(size) = crate::p6_variables::kuna_arraysize::fit(
+                            &cur,
+                            cur_end,
+                            cur.size as intb,
+                            state,
+                        ) {
                             cur.size = size;
                         }
                     }
@@ -1900,7 +2000,9 @@ impl ScopeLocal {
     /// C++ `Scope::inScope(addr,size,usepoint)` reached via `lm->inScope(...)`:
     /// are all bytes of the range owned by this scope's range tree?
     pub fn in_scope(&self, addr: &Address, size: int4) -> bool {
-        self.db.scope(self.scope).in_scope(addr, size, &Address::new_invalid())
+        self.db
+            .scope(self.scope)
+            .in_scope(addr, size, &Address::new_invalid())
     }
 
     /// C++ `localmap->clearUnlockedCategory(-1)` (the head of
@@ -1980,8 +2082,13 @@ impl ScopeLocal {
         let sym = entry.symbol;
         let symbol = self.db.symbol(sym);
         // symbol_offset = (access_addr - entry_addr) + entry_offset.
-        let sym_off = (addr.get_offset().wrapping_sub(entry_addr_off) as int4).wrapping_add(entry_off);
-        Some((symbol.get_display_name().to_string(), sym_off, symbol.dtype.clone()))
+        let sym_off =
+            (addr.get_offset().wrapping_sub(entry_addr_off) as int4).wrapping_add(entry_off);
+        Some((
+            symbol.get_display_name().to_string(),
+            sym_off,
+            symbol.dtype.clone(),
+        ))
     }
 
     /// The next default name `render` produces from `base`, skipping any a
@@ -1993,7 +2100,11 @@ impl ScopeLocal {
     /// When a directive batch is replayed the previous decompile's numbering
     /// is kept instead (see [`crate::kuna_stablenames`]): the number comes from
     /// [`Self::prefer_names`] and the Symbol being named, and `base` is unused.
-    pub fn next_default_name(&mut self, base: &mut int4, render: impl Fn(int4) -> String) -> String {
+    pub fn next_default_name(
+        &mut self,
+        base: &mut int4,
+        render: impl Fn(int4) -> String,
+    ) -> String {
         if self.name_state.active() {
             *base += 1;
             return render(self.pick_default_number(&render));
@@ -2001,7 +2112,12 @@ impl ScopeLocal {
         loop {
             let name = render(*base);
             *base += 1;
-            if !self.db.find_by_name(self.scope, &name).iter().any(|&s| self.db.symbol(s).is_name_locked()) {
+            if !self
+                .db
+                .find_by_name(self.scope, &name)
+                .iter()
+                .any(|&s| self.db.symbol(s).is_name_locked())
+            {
                 return name;
             }
         }
@@ -2009,7 +2125,11 @@ impl ScopeLocal {
 
     fn pick_default_number(&mut self, render: &dyn Fn(int4) -> String) -> int4 {
         let (db, scope) = (&self.db, self.scope);
-        let free = |name: &str| !db.find_by_name(scope, name).iter().any(|&s| db.symbol(s).is_name_locked());
+        let free = |name: &str| {
+            !db.find_by_name(scope, name)
+                .iter()
+                .any(|&s| db.symbol(s).is_name_locked())
+        };
         self.name_state.pick(render, &free)
     }
 
@@ -2026,12 +2146,18 @@ impl ScopeLocal {
     }
 
     /// Record which local each name-only rename names.
-    pub fn set_rename_targets(&mut self, targets: std::collections::BTreeMap<crate::context::HighVariableId, String>) {
+    pub fn set_rename_targets(
+        &mut self,
+        targets: std::collections::BTreeMap<crate::context::HighVariableId, String>,
+    ) {
         self.name_state.set_targets(targets);
     }
 
     /// Record the number each local keeps (`kuna_stablenames::assign_numbers`).
-    pub fn set_assigned_numbers(&mut self, assigned: std::collections::BTreeMap<crate::context::HighVariableId, int4>) {
+    pub fn set_assigned_numbers(
+        &mut self,
+        assigned: std::collections::BTreeMap<crate::context::HighVariableId, int4>,
+    ) {
         self.name_state.set_assigned(assigned);
     }
 
@@ -2085,7 +2211,9 @@ impl ScopeLocal {
     /// name, as their Symbols did; the printer tells the declarations apart.
     fn renamed_symbol_name(&self, sym: crate::database::SymbolId) -> Option<String> {
         let (addr, size) = self.prior_symbol_storage(sym)?;
-        self.name_state.symbol_rename(&addr, size).map(str::to_string)
+        self.name_state
+            .symbol_rename(&addr, size)
+            .map(str::to_string)
     }
 
     /// One past every number the naming pass handed out under a kept numbering.
@@ -2130,9 +2258,15 @@ impl ScopeLocal {
         let eref = self.db.find_overlap(self.scope, addr, size)?;
         let (sym, entry_addr_off, entry_off, entry_size) = {
             let entry = self.db.entry(self.scope, eref);
-            (entry.symbol, entry.get_addr().get_offset(), entry.get_offset(), entry.get_size())
+            (
+                entry.symbol,
+                entry.get_addr().get_offset(),
+                entry.get_offset(),
+                entry.get_size(),
+            )
         };
-        let sym_off = (addr.get_offset().wrapping_sub(entry_addr_off) as int4).wrapping_add(entry_off);
+        let sym_off =
+            (addr.get_offset().wrapping_sub(entry_addr_off) as int4).wrapping_add(entry_off);
         self.resolve_entry_name(sym, sym_off, entry_size, size, base, override_name)
     }
 
@@ -2144,7 +2278,14 @@ impl ScopeLocal {
         base: &mut int4,
         override_name: Option<&str>,
     ) -> Option<(String, int4, Option<Rc<Datatype>>)> {
-        self.resolve_entry_name(entry.symbol, entry.sym_off, entry.entry_size, size, base, override_name)
+        self.resolve_entry_name(
+            entry.symbol,
+            entry.sym_off,
+            entry.entry_size,
+            size,
+            base,
+            override_name,
+        )
     }
 
     fn resolve_entry_name(
@@ -2178,7 +2319,11 @@ impl ScopeLocal {
             }
         }
         let symbol = self.db.symbol(sym);
-        Some((symbol.get_display_name().to_string(), sym_off, symbol.dtype.clone()))
+        Some((
+            symbol.get_display_name().to_string(),
+            sym_off,
+            symbol.dtype.clone(),
+        ))
     }
 
     /// C++ `ActionNameVars::linkSpacebaseSymbol`'s namerec entry + the end-of-`apply`
@@ -2204,14 +2349,21 @@ impl ScopeLocal {
         base: &mut int4,
     ) -> Option<String> {
         // queryContainer(addr,1,Address()) — the same lookup as link_symbol_reference.
-        let eref = self.db.find_container(self.scope, addr, 1, &Address::default())?;
+        let eref = self
+            .db
+            .find_container(self.scope, addr, 1, &Address::default())?;
         let (sym, entry_addr_off, entry_off) = {
             let entry = self.db.entry(self.scope, eref);
-            (entry.symbol, entry.get_addr().get_offset(), entry.get_offset())
+            (
+                entry.symbol,
+                entry.get_addr().get_offset(),
+                entry.get_offset(),
+            )
         };
         // sym_off = (addr - entry_addr) + entry_off.  The reference must address the
         // base of the Symbol (sym_off == 0) — the `&symbol` whole-symbol reference.
-        let sym_off = (addr.get_offset().wrapping_sub(entry_addr_off) as int4).wrapping_add(entry_off);
+        let sym_off =
+            (addr.get_offset().wrapping_sub(entry_addr_off) as int4).wrapping_add(entry_off);
         if sym_off != 0 {
             return None;
         }
@@ -2256,7 +2408,11 @@ impl ScopeLocal {
     ) -> Option<(crate::database::SymbolId, uintb, int4)> {
         let eref = self.db.find_container(self.scope, addr, 1, usepoint)?;
         let entry = self.db.entry(self.scope, eref);
-        Some((entry.symbol, entry.get_addr().get_offset(), entry.get_size()))
+        Some((
+            entry.symbol,
+            entry.get_addr().get_offset(),
+            entry.get_size(),
+        ))
     }
 
     pub fn query_container_for_link(
@@ -2295,7 +2451,8 @@ impl ScopeLocal {
         usepoint: &Address,
         accepts: impl Fn(&crate::database::Symbol) -> bool,
     ) -> Option<LinkEntryInfo> {
-        let entry = self.db
+        let entry = self
+            .db
             .find_container_matching(self.scope, addr, size, usepoint, accepts)?;
         Some(self.link_entry_info(addr, entry))
     }
@@ -2342,7 +2499,12 @@ impl ScopeLocal {
     ) -> Option<(crate::database::SymbolId, Address, int4, int4)> {
         let eref = self.db.find_container(self.scope, addr, 1, usepoint)?;
         let entry = self.db.entry(self.scope, eref);
-        Some((entry.symbol, entry.get_addr().clone(), entry.get_size(), entry.get_offset()))
+        Some((
+            entry.symbol,
+            entry.get_addr().clone(),
+            entry.get_size(),
+            entry.get_offset(),
+        ))
     }
 
     /// Read a symbol's `(id, category)` pair for the `<high>` encode (C++
@@ -2353,11 +2515,16 @@ impl ScopeLocal {
     }
 
     pub fn symbol_storage(&self, sym: crate::database::SymbolId) -> Vec<(Address, int4)> {
-        self.db.symbol(sym).mapentry.iter().filter_map(|&entry| {
-            let entry = self.db.entry(self.scope, entry);
-            (entry.get_offset() == 0 && !entry.get_addr().is_invalid())
-                .then(|| (entry.get_addr().clone(), entry.get_size()))
-        }).collect()
+        self.db
+            .symbol(sym)
+            .mapentry
+            .iter()
+            .filter_map(|&entry| {
+                let entry = self.db.entry(self.scope, entry);
+                (entry.get_offset() == 0 && !entry.get_addr().is_invalid())
+                    .then(|| (entry.get_addr().clone(), entry.get_size()))
+            })
+            .collect()
     }
 
     /// Whether [`Self::encode`] will actually emit this symbol — the O(1)
@@ -2401,10 +2568,16 @@ impl ScopeLocal {
         addr: &Address,
         base: &mut int4,
     ) -> Option<(String, int4, Option<Rc<Datatype>>)> {
-        let eref = self.db.find_container(self.scope, addr, 1, &Address::default())?;
+        let eref = self
+            .db
+            .find_container(self.scope, addr, 1, &Address::default())?;
         let (sym, entry_addr_off, entry_off) = {
             let entry = self.db.entry(self.scope, eref);
-            (entry.symbol, entry.get_addr().get_offset(), entry.get_offset())
+            (
+                entry.symbol,
+                entry.get_addr().get_offset(),
+                entry.get_offset(),
+            )
         };
         let sym_off =
             (addr.get_offset().wrapping_sub(entry_addr_off) as int4).wrapping_add(entry_off);
@@ -2414,7 +2587,11 @@ impl ScopeLocal {
             let _ = self.db.rename_symbol(sym, &newname);
         }
         let symbol = self.db.symbol(sym);
-        Some((symbol.get_display_name().to_string(), sym_off, symbol.dtype.clone()))
+        Some((
+            symbol.get_display_name().to_string(),
+            sym_off,
+            symbol.dtype.clone(),
+        ))
     }
 
     /// The category of the Symbol covering a storage location (C++
@@ -2461,7 +2638,13 @@ impl ScopeLocal {
             return first;
         }
         (0u32..)
-            .map(|i| if i < 100 { format!("{nm}_{i:02}") } else { format!("{nm}_x{i:05}") })
+            .map(|i| {
+                if i < 100 {
+                    format!("{nm}_{i:02}")
+                } else {
+                    format!("{nm}_x{i:05}")
+                }
+            })
             .find(|c| !taken.contains(c) && !self.local_name_used(c))
             .expect("an unbounded suffix sequence has a free spelling")
     }
@@ -2485,7 +2668,9 @@ impl ScopeLocal {
         &self,
         addr: &Address,
     ) -> Option<(crate::database::SymbolId, Option<Rc<Datatype>>)> {
-        let eref = self.db.find_container_ignore_usepoint(self.scope, addr, 1)?;
+        let eref = self
+            .db
+            .find_container_ignore_usepoint(self.scope, addr, 1)?;
         let sym = self.db.entry(self.scope, eref).symbol;
         Some((sym, self.db.symbol(sym).dtype.clone()))
     }
@@ -2513,7 +2698,9 @@ impl ScopeLocal {
         // declared the register parameter as a body local.  C++
         // `emitScopeVarDecls` finds parameters by walking the Symbol table by
         // category, never by a usepoint query — this matches that.
-        let eref = self.db.find_container_ignore_usepoint(self.scope, addr, size)?;
+        let eref = self
+            .db
+            .find_container_ignore_usepoint(self.scope, addr, size)?;
         let entry = self.db.entry(self.scope, eref);
         Some(self.db.symbol(entry.symbol).get_category())
     }
@@ -2571,11 +2758,20 @@ impl ScopeLocal {
         let all_flags = extraflags | symbol.get_flags();
         // C++ SymbolEntry::getSizedType (non-dynamic): off = (inaddr - addr) + offset.
         let sized = symbol.dtype.as_ref().and_then(|cur| {
-            let off = (addr.get_offset().wrapping_sub(entry_addr_off) as int4)
-                .wrapping_add(entry_off);
-            types.get_exact_piece(Rc::clone(cur), off, size).ok().flatten()
+            let off =
+                (addr.get_offset().wrapping_sub(entry_addr_off) as int4).wrapping_add(entry_off);
+            types
+                .get_exact_piece(Rc::clone(cur), off, size)
+                .ok()
+                .flatten()
         });
-        Some(SyncOverlap { all_flags, entry_size, sized_type: sized, symbol_id: sym, extraflags })
+        Some(SyncOverlap {
+            all_flags,
+            entry_size,
+            sized_type: sized,
+            symbol_id: sym,
+            extraflags,
+        })
     }
 
     /// Storage-only compatibility form of the `ActionInferTypes::buildLocaltypes`
@@ -2636,8 +2832,12 @@ impl ScopeLocal {
             return None;
         }
         let sym_type = Rc::clone(symbol.dtype.as_ref()?);
-        let cur_off = (addr.get_offset().wrapping_sub(entry_addr_off) as int4).wrapping_add(entry_off);
-        let ct = types.get_exact_piece(sym_type, cur_off, size).ok().flatten()?;
+        let cur_off =
+            (addr.get_offset().wrapping_sub(entry_addr_off) as int4).wrapping_add(entry_off);
+        let ct = types
+            .get_exact_piece(sym_type, cur_off, size)
+            .ok()
+            .flatten()?;
         // TYPE_UNKNOWN piece: let the type float.
         if ct.get_metatype() == crate::dtype::type_metatype::TYPE_UNKNOWN {
             return None;
@@ -2672,7 +2872,10 @@ impl ScopeLocal {
         let addr = Address::new(Rc::clone(&self.space), addr_off);
 
         // smallest = scope->queryContainer(addr, 1, nullPoint)
-        match self.db.find_container(self.scope, &addr, 1, &Address::new_invalid()) {
+        match self
+            .db
+            .find_container(self.scope, &addr, 1, &Address::new_invalid())
+        {
             Some(eref) => {
                 let entry = self.db.entry(self.scope, eref);
                 let entry_addr_off = entry.get_addr().get_offset();
@@ -2680,8 +2883,7 @@ impl ScopeLocal {
                 let sym = entry.symbol;
                 let sym_type = self.db.symbol(sym).dtype.clone();
                 // newoff = (addr - smallest.addr) + smallest.offset
-                let newoff =
-                    (addr_off.wrapping_sub(entry_addr_off) as int8) + entry_off as int8;
+                let newoff = (addr_off.wrapping_sub(entry_addr_off) as int8) + entry_off as int8;
                 match sym_type {
                     Some(t) => Ok((t, newoff)),
                     // A Symbol with no type is degenerate; fall back to UNKNOWN(1)
@@ -2701,11 +2903,7 @@ impl ScopeLocal {
     /// Otherwise advance to the next Symbol slot (`addr + 32` when the access is
     /// inside an offset Symbol, else past the current one) and probe there.  The
     /// returned `(distance, newoff, elSize)` matches the C++ out-params.
-    pub fn spacebase_nearest_arrayed_forward(
-        &self,
-        off: int8,
-        max: int8,
-    ) -> (int8, int8, int8) {
+    pub fn spacebase_nearest_arrayed_forward(&self, off: int8, max: int8) -> (int8, int8, int8) {
         let word_size = self.space.get_word_size();
         let to_addr = |o: int8| -> Address {
             let a = AddrSpace::byte_to_address(o as u64, word_size);
@@ -2713,8 +2911,9 @@ impl ScopeLocal {
             Address::new(Rc::clone(&self.space), self.space.wrap_offset(a))
         };
         let addr = to_addr(off);
-        let smallest =
-            self.db.find_container(self.scope, &addr, 1, &Address::new_invalid());
+        let smallest = self
+            .db
+            .find_container(self.scope, &addr, 1, &Address::new_invalid());
 
         let mut el_size: int8 = 0;
         let next_addr: Address;
@@ -2754,8 +2953,9 @@ impl ScopeLocal {
         if next_addr.get_offset() < addr.get_offset() {
             return (-1, off, 0);
         }
-        let smallest2 =
-            self.db.find_container(self.scope, &next_addr, 1, &Address::new_invalid());
+        let smallest2 = self
+            .db
+            .find_container(self.scope, &next_addr, 1, &Address::new_invalid());
         let eref2 = match smallest2 {
             Some(e) => e,
             None => return (-1, off, 0),
@@ -2900,8 +3100,20 @@ pub struct NameRecommend {
 
 impl NameRecommend {
     /// C++ constructor `NameRecommend(ad,use,sz,nm,id)` (`varmap.hh:43-44`).
-    pub fn new(addr: Address, useaddr: Address, size: int4, name: String, symbol_id: u64) -> NameRecommend {
-        NameRecommend { addr, useaddr, size, name, symbol_id }
+    pub fn new(
+        addr: Address,
+        useaddr: Address,
+        size: int4,
+        name: String,
+        symbol_id: u64,
+    ) -> NameRecommend {
+        NameRecommend {
+            addr,
+            useaddr,
+            size,
+            name,
+            symbol_id,
+        }
     }
 }
 
@@ -2922,7 +3134,12 @@ pub struct DynamicRecommend {
 impl DynamicRecommend {
     /// C++ constructor `DynamicRecommend(addr,h,nm,id)` (`varmap.hh:62`).
     pub fn new(use_point: Address, hash: u64, name: String, symbol_id: u64) -> DynamicRecommend {
-        DynamicRecommend { use_point, hash, name, symbol_id }
+        DynamicRecommend {
+            use_point,
+            hash,
+            name,
+            symbol_id,
+        }
     }
 }
 
@@ -2942,7 +3159,6 @@ impl TypeRecommend {
         TypeRecommend { addr, data_type }
     }
 }
-
 
 // ===========================================================================
 // MapState (varmap.hh:174-203, varmap.cc:864-1249)
@@ -3024,13 +3240,23 @@ impl MapState {
     /// A specific range of bytes is described for the hint.  A `None`/zero-size
     /// data-type falls back to the default.  Hints outside the analysis range
     /// are dropped.
-    fn add_range(&mut self, st: uintb, ct: Option<Rc<Datatype>>, fl: uint4, rt: RangeType, hi: int4) {
+    fn add_range(
+        &mut self,
+        st: uintb,
+        ct: Option<Rc<Datatype>>,
+        fl: uint4,
+        rt: RangeType,
+        hi: int4,
+    ) {
         let ct = match ct {
             Some(c) if c.get_size() != 0 => c,
             _ => Rc::clone(&self.default_type),
         };
         let sz = ct.get_size();
-        if !self.range.in_range(&Address::new(Rc::clone(&self.spaceid), st), sz) {
+        if !self
+            .range
+            .in_range(&Address::new(Rc::clone(&self.spaceid), st), sz)
+        {
             return;
         }
         // intb sst = byteToAddress(st); sign_extend; addressToByte
@@ -3039,7 +3265,8 @@ impl MapState {
         let mut sst: intb = AddrSpace::byte_to_address(st, word_size) as intb;
         sst = sign_extend(sst, (addr_size as int4) * 8 - 1);
         sst = AddrSpace::address_to_byte_int(sst, word_size); // addressToByte on a signed value
-        self.maplist.push(RangeHint::new(st, sz, sst, ct, fl, rt, hi));
+        self.maplist
+            .push(RangeHint::new(st, sz, sst, ct, fl, rt, hi));
     }
 
     /// Add a fixed reference to a specific data-type (C++ `addFixedType`,
@@ -3047,7 +3274,13 @@ impl MapState {
     ///
     /// If the data-type is an array, partial struct, or partial union, the
     /// reference may be added as \e open.
-    fn add_fixed_type(&mut self, start: uintb, ct: Rc<Datatype>, flags: uint4, types: &dyn TypeFactory) {
+    fn add_fixed_type(
+        &mut self,
+        start: uintb,
+        ct: Rc<Datatype>,
+        flags: uint4,
+        types: &dyn TypeFactory,
+    ) {
         let meta = ct.get_metatype();
         if meta == type_metatype::TYPE_PARTIALSTRUCT {
             // TypePartialStruct: getParent() is the container, getOffset() the offset.
@@ -3281,7 +3514,10 @@ impl MapState {
     }
 
     /// (kuna `arrayextent`) Record the arrays `extend_unbounded` lengthened.
-    pub(crate) fn set_extended(&mut self, extended: Vec<crate::p6_variables::kuna_arrayextent::Extended>) {
+    pub(crate) fn set_extended(
+        &mut self,
+        extended: Vec<crate::p6_variables::kuna_arrayextent::Extended>,
+    ) {
         self.extended = extended;
     }
 
@@ -3310,7 +3546,10 @@ impl MapState {
     }
 
     /// (kuna `arraysize`) What calls and accesses say about the address at `sstart`.
-    pub(crate) fn stated_sizes(&self, sstart: intb) -> Option<&crate::p6_variables::kuna_arraysize::Evidence> {
+    pub(crate) fn stated_sizes(
+        &self,
+        sstart: intb,
+    ) -> Option<&crate::p6_variables::kuna_arraysize::Evidence> {
         self.stated_sizes.get(&sstart)
     }
 
@@ -3331,13 +3570,23 @@ impl MapState {
     /// (kuna `nulterminator`) Is every constant COPY into `(start, size)` an
     /// unread zero?
     pub fn is_terminator_store(&self, start: uintb, size: int4) -> bool {
-        self.terminator_stores.get(&(start, size)).copied().unwrap_or(false)
+        self.terminator_stores
+            .get(&(start, size))
+            .copied()
+            .unwrap_or(false)
     }
 
     /// Append an open/range hint directly (the public entry `gatherOpen` and
     /// `addGuard` use; both are `MapState` methods calling the private
     /// `addRange`).
-    pub fn add_range_pub(&mut self, st: uintb, ct: Option<Rc<Datatype>>, fl: uint4, rt: RangeType, hi: int4) {
+    pub fn add_range_pub(
+        &mut self,
+        st: uintb,
+        ct: Option<Rc<Datatype>>,
+        fl: uint4,
+        rt: RangeType,
+        hi: int4,
+    ) {
         self.add_range(st, ct, fl, rt, hi);
     }
 
@@ -3349,7 +3598,8 @@ impl MapState {
 
     /// Is `[st, st+size)` inside the analyzed range (the `addRange` filter)?
     pub fn covers(&self, st: uintb, size: int4) -> bool {
-        self.range.in_range(&Address::new(Rc::clone(&self.spaceid), st), size)
+        self.range
+            .in_range(&Address::new(Rc::clone(&self.spaceid), st), size)
     }
 }
 

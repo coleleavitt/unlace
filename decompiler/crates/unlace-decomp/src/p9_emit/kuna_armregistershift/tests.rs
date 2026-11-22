@@ -3,19 +3,19 @@
 use super::{operand_is_repeatable, plan_arm_register_lsl};
 use crate::architecture::Architecture;
 use crate::context::{ArchContext, OpId, TypeOp, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
+use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 use unlace_sleigh::globalcontext::ContextInternal;
 use unlace_sleigh::loadimage::LoadImage;
 use unlace_sleigh::sleigh::Sleigh;
-use std::rc::Rc;
 
 struct DummyImg;
 
@@ -163,12 +163,9 @@ fn volatile_unwritten_persistent_leaf_is_rejected() {
     let (mut fd, register) = build_fd();
     let arch = arm_arch();
     let count = new_value(&mut fd, &register, 0x20);
-    fd.vbank_mut()
-        .get_mut(count)
-        .unwrap()
-        .set_flags_pub(
-            crate::varnode::varnode_flags::persist | crate::varnode::varnode_flags::volatil,
-        );
+    fd.vbank_mut().get_mut(count).unwrap().set_flags_pub(
+        crate::varnode::varnode_flags::persist | crate::varnode::varnode_flags::volatil,
+    );
 
     let value = fd.vbank().get(count).unwrap();
     assert!(!value.is_written());
@@ -236,11 +233,5 @@ fn explicit_materialized_call_and_pure_arithmetic_counts_are_accepted() {
         false,
     );
     assert!(operand_is_repeatable(&fd, arithmetic, 16));
-    assert!(plan_for_count(
-        &mut fd,
-        &arch,
-        &register,
-        arithmetic,
-        0x60,
-    ));
+    assert!(plan_for_count(&mut fd, &arch, &register, arithmetic, 0x60,));
 }

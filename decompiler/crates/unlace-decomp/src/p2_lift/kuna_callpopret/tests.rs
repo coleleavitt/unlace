@@ -4,8 +4,8 @@
 use std::rc::Rc;
 
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
-    VarnodeStorage,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, VarnodeStorage, addrspace_flags,
+    spacetype,
 };
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
@@ -16,7 +16,8 @@ use super::*;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -61,7 +62,11 @@ fn spaces(m: &AddrSpaceManager) -> Spaces {
 }
 
 fn vn(space: &Rc<AddrSpace>, offset: u64, size: u32) -> VarnodeData {
-    VarnodeData { space: Some(Rc::clone(space)), offset, size }
+    VarnodeData {
+        space: Some(Rc::clone(space)),
+        offset,
+        size,
+    }
 }
 
 /// ESP: register space, offset 0, 4 bytes.
@@ -75,7 +80,11 @@ fn eax(s: &Spaces) -> VarnodeData {
 }
 
 fn sp_storage(s: &Spaces) -> VarnodeStorage {
-    VarnodeStorage { space: Some(Rc::clone(&s.reg)), offset: 0, size: 4 }
+    VarnodeStorage {
+        space: Some(Rc::clone(&s.reg)),
+        offset: 0,
+        size: 4,
+    }
 }
 
 fn op(code: OpCode, out: Option<VarnodeData>, ins: Vec<VarnodeData>) -> RawOp {
@@ -93,7 +102,11 @@ fn load_from_sp(s: &Spaces, dest: VarnodeData) -> RawOp {
 
 /// `ESP = ESP + k`.
 fn add_sp(s: &Spaces, k: u64) -> RawOp {
-    op(OpCode::CPUI_INT_ADD, Some(esp(s)), vec![esp(s), vn(&s.cnst, k, 4)])
+    op(
+        OpCode::CPUI_INT_ADD,
+        Some(esp(s)),
+        vec![esp(s), vn(&s.cnst, k, 4)],
+    )
 }
 
 /// The `ret` tail: `tmp = *:4 ESP; ESP = ESP + 4; return [tmp]`.
@@ -113,8 +126,16 @@ fn pop_adjust_ret_discards_the_return_address() {
     let s = spaces(&m);
     let mut ops = vec![load_from_sp(&s, eax(&s)), add_sp(&s, 4)];
     // `inc eax` plus a flag write the scan cannot account for.
-    ops.push(op(OpCode::CPUI_INT_ADD, Some(eax(&s)), vec![eax(&s), vn(&s.cnst, 1, 4)]));
-    ops.push(op(OpCode::CPUI_INT_SLESS, Some(vn(&s.reg, 0x40, 1)), vec![eax(&s), vn(&s.cnst, 0, 4)]));
+    ops.push(op(
+        OpCode::CPUI_INT_ADD,
+        Some(eax(&s)),
+        vec![eax(&s), vn(&s.cnst, 1, 4)],
+    ));
+    ops.push(op(
+        OpCode::CPUI_INT_SLESS,
+        Some(vn(&s.reg, 0x40, 1)),
+        vec![eax(&s), vn(&s.cnst, 0, 4)],
+    ));
     ops.extend(ret_tail(&s));
     assert!(kuna_call_pops_return_address(&ops, &sp_storage(&s)));
 }
@@ -145,7 +166,10 @@ fn get_pc_thunk_returns_to_the_call_site() {
 fn bare_ret_returns_to_the_call_site() {
     let m = build_manager();
     let s = spaces(&m);
-    assert!(!kuna_call_pops_return_address(&ret_tail(&s), &sp_storage(&s)));
+    assert!(!kuna_call_pops_return_address(
+        &ret_tail(&s),
+        &sp_storage(&s)
+    ));
 }
 
 /// `ret 8` still returns through the call site's own return address; its larger
@@ -187,8 +211,12 @@ fn balanced_frame_returns_to_the_call_site() {
 fn two_pops_return_past_the_callers_frame() {
     let m = build_manager();
     let s = spaces(&m);
-    let mut ops =
-        vec![load_from_sp(&s, eax(&s)), add_sp(&s, 4), load_from_sp(&s, eax(&s)), add_sp(&s, 4)];
+    let mut ops = vec![
+        load_from_sp(&s, eax(&s)),
+        add_sp(&s, 4),
+        load_from_sp(&s, eax(&s)),
+        add_sp(&s, 4),
+    ];
     ops.extend(ret_tail(&s));
     assert!(!kuna_call_pops_return_address(&ops, &sp_storage(&s)));
 }
@@ -234,7 +262,10 @@ fn conditional_branch_ends_the_scan() {
 fn indirect_branch_ends_the_scan() {
     let m = build_manager();
     let s = spaces(&m);
-    let ops = vec![add_sp(&s, 4), op(OpCode::CPUI_BRANCHIND, None, vec![eax(&s)])];
+    let ops = vec![
+        add_sp(&s, 4),
+        op(OpCode::CPUI_BRANCHIND, None, vec![eax(&s)]),
+    ];
     assert!(!kuna_call_pops_return_address(&ops, &sp_storage(&s)));
 }
 
@@ -274,8 +305,10 @@ fn a_store_ends_the_scan() {
 fn an_inner_call_ends_the_scan() {
     let m = build_manager();
     let s = spaces(&m);
-    let mut ops =
-        vec![add_sp(&s, 4), op(OpCode::CPUI_CALL, None, vec![vn(&s.ram, 0x401000, 4)])];
+    let mut ops = vec![
+        add_sp(&s, 4),
+        op(OpCode::CPUI_CALL, None, vec![vn(&s.ram, 0x401000, 4)]),
+    ];
     ops.extend(ret_tail(&s));
     assert!(!kuna_call_pops_return_address(&ops, &sp_storage(&s)));
 }
@@ -288,7 +321,11 @@ fn an_opaque_stack_pointer_write_ends_the_scan() {
     let s = spaces(&m);
     let mut ops = vec![
         add_sp(&s, 4),
-        op(OpCode::CPUI_INT_AND, Some(esp(&s)), vec![esp(&s), vn(&s.cnst, 0xfffffff0, 4)]),
+        op(
+            OpCode::CPUI_INT_AND,
+            Some(esp(&s)),
+            vec![esp(&s), vn(&s.cnst, 0xfffffff0, 4)],
+        ),
     ];
     ops.extend(ret_tail(&s));
     assert!(!kuna_call_pops_return_address(&ops, &sp_storage(&s)));

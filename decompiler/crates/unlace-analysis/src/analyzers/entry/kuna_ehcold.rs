@@ -49,11 +49,17 @@ impl AnalysisPass for EhColdPass {
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
         let file = ctx.file;
         if !matches!(file.format(), object::BinaryFormat::Elf)
-            || !matches!(file.architecture(), object::Architecture::X86_64 | object::Architecture::I386)
+            || !matches!(
+                file.architecture(),
+                object::Architecture::X86_64 | object::Architecture::I386
+            )
         {
             return AnalysisOutput::default();
         }
-        AnalysisOutput { eh_cold: eh_cold_parts(file, ctx.bytes), ..AnalysisOutput::default() }
+        AnalysisOutput {
+            eh_cold: eh_cold_parts(file, ctx.bytes),
+            ..AnalysisOutput::default()
+        }
     }
 }
 
@@ -66,11 +72,14 @@ pub fn eh_cold_parts(file: &object::File, bytes: &[u8]) -> Vec<(u64, u64)> {
     let bodies = scan_fde_bodies(file);
     let named = existing_function_addrs(file, bytes);
     let execs = executable_sections(file);
-    let mut incoming: std::collections::BTreeMap<(u64, u64), Vec<u64>> = std::collections::BTreeMap::new();
+    let mut incoming: std::collections::BTreeMap<(u64, u64), Vec<u64>> =
+        std::collections::BTreeMap::new();
     let mut called: Vec<u64> = Vec::new();
     for (vma, _, data) in &execs {
         for (src, target) in rel32_branches(*vma, data) {
-            let Some(body) = containing_body(&bodies, target) else { continue };
+            let Some(body) = containing_body(&bodies, target) else {
+                continue;
+            };
             if !(body.0 <= src && src < body.1) {
                 incoming.entry(body).or_default().push(src);
             }
@@ -81,13 +90,21 @@ pub fn eh_cold_parts(file: &object::File, bytes: &[u8]) -> Vec<(u64, u64)> {
     incoming
         .into_iter()
         .filter(|&((s, e), ref srcs)| {
-            if named.binary_search(&s).is_ok() || called[called.partition_point(|&c| c < s)..].first().is_some_and(|&c| c < e) {
+            if named.binary_search(&s).is_ok()
+                || called[called.partition_point(|&c| c < s)..]
+                    .first()
+                    .is_some_and(|&c| c < e)
+            {
                 return false;
             }
-            let Some(owner) = containing_body(&bodies, srcs[0]) else { return false };
-            srcs.iter().all(|&src| containing_body(&bodies, src) == Some(owner))
+            let Some(owner) = containing_body(&bodies, srcs[0]) else {
+                return false;
+            };
+            srcs.iter()
+                .all(|&src| containing_body(&bodies, src) == Some(owner))
                 && srcs.iter().any(|&src| {
-                    pads.iter().any(|&(o, pad)| o == owner.0 && pad <= src && src < pad + PAD_STUB)
+                    pads.iter()
+                        .any(|&(o, pad)| o == owner.0 && pad <= src && src < pad + PAD_STUB)
                 })
         })
         .map(|(body, _)| body)

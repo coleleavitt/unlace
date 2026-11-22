@@ -11,12 +11,12 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 
 use unlace_decomp::database::Database;
-use unlace_decomp::dtype::{type_metatype, Datatype};
+use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::varnode::varnode_flags;
 
 fn dt(size: int4) -> Rc<Datatype> {

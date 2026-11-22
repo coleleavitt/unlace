@@ -30,15 +30,22 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture(name: &str) -> PathBuf {
-    repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(name)
+    repo_root()
+        .join("decompiler/crates/unlace-analysis/tests/fixtures")
+        .join(name)
 }
 
 /// Bootstrap `bin`, apply `options` (before the analysis commit, as the CLI does),
@@ -48,7 +55,10 @@ fn decompile(bin: &str, func: &str, options: &[&str]) -> String {
     let specs = root.join("specs");
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
 
-    let path = fixture(bin).to_str().expect("UTF-8 fixture path").to_string();
+    let path = fixture(bin)
+        .to_str()
+        .expect("UTF-8 fixture path")
+        .to_string();
     let mut prog = bootstrap_from_object(&path, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
 
@@ -65,7 +75,8 @@ fn decompile(bin: &str, func: &str, options: &[&str]) -> String {
         // The `option` lines above must land before the analysis commit; do the
         // commit here, after they are queued but before any of them runs, exactly
         // as `read symbols` does in the CLI script.
-        prog.commit_pending_analysis().expect("analysis commit succeeds");
+        prog.commit_pending_analysis()
+            .expect("analysis commit succeeds");
         dcp.conf = Some(prog);
     }
     for _ in 0..count {
@@ -79,7 +90,11 @@ fn decompile(bin: &str, func: &str, options: &[&str]) -> String {
 /// return sites where the leftover shows up.
 #[test]
 fn fmt_main_without_a_prototype_returns_one_register() {
-    let code = decompile("regglobal_fmt_x86_64", "main", &["option dwarf off", "option listing on"]);
+    let code = decompile(
+        "regglobal_fmt_x86_64",
+        "main",
+        &["option dwarf off", "option listing on"],
+    );
 
     assert!(
         !code.contains("undefined16"),

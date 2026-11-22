@@ -104,7 +104,9 @@ pub struct ActionReturnDup {
 impl ActionReturnDup {
     /// Construct in group `g`.
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionReturnDup { base: ActionBase::new(0, "returndup", g) })
+        Box::new(ActionReturnDup {
+            base: ActionBase::new(0, "returndup", g),
+        })
     }
 }
 
@@ -119,7 +121,9 @@ impl Action for ActionReturnDup {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionReturnDup { base: self.base.clone() }))
+        Some(Box::new(ActionReturnDup {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // P0 assertion `option returndup on|off`, carried on the Architecture boundary.
@@ -158,10 +162,18 @@ impl OptionReturnDup {
     /// duplicated, whether call tails are too, and a confirmation message.
     pub fn apply(&self, p1: &str) -> KunaResult<(bool, bool, String)> {
         if p1 == "calls" {
-            return Ok((true, true, "Shared return duplication turned on, call tails included".to_string()));
+            return Ok((
+                true,
+                true,
+                "Shared return duplication turned on, call tails included".to_string(),
+            ));
         }
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
-        Ok((val, false, format!("Shared bare-epilogue return duplication turned {prop}")))
+        Ok((
+            val,
+            false,
+            format!("Shared bare-epilogue return duplication turned {prop}"),
+        ))
     }
 }

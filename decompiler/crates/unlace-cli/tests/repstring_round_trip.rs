@@ -7,8 +7,10 @@ use crate::common;
 use common::process;
 use std::process::Command;
 
-const FUNCS: &[&str] =
-    &["fill32", "zero32", "fill8", "copy32", "copy_end", "isdash", "order", "below", "same_n", "same5", "mismatch"];
+const FUNCS: &[&str] = &[
+    "fill32", "zero32", "fill8", "copy32", "copy_end", "isdash", "order", "below", "same_n",
+    "same5", "mismatch",
+];
 /// The function whose final pointer is read, which keeps its loop.
 const LOOP: &str = "mismatch";
 
@@ -69,7 +71,9 @@ int main(void) {
 
 /// The printed function `name`, from its header comment to the next.
 fn function<'a>(text: &'a str, name: &str) -> &'a str {
-    let start = text.find(&format!("// Function: {name} @")).unwrap_or_else(|| panic!("no {name}:\n{text}"));
+    let start = text
+        .find(&format!("// Function: {name} @"))
+        .unwrap_or_else(|| panic!("no {name}:\n{text}"));
     let rest = &text[start + 1..];
     &text[start..start + 1 + rest.find("// Function:").unwrap_or(rest.len())]
 }
@@ -80,19 +84,33 @@ fn repeated_string_instructions_round_trip_through_the_printed_builtins() {
         .into_iter()
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
-    assert!(!compilers.is_empty(), "the round trip requires a C compiler");
+    assert!(
+        !compilers.is_empty(),
+        "the round trip requires a C compiler"
+    );
     let funcs = FUNCS.join(",");
     for (image, compile) in [("repstring_x86_64", true), ("repstring_i386", false)] {
         let path = common::fixture(image);
         for opt in ["off", "on"] {
-            let args = ["decompile-all", path.as_str(), "--functions", funcs.as_str(), "--option", "repstring", opt];
+            let args = [
+                "decompile-all",
+                path.as_str(),
+                "--functions",
+                funcs.as_str(),
+                "--option",
+                "repstring",
+                opt,
+            ];
             let (text, err, rc) = common::run_kuna(&args);
             assert_eq!(rc, 0, "{image} repstring {opt}: {err}");
             for name in FUNCS {
                 let body = function(&text, name);
                 let (builtin, looped) = (body.contains("builtin_mem"), body.contains("while ("));
                 let want = opt == "on" && *name != LOOP;
-                assert!(builtin == want && looped != want, "{image} {name} with repstring {opt}:\n{body}");
+                assert!(
+                    builtin == want && looped != want,
+                    "{image} {name} with repstring {opt}:\n{body}"
+                );
             }
             if !compile {
                 continue;
@@ -100,11 +118,20 @@ fn repeated_string_instructions_round_trip_through_the_printed_builtins() {
             let program = format!("{PRELUDE}\n{text}\n{MAIN}");
             for cc in &compilers {
                 for level in ["-O0", "-O2"] {
-                    let src = common::scratch_file(&format!("repstring-{image}-{opt}-{cc}{level}"), "c");
+                    let src =
+                        common::scratch_file(&format!("repstring-{image}-{opt}-{cc}{level}"), "c");
                     let exe = src.with_extension("exe");
                     std::fs::write(&src, &program).unwrap();
                     let out = Command::new(cc)
-                        .args(["-std=gnu11", "-w", "-fwrapv", level, "-o", exe.to_str().unwrap(), src.to_str().unwrap()])
+                        .args([
+                            "-std=gnu11",
+                            "-w",
+                            "-fwrapv",
+                            level,
+                            "-o",
+                            exe.to_str().unwrap(),
+                            src.to_str().unwrap(),
+                        ])
                         .args(common::CC_GCC15_DEMOTE)
                         .output()
                         .expect("spawn the C compiler");

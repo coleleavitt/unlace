@@ -33,21 +33,19 @@ mod inspect;
 mod json;
 
 use unlace_console::assertions::{Directive, Outcome};
-use unlace_console::engine::{
-    bootstrap_from_image, ConsoleProgram, EntrySelector, FunctionEntry,
-};
+use unlace_console::engine::{ConsoleProgram, EntrySelector, FunctionEntry, bootstrap_from_image};
 use unlace_console::project::{
-    build_asm, build_c, build_header, build_readme, collect_dat_addrs,
-    decompile_export_targets, decompile_targets_with, DecompileOptions,
-    FuncResult, FAST_WHOLE_BINARY_FN_BUDGET_SECONDS,
+    DecompileOptions, FAST_WHOLE_BINARY_FN_BUDGET_SECONDS, FuncResult, build_asm, build_c,
+    build_header, build_readme, collect_dat_addrs, decompile_export_targets,
+    decompile_targets_with,
 };
 use unlace_decomp::decompile_drive::{print_c_recompile_prelude, print_c_types};
 // The per-function `kind` annotation, shared with `unlace decompile-graph`.
 use unlace_console::classify::Classifier;
 
 use json::{
-    arr, assertions_json, json_object_location, json_opt_num, json_opt_str, json_str,
-    json_str_array, Obj,
+    Obj, arr, assertions_json, json_object_location, json_opt_num, json_opt_str, json_str,
+    json_str_array,
 };
 
 /// How a command names its function.
@@ -171,7 +169,10 @@ fn parse_asserts(values: &[String]) -> Result<Vec<Directive>, String> {
 fn parse_command(cmd: &str, args: &[String], binary: &str) -> Result<Cmd, String> {
     let at_most = |n: usize| {
         if args.len() > n {
-            Err(format!("`{cmd}` takes at most {n} argument(s), got {}", args.len()))
+            Err(format!(
+                "`{cmd}` takes at most {n} argument(s), got {}",
+                args.len()
+            ))
         } else {
             Ok(())
         }
@@ -206,11 +207,15 @@ fn parse_command(cmd: &str, args: &[String], binary: &str) -> Result<Cmd, String
         }
         "inspect" => {
             at_most(1)?;
-            Cmd::Inspect(Selector::parse(arg.ok_or("`inspect` needs a function name or 0x address")?))
+            Cmd::Inspect(Selector::parse(
+                arg.ok_or("`inspect` needs a function name or 0x address")?,
+            ))
         }
         "xrefs" => {
             at_most(1)?;
-            Cmd::Xrefs(Selector::parse(arg.ok_or("`xrefs` needs a function name or 0x address")?))
+            Cmd::Xrefs(Selector::parse(
+                arg.ok_or("`xrefs` needs a function name or 0x address")?,
+            ))
         }
         "strings" => {
             at_most(0)?;
@@ -225,7 +230,10 @@ fn parse_command(cmd: &str, args: &[String], binary: &str) -> Result<Cmd, String
             let len = parse_len(len)
                 .filter(|&n| n > 0 && n <= inspect::READ_MAX)
                 .ok_or_else(|| {
-                    format!("`read`: length {len:?} must be 1..={} bytes", inspect::READ_MAX)
+                    format!(
+                        "`read`: length {len:?} must be 1..={} bytes",
+                        inspect::READ_MAX
+                    )
                 })?;
             Cmd::Read { addr, len }
         }
@@ -233,15 +241,27 @@ fn parse_command(cmd: &str, args: &[String], binary: &str) -> Result<Cmd, String
             let (addr, len) = match args {
                 [addr] if cmd == "data" => (addr, None),
                 [addr, len] => (addr, Some(len)),
-                _ => return Err(format!("`{cmd}` needs <0xADDR>{}", if cmd == "data" { " [LEN]" } else { " <LEN>" })),
+                _ => {
+                    return Err(format!(
+                        "`{cmd}` needs <0xADDR>{}",
+                        if cmd == "data" { " [LEN]" } else { " <LEN>" }
+                    ));
+                }
             };
             let addr = parse_addr(addr)
                 .ok_or_else(|| format!("`{cmd}`: {addr:?} is not a 0x-prefixed address"))?;
             let len = match len {
                 None => None,
-                Some(len) => Some(parse_len(len).filter(|&n| n > 0 && n <= data::DATA_MAX).ok_or_else(|| {
-                    format!("`{cmd}`: length {len:?} must be 1..={} bytes", data::DATA_MAX)
-                })?),
+                Some(len) => Some(
+                    parse_len(len)
+                        .filter(|&n| n > 0 && n <= data::DATA_MAX)
+                        .ok_or_else(|| {
+                            format!(
+                                "`{cmd}`: length {len:?} must be 1..={} bytes",
+                                data::DATA_MAX
+                            )
+                        })?,
+                ),
             };
             match len {
                 Some(len) if cmd == "uses" => Cmd::Uses { addr, len },
@@ -251,7 +271,7 @@ fn parse_command(cmd: &str, args: &[String], binary: &str) -> Result<Cmd, String
         other => {
             return Err(format!(
                 "unknown command: {other:?} (want `list`, `decompile`, `project`, `inspect`, `read`, `xrefs`, `strings`, `data` or `uses`)"
-            ))
+            ));
         }
     })
 }
@@ -312,10 +332,20 @@ pub fn run_request(req: &Request) -> Result<String, String> {
             Ok(list_json(binary, &prog, language, &entries, &kinds))
         }
         Cmd::Project(display) => project(binary, &mut prog, &display),
-        Cmd::Read { addr, len } => {
-            Ok(inspect::read_json(binary, &prog, addr, len, &prog.assertion_outcomes()))
-        }
-        Cmd::Data { addr, len } => Ok(data::data_json(binary, &prog, addr, len, &prog.assertion_outcomes())),
+        Cmd::Read { addr, len } => Ok(inspect::read_json(
+            binary,
+            &prog,
+            addr,
+            len,
+            &prog.assertion_outcomes(),
+        )),
+        Cmd::Data { addr, len } => Ok(data::data_json(
+            binary,
+            &prog,
+            addr,
+            len,
+            &prog.assertion_outcomes(),
+        )),
         Cmd::Uses { addr, len } => {
             let bytes = unlace_analysis::loader::elf_shdr::read_image(binary)
                 .map_err(|e| format!("could not read {binary}: {e}"))?;
@@ -323,7 +353,14 @@ pub fn run_request(req: &Request) -> Result<String, String> {
                 .map_err(|e| format!("could not parse {binary}: {e}"))?;
             let view = unlace_analysis::loader::kuna_relocrebase::rebased_view(&raw, &bytes);
             let (file, _) = unlace_analysis::loader::kuna_relocrebase::select(raw, &bytes, &view);
-            Ok(data::uses_json(binary, &prog, &file, addr, len, &prog.assertion_outcomes()))
+            Ok(data::uses_json(
+                binary,
+                &prog,
+                &file,
+                addr,
+                len,
+                &prog.assertion_outcomes(),
+            ))
         }
         Cmd::Xrefs(_) => {
             let target = resolve_targets(&prog, &command)?
@@ -334,7 +371,13 @@ pub fn run_request(req: &Request) -> Result<String, String> {
                 .map_err(|e| format!("could not read {binary}: {e}"))?;
             let file = unlace_analysis::loadimage_object::parse_object(&*bytes)
                 .map_err(|e| format!("could not parse {binary}: {e}"))?;
-            Ok(inspect::xrefs_json(binary, &prog, &file, &target, &prog.assertion_outcomes()))
+            Ok(inspect::xrefs_json(
+                binary,
+                &prog,
+                &file,
+                &target,
+                &prog.assertion_outcomes(),
+            ))
         }
         Cmd::Strings => {
             let bytes = unlace_analysis::loader::elf_shdr::read_image(binary)
@@ -342,9 +385,18 @@ pub fn run_request(req: &Request) -> Result<String, String> {
             let raw = unlace_analysis::loadimage_object::parse_object(&*bytes)
                 .map_err(|e| format!("could not parse {binary}: {e}"))?;
             let view = unlace_analysis::loader::kuna_relocrebase::rebased_view(&raw, &bytes);
-            let (file, scanned) = unlace_analysis::loader::kuna_relocrebase::select(raw, &bytes, &view);
-            let rebased = view.as_ref().filter(|v| v.bytes.as_ptr() == scanned.as_ptr());
-            Ok(inspect::strings_json(binary, &prog, &file, rebased, &prog.assertion_outcomes()))
+            let (file, scanned) =
+                unlace_analysis::loader::kuna_relocrebase::select(raw, &bytes, &view);
+            let rebased = view
+                .as_ref()
+                .filter(|v| v.bytes.as_ptr() == scanned.as_ptr());
+            Ok(inspect::strings_json(
+                binary,
+                &prog,
+                &file,
+                rebased,
+                &prog.assertion_outcomes(),
+            ))
         }
         Cmd::Inspect(ref selector) => {
             prog.arch_mut()
@@ -354,7 +406,9 @@ pub fn run_request(req: &Request) -> Result<String, String> {
             let classifier = Classifier::new(
                 &prog,
                 binary,
-                prog.function_entries_canonical().iter().map(|e| e.addr.get_offset()),
+                prog.function_entries_canonical()
+                    .iter()
+                    .map(|e| e.addr.get_offset()),
             );
             let opts = DecompileOptions {
                 want_proto: true,
@@ -368,7 +422,14 @@ pub fn run_request(req: &Request) -> Result<String, String> {
                 .first()
                 .ok_or_else(|| format!("no function selected by {selector:?}"))?;
             let kind = classifier.kind(&prog, &f.name, f.byte_address);
-            Ok(inspect::inspect_json(binary, language, &prog, f, kind, &prog.assertion_outcomes()))
+            Ok(inspect::inspect_json(
+                binary,
+                language,
+                &prog,
+                f,
+                kind,
+                &prog.assertion_outcomes(),
+            ))
         }
         _ => {
             let targets = resolve_targets(&prog, &command)?;
@@ -377,7 +438,9 @@ pub fn run_request(req: &Request) -> Result<String, String> {
             let classifier = Classifier::new(
                 &prog,
                 binary,
-                prog.function_entries_canonical().iter().map(|e| e.addr.get_offset()),
+                prog.function_entries_canonical()
+                    .iter()
+                    .map(|e| e.addr.get_offset()),
             );
             // One function carries its line mappings; a whole-binary run does
             // not pay a second render per function for them.
@@ -387,11 +450,17 @@ pub fn run_request(req: &Request) -> Result<String, String> {
                 ..DecompileOptions::default()
             };
             let out = decompile_targets_with(&mut prog, targets, &opts);
-            let kinds: Vec<&'static str> =
-                out.iter()
-                    .map(|f| classifier.kind(&prog, &f.name, f.byte_address))
-                    .collect();
-            Ok(result_json(binary, language, &out, &kinds, &prog.assertion_outcomes()))
+            let kinds: Vec<&'static str> = out
+                .iter()
+                .map(|f| classifier.kind(&prog, &f.name, f.byte_address))
+                .collect();
+            Ok(result_json(
+                binary,
+                language,
+                &out,
+                &kinds,
+                &prog.assertion_outcomes(),
+            ))
         }
     }
 }
@@ -454,7 +523,13 @@ fn project(binary: &str, prog: &mut ConsoleProgram, display: &str) -> Result<Str
     let asm = build_asm(prog, &results, &dat_addrs, display);
     // The wasm surface labels the README with the virtual display name (the
     // CLI prints its canonicalized on-disk path there).
-    let readme = build_readme(std::path::Path::new(binary), display, display, prog, &results);
+    let readme = build_readme(
+        std::path::Path::new(binary),
+        display,
+        display,
+        prog,
+        &results,
+    );
 
     let ok = results.iter().filter(|r| r.error.is_none()).count();
     Ok(project_json(
@@ -516,10 +591,12 @@ fn resolve_language(
     let Ok(file) = unlace_analysis::loadimage_object::parse_object(&*bytes) else {
         return Ok(None);
     };
-    Ok(match unlace_analysis::sourcelang::effective_compiler(&file, &bytes) {
-        unlace_analysis::sourcelang::Compiler::Rustc => Some("rust-language"),
-        _ => None,
-    })
+    Ok(
+        match unlace_analysis::sourcelang::effective_compiler(&file, &bytes) {
+            unlace_analysis::sourcelang::Compiler::Rustc => Some("rust-language"),
+            _ => None,
+        },
+    )
 }
 
 /// Bootstrap the architecture from the binary and run the analysis commit — the
@@ -571,8 +648,12 @@ fn load_program(
             None => unsafe { std::env::remove_var(arm64e_env) },
         }
     }
-    let mut prog = bootstrap
-        .map_err(|e| format!("could not build an architecture for {binary}: {}", e.explain()))?;
+    let mut prog = bootstrap.map_err(|e| {
+        format!(
+            "could not build an architecture for {binary}: {}",
+            e.explain()
+        )
+    })?;
 
     let set = |prog: &mut ConsoleProgram, name: &str, value: &str| {
         prog.arch_mut()
@@ -634,10 +715,7 @@ fn load_program(
 }
 
 /// Resolve the `(name, entry)` decompile targets for a `decompile` command.
-fn resolve_targets(
-    prog: &ConsoleProgram,
-    command: &Cmd,
-) -> Result<Vec<FunctionEntry>, String> {
+fn resolve_targets(prog: &ConsoleProgram, command: &Cmd) -> Result<Vec<FunctionEntry>, String> {
     let one = |selector: &EntrySelector| {
         prog.resolve_body_entry(selector)
             .map(|entry| vec![entry])
@@ -651,12 +729,15 @@ fn resolve_targets(
         Cmd::DecompileName(want)
         | Cmd::Inspect(Selector::Name(want))
         | Cmd::Xrefs(Selector::Name(want)) => one(&EntrySelector::parse(want)),
-        Cmd::DecompileAddr(vma) | Cmd::Inspect(Selector::Addr(vma)) | Cmd::Xrefs(Selector::Addr(vma)) => {
-            one(&EntrySelector::Numeric(*vma))
-        }
-        Cmd::List | Cmd::Project(_) | Cmd::Read { .. } | Cmd::Strings | Cmd::Data { .. } | Cmd::Uses { .. } => {
-            Err("this command selects no decompile targets".to_string())
-        }
+        Cmd::DecompileAddr(vma)
+        | Cmd::Inspect(Selector::Addr(vma))
+        | Cmd::Xrefs(Selector::Addr(vma)) => one(&EntrySelector::Numeric(*vma)),
+        Cmd::List
+        | Cmd::Project(_)
+        | Cmd::Read { .. }
+        | Cmd::Strings
+        | Cmd::Data { .. }
+        | Cmd::Uses { .. } => Err("this command selects no decompile targets".to_string()),
     }
 }
 
@@ -699,8 +780,14 @@ fn list_json(
         "  \"sections\": {},\n",
         inspect::sections_json(&unlace_console::inspect::section_rows(prog))
     ));
-    s.push_str(&format!("  \"known_types\": {},\n", inspect::known_types_json(prog)));
-    s.push_str(&format!("  \"assertions\": {},\n", assertions_json(&prog.assertion_outcomes())));
+    s.push_str(&format!(
+        "  \"known_types\": {},\n",
+        inspect::known_types_json(prog)
+    ));
+    s.push_str(&format!(
+        "  \"assertions\": {},\n",
+        assertions_json(&prog.assertion_outcomes())
+    ));
     s.push_str("  \"functions\": [");
     for (i, e) in entries.iter().enumerate() {
         let addr = e.addr.get_offset();
@@ -708,7 +795,10 @@ fn list_json(
         s.push_str("    {");
         s.push_str(&format!("\"name\": {}, ", json_str(&e.name)));
         s.push_str(&format!("\"address\": {}, ", addr));
-        s.push_str(&format!("\"address_hex\": {}, ", json_str(&format!("0x{addr:x}"))));
+        s.push_str(&format!(
+            "\"address_hex\": {}, ",
+            json_str(&format!("0x{addr:x}"))
+        ));
         s.push_str(&format!("\"aliases\": {}, ", json_str_array(&e.aliases)));
         s.push_str(&format!(
             "\"object_location\": {}, ",
@@ -718,7 +808,11 @@ fn list_json(
         s.push_str(&format!("\"kind\": {}", json_str(kinds[i])));
         s.push('}');
     }
-    s.push_str(if entries.is_empty() { "]\n}" } else { "\n  ]\n}" });
+    s.push_str(if entries.is_empty() {
+        "]\n}"
+    } else {
+        "\n  ]\n}"
+    });
     s
 }
 
@@ -747,25 +841,46 @@ fn result_json(
     s.push_str(&format!("  \"binary\": {},\n", json_str(binary)));
     s.push_str(&format!("  \"language\": {},\n", json_str(language)));
     s.push_str(&format!("  \"count\": {},\n", funcs.len()));
-    s.push_str(&format!("  \"assertions\": {},\n", assertions_json(assertions)));
+    s.push_str(&format!(
+        "  \"assertions\": {},\n",
+        assertions_json(assertions)
+    ));
     s.push_str("  \"functions\": [");
     for (i, f) in funcs.iter().enumerate() {
         s.push_str(if i == 0 { "\n" } else { ",\n" });
         s.push_str("    {\n");
         s.push_str(&format!("      \"name\": {},\n", json_str(&f.name)));
         s.push_str(&format!("      \"address\": {},\n", f.address));
-        s.push_str(&format!("      \"address_hex\": {},\n", json_str(&format!("0x{:x}", f.address))));
-        s.push_str(&format!("      \"aliases\": {},\n", json_str_array(&f.aliases)));
+        s.push_str(&format!(
+            "      \"address_hex\": {},\n",
+            json_str(&format!("0x{:x}", f.address))
+        ));
+        s.push_str(&format!(
+            "      \"aliases\": {},\n",
+            json_str_array(&f.aliases)
+        ));
         s.push_str(&format!(
             "      \"object_location\": {},\n",
             json_object_location(f.object_location.as_ref())
         ));
         s.push_str(&format!("      \"kind\": {},\n", json_str(kinds[i])));
         s.push_str(&format!("      \"size\": {},\n", f.size));
-        s.push_str(&format!("      \"code\": {},\n", json_opt_str(f.code.as_deref())));
-        s.push_str(&format!("      \"error\": {},\n", json_opt_str(f.error.as_deref())));
-        s.push_str(&format!("      \"unstructured_gotos\": {},\n", f.unstructured_gotos()));
-        s.push_str(&format!("      \"warnings\": {},\n", warnings_json(&f.warnings)));
+        s.push_str(&format!(
+            "      \"code\": {},\n",
+            json_opt_str(f.code.as_deref())
+        ));
+        s.push_str(&format!(
+            "      \"error\": {},\n",
+            json_opt_str(f.error.as_deref())
+        ));
+        s.push_str(&format!(
+            "      \"unstructured_gotos\": {},\n",
+            f.unstructured_gotos()
+        ));
+        s.push_str(&format!(
+            "      \"warnings\": {},\n",
+            warnings_json(&f.warnings)
+        ));
         s.push_str(&format!(
             "      \"line_mappings\": {},\n",
             arr(f.line_mappings.iter().map(|m| {
@@ -778,7 +893,11 @@ fn result_json(
         s.push_str(&format!(
             "      \"types\": {},\n",
             arr(f.types.iter().map(|t| {
-                Obj::new().str("name", &t.name).str("definition", &t.definition).num("size", t.size).end()
+                Obj::new()
+                    .str("name", &t.name)
+                    .str("definition", &t.definition)
+                    .num("size", t.size)
+                    .end()
             }))
         ));
         s.push_str("      \"variables\": [");
@@ -788,17 +907,30 @@ fn result_json(
             s.push_str(&format!("\"name\": {}, ", json_str(&v.name)));
             s.push_str(&format!("\"type\": {}, ", json_str(&v.type_name)));
             s.push_str(&format!("\"kind\": {}, ", json_str(v.kind())));
-            s.push_str(&format!("\"arg_index\": {}, ", json_opt_num(v.arg_index.map(|i| i as i64))));
-            s.push_str(&format!("\"stack_offset\": {}, ", json_opt_num(v.stack_offset)));
+            s.push_str(&format!(
+                "\"arg_index\": {}, ",
+                json_opt_num(v.arg_index.map(|i| i as i64))
+            ));
+            s.push_str(&format!(
+                "\"stack_offset\": {}, ",
+                json_opt_num(v.stack_offset)
+            ));
             s.push_str(&format!("\"size\": {}, ", v.size));
             s.push_str(&format!(
                 "\"line_numbers\": {}, ",
                 arr(v.line_numbers.iter().map(usize::to_string))
             ));
-            s.push_str(&format!("\"addresses\": {}", arr(v.addresses.iter().map(u64::to_string))));
+            s.push_str(&format!(
+                "\"addresses\": {}",
+                arr(v.addresses.iter().map(u64::to_string))
+            ));
             s.push('}');
         }
-        s.push_str(if f.variables.is_empty() { "]\n" } else { "\n      ]\n" });
+        s.push_str(if f.variables.is_empty() {
+            "]\n"
+        } else {
+            "\n      ]\n"
+        });
         s.push_str("    }");
     }
     s.push_str(if funcs.is_empty() { "]\n}" } else { "\n  ]\n}" });
@@ -823,7 +955,10 @@ fn project_json(
     s.push_str(&format!("  \"count\": {},\n", count));
     s.push_str(&format!("  \"ok\": {},\n", ok));
     s.push_str(&format!("  \"failed\": {},\n", count - ok));
-    s.push_str(&format!("  \"assertions\": {},\n", assertions_json(assertions)));
+    s.push_str(&format!(
+        "  \"assertions\": {},\n",
+        assertions_json(assertions)
+    ));
     s.push_str("  \"files\": {");
     for (i, (name, text)) in files.iter().enumerate() {
         s.push_str(if i == 0 { "\n" } else { ",\n" });
@@ -838,37 +973,62 @@ mod study_tests;
 
 #[cfg(test)]
 mod tests {
-    use super::{command_fn_budget_seconds, command_wants_fast_funcdisc, resolve_mode, Cmd, Selector};
+    use super::{
+        Cmd, Selector, command_fn_budget_seconds, command_wants_fast_funcdisc, resolve_mode,
+    };
+    use std::path::PathBuf;
     use unlace_console::project::FAST_WHOLE_BINARY_FN_BUDGET_SECONDS;
     use unlace_decomp::modes::{AUTO_FAST_MIN_BYTES, AUTO_RELIABLE_MIN_BYTES};
-    use std::path::PathBuf;
 
     #[test]
     fn auto_mode_uses_exact_browser_size_boundaries() {
         assert_eq!(
-            resolve_mode(Some("auto"), AUTO_RELIABLE_MIN_BYTES - 1).unwrap().0,
+            resolve_mode(Some("auto"), AUTO_RELIABLE_MIN_BYTES - 1)
+                .unwrap()
+                .0,
             "aggressive"
         );
         assert_eq!(
-            resolve_mode(Some("auto"), AUTO_RELIABLE_MIN_BYTES).unwrap().0,
+            resolve_mode(Some("auto"), AUTO_RELIABLE_MIN_BYTES)
+                .unwrap()
+                .0,
             "reliable"
         );
-        assert_eq!(resolve_mode(None, AUTO_FAST_MIN_BYTES - 1).unwrap().0, "reliable");
+        assert_eq!(
+            resolve_mode(None, AUTO_FAST_MIN_BYTES - 1).unwrap().0,
+            "reliable"
+        );
         assert_eq!(resolve_mode(None, AUTO_FAST_MIN_BYTES).unwrap().0, "fast");
         for size in [0, AUTO_RELIABLE_MIN_BYTES, AUTO_FAST_MIN_BYTES] {
-            assert!(resolve_mode(None, size).unwrap().1.contains(&("ctypes", "on")));
+            assert!(
+                resolve_mode(None, size)
+                    .unwrap()
+                    .1
+                    .contains(&("ctypes", "on"))
+            );
         }
-        assert!(!resolve_mode(Some("reliable"), 0).unwrap().1.contains(&("ctypes", "on")));
+        assert!(
+            !resolve_mode(Some("reliable"), 0)
+                .unwrap()
+                .1
+                .contains(&("ctypes", "on"))
+        );
     }
 
     #[test]
     fn explicit_mode_overrides_binary_size() {
         assert_eq!(resolve_mode(Some("fast"), 1).unwrap().0, "fast");
         assert_eq!(
-            resolve_mode(Some("aggressive"), 4 * AUTO_FAST_MIN_BYTES).unwrap().0,
+            resolve_mode(Some("aggressive"), 4 * AUTO_FAST_MIN_BYTES)
+                .unwrap()
+                .0,
             "aggressive"
         );
-        assert!(resolve_mode(Some("turbo"), 1).unwrap_err().contains("unknown mode"));
+        assert!(
+            resolve_mode(Some("turbo"), 1)
+                .unwrap_err()
+                .contains("unknown mode")
+        );
     }
 
     #[test]
@@ -878,24 +1038,67 @@ mod tests {
         assert!(matches!(parse("list", &[]), Ok(Cmd::List)));
         assert!(parse("list", &["main"]).unwrap_err().contains("at most 0"));
         assert!(matches!(parse("decompile", &[]), Ok(Cmd::DecompileAll)));
-        assert!(matches!(parse("decompile", &["0x1198"]), Ok(Cmd::DecompileAddr(0x1198))));
+        assert!(matches!(
+            parse("decompile", &["0x1198"]),
+            Ok(Cmd::DecompileAddr(0x1198))
+        ));
         assert!(parse("decompile", &["main", "x"]).is_err());
-        assert!(matches!(parse("inspect", &["main"]), Ok(Cmd::Inspect(Selector::Name(_)))));
+        assert!(matches!(
+            parse("inspect", &["main"]),
+            Ok(Cmd::Inspect(Selector::Name(_)))
+        ));
         assert!(parse("inspect", &[]).is_err());
-        assert!(matches!(parse("read", &["0x10", "16"]), Ok(Cmd::Read { addr: 0x10, len: 16 })));
-        assert!(matches!(parse("read", &["0x10", "0x10"]), Ok(Cmd::Read { addr: 0x10, len: 16 })));
+        assert!(matches!(
+            parse("read", &["0x10", "16"]),
+            Ok(Cmd::Read {
+                addr: 0x10,
+                len: 16
+            })
+        ));
+        assert!(matches!(
+            parse("read", &["0x10", "0x10"]),
+            Ok(Cmd::Read {
+                addr: 0x10,
+                len: 16
+            })
+        ));
         assert!(parse("read", &["0x10"]).is_err());
         assert!(parse("read", &["16", "16"]).is_err());
-        assert!(matches!(parse("xrefs", &["0x1161"]), Ok(Cmd::Xrefs(Selector::Addr(0x1161)))));
+        assert!(matches!(
+            parse("xrefs", &["0x1161"]),
+            Ok(Cmd::Xrefs(Selector::Addr(0x1161)))
+        ));
         assert!(matches!(parse("project", &[]), Ok(Cmd::Project(name)) if name == "bin"));
         assert!(matches!(parse("strings", &[]), Ok(Cmd::Strings)));
-        assert!(parse("strings", &["flag"]).unwrap_err().contains("at most 0"));
-        assert!(matches!(parse("data", &["0x4040"]), Ok(Cmd::Data { addr: 0x4040, len: None })));
-        assert!(matches!(parse("data", &["0x4040", "64"]), Ok(Cmd::Data { addr: 0x4040, len: Some(64) })));
+        assert!(
+            parse("strings", &["flag"])
+                .unwrap_err()
+                .contains("at most 0")
+        );
+        assert!(matches!(
+            parse("data", &["0x4040"]),
+            Ok(Cmd::Data {
+                addr: 0x4040,
+                len: None
+            })
+        ));
+        assert!(matches!(
+            parse("data", &["0x4040", "64"]),
+            Ok(Cmd::Data {
+                addr: 0x4040,
+                len: Some(64)
+            })
+        ));
         assert!(parse("data", &["4040"]).is_err());
         assert!(parse("data", &["0x4040", "0"]).is_err());
         assert!(parse("data", &[]).is_err());
-        assert!(matches!(parse("uses", &["0x4040", "0x20"]), Ok(Cmd::Uses { addr: 0x4040, len: 32 })));
+        assert!(matches!(
+            parse("uses", &["0x4040", "0x20"]),
+            Ok(Cmd::Uses {
+                addr: 0x4040,
+                len: 32
+            })
+        ));
         assert!(parse("uses", &["0x4040"]).is_err());
         assert!(parse("frobnicate", &[]).is_err());
     }
@@ -903,14 +1106,23 @@ mod tests {
     #[test]
     fn only_address_selection_skips_fast_discovery() {
         assert!(!command_wants_fast_funcdisc(&Cmd::DecompileAddr(0x1234)));
-        assert!(command_wants_fast_funcdisc(&Cmd::DecompileName("sub_1234".into())));
+        assert!(command_wants_fast_funcdisc(&Cmd::DecompileName(
+            "sub_1234".into()
+        )));
         assert!(command_wants_fast_funcdisc(&Cmd::DecompileAll));
         assert!(command_wants_fast_funcdisc(&Cmd::Project("binary".into())));
         assert!(command_wants_fast_funcdisc(&Cmd::List));
         assert!(command_wants_fast_funcdisc(&Cmd::Strings));
-        assert!(!command_wants_fast_funcdisc(&Cmd::Inspect(Selector::Addr(0x1234))));
-        assert!(command_wants_fast_funcdisc(&Cmd::Inspect(Selector::Name("main".into()))));
-        assert!(!command_wants_fast_funcdisc(&Cmd::Read { addr: 0x1234, len: 4 }));
+        assert!(!command_wants_fast_funcdisc(&Cmd::Inspect(Selector::Addr(
+            0x1234
+        ))));
+        assert!(command_wants_fast_funcdisc(&Cmd::Inspect(Selector::Name(
+            "main".into()
+        ))));
+        assert!(!command_wants_fast_funcdisc(&Cmd::Read {
+            addr: 0x1234,
+            len: 4
+        }));
     }
 
     #[test]
@@ -924,12 +1136,18 @@ mod tests {
             command_fn_budget_seconds(&Cmd::Project("binary".into()), "fast"),
             Some(FAST_WHOLE_BINARY_FN_BUDGET_SECONDS)
         );
-        assert_eq!(command_fn_budget_seconds(&Cmd::DecompileAddr(0x1234), "fast"), None);
+        assert_eq!(
+            command_fn_budget_seconds(&Cmd::DecompileAddr(0x1234), "fast"),
+            None
+        );
         assert_eq!(
             command_fn_budget_seconds(&Cmd::DecompileName("main".into()), "fast"),
             None
         );
-        assert_eq!(command_fn_budget_seconds(&Cmd::DecompileAll, "reliable"), None);
+        assert_eq!(
+            command_fn_budget_seconds(&Cmd::DecompileAll, "reliable"),
+            None
+        );
         assert_eq!(
             command_fn_budget_seconds(&Cmd::Project("binary".into()), "aggressive"),
             None
@@ -1020,17 +1238,28 @@ mod tests {
         let list = run("list", None).expect("WASM reliable list");
         let project = run("project", Some("entrymain_arm")).expect("WASM reliable project");
 
-        let listed: Vec<&str> = list.match_indices("\"address_hex\": \"").map(|(i, m)| {
-            let rest = &list[i + m.len()..];
-            &rest[..rest.find('"').unwrap()]
-        }).collect();
-        let exported: Vec<&str> = project.match_indices("@ 0x").map(|(i, _)| {
-            let rest = &project[i + 2..];
-            let end = rest.find(|c: char| !c.is_ascii_hexdigit() && c != 'x').unwrap();
-            &rest[..end]
-        }).collect();
+        let listed: Vec<&str> = list
+            .match_indices("\"address_hex\": \"")
+            .map(|(i, m)| {
+                let rest = &list[i + m.len()..];
+                &rest[..rest.find('"').unwrap()]
+            })
+            .collect();
+        let exported: Vec<&str> = project
+            .match_indices("@ 0x")
+            .map(|(i, _)| {
+                let rest = &project[i + 2..];
+                let end = rest
+                    .find(|c: char| !c.is_ascii_hexdigit() && c != 'x')
+                    .unwrap();
+                &rest[..end]
+            })
+            .collect();
 
-        assert!(!exported.is_empty(), "project exported no functions: {project}");
+        assert!(
+            !exported.is_empty(),
+            "project exported no functions: {project}"
+        );
         for addr in &exported {
             assert!(
                 listed.contains(addr),
@@ -1048,9 +1277,8 @@ mod tests {
             .join("../../..")
             .canonicalize()
             .unwrap();
-        let binary = root.join(
-            "decompiler/crates/unlace-analysis/tests/fixtures/entry_selectors_x86_64.o",
-        );
+        let binary =
+            root.join("decompiler/crates/unlace-analysis/tests/fixtures/entry_selectors_x86_64.o");
         let specs = root.join("specs");
         let run = |cmd: &str, arg: Option<&str>| {
             super::run_with_mode(
@@ -1082,8 +1310,8 @@ mod tests {
         assert!(error.contains(".text.selector_a+0x0"), "{error}");
         assert!(error.contains(".text.selector_b+0x0"), "{error}");
 
-        let selected = run("decompile", Some("6:0x0"))
-            .expect("WASM section-index selector must decompile");
+        let selected =
+            run("decompile", Some("6:0x0")).expect("WASM section-index selector must decompile");
         assert!(selected.contains("\"count\": 1"), "{selected}");
         assert!(
             selected.contains(

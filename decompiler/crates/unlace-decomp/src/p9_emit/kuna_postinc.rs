@@ -19,11 +19,15 @@ use crate::funcdata::Funcdata;
 
 /// Does `op` print a statement of its own?
 fn prints(data: &Funcdata, op: OpId) -> bool {
-    let Some(o) = data.obank().get(op) else { return false };
+    let Some(o) = data.obank().get(op) else {
+        return false;
+    };
     if o.not_printed() || matches!(o.code(), OpCode::CPUI_MULTIEQUAL | OpCode::CPUI_INDIRECT) {
         return false;
     }
-    o.get_out().and_then(|v| data.vbank().get(v)).is_none_or(|v| v.is_explicit())
+    o.get_out()
+        .and_then(|v| data.vbank().get(v))
+        .is_none_or(|v| v.is_explicit())
 }
 
 /// The op whose statement prints `op`'s value: `op` itself when it prints,
@@ -35,7 +39,9 @@ fn statement_of(data: &Funcdata, mut op: OpId) -> Option<OpId> {
         }
         let out = data.obank().get(op)?.get_out()?;
         let readers = data.descend_snapshot(out);
-        let [next] = readers.as_slice() else { return None };
+        let [next] = readers.as_slice() else {
+            return None;
+        };
         op = *next;
     }
     None
@@ -44,7 +50,12 @@ fn statement_of(data: &Funcdata, mut op: OpId) -> Option<OpId> {
 /// The step `c` of an in-place `p = p + c`.
 fn step(data: &Funcdata, op: OpId) -> Option<(VarnodeId, u64)> {
     let o = data.obank().get(op)?;
-    let constant = |i: i32| data.vbank().get(o.get_in(i)?).filter(|v| v.is_constant()).map(|v| v.get_offset());
+    let constant = |i: i32| {
+        data.vbank()
+            .get(o.get_in(i)?)
+            .filter(|v| v.is_constant())
+            .map(|v| v.get_offset())
+    };
     let c = match o.code() {
         OpCode::CPUI_INT_ADD => constant(1)?,
         OpCode::CPUI_PTRADD if constant(1)? == 1 => constant(2)?,
@@ -62,19 +73,31 @@ fn fold(data: &Funcdata, inc: OpId) -> Option<OpId> {
         return None;
     }
     let ty = pv.get_type();
-    if ty.get_metatype() != crate::dtype::type_metatype::TYPE_PTR || ty.get_ptr_to().is_none_or(|t| t.get_size() as u64 != c) {
+    if ty.get_metatype() != crate::dtype::type_metatype::TYPE_PTR
+        || ty.get_ptr_to().is_none_or(|t| t.get_size() as u64 != c)
+    {
         return None;
     }
     let readers = data.descend_snapshot(p);
-    let [a, b] = readers.as_slice() else { return None };
-    let access = if *a == inc { *b } else if *b == inc { *a } else { return None };
+    let [a, b] = readers.as_slice() else {
+        return None;
+    };
+    let access = if *a == inc {
+        *b
+    } else if *b == inc {
+        *a
+    } else {
+        return None;
+    };
     if crate::kuna_stackmem::access(data, access).is_some() {
         return None;
     }
     let ao = data.obank().get(access)?;
     let size = match ao.code() {
         OpCode::CPUI_LOAD if ao.get_in(1) == Some(p) => data.vbank().get(ao.get_out()?)?.get_size(),
-        OpCode::CPUI_STORE if ao.get_in(1) == Some(p) && ao.get_in(2) != Some(p) => data.vbank().get(ao.get_in(2)?)?.get_size(),
+        OpCode::CPUI_STORE if ao.get_in(1) == Some(p) && ao.get_in(2) != Some(p) => {
+            data.vbank().get(ao.get_in(2)?)?.get_size()
+        }
         _ => return None,
     };
     if size as u64 != c {
@@ -86,7 +109,10 @@ fn fold(data: &Funcdata, inc: OpId) -> Option<OpId> {
         return None;
     }
     let ops = data.bb_ops(block);
-    let (s, i) = (ops.iter().position(|&o| o == stmt)?, ops.iter().position(|&o| o == inc)?);
+    let (s, i) = (
+        ops.iter().position(|&o| o == stmt)?,
+        ops.iter().position(|&o| o == inc)?,
+    );
     (s < i && ops[s + 1..i].iter().all(|&o| !prints(data, o))).then_some(access)
 }
 
@@ -97,7 +123,9 @@ pub struct ActionPostIncrement {
 
 impl ActionPostIncrement {
     pub fn boxed(g: &str) -> Box<dyn Action> {
-        Box::new(ActionPostIncrement { base: ActionBase::new(0, "postinc", g) })
+        Box::new(ActionPostIncrement {
+            base: ActionBase::new(0, "postinc", g),
+        })
     }
 }
 
@@ -109,7 +137,11 @@ impl Action for ActionPostIncrement {
         &mut self.base
     }
     fn clone_filtered(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Action>> {
-        grouplist.contains(self.get_group()).then(|| Box::new(ActionPostIncrement { base: self.base.clone() }) as Box<dyn Action>)
+        grouplist.contains(self.get_group()).then(|| {
+            Box::new(ActionPostIncrement {
+                base: self.base.clone(),
+            }) as Box<dyn Action>
+        })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data.get_arch().post_increment {
@@ -117,10 +149,16 @@ impl Action for ActionPostIncrement {
         }
         let ops: Vec<OpId> = data.obank().iter_alive().collect();
         for inc in ops {
-            if !data.obank().get(inc).is_some_and(|o| o.get_parent().is_some() && matches!(o.code(), OpCode::CPUI_INT_ADD | OpCode::CPUI_PTRADD)) || !prints(data, inc) {
+            if !data.obank().get(inc).is_some_and(|o| {
+                o.get_parent().is_some()
+                    && matches!(o.code(), OpCode::CPUI_INT_ADD | OpCode::CPUI_PTRADD)
+            }) || !prints(data, inc)
+            {
                 continue;
             }
-            let Some(access) = fold(data, inc) else { continue };
+            let Some(access) = fold(data, inc) else {
+                continue;
+            };
             data.op_mark_non_printing_pub(inc);
             if let Some(o) = data.obank_mut().get_mut(access) {
                 o.set_additional_flag(crate::op::pcodeop_addlflags::kuna_postinc);

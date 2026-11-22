@@ -64,9 +64,11 @@ fn valid_and_explicitly_empty_baselines_still_pass() {
 fn missing_expected_passkeys_remain_regressions() {
     let out = run(r#"{"passing":["data:missing"]}"#, false);
     assert_eq!(out.status.code(), Some(1));
-    assert!(String::from_utf8(out.stdout)
-        .unwrap()
-        .contains("PARITY FAIL"));
+    assert!(
+        String::from_utf8(out.stdout)
+            .unwrap()
+            .contains("PARITY FAIL")
+    );
 }
 
 #[test]

@@ -77,7 +77,7 @@ impl FrameAddress {
                             );
                         }
                         OpCode::CPUI_INT_2COMP => {
-                            return self.add_scalar(fd, input, scale.checked_neg()?, id, budget)
+                            return self.add_scalar(fd, input, scale.checked_neg()?, id, budget);
                         }
                         OpCode::CPUI_INT_MULT => {
                             let other = operation.get_in(1)?;
@@ -208,9 +208,11 @@ pub(crate) fn may_alias(fd: &Funcdata, value: VarnodeId, start: u64, size: i32) 
                 if op.num_input() as usize > budget.saturating_sub(pending.len()) {
                     return true;
                 }
-                pending.extend((0..op.num_input()).filter_map(|slot| {
-                    op.get_in(slot).map(|input| (input, pointer, unresolved))
-                }));
+                pending.extend(
+                    (0..op.num_input()).filter_map(|slot| {
+                        op.get_in(slot).map(|input| (input, pointer, unresolved))
+                    }),
+                );
             }
             OpCode::CPUI_PTRADD
             | OpCode::CPUI_PTRSUB
@@ -226,9 +228,10 @@ pub(crate) fn may_alias(fd: &Funcdata, value: VarnodeId, start: u64, size: i32) 
                 if pointer {
                     return true;
                 }
-                pending.extend((0..op.num_input().min(2)).filter_map(|slot| {
-                    op.get_in(slot).map(|input| (input, pointer, true))
-                }));
+                pending.extend(
+                    (0..op.num_input().min(2))
+                        .filter_map(|slot| op.get_in(slot).map(|input| (input, pointer, true))),
+                );
             }
             _ if pointer => return true,
             _ => (),

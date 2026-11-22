@@ -253,7 +253,10 @@ mod tests {
             "--target alone still steers the slice"
         );
         // A blank token is not an override.
-        assert_eq!(slice_pref(Some("  "), Some("arm64")).0, Some(Architecture::Aarch64));
+        assert_eq!(
+            slice_pref(Some("  "), Some("arm64")).0,
+            Some(Architecture::Aarch64)
+        );
         assert_eq!(slice_pref(None, None).0, None);
         // An unrecognized --slice stays the DEFAULT rather than falling through
         // to --target: a typo must not be answered by the language override.

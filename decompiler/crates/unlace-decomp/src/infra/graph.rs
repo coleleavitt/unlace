@@ -30,9 +30,9 @@ use unlace_base::space::spacetype;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
-use crate::block::{block_get_start, block_get_stop, BlockGraph};
-use crate::funcdata::Funcdata;
+use crate::block::{BlockGraph, block_get_start, block_get_stop};
 use crate::context::BlockId;
+use crate::funcdata::Funcdata;
 
 /// Number of component blocks in the graph (C++ `BlockGraph::getSize`).
 ///
@@ -323,10 +323,7 @@ fn print_edges(data: &Funcdata, op: crate::context::OpId, s: &mut String) {
             None => continue, // C++ dereferences unconditionally; guard against null
             Some(v) => v,
         };
-        let v = data
-            .vbank()
-            .get(vn)
-            .expect("print_edges: stale in varnode");
+        let v = data.vbank().get(vn).expect("print_edges: stale in varnode");
         let tp = v.get_space().get_type();
         if tp != spacetype::IPTR_FSPEC && tp != spacetype::IPTR_IOP {
             s.push('v');
@@ -511,7 +508,12 @@ fn dump_block_edges(graph: &BlockGraph, s: &mut String) {
 }
 
 /// Print one dominator-tree edge (C++ static `print_dom_edge`).
-fn print_dom_edge(graph: &BlockGraph, bl: crate::context::BlockId, s: &mut String, falsenode: bool) {
+fn print_dom_edge(
+    graph: &BlockGraph,
+    bl: crate::context::BlockId,
+    s: &mut String,
+    falsenode: bool,
+) {
     let blk = graph.block(bl);
     let blindex = blk.get_index();
     match blk.get_immed_dom() {
@@ -721,8 +723,8 @@ mod tests {
 
     #[test]
     fn default_varnode_markup_uses_shortcut() {
-        use unlace_base::space::{addrspace_flags, spacetype, AddrSpace};
         use std::rc::Rc;
+        use unlace_base::space::{AddrSpace, addrspace_flags, spacetype};
         let ram = Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
             "ram",

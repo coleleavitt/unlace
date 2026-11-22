@@ -296,10 +296,12 @@ fn walk(args: &DisArgs, prog: &ConsoleProgram, mut region: Region) -> Result<Out
                 text.push_str(&node.row);
             }
             last = &node.edges;
-            let [Edge {
-                kind: "fallthrough",
-                target: Some(next),
-            }] = node.edges.as_slice()
+            let [
+                Edge {
+                    kind: "fallthrough",
+                    target: Some(next),
+                },
+            ] = node.edges.as_slice()
             else {
                 break;
             };
@@ -334,7 +336,10 @@ fn walk(args: &DisArgs, prog: &ConsoleProgram, mut region: Region) -> Result<Out
         .iter()
         .find_map(|issue| issue.message.as_ref())
         .map(|first| {
-            format!("{} instruction(s) in the walk did not lift; the first: {first}", failed.len())
+            format!(
+                "{} instruction(s) in the walk did not lift; the first: {first}",
+                failed.len()
+            )
         });
     let text = if args.json {
         let doc = vec![
@@ -356,7 +361,10 @@ fn walk(args: &DisArgs, prog: &ConsoleProgram, mut region: Region) -> Result<Out
             (
                 "notes".into(),
                 Json::Array(
-                    crate::funcdecl::json_notes(prog, &notes).into_iter().map(Json::Str).collect(),
+                    crate::funcdecl::json_notes(prog, &notes)
+                        .into_iter()
+                        .map(Json::Str)
+                        .collect(),
                 ),
             ),
             (

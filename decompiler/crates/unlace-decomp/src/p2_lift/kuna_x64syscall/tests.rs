@@ -4,9 +4,15 @@ use super::*;
 
 #[test]
 fn option_parse_accepts_the_three_values() {
-    assert_eq!(OptionX64Syscall.apply("off").unwrap().0, X64SyscallMode::Off);
+    assert_eq!(
+        OptionX64Syscall.apply("off").unwrap().0,
+        X64SyscallMode::Off
+    );
     assert_eq!(OptionX64Syscall.apply("on").unwrap().0, X64SyscallMode::On);
-    assert_eq!(OptionX64Syscall.apply("abi").unwrap().0, X64SyscallMode::Abi);
+    assert_eq!(
+        OptionX64Syscall.apply("abi").unwrap().0,
+        X64SyscallMode::Abi
+    );
 }
 
 #[test]

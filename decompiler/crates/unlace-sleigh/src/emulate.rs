@@ -24,7 +24,7 @@ use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::space::{AddrSpace, AddrSpaceManager};
 use unlace_base::types::Wrap;
 use unlace_num::float::FloatFormat;
-use unlace_num::opbehavior::{register_instructions, FloatFormatProvider, OpBehavior};
+use unlace_num::opbehavior::{FloatFormatProvider, OpBehavior, register_instructions};
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::{PcodeOpRaw, VarnodeData};
 
@@ -189,7 +189,10 @@ pub struct EmulateCore {
 impl EmulateCore {
     /// Generic emulator constructor (C++ `Emulate::Emulate`).
     pub fn new() -> Self {
-        EmulateCore { emu_halted: true, current_behave: None }
+        EmulateCore {
+            emu_halted: true,
+            current_behave: None,
+        }
     }
 }
 
@@ -426,9 +429,11 @@ pub mod emulate_memory {
         let behave = current_behave(emu);
         let memstate = Rc::clone(emu.get_memory_state());
         let in1 = memstate.borrow().get_value_data(op.get_input(0))?;
-        let out_vn = op.get_output().expect("executeUnary: op without output (C++ UB)");
+        let out_vn = op
+            .get_output()
+            .expect("executeUnary: op without output (C++ UB)");
         let out = behave.evaluate_unary(
-            out_vn.size as i32,         // cast: uint4 size as the C++ int4 param
+            out_vn.size as i32,          // cast: uint4 size as the C++ int4 param
             op.get_input(0).size as i32, // cast: uint4 size as the C++ int4 param
             in1,
         )?;
@@ -443,9 +448,11 @@ pub mod emulate_memory {
         let memstate = Rc::clone(emu.get_memory_state());
         let in1 = memstate.borrow().get_value_data(op.get_input(0))?;
         let in2 = memstate.borrow().get_value_data(op.get_input(1))?;
-        let out_vn = op.get_output().expect("executeBinary: op without output (C++ UB)");
+        let out_vn = op
+            .get_output()
+            .expect("executeBinary: op without output (C++ UB)");
         let out = behave.evaluate_binary(
-            out_vn.size as i32,         // cast: uint4 size as the C++ int4 param
+            out_vn.size as i32,          // cast: uint4 size as the C++ int4 param
             op.get_input(0).size as i32, // cast: uint4 size as the C++ int4 param
             in1,
             in2,
@@ -465,7 +472,9 @@ pub mod emulate_memory {
             .expect("executeLoad: <spaceid> constant does not resolve (C++ pointer always valid)");
 
         let off = AddrSpace::address_to_byte(off, spc.get_word_size());
-        let out_vn = op.get_output().expect("executeLoad: op without output (C++ UB)");
+        let out_vn = op
+            .get_output()
+            .expect("executeLoad: op without output (C++ UB)");
         let res = memstate.borrow().get_value(&spc, off, out_vn.size as i32)?; // cast: uint4 size as int4
         memstate.borrow_mut().set_value_data(out_vn, res)?;
         Ok(())
@@ -483,7 +492,9 @@ pub mod emulate_memory {
             .expect("executeStore: <spaceid> constant does not resolve (C++ pointer always valid)");
 
         let off = AddrSpace::address_to_byte(off, spc.get_word_size());
-        memstate.borrow_mut().set_value(&spc, off, op.get_input(2).size as i32, val)?; // cast: uint4 size as int4
+        memstate
+            .borrow_mut()
+            .set_value(&spc, off, op.get_input(2).size as i32, val)?; // cast: uint4 size as int4
         Ok(())
     }
 
@@ -535,27 +546,37 @@ pub mod emulate_memory {
 
     /// C++ `EmulateMemory::executeCallother`
     pub fn execute_callother<T: EmulateMemory + ?Sized>(_emu: &mut T) -> KunaResult<()> {
-        Err(KunaError::lowlevel("CALLOTHER emulation not currently supported"))
+        Err(KunaError::lowlevel(
+            "CALLOTHER emulation not currently supported",
+        ))
     }
 
     /// C++ `EmulateMemory::executeMultiequal`
     pub fn execute_multiequal<T: EmulateMemory + ?Sized>(_emu: &mut T) -> KunaResult<()> {
-        Err(KunaError::lowlevel("MULTIEQUAL appearing in unheritaged code?"))
+        Err(KunaError::lowlevel(
+            "MULTIEQUAL appearing in unheritaged code?",
+        ))
     }
 
     /// C++ `EmulateMemory::executeIndirect`
     pub fn execute_indirect<T: EmulateMemory + ?Sized>(_emu: &mut T) -> KunaResult<()> {
-        Err(KunaError::lowlevel("INDIRECT appearing in unheritaged code?"))
+        Err(KunaError::lowlevel(
+            "INDIRECT appearing in unheritaged code?",
+        ))
     }
 
     /// C++ `EmulateMemory::executeSegmentOp`
     pub fn execute_segment_op<T: EmulateMemory + ?Sized>(_emu: &mut T) -> KunaResult<()> {
-        Err(KunaError::lowlevel("SEGMENTOP emulation not currently supported"))
+        Err(KunaError::lowlevel(
+            "SEGMENTOP emulation not currently supported",
+        ))
     }
 
     /// C++ `EmulateMemory::executeCpoolRef`
     pub fn execute_cpool_ref<T: EmulateMemory + ?Sized>(_emu: &mut T) -> KunaResult<()> {
-        Err(KunaError::lowlevel("Cannot currently emulate cpool operator"))
+        Err(KunaError::lowlevel(
+            "Cannot currently emulate cpool operator",
+        ))
     }
 
     /// C++ `EmulateMemory::executeNew`
@@ -700,8 +721,7 @@ impl EmulatePcodeCache {
         b: Rc<RefCell<dyn BreakTable>>,
     ) -> Self {
         let mut inst: Vec<Option<Rc<dyn OpBehavior>>> = Vec::new();
-        let provider: Rc<dyn FloatFormatProvider> =
-            Rc::new(TranslateFloatFormats(Rc::clone(&t)));
+        let provider: Rc<dyn FloatFormatProvider> = Rc::new(TranslateFloatFormats(Rc::clone(&t)));
         register_instructions(&mut inst, &provider);
         // (C++ breaktable->setEmulate(this) is the replaced back-pointer —
         // the emulator is passed to the table at invocation time instead)
@@ -915,7 +935,10 @@ impl Emulate for EmulatePcodeCache {
                 .as_ref()
                 .expect("executeCallother: currentOp not set (C++ would dereference null)"),
         );
-        if !breaktable.borrow_mut().do_pcode_op_break(self, &current_op_ptr)? {
+        if !breaktable
+            .borrow_mut()
+            .do_pcode_op_break(self, &current_op_ptr)?
+        {
             return Err(KunaError::lowlevel("Userop not hooked"));
         }
         self.fallthru_op()
@@ -951,8 +974,7 @@ impl Emulate for EmulatePcodeCache {
         self.current_op += 1;
         if self.current_op as usize >= self.opcache.len() {
             // cast: C++ int4 >= size_t comparison (int converts)
-            self.current_address =
-                &self.current_address + i64::from(self.instruction_length);
+            self.current_address = &self.current_address + i64::from(self.instruction_length);
             let addr = self.current_address.clone();
             self.create_instruction(&addr)?;
         }
@@ -1005,7 +1027,7 @@ pub(crate) mod test_support {
     use super::*;
     use crate::loadimage::LoadImage;
     use crate::translate::{AssemblyEmit, RegisterLookup, TranslateBase, VarnodeStorage};
-    use unlace_base::space::{addrspace_flags, spacetype, ConstantSpace, OtherSpace, UniqueSpace};
+    use unlace_base::space::{ConstantSpace, OtherSpace, UniqueSpace, addrspace_flags, spacetype};
     use unlace_base::xml::DocumentStorage;
 
     /// Manager with const(0)/OTHER(1)/unique(2)/ram(3)/register(4) spaces,
@@ -1015,7 +1037,9 @@ pub(crate) mod test_support {
         let mut manager = AddrSpaceManager::new();
         manager.insert_space(Rc::new(ConstantSpace::new())).unwrap();
         manager.insert_space(Rc::new(OtherSpace::new(1))).unwrap();
-        manager.insert_space(Rc::new(UniqueSpace::new(2, 0, big_end))).unwrap();
+        manager
+            .insert_space(Rc::new(UniqueSpace::new(2, 0, big_end)))
+            .unwrap();
         manager
             .insert_space(Rc::new(AddrSpace::new(
                 spacetype::IPTR_PROCESSOR,
@@ -1171,7 +1195,11 @@ pub(crate) mod test_support {
             for i in 0..8u64 {
                 let vs = self.reg_storage(i);
                 reglist.insert(
-                    VarnodeData { space: vs.space, offset: vs.offset, size: vs.size },
+                    VarnodeData {
+                        space: vs.space,
+                        offset: vs.offset,
+                        size: vs.size,
+                    },
                     format!("r{i}"),
                 );
             }
@@ -1206,7 +1234,11 @@ pub(crate) mod test_support {
             }
         }
 
-        fn print_assembly(&self, _emit: &mut dyn AssemblyEmit, _baseaddr: &Address) -> KunaResult<i32> {
+        fn print_assembly(
+            &self,
+            _emit: &mut dyn AssemblyEmit,
+            _baseaddr: &Address,
+        ) -> KunaResult<i32> {
             Err(KunaError::lowlevel("TestTranslator: no assembly"))
         }
     }
@@ -1283,8 +1315,7 @@ mod tests {
     ) -> Env {
         let manager = Rc::new(test_manager(false));
         let program = make_program(&manager);
-        let trans: Rc<dyn Translate> =
-            Rc::new(TestTranslator::new(&manager, program, userops));
+        let trans: Rc<dyn Translate> = Rc::new(TestTranslator::new(&manager, program, userops));
         let ram = Rc::clone(manager.get_space_by_name("ram").unwrap());
         let register = Rc::clone(manager.get_space_by_name("register").unwrap());
         let unique = Rc::clone(manager.get_space_by_name("unique").unwrap());
@@ -1293,11 +1324,18 @@ mod tests {
             start: 0x2000,
             bytes: vec![0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88],
         }));
-        let image: Rc<RefCell<dyn MemoryBank>> =
-            Rc::new(RefCell::new(MemoryImage::new(Rc::clone(&ram), 8, 64, loader)));
-        let ramstate: Rc<RefCell<dyn MemoryBank>> = Rc::new(RefCell::new(
-            MemoryPageOverlay::new(Rc::clone(&ram), 8, 64, Some(image)),
-        ));
+        let image: Rc<RefCell<dyn MemoryBank>> = Rc::new(RefCell::new(MemoryImage::new(
+            Rc::clone(&ram),
+            8,
+            64,
+            loader,
+        )));
+        let ramstate: Rc<RefCell<dyn MemoryBank>> = Rc::new(RefCell::new(MemoryPageOverlay::new(
+            Rc::clone(&ram),
+            8,
+            64,
+            Some(image),
+        )));
         let registerstate: Rc<RefCell<dyn MemoryBank>> = Rc::new(RefCell::new(
             MemoryHashOverlay::new(Rc::clone(&register), 8, 64, 64, None),
         ));
@@ -1320,7 +1358,12 @@ mod tests {
             bt_dyn,
         );
 
-        Env { memstate, breaktable, emulator, ram }
+        Env {
+            memstate,
+            breaktable,
+            emulator,
+            ram,
+        }
     }
 
     /// The synthetic program (little endian, all instructions 4 bytes):
@@ -1342,27 +1385,36 @@ mod tests {
         let mut prog = BTreeMap::new();
         prog.insert(
             0x1000,
-            (4, vec![TestOp {
-                opc: OpCode::CPUI_COPY,
-                out: Some(reg(manager, 0)),
-                ins: vec![cst(manager, 5, 8)],
-            }]),
+            (
+                4,
+                vec![TestOp {
+                    opc: OpCode::CPUI_COPY,
+                    out: Some(reg(manager, 0)),
+                    ins: vec![cst(manager, 5, 8)],
+                }],
+            ),
         );
         prog.insert(
             0x1004,
-            (4, vec![TestOp {
-                opc: OpCode::CPUI_COPY,
-                out: Some(reg(manager, 1)),
-                ins: vec![cst(manager, 7, 8)],
-            }]),
+            (
+                4,
+                vec![TestOp {
+                    opc: OpCode::CPUI_COPY,
+                    out: Some(reg(manager, 1)),
+                    ins: vec![cst(manager, 7, 8)],
+                }],
+            ),
         );
         prog.insert(
             0x1008,
-            (4, vec![TestOp {
-                opc: OpCode::CPUI_INT_ADD,
-                out: Some(reg(manager, 0)),
-                ins: vec![reg(manager, 0), reg(manager, 1)],
-            }]),
+            (
+                4,
+                vec![TestOp {
+                    opc: OpCode::CPUI_INT_ADD,
+                    out: Some(reg(manager, 0)),
+                    ins: vec![reg(manager, 0), reg(manager, 1)],
+                }],
+            ),
         );
         prog.insert(
             0x100c,
@@ -1389,59 +1441,84 @@ mod tests {
         );
         prog.insert(
             0x1010,
-            (4, vec![TestOp {
-                opc: OpCode::CPUI_LOAD,
-                out: Some(reg(manager, 2)),
-                ins: vec![spaceid_vn(manager, "ram"), cst(manager, 0x2000, 8)],
-            }]),
+            (
+                4,
+                vec![TestOp {
+                    opc: OpCode::CPUI_LOAD,
+                    out: Some(reg(manager, 2)),
+                    ins: vec![spaceid_vn(manager, "ram"), cst(manager, 0x2000, 8)],
+                }],
+            ),
         );
         prog.insert(
             0x1014,
-            (4, vec![TestOp {
-                opc: OpCode::CPUI_STORE,
-                out: None,
-                ins: vec![spaceid_vn(manager, "ram"), cst(manager, 0x3000, 8), reg(manager, 0)],
-            }]),
+            (
+                4,
+                vec![TestOp {
+                    opc: OpCode::CPUI_STORE,
+                    out: None,
+                    ins: vec![
+                        spaceid_vn(manager, "ram"),
+                        cst(manager, 0x3000, 8),
+                        reg(manager, 0),
+                    ],
+                }],
+            ),
         );
         prog.insert(
             0x1018,
-            (4, vec![TestOp {
-                opc: OpCode::CPUI_BRANCH,
-                out: None,
-                ins: vec![ram_vn(manager, 0x1020, 8)],
-            }]),
+            (
+                4,
+                vec![TestOp {
+                    opc: OpCode::CPUI_BRANCH,
+                    out: None,
+                    ins: vec![ram_vn(manager, 0x1020, 8)],
+                }],
+            ),
         );
         prog.insert(
             0x1020,
-            (4, vec![TestOp {
-                opc: OpCode::CPUI_CALLOTHER,
-                out: None,
-                ins: vec![cst(manager, 0, 8)],
-            }]),
+            (
+                4,
+                vec![TestOp {
+                    opc: OpCode::CPUI_CALLOTHER,
+                    out: None,
+                    ins: vec![cst(manager, 0, 8)],
+                }],
+            ),
         );
         prog.insert(
             0x1024,
-            (4, vec![TestOp {
-                opc: OpCode::CPUI_COPY,
-                out: Some(reg(manager, 4)),
-                ins: vec![cst(manager, 0x1100, 8)],
-            }]),
+            (
+                4,
+                vec![TestOp {
+                    opc: OpCode::CPUI_COPY,
+                    out: Some(reg(manager, 4)),
+                    ins: vec![cst(manager, 0x1100, 8)],
+                }],
+            ),
         );
         prog.insert(
             0x1028,
-            (4, vec![TestOp {
-                opc: OpCode::CPUI_RETURN,
-                out: None,
-                ins: vec![reg(manager, 4)],
-            }]),
+            (
+                4,
+                vec![TestOp {
+                    opc: OpCode::CPUI_RETURN,
+                    out: None,
+                    ins: vec![reg(manager, 4)],
+                }],
+            ),
         );
         prog.insert(
             0x1100,
-            (4, vec![TestOp {
-                opc: OpCode::CPUI_COPY,
-                out: Some(reg(manager, 1)),
-                ins: vec![reg(manager, 1)],
-            }]),
+            (
+                4,
+                vec![TestOp {
+                    opc: OpCode::CPUI_COPY,
+                    out: Some(reg(manager, 1)),
+                    ins: vec![reg(manager, 1)],
+                }],
+            ),
         );
         prog
     }
@@ -1518,7 +1595,10 @@ mod tests {
         mem.get_chunk(&mut bytes, &env.ram, 0x3000).unwrap();
         assert_eq!(bytes, [12, 0, 0, 0, 0, 0, 0, 0]);
         // the LOAD source is still the load-image data
-        assert_eq!(mem.get_value(&env.ram, 0x2000, 8).unwrap(), 0x8877665544332211);
+        assert_eq!(
+            mem.get_value(&env.ram, 0x2000, 8).unwrap(),
+            0x8877665544332211
+        );
     }
 
     #[test]
@@ -1560,9 +1640,18 @@ mod tests {
         assert!(env.emulator.is_instruction_start());
         assert_eq!(env.emulator.num_current_ops(), 3);
         assert_eq!(env.emulator.get_current_op_index(), 0);
-        assert_eq!(env.emulator.get_op_by_index(0).get_opcode(), OpCode::CPUI_INT_EQUAL);
-        assert_eq!(env.emulator.get_op_by_index(1).get_opcode(), OpCode::CPUI_CBRANCH);
-        assert_eq!(env.emulator.get_op_by_index(2).get_opcode(), OpCode::CPUI_COPY);
+        assert_eq!(
+            env.emulator.get_op_by_index(0).get_opcode(),
+            OpCode::CPUI_INT_EQUAL
+        );
+        assert_eq!(
+            env.emulator.get_op_by_index(1).get_opcode(),
+            OpCode::CPUI_CBRANCH
+        );
+        assert_eq!(
+            env.emulator.get_op_by_index(2).get_opcode(),
+            OpCode::CPUI_COPY
+        );
 
         env.emulator.execute_current_op().unwrap();
         assert!(!env.emulator.is_instruction_start());
@@ -1572,7 +1661,10 @@ mod tests {
         env.emulator.execute_current_op().unwrap(); // r5 = 0xdead, next instr
         assert!(env.emulator.is_instruction_start());
         assert_eq!(env.emulator.get_execute_address().get_offset(), 0x1010);
-        assert_eq!(env.memstate.borrow().get_value_by_name("r5").unwrap(), 0xdead);
+        assert_eq!(
+            env.memstate.borrow().get_value_by_name("r5").unwrap(),
+            0xdead
+        );
 
         // halt flag is application-controlled state only
         assert!(env.emulator.get_halt());
@@ -1587,29 +1679,38 @@ mod tests {
             // 0x1000: BRANCH +5 (out of bounds: 1 op in the cache)
             prog.insert(
                 0x1000,
-                (4, vec![TestOp {
-                    opc: OpCode::CPUI_BRANCH,
-                    out: None,
-                    ins: vec![cst(manager, 5, 8)],
-                }]),
+                (
+                    4,
+                    vec![TestOp {
+                        opc: OpCode::CPUI_BRANCH,
+                        out: None,
+                        ins: vec![cst(manager, 5, 8)],
+                    }],
+                ),
             );
             // 0x1004: BRANCH with a relative offset that truncates to -1
             prog.insert(
                 0x1004,
-                (4, vec![TestOp {
-                    opc: OpCode::CPUI_BRANCH,
-                    out: None,
-                    ins: vec![cst(manager, u64::MAX, 8)],
-                }]),
+                (
+                    4,
+                    vec![TestOp {
+                        opc: OpCode::CPUI_BRANCH,
+                        out: None,
+                        ins: vec![cst(manager, u64::MAX, 8)],
+                    }],
+                ),
             );
             // 0x1008: CALLOTHER userop#0 with nothing registered
             prog.insert(
                 0x1008,
-                (4, vec![TestOp {
-                    opc: OpCode::CPUI_CALLOTHER,
-                    out: None,
-                    ins: vec![cst(manager, 0, 8)],
-                }]),
+                (
+                    4,
+                    vec![TestOp {
+                        opc: OpCode::CPUI_CALLOTHER,
+                        out: None,
+                        ins: vec![cst(manager, 0, 8)],
+                    }],
+                ),
             );
             prog
         };
@@ -1638,10 +1739,11 @@ mod tests {
         );
 
         // translating an unmapped address errs out of set_execute_address
-        assert!(env
-            .emulator
-            .set_execute_address(&Address::new(Rc::clone(&env.ram), 0x9999))
-            .is_err());
+        assert!(
+            env.emulator
+                .set_execute_address(&Address::new(Rc::clone(&env.ram), 0x9999))
+                .is_err()
+        );
 
         // registering against an unknown userop name
         assert_eq!(

@@ -36,11 +36,16 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn specs_root() -> PathBuf {
-    std::env::var_os("KUNA_SPECS").map(PathBuf::from).unwrap_or_else(|| repo_root().join("specs"))
+    std::env::var_os("KUNA_SPECS")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| repo_root().join("specs"))
 }
 
 fn datatests_dir() -> PathBuf {
@@ -54,7 +59,10 @@ fn rust_harness() -> PathBuf {
         return PathBuf::from(p);
     }
     let profile = std::env::var("KUNA_RUST_PROFILE").unwrap_or_else(|_| "release".to_string());
-    repo_root().join("decompiler/target").join(profile).join("decomp_test_dbg")
+    repo_root()
+        .join("decompiler/target")
+        .join(profile)
+        .join("decomp_test_dbg")
 }
 
 /// Drive `bin` on `stem`.xml with `KUNA_DUMP=1`, returning the sliced bulk
@@ -94,7 +102,9 @@ fn dump_print_c(bin: &PathBuf, stem: &str) -> Option<String> {
 // =============================================================================
 #[test]
 fn t1_twodim_spacebase_array_renders_no_array_pointer_cast() {
-    let Some(body) = dump_print_c(&rust_harness(), "twodim") else { return };
+    let Some(body) = dump_print_c(&rust_harness(), "twodim") else {
+        return;
+    };
 
     // The symbol must bind (the type-seed precondition this wave builds on).
     assert!(
@@ -128,7 +138,9 @@ fn t1_twodim_spacebase_array_renders_no_array_pointer_cast() {
 // =============================================================================
 #[test]
 fn t2_threedim_spacebase_array_indexes_three_deep_no_cast() {
-    let Some(body) = dump_print_c(&rust_harness(), "threedim") else { return };
+    let Some(body) = dump_print_c(&rust_harness(), "threedim") else {
+        return;
+    };
 
     assert!(
         body.contains("myarray[globindex]"),
@@ -204,9 +216,17 @@ fn t4_local_spacebase_and_switch_cluster_intact() {
              the local spacebase resolution broke. Body:\n{body}"
         );
     }
-    for stem in ["switchind", "switchmulti", "switchhide", "ifswitch", "switchloop", "switchreturn"]
-    {
-        let Some(body) = dump_print_c(&rust_harness(), stem) else { return };
+    for stem in [
+        "switchind",
+        "switchmulti",
+        "switchhide",
+        "ifswitch",
+        "switchloop",
+        "switchreturn",
+    ] {
+        let Some(body) = dump_print_c(&rust_harness(), stem) else {
+            return;
+        };
         assert!(
             body.contains('{') && body.contains('}'),
             "{stem}: the switch render lost its body — the spacebase getSubType \

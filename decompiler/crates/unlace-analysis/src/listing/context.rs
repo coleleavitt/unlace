@@ -53,9 +53,9 @@ use unlace_base::address::Address;
 use unlace_base::space::AddrSpace;
 use unlace_decomp::architecture::Architecture;
 
-use crate::pass::ContextPaint;
 use crate::loader::arm_markers::scan_arm_markers;
 use crate::loader::mips_markers::scan_mips_isa_markers;
+use crate::pass::ContextPaint;
 
 /// Resolves and applies the per-address decode-mode context (ARM `TMode`, MIPS
 /// `ISA_MODE`) the recursive-descent walker needs before it decodes (design §4.2).
@@ -107,7 +107,10 @@ impl ContextPainter {
         // MIPS STT_FUNC-LSB / `STO_MIPS_MIPS16` `st_other` → `ISA_MODE` (MIPS16e /
         // microMIPS). The scan is MIPS-gated; empty on a non-MIPS object.
         paints.extend(scan_mips_isa_markers(file).context_paints);
-        ContextPainter { paints, a32_extents }
+        ContextPainter {
+            paints,
+            a32_extents,
+        }
     }
 
     /// A painter with nothing to paint, for a caller that has no `object::File`
@@ -116,7 +119,10 @@ impl ContextPainter {
     /// carries no `$t` markers and no vector table, and `--isa arm|thumb` has
     /// already painted whatever whole-image mode the caller asserted.
     pub(super) fn empty() -> Self {
-        ContextPainter { paints: Vec::new(), a32_extents: Vec::new() }
+        ContextPainter {
+            paints: Vec::new(),
+            a32_extents: Vec::new(),
+        }
     }
 
     /// `true` iff there is nothing to paint (x86-64 / any language with no

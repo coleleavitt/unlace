@@ -41,14 +41,17 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixtures() -> PathBuf {
@@ -103,7 +106,10 @@ fn msvc_coff_demangles_and_decompiles() {
 
     // Loads with the Windows x86-64 spec (MSVC-flavored COFF).
     let desc = prog.description().to_string();
-    assert!(desc.contains("x86"), "MSVC COFF: expected x86 spec, got {desc:?}");
+    assert!(
+        desc.contains("x86"),
+        "MSVC COFF: expected x86 spec, got {desc:?}"
+    );
 
     // The PR-9 demangle arm rewrote every `?`-mangled COFF symbol:
     //   ?foo@Bar@@QEAAHH@Z  -> Bar::foo   (member, nested under scope `Bar`)

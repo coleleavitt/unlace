@@ -30,8 +30,8 @@
 //! function entry the faithful way (the binaryimage's own symbol records, which
 //! is precisely what `readLoaderSymbols` reads).
 
-mod lazy_inventory;
 mod kuna_signature_names;
+mod lazy_inventory;
 
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -46,31 +46,33 @@ use unlace_base::types::int4;
 use unlace_base::xml::{DocumentStorage, Element};
 
 use unlace_decomp::architecture::Architecture;
+use unlace_decomp::kuna_loadoptions::LoadOptions;
+use unlace_decomp::kuna_memoryspecs::IntoSpecRoot;
 use unlace_decomp::options::register_option_elements;
 use unlace_decomp::raw_arch::RawBinaryArchitectureCapability;
-use unlace_decomp::kuna_memoryspecs::IntoSpecRoot;
-use unlace_decomp::kuna_loadoptions::LoadOptions;
-use unlace_decomp::sleigh_arch::{register_sleigh_arch_ids, LanguageDatabase, SleighArchitecture};
+use unlace_decomp::sleigh_arch::{LanguageDatabase, SleighArchitecture, register_sleigh_arch_ids};
 use unlace_decomp::xml_arch::XmlArchitectureCapability;
 
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
-use unlace_sleigh::loadimage::{section_flags, LoadImage, LoadImageFunc, LoadImageSection};
-use unlace_analysis::loadimage_object::{is_arm32_language, ObjectLoadImage, PE_MACHINES};
-use unlace_analysis::loadimage_mz::{is_mz_dos_image, MzImage, MZ_LANGUAGE};
-use unlace_analysis::flirt::kuna_rustprofiles::{ImageReport as RustProfileReport, Request as RustProfileRequest};
-use unlace_analysis::loadimage_te::{is_te_image, TeLoadImage, TE_PROBE_LEN};
+use unlace_analysis::flirt::kuna_rustprofiles::{
+    ImageReport as RustProfileReport, Request as RustProfileRequest,
+};
+use unlace_analysis::loadimage_mz::{MZ_LANGUAGE, MzImage, is_mz_dos_image};
+use unlace_analysis::loadimage_object::{ObjectLoadImage, PE_MACHINES, is_arm32_language};
+use unlace_analysis::loadimage_te::{TE_PROBE_LEN, TeLoadImage, is_te_image};
+use unlace_sleigh::loadimage::{LoadImage, LoadImageFunc, LoadImageSection, section_flags};
 use unlace_sleigh::loadimage_xml::LoadImageXml;
 use unlace_sleigh::loadimage_xml::register_loadimage_xml_ids;
 use unlace_sleigh::translate::register_translate_ids;
 
 use crate::entry_selector::ObjectSectionLocation;
-pub use crate::kuna_bootstrap::{Bootstrap, LanguageSource};
 pub use crate::entry_selector::{
     DataName, EntryLookupError, EntryProvenance, EntrySelector, FunctionEntry, NameSuggestion,
     ObjectLocation,
 };
+pub use crate::kuna_bootstrap::{Bootstrap, LanguageSource};
 
 /// One function symbol discovered in the `<binaryimage>` (name → entry address).
 #[derive(Debug, Clone)]
@@ -129,7 +131,10 @@ impl SymbolStream {
 
     fn push(&mut self, mut sym: ProgramSymbol) {
         sym.ordinal = next_revision();
-        self.by_name.entry(sym.name.clone()).or_default().push(self.records.len());
+        self.by_name
+            .entry(sym.name.clone())
+            .or_default()
+            .push(self.records.len());
         self.records.push(Some(sym));
         self.live += 1;
         self.revision = next_revision();
@@ -138,7 +143,9 @@ impl SymbolStream {
     /// Tombstone every record named `name` — the `retain(|s| s.name != name)`
     /// half of a registration.
     fn remove_name(&mut self, name: &str) {
-        let Some(stale) = self.by_name.remove(name) else { return };
+        let Some(stale) = self.by_name.remove(name) else {
+            return;
+        };
         self.revision = next_revision();
         for slot in stale {
             if self.records[slot].take().is_some() {
@@ -151,12 +158,16 @@ impl SymbolStream {
     /// Tombstone the records named `name` at `addr`, leaving that name's records
     /// at other addresses live.
     fn remove_name_at(&mut self, name: &str, addr: &Address) {
-        let Some(slots) = self.by_name.get_mut(name) else { return };
+        let Some(slots) = self.by_name.get_mut(name) else {
+            return;
+        };
         self.revision = next_revision();
         let records = &mut self.records;
         let mut removed = 0;
         slots.retain(|&slot| {
-            let here = records[slot].as_ref().is_some_and(|record| record.addr == *addr);
+            let here = records[slot]
+                .as_ref()
+                .is_some_and(|record| record.addr == *addr);
             if here {
                 records[slot] = None;
                 removed += 1;
@@ -274,7 +285,11 @@ pub struct RawPcodeVarnode {
 impl From<&VarnodeData> for RawPcodeVarnode {
     fn from(v: &VarnodeData) -> Self {
         Self {
-            space: v.space.as_ref().map_or("<none>", |s| s.get_name()).to_string(),
+            space: v
+                .space
+                .as_ref()
+                .map_or("<none>", |s| s.get_name())
+                .to_string(),
             offset: v.offset,
             size: v.size,
         }
@@ -351,7 +366,11 @@ impl unlace_sleigh::translate::PcodeEmit for FixedRefs {
         vars: &[VarnodeData],
     ) {
         if self.filled == self.ops.len() {
-            self.ops.push(WholeOp { opcode: opc, out: outvar.cloned(), ins: vars.to_vec() });
+            self.ops.push(WholeOp {
+                opcode: opc,
+                out: outvar.cloned(),
+                ins: vars.to_vec(),
+            });
         } else {
             let slot = &mut self.ops[self.filled];
             slot.opcode = opc;
@@ -386,7 +405,13 @@ impl FixedRefs {
     /// so a caller stepping a listing learns where the straight line ends
     /// without decoding it a second time.
     fn harvest(&mut self, data_space: Option<&Rc<AddrSpace>>, fall_through: u64) {
-        let Self { reads, flow_targets, falls_through, ops, filled } = self;
+        let Self {
+            reads,
+            flow_targets,
+            falls_through,
+            ops,
+            filled,
+        } = self;
         let is_constant = |vn: &VarnodeData| {
             vn.space
                 .as_ref()
@@ -394,9 +419,7 @@ impl FixedRefs {
         };
         // Space identity is pointer identity throughout the engine, so match on
         // the `Rc`, never on the space's name or index.
-        let in_data_space = |vn: &VarnodeData| {
-            matches!((&vn.space, data_space), (Some(s), Some(d)) if Rc::ptr_eq(s, d))
-        };
+        let in_data_space = |vn: &VarnodeData| matches!((&vn.space, data_space), (Some(s), Some(d)) if Rc::ptr_eq(s, d));
         for op in &ops[..*filled] {
             let flow = matches!(
                 op.opcode,
@@ -841,7 +864,12 @@ impl ConsoleProgram {
 
     /// The loaded image's file name, as the loader reports it.
     fn image_path(&self) -> String {
-        self.arch().translate().loader_rc().borrow().get_file_name().to_string()
+        self.arch()
+            .translate()
+            .loader_rc()
+            .borrow()
+            .get_file_name()
+            .to_string()
     }
 
     /// Scale a user-facing raw address to the engine's byte offset without
@@ -927,7 +955,10 @@ impl ConsoleProgram {
         // binary's ORIGINAL name and the one the listing renders. Idempotent, and
         // a no-op for every real name.
         let name = &*unlace_decomp::kuna_symbolnamebound::bound_scope_path(name, "::");
-        self.symbols.lookup(name).map(|s| s.addr.clone()).or_else(|| self.anonymous_address(name))
+        self.symbols
+            .lookup(name)
+            .map(|s| s.addr.clone())
+            .or_else(|| self.anonymous_address(name))
     }
 
     /// (kuna) Iterate every function symbol kuna knows for the loaded program as
@@ -1010,7 +1041,10 @@ impl ConsoleProgram {
         let _load = self.arch().load_scope();
         let name = &*unlace_decomp::kuna_symbolnamebound::bound_scope_path(name, "::");
         (self.symbols.lookup(name).is_some() || self.anonymous_address(name).is_some())
-            || self.loader_aliases.values().any(|names| names.iter().any(|alias| alias == name))
+            || self
+                .loader_aliases
+                .values()
+                .any(|names| names.iter().any(|alias| alias == name))
     }
 
     fn build_function_entries_canonical(&self) -> Vec<FunctionEntry> {
@@ -1023,7 +1057,9 @@ impl ConsoleProgram {
         for s in self.symbols.iter() {
             // A sentinel (spaceless) address cannot be normalized or rebuilt;
             // such a record is not a real entry, so skip it rather than guess.
-            let Some(space) = s.addr.get_space() else { continue };
+            let Some(space) = s.addr.get_space() else {
+                continue;
+            };
             let vma = normalize(s.addr.get_offset());
             let entry = groups
                 .entry(vma)
@@ -1039,8 +1075,14 @@ impl ConsoleProgram {
                 // A caller's declaration first, then the most informative name —
                 // see `is_not_declared_name` and `entry_name_rank`.
                 records.sort_by(|a, b| {
-                    (self.is_not_declared_name(vma, &a.name), entry_name_rank(&a.name))
-                        .cmp(&(self.is_not_declared_name(vma, &b.name), entry_name_rank(&b.name)))
+                    (
+                        self.is_not_declared_name(vma, &a.name),
+                        entry_name_rank(&a.name),
+                    )
+                        .cmp(&(
+                            self.is_not_declared_name(vma, &b.name),
+                            entry_name_rank(&b.name),
+                        ))
                         .then_with(|| a.name.cmp(&b.name))
                 });
                 let canonical = records.remove(0);
@@ -1109,11 +1151,16 @@ impl ConsoleProgram {
     /// Append the loader's alias names at `vma` that neither `name` nor `aliases`
     /// already spells.
     fn push_loader_aliases(&self, vma: u64, name: &str, aliases: &mut Vec<String>) {
-        let Some(names) = self.loader_aliases.get(&vma) else { return };
+        let Some(names) = self.loader_aliases.get(&vma) else {
+            return;
+        };
         let mut known: std::collections::HashSet<&str> =
             aliases.iter().map(String::as_str).chain([name]).collect();
-        let fresh: Vec<String> =
-            names.iter().filter(|alias| known.insert(alias.as_str())).cloned().collect();
+        let fresh: Vec<String> = names
+            .iter()
+            .filter(|alias| known.insert(alias.as_str()))
+            .cloned()
+            .collect();
         aliases.extend(fresh);
     }
 
@@ -1170,7 +1217,9 @@ impl ConsoleProgram {
         self.flow_ends.as_ref()?;
         let vma = self.thumb_normalized(vma);
         let starts = self.entry_offsets();
-        let owner = starts[..starts.partition_point(|&start| start <= vma)].last().copied()?;
+        let owner = starts[..starts.partition_point(|&start| start <= vma)]
+            .last()
+            .copied()?;
         let (extent, clip) = self.extent_cut_by_flow(owner)?;
         let end = owner + extent;
         if owner == vma || vma < end || vma >= owner + clip {
@@ -1183,14 +1232,21 @@ impl ConsoleProgram {
     /// VMA -> `(extent, clip)`, measured in one pass; empty on an image that
     /// measured no flow ends.
     pub fn extents_cut_by_flow(&self) -> BTreeMap<u64, (u64, u64)> {
-        let Some(ends) = &self.flow_ends else { return BTreeMap::new() };
+        let Some(ends) = &self.flow_ends else {
+            return BTreeMap::new();
+        };
         if !self.anonymous_entries.is_empty() {
-            return ends.keys().filter_map(|&entry| Some((entry, self.extent_cut_by_flow(entry)?))).collect();
+            return ends
+                .keys()
+                .filter_map(|&entry| Some((entry, self.extent_cut_by_flow(entry)?)))
+                .collect();
         }
         let entries = self.entry_offsets();
         let spans = crate::funcextent::spans(&self.sections(), &self.segments());
         ends.keys()
-            .filter(|&&entry| self.declared_extent(entry) == 0 && entries.binary_search(&entry).is_ok())
+            .filter(|&&entry| {
+                self.declared_extent(entry) == 0 && entries.binary_search(&entry).is_ok()
+            })
             .filter_map(|&entry| {
                 let clip = crate::funcextent::extent_at(entry, &entries, &spans);
                 let extent = crate::funcextent::bound_by_flow(entry, clip, Some(entry), ends);
@@ -1202,9 +1258,14 @@ impl ConsoleProgram {
     /// `clip` bounded by the measured flow ends (`flow_ends`), unchanged on an
     /// image that measured none.
     fn bound_by_flow(&self, vma: u64, clip: u64) -> u64 {
-        let Some(ends) = &self.flow_ends else { return clip };
+        let Some(ends) = &self.flow_ends else {
+            return clip;
+        };
         let starts = self.entry_offsets();
-        let owner = starts.partition_point(|&start| start <= vma).checked_sub(1).map(|i| starts[i]);
+        let owner = starts
+            .partition_point(|&start| start <= vma)
+            .checked_sub(1)
+            .map(|i| starts[i]);
         crate::funcextent::bound_by_flow(vma, clip, owner, ends)
     }
 
@@ -1361,8 +1422,10 @@ impl ConsoleProgram {
     /// sees the same candidates whether or not discovery has named that address.
     fn entries_named(&self, want: &str) -> Vec<FunctionEntry> {
         let (entries, names) = self.entry_names();
-        let mut found: Vec<FunctionEntry> =
-            names.spelled(&entries, want).map(|at| entries[at].clone()).collect();
+        let mut found: Vec<FunctionEntry> = names
+            .spelled(&entries, want)
+            .map(|at| entries[at].clone())
+            .collect();
         for vma in names.aliased(&self.loader_aliases, want) {
             if !found.iter().any(|entry| entry.addr.get_offset() == vma) {
                 found.push(self.entry_at_or_named(vma));
@@ -1389,7 +1452,10 @@ impl ConsoleProgram {
     /// selected one function before those aliases existed keeps selecting it.
     fn keep_direct_candidates(&self, candidates: &mut Vec<FunctionEntry>, want: &str) -> bool {
         let before = candidates.len();
-        if candidates.iter().any(|entry| !self.named_only_by_loader_alias(entry, want)) {
+        if candidates
+            .iter()
+            .any(|entry| !self.named_only_by_loader_alias(entry, want))
+        {
             candidates.retain(|entry| !self.named_only_by_loader_alias(entry, want));
         }
         candidates.len() < before
@@ -1398,7 +1464,10 @@ impl ConsoleProgram {
     fn named_only_by_loader_alias(&self, entry: &FunctionEntry, want: &str) -> bool {
         let vma = entry.addr.get_offset();
         entry.name != want
-            && self.loader_aliases.get(&vma).is_some_and(|names| names.iter().any(|n| n == want))
+            && self
+                .loader_aliases
+                .get(&vma)
+                .is_some_and(|names| names.iter().any(|n| n == want))
             && !self
                 .symbols
                 .slots_of(want)
@@ -1418,8 +1487,13 @@ impl ConsoleProgram {
     /// already knows, so an address that is not a discovered function start is
     /// still `None` and the caller keeps decompiling exactly where it was asked.
     pub fn find_entry_at(&self, vma: u64) -> Option<FunctionEntry> {
-        let vma = if self.is_declared_entry(vma) { vma } else {
-            self.function_address_aliases.get(&vma).copied().unwrap_or(vma)
+        let vma = if self.is_declared_entry(vma) {
+            vma
+        } else {
+            self.function_address_aliases
+                .get(&vma)
+                .copied()
+                .unwrap_or(vma)
         };
         let want = self.thumb_normalized(vma);
         if !self.anonymous_entries.is_empty() {
@@ -1440,7 +1514,9 @@ impl ConsoleProgram {
                 return Some(vma);
             }
         }
-        self.resolve_entry(selector).ok().map(|entry| entry.addr.get_offset())
+        self.resolve_entry(selector)
+            .ok()
+            .map(|entry| entry.addr.get_offset())
     }
 
     /// For each of `vmas`, the inventory entry whose extent holds it when it is
@@ -1649,8 +1725,14 @@ impl ConsoleProgram {
         }
         let vma = address.get_offset();
         records.sort_by(|a, b| {
-            (self.is_not_declared_name(vma, &a.name), entry_name_rank(&a.name))
-                .cmp(&(self.is_not_declared_name(vma, &b.name), entry_name_rank(&b.name)))
+            (
+                self.is_not_declared_name(vma, &a.name),
+                entry_name_rank(&a.name),
+            )
+                .cmp(&(
+                    self.is_not_declared_name(vma, &b.name),
+                    entry_name_rank(&b.name),
+                ))
                 .then_with(|| a.name.cmp(&b.name))
         });
         let canonical = records.remove(0);
@@ -1661,9 +1743,9 @@ impl ConsoleProgram {
             .map(|_| EntryProvenance::DefinedObject)
             .unwrap_or_else(|| {
                 if canonical.provenance == EntryProvenance::UndefinedExternal
-                    || records.iter().any(|record| {
-                        record.provenance == EntryProvenance::UndefinedExternal
-                    })
+                    || records
+                        .iter()
+                        .any(|record| record.provenance == EntryProvenance::UndefinedExternal)
                 {
                     EntryProvenance::UndefinedExternal
                 } else {
@@ -1782,7 +1864,9 @@ impl ConsoleProgram {
                 && !self.elf_functions.imports.contains(&addr)
                 && self.entry_is_executable(addr, &sections)
             {
-                if definition.replace(entry).is_some() { return None; }
+                if definition.replace(entry).is_some() {
+                    return None;
+                }
             } else if !self.elf_functions.imports.contains(&addr) {
                 return None;
             }
@@ -1835,7 +1919,9 @@ impl ConsoleProgram {
             candidates.push(scaled);
         }
         candidates.into_iter().find(|&vma| {
-            minted_function_names(&Address::new(Rc::clone(space), vma)).iter().any(|m| m == name)
+            minted_function_names(&Address::new(Rc::clone(space), vma))
+                .iter()
+                .any(|m| m == name)
         })
     }
 
@@ -1966,12 +2052,20 @@ impl ConsoleProgram {
 
     /// Decode an ARM code pointer in a private Thumb context until the query ends.
     pub fn with_thumb_pointer<R>(&self, vma: u64, run: impl FnOnce() -> R) -> KunaResult<R> {
-        let space = Rc::clone(self.arch().manage().get_default_code_space()
-            .ok_or_else(|| KunaError::lowlevel("no default code space"))?);
-        let scope = self.arch().translate().context_scope()
+        let space = Rc::clone(
+            self.arch()
+                .manage()
+                .get_default_code_space()
+                .ok_or_else(|| KunaError::lowlevel("no default code space"))?,
+        );
+        let scope = self
+            .arch()
+            .translate()
+            .context_scope()
             .ok_or_else(|| KunaError::lowlevel("translator does not support scoped context"))?;
         let address = Address::new(space, vma);
-        self.arch().with_context_db_mut(|db| db.set_variable(b"TMode", &address, 1))?;
+        self.arch()
+            .with_context_db_mut(|db| db.set_variable(b"TMode", &address, 1))?;
         let result = run();
         drop(scope);
         Ok(result)
@@ -2052,17 +2146,24 @@ impl ConsoleProgram {
                 .ok_or_else(|| KunaError::lowlevel("no default code space"))?,
         );
         let addr = Address::new(code_space, vma);
-        self.arch().translate().print_assembly_into(&addr, mnem, body)
+        self.arch()
+            .translate()
+            .print_assembly_into(&addr, mnem, body)
     }
 
     /// Lift exactly one instruction, before decompiler passes or SSA construction.
     pub fn raw_pcode_at(&self, vma: u64) -> KunaResult<(int4, Vec<RawPcodeOp>)> {
         let space = Rc::clone(
-            self.arch().manage().get_default_code_space()
+            self.arch()
+                .manage()
+                .get_default_code_space()
                 .ok_or_else(|| KunaError::lowlevel("no default code space"))?,
         );
         let mut emit = RawPcodeEmit::default();
-        let len = self.arch().translate().one_instruction(&mut emit, &Address::new(space, vma))?;
+        let len = self
+            .arch()
+            .translate()
+            .one_instruction(&mut emit, &Address::new(space, vma))?;
         Ok((len, emit.0))
     }
 
@@ -2360,7 +2461,10 @@ impl ConsoleProgram {
 
     /// (kuna `armframes`) Replay `record` at the analysis commit instead of
     /// searching for frames: a `--jobs` worker passes its parent's.
-    pub fn replay_arm_frames(&mut self, record: unlace_analysis::aif::kuna_framereplay::ArmFrameReplay) {
+    pub fn replay_arm_frames(
+        &mut self,
+        record: unlace_analysis::aif::kuna_framereplay::ArmFrameReplay,
+    ) {
         self.arm_frames = Some(record);
     }
 
@@ -2387,10 +2491,7 @@ impl ConsoleProgram {
     /// buries a name the worker had derived correctly. The taken-name set is
     /// built once rather than probed per entry, so seeding a 33,000-function
     /// inventory is linear.
-    pub fn seed_function_inventory(
-        &mut self,
-        entries: &[(String, Address)],
-    ) -> KunaResult<usize> {
+    pub fn seed_function_inventory(&mut self, entries: &[(String, Address)]) -> KunaResult<usize> {
         let _load = self.arch().load_scope();
         self.callwide_changed();
         self.anonymous_symbols.take();
@@ -2402,7 +2503,12 @@ impl ConsoleProgram {
             if taken.contains(name) || self.anonymous_address(name).is_some() {
                 continue;
             }
-            if self.arch().symboltab.find_function_across_scopes(addr).is_some() {
+            if self
+                .arch()
+                .symboltab
+                .find_function_across_scopes(addr)
+                .is_some()
+            {
                 continue;
             }
             let object_location = self.object_location_at(addr.get_offset());
@@ -2444,8 +2550,11 @@ impl ConsoleProgram {
         let num_spaces = self.arch().manage().num_spaces();
         // Clone the (name, addr) pairs so the borrow of `self.arch_mut()` below
         // does not overlap `self.symbols`.
-        let records: Vec<(String, Address)> =
-            self.symbols.iter().map(|s| (s.name.clone(), s.addr.clone())).collect();
+        let records: Vec<(String, Address)> = self
+            .symbols
+            .iter()
+            .map(|s| (s.name.clone(), s.addr.clone()))
+            .collect();
         let aliases = self.function_address_aliases.clone();
         let arch = self.arch_mut();
         for (name, addr) in records {
@@ -2456,11 +2565,19 @@ impl ConsoleProgram {
             if arch.symboltab.find_function(scope, &addr).is_some() {
                 continue;
             }
-            arch.symboltab.add_function(scope, &addr, &basename, min_size, type_code.clone())?;
+            arch.symboltab
+                .add_function(scope, &addr, &basename, min_size, type_code.clone())?;
         }
-        let code = arch.manage().get_default_code_space().expect("loaded code space").clone();
+        let code = arch
+            .manage()
+            .get_default_code_space()
+            .expect("loaded code space")
+            .clone();
         for (alias, canonical) in aliases {
-            arch.symboltab.add_function_alias(&Address::new(code.clone(), canonical), &Address::new(code.clone(), alias))?;
+            arch.symboltab.add_function_alias(
+                &Address::new(code.clone(), canonical),
+                &Address::new(code.clone(), alias),
+            )?;
         }
         Ok(())
     }
@@ -2470,11 +2587,19 @@ impl ConsoleProgram {
     /// `__thiscall` model for an instance method.
     fn lock_dex_prototypes(&mut self) {
         let models = self.arch().dex_models().to_vec();
-        let Some(space) = self.arch().manage().get_default_code_space().cloned() else { return };
-        for (model, function) in models.iter().flat_map(|m| m.functions().into_iter().map(move |f| (m, f))) {
-            let Ok((pieces, name)) =
-                model.method_prototype(function.method_idx, function.is_static, false, self.arch().types())
-            else {
+        let Some(space) = self.arch().manage().get_default_code_space().cloned() else {
+            return;
+        };
+        for (model, function) in models
+            .iter()
+            .flat_map(|m| m.functions().into_iter().map(move |f| (m, f)))
+        {
+            let Ok((pieces, name)) = model.method_prototype(
+                function.method_idx,
+                function.is_static,
+                false,
+                self.arch().types(),
+            ) else {
                 continue;
             };
             let mut pieces = pieces;
@@ -2517,9 +2642,10 @@ impl ConsoleProgram {
         self.anonymous_symbols.take();
         if let Some(prior) = self.anonymous_address(name) {
             if sole || prior == addr {
-                let index = self.anonymous_entries.binary_search_by_key(
-                    &prior.get_offset(), |entry| entry.0,
-                ).unwrap();
+                let index = self
+                    .anonymous_entries
+                    .binary_search_by_key(&prior.get_offset(), |entry| entry.0)
+                    .unwrap();
                 self.anonymous_entries.remove(index);
             }
         }
@@ -2564,7 +2690,10 @@ impl ConsoleProgram {
     /// [`UNBOUNDED_SIZE`] when none was declared — the value every load of that
     /// entry passes as the analysis-size bound.
     pub fn declared_extent(&self, vma: u64) -> int4 {
-        self.declared_extents.get(&vma).copied().unwrap_or(UNBOUNDED_SIZE)
+        self.declared_extents
+            .get(&vma)
+            .copied()
+            .unwrap_or(UNBOUNDED_SIZE)
     }
 
     /// Is any function extent declared for this program?  Cheap enough to gate a
@@ -2584,7 +2713,9 @@ impl ConsoleProgram {
     pub fn declarations(
         &self,
     ) -> impl Iterator<Item = (u64, crate::kuna_declaredbytes::DeclaredBytes)> + '_ {
-        self.declared_bytes.iter().map(|(&vma, decl)| (vma, decl.bytes))
+        self.declared_bytes
+            .iter()
+            .map(|(&vma, decl)| (vma, decl.bytes))
     }
 
     /// (kuna, issue #1438) One sentence per declared function whose extent is
@@ -2607,7 +2738,10 @@ impl ConsoleProgram {
     /// the reported name of that entry and every other registration at the same
     /// address becomes an alias.
     fn is_not_declared_name(&self, vma: u64, name: &str) -> bool {
-        self.declared_names.get(&self.thumb_normalized(vma)).map(String::as_str) != Some(name)
+        self.declared_names
+            .get(&self.thumb_normalized(vma))
+            .map(String::as_str)
+            != Some(name)
     }
 
     // --- the `--assert` override plane (see `crate::assertions`) -------------
@@ -2616,14 +2750,19 @@ impl ConsoleProgram {
     /// directive so the report keeps the caller's own order however the
     /// directives are later dispatched.
     pub fn set_assertions(&mut self, directives: Vec<crate::assertions::Directive>) {
-        if directives.iter().any(|directive| matches!(directive.body,
-            crate::assertions::Body::Flow { .. }
-            | crate::assertions::Body::Callee { .. }
-            | crate::assertions::Body::CallProto { .. }
-            | crate::assertions::Body::Param { func: None, .. }
-            | crate::assertions::Body::Return { func: None, .. }))
-        {
-            self.callwide_unavailable("selected function flow or storage assertions lack a full image proof");
+        if directives.iter().any(|directive| {
+            matches!(
+                directive.body,
+                crate::assertions::Body::Flow { .. }
+                    | crate::assertions::Body::Callee { .. }
+                    | crate::assertions::Body::CallProto { .. }
+                    | crate::assertions::Body::Param { func: None, .. }
+                    | crate::assertions::Body::Return { func: None, .. }
+            )
+        }) {
+            self.callwide_unavailable(
+                "selected function flow or storage assertions lack a full image proof",
+            );
         }
         self.assertion_outcomes = vec![None; directives.len()];
         self.assertions = directives;
@@ -2647,7 +2786,9 @@ impl ConsoleProgram {
             .iter()
             .zip(self.assertion_outcomes.iter())
             .map(|(directive, outcome)| {
-                outcome.clone().unwrap_or_else(|| crate::assertions::unclaimed(directive))
+                outcome
+                    .clone()
+                    .unwrap_or_else(|| crate::assertions::unclaimed(directive))
             })
             .collect()
     }
@@ -2708,8 +2849,9 @@ impl ConsoleProgram {
         let min_size = self.arch().min_funcsymbol_size;
         let num_spaces = self.arch().manage().num_spaces() as int4;
         let arch = self.arch_mut();
-        let (scope, basename) =
-            arch.symboltab.find_create_scope_from_symbol_name(&name, "::", None, num_spaces)?;
+        let (scope, basename) = arch
+            .symboltab
+            .find_create_scope_from_symbol_name(&name, "::", None, num_spaces)?;
         let name = match arch.symboltab.find_function_across_scopes(&addr) {
             Some((sym, _)) => match &explicit {
                 Some(_) => {
@@ -2722,8 +2864,9 @@ impl ConsoleProgram {
                 None => arch.symboltab.symbol(sym).get_display_name().to_string(),
             },
             None => {
-                let sym =
-                    arch.symboltab.add_function(scope, &addr, &basename, min_size, type_code)?;
+                let sym = arch
+                    .symboltab
+                    .add_function(scope, &addr, &basename, min_size, type_code)?;
                 if explicit.is_some() {
                     install_named_call_fixup(arch, sym, &basename);
                 }
@@ -2738,7 +2881,11 @@ impl ConsoleProgram {
         let bytes = crate::kuna_declaredbytes::measure(self, vma, extent);
         self.declared_bytes.insert(
             vma,
-            crate::kuna_declaredbytes::Declaration { name: name.clone(), size: extent, bytes },
+            crate::kuna_declaredbytes::Declaration {
+                name: name.clone(),
+                size: extent,
+                bytes,
+            },
         );
         if explicit.is_some() {
             self.declared_names.insert(vma, name.clone());
@@ -2761,7 +2908,12 @@ impl ConsoleProgram {
             None => addr,
         };
         let name = match self.arch().symboltab.find_function_across_scopes(&addr) {
-            Some((sym, _)) => self.arch().symboltab.symbol(sym).get_display_name().to_string(),
+            Some((sym, _)) => self
+                .arch()
+                .symboltab
+                .symbol(sym)
+                .get_display_name()
+                .to_string(),
             None => {
                 let name = self.arch().name_function(&addr);
                 let type_code = self.arch().types().get_type_code()?;
@@ -2783,11 +2935,19 @@ impl ConsoleProgram {
     /// (kuna `fidproto`) After a FID / FLIRT rename, park the libc prototype the
     /// name (or one of its `nameladder` spellings) has, and mark the function
     /// no-return when the no-return list names it.
-    fn apply_renamed_library_facts(&mut self, sid: unlace_decomp::database::SymbolId, name: &str, addr: &Address) {
+    fn apply_renamed_library_facts(
+        &mut self,
+        sid: unlace_decomp::database::SymbolId,
+        name: &str,
+        addr: &Address,
+    ) {
         let spellings: Vec<String> = std::iter::once(name.to_string())
             .chain(unlace_analysis::protos::kuna_nameladder::fallbacks(name))
             .collect();
-        if let Some(found) = spellings.iter().find(|n| self.has_declared_libc_prototype(n)) {
+        if let Some(found) = spellings
+            .iter()
+            .find(|n| self.has_declared_libc_prototype(n))
+        {
             self.seed_declared_libc_prototype(found, addr);
         }
         if unlace_analysis::loader::noreturn::listed_noreturn(name) {
@@ -2836,9 +2996,11 @@ impl ConsoleProgram {
             unlace_analysis::protos::declared_libc_prototype(name, types, word_size, layout)
         };
         let whole = unlace_decomp::kuna_typedcallabi::returns_doubles_whole(self.arch());
-        let pieces = pieces.filter(|p| whole || !unlace_decomp::kuna_typedcallabi::declares_a_float(p));
+        let pieces =
+            pieces.filter(|p| whole || !unlace_decomp::kuna_typedcallabi::declares_a_float(p));
         if let Some(pieces) = pieces {
-            self.arch_mut().set_function_prototype_pieces_at(addr, pieces);
+            self.arch_mut()
+                .set_function_prototype_pieces_at(addr, pieces);
         }
     }
 
@@ -2861,7 +3023,12 @@ impl ConsoleProgram {
     pub fn dwarf_locals_for(
         &self,
         func_addr: u64,
-    ) -> Vec<(String, Rc<unlace_decomp::dtype::Datatype>, Address, unlace_base::types::uint4)> {
+    ) -> Vec<(
+        String,
+        Rc<unlace_decomp::dtype::Datatype>,
+        Address,
+        unlace_base::types::uint4,
+    )> {
         use unlace_decomp::varnode::varnode_flags;
         let Some(stack) = self.arch().manage().get_stack_space() else {
             return Vec::new();
@@ -2879,20 +3046,15 @@ impl ConsoleProgram {
             locals,
             stack.wrap_offset(u64::MAX),
         )
-            .into_iter()
-            .map(|(name, ty, off)| {
-                // Wrap the signed stack offset to the stack space's unsigned address
-                // (negative locals live at the high end of the unsigned range, the
-                // `map addr s0xffff...` convention).
-                let waddr = stack.wrap_offset(off as u64);
-                (
-                    name,
-                    ty,
-                    Address::new(Rc::clone(stack), waddr),
-                    flags,
-                )
-            })
-            .collect()
+        .into_iter()
+        .map(|(name, ty, off)| {
+            // Wrap the signed stack offset to the stack space's unsigned address
+            // (negative locals live at the high end of the unsigned range, the
+            // `map addr s0xffff...` convention).
+            let waddr = stack.wrap_offset(off as u64);
+            (name, ty, Address::new(Rc::clone(stack), waddr), flags)
+        })
+        .collect()
     }
 
     /// Add a successfully applied byte overlay to the deferred walk, clipped
@@ -2901,7 +3063,10 @@ impl ConsoleProgram {
         self.rust_profile_image_modified = true;
         self.callwide_unavailable("effective byte overlays require a new complete image proof");
         if self.pending_entry_thumb.is_none()
-            || !self.analysis_code_space.as_ref().zip(addr.get_space())
+            || !self
+                .analysis_code_space
+                .as_ref()
+                .zip(addr.get_space())
                 .is_some_and(|(code, space)| Rc::ptr_eq(code, space))
         {
             return;
@@ -2910,7 +3075,9 @@ impl ConsoleProgram {
         let Some(end) = start.checked_add(size as u64) else {
             return;
         };
-        let spans: Vec<_> = self.sections().into_iter()
+        let spans: Vec<_> = self
+            .sections()
+            .into_iter()
             .filter_map(|(base, size, flags)| {
                 if flags & section_flags::CODE == 0 {
                     return None;
@@ -2932,7 +3099,11 @@ impl ConsoleProgram {
         };
         for fact in facts {
             let addr = Address::new(Rc::clone(&code_space), fact.addr);
-            let sid = self.arch().symboltab.find_function_across_scopes(&addr).map(|(sid, _)| sid);
+            let sid = self
+                .arch()
+                .symboltab
+                .find_function_across_scopes(&addr)
+                .map(|(sid, _)| sid);
             if let Some(sid) = sid {
                 self.arch_mut().symboltab.set_function_no_return(sid, true);
             }
@@ -2962,25 +3133,40 @@ impl ConsoleProgram {
             .filter(|(_, _, flags)| flags & section_flags::CODE != 0)
             .map(|(addr, size, _)| (addr, addr.saturating_add(size)))
             .collect();
-        let mut seeds: Vec<u64> =
-            self.pending_synthetic_entries.iter().map(|addr| addr.get_offset()).collect();
+        let mut seeds: Vec<u64> = self
+            .pending_synthetic_entries
+            .iter()
+            .map(|addr| addr.get_offset())
+            .collect();
         // (kuna `funcstart_patterns`) The prologue patterns of the target's
         // language, swept over the same executable bytes, seed the walk too.
         if self.arch().analysis_funcstart_patterns {
-            if let Some(set) = unlace_analysis::entry::patterns::for_language(self.arch().get_description()) {
+            if let Some(set) =
+                unlace_analysis::entry::patterns::for_language(self.arch().get_description())
+            {
                 for &(lo, hi) in &exec {
-                    let Ok(size) = usize::try_from(hi - lo) else { continue };
+                    let Ok(size) = usize::try_from(hi - lo) else {
+                        continue;
+                    };
                     if let Some(bytes) = self.read_bytes(lo, size) {
                         let weak_ok = set.only_weak();
-                        seeds.extend(set.scan_hits(lo, &bytes).into_iter().filter(|h| weak_ok || !h.weak).map(|h| h.vma));
+                        seeds.extend(
+                            set.scan_hits(lo, &bytes)
+                                .into_iter()
+                                .filter(|h| weak_ok || !h.weak)
+                                .map(|h| h.vma),
+                        );
                     }
                 }
                 seeds.sort_unstable();
                 seeds.dedup();
             }
         }
-        let mut known: BTreeSet<u64> =
-            self.pending_synthetic_entries.iter().map(|addr| addr.get_offset()).collect();
+        let mut known: BTreeSet<u64> = self
+            .pending_synthetic_entries
+            .iter()
+            .map(|addr| addr.get_offset())
+            .collect();
         let found = {
             let arch = self.arch();
             let mz = self.mz_evidence.as_ref();
@@ -2995,7 +3181,8 @@ impl ConsoleProgram {
         };
         for vma in found.entries.iter().copied().chain(seeds) {
             if known.insert(vma) {
-                self.pending_synthetic_entries.push(Address::new(Rc::clone(&code_space), vma));
+                self.pending_synthetic_entries
+                    .push(Address::new(Rc::clone(&code_space), vma));
             }
         }
         self.flow_ends = found.flow_ends;
@@ -3026,13 +3213,20 @@ impl ConsoleProgram {
             self.analysis_image = None;
             return;
         }
-        let Some((path, bytes, _)) = self.analysis_image.as_ref() else { return };
+        let Some((path, bytes, _)) = self.analysis_image.as_ref() else {
+            return;
+        };
         let target = self.arch.arch_id().to_string();
         let Ok(image) = ObjectLoadImage::from_bytes_silent_with_target(path, bytes, &target) else {
             return;
         };
         let arch = self.arch();
-        let split = unlace_analysis::passes::run_default_analyses_per_pass(bytes, &image, arch, arch.translate());
+        let split = unlace_analysis::passes::run_default_analyses_per_pass(
+            bytes,
+            &image,
+            arch,
+            arch.translate(),
+        );
         self.pending_analysis.extend(split);
     }
 
@@ -3065,7 +3259,9 @@ impl ConsoleProgram {
         let rust_profile_request = self.rust_profile_request.take();
         let apply_rust_names = std::mem::take(&mut self.rust_profile_apply);
         if apply_rust_names && (self.rust_profile_image_modified || self.analysis_image.is_none()) {
-            return Err(KunaError::lowlevel("Rust signature application requires an unmodified object image before its analysis commit"));
+            return Err(KunaError::lowlevel(
+                "Rust signature application requires an unmodified object image before its analysis commit",
+            ));
         }
         self.run_object_view_passes();
         // (kuna `entrythumbflow`) The entry-reachable Thumb walk, taken out of
@@ -3108,14 +3304,13 @@ impl ConsoleProgram {
                 // record and replay are complete.
                 for paint in &flow.paints {
                     let begin = Address::new(Rc::clone(&code_space), paint.addr);
-                    let end = paint.end.map(|end| Address::new(Rc::clone(&code_space), end));
+                    let end = paint
+                        .end
+                        .map(|end| Address::new(Rc::clone(&code_space), end));
                     self.arch().with_context_db_mut(|db| match end {
-                        Some(end) => db.set_variable_region(
-                            paint.var.as_bytes(),
-                            &begin,
-                            &end,
-                            paint.value,
-                        ),
+                        Some(end) => {
+                            db.set_variable_region(paint.var.as_bytes(), &begin, &end, paint.value)
+                        }
                         None => db.set_variable(paint.var.as_bytes(), &begin, paint.value),
                     })?;
                 }
@@ -3134,11 +3329,12 @@ impl ConsoleProgram {
             // `object::File`. Discover the rest first, after the entry Thumb walk
             // has painted the decode mode, so the entries it finds are named and
             // installed by the same loop.
-            let dos_noreturn = if matches!(self.container, ProgramContainer::Raw | ProgramContainer::Te) {
-                self.discover_raw_entries()
-            } else {
-                Vec::new()
-            };
+            let dos_noreturn =
+                if matches!(self.container, ProgramContainer::Raw | ProgramContainer::Te) {
+                    self.discover_raw_entries()
+                } else {
+                    Vec::new()
+                };
             let entries = std::mem::take(&mut self.pending_synthetic_entries);
             let symbols = entries
                 .into_iter()
@@ -3157,7 +3353,8 @@ impl ConsoleProgram {
             self.read_loader_symbols()?;
             self.mark_no_return(&dos_noreturn);
         }
-        if self.pending_analysis.is_empty() && self.loader_data_objects.is_empty()
+        if self.pending_analysis.is_empty()
+            && self.loader_data_objects.is_empty()
             && rust_profile_request.is_none()
         {
             // Drop the deferred-Listing stash too: nothing to commit against, and
@@ -3225,7 +3422,9 @@ impl ConsoleProgram {
                     match RustProfileReport::reject_unsupported(&bytes) {
                         Some(report) => {
                             if apply_rust_names {
-                                return Err(KunaError::lowlevel("unsupported image: Rust signature application requires a linked little-endian x86-64 ELF image"));
+                                return Err(KunaError::lowlevel(
+                                    "unsupported image: Rust signature application requires a linked little-endian x86-64 ELF image",
+                                ));
                             }
                             self.rust_profile_report = Some(report);
                             None
@@ -3239,57 +3438,60 @@ impl ConsoleProgram {
                     unlace_analysis::loader::ImportProofScope::resume(&bytes, import_proofs);
                 let image_path = std::path::Path::new(&path);
                 let image_path = image_path.exists().then_some(image_path);
-                    // Deferred entry-discovery passes FIRST: their entries must be
-                    // in `merged` before `committed_entry_seeds` is read below, which
-                    // is what hands the load-time inventory to the Listing walk as
-                    // extra roots (`armdiscseed`).
-                    {
-                        let arch = self.arch();
-                        let entry_out =
-                            unlace_analysis::passes::run_deferred_entry_passes_without_image(
+                // Deferred entry-discovery passes FIRST: their entries must be
+                // in `merged` before `committed_entry_seeds` is read below, which
+                // is what hands the load-time inventory to the Listing walk as
+                // extra roots (`armdiscseed`).
+                {
+                    let arch = self.arch();
+                    let entry_out =
+                        unlace_analysis::passes::run_deferred_entry_passes_without_image(
                             &bytes,
                             arch,
                             image_path,
                             &|id| analysis_pass_enabled(arch, id),
                         );
-                        for (_, out) in entry_out {
-                            merged.merge(out);
-                        }
+                    for (_, out) in entry_out {
+                        merged.merge(out);
                     }
-                    // Deferred Listing build + consumer/fast-inventory run, gated
-                    // on the matching option. The call-fixup seed list is the names
-                    // the load-time pass flagged resolved to addresses via the
-                    // (already installed) symbol table.
-                    if want_listing || want_fast_funcdisc || profile_request.is_some() {
-                        let mut committed_entry_seeds = merged.entries.clone();
-                        committed_entry_seeds.sort_unstable();
-                        committed_entry_seeds.dedup();
-                        let arch = self.arch();
-                        // The call-fixup seed list is empty: a fixup'd callee is also
-                        // skipped via the consumer's no-return-disc `function_at(..)`
-                        // checks, and there is no fixup-address index here. The
-                        // no-return seeds (above) are the load-bearing skip set.
-                        //
-                        // (kuna `armdiscseed`) The entries the load-time oracles have
-                        // already agreed on are handed over as extra walk roots. They
-                        // are read off `merged` rather than recomputed, so a pass whose
-                        // gate rejected it above never seeds the walk either.
-                        // The walk's thread plan (`kuna --jobs N`): built HERE,
-                        // once, because this is where the engine is and because
-                        // the Listing is rebuilt several times below. The image
-                        // share it takes is released with the plan, before any
-                        // later writer of the loader's bytes.
-                        let plan = unlace_analysis::listing::WalkPlan::from_env(arch);
-                        let mut rust_report = None;
-                        let mut observe_rust = |file: &object::File<'_>, listing: &unlace_analysis::listing::Listing| {
+                }
+                // Deferred Listing build + consumer/fast-inventory run, gated
+                // on the matching option. The call-fixup seed list is the names
+                // the load-time pass flagged resolved to addresses via the
+                // (already installed) symbol table.
+                if want_listing || want_fast_funcdisc || profile_request.is_some() {
+                    let mut committed_entry_seeds = merged.entries.clone();
+                    committed_entry_seeds.sort_unstable();
+                    committed_entry_seeds.dedup();
+                    let arch = self.arch();
+                    // The call-fixup seed list is empty: a fixup'd callee is also
+                    // skipped via the consumer's no-return-disc `function_at(..)`
+                    // checks, and there is no fixup-address index here. The
+                    // no-return seeds (above) are the load-bearing skip set.
+                    //
+                    // (kuna `armdiscseed`) The entries the load-time oracles have
+                    // already agreed on are handed over as extra walk roots. They
+                    // are read off `merged` rather than recomputed, so a pass whose
+                    // gate rejected it above never seeds the walk either.
+                    // The walk's thread plan (`kuna --jobs N`): built HERE,
+                    // once, because this is where the engine is and because
+                    // the Listing is rebuilt several times below. The image
+                    // share it takes is released with the plan, before any
+                    // later writer of the loader's bytes.
+                    let plan = unlace_analysis::listing::WalkPlan::from_env(arch);
+                    let mut rust_report = None;
+                    let mut observe_rust =
+                        |file: &object::File<'_>, listing: &unlace_analysis::listing::Listing| {
                             if let Some(request) = profile_request {
                                 rust_report = Some(request.evaluate(file, listing));
                             }
                         };
-                        let observer = profile_request.map(|_| {
-                            &mut observe_rust as &mut dyn FnMut(&object::File<'_>, &unlace_analysis::listing::Listing)
-                        });
-                        let consumer_out = unlace_analysis::passes::run_listing_consumers_replaying_observed(
+                    let observer = profile_request.map(|_| {
+                        &mut observe_rust
+                            as &mut dyn FnMut(&object::File<'_>, &unlace_analysis::listing::Listing)
+                    });
+                    let consumer_out =
+                        unlace_analysis::passes::run_listing_consumers_replaying_observed(
                             &bytes,
                             arch,
                             arch.translate(),
@@ -3301,50 +3503,63 @@ impl ConsoleProgram {
                             self.arm_frames.as_ref(),
                             observer,
                         );
-                        if profile_request.is_some() {
-                            let report = rust_report.unwrap_or_else(|| RustProfileReport::unavailable_for(&bytes));
-                            if apply_rust_names {
-                                let profile = report.report.as_ref().ok_or_else(|| KunaError::lowlevel(
-                                    report.error.as_deref().unwrap_or("Rust signature profile is unavailable")))?;
-                                let mut names = unlace_analysis::pass::AnalysisOutput::default();
-                                names.fid_names = profile.agreed_names().map_err(KunaError::lowlevel)?;
-                                names.sanitize_names(unlace_decomp::kuna_symbolnamechars::symbolnamechars_mode());
-                                merged.merge(names);
-                            }
-                            self.rust_profile_report = Some(report);
+                    if profile_request.is_some() {
+                        let report = rust_report
+                            .unwrap_or_else(|| RustProfileReport::unavailable_for(&bytes));
+                        if apply_rust_names {
+                            let profile = report.report.as_ref().ok_or_else(|| {
+                                KunaError::lowlevel(
+                                    report
+                                        .error
+                                        .as_deref()
+                                        .unwrap_or("Rust signature profile is unavailable"),
+                                )
+                            })?;
+                            let mut names = unlace_analysis::pass::AnalysisOutput::default();
+                            names.fid_names =
+                                profile.agreed_names().map_err(KunaError::lowlevel)?;
+                            names.sanitize_names(
+                                unlace_decomp::kuna_symbolnamechars::symbolnamechars_mode(),
+                            );
+                            merged.merge(names);
                         }
-                        for (id, mut out) in consumer_out {
-                            if let Some(record) = out.arm_frames.take() {
-                                self.arm_frames = Some(record);
-                            }
-                            if analysis_pass_enabled(self.arch(), id) {
-                                merged.merge(out);
-                            }
+                        self.rust_profile_report = Some(report);
+                    }
+                    for (id, mut out) in consumer_out {
+                        if let Some(record) = out.arm_frames.take() {
+                            self.arm_frames = Some(record);
+                        }
+                        if analysis_pass_enabled(self.arch(), id) {
+                            merged.merge(out);
                         }
                     }
-                    // Deferred scalar/operand reference-markup pass, gated on the
-                    // operand_refs flag (the kuna analog of Ghidra's
-                    // ScalarOperandAnalyzer). Independent of the Listing tier — it
-                    // does its own linear decode (the Listing never populates the
-                    // data references it needs). Its facts go through the existing
-                    // string/readonly commit arms.
-                    if want_operand_refs {
-                        let out =
-                            unlace_analysis::passes::run_operand_refs(&bytes, self.arch());
-                        merged.merge(out);
-                    } else if want_wide32_alone {
-                        merged.merge(unlace_analysis::passes::run_wide_strings32(
-                            &bytes,
-                            self.arch(),
-                        ));
-                    }
-                    if want_addrtable {
-                        merged.merge(unlace_analysis::passes::run_addrtable(&bytes, self.arch(), image_path));
-                    }
-                    if merged.fid_names.iter().any(|m| m.by_signature) {
-                        zero_size_data_names =
-                            unlace_analysis::flirt::kuna_elf_data_names::zero_size_data_names(&bytes);
-                    }
+                }
+                // Deferred scalar/operand reference-markup pass, gated on the
+                // operand_refs flag (the kuna analog of Ghidra's
+                // ScalarOperandAnalyzer). Independent of the Listing tier — it
+                // does its own linear decode (the Listing never populates the
+                // data references it needs). Its facts go through the existing
+                // string/readonly commit arms.
+                if want_operand_refs {
+                    let out = unlace_analysis::passes::run_operand_refs(&bytes, self.arch());
+                    merged.merge(out);
+                } else if want_wide32_alone {
+                    merged.merge(unlace_analysis::passes::run_wide_strings32(
+                        &bytes,
+                        self.arch(),
+                    ));
+                }
+                if want_addrtable {
+                    merged.merge(unlace_analysis::passes::run_addrtable(
+                        &bytes,
+                        self.arch(),
+                        image_path,
+                    ));
+                }
+                if merged.fid_names.iter().any(|m| m.by_signature) {
+                    zero_size_data_names =
+                        unlace_analysis::flirt::kuna_elf_data_names::zero_size_data_names(&bytes);
+                }
             }
         } else {
             // Both deferred passes off: drop the stash (no deferred build).
@@ -3381,7 +3596,10 @@ impl ConsoleProgram {
         // function: drop every entry inside one, its start included.
         let mut eh_cold = std::mem::take(&mut merged.eh_cold);
         eh_cold.sort_unstable();
-        unlace_analysis::entry::kuna_ehcold::suppress_eh_cold_entries(&mut merged.entries, &eh_cold);
+        unlace_analysis::entry::kuna_ehcold::suppress_eh_cold_entries(
+            &mut merged.entries,
+            &eh_cold,
+        );
         // (kuna, `pdbinterior`) The same rejection inside PDB procedures, on its own
         // terms: see `suppress_pdb_interior_entries`.
         suppress_pdb_interior_entries(self.arch(), &code_space, &mut merged);
@@ -3412,7 +3630,10 @@ impl ConsoleProgram {
         seeds.sort_unstable();
         seeds.dedup();
         self.arch_mut().kuna_float_scan =
-            Some(Rc::new(unlace_decomp::kuna_floatglobals::FloatScan { sections, seeds }));
+            Some(Rc::new(unlace_decomp::kuna_floatglobals::FloatScan {
+                sections,
+                seeds,
+            }));
     }
 }
 
@@ -3446,21 +3667,33 @@ fn suppress_pdb_interior_entries(
         .map(|s| (s.addr, s.name.clone()))
         .collect();
     named.sort_unstable();
-    let mut noreturn: Vec<u64> =
-        merged.noreturn.iter().map(|f| f.addr).filter(|&a| a != 0).collect();
+    let mut noreturn: Vec<u64> = merged
+        .noreturn
+        .iter()
+        .map(|f| f.addr)
+        .filter(|&a| a != 0)
+        .collect();
     noreturn.sort_unstable();
     let at = |vma: u64| Address::new(Rc::clone(code_space), vma);
     let names_at = |vma: u64| {
         let lo = named.partition_point(|(a, _)| *a < vma);
-        named[lo..].iter().take_while(move |(a, _)| *a == vma).map(|(_, n)| n.as_str())
+        named[lo..]
+            .iter()
+            .take_while(move |(a, _)| *a == vma)
+            .map(|(_, n)| n.as_str())
     };
     let is_function = |start: u64| {
         names_at(start).next().is_some()
-            || arch.symboltab.find_function_across_scopes(&at(start)).is_some()
+            || arch
+                .symboltab
+                .find_function_across_scopes(&at(start))
+                .is_some()
     };
     let no_return = |target: u64| {
         noreturn.binary_search(&target).is_ok()
-            || arch.symboltab.function_is_no_return_across_scopes(&at(target))
+            || arch
+                .symboltab
+                .function_is_no_return_across_scopes(&at(target))
             || (arch.analysis_noreturn_known
                 && (names_at(target).any(is_known_noreturn_name)
                     || arch
@@ -3512,10 +3745,10 @@ fn install_named_call_fixup(
     else {
         return;
     };
-    let injectid = arch
-        .pcodeinjectlib
-        .base
-        .get_payload_id(unlace_decomp::pcodeinject::CALLFIXUP_TYPE, fixup_name.as_bytes());
+    let injectid = arch.pcodeinjectlib.base.get_payload_id(
+        unlace_decomp::pcodeinject::CALLFIXUP_TYPE,
+        fixup_name.as_bytes(),
+    );
     if injectid < 0 || arch.symboltab.function_inject_id_for_symbol(sid) >= 0 {
         return;
     }
@@ -3527,7 +3760,9 @@ fn install_named_call_fixup(
 /// enabled (a new pass with no registered gate still runs — fail-open, additive).
 fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
     match pass_id {
-        "armframes" => arch.analysis_listing && arch.analysis_funcstart_patterns && arch.analysis_armframes,
+        "armframes" => {
+            arch.analysis_listing && arch.analysis_funcstart_patterns && arch.analysis_armframes
+        }
         "noreturn_known" => arch.analysis_noreturn_known,
         "gonoreturn" => arch.analysis_noreturn_known,
         // (kuna) PE/Mach-O import-slot call binding — typed-slot `externref`
@@ -3561,7 +3796,6 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // `.gdt` stand-in, seeded onto IMPORTED API names only and keyed by entry
         // address. Facts computed at LOAD, COMMITTED only when this gate is on, so
         // `off` renders exactly what no Win32 prototype at all renders.
-
         "tlsnames" => arch.analysis_tlsnames,
         "uefi" => arch.analysis_uefi,
         "strings" => arch.analysis_strings,
@@ -3608,7 +3842,6 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // single-function FDE bodies and the commit rejects any discovered entry
         // strictly inside one. Default-ON; with the gate off the fact stream is
         // dropped here and the discovery set is exactly what it was before.
-
         "ehcold" => arch.analysis_ehcold,
         "importvote" => arch.analysis_importvote,
         // (kuna) PDB-procedure-interior entry suppression — the extents come out of
@@ -3683,7 +3916,6 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // its own -- it shapes the `aif` accept list inside `run_aif`, which the
         // `aif` arm above already gates. Registered here so the fail-open
         // `_ => true` never silently re-enables a pass id that does not exist.
-
         "vtabletypes" => arch.analysis_vtabletypes,
         // (kuna, GH-299) The AIF filler reject, shaping the `aif` accept list the
         // same way; registered for the same fail-open reason.
@@ -3792,7 +4024,9 @@ impl EntryNames {
         want: &'a str,
     ) -> impl Iterator<Item = u64> + 'a {
         hashed(&self.aliased, want).filter(move |vma| {
-            loader_aliases.get(vma).is_some_and(|names| names.iter().any(|name| name == want))
+            loader_aliases
+                .get(vma)
+                .is_some_and(|names| names.iter().any(|name| name == want))
         })
     }
 }
@@ -3804,7 +4038,10 @@ fn name_hash(name: &str) -> u64 {
     hasher.finish()
 }
 
-fn hashed<'a, T: Copy>(index: &'a [(u64, T)], want: &str) -> impl Iterator<Item = T> + 'a + use<'a, T> {
+fn hashed<'a, T: Copy>(
+    index: &'a [(u64, T)],
+    want: &str,
+) -> impl Iterator<Item = T> + 'a + use<'a, T> {
     let hash = name_hash(want);
     let lo = index.partition_point(|&(key, _)| key < hash);
     let hi = lo + index[lo..].partition_point(|&(key, _)| key == hash);
@@ -3995,7 +4232,10 @@ fn build_registry() -> IdRegistry {
 /// root wins (mirroring the C++ `scanForSleighDirectories` over the recorded
 /// roots).  A root may also be a tree held in memory
 /// ([`unlace_decomp::kuna_memoryspecs::MemorySpecs`]).
-fn scan_language_database(spec_roots: &[impl IntoSpecRoot], registry: &IdRegistry) -> KunaResult<LanguageDatabase> {
+fn scan_language_database(
+    spec_roots: &[impl IntoSpecRoot],
+    registry: &IdRegistry,
+) -> KunaResult<LanguageDatabase> {
     let mut db = LanguageDatabase::new();
     for root in spec_roots {
         db.add_spec_root(&root.to_spec_root());
@@ -4073,7 +4313,9 @@ fn find_binaryimage(root: &Rc<Element>) -> Option<Rc<Element>> {
 
 /// Read an attribute as a `String` (lossy ASCII), `None` if absent.
 fn attr(el: &Element, name: &str) -> Option<String> {
-    el.get_attribute_value(name).ok().map(|b| String::from_utf8_lossy(b).into_owned())
+    el.get_attribute_value(name)
+        .ok()
+        .map(|b| String::from_utf8_lossy(b).into_owned())
 }
 
 /// Run the spec-file resolution, translator build, and `Architecture::init`
@@ -4093,7 +4335,8 @@ fn build_engine_and_init(sleigh: &mut SleighArchitecture, db: &LanguageDatabase)
     let resolved_sla = specs
         .slafile
         .ok_or_else(|| KunaError::lowlevel("build_spec_file resolved no .sla"))?;
-    let sla = db.read_spec(&resolved_sla)
+    let sla = db
+        .read_spec(&resolved_sla)
         .map_err(|e| KunaError::lowlevel(format!("read sla {resolved_sla}: {e}")))?;
 
     // The loader is handed to the translator as a dummy first; the real opened
@@ -4244,14 +4487,20 @@ pub(crate) fn bootstrap_xml_image(
     let img = arch
         .take_loader()
         .ok_or_else(|| KunaError::lowlevel("loader vanished after open"))?;
-    arch.sleigh_mut().base_mut().unwrap().set_loader(Box::new(img));
+    arch.sleigh_mut()
+        .base_mut()
+        .unwrap()
+        .set_loader(Box::new(img));
 
     // Apply the collected read-only ranges to the symbol table's property map
     // (C++ `symboltab->setPropertyRange(Varnode::readonly, *iter)`).
     if let Some(base) = arch.sleigh_mut().base_mut() {
         for (first, last_open) in &readonly_ranges {
-            base.symboltab
-                .set_property_range(unlace_decomp::varnode::varnode_flags::readonly, first, last_open);
+            base.symboltab.set_property_range(
+                unlace_decomp::varnode::varnode_flags::readonly,
+                first,
+                last_open,
+            );
         }
     }
 
@@ -4261,7 +4510,12 @@ pub(crate) fn bootstrap_xml_image(
     // loader/adjustvma machinery is spent; the engine owns the opened image).
     // The XML path runs no analysis tier, so no facts are stashed and the gated
     // commit at `read symbols` is a no-op (parity is structurally untouched).
-    let mut prog = empty_program(arch.into_sleigh(), registry, ProgramContainer::Xml, description);
+    let mut prog = empty_program(
+        arch.into_sleigh(),
+        registry,
+        ProgramContainer::Xml,
+        description,
+    );
     prog.symbols = SymbolStream::from_loader(symbols);
     // C++ `conf->readLoaderSymbols("::")` (testfunction.cc:160 / consolemain.cc:104):
     // install the binaryimage symbols as FunctionSymbols so a CALL to one resolves
@@ -4421,7 +4675,9 @@ fn install_input_isa(
     arch.input_arm_isa_override = explicit;
     for paint in &paints {
         let begin = Address::new(Rc::clone(code_space), paint.addr);
-        let end = paint.end.map(|end| Address::new(Rc::clone(code_space), end));
+        let end = paint
+            .end
+            .map(|end| Address::new(Rc::clone(code_space), end));
         arch.with_context_db_mut(|db| match end {
             Some(end) => db.set_variable_region(paint.var.as_bytes(), &begin, &end, paint.value),
             None => db.set_variable(paint.var.as_bytes(), &begin, paint.value),
@@ -4540,7 +4796,10 @@ pub fn bootstrap_from_raw(
     isa: Option<ArmIsa>,
     spec_roots: &[String],
 ) -> KunaResult<ConsoleProgram> {
-    Bootstrap::new(spec_roots).target(target).arm_isa(isa).raw(path, base, entries)
+    Bootstrap::new(spec_roots)
+        .target(target)
+        .arm_isa(isa)
+        .raw(path, base, entries)
 }
 
 /// [`bootstrap_from_raw`] over the file, or over `bytes` built in memory.
@@ -4639,7 +4898,8 @@ pub(crate) fn bootstrap_raw_image(
         isa,
         isa.is_some(),
     )?;
-    if let Some(cs) = unlace_analysis::loader::kuna_realmodecs::raw_image_cs(image_base, image_size) {
+    if let Some(cs) = unlace_analysis::loader::kuna_realmodecs::raw_image_cs(image_base, image_size)
+    {
         unlace_analysis::loader::kuna_realmodecs::paint(
             raw.sleigh().base().unwrap(),
             &code_space,
@@ -4651,12 +4911,7 @@ pub(crate) fn bootstrap_raw_image(
         .into_iter()
         .map(|entry| Address::new(Rc::clone(&code_space), entry))
         .collect();
-    let description = raw
-        .sleigh()
-        .base()
-        .unwrap()
-        .get_description()
-        .to_string();
+    let description = raw.sleigh().base().unwrap().get_description().to_string();
     let image = raw
         .take_loader()
         .ok_or_else(|| KunaError::lowlevel("raw loader vanished after validation"))?;
@@ -4665,16 +4920,26 @@ pub(crate) fn bootstrap_raw_image(
         .unwrap()
         .set_loader(Box::new(image));
 
-    let mut prog = empty_program(raw.into_sleigh(), registry, ProgramContainer::Raw, description);
+    let mut prog = empty_program(
+        raw.into_sleigh(),
+        registry,
+        ProgramContainer::Raw,
+        description,
+    );
     prog.pending_synthetic_entries = pending_synthetic_entries;
     prog.pending_analysis = input_isa_stash(input_context_paints);
     prog.analysis_code_space = Some(code_space);
     prog.raw_address_units = Some((word_size, arm32));
     if word_size == 1 {
-        let entry = prog.pending_synthetic_entries.first().map_or(image_base, Address::get_offset);
+        let entry = prog
+            .pending_synthetic_entries
+            .first()
+            .map_or(image_base, Address::get_offset);
         let language = prog.arch.arch_id().to_string();
         let view = std::fs::read(path).ok().and_then(|bytes| {
-            unlace_analysis::loader::kuna_objectview::raw_as_elf(&bytes, image_base, entry, &language)
+            unlace_analysis::loader::kuna_objectview::raw_as_elf(
+                &bytes, image_base, entry, &language,
+            )
         });
         prog.set_object_view(path, view);
     }
@@ -4693,7 +4958,10 @@ pub fn bootstrap_from_image_with_isa(
     spec_roots: &[String],
     isa: Option<ArmIsa>,
 ) -> KunaResult<ConsoleProgram> {
-    Bootstrap::new(spec_roots).target(target).arm_isa(isa).image(path)
+    Bootstrap::new(spec_roots)
+        .target(target)
+        .arm_isa(isa)
+        .image(path)
 }
 
 /// The image dispatch behind every image bootstrap; `from_env` as in
@@ -4772,7 +5040,10 @@ pub fn bootstrap_from_mz_bytes(
     spec_roots: &[String],
     isa: Option<ArmIsa>,
 ) -> KunaResult<ConsoleProgram> {
-    Bootstrap::new(spec_roots).target(target).arm_isa(isa).mz_bytes(path, bytes)
+    Bootstrap::new(spec_roots)
+        .target(target)
+        .arm_isa(isa)
+        .mz_bytes(path, bytes)
 }
 
 pub(crate) fn bootstrap_mz_bytes(
@@ -4782,8 +5053,9 @@ pub(crate) fn bootstrap_mz_bytes(
     languages: &(impl Languages + ?Sized),
     isa: Option<ArmIsa>,
 ) -> KunaResult<ConsoleProgram> {
-    let image = MzImage::parse(bytes)
-        .map_err(|error| KunaError::lowlevel(format!("{}; {MZ_RAW_IMAGE_HINT}", error.explain())))?;
+    let image = MzImage::parse(bytes).map_err(|error| {
+        KunaError::lowlevel(format!("{}; {MZ_RAW_IMAGE_HINT}", error.explain()))
+    })?;
     if let Some(packer) = image.packer {
         let unpack = match packer {
             "PKLITE" => "run `unlace unpack`",
@@ -4806,7 +5078,8 @@ pub(crate) fn bootstrap_mz_bytes(
             ),
         );
     }
-    let target = unlace_analysis::loadimage_object::explicit_language_target(target).unwrap_or(MZ_LANGUAGE);
+    let target =
+        unlace_analysis::loadimage_object::explicit_language_target(target).unwrap_or(MZ_LANGUAGE);
     let entry = image.entry;
     let evidence = unlace_analysis::listing::kuna_mzsweep::MzEvidence::new(
         image.base,
@@ -4824,23 +5097,36 @@ pub(crate) fn bootstrap_mz_bytes(
         Some(image.module.clone()),
     )?;
     if let Some(space) = program.analysis_code_space.clone() {
-        unlace_analysis::loader::kuna_realmodecs::paint(program.arch(), &space, &image.code_segments);
+        unlace_analysis::loader::kuna_realmodecs::paint(
+            program.arch(),
+            &space,
+            &image.code_segments,
+        );
         if target.starts_with("x86:LE:16:Real Mode") {
             let arch = program.arch();
-            let startup = unlace_analysis::loader::kuna_mzdgroup::startup_ds(arch, arch.translate(), &space, &image);
-            program.arch_mut().mz_dgroup = startup.map(|startup| unlace_decomp::kuna_mzdgroup::MzDataSegment {
-                ds: startup.ds,
-                start: image.base,
-                end: image.base + image.module.len() as u64,
-                entry,
-                others: startup.others,
-            });
+            let startup = unlace_analysis::loader::kuna_mzdgroup::startup_ds(
+                arch,
+                arch.translate(),
+                &space,
+                &image,
+            );
+            program.arch_mut().mz_dgroup =
+                startup.map(|startup| unlace_decomp::kuna_mzdgroup::MzDataSegment {
+                    ds: startup.ds,
+                    start: image.base,
+                    end: image.base + image.module.len() as u64,
+                    entry,
+                    others: startup.others,
+                });
             unlace_decomp::kuna_mzdgroup::apply(program.arch());
         }
     }
     program.arch_mut().fpu_emu_evidence = fpu_emu_evidence;
     unlace_decomp::kuna_fpuemu::apply(program.arch());
-    program.image_metadata = Some(ProgramImageMetadata { entry: Some(entry), sections: Vec::new() });
+    program.image_metadata = Some(ProgramImageMetadata {
+        entry: Some(entry),
+        sections: Vec::new(),
+    });
     program.mz_evidence = Some(evidence);
     let mapped = program.sections();
     if let Some(space) = program.analysis_code_space.clone() {
@@ -4880,7 +5166,9 @@ fn reader_is_te_image(reader: &mut impl std::io::Read) -> std::io::Result<bool> 
 fn file_is_dex(path: &str) -> bool {
     use std::io::Read;
     let mut prefix = [0u8; 0x70];
-    let Ok(mut file) = std::fs::File::open(path) else { return false };
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return false;
+    };
     if file.read_exact(&mut prefix).is_err() {
         return false;
     }
@@ -4888,7 +5176,8 @@ fn file_is_dex(path: &str) -> bool {
     is_dex(&prefix)
         || is_odex(&prefix)
         || is_vdex(&prefix)
-        || (prefix.starts_with(b"PK\x03\x04") && std::fs::read(path).is_ok_and(|bytes| is_apk(&bytes)))
+        || (prefix.starts_with(b"PK\x03\x04")
+            && std::fs::read(path).is_ok_and(|bytes| is_apk(&bytes)))
         || (prefix.starts_with(b"\x7fELF") && std::fs::read(path).is_ok_and(|bytes| is_oat(&bytes)))
 }
 
@@ -4903,7 +5192,9 @@ pub fn bootstrap_from_dex_bytes(
     target: &str,
     spec_roots: &[String],
 ) -> KunaResult<ConsoleProgram> {
-    Bootstrap::new(spec_roots).target(target).dex_bytes(path, bytes)
+    Bootstrap::new(spec_roots)
+        .target(target)
+        .dex_bytes(path, bytes)
 }
 
 pub(crate) fn bootstrap_dex_bytes(
@@ -4916,7 +5207,8 @@ pub(crate) fn bootstrap_dex_bytes(
     let registry = build_registry();
     let language = unlace_analysis::loadimage_dex::dex_language(&bytes);
     let models = unlace_analysis::loadimage_dex::load_dex_models(bytes)?;
-    let mut loader = unlace_analysis::loadimage_dex::DexLoadImage::new(path, models.clone()).with_language(language);
+    let mut loader = unlace_analysis::loadimage_dex::DexLoadImage::new(path, models.clone())
+        .with_language(language);
     let mut sleigh = build_sleigh_for_loader(path, target, languages, &registry, language, None)?;
     let code_space = default_code_space(&sleigh)?;
     loader.attach_to_space(Rc::clone(&code_space));
@@ -4962,7 +5254,10 @@ pub fn bootstrap_from_te(
     spec_roots: &[String],
     isa: Option<ArmIsa>,
 ) -> KunaResult<ConsoleProgram> {
-    Bootstrap::new(spec_roots).target(target).arm_isa(isa).te(path)
+    Bootstrap::new(spec_roots)
+        .target(target)
+        .arm_isa(isa)
+        .te(path)
 }
 
 pub(crate) fn bootstrap_te(
@@ -4985,7 +5280,10 @@ pub fn bootstrap_from_te_bytes(
     spec_roots: &[String],
     isa: Option<ArmIsa>,
 ) -> KunaResult<ConsoleProgram> {
-    Bootstrap::new(spec_roots).target(target).arm_isa(isa).te_bytes(path, bytes)
+    Bootstrap::new(spec_roots)
+        .target(target)
+        .arm_isa(isa)
+        .te_bytes(path, bytes)
 }
 
 pub(crate) fn bootstrap_te_bytes(
@@ -5029,7 +5327,9 @@ pub(crate) fn bootstrap_te_bytes(
     let code_ranges = |mappings: &[(u64, u64, u32)]| -> Vec<(u64, u64)> {
         mappings
             .iter()
-            .filter_map(|&(addr, size, flags)| (flags & section_flags::CODE != 0).then_some((addr, size)))
+            .filter_map(|&(addr, size, flags)| {
+                (flags & section_flags::CODE != 0).then_some((addr, size))
+            })
             .collect()
     };
     let executable_ranges = code_ranges(&segments);
@@ -5040,8 +5340,10 @@ pub(crate) fn bootstrap_te_bytes(
         unlace_decomp::kuna_litpoolconst::code_const_ranges(&loader.file_backed_segments(), &[]);
     let readonly_ranges = loader_readonly_ranges(&loader, sleigh.base().unwrap().manage());
     let entry = loader.entry();
-    let image_metadata =
-        ProgramImageMetadata { entry: Some(entry), sections: loader.section_metadata() };
+    let image_metadata = ProgramImageMetadata {
+        entry: Some(entry),
+        sections: loader.section_metadata(),
+    };
     sleigh.base_mut().unwrap().set_loader(Box::new(loader));
     let input_context_paints = install_input_isa(
         sleigh.base_mut().unwrap(),
@@ -5062,7 +5364,10 @@ pub(crate) fn bootstrap_te_bytes(
         entry,
     });
     program.analysis_code_space = Some(code_space);
-    program.set_object_view(path, unlace_analysis::loader::kuna_objectview::te_as_pe(bytes));
+    program.set_object_view(
+        path,
+        unlace_analysis::loader::kuna_objectview::te_as_pe(bytes),
+    );
     apply_readonly_ranges(&mut program, &readonly_ranges);
     program.arch_mut().litpool_const = Rc::new(litpool_const);
     Ok(program)
@@ -5110,9 +5415,19 @@ fn mips_t9_probe(
     let mask = unlace_base::address::calc_mask(register_bytes as i32);
     Rc::new(move |entry| {
         let loader = image.try_borrow();
-        debug_assert!(loader.is_ok(), "load image mutably borrowed while building a function handle");
+        debug_assert!(
+            loader.is_ok(),
+            "load image mutably borrowed while building a function handle"
+        );
         let bytes = loader.ok()?.shared_bytes()?;
-        Some(unlace_analysis::loader::kuna_mipsentry::value(&*bytes, entry.get_offset(), elf32, little)? & mask)
+        Some(
+            unlace_analysis::loader::kuna_mipsentry::value(
+                &*bytes,
+                entry.get_offset(),
+                elf32,
+                little,
+            )? & mask,
+        )
     })
 }
 
@@ -5125,7 +5440,10 @@ pub fn bootstrap_from_object_with_isa(
     spec_roots: &[String],
     isa: Option<ArmIsa>,
 ) -> KunaResult<ConsoleProgram> {
-    Bootstrap::new(spec_roots).target(target).arm_isa(isa).object(path)
+    Bootstrap::new(spec_roots)
+        .target(target)
+        .arm_isa(isa)
+        .object(path)
 }
 
 /// The object bootstrap. `from_env` is set by the entry points that take no
@@ -5153,7 +5471,8 @@ pub(crate) fn bootstrap_object(
         // pointers the `kernelcache` peel rebases in place.
         Some(bytes)
             if unlace_analysis::loader::kuna_machotolerance::runs_past_the_file(&bytes)
-                || (unlace_decomp::kuna_kernelcache::KernelcacheChoice::in_force() != unlace_decomp::kuna_kernelcache::KernelcacheChoice::Off
+                || (unlace_decomp::kuna_kernelcache::KernelcacheChoice::in_force()
+                    != unlace_decomp::kuna_kernelcache::KernelcacheChoice::Off
                     && unlace_analysis::loader::kuna_kernelcache::is_prelinked(&bytes)) =>
         {
             None
@@ -5168,16 +5487,25 @@ pub(crate) fn bootstrap_object(
         None => {
             // Read the image bytes once: reused for the loader AND the analysis-pass
             // object::File view (the analyzers need a parsed object the loader drops).
-            let bytes = match unlace_analysis::loader::kuna_dyldcache::read_selected_image(Path::new(path)) {
-                Some(image) => image.map_err(|e| KunaError::lowlevel(format!("{path}: {e}")))?,
-                None => std::fs::read(path)
-                    .map_err(|e| KunaError::lowlevel(format!("Unable to open image file: {path}: {e}")))?,
-            };
+            let bytes =
+                match unlace_analysis::loader::kuna_dyldcache::read_selected_image(Path::new(path))
+                {
+                    Some(image) => {
+                        image.map_err(|e| KunaError::lowlevel(format!("{path}: {e}")))?
+                    }
+                    None => std::fs::read(path).map_err(|e| {
+                        KunaError::lowlevel(format!("Unable to open image file: {path}: {e}"))
+                    })?,
+                };
             // (kuna `kernelcache`) IMG4 / IM4P / LZFSE / complzss unwrapping and MH_FILESET
             // entry selection, ahead of every other normalization.
             let choice = unlace_decomp::kuna_kernelcache::KernelcacheChoice::in_force();
-            let peeled = unlace_analysis::loader::kuna_kernelcache::peel_file(Path::new(path), bytes, &choice)
-                .map_err(KunaError::lowlevel)?;
+            let peeled = unlace_analysis::loader::kuna_kernelcache::peel_file(
+                Path::new(path),
+                bytes,
+                &choice,
+            )
+            .map_err(KunaError::lowlevel)?;
             if let Some(note) = &peeled.note {
                 unlace_base::notes::say_once(path, &format!("[kuna] {note}"));
             }
@@ -5199,11 +5527,13 @@ pub(crate) fn bootstrap_object(
             // exited 1 on a file `readelf -l` reads happily. Clearing the unusable table
             // here (and only here) means the loader AND the analysis passes below see the
             // same recovered view. A file with a usable section table is untouched.
-            let (bytes, shdr_note) = unlace_analysis::loader::elf_shdr::tolerate_unusable_section_table(bytes);
+            let (bytes, shdr_note) =
+                unlace_analysis::loader::elf_shdr::tolerate_unusable_section_table(bytes);
             // (kuna) PE DOS-magic tolerance: an `e_magic` that is not `MZ` in front of an
             // `e_lfanew` that still reaches `PE\0\0` is rewritten in the loaded copy only,
             // before the data-directory clamp, which reads the headers behind it.
-            let (bytes, dosmagic_note) = unlace_analysis::loader::pe_dosmagic::tolerate_corrupt_dos_magic(bytes);
+            let (bytes, dosmagic_note) =
+                unlace_analysis::loader::pe_dosmagic::tolerate_corrupt_dos_magic(bytes);
             // (kuna) PE data-directory tolerance: the same normalization one format over.
             // A PE's `NumberOfRvaAndSizes` is declared separately from the room its own
             // optional header gives the directory array, and packers overwrite it; Windows
@@ -5213,11 +5543,23 @@ pub(crate) fn bootstrap_object(
             // imports from the real table rather than fabricating one.
             let (bytes, datadir_note) =
                 unlace_analysis::loader::pe_datadirs::tolerate_oversized_data_directories(bytes);
-            let (bytes, clamp_note) = unlace_analysis::loader::kuna_machotolerance::clamp_out_of_file_ranges(bytes);
+            let (bytes, clamp_note) =
+                unlace_analysis::loader::kuna_machotolerance::clamp_out_of_file_ranges(bytes);
             let crypt_note = unlace_analysis::loader::kuna_machotolerance::encryption_note(&bytes);
-            let load_notes: Vec<String> =
-                [shdr_note, dosmagic_note, datadir_note, clamp_note, crypt_note].into_iter().flatten().collect();
-            (unlace_analysis::image_bytes::ImageBytes::from(bytes), load_notes)
+            let load_notes: Vec<String> = [
+                shdr_note,
+                dosmagic_note,
+                datadir_note,
+                clamp_note,
+                crypt_note,
+            ]
+            .into_iter()
+            .flatten()
+            .collect();
+            (
+                unlace_analysis::image_bytes::ImageBytes::from(bytes),
+                load_notes,
+            )
         }
     };
     for note in &load_notes {
@@ -5240,7 +5582,12 @@ pub(crate) fn bootstrap_object(
         match options.go_version {
             Some((maj, min)) => {
                 // FIXME: Audit that the environment access only happens in single-threaded code.
-                unsafe { std::env::set_var(unlace_decomp::kuna_goreg::GOVERSION_ENV, format!("{maj}.{min}")) }
+                unsafe {
+                    std::env::set_var(
+                        unlace_decomp::kuna_goreg::GOVERSION_ENV,
+                        format!("{maj}.{min}"),
+                    )
+                }
             }
             // FIXME: Audit that the environment access only happens in single-threaded code.
             None => unsafe { std::env::remove_var(unlace_decomp::kuna_goreg::GOVERSION_ENV) },
@@ -5250,8 +5597,7 @@ pub(crate) fn bootstrap_object(
     let explicit_isa = isa.is_some();
     let import_proofs = unlace_analysis::loader::ImportProofScope::enter(&bytes);
     // LoadImageBfd(filename) + open(): parse the ELF (machine, segments, symbols).
-    let mut loader =
-        ObjectLoadImage::from_image_bytes_with_target(path, bytes.clone(), target)?;
+    let mut loader = ObjectLoadImage::from_image_bytes_with_target(path, bytes.clone(), target)?;
 
     // resolveArchitecture: the arch id is the loader's getArchType() (the object
     // machine → SLEIGH language id), unless an explicit target overrides it;
@@ -5295,22 +5641,26 @@ pub(crate) fn bootstrap_object(
     let parsed = is_arm32_language(&arch_id)
         .then(|| unlace_analysis::loadimage_object::parse_object(&*bytes).ok())
         .flatten();
-    let mips_linkage = loader.mips_linkage().filter(|_| arch_id.starts_with("MIPS:")).cloned();
+    let mips_linkage = loader
+        .mips_linkage()
+        .filter(|_| arch_id.starts_with("MIPS:"))
+        .cloned();
     let isa = isa.or_else(|| {
         let file = parsed.as_ref()?;
-        unlace_analysis::loadimage_object::arm_isa_hint(file, &bytes).map(|thumb| {
-            if thumb {
-                ArmIsa::Thumb
-            } else {
-                ArmIsa::Arm
-            }
-        })
+        unlace_analysis::loadimage_object::arm_isa_hint(file, &bytes)
+            .map(|thumb| if thumb { ArmIsa::Thumb } else { ArmIsa::Arm })
     });
-    let entry_thumb_walk = isa.is_none().then(|| {
-        let file = parsed.as_ref()?;
-        let entry = unlace_analysis::loadimage_object::arm_entry_thumb_hint(file, &bytes)?;
-        Some(PendingEntryThumb { executable_ranges: loader.executable_ranges(), entry })
-    }).flatten();
+    let entry_thumb_walk = isa
+        .is_none()
+        .then(|| {
+            let file = parsed.as_ref()?;
+            let entry = unlace_analysis::loadimage_object::arm_entry_thumb_hint(file, &bytes)?;
+            Some(PendingEntryThumb {
+                executable_ranges: loader.executable_ranges(),
+                entry,
+            })
+        })
+        .flatten();
     drop(parsed);
     sleigh.base_mut().unwrap().mapped_flow_boundary_image =
         unlace_decomp::kuna_mappedflowboundary::eligible_elf(&bytes, &arch_id);
@@ -5354,25 +5704,36 @@ pub(crate) fn bootstrap_object(
     // against the whole collection's slots instead.
     if let Some(signed) = &signed {
         if let Ok(file) = unlace_analysis::loadimage_object::parse_object(&bytes) {
-            let vcall_sites = unlace_analysis::rtti::kuna_arm64evcall::resolve_signed(&file, signed);
+            let vcall_sites =
+                unlace_analysis::rtti::kuna_arm64evcall::resolve_signed(&file, signed);
             pending_analysis.retain(|(id, _)| *id != "arm64evcall");
             pending_analysis.push((
                 "arm64evcall",
-                unlace_analysis::pass::AnalysisOutput { vcall_sites, ..Default::default() },
+                unlace_analysis::pass::AnalysisOutput {
+                    vcall_sites,
+                    ..Default::default()
+                },
             ));
         }
     }
     let mut nullable = std::collections::BTreeMap::<u64, Vec<_>>::new();
     for record in loader.nullable_relocations() {
-        nullable.entry(record.field).or_default().push(record.clone());
+        nullable
+            .entry(record.field)
+            .or_default()
+            .push(record.clone());
     }
     let mut literals = std::collections::BTreeSet::new();
     for record in loader.nullable_relocations() {
         literals.extend((0..16).map(|byte| record.symbol.wrapping_add(byte)));
-        if record.slot != 0 { literals.extend((0..record.pointer_size as u64).map(|byte| record.slot + byte)); }
+        if record.slot != 0 {
+            literals.extend((0..record.pointer_size as u64).map(|byte| record.slot + byte));
+        }
     }
     if !loader.reloc_sections().is_empty() {
-        for &(lo, hi) in loader.import_slot_ranges() { literals.extend(lo..hi); }
+        for &(lo, hi) in loader.import_slot_ranges() {
+            literals.extend(lo..hi);
+        }
         for &(slot, entry) in loader.function_address_aliases() {
             literals.extend((0..16).map(|byte| entry.wrapping_add(byte)));
             literals.extend((0..8).map(|byte| slot.wrapping_add(byte)));
@@ -5417,10 +5778,12 @@ pub(crate) fn bootstrap_object(
         &unlace_sleigh::loadimage::LoadImage::get_segments(&loader),
     );
     let globalref_ranges: Vec<(u64, u64)> = loader.data_object_ranges().to_vec();
-    let cstring_ranges: Vec<(u64, u64)> =
-        unlace_decomp::kuna_cstringconst::literal_sections(
-            loader.section_metadata().iter().map(|s| (s.name.as_str(), s.kind.as_str(), s.vma, s.size)),
-        );
+    let cstring_ranges: Vec<(u64, u64)> = unlace_decomp::kuna_cstringconst::literal_sections(
+        loader
+            .section_metadata()
+            .iter()
+            .map(|s| (s.name.as_str(), s.kind.as_str(), s.vma, s.size)),
+    );
 
     // (kuna `bejoin callers`) The exception-table sections, at the addresses
     // the loader maps them to (an object's synthetic layout, relocated), so
@@ -5503,8 +5866,10 @@ pub(crate) fn bootstrap_object(
         sleigh.base_mut().unwrap().rustc_pieces_layout = true;
         sleigh.base_mut().unwrap().rust_fmt_pieces_relro = layout.relro;
     }
-    if matches!(sleigh.base().unwrap().rustc_stable_version, Some((1, 93, 0 | 1)))
-        || sleigh.base().unwrap().rustc_pieces_layout
+    if matches!(
+        sleigh.base().unwrap().rustc_stable_version,
+        Some((1, 93, 0 | 1))
+    ) || sleigh.base().unwrap().rustc_pieces_layout
     {
         let metadata = unlace_analysis::sourcelang::formatter_metadata(&bytes);
         let formatters = metadata.integers;
@@ -5570,13 +5935,25 @@ pub(crate) fn bootstrap_object(
     let mut prog = empty_program(sleigh, registry, ProgramContainer::Object, description);
     if let Some(linkage) = mips_linkage {
         let (elf32, little) = (linkage.elf32, linkage.little);
-        prog.arch_mut().loader_transfer_sites = Rc::new(linkage.transfers.into_iter()
-            .map(|(site, _)| Address::new(Rc::clone(&code_space), site)).collect());
-        prog.arch_mut().loader_mips_imports = Rc::new(elf_functions.imports.iter()
-            .map(|&entry| Address::new(Rc::clone(&code_space), entry)).collect());
+        prog.arch_mut().loader_transfer_sites = Rc::new(
+            linkage
+                .transfers
+                .into_iter()
+                .map(|(site, _)| Address::new(Rc::clone(&code_space), site))
+                .collect(),
+        );
+        prog.arch_mut().loader_mips_imports = Rc::new(
+            elf_functions
+                .imports
+                .iter()
+                .map(|&entry| Address::new(Rc::clone(&code_space), entry))
+                .collect(),
+        );
         if let Ok(loc) = prog.arch().get_register_varnode(b"t9") {
-            prog.arch_mut().loader_mips_t9 = Some((loc.clone(), mips_t9_probe(
-                prog.arch().translate().loader_rc(), elf32, little, loc.size)));
+            prog.arch_mut().loader_mips_t9 = Some((
+                loc.clone(),
+                mips_t9_probe(prog.arch().translate().loader_rc(), elf32, little, loc.size),
+            ));
         }
     }
     prog.load_notes = load_notes;
@@ -5608,8 +5985,14 @@ pub(crate) fn bootstrap_object(
         if loc.size == 8 {
             for (entry, val) in elfv1_tocs {
                 let begin = Address::new(Rc::clone(&code_space), entry);
-                prog.arch_mut().loader_entry_tracks.entry(begin).or_default()
-                    .push(unlace_sleigh::globalcontext::TrackedContext { loc: loc.clone(), val });
+                prog.arch_mut()
+                    .loader_entry_tracks
+                    .entry(begin)
+                    .or_default()
+                    .push(unlace_sleigh::globalcontext::TrackedContext {
+                        loc: loc.clone(),
+                        val,
+                    });
             }
         }
     }
@@ -5677,10 +6060,16 @@ fn commit_model_facts(
     }
     let mut models = (*prog.arch().loader_proto_models).clone();
     for fact in facts {
-        let Some(model) = prog.arch().get_model(fact.model).cloned() else { continue };
+        let Some(model) = prog.arch().get_model(fact.model).cloned() else {
+            continue;
+        };
         let model = if let Some(inputs) = &fact.leaf_stack_inputs {
-            let Some(limit) = inputs.proven_limit(prog.arch(), fact.func_addr) else { continue };
-            let Some(bounded) = model.kuna_bound_stack_inputs(limit) else { continue };
+            let Some(limit) = inputs.proven_limit(prog.arch(), fact.func_addr) else {
+                continue;
+            };
+            let Some(bounded) = model.kuna_bound_stack_inputs(limit) else {
+                continue;
+            };
             Rc::new(bounded)
         } else {
             model
@@ -5698,23 +6087,33 @@ fn commit_input_hints(
     code_space: &Rc<AddrSpace>,
     facts: &[unlace_analysis::pass::InputHintFact],
 ) {
-    let mut hints: std::collections::BTreeMap<Address, Vec<unlace_decomp::kuna_inputhints::InputHint>> =
-        std::collections::BTreeMap::new();
+    let mut hints: std::collections::BTreeMap<
+        Address,
+        Vec<unlace_decomp::kuna_inputhints::InputHint>,
+    > = std::collections::BTreeMap::new();
     for fact in facts {
         let Ok(loc) = prog.arch().get_register_varnode(fact.reg.as_bytes()) else {
             continue;
         };
-        let Some(space) = loc.space.clone() else { continue };
+        let Some(space) = loc.space.clone() else {
+            continue;
+        };
         let entry = Address::new(Rc::clone(code_space), fact.func_addr);
-        hints.entry(entry).or_default().push(unlace_decomp::kuna_inputhints::InputHint {
-            addr: Address::new(space, loc.offset),
-            size: loc.size as i32,
-            name: fact.name.clone(),
-            ct: fact.type_.clone(),
-        });
+        hints
+            .entry(entry)
+            .or_default()
+            .push(unlace_decomp::kuna_inputhints::InputHint {
+                addr: Address::new(space, loc.offset),
+                size: loc.size as i32,
+                name: fact.name.clone(),
+                ct: fact.type_.clone(),
+            });
     }
     for (entry, list) in hints {
-        prog.arch_mut().loader_input_hints.entry(entry).or_insert_with(|| Rc::new(list));
+        prog.arch_mut()
+            .loader_input_hints
+            .entry(entry)
+            .or_insert_with(|| Rc::new(list));
     }
 }
 
@@ -5764,16 +6163,23 @@ fn commit_analysis_output(
         out.typed_data.splice(0..0, dwarf_globals);
     }
     let go_prototypes = if prog.arch().analysis_godwarfsig {
-        out.go_dwarf.iter()
+        out.go_dwarf
+            .iter()
             .flat_map(|facts| facts.materialize(prog.arch(), &out.go_pointer_methods))
             .collect::<Vec<_>>()
     } else {
         Vec::new()
     };
     out.go_dwarf.clear();
-    out.symbols.extend(go_prototypes.iter().map(|fact| unlace_analysis::pass::SymFact {
-        addr: fact.entry, name: fact.pieces.name.clone(), kind: SymKind::Function,
-    }));
+    out.symbols.extend(
+        go_prototypes
+            .iter()
+            .map(|fact| unlace_analysis::pass::SymFact {
+                addr: fact.entry,
+                name: fact.pieces.name.clone(),
+                kind: SymKind::Function,
+            }),
+    );
     // 0b. (kuna `swifttypes`) The Swift type-layout arm's facts, the same
     //     deferred shape: on, the typed metadata records and the accessor
     //     prototypes fold into their streams (the register-pinned parameters
@@ -5814,7 +6220,10 @@ fn commit_analysis_output(
     //     `off` neither.
     let cppsig_mode = prog.arch().analysis_cppsig;
     let (msvc_byval, msvc_builders) = if cppsig_mode.enabled() {
-        (std::mem::take(&mut out.cpp_sig.msvc_byval), std::mem::take(&mut out.cpp_sig.msvc_builders))
+        (
+            std::mem::take(&mut out.cpp_sig.msvc_byval),
+            std::mem::take(&mut out.cpp_sig.msvc_builders),
+        )
     } else {
         (Vec::new(), Vec::new())
     };
@@ -5830,7 +6239,9 @@ fn commit_analysis_output(
             .collect();
         let (members, rest): (Vec<_>, Vec<_>) = std::mem::take(&mut out.cpp_sig.inferred)
             .into_iter()
-            .partition(|(addr, pieces)| held.contains(addr) && pieces.innames.first().is_some_and(|n| n == "this"));
+            .partition(|(addr, pieces)| {
+                held.contains(addr) && pieces.innames.first().is_some_and(|n| n == "this")
+            });
         out.cpp_sig.proven.extend(members);
         out.cpp_sig.inferred = rest;
     }
@@ -5849,13 +6260,23 @@ fn commit_analysis_output(
     // Keep lookup identities even when richer debug information wins the map;
     // a spelling shared by several objects resolves to its lowest address. A
     // data import is looked up by the name of the `externref` slot holding it.
-    let externref_slots: std::collections::HashSet<u64> = out.externref.iter().map(|&(first, _)| first).collect();
+    let externref_slots: std::collections::HashSet<u64> =
+        out.externref.iter().map(|&(first, _)| first).collect();
     let aliases: Vec<(String, u64)> = prog
         .loader_data_objects
         .iter()
         .map(|(address, name, _)| (name.clone(), *address))
-        .chain(prog.loader_data_exports.iter().map(|(address, name)| (name.clone(), *address)))
-        .chain(out.symbols.iter().filter(|s| s.kind == SymKind::Data).map(|s| (s.name.clone(), s.addr)))
+        .chain(
+            prog.loader_data_exports
+                .iter()
+                .map(|(address, name)| (name.clone(), *address)),
+        )
+        .chain(
+            out.symbols
+                .iter()
+                .filter(|s| s.kind == SymKind::Data)
+                .map(|s| (s.name.clone(), s.addr)),
+        )
         .chain(out.data_objects.iter().map(|d| (d.name.clone(), d.addr)))
         .chain(out.typed_data.iter().map(|d| (d.name.clone(), d.addr)))
         .chain(
@@ -5871,9 +6292,19 @@ fn commit_analysis_output(
     }
 
     let mut data_names = crate::kuna_dataidentifiers::Names::new(
-        prog.symbols.iter().map(|s| s.name.clone())
-            .chain(prog.loader_data_objects.iter().map(|(_,name,_)| name.clone()))
-            .chain(prog.global_data_symbols().into_iter().map(|(name,_,_)| name))
+        prog.symbols
+            .iter()
+            .map(|s| s.name.clone())
+            .chain(
+                prog.loader_data_objects
+                    .iter()
+                    .map(|(_, name, _)| name.clone()),
+            )
+            .chain(
+                prog.global_data_symbols()
+                    .into_iter()
+                    .map(|(name, _, _)| name),
+            )
             .chain(out.symbols.iter().map(|s| s.name.clone()))
             .chain(out.data_objects.iter().map(|d| d.name.clone()))
             .chain(out.typed_data.iter().map(|d| d.name.clone())),
@@ -5925,7 +6356,11 @@ fn commit_analysis_output(
         for &(first, last) in &out.cpp_vtables.slot_ranges {
             let begin = Address::new(Rc::clone(code_space), first);
             let end = Address::new(Rc::clone(code_space), last + 1);
-            prog.arch_mut().symboltab.set_property_range(unlace_decomp::varnode::varnode_flags::readonly, &begin, &end);
+            prog.arch_mut().symboltab.set_property_range(
+                unlace_decomp::varnode::varnode_flags::readonly,
+                &begin,
+                &end,
+            );
             ranges.push((first, last));
         }
         ranges.sort_unstable();
@@ -5956,11 +6391,14 @@ fn commit_analysis_output(
                         .find_create_scope_from_symbol_name(&s.name, "::", None, num_spaces)?;
                     match arch.symboltab.find_function(scope, &addr) {
                         None => {
-                            arch.symboltab.add_function(scope, &addr, &base, min_size, type_code)?;
+                            arch.symboltab
+                                .add_function(scope, &addr, &base, min_size, type_code)?;
                         }
                         // A slot-index name only says which vtable slot the function
                         // fills; a real name a later pass recovers replaces it.
-                        Some(sym) if replaces_slot_name(&s.name, &arch.symboltab.symbol(sym).name) => {
+                        Some(sym)
+                            if replaces_slot_name(&s.name, &arch.symboltab.symbol(sym).name) =>
+                        {
                             arch.symboltab.rename_symbol(sym, &base)?;
                         }
                         Some(_) => {}
@@ -5977,8 +6415,13 @@ fn commit_analysis_output(
                 // Untyped data object (a typed string symbol carries its char[N]
                 // type through a dedicated fact added with the string pass).
                 let ct = arch.types().get_type_code()?;
-                let (sid, _) =
-                    arch.symboltab.add_symbol_mapped(scope, &base, ct, &addr, &Address::new_invalid())?;
+                let (sid, _) = arch.symboltab.add_symbol_mapped(
+                    scope,
+                    &base,
+                    ct,
+                    &addr,
+                    &Address::new_invalid(),
+                )?;
                 arch.symboltab
                     .set_attribute(sid, unlace_decomp::varnode::varnode_flags::namelock);
             }
@@ -5988,7 +6431,10 @@ fn commit_analysis_output(
     // 1--. (kuna `arm64evcall`) The methods each arm64e virtual call site's slot
     //      can hold; flow reads them when it builds the CALLIND.
     for v in &out.vcall_sites {
-        let call = unlace_decomp::architecture::VcallTargets { register: v.register, targets: v.targets.clone() };
+        let call = unlace_decomp::architecture::VcallTargets {
+            register: v.register,
+            targets: v.targets.clone(),
+        };
         Rc::make_mut(&mut prog.arch_mut().kuna_vcall_targets).insert(v.site, call);
     }
 
@@ -6014,9 +6460,12 @@ fn commit_analysis_output(
         let type_code = prog.arch().types().get_type_code()?;
         let min_size = prog.arch().min_funcsymbol_size;
         let arch = prog.arch_mut();
-        let (scope, base) = arch.symboltab.find_create_scope_from_symbol_name(name, "::", None, num_spaces)?;
+        let (scope, base) = arch
+            .symboltab
+            .find_create_scope_from_symbol_name(name, "::", None, num_spaces)?;
         if arch.symboltab.find_function(scope, &addr).is_none() {
-            arch.symboltab.add_function(scope, &addr, &base, min_size, type_code)?;
+            arch.symboltab
+                .add_function(scope, &addr, &base, min_size, type_code)?;
         }
     }
 
@@ -6058,20 +6507,20 @@ fn commit_analysis_output(
         if occupied {
             continue;
         }
-        let ct = prog
-            .arch()
-            .types()
-            .get_base(
-                d.size.clamp(1, int4::MAX as u32) as int4,
-                unlace_decomp::dtype::type_metatype::TYPE_UNKNOWN,
-            )?;
+        let ct = prog.arch().types().get_base(
+            d.size.clamp(1, int4::MAX as u32) as int4,
+            unlace_decomp::dtype::type_metatype::TYPE_UNKNOWN,
+        )?;
         let name = data_names.name(&d.name, d.addr);
         let arch = prog.arch_mut();
-        let (scope, base) =
-            arch.symboltab.find_create_scope_from_symbol_name(&name, "::", None, num_spaces)?;
+        let (scope, base) = arch
+            .symboltab
+            .find_create_scope_from_symbol_name(&name, "::", None, num_spaces)?;
         let (sid, _) =
-            arch.symboltab.add_symbol_mapped(scope, &base, ct, &addr, &Address::new_invalid())?;
-        arch.symboltab.set_attribute(sid, unlace_decomp::varnode::varnode_flags::namelock);
+            arch.symboltab
+                .add_symbol_mapped(scope, &base, ct, &addr, &Address::new_invalid())?;
+        arch.symboltab
+            .set_attribute(sid, unlace_decomp::varnode::varnode_flags::namelock);
     }
 
     // 1b. Extra read-only address ranges a pass discovered (`out.readonly`) — e.g.
@@ -6139,19 +6588,28 @@ fn commit_analysis_output(
         std::collections::HashSet::new()
     };
     if lazy_funcs {
-        let starts: Vec<u64> = out.entries.iter().copied().filter(|v| !eager.contains(v)).collect();
+        let starts: Vec<u64> = out
+            .entries
+            .iter()
+            .copied()
+            .filter(|v| !eager.contains(v))
+            .collect();
         prog.arch_mut().set_lazy_entry_starts(starts);
     }
     let named_placeholders: std::collections::HashSet<u64> = if lazy_funcs {
-        prog.symbols.iter().filter_map(|s| {
-            u64::from_str_radix(s.name.strip_prefix("sub_")?, 16).ok()
-        }).collect()
+        prog.symbols
+            .iter()
+            .filter_map(|s| u64::from_str_radix(s.name.strip_prefix("sub_")?, 16).ok())
+            .collect()
     } else {
         std::collections::HashSet::new()
     };
     for &vma in &out.entries {
-        if lazy_funcs && !eager.contains(&vma) && prog.arch().name_style_angr
-            && !named_placeholders.contains(&vma) && prog.thumb_normalized(vma) == vma
+        if lazy_funcs
+            && !eager.contains(&vma)
+            && prog.arch().name_style_angr
+            && !named_placeholders.contains(&vma)
+            && prog.thumb_normalized(vma) == vma
         {
             prog.anonymous_entries.push((vma, next_revision()));
             continue;
@@ -6171,13 +6629,15 @@ fn commit_analysis_output(
                 let (scope, base) = arch
                     .symboltab
                     .find_create_scope_from_symbol_name(&name, "::", None, num_spaces)?;
-                arch.symboltab.add_function(scope, &addr, &base, min_size, type_code)?;
+                arch.symboltab
+                    .add_function(scope, &addr, &base, min_size, type_code)?;
             }
         }
         prog.register_symbol(&name, addr);
     }
 
-    prog.anonymous_entries.sort_unstable_by(|a, b| a.0.cmp(&b.0).then_with(|| b.1.cmp(&a.1)));
+    prog.anonymous_entries
+        .sort_unstable_by(|a, b| a.0.cmp(&b.0).then_with(|| b.1.cmp(&a.1)));
     prog.anonymous_entries.dedup_by_key(|entry| entry.0);
     prog.anonymous_symbols.take();
     prog.symbols.revision = next_revision();
@@ -6204,7 +6664,10 @@ fn commit_analysis_output(
         // Address path (preferred): resolves a demangled/namespaced funcsym.
         let by_addr = if fact.addr != 0 {
             let addr = Address::new(Rc::clone(code_space), fact.addr);
-            prog.arch().symboltab.find_function_across_scopes(&addr).map(|(sid, _)| sid)
+            prog.arch()
+                .symboltab
+                .find_function_across_scopes(&addr)
+                .map(|(sid, _)| sid)
         } else {
             None
         };
@@ -6237,7 +6700,10 @@ fn commit_analysis_output(
         let mut table = unlace_decomp::kuna_itaniumeh::EhTable::new(out.eh_call_sites.clone());
         let arch = prog.arch();
         let reg = |names: &[&str]| {
-            names.iter().find_map(|n| arch.get_register_varnode(n.as_bytes()).ok()).map(|v| (v.get_addr(), v.size as i32))
+            names
+                .iter()
+                .find_map(|n| arch.get_register_varnode(n.as_bytes()).ok())
+                .map(|v| (v.get_addr(), v.size as i32))
         };
         let (exc, sel): (&[&str], &[&str]) = if arch.archid.starts_with("x86:LE:64") {
             (&["RAX"], &["RDX"])
@@ -6315,7 +6781,11 @@ fn commit_analysis_output(
     // an alignment pad, and the probe uses this count to tell the two apart.
     if !out.format_sites.is_empty() {
         let model = prog.arch().default_fp().cloned();
-        let stack_idx = prog.arch().manage().get_stack_space().map(|sp| sp.get_index());
+        let stack_idx = prog
+            .arch()
+            .manage()
+            .get_stack_space()
+            .map(|sp| sp.get_index());
         if let (Some(model), Some(stack_idx)) = (model, stack_idx) {
             let mut map: std::collections::BTreeMap<u64, usize> = std::collections::BTreeMap::new();
             let void = prog.arch().types().get_type_void().ok();
@@ -6340,7 +6810,11 @@ fn commit_analysis_output(
                     let n = res
                         .iter()
                         .skip(1)
-                        .filter(|p| p.addr.get_space().is_some_and(|sp| sp.get_index() == stack_idx))
+                        .filter(|p| {
+                            p.addr
+                                .get_space()
+                                .is_some_and(|sp| sp.get_index() == stack_idx)
+                        })
                         .count();
                     map.insert(site.callpoint, n);
                 }
@@ -6389,14 +6863,27 @@ fn commit_analysis_output(
             names.insert(m.name.clone());
         }
     }
-    fids.extend(by_addr.into_iter().filter(|(_, names)| names.len() == 1).filter_map(|(addr, names)| {
-        let name = names.into_iter().next()?;
-        Some(FidMatch { addr, name, by_signature: true })
-    }));
+    fids.extend(
+        by_addr
+            .into_iter()
+            .filter(|(_, names)| names.len() == 1)
+            .filter_map(|(addr, names)| {
+                let name = names.into_iter().next()?;
+                Some(FidMatch {
+                    addr,
+                    name,
+                    by_signature: true,
+                })
+            }),
+    );
     let mut signature_renames = Vec::new();
     for m in &fids {
         let addr = Address::new(Rc::clone(code_space), m.addr);
-        let sid = prog.arch().symboltab.find_function_across_scopes(&addr).map(|(sid, _)| sid);
+        let sid = prog
+            .arch()
+            .symboltab
+            .find_function_across_scopes(&addr)
+            .map(|(sid, _)| sid);
         if let Some(sid) = sid {
             if !is_generic_placeholder_name(prog.arch().symboltab.symbol(sid).get_name()) {
                 continue;
@@ -6416,9 +6903,11 @@ fn commit_analysis_output(
             }
         }
     }
-    let contested = kuna_signature_names::contested_addresses(signature_renames.iter().map(
-        |(addr, _, name)| (prog.thumb_normalized(addr.get_offset()), *name),
-    ));
+    let contested = kuna_signature_names::contested_addresses(
+        signature_renames
+            .iter()
+            .map(|(addr, _, name)| (prog.thumb_normalized(addr.get_offset()), *name)),
+    );
     for (addr, sid, name) in signature_renames {
         if !contested.contains(&prog.thumb_normalized(addr.get_offset())) {
             prog.arch_mut().symboltab.rename_symbol(sid, name)?;
@@ -6439,9 +6928,17 @@ fn commit_analysis_output(
         };
         let taken = prog.lookup_symbol(&m.name).is_some()
             || prog.lookup_data_alias(&m.name).is_some()
-            || prog.arch().symboltab.get_global_scope().is_some_and(|global| {
-                !prog.arch().symboltab.find_by_name(global, &m.name).is_empty()
-            });
+            || prog
+                .arch()
+                .symboltab
+                .get_global_scope()
+                .is_some_and(|global| {
+                    !prog
+                        .arch()
+                        .symboltab
+                        .find_by_name(global, &m.name)
+                        .is_empty()
+                });
         if taken || !is_generic_placeholder_name(prog.arch().symboltab.symbol(sid).get_name()) {
             continue;
         }
@@ -6481,15 +6978,25 @@ fn commit_analysis_output(
     //    unterminated literals read back as one 39-byte string). A bounded
     //    fact's `len` is the exact element count — there is no terminator.
     let blob_extents = crate::kuna_blobdata::Extents::new(&out.blobs);
-    let wide = if prog.arch().analysis_widestrings { out.wide_strings.as_slice() } else { &[] };
-    let wide32 =
-        if prog.arch().analysis_widestrings32 { out.wide_strings32.as_slice() } else { &[] };
+    let wide = if prog.arch().analysis_widestrings {
+        out.wide_strings.as_slice()
+    } else {
+        &[]
+    };
+    let wide32 = if prog.arch().analysis_widestrings32 {
+        out.wide_strings32.as_slice()
+    } else {
+        &[]
+    };
     //    The shared `len / char_size` element count stays exact for both: a
     //    terminated fact's len includes its NUL slot, a bounded fact's len IS
     //    the element count (char_size 1, no terminator byte to add).
     let typed_spans: Vec<(u64, u64)> = {
-        let mut spans: Vec<(u64, u64)> =
-            out.typed_data.iter().map(|d| (d.addr, d.addr + d.type_.get_size().max(1) as u64)).collect();
+        let mut spans: Vec<(u64, u64)> = out
+            .typed_data
+            .iter()
+            .map(|d| (d.addr, d.addr + d.type_.get_size().max(1) as u64))
+            .collect();
         spans.sort_unstable();
         let mut merged: Vec<(u64, u64)> = Vec::with_capacity(spans.len());
         for (lo, hi) in spans {
@@ -6517,7 +7024,10 @@ fn commit_analysis_output(
                 let i = starts.partition_point(|&s| s <= f.addr);
                 match starts.get(i) {
                     Some(&s) if s < f.addr + u64::from(f.len) => {
-                        unlace_analysis::pass::StringFact { addr: f.addr, len: (s - f.addr) as u32 }
+                        unlace_analysis::pass::StringFact {
+                            addr: f.addr,
+                            len: (s - f.addr) as u32,
+                        }
                     }
                     _ => *f,
                 }
@@ -6564,7 +7074,9 @@ fn commit_analysis_output(
         // `fact.len` is the BYTE span including the terminator, so the array's
         // element count is `len / char_size` — identical for the 1-byte width.
         let ch = if char_size == 1 {
-            prog.arch().types().get_type_char(prog.arch().types().get_size_of_char())?
+            prog.arch()
+                .types()
+                .get_type_char(prog.arch().types().get_size_of_char())?
         } else {
             // A language whose <coretypes> declares no 2- or 4-byte character type
             // has no `wchar2`/`wchar4` to plant. Skip the wide fact rather than fail
@@ -6584,11 +7096,14 @@ fn commit_analysis_output(
         // name). Placed in its namespace-resolved scope (global here).
         let name = format!("s_{:x}", fact.addr);
         let arch = prog.arch_mut();
-        let (scope, base) =
-            arch.symboltab.find_create_scope_from_symbol_name(&name, "::", None, num_spaces)?;
+        let (scope, base) = arch
+            .symboltab
+            .find_create_scope_from_symbol_name(&name, "::", None, num_spaces)?;
         let (sid, _) =
-            arch.symboltab.add_symbol_mapped(scope, &base, arr, &addr, &Address::new_invalid())?;
-        arch.symboltab.set_attribute(sid, unlace_decomp::varnode::varnode_flags::typelock);
+            arch.symboltab
+                .add_symbol_mapped(scope, &base, arr, &addr, &Address::new_invalid())?;
+        arch.symboltab
+            .set_attribute(sid, unlace_decomp::varnode::varnode_flags::typelock);
     }
 
     // 4a'. (kuna `cfstrings`) Mach-O Core Foundation constant strings. Each
@@ -6620,14 +7135,19 @@ fn commit_analysis_output(
             let arch = prog.arch();
             match arch.symboltab.get_global_scope() {
                 Some(global) => (
-                    arch.symboltab.find_function(global, &addr).is_some() || arch.is_lazy_entry(addr.get_offset()),
-                    arch.symboltab.find_container(global, &addr, 1, &Address::new_invalid()).map(|e| {
-                        let entry = arch.symboltab.entry(global, e);
-                        let start = entry.addr.get_offset();
-                        let end = start.saturating_add(u64::try_from(entry.size).unwrap_or(u64::MAX));
-                        let inside = start >= fact.addr && end <= fact.addr.saturating_add(u64::from(fact.size));
-                        (entry.symbol, inside)
-                    }),
+                    arch.symboltab.find_function(global, &addr).is_some()
+                        || arch.is_lazy_entry(addr.get_offset()),
+                    arch.symboltab
+                        .find_container(global, &addr, 1, &Address::new_invalid())
+                        .map(|e| {
+                            let entry = arch.symboltab.entry(global, e);
+                            let start = entry.addr.get_offset();
+                            let end =
+                                start.saturating_add(u64::try_from(entry.size).unwrap_or(u64::MAX));
+                            let inside = start >= fact.addr
+                                && end <= fact.addr.saturating_add(u64::from(fact.size));
+                            (entry.symbol, inside)
+                        }),
                 ),
                 None => (false, None),
             }
@@ -6635,29 +7155,40 @@ fn commit_analysis_output(
         if function {
             continue;
         }
-        prog.arch().string_manager.borrow_mut().base.register_string_at(&addr, &fact.bytes, 1);
+        prog.arch()
+            .string_manager
+            .borrow_mut()
+            .base
+            .register_string_at(&addr, &fact.bytes, 1);
         let arch = prog.arch_mut();
         arch.cfstring_entries.insert(fact.addr);
         if let Some((sid, inside)) = holder {
             if inside {
-                arch.symboltab.set_attribute(sid, unlace_decomp::varnode::varnode_flags::readonly);
+                arch.symboltab
+                    .set_attribute(sid, unlace_decomp::varnode::varnode_flags::readonly);
             }
             continue;
         }
         let ty = match &cfstring_record {
             Some(record) if record.get_size() == fact.size as i32 => Rc::clone(record),
             _ => {
-                let ch = prog.arch().types().get_type_char(prog.arch().types().get_size_of_char())?;
+                let ch = prog
+                    .arch()
+                    .types()
+                    .get_type_char(prog.arch().types().get_size_of_char())?;
                 prog.arch().types().get_type_array(fact.size as i32, ch)?
             }
         };
         let name = format!("s_{:x}", fact.addr);
         let arch = prog.arch_mut();
-        let (scope, base) =
-            arch.symboltab.find_create_scope_from_symbol_name(&name, "::", None, num_spaces)?;
+        let (scope, base) = arch
+            .symboltab
+            .find_create_scope_from_symbol_name(&name, "::", None, num_spaces)?;
         let (sid, _) =
-            arch.symboltab.add_symbol_mapped(scope, &base, ty, &addr, &Address::new_invalid())?;
-        arch.symboltab.set_attribute(sid, unlace_decomp::varnode::varnode_flags::typelock);
+            arch.symboltab
+                .add_symbol_mapped(scope, &base, ty, &addr, &Address::new_invalid())?;
+        arch.symboltab
+            .set_attribute(sid, unlace_decomp::varnode::varnode_flags::typelock);
     }
 
     // 4b. (kuna `libctypes`) Data symbols the analysis tier types outright — the
@@ -6687,15 +7218,22 @@ fn commit_analysis_output(
                 Some(global) => {
                     let names_import = |s: &unlace_decomp::database::Symbol| {
                         import_slot
-                            && matches!(s.kind, unlace_decomp::database::SymbolKind::Function { .. })
+                            && matches!(
+                                s.kind,
+                                unlace_decomp::database::SymbolKind::Function { .. }
+                            )
                     };
                     (arch.symboltab.find_function(global, &addr).is_some() && !import_slot)
                         || arch.is_lazy_entry(addr.get_offset())
                         || arch
                             .symboltab
-                            .find_container_matching(global, &addr, 1, &Address::new_invalid(), |s| {
-                                !names_import(s)
-                            })
+                            .find_container_matching(
+                                global,
+                                &addr,
+                                1,
+                                &Address::new_invalid(),
+                                |s| !names_import(s),
+                            )
                             .is_some()
                 }
                 None => false,
@@ -6706,12 +7244,9 @@ fn commit_analysis_output(
         }
         let name = data_names.name(&fact.name, fact.addr);
         let arch = prog.arch_mut();
-        let (scope, base) = arch.symboltab.find_create_scope_from_symbol_name(
-            &name,
-            "::",
-            None,
-            num_spaces,
-        )?;
+        let (scope, base) = arch
+            .symboltab
+            .find_create_scope_from_symbol_name(&name, "::", None, num_spaces)?;
         let (sid, _) = arch.symboltab.add_symbol_mapped(
             scope,
             &base,
@@ -6743,7 +7278,8 @@ fn commit_analysis_output(
     //     symbols`; the stash is drained so a second `read symbols` does not
     //     re-commit.
     let loader_data_objects = std::mem::take(&mut prog.loader_data_objects);
-    let global_widths: std::collections::BTreeMap<u64, u32> = out.global_widths.iter().copied().collect();
+    let global_widths: std::collections::BTreeMap<u64, u32> =
+        out.global_widths.iter().copied().collect();
     for (sym_addr, name, size) in &loader_data_objects {
         let addr = Address::new(Rc::clone(code_space), *sym_addr);
         let occupied = {
@@ -6779,15 +7315,20 @@ fn commit_analysis_output(
             let elem = types.get_base(width, unlace_decomp::dtype::type_metatype::TYPE_UNKNOWN)?;
             types.get_type_array(clamped / width, elem)?
         } else {
-            prog.arch().types().get_base(clamped, unlace_decomp::dtype::type_metatype::TYPE_UNKNOWN)?
+            prog.arch()
+                .types()
+                .get_base(clamped, unlace_decomp::dtype::type_metatype::TYPE_UNKNOWN)?
         };
         let name = data_names.name(name, *sym_addr);
         let arch = prog.arch_mut();
-        let (scope, base) =
-            arch.symboltab.find_create_scope_from_symbol_name(&name, "::", None, num_spaces)?;
+        let (scope, base) = arch
+            .symboltab
+            .find_create_scope_from_symbol_name(&name, "::", None, num_spaces)?;
         let (sid, _) =
-            arch.symboltab.add_symbol_mapped(scope, &base, ct, &addr, &Address::new_invalid())?;
-        arch.symboltab.set_attribute(sid, unlace_decomp::varnode::varnode_flags::namelock);
+            arch.symboltab
+                .add_symbol_mapped(scope, &base, ct, &addr, &Address::new_invalid())?;
+        arch.symboltab
+            .set_attribute(sid, unlace_decomp::varnode::varnode_flags::namelock);
     }
 
     // 4c. (kuna `blobs`) Embedded images and archives, last so every named or
@@ -6800,7 +7341,8 @@ fn commit_analysis_output(
     //     recovers (`unlace_decomp::kuna_elfmaindecl`). Any prototype another
     //     stream parks on `main` (DWARF) wins outright.
     for (addr, pieces) in out.main_decl_at {
-        prog.arch_mut().elfmain_main_decl = Some((Address::new(Rc::clone(code_space), addr), pieces));
+        prog.arch_mut().elfmain_main_decl =
+            Some((Address::new(Rc::clone(code_space), addr), pieces));
     }
 
     // 5. Library prototypes (the kuna analog of ApplyDataArchiveAnalyzer): park each
@@ -6813,7 +7355,11 @@ fn commit_analysis_output(
     //    (kuna `objcivars`) An Objective-C method whose class has an instance
     //    struct takes `self` as `Class *` instead of the encoding's `id`.
     let self_types: std::collections::HashMap<String, Rc<unlace_decomp::dtype::Datatype>> =
-        if prog.arch().analysis_objcivars { out.objc_self_types.into_iter().collect() } else { Default::default() };
+        if prog.arch().analysis_objcivars {
+            out.objc_self_types.into_iter().collect()
+        } else {
+            Default::default()
+        };
     // (kuna `objcrettype`/`objcresolve`) The ObjC class table the engine types
     // and resolves message sends with; it rides the `objc` gate like the labels.
     if let Some(table) = out.objc_classes {
@@ -6833,7 +7379,8 @@ fn commit_analysis_output(
             }
         }
         let name = pieces.name.clone();
-        prog.arch_mut().merge_function_prototype_pieces(&name, pieces);
+        prog.arch_mut()
+            .merge_function_prototype_pieces(&name, pieces);
     }
 
     // 5c. Library prototypes bound by ENTRY ADDRESS. Same
@@ -6847,7 +7394,8 @@ fn commit_analysis_output(
     //     C++ streams below so DWARF ground truth still wins over both.
     for (addr, pieces) in out.prototypes_at {
         let a = Address::new(Rc::clone(code_space), addr);
-        prog.arch_mut().merge_function_prototype_pieces_at(&a, pieces);
+        prog.arch_mut()
+            .merge_function_prototype_pieces_at(&a, pieces);
     }
     let held: Vec<_> = out
         .arm_float_prototypes
@@ -6875,7 +7423,8 @@ fn commit_analysis_output(
             if unlace_decomp::kuna_x87intrinsic::is_intrinsic(name) {
                 continue;
             }
-            prog.arch_mut().set_function_prototype_model(name, Rc::clone(&cdecl));
+            prog.arch_mut()
+                .set_function_prototype_model(name, Rc::clone(&cdecl));
         }
     }
 
@@ -6897,13 +7446,23 @@ fn commit_analysis_output(
     //     applied declaration returning a class by value) are recorded.
     let mut msvc_applied: std::collections::BTreeSet<u64> = std::collections::BTreeSet::new();
     for sig in cppsig_protos {
-        let unlace_analysis::demangle::kuna_cppsig::SelectedSig { addr, pieces, model, msvc } = sig;
+        let unlace_analysis::demangle::kuna_cppsig::SelectedSig {
+            addr,
+            pieces,
+            model,
+            msvc,
+        } = sig;
         let a = Address::new(Rc::clone(code_space), addr);
         let model = match model {
             Some(name) => {
-                let model = prog.arch().get_model(name).filter(|m| m.get_alias_parent().is_none()).cloned();
+                let model = prog
+                    .arch()
+                    .get_model(name)
+                    .filter(|m| m.get_alias_parent().is_none())
+                    .cloned();
                 let Some(model) = model else { continue };
-                prog.arch_mut().set_function_prototype_model_at(&a, Rc::clone(&model));
+                prog.arch_mut()
+                    .set_function_prototype_model_at(&a, Rc::clone(&model));
                 Some(model)
             }
             None => None,
@@ -6912,11 +7471,14 @@ fn commit_analysis_output(
             let target = crate::assertions::ProtoTarget::At(a.clone(), String::new());
             crate::assertions::lock_prototype_on_symbol(prog, &target, &pieces, model.as_ref());
             if let Some(space) = a.get_space() {
-                prog.arch_mut().msvcsig_import_slots.insert((space.get_index(), addr));
+                prog.arch_mut()
+                    .msvcsig_import_slots
+                    .insert((space.get_index(), addr));
             }
             msvc_applied.insert(addr);
         }
-        prog.arch_mut().merge_function_prototype_pieces_at(&a, pieces);
+        prog.arch_mut()
+            .merge_function_prototype_pieces_at(&a, pieces);
     }
     let space_index = code_space.get_index();
     for (addr, decl) in msvc_byval {
@@ -6925,7 +7487,8 @@ fn commit_analysis_output(
         }
     }
     for (addr, kind) in msvc_builders {
-        let applied = kind == unlace_decomp::kuna_msvcbyval::Builder::This || msvc_applied.contains(&addr);
+        let applied =
+            kind == unlace_decomp::kuna_msvcbyval::Builder::This || msvc_applied.contains(&addr);
         if applied {
             Rc::make_mut(&mut prog.arch_mut().msvc_builders).insert((space_index, addr), kind);
         }
@@ -6939,31 +7502,44 @@ fn commit_analysis_output(
     //     global by-name query never reaches). Empty when the gate is off.
     for (addr, pieces) in out.cpp_dwarf.prototypes {
         let a = Address::new(Rc::clone(code_space), addr);
-        prog.arch_mut().merge_function_prototype_pieces_at(&a, pieces);
+        prog.arch_mut()
+            .merge_function_prototype_pieces_at(&a, pieces);
     }
 
     // 5f. (kuna `vtabletypes`) The typed vtables, after every prototype source
     //     above so a slot's function pointer carries the methods' signature.
     if prog.arch().analysis_vtabletypes {
-        unlace_decomp::kuna_vtabletypes::install(prog.arch(), code_space, &out.cpp_vtables.classes)?;
+        unlace_decomp::kuna_vtabletypes::install(
+            prog.arch(),
+            code_space,
+            &out.cpp_vtables.classes,
+        )?;
     }
 
     // 5e. (kuna `importvote`) The call sites of every PLT import, read by the
     //     engine when a function tail-calls one no declaration reached.
     let space = code_space.get_index();
-    let sites: std::collections::HashMap<(i32, u64), Vec<u64>> =
-        out.import_call_sites.into_iter().map(|(stub, sites)| ((space, stub), sites)).collect();
+    let sites: std::collections::HashMap<(i32, u64), Vec<u64>> = out
+        .import_call_sites
+        .into_iter()
+        .map(|(stub, sites)| ((space, stub), sites))
+        .collect();
     if !sites.is_empty() {
         prog.arch_mut().kuna_import_sites = Rc::new(sites);
     }
     for fact in go_prototypes {
         let a = Address::new(Rc::clone(code_space), fact.entry);
         if let Some(site) = fact.status_site {
-            prog.arch_mut().go_chanrecv_status_sites.insert(fact.entry, site);
+            prog.arch_mut()
+                .go_chanrecv_status_sites
+                .insert(fact.entry, site);
         }
-        prog.arch_mut().set_go_dwarf_prototype_at(&a, fact.pieces, fact.string_input);
+        prog.arch_mut()
+            .set_go_dwarf_prototype_at(&a, fact.pieces, fact.string_input);
         if let Some(receiver) = fact.pointer_receiver {
-            prog.arch_mut().symboltab.attach_go_pointer_receiver(&a, receiver);
+            prog.arch_mut()
+                .symboltab
+                .attach_go_pointer_receiver(&a, receiver);
         }
     }
 
@@ -6982,8 +7558,11 @@ fn commit_analysis_output(
     //    ELF decompile would regress. The producing pass already gates on the
     //    object being ARM (so on a non-ARM binary `out.context_paints` is empty),
     //    and this swallow is the belt-and-suspenders second guard.
-    prog.arch_mut().arm_inventory_modes = out.inventory_context_paints.iter()
-        .filter_map(|paint| Some((paint.addr, paint.end?, paint.value))).collect();
+    prog.arch_mut().arm_inventory_modes = out
+        .inventory_context_paints
+        .iter()
+        .filter_map(|paint| Some((paint.addr, paint.end?, paint.value)))
+        .collect();
     for paint in &out.context_paints {
         let begin = Address::new(Rc::clone(code_space), paint.addr);
         // Drop the Result: an unregistered context variable (non-ARM language) is
@@ -7040,7 +7619,11 @@ fn commit_analysis_output(
         };
         let val = fact.value & unlace_base::address::calc_mask(loc.size as i32);
         let begin = Address::new(Rc::clone(code_space), fact.func_addr);
-        let track = prog.arch_mut().loader_entry_tracks.entry(begin).or_default();
+        let track = prog
+            .arch_mut()
+            .loader_entry_tracks
+            .entry(begin)
+            .or_default();
         if !track.iter().any(|seed| seed.loc == loc) {
             track.push(unlace_sleigh::globalcontext::TrackedContext { loc, val });
         }
@@ -7061,7 +7644,9 @@ fn commit_analysis_output(
             let Ok(loc) = prog.arch().get_register_varnode(fact.reg.as_bytes()) else {
                 continue;
             };
-            let Some(space) = loc.space.clone() else { continue };
+            let Some(space) = loc.space.clone() else {
+                continue;
+            };
             let piece = unlace_decomp::fspec::ParameterPieces {
                 addr: Address::new(space, loc.offset),
                 type_: Some(Rc::clone(&fact.type_)),
@@ -7077,7 +7662,9 @@ fn commit_analysis_output(
         // pieces parked by address under their model, `self` pinned to the
         // `swiftself` register as explicit input storage.
         for fact in &out.swift_types.declared {
-            let Some(model) = prog.arch().get_model(fact.model).cloned() else { continue };
+            let Some(model) = prog.arch().get_model(fact.model).cloned() else {
+                continue;
+            };
             let mut pieces = fact.pieces.clone();
             // A struct member's `self` arrives exploded into the argument
             // registers unless its body reads `swiftself` first (a mutating
@@ -7103,8 +7690,12 @@ fn commit_analysis_output(
                 let Ok(loc) = prog.arch().get_register_varnode(fact.self_reg.as_bytes()) else {
                     continue;
                 };
-                let Some(space) = loc.space.clone() else { continue };
-                let Some(ty) = pieces.intypes.get(slot as usize).cloned() else { continue };
+                let Some(space) = loc.space.clone() else {
+                    continue;
+                };
+                let Some(ty) = pieces.intypes.get(slot as usize).cloned() else {
+                    continue;
+                };
                 pieces.input_storage.push((
                     slot,
                     unlace_decomp::fspec::ParameterPieces {
@@ -7126,17 +7717,31 @@ fn commit_analysis_output(
         // hints, the register again resolved through the language.
         commit_model_facts(prog, code_space, &out.swift_types.models);
         commit_input_hints(prog, code_space, &out.swift_types.input_hints);
-        use unlace_decomp::kuna_swiftcall::{SWIFTASYNCCALL, SWIFTASYNCCALL_THROWS, SWIFTCALL, SWIFTCALL_THROWS};
+        use unlace_decomp::kuna_swiftcall::{
+            SWIFTASYNCCALL, SWIFTASYNCCALL_THROWS, SWIFTCALL, SWIFTCALL_THROWS,
+        };
         let model = |name: &str| prog.arch().get_model(name).cloned();
         let reg = |name: &str| {
             let loc = prog.arch().get_register_varnode(name.as_bytes()).ok()?;
-            Some((Address::new(loc.space.clone()?, loc.offset), loc.size as i32))
+            Some((
+                Address::new(loc.space.clone()?, loc.offset),
+                loc.size as i32,
+            ))
         };
-        let models = (model(SWIFTCALL), model(SWIFTCALL_THROWS), model(SWIFTASYNCCALL), model(SWIFTASYNCCALL_THROWS));
-        if let (Some((self_reg, error_reg, async_reg)), (Some(plain), Some(throws), Some(asynccall), Some(asynccall_throws))) =
-            (out.swift_types.regs, models)
+        let models = (
+            model(SWIFTCALL),
+            model(SWIFTCALL_THROWS),
+            model(SWIFTASYNCCALL),
+            model(SWIFTASYNCCALL_THROWS),
+        );
+        if let (
+            Some((self_reg, error_reg, async_reg)),
+            (Some(plain), Some(throws), Some(asynccall), Some(asynccall_throws)),
+        ) = (out.swift_types.regs, models)
         {
-            if let (Some(self_reg), Some(error_reg), Some(async_reg)) = (reg(self_reg), reg(error_reg), reg(async_reg)) {
+            if let (Some(self_reg), Some(error_reg), Some(async_reg)) =
+                (reg(self_reg), reg(error_reg), reg(async_reg))
+            {
                 let maybe_self = out
                     .swift_types
                     .models
@@ -7144,25 +7749,31 @@ fn commit_analysis_output(
                     .filter(|f| f.maybe_self)
                     .map(|f| (code_space.get_index(), f.func_addr))
                     .collect();
-                let no_self = out.swift_types.no_self.iter().map(|&f| (code_space.get_index(), f)).collect();
-                prog.arch_mut().loader_swift_abi = Some(Rc::new(unlace_decomp::kuna_swiftcall::SwiftAbi {
-                    self_reg,
-                    error_reg,
-                    async_reg,
-                    async_context: prog
-                        .arch()
-                        .types()
-                        .find_by_name("swift.AsyncContext")
-                        .ok()
-                        .flatten()
-                        .and_then(|t| prog.arch().types().get_type_pointer(8, t, 1).ok()),
-                    throws,
-                    plain,
-                    asynccall,
-                    asynccall_throws,
-                    maybe_self,
-                    no_self,
-                }));
+                let no_self = out
+                    .swift_types
+                    .no_self
+                    .iter()
+                    .map(|&f| (code_space.get_index(), f))
+                    .collect();
+                prog.arch_mut().loader_swift_abi =
+                    Some(Rc::new(unlace_decomp::kuna_swiftcall::SwiftAbi {
+                        self_reg,
+                        error_reg,
+                        async_reg,
+                        async_context: prog
+                            .arch()
+                            .types()
+                            .find_by_name("swift.AsyncContext")
+                            .ok()
+                            .flatten()
+                            .and_then(|t| prog.arch().types().get_type_pointer(8, t, 1).ok()),
+                        throws,
+                        plain,
+                        asynccall,
+                        asynccall_throws,
+                        maybe_self,
+                        no_self,
+                    }));
             }
         }
     }
@@ -7190,7 +7801,12 @@ fn commit_analysis_output(
             .call_fixups
             .iter()
             .map(|fact| fact.func_name.as_str())
-            .chain(out.symbols.iter().filter(|s| s.kind == SymKind::Function).map(|s| s.name.as_str()))
+            .chain(
+                out.symbols
+                    .iter()
+                    .filter(|s| s.kind == SymKind::Function)
+                    .map(|s| s.name.as_str()),
+            )
             .collect();
         for func_name in names {
             if unlace_analysis::callfixup::call_fixup_name_for_function(func_name, &map).is_none() {
@@ -7211,10 +7827,13 @@ fn commit_analysis_output(
             let Some(addr) = fact.addr else { continue };
             let a = Address::new(Rc::clone(code_space), addr);
             let arch = prog.arch();
-            let Some(scope) = arch.symboltab.get_global_scope() else { continue };
-            let Some(sid) = arch.symboltab.find_function(scope, &a) else { continue };
+            let Some(scope) = arch.symboltab.get_global_scope() else {
+                continue;
+            };
+            let Some(sid) = arch.symboltab.find_function(scope, &a) else {
+                continue;
+            };
             install_named_call_fixup(prog.arch_mut(), sid, &fact.func_name);
-
         }
     }
 
@@ -7241,40 +7860,73 @@ fn commit_analysis_output(
     //     its callers. A function the model already describes is left alone,
     //     and so is one the model gives a hidden return pointer: the two then
     //     disagree about the return, which input storage cannot settle.
-    let mut by_func: std::collections::BTreeMap<u64, Vec<(i32, String, unlace_decomp::fspec::ParameterPieces)>> =
-        std::collections::BTreeMap::new();
+    let mut by_func: std::collections::BTreeMap<
+        u64,
+        Vec<(i32, String, unlace_decomp::fspec::ParameterPieces)>,
+    > = std::collections::BTreeMap::new();
     for fact in &out.dwarf_param_regs {
-        let Ok(vd) = prog.arch().get_register_varnode(fact.reg.as_bytes()) else { continue };
-        let Some(space) = vd.space.clone() else { continue };
+        let Ok(vd) = prog.arch().get_register_varnode(fact.reg.as_bytes()) else {
+            continue;
+        };
+        let Some(space) = vd.space.clone() else {
+            continue;
+        };
         let size = fact.type_.get_size() as u64;
         if size == 0 || size > u64::from(vd.size) {
             continue;
         }
-        let offset = if space.is_big_endian() { vd.offset + u64::from(vd.size) - size } else { vd.offset };
+        let offset = if space.is_big_endian() {
+            vd.offset + u64::from(vd.size) - size
+        } else {
+            vd.offset
+        };
         let piece = unlace_decomp::fspec::ParameterPieces {
             addr: Address::new(space, offset),
             type_: Some(Rc::clone(&fact.type_)),
-            flags: unlace_decomp::fspec::parameter_pieces_flags::TYPELOCK | unlace_decomp::fspec::parameter_pieces_flags::NAMELOCK,
+            flags: unlace_decomp::fspec::parameter_pieces_flags::TYPELOCK
+                | unlace_decomp::fspec::parameter_pieces_flags::NAMELOCK,
         };
-        by_func.entry(fact.func_addr).or_default().push((fact.start as i32, fact.name.clone(), piece));
+        by_func.entry(fact.func_addr).or_default().push((
+            fact.start as i32,
+            fact.name.clone(),
+            piece,
+        ));
     }
     for (func, params) in by_func {
         let entry = Address::new(Rc::clone(code_space), func);
-        let Some(mut pieces) = prog.arch().symboltab.function_proto_pieces_across_scopes(&entry).cloned() else { continue };
+        let Some(mut pieces) = prog
+            .arch()
+            .symboltab
+            .function_proto_pieces_across_scopes(&entry)
+            .cloned()
+        else {
+            continue;
+        };
         let modelled = prog.arch().default_fp().and_then(|model| {
             let mut res = Vec::new();
             let manager = prog.arch().manage();
-            model.assign_parameter_storage(&pieces, &mut res, true, prog.arch().types(), manager).ok()?;
-            if res.iter().any(|p| p.flags & unlace_decomp::fspec::parameter_pieces_flags::HIDDENRETPARM != 0) {
+            model
+                .assign_parameter_storage(&pieces, &mut res, true, prog.arch().types(), manager)
+                .ok()?;
+            if res
+                .iter()
+                .any(|p| p.flags & unlace_decomp::fspec::parameter_pieces_flags::HIDDENRETPARM != 0)
+            {
                 return Some(true);
             }
             let inputs: Vec<Address> = res
                 .iter()
                 .skip(1)
-                .filter(|p| p.flags & unlace_decomp::fspec::parameter_pieces_flags::HIDDENRETPARM == 0)
+                .filter(|p| {
+                    p.flags & unlace_decomp::fspec::parameter_pieces_flags::HIDDENRETPARM == 0
+                })
                 .map(|p| p.addr.clone())
                 .collect();
-            Some(params.iter().all(|(i, _, p)| inputs.get(*i as usize) == Some(&p.addr)))
+            Some(
+                params
+                    .iter()
+                    .all(|(i, _, p)| inputs.get(*i as usize) == Some(&p.addr)),
+            )
         });
         if modelled != Some(false) {
             continue;
@@ -7282,28 +7934,46 @@ fn commit_analysis_output(
         for (index, name, piece) in params {
             pieces.input_storage.retain(|(i, _)| *i != index);
             pieces.input_storage.push((index, piece.clone()));
-            let locks = prog.arch_mut().loader_param_locks.entry(entry.clone()).or_default();
+            let locks = prog
+                .arch_mut()
+                .loader_param_locks
+                .entry(entry.clone())
+                .or_default();
             locks.retain(|(i, _, _)| *i != index);
             locks.push((index, name, piece));
         }
-        prog.arch_mut().set_function_prototype_pieces_at(&entry, pieces);
+        prog.arch_mut()
+            .set_function_prototype_pieces_at(&entry, pieces);
     }
     // 8b. (kuna `dwarfscopes`) Register-held DWARF locals, parked on the
     //     architecture by function entry and mapped by the decompile at the
     //     use point of the value the register holds at `start`.
     for fact in out.dwarf_reg_locals {
-        let Ok(vd) = prog.arch().get_register_varnode(fact.reg.as_bytes()) else { continue };
-        let Some(space) = vd.space.clone() else { continue };
+        let Ok(vd) = prog.arch().get_register_varnode(fact.reg.as_bytes()) else {
+            continue;
+        };
+        let Some(space) = vd.space.clone() else {
+            continue;
+        };
         let size = fact.type_.get_size() as u64;
         if size == 0 || size > u64::from(vd.size) {
             continue;
         }
-        let offset = if space.is_big_endian() { vd.offset + u64::from(vd.size) - size } else { vd.offset };
+        let offset = if space.is_big_endian() {
+            vd.offset + u64::from(vd.size) - size
+        } else {
+            vd.offset
+        };
         prog.arch_mut()
             .dwarf_reg_locals
             .entry(fact.func_addr)
             .or_default()
-            .push((fact.name, fact.type_, Address::new(space, offset), fact.start));
+            .push((
+                fact.name,
+                fact.type_,
+                Address::new(space, offset),
+                fact.start,
+            ));
     }
 
     // 9. Source-line comments from the DWARF and CVF trace analyzers.
@@ -7318,7 +7988,12 @@ fn commit_analysis_output(
     //    the default output is byte-identical to before this arm.
     for fact in out.header_comments {
         let fad = Address::new(Rc::clone(code_space), fact.func_addr);
-        prog.arch_mut().commentdb.add_comment_no_duplicate(unlace_decomp::comment::comment_type::HEADER, &fad, &fad, &fact.text);
+        prog.arch_mut().commentdb.add_comment_no_duplicate(
+            unlace_decomp::comment::comment_type::HEADER,
+            &fad,
+            &fad,
+            &fact.text,
+        );
     }
     for fact in out.comments {
         let fad = Address::new(Rc::clone(code_space), fact.func_addr);
@@ -7337,7 +8012,10 @@ fn commit_analysis_output(
 /// Bootstrap from a parsed XML document root (a `<binaryimage>` or a
 /// `<decompilertest>` wrapping one), reading the arch id off the
 /// `<binaryimage>` element.  Used by `load file` (path → parse → bootstrap).
-pub fn bootstrap_from_root(root: &Rc<Element>, spec_roots: &[String]) -> KunaResult<ConsoleProgram> {
+pub fn bootstrap_from_root(
+    root: &Rc<Element>,
+    spec_roots: &[String],
+) -> KunaResult<ConsoleProgram> {
     Bootstrap::new(spec_roots).xml_root(root)
 }
 
@@ -7382,13 +8060,18 @@ fn is_object_binary(bytes: &[u8]) -> bool {
         return true; // ELF — always admitted (the established path).
     }
     // Mach-O thin (any of the four byte orders) or fat/universal.
-    if matches!(m, MACHO_LE64 | MACHO_LE32 | MACHO_BE64 | MACHO_BE32 | MACHO_FAT) {
+    if matches!(
+        m,
+        MACHO_LE64 | MACHO_LE32 | MACHO_BE64 | MACHO_BE32 | MACHO_FAT
+    ) {
         return true;
     }
     // PE: the `MZ` DOS stub. `object`'s typed PE parser validates the `PE\0\0`
     // header at the e_lfanew offset; a bare `MZ` that isn't a real PE will be
     // rejected there with a clean error (not silently mis-loaded).
-    if &bytes[..2] == b"MZ" || unlace_analysis::loader::pe_dosmagic::is_pe_with_corrupt_dos_magic(bytes) {
+    if &bytes[..2] == b"MZ"
+        || unlace_analysis::loader::pe_dosmagic::is_pe_with_corrupt_dos_magic(bytes)
+    {
         return true;
     }
     // Bare COFF object: a leading little-endian `IMAGE_FILE_MACHINE_*` machine
@@ -7422,8 +8105,7 @@ fn is_apple_container(bytes: &[u8]) -> bool {
         && unlace_analysis::loader::kuna_kernelcache::is_container(bytes)
 }
 
-const RAW_IMAGE_INPUT_HINT: &str =
-    "unrecognized input format; for a headerless image use --raw-image --target <SLEIGH-language-id> --base <address> and at least one --entry/--addr <address>";
+const RAW_IMAGE_INPUT_HINT: &str = "unrecognized input format; for a headerless image use --raw-image --target <SLEIGH-language-id> --base <address> and at least one --entry/--addr <address>";
 
 /// Bootstrap from a file path (the `decomp_dbg` `load file [<target>] <path>`
 /// body). Detects the format by its leading bytes: `VZ` routes to the direct TE
@@ -7461,7 +8143,10 @@ pub(crate) enum FileInput {
 /// Read and classify the file [`bootstrap_from_file`] loads.
 pub(crate) fn classify_file(path: &str) -> KunaResult<FileInput> {
     if unlace_analysis::loader::kuna_dyldcache::is_dyld_cache_file(Path::new(path))
-        || unlace_analysis::image_bytes::ImageBytes::map_thin_macho(path).ok().flatten().is_some()
+        || unlace_analysis::image_bytes::ImageBytes::map_thin_macho(path)
+            .ok()
+            .flatten()
+            .is_some()
     {
         return Ok(FileInput::Object);
     }
@@ -7492,7 +8177,9 @@ pub(crate) fn classify_file(path: &str) -> KunaResult<FileInput> {
     let root = match store.parse_document(&bytes) {
         Ok(document) => document.get_root().clone(),
         Err(error) => {
-            return Err(KunaError::lowlevel(format!("{error}; {RAW_IMAGE_INPUT_HINT}")));
+            return Err(KunaError::lowlevel(format!(
+                "{error}; {RAW_IMAGE_INPUT_HINT}"
+            )));
         }
     };
     if find_binaryimage(&root).is_none() {
@@ -7538,8 +8225,7 @@ fn read_loader_symbols_generic(loader: &dyn LoadImage) -> Vec<ProgramSymbol> {
         // reaches every surface -- `functions`, the `// Function:` header, the
         // emitted declaration and the call site. A no-op (borrowed, unallocated)
         // for every real name.
-        let name =
-            unlace_decomp::kuna_symbolnamebound::bound_scope_path(&name, "::").into_owned();
+        let name = unlace_decomp::kuna_symbolnamebound::bound_scope_path(&name, "::").into_owned();
         out.push(ProgramSymbol {
             ordinal: 0,
             name,
@@ -7578,8 +8264,8 @@ pub const UNBOUNDED_SIZE: int4 = 0;
 #[cfg(test)]
 mod te_probe_tests {
     use super::reader_is_te_image;
-    use unlace_analysis::loadimage_te::{synthetic::TeImage, TE_PROBE_LEN};
     use std::io::Cursor;
+    use unlace_analysis::loadimage_te::{TE_PROBE_LEN, synthetic::TeImage};
 
     #[test]
     fn the_probe_reads_only_the_bytes_it_needs() {
@@ -7606,11 +8292,11 @@ mod te_probe_tests {
 mod tests {
     use std::rc::Rc;
 
-    use unlace_base::space::{spacetype, AddrSpace};
+    use unlace_base::space::{AddrSpace, spacetype};
     use unlace_num::opcodes::OpCode;
     use unlace_num::pcoderaw::VarnodeData;
 
-    use super::{entry_name_rank, is_vtable_slot_name, replaces_slot_name, FixedRefs, WholeOp};
+    use super::{FixedRefs, WholeOp, entry_name_rank, is_vtable_slot_name, replaces_slot_name};
 
     /// The analysis commit replaces a slot-index name with a real one, and nothing else.
     #[test]
@@ -7623,7 +8309,10 @@ mod tests {
             ("Box::sub_1234", "vfunc_1"),
             ("area", "vfunc_1"),
         ] {
-            assert!(!replaces_slot_name(name, existing), "{name} must not replace {existing}");
+            assert!(
+                !replaces_slot_name(name, existing),
+                "{name} must not replace {existing}"
+            );
         }
     }
 
@@ -7632,7 +8321,9 @@ mod tests {
     #[test]
     fn only_a_relocatable_objects_import_slots_are_stashed() {
         let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../..");
-        let linked = format!("{root}/decompiler/crates/unlace-analysis/tests/fixtures/elf_gotdata_x86_64.so");
+        let linked = format!(
+            "{root}/decompiler/crates/unlace-analysis/tests/fixtures/elf_gotdata_x86_64.so"
+        );
         let object = format!("{root}/tests/fixtures/mips-weak-imports/page-64-be.o");
         for (path, relocatable) in [(linked, false), (object, true)] {
             let image = unlace_analysis::loadimage_object::ObjectLoadImage::open(&path).unwrap();
@@ -7660,12 +8351,20 @@ mod tests {
     }
 
     fn vn(space: &Rc<AddrSpace>, offset: u64, size: u32) -> VarnodeData {
-        VarnodeData { space: Some(Rc::clone(space)), offset, size }
+        VarnodeData {
+            space: Some(Rc::clone(space)),
+            offset,
+            size,
+        }
     }
 
     /// Harvest `ops` as one instruction of length 4 at `vma`.
     fn harvest(ram: &Rc<AddrSpace>, vma: u64, ops: Vec<WholeOp>) -> FixedRefs {
-        let mut refs = FixedRefs { ops, filled: 0, ..FixedRefs::default() };
+        let mut refs = FixedRefs {
+            ops,
+            filled: 0,
+            ..FixedRefs::default()
+        };
         refs.filled = refs.ops.len();
         refs.harvest(Some(ram), vma + 4);
         refs
@@ -7693,13 +8392,37 @@ mod tests {
 
         assert!(falls(vec![]), "no ops at all is a fall-through");
         assert!(falls(vec![plain()]));
-        assert!(!falls(vec![branch(&ram, 0x2000)]), "an ordinary jmp ends it");
-        assert!(falls(vec![branch(&ram, 0x2000), plain()]), "the LAST op decides");
-        assert!(falls(vec![branch(&cst, 2)]), "p-code-relative, inside this instruction");
-        assert!(falls(vec![branch(&ram, 0x1004)]), "`goto` to its own fall-through");
-        assert!(!falls(vec![op(OpCode::CPUI_BRANCHIND, None, vec![vn(&ram, 0, 4)])]));
-        assert!(!falls(vec![op(OpCode::CPUI_RETURN, None, vec![vn(&ram, 0, 4)])]));
-        assert!(falls(vec![op(OpCode::CPUI_CALL, None, vec![vn(&ram, 0x2000, 4)])]));
+        assert!(
+            !falls(vec![branch(&ram, 0x2000)]),
+            "an ordinary jmp ends it"
+        );
+        assert!(
+            falls(vec![branch(&ram, 0x2000), plain()]),
+            "the LAST op decides"
+        );
+        assert!(
+            falls(vec![branch(&cst, 2)]),
+            "p-code-relative, inside this instruction"
+        );
+        assert!(
+            falls(vec![branch(&ram, 0x1004)]),
+            "`goto` to its own fall-through"
+        );
+        assert!(!falls(vec![op(
+            OpCode::CPUI_BRANCHIND,
+            None,
+            vec![vn(&ram, 0, 4)]
+        )]));
+        assert!(!falls(vec![op(
+            OpCode::CPUI_RETURN,
+            None,
+            vec![vn(&ram, 0, 4)]
+        )]));
+        assert!(falls(vec![op(
+            OpCode::CPUI_CALL,
+            None,
+            vec![vn(&ram, 0x2000, 4)]
+        )]));
     }
 
     /// The literal-pool read, in the two shapes SLEIGH spells one in: a `LOAD`
@@ -7715,7 +8438,10 @@ mod tests {
         assert_eq!(harvest(&ram, 0x8440, vec![load]).reads, vec![(0x8458, 4)]);
 
         let direct = op(OpCode::CPUI_COPY, None, vec![vn(&ram, 0x404018, 4)]);
-        assert_eq!(harvest(&ram, 0x1000, vec![direct]).reads, vec![(0x404018, 4)]);
+        assert_eq!(
+            harvest(&ram, 0x1000, vec![direct]).reads,
+            vec![(0x404018, 4)]
+        );
 
         // A `LOAD`'s address varnode is pointer-sized whatever the access is, so
         // the width has to come from the output: `ldrh r0,[0x1003c]` lifts to a
@@ -7726,7 +8452,10 @@ mod tests {
             Some(vn(&cst, 0x100, 2)),
             vec![vn(&cst, 0x1b, 8), vn(&ram, 0x1003c, 4)],
         );
-        assert_eq!(harvest(&ram, 0x10034, vec![narrow]).reads, vec![(0x1003c, 2)]);
+        assert_eq!(
+            harvest(&ram, 0x10034, vec![narrow]).reads,
+            vec![(0x1003c, 2)]
+        );
     }
 
     /// The `in0` of a `LOAD`/`STORE`/`CALLOTHER` is a space id, and of a flow op
@@ -7758,13 +8487,19 @@ mod tests {
         assert!(harvest(&ram, 0x1000c, vec![skip]).flow_targets.is_empty());
         // A real branch to anywhere else is kept.
         let real = op(OpCode::CPUI_CBRANCH, None, vec![vn(&ram, 0x83d0, 4)]);
-        assert_eq!(harvest(&ram, 0x1000c, vec![real]).flow_targets, vec![0x83d0]);
+        assert_eq!(
+            harvest(&ram, 0x1000c, vec![real]).flow_targets,
+            vec![0x83d0]
+        );
     }
-
 
     /// Which of an entry's names `function_entries_canonical` reports.
     fn wins<'a>(a: &'a str, b: &'a str) -> &'a str {
-        if entry_name_rank(a).cmp(&entry_name_rank(b)).then_with(|| a.cmp(b)).is_le() {
+        if entry_name_rank(a)
+            .cmp(&entry_name_rank(b))
+            .then_with(|| a.cmp(b))
+            .is_le()
+        {
             a
         } else {
             b
@@ -7780,8 +8515,14 @@ mod tests {
     #[test]
     fn a_real_method_name_outranks_its_vtable_slot_index() {
         for (real, slot) in [
-            ("std::basic_streambuf::showmanyc", "std::basic_stringbuf::vfunc_5"),
-            ("std::basic_streambuf::uflow", "std::basic_stringbuf::vfunc_7"),
+            (
+                "std::basic_streambuf::showmanyc",
+                "std::basic_stringbuf::vfunc_5",
+            ),
+            (
+                "std::basic_streambuf::uflow",
+                "std::basic_stringbuf::vfunc_7",
+            ),
             ("Shape::perimeter", "Circle::vfunc_2"),
             ("Widget::render", "Widget::vfunc_for_Drawable_2"),
             // The real name being much the longer of the two is the whole point.
@@ -7795,7 +8536,10 @@ mod tests {
     #[test]
     fn a_vtable_slot_index_still_outranks_a_placeholder() {
         for placeholder in ["sub_140002c2c", "FUN_140002c2c", "func_140002c2c"] {
-            assert_eq!(wins("std::bad_alloc::vfunc_0", placeholder), "std::bad_alloc::vfunc_0");
+            assert_eq!(
+                wins("std::bad_alloc::vfunc_0", placeholder),
+                "std::bad_alloc::vfunc_0"
+            );
         }
     }
 
@@ -7819,7 +8563,10 @@ mod tests {
             "::vfunc_0",
             "vtable_3",
         ] {
-            assert!(!is_vtable_slot_name(not_a_slot), "{not_a_slot} is not a slot name");
+            assert!(
+                !is_vtable_slot_name(not_a_slot),
+                "{not_a_slot} is not a slot name"
+            );
         }
     }
 }
@@ -7829,7 +8576,7 @@ mod symbolstream_tests {
     use std::rc::Rc;
 
     use unlace_base::address::Address;
-    use unlace_base::space::{spacetype, AddrSpace};
+    use unlace_base::space::{AddrSpace, spacetype};
 
     use super::{EntryProvenance, ProgramSymbol, SymbolStream};
 
@@ -7872,7 +8619,11 @@ mod symbolstream_tests {
         assert_eq!(stream.len(), 4);
 
         register(&mut stream, &sp, "dup", 9);
-        assert_eq!(names(&stream), ["a", "b", "dup"], "both `dup` records go, the new one lands last");
+        assert_eq!(
+            names(&stream),
+            ["a", "b", "dup"],
+            "both `dup` records go, the new one lands last"
+        );
         assert_eq!(stream.len(), 3);
         assert_eq!(stream.lookup("dup").unwrap().addr.get_offset(), 9);
     }
@@ -7897,10 +8648,20 @@ mod symbolstream_tests {
         second.provenance = EntryProvenance::UndefinedExternal;
         stream.push(second);
 
-        let at_two = stream.lookup_at("dup", &Address::new(Rc::clone(&sp), 2)).unwrap();
+        let at_two = stream
+            .lookup_at("dup", &Address::new(Rc::clone(&sp), 2))
+            .unwrap();
         assert_eq!(at_two.provenance, EntryProvenance::UndefinedExternal);
-        assert!(stream.lookup_at("dup", &Address::new(Rc::clone(&sp), 3)).is_none());
-        assert!(stream.lookup_at("absent", &Address::new(Rc::clone(&sp), 1)).is_none());
+        assert!(
+            stream
+                .lookup_at("dup", &Address::new(Rc::clone(&sp), 3))
+                .is_none()
+        );
+        assert!(
+            stream
+                .lookup_at("absent", &Address::new(Rc::clone(&sp), 1))
+                .is_none()
+        );
     }
 
     /// However many times a name is re-registered, exactly one record stays live,
@@ -7916,7 +8677,10 @@ mod symbolstream_tests {
         assert_eq!(names(&stream), ["f", "g"]);
         assert_eq!(stream.len(), 2);
         assert_eq!(stream.lookup("f").unwrap().addr.get_offset(), 500);
-        assert!(stream.records.len() < 128, "tombstones must be reclaimed, not accumulated");
+        assert!(
+            stream.records.len() < 128,
+            "tombstones must be reclaimed, not accumulated"
+        );
     }
 
     /// Compaction renumbers every slot, so the index must survive it. Moving
@@ -7941,7 +8705,10 @@ mod symbolstream_tests {
         assert_eq!(names(&stream), expected);
         assert_eq!(stream.len(), 101);
         for name in &expected {
-            assert_eq!(stream.lookup(name).map(|r| r.name.as_str()), Some(name.as_str()));
+            assert_eq!(
+                stream.lookup(name).map(|r| r.name.as_str()),
+                Some(name.as_str())
+            );
         }
         assert_eq!(stream.lookup("keep73").unwrap().addr.get_offset(), 73);
         assert_eq!(stream.lookup("keep0").unwrap().addr.get_offset(), 1_000);

@@ -24,9 +24,9 @@
 //! `catch_unwind` and assert the C++ (x86) result the port fails to produce, so
 //! the file stays green-or-documents-the-bug rather than aborting the harness.
 
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use unlace_decomp::rangeutil::{CircleRange, ValueSet, ValueSetGraph, ValueSetSolver};
 use unlace_num::opcodes::OpCode;
-use std::panic::{catch_unwind, AssertUnwindSafe};
 
 // ---------------------------------------------------------------------------
 // F1: right-shift-by->=64 wrapping divergence (the central finding)
@@ -244,8 +244,16 @@ fn w6_s5_pushforward_int_sright_out4_no_overflow() {
     // as i64), sign_extend(_,31) -> 0xFFFF_FFFF_8000_0000 (i32::MIN sign-extended).
     //   sa = 1: left  = (0xFFFF_FFFF_8000_0000 >> 1) & 0xffff_ffff = 0xC000_0000
     //           right = (((0x7fff_ffff - 1) >> 1) + 1) & 0xffff_ffff = 0x4000_0000
-    assert_eq!(out.get_min(), 0xC000_0000u64, "out4 left matches x86 oracle");
-    assert_eq!(out.get_end(), 0x4000_0000u64, "out4 right matches x86 oracle");
+    assert_eq!(
+        out.get_min(),
+        0xC000_0000u64,
+        "out4 left matches x86 oracle"
+    );
+    assert_eq!(
+        out.get_end(),
+        0x4000_0000u64,
+        "out4 right matches x86 oracle"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -296,15 +304,33 @@ fn w6_s5_add_equation_is_slot_ordered_stable() {
     // Expected stored order (stable slot sort): idx0=slot0, idx1=slot1, idx2=slot2, idx3=slot2.
     assert!(vs.does_equation_apply(0, 0), "equations[0] must be slot 0");
     assert!(vs.does_equation_apply(1, 1), "equations[1] must be slot 1");
-    assert!(vs.does_equation_apply(2, 2), "equations[2] must be slot 2 (first inserted)");
-    assert!(vs.does_equation_apply(3, 2), "equations[3] must be slot 2 (second inserted)");
+    assert!(
+        vs.does_equation_apply(2, 2),
+        "equations[2] must be slot 2 (first inserted)"
+    );
+    assert!(
+        vs.does_equation_apply(3, 2),
+        "equations[3] must be slot 2 (second inserted)"
+    );
     // No slot mismatch should report apply.
-    assert!(!vs.does_equation_apply(0, 1), "index 0 is slot 0, not slot 1");
-    assert!(!vs.does_equation_apply(4, 2), "out-of-range index never applies");
+    assert!(
+        !vs.does_equation_apply(0, 1),
+        "index 0 is slot 0, not slot 1"
+    );
+    assert!(
+        !vs.does_equation_apply(4, 2),
+        "out-of-range index never applies"
+    );
 
     // get_landmark returns the FIRST equation's range -> slot 0 -> value 0xB.
-    let lm = vs.get_landmark().expect("landmark exists (type_code 0 matches)");
-    assert_eq!(lm.get_min(), 0xB, "landmark is the first (slot-0) equation's range");
+    let lm = vs
+        .get_landmark()
+        .expect("landmark exists (type_code 0 matches)");
+    assert_eq!(
+        lm.get_min(),
+        0xB,
+        "landmark is the first (slot-0) equation's range"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -345,7 +371,11 @@ fn w6_s5_get_size_full_8byte_range_overflow_diverges() {
     // so the port must compute 0x100 without panicking.
     let mut full1 = CircleRange::new_empty();
     full1.set_full(1);
-    assert_eq!(full1.get_size(), 0x100, "1-byte full range size is 256, no wrap");
+    assert_eq!(
+        full1.get_size(),
+        0x100,
+        "1-byte full range size is 256, no wrap"
+    );
 }
 
 /// `circle_union` of two disjoint singletons that are NOT adjacent returns 2
@@ -381,7 +411,11 @@ fn w6_s5_intersect_mixed_step_phase() {
     assert_eq!(code, 0, "intersect should yield a single interval");
     assert!(!a.is_empty());
     // The intersection is the odd values in [1,7]; step becomes 2, phase 1.
-    assert_eq!(a.get_step(), 2, "intersect raises stride to the larger step");
+    assert_eq!(
+        a.get_step(),
+        2,
+        "intersect raises stride to the larger step"
+    );
     assert_eq!(a.get_min() % 2, 1, "phase preserved (odd)");
 }
 
@@ -426,9 +460,9 @@ fn w6_s5_wto_orders_cycle_as_nested_component() {
     // establish_topological_order, so root_index = 3.
     let graph = AdjGraph {
         successors: vec![
-            vec![n1],     // 0 -> 1
-            vec![n2],     // 1 -> 2
-            vec![n1],     // 2 -> 1 (back-edge forming the loop)
+            vec![n1], // 0 -> 1
+            vec![n2], // 1 -> 2
+            vec![n1], // 2 -> 1 (back-edge forming the loop)
         ],
         root_index: 3,
         root_edges: vec![n0],
@@ -438,8 +472,15 @@ fn w6_s5_wto_orders_cycle_as_nested_component() {
     let order = solver.iteration_order();
 
     // Node 0 must come first; the loop {1,2} forms a component headed by 1.
-    assert_eq!(order.first(), Some(&n0), "acyclic predecessor 0 iterates first");
-    assert!(order.contains(&n1) && order.contains(&n2), "all loop nodes present");
+    assert_eq!(
+        order.first(),
+        Some(&n0),
+        "acyclic predecessor 0 iterates first"
+    );
+    assert!(
+        order.contains(&n1) && order.contains(&n2),
+        "all loop nodes present"
+    );
     // The component head (node 1) must be recorded as a partition head.
     assert!(
         solver.part_head_of(n1).is_some(),
@@ -448,7 +489,10 @@ fn w6_s5_wto_orders_cycle_as_nested_component() {
     // Node 1 must appear before node 2 in the component (head leads the body).
     let p1 = order.iter().position(|&x| x == n1).unwrap();
     let p2 = order.iter().position(|&x| x == n2).unwrap();
-    assert!(p1 < p2, "component head precedes its body in iteration order");
+    assert!(
+        p1 < p2,
+        "component head precedes its body in iteration order"
+    );
 }
 
 /// A purely linear chain (no cycle) must produce a flat order root->0->1->2 with
@@ -467,8 +511,15 @@ fn w6_s5_wto_linear_chain_has_no_components() {
     };
     solver.establish_topological_order(&graph);
     let order = solver.iteration_order();
-    assert_eq!(order, vec![n0, n1, n2], "linear chain iterates in flow order");
+    assert_eq!(
+        order,
+        vec![n0, n1, n2],
+        "linear chain iterates in flow order"
+    );
     for &n in &[n0, n1, n2] {
-        assert!(solver.part_head_of(n).is_none(), "no node is a component head");
+        assert!(
+            solver.part_head_of(n).is_none(),
+            "no node is a component head"
+        );
     }
 }

@@ -37,17 +37,26 @@ pub fn definition(arch: &Architecture, entry: &Address) -> Option<Address> {
         return None;
     }
     let target = target_of(&arch.plt_local, entry.get_offset())?;
-    if arch.symboltab.function_proto_pieces_across_scopes(entry).is_some() {
+    if arch
+        .symboltab
+        .function_proto_pieces_across_scopes(entry)
+        .is_some()
+    {
         return None;
     }
     let space = entry.get_space()?;
     let def = Address::new(std::rc::Rc::clone(space), target);
-    arch.symboltab.function_display_name_across_scopes(&def).map(|_| def)
+    arch.symboltab
+        .function_display_name_across_scopes(&def)
+        .map(|_| def)
 }
 
 /// The definition `stub` is bound to in `table` (ascending by stub).
 pub fn target_of(table: &[(u64, u64)], stub: u64) -> Option<u64> {
-    table.binary_search_by_key(&stub, |&(s, _)| s).ok().map(|i| table[i].1)
+    table
+        .binary_search_by_key(&stub, |&(s, _)| s)
+        .ok()
+        .map(|i| table[i].1)
 }
 
 #[cfg(test)]

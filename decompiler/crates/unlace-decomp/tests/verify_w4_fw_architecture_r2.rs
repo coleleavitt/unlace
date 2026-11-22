@@ -25,7 +25,7 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, addrspace_flags, spacetype};
 
 use unlace_decomp::architecture::Architecture;
 

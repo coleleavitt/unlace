@@ -16,7 +16,7 @@ use unlace_base::types::Wrap;
 
 use unlace_sleigh::slghpatexpress::PatternExpressionContext;
 use unlace_sleigh::slghpattern::{
-    sla, ContextPattern, DisjointPattern, InstructionPattern, OrPattern, Pattern, PatternBlock,
+    ContextPattern, DisjointPattern, InstructionPattern, OrPattern, Pattern, PatternBlock, sla,
 };
 
 // -- harness -----------------------------------------------------------------
@@ -152,10 +152,22 @@ fn verify_w2pat_or_door_delegated_negative_sa_mutates_or_operand() {
 
     // result: all three requirements still at byte 0, UNSHIFTED
     assert_eq!(res.num_disjoint(), 3);
-    assert!(res.is_match(&ByteWalker::instr(&[0x11, 0, 0, 0, 0])).unwrap());
-    assert!(res.is_match(&ByteWalker::instr(&[0x22, 0, 0, 0, 0])).unwrap());
-    assert!(res.is_match(&ByteWalker::instr(&[0x33, 0, 0, 0, 0])).unwrap());
-    assert!(!res.is_match(&ByteWalker::instr(&[0, 0x11, 0, 0, 0])).unwrap());
+    assert!(
+        res.is_match(&ByteWalker::instr(&[0x11, 0, 0, 0, 0]))
+            .unwrap()
+    );
+    assert!(
+        res.is_match(&ByteWalker::instr(&[0x22, 0, 0, 0, 0]))
+            .unwrap()
+    );
+    assert!(
+        res.is_match(&ByteWalker::instr(&[0x33, 0, 0, 0, 0]))
+            .unwrap()
+    );
+    assert!(
+        !res.is_match(&ByteWalker::instr(&[0, 0x11, 0, 0, 0]))
+            .unwrap()
+    );
 
     // the Or OPERAND was mutated through the delegation: its byte-0
     // requirements moved to byte 1
@@ -182,11 +194,26 @@ fn verify_w2pat_or_door_positive_sa_shifts_receiver_clones_too() {
 
     assert_eq!(res.num_disjoint(), 3);
     // everything in the result moved to byte 1
-    assert!(res.is_match(&ByteWalker::instr(&[0, 0x11, 0, 0, 0])).unwrap());
-    assert!(res.is_match(&ByteWalker::instr(&[0, 0x22, 0, 0, 0])).unwrap());
-    assert!(res.is_match(&ByteWalker::instr(&[0, 0x33, 0, 0, 0])).unwrap());
-    assert!(!res.is_match(&ByteWalker::instr(&[0x11, 0, 0, 0, 0])).unwrap());
-    assert!(!res.is_match(&ByteWalker::instr(&[0x33, 0, 0, 0, 0])).unwrap());
+    assert!(
+        res.is_match(&ByteWalker::instr(&[0, 0x11, 0, 0, 0]))
+            .unwrap()
+    );
+    assert!(
+        res.is_match(&ByteWalker::instr(&[0, 0x22, 0, 0, 0]))
+            .unwrap()
+    );
+    assert!(
+        res.is_match(&ByteWalker::instr(&[0, 0x33, 0, 0, 0]))
+            .unwrap()
+    );
+    assert!(
+        !res.is_match(&ByteWalker::instr(&[0x11, 0, 0, 0, 0]))
+            .unwrap()
+    );
+    assert!(
+        !res.is_match(&ByteWalker::instr(&[0x33, 0, 0, 0, 0]))
+            .unwrap()
+    );
 
     // the receiver is NOT mutated this time
     assert!(a.is_match(&ByteWalker::instr(&[0x11, 0, 0, 0, 0])).unwrap());
@@ -317,10 +344,14 @@ fn verify_w2pat_identical_cross_type_specializes_asymmetry_and_overread() {
     // over-read: a 2-byte pattern still fetches 4 instruction bytes
     let two_byte = PatternBlock::new(0, 0xffff_0000, 0xabcd_0000);
     assert_eq!(two_byte.get_length(), 2);
-    assert!(two_byte
-        .is_instruction_match(&ByteWalker::instr(&[0xab, 0xcd]))
-        .is_err());
-    assert!(two_byte
-        .is_instruction_match(&ByteWalker::instr(&[0xab, 0xcd, 0, 0]))
-        .unwrap());
+    assert!(
+        two_byte
+            .is_instruction_match(&ByteWalker::instr(&[0xab, 0xcd]))
+            .is_err()
+    );
+    assert!(
+        two_byte
+            .is_instruction_match(&ByteWalker::instr(&[0xab, 0xcd, 0, 0]))
+            .unwrap()
+    );
 }

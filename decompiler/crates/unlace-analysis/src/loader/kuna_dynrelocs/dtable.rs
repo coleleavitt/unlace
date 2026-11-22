@@ -59,19 +59,41 @@ impl<'a> ElfView<'a> {
         if bytes.len() < 52 || &bytes[..4] != b"\x7fELF" {
             return None;
         }
-        let mut view = ElfView { bytes, is64: bytes[4] == 2, le: bytes[5] == 1, loads: Vec::new(), dynamic: None };
+        let mut view = ElfView {
+            bytes,
+            is64: bytes[4] == 2,
+            le: bytes[5] == 1,
+            loads: Vec::new(),
+            dynamic: None,
+        };
         let (phoff, phentsize, phnum) = if view.is64 {
-            (view.word(0x20)?, view.u16(0x36)? as u64, view.u16(0x38)? as u64)
+            (
+                view.word(0x20)?,
+                view.u16(0x36)? as u64,
+                view.u16(0x38)? as u64,
+            )
         } else {
-            (u64::from(view.u32(0x1c)?), view.u16(0x2a)? as u64, view.u16(0x2c)? as u64)
+            (
+                u64::from(view.u32(0x1c)?),
+                view.u16(0x2a)? as u64,
+                view.u16(0x2c)? as u64,
+            )
         };
         for i in 0..phnum {
             let ph = usize::try_from(phoff.checked_add(i.checked_mul(phentsize)?)?).ok()?;
             let p_type = view.u32(ph)?;
             let (offset, vaddr, filesz) = if view.is64 {
-                (view.word(ph + 8)?, view.word(ph + 0x10)?, view.word(ph + 0x20)?)
+                (
+                    view.word(ph + 8)?,
+                    view.word(ph + 0x10)?,
+                    view.word(ph + 0x20)?,
+                )
             } else {
-                (u64::from(view.u32(ph + 4)?), u64::from(view.u32(ph + 8)?), u64::from(view.u32(ph + 16)?))
+                (
+                    u64::from(view.u32(ph + 4)?),
+                    u64::from(view.u32(ph + 8)?),
+                    u64::from(view.u32(ph + 16)?),
+                )
             };
             match p_type {
                 PT_LOAD => view.loads.push((vaddr, filesz, offset)),
@@ -84,22 +106,38 @@ impl<'a> ElfView<'a> {
 
     fn u16(&self, at: usize) -> Option<u16> {
         let b: [u8; 2] = self.bytes.get(at..at + 2)?.try_into().ok()?;
-        Some(if self.le { u16::from_le_bytes(b) } else { u16::from_be_bytes(b) })
+        Some(if self.le {
+            u16::from_le_bytes(b)
+        } else {
+            u16::from_be_bytes(b)
+        })
     }
 
     fn u32(&self, at: usize) -> Option<u32> {
         let b: [u8; 4] = self.bytes.get(at..at + 4)?.try_into().ok()?;
-        Some(if self.le { u32::from_le_bytes(b) } else { u32::from_be_bytes(b) })
+        Some(if self.le {
+            u32::from_le_bytes(b)
+        } else {
+            u32::from_be_bytes(b)
+        })
     }
 
     fn u64(&self, at: usize) -> Option<u64> {
         let b: [u8; 8] = self.bytes.get(at..at + 8)?.try_into().ok()?;
-        Some(if self.le { u64::from_le_bytes(b) } else { u64::from_be_bytes(b) })
+        Some(if self.le {
+            u64::from_le_bytes(b)
+        } else {
+            u64::from_be_bytes(b)
+        })
     }
 
     /// One address-sized word.
     fn word(&self, at: usize) -> Option<u64> {
-        if self.is64 { self.u64(at) } else { self.u32(at).map(u64::from) }
+        if self.is64 {
+            self.u64(at)
+        } else {
+            self.u32(at).map(u64::from)
+        }
     }
 
     fn word_size(&self) -> usize {
@@ -110,24 +148,34 @@ impl<'a> ElfView<'a> {
     pub fn file_offset(&self, vaddr: u64) -> Option<usize> {
         self.loads.iter().find_map(|&(base, filesz, offset)| {
             let delta = vaddr.checked_sub(base)?;
-            (delta < filesz).then(|| usize::try_from(offset + delta).ok()).flatten()
+            (delta < filesz)
+                .then(|| usize::try_from(offset + delta).ok())
+                .flatten()
         })
     }
 
     /// The `width`-byte word at `vaddr` in the file's bytes.
     pub fn read_at(&self, vaddr: u64, width: usize) -> Option<u64> {
         let at = self.file_offset(vaddr)?;
-        if width == 8 { self.u64(at) } else { self.u32(at).map(u64::from) }
+        if width == 8 {
+            self.u64(at)
+        } else {
+            self.u32(at).map(u64::from)
+        }
     }
 
     /// The `(tag, value)` pairs of `PT_DYNAMIC`.
     fn dynamic_tags(&self) -> Vec<(u64, u64)> {
-        let Some((offset, size)) = self.dynamic else { return Vec::new() };
+        let Some((offset, size)) = self.dynamic else {
+            return Vec::new();
+        };
         let entry = 2 * self.word_size();
         let mut tags = Vec::new();
         let mut at = offset as usize;
         while at + entry <= (offset + size) as usize {
-            let (Some(tag), Some(value)) = (self.word(at), self.word(at + self.word_size())) else { break };
+            let (Some(tag), Some(value)) = (self.word(at), self.word(at + self.word_size())) else {
+                break;
+            };
             if tag == DT_NULL {
                 break;
             }
@@ -146,7 +194,10 @@ impl<'a> ElfView<'a> {
         } else {
             (u64::from(self.u32(at + 4)?), self.u16(at + 14)?)
         };
-        Some(DynSym { value, defined: shndx != 0 })
+        Some(DynSym {
+            value,
+            defined: shndx != 0,
+        })
     }
 }
 
@@ -164,8 +215,15 @@ pub fn dynamic_relocations(view: &ElfView) -> Option<(Vec<DynEntry>, Option<u64>
     };
     table(get(DT_RELA), get(DT_RELASZ), true);
     table(get(DT_REL), get(DT_RELSZ), false);
-    table(get(DT_JMPREL), get(DT_PLTRELSZ), get(DT_PLTREL) == Some(DT_RELA));
-    for (addr, size) in [(get(DT_RELR), get(DT_RELRSZ)), (get(DT_ANDROID_RELR), get(DT_ANDROID_RELRSZ))] {
+    table(
+        get(DT_JMPREL),
+        get(DT_PLTRELSZ),
+        get(DT_PLTREL) == Some(DT_RELA),
+    );
+    for (addr, size) in [
+        (get(DT_RELR), get(DT_RELRSZ)),
+        (get(DT_ANDROID_RELR), get(DT_ANDROID_RELRSZ)),
+    ] {
         if let (Some(addr), Some(size)) = (addr, size) {
             read_relr(view, addr, size, &mut out);
         }
@@ -182,16 +240,24 @@ pub fn dynamic_relocations(view: &ElfView) -> Option<(Vec<DynEntry>, Option<u64>
 }
 
 fn split_info(view: &ElfView, info: u64) -> (u32, u32) {
-    if view.is64 { ((info >> 32) as u32, info as u32) } else { ((info >> 8) as u32, (info & 0xff) as u32) }
+    if view.is64 {
+        ((info >> 32) as u32, info as u32)
+    } else {
+        ((info >> 8) as u32, (info & 0xff) as u32)
+    }
 }
 
 fn read_table(view: &ElfView, addr: u64, size: u64, rela: bool, out: &mut Vec<DynEntry>) {
     let w = view.word_size() as u64;
     let entsize = if rela { 3 * w } else { 2 * w };
-    let Some(start) = view.file_offset(addr) else { return };
+    let Some(start) = view.file_offset(addr) else {
+        return;
+    };
     for i in 0..size / entsize {
         let at = start + (i * entsize) as usize;
-        let (Some(offset), Some(info)) = (view.word(at), view.word(at + w as usize)) else { return };
+        let (Some(offset), Some(info)) = (view.word(at), view.word(at + w as usize)) else {
+            return;
+        };
         let addend = if rela {
             match view.word(at + 2 * w as usize) {
                 Some(a) if view.is64 => Some(a as i64),
@@ -202,7 +268,12 @@ fn read_table(view: &ElfView, addr: u64, size: u64, rela: bool, out: &mut Vec<Dy
             None
         };
         let (sym, r_type) = split_info(view, info);
-        out.push(DynEntry { offset, r_type, sym, addend });
+        out.push(DynEntry {
+            offset,
+            r_type,
+            sym,
+            addend,
+        });
     }
 }
 
@@ -210,19 +281,33 @@ fn read_table(view: &ElfView, addr: u64, size: u64, rela: bool, out: &mut Vec<Dy
 /// bitmap of the next `8 * word - 1` slots after the last address.
 fn read_relr(view: &ElfView, addr: u64, size: u64, out: &mut Vec<DynEntry>) {
     let w = view.word_size() as u64;
-    let Some(start) = view.file_offset(addr) else { return };
+    let Some(start) = view.file_offset(addr) else {
+        return;
+    };
     let mut base = 0u64;
     for i in 0..size / w {
-        let Some(entry) = view.word(start + (i * w) as usize) else { return };
+        let Some(entry) = view.word(start + (i * w) as usize) else {
+            return;
+        };
         if entry & 1 == 0 {
-            out.push(DynEntry { offset: entry, r_type: RELR_RELATIVE, sym: 0, addend: None });
+            out.push(DynEntry {
+                offset: entry,
+                r_type: RELR_RELATIVE,
+                sym: 0,
+                addend: None,
+            });
             base = entry.wrapping_add(w);
         } else {
             let mut bits = entry >> 1;
             let mut slot = base;
             while bits != 0 {
                 if bits & 1 != 0 {
-                    out.push(DynEntry { offset: slot, r_type: RELR_RELATIVE, sym: 0, addend: None });
+                    out.push(DynEntry {
+                        offset: slot,
+                        r_type: RELR_RELATIVE,
+                        sym: 0,
+                        addend: None,
+                    });
                 }
                 bits >>= 1;
                 slot = slot.wrapping_add(w);
@@ -266,46 +351,83 @@ fn read_aps2(view: &ElfView, addr: u64, size: u64, rela: bool, out: &mut Vec<Dyn
     const BY_OFFSET_DELTA: i64 = 2;
     const BY_ADDEND: i64 = 4;
     const HAS_ADDEND: i64 = 8;
-    let Some(start) = view.file_offset(addr) else { return };
-    let Some(data) = view.bytes.get(start..start + size as usize) else { return };
+    let Some(start) = view.file_offset(addr) else {
+        return;
+    };
+    let Some(data) = view.bytes.get(start..start + size as usize) else {
+        return;
+    };
     if !data.starts_with(b"APS2") {
         return;
     }
     let mut pos = 4;
-    let (Some(count), Some(mut offset)) = (sleb(data, &mut pos), sleb(data, &mut pos)) else { return };
+    let (Some(count), Some(mut offset)) = (sleb(data, &mut pos), sleb(data, &mut pos)) else {
+        return;
+    };
     let mut addend: i64 = 0;
     let mut left = count;
     while left > 0 {
-        let Some(group_size) = sleb(data, &mut pos) else { return };
-        let Some(flags) = sleb(data, &mut pos) else { return };
+        let Some(group_size) = sleb(data, &mut pos) else {
+            return;
+        };
+        let Some(flags) = sleb(data, &mut pos) else {
+            return;
+        };
         if group_size <= 0 || group_size > left {
             return;
         }
-        let group_delta = if flags & BY_OFFSET_DELTA != 0 { sleb(data, &mut pos) } else { Some(0) };
-        let group_info = if flags & BY_INFO != 0 { sleb(data, &mut pos) } else { Some(0) };
-        let (Some(group_delta), Some(group_info)) = (group_delta, group_info) else { return };
+        let group_delta = if flags & BY_OFFSET_DELTA != 0 {
+            sleb(data, &mut pos)
+        } else {
+            Some(0)
+        };
+        let group_info = if flags & BY_INFO != 0 {
+            sleb(data, &mut pos)
+        } else {
+            Some(0)
+        };
+        let (Some(group_delta), Some(group_info)) = (group_delta, group_info) else {
+            return;
+        };
         if rela && flags & HAS_ADDEND != 0 && flags & BY_ADDEND != 0 {
-            let Some(delta) = sleb(data, &mut pos) else { return };
+            let Some(delta) = sleb(data, &mut pos) else {
+                return;
+            };
             addend = addend.wrapping_add(delta);
         } else if !(rela && flags & HAS_ADDEND != 0) {
             addend = 0;
         }
         for _ in 0..group_size {
-            let delta = if flags & BY_OFFSET_DELTA != 0 { group_delta } else {
-                let Some(d) = sleb(data, &mut pos) else { return };
+            let delta = if flags & BY_OFFSET_DELTA != 0 {
+                group_delta
+            } else {
+                let Some(d) = sleb(data, &mut pos) else {
+                    return;
+                };
                 d
             };
             offset = offset.wrapping_add(delta);
-            let info = if flags & BY_INFO != 0 { group_info } else {
-                let Some(i) = sleb(data, &mut pos) else { return };
+            let info = if flags & BY_INFO != 0 {
+                group_info
+            } else {
+                let Some(i) = sleb(data, &mut pos) else {
+                    return;
+                };
                 i
             };
             if rela && flags & HAS_ADDEND != 0 && flags & BY_ADDEND == 0 {
-                let Some(d) = sleb(data, &mut pos) else { return };
+                let Some(d) = sleb(data, &mut pos) else {
+                    return;
+                };
                 addend = addend.wrapping_add(d);
             }
             let (sym, r_type) = split_info(view, info as u64);
-            out.push(DynEntry { offset: offset as u64, r_type, sym, addend: rela.then_some(addend) });
+            out.push(DynEntry {
+                offset: offset as u64,
+                r_type,
+                sym,
+                addend: rela.then_some(addend),
+            });
         }
         left -= group_size;
     }
@@ -328,7 +450,13 @@ mod tests {
         for w in words {
             image.extend_from_slice(&w.to_le_bytes());
         }
-        let view = ElfView { bytes: &image, is64: true, le: true, loads: vec![(0x40, 16, 0x40)], dynamic: None };
+        let view = ElfView {
+            bytes: &image,
+            is64: true,
+            le: true,
+            loads: vec![(0x40, 16, 0x40)],
+            dynamic: None,
+        };
         read_relr(&view, 0x40, 16, &mut slots);
         let offsets: Vec<u64> = slots.iter().map(|e| e.offset).collect();
         assert_eq!(offsets, vec![0x1000, 0x1008, 0x1018]);
@@ -353,7 +481,13 @@ mod tests {
         let mut image = vec![0u8; 0x40];
         image[..4].copy_from_slice(b"\x7fELF");
         image.extend_from_slice(&stream);
-        let view = ElfView { bytes: &image, is64: true, le: true, loads: vec![(0x40, stream.len() as u64, 0x40)], dynamic: None };
+        let view = ElfView {
+            bytes: &image,
+            is64: true,
+            le: true,
+            loads: vec![(0x40, stream.len() as u64, 0x40)],
+            dynamic: None,
+        };
         let mut out = Vec::new();
         read_aps2(&view, 0x40, stream.len() as u64, true, &mut out);
         assert_eq!(out.len(), 3);

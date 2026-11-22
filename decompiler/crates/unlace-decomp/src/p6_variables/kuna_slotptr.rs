@@ -32,7 +32,7 @@ use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::VarnodeId;
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::infra::architecture::Architecture;
 
@@ -78,14 +78,19 @@ impl SlotEvidence {
 
     /// The distinct values stored into exactly `(off, size)`.
     pub fn stores_at(&self, off: i64, size: int4) -> &[SlotStore] {
-        self.stores.get(&(off, size)).map(|v| v.as_slice()).unwrap_or(&[])
+        self.stores
+            .get(&(off, size))
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
     }
 
     /// Whether any pass saw a Varnode overlapping `[off, off + size)` at another
     /// offset or width.
     pub fn foreign_access(&self, off: i64, size: int4) -> bool {
         let end = off + size as i64;
-        self.accesses.iter().any(|&(o, s)| (o, s) != (off, size) && o < end && off < o + s as i64)
+        self.accesses
+            .iter()
+            .any(|&(o, s)| (o, s) != (off, size) && o < end && off < o + s as i64)
     }
 }
 
@@ -109,9 +114,15 @@ fn signed_offset(space: &AddrSpace, off: u64) -> i64 {
 
 fn classify_value(fd: &Funcdata, mut vn: VarnodeId) -> SlotStore {
     for _ in 0..COPY_CHAIN_LIMIT {
-        let Some(v) = fd.vbank().get(vn) else { return SlotStore::Opaque };
+        let Some(v) = fd.vbank().get(vn) else {
+            return SlotStore::Opaque;
+        };
         if v.is_constant() {
-            return if v.get_offset() == 0 { SlotStore::Null } else { SlotStore::Opaque };
+            return if v.get_offset() == 0 {
+                SlotStore::Null
+            } else {
+                SlotStore::Opaque
+            };
         }
         if v.is_input() {
             return SlotStore::Input(v.get_addr().clone(), v.get_size());
@@ -140,7 +151,9 @@ fn classify_value(fd: &Funcdata, mut vn: VarnodeId) -> SlotStore {
 /// INDIRECT stands for is that call's output once return recovery attaches it.
 fn call_of_iop(fd: &Funcdata, iop: VarnodeId) -> Option<SeqNum> {
     let off = fd.vbank().get(iop)?.get_offset();
-    let op = fd.obank().get(crate::context::OpId::from(slotmap::KeyData::from_ffi(off)))?;
+    let op = fd
+        .obank()
+        .get(crate::context::OpId::from(slotmap::KeyData::from_ffi(off)))?;
     matches!(op.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND).then(|| op.get_seq_num().clone())
 }
 
@@ -151,7 +164,9 @@ pub fn record_pass(fd: &Funcdata, space: &Rc<AddrSpace>) {
     let mut accesses: Vec<(i64, int4)> = Vec::new();
     let at = |off: u64| Address::new(Rc::clone(space), off);
     let vbank = fd.vbank();
-    let whole_space = vbank.iter_loc_addr_range(&at(0), &at(1)).chain(vbank.iter_loc_addr_range(&at(1), &at(0)));
+    let whole_space = vbank
+        .iter_loc_addr_range(&at(0), &at(1))
+        .chain(vbank.iter_loc_addr_range(&at(1), &at(0)));
     for vn in whole_space {
         let Some(v) = vbank.get(vn) else { continue };
         if v.is_free() {
@@ -159,7 +174,9 @@ pub fn record_pass(fd: &Funcdata, space: &Rc<AddrSpace>) {
         }
         let key = (signed_offset(space, v.get_offset()), v.get_size());
         accesses.push(key);
-        let Some(op) = v.get_def().and_then(|d| fd.obank().get(d)) else { continue };
+        let Some(op) = v.get_def().and_then(|d| fd.obank().get(d)) else {
+            continue;
+        };
         let store = match op.code() {
             OpCode::CPUI_INDIRECT | OpCode::CPUI_MULTIEQUAL => continue,
             OpCode::CPUI_COPY => match op.get_in(0) {
@@ -259,7 +276,9 @@ pub fn admit(ty: &Datatype, size: int4) -> Result<(), Decline> {
         return Err(Decline::Width);
     }
     match ty.get_ptr_to().map(|p| p.get_metatype()) {
-        None | Some(type_metatype::TYPE_UNKNOWN | type_metatype::TYPE_CODE) => Err(Decline::Pointee),
+        None | Some(type_metatype::TYPE_UNKNOWN | type_metatype::TYPE_CODE) => {
+            Err(Decline::Pointee)
+        }
         _ => Ok(()),
     }
 }

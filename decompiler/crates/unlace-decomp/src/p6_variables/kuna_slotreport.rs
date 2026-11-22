@@ -35,7 +35,10 @@ use crate::infra::architecture::Architecture;
 fn byte_scalar(dt: &crate::dtype::Datatype) -> bool {
     use crate::dtype::type_metatype;
     dt.get_size() == 1
-        && matches!(dt.get_metatype(), type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_BOOL)
+        && matches!(
+            dt.get_metatype(),
+            type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_BOOL
+        )
 }
 
 /// Is `dt` a type the recovery never committed to: an unknown of its width, or
@@ -44,7 +47,9 @@ pub fn uncommitted(dt: &crate::dtype::Datatype) -> bool {
     use crate::dtype::type_metatype;
     match dt.get_metatype() {
         type_metatype::TYPE_UNKNOWN => true,
-        type_metatype::TYPE_ARRAY => dt.get_array_base().is_some_and(|e| e.get_metatype() == type_metatype::TYPE_UNKNOWN),
+        type_metatype::TYPE_ARRAY => dt
+            .get_array_base()
+            .is_some_and(|e| e.get_metatype() == type_metatype::TYPE_UNKNOWN),
         _ => false,
     }
 }
@@ -86,7 +91,8 @@ impl DeclaredSlots {
                 .collect();
             homes.sort_unstable();
             homes.dedup();
-            let type_name = (!byte_scalar(ty)).then(|| crate::kuna_bytehonest::exported_type_name(arch, ty));
+            let type_name =
+                (!byte_scalar(ty)).then(|| crate::kuna_bytehonest::exported_type_name(arch, ty));
             let pointer_or_float = {
                 use crate::dtype::type_metatype::{TYPE_FLOAT, TYPE_PTR, TYPE_PTRREL};
                 matches!(ty.get_metatype(), TYPE_PTR | TYPE_PTRREL | TYPE_FLOAT)
@@ -109,14 +115,21 @@ impl DeclaredSlots {
     pub fn covering_type(&self, off: i64, size: i64) -> Option<String> {
         let (first, rest) = self.slots.get(&(off, size))?.split_first()?;
         let type_name = first.type_name.as_ref()?;
-        rest.iter().all(|d| d.type_name.as_ref() == Some(type_name)).then(|| type_name.clone())
+        rest.iter()
+            .all(|d| d.type_name.as_ref() == Some(type_name))
+            .then(|| type_name.clone())
     }
 
     /// The type the C declares the frame Symbol `name`, whose own type is
     /// uncommitted, at: its declaration's type, when that declaration lives at
     /// the Symbol's offset and width and is not a one-byte integer or `bool`.
     pub fn declared_type(&self, name: &str, off: i64, size: i64) -> Option<String> {
-        self.slots.get(&(off, size))?.iter().find(|d| d.name == name)?.type_name.clone()
+        self.slots
+            .get(&(off, size))?
+            .iter()
+            .find(|d| d.name == name)?
+            .type_name
+            .clone()
     }
 
     /// An index of the given `(offset, width)` homes, each with its
@@ -161,8 +174,12 @@ impl DeclaredSlots {
         let (first, rest) = self.slots.get(&(off, size))?.split_first()?;
         let agree = rest.iter().all(|d| d.type_name == first.type_name);
         if committed_only {
-            let pointer_or_float = first.pointer_or_float && rest.iter().all(|d| d.pointer_or_float);
-            return first.type_name.clone().filter(|_| agree && pointer_or_float);
+            let pointer_or_float =
+                first.pointer_or_float && rest.iter().all(|d| d.pointer_or_float);
+            return first
+                .type_name
+                .clone()
+                .filter(|_| agree && pointer_or_float);
         }
         match &first.type_name {
             _ if !agree => Some(format!("undefined{size}")),
@@ -185,12 +202,19 @@ mod tests {
                 pointer_or_float: ty.is_some_and(|t| t.ends_with('*') || t == "double"),
             })
             .collect();
-        DeclaredSlots { slots: HashMap::from([((-0x18, 8), declared)]) }
+        DeclaredSlots {
+            slots: HashMap::from([((-0x18, 8), declared)]),
+        }
     }
 
     #[test]
     fn one_declaration_types_its_slot() {
-        assert_eq!(slots(&[("v1", Some("double"))]).covering_type(-0x18, 8).as_deref(), Some("double"));
+        assert_eq!(
+            slots(&[("v1", Some("double"))])
+                .covering_type(-0x18, 8)
+                .as_deref(),
+            Some("double")
+        );
     }
 
     #[test]
@@ -201,14 +225,23 @@ mod tests {
 
     #[test]
     fn same_width_declarations_that_differ_leave_it_undefined() {
-        assert_eq!(slots(&[("v1", Some("char *")), ("v4", Some("long"))]).covering_type(-0x18, 8), None);
+        assert_eq!(
+            slots(&[("v1", Some("char *")), ("v4", Some("long"))]).covering_type(-0x18, 8),
+            None
+        );
     }
 
     #[test]
     fn a_byte_scalar_declaration_leaves_it_undefined() {
         assert_eq!(slots(&[("v1", None)]).covering_type(-0x18, 8), None);
-        assert_eq!(slots(&[("v1", None), ("v2", None)]).covering_type(-0x18, 8), None);
-        assert_eq!(slots(&[("v1", Some("long")), ("v2", None)]).covering_type(-0x18, 8), None);
+        assert_eq!(
+            slots(&[("v1", None), ("v2", None)]).covering_type(-0x18, 8),
+            None
+        );
+        assert_eq!(
+            slots(&[("v1", Some("long")), ("v2", None)]).covering_type(-0x18, 8),
+            None
+        );
     }
 
     #[test]

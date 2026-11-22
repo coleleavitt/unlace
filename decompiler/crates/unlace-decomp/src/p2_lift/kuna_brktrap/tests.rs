@@ -6,14 +6,14 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
 use crate::context::{ArchContext, OpId, TypeOp, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::op::pcodeop_flags;
 
@@ -27,7 +27,8 @@ const X0: u64 = 0x4000;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     for (index, name) in [(2, "ram"), (3, "register")] {
         m.insert_space(Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
@@ -48,7 +49,15 @@ fn build_manager() -> AddrSpaceManager {
 fn build_fd() -> Funcdata {
     let glb = Rc::new(ArchContext::new(build_manager()));
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
-    Funcdata::new("func", "func", glb, Address::new(ram, 0x1000), 0x1000_0000, 0x40).unwrap()
+    Funcdata::new(
+        "func",
+        "func",
+        glb,
+        Address::new(ram, 0x1000),
+        0x1000_0000,
+        0x40,
+    )
+    .unwrap()
 }
 
 fn space(fd: &Funcdata, name: &str) -> Rc<AddrSpace> {
@@ -64,23 +73,31 @@ fn make_op(fd: &mut Funcdata, opc: OpCode, pc_off: u64, ninputs: int4, start: bo
     let op = fd.obank_mut().create_at(ninputs, pc);
     fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, "op"));
     if start {
-        fd.obank_mut().get_mut(op).unwrap().set_flag(pcodeop_flags::startmark);
+        fd.obank_mut()
+            .get_mut(op)
+            .unwrap()
+            .set_flag(pcodeop_flags::startmark);
     }
     op
 }
 
 fn constant(fd: &mut Funcdata, value: uintb, size: int4) -> VarnodeId {
     let cspace = space(fd, "const");
-    fd.vbank_mut().create(size, Address::new(cspace, value), unk_type(size))
+    fd.vbank_mut()
+        .create(size, Address::new(cspace, value), unk_type(size))
 }
 
 fn register(fd: &mut Funcdata, off: u64, size: int4) -> VarnodeId {
     let rspace = space(fd, "register");
-    fd.vbank_mut().create(size, Address::new(rspace, off), unk_type(size))
+    fd.vbank_mut()
+        .create(size, Address::new(rspace, off), unk_type(size))
 }
 
 fn set_input(fd: &mut Funcdata, op: OpId, slot: int4, vn: VarnodeId) {
-    fd.obank_mut().get_mut(op).unwrap().set_input(Some(vn), slot);
+    fd.obank_mut()
+        .get_mut(op)
+        .unwrap()
+        .set_input(Some(vn), slot);
 }
 
 fn set_output(fd: &mut Funcdata, op: OpId, vn: VarnodeId) {
@@ -121,7 +138,10 @@ fn compiler_trap_immediates() {
     for imm in [0x1, 0x3e8, 0x5500, 0x5501, 0x55ff, 0xc470, 0xc473, 0xf003] {
         assert!(is_compiler_trap_immediate(imm), "{imm:#x}");
     }
-    for imm in [0x0, 0x2, 0x4, 0x5, 0x400, 0x800, 0x900, 0x3e7, 0x3e9, 0x54ff, 0x5600, 0x8000, 0xc46f, 0xc474, 0xf000, 0xf001, 0xf002, 0xf004] {
+    for imm in [
+        0x0, 0x2, 0x4, 0x5, 0x400, 0x800, 0x900, 0x3e7, 0x3e9, 0x54ff, 0x5600, 0x8000, 0xc46f,
+        0xc474, 0xf000, 0xf001, 0xf002, 0xf004,
+    ] {
         assert!(!is_compiler_trap_immediate(imm), "{imm:#x}");
     }
 }
@@ -139,8 +159,15 @@ fn the_fastfail_code_is_read_after_the_return_address() {
     let mut fd = build_fd();
     let callother = breakpoint(&mut fd, 0x1000, BRK_USEROP, 0xf003, 2);
     let op = branchind(&mut fd, 0x1000, PC);
-    assert_eq!(brk_site(&fd, op, BRK_USEROP as u32), Some((callother, 0xf003)));
-    let w0 = VarnodeData { space: Some(space(&fd, "register")), offset: X0, size: 4 };
+    assert_eq!(
+        brk_site(&fd, op, BRK_USEROP as u32),
+        Some((callother, 0xf003))
+    );
+    let w0 = VarnodeData {
+        space: Some(space(&fd, "register")),
+        offset: X0,
+        size: 4,
+    };
     read_code(&mut fd, callother, &w0).unwrap();
     let callop = fd.obank().get(callother).unwrap();
     assert_eq!(callop.num_input(), 4);

@@ -97,7 +97,9 @@ fn overlaps(a: &RegLoc, b: &RegLoc) -> bool {
 impl PushedRegisters {
     /// Is `addr`/`size` a register the function only ever pushed?
     pub fn is_push_only(&self, addr: &Address, size: i32) -> bool {
-        let Some(sp) = addr.get_space() else { return false };
+        let Some(sp) = addr.get_space() else {
+            return false;
+        };
         let probe: RegLoc = (sp.get_index(), addr.get_offset(), size);
         self.saved.iter().any(|s| overlaps(s, &probe))
             && !self.written.iter().any(|w| overlaps(w, &probe))
@@ -106,7 +108,9 @@ impl PushedRegisters {
 
 /// Is `addr` in the processor's `register` space?
 fn is_register(addr: &Address) -> bool {
-    addr.get_space().map(|s| s.get_name() == "register").unwrap_or(false)
+    addr.get_space()
+        .map(|s| s.get_name() == "register")
+        .unwrap_or(false)
 }
 
 /// The register a stored value came from, following the temporaries the same
@@ -143,7 +147,11 @@ fn stored_register(data: &Funcdata, ops: &[OpId], vn: VarnodeId, depth: u32) -> 
 fn vn_loc(data: &Funcdata, vn: VarnodeId) -> Option<RegLoc> {
     let v = data.vbank().get(vn)?;
     let addr = v.get_addr();
-    Some((addr.get_space()?.get_index(), addr.get_offset(), v.get_size()))
+    Some((
+        addr.get_space()?.get_index(),
+        addr.get_offset(),
+        v.get_size(),
+    ))
 }
 
 /// The location of a Varnode, if it is a register.
@@ -153,7 +161,11 @@ fn reg_loc(data: &Funcdata, vn: VarnodeId) -> Option<RegLoc> {
     if !is_register(addr) {
         return None;
     }
-    Some((addr.get_space()?.get_index(), addr.get_offset(), v.get_size()))
+    Some((
+        addr.get_space()?.get_index(),
+        addr.get_offset(),
+        v.get_size(),
+    ))
 }
 
 /// Record what the ops just emitted for one machine instruction say about
@@ -162,17 +174,27 @@ fn reg_loc(data: &Funcdata, vn: VarnodeId) -> Option<RegLoc> {
 /// Called from the flow build with `ops` the ops that instruction produced, in
 /// emission order.
 pub fn observe_instruction(data: &mut Funcdata, ops: &[OpId]) {
-    let Some(stackspc) = data.get_arch().manage().get_stack_space().cloned() else { return };
-    let Ok(spreg) = stackspc.get_spacebase(0) else { return };
-    let Some(spspace) = spreg.space.as_ref() else { return };
+    let Some(stackspc) = data.get_arch().manage().get_stack_space().cloned() else {
+        return;
+    };
+    let Ok(spreg) = stackspc.get_spacebase(0) else {
+        return;
+    };
+    let Some(spspace) = spreg.space.as_ref() else {
+        return;
+    };
     let sploc: RegLoc = (spspace.get_index(), spreg.offset, spreg.size as i32);
 
     let mut adjusts_sp = false;
     let mut written: Vec<RegLoc> = Vec::new();
     for &op in ops {
-        let Some(o) = data.obank().get(op) else { continue };
+        let Some(o) = data.obank().get(op) else {
+            continue;
+        };
         let Some(out) = o.get_out() else { continue };
-        let Some(loc) = reg_loc(data, out) else { continue };
+        let Some(loc) = reg_loc(data, out) else {
+            continue;
+        };
         if overlaps(&loc, &sploc) {
             adjusts_sp = true;
         }
@@ -182,7 +204,9 @@ pub fn observe_instruction(data: &mut Funcdata, ops: &[OpId]) {
     let mut saved: Vec<RegLoc> = Vec::new();
     if adjusts_sp {
         for &op in ops {
-            let Some(o) = data.obank().get(op) else { continue };
+            let Some(o) = data.obank().get(op) else {
+                continue;
+            };
             if o.code() != OpCode::CPUI_STORE || o.num_input() < 3 {
                 continue;
             }

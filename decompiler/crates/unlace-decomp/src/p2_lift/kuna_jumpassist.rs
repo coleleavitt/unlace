@@ -17,9 +17,9 @@
 use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
 
-use unlace_base::address::{calc_mask, Address};
+use unlace_base::address::{Address, calc_mask};
 use unlace_base::error::{KunaError, KunaResult};
-use unlace_base::space::{spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::{int4, uint4, uintb};
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
@@ -64,17 +64,38 @@ impl JumpAssists {
         };
         let mut ops = BTreeMap::new();
         for index in 0..userops.num_ops() {
-            let Some(op) = userops.get_op(index) else { continue };
-            let Some(assist) = op.as_jump_assist() else { continue };
-            let (Some(addr), Some(default)) = (script(assist.index2addr), script(assist.defaultaddr)) else {
+            let Some(op) = userops.get_op(index) else {
                 continue;
             };
-            let case = (assist.index2case >= 0).then(|| script(assist.index2case)).flatten();
-            let size = (assist.calcsize >= 0).then(|| script(assist.calcsize)).flatten();
-            if (assist.index2case >= 0 && case.is_none()) || (assist.calcsize >= 0 && size.is_none()) {
+            let Some(assist) = op.as_jump_assist() else {
+                continue;
+            };
+            let (Some(addr), Some(default)) =
+                (script(assist.index2addr), script(assist.defaultaddr))
+            else {
+                continue;
+            };
+            let case = (assist.index2case >= 0)
+                .then(|| script(assist.index2case))
+                .flatten();
+            let size = (assist.calcsize >= 0)
+                .then(|| script(assist.calcsize))
+                .flatten();
+            if (assist.index2case >= 0 && case.is_none())
+                || (assist.calcsize >= 0 && size.is_none())
+            {
                 continue;
             }
-            ops.insert(index, Rc::new(Assist { name: op.get_name().to_vec(), case, addr, default, size }));
+            ops.insert(
+                index,
+                Rc::new(Assist {
+                    name: op.get_name().to_vec(),
+                    case,
+                    addr,
+                    default,
+                    size,
+                }),
+            );
         }
         JumpAssists { ops }
     }
@@ -93,25 +114,42 @@ impl Script {
     /// (`ExecutablePcode::evaluate`).
     pub fn evaluate(&self, glb: &ArchContext, inputs: &[uintb]) -> KunaResult<uintb> {
         let manage = glb.manage();
-        let space = |s: Option<&Rc<AddrSpace>>| s.cloned().ok_or_else(|| KunaError::lowlevel("jumpassist: missing address space"));
+        let space = |s: Option<&Rc<AddrSpace>>| {
+            s.cloned()
+                .ok_or_else(|| KunaError::lowlevel("jumpassist: missing address space"))
+        };
         let unique = space(manage.get_unique_space())?;
         let core = self.payload.as_payload().core();
         if inputs.len() != core.size_input() as usize {
-            return Err(KunaError::lowlevel("jumpassist: script has the wrong number of parameters"));
+            return Err(KunaError::lowlevel(
+                "jumpassist: script has the wrong number of parameters",
+            ));
         }
         let mut context = InjectContext::default();
         let mut slot: u64 = 0x10;
         for i in 0..core.size_input() {
-            context.inputlist.push(VarnodeData { space: Some(Rc::clone(&unique)), offset: slot, size: core.get_input(i).get_size() as u32 });
+            context.inputlist.push(VarnodeData {
+                space: Some(Rc::clone(&unique)),
+                offset: slot,
+                size: core.get_input(i).get_size() as u32,
+            });
             slot += 0x20;
         }
         for i in 0..core.size_output() {
-            context.output.push(VarnodeData { space: Some(Rc::clone(&unique)), offset: slot, size: core.get_output(i).get_size() as u32 });
+            context.output.push(VarnodeData {
+                space: Some(Rc::clone(&unique)),
+                offset: slot,
+                size: core.get_output(i).get_size() as u32,
+            });
             slot += 0x20;
         }
         let code = space(manage.get_default_code_space())?;
         context.baseaddr = Some(Address::new(Rc::clone(&code), 0));
-        let engine = SleighInjectEngine::new(space(manage.get_constant_space())?, Rc::clone(&unique), code);
+        let engine = SleighInjectEngine::new(
+            space(manage.get_constant_space())?,
+            Rc::clone(&unique),
+            code,
+        );
         let mut ops = Ops::default();
         engine.emit_payload(self.payload.as_payload(), &self.tpl, &mut context, &mut ops)?;
 
@@ -128,28 +166,43 @@ impl Script {
                 }
             };
             let Some(out) = op.output.as_ref() else {
-                return Err(KunaError::lowlevel("jumpassist: script op without an output"));
+                return Err(KunaError::lowlevel(
+                    "jumpassist: script op without an output",
+                ));
             };
             let value = match op.opcode {
                 OpCode::CPUI_COPY => read(&op.inputs[0]),
-                OpCode::CPUI_LOAD => glb.get_load_image_value(&Address::new(Rc::clone(&data), read(&op.inputs[1])), out.size as int4)?,
+                OpCode::CPUI_LOAD => glb.get_load_image_value(
+                    &Address::new(Rc::clone(&data), read(&op.inputs[1])),
+                    out.size as int4,
+                )?,
                 code => {
                     let behave = glb
                         .opbehaviors
                         .get(code as usize)
                         .and_then(Option::as_ref)
-                        .ok_or_else(|| KunaError::lowlevel("jumpassist: script op cannot be evaluated"))?;
+                        .ok_or_else(|| {
+                            KunaError::lowlevel("jumpassist: script op cannot be evaluated")
+                        })?;
                     let insize = op.inputs[0].size as int4;
                     if op.inputs.len() == 1 {
                         behave.evaluate_unary(out.size as int4, insize, read(&op.inputs[0]))?
                     } else {
-                        behave.evaluate_binary(out.size as int4, insize, read(&op.inputs[0]), read(&op.inputs[1]))?
+                        behave.evaluate_binary(
+                            out.size as int4,
+                            insize,
+                            read(&op.inputs[0]),
+                            read(&op.inputs[1]),
+                        )?
                     }
                 }
             };
             state.insert(key(out), value & calc_mask(out.size as int4));
         }
-        let out = context.output.first().ok_or_else(|| KunaError::lowlevel("jumpassist: script has no output"))?;
+        let out = context
+            .output
+            .first()
+            .ok_or_else(|| KunaError::lowlevel("jumpassist: script has no output"))?;
         Ok(state.get(&key(out)).copied().unwrap_or(0))
     }
 }
@@ -162,8 +215,19 @@ fn key(vn: &VarnodeData) -> (int4, u64) {
 struct Ops(Vec<Operation>);
 
 impl unlace_sleigh::translate::PcodeEmit for Ops {
-    fn dump(&mut self, address: &Address, opcode: OpCode, output: Option<&VarnodeData>, inputs: &[VarnodeData]) {
-        self.0.push(Operation { address: address.clone(), opcode, output: output.cloned(), inputs: inputs.to_vec() });
+    fn dump(
+        &mut self,
+        address: &Address,
+        opcode: OpCode,
+        output: Option<&VarnodeData>,
+        inputs: &[VarnodeData],
+    ) {
+        self.0.push(Operation {
+            address: address.clone(),
+            opcode,
+            output: output.cloned(),
+            inputs: inputs.to_vec(),
+        });
     }
 }
 
@@ -183,7 +247,9 @@ impl JumpModelAssisted {
     }
 
     fn assist(&self) -> KunaResult<&Rc<Assist>> {
-        self.assist.as_ref().ok_or_else(|| KunaError::lowlevel("JumpAssisted: model not recovered"))
+        self.assist
+            .as_ref()
+            .ok_or_else(|| KunaError::lowlevel("JumpAssisted: model not recovered"))
     }
 
     fn run(&self, fd: &Funcdata, script: &Script, index: uintb) -> KunaResult<uintb> {
@@ -208,21 +274,46 @@ impl JumpModel for JumpModelAssisted {
         self.size_indices as int4 + 1
     }
 
-    fn recover_model(&mut self, fd: &mut Funcdata, indop: OpId, matchsize: uint4, maxtablesize: uint4) -> KunaResult<bool> {
-        let Some(addr_vn) = fd.obank().get(indop).and_then(|o| o.get_in(0)) else { return Ok(false) };
-        let Some(assist_op) = fd.vbank().get(addr_vn).filter(|v| v.is_written()).and_then(|v| v.get_def()) else {
+    fn recover_model(
+        &mut self,
+        fd: &mut Funcdata,
+        indop: OpId,
+        matchsize: uint4,
+        maxtablesize: uint4,
+    ) -> KunaResult<bool> {
+        let Some(addr_vn) = fd.obank().get(indop).and_then(|o| o.get_in(0)) else {
             return Ok(false);
         };
-        let Some(o) = fd.obank().get(assist_op) else { return Ok(false) };
+        let Some(assist_op) = fd
+            .vbank()
+            .get(addr_vn)
+            .filter(|v| v.is_written())
+            .and_then(|v| v.get_def())
+        else {
+            return Ok(false);
+        };
+        let Some(o) = fd.obank().get(assist_op) else {
+            return Ok(false);
+        };
         if o.code() != OpCode::CPUI_CALLOTHER || o.num_input() < 3 {
             return Ok(false);
         }
-        let offset = |slot: int4| o.get_in(slot).and_then(|v| fd.vbank().get(v)).map(|v| (v.get_offset(), v.is_constant()));
-        let Some((index, _)) = offset(0) else { return Ok(false) };
-        let Some(assist) = fd.get_arch().jump_assists.get(index as uint4) else { return Ok(false) };
+        let offset = |slot: int4| {
+            o.get_in(slot)
+                .and_then(|v| fd.vbank().get(v))
+                .map(|v| (v.get_offset(), v.is_constant()))
+        };
+        let Some((index, _)) = offset(0) else {
+            return Ok(false);
+        };
+        let Some(assist) = fd.get_arch().jump_assists.get(index as uint4) else {
+            return Ok(false);
+        };
         let mut inputs = Vec::new();
         for slot in 1..o.num_input() {
-            let Some((value, constant)) = offset(slot) else { return Ok(false) };
+            let Some((value, constant)) = offset(slot) else {
+                return Ok(false);
+            };
             if slot >= 2 && !constant {
                 return Ok(false);
             }
@@ -279,14 +370,31 @@ impl JumpModel for JumpModelAssisted {
         Ok(())
     }
 
-    fn find_unnormalized(&mut self, _fd: &mut Funcdata, _maxaddsub: uint4, _maxleftright: uint4, _maxext: uint4) -> KunaResult<()> {
+    fn find_unnormalized(
+        &mut self,
+        _fd: &mut Funcdata,
+        _maxaddsub: uint4,
+        _maxleftright: uint4,
+        _maxext: uint4,
+    ) -> KunaResult<()> {
         Ok(())
     }
 
-    fn build_labels(&self, fd: &mut Funcdata, _addresstable: &mut [Address], label: &mut Vec<uintb>, orig: &dyn JumpModel) -> KunaResult<()> {
-        let same = orig.as_any().downcast_ref::<JumpModelAssisted>().is_some_and(|o| o.size_indices == self.size_indices);
+    fn build_labels(
+        &self,
+        fd: &mut Funcdata,
+        _addresstable: &mut [Address],
+        label: &mut Vec<uintb>,
+        orig: &dyn JumpModel,
+    ) -> KunaResult<()> {
+        let same = orig
+            .as_any()
+            .downcast_ref::<JumpModelAssisted>()
+            .is_some_and(|o| o.size_indices == self.size_indices);
         if !same {
-            return Err(KunaError::lowlevel("JumpAssisted table size changed during recovery"));
+            return Err(KunaError::lowlevel(
+                "JumpAssisted table size changed during recovery",
+            ));
         }
         match self.assist()?.case.as_ref() {
             None => label.extend((0..self.size_indices).map(uintb::from)),
@@ -300,7 +408,11 @@ impl JumpModel for JumpModelAssisted {
         Ok(())
     }
 
-    fn fold_in_normalization(&mut self, fd: &mut Funcdata, _indop: OpId) -> KunaResult<Option<VarnodeId>> {
+    fn fold_in_normalization(
+        &mut self,
+        fd: &mut Funcdata,
+        _indop: OpId,
+    ) -> KunaResult<Option<VarnodeId>> {
         let (Some(assist_op), Some(switchvn)) = (self.assist_op, self.switchvn) else {
             return Err(KunaError::lowlevel("JumpAssisted: model not recovered"));
         };
@@ -309,7 +421,11 @@ impl JumpModel for JumpModelAssisted {
                 let slots: Vec<int4> = fd
                     .obank()
                     .get(reader)
-                    .map(|o| (0..o.num_input()).filter(|&i| o.get_in(i) == Some(out)).collect())
+                    .map(|o| {
+                        (0..o.num_input())
+                            .filter(|&i| o.get_in(i) == Some(out))
+                            .collect()
+                    })
                     .unwrap_or_default();
                 for slot in slots {
                     fd.op_set_input(reader, switchvn, slot)?;

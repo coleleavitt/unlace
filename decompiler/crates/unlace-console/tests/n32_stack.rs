@@ -1,9 +1,9 @@
 //! Original GCC fixtures exercising stack addresses narrower than their GPRs.
+use std::path::PathBuf;
 use unlace_console::{
-    engine::{bootstrap_from_object, EntrySelector},
+    engine::{EntrySelector, bootstrap_from_object},
     project::decompile_targets,
 };
-use std::path::PathBuf;
 
 #[test]
 fn gcc_stack_and_split_arguments_recover_the_declared_value() {

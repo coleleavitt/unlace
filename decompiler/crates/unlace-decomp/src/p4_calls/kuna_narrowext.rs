@@ -15,13 +15,13 @@
 //! its arguments take Apple's rule under `compiler`.
 use crate::{
     context::{OpId, VarnodeId},
-    dtype::{type_class, type_metatype, Datatype},
+    dtype::{Datatype, type_class, type_metatype},
     fspec::ParamListStandard,
     funcdata::Funcdata,
     infra::architecture::Architecture,
     op::pcodeop_addlflags,
 };
-use unlace_base::address::{calc_mask, Address};
+use unlace_base::address::{Address, calc_mask};
 use unlace_num::{opcodes::OpCode, pcoderaw::VarnodeData};
 
 /// The value of `narrowext`.
@@ -60,10 +60,13 @@ impl OptionNarrowExt {
             other => {
                 return Err(unlace_base::error::KunaError::parse(format!(
                     "Unknown narrowext value: {other} (expected off|abi|compiler)"
-                )))
+                )));
             }
         };
-        Ok((mode, format!("Narrow integer extension set to {}", mode.as_str())))
+        Ok((
+            mode,
+            format!("Narrow integer extension set to {}", mode.as_str()),
+        ))
     }
 }
 
@@ -190,7 +193,11 @@ fn extension_by(
             && e.justified_contain(addr, size) == 0
     })?;
     let register = entry.get_size();
-    let by_sign = if signed { OpCode::CPUI_INT_SEXT } else { OpCode::CPUI_INT_ZEXT };
+    let by_sign = if signed {
+        OpCode::CPUI_INT_SEXT
+    } else {
+        OpCode::CPUI_INT_ZEXT
+    };
     let (op, width) = match widen {
         _ if size >= register => return None,
         Widen::Register if size < 4 => (by_sign, register),
@@ -199,7 +206,11 @@ fn extension_by(
         _ => return None,
     };
     let space = entry.get_space();
-    let skip = if space.is_big_endian() { register - width } else { 0 };
+    let skip = if space.is_big_endian() {
+        register - width
+    } else {
+        0
+    };
     res.space = Some(space.clone());
     res.offset = entry.get_base() + skip as u64;
     res.size = width as u32;
@@ -209,7 +220,12 @@ fn extension_by(
 /// Whether a `size`-byte integer at `addr` in a register entry of `list` is
 /// extended by the sign of its type: under `rule` where it speaks, else where the
 /// spec states `inttype`.
-pub fn extends_by_sign(rule: Option<Widen>, list: &ParamListStandard, addr: &Address, size: i32) -> bool {
+pub fn extends_by_sign(
+    rule: Option<Widen>,
+    list: &ParamListStandard,
+    addr: &Address,
+    size: i32,
+) -> bool {
     let mut res = VarnodeData::default();
     if let Some(w) = rule {
         let by = |signed| extension_by(w, list, addr, size, signed, &mut VarnodeData::default());
@@ -223,7 +239,12 @@ pub fn extends_by_sign(rule: Option<Widen>, list: &ParamListStandard, addr: &Add
 
 /// Whether `rule` sign-extends a `size`-byte integer at `addr` in a register
 /// entry of `list` whatever the sign of its type.
-pub fn sign_extends_any(rule: Option<Widen>, list: &ParamListStandard, addr: &Address, size: i32) -> bool {
+pub fn sign_extends_any(
+    rule: Option<Widen>,
+    list: &ParamListStandard,
+    addr: &Address,
+    size: i32,
+) -> bool {
     let Some(w) = rule else { return false };
     let by = |signed| extension_by(w, list, addr, size, signed, &mut VarnodeData::default());
     by(true) == Some(OpCode::CPUI_INT_SEXT) && by(false) == Some(OpCode::CPUI_INT_SEXT)
@@ -239,7 +260,10 @@ pub fn or_model(
     ty: Option<&Datatype>,
     res: &mut VarnodeData,
 ) -> (OpCode, bool) {
-    match rule.zip(ty).and_then(|(w, ty)| extension(w, list, addr, size, ty, res)) {
+    match rule
+        .zip(ty)
+        .and_then(|(w, ty)| extension(w, list, addr, size, ty, res))
+    {
         Some(op) => (op, true),
         None => (list.assumed_extension(addr, size, res), false),
     }

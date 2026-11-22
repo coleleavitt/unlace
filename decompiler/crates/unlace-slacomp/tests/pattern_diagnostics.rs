@@ -27,7 +27,10 @@ impl LoadImage for CodeImg {
 }
 
 fn disassemble(image: &[u8], code: &[u8]) -> (i32, String, String) {
-    let mut sleigh = Sleigh::new(Box::new(CodeImg(code.to_vec())), Box::new(ContextInternal::new()));
+    let mut sleigh = Sleigh::new(
+        Box::new(CodeImg(code.to_vec())),
+        Box::new(ContextInternal::new()),
+    );
     sleigh.initialize_from_sla(image).unwrap();
     let space = Rc::clone(sleigh.base().manager().get_default_code_space().unwrap());
     let (mut mnemonic, mut body) = (String::new(), String::new());
@@ -113,9 +116,16 @@ fn operand_defined_from_a_field_expression_or_an_earlier_operand_decodes() {
             &[],
             false,
         );
-        assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stderr));
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
         let (length, mnemonic, body) = disassemble(&image.unwrap(), &[0xa8, 0x01]);
-        assert_eq!((length, mnemonic.as_str(), body.as_str()), (2, "foo", expected));
+        assert_eq!(
+            (length, mnemonic.as_str(), body.as_str()),
+            (2, "foo", expected)
+        );
     }
 }
 

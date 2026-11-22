@@ -359,11 +359,7 @@ fn goto_targets(body: &str) -> Option<Vec<i64>> {
             }
         }
     }
-    if out.is_empty() {
-        None
-    } else {
-        Some(out)
-    }
+    if out.is_empty() { None } else { Some(out) }
 }
 
 /// Parse a C++ B2 snapshot file into a [`StructModel`].
@@ -462,7 +458,12 @@ pub fn parse_cpp_b2(text: &str, excluded_tracked: &mut usize) -> Result<StructMo
                 if let Some(t) = goto_targets(body) {
                     b.explicit_targets = Some(t);
                 }
-                b.ops.push(RawOp { addr, time, class, has_output });
+                b.ops.push(RawOp {
+                    addr,
+                    time,
+                    class,
+                    has_output,
+                });
             }
             continue;
         }
@@ -544,7 +545,11 @@ pub fn parse_cpp_b2(text: &str, excluded_tracked: &mut usize) -> Result<StructMo
 
         let ops: Vec<OpRec> = ops_raw
             .into_iter()
-            .map(|o| OpRec { addr: o.addr, class: o.class, has_output: o.has_output })
+            .map(|o| OpRec {
+                addr: o.addr,
+                class: o.class,
+                has_output: o.has_output,
+            })
             .collect();
 
         // Out-edge target block INDICES: explicit goto > implied goto > fall-through
@@ -695,8 +700,10 @@ fn fmt_idx_list(v: &[i64]) -> String {
 
 /// Render the cover ranges of an ordered block list for a divergence message.
 fn fmt_cover_list(blocks: &[BlockRec]) -> String {
-    let parts: Vec<String> =
-        blocks.iter().map(|b| format!("0x{:x}-0x{:x}", b.start, b.stop)).collect();
+    let parts: Vec<String> = blocks
+        .iter()
+        .map(|b| format!("0x{:x}-0x{:x}", b.start, b.stop))
+        .collect();
     format!("[{}]", parts.join(","))
 }
 
@@ -711,8 +718,14 @@ mod tests {
     #[test]
     fn classify_keyword_forms() {
         // STORE / LOAD
-        assert_eq!(classify("*(ram,RSP(free)) = u0x4f900(free)"), (OpClass::Store, false));
-        assert_eq!(classify("u0x4f900(0x4:1) = *(ram,RSP(free))"), (OpClass::Load, true));
+        assert_eq!(
+            classify("*(ram,RSP(free)) = u0x4f900(free)"),
+            (OpClass::Store, false)
+        );
+        assert_eq!(
+            classify("u0x4f900(0x4:1) = *(ram,RSP(free))"),
+            (OpClass::Load, true)
+        );
         // BRANCH / CBRANCH / BRANCHIND
         assert_eq!(classify("goto Block_2:0x000b"), (OpClass::Branch, false));
         assert_eq!(
@@ -723,8 +736,14 @@ mod tests {
         // RETURN
         assert_eq!(classify("return(#0x0)"), (OpClass::Return, false));
         // CALL with and without a return value
-        assert_eq!(classify("call fother:8(free)(u0x4:1(free))"), (OpClass::Call, false));
-        assert_eq!(classify("r0(0x4:7) = call fother:8(free)()"), (OpClass::Call, true));
+        assert_eq!(
+            classify("call fother:8(free)(u0x4:1(free))"),
+            (OpClass::Call, false)
+        );
+        assert_eq!(
+            classify("r0(0x4:7) = call fother:8(free)()"),
+            (OpClass::Call, true)
+        );
         assert_eq!(classify("callind r0(free)"), (OpClass::Callind, false));
     }
 
@@ -734,10 +753,22 @@ mod tests {
         assert_eq!(classify("DF(0x4:47) = #0x0:1"), (OpClass::Value, true));
         assert_eq!(classify("r3(0x4:0) = r3(free)"), (OpClass::Value, true));
         // binary / unary / function forms -> Value, with output.
-        assert_eq!(classify("RSP(0x4:1) = RSP(free) - #0x8"), (OpClass::Value, true));
-        assert_eq!(classify("r3(0x4:1) = LZCOUNT(r3(free))"), (OpClass::Value, true));
-        assert_eq!(classify("x1(0x4:2c) = ZEXT48(w1(i))"), (OpClass::Value, true));
-        assert_eq!(classify("u0x3500:1(0x4:45) = ! ZR(free)"), (OpClass::Value, true));
+        assert_eq!(
+            classify("RSP(0x4:1) = RSP(free) - #0x8"),
+            (OpClass::Value, true)
+        );
+        assert_eq!(
+            classify("r3(0x4:1) = LZCOUNT(r3(free))"),
+            (OpClass::Value, true)
+        );
+        assert_eq!(
+            classify("x1(0x4:2c) = ZEXT48(w1(i))"),
+            (OpClass::Value, true)
+        );
+        assert_eq!(
+            classify("u0x3500:1(0x4:45) = ! ZR(free)"),
+            (OpClass::Value, true)
+        );
         // The Rust opcode classifier agrees on the same classes.
         use unlace_num::opcodes::OpCode::*;
         assert_eq!(OpClass::from_opcode(CPUI_COPY), OpClass::Value);
@@ -764,7 +795,9 @@ mod tests {
         // `Block_N:0xADDR` yields the target block INDEX N (not the address).
         assert_eq!(goto_targets("goto Block_2:0x000b"), Some(vec![2]));
         assert_eq!(
-            goto_targets("goto Block_4:0x402d29cc if (u0x4d00:1(free) != 0) else Block_3:0x402d29c8"),
+            goto_targets(
+                "goto Block_4:0x402d29cc if (u0x4d00:1(free) != 0) else Block_3:0x402d29c8"
+            ),
             Some(vec![4, 3])
         );
         assert_eq!(goto_targets("return(#0x0)"), None);
@@ -853,8 +886,16 @@ mod tests {
                 start: 0,
                 stop: 4,
                 ops: vec![
-                    OpRec { addr: 0, class: OpClass::Value, has_output: true },
-                    OpRec { addr: 4, class: OpClass::Return, has_output: false },
+                    OpRec {
+                        addr: 0,
+                        class: OpClass::Value,
+                        has_output: true,
+                    },
+                    OpRec {
+                        addr: 4,
+                        class: OpClass::Return,
+                        has_output: false,
+                    },
                 ],
                 out_indices: vec![],
             }],

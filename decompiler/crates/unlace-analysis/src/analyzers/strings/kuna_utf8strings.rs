@@ -33,7 +33,7 @@
 //! Scope: the **inventory** only. [`super::StringLiteralPass`] still commits
 //! exactly the `char[N]` facts it always did, so no emitted C moves.
 
-use super::{is_string_char, Run, Termination};
+use super::{Run, Termination, is_string_char};
 
 /// The character at `data[i]`: one in-charset ASCII byte, or one well-formed
 /// multi-byte UTF-8 sequence whose scalar is not a control character.
@@ -71,17 +71,16 @@ fn char_at(data: &[u8], i: usize) -> Option<usize> {
 /// A [`Run`]'s `visible_len` is in BYTES at every width, so a run here spans more
 /// bytes than it holds characters; the caller reads the character count off the
 /// decoded text.
-pub(crate) fn scan_utf8_runs(
-    data: &[u8],
-    vma: u64,
-    min_len: usize,
-    term: Termination,
-) -> Vec<Run> {
+pub(crate) fn scan_utf8_runs(data: &[u8], vma: u64, min_len: usize, term: Termination) -> Vec<Run> {
     let mut out = Vec::new();
     let mut run_start: Option<(usize, usize)> = None;
     let close = |start: usize, chars: usize, end: usize, nul: bool, out: &mut Vec<Run>| {
         if chars >= min_len && (nul || term == Termination::Any) {
-            out.push(Run { addr: vma + start as u64, visible_len: end - start, nul_terminated: nul });
+            out.push(Run {
+                addr: vma + start as u64,
+                visible_len: end - start,
+                nul_terminated: nul,
+            });
         }
     };
     let mut i = 0usize;
@@ -127,7 +126,11 @@ was the magical keycombination? \x00";
         let utf8 = scan_utf8_runs(KAOMOJI, 0x2000, 5, Termination::Any);
         assert_eq!(
             utf8,
-            vec![Run { addr: 0x2000, visible_len: 0x37, nul_terminated: true }],
+            vec![Run {
+                addr: 0x2000,
+                visible_len: 0x37,
+                nul_terminated: true
+            }],
             "the whole literal is one run at its true address"
         );
         let text = std::str::from_utf8(&KAOMOJI[..0x37]).expect("valid UTF-8 by construction");
@@ -160,11 +163,23 @@ was the magical keycombination? \x00";
         assert_eq!(
             runs,
             vec![
-                Run { addr: 0, visible_len: 5, nul_terminated: false },
-                Run { addr: 6, visible_len: 7, nul_terminated: true },
+                Run {
+                    addr: 0,
+                    visible_len: 5,
+                    nul_terminated: false
+                },
+                Run {
+                    addr: 6,
+                    visible_len: 7,
+                    nul_terminated: true
+                },
             ]
         );
-        assert_eq!(runs, scan_runs(data, 0, 5, Termination::Any), "same as the 1-byte matcher");
+        assert_eq!(
+            runs,
+            scan_runs(data, 0, 5, Termination::Any),
+            "same as the 1-byte matcher"
+        );
     }
 
     #[test]
@@ -172,12 +187,21 @@ was the magical keycombination? \x00";
         // C0 80 (overlong NUL), ED A0 80 (a surrogate), F5 80 80 80 (past
         // U+10FFFF) and C2 85 (U+0085 NEXT LINE, a C1 control) are all rejected,
         // so none of them joins two neighbouring runs into one.
-        for bad in [&b"\xc0\x80"[..], b"\xed\xa0\x80", b"\xf5\x80\x80\x80", b"\xc2\x85"] {
+        for bad in [
+            &b"\xc0\x80"[..],
+            b"\xed\xa0\x80",
+            b"\xf5\x80\x80\x80",
+            b"\xc2\x85",
+        ] {
             let mut data = b"aaaaa".to_vec();
             data.extend_from_slice(bad);
             data.extend_from_slice(b"bbbbb\x00");
             let runs = scan_utf8_runs(&data, 0, 5, Termination::Any);
-            assert_eq!(runs.len(), 2, "{bad:x?} must not join the two runs: {runs:?}");
+            assert_eq!(
+                runs.len(),
+                2,
+                "{bad:x?} must not join the two runs: {runs:?}"
+            );
             assert_eq!(runs[0].addr, 0);
         }
     }
@@ -188,7 +212,11 @@ was the magical keycombination? \x00";
         let data = b"\xc2\xb0\xc2\xb0\xc2\xb0\xc2\xb0\xc2\xb0\x00";
         assert_eq!(
             scan_utf8_runs(data, 0, 5, Termination::Nul),
-            vec![Run { addr: 0, visible_len: 10, nul_terminated: true }]
+            vec![Run {
+                addr: 0,
+                visible_len: 10,
+                nul_terminated: true
+            }]
         );
         assert!(scan_utf8_runs(data, 0, 6, Termination::Nul).is_empty());
     }
@@ -199,7 +227,11 @@ was the magical keycombination? \x00";
         let data = b"aaaaa\xc2";
         assert_eq!(
             scan_utf8_runs(data, 0, 5, Termination::Any),
-            vec![Run { addr: 0, visible_len: 5, nul_terminated: false }]
+            vec![Run {
+                addr: 0,
+                visible_len: 5,
+                nul_terminated: false
+            }]
         );
     }
 }

@@ -233,11 +233,7 @@ fn call_arities(code: &str, name: &str) -> Vec<usize> {
                 }
                 any |= !c.is_whitespace();
             }
-            if any {
-                count
-            } else {
-                0
-            }
+            if any { count } else { 0 }
         })
         .collect()
 }
@@ -433,7 +429,10 @@ fn stated_doubles_pass_whole_and_backfill_holes_stay_empty() {
     for (source, checks) in cases {
         let expected = has_cc.then(|| {
             let reference = common::scratch_file(&format!("{source}-reference"), "exe");
-            compile_and_run(&[fixtures.join(format!("{source}.c")), driver.clone()], &reference)
+            compile_and_run(
+                &[fixtures.join(format!("{source}.c")), driver.clone()],
+                &reference,
+            )
         });
         for build in ["arm-O2", "thumb-O2", "thumb-Os"] {
             let bytes = std::fs::read(fixtures.join(format!("{source}_{build}.o"))).unwrap();
@@ -493,7 +492,11 @@ fn ignored_stated_doubles_keep_the_callers_float_parameters() {
         )
     });
     let checks: [(&str, &str, &[usize]); 12] = [
-        ("i4", "double i4(double a0,float a1,float a2,double a3)", &[4]),
+        (
+            "i4",
+            "double i4(double a0,float a1,float a2,double a3)",
+            &[4],
+        ),
         ("i2", "double i2(double a0,double a1)", &[2, 2]),
         ("i3", "double i3(double a0,float a1,double a2)", &[3]),
         ("w3", "float w3(float a0)", &[1]),
@@ -519,7 +522,11 @@ fn ignored_stated_doubles_keep_the_callers_float_parameters() {
                 code.contains(signature),
                 "{build}: missing {signature}\n{code}"
             );
-            assert_eq!(&call_arities(&code, name), arities, "{build}: {name}\n{code}");
+            assert_eq!(
+                &call_arities(&code, name),
+                arities,
+                "{build}: {name}\n{code}"
+            );
         }
         let Some(expected) = &expected else {
             continue;
@@ -570,7 +577,10 @@ fn a_parameter_returned_on_some_path_keeps_its_argument() {
             std::fs::read(fixtures.join(format!("armfloatargs_passthrough_{build}.o"))).unwrap();
         let code = decompile_with(&bytes, &["armfloatreturn", "on", "armfloatargs", "on"]);
         for (caller, call) in calls {
-            assert!(code.contains(call), "{build}: {caller} lacks {call}\n{code}");
+            assert!(
+                code.contains(call),
+                "{build}: {caller} lacks {call}\n{code}"
+            );
         }
         let Some(expected) = &expected else {
             continue;
@@ -607,12 +617,19 @@ fn leaf_callees_with_conditional_code_take_zero_for_unread_words() {
     .unwrap();
     let expected = has_cc.then(|| {
         let reference = common::scratch_file("arm-float-early-reference", "exe");
-        compile_and_run(&[fixtures.join("armfloatargs_early.c"), driver.clone()], &reference)
+        compile_and_run(
+            &[fixtures.join("armfloatargs_early.c"), driver.clone()],
+            &reference,
+        )
     });
     for build in ["arm-O2", "thumb-O2", "thumb-O1"] {
         let bytes = std::fs::read(fixtures.join(format!("armfloatargs_early_{build}.o"))).unwrap();
         let code = decompile_with(&bytes, &["armfloatreturn", "on", "armfloatargs", "on"]);
-        for call in ["C2(5.5f,0.0f,v1,", "C9(5.5f,a0,v1,a1)", "C3(0.0,0.0,(double)v1,a0)"] {
+        for call in [
+            "C2(5.5f,0.0f,v1,",
+            "C9(5.5f,a0,v1,a1)",
+            "C3(0.0,0.0,(double)v1,a0)",
+        ] {
             assert!(code.contains(call), "{build}: lacks {call}\n{code}");
         }
         assert!(!code.contains("unsigned long long"), "{build}\n{code}");

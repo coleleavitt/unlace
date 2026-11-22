@@ -17,11 +17,16 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture() -> PathBuf {
@@ -48,7 +53,8 @@ fn decompile_bin(bin: &PathBuf, load_cmd: &str) -> String {
         .expect("bootstrap fixture with built processor specs");
     // `read symbols`: commit the analysis facts, including the loader's data
     // symbols.
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
     let cmds: Vec<String> = [load_cmd.to_string(), "decompile".into(), "print C".into()].to_vec();
     let count = cmds.len();
@@ -126,4 +132,3 @@ fn faillog_stderr_renders_by_name_by_default() {
         "`dat_61a0` should have been named `stderr` from `.dynsym`; got:\n{code}",
     );
 }
-

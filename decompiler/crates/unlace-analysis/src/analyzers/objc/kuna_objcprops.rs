@@ -22,8 +22,18 @@ mod property_list_t {
 /// A property's selectors with their encodings: `(selector, encoding)`.
 pub fn declarations(img: &MachoImage, list_va: u64) -> Vec<(String, String)> {
     let mut out = Vec::new();
-    let Some(ent) = list_va.checked_add(property_list_t::ENTSIZE).and_then(|a| img.read_u32(a)) else { return out };
-    let Some(count) = list_va.checked_add(property_list_t::COUNT).and_then(|a| img.read_u32(a)) else { return out };
+    let Some(ent) = list_va
+        .checked_add(property_list_t::ENTSIZE)
+        .and_then(|a| img.read_u32(a))
+    else {
+        return out;
+    };
+    let Some(count) = list_va
+        .checked_add(property_list_t::COUNT)
+        .and_then(|a| img.read_u32(a))
+    else {
+        return out;
+    };
     let entsize = (ent & 0xffff) as u64;
     if entsize < 2 * img.ptr_size() {
         return out;
@@ -32,9 +42,17 @@ pub fn declarations(img: &MachoImage, list_va: u64) -> Vec<(String, String)> {
         if !img.charge(RECORD_WORK) {
             break;
         }
-        let rec = list_va.wrapping_add(property_list_t::FIRST).wrapping_add(i.wrapping_mul(entsize));
-        let Some(name) = img.rebase_ptr(rec).and_then(|p| img.read_cstr(p)) else { continue };
-        let Some(attrs) = rec.checked_add(img.ptr_size()).and_then(|a| img.rebase_ptr(a)).and_then(|p| img.read_cstr(p)) else {
+        let rec = list_va
+            .wrapping_add(property_list_t::FIRST)
+            .wrapping_add(i.wrapping_mul(entsize));
+        let Some(name) = img.rebase_ptr(rec).and_then(|p| img.read_cstr(p)) else {
+            continue;
+        };
+        let Some(attrs) = rec
+            .checked_add(img.ptr_size())
+            .and_then(|a| img.rebase_ptr(a))
+            .and_then(|p| img.read_cstr(p))
+        else {
             continue;
         };
         out.extend(from_attributes(&name, &attrs));
@@ -58,12 +76,21 @@ pub fn from_attributes(name: &str, attrs: &str) -> Vec<(String, String)> {
             _ => {}
         }
     }
-    let Some(ty) = ty.filter(|t| !t.is_empty()) else { return Vec::new() };
-    let mut out = vec![(getter.unwrap_or_else(|| name.to_string()), format!("{ty}@:"))];
+    let Some(ty) = ty.filter(|t| !t.is_empty()) else {
+        return Vec::new();
+    };
+    let mut out = vec![(
+        getter.unwrap_or_else(|| name.to_string()),
+        format!("{ty}@:"),
+    )];
     if !readonly {
         let setter = setter.unwrap_or_else(|| {
             let mut c = name.chars();
-            format!("set{}{}:", c.next().map(|f| f.to_ascii_uppercase()).unwrap_or_default(), c.as_str())
+            format!(
+                "set{}{}:",
+                c.next().map(|f| f.to_ascii_uppercase()).unwrap_or_default(),
+                c.as_str()
+            )
         });
         out.push((setter, format!("v@:{ty}")));
     }
@@ -101,17 +128,29 @@ mod tests {
     fn attributes_yield_typed_getter_and_setter() {
         assert_eq!(
             from_attributes("inner", "T@\"Base\",&,N,Vinner"),
-            [("inner".to_string(), "@\"Base\"@:".to_string()), ("setInner:".to_string(), "v@:@\"Base\"".to_string())]
+            [
+                ("inner".to_string(), "@\"Base\"@:".to_string()),
+                ("setInner:".to_string(), "v@:@\"Base\"".to_string())
+            ]
         );
-        assert_eq!(from_attributes("count", "Ti,R,N,Vcount"), [("count".to_string(), "i@:".to_string())]);
+        assert_eq!(
+            from_attributes("count", "Ti,R,N,Vcount"),
+            [("count".to_string(), "i@:".to_string())]
+        );
         assert_eq!(
             from_attributes("hidden", "TB,N,GisHidden,SsetIsHidden:,Vhidden"),
-            [("isHidden".to_string(), "B@:".to_string()), ("setIsHidden:".to_string(), "v@:B".to_string())]
+            [
+                ("isHidden".to_string(), "B@:".to_string()),
+                ("setIsHidden:".to_string(), "v@:B".to_string())
+            ]
         );
         assert_eq!(
             from_attributes("frame", "T{CGRect={CGPoint=dd}{CGSize=dd}},N,Vframe")[0].1,
             "{CGRect={CGPoint=dd}{CGSize=dd}}@:"
         );
-        assert!(from_attributes("x", "N,Vx").is_empty(), "no type, no declaration");
+        assert!(
+            from_attributes("x", "N,Vx").is_empty(),
+            "no type, no declaration"
+        );
     }
 }

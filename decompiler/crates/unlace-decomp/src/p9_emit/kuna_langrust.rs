@@ -48,9 +48,9 @@
 //! the Rust token is `^` at the bitwise tier.
 
 use crate::kuna_lang::{
-    CastForm, CharForm, DeclForm, DoWhileForm, ForLoopForm, GotoForm, InfLoopForm, LabelForm, LangCaps,
-    LangForms, LangProfile, MemberForm, Prec, PrecLadder, ProtoForm, StringEscape, SwitchForm,
-    WhileForm,
+    CastForm, CharForm, DeclForm, DoWhileForm, ForLoopForm, GotoForm, InfLoopForm, LabelForm,
+    LangCaps, LangForms, LangProfile, MemberForm, Prec, PrecLadder, ProtoForm, StringEscape,
+    SwitchForm, WhileForm,
 };
 
 /// Rust's precedence ladder, loosest first.
@@ -97,7 +97,7 @@ use crate::printlanguage::{OpToken, TokenType};
 /// The Rust operator tokens whose spelling or precedence differs from C.
 /// Everything else is inherited from `printc::tokens` unchanged.
 pub mod rust_tokens {
-    use super::{OpToken, Prec, TokenType, RUST_LADDER};
+    use super::{OpToken, Prec, RUST_LADDER, TokenType};
     use unlace_base::types::int4;
 
     /// This token's rank, DERIVED from `RUST_LADDER`'s order rather than written
@@ -143,12 +143,9 @@ pub mod rust_tokens {
     // comparison `a < b != 0`, which does not parse. The `negate` links are the
     // pairs `token_negate` resolves by pointer identity for C.
     pub static LESS_THAN: OpToken = bin("<", rank(Prec::Relational), false, Some(&GREATER_EQUAL));
-    pub static LESS_EQUAL: OpToken =
-        bin("<=", rank(Prec::Relational), false, Some(&GREATER_THAN));
-    pub static GREATER_THAN: OpToken =
-        bin(">", rank(Prec::Relational), false, Some(&LESS_EQUAL));
-    pub static GREATER_EQUAL: OpToken =
-        bin(">=", rank(Prec::Relational), false, Some(&LESS_THAN));
+    pub static LESS_EQUAL: OpToken = bin("<=", rank(Prec::Relational), false, Some(&GREATER_THAN));
+    pub static GREATER_THAN: OpToken = bin(">", rank(Prec::Relational), false, Some(&LESS_EQUAL));
+    pub static GREATER_EQUAL: OpToken = bin(">=", rank(Prec::Relational), false, Some(&LESS_THAN));
     // Equality shares the relational tier in Rust, so it is remapped too --
     // otherwise `(a == b) < c` would keep C's ordering and lose its parentheses.
     pub static EQUAL: OpToken = bin("==", rank(Prec::Equality), false, Some(&NOT_EQUAL));
@@ -313,7 +310,9 @@ pub static LANG_RUST: LangProfile = LangProfile {
     },
     // Decompiled output does not follow Rust naming or use every binding; the
     // attribute keeps a reader's tooling quiet without changing the code.
-    fn_attributes: &["#[allow(non_snake_case, unused_mut, unused_variables, unused_parens, dead_code)]"],
+    fn_attributes: &[
+        "#[allow(non_snake_case, unused_mut, unused_variables, unused_parens, dead_code)]",
+    ],
 };
 
 #[cfg(test)]
@@ -333,7 +332,7 @@ use crate::architecture::Architecture;
 use crate::context::BlockId;
 use crate::funcdata::Funcdata;
 use crate::prettyprint::{Emit, MarkupRef, SyntaxHighlight};
-use crate::printc::{declarator_parts, display_format, to_emit_brace, PrintC};
+use crate::printc::{PrintC, declarator_parts, display_format, to_emit_brace};
 use crate::printlanguage::modifiers;
 
 impl PrintC {
@@ -371,7 +370,8 @@ impl PrintC {
         let ident = crate::kuna_rusttypes::path_tail(&display);
         if ident != display {
             self.emit.tag_line();
-            self.emit.print(&format!("// {display}"), SyntaxHighlight::CommentColor);
+            self.emit
+                .print(&format!("// {display}"), SyntaxHighlight::CommentColor);
         }
         let display = ident;
         for attr in self.lang().fn_attributes {
@@ -391,10 +391,12 @@ impl PrintC {
             .lang_abi()
             .extern_marker(&model, fd.get_func_proto().is_dotdotdot())
             .unwrap_or("");
-        self.emit.print(&format!("unsafe {ext}fn"), SyntaxHighlight::KeywordColor);
+        self.emit
+            .print(&format!("unsafe {ext}fn"), SyntaxHighlight::KeywordColor);
         self.emit.spaces(1, 0);
         let id1g = self.emit.open_group();
-        self.emit.tag_func_name(&display, SyntaxHighlight::FuncnameColor, markup);
+        self.emit
+            .tag_func_name(&display, SyntaxHighlight::FuncnameColor, markup);
         let id2 = self.emit.open_paren("(", 0);
         self.emit_prototype_inputs_rust(fd, arch, markup);
         self.emit.close_paren(")", id2);
@@ -404,7 +406,8 @@ impl PrintC {
             self.emit.print("->", SyntaxHighlight::NoColor);
             self.emit.spaces(1, 0);
             let idret = self.emit.begin_return_type(markup);
-            self.emit.tag_type(&ret_type, SyntaxHighlight::TypeColor, markup);
+            self.emit
+                .tag_type(&ret_type, SyntaxHighlight::TypeColor, markup);
             self.emit.end_return_type(idret);
         }
         self.emit.end_func_proto(idp);
@@ -425,7 +428,9 @@ impl PrintC {
         let sz = proto.num_params();
         let mut print_comma = false;
         for i in 0..sz {
-            let Some(param) = proto.get_param(i) else { continue };
+            let Some(param) = proto.get_param(i) else {
+                continue;
+            };
             if print_comma {
                 self.emit.print(",", SyntaxHighlight::NoColor);
                 self.emit.spaces(1, 0);
@@ -434,11 +439,8 @@ impl PrintC {
             let default_name;
             let mut name = param.get_name();
             if name.is_empty() {
-                default_name = crate::database::kuna_materialized_param_name(
-                    arch.name_style_angr,
-                    i,
-                    "",
-                );
+                default_name =
+                    crate::database::kuna_materialized_param_name(arch.name_style_angr, i, "");
                 name = default_name.as_str();
             }
             let ty = match param.get_type() {
@@ -447,7 +449,8 @@ impl PrintC {
             };
             self.emit.print("mut", SyntaxHighlight::KeywordColor);
             self.emit.spaces(1, 0);
-            self.emit.tag_variable(name, SyntaxHighlight::VarColor, markup);
+            self.emit
+                .tag_variable(name, SyntaxHighlight::VarColor, markup);
             self.emit.print(":", SyntaxHighlight::NoColor);
             self.emit.spaces(1, 0);
             self.emit.tag_type(&ty, SyntaxHighlight::TypeColor, markup);
@@ -469,12 +472,15 @@ impl PrintC {
         blk: BlockId,
     ) {
         self.context.push_mod();
-        self.context.unset_mod(modifiers::NO_BRANCH | modifiers::ONLY_BRANCH);
+        self.context
+            .unset_mod(modifiers::NO_BRANCH | modifiers::ONLY_BRANCH);
         self.emit_any_label_statement(fd, blk);
         self.emit.tag_line();
         self.emit.print("loop", SyntaxHighlight::KeywordColor);
-        let id =
-            self.emit.open_brace_indent(self.lang().kw_open_curly, to_emit_brace(self.options.brace_loop));
+        let id = self.emit.open_brace_indent(
+            self.lang().kw_open_curly,
+            to_emit_brace(self.options.brace_loop),
+        );
         let body = fd.sblocks_ref().block(blk).get_block(0);
         let id1 = self.emit.begin_block(0);
         self.emit_block(fd, arch, body);
@@ -496,12 +502,15 @@ impl PrintC {
         blk: BlockId,
     ) {
         self.context.push_mod();
-        self.context.unset_mod(modifiers::NO_BRANCH | modifiers::ONLY_BRANCH);
+        self.context
+            .unset_mod(modifiers::NO_BRANCH | modifiers::ONLY_BRANCH);
         self.emit_any_label_statement(fd, blk);
         self.emit.tag_line();
         self.emit.print("loop", SyntaxHighlight::KeywordColor);
-        let id =
-            self.emit.open_brace_indent(self.lang().kw_open_curly, to_emit_brace(self.options.brace_loop));
+        let id = self.emit.open_brace_indent(
+            self.lang().kw_open_curly,
+            to_emit_brace(self.options.brace_loop),
+        );
         let body = fd.sblocks_ref().block(blk).get_block(0);
         self.context.push_mod();
         let id2 = self.emit.begin_block(0);
@@ -512,7 +521,11 @@ impl PrintC {
 
         // `if !(cond) { break; }`
         self.emit.tag_line();
-        self.emit.tag_op(self.lang().kw_if, SyntaxHighlight::KeywordColor, &MarkupRef::none());
+        self.emit.tag_op(
+            self.lang().kw_if,
+            SyntaxHighlight::KeywordColor,
+            &MarkupRef::none(),
+        );
         self.emit.spaces(1, 0);
         self.emit.print("!", SyntaxHighlight::NoColor);
         let idp = self.emit.open_paren(crate::printlanguage::OPEN_PAREN, 0);
@@ -520,13 +533,19 @@ impl PrintC {
         self.context.set_mod(modifiers::ONLY_BRANCH);
         self.emit_block(fd, arch, body);
         self.context.pop_mod();
-        self.emit.close_paren(crate::printlanguage::CLOSE_PAREN, idp);
-        let idb =
-            self.emit.open_brace_indent(self.lang().kw_open_curly, to_emit_brace(self.options.brace_loop));
+        self.emit
+            .close_paren(crate::printlanguage::CLOSE_PAREN, idp);
+        let idb = self.emit.open_brace_indent(
+            self.lang().kw_open_curly,
+            to_emit_brace(self.options.brace_loop),
+        );
         self.emit.tag_line();
-        self.emit.print(self.lang().kw_break, SyntaxHighlight::KeywordColor);
-        self.emit.print(self.lang().kw_semicolon, SyntaxHighlight::NoColor);
-        self.emit.close_brace_indent(self.lang().kw_close_curly, idb);
+        self.emit
+            .print(self.lang().kw_break, SyntaxHighlight::KeywordColor);
+        self.emit
+            .print(self.lang().kw_semicolon, SyntaxHighlight::NoColor);
+        self.emit
+            .close_brace_indent(self.lang().kw_close_curly, idb);
 
         self.emit.close_brace_indent(self.lang().kw_close_curly, id);
         self.flush_eol_warnings();
@@ -550,7 +569,8 @@ impl PrintC {
         }
         let name = self.block_label_name(fd, bl);
         self.emit.tag_line_indent(0);
-        self.emit.print(&format!("// {name}:"), SyntaxHighlight::CommentColor);
+        self.emit
+            .print(&format!("// {name}:"), SyntaxHighlight::CommentColor);
     }
 }
 
@@ -570,7 +590,8 @@ impl PrintC {
     ) {
         self.emit.print("let mut", SyntaxHighlight::KeywordColor);
         self.emit.spaces(1, 0);
-        self.emit.tag_variable(name, SyntaxHighlight::VarColor, markup);
+        self.emit
+            .tag_variable(name, SyntaxHighlight::VarColor, markup);
         self.emit.print(":", SyntaxHighlight::NoColor);
         self.emit.spaces(1, 0);
         match array_count {
@@ -578,7 +599,9 @@ impl PrintC {
                 let ty = format!("[{decl_type}; {n}]");
                 self.emit.tag_type(&ty, SyntaxHighlight::TypeColor, markup);
             }
-            None => self.emit.tag_type(decl_type, SyntaxHighlight::TypeColor, markup),
+            None => self
+                .emit
+                .tag_type(decl_type, SyntaxHighlight::TypeColor, markup),
         }
     }
 }
@@ -630,8 +653,10 @@ impl PrintC {
             SyntaxHighlight::CommentColor,
         );
         self.emit.spaces(1, 0);
-        self.emit
-            .print(&format!("{UNSTRUCTURED_GOTO_MARKER}{name}\")"), SyntaxHighlight::NoColor);
+        self.emit.print(
+            &format!("{UNSTRUCTURED_GOTO_MARKER}{name}\")"),
+            SyntaxHighlight::NoColor,
+        );
     }
 }
 
@@ -659,38 +684,52 @@ impl PrintC {
         blk: BlockId,
     ) {
         self.context.push_mod();
-        self.context.unset_mod(modifiers::NO_BRANCH | modifiers::ONLY_BRANCH);
+        self.context
+            .unset_mod(modifiers::NO_BRANCH | modifiers::ONLY_BRANCH);
         self.emit_any_label_statement(fd, blk);
         let cond_block = fd.sblocks_ref().block(blk).get_block(0);
         let indent;
         if fd.sblocks_ref().block(blk).has_overflow_syntax() {
             self.emit.tag_line();
             self.emit.print("loop", SyntaxHighlight::KeywordColor);
-            indent = self
-                .emit
-                .open_brace_indent(self.lang().kw_open_curly, to_emit_brace(self.options.brace_loop));
+            indent = self.emit.open_brace_indent(
+                self.lang().kw_open_curly,
+                to_emit_brace(self.options.brace_loop),
+            );
             self.context.push_mod();
             self.context.set_mod(modifiers::NO_BRANCH);
             self.emit_block(fd, arch, cond_block);
             self.context.pop_mod();
             self.emit.tag_line();
-            self.emit.tag_op(self.lang().kw_if, SyntaxHighlight::KeywordColor, &MarkupRef::none());
+            self.emit.tag_op(
+                self.lang().kw_if,
+                SyntaxHighlight::KeywordColor,
+                &MarkupRef::none(),
+            );
             self.emit.spaces(1, 0);
             self.context.push_mod();
             self.context.set_mod(modifiers::ONLY_BRANCH);
             self.emit_block(fd, arch, cond_block);
             self.context.pop_mod();
-            let idb = self
-                .emit
-                .open_brace_indent(self.lang().kw_open_curly, to_emit_brace(self.options.brace_ifelse));
+            let idb = self.emit.open_brace_indent(
+                self.lang().kw_open_curly,
+                to_emit_brace(self.options.brace_ifelse),
+            );
             self.emit.tag_line();
-            self.emit.print(self.lang().kw_break, SyntaxHighlight::KeywordColor);
-            self.emit.print(self.lang().kw_semicolon, SyntaxHighlight::NoColor);
-            self.emit.close_brace_indent(self.lang().kw_close_curly, idb);
+            self.emit
+                .print(self.lang().kw_break, SyntaxHighlight::KeywordColor);
+            self.emit
+                .print(self.lang().kw_semicolon, SyntaxHighlight::NoColor);
+            self.emit
+                .close_brace_indent(self.lang().kw_close_curly, idb);
         } else {
             self.emit_comment_block_tree(fd, cond_block);
             self.emit.tag_line();
-            self.emit.tag_op(self.lang().kw_while, SyntaxHighlight::KeywordColor, &MarkupRef::none());
+            self.emit.tag_op(
+                self.lang().kw_while,
+                SyntaxHighlight::KeywordColor,
+                &MarkupRef::none(),
+            );
             self.emit.spaces(1, 0);
             // (kuna outlang) C renders a condition that carries statements as a
             // comma expression -- `while (v = f(), v != 0)`. Rust has no comma
@@ -701,9 +740,10 @@ impl PrintC {
             // ONLY_BRANCH -- so nothing about the condition is re-derived here.
             let block_cond = self.cond_block_emits_statements(fd, cond_block);
             let id1 = if block_cond {
-                let id = self
-                    .emit
-                    .open_brace_indent(self.lang().kw_open_curly, crate::prettyprint::BraceStyle::SameLine);
+                let id = self.emit.open_brace_indent(
+                    self.lang().kw_open_curly,
+                    crate::prettyprint::BraceStyle::SameLine,
+                );
                 self.context.push_mod();
                 self.context.set_mod(modifiers::NO_BRANCH);
                 self.emit_block(fd, arch, cond_block);
@@ -722,16 +762,18 @@ impl PrintC {
             if let Some(id) = id1 {
                 self.emit.close_brace_indent(self.lang().kw_close_curly, id);
             }
-            indent = self
-                .emit
-                .open_brace_indent(self.lang().kw_open_curly, to_emit_brace(self.options.brace_loop));
+            indent = self.emit.open_brace_indent(
+                self.lang().kw_open_curly,
+                to_emit_brace(self.options.brace_loop),
+            );
             self.flush_eol_warnings();
         }
         self.context.set_mod(modifiers::NO_BRANCH);
         let id2 = self.emit.begin_block(0);
         self.emit_block(fd, arch, fd.sblocks_ref().block(blk).get_block(1));
         self.emit.end_block(id2);
-        self.emit.close_brace_indent(self.lang().kw_close_curly, indent);
+        self.emit
+            .close_brace_indent(self.lang().kw_close_curly, indent);
         self.context.pop_mod();
     }
 }
@@ -771,7 +813,8 @@ impl PrintC {
         let switch_block = fd.sblocks_ref().block(blk).get_block(0);
 
         self.context.push_mod();
-        self.context.unset_mod(modifiers::NO_BRANCH | modifiers::ONLY_BRANCH);
+        self.context
+            .unset_mod(modifiers::NO_BRANCH | modifiers::ONLY_BRANCH);
         self.context.push_mod();
         self.context.set_mod(modifiers::NO_BRANCH);
         self.emit_block(fd, arch, switch_block);
@@ -780,12 +823,14 @@ impl PrintC {
         // The `match v` header: the BRANCHIND arm emits the keyword and, for a
         // language without parenthesised conditions, the bare scrutinee.
         self.context.push_mod();
-        self.context.set_mod(modifiers::ONLY_BRANCH | modifiers::COMMA_SEPARATE);
+        self.context
+            .set_mod(modifiers::ONLY_BRANCH | modifiers::COMMA_SEPARATE);
         self.emit_block(fd, arch, switch_block);
         self.context.pop_mod();
-        let brace_id = self
-            .emit
-            .open_brace_indent(self.lang().kw_open_curly, to_emit_brace(self.options.brace_switch));
+        let brace_id = self.emit.open_brace_indent(
+            self.lang().kw_open_curly,
+            to_emit_brace(self.options.brace_switch),
+        );
         self.flush_eol_warnings();
 
         let ncase = fd.sblocks_ref().block(blk).switch_caseblocks().len();
@@ -804,7 +849,8 @@ impl PrintC {
                 // falling out of the C switch is "continue past it", which is an
                 // empty arm.
                 self.emit.tag_line();
-                self.emit.print(self.lang().kw_default, SyntaxHighlight::KeywordColor);
+                self.emit
+                    .print(self.lang().kw_default, SyntaxHighlight::KeywordColor);
                 self.emit.spaces(1, 0);
                 self.emit.print("=>", SyntaxHighlight::NoColor);
                 self.emit.spaces(1, 0);
@@ -813,7 +859,8 @@ impl PrintC {
         }
 
         self.emit.tag_line();
-        self.emit.close_brace_indent(self.lang().kw_close_curly, brace_id);
+        self.emit
+            .close_brace_indent(self.lang().kw_close_curly, brace_id);
         self.context.pop_mod();
     }
 
@@ -830,7 +877,8 @@ impl PrintC {
 
         self.emit.tag_line();
         if case.isdefault {
-            self.emit.print(self.lang().kw_default, SyntaxHighlight::KeywordColor);
+            self.emit
+                .print(self.lang().kw_default, SyntaxHighlight::KeywordColor);
         } else {
             for i in 0..self.switch_case_label_count(fd, blk, &case) {
                 if i != 0 {
@@ -842,13 +890,7 @@ impl PrintC {
                 match firstop.or_else(|| self.any_op(fd, case.block)) {
                     Some(op) => {
                         if signed {
-                            self.push_constant_ir_fmt_sign(
-                                val,
-                                sz,
-                                op,
-                                display_format::NONE,
-                                true,
-                            );
+                            self.push_constant_ir_fmt_sign(val, sz, op, display_format::NONE, true);
                         } else {
                             self.push_constant_ir(val, sz, op);
                         }
@@ -870,9 +912,10 @@ impl PrintC {
         }
         self.emit.spaces(1, 0);
         self.emit.print("=>", SyntaxHighlight::NoColor);
-        let id = self
-            .emit
-            .open_brace_indent(self.lang().kw_open_curly, to_emit_brace(self.options.brace_switch));
+        let id = self.emit.open_brace_indent(
+            self.lang().kw_open_curly,
+            to_emit_brace(self.options.brace_switch),
+        );
         let id2 = self.emit.begin_block(0);
         if case.gototype != 0 {
             if case.gototype != crate::block::block_flags::f_break_goto {
@@ -919,7 +962,9 @@ impl PrintC {
         let mut cur = fd.bb_op_head(under);
         while let Some(inst) = cur {
             cur = fd.bb_op_next(inst);
-            let Some(o) = fd.obank().get(inst) else { continue };
+            let Some(o) = fd.obank().get(inst) else {
+                continue;
+            };
             if o.not_printed() || o.is_branch() {
                 continue;
             }

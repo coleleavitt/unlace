@@ -71,7 +71,9 @@ pub fn eval_current_model_name(root: &std::rc::Rc<unlace_base::xml::Element>) ->
         .iter()
         .find(|c| c.get_name() == "eval_current_prototype")
         .and_then(|el| {
-            el.get_attribute_value("name").ok().map(|v| String::from_utf8_lossy(v).into_owned())
+            el.get_attribute_value("name")
+                .ok()
+                .map(|v| String::from_utf8_lossy(v).into_owned())
         })
         .filter(|n: &String| !n.is_empty())
 }
@@ -82,7 +84,11 @@ mod tests {
 
     fn parse(xml: &str) -> std::rc::Rc<unlace_base::xml::Element> {
         let mut store = unlace_base::xml::DocumentStorage::new();
-        store.parse_document(xml.as_bytes()).unwrap().get_root().clone()
+        store
+            .parse_document(xml.as_bytes())
+            .unwrap()
+            .get_root()
+            .clone()
     }
 
     /// The nominated model name is read off the element; a spec without one (the
@@ -103,6 +109,10 @@ mod tests {
         assert_eq!(eval_current_model_name(&without), None);
 
         let empty = parse(r#"<compiler_spec><eval_current_prototype name=""/></compiler_spec>"#);
-        assert_eq!(eval_current_model_name(&empty), None, "an empty name nominates nothing");
+        assert_eq!(
+            eval_current_model_name(&empty),
+            None,
+            "an empty name nominates nothing"
+        );
     }
 }

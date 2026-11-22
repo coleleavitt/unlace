@@ -18,7 +18,8 @@
 //! the gap this module describes.
 
 use object::{
-    Object, ObjectSection, ObjectSegment, ObjectSymbol, SectionFlags, SectionKind, SegmentFlags, SymbolKind,
+    Object, ObjectSection, ObjectSegment, ObjectSymbol, SectionFlags, SectionKind, SegmentFlags,
+    SymbolKind,
 };
 
 /// One section of executable memory the walk does not decode on its own.
@@ -93,7 +94,9 @@ pub fn placement(file: &object::File, vma: u64) -> Placement {
         if vma < start || vma - start >= sec.size() {
             continue;
         }
-        let Some(here) = classify(&sec, &segments) else { continue };
+        let Some(here) = classify(&sec, &segments) else {
+            continue;
+        };
         let rank = |p: &Placement| match p {
             Placement::Code { .. } => 3,
             Placement::Unflagged(_) => 2,
@@ -111,7 +114,9 @@ pub fn placement(file: &object::File, vma: u64) -> Placement {
 /// (`STT_OBJECT`, `STT_COMMON`, `STT_TLS`). A Mach-O `nlist` and a PE image
 /// declare no such type, so the answer there is always `None`.
 pub fn declared_data(file: &object::File, vma: u64) -> Option<String> {
-    declared(file, vma, 0, |kind| matches!(kind, SymbolKind::Data | SymbolKind::Tls))
+    declared(file, vma, 0, |kind| {
+        matches!(kind, SymbolKind::Data | SymbolKind::Tls)
+    })
 }
 
 /// The name of the function an ELF symbol table declares at `vma`
@@ -139,17 +144,28 @@ pub fn named_at(file: &object::File, vma: u64) -> Option<String> {
         .filter(|sym| matches!(sym.section(), object::SymbolSection::Section(_)))
         .filter(|sym| {
             let kind = sym.kind();
-            let at = sym.address() == vma || (thumb && kind == SymbolKind::Text && sym.address() & !1 == vma);
+            let at = sym.address() == vma
+                || (thumb && kind == SymbolKind::Text && sym.address() & !1 == vma);
             at && match kind {
                 SymbolKind::Section | SymbolKind::File => false,
                 SymbolKind::Data | SymbolKind::Tls => !elf,
                 _ => true,
             }
         })
-        .find_map(|sym| sym.name().ok().filter(|n| !n.is_empty() && !n.starts_with('$')).map(str::to_string))
+        .find_map(|sym| {
+            sym.name()
+                .ok()
+                .filter(|n| !n.is_empty() && !n.starts_with('$'))
+                .map(str::to_string)
+        })
 }
 
-fn declared(file: &object::File, vma: u64, ignore: u64, kind: impl Fn(SymbolKind) -> bool) -> Option<String> {
+fn declared(
+    file: &object::File,
+    vma: u64,
+    ignore: u64,
+    kind: impl Fn(SymbolKind) -> bool,
+) -> Option<String> {
     if file.format() != object::BinaryFormat::Elf {
         return None;
     }
@@ -203,14 +219,19 @@ fn classify(sec: &object::Section, segments: &[(u64, u64)]) -> Option<Placement>
     }
     let name = section_name(sec);
     if crate::entry::is_executable(sec) {
-        return Some(Placement::Code { section: Some(name) });
+        return Some(Placement::Code {
+            section: Some(name),
+        });
     }
     let end = start.saturating_add(size);
     let executable = segments.iter().any(|&(lo, hi)| start >= lo && end <= hi);
     if executable && may_hold_code(sec) {
         return Some(Placement::Unflagged(UnflaggedSection { name, start, end }));
     }
-    Some(Placement::Data { section: name, executable })
+    Some(Placement::Data {
+        section: name,
+        executable,
+    })
 }
 
 /// Can this section's type hold instructions at all? ELF: allocated
@@ -223,9 +244,14 @@ fn may_hold_code(sec: &object::Section) -> bool {
     const S_SYMBOL_STUBS: u32 = 0x8;
     const S_COALESCED: u32 = 0xb;
     match sec.flags() {
-        SectionFlags::Elf { .. } => matches!(sec.kind(), SectionKind::Data | SectionKind::ReadOnlyData),
+        SectionFlags::Elf { .. } => {
+            matches!(sec.kind(), SectionKind::Data | SectionKind::ReadOnlyData)
+        }
         SectionFlags::MachO { flags } => {
-            matches!(flags & SECTION_TYPE, S_REGULAR | S_SYMBOL_STUBS | S_COALESCED)
+            matches!(
+                flags & SECTION_TYPE,
+                S_REGULAR | S_SYMBOL_STUBS | S_COALESCED
+            )
         }
         _ => false,
     }
@@ -249,7 +275,11 @@ mod tests {
     use super::*;
 
     fn fixture(name: &str) -> Vec<u8> {
-        std::fs::read(format!("{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"))).unwrap()
+        std::fs::read(format!(
+            "{}/tests/fixtures/{name}",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap()
     }
 
     /// `__TEXT,__const` without an instruction attribute in the `r-x` `__TEXT`
@@ -258,20 +288,41 @@ mod tests {
     fn a_macho_const_section_in_text_is_unflagged() {
         let bytes = fixture("unflagged_macho_arm64");
         let file = object::File::parse(&*bytes).unwrap();
-        let section = UnflaggedSection { name: "__TEXT,__const".into(), start: 0x1000003fc, end: 0x100000414 };
+        let section = UnflaggedSection {
+            name: "__TEXT,__const".into(),
+            start: 0x1000003fc,
+            end: 0x100000414,
+        };
         assert_eq!(unflagged_sections(&file), [section.clone()]);
-        assert_eq!(placement(&file, 0x1000003d8), Placement::Code { section: Some("__TEXT,__text".into()) });
+        assert_eq!(
+            placement(&file, 0x1000003d8),
+            Placement::Code {
+                section: Some("__TEXT,__text".into())
+            }
+        );
         assert_eq!(placement(&file, 0x10000040c), Placement::Unflagged(section));
         assert_eq!(
             placement(&file, 0x100000414),
-            Placement::Data { section: "__TEXT,__cstring".into(), executable: true }
+            Placement::Data {
+                section: "__TEXT,__cstring".into(),
+                executable: true
+            }
         );
         assert_eq!(
             placement(&file, 0x100004000),
-            Placement::Data { section: "__DATA,__data".into(), executable: false }
+            Placement::Data {
+                section: "__DATA,__data".into(),
+                executable: false
+            }
         );
         assert_eq!(placement(&file, 0x100000000), Placement::NoSection);
-        assert_eq!((declared_data(&file, 0x1000003fc), declared_function(&file, 0x1000003fc)), (None, None));
+        assert_eq!(
+            (
+                declared_data(&file, 0x1000003fc),
+                declared_function(&file, 0x1000003fc)
+            ),
+            (None, None)
+        );
     }
 
     /// `.rodata` in the `R E` `PT_LOAD` is unflagged; the symbol table declares
@@ -280,13 +331,37 @@ mod tests {
     fn an_elf_rodata_in_the_text_segment_is_unflagged() {
         let bytes = fixture("unflagged_elf_x86_64");
         let file = object::File::parse(&*bytes).unwrap();
-        let section = UnflaggedSection { name: ".rodata".into(), start: 0x4000c2, end: 0x4000d8 };
+        let section = UnflaggedSection {
+            name: ".rodata".into(),
+            start: 0x4000c2,
+            end: 0x4000d8,
+        };
         assert_eq!(placement(&file, 0x4000d3), Placement::Unflagged(section));
-        assert_eq!(placement(&file, 0x4000b0), Placement::Code { section: Some(".text".into()) });
-        assert_eq!(placement(&file, 0x401000), Placement::Data { section: ".data".into(), executable: false });
+        assert_eq!(
+            placement(&file, 0x4000b0),
+            Placement::Code {
+                section: Some(".text".into())
+            }
+        );
+        assert_eq!(
+            placement(&file, 0x401000),
+            Placement::Data {
+                section: ".data".into(),
+                executable: false
+            }
+        );
         assert_eq!(declared_data(&file, 0x4000ce).as_deref(), Some("table"));
-        assert_eq!(declared_function(&file, 0x4000c8).as_deref(), Some("lonely"));
-        assert_eq!((declared_data(&file, 0x4000d3), declared_function(&file, 0x4000d3)), (None, None));
+        assert_eq!(
+            declared_function(&file, 0x4000c8).as_deref(),
+            Some("lonely")
+        );
+        assert_eq!(
+            (
+                declared_data(&file, 0x4000d3),
+                declared_function(&file, 0x4000d3)
+            ),
+            (None, None)
+        );
     }
 
     /// An ARM `STT_FUNC`'s bit 0 is the Thumb flag, and a mapping symbol
@@ -295,9 +370,18 @@ mod tests {
     fn symbols_name_code_by_their_address() {
         let bytes = fixture("unflagged_elf_thumb");
         let file = object::File::parse(&*bytes).unwrap();
-        assert_eq!(declared_function(&file, 0x40008c).as_deref(), Some("lonely"));
+        assert_eq!(
+            declared_function(&file, 0x40008c).as_deref(),
+            Some("lonely")
+        );
         assert_eq!(named_at(&file, 0x400084).as_deref(), Some("middle"));
-        assert_eq!((named_at(&file, 0x400094), declared_function(&file, 0x400094)), (None, None));
+        assert_eq!(
+            (
+                named_at(&file, 0x400094),
+                declared_function(&file, 0x400094)
+            ),
+            (None, None)
+        );
         assert_eq!(named_at(&file, 0x400074).as_deref(), Some("_start"));
         let bytes = fixture("unflagged_macho_arm64");
         let file = object::File::parse(&*bytes).unwrap();
@@ -316,15 +400,25 @@ mod tests {
         for name in ["pe_imports.exe", "cet_pie_x86_64"] {
             let bytes = fixture(name);
             let file = object::File::parse(&*bytes).unwrap();
-            assert!(unflagged_sections(&file).is_empty(), "{name}: {:?}", unflagged_sections(&file));
+            assert!(
+                unflagged_sections(&file).is_empty(),
+                "{name}: {:?}",
+                unflagged_sections(&file)
+            );
         }
         for (name, expect) in [
-            ("fauxware", &[".interp", ".rodata", ".eh_frame_hdr", ".eh_frame"][..]),
+            (
+                "fauxware",
+                &[".interp", ".rodata", ".eh_frame_hdr", ".eh_frame"][..],
+            ),
             ("macho_datasyms_arm64", &["__TEXT,__unwind_info"][..]),
         ] {
             let bytes = fixture(name);
             let file = object::File::parse(&*bytes).unwrap();
-            let names: Vec<String> = unflagged_sections(&file).into_iter().map(|s| s.name).collect();
+            let names: Vec<String> = unflagged_sections(&file)
+                .into_iter()
+                .map(|s| s.name)
+                .collect();
             assert_eq!(names, expect, "{name}");
         }
     }

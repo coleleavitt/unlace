@@ -77,7 +77,7 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
-use unlace_base::space::{spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
@@ -126,7 +126,11 @@ struct Val {
 
 impl Val {
     fn konst(k: u64, size: int4) -> Val {
-        Val { terms: Vec::new(), k: k & mask(size), size }
+        Val {
+            terms: Vec::new(),
+            k: k & mask(size),
+            size,
+        }
     }
 
     fn as_const(&self) -> Option<u64> {
@@ -135,8 +139,16 @@ impl Val {
 
     fn resized(terms: Vec<(u32, u64)>, k: u64, size: int4) -> Val {
         let m = mask(size);
-        let terms = terms.into_iter().map(|(a, c)| (a, c & m)).filter(|&(_, c)| c != 0).collect();
-        Val { terms, k: k & m, size }
+        let terms = terms
+            .into_iter()
+            .map(|(a, c)| (a, c & m))
+            .filter(|&(_, c)| c != 0)
+            .collect();
+        Val {
+            terms,
+            k: k & m,
+            size,
+        }
     }
 
     fn add(&self, o: &Val) -> Val {
@@ -145,11 +157,19 @@ impl Val {
             let e = acc.entry(a).or_insert(0);
             *e = e.wrapping_add(c);
         }
-        Val::resized(acc.into_iter().collect(), self.k.wrapping_add(o.k), self.size)
+        Val::resized(
+            acc.into_iter().collect(),
+            self.k.wrapping_add(o.k),
+            self.size,
+        )
     }
 
     fn scale(&self, c: u64) -> Val {
-        let terms = self.terms.iter().map(|&(a, x)| (a, x.wrapping_mul(c))).collect();
+        let terms = self
+            .terms
+            .iter()
+            .map(|&(a, x)| (a, x.wrapping_mul(c)))
+            .collect();
         Val::resized(terms, self.k.wrapping_mul(c), self.size)
     }
 
@@ -170,10 +190,23 @@ impl Val {
 enum Atom {
     /// Register or temporary storage never written since the head began or
     /// since the last call (`epoch`).
-    Leaf { space: int4, off: u64, size: int4, epoch: u32 },
+    Leaf {
+        space: int4,
+        off: u64,
+        size: int4,
+        epoch: u32,
+    },
     /// A `LOAD` from the data space at memory version `ver`.
-    Load { addr: Val, size: int4, ver: u32 },
-    Op { code: OpCode, ins: Vec<Val>, size: int4 },
+    Load {
+        addr: Val,
+        size: int4,
+        ver: u32,
+    },
+    Op {
+        code: OpCode,
+        ins: Vec<Val>,
+        size: int4,
+    },
     Fresh(u32),
 }
 
@@ -200,11 +233,19 @@ impl Syms {
     }
 
     fn atom(&mut self, a: Atom, size: int4) -> Val {
-        Val { terms: vec![(self.intern(a), 1)], k: 0, size }
+        Val {
+            terms: vec![(self.intern(a), 1)],
+            k: 0,
+            size,
+        }
     }
 
     fn id_val(id: u32, size: int4) -> Val {
-        Val { terms: vec![(id, 1)], k: 0, size }
+        Val {
+            terms: vec![(id, 1)],
+            k: 0,
+            size,
+        }
     }
 
     fn fresh(&mut self, size: int4) -> Val {
@@ -227,9 +268,11 @@ impl Syms {
         let mut acc = Val::konst(v.k, size);
         for &(id, c) in &v.terms {
             let piece = match self.atoms.get(id as usize) {
-                Some(Atom::Op { code: OpCode::CPUI_INT_ZEXT, ins, .. }) if ins[0].size >= size => {
-                    self.truncate(&ins[0], size)
-                }
+                Some(Atom::Op {
+                    code: OpCode::CPUI_INT_ZEXT,
+                    ins,
+                    ..
+                }) if ins[0].size >= size => self.truncate(&ins[0], size),
                 _ => Syms::id_val(id, size),
             };
             acc = acc.add(&piece.scale(c));
@@ -242,14 +285,25 @@ impl Syms {
             return v;
         }
         if let Some(c) = v.as_const() {
-            let shifted = if byte_off >= 8 { 0 } else { c >> (8 * byte_off) };
+            let shifted = if byte_off >= 8 {
+                0
+            } else {
+                c >> (8 * byte_off)
+            };
             return Val::konst(shifted, size);
         }
         if byte_off == 0 && size < v.size {
             return self.truncate(&v, size);
         }
         let off = Val::konst(byte_off, 4);
-        self.atom(Atom::Op { code: OpCode::CPUI_SUBPIECE, ins: vec![v, off], size }, size)
+        self.atom(
+            Atom::Op {
+                code: OpCode::CPUI_SUBPIECE,
+                ins: vec![v, off],
+                size,
+            },
+            size,
+        )
     }
 
     fn op(&mut self, code: OpCode, ins: Vec<Val>, size: int4) -> Val {
@@ -288,7 +342,12 @@ impl Syms {
                 if let Some(c) = c0 {
                     return Val::konst((c ^ 1) & 1, size);
                 }
-                if let Some(Atom::Op { code: CPUI_BOOL_NEGATE, ins: inner, .. }) = self.single(&ins[0]) {
+                if let Some(Atom::Op {
+                    code: CPUI_BOOL_NEGATE,
+                    ins: inner,
+                    ..
+                }) = self.single(&ins[0])
+                {
                     return inner[0].clone();
                 }
                 self.op(code, ins, size)
@@ -337,14 +396,18 @@ impl Syms {
         if let Some(c) = v.as_const() {
             return c <= 1;
         }
-        let Some(Atom::Op { code, ins, .. }) = self.single(v) else { return false };
+        let Some(Atom::Op { code, ins, .. }) = self.single(v) else {
+            return false;
+        };
         match *code {
             CPUI_BOOL_NEGATE => self.lang_ok(&ins[0], spec, bps),
             CPUI_BOOL_AND | CPUI_BOOL_OR | CPUI_BOOL_XOR => {
                 self.lang_ok(&ins[0], spec, bps) && self.lang_ok(&ins[1], spec, bps)
             }
             CPUI_INT_AND | CPUI_INT_OR | CPUI_INT_XOR if v.size == 1 => {
-                ins.iter().all(|i| i.size == 1) && self.lang_ok(&ins[0], spec, bps) && self.lang_ok(&ins[1], spec, bps)
+                ins.iter().all(|i| i.size == 1)
+                    && self.lang_ok(&ins[0], spec, bps)
+                    && self.lang_ok(&ins[1], spec, bps)
             }
             CPUI_INT_EQUAL | CPUI_INT_NOTEQUAL => {
                 let d = ins[0].sub(&ins[1]);
@@ -424,7 +487,9 @@ impl Syms {
                 }
             }
         }
-        let Some(Atom::Op { code, ins, .. }) = self.single(v) else { return None };
+        let Some(Atom::Op { code, ins, .. }) = self.single(v) else {
+            return None;
+        };
         let a = self.conc(&ins[0], env)?;
         if *code == CPUI_BOOL_NEGATE {
             return Some((a ^ 1) & 1);
@@ -451,7 +516,12 @@ impl Syms {
 
     /// For each test value of `x`, whether every condition holds with its
     /// recorded sense. `None` when a condition leaves the decidable language.
-    fn classify_one(&self, conds: &[(Val, bool)], x: &Val, extra: &[u64]) -> Option<Vec<(u64, bool)>> {
+    fn classify_one(
+        &self,
+        conds: &[(Val, bool)],
+        x: &Val,
+        extra: &[u64],
+    ) -> Option<Vec<(u64, bool)>> {
         let spec = Spec::One(x.clone());
         let mut bps: Vec<u64> = extra.to_vec();
         for (c, _) in conds {
@@ -475,7 +545,14 @@ impl Syms {
     /// Does the condition, with sense `taken`, equal `target` over every ordering
     /// of the two atoms? Exact because the language only relates them to each
     /// other.
-    fn decide_two(&self, cond: &Val, taken: bool, s: u32, r: u32, target: fn(u64, u64) -> bool) -> bool {
+    fn decide_two(
+        &self,
+        cond: &Val,
+        taken: bool,
+        s: u32,
+        r: u32,
+        target: fn(u64, u64) -> bool,
+    ) -> bool {
         let spec = Spec::Two(s, r);
         if cond.size != 1 || !self.lang_ok(cond, &spec, &mut Vec::new()) {
             return false;
@@ -530,11 +607,16 @@ impl Regs {
         let rax = reg("RAX", 8)?;
         let reg_space = rax.get_space()?.get_index();
         let mut bases = Vec::new();
-        for nm in ["RSP", "RBP", "RBX", "RSI", "RDI", "R12", "R13", "R14", "R15", "RAX", "R9", "R10", "R11"] {
+        for nm in [
+            "RSP", "RBP", "RBX", "RSI", "RDI", "R12", "R13", "R14", "R15", "RAX", "R9", "R10",
+            "R11",
+        ] {
             bases.push(reg(nm, 8)?);
         }
         let mut bytes = Vec::new();
-        for nm in ["AL", "BL", "SIL", "DIL", "BPL", "R9B", "R10B", "R11B", "R12B", "R13B", "R14B", "R15B"] {
+        for nm in [
+            "AL", "BL", "SIL", "DIL", "BPL", "R9B", "R10B", "R11B", "R12B", "R13B", "R14B", "R15B",
+        ] {
             bytes.push(reg(nm, 1)?);
         }
         let model = data.get_arch().eval_fp_called()?.clone();
@@ -602,7 +684,15 @@ impl<'a> Engine<'a> {
                 return self.syms.fresh(size);
             }
         }
-        self.syms.atom(Atom::Leaf { space, off, size, epoch: st.epoch }, size)
+        self.syms.atom(
+            Atom::Leaf {
+                space,
+                off,
+                size,
+                epoch: st.epoch,
+            },
+            size,
+        )
     }
 
     fn read_reg(&mut self, st: &State, addr: &Address, size: int4) -> Val {
@@ -612,12 +702,15 @@ impl<'a> Engine<'a> {
     fn space_kind(&self, vn: VarnodeId) -> Option<(bool, int4, u64, int4)> {
         let v = self.data.vbank().get(vn)?;
         let sp = v.get_addr().get_space()?;
-        let local = sp.get_index() == self.regs.reg_space || sp.get_type() == spacetype::IPTR_INTERNAL;
+        let local =
+            sp.get_index() == self.regs.reg_space || sp.get_type() == spacetype::IPTR_INTERNAL;
         Some((local, sp.get_index(), v.get_offset(), v.get_size()))
     }
 
     fn read_vn(&mut self, st: &State, vn: VarnodeId) -> Val {
-        let Some(v) = self.data.vbank().get(vn) else { return self.syms.fresh(1) };
+        let Some(v) = self.data.vbank().get(vn) else {
+            return self.syms.fresh(1);
+        };
         let size = v.get_size();
         if v.is_constant() {
             return Val::konst(v.get_offset(), size);
@@ -632,7 +725,8 @@ impl<'a> Engine<'a> {
         match self.space_kind(vn) {
             Some((true, space, off, size)) => {
                 let end = off + size as u64;
-                st.reg.retain(|(s, o, z, _)| !(*s == space && *o >= off && o + *z as u64 <= end));
+                st.reg
+                    .retain(|(s, o, z, _)| !(*s == space && *o >= off && o + *z as u64 <= end));
                 st.reg.push((space, off, size, val));
                 if space == self.regs.reg_space {
                     st.written.insert((off, size));
@@ -643,7 +737,9 @@ impl<'a> Engine<'a> {
     }
 
     fn data_space(&self, vn: Option<VarnodeId>) -> bool {
-        let Some(v) = vn.and_then(|vn| self.data.vbank().get(vn)) else { return false };
+        let Some(v) = vn.and_then(|vn| self.data.vbank().get(vn)) else {
+            return false;
+        };
         v.is_constant() && v.get_offset() == self.regs.ram.get_index() as u64
     }
 
@@ -659,10 +755,22 @@ impl<'a> Engine<'a> {
         match code {
             CPUI_LOAD => {
                 let Some(out) = out else { return };
-                let size = self.data.vbank().get(out).map(|v| v.get_size()).unwrap_or(1);
+                let size = self
+                    .data
+                    .vbank()
+                    .get(out)
+                    .map(|v| v.get_size())
+                    .unwrap_or(1);
                 let val = if ins.len() == 2 && self.data_space(Some(ins[0])) {
                     let addr = self.read_vn(st, ins[1]);
-                    self.syms.atom(Atom::Load { addr, size, ver: st.ver }, size)
+                    self.syms.atom(
+                        Atom::Load {
+                            addr,
+                            size,
+                            ver: st.ver,
+                        },
+                        size,
+                    )
                 } else {
                     self.syms.fresh(size)
                 };
@@ -685,16 +793,28 @@ impl<'a> Engine<'a> {
                 st.epoch += 1;
                 st.reg.clear();
                 if let Some(out) = out {
-                    let size = self.data.vbank().get(out).map(|v| v.get_size()).unwrap_or(1);
+                    let size = self
+                        .data
+                        .vbank()
+                        .get(out)
+                        .map(|v| v.get_size())
+                        .unwrap_or(1);
                     let f = self.syms.fresh(size);
                     self.write_vn(st, out, f);
                 }
             }
             CPUI_BRANCH => {}
-            CPUI_CBRANCH | CPUI_BRANCHIND | CPUI_RETURN | CPUI_MULTIEQUAL | CPUI_INDIRECT => st.bad = true,
+            CPUI_CBRANCH | CPUI_BRANCHIND | CPUI_RETURN | CPUI_MULTIEQUAL | CPUI_INDIRECT => {
+                st.bad = true
+            }
             _ => {
                 let Some(out) = out else { return };
-                let size = self.data.vbank().get(out).map(|v| v.get_size()).unwrap_or(1);
+                let size = self
+                    .data
+                    .vbank()
+                    .get(out)
+                    .map(|v| v.get_size())
+                    .unwrap_or(1);
                 let vals: Vec<Val> = ins.iter().map(|&vn| self.read_vn(st, vn)).collect();
                 let val = self.syms.eval(code, vals, size);
                 self.write_vn(st, out, val);
@@ -708,8 +828,12 @@ impl<'a> Engine<'a> {
     fn exec_block(&mut self, st: &mut State, bl: BlockId, from_last_call: bool) -> Option<Val> {
         use OpCode::*;
         let ops = self.data.bb_ops(bl);
-        let last_call =
-            ops.iter().rposition(|&o| matches!(block_code(self.data, o), Some(CPUI_CALL | CPUI_CALLIND | CPUI_CALLOTHER)));
+        let last_call = ops.iter().rposition(|&o| {
+            matches!(
+                block_code(self.data, o),
+                Some(CPUI_CALL | CPUI_CALLIND | CPUI_CALLOTHER)
+            )
+        });
         let start = match last_call {
             Some(i) if from_last_call => {
                 st.epoch += 1;
@@ -725,7 +849,8 @@ impl<'a> Engine<'a> {
         }
         let mut cond = None;
         for (i, &op) in ops.iter().enumerate().skip(start) {
-            let is_cbranch = self.data.obank().get(op).map(|o| o.code()) == Some(OpCode::CPUI_CBRANCH);
+            let is_cbranch =
+                self.data.obank().get(op).map(|o| o.code()) == Some(OpCode::CPUI_CBRANCH);
             if is_cbranch && i + 1 == ops.len() {
                 let o = self.data.obank().get(op)?;
                 if o.is_boolean_flip() {
@@ -771,7 +896,13 @@ fn block_code(data: &Funcdata, op: OpId) -> Option<OpCode> {
 }
 
 /// Every path from `f0` to `join` through a single-entry fast arm, or `None`.
-fn fast_paths(data: &Funcdata, head: BlockId, grow: BlockId, join: BlockId, f0: BlockId) -> Option<Vec<Vec<BlockId>>> {
+fn fast_paths(
+    data: &Funcdata,
+    head: BlockId,
+    grow: BlockId,
+    join: BlockId,
+    f0: BlockId,
+) -> Option<Vec<Vec<BlockId>>> {
     let g = data.bblocks_ref();
     let mut paths: Vec<Vec<BlockId>> = Vec::new();
     let mut stack: Vec<Vec<BlockId>> = vec![vec![f0]];
@@ -781,7 +912,10 @@ fn fast_paths(data: &Funcdata, head: BlockId, grow: BlockId, join: BlockId, f0: 
             return None;
         }
         let b = g.block(bl);
-        if b.size_out() == 0 || b.size_out() > 2 || (b.size_out() == 2 && b.get_out(0) == b.get_out(1)) {
+        if b.size_out() == 0
+            || b.size_out() > 2
+            || (b.size_out() == 2 && b.get_out(0) == b.get_out(1))
+        {
             return None;
         }
         for i in 0..b.size_out() {
@@ -835,7 +969,9 @@ fn prove_fast_path(
     n: u64,
 ) -> Option<Option<FastPath>> {
     let res = Syms::id_val(res_id, WORD);
-    let points = eng.syms.classify_one(&st.conds[1..], &res, &[SSO_CAPACITY, SSO_CAPACITY + 1])?;
+    let points = eng
+        .syms
+        .classify_one(&st.conds[1..], &res, &[SSO_CAPACITY, SSO_CAPACITY + 1])?;
     let feasible: Vec<u64> = points.iter().filter(|(_, t)| *t).map(|(v, _)| *v).collect();
     if feasible.is_empty() {
         return Some(None);
@@ -868,13 +1004,20 @@ fn prove_fast_path(
             }
             rel.k.wrapping_sub(a.k)
         } else {
-            let [(pid, 1)] = rel.terms.as_slice() else { return None };
-            let Some(Atom::Load { addr, size: 8, ver }) = eng.syms.atoms.get(*pid as usize) else { return None };
+            let [(pid, 1)] = rel.terms.as_slice() else {
+                return None;
+            };
+            let Some(Atom::Load { addr, size: 8, ver }) = eng.syms.atoms.get(*pid as usize) else {
+                return None;
+            };
             if addr != a || heap_ptr.is_some_and(|p| p != *pid) {
                 return None;
             }
-            let Some(before) = ver.checked_sub(base_ver).map(|b| b as usize) else { return None };
-            if before > 1 || before > idx || st.stores[..before].iter().any(|b| b.addr != size_slot) {
+            let Some(before) = ver.checked_sub(base_ver).map(|b| b as usize) else {
+                return None;
+            };
+            if before > 1 || before > idx || st.stores[..before].iter().any(|b| b.addr != size_slot)
+            {
                 return None;
             }
             heap_ptr = Some(*pid);
@@ -908,7 +1051,11 @@ fn prove_fast_path(
     }
     let rax_addr = eng.regs.rax.clone();
     let rax = eng.read_reg(st, &rax_addr, WORD);
-    Some(Some(FastPath { bytes: (0..n).map(|i| bytes[&i].clone()).collect(), sso, rax }))
+    Some(Some(FastPath {
+        bytes: (0..n).map(|i| bytes[&i].clone()).collect(),
+        sso,
+        rax,
+    }))
 }
 
 /// May a call change this register? Anything the default model does not promise
@@ -922,13 +1069,17 @@ fn volatile(regs: &Regs, off: u64, size: int4) -> bool {
         return false;
     }
     let addr = Address::new(regs.rax.get_space().expect("register space").clone(), off);
-    !matches!(regs.model.has_effect(&addr, size), UNAFFECTED | RETURN_ADDRESS)
+    !matches!(
+        regs.model.has_effect(&addr, size),
+        UNAFFECTED | RETURN_ADDRESS
+    )
 }
 
 fn register_bytes(data: &Funcdata, regs: &Regs, vn: VarnodeId) -> Option<std::ops::Range<u64>> {
     let v = data.vbank().get(vn)?;
     let space = v.get_addr().get_space()?;
-    (space.get_index() == regs.reg_space).then(|| v.get_offset()..v.get_offset() + v.get_size() as u64)
+    (space.get_index() == regs.reg_space)
+        .then(|| v.get_offset()..v.get_offset() + v.get_size() as u64)
 }
 
 /// Does an op on some path from `join` read a byte of `live` before overwriting
@@ -950,7 +1101,9 @@ fn read_after_join(data: &Funcdata, regs: &Regs, join: BlockId, live: BTreeSet<u
         seen.extend(live.iter().copied());
         let mut path_ends = false;
         for op in data.bb_ops(bl) {
-            let Some(o) = data.obank().get(op) else { return true };
+            let Some(o) = data.obank().get(op) else {
+                return true;
+            };
             budget = match budget.checked_sub(1) {
                 Some(b) => b,
                 None => return true,
@@ -972,7 +1125,10 @@ fn read_after_join(data: &Funcdata, regs: &Regs, join: BlockId, live: BTreeSet<u
                 && register_bytes(data, regs, ins[0]).is_some()
                 && register_bytes(data, regs, ins[0]) == register_bytes(data, regs, ins[1]);
             if !self_cancel
-                && ins.iter().filter_map(|&vn| register_bytes(data, regs, vn)).any(|mut r| r.any(|b| live.contains(&b)))
+                && ins
+                    .iter()
+                    .filter_map(|&vn| register_bytes(data, regs, vn))
+                    .any(|mut r| r.any(|b| live.contains(&b)))
             {
                 return true;
             }
@@ -1011,7 +1167,10 @@ fn materialize(eng: &mut Engine, st: &State, want: &Val, cands: &[Address]) -> O
     for r in cands {
         let v = eng.read_reg(st, r, want.size);
         if v.terms == want.terms {
-            return Some(Src::Reg(r.clone(), want.k.wrapping_sub(v.k) & mask(want.size)));
+            return Some(Src::Reg(
+                r.clone(),
+                want.k.wrapping_sub(v.k) & mask(want.size),
+            ));
         }
     }
     None
@@ -1035,7 +1194,8 @@ fn try_match(data: &Funcdata, regs: &Regs, call: OpId) -> Option<Site> {
         return None;
     }
     let hb = g.block(head);
-    if hb.size_out() != 2 || block_code(data, data.bb_op_tail(head)?) != Some(OpCode::CPUI_CBRANCH) {
+    if hb.size_out() != 2 || block_code(data, data.bb_op_tail(head)?) != Some(OpCode::CPUI_CBRANCH)
+    {
         return None;
     }
     let (fast_slot, f0) = match (hb.get_out(0), hb.get_out(1)) {
@@ -1056,11 +1216,17 @@ fn try_match(data: &Funcdata, regs: &Regs, call: OpId) -> Option<Site> {
         return None;
     }
     let call_ix = gops.iter().position(|&o| o == call)?;
-    if gops[call_ix + 1..].iter().any(|&o| block_code(data, o) != Some(OpCode::CPUI_BRANCH)) {
+    if gops[call_ix + 1..]
+        .iter()
+        .any(|&o| block_code(data, o) != Some(OpCode::CPUI_BRANCH))
+    {
         return None;
     }
-    let first_call_ix =
-        gops.iter().position(|&o| data.obank().get(o).is_some_and(|x| x.get_addr() == &call_addr))?;
+    let first_call_ix = gops.iter().position(|&o| {
+        data.obank()
+            .get(o)
+            .is_some_and(|x| x.get_addr() == &call_addr)
+    })?;
 
     let paths = fast_paths(data, head, grow, join, f0)?;
     let arm_stores: usize = paths
@@ -1068,13 +1234,22 @@ fn try_match(data: &Funcdata, regs: &Regs, call: OpId) -> Option<Site> {
         .flatten()
         .collect::<BTreeSet<_>>()
         .into_iter()
-        .map(|&bl| data.bb_ops(bl).iter().filter(|&&o| block_code(data, o) == Some(OpCode::CPUI_STORE)).count())
+        .map(|&bl| {
+            data.bb_ops(bl)
+                .iter()
+                .filter(|&&o| block_code(data, o) == Some(OpCode::CPUI_STORE))
+                .count()
+        })
         .sum();
     if arm_stores < 2 {
         return None;
     }
 
-    let mut eng = Engine { data, regs, syms: Syms::default() };
+    let mut eng = Engine {
+        data,
+        regs,
+        syms: Syms::default(),
+    };
     let mut sh = State::default();
     let cond_h = eng.exec_block(&mut sh, head, true)?;
     if sh.bad {
@@ -1123,8 +1298,12 @@ fn try_match(data: &Funcdata, regs: &Regs, call: OpId) -> Option<Site> {
         if s.size != WORD {
             continue;
         }
-        let [(lid, 1)] = s.val.terms.as_slice() else { continue };
-        let Some(Atom::Load { addr, size: 8, ver }) = eng.syms.atoms.get(*lid as usize) else { continue };
+        let [(lid, 1)] = s.val.terms.as_slice() else {
+            continue;
+        };
+        let Some(Atom::Load { addr, size: 8, ver }) = eng.syms.atoms.get(*lid as usize) else {
+            continue;
+        };
         if *ver != base_ver || *addr != s.addr || s.val.k == 0 || s.val.k > MAX_APPEND_BYTES {
             continue;
         }
@@ -1135,14 +1314,23 @@ fn try_match(data: &Funcdata, regs: &Regs, call: OpId) -> Option<Site> {
     }
     let (size_slot, size_id, n) = found?;
     let a = size_slot.plus(0u64.wrapping_sub(SIZE_FIELD));
-    let res_id = eng.syms.lookup(&Atom::Load { addr: a.plus(RES_FIELD), size: WORD, ver: base_ver })?;
+    let res_id = eng.syms.lookup(&Atom::Load {
+        addr: a.plus(RES_FIELD),
+        size: WORD,
+        ver: base_ver,
+    })?;
     let size_v = Syms::id_val(size_id, WORD);
     let res_v = Syms::id_val(res_id, WORD);
 
-    let push_back = n == 1 && eng.syms.decide_two(&cond_h, fast_taken, size_id, res_id, |s, r| s < r);
+    let push_back = n == 1
+        && eng
+            .syms
+            .decide_two(&cond_h, fast_taken, size_id, res_id, |s, r| s < r);
     if !push_back {
         let d = res_v.sub(&size_v);
-        let pts = eng.syms.classify_one(&[(cond_h.clone(), fast_taken)], &d, &[n])?;
+        let pts = eng
+            .syms
+            .classify_one(&[(cond_h.clone(), fast_taken)], &d, &[n])?;
         if !pts.iter().all(|&(dv, t)| t == (dv >= n)) {
             return None;
         }
@@ -1163,7 +1351,10 @@ fn try_match(data: &Funcdata, regs: &Regs, call: OpId) -> Option<Site> {
     }
     let returns_this = proven.iter().all(|p| p.rax == a);
 
-    let fast_written: BTreeSet<(u64, int4)> = ends.iter().flat_map(|st| st.written.iter().copied()).collect();
+    let fast_written: BTreeSet<(u64, int4)> = ends
+        .iter()
+        .flat_map(|st| st.written.iter().copied())
+        .collect();
     let written: BTreeSet<(u64, int4)> = fast_written.union(&sg.written).copied().collect();
     if !written.iter().all(|&(off, size)| volatile(regs, off, size)) {
         return None;
@@ -1180,7 +1371,10 @@ fn try_match(data: &Funcdata, regs: &Regs, call: OpId) -> Option<Site> {
             return None;
         }
         let rdx_off = regs.rdx.get_offset();
-        if sg.written.iter().any(|&(o, z)| o < rdx_off + 8 && rdx_off < o + z as u64)
+        if sg
+            .written
+            .iter()
+            .any(|&(o, z)| o < rdx_off + 8 && rdx_off < o + z as u64)
             && eng.read_reg(&sg, &regs.rdx, WORD) != Val::konst(1, WORD)
         {
             return None;
@@ -1193,12 +1387,20 @@ fn try_match(data: &Funcdata, regs: &Regs, call: OpId) -> Option<Site> {
         let lit = eng.read_reg(&sg, &regs.r9, WORD).as_const()?;
         let rsp = eng.read_reg(&sg, &regs.rsp, WORD);
         if sg.stores.len() > 1
-            || sg.stores.iter().any(|s| s.addr != rsp.plus(STACK_ARG_FIVE) || s.val != Val::konst(n, WORD))
+            || sg
+                .stores
+                .iter()
+                .any(|s| s.addr != rsp.plus(STACK_ARG_FIVE) || s.val != Val::konst(n, WORD))
         {
             return None;
         }
         let lit_addr = Address::new(regs.ram.clone(), lit);
-        if data.get_arch().query_global_properties(&lit_addr, n as int4, &call_addr) & varnode_flags::readonly == 0 {
+        if data
+            .get_arch()
+            .query_global_properties(&lit_addr, n as int4, &call_addr)
+            & varnode_flags::readonly
+            == 0
+        {
             return None;
         }
         for (i, b) in bytes.iter().enumerate() {
@@ -1232,10 +1434,27 @@ fn try_match(data: &Funcdata, regs: &Regs, call: OpId) -> Option<Site> {
     if read_after_join(data, regs, join, changed) {
         return None;
     }
-    Some(Site { head, grow, fast_slot, call, first_call_ix, this, kind, returns_this, fast_written })
+    Some(Site {
+        head,
+        grow,
+        fast_slot,
+        call,
+        first_call_ix,
+        this,
+        kind,
+        returns_this,
+        fast_written,
+    })
 }
 
-fn emit_assign(data: &mut Funcdata, before: OpId, at: &Address, dest: &Address, size: int4, src: &Src) -> KunaResult<()> {
+fn emit_assign(
+    data: &mut Funcdata,
+    before: OpId,
+    at: &Address,
+    dest: &Address,
+    size: int4,
+    src: &Src,
+) -> KunaResult<()> {
     let op = match src {
         Src::Const(c) => {
             let op = data.new_op(1, at.clone());
@@ -1268,59 +1487,101 @@ fn emit_assign(data: &mut Funcdata, before: OpId, at: &Address, dest: &Address, 
 
 fn rewrite(data: &mut Funcdata, regs: &Regs, site: &Site) -> KunaResult<bool> {
     use crate::dtype::type_metatype;
-    use crate::fspec::{effect_type, EffectRecord};
-    let Some(types) = data.get_arch().types() else { return Ok(false) };
-    let (Ok(void_ty), Ok(char_ty), Ok(ulong_ty)) =
-        (types.get_type_void(), types.get_type_char(1), types.get_base(WORD, type_metatype::TYPE_UINT))
-    else {
+    use crate::fspec::{EffectRecord, effect_type};
+    let Some(types) = data.get_arch().types() else {
         return Ok(false);
     };
-    let (Ok(void_ptr), Ok(char_ptr)) =
-        (types.get_type_pointer(WORD, void_ty.clone(), WORD as u32), types.get_type_pointer(WORD, char_ty.clone(), WORD as u32))
-    else {
+    let (Ok(void_ty), Ok(char_ty), Ok(ulong_ty)) = (
+        types.get_type_void(),
+        types.get_type_char(1),
+        types.get_base(WORD, type_metatype::TYPE_UINT),
+    ) else {
+        return Ok(false);
+    };
+    let (Ok(void_ptr), Ok(char_ptr)) = (
+        types.get_type_pointer(WORD, void_ty.clone(), WORD as u32),
+        types.get_type_pointer(WORD, char_ty.clone(), WORD as u32),
+    ) else {
         return Ok(false);
     };
     let gops = data.bb_ops(site.grow);
-    let Some(call_addr) = data.obank().get(site.call).map(|o| o.get_addr().clone()) else { return Ok(false) };
+    let Some(call_addr) = data.obank().get(site.call).map(|o| o.get_addr().clone()) else {
+        return Ok(false);
+    };
 
-    let this_piece = ParameterPieces { addr: regs.rcx.clone(), type_: Some(void_ptr.clone()), flags: 0 };
+    let this_piece = ParameterPieces {
+        addr: regs.rcx.clone(),
+        type_: Some(void_ptr.clone()),
+        flags: 0,
+    };
     let (name, params) = match &site.kind {
         Kind::PushBack(_) => {
-            let c = ParameterPieces { addr: regs.rdx.clone(), type_: Some(char_ty), flags: 0 };
+            let c = ParameterPieces {
+                addr: regs.rdx.clone(),
+                type_: Some(char_ty),
+                flags: 0,
+            };
             (PUSH_BACK_NAME, vec![("this", this_piece), ("c", c)])
         }
         Kind::Append { .. } => {
-            let s = ParameterPieces { addr: regs.rdx.clone(), type_: Some(char_ptr), flags: 0 };
-            let n = ParameterPieces { addr: regs.r8.clone(), type_: Some(ulong_ty), flags: 0 };
+            let s = ParameterPieces {
+                addr: regs.rdx.clone(),
+                type_: Some(char_ptr),
+                flags: 0,
+            };
+            let n = ParameterPieces {
+                addr: regs.r8.clone(),
+                type_: Some(ulong_ty),
+                flags: 0,
+            };
             (APPEND_NAME, vec![("this", this_piece), ("s", s), ("n", n)])
         }
     };
     let mut fc = FuncCallSpecs::new(site.call, Address::default());
     fc.set_funcdata(Address::default(), name)?;
     let out_ty = if site.returns_this { void_ptr } else { void_ty };
-    fc.proto_mut().set_internal(regs.model.clone(), out_ty.clone());
+    fc.proto_mut()
+        .set_internal(regs.model.clone(), out_ty.clone());
     for (slot, (nm, piece)) in params.iter().enumerate() {
         fc.proto_mut().set_param(slot as int4, nm, piece);
     }
     fc.proto_mut().set_input_lock(true);
     if site.returns_this {
-        fc.proto_mut().set_output(&ParameterPieces { addr: regs.rax.clone(), type_: Some(out_ty), flags: 0 });
+        fc.proto_mut().set_output(&ParameterPieces {
+            addr: regs.rax.clone(),
+            type_: Some(out_ty),
+            flags: 0,
+        });
     }
     fc.proto_mut().set_output_lock(true);
     let rax = regs.rax.get_offset();
     for rec in regs.model.effect_list() {
         let at = rec.get_address();
         let (off, size) = (at.get_offset(), rec.get_size() as u64);
-        let in_register_space = at.get_space().is_some_and(|sp| sp.get_index() == regs.reg_space);
-        let fast_writes = site.fast_written.iter().any(|&(o, z)| o < off + size && off < o + z as u64);
+        let in_register_space = at
+            .get_space()
+            .is_some_and(|sp| sp.get_index() == regs.reg_space);
+        let fast_writes = site
+            .fast_written
+            .iter()
+            .any(|&(o, z)| o < off + size && off < o + z as u64);
         let returned = site.returns_this && off <= rax && rax < off + size;
-        let kind = if rec.get_type() == effect_type::KILLEDBYCALL && in_register_space && !fast_writes && !returned {
+        let kind = if rec.get_type() == effect_type::KILLEDBYCALL
+            && in_register_space
+            && !fast_writes
+            && !returned
+        {
             effect_type::UNAFFECTED
         } else {
             rec.get_type()
         };
-        let range = unlace_num::pcoderaw::VarnodeData { space: at.get_space().cloned(), offset: off, size: size as u32 };
-        fc.proto_mut().push_effect_override(EffectRecord::from_varnode(range, kind));
+        let range = unlace_num::pcoderaw::VarnodeData {
+            space: at.get_space().cloned(),
+            offset: off,
+            size: size as u32,
+        };
+        fc.proto_mut()
+            .push_effect_override(EffectRecord::from_varnode(range, kind));
     }
 
     let anchor = gops[site.first_call_ix];
@@ -1340,7 +1601,8 @@ fn rewrite(data: &mut Funcdata, regs: &Regs, site: &Site) -> KunaResult<bool> {
     let idx = data.push_call_specs(fc);
     let handle = crate::flow::next_fspec_handle();
     let style = data.get_arch().kuna_name_style();
-    data.get_call_specs(idx).register_in_fspec_space(handle, style);
+    data.get_call_specs(idx)
+        .register_in_fspec_space(handle, style);
     let fspecvn = data.new_varnode_call_specs(handle);
     data.op_set_input(site.call, fspecvn, 0)?;
     data.remove_unreachable_blocks(false, false)?;
@@ -1357,7 +1619,11 @@ impl ActionMsvcStrAppend {
     /// Construct the action in the given group.
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
         Box::new(ActionMsvcStrAppend {
-            base: ActionBase::new(crate::action::ruleflags::rule_onceperfunc, "msvcstrappend", g),
+            base: ActionBase::new(
+                crate::action::ruleflags::rule_onceperfunc,
+                "msvcstrappend",
+                g,
+            ),
         })
     }
 }
@@ -1373,22 +1639,30 @@ impl Action for ActionMsvcStrAppend {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionMsvcStrAppend { base: self.base.clone() }))
+        Some(Box::new(ActionMsvcStrAppend {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data.get_arch().msvc_str_append || data.num_calls() == 0 {
             return 0;
         }
-        let Some(regs) = Regs::resolve(data) else { return 0 };
+        let Some(regs) = Regs::resolve(data) else {
+            return 0;
+        };
         let mut changed = 0;
         let mut seen: BTreeSet<OpId> = BTreeSet::new();
         'sites: while changed < MAX_SITES {
-            let calls: Vec<OpId> = (0..data.num_calls()).map(|i| data.get_call_specs(i).get_op()).collect();
+            let calls: Vec<OpId> = (0..data.num_calls())
+                .map(|i| data.get_call_specs(i).get_op())
+                .collect();
             for call in calls {
                 if !seen.insert(call) {
                     continue;
                 }
-                let Some(site) = try_match(data, &regs, call) else { continue };
+                let Some(site) = try_match(data, &regs, call) else {
+                    continue;
+                };
                 match rewrite(data, &regs, &site) {
                     Ok(true) => {
                         changed += 1;

@@ -22,21 +22,22 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::{int4, uintm};
 use unlace_num::opcodes::OpCode;
 
-use unlace_decomp::dtype::{type_metatype, Datatype};
-use unlace_decomp::funcdata::Funcdata;
-use unlace_decomp::op::{pcodeop_flags, PcodeOpBank};
 use unlace_decomp::context::{ArchContext, BlockId, OpId, TypeOp};
+use unlace_decomp::dtype::{Datatype, type_metatype};
+use unlace_decomp::funcdata::Funcdata;
+use unlace_decomp::op::{PcodeOpBank, pcodeop_flags};
 use unlace_decomp::varnode::VarnodeBank;
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -71,7 +72,8 @@ fn unk_type() -> Rc<Datatype> {
 fn copy_op(fd: &mut Funcdata, inputs: int4, off: u64) -> OpId {
     let ram = ram_space(fd);
     let op = fd.obank_mut().create_at(inputs, Address::new(ram, off));
-    fd.obank_mut().change_opcode(op, TypeOp::new(OpCode::CPUI_COPY, 0, "COPY"));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(OpCode::CPUI_COPY, 0, "COPY"));
     op
 }
 
@@ -133,17 +135,29 @@ fn thunk_repoints_self_def_input_cpp_skips_it() {
         Some(oldvn),
         "self-definition input must stay reading oldvn (C++ replace skips op->output==newvn)"
     );
-    assert_ne!(in0, Some(newvn), "self-def slot must NOT be repointed to newvn (would self-reference)");
+    assert_ne!(
+        in0,
+        Some(newvn),
+        "self-def slot must NOT be repointed to newvn (would self-reference)"
+    );
     // C++ leaves the skipped op's descend link on oldvn intact (the erase only
     // runs for repointed entries); the blanket destroy is gone.
     assert_eq!(
-        bank.get(oldvn).unwrap().descend_iter().filter(|&o| o == op).count(),
+        bank.get(oldvn)
+            .unwrap()
+            .descend_iter()
+            .filter(|&o| o == op)
+            .count(),
         1,
         "skipped self-def op keeps its descend link on oldvn"
     );
     // newvn gained no descend entry for the skipped op.
     assert_eq!(
-        bank.get(newvn).unwrap().descend_iter().filter(|&o| o == op).count(),
+        bank.get(newvn)
+            .unwrap()
+            .descend_iter()
+            .filter(|&o| o == op)
+            .count(),
         0,
         "self-def op is not added to newvn's descend"
     );
@@ -185,8 +199,16 @@ fn thunk_repoints_ordinary_reader_matches_cpp() {
     assert_eq!(obank.get(op).unwrap().get_in(0), Some(newvn));
     assert_eq!(obank.get(op).unwrap().get_in(1), Some(other));
     // newvn now reads op once (the single repointed slot).
-    let cnt = bank.get(newvn).unwrap().descend_iter().filter(|&o| o == op).count();
-    assert_eq!(cnt, 1, "descend gains exactly one entry for the repointed slot");
+    let cnt = bank
+        .get(newvn)
+        .unwrap()
+        .descend_iter()
+        .filter(|&o| o == op)
+        .count();
+    assert_eq!(
+        cnt, 1,
+        "descend gains exactly one entry for the repointed slot"
+    );
     // oldvn fully detached.
     assert_eq!(bank.get(oldvn).unwrap().num_descend(), 0);
 }
@@ -211,11 +233,17 @@ fn bb_insert_orders_strictly_increasing_and_midpoint() {
     }
     let orders: Vec<uintm> = ops.iter().map(|&o| order_of(&fd, o)).collect();
     for w in orders.windows(2) {
-        assert!(w[0] < w[1], "append orders must strictly increase: {orders:?}");
+        assert!(
+            w[0] < w[1],
+            "append orders must strictly increase: {orders:?}"
+        );
     }
     // First appended op: prev=None -> ordbefore=2, ordafter=2+0x1000000=0x1000002,
     // mid = 0x1000002/2 + 2/2 = 0x800001 + 1 = 0x800002.
-    assert_eq!(orders[0], 0x800002, "first-append midpoint (C++ ordafter/2 + ordbefore/2)");
+    assert_eq!(
+        orders[0], 0x800002,
+        "first-append midpoint (C++ ordafter/2 + ordbefore/2)"
+    );
 
     // Insert before ops[2]; new order must be strictly between ops[1] and ops[2].
     let mid = copy_op(&mut fd, 1, 0x9000);
@@ -223,8 +251,14 @@ fn bb_insert_orders_strictly_increasing_and_midpoint() {
     let om = order_of(&fd, mid);
     let o1 = order_of(&fd, ops[1]);
     let o2 = order_of(&fd, ops[2]);
-    assert!(o1 < om && om < o2, "mid-insert must land strictly between neighbours: {o1} < {om} < {o2}");
-    assert_eq!(fd.bb_ops(bl), vec![ops[0], ops[1], mid, ops[2], ops[3], ops[4]]);
+    assert!(
+        o1 < om && om < o2,
+        "mid-insert must land strictly between neighbours: {o1} < {om} < {o2}"
+    );
+    assert_eq!(
+        fd.bb_ops(bl),
+        vec![ops[0], ops[1], mid, ops[2], ops[3], ops[4]]
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -255,13 +289,20 @@ fn bb_insert_gap_collapse_triggers_full_reorder() {
     // setOrder fallback).
     let orders: Vec<uintm> = listed.iter().map(|&o| order_of(&fd, o)).collect();
     for w in orders.windows(2) {
-        assert!(w[0] < w[1], "post-collapse orders must be strictly increasing");
+        assert!(
+            w[0] < w[1],
+            "post-collapse orders must be strictly increasing"
+        );
     }
     // All distinct.
     let mut sorted = orders.clone();
     sorted.sort_unstable();
     sorted.dedup();
-    assert_eq!(sorted.len(), orders.len(), "no duplicate SeqNum orders after reorder");
+    assert_eq!(
+        sorted.len(),
+        orders.len(),
+        "no duplicate SeqNum orders after reorder"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -279,8 +320,16 @@ fn splice_empty_bl_inherits_outbl_ops_in_order() {
     let succ = fd.bblocks_mut().new_block_basic(root);
     fd.bblocks_mut().add_edge(bl, outbl);
     fd.bblocks_mut().add_edge(outbl, succ);
-    fd.set_basic_block_range(bl, &Address::new(Rc::clone(&rs), 0x1000), &Address::new(Rc::clone(&rs), 0x1004));
-    fd.set_basic_block_range(outbl, &Address::new(Rc::clone(&rs), 0x2000), &Address::new(Rc::clone(&rs), 0x2008));
+    fd.set_basic_block_range(
+        bl,
+        &Address::new(Rc::clone(&rs), 0x1000),
+        &Address::new(Rc::clone(&rs), 0x1004),
+    );
+    fd.set_basic_block_range(
+        outbl,
+        &Address::new(Rc::clone(&rs), 0x2000),
+        &Address::new(Rc::clone(&rs), 0x2008),
+    );
 
     // bl empty; outbl holds 3 plain COPYs.
     let mut outops = Vec::new();
@@ -328,7 +377,11 @@ fn bb_set_order_spreads_with_uniform_step() {
     let step: uintm = (u32::MAX / (n as u32)).wrapping_sub(1);
     for (i, &op) in ops.iter().enumerate() {
         let expected = step.wrapping_mul((i as u32) + 1);
-        assert_eq!(order_of(&fd, op), expected, "setOrder count mismatch at index {i}");
+        assert_eq!(
+            order_of(&fd, op),
+            expected,
+            "setOrder count mismatch at index {i}"
+        );
     }
     // Strictly increasing across the whole block.
     let orders: Vec<uintm> = ops.iter().map(|&o| order_of(&fd, o)).collect();
@@ -383,17 +436,32 @@ fn splice_clears_startbasic_on_merged_head() {
     let succ = fd.bblocks_mut().new_block_basic(root);
     fd.bblocks_mut().add_edge(bl, outbl);
     fd.bblocks_mut().add_edge(outbl, succ);
-    fd.set_basic_block_range(bl, &Address::new(Rc::clone(&rs), 0x1000), &Address::new(Rc::clone(&rs), 0x1000));
-    fd.set_basic_block_range(outbl, &Address::new(Rc::clone(&rs), 0x2000), &Address::new(Rc::clone(&rs), 0x2000));
+    fd.set_basic_block_range(
+        bl,
+        &Address::new(Rc::clone(&rs), 0x1000),
+        &Address::new(Rc::clone(&rs), 0x1000),
+    );
+    fd.set_basic_block_range(
+        outbl,
+        &Address::new(Rc::clone(&rs), 0x2000),
+        &Address::new(Rc::clone(&rs), 0x2000),
+    );
 
     let head = copy_op(&mut fd, 1, 0x2000);
     // Mark the outbl head op startbasic, as the flow builder would.
-    fd.obank_mut().get_mut(head).unwrap().set_flag(pcodeop_flags::startbasic);
+    fd.obank_mut()
+        .get_mut(head)
+        .unwrap()
+        .set_flag(pcodeop_flags::startbasic);
     fd.bb_insert_op(head, outbl, None);
 
     fd.splice_block_basic(bl).unwrap();
     let flags = fd.obank().get(head).unwrap().get_flags();
-    assert_eq!(flags & pcodeop_flags::startbasic, 0, "startbasic must be cleared on the merged head");
+    assert_eq!(
+        flags & pcodeop_flags::startbasic,
+        0,
+        "startbasic must be cleared on the merged head"
+    );
 }
 
 // ===========================================================================
@@ -414,7 +482,11 @@ fn splice_clears_startbasic_on_merged_head() {
 // forbids multiple descendants), so these make oldvn a formal input.
 // ===========================================================================
 
-fn no_replace() -> impl FnMut(&mut VarnodeBank, unlace_decomp::context::VarnodeId, unlace_decomp::context::VarnodeId) -> unlace_base::error::KunaResult<()> {
+fn no_replace() -> impl FnMut(
+    &mut VarnodeBank,
+    unlace_decomp::context::VarnodeId,
+    unlace_decomp::context::VarnodeId,
+) -> unlace_base::error::KunaResult<()> {
     |_: &mut VarnodeBank, _, _| Ok(())
 }
 
@@ -459,15 +531,31 @@ fn verify_r2_multi_slot_read_repoints_every_slot() {
 
     // C++ oracle: both slots now read newvn; oldvn fully detached; newvn's
     // descend has exactly two entries for op.
-    assert_eq!(obank.get(op).unwrap().get_in(0), Some(newvn), "slot 0 -> newvn");
-    assert_eq!(obank.get(op).unwrap().get_in(1), Some(newvn), "slot 1 -> newvn");
     assert_eq!(
-        bank.get(oldvn).unwrap().descend_iter().filter(|&o| o == op).count(),
+        obank.get(op).unwrap().get_in(0),
+        Some(newvn),
+        "slot 0 -> newvn"
+    );
+    assert_eq!(
+        obank.get(op).unwrap().get_in(1),
+        Some(newvn),
+        "slot 1 -> newvn"
+    );
+    assert_eq!(
+        bank.get(oldvn)
+            .unwrap()
+            .descend_iter()
+            .filter(|&o| o == op)
+            .count(),
         0,
         "oldvn loses both descend links"
     );
     assert_eq!(
-        bank.get(newvn).unwrap().descend_iter().filter(|&o| o == op).count(),
+        bank.get(newvn)
+            .unwrap()
+            .descend_iter()
+            .filter(|&o| o == op)
+            .count(),
         2,
         "newvn gains one descend entry per repointed slot (multiplicity preserved)"
     );
@@ -512,14 +600,30 @@ fn verify_r2_self_def_skip_preserves_other_readers() {
 
     // C++ oracle: op_self skipped (slot 0 stays oldvn, descend link kept);
     // op_other repointed (slot 0 -> newvn, descend moved to newvn).
-    assert_eq!(obank.get(op_self).unwrap().get_in(0), Some(oldvn), "self-def reader keeps oldvn");
-    assert_eq!(obank.get(op_other).unwrap().get_in(0), Some(newvn), "ordinary reader repoints");
+    assert_eq!(
+        obank.get(op_self).unwrap().get_in(0),
+        Some(oldvn),
+        "self-def reader keeps oldvn"
+    );
+    assert_eq!(
+        obank.get(op_other).unwrap().get_in(0),
+        Some(newvn),
+        "ordinary reader repoints"
+    );
     // oldvn retains exactly the skipped op_self link; the op_other link is gone.
     let old_descend: Vec<_> = bank.get(oldvn).unwrap().descend_iter().collect();
-    assert_eq!(old_descend, vec![op_self], "oldvn keeps only the skipped self-def reader");
+    assert_eq!(
+        old_descend,
+        vec![op_self],
+        "oldvn keeps only the skipped self-def reader"
+    );
     // newvn gains exactly op_other (NOT op_self).
     let new_descend: Vec<_> = bank.get(newvn).unwrap().descend_iter().collect();
-    assert_eq!(new_descend, vec![op_other], "newvn gains only the repointed ordinary reader");
+    assert_eq!(
+        new_descend,
+        vec![op_other],
+        "newvn gains only the repointed ordinary reader"
+    );
 }
 
 // Mixed multiplicity: op_other reads oldvn TWICE and op_self (self-def) reads it
@@ -564,27 +668,55 @@ fn verify_r2_interleaved_selfdef_and_double_reader() {
         thunk(&mut bank, oldvn, newvn).unwrap();
     }
 
-    assert_eq!(obank.get(op_self).unwrap().get_in(0), Some(oldvn), "self-def stays oldvn");
-    assert_eq!(obank.get(op_dbl).unwrap().get_in(0), Some(newvn), "double-reader slot 0 -> newvn");
-    assert_eq!(obank.get(op_dbl).unwrap().get_in(1), Some(newvn), "double-reader slot 1 -> newvn");
+    assert_eq!(
+        obank.get(op_self).unwrap().get_in(0),
+        Some(oldvn),
+        "self-def stays oldvn"
+    );
+    assert_eq!(
+        obank.get(op_dbl).unwrap().get_in(0),
+        Some(newvn),
+        "double-reader slot 0 -> newvn"
+    );
+    assert_eq!(
+        obank.get(op_dbl).unwrap().get_in(1),
+        Some(newvn),
+        "double-reader slot 1 -> newvn"
+    );
     // oldvn keeps exactly the one self-def link; both op_dbl links moved.
     assert_eq!(
-        bank.get(oldvn).unwrap().descend_iter().filter(|&o| o == op_self).count(),
+        bank.get(oldvn)
+            .unwrap()
+            .descend_iter()
+            .filter(|&o| o == op_self)
+            .count(),
         1,
         "self-def link retained"
     );
     assert_eq!(
-        bank.get(oldvn).unwrap().descend_iter().filter(|&o| o == op_dbl).count(),
+        bank.get(oldvn)
+            .unwrap()
+            .descend_iter()
+            .filter(|&o| o == op_dbl)
+            .count(),
         0,
         "both double-reader links severed from oldvn"
     );
     assert_eq!(
-        bank.get(newvn).unwrap().descend_iter().filter(|&o| o == op_dbl).count(),
+        bank.get(newvn)
+            .unwrap()
+            .descend_iter()
+            .filter(|&o| o == op_dbl)
+            .count(),
         2,
         "newvn gains exactly two double-reader links"
     );
     assert_eq!(
-        bank.get(newvn).unwrap().descend_iter().filter(|&o| o == op_self).count(),
+        bank.get(newvn)
+            .unwrap()
+            .descend_iter()
+            .filter(|&o| o == op_self)
+            .count(),
         0,
         "self-def never added to newvn"
     );

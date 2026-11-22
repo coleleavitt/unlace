@@ -94,7 +94,10 @@ pub fn split_pair(
     if partial {
         return false;
     }
-    if !writevars.iter().any(|&vn| covers(fd, vn, addr, size) && written_by_load(fd, vn)) {
+    if !writevars
+        .iter()
+        .any(|&vn| covers(fd, vn, addr, size) && written_by_load(fd, vn))
+    {
         return false;
     }
     let loaded = writevars
@@ -105,7 +108,10 @@ pub fn split_pair(
             .iter()
             .filter(|&&vn| straddles_middle(fd, vn, addr, size))
             .all(|&vn| read_by_store(fd, vn));
-    if inputvars.iter().any(|&vn| straddles_middle(fd, vn, addr, size)) {
+    if inputvars
+        .iter()
+        .any(|&vn| straddles_middle(fd, vn, addr, size))
+    {
         return false;
     }
     let floating = readvars.iter().any(|&vn| feeds_float(fd, vn))
@@ -135,7 +141,11 @@ fn in_float_file(
 ) -> bool {
     let named = |off: u64, size: int4| !lookup.get_exact_register_name(space, off, size).is_empty();
     let proto = fd.get_func_proto();
-    let models = proto.has_model().then(|| proto.model()).into_iter().chain(fd.get_arch().default_fp());
+    let models = proto
+        .has_model()
+        .then(|| proto.model())
+        .into_iter()
+        .chain(fd.get_arch().default_fp());
     models
         .flat_map(|m| m.input_opt().into_iter().chain(m.output_list()))
         .flat_map(|list| list.get_entry().iter())
@@ -169,16 +179,23 @@ fn in_float_file(
 
 /// Whether `vn` is exactly the `size`-byte range at `addr`.
 fn covers(fd: &Funcdata, vn: VarnodeId, addr: &Address, size: int4) -> bool {
-    fd.vbank().get(vn).is_some_and(|v| v.get_addr().get_offset() == addr.get_offset() && v.get_size() == size)
+    fd.vbank()
+        .get(vn)
+        .is_some_and(|v| v.get_addr().get_offset() == addr.get_offset() && v.get_size() == size)
 }
 
 /// Whether a memory varnode: a processor or frame space other than the register file.
 fn in_memory(fd: &Funcdata, vn: VarnodeId) -> bool {
     let register = fd.get_arch().manage().get_space_by_name("register");
-    fd.vbank().get(vn).and_then(|v| v.get_addr().get_space()).is_some_and(|space| {
-        matches!(space.get_type(), spacetype::IPTR_PROCESSOR | spacetype::IPTR_SPACEBASE)
-            && !register.is_some_and(|r| r.get_index() == space.get_index())
-    })
+    fd.vbank()
+        .get(vn)
+        .and_then(|v| v.get_addr().get_space())
+        .is_some_and(|space| {
+            matches!(
+                space.get_type(),
+                spacetype::IPTR_PROCESSOR | spacetype::IPTR_SPACEBASE
+            ) && !register.is_some_and(|r| r.get_index() == space.get_index())
+        })
 }
 
 /// Whether every op reading a whole pair stores it: a `STORE` of the pair as its
@@ -199,7 +216,12 @@ fn read_by_store(fd: &Funcdata, vn: VarnodeId) -> bool {
 /// Whether a whole-pair write is defined by a load: a `LOAD`, or the `COPY` of a
 /// memory varnode a frame or global load becomes.
 fn written_by_load(fd: &Funcdata, vn: VarnodeId) -> bool {
-    let Some(op) = fd.vbank().get(vn).and_then(|v| v.get_def()).and_then(|op| fd.obank().get(op)) else {
+    let Some(op) = fd
+        .vbank()
+        .get(vn)
+        .and_then(|v| v.get_def())
+        .and_then(|op| fd.obank().get(op))
+    else {
         return false;
     };
     match op.code() {
@@ -212,7 +234,8 @@ fn written_by_load(fd: &Funcdata, vn: VarnodeId) -> bool {
 /// Whether a read of the range feeds a floating-point op.
 fn feeds_float(fd: &Funcdata, vn: VarnodeId) -> bool {
     fd.vbank().get(vn).is_some_and(|v| {
-        v.descend_iter().any(|op| fd.obank().get(op).is_some_and(|o| is_float_op(o.code())))
+        v.descend_iter()
+            .any(|op| fd.obank().get(op).is_some_and(|o| is_float_op(o.code())))
     })
 }
 
@@ -234,4 +257,3 @@ pub fn straddles_middle(fd: &Funcdata, vn: VarnodeId, addr: &Address, size: int4
         start < half && start + v.get_size() as u64 > half
     })
 }
-

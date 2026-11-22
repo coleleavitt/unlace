@@ -10,7 +10,7 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::marshal::{Decoder, IdRegistry, XmlDecode, XmlEncode};
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, ConstantSpace, addrspace_flags, spacetype};
 use unlace_base::types::{int4, uint4};
 
 use super::*;
@@ -165,7 +165,12 @@ fn clear_type_only_removes_matching_property_for_function() {
     db.add_comment(comment_type::WARNING, &fad, &ram(&m, 0x1020), b"warn");
     db.add_comment(comment_type::HEADER, &fad, &ram(&m, 0x1030), b"hdr");
     // Same property bit but a different function — must survive.
-    db.add_comment(comment_type::USER1, &other_fad, &ram(&m, 0x2010), b"other-u1");
+    db.add_comment(
+        comment_type::USER1,
+        &other_fad,
+        &ram(&m, 0x2010),
+        b"other-u1",
+    );
 
     // Clear USER1|WARNING for `fad`.
     db.clear_type(&fad, comment_type::USER1 | comment_type::WARNING);
@@ -201,7 +206,11 @@ fn delete_comment_removes_by_key() {
     let mut db = CommentDatabaseInternal::new();
     db.add_comment(comment_type::USER1, &fad, &ad, b"a");
     db.add_comment(comment_type::USER1, &fad, &ad, b"b");
-    let key = CommentKey { funcaddr: fad.clone(), addr: ad.clone(), uniq: 0 };
+    let key = CommentKey {
+        funcaddr: fad.clone(),
+        addr: ad.clone(),
+        uniq: 0,
+    };
     db.delete_comment(&key);
     let comms: Vec<_> = db.comments_for(&fad).collect();
     assert_eq!(comms.len(), 1);
@@ -227,13 +236,34 @@ fn ordering_is_funcaddr_then_addr_then_uniq() {
     let m = manager();
     let mut db = CommentDatabaseInternal::new();
     // Insert out of order across two functions and addresses.
-    db.add_comment(comment_type::USER1, &ram(&m, 0x2000), &ram(&m, 0x2010), b"f2-a10");
-    db.add_comment(comment_type::USER1, &ram(&m, 0x1000), &ram(&m, 0x1020), b"f1-a20");
-    db.add_comment(comment_type::USER1, &ram(&m, 0x1000), &ram(&m, 0x1010), b"f1-a10");
+    db.add_comment(
+        comment_type::USER1,
+        &ram(&m, 0x2000),
+        &ram(&m, 0x2010),
+        b"f2-a10",
+    );
+    db.add_comment(
+        comment_type::USER1,
+        &ram(&m, 0x1000),
+        &ram(&m, 0x1020),
+        b"f1-a20",
+    );
+    db.add_comment(
+        comment_type::USER1,
+        &ram(&m, 0x1000),
+        &ram(&m, 0x1010),
+        b"f1-a10",
+    );
     // beginComment/endComment for f1 must yield (0x1010, 0x1020) in order.
-    let f1: Vec<_> = db.comments_for(&ram(&m, 0x1000)).map(|c| c.get_text().to_vec()).collect();
+    let f1: Vec<_> = db
+        .comments_for(&ram(&m, 0x1000))
+        .map(|c| c.get_text().to_vec())
+        .collect();
     assert_eq!(f1, vec![b"f1-a10".to_vec(), b"f1-a20".to_vec()]);
-    let f2: Vec<_> = db.comments_for(&ram(&m, 0x2000)).map(|c| c.get_text().to_vec()).collect();
+    let f2: Vec<_> = db
+        .comments_for(&ram(&m, 0x2000))
+        .map(|c| c.get_text().to_vec())
+        .collect();
     assert_eq!(f2, vec![b"f2-a10".to_vec()]);
 }
 
@@ -305,11 +335,31 @@ fn comment_empty_text_roundtrips() {
 
 #[test]
 fn subsort_orders_index_then_order_then_pos() {
-    let header = Subsort { index: -1, order: 0, pos: 0 };
-    let blk0_a = Subsort { index: 0, order: 0, pos: 0 };
-    let blk0_b = Subsort { index: 0, order: 0, pos: 1 };
-    let blk0_c = Subsort { index: 0, order: 5, pos: 0 };
-    let blk1 = Subsort { index: 1, order: 0, pos: 0 };
+    let header = Subsort {
+        index: -1,
+        order: 0,
+        pos: 0,
+    };
+    let blk0_a = Subsort {
+        index: 0,
+        order: 0,
+        pos: 0,
+    };
+    let blk0_b = Subsort {
+        index: 0,
+        order: 0,
+        pos: 1,
+    };
+    let blk0_c = Subsort {
+        index: 0,
+        order: 5,
+        pos: 0,
+    };
+    let blk1 = Subsort {
+        index: 1,
+        order: 0,
+        pos: 0,
+    };
     let mut v = vec![blk1, blk0_c, header, blk0_b, blk0_a];
     v.sort();
     assert_eq!(v, vec![header, blk0_a, blk0_b, blk0_c, blk1]);
@@ -373,7 +423,11 @@ impl SorterFuncdata for FakeFd {
                 break;
             }
         }
-        Ok(OpBlockInfo { block_index: idx, order, block_contains_comment: contains })
+        Ok(OpBlockInfo {
+            block_index: idx,
+            order,
+            block_contains_comment: contains,
+        })
     }
     fn op_addr(&self, cursor: &OpCursor) -> Address {
         self.ops[cursor.0 as usize].0.clone()
@@ -405,12 +459,7 @@ fn sorter_places_header_and_block_comments_and_walks() {
 
     let mut sorter = CommentSorter::new();
     sorter
-        .setup_function_list(
-            comment_type::HEADER | comment_type::USER1,
-            &fd,
-            &db,
-            false,
-        )
+        .setup_function_list(comment_type::HEADER | comment_type::USER1, &fd, &db, false)
         .unwrap();
 
     // Walk the header.
@@ -467,7 +516,9 @@ fn sorter_tp_zero_collects_nothing_else_collects_all_nonzero_types() {
 
     // Any non-zero `tp` gate collects every non-zero-type comment of the
     // function (both u1 and warn), in container (uniq) order at the address.
-    sorter.setup_function_list(comment_type::USER1, &fd, &db, false).unwrap();
+    sorter
+        .setup_function_list(comment_type::USER1, &fd, &db, false)
+        .unwrap();
     sorter.setup_block_list(0);
     sorter.setup_op_list(None);
     let mut texts = Vec::new();
@@ -492,7 +543,9 @@ fn sorter_op_landmark_stops_walk_early() {
     db.add_comment(comment_type::USER1, &fad, &ram(&m, 0x1010), b"at-order-5");
 
     let mut sorter = CommentSorter::new();
-    sorter.setup_function_list(comment_type::USER1, &fd, &db, false).unwrap();
+    sorter
+        .setup_function_list(comment_type::USER1, &fd, &db, false)
+        .unwrap();
     sorter.setup_block_list(0);
     // Landmark at order 0: opstop = upper_bound(index=0, order=0, pos=MAX), so
     // only comments with order <= 0 are emitted.
@@ -528,12 +581,16 @@ fn sorter_unplaced_goes_to_header_when_enabled() {
 
     // displayUnplaced = false: comment is dropped.
     let mut sorter = CommentSorter::new();
-    sorter.setup_function_list(comment_type::USER1, &fd, &db, false).unwrap();
+    sorter
+        .setup_function_list(comment_type::USER1, &fd, &db, false)
+        .unwrap();
     sorter.setup_header(header_kind::HEADER_UNPLACED);
     assert!(!sorter.has_next());
 
     // displayUnplaced = true: comment surfaces in the unplaced header group.
-    sorter.setup_function_list(comment_type::USER1, &fd, &db, true).unwrap();
+    sorter
+        .setup_function_list(comment_type::USER1, &fd, &db, true)
+        .unwrap();
     sorter.setup_header(header_kind::HEADER_UNPLACED);
     let mut texts = Vec::new();
     while sorter.has_next() {
@@ -546,12 +603,18 @@ fn sorter_unplaced_goes_to_header_when_enabled() {
 fn sorter_no_ops_puts_comment_at_first_block() {
     let m = manager();
     let fad = ram(&m, 0x1000);
-    let fd = FakeFd { func_addr: fad.clone(), ops: vec![], block_spans: vec![] };
+    let fd = FakeFd {
+        func_addr: fad.clone(),
+        ops: vec![],
+        block_spans: vec![],
+    };
     let mut db = CommentDatabaseInternal::new();
     db.add_comment(comment_type::USER1, &fad, &ram(&m, 0x1010), b"anywhere");
 
     let mut sorter = CommentSorter::new();
-    sorter.setup_function_list(comment_type::USER1, &fd, &db, false).unwrap();
+    sorter
+        .setup_function_list(comment_type::USER1, &fd, &db, false)
+        .unwrap();
     // setBlock(0,0): emitted as the very first comment of block 0.
     sorter.setup_block_list(0);
     sorter.setup_op_list(None);

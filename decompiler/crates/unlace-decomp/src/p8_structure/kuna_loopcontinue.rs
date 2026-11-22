@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::block::{block_flags, BlockGraph, BlockKind, BlockType};
+use crate::block::{BlockGraph, BlockKind, BlockType, block_flags};
 use crate::context::BlockId;
 use crate::funcdata::Funcdata;
 
@@ -65,8 +65,7 @@ pub(crate) fn refine_latches(graph: &mut BlockGraph, root: BlockId) {
             || body.iter().any(|&node| {
                 let block = graph.block(node);
                 (0..block.size_in()).any(|j| {
-                    block.is_irreducible_in(j)
-                        || (node != head && !body.contains(&block.get_in(j)))
+                    block.is_irreducible_in(j) || (node != head && !body.contains(&block.get_in(j)))
                 }) || (0..block.size_out()).any(|e| block.is_irreducible_out(e))
             })
             || body.iter().any(|&node| {
@@ -87,7 +86,11 @@ pub(crate) fn refine_latches(graph: &mut BlockGraph, root: BlockId) {
 /// A continue in an infinite loop resumes its first leaf. A conditional loop
 /// resumes the leaf `points` gives it ([`continue_points`]), or resets the
 /// scope when it has none: its continue can evaluate a test or iterator instead.
-pub(crate) fn recover_continues(graph: &mut BlockGraph, root: BlockId, points: &BTreeMap<BlockId, BlockId>) {
+pub(crate) fn recover_continues(
+    graph: &mut BlockGraph,
+    root: BlockId,
+    points: &BTreeMap<BlockId, BlockId>,
+) {
     let mut stack = vec![(root, None)];
     while let Some((id, mut head)) = stack.pop() {
         match graph.block(id).get_type() {
@@ -131,9 +134,9 @@ pub(crate) fn continue_points(data: &Funcdata, root: BlockId) -> BTreeMap<BlockI
             stack.push(block.get_block(i));
         }
         let point = match block.get_type() {
-            BlockType::WhileDo if block.get_iterate_op().is_none() => {
-                graph.sub_block(id, 0).and_then(|cond| graph.get_front_leaf(cond))
-            }
+            BlockType::WhileDo if block.get_iterate_op().is_none() => graph
+                .sub_block(id, 0)
+                .and_then(|cond| graph.get_front_leaf(cond)),
             BlockType::DoWhile if data.get_arch().do_while_continue => graph
                 .sub_block(id, 0)
                 .and_then(|body| graph.get_exit_leaf(body))
@@ -149,16 +152,25 @@ pub(crate) fn continue_points(data: &Funcdata, root: BlockId) -> BTreeMap<BlockI
 
 /// Does the structured leaf `leaf` print no statement besides its branch?
 fn prints_only_its_branch(data: &Funcdata, leaf: BlockId) -> bool {
-    let Some(bb) = data.sblocks_ref().block(leaf).get_copy() else { return false };
-    let BlockKind::Basic(basic) = data.bblocks_ref().block(bb).kind() else { return false };
+    let Some(bb) = data.sblocks_ref().block(leaf).get_copy() else {
+        return false;
+    };
+    let BlockKind::Basic(basic) = data.bblocks_ref().block(bb).kind() else {
+        return false;
+    };
     let mut cur = basic.op_head;
     while let Some(op) = cur {
         cur = data.bb_op_next(op);
-        let Some(o) = data.obank().get(op) else { return false };
+        let Some(o) = data.obank().get(op) else {
+            return false;
+        };
         if o.is_branch() || o.not_printed() || o.is_marker() {
             continue;
         }
-        let implied = o.get_out().and_then(|v| data.vbank().get(v)).is_some_and(|v| v.is_implied());
+        let implied = o
+            .get_out()
+            .and_then(|v| data.vbank().get(v))
+            .is_some_and(|v| v.is_implied());
         if !implied {
             return false;
         }
@@ -184,7 +196,15 @@ mod tests {
 
     #[test]
     fn only_unbounded_loops_without_nested_cycles_are_refined() {
-        for variant in ["retry", "head-test", "latch-test", "nested", "switch", "multi-entry", "irreducible"] {
+        for variant in [
+            "retry",
+            "head-test",
+            "latch-test",
+            "nested",
+            "switch",
+            "multi-entry",
+            "irreducible",
+        ] {
             let mut graph = BlockGraph::new();
             let root = graph.arena.insert(FlowBlock::new_kind(BlockKind::Graph));
             let entry = graph.new_block(root);
@@ -203,7 +223,9 @@ mod tests {
                 "head-test" => graph.add_edge(head, exit),
                 "latch-test" => graph.add_edge(tail, exit),
                 "nested" => graph.add_edge(condition, condition),
-                "switch" => graph.block_mut(condition).set_flag(block_flags::f_switch_out),
+                "switch" => graph
+                    .block_mut(condition)
+                    .set_flag(block_flags::f_switch_out),
                 "multi-entry" => {
                     let extra = graph.new_block(root);
                     graph.add_edge(entry, extra);
@@ -218,11 +240,18 @@ mod tests {
             if variant == "irreducible" {
                 graph.set_out_edge_flag(condition, 0, crate::block::edge_flags::f_irreducible);
             }
-            for (index, id) in [entry, head, condition, retry, tail, exit].into_iter().enumerate() {
+            for (index, id) in [entry, head, condition, retry, tail, exit]
+                .into_iter()
+                .enumerate()
+            {
                 graph.block_mut(id).set_index(index as i32);
             }
             refine_latches(&mut graph, root);
-            assert_eq!(graph.block(retry).is_goto_out(0), variant == "retry", "{variant}");
+            assert_eq!(
+                graph.block(retry).is_goto_out(0),
+                variant == "retry",
+                "{variant}"
+            );
             assert!(!graph.block(tail).is_goto_out(0), "{variant}");
         }
     }
@@ -235,10 +264,15 @@ mod tests {
         let middle = leaf(&mut graph, root);
         let restart = jump(&mut graph, root, head);
         let skip = jump(&mut graph, root, middle);
-        let body = graph.new_block_list(root, &[head, middle, restart, skip]).unwrap();
+        let body = graph
+            .new_block_list(root, &[head, middle, restart, skip])
+            .unwrap();
         graph.new_block_inf_loop(root, body);
         recover_continues(&mut graph, root, &BTreeMap::new());
-        assert_eq!(graph.block(restart).get_goto_type(), block_flags::f_continue_goto);
+        assert_eq!(
+            graph.block(restart).get_goto_type(),
+            block_flags::f_continue_goto
+        );
         assert_eq!(graph.block(skip).get_goto_type(), block_flags::f_goto_goto);
     }
 
@@ -250,13 +284,21 @@ mod tests {
         let inner_head = leaf(&mut graph, root);
         let outer_jump = jump(&mut graph, root, outer_head);
         let inner_jump = jump(&mut graph, root, inner_head);
-        let inner_body = graph.new_block_list(root, &[inner_head, outer_jump, inner_jump]).unwrap();
+        let inner_body = graph
+            .new_block_list(root, &[inner_head, outer_jump, inner_jump])
+            .unwrap();
         let inner = graph.new_block_inf_loop(root, inner_body);
         let outer_body = graph.new_block_list(root, &[outer_head, inner]).unwrap();
         graph.new_block_inf_loop(root, outer_body);
         recover_continues(&mut graph, root, &BTreeMap::new());
-        assert_eq!(graph.block(outer_jump).get_goto_type(), block_flags::f_goto_goto);
-        assert_eq!(graph.block(inner_jump).get_goto_type(), block_flags::f_continue_goto);
+        assert_eq!(
+            graph.block(outer_jump).get_goto_type(),
+            block_flags::f_goto_goto
+        );
+        assert_eq!(
+            graph.block(inner_jump).get_goto_type(),
+            block_flags::f_continue_goto
+        );
     }
 
     #[test]
@@ -268,6 +310,9 @@ mod tests {
         let body = graph.new_block_list(root, &[head, restart]).unwrap();
         graph.new_block_do_while(root, body);
         recover_continues(&mut graph, root, &BTreeMap::new());
-        assert_eq!(graph.block(restart).get_goto_type(), block_flags::f_goto_goto);
+        assert_eq!(
+            graph.block(restart).get_goto_type(),
+            block_flags::f_goto_goto
+        );
     }
 }

@@ -59,7 +59,9 @@ pub struct RuleCallPush {
 impl RuleCallPush {
     /// Build the rule for `group`.
     pub fn with_group(group: &str) -> RuleCallPush {
-        RuleCallPush { group: group.to_string() }
+        RuleCallPush {
+            group: group.to_string(),
+        }
     }
 }
 
@@ -72,7 +74,9 @@ impl Rule for RuleCallPush {
         if !grouplist.contains(&self.group) {
             return None;
         }
-        Some(Box::new(RuleCallPush { group: self.group.clone() }))
+        Some(Box::new(RuleCallPush {
+            group: self.group.clone(),
+        }))
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
@@ -88,7 +92,9 @@ impl Rule for RuleCallPush {
 /// address, through a stack pointer the frame could not track?
 pub fn is_call_push(data: &Funcdata, op: OpId) -> bool {
     let (addr, ptr, val) = {
-        let Some(o) = data.obank().get(op) else { return false };
+        let Some(o) = data.obank().get(op) else {
+            return false;
+        };
         if o.code() != OpCode::CPUI_STORE {
             return false;
         }
@@ -97,12 +103,17 @@ pub fn is_call_push(data: &Funcdata, op: OpId) -> bool {
             _ => return false,
         }
     };
-    let Some(v) = data.vbank().get(val) else { return false };
+    let Some(v) = data.vbank().get(val) else {
+        return false;
+    };
     if !v.is_constant() {
         return false;
     }
     let ret = v.get_offset();
-    let word = addr.get_space().map(|s| s.get_addr_size() as int4).unwrap_or(0);
+    let word = addr
+        .get_space()
+        .map(|s| s.get_addr_size() as int4)
+        .unwrap_or(0);
     if word == 0 || v.get_size() != word {
         return false;
     }
@@ -110,7 +121,9 @@ pub fn is_call_push(data: &Funcdata, op: OpId) -> bool {
     if ret <= here || ret - here > MAX_INSN_LEN {
         return false;
     }
-    let Some(call) = same_insn_call(data, op) else { return false };
+    let Some(call) = same_insn_call(data, op) else {
+        return false;
+    };
     if call_target(data, call) == Some(ret) {
         return false;
     }
@@ -151,17 +164,27 @@ fn call_target(data: &Funcdata, call: OpId) -> Option<u64> {
 /// Is `ptr` (through COPY and CAST) the stack pointer register as written by
 /// an op of the instruction at `addr`?
 fn is_pushed_sp(data: &Funcdata, ptr: VarnodeId, addr: &unlace_base::address::Address) -> bool {
-    let Some(stackspc) = data.get_arch().manage().get_stack_space() else { return false };
-    let Ok(sp) = stackspc.get_spacebase(0) else { return false };
-    let Some(sp_space) = sp.space else { return false };
+    let Some(stackspc) = data.get_arch().manage().get_stack_space() else {
+        return false;
+    };
+    let Ok(sp) = stackspc.get_spacebase(0) else {
+        return false;
+    };
+    let Some(sp_space) = sp.space else {
+        return false;
+    };
     let mut vn = ptr;
     for _ in 0..8 {
-        let Some(v) = data.vbank().get(vn) else { return false };
+        let Some(v) = data.vbank().get(vn) else {
+            return false;
+        };
         if !v.is_written() {
             return false;
         }
         let Some(def) = v.get_def() else { return false };
-        let Some(d) = data.obank().get(def) else { return false };
+        let Some(d) = data.obank().get(def) else {
+            return false;
+        };
         let is_sp = v.get_space().get_index() == sp_space.get_index()
             && v.get_offset() == sp.offset
             && v.get_size() as u32 == sp.size;

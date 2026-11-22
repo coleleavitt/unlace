@@ -55,11 +55,16 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture() -> PathBuf {
@@ -94,7 +99,9 @@ fn bootstrap(on: bool) -> unlace_console::engine::ConsoleProgram {
     let bin = fixture().to_str().expect("UTF-8 fixture path").to_string();
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.arch_mut().set_kuna_option("listing", "on").expect("listing flips on");
+    prog.arch_mut()
+        .set_kuna_option("listing", "on")
+        .expect("listing flips on");
     prog.arch_mut()
         .set_kuna_option("funcstart_patterns", "on")
         .expect("funcstart_patterns flips on");
@@ -104,25 +111,36 @@ fn bootstrap(on: bool) -> unlace_console::engine::ConsoleProgram {
     // contract (pool inference, the paired MOVE, the unpaired KEEP, the disclosed
     // split), so they keep the byte-granular cursor they were written against.
     // `verify_aifstrict.rs` is the two-pass gate for the suppression itself.
-    prog.arch_mut().set_kuna_option("aif", "on").expect("aif flips on");
+    prog.arch_mut()
+        .set_kuna_option("aif", "on")
+        .expect("aif flips on");
     // `aifpoolslide` (default-on) keeps the gap walk off both pool words in the first
     // place; it is pinned off here for the same reason. `verify_aifpoolslide.rs`
     // gates it on this fixture.
-    prog.arch_mut().set_kuna_option("aifpoolslide", "off").expect("aifpoolslide flips off");
+    prog.arch_mut()
+        .set_kuna_option("aifpoolslide", "off")
+        .expect("aifpoolslide flips off");
     // `aifdataveto` drops `F`, an AIF-only entry whose first word `G` reads as
     // data; it is pinned off so the disclosed split below stays observable.
-    prog.arch_mut().set_kuna_option("aifdataveto", "off").expect("aifdataveto flips off");
+    prog.arch_mut()
+        .set_kuna_option("aifdataveto", "off")
+        .expect("aifdataveto flips off");
     prog.arch_mut()
         .set_kuna_option("poolentry", if on { "on" } else { "off" })
         .expect("poolentry flips");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
 /// Decompile `func` in an already-bootstrapped program and return the captured C.
 fn decompile(prog: unlace_console::engine::ConsoleProgram, func: &str) -> String {
-    let cmds: Vec<String> =
-        [format!("load function {func}"), "decompile".into(), "print C".into()].to_vec();
+    let cmds: Vec<String> = [
+        format!("load function {func}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .to_vec();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -145,8 +163,14 @@ fn decompile(prog: unlace_console::engine::ConsoleProgram, func: &str) -> String
 #[test]
 fn off_plants_the_entry_inside_the_literal_pool() {
     let off = bootstrap(false);
-    assert!(off.lookup_symbol(RESET).is_some(), "the reset vector is always found");
-    assert!(off.lookup_symbol(A).is_some(), "the walk always follows the BL to A");
+    assert!(
+        off.lookup_symbol(RESET).is_some(),
+        "the reset vector is always found"
+    );
+    assert!(
+        off.lookup_symbol(A).is_some(),
+        "the walk always follows the BL to A"
+    );
     assert!(
         off.lookup_symbol(PHANTOM).is_some(),
         "default (poolentry off) must show the defect: AIF accepts {PHANTOM}, one \
@@ -225,7 +249,10 @@ fn poolentry_keeps_an_unpaired_phantom() {
 #[test]
 fn poolentry_split_residue_is_pinned() {
     let off = bootstrap(false);
-    assert!(off.lookup_symbol(F).is_some(), "AIF finds F at its real entry today");
+    assert!(
+        off.lookup_symbol(F).is_some(),
+        "AIF finds F at its real entry today"
+    );
     assert!(off.lookup_symbol(F_PLUS_4).is_none());
     let body = decompile(off, F);
     eprintln!("---- {F} (poolentry off / default) ----\n{body}");
@@ -239,7 +266,10 @@ fn poolentry_split_residue_is_pinned() {
         on.lookup_symbol(F_PLUS_4).is_some(),
         "KNOWN RESIDUE: the entry moves to {F_PLUS_4}, four bytes into F"
     );
-    assert!(on.lookup_symbol(F).is_none(), "KNOWN RESIDUE: F's own entry is dropped");
+    assert!(
+        on.lookup_symbol(F).is_none(),
+        "KNOWN RESIDUE: F's own entry is dropped"
+    );
     let split = decompile(on, F_PLUS_4);
     eprintln!("---- {F_PLUS_4} (poolentry on / the disclosed split) ----\n{split}");
     assert!(
@@ -261,24 +291,29 @@ fn poolentry_is_inert_without_aif() {
     for on in [false, true] {
         let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
             .expect("bootstrap fixture with built processor specs");
-        prog.arch_mut().set_kuna_option("listing", "on").expect("listing flips on");
+        prog.arch_mut()
+            .set_kuna_option("listing", "on")
+            .expect("listing flips on");
         prog.arch_mut()
             .set_kuna_option("funcstart_patterns", "on")
             .expect("funcstart_patterns flips on");
         prog.arch_mut()
             .set_kuna_option("poolentry", if on { "on" } else { "off" })
             .expect("poolentry flips");
-        prog.commit_pending_analysis().expect("analysis commit succeeds");
+        prog.commit_pending_analysis()
+            .expect("analysis commit succeeds");
         sets.push([PHANTOM, B, UNPAIRED, F, F_PLUS_4].map(|s| prog.lookup_symbol(s).is_some()));
     }
-    assert_eq!(sets[0], sets[1], "with `aif` off, poolentry must change nothing");
+    assert_eq!(
+        sets[0], sets[1],
+        "with `aif` off, poolentry must change nothing"
+    );
     assert_eq!(
         sets[0],
         [false, false, false, false, false],
         "and with `aif` off none of the gap-discovered entries exist at all"
     );
 }
-
 
 fn frame_variant(pointer: bool) -> PathBuf {
     let path = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
@@ -367,8 +402,11 @@ fn recovered_frames_preserve_pointer_entries_before_aif_claims_them() {
     for aif in [false, true] {
         for pointers in [false, true] {
             let prog = checked_frame_program(&path, aif, false, pointers);
-            assert_eq!(prog.lookup_symbol(B).is_some(), pointers,
-                "pointer target became established only through AIF: aif={aif}, pointers={pointers}");
+            assert_eq!(
+                prog.lookup_symbol(B).is_some(),
+                pointers,
+                "pointer target became established only through AIF: aif={aif}, pointers={pointers}"
+            );
             assert_eq!(prog.lookup_symbol(PHANTOM).is_some(), aif);
         }
     }

@@ -20,7 +20,11 @@ struct Func {
 }
 
 fn func(name: &'static str, code: Vec<u8>, branches: &[(usize, &'static str)]) -> Func {
-    Func { name, code, branches: branches.to_vec() }
+    Func {
+        name,
+        code,
+        branches: branches.to_vec(),
+    }
 }
 
 fn words(code: &[u32]) -> Vec<u8> {
@@ -29,7 +33,11 @@ fn words(code: &[u32]) -> Vec<u8> {
 
 /// A relocatable object whose `.text` is `funcs` back to back, each branch
 /// encoded by `patch(code, at, from, to)` against those offsets.
-fn object(arch: Architecture, funcs: &[Func], patch: impl Fn(&mut [u8], usize, u64, u64)) -> Vec<u8> {
+fn object(
+    arch: Architecture,
+    funcs: &[Func],
+    patch: impl Fn(&mut [u8], usize, u64, u64),
+) -> Vec<u8> {
     let mut text = Vec::new();
     let mut at = Vec::new();
     for f in funcs {
@@ -71,7 +79,11 @@ fn x86_image() -> Vec<u8> {
         // lea (%rdi,%rdi,2),%eax; ret
         func("getk", vec![0x8d, 0x04, 0x7f, 0xc3], &[]),
         // mov (%rdi),%rax; mov %eax,%edi; jmp getk
-        func("fk", [&[0x48, 0x8b, 0x07, 0x89, 0xc7, 0xe9][..], &rel32].concat(), &[(5, "getk")]),
+        func(
+            "fk",
+            [&[0x48, 0x8b, 0x07, 0x89, 0xc7, 0xe9][..], &rel32].concat(),
+            &[(5, "getk")],
+        ),
         // call getv; mov %eax,%edi; jmp getk
         func(
             "twice",
@@ -79,7 +91,11 @@ fn x86_image() -> Vec<u8> {
             &[(0, "getv"), (7, "getk")],
         ),
         // call getv; mov $7,%eax; ret
-        func("after", [&[0xe8][..], &rel32, &[0xb8, 7, 0, 0, 0, 0xc3]].concat(), &[(0, "getv")]),
+        func(
+            "after",
+            [&[0xe8][..], &rel32, &[0xb8, 7, 0, 0, 0, 0xc3]].concat(),
+            &[(0, "getv")],
+        ),
         // mov %esi,(%rdi); ret
         func("sink", vec![0x89, 0x37, 0xc3], &[]),
         // jmp sink
@@ -129,13 +145,22 @@ fn decompile(bytes: &[u8], passthrough: bool) -> String {
     let path = common::scratch_file("tail-call-returns", "o");
     std::fs::write(&path, bytes).unwrap();
     let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
-    command.args(["decompile-all", path.to_str().unwrap(), "--mode", "aggressive"]);
+    command.args([
+        "decompile-all",
+        path.to_str().unwrap(),
+        "--mode",
+        "aggressive",
+    ]);
     if !passthrough {
         command.args(["--option", "passthrough", "off"]);
     }
     let output = command.output().unwrap();
     let text = String::from_utf8(output.stdout).unwrap();
-    assert!(output.status.success(), "{text}\n{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{text}\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     text
 }
 
@@ -180,8 +205,14 @@ fn an_x86_64_write_to_the_return_register_before_the_call_does_not_hide_its_resu
 #[test]
 fn an_aarch64_register_split_around_a_narrow_tail_result_is_still_forwarded() {
     let text = decompile(&aarch64_image(), true);
-    assert!(function(&text, "wi").contains("int wi(int *a0,int a1,int a2)"), "{text}");
-    assert!(function(&text, "wi").contains("return geti(a0,a1,a2);"), "{text}");
+    assert!(
+        function(&text, "wi").contains("int wi(int *a0,int a1,int a2)"),
+        "{text}"
+    );
+    assert!(
+        function(&text, "wi").contains("return geti(a0,a1,a2);"),
+        "{text}"
+    );
 }
 
 #[test]

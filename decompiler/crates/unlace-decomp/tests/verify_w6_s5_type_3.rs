@@ -34,7 +34,12 @@ fn int4_t() -> Rc<Datatype> {
 fn plain_pointer(ptrto: Rc<Datatype>, ws: u32) -> Datatype {
     let mut p = Datatype::new(8, type_metatype::TYPE_PTR);
     p.submeta = sub_metatype::SUB_PTR;
-    p.kind = DatatypeKind::Pointer { ptrto, spaceid: None, truncate: None, wordsize: ws };
+    p.kind = DatatypeKind::Pointer {
+        ptrto,
+        spaceid: None,
+        truncate: None,
+        wordsize: ws,
+    };
     p
 }
 
@@ -51,7 +56,13 @@ fn ptrrel(
 ) -> Datatype {
     let mut pr = Datatype::new_with_align(size, -1, type_metatype::TYPE_PTRREL);
     pr.submeta = sub_metatype::SUB_PTRREL;
-    pr.kind = DatatypeKind::PointerRel { ptrto, wordsize, stripped, parent, offset };
+    pr.kind = DatatypeKind::PointerRel {
+        ptrto,
+        wordsize,
+        stripped,
+        parent,
+        offset,
+    };
     pr
 }
 
@@ -126,7 +137,14 @@ fn f2_ptrrel_compare_formal_ephemeral_totality() {
     let parent = Rc::new(Datatype::new(16, type_metatype::TYPE_STRUCT));
     let strip: Rc<Datatype> = Rc::new(plain_pointer(int4_t(), 1));
     let formal = ptrrel(8, int4_t(), 1, None, Rc::clone(&parent), 4);
-    let ephem = ptrrel(8, int4_t(), 1, Some(Rc::clone(&strip)), Rc::clone(&parent), 4);
+    let ephem = ptrrel(
+        8,
+        int4_t(),
+        1,
+        Some(Rc::clone(&strip)),
+        Rc::clone(&parent),
+        4,
+    );
 
     // formal (None) < ephemeral (Some) -> -1, and antisymmetric.
     assert_eq!(formal.compare(&ephem, 10).unwrap(), -1);
@@ -181,7 +199,11 @@ fn f3_ptrrel_compare_dependency_field_precedence() {
     let e = ptrrel(8, int4_t(), 1, None, Rc::clone(&parent), 4); // distinct ptrto
     let ae = a.compare_dependency(&e).unwrap();
     assert_ne!(ae, 0, "distinct ptrto objects must not tie");
-    assert_eq!(ae, -e.compare_dependency(&a).unwrap(), "ptrto order antisymmetric");
+    assert_eq!(
+        ae,
+        -e.compare_dependency(&a).unwrap(),
+        "ptrto order antisymmetric"
+    );
 
     // Same ptrto/offset/parent/wordsize, different total size -> tail
     // `op.getSize() - size` (wrapping i32). a.size==8; make d.size==6 so
@@ -214,7 +236,11 @@ fn f4_hash_name_size_properties() {
     for size in [1, 4, 7, 16, 255] {
         let id = 0x1234_5678_9abc_def0u64;
         let sized = Datatype::hash_size(id, size);
-        assert_eq!(Datatype::hash_size(sized, size), id, "hashSize involution at size {size}");
+        assert_eq!(
+            Datatype::hash_size(sized, size),
+            id,
+            "hashSize involution at size {size}"
+        );
     }
     // A negative size sign-extends to u64 before the multiply (C++
     // `uint8 sizeHash = size;`): size = -1 hashes differently from size = 1 and is

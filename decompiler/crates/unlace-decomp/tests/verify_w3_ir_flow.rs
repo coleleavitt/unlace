@@ -32,22 +32,22 @@ use unlace_base::address::{Address, SeqNum};
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::marshal::IdRegistry;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace,
-    UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace, addrspace_flags,
+    spacetype,
 };
 use unlace_base::types::{int4, uintb};
 use unlace_base::xml::{DocumentStorage, Element};
 use unlace_num::opcodes::OpCode;
 
-use unlace_decomp::dtype::{type_metatype, Datatype};
+use unlace_decomp::context::{ArchContext, OpId, TypeOp};
+use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::flow::{FlowEnvironment, FlowInfo};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::op::pcodeop_flags;
-use unlace_decomp::context::{ArchContext, OpId, TypeOp};
 
 use unlace_sleigh::globalcontext::ContextInternal;
 use unlace_sleigh::loadimage::LoadImage;
-use unlace_sleigh::loadimage_xml::{register_loadimage_xml_ids, LoadImageXml};
+use unlace_sleigh::loadimage_xml::{LoadImageXml, register_loadimage_xml_ids};
 use unlace_sleigh::sleigh::Sleigh;
 use unlace_sleigh::translate::Translate;
 
@@ -96,7 +96,8 @@ impl FlowEnvironment for TableEnv {
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(IopSpace::new(2))).unwrap();
     m.insert_space(Rc::new(FspecSpace::new(3))).unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
@@ -181,9 +182,15 @@ fn target_resolves_first_op_and_skips_noop_instruction() {
     flow.seed_visited(&Address::new(Rc::clone(&ram), 0x1008), seq2, 4);
 
     // Direct lookup.
-    assert_eq!(flow.target(&Address::new(Rc::clone(&ram), 0x1000)).unwrap(), op0);
+    assert_eq!(
+        flow.target(&Address::new(Rc::clone(&ram), 0x1000)).unwrap(),
+        op0
+    );
     // No-op instruction at 0x1004 falls thru to 0x1008's op.
-    assert_eq!(flow.target(&Address::new(Rc::clone(&ram), 0x1004)).unwrap(), op2);
+    assert_eq!(
+        flow.target(&Address::new(Rc::clone(&ram), 0x1004)).unwrap(),
+        op2
+    );
     // An address never visited is an error.
     assert!(flow.target(&Address::new(ram, 0x2000)).is_err());
 }
@@ -247,11 +254,17 @@ fn fallthru_op_same_instruction_then_boundary() {
     let ram = ram_space(&fd);
     // Instruction at 0x1000 (size 4): op0 (start), op1 (same instr).
     let op0 = make_op(&mut fd, OpCode::CPUI_COPY, 0x1000, 1);
-    fd.obank_mut().get_mut(op0).unwrap().set_flag(pcodeop_flags::startmark);
+    fd.obank_mut()
+        .get_mut(op0)
+        .unwrap()
+        .set_flag(pcodeop_flags::startmark);
     let op1 = make_op(&mut fd, OpCode::CPUI_COPY, 0x1000, 1);
     // Instruction at 0x1004: op2 (start of next instruction).
     let op2 = make_op(&mut fd, OpCode::CPUI_COPY, 0x1004, 1);
-    fd.obank_mut().get_mut(op2).unwrap().set_flag(pcodeop_flags::startmark);
+    fd.obank_mut()
+        .get_mut(op2)
+        .unwrap()
+        .set_flag(pcodeop_flags::startmark);
 
     let seq0 = fd.obank().get(op0).unwrap().get_seq_num().clone();
     let seq2 = fd.obank().get(op2).unwrap().get_seq_num().clone();
@@ -277,13 +290,18 @@ fn xref_classifies_branch_return_and_isfallthru() {
     // A BRANCH at 0x1000 to absolute 0x2000 (out of any visited range -> addrlist).
     let br = make_op(&mut fd, OpCode::CPUI_BRANCH, 0x1000, 1);
     set_coderef_in(&mut fd, br, 0x2000);
-    fd.obank_mut().get_mut(br).unwrap().set_flag(pcodeop_flags::startmark);
+    fd.obank_mut()
+        .get_mut(br)
+        .unwrap()
+        .set_flag(pcodeop_flags::startmark);
 
     let env = TableEnv;
     let mut flow = FlowInfo::new(fd, &env);
     let mut startbasic = true;
     let mut isfallthru = true;
-    let last = flow.xref_for_test(br, &mut startbasic, &mut isfallthru).unwrap();
+    let last = flow
+        .xref_for_test(br, &mut startbasic, &mut isfallthru)
+        .unwrap();
     assert_eq!(last, Some(br));
     // A BRANCH is not a fall-thru.
     assert!(!isfallthru);
@@ -299,13 +317,17 @@ fn xref_return_no_fallthru() {
     let mut fd = build_fd();
     let ret = make_op(&mut fd, OpCode::CPUI_RETURN, 0x1000, 1);
     set_const_in(&mut fd, ret, 0, 1, 4);
-    fd.obank_mut().get_mut(ret).unwrap().set_flag(pcodeop_flags::startmark);
+    fd.obank_mut()
+        .get_mut(ret)
+        .unwrap()
+        .set_flag(pcodeop_flags::startmark);
 
     let env = TableEnv;
     let mut flow = FlowInfo::new(fd, &env);
     let mut startbasic = true;
     let mut isfallthru = true;
-    flow.xref_for_test(ret, &mut startbasic, &mut isfallthru).unwrap();
+    flow.xref_for_test(ret, &mut startbasic, &mut isfallthru)
+        .unwrap();
     assert!(!isfallthru);
     assert!(startbasic);
 }
@@ -316,13 +338,17 @@ fn xref_plain_op_falls_thru() {
     let mut fd = build_fd();
     let cp = make_op(&mut fd, OpCode::CPUI_COPY, 0x1000, 1);
     set_const_in(&mut fd, cp, 0, 7, 4);
-    fd.obank_mut().get_mut(cp).unwrap().set_flag(pcodeop_flags::startmark);
+    fd.obank_mut()
+        .get_mut(cp)
+        .unwrap()
+        .set_flag(pcodeop_flags::startmark);
 
     let env = TableEnv;
     let mut flow = FlowInfo::new(fd, &env);
     let mut startbasic = true;
     let mut isfallthru = false;
-    flow.xref_for_test(cp, &mut startbasic, &mut isfallthru).unwrap();
+    flow.xref_for_test(cp, &mut startbasic, &mut isfallthru)
+        .unwrap();
     assert!(isfallthru);
 }
 
@@ -336,9 +362,15 @@ fn artificial_halt_is_return_with_halt_flag() {
     let mut flow = FlowInfo::new(fd, &env);
     let halt = flow.artificial_halt_for_test(&Address::new(ram, 0x1000), pcodeop_flags::missing);
     let h = halt.unwrap();
-    assert_eq!(flow.data.obank().get(h).unwrap().code(), OpCode::CPUI_RETURN);
+    assert_eq!(
+        flow.data.obank().get(h).unwrap().code(),
+        OpCode::CPUI_RETURN
+    );
     // halt-type is the `missing` flag.
-    assert_ne!(flow.data.obank().get(h).unwrap().get_halt_type() & pcodeop_flags::missing, 0);
+    assert_ne!(
+        flow.data.obank().get(h).unwrap().get_halt_type() & pcodeop_flags::missing,
+        0
+    );
     // input 0 is a constant of value 1.
     let in0 = flow.data.obank().get(h).unwrap().get_in(0).unwrap();
     assert!(flow.data.vbank().get(in0).unwrap().is_constant());
@@ -356,15 +388,27 @@ fn block_build_two_blocks_one_branch_edge() {
     // op must be a block start (C++ splitBasic asserts the first op isBlockStart).
     let op0 = make_op(&mut fd, OpCode::CPUI_COPY, 0x1000, 1);
     set_const_in(&mut fd, op0, 0, 0, 4);
-    fd.obank_mut().get_mut(op0).unwrap().set_flag(pcodeop_flags::startmark);
-    fd.obank_mut().get_mut(op0).unwrap().set_flag(pcodeop_flags::startbasic);
+    fd.obank_mut()
+        .get_mut(op0)
+        .unwrap()
+        .set_flag(pcodeop_flags::startmark);
+    fd.obank_mut()
+        .get_mut(op0)
+        .unwrap()
+        .set_flag(pcodeop_flags::startbasic);
     // BRANCH @0x1004 to absolute 0x1000 (back-edge to op0, which is a block start).
     let br = make_op(&mut fd, OpCode::CPUI_BRANCH, 0x1004, 1);
     set_coderef_in(&mut fd, br, 0x1000);
-    fd.obank_mut().get_mut(br).unwrap().set_flag(pcodeop_flags::startmark);
+    fd.obank_mut()
+        .get_mut(br)
+        .unwrap()
+        .set_flag(pcodeop_flags::startmark);
     // op0 is a block start (branch target); the BRANCH at 0x1004 also starts a
     // block (it is a separate instruction whose predecessor was a fall-thru).
-    fd.obank_mut().get_mut(br).unwrap().set_flag(pcodeop_flags::startbasic);
+    fd.obank_mut()
+        .get_mut(br)
+        .unwrap()
+        .set_flag(pcodeop_flags::startbasic);
 
     let seq0 = fd.obank().get(op0).unwrap().get_seq_num().clone();
     let seqb = fd.obank().get(br).unwrap().get_seq_num().clone();
@@ -398,7 +442,10 @@ fn only_an_out_of_range_stub_becomes_a_resolvable_target() {
     // BRANCH @0x1000 to 0x2000, with flow declared to span [0x1000,0x1010].
     let br = make_op(&mut fd, OpCode::CPUI_BRANCH, 0x1000, 1);
     set_coderef_in(&mut fd, br, 0x2000);
-    fd.obank_mut().get_mut(br).unwrap().set_flag(pcodeop_flags::startmark);
+    fd.obank_mut()
+        .get_mut(br)
+        .unwrap()
+        .set_flag(pcodeop_flags::startmark);
 
     let env = TableEnv;
     let mut flow = FlowInfo::new(fd, &env);
@@ -408,10 +455,17 @@ fn only_an_out_of_range_stub_becomes_a_resolvable_target() {
     );
     let mut startbasic = true;
     let mut isfallthru = true;
-    flow.xref_for_test(br, &mut startbasic, &mut isfallthru).unwrap();
+    flow.xref_for_test(br, &mut startbasic, &mut isfallthru)
+        .unwrap();
     // Out of range: the walk records it and refuses to follow it.
-    assert!(!flow.addrlist_contains(0x2000), "an out-of-range target is not queued");
-    assert!(flow.has_out_of_bounds(), "the boundary crossing is reported");
+    assert!(
+        !flow.addrlist_contains(0x2000),
+        "an out-of-range target is not queued"
+    );
+    assert!(
+        flow.has_out_of_bounds(),
+        "the boundary crossing is reported"
+    );
     // An in-range address that went unprocessed for some other reason.
     flow.push_unprocessed(Address::new(Rc::clone(&ram), 0x1008));
 
@@ -481,7 +535,10 @@ fn dedup_unprocessed_sorts_and_dedups() {
 // ===========================================================================
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn find_binaryimage(el: &Rc<Element>) -> Option<Rc<Element>> {
@@ -567,7 +624,12 @@ fn parse_meta(text: &str) -> FixtureMeta {
             context.push((name, val));
         }
     }
-    FixtureMeta { corpus, sla_rel, lift_points, context }
+    FixtureMeta {
+        corpus,
+        sla_rel,
+        lift_points,
+        context,
+    }
 }
 
 /// Build a `(Funcdata, SleighEnv)` pair sharing the corpus' address-space layout,
@@ -576,7 +638,11 @@ fn build_sleigh_flow(meta: &FixtureMeta) -> (Funcdata, SleighEnv) {
     let root = repo_root();
     let xml = std::fs::read(root.join(&meta.corpus)).expect("read corpus xml");
     let mut store = DocumentStorage::new();
-    let doc_root = store.parse_document(&xml).expect("parse corpus xml").get_root().clone();
+    let doc_root = store
+        .parse_document(&xml)
+        .expect("parse corpus xml")
+        .get_root()
+        .clone();
     let bi = find_binaryimage(&doc_root).expect("corpus has a binaryimage");
 
     let sla = std::fs::read(root.join("specs").join(&meta.sla_rel)).expect("read .sla");
@@ -587,18 +653,26 @@ fn build_sleigh_flow(meta: &FixtureMeta) -> (Funcdata, SleighEnv) {
     let mut img = LoadImageXml::new(&meta.corpus, bi).expect("LoadImageXml::new");
     let ctx = Box::new(ContextInternal::new());
     let mut sleigh = Sleigh::new(Box::new(DummyImg), ctx);
-    sleigh.initialize_from_sla(&sla).expect("initialize from sla");
+    sleigh
+        .initialize_from_sla(&sla)
+        .expect("initialize from sla");
     for (name, val) in &meta.context {
         sleigh.set_context_default(name, *val);
     }
-    img.open(sleigh.base().manager(), &registry).expect("open corpus image");
+    img.open(sleigh.base().manager(), &registry)
+        .expect("open corpus image");
 
     // The entry address uses the Sleigh manager's *own* lift-point space (the same
     // `Rc<AddrSpace>` objects the lift emits varnodes into), so the flow bounds and
     // the lifted op addresses share one space.
     let (space_name, off) = &meta.lift_points[0];
-    let entry_space =
-        Rc::clone(sleigh.base().manager().get_space_by_name(space_name).expect("entry space"));
+    let entry_space = Rc::clone(
+        sleigh
+            .base()
+            .manager()
+            .get_space_by_name(space_name)
+            .expect("entry space"),
+    );
     let entry = Address::new(entry_space, *off);
     let uniq_start = sleigh.get_unique_start(unlace_sleigh::translate::UniqueLayout::ANALYSIS);
     sleigh.set_loader(Box::new(img));
@@ -722,9 +796,15 @@ fn verify_target_chains_over_multiple_noop_instructions() {
     flow.seed_visited(&Address::new(Rc::clone(&ram), 0x1008), seq, 4);
 
     // From 0x1000, chain-skip 0x1000 -> 0x1004 -> 0x1008 -> op.
-    assert_eq!(flow.target(&Address::new(Rc::clone(&ram), 0x1000)).unwrap(), op);
+    assert_eq!(
+        flow.target(&Address::new(Rc::clone(&ram), 0x1000)).unwrap(),
+        op
+    );
     // From the middle no-op too.
-    assert_eq!(flow.target(&Address::new(Rc::clone(&ram), 0x1004)).unwrap(), op);
+    assert_eq!(
+        flow.target(&Address::new(Rc::clone(&ram), 0x1004)).unwrap(),
+        op
+    );
     // A no-op chain that never reaches a real op is an error (off the end).
     let mut fd2 = build_fd();
     let _ = make_op(&mut fd2, OpCode::CPUI_COPY, 0x9000, 1); // unrelated op
@@ -773,7 +853,10 @@ fn verify_find_rel_target_next_instruction_guard_requires_strict_advance() {
     let op_a3 = make_op(&mut fd3, OpCode::CPUI_COPY, 0x1000, 1);
     let cbr3 = make_op(&mut fd3, OpCode::CPUI_CBRANCH, 0x1000, 2);
     let next3 = make_op(&mut fd3, OpCode::CPUI_COPY, 0x1004, 1);
-    fd3.obank_mut().get_mut(next3).unwrap().set_flag(pcodeop_flags::startmark);
+    fd3.obank_mut()
+        .get_mut(next3)
+        .unwrap()
+        .set_flag(pcodeop_flags::startmark);
     set_const_in(&mut fd3, cbr3, 0, 1, 4); // rel = 1 -> id-1 == t_cbr3
     set_const_in(&mut fd3, cbr3, 1, 0, 1);
     let seq_a3 = fd3.obank().get(op_a3).unwrap().get_seq_num().clone();
@@ -811,7 +894,10 @@ fn verify_fallthru_op_offcut_boundary_is_none() {
     let ram2 = ram_space(&fd2);
     let here = make_op(&mut fd2, OpCode::CPUI_COPY, 0x1000, 1);
     let tgt = make_op(&mut fd2, OpCode::CPUI_COPY, 0x1004, 1);
-    fd2.obank_mut().get_mut(tgt).unwrap().set_flag(pcodeop_flags::startmark);
+    fd2.obank_mut()
+        .get_mut(tgt)
+        .unwrap()
+        .set_flag(pcodeop_flags::startmark);
     let seq_h = fd2.obank().get(here).unwrap().get_seq_num().clone();
     let seq_t = fd2.obank().get(tgt).unwrap().get_seq_num().clone();
     let env2 = TableEnv;
@@ -867,8 +953,14 @@ fn verify_collect_edges_default_fallthru_gated_on_nextstart() {
     let ram = ram_space(&fd);
     let op0 = make_op(&mut fd, OpCode::CPUI_COPY, 0x1000, 1);
     set_const_in(&mut fd, op0, 0, 0, 4);
-    fd.obank_mut().get_mut(op0).unwrap().set_flag(pcodeop_flags::startmark);
-    fd.obank_mut().get_mut(op0).unwrap().set_flag(pcodeop_flags::startbasic);
+    fd.obank_mut()
+        .get_mut(op0)
+        .unwrap()
+        .set_flag(pcodeop_flags::startmark);
+    fd.obank_mut()
+        .get_mut(op0)
+        .unwrap()
+        .set_flag(pcodeop_flags::startbasic);
     let op1 = make_op(&mut fd, OpCode::CPUI_COPY, 0x1000, 1); // same instruction, NOT a start
     set_const_in(&mut fd, op1, 0, 1, 4);
     let seq0 = fd.obank().get(op0).unwrap().get_seq_num().clone();
@@ -890,12 +982,24 @@ fn verify_collect_edges_default_fallthru_gated_on_nextstart() {
     let ram2 = ram_space(&fd2);
     let a0 = make_op(&mut fd2, OpCode::CPUI_COPY, 0x1000, 1);
     set_const_in(&mut fd2, a0, 0, 0, 4);
-    fd2.obank_mut().get_mut(a0).unwrap().set_flag(pcodeop_flags::startmark);
-    fd2.obank_mut().get_mut(a0).unwrap().set_flag(pcodeop_flags::startbasic);
+    fd2.obank_mut()
+        .get_mut(a0)
+        .unwrap()
+        .set_flag(pcodeop_flags::startmark);
+    fd2.obank_mut()
+        .get_mut(a0)
+        .unwrap()
+        .set_flag(pcodeop_flags::startbasic);
     let a1 = make_op(&mut fd2, OpCode::CPUI_COPY, 0x1004, 1);
     set_const_in(&mut fd2, a1, 0, 1, 4);
-    fd2.obank_mut().get_mut(a1).unwrap().set_flag(pcodeop_flags::startmark);
-    fd2.obank_mut().get_mut(a1).unwrap().set_flag(pcodeop_flags::startbasic);
+    fd2.obank_mut()
+        .get_mut(a1)
+        .unwrap()
+        .set_flag(pcodeop_flags::startmark);
+    fd2.obank_mut()
+        .get_mut(a1)
+        .unwrap()
+        .set_flag(pcodeop_flags::startbasic);
     let seq_a0 = fd2.obank().get(a0).unwrap().get_seq_num().clone();
     let seq_a1 = fd2.obank().get(a1).unwrap().get_seq_num().clone();
     let env2 = TableEnv;

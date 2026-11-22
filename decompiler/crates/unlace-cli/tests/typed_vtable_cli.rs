@@ -52,7 +52,9 @@ fn run(msabi: bool, typed: bool) -> String {
     std::fs::write(&binary, bytes).unwrap();
     let model = if msabi { "MSABI " } else { "" };
     let fields = if typed {
-        format!("float ({model}*get_scale)(void *node); void ({model}*set_scale)(void *node, float scale);")
+        format!(
+            "float ({model}*get_scale)(void *node); void ({model}*set_scale)(void *node, float scale);"
+        )
     } else {
         "void *get_scale; void *set_scale;".to_string()
     };

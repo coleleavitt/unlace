@@ -55,7 +55,10 @@ fn registers_full_command_set() {
 fn prefix_expansion_matches_datatest_streams() {
     let mut status = console(&[]);
     // The four abbreviations the datatest <com> tags use most.
-    assert_eq!(status.resolve("lo fu main").unwrap(), vec!["load", "function"]);
+    assert_eq!(
+        status.resolve("lo fu main").unwrap(),
+        vec!["load", "function"]
+    );
     assert_eq!(status.resolve("dec").unwrap(), vec!["decompile"]);
     assert_eq!(status.resolve("print C").unwrap(), vec!["print", "C"]);
     assert_eq!(status.resolve("quit").unwrap(), vec!["quit"]);
@@ -67,9 +70,18 @@ fn print_c_subcommands_resolve_distinctly() {
     // "print C" is its own complete command even though "print C flat"/globals/
     // types/xml extend it — the unique-but-complete branch of expandCom.
     assert_eq!(status.resolve("print C").unwrap(), vec!["print", "C"]);
-    assert_eq!(status.resolve("print C flat").unwrap(), vec!["print", "C", "flat"]);
-    assert_eq!(status.resolve("print C globals").unwrap(), vec!["print", "C", "globals"]);
-    assert_eq!(status.resolve("print C xml").unwrap(), vec!["print", "C", "xml"]);
+    assert_eq!(
+        status.resolve("print C flat").unwrap(),
+        vec!["print", "C", "flat"]
+    );
+    assert_eq!(
+        status.resolve("print C globals").unwrap(),
+        vec!["print", "C", "globals"]
+    );
+    assert_eq!(
+        status.resolve("print C xml").unwrap(),
+        vec!["print", "C", "xml"]
+    );
 }
 
 #[test]
@@ -107,31 +119,46 @@ fn print_c_without_function_is_no_function_selected() {
 #[test]
 fn decompile_without_function_is_no_function_selected() {
     let out = run_all(&["decompile", "quit"]);
-    assert!(out.contains("Execution error: No function selected"), "out: {out:?}");
+    assert!(
+        out.contains("Execution error: No function selected"),
+        "out: {out:?}"
+    );
 }
 
 #[test]
 fn option_without_image_is_no_load_image_present() {
     let out = run_all(&["option readonly on", "quit"]);
-    assert!(out.contains("Execution error: No load image present"), "out: {out:?}");
+    assert!(
+        out.contains("Execution error: No load image present"),
+        "out: {out:?}"
+    );
 }
 
 #[test]
 fn parse_line_without_image_is_no_load_image_present() {
     let out = run_all(&["parse line extern void f(void);", "quit"]);
-    assert!(out.contains("Execution error: No load image present"), "out: {out:?}");
+    assert!(
+        out.contains("Execution error: No load image present"),
+        "out: {out:?}"
+    );
 }
 
 #[test]
 fn map_hash_without_function_is_no_function_loaded() {
     let out = run_all(&["map hash r0x10000c 5fc6319fee int4 size", "quit"]);
-    assert!(out.contains("Execution error: No function loaded"), "out: {out:?}");
+    assert!(
+        out.contains("Execution error: No function loaded"),
+        "out: {out:?}"
+    );
 }
 
 #[test]
 fn volatile_without_image_is_no_load_image_present() {
     let out = run_all(&["volatile [ram,0x1000,16]", "quit"]);
-    assert!(out.contains("Execution error: No load image present"), "out: {out:?}");
+    assert!(
+        out.contains("Execution error: No load image present"),
+        "out: {out:?}"
+    );
 }
 
 #[test]
@@ -140,11 +167,11 @@ fn pointer_setting_without_image_is_no_load_image_present() {
     // no-image console produces the "No load image present" guard, NOT the old
     // engine-unavailable seam.  This pins that the command is wired (no longer a
     // STUB stub) while exercising the no-image guard order.
-    let out = run_all(&[
-        "pointer setting myptroff mystruct offset 8",
-        "quit",
-    ]);
-    assert!(out.contains("Execution error: No load image present"), "out: {out:?}");
+    let out = run_all(&["pointer setting myptroff mystruct offset 8", "quit"]);
+    assert!(
+        out.contains("Execution error: No load image present"),
+        "out: {out:?}"
+    );
     assert!(
         !out.contains("engine integration not yet ported"),
         "pointer setting must no longer be an engine-unavailable seam: {out:?}"
@@ -163,7 +190,10 @@ fn option_missing_name_is_parse_error() {
     // guard-order is exactly C++ (conf check precedes the name read), so assert
     // the guard, which is what a no-image console produces.
     let out = run_all(&["option", "quit"]);
-    assert!(out.contains("Execution error: No load image present"), "out: {out:?}");
+    assert!(
+        out.contains("Execution error: No load image present"),
+        "out: {out:?}"
+    );
 }
 
 #[test]
@@ -191,7 +221,10 @@ fn map_convert_bad_format_is_parse_error() {
     // fd is None → "No function loaded" guard precedes the format check (C++
     // order), so a no-function console reports the function guard.
     let out = run_all(&["map convert bogus 0 r0x0 0", "quit"]);
-    assert!(out.contains("Execution error: No function loaded"), "out: {out:?}");
+    assert!(
+        out.contains("Execution error: No function loaded"),
+        "out: {out:?}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -211,7 +244,11 @@ fn quit_terminates_mainloop() {
     let mut status = console(&["quit", "print C"]);
     mainloop(&mut status);
     assert!(status.done);
-    assert!(!status.optr.contains("No function selected"), "out: {:?}", status.optr);
+    assert!(
+        !status.optr.contains("No function selected"),
+        "out: {:?}",
+        status.optr
+    );
 }
 
 #[test]
@@ -236,7 +273,10 @@ fn decompile_engine_drive_is_documented_loss() {
     // we assert the dispatch path is intact (resolves + runs, no "Invalid").
     let out = run_all(&["dec", "quit"]);
     assert!(!out.contains("Invalid command"), "out: {out:?}");
-    assert!(out.contains("Execution error: No function selected"), "out: {out:?}");
+    assert!(
+        out.contains("Execution error: No function selected"),
+        "out: {out:?}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -348,14 +388,20 @@ fn abort_function_warns_and_drops_fd() {
 #[test]
 fn callgraph_dump_without_graph_is_no_callgraph_present() {
     let out = run_all(&["callgraph dump foo.out", "quit"]);
-    assert!(out.contains("Execution error: No callgraph present"), "out: {out:?}");
+    assert!(
+        out.contains("Execution error: No callgraph present"),
+        "out: {out:?}"
+    );
 }
 
 #[test]
 fn produce_prototypes_without_callgraph_guard() {
     // conf None → "No load image" first (C++ order: conf precedes cgraph).
     let out = run_all(&["produce prototypes", "quit"]);
-    assert!(out.contains("Execution error: No load image"), "out: {out:?}");
+    assert!(
+        out.contains("Execution error: No load image"),
+        "out: {out:?}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -405,40 +451,112 @@ fn render_engine_error_prefixes() {
 /// so a single-token drift in register_decomp_commands is caught positionally —
 /// the `num_commands()==105` count test cannot see a swap that keeps the count.
 const CPP_REGISTER_ORDER: &[&[&str]] = &[
-    &["//"], &["#"], &["%"], &["quit"], &["history"],
-    &["openfile", "write"], &["openfile", "append"], &["closefile"], &["echo"],
+    &["//"],
+    &["#"],
+    &["%"],
+    &["quit"],
+    &["history"],
+    &["openfile", "write"],
+    &["openfile", "append"],
+    &["closefile"],
+    &["echo"],
     // (source omitted — console-only)
-    &["option"], &["parse", "file"], &["parse", "line"], &["adjust", "vma"],
-    &["load", "function"], &["load", "addr"], &["read", "symbols"],
-    &["clear", "architecture"], &["map", "address"], &["map", "hash"],
-    &["map", "param"], &["map", "return"], &["map", "function"],
-    &["map", "externalref"], &["map", "label"], &["map", "convert"],
-    &["map", "unionfacet"], &["disassemble"], &["decompile"], &["dump"],
-    &["binary"], &["force", "goto"], &["force", "varnode"], &["force", "datatype"],
-    &["override", "prototype"], &["override", "jumptable"], &["override", "flow"],
-    &["deadcode", "delay"], &["global", "add"], &["global", "remove"],
-    &["global", "spaces"], &["global", "registers"], &["graph", "dataflow"],
-    &["graph", "controlflow"], &["graph", "dom"], &["print", "language"],
-    &["print", "C"], &["print", "C", "flat"], &["print", "C", "globals"],
-    &["print", "C", "types"], &["print", "C", "xml"], &["print", "parammeasures"],
-    &["produce", "C"], &["produce", "prototypes"], &["print", "raw"],
-    &["print", "inputs"], &["print", "inputs", "all"], &["list", "action"],
-    &["list", "override"], &["list", "prototypes"], &["set", "context"],
-    &["set", "track"], &["break", "start"], &["break", "action"],
-    &["print", "spaces"], &["print", "high"], &["print", "tree", "varnode"],
-    &["print", "tree", "block"], &["print", "localrange"], &["print", "map"],
-    &["print", "varnode"], &["print", "cover", "high"], &["print", "cover", "varnode"],
-    &["print", "cover", "varnodehigh"], &["print", "extrapop"],
-    &["print", "actionstats"], &["reset", "actionstats"], &["count", "pcode"],
-    &["type", "varnode"], &["name", "varnode"], &["rename"], &["retype"],
-    &["remove"], &["isolate"], &["prototype", "lock"], &["prototype", "unlock"],
-    &["comment", "instruction"], &["duplicate", "hash"], &["callgraph", "build"],
-    &["callgraph", "build", "quick"], &["callgraph", "dump"], &["callgraph", "load"],
-    &["callgraph", "list"], &["fixup", "call"], &["fixup", "callother"],
-    &["fixup", "apply"], &["volatile"], &["readonly"], &["pointer", "setting"],
-    &["prefersplit"], &["structure", "blocks"], &["analyze", "range"],
-    &["load", "test", "file"], &["list", "test", "commands"],
-    &["execute", "test", "command"], &["continue"],
+    &["option"],
+    &["parse", "file"],
+    &["parse", "line"],
+    &["adjust", "vma"],
+    &["load", "function"],
+    &["load", "addr"],
+    &["read", "symbols"],
+    &["clear", "architecture"],
+    &["map", "address"],
+    &["map", "hash"],
+    &["map", "param"],
+    &["map", "return"],
+    &["map", "function"],
+    &["map", "externalref"],
+    &["map", "label"],
+    &["map", "convert"],
+    &["map", "unionfacet"],
+    &["disassemble"],
+    &["decompile"],
+    &["dump"],
+    &["binary"],
+    &["force", "goto"],
+    &["force", "varnode"],
+    &["force", "datatype"],
+    &["override", "prototype"],
+    &["override", "jumptable"],
+    &["override", "flow"],
+    &["deadcode", "delay"],
+    &["global", "add"],
+    &["global", "remove"],
+    &["global", "spaces"],
+    &["global", "registers"],
+    &["graph", "dataflow"],
+    &["graph", "controlflow"],
+    &["graph", "dom"],
+    &["print", "language"],
+    &["print", "C"],
+    &["print", "C", "flat"],
+    &["print", "C", "globals"],
+    &["print", "C", "types"],
+    &["print", "C", "xml"],
+    &["print", "parammeasures"],
+    &["produce", "C"],
+    &["produce", "prototypes"],
+    &["print", "raw"],
+    &["print", "inputs"],
+    &["print", "inputs", "all"],
+    &["list", "action"],
+    &["list", "override"],
+    &["list", "prototypes"],
+    &["set", "context"],
+    &["set", "track"],
+    &["break", "start"],
+    &["break", "action"],
+    &["print", "spaces"],
+    &["print", "high"],
+    &["print", "tree", "varnode"],
+    &["print", "tree", "block"],
+    &["print", "localrange"],
+    &["print", "map"],
+    &["print", "varnode"],
+    &["print", "cover", "high"],
+    &["print", "cover", "varnode"],
+    &["print", "cover", "varnodehigh"],
+    &["print", "extrapop"],
+    &["print", "actionstats"],
+    &["reset", "actionstats"],
+    &["count", "pcode"],
+    &["type", "varnode"],
+    &["name", "varnode"],
+    &["rename"],
+    &["retype"],
+    &["remove"],
+    &["isolate"],
+    &["prototype", "lock"],
+    &["prototype", "unlock"],
+    &["comment", "instruction"],
+    &["duplicate", "hash"],
+    &["callgraph", "build"],
+    &["callgraph", "build", "quick"],
+    &["callgraph", "dump"],
+    &["callgraph", "load"],
+    &["callgraph", "list"],
+    &["fixup", "call"],
+    &["fixup", "callother"],
+    &["fixup", "apply"],
+    &["volatile"],
+    &["readonly"],
+    &["pointer", "setting"],
+    &["prefersplit"],
+    &["structure", "blocks"],
+    &["analyze", "range"],
+    &["load", "test", "file"],
+    &["list", "test", "commands"],
+    &["execute", "test", "command"],
+    &["continue"],
 ];
 
 #[test]
@@ -457,8 +575,14 @@ fn w9_con_ifacedecomp_v1_register_token_sequence_byte_identical() {
         assert_eq!(&resolved, words, "registered token drifted: {words:?}");
     }
     assert_eq!(status.num_commands(), CPP_REGISTER_ORDER.len() + 2);
-    assert_eq!(status.resolve("print stack objects").unwrap(), vec!["print", "stack", "objects"]);
-    assert_eq!(status.resolve("force constant").unwrap(), vec!["force", "constant"]);
+    assert_eq!(
+        status.resolve("print stack objects").unwrap(),
+        vec!["print", "stack", "objects"]
+    );
+    assert_eq!(
+        status.resolve("force constant").unwrap(),
+        vec!["force", "constant"]
+    );
 }
 
 #[test]
@@ -507,8 +631,14 @@ fn w9_con_ifacedecomp_v3_execute_exception_prefix_grammar() {
     // Build a console whose single registered command raises each kind and
     // assert the exact prefix the driver writes (the harness greps these).
     for (err, prefix) in [
-        (IfaceError::parse("p-explain"), "Command parsing error: p-explain"),
-        (IfaceError::execution("x-explain"), "Execution error: x-explain"),
+        (
+            IfaceError::parse("p-explain"),
+            "Command parsing error: p-explain",
+        ),
+        (
+            IfaceError::execution("x-explain"),
+            "Execution error: x-explain",
+        ),
         (IfaceError::base("b-explain"), "ERROR: b-explain"),
     ] {
         let mut status = ConsoleCommands::into_status(vec!["raise".to_string()]);
@@ -521,7 +651,11 @@ fn w9_con_ifacedecomp_v3_execute_exception_prefix_grammar() {
             status.optr
         );
         // Exactly one newline-terminated diagnostic line.
-        assert!(status.optr.ends_with('\n'), "missing newline: {:?}", status.optr);
+        assert!(
+            status.optr.ends_with('\n'),
+            "missing newline: {:?}",
+            status.optr
+        );
     }
 }
 
@@ -532,14 +666,26 @@ fn w9_con_ifacedecomp_v4_deliberate_omissions_absent() {
     // #ifdef CPUI_RULECOMPILE (compiled out of every kuna build).  None must
     // resolve through the decompiler command set.
     let mut status = console(&[]);
-    assert!(status.resolve("source foo.txt").is_err(), "source must not be registered");
-    assert!(status.resolve("parse rule").is_err(), "parse rule is CPUI_RULECOMPILE-gated");
+    assert!(
+        status.resolve("source foo.txt").is_err(),
+        "source must not be registered"
+    );
+    assert!(
+        status.resolve("parse rule").is_err(),
+        "parse rule is CPUI_RULECOMPILE-gated"
+    );
     assert!(
         status.resolve("experimental rules").is_err(),
         "experimental rules is CPUI_RULECOMPILE-gated"
     );
     // But `parse file` / `parse line` (the non-gated parse subcommands) DO
     // resolve — guards that the omission did not over-prune the `parse` subtree.
-    assert_eq!(status.resolve("parse file x").unwrap(), vec!["parse", "file"]);
-    assert_eq!(status.resolve("parse line int x;").unwrap(), vec!["parse", "line"]);
+    assert_eq!(
+        status.resolve("parse file x").unwrap(),
+        vec!["parse", "file"]
+    );
+    assert_eq!(
+        status.resolve("parse line int x;").unwrap(),
+        vec!["parse", "line"]
+    );
 }

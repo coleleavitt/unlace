@@ -52,20 +52,20 @@ use std::rc::Rc;
 
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::marshal::{
-    AttributeId, Decoder, ElementId, ATTRIB_ALIGN, ATTRIB_INDEX, ATTRIB_NAME, ATTRIB_STACKSPILL,
-    ATTRIB_STORAGE,
+    ATTRIB_ALIGN, ATTRIB_INDEX, ATTRIB_NAME, ATTRIB_STACKSPILL, ATTRIB_STORAGE, AttributeId,
+    Decoder, ElementId,
 };
 use unlace_base::space::{AddrSpace, AddrSpaceManager};
 use unlace_base::types::{int4, uint4};
 use unlace_num::pcoderaw::VarnodeData;
 
 use crate::dtype::{
-    metatype2typeclass, string2metatype, string2typeclass, type_class, type_metatype, Datatype,
-    TypeFactory,
+    Datatype, TypeFactory, metatype2typeclass, string2metatype, string2typeclass, type_class,
+    type_metatype,
 };
 use crate::fspec::{
-    parameter_pieces_flags, AssignActionResponse, ParamActive, ParamEntry, ParamListStandard,
-    ParamListType, ParameterPieces, PrototypePieces,
+    AssignActionResponse, ParamActive, ParamEntry, ParamListStandard, ParamListType,
+    ParameterPieces, PrototypePieces, parameter_pieces_flags,
 };
 
 // =============================================================================
@@ -258,10 +258,19 @@ impl PrimitiveExtractor {
     /// Construct from a data-type (C++
     /// `PrimitiveExtractor(Datatype *dt,bool unionIllegal,int offset,int4 max)`,
     /// modelrules.cc:242-248).
-    pub fn new(dt: &Rc<Datatype>, union_illegal: bool, offset: int4, max: int4) -> PrimitiveExtractor {
+    pub fn new(
+        dt: &Rc<Datatype>,
+        union_illegal: bool,
+        offset: int4,
+        max: int4,
+    ) -> PrimitiveExtractor {
         let mut res = PrimitiveExtractor {
             primitives: Vec::new(),
-            flags: if union_illegal { prim_flags::UNION_INVALID } else { 0 },
+            flags: if union_illegal {
+                prim_flags::UNION_INVALID
+            } else {
+                0
+            },
         };
         if !res.extract(dt, max, offset) {
             res.flags |= prim_flags::INVALID;
@@ -347,7 +356,8 @@ impl PrimitiveExtractor {
                 continue;
             }
             if second_element.offset < first_element.offset
-                && second_element.offset + second_element.dt.get_align_size() <= first_element.offset
+                && second_element.offset + second_element.dt.get_align_size()
+                    <= first_element.offset
             {
                 common.push(second_element);
                 second_point += 1;
@@ -394,12 +404,8 @@ impl PrimitiveExtractor {
             Some(f) => f,
             None => return false,
         };
-        let mut common = PrimitiveExtractor::new(
-            &cur_field.field_type,
-            false,
-            offset + cur_field.offset,
-            max,
-        );
+        let mut common =
+            PrimitiveExtractor::new(&cur_field.field_type, false, offset + cur_field.offset, max);
         if !common.is_valid() {
             return false;
         }
@@ -520,11 +526,21 @@ pub enum DatatypeFilter {
     /// `SizeRestrictedFilter` — bounds on data-type size only.
     SizeRestricted(SizeRestriction),
     /// `MetaTypeFilter` — a single meta data-type plus size bounds.
-    MetaType { meta_type: type_metatype, size: SizeRestriction },
+    MetaType {
+        meta_type: type_metatype,
+        size: SizeRestriction,
+    },
     /// `HomogeneousAggregate` — an aggregate whose primitives are all the same.
-    Homogeneous { meta_type: type_metatype, max_primitives: int4, size: SizeRestriction },
+    Homogeneous {
+        meta_type: type_metatype,
+        max_primitives: int4,
+        size: SizeRestriction,
+    },
     /// A struct with direct floating fields, allowing different precisions and padding.
-    FloatFields { max_primitives: int4, size: SizeRestriction },
+    FloatFields {
+        max_primitives: int4,
+        size: SizeRestriction,
+    },
 }
 
 /// The size-restriction state shared by every [`DatatypeFilter`] (C++
@@ -543,7 +559,11 @@ impl SizeRestriction {
     /// Constructor for use with decode (C++ `SizeRestrictedFilter()`,
     /// modelrules.hh:130): `minSize=0; maxSize=0`.
     pub fn new_for_decode() -> SizeRestriction {
-        SizeRestriction { min_size: 0, max_size: 0, sizes: std::collections::BTreeSet::new() }
+        SizeRestriction {
+            min_size: 0,
+            max_size: 0,
+            sizes: std::collections::BTreeSet::new(),
+        }
     }
 
     /// C++ `SizeRestrictedFilter` (modelrules.cc:303-312).
@@ -640,12 +660,19 @@ impl DatatypeFilter {
                 }
                 size.filter_on_size(dt)
             }
-            DatatypeFilter::FloatFields { max_primitives, size } => {
+            DatatypeFilter::FloatFields {
+                max_primitives,
+                size,
+            } => {
                 size.filter_on_size(dt)
                     && super::kuna_aggregateabi::float_fields(dt, *max_primitives)
             }
             // HomogeneousAggregate::filter (modelrules.cc:412-430).
-            DatatypeFilter::Homogeneous { meta_type, max_primitives, size: _ } => {
+            DatatypeFilter::Homogeneous {
+                meta_type,
+                max_primitives,
+                size: _,
+            } => {
                 let meta = dt.get_metatype();
                 if meta != type_metatype::TYPE_ARRAY && meta != type_metatype::TYPE_STRUCT {
                     return false;
@@ -697,7 +724,10 @@ impl DatatypeFilter {
             let s = std::str::from_utf8(&nm)
                 .map_err(|_| KunaError::decoder("Non-UTF8 metatype name"))?;
             let meta = string2metatype(s)?;
-            DatatypeFilter::MetaType { meta_type: meta, size: SizeRestriction::new_for_decode() }
+            DatatypeFilter::MetaType {
+                meta_type: meta,
+                size: SizeRestriction::new_for_decode(),
+            }
         };
         filter.decode(decoder)?;
         decoder.close_element(elem_id)?;
@@ -710,8 +740,15 @@ impl DatatypeFilter {
         match self {
             DatatypeFilter::SizeRestricted(sz) => sz.decode(decoder),
             DatatypeFilter::MetaType { size, .. } => size.decode(decoder),
-            DatatypeFilter::Homogeneous { max_primitives, size, .. }
-            | DatatypeFilter::FloatFields { max_primitives, size } => {
+            DatatypeFilter::Homogeneous {
+                max_primitives,
+                size,
+                ..
+            }
+            | DatatypeFilter::FloatFields {
+                max_primitives,
+                size,
+            } => {
                 // HomogeneousAggregate::decode (modelrules.cc:432-445).
                 size.decode(decoder)?;
                 decoder.rewind_attributes();
@@ -750,7 +787,10 @@ pub enum QualifierFilter {
     /// `PositionMatchFilter` — a specific parameter position.
     Position(int4),
     /// `DatatypeMatchFilter` — a data-type at a fixed position.
-    DatatypeMatch { position: int4, type_filter: Box<DatatypeFilter> },
+    DatatypeMatch {
+        position: int4,
+        type_filter: Box<DatatypeFilter>,
+    },
 }
 
 impl QualifierFilter {
@@ -768,7 +808,10 @@ impl QualifierFilter {
                 true
             }
             // VarargsFilter::filter (modelrules.cc:502-508).
-            QualifierFilter::Varargs { first_pos, last_pos } => {
+            QualifierFilter::Varargs {
+                first_pos,
+                last_pos,
+            } => {
                 if proto.first_var_arg_slot < 0 {
                     return false;
                 }
@@ -778,7 +821,10 @@ impl QualifierFilter {
             // PositionMatchFilter::filter (modelrules.cc:525-529).
             QualifierFilter::Position(position) => pos == *position,
             // DatatypeMatchFilter::filter (modelrules.cc:555-568).
-            QualifierFilter::DatatypeMatch { position, type_filter } => {
+            QualifierFilter::DatatypeMatch {
+                position,
+                type_filter,
+            } => {
                 // The position of the current parameter being assigned, pos, is NOT used.
                 let dt = if *position < 0 {
                     match &proto.outtype {
@@ -803,7 +849,10 @@ impl QualifierFilter {
         let elem_id = decoder.peek_element()?;
         let mut filter = if elem_id == ELEM_VARARGS.get_id() {
             // VarargsFilter() — firstPos = 0x80000000; lastPos = 0x7fffffff.
-            QualifierFilter::Varargs { first_pos: 0x80000000u32 as i32, last_pos: 0x7fffffff }
+            QualifierFilter::Varargs {
+                first_pos: 0x80000000u32 as i32,
+                last_pos: 0x7fffffff,
+            }
         } else if elem_id == ELEM_POSITION.get_id() {
             QualifierFilter::Position(-1)
         } else if elem_id == ELEM_DATATYPE_AT.get_id() {
@@ -828,7 +877,10 @@ impl QualifierFilter {
             // AndFilter::decode is empty (modelrules.hh:206).
             QualifierFilter::And(_) => Ok(()),
             // VarargsFilter::decode (modelrules.cc:510-523).
-            QualifierFilter::Varargs { first_pos, last_pos } => {
+            QualifierFilter::Varargs {
+                first_pos,
+                last_pos,
+            } => {
                 let elem_id = decoder.open_element_id(&ELEM_VARARGS)?;
                 loop {
                     let attrib_id = decoder.get_next_attribute_id()?;
@@ -852,7 +904,10 @@ impl QualifierFilter {
                 Ok(())
             }
             // DatatypeMatchFilter::decode (modelrules.cc:570-577).
-            QualifierFilter::DatatypeMatch { position, type_filter } => {
+            QualifierFilter::DatatypeMatch {
+                position,
+                type_filter,
+            } => {
                 let elem_id = decoder.open_element_id(&ELEM_DATATYPE_AT)?;
                 *position = decoder.read_signed_integer_id(&ATTRIB_INDEX)? as int4; // cast: int4 member
                 *type_filter = Box::new(DatatypeFilter::decode_filter(decoder)?);
@@ -933,11 +988,22 @@ pub enum AssignAction {
     /// `HiddenReturnAssign` — allocate the return value as an input parameter.
     HiddenReturnAssign { ret_code: AssignActionResponse },
     /// `ConsumeExtra` — side-effect consuming extra registers.
-    ConsumeExtra { resource_type: type_class, match_size: bool, tiles: Vec<usize> },
+    ConsumeExtra {
+        resource_type: type_class,
+        match_size: bool,
+        tiles: Vec<usize>,
+    },
     /// `ExtraStack` — side-effect consuming stack resources.
-    ExtraStack { after_bytes: int4, after_storage: type_class, stack_entry: Option<usize> },
+    ExtraStack {
+        after_bytes: int4,
+        after_storage: type_class,
+        stack_entry: Option<usize>,
+    },
     /// `ConsumeRemaining` — side-effect consuming all remaining registers.
-    ConsumeRemaining { resource_type: type_class, tiles: Vec<usize> },
+    ConsumeRemaining {
+        resource_type: type_class,
+        tiles: Vec<usize>,
+    },
 }
 
 impl AssignAction {
@@ -1032,16 +1098,25 @@ impl AssignAction {
                         "Cannot find matching stack resource for action: join_dual_class",
                     ));
                 }
-                if *enforce_alignment && (base_tiles.len() != alt_tiles.len()
-                    || base_tiles.iter().zip(alt_tiles.iter()).any(|(&a, &b)|
-                        entries[a].get_group() != entries[b].get_group()
-                        || entries[a].get_size() != entries[b].get_size())) {
-                    return Err(KunaError::lowlevel("Aligned join_dual_class requires shared argument slots"));
+                if *enforce_alignment
+                    && (base_tiles.len() != alt_tiles.len()
+                        || base_tiles.iter().zip(alt_tiles.iter()).any(|(&a, &b)| {
+                            entries[a].get_group() != entries[b].get_group()
+                                || entries[a].get_size() != entries[b].get_size()
+                        }))
+                {
+                    return Err(KunaError::lowlevel(
+                        "Aligned join_dual_class requires shared argument slots",
+                    ));
                 }
                 Ok(())
             }
             // ConsumeExtra::initializeEntries (modelrules.cc:1411-1417).
-            AssignAction::ConsumeExtra { resource_type, tiles, .. } => {
+            AssignAction::ConsumeExtra {
+                resource_type,
+                tiles,
+                ..
+            } => {
                 tiles.clear();
                 resource.extract_tiles(tiles, *resource_type);
                 if tiles.is_empty() {
@@ -1052,7 +1127,10 @@ impl AssignAction {
                 Ok(())
             }
             // ConsumeRemaining::initializeEntries (modelrules.cc:1472-1478).
-            AssignAction::ConsumeRemaining { resource_type, tiles } => {
+            AssignAction::ConsumeRemaining {
+                resource_type,
+                tiles,
+            } => {
                 tiles.clear();
                 resource.extract_tiles(tiles, *resource_type);
                 if tiles.is_empty() {
@@ -1116,13 +1194,13 @@ impl AssignAction {
                 // HiddenReturnAssign::assignAddress (modelrules.cc:1380-1384).
                 Ok(*ret_code) // Signal to assignMap to use TYPECLASS_HIDDENRET
             }
-            AssignAction::ConsumeExtra { .. } => {
-                self.assign_consume_extra(dt, status, resource)
-            }
+            AssignAction::ConsumeExtra { .. } => self.assign_consume_extra(dt, status, resource),
             AssignAction::ExtraStack { .. } => {
                 self.assign_extra_stack(dt, status, res, resource, manager)
             }
-            AssignAction::ConsumeRemaining { .. } => self.assign_consume_remaining(status, resource),
+            AssignAction::ConsumeRemaining { .. } => {
+                self.assign_consume_remaining(status, resource)
+            }
         }
     }
 
@@ -1135,31 +1213,40 @@ impl AssignAction {
         resource: &ParamListStandard,
         manager: &AddrSpaceManager,
     ) -> KunaResult<AssignActionResponse> {
-        let (resource_type, is_big_endian, consume_from_stack, consume_most_sig, enforce_alignment, justify_right, stack_align, tiles, stack_entry) =
-            match self {
-                AssignAction::MultiSlotAssign {
-                    resource_type,
-                    is_big_endian,
-                    consume_from_stack,
-                    consume_most_sig,
-                    enforce_alignment,
-                    justify_right,
-                    stack_align,
-                    tiles,
-                    stack_entry,
-                } => (
-                    *resource_type,
-                    *is_big_endian,
-                    *consume_from_stack,
-                    *consume_most_sig,
-                    *enforce_alignment,
-                    *justify_right,
-                    *stack_align,
-                    tiles,
-                    *stack_entry,
-                ),
-                _ => unreachable!(),
-            };
+        let (
+            resource_type,
+            is_big_endian,
+            consume_from_stack,
+            consume_most_sig,
+            enforce_alignment,
+            justify_right,
+            stack_align,
+            tiles,
+            stack_entry,
+        ) = match self {
+            AssignAction::MultiSlotAssign {
+                resource_type,
+                is_big_endian,
+                consume_from_stack,
+                consume_most_sig,
+                enforce_alignment,
+                justify_right,
+                stack_align,
+                tiles,
+                stack_entry,
+            } => (
+                *resource_type,
+                *is_big_endian,
+                *consume_from_stack,
+                *consume_most_sig,
+                *enforce_alignment,
+                *justify_right,
+                *stack_align,
+                tiles,
+                *stack_entry,
+            ),
+            _ => unreachable!(),
+        };
         let entries = resource.get_entry();
         let mut tmp_status: Vec<int4> = status.to_vec();
         let mut pieces: Vec<VarnodeData> = Vec::new();
@@ -1235,7 +1322,13 @@ impl AssignAction {
                 tmp.offset = addr.get_offset();
                 tmp.size = dt.get_size() as u32;
             } else {
-                justify_pieces(&mut pieces, -size_left, is_big_endian, consume_most_sig, justify_right);
+                justify_pieces(
+                    &mut pieces,
+                    -size_left,
+                    is_big_endian,
+                    consume_most_sig,
+                    justify_right,
+                );
             }
         }
         status.copy_from_slice(&tmp_status); // Commit resource usage for all the pieces
@@ -1255,14 +1348,27 @@ impl AssignAction {
         manager: &AddrSpaceManager,
     ) -> KunaResult<AssignActionResponse> {
         let (resource_type, consume_from_stack, consume_most_sig, direct_fields) = match self {
-            AssignAction::MultiMemberAssign { resource_type, consume_from_stack, consume_most_sig, direct_fields } => {
-                (*resource_type, *consume_from_stack, *consume_most_sig, *direct_fields)
-            }
+            AssignAction::MultiMemberAssign {
+                resource_type,
+                consume_from_stack,
+                consume_most_sig,
+                direct_fields,
+            } => (
+                *resource_type,
+                *consume_from_stack,
+                *consume_most_sig,
+                *direct_fields,
+            ),
             _ => unreachable!(),
         };
         if direct_fields {
             return super::kuna_aggregateabi::assign_fields(
-                dt, resource_type, status, res, resource, manager,
+                dt,
+                resource_type,
+                status,
+                res,
+                resource,
+                manager,
             );
         }
         let mut tmp_status: Vec<int4> = status.to_vec();
@@ -1312,36 +1418,53 @@ impl AssignAction {
         resource: &ParamListStandard,
         manager: &AddrSpaceManager,
     ) -> KunaResult<AssignActionResponse> {
-        let (is_big_endian, consume_from_stack, consume_most_sig, justify_right, enforce_alignment, base_tiles, alt_tiles, stack_entry) =
-            match self {
-                AssignAction::MultiSlotDualAssign {
-                    is_big_endian,
-                    consume_from_stack,
-                    consume_most_sig,
-                    justify_right,
-                    enforce_alignment,
-                    base_tiles,
-                    alt_tiles,
-                    stack_entry,
-                    ..
-                } => (
-                    *is_big_endian,
-                    *consume_from_stack,
-                    *consume_most_sig,
-                    *justify_right,
-                    *enforce_alignment,
-                    base_tiles,
-                    alt_tiles,
-                    *stack_entry,
-                ),
-                _ => unreachable!(),
-            };
+        let (
+            is_big_endian,
+            consume_from_stack,
+            consume_most_sig,
+            justify_right,
+            enforce_alignment,
+            base_tiles,
+            alt_tiles,
+            stack_entry,
+        ) = match self {
+            AssignAction::MultiSlotDualAssign {
+                is_big_endian,
+                consume_from_stack,
+                consume_most_sig,
+                justify_right,
+                enforce_alignment,
+                base_tiles,
+                alt_tiles,
+                stack_entry,
+                ..
+            } => (
+                *is_big_endian,
+                *consume_from_stack,
+                *consume_most_sig,
+                *justify_right,
+                *enforce_alignment,
+                base_tiles,
+                alt_tiles,
+                *stack_entry,
+            ),
+            _ => unreachable!(),
+        };
         let entries = resource.get_entry();
-        let primitives = if matches!(self, AssignAction::MultiSlotDualAssign { direct_fields: true, .. }) {
+        let primitives = if matches!(
+            self,
+            AssignAction::MultiSlotDualAssign {
+                direct_fields: true,
+                ..
+            }
+        ) {
             let Some(fields) = super::kuna_aggregateabi::direct_fields(dt) else {
                 return Ok(RES_FAIL);
             };
-            PrimitiveExtractor { primitives: fields, flags: 0 }
+            PrimitiveExtractor {
+                primitives: fields,
+                flags: 0,
+            }
         } else {
             PrimitiveExtractor::new(dt, false, 0, 1024)
         };
@@ -1373,7 +1496,8 @@ impl AssignAction {
             iter_alt = iter_base;
         }
         while size_left > 0 {
-            let iter_type = self.get_tile_class(&primitives, type_size - size_left, &mut primitive_index);
+            let iter_type =
+                self.get_tile_class(&primitives, type_size - size_left, &mut primitive_index);
             if iter_type < 0 {
                 return Ok(RES_FAIL);
             }
@@ -1433,7 +1557,13 @@ impl AssignAction {
         }
         if size_left < 0 {
             // Have odd data-type size
-            justify_pieces(&mut pieces, -size_left, is_big_endian, consume_most_sig, justify_right);
+            justify_pieces(
+                &mut pieces,
+                -size_left,
+                is_big_endian,
+                consume_most_sig,
+                justify_right,
+            );
         }
         status.copy_from_slice(&tmp_status); // Commit resource usage for all the pieces
         res.flags = 0;
@@ -1443,22 +1573,28 @@ impl AssignAction {
     }
 
     /// `MultiSlotDualAssign::getTileClass` (modelrules.cc:1108-1135).
-    fn get_tile_class(
-        &self,
-        primitives: &PrimitiveExtractor,
-        off: int4,
-        index: &mut int4,
-    ) -> int4 {
+    fn get_tile_class(&self, primitives: &PrimitiveExtractor, off: int4, index: &mut int4) -> int4 {
         let (alt_type, fill_alternate, tile_size) = match self {
-            AssignAction::MultiSlotDualAssign { alt_type, fill_alternate, tile_size, .. } => {
-                (*alt_type, *fill_alternate, *tile_size)
-            }
+            AssignAction::MultiSlotDualAssign {
+                alt_type,
+                fill_alternate,
+                tile_size,
+                ..
+            } => (*alt_type, *fill_alternate, *tile_size),
             _ => unreachable!(),
         };
-        if matches!(self, AssignAction::MultiSlotDualAssign { direct_fields: true, .. }) {
-            return i32::from(primitives.primitives.iter().any(|field|
-                field.offset == off && field.dt.get_size() == tile_size
-                    && metatype2typeclass(field.dt.get_metatype()) == alt_type));
+        if matches!(
+            self,
+            AssignAction::MultiSlotDualAssign {
+                direct_fields: true,
+                ..
+            }
+        ) {
+            return i32::from(primitives.primitives.iter().any(|field| {
+                field.offset == off
+                    && field.dt.get_size() == tile_size
+                    && metatype2typeclass(field.dt.get_metatype()) == alt_type
+            }));
         }
         let mut res = 1;
         let mut count = 0;
@@ -1508,7 +1644,9 @@ impl AssignAction {
         resource: &ParamListStandard,
     ) -> KunaResult<AssignActionResponse> {
         let (match_size, tiles) = match self {
-            AssignAction::ConsumeExtra { match_size, tiles, .. } => (*match_size, tiles),
+            AssignAction::ConsumeExtra {
+                match_size, tiles, ..
+            } => (*match_size, tiles),
             _ => unreachable!(),
         };
         let entries = resource.get_entry();
@@ -1562,15 +1700,22 @@ impl AssignAction {
         manager: &AddrSpaceManager,
     ) -> KunaResult<AssignActionResponse> {
         let (after_bytes, after_storage, stack_entry) = match self {
-            AssignAction::ExtraStack { after_bytes, after_storage, stack_entry } => {
-                (*after_bytes, *after_storage, *stack_entry)
-            }
+            AssignAction::ExtraStack {
+                after_bytes,
+                after_storage,
+                stack_entry,
+            } => (*after_bytes, *after_storage, *stack_entry),
             _ => unreachable!(),
         };
         let entries = resource.get_entry();
         let se = stack_entry.expect("ExtraStack stack entry");
         let stack_space = entries[se].get_space();
-        if res.addr.get_space().map(|s| Rc::ptr_eq(s, stack_space)).unwrap_or(false) {
+        if res
+            .addr
+            .get_space()
+            .map(|s| Rc::ptr_eq(s, stack_space))
+            .unwrap_or(false)
+        {
             return Ok(RES_SUCCESS); // Parameter was already assigned to the stack
         }
         let grp = entries[se].get_group();
@@ -1592,7 +1737,8 @@ impl AssignAction {
         // We assign the stack address (but ignore the actual address) updating the status for
         // the stack, which consumes the stack resources.
         let mut slot = status[grp as usize];
-        let _ = entries[se].get_addr_by_slot(&mut slot, dt.get_size(), dt.get_alignment(), manager)?;
+        let _ =
+            entries[se].get_addr_by_slot(&mut slot, dt.get_size(), dt.get_alignment(), manager)?;
         status[grp as usize] = slot;
         Ok(RES_SUCCESS)
     }
@@ -1601,7 +1747,11 @@ impl AssignAction {
     /// given set of trials (C++ `fillinOutputMap`, per-subclass overrides).
     /// The default (`AssignAction::fillinOutputMap`, modelrules.cc:579-583)
     /// returns `false`.
-    pub fn fillin_output_map(&self, active: &mut ParamActive, resource: &ParamListStandard) -> bool {
+    pub fn fillin_output_map(
+        &self,
+        active: &mut ParamActive,
+        resource: &ParamListStandard,
+    ) -> bool {
         let entries = resource.get_entry();
         match self {
             // GotoStack::fillinOutputMap (modelrules.cc:731-746).
@@ -1629,7 +1779,10 @@ impl AssignAction {
             }
             // MultiSlotAssign::fillinOutputMap (modelrules.cc:902-952).
             AssignAction::MultiSlotAssign {
-                resource_type, consume_most_sig, justify_right, ..
+                resource_type,
+                consume_most_sig,
+                justify_right,
+                ..
             } => fillin_multi_slot(
                 active,
                 entries,
@@ -1638,7 +1791,11 @@ impl AssignAction {
                 *justify_right,
             ),
             // MultiMemberAssign::fillinOutputMap (modelrules.cc:1019-1047).
-            AssignAction::MultiMemberAssign { resource_type, consume_most_sig, .. } => {
+            AssignAction::MultiMemberAssign {
+                resource_type,
+                consume_most_sig,
+                ..
+            } => {
                 let mut count = 0;
                 let mut cur_group = -1;
                 for i in 0..active.get_num_trials() {
@@ -1674,7 +1831,11 @@ impl AssignAction {
             }
             // MultiSlotDualAssign::fillinOutputMap (modelrules.cc:1242-1298).
             AssignAction::MultiSlotDualAssign {
-                base_type, alt_type, consume_most_sig, justify_right, ..
+                base_type,
+                alt_type,
+                consume_most_sig,
+                justify_right,
+                ..
             } => fillin_multi_slot_dual(
                 active,
                 entries,
@@ -1728,11 +1889,17 @@ impl AssignAction {
         } else if elem_id == ELEM_JOIN.get_id() {
             new_multi_slot_assign_default(resource)
         } else if elem_id == ELEM_CONSUME.get_id() {
-            AssignAction::ConsumeAs { resource_type: type_class::TYPECLASS_GENERAL }
+            AssignAction::ConsumeAs {
+                resource_type: type_class::TYPECLASS_GENERAL,
+            }
         } else if elem_id == ELEM_CONVERT_TO_PTR.get_id() {
-            AssignAction::ConvertToPointer { space: resource.get_spacebase().cloned() }
+            AssignAction::ConvertToPointer {
+                space: resource.get_spacebase().cloned(),
+            }
         } else if elem_id == ELEM_HIDDEN_RETURN.get_id() {
-            AssignAction::HiddenReturnAssign { ret_code: RES_HIDDENRET_SPECIALREG }
+            AssignAction::HiddenReturnAssign {
+                ret_code: RES_HIDDENRET_SPECIALREG,
+            }
         } else if elem_id == ELEM_JOIN_PER_PRIMITIVE.get_id() {
             // MultiMemberAssign(TYPECLASS_GENERAL,false,res->isBigEndian(),res).
             AssignAction::MultiMemberAssign {
@@ -1790,7 +1957,11 @@ impl AssignAction {
     /// Configure any details of how this action should behave from the stream
     /// (C++ `decode`, per-subclass).  Runs the `initializeEntries` tail where
     /// the C++ does.
-    fn decode(&mut self, decoder: &mut dyn Decoder, resource: &ParamListStandard) -> KunaResult<()> {
+    fn decode(
+        &mut self,
+        decoder: &mut dyn Decoder,
+        resource: &ParamListStandard,
+    ) -> KunaResult<()> {
         match self {
             // GotoStack::decode (modelrules.cc:748-754).
             AssignAction::GotoStack { .. } => {
@@ -1842,7 +2013,11 @@ impl AssignAction {
                 self.initialize(resource) // Need new firstIter
             }
             // MultiMemberAssign::decode (modelrules.cc:1049-1061).
-            AssignAction::MultiMemberAssign { resource_type, direct_fields, .. } => {
+            AssignAction::MultiMemberAssign {
+                resource_type,
+                direct_fields,
+                ..
+            } => {
                 let elem_id = decoder.open_element_id(&ELEM_JOIN_PER_PRIMITIVE)?;
                 loop {
                     let attrib_id = decoder.get_next_attribute_id()?;
@@ -1856,8 +2031,15 @@ impl AssignAction {
                     }
                 }
                 decoder.close_element(elem_id)?;
-                if *direct_fields && !matches!(resource.get_type(), ParamListType::StandardOut | ParamListType::RegisterOut) {
-                    return Err(KunaError::decoder("Direct-field member joins require output resources"));
+                if *direct_fields
+                    && !matches!(
+                        resource.get_type(),
+                        ParamListType::StandardOut | ParamListType::RegisterOut
+                    )
+                {
+                    return Err(KunaError::decoder(
+                        "Direct-field member joins require output resources",
+                    ));
                 }
                 Ok(())
             }
@@ -1939,7 +2121,11 @@ impl AssignAction {
                 Ok(())
             }
             // ConsumeExtra::decode (modelrules.cc:1452-1468).
-            AssignAction::ConsumeExtra { resource_type, match_size, .. } => {
+            AssignAction::ConsumeExtra {
+                resource_type,
+                match_size,
+                ..
+            } => {
                 let elem_id = decoder.open_element_id(&ELEM_CONSUME_EXTRA)?;
                 loop {
                     let attrib_id = decoder.get_next_attribute_id()?;
@@ -1962,7 +2148,11 @@ impl AssignAction {
                 self.initialize(resource)
             }
             // ExtraStack::decode (modelrules.cc:1574-1588).
-            AssignAction::ExtraStack { after_bytes, after_storage, .. } => {
+            AssignAction::ExtraStack {
+                after_bytes,
+                after_storage,
+                ..
+            } => {
                 let elem_id = decoder.open_element_id(&ELEM_EXTRA_STACK)?;
                 loop {
                     let attrib_id = decoder.get_next_attribute_id()?;
@@ -2026,7 +2216,7 @@ fn new_multi_slot_dual_default(resource: &ParamListStandard) -> AssignAction {
     }
     AssignAction::MultiSlotDualAssign {
         base_type: type_class::TYPECLASS_GENERAL, // Tile from general purpose registers
-        alt_type: type_class::TYPECLASS_FLOAT, // Specialized registers for floating-point
+        alt_type: type_class::TYPECLASS_FLOAT,    // Specialized registers for floating-point
         is_big_endian,
         consume_from_stack: false,
         consume_most_sig,
@@ -2401,7 +2591,11 @@ impl ModelRule {
 
     /// Test and mark the trial(s) that can be a valid return value (C++
     /// `ModelRule::fillinOutputMap`, the inline at modelrules.hh:559-563).
-    pub fn fillin_output_map(&self, active: &mut ParamActive, resource: &ParamListStandard) -> bool {
+    pub fn fillin_output_map(
+        &self,
+        active: &mut ParamActive,
+        resource: &ParamListStandard,
+    ) -> bool {
         self.assign.fillin_output_map(active, resource)
     }
 
@@ -2435,10 +2629,27 @@ impl ModelRule {
         }
         let mut tmp_status: Vec<int4> = status.to_vec();
         for precond in self.preconditions.iter() {
-            precond.assign_address(dt, proto, pos, tlist, &mut tmp_status, res, resource, manager)?;
+            precond.assign_address(
+                dt,
+                proto,
+                pos,
+                tlist,
+                &mut tmp_status,
+                res,
+                resource,
+                manager,
+            )?;
         }
-        let response =
-            self.assign.assign_address(dt, proto, pos, tlist, &mut tmp_status, res, resource, manager)?;
+        let response = self.assign.assign_address(
+            dt,
+            proto,
+            pos,
+            tlist,
+            &mut tmp_status,
+            res,
+            resource,
+            manager,
+        )?;
         if response != RES_FAIL {
             status.copy_from_slice(&tmp_status);
             for sideeffect in self.sideeffects.iter() {
@@ -2450,7 +2661,10 @@ impl ModelRule {
 
     /// Decode this rule from the stream (C++ `ModelRule::decode`,
     /// modelrules.cc:1676-1709).
-    pub fn decode(decoder: &mut dyn Decoder, resource: &ParamListStandard) -> KunaResult<ModelRule> {
+    pub fn decode(
+        decoder: &mut dyn Decoder,
+        resource: &ParamListStandard,
+    ) -> KunaResult<ModelRule> {
         let mut qualifiers: Vec<QualifierFilter> = Vec::new();
         let elem_id = decoder.open_element_id(&ELEM_RULE)?;
         let filter = DatatypeFilter::decode_filter(decoder)?;
@@ -2480,7 +2694,13 @@ impl ModelRule {
             sideeffects.push(AssignAction::decode_sideeffect(decoder, resource)?);
         }
         decoder.close_element(elem_id)?;
-        Ok(ModelRule { filter, qualifier, assign, preconditions, sideeffects })
+        Ok(ModelRule {
+            filter,
+            qualifier,
+            assign,
+            preconditions,
+            sideeffects,
+        })
     }
 }
 

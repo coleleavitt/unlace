@@ -6,10 +6,10 @@ pub(crate) use plan::callee_first_plan;
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
+use object::{Object, ObjectSection};
 use unlace_analysis::listing::xrefs::{SwitchTable, Xref, XrefIndex, XrefKind};
 use unlace_analysis::loader::macho_fat::SlicePref;
 use unlace_console::engine::ConsoleProgram;
-use object::{Object, ObjectSection};
 
 use crate::image::image_bytes;
 
@@ -39,7 +39,9 @@ struct EntryRefs {
 impl CallbackRefs {
     /// [`CallGraph::address_taken_refs`] for `entry`.
     pub(crate) fn address_taken_refs(&self, entry: u64) -> Vec<(u64, Option<u64>)> {
-        self.by_entry.get(&entry).map_or_else(Vec::new, |r| r.taken.clone())
+        self.by_entry
+            .get(&entry)
+            .map_or_else(Vec::new, |r| r.taken.clone())
     }
 
     /// [`CallGraph::called_directly`] for `entry`.
@@ -49,7 +51,9 @@ impl CallbackRefs {
 
     /// [`CallGraph::direct_callers`] for `entry`.
     pub(crate) fn direct_callers(&self, entry: u64) -> Option<Vec<u64>> {
-        self.by_entry.get(&entry).map_or(Some(Vec::new()), |r| r.callers.clone())
+        self.by_entry
+            .get(&entry)
+            .map_or(Some(Vec::new()), |r| r.callers.clone())
     }
 }
 
@@ -112,7 +116,11 @@ impl CallGraph {
         }
         entries.sort_unstable();
         let plt_local = prog.arch().plt_local.to_vec();
-        CallGraph { index, entries, plt_local }
+        CallGraph {
+            index,
+            entries,
+            plt_local,
+        }
     }
 
     /// (kuna `pltlocal`) The function a call to `entry` is built at: the
@@ -192,7 +200,9 @@ impl CallGraph {
                         out.push(r.from);
                     }
                 }
-                XrefKind::Data | XrefKind::Read | XrefKind::Write | XrefKind::VirtualCall => return None,
+                XrefKind::Data | XrefKind::Read | XrefKind::Write | XrefKind::VirtualCall => {
+                    return None;
+                }
             }
         }
         Some(out)
@@ -411,7 +421,11 @@ impl CallGraph {
     /// decodes as a branch to it is one of those references. Nothing is closed
     /// in an image whose dynamic relocations cannot be read (Android packed
     /// relocations). `None` for any other image.
-    pub(crate) fn arm_closed_sites(&self, binary: &str, pref: SlicePref) -> Option<BTreeMap<u64, Vec<u64>>> {
+    pub(crate) fn arm_closed_sites(
+        &self,
+        binary: &str,
+        pref: SlicePref,
+    ) -> Option<BTreeMap<u64, Vec<u64>>> {
         let bytes = image_bytes(binary, pref).ok()?;
         let file = unlace_analysis::loadimage_object::parse_object(&bytes).ok()?;
         if file.architecture() != object::Architecture::Arm
@@ -432,12 +446,17 @@ impl CallGraph {
             }
             let mut sites = Vec::new();
             for r in self.index.refs_to(entry) {
-                if !matches!(r.kind, XrefKind::Call | XrefKind::Jump) || self.owner_of(r.from).is_none() {
+                if !matches!(r.kind, XrefKind::Call | XrefKind::Jump)
+                    || self.owner_of(r.from).is_none()
+                {
                     continue 'entry;
                 }
                 sites.push(r.from);
             }
-            let unseen = image.branches.get(&entry).is_some_and(|from| from.iter().any(|f| !sites.contains(f)));
+            let unseen = image
+                .branches
+                .get(&entry)
+                .is_some_and(|from| from.iter().any(|f| !sites.contains(f)));
             if !sites.is_empty() && !unseen {
                 out.insert(entry, sites);
             }
@@ -548,7 +567,10 @@ pub(super) fn image_loads(section: &object::Section) -> bool {
 
 /// (kuna `calleevote`) The function entries found stored so far.
 struct StoredScan {
-    #[expect(clippy::disallowed_types, reason = "Membership only; the separate BTreeSet orders the results.")]
+    #[expect(
+        clippy::disallowed_types,
+        reason = "Membership only; the separate BTreeSet orders the results."
+    )]
     wanted: std::collections::HashSet<u64>,
     out: BTreeSet<u64>,
 }
@@ -631,19 +653,21 @@ mod tests {
 
     #[test]
     fn established_entries_preserve_distant_callers_in_graph_queries() {
-        use unlace_console::engine::{bootstrap_from_object_with_isa, ArmIsa};
+        use unlace_console::engine::{ArmIsa, bootstrap_from_object_with_isa};
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("split-body.elf");
         let specs = root.join("../../../specs");
         for (endian, target) in [("little", "ARM:LE:32:v8"), ("big", "ARM:BE:32:v8")] {
-            assert!(std::process::Command::new("python3")
-                .arg(root.join("../unlace-analysis/tests/fixtures/arm_xref_bodies.py"))
-                .arg(&path)
-                .arg(endian)
-                .status()
-                .unwrap()
-                .success());
+            assert!(
+                std::process::Command::new("python3")
+                    .arg(root.join("../unlace-analysis/tests/fixtures/arm_xref_bodies.py"))
+                    .arg(&path)
+                    .arg(endian)
+                    .status()
+                    .unwrap()
+                    .success()
+            );
             let mut prog = bootstrap_from_object_with_isa(
                 path.to_str().unwrap(),
                 target,
@@ -690,19 +714,21 @@ mod tests {
 
     #[test]
     fn recovered_frames_preserve_distant_callers_in_graph_queries() {
-        use unlace_console::engine::{bootstrap_from_object_with_isa, ArmIsa};
+        use unlace_console::engine::{ArmIsa, bootstrap_from_object_with_isa};
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("split-body.elf");
         let specs = root.join("../../../specs");
         for (endian, target) in [("little", "ARM:LE:32:v8"), ("big", "ARM:BE:32:v8")] {
-            assert!(std::process::Command::new("python3")
-                .arg(root.join("../unlace-analysis/tests/fixtures/arm_xref_roots.py"))
-                .arg(&path)
-                .args(["arm", endian, "splitbody"])
-                .status()
-                .unwrap()
-                .success());
+            assert!(
+                std::process::Command::new("python3")
+                    .arg(root.join("../unlace-analysis/tests/fixtures/arm_xref_roots.py"))
+                    .arg(&path)
+                    .args(["arm", endian, "splitbody"])
+                    .status()
+                    .unwrap()
+                    .success()
+            );
             let mut prog = bootstrap_from_object_with_isa(
                 path.to_str().unwrap(),
                 target,

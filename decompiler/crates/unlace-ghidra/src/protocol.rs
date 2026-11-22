@@ -140,7 +140,7 @@ fn get_byte<R: Read>(s: &mut R) -> WireResult<u8> {
             Ok(_) => return Ok(buf[0]),
             Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
             Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
-                return Err(WireError::PipeClosed)
+                return Err(WireError::PipeClosed);
             }
             Err(e) => return Err(WireError::Io(e)),
         }

@@ -38,11 +38,16 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// One of the vendored `printf("%d %s\n", argc, argv[0])` fixtures
@@ -61,22 +66,32 @@ fn decompile_main(arch: &str, formatstring_on: bool) -> String {
     let specs = root.join("specs");
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
 
-    let bin = fmt_bin(arch).to_str().expect("UTF-8 fixture path").to_string();
+    let bin = fmt_bin(arch)
+        .to_str()
+        .expect("UTF-8 fixture path")
+        .to_string();
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     // Commit the load-time analysis facts (libproto, PLT import names, etc.) — what
     // `read symbols` does — so the `printf` proto is recovered before the decompile.
     // The untyped varargs are `main`'s body-driven parameters; `elfmain` declares them.
-    prog.arch_mut().set_kuna_option("elfmain", "off").expect("elfmain flips off");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.arch_mut()
+        .set_kuna_option("elfmain", "off")
+        .expect("elfmain flips off");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     if formatstring_on {
         prog.arch_mut()
             .set_kuna_option("formatstring", "on")
             .expect("formatstring option flips on");
     }
 
-    let cmds: Vec<String> =
-        ["load function main".into(), "decompile".into(), "print C".into()].to_vec();
+    let cmds: Vec<String> = [
+        "load function main".into(),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .to_vec();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -95,7 +110,10 @@ fn decompile_main(arch: &str, formatstring_on: bool) -> String {
 /// `char *`).  Run for each of AArch64/ARM/RISC-V.
 fn assert_off_leaves_varargs_untyped(arch: &str) {
     let out = decompile_main(arch, false);
-    assert!(out.contains("printf("), "[{arch}] expected a printf call, got:\n{out}");
+    assert!(
+        out.contains("printf("),
+        "[{arch}] expected a printf call, got:\n{out}"
+    );
     assert!(
         !out.contains("(char *)*a1"),
         "[{arch}] default-off must NOT type the %s arg as char* (feature is off), got:\n{out}"
@@ -107,7 +125,10 @@ fn assert_off_leaves_varargs_untyped(arch: &str) {
 /// for each of AArch64/ARM/RISC-V.
 fn assert_on_types_printf_varargs(arch: &str) {
     let out = decompile_main(arch, true);
-    assert!(out.contains("printf("), "[{arch}] expected a printf call, got:\n{out}");
+    assert!(
+        out.contains("printf("),
+        "[{arch}] expected a printf call, got:\n{out}"
+    );
     // The whole point: the call renders `printf("%d %s\n",a0,(char *)*a1)`.
     assert!(
         out.contains("printf(\"%d %s\\n\",a0,(char *)*a1)"),

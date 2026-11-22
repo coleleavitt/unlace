@@ -102,7 +102,10 @@ pub struct ActionStrlenScan {
 
 impl ActionStrlenScan {
     pub fn new(enabled: bool, g: impl Into<String>) -> Self {
-        Self { base: ActionBase::new(0, "strlenscan", g), enabled }
+        Self {
+            base: ActionBase::new(0, "strlenscan", g),
+            enabled,
+        }
     }
 }
 
@@ -114,9 +117,12 @@ impl Action for ActionStrlenScan {
         &mut self.base
     }
     fn clone_filtered(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Action>> {
-        grouplist
-            .contains(self.get_group())
-            .then(|| Box::new(Self { base: self.base.clone(), enabled: self.enabled }) as Box<dyn Action>)
+        grouplist.contains(self.get_group()).then(|| {
+            Box::new(Self {
+                base: self.base.clone(),
+                enabled: self.enabled,
+            }) as Box<dyn Action>
+        })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !self.enabled && !data.get_arch().strlen_scan {
@@ -128,7 +134,9 @@ impl Action for ActionStrlenScan {
             .collect();
         let mut changed = 0;
         for head in heads {
-            let Some(scan) = match_scan(data, head) else { continue };
+            let Some(scan) = match_scan(data, head) else {
+                continue;
+            };
             if rewrite(data, &scan).is_err() {
                 break;
             }
@@ -203,12 +211,22 @@ pub(crate) fn taken(data: &Funcdata, b: BlockId) -> Option<(BlockId, BlockId)> {
         return None;
     }
     let (t, f) = (fb.get_true_out(), fb.get_false_out());
-    Some(if tail.is_boolean_flip() { (f, t) } else { (t, f) })
+    Some(if tail.is_boolean_flip() {
+        (f, t)
+    } else {
+        (t, f)
+    })
 }
 
 /// The value of `v` with each `(leaf, value)` of `env` substituted, following
 /// only ops defined in `region`; `None` when `v` reads anything else.
-pub(crate) fn eval(data: &Funcdata, v: VarnodeId, env: &[(VarnodeId, u64)], region: &[BlockId], depth: u32) -> Option<u64> {
+pub(crate) fn eval(
+    data: &Funcdata,
+    v: VarnodeId,
+    env: &[(VarnodeId, u64)],
+    region: &[BlockId],
+    depth: u32,
+) -> Option<u64> {
     if let Some(&(_, x)) = env.iter().find(|(leaf, _)| *leaf == v) {
         return Some(x);
     }
@@ -247,11 +265,7 @@ pub(crate) fn eval(data: &Funcdata, v: VarnodeId, env: &[(VarnodeId, u64)], regi
         CPUI_SUBPIECE => {
             let (x, _) = arg(0)?;
             let k = constant(data, o.get_in(1)?)?;
-            if k >= 8 {
-                0
-            } else {
-                x >> (8 * k)
-            }
+            if k >= 8 { 0 } else { x >> (8 * k) }
         }
         code => {
             let ((a, wa), (b, _)) = (arg(0)?, arg(1)?);
@@ -299,15 +313,22 @@ fn steps(data: &Funcdata, inc: &PcodeOp, v: VarnodeId, step: u64, width: i32) ->
     let step = step & mask(width);
     match inc.code() {
         CPUI_INT_ADD => {
-            let (Some(a), Some(b)) = (inc.get_in(0), inc.get_in(1)) else { return false };
-            (a == v && constant(data, b) == Some(step)) || (b == v && constant(data, a) == Some(step))
+            let (Some(a), Some(b)) = (inc.get_in(0), inc.get_in(1)) else {
+                return false;
+            };
+            (a == v && constant(data, b) == Some(step))
+                || (b == v && constant(data, a) == Some(step))
         }
         CPUI_INT_SUB => {
-            let (Some(a), Some(b)) = (inc.get_in(0), inc.get_in(1)) else { return false };
+            let (Some(a), Some(b)) = (inc.get_in(0), inc.get_in(1)) else {
+                return false;
+            };
             a == v && constant(data, b) == Some(step.wrapping_neg() & mask(width))
         }
         CPUI_PTRADD => {
-            let (Some(a), Some(i), Some(e)) = (inc.get_in(0), inc.get_in(1), inc.get_in(2)) else { return false };
+            let (Some(a), Some(i), Some(e)) = (inc.get_in(0), inc.get_in(1), inc.get_in(2)) else {
+                return false;
+            };
             a == v && constant(data, e) == Some(1) && constant(data, i) == Some(step)
         }
         _ => false,
@@ -332,13 +353,26 @@ fn match_scan(data: &Funcdata, head: BlockId) -> Option<Scan> {
     let back = hb.get_in_index(body);
     let (head_ops, body_ops) = (data.bb_ops(head), data.bb_ops(body));
     let at = op(data, *head_ops.first()?)?.get_addr().clone();
-    if !head_ops.iter().chain(body_ops.iter()).all(|&o| op(data, o).is_some_and(|p| *p.get_addr() == at)) {
+    if !head_ops
+        .iter()
+        .chain(body_ops.iter())
+        .all(|&o| op(data, o).is_some_and(|p| *p.get_addr() == at))
+    {
         return None;
     }
-    if data.bb_ops(exit).first().and_then(|&o| op(data, o)).is_none_or(|p| *p.get_addr() == at) {
+    if data
+        .bb_ops(exit)
+        .first()
+        .and_then(|&o| op(data, o))
+        .is_none_or(|p| *p.get_addr() == at)
+    {
         return None;
     }
-    let phis: Vec<OpId> = head_ops.iter().copied().filter(|&o| op(data, o).is_some_and(|p| p.code() == CPUI_MULTIEQUAL)).collect();
+    let phis: Vec<OpId> = head_ops
+        .iter()
+        .copied()
+        .filter(|&o| op(data, o).is_some_and(|p| p.code() == CPUI_MULTIEQUAL))
+        .collect();
     if phis.len() != 2 {
         return None;
     }
@@ -349,7 +383,9 @@ fn match_scan(data: &Funcdata, head: BlockId) -> Option<Scan> {
     };
     let (a, b) = (phi_val(phis[0])?, phi_val(phis[1])?);
     let width_of = |t: &(VarnodeId, VarnodeId, VarnodeId)| size(data, t.0).unwrap_or(0);
-    let is_ones = |t: &(VarnodeId, VarnodeId, VarnodeId)| copied_constant(data, t.1) == Some(mask(width_of(t)));
+    let is_ones = |t: &(VarnodeId, VarnodeId, VarnodeId)| {
+        copied_constant(data, t.1) == Some(mask(width_of(t)))
+    };
     let ((count, _, count_next), (ptr, start, ptr_next)) = match (is_ones(&a), is_ones(&b)) {
         (true, false) => (a, b),
         (false, true) => (b, a),
@@ -371,7 +407,19 @@ fn match_scan(data: &Funcdata, head: BlockId) -> Option<Scan> {
         }
     }
     let ones = mask(width);
-    for x in [0, 1, 2, 0x7f, 0x80, 0xff, 0x100, ones, ones - 1, ones >> 1, (ones >> 1) + 1] {
+    for x in [
+        0,
+        1,
+        2,
+        0x7f,
+        0x80,
+        0xff,
+        0x100,
+        ones,
+        ones - 1,
+        ones >> 1,
+        (ones >> 1) + 1,
+    ] {
         let c = eval(data, head_cond, &[(count, x)], &[head], 0)?;
         let to = if c != 0 { h_true } else { h_false };
         if (to == exit) != (x == 0) {
@@ -447,7 +495,9 @@ fn match_scan(data: &Funcdata, head: BlockId) -> Option<Scan> {
         .filter(|&o| op(data, o).is_some_and(|p| p.code() == CPUI_MULTIEQUAL))
         .collect();
     for &o in head_ops.iter().chain(body_ops.iter()) {
-        let Some(out) = op(data, o)?.get_out() else { continue };
+        let Some(out) = op(data, o)?.get_out() else {
+            continue;
+        };
         for u in data.vbank().get(out)?.descend_iter() {
             let up = op(data, u)?;
             let blk = up.get_parent()?;
@@ -459,7 +509,12 @@ fn match_scan(data: &Funcdata, head: BlockId) -> Option<Scan> {
             }
             if out == count || out == count_next {
                 let merged = up.get_out()?;
-                if data.vbank().get(merged)?.descend_iter().any(|r| op(data, r).is_none_or(|q| q.code() != CPUI_INT_NEGATE)) {
+                if data
+                    .vbank()
+                    .get(merged)?
+                    .descend_iter()
+                    .any(|r| op(data, r).is_none_or(|q| q.code() != CPUI_INT_NEGATE))
+                {
                     return None;
                 }
                 for k in 0..up.num_input() {
@@ -471,13 +526,27 @@ fn match_scan(data: &Funcdata, head: BlockId) -> Option<Scan> {
             }
         }
     }
-    Some(Scan { head, body, exit, width, start, count_dec, ptr_inc, load })
+    Some(Scan {
+        head,
+        body,
+        exit,
+        width,
+        start,
+        count_dec,
+        ptr_inc,
+        load,
+    })
 }
 
 fn rewrite(data: &mut Funcdata, s: &Scan) -> unlace_base::error::KunaResult<()> {
     use unlace_base::error::KunaError;
-    let at = op(data, s.count_dec).map(|p| p.get_addr().clone()).ok_or_else(|| KunaError::lowlevel("strlenscan: stale op"))?;
-    let first = *data.bb_ops(s.body).first().ok_or_else(|| KunaError::lowlevel("strlenscan: empty body"))?;
+    let at = op(data, s.count_dec)
+        .map(|p| p.get_addr().clone())
+        .ok_or_else(|| KunaError::lowlevel("strlenscan: stale op"))?;
+    let first = *data
+        .bb_ops(s.body)
+        .first()
+        .ok_or_else(|| KunaError::lowlevel("strlenscan: empty body"))?;
     let to_exit = data.bblocks_ref().block(s.head).get_out_index(s.exit);
     let to_head = data.bblocks_ref().block(s.body).get_out_index(s.head);
     if to_exit < 0 || to_head < 0 {
@@ -490,7 +559,10 @@ fn rewrite(data: &mut Funcdata, s: &Scan) -> unlace_base::error::KunaResult<()> 
     data.op_set_input(call, id, 0)?;
     data.op_set_input(call, s.start, 1)?;
     let len = data.new_unique_out(s.width, call)?;
-    let uint = data.get_arch().types().and_then(|t| t.get_base(s.width, crate::dtype::type_metatype::TYPE_UINT).ok());
+    let uint = data.get_arch().types().and_then(|t| {
+        t.get_base(s.width, crate::dtype::type_metatype::TYPE_UINT)
+            .ok()
+    });
     if let (Some(t), Some(n)) = (uint, data.vbank_mut().get_mut(len)) {
         n.update_type(t);
     }

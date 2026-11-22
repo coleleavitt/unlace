@@ -18,9 +18,9 @@
 //! - a 45-op randomized differential run with a verifier-chosen LCG
 //!   (different constants AND seed from the porter's digest test).
 
+use std::fmt::Write as _;
 use unlace_base::partmap::PartMap;
 use unlace_base::rangemap::{RangeMap, RangeRecord, RecordIdx};
-use std::fmt::Write as _;
 
 /// Mirrors the C++ harness record: u64 line domain, u64 subsort
 /// (`subsorttype(false)` == 0, `subsorttype(true)` == u64::MAX), tag id.
@@ -38,7 +38,12 @@ impl RangeRecord for TestRecord {
     type InitType = (u32, u64); // (tag, subsort)
 
     fn create(data: (u32, u64), a: u64, b: u64) -> Self {
-        TestRecord { a, b, ss: data.1, tag: data.0 }
+        TestRecord {
+            a,
+            b,
+            ss: data.1,
+            tag: data.0,
+        }
     }
     fn get_first(&self) -> u64 {
         self.a
@@ -285,7 +290,10 @@ fn verify_defensive_ub_divergence_paths() {
     // NOT inverted despite sub1 > sub2: lower_bound((7,20)) lands on the
     // ss10 cell, and upper_bound((10,10)) is past it — C++ defined behavior,
     // visits tag 1.  (Verified against the C++ harness directly.)
-    let tags: Vec<u32> = rm.find_subsorts(7, 20, 10).map(|i| rm.record(i).tag).collect();
+    let tags: Vec<u32> = rm
+        .find_subsorts(7, 20, 10)
+        .map(|i| rm.record(i).tag)
+        .collect();
     assert_eq!(tags, vec![1]);
     // Genuinely inverted iterator pair: only ss-20 cells exist, so iter1 has
     // subsort 20 > sub2 == 10 and the C++ (iter1, iter2) pair is reversed —

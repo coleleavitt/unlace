@@ -21,13 +21,13 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use unlace_base::address::{calc_mask, Address};
+use unlace_base::address::{Address, calc_mask};
 use unlace_base::space::spacetype;
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_class, type_metatype, Datatype};
+use crate::dtype::{Datatype, type_class, type_metatype};
 use crate::fspec::FuncCallSpecs;
 use crate::funcdata::Funcdata;
 use crate::infra::architecture::Architecture;
@@ -98,14 +98,18 @@ pub(crate) fn note_trim(data: &mut Funcdata, op: OpId, before: VarnodeId, mask: 
     if !data.get_arch().narrow_ret {
         return;
     }
-    let Some(o) = data.obank().get(op) else { return };
+    let Some(o) = data.obank().get(op) else {
+        return;
+    };
     if o.code() != OpCode::CPUI_RETURN {
         return;
     }
     let marked = o.get_addlflags() & kuna_narrowret != 0;
     let zero = crate::kuna_truncarg::drops_only_zero_bits(data, before, mask);
     let whole = data.vbank().get(before).map(|v| v.get_size()) == return_register_width(data);
-    let Some(o) = data.obank_mut().get_mut(op) else { return };
+    let Some(o) = data.obank_mut().get_mut(op) else {
+        return;
+    };
     if zero && (whole || marked) {
         o.set_additional_flag(kuna_narrowret);
     } else {
@@ -118,7 +122,11 @@ pub(crate) fn note_trim(data: &mut Funcdata, op: OpId, before: VarnodeId, mask: 
 /// exactly that storage.
 fn narrow_return(data: &Funcdata) -> Option<NarrowReturn> {
     let proto = data.get_func_proto();
-    if !proto.has_store() || !proto.has_model() || proto.is_model_unknown() || proto.is_output_locked() {
+    if !proto.has_store()
+        || !proto.has_model()
+        || proto.is_model_unknown()
+        || proto.is_output_locked()
+    {
         return None;
     }
     let out = proto.get_output();
@@ -170,11 +178,14 @@ fn narrow_return(data: &Funcdata) -> Option<NarrowReturn> {
     if truth && return_register_width(data)? > 4 {
         return None;
     }
-    let ct = out.get_type().filter(|t| t.get_size() == size).filter(|t| match t.get_metatype() {
-        type_metatype::TYPE_UINT => !truth,
-        type_metatype::TYPE_BOOL => truth,
-        _ => false,
-    })?;
+    let ct = out
+        .get_type()
+        .filter(|t| t.get_size() == size)
+        .filter(|t| match t.get_metatype() {
+            type_metatype::TYPE_UINT => !truth,
+            type_metatype::TYPE_BOOL => truth,
+            _ => false,
+        })?;
     Some(NarrowReturn {
         addr,
         size,
@@ -212,7 +223,9 @@ fn tail_statement(data: &Funcdata, vn: VarnodeId) -> Option<NarrowReturn> {
         }
         _ => return None,
     };
-    data.obank().get(call).filter(|c| c.code() == OpCode::CPUI_CALL)?;
+    data.obank()
+        .get(call)
+        .filter(|c| c.code() == OpCode::CPUI_CALL)?;
     let fc = data.get_call_specs(data.get_call_specs_index(call)?);
     let stated = data.kuna_narrowret(key(fc.get_entry_address())?)?;
     (stated.size == v.get_size() && stated.addr == *v.get_addr()).then(|| stated.clone())
@@ -226,7 +239,11 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
         return;
     }
     let Some(k) = key(entry) else { return };
-    let stated = if arch.symboltab.function_proto_pieces_across_scopes(entry).is_some() {
+    let stated = if arch
+        .symboltab
+        .function_proto_pieces_across_scopes(entry)
+        .is_some()
+    {
         None
     } else {
         narrow_return(data)
@@ -265,7 +282,9 @@ pub fn same_statement(a: Option<&NarrowReturn>, b: Option<&NarrowReturn>) -> boo
                 && a.size == b.size
                 && match (&a.ct, &b.ct) {
                     (None, None) => true,
-                    (Some(x), Some(y)) => Rc::ptr_eq(x, y) || x.compare(y, 10).is_ok_and(|c| c == 0),
+                    (Some(x), Some(y)) => {
+                        Rc::ptr_eq(x, y) || x.compare(y, 10).is_ok_and(|c| c == 0)
+                    }
                     _ => false,
                 }
         }
@@ -312,12 +331,16 @@ pub fn seed(arch: &Architecture, data: &mut Funcdata) {
 /// storage as its low part: the low-addressed bytes on a little-endian space,
 /// the high-addressed ones on a big-endian one.
 fn holds_low_part(data: &Funcdata, out: VarnodeId, stated: &NarrowReturn) -> bool {
-    let Some(v) = data.vbank().get(out) else { return false };
+    let Some(v) = data.vbank().get(out) else {
+        return false;
+    };
     let (addr, size) = (v.get_addr(), v.get_size());
     if size < stated.size || v.is_type_lock() || v.is_addr_tied() || v.is_persist() {
         return false;
     }
-    let Some(space) = addr.get_space() else { return false };
+    let Some(space) = addr.get_space() else {
+        return false;
+    };
     if space.get_type() != spacetype::IPTR_PROCESSOR {
         return false;
     }
@@ -337,11 +360,17 @@ fn holds_low_part(data: &Funcdata, out: VarnodeId, stated: &NarrowReturn) -> boo
 /// specifications are out of `data`); one already that narrow is left as it
 /// is.  A stated truth value marks the CALL a calculated boolean, as a callee
 /// declared `bool` does.
-pub fn narrow_call_output(data: &mut Funcdata, fc: &FuncCallSpecs, callees: &[(OpId, (int4, uintb))]) {
+pub fn narrow_call_output(
+    data: &mut Funcdata,
+    fc: &FuncCallSpecs,
+    callees: &[(OpId, (int4, uintb))],
+) {
     if !data.get_arch().narrow_ret {
         return;
     }
-    let Some(k) = key(fc.get_entry_address()) else { return };
+    let Some(k) = key(fc.get_entry_address()) else {
+        return;
+    };
     let Some(stated) = data.kuna_narrowret(k).cloned() else {
         return;
     };
@@ -368,7 +397,10 @@ pub fn narrow_call_output(data: &mut Funcdata, fc: &FuncCallSpecs, callees: &[(O
         };
         let before = ReadBefore {
             used: crate::kuna_voidret::used_storage(data, out),
-            read: data.vbank().get(out).and_then(crate::kuna_voidret::read_storage),
+            read: data
+                .vbank()
+                .get(out)
+                .and_then(crate::kuna_voidret::read_storage),
         };
         data.kuna_note_narrowret_read(op, before);
         data.op_unset_output(op);
@@ -399,7 +431,10 @@ pub fn narrow_call_output(data: &mut Funcdata, fc: &FuncCallSpecs, callees: &[(O
             eprintln!(
                 "[narrowret] 0x{:x} call at 0x{:x} reads {} of {size} bytes",
                 data.get_address().get_offset(),
-                data.obank().get(op).map(|o| o.get_addr().get_offset()).unwrap_or(0),
+                data.obank()
+                    .get(op)
+                    .map(|o| o.get_addr().get_offset())
+                    .unwrap_or(0),
                 stated.size
             );
         }
@@ -417,7 +452,12 @@ pub fn narrow_call_output(data: &mut Funcdata, fc: &FuncCallSpecs, callees: &[(O
 /// compares the byte with `0x80` otherwise types it from the comparison alone,
 /// while C reads the call at the declared type.  A wider narrow value is
 /// `callrettype`'s to type.
-pub fn stated_type(data: &Funcdata, op: OpId, fc: &FuncCallSpecs, size: int4) -> Option<Rc<Datatype>> {
+pub fn stated_type(
+    data: &Funcdata,
+    op: OpId,
+    fc: &FuncCallSpecs,
+    size: int4,
+) -> Option<Rc<Datatype>> {
     if !data.get_arch().narrow_ret || size != 1 {
         return None;
     }
@@ -431,7 +471,9 @@ pub fn stated_type(data: &Funcdata, op: OpId, fc: &FuncCallSpecs, size: int4) ->
     if stated.size != size || !holds_low_part(data, out, stated) {
         return None;
     }
-    sole_value(data, out, stated, &|c| callee_key(data, c)).then(|| stated.ct.clone()).flatten()
+    sole_value(data, out, stated, &|c| callee_key(data, c))
+        .then(|| stated.ct.clone())
+        .flatten()
 }
 
 /// Does the CALL `op` read a callee that states it returns a truth value, in
@@ -441,7 +483,12 @@ pub(crate) fn states_truth(data: &Funcdata, op: OpId) -> bool {
     if !data.get_arch().narrow_ret {
         return false;
     }
-    let Some(out) = data.obank().get(op).and_then(|o| o.get_out()).and_then(|v| data.vbank().get(v)) else {
+    let Some(out) = data
+        .obank()
+        .get(op)
+        .and_then(|o| o.get_out())
+        .and_then(|v| data.vbank().get(v))
+    else {
         return false;
     };
     callee_key(data, op)
@@ -451,12 +498,16 @@ pub(crate) fn states_truth(data: &Funcdata, op: OpId) -> bool {
 
 /// Each call's op and the entry of its callee, for [`narrow_call_output`].
 pub fn callee_keys(qlst: &[FuncCallSpecs]) -> Vec<(OpId, (int4, uintb))> {
-    qlst.iter().filter_map(|fc| Some((fc.get_op(), key(fc.get_entry_address())?))).collect()
+    qlst.iter()
+        .filter_map(|fc| Some((fc.get_op(), key(fc.get_entry_address())?)))
+        .collect()
 }
 
 /// The entry of the callee of the CALL `op`, from its call specification.
 fn callee_key(data: &Funcdata, op: OpId) -> Option<(int4, uintb)> {
-    key(data.get_call_specs(data.get_call_specs_index(op)?).get_entry_address())
+    key(data
+        .get_call_specs(data.get_call_specs_index(op)?)
+        .get_entry_address())
 }
 
 /// Does the variable the call output `out` starts take no value but the
@@ -486,27 +537,43 @@ fn sole_value(
             return false;
         }
         seen.push(v);
-        let Some(n) = data.vbank().get(v) else { return false };
+        let Some(n) = data.vbank().get(v) else {
+            return false;
+        };
         if n.is_constant() {
-            if n.get_offset() > if stated.truth() { 1 } else { calc_mask(stated.size) } {
+            if n.get_offset()
+                > if stated.truth() {
+                    1
+                } else {
+                    calc_mask(stated.size)
+                }
+            {
                 return false;
             }
             continue;
         }
         let Some(def) = n.get_def() else { return false };
-        let Some(d) = data.obank().get(def) else { return false };
+        let Some(d) = data.obank().get(def) else {
+            return false;
+        };
         match d.code() {
             OpCode::CPUI_CALL if same_callee(def) => {}
-            OpCode::CPUI_COPY | OpCode::CPUI_MULTIEQUAL => work.extend((0..d.num_input()).filter_map(|i| d.get_in(i))),
+            OpCode::CPUI_COPY | OpCode::CPUI_MULTIEQUAL => {
+                work.extend((0..d.num_input()).filter_map(|i| d.get_in(i)))
+            }
             OpCode::CPUI_INDIRECT if d.is_indirect_creation() => {
-                let Some(iop) = d.get_in(1).and_then(|i| data.vbank().get(i)) else { return false };
+                let Some(iop) = d.get_in(1).and_then(|i| data.vbank().get(i)) else {
+                    return false;
+                };
                 let call = OpId::from(slotmap::KeyData::from_ffi(iop.get_offset()));
                 if !same_callee(call) {
                     return false;
                 }
             }
             OpCode::CPUI_INDIRECT => work.extend(d.get_in(0)),
-            OpCode::CPUI_INT_ZEXT if d.get_addlflags() & kuna_narrowret != 0 => work.extend(d.get_in(0)),
+            OpCode::CPUI_INT_ZEXT if d.get_addlflags() & kuna_narrowret != 0 => {
+                work.extend(d.get_in(0))
+            }
             other => {
                 if trace() {
                     eprintln!(
@@ -519,10 +586,16 @@ fn sole_value(
             }
         }
         for op in n.descend_iter() {
-            let Some(o) = data.obank().get(op) else { continue };
+            let Some(o) = data.obank().get(op) else {
+                continue;
+            };
             match o.code() {
-                OpCode::CPUI_COPY | OpCode::CPUI_MULTIEQUAL | OpCode::CPUI_INDIRECT => work.extend(o.get_out()),
-                OpCode::CPUI_INT_ZEXT if o.get_addlflags() & kuna_narrowret != 0 => work.extend(o.get_out()),
+                OpCode::CPUI_COPY | OpCode::CPUI_MULTIEQUAL | OpCode::CPUI_INDIRECT => {
+                    work.extend(o.get_out())
+                }
+                OpCode::CPUI_INT_ZEXT if o.get_addlflags() & kuna_narrowret != 0 => {
+                    work.extend(o.get_out())
+                }
                 OpCode::CPUI_RETURN => returned = true,
                 _ => {}
             }
@@ -532,7 +605,9 @@ fn sole_value(
         return true;
     }
     data.obank().iter_code(OpCode::CPUI_RETURN).all(|r| {
-        let Some(o) = data.obank().get(r) else { return true };
+        let Some(o) = data.obank().get(r) else {
+            return true;
+        };
         if o.is_dead() || o.get_halt_type() != 0 || o.num_input() < 2 {
             return true;
         }
@@ -546,11 +621,20 @@ fn sole_value(
 /// and a wrapper that returns the narrowed result on one path and another value
 /// on the next (`jmp h3` beside `call h4; movzbl %al,%eax; ret`) would trim
 /// its own return to the byte and declare it at the wrong sign.
-fn sole_tail(data: &Funcdata, op: OpId, stated: &NarrowReturn, callee: &dyn Fn(OpId) -> Option<(int4, uintb)>) -> bool {
+fn sole_tail(
+    data: &Funcdata,
+    op: OpId,
+    stated: &NarrowReturn,
+    callee: &dyn Fn(OpId) -> Option<(int4, uintb)>,
+) -> bool {
     let producers: Vec<Option<OpId>> = data
         .obank()
         .iter_code(OpCode::CPUI_RETURN)
-        .filter(|&r| data.obank().get(r).is_some_and(|o| !o.is_dead() && o.get_halt_type() == 0))
+        .filter(|&r| {
+            data.obank()
+                .get(r)
+                .is_some_and(|o| !o.is_dead() && o.get_halt_type() == 0)
+        })
         .map(|r| crate::p4_calls::kuna_passthrough::producing_call(data, r))
         .collect();
     if !producers.contains(&Some(op)) {
@@ -573,10 +657,14 @@ fn sole_tail(data: &Funcdata, op: OpId, stated: &NarrowReturn, callee: &dyn Fn(O
 pub fn widened_read(data: &Funcdata, out: VarnodeId) -> VarnodeId {
     let mut cur = out;
     for _ in 0..3 {
-        let Some(v) = data.vbank().get(cur) else { break };
+        let Some(v) = data.vbank().get(cur) else {
+            break;
+        };
         let mut next = None;
         for op in v.descend_iter() {
-            let Some(o) = data.obank().get(op) else { continue };
+            let Some(o) = data.obank().get(op) else {
+                continue;
+            };
             match o.code() {
                 OpCode::CPUI_INT_ZEXT if o.get_addlflags() & kuna_narrowret != 0 => {
                     if let Some(wide) = o.get_out() {

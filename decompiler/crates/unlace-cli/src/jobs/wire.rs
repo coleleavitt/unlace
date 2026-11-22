@@ -256,7 +256,8 @@ impl ResultWriter {
         let file = std::fs::File::create(path)
             .map_err(|e| format!("cannot create worker result file {path}: {e}"))?;
         let mut out = BufWriter::new(file);
-        out.write_all(RESULT_MAGIC).map_err(|e| format!("worker result write failed: {e}"))?;
+        out.write_all(RESULT_MAGIC)
+            .map_err(|e| format!("worker result write failed: {e}"))?;
         Ok(Self { out })
     }
 
@@ -274,8 +275,12 @@ impl ResultWriter {
         frame.push(kind);
         put_u32(&mut frame, body.len() as u32);
         frame.extend_from_slice(body);
-        self.out.write_all(&frame).map_err(|e| format!("worker result write failed: {e}"))?;
-        self.out.flush().map_err(|e| format!("worker result flush failed: {e}"))
+        self.out
+            .write_all(&frame)
+            .map_err(|e| format!("worker result write failed: {e}"))?;
+        self.out
+            .flush()
+            .map_err(|e| format!("worker result flush failed: {e}"))
     }
 }
 
@@ -391,14 +396,18 @@ pub(crate) fn encode_result(r: &FuncResult) -> Vec<u8> {
     put_pointerargs(&mut body, r.pointerargs.as_ref());
     put_warnings(&mut body, &r.warnings);
     put_u32(&mut body, r.call_declarations.len() as u32);
-    for declaration in &r.call_declarations { put_str(&mut body, declaration); }
+    for declaration in &r.call_declarations {
+        put_str(&mut body, declaration);
+    }
     put_u32(&mut body, r.callwide_prototypes.len() as u32);
     for contract in &r.callwide_prototypes {
         put_str(&mut body, &contract.name);
         put_u64(&mut body, contract.entry);
         body.push(u8::from(contract.signed));
         put_u32(&mut body, contract.inputs.len() as u32);
-        for signed in &contract.inputs { body.push(u8::from(*signed)); }
+        for signed in &contract.inputs {
+            body.push(u8::from(*signed));
+        }
         body.push(u8::from(contract.definition));
     }
     body
@@ -418,10 +427,15 @@ pub(super) fn decode_results(bytes: &[u8]) -> Option<Frames> {
     if r.take(RESULT_MAGIC.len())? != RESULT_MAGIC {
         return None;
     }
-    let mut out = Frames { results: Vec::new(), running: None };
+    let mut out = Frames {
+        results: Vec::new(),
+        running: None,
+    };
     while let Some(kind) = r.u8() {
         let Some(len) = r.u32() else { break };
-        let Some(body) = r.take(len as usize) else { break };
+        let Some(body) = r.take(len as usize) else {
+            break;
+        };
         match kind {
             FRAME_RESULT => match decode_result(body) {
                 Some(rec) => out.results.push(rec),
@@ -440,7 +454,10 @@ pub(super) fn decode_results(bytes: &[u8]) -> Option<Frames> {
 /// Read one record body written by [`encode_result`]; `None` when it is not a
 /// complete one.
 pub(crate) fn decode_result(body: &[u8]) -> Option<FuncResult> {
-    let mut r = Reader { bytes: body, pos: 0 };
+    let mut r = Reader {
+        bytes: body,
+        pos: 0,
+    };
     let address = r.u64()?;
     let byte_address = r.u64()?;
     let size = r.i64()?;
@@ -505,7 +522,11 @@ pub(crate) fn decode_result(body: &[u8]) -> Option<FuncResult> {
         let tname = r.string()?;
         let definition = r.string()?;
         let tsize = r.i64()?;
-        types.push(TypeInfo { name: tname, definition, size: tsize });
+        types.push(TypeInfo {
+            name: tname,
+            definition,
+            size: tsize,
+        });
     }
     let no = r.u32()? as usize;
     let mut stack_objects = r.sized(no);
@@ -529,7 +550,12 @@ pub(crate) fn decode_result(body: &[u8]) -> Option<FuncResult> {
             });
         }
         stack_objects.push(unlace_decomp::kuna_stackobjectinfo::StackObjectInfo {
-            id, name, stack_offset, size, defined, uses,
+            id,
+            name,
+            stack_offset,
+            size,
+            defined,
+            uses,
         });
     }
     let ng = r.u32()? as usize;
@@ -562,7 +588,11 @@ pub(crate) fn decode_result(body: &[u8]) -> Option<FuncResult> {
             1 => Some(r.string()?),
             _ => return None,
         };
-        field_calls.push(unlace_decomp::kuna_calltargettype::FieldDecl { record, field, declaration });
+        field_calls.push(unlace_decomp::kuna_calltargettype::FieldDecl {
+            record,
+            field,
+            declaration,
+        });
     }
     let callee_hints = r.u64s()?;
     let synth = match r.u8()? {
@@ -578,26 +608,50 @@ pub(crate) fn decode_result(body: &[u8]) -> Option<FuncResult> {
     let warnings = read_warnings(&mut r)?;
     let count = r.u32()? as usize;
     let mut call_declarations = r.sized(count);
-    for _ in 0..count { call_declarations.push(r.string()?); }
+    for _ in 0..count {
+        call_declarations.push(r.string()?);
+    }
     let count = r.u32()? as usize;
-    if count > 16_384 { return None; }
+    if count > 16_384 {
+        return None;
+    }
     let mut callwide_prototypes = r.sized(count);
     for _ in 0..count {
         let name = r.string()?;
         let entry = r.u64()?;
-        let signed = match r.u8()? { 0 => false, 1 => true, _ => return None };
+        let signed = match r.u8()? {
+            0 => false,
+            1 => true,
+            _ => return None,
+        };
         let inputs = r.u32()? as usize;
-        if inputs > 32 { return None; }
+        if inputs > 32 {
+            return None;
+        }
         let mut words = r.sized(inputs);
         for _ in 0..inputs {
-            words.push(match r.u8()? { 0 => false, 1 => true, _ => return None });
+            words.push(match r.u8()? {
+                0 => false,
+                1 => true,
+                _ => return None,
+            });
         }
-        let definition = match r.u8()? { 0 => false, 1 => true, _ => return None };
+        let definition = match r.u8()? {
+            0 => false,
+            1 => true,
+            _ => return None,
+        };
         callwide_prototypes.push(unlace_decomp::kuna_callwide::ExportPrototype {
-            name, entry, signed, inputs: words, definition,
+            name,
+            entry,
+            signed,
+            inputs: words,
+            definition,
         });
     }
-    if r.pos != body.len() { return None; }
+    if r.pos != body.len() {
+        return None;
+    }
     Some(FuncResult {
         name,
         address,
@@ -636,7 +690,10 @@ fn put_storage(out: &mut Vec<u8>, storage: &unlace_decomp::kuna_pointerargs::Sto
 }
 
 fn put_pointerargs(out: &mut Vec<u8>, record: Option<&unlace_decomp::kuna_pointerargs::Record>) {
-    let Some(record) = record else { out.push(0); return };
+    let Some(record) = record else {
+        out.push(0);
+        return;
+    };
     out.push(1);
     put_entry(out, &record.entry);
     put_u32(out, record.parameters.len() as u32);
@@ -681,10 +738,18 @@ fn read_warnings(r: &mut Reader<'_>) -> Option<Vec<unlace_decomp::kuna_functionw
     let n = r.u32()? as usize;
     let mut warnings = r.sized(n);
     for _ in 0..n {
-        let address = match r.u8()? { 0 => None, 1 => Some(r.u64()?), _ => return None };
+        let address = match r.u8()? {
+            0 => None,
+            1 => Some(r.u64()?),
+            _ => return None,
+        };
         let text = r.string()?;
         let line = r.u64()?.try_into().ok()?;
-        warnings.push(unlace_decomp::kuna_functionwarnings::Warning { address, text, line });
+        warnings.push(unlace_decomp::kuna_functionwarnings::Warning {
+            address,
+            text,
+            line,
+        });
     }
     Some(warnings)
 }
@@ -699,14 +764,21 @@ fn read_storage(r: &mut Reader<'_>) -> Option<unlace_decomp::kuna_pointerargs::S
 
 fn read_pointerargs(r: &mut Reader<'_>) -> Option<Option<unlace_decomp::kuna_pointerargs::Record>> {
     use unlace_decomp::kuna_pointerargs::{Call, Parameter, Position, Record};
-    match r.u8()? { 0 => return Some(None), 1 => {}, _ => return None }
+    match r.u8()? {
+        0 => return Some(None),
+        1 => {}
+        _ => return None,
+    }
     let entry = read_entry(r)?;
     let n = r.u32()? as usize;
     let mut parameters = r.sized(n);
     for _ in 0..n {
         parameters.push(match r.u8()? {
             0 => None,
-            1 => Some(Parameter { storage: read_storage(r)?, spelling: r.string()? }),
+            1 => Some(Parameter {
+                storage: read_storage(r)?,
+                spelling: r.string()?,
+            }),
             _ => return None,
         });
     }
@@ -714,11 +786,20 @@ fn read_pointerargs(r: &mut Reader<'_>) -> Option<Option<unlace_decomp::kuna_poi
     let mut calls = r.sized(n);
     for _ in 0..n {
         calls.push(Call {
-            callee: read_entry(r)?, index: r.u64()?.try_into().ok()?,
-            storage: read_storage(r)?, actual: r.string()?,
-            position: Position { line: r.u64()?.try_into().ok()?, column: r.u64()?.try_into().ok()? },
+            callee: read_entry(r)?,
+            index: r.u64()?.try_into().ok()?,
+            storage: read_storage(r)?,
+            actual: r.string()?,
+            position: Position {
+                line: r.u64()?.try_into().ok()?,
+                column: r.u64()?.try_into().ok()?,
+            },
             expression: r.string()?,
         });
     }
-    Some(Some(Record { entry, parameters, calls }))
+    Some(Some(Record {
+        entry,
+        parameters,
+        calls,
+    }))
 }

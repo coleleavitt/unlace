@@ -27,11 +27,16 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// The stripped shadow `faillog` (23 KB): small enough to decompile whole in a
@@ -55,7 +60,8 @@ fn decompile_as(bin: &PathBuf, func: &str, lang: &str) -> String {
     let path = bin.to_str().expect("UTF-8 fixture path").to_string();
     let mut prog = bootstrap_from_object(&path, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
     let cmds: Vec<String> = vec![
         format!("option setlanguage {lang}"),
@@ -97,7 +103,12 @@ fn strip_console_chatter(out: &str) -> String {
         return out.to_string();
     }
     match out.rfind("Decompilation complete") {
-        Some(i) => out[i..].splitn(2, '\n').nth(1).unwrap_or("").trim_start_matches('\n').to_string(),
+        Some(i) => out[i..]
+            .splitn(2, '\n')
+            .nth(1)
+            .unwrap_or("")
+            .trim_start_matches('\n')
+            .to_string(),
         None => out.to_string(),
     }
 }
@@ -106,7 +117,9 @@ fn strip_console_chatter(out: &str) -> String {
 fn assert_parses_as_rust(code: &str, what: &str) {
     match syn::parse_file(code) {
         Ok(_) => {}
-        Err(e) => panic!("{what}: emitted document is not valid Rust: {e}\n--- document ---\n{code}"),
+        Err(e) => {
+            panic!("{what}: emitted document is not valid Rust: {e}\n--- document ---\n{code}")
+        }
     }
 }
 
@@ -133,9 +146,18 @@ fn rust_match_output_parses() {
     for func in ["sub_eda0", "sub_f9c0", "sub_15020", "sub_1f450"] {
         let code = decompile_as(&grep(), func, "rust-language");
         assert_parses_as_rust(&code, &format!("grep/{func}"));
-        assert!(code.contains("match "), "expected a match in {func}:\n{code}");
-        assert!(code.contains("_ => "), "a match on an integer needs a wildcard arm in {func}");
-        assert!(!code.contains("case "), "`case` has no match form; got:\n{code}");
+        assert!(
+            code.contains("match "),
+            "expected a match in {func}:\n{code}"
+        );
+        assert!(
+            code.contains("_ => "),
+            "a match on an integer needs a wildcard arm in {func}"
+        );
+        assert!(
+            !code.contains("case "),
+            "`case` has no match form; got:\n{code}"
+        );
     }
 }
 
@@ -146,7 +168,10 @@ fn rust_match_output_parses() {
 fn multi_label_arms_use_pattern_alternation() {
     let code = decompile_as(&grep(), "sub_f9c0", "rust-language");
     let re = regex::Regex::new(r"(?m)^\s*0x[0-9a-f]+( \| 0x[0-9a-f]+)+ => \{").unwrap();
-    assert!(re.is_match(&code), "expected an `A | B => {{` arm; got:\n{code}");
+    assert!(
+        re.is_match(&code),
+        "expected an `A | B => {{` arm; got:\n{code}"
+    );
 }
 
 /// The four C-isms the reference implementation leaks into its Rust output.
@@ -167,7 +192,10 @@ fn rust_output_carries_no_c_isms() {
         .join("\n")
         .replace(") -> ", ") RETURNS ");
     for (pattern, why) in [
-        (r"->", "Rust raw pointers have no auto-deref; expected `(*p).f`"),
+        (
+            r"->",
+            "Rust raw pointers have no auto-deref; expected `(*p).f`",
+        ),
         (r"~", "Rust spells bitwise complement `!`"),
         (r"(?m)^\s*goto\s+\w+\s*;", "Rust has no goto"),
         (r"\}\s*while", "Rust has no do/while"),
@@ -175,7 +203,10 @@ fn rust_output_carries_no_c_isms() {
         (r"\b\d+[UL]+\b", "Rust has no C integer suffixes"),
     ] {
         let re = regex::Regex::new(pattern).unwrap();
-        assert!(!re.is_match(&body), "rust output matches `{pattern}`: {why}\n{code}");
+        assert!(
+            !re.is_match(&body),
+            "rust output matches `{pattern}`: {why}\n{code}"
+        );
     }
 }
 
@@ -184,9 +215,18 @@ fn rust_output_carries_no_c_isms() {
 #[test]
 fn c_output_is_unchanged_by_the_language_seam() {
     let code = decompile_as(&faillog(), "sub_3050", "c-language");
-    assert!(code.contains("void sub_3050("), "expected the C prototype form; got:\n{code}");
-    assert!(!code.contains("unsafe fn"), "C output must not carry the Rust shell:\n{code}");
-    assert!(!code.contains("let mut"), "C output must not carry Rust declarations:\n{code}");
+    assert!(
+        code.contains("void sub_3050("),
+        "expected the C prototype form; got:\n{code}"
+    );
+    assert!(
+        !code.contains("unsafe fn"),
+        "C output must not carry the Rust shell:\n{code}"
+    );
+    assert!(
+        !code.contains("let mut"),
+        "C output must not carry Rust declarations:\n{code}"
+    );
 }
 
 /// A name no back-end claims is an error rather than a silent fallback to C --
@@ -207,7 +247,10 @@ fn an_unknown_language_is_rejected() {
 #[test]
 fn variadic_prototypes_carry_extern_c() {
     let code = decompile_as(&grep(), "__printf_chk", "rust-language");
-    assert!(code.contains(", ...)"), "expected a recovered variadic; got:\n{code}");
+    assert!(
+        code.contains(", ...)"),
+        "expected a recovered variadic; got:\n{code}"
+    );
     assert!(
         code.contains("unsafe extern \"C\" fn"),
         "a C-variadic needs `unsafe extern \"C\" fn`; got:\n{code}"
@@ -219,5 +262,8 @@ fn variadic_prototypes_carry_extern_c() {
 fn non_variadic_prototypes_stay_plain_unsafe_fn() {
     let code = decompile_as(&faillog(), "sub_3050", "rust-language");
     assert!(code.contains("unsafe fn sub_3050("), "got:\n{code}");
-    assert!(!code.contains("extern \"C\""), "no variadic here; got:\n{code}");
+    assert!(
+        !code.contains("extern \"C\""),
+        "no variadic here; got:\n{code}"
+    );
 }

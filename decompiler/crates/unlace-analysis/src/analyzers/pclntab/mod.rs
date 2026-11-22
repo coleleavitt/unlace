@@ -389,7 +389,9 @@ fn decode_functions(img: &ImageBytes, h: &PcHeader) -> Vec<GoFunc> {
             Some(v) => v,
             None => break,
         };
-        let Some(ent) = img.read(ent_vma, stride) else { break };
+        let Some(ent) = img.read(ent_vma, stride) else {
+            break;
+        };
 
         // Field 0: entry (absolute, ≤1.17) or entryoff (relative to textStart, 1.18+).
         let (func_pc, funcoff) = if h.ver.is_118plus() {
@@ -414,8 +416,14 @@ fn decode_functions(img: &ImageBytes, h: &PcHeader) -> Vec<GoFunc> {
             Some(v) => v,
             None => continue,
         };
-        let name_field_off = if h.ver.is_118plus() { 4 } else { h.ptr_size as usize };
-        let Some(nb) = img.read(func_vma + name_field_off as u64, 4) else { continue };
+        let name_field_off = if h.ver.is_118plus() {
+            4
+        } else {
+            h.ptr_size as usize
+        };
+        let Some(nb) = img.read(func_vma + name_field_off as u64, 4) else {
+            continue;
+        };
         // nameoff is i32; a negative value is invalid here (no name).
         let nameoff = rd_u32(nb, h.end);
         if nameoff == u32::MAX {
@@ -427,7 +435,9 @@ fn decode_functions(img: &ImageBytes, h: &PcHeader) -> Vec<GoFunc> {
             None => continue,
         };
         // Names are bounded; 4096 is far beyond any real Go symbol.
-        let Some(name) = img.read_cstr(name_vma, 4096) else { continue };
+        let Some(name) = img.read_cstr(name_vma, 4096) else {
+            continue;
+        };
         if name.is_empty() || FUNCNAMES_TO_IGNORE.contains(&name.as_str()) {
             continue;
         }
@@ -437,7 +447,11 @@ fn decode_functions(img: &ImageBytes, h: &PcHeader) -> Vec<GoFunc> {
             .filter(|&off| off != 0)
             .and_then(|off| pcvalue_span(img, h.pctab_vma.checked_add(off as u64)?, h.quantum))
             .map(|span| func_pc + span);
-        out.push(GoFunc { addr: func_pc, name, end });
+        out.push(GoFunc {
+            addr: func_pc,
+            name,
+            end,
+        });
     }
     out
 }
@@ -554,7 +568,9 @@ pub(crate) fn locate_header(file: &object::File, img: &ImageBytes) -> Option<u64
             }
         }
     }
-    kuna_gomoduledata::locate(file, img).map(|(vma, _)| vma).or(first)
+    kuna_gomoduledata::locate(file, img)
+        .map(|(vma, _)| vma)
+        .or(first)
 }
 
 /// The newest Go release that wrote the pclntab format of the image's named
@@ -562,10 +578,15 @@ pub(crate) fn locate_header(file: &object::File, img: &ImageBytes) -> Option<u64
 /// layout, go1.17 for the go1.16 one. `None` for a newer format, which says
 /// nothing the callers act on, and for an image with no named table.
 pub(crate) fn format_last_release(file: &object::File, img: &ImageBytes) -> Option<(u16, u16)> {
-    let (ver, ..) = [".gopclntab", ".data.rel.ro.gopclntab", "gopclntab", "__gopclntab"]
-        .iter()
-        .filter_map(|name| img.read(file.section_by_name(name)?.address(), 8))
-        .find_map(probe_header)?;
+    let (ver, ..) = [
+        ".gopclntab",
+        ".data.rel.ro.gopclntab",
+        "gopclntab",
+        "__gopclntab",
+    ]
+    .iter()
+    .filter_map(|name| img.read(file.section_by_name(name)?.address(), 8))
+    .find_map(probe_header)?;
     match ver {
         GoVer::Go12 => Some((1, 15)),
         GoVer::Go116 => Some((1, 17)),
@@ -581,21 +602,31 @@ pub(crate) fn format_last_release(file: &object::File, img: &ImageBytes) -> Opti
 /// this with the build-info blob.
 pub(crate) fn readonly_table_present(file: &object::File) -> bool {
     let img = ImageBytes::new(file);
-    let readonly = || file.sections().filter(|s| s.kind() == object::SectionKind::ReadOnlyData);
+    let readonly = || {
+        file.sections()
+            .filter(|s| s.kind() == object::SectionKind::ReadOnlyData)
+    };
     readonly().any(|s| scan_section(&img, &s, |vma| moduledata_anchored(file, &img, vma)).is_some())
-        || kuna_gomoduledata::locate(file, &img)
-            .is_some_and(|(_, h)| readonly().any(|s| h.functab_vma.wrapping_sub(s.address()) < s.size()))
+        || kuna_gomoduledata::locate(file, &img).is_some_and(|(_, h)| {
+            readonly().any(|s| h.functab_vma.wrapping_sub(s.address()) < s.size())
+        })
 }
 
 /// The first validated header in `sec` that `accept` takes, stepping the
 /// 8-byte alignment the linker gives the table.
-fn scan_section(img: &ImageBytes, sec: &object::Section, mut accept: impl FnMut(u64) -> bool) -> Option<u64> {
+fn scan_section(
+    img: &ImageBytes,
+    sec: &object::Section,
+    mut accept: impl FnMut(u64) -> bool,
+) -> Option<u64> {
     let base = sec.address();
     let data = sec.data().ok()?;
     (0..data.len().saturating_sub(7))
         .step_by(8)
         .map(|off| (off, base + off as u64))
-        .find(|&(off, vma)| probe_header(&data[off..off + 8]).is_some() && table_plausible(img, vma) && accept(vma))
+        .find(|&(off, vma)| {
+            probe_header(&data[off..off + 8]).is_some() && table_plausible(img, vma) && accept(vma)
+        })
         .map(|(_, vma)| vma)
 }
 
@@ -606,8 +637,14 @@ fn scan_section(img: &ImageBytes, sec: &object::Section, mut accept: impl FnMut(
 /// The linker always writes it for the module's own table; a copy of another
 /// image's table, carried as data, has none pointing at where the copy sits.
 fn moduledata_anchored(file: &object::File, img: &ImageBytes, vma: u64) -> bool {
-    let Some(h) = parse_header(img, vma) else { return false };
-    let (idx, want) = if h.ver == GoVer::Go12 { (3, h.functab_vma) } else { (1, h.funcname_vma) };
+    let Some(h) = parse_header(img, vma) else {
+        return false;
+    };
+    let (idx, want) = if h.ver == GoVer::Go12 {
+        (3, h.functab_vma)
+    } else {
+        (1, h.funcname_vma)
+    };
     file.sections()
         .filter(|s| s.kind() == object::SectionKind::Data)
         .any(|sec| moduledata_records(&sec, h, vma, idx + 1).any(|rec| h.word(rec, idx) == want))
@@ -634,10 +671,18 @@ fn moduledata_records<'d>(
 /// function count in range and a functab plus name table that both resolve
 /// inside the image.
 fn table_plausible(img: &ImageBytes, vma: u64) -> bool {
-    let Some(h) = parse_header(img, vma) else { return false };
-    let stride = if h.ver.is_118plus() { 8 } else { 2 * h.ptr_size as u64 };
+    let Some(h) = parse_header(img, vma) else {
+        return false;
+    };
+    let stride = if h.ver.is_118plus() {
+        8
+    } else {
+        2 * h.ptr_size as u64
+    };
     (1..=2_000_000).contains(&h.nfunc)
-        && img.read(h.functab_vma, (h.nfunc * stride) as usize).is_some()
+        && img
+            .read(h.functab_vma, (h.nfunc * stride) as usize)
+            .is_some()
         && img.read(h.funcname_vma, 1).is_some()
 }
 
@@ -670,7 +715,8 @@ fn recover_go_table(file: &object::File) -> (Vec<GoFunc>, Option<u64>) {
 
 fn recover_go_header(file: &object::File, img: &ImageBytes) -> Option<(PcHeader, u64)> {
     let header_vma = locate_header(file, img)?;
-    let mut h = parse_header(img, header_vma).or_else(|| kuna_gomoduledata::locate(file, img).map(|(_, h)| h))?;
+    let mut h = parse_header(img, header_vma)
+        .or_else(|| kuna_gomoduledata::locate(file, img).map(|(_, h)| h))?;
     // Go 1.26 stopped storing the text base here (the runtime uses `moduledata.text`
     // instead), so `entryoff` is resolved against the module's `moduledata.text`,
     // falling back to the lowest code section when no moduledata is found.
@@ -692,19 +738,28 @@ impl<'a> MethodEntries<'a> {
     pub(crate) fn new(file: &'a object::File<'a>, anchor: u64, text: u64) -> Option<Self> {
         let bytes = ImageBytes::new(file);
         let (header, at) = recover_go_header(file, &bytes)?;
-        if at != anchor || header.text_start != text || header.end != End::Little
-            || header.ptr_size != 8 || bytes.read(at, 4)? != [0xf1, 0xff, 0xff, 0xff]
+        if at != anchor
+            || header.text_start != text
+            || header.end != End::Little
+            || header.ptr_size != 8
+            || bytes.read(at, 4)? != [0xf1, 0xff, 0xff, 0xff]
             || !(1..=2_000_000).contains(&header.nfunc)
         {
             return None;
         }
         let rows = bytes.read(header.functab_vma, header.nfunc as usize * 8)?;
-        if rows.windows(16).step_by(8).any(|pair|
-            rd_u32(pair, End::Little) >= rd_u32(&pair[8..], End::Little))
+        if rows
+            .windows(16)
+            .step_by(8)
+            .any(|pair| rd_u32(pair, End::Little) >= rd_u32(&pair[8..], End::Little))
         {
             return None;
         }
-        Some(Self { bytes, header, rows })
+        Some(Self {
+            bytes,
+            header,
+            rows,
+        })
     }
 
     pub(crate) fn ordinary_name(&self, entry: u64) -> Option<String> {
@@ -714,7 +769,11 @@ impl<'a> MethodEntries<'a> {
         let (mut low, mut high) = (0, self.header.nfunc);
         while low < high {
             let mid = low + (high - low) / 2;
-            if offset(row(mid)?) < relative { low = mid + 1; } else { high = mid; }
+            if offset(row(mid)?) < relative {
+                low = mid + 1;
+            } else {
+                high = mid;
+            }
         }
         if low == self.header.nfunc {
             return None;
@@ -723,13 +782,19 @@ impl<'a> MethodEntries<'a> {
         if offset(entry) != relative {
             return None;
         }
-        let record = self.header.funcdata_base.checked_add(offset(&entry[4..]) as u64)?;
+        let record = self
+            .header
+            .funcdata_base
+            .checked_add(offset(&entry[4..]) as u64)?;
         let record = self.bytes.read(record, 42)?;
         if offset(record) != relative || record[40] != 0 || record[41] != 0 {
             return None;
         }
         let name = i32::from_le_bytes(record[4..8].try_into().ok()?);
-        let at = self.header.funcname_vma.checked_add(u64::try_from(name).ok()?)?;
+        let at = self
+            .header
+            .funcname_vma
+            .checked_add(u64::try_from(name).ok()?)?;
         self.bytes.read_cstr(at, 512)
     }
 }
@@ -754,24 +819,51 @@ fn functab_end(img: &ImageBytes, h: &PcHeader) -> Option<u64> {
 /// the head every release shares — word 17 is `len(ftab)` (`nfunc + 1`) and
 /// words 20-23 are `minpc, maxpc, text, etext`, which must nest. Searched in the
 /// data sections the linker places `runtime.firstmoduledata` in.
-fn moduledata_text(file: &object::File, img: &ImageBytes, h: &PcHeader, header_vma: u64) -> Option<u64> {
+fn moduledata_text(
+    file: &object::File,
+    img: &ImageBytes,
+    h: &PcHeader,
+    header_vma: u64,
+) -> Option<u64> {
     let minor = crate::loader::gobuildinfo::buildinfo_blob(file)
         .and_then(|blob| crate::loader::gobuildinfo::go_version(blob, |va, n| img.read(va, n)))
         .filter(|v| v.0 == 1)
         .map(|v| v.1);
-    let md = kuna_gomodlayout::locate(file, img, header_vma, minor, h.ptr_size as u64, &|img, va| {
-        img.read(va, h.ptr_size as usize).map(|b| rd_ptr(b, h.ptr_size, h.end))
-    });
+    let md = kuna_gomodlayout::locate(
+        file,
+        img,
+        header_vma,
+        minor,
+        h.ptr_size as u64,
+        &|img, va| {
+            img.read(va, h.ptr_size as usize)
+                .map(|b| rd_ptr(b, h.ptr_size, h.end))
+        },
+    );
     if let Some(md) = md.filter(|md| md.ftab_len == h.nfunc.wrapping_add(1)) {
         return Some(md.text);
     }
-    for name in [".go.module", "__go_module", ".noptrdata", ".data", "__noptrdata", "__data"] {
-        let Some(sec) = file.section_by_name(name) else { continue };
+    for name in [
+        ".go.module",
+        "__go_module",
+        ".noptrdata",
+        ".data",
+        "__noptrdata",
+        "__data",
+    ] {
+        let Some(sec) = file.section_by_name(name) else {
+            continue;
+        };
         for rec in moduledata_records(&sec, *h, header_vma, 24) {
             if h.word(rec, 17) != h.nfunc.wrapping_add(1) {
                 continue;
             }
-            let (minpc, maxpc, text, etext) = (h.word(rec, 20), h.word(rec, 21), h.word(rec, 22), h.word(rec, 23));
+            let (minpc, maxpc, text, etext) = (
+                h.word(rec, 20),
+                h.word(rec, 21),
+                h.word(rec, 22),
+                h.word(rec, 23),
+            );
             if text != 0 && text <= minpc && minpc < maxpc && maxpc <= etext {
                 return Some(text);
             }
@@ -799,7 +891,11 @@ fn text_section_start(file: &object::File) -> u64 {
 /// them from there decodes the whole Go text only to re-find the same set.
 /// Every other root, cgo's C code included, stays a root.
 pub(crate) fn function_entries(file: &object::File) -> Vec<u64> {
-    let mut entries: Vec<u64> = recover_go_table(file).0.into_iter().map(|f| f.addr).collect();
+    let mut entries: Vec<u64> = recover_go_table(file)
+        .0
+        .into_iter()
+        .map(|f| f.addr)
+        .collect();
     entries.sort_unstable();
     entries.dedup();
     entries
@@ -829,12 +925,19 @@ impl AnalysisPass for GoPclntabPass {
         // Format-neutral: the three formats share the `pcHeader`/`functab` layout. An
         // entry is admitted only inside executable bytes, so a corrupt table cannot
         // mint a function over data.
-        let exec = ctx.image.expect("load-time analysis image").executable_ranges();
+        let exec = ctx
+            .image
+            .expect("load-time analysis image")
+            .executable_ranges();
         let img = ImageBytes::new(ctx.file);
-        let Some((h, header_vma)) = recover_go_header(ctx.file, &img) else { return out };
+        let Some((h, header_vma)) = recover_go_header(ctx.file, &img) else {
+            return out;
+        };
         let text_end = functab_end(&img, &h);
         let mut funcs: Vec<GoFunc> = decode_functions(&img, &h)
-            .into_iter().filter(|f| exec_end(&exec, f.addr).is_some()).collect();
+            .into_iter()
+            .filter(|f| exec_end(&exec, f.addr).is_some())
+            .collect();
         funcs.sort_unstable_by_key(|f| f.addr);
         out.models = kuna_goabi0::model_facts(ctx, &funcs, &h, header_vma);
         if ctx.arch.archid == "x86:LE:64:default:golang"
@@ -842,7 +945,9 @@ impl AnalysisPass for GoPclntabPass {
         {
             let mut receive = funcs.iter().filter(|f| f.name == "runtime.chanrecv2");
             if let Some(first) = receive.next() {
-                if receive.next().is_none() && funcs.iter().filter(|f| f.addr == first.addr).count() == 1 {
+                if receive.next().is_none()
+                    && funcs.iter().filter(|f| f.addr == first.addr).count() == 1
+                {
                     out.go_chanrecv2 = Some(first.addr);
                 }
             }
@@ -854,13 +959,22 @@ impl AnalysisPass for GoPclntabPass {
             // padding between functions is in neither. It never
             // runs past the extent holding it, so a body cannot swallow an entry in
             // another section or the host code an external link places after Go's.
-            let next = addrs.get(i + 1).copied().or(text_end.filter(|&e| e > f.addr));
-            let end = next.unwrap_or(u64::MAX).min(f.end.filter(|&e| e > f.addr).unwrap_or(u64::MAX));
+            let next = addrs
+                .get(i + 1)
+                .copied()
+                .or(text_end.filter(|&e| e > f.addr));
+            let end = next
+                .unwrap_or(u64::MAX)
+                .min(f.end.filter(|&e| e > f.addr).unwrap_or(u64::MAX));
             let end = end.min(exec_end(&exec, f.addr).unwrap_or(u64::MAX));
             if end > f.addr {
                 out.fde_bodies.push((f.addr, end));
             }
-            out.symbols.push(SymFact { addr: f.addr, name: f.name, kind: SymKind::Function });
+            out.symbols.push(SymFact {
+                addr: f.addr,
+                name: f.name,
+                kind: SymKind::Function,
+            });
         }
         out
     }

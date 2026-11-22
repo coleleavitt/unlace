@@ -23,9 +23,9 @@ use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::types::{int4, int8};
 use unlace_num::opcodes::OpCode;
 
-use crate::dtype::{type_metatype, Datatype, DatatypeKind, TypeFactory};
-use crate::funcdata::Funcdata;
 use crate::context::OpId;
+use crate::dtype::{Datatype, DatatypeKind, TypeFactory, type_metatype};
+use crate::funcdata::Funcdata;
 use crate::unionresolve::ResolvedUnion;
 use crate::unionresolve_run::ScoreUnionFields;
 
@@ -45,7 +45,12 @@ impl Funcdata {
     /// the cast plane (`ActionSetCasts::resolveUnion`) gates on `needsResolution()`
     /// before calling, but the base `return this` arm is kept so a non-resolution
     /// type is a no-op pass-through (the C++ `Datatype::resolveInFlow` body).
-    pub fn resolve_in_flow(&mut self, ct: &Rc<Datatype>, op: OpId, slot: int4) -> KunaResult<Rc<Datatype>> {
+    pub fn resolve_in_flow(
+        &mut self,
+        ct: &Rc<Datatype>,
+        op: OpId,
+        slot: int4,
+    ) -> KunaResult<Rc<Datatype>> {
         match &ct.kind {
             // TypePointer::resolveInFlow (type.cc:1314-1333).
             //
@@ -93,22 +98,27 @@ impl Funcdata {
             // for the union arm / `resolve` for the pointer arm — both store the
             // same field number; we rebuild a fresh resolution off `this` so the
             // cached resolve data-type matches `this`'s size).
-            let field_num = self.get_address_based_union_field(ct, addr, slot).map(|r| r.get_field_num());
+            let field_num = self
+                .get_address_based_union_field(ct, addr, slot)
+                .map(|r| r.get_field_num());
             if let Some(field_num) = field_num {
-                let typegrp = self.get_arch().types_rc().ok_or_else(|| {
-                    KunaError::lowlevel("resolveInFlow: TypeFactory unavailable")
-                })?;
+                let typegrp = self
+                    .get_arch()
+                    .types_rc()
+                    .ok_or_else(|| KunaError::lowlevel("resolveInFlow: TypeFactory unavailable"))?;
                 let resolve = ResolvedUnion::new_field(Rc::clone(ct), field_num, typegrp.as_ref())?;
                 let dt = Rc::clone(resolve.get_datatype());
                 self.set_union_field(ct, op, slot, resolve);
                 return Ok(dt);
             }
         }
-        let typegrp = self.get_arch().types_rc().ok_or_else(|| {
-            KunaError::lowlevel("resolveInFlow: TypeFactory unavailable")
-        })?;
+        let typegrp = self
+            .get_arch()
+            .types_rc()
+            .ok_or_else(|| KunaError::lowlevel("resolveInFlow: TypeFactory unavailable"))?;
         let result = {
-            let scorer = ScoreUnionFields::new_edge(self, typegrp.as_ref(), Rc::clone(ct), op, slot)?;
+            let scorer =
+                ScoreUnionFields::new_edge(self, typegrp.as_ref(), Rc::clone(ct), op, slot)?;
             scorer.into_result()
         };
         let dt = Rc::clone(result.get_datatype());
@@ -129,9 +139,10 @@ impl Funcdata {
             return Ok(Rc::clone(res.get_datatype()));
         }
         let field_num = self.score_single_component(ct, op, slot)?;
-        let typegrp = self.get_arch().types_rc().ok_or_else(|| {
-            KunaError::lowlevel("resolveInFlow: TypeFactory unavailable")
-        })?;
+        let typegrp = self
+            .get_arch()
+            .types_rc()
+            .ok_or_else(|| KunaError::lowlevel("resolveInFlow: TypeFactory unavailable"))?;
         let comp_fill = ResolvedUnion::new_field(Rc::clone(ct), field_num, typegrp.as_ref())?;
         let dt = Rc::clone(comp_fill.get_datatype());
         self.set_union_field(ct, op, slot, comp_fill);
@@ -167,11 +178,18 @@ impl Funcdata {
             || (opc == OpCode::CPUI_STORE && slot == 2)
         {
             if let Some(vn) = o.get_in(1) {
-                let is_lock = self.vbank().get(vn).map(|v| v.is_type_lock()).unwrap_or(false);
+                let is_lock = self
+                    .vbank()
+                    .get(vn)
+                    .map(|v| v.is_type_lock())
+                    .unwrap_or(false);
                 if is_lock {
                     let read = self.vn_type_read_facing(vn, op);
                     if read.get_metatype() == type_metatype::TYPE_PTR
-                        && read.get_ptr_to().map(|p| Rc::ptr_eq(&p, parent)).unwrap_or(false)
+                        && read
+                            .get_ptr_to()
+                            .map(|p| Rc::ptr_eq(&p, parent))
+                            .unwrap_or(false)
                     {
                         return Ok(-1); // LOAD/STORE of the structure directly, use whole structure
                     }
@@ -186,7 +204,9 @@ impl Funcdata {
                 let fc = self.get_call_specs(idx);
                 let proto = fc.proto();
                 let param_type: Option<Rc<Datatype>> = if slot >= 1 && proto.is_input_locked() {
-                    proto.get_param(slot - 1).and_then(|p| p.get_type().cloned())
+                    proto
+                        .get_param(slot - 1)
+                        .and_then(|p| p.get_type().cloned())
                 } else if slot < 0 && proto.is_output_locked() {
                     proto.get_output_type().cloned()
                 } else {
@@ -238,7 +258,10 @@ impl Funcdata {
                 let resolved = self.resolve_truncation(&parent_union, cur_off, op, slot)?;
                 cur_type = None;
                 if let Some((field_idx, _newoff)) = resolved {
-                    if let Some(ftype) = parent_union.get_field(field_idx).map(|f| Rc::clone(&f.field_type)) {
+                    if let Some(ftype) = parent_union
+                        .get_field(field_idx)
+                        .map(|f| Rc::clone(&f.field_type))
+                    {
                         let typegrp = self.get_arch().types_rc().ok_or_else(|| {
                             KunaError::lowlevel("resolveInFlow: TypeFactory unavailable")
                         })?;
@@ -251,7 +274,8 @@ impl Funcdata {
                 cur_type = None;
                 if let Some((field_idx, newoff)) = resolved {
                     cur_off = newoff; // resolveTruncation passes back curOff by &ref
-                    if let Some(ftype) = cur.get_field(field_idx).map(|f| Rc::clone(&f.field_type)) {
+                    if let Some(ftype) = cur.get_field(field_idx).map(|f| Rc::clone(&f.field_type))
+                    {
                         let typegrp = self.get_arch().types_rc().ok_or_else(|| {
                             KunaError::lowlevel("resolveInFlow: TypeFactory unavailable")
                         })?;
@@ -325,7 +349,9 @@ impl Funcdata {
         op: OpId,
         slot: int4,
     ) -> KunaResult<Option<(int4, int8)>> {
-        let mut have_cached: Option<int4> = self.get_union_resolution(ct, op, slot).map(|r| r.get_field_num());
+        let mut have_cached: Option<int4> = self
+            .get_union_resolution(ct, op, slot)
+            .map(|r| r.get_field_num());
         if have_cached.is_none() {
             let op_addr = self.obank().get(op).map(|o| o.get_addr().clone());
             if let Some(addr) = &op_addr {
@@ -347,10 +373,15 @@ impl Funcdata {
             return Ok(None);
         }
         // artificial slot
-        let opc = self.obank().get(op).map(|o| o.code()).unwrap_or(OpCode::CPUI_COPY);
-        let typegrp = self.get_arch().types_rc().ok_or_else(|| {
-            KunaError::lowlevel("resolveTruncation: TypeFactory unavailable")
-        })?;
+        let opc = self
+            .obank()
+            .get(op)
+            .map(|o| o.code())
+            .unwrap_or(OpCode::CPUI_COPY);
+        let typegrp = self
+            .get_arch()
+            .types_rc()
+            .ok_or_else(|| KunaError::lowlevel("resolveTruncation: TypeFactory unavailable"))?;
         if opc == OpCode::CPUI_SUBPIECE && slot == 1 {
             // constructor 2
             let result = {

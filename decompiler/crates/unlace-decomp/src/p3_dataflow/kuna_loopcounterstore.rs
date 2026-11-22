@@ -72,8 +72,8 @@
 //! of an **implied** two-input value is rendered from the inner op.  An explicit
 //! input is left alone, because there the statement really is `out = <name>`.
 
-use unlace_num::opcodes::OpCode;
 use unlace_base::space::spacetype;
+use unlace_num::opcodes::OpCode;
 
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;

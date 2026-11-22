@@ -1,7 +1,9 @@
 use super::*;
 
 fn fixture(name: &str) -> Vec<u8> {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures").join(name);
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures")
+        .join(name);
     std::fs::read(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()))
 }
 
@@ -26,7 +28,8 @@ fn source_paths_are_told_from_format_strings() {
 fn x86_64_module_table_names_a_warn_and_a_bug() {
     let bytes = fixture("kernel_bugtable_x86_64.ko");
     let raw = object::File::parse(&*bytes).expect("parse");
-    let view = crate::loader::kuna_relocrebase::rebased_view(&raw, &bytes).expect("a module is laid out");
+    let view =
+        crate::loader::kuna_relocrebase::rebased_view(&raw, &bytes).expect("a module is laid out");
     let file = object::File::parse(&*view.bytes).expect("rebased view parses");
     let sites = scan(&file, exec_ranges(&file));
     let text = file.section_by_name(".text").expect(".text").address();
@@ -39,10 +42,12 @@ fn x86_64_module_table_names_a_warn_and_a_bug() {
     assert_eq!(sites[1].line, Some(11));
     let image = Image::new(&file, exec_ranges(&file));
     for s in &sites {
-        assert_eq!(image.string_at(s.file.expect("verbose table")).as_deref(), Some("kwarn_bugsite.c"));
+        assert_eq!(
+            image.string_at(s.file.expect("verbose table")).as_deref(),
+            Some("kwarn_bugsite.c")
+        );
     }
 }
-
 
 /// A minimal ELF64 x86-64 executable: the named `PROGBITS` sections at their
 /// addresses, no segments. Enough for the `object` crate to answer section
@@ -98,7 +103,14 @@ fn elf64(sections: &[(&str, u64, u64, &[u8])]) -> Vec<u8> {
     };
     out.extend_from_slice(&[0u8; 64]);
     for (i, (_, addr, flags, data)) in sections.iter().enumerate() {
-        shdr(&mut out, names[i], *flags, *addr, offsets[i], data.len() as u64);
+        shdr(
+            &mut out,
+            names[i],
+            *flags,
+            *addr,
+            offsets[i],
+            data.len() as u64,
+        );
     }
     shdr(&mut out, shstrtab_name, 0, 0, shstr_off, shstr.len() as u64);
     out
@@ -137,8 +149,18 @@ fn linked_image_probe_recovers_the_verbose_layout() {
     assert_eq!(
         sites,
         vec![
-            KernelBugSite { addr: 0x1001, warning: true, file: Some(0x2000), line: Some(42) },
-            KernelBugSite { addr: 0x1005, warning: false, file: Some(0x2000), line: Some(77) },
+            KernelBugSite {
+                addr: 0x1001,
+                warning: true,
+                file: Some(0x2000),
+                line: Some(42)
+            },
+            KernelBugSite {
+                addr: 0x1005,
+                warning: false,
+                file: Some(0x2000),
+                line: Some(77)
+            },
         ]
     );
 }
@@ -152,7 +174,10 @@ fn pre_5_19_file_counts_from_the_entry() {
     let rodata = b"x\0include/linux/mm.h\0fs/nfs/write.c\0";
     let (text_vma, rodata_vma, table_vma) = (0x1000u64, 0x2000u64, 0x3000u64);
     let mut table = Vec::new();
-    for (i, (trap, path, line, flags)) in [(1u64, 2u64, 607u16, 0x903u16), (5, 21, 77, 0)].iter().enumerate() {
+    for (i, (trap, path, line, flags)) in [(1u64, 2u64, 607u16, 0x903u16), (5, 21, 77, 0)]
+        .iter()
+        .enumerate()
+    {
         let e = table_vma + 12 * i as u64;
         table.extend_from_slice(&rel32(e, text_vma + trap));
         table.extend_from_slice(&rel32(e, rodata_vma + path));
@@ -169,8 +194,18 @@ fn pre_5_19_file_counts_from_the_entry() {
     assert_eq!(
         sites,
         vec![
-            KernelBugSite { addr: 0x1001, warning: true, file: Some(0x2002), line: Some(607) },
-            KernelBugSite { addr: 0x1005, warning: false, file: Some(0x2015), line: Some(77) },
+            KernelBugSite {
+                addr: 0x1001,
+                warning: true,
+                file: Some(0x2002),
+                line: Some(607)
+            },
+            KernelBugSite {
+                addr: 0x1005,
+                warning: false,
+                file: Some(0x2015),
+                line: Some(77)
+            },
         ]
     );
 }
@@ -219,14 +254,27 @@ fn linked_image_probe_recovers_the_bare_layout() {
         table.extend_from_slice(&flags.to_le_bytes());
         table.extend_from_slice(&[0, 0]);
     }
-    let bytes = elf64(&[(".text", text_vma, SHF_ALLOC_EXEC, &text), (BUG_TABLE_SECTION, table_vma, SHF_ALLOC_WRITE, &table)]);
+    let bytes = elf64(&[
+        (".text", text_vma, SHF_ALLOC_EXEC, &text),
+        (BUG_TABLE_SECTION, table_vma, SHF_ALLOC_WRITE, &table),
+    ]);
     let file = object::File::parse(&*bytes).expect("parse");
     let sites = scan(&file, exec_ranges(&file));
     assert_eq!(
         sites,
         vec![
-            KernelBugSite { addr: 0x1000, warning: true, file: None, line: None },
-            KernelBugSite { addr: 0x1004, warning: false, file: None, line: None },
+            KernelBugSite {
+                addr: 0x1000,
+                warning: true,
+                file: None,
+                line: None
+            },
+            KernelBugSite {
+                addr: 0x1004,
+                warning: false,
+                file: None,
+                line: None
+            },
         ]
     );
 }
@@ -245,7 +293,10 @@ fn an_entry_with_unexplained_room_is_declined() {
         table.extend_from_slice(&rel32(e + 4, text_vma));
         table.extend_from_slice(&[0x01, 0x09, 0x01, 0x09]);
     }
-    let bytes = elf64(&[(".text", text_vma, SHF_ALLOC_EXEC, &text), (BUG_TABLE_SECTION, table_vma, SHF_ALLOC_WRITE, &table)]);
+    let bytes = elf64(&[
+        (".text", text_vma, SHF_ALLOC_EXEC, &text),
+        (BUG_TABLE_SECTION, table_vma, SHF_ALLOC_WRITE, &table),
+    ]);
     let file = object::File::parse(&*bytes).expect("parse");
     assert!(scan(&file, exec_ranges(&file)).is_empty());
 }
@@ -255,7 +306,10 @@ fn an_entry_with_unexplained_room_is_declined() {
 fn a_table_no_size_explains_is_declined() {
     let text = [0x0f, 0x0b];
     let table = [0xff; 24];
-    let bytes = elf64(&[(".text", 0x1000, SHF_ALLOC_EXEC, &text), (BUG_TABLE_SECTION, 0x3000, SHF_ALLOC_WRITE, &table)]);
+    let bytes = elf64(&[
+        (".text", 0x1000, SHF_ALLOC_EXEC, &text),
+        (BUG_TABLE_SECTION, 0x3000, SHF_ALLOC_WRITE, &table),
+    ]);
     let file = object::File::parse(&*bytes).expect("parse");
     assert!(scan(&file, exec_ranges(&file)).is_empty());
 }

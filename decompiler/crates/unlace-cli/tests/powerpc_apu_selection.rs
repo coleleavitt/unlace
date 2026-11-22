@@ -132,7 +132,10 @@ fn shared_apu_requirements_preserve_altivec_and_hard_float() {
                 let add = String::from_utf8(output.stdout).unwrap();
                 assert!(add.contains("double add(double"), "{add}");
                 check_emitted_c(&add, "add(1.25, 2.5) != 3.75");
-                check_emitted_c(&text, "choose(0, 17, 23) != 17 || choose(1, 17, 23) != 23 || choose(-1, 41, 59) != 59");
+                check_emitted_c(
+                    &text,
+                    "choose(0, 17, 23) != 17 || choose(1, 17, 23) != 23 || choose(-1, 41, 59) != 59",
+                );
             }
         }
     }
@@ -222,7 +225,12 @@ fn spe_integer_pairs_align_and_spill_without_losing_arguments() {
                 );
                 assert_eq!(text, spe_declared(&path, &[&prototype], Some(&target)));
                 let values = "11,".repeat(padding);
-                check_emitted_c(&text, &format!("pick({values}0x123456789abcdef0LL) != 0x123456789abcdef0LL || pick({values}-1) != ({ty})-1"));
+                check_emitted_c(
+                    &text,
+                    &format!(
+                        "pick({values}0x123456789abcdef0LL) != 0x123456789abcdef0LL || pick({values}-1) != ({ty})-1"
+                    ),
+                );
             }
             let words = if first <= 7 {
                 vec![mr(3, first + 2), 0x4e800020]
@@ -343,7 +351,10 @@ fn spe_requirements_select_e500_only_under_ppcapu() {
         assert!(text.contains("add3(a0,2,3)"), "{text}");
         let generic = format!("PowerPC:{endian}:32:default:default");
         assert_eq!(text, decompile(&path, "caller", &["--target", &generic]).0);
-        assert_eq!(text, decompile(&path, "caller", &["--option", "ppcapu", "off"]).0);
+        assert_eq!(
+            text,
+            decompile(&path, "caller", &["--option", "ppcapu", "off"]).0
+        );
         let e500 = format!("PowerPC:{endian}:32:e500:default");
         for function in ["caller", "touch"] {
             assert_eq!(
@@ -365,7 +376,11 @@ fn unclassified_apu_notes_keep_the_generic_decoder_under_ppcapu() {
     let path = common::scratch_file("powerpc-apu-unknown", "o");
     for little in [false, true] {
         let endian = if little { "LE" } else { "BE" };
-        for apus in [&[0x0104_0001][..], &[0x0100_0002], &[0x0100_0001, 0xffff_0001]] {
+        for apus in [
+            &[0x0104_0001][..],
+            &[0x0100_0002],
+            &[0x0100_0001, 0xffff_0001],
+        ] {
             std::fs::write(&path, spe_caller_image(little, apus)).unwrap();
             let generic = format!("PowerPC:{endian}:32:default:default");
             let (expected, quiet) = decompile(&path, "caller", &["--target", &generic]);
@@ -385,10 +400,16 @@ fn unclassified_apu_notes_keep_the_generic_decoder_under_ppcapu() {
 fn e500mc_returns_a_64_bit_value_high_word_first() {
     let path = common::scratch_file("powerpc-e500mc-pair", "bin");
     // lis r3,0x1122; ori r3,r3,0x3344; lis r4,0x5566; ori r4,r4,0x7788; blr.
-    let code: Vec<u8> = [0x3c601122u32, 0x60633344, 0x3c805566, 0x60847788, 0x4e800020]
-        .into_iter()
-        .flat_map(u32::to_be_bytes)
-        .collect();
+    let code: Vec<u8> = [
+        0x3c601122u32,
+        0x60633344,
+        0x3c805566,
+        0x60847788,
+        0x4e800020,
+    ]
+    .into_iter()
+    .flat_map(u32::to_be_bytes)
+    .collect();
     std::fs::write(&path, code).unwrap();
     let (text, _) = decompile(
         &path,

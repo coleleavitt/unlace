@@ -48,7 +48,9 @@ pub fn load_types(paths: &[String], cpp: Option<&str>) -> Result<Vec<Directive>,
                 None => read_header(&file)?,
             };
             for chunk in split_declarations(&shown, &text) {
-                let Some(body) = classify(&chunk.text, &mut known) else { continue };
+                let Some(body) = classify(&chunk.text, &mut known) else {
+                    continue;
+                };
                 if seen.insert(body_key(&body)) {
                     let raw = format!("{ORIGIN}{}:{}: {}", chunk.file, chunk.line, chunk.text);
                     out.push(Directive { raw, body });
@@ -93,7 +95,10 @@ fn read_header(file: &Path) -> Result<String, String> {
     let shown = file.display();
     let meta = std::fs::metadata(file).map_err(|e| format!("--types {shown}: {e}"))?;
     if meta.len() > MAX_HEADER_BYTES {
-        return Err(format!("--types {shown}: larger than {} MiB", MAX_HEADER_BYTES >> 20));
+        return Err(format!(
+            "--types {shown}: larger than {} MiB",
+            MAX_HEADER_BYTES >> 20
+        ));
     }
     let bytes = std::fs::read(file).map_err(|e| format!("--types {shown}: {e}"))?;
     Ok(String::from_utf8_lossy(&bytes).into_owned())
@@ -117,7 +122,10 @@ fn preprocess(cpp: &str, file: &Path) -> Result<String, String> {
         .map_err(|e| format!("--types-cpp {cpp:?}: {e}"))?;
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr);
-        let first = stderr.lines().find(|l| !l.trim().is_empty()).unwrap_or("no diagnostic");
+        let first = stderr
+            .lines()
+            .find(|l| !l.trim().is_empty())
+            .unwrap_or("no diagnostic");
         return Err(format!(
             "--types-cpp {cpp:?} failed on {} ({}): {first}",
             file.display(),
@@ -186,7 +194,9 @@ fn strip_comments(text: &str) -> String {
 fn line_marker(directive: &str) -> Option<(usize, Option<String>)> {
     let rest = directive.strip_prefix('#')?.trim_start();
     let rest = rest.strip_prefix("line").unwrap_or(rest).trim_start();
-    let digits = rest.find(|c: char| !c.is_ascii_digit()).unwrap_or(rest.len());
+    let digits = rest
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(rest.len());
     let line = rest[..digits].parse().ok()?;
     let tail = rest[digits..].trim_start();
     let file = tail
@@ -319,7 +329,11 @@ fn flush(out: &mut Vec<Chunk>, cur: &mut String, start: &(String, usize)) {
     let text = cur.split_whitespace().collect::<Vec<_>>().join(" ");
     cur.clear();
     if !text.is_empty() {
-        out.push(Chunk { file: start.0.clone(), line: start.1, text });
+        out.push(Chunk {
+            file: start.0.clone(),
+            line: start.1,
+            text,
+        });
     }
 }
 
@@ -549,7 +563,10 @@ fn constant(
         "(" => {
             let close = matching(toks, *at, "(", ")")?;
             let cast = toks[*at + 1..close].iter().all(|t| {
-                matches!(t.as_str(), "int" | "long" | "short" | "char" | "signed" | "unsigned")
+                matches!(
+                    t.as_str(),
+                    "int" | "long" | "short" | "char" | "signed" | "unsigned"
+                )
             });
             if cast && close > *at + 1 {
                 let ty = Ty::named(&toks[*at + 1..close])?;
@@ -600,7 +617,11 @@ fn constant(
         let right = constant(toks, at, prec + 1, known, depth + 1)?;
         let ((a, ty), (b, _)) = (left, right);
         left = if op == "<<" || op == ">>" {
-            let bits = if matches!(ty, Ty::LLong | Ty::ULLong) { 64 } else { 32 };
+            let bits = if matches!(ty, Ty::LLong | Ty::ULLong) {
+                64
+            } else {
+                32
+            };
             let n = u32::try_from(b).ok().filter(|n| *n < bits)?;
             let v = match (op, ty) {
                 (">>", _) => a >> n,
@@ -784,7 +805,10 @@ fn classify(text: &str, known: &mut BTreeMap<String, i128>) -> Option<Body> {
                     return None;
                 }
                 let func = name.clone();
-                return Some(Body::Prototype { func, decl: join(&pointer_parameters(decl.to_vec())) });
+                return Some(Body::Prototype {
+                    func,
+                    decl: join(&pointer_parameters(decl.to_vec())),
+                });
             }
             _ => continue,
         }

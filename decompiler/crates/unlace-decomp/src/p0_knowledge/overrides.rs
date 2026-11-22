@@ -57,8 +57,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
-use unlace_base::marshal::{Decoder, ElementId, Encoder, IdRegistry, ATTRIB_SPACE, ATTRIB_TYPE};
-use unlace_base::space::{AddrSpace, AddrSpaceManager, ATTRIB_DELAY};
+use unlace_base::marshal::{ATTRIB_SPACE, ATTRIB_TYPE, Decoder, ElementId, Encoder, IdRegistry};
+use unlace_base::space::{ATTRIB_DELAY, AddrSpace, AddrSpaceManager};
 use unlace_base::types::{int4, uint4};
 
 // ---------------------------------------------------------------------------
@@ -289,8 +289,13 @@ impl Override {
     /// \param index is the index of the address space
     /// \param glb is the Architecture's address-space manager
     fn generate_deadcode_delay_message(index: int4, glb: &AddrSpaceManager) -> String {
-        let spc = glb.get_space(index).expect("generateDeadcodeDelayMessage: null space");
-        format!("Restarted to delay deadcode elimination for space: {}", spc.get_name())
+        let spc = glb
+            .get_space(index)
+            .expect("generateDeadcodeDelayMessage: null space");
+        format!(
+            "Restarted to delay deadcode elimination for space: {}",
+            spc.get_name()
+        )
     }
 
     /// Force a specific branch instruction to be an unstructured \e goto
@@ -529,7 +534,9 @@ impl Override {
             let mut b = String::new();
             // print_raw on a valid address cannot fail; an m_maximal sentinel
             // would be C++ UB and panics there too.
-            target.print_raw(&mut a).expect("printRaw: forcegoto target");
+            target
+                .print_raw(&mut a)
+                .expect("printRaw: forcegoto target");
             dest.print_raw(&mut b).expect("printRaw: forcegoto dest");
             s.push_str(&format!("force goto at {a} jumping to {b}\n"));
         }
@@ -538,21 +545,35 @@ impl Override {
             if delay < 0 {
                 continue;
             }
-            let spc = glb.get_space(i as int4).expect("printRaw: null deadcode space");
-            s.push_str(&format!("dead code delay on {} set to {}\n", spc.get_name(), delay));
+            let spc = glb
+                .get_space(i as int4)
+                .expect("printRaw: null deadcode space");
+            s.push_str(&format!(
+                "dead code delay on {} set to {}\n",
+                spc.get_name(),
+                delay
+            ));
         }
 
         for (callpoint, directcall) in &self.indirectover {
             let mut a = String::new();
             let mut b = String::new();
-            callpoint.print_raw(&mut a).expect("printRaw: indirect callpoint");
-            directcall.print_raw(&mut b).expect("printRaw: indirect target");
-            s.push_str(&format!("override indirect at {a} to call directly to {b}\n"));
+            callpoint
+                .print_raw(&mut a)
+                .expect("printRaw: indirect callpoint");
+            directcall
+                .print_raw(&mut b)
+                .expect("printRaw: indirect target");
+            s.push_str(&format!(
+                "override indirect at {a} to call directly to {b}\n"
+            ));
         }
 
         for (callpoint, proto) in &self.protoover {
             let mut a = String::new();
-            callpoint.print_raw(&mut a).expect("printRaw: proto callpoint");
+            callpoint
+                .print_raw(&mut a)
+                .expect("printRaw: proto callpoint");
             s.push_str(&format!("override prototype at {a} to "));
             proto.print_raw(s);
             s.push('\n');
@@ -604,7 +625,9 @@ impl Override {
             if delay < 0 {
                 continue;
             }
-            let spc = glb.get_space(i as int4).expect("encode: null deadcode space");
+            let spc = glb
+                .get_space(i as int4)
+                .expect("encode: null deadcode space");
             encoder.open_element(&ELEM_DEADCODEDELAY);
             encoder.write_space(&ATTRIB_SPACE, spc);
             encoder.write_signed_integer(&ATTRIB_DELAY, delay as i64);

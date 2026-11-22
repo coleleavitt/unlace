@@ -15,7 +15,9 @@ fn factory() -> TypeFactoryImpl {
     types.set_default_alignment_map();
     types.set_max_basetype_size(8);
     types.setup_sizes(Some(8), 8, 4);
-    types.set_core_type("char", 1, type_metatype::TYPE_INT, true).expect("char core type");
+    types
+        .set_core_type("char", 1, type_metatype::TYPE_INT, true)
+        .expect("char core type");
     types.cache_core_types().expect("cache core types");
     types
 }
@@ -42,8 +44,17 @@ fn every_named_aggregate_is_sized_and_incomplete() {
     for agg in NAMED_AGGREGATES {
         let ct = named_aggregate(agg.name, &types, 1, Layout::Opaque).expect("mint");
         assert_eq!(ct.get_size(), agg.size, "{}: width", agg.name);
-        assert!(ct.get_size() > 0, "{}: a 0-width pointee keeps PTRSUB alive", agg.name);
-        assert_eq!(ct.get_metatype(), type_metatype::TYPE_STRUCT, "{}", agg.name);
+        assert!(
+            ct.get_size() > 0,
+            "{}: a 0-width pointee keeps PTRSUB alive",
+            agg.name
+        );
+        assert_eq!(
+            ct.get_metatype(),
+            type_metatype::TYPE_STRUCT,
+            "{}",
+            agg.name
+        );
         assert!(
             ct.is_incomplete(),
             "{}: the shell stays incomplete so DWARF may complete it in place",
@@ -65,7 +76,10 @@ fn a_completed_name_is_left_alone() {
         .set_fields_struct_raw(&shell, vec![field], Vec::new(), 144, 8, 0)
         .expect("complete stat");
     let got = named_aggregate("stat", &types, 1, Layout::Opaque).expect("find the held stat");
-    assert!(Rc::ptr_eq(&complete, &got), "the held definition is the answer");
+    assert!(
+        Rc::ptr_eq(&complete, &got),
+        "the held definition is the answer"
+    );
     assert!(!got.is_incomplete(), "and it stays complete");
 }
 
@@ -81,7 +95,10 @@ fn a_different_type_under_the_same_name_declines() {
     types
         .set_fields_struct_raw(&shell, vec![field], Vec::new(), 24, 8, 0)
         .expect("a 24-byte `option` that is not the platform's");
-    assert!(named_aggregate("option", &types, 1, Layout::Opaque).is_err(), "declined, not adopted");
+    assert!(
+        named_aggregate("option", &types, 1, Layout::Opaque).is_err(),
+        "declined, not adopted"
+    );
 }
 
 /// glibc spells `FILE` as `struct _IO_FILE`, so that is the tag a `-g` image
@@ -96,8 +113,12 @@ fn the_platform_spelling_of_the_same_type_is_adopted() {
     let complete = types
         .set_fields_struct_raw(&shell, vec![field], Vec::new(), 216, 8, 0)
         .expect("complete _IO_FILE");
-    let got = named_aggregate("FILE", &types, 1, Layout::Opaque).expect("adopt the platform spelling");
-    assert!(Rc::ptr_eq(&complete, &got), "`FILE` resolves to the held `_IO_FILE`");
+    let got =
+        named_aggregate("FILE", &types, 1, Layout::Opaque).expect("adopt the platform spelling");
+    assert!(
+        Rc::ptr_eq(&complete, &got),
+        "`FILE` resolves to the held `_IO_FILE`"
+    );
     assert_eq!(got.get_name(), "_IO_FILE");
 }
 
@@ -109,8 +130,13 @@ fn the_platform_spelling_of_the_same_type_is_adopted() {
 #[test]
 fn a_zero_width_forward_declaration_declines() {
     let types = factory();
-    types.get_type_struct("stat").expect("a width-0 forward declaration");
-    assert!(named_aggregate("stat", &types, 1, Layout::Opaque).is_err(), "declined, not completed");
+    types
+        .get_type_struct("stat")
+        .expect("a width-0 forward declaration");
+    assert!(
+        named_aggregate("stat", &types, 1, Layout::Opaque).is_err(),
+        "declined, not completed"
+    );
 }
 
 /// The adopt test is metatype + declared width, NOT completeness: a struct of
@@ -123,11 +149,21 @@ fn an_incomplete_struct_of_the_declared_width_is_adopted() {
     let types = factory();
     let shell = types.get_type_struct("stat").expect("shell");
     let held = types
-        .set_fields_struct_raw(&shell, Vec::new(), Vec::new(), 144, 8, flags::type_incomplete)
+        .set_fields_struct_raw(
+            &shell,
+            Vec::new(),
+            Vec::new(),
+            144,
+            8,
+            flags::type_incomplete,
+        )
         .expect("a 144-byte shell somebody else is populating");
     assert!(held.is_incomplete(), "the fixture is the incomplete case");
     let got = named_aggregate("stat", &types, 1, Layout::Opaque).expect("adopted");
-    assert!(Rc::ptr_eq(&held, &got), "the held shell is the answer, not a second definition");
+    assert!(
+        Rc::ptr_eq(&held, &got),
+        "the held shell is the answer, not a second definition"
+    );
 }
 
 /// Every `NamedPtr` in either table must name a row of `NAMED_AGGREGATES` —
@@ -176,9 +212,15 @@ fn a_retarget_only_names_a_void_pointer() {
         };
         assert_eq!(sig.params.len(), base.params.len(), "{name}: arity moved");
         assert_eq!(sig.vararg, base.vararg, "{name}: vararg slot moved");
-        assert!(same(&sig.ret, &base.ret), "{name}: the return type is not a naming of the shipped one");
+        assert!(
+            same(&sig.ret, &base.ret),
+            "{name}: the return type is not a naming of the shipped one"
+        );
         for (i, (new, old)) in sig.params.iter().zip(base.params.iter()).enumerate() {
-            assert!(same(new, old), "{name}: p{i} is not a naming of the shipped slot");
+            assert!(
+                same(new, old),
+                "{name}: p{i} is not a naming of the shipped slot"
+            );
         }
     }
 }
@@ -187,7 +229,14 @@ fn a_retarget_only_names_a_void_pointer() {
 /// blanket retarget would call it a `FILE *` at every one of those call sites.
 #[test]
 fn the_va_list_family_is_never_retargeted() {
-    for name in ["vasprintf", "vsnprintf", "__vasprintf_chk", "__vsnprintf_chk", "verr", "vwarn"] {
+    for name in [
+        "vasprintf",
+        "vsnprintf",
+        "__vasprintf_chk",
+        "__vsnprintf_chk",
+        "verr",
+        "vwarn",
+    ] {
         assert!(
             !LIBC_EXT_NAMED.iter().any(|(n, _)| *n == name),
             "{name} takes a va_list, not an aggregate pointer"
@@ -197,19 +246,31 @@ fn the_va_list_family_is_never_retargeted() {
         .iter()
         .find(|(n, _)| *n == "__vfprintf_chk")
         .expect("__vfprintf_chk names its stream");
-    assert!(matches!(chk.params[0], Ty::NamedPtr("FILE")), "p0 is the stream");
-    assert!(matches!(chk.params[3], Ty::VoidPtr), "p3 is the va_list and stays void *");
+    assert!(
+        matches!(chk.params[0], Ty::NamedPtr("FILE")),
+        "p0 is the stream"
+    );
+    assert!(
+        matches!(chk.params[3], Ty::VoidPtr),
+        "p3 is the va_list and stays void *"
+    );
 }
 
 /// `getdelim` takes the delimiter where `getline` takes nothing, so its stream
 /// is the FOURTH slot. Pinned because the off-by-one is invisible in output.
 #[test]
 fn getdelim_names_its_fourth_slot() {
-    let (_, sig) = LIBC_EXT_NAMED.iter().find(|(n, _)| *n == "getdelim").expect("getdelim");
+    let (_, sig) = LIBC_EXT_NAMED
+        .iter()
+        .find(|(n, _)| *n == "getdelim")
+        .expect("getdelim");
     assert_eq!(sig.params.len(), 4, "char **, size_t *, int, FILE *");
     assert!(matches!(sig.params[2], Ty::Int), "the delimiter");
     assert!(matches!(sig.params[3], Ty::NamedPtr("FILE")), "the stream");
-    let (_, line) = LIBC_EXT_NAMED.iter().find(|(n, _)| *n == "getline").expect("getline");
+    let (_, line) = LIBC_EXT_NAMED
+        .iter()
+        .find(|(n, _)| *n == "getline")
+        .expect("getline");
     assert_eq!(line.params.len(), 3);
     assert!(matches!(line.params[2], Ty::NamedPtr("FILE")));
 }
@@ -219,13 +280,18 @@ fn getdelim_names_its_fourth_slot() {
 /// the shipped behavior.
 #[test]
 fn uflow_is_new_to_this_table() {
-    let (_, sig) = LIBC_EXT_NAMED.iter().find(|(n, _)| *n == "__uflow").expect("__uflow");
+    let (_, sig) = LIBC_EXT_NAMED
+        .iter()
+        .find(|(n, _)| *n == "__uflow")
+        .expect("__uflow");
     assert!(matches!(sig.ret, Ty::Int), "int __uflow(FILE *)");
     assert_eq!(sig.params.len(), 1);
     assert!(matches!(sig.params[0], Ty::NamedPtr("FILE")));
     assert!(
         !super::super::LIBC.iter().any(|(n, _)| *n == "__uflow")
-            && !super::super::kuna_libcsigs::LIBC_EXT.iter().any(|(n, _)| *n == "__uflow"),
+            && !super::super::kuna_libcsigs::LIBC_EXT
+                .iter()
+                .any(|(n, _)| *n == "__uflow"),
         "a name only this table carries"
     );
 }
@@ -248,7 +314,11 @@ fn the_tables_have_no_duplicate_names() {
     let before = across.len();
     across.sort_unstable();
     across.dedup();
-    assert_eq!(across.len(), before, "a name is carried by two libctypes tables");
+    assert_eq!(
+        across.len(),
+        before,
+        "a name is carried by two libctypes tables"
+    );
     let mut aggs: Vec<&str> = NAMED_AGGREGATES.iter().map(|a| a.name).collect();
     let before = aggs.len();
     aggs.sort_unstable();
@@ -261,7 +331,10 @@ fn the_tables_have_no_duplicate_names() {
 /// would retype a function the image wrote itself.
 #[test]
 fn the_defined_table_is_obstack_entry_points_only() {
-    for (name, sig) in LIBC_DEFINED_NAMED.iter().chain(LIBC_IMPORTED_OBSTACK.iter()) {
+    for (name, sig) in LIBC_DEFINED_NAMED
+        .iter()
+        .chain(LIBC_IMPORTED_OBSTACK.iter())
+    {
         assert!(
             name.starts_with("_obstack_"),
             "{name}: only the reserved obstack entry points may match a DEFINED name"
@@ -272,11 +345,17 @@ fn the_defined_table_is_obstack_entry_points_only() {
         );
         assert!(
             !super::super::LIBC.iter().any(|(n, _)| n == name)
-                && !super::super::kuna_libcsigs::LIBC_EXT.iter().any(|(n, _)| n == name),
+                && !super::super::kuna_libcsigs::LIBC_EXT
+                    .iter()
+                    .any(|(n, _)| n == name),
             "{name}: a name only this table carries, so `libctypes off` is unchanged"
         );
     }
-    assert_eq!(LIBC_DEFINED_NAMED.len(), 5, "`_obstack_allocated_p` has no installed declaration");
+    assert_eq!(
+        LIBC_DEFINED_NAMED.len(),
+        5,
+        "`_obstack_allocated_p` has no installed declaration"
+    );
 }
 
 /// The two obstack tables are the SAME five names with the SAME shape, and
@@ -315,15 +394,33 @@ fn the_two_obstack_tables_differ_only_in_the_size_slots() {
 #[test]
 fn each_obstack_channel_keeps_its_own_size_spelling() {
     let chunk = |t: &'static [(&str, Sig)]| {
-        &t.iter().find(|(n, _)| *n == "_obstack_newchunk").expect("newchunk").1
+        &t.iter()
+            .find(|(n, _)| *n == "_obstack_newchunk")
+            .expect("newchunk")
+            .1
     };
     let used = |t: &'static [(&str, Sig)]| {
-        &t.iter().find(|(n, _)| *n == "_obstack_memory_used").expect("used").1
+        &t.iter()
+            .find(|(n, _)| *n == "_obstack_memory_used")
+            .expect("used")
+            .1
     };
-    assert!(matches!(chunk(LIBC_DEFINED_NAMED).params[1], Ty::Size), "gnulib: size_t");
-    assert!(matches!(used(LIBC_DEFINED_NAMED).ret, Ty::Size), "gnulib: size_t");
-    assert!(matches!(chunk(LIBC_IMPORTED_OBSTACK).params[1], Ty::Int), "glibc: int");
-    assert!(matches!(used(LIBC_IMPORTED_OBSTACK).ret, Ty::Int), "glibc: int");
+    assert!(
+        matches!(chunk(LIBC_DEFINED_NAMED).params[1], Ty::Size),
+        "gnulib: size_t"
+    );
+    assert!(
+        matches!(used(LIBC_DEFINED_NAMED).ret, Ty::Size),
+        "gnulib: size_t"
+    );
+    assert!(
+        matches!(chunk(LIBC_IMPORTED_OBSTACK).params[1], Ty::Int),
+        "glibc: int"
+    );
+    assert!(
+        matches!(used(LIBC_IMPORTED_OBSTACK).ret, Ty::Int),
+        "glibc: int"
+    );
 }
 
 /// The record readers of the three account databases all end their argument
@@ -337,15 +434,31 @@ fn the_account_database_slots_name_both_aggregates() {
         ("fgetspent", "spwd"),
     ] {
         let (_, sig) = LIBC_EXT_NAMED.iter().find(|(n, _)| *n == name).expect(name);
-        assert!(matches!(sig.ret, Ty::NamedPtr(r) if r == record), "{name}: returns the record");
+        assert!(
+            matches!(sig.ret, Ty::NamedPtr(r) if r == record),
+            "{name}: returns the record"
+        );
         assert_eq!(sig.params.len(), 1);
-        assert!(matches!(sig.params[0], Ty::NamedPtr("FILE")), "{name}: reads a stream");
+        assert!(
+            matches!(sig.params[0], Ty::NamedPtr("FILE")),
+            "{name}: reads a stream"
+        );
     }
-    for (name, record) in [("putpwent", "passwd"), ("putgrent", "group"), ("putspent", "spwd")] {
+    for (name, record) in [
+        ("putpwent", "passwd"),
+        ("putgrent", "group"),
+        ("putspent", "spwd"),
+    ] {
         let (_, sig) = LIBC_EXT_NAMED.iter().find(|(n, _)| *n == name).expect(name);
         assert_eq!(sig.params.len(), 2);
-        assert!(matches!(sig.params[0], Ty::NamedPtr(r) if r == record), "{name}: the record");
-        assert!(matches!(sig.params[1], Ty::NamedPtr("FILE")), "{name}: then the stream");
+        assert!(
+            matches!(sig.params[0], Ty::NamedPtr(r) if r == record),
+            "{name}: the record"
+        );
+        assert!(
+            matches!(sig.params[1], Ty::NamedPtr("FILE")),
+            "{name}: then the stream"
+        );
     }
     // The reentrant lookups end in a `struct X **` result slot the vocabulary
     // cannot spell; the RECORD is the second slot, never the last.
@@ -356,8 +469,14 @@ fn the_account_database_slots_name_both_aggregates() {
     ] {
         let (_, sig) = LIBC_EXT_NAMED.iter().find(|(n, _)| *n == name).expect(name);
         assert_eq!(sig.params.len(), 5);
-        assert!(matches!(sig.params[1], Ty::NamedPtr(r) if r == record), "{name}: p1 is the record");
-        assert!(matches!(sig.params[4], Ty::VoidPtr), "{name}: p4 is the result pointer");
+        assert!(
+            matches!(sig.params[1], Ty::NamedPtr(r) if r == record),
+            "{name}: p1 is the record"
+        );
+        assert!(
+            matches!(sig.params[4], Ty::VoidPtr),
+            "{name}: p4 is the result pointer"
+        );
     }
 }
 
@@ -367,7 +486,9 @@ fn the_account_database_slots_name_both_aggregates() {
 fn the_declared_lookup_follows_the_gate() {
     let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     let types = factory();
-    unlace_decomp::kuna_libctypes::set_libctypes_env_layout(unlace_decomp::kuna_libctypes::LibcTypesLayout::Off);
+    unlace_decomp::kuna_libctypes::set_libctypes_env_layout(
+        unlace_decomp::kuna_libctypes::LibcTypesLayout::Off,
+    );
     let off = super::super::declared_libc_prototype("fopen", &types, 1, Layout::Opaque)
         .expect("fopen off");
     let off_base = off.outtype.as_ref().and_then(|t| t.get_ptr_to());
@@ -376,7 +497,9 @@ fn the_declared_lookup_follows_the_gate() {
         Some(type_metatype::TYPE_VOID),
         "off: the shipped void * signature"
     );
-    unlace_decomp::kuna_libctypes::set_libctypes_env_layout(unlace_decomp::kuna_libctypes::LibcTypesLayout::Opaque);
+    unlace_decomp::kuna_libctypes::set_libctypes_env_layout(
+        unlace_decomp::kuna_libctypes::LibcTypesLayout::Opaque,
+    );
     let on = super::super::declared_libc_prototype("fopen", &types, 1, Layout::Opaque)
         .expect("fopen on");
     let on_base = on.outtype.as_ref().and_then(|t| t.get_ptr_to());
@@ -396,19 +519,28 @@ fn the_declared_lookup_follows_the_gate() {
 fn a_declined_aggregate_degrades_to_the_width_stable_signature() {
     let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     let types = factory();
-    unlace_decomp::kuna_libctypes::set_libctypes_env_layout(unlace_decomp::kuna_libctypes::LibcTypesLayout::Opaque);
+    unlace_decomp::kuna_libctypes::set_libctypes_env_layout(
+        unlace_decomp::kuna_libctypes::LibcTypesLayout::Opaque,
+    );
     let shell = types.get_type_struct("stat").expect("shell");
     let int4t = types.get_base(4, type_metatype::TYPE_INT).expect("int");
     let field = unlace_decomp::dtype::TypeField::new(0, 0, "mine", int4t);
     types
         .set_fields_struct_raw(&shell, vec![field], Vec::new(), 24, 8, 0)
         .expect("a 24-byte `stat` of the program's own");
-    assert!(named_aggregate("stat", &types, 1, Layout::Opaque).is_err(), "the fixture declines the named form");
+    assert!(
+        named_aggregate("stat", &types, 1, Layout::Opaque).is_err(),
+        "the fixture declines the named form"
+    );
     let pieces = super::super::declared_libc_prototype("stat", &types, 1, Layout::Opaque)
         .expect("still answered, from the void * tables");
     assert_eq!(pieces.intypes.len(), 2, "the shipped arity survives");
     let p1 = pieces.intypes[1].get_ptr_to().expect("a pointer slot");
-    assert_eq!(p1.get_metatype(), type_metatype::TYPE_VOID, "degraded to void *");
+    assert_eq!(
+        p1.get_metatype(),
+        type_metatype::TYPE_VOID,
+        "degraded to void *"
+    );
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var(unlace_decomp::kuna_libctypes::LIBCTYPES_ENV) };
 }
@@ -443,8 +575,14 @@ fn glibc_layouts_fit_their_aggregate() {
                 row.name,
                 agg.size
             );
-            assert_eq!(field.offset, row.off, "the field offset is the declared one");
-            assert_eq!(field.ident, row.off, "ident is the offset, as the DWARF importer does it");
+            assert_eq!(
+                field.offset, row.off,
+                "the field offset is the declared one"
+            );
+            assert_eq!(
+                field.ident, row.off,
+                "ident is the offset, as the DWARF importer does it"
+            );
         }
     }
 }
@@ -464,10 +602,13 @@ fn glibc_layouts_nest_at_most_one_level() {
     }
     for (name, rows) in glibc::GLIBC_LAYOUTS {
         for row in rows.iter() {
-            let Some(inner) = named(&row.ty) else { continue };
+            let Some(inner) = named(&row.ty) else {
+                continue;
+            };
             assert_ne!(inner, *name, "{name}::{} holds its own aggregate", row.name);
-            let nested = glibc::layout_for(inner)
-                .unwrap_or_else(|| panic!("{name}::{} names `{inner}`, which has no layout", row.name));
+            let nested = glibc::layout_for(inner).unwrap_or_else(|| {
+                panic!("{name}::{} names `{inner}`, which has no layout", row.name)
+            });
             for deep in nested.iter() {
                 assert!(
                     named(&deep.ty).is_none(),
@@ -487,8 +628,16 @@ fn glibc_mints_a_complete_file_with_its_published_fields() {
     let types = factory();
     let file = named_aggregate("FILE", &types, 1, Layout::Glibc).expect("mint FILE");
     assert_eq!(file.get_size(), 216, "the glibc x86-64 width");
-    assert!(!file.is_incomplete(), "a struct with its members is not incomplete");
-    for (off, want, size) in [(0, "_flags", 4), (8, "_IO_read_ptr", 8), (0x10, "_IO_read_end", 8), (0x70, "_fileno", 4)] {
+    assert!(
+        !file.is_incomplete(),
+        "a struct with its members is not incomplete"
+    );
+    for (off, want, size) in [
+        (0, "_flags", 4),
+        (8, "_IO_read_ptr", 8),
+        (0x10, "_IO_read_end", 8),
+        (0x70, "_fileno", 4),
+    ] {
         let field = (0..file.num_depend())
             .filter_map(|i| file.get_field(i))
             .find(|f| f.offset == off)
@@ -535,7 +684,10 @@ fn glibc_adopts_a_held_definition_instead_of_installing_over_it() {
         .set_fields_struct_raw(&shell, vec![field], Vec::new(), 144, 8, 0)
         .expect("somebody else's 144-byte `stat`");
     let got = named_aggregate("stat", &types, 1, Layout::Glibc).expect("adopt");
-    assert!(Rc::ptr_eq(&got, &theirs), "the held definition is the answer");
+    assert!(
+        Rc::ptr_eq(&got, &theirs),
+        "the held definition is the answer"
+    );
     assert_eq!(
         got.get_field(0).expect("their field").name,
         "theirs",
@@ -550,7 +702,10 @@ fn glibc_adopts_a_held_definition_instead_of_installing_over_it() {
 fn glibc_leaves_the_layoutless_aggregates_opaque() {
     let types = factory();
     for name in ["DIR", "termios", "sigset_t", "pthread_mutex_t"] {
-        assert!(glibc::layout_for(name).is_none(), "`{name}` must have no layout");
+        assert!(
+            glibc::layout_for(name).is_none(),
+            "`{name}` must have no layout"
+        );
         let ct = named_aggregate(name, &types, 1, Layout::Glibc).expect("mint");
         assert!(ct.is_incomplete(), "`{name}` stays an opaque shell");
         assert_eq!(ct.num_depend(), 0, "`{name}` has no members");
@@ -576,9 +731,13 @@ fn only_a_glibc_x86_64_elf_takes_the_layouts() {
         ("mips_gp_le32", false),
         ("libctypes_mips32_glibc_le32", false),
     ] {
-        let path = format!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/{}"), name);
+        let path = format!(
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/{}"),
+            name
+        );
         let bytes = std::fs::read(&path).unwrap_or_else(|e| panic!("read {name}: {e}"));
-        let file = object::File::parse(bytes.as_slice()).unwrap_or_else(|e| panic!("parse {name}: {e}"));
+        let file =
+            object::File::parse(bytes.as_slice()).unwrap_or_else(|e| panic!("parse {name}: {e}"));
         assert_eq!(
             glibc::target_is_glibc_x86_64(&file),
             want,
@@ -608,10 +767,16 @@ fn no_layout_names_a_reserved_member() {
     }
     let types = factory();
     let stat = named_aggregate("stat", &types, 1, Layout::Glibc).expect("mint stat");
-    assert_eq!(stat.get_size(), 144, "the holes do not shrink the aggregate");
+    assert_eq!(
+        stat.get_size(),
+        144,
+        "the holes do not shrink the aggregate"
+    );
     for off in [0x24, 0x78, 0x80, 0x88] {
         assert!(
-            (0..stat.num_depend()).filter_map(|i| stat.get_field(i)).all(|f| f.offset != off),
+            (0..stat.num_depend())
+                .filter_map(|i| stat.get_field(i))
+                .all(|f| f.offset != off),
             "stat has no member at {off:#x}"
         );
     }
@@ -630,7 +795,7 @@ fn no_layout_names_a_reserved_member() {
 /// buy a 216-byte x86-64 `FILE`.
 #[test]
 fn a_refused_target_cannot_reach_the_glibc_layouts() {
-    use unlace_decomp::kuna_libctypes::{set_libctypes_env_layout, LibcTypesLayout, LIBCTYPES_ENV};
+    use unlace_decomp::kuna_libctypes::{LIBCTYPES_ENV, LibcTypesLayout, set_libctypes_env_layout};
     let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
 
     // The run asked for `glibc` and the program looks the part. The load-time
@@ -639,21 +804,33 @@ fn a_refused_target_cannot_reach_the_glibc_layouts() {
     set_libctypes_env_layout(LibcTypesLayout::Glibc);
     let refused = factory();
     named_aggregate("stat", &refused, 1, Layout::Glibc).expect("a laid-out `stat`");
-    let shelled = super::super::declared_libc_prototype("fopen", &refused, 1, Layout::Opaque)
-        .expect("fopen");
-    let shell = shelled.outtype.as_ref().and_then(|t| t.get_ptr_to()).expect("FILE *");
+    let shelled =
+        super::super::declared_libc_prototype("fopen", &refused, 1, Layout::Opaque).expect("fopen");
+    let shell = shelled
+        .outtype
+        .as_ref()
+        .and_then(|t| t.get_ptr_to())
+        .expect("FILE *");
     assert_eq!(shell.get_name(), "FILE", "the name is still the table's");
     assert!(
         shell.is_incomplete(),
         "a refused target gets the fieldless shell, whatever the program holds"
     );
-    assert_eq!(shell.num_depend(), 0, "and no fields to read an offset under");
+    assert_eq!(
+        shell.num_depend(),
+        0,
+        "and no fields to read an offset under"
+    );
 
     // The gate passed: the same call mints the published layout.
     let accepted = factory();
-    let pieces = super::super::declared_libc_prototype("fopen", &accepted, 1, Layout::Glibc)
-        .expect("fopen");
-    let file = pieces.outtype.as_ref().and_then(|t| t.get_ptr_to()).expect("FILE *");
+    let pieces =
+        super::super::declared_libc_prototype("fopen", &accepted, 1, Layout::Glibc).expect("fopen");
+    let file = pieces
+        .outtype
+        .as_ref()
+        .and_then(|t| t.get_ptr_to())
+        .expect("FILE *");
     assert_eq!(file.get_name(), "FILE");
     assert!(!file.is_incomplete(), "an accepted target gets the fields");
     assert_eq!(file.get_size(), 216, "the published x86-64 width");
@@ -663,7 +840,11 @@ fn a_refused_target_cannot_reach_the_glibc_layouts() {
     set_libctypes_env_layout(LibcTypesLayout::Opaque);
     let still = super::super::declared_libc_prototype("fopen", &factory(), 1, Layout::Opaque)
         .expect("fopen");
-    let shell = still.outtype.as_ref().and_then(|t| t.get_ptr_to()).expect("FILE *");
+    let shell = still
+        .outtype
+        .as_ref()
+        .and_then(|t| t.get_ptr_to())
+        .expect("FILE *");
     assert!(shell.is_incomplete(), "`opaque` mints the fieldless shell");
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var(LIBCTYPES_ENV) };
@@ -685,17 +866,24 @@ fn a_copy_relocated_stream_slot_is_the_stream_pointer() {
     let types = factory();
     let facts = streams::stream_data_symbols(&file, &types, 1, Layout::Opaque);
 
-    let mut got: Vec<(String, u64)> =
-        facts.iter().map(|f| (f.name.clone(), f.addr)).collect();
+    let mut got: Vec<(String, u64)> = facts.iter().map(|f| (f.name.clone(), f.addr)).collect();
     got.sort();
     assert_eq!(
         got,
-        vec![("stdin".to_string(), 0x4020), ("stdout".to_string(), 0x4010)],
+        vec![
+            ("stdin".to_string(), 0x4020),
+            ("stdout".to_string(), 0x4010)
+        ],
         "the two copy-relocated slots, under the stream's own name"
     );
     for f in &facts {
         let pointee = f.type_.get_ptr_to().expect("FILE *");
-        assert_eq!(pointee.get_name(), "FILE", "{}: one indirection to the stream", f.name);
+        assert_eq!(
+            pointee.get_name(),
+            "FILE",
+            "{}: one indirection to the stream",
+            f.name
+        );
     }
 }
 
@@ -709,12 +897,14 @@ fn a_shared_object_names_the_got_slot_as_a_pointer_to_the_stream() {
     let types = factory();
     let facts = streams::stream_data_symbols(&file, &types, 1, Layout::Opaque);
 
-    let mut got: Vec<(String, u64)> =
-        facts.iter().map(|f| (f.name.clone(), f.addr)).collect();
+    let mut got: Vec<(String, u64)> = facts.iter().map(|f| (f.name.clone(), f.addr)).collect();
     got.sort();
     assert_eq!(
         got,
-        vec![("stdin_ptr".to_string(), 0x3fe0), ("stdout_ptr".to_string(), 0x3fd8)],
+        vec![
+            ("stdin_ptr".to_string(), 0x3fe0),
+            ("stdout_ptr".to_string(), 0x3fd8)
+        ],
         "the GOT slots, named for what they hold"
     );
     for f in &facts {
@@ -730,9 +920,10 @@ fn a_shared_object_names_the_got_slot_as_a_pointer_to_the_stream() {
 #[test]
 fn the_two_stream_shapes_do_not_borrow_each_others_names() {
     let types = factory();
-    for (fixture, want_ptr) in
-        [("libctypes_streams_x86_64", false), ("libctypes_streams_so_x86_64.so", true)]
-    {
+    for (fixture, want_ptr) in [
+        ("libctypes_streams_x86_64", false),
+        ("libctypes_streams_so_x86_64.so", true),
+    ] {
         let bytes = fixture_bytes(fixture);
         let file = object::File::parse(&bytes[..]).expect("parse");
         for f in streams::stream_data_symbols(&file, &types, 1, Layout::Opaque) {
@@ -783,7 +974,11 @@ fn a_stream_slot_shares_the_tables_own_file_type() {
     assert!(!facts.is_empty());
     for f in &facts {
         let pointee = f.type_.get_ptr_to().expect("FILE *");
-        assert!(Rc::ptr_eq(&pointee, &table), "{}: one FILE, not two", f.name);
+        assert!(
+            Rc::ptr_eq(&pointee, &table),
+            "{}: one FILE, not two",
+            f.name
+        );
     }
 }
 
@@ -796,7 +991,10 @@ fn the_glibc_layout_reaches_a_stream_slot() {
     let types = factory();
     let facts = streams::stream_data_symbols(&file, &types, 1, Layout::Glibc);
     let pointee = facts[0].type_.get_ptr_to().expect("FILE *");
-    assert!(!pointee.is_incomplete(), "the published layout, not the shell");
+    assert!(
+        !pointee.is_incomplete(),
+        "the published layout, not the shell"
+    );
     assert!(pointee.num_depend() > 0, "with its members");
 }
 
@@ -822,11 +1020,22 @@ fn a_relocatable_or_non_elf_image_yields_no_stream_symbol() {
 #[test]
 fn the_frame_splitting_slots_stay_out() {
     for name in [
-        "utimensat", "futimens", "utimes", "futimesat", "sigfillset", "sigsuspend",
-        "pthread_sigmask", "sigdelset", "sigismember", "sigwait",
+        "utimensat",
+        "futimens",
+        "utimes",
+        "futimesat",
+        "sigfillset",
+        "sigsuspend",
+        "pthread_sigmask",
+        "sigdelset",
+        "sigismember",
+        "sigwait",
     ] {
         assert!(
-            !LIBC_NAMED.iter().chain(LIBC_EXT_NAMED.iter()).any(|(n, _)| *n == name),
+            !LIBC_NAMED
+                .iter()
+                .chain(LIBC_EXT_NAMED.iter())
+                .any(|(n, _)| *n == name),
             "{name}: naming this slot splits the caller's frame object"
         );
     }
@@ -854,7 +1063,8 @@ fn only_an_x86_64_glibc_abi_takes_the_widths() {
         ("macho_imports", false),
     ] {
         let bytes = fixture_bytes(name);
-        let file = object::File::parse(bytes.as_slice()).unwrap_or_else(|e| panic!("parse {name}: {e}"));
+        let file =
+            object::File::parse(bytes.as_slice()).unwrap_or_else(|e| panic!("parse {name}: {e}"));
         assert_eq!(
             glibc::target_takes_the_widths(&file),
             want,
@@ -869,24 +1079,44 @@ fn only_an_x86_64_glibc_abi_takes_the_widths() {
 /// `void *` tables, and so does a name the operator declares there.
 #[test]
 fn a_refused_target_is_off_whatever_was_asked() {
-    use unlace_decomp::kuna_libctypes::{set_libctypes_env_layout, LibcTypesLayout, LIBCTYPES_ENV};
+    use unlace_decomp::kuna_libctypes::{LIBCTYPES_ENV, LibcTypesLayout, set_libctypes_env_layout};
     let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     for asked in [LibcTypesLayout::Opaque, LibcTypesLayout::Glibc] {
         set_libctypes_env_layout(asked);
         let i386 = fixture_bytes("libctypes_widths_i386");
         let file = object::File::parse(i386.as_slice()).expect("parse the i386 witness");
-        assert_eq!(super::super::effective_libctypes_layout(&file), Layout::Off, "{asked:?} on i386");
+        assert_eq!(
+            super::super::effective_libctypes_layout(&file),
+            Layout::Off,
+            "{asked:?} on i386"
+        );
         let x86_64 = fixture_bytes("libctypes_container_x86_64");
         let file = object::File::parse(x86_64.as_slice()).expect("parse the x86-64 fixture");
-        assert_ne!(super::super::effective_libctypes_layout(&file), Layout::Off, "{asked:?} on x86-64");
+        assert_ne!(
+            super::super::effective_libctypes_layout(&file),
+            Layout::Off,
+            "{asked:?} on x86-64"
+        );
     }
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var(LIBCTYPES_ENV) };
     let types = factory();
-    let pieces = super::super::declared_libc_prototype("fopen", &types, 1, Layout::Off).expect("fopen");
-    let pointee = pieces.outtype.as_ref().and_then(|t| t.get_ptr_to()).expect("a pointer result");
-    assert_eq!(pointee.get_metatype(), unlace_decomp::dtype::type_metatype::TYPE_VOID, "`void *`, not `FILE *`");
-    assert!(types.find_by_name("FILE").expect("lookup").is_none(), "and no shell is minted");
+    let pieces =
+        super::super::declared_libc_prototype("fopen", &types, 1, Layout::Off).expect("fopen");
+    let pointee = pieces
+        .outtype
+        .as_ref()
+        .and_then(|t| t.get_ptr_to())
+        .expect("a pointer result");
+    assert_eq!(
+        pointee.get_metatype(),
+        unlace_decomp::dtype::type_metatype::TYPE_VOID,
+        "`void *`, not `FILE *`"
+    );
+    assert!(
+        types.find_by_name("FILE").expect("lookup").is_none(),
+        "and no shell is minted"
+    );
 }
 
 /// The P5 fit rule (`unlace_decomp::kuna_libcfit`) recognises this table's
@@ -909,6 +1139,15 @@ fn the_fit_rule_knows_every_aggregate_this_table_names() {
 /// +0/-0. (`pthread_mutex_init` stays for its arity.)
 #[test]
 fn the_mutex_destroy_slot_stays_out() {
-    assert!(!LIBC_NAMED.iter().chain(LIBC_EXT_NAMED.iter()).any(|(n, _)| *n == "pthread_mutex_destroy"));
-    assert!(LIBC_EXT_NAMED.iter().any(|(n, _)| *n == "pthread_mutex_init"));
+    assert!(
+        !LIBC_NAMED
+            .iter()
+            .chain(LIBC_EXT_NAMED.iter())
+            .any(|(n, _)| *n == "pthread_mutex_destroy")
+    );
+    assert!(
+        LIBC_EXT_NAMED
+            .iter()
+            .any(|(n, _)| *n == "pthread_mutex_init")
+    );
 }

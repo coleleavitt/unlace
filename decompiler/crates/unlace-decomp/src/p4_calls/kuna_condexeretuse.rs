@@ -80,7 +80,9 @@ pub fn applies(data: &Funcdata, opmatch: OpId) -> bool {
 /// Whether any MULTIEQUAL `op` a walk reached through `vn` sits in a merge
 /// block that re-tests its condition and was entered through one in-edge.
 pub fn any_retest_merge(data: &Funcdata, entered: &[(OpId, VarnodeId)]) -> bool {
-    entered.iter().any(|&(op, vn)| carried(data, op, vn, None).is_some())
+    entered
+        .iter()
+        .any(|&(op, vn)| carried(data, op, vn, None).is_some())
 }
 
 /// The [`Forced`] pair the output of `op` carries when the walk reaches it
@@ -125,7 +127,10 @@ pub fn cannot_arrive(data: &Funcdata, f: Forced, op: OpId, reach: &mut Reach) ->
     if bl == f.merge {
         return false;
     }
-    let set = reach.sets.entry(f.next).or_insert_with(|| reachable_from(data, f.next));
+    let set = reach
+        .sets
+        .entry(f.next)
+        .or_insert_with(|| reachable_from(data, f.next));
     set.as_ref().is_some_and(|s| !s.contains(&bl))
 }
 
@@ -155,7 +160,11 @@ fn reachable_from(data: &Funcdata, from: BlockId) -> Option<HashSet<BlockId>> {
                 continue;
             }
             let nb = graph.block(next);
-            let slot = if nb.size_in() == 2 && nb.size_out() == 2 { b.get_out_rev_index(i) } else { -1 };
+            let slot = if nb.size_in() == 2 && nb.size_out() == 2 {
+                b.get_out_rev_index(i)
+            } else {
+                -1
+            };
             stack.push((next, slot));
         }
     }

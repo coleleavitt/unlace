@@ -83,14 +83,14 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use object::read::{Object, ObjectSection};
 use unlace_base::address::Address;
-use unlace_base::space::{spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::translate::{PcodeEmit, Translate};
-use object::read::{Object, ObjectSection};
 
-use super::xrefs::{in_range, FullOp, XrefKind};
+use super::xrefs::{FullOp, XrefKind, in_range};
 
 /// How far into a function the base-establishing idiom is looked for. GCC emits
 /// it in the prologue, after at most a frame setup and the callee-saved pushes;
@@ -162,7 +162,11 @@ impl Ctx {
         let stack = arch.manage().get_stack_space()?;
         let sp = stack.get_spacebase(0).ok()?;
         Some(Ctx {
-            sp: VarnodeData { space: sp.space, offset: sp.offset, size: sp.size },
+            sp: VarnodeData {
+                space: sp.space,
+                offset: sp.offset,
+                size: sp.size,
+            },
             data_index: data_space.map(|d| d.get_index()),
         })
     }
@@ -207,7 +211,9 @@ enum Val {
 type Key = (i32, u64, u32);
 
 fn key_of(vn: &VarnodeData) -> Option<Key> {
-    vn.space.as_ref().map(|s| (s.get_index(), vn.offset, vn.size))
+    vn.space
+        .as_ref()
+        .map(|s| (s.get_index(), vn.offset, vn.size))
 }
 
 /// The byte mask of an `n`-byte value.
@@ -270,17 +276,21 @@ impl Machine {
     /// would let a write to `bl` leave a stale `ebx` behind, which is the one
     /// way this machine could hand out a value the program does not hold.
     fn invalidate(&mut self, vn: &VarnodeData) {
-        let Some((idx, off, size)) = key_of(vn) else { return };
+        let Some((idx, off, size)) = key_of(vn) else {
+            return;
+        };
         let (lo, hi) = (off, off.saturating_add(u64::from(size)));
-        self.vals.retain(|&(i, o, s)| {
-            i != idx || o.saturating_add(u64::from(s)) <= lo || o >= hi
-        });
+        self.vals
+            .retain(|&(i, o, s)| i != idx || o.saturating_add(u64::from(s)) <= lo || o >= hi);
     }
 
     fn get(&self, vn: &VarnodeData) -> Option<Val> {
         let space = vn.space.as_ref()?;
         if space.get_type() == spacetype::IPTR_CONSTANT {
-            return Some(Val::Const { v: vn.offset & mask(vn.size), pc: false });
+            return Some(Val::Const {
+                v: vn.offset & mask(vn.size),
+                pc: false,
+            });
         }
         self.vals.get(&key_of(vn)?).copied()
     }
@@ -298,7 +308,10 @@ impl Machine {
         self.invalidate(out);
         if let (Some(k), Some(v)) = (key_of(out), val) {
             let v = match v {
-                Val::Const { v, pc } => Val::Const { v: v & mask(out.size), pc },
+                Val::Const { v, pc } => Val::Const {
+                    v: v & mask(out.size),
+                    pc,
+                },
                 other => other,
             };
             self.vals.insert(k, v);
@@ -313,14 +326,20 @@ impl Machine {
             let vn = op.ins.get(i)?;
             let v = m.get(vn)?;
             Some(match v {
-                Val::Const { v, pc } => Val::Const { v, pc: pc || v == fall_through },
+                Val::Const { v, pc } => Val::Const {
+                    v,
+                    pc: pc || v == fall_through,
+                },
                 other => other,
             })
         };
 
         // A call clobbers the caller-saved registers and may rewrite the frame
         // below the stack pointer; nothing survives it that this machine models.
-        if matches!(op.opcode, OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_CALLOTHER) {
+        if matches!(
+            op.opcode,
+            OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_CALLOTHER
+        ) {
             // The stack pointer survives: the callee's own `ret` puts it back,
             // and dropping it would strand every push and pop after the call.
             let sp = self.get(&ctx.sp);
@@ -381,7 +400,10 @@ impl Machine {
             | OpCode::CPUI_CAST => a,
             OpCode::CPUI_INT_ADD => match (a, b) {
                 (Some(Val::Const { v: x, pc: p }), Some(Val::Const { v: y, pc: q })) => {
-                    Some(Val::Const { v: x.wrapping_add(y), pc: p || q })
+                    Some(Val::Const {
+                        v: x.wrapping_add(y),
+                        pc: p || q,
+                    })
                 }
                 (Some(Val::Stack(d)), Some(Val::Const { v, .. }))
                 | (Some(Val::Const { v, .. }), Some(Val::Stack(d))) => {
@@ -391,7 +413,10 @@ impl Machine {
             },
             OpCode::CPUI_INT_SUB => match (a, b) {
                 (Some(Val::Const { v: x, pc: p }), Some(Val::Const { v: y, pc: q })) => {
-                    Some(Val::Const { v: x.wrapping_sub(y), pc: p || q })
+                    Some(Val::Const {
+                        v: x.wrapping_sub(y),
+                        pc: p || q,
+                    })
                 }
                 (Some(Val::Stack(d)), Some(Val::Const { v, .. })) => {
                     Some(Val::Stack(d.wrapping_sub(sign_extend(v, out.size))))
@@ -464,7 +489,11 @@ impl PcodeEmit for Capture {
         outvar: Option<&VarnodeData>,
         vars: &[VarnodeData],
     ) {
-        self.ops.push(FullOp { opcode: opc, out: outvar.cloned(), ins: vars.to_vec() });
+        self.ops.push(FullOp {
+            opcode: opc,
+            out: outvar.cloned(),
+            ins: vars.to_vec(),
+        });
     }
 }
 
@@ -475,7 +504,10 @@ fn decode(translate: &dyn Translate, vma: u64, code_space: &Rc<AddrSpace>) -> Op
         translate.one_instruction(&mut cap, &addr)
     }));
     match decoded {
-        Ok(Ok(len)) if len > 0 => Some(Insn { len: len as u32, ops: cap.ops }),
+        Ok(Ok(len)) if len > 0 => Some(Insn {
+            len: len as u32,
+            ops: cap.ops,
+        }),
         _ => None,
     }
 }
@@ -536,7 +568,11 @@ fn holder_of(m: &Machine, ctx: &Ctx, want: u64) -> Option<VarnodeData> {
         }
     }
     let (_, offset, size) = best?;
-    Some(VarnodeData { space: Some(Rc::clone(space)), offset, size })
+    Some(VarnodeData {
+        space: Some(Rc::clone(space)),
+        offset,
+        size,
+    })
 }
 
 /// Run a linear forward interpretation and report the first address after which
@@ -626,9 +662,16 @@ pub(super) fn detect(
     let mut found: Option<VarnodeData> = None;
     let never = |_: u64| false;
     for &seed in seeds {
-        let Some((_, reg)) =
-            establish(translate, code_space, ctx, &mut thunks, seed, MAX_PROLOGUE_INSNS, got, &never)
-        else {
+        let Some((_, reg)) = establish(
+            translate,
+            code_space,
+            ctx,
+            &mut thunks,
+            seed,
+            MAX_PROLOGUE_INSNS,
+            got,
+            &never,
+        ) else {
             continue;
         };
         match &found {
@@ -718,12 +761,15 @@ pub(super) struct BaseCandidate {
 
 /// Does `ops` write the base register (the `scope` live-window cut)?
 pub(super) fn writes_base(ops: &[FullOp], base: &PicBase) -> bool {
-    let Some((idx, lo, size)) = key_of(&base.reg) else { return false };
+    let Some((idx, lo, size)) = key_of(&base.reg) else {
+        return false;
+    };
     let hi = lo.saturating_add(u64::from(size));
     ops.iter().any(|op| {
-        op.out.as_ref().and_then(key_of).is_some_and(|(i, o, s)| {
-            i == idx && o < hi && o.saturating_add(u64::from(s)) > lo
-        })
+        op.out
+            .as_ref()
+            .and_then(key_of)
+            .is_some_and(|(i, o, s)| i == idx && o < hi && o.saturating_add(u64::from(s)) > lo)
     })
 }
 
@@ -749,7 +795,13 @@ pub(super) fn refs_through_base(
     fall_through: u64,
 ) -> Vec<(u64, XrefKind)> {
     let mut m = Machine::default();
-    m.seed(&base.reg, Val::Const { v: base.value, pc: true });
+    m.seed(
+        &base.reg,
+        Val::Const {
+            v: base.value,
+            pc: true,
+        },
+    );
     m.seed(&ctx.sp, Val::Stack(0));
 
     let mut out = Vec::new();
@@ -806,11 +858,18 @@ mod tests {
     }
 
     fn vn(space: &Rc<AddrSpace>, offset: u64, size: u32) -> VarnodeData {
-        VarnodeData { space: Some(Rc::clone(space)), offset, size }
+        VarnodeData {
+            space: Some(Rc::clone(space)),
+            offset,
+            size,
+        }
     }
 
     fn ctx(reg: &Rc<AddrSpace>) -> Ctx {
-        Ctx { sp: vn(reg, 0x10, 4), data_index: Some(2) }
+        Ctx {
+            sp: vn(reg, 0x10, 4),
+            data_index: Some(2),
+        }
     }
 
     fn op(opcode: OpCode, out: Option<VarnodeData>, ins: Vec<VarnodeData>) -> FullOp {
@@ -822,7 +881,10 @@ mod tests {
     #[test]
     fn a_base_relative_lea_is_a_data_reference() {
         let (k, r, _u) = spaces();
-        let base = PicBase { reg: vn(&r, 0xc, 4), value: 0x804a240 };
+        let base = PicBase {
+            reg: vn(&r, 0xc, 4),
+            value: 0x804a240,
+        };
         // EAX = EBX + (-0x1119)
         let ops = [op(
             OpCode::CPUI_INT_ADD,
@@ -839,31 +901,64 @@ mod tests {
     #[test]
     fn a_base_relative_address_below_the_floor_is_a_reference() {
         let (k, r, _u) = spaces();
-        let base = PicBase { reg: vn(&r, 0xc, 4), value: 0x3208 };
+        let base = PicBase {
+            reg: vn(&r, 0xc, 4),
+            value: 0x3208,
+        };
         let low = [(0x170, 0x200), (0x3208, 0x3214)];
         // EAX = EBX + (-0x3088)
-        let lea = [op(OpCode::CPUI_INT_ADD, Some(vn(&r, 0, 4)), vec![vn(&r, 0xc, 4), vn(&k, 0xffffcf78, 4)])];
-        assert_eq!(refs_through_base(&lea, &base, &ctx(&r), &low, 0x119e), vec![(0x180, XrefKind::Data)]);
-        let mov = [op(OpCode::CPUI_COPY, Some(vn(&r, 0, 4)), vec![vn(&k, 0x180, 4)])];
+        let lea = [op(
+            OpCode::CPUI_INT_ADD,
+            Some(vn(&r, 0, 4)),
+            vec![vn(&r, 0xc, 4), vn(&k, 0xffffcf78, 4)],
+        )];
+        assert_eq!(
+            refs_through_base(&lea, &base, &ctx(&r), &low, 0x119e),
+            vec![(0x180, XrefKind::Data)]
+        );
+        let mov = [op(
+            OpCode::CPUI_COPY,
+            Some(vn(&r, 0, 4)),
+            vec![vn(&k, 0x180, 4)],
+        )];
         assert!(refs_through_base(&mov, &base, &ctx(&r), &low, 0x119e).is_empty());
     }
 
     #[test]
     fn a_base_relative_load_is_a_read_and_a_store_a_write() {
         let (k, r, u) = spaces();
-        let base = PicBase { reg: vn(&r, 0xc, 4), value: 0x804a240 };
+        let base = PicBase {
+            reg: vn(&r, 0xc, 4),
+            value: 0x804a240,
+        };
         let tmp = vn(&u, 0x80, 4);
         let addr = vec![
-            op(OpCode::CPUI_INT_ADD, Some(tmp.clone()), vec![vn(&r, 0xc, 4), vn(&k, 0xa8, 4)]),
-            op(OpCode::CPUI_LOAD, Some(vn(&r, 0, 4)), vec![vn(&k, 2, 4), tmp.clone()]),
+            op(
+                OpCode::CPUI_INT_ADD,
+                Some(tmp.clone()),
+                vec![vn(&r, 0xc, 4), vn(&k, 0xa8, 4)],
+            ),
+            op(
+                OpCode::CPUI_LOAD,
+                Some(vn(&r, 0, 4)),
+                vec![vn(&k, 2, 4), tmp.clone()],
+            ),
         ];
         assert_eq!(
             refs_through_base(&addr, &base, &ctx(&r), &MAPPED, 0),
             vec![(0x804a2e8, XrefKind::Read)]
         );
         let store = vec![
-            op(OpCode::CPUI_INT_ADD, Some(tmp.clone()), vec![vn(&r, 0xc, 4), vn(&k, 0xa8, 4)]),
-            op(OpCode::CPUI_STORE, None, vec![vn(&k, 2, 4), tmp, vn(&k, 0xa, 1)]),
+            op(
+                OpCode::CPUI_INT_ADD,
+                Some(tmp.clone()),
+                vec![vn(&r, 0xc, 4), vn(&k, 0xa8, 4)],
+            ),
+            op(
+                OpCode::CPUI_STORE,
+                None,
+                vec![vn(&k, 2, 4), tmp, vn(&k, 0xa, 1)],
+            ),
         ];
         assert_eq!(
             refs_through_base(&store, &base, &ctx(&r), &MAPPED, 0),
@@ -874,13 +969,28 @@ mod tests {
     #[test]
     fn an_indexed_access_reports_nothing_rather_than_its_array_base() {
         let (k, r, u) = spaces();
-        let base = PicBase { reg: vn(&r, 0xc, 4), value: 0x804a240 };
+        let base = PicBase {
+            reg: vn(&r, 0xc, 4),
+            value: 0x804a240,
+        };
         let tmp = vn(&u, 0x80, 4);
         // $tmp = EBX + 0x87; $tmp = $tmp + EDX (unknown); AL = *$tmp
         let ops = vec![
-            op(OpCode::CPUI_INT_ADD, Some(tmp.clone()), vec![vn(&r, 0xc, 4), vn(&k, 0x87, 4)]),
-            op(OpCode::CPUI_INT_ADD, Some(tmp.clone()), vec![tmp.clone(), vn(&r, 0x8, 4)]),
-            op(OpCode::CPUI_LOAD, Some(vn(&r, 0, 1)), vec![vn(&k, 2, 4), tmp]),
+            op(
+                OpCode::CPUI_INT_ADD,
+                Some(tmp.clone()),
+                vec![vn(&r, 0xc, 4), vn(&k, 0x87, 4)],
+            ),
+            op(
+                OpCode::CPUI_INT_ADD,
+                Some(tmp.clone()),
+                vec![tmp.clone(), vn(&r, 0x8, 4)],
+            ),
+            op(
+                OpCode::CPUI_LOAD,
+                Some(vn(&r, 0, 1)),
+                vec![vn(&k, 2, 4), tmp],
+            ),
         ];
         // The array base is computed into a temporary, which is not something a
         // later instruction can read, so nothing at all is claimed: the address
@@ -891,7 +1001,10 @@ mod tests {
     #[test]
     fn a_partial_write_to_the_base_invalidates_the_whole_register() {
         let (k, r, _u) = spaces();
-        let base = PicBase { reg: vn(&r, 0xc, 4), value: 0x804a240 };
+        let base = PicBase {
+            reg: vn(&r, 0xc, 4),
+            value: 0x804a240,
+        };
         // BL = 0; EAX = EBX + (-0x1119)  -- EBX is no longer known.
         let ops = vec![
             op(OpCode::CPUI_COPY, Some(vn(&r, 0xc, 1)), vec![vn(&k, 0, 1)]),
@@ -907,7 +1020,10 @@ mod tests {
     #[test]
     fn an_unmapped_or_small_result_is_not_a_reference() {
         let (k, r, _u) = spaces();
-        let base = PicBase { reg: vn(&r, 0xc, 4), value: 0x804a240 };
+        let base = PicBase {
+            reg: vn(&r, 0xc, 4),
+            value: 0x804a240,
+        };
         // EAX = EBX - 0x804a000 -- lands at 0x240, below the address floor.
         let ops = [op(
             OpCode::CPUI_INT_SUB,
@@ -922,9 +1038,16 @@ mod tests {
     #[test]
     fn a_calls_own_return_address_is_not_a_reference() {
         let (k, r, _u) = spaces();
-        let base = PicBase { reg: vn(&r, 0xc, 4), value: 0x804a240 };
+        let base = PicBase {
+            reg: vn(&r, 0xc, 4),
+            value: 0x804a240,
+        };
         let ops = [
-            op(OpCode::CPUI_COPY, Some(vn(&r, 0, 4)), vec![vn(&k, 0x8048ad9, 4)]),
+            op(
+                OpCode::CPUI_COPY,
+                Some(vn(&r, 0, 4)),
+                vec![vn(&k, 0x8048ad9, 4)],
+            ),
             op(OpCode::CPUI_CALL, None, vec![vn(&r, 0x100, 4)]),
         ];
         assert!(refs_through_base(&ops, &base, &ctx(&r), &MAPPED, 0x8048ad9).is_empty());
@@ -949,16 +1072,36 @@ mod tests {
         let tmp = vn(&u, 0x80, 4);
         // push 0x80489f4:  $tmp = 0x80489f4; ESP = ESP - 4; *ESP = $tmp
         for o in [
-            op(OpCode::CPUI_COPY, Some(tmp.clone()), vec![vn(&k, 0x80489f4, 4)]),
-            op(OpCode::CPUI_INT_SUB, Some(c.sp.clone()), vec![c.sp.clone(), vn(&k, 4, 4)]),
-            op(OpCode::CPUI_STORE, None, vec![vn(&k, 2, 4), c.sp.clone(), tmp.clone()]),
+            op(
+                OpCode::CPUI_COPY,
+                Some(tmp.clone()),
+                vec![vn(&k, 0x80489f4, 4)],
+            ),
+            op(
+                OpCode::CPUI_INT_SUB,
+                Some(c.sp.clone()),
+                vec![c.sp.clone(), vn(&k, 4, 4)],
+            ),
+            op(
+                OpCode::CPUI_STORE,
+                None,
+                vec![vn(&k, 2, 4), c.sp.clone(), tmp.clone()],
+            ),
         ] {
             m.apply(&o, &c, 0x80489f4);
         }
         // pop ebx: $tmp = *ESP; ESP = ESP + 4; EBX = $tmp
         for o in [
-            op(OpCode::CPUI_LOAD, Some(tmp.clone()), vec![vn(&k, 2, 4), c.sp.clone()]),
-            op(OpCode::CPUI_INT_ADD, Some(c.sp.clone()), vec![c.sp.clone(), vn(&k, 4, 4)]),
+            op(
+                OpCode::CPUI_LOAD,
+                Some(tmp.clone()),
+                vec![vn(&k, 2, 4), c.sp.clone()],
+            ),
+            op(
+                OpCode::CPUI_INT_ADD,
+                Some(c.sp.clone()),
+                vec![c.sp.clone(), vn(&k, 4, 4)],
+            ),
             op(OpCode::CPUI_COPY, Some(vn(&r, 0xc, 4)), vec![tmp.clone()]),
         ] {
             m.apply(&o, &c, 0x80489f5);
@@ -982,12 +1125,19 @@ mod tests {
         let c = ctx(&r);
         let mut m = Machine::default();
         m.apply(
-            &op(OpCode::CPUI_COPY, Some(vn(&r, 0xc, 4)), vec![vn(&k, 0x804a240, 4)]),
+            &op(
+                OpCode::CPUI_COPY,
+                Some(vn(&r, 0xc, 4)),
+                vec![vn(&k, 0x804a240, 4)],
+            ),
             &c,
             0x8048000,
         );
         assert_eq!(m.konst(&vn(&r, 0xc, 4)), Some((0x804a240, false)));
-        assert!(holder_of(&m, &c, 0x804a240).is_none(), "untainted constant established a base");
+        assert!(
+            holder_of(&m, &c, 0x804a240).is_none(),
+            "untainted constant established a base"
+        );
     }
 
     #[test]

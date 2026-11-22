@@ -31,13 +31,13 @@ use unlace_num::opcodes::{OpcodeDecoder, OpcodeEncoder};
 use unlace_num::pcoderaw::VarnodeData;
 
 use crate::context::{FixedHandle, Token};
+use crate::semantics::{ConstTpl, ConstType, ConstructTpl, VarnodeTpl};
 use crate::slghpatexpress::{
     ConstantValue, ContextField, EndInstructionValue, EqId, EquationArena, Next2InstructionValue,
     OperandResolve, OperandResolveSink, OperandValue, OperandValueResolver, PatternExpression,
     PatternExpressionContext, PatternValue, StartInstructionValue, TokenPattern,
 };
 use crate::slghpattern::{DisjointPattern, Pattern};
-use crate::semantics::{ConstTpl, ConstType, ConstructTpl, VarnodeTpl};
 
 #[path = "kuna_operandplan.rs"]
 pub(crate) mod kuna_operandplan;
@@ -738,14 +738,16 @@ impl OperandSymbol {
         table: &SymbolTable,
         code_address: bool,
     ) -> KunaResult<()> {
-        let code_address = code_address
-            || (self.is_code_address() && walker.get_cur_space().get_addr_size() == 8);
+        let code_address =
+            code_address || (self.is_code_address() && walker.get_cur_space().get_addr_size() == 8);
         walker.push_operand(self.get_index())?;
         if let Some(triple_id) = self.triple {
             let tsym = table.symbol(triple_id)?;
             if tsym.get_type() == SymbolType::Subtable {
                 let ctref = walker.get_constructor()?;
-                table.get_constructor(ctref)?.print_with_address(s, walker, table, code_address)?;
+                table
+                    .get_constructor(ctref)?
+                    .print_with_address(s, walker, table, code_address)?;
             } else {
                 tsym.print_with_address(s, walker, table, code_address)?;
             }
@@ -1434,7 +1436,9 @@ impl Constructor {
         if piece.first() == Some(&b'\n') {
             let index = i32::from(piece[1]) - i32::from(b'A');
             let opid = self.get_operand(index)?;
-            table.symbol(opid)?.print_with_address(s, walker, table, code_address)?;
+            table
+                .symbol(opid)?
+                .print_with_address(s, walker, table, code_address)?;
         } else {
             s.push_str(&String::from_utf8_lossy(piece));
         }
@@ -1761,7 +1765,9 @@ impl DecisionNode {
     /// C++ `DecisionNode::addConstructorPair`.
     fn add_constructor_pair(&mut self, pat: &DisjointPattern, ct: u32) {
         let Pattern::Disjoint(pattern) = pat.simplify_clone() else {
-            panic!("addConstructorPair: simplifyClone of a DisjointPattern is not disjoint (C++ UB)");
+            panic!(
+                "addConstructorPair: simplifyClone of a DisjointPattern is not disjoint (C++ UB)"
+            );
         };
         self.list.push((pattern, ct));
         self.num += 1;
@@ -1889,10 +1895,15 @@ impl DecisionNode {
 
     /// Compatible branch values in ascending order (`DecisionNode::consistentValues`).
     fn consistent_values(&self, pat: &DisjointPattern) -> impl Iterator<Item = u32> + use<> {
-        let mut m: u32 = if self.bitsize == 32 { 0 } else { 1u32 << self.bitsize };
+        let mut m: u32 = if self.bitsize == 32 {
+            0
+        } else {
+            1u32 << self.bitsize
+        };
         m = m.wrapping_sub(1);
         let common_mask = m & pat.get_mask(self.startbit, self.bitsize, self.contextdecision);
-        let common_value = common_mask & pat.get_value(self.startbit, self.bitsize, self.contextdecision);
+        let common_value =
+            common_mask & pat.get_value(self.startbit, self.bitsize, self.contextdecision);
         let dont_care_mask = m ^ common_mask;
 
         (0..=dont_care_mask)
@@ -1980,7 +1991,9 @@ impl DecisionNode {
         }
         let mut original: Vec<_> = self.list.drain(..).map(Some).collect();
         self.list.extend(order.into_iter().map(|index| {
-            original[index].take().expect("each pattern is ordered once")
+            original[index]
+                .take()
+                .expect("each pattern is ordered once")
         }));
     }
 
@@ -2405,10 +2418,7 @@ impl SleighSymbol {
 
     /// C++ `ValueSymbol(const string &nm,PatternValue *pv)`.
     pub fn new_value(nm: &[u8], pv: PatternValue) -> SleighSymbol {
-        SleighSymbol::new(
-            nm,
-            SymbolKind::Value(ValueSymbol { patval: Some(pv) }),
-        )
+        SleighSymbol::new(nm, SymbolKind::Value(ValueSymbol { patval: Some(pv) }))
     }
 
     /// C++ `ValueMapSymbol(const string &nm,PatternValue *pv,const
@@ -2958,18 +2968,20 @@ impl SleighSymbol {
             }
             SymbolKind::FlowDest(f) => {
                 let ref_addr = walker.get_dest_addr()?;
-                hand.space = Some(f.const_space.clone().ok_or_else(|| {
-                    KunaError::sleigh("flowdest symbol has no constant space")
-                })?);
+                hand.space =
+                    Some(f.const_space.clone().ok_or_else(|| {
+                        KunaError::sleigh("flowdest symbol has no constant space")
+                    })?);
                 hand.offset_space = None;
                 hand.offset_offset = ref_addr.get_offset();
                 hand.size = ref_addr.get_addr_size() as u32; // C++ implicit int4 -> uint4
             }
             SymbolKind::FlowRef(f) => {
                 let ref_addr = walker.get_ref_addr()?;
-                hand.space = Some(f.const_space.clone().ok_or_else(|| {
-                    KunaError::sleigh("flowref symbol has no constant space")
-                })?);
+                hand.space =
+                    Some(f.const_space.clone().ok_or_else(|| {
+                        KunaError::sleigh("flowref symbol has no constant space")
+                    })?);
                 hand.offset_space = None;
                 hand.offset_offset = ref_addr.get_offset();
                 hand.size = ref_addr.get_addr_size() as u32; // C++ implicit int4 -> uint4
@@ -3558,7 +3570,9 @@ impl SymbolTable {
     /// Look up a symbol id for mutation. Returns `None` for an out-of-range id
     /// or an empty slot.
     pub fn find_symbol_by_id_mut(&mut self, id: u32) -> Option<&mut SleighSymbol> {
-        self.symbollist.get_mut(id as usize).and_then(|s| s.as_mut())
+        self.symbollist
+            .get_mut(id as usize)
+            .and_then(|s| s.as_mut())
     }
 
     /// `findSymbol(id)` at sites where C++ dereferences the result
@@ -3670,7 +3684,9 @@ impl SymbolTable {
             SymbolKind::FlowDest(s) => {
                 self.jump_varnode(s.const_space.as_ref(), ConstType::JFlowdest)
             }
-            SymbolKind::FlowRef(s) => self.jump_varnode(s.const_space.as_ref(), ConstType::JFlowref),
+            SymbolKind::FlowRef(s) => {
+                self.jump_varnode(s.const_space.as_ref(), ConstType::JFlowref)
+            }
             SymbolKind::Operand(op) => {
                 if op.defexp.is_some() {
                     // Definite constant handle.
@@ -3841,9 +3857,7 @@ impl SymbolTable {
                 self.subtable_symbol_mut(table_id)?.errors = true;
             }
         }
-        let mut acc = self
-            .subtable_symbol(table_id)?
-            .construct[0]
+        let mut acc = self.subtable_symbol(table_id)?.construct[0]
             .pattern
             .clone()
             .unwrap_or_else(TokenPattern::new_true);
@@ -3856,9 +3870,7 @@ impl SymbolTable {
                     self.subtable_symbol_mut(table_id)?.errors = true;
                 }
             }
-            acc = self
-                .subtable_symbol(table_id)?
-                .construct[i]
+            acc = self.subtable_symbol(table_id)?.construct[i]
                 .pattern
                 .as_ref()
                 .unwrap_or(&TokenPattern::new_true())
@@ -3926,8 +3938,7 @@ impl SymbolTable {
         for &opid in &operand_ids {
             let operand = self.operand_symbol(opid)?;
             let sympat: TokenPattern = if let Some(tripid) = operand.get_defining_symbol() {
-                let is_subtable =
-                    self.symbol(tripid)?.get_type() == SymbolType::Subtable;
+                let is_subtable = self.symbol(tripid)?.get_type() == SymbolType::Subtable;
                 if is_subtable {
                     if self.subtable_symbol(tripid)?.is_being_built() {
                         // Detected recursion
@@ -4029,7 +4040,8 @@ impl SymbolTable {
                 offset += bop.get_relative_offset() as i32;
                 base = bbase;
                 if base < 0 {
-                    self.operand_symbol_mut(opid)?.set_offset(base, offset as u32);
+                    self.operand_symbol_mut(opid)?
+                        .set_offset(base, offset as u32);
                 }
             }
         }
@@ -4100,13 +4112,12 @@ impl SymbolTable {
                     continue; // expression operands come last
                 }
                 let base = op.get_offset_base();
-                let base_marked = base != -1
-                    && self
-                        .operand_symbol(operand_ids[base as usize])?
-                        .is_marked();
+                let base_marked =
+                    base != -1 && self.operand_symbol(operand_ids[base as usize])?.is_marked();
                 if base == -1 || !base_marked {
                     neworder.push(idx);
-                    self.operand_symbol_mut(operand_ids[idx as usize])?.clear_mark();
+                    self.operand_symbol_mut(operand_ids[idx as usize])?
+                        .clear_mark();
                 }
             }
             if neworder.len() == lastsize {
@@ -4120,7 +4131,8 @@ impl SymbolTable {
                 .is_offset_irrelevant()
             {
                 neworder.push(idx);
-                self.operand_symbol_mut(operand_ids[idx as usize])?.clear_mark();
+                self.operand_symbol_mut(operand_ids[idx as usize])?
+                    .clear_mark();
             }
         }
 
@@ -4153,7 +4165,10 @@ impl SymbolTable {
         }
 
         // Reorder the constructor's operand id vector + fix printpiece refs.
-        let new_operand_ids: Vec<u32> = neworder.iter().map(|&idx| operand_ids[idx as usize]).collect();
+        let new_operand_ids: Vec<u32> = neworder
+            .iter()
+            .map(|&idx| operand_ids[idx as usize])
+            .collect();
         // Remap operand-value indices embedded in each operand's defining
         // expression (`op << 8 | op` etc.) through the handmap (C++ shares the
         // operand `localexp` pointers; the kuna port clones them).  Done before
@@ -4229,7 +4244,11 @@ impl SymbolTable {
             let a = self.symbol(a_id)?;
             (a.name.clone(), a.scopeid)
         };
-        if let Some(scope) = self.table.get_mut(scopeid as usize).and_then(|s| s.as_mut()) {
+        if let Some(scope) = self
+            .table
+            .get_mut(scopeid as usize)
+            .and_then(|s| s.as_mut())
+        {
             b.id = a_id;
             b.scopeid = scopeid;
             scope.tree.insert(name, a_id);
@@ -4284,7 +4303,10 @@ impl SymbolTable {
         }
         // Remove any empty scopes (except the global scope 0).
         for i in 1..self.table.len() {
-            let empty = self.table[i].as_ref().map(|s| s.is_empty()).unwrap_or(false);
+            let empty = self.table[i]
+                .as_ref()
+                .map(|s| s.is_empty())
+                .unwrap_or(false);
             if empty {
                 self.table[i] = None;
             }
@@ -4370,7 +4392,11 @@ impl SymbolTable {
         }
         self.table = newtable;
         self.symbollist = newsymbol;
-        self.curscope = self.table.first().and_then(|s| s.as_ref()).map(|s| s.get_id());
+        self.curscope = self
+            .table
+            .first()
+            .and_then(|s| s.as_ref())
+            .map(|s| s.get_id());
     }
 
     /// C++ `SymbolTable::encode`.
@@ -4805,15 +4831,14 @@ impl SymbolTable {
                     };
                     // C++ (OperandValue*)decodeExpression(...): unchecked
                     // cast (UB on a non-operand expression); an error here
-                    let localexp =
-                        match PatternExpression::decode_expression(decoder, &resolver)? {
-                            PatternExpression::Value(PatternValue::OperandValue(ov)) => ov,
-                            _ => {
-                                return Err(KunaError::decoder(
-                                    "Expecting operand expression (C++ casts unchecked)",
-                                ))
-                            }
-                        };
+                    let localexp = match PatternExpression::decode_expression(decoder, &resolver)? {
+                        PatternExpression::Value(PatternValue::OperandValue(ov)) => ov,
+                        _ => {
+                            return Err(KunaError::decoder(
+                                "Expecting operand expression (C++ casts unchecked)",
+                            ));
+                        }
+                    };
                     let defexp = if decoder.peek_element()? != 0 {
                         Some(PatternExpression::decode_expression(decoder, &resolver)?)
                     } else {
@@ -4968,7 +4993,7 @@ fn decode_subtable_content(
 #[cfg(test)]
 mod tests {
     use unlace_base::marshal::{PackedDecode, PackedEncode};
-    use unlace_base::space::{addrspace_flags, AddrSpaceManager, ConstantSpace};
+    use unlace_base::space::{AddrSpaceManager, ConstantSpace, addrspace_flags};
 
     use crate::slghpatexpress::TokenField;
     use crate::slghpattern::{InstructionPattern, PatternBlock};
@@ -5306,8 +5331,12 @@ mod tests {
                 SymbolKind::Section(SectionSymbol::new(0)),
             ))
             .unwrap();
-        table.add_symbol(SleighSymbol::new_userop(b"first")).unwrap();
-        table.add_symbol(SleighSymbol::new_userop(b"second")).unwrap();
+        table
+            .add_symbol(SleighSymbol::new_userop(b"first"))
+            .unwrap();
+        table
+            .add_symbol(SleighSymbol::new_userop(b"second"))
+            .unwrap();
 
         for _ in 0..2 {
             table.purge();
@@ -5397,9 +5426,11 @@ mod tests {
         assert_eq!(op.shift, 24);
         assert_eq!(op.mask, 0x0f00_0000);
         // field straddling two machine ints
-        let err = ContextOp::new(30, 33, PatternExpression::Value(PatternValue::ConstantValue(
-            ConstantValue::new(0),
-        )))
+        let err = ContextOp::new(
+            30,
+            33,
+            PatternExpression::Value(PatternValue::ConstantValue(ConstantValue::new(0))),
+        )
         .expect_err("straddling field must fail");
         assert!(format!("{err}").contains("Context field not contained within one machine int"));
     }
@@ -5473,7 +5504,9 @@ mod tests {
         constructor.set_named_section(0, 3);
         let templates = [ConstructTpl::new()];
         let mut bytes = Vec::new();
-        constructor.encode(&mut PackedEncode::new(&mut bytes), &templates).unwrap();
+        constructor
+            .encode(&mut PackedEncode::new(&mut bytes), &templates)
+            .unwrap();
 
         let manager = test_manager();
         let mut decoder = PackedDecode::new(&manager);
@@ -5483,7 +5516,9 @@ mod tests {
         while decoder.peek_element().unwrap() != 0 {
             sections.push(ConstructTpl::new().decode(&mut decoder).unwrap());
         }
-        decoder.close_element(sla::ELEM_CONSTRUCTOR.get_id()).unwrap();
+        decoder
+            .close_element(sla::ELEM_CONSTRUCTOR.get_id())
+            .unwrap();
         assert_eq!(sections, [-1, 1, 3]);
     }
 
@@ -5498,14 +5533,21 @@ mod tests {
                 constructor.set_main_section(0);
             }
             let mut bytes = Vec::new();
-            let error = constructor.encode(&mut PackedEncode::new(&mut bytes), &[]).unwrap_err();
+            let error = constructor
+                .encode(&mut PackedEncode::new(&mut bytes), &[])
+                .unwrap_err();
             assert_eq!(error.explain(), "bad ConstructTpl handle");
         }
     }
 
     // -- full symbol-table decode / round-trip ----------------------------------
 
-    fn enc_head(enc: &mut PackedEncode, elem: &unlace_base::marshal::ElementId, name: &[u8], id: u64) {
+    fn enc_head(
+        enc: &mut PackedEncode,
+        elem: &unlace_base::marshal::ElementId,
+        name: &[u8],
+        id: u64,
+    ) {
         enc.open_element(elem);
         enc.write_string(&sla::ATTRIB_NAME, name);
         enc.write_unsigned_integer(&sla::ATTRIB_ID, id);
@@ -5870,7 +5912,14 @@ mod tests {
         let r0 = SleighSymbol::new_varnode(b"r0", ram(&manager), 0x100, 4);
         assert_eq!(table.add_global_symbol(r0).unwrap(), 1);
         // id 2: operand opA defined by the subtable
-        let mut op_a = SleighSymbol::new_operand(b"opA", 0, ConstructorRef { table_id: 3, ct_id: 0 });
+        let mut op_a = SleighSymbol::new_operand(
+            b"opA",
+            0,
+            ConstructorRef {
+                table_id: 3,
+                ct_id: 0,
+            },
+        );
         if let SymbolKind::Operand(o) = op_a.kind_mut() {
             o.define_operand_symbol(0).unwrap();
             // redefinition is the C++ SleighError
@@ -5878,7 +5927,14 @@ mod tests {
         }
         assert_eq!(table.add_global_symbol(op_a).unwrap(), 2);
         // id 3: top-level table "instruction" with ct: "do " opA " " opB
-        let mut op_b = SleighSymbol::new_operand(b"opB", 1, ConstructorRef { table_id: 3, ct_id: 0 });
+        let mut op_b = SleighSymbol::new_operand(
+            b"opB",
+            1,
+            ConstructorRef {
+                table_id: 3,
+                ct_id: 0,
+            },
+        );
         if let SymbolKind::Operand(o) = op_b.kind_mut() {
             o.define_operand_symbol(1).unwrap();
         }
@@ -5911,7 +5967,12 @@ mod tests {
             .unwrap();
         assert_eq!(
             ct.get_print_pieces(),
-            &[b"do ".to_vec(), b"\nA".to_vec(), b" ".to_vec(), b"\nB".to_vec()]
+            &[
+                b"do ".to_vec(),
+                b"\nA".to_vec(),
+                b" ".to_vec(),
+                b"\nB".to_vec()
+            ]
         );
         assert_eq!(ct.get_first_whitespace(), 2);
         let mut s = String::new();

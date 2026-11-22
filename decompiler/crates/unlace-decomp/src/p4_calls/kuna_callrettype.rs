@@ -36,7 +36,7 @@ use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::infra::architecture::Architecture;
 use crate::p4_calls::fspec::FuncCallSpecs;
@@ -83,7 +83,10 @@ fn value_class(t: &Datatype) -> u8 {
 /// Is `t` a value of the other class than `ct` at the same width: an integer
 /// beside a pointer or a pointer beside an integer?
 fn other_class(t: &Datatype, ct: &Datatype) -> bool {
-    t.get_size() == ct.get_size() && value_class(t) != 0 && value_class(ct) != 0 && value_class(t) != value_class(ct)
+    t.get_size() == ct.get_size()
+        && value_class(t) != 0
+        && value_class(ct) != 0
+        && value_class(t) != value_class(ct)
 }
 
 /// Is `t` an integer or a pointer and `ct`, at the same width, anything but a
@@ -98,9 +101,12 @@ fn differs_in_class(t: &Datatype, ct: &Datatype) -> bool {
 fn is_number(data: &Funcdata, v: Option<VarnodeId>) -> bool {
     let ranges = data.kuna_callret_data();
     !ranges.is_empty()
-        && v.and_then(|v| data.vbank().get(v)).filter(|n| n.is_constant()).is_some_and(|n| {
-            n.get_offset() != 0 && !crate::p9_emit::kuna_globalref::in_ranges(ranges, n.get_offset())
-        })
+        && v.and_then(|v| data.vbank().get(v))
+            .filter(|n| n.is_constant())
+            .is_some_and(|n| {
+                n.get_offset() != 0
+                    && !crate::p9_emit::kuna_globalref::in_ranges(ranges, n.get_offset())
+            })
 }
 
 /// Keep what `data`, the function entered at `entry`, returns, for the callers
@@ -111,7 +117,11 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
         return;
     }
     let Some(k) = key(entry) else { return };
-    let stated = if arch.symboltab.function_proto_pieces_across_scopes(entry).is_some() {
+    let stated = if arch
+        .symboltab
+        .function_proto_pieces_across_scopes(entry)
+        .is_some()
+    {
         None
     } else {
         recovered_return(data)
@@ -147,7 +157,11 @@ fn recovered_return(data: &Funcdata) -> Option<StatedReturn> {
     if !crate::kuna_returnuncomputed::every_return_computes_with(data, true) {
         return None;
     }
-    Some(StatedReturn { addr, size: out.get_size(), ct: Rc::clone(ct) })
+    Some(StatedReturn {
+        addr,
+        size: out.get_size(),
+        ct: Rc::clone(ct),
+    })
 }
 
 /// A type a return statement may carry: a pointer, an integer wider than a
@@ -176,7 +190,9 @@ pub fn same_statement(a: Option<&StatedReturn>, b: Option<&StatedReturn>) -> boo
     match (a, b) {
         (None, None) => true,
         (Some(a), Some(b)) => {
-            a.addr == b.addr && a.size == b.size && (Rc::ptr_eq(&a.ct, &b.ct) || a.ct.compare(&b.ct, 10).is_ok_and(|c| c == 0))
+            a.addr == b.addr
+                && a.size == b.size
+                && (Rc::ptr_eq(&a.ct, &b.ct) || a.ct.compare(&b.ct, 10).is_ok_and(|c| c == 0))
         }
         _ => false,
     }
@@ -203,7 +219,8 @@ pub fn forget_statements_naming(arch: &mut Architecture, names: &[String]) {
     if names.is_empty() {
         return;
     }
-    arch.kuna_callret_types.retain(|_, s| !crate::kuna_protoorder::names_type(&s.ct, names));
+    arch.kuna_callret_types
+        .retain(|_, s| !crate::kuna_protoorder::names_type(&s.ct, names));
 }
 
 /// Copy onto `data` what every callee it calls stated it returns.  A function
@@ -223,7 +240,9 @@ pub fn seed(arch: &Architecture, data: &mut Funcdata) {
         if Some(k) == own {
             continue;
         }
-        let Some(s) = arch.kuna_callret_types.get(&k) else { continue };
+        let Some(s) = arch.kuna_callret_types.get(&k) else {
+            continue;
+        };
         if own.is_some_and(|o| arch.kuna_callret_refused.contains(&(o, k))) {
             data.kuna_set_callret_withdrawn(k, Rc::clone(s));
         } else {
@@ -265,8 +284,12 @@ pub fn contradicted(data: &mut Funcdata) -> Vec<(int4, uintb)> {
         if fc.proto().is_output_locked() {
             continue;
         }
-        let Some(k) = key(fc.get_entry_address()) else { continue };
-        let Some(stated) = data.kuna_callret_type(k) else { continue };
+        let Some(k) = key(fc.get_entry_address()) else {
+            continue;
+        };
+        let Some(stated) = data.kuna_callret_type(k) else {
+            continue;
+        };
         if returns_number
             && returns_pointer
             && stated.ct.get_metatype() == type_metatype::TYPE_PTR
@@ -277,8 +300,12 @@ pub fn contradicted(data: &mut Funcdata) -> Vec<(int4, uintb)> {
             }
             continue;
         }
-        let Some(rv) = result_of(data, op) else { continue };
-        let Some(result) = data.vbank().get(rv) else { continue };
+        let Some(rv) = result_of(data, op) else {
+            continue;
+        };
+        let Some(result) = data.vbank().get(rv) else {
+            continue;
+        };
         if result.get_addr() == &stated.addr && result.get_size() == stated.size {
             kept.push((k, op, rv));
         }
@@ -287,11 +314,18 @@ pub fn contradicted(data: &mut Funcdata) -> Vec<(int4, uintb)> {
         if out.contains(&k) {
             continue;
         }
-        let Some(ct) = data.kuna_callret_type(k).map(|s| Rc::clone(&s.ct)) else { continue };
-        if !data.high_get_type(rv).is_some_and(|t| crate::kuna_calleevote::same_type(&t, &ct)) {
+        let Some(ct) = data.kuna_callret_type(k).map(|s| Rc::clone(&s.ct)) else {
+            continue;
+        };
+        if !data
+            .high_get_type(rv)
+            .is_some_and(|t| crate::kuna_calleevote::same_type(&t, &ct))
+        {
             continue;
         }
-        let Some(high) = data.vbank().get(rv).and_then(|n| n.get_high()) else { continue };
+        let Some(high) = data.vbank().get(rv).and_then(|n| n.get_high()) else {
+            continue;
+        };
         if high_contradicts(data, op, high, &ct) {
             out.push(k);
         }
@@ -309,7 +343,12 @@ fn returned_sources(data: &Funcdata) -> (Vec<OpId>, bool) {
     let mut work: Vec<(VarnodeId, bool)> = data
         .obank()
         .iter_code(OpCode::CPUI_RETURN)
-        .filter_map(|r| data.obank().get(r).filter(|o| !o.is_dead()).and_then(|o| o.get_in(1)))
+        .filter_map(|r| {
+            data.obank()
+                .get(r)
+                .filter(|o| !o.is_dead())
+                .and_then(|o| o.get_in(1))
+        })
         .map(|v| (v, true))
         .collect();
     let mut seen: Vec<VarnodeId> = Vec::new();
@@ -322,18 +361,36 @@ fn returned_sources(data: &Funcdata) -> (Vec<OpId>, bool) {
             numbers |= whole;
             continue;
         }
-        let Some(def) = data.vbank().get(v).and_then(|n| n.get_def()) else { continue };
-        let Some(o) = data.obank().get(def) else { continue };
+        let Some(def) = data.vbank().get(v).and_then(|n| n.get_def()) else {
+            continue;
+        };
+        let Some(o) = data.obank().get(def) else {
+            continue;
+        };
         match o.code() {
             OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => calls.push(def),
-            OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_MULTIEQUAL | OpCode::CPUI_INT_ZEXT | OpCode::CPUI_INT_SEXT => {
-                work.extend((0..o.num_input()).filter_map(|i| o.get_in(i)).map(|i| (i, whole)));
+            OpCode::CPUI_COPY
+            | OpCode::CPUI_CAST
+            | OpCode::CPUI_MULTIEQUAL
+            | OpCode::CPUI_INT_ZEXT
+            | OpCode::CPUI_INT_SEXT => {
+                work.extend(
+                    (0..o.num_input())
+                        .filter_map(|i| o.get_in(i))
+                        .map(|i| (i, whole)),
+                );
             }
             OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB => {
-                work.extend((0..o.num_input()).filter_map(|i| o.get_in(i)).map(|i| (i, false)));
+                work.extend(
+                    (0..o.num_input())
+                        .filter_map(|i| o.get_in(i))
+                        .map(|i| (i, false)),
+                );
             }
             OpCode::CPUI_INDIRECT => work.extend(o.get_in(0).map(|i| (i, whole))),
-            OpCode::CPUI_PTRADD | OpCode::CPUI_PTRSUB => work.extend(o.get_in(0).map(|i| (i, false))),
+            OpCode::CPUI_PTRADD | OpCode::CPUI_PTRSUB => {
+                work.extend(o.get_in(0).map(|i| (i, false)))
+            }
             _ => {}
         }
     }
@@ -352,23 +409,35 @@ pub fn refuse(arch: &mut Architecture, entry: &Address, callees: &[(int4, uintb)
 fn address_in(data: &Funcdata, a: VarnodeId, high: crate::context::HighVariableId) -> bool {
     let mut at = a;
     for _ in 0..4 {
-        let Some(n) = data.vbank().get(at) else { return false };
+        let Some(n) = data.vbank().get(at) else {
+            return false;
+        };
         if n.get_high() == Some(high) {
             return true;
         }
-        let Some(o) = n.get_def().and_then(|d| data.obank().get(d)) else { return false };
+        let Some(o) = n.get_def().and_then(|d| data.obank().get(d)) else {
+            return false;
+        };
         if !matches!(
             o.code(),
-            OpCode::CPUI_INT_ADD | OpCode::CPUI_PTRADD | OpCode::CPUI_PTRSUB | OpCode::CPUI_COPY | OpCode::CPUI_CAST
+            OpCode::CPUI_INT_ADD
+                | OpCode::CPUI_PTRADD
+                | OpCode::CPUI_PTRSUB
+                | OpCode::CPUI_COPY
+                | OpCode::CPUI_CAST
         ) {
             return false;
         }
         if o.code() == OpCode::CPUI_INT_ADD
-            && o.get_in(1).and_then(|v| data.vbank().get(v)).is_some_and(|v| v.get_high() == Some(high))
+            && o.get_in(1)
+                .and_then(|v| data.vbank().get(v))
+                .is_some_and(|v| v.get_high() == Some(high))
         {
             return true;
         }
-        let Some(base) = o.get_in(0) else { return false };
+        let Some(base) = o.get_in(0) else {
+            return false;
+        };
         at = base;
     }
     false
@@ -384,7 +453,9 @@ fn result_of(data: &Funcdata, op: OpId) -> Option<VarnodeId> {
 /// put after it: the conversion takes over the output's storage and leaves the
 /// call writing a temporary only it reads.
 pub fn converted_result(data: &Funcdata, out: VarnodeId) -> VarnodeId {
-    let Some(node) = data.vbank().get(out) else { return out };
+    let Some(node) = data.vbank().get(out) else {
+        return out;
+    };
     let mut reads = node.descend_iter();
     let via_cast = match (reads.next(), reads.next()) {
         (Some(r), None) if node.is_implied() => data
@@ -401,36 +472,71 @@ pub fn converted_result(data: &Funcdata, out: VarnodeId) -> VarnodeId {
 /// statement `ct` cannot describe: another call's result of the other class,
 /// and beside a pointer a number that is not an address, a value loaded
 /// through the pointer itself, or a sum or product of integers?
-fn high_contradicts(data: &Funcdata, op: OpId, high: crate::context::HighVariableId, ct: &Datatype) -> bool {
-    let Some(h) = data.high_bank().get(high) else { return false };
+fn high_contradicts(
+    data: &Funcdata,
+    op: OpId,
+    high: crate::context::HighVariableId,
+    ct: &Datatype,
+) -> bool {
+    let Some(h) = data.high_bank().get(high) else {
+        return false;
+    };
     let pointer = ct.get_metatype() == type_metatype::TYPE_PTR;
     let primitive_pointee = ct.get_ptr_to().is_some_and(|p| {
-        !matches!(p.get_metatype(), type_metatype::TYPE_PTR | type_metatype::TYPE_STRUCT | type_metatype::TYPE_UNION)
+        !matches!(
+            p.get_metatype(),
+            type_metatype::TYPE_PTR | type_metatype::TYPE_STRUCT | type_metatype::TYPE_UNION
+        )
     });
     for i in 0..h.num_instances() {
-        let Some(mut def) = data.vbank().get(h.get_instance(i)).and_then(|n| n.get_def()) else { continue };
-        let Some(mut o) = data.obank().get(def) else { continue };
+        let Some(mut def) = data
+            .vbank()
+            .get(h.get_instance(i))
+            .and_then(|n| n.get_def())
+        else {
+            continue;
+        };
+        let Some(mut o) = data.obank().get(def) else {
+            continue;
+        };
         if o.code() == OpCode::CPUI_CAST {
             if pointer && is_number(data, o.get_in(0)) {
                 return true;
             }
-            let Some(inner) = o.get_in(0).and_then(|v| data.vbank().get(v)).and_then(|n| n.get_def()) else { continue };
-            let Some(io) = data.obank().get(inner) else { continue };
+            let Some(inner) = o
+                .get_in(0)
+                .and_then(|v| data.vbank().get(v))
+                .and_then(|n| n.get_def())
+            else {
+                continue;
+            };
+            let Some(io) = data.obank().get(inner) else {
+                continue;
+            };
             (def, o) = (inner, io);
         }
         if def == op {
             continue;
         }
         let contradicts = match o.code() {
-            OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => result_type(data, def).is_some_and(|t| differs_in_class(&t, ct)),
+            OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => {
+                result_type(data, def).is_some_and(|t| differs_in_class(&t, ct))
+            }
             OpCode::CPUI_COPY => pointer && is_number(data, o.get_in(0)),
-            OpCode::CPUI_LOAD => pointer && primitive_pointee && o.get_in(1).is_some_and(|a| address_in(data, a, high)),
+            OpCode::CPUI_LOAD => {
+                pointer
+                    && primitive_pointee
+                    && o.get_in(1).is_some_and(|a| address_in(data, a, high))
+            }
             OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB | OpCode::CPUI_INT_MULT => {
                 pointer
                     && (0..o.num_input()).all(|s| {
-                        o.get_in(s).and_then(|v| data.vbank().get(v)).is_some_and(|n| {
-                            n.get_high() != Some(high) && n.get_type().get_metatype() != type_metatype::TYPE_PTR
-                        })
+                        o.get_in(s)
+                            .and_then(|v| data.vbank().get(v))
+                            .is_some_and(|n| {
+                                n.get_high() != Some(high)
+                                    && n.get_type().get_metatype() != type_metatype::TYPE_PTR
+                            })
                     })
             }
             _ => false,
@@ -446,13 +552,18 @@ fn high_contradicts(data: &Funcdata, op: OpId, high: crate::context::HighVariabl
 /// output sits in exactly the storage and width the callee returns in.
 pub fn stated_return_type(data: &Funcdata, op: OpId, fc: &FuncCallSpecs) -> Option<Rc<Datatype>> {
     let o = data.obank().get(op)?;
-    if !matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND) || fc.proto().is_output_locked() {
+    if !matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND)
+        || fc.proto().is_output_locked()
+    {
         return None;
     }
     let stated = data.kuna_callret_type(key(fc.get_entry_address())?)?;
     let outvn = o.get_out()?;
     let out = data.vbank().get(outvn)?;
-    if out.get_size() != stated.size || out.get_addr() != &stated.addr || stated.ct.get_size() != stated.size {
+    if out.get_size() != stated.size
+        || out.get_addr() != &stated.addr
+        || stated.ct.get_size() != stated.size
+    {
         return None;
     }
     if crate::kuna_protoorder::output_refuses(data, outvn, &stated.ct)
@@ -495,7 +606,10 @@ pub fn refused_token(data: &mut Funcdata, op: OpId) -> Option<Rc<Datatype>> {
     let held = data.high_get_type(outvn)?;
     let float = ct.get_metatype() == type_metatype::TYPE_FLOAT
         && held.get_size() == ct.get_size()
-        && matches!(held.get_metatype(), type_metatype::TYPE_FLOAT | type_metatype::TYPE_UNKNOWN);
+        && matches!(
+            held.get_metatype(),
+            type_metatype::TYPE_FLOAT | type_metatype::TYPE_UNKNOWN
+        );
     (other_class(&held, &ct) || float).then_some(ct)
 }
 
@@ -522,7 +636,11 @@ pub fn float_held_as_bits(data: &mut Funcdata, op: OpId) -> Option<Rc<Datatype>>
         let k = key(fc.get_entry_address())?;
         let outvn = o.get_out()?;
         let out = data.vbank().get(outvn)?;
-        let model = if fc.proto().has_model() { Some(fc.proto().model()) } else { data.get_arch().defaultfp.as_ref() };
+        let model = if fc.proto().has_model() {
+            Some(fc.proto().model())
+        } else {
+            data.get_arch().defaultfp.as_ref()
+        };
         let list = model.and_then(|m| m.output_list())?;
         let entry = list.find_entry(out.get_addr(), out.get_size(), true)?;
         if list.get_entry()[entry].get_type() != crate::dtype::type_class::TYPECLASS_FLOAT {
@@ -542,7 +660,10 @@ pub fn float_held_as_bits(data: &mut Funcdata, op: OpId) -> Option<Rc<Datatype>>
                 if !at(addr, *size) {
                     return None;
                 }
-                data.get_arch().types()?.get_base(*size, type_metatype::TYPE_FLOAT).ok()?
+                data.get_arch()
+                    .types()?
+                    .get_base(*size, type_metatype::TYPE_FLOAT)
+                    .ok()?
             }
         };
         (outvn, ct)
@@ -563,20 +684,27 @@ pub fn float_held_as_bits(data: &mut Funcdata, op: OpId) -> Option<Rc<Datatype>>
 /// convert them; a store through a variable declared `unsigned long *` is
 /// (`*a2 = getd(..)`), where an address computed in place is cast to `float *`.
 fn kept_in_memory(data: &mut Funcdata, vn: VarnodeId) -> bool {
-    let Some(node) = data.vbank().get(vn) else { return false };
+    let Some(node) = data.vbank().get(vn) else {
+        return false;
+    };
     if node.is_persist() {
         return true;
     }
     let mut pointers: Vec<VarnodeId> = Vec::new();
     for r in node.descend_iter() {
-        let Some(o) = data.obank().get(r) else { return false };
+        let Some(o) = data.obank().get(r) else {
+            return false;
+        };
         let kept = match o.code() {
             OpCode::CPUI_STORE => {
                 let ptr = o.get_in(1).filter(|&p| p != vn && o.get_in(2) == Some(vn));
                 pointers.extend(ptr);
                 ptr.is_some()
             }
-            OpCode::CPUI_COPY => o.get_out().and_then(|v| data.vbank().get(v)).is_some_and(|v| v.is_persist()),
+            OpCode::CPUI_COPY => o
+                .get_out()
+                .and_then(|v| data.vbank().get(v))
+                .is_some_and(|v| v.is_persist()),
             _ => false,
         };
         if !kept {
@@ -585,11 +713,14 @@ fn kept_in_memory(data: &mut Funcdata, vn: VarnodeId) -> bool {
     }
     pointers.into_iter().all(|p| {
         let named = data.vbank().get(p).is_some_and(|v| !v.is_implied());
-        !data.high_get_type(p).and_then(|t| t.get_ptr_to()).is_some_and(|to| match to.get_metatype() {
-            type_metatype::TYPE_INT | type_metatype::TYPE_UINT => true,
-            type_metatype::TYPE_UNKNOWN => named,
-            _ => false,
-        })
+        !data
+            .high_get_type(p)
+            .and_then(|t| t.get_ptr_to())
+            .is_some_and(|to| match to.get_metatype() {
+                type_metatype::TYPE_INT | type_metatype::TYPE_UINT => true,
+                type_metatype::TYPE_UNKNOWN => named,
+                _ => false,
+            })
     })
 }
 
@@ -621,12 +752,18 @@ fn declared_contradicts(data: &Funcdata, op: OpId, outvn: VarnodeId, ct: &Dataty
     let other = |t: &Datatype| {
         if integer {
             t.get_size() == ct.get_size()
-                && matches!(t.get_metatype(), type_metatype::TYPE_INT | type_metatype::TYPE_UINT)
+                && matches!(
+                    t.get_metatype(),
+                    type_metatype::TYPE_INT | type_metatype::TYPE_UINT
+                )
                 && t.get_metatype() != want
         } else {
             let known = |t: &Datatype| {
                 t.get_ptr_to().is_some_and(|p| {
-                    !matches!(p.get_metatype(), type_metatype::TYPE_VOID | type_metatype::TYPE_UNKNOWN)
+                    !matches!(
+                        p.get_metatype(),
+                        type_metatype::TYPE_VOID | type_metatype::TYPE_UNKNOWN
+                    )
                 })
             };
             t.get_metatype() == type_metatype::TYPE_PTR
@@ -640,16 +777,23 @@ fn declared_contradicts(data: &Funcdata, op: OpId, outvn: VarnodeId, ct: &Dataty
         return true;
     }
     for v in family {
-        let Some(node) = data.vbank().get(v) else { continue };
+        let Some(node) = data.vbank().get(v) else {
+            continue;
+        };
         if let Some(def) = node.get_def().filter(|&d| d != op) {
-            if data.obank().get(def).is_some_and(|o| matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND))
+            if data
+                .obank()
+                .get(def)
+                .is_some_and(|o| matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND))
                 && result_type(data, def).is_some_and(|t| other(&t) || differs_in_class(&t, ct))
             {
                 return true;
             }
         }
         for r in node.descend_iter() {
-            let Some(o) = data.obank().get(r) else { continue };
+            let Some(o) = data.obank().get(r) else {
+                continue;
+            };
             let sensitive = integer
                 && matches!(
                     o.code(),
@@ -703,13 +847,20 @@ fn declared_contradicts(data: &Funcdata, op: OpId, outvn: VarnodeId, ct: &Dataty
 fn widened_at_other_sign(data: &Funcdata, family: &[VarnodeId], ct: &Datatype) -> bool {
     let signed = ct.get_metatype() == type_metatype::TYPE_INT;
     let size = ct.get_size();
-    let returned = data.kuna_callret_returned().iter().any(|&(s, from)| from == size && s != signed);
+    let returned = data
+        .kuna_callret_returned()
+        .iter()
+        .any(|&(s, from)| from == size && s != signed);
     let mut work: Vec<VarnodeId> = family.to_vec();
     let mut seen: std::collections::HashSet<VarnodeId> = work.iter().copied().collect();
     while let Some(v) = work.pop() {
-        let Some(node) = data.vbank().get(v) else { continue };
+        let Some(node) = data.vbank().get(v) else {
+            continue;
+        };
         for r in node.descend_iter() {
-            let Some(o) = data.obank().get(r) else { continue };
+            let Some(o) = data.obank().get(r) else {
+                continue;
+            };
             let slots = || (1..o.num_input()).filter(|&i| o.get_in(i) == Some(v));
             match o.code() {
                 OpCode::CPUI_RETURN => {
@@ -718,7 +869,9 @@ fn widened_at_other_sign(data: &Funcdata, family: &[VarnodeId], ct: &Datatype) -
                     }
                 }
                 OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => {
-                    if signed && slots().any(|i| zero_extended_argument(data, r, i, size, o.num_input())) {
+                    if signed
+                        && slots().any(|i| zero_extended_argument(data, r, i, size, o.num_input()))
+                    {
                         return true;
                     }
                 }
@@ -751,9 +904,17 @@ fn widened_at_other_sign(data: &Funcdata, family: &[VarnodeId], ct: &Datatype) -
 
 /// Did the dead-bit trimming drop a zero-extension of the `size`-byte argument
 /// in `slot` of the call `call` (`kuna_truncarg`'s record)?
-fn zero_extended_argument(data: &Funcdata, call: OpId, slot: int4, size: int4, ninputs: int4) -> bool {
-    data.get_call_specs_index(call)
-        .is_some_and(|i| data.get_call_specs(i).is_zext_trimmed_input(slot, size, ninputs))
+fn zero_extended_argument(
+    data: &Funcdata,
+    call: OpId,
+    slot: int4,
+    size: int4,
+    ninputs: int4,
+) -> bool {
+    data.get_call_specs_index(call).is_some_and(|i| {
+        data.get_call_specs(i)
+            .is_zext_trimmed_input(slot, size, ninputs)
+    })
 }
 
 /// (Called by `RuleSubvarZext` and `RuleSubvarSext`.)  An extension from
@@ -779,7 +940,9 @@ fn accesses_disagree(data: &Funcdata, outvn: VarnodeId, ct: &Datatype) -> bool {
     if ct.get_metatype() != type_metatype::TYPE_PTR {
         return false;
     }
-    let Some(pointee) = ct.get_ptr_to() else { return false };
+    let Some(pointee) = ct.get_ptr_to() else {
+        return false;
+    };
     let size = match pointee.get_metatype() {
         type_metatype::TYPE_VOID => 0,
         type_metatype::TYPE_INT
@@ -791,14 +954,19 @@ fn accesses_disagree(data: &Funcdata, outvn: VarnodeId, ct: &Datatype) -> bool {
         _ => return false,
     };
     let family = with_returned_values(data, crate::kuna_protoorder::value_family(data, outvn));
-    let Some((accesses, places, _)) = crate::kuna_protoorder::accesses_through(data, &family) else { return true };
+    let Some((accesses, places, _)) = crate::kuna_protoorder::accesses_through(data, &family)
+    else {
+        return true;
+    };
     if accesses.iter().any(|a| family.contains(&a.value)) {
         return true;
     }
     if size == 0 {
         return places.iter().any(|&(c, stride)| c != 0 || stride != 0);
     }
-    places.iter().any(|&(c, stride)| c % size != 0 || stride % size != 0)
+    places
+        .iter()
+        .any(|&(c, stride)| c % size != 0 || stride % size != 0)
         || accesses.iter().any(|a| a.size as i64 != size)
 }
 
@@ -810,7 +978,9 @@ fn with_returned_values(data: &Funcdata, mut family: Vec<VarnodeId>) -> Vec<Varn
     let returned = family.iter().any(|&v| {
         data.vbank().get(v).is_some_and(|n| {
             n.descend_iter().any(|r| {
-                data.obank().get(r).is_some_and(|o| o.code() == OpCode::CPUI_RETURN && o.get_in(1) == Some(v))
+                data.obank()
+                    .get(r)
+                    .is_some_and(|o| o.code() == OpCode::CPUI_RETURN && o.get_in(1) == Some(v))
             })
         })
     });
@@ -820,7 +990,12 @@ fn with_returned_values(data: &Funcdata, mut family: Vec<VarnodeId>) -> Vec<Varn
     let rets: Vec<VarnodeId> = data
         .obank()
         .iter_code(OpCode::CPUI_RETURN)
-        .filter_map(|r| data.obank().get(r).filter(|o| !o.is_dead()).and_then(|o| o.get_in(1)))
+        .filter_map(|r| {
+            data.obank()
+                .get(r)
+                .filter(|o| !o.is_dead())
+                .and_then(|o| o.get_in(1))
+        })
         .collect();
     for r in rets {
         for v in crate::kuna_protoorder::value_family(data, r) {
@@ -838,7 +1013,9 @@ fn result_type(data: &Funcdata, call: OpId) -> Option<Rc<Datatype>> {
     if fc.proto().is_output_locked() {
         return fc.proto().get_output_type().cloned();
     }
-    Some(Rc::clone(&data.kuna_callret_type(key(fc.get_entry_address())?)?.ct))
+    Some(Rc::clone(
+        &data.kuna_callret_type(key(fc.get_entry_address())?)?.ct,
+    ))
 }
 
 /// The declared type of the call `call`'s parameter `slot`, when it is locked.

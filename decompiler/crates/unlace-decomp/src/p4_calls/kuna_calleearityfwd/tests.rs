@@ -13,8 +13,8 @@ use super::*;
 /// aborts it rather than shifting the remaining arguments left.
 #[test]
 fn an_uncaptured_witness_location_aborts_the_retry() {
-    use unlace_base::space::AddrSpace;
     use std::rc::Rc;
+    use unlace_base::space::AddrSpace;
     let reg = Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "register",
@@ -36,6 +36,9 @@ fn an_uncaptured_witness_location_aborts_the_retry() {
         has_value: true,
     };
     let captured = vec![view(0x10)];
-    assert_eq!(plan_promotions(&[(at(0x8), 8), (at(0x10), 8)], &captured), None);
+    assert_eq!(
+        plan_promotions(&[(at(0x8), 8), (at(0x10), 8)], &captured),
+        None
+    );
     assert_eq!(plan_promotions(&[(at(0x10), 8)], &captured), Some(vec![0]));
 }

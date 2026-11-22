@@ -28,11 +28,16 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture() -> PathBuf {
@@ -49,8 +54,12 @@ fn decompile(func: &str) -> String {
     let prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
 
-    let cmds: Vec<String> =
-        [format!("load function {func}"), "decompile".into(), "print C".into()].to_vec();
+    let cmds: Vec<String> = [
+        format!("load function {func}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .to_vec();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -68,11 +77,17 @@ fn decompile(func: &str) -> String {
 #[test]
 fn returned_parameter_survives_a_failed_lookup() {
     let c = decompile("lookup_service");
-    let declaration = c.lines().find(|line| line.contains("lookup_service("))
+    let declaration = c
+        .lines()
+        .find(|line| line.contains("lookup_service("))
         .expect("lookup_service declaration");
     let code = &c[c.find(declaration).unwrap()..];
-    let source = std::env::temp_dir().join(format!("kuna-returned-parameter-{}.c", std::process::id()));
-    std::fs::write(&source, format!(r#"
+    let source =
+        std::env::temp_dir().join(format!("kuna-returned-parameter-{}.c", std::process::id()));
+    std::fs::write(
+        &source,
+        format!(
+            r#"
 #include <stdint.h>
 #include <stdlib.h>
 typedef int32_t int4;
@@ -94,7 +109,10 @@ int main(void) {{
     }}
     return 0;
 }}
-"#)).unwrap();
+"#
+        ),
+    )
+    .unwrap();
     let mut checked = false;
     for compiler in ["gcc", "clang"] {
         let available = match Command::new(compiler).arg("--version").output() {
@@ -111,10 +129,26 @@ int main(void) {{
         for level in ["-O0", "-O2"] {
             let executable = source.with_extension(format!("{compiler}{}", &level[1..]));
             let output = Command::new(compiler)
-                .args(["-std=c11", level, "-Werror=int-conversion", "-Werror=incompatible-pointer-types"])
-                .arg(&source).arg("-o").arg(&executable).output().unwrap();
-            assert!(output.status.success(), "{}\n{code}", String::from_utf8_lossy(&output.stderr));
-            assert!(Command::new(&executable).status().unwrap().success(), "{code}");
+                .args([
+                    "-std=c11",
+                    level,
+                    "-Werror=int-conversion",
+                    "-Werror=incompatible-pointer-types",
+                ])
+                .arg(&source)
+                .arg("-o")
+                .arg(&executable)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}\n{code}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert!(
+                Command::new(&executable).status().unwrap().success(),
+                "{code}"
+            );
             std::fs::remove_file(executable).unwrap();
             checked = true;
         }
@@ -146,8 +180,10 @@ fn independent_selects_do_not_share_one_variable() {
 
     // The bug: both phis merged into ONE HighVariable, so the call argument read
     // the same variable twice and the first select's value was lost.
-    let lhs: std::collections::BTreeSet<&str> =
-        step_writes.iter().map(|l| l.split(" =").next().unwrap()).collect();
+    let lhs: std::collections::BTreeSet<&str> = step_writes
+        .iter()
+        .map(|l| l.split(" =").next().unwrap())
+        .collect();
     assert_eq!(
         lhs.len(),
         2,

@@ -10,9 +10,9 @@ use unlace_base::xml::Element;
 use unlace_decomp::kuna_loadoptions::{self, LoadOptions, LoadScope};
 
 use crate::engine::{
-    arm_isa_from_env, bootstrap_dex_bytes, bootstrap_image, bootstrap_mz_bytes, bootstrap_object,
-    bootstrap_raw_image, bootstrap_te, bootstrap_te_bytes, bootstrap_xml_image, classify_file,
-    xml_root_image, ArmIsa, ConsoleProgram, FileInput, Languages,
+    ArmIsa, ConsoleProgram, FileInput, Languages, arm_isa_from_env, bootstrap_dex_bytes,
+    bootstrap_image, bootstrap_mz_bytes, bootstrap_object, bootstrap_raw_image, bootstrap_te,
+    bootstrap_te_bytes, bootstrap_xml_image, classify_file, xml_root_image,
 };
 
 /// Where a [`Bootstrap`] finds its languages: spec roots (a slice, array or

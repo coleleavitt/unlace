@@ -26,8 +26,8 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, OtherSpace,
-    RegisterLookup, UniqueSpace, VarnodeStorage,
+    AddrSpace, AddrSpaceManager, ConstantSpace, OtherSpace, RegisterLookup, UniqueSpace,
+    VarnodeStorage, addrspace_flags, spacetype,
 };
 use unlace_base::xml::DocumentStorage;
 use unlace_num::opcodes::OpCode;
@@ -48,7 +48,8 @@ fn manager(big_end: bool) -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
     m.insert_space(Rc::new(OtherSpace::new(1))).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(2, 0, big_end))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(2, 0, big_end)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -310,7 +311,9 @@ fn verify_w2emulate_default_page_word_loop_chunk_oracle() {
     bank.get_chunk(0x110, &mut out).unwrap();
     assert_eq!(
         out,
-        [0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14]
+        [
+            0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14
+        ]
     );
 
     // big-endian: full-word path (byte_swap of the raw host word) and the
@@ -515,7 +518,12 @@ fn verify_w2emulate_snippet_backward_cbranch_int4_truncation() {
     {
         let mut emit = snippet.build_emitter(&inst, 0x200);
         // 0: u80 = COPY 0
-        emit.dump(&addr, OpCode::CPUI_COPY, Some(&uvn(&m, 0x80, 8)), &[cst(&m, 0, 8)]);
+        emit.dump(
+            &addr,
+            OpCode::CPUI_COPY,
+            Some(&uvn(&m, 0x80, 8)),
+            &[cst(&m, 0, 8)],
+        );
         // 1: u80 = INT_ADD u80, 1
         emit.dump(
             &addr,

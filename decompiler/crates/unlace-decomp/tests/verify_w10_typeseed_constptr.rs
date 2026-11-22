@@ -27,11 +27,16 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn specs_root() -> PathBuf {
-    std::env::var_os("KUNA_SPECS").map(PathBuf::from).unwrap_or_else(|| repo_root().join("specs"))
+    std::env::var_os("KUNA_SPECS")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| repo_root().join("specs"))
 }
 
 fn datatests_dir() -> PathBuf {
@@ -45,7 +50,10 @@ fn rust_harness() -> PathBuf {
         return PathBuf::from(p);
     }
     let profile = std::env::var("KUNA_RUST_PROFILE").unwrap_or_else(|_| "release".to_string());
-    repo_root().join("decompiler/target").join(profile).join("decomp_test_dbg")
+    repo_root()
+        .join("decompiler/target")
+        .join(profile)
+        .join("decomp_test_dbg")
 }
 
 fn cpp_oracle() -> PathBuf {
@@ -96,7 +104,9 @@ fn dump_print_c(bin: &PathBuf, stem: &str) -> Option<String> {
 // =============================================================================
 #[test]
 fn t1_twodim_global_array_indexes_by_symbol_not_bare_constant() {
-    let Some(body) = dump_print_c(&rust_harness(), "twodim") else { return };
+    let Some(body) = dump_print_c(&rust_harness(), "twodim") else {
+        return;
+    };
 
     // The mapped symbol NAME must appear, bound onto the spacebase PTRSUB.
     assert!(
@@ -148,7 +158,9 @@ fn t2_switch_cluster_recovers_and_gains_no_spurious_pointer() {
         "switchloop",
         "switchreturn",
     ] {
-        let Some(body) = dump_print_c(&rust_harness(), stem) else { return };
+        let Some(body) = dump_print_c(&rust_harness(), stem) else {
+            return;
+        };
         // The render is non-empty and structurally intact (a function body with a
         // brace) — a type-seed that corrupted the IR would drop the body.  (The
         // strong byte-stable-vs-base no-perturbation proof — rust render at the
@@ -187,7 +199,9 @@ fn t2_switch_cluster_recovers_and_gains_no_spurious_pointer() {
 #[test]
 fn t3_single_bit_const_not_turned_into_pointer() {
     for stem in ["switchind", "switchmulti", "switchhide", "switchloop"] {
-        let Some(body) = dump_print_c(&rust_harness(), stem) else { return };
+        let Some(body) = dump_print_c(&rust_harness(), stem) else {
+            return;
+        };
         let lower = body.to_ascii_lowercase();
         // A single-bit/mask constant promoted to a GLOBAL pointer would render a
         // `&dat_<addr>` / `PTRSUB(0,<addr>)` reference (the global-array type-seed
@@ -212,8 +226,12 @@ fn t3_single_bit_const_not_turned_into_pointer() {
 #[test]
 fn t4_protected_parity_files_byte_identical() {
     for stem in ["boolless", "condconst"] {
-        let Some(rust_body) = dump_print_c(&rust_harness(), stem) else { return };
-        let Some(cpp_body) = dump_print_c(&cpp_oracle(), stem) else { return };
+        let Some(rust_body) = dump_print_c(&rust_harness(), stem) else {
+            return;
+        };
+        let Some(cpp_body) = dump_print_c(&cpp_oracle(), stem) else {
+            return;
+        };
         assert_eq!(
             rust_body, cpp_body,
             "{stem}: render diverged from the C++ oracle — the const->ptr type-seed \
@@ -230,7 +248,9 @@ fn t4_protected_parity_files_byte_identical() {
 // =============================================================================
 #[test]
 fn t5_threedim_global_array_indexes_three_deep() {
-    let Some(body) = dump_print_c(&rust_harness(), "threedim") else { return };
+    let Some(body) = dump_print_c(&rust_harness(), "threedim") else {
+        return;
+    };
     assert!(
         body.contains("myarray") && body.contains("[globindex]"),
         "threedim: the 3D mapped global array did not bind/index off the typed \

@@ -1,8 +1,8 @@
 use super::*;
+use object::{ObjectSection, ObjectSymbol};
 use unlace_base::space::spacetype;
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::loadimage::LoadImage;
-use object::{ObjectSection, ObjectSymbol};
 
 const IMAGE: &[u8] = include_bytes!("../../tests/fixtures/immutable_got_calls_x86_64");
 

@@ -62,7 +62,11 @@ fn verify_rejects_drift_gaps_overlap_and_order() {
     let drift = vec![token(1, 0, "a"), token(1, 3, "="), token(1, 4, "b;")];
     assert!(verify(&drift, code).is_err());
     let uncovered = vec![token(1, 0, "a"), token(1, 2, "=")];
-    assert!(verify(&uncovered, code).unwrap_err().contains("not covered"));
+    assert!(
+        verify(&uncovered, code)
+            .unwrap_err()
+            .contains("not covered")
+    );
     let overlap = vec![token(1, 0, "a ="), token(1, 2, "="), token(1, 4, "b;")];
     assert!(verify(&overlap, code).is_err());
     let order = vec![token(1, 2, "="), token(1, 0, "a"), token(1, 4, "b;")];
@@ -86,7 +90,11 @@ fn a_cookie_rewrite_moves_the_literal_onto_the_return_line() {
     let mut tokens = vec![
         raw(4, 2, "v1", TokenKind::Variable),
         raw(4, 5, "=", TokenKind::Op),
-        EmitToken { opref: Some(9), color: SyntaxHighlight::ConstColor, ..raw(4, 7, "0", TokenKind::Value) },
+        EmitToken {
+            opref: Some(9),
+            color: SyntaxHighlight::ConstColor,
+            ..raw(4, 7, "0", TokenKind::Value)
+        },
         raw(4, 8, ";", TokenKind::Syntax),
         raw(5, 2, "check", TokenKind::FuncName),
         raw(5, 7, "(", TokenKind::Syntax),
@@ -98,10 +106,17 @@ fn a_cookie_rewrite_moves_the_literal_onto_the_return_line() {
     ];
     apply_cookie_rewrites(
         &mut tokens,
-        &[CookieRewrite { assignment_line: 4, return_line: 6, indent: 2, literal: '0' }],
+        &[CookieRewrite {
+            assignment_line: 4,
+            return_line: 6,
+            indent: 2,
+            literal: '0',
+        }],
     );
-    let placed: Vec<(usize, usize, &str)> =
-        tokens.iter().map(|t| (t.line, t.col, t.text.as_str())).collect();
+    let placed: Vec<(usize, usize, &str)> = tokens
+        .iter()
+        .map(|t| (t.line, t.col, t.text.as_str()))
+        .collect();
     assert_eq!(
         placed,
         vec![
@@ -136,7 +151,12 @@ fn a_cookie_rewrite_leaves_a_return_line_it_does_not_recognise() {
     let mut tokens = before.clone();
     apply_cookie_rewrites(
         &mut tokens,
-        &[CookieRewrite { assignment_line: 4, return_line: 6, indent: 2, literal: '0' }],
+        &[CookieRewrite {
+            assignment_line: 4,
+            return_line: 6,
+            indent: 2,
+            literal: '0',
+        }],
     );
     assert_eq!(tokens, before);
 }

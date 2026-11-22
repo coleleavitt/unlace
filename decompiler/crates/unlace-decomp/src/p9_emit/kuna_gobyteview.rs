@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 
 pub(crate) enum View {

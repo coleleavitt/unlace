@@ -54,8 +54,8 @@
 //! carries 3287 relocated code addresses.
 
 use object::pe::{
-    ImageNtHeaders32, ImageNtHeaders64, IMAGE_FILE_MACHINE_AMD64, IMAGE_FILE_MACHINE_I386,
-    IMAGE_REL_BASED_DIR64, IMAGE_REL_BASED_HIGHLOW,
+    IMAGE_FILE_MACHINE_AMD64, IMAGE_FILE_MACHINE_I386, IMAGE_REL_BASED_DIR64,
+    IMAGE_REL_BASED_HIGHLOW, ImageNtHeaders32, ImageNtHeaders64,
 };
 use object::read::pe::{ImageNtHeaders, PeFile, PeFile32, PeFile64};
 use object::{FileKind, LittleEndian as LE};
@@ -108,7 +108,11 @@ pub(crate) fn pre_record_code_pointers(bytes: &[u8], execs: &[(u64, u64, Vec<u8>
         let mut out = Vec::new();
         if !code.firsts.is_empty() {
             relocated_words(pe, bytes, ptr, |va| {
-                if code.firsts.iter().any(|&(lo, first)| va >= lo && va < first) {
+                if code
+                    .firsts
+                    .iter()
+                    .any(|&(lo, first)| va >= lo && va < first)
+                {
                     out.push(va);
                 }
             });
@@ -118,10 +122,14 @@ pub(crate) fn pre_record_code_pointers(bytes: &[u8], execs: &[(u64, u64, Vec<u8>
         out
     }
     match FileKind::parse(bytes) {
-        Ok(FileKind::Pe64) => PeFile64::parse(bytes)
-            .map_or_else(|_| Vec::new(), |pe| typed::<ImageNtHeaders64>(&pe, bytes, 8, execs)),
-        Ok(FileKind::Pe32) => PeFile32::parse(bytes)
-            .map_or_else(|_| Vec::new(), |pe| typed::<ImageNtHeaders32>(&pe, bytes, 4, execs)),
+        Ok(FileKind::Pe64) => PeFile64::parse(bytes).map_or_else(
+            |_| Vec::new(),
+            |pe| typed::<ImageNtHeaders64>(&pe, bytes, 8, execs),
+        ),
+        Ok(FileKind::Pe32) => PeFile32::parse(bytes).map_or_else(
+            |_| Vec::new(),
+            |pe| typed::<ImageNtHeaders32>(&pe, bytes, 4, execs),
+        ),
         _ => Vec::new(),
     }
 }
@@ -186,7 +194,11 @@ impl CodeRegions {
         image_base: u64,
         execs: &[(u64, u64, Vec<u8>)],
     ) -> Self {
-        let mut me = CodeRegions { bodies: Vec::new(), hulls: Vec::new(), firsts: Vec::new() };
+        let mut me = CodeRegions {
+            bodies: Vec::new(),
+            hulls: Vec::new(),
+            firsts: Vec::new(),
+        };
         // Only the 12-byte x86/x64 `RUNTIME_FUNCTION` carries an `EndAddress`.
         match pe.nt_headers().file_header().machine.get(LE) {
             IMAGE_FILE_MACHINE_I386 | IMAGE_FILE_MACHINE_AMD64 => {}
@@ -212,7 +224,10 @@ impl CodeRegions {
             }
             let (begin, end) = (image_base.wrapping_add(begin), image_base.wrapping_add(end));
             me.bodies.push((begin, end));
-            if let Some(i) = execs.iter().position(|&(lo, hi, _)| begin >= lo && begin < hi) {
+            if let Some(i) = execs
+                .iter()
+                .position(|&(lo, hi, _)| begin >= lo && begin < hi)
+            {
                 let h = hulls[i].get_or_insert((begin, end));
                 h.0 = h.0.min(begin);
                 h.1 = h.1.max(end);
@@ -292,10 +307,16 @@ mod tests {
             !entries.contains(&LABEL),
             "interior label {LABEL:#x} seeded as a function start"
         );
-        assert!(entries.contains(&DISPATCH), "the .pdata oracle still answers");
+        assert!(
+            entries.contains(&DISPATCH),
+            "the .pdata oracle still answers"
+        );
         let execs = executable_sections(&file);
         for &e in &entries {
-            assert!(in_executable_section(&execs, e), "entry {e:#x} outside exec");
+            assert!(
+                in_executable_section(&execs, e),
+                "entry {e:#x} outside exec"
+            );
         }
     }
 

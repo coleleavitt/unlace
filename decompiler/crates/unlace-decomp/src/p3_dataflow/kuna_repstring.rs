@@ -79,20 +79,21 @@
 //! precedes the instruction with `cmp eax, eax` for this). A loop whose final
 //! count or pointers are read afterwards, or any other value, keeps its loop.
 
-use unlace_base::error::{KunaError, KunaResult};
 use std::rc::Rc;
+use unlace_base::error::{KunaError, KunaResult};
 
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode::*;
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
 use crate::context::{BlockId, OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::kuna_strlenscan::{eval, PURE};
+use crate::kuna_strlenscan::{PURE, eval};
 use crate::op::PcodeOp;
 use crate::userop::{
-    BUILTIN_MEMCMP, BUILTIN_MEMCPY, BUILTIN_MEMSET, BUILTIN_MEMSET16, BUILTIN_MEMSET32, BUILTIN_MEMSET64,
+    BUILTIN_MEMCMP, BUILTIN_MEMCPY, BUILTIN_MEMSET, BUILTIN_MEMSET16, BUILTIN_MEMSET32,
+    BUILTIN_MEMSET64,
 };
 
 /// (kuna) `ActionRepString` — collapse an x86 `rep movs`/`rep stos`/`repz cmpsb`
@@ -103,7 +104,9 @@ pub struct ActionRepString {
 
 impl ActionRepString {
     pub fn new(g: impl Into<String>) -> Self {
-        Self { base: ActionBase::new(0, "repstring", g) }
+        Self {
+            base: ActionBase::new(0, "repstring", g),
+        }
     }
 }
 
@@ -115,13 +118,19 @@ impl Action for ActionRepString {
         &mut self.base
     }
     fn clone_filtered(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Action>> {
-        grouplist.contains(self.get_group()).then(|| Box::new(Self { base: self.base.clone() }) as Box<dyn Action>)
+        grouplist.contains(self.get_group()).then(|| {
+            Box::new(Self {
+                base: self.base.clone(),
+            }) as Box<dyn Action>
+        })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data.get_arch().rep_string {
             return 0;
         }
-        let heads: Vec<BlockId> = (0..data.bblocks_get_size()).map(|i| data.bblocks_get_block(i)).collect();
+        let heads: Vec<BlockId> = (0..data.bblocks_get_size())
+            .map(|i| data.bblocks_get_block(i))
+            .collect();
         let mut changed = 0;
         for head in heads {
             let done = if let Some(rep) = match_rep(data, head) {
@@ -145,7 +154,10 @@ impl Action for ActionRepString {
 /// output and its entering value), a fill byte, constant or not, or a fill
 /// element whose bytes differ.
 enum Element {
-    Copy { src_out: VarnodeId, src_in: VarnodeId },
+    Copy {
+        src_out: VarnodeId,
+        src_in: VarnodeId,
+    },
     FillConst(u64),
     FillByte(VarnodeId),
     FillElement(VarnodeId),
@@ -196,7 +208,14 @@ fn def_block(data: &Funcdata, v: VarnodeId) -> Option<BlockId> {
 /// `v` through the COPYs that define it.
 fn copied(data: &Funcdata, mut v: VarnodeId) -> VarnodeId {
     for _ in 0..4 {
-        let Some(d) = data.vbank().get(v).and_then(|n| n.get_def()).and_then(|d| op(data, d)) else { break };
+        let Some(d) = data
+            .vbank()
+            .get(v)
+            .and_then(|n| n.get_def())
+            .and_then(|d| op(data, d))
+        else {
+            break;
+        };
         if d.code() != CPUI_COPY {
             break;
         }
@@ -230,7 +249,11 @@ fn taken(data: &Funcdata, b: BlockId) -> Option<(BlockId, BlockId)> {
         return None;
     }
     let (t, f) = (fb.get_true_out(), fb.get_false_out());
-    Some(if tail.is_boolean_flip() { (f, t) } else { (t, f) })
+    Some(if tail.is_boolean_flip() {
+        (f, t)
+    } else {
+        (t, f)
+    })
 }
 
 /// The counter `cond` compares with zero, and whether `cond` holds when it is
@@ -258,9 +281,18 @@ fn match_rep(data: &Funcdata, head: BlockId) -> Option<Rep> {
     let cond = op(data, data.bb_op_tail(head)?)?.get_in(1)?;
     let (counter, when_zero) = zero_test(data, cond)?;
     let (on_true, on_false) = taken(data, head)?;
-    let (exit, body) = if when_zero { (on_true, on_false) } else { (on_false, on_true) };
+    let (exit, body) = if when_zero {
+        (on_true, on_false)
+    } else {
+        (on_false, on_true)
+    };
     let bb = data.bblocks_ref().block(body);
-    if body == head || body == exit || bb.size_in() != 1 || bb.size_out() != 1 || bb.get_out(0) != head {
+    if body == head
+        || body == exit
+        || bb.size_in() != 1
+        || bb.size_out() != 1
+        || bb.get_out(0) != head
+    {
         return None;
     }
     let back = hb.get_in_index(body);
@@ -270,10 +302,19 @@ fn match_rep(data: &Funcdata, head: BlockId) -> Option<Rep> {
     }
     let (head_ops, body_ops) = (data.bb_ops(head), data.bb_ops(body));
     let at = op(data, *head_ops.first()?)?.get_addr().clone();
-    if !head_ops.iter().chain(body_ops.iter()).all(|&o| op(data, o).is_some_and(|p| *p.get_addr() == at)) {
+    if !head_ops
+        .iter()
+        .chain(body_ops.iter())
+        .all(|&o| op(data, o).is_some_and(|p| *p.get_addr() == at))
+    {
         return None;
     }
-    if data.bb_ops(exit).first().and_then(|&o| op(data, o)).is_none_or(|p| *p.get_addr() == at) {
+    if data
+        .bb_ops(exit)
+        .first()
+        .and_then(|&o| op(data, o))
+        .is_none_or(|p| *p.get_addr() == at)
+    {
         return None;
     }
     // The head: phis (out, entering value, value from the body), then the branch.
@@ -356,14 +397,19 @@ fn match_rep(data: &Funcdata, head: BlockId) -> Option<Rep> {
             if src.2 != width as u64 || src.0 == dst.0 {
                 return None;
             }
-            Element::Copy { src_out: src.0, src_in: src.1 }
+            Element::Copy {
+                src_out: src.0,
+                src_in: src.1,
+            }
         }
         None => {
             if ptrs.len() != 1 || def_block(data, stored).is_some_and(|b| b == head || b == body) {
                 return None;
             }
             match constant(data, stored) {
-                Some(k) if (0..width).all(|i| (k >> (8 * i)) & 0xff == k & 0xff) => Element::FillConst(k & 0xff),
+                Some(k) if (0..width).all(|i| (k >> (8 * i)) & 0xff == k & 0xff) => {
+                    Element::FillConst(k & 0xff)
+                }
                 None if width == 1 => Element::FillByte(stored),
                 _ if matches!(width, 2 | 4 | 8) => Element::FillElement(stored),
                 _ => return None,
@@ -372,25 +418,45 @@ fn match_rep(data: &Funcdata, head: BlockId) -> Option<Rep> {
     };
     // Nothing outside the loop reads what the body computes.
     for &o in &body_ops {
-        let Some(out) = op(data, o)?.get_out() else { continue };
+        let Some(out) = op(data, o)?.get_out() else {
+            continue;
+        };
         for u in data.vbank().get(out)?.descend_iter() {
-            if !op(data, u)?.get_parent().is_some_and(|b| b == head || b == body) {
+            if !op(data, u)?
+                .get_parent()
+                .is_some_and(|b| b == head || b == body)
+            {
                 return None;
             }
         }
     }
-    Some(Rep { head, body, to_body, width, count_out, count_in, dst_out: dst.0, dst_in: dst.1, element, memory })
+    Some(Rep {
+        head,
+        body,
+        to_body,
+        width,
+        count_out,
+        count_in,
+        dst_out: dst.0,
+        dst_in: dst.1,
+        element,
+        memory,
+    })
 }
 
 /// Is `v` an address in the function's own frame: the stack pointer plus a
 /// constant, through copies?
 fn in_frame(data: &Funcdata, mut v: VarnodeId) -> bool {
     for _ in 0..8 {
-        let Some(n) = data.vbank().get(v) else { return false };
+        let Some(n) = data.vbank().get(v) else {
+            return false;
+        };
         if n.is_spacebase() {
             return true;
         }
-        let Some(d) = n.get_def().and_then(|d| op(data, d)) else { return false };
+        let Some(d) = n.get_def().and_then(|d| op(data, d)) else {
+            return false;
+        };
         let next = match d.code() {
             CPUI_COPY | CPUI_CAST => d.get_in(0),
             CPUI_INT_ADD | CPUI_PTRSUB | CPUI_PTRADD | CPUI_INT_SUB => d.get_in(0),
@@ -413,28 +479,45 @@ fn insert(
     size: i32,
     before: OpId,
 ) -> KunaResult<(OpId, Option<VarnodeId>)> {
-    let at = op(data, before).map(|p| p.get_addr().clone()).ok_or_else(|| KunaError::lowlevel("repstring: stale op"))?;
+    let at = op(data, before)
+        .map(|p| p.get_addr().clone())
+        .ok_or_else(|| KunaError::lowlevel("repstring: stale op"))?;
     let new = data.new_op(inputs.len() as i32, at);
     data.op_set_opcode_code(new, code);
     for (slot, &v) in inputs.iter().enumerate() {
         data.op_set_input(new, v, slot as i32)?;
     }
-    let out = if size > 0 { Some(data.new_unique_out(size, new)?) } else { None };
+    let out = if size > 0 {
+        Some(data.new_unique_out(size, new)?)
+    } else {
+        None
+    };
     data.op_insert_before(new, before);
     Ok((new, out))
 }
 
 /// Point every read of `from` outside the loop at `to`, or at a new zero of
 /// `from`'s width when `to` is `None`.
-fn redirect(data: &mut Funcdata, from: VarnodeId, to: Option<VarnodeId>, inside: [BlockId; 2]) -> KunaResult<()> {
+fn redirect(
+    data: &mut Funcdata,
+    from: VarnodeId,
+    to: Option<VarnodeId>,
+    inside: [BlockId; 2],
+) -> KunaResult<()> {
     let width = size(data, from).unwrap_or(8);
-    let readers: Vec<OpId> = data.vbank().get(from).map(|v| v.descend_iter().collect()).unwrap_or_default();
+    let readers: Vec<OpId> = data
+        .vbank()
+        .get(from)
+        .map(|v| v.descend_iter().collect())
+        .unwrap_or_default();
     for reader in readers {
         let Some(p) = op(data, reader) else { continue };
         if p.get_parent().is_some_and(|b| inside.contains(&b)) {
             continue;
         }
-        let slots: Vec<i32> = (0..p.num_input()).filter(|&i| p.get_in(i) == Some(from)).collect();
+        let slots: Vec<i32> = (0..p.num_input())
+            .filter(|&i| p.get_in(i) == Some(from))
+            .collect();
         for slot in slots {
             let value = match to {
                 Some(v) => v,
@@ -447,7 +530,9 @@ fn redirect(data: &mut Funcdata, from: VarnodeId, to: Option<VarnodeId>, inside:
 }
 
 fn rewrite(data: &mut Funcdata, rep: &Rep) -> KunaResult<()> {
-    let tail = data.bb_op_tail(rep.head).ok_or_else(|| KunaError::lowlevel("repstring: empty head"))?;
+    let tail = data
+        .bb_op_tail(rep.head)
+        .ok_or_else(|| KunaError::lowlevel("repstring: empty head"))?;
     let ptr_size = size(data, rep.dst_out).unwrap_or(8);
     let count_size = size(data, rep.count_in).unwrap_or(ptr_size);
     let bytes = if rep.width == 1 {
@@ -460,7 +545,12 @@ fn rewrite(data: &mut Funcdata, rep: &Rep) -> KunaResult<()> {
     };
     let (id, second, length, src) = match rep.element {
         Element::Copy { src_out, src_in } => (BUILTIN_MEMCPY, src_in, bytes, Some(src_out)),
-        Element::FillConst(byte) => (BUILTIN_MEMSET, data.new_constant(4, byte as uintb), bytes, None),
+        Element::FillConst(byte) => (
+            BUILTIN_MEMSET,
+            data.new_constant(4, byte as uintb),
+            bytes,
+            None,
+        ),
         Element::FillByte(byte) => (BUILTIN_MEMSET, byte, bytes, None),
         Element::FillElement(value) => {
             let id = match rep.width {
@@ -476,13 +566,21 @@ fn rewrite(data: &mut Funcdata, rep: &Rep) -> KunaResult<()> {
         }
     };
     let id = data.new_constant(4, id as uintb);
-    let (call, _) = insert(data, CPUI_CALLOTHER, &[id, rep.dst_in, second, length], 0, tail)?;
+    let (call, _) = insert(
+        data,
+        CPUI_CALLOTHER,
+        &[id, rep.dst_in, second, length],
+        0,
+        tail,
+    )?;
     for &location in &rep.memory {
         let (addr, width) = match data.vbank().get(location) {
             Some(v) => (v.get_addr().clone(), v.get_size()),
             None => continue,
         };
-        let at = op(data, call).map(|p| p.get_addr().clone()).ok_or_else(|| KunaError::lowlevel("repstring: stale call"))?;
+        let at = op(data, call)
+            .map(|p| p.get_addr().clone())
+            .ok_or_else(|| KunaError::lowlevel("repstring: stale call"))?;
         let ind = data.new_op(2, at);
         data.op_set_opcode_code(ind, CPUI_INDIRECT);
         data.op_set_input(ind, location, 0)?;
@@ -557,7 +655,11 @@ fn join(equal: u64, differ: After) -> Option<Join> {
 /// Is `v` read by an op outside `inside`?
 fn read_outside(data: &Funcdata, v: VarnodeId, inside: [BlockId; 2]) -> bool {
     data.vbank().get(v).is_some_and(|n| {
-        n.descend_iter().any(|u| !op(data, u).and_then(|p| p.get_parent()).is_some_and(|b| inside.contains(&b)))
+        n.descend_iter().any(|u| {
+            !op(data, u)
+                .and_then(|p| p.get_parent())
+                .is_some_and(|b| inside.contains(&b))
+        })
     })
 }
 
@@ -584,7 +686,13 @@ fn read_leaving_head(data: &Funcdata, v: VarnodeId, inside: [BlockId; 2], exit: 
 
 /// `v` as a function of the byte pair `(x, y)` the body loaded, over the
 /// pairs that differ: one constant, `x < y` or `x > y`.
-fn after_difference(data: &Funcdata, v: VarnodeId, x: VarnodeId, y: VarnodeId, body: BlockId) -> Option<After> {
+fn after_difference(
+    data: &Funcdata,
+    v: VarnodeId,
+    x: VarnodeId,
+    y: VarnodeId,
+    body: BlockId,
+) -> Option<After> {
     let at = |a: u64, b: u64| eval(data, v, &[(x, a), (y, b)], &[body], 0);
     let first = at(0, 1)?;
     let candidates = [After::Constant(first), After::Less, After::Greater];
@@ -608,13 +716,25 @@ fn after_difference(data: &Funcdata, v: VarnodeId, x: VarnodeId, y: VarnodeId, b
             }
         }
     }
-    candidates.into_iter().zip(alive).find(|&(_, ok)| ok).map(|(c, _)| c)
+    candidates
+        .into_iter()
+        .zip(alive)
+        .find(|&(_, ok)| ok)
+        .map(|(c, _)| c)
 }
 
 /// `v`'s value for every equal byte pair, when it is the same for all of them.
-fn after_equal(data: &Funcdata, v: VarnodeId, x: VarnodeId, y: VarnodeId, body: BlockId) -> Option<u64> {
+fn after_equal(
+    data: &Funcdata,
+    v: VarnodeId,
+    x: VarnodeId,
+    y: VarnodeId,
+    body: BlockId,
+) -> Option<u64> {
     let first = eval(data, v, &[(x, 0), (y, 0)], &[body], 0)?;
-    (1..=255u64).all(|a| eval(data, v, &[(x, a), (y, a)], &[body], 0) == Some(first)).then_some(first)
+    (1..=255u64)
+        .all(|a| eval(data, v, &[(x, a), (y, a)], &[body], 0) == Some(first))
+        .then_some(first)
 }
 
 /// `v` through COPYs, when that ends in a constant.
@@ -631,7 +751,11 @@ fn match_compare(data: &Funcdata, head: BlockId) -> Option<Compare> {
     let cond = tail.get_in(1)?;
     let (counter, when_zero) = zero_test(data, cond)?;
     let (on_true, on_false) = taken(data, head)?;
-    let (exit, body) = if when_zero { (on_true, on_false) } else { (on_false, on_true) };
+    let (exit, body) = if when_zero {
+        (on_true, on_false)
+    } else {
+        (on_false, on_true)
+    };
     let bb = data.bblocks_ref().block(body);
     if body == head || body == exit || bb.size_in() != 1 || bb.size_out() != 2 {
         return None;
@@ -642,7 +766,11 @@ fn match_compare(data: &Funcdata, head: BlockId) -> Option<Compare> {
     }
     let (head_ops, body_ops) = (data.bb_ops(head), data.bb_ops(body));
     let at = op(data, *head_ops.first()?)?.get_addr().clone();
-    if !head_ops.iter().chain(body_ops.iter()).all(|&o| op(data, o).is_some_and(|p| *p.get_addr() == at)) {
+    if !head_ops
+        .iter()
+        .chain(body_ops.iter())
+        .all(|&o| op(data, o).is_some_and(|p| *p.get_addr() == at))
+    {
         return None;
     }
     let inside = [head, body];
@@ -652,7 +780,9 @@ fn match_compare(data: &Funcdata, head: BlockId) -> Option<Compare> {
         match p.code() {
             CPUI_MULTIEQUAL => {
                 let (enter, next) = (p.get_in(1 - back)?, p.get_in(back)?);
-                if def_block(data, enter).is_some_and(|b| inside.contains(&b)) || def_block(data, next) != Some(body) {
+                if def_block(data, enter).is_some_and(|b| inside.contains(&b))
+                    || def_block(data, next) != Some(body)
+                {
                     return None;
                 }
                 phis.push((p.get_out()?, enter, next));
@@ -676,21 +806,28 @@ fn match_compare(data: &Funcdata, head: BlockId) -> Option<Compare> {
                 loads.push((copied(data, p.get_in(1)?), out));
             }
             code if PURE.contains(&code) => {
-                if data.vbank().get(p.get_out()?).is_some_and(|n| n.is_persist()) {
+                if data
+                    .vbank()
+                    .get(p.get_out()?)
+                    .is_some_and(|n| n.is_persist())
+                {
                     return None;
                 }
             }
             _ => return None,
         }
     }
-    let [(p0, b0), (p1, b1)] = loads[..] else { return None };
+    let [(p0, b0), (p1, b1)] = loads[..] else {
+        return None;
+    };
     if p0 == p1 {
         return None;
     }
     // The count and the two pointers; every other phi is a flag.
     let (mut count_in, mut ptr_in, mut flags) = (None, [None, None], Vec::new());
     for &(out, enter, next) in &phis {
-        let step = op(data, data.vbank().get(copied(data, next))?.get_def()?).and_then(|inc| step(data, inc, out));
+        let step = op(data, data.vbank().get(copied(data, next))?.get_def()?)
+            .and_then(|inc| step(data, inc, out));
         if out == counter {
             if step != Some(mask(size(data, out)?)) || read_outside(data, out, inside) {
                 return None;
@@ -713,10 +850,18 @@ fn match_compare(data: &Funcdata, head: BlockId) -> Option<Compare> {
         (a == Some(b0) && b == Some(b1)) || (a == Some(b1) && b == Some(b0))
     };
     let ordered = |p: &PcodeOp| matches!(p.code(), CPUI_INT_SUB | CPUI_INT_LESS | CPUI_INT_SBORROW);
-    let users: Vec<&PcodeOp> = body_ops.iter().filter_map(|&o| op(data, o)).filter(|p| reads_both(p)).collect();
+    let users: Vec<&PcodeOp> = body_ops
+        .iter()
+        .filter_map(|&o| op(data, o))
+        .filter(|p| reads_both(p))
+        .collect();
     let lead = users.iter().find(|p| ordered(p)).or(users.first())?;
     let swap = lead.get_in(0) == Some(b1);
-    let ((x, first_in), (y, second_in)) = if swap { ((b1, in1), (b0, in0)) } else { ((b0, in0), (b1, in1)) };
+    let ((x, first_in), (y, second_in)) = if swap {
+        ((b1, in1), (b0, in0))
+    } else {
+        ((b0, in0), (b1, in1))
+    };
     // The body returns to the head exactly while the bytes are equal.
     let (b_true, b_false) = taken(data, body)?;
     let body_cond = op(data, data.bb_op_tail(body)?)?.get_in(1)?;
@@ -737,13 +882,17 @@ fn match_compare(data: &Funcdata, head: BlockId) -> Option<Compare> {
             continue;
         }
         let equal = after_equal(data, next, x, y, body)?;
-        if copied_constant(data, enter) != Some(equal) && !(nonzero_count && read_leaving_head(data, out, inside, exit)) {
+        if copied_constant(data, enter) != Some(equal)
+            && !(nonzero_count && read_leaving_head(data, out, inside, exit))
+        {
             return None;
         }
         after.push((out, After::Constant(equal)));
     }
     for &o in &body_ops {
-        let Some(out) = op(data, o)?.get_out() else { continue };
+        let Some(out) = op(data, o)?.get_out() else {
+            continue;
+        };
         if read_outside(data, out, inside) {
             after.push((out, after_difference(data, out, x, y, body)?));
         }
@@ -766,7 +915,9 @@ fn match_compare(data: &Funcdata, head: BlockId) -> Option<Compare> {
             if h == b {
                 continue;
             }
-            let After::Constant(equal) = known(h)? else { return None };
+            let After::Constant(equal) = known(h)? else {
+                return None;
+            };
             joins.push((o, from_head, join(equal, known(b)?)?));
         }
         Some(joins)
@@ -787,11 +938,22 @@ fn match_compare(data: &Funcdata, head: BlockId) -> Option<Compare> {
 }
 
 fn rewrite_compare(data: &mut Funcdata, c: &Compare) -> KunaResult<()> {
-    let tail = data.bb_op_tail(c.head).ok_or_else(|| KunaError::lowlevel("repstring: empty head"))?;
+    let tail = data
+        .bb_op_tail(c.head)
+        .ok_or_else(|| KunaError::lowlevel("repstring: empty head"))?;
     let id = data.new_constant(4, BUILTIN_MEMCMP as uintb);
-    let (_, result) = insert(data, CPUI_CALLOTHER, &[id, c.first_in, c.second_in, c.count_in], 4, tail)?;
+    let (_, result) = insert(
+        data,
+        CPUI_CALLOTHER,
+        &[id, c.first_in, c.second_in, c.count_in],
+        4,
+        tail,
+    )?;
     let result = result.ok_or_else(|| KunaError::lowlevel("repstring: no result"))?;
-    let int = data.get_arch().types().and_then(|t| t.get_base(4, type_metatype::TYPE_INT).ok());
+    let int = data
+        .get_arch()
+        .types()
+        .and_then(|t| t.get_base(4, type_metatype::TYPE_INT).ok());
     if let (Some(t), Some(n)) = (int, data.vbank_mut().get_mut(result)) {
         n.update_type(t);
     }
@@ -822,7 +984,10 @@ fn rewrite_compare(data: &mut Funcdata, c: &Compare) -> KunaResult<()> {
     }
     if let Some(joins) = &c.joins {
         for &(phi, slot, value) in joins {
-            let width = op(data, phi).and_then(|p| p.get_out()).and_then(|v| size(data, v)).unwrap_or(1);
+            let width = op(data, phi)
+                .and_then(|p| p.get_out())
+                .and_then(|v| size(data, v))
+                .unwrap_or(1);
             let merged = match value {
                 Join::Constant(k) => Some(data.new_constant(width, k)),
                 Join::Result(code, k) => {
@@ -834,23 +999,42 @@ fn rewrite_compare(data: &mut Funcdata, c: &Compare) -> KunaResult<()> {
                     insert(data, code, &[k, result], width, tail)?.1
                 }
             };
-            data.op_set_input(phi, merged.ok_or_else(|| KunaError::lowlevel("repstring: no join"))?, slot)?;
+            data.op_set_input(
+                phi,
+                merged.ok_or_else(|| KunaError::lowlevel("repstring: no join"))?,
+                slot,
+            )?;
         }
         return data.remove_branch(c.head, c.to_body);
     }
     let zero = data.new_constant(4, 0);
-    let code = if c.exit_when_true { CPUI_INT_EQUAL } else { CPUI_INT_NOTEQUAL };
+    let code = if c.exit_when_true {
+        CPUI_INT_EQUAL
+    } else {
+        CPUI_INT_NOTEQUAL
+    };
     let (_, same) = insert(data, code, &[result, zero], 1, tail)?;
-    data.op_set_input(tail, same.ok_or_else(|| KunaError::lowlevel("repstring: no test"))?, 1)?;
+    data.op_set_input(
+        tail,
+        same.ok_or_else(|| KunaError::lowlevel("repstring: no test"))?,
+        1,
+    )?;
     data.remove_branch(c.body, c.to_head)
 }
 
 /// The builtin a CALLOTHER names, when it is one this pass places.
 fn builtin(data: &Funcdata, op_id: OpId) -> Option<u32> {
     let id = constant(data, op(data, op_id)?.get_in(0)?)? as u32;
-    [BUILTIN_MEMCPY, BUILTIN_MEMSET, BUILTIN_MEMSET16, BUILTIN_MEMSET32, BUILTIN_MEMSET64, BUILTIN_MEMCMP]
-        .contains(&id)
-        .then_some(id)
+    [
+        BUILTIN_MEMCPY,
+        BUILTIN_MEMSET,
+        BUILTIN_MEMSET16,
+        BUILTIN_MEMSET32,
+        BUILTIN_MEMSET64,
+        BUILTIN_MEMCMP,
+    ]
+    .contains(&id)
+    .then_some(id)
 }
 
 /// The type of a pointer operand of a copy, fill or compare builtin: `void *`,
@@ -871,8 +1055,14 @@ pub(crate) fn input_type(data: &Funcdata, op_id: OpId, slot: int4) -> Option<Rc<
         BUILTIN_MEMCMP => types.get_type_char(1).ok()?,
         _ => types.get_type_void().ok()?,
     };
-    let word = arch.manage().get_default_data_space().map(|s| s.get_word_size()).unwrap_or(1);
-    types.get_type_pointer(size(data, op(data, op_id)?.get_in(slot)?)?, element, word).ok()
+    let word = arch
+        .manage()
+        .get_default_data_space()
+        .map(|s| s.get_word_size())
+        .unwrap_or(1);
+    types
+        .get_type_pointer(size(data, op(data, op_id)?.get_in(slot)?)?, element, word)
+        .ok()
 }
 
 /// The type of `builtin_memcmp`'s result: a signed integer.
@@ -881,5 +1071,8 @@ pub(crate) fn output_type(data: &Funcdata, op_id: OpId) -> Option<Rc<Datatype>> 
         return None;
     }
     let width = size(data, op(data, op_id)?.get_out()?)?;
-    data.get_arch().types()?.get_base(width, type_metatype::TYPE_INT).ok()
+    data.get_arch()
+        .types()?
+        .get_base(width, type_metatype::TYPE_INT)
+        .ok()
 }

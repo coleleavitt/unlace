@@ -17,11 +17,15 @@
 use unlace_base::address::Address;
 
 use crate::context::ArchContext;
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::fspec::PrototypePieces;
 
 fn concrete(ty: &Datatype) -> bool {
-    ty.get_size() > 0 && !matches!(ty.get_metatype(), type_metatype::TYPE_VOID | type_metatype::TYPE_UNKNOWN)
+    ty.get_size() > 0
+        && !matches!(
+            ty.get_metatype(),
+            type_metatype::TYPE_VOID | type_metatype::TYPE_UNKNOWN
+        )
 }
 
 /// Whether the type-only declaration `pieces` binds at a call to `entry`.

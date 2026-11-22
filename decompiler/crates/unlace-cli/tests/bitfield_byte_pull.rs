@@ -108,7 +108,9 @@ fn bitfield_loads_keep_their_values_across_stores_aliases_and_calls() {
             ("a_call", "unsigned a_call(A *p)"),
             ("a_swap", "unsigned a_swap(A *p)"),
         ];
-        let functions = functions.iter().filter(|(name, _)| !debug || dwarf_layout_reads(name));
+        let functions = functions
+            .iter()
+            .filter(|(name, _)| !debug || dwarf_layout_reads(name));
         let code = functions
             .clone()
             .map(|(name, signature)| decompile(name, signature, debug))
@@ -190,7 +192,13 @@ fn whole_field_arguments_have_a_defined_value() {
 fn decompile_shapes() -> std::collections::HashMap<String, String> {
     let image = common::repo_root().join("tests/fixtures/bitfield-byte-pull/shapes-no-debug.o");
     let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
-    command.args(["decompile-all", image.to_str().unwrap(), "--json", "--max-fn-seconds", "5"]);
+    command.args([
+        "decompile-all",
+        image.to_str().unwrap(),
+        "--json",
+        "--max-fn-seconds",
+        "5",
+    ]);
     command.args(["--option", "ctypes", "on", "--assert-strict"]);
     for assertion in [
         "typedef struct job { int stopstatus; unsigned nprocs : 16, state : 8, used : 1, changed : 1; } job;",
@@ -214,7 +222,10 @@ fn decompile_shapes() -> std::collections::HashMap<String, String> {
         .iter()
         .map(|f| {
             assert!(f["error"].is_null(), "{f}");
-            (f["name"].as_str().unwrap().to_owned(), f["code"].as_str().unwrap().to_owned())
+            (
+                f["name"].as_str().unwrap().to_owned(),
+                f["code"].as_str().unwrap().to_owned(),
+            )
         })
         .collect()
 }
@@ -223,25 +234,49 @@ fn decompile_shapes() -> std::collections::HashMap<String, String> {
 fn whole_byte_fields_keep_their_type_sign_value_and_single_read() {
     let code = decompile_shapes();
     let job = &code["job_state"];
-    assert!(job.contains("== 1") && job.contains("!= 2") && !job.contains("'\\x"), "{job}");
-    assert!(code["pair_a"].contains("return s.a * 3;"), "{}", code["pair_a"]);
+    assert!(
+        job.contains("== 1") && job.contains("!= 2") && !job.contains("'\\x"),
+        "{job}"
+    );
+    assert!(
+        code["pair_a"].contains("return s.a * 3;"),
+        "{}",
+        code["pair_a"]
+    );
     let node = &code["node_accept"];
     assert_eq!(node.matches("n->constraint").count(), 1, "{node}");
     let store = &code["node_store"];
-    assert!(store.contains(".type = 6;") && !store.contains("(char *)"), "{store}");
+    assert!(
+        store.contains(".type = 6;") && !store.contains("(char *)"),
+        "{store}"
+    );
     let save = &code["node_save"];
-    let reads = save.lines().filter(|l| l.trim_start().starts_with("v") && l.contains(".type;")).count();
+    let reads = save
+        .lines()
+        .filter(|l| l.trim_start().starts_with("v") && l.contains(".type;"))
+        .count();
     let self_assigned = save.lines().any(|l| {
-        l.trim().split_once(" = ").is_some_and(|(lhs, rhs)| rhs.strip_prefix(lhs).is_some_and(|r| r.starts_with('.')))
+        l.trim()
+            .split_once(" = ")
+            .is_some_and(|(lhs, rhs)| rhs.strip_prefix(lhs).is_some_and(|r| r.starts_with('.')))
     });
-    assert!(reads == 1 && !self_assigned && !save.contains("char *)"), "{save}");
+    assert!(
+        reads == 1 && !self_assigned && !save.contains("char *)"),
+        "{save}"
+    );
 }
 
 #[test]
 fn field_read_from_a_read_modify_write_word_prints_before_both_stores() {
     let image = common::repo_root().join("tests/fixtures/bitfield-byte-pull/rmw-mipsbe.o");
     let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
-    command.args(["decompile-all", image.to_str().unwrap(), "--json", "--max-fn-seconds", "5"]);
+    command.args([
+        "decompile-all",
+        image.to_str().unwrap(),
+        "--json",
+        "--max-fn-seconds",
+        "5",
+    ]);
     let output = common::process::required_output(&mut command);
     let document: Value = serde_json::from_slice(&output.stdout).unwrap();
     let code: std::collections::HashMap<String, String> = document["functions"]
@@ -250,7 +285,10 @@ fn field_read_from_a_read_modify_write_word_prints_before_both_stores() {
         .iter()
         .map(|f| {
             assert!(f["error"].is_null(), "{f}");
-            (f["name"].as_str().unwrap().to_owned(), f["code"].as_str().unwrap().to_owned())
+            (
+                f["name"].as_str().unwrap().to_owned(),
+                f["code"].as_str().unwrap().to_owned(),
+            )
         })
         .collect();
     for (name, read) in [
@@ -262,11 +300,18 @@ fn field_read_from_a_read_modify_write_word_prints_before_both_stores() {
         let body = &code[name];
         let lines: Vec<&str> = body.lines().map(str::trim).collect();
         let at = |needle: &str| lines.iter().position(|l| l.contains(needle));
-        let (Some(load), Some(field), Some(alias)) = (at(read), at("p->hi = v;"), at("*q = ")) else {
+        let (Some(load), Some(field), Some(alias)) = (at(read), at("p->hi = v;"), at("*q = "))
+        else {
             panic!("{name}: missing read, field store or aliasing store\n{body}");
         };
-        assert!(load < field && field < alias, "{name}: read must precede both stores\n{body}");
+        assert!(
+            load < field && field < alias,
+            "{name}: read must precede both stores\n{body}"
+        );
         let ret = lines.iter().find(|l| l.starts_with("return")).unwrap();
-        assert!(!ret.contains("p->"), "{name}: return re-reads memory\n{body}");
+        assert!(
+            !ret.contains("p->"),
+            "{name}: return re-reads memory\n{body}"
+        );
     }
 }

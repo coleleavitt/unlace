@@ -9,7 +9,10 @@ use crate::common;
 mod synth;
 
 fn packed(name: &str) -> (Vec<u8>, Vec<u8>) {
-    let (_, layout, relocs) = synth::layouts().into_iter().find(|(n, ..)| *n == name).unwrap();
+    let (_, layout, relocs) = synth::layouts()
+        .into_iter()
+        .find(|(n, ..)| *n == name)
+        .unwrap();
     let mut p = synth::program(0x1288, 12_000, relocs, &[]);
     p.overlay = vec![0x02, 0x70, 0xe2, 0xaa, 0x28, 0x10, 0x27];
     (synth::pack(&p, &layout), synth::expected(&p, &layout))
@@ -72,5 +75,8 @@ fn a_packed_dos_program_points_at_kuna_unpack() {
     let (image, _) = packed("v1.00 large");
     let input = written("pklite-hint", &image);
     let (_, stderr, _) = common::run_kuna(&["functions", &input]);
-    assert!(stderr.contains("PKLITE packed: run 'unlace unpack'"), "{stderr}");
+    assert!(
+        stderr.contains("PKLITE packed: run 'unlace unpack'"),
+        "{stderr}"
+    );
 }

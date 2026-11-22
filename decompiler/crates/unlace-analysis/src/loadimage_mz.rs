@@ -57,7 +57,8 @@ fn lfanew_is_a_field(bytes: &[u8]) -> bool {
     let header = usize::from(word(bytes, 0x08)) * 16;
     let nrelocs = usize::from(word(bytes, 0x06));
     let table = usize::from(word(bytes, 0x18));
-    let overlaps = (0x3d..0x40).contains(&table) || (nrelocs > 0 && table < 0x40 && table + 4 * nrelocs > 0x3c);
+    let overlaps = (0x3d..0x40).contains(&table)
+        || (nrelocs > 0 && table < 0x40 && table + 4 * nrelocs > 0x3c);
     header > 0x3c && !overlaps
 }
 
@@ -68,12 +69,16 @@ pub fn is_mz_dos_image(bytes: &[u8]) -> bool {
         return false;
     }
     if bytes.len() >= 0x40 {
-        let lfanew = u32::from_le_bytes([bytes[0x3c], bytes[0x3d], bytes[0x3e], bytes[0x3f]]) as usize;
+        let lfanew =
+            u32::from_le_bytes([bytes[0x3c], bytes[0x3d], bytes[0x3e], bytes[0x3f]]) as usize;
         if let Some(sig) = bytes.get(lfanew..lfanew.saturating_add(4)) {
             if lfanew >= 4 && sig == b"PE\0\0" {
                 return false;
             }
-            if lfanew >= 0x40 && matches!(&sig[..2], b"NE" | b"LE" | b"LX") && lfanew_is_a_field(bytes) {
+            if lfanew >= 0x40
+                && matches!(&sig[..2], b"NE" | b"LE" | b"LX")
+                && lfanew_is_a_field(bytes)
+            {
                 return false;
             }
         }
@@ -134,7 +139,8 @@ impl MzImage {
             let site = usize::from(word(entry, 2)) * 16 + usize::from(word(entry, 0));
             match module.get_mut(site..site + 2) {
                 Some(slot) => {
-                    let value = u16::from_le_bytes([slot[0], slot[1]]).wrapping_add(MZ_LOAD_SEGMENT);
+                    let value =
+                        u16::from_le_bytes([slot[0], slot[1]]).wrapping_add(MZ_LOAD_SEGMENT);
                     slot.copy_from_slice(&value.to_le_bytes());
                     relocations += 1;
                     sites.push(site);
@@ -204,7 +210,9 @@ fn far_targets<'a>(
         let target = u64::from(segment) * 16 + u64::from(word(module, site - 2));
         let next = named.get(named.partition_point(|&other| other <= segment));
         let next = next.map_or(end, |&other| u64::from(other) * 16);
-        (base..end.min(next)).contains(&target).then_some((target, segment))
+        (base..end.min(next))
+            .contains(&target)
+            .then_some((target, segment))
     })
 }
 
@@ -245,9 +253,16 @@ mod tests {
         assert_eq!(mz.base, 0x10000);
         assert_eq!(mz.entry, 0x10000);
         assert_eq!(mz.stack, 0x10130);
-        assert_eq!(mz.module.len(), 0x24, "the overlay past the image is not mapped");
+        assert_eq!(
+            mz.module.len(),
+            0x24,
+            "the overlay past the image is not mapped"
+        );
         assert_eq!(&mz.module[6..8], &0x1002u16.to_le_bytes());
-        assert_eq!((mz.relocations, mz.skipped_relocations, mz.packer), (1, 0, None));
+        assert_eq!(
+            (mz.relocations, mz.skipped_relocations, mz.packer),
+            (1, 0, None)
+        );
         assert_eq!(mz.code_segments, vec![(0x10000, 0x1000), (0x10020, 0x1002)]);
         assert_eq!(mz.relocated_words, vec![0x10006]);
     }
@@ -256,7 +271,10 @@ mod tests {
     fn a_far_target_outside_the_module_states_no_segment() {
         let mut bytes = image();
         bytes[0x24..0x26].copy_from_slice(&0x0100u16.to_le_bytes());
-        assert_eq!(MzImage::parse(&bytes).unwrap().code_segments, vec![(0x10000, 0x1000)]);
+        assert_eq!(
+            MzImage::parse(&bytes).unwrap().code_segments,
+            vec![(0x10000, 0x1000)]
+        );
     }
 
     /// `mov bx, 0x9a00; mov word [bx], seg 0000` (`bb 00 9a c7 07 ..`) reads
@@ -320,18 +338,29 @@ mod tests {
         bytes.resize(0x200, 0);
         bytes[0x3c..0x40].copy_from_slice(&0x100u32.to_le_bytes());
         bytes[0x100..0x102].copy_from_slice(b"LE");
-        assert!(is_mz_dos_image(&bytes), "a two-paragraph header ends before e_lfanew");
+        assert!(
+            is_mz_dos_image(&bytes),
+            "a two-paragraph header ends before e_lfanew"
+        );
         bytes[0x08..0x0a].copy_from_slice(&5u16.to_le_bytes());
         assert!(!is_mz_dos_image(&bytes));
         bytes[0x06..0x08].copy_from_slice(&10u16.to_le_bytes());
-        assert!(is_mz_dos_image(&bytes), "the relocation table covers e_lfanew");
+        assert!(
+            is_mz_dos_image(&bytes),
+            "the relocation table covers e_lfanew"
+        );
     }
 
     #[test]
     fn an_entry_outside_the_module_is_refused() {
         let mut bytes = image();
         bytes[0x16..0x18].copy_from_slice(&0x0100u16.to_le_bytes());
-        assert!(MzImage::parse(&bytes).unwrap_err().to_string().contains("outside"));
+        assert!(
+            MzImage::parse(&bytes)
+                .unwrap_err()
+                .to_string()
+                .contains("outside")
+        );
     }
 
     #[test]

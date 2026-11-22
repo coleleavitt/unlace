@@ -1,14 +1,14 @@
 //! Verified older Rust piece-array printing and its refusal boundaries.
 
+use std::path::PathBuf;
 use unlace_console::engine::bootstrap_from_object;
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::kuna_rustfmt::RustFmtMode;
-use std::path::PathBuf;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
@@ -263,10 +263,12 @@ fn layout_metadata_rejects_other_images_and_bounds_relro_to_full_pages() {
     );
     let mut no_relro = bytes.clone();
     no_relro[relro..relro + 4].copy_from_slice(&0u32.to_le_bytes());
-    assert!(unlace_analysis::sourcelang::fmt_pieces_layout(&no_relro, true)
-        .unwrap()
-        .relro
-        .is_none());
+    assert!(
+        unlace_analysis::sourcelang::fmt_pieces_layout(&no_relro, true)
+            .unwrap()
+            .relro
+            .is_none()
+    );
     for mutation in 0..3 {
         let mut other = bytes.clone();
         match mutation {
@@ -297,14 +299,24 @@ fn layout_metadata_rejects_other_images_and_bounds_relro_to_full_pages() {
         unlace_analysis::sourcelang::stable_rustc_version(&uncommented, true),
         Some((1, 90, 0))
     );
-    assert_eq!(unlace_analysis::sourcelang::stable_rustc_version(&uncommented, false), None);
+    assert_eq!(
+        unlace_analysis::sourcelang::stable_rustc_version(&uncommented, false),
+        None
+    );
     let path = uncommented
         .windows(7)
         .position(|w| w == b"/rustc/")
         .unwrap();
-    uncommented[path + 7] = if uncommented[path + 7] == b'0' { b'1' } else { b'0' };
+    uncommented[path + 7] = if uncommented[path + 7] == b'0' {
+        b'1'
+    } else {
+        b'0'
+    };
     assert!(unlace_analysis::sourcelang::fmt_pieces_layout(&uncommented, true).is_none());
-    assert_eq!(unlace_analysis::sourcelang::stable_rustc_version(&uncommented, true), None);
+    assert_eq!(
+        unlace_analysis::sourcelang::stable_rustc_version(&uncommented, true),
+        None
+    );
     assert!(unlace_analysis::sourcelang::fmt_pieces_layout(b"not ELF", true).is_none());
 }
 
@@ -379,14 +391,32 @@ fn emitted_literals_and_primitive_macros_reproduce_native_streams() {
         for (name, parameters, bindings) in [
             ("pieces_u32", "a:u32", "let v2=&a as *const u32;"),
             ("pieces_i64", "a:i64", "let v2=&a as *const i64;"),
-            ("pieces_pair", "a:i8,b:u64", "let v3=&a as *const i8;let v6=&b as *const u64;"),
-            ("pieces_narrow", "a:u8,b:i16,c:u16,d:i32", "let v5=&a as *const u8;let v8=&b as *const i16;let v10=&c as *const u16;let v12=&d as *const i32;"),
-            ("pieces_adjacent", "a:u64,b:i64", "let v3=&a as *const u64;let v6=&b as *const i64;"),
+            (
+                "pieces_pair",
+                "a:i8,b:u64",
+                "let v3=&a as *const i8;let v6=&b as *const u64;",
+            ),
+            (
+                "pieces_narrow",
+                "a:u8,b:i16,c:u16,d:i32",
+                "let v5=&a as *const u8;let v8=&b as *const i16;let v10=&c as *const u16;let v12=&d as *const i32;",
+            ),
+            (
+                "pieces_adjacent",
+                "a:u64,b:i64",
+                "let v3=&a as *const u64;let v6=&b as *const i64;",
+            ),
         ] {
-            let body=output(fixture,name,true);
-            let macros:Vec<_>=body.lines().filter(|line| line.contains("print!(")||line.contains("println!(")).collect();
-            assert_eq!(macros.len(),1,"{body}");
-            source.push_str(&format!("unsafe fn {name}({parameters}) {{ {bindings} {} }}\n",macros[0]));
+            let body = output(fixture, name, true);
+            let macros: Vec<_> = body
+                .lines()
+                .filter(|line| line.contains("print!(") || line.contains("println!("))
+                .collect();
+            assert_eq!(macros.len(), 1, "{body}");
+            source.push_str(&format!(
+                "unsafe fn {name}({parameters}) {{ {bindings} {} }}\n",
+                macros[0]
+            ));
         }
         source.push_str("fn main(){unsafe{pieces_literal();pieces_plain();pieces_stderr();pieces_empty();pieces_u32(23);pieces_i64(i64::MIN);pieces_pair(-7,u64::MAX);pieces_narrow(255,i16::MIN,u16::MAX,i32::MIN);pieces_adjacent(11,-22);}}\n");
         let path = common::scratch_file("rustfmtpieces", "rs");

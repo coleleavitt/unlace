@@ -15,14 +15,18 @@ pub(super) fn is_complzss(bytes: &[u8]) -> bool {
 /// Decode a `complzss` container, checking its declared size and Adler-32.
 pub(super) fn decode(bytes: &[u8], limit: usize) -> Result<Vec<u8>, String> {
     let be = |off: usize| {
-        bytes.get(off..off + 4).map(|s| u32::from_be_bytes(s.try_into().unwrap()))
+        bytes
+            .get(off..off + 4)
+            .map(|s| u32::from_be_bytes(s.try_into().unwrap()))
     };
     let (Some(adler), Some(size), Some(csize)) = (be(8), be(12), be(16)) else {
         return Err("truncated complzss header".into());
     };
     let (size, csize) = (size as usize, csize as usize);
     if size > limit {
-        return Err(format!("complzss declares {size} decoded bytes, over the {limit}-byte limit"));
+        return Err(format!(
+            "complzss declares {size} decoded bytes, over the {limit}-byte limit"
+        ));
     }
     let src = HEADER_LEN
         .checked_add(csize)
@@ -30,7 +34,10 @@ pub(super) fn decode(bytes: &[u8], limit: usize) -> Result<Vec<u8>, String> {
         .ok_or("complzss compressed size runs past the end of the payload")?;
     let out = decode_stream(src, size)?;
     if out.len() != size {
-        return Err(format!("complzss decoded {} bytes, header declares {size}", out.len()));
+        return Err(format!(
+            "complzss decoded {} bytes, header declares {size}",
+            out.len()
+        ));
     }
     if adler32(&out) != adler {
         return Err("complzss Adler-32 mismatch".into());
@@ -59,11 +66,15 @@ pub(super) fn decode_stream(src: &[u8], size: usize) -> Result<Vec<u8>, String> 
             r = (r + 1) & (N - 1);
             continue;
         }
-        let (Some(lo), Some(hi)) = (input.next(), input.next()) else { break };
+        let (Some(lo), Some(hi)) = (input.next(), input.next()) else {
+            break;
+        };
         let at = lo as usize | ((hi as usize & 0xf0) << 4);
         let len = (hi as usize & 0x0f) + THRESHOLD;
         if out.len() + len + 1 > size {
-            return Err(format!("complzss back-reference runs past the declared {size} bytes"));
+            return Err(format!(
+                "complzss back-reference runs past the declared {size} bytes"
+            ));
         }
         for k in 0..=len {
             let c = ring[(at + k) & (N - 1)];

@@ -1,12 +1,12 @@
 //! One weak import keeps one logical symbol, entered at its synthetic extern
 //! address, across its import slot and direct relocations.
+use std::path::PathBuf;
 use unlace_analysis::loadimage_object::ObjectLoadImage;
 use unlace_base::address::Address;
 use unlace_console::{
     assertions, assertsyntax,
-    engine::{bootstrap_from_object, EntrySelector},
+    engine::{EntrySelector, bootstrap_from_object},
 };
-use std::path::PathBuf;
 
 #[test]
 fn mixed_and_got_only_imports_keep_one_identity_and_share_edited_prototypes() {
@@ -46,10 +46,12 @@ fn mixed_and_got_only_imports_keep_one_identity_and_share_edited_prototypes() {
                     .unwrap();
                 assert!(!prog.is_import_slot(entry.addr.get_offset()));
                 assert!(!prog.vma_bytes_mapped(entry.addr.get_offset()));
-                assert!(!prog
-                    .function_entries_executable()
-                    .iter()
-                    .any(|e| e.name == "optional"));
+                assert!(
+                    !prog
+                        .function_entries_executable()
+                        .iter()
+                        .any(|e| e.name == "optional")
+                );
                 let mut addresses = vec![entry.addr.clone()];
                 for &(alias, canonical) in &aliases {
                     assert_eq!(canonical, entry.addr.get_offset());
@@ -89,10 +91,12 @@ fn mixed_and_got_only_imports_keep_one_identity_and_share_edited_prototypes() {
                         2,
                     ),
                 ] {
-                    prog.set_assertions(vec![assertsyntax::parse_directive(&format!(
-                        "prototype {selector} {declaration}"
-                    ))
-                    .unwrap()]);
+                    prog.set_assertions(vec![
+                        assertsyntax::parse_directive(&format!(
+                            "prototype {selector} {declaration}"
+                        ))
+                        .unwrap(),
+                    ]);
                     assertions::apply_program_scoped(&mut prog);
                     assert!(
                         prog.assertion_outcomes()

@@ -41,7 +41,9 @@ pub fn trimmed_rows(
         loadpoints.get(usize::try_from(n).ok()?.checked_sub(1)?)
     };
     let exec = &fd.get_arch().litpool_const;
-    let Some(lo) = entry(0).map(|e| e.addr.get_offset()) else { return 0 };
+    let Some(lo) = entry(0).map(|e| e.addr.get_offset()) else {
+        return 0;
+    };
     let mut prev: Option<u64> = None;
     let mut lowest_target_above: Option<u64> = None;
     for (i, t) in addresstable.iter().enumerate() {
@@ -52,7 +54,10 @@ pub fn trimmed_rows(
         let Some(e) = entry(i) else { return i };
         let at = e.addr.get_offset();
         let end = at.saturating_add(e.size.max(0) as u64);
-        if prev.is_some_and(|p| at <= p) || (lo..end).contains(&off) || lowest_target_above.is_some_and(|m| at >= m) {
+        if prev.is_some_and(|p| at <= p)
+            || (lo..end).contains(&off)
+            || lowest_target_above.is_some_and(|m| at >= m)
+        {
             return i;
         }
         prev = Some(at);

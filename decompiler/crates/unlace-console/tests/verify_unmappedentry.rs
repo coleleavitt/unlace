@@ -26,7 +26,7 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 /// The overlapping call's target — outside every section of the fixture.
 const PHANTOM: &str = "sub_349688c1";
@@ -36,7 +36,10 @@ const ENTRY: &str = "sub_401000";
 const CALLEE: &str = "sub_401010";
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Bootstrap the fixture with the bounded recursive discovery on (the consumer that commits
@@ -48,13 +51,19 @@ fn bootstrap() -> ConsoleProgram {
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.arch_mut().set_kuna_option("fast_funcdisc", "on").expect("fast_funcdisc flips on");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.arch_mut()
+        .set_kuna_option("fast_funcdisc", "on")
+        .expect("fast_funcdisc flips on");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
 fn entry_names(prog: &ConsoleProgram) -> Vec<String> {
-    prog.function_entries_canonical().into_iter().map(|e| e.name).collect()
+    prog.function_entries_canonical()
+        .into_iter()
+        .map(|e| e.name)
+        .collect()
 }
 
 /// The phantom is gone and both real functions survive.
@@ -74,4 +83,3 @@ fn unmapped_call_target_is_refused_and_real_entries_survive() {
         );
     }
 }
-

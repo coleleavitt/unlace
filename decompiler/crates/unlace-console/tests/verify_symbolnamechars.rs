@@ -34,7 +34,10 @@ use unlace_decomp::kuna_symbolnamechars::{NameChars, SYMBOLNAMECHARS_ENV};
 static GATE: Mutex<()> = Mutex::new(());
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture(name: &str) -> String {
@@ -58,11 +61,15 @@ fn load_function_names(bin: &str, mode: NameChars) -> Result<Vec<String>, String
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var(SYMBOLNAMECHARS_ENV) };
     let prog = prog.map_err(|e| e.explain().to_string())?;
-    Ok(prog.function_entries().map(|(name, _)| name.to_string()).collect())
+    Ok(prog
+        .function_entries()
+        .map(|(name, _)| name.to_string())
+        .collect())
 }
 
 fn require_specs() {
-    load_function_names(&fixture("hostile_symname_x86_64"), NameChars::Safe).expect("load required fixture with built processor specs");
+    load_function_names(&fixture("hostile_symname_x86_64"), NameChars::Safe)
+        .expect("load required fixture with built processor specs");
 }
 
 /// The broken arm. `off` is today's verbatim behavior, kept reachable for
@@ -77,7 +84,10 @@ fn off_restores_every_half_of_the_defect() {
 
     // The structural names arrive verbatim, comment delimiters and all.
     for raw in ["a*/b", "a//b", "a\nb"] {
-        assert!(names.iter().any(|n| n == raw), "expected the raw {raw:?} in {names:?}");
+        assert!(
+            names.iter().any(|n| n == raw),
+            "expected the raw {raw:?} in {names:?}"
+        );
     }
     // And the two invalid-UTF-8 names collapse onto ONE string at two addresses:
     // the export would carry two definitions and two prototypes with one name.
@@ -97,23 +107,43 @@ fn safe_neutralizes_every_half_and_keeps_distinct_names_distinct() {
     let names = load_function_names(&fixture("hostile_symname_x86_64"), NameChars::Safe)
         .expect("the fixture must load under the shipped default");
 
-    for expected in ["main", "a_x2a_x2fb", "a_x2f_x2fb", "a_x0ab", "a_x80b", "a_x81b"] {
-        assert!(names.iter().any(|n| n == expected), "missing {expected:?}; got {names:?}");
+    for expected in [
+        "main",
+        "a_x2a_x2fb",
+        "a_x2f_x2fb",
+        "a_x0ab",
+        "a_x80b",
+        "a_x81b",
+    ] {
+        assert!(
+            names.iter().any(|n| n == expected),
+            "missing {expected:?}; got {names:?}"
+        );
     }
     // No name may still be able to restructure the document it is printed into.
     for n in &names {
         assert!(!n.contains("*/"), "a comment delimiter survived: {n:?}");
         assert!(!n.contains("/*"), "a comment delimiter survived: {n:?}");
         assert!(!n.contains("//"), "a line comment survived: {n:?}");
-        assert!(!n.chars().any(|c| c.is_control()), "a control character survived: {n:?}");
-        assert!(!n.contains('\u{fffd}'), "a lossy replacement survived: {n:?}");
+        assert!(
+            !n.chars().any(|c| c.is_control()),
+            "a control character survived: {n:?}"
+        );
+        assert!(
+            !n.contains('\u{fffd}'),
+            "a lossy replacement survived: {n:?}"
+        );
     }
     // The identity half: six symbols in, six DISTINCT names out.
     let mut sorted = names.clone();
     sorted.sort();
     let before = sorted.len();
     sorted.dedup();
-    assert_eq!(sorted.len(), before, "two names collapsed onto one: {names:?}");
+    assert_eq!(
+        sorted.len(),
+        before,
+        "two names collapsed onto one: {names:?}"
+    );
 }
 
 /// `safe` must be a NO-OP on the names a real optimizing toolchain emits — that
@@ -126,7 +156,10 @@ fn safe_leaves_gcc_clone_suffixes_alone_and_ident_folds_them() {
     let bin = fixture("noreturn_error_x86_64");
     let safe = load_function_names(&bin, NameChars::Safe).expect("safe load");
     let off = load_function_names(&bin, NameChars::Off).expect("off load");
-    assert_eq!(safe, off, "safe must not rewrite a single name on a real gcc binary");
+    assert_eq!(
+        safe, off,
+        "safe must not rewrite a single name on a real gcc binary"
+    );
     assert!(
         safe.iter().any(|n| n == "err_fatal.constprop.0"),
         "the fixture must actually carry a clone suffix; got {safe:?}"
@@ -164,7 +197,11 @@ fn safe_leaves_gcc_clone_suffixes_alone_and_ident_folds_them() {
 #[test]
 fn every_reported_name_is_addressable_and_unique() {
     require_specs();
-    for bin in ["hostile_symname_x86_64", "anon_namespace_x86_64", "cpp_mangled_x86_64"] {
+    for bin in [
+        "hostile_symname_x86_64",
+        "anon_namespace_x86_64",
+        "cpp_mangled_x86_64",
+    ] {
         let path = fixture(bin);
         let _guard = GATE.lock().unwrap_or_else(|e| e.into_inner());
         let root = repo_root();

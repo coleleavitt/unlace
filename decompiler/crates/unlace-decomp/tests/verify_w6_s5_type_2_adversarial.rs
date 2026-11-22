@@ -22,10 +22,8 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use unlace_decomp::dtype::{
-    flags, type_metatype, Datatype, DatatypeKind, TypeBitField, TypeField,
-};
 use unlace_decomp::context::OpId;
+use unlace_decomp::dtype::{Datatype, DatatypeKind, TypeBitField, TypeField, flags, type_metatype};
 
 fn scalar(size: i32, align: i32, m: type_metatype) -> Rc<Datatype> {
     let mut dt = Datatype::new_with_align(size, align, m);
@@ -36,7 +34,10 @@ fn scalar(size: i32, align: i32, m: type_metatype) -> Rc<Datatype> {
 fn make_struct(size: i32, align: i32, fields: Vec<TypeField>) -> Datatype {
     let mut s = Datatype::new_with_align(size, align, type_metatype::TYPE_STRUCT);
     s.align_size = Datatype::calc_align_size(size, align);
-    s.kind = DatatypeKind::Struct { field: fields, bitfield: vec![] };
+    s.kind = DatatypeKind::Struct {
+        field: fields,
+        bitfield: vec![],
+    };
     s
 }
 

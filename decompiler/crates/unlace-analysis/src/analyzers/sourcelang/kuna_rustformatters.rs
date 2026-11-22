@@ -21,7 +21,9 @@ pub fn primitive_display_formatters(bytes: &[u8]) -> BTreeMap<u64, &'static str>
         .collect()
 }
 
-pub fn integer_formatters(bytes: &[u8]) -> BTreeMap<u64, unlace_decomp::kuna_rustfmtflags::Formatter> {
+pub fn integer_formatters(
+    bytes: &[u8],
+) -> BTreeMap<u64, unlace_decomp::kuna_rustfmtflags::Formatter> {
     formatter_metadata(bytes).integers
 }
 
@@ -36,21 +38,31 @@ pub fn formatter_metadata(bytes: &[u8]) -> FormatterMetadata {
     {
         return FormatterMetadata::default();
     }
-    let symbols: Vec<_> = file.symbols()
-            .chain(file.dynamic_symbols())
-            .filter(|symbol| symbol.kind() == SymbolKind::Text && symbol.is_definition())
-            .map(|symbol| {
-                let full = symbol
-                    .name()
-                    .ok()
-                    .filter(|name| name.contains("fmt") || (name.contains("drop_in_place") && name.contains("String")))
-                    .and_then(|name| rustc_demangle::try_demangle(name).ok())
-                    .map(|name| format!("{name:#}"));
-                (symbol.address(), full)
-            }).collect();
+    let symbols: Vec<_> = file
+        .symbols()
+        .chain(file.dynamic_symbols())
+        .filter(|symbol| symbol.kind() == SymbolKind::Text && symbol.is_definition())
+        .map(|symbol| {
+            let full = symbol
+                .name()
+                .ok()
+                .filter(|name| {
+                    name.contains("fmt")
+                        || (name.contains("drop_in_place") && name.contains("String"))
+                })
+                .and_then(|name| rustc_demangle::try_demangle(name).ok())
+                .map(|name| format!("{name:#}"));
+            (symbol.address(), full)
+        })
+        .collect();
     let strings = super::kuna_rustfmtstr::collect(&file, &symbols);
     let writers = super::kuna_rustfmtwrite::collect(&file, bytes, &symbols);
     let io_writers = super::kuna_rustfmtio::collect(&file, bytes, &symbols);
     let integers = unlace_decomp::kuna_rustfmtflags::formatter_symbols(symbols);
-    FormatterMetadata { integers, strings, writers, io_writers }
+    FormatterMetadata {
+        integers,
+        strings,
+        writers,
+        io_writers,
+    }
 }

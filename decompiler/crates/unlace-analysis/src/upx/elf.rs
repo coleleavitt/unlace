@@ -25,7 +25,7 @@
 use super::filter;
 use super::lzma;
 use super::nrv::{self, BitOrder, Variant};
-use super::{adler32, Block, PackInfo, UpxError};
+use super::{Block, PackInfo, UpxError, adler32};
 
 /// UPX's own cap on a block's uncompressed size (`PackUnix::blocksize`), plus a
 /// sanity ceiling so a corrupt `p_info` cannot ask for an unbounded allocation.
@@ -79,7 +79,11 @@ impl<'a> Image<'a> {
         if self.class64 {
             let s = self.slice(off, 8)?;
             let a: [u8; 8] = s.try_into().expect("slice checked");
-            Ok(if self.be { u64::from_be_bytes(a) } else { u64::from_le_bytes(a) })
+            Ok(if self.be {
+                u64::from_be_bytes(a)
+            } else {
+                u64::from_le_bytes(a)
+            })
         } else {
             Ok(u64::from(self.u32_at(off)?))
         }
@@ -92,19 +96,11 @@ impl<'a> Image<'a> {
     }
 
     fn ehdr_size(&self) -> usize {
-        if self.class64 {
-            64
-        } else {
-            52
-        }
+        if self.class64 { 64 } else { 52 }
     }
 
     fn phdr_size(&self) -> usize {
-        if self.class64 {
-            56
-        } else {
-            32
-        }
+        if self.class64 { 56 } else { 32 }
     }
 }
 
@@ -153,7 +149,14 @@ fn parse_phdrs(img: &Image<'_>, buf: &[u8], count: usize) -> Result<Vec<Phdr>, U
                 u64::from(read_u32(&buf[o + 20..o + 24], be)),
             )
         };
-        out.push(Phdr { p_type, p_flags, p_offset, p_vaddr, p_filesz, p_memsz });
+        out.push(Phdr {
+            p_type,
+            p_flags,
+            p_offset,
+            p_vaddr,
+            p_filesz,
+            p_memsz,
+        });
     }
     Ok(out)
 }
@@ -197,7 +200,11 @@ struct Walk {
 
 impl Walk {
     fn new() -> Self {
-        Walk { blocks: Vec::new(), u_adler: 1, c_adler: 1 }
+        Walk {
+            blocks: Vec::new(),
+            u_adler: 1,
+            c_adler: 1,
+        }
     }
 }
 
@@ -223,20 +230,18 @@ impl<'a, 'i> Reader<'a, 'i> {
 }
 
 /// The whole reconstruction. `info` is the already-parsed trailing PackHeader.
-pub(super) fn unpack(
-    img: &Image<'_>,
-    info: &PackInfo,
-) -> Result<(Vec<u8>, Vec<Block>), UpxError> {
+pub(super) fn unpack(img: &Image<'_>, info: &PackInfo) -> Result<(Vec<u8>, Vec<Block>), UpxError> {
     // `l_info` sits immediately before the overlay; `p_info` starts it.
     let l_off = (info.overlay_offset as usize)
         .checked_sub(12)
         .ok_or_else(|| UpxError::Corrupt("overlay_offset underflows l_info".into()))?;
     // l_magic is stored le32 whatever the target's endianness.
     let l_magic = img.slice(l_off + 4, 4)?;
-    if u32::from_le_bytes([l_magic[0], l_magic[1], l_magic[2], l_magic[3]])
-        != super::UPX_MAGIC_LE32
+    if u32::from_le_bytes([l_magic[0], l_magic[1], l_magic[2], l_magic[3]]) != super::UPX_MAGIC_LE32
     {
-        return Err(UpxError::Corrupt("l_info magic missing before the overlay".into()));
+        return Err(UpxError::Corrupt(
+            "l_info magic missing before the overlay".into(),
+        ));
     }
     let lsize = usize::from(img.u16_at(l_off + 8)?);
     let orig_file_size = img.u32_at(info.overlay_offset as usize + 4)?;
@@ -248,7 +253,9 @@ pub(super) fn unpack(
         )));
     }
     if blocksize == 0 || blocksize > orig_file_size || blocksize > MAX_BLOCKSIZE {
-        return Err(UpxError::Corrupt(format!("implausible block size {blocksize}")));
+        return Err(UpxError::Corrupt(format!(
+            "implausible block size {blocksize}"
+        )));
     }
 
     // Old (2001-era) loaders wrote an 8-byte b_info with no method or filter id;
@@ -325,13 +332,7 @@ pub(super) fn unpack(
     for p in &phdrs {
         if p.p_type == PT_LOAD {
             written += unpack_extent(
-                img,
-                &mut rd,
-                p.p_filesz,
-                p.p_offset,
-                blocksize,
-                &mut out,
-                &mut walk,
+                img, &mut rd, p.p_filesz, p.p_offset, blocksize, &mut out, &mut walk,
             )?;
         }
     }
@@ -367,15 +368,7 @@ pub(super) fn unpack(
         let gap = find_load_gap(&phdrs, j, info.u_file_size)?;
         if gap != 0 {
             let where_ = phdrs[j].p_offset + phdrs[j].p_filesz;
-            written += unpack_extent(
-                img,
-                &mut rd,
-                gap,
-                where_,
-                blocksize,
-                &mut out,
-                &mut walk,
-            )?;
+            written += unpack_extent(img, &mut rd, gap, where_, blocksize, &mut out, &mut walk)?;
         }
     }
 
@@ -543,7 +536,7 @@ pub(super) fn method_codec(method: u8) -> Result<Codec, UpxError> {
             return Err(UpxError::Unsupported(format!(
                 "compression method {other} ({})",
                 super::method_name(other)
-            )))
+            )));
         }
     })
 }
@@ -558,14 +551,14 @@ fn d_info_size(img: &Image<'_>, c_phdrs: &[Phdr]) -> Result<u64, UpxError> {
     }
     let e_machine = img.u16_at(18)?;
     Ok(match e_machine {
-        3 | 62 => 8,            // EM_386, EM_X86_64
-        40 | 183 => 16,         // EM_ARM, EM_AARCH64
-        20 | 21 => 12,          // EM_PPC, EM_PPC64
-        8 => 4,                 // EM_MIPS
+        3 | 62 => 8,    // EM_386, EM_X86_64
+        40 | 183 => 16, // EM_ARM, EM_AARCH64
+        20 | 21 => 12,  // EM_PPC, EM_PPC64
+        8 => 4,         // EM_MIPS
         other => {
             return Err(UpxError::Unsupported(format!(
                 "ELF machine {other} (no known loader prologue size)"
-            )))
+            )));
         }
     })
 }
@@ -579,7 +572,9 @@ fn find_load_gap(phdrs: &[Phdr], k: usize, u_file_size: u32) -> Result<u64, UpxE
     let hi = phdrs[k].p_offset + phdrs[k].p_filesz;
     let mut lo = u64::from(u_file_size);
     if lo < hi {
-        return Err(UpxError::Corrupt("PT_LOAD extends beyond end of file".into()));
+        return Err(UpxError::Corrupt(
+            "PT_LOAD extends beyond end of file".into(),
+        ));
     }
     let n = phdrs.len();
     let mut j = k;

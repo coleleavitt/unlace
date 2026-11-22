@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use crate::dtype::{type_metatype, Datatype, TypeFactory, TypeFactoryImpl};
+use crate::dtype::{Datatype, TypeFactory, TypeFactoryImpl, type_metatype};
 use unlace_base::types::int4;
 
 use super::*;
@@ -45,5 +45,8 @@ fn spans_multiple_elements_only_for_a_wide_array_cover() {
     assert!(spans_multiple_elements(&arr4x4, 16));
 
     // A scalar leaf is never a wide array cover, whatever width is asked for.
-    assert!(!spans_multiple_elements(&base(4, type_metatype::TYPE_INT), 16));
+    assert!(!spans_multiple_elements(
+        &base(4, type_metatype::TYPE_INT),
+        16
+    ));
 }

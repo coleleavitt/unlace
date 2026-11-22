@@ -63,9 +63,9 @@
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::kuna_castimplied::{int_range, preserves, CType, ImpliedCasts, PrintedForms};
+use crate::kuna_castimplied::{CType, ImpliedCasts, PrintedForms, int_range, preserves};
 
 /// Promoted C integer types, as bits of a set: `int`, `unsigned int`, and the
 /// signed and unsigned 8-byte integers (`long` where it is 8 bytes, else
@@ -112,7 +112,9 @@ pub(crate) fn arm_drops(
 
 /// The conversions the pair `a`, `b` leaves out, both first.
 fn choose(a: Arm, b: Arm) -> Vec<OpId> {
-    let Some(r) = common(a.kept, b.kept) else { return Vec::new() };
+    let Some(r) = common(a.kept, b.kept) else {
+        return Vec::new();
+    };
     let options = [(a.conv, b.conv), (a.conv, None), (None, b.conv)];
     for (ca, cb) in options {
         if ca.is_none() && cb.is_none() {
@@ -228,8 +230,14 @@ pub(crate) fn literal_type(tok: &str, long_size: i32) -> Option<u8> {
         (10, num)
     };
     let value = u128::from_str_radix(digits, radix).ok()?;
-    let (int, uint, long, ulong, llong, ullong) =
-        ((4, true), (4, false), (long_size, true), (long_size, false), (8, true), (8, false));
+    let (int, uint, long, ulong, llong, ullong) = (
+        (4, true),
+        (4, false),
+        (long_size, true),
+        (long_size, false),
+        (8, true),
+        (8, false),
+    );
     let candidates: &[(i32, bool)] = match (unsigned, longs, radix == 10) {
         (false, 0, true) => &[int, long, llong],
         (false, 0, false) => &[int, uint, long, ulong, llong, ullong],
@@ -244,7 +252,12 @@ pub(crate) fn literal_type(tok: &str, long_size: i32) -> Option<u8> {
     };
     let holds = |&(size, signed): &(i32, bool)| {
         let bits = 8 * size as u32;
-        value <= if signed { (1u128 << (bits - 1)) - 1 } else { (1u128 << bits) - 1 }
+        value
+            <= if signed {
+                (1u128 << (bits - 1)) - 1
+            } else {
+                (1u128 << bits) - 1
+            }
     };
     match candidates.iter().find(|c| holds(c))? {
         (4, true) => Some(INT),
@@ -258,7 +271,10 @@ pub(crate) fn literal_type(tok: &str, long_size: i32) -> Option<u8> {
 /// Is `op` a conversion `castimplied` weighs?
 fn is_conversion(fd: &Funcdata, op: OpId) -> bool {
     fd.obank().get(op).is_some_and(|o| {
-        matches!(o.code(), OpCode::CPUI_CAST | OpCode::CPUI_INT_SEXT | OpCode::CPUI_INT_ZEXT)
+        matches!(
+            o.code(),
+            OpCode::CPUI_CAST | OpCode::CPUI_INT_SEXT | OpCode::CPUI_INT_ZEXT
+        )
     })
 }
 
@@ -271,7 +287,10 @@ fn arm(implied: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, op: OpId) ->
             let vn = o.get_in(0)?;
             let v = fd.vbank().get(vn)?;
             if v.is_constant() {
-                return Some(Arm { kept: literal(p, fd, vn, op)?, conv: None });
+                return Some(Arm {
+                    kept: literal(p, fd, vn, op)?,
+                    conv: None,
+                });
             }
             if !v.is_explicit() && !v.is_annotation() {
                 if let Some(def) = v.get_def().filter(|&d| is_conversion(fd, d)) {
@@ -308,19 +327,30 @@ fn conversion_arm(
     let src = implied.operand_type(p, fd, invn, op);
     let bare = || value_set(&src, &ir_src);
     match o.code() {
-        OpCode::CPUI_CAST if p.sign_dropped(op) => return Some(Arm { kept: promote(&target)?, conv: None }),
+        OpCode::CPUI_CAST if p.sign_dropped(op) => {
+            return Some(Arm {
+                kept: promote(&target)?,
+                conv: None,
+            });
+        }
         OpCode::CPUI_INT_SEXT | OpCode::CPUI_INT_ZEXT => {
             if !p.extension_is_cast(op) {
                 return None;
             }
             if p.extension_hidden(op, read_op) {
-                return Some(Arm { kept: bare()?, conv: None });
+                return Some(Arm {
+                    kept: bare()?,
+                    conv: None,
+                });
             }
         }
         _ => {}
     }
     if implied.drops(p, fd, op, read_op) {
-        return Some(Arm { kept: bare()?, conv: None });
+        return Some(Arm {
+            kept: bare()?,
+            conv: None,
+        });
     }
     let kept = promote(&target).filter(|_| is_int(&target))?;
     let exact = matches!(target.get_size(), 4 | 8);
@@ -330,14 +360,20 @@ fn conversion_arm(
         CType::Opaque => return Some(Arm { kept, conv: None }),
     };
     let widening = exact && is_int(&ir_src) && is_int(&from) && preserves(&from, &target);
-    let conv = if widening { bare().map(|operand| (op, kept, operand)) } else { None };
+    let conv = if widening {
+        bare().map(|operand| (op, kept, operand))
+    } else {
+        None
+    };
     Some(Arm { kept, conv })
 }
 
 /// An integer that is neither `bool` nor an enum.
 fn is_int(t: &Datatype) -> bool {
-    matches!(t.get_metatype(), type_metatype::TYPE_INT | type_metatype::TYPE_UINT)
-        && !t.is_enum_type()
+    matches!(
+        t.get_metatype(),
+        type_metatype::TYPE_INT | type_metatype::TYPE_UINT
+    ) && !t.is_enum_type()
         && int_range(t).is_some()
 }
 

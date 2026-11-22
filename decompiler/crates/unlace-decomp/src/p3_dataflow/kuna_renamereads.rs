@@ -26,7 +26,9 @@ use unlace_num::opcodes::OpCode;
 /// Is `op` waiting for renaming to fill its read of its own storage?
 #[inline]
 pub(crate) fn pending(fd: &Funcdata, op: OpId) -> bool {
-    fd.obank().get(op).is_some_and(|o| o.get_addlflags() & kuna_rename_read != 0)
+    fd.obank()
+        .get(op)
+        .is_some_and(|o| o.get_addlflags() & kuna_rename_read != 0)
 }
 
 /// Mark `op`, whose `n` empty input slots read its output storage, for
@@ -65,9 +67,17 @@ pub(crate) fn new_indirect(
     iops: &mut FxHashMap<OpId, VarnodeId>,
 ) -> OpId {
     let first = fd.vbank_mut().reserve_create_index(1);
-    let indaddr = fd.obank().get(indeffect).expect("renamereads: stale effect op").get_addr().clone();
+    let indaddr = fd
+        .obank()
+        .get(indeffect)
+        .expect("renamereads: stale effect op")
+        .get_addr()
+        .clone();
     let newop = fd.new_op(2, indaddr);
-    fd.obank_mut().get_mut(newop).expect("renamereads: new INDIRECT").set_flag(extra_flags);
+    fd.obank_mut()
+        .get_mut(newop)
+        .expect("renamereads: new INDIRECT")
+        .set_flag(extra_flags);
     let _ = fd.new_varnode_out(sz, addr, newop);
     fd.op_set_opcode_code(newop, OpCode::CPUI_INDIRECT);
     let code = op_iop_encode(indeffect);
@@ -94,21 +104,28 @@ pub(crate) fn new_indirect(
 /// active for heritage except on a MULTIEQUAL.
 pub(crate) fn finish(fd: &mut Funcdata, pending: &mut Vec<(OpId, uint4)>) {
     for (op, first) in std::mem::take(pending) {
-        let Some(o) = fd.obank_mut().get_mut(op) else { continue };
+        let Some(o) = fd.obank_mut().get_mut(op) else {
+            continue;
+        };
         if o.get_addlflags() & kuna_rename_read == 0 {
             continue;
         }
         o.clear_additional_flag(kuna_rename_read);
         let phi = o.code() == OpCode::CPUI_MULTIEQUAL;
         let slots = if phi { o.num_input() } else { 1 };
-        let Some((addr, size)) = storage(fd, op) else { continue };
+        let Some((addr, size)) = storage(fd, op) else {
+            continue;
+        };
         for slot in 0..slots {
             if fd.obank().get(op).and_then(|o| o.get_in(slot)).is_some() {
                 continue;
             }
             let vn = fd.new_varnode_reserved(size, &addr, first.wrapping_add(slot as uint4));
             if !phi {
-                fd.vbank_mut().get_mut(vn).expect("renamereads: placeholder").set_active_heritage();
+                fd.vbank_mut()
+                    .get_mut(vn)
+                    .expect("renamereads: placeholder")
+                    .set_active_heritage();
             }
             let _ = fd.op_set_input(op, vn, slot);
         }

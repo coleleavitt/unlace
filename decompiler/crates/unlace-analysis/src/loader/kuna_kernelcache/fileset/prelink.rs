@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use super::{load_commands, rd_u32, rd_u64, LC_SEGMENT_64};
+use super::{LC_SEGMENT_64, load_commands, rd_u32, rd_u64};
 
 #[derive(Debug, PartialEq)]
 pub(super) struct KextInfo {
@@ -55,7 +55,11 @@ fn attr(tag: &str, name: &str) -> Option<String> {
 }
 
 fn unescape(s: &str) -> String {
-    s.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'").replace("&amp;", "&")
+    s.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&amp;", "&")
 }
 
 impl<'a> Parser<'a> {
@@ -101,7 +105,11 @@ impl<'a> Parser<'a> {
                     if t == "/dict" {
                         break;
                     }
-                    let key = if t == "key" { self.text_until("</key>")? } else { return None };
+                    let key = if t == "key" {
+                        self.text_until("</key>")?
+                    } else {
+                        return None;
+                    };
                     items.push((key, self.value(depth + 1)?));
                 }
                 Value::Dict(Rc::new(items))
@@ -152,7 +160,10 @@ fn info_section(bytes: &[u8]) -> Option<&[u8]> {
         for k in 0..rd_u32(bytes, p + 64)? as usize {
             let s = p + 72 + k * 80;
             if bytes.get(s..s + 7) == Some(b"__info\0") {
-                let (size, off) = (rd_u64(bytes, s + 40)? as usize, rd_u32(bytes, s + 48)? as usize);
+                let (size, off) = (
+                    rd_u64(bytes, s + 40)? as usize,
+                    rd_u32(bytes, s + 48)? as usize,
+                );
                 return bytes.get(off..off.checked_add(size)?);
             }
         }
@@ -162,8 +173,13 @@ fn info_section(bytes: &[u8]) -> Option<&[u8]> {
 
 pub(super) fn kexts(bytes: &[u8]) -> Option<Vec<KextInfo>> {
     let raw = info_section(bytes)?;
-    let text = std::str::from_utf8(&raw[..raw.iter().position(|&b| b == 0).unwrap_or(raw.len())]).ok()?;
-    let mut parser = Parser { text, pos: 0, ids: HashMap::new() };
+    let text =
+        std::str::from_utf8(&raw[..raw.iter().position(|&b| b == 0).unwrap_or(raw.len())]).ok()?;
+    let mut parser = Parser {
+        text,
+        pos: 0,
+        ids: HashMap::new(),
+    };
     let root = loop {
         let tag = parser.tag()?;
         if tag == "plist" || tag.starts_with("plist ") {
@@ -173,7 +189,9 @@ pub(super) fn kexts(bytes: &[u8]) -> Option<Vec<KextInfo>> {
             break parser.value_from(tag, 0)?;
         }
     };
-    let Value::Array(items) = root.get("_PrelinkInfoDictionary")? else { return None };
+    let Value::Array(items) = root.get("_PrelinkInfoDictionary")? else {
+        return None;
+    };
     Some(
         items
             .iter()
@@ -189,16 +207,24 @@ pub(super) fn kexts(bytes: &[u8]) -> Option<Vec<KextInfo>> {
                     Some(Value::Int(a)) => Some(*a),
                     _ => None,
                 };
-                let (load_addr, module_index) = (int("_PrelinkExecutableLoadAddr"), int("ModuleIndex"));
+                let (load_addr, module_index) =
+                    (int("_PrelinkExecutableLoadAddr"), int("ModuleIndex"));
                 let mut classes: Vec<String> = match d.get("IOKitPersonalities") {
-                    Some(Value::Dict(ps)) => {
-                        ps.iter().filter_map(|(_, p)| p.get("IOClass")?.str().map(str::to_string)).collect()
-                    }
+                    Some(Value::Dict(ps)) => ps
+                        .iter()
+                        .filter_map(|(_, p)| p.get("IOClass")?.str().map(str::to_string))
+                        .collect(),
                     _ => Vec::new(),
                 };
                 classes.sort();
                 classes.dedup();
-                Some(KextInfo { id, version, load_addr, module_index, classes })
+                Some(KextInfo {
+                    id,
+                    version,
+                    load_addr,
+                    module_index,
+                    classes,
+                })
             })
             .collect(),
     )
@@ -240,18 +266,41 @@ mod tests {
               <dict><key>CFBundleIdentifier</key><string>com.example.B</string>
                 <key>CFBundleVersion</key><string IDREF="1"/></dict>
             </array></dict></plist>"#;
-        let mut p = Parser { text: xml, pos: 0, ids: HashMap::new() };
+        let mut p = Parser {
+            text: xml,
+            pos: 0,
+            ids: HashMap::new(),
+        };
         while p.tag() != Some(r#"plist version="1.0""#) {}
         let root = p.value(0).unwrap();
-        let Some(Value::Array(items)) = root.get("_PrelinkInfoDictionary") else { panic!() };
+        let Some(Value::Array(items)) = root.get("_PrelinkInfoDictionary") else {
+            panic!()
+        };
         assert_eq!(items.len(), 2);
         let bare = &xml[xml.find("<dict>").unwrap()..xml.rfind("</plist>").unwrap()];
-        let mut p = Parser { text: bare, pos: 0, ids: HashMap::new() };
+        let mut p = Parser {
+            text: bare,
+            pos: 0,
+            ids: HashMap::new(),
+        };
         let tag = p.tag().unwrap();
-        assert!(p.value_from(tag, 0).unwrap().get("_PrelinkInfoDictionary").is_some());
-        assert_eq!(items[1].get("CFBundleVersion").and_then(Value::str), Some("1.0"));
+        assert!(
+            p.value_from(tag, 0)
+                .unwrap()
+                .get("_PrelinkInfoDictionary")
+                .is_some()
+        );
+        assert_eq!(
+            items[1].get("CFBundleVersion").and_then(Value::str),
+            Some("1.0")
+        );
         let ps = items[0].get("IOKitPersonalities").unwrap();
-        assert_eq!(ps.get("p2").and_then(|d| d.get("IOClass")).and_then(Value::str), Some("AService"));
+        assert_eq!(
+            ps.get("p2")
+                .and_then(|d| d.get("IOClass"))
+                .and_then(Value::str),
+            Some("AService")
+        );
     }
 
     /// Each level holds ten references to the level below: copying the shared
@@ -260,14 +309,22 @@ mod tests {
     fn idref_expansion_shares_values_instead_of_copying_them() {
         let mut xml = String::from(r#"<dict ID="v0"><key>k</key><string>x</string></dict>"#);
         for level in 1..40 {
-            let refs: String = (0..10).map(|_| format!(r#"<array IDREF="v{}"/>"#, level - 1)).collect();
+            let refs: String = (0..10)
+                .map(|_| format!(r#"<array IDREF="v{}"/>"#, level - 1))
+                .collect();
             xml += &format!(r#"<array ID="v{level}">{refs}</array>"#);
         }
         xml += r#"<array IDREF="v39"/>"#;
         let text = format!("<array>{xml}</array>");
-        let mut p = Parser { text: &text, pos: 0, ids: HashMap::new() };
+        let mut p = Parser {
+            text: &text,
+            pos: 0,
+            ids: HashMap::new(),
+        };
         let tag = p.tag().unwrap();
-        let Some(Value::Array(items)) = p.value_from(tag, 0) else { panic!() };
+        let Some(Value::Array(items)) = p.value_from(tag, 0) else {
+            panic!()
+        };
         assert_eq!(items.len(), 41);
     }
 }

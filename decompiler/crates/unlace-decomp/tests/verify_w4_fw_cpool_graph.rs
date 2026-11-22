@@ -17,19 +17,19 @@ use std::rc::Rc;
 
 use unlace_base::marshal::{IdRegistry, XmlDecode, XmlEncode};
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::uintb;
 
-use unlace_decomp::callgraph::{CallGraph, NodeIndex, ELEM_CALLGRAPH, ELEM_NODE};
-use unlace_decomp::cpool::{
-    cpool_tag, ConstantPool, ConstantPoolInternal, CPoolTypeFactory, CPoolTypeRef,
-    CPoolTypeRefProvider, ELEM_CONSTANTPOOL, ELEM_CPOOLREC, ELEM_REF, ELEM_TOKEN,
-    ATTRIB_A, ATTRIB_B, ATTRIB_LENGTH, ATTRIB_TAG,
-};
-use unlace_decomp::dtype::{type_metatype, Datatype};
 use unlace_base::error::KunaResult;
 use unlace_base::marshal::{Decoder, Encoder};
+use unlace_decomp::callgraph::{CallGraph, ELEM_CALLGRAPH, ELEM_NODE, NodeIndex};
+use unlace_decomp::cpool::{
+    ATTRIB_A, ATTRIB_B, ATTRIB_LENGTH, ATTRIB_TAG, CPoolTypeFactory, CPoolTypeRef,
+    CPoolTypeRefProvider, ConstantPool, ConstantPoolInternal, ELEM_CONSTANTPOOL, ELEM_CPOOLREC,
+    ELEM_REF, ELEM_TOKEN, cpool_tag,
+};
+use unlace_decomp::dtype::{Datatype, type_metatype};
 
 // --------------------------------------------------------------------------
 // shared cpool access impl (mirrors the in-crate VoidTypeAccess, public-API only)
@@ -167,8 +167,14 @@ fn cpool_duplicate_error_names_existing_token() {
         .put_record(&[9, 9], cpool_tag::PRIMITIVE, b"REPLACEMENT", void_type())
         .unwrap_err();
     let msg = e.to_string();
-    assert!(msg.contains("ORIGINAL"), "expected existing token, got: {msg}");
-    assert!(!msg.contains("REPLACEMENT"), "must not name new token: {msg}");
+    assert!(
+        msg.contains("ORIGINAL"),
+        "expected existing token, got: {msg}"
+    );
+    assert!(
+        !msg.contains("REPLACEMENT"),
+        "must not name new token: {msg}"
+    );
 }
 
 /// HUNT(iteration order): the container is a BTreeMap keyed by the
@@ -211,7 +217,8 @@ fn rec_tag_primitive(rec: &mut unlace_decomp::cpool::CPoolRecord) {
 fn cg_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -311,12 +318,17 @@ fn callgraph_self_recursion_snips_and_terminates() {
     // pointing at f (the in/out vectors of one node are cross-linked).
     let oe0 = {
         let n = g.get_node(f).num_out_edge();
-        (0..n).find(|&i| g.get_node(f).get_out_node(i) == f).unwrap()
+        (0..n)
+            .find(|&i| g.get_node(f).get_out_node(i) == f)
+            .unwrap()
     };
     let self_in = (0..g.get_node(f).num_in_edge())
         .filter(|&k| g.get_node(f).get_in_node(k) == f)
         .count();
-    assert_eq!(self_in, 1, "self recursion must add exactly one self in-edge");
+    assert_eq!(
+        self_in, 1,
+        "self recursion must add exactly one self in-edge"
+    );
 
     let order = leaf_order(&mut g);
     let mut sorted = order.clone();

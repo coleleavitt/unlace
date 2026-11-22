@@ -135,7 +135,12 @@ mod tests {
 
     #[test]
     fn tokens_round_trip() {
-        for lang in [SourceLang::C, SourceLang::Rust, SourceLang::Go, SourceLang::Swift] {
+        for lang in [
+            SourceLang::C,
+            SourceLang::Rust,
+            SourceLang::Go,
+            SourceLang::Swift,
+        ] {
             assert_eq!(SourceLang::parse_forced(lang.as_str()), Some(lang));
         }
         assert_eq!(SourceLang::parse_forced("golang"), Some(SourceLang::Go));

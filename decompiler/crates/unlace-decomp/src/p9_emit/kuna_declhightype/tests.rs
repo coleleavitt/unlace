@@ -4,7 +4,7 @@
 //! return, an `unsigned long long *` from a pointer computation, and an integer.
 
 use super::*;
-use crate::dtype::{type_metatype, DatatypeKind};
+use crate::dtype::{DatatypeKind, type_metatype};
 use slotmap::KeyData;
 
 fn vid(n: u64) -> VarnodeId {
@@ -18,12 +18,21 @@ fn ty(size: i32, m: type_metatype) -> Rc<Datatype> {
 /// `types->getTypePointer(8, elem, 1)` — an 8-byte pointer.
 fn ptr_to(elem: Rc<Datatype>) -> Rc<Datatype> {
     let mut t = Datatype::new_with_align(8, -1, type_metatype::TYPE_PTR);
-    t.kind = DatatypeKind::Pointer { ptrto: elem, spaceid: None, truncate: None, wordsize: 1 };
+    t.kind = DatatypeKind::Pointer {
+        ptrto: elem,
+        spaceid: None,
+        truncate: None,
+        wordsize: 1,
+    };
     Rc::new(t)
 }
 
 fn member(n: u64, type_lock: bool, ty: Rc<Datatype>) -> Option<Member> {
-    Some(Member { vn: vid(n), type_lock, ty })
+    Some(Member {
+        vn: vid(n),
+        type_lock,
+        ty,
+    })
 }
 
 /// No members at all: no representative, so the caller keeps its own type.

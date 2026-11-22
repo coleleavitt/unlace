@@ -6,7 +6,7 @@
 use flate2::{Decompress, FlushDecompress, Status};
 use memchr::memmem;
 
-use super::{crc32, le16, le32, Work};
+use super::{Work, crc32, le16, le32};
 
 pub(super) const ZIP_END: &[u8] = b"PK\x05\x06";
 const ZIP_LOCAL: &[u8] = b"PK\x03\x04";
@@ -18,12 +18,15 @@ const ZIP_CENTRAL: &[u8] = b"PK\x01\x02";
 pub(super) fn zip(d: &[u8], end: usize, work: &mut Work) -> Option<(usize, usize)> {
     let record = d.get(end..end.checked_add(22)?)?;
     let entries = le16(record, 10)?;
-    if le16(record, 4)? != 0 || le16(record, 6)? != 0 || le16(record, 8)? != entries || entries == 0 {
+    if le16(record, 4)? != 0 || le16(record, 6)? != 0 || le16(record, 8)? != entries || entries == 0
+    {
         return None;
     }
     let directory = end.checked_sub(le32(record, 12)? as usize)?;
     let start = directory.checked_sub(le32(record, 16)? as usize)?;
-    let stop = end.checked_add(22 + le16(record, 20)?).filter(|&e| e <= d.len())?;
+    let stop = end
+        .checked_add(22 + le16(record, 20)?)
+        .filter(|&e| e <= d.len())?;
     if !d.get(start..)?.starts_with(ZIP_LOCAL) {
         return None;
     }
@@ -72,7 +75,9 @@ pub(super) fn gzip(d: &[u8], work: &mut Work) -> Option<usize> {
     loop {
         let (read, written) = (inflate.total_in(), inflate.total_out());
         let input = stream.get(read as usize..)?;
-        let status = inflate.decompress(input, &mut buffer, FlushDecompress::None).ok()?;
+        let status = inflate
+            .decompress(input, &mut buffer, FlushDecompress::None)
+            .ok()?;
         let produced = (inflate.total_out() - written) as usize;
         let consumed = (inflate.total_in() - read) as usize;
         crc.update(&buffer[..produced]);
@@ -95,7 +100,11 @@ pub(super) fn gzip(d: &[u8], work: &mut Work) -> Option<usize> {
 /// exactly the bytes between header and index.
 pub(super) fn xz(d: &[u8], work: &mut Work) -> Option<usize> {
     let flags = d.get(6..8)?;
-    if !d.starts_with(b"\xfd7zXZ\x00") || flags[0] != 0 || flags[1] > 0x0f || crc32(flags) != le32(d, 8)? {
+    if !d.starts_with(b"\xfd7zXZ\x00")
+        || flags[0] != 0
+        || flags[1] > 0x0f
+        || crc32(flags) != le32(d, 8)?
+    {
         return None;
     }
     let mut searched = 24usize;
@@ -179,7 +188,9 @@ pub(super) fn zstd(d: &[u8], work: &mut Work) -> Option<usize> {
         (0, true) => Some(u64::from(*d.get(p)?)),
         (1, _) => Some(le16(d, p)? as u64 + 256),
         (2, _) => Some(u64::from(le32(d, p)?)),
-        _ => Some(u64::from_le_bytes(d.get(p..p.checked_add(8)?)?.try_into().ok()?)),
+        _ => Some(u64::from_le_bytes(
+            d.get(p..p.checked_add(8)?)?.try_into().ok()?,
+        )),
     };
     p += match (descriptor >> 6, single) {
         (0, false) => 0,
@@ -201,7 +212,10 @@ pub(super) fn zstd(d: &[u8], work: &mut Work) -> Option<usize> {
             0 => size,
             1 => 1,
             2 => {
-                zstd_compressed_block(d.get(p..p.checked_add(size)?)?, !compressed && dictionary == 0)?;
+                zstd_compressed_block(
+                    d.get(p..p.checked_add(size)?)?,
+                    !compressed && dictionary == 0,
+                )?;
                 compressed = true;
                 size
             }
@@ -229,13 +243,34 @@ fn zstd_compressed_block(block: &[u8], first: bool) -> Option<()> {
     let head = *block.first()?;
     let format = (head >> 2) & 3;
     let literals = match (head & 3, format) {
-        (0 | 1, 0 | 2) => 1 + if head & 3 == 0 { usize::from(head >> 3) } else { 1 },
-        (0 | 1, 1) => 2 + if head & 3 == 0 { le16(block, 0)? >> 4 } else { 1 },
-        (0 | 1, _) => 3 + if head & 3 == 0 { le24(block, 0)? as usize >> 4 } else { 1 },
+        (0 | 1, 0 | 2) => {
+            1 + if head & 3 == 0 {
+                usize::from(head >> 3)
+            } else {
+                1
+            }
+        }
+        (0 | 1, 1) => {
+            2 + if head & 3 == 0 {
+                le16(block, 0)? >> 4
+            } else {
+                1
+            }
+        }
+        (0 | 1, _) => {
+            3 + if head & 3 == 0 {
+                le24(block, 0)? as usize >> 4
+            } else {
+                1
+            }
+        }
         (3, _) if first => return None,
         (_, 0 | 1) => 3 + ((le32(block, 0)? >> 14) & 0x3ff) as usize,
         (_, 2) => 4 + (le32(block, 0)? >> 18) as usize,
-        _ => 5 + ((u64::from(le32(block, 0)?) | u64::from(*block.get(4)?) << 32) >> 22 & 0x3_ffff) as usize,
+        _ => {
+            5 + ((u64::from(le32(block, 0)?) | u64::from(*block.get(4)?) << 32) >> 22 & 0x3_ffff)
+                as usize
+        }
     };
     let sequences = block.get(literals..)?;
     let count = *sequences.first()?;

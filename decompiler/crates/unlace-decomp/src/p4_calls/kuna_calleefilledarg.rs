@@ -101,8 +101,14 @@ pub fn mark(call: &mut FuncCallSpecs, data: &Funcdata) {
     if let Some(dead) = &dead {
         for i in 0..active.get_num_trials() {
             let t = active.get_trial(i);
-            let register = t.get_address().get_space().is_some_and(|s| s.get_name() == "register");
-            if t.is_definitely_not_used() && register && dead.proves_dead(t.get_address(), t.get_size()) {
+            let register = t
+                .get_address()
+                .get_space()
+                .is_some_and(|s| s.get_name() == "register");
+            if t.is_definitely_not_used()
+                && register
+                && dead.proves_dead(t.get_address(), t.get_size())
+            {
                 active.get_trial_mut(i).set_callee_filled();
             }
         }
@@ -114,7 +120,8 @@ pub fn mark(call: &mut FuncCallSpecs, data: &Funcdata) {
 /// Mach-O symbol's leading underscore or without)?
 fn is_selector_stub(name: &str) -> bool {
     let name = name.strip_prefix('_').unwrap_or(name);
-    name.strip_prefix("objc_msgSend$").is_some_and(|sel| !sel.is_empty())
+    name.strip_prefix("objc_msgSend$")
+        .is_some_and(|sel| !sel.is_empty())
 }
 
 #[cfg(test)]
@@ -122,7 +129,7 @@ mod tests {
     use std::rc::Rc;
 
     use unlace_base::address::Address;
-    use unlace_base::space::{spacetype, AddrSpace, AddrSpaceManager};
+    use unlace_base::space::{AddrSpace, AddrSpaceManager, spacetype};
 
     use crate::dtype::type_class;
     use crate::fspec::{ParamActive, ParamEntry, ParamListKind, ParamListStandard};
@@ -131,12 +138,32 @@ mod tests {
     /// slots 2 and 3 are actively staged.
     fn model() -> (AddrSpaceManager, Rc<AddrSpace>, ParamListStandard) {
         let mgr = AddrSpaceManager::new();
-        let reg = Rc::new(AddrSpace::new(spacetype::IPTR_PROCESSOR, "register", false, 8, 1, 3, 0, 0, 0));
+        let reg = Rc::new(AddrSpace::new(
+            spacetype::IPTR_PROCESSOR,
+            "register",
+            false,
+            8,
+            1,
+            3,
+            0,
+            0,
+            0,
+        ));
         let mut model = ParamListStandard::new(ParamListKind::Standard);
         for group in 0..5 {
             let e = ParamEntry::seed(
-                group, type_class::TYPECLASS_GENERAL, Rc::clone(&reg), group as u64 * 8, 8, 1, 0, 0, true, false,
-                model.get_entry(), &mgr,
+                group,
+                type_class::TYPECLASS_GENERAL,
+                Rc::clone(&reg),
+                group as u64 * 8,
+                8,
+                1,
+                0,
+                0,
+                true,
+                false,
+                model.get_entry(),
+                &mgr,
             )
             .unwrap();
             model.push_entry(e);

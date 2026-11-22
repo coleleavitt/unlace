@@ -495,7 +495,10 @@ fn variadic_prototype_with_float_or_pair_storage_keeps_the_recovered_call() {
     );
     let w2 = function(&text, "w2");
     assert!(w2.contains("(double)(*v1)(k,k + 1,0,0x3fe00000)"), "{w2}");
-    assert!(!w2.contains("CONCAT44"), "read the result from unset r0/r1: {w2}");
+    assert!(
+        !w2.contains("CONCAT44"),
+        "read the result from unset r0/r1: {w2}"
+    );
     let j1 = function(&text, "j1");
     assert!(j1.contains("(*v1)(5,0,k,"), "{j1}");
     assert!(j1.contains("0x3ff80000)"), "dropped the stacked 1.5: {j1}");
@@ -506,12 +509,12 @@ fn variadic_prototype_with_float_or_pair_storage_keeps_the_recovered_call() {
 /// for RISC-V lp64d: the callee sign-extends the `int` it returns in a0.
 fn riscv_int_return() -> Vec<u8> {
     let r1 = vec![
-        0x41, 0x11, 0x06, 0xe4, 0x10, 0x61, 0x2e, 0x85, 0x02, 0x96, 0xa2, 0x60, 0x41, 0x01,
-        0x82, 0x80,
+        0x41, 0x11, 0x06, 0xe4, 0x10, 0x61, 0x2e, 0x85, 0x02, 0x96, 0xa2, 0x60, 0x41, 0x01, 0x82,
+        0x80,
     ];
     let r6 = vec![
-        0x41, 0x11, 0x06, 0xe4, 0x22, 0xe0, 0x14, 0x61, 0x32, 0x84, 0x2e, 0x85, 0x82, 0x96,
-        0x0e, 0x05, 0x22, 0x95, 0x08, 0x61, 0xa2, 0x60, 0x02, 0x64, 0x41, 0x01, 0x82, 0x80,
+        0x41, 0x11, 0x06, 0xe4, 0x22, 0xe0, 0x14, 0x61, 0x32, 0x84, 0x2e, 0x85, 0x82, 0x96, 0x0e,
+        0x05, 0x22, 0x95, 0x08, 0x61, 0xa2, 0x60, 0x02, 0x64, 0x41, 0x01, 0x82, 0x80,
     ];
     image_bytes(
         Architecture::Riscv64,
@@ -561,10 +564,16 @@ fn return_the_riscv_convention_extends_is_forced_as_declared() {
     );
     let r1 = function(&text, "r1");
     assert!(r1.contains("return (*v1)(k);"), "{r1}");
-    assert!(!r1.contains("(unsigned int)"), "zero-extended the signed int: {r1}");
+    assert!(
+        !r1.contains("(unsigned int)"),
+        "zero-extended the signed int: {r1}"
+    );
     let r6 = function(&text, "r6");
     assert!(r6.contains("p[(*v1)(k)]"), "{r6}");
-    assert!(!r6.contains("(unsigned int)"), "zero-extended the signed index: {r6}");
+    assert!(
+        !r6.contains("(unsigned int)"),
+        "zero-extended the signed index: {r6}"
+    );
 }
 
 #[test]
@@ -606,7 +615,11 @@ fn apple_arm64() -> Vec<u8> {
         0xa9be4ff4, 0xa9017bfd, 0x910043fd, 0xaa0203f3, 0xf9400008, 0x1e609000, 0xaa0103e0,
         0xd63f0100, 0xf860da60, 0xa9417bfd, 0xa8c24ff4, 0xd65f03c0,
     ]);
-    let mut object = Object::new(BinaryFormat::MachO, Architecture::Aarch64, Endianness::Little);
+    let mut object = Object::new(
+        BinaryFormat::MachO,
+        Architecture::Aarch64,
+        Endianness::Little,
+    );
     let text = object.section_id(object::write::StandardSection::Text);
     object_bytes(object, text, &[("c1", c1), ("c6", c6), ("e1", e1)], None)
 }
@@ -625,13 +638,25 @@ fn apple_arm64_return_narrower_than_32_bits_keeps_the_recovered_call() {
     );
     let c1 = function(&text, "_c1");
     assert!(c1.contains("(*v1)(k) * 3"), "{c1}");
-    assert!(!c1.contains("(unsigned char)"), "zero-extended the signed char: {c1}");
+    assert!(
+        !c1.contains("(unsigned char)"),
+        "zero-extended the signed char: {c1}"
+    );
     let c6 = function(&text, "_c6");
     assert!(c6.contains("p[(int)(*v1)(k)]"), "{c6}");
-    assert!(!c6.contains("(unsigned char)"), "zero-extended the signed index: {c6}");
+    assert!(
+        !c6.contains("(unsigned char)"),
+        "zero-extended the signed index: {c6}"
+    );
     let e1 = function(&text, "_e1");
-    assert!(e1.contains("p[(*v1)(k,2.5)]"), "an int return keeps the declared call: {e1}");
-    let c1: Vec<u8> = apple_arm64_c1().iter().flat_map(|w| w.to_le_bytes()).collect();
+    assert!(
+        e1.contains("p[(*v1)(k,2.5)]"),
+        "an int return keeps the declared call: {e1}"
+    );
+    let c1: Vec<u8> = apple_arm64_c1()
+        .iter()
+        .flat_map(|w| w.to_le_bytes())
+        .collect();
     let text = decompile_args(
         &c1,
         &[
@@ -651,8 +676,14 @@ fn apple_arm64_return_narrower_than_32_bits_keeps_the_recovered_call() {
         ],
     );
     let c1 = function(&text, "c1");
-    assert!(c1.contains("(*v1)(k) * 3"), "a raw image states no platform: {c1}");
-    assert!(!c1.contains("(unsigned char)"), "zero-extended the signed char: {c1}");
+    assert!(
+        c1.contains("(*v1)(k) * 3"),
+        "a raw image states no platform: {c1}"
+    );
+    assert!(
+        !c1.contains("(unsigned char)"),
+        "zero-extended the signed char: {c1}"
+    );
 }
 
 /// `double s4(double a, int k) { return dmix(a, k * 2) * a; }` and
@@ -674,7 +705,15 @@ fn arm_direct(vfp: bool) -> Vec<u8> {
             0xe8bd8800,
         ];
         let s9 = vec![0xeeb71b08, 0xeeb02b40, 0xea000000];
-        (vec![("s4", s4), ("s9", s9), ("dmix", ret.clone()), ("vsink", ret)], vec![6, 10, 28, 1])
+        (
+            vec![
+                ("s4", s4),
+                ("s9", s9),
+                ("dmix", ret.clone()),
+                ("vsink", ret),
+            ],
+            vec![6, 10, 28, 1],
+        )
     } else {
         let s4 = vec![
             0xe92d4830,
@@ -735,7 +774,9 @@ fn soft_float_arm_lays_declared_prototypes_out_in_core_registers() {
     let s4 = function(&text, "s4");
     assert!(s4.contains("v1 = dmix(a,k << 1);"), "{s4}");
     assert!(
-        s4.contains("__aeabi_dmul((int)((union { double from; unsigned long long to; }){ .from = v1 }).to,"),
+        s4.contains(
+            "__aeabi_dmul((int)((union { double from; unsigned long long to; }){ .from = v1 }).to,"
+        ),
         "{s4}"
     );
     assert!(!s4.contains("SUB84(v1,0)"), "{s4}");
@@ -752,7 +793,10 @@ fn soft_float_arm_lays_declared_prototypes_out_in_core_registers() {
 #[test]
 fn hard_float_arm_lays_declared_prototypes_out_in_vfp_registers() {
     let text = decompile_with(&arm_direct(true), &direct_prototypes());
-    assert!(function(&text, "s4").contains("return dmix(a,k << 1) * a;"), "{text}");
+    assert!(
+        function(&text, "s4").contains("return dmix(a,k << 1) * a;"),
+        "{text}"
+    );
     assert!(function(&text, "s9").contains("vsink(a,1.5,a);"), "{text}");
 }
 
@@ -766,7 +810,9 @@ fn soft_float_arm_lays_dwarf_prototypes_out_in_core_registers() {
     let s4 = function(&text, "s4");
     assert!(s4.contains("v1 = dmix(a,k << 1);"), "{s4}");
     assert!(
-        !text.lines().filter_map(|line| line.split_once("; // "))
+        !text
+            .lines()
+            .filter_map(|line| line.split_once("; // "))
             .any(|(_, sources)| sources.split(" | ").any(|source| source == "r1")),
         "read a core register as unset: {text}"
     );
@@ -777,7 +823,9 @@ fn soft_float_arm_lays_dwarf_prototypes_out_in_core_registers() {
 /// with `-mfloat-abi=softfp`: the image states the base convention and VFPv3
 /// hardware, and clang passes the static function's float in `s0`.
 fn arm_softfp_static() -> Vec<u8> {
-    let g = vec![0xe92d4800, 0xee000a10, 0xeb000002, 0xee300a00, 0xee100a10, 0xe8bd8800];
+    let g = vec![
+        0xe92d4800, 0xee000a10, 0xeb000002, 0xee300a00, 0xee100a10, 0xe8bd8800,
+    ];
     let sq = vec![0xeeb71a00, 0xee001a00, 0xeeb00a41, 0xe12fff1e];
     image(
         Architecture::Arm,
@@ -823,5 +871,8 @@ fn soft_float_arm_extends_a_narrow_declared_argument() {
     let pick = function(&text, "pick");
     assert!(pick.contains("if (b)"), "{pick}");
     assert!(pick.contains("c = a;"), "{pick}");
-    assert!(!pick.contains("CONCAT"), "an unextended argument register: {pick}");
+    assert!(
+        !pick.contains("CONCAT"),
+        "an unextended argument register: {pick}"
+    );
 }

@@ -55,10 +55,16 @@ fn elf32(mutate: impl FnOnce(&mut Vec<u8>)) -> Vec<u8> {
 #[test]
 fn usable_section_table_is_returned_verbatim() {
     let bytes = elf32(|_| {});
-    assert!(object::File::parse(bytes.as_slice()).is_ok(), "fixture must parse as-is");
+    assert!(
+        object::File::parse(bytes.as_slice()).is_ok(),
+        "fixture must parse as-is"
+    );
     let (out, note) = tolerate_unusable_section_table(bytes.clone());
     assert_eq!(out, bytes, "a parseable image must not be rewritten");
-    assert!(note.is_none(), "no diagnostic for a healthy image, got {note:?}");
+    assert!(
+        note.is_none(),
+        "no diagnostic for a healthy image, got {note:?}"
+    );
 }
 
 #[test]
@@ -81,18 +87,31 @@ fn out_of_range_section_table_is_cleared_and_program_headers_survive() {
         b[48..50].copy_from_slice(&57007u16.to_le_bytes()); // e_shnum
         b[50..52].copy_from_slice(&47806u16.to_le_bytes()); // e_shstrndx
     });
-    assert!(object::File::parse(bytes.as_slice()).is_err(), "fixture must be rejected today");
+    assert!(
+        object::File::parse(bytes.as_slice()).is_err(),
+        "fixture must be rejected today"
+    );
 
     let (out, note) = tolerate_unusable_section_table(bytes);
     let note = note.expect("the repair must report what it dropped");
-    assert!(note.contains("past the end"), "note should name the cause: {note}");
-    assert!(note.contains("0x8048054"), "note should report the surviving entry: {note}");
+    assert!(
+        note.contains("past the end"),
+        "note should name the cause: {note}"
+    );
+    assert!(
+        note.contains("0x8048054"),
+        "note should report the surviving entry: {note}"
+    );
 
     let file = object::File::parse(out.as_slice()).expect("repaired image parses");
     assert_eq!(file.entry(), 0x8048054);
     let segs: Vec<_> = file.segments().map(|s| s.address()).collect();
     assert_eq!(segs, vec![0x8048000], "the PT_LOAD map must be intact");
-    assert_eq!(file.sections().count(), 0, "the unusable table is gone, not guessed at");
+    assert_eq!(
+        file.sections().count(),
+        0,
+        "the unusable table is gone, not guessed at"
+    );
 }
 
 /// A section table whose name-string index was zeroed in place: `object` refuses
@@ -145,7 +164,10 @@ fn unrepairable_image_keeps_its_original_bytes() {
         b[28..32].copy_from_slice(&0xffff_0000u32.to_le_bytes()); // e_phoff past EOF
     });
     let (out, note) = tolerate_unusable_section_table(bytes.clone());
-    assert_eq!(out, bytes, "a repair that does not make the file parse is discarded");
+    assert_eq!(
+        out, bytes,
+        "a repair that does not make the file parse is discarded"
+    );
     assert!(note.is_none());
 }
 
@@ -161,15 +183,26 @@ fn read_image_peels_a_universal_macho_to_one_slice() {
 
     let fat = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/macho_fat");
     let raw = std::fs::read(fat).expect("the vendored 2-slice fixture");
-    assert!(crate::loadimage_object::parse_object(&raw).is_err(), "the fat header itself");
+    assert!(
+        crate::loadimage_object::parse_object(&raw).is_err(),
+        "the fat header itself"
+    );
 
     let default = read_image_sliced(fat, SlicePref::default()).unwrap();
     let file = crate::loadimage_object::parse_object(&default).expect("the peeled slice parses");
-    assert_eq!(file.architecture(), object::Architecture::X86_64, "x86-64 → arm64 → first");
+    assert_eq!(
+        file.architecture(),
+        object::Architecture::X86_64,
+        "x86-64 → arm64 → first"
+    );
 
     let arm = read_image_sliced(fat, SlicePref::parse("arm64")).unwrap();
     let file = crate::loadimage_object::parse_object(&arm).expect("the peeled slice parses");
-    assert_eq!(file.architecture(), object::Architecture::Aarch64, "the override wins");
+    assert_eq!(
+        file.architecture(),
+        object::Architecture::Aarch64,
+        "the override wins"
+    );
     assert_ne!(default, arm, "two slices, two images");
 }
 
@@ -180,6 +213,9 @@ fn read_image_leaves_a_thin_image_alone() {
     use crate::loader::macho_fat::SlicePref;
     let elf = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/fauxware");
     let raw = std::fs::read(elf).expect("the vendored ELF");
-    assert_eq!(read_image_sliced(elf, SlicePref::parse("arm64")).unwrap(), raw);
+    assert_eq!(
+        read_image_sliced(elf, SlicePref::parse("arm64")).unwrap(),
+        raw
+    );
     assert_eq!(read_image(elf).unwrap(), raw);
 }

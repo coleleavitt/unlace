@@ -28,22 +28,32 @@ pub fn elf(machine: u16) -> Vec<u8> {
         put16(&mut bytes, offset, value);
     }
     let length = bytes.len() as u32;
-    for (index, value) in [1, 0, 0x10000, 0x10000, length, length, 7, 0x1000].into_iter().enumerate() {
+    for (index, value) in [1, 0, 0x10000, 0x10000, length, length, 7, 0x1000]
+        .into_iter()
+        .enumerate()
+    {
         put32(&mut bytes, 52 + index * 4, value);
     }
 
     // save %sp,-96,%sp; mov %i0,%o0; call puts; nop;
     // mov %i0,%o0; call printf; nop; ret; restore.
     for (index, word) in [
-        0x9de3bfa0, 0x90100018, 0x4000004a, 0x01000000,
-        0x90100018, 0x4000004a, 0x01000000, 0x81c7e008, 0x81e80000,
-    ].into_iter().enumerate() {
+        0x9de3bfa0, 0x90100018, 0x4000004a, 0x01000000, 0x90100018, 0x4000004a, 0x01000000,
+        0x81c7e008, 0x81e80000,
+    ]
+    .into_iter()
+    .enumerate()
+    {
         put32(&mut bytes, 0x100 + 4 * index, word);
     }
     for index in 0..2 {
         let offset = 48 + 12 * index;
         put32(&mut bytes, PLT_OFFSET + offset, 0x03000000 | offset as u32);
-        put32(&mut bytes, PLT_OFFSET + offset + 4, 0x30bffff3 - 3 * index as u32);
+        put32(
+            &mut bytes,
+            PLT_OFFSET + offset + 4,
+            0x30bffff3 - 3 * index as u32,
+        );
         put32(&mut bytes, PLT_OFFSET + offset + 8, 0x01000000);
     }
 
@@ -51,9 +61,9 @@ pub fn elf(machine: u16) -> Vec<u8> {
     bytes[0x280..0x280 + names.len()].copy_from_slice(names);
     let strings = b"\0main\0puts\0printf\0";
     bytes[0x2c0..0x2c0 + strings.len()].copy_from_slice(strings);
-    for (index, name, value, size, section) in [
-        (1, 1, 0x10100, 36, 2), (2, 6, 0, 0, 0), (3, 11, 0, 0, 0),
-    ] {
+    for (index, name, value, size, section) in
+        [(1, 1, 0x10100, 36, 2), (2, 6, 0, 0, 0), (3, 11, 0, 0, 0)]
+    {
         let offset = 0x300 + index * 16;
         put32(&mut bytes, offset, name);
         put32(&mut bytes, offset + 4, value);
@@ -62,8 +72,16 @@ pub fn elf(machine: u16) -> Vec<u8> {
         put16(&mut bytes, offset + 14, section);
     }
     for index in 0..2 {
-        put32(&mut bytes, 0x350 + index * 12, PLT_VMA + 48 + index as u32 * 12);
-        put32(&mut bytes, 0x354 + index * 12, ((index as u32 + 2) << 8) | 21);
+        put32(
+            &mut bytes,
+            0x350 + index * 12,
+            PLT_VMA + 48 + index as u32 * 12,
+        );
+        put32(
+            &mut bytes,
+            0x354 + index * 12,
+            ((index as u32 + 2) << 8) | 21,
+        );
     }
     // sh_name, type, flags, addr, offset, size, link, info, align, entsize.
     for (index, header) in [
@@ -73,9 +91,16 @@ pub fn elf(machine: u16) -> Vec<u8> {
         [22, 3, 2, 0x102c0, 0x2c0, strings.len() as u32, 0, 0, 1, 0],
         [30, 11, 2, 0x10300, 0x300, 64, 4, 1, 4, 16],
         [38, 4, 2, 0x10350, 0x350, 24, 5, 3, 4, 12],
-    ].into_iter().enumerate() {
+    ]
+    .into_iter()
+    .enumerate()
+    {
         for (field, value) in header.into_iter().enumerate() {
-            put32(&mut bytes, SECTION_HEADERS + (index + 1) * 40 + field * 4, value);
+            put32(
+                &mut bytes,
+                SECTION_HEADERS + (index + 1) * 40 + field * 4,
+                value,
+            );
         }
     }
     bytes

@@ -64,11 +64,16 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn specs_root() -> PathBuf {
-    std::env::var_os("KUNA_SPECS").map(PathBuf::from).unwrap_or_else(|| repo_root().join("specs"))
+    std::env::var_os("KUNA_SPECS")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| repo_root().join("specs"))
 }
 
 fn datatests_dir() -> PathBuf {
@@ -82,7 +87,10 @@ fn rust_harness() -> PathBuf {
         return PathBuf::from(p);
     }
     let profile = std::env::var("KUNA_RUST_PROFILE").unwrap_or_else(|_| "release".to_string());
-    repo_root().join("decompiler/target").join(profile).join("decomp_test_dbg")
+    repo_root()
+        .join("decompiler/target")
+        .join(profile)
+        .join("decomp_test_dbg")
 }
 
 fn cpp_oracle() -> PathBuf {
@@ -161,8 +169,15 @@ fn verdict_for(stream: &str, name: &str) -> Option<bool> {
 // =============================================================================
 #[test]
 fn a1_forloop_files_render_plain_while_not_malformed_for() {
-    for stem in ["forloop1", "forloop_thruspecial", "forloop_varused", "loopcomment"] {
-        let Some(body) = dump_print_c(&rust_harness(), stem) else { return };
+    for stem in [
+        "forloop1",
+        "forloop_thruspecial",
+        "forloop_varused",
+        "loopcomment",
+    ] {
+        let Some(body) = dump_print_c(&rust_harness(), stem) else {
+            return;
+        };
         // The reroll fires: a real `for (` header is emitted (the iterate op is
         // recorded on the whiledo node and emit_for_loop runs).
         assert!(
@@ -183,7 +198,9 @@ fn a1_forloop_files_render_plain_while_not_malformed_for() {
 // =============================================================================
 #[test]
 fn a1b_forloop1_rsp_cleaned_by_keystone_but_reroll_still_blocked() {
-    let Some(body) = dump_print_c(&rust_harness(), "forloop1") else { return };
+    let Some(body) = dump_print_c(&rust_harness(), "forloop1") else {
+        return;
+    };
     // The dirty-RSP chain is GONE: no `// rsp` spacebase-input local and no raw
     // PTRSUB-on-spacebase return-address store survives.  (No register-name
     // special-casing — keyed on the printer's `// rsp` comment + the dead store.)
@@ -280,8 +297,12 @@ fn a3_switch_jumptable_cluster_does_not_regress() {
 #[test]
 fn a4_protected_files_byte_identical_rust_vs_cpp() {
     for stem in ["boolless", "readstruct", "condconst_conn"] {
-        let Some(rust) = dump_print_c(&rust_harness(), stem) else { return };
-        let Some(cpp) = dump_print_c(&cpp_oracle(), stem) else { return };
+        let Some(rust) = dump_print_c(&rust_harness(), stem) else {
+            return;
+        };
+        let Some(cpp) = dump_print_c(&cpp_oracle(), stem) else {
+            return;
+        };
         assert_eq!(
             rust, cpp,
             "{stem}: Rust render diverged from the C++ oracle — the \
@@ -313,9 +334,16 @@ fn a4_protected_files_byte_identical_rust_vs_cpp() {
 #[test]
 fn vfy_r1_real_protected_files_byte_identical() {
     for stem in ["boolless", "nestedoffset", "condconst"] {
-        let Some(rust) = dump_print_c(&rust_harness(), stem) else { return };
-        let Some(cpp) = dump_print_c(&cpp_oracle(), stem) else { return };
-        assert!(!rust.is_empty(), "{stem}: empty Rust dump — stem is not a real datatest file");
+        let Some(rust) = dump_print_c(&rust_harness(), stem) else {
+            return;
+        };
+        let Some(cpp) = dump_print_c(&cpp_oracle(), stem) else {
+            return;
+        };
+        assert!(
+            !rust.is_empty(),
+            "{stem}: empty Rust dump — stem is not a real datatest file"
+        );
         assert_eq!(
             rust, cpp,
             "{stem}: Rust render diverged from the C++ oracle (real protected stem).\n\
@@ -330,7 +358,9 @@ fn vfy_r1_real_protected_files_byte_identical() {
 /// locals (`stackfoo`/`stackmy`/`stackconst`) that are passed by address.
 #[test]
 fn vfy_r1_spacebase_arm_emits_addressof_name_for_mapped_local() {
-    let Some(rust) = dump_print_c(&rust_harness(), "partialsplit") else { return };
+    let Some(rust) = dump_print_c(&rust_harness(), "partialsplit") else {
+        return;
+    };
     // The reference form appeared for the MAPPED locals (the SPACEBASE arm fired,
     // reading the Symbol parked by link_symbol_reference).  Each is passed by
     // address to its sub as `&name`, not the pre-stage `PTRSUB(vN, off)`.
@@ -368,8 +398,16 @@ fn vfy_r1_spacebase_arm_emits_addressof_name_for_mapped_local() {
 #[test]
 fn vfy_r1_no_new_addressof_undef_leak_from_spacebase_arm() {
     // Stems where the SPACEBASE arm newly fires on (some) unmapped locals.
-    for stem in ["partialmerge", "partialsplit", "varcross", "noforloop_alias", "stackstring"] {
-        let Some(rust) = dump_print_c(&rust_harness(), stem) else { return };
+    for stem in [
+        "partialmerge",
+        "partialsplit",
+        "varcross",
+        "noforloop_alias",
+        "stackstring",
+    ] {
+        let Some(rust) = dump_print_c(&rust_harness(), stem) else {
+            return;
+        };
         assert!(
             !rust.contains("&$$undef"),
             "{stem}: the SPACEBASE arm leaked an `&$$undef` placeholder — the \
@@ -397,7 +435,9 @@ fn vfy_r1_no_new_addressof_undef_leak_from_spacebase_arm() {
 #[test]
 fn adv_keystone_addressof_stack_arg_has_no_spurious_pointer_cast() {
     for stem in ["switchind", "partialsplit"] {
-        let Some(c) = dump_print_c(&rust_harness(), stem) else { return };
+        let Some(c) = dump_print_c(&rust_harness(), stem) else {
+            return;
+        };
         for (idx, _) in c.match_indices('&') {
             let trimmed = c[..idx].trim_end();
             // A `(... *)` cast immediately preceding the `&` is suspicious, but a
@@ -406,7 +446,9 @@ fn adv_keystone_addressof_stack_arg_has_no_spurious_pointer_cast() {
             // pointer cast applied to an address-of CALL ARGUMENT — the cast's
             // opening `(` is preceded by `(`/`,`, NOT by a `*` dereference.
             let cast_before_amp = trimmed.ends_with(')')
-                && trimmed.rfind('(').is_some_and(|op| trimmed[op + 1..].contains('*'));
+                && trimmed
+                    .rfind('(')
+                    .is_some_and(|op| trimmed[op + 1..].contains('*'));
             if !cast_before_amp {
                 continue;
             }
@@ -429,14 +471,21 @@ fn adv_keystone_addressof_stack_arg_has_no_spurious_pointer_cast() {
 /// the fix keys on the parked per-slot Symbol, not on every spacebase PTRSUB.
 #[test]
 fn adv_keystone_spacebase_typing_keeps_distinct_named_locals() {
-    let Some(c) = dump_print_c(&rust_harness(), "partialsplit") else { return };
+    let Some(c) = dump_print_c(&rust_harness(), "partialsplit") else {
+        return;
+    };
     let mut refs: Vec<String> = Vec::new();
     for (idx, _) in c.match_indices('&') {
         let name: String = c[idx + 1..]
             .chars()
             .take_while(|ch| ch.is_alphanumeric() || *ch == '_')
             .collect();
-        if name.len() > 1 && name.chars().next().is_some_and(|ch| ch.is_alphabetic() || ch == '_') {
+        if name.len() > 1
+            && name
+                .chars()
+                .next()
+                .is_some_and(|ch| ch.is_alphabetic() || ch == '_')
+        {
             refs.push(name);
         }
     }

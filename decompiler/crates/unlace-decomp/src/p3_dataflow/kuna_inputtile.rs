@@ -70,7 +70,11 @@ pub fn new_tiled_input(fd: &mut Funcdata, size: int4, addr: &Address) -> KunaRes
 /// [`new_tiled_input`] can fold it into a diagnostic message; every `?`/early
 /// return below states the geometry it saw, not just that reconciliation
 /// declined.
-fn combine_covered_pieces(fd: &mut Funcdata, size: int4, addr: &Address) -> Result<VarnodeId, String> {
+fn combine_covered_pieces(
+    fd: &mut Funcdata,
+    size: int4,
+    addr: &Address,
+) -> Result<VarnodeId, String> {
     let space = addr
         .get_space()
         .ok_or_else(|| "requested address has no space".to_string())?
@@ -164,7 +168,12 @@ fn combine_covered_pieces(fd: &mut Funcdata, size: int4, addr: &Address) -> Resu
         let joinaddr = Address::new(std::rc::Rc::clone(&space), aoff);
         let joined = fd
             .find_varnode_input(asize + bsize, &joinaddr)
-            .ok_or_else(|| format!("combined input [{aoff:#x},+{:#x}) not found after join", asize + bsize))?;
+            .ok_or_else(|| {
+                format!(
+                    "combined input [{aoff:#x},+{:#x}) not found after join",
+                    asize + bsize
+                )
+            })?;
         tiling.insert(0, (aoff, asize + bsize, joined));
     }
     let (_, joinedsize, joined) = tiling[0];
@@ -189,8 +198,8 @@ mod tests {
     use std::rc::Rc;
 
     use unlace_base::space::{
-        addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace,
-        IopSpace, UniqueSpace,
+        AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace,
+        addrspace_flags, spacetype,
     };
 
     use crate::context::ArchContext;
@@ -198,7 +207,8 @@ mod tests {
     fn build_manager() -> AddrSpaceManager {
         let mut m = AddrSpaceManager::new();
         m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+            .unwrap();
         m.insert_space(Rc::new(IopSpace::new(2))).unwrap();
         m.insert_space(Rc::new(FspecSpace::new(3))).unwrap();
         m.insert_space(Rc::new(AddrSpace::new(
@@ -228,8 +238,8 @@ mod tests {
         Rc::clone(fd.get_arch().manage().get_space_by_name("ram").unwrap())
     }
 
-    fn no_replace(
-    ) -> impl FnMut(&mut crate::varnode::VarnodeBank, VarnodeId, VarnodeId) -> KunaResult<()> {
+    fn no_replace()
+    -> impl FnMut(&mut crate::varnode::VarnodeBank, VarnodeId, VarnodeId) -> KunaResult<()> {
         |_, _, _| Ok(())
     }
 
@@ -274,7 +284,10 @@ mod tests {
             "diagnostic says *why* it declined (live, not a guardInput piece): {msg}"
         );
         // Declining must not have touched the live varnode.
-        assert!(fd.vbank().get(live).unwrap().is_input(), "live input survives the decline");
+        assert!(
+            fd.vbank().get(live).unwrap().is_input(),
+            "live input survives the decline"
+        );
     }
 
     /// The shape DIV-50 exists for: every byte of the request is covered by
@@ -295,7 +308,13 @@ mod tests {
         assert!(wv.is_input());
         assert_eq!(wv.get_size(), 4);
         assert_eq!(wv.get_addr(), &Address::new(r, 0x100));
-        assert!(fd.vbank().get(lo).is_none(), "piece destroyed by the combine");
-        assert!(fd.vbank().get(hi).is_none(), "piece destroyed by the combine");
+        assert!(
+            fd.vbank().get(lo).is_none(),
+            "piece destroyed by the combine"
+        );
+        assert!(
+            fd.vbank().get(hi).is_none(),
+            "piece destroyed by the combine"
+        );
     }
 }

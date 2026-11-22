@@ -37,13 +37,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
-use unlace_base::address::{sign_extend, Address};
+use unlace_base::address::{Address, sign_extend};
 use unlace_base::space::AddrSpace;
 use unlace_base::types::{int4, intb, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype, TypeFactory, TypeField};
+use crate::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::varmap::{MapState, RangeHint, RangeType, SHARED_STORAGE, TYPELOCK};
 
@@ -87,16 +87,22 @@ fn is_plumbing(code: OpCode) -> bool {
 
 /// What a frame write stored: zero, the bytes of text, or anything else.
 fn stored(fd: &Funcdata, def: OpId, width: int4) -> Stored {
-    let Some(op) = fd.obank().get(def) else { return Stored::Other };
+    let Some(op) = fd.obank().get(def) else {
+        return Stored::Other;
+    };
     if op.code() != OpCode::CPUI_COPY {
         return Stored::Other;
     }
-    let Some(v) = op.get_in(0).and_then(|i| fd.vbank().get(i)) else { return Stored::Other };
+    let Some(v) = op.get_in(0).and_then(|i| fd.vbank().get(i)) else {
+        return Stored::Other;
+    };
     if !v.is_constant() {
         return Stored::Other;
     }
     let n = width.clamp(0, 8) as u32;
-    let bytes: Vec<u8> = (0..n).map(|i| ((v.get_offset() >> (8 * i)) & 0xff) as u8).collect();
+    let bytes: Vec<u8> = (0..n)
+        .map(|i| ((v.get_offset() >> (8 * i)) & 0xff) as u8)
+        .collect();
     match crate::kuna_structsynth::bytes_text(&bytes) {
         None => Stored::Zero,
         Some(true) => Stored::Text,
@@ -111,7 +117,9 @@ fn accesses(fd: &Funcdata, space: &Rc<AddrSpace>, lo: intb, hi: intb) -> Vec<Acc
     let to = Address::new(Rc::clone(space), space.wrap_offset(hi as uintb));
     let mut out = Vec::new();
     for vn in fd.vbank().iter_loc_addr_range(&from, &to) {
-        let Some(v) = fd.vbank().get(vn) else { continue };
+        let Some(v) = fd.vbank().get(vn) else {
+            continue;
+        };
         if v.is_free() || v.get_space().get_index() != space.get_index() {
             continue;
         }
@@ -119,21 +127,32 @@ fn accesses(fd: &Funcdata, space: &Rc<AddrSpace>, lo: intb, hi: intb) -> Vec<Acc
         if off < lo || off >= hi {
             continue;
         }
-        let def = v.get_def().filter(|d| fd.obank().get(*d).is_some_and(|o| !is_plumbing(o.code())));
+        let def = v
+            .get_def()
+            .filter(|d| fd.obank().get(*d).is_some_and(|o| !is_plumbing(o.code())));
         let reader_ops: Vec<OpId> = v
             .descend_iter()
             .filter(|d| fd.obank().get(*d).is_some_and(|o| !is_plumbing(o.code())))
             .collect();
-        let readers: Vec<OpCode> = reader_ops.iter().filter_map(|d| fd.obank().get(*d)).map(|o| o.code()).collect();
+        let readers: Vec<OpCode> = reader_ops
+            .iter()
+            .filter_map(|d| fd.obank().get(*d))
+            .map(|o| o.code())
+            .collect();
         if def.is_none() && readers.is_empty() {
             continue;
         }
         let float = v.get_type().get_metatype() == type_metatype::TYPE_UNKNOWN
-            && def.iter().chain(reader_ops.iter()).any(|o| crate::kuna_partialaccess::carries_float(fd, vn, *o));
+            && def
+                .iter()
+                .chain(reader_ops.iter())
+                .any(|o| crate::kuna_partialaccess::carries_float(fd, vn, *o));
         out.push(Access {
             off,
             size: v.get_size(),
-            writer: def.and_then(|d| fd.obank().get(d)).map(|o| o.get_addr().get_offset()),
+            writer: def
+                .and_then(|d| fd.obank().get(d))
+                .map(|o| o.get_addr().get_offset()),
             stored: def.map_or(Stored::Other, |d| stored(fd, d, v.get_size())),
             whole_read: readers.iter().any(|c| *c != OpCode::CPUI_SUBPIECE),
             ctype: Rc::clone(v.get_type()),
@@ -181,12 +200,20 @@ fn call_extent(fd: &Funcdata, base: VarnodeId) -> Option<intb> {
         if !matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND) {
             continue;
         }
-        let slots: Vec<usize> = (1..o.num_input()).filter(|s| o.get_in(*s) == Some(base)).map(|s| s as usize - 1).collect();
+        let slots: Vec<usize> = (1..o.num_input())
+            .filter(|s| o.get_in(*s) == Some(base))
+            .map(|s| s as usize - 1)
+            .collect();
         if slots.is_empty() {
             continue;
         }
         called = true;
-        let Some(name) = fd.get_call_specs_index(d).map(|i| fd.get_call_specs(i).get_name().to_string()) else { continue };
+        let Some(name) = fd
+            .get_call_specs_index(d)
+            .map(|i| fd.get_call_specs(i).get_name().to_string())
+        else {
+            continue;
+        };
         for (callee, ptr, sizes) in SIZED_CALLS {
             if *callee != name || !slots.contains(ptr) {
                 continue;
@@ -276,12 +303,18 @@ type Claims = BTreeMap<intb, (int4, Option<Rc<Datatype>>, bool)>;
 /// The members the accesses inside `[start, end)` claim, keyed by object
 /// offset, or `None` when two claims overlap.
 fn claims(acc: &[Access], start: intb, end: intb) -> Option<Claims> {
-    let inside: Vec<&Access> = acc.iter().filter(|a| a.off >= start && a.end() <= end).collect();
+    let inside: Vec<&Access> = acc
+        .iter()
+        .filter(|a| a.off >= start && a.end() <= end)
+        .collect();
     let contains = |a: &Access, b: &Access| {
         a.off <= b.off && a.end() >= b.end() && (a.off, a.size) != (b.off, b.size)
     };
     let mut out = Claims::new();
-    for a in inside.iter().filter(|a| !inside.iter().any(|b| contains(a, b))) {
+    for a in inside
+        .iter()
+        .filter(|a| !inside.iter().any(|b| contains(a, b)))
+    {
         let key = a.off - start;
         match out.get_mut(&key) {
             Some((w, t, f)) => {
@@ -320,7 +353,10 @@ fn is_record(claimed: &Claims) -> bool {
 /// the whole object uses it as one value; a register-shared slot does both and
 /// a record does neither.
 fn is_scalar_too(acc: &[Access], start: intb, end: intb) -> bool {
-    let inside: Vec<&Access> = acc.iter().filter(|a| a.off >= start && a.end() <= end).collect();
+    let inside: Vec<&Access> = acc
+        .iter()
+        .filter(|a| a.off >= start && a.end() <= end)
+        .collect();
     inside.iter().any(|a| {
         let wide = inside
             .iter()
@@ -339,7 +375,12 @@ fn is_text(acc: &[Access], start: intb, end: intb) -> bool {
 
 /// A member type that spells exactly its own width, a float for an unknown that
 /// carries one, or the honest unknown.
-fn member_type(types: &dyn TypeFactory, width: int4, ct: Option<&Rc<Datatype>>, float: bool) -> Option<Rc<Datatype>> {
+fn member_type(
+    types: &dyn TypeFactory,
+    width: int4,
+    ct: Option<&Rc<Datatype>>,
+    float: bool,
+) -> Option<Rc<Datatype>> {
     let scalar = |t: &&Rc<Datatype>| {
         t.get_size() == width
             && matches!(
@@ -352,7 +393,9 @@ fn member_type(types: &dyn TypeFactory, width: int4, ct: Option<&Rc<Datatype>>, 
     };
     match ct.filter(scalar) {
         Some(t) => Some(Rc::clone(t)),
-        None if float && matches!(width, 4 | 8) => types.get_base(width, type_metatype::TYPE_FLOAT).ok(),
+        None if float && matches!(width, 4 | 8) => {
+            types.get_base(width, type_metatype::TYPE_FLOAT).ok()
+        }
         None => types.get_base(width, type_metatype::TYPE_UNKNOWN).ok(),
     }
 }
@@ -363,7 +406,12 @@ fn fill(types: &dyn TypeFactory, fields: &mut Vec<TypeField>, from: int4, to: in
     if to - from > 8 {
         let byte = types.get_base(1, type_metatype::TYPE_UNKNOWN).ok()?;
         let ct = types.get_type_array(to - from, byte).ok()?;
-        fields.push(TypeField::new(fields.len() as int4, from, format!("field_0x{from:x}"), ct));
+        fields.push(TypeField::new(
+            fields.len() as int4,
+            from,
+            format!("field_0x{from:x}"),
+            ct,
+        ));
         return Some(());
     }
     let mut at = from;
@@ -375,7 +423,12 @@ fn fill(types: &dyn TypeFactory, fields: &mut Vec<TypeField>, from: int4, to: in
             .find(|w| at % w == 0 && at + w <= to)
             .unwrap_or(1);
         let ct = types.get_base(width, type_metatype::TYPE_UNKNOWN).ok()?;
-        fields.push(TypeField::new(fields.len() as int4, at, format!("field_0x{at:x}"), ct));
+        fields.push(TypeField::new(
+            fields.len() as int4,
+            at,
+            format!("field_0x{at:x}"),
+            ct,
+        ));
         at += width;
     }
     Some(())
@@ -396,7 +449,12 @@ fn layout(types: &dyn TypeFactory, claimed: &Claims, size: int4) -> Option<Vec<T
         }
         fill(types, &mut fields, next, off)?;
         let ct = member_type(types, *width, ct.as_ref(), *float)?;
-        fields.push(TypeField::new(fields.len() as int4, off, format!("field_0x{off:x}"), ct));
+        fields.push(TypeField::new(
+            fields.len() as int4,
+            off,
+            format!("field_0x{off:x}"),
+            ct,
+        ));
         align = align.max(*width);
         next = off + *width;
     }
@@ -410,7 +468,9 @@ fn layout(types: &dyn TypeFactory, claimed: &Claims, size: int4) -> Option<Vec<T
 /// Is a hint over the object already a decision this pass must not override:
 /// locked, shared storage, or a composite some other evidence typed?
 fn is_decided(h: &RangeHint) -> bool {
-    if h.flags & (TYPELOCK | SHARED_STORAGE) != 0 || (h.range_type == RangeType::Open && h.highind >= 0) {
+    if h.flags & (TYPELOCK | SHARED_STORAGE) != 0
+        || (h.range_type == RangeType::Open && h.highind >= 0)
+    {
         return true;
     }
     match h.type_.get_metatype() {
@@ -444,7 +504,11 @@ fn measure(
     frame_end: intb,
 ) -> Option<(intb, Vec<TypeField>)> {
     let end = extent(spans, start, sized)?;
-    if end > frame_end || end - start > MAX_OBJECT || is_text(acc, start, end) || is_scalar_too(acc, start, end) {
+    if end > frame_end
+        || end - start > MAX_OBJECT
+        || is_text(acc, start, end)
+        || is_scalar_too(acc, start, end)
+    {
         return None;
     }
     let claimed = claims(acc, start, end)?;
@@ -460,13 +524,20 @@ pub(super) fn coalesce(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace
     if !fd.get_arch().stack_struct || space.get_word_size() != 1 {
         return;
     }
-    let Some(types) = fd.get_arch().types_rc() else { return };
+    let Some(types) = fd.get_arch().types_rc() else {
+        return;
+    };
     let frame_end = state.end_sstart().unwrap_or(0).min(0);
     let bits = space.get_addr_size() as int4 * 8 - 1;
     let mut bases: BTreeMap<intb, intb> = BTreeMap::new();
     {
         let checker = state.checker_mut();
-        for (off, b) in checker.get_alias().iter().copied().zip(checker.get_add_base()) {
+        for (off, b) in checker
+            .get_alias()
+            .iter()
+            .copied()
+            .zip(checker.get_add_base())
+        {
             let start = sign_extend(space.wrap_offset(off) as intb, bits);
             if b.index.is_some() || start >= frame_end {
                 continue;
@@ -477,10 +548,13 @@ pub(super) fn coalesce(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace
             }
         }
     }
-    let Some(&lowest) = bases.keys().next() else { return };
+    let Some(&lowest) = bases.keys().next() else {
+        return;
+    };
     let known = fd.stack_records();
-    let settled =
-        fd.has_type_recovery_started() && !fd.is_type_recovery_exceeded() && fd.kuna_infertypes_settled();
+    let settled = fd.has_type_recovery_started()
+        && !fd.is_type_recovery_exceeded()
+        && fd.kuna_infertypes_settled();
     if known.is_empty() && !settled {
         return;
     }
@@ -506,7 +580,12 @@ pub(super) fn coalesce(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace
         let end = start + found.size as intb;
         let at: uintb = space.wrap_offset(start as uintb);
         let overlaps = |h: &RangeHint| h.sstart < end && h.sstart + h.size as intb > start;
-        if !state.covers(at, found.size) || state.hints_mut().iter().any(|h| overlaps(h) && is_decided(h)) {
+        if !state.covers(at, found.size)
+            || state
+                .hints_mut()
+                .iter()
+                .any(|h| overlaps(h) && is_decided(h))
+        {
             continue;
         }
         state.hints_mut().retain(|h| !overlaps(h));
@@ -527,5 +606,9 @@ fn mint(
 ) -> Option<StackRecord> {
     let size = (end - start) as int4;
     let record = crate::kuna_structsynth::answer_frame(fd, types, fields, size)?;
-    Some(StackRecord { start, size, record })
+    Some(StackRecord {
+        start,
+        size,
+        record,
+    })
 }

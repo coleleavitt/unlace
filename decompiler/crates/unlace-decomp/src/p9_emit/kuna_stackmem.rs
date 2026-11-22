@@ -2,11 +2,11 @@
 //! Copy bytes through reinterpreted pointers or indexed frame fields.
 
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use unlace_num::opcodes::OpCode;
 use std::collections::BTreeSet;
 use std::rc::Rc;
+use unlace_num::opcodes::OpCode;
 
 pub(crate) struct ByteAddress {
     pub name: String,
@@ -79,7 +79,7 @@ pub(crate) fn access(fd: &Funcdata, op: OpId) -> Option<Access> {
 }
 
 fn byte_address(fd: &Funcdata, pointer: VarnodeId, size: i32) -> Option<ByteAddress> {
-    use unlace_base::address::{calc_mask, Address};
+    use unlace_base::address::{Address, calc_mask};
     let address = crate::kuna_stackranges::frame_address(fd, pointer)?;
     let space = fd.get_arch().manage().get_stack_space()?;
     let at = Address::new(

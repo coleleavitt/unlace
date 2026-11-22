@@ -14,16 +14,16 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 
+use unlace_base::types::{uint4, uintb};
 use unlace_decomp::database::{
-    kuna_global_data_name, Database, DatabaseArch, ScopeId, TranslateAccess, TypeFactoryAccess,
+    Database, DatabaseArch, ScopeId, TranslateAccess, TypeFactoryAccess, kuna_global_data_name,
 };
-use unlace_decomp::dtype::{type_metatype, Datatype};
+use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::varnode::varnode_flags;
-use unlace_base::types::{uintb, uint4};
 
 /// Minimal angr-style architecture access impl: no register names, angr naming on.
 /// `buildVariableName` with the `persist` flag and an empty register name then
@@ -75,7 +75,8 @@ fn dt(size: int4) -> Rc<Datatype> {
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -192,7 +193,9 @@ fn w4_p0_database_make_name_unique_xform_boundary() {
     let m = build_manager();
     let ram = space(&m, 2);
     let (mut db, g) = db_with_global(m.num_spaces());
-    let arch = AngrArch { num_spaces: m.num_spaces() };
+    let arch = AngrArch {
+        num_spaces: m.num_spaces(),
+    };
 
     let addr = Address::new(Rc::clone(&ram), 0x4000);
     let basebare = kuna_global_data_name(&addr); // dat_4000
@@ -200,7 +203,8 @@ fn w4_p0_database_make_name_unique_xform_boundary() {
     // Seed dat_4000 plus the full two-digit run dat_4000_00..dat_4000_99.
     db.add_symbol(g, &basebare, dt(4)).unwrap();
     for i in 0..=99u32 {
-        db.add_symbol(g, &format!("{basebare}_{i:02}"), dt(4)).unwrap();
+        db.add_symbol(g, &format!("{basebare}_{i:02}"), dt(4))
+            .unwrap();
     }
 
     // buildVariableName(persist, empty regname) -> makeNameUnique("dat_4000").
@@ -231,7 +235,9 @@ fn w4_p0_database_make_name_unique_ignores_wrong_digit_count() {
     let m = build_manager();
     let ram = space(&m, 2);
     let (mut db, g) = db_with_global(m.num_spaces());
-    let arch = AngrArch { num_spaces: m.num_spaces() };
+    let arch = AngrArch {
+        num_spaces: m.num_spaces(),
+    };
 
     let addr = Address::new(Rc::clone(&ram), 0x5000);
     let basebare = kuna_global_data_name(&addr); // dat_5000
@@ -327,13 +333,19 @@ fn w4_p0_database_find_container_smallest_enclosing() {
     let inv = Address::new_invalid();
 
     // A 4-byte access -> smallest enclosing is s4.
-    let e = db.find_container(g, &base, 4, &inv).expect("4-byte container");
+    let e = db
+        .find_container(g, &base, 4, &inv)
+        .expect("4-byte container");
     assert_eq!(db.entry(g, e).symbol, s4);
     // A 5-byte access -> s4 too small, smallest enclosing is s8.
-    let e = db.find_container(g, &base, 5, &inv).expect("5-byte container");
+    let e = db
+        .find_container(g, &base, 5, &inv)
+        .expect("5-byte container");
     assert_eq!(db.entry(g, e).symbol, s8);
     // A 9-byte access -> only s16 contains it.
-    let e = db.find_container(g, &base, 9, &inv).expect("9-byte container");
+    let e = db
+        .find_container(g, &base, 9, &inv)
+        .expect("9-byte container");
     assert_eq!(db.entry(g, e).symbol, s16);
     // A 17-byte access -> none contain it.
     assert!(db.find_container(g, &base, 17, &inv).is_none());
@@ -393,14 +405,17 @@ fn w4_p0_database_make_name_unique_continues_xform() {
     let m = build_manager();
     let ram = space(&m, 2);
     let (mut db, g) = db_with_global(m.num_spaces());
-    let arch = AngrArch { num_spaces: m.num_spaces() };
+    let arch = AngrArch {
+        num_spaces: m.num_spaces(),
+    };
 
     let addr = Address::new(Rc::clone(&ram), 0x6000);
     let basebare = kuna_global_data_name(&addr); // dat_6000
 
     // Seed the base name plus a single x-form entry at 100.
     db.add_symbol(g, &basebare, dt(4)).unwrap();
-    db.add_symbol(g, &format!("{basebare}_x00100"), dt(4)).unwrap();
+    db.add_symbol(g, &format!("{basebare}_x00100"), dt(4))
+        .unwrap();
 
     let mut index: int4 = 0;
     let nm = db

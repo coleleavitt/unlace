@@ -27,7 +27,13 @@ struct Transfers {
 }
 
 impl PcodeEmit for Transfers {
-    fn dump(&mut self, _addr: &Address, opc: OpCode, _out: Option<&VarnodeData>, _vars: &[VarnodeData]) {
+    fn dump(
+        &mut self,
+        _addr: &Address,
+        opc: OpCode,
+        _out: Option<&VarnodeData>,
+        _vars: &[VarnodeData],
+    ) {
         match opc {
             OpCode::CPUI_CALL => self.direct_call = true,
             OpCode::CPUI_CALLIND => self.indirect_call = true,
@@ -44,7 +50,10 @@ fn check_site(trans: &dyn Translate, site: &Address) -> Result<(), String> {
         trans.one_instruction(&mut seen, site)
     }));
     if !matches!(decoded, Ok(Ok(len)) if len > 0) {
-        return Err(format!("no instruction decodes at {:#x}", site.get_offset()));
+        return Err(format!(
+            "no instruction decodes at {:#x}",
+            site.get_offset()
+        ));
     }
     if seen.indirect_call || (seen.indirect_jump && !seen.direct_call) {
         Ok(())
@@ -54,7 +63,10 @@ fn check_site(trans: &dyn Translate, site: &Address) -> Result<(), String> {
             site.get_offset()
         ))
     } else {
-        Err(format!("the instruction at {:#x} is not a call", site.get_offset()))
+        Err(format!(
+            "the instruction at {:#x} is not a call",
+            site.get_offset()
+        ))
     }
 }
 
@@ -68,7 +80,9 @@ fn callee_entry(prog: &ConsoleProgram, token: &str) -> Result<Address, String> {
             .ok_or_else(|| format!("{vma:#x} is not a function entry")),
         selector => match prog.resolve_entry(&selector) {
             Ok(entry) => Ok(entry.addr),
-            Err(EntryLookupError::NotFound { .. }) => Err(format!("{token:?} does not name a function")),
+            Err(EntryLookupError::NotFound { .. }) => {
+                Err(format!("{token:?} does not name a function"))
+            }
             Err(other) => Err(other.to_string()),
         },
     }

@@ -22,22 +22,23 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::{int4, uint4};
 use unlace_num::opcodes::OpCode;
 
 use unlace_base::error::KunaResult;
-use unlace_decomp::dtype::{type_metatype, Datatype};
+use unlace_decomp::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
+use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::op::pcodeop_flags;
-use unlace_decomp::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
 use unlace_decomp::varnode::{DefOpInfo, VarnodeBank};
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -75,7 +76,9 @@ fn dt(size: int4) -> Rc<Datatype> {
 
 fn opcode_flags(opc: OpCode) -> uint4 {
     match opc {
-        OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH | OpCode::CPUI_BRANCHIND => pcodeop_flags::branch,
+        OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH | OpCode::CPUI_BRANCHIND => {
+            pcodeop_flags::branch
+        }
         OpCode::CPUI_RETURN => pcodeop_flags::returns,
         _ => 0,
     }
@@ -84,7 +87,8 @@ fn opcode_flags(opc: OpCode) -> uint4 {
 fn mk_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
     let ram = ram_space(fd);
     let op = fd.new_op(inputs, Address::new(ram, off));
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, opcode_flags(opc), format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, opcode_flags(opc), format!("{opc:?}")));
     op
 }
 
@@ -121,18 +125,36 @@ fn w3_ir_funcdata_op_const_reshare_dedups_like_cpp() {
     let op_b = mk_op(&mut fd, 1, 0x110, OpCode::CPUI_COPY);
     let k = mk_const(&mut fd, 7);
     // First link: the constant gains its single descendant — fine.
-    fd.op_set_input(op_a, k, 0).expect("first const link must succeed");
+    fd.op_set_input(op_a, k, 0)
+        .expect("first const link must succeed");
     assert_eq!(fd.vbank().get(k).unwrap().num_descend(), 1);
     // Second link of the SAME constant: the dedup guard re-duplicates it, so the
     // link SUCCEEDS and op_b reads a fresh copy (value 7), not `k` itself.
-    fd.op_set_input(op_b, k, 0).expect("re-shared constant dedups and links");
-    let dup = fd.obank().get(op_b).unwrap().get_in(0).expect("op_b slot 0 linked");
-    assert_ne!(dup, k, "op_b reads a FRESH duplicate, not the shared constant");
+    fd.op_set_input(op_b, k, 0)
+        .expect("re-shared constant dedups and links");
+    let dup = fd
+        .obank()
+        .get(op_b)
+        .unwrap()
+        .get_in(0)
+        .expect("op_b slot 0 linked");
+    assert_ne!(
+        dup, k,
+        "op_b reads a FRESH duplicate, not the shared constant"
+    );
     assert!(fd.vbank().get(dup).unwrap().is_constant());
-    assert_eq!(fd.vbank().get(dup).unwrap().get_offset(), 7, "duplicate carries the same value");
+    assert_eq!(
+        fd.vbank().get(dup).unwrap().get_offset(),
+        7,
+        "duplicate carries the same value"
+    );
     // The original constant still has exactly its one (op_a) descendant.
     assert_eq!(fd.vbank().get(k).unwrap().num_descend(), 1);
-    assert_eq!(fd.vbank().get(dup).unwrap().num_descend(), 1, "duplicate has its single reader");
+    assert_eq!(
+        fd.vbank().get(dup).unwrap().num_descend(),
+        1,
+        "duplicate has its single reader"
+    );
 }
 
 // A NON-constant free varnode reshare also errors (this is the plain C++
@@ -147,7 +169,10 @@ fn w3_ir_funcdata_op_nonconst_free_reshare_errs_like_cpp() {
     let v = mk_vn(&mut fd, 0x10); // free, non-constant, non-spacebase
     fd.op_set_input(op_a, v, 0).expect("first link ok");
     let res = fd.op_set_input(op_b, v, 0);
-    assert!(res.is_err(), "free non-const varnode cannot have two descendants (C++ throws too)");
+    assert!(
+        res.is_err(),
+        "free non-const varnode cannot have two descendants (C++ throws too)"
+    );
 }
 
 // -----------------------------------------------------------------------------
@@ -200,10 +225,16 @@ fn w3_ir_funcdata_op_target_stops_at_nearest_startmark() {
     let mut fd = build_fd();
     // dead-list order: s0(startmark), a, s1(startmark), b, c
     let s0 = mk_op(&mut fd, 0, 0x100, OpCode::CPUI_COPY);
-    fd.obank_mut().get_mut(s0).unwrap().set_flag(pcodeop_flags::startmark);
+    fd.obank_mut()
+        .get_mut(s0)
+        .unwrap()
+        .set_flag(pcodeop_flags::startmark);
     let a = mk_op(&mut fd, 0, 0x104, OpCode::CPUI_COPY);
     let s1 = mk_op(&mut fd, 0, 0x108, OpCode::CPUI_COPY);
-    fd.obank_mut().get_mut(s1).unwrap().set_flag(pcodeop_flags::startmark);
+    fd.obank_mut()
+        .get_mut(s1)
+        .unwrap()
+        .set_flag(pcodeop_flags::startmark);
     let b = mk_op(&mut fd, 0, 0x10c, OpCode::CPUI_COPY);
     let c = mk_op(&mut fd, 0, 0x110, OpCode::CPUI_COPY);
     // target of c/b is s1 (nearest preceding startmark), NOT s0.
@@ -254,30 +285,35 @@ fn w3_ir_funcdata_op_flip_bool_and_order_and_return() {
     let mut fliplist = Vec::new();
     let r = fd.op_flip_in_place_test(and, &mut fliplist, false);
     // children pushed before parent, in0-subtree first.
-    assert_eq!(fliplist, vec![d0, d1, and], "fliplist must be d0, d1, then the AND");
+    assert_eq!(
+        fliplist,
+        vec![d0, d1, and],
+        "fliplist must be d0, d1, then the AND"
+    );
     // return value is subtest1 (d0's normalizing result == 0).
-    assert_eq!(r, 0, "AND returns its front (in0) subtest, which is normalizing");
+    assert_eq!(
+        r, 0,
+        "AND returns its front (in0) subtest, which is normalizing"
+    );
 }
 
 /// Wire `vn` to be written by `def` and read (as a lone descendant) by `reader`
 /// in `slot`, using only the public bank surfaces this verifier may touch.
 /// (op_set_output is seam-deferred for the def link, so set the def flag via the
 /// op's output field + the varnode's written flag manually through the bank.)
-fn wire_def_and_lone_read(
-    fd: &mut Funcdata,
-    def: OpId,
-    vn: VarnodeId,
-    reader: OpId,
-    slot: int4,
-) {
+fn wire_def_and_lone_read(fd: &mut Funcdata, def: OpId, vn: VarnodeId, reader: OpId, slot: int4) {
     // Mark vn as written by `def` via the varnode bank's set_def (the same call
     // op_set_output is built on); a fresh varnode never unifies, so the
     // replace-reads thunk is a no-op here.
     let seqnum = fd.obank().get(def).unwrap().get_seq_num().clone();
     let info = DefOpInfo { id: def, seqnum };
-    let mut noop = |_b: &mut VarnodeBank, _o: VarnodeId, _n: VarnodeId| -> KunaResult<()> { Ok(()) };
+    let mut noop =
+        |_b: &mut VarnodeBank, _o: VarnodeId, _n: VarnodeId| -> KunaResult<()> { Ok(()) };
     let new_vn = fd.vbank_mut().set_def(vn, info, &mut noop).unwrap();
-    fd.obank_mut().get_mut(def).unwrap().set_output(Some(new_vn));
+    fd.obank_mut()
+        .get_mut(def)
+        .unwrap()
+        .set_output(Some(new_vn));
     // Link the lone read.
     fd.op_set_input(reader, new_vn, slot).unwrap();
 }

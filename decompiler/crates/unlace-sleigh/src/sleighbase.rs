@@ -18,8 +18,8 @@ use std::rc::Rc;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::marshal::{Decoder, Encoder, IdRegistry};
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, OtherSpace,
-    RegisterLookup, UniqueSpace, VarnodeStorage,
+    AddrSpace, AddrSpaceManager, ConstantSpace, OtherSpace, RegisterLookup, UniqueSpace,
+    VarnodeStorage, addrspace_flags, spacetype,
 };
 
 use unlace_num::opcodes::{OpcodeDecoder, OpcodeEncoder};
@@ -33,7 +33,7 @@ use crate::slghsymbol::{
     ConstructTplHandle, ContextChange, SleighBaseTrans, SleighSymbol, SymbolKind, SymbolTable,
     SymbolType,
 };
-use crate::translate::{storage_from_varnode_data, TranslateBase};
+use crate::translate::{TranslateBase, storage_from_varnode_data};
 
 #[cfg(test)]
 mod tests;
@@ -62,8 +62,10 @@ impl SourceFileIndexer {
         if let Some(i) = self.file_to_index.get(filename) {
             return *i;
         }
-        self.file_to_index.insert(filename.to_vec(), self.least_unused_index);
-        self.index_to_file.insert(self.least_unused_index, filename.to_vec());
+        self.file_to_index
+            .insert(filename.to_vec(), self.least_unused_index);
+        self.index_to_file
+            .insert(self.least_unused_index, filename.to_vec());
         let res = self.least_unused_index;
         self.least_unused_index += 1;
         res
@@ -108,7 +110,10 @@ impl SourceFileIndexer {
             // an empty default here (the encode invariant fills 0..least).
             encoder.write_string(
                 &sla::ATTRIB_NAME,
-                self.index_to_file.get(&i).map(|v| v.as_slice()).unwrap_or(b""),
+                self.index_to_file
+                    .get(&i)
+                    .map(|v| v.as_slice())
+                    .unwrap_or(b""),
             );
             encoder.write_signed_integer(&sla::ATTRIB_INDEX, i64::from(i));
             encoder.close_element(&sla::ELEM_SOURCEFILE);
@@ -278,7 +283,10 @@ impl SleighBase {
             .ok_or_else(|| KunaError::sleigh(format!("Unknown register name: {}", lossy(nm))))?;
         match sym.kind() {
             SymbolKind::Varnode(v) => Ok(v.get_fixed_varnode().clone()),
-            _ => Err(KunaError::sleigh(format!("Symbol is not a register: {}", lossy(nm)))),
+            _ => Err(KunaError::sleigh(format!(
+                "Symbol is not a register: {}",
+                lossy(nm)
+            ))),
         }
     }
 
@@ -404,7 +412,7 @@ impl SleighBase {
                 return Err(KunaError::lowlevel(format!(
                     "Bad 'defaultspace' attribute: {}",
                     lossy(&defname)
-                )))
+                )));
             }
         };
         manager_get_mut(&mut self.manager).set_default_code_space(spc_index)?;
@@ -527,8 +535,10 @@ impl SleighBase {
         encoder.write_signed_integer(&sla::ATTRIB_VERSION, i64::from(sla::FORMAT_VERSION));
         encoder.write_bool(&sla::ATTRIB_BIGENDIAN, self.base.is_big_endian());
         encoder.write_signed_integer(&sla::ATTRIB_ALIGN, i64::from(self.base.alignment));
-        encoder
-            .write_unsigned_integer(&sla::ATTRIB_UNIQBASE, u64::from(self.base.get_unique_base()));
+        encoder.write_unsigned_integer(
+            &sla::ATTRIB_UNIQBASE,
+            u64::from(self.base.get_unique_base()),
+        );
         if self.maxdelayslotbytes > 0 {
             encoder
                 .write_unsigned_integer(&sla::ATTRIB_MAXDELAY, u64::from(self.maxdelayslotbytes));
@@ -538,8 +548,7 @@ impl SleighBase {
                 .write_unsigned_integer(&sla::ATTRIB_UNIQMASK, u64::from(self.unique_allocatemask));
         }
         if self.num_sections != 0 {
-            encoder
-                .write_unsigned_integer(&sla::ATTRIB_NUMSECTIONS, u64::from(self.num_sections));
+            encoder.write_unsigned_integer(&sla::ATTRIB_NUMSECTIONS, u64::from(self.num_sections));
         }
         self.indexer.encode(encoder);
 
@@ -595,8 +604,7 @@ fn lossy(b: &[u8]) -> String {
 /// any `glb` clones it), so `Rc::get_mut` always succeeds; a `None` is a build
 /// ordering bug (the manager was shared too early).
 fn manager_get_mut(manager: &mut Rc<AddrSpaceManager>) -> &mut AddrSpaceManager {
-    Rc::get_mut(manager)
-        .expect("engine address-space manager already shared (Rc not unique)")
+    Rc::get_mut(manager).expect("engine address-space manager already shared (Rc not unique)")
 }
 
 /// C++ `ContextSymbol::getPatternValue()` -> `ContextField`'s start/end bits
@@ -604,9 +612,7 @@ fn manager_get_mut(manager: &mut Rc<AddrSpaceManager>) -> &mut AddrSpaceManager 
 /// Rust errors if the pattern value is not the expected `ContextField`.
 fn context_field_bits(sym: &SleighSymbol) -> KunaResult<(i32, i32)> {
     match sym.get_pattern_value() {
-        Some(PatternValue::ContextField(field)) => {
-            Ok((field.get_start_bit(), field.get_end_bit()))
-        }
+        Some(PatternValue::ContextField(field)) => Ok((field.get_start_bit(), field.get_end_bit())),
         _ => Err(KunaError::sleigh("context symbol has no context field")),
     }
 }
@@ -1071,12 +1077,20 @@ impl crate::pcodeparse::SnippetLanguage for SleighBase {
 
     /// C++ `sleigh->getConstantSpace()`.
     fn get_constant_space(&self) -> Rc<AddrSpace> {
-        Rc::clone(self.manager().get_constant_space().expect("SnippetLanguage: no constant space"))
+        Rc::clone(
+            self.manager()
+                .get_constant_space()
+                .expect("SnippetLanguage: no constant space"),
+        )
     }
 
     /// C++ `sleigh->getUniqueSpace()`.
     fn get_unique_space(&self) -> Rc<AddrSpace> {
-        Rc::clone(self.manager().get_unique_space().expect("SnippetLanguage: no unique space"))
+        Rc::clone(
+            self.manager()
+                .get_unique_space()
+                .expect("SnippetLanguage: no unique space"),
+        )
     }
 
     /// C++ `sleigh->numSpaces()`.

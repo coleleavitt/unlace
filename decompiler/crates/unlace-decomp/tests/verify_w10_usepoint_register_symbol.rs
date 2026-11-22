@@ -18,12 +18,12 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 
 use unlace_decomp::database::{Database, ScopeId};
-use unlace_decomp::dtype::{type_metatype, Datatype};
+use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::varnode::varnode_flags;
 
 fn dt(size: int4) -> Rc<Datatype> {
@@ -34,7 +34,8 @@ fn dt(size: int4) -> Rc<Datatype> {
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -141,11 +142,19 @@ fn at2_addrtied_symbol_found_regardless_of_usepoint() {
     let inv = Address::new_invalid();
     let any_pc = Address::new(Rc::clone(&ram), 0x123456);
     assert_eq!(
-        db.symbol(db.entry(g, db.find_container(g, &loc, 1, &inv).unwrap()).symbol).name,
+        db.symbol(
+            db.entry(g, db.find_container(g, &loc, 1, &inv).unwrap())
+                .symbol
+        )
+        .name,
         "g"
     );
     assert_eq!(
-        db.symbol(db.entry(g, db.find_container(g, &loc, 1, &any_pc).unwrap()).symbol).name,
+        db.symbol(
+            db.entry(g, db.find_container(g, &loc, 1, &any_pc).unwrap())
+                .symbol
+        )
+        .name,
         "g"
     );
 }

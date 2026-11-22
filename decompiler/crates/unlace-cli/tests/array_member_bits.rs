@@ -53,7 +53,11 @@ fn pe32_double_partial_register_halves_preserve_bits() {
 /// double through SSE; the `register_halves` cases pin `-march=i686`, which copies it as
 /// two general-register words.
 fn check_target(target: &str, width: usize, capacity: usize) {
-    let cpu = if target.starts_with("i686") { "pentium4" } else { "x86-64" };
+    let cpu = if target.starts_with("i686") {
+        "pentium4"
+    } else {
+        "x86-64"
+    };
     check_target_cpu(target, cpu, width, capacity);
 }
 

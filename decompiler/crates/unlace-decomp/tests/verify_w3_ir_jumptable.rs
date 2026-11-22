@@ -22,19 +22,20 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::marshal::{Decoder, PackedDecode, PackedEncode};
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 
 use unlace_base::marshal::Encoder;
 use unlace_decomp::jumptable::{
-    CircleRange, IndexPair, JumpTable, JumpValues, JumpValuesRange, JumpValuesRangeDefault,
-    LoadTable, ATTRIB_LABEL, ELEM_DEST, ELEM_JUMPTABLE, NO_LABEL,
+    ATTRIB_LABEL, CircleRange, ELEM_DEST, ELEM_JUMPTABLE, IndexPair, JumpTable, JumpValues,
+    JumpValuesRange, JumpValuesRangeDefault, LoadTable, NO_LABEL,
 };
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -94,7 +95,11 @@ fn truncate_step_times_nm_overflows_int32_diverges_from_cpp() {
     // C++ oracle: (left + (int4)(step*nm)) & mask, with step*nm in int32.
     let cpp_prod_i32 = (step as i32).wrapping_mul(nm); // == 0
     let cpp_right = left.wrapping_add(cpp_prod_i32 as i64 as u64) & mask;
-    let cpp_size = if step == 0 { 0 } else { (cpp_right.wrapping_sub(left) & mask) / step };
+    let cpp_size = if step == 0 {
+        0
+    } else {
+        (cpp_right.wrapping_sub(left) & mask) / step
+    };
     assert_eq!(cpp_size, 0, "C++ int32 product wraps to 0 -> empty range");
 
     // Rust port behaviour through the public API.  (The initial range value is
@@ -113,7 +118,10 @@ fn truncate_step_times_nm_overflows_int32_diverges_from_cpp() {
         rust_size, cpp_size,
         "DIVERGENCE: Rust truncate uses 64-bit step*nm; C++ uses int32 (oracle=0)"
     );
-    assert_eq!(rust_size, 0x10000, "Rust 64-bit product yields full-step range");
+    assert_eq!(
+        rust_size, 0x10000,
+        "Rust 64-bit product yields full-step range"
+    );
 }
 
 // ===========================================================================
@@ -140,7 +148,11 @@ fn collapse_table_overlap_entry_is_skipped() {
     LoadTable::collapse_table(&mut table);
 
     // Net: a single table [0x1000, size 4] with num 4 + 2 = 6 (overlap dropped).
-    assert_eq!(table.len(), 1, "overlap entry dropped, rest merged into one");
+    assert_eq!(
+        table.len(),
+        1,
+        "overlap entry dropped, rest merged into one"
+    );
     assert_eq!(table[0].addr, a(0x1000));
     assert_eq!(table[0].size, 4);
     assert_eq!(table[0].num, 6, "0x1008 overlap contributed nothing");
@@ -157,8 +169,10 @@ fn collapse_table_size_change_starts_new_table() {
 
     // entry0: [0x2000, size 4, num 2] -> nextaddr 0x2008
     // entry1: [0x2008, size 2, num 3] -> addr==nextaddr but size differs -> new
-    let mut table =
-        vec![LoadTable::full(a(0x2000), 4, 2), LoadTable::full(a(0x2008), 2, 3)];
+    let mut table = vec![
+        LoadTable::full(a(0x2000), 4, 2),
+        LoadTable::full(a(0x2008), 2, 3),
+    ];
     LoadTable::collapse_table(&mut table);
 
     assert_eq!(table.len(), 2, "size change forces a second table");
@@ -182,7 +196,11 @@ fn collapse_table_unsorted_input_is_sorted_then_merged() {
     LoadTable::collapse_table(&mut table);
 
     assert_eq!(table.len(), 1, "sorted then merged into one contiguous run");
-    assert_eq!(table[0].addr, a(0x3000), "merged table starts at lowest addr");
+    assert_eq!(
+        table[0].addr,
+        a(0x3000),
+        "merged table starts at lowest addr"
+    );
     assert_eq!(table[0].num, 3);
 }
 
@@ -204,7 +222,10 @@ fn indexpair_total_order_position_then_index() {
         IndexPair::new(1, 7),
     ];
     v.sort();
-    let got: Vec<(i32, i32)> = v.iter().map(|p| (p.block_position, p.address_index)).collect();
+    let got: Vec<(i32, i32)> = v
+        .iter()
+        .map(|p| (p.block_position, p.address_index))
+        .collect();
     assert_eq!(
         got,
         vec![(0, 1), (0, 5), (1, 7), (2, 1), (2, 9)],
@@ -214,8 +235,14 @@ fn indexpair_total_order_position_then_index() {
     // Totality spot-checks: antisymmetry + reflexivity.
     let p = IndexPair::new(3, 4);
     assert_eq!(p.cmp(&p), std::cmp::Ordering::Equal);
-    assert_eq!(IndexPair::new(1, 0).cmp(&IndexPair::new(1, 2)), std::cmp::Ordering::Less);
-    assert_eq!(IndexPair::new(2, 0).cmp(&IndexPair::new(1, 99)), std::cmp::Ordering::Greater);
+    assert_eq!(
+        IndexPair::new(1, 0).cmp(&IndexPair::new(1, 2)),
+        std::cmp::Ordering::Less
+    );
+    assert_eq!(
+        IndexPair::new(2, 0).cmp(&IndexPair::new(1, 99)),
+        std::cmp::Ordering::Greater
+    );
 }
 
 // ===========================================================================
@@ -244,9 +271,20 @@ fn default_range_iterates_base_then_extra_value_last() {
     last.set_range(CircleRange::new_empty()); // empty base
     last.set_extra_value(0x99);
     assert!(last.initialize_for_reading());
-    assert_eq!(last.get_value(), 0x99, "empty base -> straight to extra value");
-    assert!(!last.is_reversible(), "the extra/default value is not reversible");
-    assert_eq!(last.next().unwrap(), false, "no value after the extra (lastvalue)");
+    assert_eq!(
+        last.get_value(),
+        0x99,
+        "empty base -> straight to extra value"
+    );
+    assert!(
+        !last.is_reversible(),
+        "the extra/default value is not reversible"
+    );
+    assert_eq!(
+        last.next().unwrap(),
+        false,
+        "no value after the extra (lastvalue)"
+    );
 }
 
 // ===========================================================================
@@ -263,7 +301,9 @@ fn encode_two_dests(m: &AddrSpaceManager, first_labeled: bool, second_labeled: b
     let mut enc = PackedEncode::new(&mut buf);
     enc.open_element(&ELEM_JUMPTABLE);
     // opaddress
-    Address::new(Rc::clone(&ram), 0x4000).encode(&mut enc).unwrap();
+    Address::new(Rc::clone(&ram), 0x4000)
+        .encode(&mut enc)
+        .unwrap();
     // dest 0
     enc.open_element(&ELEM_DEST);
     ram.encode_attributes(&mut enc, 0x5000).unwrap();
@@ -298,7 +338,11 @@ fn decode_labeled_then_unlabeled_backfills_no_label() {
     assert_eq!(jt.num_entries(), 2);
     assert!(jt.is_labelled());
     assert_eq!(jt.get_label_by_index(0), 7);
-    assert_eq!(jt.get_label_by_index(1), NO_LABEL, "trailing entry back-filled NO_LABEL");
+    assert_eq!(
+        jt.get_label_by_index(1),
+        NO_LABEL,
+        "trailing entry back-filled NO_LABEL"
+    );
 }
 
 #[test]
@@ -313,5 +357,8 @@ fn decode_unlabeled_then_labeled_is_an_error() {
     dec.ingest_stream(&buf).unwrap();
     let mut jt = JumpTable::new(Address::default());
     let err = jt.decode(&mut dec);
-    assert!(err.is_err(), "labeled entry after an unlabeled one must be rejected");
+    assert!(
+        err.is_err(),
+        "labeled entry after an unlabeled one must be rejected"
+    );
 }

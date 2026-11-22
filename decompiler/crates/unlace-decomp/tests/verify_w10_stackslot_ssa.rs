@@ -22,22 +22,23 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 
-use unlace_decomp::dtype::{type_metatype, Datatype};
-use unlace_decomp::funcdata::Funcdata;
-use unlace_decomp::ruleaction_3::RuleMultiCollapse;
 use unlace_decomp::action::Rule;
 use unlace_decomp::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
+use unlace_decomp::dtype::{Datatype, type_metatype};
+use unlace_decomp::funcdata::Funcdata;
+use unlace_decomp::ruleaction_3::RuleMultiCollapse;
 use unlace_decomp::varnode::DefOpInfo;
 use unlace_num::opcodes::OpCode;
 
 fn build_fd() -> Funcdata {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -79,7 +80,9 @@ fn mk_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
 fn mk_reg(fd: &mut Funcdata, s: int4, off: u64) -> VarnodeId {
     let r = ram(fd);
     let vn = fd.vbank_mut().create(s, Address::new(r, off), dt(s));
-    fd.vbank_mut().set_input(vn, &mut |_, _, _| Ok(())).expect("set_input")
+    fd.vbank_mut()
+        .set_input(vn, &mut |_, _, _| Ok(()))
+        .expect("set_input")
 }
 /// Fresh unique output of `op`, marked heritage-known (`insert`), as a real
 /// SSA def written into the op graph would be.
@@ -93,7 +96,10 @@ fn mk_out(fd: &mut Funcdata, s: int4, op: OpId) -> VarnodeId {
     fd.obank_mut().get_mut(op).unwrap().set_output(Some(vn));
     // A written SSA def is heritage-known: set the `insert` flag the heritage
     // renamer would have set (mk_reg's set_input does this for inputs).
-    fd.vbank_mut().get_mut(vn).unwrap().set_flags_pub(unlace_decomp::varnode::varnode_flags::insert);
+    fd.vbank_mut()
+        .get_mut(vn)
+        .unwrap()
+        .set_flags_pub(unlace_decomp::varnode::varnode_flags::insert);
     vn
 }
 
@@ -360,12 +366,7 @@ fn vt4_nested_multiequal_failure_grows_scratch_and_clears_all_marks() {
     let mut nested_ops = Vec::new();
     let mut nested_outs = Vec::new();
     for depth in 0..9 {
-        let phi = mk_op(
-            &mut fd,
-            2,
-            0x100 + depth * 0x10,
-            OpCode::CPUI_MULTIEQUAL,
-        );
+        let phi = mk_op(&mut fd, 2, 0x100 + depth * 0x10, OpCode::CPUI_MULTIEQUAL);
         fd.op_set_input(phi, edi, 0).unwrap();
         fd.op_set_input(phi, tail, 1).unwrap();
         fd.op_insert(phi, join, None);
@@ -382,7 +383,10 @@ fn vt4_nested_multiequal_failure_grows_scratch_and_clears_all_marks() {
     fd.bb_set_order(join);
 
     assert_eq!(RuleMultiCollapse::default().apply_op(outer, &mut fd), 0);
-    assert_eq!(fd.obank().get(outer).unwrap().code(), OpCode::CPUI_MULTIEQUAL);
+    assert_eq!(
+        fd.obank().get(outer).unwrap().code(),
+        OpCode::CPUI_MULTIEQUAL
+    );
     assert!(!fd.vbank().get(outer_out).unwrap().is_mark());
     for (&phi, &out) in nested_ops.iter().zip(&nested_outs) {
         assert_eq!(fd.obank().get(phi).unwrap().code(), OpCode::CPUI_MULTIEQUAL);

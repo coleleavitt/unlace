@@ -84,11 +84,13 @@ mod tests {
     #[test]
     fn invalid_ordinary_and_unreadable_words_have_no_isa_hint() {
         for word in [0u32, 0x4e80_0020, 0x7c83_2378, 0x7c64_289f, 0x7864_0182] {
-            assert!(powerpc_isa_hint("PowerPC:BE:64:default", 0, |buffer| {
-                buffer.copy_from_slice(&word.to_be_bytes());
-                true
-            })
-            .is_none());
+            assert!(
+                powerpc_isa_hint("PowerPC:BE:64:default", 0, |buffer| {
+                    buffer.copy_from_slice(&word.to_be_bytes());
+                    true
+                })
+                .is_none()
+            );
         }
         assert!(powerpc_isa_hint("PowerPC:BE:64:default", 0, |_| false).is_none());
     }

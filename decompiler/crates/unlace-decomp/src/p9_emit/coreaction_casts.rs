@@ -60,10 +60,12 @@ use unlace_base::types::{int4, int8, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::cast::{CastContext, CastStrategy, CastStrategyC, OpRef, VnRef};
-use crate::coreaction_infertypes::{declared_input_type_local as input_type_local, output_type_local};
-use crate::dtype::{type_metatype, Datatype, TypeFactory};
-use crate::funcdata::Funcdata;
 use crate::context::{OpId, VarnodeId};
+use crate::coreaction_infertypes::{
+    declared_input_type_local as input_type_local, output_type_local,
+};
+use crate::dtype::{Datatype, TypeFactory, type_metatype};
+use crate::funcdata::Funcdata;
 use crate::unionresolve::ResolvedUnion;
 
 // =============================================================================
@@ -113,7 +115,12 @@ impl<'a> FuncdataCastContext<'a> {
             Some(b)
                 if ty.get_size() == 1
                     && ty.get_metatype() == type_metatype::TYPE_UNKNOWN
-                    && !self.fd.borrow().vbank().get(vn).is_some_and(|v| v.is_constant()) =>
+                    && !self
+                        .fd
+                        .borrow()
+                        .vbank()
+                        .get(vn)
+                        .is_some_and(|v| v.is_constant()) =>
             {
                 Rc::clone(b)
             }
@@ -159,12 +166,22 @@ impl<'a> FuncdataCastContext<'a> {
 impl CastContext for FuncdataCastContext<'_> {
     fn op_code(&self, op: OpRef) -> OpCode {
         let op = self.op_key(op);
-        self.fd.borrow().obank().get(op).expect("cast ctx: stale op").code()
+        self.fd
+            .borrow()
+            .obank()
+            .get(op)
+            .expect("cast ctx: stale op")
+            .code()
     }
 
     fn op_num_input(&self, op: OpRef) -> int4 {
         let op = self.op_key(op);
-        self.fd.borrow().obank().get(op).expect("cast ctx: stale op").num_input()
+        self.fd
+            .borrow()
+            .obank()
+            .get(op)
+            .expect("cast ctx: stale op")
+            .num_input()
     }
 
     fn op_in(&self, op: OpRef, slot: int4) -> VnRef {
@@ -182,44 +199,86 @@ impl CastContext for FuncdataCastContext<'_> {
 
     fn op_out(&self, op: OpRef) -> Option<VnRef> {
         let opk = self.op_key(op);
-        let out = self.fd.borrow().obank().get(opk).expect("cast ctx: stale op").get_out();
+        let out = self
+            .fd
+            .borrow()
+            .obank()
+            .get(opk)
+            .expect("cast ctx: stale op")
+            .get_out();
         out.map(|vn| self.vn_ref(vn))
     }
 
     fn op_slot(&self, op: OpRef, vn: VnRef) -> int4 {
         let opk = self.op_key(op);
         let vnk = self.vn_key(vn);
-        self.fd.borrow().obank().get(opk).expect("cast ctx: stale op").get_slot(vnk)
+        self.fd
+            .borrow()
+            .obank()
+            .get(opk)
+            .expect("cast ctx: stale op")
+            .get_slot(vnk)
     }
 
     fn vn_is_constant(&self, vn: VnRef) -> bool {
         let vn = self.vn_key(vn);
-        self.fd.borrow().vbank().get(vn).expect("cast ctx: stale vn").is_constant()
+        self.fd
+            .borrow()
+            .vbank()
+            .get(vn)
+            .expect("cast ctx: stale vn")
+            .is_constant()
     }
 
     fn vn_is_explicit(&self, vn: VnRef) -> bool {
         let vn = self.vn_key(vn);
-        self.fd.borrow().vbank().get(vn).expect("cast ctx: stale vn").is_explicit()
+        self.fd
+            .borrow()
+            .vbank()
+            .get(vn)
+            .expect("cast ctx: stale vn")
+            .is_explicit()
     }
 
     fn vn_is_written(&self, vn: VnRef) -> bool {
         let vn = self.vn_key(vn);
-        self.fd.borrow().vbank().get(vn).expect("cast ctx: stale vn").is_written()
+        self.fd
+            .borrow()
+            .vbank()
+            .get(vn)
+            .expect("cast ctx: stale vn")
+            .is_written()
     }
 
     fn vn_size(&self, vn: VnRef) -> int4 {
         let vn = self.vn_key(vn);
-        self.fd.borrow().vbank().get(vn).expect("cast ctx: stale vn").get_size()
+        self.fd
+            .borrow()
+            .vbank()
+            .get(vn)
+            .expect("cast ctx: stale vn")
+            .get_size()
     }
 
     fn vn_offset(&self, vn: VnRef) -> uintb {
         let vn = self.vn_key(vn);
-        self.fd.borrow().vbank().get(vn).expect("cast ctx: stale vn").get_offset()
+        self.fd
+            .borrow()
+            .vbank()
+            .get(vn)
+            .expect("cast ctx: stale vn")
+            .get_offset()
     }
 
     fn vn_def(&self, vn: VnRef) -> Option<OpRef> {
         let vn = self.vn_key(vn);
-        let def = self.fd.borrow().vbank().get(vn).expect("cast ctx: stale vn").get_def();
+        let def = self
+            .fd
+            .borrow()
+            .vbank()
+            .get(vn)
+            .expect("cast ctx: stale vn")
+            .get_def();
         def.map(|op| self.op_ref(op))
     }
 
@@ -235,8 +294,9 @@ impl CastContext for FuncdataCastContext<'_> {
         // &mut), else the bare Varnode type when no HighVariable exists.
         let ty = {
             let mut fd = self.fd.borrow_mut();
-            fd.high_get_type(vnk)
-                .unwrap_or_else(|| Rc::clone(fd.vbank().get(vnk).expect("cast ctx: stale vn").get_type()))
+            fd.high_get_type(vnk).unwrap_or_else(|| {
+                Rc::clone(fd.vbank().get(vnk).expect("cast ctx: stale vn").get_type())
+            })
         };
         self.view(vnk, ty)
     }
@@ -262,12 +322,22 @@ impl CastContext for FuncdataCastContext<'_> {
 
     fn op_is_bool_output(&self, op: OpRef) -> bool {
         let opk = self.op_key(op);
-        self.fd.borrow().obank().get(opk).expect("cast ctx: stale op").is_bool_output()
+        self.fd
+            .borrow()
+            .obank()
+            .get(opk)
+            .expect("cast ctx: stale op")
+            .is_bool_output()
     }
 
     fn op_is_call(&self, op: OpRef) -> bool {
         let opk = self.op_key(op);
-        self.fd.borrow().obank().get(opk).expect("cast ctx: stale op").is_call()
+        self.fd
+            .borrow()
+            .obank()
+            .get(opk)
+            .expect("cast ctx: stale op")
+            .is_call()
     }
 
     fn vn_set_unsigned_print(&mut self, vn: VnRef) {
@@ -390,11 +460,14 @@ fn get_input_cast_op(
             let declared_storage = contract.is_some();
             let reqtype = contract.unwrap_or_else(|| input_type_local(data, op, slot));
             let curtype = data.vn_high_type_read_facing(invn, op);
-            let care_ptr_uint = declared_storage || reqtype.get_metatype() != type_metatype::TYPE_UNKNOWN
+            let care_ptr_uint = declared_storage
+                || reqtype.get_metatype() != type_metatype::TYPE_UNKNOWN
                 || crate::p9_emit::kuna_unknowncasts::declared_argument(data, op, slot);
             strat
                 .cast_standard(&reqtype, &curtype, false, care_ptr_uint)
-                .or_else(|| crate::kuna_calltargettype::uncallable_target_cast(data, op, slot, &curtype))
+                .or_else(|| {
+                    crate::kuna_calltargettype::uncallable_target_cast(data, op, slot, &curtype)
+                })
                 .or_else(|| crate::kuna_truncarg::narrowed_arg_cast(data, strat, op, slot))
         }
     }
@@ -424,10 +497,12 @@ fn get_input_cast_load(
     } else {
         return tlst.get_type_pointer(in_size, reqtype, wordsize).ok();
     }
-    let reqtype = tlst.get_qualified_type(
-        crate::kuna_typequal::unqualified_value(reqtype),
-        crate::kuna_typequal::effective_qualifiers(&curtype),
-    ).ok()?;
+    let reqtype = tlst
+        .get_qualified_type(
+            crate::kuna_typequal::unqualified_value(reqtype),
+            crate::kuna_typequal::effective_qualifiers(&curtype),
+        )
+        .ok()?;
     if !Rc::ptr_eq(&curtype, &reqtype) && curtype.get_size() == reqtype.get_size() {
         let curmeta = curtype.get_metatype();
         if curmeta != type_metatype::TYPE_STRUCT
@@ -485,22 +560,31 @@ fn get_input_cast_store(
         (Rc::clone(&pointer_type), -1)
     };
     let qualifiers = crate::kuna_typequal::effective_qualifiers(&pointed_to);
-    let access_type = |ty| tlst.get_qualified_type(
-        crate::kuna_typequal::unqualified_value(ty),
-        qualifiers & !crate::kuna_typequal::CONST,
-    ).ok();
+    let access_type = |ty| {
+        tlst.get_qualified_type(
+            crate::kuna_typequal::unqualified_value(ty),
+            qualifiers & !crate::kuna_typequal::CONST,
+        )
+        .ok()
+    };
     if dest_size != value_type.get_size() {
         if slot == 1 {
-            return tlst.get_type_pointer(pointer_size, access_type(value_type)?, wordsize).ok();
+            return tlst
+                .get_type_pointer(pointer_size, access_type(value_type)?, wordsize)
+                .ok();
         }
         return None;
     }
     if slot == 1 {
         if qualifiers & crate::kuna_typequal::CONST != 0 {
-            return tlst.get_type_pointer(pointer_size, access_type(pointed_to)?, wordsize).ok();
+            return tlst
+                .get_type_pointer(pointer_size, access_type(pointed_to)?, wordsize)
+                .ok();
         }
         if let Some(value) = super::kuna_floatstore::pointer(data, &pointed_to, &value_type) {
-            return tlst.get_type_pointer(pointer_size, access_type(value)?, wordsize).ok();
+            return tlst
+                .get_type_pointer(pointer_size, access_type(value)?, wordsize)
+                .ok();
         }
         let v = data.vbank().get(pointer_vn)?;
         let is_cast = v.is_written()
@@ -512,7 +596,9 @@ fn get_input_cast_store(
             && data.vbank().get(pointer_vn)?.is_implied()
             && data.lone_descend(pointer_vn) == Some(op)
         {
-            let new_type = tlst.get_type_pointer(pointer_size, access_type(Rc::clone(&value_type))?, wordsize).ok()?;
+            let new_type = tlst
+                .get_type_pointer(pointer_size, access_type(Rc::clone(&value_type))?, wordsize)
+                .ok()?;
             if !Rc::ptr_eq(&pointer_type, &new_type) {
                 return Some(new_type);
             }
@@ -572,7 +658,9 @@ fn get_input_cast_equal(
     let slottype = data.vn_high_type_read_facing(slotvn, op);
     let standard = strat.cast_standard(&reqtype, &slottype, false, false);
     let other = if slot == 0 { in1 } else { in0 };
-    if standard.is_none() && promotes_with_other_sign(data, strat, slotvn, other, &slottype, &reqtype) {
+    if standard.is_none()
+        && promotes_with_other_sign(data, strat, slotvn, other, &slottype, &reqtype)
+    {
         return Some(reqtype);
     }
     standard
@@ -589,8 +677,10 @@ fn integer_beside_bool(reqtype: &Rc<Datatype>, types: [&Rc<Datatype>; 2]) -> Opt
     types
         .into_iter()
         .find(|t| {
-            matches!(t.get_metatype(), type_metatype::TYPE_INT | type_metatype::TYPE_UINT)
-                && t.get_size() == reqtype.get_size()
+            matches!(
+                t.get_metatype(),
+                type_metatype::TYPE_INT | type_metatype::TYPE_UINT
+            ) && t.get_size() == reqtype.get_size()
         })
         .cloned()
 }
@@ -610,12 +700,21 @@ fn promotes_with_other_sign(
     slottype: &Datatype,
     reqtype: &Datatype,
 ) -> bool {
-    let Some(v) = data.vbank().get(vn) else { return false };
-    let integer = |t: &Datatype| matches!(t.get_metatype(), type_metatype::TYPE_INT | type_metatype::TYPE_UINT);
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
+    let integer = |t: &Datatype| {
+        matches!(
+            t.get_metatype(),
+            type_metatype::TYPE_INT | type_metatype::TYPE_UINT
+        )
+    };
     if v.get_size() >= strat.promote_size() || !integer(slottype) || !integer(reqtype) {
         return false;
     }
-    if (slottype.get_metatype() == type_metatype::TYPE_INT) == (reqtype.get_metatype() == type_metatype::TYPE_INT) {
+    if (slottype.get_metatype() == type_metatype::TYPE_INT)
+        == (reqtype.get_metatype() == type_metatype::TYPE_INT)
+    {
         return false;
     }
     let top_bit_clear = |vn: VarnodeId| {
@@ -632,11 +731,19 @@ fn promotes_with_other_sign(
 /// which can be neither `-0.0` nor equal to zero as a NaN.
 fn float_compare_is_exact(data: &Funcdata, a: VarnodeId, b: VarnodeId) -> bool {
     let zero_against_abs = |c: VarnodeId, v: VarnodeId| {
-        data.vbank().get(c).is_some_and(|n| n.is_constant() && n.get_offset() == 0)
-            && data.vbank().get(v).and_then(|n| n.get_def()).and_then(|d| data.obank().get(d))
+        data.vbank()
+            .get(c)
+            .is_some_and(|n| n.is_constant() && n.get_offset() == 0)
+            && data
+                .vbank()
+                .get(v)
+                .and_then(|n| n.get_def())
+                .and_then(|d| data.obank().get(d))
                 .is_some_and(|o| o.code() == OpCode::CPUI_FLOAT_ABS)
     };
-    [(a, b), (b, a)].into_iter().any(|(c, v)| crate::kuna_floatbits::compares_as_a_float(data, c) || zero_against_abs(c, v))
+    [(a, b), (b, a)]
+        .into_iter()
+        .any(|(c, v)| crate::kuna_floatbits::compares_as_a_float(data, c) || zero_against_abs(c, v))
 }
 
 /// (kuna) The integer type an `INT_EQUAL`/`INT_NOTEQUAL` with a float input
@@ -644,11 +751,18 @@ fn float_compare_is_exact(data: &Funcdata, a: VarnodeId, b: VarnodeId) -> bool {
 /// A C `==` on floats differs from the bit test for -0.0, NaNs and NaN constants.
 fn float_bits_type(data: &Funcdata, types: &[Rc<Datatype>], size: int4) -> Option<Rc<Datatype>> {
     if let Some(t) = types.iter().find(|t| {
-        t.get_size() == size && matches!(t.get_metatype(), type_metatype::TYPE_INT | type_metatype::TYPE_UINT)
+        t.get_size() == size
+            && matches!(
+                t.get_metatype(),
+                type_metatype::TYPE_INT | type_metatype::TYPE_UINT
+            )
     }) {
         return Some(Rc::clone(t));
     }
-    data.get_arch().types_rc()?.get_base(size, type_metatype::TYPE_UINT).ok()
+    data.get_arch()
+        .types_rc()?
+        .get_base(size, type_metatype::TYPE_UINT)
+        .ok()
 }
 
 /// The signed/unsigned ordered-compare getInputCast body, shared by
@@ -1001,8 +1115,16 @@ fn get_output_token_ptrsub(data: &mut Funcdata, op: OpId) -> Rc<Datatype> {
             Some(o) => o,
             None => return output_type_local(data, op),
         };
-        let in1off = o.get_in(1).and_then(|v| data.vbank().get(v)).map(|v| v.get_offset()).unwrap_or(0);
-        let out_size = o.get_out().and_then(|v| data.vbank().get(v)).map(|v| v.get_size()).unwrap_or(1);
+        let in1off = o
+            .get_in(1)
+            .and_then(|v| data.vbank().get(v))
+            .map(|v| v.get_offset())
+            .unwrap_or(0);
+        let out_size = o
+            .get_out()
+            .and_then(|v| data.vbank().get(v))
+            .map(|v| v.get_size())
+            .unwrap_or(1);
         let ws = ptype.get_word_size().unwrap_or(1);
         (in1off, out_size, ws)
     };
@@ -1024,7 +1146,11 @@ fn get_output_token_ptrsub(data: &mut Funcdata, op: OpId) -> Rc<Datatype> {
     // guard (type.cc:1225-1226) is skipped (`ptrtoSize != 0` is false); the type
     // is not an array/struct, so `!isArray -> getTypePointerStripArray` applies.
     let ptrto = ptype.get_ptr_to();
-    if offset == 0 && ptrto.as_ref().is_some_and(|ty| ty.get_metatype() == type_metatype::TYPE_UNION) {
+    if offset == 0
+        && ptrto
+            .as_ref()
+            .is_some_and(|ty| ty.get_metatype() == type_metatype::TYPE_UNION)
+    {
         if let Some(resolution) = data.get_union_field(&ptype, op, -1) {
             if resolution.get_field_num() >= 0 {
                 return Rc::clone(resolution.get_datatype());
@@ -1169,7 +1295,11 @@ fn subpiece_composite_byte_offset(data: &Funcdata, op: OpId) -> i64 {
         Some(v) => v,
         None => return 0,
     };
-    let in1off = o.get_in(1).and_then(|v| data.vbank().get(v)).map(|v| v.get_offset()).unwrap_or(0);
+    let in1off = o
+        .get_in(1)
+        .and_then(|v| data.vbank().get(v))
+        .map(|v| v.get_offset())
+        .unwrap_or(0);
     let big_endian = data
         .vbank()
         .get(in0)
@@ -1229,11 +1359,17 @@ fn get_output_token_load(data: &mut Funcdata, op: OpId) -> Rc<Datatype> {
 
 /// `castStrategy->arithmeticOutputStandard(op)` driven through the bridge
 /// (cast.cc:394-409).
-fn arithmetic_output_standard(data: &mut Funcdata, strat: &CastStrategyC, op: OpId) -> Rc<Datatype> {
+fn arithmetic_output_standard(
+    data: &mut Funcdata,
+    strat: &CastStrategyC,
+    op: OpId,
+) -> Rc<Datatype> {
     let fallback = output_type_local(data, op);
     let ctx = FuncdataCastContext::new(data);
     let opr = ctx.op_ref(op);
-    strat.arithmetic_output_standard(&ctx, opr).unwrap_or(fallback)
+    strat
+        .arithmetic_output_standard(&ctx, opr)
+        .unwrap_or(fallback)
 }
 
 /// The LOAD/STORE address space from the constant in slot 0 (C++
@@ -1369,7 +1505,11 @@ impl Funcdata {
                 Some(o) => o,
                 None => return,
             };
-            let sz = o.get_in(2).and_then(|v| self.vbank().get(v)).map(|v| v.get_offset()).unwrap_or(0);
+            let sz = o
+                .get_in(2)
+                .and_then(|v| self.vbank().get(v))
+                .map(|v| v.get_offset())
+                .unwrap_or(0);
             let in0 = match o.get_in(0) {
                 Some(v) => v,
                 None => return,
@@ -1378,14 +1518,16 @@ impl Funcdata {
         };
         let ct = self.vn_high_type_read_facing(in0, op);
         let fits = if ct.get_metatype() == type_metatype::TYPE_PTR {
-            match (ct.get_ptr_to(), ct.get_word_size()) { (Some(ptrto), Some(ws)) => {
-                let align = ptrto.get_align_size();
-                // C++: getAlignSize() == AddrSpace::addressToByteInt(sz, wordSize)
-                // (int4 vs int8 — promote the int4 align to int8 for the compare).
-                align as i64 == unlace_base::space::AddrSpace::address_to_byte_int(sz as i64, ws)
-            } _ => {
-                false
-            }}
+            match (ct.get_ptr_to(), ct.get_word_size()) {
+                (Some(ptrto), Some(ws)) => {
+                    let align = ptrto.get_align_size();
+                    // C++: getAlignSize() == AddrSpace::addressToByteInt(sz, wordSize)
+                    // (int4 vs int8 — promote the int4 align to int8 for the compare).
+                    align as i64
+                        == unlace_base::space::AddrSpace::address_to_byte_int(sz as i64, ws)
+                }
+                _ => false,
+            }
         } else {
             false
         };
@@ -1405,16 +1547,22 @@ impl Funcdata {
                 Some(v) => v,
                 None => return,
             };
-            let in1off = o.get_in(1).and_then(|v| self.vbank().get(v)).map(|v| v.get_offset()).unwrap_or(0);
+            let in1off = o
+                .get_in(1)
+                .and_then(|v| self.vbank().get(v))
+                .map(|v| v.get_offset())
+                .unwrap_or(0);
             (in0, in1off)
         };
         let curtype = self.vn_type_read_facing(in0, op);
         if in1off == 0
             && curtype.get_ptr_to().is_some_and(|ty| {
                 ty.get_metatype() == type_metatype::TYPE_UNION
-                    && self.get_union_field(&curtype, op, -1).is_some_and(|resolution| {
-                        ty.get_field(resolution.get_field_num()).is_some()
-                    })
+                    && self
+                        .get_union_field(&curtype, op, -1)
+                        .is_some_and(|resolution| {
+                            ty.get_field(resolution.get_field_num()).is_some()
+                        })
             })
         {
             return;
@@ -1436,7 +1584,12 @@ impl Funcdata {
             Some(v) => v,
             None => return 0,
         };
-        if self.vbank().get(vn).map(|v| v.is_annotation()).unwrap_or(true) {
+        if self
+            .vbank()
+            .get(vn)
+            .map(|v| v.is_annotation())
+            .unwrap_or(true)
+        {
             return 0;
         }
         let dt = match self.high_get_type(vn) {
@@ -1477,8 +1630,18 @@ impl Funcdata {
             };
             self.set_union_field(&dt, ptrsub, -1, resolve);
             1
-        } else if self.vbank().get(vn).map(|v| v.is_implied()).unwrap_or(false) {
-            if self.vbank().get(vn).map(|v| v.is_written()).unwrap_or(false) {
+        } else if self
+            .vbank()
+            .get(vn)
+            .map(|v| v.is_implied())
+            .unwrap_or(false)
+        {
+            if self
+                .vbank()
+                .get(vn)
+                .map(|v| v.is_written())
+                .unwrap_or(false)
+            {
                 // writefacing == readfacing -> treat as if it had the field type.
                 if let Some(def) = self.vbank().get(vn).and_then(|v| v.get_def()) {
                     if let Some(wr) = self.get_union_field(&dt, def, -1) {
@@ -1519,7 +1682,11 @@ impl Funcdata {
         };
         let vnin = vn;
         // Guard against double-casts.
-        let vn_is_written = self.vbank().get(vn).map(|v| v.is_written()).unwrap_or(false);
+        let vn_is_written = self
+            .vbank()
+            .get(vn)
+            .map(|v| v.is_written())
+            .unwrap_or(false);
         let vn_def_is_cast = vn_is_written
             && self
                 .vbank()
@@ -1529,7 +1696,12 @@ impl Funcdata {
                 .map(|o| o.code() == OpCode::CPUI_CAST)
                 .unwrap_or(false);
         if vn_def_is_cast {
-            if self.vbank().get(vn).map(|v| v.is_implied()).unwrap_or(false) {
+            if self
+                .vbank()
+                .get(vn)
+                .map(|v| v.is_implied())
+                .unwrap_or(false)
+            {
                 if self.lone_descend(vn) == Some(op) {
                     let changed = self.vn_update_type(vn, Rc::clone(&ct));
                     let _ = changed;
@@ -1561,9 +1733,19 @@ impl Funcdata {
                     }
                 }
             }
-        } else if self.vbank().get(vn).map(|v| v.is_constant()).unwrap_or(false) {
+        } else if self
+            .vbank()
+            .get(vn)
+            .map(|v| v.is_constant())
+            .unwrap_or(false)
+        {
             let _ = self.vn_update_type(vn, Rc::clone(&ct));
-            if self.vbank().get(vn).map(|v| Rc::ptr_eq(v.get_type(), &ct)).unwrap_or(false) {
+            if self
+                .vbank()
+                .get(vn)
+                .map(|v| Rc::ptr_eq(v.get_type(), &ct))
+                .unwrap_or(false)
+            {
                 return 1;
             }
         } else if ct.get_metatype() == type_metatype::TYPE_PTR {
@@ -1612,10 +1794,13 @@ impl Funcdata {
                 self.inherit_union_field(&h, newop, 0, op, slot);
             }
         }
-        if let Some(backing) = self.vbank().get(vnin)
+        if let Some(backing) = self
+            .vbank()
+            .get(vnin)
             .and_then(|v| v.get_high())
             .and_then(|h| self.high_bank().get(h))
-            .and_then(|h| h.kuna_symbol_type()).cloned()
+            .and_then(|h| h.kuna_symbol_type())
+            .cloned()
         {
             self.inherit_union_field(&backing, newop, 0, op, slot);
         }
@@ -1642,7 +1827,9 @@ impl Funcdata {
 
     /// `ActionSetCasts::castOutput` (coreaction.cc:2624-2704).
     fn cast_output(&mut self, op: OpId, strat: &CastStrategyC) -> int4 {
-        if let Some((wide, unsigned)) = crate::p4_calls::kuna_voidret::narrowed_call_result(self, op) {
+        if let Some((wide, unsigned)) =
+            crate::p4_calls::kuna_voidret::narrowed_call_result(self, op)
+        {
             return self.cast_narrowed_call(op, wide, unsigned);
         }
         if let Some(float) = crate::p4_calls::kuna_callrettype::float_held_as_bits(self, op) {
@@ -1652,10 +1839,13 @@ impl Funcdata {
         let integer_userop_in_float_storage = self.obank().get(op).is_some_and(|operation| {
             operation.code() == OpCode::CPUI_CALLOTHER
                 && tokenct.get_metatype() == type_metatype::TYPE_INT
-                && operation.get_out().and_then(|id| self.vbank().get(id)).is_some_and(|out| {
-                    out.get_type().get_metatype() == type_metatype::TYPE_FLOAT
-                        && out.get_size() == tokenct.get_size()
-                })
+                && operation
+                    .get_out()
+                    .and_then(|id| self.vbank().get(id))
+                    .is_some_and(|out| {
+                        out.get_type().get_metatype() == type_metatype::TYPE_FLOAT
+                            && out.get_size() == tokenct.get_size()
+                    })
         });
         if integer_userop_in_float_storage {
             return self.cast_narrowed_call(op, tokenct, false);
@@ -1671,12 +1861,20 @@ impl Funcdata {
     /// CAST at its own width, which prints the reinterpretation
     /// ([`crate::p4_calls::kuna_callrettype::float_held_as_bits`]).
     fn cast_narrowed_call(&mut self, op: OpId, wide: Rc<Datatype>, unsigned: bool) -> int4 {
-        let Some((outvn, addr)) = self.obank().get(op).and_then(|o| Some((o.get_out()?, o.get_addr().clone()))) else {
+        let Some((outvn, addr)) = self
+            .obank()
+            .get(op)
+            .and_then(|o| Some((o.get_out()?, o.get_addr().clone())))
+        else {
             return 0;
         };
         if unsigned {
             let size = self.vbank().get(outvn).map_or(0, |v| v.get_size());
-            if let Some(word) = self.get_arch().types().and_then(|t| t.get_base(size, type_metatype::TYPE_UINT).ok()) {
+            if let Some(word) = self
+                .get_arch()
+                .types()
+                .and_then(|t| t.get_base(size, type_metatype::TYPE_UINT).ok())
+            {
                 let _ = self.vn_update_type(outvn, word);
             }
         }
@@ -1695,14 +1893,24 @@ impl Funcdata {
     }
 
     /// [`Self::cast_output`] against a given output token.
-    fn cast_output_token(&mut self, op: OpId, strat: &CastStrategyC, tokenct: Rc<Datatype>) -> int4 {
+    fn cast_output_token(
+        &mut self,
+        op: OpId,
+        strat: &CastStrategyC,
+        tokenct: Rc<Datatype>,
+    ) -> int4 {
         let outvn = match self.obank().get(op).and_then(|o| o.get_out()) {
             Some(v) => v,
             None => return 0,
         };
         let out_high_type = match self.high_get_type(outvn) {
             Some(t) => t,
-            None => Rc::clone(self.vbank().get(outvn).expect("castOutput: stale outvn").get_type()),
+            None => Rc::clone(
+                self.vbank()
+                    .get(outvn)
+                    .expect("castOutput: stale outvn")
+                    .get_type(),
+            ),
         };
         let storage_type = crate::kuna_stackviews::access_type(self, outvn, op, -1);
         if Rc::ptr_eq(&tokenct, storage_type.as_ref().unwrap_or(&out_high_type)) {
@@ -1714,8 +1922,18 @@ impl Funcdata {
         }
         let mut out_high_resolve = self.vn_high_type_def_facing(outvn);
         let mut force = false;
-        if self.vbank().get(outvn).map(|v| v.is_implied()).unwrap_or(false) {
-            if self.vbank().get(outvn).map(|v| v.is_type_lock()).unwrap_or(false) {
+        if self
+            .vbank()
+            .get(outvn)
+            .map(|v| v.is_implied())
+            .unwrap_or(false)
+        {
+            if self
+                .vbank()
+                .get(outvn)
+                .map(|v| v.is_type_lock())
+                .unwrap_or(false)
+            {
                 let out_op = self.lone_descend(outvn);
                 let is_return = out_op
                     .and_then(|o| self.obank().get(o))
@@ -1741,9 +1959,14 @@ impl Funcdata {
             }
         }
         // FLOAT_TRUNC converts to a signed integer before any destination coercion.
-        force |= self.obank().get(op).is_some_and(|o| o.code() == OpCode::CPUI_FLOAT_TRUNC)
-            && matches!(out_high_resolve.get_metatype(),
-                type_metatype::TYPE_UINT | type_metatype::TYPE_BOOL);
+        force |= self
+            .obank()
+            .get(op)
+            .is_some_and(|o| o.code() == OpCode::CPUI_FLOAT_TRUNC)
+            && matches!(
+                out_high_resolve.get_metatype(),
+                type_metatype::TYPE_UINT | type_metatype::TYPE_BOOL
+            );
         let mut opc = OpCode::CPUI_CAST;
         if !force {
             let outct = out_high_resolve;
@@ -1786,14 +2009,26 @@ impl Funcdata {
         if out_high_type.needs_resolution() {
             self.inherit_union_field(&out_high_type, newop, -1, op, -1);
         }
-        match self.stack_write_views.remove(&op) { Some(view) => {
-            self.inherit_union_field(&view.backing, newop, -1, op, -1);
-            self.stack_write_views.insert(newop, view);
-        } _ => if storage_type.is_some() {
-            if let Some(backing) = self.vbank().get(outvn).and_then(|v| v.get_high()).and_then(|h| self.high_bank().get(h)).and_then(|h| h.kuna_symbol_type()).cloned() {
-                self.inherit_union_field(&backing, newop, -1, op, -1);
+        match self.stack_write_views.remove(&op) {
+            Some(view) => {
+                self.inherit_union_field(&view.backing, newop, -1, op, -1);
+                self.stack_write_views.insert(newop, view);
             }
-        }}
+            _ => {
+                if storage_type.is_some() {
+                    if let Some(backing) = self
+                        .vbank()
+                        .get(outvn)
+                        .and_then(|v| v.get_high())
+                        .and_then(|h| self.high_bank().get(h))
+                        .and_then(|h| h.kuna_symbol_type())
+                        .cloned()
+                    {
+                        self.inherit_union_field(&backing, newop, -1, op, -1);
+                    }
+                }
+            }
+        }
         1
     }
 
@@ -1805,9 +2040,16 @@ impl Funcdata {
             .and_then(|o| o.get_in(slot))
             .expect("insertPtrsubZero: missing input slot");
         let vn_size = self.vbank().get(vn).map(|v| v.get_size()).unwrap_or(1);
-        let addr = self.obank().get(op).expect("insertPtrsubZero: stale op").get_addr().clone();
+        let addr = self
+            .obank()
+            .get(op)
+            .expect("insertPtrsubZero: stale op")
+            .get_addr()
+            .clone();
         let newop = self.new_op(2, addr);
-        let vnout = self.new_unique_out(vn_size, newop).expect("insertPtrsubZero: new unique out");
+        let vnout = self
+            .new_unique_out(vn_size, newop)
+            .expect("insertPtrsubZero: new unique out");
         let _ = self.vn_update_type(vnout, Rc::clone(&ct));
         let _ = self.vbank_mut().get_mut(vnout).map(|v| {
             v.set_implied();
@@ -1969,14 +2211,22 @@ impl Funcdata {
 
     /// Rebuild a `ResolvedUnion` for `(unres_type, field_num)` (the C++ constructs
     /// a fresh `ResolvedUnion resolve(curType, fieldNum, *typegrp)` at each use).
-    fn rebuild_resolved(&self, unres_type: &Rc<Datatype>, field_num: int4) -> Option<ResolvedUnion> {
+    fn rebuild_resolved(
+        &self,
+        unres_type: &Rc<Datatype>,
+        field_num: int4,
+    ) -> Option<ResolvedUnion> {
         let tlst = self.get_arch().types_rc()?;
         ResolvedUnion::new_field(Rc::clone(unres_type), field_num, tlst.as_ref()).ok()
     }
 }
 
 /// `ActionSetCasts::testStructOffset0` (coreaction.cc:2443-2472).
-pub fn test_struct_offset0(reqtype: &Rc<Datatype>, curtype: &Rc<Datatype>, strat: &CastStrategyC) -> bool {
+pub fn test_struct_offset0(
+    reqtype: &Rc<Datatype>,
+    curtype: &Rc<Datatype>,
+    strat: &CastStrategyC,
+) -> bool {
     if curtype.get_metatype() != type_metatype::TYPE_PTR {
         return false;
     }
@@ -2040,7 +2290,8 @@ pub fn test_struct_offset0(reqtype: &Rc<Datatype>, curtype: &Rc<Datatype>, strat
 pub fn is_op_identical(ct1: &Rc<Datatype>, ct2: &Rc<Datatype>) -> bool {
     let mut a = Rc::clone(ct1);
     let mut b = Rc::clone(ct2);
-    while a.get_metatype() == type_metatype::TYPE_PTR && b.get_metatype() == type_metatype::TYPE_PTR {
+    while a.get_metatype() == type_metatype::TYPE_PTR && b.get_metatype() == type_metatype::TYPE_PTR
+    {
         a = match a.get_ptr_to() {
             Some(p) => p,
             None => break,
@@ -2084,13 +2335,13 @@ pub fn is_op_identical(ct1: &Rc<Datatype>, ct2: &Rc<Datatype>) -> bool {
 mod verify_w10_merge_casts_r2 {
     use super::*;
     use crate::cast::CastStrategy;
-    use crate::dtype::{type_metatype, Datatype, TypeFactoryImpl};
-    use crate::funcdata::Funcdata;
     use crate::context::{ArchContext, TypeOp};
+    use crate::dtype::{Datatype, TypeFactoryImpl, type_metatype};
+    use crate::funcdata::Funcdata;
     use unlace_base::address::Address;
     use unlace_base::space::{
-        addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace,
-        IopSpace, UniqueSpace,
+        AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace,
+        addrspace_flags, spacetype,
     };
 
     /// A `Funcdata` whose `Architecture` carries a real `TypeFactory` (size-of-int
@@ -2099,7 +2350,8 @@ mod verify_w10_merge_casts_r2 {
     fn build() -> (Funcdata, CastStrategyC, Rc<AddrSpace>) {
         let mut m = AddrSpaceManager::new();
         m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+            .unwrap();
         m.insert_space(Rc::new(IopSpace::new(2))).unwrap();
         m.insert_space(Rc::new(FspecSpace::new(3))).unwrap();
         m.insert_space(Rc::new(AddrSpace::new(
@@ -2271,8 +2523,14 @@ mod verify_w10_merge_casts_r2 {
         // (TYPE_UINT).  If SLESS were misrouted to the EQUAL body its reqtype
         // would be max-read-facing(uint4,uint4)=uint4 — UNSIGNED — collapsing the
         // signedness distinction the C++ preserves.
-        assert_eq!(input_type_local(&fd, sless, 0).get_metatype(), type_metatype::TYPE_INT);
-        assert_eq!(input_type_local(&fd, less, 0).get_metatype(), type_metatype::TYPE_UINT);
+        assert_eq!(
+            input_type_local(&fd, sless, 0).get_metatype(),
+            type_metatype::TYPE_INT
+        );
+        assert_eq!(
+            input_type_local(&fd, less, 0).get_metatype(),
+            type_metatype::TYPE_UINT
+        );
     }
 
     // -- AT3 (B2) -- INT_ZEXT fallthrough must use the (true,false) tail, NOT the
@@ -2285,7 +2543,13 @@ mod verify_w10_merge_casts_r2 {
     fn at3_zext_dispatch_uses_true_false_not_inverted() {
         let (mut fd, strat, ram) = build();
         let int4s = ity(4, type_metatype::TYPE_INT); // signed input -> differs from ZEXT local uint
-        let op = unop(&mut fd, &ram, 0x30, OpCode::CPUI_INT_ZEXT, Rc::clone(&int4s));
+        let op = unop(
+            &mut fd,
+            &ram,
+            0x30,
+            OpCode::CPUI_INT_ZEXT,
+            Rc::clone(&int4s),
+        );
 
         let reqtype = input_type_local(&fd, op, 0);
         assert_eq!(
@@ -2293,7 +2557,8 @@ mod verify_w10_merge_casts_r2 {
             type_metatype::TYPE_UINT,
             "inputTypeLocal(ZEXT) must be UNSIGNED (typeop.cc:1119 TYPE_UINT)"
         );
-        let curtype = fd.vn_high_type_read_facing(fd.obank().get(op).unwrap().get_in(0).unwrap(), op);
+        let curtype =
+            fd.vn_high_type_read_facing(fd.obank().get(op).unwrap().get_in(0).unwrap(), op);
         let faithful = strat.cast_standard(&reqtype, &curtype, true, false);
         let inverted = strat.cast_standard(&reqtype, &curtype, false, true);
         assert!(
@@ -2323,7 +2588,13 @@ mod verify_w10_merge_casts_r2 {
     fn at4_sext_dispatch_uses_signed_local_true_false() {
         let (mut fd, strat, ram) = build();
         let uint4 = ity(4, type_metatype::TYPE_UINT); // unsigned input -> differs from SEXT local int
-        let op = unop(&mut fd, &ram, 0x38, OpCode::CPUI_INT_SEXT, Rc::clone(&uint4));
+        let op = unop(
+            &mut fd,
+            &ram,
+            0x38,
+            OpCode::CPUI_INT_SEXT,
+            Rc::clone(&uint4),
+        );
 
         let reqtype = input_type_local(&fd, op, 0);
         assert_eq!(
@@ -2331,7 +2602,8 @@ mod verify_w10_merge_casts_r2 {
             type_metatype::TYPE_INT,
             "inputTypeLocal(SEXT) must be SIGNED (typeop.cc:1145 TYPE_INT)"
         );
-        let curtype = fd.vn_high_type_read_facing(fd.obank().get(op).unwrap().get_in(0).unwrap(), op);
+        let curtype =
+            fd.vn_high_type_read_facing(fd.obank().get(op).unwrap().get_in(0).unwrap(), op);
         let faithful = strat.cast_standard(&reqtype, &curtype, true, false);
         let got = get_input_cast(&mut fd, &strat, op, 0);
         assert!(
@@ -2384,10 +2656,12 @@ mod verify_w10_merge_casts_r2 {
         backing.display_name = backing.name.clone();
         backing.id = Datatype::hash_name(&backing.name);
         backing.flags |= crate::dtype::flags::needs_resolution;
-        backing.kind = crate::dtype::DatatypeKind::Union { field: vec![
-            crate::dtype::TypeField::new(0, 0, "pointer", Rc::clone(&pointer)),
-            crate::dtype::TypeField::new(1, 0, "integer", signed),
-        ] };
+        backing.kind = crate::dtype::DatatypeKind::Union {
+            field: vec![
+                crate::dtype::TypeField::new(0, 0, "pointer", Rc::clone(&pointer)),
+                crate::dtype::TypeField::new(1, 0, "integer", signed),
+            ],
+        };
         let backing = Rc::new(backing);
         let source = fd.new_varnode(4, &Address::new(Rc::clone(&ram), 0x400), Some(pointer));
         let source = fd.set_input_varnode(source).unwrap();
@@ -2408,14 +2682,22 @@ mod verify_w10_merge_casts_r2 {
         named.set_symbol_offset(0);
         let resolution = ResolvedUnion::new_field(Rc::clone(&backing), 1, types.as_ref()).unwrap();
         fd.set_union_field(&backing, op, 0, resolution);
-        assert_eq!(fd.high_get_type(source).unwrap().get_metatype(), type_metatype::TYPE_PTR);
+        assert_eq!(
+            fd.high_get_type(source).unwrap().get_metatype(),
+            type_metatype::TYPE_PTR
+        );
         assert_eq!(fd.cast_input(op, 0, &strat), 1);
         let value = fd.obank().get(op).unwrap().get_in(0).unwrap();
         let cast = fd.vbank().get(value).unwrap().get_def().unwrap();
         assert_eq!(fd.obank().get(cast).unwrap().code(), OpCode::CPUI_CAST);
         assert_eq!(fd.obank().get(cast).unwrap().get_in(0), Some(source));
-        assert_eq!(fd.get_union_resolution(&backing, cast, 0).map(|r| r.get_field_num()), Some(1));
-        fd.get_func_proto_mut().attach_internal_store(types.get_type_void().unwrap());
+        assert_eq!(
+            fd.get_union_resolution(&backing, cast, 0)
+                .map(|r| r.get_field_num()),
+            Some(1)
+        );
+        fd.get_func_proto_mut()
+            .attach_internal_store(types.get_type_void().unwrap());
         fd.seed_sblocks_copy();
         let root = fd.sblocks_ref().root.unwrap();
         let copy = fd.sblocks_ref().block(root).get_list()[0];

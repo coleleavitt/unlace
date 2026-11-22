@@ -80,15 +80,24 @@ fn ordinary_argument_adjust_overwrite_computed_and_conditional_returns_decline()
         "conditional_bypass_ret",
     ] {
         let code = decompile(function, &[]);
-        assert!(keeps_return_classification(&code), "negative {function} became a transfer:\n{code}");
+        assert!(
+            keeps_return_classification(&code),
+            "negative {function} became a transfer:\n{code}"
+        );
     }
 }
 
 #[test]
 fn two_push_call_dispatch_belongs_to_entryretdispatch() {
     let code = decompile("two_push_dispatch", &[]);
-    assert!(code.contains("dispatch_helper();"), "the two-store call form was lost:\n{code}");
-    assert!(keeps_return_classification(&code), "the one-store rule stole the two-store call form:\n{code}");
+    assert!(
+        code.contains("dispatch_helper();"),
+        "the two-store call form was lost:\n{code}"
+    );
+    assert!(
+        keeps_return_classification(&code),
+        "the one-store rule stole the two-store call form:\n{code}"
+    );
 }
 
 #[test]

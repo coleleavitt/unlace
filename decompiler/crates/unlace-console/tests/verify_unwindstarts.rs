@@ -19,15 +19,22 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 /// The four function starts `__TEXT,__unwind_info` records, each reachable by no
 /// other oracle in this stripped image.
-const UNWIND_ONLY: [&str; 4] =
-    ["sub_1000002e0", "sub_100000328", "sub_100000370", "sub_1000003bc"];
+const UNWIND_ONLY: [&str; 4] = [
+    "sub_1000002e0",
+    "sub_100000328",
+    "sub_100000370",
+    "sub_1000003bc",
+];
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn bootstrap(unwindstarts: bool) -> ConsoleProgram {
@@ -41,7 +48,8 @@ fn bootstrap(unwindstarts: bool) -> ConsoleProgram {
     prog.arch_mut()
         .set_kuna_option("unwindstarts", if unwindstarts { "on" } else { "off" })
         .expect("unwindstarts flips");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 

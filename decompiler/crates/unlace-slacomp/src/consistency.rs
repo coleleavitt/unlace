@@ -14,7 +14,7 @@ use std::collections::BTreeMap;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_num::opcodes::OpCode;
 use unlace_sleigh::semantics::{
-    ConstTpl, ConstType, VField, VarnodeTpl, BUILD, CROSSBUILD, DELAY_SLOT, LABELBUILD, MACROBUILD,
+    BUILD, CROSSBUILD, ConstTpl, ConstType, DELAY_SLOT, LABELBUILD, MACROBUILD, VField, VarnodeTpl,
 };
 use unlace_sleigh::slghsymbol::{ConstructTplHandle, ConstructorRef, SymbolKind, SymbolType};
 
@@ -135,7 +135,10 @@ impl UniqueState {
     /// C++ `set(OptimizeRecord &rec)`: coalesce overlaps and replace.
     fn set(&mut self, rec: OptimizeRecord) {
         let defs = self.get_definition_keys(rec.offset, rec.size);
-        let records = defs.iter().map(|k| &self.recs[k]).chain(std::iter::once(&rec));
+        let records = defs
+            .iter()
+            .map(|k| &self.recs[k])
+            .chain(std::iter::once(&rec));
         let coalesced = OptimizeRecord::coalesce(records);
         // erase [coalesced.offset, coalesced.offset+coalesced.size)
         let lo = coalesced.offset;
@@ -391,7 +394,12 @@ impl SleighCompile {
             Some(h) => h,
             None => return true,
         };
-        let numops = self.base.templates().get(h).map(|t| t.get_opvec().len()).unwrap_or(0);
+        let numops = self
+            .base
+            .templates()
+            .get(h)
+            .map(|t| t.get_opvec().len())
+            .unwrap_or(0);
         let mut testresult = true;
         for i in 0..numops {
             if !self.size_restriction(h, i, sym, ctidx, cc) {
@@ -425,9 +433,7 @@ impl SleighCompile {
                     .unwrap_or(0);
                 if size == -1 {
                     // The operand's defining symbol must be a subtable.
-                    let subid = self
-                        .operand_defining_subtable_by_op(opid)
-                        .ok_or(())?;
+                    let subid = self.operand_defining_subtable_by_op(opid).ok_or(())?;
                     size = *cc.sizemap.get(&subid).ok_or(())?;
                 }
                 Ok(size)
@@ -459,11 +465,31 @@ impl SleighCompile {
             | CPUI_FLOAT_SQRT | CPUI_FLOAT_CEIL | CPUI_FLOAT_FLOOR | CPUI_FLOAT_ROUND => {
                 let vnout = match rsize!(-1) {
                     Some(v) => v,
-                    None => return self.op_err(h, opidx, sym, ctidx, -1, -1, "Using subtable with exports in expression"),
+                    None => {
+                        return self.op_err(
+                            h,
+                            opidx,
+                            sym,
+                            ctidx,
+                            -1,
+                            -1,
+                            "Using subtable with exports in expression",
+                        );
+                    }
                 };
                 let vn0 = match rsize!(0) {
                     Some(v) => v,
-                    None => return self.op_err(h, opidx, sym, ctidx, 0, 0, "Using subtable with exports in expression"),
+                    None => {
+                        return self.op_err(
+                            h,
+                            opidx,
+                            sym,
+                            ctidx,
+                            0,
+                            0,
+                            "Using subtable with exports in expression",
+                        );
+                    }
                 };
                 if vnout == vn0 {
                     return true;
@@ -471,41 +497,121 @@ impl SleighCompile {
                 if vnout == 0 || vn0 == 0 {
                     return true;
                 }
-                self.op_err(h, opidx, sym, ctidx, -1, 0, "Input and output sizes must match")
+                self.op_err(
+                    h,
+                    opidx,
+                    sym,
+                    ctidx,
+                    -1,
+                    0,
+                    "Input and output sizes must match",
+                )
             }
             CPUI_INT_ADD | CPUI_INT_SUB | CPUI_INT_XOR | CPUI_INT_AND | CPUI_INT_OR
             | CPUI_INT_MULT | CPUI_INT_DIV | CPUI_INT_SDIV | CPUI_INT_REM | CPUI_INT_SREM
             | CPUI_FLOAT_ADD | CPUI_FLOAT_DIV | CPUI_FLOAT_MULT | CPUI_FLOAT_SUB => {
                 let vnout = match rsize!(-1) {
                     Some(v) => v,
-                    None => return self.op_err(h, opidx, sym, ctidx, -1, -1, "Using subtable with exports in expression"),
+                    None => {
+                        return self.op_err(
+                            h,
+                            opidx,
+                            sym,
+                            ctidx,
+                            -1,
+                            -1,
+                            "Using subtable with exports in expression",
+                        );
+                    }
                 };
                 let vn0 = match rsize!(0) {
                     Some(v) => v,
-                    None => return self.op_err(h, opidx, sym, ctidx, 0, 0, "Using subtable with exports in expression"),
+                    None => {
+                        return self.op_err(
+                            h,
+                            opidx,
+                            sym,
+                            ctidx,
+                            0,
+                            0,
+                            "Using subtable with exports in expression",
+                        );
+                    }
                 };
                 let vn1 = match rsize!(1) {
                     Some(v) => v,
-                    None => return self.op_err(h, opidx, sym, ctidx, 1, 1, "Using subtable with exports in expression"),
+                    None => {
+                        return self.op_err(
+                            h,
+                            opidx,
+                            sym,
+                            ctidx,
+                            1,
+                            1,
+                            "Using subtable with exports in expression",
+                        );
+                    }
                 };
                 if vnout != 0 && vn0 != 0 && vnout != vn0 {
-                    return self.op_err(h, opidx, sym, ctidx, -1, 0, "The output and all input sizes must match");
+                    return self.op_err(
+                        h,
+                        opidx,
+                        sym,
+                        ctidx,
+                        -1,
+                        0,
+                        "The output and all input sizes must match",
+                    );
                 }
                 if vnout != 0 && vn1 != 0 && vnout != vn1 {
-                    return self.op_err(h, opidx, sym, ctidx, -1, 1, "The output and all input sizes must match");
+                    return self.op_err(
+                        h,
+                        opidx,
+                        sym,
+                        ctidx,
+                        -1,
+                        1,
+                        "The output and all input sizes must match",
+                    );
                 }
                 if vn0 != 0 && vn1 != 0 && vn0 != vn1 {
-                    return self.op_err(h, opidx, sym, ctidx, 0, 1, "The output and all input sizes must match");
+                    return self.op_err(
+                        h,
+                        opidx,
+                        sym,
+                        ctidx,
+                        0,
+                        1,
+                        "The output and all input sizes must match",
+                    );
                 }
                 true
             }
             CPUI_FLOAT_NAN => {
                 let vnout = match rsize!(-1) {
                     Some(v) => v,
-                    None => return self.op_err(h, opidx, sym, ctidx, -1, -1, "Using subtable with exports in expression"),
+                    None => {
+                        return self.op_err(
+                            h,
+                            opidx,
+                            sym,
+                            ctidx,
+                            -1,
+                            -1,
+                            "Using subtable with exports in expression",
+                        );
+                    }
                 };
                 if vnout != 1 {
-                    return self.op_err(h, opidx, sym, ctidx, -1, -1, "Output must be a boolean (size 1)");
+                    return self.op_err(
+                        h,
+                        opidx,
+                        sym,
+                        ctidx,
+                        -1,
+                        -1,
+                        "Output must be a boolean (size 1)",
+                    );
                 }
                 true
             }
@@ -515,18 +621,56 @@ impl SleighCompile {
             | CPUI_FLOAT_LESSEQUAL => {
                 let vnout = match rsize!(-1) {
                     Some(v) => v,
-                    None => return self.op_err(h, opidx, sym, ctidx, -1, -1, "Using subtable with exports in expression"),
+                    None => {
+                        return self.op_err(
+                            h,
+                            opidx,
+                            sym,
+                            ctidx,
+                            -1,
+                            -1,
+                            "Using subtable with exports in expression",
+                        );
+                    }
                 };
                 if vnout != 1 {
-                    return self.op_err(h, opidx, sym, ctidx, -1, -1, "Output must be a boolean (size 1)");
+                    return self.op_err(
+                        h,
+                        opidx,
+                        sym,
+                        ctidx,
+                        -1,
+                        -1,
+                        "Output must be a boolean (size 1)",
+                    );
                 }
                 let vn0 = match rsize!(0) {
                     Some(v) => v,
-                    None => return self.op_err(h, opidx, sym, ctidx, 0, 0, "Using subtable with exports in expression"),
+                    None => {
+                        return self.op_err(
+                            h,
+                            opidx,
+                            sym,
+                            ctidx,
+                            0,
+                            0,
+                            "Using subtable with exports in expression",
+                        );
+                    }
                 };
                 let vn1 = match rsize!(1) {
                     Some(v) => v,
-                    None => return self.op_err(h, opidx, sym, ctidx, 1, 1, "Using subtable with exports in expression"),
+                    None => {
+                        return self.op_err(
+                            h,
+                            opidx,
+                            sym,
+                            ctidx,
+                            1,
+                            1,
+                            "Using subtable with exports in expression",
+                        );
+                    }
                 };
                 if vn0 == 0 || vn1 == 0 {
                     return true;
@@ -539,62 +683,182 @@ impl SleighCompile {
             CPUI_BOOL_XOR | CPUI_BOOL_AND | CPUI_BOOL_OR => {
                 let vnout = match rsize!(-1) {
                     Some(v) => v,
-                    None => return self.op_err(h, opidx, sym, ctidx, -1, -1, "Using subtable with exports in expression"),
+                    None => {
+                        return self.op_err(
+                            h,
+                            opidx,
+                            sym,
+                            ctidx,
+                            -1,
+                            -1,
+                            "Using subtable with exports in expression",
+                        );
+                    }
                 };
                 if vnout != 1 {
-                    return self.op_err(h, opidx, sym, ctidx, -1, -1, "Output must be a boolean (size 1)");
+                    return self.op_err(
+                        h,
+                        opidx,
+                        sym,
+                        ctidx,
+                        -1,
+                        -1,
+                        "Output must be a boolean (size 1)",
+                    );
                 }
                 let vn0 = match rsize!(0) {
                     Some(v) => v,
-                    None => return self.op_err(h, opidx, sym, ctidx, 0, 0, "Using subtable with exports in expression"),
+                    None => {
+                        return self.op_err(
+                            h,
+                            opidx,
+                            sym,
+                            ctidx,
+                            0,
+                            0,
+                            "Using subtable with exports in expression",
+                        );
+                    }
                 };
                 if vn0 != 1 {
-                    return self.op_err(h, opidx, sym, ctidx, 0, 0, "Input must be a boolean (size 1)");
+                    return self.op_err(
+                        h,
+                        opidx,
+                        sym,
+                        ctidx,
+                        0,
+                        0,
+                        "Input must be a boolean (size 1)",
+                    );
                 }
                 true
             }
             CPUI_BOOL_NEGATE => {
                 let vnout = match rsize!(-1) {
                     Some(v) => v,
-                    None => return self.op_err(h, opidx, sym, ctidx, -1, -1, "Using subtable with exports in expression"),
+                    None => {
+                        return self.op_err(
+                            h,
+                            opidx,
+                            sym,
+                            ctidx,
+                            -1,
+                            -1,
+                            "Using subtable with exports in expression",
+                        );
+                    }
                 };
                 if vnout != 1 {
-                    return self.op_err(h, opidx, sym, ctidx, -1, -1, "Output must be a boolean (size 1)");
+                    return self.op_err(
+                        h,
+                        opidx,
+                        sym,
+                        ctidx,
+                        -1,
+                        -1,
+                        "Output must be a boolean (size 1)",
+                    );
                 }
                 let vn0 = match rsize!(0) {
                     Some(v) => v,
-                    None => return self.op_err(h, opidx, sym, ctidx, 0, 0, "Using subtable with exports in expression"),
+                    None => {
+                        return self.op_err(
+                            h,
+                            opidx,
+                            sym,
+                            ctidx,
+                            0,
+                            0,
+                            "Using subtable with exports in expression",
+                        );
+                    }
                 };
                 if vn0 != 1 {
-                    return self.op_err(h, opidx, sym, ctidx, 0, 0, "Input must be a boolean (size 1)");
+                    return self.op_err(
+                        h,
+                        opidx,
+                        sym,
+                        ctidx,
+                        0,
+                        0,
+                        "Input must be a boolean (size 1)",
+                    );
                 }
                 true
             }
             CPUI_INT_LEFT | CPUI_INT_RIGHT | CPUI_INT_SRIGHT => {
                 let vnout = match rsize!(-1) {
                     Some(v) => v,
-                    None => return self.op_err(h, opidx, sym, ctidx, -1, -1, "Using subtable with exports in expression"),
+                    None => {
+                        return self.op_err(
+                            h,
+                            opidx,
+                            sym,
+                            ctidx,
+                            -1,
+                            -1,
+                            "Using subtable with exports in expression",
+                        );
+                    }
                 };
                 let vn0 = match rsize!(0) {
                     Some(v) => v,
-                    None => return self.op_err(h, opidx, sym, ctidx, 0, 0, "Using subtable with exports in expression"),
+                    None => {
+                        return self.op_err(
+                            h,
+                            opidx,
+                            sym,
+                            ctidx,
+                            0,
+                            0,
+                            "Using subtable with exports in expression",
+                        );
+                    }
                 };
                 if vnout == 0 || vn0 == 0 {
                     return true;
                 }
                 if vnout != vn0 {
-                    return self.op_err(h, opidx, sym, ctidx, -1, 0, "Output and first input must be the same size");
+                    return self.op_err(
+                        h,
+                        opidx,
+                        sym,
+                        ctidx,
+                        -1,
+                        0,
+                        "Output and first input must be the same size",
+                    );
                 }
                 true
             }
             CPUI_INT_ZEXT | CPUI_INT_SEXT => {
                 let vnout = match rsize!(-1) {
                     Some(v) => v,
-                    None => return self.op_err(h, opidx, sym, ctidx, -1, -1, "Using subtable with exports in expression"),
+                    None => {
+                        return self.op_err(
+                            h,
+                            opidx,
+                            sym,
+                            ctidx,
+                            -1,
+                            -1,
+                            "Using subtable with exports in expression",
+                        );
+                    }
                 };
                 let vn0 = match rsize!(0) {
                     Some(v) => v,
-                    None => return self.op_err(h, opidx, sym, ctidx, 0, 0, "Using subtable with exports in expression"),
+                    None => {
+                        return self.op_err(
+                            h,
+                            opidx,
+                            sym,
+                            ctidx,
+                            0,
+                            0,
+                            "Using subtable with exports in expression",
+                        );
+                    }
                 };
                 if vnout == 0 || vn0 == 0 {
                     return true;
@@ -603,17 +867,43 @@ impl SleighCompile {
                     self.deal_with_unnecessary_ext(h, opidx, sym, ctidx);
                     return true;
                 } else if vnout < vn0 {
-                    return self.op_err(h, opidx, sym, ctidx, -1, 0, "Output size must be strictly bigger than input size");
+                    return self.op_err(
+                        h,
+                        opidx,
+                        sym,
+                        ctidx,
+                        -1,
+                        0,
+                        "Output size must be strictly bigger than input size",
+                    );
                 }
                 true
             }
             CPUI_CBRANCH => {
                 let vn1 = match rsize!(1) {
                     Some(v) => v,
-                    None => return self.op_err(h, opidx, sym, ctidx, 1, 1, "Using subtable with exports in expression"),
+                    None => {
+                        return self.op_err(
+                            h,
+                            opidx,
+                            sym,
+                            ctidx,
+                            1,
+                            1,
+                            "Using subtable with exports in expression",
+                        );
+                    }
                 };
                 if vn1 != 1 {
-                    return self.op_err(h, opidx, sym, ctidx, 1, 1, "Input must be a boolean (size 1)");
+                    return self.op_err(
+                        h,
+                        opidx,
+                        sym,
+                        ctidx,
+                        1,
+                        1,
+                        "Input must be a boolean (size 1)",
+                    );
                 }
                 true
             }
@@ -625,21 +915,59 @@ impl SleighCompile {
                 let spc = off0.get_space();
                 let vn1 = match rsize!(1) {
                     Some(v) => v,
-                    None => return self.op_err(h, opidx, sym, ctidx, 1, 1, "Using subtable with exports in expression"),
+                    None => {
+                        return self.op_err(
+                            h,
+                            opidx,
+                            sym,
+                            ctidx,
+                            1,
+                            1,
+                            "Using subtable with exports in expression",
+                        );
+                    }
                 };
                 if vn1 != 0 && vn1 != spc.get_addr_size() as i32 {
-                    return self.op_err(h, opidx, sym, ctidx, 1, 1, "Pointer size must match size of space");
+                    return self.op_err(
+                        h,
+                        opidx,
+                        sym,
+                        ctidx,
+                        1,
+                        1,
+                        "Pointer size must match size of space",
+                    );
                 }
                 true
             }
             CPUI_SUBPIECE => {
                 let vnout = match rsize!(-1) {
                     Some(v) => v,
-                    None => return self.op_err(h, opidx, sym, ctidx, -1, -1, "Using subtable with exports in expression"),
+                    None => {
+                        return self.op_err(
+                            h,
+                            opidx,
+                            sym,
+                            ctidx,
+                            -1,
+                            -1,
+                            "Using subtable with exports in expression",
+                        );
+                    }
                 };
                 let vn0 = match rsize!(0) {
                     Some(v) => v,
-                    None => return self.op_err(h, opidx, sym, ctidx, 0, 0, "Using subtable with exports in expression"),
+                    None => {
+                        return self.op_err(
+                            h,
+                            opidx,
+                            sym,
+                            ctidx,
+                            0,
+                            0,
+                            "Using subtable with exports in expression",
+                        );
+                    }
                 };
                 let vn1 = self.template_varnode(h, opidx, 1).get_offset().get_real() as i32;
                 if vnout == 0 || vn0 == 0 {
@@ -649,7 +977,15 @@ impl SleighCompile {
                     self.deal_with_unnecessary_trunc(h, opidx, sym, ctidx);
                     return true;
                 } else if vnout >= vn0 {
-                    return self.op_err(h, opidx, sym, ctidx, -1, 0, "Output must be strictly smaller than input");
+                    return self.op_err(
+                        h,
+                        opidx,
+                        sym,
+                        ctidx,
+                        -1,
+                        0,
+                        "Output must be strictly smaller than input",
+                    );
                 }
                 if vnout > vn0 - vn1 {
                     return self.op_err(h, opidx, sym, ctidx, -1, 0, "Too much truncation");
@@ -661,7 +997,13 @@ impl SleighCompile {
     }
 
     /// C++ `checkOpMisuse`: unsigned-less-than-zero warning.
-    fn check_op_misuse(&mut self, h: ConstructTplHandle, opidx: usize, sym: SymbolId, ctidx: u32) -> bool {
+    fn check_op_misuse(
+        &mut self,
+        h: ConstructTplHandle,
+        opidx: usize,
+        sym: SymbolId,
+        ctidx: u32,
+    ) -> bool {
         if self.template_op_opcode(h, opidx) == OpCode::CPUI_INT_LESS {
             let is_const = self
                 .base
@@ -674,13 +1016,23 @@ impl SleighCompile {
                 })
                 .unwrap_or(false);
             if is_const {
-                self.cc_report_warning_ct(sym, ctidx, "Unsigned comparison with zero is always false");
+                self.cc_report_warning_ct(
+                    sym,
+                    ctidx,
+                    "Unsigned comparison with zero is always false",
+                );
             }
         }
         true
     }
 
-    fn deal_with_unnecessary_ext(&mut self, h: ConstructTplHandle, opidx: usize, sym: SymbolId, ctidx: u32) {
+    fn deal_with_unnecessary_ext(
+        &mut self,
+        h: ConstructTplHandle,
+        opidx: usize,
+        sym: SymbolId,
+        ctidx: u32,
+    ) {
         if self.warnunnecessarypcode() {
             let nm = self.op_name(h, opidx);
             self.cc_report_warning_ct(sym, ctidx, &format!("Unnecessary {nm}"));
@@ -691,7 +1043,13 @@ impl SleighCompile {
         self.cc_bump_unnecessary();
     }
 
-    fn deal_with_unnecessary_trunc(&mut self, h: ConstructTplHandle, opidx: usize, sym: SymbolId, ctidx: u32) {
+    fn deal_with_unnecessary_trunc(
+        &mut self,
+        h: ConstructTplHandle,
+        opidx: usize,
+        sym: SymbolId,
+        ctidx: u32,
+    ) {
         if self.warnunnecessarypcode() {
             let nm = self.op_name(h, opidx);
             self.cc_report_warning_ct(sym, ctidx, &format!("Unnecessary {nm}"));
@@ -740,7 +1098,12 @@ impl SleighCompile {
         isbig: bool,
         cc: &CcState,
     ) -> bool {
-        let numops = self.base.templates().get(h).map(|t| t.get_opvec().len()).unwrap_or(0);
+        let numops = self
+            .base
+            .templates()
+            .get(h)
+            .map(|t| t.get_opvec().len())
+            .unwrap_or(0);
         let mut testresult = true;
         for i in 0..numops {
             // output
@@ -778,11 +1141,21 @@ impl SleighCompile {
         }
         let sztype = self.template_varnode(h, opidx, slot).get_size().get_type();
         if sztype != ConstType::Real && sztype != ConstType::Handle {
-            return self.op_err(h, opidx, sym, ctidx, slot, slot, "Bad truncation expression");
+            return self.op_err(
+                h,
+                opidx,
+                sym,
+                ctidx,
+                slot,
+                slot,
+                "Bad truncation expression",
+            );
         }
         let sz = match self.recover_size(off, sym, ctidx, cc) {
             Ok(v) => v,
-            Err(_) => return self.op_err(h, opidx, sym, ctidx, slot, slot, "Could not recover size"),
+            Err(_) => {
+                return self.op_err(h, opidx, sym, ctidx, slot, slot, "Could not recover size");
+            }
         };
         if sz <= 0 {
             return self.op_err(h, opidx, sym, ctidx, slot, slot, "Could not recover size");
@@ -799,7 +1172,15 @@ impl SleighCompile {
             true
         };
         if !res {
-            return self.op_err(h, opidx, sym, ctidx, slot, slot, "Truncation operator out of bounds");
+            return self.op_err(
+                h,
+                opidx,
+                sym,
+                ctidx,
+                slot,
+                slot,
+                "Truncation operator out of bounds",
+            );
         }
         true
     }
@@ -841,7 +1222,12 @@ impl SleighCompile {
             Some(h) => h,
             None => return,
         };
-        let numops = self.base.templates().get(h).map(|t| t.get_opvec().len()).unwrap_or(0);
+        let numops = self
+            .base
+            .templates()
+            .get(h)
+            .map(|t| t.get_opvec().len())
+            .unwrap_or(0);
         for i in 0..numops {
             let ninput = self.template_op_num_input(h, i);
             for j in 0..ninput {
@@ -890,7 +1276,10 @@ impl SleighCompile {
         state: &UniqueState,
     ) -> KunaResult<Option<OptimizeRecord>> {
         for currec in state.recs.values() {
-            if currec.writecount == 1 && currec.readcount == 1 && currec.readsection == currec.writesection {
+            if currec.writecount == 1
+                && currec.readcount == 1
+                && currec.readsection == currec.writesection
+            {
                 let Some(h) = self.section_handle(sym, ctidx, currec.readsection) else {
                     return Ok(None);
                 };
@@ -950,7 +1339,12 @@ impl SleighCompile {
                 .base
                 .templates()
                 .get(h)
-                .map(|t| t.get_opvec()[rec.readop as usize].get_out().expect("out").clone())
+                .map(|t| {
+                    t.get_opvec()[rec.readop as usize]
+                        .get_out()
+                        .expect("out")
+                        .clone()
+                })
                 .unwrap();
             if let Some(t) = self.base.template_mut(h) {
                 t.set_output(vnout, rec.writeop);
@@ -971,7 +1365,13 @@ impl SleighCompile {
         }
     }
 
-    fn check_unused_temps(&mut self, sym: SymbolId, ctidx: u32, state: &UniqueState, cc: &mut CcState) {
+    fn check_unused_temps(
+        &mut self,
+        sym: SymbolId,
+        ctidx: u32,
+        state: &UniqueState,
+        cc: &mut CcState,
+    ) {
         for currec in state.recs.values() {
             if currec.readcount == 0 {
                 if self.warndeadtemps() {
@@ -985,7 +1385,13 @@ impl SleighCompile {
         }
     }
 
-    fn read_write_interference(&self, h: ConstructTplHandle, vn: &VarnodeTpl, opidx: usize, checkread: bool) -> bool {
+    fn read_write_interference(
+        &self,
+        h: ConstructTplHandle,
+        vn: &VarnodeTpl,
+        opidx: usize,
+        checkread: bool,
+    ) -> bool {
         let opcode = self.template_op_opcode(h, opidx);
         if matches!(
             opcode,
@@ -1048,7 +1454,12 @@ impl SleighCompile {
     }
 
     fn check_large_temporaries(&mut self, sym: SymbolId, ctidx: u32, h: ConstructTplHandle) {
-        let numops = self.base.templates().get(h).map(|t| t.get_opvec().len()).unwrap_or(0);
+        let numops = self
+            .base
+            .templates()
+            .get(h)
+            .map(|t| t.get_opvec().len())
+            .unwrap_or(0);
         for i in 0..numops {
             if self.has_large_temporary(h, i) {
                 self.cc_report_error_ct(
@@ -1095,7 +1506,11 @@ fn examine_vn(state: &mut UniqueState, vn: &VarnodeTpl, i: u32, inslot: i32, sec
     let size = vn.get_size().get_real() as i32;
     if inslot >= 0 {
         for k in state.get_definition_keys(offset, size) {
-            state.recs.get_mut(&k).unwrap().update_read(i as i32, inslot, secnum);
+            state
+                .recs
+                .get_mut(&k)
+                .unwrap()
+                .update_read(i as i32, inslot, secnum);
         }
     } else {
         let mut rec = OptimizeRecord::new(offset, size);
@@ -1193,35 +1608,55 @@ impl SleighCompile {
     fn constructor_num_operands(&self, sym: SymbolId, ctidx: u32) -> i32 {
         self.base
             .symtab()
-            .get_constructor(ConstructorRef { table_id: sym, ct_id: ctidx })
+            .get_constructor(ConstructorRef {
+                table_id: sym,
+                ct_id: ctidx,
+            })
             .map(|ct| ct.get_num_operands())
             .unwrap_or(0)
     }
     fn constructor_num_sections(&self, sym: SymbolId, ctidx: u32) -> i32 {
         self.base
             .symtab()
-            .get_constructor(ConstructorRef { table_id: sym, ct_id: ctidx })
+            .get_constructor(ConstructorRef {
+                table_id: sym,
+                ct_id: ctidx,
+            })
             .map(|ct| ct.get_num_sections())
             .unwrap_or(0)
     }
     fn constructor_lineno(&self, sym: SymbolId, ctidx: u32) -> i32 {
         self.base
             .symtab()
-            .get_constructor(ConstructorRef { table_id: sym, ct_id: ctidx })
+            .get_constructor(ConstructorRef {
+                table_id: sym,
+                ct_id: ctidx,
+            })
             .map(|ct| ct.get_lineno())
             .unwrap_or(0)
     }
     fn constructor_templ_handle(&self, sym: SymbolId, ctidx: u32) -> Option<ConstructTplHandle> {
         self.base
             .symtab()
-            .get_constructor(ConstructorRef { table_id: sym, ct_id: ctidx })
+            .get_constructor(ConstructorRef {
+                table_id: sym,
+                ct_id: ctidx,
+            })
             .ok()
             .and_then(|ct| ct.get_templ())
     }
-    fn constructor_named_templ_handle(&self, sym: SymbolId, ctidx: u32, sec: i32) -> Option<ConstructTplHandle> {
+    fn constructor_named_templ_handle(
+        &self,
+        sym: SymbolId,
+        ctidx: u32,
+        sec: i32,
+    ) -> Option<ConstructTplHandle> {
         self.base
             .symtab()
-            .get_constructor(ConstructorRef { table_id: sym, ct_id: ctidx })
+            .get_constructor(ConstructorRef {
+                table_id: sym,
+                ct_id: ctidx,
+            })
             .ok()
             .and_then(|ct| ct.get_named_templ(sec))
     }
@@ -1235,7 +1670,10 @@ impl SleighCompile {
     fn constructor_operand_id(&self, sym: SymbolId, ctidx: u32, hand: i32) -> Result<SymbolId, ()> {
         self.base
             .symtab()
-            .get_constructor(ConstructorRef { table_id: sym, ct_id: ctidx })
+            .get_constructor(ConstructorRef {
+                table_id: sym,
+                ct_id: ctidx,
+            })
             .ok()
             .and_then(|ct| ct.get_operand(hand).ok())
             .ok_or(())
@@ -1245,7 +1683,10 @@ impl SleighCompile {
         let opid = self
             .base
             .symtab()
-            .get_constructor(ConstructorRef { table_id: sym, ct_id: ctidx })
+            .get_constructor(ConstructorRef {
+                table_id: sym,
+                ct_id: ctidx,
+            })
             .ok()
             .and_then(|ct| ct.get_operand(oper as i32).ok())?;
         self.operand_defining_subtable_by_op(opid)
@@ -1265,11 +1706,7 @@ impl SleighCompile {
             .find_symbol_by_id(defid)
             .map(|s| s.get_type() == SymbolType::Subtable)
             .unwrap_or(false);
-        if is_sub {
-            Some(defid)
-        } else {
-            None
-        }
+        if is_sub { Some(defid) } else { None }
     }
     fn symbol_name_str(&self, sym: SymbolId) -> String {
         String::from_utf8_lossy(
@@ -1285,13 +1722,25 @@ impl SleighCompile {
     // --- template element reads ---
 
     fn template_op_opcode(&self, h: ConstructTplHandle, opidx: usize) -> OpCode {
-        self.base.templates().get(h).map(|t| t.get_opvec()[opidx].get_opcode()).unwrap()
+        self.base
+            .templates()
+            .get(h)
+            .map(|t| t.get_opvec()[opidx].get_opcode())
+            .unwrap()
     }
     fn template_op_num_input(&self, h: ConstructTplHandle, opidx: usize) -> i32 {
-        self.base.templates().get(h).map(|t| t.get_opvec()[opidx].num_input()).unwrap_or(0)
+        self.base
+            .templates()
+            .get(h)
+            .map(|t| t.get_opvec()[opidx].num_input())
+            .unwrap_or(0)
     }
     fn template_has_out(&self, h: ConstructTplHandle, opidx: usize) -> bool {
-        self.base.templates().get(h).map(|t| t.get_opvec()[opidx].get_out().is_some()).unwrap_or(false)
+        self.base
+            .templates()
+            .get(h)
+            .map(|t| t.get_opvec()[opidx].get_out().is_some())
+            .unwrap_or(false)
     }
     fn template_varnode(&self, h: ConstructTplHandle, opidx: usize, slot: i32) -> &VarnodeTpl {
         let t = self.base.templates().get(h).unwrap();

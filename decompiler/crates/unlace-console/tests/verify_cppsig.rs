@@ -24,11 +24,16 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Bootstrap the stripped C++ fixture with `cppsig` set to `mode`, commit the analysis
@@ -40,17 +45,25 @@ fn decompile(func: &str, mode: &str) -> String {
 
     let path = root
         .join("decompiler/crates/unlace-analysis/tests/fixtures/cppsig_x86_64.so")
-        .to_str().expect("UTF-8 fixture path")
+        .to_str()
+        .expect("UTF-8 fixture path")
         .to_string();
     let mut prog = bootstrap_from_object(&path, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     // The gate is read at the analysis COMMIT boundary (the producing pass runs
     // at `load file`, upstream of any `option` command), so it must be set here.
-    prog.arch_mut().set_kuna_option("cppsig", mode).expect("cppsig is a registered option");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.arch_mut()
+        .set_kuna_option("cppsig", mode)
+        .expect("cppsig is a registered option");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
-    let cmds: Vec<String> =
-        [format!("load function {func}"), "decompile".into(), "print C".into()].to_vec();
+    let cmds: Vec<String> = [
+        format!("load function {func}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .to_vec();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -186,7 +199,8 @@ fn dwarf_wins_over_the_demangled_signature() {
         let mut prog = bootstrap_from_object(&path, "", &spec_roots)
             .expect("bootstrap fixture with built processor specs");
         prog.arch_mut().set_kuna_option("cppsig", mode).unwrap();
-        prog.commit_pending_analysis().expect("analysis commit succeeds");
+        prog.commit_pending_analysis()
+            .expect("analysis commit succeeds");
         let cmds: Vec<String> = [
             "load function Account::deposit".into(),
             "decompile".into(),
@@ -205,7 +219,9 @@ fn dwarf_wins_over_the_demangled_signature() {
             execute(&mut status);
         }
         assert!(
-            status.optr.contains("Account::deposit(Account *this,int4 amount)"),
+            status
+                .optr
+                .contains("Account::deposit(Account *this,int4 amount)"),
             "DWARF must win at cppsig={mode} (the parameter name proves it), got:\n{}",
             status.optr
         );

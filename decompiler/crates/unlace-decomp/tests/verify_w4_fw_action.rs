@@ -33,17 +33,17 @@ use std::rc::Rc;
 
 use unlace_base::address::{Address, SeqNum};
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use unlace_decomp::action::{
-    breakflags, Action, ActionContext, ActionDatabase, ActionGroup, ActionGroupList,
-    ActionPool, Rule, RuleState,
+    Action, ActionContext, ActionDatabase, ActionGroup, ActionGroupList, ActionPool, Rule,
+    RuleState, breakflags,
 };
-use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::context::{ArchContext, OpId, TypeOp};
+use unlace_decomp::funcdata::Funcdata;
 
 // -----------------------------------------------------------------------------
 // Harness (public-API only)
@@ -52,7 +52,8 @@ use unlace_decomp::context::{ArchContext, OpId, TypeOp};
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -86,7 +87,8 @@ fn make_op(fd: &mut Funcdata, off: u64, opc: OpCode) -> OpId {
     let pc = ram_addr(fd, off);
     let id = fd.obank_mut().create_at(0, pc);
     fd.obank_mut().mark_alive(id);
-    fd.obank_mut().change_opcode(id, TypeOp::new(opc, 0, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(id, TypeOp::new(opc, 0, format!("{opc:?}")));
     id
 }
 
@@ -95,7 +97,8 @@ fn make_op_seq(fd: &mut Funcdata, off: u64, uniq: u32, opc: OpCode) -> OpId {
     let pc = ram_addr(fd, off);
     let id = fd.obank_mut().create_seq(0, SeqNum::new(pc, uniq));
     fd.obank_mut().mark_alive(id);
-    fd.obank_mut().change_opcode(id, TypeOp::new(opc, 0, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(id, TypeOp::new(opc, 0, format!("{opc:?}")));
     id
 }
 
@@ -109,14 +112,19 @@ struct LogRule {
 impl Rule for LogRule {
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         let opc = data.obank().get(op).unwrap().code();
-        self.log.borrow_mut().push(format!("{}:{:?}", self.tag, opc));
+        self.log
+            .borrow_mut()
+            .push(format!("{}:{:?}", self.tag, opc));
         0
     }
     fn get_op_list(&self) -> Vec<OpCode> {
         vec![OpCode::CPUI_COPY, OpCode::CPUI_INT_ADD]
     }
     fn clone_rule(&self, _g: &ActionGroupList) -> Option<Box<dyn Rule>> {
-        Some(Box::new(LogRule { tag: self.tag.clone(), log: self.log.clone() }))
+        Some(Box::new(LogRule {
+            tag: self.tag.clone(),
+            log: self.log.clone(),
+        }))
     }
 }
 
@@ -132,7 +140,8 @@ impl Rule for MorphRule {
         self.log.borrow_mut().push(format!("morph:{opc:?}"));
         if opc == OpCode::CPUI_COPY && !*self.fired.borrow() {
             *self.fired.borrow_mut() = true;
-            data.obank_mut().change_opcode(op, TypeOp::new(OpCode::CPUI_INT_ADD, 0, "INT_ADD"));
+            data.obank_mut()
+                .change_opcode(op, TypeOp::new(OpCode::CPUI_INT_ADD, 0, "INT_ADD"));
             return 1;
         }
         0
@@ -141,7 +150,10 @@ impl Rule for MorphRule {
         vec![OpCode::CPUI_COPY, OpCode::CPUI_INT_ADD]
     }
     fn clone_rule(&self, _g: &ActionGroupList) -> Option<Box<dyn Rule>> {
-        Some(Box::new(MorphRule { log: self.log.clone(), fired: self.fired.clone() }))
+        Some(Box::new(MorphRule {
+            log: self.log.clone(),
+            fired: self.fired.clone(),
+        }))
     }
 }
 
@@ -151,7 +163,9 @@ struct NamedLeaf {
 }
 impl NamedLeaf {
     fn boxed(name: &str) -> Box<dyn Action> {
-        Box::new(NamedLeaf { base: unlace_decomp::action::ActionBase::new(0, name, "g") })
+        Box::new(NamedLeaf {
+            base: unlace_decomp::action::ActionBase::new(0, name, "g"),
+        })
     }
 }
 impl Action for NamedLeaf {
@@ -165,7 +179,9 @@ impl Action for NamedLeaf {
         0
     }
     fn clone_filtered(&self, _g: &ActionGroupList) -> Option<Box<dyn Action>> {
-        Some(Box::new(NamedLeaf { base: self.base.clone() }))
+        Some(Box::new(NamedLeaf {
+            base: self.base.clone(),
+        }))
     }
 }
 
@@ -190,7 +206,10 @@ fn w4_fw_action_consecutive_dead_ops_at_head_all_destroyed_live_visited_once() {
     let mut pool = ActionPool::new(0, "pool");
     pool.add_rule(
         RuleState::new("analysis", 0, "A"),
-        Box::new(LogRule { tag: "A".into(), log: log.clone() }),
+        Box::new(LogRule {
+            tag: "A".into(),
+            log: log.clone(),
+        }),
     );
     let mut ctx = ActionContext::new();
     assert_eq!(pool.apply(&mut fd, &mut ctx), 0);
@@ -221,21 +240,37 @@ fn w4_fw_action_rezero_reoffers_disabled_rule_without_applying_it() {
     // A disabled LogRule (tag "DIS") at the front: type_disable flag set.
     let mut dis = RuleState::new("analysis", 0, "DIS");
     dis.set_disable();
-    pool.add_rule(dis, Box::new(LogRule { tag: "DIS".into(), log: log.clone() }));
+    pool.add_rule(
+        dis,
+        Box::new(LogRule {
+            tag: "DIS".into(),
+            log: log.clone(),
+        }),
+    );
     pool.add_rule(
         RuleState::new("analysis", 0, "morph"),
-        Box::new(MorphRule { log: log.clone(), fired: fired.clone() }),
+        Box::new(MorphRule {
+            log: log.clone(),
+            fired: fired.clone(),
+        }),
     );
     pool.add_rule(
         RuleState::new("analysis", 0, "live"),
-        Box::new(LogRule { tag: "live".into(), log: log.clone() }),
+        Box::new(LogRule {
+            tag: "live".into(),
+            log: log.clone(),
+        }),
     );
 
     let mut ctx = ActionContext::new();
     assert_eq!(pool.apply(&mut fd, &mut ctx), 0);
 
     // DIS never appears (disabled, both before and after the re-zero).
-    assert!(!log.borrow().iter().any(|l| l.starts_with("DIS")), "disabled rule was invoked: {:?}", log.borrow());
+    assert!(
+        !log.borrow().iter().any(|l| l.starts_with("DIS")),
+        "disabled rule was invoked: {:?}",
+        log.borrow()
+    );
     // Morph saw COPY (rewrote) then INT_ADD (no-op); live saw INT_ADD.
     assert_eq!(
         *log.borrow(),
@@ -290,10 +325,19 @@ fn w4_fw_action_breakpoint_resumes_same_op_from_preserved_rule_index() {
 
     let mut morph_state = RuleState::new("analysis", 0, "morph");
     morph_state.breakpoint |= breakflags::break_action; // fire on apply
-    pool.add_rule(morph_state, Box::new(MorphRule { log: log.clone(), fired: fired.clone() }));
+    pool.add_rule(
+        morph_state,
+        Box::new(MorphRule {
+            log: log.clone(),
+            fired: fired.clone(),
+        }),
+    );
     pool.add_rule(
         RuleState::new("analysis", 0, "log"),
-        Box::new(LogRule { tag: "log".into(), log: log.clone() }),
+        Box::new(LogRule {
+            tag: "log".into(),
+            log: log.clone(),
+        }),
     );
 
     let mut ctx = ActionContext::new();
@@ -349,13 +393,18 @@ fn w4_fw_action_empty_grouplist_derives_a_noop_root_not_a_crash() {
         }
         fn clone_rule(&self, g: &ActionGroupList) -> Option<Box<dyn Rule>> {
             if g.contains("x") {
-                Some(Box::new(XRule { log: self.log.clone() }))
+                Some(Box::new(XRule {
+                    log: self.log.clone(),
+                }))
             } else {
                 None
             }
         }
     }
-    pool.add_rule(RuleState::new("x", 0, "xrule"), Box::new(XRule { log: log.clone() }));
+    pool.add_rule(
+        RuleState::new("x", 0, "xrule"),
+        Box::new(XRule { log: log.clone() }),
+    );
     let mut universal = ActionGroup::new(0, "universal");
     universal.add_action(Box::new(pool));
 
@@ -381,7 +430,11 @@ fn w4_fw_action_empty_grouplist_derives_a_noop_root_not_a_crash() {
         assert_eq!(r, 0);
     }
     // The filtered-out rule never ran.
-    assert!(log.borrow().is_empty(), "filtered rule ran in an empty root: {:?}", log.borrow());
+    assert!(
+        log.borrow().is_empty(),
+        "filtered rule ran in an empty root: {:?}",
+        log.borrow()
+    );
 }
 
 // =============================================================================
@@ -422,7 +475,8 @@ fn w4_fw_action_cursor_jumps_to_op_inserted_below_after_break_documents_divergen
                 let pc = Address::new(ram, 0x0500);
                 let id = data.obank_mut().create_seq(0, SeqNum::new(pc, 99));
                 data.obank_mut().mark_alive(id);
-                data.obank_mut().change_opcode(id, TypeOp::new(OpCode::CPUI_INT_ADD, 0, "INT_ADD"));
+                data.obank_mut()
+                    .change_opcode(id, TypeOp::new(OpCode::CPUI_INT_ADD, 0, "INT_ADD"));
                 return 1; // a change -> action breakpoint can trip
             }
             0
@@ -431,14 +485,23 @@ fn w4_fw_action_cursor_jumps_to_op_inserted_below_after_break_documents_divergen
             vec![OpCode::CPUI_COPY, OpCode::CPUI_INT_ADD]
         }
         fn clone_rule(&self, _g: &ActionGroupList) -> Option<Box<dyn Rule>> {
-            Some(Box::new(InsertBelowRule { log: self.log.clone(), done: self.done.clone() }))
+            Some(Box::new(InsertBelowRule {
+                log: self.log.clone(),
+                done: self.done.clone(),
+            }))
         }
     }
 
     let mut pool = ActionPool::new(0, "pool");
     let mut st = RuleState::new("analysis", 0, "ins");
     st.breakpoint |= breakflags::break_action;
-    pool.add_rule(st, Box::new(InsertBelowRule { log: log.clone(), done: Rc::new(RefCell::new(false)) }));
+    pool.add_rule(
+        st,
+        Box::new(InsertBelowRule {
+            log: log.clone(),
+            done: Rc::new(RefCell::new(false)),
+        }),
+    );
 
     let mut ctx = ActionContext::new();
     let r1 = pool.perform(&mut fd, &mut ctx);

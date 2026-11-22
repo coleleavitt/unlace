@@ -40,7 +40,7 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::{type_class, type_metatype};
 use crate::fspec::{FuncCallSpecs, ParameterPieces, PrototypePieces};
 use crate::funcdata::Funcdata;
-use crate::p4_calls::kuna_varargretreg::{float_register_count, VarargFloats};
+use crate::p4_calls::kuna_varargretreg::{VarargFloats, float_register_count};
 
 /// Is the input trial `[addr, addr + size)` at `slot` of variadic call spec `idx`
 /// a declared parameter of the calling function, or the declared result of
@@ -58,7 +58,9 @@ pub fn forwards_declared_value(
         return false;
     }
     let op = fc.get_op();
-    let Some(vn) = data.obank().get(op).and_then(|o| o.get_in(slot)) else { return false };
+    let Some(vn) = data.obank().get(op).and_then(|o| o.get_in(slot)) else {
+        return false;
+    };
     if !read_only_at(data, vn, op, slot, 0) || !declared_value(data, vn) {
         return false;
     }
@@ -66,7 +68,8 @@ pub fn forwards_declared_value(
         e.get_type() == type_class::TYPECLASS_FLOAT && e.justified_contain(addr, size) >= 0
     });
     if float
-        && (arch.vararg_floats == VarargFloats::Shadowed || float_register_count(data, op).is_some())
+        && (arch.vararg_floats == VarargFloats::Shadowed
+            || float_register_count(data, op).is_some())
     {
         return false;
     }
@@ -82,32 +85,48 @@ pub fn forwards_declared_value(
 /// `v1` never set.
 pub fn narrow_undeclared_upper(data: &mut Funcdata, idx: int4, i: int4) {
     let arch = data.get_arch();
-    let Some(width) = arch.types().map(|t| t.get_size_of_int()) else { return };
+    let Some(width) = arch.types().map(|t| t.get_size_of_int()) else {
+        return;
+    };
     let fc = data.get_call_specs(idx);
     if !fc.is_dotdotdot() || !fc.proto().has_model() {
         return;
     }
     let trial = fc.active_input().get_trial(i);
-    let (addr, size, slot) = (trial.get_address().clone(), trial.get_size(), trial.get_slot());
+    let (addr, size, slot) = (
+        trial.get_address().clone(),
+        trial.get_size(),
+        trial.get_slot(),
+    );
     if size <= width
-        || addr.get_space().is_none_or(|s| s.get_type() != spacetype::IPTR_PROCESSOR)
+        || addr
+            .get_space()
+            .is_none_or(|s| s.get_type() != spacetype::IPTR_PROCESSOR)
         || fc.proto().model().input().get_entry().iter().any(|e| {
             e.get_type() == type_class::TYPECLASS_FLOAT && e.justified_contain(&addr, size) >= 0
         })
     {
         return;
     }
-    let low = if addr.is_big_endian() { &addr + (size - width) as i64 } else { addr.clone() };
+    let low = if addr.is_big_endian() {
+        &addr + (size - width) as i64
+    } else {
+        addr.clone()
+    };
     if !fc.active_input().test_shrink(i, &low, width) {
         return;
     }
-    let Some(vn) = data.obank().get(fc.get_op()).and_then(|o| o.get_in(slot)) else { return };
+    let Some(vn) = data.obank().get(fc.get_op()).and_then(|o| o.get_in(slot)) else {
+        return;
+    };
     if !undeclared_bytes(data, vn, width, size - width, &mut 64)
         || !super::kuna_varargformat::defined_bytes(data, vn, 0, width, &mut 64)
     {
         return;
     }
-    data.get_call_specs_mut(idx).get_active_input().shrink(i, low, width);
+    data.get_call_specs_mut(idx)
+        .get_active_input()
+        .shrink(i, low, width);
 }
 
 /// Are bytes `[offset, offset + width)` of `vn`, counted from its least
@@ -124,7 +143,9 @@ fn undeclared_bytes(
         return false;
     }
     *budget -= 1;
-    let Some(v) = data.vbank().get(vn) else { return false };
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
     let size = v.get_size();
     if offset < 0 || width <= 0 || offset > size - width {
         return false;
@@ -133,17 +154,25 @@ fn undeclared_bytes(
         let proto = data.get_func_proto();
         let at = v.get_addr();
         return proto.is_input_locked()
-            && at.get_space().is_some_and(|s| s.get_type() == spacetype::IPTR_PROCESSOR)
-            && (0..proto.num_params()).filter_map(|i| proto.get_param(i)).all(|p| {
-                let (pa, ps) = (p.get_address(), p.get_size());
-                pa.get_space().is_some_and(|s| s.get_type() != spacetype::IPTR_JOIN)
-                    && at.overlap(0, &pa, ps) < 0
-                    && pa.overlap(0, at, size) < 0
-            });
+            && at
+                .get_space()
+                .is_some_and(|s| s.get_type() == spacetype::IPTR_PROCESSOR)
+            && (0..proto.num_params())
+                .filter_map(|i| proto.get_param(i))
+                .all(|p| {
+                    let (pa, ps) = (p.get_address(), p.get_size());
+                    pa.get_space()
+                        .is_some_and(|s| s.get_type() != spacetype::IPTR_JOIN)
+                        && at.overlap(0, &pa, ps) < 0
+                        && pa.overlap(0, at, size) < 0
+                });
     }
-    let Some(op) = v.get_def().and_then(|id| data.obank().get(id)) else { return false };
+    let Some(op) = v.get_def().and_then(|id| data.obank().get(id)) else {
+        return false;
+    };
     let mut input = |slot, off, len| {
-        op.get_in(slot).is_some_and(|id| undeclared_bytes(data, id, off, len, budget))
+        op.get_in(slot)
+            .is_some_and(|id| undeclared_bytes(data, id, off, len, budget))
     };
     match op.code() {
         OpCode::CPUI_COPY => input(0, offset, width),
@@ -179,26 +208,34 @@ fn undeclared_bytes(
 /// Is `vn` the calling function's own input where it declares a parameter, or
 /// the output of a call whose declared return it is?
 pub(super) fn declared_value(data: &Funcdata, vn: VarnodeId) -> bool {
-    let Some(v) = data.vbank().get(vn) else { return false };
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
     let (at, width) = (v.get_addr(), v.get_size());
     if v.is_input() {
         let proto = data.get_func_proto();
         return proto.is_input_locked()
-            && (0..proto.num_params()).filter_map(|i| proto.get_param(i)).any(|p| {
-                let (pa, ps) = (p.get_address(), p.get_size());
-                at.justified_contain(width, &pa, ps, false) == 0
-                    || pa.justified_contain(ps, at, width, false) == 0
-            });
+            && (0..proto.num_params())
+                .filter_map(|i| proto.get_param(i))
+                .any(|p| {
+                    let (pa, ps) = (p.get_address(), p.get_size());
+                    at.justified_contain(width, &pa, ps, false) == 0
+                        || pa.justified_contain(ps, at, width, false) == 0
+                });
     }
     let Some(def) = v.get_def() else { return false };
     if !data.obank().get(def).is_some_and(|o| o.is_call()) {
         return false;
     }
-    let Some(producer) = data.get_call_specs_index(def) else { return false };
+    let Some(producer) = data.get_call_specs_index(def) else {
+        return false;
+    };
     let proto = data.get_call_specs(producer).proto();
     let out = proto.get_output();
     proto.is_output_locked()
-        && out.get_type().is_some_and(|t| t.get_metatype() != type_metatype::TYPE_VOID)
+        && out
+            .get_type()
+            .is_some_and(|t| t.get_metatype() != type_metatype::TYPE_VOID)
         && out.get_address() == *at
         && out.get_size() == width
 }
@@ -207,15 +244,20 @@ pub(super) fn declared_value(data: &Funcdata, vn: VarnodeId) -> bool {
 /// possible effect on the storage is not a read, as long as its own output is
 /// read by nothing else.
 fn read_only_at(data: &Funcdata, vn: VarnodeId, call: OpId, slot: int4, depth: u32) -> bool {
-    let Some(v) = data.vbank().get(vn) else { return false };
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
     v.descend_iter().all(|d| {
-        let Some(o) = data.obank().get(d) else { return false };
+        let Some(o) = data.obank().get(d) else {
+            return false;
+        };
         if d == call {
             return (0..o.num_input()).all(|i| i == slot || o.get_in(i) != Some(vn));
         }
         o.code() == OpCode::CPUI_INDIRECT
             && depth < 4
-            && o.get_out().is_some_and(|out| read_only_at(data, out, call, slot, depth + 1))
+            && o.get_out()
+                .is_some_and(|out| read_only_at(data, out, call, slot, depth + 1))
     })
 }
 
@@ -240,12 +282,21 @@ fn format_stops_before(
         return false;
     }
     let op = fc.get_op();
-    let Some(call) = data.obank().get(op) else { return false };
-    let Some(vn) = call.get_in(active.get_trial(index).get_slot()) else { return false };
-    let Some((value, width)) = constant_value(data, vn, 0) else { return false };
-    let Some(count) =
-        crate::p4_calls::kuna_formatwitness::pointed_format_count(data, value, width, call.get_addr())
-    else {
+    let Some(call) = data.obank().get(op) else {
+        return false;
+    };
+    let Some(vn) = call.get_in(active.get_trial(index).get_slot()) else {
+        return false;
+    };
+    let Some((value, width)) = constant_value(data, vn, 0) else {
+        return false;
+    };
+    let Some(count) = crate::p4_calls::kuna_formatwitness::pointed_format_count(
+        data,
+        value,
+        width,
+        call.get_addr(),
+    ) else {
         return false;
     };
     vararg_position(data, fc, addr, size, float).is_some_and(|position| position > count)
@@ -269,7 +320,11 @@ pub(super) fn constant_value(data: &Funcdata, vn: VarnodeId, depth: u32) -> Opti
         OpCode::CPUI_COPY => operand(0).map(|(value, _)| (value, size)),
         OpCode::CPUI_INT_ADD => {
             let (a, b) = (operand(0)?.0, operand(1)?.0);
-            let mask = if size >= 8 { u64::MAX } else { (1u64 << (8 * size)) - 1 };
+            let mask = if size >= 8 {
+                u64::MAX
+            } else {
+                (1u64 << (8 * size)) - 1
+            };
             Some((a.wrapping_add(b) & mask, size))
         }
         OpCode::CPUI_LOAD => {
@@ -280,12 +335,16 @@ pub(super) fn constant_value(data: &Funcdata, vn: VarnodeId, depth: u32) -> Opti
             }
             let space = manage.get_space(index as i32)?.clone();
             let at = Address::new(space.clone(), operand(1)?.0);
-            let flags = data.get_arch().query_global_properties(&at, size, def.get_addr());
+            let flags = data
+                .get_arch()
+                .query_global_properties(&at, size, def.get_addr());
             if flags & crate::varnode::varnode_flags::readonly == 0 {
                 return None;
             }
             let mut bytes = [0u8; 8];
-            data.get_arch().loader_fill(&mut bytes[..size as usize], &at).ok()?;
+            data.get_arch()
+                .loader_fill(&mut bytes[..size as usize], &at)
+                .ok()?;
             let bytes = &bytes[..size as usize];
             let fold = |acc: u64, b: &u8| (acc << 8) | *b as u64;
             let value = if space.is_big_endian() {
@@ -310,7 +369,11 @@ fn vararg_position(
 ) -> Option<usize> {
     let arch = data.get_arch();
     let types = arch.types()?;
-    let metatype = if float { type_metatype::TYPE_FLOAT } else { type_metatype::TYPE_INT };
+    let metatype = if float {
+        type_metatype::TYPE_FLOAT
+    } else {
+        type_metatype::TYPE_INT
+    };
     let vararg = types.get_base(size, metatype).ok()?;
     let mut pieces = PrototypePieces::default();
     fc.proto().get_pieces(&mut pieces);

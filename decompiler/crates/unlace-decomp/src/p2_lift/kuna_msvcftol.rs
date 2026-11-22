@@ -86,10 +86,12 @@ pub const FIXUP_NAME_SSE: &str = "kuna_msvcftol_sse";
 /// default code space) is the architecture guard: `ST0` exists only on x86, and
 /// `ESP`/`EAX`/`EDX` narrow that to the 32-bit variant, where alone this helper
 /// exists.
-const REQUIRED_REGISTERS: [&str; 11] =
-    ["ST0", "ST1", "ST2", "ST3", "ST4", "ST5", "ST6", "ST7", "EAX", "EDX", "ESP"];
+const REQUIRED_REGISTERS: [&str; 11] = [
+    "ST0", "ST1", "ST2", "ST3", "ST4", "ST5", "ST6", "ST7", "EAX", "EDX", "ESP",
+];
 
-const X87_POP: &str = "ST0 = ST1; ST1 = ST2; ST2 = ST3; ST3 = ST4; ST4 = ST5; ST5 = ST6; ST6 = ST7;";
+const X87_POP: &str =
+    "ST0 = ST1; ST1 = ST2; ST2 = ST3; ST3 = ST4; ST4 = ST5; ST5 = ST6; ST6 = ST7;";
 
 /// The synthesized 64-bit `<callfixup>` element, in the shape
 /// `Architecture::decode_call_fixups` hands to `decode_inject`.
@@ -137,7 +139,10 @@ pub fn language_is_x86_32(
     resolve_register: impl Fn(&[u8]) -> bool,
     code_space_addr_size: i32,
 ) -> bool {
-    code_space_addr_size == 4 && REQUIRED_REGISTERS.iter().all(|r| resolve_register(r.as_bytes()))
+    code_space_addr_size == 4
+        && REQUIRED_REGISTERS
+            .iter()
+            .all(|r| resolve_register(r.as_bytes()))
 }
 
 /// Parse both payloads into the decoder shape `decode_inject` consumes, and

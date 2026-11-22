@@ -7,7 +7,7 @@ use std::fmt::Write as _;
 use std::rc::Rc;
 
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_num::opcodes::OpCode;
 use unlace_sleigh::pcodecompile::{Location, PcodeCompileSymbol};

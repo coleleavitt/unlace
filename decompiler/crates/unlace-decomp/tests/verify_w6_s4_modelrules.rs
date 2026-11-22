@@ -27,23 +27,24 @@
 use std::rc::Rc;
 
 use unlace_base::marshal::{Decoder, IdRegistry, XmlDecode};
-use unlace_base::space::{spacetype, AddrSpace, AddrSpaceManager};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, spacetype};
 use unlace_base::types::int4;
 
-use unlace_decomp::dtype::{type_class, type_metatype, Datatype, DatatypeKind, TypeField, TypeFactory};
+use unlace_decomp::dtype::{
+    Datatype, DatatypeKind, TypeFactory, TypeField, type_class, type_metatype,
+};
 use unlace_decomp::fspec::{
     AssignActionResponse, ParamEntry, ParamListKind, ParamListStandard, ParameterPieces,
     PrototypePieces,
 };
 use unlace_decomp::modelrules::{
-    DatatypeFilter, ModelRule, QualifierFilter,
-    ELEM_CONSUME, ELEM_CONVERT_TO_PTR, ELEM_DATATYPE, ELEM_DATATYPE_AT, ELEM_EXTRA_STACK,
-    ELEM_GOTO_STACK, ELEM_HIDDEN_RETURN, ELEM_JOIN, ELEM_JOIN_DUAL_CLASS, ELEM_JOIN_PER_PRIMITIVE,
-    ELEM_POSITION, ELEM_RULE, ELEM_VARARGS, ELEM_CONSUME_EXTRA, ELEM_CONSUME_REMAINING,
     ATTRIB_A, ATTRIB_AFTER_BYTES, ATTRIB_AFTER_STORAGE, ATTRIB_B, ATTRIB_FILL_ALTERNATE,
-    ATTRIB_FIRST, ATTRIB_LAST, ATTRIB_MATCHSIZE, ATTRIB_MAXSIZE, ATTRIB_MAX_PRIMITIVES,
+    ATTRIB_FIRST, ATTRIB_LAST, ATTRIB_MATCHSIZE, ATTRIB_MAX_PRIMITIVES, ATTRIB_MAXSIZE,
     ATTRIB_MINSIZE, ATTRIB_REVERSEJUSTIFY, ATTRIB_REVERSESIGNIF, ATTRIB_SIZES, ATTRIB_STRATEGY,
-    ATTRIB_VOIDLOCK,
+    ATTRIB_VOIDLOCK, DatatypeFilter, ELEM_CONSUME, ELEM_CONSUME_EXTRA, ELEM_CONSUME_REMAINING,
+    ELEM_CONVERT_TO_PTR, ELEM_DATATYPE, ELEM_DATATYPE_AT, ELEM_EXTRA_STACK, ELEM_GOTO_STACK,
+    ELEM_HIDDEN_RETURN, ELEM_JOIN, ELEM_JOIN_DUAL_CLASS, ELEM_JOIN_PER_PRIMITIVE, ELEM_POSITION,
+    ELEM_RULE, ELEM_VARARGS, ModelRule, QualifierFilter,
 };
 
 // ---------------------------------------------------------------------------
@@ -51,13 +52,43 @@ use unlace_decomp::modelrules::{
 // ---------------------------------------------------------------------------
 
 fn reg_space_le() -> Rc<AddrSpace> {
-    Rc::new(AddrSpace::new(spacetype::IPTR_PROCESSOR, "register", false, 4, 1, 3, 0, 0, 0))
+    Rc::new(AddrSpace::new(
+        spacetype::IPTR_PROCESSOR,
+        "register",
+        false,
+        4,
+        1,
+        3,
+        0,
+        0,
+        0,
+    ))
 }
 fn reg_space_be() -> Rc<AddrSpace> {
-    Rc::new(AddrSpace::new(spacetype::IPTR_PROCESSOR, "register", true, 4, 1, 3, 0, 0, 0))
+    Rc::new(AddrSpace::new(
+        spacetype::IPTR_PROCESSOR,
+        "register",
+        true,
+        4,
+        1,
+        3,
+        0,
+        0,
+        0,
+    ))
 }
 fn stack_space() -> Rc<AddrSpace> {
-    Rc::new(AddrSpace::new(spacetype::IPTR_SPACEBASE, "stack", false, 4, 1, 5, 0, 0, 0))
+    Rc::new(AddrSpace::new(
+        spacetype::IPTR_SPACEBASE,
+        "stack",
+        false,
+        4,
+        1,
+        5,
+        0,
+        0,
+        0,
+    ))
 }
 
 fn excl_entry(
@@ -69,8 +100,21 @@ fn excl_entry(
     prev: &[ParamEntry],
     mgr: &AddrSpaceManager,
 ) -> ParamEntry {
-    ParamEntry::seed(grp, class, Rc::clone(space), base, size, 1, 0, 0, true, false, prev, mgr)
-        .expect("seed exclusion entry")
+    ParamEntry::seed(
+        grp,
+        class,
+        Rc::clone(space),
+        base,
+        size,
+        1,
+        0,
+        0,
+        true,
+        false,
+        prev,
+        mgr,
+    )
+    .expect("seed exclusion entry")
 }
 
 fn stack_entry(
@@ -100,10 +144,18 @@ fn stack_entry(
 }
 
 fn dt_int(size: int4) -> Rc<Datatype> {
-    Rc::new(Datatype::new_with_align(size, size, type_metatype::TYPE_INT))
+    Rc::new(Datatype::new_with_align(
+        size,
+        size,
+        type_metatype::TYPE_INT,
+    ))
 }
 fn dt_float(size: int4) -> Rc<Datatype> {
-    Rc::new(Datatype::new_with_align(size, size, type_metatype::TYPE_FLOAT))
+    Rc::new(Datatype::new_with_align(
+        size,
+        size,
+        type_metatype::TYPE_FLOAT,
+    ))
 }
 
 fn dt_struct(size: int4, align: int4, fields: &[(int4, Rc<Datatype>)]) -> Rc<Datatype> {
@@ -113,15 +165,24 @@ fn dt_struct(size: int4, align: int4, fields: &[(int4, Rc<Datatype>)]) -> Rc<Dat
         .enumerate()
         .map(|(i, (off, ft))| TypeField::new(i as int4, *off, format!("f{i}"), Rc::clone(ft)))
         .collect();
-    d.kind = DatatypeKind::Struct { field, bitfield: Vec::new() };
+    d.kind = DatatypeKind::Struct {
+        field,
+        bitfield: Vec::new(),
+    };
     Rc::new(d)
 }
 
 fn dt_array(elem: Rc<Datatype>, nels: int4) -> Rc<Datatype> {
     let elsize = elem.get_align_size();
-    let mut d =
-        Datatype::new_with_align(elsize * nels, elem.get_alignment(), type_metatype::TYPE_ARRAY);
-    d.kind = DatatypeKind::Array { arrayof: elem, arraysize: nels };
+    let mut d = Datatype::new_with_align(
+        elsize * nels,
+        elem.get_alignment(),
+        type_metatype::TYPE_ARRAY,
+    );
+    d.kind = DatatypeKind::Array {
+        arrayof: elem,
+        arraysize: nels,
+    };
     Rc::new(d)
 }
 
@@ -181,7 +242,10 @@ fn decode_rule(
 }
 
 /// Decode just a `<datatype .../>` filter (so we can probe initFromSizeList).
-fn decode_filter(xml: &str, mgr: &AddrSpaceManager) -> unlace_base::error::KunaResult<DatatypeFilter> {
+fn decode_filter(
+    xml: &str,
+    mgr: &AddrSpaceManager,
+) -> unlace_base::error::KunaResult<DatatypeFilter> {
     let registry = modelrules_registry();
     let mut decoder = XmlDecode::new(mgr, &registry);
     decoder.ingest_stream(xml.as_bytes())?;
@@ -194,39 +258,184 @@ fn decode_filter(xml: &str, mgr: &AddrSpaceManager) -> unlace_base::error::KunaR
 struct PanicFactory;
 #[allow(unused_variables)]
 impl TypeFactory for PanicFactory {
-    fn get_size_of_int(&self) -> int4 { panic!() }
-    fn get_size_of_long(&self) -> int4 { panic!() }
-    fn get_size_of_char(&self) -> int4 { panic!() }
-    fn get_size_of_wchar(&self) -> int4 { panic!() }
-    fn get_size_of_pointer(&self) -> int4 { panic!() }
-    fn get_size_of_alt_pointer(&self) -> int4 { panic!() }
-    fn get_alignment(&self, size: u32) -> unlace_base::error::KunaResult<int4> { panic!() }
-    fn get_primitive_align_size(&self, size: u32) -> unlace_base::error::KunaResult<int4> { panic!() }
-    fn get_type_void(&self) -> unlace_base::error::KunaResult<Rc<Datatype>> { panic!() }
-    fn get_base_no_char(&self, s: int4, m: type_metatype) -> unlace_base::error::KunaResult<Rc<Datatype>> { panic!() }
-    fn get_base(&self, s: int4, m: type_metatype) -> unlace_base::error::KunaResult<Rc<Datatype>> { panic!() }
-    fn get_base_named(&self, s: int4, m: type_metatype, n: &str) -> unlace_base::error::KunaResult<Rc<Datatype>> { panic!() }
-    fn get_type_char(&self, s: int4) -> unlace_base::error::KunaResult<Rc<Datatype>> { panic!() }
-    fn get_type_code(&self) -> unlace_base::error::KunaResult<Rc<Datatype>> { panic!() }
-    fn get_type_pointer_strip_array(&self, s: int4, pt: Rc<Datatype>, ws: u32) -> unlace_base::error::KunaResult<Rc<Datatype>> { panic!() }
-    fn get_type_pointer(&self, s: int4, pt: Rc<Datatype>, ws: u32) -> unlace_base::error::KunaResult<Rc<Datatype>> { panic!() }
-    fn get_type_pointer_named(&self, s: int4, pt: Rc<Datatype>, ws: u32, n: &str) -> unlace_base::error::KunaResult<Rc<Datatype>> { panic!() }
-    fn resize_pointer(&self, ptr: Rc<Datatype>, new_size: int4) -> unlace_base::error::KunaResult<Rc<Datatype>> { panic!() }
-    fn get_type_pointer_rel(&self, parent_ptr: Rc<Datatype>, ptr_to: Rc<Datatype>, off: int4) -> unlace_base::error::KunaResult<Rc<Datatype>> { panic!() }
-    fn get_type_pointer_rel_full(&self, sz: int4, parent: Rc<Datatype>, ptr_to: Rc<Datatype>, ws: int4, off: int4, nm: &str) -> unlace_base::error::KunaResult<Rc<Datatype>> { panic!() }
-    fn get_type_pointer_with_space(&self, ptr_to: Rc<Datatype>, spc: Rc<AddrSpace>, nm: &str) -> unlace_base::error::KunaResult<Rc<Datatype>> { panic!() }
-    fn get_type_array(&self, as_: int4, ao: Rc<Datatype>) -> unlace_base::error::KunaResult<Rc<Datatype>> { panic!() }
-    fn get_type_struct(&self, n: &str) -> unlace_base::error::KunaResult<Rc<Datatype>> { panic!() }
-    fn get_type_partial_struct(&self, contain: Rc<Datatype>, off: int4, sz: int4) -> unlace_base::error::KunaResult<Rc<Datatype>> { panic!() }
-    fn get_type_union(&self, n: &str) -> unlace_base::error::KunaResult<Rc<Datatype>> { panic!() }
-    fn get_type_partial_union(&self, contain: Rc<Datatype>, off: int4, sz: int4) -> unlace_base::error::KunaResult<Rc<Datatype>> { panic!() }
-    fn get_type_partial_enum(&self, contain: Rc<Datatype>, off: int4, sz: int4) -> unlace_base::error::KunaResult<Rc<Datatype>> { panic!() }
-    fn get_type_enum(&self, n: &str) -> unlace_base::error::KunaResult<Rc<Datatype>> { panic!() }
-    fn get_type_spacebase(&self, id: Rc<AddrSpace>, addr: &unlace_base::address::Address) -> unlace_base::error::KunaResult<Rc<Datatype>> { panic!() }
-    fn resize_integer(&self, ct: Rc<Datatype>, new_size: int4) -> unlace_base::error::KunaResult<Rc<Datatype>> { panic!() }
-    fn get_exact_piece(&self, ct: Rc<Datatype>, offset: int4, size: int4) -> unlace_base::error::KunaResult<Option<Rc<Datatype>>> { panic!() }
-    fn find_by_name(&self, n: &str) -> unlace_base::error::KunaResult<Option<Rc<Datatype>>> { panic!() }
-    fn concretize(&self, ct: Rc<Datatype>) -> unlace_base::error::KunaResult<Rc<Datatype>> { panic!() }
+    fn get_size_of_int(&self) -> int4 {
+        panic!()
+    }
+    fn get_size_of_long(&self) -> int4 {
+        panic!()
+    }
+    fn get_size_of_char(&self) -> int4 {
+        panic!()
+    }
+    fn get_size_of_wchar(&self) -> int4 {
+        panic!()
+    }
+    fn get_size_of_pointer(&self) -> int4 {
+        panic!()
+    }
+    fn get_size_of_alt_pointer(&self) -> int4 {
+        panic!()
+    }
+    fn get_alignment(&self, size: u32) -> unlace_base::error::KunaResult<int4> {
+        panic!()
+    }
+    fn get_primitive_align_size(&self, size: u32) -> unlace_base::error::KunaResult<int4> {
+        panic!()
+    }
+    fn get_type_void(&self) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+        panic!()
+    }
+    fn get_base_no_char(
+        &self,
+        s: int4,
+        m: type_metatype,
+    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+        panic!()
+    }
+    fn get_base(&self, s: int4, m: type_metatype) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+        panic!()
+    }
+    fn get_base_named(
+        &self,
+        s: int4,
+        m: type_metatype,
+        n: &str,
+    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+        panic!()
+    }
+    fn get_type_char(&self, s: int4) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+        panic!()
+    }
+    fn get_type_code(&self) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+        panic!()
+    }
+    fn get_type_pointer_strip_array(
+        &self,
+        s: int4,
+        pt: Rc<Datatype>,
+        ws: u32,
+    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+        panic!()
+    }
+    fn get_type_pointer(
+        &self,
+        s: int4,
+        pt: Rc<Datatype>,
+        ws: u32,
+    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+        panic!()
+    }
+    fn get_type_pointer_named(
+        &self,
+        s: int4,
+        pt: Rc<Datatype>,
+        ws: u32,
+        n: &str,
+    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+        panic!()
+    }
+    fn resize_pointer(
+        &self,
+        ptr: Rc<Datatype>,
+        new_size: int4,
+    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+        panic!()
+    }
+    fn get_type_pointer_rel(
+        &self,
+        parent_ptr: Rc<Datatype>,
+        ptr_to: Rc<Datatype>,
+        off: int4,
+    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+        panic!()
+    }
+    fn get_type_pointer_rel_full(
+        &self,
+        sz: int4,
+        parent: Rc<Datatype>,
+        ptr_to: Rc<Datatype>,
+        ws: int4,
+        off: int4,
+        nm: &str,
+    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+        panic!()
+    }
+    fn get_type_pointer_with_space(
+        &self,
+        ptr_to: Rc<Datatype>,
+        spc: Rc<AddrSpace>,
+        nm: &str,
+    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+        panic!()
+    }
+    fn get_type_array(
+        &self,
+        as_: int4,
+        ao: Rc<Datatype>,
+    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+        panic!()
+    }
+    fn get_type_struct(&self, n: &str) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+        panic!()
+    }
+    fn get_type_partial_struct(
+        &self,
+        contain: Rc<Datatype>,
+        off: int4,
+        sz: int4,
+    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+        panic!()
+    }
+    fn get_type_union(&self, n: &str) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+        panic!()
+    }
+    fn get_type_partial_union(
+        &self,
+        contain: Rc<Datatype>,
+        off: int4,
+        sz: int4,
+    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+        panic!()
+    }
+    fn get_type_partial_enum(
+        &self,
+        contain: Rc<Datatype>,
+        off: int4,
+        sz: int4,
+    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+        panic!()
+    }
+    fn get_type_enum(&self, n: &str) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+        panic!()
+    }
+    fn get_type_spacebase(
+        &self,
+        id: Rc<AddrSpace>,
+        addr: &unlace_base::address::Address,
+    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+        panic!()
+    }
+    fn resize_integer(
+        &self,
+        ct: Rc<Datatype>,
+        new_size: int4,
+    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+        panic!()
+    }
+    fn get_exact_piece(
+        &self,
+        ct: Rc<Datatype>,
+        offset: int4,
+        size: int4,
+    ) -> unlace_base::error::KunaResult<Option<Rc<Datatype>>> {
+        panic!()
+    }
+    fn find_by_name(&self, n: &str) -> unlace_base::error::KunaResult<Option<Rc<Datatype>>> {
+        panic!()
+    }
+    fn concretize(&self, ct: Rc<Datatype>) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+        panic!()
+    }
 }
 
 // ===========================================================================
@@ -244,7 +453,10 @@ fn v_w6_s4_modelrules_size_list_parse_parity() {
     assert!(f.filter(&dt_int(4)), "4 in {{2,4,8}}");
     assert!(f.filter(&dt_int(8)), "8 in {{2,4,8}}");
     assert!(!f.filter(&dt_int(1)), "1 below min");
-    assert!(!f.filter(&dt_int(3)), "3 not enumerated even though min<=3<=max");
+    assert!(
+        !f.filter(&dt_int(3)),
+        "3 not enumerated even though min<=3<=max"
+    );
     assert!(!f.filter(&dt_int(16)), "16 above max");
 
     // Space-separated (no commas) parses identically (C++ `s>>ws` between ints).
@@ -275,8 +487,24 @@ fn two_reg_stack_model(
     stk: &Rc<AddrSpace>,
 ) -> ParamListStandard {
     let mut m = ParamListStandard::new(ParamListKind::Standard);
-    m.push_entry(excl_entry(0, type_class::TYPECLASS_GENERAL, reg, 0x10, 4, &[], mgr));
-    let e1 = excl_entry(1, type_class::TYPECLASS_GENERAL, reg, 0x20, 4, m.get_entry(), mgr);
+    m.push_entry(excl_entry(
+        0,
+        type_class::TYPECLASS_GENERAL,
+        reg,
+        0x10,
+        4,
+        &[],
+        mgr,
+    ));
+    let e1 = excl_entry(
+        1,
+        type_class::TYPECLASS_GENERAL,
+        reg,
+        0x20,
+        4,
+        m.get_entry(),
+        mgr,
+    );
     m.push_entry(e1);
     let se = stack_entry(2, stk, 0, 0x1000, 4, m.get_entry(), mgr);
     m.push_entry(se);
@@ -291,18 +519,35 @@ fn v_w6_s4_modelrules_justify_pieces_little_endian() {
     let stk = stack_space();
     let model = two_reg_stack_model(&mgr, &reg, &stk);
     // Little-endian <join> default: consumeMostSig=false, justifyRight=false.
-    let rule = decode_rule(r#"<rule><datatype name="any"/><join/></rule>"#, &model, &mgr)
-        .expect("decode join");
+    let rule = decode_rule(
+        r#"<rule><datatype name="any"/><join/></rule>"#,
+        &model,
+        &mgr,
+    )
+    .expect("decode join");
     let mut status = vec![0i32; 3];
     let mut res = ParameterPieces::default();
     let r = rule
-        .assign_address(&dt_int(3), &PrototypePieces::default().with_dummy(), 0, &PanicFactory, &mut status, &mut res, &model, &mgr)
+        .assign_address(
+            &dt_int(3),
+            &PrototypePieces::default().with_dummy(),
+            0,
+            &PanicFactory,
+            &mut status,
+            &mut res,
+            &model,
+            &mgr,
+        )
         .expect("assign");
     assert_eq!(r, AssignActionResponse::success);
     // One 4-byte register consumed; the single piece truncated to 3 bytes.
     // addOffset = LE(false) ^ mostSig(false) ^ justRight(false) = false -> offset stays 0x10.
     assert_eq!(status[0], -1);
-    assert_eq!(res.addr.get_offset(), 0x10, "LE/justify-left keeps the low offset");
+    assert_eq!(
+        res.addr.get_offset(),
+        0x10,
+        "LE/justify-left keeps the low offset"
+    );
 }
 
 #[test]
@@ -312,18 +557,35 @@ fn v_w6_s4_modelrules_justify_pieces_big_endian() {
     let stk = stack_space();
     let model = two_reg_stack_model(&mgr, &reg, &stk);
     // Big-endian <join>: ctor sets consumeMostSig=true, justifyRight=true.
-    let rule = decode_rule(r#"<rule><datatype name="any"/><join/></rule>"#, &model, &mgr)
-        .expect("decode join");
+    let rule = decode_rule(
+        r#"<rule><datatype name="any"/><join/></rule>"#,
+        &model,
+        &mgr,
+    )
+    .expect("decode join");
     let mut status = vec![0i32; 3];
     let mut res = ParameterPieces::default();
     let r = rule
-        .assign_address(&dt_int(3), &PrototypePieces::default().with_dummy(), 0, &PanicFactory, &mut status, &mut res, &model, &mgr)
+        .assign_address(
+            &dt_int(3),
+            &PrototypePieces::default().with_dummy(),
+            0,
+            &PanicFactory,
+            &mut status,
+            &mut res,
+            &model,
+            &mgr,
+        )
         .expect("assign");
     assert_eq!(r, AssignActionResponse::success);
     // addOffset = BE(true) ^ mostSig(true) ^ justRight(true) = true -> offset += 1.
     // justifyRight=true picks pieces[0]; offset 0x10 + 1 = 0x11, size 4 -> 3.
     assert_eq!(status[0], -1);
-    assert_eq!(res.addr.get_offset(), 0x11, "BE/justify-right shifts the offset up by the padding");
+    assert_eq!(
+        res.addr.get_offset(),
+        0x11,
+        "BE/justify-right shifts the offset up by the padding"
+    );
 }
 
 // ===========================================================================
@@ -341,15 +603,24 @@ fn v_w6_s4_modelrules_homogeneous_aggregate_ptr_identity() {
     // -> Rc::ptr_eq true for all, base meta == FLOAT -> ACCEPT.
     let f4 = dt_float(4);
     let arr = dt_array(Rc::clone(&f4), 4);
-    assert!(f.filter(&arr), "array of 4 identical floats is a homogeneous float aggregate");
+    assert!(
+        f.filter(&arr),
+        "array of 4 identical floats is a homogeneous float aggregate"
+    );
 
     // Array of 5 identical floats exceeds maxPrimitives=4 -> extractor invalid -> REJECT.
     let arr5 = dt_array(Rc::clone(&f4), 5);
-    assert!(!f.filter(&arr5), "5 primitives exceeds the maxprimitives=4 default");
+    assert!(
+        !f.filter(&arr5),
+        "5 primitives exceeds the maxprimitives=4 default"
+    );
 
     // Struct {float, int}: primitives differ (and one is non-float) -> REJECT.
     let mixed = dt_struct(8, 4, &[(0, dt_float(4)), (4, dt_int(4))]);
-    assert!(!f.filter(&mixed), "mixed float/int struct is not a homogeneous float aggregate");
+    assert!(
+        !f.filter(&mixed),
+        "mixed float/int struct is not a homogeneous float aggregate"
+    );
 
     // Struct {float@0, float@4} built from DISTINCT Rc allocations of the same
     // logical float: C++ would dedup these to one Datatype* (ptr-eq true); the
@@ -365,12 +636,18 @@ fn v_w6_s4_modelrules_homogeneous_aggregate_ptr_identity() {
     // matching C++ when the TypeFactory has deduplicated the field type.
     let shared = dt_float(4);
     let s_shared = dt_struct(8, 4, &[(0, Rc::clone(&shared)), (4, Rc::clone(&shared))]);
-    assert!(f.filter(&s_shared), "shared-Rc identical float fields ARE a homogeneous float aggregate");
+    assert!(
+        f.filter(&s_shared),
+        "shared-Rc identical float fields ARE a homogeneous float aggregate"
+    );
 
     // An int aggregate is rejected because the base meta (INT) != FLOAT.
     let i4 = dt_int(4);
     let iarr = dt_array(Rc::clone(&i4), 2);
-    assert!(!f.filter(&iarr), "homogeneous INT aggregate fails a FLOAT filter");
+    assert!(
+        !f.filter(&iarr),
+        "homogeneous INT aggregate fails a FLOAT filter"
+    );
 }
 
 // ===========================================================================
@@ -381,7 +658,10 @@ fn v_w6_s4_modelrules_homogeneous_aggregate_ptr_identity() {
 fn v_w6_s4_modelrules_varargs_default_and_boundary() {
     // The decode default (<varargs/> with no first/last) is firstPos=INT_MIN,
     // lastPos=INT_MAX: matches ANY parameter once the prototype is varargs.
-    let q_default = QualifierFilter::Varargs { first_pos: i32::MIN, last_pos: i32::MAX };
+    let q_default = QualifierFilter::Varargs {
+        first_pos: i32::MIN,
+        last_pos: i32::MAX,
+    };
     let mut proto = PrototypePieces::default();
 
     // firstVarArgSlot < 0 -> never matches, regardless of pos.
@@ -396,21 +676,45 @@ fn v_w6_s4_modelrules_varargs_default_and_boundary() {
     assert!(q_default.filter(&proto, 100));
 
     // <varargs first="0"/> : matches pos >= firstVarArgSlot (optional args only).
-    let q_first0 = QualifierFilter::Varargs { first_pos: 0, last_pos: i32::MAX };
+    let q_first0 = QualifierFilter::Varargs {
+        first_pos: 0,
+        last_pos: i32::MAX,
+    };
     proto.first_var_arg_slot = 3;
-    assert!(!q_first0.filter(&proto, 2), "pos 2 is non-optional (2-3 = -1 < 0)");
-    assert!(q_first0.filter(&proto, 3), "pos 3 is the first optional (3-3 = 0)");
+    assert!(
+        !q_first0.filter(&proto, 2),
+        "pos 2 is non-optional (2-3 = -1 < 0)"
+    );
+    assert!(
+        q_first0.filter(&proto, 3),
+        "pos 3 is the first optional (3-3 = 0)"
+    );
     assert!(q_first0.filter(&proto, 9));
 
     // <varargs first="-1"/> : matches the last NON-optional arg and all optional.
-    let q_firstm1 = QualifierFilter::Varargs { first_pos: -1, last_pos: i32::MAX };
-    assert!(q_firstm1.filter(&proto, 2), "pos 2 (2-3=-1) is the last non-optional");
-    assert!(!q_firstm1.filter(&proto, 1), "pos 1 (1-3=-2) is before the matched range");
+    let q_firstm1 = QualifierFilter::Varargs {
+        first_pos: -1,
+        last_pos: i32::MAX,
+    };
+    assert!(
+        q_firstm1.filter(&proto, 2),
+        "pos 2 (2-3=-1) is the last non-optional"
+    );
+    assert!(
+        !q_firstm1.filter(&proto, 1),
+        "pos 1 (1-3=-2) is before the matched range"
+    );
 
     // <varargs first="0" last="0"/> : matches ONLY the first optional argument.
-    let q_first0last0 = QualifierFilter::Varargs { first_pos: 0, last_pos: 0 };
+    let q_first0last0 = QualifierFilter::Varargs {
+        first_pos: 0,
+        last_pos: 0,
+    };
     assert!(q_first0last0.filter(&proto, 3), "first optional only");
-    assert!(!q_first0last0.filter(&proto, 4), "second optional excluded by last=0");
+    assert!(
+        !q_first0last0.filter(&proto, 4),
+        "second optional excluded by last=0"
+    );
 }
 
 // A tiny extension trait so the justify tests can pass a non-default proto

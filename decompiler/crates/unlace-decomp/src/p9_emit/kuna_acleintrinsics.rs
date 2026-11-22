@@ -33,29 +33,58 @@ pub(crate) struct Intrinsic {
 }
 
 /// The ACLE spelling of the CALLOTHER `op` whose user op is named `name`.
-pub(crate) fn intrinsic(fd: &Funcdata, arch: &Architecture, op: OpId, name: &[u8]) -> Option<Intrinsic> {
+pub(crate) fn intrinsic(
+    fd: &Funcdata,
+    arch: &Architecture,
+    op: OpId,
+    name: &[u8],
+) -> Option<Intrinsic> {
     if !arch.acle_intrinsics || !arch.archid.starts_with("AARCH64:") {
         return None;
     }
     let o = fd.obank().get(op)?;
     let operands: Vec<VarnodeId> = (1..o.num_input()).filter_map(|i| o.get_in(i)).collect();
-    let constant = |vn: VarnodeId| fd.vbank().get(vn).filter(|v| v.is_constant()).map(|v| v.get_offset());
+    let constant = |vn: VarnodeId| {
+        fd.vbank()
+            .get(vn)
+            .filter(|v| v.is_constant())
+            .map(|v| v.get_offset())
+    };
     let (name, args) = match (name, operands.as_slice()) {
-        (b"DataMemoryBarrier", &[domain, types]) => ("__dmb", vec![Arg::Dec(crm(constant(domain)?, constant(types)?)?)]),
-        (b"DataSynchronizationBarrier", &[domain, types, nxs]) if constant(nxs)? == 0 => {
-            ("__dsb", vec![Arg::Dec(crm(constant(domain)?, constant(types)?)?)])
+        (b"DataMemoryBarrier", &[domain, types]) => (
+            "__dmb",
+            vec![Arg::Dec(crm(constant(domain)?, constant(types)?)?)],
+        ),
+        (b"DataSynchronizationBarrier", &[domain, types, nxs]) if constant(nxs)? == 0 => (
+            "__dsb",
+            vec![Arg::Dec(crm(constant(domain)?, constant(types)?)?)],
+        ),
+        (b"InstructionSynchronizationBarrier", &[]) => {
+            ("__isb", vec![Arg::Dec(isb_option(arch, o.get_addr())?)])
         }
-        (b"InstructionSynchronizationBarrier", &[]) => ("__isb", vec![Arg::Dec(isb_option(arch, o.get_addr())?)]),
         (b"WaitForInterrupt", &[]) => ("__wfi", Vec::new()),
         (b"WaitForEvent", &[]) => ("__wfe", Vec::new()),
         (b"Yield", &[]) => ("__yield", Vec::new()),
         (b"SendEvent", &[]) => ("__sev", Vec::new()),
         (b"SendEventLocally", &[]) => ("__sevl", Vec::new()),
-        (b"RandomizePtrTag_Exclude", &[ptr, mask]) => ("__arm_mte_create_random_tag", vec![Arg::Vn(ptr), Arg::Vn(mask)]),
-        (b"AddPtrTag", &[ptr, offset]) => ("__arm_mte_increment_tag", vec![Arg::Vn(ptr), Arg::Dec(constant(offset)?)]),
-        (b"ExcludePtrTag", &[ptr, excluded]) => ("__arm_mte_exclude_tag", vec![Arg::Vn(ptr), Arg::Vn(excluded)]),
-        (b"LoadPtrTag", &[ptr, granule]) if same_value(fd, ptr, granule, 2) => ("__arm_mte_get_tag", vec![Arg::Vn(ptr)]),
-        (b"StorePtrTag", &[granule, ptr]) if same_value(fd, ptr, granule, 2) => ("__arm_mte_set_tag", vec![Arg::Vn(ptr)]),
+        (b"RandomizePtrTag_Exclude", &[ptr, mask]) => (
+            "__arm_mte_create_random_tag",
+            vec![Arg::Vn(ptr), Arg::Vn(mask)],
+        ),
+        (b"AddPtrTag", &[ptr, offset]) => (
+            "__arm_mte_increment_tag",
+            vec![Arg::Vn(ptr), Arg::Dec(constant(offset)?)],
+        ),
+        (b"ExcludePtrTag", &[ptr, excluded]) => (
+            "__arm_mte_exclude_tag",
+            vec![Arg::Vn(ptr), Arg::Vn(excluded)],
+        ),
+        (b"LoadPtrTag", &[ptr, granule]) if same_value(fd, ptr, granule, 2) => {
+            ("__arm_mte_get_tag", vec![Arg::Vn(ptr)])
+        }
+        (b"StorePtrTag", &[granule, ptr]) if same_value(fd, ptr, granule, 2) => {
+            ("__arm_mte_set_tag", vec![Arg::Vn(ptr)])
+        }
         _ => return None,
     };
     Some(Intrinsic { name, args })
@@ -68,19 +97,31 @@ fn same_value(fd: &Funcdata, a: VarnodeId, b: VarnodeId, depth: u32) -> bool {
     if a == b {
         return true;
     }
-    let (Some(va), Some(vb)) = (fd.vbank().get(a), fd.vbank().get(b)) else { return false };
+    let (Some(va), Some(vb)) = (fd.vbank().get(a), fd.vbank().get(b)) else {
+        return false;
+    };
     if va.is_constant() || vb.is_constant() {
-        return va.is_constant() && vb.is_constant() && va.get_offset() == vb.get_offset() && va.get_size() == vb.get_size();
+        return va.is_constant()
+            && vb.is_constant()
+            && va.get_offset() == vb.get_offset()
+            && va.get_size() == vb.get_size();
     }
     if depth == 0 {
         return false;
     }
-    let (Some(da), Some(db)) = (va.get_def().and_then(|d| fd.obank().get(d)), vb.get_def().and_then(|d| fd.obank().get(d))) else {
+    let (Some(da), Some(db)) = (
+        va.get_def().and_then(|d| fd.obank().get(d)),
+        vb.get_def().and_then(|d| fd.obank().get(d)),
+    ) else {
         return false;
     };
     let address_arithmetic = matches!(
         da.code(),
-        OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_INT_ADD | OpCode::CPUI_PTRSUB | OpCode::CPUI_PTRADD
+        OpCode::CPUI_COPY
+            | OpCode::CPUI_CAST
+            | OpCode::CPUI_INT_ADD
+            | OpCode::CPUI_PTRSUB
+            | OpCode::CPUI_PTRADD
     );
     address_arithmetic
         && da.code() == db.code()
@@ -100,7 +141,11 @@ fn crm(domain: u64, types: u64) -> Option<u64> {
 fn isb_option(arch: &Architecture, addr: &Address) -> Option<u64> {
     let mut bytes = [0u8; 4];
     let loader_rc = arch.translate().loader_rc();
-    loader_rc.try_borrow_mut().ok()?.load_fill(&mut bytes, addr).ok()?;
+    loader_rc
+        .try_borrow_mut()
+        .ok()?
+        .load_fill(&mut bytes, addr)
+        .ok()?;
     isb_crm(u32::from_le_bytes(bytes))
 }
 

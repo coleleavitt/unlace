@@ -20,13 +20,22 @@ fn dwarf2_plus_uconst_offsets_place_members_and_bitfields() {
 #[test]
 fn static_data_members_take_no_place_in_the_layout() {
     let code = decompile("dwarf_static_member_x86_64.o", "first_of");
-    assert!(code.contains("return c->first;") && !code.contains("instances"), "{code}");
+    assert!(
+        code.contains("return c->first;") && !code.contains("instances"),
+        "{code}"
+    );
 }
 
 #[test]
 fn bitfields_read_their_own_bits_in_either_byte_order() {
-    let common_lines = ["return p->lo;", "return p->hi;", "return p->b;", "return p->count;",
-        "p->b = v;", "return s->c;"];
+    let common_lines = [
+        "return p->lo;",
+        "return p->hi;",
+        "return p->b;",
+        "return p->count;",
+        "p->b = v;",
+        "return s->c;",
+    ];
     let fixtures = [
         ("dwarf_bitfields_ppc_dwarf4.o", &["return p->wide;"][..]),
         ("dwarf_bitfields_mips_dwarf5.o", &[][..]),

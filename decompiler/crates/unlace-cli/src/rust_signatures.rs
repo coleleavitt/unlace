@@ -3,12 +3,12 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use unlace_analysis::flirt::kuna_rustprofiles::{
     Bank, ImageReport, Library, Profile, ProfileSignature, Request, Selection, Source,
 };
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
 
 use crate::jsonfmt::Json;
 
@@ -338,14 +338,25 @@ mod tests;
 /// The application and its scoring must observe the same unmodified linked image.
 pub(crate) fn validate_application(args: &crate::decompile_all::Args) -> Result<(), String> {
     use unlace_console::assertions::Body;
-    if args.raw_image || args.slice.is_some() || args.target.is_some() || args.isa.is_some()
-        || args.assertions.iter().any(|directive| matches!(directive.body, Body::Bytes { .. }))
-        || args.options.iter().any(|(name, _)| matches!(name.as_str(), "dyldimage" | "kernelcache"))
+    if args.raw_image
+        || args.slice.is_some()
+        || args.target.is_some()
+        || args.isa.is_some()
+        || args
+            .assertions
+            .iter()
+            .any(|directive| matches!(directive.body, Body::Bytes { .. }))
+        || args
+            .options
+            .iter()
+            .any(|(name, _)| matches!(name.as_str(), "dyldimage" | "kernelcache"))
     {
         return Err("--apply-rust-signatures requires an unmodified object image without raw, slice, target, ISA, image-selection or bytes overrides".into());
     }
     if args.jobs != 1 || args.jobs_auto || args.jobs_worker.is_some() {
-        return Err("--apply-rust-signatures requires a single-process functions or decompile run".into());
+        return Err(
+            "--apply-rust-signatures requires a single-process functions or decompile run".into(),
+        );
     }
     Ok(())
 }

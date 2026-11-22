@@ -17,7 +17,7 @@ use std::process::Command;
 
 use unlace_console::kuna_buildstamp;
 
-use crate::jsonfmt::{dumps_indent2_sorted, Json};
+use crate::jsonfmt::{Json, dumps_indent2_sorted};
 use crate::paths;
 
 mod baseline;
@@ -84,10 +84,11 @@ fn parse_unit(stderr: &str) -> UnitResult {
         // ^testing : (?P<name>.+) \.\.\.$
         if let Some(rest) = line.strip_prefix("testing : ")
             && let Some(name) = rest.strip_suffix(" ...")
-                && !name.is_empty() {
-                    current = Some(name.to_string());
-                    continue;
-                }
+            && !name.is_empty()
+        {
+            current = Some(name.to_string());
+            continue;
+        }
         if let Some(cur) = current.clone() {
             // ^  passed\.$
             if line == "  passed." {
@@ -112,7 +113,11 @@ fn parse_unit(stderr: &str) -> UnitResult {
             footer = Some(f);
         }
     }
-    UnitResult { passing, failing, footer }
+    UnitResult {
+        passing,
+        failing,
+        footer,
+    }
 }
 
 /// Parse `"<a>/<b> <suffix>"` -> `(a, b)`.
@@ -169,7 +174,12 @@ fn parse_data(stdout: &str) -> DataResult {
         .into_iter()
         .filter(|e| seen.insert(e.clone()))
         .collect();
-    DataResult { passing, failing, errors, footer }
+    DataResult {
+        passing,
+        failing,
+        errors,
+        footer,
+    }
 }
 
 /// Match a file-level datatest error line, returning the named `*.xml` file.
@@ -180,9 +190,10 @@ fn parse_data_error(line: &str) -> Option<String> {
     // "Error parsing <f>.xml: ..." | "Error executing <f>.xml: ..."
     for kw in ["Error parsing ", "Error executing "] {
         if let Some(rest) = t.strip_prefix(kw)
-            && let Some(idx) = rest.find(".xml: ") {
-                return Some(rest[..idx + 4].to_string());
-            }
+            && let Some(idx) = rest.find(".xml: ")
+        {
+            return Some(rest[..idx + 4].to_string());
+        }
     }
     // "Error: Did not apply tests in <f>.xml"
     if let Some(rest) = t.strip_prefix("Error: Did not apply tests in ") {
@@ -196,14 +207,16 @@ fn parse_data_error(line: &str) -> Option<String> {
     }
     // "No output for <f>.xml"
     if let Some(rest) = t.strip_prefix("No output for ")
-        && rest.ends_with(".xml") {
-            return Some(rest.to_string());
-        }
+        && rest.ends_with(".xml")
+    {
+        return Some(rest.to_string());
+    }
     // "Execution failed for <f>.xml"
     if let Some(rest) = t.strip_prefix("Execution failed for ")
-        && rest.ends_with(".xml") {
-            return Some(rest.to_string());
-        }
+        && rest.ends_with(".xml")
+    {
+        return Some(rest.to_string());
+    }
     None
 }
 
@@ -218,7 +231,9 @@ fn abspath(p: &str) -> PathBuf {
     let joined = if raw.is_absolute() {
         raw
     } else {
-        std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).join(raw)
+        std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(raw)
     };
     let mut out = PathBuf::new();
     for comp in joined.components() {
@@ -472,7 +487,10 @@ pub fn run_cmd(args: &TestArgs) -> i32 {
                 "passing".into(),
                 Json::Array(passkeys.iter().map(|k| Json::Str(k.clone())).collect()),
             ),
-            ("returncode".into(), Json::Number(result.returncode.to_string())),
+            (
+                "returncode".into(),
+                Json::Number(result.returncode.to_string()),
+            ),
         ])
     };
 
@@ -532,7 +550,11 @@ pub fn run_cmd(args: &TestArgs) -> i32 {
         parity = Some(Parity {
             regressed,
             newly_passing: newly,
-            verdict: if parity_fail { "PARITY FAIL" } else { "PARITY OK" },
+            verdict: if parity_fail {
+                "PARITY FAIL"
+            } else {
+                "PARITY OK"
+            },
         });
     }
 
@@ -552,10 +574,20 @@ pub fn run_cmd(args: &TestArgs) -> i32 {
                 .collect(),
         );
         let data_fail = Json::Array(
-            result.data.failing.iter().map(|n| Json::Str(n.clone())).collect(),
+            result
+                .data
+                .failing
+                .iter()
+                .map(|n| Json::Str(n.clone()))
+                .collect(),
         );
         let data_errors = Json::Array(
-            result.data.errors.iter().map(|e| Json::Str(e.clone())).collect(),
+            result
+                .data
+                .errors
+                .iter()
+                .map(|e| Json::Str(e.clone()))
+                .collect(),
         );
         obj.push((
             "failures".into(),
@@ -584,7 +616,10 @@ pub fn run_cmd(args: &TestArgs) -> i32 {
                     (
                         "newly_passing".into(),
                         Json::Array(
-                            p.newly_passing.iter().map(|k| Json::Str(k.clone())).collect(),
+                            p.newly_passing
+                                .iter()
+                                .map(|k| Json::Str(k.clone()))
+                                .collect(),
                         ),
                     ),
                     ("verdict".into(), Json::Str(p.verdict.to_string())),
@@ -604,7 +639,11 @@ pub fn run_cmd(args: &TestArgs) -> i32 {
             }
             if !p.newly_passing.is_empty() {
                 let shown: Vec<String> = p.newly_passing.iter().take(10).cloned().collect();
-                let suffix = if p.newly_passing.len() > 10 { " ..." } else { "" };
+                let suffix = if p.newly_passing.len() > 10 {
+                    " ..."
+                } else {
+                    ""
+                };
                 let _ = writeln!(
                     text,
                     "newly passing ({}): {}{}",

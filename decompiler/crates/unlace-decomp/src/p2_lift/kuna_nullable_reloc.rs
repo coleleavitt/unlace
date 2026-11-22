@@ -2,7 +2,7 @@
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::TypeFactory;
 use crate::funcdata::Funcdata;
-use unlace_base::address::{calc_mask, Address};
+use unlace_base::address::{Address, calc_mask};
 use unlace_num::opcodes::OpCode;
 
 #[derive(Clone, Copy, Debug)]
@@ -279,7 +279,8 @@ pub(crate) fn materialize(data: &mut Funcdata, address: &Address, step: i32, ops
         }
         if shared {
             for &(id, slot, _) in &matches {
-                data.op_set_input(id, value, slot).expect("relocation operand");
+                data.op_set_input(id, value, slot)
+                    .expect("relocation operand");
             }
             continue;
         }

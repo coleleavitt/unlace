@@ -51,7 +51,9 @@ pub struct UnitTestError {
 impl UnitTestError {
     /// A failure carrying an explanation (the `LowlevelError` arm).
     pub fn msg(explain: impl Into<String>) -> Self {
-        UnitTestError { explain: Some(explain.into()) }
+        UnitTestError {
+            explain: Some(explain.into()),
+        }
     }
 
     /// An anonymous failure (the `catch(...)` arm: bare `  fail`).
@@ -89,7 +91,10 @@ impl UnitTest {
     /// C++ `UnitTest(name, func)` (without the static-registry side effect,
     /// which the [`UnitTestSuite`] supplies explicitly).
     pub fn new(name: impl Into<String>, func: UnitTestFn) -> Self {
-        UnitTest { name: name.into(), func }
+        UnitTest {
+            name: name.into(),
+            func,
+        }
     }
 }
 
@@ -319,7 +324,10 @@ testing : gamma ...
         assert_eq!(failed, 0);
         let zebra_at = out.find("zebra").unwrap();
         let alpha_at = out.find("alpha").unwrap();
-        assert!(zebra_at < alpha_at, "registration order, not set order:\n{out}");
+        assert!(
+            zebra_at < alpha_at,
+            "registration order, not set order:\n{out}"
+        );
         assert!(!out.contains("ghost"));
         assert!(out.contains("2/2 tests passed."));
     }

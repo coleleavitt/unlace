@@ -62,8 +62,15 @@ struct Run {
 /// function has one.
 fn output_entries(fd: &Funcdata) -> Vec<ParamEntry> {
     let proto = fd.get_func_proto();
-    let model = if proto.has_model() { Some(proto.model()) } else { fd.get_arch().defaultfp.as_ref() };
-    model.and_then(|m| m.output_list()).map(|o| o.get_entry().to_vec()).unwrap_or_default()
+    let model = if proto.has_model() {
+        Some(proto.model())
+    } else {
+        fd.get_arch().defaultfp.as_ref()
+    };
+    model
+        .and_then(|m| m.output_list())
+        .map(|o| o.get_entry().to_vec())
+        .unwrap_or_default()
 }
 
 /// Retire the active output trials that only hold a zero the epilogue run of
@@ -79,7 +86,11 @@ pub fn drop_epilogue_zeros(data: &Funcdata, active: &mut ParamActive, returns: &
     let runs: Vec<Run> = returns
         .iter()
         .copied()
-        .filter(|&id| data.obank().get(id).is_some_and(|o| !o.is_dead() && o.get_halt_type() == 0))
+        .filter(|&id| {
+            data.obank()
+                .get(id)
+                .is_some_and(|o| !o.is_dead() && o.get_halt_type() == 0)
+        })
         .filter_map(|id| epilogue_run(data, id, &outputs))
         .collect();
     if runs.is_empty() {
@@ -120,7 +131,10 @@ fn epilogue_run(data: &Funcdata, ret: OpId, outputs: &[ParamEntry]) -> Option<Ru
         if o.get_addr() != &end {
             break;
         }
-        if matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_BRANCHIND) {
+        if matches!(
+            o.code(),
+            OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_BRANCHIND
+        ) {
             return None;
         }
         cur = o.basic_neighbours().0;
@@ -144,7 +158,9 @@ fn epilogue_run(data: &Funcdata, ret: OpId, outputs: &[ParamEntry]) -> Option<Ru
             ops.push(id);
             walk = o.basic_neighbours().0;
         }
-        let Some(clears) = clearing_instruction(data, &ops) else { break };
+        let Some(clears) = clearing_instruction(data, &ops) else {
+            break;
+        };
         foreign |= clears.iter().all(|&(vn, ref addr, size)| {
             !outputs.iter().any(|e| e.intersects(addr, size)) && unread_after(data, vn, &at)
         });
@@ -152,7 +168,12 @@ fn epilogue_run(data: &Funcdata, ret: OpId, outputs: &[ParamEntry]) -> Option<Ru
         cur = walk;
     }
     let start = start?;
-    foreign.then_some(Run { ret, block, start, end })
+    foreign.then_some(Run {
+        ret,
+        block,
+        start,
+        end,
+    })
 }
 
 /// The registers the instruction made of `ops` (in reverse order) clears,
@@ -181,7 +202,9 @@ fn clearing_instruction(data: &Funcdata, ops: &[OpId]) -> Option<Vec<(VarnodeId,
         let out = data.vbank().get(vn)?;
         let (addr, size) = (out.get_addr(), out.get_size());
         let covered = writes[k + 1..].iter().any(|&(_, later)| {
-            data.vbank().get(later).is_some_and(|l| addr.contained_by(size, l.get_addr(), l.get_size()))
+            data.vbank()
+                .get(later)
+                .is_some_and(|l| addr.contained_by(size, l.get_addr(), l.get_size()))
         });
         if covered {
             continue;
@@ -203,7 +226,8 @@ fn clearing_instruction(data: &Funcdata, ops: &[OpId]) -> Option<Vec<(VarnodeId,
 /// flags of a clearing XOR are?
 fn unread_after(data: &Funcdata, vn: VarnodeId, at: &Address) -> bool {
     data.vbank().get(vn).is_some_and(|v| {
-        v.descend_iter().all(|r| data.obank().get(r).is_some_and(|o| o.get_addr() == at))
+        v.descend_iter()
+            .all(|r| data.obank().get(r).is_some_and(|o| o.get_addr() == at))
     })
 }
 
@@ -239,7 +263,9 @@ fn is_zero(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
 fn zero_in_run(data: &Funcdata, vn: VarnodeId, run: &Run, depth: u32) -> bool {
     let inside = |id: OpId| {
         data.obank().get(id).is_some_and(|o| {
-            o.get_parent() == Some(run.block) && o.get_addr() >= &run.start && o.get_addr() <= &run.end
+            o.get_parent() == Some(run.block)
+                && o.get_addr() >= &run.start
+                && o.get_addr() <= &run.end
         })
     };
     data.vbank().get(vn).is_some_and(|v| v.is_written()) && zero_def(data, vn, depth, &inside)
@@ -247,7 +273,9 @@ fn zero_in_run(data: &Funcdata, vn: VarnodeId, run: &Run, depth: u32) -> bool {
 
 /// [`is_zero`], requiring `keep` of every defining op on the way.
 fn zero_def(data: &Funcdata, vn: VarnodeId, depth: u32, keep: &dyn Fn(OpId) -> bool) -> bool {
-    let Some(v) = data.vbank().get(vn) else { return false };
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
     if v.is_constant() {
         return v.get_offset() == 0;
     }
@@ -258,8 +286,13 @@ fn zero_def(data: &Funcdata, vn: VarnodeId, depth: u32, keep: &dyn Fn(OpId) -> b
     if !keep(def) {
         return false;
     }
-    let Some(op) = data.obank().get(def) else { return false };
-    let input = |k: i32| op.get_in(k).is_some_and(|i| zero_def(data, i, depth - 1, keep));
+    let Some(op) = data.obank().get(def) else {
+        return false;
+    };
+    let input = |k: i32| {
+        op.get_in(k)
+            .is_some_and(|i| zero_def(data, i, depth - 1, keep))
+    };
     match op.code() {
         OpCode::CPUI_COPY | OpCode::CPUI_INT_ZEXT | OpCode::CPUI_INT_SEXT => input(0),
         OpCode::CPUI_SUBPIECE => input(0) || slice_of_zero(data, op, v.get_size(), depth - 1, keep),
@@ -283,14 +316,32 @@ fn slice_of_zero(
     depth: u32,
     keep: &dyn Fn(OpId) -> bool,
 ) -> bool {
-    let Some(off) = op.get_in(1).and_then(|c| data.vbank().get(c)).map(|c| c.get_offset() as i64) else {
+    let Some(off) = op
+        .get_in(1)
+        .and_then(|c| data.vbank().get(c))
+        .map(|c| c.get_offset() as i64)
+    else {
         return false;
     };
-    let Some(whole) = op.get_in(0).and_then(|w| data.vbank().get(w)) else { return false };
-    let Some(def) = whole.get_def().filter(|&d| keep(d)) else { return false };
-    let Some(piece) = data.obank().get(def).filter(|p| p.code() == OpCode::CPUI_PIECE) else { return false };
-    let (Some(hi), Some(lo)) = (piece.get_in(0), piece.get_in(1)) else { return false };
-    let Some(lo_size) = data.vbank().get(lo).map(|l| i64::from(l.get_size())) else { return false };
+    let Some(whole) = op.get_in(0).and_then(|w| data.vbank().get(w)) else {
+        return false;
+    };
+    let Some(def) = whole.get_def().filter(|&d| keep(d)) else {
+        return false;
+    };
+    let Some(piece) = data
+        .obank()
+        .get(def)
+        .filter(|p| p.code() == OpCode::CPUI_PIECE)
+    else {
+        return false;
+    };
+    let (Some(hi), Some(lo)) = (piece.get_in(0), piece.get_in(1)) else {
+        return false;
+    };
+    let Some(lo_size) = data.vbank().get(lo).map(|l| i64::from(l.get_size())) else {
+        return false;
+    };
     if off + i64::from(size) <= lo_size {
         zero_def(data, lo, depth, keep)
     } else if off >= lo_size {

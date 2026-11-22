@@ -5,10 +5,10 @@
 
 use super::*;
 
-use unlace_base::address::Address;
-use unlace_base::space::{spacetype, AddrSpace};
-use unlace_base::types::int4;
 use std::rc::Rc;
+use unlace_base::address::Address;
+use unlace_base::space::{AddrSpace, spacetype};
+use unlace_base::types::int4;
 
 use crate::context::VarnodeId;
 use crate::p4_calls::kuna_calleearitybody::plan_from_body;
@@ -18,7 +18,17 @@ use crate::p4_calls::kuna_calleedeadarg::CalleeEntryDead;
 const REG: int4 = 3;
 
 fn reg_space() -> Rc<AddrSpace> {
-    Rc::new(AddrSpace::new(spacetype::IPTR_PROCESSOR, "register", false, 8, 1, REG, 0, 0, 0))
+    Rc::new(AddrSpace::new(
+        spacetype::IPTR_PROCESSOR,
+        "register",
+        false,
+        8,
+        1,
+        REG,
+        0,
+        0,
+        0,
+    ))
 }
 
 fn vid(n: u64) -> VarnodeId {
@@ -56,12 +66,18 @@ fn scratch(sp: &Rc<AddrSpace>, off: u64, vn: u64) -> BodyTrial {
 /// A trial the caller wrote whose value reaches the CALL and nothing else —
 /// upstream's own reading of a further argument.
 fn active(sp: &Rc<AddrSpace>, off: u64, vn: u64) -> BodyTrial {
-    BodyTrial { caller_active: true, ..scratch(sp, off, vn) }
+    BodyTrial {
+        caller_active: true,
+        ..scratch(sp, off, vn)
+    }
 }
 
 /// A constant the caller materialized into the register, used by the caller too.
 fn constant(sp: &Rc<AddrSpace>, off: u64, vn: u64) -> BodyTrial {
-    BodyTrial { caller_constant: true, ..scratch(sp, off, vn) }
+    BodyTrial {
+        caller_constant: true,
+        ..scratch(sp, off, vn)
+    }
 }
 
 fn loc(sp: &Rc<AddrSpace>, off: u64) -> (Address, int4) {
@@ -70,13 +86,25 @@ fn loc(sp: &Rc<AddrSpace>, off: u64) -> (Address, int4) {
 
 /// The SysV integer argument registers, in prototype order.
 fn sysv(reg: &Rc<AddrSpace>) -> Vec<(Address, int4)> {
-    vec![loc(reg, 0x38), loc(reg, 0x30), loc(reg, 0x10), loc(reg, 0x8), loc(reg, 0x80), loc(reg, 0x88)]
+    vec![
+        loc(reg, 0x38),
+        loc(reg, 0x30),
+        loc(reg, 0x10),
+        loc(reg, 0x8),
+        loc(reg, 0x80),
+        loc(reg, 0x88),
+    ]
 }
 
 /// A summary that proves `reads` are inputs and nothing dead anywhere — what a
 /// body whose every path is cut at a nested call answers.
 fn cut_body(reads: &[u64]) -> CalleeEntryDead {
-    CalleeEntryDead::from_parts(REG, reads.iter().map(|r| (REG, *r, 8)).collect(), vec![vec![]], true)
+    CalleeEntryDead::from_parts(
+        REG,
+        reads.iter().map(|r| (REG, *r, 8)).collect(),
+        vec![vec![]],
+        true,
+    )
 }
 
 /// The witness's trials: rdi holds the buffer, rsi holds the XOR key the caller
@@ -127,7 +155,10 @@ fn a_constant_boundary_is_never_scratch() {
 #[test]
 fn an_unchecked_boundary_is_refused() {
     let reg = reg_space();
-    let unchecked = BodyTrial { caller_checked: false, ..scratch(&reg, 0x30, 2) };
+    let unchecked = BodyTrial {
+        caller_checked: false,
+        ..scratch(&reg, 0x30, 2)
+    };
     let trials = witness(&reg, unchecked);
     let live = cut_body(&[0x38]);
     assert_eq!(plan_from_body(&trials, &sysv(&reg), &live), None);
@@ -150,7 +181,10 @@ fn a_run_that_reaches_the_last_argument_register_is_still_refused() {
 fn a_hole_inside_the_run_is_still_refused() {
     let reg = reg_space();
     let mut trials = witness(&reg, scratch(&reg, 0x30, 2));
-    trials[1] = BodyTrial { vn: None, ..scratch(&reg, 0x30, 2) };
+    trials[1] = BodyTrial {
+        vn: None,
+        ..scratch(&reg, 0x30, 2)
+    };
     let live = cut_body(&[0x38, 0x10]); // rsi skipped, rdx read
     assert_eq!(plan_from_body(&trials, &sysv(&reg), &live), None);
 }

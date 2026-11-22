@@ -42,7 +42,10 @@ pub(super) enum Guard {
     /// The legacy flat hop budget, every hop counted.
     Depth { depth: u32 },
     /// Default: upstream's per-offset re-entry counter plus a stack backstop.
-    Cycle { counts: BTreeMap<usize, u32>, nesting: u32 },
+    Cycle {
+        counts: BTreeMap<usize, u32>,
+        nesting: u32,
+    },
 }
 
 impl TypeWalk {
@@ -54,11 +57,17 @@ impl TypeWalk {
     /// A walk with the guard chosen explicitly (the unit tests).
     pub(super) fn with_gate(full_depth: bool) -> Self {
         let guard = if full_depth {
-            Guard::Cycle { counts: BTreeMap::new(), nesting: 0 }
+            Guard::Cycle {
+                counts: BTreeMap::new(),
+                nesting: 0,
+            }
         } else {
             Guard::Depth { depth: 0 }
         };
-        TypeWalk { guard, active: BTreeSet::new() }
+        TypeWalk {
+            guard,
+            active: BTreeSet::new(),
+        }
     }
 
     /// (kuna `dwarfstructs`) Claim `name` for field population on this path.
@@ -158,7 +167,10 @@ mod tests {
         for off in 0..MAX_NESTING as usize {
             assert!(w.enter(off));
         }
-        assert!(!w.enter(9999), "nesting bound must refuse beyond MAX_NESTING");
+        assert!(
+            !w.enter(9999),
+            "nesting bound must refuse beyond MAX_NESTING"
+        );
     }
 
     /// (kuna `dwarfstructs`) The aggregate-in-progress claim is exact and
@@ -169,10 +181,16 @@ mod tests {
     fn aggregate_claim_is_path_local() {
         let mut w = TypeWalk::with_gate(true);
         assert!(w.begin_aggregate("node"));
-        assert!(!w.begin_aggregate("node"), "a re-entrant claim must be refused");
+        assert!(
+            !w.begin_aggregate("node"),
+            "a re-entrant claim must be refused"
+        );
         assert!(w.begin_aggregate("other"), "a different name is unaffected");
         w.end_aggregate("node");
-        assert!(w.begin_aggregate("node"), "released names are claimable again");
+        assert!(
+            w.begin_aggregate("node"),
+            "released names are claimable again"
+        );
     }
 
     /// The gate-off arm is the pre-fix budget: three hops, whatever they are.
@@ -185,6 +203,9 @@ mod tests {
         assert!(!w.enter(4), "the pre-fix budget is three hops");
         w.leave(3);
         assert!(w.enter(4), "unwinding one hop frees the budget again");
-        assert!(!w.collapse_qualifiers(), "the off arm keeps the C++-only collapse");
+        assert!(
+            !w.collapse_qualifiers(),
+            "the off arm keeps the C++-only collapse"
+        );
     }
 }

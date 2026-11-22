@@ -20,25 +20,26 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace,
-    UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace, addrspace_flags,
+    spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
-use unlace_decomp::dtype::{type_metatype, Datatype};
+use unlace_decomp::action::Rule;
+use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
+use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::ruleaction_1::{
     RuleHighOrderAnd, RuleLessOne, RuleNegateIdentity, RuleRightShiftAnd, RuleShiftBitops,
 };
-use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
 use unlace_decomp::varnode::{DefOpInfo, VarnodeBank};
-use unlace_decomp::action::Rule;
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(IopSpace::new(2))).unwrap();
     m.insert_space(Rc::new(FspecSpace::new(3))).unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
@@ -80,7 +81,8 @@ fn make_op_n(fd: &mut Funcdata, off: u64, opc: OpCode, ninputs: int4, flags: u32
     let pc = Address::new(ram(fd), off);
     let id = fd.obank_mut().create_at(ninputs, pc);
     fd.obank_mut().mark_alive(id);
-    fd.obank_mut().change_opcode(id, TypeOp::new(opc, flags, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(id, TypeOp::new(opc, flags, format!("{opc:?}")));
     id
 }
 
@@ -101,10 +103,14 @@ fn make_written(fd: &mut Funcdata, off: u64, size: int4, defopc: OpCode) -> (Var
     let pc = Address::new(ram(fd), off);
     let defop = fd.obank_mut().create_at(2, pc);
     fd.obank_mut().mark_alive(defop);
-    fd.obank_mut().change_opcode(defop, TypeOp::new(defopc, 0, format!("{defopc:?}")));
+    fd.obank_mut()
+        .change_opcode(defop, TypeOp::new(defopc, 0, format!("{defopc:?}")));
     let vn = fd.new_varnode(size, &Address::new(ram(fd), off), Some(unk(size)));
     let seq = fd.obank().get(defop).unwrap().get_seq_num().clone();
-    let info = DefOpInfo { id: defop, seqnum: seq };
+    let info = DefOpInfo {
+        id: defop,
+        seqnum: seq,
+    };
     let vn = fd.vbank_mut().set_def(vn, info, &mut no_replace()).unwrap();
     fd.obank_mut().get_mut(defop).unwrap().set_output(Some(vn));
     (vn, defop)
@@ -113,7 +119,10 @@ fn make_written(fd: &mut Funcdata, off: u64, size: int4, defopc: OpCode) -> (Var
 fn give_output(fd: &mut Funcdata, op: OpId, off: u64, size: int4) -> VarnodeId {
     let vn = fd.new_varnode(size, &Address::new(ram(fd), off), Some(unk(size)));
     let seq = fd.obank().get(op).unwrap().get_seq_num().clone();
-    let info = DefOpInfo { id: op, seqnum: seq };
+    let info = DefOpInfo {
+        id: op,
+        seqnum: seq,
+    };
     let vn = fd.vbank_mut().set_def(vn, info, &mut no_replace()).unwrap();
     fd.obank_mut().get_mut(op).unwrap().set_output(Some(vn));
     vn
@@ -121,7 +130,10 @@ fn give_output(fd: &mut Funcdata, op: OpId, off: u64, size: int4) -> VarnodeId {
 
 fn wire_input(fd: &mut Funcdata, op: OpId, vn: VarnodeId, slot: int4) {
     fd.vbank_mut().add_descend(vn, op).unwrap();
-    fd.obank_mut().get_mut(op).unwrap().set_input(Some(vn), slot);
+    fd.obank_mut()
+        .get_mut(op)
+        .unwrap()
+        .set_input(Some(vn), slot);
 }
 
 fn code_of(fd: &Funcdata, op: OpId) -> OpCode {
@@ -167,7 +179,11 @@ fn w5s3_rightshiftand_large_shift_masks_count_and_applies() {
 
     // x86-masked: sa==64 -> count mod 64 == 0, so mask>>0 == full>>0 == u64::MAX,
     // full == mask passes, root is non-free -> rule applies and bypasses the AND.
-    assert_eq!(r.apply_op(op, &mut fd), 1, "rule applies (x86-masked shift, full==mask)");
+    assert_eq!(
+        r.apply_op(op, &mut fd),
+        1,
+        "rule applies (x86-masked shift, full==mask)"
+    );
     assert_eq!(in_of(&fd, op, 0), Some(root), "AND bypassed, slot0 -> root");
 }
 
@@ -454,7 +470,11 @@ fn w5s3r2_rightshiftand_negative_sa_masks_like_x86() {
     wire_input(&mut fd, op, sa, 1);
     let mut r = RuleRightShiftAnd::new("analysis");
     // sa=-64 -> count mod 64 == 0 -> full>>0 == mask>>0 == u64::MAX -> applies.
-    assert_eq!(r.apply_op(op, &mut fd), 1, "negative sa, x86-masked to 0, full==mask -> applies");
+    assert_eq!(
+        r.apply_op(op, &mut fd),
+        1,
+        "negative sa, x86-masked to 0, full==mask -> applies"
+    );
     assert_eq!(in_of(&fd, op, 0), Some(root), "AND bypassed, slot0 -> root");
 }
 
@@ -482,9 +502,17 @@ fn w5s3r2_rightshiftand_large_shift_full_mismatch_declines() {
     wire_input(&mut fd, op, sa, 1);
     let mut r = RuleRightShiftAnd::new("analysis");
     // 66 % 64 == 2; full>>2 (0x3FFF_FFFF) != mask>>2 (0x03FF_FFFF) -> decline.
-    assert_eq!(r.apply_op(op, &mut fd), 0, "masked nonzero count, full!=mask -> decline");
+    assert_eq!(
+        r.apply_op(op, &mut fd),
+        0,
+        "masked nonzero count, full!=mask -> decline"
+    );
     // The AND must be left untouched (slot0 still the written AND output).
-    assert_eq!(in_of(&fd, op, 0), Some(inv), "op slot0 unchanged on decline");
+    assert_eq!(
+        in_of(&fd, op, 0),
+        Some(inv),
+        "op slot0 unchanged on decline"
+    );
 }
 
 // -----------------------------------------------------------------------------
@@ -517,8 +545,19 @@ fn w5s3r2_shiftbitops_left_shift_64_uses_pcode_left_returns_zero() {
     let _out = give_output(&mut fd, op, 0x80, 8);
     let mut r = RuleShiftBitops::new("analysis");
     // pcode_left(nzm, 64) == 0 -> break at i==0 -> AND branch -> const-0 rewire.
-    assert_eq!(r.apply_op(op, &mut fd), 1, "pcode_left(>=64)=0 -> nzm clears -> applies");
+    assert_eq!(
+        r.apply_op(op, &mut fd),
+        1,
+        "pcode_left(>=64)=0 -> nzm clears -> applies"
+    );
     let s0 = in_of(&fd, op, 0).unwrap();
-    assert!(is_const(&fd, s0), "INT_AND branch: slot0 becomes a fresh constant");
-    assert_eq!(off_of(&fd, s0), 0, "the rewired constant is 0 (result is zero)");
+    assert!(
+        is_const(&fd, s0),
+        "INT_AND branch: slot0 becomes a fresh constant"
+    );
+    assert_eq!(
+        off_of(&fd, s0),
+        0,
+        "the rewired constant is 0 (result is zero)"
+    );
 }

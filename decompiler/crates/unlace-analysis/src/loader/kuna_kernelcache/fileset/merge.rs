@@ -10,7 +10,9 @@
 //! indirect table. The rebuilt header goes in front of the collection, so every
 //! file offset moves by the header's page-rounded size.
 
-use super::{load_commands, rd_u32, rd_u64, FilesetEntry, HEADER_LEN, LC_SEGMENT_64, LC_SYMTAB, NLIST_LEN};
+use super::{
+    FilesetEntry, HEADER_LEN, LC_SEGMENT_64, LC_SYMTAB, NLIST_LEN, load_commands, rd_u32, rd_u64,
+};
 
 const LC_DYSYMTAB: u32 = 0xb;
 const LC_UNIXTHREAD: u32 = 0x5;
@@ -56,7 +58,8 @@ struct EntrySymbols {
 fn entry_symbols(bytes: &[u8], cmds: &[(u32, usize)]) -> Option<EntrySymbols> {
     let &(_, st) = cmds.iter().find(|&&(c, _)| c == LC_SYMTAB)?;
     let symoff = rd_u32(bytes, st + 8)? as usize;
-    let nsyms = (rd_u32(bytes, st + 12)? as usize).min(bytes.len().saturating_sub(symoff) / NLIST_LEN);
+    let nsyms =
+        (rd_u32(bytes, st + 12)? as usize).min(bytes.len().saturating_sub(symoff) / NLIST_LEN);
     let mut out = EntrySymbols {
         symoff,
         nsyms,
@@ -70,7 +73,12 @@ fn entry_symbols(bytes: &[u8], cmds: &[(u32, usize)]) -> Option<EntrySymbols> {
     if let Some(&(_, dy)) = cmds.iter().find(|&&(c, _)| c == LC_DYSYMTAB) {
         let range = |i: usize| -> Option<std::ops::Range<usize>> {
             let first = (rd_u32(bytes, dy + i)? as usize).min(nsyms);
-            Some(first..first.saturating_add(rd_u32(bytes, dy + i + 4)? as usize).min(nsyms))
+            Some(
+                first
+                    ..first
+                        .saturating_add(rd_u32(bytes, dy + i + 4)? as usize)
+                        .min(nsyms),
+            )
         };
         out.local = range(8)?;
         out.extdef = range(16)?;
@@ -83,7 +91,9 @@ fn entry_symbols(bytes: &[u8], cmds: &[(u32, usize)]) -> Option<EntrySymbols> {
 }
 
 fn function_starts(bytes: &[u8], cmds: &[(u32, usize)]) -> Vec<u64> {
-    let Some(&(_, fs)) = cmds.iter().find(|&&(c, _)| c == LC_FUNCTION_STARTS) else { return Vec::new() };
+    let Some(&(_, fs)) = cmds.iter().find(|&&(c, _)| c == LC_FUNCTION_STARTS) else {
+        return Vec::new();
+    };
     let Some(base) = cmds
         .iter()
         .filter(|&&(c, p)| c == LC_SEGMENT_64 && seg_name(bytes, p) == b"__TEXT")
@@ -91,8 +101,12 @@ fn function_starts(bytes: &[u8], cmds: &[(u32, usize)]) -> Vec<u64> {
     else {
         return Vec::new();
     };
-    let (Some(off), Some(size)) = (rd_u32(bytes, fs + 8), rd_u32(bytes, fs + 12)) else { return Vec::new() };
-    let Some(data) = bytes.get(off as usize..off as usize + size as usize) else { return Vec::new() };
+    let (Some(off), Some(size)) = (rd_u32(bytes, fs + 8), rd_u32(bytes, fs + 12)) else {
+        return Vec::new();
+    };
+    let Some(data) = bytes.get(off as usize..off as usize + size as usize) else {
+        return Vec::new();
+    };
     let mut out = Vec::new();
     let (mut addr, mut i) = (base, 0);
     while i < data.len() {
@@ -130,7 +144,11 @@ fn uleb(mut v: u64, out: &mut Vec<u8>) {
 }
 
 /// Build one image from `chosen` (indexes into `all`).
-pub(super) fn merge(bytes: Vec<u8>, all: &[FilesetEntry], chosen: &[usize]) -> Result<Vec<u8>, String> {
+pub(super) fn merge(
+    bytes: Vec<u8>,
+    all: &[FilesetEntry],
+    chosen: &[usize],
+) -> Result<Vec<u8>, String> {
     let mut segs: Vec<Vec<u8>> = Vec::new();
     let mut extra: Vec<Vec<u8>> = Vec::new();
     let mut nlocal: Vec<u8> = Vec::new();
@@ -146,13 +164,17 @@ pub(super) fn merge(bytes: Vec<u8>, all: &[FilesetEntry], chosen: &[usize]) -> R
 
     for &i in chosen {
         let at = all[i].fileoff as usize;
-        let cmds = load_commands(&bytes, at).ok_or_else(|| format!("malformed load commands in {}", all[i].id))?;
+        let cmds = load_commands(&bytes, at)
+            .ok_or_else(|| format!("malformed load commands in {}", all[i].id))?;
         let syms = entry_symbols(&bytes, &cmds);
         let mut section_map: Vec<u8> = vec![0];
         let indirect_base = indirect.len() as u32;
         for &(cmd, p) in &cmds {
             let size = rd_u32(&bytes, p + 4).unwrap_or(0) as usize;
-            let raw = bytes.get(p..p + size).ok_or("truncated load command")?.to_vec();
+            let raw = bytes
+                .get(p..p + size)
+                .ok_or("truncated load command")?
+                .to_vec();
             match cmd {
                 LC_SEGMENT_64 => {
                     if seg_name(&bytes, p) == b"__LINKEDIT" {
@@ -165,9 +187,13 @@ pub(super) fn merge(bytes: Vec<u8>, all: &[FilesetEntry], chosen: &[usize]) -> R
                     let nsects = rd_u32(&seg, 64).unwrap_or(0) as usize;
                     for k in 0..nsects {
                         let s = SEGMENT_LEN + k * SECTION_LEN;
-                        let Some(flags) = rd_u32(&seg, s + 64) else { break };
+                        let Some(flags) = rd_u32(&seg, s + 64) else {
+                            break;
+                        };
                         if matches!(flags & 0xff, 0x6 | 0x7 | 0x8 | 0x10 | 0x14) {
-                            let r1 = rd_u32(&seg, s + 68).unwrap_or(0).wrapping_add(indirect_base);
+                            let r1 = rd_u32(&seg, s + 68)
+                                .unwrap_or(0)
+                                .wrapping_add(indirect_base);
                             seg[s + 68..s + 72].copy_from_slice(&r1.to_le_bytes());
                         }
                         sections_seen += 1;
@@ -197,10 +223,15 @@ pub(super) fn merge(bytes: Vec<u8>, all: &[FilesetEntry], chosen: &[usize]) -> R
         let Some(syms) = syms else { continue };
         strtab.get_or_insert((syms.stroff, syms.strsize));
         let mut index: Vec<u32> = vec![u32::MAX; syms.nsyms];
-        for (range, out) in [(&syms.local, &mut nlocal), (&syms.extdef, &mut nextdef), (&syms.undef, &mut nundef)] {
+        for (range, out) in [
+            (&syms.local, &mut nlocal),
+            (&syms.extdef, &mut nextdef),
+            (&syms.undef, &mut nundef),
+        ] {
             for s in range.clone() {
                 index[s] = (out.len() / NLIST_LEN) as u32;
-                let mut n = bytes[syms.symoff + s * NLIST_LEN..syms.symoff + (s + 1) * NLIST_LEN].to_vec();
+                let mut n =
+                    bytes[syms.symoff + s * NLIST_LEN..syms.symoff + (s + 1) * NLIST_LEN].to_vec();
                 if n[5] != 0 {
                     n[5] = section_map.get(n[5] as usize).copied().unwrap_or(0);
                 }
@@ -216,7 +247,10 @@ pub(super) fn merge(bytes: Vec<u8>, all: &[FilesetEntry], chosen: &[usize]) -> R
             }
             let s = raw as usize;
             let new = index.get(s).copied().filter(|&v| v != u32::MAX);
-            let tag = tags.iter().find(|(r, _)| r.contains(&s)).map(|&(_, t)| t as usize);
+            let tag = tags
+                .iter()
+                .find(|(r, _)| r.contains(&s))
+                .map(|&(_, t)| t as usize);
             indirect.push(match (tag, new) {
                 (Some(t), Some(v)) => Ok((t, v)),
                 _ => Err(INDIRECT_SYMBOL_LOCAL),
@@ -225,9 +259,18 @@ pub(super) fn merge(bytes: Vec<u8>, all: &[FilesetEntry], chosen: &[usize]) -> R
     }
     for p in branch_segments(&bytes) {
         let size = rd_u32(&bytes, p + 4).unwrap_or(0) as usize;
-        segs.push(bytes.get(p..p + size).ok_or("truncated branch segment")?.to_vec());
+        segs.push(
+            bytes
+                .get(p..p + size)
+                .ok_or("truncated branch segment")?
+                .to_vec(),
+        );
     }
-    let (nl, ne, nu) = (nlocal.len() / NLIST_LEN, nextdef.len() / NLIST_LEN, nundef.len() / NLIST_LEN);
+    let (nl, ne, nu) = (
+        nlocal.len() / NLIST_LEN,
+        nextdef.len() / NLIST_LEN,
+        nundef.len() / NLIST_LEN,
+    );
     let indirect: Vec<u32> = indirect
         .into_iter()
         .map(|v| match v {
@@ -236,10 +279,19 @@ pub(super) fn merge(bytes: Vec<u8>, all: &[FilesetEntry], chosen: &[usize]) -> R
         })
         .collect();
 
-    let starts_base = segs.iter().rev().find(|s| seg_name(s, 0) == b"__TEXT").and_then(|s| rd_u64(s, 24));
+    let starts_base = segs
+        .iter()
+        .rev()
+        .find(|s| seg_name(s, 0) == b"__TEXT")
+        .and_then(|s| rd_u64(s, 24));
     let ranges: Vec<(u64, u64)> = segs
         .iter()
-        .filter_map(|s| Some((rd_u64(s, 24)?, rd_u64(s, 24)?.saturating_add(rd_u64(s, 32)?))))
+        .filter_map(|s| {
+            Some((
+                rd_u64(s, 24)?,
+                rd_u64(s, 24)?.saturating_add(rd_u64(s, 32)?),
+            ))
+        })
         .collect();
     starts.retain(|&a| ranges.iter().any(|&(lo, hi)| (lo..hi).contains(&a)));
     starts.sort_unstable();
@@ -261,7 +313,8 @@ pub(super) fn merge(bytes: Vec<u8>, all: &[FilesetEntry], chosen: &[usize]) -> R
         + 80
         + if starts_blob.is_empty() { 0 } else { 16 };
     let shift = (HEADER_LEN + sizeofcmds).div_ceil(PAGE) * PAGE;
-    let shift32 = u32::try_from(shift).map_err(|_| "the merged image does not fit 32-bit file offsets")?;
+    let shift32 =
+        u32::try_from(shift).map_err(|_| "the merged image does not fit 32-bit file offsets")?;
 
     let tail_start = shift + bytes.len();
     let symoff = tail_start.div_ceil(8) * 8;
@@ -271,7 +324,11 @@ pub(super) fn merge(bytes: Vec<u8>, all: &[FilesetEntry], chosen: &[usize]) -> R
     let mut out = Vec::with_capacity(startsoff + starts_blob.len());
     let first = &all[*chosen.first().ok_or("no entries to merge")?];
     let at = first.fileoff as usize;
-    let filetype = if has_kernel { MH_EXECUTE } else { MH_KEXT_BUNDLE };
+    let filetype = if has_kernel {
+        MH_EXECUTE
+    } else {
+        MH_KEXT_BUNDLE
+    };
     out.extend_from_slice(&bytes[at..at + 12]);
     out.extend_from_slice(&filetype.to_le_bytes());
     out.extend_from_slice(&(ncmds_fixed as u32).to_le_bytes());
@@ -279,13 +336,18 @@ pub(super) fn merge(bytes: Vec<u8>, all: &[FilesetEntry], chosen: &[usize]) -> R
     out.extend_from_slice(&rd_u32(&bytes, at + 24).unwrap_or(0).to_le_bytes());
     out.extend_from_slice(&0u32.to_le_bytes());
     for mut seg in segs {
-        let fileoff = rd_u64(&seg, 40).unwrap_or(0).checked_add(shift as u64).ok_or("segment offset overflows")?;
+        let fileoff = rd_u64(&seg, 40)
+            .unwrap_or(0)
+            .checked_add(shift as u64)
+            .ok_or("segment offset overflows")?;
         seg[40..48].copy_from_slice(&fileoff.to_le_bytes());
         let nsects = rd_u32(&seg, 64).unwrap_or(0) as usize;
         for k in 0..nsects {
             let s = SEGMENT_LEN + k * SECTION_LEN;
             if let Some(off) = rd_u32(&seg, s + 48).filter(|&o| o != 0) {
-                let moved = off.checked_add(shift32).ok_or("section offset overflows the merged image")?;
+                let moved = off
+                    .checked_add(shift32)
+                    .ok_or("section offset overflows the merged image")?;
                 seg[s + 48..s + 52].copy_from_slice(&moved.to_le_bytes());
             }
         }
@@ -295,18 +357,59 @@ pub(super) fn merge(bytes: Vec<u8>, all: &[FilesetEntry], chosen: &[usize]) -> R
         out.extend_from_slice(&e);
     }
     let (stroff, strsize) = strtab.unwrap_or((0, 0));
-    let w = |out: &mut Vec<u8>, vals: &[u32]| vals.iter().for_each(|v| out.extend_from_slice(&v.to_le_bytes()));
-    let stroff = stroff.checked_add(shift32).ok_or("string table offset overflows the merged image")?;
-    w(&mut out, &[LC_SYMTAB, 24, symoff as u32, (nl + ne + nu) as u32, stroff, strsize]);
+    let w = |out: &mut Vec<u8>, vals: &[u32]| {
+        vals.iter()
+            .for_each(|v| out.extend_from_slice(&v.to_le_bytes()))
+    };
+    let stroff = stroff
+        .checked_add(shift32)
+        .ok_or("string table offset overflows the merged image")?;
     w(
         &mut out,
         &[
-            LC_DYSYMTAB, 80, 0, nl as u32, nl as u32, ne as u32, (nl + ne) as u32, nu as u32,
-            0, 0, 0, 0, 0, 0, indirectoff as u32, indirect.len() as u32, 0, 0, 0, 0,
+            LC_SYMTAB,
+            24,
+            symoff as u32,
+            (nl + ne + nu) as u32,
+            stroff,
+            strsize,
+        ],
+    );
+    w(
+        &mut out,
+        &[
+            LC_DYSYMTAB,
+            80,
+            0,
+            nl as u32,
+            nl as u32,
+            ne as u32,
+            (nl + ne) as u32,
+            nu as u32,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            indirectoff as u32,
+            indirect.len() as u32,
+            0,
+            0,
+            0,
+            0,
         ],
     );
     if !starts_blob.is_empty() {
-        w(&mut out, &[LC_FUNCTION_STARTS, 16, startsoff as u32, starts_blob.len() as u32]);
+        w(
+            &mut out,
+            &[
+                LC_FUNCTION_STARTS,
+                16,
+                startsoff as u32,
+                starts_blob.len() as u32,
+            ],
+        );
     }
     if u32::try_from(startsoff + starts_blob.len()).is_err() {
         return Err("the merged image does not fit 32-bit file offsets".into());
@@ -317,7 +420,9 @@ pub(super) fn merge(bytes: Vec<u8>, all: &[FilesetEntry], chosen: &[usize]) -> R
     out.extend_from_slice(&nlocal);
     out.extend_from_slice(&nextdef);
     out.extend_from_slice(&nundef);
-    indirect.iter().for_each(|v| out.extend_from_slice(&v.to_le_bytes()));
+    indirect
+        .iter()
+        .for_each(|v| out.extend_from_slice(&v.to_le_bytes()));
     out.extend_from_slice(&starts_blob);
     Ok(out)
 }

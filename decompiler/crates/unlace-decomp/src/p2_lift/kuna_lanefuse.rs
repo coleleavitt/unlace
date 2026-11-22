@@ -72,14 +72,23 @@ fn name(code: OpCode, op: &str, lane: int4, total: int4) -> Option<String> {
         32 => "256",
         _ => "512",
     };
-    let float = matches!(code, OpCode::CPUI_FLOAT_ADD | OpCode::CPUI_FLOAT_SUB | OpCode::CPUI_FLOAT_MULT | OpCode::CPUI_FLOAT_DIV);
+    let float = matches!(
+        code,
+        OpCode::CPUI_FLOAT_ADD
+            | OpCode::CPUI_FLOAT_SUB
+            | OpCode::CPUI_FLOAT_MULT
+            | OpCode::CPUI_FLOAT_DIV
+    );
     let ty = if float {
         match lane {
             4 => "ps".to_string(),
             8 => "pd".to_string(),
             _ => return None,
         }
-    } else if matches!(code, OpCode::CPUI_INT_AND | OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR) {
+    } else if matches!(
+        code,
+        OpCode::CPUI_INT_AND | OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR
+    ) {
         format!("si{}", total * 8)
     } else {
         format!("epi{}", lane * 8)
@@ -100,7 +109,9 @@ pub const BUILTIN_MASK_BASE: uint4 = 0x1001_0000;
 pub fn mask_builtins<'a>(ops: impl Iterator<Item = (uint4, &'a [u8])>) -> Vec<(uint4, String)> {
     let mut out = Vec::new();
     for (i, nm) in ops {
-        let Ok(name) = std::str::from_utf8(nm) else { continue };
+        let Ok(name) = std::str::from_utf8(nm) else {
+            continue;
+        };
         if crate::kuna_avxintrin::intrinsic(name, 64).is_none() {
             continue;
         }
@@ -124,21 +135,31 @@ fn slice_of(data: &Funcdata, vn: VarnodeId) -> Option<Slice> {
     if v.is_constant() {
         return None;
     }
-    if let Some(def) = v.get_def().filter(|_| v.is_written()).and_then(|d| data.obank().get(d)) {
+    if let Some(def) = v
+        .get_def()
+        .filter(|_| v.is_written())
+        .and_then(|d| data.obank().get(d))
+    {
         if def.code() == OpCode::CPUI_SUBPIECE {
             let off = data.vbank().get(def.get_in(1)?)?.get_offset();
             return Some(Slice::Piece(def.get_in(0)?, off));
         }
     }
     let addr = v.get_addr().clone();
-    Some(Slice::Direct(addr.get_space()?.get_index() as usize, addr.get_offset(), addr))
+    Some(Slice::Direct(
+        addr.get_space()?.get_index() as usize,
+        addr.get_offset(),
+        addr,
+    ))
 }
 
 fn advance(s: &Slice, by: u64) -> Slice {
     match s {
-        Slice::Direct(sp, off, a) => {
-            Slice::Direct(*sp, off + by, Address::new(a.get_space().expect("slice space").clone(), off + by))
-        }
+        Slice::Direct(sp, off, a) => Slice::Direct(
+            *sp,
+            off + by,
+            Address::new(a.get_space().expect("slice space").clone(), off + by),
+        ),
         Slice::Piece(v, off) => Slice::Piece(*v, off + by),
     }
 }
@@ -160,7 +181,13 @@ fn whole(data: &mut Funcdata, s: &Slice, total: int4) -> Option<VarnodeId> {
 pub fn has_vector_run(data: &Funcdata, ops: &[OpId]) -> bool {
     (0..ops.len()).any(|i| {
         run_at(data, ops, i, true).is_some_and(|(_, run, _)| {
-            let lane = data.obank().get(run[0]).and_then(|o| o.get_out()).and_then(|v| data.vbank().get(v)).map(|v| v.get_size()).unwrap_or(0);
+            let lane = data
+                .obank()
+                .get(run[0])
+                .and_then(|o| o.get_out())
+                .and_then(|v| data.vbank().get(v))
+                .map(|v| v.get_size())
+                .unwrap_or(0);
             TOTALS.contains(&(lane * run.len() as int4))
         })
     })
@@ -177,9 +204,18 @@ pub fn fuse(data: &mut Funcdata, ops: &[OpId], vex: bool) -> KunaResult<bool> {
             continue;
         };
         let first = run[0];
-        let lane = data.obank().get(first).and_then(|o| o.get_out()).and_then(|v| data.vbank().get(v)).map(|v| v.get_size()).unwrap_or(0);
+        let lane = data
+            .obank()
+            .get(first)
+            .and_then(|o| o.get_out())
+            .and_then(|v| data.vbank().get(v))
+            .map(|v| v.get_size())
+            .unwrap_or(0);
         let total = lane * run.len() as int4;
-        let (Some(li), Some(ti)) = (LANES.iter().position(|&l| l == lane), TOTALS.iter().position(|&t| t == total)) else {
+        let (Some(li), Some(ti)) = (
+            LANES.iter().position(|&l| l == lane),
+            TOTALS.iter().position(|&t| t == total),
+        ) else {
             i = end;
             continue;
         };
@@ -220,13 +256,23 @@ pub fn fuse(data: &mut Funcdata, ops: &[OpId], vex: bool) -> KunaResult<bool> {
 }
 
 fn operands(data: &Funcdata, op: OpId) -> (Option<Slice>, Option<Slice>, Option<Slice>) {
-    let Some(o) = data.obank().get(op) else { return (None, None, None) };
+    let Some(o) = data.obank().get(op) else {
+        return (None, None, None);
+    };
     let out = o.get_out().and_then(|v| {
         let v = data.vbank().get(v)?;
         let a = v.get_addr().clone();
-        Some(Slice::Direct(a.get_space()?.get_index() as usize, a.get_offset(), a))
+        Some(Slice::Direct(
+            a.get_space()?.get_index() as usize,
+            a.get_offset(),
+            a,
+        ))
     });
-    (out, o.get_in(0).and_then(|v| slice_of(data, v)), o.get_in(1).and_then(|v| slice_of(data, v)))
+    (
+        out,
+        o.get_in(0).and_then(|v| slice_of(data, v)),
+        o.get_in(1).and_then(|v| slice_of(data, v)),
+    )
 }
 
 /// The lane run that starts at `ops[i]`: its opcode index, its ops, and the
@@ -234,13 +280,24 @@ fn operands(data: &Funcdata, op: OpId) -> (Option<Slice>, Option<Slice>, Option<
 fn run_at(data: &Funcdata, ops: &[OpId], i: usize, vex: bool) -> Option<(usize, Vec<OpId>, usize)> {
     let o = data.obank().get(ops[i])?;
     let oi = OPS.iter().position(|(c, _)| *c == o.code())?;
-    if matches!(o.code(), OpCode::CPUI_INT_AND | OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR) {
+    if matches!(
+        o.code(),
+        OpCode::CPUI_INT_AND | OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR
+    ) {
         return None;
     }
     // Legacy-encoded SSE integer lanes are left to the scalar lane rules
     // (`devectorize`, `wideslice`, `simdlane`): compilers emit them for
     // auto-vectorised scalar loops, which those rules turn back into the source.
-    if !vex && !matches!(o.code(), OpCode::CPUI_FLOAT_ADD | OpCode::CPUI_FLOAT_SUB | OpCode::CPUI_FLOAT_MULT | OpCode::CPUI_FLOAT_DIV) {
+    if !vex
+        && !matches!(
+            o.code(),
+            OpCode::CPUI_FLOAT_ADD
+                | OpCode::CPUI_FLOAT_SUB
+                | OpCode::CPUI_FLOAT_MULT
+                | OpCode::CPUI_FLOAT_DIV
+        )
+    {
         return None;
     }
     // Legacy-encoded two-lane double runs are the SLP vectoriser pairing two
@@ -250,14 +307,26 @@ fn run_at(data: &Funcdata, ops: &[OpId], i: usize, vex: bool) -> Option<(usize, 
         return None;
     }
     let lane = data.vbank().get(o.get_out()?)?.get_size() as u64;
-    let (Some(out0), Some(a0), Some(b0)) = operands(data, ops[i]) else { return None };
+    let (Some(out0), Some(a0), Some(b0)) = operands(data, ops[i]) else {
+        return None;
+    };
     let mut run = vec![ops[i]];
     let mut end = i + 1;
     // Lane ops of one run may be separated by the SUBPIECEs that feed them.
     let mut j = i + 1;
     while j < ops.len() {
         let oj = data.obank().get(ops[j])?;
-        if oj.code() == OpCode::CPUI_SUBPIECE || oj.code() == OpCode::CPUI_COPY && !oj.get_out().and_then(|v| data.vbank().get(v)).is_some_and(|v| v.get_addr().get_space().is_some_and(|s| s.get_name() == "register")) {
+        if oj.code() == OpCode::CPUI_SUBPIECE
+            || oj.code() == OpCode::CPUI_COPY
+                && !oj
+                    .get_out()
+                    .and_then(|v| data.vbank().get(v))
+                    .is_some_and(|v| {
+                        v.get_addr()
+                            .get_space()
+                            .is_some_and(|s| s.get_name() == "register")
+                    })
+        {
             j += 1;
             continue;
         }
@@ -265,7 +334,9 @@ fn run_at(data: &Funcdata, ops: &[OpId], i: usize, vex: bool) -> Option<(usize, 
             break;
         }
         let step = lane * run.len() as u64;
-        let (Some(out), Some(a), Some(b)) = operands(data, ops[j]) else { break };
+        let (Some(out), Some(a), Some(b)) = operands(data, ops[j]) else {
+            break;
+        };
         if out != advance(&out0, step) || a != advance(&a0, step) || b != advance(&b0, step) {
             break;
         }
@@ -294,36 +365,67 @@ pub fn fold_mask(data: &mut Funcdata, ops: &[OpId], evex_z: bool) -> KunaResult<
     let Some(pos) = ops.iter().position(|&op| {
         data.obank().get(op).is_some_and(|o| {
             o.code() == OpCode::CPUI_CALLOTHER
-                && o.get_in(0).and_then(|v| data.vbank().get(v)).is_some_and(|v| v.get_offset() < 0x1000_0000)
+                && o.get_in(0)
+                    .and_then(|v| data.vbank().get(v))
+                    .is_some_and(|v| v.get_offset() < 0x1000_0000)
         })
     }) else {
         return Ok(false);
     };
     let call = ops[pos];
-    let Some(r_addr) = addr_of(data, data.obank().get(call).and_then(|o| o.get_out())) else { return Ok(false) };
-    let r_size = data.obank().get(call).and_then(|o| o.get_out()).and_then(|v| data.vbank().get(v)).map(|v| v.get_size()).unwrap_or(0);
+    let Some(r_addr) = addr_of(data, data.obank().get(call).and_then(|o| o.get_out())) else {
+        return Ok(false);
+    };
+    let r_size = data
+        .obank()
+        .get(call)
+        .and_then(|o| o.get_out())
+        .and_then(|v| data.vbank().get(v))
+        .map(|v| v.get_size())
+        .unwrap_or(0);
     // The lane writes: ORs (merge) or MULTs (zero) into consecutive slices of r.
     let lane_writes: Vec<(usize, OpId)> = ops[pos + 1..]
         .iter()
         .enumerate()
         .filter(|&(_, &op)| {
             addr_of(data, data.obank().get(op).and_then(|o| o.get_out())).is_some_and(|a| {
-                a.get_space().map(|s| s.get_index()) == r_addr.get_space().map(|s| s.get_index()) && a.get_offset() >= r_addr.get_offset() && a.get_offset() < r_addr.get_offset() + r_size as u64
+                a.get_space().map(|s| s.get_index()) == r_addr.get_space().map(|s| s.get_index())
+                    && a.get_offset() >= r_addr.get_offset()
+                    && a.get_offset() < r_addr.get_offset() + r_size as u64
             })
         })
         .map(|(k, &op)| (pos + 1 + k, op))
         .collect();
-    let Some(&(_, first_write)) = lane_writes.first() else { return Ok(false) };
-    let lane = data.obank().get(first_write).and_then(|o| o.get_out()).and_then(|v| data.vbank().get(v)).map(|v| v.get_size()).unwrap_or(0);
+    let Some(&(_, first_write)) = lane_writes.first() else {
+        return Ok(false);
+    };
+    let lane = data
+        .obank()
+        .get(first_write)
+        .and_then(|o| o.get_out())
+        .and_then(|v| data.vbank().get(v))
+        .map(|v| v.get_size())
+        .unwrap_or(0);
     if !matches!(lane, 4 | 8) || lane_writes.len() as int4 * lane != r_size {
         return Ok(false);
     }
-    let merge = data.obank().get(first_write).is_some_and(|o| o.code() == OpCode::CPUI_INT_OR);
+    let merge = data
+        .obank()
+        .get(first_write)
+        .is_some_and(|o| o.code() == OpCode::CPUI_INT_OR);
     for (j, &(_, op)) in lane_writes.iter().enumerate() {
-        let Some(o) = data.obank().get(op) else { return Ok(false) };
-        let want = if merge { OpCode::CPUI_INT_OR } else { OpCode::CPUI_INT_MULT };
+        let Some(o) = data.obank().get(op) else {
+            return Ok(false);
+        };
+        let want = if merge {
+            OpCode::CPUI_INT_OR
+        } else {
+            OpCode::CPUI_INT_MULT
+        };
         let at = addr_of(data, o.get_out());
-        if o.code() != want || at.map(|a| a.get_offset()) != Some(r_addr.get_offset() + j as u64 * lane as u64) {
+        if o.code() != want
+            || at.map(|a| a.get_offset()) != Some(r_addr.get_offset() + j as u64 * lane as u64)
+        {
             return Ok(false);
         }
     }
@@ -336,10 +438,15 @@ pub fn fold_mask(data: &mut Funcdata, ops: &[OpId], evex_z: bool) -> KunaResult<
     let mut src: Option<Address> = None;
     if merge {
         for &op in &ops[pos + 1..range_end] {
-            let Some(o) = data.obank().get(op) else { continue };
+            let Some(o) = data.obank().get(op) else {
+                continue;
+            };
             if o.code() == OpCode::CPUI_INT_MULT {
                 if let Some(a) = addr_of(data, o.get_in(1)) {
-                    if a.get_space().map(|s| s.get_index()) == r_addr.get_space().map(|s| s.get_index()) && a.get_offset() != r_addr.get_offset() {
+                    if a.get_space().map(|s| s.get_index())
+                        == r_addr.get_space().map(|s| s.get_index())
+                        && a.get_offset() != r_addr.get_offset()
+                    {
                         src = Some(a);
                         break;
                     }
@@ -352,11 +459,18 @@ pub fn fold_mask(data: &mut Funcdata, ops: &[OpId], evex_z: bool) -> KunaResult<
     let mut src_zero = false;
     if let Some(s) = src.clone() {
         let writer = ops.iter().copied().find(|&op| {
-            data.obank().get(op).is_some_and(|o| o.code() == OpCode::CPUI_COPY)
-                && addr_of(data, data.obank().get(op).and_then(|o| o.get_out())).is_some_and(|a| a == s)
+            data.obank()
+                .get(op)
+                .is_some_and(|o| o.code() == OpCode::CPUI_COPY)
+                && addr_of(data, data.obank().get(op).and_then(|o| o.get_out()))
+                    .is_some_and(|a| a == s)
         });
         if let Some(w) = writer {
-            let input = data.obank().get(w).and_then(|o| o.get_in(0)).and_then(|v| data.vbank().get(v));
+            let input = data
+                .obank()
+                .get(w)
+                .and_then(|o| o.get_in(0))
+                .and_then(|v| data.vbank().get(v));
             match input {
                 Some(v) if v.is_constant() => src_zero = v.get_offset() == 0,
                 Some(v) => src = Some(v.get_addr().clone()),
@@ -372,7 +486,11 @@ pub fn fold_mask(data: &mut Funcdata, ops: &[OpId], evex_z: bool) -> KunaResult<
             && ops[pos + 1..range_end].iter().any(|&op| {
                 data.obank().get(op).is_some_and(|o| {
                     o.code() == OpCode::CPUI_INT_MULT
-                        && (0..2).any(|k| o.get_in(k).and_then(|v| data.vbank().get(v)).is_some_and(|v| v.is_constant() && v.get_offset() == 0))
+                        && (0..2).any(|k| {
+                            o.get_in(k)
+                                .and_then(|v| data.vbank().get(v))
+                                .is_some_and(|v| v.is_constant() && v.get_offset() == 0)
+                        })
                 })
             });
     if merge && src.is_none() && !zeroing {
@@ -382,7 +500,9 @@ pub fn fold_mask(data: &mut Funcdata, ops: &[OpId], evex_z: bool) -> KunaResult<
     let mut mask: Option<(Address, int4)> = None;
     let mut doomed = Vec::new();
     for &op in &ops[pos + 1..=range_end] {
-        let Some(o) = data.obank().get(op) else { continue };
+        let Some(o) = data.obank().get(op) else {
+            continue;
+        };
         if lane_writes.iter().any(|&(_, w)| w == op) {
             doomed.push(op);
             continue;
@@ -392,15 +512,26 @@ pub fn fold_mask(data: &mut Funcdata, ops: &[OpId], evex_z: bool) -> KunaResult<
         }
         if o.code() == OpCode::CPUI_COPY && mask.is_none() {
             if let Some(v) = o.get_in(0).and_then(|v| data.vbank().get(v)) {
-                if v.get_addr().get_space().is_some_and(|s| s.get_name() == "register") {
+                if v.get_addr()
+                    .get_space()
+                    .is_some_and(|s| s.get_name() == "register")
+                {
                     mask = Some((v.get_addr().clone(), v.get_size()));
                 }
             }
         }
         doomed.push(op);
     }
-    let Some((mask_addr, mask_size)) = mask else { return Ok(false) };
-    let id = data.obank().get(call).and_then(|o| o.get_in(0)).and_then(|v| data.vbank().get(v)).map(|v| v.get_offset()).unwrap_or(0);
+    let Some((mask_addr, mask_size)) = mask else {
+        return Ok(false);
+    };
+    let id = data
+        .obank()
+        .get(call)
+        .and_then(|o| o.get_in(0))
+        .and_then(|v| data.vbank().get(v))
+        .map(|v| v.get_offset())
+        .unwrap_or(0);
     let masked = BUILTIN_MASK_BASE as u64 + 2 * id + u64::from(zeroing);
     let mut inputs: Vec<VarnodeId> = Vec::new();
     inputs.push(data.new_constant(4, masked));
@@ -425,8 +556,11 @@ pub fn fold_mask(data: &mut Funcdata, ops: &[OpId], evex_z: bool) -> KunaResult<
     // `dst = COPY r` after the lanes: the masked op writes `dst` itself.
     let copy = ops[range_end + 1..].iter().copied().find(|&op| {
         data.obank().get(op).is_some_and(|o| {
-            o.code() == OpCode::CPUI_COPY && addr_of(data, o.get_in(0)).is_some_and(|a| a == r_addr)
-                && o.get_in(0).and_then(|v| data.vbank().get(v)).is_some_and(|v| v.get_size() == r_size)
+            o.code() == OpCode::CPUI_COPY
+                && addr_of(data, o.get_in(0)).is_some_and(|a| a == r_addr)
+                && o.get_in(0)
+                    .and_then(|v| data.vbank().get(v))
+                    .is_some_and(|v| v.get_size() == r_size)
         })
     });
     if let Some(copy) = copy {

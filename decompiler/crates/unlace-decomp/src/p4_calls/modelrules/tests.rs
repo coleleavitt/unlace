@@ -14,13 +14,15 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_base::marshal::{Decoder, IdRegistry, XmlDecode};
-use unlace_base::space::{spacetype, AddrSpace, AddrSpaceManager};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, spacetype};
 use unlace_base::types::int4;
 
-use crate::dtype::{type_class, type_metatype, Datatype, DatatypeKind, TypeBitField, TypeField, TypeFactory};
+use crate::dtype::{
+    Datatype, DatatypeKind, TypeBitField, TypeFactory, TypeField, type_class, type_metatype,
+};
 use crate::fspec::{
-    AssignActionResponse, ParamActive, ParamEntry, ParamListKind, ParamListStandard, ParameterPieces,
-    PrototypePieces,
+    AssignActionResponse, ParamActive, ParamEntry, ParamListKind, ParamListStandard,
+    ParameterPieces, PrototypePieces,
 };
 
 use super::*;
@@ -31,12 +33,32 @@ use super::*;
 
 /// A little-endian "register" space at index 3.
 fn reg_space_le() -> Rc<AddrSpace> {
-    Rc::new(AddrSpace::new(spacetype::IPTR_PROCESSOR, "register", false, 4, 1, 3, 0, 0, 0))
+    Rc::new(AddrSpace::new(
+        spacetype::IPTR_PROCESSOR,
+        "register",
+        false,
+        4,
+        1,
+        3,
+        0,
+        0,
+        0,
+    ))
 }
 
 /// A little-endian stack (spacebase) space at index 5.
 fn stack_space() -> Rc<AddrSpace> {
-    Rc::new(AddrSpace::new(spacetype::IPTR_SPACEBASE, "stack", false, 4, 1, 5, 0, 0, 0))
+    Rc::new(AddrSpace::new(
+        spacetype::IPTR_SPACEBASE,
+        "stack",
+        false,
+        4,
+        1,
+        5,
+        0,
+        0,
+        0,
+    ))
 }
 
 fn addr(spc: &Rc<AddrSpace>, off: u64) -> Address {
@@ -53,8 +75,21 @@ fn excl_entry_class(
     prev: &[ParamEntry],
     mgr: &AddrSpaceManager,
 ) -> ParamEntry {
-    ParamEntry::seed(grp, class, Rc::clone(space), base, size, 1, 0, 0, true, false, prev, mgr)
-        .expect("seed exclusion entry")
+    ParamEntry::seed(
+        grp,
+        class,
+        Rc::clone(space),
+        base,
+        size,
+        1,
+        0,
+        0,
+        true,
+        false,
+        prev,
+        mgr,
+    )
+    .expect("seed exclusion entry")
 }
 
 /// Build a GENERAL exclusion register ParamEntry.
@@ -66,7 +101,15 @@ fn excl_entry(
     prev: &[ParamEntry],
     mgr: &AddrSpaceManager,
 ) -> ParamEntry {
-    excl_entry_class(grp, type_class::TYPECLASS_GENERAL, space, base, size, prev, mgr)
+    excl_entry_class(
+        grp,
+        type_class::TYPECLASS_GENERAL,
+        space,
+        base,
+        size,
+        prev,
+        mgr,
+    )
 }
 
 /// Build a stack resource ParamEntry with the given alignment.
@@ -97,15 +140,27 @@ fn stack_entry(
 }
 
 fn dt_int(size: int4) -> Rc<Datatype> {
-    Rc::new(Datatype::new_with_align(size, size, type_metatype::TYPE_INT))
+    Rc::new(Datatype::new_with_align(
+        size,
+        size,
+        type_metatype::TYPE_INT,
+    ))
 }
 
 fn dt_float(size: int4) -> Rc<Datatype> {
-    Rc::new(Datatype::new_with_align(size, size, type_metatype::TYPE_FLOAT))
+    Rc::new(Datatype::new_with_align(
+        size,
+        size,
+        type_metatype::TYPE_FLOAT,
+    ))
 }
 
 fn dt_unknown(size: int4) -> Rc<Datatype> {
-    Rc::new(Datatype::new_with_align(size, size, type_metatype::TYPE_UNKNOWN))
+    Rc::new(Datatype::new_with_align(
+        size,
+        size,
+        type_metatype::TYPE_UNKNOWN,
+    ))
 }
 
 /// Build a struct Datatype from `(offset, field_type)` components.
@@ -116,15 +171,25 @@ fn dt_struct(size: int4, align: int4, fields: &[(int4, Rc<Datatype>)]) -> Rc<Dat
         .enumerate()
         .map(|(i, (off, ft))| TypeField::new(i as int4, *off, format!("f{i}"), Rc::clone(ft)))
         .collect();
-    d.kind = DatatypeKind::Struct { field, bitfield: Vec::new() };
+    d.kind = DatatypeKind::Struct {
+        field,
+        bitfield: Vec::new(),
+    };
     Rc::new(d)
 }
 
 /// Build an array Datatype.
 fn dt_array(elem: Rc<Datatype>, nels: int4) -> Rc<Datatype> {
     let elsize = elem.get_align_size();
-    let mut d = Datatype::new_with_align(elsize * nels, elem.get_alignment(), type_metatype::TYPE_ARRAY);
-    d.kind = DatatypeKind::Array { arrayof: elem, arraysize: nels };
+    let mut d = Datatype::new_with_align(
+        elsize * nels,
+        elem.get_alignment(),
+        type_metatype::TYPE_ARRAY,
+    );
+    d.kind = DatatypeKind::Array {
+        arrayof: elem,
+        arraysize: nels,
+    };
     Rc::new(d)
 }
 
@@ -214,7 +279,10 @@ fn primitive_extractor_bitfields_include_only_occupied_bytes() {
         let mut bf = TypeBitField::new(0, 16, big_endian, "w", dt_int(4));
         bf.byte_size = 4;
         bf.least_sig_bit = 8;
-        s.kind = DatatypeKind::Struct { field: vec![], bitfield: vec![bf.clone(), bf] };
+        s.kind = DatatypeKind::Struct {
+            field: vec![],
+            bitfield: vec![bf.clone(), bf],
+        };
         let p = PrimitiveExtractor::new(&Rc::new(s), false, 0, 2);
         assert!(p.is_valid() && p.is_aligned() && !p.contains_unknown());
         assert_eq!(p.size(), 2);
@@ -228,7 +296,9 @@ fn primitive_extractor_bitfields_include_only_occupied_bytes() {
 #[test]
 fn primitive_extractor_bitfields_keep_mixed_float_and_member_alignment() {
     let mut s = (*dt_struct(16, 8, &[(8, dt_float(8))])).clone();
-    let DatatypeKind::Struct { bitfield, .. } = &mut s.kind else { unreachable!() };
+    let DatatypeKind::Struct { bitfield, .. } = &mut s.kind else {
+        unreachable!()
+    };
     bitfield.push(TypeBitField::new(0, 16, false, "w", dt_int(2)));
     let p = PrimitiveExtractor::new(&Rc::new(s), false, 0, 16);
     assert!(p.is_valid() && p.is_aligned() && !p.contains_holes());
@@ -239,7 +309,9 @@ fn primitive_extractor_bitfields_keep_mixed_float_and_member_alignment() {
     assert_eq!(p.get(1).dt.get_metatype(), type_metatype::TYPE_FLOAT);
 
     let mut packed = (*dt_struct(5, 1, &[(1, dt_float(4))])).clone();
-    let DatatypeKind::Struct { bitfield, .. } = &mut packed.kind else { unreachable!() };
+    let DatatypeKind::Struct { bitfield, .. } = &mut packed.kind else {
+        unreachable!()
+    };
     bitfield.push(TypeBitField::new(0, 3, false, "b", dt_int(4)));
     let p = PrimitiveExtractor::new(&Rc::new(packed), false, 0, 16);
     assert!(p.is_valid());
@@ -360,8 +432,14 @@ fn filter_homogeneous_float_aggregate() {
 
 #[test]
 fn direct_float_struct_filter_keeps_field_identity_offsets_and_size_limits() {
-    let filter = DatatypeFilter::FloatFields { max_primitives: 2, size: SizeRestriction::new(1, 16) };
-    for fields in [vec![(0, dt_float(4)), (8, dt_float(8))], vec![(0, dt_float(8)), (8, dt_float(4))]] {
+    let filter = DatatypeFilter::FloatFields {
+        max_primitives: 2,
+        size: SizeRestriction::new(1, 16),
+    };
+    for fields in [
+        vec![(0, dt_float(4)), (8, dt_float(8))],
+        vec![(0, dt_float(8)), (8, dt_float(4))],
+    ] {
         assert!(filter.filter(&dt_struct(16, 8, &fields)));
     }
     assert!(filter.filter(&dt_struct(16, 16, &[(0, dt_float(4))])));
@@ -375,14 +453,22 @@ fn direct_float_struct_filter_keeps_field_identity_offsets_and_size_limits() {
     }
     let with_bits = Rc::new(with_bits);
     assert!(!filter.filter(&with_bits));
-    assert!(super::super::kuna_aggregateabi::direct_fields(&with_bits).is_some(),
-        "integer bitfields must not discard a separate direct floating argument field");
+    assert!(
+        super::super::kuna_aggregateabi::direct_fields(&with_bits).is_some(),
+        "integer bitfields must not discard a separate direct floating argument field"
+    );
     for rejected in [
-        dt_float(8), dt_array(dt_float(8), 1), dt_union(8, 8, &[dt_float(8)]),
+        dt_float(8),
+        dt_array(dt_float(8), 1),
+        dt_union(8, 8, &[dt_float(8)]),
         dt_struct(8, 8, &[(0, dt_struct(8, 8, &[(0, dt_float(8))]))]),
         dt_struct(8, 8, &[(0, dt_array(dt_float(8), 1))]),
         dt_struct(16, 8, &[(0, dt_float(8)), (8, dt_int(8))]),
-        dt_struct(12, 4, &[(0, dt_float(4)), (4, dt_float(4)), (8, dt_float(4))]),
+        dt_struct(
+            12,
+            4,
+            &[(0, dt_float(4)), (4, dt_float(4)), (8, dt_float(4))],
+        ),
         dt_struct(32, 16, &[(0, dt_float(16)), (16, dt_float(16))]),
         dt_struct(8, 8, &[(4, dt_float(8))]),
         dt_struct(8, 4, &[(0, dt_float(4)), (2, dt_float(4))]),
@@ -407,7 +493,10 @@ fn qualifier_position_match() {
 #[test]
 fn qualifier_varargs_range() {
     // <varargs first="0"/> matches optional args (pos >= firstVarArgSlot).
-    let q = QualifierFilter::Varargs { first_pos: 0, last_pos: 0x7fffffff };
+    let q = QualifierFilter::Varargs {
+        first_pos: 0,
+        last_pos: 0x7fffffff,
+    };
     let mut proto = proto_empty();
     proto.first_var_arg_slot = 2;
     assert!(!q.filter(&proto, 1)); // non-optional (pos-2 = -1 < 0)
@@ -422,7 +511,10 @@ fn qualifier_varargs_range() {
 fn qualifier_and_all_must_pass() {
     let q = QualifierFilter::And(vec![
         QualifierFilter::Position(1),
-        QualifierFilter::Varargs { first_pos: 0, last_pos: 0x7fffffff },
+        QualifierFilter::Varargs {
+            first_pos: 0,
+            last_pos: 0x7fffffff,
+        },
     ]);
     let mut proto = proto_empty();
     proto.first_var_arg_slot = 0;
@@ -481,12 +573,23 @@ fn consume_as_assigns_general_register() {
     let mgr = AddrSpaceManager::new();
     let reg = reg_space_le();
     let model = single_reg_model(&mgr, &reg);
-    let action = AssignAction::ConsumeAs { resource_type: type_class::TYPECLASS_GENERAL };
+    let action = AssignAction::ConsumeAs {
+        resource_type: type_class::TYPECLASS_GENERAL,
+    };
     let mut status = vec![0i32; 2];
     let mut res = ParameterPieces::default();
     let dt = dt_int(4);
     let r = action
-        .assign_address(&dt, &proto_empty(), 0, &PanicFactory, &mut status, &mut res, &model, &mgr)
+        .assign_address(
+            &dt,
+            &proto_empty(),
+            0,
+            &PanicFactory,
+            &mut status,
+            &mut res,
+            &model,
+            &mgr,
+        )
         .unwrap();
     assert_eq!(r, AssignActionResponse::success);
     assert_eq!(res.addr.get_offset(), 0x10);
@@ -505,11 +608,25 @@ fn goto_stack_assigns_stack_slot() {
     let mut res = ParameterPieces::default();
     let dt = dt_int(4);
     let r = action
-        .assign_address(&dt, &proto_empty(), 0, &PanicFactory, &mut status, &mut res, &model, &mgr)
+        .assign_address(
+            &dt,
+            &proto_empty(),
+            0,
+            &PanicFactory,
+            &mut status,
+            &mut res,
+            &model,
+            &mgr,
+        )
         .unwrap();
     assert_eq!(r, AssignActionResponse::success);
     // Stack slot at offset 0 (group 1 consumed one slot).
-    assert!(res.addr.get_space().map(|s| Rc::ptr_eq(s, &stk)).unwrap_or(false));
+    assert!(
+        res.addr
+            .get_space()
+            .map(|s| Rc::ptr_eq(s, &stk))
+            .unwrap_or(false)
+    );
     assert_eq!(res.addr.get_offset(), 0x0);
     assert_eq!(status[1], 1); // one stack slot consumed
 }
@@ -526,7 +643,16 @@ fn hidden_return_signals_code() {
     let mut res = ParameterPieces::default();
     let dt = dt_int(8);
     let r = action
-        .assign_address(&dt, &proto_empty(), -1, &PanicFactory, &mut status, &mut res, &model, &mgr)
+        .assign_address(
+            &dt,
+            &proto_empty(),
+            -1,
+            &PanicFactory,
+            &mut status,
+            &mut res,
+            &model,
+            &mgr,
+        )
         .unwrap();
     assert_eq!(r, AssignActionResponse::hiddenret_specialreg);
 }
@@ -546,7 +672,16 @@ fn multi_slot_single_register_success() {
     let mut res = ParameterPieces::default();
     let dt = dt_int(4);
     let r = action
-        .assign_address(&dt, &proto_empty(), 0, &PanicFactory, &mut status, &mut res, &model, &mgr)
+        .assign_address(
+            &dt,
+            &proto_empty(),
+            0,
+            &PanicFactory,
+            &mut status,
+            &mut res,
+            &model,
+            &mgr,
+        )
         .unwrap();
     assert_eq!(r, AssignActionResponse::success);
     assert_eq!(res.addr.get_offset(), 0x10);
@@ -562,7 +697,10 @@ fn multi_slot_out_of_registers_fails_without_stack() {
     let reg = reg_space_le();
     let model = single_reg_model(&mgr, &reg);
     let mut action = new_multi_slot_assign_default(&model);
-    if let AssignAction::MultiSlotAssign { consume_from_stack, .. } = &mut action {
+    if let AssignAction::MultiSlotAssign {
+        consume_from_stack, ..
+    } = &mut action
+    {
         *consume_from_stack = false;
     }
     action.initialize(&model).unwrap();
@@ -570,7 +708,16 @@ fn multi_slot_out_of_registers_fails_without_stack() {
     let mut res = ParameterPieces::default();
     let dt = dt_int(8); // needs two registers; only one available
     let r = action
-        .assign_address(&dt, &proto_empty(), 0, &PanicFactory, &mut status, &mut res, &model, &mgr)
+        .assign_address(
+            &dt,
+            &proto_empty(),
+            0,
+            &PanicFactory,
+            &mut status,
+            &mut res,
+            &model,
+            &mgr,
+        )
         .unwrap();
     assert_eq!(r, AssignActionResponse::fail);
 }
@@ -590,7 +737,16 @@ fn consume_extra_consumes_register_as_sideeffect() {
     let mut res = ParameterPieces::default();
     let dt = dt_int(4);
     let r = action
-        .assign_address(&dt, &proto_empty(), 0, &PanicFactory, &mut status, &mut res, &model, &mgr)
+        .assign_address(
+            &dt,
+            &proto_empty(),
+            0,
+            &PanicFactory,
+            &mut status,
+            &mut res,
+            &model,
+            &mgr,
+        )
         .unwrap();
     assert_eq!(r, AssignActionResponse::success);
     assert_eq!(status[0], -1); // the register was consumed as a side effect
@@ -615,7 +771,16 @@ fn consume_remaining_consumes_all() {
     let mut res = ParameterPieces::default();
     let dt = dt_int(4);
     action
-        .assign_address(&dt, &proto_empty(), 0, &PanicFactory, &mut status, &mut res, &model, &mgr)
+        .assign_address(
+            &dt,
+            &proto_empty(),
+            0,
+            &PanicFactory,
+            &mut status,
+            &mut res,
+            &model,
+            &mgr,
+        )
         .unwrap();
     assert_eq!(status[0], -1);
     assert_eq!(status[1], -1);
@@ -631,10 +796,22 @@ fn extra_stack_noop_when_already_on_stack() {
     action.initialize(&model).unwrap();
     let mut status = vec![0i32; 2];
     // res.addr already on the stack -> success, no extra consumption.
-    let mut res = ParameterPieces { addr: addr(&stk, 0x0), ..Default::default() };
+    let mut res = ParameterPieces {
+        addr: addr(&stk, 0x0),
+        ..Default::default()
+    };
     let dt = dt_int(4);
     let r = action
-        .assign_address(&dt, &proto_empty(), 0, &PanicFactory, &mut status, &mut res, &model, &mgr)
+        .assign_address(
+            &dt,
+            &proto_empty(),
+            0,
+            &PanicFactory,
+            &mut status,
+            &mut res,
+            &model,
+            &mgr,
+        )
         .unwrap();
     assert_eq!(r, AssignActionResponse::success);
     assert_eq!(status[1], 0); // stack not further consumed
@@ -646,13 +823,24 @@ fn convert_to_pointer_recurses_and_marks_indirect() {
     let reg = reg_space_le();
     let model = single_reg_model(&mgr, &reg);
     // space=Some(reg) so we don't need a default data space in the manager.
-    let action = AssignAction::ConvertToPointer { space: Some(Rc::clone(&reg)) };
+    let action = AssignAction::ConvertToPointer {
+        space: Some(Rc::clone(&reg)),
+    };
     let mut status = vec![0i32; 2];
     let mut res = ParameterPieces::default();
     let dt = dt_struct(64, 4, &[(0, dt_int(4))]); // big aggregate passed by pointer
     let factory = PointerFactory;
     let r = action
-        .assign_address(&dt, &proto_empty(), 0, &factory, &mut status, &mut res, &model, &mgr)
+        .assign_address(
+            &dt,
+            &proto_empty(),
+            0,
+            &factory,
+            &mut status,
+            &mut res,
+            &model,
+            &mgr,
+        )
         .unwrap();
     assert_eq!(r, AssignActionResponse::success);
     // The pointer (4 bytes) was assigned to the register.
@@ -669,7 +857,9 @@ fn consume_as_fillin_output_single_trial() {
     let mgr = AddrSpaceManager::new();
     let reg = reg_space_le();
     let model = single_reg_model(&mgr, &reg);
-    let action = AssignAction::ConsumeAs { resource_type: type_class::TYPECLASS_GENERAL };
+    let action = AssignAction::ConsumeAs {
+        resource_type: type_class::TYPECLASS_GENERAL,
+    };
     let mut active = ParamActive::new(false);
     active.register_trial(&addr(&reg, 0x10), 4);
     active.get_trial_mut(0).set_entry(Some(0), 0);
@@ -697,13 +887,19 @@ fn goto_stack_fillin_output_requires_exactly_one() {
 
 #[test]
 fn can_affect_fillin_output_flags() {
-    assert!(AssignAction::ConsumeAs { resource_type: type_class::TYPECLASS_GENERAL }
-        .can_affect_fillin_output());
+    assert!(
+        AssignAction::ConsumeAs {
+            resource_type: type_class::TYPECLASS_GENERAL
+        }
+        .can_affect_fillin_output()
+    );
     assert!(AssignAction::GotoStack { stack_entry: None }.can_affect_fillin_output());
-    assert!(!AssignAction::HiddenReturnAssign {
-        ret_code: AssignActionResponse::hiddenret_specialreg
-    }
-    .can_affect_fillin_output());
+    assert!(
+        !AssignAction::HiddenReturnAssign {
+            ret_code: AssignActionResponse::hiddenret_specialreg
+        }
+        .can_affect_fillin_output()
+    );
     assert!(!new_extra_stack_decode().can_affect_fillin_output());
 }
 
@@ -749,7 +945,11 @@ fn modelrules_registry() -> IdRegistry {
 }
 
 /// Decode a `<rule>` blob against the given resource.
-fn decode_rule(xml: &str, resource: &ParamListStandard, mgr: &AddrSpaceManager) -> KunaResult<ModelRule> {
+fn decode_rule(
+    xml: &str,
+    resource: &ParamListStandard,
+    mgr: &AddrSpaceManager,
+) -> KunaResult<ModelRule> {
     let registry = modelrules_registry();
     let mut decoder = XmlDecode::new(mgr, &registry);
     decoder.ingest_stream(xml.as_bytes())?;
@@ -771,13 +971,31 @@ fn decode_rule_consume_general() {
     let mut status = vec![0i32; 2];
     let mut res = ParameterPieces::default();
     let r = rule
-        .assign_address(&dt_int(4), &proto_empty(), 0, &PanicFactory, &mut status, &mut res, &model, &mgr)
+        .assign_address(
+            &dt_int(4),
+            &proto_empty(),
+            0,
+            &PanicFactory,
+            &mut status,
+            &mut res,
+            &model,
+            &mgr,
+        )
         .unwrap();
     assert_eq!(r, AssignActionResponse::fail); // datatype filter (float) rejects int
     let mut status2 = vec![0i32; 2];
     let mut res2 = ParameterPieces::default();
     let r2 = rule
-        .assign_address(&dt_float(4), &proto_empty(), 0, &PanicFactory, &mut status2, &mut res2, &model, &mgr)
+        .assign_address(
+            &dt_float(4),
+            &proto_empty(),
+            0,
+            &PanicFactory,
+            &mut status2,
+            &mut res2,
+            &model,
+            &mgr,
+        )
         .unwrap();
     assert_eq!(r2, AssignActionResponse::success);
     assert_eq!(res2.addr.get_offset(), 0x10);
@@ -798,10 +1016,24 @@ fn decode_rule_goto_stack() {
     let mut status = vec![0i32; 2];
     let mut res = ParameterPieces::default();
     let r = rule
-        .assign_address(&dt_int(4), &proto_empty(), 0, &PanicFactory, &mut status, &mut res, &model, &mgr)
+        .assign_address(
+            &dt_int(4),
+            &proto_empty(),
+            0,
+            &PanicFactory,
+            &mut status,
+            &mut res,
+            &model,
+            &mgr,
+        )
         .unwrap();
     assert_eq!(r, AssignActionResponse::success);
-    assert!(res.addr.get_space().map(|s| Rc::ptr_eq(s, &stk)).unwrap_or(false));
+    assert!(
+        res.addr
+            .get_space()
+            .map(|s| Rc::ptr_eq(s, &stk))
+            .unwrap_or(false)
+    );
 }
 
 #[test]
@@ -829,10 +1061,24 @@ fn register_ids_drives_production_rule_decode() {
     let mut status = vec![0i32; 2];
     let mut res = ParameterPieces::default();
     let r = rule
-        .assign_address(&dt_int(4), &proto_empty(), 0, &PanicFactory, &mut status, &mut res, &model, &mgr)
+        .assign_address(
+            &dt_int(4),
+            &proto_empty(),
+            0,
+            &PanicFactory,
+            &mut status,
+            &mut res,
+            &model,
+            &mgr,
+        )
         .unwrap();
     assert_eq!(r, AssignActionResponse::success);
-    assert!(res.addr.get_space().map(|s| Rc::ptr_eq(s, &stk)).unwrap_or(false));
+    assert!(
+        res.addr
+            .get_space()
+            .map(|s| Rc::ptr_eq(s, &stk))
+            .unwrap_or(false)
+    );
 }
 
 #[test]
@@ -852,14 +1098,25 @@ fn w10_float_typeclass_register_ids_decodes_hidden_return_strategy() {
     crate::modelrules::register_ids(&mut registry);
     let mut decoder = XmlDecode::new(&mgr, &registry);
     decoder
-        .ingest_stream(br#"<rule><datatype name="any"/><hidden_return strategy="normalparam"/></rule>"#)
+        .ingest_stream(
+            br#"<rule><datatype name="any"/><hidden_return strategy="normalparam"/></rule>"#,
+        )
         .expect("ingest");
-    let rule = ModelRule::decode(&mut decoder, &model)
-        .expect("decode hidden_return via register_ids");
+    let rule =
+        ModelRule::decode(&mut decoder, &model).expect("decode hidden_return via register_ids");
     let mut status = vec![0i32; 2];
     let mut res = ParameterPieces::default();
     let r = rule
-        .assign_address(&dt_int(8), &proto_empty(), -1, &PanicFactory, &mut status, &mut res, &model, &mgr)
+        .assign_address(
+            &dt_int(8),
+            &proto_empty(),
+            -1,
+            &PanicFactory,
+            &mut status,
+            &mut res,
+            &model,
+            &mgr,
+        )
         .unwrap();
     // `strategy="normalparam"` -> hiddenret_ptrparam.  If ATTRIB_STRATEGY had not
     // resolved through register_ids, the default (`special`) strategy would yield
@@ -882,15 +1139,33 @@ fn decode_rule_with_position_qualifier() {
     let mut status = vec![0i32; 2];
     let mut res = ParameterPieces::default();
     assert_eq!(
-        rule.assign_address(&dt_int(4), &proto_empty(), 0, &PanicFactory, &mut status, &mut res, &model, &mgr)
-            .unwrap(),
+        rule.assign_address(
+            &dt_int(4),
+            &proto_empty(),
+            0,
+            &PanicFactory,
+            &mut status,
+            &mut res,
+            &model,
+            &mgr
+        )
+        .unwrap(),
         AssignActionResponse::success
     );
     let mut status2 = vec![0i32; 2];
     let mut res2 = ParameterPieces::default();
     assert_eq!(
-        rule.assign_address(&dt_int(4), &proto_empty(), 1, &PanicFactory, &mut status2, &mut res2, &model, &mgr)
-            .unwrap(),
+        rule.assign_address(
+            &dt_int(4),
+            &proto_empty(),
+            1,
+            &PanicFactory,
+            &mut status2,
+            &mut res2,
+            &model,
+            &mgr
+        )
+        .unwrap(),
         AssignActionResponse::fail
     );
 }
@@ -909,7 +1184,16 @@ fn decode_rule_hidden_return_strategy() {
     let mut status = vec![0i32; 2];
     let mut res = ParameterPieces::default();
     let r = rule
-        .assign_address(&dt_int(8), &proto_empty(), -1, &PanicFactory, &mut status, &mut res, &model, &mgr)
+        .assign_address(
+            &dt_int(8),
+            &proto_empty(),
+            -1,
+            &PanicFactory,
+            &mut status,
+            &mut res,
+            &model,
+            &mgr,
+        )
         .unwrap();
     assert_eq!(r, AssignActionResponse::hiddenret_ptrparam);
 }
@@ -920,11 +1204,28 @@ fn dual_alignment_requires_shared_slots_and_is_explicitly_opted_in() {
     let reg = reg_space_le();
     for shared in [false, true] {
         let mut model = ParamListStandard::new(ParamListKind::Standard);
-        model.push_entry(excl_entry_class(0, type_class::TYPECLASS_FLOAT, &reg, 0x10, 8, &[], &mgr));
-        model.push_entry(excl_entry(if shared { 0 } else { 1 }, &reg, 0x20, 8, model.get_entry(), &mgr));
+        model.push_entry(excl_entry_class(
+            0,
+            type_class::TYPECLASS_FLOAT,
+            &reg,
+            0x10,
+            8,
+            &[],
+            &mgr,
+        ));
+        model.push_entry(excl_entry(
+            if shared { 0 } else { 1 },
+            &reg,
+            0x20,
+            8,
+            model.get_entry(),
+            &mgr,
+        ));
         model.finish_decode();
         for align in [false, true] {
-            let xml = format!("<rule><datatype name=\"struct\"/><join_dual_class align=\"{align}\"/></rule>");
+            let xml = format!(
+                "<rule><datatype name=\"struct\"/><join_dual_class align=\"{align}\"/></rule>"
+            );
             assert_eq!(decode_rule(&xml, &model, &mgr).is_ok(), !align || shared);
         }
     }
@@ -945,15 +1246,33 @@ fn decode_rule_size_restricted_filter() {
     let mut s1 = vec![0i32; 2];
     let mut r1 = ParameterPieces::default();
     assert_eq!(
-        rule.assign_address(&dt_int(4), &proto_empty(), 0, &PanicFactory, &mut s1, &mut r1, &model, &mgr)
-            .unwrap(),
+        rule.assign_address(
+            &dt_int(4),
+            &proto_empty(),
+            0,
+            &PanicFactory,
+            &mut s1,
+            &mut r1,
+            &model,
+            &mgr
+        )
+        .unwrap(),
         AssignActionResponse::success
     );
     let mut s2 = vec![0i32; 2];
     let mut r2 = ParameterPieces::default();
     assert_eq!(
-        rule.assign_address(&dt_int(8), &proto_empty(), 0, &PanicFactory, &mut s2, &mut r2, &model, &mgr)
-            .unwrap(),
+        rule.assign_address(
+            &dt_int(8),
+            &proto_empty(),
+            0,
+            &PanicFactory,
+            &mut s2,
+            &mut r2,
+            &model,
+            &mgr
+        )
+        .unwrap(),
         AssignActionResponse::fail
     );
 }
@@ -978,7 +1297,16 @@ fn decode_rule_consume_extra_sideeffect() {
     let mut status = vec![0i32; 2];
     let mut res = ParameterPieces::default();
     let r = rule
-        .assign_address(&dt_int(4), &proto_empty(), 0, &PanicFactory, &mut status, &mut res, &model, &mgr)
+        .assign_address(
+            &dt_int(4),
+            &proto_empty(),
+            0,
+            &PanicFactory,
+            &mut status,
+            &mut res,
+            &model,
+            &mgr,
+        )
         .unwrap();
     assert_eq!(r, AssignActionResponse::success);
     // The consume took group 0; the side-effect consumed group 1.
@@ -1048,7 +1376,12 @@ impl_type_factory!(
     PointerFactory,
     fn get_type_pointer(&self, s: int4, pt: Rc<Datatype>, ws: u32) -> KunaResult<Rc<Datatype>> {
         let mut d = Datatype::new_with_align(s, s, type_metatype::TYPE_PTR);
-        d.kind = DatatypeKind::Pointer { ptrto: pt, spaceid: None, truncate: None, wordsize: ws };
+        d.kind = DatatypeKind::Pointer {
+            ptrto: pt,
+            spaceid: None,
+            truncate: None,
+            wordsize: ws,
+        };
         Ok(Rc::new(d))
     }
 );

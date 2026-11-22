@@ -17,7 +17,11 @@ fn section<'a>(file: &'a object::File<'a>, name: &str) -> &'a [u8] {
 
 /// The compiler the debug info names, if any unit says.
 pub fn dwarf_compiler(file: &object::File) -> Option<Compiler> {
-    let endian = if file.is_little_endian() { gimli::RunTimeEndian::Little } else { gimli::RunTimeEndian::Big };
+    let endian = if file.is_little_endian() {
+        gimli::RunTimeEndian::Little
+    } else {
+        gimli::RunTimeEndian::Big
+    };
     let dwarf = gimli::Dwarf::load(|id| -> Result<_, gimli::Error> {
         Ok(gimli::EndianSlice::new(section(file, id.name()), endian))
     })
@@ -25,11 +29,18 @@ pub fn dwarf_compiler(file: &object::File) -> Option<Compiler> {
     let mut units = dwarf.units();
     let mut verdict = None;
     for _ in 0..UNITS {
-        let Ok(Some(header)) = units.next() else { break };
-        let Ok(unit) = dwarf.unit(header) else { continue };
+        let Ok(Some(header)) = units.next() else {
+            break;
+        };
+        let Ok(unit) = dwarf.unit(header) else {
+            continue;
+        };
         let mut entries = unit.entries();
-        let Ok(Some(root)) = entries.next_dfs() else { continue };
-        if let Some(gimli::AttributeValue::Language(lang)) = root.attr_value(gimli::DW_AT_language) {
+        let Ok(Some(root)) = entries.next_dfs() else {
+            continue;
+        };
+        if let Some(gimli::AttributeValue::Language(lang)) = root.attr_value(gimli::DW_AT_language)
+        {
             match lang {
                 gimli::DW_LANG_Rust => return Some(Compiler::Rustc),
                 gimli::DW_LANG_Go => return Some(Compiler::Go),
@@ -61,7 +72,9 @@ mod tests {
     use super::*;
 
     fn detect(name: &str) -> Option<Compiler> {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures").join(name);
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures")
+            .join(name);
         let bytes = std::fs::read(path).unwrap();
         let file = object::File::parse(&*bytes).unwrap();
         dwarf_compiler(&file)
@@ -69,7 +82,10 @@ mod tests {
 
     #[test]
     fn producer_and_language_name_the_toolchain() {
-        assert_eq!(detect("dwarfglobaltypes_gcc_O1_x86_64"), Some(Compiler::Gcc));
+        assert_eq!(
+            detect("dwarfglobaltypes_gcc_O1_x86_64"),
+            Some(Compiler::Gcc)
+        );
         assert_eq!(detect("dwarfscopes_clang_O0_x86_64"), Some(Compiler::Clang));
         assert_eq!(detect("dwarfvariants_x86_64"), Some(Compiler::Rustc));
     }

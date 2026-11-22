@@ -84,10 +84,24 @@ pub fn ostream_scientific(val: f64, precision: i32) -> String {
 /// glibc text forms for non-finite values (sign included for negatives).
 fn special_text(val: f64) -> Option<String> {
     if val.is_nan() {
-        return Some(if val.is_sign_negative() { "-nan" } else { "nan" }.to_string());
+        return Some(
+            if val.is_sign_negative() {
+                "-nan"
+            } else {
+                "nan"
+            }
+            .to_string(),
+        );
     }
     if val.is_infinite() {
-        return Some(if val.is_sign_negative() { "-inf" } else { "inf" }.to_string());
+        return Some(
+            if val.is_sign_negative() {
+                "-inf"
+            } else {
+                "inf"
+            }
+            .to_string(),
+        );
     }
     None
 }

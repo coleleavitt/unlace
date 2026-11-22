@@ -4,18 +4,21 @@
 //! worker when replay cannot settle. The parent module owns process lifetime
 //! and chunk scheduling.
 
-#[expect(clippy::disallowed_types, reason = "These are lookup caches; observable output order is explicit.")]
+#[expect(
+    clippy::disallowed_types,
+    reason = "These are lookup caches; observable output order is explicit."
+)]
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use unlace_console::project::FuncResult;
 use unlace_decomp::kuna_structsynth::shard::{self, FunctionRecord, Replay, SynthRequest};
 
-use super::{
-    plan_chunks, run_planned, spec_name, Ending, Faults, Phase, PlannedRun, PoolConfig,
-    Session, SynthWorker, TargetSpec, Worker, JOBS_FAULT_ENV, SPAWN_FAILED,
-};
 use super::wire::encode_spec;
+use super::{
+    Ending, Faults, JOBS_FAULT_ENV, Phase, PlannedRun, PoolConfig, SPAWN_FAILED, Session,
+    SynthWorker, TargetSpec, Worker, plan_chunks, run_planned, spec_name,
+};
 
 /// How a sharded run's synthesized structures were named: the kind of worker
 /// whose type blocks speak for the document, and the replayed table when the
@@ -36,14 +39,21 @@ pub(super) fn name_structs_serially(
     base: Replay,
     run: &mut PlannedRun,
 ) -> Result<Named, String> {
-    let records: Vec<Option<FunctionRecord>> = run.results.iter_mut().map(|r| r.synth.take()).collect();
-    let mut asked: Vec<Vec<SynthRequest>> =
-        records.iter().map(|r| r.as_ref().map(|r| r.requests.clone()).unwrap_or_default()).collect();
+    let records: Vec<Option<FunctionRecord>> =
+        run.results.iter_mut().map(|r| r.synth.take()).collect();
+    let mut asked: Vec<Vec<SynthRequest>> = records
+        .iter()
+        .map(|r| r.as_ref().map(|r| r.requests.clone()).unwrap_or_default())
+        .collect();
     let askers: Vec<usize> = (0..asked.len()).filter(|&i| !asked[i].is_empty()).collect();
     if askers.is_empty() {
-        return Ok(Named { kind: SynthWorker::Record, table: None });
+        return Ok(Named {
+            kind: SynthWorker::Record,
+            table: None,
+        });
     }
-    let fallback = |run: &mut PlannedRun, why: &str| serial_fallback(cfg, session, targets, &askers, run, why);
+    let fallback =
+        |run: &mut PlannedRun, why: &str| serial_fallback(cfg, session, targets, &askers, run, why);
     let faults = Faults::from_env();
     if faults.synth_serial {
         return fallback(run, &format!("{JOBS_FAULT_ENV} asked for the serial path"));
@@ -55,14 +65,26 @@ pub(super) fn name_structs_serially(
     let mut own: Vec<Option<Vec<shard::Answer>>> = records
         .iter()
         .zip(&cut_short)
-        .map(|(r, &cut)| if cut || faults.synth_force { None } else { r.as_ref()?.own_answers() })
+        .map(|(r, &cut)| {
+            if cut || faults.synth_force {
+                None
+            } else {
+                r.as_ref()?.own_answers()
+            }
+        })
         .collect();
     let held = base.held();
 
     // Every kept first and sweep decompile, with the answers it was given.
-    #[expect(clippy::disallowed_types, reason = "Iteration writes distinct target slots and sums an order-independent count.")]
+    #[expect(
+        clippy::disallowed_types,
+        reason = "Iteration writes distinct target slots and sums an order-independent count."
+    )]
     let mut firsts: HashMap<usize, KeptFirst> = HashMap::new();
-    #[expect(clippy::disallowed_types, reason = "Lookup only; the target sequence orders the sweep.")]
+    #[expect(
+        clippy::disallowed_types,
+        reason = "Lookup only; the target sequence orders the sweep."
+    )]
     let mut sweeps: HashMap<usize, (AnswerKey, FuncResult)> = HashMap::new();
     let mut forced = 0usize;
     let mut round = 0;
@@ -72,14 +94,29 @@ pub(super) fn name_structs_serially(
             Err(why) => return fallback(run, &why),
         };
         for &i in &askers {
-            if firsts.get(&i).is_none_or(|kept| !plan.matches(&plan.first[i], &kept.key)) {
+            if firsts
+                .get(&i)
+                .is_none_or(|kept| !plan.matches(&plan.first[i], &kept.key))
+            {
                 let first = plan.first_key(i);
                 if let Some(r) = rename_result(&run.results[i], own[i].as_deref(), &first, &held) {
-                    firsts.insert(i, KeptFirst { key: first, result: r, renamed: true });
+                    firsts.insert(
+                        i,
+                        KeptFirst {
+                            key: first,
+                            result: r,
+                            renamed: true,
+                        },
+                    );
                 }
             }
-            let Some(answers) = plan.sweep[i].as_ref().filter(|_| plan.redo_predicted(i)) else { continue };
-            if sweeps.get(&i).is_none_or(|(kept, _)| !plan.matches(answers, kept)) {
+            let Some(answers) = plan.sweep[i].as_ref().filter(|_| plan.redo_predicted(i)) else {
+                continue;
+            };
+            if sweeps
+                .get(&i)
+                .is_none_or(|(kept, _)| !plan.matches(answers, kept))
+            {
                 let key = plan.key(answers);
                 if let Some(r) = rename_result(&run.results[i], own[i].as_deref(), &key, &held) {
                     sweeps.insert(i, (key, r));
@@ -87,18 +124,28 @@ pub(super) fn name_structs_serially(
             }
         }
         let stale_first = |i: usize| {
-            firsts.get(&i).is_none_or(|kept| !plan.matches(&plan.first[i], &kept.key))
+            firsts
+                .get(&i)
+                .is_none_or(|kept| !plan.matches(&plan.first[i], &kept.key))
         };
         let stale_sweep = |i: usize| {
-            plan.redo_predicted(i) && sweeps.get(&i).is_none_or(|(key, _)| {
-                plan.sweep[i].as_ref().is_none_or(|answers| !plan.matches(answers, key))
-            })
+            plan.redo_predicted(i)
+                && sweeps.get(&i).is_none_or(|(key, _)| {
+                    plan.sweep[i]
+                        .as_ref()
+                        .is_none_or(|answers| !plan.matches(answers, key))
+                })
         };
         let list: Vec<(usize, bool)> = askers
             .iter()
             .filter(|&&i| stale_first(i))
             .map(|&i| (i, false))
-            .chain(askers.iter().filter(|&&i| stale_sweep(i)).map(|&i| (i, true)))
+            .chain(
+                askers
+                    .iter()
+                    .filter(|&&i| stale_sweep(i))
+                    .map(|&i| (i, true)),
+            )
             .collect();
         if list.is_empty() {
             break plan;
@@ -110,14 +157,26 @@ pub(super) fn name_structs_serially(
         forced += list.len();
         for (i, sweep, r, record) in run_forced(cfg, session, jobs, targets, &plan, &list)? {
             if r.error.is_some() && !cut_short[i] {
-                return fallback(run, "a function failed when decompiled again with the serial names");
+                return fallback(
+                    run,
+                    "a function failed when decompiled again with the serial names",
+                );
             }
-            let agrees = record.as_ref().is_some_and(|rec| asks_the_same(rec, &asked[i]));
+            let agrees = record
+                .as_ref()
+                .is_some_and(|rec| asks_the_same(rec, &asked[i]));
             if agrees || cut_short[i] {
                 if sweep {
                     sweeps.insert(i, (plan.sweep_key(i).unwrap_or_default(), r));
                 } else {
-                    firsts.insert(i, KeptFirst { key: plan.first_key(i), result: r, renamed: false });
+                    firsts.insert(
+                        i,
+                        KeptFirst {
+                            key: plan.first_key(i),
+                            result: r,
+                            renamed: false,
+                        },
+                    );
                 }
                 continue;
             }
@@ -127,7 +186,12 @@ pub(super) fn name_structs_serially(
                     own[i] = None;
                     firsts.remove(&i);
                 }
-                _ => return fallback(run, "a function asked the ledger something new in the sweep"),
+                _ => {
+                    return fallback(
+                        run,
+                        "a function asked the ledger something new in the sweep",
+                    );
+                }
             }
         }
     };
@@ -151,7 +215,11 @@ pub(super) fn name_structs_serially(
             None => return fallback(run, "the convergence sweep would mint a structure"),
             Some(s) if *s == plan.first[i] => {}
             Some(_) => match sweeps.remove(&i) {
-                Some((key, r)) if plan.sweep[i].as_ref().is_some_and(|answers| plan.matches(answers, &key)) => {
+                Some((key, r))
+                    if plan.sweep[i]
+                        .as_ref()
+                        .is_some_and(|answers| plan.matches(answers, &key)) =>
+                {
                     again.push((i, r));
                 }
                 _ => leftover.push((i, true)),
@@ -162,21 +230,31 @@ pub(super) fn name_structs_serially(
         forced += leftover.len();
         for (i, _, r, record) in run_forced(cfg, session, jobs, targets, &plan, &leftover)? {
             if r.error.is_some() && !cut_short[i] {
-                return fallback(run, "a function failed when decompiled again with the serial names");
+                return fallback(
+                    run,
+                    "a function failed when decompiled again with the serial names",
+                );
             }
-            let agrees = record.as_ref().is_some_and(|rec| asks_the_same(rec, &asked[i]));
+            let agrees = record
+                .as_ref()
+                .is_some_and(|rec| asks_the_same(rec, &asked[i]));
             if !(agrees || cut_short[i]) {
-                return fallback(run, "a function asked the ledger something new in the sweep");
+                return fallback(
+                    run,
+                    "a function asked the ledger something new in the sweep",
+                );
             }
             again.push((i, r));
         }
     }
     // The `.h` renders the structures from the workers that hold them, each
     // with the other types its own functions interned.
-    if cfg.want_types && !plan.minted.is_empty()
-        && let Err(why) = install_on_idle_workers(cfg, session, &plan.table) {
-            return fallback(run, &why);
-        }
+    if cfg.want_types
+        && !plan.minted.is_empty()
+        && let Err(why) = install_on_idle_workers(cfg, session, &plan.table)
+    {
+        return fallback(run, &why);
+    }
     again.sort_by_key(|(i, _)| *i);
     for (i, r) in again {
         if unlace_console::project::redo_replaces(&run.results[i], &r) {
@@ -189,7 +267,10 @@ pub(super) fn name_structs_serially(
         askers.len(),
         serial_run(cfg)
     );
-    Ok(Named { kind: SynthWorker::Force, table: Some(plan.table) })
+    Ok(Named {
+        kind: SynthWorker::Force,
+        table: Some(plan.table),
+    })
 }
 
 /// Whether every name `map` covers in `r` is a TYPE name.
@@ -223,13 +304,14 @@ fn rename_result(
     out.code = match r.code.as_deref() {
         Some(code) => {
             let mut edits = Vec::new();
-            let renamed = shard::rename_identifiers_with(code, &map, held,
-                |start, end, to| edits.push((start, end, to.to_string())))?;
+            let renamed = shard::rename_identifiers_with(code, &map, held, |start, end, to| {
+                edits.push((start, end, to.to_string()))
+            })?;
             if let Some(record) = &mut out.pointerargs {
                 record.renamed(code, &edits);
             }
             Some(renamed)
-        },
+        }
         None => None,
     };
     out.proto = match r.proto.as_deref() {
@@ -283,7 +365,10 @@ struct SynthPlan {
     sweep: Vec<Option<Vec<Option<String>>>>,
     stale: Vec<String>,
     table: Vec<u8>,
-    #[expect(clippy::disallowed_types, reason = "Lookup only; table serialization precedes conversion to this index.")]
+    #[expect(
+        clippy::disallowed_types,
+        reason = "Lookup only; table serialization precedes conversion to this index."
+    )]
     minted: HashMap<String, SynthRequest>,
 }
 
@@ -305,7 +390,7 @@ impl SynthPlan {
                 }
                 match answers.iter().find(|(asked, _)| *asked == q) {
                     Some((_, earlier)) if *earlier != answer => {
-                        return Err("a function's repeated question got another answer".into())
+                        return Err("a function's repeated question got another answer".into());
                     }
                     Some(_) => {}
                     None => answers.push((q, answer)),
@@ -314,17 +399,26 @@ impl SynthPlan {
             // Whether the function repeats a question can depend on what its
             // process decompiled before, so every question must get the same
             // answer at the end of the function as when it was first asked.
-            if answers.iter().any(|(q, a)| replay.lookup(q) != Ok(a.clone())) {
-                return Err("a function's own structures would answer its earlier question \
+            if answers
+                .iter()
+                .any(|(q, a)| replay.lookup(q) != Ok(a.clone()))
+            {
+                return Err(
+                    "a function's own structures would answer its earlier question \
                             differently"
-                    .into());
+                        .into(),
+                );
             }
             first.push(answers.into_iter().map(|(_, a)| a).collect());
         }
         let sweep = asked
             .iter()
             .map(|requests| {
-                shard::distinct(requests).iter().map(|q| replay.lookup(q)).collect::<Result<_, _>>().ok()
+                shard::distinct(requests)
+                    .iter()
+                    .map(|q| replay.lookup(q))
+                    .collect::<Result<_, _>>()
+                    .ok()
             })
             .collect();
         Ok(SynthPlan {
@@ -352,7 +446,9 @@ impl SynthPlan {
             .iter()
             .map(|answer| answer.as_deref().map(|name| (name, self.minted.get(name))))
             .eq(key.iter().map(|answer| {
-                answer.as_ref().map(|(name, request)| (name.as_str(), request.as_ref()))
+                answer
+                    .as_ref()
+                    .map(|(name, request)| (name.as_str(), request.as_ref()))
             }))
     }
 
@@ -363,7 +459,10 @@ impl SynthPlan {
     /// Will the sweep, as far as the answers tell, decompile `i` again with
     /// different answers? The text decides whether it really does.
     fn redo_predicted(&self, i: usize) -> bool {
-        self.first[i].iter().flatten().any(|n| self.stale.contains(n))
+        self.first[i]
+            .iter()
+            .flatten()
+            .any(|n| self.stale.contains(n))
             && self.sweep[i].as_ref().is_some_and(|s| *s != self.first[i])
     }
 }
@@ -385,13 +484,23 @@ fn run_forced(
     let specs: Vec<TargetSpec> = list
         .iter()
         .map(|&(i, sweep)| {
-            let answers = if sweep { plan.sweep[i].clone() } else { Some(plan.first[i].clone()) };
-            TargetSpec { synth: answers, ..targets[i].clone() }
+            let answers = if sweep {
+                plan.sweep[i].clone()
+            } else {
+                Some(plan.first[i].clone())
+            };
+            TargetSpec {
+                synth: answers,
+                ..targets[i].clone()
+            }
         })
         .collect();
     // A chunk never holds one function twice: records are matched back by
     // address, and a function the sweep redoes is here twice.
-    let split = list.iter().position(|&(_, sweep)| sweep).unwrap_or(list.len());
+    let split = list
+        .iter()
+        .position(|&(_, sweep)| sweep)
+        .unwrap_or(list.len());
     let mut chunks = plan_chunks(&specs[..split], cfg.chunk, jobs);
     chunks.extend(
         plan_chunks(&specs[split..], cfg.chunk, jobs)
@@ -406,7 +515,11 @@ fn run_forced(
             plan.len()
         )
     };
-    let phase = Phase { synth: SynthWorker::Force, table: Some(&plan.table), watch: None };
+    let phase = Phase {
+        synth: SynthWorker::Force,
+        table: Some(&plan.table),
+        watch: None,
+    };
     let run = run_planned(cfg, session, jobs, &specs, chunks, &phase, &banner)?;
     Ok(run
         .results
@@ -423,19 +536,29 @@ fn run_forced(
 /// that could -- and wait until each says it installed it: the `.h` renders
 /// the replayed structures from the workers that hold them, and a worker whose
 /// every function kept its first decompile never took the table.
-fn install_on_idle_workers(cfg: &PoolConfig, session: &Session, table: &[u8]) -> Result<(), String> {
+fn install_on_idle_workers(
+    cfg: &PoolConfig,
+    session: &Session,
+    table: &[u8],
+) -> Result<(), String> {
     let id = session.write_table(table)?;
     let idle = std::mem::take(&mut *session.idle.lock().unwrap_or_else(|e| e.into_inner()));
-    let (ready, mut stale): (Vec<Worker>, Vec<Worker>) =
-        idle.into_iter().partition(|w| w.synth == SynthWorker::Force && w.table == id);
+    let (ready, mut stale): (Vec<Worker>, Vec<Worker>) = idle
+        .into_iter()
+        .partition(|w| w.synth == SynthWorker::Force && w.table == id);
     if ready.is_empty() && stale.is_empty() && !session.holds_table(table) {
-        let exe = std::env::current_exe().map_err(|e| format!("cannot locate the kuna binary: {e}"))?;
+        let exe =
+            std::env::current_exe().map_err(|e| format!("cannot locate the kuna binary: {e}"))?;
         let mut w = Worker::spawn(cfg, SynthWorker::Force, &exe, session.path())
             .map_err(|e| format!("{SPAWN_FAILED}: {e}"))?;
         w.table = id;
         stale.push(w);
     }
-    session.idle.lock().unwrap_or_else(|e| e.into_inner()).extend(ready);
+    session
+        .idle
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .extend(ready);
     let failed = AtomicBool::new(false);
     std::thread::scope(|scope| {
         for mut w in stale {
@@ -449,11 +572,17 @@ fn install_on_idle_workers(cfg: &PoolConfig, session: &Session, table: &[u8]) ->
                 }
                 // An empty chunk acknowledged after the `synth` line is the
                 // table installed; a worker that died instead is gone.
-                if (w.stale_for(id) && !w.force(id)) || w.run_chunk(cfg, session.path(), idx, 0).2 != Ending::Finished {
+                if (w.stale_for(id) && !w.force(id))
+                    || w.run_chunk(cfg, session.path(), idx, 0).2 != Ending::Finished
+                {
                     failed.store(true, Ordering::SeqCst);
                     return;
                 }
-                session.idle.lock().unwrap_or_else(|e| e.into_inner()).push(w);
+                session
+                    .idle
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .push(w);
             });
         }
     });
@@ -498,14 +627,29 @@ fn serial_fallback(
     let banner = |_: &[Vec<usize>], _: usize| {
         format!("[kuna --jobs] structsynth: {n} function(s) in one ordered chunk, 1 worker process")
     };
-    let phase = Phase { synth: SynthWorker::Serial, table: None, watch: None };
-    let serial = run_planned(cfg, session, 1, &specs, vec![(0..n).collect()], &phase, &banner)?;
+    let phase = Phase {
+        synth: SynthWorker::Serial,
+        table: None,
+        watch: None,
+    };
+    let serial = run_planned(
+        cfg,
+        session,
+        1,
+        &specs,
+        vec![(0..n).collect()],
+        &phase,
+        &banner,
+    )?;
     for (&i, r) in askers.iter().zip(serial.results) {
         run.results[i] = r;
     }
     run.retries.recovered += serial.retries.recovered;
     run.retries.failed_alone += serial.retries.failed_alone;
-    Ok(Named { kind: SynthWorker::Serial, table: None })
+    Ok(Named {
+        kind: SynthWorker::Serial,
+        table: None,
+    })
 }
 
 #[cfg(test)]

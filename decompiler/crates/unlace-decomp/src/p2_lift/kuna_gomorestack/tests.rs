@@ -17,7 +17,7 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 
 use crate::action::ActionContext;
@@ -27,7 +27,8 @@ use crate::kuna_sourcelang::SourceLang;
 fn build_fd(mode: GoMorestackMode, lang: SourceLang) -> Funcdata {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -79,10 +80,10 @@ fn morestack_name_recognition() {
         assert!(is_morestack_name(name), "{name}");
     }
     for name in [
-        "runtime.morestacked",   // not a runtime spelling
-        "morestack",             // no package path
+        "runtime.morestacked", // not a runtime spelling
+        "morestack",           // no package path
         "runtime.gopanic",
-        "my.runtime.morestack",  // prefix test is anchored
+        "my.runtime.morestack", // prefix test is anchored
         "",
     ] {
         assert!(!is_morestack_name(name), "{name}");
@@ -107,7 +108,9 @@ fn live_follows_mode_and_language() {
 fn apply_and_matcher_are_inert_without_calls() {
     let mut fd = build_fd(GoMorestackMode::Always, SourceLang::Unknown);
     assert!(match_entry_guard_loop(&fd, &is_morestack_name).is_none());
-    let mut action = ActionGoMorestack { base: ActionBase::new(0, "gomorestack", "deadcode") };
+    let mut action = ActionGoMorestack {
+        base: ActionBase::new(0, "gomorestack", "deadcode"),
+    };
     let mut ctx = ActionContext::default();
     assert_eq!(action.apply(&mut fd, &mut ctx), 0);
 }

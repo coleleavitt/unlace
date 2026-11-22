@@ -41,7 +41,7 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use unlace_decomp::dtype::{flags, type_metatype, Datatype, DatatypeKind};
+use unlace_decomp::dtype::{Datatype, DatatypeKind, flags, type_metatype};
 
 /// Build a `TypeEnum` from a (value -> name) map, mirroring the C++
 /// `parse("enum name { ... }")` result (an interned `TypeEnum` after decode).
@@ -127,7 +127,13 @@ fn cast_integertoken() {}
 fn enum_matching() {
     let enum3 = make_enum(
         8,
-        &[(0, "ZERO"), (1, "ONE"), (2, "TWO"), (4, "FOUR"), (8, "EIGHT")],
+        &[
+            (0, "ZERO"),
+            (1, "ONE"),
+            (2, "TWO"),
+            (4, "FOUR"),
+            (8, "EIGHT"),
+        ],
     );
 
     let mut rep = enum3.get_matches(5).unwrap();

@@ -114,7 +114,7 @@ use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
 use crate::context::VarnodeId;
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::infra::architecture::Architecture;
 use crate::p4_calls::fspec::{FuncProto, PrototypePieces};
@@ -160,10 +160,16 @@ impl OptionCallbackType {
             other => {
                 return Err(KunaError::parse(format!(
                     "Unknown callbacktype value: {other} (expected on|off)"
-                )))
+                )));
             }
         };
-        Ok((mode, format!("Callback prototypes from the declared slot set to {}", mode.as_str())))
+        Ok((
+            mode,
+            format!(
+                "Callback prototypes from the declared slot set to {}",
+                mode.as_str()
+            ),
+        ))
     }
 }
 
@@ -203,17 +209,46 @@ pub struct Entry {
     pub slots: &'static [(usize, Sig)],
 }
 
-const CMP2: Sig = Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::VoidPtr] };
-const HANDLER: Sig = Sig { ret: Ty::Void, params: &[Ty::Int] };
-const THREAD: Sig = Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr] };
-const DTOR: Sig = Sig { ret: Ty::Void, params: &[Ty::VoidPtr] };
-const NULLARY: Sig = Sig { ret: Ty::Void, params: &[] };
-const ONEXIT: Sig = Sig { ret: Ty::Void, params: &[Ty::Int, Ty::VoidPtr] };
-const GLOBERR: Sig = Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::Int] };
-const FTWFN: Sig = Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::VoidPtr, Ty::Int] };
-const NFTWFN: Sig =
-    Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::VoidPtr, Ty::Int, Ty::VoidPtr] };
-const DIRFILT: Sig = Sig { ret: Ty::Int, params: &[Ty::VoidPtr] };
+const CMP2: Sig = Sig {
+    ret: Ty::Int,
+    params: &[Ty::VoidPtr, Ty::VoidPtr],
+};
+const HANDLER: Sig = Sig {
+    ret: Ty::Void,
+    params: &[Ty::Int],
+};
+const THREAD: Sig = Sig {
+    ret: Ty::VoidPtr,
+    params: &[Ty::VoidPtr],
+};
+const DTOR: Sig = Sig {
+    ret: Ty::Void,
+    params: &[Ty::VoidPtr],
+};
+const NULLARY: Sig = Sig {
+    ret: Ty::Void,
+    params: &[],
+};
+const ONEXIT: Sig = Sig {
+    ret: Ty::Void,
+    params: &[Ty::Int, Ty::VoidPtr],
+};
+const GLOBERR: Sig = Sig {
+    ret: Ty::Int,
+    params: &[Ty::CharPtr, Ty::Int],
+};
+const FTWFN: Sig = Sig {
+    ret: Ty::Int,
+    params: &[Ty::CharPtr, Ty::VoidPtr, Ty::Int],
+};
+const NFTWFN: Sig = Sig {
+    ret: Ty::Int,
+    params: &[Ty::CharPtr, Ty::VoidPtr, Ty::Int, Ty::VoidPtr],
+};
+const DIRFILT: Sig = Sig {
+    ret: Ty::Int,
+    params: &[Ty::VoidPtr],
+};
 
 const P: Ty = Ty::VoidPtr;
 const I: Ty = Ty::Int;
@@ -229,33 +264,121 @@ const I: Ty = Ty::Int;
 /// name whose C libraries disagree about where the callback goes
 /// ([`_QSORT_R_IS_NOT_A_SLOT`]).
 pub const SLOTS: &[Entry] = &[
-    Entry { name: "qsort", params: &[P, P, P, P], slots: &[(3, CMP2)] },
-    Entry { name: "bsearch", params: &[P, P, P, P, P], slots: &[(4, CMP2)] },
-    Entry { name: "lfind", params: &[P, P, P, P, P], slots: &[(4, CMP2)] },
-    Entry { name: "lsearch", params: &[P, P, P, P, P], slots: &[(4, CMP2)] },
-    Entry { name: "signal", params: &[I, P], slots: &[(1, HANDLER)] },
-    Entry { name: "__sysv_signal", params: &[I, P], slots: &[(1, HANDLER)] },
-    Entry { name: "bsd_signal", params: &[I, P], slots: &[(1, HANDLER)] },
-    Entry { name: "sigset", params: &[I, P], slots: &[(1, HANDLER)] },
-    Entry { name: "atexit", params: &[P], slots: &[(0, NULLARY)] },
-    Entry { name: "on_exit", params: &[P, P], slots: &[(0, ONEXIT)] },
-    Entry { name: "pthread_create", params: &[P, P, P, P], slots: &[(2, THREAD)] },
-    Entry { name: "pthread_once", params: &[P, P], slots: &[(1, NULLARY)] },
-    Entry { name: "pthread_key_create", params: &[P, P], slots: &[(1, DTOR)] },
+    Entry {
+        name: "qsort",
+        params: &[P, P, P, P],
+        slots: &[(3, CMP2)],
+    },
+    Entry {
+        name: "bsearch",
+        params: &[P, P, P, P, P],
+        slots: &[(4, CMP2)],
+    },
+    Entry {
+        name: "lfind",
+        params: &[P, P, P, P, P],
+        slots: &[(4, CMP2)],
+    },
+    Entry {
+        name: "lsearch",
+        params: &[P, P, P, P, P],
+        slots: &[(4, CMP2)],
+    },
+    Entry {
+        name: "signal",
+        params: &[I, P],
+        slots: &[(1, HANDLER)],
+    },
+    Entry {
+        name: "__sysv_signal",
+        params: &[I, P],
+        slots: &[(1, HANDLER)],
+    },
+    Entry {
+        name: "bsd_signal",
+        params: &[I, P],
+        slots: &[(1, HANDLER)],
+    },
+    Entry {
+        name: "sigset",
+        params: &[I, P],
+        slots: &[(1, HANDLER)],
+    },
+    Entry {
+        name: "atexit",
+        params: &[P],
+        slots: &[(0, NULLARY)],
+    },
+    Entry {
+        name: "on_exit",
+        params: &[P, P],
+        slots: &[(0, ONEXIT)],
+    },
+    Entry {
+        name: "pthread_create",
+        params: &[P, P, P, P],
+        slots: &[(2, THREAD)],
+    },
+    Entry {
+        name: "pthread_once",
+        params: &[P, P],
+        slots: &[(1, NULLARY)],
+    },
+    Entry {
+        name: "pthread_key_create",
+        params: &[P, P],
+        slots: &[(1, DTOR)],
+    },
     Entry {
         name: "pthread_atfork",
         params: &[P, P, P],
         slots: &[(0, NULLARY), (1, NULLARY), (2, NULLARY)],
     },
-    Entry { name: "scandir", params: &[P, P, P, P], slots: &[(2, DIRFILT), (3, CMP2)] },
-    Entry { name: "scandirat", params: &[I, P, P, P, P], slots: &[(3, DIRFILT), (4, CMP2)] },
-    Entry { name: "ftw", params: &[P, P, I], slots: &[(1, FTWFN)] },
-    Entry { name: "nftw", params: &[P, P, I, I], slots: &[(1, NFTWFN)] },
-    Entry { name: "tsearch", params: &[P, P, P], slots: &[(2, CMP2)] },
-    Entry { name: "tfind", params: &[P, P, P], slots: &[(2, CMP2)] },
-    Entry { name: "tdelete", params: &[P, P, P], slots: &[(2, CMP2)] },
-    Entry { name: "tdestroy", params: &[P, P], slots: &[(1, DTOR)] },
-    Entry { name: "glob", params: &[P, I, P, P], slots: &[(2, GLOBERR)] },
+    Entry {
+        name: "scandir",
+        params: &[P, P, P, P],
+        slots: &[(2, DIRFILT), (3, CMP2)],
+    },
+    Entry {
+        name: "scandirat",
+        params: &[I, P, P, P, P],
+        slots: &[(3, DIRFILT), (4, CMP2)],
+    },
+    Entry {
+        name: "ftw",
+        params: &[P, P, I],
+        slots: &[(1, FTWFN)],
+    },
+    Entry {
+        name: "nftw",
+        params: &[P, P, I, I],
+        slots: &[(1, NFTWFN)],
+    },
+    Entry {
+        name: "tsearch",
+        params: &[P, P, P],
+        slots: &[(2, CMP2)],
+    },
+    Entry {
+        name: "tfind",
+        params: &[P, P, P],
+        slots: &[(2, CMP2)],
+    },
+    Entry {
+        name: "tdelete",
+        params: &[P, P, P],
+        slots: &[(2, CMP2)],
+    },
+    Entry {
+        name: "tdestroy",
+        params: &[P, P],
+        slots: &[(1, DTOR)],
+    },
+    Entry {
+        name: "glob",
+        params: &[P, I, P, P],
+        slots: &[(2, GLOBERR)],
+    },
 ];
 
 /// `__cxa_atexit` is DELIBERATELY absent. glibc's `<stdlib.h>` turns
@@ -353,14 +476,13 @@ const NO_STORAGE: Range = (-1, 0, 0);
 
 /// The [`Range`] of `size` bytes at `addr`.
 fn range_of(addr: &Address, size: int4) -> Range {
-    addr.get_space().map_or(NO_STORAGE, |sp| (sp.get_index(), addr.get_offset(), size))
+    addr.get_space()
+        .map_or(NO_STORAGE, |sp| (sp.get_index(), addr.get_offset(), size))
 }
 
 /// Do `a` and `b` share a byte?
 fn overlaps(a: Range, b: Range) -> bool {
-    a.0 == b.0
-        && a.1 < b.1.saturating_add(b.2 as uintb)
-        && b.1 < a.1.saturating_add(a.2 as uintb)
+    a.0 == b.0 && a.1 < b.1.saturating_add(b.2 as uintb) && b.1 < a.1.saturating_add(a.2 as uintb)
 }
 
 /// Does `outer` hold every byte of `inner`?
@@ -545,7 +667,10 @@ fn pieces_of(sig: &Sig, name: &str, arch: &Architecture) -> Option<PrototypePiec
 /// parameters, so a callback slot's argument register is read from the
 /// program's convention rather than from an architecture table.
 fn slot_storage(e: &Entry, arch: &Architecture) -> Option<Vec<(Address, int4)>> {
-    let sig = Sig { ret: Ty::Int, params: e.params };
+    let sig = Sig {
+        ret: Ty::Int,
+        params: e.params,
+    };
     let pieces = pieces_of(&sig, e.name, arch)?;
     crate::kuna_protoorder::model_storage(&pieces, arch)
 }
@@ -579,18 +704,26 @@ pub fn record(arch: &mut Architecture, entry: &Address, fd: &Funcdata) {
             }
             continue;
         };
-        let Some(o) = fd.obank().get(op) else { continue };
+        let Some(o) = fd.obank().get(op) else {
+            continue;
+        };
         if o.is_dead() || !matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND) {
             continue;
         }
         let call_at = o.get_addr().get_offset();
         for (slot, sig) in e.slots {
-            let Some((want, _)) = model.get(*slot) else { continue };
+            let Some((want, _)) = model.get(*slot) else {
+                continue;
+            };
             // Match by address only: a 4-byte `int` slot and an 8-byte pointer
             // slot share a register address on a little-endian machine, and the
             // call recovered whichever width it saw.
-            let Some(slot_at) = storage.iter().position(|(a, _)| a == want) else { continue };
-            let Some(vn) = o.get_in(slot_at as int4 + 1) else { continue };
+            let Some(slot_at) = storage.iter().position(|(a, _)| a == want) else {
+                continue;
+            };
+            let Some(vn) = o.get_in(slot_at as int4 + 1) else {
+                continue;
+            };
             let Some(value) = code_address(fd, vn, 0).filter(|v| *v != 0) else {
                 if trace() {
                     eprintln!(
@@ -600,7 +733,12 @@ pub fn record(arch: &mut Architecture, entry: &Address, fd: &Funcdata) {
                 continue;
             };
             accounted.insert((op, slot_at as int4 + 1));
-            found.push(Fact { value, declared_by: e.name, sig: *sig, at: call_at });
+            found.push(Fact {
+                value,
+                declared_by: e.name,
+                sig: *sig,
+                at: call_at,
+            });
         }
     }
     let other_use = other_uses(fd, &found, &accounted);
@@ -612,13 +750,20 @@ pub fn record(arch: &mut Architecture, entry: &Address, fd: &Funcdata) {
         let proto = fd.get_func_proto();
         let inputs = (0..proto.num_params())
             .map(|i| {
-                proto.get_param(i).map_or(NO_STORAGE, |p| range_of(&p.get_address(), p.get_size()))
+                proto
+                    .get_param(i)
+                    .map_or(NO_STORAGE, |p| range_of(&p.get_address(), p.get_size()))
             })
             .collect();
         let output = proto
             .get_output_type()
             .is_some_and(|t| t.get_metatype() != type_metatype::TYPE_VOID)
-            .then(|| range_of(&proto.get_output().get_address(), proto.get_output().get_size()));
+            .then(|| {
+                range_of(
+                    &proto.get_output().get_address(),
+                    proto.get_output().get_size(),
+                )
+            });
         let computes = returns_a_value(fd);
         let output_set = output.and_then(|o| {
             let addr = proto.get_output().get_address();
@@ -629,13 +774,22 @@ pub fn record(arch: &mut Architecture, entry: &Address, fd: &Funcdata) {
             inputs,
             output,
             output_set,
-            call_return: if computes { None } else { call_return(fd, arch) },
+            call_return: if computes {
+                None
+            } else {
+                call_return(fd, arch)
+            },
             noreturn_calls: noreturn_calls(fd),
             printed: printed_sig(proto),
         })
     };
     let ledger = &mut arch.kuna_callbacktype;
-    let mut row = CallerFacts { facts: found, other_use, reads, calls };
+    let mut row = CallerFacts {
+        facts: found,
+        other_use,
+        reads,
+        calls,
+    };
     if let Some(before) = ledger.by_caller.remove(&me) {
         for read in before.reads {
             if !row.reads.contains(&read) {
@@ -666,7 +820,9 @@ fn return_reads(fd: &Funcdata) -> Vec<(uintb, Range)> {
         if callee.is_invalid() {
             continue;
         }
-        let Some(o) = fd.obank().get(op) else { continue };
+        let Some(o) = fd.obank().get(op) else {
+            continue;
+        };
         if o.is_dead() || o.code() != OpCode::CPUI_CALL {
             continue;
         }
@@ -677,7 +833,9 @@ fn return_reads(fd: &Funcdata) -> Vec<(uintb, Range)> {
         else {
             continue;
         };
-        let Some(space) = v.get_addr().get_space() else { continue };
+        let Some(space) = v.get_addr().get_space() else {
+            continue;
+        };
         let storage = (space.get_index(), v.get_addr().get_offset(), v.get_size());
         if let Some(read) = set_part(storage, v.get_consume(), space.is_big_endian()) {
             out.push((callee.get_offset(), read));
@@ -698,7 +856,9 @@ fn direct_calls(fd: &Funcdata) -> Vec<(uintb, usize, bool)> {
         if callee.is_invalid() {
             continue;
         }
-        let Some(o) = fd.obank().get(op) else { continue };
+        let Some(o) = fd.obank().get(op) else {
+            continue;
+        };
         if o.is_dead() || o.code() != OpCode::CPUI_CALL {
             continue;
         }
@@ -706,7 +866,11 @@ fn direct_calls(fd: &Funcdata) -> Vec<(uintb, usize, bool)> {
             .get_out()
             .and_then(|vn| fd.vbank().get(vn))
             .is_some_and(|v| !v.has_no_descend() && v.get_consume() != 0);
-        out.push((callee.get_offset(), (o.num_input() as usize).saturating_sub(1), consumed));
+        out.push((
+            callee.get_offset(),
+            (o.num_input() as usize).saturating_sub(1),
+            consumed,
+        ));
     }
     out
 }
@@ -721,7 +885,11 @@ fn printed_sig(proto: &FuncProto) -> Option<PrintedSig> {
         Some(t) => Some(Rc::clone(t)),
         None => None,
     };
-    Some(PrintedSig { inputs, output, dotdotdot: proto.is_dotdotdot() })
+    Some(PrintedSig {
+        inputs,
+        output,
+        dotdotdot: proto.is_dotdotdot(),
+    })
 }
 
 /// The same type: one factory entry, or two that order equal.
@@ -735,7 +903,11 @@ fn agrees(printed: Option<&PrintedSig>, pieces: &PrototypePieces) -> bool {
     let Some(sig) = printed else { return false };
     !sig.dotdotdot
         && sig.inputs.len() == pieces.intypes.len()
-        && sig.inputs.iter().zip(&pieces.intypes).all(|(a, b)| same_type(a, b))
+        && sig
+            .inputs
+            .iter()
+            .zip(&pieces.intypes)
+            .all(|(a, b)| same_type(a, b))
         && match (&sig.output, &pieces.outtype) {
             (None, None) => true,
             (Some(a), Some(b)) => same_type(a, b),
@@ -772,7 +944,9 @@ fn other_uses(
     let mut marked: HashMap<VarnodeId, uintb> = HashMap::new();
     let mut work: Vec<VarnodeId> = Vec::new();
     for op in fd.obank().iter_alive() {
-        let Some(o) = fd.obank().get(op) else { continue };
+        let Some(o) = fd.obank().get(op) else {
+            continue;
+        };
         let ins = (0..o.num_input()).filter_map(|slot| o.get_in(slot));
         for vn in ins.chain(o.get_out()) {
             if marked.contains_key(&vn) {
@@ -786,12 +960,16 @@ fn other_uses(
     }
     while let Some(vn) = work.pop() {
         let value = marked[&vn];
-        let Some(var) = fd.vbank().get(vn) else { continue };
+        let Some(var) = fd.vbank().get(vn) else {
+            continue;
+        };
         if var.is_persist() || var.is_addr_tied() {
             out.insert(value);
         }
         for op in var.descend_iter() {
-            let Some(o) = fd.obank().get(op) else { continue };
+            let Some(o) = fd.obank().get(op) else {
+                continue;
+            };
             if o.is_dead() {
                 continue;
             }
@@ -843,16 +1021,22 @@ impl Ledger {
         arity: usize,
         returns: bool,
     ) -> Option<Decline> {
-        let Some(callers) = callers else { return Some(Decline::CallerNotSeen) };
+        let Some(callers) = callers else {
+            return Some(Decline::CallerNotSeen);
+        };
         for caller in callers {
-            let mut rows = self.by_caller.iter().filter(|(k, _)| k.1 == *caller).peekable();
+            let mut rows = self
+                .by_caller
+                .iter()
+                .filter(|(k, _)| k.1 == *caller)
+                .peekable();
             if rows.peek().is_none() {
                 return Some(Decline::CallerNotSeen);
             }
             let disagrees = rows.any(|(_, c)| {
-                c.calls
-                    .iter()
-                    .any(|(to, n, consumed)| *to == callee && (*n != arity || (*consumed && !returns)))
+                c.calls.iter().any(|(to, n, consumed)| {
+                    *to == callee && (*n != arity || (*consumed && !returns))
+                })
             });
             if disagrees {
                 return Some(Decline::DirectCallDisagrees);
@@ -956,11 +1140,16 @@ fn returns_a_value(fd: &Funcdata) -> bool {
 fn returned_bits(fd: &Funcdata) -> uintb {
     let mut bits: uintb = 0;
     for ret in fd.obank().iter_code(OpCode::CPUI_RETURN) {
-        let Some(r) = fd.obank().get(ret) else { continue };
+        let Some(r) = fd.obank().get(ret) else {
+            continue;
+        };
         if r.is_dead() || r.get_halt_type() != 0 || r.num_input() < 2 {
             continue;
         }
-        bits |= r.get_in(1).and_then(|v| fd.vbank().get(v)).map_or(uintb::MAX, |v| v.get_nz_mask());
+        bits |= r
+            .get_in(1)
+            .and_then(|v| fd.vbank().get(v))
+            .map_or(uintb::MAX, |v| v.get_nz_mask());
     }
     bits
 }
@@ -971,7 +1160,11 @@ fn set_part(storage: Range, bits: uintb, big_endian: bool) -> Option<Range> {
     if used >= storage.2 {
         return Some(storage);
     }
-    let offset = if big_endian { storage.1 + (storage.2 - used) as uintb } else { storage.1 };
+    let offset = if big_endian {
+        storage.1 + (storage.2 - used) as uintb
+    } else {
+        storage.1
+    };
     Some((storage.0, offset, used))
 }
 
@@ -988,8 +1181,14 @@ fn set_part(storage: Range, bits: uintb, big_endian: bool) -> Option<Range> {
 /// RETURN is reached otherwise or its callee declares nothing.
 fn call_return(fd: &Funcdata, arch: &Architecture) -> Option<Range> {
     let mut out: Option<Range> = None;
-    for ret in fd.obank().iter_code(OpCode::CPUI_RETURN).collect::<Vec<_>>() {
-        let Some(r) = fd.obank().get(ret) else { continue };
+    for ret in fd
+        .obank()
+        .iter_code(OpCode::CPUI_RETURN)
+        .collect::<Vec<_>>()
+    {
+        let Some(r) = fd.obank().get(ret) else {
+            continue;
+        };
         if r.is_dead() || r.get_halt_type() != 0 {
             continue;
         }
@@ -1005,7 +1204,11 @@ fn call_return(fd: &Funcdata, arch: &Architecture) -> Option<Range> {
         }
         let param = proto.get_output();
         let addr = param.get_address();
-        let here = (addr.get_space()?.get_index(), addr.get_offset(), param.get_size());
+        let here = (
+            addr.get_space()?.get_index(),
+            addr.get_offset(),
+            param.get_size(),
+        );
         if !straight_to_return(arch, c.get_addr(), r.get_addr(), here) {
             return None;
         }
@@ -1068,7 +1271,7 @@ fn straight_to_return(arch: &Architecture, call: &Address, ret: &Address, value:
                 // A store through the register space is an indexed register
                 // file: which register it writes is not known.
                 OpCode::CPUI_STORE if ins.first().is_some_and(|v| v.offset as int4 == value.0) => {
-                    return false
+                    return false;
                 }
                 OpCode::CPUI_BRANCH => match ins.first().and_then(|v| v.space.clone()) {
                     Some(sp) if sp.get_type() == spacetype::IPTR_PROCESSOR => {
@@ -1145,7 +1348,12 @@ impl Raw {
             spacetype::IPTR_INTERNAL => RawKind::Unique,
             _ => RawKind::Space,
         };
-        Some(Raw { kind, space: sp.get_index(), offset: v.offset, size: v.size as int4 })
+        Some(Raw {
+            kind,
+            space: sp.get_index(),
+            offset: v.offset,
+            size: v.size as int4,
+        })
     }
 }
 
@@ -1160,7 +1368,11 @@ struct ZeroState {
 
 /// The window byte a value's byte `i` (least significant first) lives at.
 fn window_byte(at: &Raw, i: int4, window: Range, big_endian: bool) -> Option<u32> {
-    let addr = if big_endian { at.offset + (at.size - 1 - i) as uintb } else { at.offset + i as uintb };
+    let addr = if big_endian {
+        at.offset + (at.size - 1 - i) as uintb
+    } else {
+        at.offset + i as uintb
+    };
     (at.kind == RawKind::Space && at.space == window.0)
         .then_some(())
         .filter(|_| addr >= window.1 && addr < window.1 + window.2 as uintb)
@@ -1189,10 +1401,21 @@ fn zero_mask_of(v: &Raw, st: &ZeroState, window: Range, big_endian: bool) -> u32
 }
 
 /// The bytes of an operation's output provably zero, least significant first.
-fn zero_mask_out(code: OpCode, out: &Raw, ins: &[Raw], st: &ZeroState, window: Range, be: bool) -> u32 {
+fn zero_mask_out(
+    code: OpCode,
+    out: &Raw,
+    ins: &[Raw],
+    st: &ZeroState,
+    window: Range,
+    be: bool,
+) -> u32 {
     let m = |k: usize| ins.get(k).map_or(0, |v| zero_mask_of(v, st, window, be));
     let low = |k: usize| ins.get(k).map_or(0, |v| (1u32 << v.size.clamp(0, 31)) - 1);
-    let all = if out.size >= 32 { u32::MAX } else { (1u32 << out.size.max(0)) - 1 };
+    let all = if out.size >= 32 {
+        u32::MAX
+    } else {
+        (1u32 << out.size.max(0)) - 1
+    };
     let mask = match code {
         OpCode::CPUI_COPY => m(0),
         OpCode::CPUI_INT_ZEXT if !ins.is_empty() => m(0) | (all & !low(0)),
@@ -1202,7 +1425,11 @@ fn zero_mask_out(code: OpCode, out: &Raw, ins: &[Raw], st: &ZeroState, window: R
         }
         OpCode::CPUI_INT_AND => m(0) | m(1),
         OpCode::CPUI_INT_OR => m(0) & m(1),
-        OpCode::CPUI_INT_XOR if ins.len() == 2 && ins[0] == ins[1] && ins[0].kind != RawKind::Const => all,
+        OpCode::CPUI_INT_XOR
+            if ins.len() == 2 && ins[0] == ins[1] && ins[0].kind != RawKind::Const =>
+        {
+            all
+        }
         OpCode::CPUI_INT_XOR => m(0) & m(1),
         OpCode::CPUI_SUBPIECE => {
             let cut = ins.get(1).map_or(0, |c| c.offset as u32);
@@ -1216,7 +1443,15 @@ fn zero_mask_out(code: OpCode, out: &Raw, ins: &[Raw], st: &ZeroState, window: R
 
 /// Apply one raw operation's write to `st`. A `conditional` write may not
 /// happen, so a byte it zeroes is zero only if it already was.
-fn write_zero(code: OpCode, out: &Raw, ins: &[Raw], st: &mut ZeroState, window: Range, be: bool, conditional: bool) {
+fn write_zero(
+    code: OpCode,
+    out: &Raw,
+    ins: &[Raw],
+    st: &mut ZeroState,
+    window: Range,
+    be: bool,
+    conditional: bool,
+) {
     let mask = zero_mask_out(code, out, ins, st, window, be);
     match out.kind {
         RawKind::Unique => {
@@ -1224,7 +1459,9 @@ fn write_zero(code: OpCode, out: &Raw, ins: &[Raw], st: &mut ZeroState, window: 
         }
         RawKind::Space => {
             for i in 0..out.size.min(32) {
-                let Some(b) = window_byte(out, i, window, be) else { continue };
+                let Some(b) = window_byte(out, i, window, be) else {
+                    continue;
+                };
                 let zero = mask & (1 << i) != 0 && (!conditional || st.window & (1 << b) != 0);
                 if zero {
                     st.window |= 1 << b;
@@ -1254,7 +1491,12 @@ fn write_zero(code: OpCode, out: &Raw, ins: &[Raw], st: &mut ZeroState, window: 
 /// ends the path. `None` when the walk cannot finish: an indirect branch, an
 /// instruction it cannot decode, more than [`ZERO_WALK_INSTRUCTIONS`], or no
 /// RETURN at all.
-fn zero_at_every_return(arch: &Architecture, entry: &Address, window: Range, stop_at: &[uintb]) -> Option<u32> {
+fn zero_at_every_return(
+    arch: &Architecture,
+    entry: &Address,
+    window: Range,
+    stop_at: &[uintb],
+) -> Option<u32> {
     let tr = arch.translate();
     let be = entry.get_space()?.is_big_endian();
     let mut seen: HashMap<uintb, u32> = HashMap::new();
@@ -1276,12 +1518,17 @@ fn zero_at_every_return(arch: &Architecture, entry: &Address, window: Range, sto
         };
         let next = &at + len as i64;
         let relative = |v: &Vec<VarnodeData>| {
-            v.first().and_then(|t| t.space.as_ref()).is_some_and(|sp| sp.get_type() == spacetype::IPTR_CONSTANT)
+            v.first()
+                .and_then(|t| t.space.as_ref())
+                .is_some_and(|sp| sp.get_type() == spacetype::IPTR_CONSTANT)
         };
         let conditional = emit.ops.iter().any(|(opc, _, ins)| {
             matches!(opc, OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH) && relative(ins)
         });
-        let mut st = ZeroState { window: state, temps: HashMap::new() };
+        let mut st = ZeroState {
+            window: state,
+            temps: HashMap::new(),
+        };
         let mut falls_through = true;
         for (opc, out, ins) in &emit.ops {
             match opc {
@@ -1310,9 +1557,15 @@ fn zero_at_every_return(arch: &Architecture, entry: &Address, window: Range, sto
                     st.window = 0;
                 }
                 _ => {
-                    let Some(o) = out.as_ref().and_then(Raw::of) else { continue };
+                    let Some(o) = out.as_ref().and_then(Raw::of) else {
+                        continue;
+                    };
                     let raws: Vec<Raw> = ins.iter().filter_map(Raw::of).collect();
-                    let code = if raws.len() == ins.len() { *opc } else { OpCode::CPUI_LOAD };
+                    let code = if raws.len() == ins.len() {
+                        *opc
+                    } else {
+                        OpCode::CPUI_LOAD
+                    };
                     write_zero(code, &o, &raws, &mut st, window, be, conditional);
                 }
             }
@@ -1326,7 +1579,11 @@ fn zero_at_every_return(arch: &Architecture, entry: &Address, window: Range, sto
 
 /// `(declared, value)` when the body computes a return narrower than the
 /// declared one, so the declaration would also print the bytes above it.
-fn narrower_output(own: &OwnFacts, sig: &Sig, declared_out: Option<Range>) -> Option<(Range, Range)> {
+fn narrower_output(
+    own: &OwnFacts,
+    sig: &Sig,
+    declared_out: Option<Range>,
+) -> Option<(Range, Range)> {
     if sig.ret == Ty::Void || !own.returns_a_value {
         return None;
     }
@@ -1350,13 +1607,21 @@ fn output_storage(pieces: &PrototypePieces, arch: &Architecture) -> Option<Range
     let dfp = crate::kuna_typedcallabi::undeclared_model_for(arch, pieces)
         .or_else(|| arch.default_fp().cloned())?;
     let void_ty = arch.types().get_type_void().ok()?;
-    let types_only =
-        PrototypePieces { input_storage: Vec::new(), output_storage: None, ..pieces.clone() };
+    let types_only = PrototypePieces {
+        input_storage: Vec::new(),
+        output_storage: None,
+        ..pieces.clone()
+    };
     let mut fp = FuncProto::new();
-    fp.seed_locked_from_pieces(&types_only, dfp, void_ty, arch.types(), arch.manage()).ok()?;
+    fp.seed_locked_from_pieces(&types_only, dfp, void_ty, arch.types(), arch.manage())
+        .ok()?;
     let out = fp.get_output();
     let addr = out.get_address();
-    Some((addr.get_space()?.get_index(), addr.get_offset(), out.get_size()))
+    Some((
+        addr.get_space()?.get_index(),
+        addr.get_offset(),
+        out.get_size(),
+    ))
 }
 
 /// Does the body's own recovery contradict the declaration `sig`?
@@ -1427,9 +1692,17 @@ fn body_contradicts(
         return Some(Decline::WiderInputThanDeclared);
     }
     if sig.ret != Ty::Void {
-        let handed_back = if own.returns_a_value { own.output } else { own.call_return };
-        let Some(value) = handed_back else { return Some(Decline::ReturnsNoValue) };
-        let Some(declared) = declared_out else { return Some(Decline::ReturnsNoValue) };
+        let handed_back = if own.returns_a_value {
+            own.output
+        } else {
+            own.call_return
+        };
+        let Some(value) = handed_back else {
+            return Some(Decline::ReturnsNoValue);
+        };
+        let Some(declared) = declared_out else {
+            return Some(Decline::ReturnsNoValue);
+        };
         if !own.returns_a_value && !contains(value, declared) {
             return Some(Decline::ReturnsNoValue);
         }
@@ -1477,11 +1750,20 @@ pub fn park(
     if image.escapes || row.other_use {
         return Err(Decline::Escapes);
     }
-    if arch.symboltab.function_proto_pieces_across_scopes(entry).is_some() {
+    if arch
+        .symboltab
+        .function_proto_pieces_across_scopes(entry)
+        .is_some()
+    {
         return Err(Decline::Declared);
     }
     let key = key_of(entry).ok_or(Decline::StorageUnderivable)?;
-    let own = arch.kuna_callbacktype.own.get(&key).cloned().ok_or(Decline::BodyNotSeen)?;
+    let own = arch
+        .kuna_callbacktype
+        .own
+        .get(&key)
+        .cloned()
+        .ok_or(Decline::BodyNotSeen)?;
     let pieces = pieces_of(&row.sig, name, arch).ok_or(Decline::StorageUnderivable)?;
     let storage =
         crate::kuna_protoorder::model_storage(&pieces, arch).ok_or(Decline::StorageUnderivable)?;
@@ -1490,14 +1772,20 @@ pub fn park(
     }
     let declared_in: Vec<Range> = storage.iter().map(|(a, size)| range_of(a, *size)).collect();
     let declared_out = output_storage(&pieces, arch);
-    if let Some(why) =
-        body_contradicts(&own, &row.sig, image.called_directly, &declared_in, declared_out)
-    {
+    if let Some(why) = body_contradicts(
+        &own,
+        &row.sig,
+        image.called_directly,
+        &declared_in,
+        declared_out,
+    ) {
         return Err(why);
     }
-    if arch.kuna_callbacktype.reads_of(entry.get_offset()).any(|read| {
-        declared_out.is_none_or(|declared| !contains(declared, read))
-    }) {
+    if arch
+        .kuna_callbacktype
+        .reads_of(entry.get_offset())
+        .any(|read| declared_out.is_none_or(|declared| !contains(declared, read)))
+    {
         return Err(Decline::CallerReadsAWiderReturn);
     }
     if image.called_directly {

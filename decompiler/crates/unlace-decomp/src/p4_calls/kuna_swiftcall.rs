@@ -215,8 +215,13 @@ fn zeroed_before(data: &Funcdata, call: OpId, reg: &Address, size: int4) -> bool
     let mut cur = data.op_previous_op(call);
     for _ in 0..MAX_SCAN {
         let Some(id) = cur else { return false };
-        let Some(op) = data.obank().get(id) else { return false };
-        if matches!(op.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_CALLOTHER) {
+        let Some(op) = data.obank().get(id) else {
+            return false;
+        };
+        if matches!(
+            op.code(),
+            OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_CALLOTHER
+        ) {
             return false;
         }
         if let Some(out) = op.get_out().and_then(|o| data.vbank().get(o)) {
@@ -244,7 +249,10 @@ fn within(set: &[(Address, int4)], addr: &Address, size: int4) -> bool {
 /// constant (`rsp + 8`, `x29 - 0x18`); `None` for anything else.
 fn address_of(code: OpCode, inputs: &[&crate::varnode::Varnode]) -> Option<(Address, int4, uintb)> {
     let register = |v: &crate::varnode::Varnode| {
-        !v.is_constant() && v.get_addr().get_space().is_some_and(|s| s.get_type() == unlace_base::space::spacetype::IPTR_PROCESSOR)
+        !v.is_constant()
+            && v.get_addr()
+                .get_space()
+                .is_some_and(|s| s.get_type() == unlace_base::space::spacetype::IPTR_PROCESSOR)
     };
     let (base, off) = match (code, inputs) {
         (OpCode::CPUI_COPY, [a]) => (*a, 0),
@@ -271,7 +279,9 @@ fn tested_after(data: &Funcdata, call: OpId, reg: &Address, size: int4) -> bool 
     let mut cur = data.op_next_op(call);
     for _ in 0..MAX_SCAN {
         let Some(id) = cur else { return false };
-        let Some(op) = data.obank().get(id) else { return false };
+        let Some(op) = data.obank().get(id) else {
+            return false;
+        };
         let inputs: Vec<_> = (0..op.num_input())
             .filter_map(|i| op.get_in(i).and_then(|v| data.vbank().get(v)))
             .collect();
@@ -280,21 +290,31 @@ fn tested_after(data: &Funcdata, call: OpId, reg: &Address, size: int4) -> bool 
             .and_then(|o| data.vbank().get(o))
             .map(|o| (o.get_addr().clone(), o.get_size()));
         let slot = match (op.code(), inputs.get(1)) {
-            (OpCode::CPUI_LOAD | OpCode::CPUI_STORE, Some(p)) if !p.is_constant() => {
-                pointers.iter().find(|(a, w, _)| a == p.get_addr() && *w == p.get_size()).map(|(_, _, s)| s.clone()).or_else(
-                    || p.get_addr().get_space().is_some_and(|s| s.get_type() == unlace_base::space::spacetype::IPTR_PROCESSOR)
-                        .then(|| (p.get_addr().clone(), p.get_size(), 0)),
-                )
-            }
+            (OpCode::CPUI_LOAD | OpCode::CPUI_STORE, Some(p)) if !p.is_constant() => pointers
+                .iter()
+                .find(|(a, w, _)| a == p.get_addr() && *w == p.get_size())
+                .map(|(_, _, s)| s.clone())
+                .or_else(|| {
+                    p.get_addr()
+                        .get_space()
+                        .is_some_and(|s| {
+                            s.get_type() == unlace_base::space::spacetype::IPTR_PROCESSOR
+                        })
+                        .then(|| (p.get_addr().clone(), p.get_size(), 0))
+                }),
             _ => None,
         };
         if let Some((addr, width)) = &out {
-            pointers.retain(|(a, w, (b, bw, _))| !overlaps(addr, *width, a, *w) && !overlaps(addr, *width, b, *bw));
+            pointers.retain(|(a, w, (b, bw, _))| {
+                !overlaps(addr, *width, a, *w) && !overlaps(addr, *width, b, *bw)
+            });
             if let Some(target) = address_of(op.code(), &inputs) {
                 pointers.push((addr.clone(), *width, target));
             }
         }
-        let read = inputs.iter().any(|v| !v.is_constant() && within(&tracked, v.get_addr(), v.get_size()));
+        let read = inputs
+            .iter()
+            .any(|v| !v.is_constant() && within(&tracked, v.get_addr(), v.get_size()));
         if read {
             match op.code() {
                 OpCode::CPUI_INT_EQUAL
@@ -315,12 +335,18 @@ fn tested_after(data: &Funcdata, call: OpId, reg: &Address, size: int4) -> bool 
                     return inputs.len() == 2 && inputs[0].get_addr() == inputs[1].get_addr();
                 }
                 OpCode::CPUI_COPY if tracked.len() + slots.len() < MAX_TRACKED => {
-                    let Some(place) = out.clone() else { return false };
+                    let Some(place) = out.clone() else {
+                        return false;
+                    };
                     tracked.push(place);
                 }
                 OpCode::CPUI_STORE => {
-                    let value = inputs.get(2).is_some_and(|v| within(&tracked, v.get_addr(), v.get_size()));
-                    if let Some(slot) = slot.filter(|_| value && tracked.len() + slots.len() < MAX_TRACKED) {
+                    let value = inputs
+                        .get(2)
+                        .is_some_and(|v| within(&tracked, v.get_addr(), v.get_size()));
+                    if let Some(slot) =
+                        slot.filter(|_| value && tracked.len() + slots.len() < MAX_TRACKED)
+                    {
                         slots.push(slot);
                     }
                 }
@@ -335,7 +361,9 @@ fn tested_after(data: &Funcdata, call: OpId, reg: &Address, size: int4) -> bool 
             if let Some((addr, width)) = &out {
                 tracked.retain(|(a, w)| !overlaps(addr, *width, a, *w));
                 slots.retain(|(a, w, _)| !overlaps(addr, *width, a, *w));
-                if op.code() == OpCode::CPUI_LOAD && slot.as_ref().is_some_and(|s| slots.contains(s)) {
+                if op.code() == OpCode::CPUI_LOAD
+                    && slot.as_ref().is_some_and(|s| slots.contains(s))
+                {
                     tracked.push((addr.clone(), *width));
                 }
                 if tracked.is_empty() && slots.is_empty() {
@@ -390,7 +418,10 @@ pub fn stale_self(data: &Funcdata, idx: int4, slot: int4, addr: &Address, size: 
 
 /// Is `(addr, size)` the image's `swiftself` register?
 pub fn is_self_storage(data: &Funcdata, addr: &Address, size: int4) -> bool {
-    data.get_arch().swift_abi.as_ref().is_some_and(|abi| &abi.self_reg.0 == addr && abi.self_reg.1 == size)
+    data.get_arch()
+        .swift_abi
+        .as_ref()
+        .is_some_and(|abi| &abi.self_reg.0 == addr && abi.self_reg.1 == size)
 }
 
 /// Is the model one of the two Swift models?
@@ -407,26 +438,44 @@ fn is_swift(model: &ProtoModel) -> bool {
 /// for a callee that may not take `self`. A direct call only; an indirect
 /// one is [`indirect_self`]'s.
 pub fn passes_own_self(data: &Funcdata, idx: int4, slot: int4, addr: &Address, size: int4) -> bool {
-    let Some(abi) = data.get_arch().swift_abi.as_ref() else { return false };
+    let Some(abi) = data.get_arch().swift_abi.as_ref() else {
+        return false;
+    };
     if addr != &abi.self_reg.0 || size != abi.self_reg.1 {
         return false;
     }
     let own = data.get_func_proto();
     let call = data.get_call_specs(idx);
-    if !own.has_model() || !is_swift(own.model()) || !call.proto().has_model() || !is_swift(call.proto().model()) {
+    if !own.has_model()
+        || !is_swift(own.model())
+        || !call.proto().has_model()
+        || !is_swift(call.proto().model())
+    {
         return false;
     }
     let op = call.get_op();
-    let Some(vn) = data.obank().get(op).and_then(|o| o.get_in(slot)) else { return false };
+    let Some(vn) = data.obank().get(op).and_then(|o| o.get_in(slot)) else {
+        return false;
+    };
     let root = copy_root(data, vn);
-    let own = data.vbank().get(root).is_some_and(|v| v.is_input() && v.get_addr() == addr && v.get_size() == size);
-    own && data.obank().get(op).is_some_and(|o| o.code() == OpCode::CPUI_CALL)
+    let own = data
+        .vbank()
+        .get(root)
+        .is_some_and(|v| v.is_input() && v.get_addr() == addr && v.get_size() == size);
+    own && data
+        .obank()
+        .get(op)
+        .is_some_and(|o| o.code() == OpCode::CPUI_CALL)
 }
 
 /// The Varnode `vn` copies, through any chain of copies.
 fn copy_root(data: &Funcdata, mut vn: crate::context::VarnodeId) -> crate::context::VarnodeId {
     for _ in 0..8 {
-        let def = data.vbank().get(vn).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d));
+        let def = data
+            .vbank()
+            .get(vn)
+            .and_then(|v| v.get_def())
+            .and_then(|d| data.obank().get(d));
         match def {
             Some(d) if d.code() == OpCode::CPUI_COPY => match d.get_in(0) {
                 Some(a) => vn = a,
@@ -443,14 +492,23 @@ fn copy_root(data: &Funcdata, mut vn: crate::context::VarnodeId) -> crate::conte
 /// the register holds, through that value's own isa (`obj->isa[k](obj, …)`).
 /// A value witness, a witness-table entry or a closure reached any other way
 /// is not told what `swiftself` holds, so the register is not its argument.
-pub fn indirect_self(data: &Funcdata, idx: int4, slot: int4, addr: &Address, size: int4) -> Option<bool> {
+pub fn indirect_self(
+    data: &Funcdata,
+    idx: int4,
+    slot: int4,
+    addr: &Address,
+    size: int4,
+) -> Option<bool> {
     let abi = data.get_arch().swift_abi.as_ref()?;
     if addr != &abi.self_reg.0 || size != abi.self_reg.1 {
         return None;
     }
     let call = data.get_call_specs(idx);
     let op = call.get_op();
-    if !data.obank().get(op).is_some_and(|o| o.code() == OpCode::CPUI_CALLIND)
+    if !data
+        .obank()
+        .get(op)
+        .is_some_and(|o| o.code() == OpCode::CPUI_CALLIND)
         || !call.proto().has_model()
         || !is_swift(call.proto().model())
     {
@@ -464,7 +522,10 @@ pub fn indirect_self(data: &Funcdata, idx: int4, slot: int4, addr: &Address, siz
 /// own first word, its isa: `obj->isa[k]`, a method dispatched on `obj`?
 fn dispatches_on(data: &Funcdata, op: OpId, obj: crate::context::VarnodeId) -> bool {
     let def = |v: crate::context::VarnodeId| {
-        data.vbank().get(v).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d))
+        data.vbank()
+            .get(v)
+            .and_then(|v| v.get_def())
+            .and_then(|d| data.obank().get(d))
     };
     let root = |v| copy_root(data, v);
     let obj = root(obj);
@@ -486,12 +547,13 @@ fn dispatches_on(data: &Funcdata, op: OpId, obj: crate::context::VarnodeId) -> b
                     None => return false,
                 }
             }
-            OpCode::CPUI_COPY | OpCode::CPUI_INT_ADD | OpCode::CPUI_PTRADD | OpCode::CPUI_PTRSUB => {
-                match d.get_in(0) {
-                    Some(a) => a,
-                    None => return false,
-                }
-            }
+            OpCode::CPUI_COPY
+            | OpCode::CPUI_INT_ADD
+            | OpCode::CPUI_PTRADD
+            | OpCode::CPUI_PTRSUB => match d.get_in(0) {
+                Some(a) => a,
+                None => return false,
+            },
             _ => return false,
         };
     }
@@ -515,8 +577,17 @@ pub fn indirect_call(data: &Funcdata, call: OpId) -> Option<Rc<ProtoModel>> {
         return None;
     }
     let target = data.vbank().get(op.get_in(0)?)?;
-    let load = defining_op(data, call, target.get_addr().clone(), target.get_size(), &[OpCode::CPUI_COPY])?;
-    let slot = data.obank().get(load).filter(|o| o.code() == OpCode::CPUI_LOAD)?;
+    let load = defining_op(
+        data,
+        call,
+        target.get_addr().clone(),
+        target.get_size(),
+        &[OpCode::CPUI_COPY],
+    )?;
+    let slot = data
+        .obank()
+        .get(load)
+        .filter(|o| o.code() == OpCode::CPUI_LOAD)?;
     let ptr = data.vbank().get(slot.get_in(1)?)?;
     let through_memory = !ptr.is_constant()
         && defining_op(
@@ -524,7 +595,12 @@ pub fn indirect_call(data: &Funcdata, call: OpId) -> Option<Rc<ProtoModel>> {
             load,
             ptr.get_addr().clone(),
             ptr.get_size(),
-            &[OpCode::CPUI_COPY, OpCode::CPUI_INT_ADD, OpCode::CPUI_PTRADD, OpCode::CPUI_PTRSUB],
+            &[
+                OpCode::CPUI_COPY,
+                OpCode::CPUI_INT_ADD,
+                OpCode::CPUI_PTRADD,
+                OpCode::CPUI_PTRSUB,
+            ],
         )
         .and_then(|d| data.obank().get(d))
         .is_some_and(|d| d.code() == OpCode::CPUI_LOAD);
@@ -534,7 +610,13 @@ pub fn indirect_call(data: &Funcdata, call: OpId) -> Option<Rc<ProtoModel>> {
 /// The op before `from` in its block that last wrote `(addr, size)`, after
 /// following back through any of `through` (each to its first non-constant
 /// input), or `None` when another op writes it first or nothing does.
-pub(crate) fn defining_op(data: &Funcdata, from: OpId, mut addr: Address, mut size: int4, through: &[OpCode]) -> Option<OpId> {
+pub(crate) fn defining_op(
+    data: &Funcdata,
+    from: OpId,
+    mut addr: Address,
+    mut size: int4,
+    through: &[OpCode],
+) -> Option<OpId> {
     let mut cur = data.op_previous_op(from);
     for _ in 0..MAX_SCAN {
         let id = cur?;
@@ -561,11 +643,20 @@ fn sets_self(data: &Funcdata, call: OpId, abi: &SwiftAbi) -> bool {
     let mut cur = data.op_previous_op(call);
     for _ in 0..MAX_SCAN {
         let Some(id) = cur else { return false };
-        let Some(op) = data.obank().get(id) else { return false };
-        if matches!(op.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_CALLOTHER) {
+        let Some(op) = data.obank().get(id) else {
+            return false;
+        };
+        if matches!(
+            op.code(),
+            OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_CALLOTHER
+        ) {
             return false;
         }
-        if op.get_out().and_then(|o| data.vbank().get(o)).is_some_and(|o| overlaps(o.get_addr(), o.get_size(), reg, *size)) {
+        if op
+            .get_out()
+            .and_then(|o| data.vbank().get(o))
+            .is_some_and(|o| overlaps(o.get_addr(), o.get_size(), reg, *size))
+        {
             return true;
         }
         cur = data.op_previous_op(id);
@@ -584,14 +675,18 @@ const MAX_BLOCKS: usize = 64;
 /// ([`SwiftAbi::no_self`]). Any other Swift function, unnamed one or
 /// indirect target may.
 fn may_take_self(data: &Funcdata, id: OpId) -> bool {
-    let Some(i) = data.get_call_specs_index(id) else { return true };
+    let Some(i) = data.get_call_specs_index(id) else {
+        return true;
+    };
     let call = data.get_call_specs(i);
     let entry = call.get_entry_address();
     if data.kuna_swift_self_unread(entry) {
         return false;
     }
     let free = data.get_arch().swift_abi.as_ref().is_some_and(|abi| {
-        entry.get_space().is_some_and(|sp| abi.no_self.contains(&(sp.get_index(), entry.get_offset())))
+        entry
+            .get_space()
+            .is_some_and(|sp| abi.no_self.contains(&(sp.get_index(), entry.get_offset())))
     });
     if free {
         return false;
@@ -612,8 +707,12 @@ fn call_since(data: &Funcdata, def: Option<OpId>, op: OpId) -> bool {
             if Some(id) == def {
                 return false;
             }
-            let Some(o) = data.obank().get(id) else { return false };
-            if matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND) && may_take_self(data, id) {
+            let Some(o) = data.obank().get(id) else {
+                return false;
+            };
+            if matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND)
+                && may_take_self(data, id)
+            {
                 return true;
             }
             cur = data.op_previous_op(id);
@@ -629,7 +728,12 @@ fn call_since(data: &Funcdata, def: Option<OpId>, op: OpId) -> bool {
 
 /// Whether the body at `f` reads the register `reg` before it writes it
 /// ([`first_touch`]'s verdict alone).
-pub fn self_first(translate: &dyn Translate, code_space: &Rc<AddrSpace>, reg: &str, f: u64) -> Option<bool> {
+pub fn self_first(
+    translate: &dyn Translate,
+    code_space: &Rc<AddrSpace>,
+    reg: &str,
+    f: u64,
+) -> Option<bool> {
     first_touch(translate, code_space, reg, f).0
 }
 
@@ -645,26 +749,47 @@ pub fn self_first(translate: &dyn Translate, code_space: &Rc<AddrSpace>, reg: &s
 /// any other address does (it hands the value on), as does the copy into a
 /// temporary a `push` or `stp` makes first. Decodes through `translate`, so
 /// its load image must be attached.
-fn first_touch(translate: &dyn Translate, code_space: &Rc<AddrSpace>, reg: &str, f: u64) -> (Option<bool>, bool) {
+fn first_touch(
+    translate: &dyn Translate,
+    code_space: &Rc<AddrSpace>,
+    reg: &str,
+    f: u64,
+) -> (Option<bool>, bool) {
     struct Ops(Vec<(OpCode, Option<VarnodeData>, Vec<VarnodeData>)>);
     impl PcodeEmit for Ops {
-        fn dump(&mut self, _: &Address, opc: OpCode, out: Option<&VarnodeData>, vars: &[VarnodeData]) {
+        fn dump(
+            &mut self,
+            _: &Address,
+            opc: OpCode,
+            out: Option<&VarnodeData>,
+            vars: &[VarnodeData],
+        ) {
             self.0.push((opc, out.cloned(), vars.to_vec()));
         }
     }
-    let Ok(want) = translate.get_register_data(reg) else { return (None, false) };
-    let sp = translate.get_register_data("RSP").or_else(|_| translate.get_register_data("sp")).ok();
+    let Ok(want) = translate.get_register_data(reg) else {
+        return (None, false);
+    };
+    let sp = translate
+        .get_register_data("RSP")
+        .or_else(|_| translate.get_register_data("sp"))
+        .ok();
     let index = |v: &VarnodeData| v.space.as_ref().map(|s| s.get_index());
     let same = |v: &VarnodeData| {
         index(v) == index(&want)
             && v.offset < want.offset + u64::from(want.size)
             && want.offset < v.offset + u64::from(v.size)
     };
-    let is_sp = |v: &VarnodeData| sp.as_ref().is_some_and(|sp| index(v) == index(sp) && v.offset == sp.offset);
+    let is_sp = |v: &VarnodeData| {
+        sp.as_ref()
+            .is_some_and(|sp| index(v) == index(sp) && v.offset == sp.offset)
+    };
     let mut vma = f;
     for _ in 0..64 {
         let mut ops = Ops(Vec::new());
-        let Ok(len) = translate.one_instruction(&mut ops, &Address::new(Rc::clone(code_space), vma)) else {
+        let Ok(len) =
+            translate.one_instruction(&mut ops, &Address::new(Rc::clone(code_space), vma))
+        else {
             return (None, false);
         };
         let mut sp_temps: Vec<VarnodeData> = Vec::new();
@@ -672,14 +797,28 @@ fn first_touch(translate: &dyn Translate, code_space: &Rc<AddrSpace>, reg: &str,
             match opc {
                 OpCode::CPUI_RETURN => return (None, true),
                 OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH
-                    if vars.first().and_then(|v| v.space.as_ref()).is_some_and(|s| s.get_type() == spacetype::IPTR_CONSTANT) => {}
-                OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH | OpCode::CPUI_BRANCHIND | OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => {
+                    if vars
+                        .first()
+                        .and_then(|v| v.space.as_ref())
+                        .is_some_and(|s| s.get_type() == spacetype::IPTR_CONSTANT) => {}
+                OpCode::CPUI_BRANCH
+                | OpCode::CPUI_CBRANCH
+                | OpCode::CPUI_BRANCHIND
+                | OpCode::CPUI_CALL
+                | OpCode::CPUI_CALLIND => {
                     return (None, false);
                 }
                 _ => {}
             }
-            let from_sp = |p: &VarnodeData| is_sp(p) || sp_temps.iter().any(|t| index(t) == index(p) && t.offset == p.offset);
-            let spill = *opc == OpCode::CPUI_STORE && vars.get(2).is_some_and(same) && vars.get(1).is_some_and(from_sp);
+            let from_sp = |p: &VarnodeData| {
+                is_sp(p)
+                    || sp_temps
+                        .iter()
+                        .any(|t| index(t) == index(p) && t.offset == p.offset)
+            };
+            let spill = *opc == OpCode::CPUI_STORE
+                && vars.get(2).is_some_and(same)
+                && vars.get(1).is_some_and(from_sp);
             let reload = *opc == OpCode::CPUI_LOAD && out.as_ref().is_some_and(same);
             if spill || reload {
                 continue;
@@ -690,13 +829,22 @@ fn first_touch(translate: &dyn Translate, code_space: &Rc<AddrSpace>, reg: &str,
             if out.as_ref().is_some_and(same) {
                 return (Some(false), true);
             }
-            let derived = matches!(opc, OpCode::CPUI_COPY | OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB)
-                && vars.first().is_some_and(from_sp);
-            if let Some(o) = out.as_ref().filter(|o| derived && o.space.as_ref().is_some_and(|s| s.get_type() == spacetype::IPTR_INTERNAL)) {
+            let derived = matches!(
+                opc,
+                OpCode::CPUI_COPY | OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB
+            ) && vars.first().is_some_and(from_sp);
+            if let Some(o) = out.as_ref().filter(|o| {
+                derived
+                    && o.space
+                        .as_ref()
+                        .is_some_and(|s| s.get_type() == spacetype::IPTR_INTERNAL)
+            }) {
                 sp_temps.push(o.clone());
             }
         }
-        let Some(next) = u64::try_from(len).ok().and_then(|l| vma.checked_add(l)) else { return (None, false) };
+        let Some(next) = u64::try_from(len).ok().and_then(|l| vma.checked_add(l)) else {
+            return (None, false);
+        };
         vma = next;
     }
     (None, false)
@@ -708,27 +856,38 @@ fn first_touch(translate: &dyn Translate, code_space: &Rc<AddrSpace>, reg: &str,
 /// per-function `ArchContext` carries no translator, so the bodies are read
 /// here, once per image. Inert outside an image the convention is bound in.
 pub fn seed_self_readers(arch: &mut crate::architecture::Architecture, data: &mut Funcdata) {
-    let Some(abi) = arch.loader_swift_abi.clone() else { return };
+    let Some(abi) = arch.loader_swift_abi.clone() else {
+        return;
+    };
     if abi.maybe_self.is_empty() || data.num_calls() < 2 {
         return;
     }
-    let Some(space) = abi.self_reg.0.get_space().cloned() else { return };
-    let reg = arch.translate().get_register_name(&space, abi.self_reg.0.get_offset(), abi.self_reg.1);
+    let Some(space) = abi.self_reg.0.get_space().cloned() else {
+        return;
+    };
+    let reg =
+        arch.translate()
+            .get_register_name(&space, abi.self_reg.0.get_offset(), abi.self_reg.1);
     if reg.is_empty() {
         return;
     }
     for i in 0..data.num_calls() {
         let call = data.get_call_specs(i);
         let entry = call.get_entry_address().clone();
-        let Some(code) = entry.get_space().cloned().filter(|_| !entry.is_invalid()) else { continue };
-        if !(call.proto().has_model() && is_swift(call.proto().model())) && !counts_as_swift(call.get_name()) {
+        let Some(code) = entry.get_space().cloned().filter(|_| !entry.is_invalid()) else {
+            continue;
+        };
+        if !(call.proto().has_model() && is_swift(call.proto().model()))
+            && !counts_as_swift(call.get_name())
+        {
             continue;
         }
         let key = (code.get_index(), entry.get_offset());
         let unread = match arch.kuna_swift_self_first_cache.get(&key) {
             Some(&v) => v,
             None => {
-                let (first, straight) = first_touch(arch.translate(), &code, &reg, entry.get_offset());
+                let (first, straight) =
+                    first_touch(arch.translate(), &code, &reg, entry.get_offset());
                 let v = straight && first != Some(true);
                 arch.kuna_swift_self_first_cache.insert(key, v);
                 v

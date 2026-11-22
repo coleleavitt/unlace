@@ -20,7 +20,10 @@ use unlace_analysis::listing::{FlowKind, Listing, RefKind};
 use unlace_console::engine::bootstrap_from_object;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// The vendored non-PIE x86-64 fauxware fixture (shared with several gates). Its
@@ -125,7 +128,10 @@ fn listing_build_recovers_instructions_flow_and_functions() {
         ret.flow.kind
     );
     assert!(ret.flow.is_terminal, "the `ret` must be is_terminal");
-    assert_eq!(ret.fall_through, None, "the `ret` must have no fall-through");
+    assert_eq!(
+        ret.fall_through, None,
+        "the `ret` must have no fall-through"
+    );
 
     // --- (d) a CALL site records a RefKind::Call edge + seeds a function. ------
     let call = listing
@@ -149,7 +155,10 @@ fn listing_build_recovers_instructions_flow_and_functions() {
     );
     // The callee is incoming-referenced and seeded as a function entry.
     assert!(
-        listing.refs_to(AUTHENTICATE).iter().any(|r| r.kind == RefKind::Call),
+        listing
+            .refs_to(AUTHENTICATE)
+            .iter()
+            .any(|r| r.kind == RefKind::Call),
         "authenticate ({AUTHENTICATE:#x}) must have an incoming Call ref"
     );
     assert!(
@@ -167,8 +176,10 @@ fn listing_build_recovers_instructions_flow_and_functions() {
 
     // Diagnostic sample (printed so the PR body / report can quote it): how much
     // the keystone recovered, plus a few classified instructions.
-    let call_edges_total: usize =
-        listing.instructions().map(|(_, i)| i.flows.iter().filter(|_| i.flow.is_call).count()).sum();
+    let call_edges_total: usize = listing
+        .instructions()
+        .map(|(_, i)| i.flows.iter().filter(|_| i.flow.is_call).count())
+        .sum();
     eprintln!(
         "verify_listing_core: decoded {} instructions, discovered {} functions, {} call edges \
          (seeds = {})",
@@ -215,7 +226,10 @@ fn listing_build_through_engine_driver_seeds() {
     // entries, restricted to executable sections, sorted/deduped — the very
     // helper the live driver calls (`passes::listing_seeds`).
     let seeds = unlace_analysis::passes::listing_seeds(&file, &bytes);
-    assert!(!seeds.is_empty(), "the driver seed set must be non-empty for fauxware");
+    assert!(
+        !seeds.is_empty(),
+        "the driver seed set must be non-empty for fauxware"
+    );
 
     let arch = prog.arch();
     let translate = arch.translate(); // the engine's real `&dyn Translate`

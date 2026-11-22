@@ -59,7 +59,9 @@ pub fn walk_functions(pdb: &mut pdb::PDB<'_, std::fs::File>, image_base: u64) ->
 /// The `S_LPROC32`/`S_GPROC32` record kinds (plain, `_ST`, `_ID` and DPC forms),
 /// checked before a record is parsed; the `pdb` crate does not export its kind
 /// constants, and a module stream is mostly locals and ranges.
-const PROCEDURE_KINDS: [u16; 8] = [0x100a, 0x100b, 0x110f, 0x1110, 0x1146, 0x1147, 0x1155, 0x1156];
+const PROCEDURE_KINDS: [u16; 8] = [
+    0x100a, 0x100b, 0x110f, 0x1110, 0x1146, 0x1147, 0x1155, 0x1156,
+];
 
 /// One module-stream procedure record, global or local, at absolute VMAs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -190,8 +192,14 @@ mod tests {
 
     #[test]
     fn pdb_func_eq() {
-        let a = PdbFunc { vma: 0x401000, name: "main".into() };
-        let b = PdbFunc { vma: 0x401000, name: "main".into() };
+        let a = PdbFunc {
+            vma: 0x401000,
+            name: "main".into(),
+        };
+        let b = PdbFunc {
+            vma: 0x401000,
+            name: "main".into(),
+        };
         assert_eq!(a, b);
     }
 
@@ -199,7 +207,10 @@ mod tests {
     /// overflows the RVA space yields a start with no end.
     #[test]
     fn procedures_carry_their_extent_or_none() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/pe_pdbinterior_x86_64.pdb");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/pe_pdbinterior_x86_64.pdb"
+        );
         let file = std::fs::File::open(path).expect("open the fixture pdb");
         let mut pdb = pdb::PDB::open(file).expect("parse the fixture pdb");
         let procs = walk_procedures(&mut pdb, 0x140000000);
@@ -211,7 +222,10 @@ mod tests {
             (0x140001548, Some(0x140001568)),
             (0x140002008, Some(0x140002010)),
         ] {
-            assert!(procs.contains(&PdbProcedure { start, end }), "{start:#x}: {procs:#x?}");
+            assert!(
+                procs.contains(&PdbProcedure { start, end }),
+                "{start:#x}: {procs:#x?}"
+            );
         }
     }
 }

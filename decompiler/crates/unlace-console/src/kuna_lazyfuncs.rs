@@ -49,7 +49,9 @@ pub(crate) fn fact_entries(out: &AnalysisOutput) -> HashSet<u64> {
 /// symbol table never holds a `Function` the eager commit would not have built.
 pub(crate) fn materialize_callees(arch: &mut Architecture, lifted: &KunaResult<Funcdata>) -> usize {
     let Ok(fd) = lifted else { return 0 };
-    let Some(space) = fd.get_address().get_space().cloned() else { return 0 };
+    let Some(space) = fd.get_address().get_space().cloned() else {
+        return 0;
+    };
     let mut targets: Vec<u64> = transfers(fd)
         .into_iter()
         .chain(constants(fd))
@@ -81,13 +83,17 @@ fn transfers(fd: &Funcdata) -> Vec<u64> {
     let end = entry.saturating_add(fd.get_size().max(0) as u64);
     let mut out = Vec::new();
     for (_, id) in fd.obank().iter_all() {
-        let Some(op) = fd.obank().get(id) else { continue };
+        let Some(op) = fd.obank().get(id) else {
+            continue;
+        };
         let direct = match op.code() {
             OpCode::CPUI_CALL | OpCode::CPUI_BRANCH => true,
             OpCode::CPUI_CALLIND | OpCode::CPUI_BRANCHIND => false,
             _ => continue,
         };
-        let Some(dest) = op.get_in(0).and_then(|v| fd.vbank().get(v)) else { continue };
+        let Some(dest) = op.get_in(0).and_then(|v| fd.vbank().get(v)) else {
+            continue;
+        };
         if dest.is_constant() != direct && !(entry..end).contains(&dest.get_offset()) {
             out.push(dest.get_offset());
         }
@@ -113,13 +119,18 @@ fn ensure_function(arch: &mut Architecture, addr: &Address) -> bool {
         return false;
     }
     let name = arch.name_function(addr);
-    let Ok(type_code) = arch.types().get_type_code() else { return false };
+    let Ok(type_code) = arch.types().get_type_code() else {
+        return false;
+    };
     let min_size = arch.min_funcsymbol_size;
     let num_spaces = arch.manage().num_spaces() as i32;
-    let Ok((scope, base)) =
-        arch.symboltab.find_create_scope_from_symbol_name(&name, "::", None, num_spaces)
+    let Ok((scope, base)) = arch
+        .symboltab
+        .find_create_scope_from_symbol_name(&name, "::", None, num_spaces)
     else {
         return false;
     };
-    arch.symboltab.add_function(scope, addr, &base, min_size, type_code).is_ok()
+    arch.symboltab
+        .add_function(scope, addr, &base, min_size, type_code)
+        .is_ok()
 }

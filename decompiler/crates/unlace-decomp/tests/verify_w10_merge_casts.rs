@@ -32,10 +32,10 @@ use source_diagnostics::normalize_sources;
 use std::rc::Rc;
 
 use unlace_base::types::int4;
-use unlace_decomp::coreaction_casts::{is_op_identical, test_struct_offset0};
 use unlace_decomp::cast::{CastStrategy, CastStrategyC};
+use unlace_decomp::coreaction_casts::{is_op_identical, test_struct_offset0};
 use unlace_decomp::dtype::{
-    type_metatype, Datatype, DatatypeKind, TypeFactory, TypeFactoryImpl, TypeField,
+    Datatype, DatatypeKind, TypeFactory, TypeFactoryImpl, TypeField, type_metatype,
 };
 
 // ---- type builders ---------------------------------------------------------
@@ -54,7 +54,12 @@ fn void() -> Rc<Datatype> {
 /// `castStandard`'s space check stays "one pointer has no address" -> no cast).
 fn ptr(ptrto: Rc<Datatype>) -> Rc<Datatype> {
     let mut d = Datatype::new(8, type_metatype::TYPE_PTR);
-    d.kind = DatatypeKind::Pointer { ptrto, spaceid: None, truncate: None, wordsize: 1 };
+    d.kind = DatatypeKind::Pointer {
+        ptrto,
+        spaceid: None,
+        truncate: None,
+        wordsize: 1,
+    };
     Rc::new(d)
 }
 
@@ -64,20 +69,30 @@ fn array(elem: Rc<Datatype>, n: int4) -> Rc<Datatype> {
     let esz = elem.get_size();
     let mut d = Datatype::new(esz * n, type_metatype::TYPE_ARRAY);
     d.align_size = esz * n;
-    d.kind = DatatypeKind::Array { arrayof: elem, arraysize: n };
+    d.kind = DatatypeKind::Array {
+        arrayof: elem,
+        arraysize: n,
+    };
     Rc::new(d)
 }
 
 /// A struct from `(offset, type)` fields.
 fn structof(fields: &[(int4, Rc<Datatype>)]) -> Rc<Datatype> {
-    let total: int4 = fields.iter().map(|(o, t)| o + t.get_size()).max().unwrap_or(0);
+    let total: int4 = fields
+        .iter()
+        .map(|(o, t)| o + t.get_size())
+        .max()
+        .unwrap_or(0);
     let mut d = Datatype::new(total, type_metatype::TYPE_STRUCT);
     let field: Vec<TypeField> = fields
         .iter()
         .enumerate()
         .map(|(i, (off, ct))| TypeField::new(i as int4, *off, format!("f{i}"), Rc::clone(ct)))
         .collect();
-    d.kind = DatatypeKind::Struct { field, bitfield: Vec::new() };
+    d.kind = DatatypeKind::Struct {
+        field,
+        bitfield: Vec::new(),
+    };
     Rc::new(d)
 }
 
@@ -228,7 +243,7 @@ mod harness {
     use unlace_base::xml::{DocumentStorage, Element};
 
     use unlace_decomp::decompile_drive::{decompile_func, print_c};
-    use unlace_decomp::sleigh_arch::{register_sleigh_arch_ids, LanguageDatabase};
+    use unlace_decomp::sleigh_arch::{LanguageDatabase, register_sleigh_arch_ids};
     use unlace_decomp::xml_arch::{XmlArchitecture, XmlArchitectureCapability};
 
     use unlace_sleigh::loadimage::LoadImage;
@@ -236,7 +251,10 @@ mod harness {
     use unlace_sleigh::translate::register_translate_ids;
 
     fn repo_root() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../..")
+            .canonicalize()
+            .unwrap()
     }
 
     struct SymbolFn {
@@ -267,11 +285,15 @@ mod harness {
         }
     }
     fn attr(el: &Element, name: &str) -> Option<String> {
-        el.get_attribute_value(name).ok().map(|b| String::from_utf8_lossy(b).into_owned())
+        el.get_attribute_value(name)
+            .ok()
+            .map(|b| String::from_utf8_lossy(b).into_owned())
     }
 
     fn parse_datatest(stem: &str) -> Result<DataTest, String> {
-        let path = repo_root().join("tests/datatests").join(format!("{stem}.xml"));
+        let path = repo_root()
+            .join("tests/datatests")
+            .join(format!("{stem}.xml"));
         let xml = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
         let mut store = DocumentStorage::new();
         let root = store
@@ -295,7 +317,11 @@ mod harness {
                 })
             })
             .collect();
-        Ok(DataTest { binaryimage, arch_id, symbols })
+        Ok(DataTest {
+            binaryimage,
+            arch_id,
+            symbols,
+        })
     }
 
     struct DummyImg;
@@ -325,10 +351,12 @@ mod harness {
         let registry = build_registry();
         let capability = XmlArchitectureCapability::new();
         let mut arch = capability.build_architecture("datatest", "");
-        arch.build_loader(Rc::clone(&dt.binaryimage)).map_err(|e| format!("build_loader: {e}"))?;
+        arch.build_loader(Rc::clone(&dt.binaryimage))
+            .map_err(|e| format!("build_loader: {e}"))?;
         let mut db = LanguageDatabase::new();
         db.scan_for_sleigh_directories(root.join("specs").to_str().unwrap());
-        db.get_descriptions(&registry).map_err(|e| format!("collect ldefs: {e}"))?;
+        db.get_descriptions(&registry)
+            .map_err(|e| format!("collect ldefs: {e}"))?;
         arch.sleigh_mut().set_archid(&dt.arch_id);
         arch.sleigh_mut()
             .resolve_architecture(&db, &dt.arch_id)
@@ -336,7 +364,10 @@ mod harness {
         if arch.sleigh().language_index() < 0 {
             return Err("language index unresolved".to_string());
         }
-        let specs = arch.sleigh().build_spec_file(&db).map_err(|e| format!("build_spec_file: {e}"))?;
+        let specs = arch
+            .sleigh()
+            .build_spec_file(&db)
+            .map_err(|e| format!("build_spec_file: {e}"))?;
         let resolved_sla = specs.slafile.ok_or("build_spec_file resolved no .sla")?;
         let sla = std::fs::read(&resolved_sla).map_err(|e| format!("read sla: {e}"))?;
         arch.sleigh_mut()
@@ -349,7 +380,9 @@ mod harness {
             .base_mut()
             .ok_or("no Architecture base after build_translator")?
             .translate_mut()
-            .as_sleigh_mut().expect("standalone Sleigh engine").install_register_lookup()
+            .as_sleigh_mut()
+            .expect("standalone Sleigh engine")
+            .install_register_lookup()
             .map_err(|e| format!("install_register_lookup: {e}"))?;
         if !specs.compilerfile.is_empty() {
             if let Ok(cspec) = std::fs::read(&specs.compilerfile) {
@@ -369,7 +402,10 @@ mod harness {
         arch.open_image(unsafe { &*manager_ptr }, &registry)
             .map_err(|e| format!("open_image: {e}"))?;
         let img = arch.take_loader().ok_or("loader vanished after open")?;
-        arch.sleigh_mut().base_mut().unwrap().set_loader(Box::new(img));
+        arch.sleigh_mut()
+            .base_mut()
+            .unwrap()
+            .set_loader(Box::new(img));
         Ok(arch)
     }
 
@@ -383,7 +419,10 @@ mod harness {
         let space_name = sym.space.clone();
         let off = sym.offset;
         let name = sym.name.clone();
-        let arch = xarch.sleigh_mut().base_mut().ok_or("no Architecture base")?;
+        let arch = xarch
+            .sleigh_mut()
+            .base_mut()
+            .ok_or("no Architecture base")?;
         let space = arch
             .manage()
             .get_space_by_name(&space_name)
@@ -394,9 +433,9 @@ mod harness {
         arch.switch_return = false; // (kuna) also opt out of switchreturn (DIV-25 default-on)
         let fd = decompile_func(arch, &name, entry, 0).map_err(|e| format!("decompile: {e}"))?;
         // (kuna DIV-37) The frozen C++ oracles pin the upstream braced
-    // single-statement if-body form; reset braceelide for the comparison.
-    arch.print_mut().options.set_brace_elide(false);
-    Ok(print_c(arch, &fd))
+        // single-statement if-body form; reset braceelide for the comparison.
+        arch.print_mut().options.set_brace_elide(false);
+        Ok(print_c(arch, &fd))
     }
 }
 
@@ -419,7 +458,8 @@ fn w10_byte_identical_boolless_unperturbed_by_casts() {
         }
     };
     assert_eq!(
-        normalize_sources(&rendered), normalize_sources(BOOLLESS_CPP_B5),
+        normalize_sources(&rendered),
+        normalize_sources(BOOLLESS_CPP_B5),
         "the active ActionSetCasts must leave the boolless body unchanged (source diagnostics normalized):\n\
          --- rust ---\n{rendered}\n--- oracle ---\n{BOOLLESS_CPP_B5}"
     );

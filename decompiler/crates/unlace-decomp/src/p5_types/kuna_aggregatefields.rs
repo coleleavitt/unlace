@@ -26,7 +26,9 @@ const MAX_COPY_CHAIN: usize = 16;
 /// Whether `RuleConcatZero` leaves `op` a PIECE: its output is a structured
 /// value whose fields `RulePieceStructure` recovers.
 pub fn keeps_structured_concat(data: &Funcdata, op: OpId) -> bool {
-    data.obank().get(op).and_then(|o| o.get_out())
+    data.obank()
+        .get(op)
+        .and_then(|o| o.get_out())
         .and_then(|out| data.vbank().get(out))
         .is_some_and(|out| out.get_type().is_piece_structured())
 }
@@ -38,17 +40,22 @@ pub fn keeps_structured_concat(data: &Funcdata, op: OpId) -> bool {
 pub fn returns_whole_container(fd: &Funcdata, op: OpId, slot: i32, parent: &Rc<Datatype>) -> bool {
     let proto = fd.get_func_proto();
     if !proto.is_output_locked()
-        || !proto.get_output_type().is_some_and(|ty| Rc::ptr_eq(ty, parent))
+        || !proto
+            .get_output_type()
+            .is_some_and(|ty| Rc::ptr_eq(ty, parent))
     {
         return false;
     }
-    let Some(o) = fd.obank().get(op) else { return false };
+    let Some(o) = fd.obank().get(op) else {
+        return false;
+    };
     match o.code() {
-        OpCode::CPUI_RETURN if slot >= 1 => {
-            o.get_in(slot).is_some_and(|value| whole_container_copy(fd, value, parent))
-        }
+        OpCode::CPUI_RETURN if slot >= 1 => o
+            .get_in(slot)
+            .is_some_and(|value| whole_container_copy(fd, value, parent)),
         OpCode::CPUI_COPY | OpCode::CPUI_INDIRECT if slot <= 0 => {
-            o.get_in(0).is_some_and(|input| whole_container_copy(fd, input, parent))
+            o.get_in(0)
+                .is_some_and(|input| whole_container_copy(fd, input, parent))
                 && o.get_out().is_some_and(|out| copies_reach_return(fd, out))
         }
         _ => false,
@@ -58,7 +65,9 @@ pub fn returns_whole_container(fd: &Funcdata, op: OpId, slot: i32, parent: &Rc<D
 fn copies_reach_return(fd: &Funcdata, value: VarnodeId) -> bool {
     let mut pending = vec![value];
     for _ in 0..MAX_COPY_CHAIN {
-        let Some(value) = pending.pop() else { return false };
+        let Some(value) = pending.pop() else {
+            return false;
+        };
         for reader in fd.descend_snapshot(value) {
             match fd.obank().get(reader) {
                 Some(op) if op.code() == OpCode::CPUI_RETURN => return true,
@@ -72,18 +81,24 @@ fn copies_reach_return(fd: &Funcdata, value: VarnodeId) -> bool {
 
 fn whole_container_copy(fd: &Funcdata, mut value: VarnodeId, parent: &Rc<Datatype>) -> bool {
     for _ in 0..MAX_COPY_CHAIN {
-        let Some(vn) = fd.vbank().get(value) else { return false };
+        let Some(vn) = fd.vbank().get(value) else {
+            return false;
+        };
         if vn.get_size() != parent.get_size() {
             return false;
         }
         if vn.is_input() && vn.is_type_lock() && Rc::ptr_eq(vn.get_type(), parent) {
             return true;
         }
-        let Some(op) = vn.get_def().and_then(|id| fd.obank().get(id)) else { return false };
+        let Some(op) = vn.get_def().and_then(|id| fd.obank().get(id)) else {
+            return false;
+        };
         if op.code() != OpCode::CPUI_COPY {
             return false;
         }
-        let Some(input) = op.get_in(0) else { return false };
+        let Some(input) = op.get_in(0) else {
+            return false;
+        };
         value = input;
     }
     false
@@ -100,7 +115,9 @@ pub fn collapse_split_truncation(data: &mut Funcdata, subpiece: OpId) {
 /// through its SUBPIECE sources, using the normal dead-code rule.
 pub fn discard_unused_truncations(data: &mut Funcdata, mut value: VarnodeId) {
     while let Some(op) = data.vbank().get(value).and_then(|vn| vn.get_def()) {
-        let Some(def) = data.obank().get(op) else { break };
+        let Some(def) = data.obank().get(op) else {
+            break;
+        };
         if def.code() != OpCode::CPUI_SUBPIECE {
             break;
         }
@@ -126,7 +143,14 @@ pub fn edge_type(fd: &Funcdata, vn: VarnodeId, op: OpId, slot: i32) -> Option<Rc
 
 /// Whether the walk stops at single-field struct `cur` because the operation's
 /// cached resolution of the `size`-byte access is the whole struct.
-pub fn resolves_whole_struct(fd: &Funcdata, cur: &Rc<Datatype>, size: i32, op: OpId, slot: i32) -> bool {
-    cur.needs_resolution() && cur.get_size() == size
+pub fn resolves_whole_struct(
+    fd: &Funcdata,
+    cur: &Rc<Datatype>,
+    size: i32,
+    op: OpId,
+    slot: i32,
+) -> bool {
+    cur.needs_resolution()
+        && cur.get_size() == size
         && Rc::ptr_eq(cur, &fd.find_resolve_facing(cur, op, slot))
 }

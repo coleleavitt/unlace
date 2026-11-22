@@ -104,8 +104,8 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
-use unlace_base::space::{spacetype, AddrSpace};
 use unlace_base::marshal::ElementId;
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::{int4, uint4, uintb};
 use unlace_num::opcodes::OpCode;
 
@@ -114,8 +114,8 @@ use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::p4_calls::fspec::FuncCallSpecs;
 use crate::p7_regions::kuna_regiongraph::{
-    kuna_subgraph_between_nodes, KunaIncrementalDominators, KunaNodeId, KunaNodePool,
-    KunaNodeSet, KunaRegionGraph, NodeKind,
+    KunaIncrementalDominators, KunaNodeId, KunaNodePool, KunaNodeSet, KunaRegionGraph, NodeKind,
+    kuna_subgraph_between_nodes,
 };
 
 /// kuna ElementId for the `outline` option (4124; `almostregion` took 4123).
@@ -161,9 +161,9 @@ impl OutlineSpec {
             if part.is_empty() {
                 continue;
             }
-            let (fnpart, region) = part.split_once(':').ok_or_else(|| {
-                KunaError::lowlevel("outline: expected <fn_entry>:<head>-<exit>")
-            })?;
+            let (fnpart, region) = part
+                .split_once(':')
+                .ok_or_else(|| KunaError::lowlevel("outline: expected <fn_entry>:<head>-<exit>"))?;
             let (headpart, exitpart) = region.split_once('-').ok_or_else(|| {
                 KunaError::lowlevel("outline: expected <head>-<exit> after the colon")
             })?;
@@ -192,7 +192,10 @@ impl OutlineSpec {
 
 fn parse_hex(s: &str) -> KunaResult<uintb> {
     let t = s.trim();
-    let body = t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")).unwrap_or(t);
+    let body = t
+        .strip_prefix("0x")
+        .or_else(|| t.strip_prefix("0X"))
+        .unwrap_or(t);
     uintb::from_str_radix(body, 16)
         .map_err(|_| KunaError::lowlevel("outline: address is not hexadecimal"))
 }
@@ -206,7 +209,9 @@ pub struct ActionOutline {
 impl ActionOutline {
     /// Construct in group `g`.
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionOutline { base: ActionBase::new(0, "outline", g) })
+        Box::new(ActionOutline {
+            base: ActionBase::new(0, "outline", g),
+        })
     }
 }
 
@@ -221,7 +226,9 @@ impl Action for ActionOutline {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionOutline { base: self.base.clone() }))
+        Some(Box::new(ActionOutline {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // P0 assertion `option outline <spec>`, carried on the Architecture boundary.
@@ -390,7 +397,9 @@ fn store_of(data: &Funcdata, vn: VarnodeId) -> Option<Store> {
 }
 
 fn op_inputs(data: &Funcdata, op: OpId) -> Vec<Store> {
-    let Some(o) = data.obank().get(op) else { return Vec::new() };
+    let Some(o) = data.obank().get(op) else {
+        return Vec::new();
+    };
     let n = o.num_input();
     // Slot 0 of a control-transfer op is its DESTINATION, carried as a varnode in
     // the code space.  It is an address, not a value the region reads, and
@@ -406,7 +415,9 @@ fn op_inputs(data: &Funcdata, op: OpId) -> Vec<Store> {
         _ => 0,
     };
     let ins: Vec<_> = (first..n).filter_map(|s| o.get_in(s)).collect();
-    ins.into_iter().filter_map(|vn| store_of(data, vn)).collect()
+    ins.into_iter()
+        .filter_map(|vn| store_of(data, vn))
+        .collect()
 }
 
 /// Blocks reachable from `from` without entering `members` (the region's
@@ -436,12 +447,14 @@ fn op_output(data: &Funcdata, op: OpId) -> Option<Store> {
     store_of(data, out)
 }
 
-
 /// Does any continuation block end in a `RETURN`?
 fn continuation_returns(data: &Funcdata, cont: &BTreeSet<BlockId>) -> bool {
     cont.iter().any(|&bl| {
         data.bb_ops(bl).iter().any(|&op| {
-            data.obank().get(op).map(|o| o.code() == OpCode::CPUI_RETURN).unwrap_or(false)
+            data.obank()
+                .get(op)
+                .map(|o| o.code() == OpCode::CPUI_RETURN)
+                .unwrap_or(false)
         })
     })
 }
@@ -482,14 +495,21 @@ fn returned_storage(
     if redefined {
         return None;
     }
-    Some(Store { key, space, offset: addr.get_offset(), size })
+    Some(Store {
+        key,
+        space,
+        offset: addr.get_offset(),
+        size,
+    })
 }
 
 /// Does any member block hold a call or a store this pass will not reason about?
 fn has_unmodelled_side_effect(data: &Funcdata, members: &BTreeSet<BlockId>) -> bool {
     for &bl in members {
         for op in data.bb_ops(bl) {
-            let Some(o) = data.obank().get(op) else { continue };
+            let Some(o) = data.obank().get(op) else {
+                continue;
+            };
             match o.code() {
                 OpCode::CPUI_CALL
                 | OpCode::CPUI_CALLIND
@@ -540,8 +560,10 @@ fn outline_one(data: &mut Funcdata, run: &OutlineRun) -> KunaResult<bool> {
     for (&bl, &nid) in sc.node_of.iter() {
         block_of.insert(nid, bl);
     }
-    let members: BTreeSet<BlockId> =
-        nodes.iter().filter_map(|n| block_of.get(n).copied()).collect();
+    let members: BTreeSet<BlockId> = nodes
+        .iter()
+        .filter_map(|n| block_of.get(n).copied())
+        .collect();
     if members.len() < 2 || !members.contains(&head_bl) || members.contains(&exit_bl) {
         return Ok(false);
     }
@@ -646,7 +668,8 @@ fn outline_one(data: &mut Funcdata, run: &OutlineRun) -> KunaResult<bool> {
     let idx = data.push_call_specs(fc);
     let handle = crate::flow::next_fspec_handle();
     let angr = data.get_arch().kuna_name_style();
-    data.get_call_specs(idx).register_in_fspec_space(handle, angr);
+    data.get_call_specs(idx)
+        .register_in_fspec_space(handle, angr);
     let fspecvn = data.new_varnode_call_specs(handle);
     data.op_set_input(callop, fspecvn, 0)?;
 
@@ -682,7 +705,6 @@ fn outline_one(data: &mut Funcdata, run: &OutlineRun) -> KunaResult<bool> {
     ));
     Ok(true)
 }
-
 
 //===========================================================================
 // Region substrate
@@ -749,7 +771,12 @@ fn build_scratch(data: &Funcdata) -> Scratch {
             graph.add_edge(&pool, nid, sink);
         }
     }
-    Scratch { pool, graph, head, node_of }
+    Scratch {
+        pool,
+        graph,
+        head,
+        node_of,
+    }
 }
 
 /// Is `[start, end)` a single-entry region of `g`?
@@ -840,7 +867,11 @@ mod tests {
         let s = OutlineSpec::parse("0x401000:0x401008-0x40101f").unwrap();
         assert_eq!(
             s.runs,
-            vec![OutlineRun { fn_entry: 0x401000, head: 0x401008, exit: 0x40101f }]
+            vec![OutlineRun {
+                fn_entry: 0x401000,
+                head: 0x401008,
+                exit: 0x40101f
+            }]
         );
         assert_eq!(s.for_function(0x401000).unwrap().head, 0x401008);
         assert!(s.for_function(0x402000).is_none());

@@ -37,7 +37,7 @@ use object::read::{Object, ObjectSection};
 
 use crate::listing::Listing;
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, FidMatch, Phase};
-use flirt_sig::{Endian, Matcher, Module, Signature, FLAG_STARTUP};
+use flirt_sig::{Endian, FLAG_STARTUP, Matcher, Module, Signature};
 
 pub mod kuna_elf_data_names;
 pub mod kuna_rustprofiles;
@@ -63,12 +63,18 @@ impl AnalysisPass for FlirtPass {
 
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
         let mut out = AnalysisOutput::default();
-        let Some(listing) = ctx.listing else { return out };
+        let Some(listing) = ctx.listing else {
+            return out;
+        };
         let sigs = load_sigs(ctx.file.format());
         if sigs.is_empty() {
             return out;
         }
-        let endian = if ctx.file.is_little_endian() { Endian::Little } else { Endian::Big };
+        let endian = if ctx.file.is_little_endian() {
+            Endian::Little
+        } else {
+            Endian::Big
+        };
         let matchers: Vec<Matcher<'_>> = sigs.iter().map(|s| Matcher::new(s, endian)).collect();
         let image = Image::new(ctx.file);
         let entries: Vec<u64> = listing.functions().map(|(&a, _)| a).collect();
@@ -77,7 +83,11 @@ impl AnalysisPass for FlirtPass {
             .filter_map(|(&a, f)| f.name.clone().map(|n| (a, n)))
             .collect();
         for (addr, name) in match_all(&matchers, &image, listing, &entries, known, true) {
-            out.fid_names.push(FidMatch { addr, name, by_signature: true });
+            out.fid_names.push(FidMatch {
+                addr,
+                name,
+                by_signature: true,
+            });
         }
         out
     }
@@ -148,8 +158,12 @@ pub struct Image<'a> {
 }
 
 const X86_PADS: &[[u8; 4]] = &[[0xf3, 0x0f, 0x1e, 0xfa], [0xf3, 0x0f, 0x1e, 0xfb]];
-const AARCH64_PADS: &[[u8; 4]] =
-    &[[0x1f, 0x24, 0x03, 0xd5], [0x5f, 0x24, 0x03, 0xd5], [0x9f, 0x24, 0x03, 0xd5], [0xdf, 0x24, 0x03, 0xd5]];
+const AARCH64_PADS: &[[u8; 4]] = &[
+    [0x1f, 0x24, 0x03, 0xd5],
+    [0x5f, 0x24, 0x03, 0xd5],
+    [0x9f, 0x24, 0x03, 0xd5],
+    [0xdf, 0x24, 0x03, 0xd5],
+];
 
 impl<'a> Image<'a> {
     pub fn new(file: &'a object::File<'a>) -> Self {
@@ -160,13 +174,20 @@ impl<'a> Image<'a> {
             .filter(|(_, d)| !d.is_empty())
             .collect();
         spans.sort_by_key(|&(a, _)| a);
-        let x86_fields = matches!(file.architecture(), object::Architecture::X86_64 | object::Architecture::I386);
+        let x86_fields = matches!(
+            file.architecture(),
+            object::Architecture::X86_64 | object::Architecture::I386
+        );
         let pads = match file.architecture() {
             _ if x86_fields => X86_PADS,
             object::Architecture::Aarch64 if file.is_little_endian() => AARCH64_PADS,
             _ => &[],
         };
-        Image { spans, x86_fields, pads }
+        Image {
+            spans,
+            x86_fields,
+            pads,
+        }
     }
 
     /// Whether the code at `addr` starts with a landing pad.
@@ -232,7 +253,15 @@ pub fn accepted_matches(
     sites: bool,
 ) -> BTreeMap<u64, String> {
     let mut accepted = BTreeMap::new();
-    match_all_inner(sigs, image, listing, entries, known, sites, Some(&mut accepted));
+    match_all_inner(
+        sigs,
+        image,
+        listing,
+        entries,
+        known,
+        sites,
+        Some(&mut accepted),
+    );
     accepted
 }
 
@@ -267,8 +296,14 @@ fn match_all_inner(
                     if !reference_ok(m, ea, image, listing, &known, unnamed_ok) {
                         continue;
                     }
-                    let Some(name) = function_name(m, pattern_len, sites) else { continue };
-                    let tally = if sites { site_tally(m, ea, image, listing, &known) } else { Tally::default() };
+                    let Some(name) = function_name(m, pattern_len, sites) else {
+                        continue;
+                    };
+                    let tally = if sites {
+                        site_tally(m, ea, image, listing, &known)
+                    } else {
+                        Tally::default()
+                    };
                     let unconfirmed = tally.differ > 0 || (tally.agree == 0 && !last);
                     if sites && m.length as usize <= pattern_len && tally.named > 0 && unconfirmed {
                         continue;
@@ -282,7 +317,9 @@ fn match_all_inner(
             ranked.sort_by_key(|&(_, s)| std::cmp::Reverse(s));
             let decided = match ranked.as_slice() {
                 [(name, score)] => Some(((*name).clone(), *score)),
-                [(name, top), (_, next), ..] if sites && top > next => Some(((*name).clone(), *top)),
+                [(name, top), (_, next), ..] if sites && top > next => {
+                    Some(((*name).clone(), *top))
+                }
                 _ => None,
             };
             if let Some((name, score)) = decided {
@@ -354,7 +391,9 @@ fn modules_at<'a>(s: &Matcher<'a>, code: &[u8], pattern_len: usize) -> Vec<&'a M
 /// (`endbr64; ret` is as empty as `ret`).
 fn bare_return(listing: &Listing, image: &Image<'_>, ea: u64) -> bool {
     let at = if image.landing_pad(ea) { ea + 4 } else { ea };
-    listing.instruction_at(at).is_some_and(|i| i.flow.is_terminal && !i.flow.is_jump)
+    listing
+        .instruction_at(at)
+        .is_some_and(|i| i.flow.is_terminal && !i.flow.is_jump)
 }
 
 /// The module's own name: the public at offset 0, unless it is unnamed (`?`) or
@@ -366,7 +405,11 @@ fn function_name(m: &Module, pattern_len: usize, sites: bool) -> Option<String> 
     if p.name.is_empty() || p.name.starts_with(b"?") || p.flags & 0x04 != 0 {
         return None;
     }
-    if !sites && m.length as usize <= pattern_len && m.reference.is_none() && m.sites.iter().all(|s| s.name.len() < 2) {
+    if !sites
+        && m.length as usize <= pattern_len
+        && m.reference.is_none()
+        && m.sites.iter().all(|s| s.name.len() < 2)
+    {
         return None;
     }
     Some(String::from_utf8_lossy(&p.name).into_owned())
@@ -421,8 +464,18 @@ struct Tally {
     differ: usize,
 }
 
-fn site_tally(m: &Module, ea: u64, image: &Image<'_>, listing: &Listing, known: &HashMap<u64, String>) -> Tally {
-    let reference = m.reference.as_ref().filter(|r| r.name != b".").map(|r| (r.offset, r.name.as_slice()));
+fn site_tally(
+    m: &Module,
+    ea: u64,
+    image: &Image<'_>,
+    listing: &Listing,
+    known: &HashMap<u64, String>,
+) -> Tally {
+    let reference = m
+        .reference
+        .as_ref()
+        .filter(|r| r.name != b".")
+        .map(|r| (r.offset, r.name.as_slice()));
     let sites = m
         .sites
         .iter()
@@ -430,7 +483,11 @@ fn site_tally(m: &Module, ea: u64, image: &Image<'_>, listing: &Listing, known: 
         .map(|s| (i64::from(s.offset), s.name.as_slice()));
     let mut seen: HashSet<i64> = HashSet::new();
     let mut t = Tally::default();
-    for (off, name) in reference.into_iter().chain(sites).filter(|&(o, _)| seen.insert(o)) {
+    for (off, name) in reference
+        .into_iter()
+        .chain(sites)
+        .filter(|&(o, _)| seen.insert(o))
+    {
         t.named += 1;
         match site_match(ea, off, name, image, listing, known) {
             Some(SiteMatch::Agrees) => t.agree += 1,
@@ -454,19 +511,25 @@ fn reference_ok(
     known: &HashMap<u64, String>,
     unnamed_ok: bool,
 ) -> bool {
-    let reference_ok = m.reference.as_ref().filter(|r| r.name != b".").is_none_or(|r| {
-        match site_match(ea, r.offset, &r.name, image, listing, known) {
-            Some(SiteMatch::Agrees) => true,
-            Some(SiteMatch::Unnamed) => unnamed_ok,
-            _ => false,
-        }
-    });
+    let reference_ok = m
+        .reference
+        .as_ref()
+        .filter(|r| r.name != b".")
+        .is_none_or(
+            |r| match site_match(ea, r.offset, &r.name, image, listing, known) {
+                Some(SiteMatch::Agrees) => true,
+                Some(SiteMatch::Unnamed) => unnamed_ok,
+                _ => false,
+            },
+        );
     reference_ok
-        && m
-            .sites
+        && m.sites
             .iter()
             .filter(|s| m.length <= 0x10 && s.name.len() >= 2 && s.flags & 0x08 == 0)
-            .all(|s| site_match(ea, i64::from(s.offset), &s.name, image, listing, known) == Some(SiteMatch::Agrees))
+            .all(|s| {
+                site_match(ea, i64::from(s.offset), &s.name, image, listing, known)
+                    == Some(SiteMatch::Agrees)
+            })
 }
 
 /// FLIRT names carry the object file's spelling (`_strlen` on a Mach-O or COFF

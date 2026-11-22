@@ -105,7 +105,7 @@
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use unlace_base::space::{spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_decomp::kuna_fasthash::FxBuildHasher;
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
@@ -113,7 +113,7 @@ use unlace_num::pcoderaw::VarnodeData;
 use object::read::{Object, ObjectSection};
 
 use super::kuna_poolref::PoolImage;
-use super::xrefs::{in_range, looks_like_address, FullOp, XrefKind};
+use super::xrefs::{FullOp, XrefKind, in_range, looks_like_address};
 
 /// The file bytes of `.got`, which [`PoolImage`] leaves out because the section
 /// is writable. A slot for a local function holds its address in a non-PIE
@@ -336,8 +336,19 @@ impl PicPool {
     /// write to a base therefore kills it only on the path where it ran, and a
     /// predicated return (`popeq {r4-r6,pc}`) leaves the base to the path that
     /// falls past it.
-    pub(super) fn step(&mut self, img: &Image, insn: Insn, queued: impl FnOnce() -> Vec<u64>) -> Option<u64> {
-        let Insn { vma, len, fall, ops, branches: branch_targets } = insn;
+    pub(super) fn step(
+        &mut self,
+        img: &Image,
+        insn: Insn,
+        queued: impl FnOnce() -> Vec<u64>,
+    ) -> Option<u64> {
+        let Insn {
+            vma,
+            len,
+            fall,
+            ops,
+            branches: branch_targets,
+        } = insn;
         let fresh = seed(vma, ops, img);
         if !self.live {
             fresh?;
@@ -345,7 +356,9 @@ impl PicPool {
             self.dry = queued().into_iter().collect();
         }
         let next = vma.wrapping_add(u64::from(len));
-        let skip_at = ops.iter().position(|op| op.opcode == OpCode::CPUI_CBRANCH && branches_to(op, next));
+        let skip_at = ops
+            .iter()
+            .position(|op| op.opcode == OpCode::CPUI_CBRANCH && branches_to(op, next));
         if let Some(next) = fall {
             self.edges.push((vma, next, Edge::Fall));
         }
@@ -362,22 +375,36 @@ impl PicPool {
         // Hashing every instruction's address would be this walk's whole cost on
         // an architecture that never forms one of these pairs; nothing is in
         // flight until a pool load puts it there.
-        let pending =
-            if self.at.is_empty() { Vec::new() } else { self.at.remove(&vma).unwrap_or_default() };
-        let bases =
-            if self.bases_at.is_empty() { Vec::new() } else { self.bases_at.remove(&vma).unwrap_or_default() };
+        let pending = if self.at.is_empty() {
+            Vec::new()
+        } else {
+            self.at.remove(&vma).unwrap_or_default()
+        };
+        let bases = if self.bases_at.is_empty() {
+            Vec::new()
+        } else {
+            self.bases_at.remove(&vma).unwrap_or_default()
+        };
         if pending.is_empty() && bases.is_empty() && fresh.is_none() {
             return None;
         }
         let ins: Vec<Fact> = if bases.is_empty() {
             pending
         } else {
-            bases.iter().map(|&p| Fact { p, base: true }).chain(pending).collect()
+            bases
+                .iter()
+                .map(|&p| Fact { p, base: true })
+                .chain(pending)
+                .collect()
         };
         let ev = evaluate(vma, ops, &ins, img);
-        let calls = ops.iter().any(|op| matches!(op.opcode, OpCode::CPUI_CALL | OpCode::CPUI_CALLIND));
+        let calls = ops
+            .iter()
+            .any(|op| matches!(op.opcode, OpCode::CPUI_CALL | OpCode::CPUI_CALLIND));
         let kept = |f: &Fact| {
-            !ev.written.iter().any(|&(off, size)| spans_overlap(f.p.off, f.p.size, off, size))
+            !ev.written
+                .iter()
+                .any(|&(off, size)| spans_overlap(f.p.off, f.p.size, off, size))
                 && (!calls || survives_calls(&f.p, img.preserved))
         };
 
@@ -397,7 +424,13 @@ impl PicPool {
         if let Some(p) = fresh.filter(|p| img.deref && is_pointer(p.word, img)) {
             if !calls || survives_calls(&p, img.preserved) {
                 outs.retain(|(o, _)| !(o.base && overlaps(&o.p, &p)));
-                outs.push((Fact { p: Pending { ptr: true, ..p }, base: true }, 0));
+                outs.push((
+                    Fact {
+                        p: Pending { ptr: true, ..p },
+                        base: true,
+                    },
+                    0,
+                ));
             }
         }
         if !leaves_the_run(ops) {
@@ -426,13 +459,18 @@ impl PicPool {
         if let Some(k) = skip_at {
             let cond_writes: Vec<(u64, u32)> = ops[..k]
                 .iter()
-                .filter_map(|op| match op.out.as_ref().and_then(|o| key_of(o, img.data_space)) {
-                    Some(Key::Reg(off, size)) => Some((off, size)),
-                    _ => None,
-                })
+                .filter_map(
+                    |op| match op.out.as_ref().and_then(|o| key_of(o, img.data_space)) {
+                        Some(Key::Reg(off, size)) => Some((off, size)),
+                        _ => None,
+                    },
+                )
                 .collect();
-            let untouched =
-                |f: &Fact| !cond_writes.iter().any(|&(off, size)| spans_overlap(f.p.off, f.p.size, off, size));
+            let untouched = |f: &Fact| {
+                !cond_writes
+                    .iter()
+                    .any(|&(off, size)| spans_overlap(f.p.off, f.p.size, off, size))
+            };
             for (i, f) in ins.iter().enumerate() {
                 if f.base && untouched(f) {
                     skip.push((*f, 1 << i));
@@ -448,19 +486,38 @@ impl PicPool {
         }
 
         if let Some(next) = fall.filter(|_| outs.iter().any(|(f, _)| !f.base)) {
-            self.at.entry(next).or_default().extend(outs.iter().filter(|(f, _)| !f.base).map(|(f, _)| *f));
+            self.at
+                .entry(next)
+                .or_default()
+                .extend(outs.iter().filter(|(f, _)| !f.base).map(|(f, _)| *f));
         }
         if fall.is_none() {
             if skip.iter().any(|(f, _)| !f.base) {
-                self.at.entry(next).or_default().extend(skip.iter().filter(|(f, _)| !f.base).map(|(f, _)| *f));
+                self.at
+                    .entry(next)
+                    .or_default()
+                    .extend(skip.iter().filter(|(f, _)| !f.base).map(|(f, _)| *f));
             }
         }
-        let based: Vec<Pending> =
-            outs.iter().filter(|(f, _)| f.base).map(|(f, _)| f.p).take(MAX_TRACKED).collect();
-        let skipped: Vec<Pending> = skip.iter().filter(|(f, _)| f.base).map(|(f, _)| f.p).collect();
+        let based: Vec<Pending> = outs
+            .iter()
+            .filter(|(f, _)| f.base)
+            .map(|(f, _)| f.p)
+            .take(MAX_TRACKED)
+            .collect();
+        let skipped: Vec<Pending> = skip
+            .iter()
+            .filter(|(f, _)| f.base)
+            .map(|(f, _)| f.p)
+            .collect();
         let reach = fall
             .into_iter()
-            .chain(branch_targets.iter().copied().filter(|&to| !(skip_at.is_some() && to == next)))
+            .chain(
+                branch_targets
+                    .iter()
+                    .copied()
+                    .filter(|&to| !(skip_at.is_some() && to == next)),
+            )
             .map(|to| (to, &based))
             .chain(skip_at.map(|_| (next, &skipped)));
         if !(based.is_empty() && skipped.is_empty()) {
@@ -470,12 +527,20 @@ impl PicPool {
         }
 
         let seeded = fresh.and_then(|p| {
-            outs.iter().any(|(f, deps)| *deps == 0 && !f.base && f.p.origin == p.origin).then_some(p.word)
+            outs.iter()
+                .any(|(f, deps)| *deps == 0 && !f.base && f.p.origin == p.origin)
+                .then_some(p.word)
         });
         // A node that passes nothing on and forms nothing delivers nothing,
         // which an absent one already does.
         if !(outs.is_empty() && skip.is_empty() && ev.found.is_empty()) {
-            self.nodes.push(Node { vma, ins, outs, skip, refs: ev.found });
+            self.nodes.push(Node {
+                vma,
+                ins,
+                outs,
+                skip,
+                refs: ev.found,
+            });
         }
         seeded
     }
@@ -491,9 +556,17 @@ impl PicPool {
         if !self.live {
             return;
         }
-        self.edges.extend(targets.iter().map(|&to| (vma, to, Edge::Branch)));
-        let Some(n) = self.nodes.iter().rev().find(|n| n.vma == vma) else { return };
-        let based: Vec<Pending> = n.outs.iter().filter(|(f, _)| f.base).map(|(f, _)| f.p).collect();
+        self.edges
+            .extend(targets.iter().map(|&to| (vma, to, Edge::Branch)));
+        let Some(n) = self.nodes.iter().rev().find(|n| n.vma == vma) else {
+            return;
+        };
+        let based: Vec<Pending> = n
+            .outs
+            .iter()
+            .filter(|(f, _)| f.base)
+            .map(|(f, _)| f.p)
+            .collect();
         for &to in targets {
             self.reach(to, &based);
         }
@@ -528,23 +601,36 @@ impl PicPool {
         if self.nodes.iter().all(|n| n.refs.is_empty()) {
             return verdict;
         }
-        let index: HashMap<u64, usize, FxBuildHasher> =
-            self.nodes.iter().enumerate().map(|(i, n)| (n.vma, i)).collect();
+        let index: HashMap<u64, usize, FxBuildHasher> = self
+            .nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.vma, i))
+            .collect();
         let mut preds: HashMap<u64, Vec<(u64, Edge)>, FxBuildHasher> = HashMap::default();
         for &(from, to, kind) in &self.edges {
             if index.contains_key(&to) {
                 preds.entry(to).or_default().push((from, kind));
             }
         }
-        let mut valid: Vec<u32> =
-            self.nodes.iter().map(|n| if entered.contains(&n.vma) || self.dry.contains(&n.vma) { 0 } else { all(n.ins.len()) }).collect();
+        let mut valid: Vec<u32> = self
+            .nodes
+            .iter()
+            .map(|n| {
+                if entered.contains(&n.vma) || self.dry.contains(&n.vma) {
+                    0
+                } else {
+                    all(n.ins.len())
+                }
+            })
+            .collect();
         let delivers = |valid: &[u32], from: u64, kind: Edge, f: &Fact| {
             index.get(&from).is_some_and(|&i| {
                 let n = &self.nodes[i];
                 let carried = if kind == Edge::Skip { &n.skip } else { &n.outs };
-                carried
-                    .iter()
-                    .any(|(o, deps)| deps & !valid[i] == 0 && (o.base || kind != Edge::Branch) && o.same(f))
+                carried.iter().any(|(o, deps)| {
+                    deps & !valid[i] == 0 && (o.base || kind != Edge::Branch) && o.same(f)
+                })
             })
         };
         let mut changed = true;
@@ -557,7 +643,11 @@ impl PicPool {
                     if keep & (1 << j) == 0 {
                         continue;
                     }
-                    if ps.is_empty() || !ps.iter().all(|&(from, kind)| delivers(&valid, from, kind, f)) {
+                    if ps.is_empty()
+                        || !ps
+                            .iter()
+                            .all(|&(from, kind)| delivers(&valid, from, kind, f))
+                    {
                         keep &= !(1 << j);
                     }
                 }
@@ -607,40 +697,82 @@ fn evaluate(vma: u64, ops: &[FullOp], ins: &[Fact], img: &Image) -> Eval {
     // Without a base among its inputs or its own PC among its constants, nothing
     // this instruction computes is an address; only its writes matter.
     let inert = !ins.iter().any(|f| f.base)
-        && !ops.iter().flat_map(|op| op.ins.iter()).any(|vn| is_constant(vn) && is_own_pc(vn.offset, vma));
+        && !ops
+            .iter()
+            .flat_map(|op| op.ins.iter())
+            .any(|vn| is_constant(vn) && is_own_pc(vn.offset, vma));
     if inert
-        || !ops.iter().flat_map(|op| op.ins.iter()).any(|vn| match key_of(vn, data) {
-            Some(Key::Reg(off, size)) => ins.iter().any(|f| spans_overlap(f.p.off, f.p.size, off, size)),
-            _ => false,
-        })
+        || !ops
+            .iter()
+            .flat_map(|op| op.ins.iter())
+            .any(|vn| match key_of(vn, data) {
+                Some(Key::Reg(off, size)) => ins
+                    .iter()
+                    .any(|f| spans_overlap(f.p.off, f.p.size, off, size)),
+                _ => false,
+            })
     {
         let written = ops
             .iter()
             .filter_map(|op| match op.out.as_ref().and_then(|o| key_of(o, data)) {
-                Some(Key::Reg(off, size)) if ins.iter().any(|f| spans_overlap(f.p.off, f.p.size, off, size)) => {
+                Some(Key::Reg(off, size))
+                    if ins
+                        .iter()
+                        .any(|f| spans_overlap(f.p.off, f.p.size, off, size)) =>
+                {
                     Some((off, size))
                 }
                 _ => None,
             })
             .collect();
-        return Eval { found: Vec::new(), written, new_bases: Vec::new() };
+        return Eval {
+            found: Vec::new(),
+            written,
+            new_bases: Vec::new(),
+        };
     }
     let mut vals: Vec<(Key, Known)> = Vec::with_capacity(ins.len());
     for (i, f) in ins.iter().enumerate() {
         let key = Key::Reg(f.p.off, f.p.size);
         let k = if f.p.ptr {
-            Known { via: f.p.origin, ..Known::ptr(f.p.word, 1 << i) }
+            Known {
+                via: f.p.origin,
+                ..Known::ptr(f.p.word, 1 << i)
+            }
         } else if f.base {
-            Known { v: f.p.word, seed: false, pc: false, got: true, ptr: false, alias: false, origin: 0, via: 0, deps: 1 << i, pdeps: 0 }
+            Known {
+                v: f.p.word,
+                seed: false,
+                pc: false,
+                got: true,
+                ptr: false,
+                alias: false,
+                origin: 0,
+                via: 0,
+                deps: 1 << i,
+                pdeps: 0,
+            }
         } else {
-            Known { deps: 1 << i, ..Known::seed(f.p.word, f.p.origin) }
+            Known {
+                deps: 1 << i,
+                ..Known::seed(f.p.word, f.p.origin)
+            }
         };
         // The word a pool load just put in a register is both a pool word and,
         // under `armderef`, the pointer it reads as.
-        match vals.iter_mut().find(|(k2, v)| *k2 == key && v.v == k.v && v.ptr != k.ptr && !v.got && !k.got) {
+        match vals
+            .iter_mut()
+            .find(|(k2, v)| *k2 == key && v.v == k.v && v.ptr != k.ptr && !v.got && !k.got)
+        {
             Some((_, v)) => {
                 let (p, w) = if v.ptr { (*v, k) } else { (k, *v) };
-                *v = Known { seed: true, alias: true, origin: w.origin, deps: p.deps | w.deps, ..p };
+                *v = Known {
+                    seed: true,
+                    alias: true,
+                    origin: w.origin,
+                    deps: p.deps | w.deps,
+                    ..p
+                };
             }
             None => vals.push((key, k)),
         }
@@ -652,14 +784,20 @@ fn evaluate(vma: u64, ops: &[FullOp], ins: &[Fact], img: &Image) -> Eval {
     for op in ops {
         let mut slot_word = None;
         if op.opcode == OpCode::CPUI_LOAD {
-            if let (Some(g), Some(addr)) = (got, op.ins.get(1).and_then(|vn| value_of(vn, vma, &vals, data))) {
+            if let (Some(g), Some(addr)) = (
+                got,
+                op.ins.get(1).and_then(|vn| value_of(vn, vma, &vals, data)),
+            ) {
                 let slot = addr.v & mask(op.ins[1].size);
                 if addr.got && addr.seed && !addr.pc && g.contains(slot) {
                     found.push((slot, XrefKind::Read, addr.deps, addr.origin, 0));
                     if let Some(word) = g.word_at(slot) {
                         if looks_like_address(word) && in_range(mapped, word) {
                             found.push((word, XrefKind::Data, addr.deps, addr.origin, 0));
-                            if img.deref && word & 1 == 0 && op.out.as_ref().is_some_and(|o| o.size == g.ptr) {
+                            if img.deref
+                                && word & 1 == 0
+                                && op.out.as_ref().is_some_and(|o| o.size == g.ptr)
+                            {
                                 slot_word = Some(Known::ptr(word, addr.deps));
                             }
                         }
@@ -671,7 +809,11 @@ fn evaluate(vma: u64, ops: &[FullOp], ins: &[Fact], img: &Image) -> Eval {
             if let Some(addr) = op.ins.get(1).and_then(|vn| value_of(vn, vma, &vals, data)) {
                 let to = addr.v & mask(op.ins[1].size);
                 if addr.pointer() && in_range(mapped, to) {
-                    let kind = if op.opcode == OpCode::CPUI_LOAD { XrefKind::Read } else { XrefKind::Write };
+                    let kind = if op.opcode == OpCode::CPUI_LOAD {
+                        XrefKind::Read
+                    } else {
+                        XrefKind::Write
+                    };
                     found.push((to, kind, addr.pdeps, 0, addr.via));
                 }
             }
@@ -683,7 +825,9 @@ fn evaluate(vma: u64, ops: &[FullOp], ins: &[Fact], img: &Image) -> Eval {
             written.push((off, size));
         }
         invalidate(&mut vals, key);
-        let (Some(key), Some(mut val)) = (key, folded) else { continue };
+        let (Some(key), Some(mut val)) = (key, folded) else {
+            continue;
+        };
         val.v &= mask(out.size);
         if let Key::Reg(off, size) = key {
             let composed = val.seed && val.pc && !val.got;
@@ -691,7 +835,10 @@ fn evaluate(vma: u64, ops: &[FullOp], ins: &[Fact], img: &Image) -> Eval {
             if (composed || gotoff) && in_range(mapped, val.v) {
                 found.push((val.v, XrefKind::Data, val.deps, val.origin, 0));
             }
-            let copied = val.got && !val.seed && !val.pc && ins.iter().any(|f| f.base && !f.p.ptr && f.p.word == val.v);
+            let copied = val.got
+                && !val.seed
+                && !val.pc
+                && ins.iter().any(|f| f.base && !f.p.ptr && f.p.word == val.v);
             let in_got = got.is_some_and(|g| g.contains(val.v));
             let made = composed && in_range(mapped, val.v) && in_got;
             let pointer = img.deref
@@ -701,13 +848,31 @@ fn evaluate(vma: u64, ops: &[FullOp], ins: &[Fact], img: &Image) -> Eval {
             if made || copied || pointer {
                 new_bases.retain(|(b, _)| !spans_overlap(b.off, b.size, off, size));
                 let ptr = pointer && !(made || copied);
-                let (origin, deps) = if ptr && val.pointer() { (val.via, val.pdeps) } else { (0, val.deps) };
-                new_bases.push((Pending { off, size, word: val.v, hops: 0, origin, ptr }, deps));
+                let (origin, deps) = if ptr && val.pointer() {
+                    (val.via, val.pdeps)
+                } else {
+                    (0, val.deps)
+                };
+                new_bases.push((
+                    Pending {
+                        off,
+                        size,
+                        word: val.v,
+                        hops: 0,
+                        origin,
+                        ptr,
+                    },
+                    deps,
+                ));
             }
         }
         vals.push((key, val));
     }
-    Eval { found, written, new_bases }
+    Eval {
+        found,
+        written,
+        new_bases,
+    }
 }
 
 /// The pool word this instruction loads into a register.
@@ -730,11 +895,10 @@ fn seed(vma: u64, ops: &[FullOp], img: &Image) -> Option<Pending> {
             OpCode::CPUI_LOAD => {
                 // `in0` is the space id: a load through some other space is not
                 // a read of the image.
-                let through_image = op
-                    .ins
-                    .first()
-                    .zip(data_index)
-                    .is_some_and(|(vn, idx)| vn.offset == u64::try_from(idx).unwrap_or(u64::MAX));
+                let through_image =
+                    op.ins.first().zip(data_index).is_some_and(|(vn, idx)| {
+                        vn.offset == u64::try_from(idx).unwrap_or(u64::MAX)
+                    });
                 match op.ins.get(1).filter(|vn| through_image && is_constant(vn)) {
                     Some(vn) => vn.offset,
                     None => continue,
@@ -749,11 +913,20 @@ fn seed(vma: u64, ops: &[FullOp], img: &Image) -> Option<Pending> {
         if !matches!(key_of(out, data), Some(Key::Reg(..))) || out.size != pool.ptr_width() {
             continue;
         }
-        let Some(word) = pool.word_at(addr) else { continue };
+        let Some(word) = pool.word_at(addr) else {
+            continue;
+        };
         if !img.extended && looks_like_address(word) && in_range(img.mapped, word) {
             continue;
         }
-        return Some(Pending { off: out.offset, size: out.size, word, hops: 0, origin: vma, ptr: false });
+        return Some(Pending {
+            off: out.offset,
+            size: out.size,
+            word,
+            hops: 0,
+            origin: vma,
+            ptr: false,
+        });
     }
     None
 }
@@ -774,7 +947,9 @@ fn in_data_space(vn: &VarnodeData, data: Option<&Rc<AddrSpace>>) -> bool {
 /// Is `op` a branch to the absolute address `to`? A constant-space target is
 /// p-code-relative, inside the instruction.
 fn branches_to(op: &FullOp, to: u64) -> bool {
-    op.ins.first().is_some_and(|vn| !is_constant(vn) && vn.offset == to)
+    op.ins
+        .first()
+        .is_some_and(|vn| !is_constant(vn) && vn.offset == to)
 }
 
 /// Does control leave the straight-line run here, so the fall-through is not the
@@ -787,7 +962,9 @@ fn branches_to(op: &FullOp, to: u64) -> bool {
 /// its `add r4,pc,r4` after it. A `CALLOTHER` ends everything, except inside a
 /// call, where it is the Thumb `bl`'s mode switch and the call already decides.
 fn leaves_the_run(ops: &[FullOp]) -> bool {
-    let calls = ops.iter().any(|op| matches!(op.opcode, OpCode::CPUI_CALL | OpCode::CPUI_CALLIND));
+    let calls = ops
+        .iter()
+        .any(|op| matches!(op.opcode, OpCode::CPUI_CALL | OpCode::CPUI_CALLIND));
     ops.iter().any(|op| match op.opcode {
         OpCode::CPUI_BRANCH | OpCode::CPUI_BRANCHIND | OpCode::CPUI_RETURN => true,
         OpCode::CPUI_CALLOTHER => !calls,
@@ -797,7 +974,9 @@ fn leaves_the_run(ops: &[FullOp]) -> bool {
 
 /// Is the value's whole register callee-saved?
 fn survives_calls(p: &Pending, preserved: &[(u64, u64)]) -> bool {
-    preserved.iter().any(|&(lo, hi)| p.off >= lo && p.off + u64::from(p.size) <= hi)
+    preserved
+        .iter()
+        .any(|&(lo, hi)| p.off >= lo && p.off + u64::from(p.size) <= hi)
 }
 
 // --- the one-instruction constant fold ---------------------------------------
@@ -833,11 +1012,33 @@ struct Known {
 
 impl Known {
     fn seed(v: u64, origin: u64) -> Self {
-        Known { v, seed: true, pc: false, got: false, ptr: false, alias: false, origin, deps: 0, via: 0, pdeps: 0 }
+        Known {
+            v,
+            seed: true,
+            pc: false,
+            got: false,
+            ptr: false,
+            alias: false,
+            origin,
+            deps: 0,
+            via: 0,
+            pdeps: 0,
+        }
     }
 
     fn ptr(v: u64, deps: u32) -> Self {
-        Known { v, seed: false, pc: false, got: false, ptr: true, alias: false, origin: 0, deps, via: 0, pdeps: deps }
+        Known {
+            v,
+            seed: false,
+            pc: false,
+            got: false,
+            ptr: true,
+            alias: false,
+            origin: 0,
+            deps,
+            via: 0,
+            pdeps: deps,
+        }
     }
 
     /// A tracked pointer plus or minus constants alone: the address of a datum.
@@ -847,9 +1048,25 @@ impl Known {
 }
 
 /// The value a varnode holds, as [`fold`] reads its inputs.
-fn value_of(vn: &VarnodeData, vma: u64, vals: &[(Key, Known)], data: Option<&Rc<AddrSpace>>) -> Option<Known> {
+fn value_of(
+    vn: &VarnodeData,
+    vma: u64,
+    vals: &[(Key, Known)],
+    data: Option<&Rc<AddrSpace>>,
+) -> Option<Known> {
     if is_constant(vn) {
-        return Some(Known { v: vn.offset & mask(vn.size), seed: false, pc: is_own_pc(vn.offset, vma), got: false, ptr: false, alias: false, origin: 0, deps: 0, via: 0, pdeps: 0 });
+        return Some(Known {
+            v: vn.offset & mask(vn.size),
+            seed: false,
+            pc: is_own_pc(vn.offset, vma),
+            got: false,
+            ptr: false,
+            alias: false,
+            origin: 0,
+            deps: 0,
+            via: 0,
+            pdeps: 0,
+        });
     }
     let key = key_of(vn, data)?;
     vals.iter().rev().find(|(k, _)| *k == key).map(|(_, v)| *v)
@@ -876,7 +1093,9 @@ fn key_of(vn: &VarnodeData, data: Option<&Rc<AddrSpace>>) -> Option<Key> {
 }
 
 fn is_constant(vn: &VarnodeData) -> bool {
-    vn.space.as_ref().is_some_and(|s| s.get_type() == spacetype::IPTR_CONSTANT)
+    vn.space
+        .as_ref()
+        .is_some_and(|s| s.get_type() == spacetype::IPTR_CONSTANT)
 }
 
 /// The value this op produces, or `None` when the fold does not model it.
@@ -1011,7 +1230,11 @@ mod tests {
     }
 
     fn vn(space: &Rc<AddrSpace>, offset: u64, size: u32) -> VarnodeData {
-        VarnodeData { space: Some(Rc::clone(space)), offset, size }
+        VarnodeData {
+            space: Some(Rc::clone(space)),
+            offset,
+            size,
+        }
     }
 
     fn op(opcode: OpCode, out: Option<VarnodeData>, ins: Vec<VarnodeData>) -> FullOp {
@@ -1031,14 +1254,26 @@ mod tests {
     /// Thumb's `ldr rN,[pc,#imm]`: the slot is exported as a data-space
     /// varnode, so the literal load is a `COPY`, not a `LOAD`.
     fn thumb_ldr(s: &Spaces, reg: u64, at: u64) -> Vec<FullOp> {
-        vec![op(OpCode::CPUI_COPY, Some(vn(&s.reg, reg, 4)), vec![vn(&s.ram, at, 4)])]
+        vec![op(
+            OpCode::CPUI_COPY,
+            Some(vn(&s.reg, reg, 4)),
+            vec![vn(&s.ram, at, 4)],
+        )]
     }
 
     /// Thumb's `add rN,pc` at `vma`: the PC reads as `inst_start + 4`.
     fn thumb_add_pc(s: &Spaces, reg: u64, vma: u64) -> Vec<FullOp> {
         vec![
-            op(OpCode::CPUI_INT_ADD, Some(vn(&s.uniq, 0x2f00, 4)), vec![vn(&s.konst, vma, 4), vn(&s.konst, 4, 4)]),
-            op(OpCode::CPUI_INT_ADD, Some(vn(&s.reg, reg, 4)), vec![vn(&s.reg, reg, 4), vn(&s.uniq, 0x2f00, 4)]),
+            op(
+                OpCode::CPUI_INT_ADD,
+                Some(vn(&s.uniq, 0x2f00, 4)),
+                vec![vn(&s.konst, vma, 4), vn(&s.konst, 4, 4)],
+            ),
+            op(
+                OpCode::CPUI_INT_ADD,
+                Some(vn(&s.reg, reg, 4)),
+                vec![vn(&s.reg, reg, 4), vn(&s.uniq, 0x2f00, 4)],
+            ),
         ]
     }
 
@@ -1092,9 +1327,20 @@ mod tests {
             self.step_len(vma, 4, ops, branches)
         }
 
-        fn step_len(&mut self, vma: u64, len: u32, ops: &[FullOp], branches: &[u64]) -> Option<u64> {
-            let raw: Vec<RawOp> =
-                ops.iter().map(|op| RawOp { opcode: op.opcode, in0: op.ins.first().cloned() }).collect();
+        fn step_len(
+            &mut self,
+            vma: u64,
+            len: u32,
+            ops: &[FullOp],
+            branches: &[u64],
+        ) -> Option<u64> {
+            let raw: Vec<RawOp> = ops
+                .iter()
+                .map(|op| RawOp {
+                    opcode: op.opcode,
+                    in0: op.ins.first().cloned(),
+                })
+                .collect();
             let fall = classify(&raw, vma, len).fall_through;
             let img = Image {
                 pool: self.pool,
@@ -1105,7 +1351,17 @@ mod tests {
                 preserved: self.preserved,
                 deref: self.deref,
             };
-            self.pp.step(&img, Insn { vma, len, fall, ops, branches }, || self.queue.clone())
+            self.pp.step(
+                &img,
+                Insn {
+                    vma,
+                    len,
+                    fall,
+                    ops,
+                    branches,
+                },
+                || self.queue.clone(),
+            )
         }
 
         fn finish(self) -> Verdict {
@@ -1125,7 +1381,11 @@ mod tests {
         let mut w = Walk::new(&s, &pool, &MAPPED);
         w.step(0x660, &ldr(&s, 0x20, 0x6a0), &[]);
         w.step(0x664, &add_pc(&s, 0x20, 0x664), &[]);
-        assert_eq!(refs(&w.finish()), vec![(0x664, 0x4ab, XrefKind::Data)], "0x66c + (-0x1c1)");
+        assert_eq!(
+            refs(&w.finish()),
+            vec![(0x664, 0x4ab, XrefKind::Data)],
+            "0x66c + (-0x1c1)"
+        );
     }
 
     /// The pair need not be adjacent: instruction scheduling separates the load
@@ -1150,8 +1410,11 @@ mod tests {
     #[test]
     fn a_write_to_the_register_ends_the_tracked_word() {
         let (s, pool) = (spaces(), image());
-        let clobber =
-            vec![op(OpCode::CPUI_COPY, Some(vn(&s.reg, 0x20, 4)), vec![vn(&s.konst, 0, 4)])];
+        let clobber = vec![op(
+            OpCode::CPUI_COPY,
+            Some(vn(&s.reg, 0x20, 4)),
+            vec![vn(&s.konst, 0, 4)],
+        )];
         let mut w = Walk::new(&s, &pool, &MAPPED);
         w.step(0x660, &ldr(&s, 0x20, 0x6a0), &[]);
         w.step(0x664, &clobber, &[]);
@@ -1192,7 +1455,11 @@ mod tests {
     fn a_thumb_call_keeps_a_word_in_a_callee_saved_register() {
         let (s, pool) = (spaces(), image());
         let bl = vec![
-            op(OpCode::CPUI_CALLOTHER, None, vec![vn(&s.konst, 62, 4), vn(&s.reg, 0x69, 1)]),
+            op(
+                OpCode::CPUI_CALLOTHER,
+                None,
+                vec![vn(&s.konst, 62, 4), vn(&s.reg, 0x69, 1)],
+            ),
             op(OpCode::CPUI_CALL, None, vec![vn(&s.ram, 0x700, 4)]),
         ];
         let mut w = Walk::new(&s, &pool, &MAPPED);
@@ -1200,7 +1467,11 @@ mod tests {
         w.step_len(0x660, 2, &thumb_ldr(&s, 0x30, 0x6a0), &[]);
         w.step_len(0x662, 4, &bl, &[]);
         w.step_len(0x666, 2, &thumb_add_pc(&s, 0x30, 0x666), &[]);
-        assert_eq!(refs(&w.finish()), vec![(0x666, 0x4a9, XrefKind::Data)], "0x66a + (-0x1c1)");
+        assert_eq!(
+            refs(&w.finish()),
+            vec![(0x666, 0x4a9, XrefKind::Data)],
+            "0x66a + (-0x1c1)"
+        );
     }
 
     /// The two refusals, each of which would be a fabricated reference.
@@ -1344,7 +1615,11 @@ mod tests {
         w.step_len(0x660, 2, &thumb_ldr(&s, 0x20, 0x6a0), &[]);
         w.step_len(0x662, 2, &thumb_add_pc(&s, 0x20, 0x662), &[]);
         let v = w.finish();
-        assert_eq!(refs(&v), vec![(0x662, 0x4a5, XrefKind::Data)], "0x666 + (-0x1c1)");
+        assert_eq!(
+            refs(&v),
+            vec![(0x662, 0x4a5, XrefKind::Data)],
+            "0x666 + (-0x1c1)"
+        );
         assert!(v.displaced.contains(&0x660));
     }
 
@@ -1399,14 +1674,28 @@ mod tests {
     }
 
     fn got_image() -> GotImage<'static> {
-        GotImage { lo: 0x800, hi: 0x820, data: &GOT_BYTES[..], ptr: 4, little_endian: true }
+        GotImage {
+            lo: 0x800,
+            hi: 0x820,
+            data: &GOT_BYTES[..],
+            ptr: 4,
+            little_endian: true,
+        }
     }
 
     /// `ldr r2,[r4,r2]`.
     fn slot_load(s: &Spaces) -> Vec<FullOp> {
         vec![
-            op(OpCode::CPUI_INT_ADD, Some(vn(&s.uniq, 0x2f00, 4)), vec![vn(&s.reg, R4, 4), vn(&s.reg, R2, 4)]),
-            op(OpCode::CPUI_LOAD, Some(vn(&s.reg, R2, 4)), vec![vn(&s.konst, ram_id(&s), 8), vn(&s.uniq, 0x2f00, 4)]),
+            op(
+                OpCode::CPUI_INT_ADD,
+                Some(vn(&s.uniq, 0x2f00, 4)),
+                vec![vn(&s.reg, R4, 4), vn(&s.reg, R2, 4)],
+            ),
+            op(
+                OpCode::CPUI_LOAD,
+                Some(vn(&s.reg, R2, 4)),
+                vec![vn(&s.konst, ram_id(&s), 8), vn(&s.uniq, 0x2f00, 4)],
+            ),
         ]
     }
 
@@ -1415,13 +1704,21 @@ mod tests {
     }
 
     fn cbranch(s: &Spaces, to: u64) -> Vec<FullOp> {
-        vec![op(OpCode::CPUI_CBRANCH, None, vec![vn(&s.ram, to, 4), vn(&s.reg, 0x100, 1)])]
+        vec![op(
+            OpCode::CPUI_CBRANCH,
+            None,
+            vec![vn(&s.ram, to, 4), vn(&s.reg, 0x100, 1)],
+        )]
     }
 
     const SLOT_REFS: [(u64, XrefKind); 2] = [(0x810, XrefKind::Read), (0x1450, XrefKind::Data)];
 
     fn slot_refs(v: &Verdict, at: u64) -> Vec<(u64, XrefKind)> {
-        v.refs.iter().filter(|r| r.0 == at).map(|r| (r.1, r.2)).collect()
+        v.refs
+            .iter()
+            .filter(|r| r.0 == at)
+            .map(|r| (r.1, r.2))
+            .collect()
     }
 
     /// The ARM GOT idiom of a `-fPIC` body: `ldr r4,[pc,#a]; add r4,pc,r4`
@@ -1458,14 +1755,23 @@ mod tests {
             g
         };
         let (s, pool) = (spaces(), got_pool());
-        let got = GotImage { lo: 0x800, hi: 0x820, data: &ODD[..], ptr: 4, little_endian: true };
+        let got = GotImage {
+            lo: 0x800,
+            hi: 0x820,
+            data: &ODD[..],
+            ptr: 4,
+            little_endian: true,
+        };
         let mut w = Walk::new(&s, &pool, &GOT_MAP);
         w.got = Some(&got);
         w.step_len(0x604, 2, &thumb_ldr(&s, R4, 0x6a0), &[]);
         w.step_len(0x606, 2, &thumb_ldr(&s, R2, 0x6a4), &[]);
         w.step_len(0x608, 2, &thumb_add_pc(&s, R4, 0x608), &[]);
         w.step_len(0x60a, 2, &slot_load(&s), &[]);
-        assert_eq!(slot_refs(&w.finish(), 0x60a), vec![(0x810, XrefKind::Read), (0x1451, XrefKind::Data)]);
+        assert_eq!(
+            slot_refs(&w.finish(), 0x60a),
+            vec![(0x810, XrefKind::Read), (0x1451, XrefKind::Data)]
+        );
     }
 
     /// `mov r5,r4` copies the base: the copy files nothing, and r5 is a base
@@ -1473,10 +1779,22 @@ mod tests {
     #[test]
     fn a_copy_of_the_base_is_a_base_and_files_nothing() {
         let (s, pool, got) = (spaces(), got_pool(), got_image());
-        let mov = vec![op(OpCode::CPUI_COPY, Some(vn(&s.reg, R5, 4)), vec![vn(&s.reg, R4, 4)])];
+        let mov = vec![op(
+            OpCode::CPUI_COPY,
+            Some(vn(&s.reg, R5, 4)),
+            vec![vn(&s.reg, R4, 4)],
+        )];
         let through_r5 = vec![
-            op(OpCode::CPUI_INT_ADD, Some(vn(&s.uniq, 0x2f00, 4)), vec![vn(&s.reg, R5, 4), vn(&s.reg, R2, 4)]),
-            op(OpCode::CPUI_LOAD, Some(vn(&s.reg, R2, 4)), vec![vn(&s.konst, ram_id(&s), 8), vn(&s.uniq, 0x2f00, 4)]),
+            op(
+                OpCode::CPUI_INT_ADD,
+                Some(vn(&s.uniq, 0x2f00, 4)),
+                vec![vn(&s.reg, R5, 4), vn(&s.reg, R2, 4)],
+            ),
+            op(
+                OpCode::CPUI_LOAD,
+                Some(vn(&s.reg, R2, 4)),
+                vec![vn(&s.konst, ram_id(&s), 8), vn(&s.uniq, 0x2f00, 4)],
+            ),
         ];
         let mut w = Walk::new(&s, &pool, &GOT_MAP);
         w.got = Some(&got);
@@ -1496,8 +1814,16 @@ mod tests {
     #[test]
     fn base_plus_an_immediate_files_nothing_and_base_plus_a_pool_word_does() {
         let (s, pool, got) = (spaces(), got_pool(), got_image());
-        let add_imm = vec![op(OpCode::CPUI_INT_ADD, Some(vn(&s.reg, R5, 4)), vec![vn(&s.reg, R4, 4), vn(&s.konst, 8, 4)])];
-        let gotoff = vec![op(OpCode::CPUI_INT_ADD, Some(vn(&s.reg, 0x20, 4)), vec![vn(&s.reg, R4, 4), vn(&s.reg, R2, 4)])];
+        let add_imm = vec![op(
+            OpCode::CPUI_INT_ADD,
+            Some(vn(&s.reg, R5, 4)),
+            vec![vn(&s.reg, R4, 4), vn(&s.konst, 8, 4)],
+        )];
+        let gotoff = vec![op(
+            OpCode::CPUI_INT_ADD,
+            Some(vn(&s.reg, 0x20, 4)),
+            vec![vn(&s.reg, R4, 4), vn(&s.reg, R2, 4)],
+        )];
         let mut w = Walk::new(&s, &pool, &GOT_MAP);
         w.got = Some(&got);
         w.step(0x600, &ldr(&s, R4, 0x6a0), &[]);
@@ -1517,7 +1843,11 @@ mod tests {
     #[test]
     fn a_base_that_one_path_overwrites_is_not_believed_at_the_join() {
         let (s, pool, got) = (spaces(), got_pool(), got_image());
-        let clobber = vec![op(OpCode::CPUI_COPY, Some(vn(&s.reg, R4, 4)), vec![vn(&s.konst, 0x810, 4)])];
+        let clobber = vec![op(
+            OpCode::CPUI_COPY,
+            Some(vn(&s.reg, R4, 4)),
+            vec![vn(&s.konst, 0x810, 4)],
+        )];
         let mut w = Walk::new(&s, &pool, &GOT_MAP);
         w.got = Some(&got);
         w.step(0x600, &ldr(&s, R4, 0x6a0), &[]);
@@ -1536,7 +1866,11 @@ mod tests {
     #[test]
     fn a_base_both_paths_keep_survives_the_join() {
         let (s, pool, got) = (spaces(), got_pool(), got_image());
-        let other = vec![op(OpCode::CPUI_COPY, Some(vn(&s.reg, 0x20, 4)), vec![vn(&s.konst, 0, 4)])];
+        let other = vec![op(
+            OpCode::CPUI_COPY,
+            Some(vn(&s.reg, 0x20, 4)),
+            vec![vn(&s.konst, 0, 4)],
+        )];
         let mut w = Walk::new(&s, &pool, &GOT_MAP);
         w.got = Some(&got);
         w.step(0x600, &ldr(&s, R4, 0x6a0), &[]);
@@ -1565,11 +1899,23 @@ mod tests {
     /// instruction when it fails, then the pops and the return.
     fn popeq(s: &Spaces, next: u64) -> Vec<FullOp> {
         let pop = |reg: u64| {
-            op(OpCode::CPUI_LOAD, Some(vn(&s.reg, reg, 4)), vec![vn(&s.konst, ram_id(s), 8), vn(&s.reg, 0x54, 4)])
+            op(
+                OpCode::CPUI_LOAD,
+                Some(vn(&s.reg, reg, 4)),
+                vec![vn(&s.konst, ram_id(s), 8), vn(&s.reg, 0x54, 4)],
+            )
         };
         vec![
-            op(OpCode::CPUI_BOOL_NEGATE, Some(vn(&s.uniq, 0x100, 1)), vec![vn(&s.reg, 0x101, 1)]),
-            op(OpCode::CPUI_CBRANCH, None, vec![vn(&s.ram, next, 4), vn(&s.uniq, 0x100, 1)]),
+            op(
+                OpCode::CPUI_BOOL_NEGATE,
+                Some(vn(&s.uniq, 0x100, 1)),
+                vec![vn(&s.reg, 0x101, 1)],
+            ),
+            op(
+                OpCode::CPUI_CBRANCH,
+                None,
+                vec![vn(&s.ram, next, 4), vn(&s.uniq, 0x100, 1)],
+            ),
             pop(R4),
             pop(R5),
             pop(0x38),
@@ -1598,9 +1944,21 @@ mod tests {
     fn a_predicated_write_that_falls_through_ends_the_base() {
         let (s, pool, got) = (spaces(), got_pool(), got_image());
         let ldrne = vec![
-            op(OpCode::CPUI_BOOL_NEGATE, Some(vn(&s.uniq, 0x100, 1)), vec![vn(&s.reg, 0x101, 1)]),
-            op(OpCode::CPUI_CBRANCH, None, vec![vn(&s.ram, 0x60c, 4), vn(&s.uniq, 0x100, 1)]),
-            op(OpCode::CPUI_LOAD, Some(vn(&s.reg, R4, 4)), vec![vn(&s.konst, ram_id(&s), 8), vn(&s.reg, 0x54, 4)]),
+            op(
+                OpCode::CPUI_BOOL_NEGATE,
+                Some(vn(&s.uniq, 0x100, 1)),
+                vec![vn(&s.reg, 0x101, 1)],
+            ),
+            op(
+                OpCode::CPUI_CBRANCH,
+                None,
+                vec![vn(&s.ram, 0x60c, 4), vn(&s.uniq, 0x100, 1)],
+            ),
+            op(
+                OpCode::CPUI_LOAD,
+                Some(vn(&s.reg, R4, 4)),
+                vec![vn(&s.konst, ram_id(&s), 8), vn(&s.reg, 0x54, 4)],
+            ),
         ];
         let mut w = Walk::new(&s, &pool, &GOT_MAP);
         w.got = Some(&got);
@@ -1689,7 +2047,11 @@ mod tests {
         let (s, pool, got) = (spaces(), got_pool(), got_image());
         let mut w = Walk::new(&s, &pool, &GOT_MAP);
         w.got = Some(&got);
-        let other = vec![op(OpCode::CPUI_COPY, Some(vn(&s.reg, 0x20, 4)), vec![vn(&s.konst, 0, 4)])];
+        let other = vec![op(
+            OpCode::CPUI_COPY,
+            Some(vn(&s.reg, 0x20, 4)),
+            vec![vn(&s.konst, 0, 4)],
+        )];
         w.step(0x5f8, &cbranch(&s, 0x640), &[0x640]);
         w.queue = vec![0x640];
         w.step(0x5fc, &ldr(&s, R4, 0x6a0), &[]);
@@ -1736,11 +2098,27 @@ mod tests {
 
     /// `ldr rd,[rn,#off]`, or `str rd,[rn,#off]` when `store`.
     fn access(s: &Spaces, rd: u64, rn: u64, off: u64, store: bool) -> Vec<FullOp> {
-        let at = op(OpCode::CPUI_INT_ADD, Some(vn(&s.uniq, 0x2f80, 4)), vec![vn(&s.reg, rn, 4), vn(&s.konst, off, 4)]);
+        let at = op(
+            OpCode::CPUI_INT_ADD,
+            Some(vn(&s.uniq, 0x2f80, 4)),
+            vec![vn(&s.reg, rn, 4), vn(&s.konst, off, 4)],
+        );
         let mem = if store {
-            op(OpCode::CPUI_STORE, None, vec![vn(&s.konst, ram_id(s), 8), vn(&s.uniq, 0x2f80, 4), vn(&s.reg, rd, 4)])
+            op(
+                OpCode::CPUI_STORE,
+                None,
+                vec![
+                    vn(&s.konst, ram_id(s), 8),
+                    vn(&s.uniq, 0x2f80, 4),
+                    vn(&s.reg, rd, 4),
+                ],
+            )
         } else {
-            op(OpCode::CPUI_LOAD, Some(vn(&s.reg, rd, 4)), vec![vn(&s.konst, ram_id(s), 8), vn(&s.uniq, 0x2f80, 4)])
+            op(
+                OpCode::CPUI_LOAD,
+                Some(vn(&s.reg, rd, 4)),
+                vec![vn(&s.konst, ram_id(s), 8), vn(&s.uniq, 0x2f80, 4)],
+            )
         };
         vec![at, mem]
     }
@@ -1785,13 +2163,20 @@ mod tests {
         let (s, pool, got) = (spaces(), got_pool(), got_image());
         let mut w = got_walk(&s, &pool, &got);
         w.preserved = &[(R4, R5 + 4)];
-        let bump = vec![op(OpCode::CPUI_INT_ADD, Some(vn(&s.reg, R5, 4)), vec![vn(&s.reg, R2, 4), vn(&s.konst, 0x10, 4)])];
+        let bump = vec![op(
+            OpCode::CPUI_INT_ADD,
+            Some(vn(&s.reg, R5, 4)),
+            vec![vn(&s.reg, R2, 4), vn(&s.konst, 0x10, 4)],
+        )];
         let call = vec![op(OpCode::CPUI_CALL, None, vec![vn(&s.ram, 0x400, 4)])];
         w.step(0x610, &bump, &[]);
         w.step(0x614, &call, &[]);
         w.step(0x618, &jump(&s, 0x700), &[0x700]);
         w.step(0x700, &access(&s, R0, R5, 4, false), &[]);
-        assert_eq!(slot_refs(&w.finish(), 0x700), vec![(0x1464, XrefKind::Read)]);
+        assert_eq!(
+            slot_refs(&w.finish(), 0x700),
+            vec![(0x1464, XrefKind::Read)]
+        );
     }
 
     /// A call ends a pointer held in a register the callee may clobber.
@@ -1810,7 +2195,11 @@ mod tests {
     #[test]
     fn a_pointer_one_path_overwrites_is_not_believed_at_the_join() {
         let (s, pool, got) = (spaces(), got_pool(), got_image());
-        let clobber = vec![op(OpCode::CPUI_COPY, Some(vn(&s.reg, R2, 4)), vec![vn(&s.reg, R0, 4)])];
+        let clobber = vec![op(
+            OpCode::CPUI_COPY,
+            Some(vn(&s.reg, R2, 4)),
+            vec![vn(&s.reg, R0, 4)],
+        )];
         let mut w = got_walk(&s, &pool, &got);
         w.step(0x610, &cbranch(&s, 0x620), &[0x620]);
         w.step(0x614, &clobber, &[]);
@@ -1825,8 +2214,16 @@ mod tests {
         let (s, pool, got) = (spaces(), got_pool(), got_image());
         let mut w = got_walk(&s, &pool, &got);
         let indexed = vec![
-            op(OpCode::CPUI_INT_ADD, Some(vn(&s.uniq, 0x2f80, 4)), vec![vn(&s.reg, R2, 4), vn(&s.reg, R0, 4)]),
-            op(OpCode::CPUI_LOAD, Some(vn(&s.reg, R0, 4)), vec![vn(&s.konst, ram_id(&s), 8), vn(&s.uniq, 0x2f80, 4)]),
+            op(
+                OpCode::CPUI_INT_ADD,
+                Some(vn(&s.uniq, 0x2f80, 4)),
+                vec![vn(&s.reg, R2, 4), vn(&s.reg, R0, 4)],
+            ),
+            op(
+                OpCode::CPUI_LOAD,
+                Some(vn(&s.reg, R0, 4)),
+                vec![vn(&s.konst, ram_id(&s), 8), vn(&s.uniq, 0x2f80, 4)],
+            ),
         ];
         w.step(0x610, &indexed, &[]);
         assert!(slot_refs(&w.finish(), 0x610).is_empty());
@@ -1877,6 +2274,12 @@ mod tests {
         w.step(0x660, &ldr(&s, R0, 0x6a0), &[]);
         w.step(0x664, &add_pc(&s, R0, 0x664), &[]);
         w.step(0x668, &access(&s, R2, R0, 4, true), &[]);
-        assert_eq!(refs(&w.finish()), vec![(0x664, 0x4ab, XrefKind::Data), (0x668, 0x4af, XrefKind::Write)]);
+        assert_eq!(
+            refs(&w.finish()),
+            vec![
+                (0x664, 0x4ab, XrefKind::Data),
+                (0x668, 0x4af, XrefKind::Write)
+            ]
+        );
     }
 }

@@ -44,7 +44,7 @@
 use object::read::{Object, ObjectSection};
 
 use crate::loader::format::macho::resolve_chained_fixups;
-use crate::objc::sections::{sections_named, MachoImage};
+use crate::objc::sections::{MachoImage, sections_named};
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, CFStringFact, Phase};
 
 /// The `__cfstring` section short name (`object` exposes the bare section name).
@@ -133,7 +133,11 @@ fn collect_bounded(file: &object::File, bytes: &[u8], max_span_checks: u64) -> A
                 continue;
             }
             let unicode = flags & CFSTRING_UNICODE != 0;
-            let Some(byte_len) = (if unicode { length.checked_mul(2) } else { Some(length) }) else {
+            let Some(byte_len) = (if unicode {
+                length.checked_mul(2)
+            } else {
+                Some(length)
+            }) else {
                 continue;
             };
             if byte_len == 0 || byte_len > MAX_CFSTRING_BYTES || byte_len > budget {
@@ -157,7 +161,11 @@ fn collect_bounded(file: &object::File, bytes: &[u8], max_span_checks: u64) -> A
             if nul_inside(&text) {
                 continue;
             }
-            out.cfstrings.push(CFStringFact { addr: entry, bytes: text, size: stride as u32 });
+            out.cfstrings.push(CFStringFact {
+                addr: entry,
+                bytes: text,
+                size: stride as u32,
+            });
             out.readonly.push((entry, entry.wrapping_add(stride)));
         }
     }
@@ -194,12 +202,20 @@ mod tests {
     use super::*;
 
     fn fixture() -> Vec<u8> {
-        std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/macho_cfstring")).unwrap()
+        std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/macho_cfstring"
+        ))
+        .unwrap()
     }
 
     fn texts(bytes: &[u8]) -> Vec<String> {
         let file = object::File::parse(bytes).unwrap();
-        collect(&file, bytes).cfstrings.iter().map(|f| String::from_utf8(f.bytes.clone()).unwrap()).collect()
+        collect(&file, bytes)
+            .cfstrings
+            .iter()
+            .map(|f| String::from_utf8(f.bytes.clone()).unwrap())
+            .collect()
     }
 
     fn section_size_offset(bytes: &[u8]) -> usize {
@@ -209,8 +225,11 @@ mod tests {
         // `section_64` header: sectname[16] segname[16] addr size offset ...; find the
         // header whose `offset` field names this section's file offset.
         (0..bytes.len() - 80)
-            .find(|&at| bytes[at..at + 16].starts_with(b"__cfstring\0")
-                && u32::from_le_bytes(bytes[at + 48..at + 52].try_into().unwrap()) as u64 == file_off)
+            .find(|&at| {
+                bytes[at..at + 16].starts_with(b"__cfstring\0")
+                    && u32::from_le_bytes(bytes[at + 48..at + 52].try_into().unwrap()) as u64
+                        == file_off
+            })
             .map(|at| at + 40)
             .unwrap()
     }
@@ -219,7 +238,11 @@ mod tests {
     fn reads_every_entry_of_the_fixture() {
         assert_eq!(
             texts(&fixture()),
-            ["cfstring hello", "a constant string longer than one entry", "after the long one"]
+            [
+                "cfstring hello",
+                "a constant string longer than one entry",
+                "after the long one"
+            ]
         );
     }
 
@@ -241,10 +264,19 @@ mod tests {
         let mut b = vec![0u8; cf_off + n * 32];
         let total = b.len() as u64;
         let base = 0x1_0000_0000u64;
-        let put32 = |b: &mut Vec<u8>, at: usize, v: u32| b[at..at + 4].copy_from_slice(&v.to_le_bytes());
-        let put64 = |b: &mut Vec<u8>, at: usize, v: u64| b[at..at + 8].copy_from_slice(&v.to_le_bytes());
-        let name = |b: &mut Vec<u8>, at: usize, s: &str| b[at..at + s.len()].copy_from_slice(s.as_bytes());
-        for (at, v) in [(0, 0xfeed_facf), (4, 0x0100_000c), (12, 2), (16, 1), (20, cmds as u32)] {
+        let put32 =
+            |b: &mut Vec<u8>, at: usize, v: u32| b[at..at + 4].copy_from_slice(&v.to_le_bytes());
+        let put64 =
+            |b: &mut Vec<u8>, at: usize, v: u64| b[at..at + 8].copy_from_slice(&v.to_le_bytes());
+        let name =
+            |b: &mut Vec<u8>, at: usize, s: &str| b[at..at + s.len()].copy_from_slice(s.as_bytes());
+        for (at, v) in [
+            (0, 0xfeed_facf),
+            (4, 0x0100_000c),
+            (12, 2),
+            (16, 1),
+            (20, cmds as u32),
+        ] {
             put32(&mut b, at, v);
         }
         put32(&mut b, 32, 0x19);
@@ -257,7 +289,10 @@ mod tests {
             put32(&mut b, at, 3);
         }
         put32(&mut b, 96, 2);
-        for (i, (sect, off, size)) in [("__cstring", data_off, run), ("__cfstring", cf_off, n * 32)].into_iter().enumerate() {
+        for (i, (sect, off, size)) in [("__cstring", data_off, run), ("__cfstring", cf_off, n * 32)]
+            .into_iter()
+            .enumerate()
+        {
             let at = 104 + i * 80;
             name(&mut b, at, sect);
             name(&mut b, at + 16, "__DATA");
@@ -282,7 +317,11 @@ mod tests {
         let out = collect(&file, &bytes);
         let total: usize = out.cfstrings.iter().map(|f| f.bytes.len()).sum();
         assert!(!out.cfstrings.is_empty());
-        assert!(total <= bytes.len(), "{total} string bytes from a {}-byte file", bytes.len());
+        assert!(
+            total <= bytes.len(),
+            "{total} string bytes from a {}-byte file",
+            bytes.len()
+        );
     }
 
     #[test]
@@ -299,25 +338,47 @@ mod tests {
         assert!(!nul_inside(b"plain"));
         assert!(nul_inside(b"a\0b"));
         let mut bytes = fixture();
-        let at = bytes.windows(14).position(|w| w == b"cfstring hello").unwrap();
+        let at = bytes
+            .windows(14)
+            .position(|w| w == b"cfstring hello")
+            .unwrap();
         bytes[at + 8] = 0;
-        assert_eq!(texts(&bytes), ["a constant string longer than one entry", "after the long one"]);
+        assert_eq!(
+            texts(&bytes),
+            [
+                "a constant string longer than one entry",
+                "after the long one"
+            ]
+        );
     }
 
     #[test]
     fn a_string_ending_in_a_nul_is_skipped_too() {
         assert!(nul_inside(b"trailing\0"));
         let mut bytes = fixture();
-        let at = bytes.windows(14).position(|w| w == b"cfstring hello").unwrap();
+        let at = bytes
+            .windows(14)
+            .position(|w| w == b"cfstring hello")
+            .unwrap();
         bytes[at + 13] = 0;
-        assert_eq!(texts(&bytes), ["a constant string longer than one entry", "after the long one"]);
+        assert_eq!(
+            texts(&bytes),
+            [
+                "a constant string longer than one entry",
+                "after the long one"
+            ]
+        );
     }
 
     /// The chained-fixup image: each `data` pointer is a chained rebase, the
     /// UTF-16 entry decodes, and the entry holding a NUL is skipped.
     #[test]
     fn reads_a_chained_image_with_a_utf16_entry() {
-        let bytes = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/macho_cfstring_chained_arm64")).unwrap();
+        let bytes = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/macho_cfstring_chained_arm64"
+        ))
+        .unwrap();
         assert_eq!(texts(&bytes), ["chained hello", "café \u{2192} ok"]);
     }
 
@@ -325,16 +386,31 @@ mod tests {
     fn utf16_decodes_in_either_byte_order_and_refuses_a_lone_surrogate() {
         let snowman_le = [0x03, 0x26, 0x20, 0x00];
         let snowman_be = [0x26, 0x03, 0x00, 0x20];
-        assert_eq!(decode_utf16(&snowman_le, true).unwrap(), "\u{2603} ".as_bytes());
-        assert_eq!(decode_utf16(&snowman_be, false).unwrap(), "\u{2603} ".as_bytes());
+        assert_eq!(
+            decode_utf16(&snowman_le, true).unwrap(),
+            "\u{2603} ".as_bytes()
+        );
+        assert_eq!(
+            decode_utf16(&snowman_be, false).unwrap(),
+            "\u{2603} ".as_bytes()
+        );
         assert_eq!(decode_utf16(&[0x00, 0xd8], true), None);
     }
 
     #[test]
     fn an_8bit_entry_that_is_not_utf8_is_skipped() {
         let mut bytes = fixture();
-        let at = bytes.windows(14).position(|w| w == b"cfstring hello").unwrap();
+        let at = bytes
+            .windows(14)
+            .position(|w| w == b"cfstring hello")
+            .unwrap();
         bytes[at + 3] = 0xff;
-        assert_eq!(texts(&bytes), ["a constant string longer than one entry", "after the long one"]);
+        assert_eq!(
+            texts(&bytes),
+            [
+                "a constant string longer than one entry",
+                "after the long one"
+            ]
+        );
     }
 }

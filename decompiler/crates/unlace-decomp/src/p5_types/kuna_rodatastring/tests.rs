@@ -14,7 +14,7 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 
 use crate::action::Rule;
@@ -24,7 +24,8 @@ use crate::varnode::varnode_flags;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -69,7 +70,12 @@ fn mk_copy(fd: &mut Funcdata, bl: BlockId, at: u64) -> OpId {
 }
 
 fn slice(off: int4, size: int4) -> Slice {
-    Slice { off, size, op: OpId::default(), order: 0 }
+    Slice {
+        off,
+        size,
+        op: OpId::default(),
+        order: 0,
+    }
 }
 
 // --- covers_exactly ---------------------------------------------------------
@@ -151,7 +157,10 @@ fn readonly_memory_source_is_accepted() {
     let op = mk_copy(&mut fd, bl, 0);
     let r = ram(&fd);
     let vn = fd.new_varnode(8, &Address::new(r, 0x2000), None);
-    fd.vbank_mut().get_mut(vn).unwrap().set_flags_pub(varnode_flags::readonly);
+    fd.vbank_mut()
+        .get_mut(vn)
+        .unwrap()
+        .set_flags_pub(varnode_flags::readonly);
     fd.op_set_input(op, vn, 0).unwrap();
     assert_eq!(readonly_source(&fd, op), Some(vn));
 }
@@ -169,7 +178,10 @@ fn cast_between_read_and_copy_is_looked_through() {
     );
     fd.op_insert_end(cast, bl);
     let src = fd.new_varnode(8, &Address::new(Rc::clone(&r), 0x2000), None);
-    fd.vbank_mut().get_mut(src).unwrap().set_flags_pub(varnode_flags::readonly);
+    fd.vbank_mut()
+        .get_mut(src)
+        .unwrap()
+        .set_flags_pub(varnode_flags::readonly);
     fd.op_set_input(cast, src, 0).unwrap();
     let casted = fd.new_unique_out(8, cast).unwrap();
     let op = mk_copy(&mut fd, bl, 4);
@@ -208,8 +220,14 @@ fn rule_gate_on_without_symbol_declines() {
 fn rule_oplist_and_clone() {
     let rule = RuleRodataStringCopy::new(true);
     assert_eq!(rule.get_op_list(), vec![OpCode::CPUI_COPY]);
-    assert!(rule.clone_rule(&ActionGroupList::from_names(["analysis"])).is_some());
-    assert!(rule.clone_rule(&ActionGroupList::from_names(["other"])).is_none());
+    assert!(
+        rule.clone_rule(&ActionGroupList::from_names(["analysis"]))
+            .is_some()
+    );
+    assert!(
+        rule.clone_rule(&ActionGroupList::from_names(["other"]))
+            .is_none()
+    );
 }
 
 // --- option parse -----------------------------------------------------------
@@ -250,5 +268,8 @@ fn specs_ship_default_on() {
     assert_eq!(s[0].group, "analysis");
     let rule = (s[0].ctor)();
     assert_eq!(rule.get_op_list(), vec![OpCode::CPUI_COPY]);
-    assert!(rule.clone_rule(&ActionGroupList::from_names(["analysis"])).is_some());
+    assert!(
+        rule.clone_rule(&ActionGroupList::from_names(["analysis"]))
+            .is_some()
+    );
 }

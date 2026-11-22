@@ -53,10 +53,16 @@ impl OptionCallMechanisms {
             other => {
                 return Err(KunaError::parse(format!(
                     "Unknown callmechanisms value: {other} (expected off|auto|on)"
-                )))
+                )));
             }
         };
-        Ok((mode, format!("Compiler prototype call mechanisms set to {}", mode.as_str())))
+        Ok((
+            mode,
+            format!(
+                "Compiler prototype call mechanisms set to {}",
+                mode.as_str()
+            ),
+        ))
     }
 }
 
@@ -166,9 +172,10 @@ pub fn evaluation_model(data: &crate::funcdata::Funcdata) -> Option<Rc<crate::fs
     // takes a callee-saved register as a custom argument evaluates its own
     // prototype under the synthesized model, so its printed parameters are the
     // ones its callers pass.
-    if let Some(model) =
-        crate::p4_calls::kuna_calleereginputs::own_register_model(data.get_arch(), &data.get_address().clone())
-    {
+    if let Some(model) = crate::p4_calls::kuna_calleereginputs::own_register_model(
+        data.get_arch(),
+        &data.get_address().clone(),
+    ) {
         return Some(model);
     }
     data.get_arch().eval_fp_current().cloned().or_else(|| {
@@ -242,11 +249,20 @@ fn forwardable_value(
     use unlace_base::space::spacetype::{IPTR_INTERNAL, IPTR_PROCESSOR};
     let temporary_only = operations.iter().enumerate().all(|(index, op)| {
         index == store
-            || op.output.as_ref().and_then(|v| v.space.as_ref()).map(|space| space.get_type())
+            || op
+                .output
+                .as_ref()
+                .and_then(|v| v.space.as_ref())
+                .map(|space| space.get_type())
                 == Some(IPTR_INTERNAL)
     });
     let value = operations[store].inputs.get(2)?.clone();
-    let width = data.obank().get(load)?.get_out().and_then(|vn| data.vbank().get(vn))?.get_size();
+    let width = data
+        .obank()
+        .get(load)?
+        .get_out()
+        .and_then(|vn| data.vbank().get(vn))?
+        .get_size();
     (temporary_only
         && value.space.as_ref()?.get_type() == IPTR_PROCESSOR
         && value.size as i32 == width)
@@ -267,7 +283,10 @@ fn forward_reload(
     let source = data.new_varnode_space_off(value.size as i32, space, value.offset);
     data.op_set_input(load, source, 0)?;
     data.op_remove_input(load, 1);
-    data.op_set_opcode(load, crate::typeop::type_op_for(unlace_num::opcodes::OpCode::CPUI_COPY));
+    data.op_set_opcode(
+        load,
+        crate::typeop::type_op_for(unlace_num::opcodes::OpCode::CPUI_COPY),
+    );
     Ok(())
 }
 
@@ -285,30 +304,43 @@ fn payload_slots(operations: &[Operation]) -> Vec<(usize, Slot)> {
     use unlace_base::space::spacetype::{IPTR_CONSTANT, IPTR_PROCESSOR};
     use unlace_num::opcodes::OpCode::{CPUI_INT_ADD, CPUI_STORE};
     let key = |v: &unlace_num::pcoderaw::VarnodeData| {
-        v.space.as_ref().map(|space| (space.get_index(), v.offset, v.size))
+        v.space
+            .as_ref()
+            .map(|space| (space.get_index(), v.offset, v.size))
     };
-    let kind = |v: &unlace_num::pcoderaw::VarnodeData| v.space.as_ref().map(|space| space.get_type());
-    let base_plus = |pointer: &unlace_num::pcoderaw::VarnodeData| -> Option<((i32, u64, u32), u64)> {
-        if kind(pointer) == Some(IPTR_PROCESSOR) {
-            return Some((key(pointer)?, 0));
-        }
-        let add = operations
-            .iter()
-            .find(|op| op.opcode == CPUI_INT_ADD && op.output.as_ref().and_then(key) == key(pointer))?;
-        let [a, b] = add.inputs.as_slice() else { return None };
-        match (kind(a), kind(b)) {
-            (Some(IPTR_PROCESSOR), Some(IPTR_CONSTANT)) => Some((key(a)?, b.offset)),
-            (Some(IPTR_CONSTANT), Some(IPTR_PROCESSOR)) => Some((key(b)?, a.offset)),
-            _ => None,
-        }
-    };
+    let kind =
+        |v: &unlace_num::pcoderaw::VarnodeData| v.space.as_ref().map(|space| space.get_type());
+    let base_plus =
+        |pointer: &unlace_num::pcoderaw::VarnodeData| -> Option<((i32, u64, u32), u64)> {
+            if kind(pointer) == Some(IPTR_PROCESSOR) {
+                return Some((key(pointer)?, 0));
+            }
+            let add = operations.iter().find(|op| {
+                op.opcode == CPUI_INT_ADD && op.output.as_ref().and_then(key) == key(pointer)
+            })?;
+            let [a, b] = add.inputs.as_slice() else {
+                return None;
+            };
+            match (kind(a), kind(b)) {
+                (Some(IPTR_PROCESSOR), Some(IPTR_CONSTANT)) => Some((key(a)?, b.offset)),
+                (Some(IPTR_CONSTANT), Some(IPTR_PROCESSOR)) => Some((key(b)?, a.offset)),
+                _ => None,
+            }
+        };
     operations
         .iter()
         .enumerate()
         .filter(|(_, op)| op.opcode == CPUI_STORE && op.inputs.len() == 3)
         .filter_map(|(index, store)| {
             let (base, offset) = base_plus(&store.inputs[1])?;
-            Some((index, Slot { space: store.inputs[0].offset as i32, base, offset }))
+            Some((
+                index,
+                Slot {
+                    space: store.inputs[0].offset as i32,
+                    base,
+                    offset,
+                },
+            ))
         })
         .collect()
 }
@@ -335,7 +367,13 @@ fn reloads_stored_slot(
     }
     let reload = next.and_then(|id| ops.get(id))?;
     let varnode = |id: Option<crate::context::VarnodeId>| id.and_then(|id| data.vbank().get(id));
-    let key = |v: &crate::varnode::Varnode| (v.get_space().get_index(), v.get_offset(), v.get_size() as u32);
+    let key = |v: &crate::varnode::Varnode| {
+        (
+            v.get_space().get_index(),
+            v.get_offset(),
+            v.get_size() as u32,
+        )
+    };
     let instruction: Vec<_> = ops
         .iter_at(reload.get_addr())
         .filter_map(|(_, id)| ops.get(id).map(|op| (id, op)))
@@ -345,7 +383,8 @@ fn reloads_stored_slot(
             return Some((key(pointer), 0));
         }
         let (_, add) = instruction.iter().find(|(_, op)| {
-            op.code() == CPUI_INT_ADD && varnode(op.get_out()).is_some_and(|out| key(out) == key(pointer))
+            op.code() == CPUI_INT_ADD
+                && varnode(op.get_out()).is_some_and(|out| key(out) == key(pointer))
         })?;
         let (a, b) = (varnode(add.get_in(0))?, varnode(add.get_in(1))?);
         match (a.get_space().get_type(), b.get_space().get_type()) {
@@ -360,8 +399,15 @@ fn reloads_stored_slot(
         }
         let (space, pointer) = (varnode(load.get_in(0))?, varnode(load.get_in(1))?);
         let (base, offset) = base_plus(pointer)?;
-        let slot = Slot { space: space.get_offset() as i32, base, offset };
-        slots.iter().find(|(_, stored)| *stored == slot).map(|(index, _)| (id, *index))
+        let slot = Slot {
+            space: space.get_offset() as i32,
+            base,
+            offset,
+        };
+        slots
+            .iter()
+            .find(|(_, stored)| *stored == slot)
+            .map(|(index, _)| (id, *index))
     })
 }
 
@@ -454,10 +500,9 @@ fn validate_operations(operations: &[Operation]) -> KunaResult<()> {
             ));
         }
         if op.output.as_ref().is_some_and(|storage| {
-            storage
-                .space
-                .as_ref()
-                .is_some_and(|space| space.get_type() == unlace_base::space::spacetype::IPTR_CONSTANT)
+            storage.space.as_ref().is_some_and(|space| {
+                space.get_type() == unlace_base::space::spacetype::IPTR_CONSTANT
+            })
         }) {
             return Err(KunaError::lowlevel(
                 "Compiler prototype mechanism writes constant storage",
@@ -690,14 +735,20 @@ mod tests {
             [false, true].map(|fact| CallMechanismMode::Auto.fires(fact)),
             [false, true]
         );
-        assert_eq!([false, true].map(|fact| CallMechanismMode::Off.fires(fact)), [false; 2]);
-        assert_eq!([false, true].map(|fact| CallMechanismMode::On.fires(fact)), [true; 2]);
+        assert_eq!(
+            [false, true].map(|fact| CallMechanismMode::Off.fires(fact)),
+            [false; 2]
+        );
+        assert_eq!(
+            [false, true].map(|fact| CallMechanismMode::On.fires(fact)),
+            [true; 2]
+        );
     }
 
     #[test]
     fn unasserted_function_uses_the_effective_default_entry_model() {
         use unlace_base::address::Address;
-        use unlace_base::space::{spacetype, AddrSpace, ConstantSpace, UniqueSpace};
+        use unlace_base::space::{AddrSpace, ConstantSpace, UniqueSpace, spacetype};
         use unlace_num::opcodes::OpCode::CPUI_COPY;
         use unlace_sleigh::semantics::{ConstTpl, ConstType, ConstructTpl, OpTpl, VarnodeTpl};
         let mut manager = AddrSpaceManager::new();
@@ -839,7 +890,7 @@ mod tests {
     #[test]
     fn repeated_installations_preserve_partial_temporary_aliases_without_sharing() {
         use unlace_base::address::Address;
-        use unlace_base::space::{spacetype, AddrSpace, ConstantSpace, UniqueSpace};
+        use unlace_base::space::{AddrSpace, ConstantSpace, UniqueSpace, spacetype};
         use unlace_num::opcodes::OpCode::CPUI_COPY;
         use unlace_num::pcoderaw::VarnodeData;
         let mut manager = AddrSpaceManager::new();
@@ -934,7 +985,7 @@ mod tests {
     #[test]
     fn collection_keeps_memory_effects_and_rejects_control_flow() {
         use unlace_base::address::Address;
-        use unlace_base::space::{spacetype, AddrSpace, ConstantSpace};
+        use unlace_base::space::{AddrSpace, ConstantSpace, spacetype};
         use unlace_num::opcodes::OpCode::*;
         use unlace_num::pcoderaw::VarnodeData;
         use unlace_sleigh::translate::PcodeEmit;
@@ -998,9 +1049,11 @@ mod tests {
     fn absent_or_uncompiled_mechanisms_are_errors() {
         let manager = AddrSpaceManager::new();
         let mut context = crate::pcodeinject::InjectContext::default();
-        assert!(Mechanisms::default()
-            .operations(0, &manager, &mut context)
-            .is_err());
+        assert!(
+            Mechanisms::default()
+                .operations(0, &manager, &mut context)
+                .is_err()
+        );
         let mut library = PcodeInjectLibrarySleigh::new(0x1000);
         register(
             Some(

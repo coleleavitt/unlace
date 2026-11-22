@@ -16,7 +16,7 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 
 use crate::action::{Action, ActionContext};
@@ -26,7 +26,8 @@ use crate::funcdata::Funcdata;
 fn build_fd() -> Funcdata {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -52,7 +53,10 @@ fn callee_path_trims_generics_and_legacy_hash() {
         "core::slice::index::slice_start_index_len_fail"
     );
     // A turbofish the demangler left in place.
-    assert_eq!(callee_path("core::ptr::drop_in_place::<alloc::vec::Vec<u8>>"), "core::ptr::drop_in_place");
+    assert_eq!(
+        callee_path("core::ptr::drop_in_place::<alloc::vec::Vec<u8>>"),
+        "core::ptr::drop_in_place"
+    );
     assert_eq!(
         callee_path("core::panicking::panic_bounds_check::h0123456789abcdef"),
         "core::panicking::panic_bounds_check"
@@ -67,7 +71,10 @@ fn every_full_path_matches() {
     for full in SECURITY_CHECK_FUNCTIONS {
         assert!(is_security_check_name(full), "{full}");
         // The generic-carrying form of the same symbol.
-        assert!(is_security_check_name(&format!("{full}<usize>")), "{full}<usize>");
+        assert!(
+            is_security_check_name(&format!("{full}<usize>")),
+            "{full}<usize>"
+        );
     }
 }
 
@@ -77,7 +84,9 @@ fn bare_leaves_and_partial_scopes_match() {
     assert!(is_security_check_name("panicking::panic_bounds_check"));
     assert!(is_security_check_name("slice_error_fail"));
     assert!(is_security_check_name("index::slice_index_order_fail"));
-    assert!(is_security_check_name("panic_const::panic_const_rem_by_zero"));
+    assert!(is_security_check_name(
+        "panic_const::panic_const_rem_by_zero"
+    ));
 }
 
 #[test]
@@ -94,16 +103,24 @@ fn near_misses_do_not_match() {
     assert!(!is_security_check_name(""));
     assert!(!is_security_check_name("<usize>"));
     // A *longer* path is not a suffix match of a shorter one.
-    assert!(!is_security_check_name("mycrate::core::panicking::panic_bounds_check::extra"));
+    assert!(!is_security_check_name(
+        "mycrate::core::panicking::panic_bounds_check::extra"
+    ));
 }
 
 #[test]
 fn option_default_is_on_and_apply_reports() {
     let mut o = SecurityCheckOption::default();
     assert!(o.is_enabled());
-    assert_eq!(o.apply(false), "Rust security-check branch stripping turned off");
+    assert_eq!(
+        o.apply(false),
+        "Rust security-check branch stripping turned off"
+    );
     assert!(!o.is_enabled());
-    assert_eq!(o.apply(true), "Rust security-check branch stripping turned on");
+    assert_eq!(
+        o.apply(true),
+        "Rust security-check branch stripping turned on"
+    );
     assert!(o.is_enabled());
 }
 

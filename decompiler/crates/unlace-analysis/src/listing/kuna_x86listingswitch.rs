@@ -4,18 +4,18 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
+use object::Object;
 use unlace_base::space::AddrSpace;
 use unlace_decomp::architecture::Architecture;
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::translate::Translate;
-use object::Object;
 
 use super::kuna_poolref::PoolImage;
-use super::kuna_switchtable::{is_constant, key_of, Key, DEFAULT_MAX_ENTRIES, MIN_ENTRIES};
+use super::kuna_switchtable::{DEFAULT_MAX_ENTRIES, Key, MIN_ENTRIES, is_constant, key_of};
 use super::model::FlowKind;
 use super::walk::WalkState;
-use super::xrefs::{decode, FullCapture, FullOp};
+use super::xrefs::{FullCapture, FullOp, decode};
 
 const WORD_LIMIT: u64 = 1u64 << 32;
 const MAX_PATH_INSNS: usize = 16;
@@ -1006,13 +1006,15 @@ mod tests {
         assert_eq!(address.value.at(lo), Some(0x2000));
         assert!(address.without_wrap(lo, hi));
         for (register, width, signed) in [(4, 4, false), (0, 1, false), (0, 4, true)] {
-            assert!(prove_path(
-                &spaces.path(register, width, signed),
-                0x1007,
-                &spaces.ram,
-                &spaces.ram
-            )
-            .is_none());
+            assert!(
+                prove_path(
+                    &spaces.path(register, width, signed),
+                    0x1007,
+                    &spaces.ram,
+                    &spaces.ram
+                )
+                .is_none()
+            );
         }
     }
 
@@ -1098,9 +1100,11 @@ mod tests {
             .unwrap()
             .shifted(0x2000)
             .unwrap();
-        assert!(tables
-            .read(0x1009, address.clone(), 0, 3, &empty_state())
-            .is_none());
+        assert!(
+            tables
+                .read(0x1009, address.clone(), 0, 3, &empty_state())
+                .is_none()
+        );
         tables.max_entries = 2;
         assert_eq!(
             tables.read(0x1009, address, 0, 3, &empty_state()),

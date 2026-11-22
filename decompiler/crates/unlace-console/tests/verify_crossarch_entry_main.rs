@@ -29,16 +29,21 @@ use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture(name: &str) -> PathBuf {
-    repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(name)
+    repo_root()
+        .join("decompiler/crates/unlace-analysis/tests/fixtures")
+        .join(name)
 }
 
 /// Bootstrap `fixture` in both `elfmain` arms and assert the discovered `main` is
@@ -50,16 +55,15 @@ fn assert_discovered_main_decompiles(fixture_name: &str, main_vma: u64) {
     assert_discovered_main_decompiles_arm(fixture_name, main_vma, true);
 }
 
-fn assert_discovered_main_decompiles_arm(
-    fixture_name: &str,
-    main_vma: u64,
-    elfmain: bool,
-) {
+fn assert_discovered_main_decompiles_arm(fixture_name: &str, main_vma: u64, elfmain: bool) {
     let root = repo_root();
     let specs = root.join("specs");
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
 
-    let bin = fixture(fixture_name).to_str().expect("UTF-8 fixture path").to_string();
+    let bin = fixture(fixture_name)
+        .to_str()
+        .expect("UTF-8 fixture path")
+        .to_string();
 
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
@@ -69,14 +73,19 @@ fn assert_discovered_main_decompiles_arm(
         .expect("elfmain flips");
     // The analysis facts (entries + ARM TMode paints) are committed at the
     // `read symbols` seam, not eagerly at bootstrap.
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
     // The discovered `main` is registered even though it is in NO symbol table of
     // this stripped, hidden-visibility binary — recovered purely by the
     // `_start`→`main` libc-start idiom. Which name it carries is `elfmain`'s
     // half: the angr-style `sub_<addr>` with the option off, the C name with it
     // on.
-    let sym = if elfmain { MAIN.to_string() } else { format!("sub_{main_vma:x}") };
+    let sym = if elfmain {
+        MAIN.to_string()
+    } else {
+        format!("sub_{main_vma:x}")
+    };
     assert!(
         prog.lookup_symbol(&sym).is_some(),
         "[{fixture_name}] discovered main ({sym}) not registered — oracle 4 failed"
@@ -88,9 +97,13 @@ fn assert_discovered_main_decompiles_arm(
         "[{fixture_name}] {sym} must sit at the address oracle 4 recovered"
     );
 
-    let cmds: Vec<String> = [format!("load function {sym}"), "decompile".into(), "print C".into()]
-        .into_iter()
-        .collect();
+    let cmds: Vec<String> = [
+        format!("load function {sym}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .into_iter()
+    .collect();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);

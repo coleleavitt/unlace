@@ -78,10 +78,11 @@ pub fn read_image_selected(
     path: &str,
     pref: super::macho_fat::SlicePref,
 ) -> std::io::Result<SelectedImage> {
-    let (bytes, extracted) = match super::kuna_dyldcache::read_selected_image(std::path::Path::new(path)) {
-        Some(image) => (image.map_err(std::io::Error::other)?, true),
-        None => (std::fs::read(path)?, false),
-    };
+    let (bytes, extracted) =
+        match super::kuna_dyldcache::read_selected_image(std::path::Path::new(path)) {
+            Some(image) => (image.map_err(std::io::Error::other)?, true),
+            None => (std::fs::read(path)?, false),
+        };
     let choice = unlace_decomp::kuna_kernelcache::KernelcacheChoice::in_force();
     let peeled = super::kuna_kernelcache::peel_file(std::path::Path::new(path), bytes, &choice)
         .map_err(std::io::Error::other)?;
@@ -91,8 +92,13 @@ pub fn read_image_selected(
     let (bytes, magic) = super::pe_dosmagic::tolerate_corrupt_dos_magic(bytes);
     let (bytes, clamped) = super::kuna_machotolerance::clamp_out_of_file_ranges(bytes);
     let (bytes, dirs) = super::pe_datadirs::tolerate_oversized_data_directories(bytes);
-    let repaired = extracted || shdr.is_some() || magic.is_some() || clamped.is_some() || dirs.is_some();
-    Ok(SelectedImage { bytes, repaired, fileset: peeled.fileset })
+    let repaired =
+        extracted || shdr.is_some() || magic.is_some() || clamped.is_some() || dirs.is_some();
+    Ok(SelectedImage {
+        bytes,
+        repaired,
+        fileset: peeled.fileset,
+    })
 }
 
 /// ELF header field offsets, by class. `object` reads these through typed

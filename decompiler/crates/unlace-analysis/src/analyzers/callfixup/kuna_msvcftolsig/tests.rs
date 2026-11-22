@@ -53,4 +53,3 @@ fn one_changed_byte_rejects() {
 fn truncated_stream_is_ignored() {
     assert!(scan_bytes(&FTOL[..FTOL.len() - 1], 0).is_empty());
 }
-

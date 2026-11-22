@@ -20,11 +20,11 @@ use unlace_base::address::{calc_mask, extend_signbit, leastsigbit_set, popcount}
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
-use super::{BitFieldNodeState, BitFieldTransform, BitRange, ALLOWED_FINAL_WRITES};
-use crate::dtype::{type_metatype, Datatype};
+use super::{ALLOWED_FINAL_WRITES, BitFieldNodeState, BitFieldTransform, BitRange};
+use crate::context::{OpId, VarnodeId};
+use crate::dtype::{Datatype, type_metatype};
 use crate::expression::{pointer_equality, root_pointer};
 use crate::funcdata::Funcdata;
-use crate::context::{OpId, VarnodeId};
 use std::rc::Rc;
 
 /// `sizeof(uintb)` — the C++ `uintb` is `uint8`, i.e. 8 bytes.
@@ -64,14 +64,34 @@ struct InsertRecord {
 impl InsertRecord {
     /// Constructor for a Varnode value (C++ `InsertRecord(Varnode*,Datatype*,int4,
     /// int4,int4)`, bitfield.hh:78).
-    fn from_vn(vn: VarnodeId, dt: Option<Rc<Datatype>>, p: int4, sz: int4, sa: int4) -> InsertRecord {
-        InsertRecord { vn: Some(vn), const_val: 0, dt, pos: p, num_bits: sz, shift_amount: sa }
+    fn from_vn(
+        vn: VarnodeId,
+        dt: Option<Rc<Datatype>>,
+        p: int4,
+        sz: int4,
+        sa: int4,
+    ) -> InsertRecord {
+        InsertRecord {
+            vn: Some(vn),
+            const_val: 0,
+            dt,
+            pos: p,
+            num_bits: sz,
+            shift_amount: sa,
+        }
     }
 
     /// Constructor for a constant value (C++ `InsertRecord(uintb,Datatype*,int4,
     /// int4)`, bitfield.hh:79).
     fn from_const(val: uintb, dt: Option<Rc<Datatype>>, p: int4, sz: int4) -> InsertRecord {
-        InsertRecord { vn: None, const_val: val, dt, pos: p, num_bits: sz, shift_amount: 0 }
+        InsertRecord {
+            vn: None,
+            const_val: val,
+            dt,
+            pos: p,
+            num_bits: sz,
+            shift_amount: 0,
+        }
     }
 }
 
@@ -170,7 +190,12 @@ impl BitFieldInsertTransform {
                 state.bits_field.num_bits,
                 self.base.is_big_endian,
             );
-            let bl = data.obank().get(self.final_write_op).unwrap().get_parent().unwrap();
+            let bl = data
+                .obank()
+                .get(self.final_write_op)
+                .unwrap()
+                .get_parent()
+                .unwrap();
             return Self::find_overwrite(data, mapped, bl, &cur_range);
         }
         false
@@ -179,7 +204,12 @@ impl BitFieldInsertTransform {
     /// Is this an original value defined by ZPULL or SPULL (C++
     /// `checkPulledOriginalValue`, bitfield.cc:146-158).
     fn check_pulled_original_value(&mut self, data: &Funcdata, state: &BitFieldNodeState) -> bool {
-        if !data.vbank().get(state.node).map(|v| v.is_written()).unwrap_or(false) {
+        if !data
+            .vbank()
+            .get(state.node)
+            .map(|v| v.is_written())
+            .unwrap_or(false)
+        {
             return false;
         }
         let op = data.vbank().get(state.node).unwrap().get_def().unwrap();
@@ -187,8 +217,16 @@ impl BitFieldInsertTransform {
         if opc != OpCode::CPUI_ZPULL && opc != OpCode::CPUI_SPULL {
             return false;
         }
-        let pos = data.vbank().get(data.obank().get(op).unwrap().get_in(1).unwrap()).unwrap().get_offset() as int4;
-        let numbits = data.vbank().get(data.obank().get(op).unwrap().get_in(2).unwrap()).unwrap().get_offset() as int4;
+        let pos = data
+            .vbank()
+            .get(data.obank().get(op).unwrap().get_in(1).unwrap())
+            .unwrap()
+            .get_offset() as int4;
+        let numbits = data
+            .vbank()
+            .get(data.obank().get(op).unwrap().get_in(2).unwrap())
+            .unwrap()
+            .get_offset() as int4;
         if pos != state.bits_field.least_sig_bit {
             return false;
         }
@@ -203,7 +241,12 @@ impl BitFieldInsertTransform {
     /// `checkOriginalBase`, bitfield.cc:164-182).
     fn check_original_base(&mut self, data: &Funcdata, vn: VarnodeId) -> bool {
         if self.final_code(data) == OpCode::CPUI_STORE {
-            if !data.vbank().get(vn).map(|v| v.is_written()).unwrap_or(false) {
+            if !data
+                .vbank()
+                .get(vn)
+                .map(|v| v.is_written())
+                .unwrap_or(false)
+            {
                 return false;
             }
             let load_op = data.vbank().get(vn).unwrap().get_def().unwrap();
@@ -211,7 +254,12 @@ impl BitFieldInsertTransform {
                 return false;
             }
             let l1 = data.obank().get(load_op).unwrap().get_in(1).unwrap();
-            let f1 = data.obank().get(self.final_write_op).unwrap().get_in(1).unwrap();
+            let f1 = data
+                .obank()
+                .get(self.final_write_op)
+                .unwrap()
+                .get_in(1)
+                .unwrap();
             if !pointer_equality(l1, f1, data.vbank(), data.obank()) {
                 return false;
             }
@@ -320,9 +368,19 @@ impl BitFieldInsertTransform {
 
     /// Follow bitfield back through INT_AND with a mask (C++ `handleAndBack`,
     /// bitfield.cc:251-268).
-    fn handle_and_back(&mut self, data: &Funcdata, state: &mut BitFieldNodeState, op: OpId) -> bool {
+    fn handle_and_back(
+        &mut self,
+        data: &Funcdata,
+        state: &mut BitFieldNodeState,
+        op: OpId,
+    ) -> bool {
         let cvn = data.obank().get(op).unwrap().get_in(1).unwrap();
-        if !data.vbank().get(cvn).map(|v| v.is_constant()).unwrap_or(false) {
+        if !data
+            .vbank()
+            .get(cvn)
+            .map(|v| v.is_constant())
+            .unwrap_or(false)
+        {
             return false;
         }
         if state.bits_field.byte_size > SIZEOF_UINTB {
@@ -356,7 +414,11 @@ impl BitFieldInsertTransform {
         let is_masked0 = (nz0 & mask) == 0;
         let is_masked1 = (nz1 & mask) == 0;
         if is_masked0 == is_masked1 {
-            if data.vbank().get(vn1).map(|v| v.is_constant()).unwrap_or(false)
+            if data
+                .vbank()
+                .get(vn1)
+                .map(|v| v.is_constant())
+                .unwrap_or(false)
                 && (nz1 & mask) == mask
             {
                 state.node = vn1;
@@ -370,7 +432,12 @@ impl BitFieldInsertTransform {
 
     /// Follow bitfield back through INT_ADD (C++ `handleAddBack`,
     /// bitfield.cc:298-315).
-    fn handle_add_back(&mut self, data: &Funcdata, state: &mut BitFieldNodeState, op: OpId) -> bool {
+    fn handle_add_back(
+        &mut self,
+        data: &Funcdata,
+        state: &mut BitFieldNodeState,
+        op: OpId,
+    ) -> bool {
         if state.bits_field.byte_size > SIZEOF_UINTB {
             return false;
         }
@@ -393,9 +460,19 @@ impl BitFieldInsertTransform {
 
     /// Follow bitfield back through INT_LEFT by a constant (C++ `handleLeftBack`,
     /// bitfield.cc:323-343).
-    fn handle_left_back(&mut self, data: &Funcdata, state: &mut BitFieldNodeState, op: OpId) -> bool {
+    fn handle_left_back(
+        &mut self,
+        data: &Funcdata,
+        state: &mut BitFieldNodeState,
+        op: OpId,
+    ) -> bool {
         let cvn = data.obank().get(op).unwrap().get_in(1).unwrap();
-        if !data.vbank().get(cvn).map(|v| v.is_constant()).unwrap_or(false) {
+        if !data
+            .vbank()
+            .get(cvn)
+            .map(|v| v.is_constant())
+            .unwrap_or(false)
+        {
             return false;
         }
         let sa = data.vbank().get(cvn).unwrap().get_offset() as int4;
@@ -417,9 +494,19 @@ impl BitFieldInsertTransform {
 
     /// Follow bitfield back through INT_SRIGHT by a constant (C++
     /// `handleRightBack`, bitfield.cc:349-365).
-    fn handle_right_back(&mut self, data: &Funcdata, state: &mut BitFieldNodeState, op: OpId) -> bool {
+    fn handle_right_back(
+        &mut self,
+        data: &Funcdata,
+        state: &mut BitFieldNodeState,
+        op: OpId,
+    ) -> bool {
         let cvn = data.obank().get(op).unwrap().get_in(1).unwrap();
-        if !data.vbank().get(cvn).map(|v| v.is_constant()).unwrap_or(false) {
+        if !data
+            .vbank()
+            .get(cvn)
+            .map(|v| v.is_constant())
+            .unwrap_or(false)
+        {
             return false;
         }
         let sa = data.vbank().get(cvn).unwrap().get_offset() as int4;
@@ -439,7 +526,12 @@ impl BitFieldInsertTransform {
 
     /// Follow bitfield back through INT_ZEXT (C++ `handleZextBack`,
     /// bitfield.cc:372-389).
-    fn handle_zext_back(&mut self, data: &Funcdata, state: &mut BitFieldNodeState, op: OpId) -> bool {
+    fn handle_zext_back(
+        &mut self,
+        data: &Funcdata,
+        state: &mut BitFieldNodeState,
+        op: OpId,
+    ) -> bool {
         let vn = data.obank().get(op).unwrap().get_in(0).unwrap();
         let out = data.obank().get(op).unwrap().get_out().unwrap();
         let trunc_amount =
@@ -460,9 +552,19 @@ impl BitFieldInsertTransform {
 
     /// Treat INT_MULT by a power of 2 like INT_LEFT (C++ `handleMultBack`,
     /// bitfield.cc:395-415).
-    fn handle_mult_back(&mut self, data: &Funcdata, state: &mut BitFieldNodeState, op: OpId) -> bool {
+    fn handle_mult_back(
+        &mut self,
+        data: &Funcdata,
+        state: &mut BitFieldNodeState,
+        op: OpId,
+    ) -> bool {
         let vn1 = data.obank().get(op).unwrap().get_in(1).unwrap();
-        if !data.vbank().get(vn1).map(|v| v.is_constant()).unwrap_or(false) {
+        if !data
+            .vbank()
+            .get(vn1)
+            .map(|v| v.is_constant())
+            .unwrap_or(false)
+        {
             return false;
         }
         let val = data.vbank().get(vn1).unwrap().get_offset();
@@ -485,11 +587,21 @@ impl BitFieldInsertTransform {
 
     /// Follow the field into the input of the SUBPIECE (C++ `handleSubpieceBack`,
     /// bitfield.cc:421-438).
-    fn handle_subpiece_back(&mut self, data: &Funcdata, state: &mut BitFieldNodeState, op: OpId) -> bool {
+    fn handle_subpiece_back(
+        &mut self,
+        data: &Funcdata,
+        state: &mut BitFieldNodeState,
+        op: OpId,
+    ) -> bool {
         let in_vn = data.obank().get(op).unwrap().get_in(0).unwrap();
-        let extend_amount =
-            data.vbank().get(in_vn).unwrap().get_size() - data.vbank().get(state.node).unwrap().get_size();
-        let sa = data.vbank().get(data.obank().get(op).unwrap().get_in(1).unwrap()).unwrap().get_offset() as int4 * 8;
+        let extend_amount = data.vbank().get(in_vn).unwrap().get_size()
+            - data.vbank().get(state.node).unwrap().get_size();
+        let sa = data
+            .vbank()
+            .get(data.obank().get(op).unwrap().get_in(1).unwrap())
+            .unwrap()
+            .get_offset() as int4
+            * 8;
         let mut new_range = state.bits_field;
         new_range.extend_bytes(extend_amount);
         new_range.shift(-sa);
@@ -505,7 +617,12 @@ impl BitFieldInsertTransform {
 
     /// Test if a call is producing the \e original \e value (C++
     /// `testCallOriginal`, bitfield.cc:445-469).
-    fn test_call_original(&mut self, data: &mut Funcdata, state: &BitFieldNodeState, op: OpId) -> bool {
+    fn test_call_original(
+        &mut self,
+        data: &mut Funcdata,
+        state: &BitFieldNodeState,
+        op: OpId,
+    ) -> bool {
         if !data.obank().get(op).map(|o| o.is_call()).unwrap_or(false) {
             return false;
         }
@@ -552,7 +669,12 @@ impl BitFieldInsertTransform {
     /// `processBackward`, bitfield.cc:473-553).
     fn process_backward(&mut self, data: &mut Funcdata, state: &mut BitFieldNodeState) -> bool {
         while state.node != VarnodeId::default() {
-            if data.vbank().get(state.node).map(|v| v.is_constant()).unwrap_or(false) {
+            if data
+                .vbank()
+                .get(state.node)
+                .map(|v| v.is_constant())
+                .unwrap_or(false)
+            {
                 return self.add_constant_write(data, state);
             }
             if self.is_original_value(data, state) {
@@ -562,12 +684,21 @@ impl BitFieldInsertTransform {
             // (kuna) The final write's own output holds the field only after the
             // write; its value comes from the write's inputs.
             let own_output = self.final_code(data) != OpCode::CPUI_STORE
-                && data.obank().get(self.final_write_op).and_then(|o| o.get_out()) == Some(state.node);
+                && data
+                    .obank()
+                    .get(self.final_write_op)
+                    .and_then(|o| o.get_out())
+                    == Some(state.node);
             if state.field().is_some() && state.is_field_aligned() && !own_output {
                 self.add_field_write(data, state);
                 return true;
             }
-            if !data.vbank().get(state.node).map(|v| v.is_written()).unwrap_or(false) {
+            if !data
+                .vbank()
+                .get(state.node)
+                .map(|v| v.is_written())
+                .unwrap_or(false)
+            {
                 return false;
             }
             let op = data.vbank().get(state.node).unwrap().get_def().unwrap();
@@ -621,7 +752,12 @@ impl BitFieldInsertTransform {
 
     /// Return true if specified bits in a Varnode are overwritten in the same
     /// basic block (C++ `BitFieldTransform::findOverwrite`, bitfield.cc:571-650).
-    fn find_overwrite(data: &Funcdata, vn: VarnodeId, bl: crate::context::BlockId, range: &BitRange) -> bool {
+    fn find_overwrite(
+        data: &Funcdata,
+        vn: VarnodeId,
+        bl: crate::context::BlockId,
+        range: &BitRange,
+    ) -> bool {
         let mut min_range = *range;
         min_range.minimize_container();
         let base_addr = data.vbank().get(vn).unwrap().get_addr().clone();
@@ -643,7 +779,11 @@ impl BitFieldInsertTransform {
                     OpCode::CPUI_PIECE => {
                         let in0 = data.obank().get(cop).unwrap().get_in(0).unwrap();
                         if in0 == cur_vn {
-                            let sz = data.vbank().get(data.obank().get(cop).unwrap().get_in(1).unwrap()).unwrap().get_size();
+                            let sz = data
+                                .vbank()
+                                .get(data.obank().get(cop).unwrap().get_in(1).unwrap())
+                                .unwrap()
+                                .get_size();
                             cur_range.extend_bytes(sz);
                             cur_range.shift(sz * 8);
                         } else {
@@ -653,7 +793,12 @@ impl BitFieldInsertTransform {
                     }
                     OpCode::CPUI_INT_LEFT => {
                         let cvn = data.obank().get(cop).unwrap().get_in(1).unwrap();
-                        if data.vbank().get(cvn).map(|v| v.is_constant()).unwrap_or(false) {
+                        if data
+                            .vbank()
+                            .get(cvn)
+                            .map(|v| v.is_constant())
+                            .unwrap_or(false)
+                        {
                             cur_range.shift(data.vbank().get(cvn).unwrap().get_offset() as int4);
                         } else {
                             return false;
@@ -661,7 +806,12 @@ impl BitFieldInsertTransform {
                     }
                     OpCode::CPUI_INT_RIGHT => {
                         let cvn = data.obank().get(cop).unwrap().get_in(1).unwrap();
-                        if data.vbank().get(cvn).map(|v| v.is_constant()).unwrap_or(false) {
+                        if data
+                            .vbank()
+                            .get(cvn)
+                            .map(|v| v.is_constant())
+                            .unwrap_or(false)
+                        {
                             cur_range.shift(-(data.vbank().get(cvn).unwrap().get_offset() as int4));
                         } else {
                             return false;
@@ -673,7 +823,12 @@ impl BitFieldInsertTransform {
                     | OpCode::CPUI_INT_NEGATE => {}
                     OpCode::CPUI_INT_AND => {
                         let cvn = data.obank().get(cop).unwrap().get_in(1).unwrap();
-                        if data.vbank().get(cvn).map(|v| v.is_constant()).unwrap_or(false) {
+                        if data
+                            .vbank()
+                            .get(cvn)
+                            .map(|v| v.is_constant())
+                            .unwrap_or(false)
+                        {
                             cur_range.intersect_mask(data.vbank().get(cvn).unwrap().get_offset());
                         }
                     }
@@ -702,7 +857,9 @@ impl BitFieldInsertTransform {
                 cur_vn = data.obank().get(cop).unwrap().get_out().unwrap();
                 let cvn_addr = data.vbank().get(cur_vn).unwrap().get_addr().clone();
                 let cvn_size = data.vbank().get(cur_vn).unwrap().get_size();
-                if addr.contained_by(min_range.byte_size, &cvn_addr, cvn_size) && cur_range.num_bits == 0 {
+                if addr.contained_by(min_range.byte_size, &cvn_addr, cvn_size)
+                    && cur_range.num_bits == 0
+                {
                     return true;
                 }
                 if data.vbank().get(cur_vn).unwrap().has_no_descend() {
@@ -719,7 +876,12 @@ impl BitFieldInsertTransform {
     fn set_insert_inputs(&self, data: &mut Funcdata, op: Option<OpId>, rec: &InsertRecord) -> OpId {
         let op = match op {
             None => {
-                let addr = data.obank().get(self.final_write_op).unwrap().get_addr().clone();
+                let addr = data
+                    .obank()
+                    .get(self.final_write_op)
+                    .unwrap()
+                    .get_addr()
+                    .clone();
                 data.new_op(4, addr)
             }
             Some(o) => {
@@ -737,7 +899,9 @@ impl BitFieldInsertTransform {
             None => {
                 if let Some(dt) = &rec.dt {
                     let v = data.new_constant(dt.get_size(), rec.const_val);
-                    data.vbank_mut().get_mut(v).map(|x| x.update_type(Rc::clone(dt)));
+                    data.vbank_mut()
+                        .get_mut(v)
+                        .map(|x| x.update_type(Rc::clone(dt)));
                     v
                 } else {
                     data.new_constant(self.base.container_size, rec.const_val)
@@ -781,7 +945,8 @@ impl BitFieldInsertTransform {
                 continue;
             }
             let opc = data.obank().get(op).unwrap().code();
-            if opc != OpCode::CPUI_INSERT && opc != OpCode::CPUI_ZPULL && opc != OpCode::CPUI_SPULL {
+            if opc != OpCode::CPUI_INSERT && opc != OpCode::CPUI_ZPULL && opc != OpCode::CPUI_SPULL
+            {
                 return false;
             }
         }
@@ -793,7 +958,12 @@ impl BitFieldInsertTransform {
     /// bitfield.cc:726-741).
     fn fold_ptrsub(&self, data: &mut Funcdata, load_op: OpId) {
         let vn = data.obank().get(load_op).unwrap().get_in(1).unwrap();
-        if !data.vbank().get(vn).map(|v| v.is_written()).unwrap_or(false) {
+        if !data
+            .vbank()
+            .get(vn)
+            .map(|v| v.is_written())
+            .unwrap_or(false)
+        {
             return;
         }
         let ptrsub = data.vbank().get(vn).unwrap().get_def().unwrap();
@@ -843,26 +1013,46 @@ impl BitFieldInsertTransform {
                 }
                 Some(i) => i,
             };
-            let op2 = data.vbank().get(data.obank().get(op).unwrap().get_in(2).unwrap()).unwrap().get_offset();
-            let im2 = data.vbank().get(data.obank().get(immed).unwrap().get_in(2).unwrap()).unwrap().get_offset();
+            let op2 = data
+                .vbank()
+                .get(data.obank().get(op).unwrap().get_in(2).unwrap())
+                .unwrap()
+                .get_offset();
+            let im2 = data
+                .vbank()
+                .get(data.obank().get(immed).unwrap().get_in(2).unwrap())
+                .unwrap()
+                .get_offset();
             if op2 != im2 {
                 continue;
             }
-            let op3 = data.vbank().get(data.obank().get(op).unwrap().get_in(3).unwrap()).unwrap().get_offset();
-            let im3 = data.vbank().get(data.obank().get(immed).unwrap().get_in(3).unwrap()).unwrap().get_offset();
+            let op3 = data
+                .vbank()
+                .get(data.obank().get(op).unwrap().get_in(3).unwrap())
+                .unwrap()
+                .get_offset();
+            let im3 = data
+                .vbank()
+                .get(data.obank().get(immed).unwrap().get_in(3).unwrap())
+                .unwrap()
+                .get_offset();
             if op3 != im3 {
                 continue;
             }
             if self.final_code(data) == OpCode::CPUI_STORE {
-                let store1 = match data.lone_descend(data.obank().get(op).unwrap().get_out().unwrap()) {
-                    Some(s) if data.obank().get(s).unwrap().code() == OpCode::CPUI_STORE => s,
-                    _ => continue,
-                };
-                let store2 = match data.lone_descend(data.obank().get(immed).unwrap().get_out().unwrap()) {
-                    Some(s) if data.obank().get(s).unwrap().code() == OpCode::CPUI_STORE => s,
-                    _ => continue,
-                };
-                if data.obank().get(store1).unwrap().get_parent() != data.obank().get(store2).unwrap().get_parent() {
+                let store1 =
+                    match data.lone_descend(data.obank().get(op).unwrap().get_out().unwrap()) {
+                        Some(s) if data.obank().get(s).unwrap().code() == OpCode::CPUI_STORE => s,
+                        _ => continue,
+                    };
+                let store2 =
+                    match data.lone_descend(data.obank().get(immed).unwrap().get_out().unwrap()) {
+                        Some(s) if data.obank().get(s).unwrap().code() == OpCode::CPUI_STORE => s,
+                        _ => continue,
+                    };
+                if data.obank().get(store1).unwrap().get_parent()
+                    != data.obank().get(store2).unwrap().get_parent()
+                {
                     continue;
                 }
                 let s1p = data.obank().get(store1).unwrap().get_in(1).unwrap();
@@ -890,14 +1080,24 @@ impl BitFieldInsertTransform {
     fn verify_load_store_original_value(&self, data: &Funcdata, mask: uintb) -> bool {
         let original = self.original_value.unwrap();
         let load_op = data.vbank().get(original).unwrap().get_def().unwrap();
-        let bl = data.obank().get(self.final_write_op).unwrap().get_parent().unwrap();
+        let bl = data
+            .obank()
+            .get(self.final_write_op)
+            .unwrap()
+            .get_parent()
+            .unwrap();
         let ops = data.bb_ops(bl);
         // Find index of finalWriteOp, walk backward to block start.
         let final_idx = match ops.iter().position(|&o| o == self.final_write_op) {
             Some(i) => i,
             None => return true,
         };
-        let f1 = data.obank().get(self.final_write_op).unwrap().get_in(1).unwrap();
+        let f1 = data
+            .obank()
+            .get(self.final_write_op)
+            .unwrap()
+            .get_in(1)
+            .unwrap();
         let mut off: uintb = 0;
         let base_ptr = root_pointer(f1, &mut off, data.vbank(), data.obank());
         for idx in (0..final_idx).rev() {
@@ -911,8 +1111,16 @@ impl BitFieldInsertTransform {
             if data.obank().get(op).unwrap().code() != OpCode::CPUI_STORE {
                 continue;
             }
-            let lspace = data.vbank().get(data.obank().get(load_op).unwrap().get_in(0).unwrap()).unwrap().get_offset();
-            let sspace = data.vbank().get(data.obank().get(op).unwrap().get_in(0).unwrap()).unwrap().get_offset();
+            let lspace = data
+                .vbank()
+                .get(data.obank().get(load_op).unwrap().get_in(0).unwrap())
+                .unwrap()
+                .get_offset();
+            let sspace = data
+                .vbank()
+                .get(data.obank().get(op).unwrap().get_in(0).unwrap())
+                .unwrap()
+                .get_offset();
             if sspace != lspace {
                 continue;
             }
@@ -925,7 +1133,12 @@ impl BitFieldInsertTransform {
                 continue;
             }
             let vn = data.obank().get(op).unwrap().get_in(2).unwrap();
-            if !data.vbank().get(vn).map(|v| v.is_written()).unwrap_or(false) {
+            if !data
+                .vbank()
+                .get(vn)
+                .map(|v| v.is_written())
+                .unwrap_or(false)
+            {
                 return false;
             }
             let insert_op = data.vbank().get(vn).unwrap().get_def().unwrap();
@@ -944,7 +1157,12 @@ impl BitFieldInsertTransform {
     /// bitfield.cc:862-883).
     fn verify_mapped_original_value(&self, data: &Funcdata, mask: uintb) -> bool {
         let original = self.original_value.unwrap();
-        let bl = data.obank().get(self.final_write_op).unwrap().get_parent().unwrap();
+        let bl = data
+            .obank()
+            .get(self.final_write_op)
+            .unwrap()
+            .get_parent()
+            .unwrap();
         let ops = data.bb_ops(bl);
         let final_idx = match ops.iter().position(|&o| o == self.final_write_op) {
             Some(i) => i,
@@ -970,7 +1188,12 @@ impl BitFieldInsertTransform {
             if data.vbank().get(vn).unwrap().get_size() != orig_size {
                 continue;
             }
-            if !data.vbank().get(vn).map(|v| v.is_written()).unwrap_or(false) {
+            if !data
+                .vbank()
+                .get(vn)
+                .map(|v| v.is_written())
+                .unwrap_or(false)
+            {
                 return false;
             }
             let insert_op = data.vbank().get(vn).unwrap().get_def().unwrap();
@@ -999,7 +1222,11 @@ impl BitFieldInsertTransform {
             val <<= rec.pos;
             mask |= val;
         }
-        let orig_size = data.vbank().get(self.original_value.unwrap()).unwrap().get_size();
+        let orig_size = data
+            .vbank()
+            .get(self.original_value.unwrap())
+            .unwrap()
+            .get_size();
         !mask & calc_mask(orig_size)
     }
 
@@ -1028,7 +1255,8 @@ impl BitFieldInsertTransform {
         }
         while !self.base.work_list.is_empty() {
             let mut node = self.base.work_list.remove(0);
-            if !self.process_backward(data, &mut node) && !self.is_overwritten_partial(data, &node) {
+            if !self.process_backward(data, &mut node) && !self.is_overwritten_partial(data, &node)
+            {
                 return false;
             }
         }
@@ -1074,8 +1302,18 @@ impl BitFieldInsertTransform {
     }
 
     /// STORE-terminated apply (C++ `apply`, bitfield.cc:941-987).
-    fn apply_store(&mut self, data: &mut Funcdata, partial_type: &Rc<Datatype>, records: &[InsertRecord]) {
-        let dead_point = data.obank().get(self.final_write_op).unwrap().get_in(2).unwrap();
+    fn apply_store(
+        &mut self,
+        data: &mut Funcdata,
+        partial_type: &Rc<Datatype>,
+        records: &[InsertRecord],
+    ) {
+        let dead_point = data
+            .obank()
+            .get(self.final_write_op)
+            .unwrap()
+            .get_in(2)
+            .unwrap();
         let mut current_store = Some(self.final_write_op);
         let mut load_model: Option<OpId> = None;
         let mut load_type: Option<Rc<Datatype>> = None;
@@ -1105,9 +1343,13 @@ impl BitFieldInsertTransform {
                     data.op_set_opcode_code(load_op, OpCode::CPUI_LOAD);
                     data.op_set_input(load_op, l0, 0).ok();
                     data.op_set_input(load_op, l1, 1).ok();
-                    let ov = data.new_unique_out(self.base.container_size, load_op).unwrap();
+                    let ov = data
+                        .new_unique_out(self.base.container_size, load_op)
+                        .unwrap();
                     if let Some(lt) = &load_type {
-                        data.vbank_mut().get_mut(ov).map(|v| v.update_type(Rc::clone(lt)));
+                        data.vbank_mut()
+                            .get_mut(ov)
+                            .map(|v| v.update_type(Rc::clone(lt)));
                     }
                     self.original_value = Some(ov);
                     data.op_insert_before(load_op, cs);
@@ -1117,8 +1359,12 @@ impl BitFieldInsertTransform {
             }
             let cs = current_store.unwrap();
             let insert_op = self.set_insert_inputs(data, None, rec);
-            let new_out = data.new_unique_out(self.base.container_size, insert_op).unwrap();
-            data.vbank_mut().get_mut(new_out).map(|v| v.update_type(Rc::clone(partial_type)));
+            let new_out = data
+                .new_unique_out(self.base.container_size, insert_op)
+                .unwrap();
+            data.vbank_mut()
+                .get_mut(new_out)
+                .map(|v| v.update_type(Rc::clone(partial_type)));
             let insert_out = data.obank().get(insert_op).unwrap().get_out().unwrap();
             data.op_set_input(cs, insert_out, 2).ok();
             data.op_insert_before(insert_op, cs);
@@ -1128,7 +1374,12 @@ impl BitFieldInsertTransform {
         }
         data.destroy_varnode_recursive(dead_point).ok();
         if let Some(lm) = load_model {
-            if data.obank().get(lm).map(|o| o.code()).unwrap_or(OpCode::CPUI_COPY) == OpCode::CPUI_LOAD
+            if data
+                .obank()
+                .get(lm)
+                .map(|o| o.code())
+                .unwrap_or(OpCode::CPUI_COPY)
+                == OpCode::CPUI_LOAD
                 && self.fold_load(data, lm)
             {
                 self.fold_ptrsub(data, lm);
@@ -1137,7 +1388,12 @@ impl BitFieldInsertTransform {
     }
 
     /// Mapped-variable apply (C++ `apply`, bitfield.cc:988-1013).
-    fn apply_mapped(&mut self, data: &mut Funcdata, partial_type: &Rc<Datatype>, records: &[InsertRecord]) {
+    fn apply_mapped(
+        &mut self,
+        data: &mut Funcdata,
+        partial_type: &Rc<Datatype>,
+        records: &[InsertRecord],
+    ) {
         let num_in = data.obank().get(self.final_write_op).unwrap().num_input();
         let mut dead_points: Vec<VarnodeId> = Vec::new();
         for i in 0..num_in {
@@ -1154,14 +1410,20 @@ impl BitFieldInsertTransform {
         let first = iter.next().unwrap();
         let mut insert_op = self.set_insert_inputs(data, Some(self.final_write_op), first);
         let insert_out = data.obank().get(insert_op).unwrap().get_out().unwrap();
-        data.vbank_mut().get_mut(insert_out).map(|v| v.update_type(Rc::clone(partial_type)));
+        data.vbank_mut()
+            .get_mut(insert_out)
+            .map(|v| v.update_type(Rc::clone(partial_type)));
         self.add_field_shift(data, insert_op, first);
         for rec in iter {
             let last_op = insert_op;
             data.op_unset_input(last_op, 0);
             insert_op = self.set_insert_inputs(data, None, rec);
-            let new_out = data.new_varnode_out(self.base.container_size, &mapped_addr, insert_op).unwrap();
-            data.vbank_mut().get_mut(new_out).map(|v| v.update_type(Rc::clone(partial_type)));
+            let new_out = data
+                .new_varnode_out(self.base.container_size, &mapped_addr, insert_op)
+                .unwrap();
+            data.vbank_mut()
+                .get_mut(new_out)
+                .map(|v| v.update_type(Rc::clone(partial_type)));
             data.op_set_input(last_op, new_out, 0).ok();
             data.op_insert_before(insert_op, last_op);
             self.add_field_shift(data, insert_op, rec);

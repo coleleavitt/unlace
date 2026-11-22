@@ -44,14 +44,17 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixtures() -> PathBuf {
@@ -97,14 +100,20 @@ fn pe_renders_string_literal_and_typed_args() {
     let out = decompile_func(prog, &["load function main", "decompile", "print C"]);
 
     // strings: the `.rdata` "hello" recovers as a literal (was `0x140009000`).
-    assert!(out.contains("puts(\"hello\")"), "PE: expected puts(\"hello\"), got:\n{out}");
+    assert!(
+        out.contains("puts(\"hello\")"),
+        "PE: expected puts(\"hello\"), got:\n{out}"
+    );
     assert!(
         !out.contains("puts(0x140009000)"),
         "PE: puts arg must be the literal, not the raw pointer:\n{out}"
     );
     // protos: printf's first arg typed `char *`, so the short `%d\n` literal
     // (below the string-scan min-5) renders via the printer's constant-string route.
-    assert!(out.contains("printf(\"%d\\n\""), "PE: expected printf(\"%d\\n\", …), got:\n{out}");
+    assert!(
+        out.contains("printf(\"%d\\n\""),
+        "PE: expected printf(\"%d\\n\", …), got:\n{out}"
+    );
     assert!(
         !out.contains("printf(0x140009006"),
         "PE: printf arg must be the literal, not the raw pointer:\n{out}"
@@ -119,7 +128,10 @@ fn macho_renders_typed_printf_literal() {
 
     let out = decompile_func(prog, &["load function _main", "decompile", "print C"]);
 
-    assert!(out.contains("printf(\"%d\\n\""), "Mach-O: expected printf(\"%d\\n\", …), got:\n{out}");
+    assert!(
+        out.contains("printf(\"%d\\n\""),
+        "Mach-O: expected printf(\"%d\\n\", …), got:\n{out}"
+    );
     assert!(
         !out.contains("printf(0x1000005ee"),
         "Mach-O: printf arg must be the literal, not the raw pointer:\n{out}"
@@ -133,9 +145,15 @@ fn pe_exit_eliminates_dead_code_via_noreturn_list() {
     let prog = boot("pe_imports.exe");
 
     // ON (default): exit is no-return → WARNING terminator, no fall-through after.
-    let on = decompile_func(prog, &["load function __tmainCRTStartup", "decompile", "print C"]);
+    let on = decompile_func(
+        prog,
+        &["load function __tmainCRTStartup", "decompile", "print C"],
+    );
 
-    assert!(on.contains("exit("), "PE: the tail call must be named exit(:\n{on}");
+    assert!(
+        on.contains("exit("),
+        "PE: the tail call must be named exit(:\n{on}"
+    );
     assert!(
         on.contains("// no-return"),
         "PE: exit must be marked no-return (the PeMac list fired):\n{on}"

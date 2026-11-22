@@ -1,4 +1,4 @@
-use unlace_num::opcodes::{get_booleanflip, OpCode};
+use unlace_num::opcodes::{OpCode, get_booleanflip};
 
 #[test]
 fn undefined_complements_preserve_both_reorder_states() {

@@ -13,7 +13,7 @@
 //!   float2float,sizein,sizeout,a,res
 
 use unlace_base::cfmt;
-use unlace_num::float::{floatclass, FloatFormat};
+use unlace_num::float::{FloatFormat, floatclass};
 
 /// Total number of data rows in float.csv (3607 lines minus 3 comments).
 const EXPECTED_ROWS: usize = 3604;

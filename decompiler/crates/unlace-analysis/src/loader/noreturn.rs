@@ -43,8 +43,8 @@
 //! [`IMPORT_NORETURN`] names the no-return helpers matched only as IMPORTS and
 //! only by exact spelling, never against a function the image defines.
 
-use object::read::{Object, ObjectSymbol};
 use object::SymbolKind;
+use object::read::{Object, ObjectSymbol};
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, NoReturnFact, Phase};
 use crate::sourcelang::Compiler;
@@ -94,17 +94,23 @@ impl NoReturnKnownPass {
     /// with no matching `<compiler>` arm. Equivalent to
     /// [`NoReturnKnownPass::for_compiler`] with `Gcc`/`Clang`/`Unknown`.
     pub fn elf() -> Self {
-        NoReturnKnownPass { compiler: Compiler::Unknown }
+        NoReturnKnownPass {
+            compiler: Compiler::Unknown,
+        }
     }
 
     /// The pass for a Rust-detected ELF: base ELF list + the Rust wildcard list.
     pub fn rust() -> Self {
-        NoReturnKnownPass { compiler: Compiler::Rustc }
+        NoReturnKnownPass {
+            compiler: Compiler::Rustc,
+        }
     }
 
     /// The pass for a Go-detected ELF: base ELF list + the Golang list.
     pub fn golang() -> Self {
-        NoReturnKnownPass { compiler: Compiler::Go }
+        NoReturnKnownPass {
+            compiler: Compiler::Go,
+        }
     }
 
     /// The pass for the given detected [`Compiler`] — the kuna analog of selecting
@@ -210,12 +216,19 @@ fn rust_path(name: &str) -> Option<String> {
 /// Does a Rust path match one of the list's `::` entries?
 fn path_matches(path: &str, exact: &[String], wildcard: &[String]) -> bool {
     exact.iter().any(|e| e == path)
-        || wildcard.iter().any(|w| w.contains("::") && path.starts_with(w.as_str()))
+        || wildcard
+            .iter()
+            .any(|w| w.contains("::") && path.starts_with(w.as_str()))
 }
 
 /// [`name_matches`], retried under the `nameladder` fallback spellings
 /// (`j_exit`, `__imp_abort`, `exit_0`) when `ladder` is set.
-pub(crate) fn name_matches_ladder(name: &str, exact: &[String], wildcard: &[String], ladder: bool) -> bool {
+pub(crate) fn name_matches_ladder(
+    name: &str,
+    exact: &[String],
+    wildcard: &[String],
+    ladder: bool,
+) -> bool {
     name_matches(name, exact, wildcard)
         || (ladder
             && crate::analyzers::protos::kuna_nameladder::fallbacks(name)
@@ -247,7 +260,12 @@ pub fn listed_noreturn(name: &str) -> bool {
 /// ELF list (faithful to `noReturnFunctionConstraints.xml`'s per-`<compiler>`
 /// arms): `Rustc` → `RustFunctionsThatDoNotReturn`, `Go` →
 /// `GolangFunctionsThatDoNotReturn`, everything else → base ELF list only.
-fn scan_noreturn(file: &object::File, bytes: &[u8], compiler: Compiler, ladder: bool) -> AnalysisOutput {
+fn scan_noreturn(
+    file: &object::File,
+    bytes: &[u8],
+    compiler: Compiler,
+    ladder: bool,
+) -> AnalysisOutput {
     let mut out = AnalysisOutput::default();
     // Per-format base list (PR-10): an ELF gets the vendored ELF list (+ the
     // per-compiler Rust/Go widening); a PE/COFF/Mach-O gets the PE/Mac list
@@ -276,9 +294,9 @@ fn scan_noreturn(file: &object::File, bytes: &[u8], compiler: Compiler, ladder: 
             (e, w)
         }
         // PE / COFF / Mach-O: the Windows-CRT + macOS no-return list.
-        object::BinaryFormat::Pe
-        | object::BinaryFormat::Coff
-        | object::BinaryFormat::MachO => parse_list(PE_MAC_NORETURN_LIST),
+        object::BinaryFormat::Pe | object::BinaryFormat::Coff | object::BinaryFormat::MachO => {
+            parse_list(PE_MAC_NORETURN_LIST)
+        }
         // Any other (unsupported) format: no list, no facts.
         _ => return out,
     };
@@ -327,7 +345,9 @@ fn scan_noreturn(file: &object::File, bytes: &[u8], compiler: Compiler, ladder: 
     //    matches. The name is matched on the raw (pre-demangle) `.dynstr` form,
     //    exactly as the `.symtab`/`.dynsym` arm does.
     for p in crate::loader::format::resolve_imports(file, bytes) {
-        let Ok(n) = String::from_utf8(p.name) else { continue };
+        let Ok(n) = String::from_utf8(p.name) else {
+            continue;
+        };
         emit(&mut out, p.addr, n);
     }
     out
@@ -336,7 +356,11 @@ fn scan_noreturn(file: &object::File, bytes: &[u8], compiler: Compiler, ladder: 
 /// (kuna `armfuncmode`) The addresses (Thumb bit cleared) of the image's
 /// functions and PLT stubs the base ELF list names as never returning.
 pub(crate) fn known_noreturn_addrs(file: &object::File) -> std::collections::BTreeSet<u64> {
-    scan_noreturn(file, &[], Compiler::Unknown, false).noreturn.iter().map(|fact| fact.addr & !1).collect()
+    scan_noreturn(file, &[], Compiler::Unknown, false)
+        .noreturn
+        .iter()
+        .map(|fact| fact.addr & !1)
+        .collect()
 }
 
 impl AnalysisPass for NoReturnKnownPass {
@@ -349,7 +373,12 @@ impl AnalysisPass for NoReturnKnownPass {
     }
 
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
-        let mut out = scan_noreturn(ctx.file, ctx.bytes, self.compiler, ctx.arch.analysis_nameladder);
+        let mut out = scan_noreturn(
+            ctx.file,
+            ctx.bytes,
+            self.compiler,
+            ctx.arch.analysis_nameladder,
+        );
         if let Some(image) = ctx.image {
             let (imports, _) = crate::protos::loaded_import_addrs(ctx.file, ctx.bytes, image);
             out.noreturn.extend(
@@ -389,7 +418,12 @@ mod tests {
         }
         assert!(!name_matches("__assert", &exact, &wildcard));
         let (exact, wildcard) = parse_list(PE_MAC_NORETURN_LIST);
-        for name in ["_objc_exception_throw", "_dispatch_main", "___cxa_rethrow", "__ZNSt3__121__throw_runtime_errorEPKc"] {
+        for name in [
+            "_objc_exception_throw",
+            "_dispatch_main",
+            "___cxa_rethrow",
+            "__ZNSt3__121__throw_runtime_errorEPKc",
+        ] {
             assert!(name_matches(name, &exact, &wildcard), "{name}");
         }
         let (exact, wildcard) = parse_list(crate::sourcelang::golang_noreturn_list());
@@ -402,11 +436,16 @@ mod tests {
     fn rust_paths_match_either_mangling_and_drop_generic_arguments() {
         let (exact, wildcard) = parse_list(crate::sourcelang::rust_noreturn_list());
         let hit = |raw: &str| rust_path(raw).is_some_and(|p| path_matches(&p, &exact, &wildcard));
-        assert!(hit("_RNvNtNtCsgxBkk5gSRhY_4core9panicking11panic_const24panic_const_add_overflow"));
+        assert!(hit(
+            "_RNvNtNtCsgxBkk5gSRhY_4core9panicking11panic_const24panic_const_add_overflow"
+        ));
         assert!(hit("_ZN4core6option13unwrap_failed17ha2239fe7bcf32a06E"));
-        assert!(hit("_RINvNtCsgxBkk5gSRhY_4core9panicking13assert_failedllECs9k3SxhrAWiO_3std"));
+        assert!(hit(
+            "_RINvNtCsgxBkk5gSRhY_4core9panicking13assert_failedllECs9k3SxhrAWiO_3std"
+        ));
         assert_eq!(
-            rust_path("_RINvNtCsgxBkk5gSRhY_4core9panicking13assert_failedllECs9k3SxhrAWiO_3std").as_deref(),
+            rust_path("_RINvNtCsgxBkk5gSRhY_4core9panicking13assert_failedllECs9k3SxhrAWiO_3std")
+                .as_deref(),
             Some("core::panicking::assert_failed")
         );
         assert!(!hit(
@@ -419,12 +458,19 @@ mod tests {
     fn fortran_fatal_diagnostics_exclude_recoverable_errors() {
         for list in [ELF_NORETURN_LIST, PE_MAC_NORETURN_LIST] {
             let (exact, wildcard) = parse_list(list);
-            for name in ["_gfortran_runtime_error", "_gfortran_runtime_error_at",
-                         "_gfortran_os_error", "_gfortran_os_error_at"] {
+            for name in [
+                "_gfortran_runtime_error",
+                "_gfortran_runtime_error_at",
+                "_gfortran_os_error",
+                "_gfortran_os_error_at",
+            ] {
                 assert!(name_matches(name, &exact, &wildcard), "{name}");
             }
-            for name in ["_gfortran_runtime_warning_at", "_gfortran_generate_error",
-                         "_gfortran_runtime_error_custom"] {
+            for name in [
+                "_gfortran_runtime_warning_at",
+                "_gfortran_generate_error",
+                "_gfortran_runtime_error_custom",
+            ] {
                 assert!(!name_matches(name, &exact, &wildcard), "{name}");
             }
         }
@@ -437,10 +483,18 @@ mod tests {
         // mangled `std::` / `std::__1::` function-name prefixes, which an
         // Itanium encoding keeps from reaching any other symbol.
         assert!(
-            wildcard.iter().all(|w| w.starts_with("ZSt") || w.starts_with("ZNSt3__1")),
+            wildcard
+                .iter()
+                .all(|w| w.starts_with("ZSt") || w.starts_with("ZNSt3__1")),
             "the only ELF-list wildcards are mangled std:: prefixes: {wildcard:?}"
         );
-        for want in ["exit", "abort", "stack_chk_fail", "assert_fail", "pthread_exit"] {
+        for want in [
+            "exit",
+            "abort",
+            "stack_chk_fail",
+            "assert_fail",
+            "pthread_exit",
+        ] {
             assert!(exact.iter().any(|e| e == want), "missing {want}");
         }
         // leading underscores are stripped at parse time
@@ -455,8 +509,19 @@ mod tests {
     #[test]
     fn div21_unconditional_noreturn_family_present_warn_absent() {
         let (exact, wildcard) = sets();
-        for want in ["err", "errx", "verr", "verrx", "errc", "verrc", "quick_exit"] {
-            assert!(name_matches(want, &exact, &wildcard), "DIV-21: {want} must be no-return");
+        for want in [
+            "err",
+            "errx",
+            "verr",
+            "verrx",
+            "errc",
+            "verrc",
+            "quick_exit",
+        ] {
+            assert!(
+                name_matches(want, &exact, &wildcard),
+                "DIV-21: {want} must be no-return"
+            );
         }
         // underscore-stripped glibc internals
         assert!(name_matches("__assert_perror_fail", &exact, &wildcard));
@@ -464,7 +529,10 @@ mod tests {
         assert!(name_matches("__libc_fatal", &exact, &wildcard));
         // the warn family RETURNS — a false positive here would drop live caller code.
         for nope in ["warn", "warnx", "vwarn", "vwarnx"] {
-            assert!(!name_matches(nope, &exact, &wildcard), "{nope} RETURNS; must NOT be no-return");
+            assert!(
+                !name_matches(nope, &exact, &wildcard),
+                "{nope} RETURNS; must NOT be no-return"
+            );
         }
     }
 
@@ -495,7 +563,10 @@ mod tests {
             "_ZSt19__throw_ios_failurePKci",
             "_ZSt19__throw_regex_errorNSt15regex_constants10error_typeE",
         ] {
-            assert!(name_matches(want, &exact, &wildcard), "DIV-78: {want} must be no-return");
+            assert!(
+                name_matches(want, &exact, &wildcard),
+                "DIV-78: {want} must be no-return"
+            );
         }
         // Demangled: `std` is the sole allowed non-global namespace, and the
         // leading-`_` strip reduces the base to the listed name.
@@ -514,11 +585,18 @@ mod tests {
             "std::__throw_future_error",
             "__throw_length_error",
         ] {
-            assert!(name_matches(want, &exact, &wildcard), "DIV-78: {want} must be no-return");
+            assert!(
+                name_matches(want, &exact, &wildcard),
+                "DIV-78: {want} must be no-return"
+            );
         }
         // The namespace guard still applies: a same-named method on a user class
         // is NOT the libstdc++ helper and must never be truncated.
-        assert!(!name_matches("Buf::__throw_length_error", &exact, &wildcard));
+        assert!(!name_matches(
+            "Buf::__throw_length_error",
+            &exact,
+            &wildcard
+        ));
         // The mangled wildcards are anchored on the Itanium `ZSt<len>` encoding of
         // `std::__throw_*`, so no other std symbol can be swept up.
         for nope in [
@@ -539,7 +617,10 @@ mod tests {
         }
         // A user function whose name merely contains `throw` is untouched.
         for nope in ["throw_it", "rethrow", "throwing_helper", "do_throw"] {
-            assert!(!name_matches(nope, &exact, &wildcard), "{nope} must not be flagged");
+            assert!(
+                !name_matches(nope, &exact, &wildcard),
+                "{nope} must not be flagged"
+            );
         }
     }
 
@@ -562,24 +643,51 @@ mod tests {
         // and the leading-underscore strip applies (`_exit` -> `exit`).
         let (exact, wildcard) = parse_list(PE_MAC_NORETURN_LIST);
         for want in ["exit", "abort", "quick_exit"] {
-            assert!(name_matches(want, &exact, &wildcard), "PE/Mac list must flag {want}");
+            assert!(
+                name_matches(want, &exact, &wildcard),
+                "PE/Mac list must flag {want}"
+            );
         }
         // The Windows-CRT fast-fail / Watson names (leading `__`/`_` stripped).
-        assert!(name_matches("__fastfail", &exact, &wildcard), "must flag __fastfail");
-        assert!(name_matches("_invoke_watson", &exact, &wildcard), "must flag _invoke_watson");
-        assert!(name_matches("_exit", &exact, &wildcard), "_exit must strip to exit");
+        assert!(
+            name_matches("__fastfail", &exact, &wildcard),
+            "must flag __fastfail"
+        );
+        assert!(
+            name_matches("_invoke_watson", &exact, &wildcard),
+            "must flag _invoke_watson"
+        );
+        assert!(
+            name_matches("_exit", &exact, &wildcard),
+            "_exit must strip to exit"
+        );
         // An ordinary function is never flagged.
-        assert!(!name_matches("printf", &exact, &wildcard), "printf must not be flagged");
-        assert!(!name_matches("main", &exact, &wildcard), "main must not be flagged");
+        assert!(
+            !name_matches("printf", &exact, &wildcard),
+            "printf must not be flagged"
+        );
+        assert!(
+            !name_matches("main", &exact, &wildcard),
+            "main must not be flagged"
+        );
     }
 
     #[test]
     fn nameladder_reaches_decorated_spellings() {
         let (exact, wildcard) = sets();
         for n in ["j_exit", "__imp_abort", "exit_0", "_abort@0"] {
-            assert!(!name_matches(n, &exact, &wildcard), "{n} is not listed as spelled");
-            assert!(name_matches_ladder(n, &exact, &wildcard, true), "{n} under the ladder");
-            assert!(!name_matches_ladder(n, &exact, &wildcard, false), "{n} without the ladder");
+            assert!(
+                !name_matches(n, &exact, &wildcard),
+                "{n} is not listed as spelled"
+            );
+            assert!(
+                name_matches_ladder(n, &exact, &wildcard, true),
+                "{n} under the ladder"
+            );
+            assert!(
+                !name_matches_ladder(n, &exact, &wildcard, false),
+                "{n} without the ladder"
+            );
         }
     }
 
@@ -587,7 +695,10 @@ mod tests {
     fn does_not_flag_unlisted_names() {
         let (exact, wildcard) = sets();
         for n in ["puts", "read", "main", "authenticate", "printf", "strcmp"] {
-            assert!(!name_matches(n, &exact, &wildcard), "{n} must not be flagged");
+            assert!(
+                !name_matches(n, &exact, &wildcard),
+                "{n} must not be flagged"
+            );
         }
     }
 
@@ -611,13 +722,26 @@ mod tests {
         let bytes = std::fs::read(path).expect("read fauxware fixture");
         let file = object::File::parse(bytes.as_slice()).expect("parse fauxware");
         let out = scan_noreturn(&file, &bytes, Compiler::Gcc, false);
-        let exit = out.noreturn.iter().find(|f| f.name == "exit").expect("exit must be flagged");
+        let exit = out
+            .noreturn
+            .iter()
+            .find(|f| f.name == "exit")
+            .expect("exit must be flagged");
         // The emitted address is the PLT-stub install address (a real code
         // address, never the UND `.dynsym` 0), so the commit resolves it by
         // address as well as by name.
-        assert_ne!(exit.addr, 0, "exit fact must carry the PLT-stub install address");
-        assert!(!out.noreturn.iter().any(|f| f.name == "puts"), "puts must not be flagged");
-        assert!(!out.noreturn.iter().any(|f| f.name == "read"), "read must not be flagged");
+        assert_ne!(
+            exit.addr, 0,
+            "exit fact must carry the PLT-stub install address"
+        );
+        assert!(
+            !out.noreturn.iter().any(|f| f.name == "puts"),
+            "puts must not be flagged"
+        );
+        assert!(
+            !out.noreturn.iter().any(|f| f.name == "read"),
+            "read must not be flagged"
+        );
     }
 
     /// The cross-pass boundary fix: a C++ binary whose `.dynsym` carries the mangled
@@ -630,7 +754,10 @@ mod tests {
     /// name-only commit (`query_global_function("_ZSt9terminatev")`) would miss it.
     #[test]
     fn cpp_mangled_noreturn_emits_plt_stub_address() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/cpp_noreturn_x86_64");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/cpp_noreturn_x86_64"
+        );
         let bytes = std::fs::read(path).expect("read cpp_noreturn fixture");
         let file = object::File::parse(bytes.as_slice()).expect("parse cpp_noreturn");
         let out = scan_noreturn(&file, &bytes, Compiler::Gcc, false);
@@ -645,7 +772,10 @@ mod tests {
             .expect("_ZSt9terminatev must be flagged no-return");
         // PINNED: the `_ZSt9terminatev@plt` stub is at 0x401070 in this fixture
         // (objdump -d -j .plt). Emitting this address (not the UND 0) is the fix.
-        assert_eq!(term.addr, 0x401070, "must carry the terminate PLT-stub address");
+        assert_eq!(
+            term.addr, 0x401070,
+            "must carry the terminate PLT-stub address"
+        );
 
         // __cxa_throw (raw `__cxa_throw` -> `cxa_throw` in the list) likewise.
         let throw = out
@@ -653,7 +783,10 @@ mod tests {
             .iter()
             .find(|f| f.name == "__cxa_throw")
             .expect("__cxa_throw must be flagged no-return");
-        assert_eq!(throw.addr, 0x4010a0, "must carry the __cxa_throw PLT-stub address");
+        assert_eq!(
+            throw.addr, 0x4010a0,
+            "must carry the __cxa_throw PLT-stub address"
+        );
 
         // No spurious flags (e.g. main / fail / the C++ method must not be hit).
         for spurious in ["main", "_Z4failv", "_ZN3app5Guard8throw_itEi"] {
@@ -672,7 +805,10 @@ mod tests {
     /// covered by `unlace-console/tests/verify_cxx_throw_noreturn.rs`.
     #[test]
     fn cxx_throw_family_emits_plt_stub_address() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/cxxthrow_noreturn_x86_64");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/cxxthrow_noreturn_x86_64"
+        );
         let bytes = std::fs::read(path).expect("read cxxthrow fixture");
         let file = object::File::parse(bytes.as_slice()).expect("parse cxxthrow fixture");
         let out = scan_noreturn(&file, &bytes, Compiler::Clang, false);
@@ -708,7 +844,10 @@ mod tests {
         // Base ELF list: its only wildcards are the C++ `_ZSt*__throw_*` prefixes,
         // so the Rust panic symbol is NOT flagged.
         let (e_elf, w_elf) = parse_list(ELF_NORETURN_LIST);
-        assert!(!name_matches(panic, &e_elf, &w_elf), "C ELF must not flag a Rust panic");
+        assert!(
+            !name_matches(panic, &e_elf, &w_elf),
+            "C ELF must not flag a Rust panic"
+        );
 
         // ELF + Rust list: the `ZN4core9panicking5panic17h*` wildcard matches it.
         let (r_exact, r_wildcard) = parse_list(crate::sourcelang::rust_noreturn_list());
@@ -716,7 +855,10 @@ mod tests {
         let mut w_rust = w_elf.clone();
         e_rust.extend(r_exact);
         w_rust.extend(r_wildcard);
-        assert!(name_matches(panic, &e_rust, &w_rust), "Rust ELF must flag a Rust panic");
+        assert!(
+            name_matches(panic, &e_rust, &w_rust),
+            "Rust ELF must flag a Rust panic"
+        );
         // a couple more Rust no-return forms
         assert!(name_matches(
             "ZN5alloc5alloc18handle_alloc_error17hcafebabecafebabeE",
@@ -725,10 +867,18 @@ mod tests {
         ));
         assert!(name_matches("rust_begin_unwind", &e_rust, &w_rust));
         // the leading-underscore strip still applies to the Rust forms
-        assert!(name_matches("_ZN4core9panicking5panic17h0123456789abcdefE", &e_rust, &w_rust));
+        assert!(name_matches(
+            "_ZN4core9panicking5panic17h0123456789abcdefE",
+            &e_rust,
+            &w_rust
+        ));
 
         // an ordinary Rust function (no panic/abort) is never flagged
-        assert!(!name_matches("ZN5nostd1m12rusty_helper17h76f46bb3af543e7bE", &e_rust, &w_rust));
+        assert!(!name_matches(
+            "ZN5nostd1m12rusty_helper17h76f46bb3af543e7bE",
+            &e_rust,
+            &w_rust
+        ));
     }
 
     #[test]
@@ -739,21 +889,50 @@ mod tests {
         );
         let bytes = std::fs::read(path).expect("read authored Rust process exit fixture");
         let file = object::File::parse(bytes.as_slice()).expect("parse authored Rust ELF");
-        assert_eq!(crate::sourcelang::detect_compiler(&file, &bytes), Compiler::Rustc);
-        let exit = file.symbols().find(|symbol| {
-            symbol.name().is_ok_and(|name| name.starts_with("_ZN3std7process4exit17h"))
-        }).expect("fixture has the standard process exit function");
+        assert_eq!(
+            crate::sourcelang::detect_compiler(&file, &bytes),
+            Compiler::Rustc
+        );
+        let exit = file
+            .symbols()
+            .find(|symbol| {
+                symbol
+                    .name()
+                    .is_ok_and(|name| name.starts_with("_ZN3std7process4exit17h"))
+            })
+            .expect("fixture has the standard process exit function");
         let rust = scan_noreturn(&file, &bytes, Compiler::Rustc, false);
-        assert!(rust.noreturn.iter().any(|fact| {
-            fact.addr == exit.address() && fact.name == exit.name().unwrap()
-        }));
-        for name in ["exit_choice", "returning_names", "_ZN3std7process11exit_status17h0123456789abcdefE"] {
+        assert!(
+            rust.noreturn
+                .iter()
+                .any(|fact| { fact.addr == exit.address() && fact.name == exit.name().unwrap() })
+        );
+        for name in [
+            "exit_choice",
+            "returning_names",
+            "_ZN3std7process11exit_status17h0123456789abcdefE",
+        ] {
             assert!(!rust.noreturn.iter().any(|fact| fact.name == name));
         }
-        assert!(!rust.noreturn.iter().any(|fact| fact.name.contains("lookalike")));
-        for compiler in [Compiler::Gcc, Compiler::Clang, Compiler::Go, Compiler::Unknown] {
+        assert!(
+            !rust
+                .noreturn
+                .iter()
+                .any(|fact| fact.name.contains("lookalike"))
+        );
+        for compiler in [
+            Compiler::Gcc,
+            Compiler::Clang,
+            Compiler::Go,
+            Compiler::Unknown,
+        ] {
             let other = scan_noreturn(&file, &bytes, compiler, false);
-            assert!(!other.noreturn.iter().any(|fact| fact.addr == exit.address()));
+            assert!(
+                !other
+                    .noreturn
+                    .iter()
+                    .any(|fact| fact.addr == exit.address())
+            );
         }
     }
 
@@ -792,7 +971,10 @@ mod tests {
         e_rust.extend(r_exact);
         w_rust.extend(r_wildcard);
         for n in go_names {
-            assert!(!name_matches(n, &e_rust, &w_rust), "Rust ELF must not flag {n}");
+            assert!(
+                !name_matches(n, &e_rust, &w_rust),
+                "Rust ELF must not flag {n}"
+            );
         }
 
         // ELF + Golang list (a Go ELF): every runtime no-return name is flagged.
@@ -825,7 +1007,10 @@ mod tests {
         assert_eq!(NoReturnKnownPass::elf().compiler, Compiler::Unknown);
         assert_eq!(NoReturnKnownPass::rust().compiler, Compiler::Rustc);
         assert_eq!(NoReturnKnownPass::golang().compiler, Compiler::Go);
-        assert_eq!(NoReturnKnownPass::for_compiler(Compiler::Go).compiler, Compiler::Go);
+        assert_eq!(
+            NoReturnKnownPass::for_compiler(Compiler::Go).compiler,
+            Compiler::Go
+        );
         // default is the base ELF pass (no per-compiler list).
         assert_eq!(NoReturnKnownPass::default().compiler, Compiler::Unknown);
     }
@@ -870,8 +1055,11 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("kuna_go_noreturn_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("mkdir temp go dir");
-        std::fs::write(dir.join("main.go"), "package main\nfunc main() { println(\"hi\") }\n")
-            .expect("write main.go");
+        std::fs::write(
+            dir.join("main.go"),
+            "package main\nfunc main() { println(\"hi\") }\n",
+        )
+        .expect("write main.go");
         let out_bin = dir.join("go_hello");
 
         let status = std::process::Command::new("go")
@@ -901,7 +1089,11 @@ mod tests {
 
         // (1) Detection: a real Go ELF must detect as `Compiler::Go`
         // (`.go.buildinfo` / `.note.go.buildid`).
-        assert_eq!(detect_compiler(&file, &bytes), Compiler::Go, "go binary must detect as Go");
+        assert_eq!(
+            detect_compiler(&file, &bytes),
+            Compiler::Go,
+            "go binary must detect as Go"
+        );
 
         // (2) Matching under the Go arm: `runtime.gopanic` (a defined FUNC in
         // `.symtab`) is flagged no-return, carrying its real code address.
@@ -911,7 +1103,10 @@ mod tests {
             .iter()
             .find(|f| f.name == "runtime.gopanic")
             .expect("runtime.gopanic must be flagged no-return under the Go arm");
-        assert_ne!(gopanic.addr, 0, "runtime.gopanic fact must carry its code address");
+        assert_ne!(
+            gopanic.addr, 0,
+            "runtime.gopanic fact must carry its code address"
+        );
         // a few more headline runtime no-return names are present too.
         for n in ["runtime.throw", "runtime.goexit.abi0"] {
             assert!(

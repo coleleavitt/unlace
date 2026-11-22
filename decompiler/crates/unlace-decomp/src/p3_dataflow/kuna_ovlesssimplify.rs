@@ -20,8 +20,8 @@ use unlace_base::types::{int4, intb, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{ActionGroupList, Rule, RuleSpec};
-use crate::funcdata::Funcdata;
 use crate::context::{OpId, TypeOp, VarnodeId};
+use crate::funcdata::Funcdata;
 
 /// (kuna GH-7190) Collapse the OV-flag signed-less-than idiom to `INT_SLESS(V,-K)`
 /// (C++ `RuleOvLessSimplify`).
@@ -34,12 +34,16 @@ impl RuleOvLessSimplify {
     /// Default group `"analysis"` (the main simplification pool, where the
     /// boolean cone is stable).
     pub fn new() -> RuleOvLessSimplify {
-        RuleOvLessSimplify { group: String::from("analysis") }
+        RuleOvLessSimplify {
+            group: String::from("analysis"),
+        }
     }
 
     /// Construct with an explicit group string.
     pub fn with_group(group: impl Into<String>) -> RuleOvLessSimplify {
-        RuleOvLessSimplify { group: group.into() }
+        RuleOvLessSimplify {
+            group: group.into(),
+        }
     }
 }
 
@@ -54,7 +58,9 @@ impl Rule for RuleOvLessSimplify {
         if !grouplist.contains(&self.group) {
             return None;
         }
-        Some(Box::new(RuleOvLessSimplify { group: self.group.clone() }))
+        Some(Box::new(RuleOvLessSimplify {
+            group: self.group.clone(),
+        }))
     }
 
     /// C++ `RuleOvLessSimplify::applyOp` (`kuna_ovlesssimplify.cc:48`) —
@@ -198,8 +204,7 @@ fn match_add_const(data: &Funcdata, vn: VarnodeId) -> Option<(VarnodeId, uintb)>
     let b = op_in(data, addop, 1)?;
     if vn_is_constant(data, b) {
         Some((a, vn_offset(data, b)))
-    }
-    else if vn_is_constant(data, a) {
+    } else if vn_is_constant(data, a) {
         Some((b, vn_offset(data, a)))
     } else {
         None
@@ -215,10 +220,16 @@ fn op_code(data: &Funcdata, op: OpId) -> OpCode {
     data.obank().get(op).expect("op_code: stale op").code()
 }
 fn vn_is_constant(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).map(|v| v.is_constant()).unwrap_or(false)
+    data.vbank()
+        .get(vn)
+        .map(|v| v.is_constant())
+        .unwrap_or(false)
 }
 fn vn_is_written(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).map(|v| v.is_written()).unwrap_or(false)
+    data.vbank()
+        .get(vn)
+        .map(|v| v.is_written())
+        .unwrap_or(false)
 }
 fn vn_def(data: &Funcdata, vn: VarnodeId) -> Option<OpId> {
     data.vbank().get(vn).and_then(|v| v.get_def())

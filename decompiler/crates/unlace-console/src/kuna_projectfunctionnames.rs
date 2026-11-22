@@ -108,8 +108,8 @@ mod tests {
     }
     #[test]
     fn exact_global_lookup_respects_renames_and_declines_namespace_owners() {
-        use unlace_base::address::Address;
         use std::rc::Rc;
+        use unlace_base::address::Address;
         let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
         let mut program = crate::engine::bootstrap_from_file(
             root.join("tests/datatests/boolless.xml").to_str().unwrap(),
@@ -182,7 +182,10 @@ pub(crate) fn conflicts(
     errors
 }
 
-pub(crate) fn reserve(arch: &Architecture, fd: &mut Funcdata) -> unlace_base::error::KunaResult<()> {
+pub(crate) fn reserve(
+    arch: &Architecture,
+    fd: &mut Funcdata,
+) -> unlace_base::error::KunaResult<()> {
     use std::collections::{BTreeMap, BTreeSet};
     let Some(global) = arch.symboltab.get_global_scope() else {
         return Ok(());

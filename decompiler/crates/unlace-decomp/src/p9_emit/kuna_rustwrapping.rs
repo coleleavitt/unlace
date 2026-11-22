@@ -2,10 +2,10 @@
 
 use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::kuna_rusttypes::int_name;
-use crate::printc::{op_key, tokens, PrintC};
+use crate::printc::{PrintC, op_key, tokens};
 use crate::printlanguage::{Atom, SyntaxHighlight, TagType};
 use unlace_base::address::calc_mask;
 use unlace_num::opcodes::OpCode;

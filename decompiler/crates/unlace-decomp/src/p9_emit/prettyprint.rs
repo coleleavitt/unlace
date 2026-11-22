@@ -367,7 +367,10 @@ impl MarkupRef {
     /// for `tagOp`/`tagCaseLabel`).
     #[inline]
     pub fn op(opref: Option<uintb>) -> Self {
-        MarkupRef { opref, ..MarkupRef::default() }
+        MarkupRef {
+            opref,
+            ..MarkupRef::default()
+        }
     }
 }
 
@@ -546,7 +549,16 @@ pub trait Emit {
     /// by [`EmitPrettyPrint`]; the base ignores it, exactly like C++).
     fn spaces(&mut self, num: int4, _bump: int4) {
         const SPACEARRAY: [&str; 11] = [
-            "", " ", "  ", "   ", "    ", "     ", "      ", "       ", "        ", "         ",
+            "",
+            " ",
+            "  ",
+            "   ",
+            "    ",
+            "     ",
+            "      ",
+            "       ",
+            "        ",
+            "         ",
             "          ",
         ];
         if num <= 10 {
@@ -801,7 +813,10 @@ impl EmitNoMarkup {
     /// One-based position of the next emitted byte in [`output`](Self::output),
     /// scanning each preceding byte once.
     pub fn position(&mut self) -> crate::kuna_pointerargs::Position {
-        for (i, &byte) in self.out.as_bytes()[self.position_cursor..].iter().enumerate() {
+        for (i, &byte) in self.out.as_bytes()[self.position_cursor..]
+            .iter()
+            .enumerate()
+        {
             if byte == b'\n' {
                 self.position_line += 1;
                 self.position_start = self.position_cursor + i + 1;
@@ -898,14 +913,15 @@ impl Emit for EmitNoMarkup {
     }
     fn end_var_decl(&mut self, _id: int4) {}
     fn begin_statement(&mut self, markup: &MarkupRef) -> int4 {
-        if self.capture_statement_provenance
-            && (markup.opref.is_some() || markup.varref.is_some())
+        if self.capture_statement_provenance && (markup.opref.is_some() || markup.varref.is_some())
         {
-            self.statement_provenance.associations.push(MarkupAssociation {
-                line_number: self.line_number,
-                opref: markup.opref,
-                varref: markup.varref,
-            });
+            self.statement_provenance
+                .associations
+                .push(MarkupAssociation {
+                    line_number: self.line_number,
+                    opref: markup.opref,
+                    varref: markup.varref,
+                });
         }
         0
     }
@@ -1034,7 +1050,10 @@ impl EmitMarkup {
     }
     /// Take the tokens captured since the last reset.
     pub fn take_tokens(&mut self) -> Vec<EmitToken> {
-        self.capture.as_mut().map(|c| std::mem::take(&mut c.out)).unwrap_or_default()
+        self.capture
+            .as_mut()
+            .map(|c| std::mem::take(&mut c.out))
+            .unwrap_or_default()
     }
 
     fn capture(
@@ -1305,8 +1324,11 @@ impl Emit for EmitMarkup {
 
     fn tag_variable(&mut self, name: &str, hl: SyntaxHighlight, markup: &MarkupRef) {
         self.record_association(markup);
-        let kind =
-            if hl == SyntaxHighlight::ConstColor { TokenKind::Value } else { TokenKind::Variable };
+        let kind = if hl == SyntaxHighlight::ConstColor {
+            TokenKind::Value
+        } else {
+            TokenKind::Variable
+        };
         self.capture(name, kind, hl, Some(markup), None);
         let (vr, op) = (markup.varref, markup.opref);
         self.with_encoder(|e| {
@@ -1430,7 +1452,13 @@ impl Emit for EmitMarkup {
         });
     }
     fn tag_comment(&mut self, name: &str, hl: SyntaxHighlight, spc: &Rc<AddrSpace>, off: uintb) {
-        self.capture(name, TokenKind::Comment, hl, None, Some((spc.get_index(), off)));
+        self.capture(
+            name,
+            TokenKind::Comment,
+            hl,
+            None,
+            Some((spc.get_index(), off)),
+        );
         self.with_encoder(|e| {
             e.open_element(&ids::ELEM_COMMENT);
             if hl != SyntaxHighlight::NoColor {
@@ -1443,7 +1471,13 @@ impl Emit for EmitMarkup {
         });
     }
     fn tag_label(&mut self, name: &str, hl: SyntaxHighlight, spc: &Rc<AddrSpace>, off: uintb) {
-        self.capture(name, TokenKind::Label, hl, None, Some((spc.get_index(), off)));
+        self.capture(
+            name,
+            TokenKind::Label,
+            hl,
+            None,
+            Some((spc.get_index(), off)),
+        );
         self.with_encoder(|e| {
             e.open_element(&ids::ELEM_LABEL);
             if hl != SyntaxHighlight::NoColor {
@@ -1455,7 +1489,13 @@ impl Emit for EmitMarkup {
             e.close_element(&ids::ELEM_LABEL);
         });
     }
-    fn tag_case_label(&mut self, name: &str, hl: SyntaxHighlight, markup: &MarkupRef, value: uintb) {
+    fn tag_case_label(
+        &mut self,
+        name: &str,
+        hl: SyntaxHighlight,
+        markup: &MarkupRef,
+        value: uintb,
+    ) {
         self.record_association(markup);
         self.capture(name, TokenKind::Value, hl, Some(markup), None);
         let op = markup.opref;
@@ -1473,7 +1513,11 @@ impl Emit for EmitMarkup {
         });
     }
     fn print(&mut self, data: &str, hl: SyntaxHighlight) {
-        let kind = if hl == SyntaxHighlight::ConstColor { TokenKind::Value } else { TokenKind::Syntax };
+        let kind = if hl == SyntaxHighlight::ConstColor {
+            TokenKind::Value
+        } else {
+            TokenKind::Syntax
+        };
         self.capture(data, kind, hl, None, None);
         self.with_encoder(|e| {
             e.open_element(&ids::ELEM_SYNTAX);
@@ -1485,7 +1529,13 @@ impl Emit for EmitMarkup {
         });
     }
     fn open_paren(&mut self, paren: &str, id: int4) -> int4 {
-        self.capture(paren, TokenKind::Syntax, SyntaxHighlight::NoColor, None, None);
+        self.capture(
+            paren,
+            TokenKind::Syntax,
+            SyntaxHighlight::NoColor,
+            None,
+            None,
+        );
         self.with_encoder(|e| {
             e.open_element(&ids::ELEM_SYNTAX);
             e.write_signed_integer(&ids::ATTRIB_OPEN, id as i64);
@@ -1496,7 +1546,13 @@ impl Emit for EmitMarkup {
         0
     }
     fn close_paren(&mut self, paren: &str, id: int4) {
-        self.capture(paren, TokenKind::Syntax, SyntaxHighlight::NoColor, None, None);
+        self.capture(
+            paren,
+            TokenKind::Syntax,
+            SyntaxHighlight::NoColor,
+            None,
+            None,
+        );
         self.with_encoder(|e| {
             e.open_element(&ids::ELEM_SYNTAX);
             e.write_signed_integer(&ids::ATTRIB_CLOSE, id as i64);
@@ -1542,7 +1598,12 @@ impl<T: Default + Clone> CircularQueue<T> {
         for _ in 0..sz {
             cache.push(T::default());
         }
-        CircularQueue { cache, left: 1, right: 0, max: sz }
+        CircularQueue {
+            cache,
+            left: 1,
+            right: 0,
+            max: sz,
+        }
     }
 
     /// C++ `getMax()`.
@@ -1986,7 +2047,9 @@ impl TokenSplit {
     pub fn tag_comment(&mut self, name: &str, h: SyntaxHighlight, spc: &Rc<AddrSpace>, o: uintb) {
         self.tok = name.to_string();
         self.size = self.tok.len() as int4;
-        self.addr = Some(AddrPayload { spc: Rc::clone(spc) });
+        self.addr = Some(AddrPayload {
+            spc: Rc::clone(spc),
+        });
         self.off = o;
         self.tagtype = TagType::CommT;
         self.delimtype = PrintClass::TokenString;
@@ -1996,14 +2059,22 @@ impl TokenSplit {
     pub fn tag_label(&mut self, name: &str, h: SyntaxHighlight, spc: &Rc<AddrSpace>, o: uintb) {
         self.tok = name.to_string();
         self.size = self.tok.len() as int4;
-        self.addr = Some(AddrPayload { spc: Rc::clone(spc) });
+        self.addr = Some(AddrPayload {
+            spc: Rc::clone(spc),
+        });
         self.off = o;
         self.tagtype = TagType::LabelT;
         self.delimtype = PrintClass::TokenString;
         self.hl = h;
     }
     /// C++ `tagCaseLabel(name,h,inOp,intValue)`.
-    pub fn tag_case_label(&mut self, name: &str, h: SyntaxHighlight, markup: &MarkupRef, value: uintb) {
+    pub fn tag_case_label(
+        &mut self,
+        name: &str,
+        h: SyntaxHighlight,
+        markup: &MarkupRef,
+        value: uintb,
+    ) {
         self.tok = name.to_string();
         self.size = self.tok.len() as int4;
         self.markup.opref = markup.opref;
@@ -2169,11 +2240,17 @@ impl TokenSplit {
                 emit.tag_bit_field(&self.tok, self.hl, self.off as int4, &self.markup)
             }
             TagType::CommT => {
-                let addr = self.addr.as_ref().expect("comment token missing addr payload");
+                let addr = self
+                    .addr
+                    .as_ref()
+                    .expect("comment token missing addr payload");
                 emit.tag_comment(&self.tok, self.hl, &addr.spc, self.off);
             }
             TagType::LabelT => {
-                let addr = self.addr.as_ref().expect("label token missing addr payload");
+                let addr = self
+                    .addr
+                    .as_ref()
+                    .expect("label token missing addr payload");
                 emit.tag_label(&self.tok, self.hl, &addr.spc, self.off);
             }
             TagType::CaseT => emit.tag_case_label(&self.tok, self.hl, &self.markup, self.off),
@@ -2409,7 +2486,10 @@ impl EmitPrettyPrint {
                 tok.print_to(self.lowlevel.as_emit_mut())?;
             }
             PrintClass::BeginIndent => {
-                val = *self.indentstack.last().expect("begin_indent with empty indentstack")
+                val = *self
+                    .indentstack
+                    .last()
+                    .expect("begin_indent with empty indentstack")
                     - self.tokqueue.get_ref(tok_ref).get_indent_bump();
                 self.indentstack.push(val);
             }
@@ -2459,11 +2539,15 @@ impl EmitPrettyPrint {
                         self.spaceremain = self.maxlinesize - tok.get_indent_bump();
                     } else {
                         // relative indent
-                        val = *self.indentstack.last().expect("token_break with empty indentstack")
+                        val = *self
+                            .indentstack
+                            .last()
+                            .expect("token_break with empty indentstack")
                             - tok.get_indent_bump();
                         // If creating a line break doesn't save that much
                         // don't do the line break
-                        if (tok.get_num_spaces() <= self.spaceremain) && (val - self.spaceremain < 10)
+                        if (tok.get_num_spaces() <= self.spaceremain)
+                            && (val - self.spaceremain < 10)
                         {
                             let num = tok.get_num_spaces();
                             self.lowlevel.as_emit_mut().spaces(num, 0);
@@ -2794,11 +2878,18 @@ impl EmitPrettyPrint {
     ) -> KunaResult<()> {
         self.checkstring()?;
         let slot = self.tokqueue.push();
-        self.tokqueue.get_ref_mut(slot).tag_variable(name, hl, markup);
+        self.tokqueue
+            .get_ref_mut(slot)
+            .tag_variable(name, hl, markup);
         self.scan()
     }
     /// Fallible C++ `tagOp(...)`.
-    pub fn try_tag_op(&mut self, name: &str, hl: SyntaxHighlight, markup: &MarkupRef) -> KunaResult<()> {
+    pub fn try_tag_op(
+        &mut self,
+        name: &str,
+        hl: SyntaxHighlight,
+        markup: &MarkupRef,
+    ) -> KunaResult<()> {
         self.checkstring()?;
         let slot = self.tokqueue.push();
         self.tokqueue.get_ref_mut(slot).tag_op(name, hl, markup);
@@ -2813,7 +2904,9 @@ impl EmitPrettyPrint {
     ) -> KunaResult<()> {
         self.checkstring()?;
         let slot = self.tokqueue.push();
-        self.tokqueue.get_ref_mut(slot).tag_func_name(name, hl, markup);
+        self.tokqueue
+            .get_ref_mut(slot)
+            .tag_func_name(name, hl, markup);
         self.scan()
     }
     /// Fallible C++ `tagType(...)`.
@@ -2838,7 +2931,9 @@ impl EmitPrettyPrint {
     ) -> KunaResult<()> {
         self.checkstring()?;
         let slot = self.tokqueue.push();
-        self.tokqueue.get_ref_mut(slot).tag_field(name, hl, o, markup);
+        self.tokqueue
+            .get_ref_mut(slot)
+            .tag_field(name, hl, o, markup);
         self.scan()
     }
     /// Fallible C++ `tagBitField(...)`.
@@ -2851,7 +2946,9 @@ impl EmitPrettyPrint {
     ) -> KunaResult<()> {
         self.checkstring()?;
         let slot = self.tokqueue.push();
-        self.tokqueue.get_ref_mut(slot).tag_bit_field(name, hl, id, markup);
+        self.tokqueue
+            .get_ref_mut(slot)
+            .tag_bit_field(name, hl, id, markup);
         self.scan()
     }
     /// Fallible C++ `tagComment(...)`.
@@ -2864,7 +2961,9 @@ impl EmitPrettyPrint {
     ) -> KunaResult<()> {
         self.checkstring()?;
         let slot = self.tokqueue.push();
-        self.tokqueue.get_ref_mut(slot).tag_comment(name, hl, spc, off);
+        self.tokqueue
+            .get_ref_mut(slot)
+            .tag_comment(name, hl, spc, off);
         self.scan()
     }
     /// Fallible C++ `tagLabel(...)`.
@@ -2877,7 +2976,9 @@ impl EmitPrettyPrint {
     ) -> KunaResult<()> {
         self.checkstring()?;
         let slot = self.tokqueue.push();
-        self.tokqueue.get_ref_mut(slot).tag_label(name, hl, spc, off);
+        self.tokqueue
+            .get_ref_mut(slot)
+            .tag_label(name, hl, spc, off);
         self.scan()
     }
     /// Fallible C++ `tagCaseLabel(...)`.
@@ -2890,7 +2991,9 @@ impl EmitPrettyPrint {
     ) -> KunaResult<()> {
         self.checkstring()?;
         let slot = self.tokqueue.push();
-        self.tokqueue.get_ref_mut(slot).tag_case_label(name, hl, markup, value);
+        self.tokqueue
+            .get_ref_mut(slot)
+            .tag_case_label(name, hl, markup, value);
         self.scan()
     }
     /// Fallible C++ `print(const string &data,hl)`.
@@ -3052,19 +3155,24 @@ impl Emit for EmitPrettyPrint {
     }
 
     fn begin_document(&mut self) -> int4 {
-        self.try_begin_document().expect("EmitPrettyPrint::beginDocument")
+        self.try_begin_document()
+            .expect("EmitPrettyPrint::beginDocument")
     }
     fn end_document(&mut self, id: int4) {
-        self.try_end_document(id).expect("EmitPrettyPrint::endDocument")
+        self.try_end_document(id)
+            .expect("EmitPrettyPrint::endDocument")
     }
     fn begin_function(&mut self) -> int4 {
-        self.try_begin_function().expect("EmitPrettyPrint::beginFunction")
+        self.try_begin_function()
+            .expect("EmitPrettyPrint::beginFunction")
     }
     fn end_function(&mut self, id: int4) {
-        self.try_end_function(id).expect("EmitPrettyPrint::endFunction")
+        self.try_end_function(id)
+            .expect("EmitPrettyPrint::endFunction")
     }
     fn begin_block(&mut self, blockref: int4) -> int4 {
-        self.try_begin_block(blockref).expect("EmitPrettyPrint::beginBlock")
+        self.try_begin_block(blockref)
+            .expect("EmitPrettyPrint::beginBlock")
     }
     fn end_block(&mut self, id: int4) {
         self.try_end_block(id).expect("EmitPrettyPrint::endBlock")
@@ -3073,73 +3181,100 @@ impl Emit for EmitPrettyPrint {
         self.try_tag_line().expect("EmitPrettyPrint::tagLine")
     }
     fn tag_line_indent(&mut self, indent: int4) {
-        self.try_tag_line_indent(indent).expect("EmitPrettyPrint::tagLine")
+        self.try_tag_line_indent(indent)
+            .expect("EmitPrettyPrint::tagLine")
     }
     fn begin_return_type(&mut self, markup: &MarkupRef) -> int4 {
-        self.try_begin_return_type(markup).expect("EmitPrettyPrint::beginReturnType")
+        self.try_begin_return_type(markup)
+            .expect("EmitPrettyPrint::beginReturnType")
     }
     fn end_return_type(&mut self, id: int4) {
-        self.try_end_return_type(id).expect("EmitPrettyPrint::endReturnType")
+        self.try_end_return_type(id)
+            .expect("EmitPrettyPrint::endReturnType")
     }
     fn begin_var_decl(&mut self, markup: &MarkupRef) -> int4 {
-        self.try_begin_var_decl(markup).expect("EmitPrettyPrint::beginVarDecl")
+        self.try_begin_var_decl(markup)
+            .expect("EmitPrettyPrint::beginVarDecl")
     }
     fn end_var_decl(&mut self, id: int4) {
-        self.try_end_var_decl(id).expect("EmitPrettyPrint::endVarDecl")
+        self.try_end_var_decl(id)
+            .expect("EmitPrettyPrint::endVarDecl")
     }
     fn begin_statement(&mut self, markup: &MarkupRef) -> int4 {
-        self.try_begin_statement(markup).expect("EmitPrettyPrint::beginStatement")
+        self.try_begin_statement(markup)
+            .expect("EmitPrettyPrint::beginStatement")
     }
     fn end_statement(&mut self, id: int4) {
-        self.try_end_statement(id).expect("EmitPrettyPrint::endStatement")
+        self.try_end_statement(id)
+            .expect("EmitPrettyPrint::endStatement")
     }
     fn begin_func_proto(&mut self) -> int4 {
-        self.try_begin_func_proto().expect("EmitPrettyPrint::beginFuncProto")
+        self.try_begin_func_proto()
+            .expect("EmitPrettyPrint::beginFuncProto")
     }
     fn end_func_proto(&mut self, id: int4) {
-        self.try_end_func_proto(id).expect("EmitPrettyPrint::endFuncProto")
+        self.try_end_func_proto(id)
+            .expect("EmitPrettyPrint::endFuncProto")
     }
     fn tag_variable(&mut self, name: &str, hl: SyntaxHighlight, markup: &MarkupRef) {
-        self.try_tag_variable(name, hl, markup).expect("EmitPrettyPrint::tagVariable")
+        self.try_tag_variable(name, hl, markup)
+            .expect("EmitPrettyPrint::tagVariable")
     }
     fn tag_op(&mut self, name: &str, hl: SyntaxHighlight, markup: &MarkupRef) {
-        self.try_tag_op(name, hl, markup).expect("EmitPrettyPrint::tagOp")
+        self.try_tag_op(name, hl, markup)
+            .expect("EmitPrettyPrint::tagOp")
     }
     fn tag_func_name(&mut self, name: &str, hl: SyntaxHighlight, markup: &MarkupRef) {
-        self.try_tag_func_name(name, hl, markup).expect("EmitPrettyPrint::tagFuncName")
+        self.try_tag_func_name(name, hl, markup)
+            .expect("EmitPrettyPrint::tagFuncName")
     }
     fn tag_type(&mut self, name: &str, hl: SyntaxHighlight, markup: &MarkupRef) {
-        self.try_tag_type(name, hl, markup).expect("EmitPrettyPrint::tagType")
+        self.try_tag_type(name, hl, markup)
+            .expect("EmitPrettyPrint::tagType")
     }
     fn tag_field(&mut self, name: &str, hl: SyntaxHighlight, off: int4, markup: &MarkupRef) {
-        self.try_tag_field(name, hl, off, markup).expect("EmitPrettyPrint::tagField")
+        self.try_tag_field(name, hl, off, markup)
+            .expect("EmitPrettyPrint::tagField")
     }
     fn tag_bit_field(&mut self, name: &str, hl: SyntaxHighlight, id: int4, markup: &MarkupRef) {
-        self.try_tag_bit_field(name, hl, id, markup).expect("EmitPrettyPrint::tagBitField")
+        self.try_tag_bit_field(name, hl, id, markup)
+            .expect("EmitPrettyPrint::tagBitField")
     }
     fn tag_comment(&mut self, name: &str, hl: SyntaxHighlight, spc: &Rc<AddrSpace>, off: uintb) {
-        self.try_tag_comment(name, hl, spc, off).expect("EmitPrettyPrint::tagComment")
+        self.try_tag_comment(name, hl, spc, off)
+            .expect("EmitPrettyPrint::tagComment")
     }
     fn tag_label(&mut self, name: &str, hl: SyntaxHighlight, spc: &Rc<AddrSpace>, off: uintb) {
-        self.try_tag_label(name, hl, spc, off).expect("EmitPrettyPrint::tagLabel")
+        self.try_tag_label(name, hl, spc, off)
+            .expect("EmitPrettyPrint::tagLabel")
     }
-    fn tag_case_label(&mut self, name: &str, hl: SyntaxHighlight, markup: &MarkupRef, value: uintb) {
-        self.try_tag_case_label(name, hl, markup, value).expect("EmitPrettyPrint::tagCaseLabel")
+    fn tag_case_label(
+        &mut self,
+        name: &str,
+        hl: SyntaxHighlight,
+        markup: &MarkupRef,
+        value: uintb,
+    ) {
+        self.try_tag_case_label(name, hl, markup, value)
+            .expect("EmitPrettyPrint::tagCaseLabel")
     }
     fn print(&mut self, data: &str, hl: SyntaxHighlight) {
         self.try_print(data, hl).expect("EmitPrettyPrint::print")
     }
     fn open_paren(&mut self, paren: &str, id: int4) -> int4 {
-        self.try_open_paren(paren, id).expect("EmitPrettyPrint::openParen")
+        self.try_open_paren(paren, id)
+            .expect("EmitPrettyPrint::openParen")
     }
     fn close_paren(&mut self, paren: &str, id: int4) {
-        self.try_close_paren(paren, id).expect("EmitPrettyPrint::closeParen")
+        self.try_close_paren(paren, id)
+            .expect("EmitPrettyPrint::closeParen")
     }
     fn open_group(&mut self) -> int4 {
         self.try_open_group().expect("EmitPrettyPrint::openGroup")
     }
     fn close_group(&mut self, id: int4) {
-        self.try_close_group(id).expect("EmitPrettyPrint::closeGroup")
+        self.try_close_group(id)
+            .expect("EmitPrettyPrint::closeGroup")
     }
     fn clear(&mut self) {
         self.clear_pretty();
@@ -3151,16 +3286,20 @@ impl Emit for EmitPrettyPrint {
         self.try_spaces(num, bump).expect("EmitPrettyPrint::spaces")
     }
     fn start_indent(&mut self) -> int4 {
-        self.try_start_indent().expect("EmitPrettyPrint::startIndent")
+        self.try_start_indent()
+            .expect("EmitPrettyPrint::startIndent")
     }
     fn stop_indent(&mut self, id: int4) {
-        self.try_stop_indent(id).expect("EmitPrettyPrint::stopIndent")
+        self.try_stop_indent(id)
+            .expect("EmitPrettyPrint::stopIndent")
     }
     fn start_comment(&mut self) -> int4 {
-        self.try_start_comment().expect("EmitPrettyPrint::startComment")
+        self.try_start_comment()
+            .expect("EmitPrettyPrint::startComment")
     }
     fn stop_comment(&mut self, id: int4) {
-        self.try_stop_comment(id).expect("EmitPrettyPrint::stopComment")
+        self.try_stop_comment(id)
+            .expect("EmitPrettyPrint::stopComment")
     }
     fn flush(&mut self) -> KunaResult<()> {
         self.try_flush()

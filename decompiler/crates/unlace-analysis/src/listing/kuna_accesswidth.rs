@@ -19,8 +19,8 @@ use unlace_base::space::AddrSpace;
 use unlace_num::opcodes::OpCode;
 use unlace_sleigh::translate::Translate;
 
-use super::xrefs::{decode, FullCapture};
 use super::Listing;
+use super::xrefs::{FullCapture, decode};
 
 /// `(object address, width)` for every object in `objects` (`(addr, size)`)
 /// that the decoded code only ever reads or writes at one width dividing its
@@ -56,9 +56,13 @@ pub fn access_widths(
             e.1 |= indexed || a != o;
         }
     };
-    let is_data = |vn: &unlace_num::pcoderaw::VarnodeData| vn.space.as_ref().is_some_and(|s| Rc::ptr_eq(s, data_space));
+    let is_data = |vn: &unlace_num::pcoderaw::VarnodeData| {
+        vn.space.as_ref().is_some_and(|s| Rc::ptr_eq(s, data_space))
+    };
     let is_const = |vn: &unlace_num::pcoderaw::VarnodeData| {
-        vn.space.as_ref().is_some_and(|s| s.get_type() == unlace_base::space::spacetype::IPTR_CONSTANT)
+        vn.space
+            .as_ref()
+            .is_some_and(|s| s.get_type() == unlace_base::space::spacetype::IPTR_CONSTANT)
     };
     let mut cap = FullCapture::default();
     for (&vma, _) in listing.instructions() {
@@ -68,14 +72,30 @@ pub fn access_widths(
         let ops = cap.ops();
         // temporaries holding a constant, or a constant plus something
         let mut bases: Vec<(&unlace_num::pcoderaw::VarnodeData, u64, bool)> = Vec::new();
-        let base_of = |vn: &unlace_num::pcoderaw::VarnodeData, bases: &[(&unlace_num::pcoderaw::VarnodeData, u64, bool)]| -> Option<(u64, bool)> {
+        let base_of = |vn: &unlace_num::pcoderaw::VarnodeData,
+                       bases: &[(&unlace_num::pcoderaw::VarnodeData, u64, bool)]|
+         -> Option<(u64, bool)> {
             if is_const(vn) {
                 return Some((vn.offset, false));
             }
-            bases.iter().rev().find(|(b, _, _)| b.space.as_ref().zip(vn.space.as_ref()).is_some_and(|(x, y)| Rc::ptr_eq(x, y)) && b.offset == vn.offset && b.size == vn.size).map(|&(_, c, i)| (c, i))
+            bases
+                .iter()
+                .rev()
+                .find(|(b, _, _)| {
+                    b.space
+                        .as_ref()
+                        .zip(vn.space.as_ref())
+                        .is_some_and(|(x, y)| Rc::ptr_eq(x, y))
+                        && b.offset == vn.offset
+                        && b.size == vn.size
+                })
+                .map(|&(_, c, i)| (c, i))
         };
         for op in ops {
-            let flow = matches!(op.opcode, OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH | OpCode::CPUI_CALL);
+            let flow = matches!(
+                op.opcode,
+                OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH | OpCode::CPUI_CALL
+            );
             for vn in op.ins.iter().skip(usize::from(flow)).chain(op.out.iter()) {
                 if is_data(vn) {
                     note(vn.offset, vn.size, false);
@@ -98,7 +118,12 @@ pub fn access_widths(
                     let c = if op.opcode == OpCode::CPUI_COPY {
                         op.ins.first().and_then(|v| base_of(v, &bases))
                     } else {
-                        let known: Vec<(u64, bool)> = op.ins.iter().take(2).filter_map(|v| base_of(v, &bases)).collect();
+                        let known: Vec<(u64, bool)> = op
+                            .ins
+                            .iter()
+                            .take(2)
+                            .filter_map(|v| base_of(v, &bases))
+                            .collect();
                         match known.as_slice() {
                             [(a, i), (b, j)] => Some((a.wrapping_add(*b), *i || *j)),
                             [(a, _)] => Some((*a, true)),
@@ -134,9 +159,13 @@ pub fn data_targets(
     data_space: &Rc<AddrSpace>,
 ) -> std::collections::BTreeSet<u64> {
     let mut out = std::collections::BTreeSet::new();
-    let is_data = |vn: &unlace_num::pcoderaw::VarnodeData| vn.space.as_ref().is_some_and(|s| Rc::ptr_eq(s, data_space));
+    let is_data = |vn: &unlace_num::pcoderaw::VarnodeData| {
+        vn.space.as_ref().is_some_and(|s| Rc::ptr_eq(s, data_space))
+    };
     let is_const = |vn: &unlace_num::pcoderaw::VarnodeData| {
-        vn.space.as_ref().is_some_and(|s| s.get_type() == unlace_base::space::spacetype::IPTR_CONSTANT)
+        vn.space
+            .as_ref()
+            .is_some_and(|s| s.get_type() == unlace_base::space::spacetype::IPTR_CONSTANT)
     };
     let mut cap = FullCapture::default();
     for (&vma, _) in listing.instructions() {
@@ -145,18 +174,34 @@ pub fn data_targets(
         }
         let mut bases: Vec<(&unlace_num::pcoderaw::VarnodeData, u64)> = Vec::new();
         for op in cap.ops() {
-            let flow = matches!(op.opcode, OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH | OpCode::CPUI_CALL);
+            let flow = matches!(
+                op.opcode,
+                OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH | OpCode::CPUI_CALL
+            );
             for vn in op.ins.iter().skip(usize::from(flow)).chain(op.out.iter()) {
                 if is_data(vn) {
                     out.insert(vn.offset);
                 }
             }
-            let base = |vn: &unlace_num::pcoderaw::VarnodeData, bases: &[(&unlace_num::pcoderaw::VarnodeData, u64)]| {
-                if is_const(vn) {
-                    return Some(vn.offset);
-                }
-                bases.iter().rev().find(|(b, _)| b.offset == vn.offset && b.size == vn.size && b.space.as_ref().zip(vn.space.as_ref()).is_some_and(|(x, y)| Rc::ptr_eq(x, y))).map(|&(_, c)| c)
-            };
+            let base =
+                |vn: &unlace_num::pcoderaw::VarnodeData,
+                 bases: &[(&unlace_num::pcoderaw::VarnodeData, u64)]| {
+                    if is_const(vn) {
+                        return Some(vn.offset);
+                    }
+                    bases
+                        .iter()
+                        .rev()
+                        .find(|(b, _)| {
+                            b.offset == vn.offset
+                                && b.size == vn.size
+                                && b.space
+                                    .as_ref()
+                                    .zip(vn.space.as_ref())
+                                    .is_some_and(|(x, y)| Rc::ptr_eq(x, y))
+                        })
+                        .map(|&(_, c)| c)
+                };
             match op.opcode {
                 OpCode::CPUI_LOAD | OpCode::CPUI_STORE => {
                     if let Some(c) = op.ins.get(1).and_then(|p| base(p, &bases)) {
@@ -165,7 +210,11 @@ pub fn data_targets(
                 }
                 OpCode::CPUI_COPY | OpCode::CPUI_INT_ADD | OpCode::CPUI_PTRADD => {
                     let Some(o) = op.out.as_ref() else { continue };
-                    let c = op.ins.iter().take(if op.opcode == OpCode::CPUI_COPY { 1 } else { 2 }).find_map(|v| base(v, &bases));
+                    let c = op
+                        .ins
+                        .iter()
+                        .take(if op.opcode == OpCode::CPUI_COPY { 1 } else { 2 })
+                        .find_map(|v| base(v, &bases));
                     if let Some(c) = c {
                         bases.push((o, c));
                     }

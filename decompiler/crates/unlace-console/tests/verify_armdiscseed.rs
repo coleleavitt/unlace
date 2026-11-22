@@ -19,7 +19,7 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 /// `_start`, the ELF entry point — the one address `collect_entries` recovers.
 const START: u64 = 0x10160;

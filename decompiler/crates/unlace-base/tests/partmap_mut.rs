@@ -13,5 +13,8 @@ fn mutable_lookup_updates_only_its_existing_interval() {
     assert_eq!(map.get_value(&19), &[10, 2, 3]);
     assert_eq!(map.get_value(&20), &[20, 4, 5]);
     assert_eq!(map.get_value(&i32::MAX), &[20, 4, 5]);
-    assert_eq!(map.iter().map(|(key, _)| *key).collect::<Vec<_>>(), [10, 20]);
+    assert_eq!(
+        map.iter().map(|(key, _)| *key).collect::<Vec<_>>(),
+        [10, 20]
+    );
 }

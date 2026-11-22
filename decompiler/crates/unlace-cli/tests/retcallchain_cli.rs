@@ -19,7 +19,10 @@ const FIRST_LINK_RET: &str = "0x8049019";
 const EPILOGUE_RET: &str = "0x8049032";
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture() -> String {
@@ -33,13 +36,15 @@ fn fixture() -> String {
 fn decompile(assertion: Option<&str>) -> String {
     let binary = fixture();
     let sleigh = repo_root().join("specs").to_string_lossy().into_owned();
-    let mut args: Vec<&str> =
-        vec!["decompile", &binary, "chain_entry", "--sleighpath", &sleigh];
+    let mut args: Vec<&str> = vec!["decompile", &binary, "chain_entry", "--sleighpath", &sleigh];
     if let Some(spec) = assertion {
         args.push("--assert");
         args.push(spec);
     }
-    let out = Command::new(env!("CARGO_BIN_EXE_unlace")).args(&args).output().expect("spawn kuna");
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
+        .args(&args)
+        .output()
+        .expect("spawn kuna");
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
     if !out.status.success() {
@@ -56,7 +61,10 @@ const CALLS: [&str; 3] = ["(*dat_804a000)()", "(*dat_804a004)()", "(*dat_804a008
 fn the_default_recovers_the_whole_entry_chain() {
     let code = decompile(None);
     for call in CALLS {
-        assert!(code.contains(call), "the default chain stopped before {call}:\n{code}");
+        assert!(
+            code.contains(call),
+            "the default chain stopped before {call}:\n{code}"
+        );
     }
 }
 
@@ -65,7 +73,10 @@ fn the_default_recovers_the_whole_entry_chain() {
 fn overriding_the_first_link_recovers_the_whole_chain() {
     let code = decompile(Some(&format!("flow {FIRST_LINK_RET} call")));
     for call in CALLS {
-        assert!(code.contains(call), "the chain stopped before {call}:\n{code}");
+        assert!(
+            code.contains(call),
+            "the chain stopped before {call}:\n{code}"
+        );
     }
 }
 
@@ -75,7 +86,13 @@ fn overriding_the_first_link_recovers_the_whole_chain() {
 fn overriding_the_plain_epilogue_extends_to_nothing() {
     let code = decompile(Some(&format!("flow {EPILOGUE_RET} call")));
     for call in CALLS {
-        assert!(code.contains(call), "the default chain stopped before {call}:\n{code}");
+        assert!(
+            code.contains(call),
+            "the default chain stopped before {call}:\n{code}"
+        );
     }
-    assert!(code.contains("funcboundflow:"), "the epilogue override did not stay local:\n{code}");
+    assert!(
+        code.contains("funcboundflow:"),
+        "the epilogue override did not stay local:\n{code}"
+    );
 }

@@ -17,7 +17,7 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 
 use unlace_sleigh::loadimage::LoadImage;
@@ -56,7 +56,8 @@ impl LoadImage for MemImage {
 fn manager(big_endian: bool) -> (Rc<AddrSpaceManager>, Rc<AddrSpace>) {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     let ram = Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -85,7 +86,11 @@ fn arch_with_image(big_endian: bool, base: u64, bytes: Vec<u8>) -> (ArchContext,
 fn w10_loadimage_value_little_endian_masks_to_size() {
     // The x86-64 corpus jump table is little-endian 4-byte signed offsets.
     // 0xa1 0xff 0xff 0xff at 0x1000c0 -> 0xffffffa1 read as a 4-byte value.
-    let (arch, ram) = arch_with_image(false, 0x1000c0, vec![0xa1, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00]);
+    let (arch, ram) = arch_with_image(
+        false,
+        0x1000c0,
+        vec![0xa1, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00],
+    );
     let addr = Address::new(Rc::clone(&ram), 0x1000c0);
     let v = arch.get_load_image_value(&addr, 4).unwrap();
     assert_eq!(v, 0xffff_ffa1, "little-endian 4-byte read masked to size");
@@ -103,7 +108,11 @@ fn w10_loadimage_value_size_one_byte_is_masked_not_shifted_on_le() {
 fn w10_loadimage_value_big_endian_shifts_high_bytes_down() {
     // Big-endian: the C++ path does `res >>= (sizeof(uintb)-sz)*8` (NOT a mask),
     // so a 2-byte read of 0x12 0x34 yields 0x1234.
-    let (arch, ram) = arch_with_image(true, 0, vec![0x12, 0x34, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa]);
+    let (arch, ram) = arch_with_image(
+        true,
+        0,
+        vec![0x12, 0x34, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa],
+    );
     let addr = Address::new(Rc::clone(&ram), 0);
     assert_eq!(arch.get_load_image_value(&addr, 2).unwrap(), 0x1234);
 }

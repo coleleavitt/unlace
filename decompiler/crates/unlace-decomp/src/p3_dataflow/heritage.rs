@@ -78,17 +78,17 @@
 //! [`RestartLog`]: because `Funcdata` does not yet own either handle (a W4
 //! stub), the method takes them as explicit `&mut` parameters — see its doc.
 
-use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
-use unlace_base::space::{spacetype, AddrSpace};
-use unlace_base::types::{int4, uint4, uintb};
 use std::collections::BTreeMap;
 use std::rc::Rc;
+use unlace_base::address::Address;
+use unlace_base::error::KunaResult;
+use unlace_base::space::{AddrSpace, spacetype};
+use unlace_base::types::{int4, uint4, uintb};
 
+use crate::context::BlockId;
 use crate::kuna_indexaliasguard::{LEVEL_FULL, LEVEL_GLOBAL, LEVEL_OFF};
 use crate::kuna_restartlog::{KunaRestartReason, RestartLog};
 use crate::overrides::Override;
-use crate::context::BlockId;
 use crate::varnode::varnode_flags;
 
 // =============================================================================
@@ -131,7 +131,9 @@ pub struct LocationMap {
 impl LocationMap {
     /// New empty map.
     pub fn new() -> LocationMap {
-        LocationMap { themap: BTreeMap::new() }
+        LocationMap {
+            themap: BTreeMap::new(),
+        }
     }
 
     /// Mark a new address as \b heritaged (C++ `LocationMap::add`,
@@ -151,7 +153,12 @@ impl LocationMap {
     /// both of which are already in hand here.  (The size used to be re-looked
     /// through [`get`](LocationMap::get), a second descent per call — this map
     /// takes over a million `add`s on a large function.)
-    pub fn add(&mut self, mut addr: Address, mut size: int4, mut pass: int4) -> (Address, int4, int4) {
+    pub fn add(
+        &mut self,
+        mut addr: Address,
+        mut size: int4,
+        mut pass: int4,
+    ) -> (Address, int4, int4) {
         // We replicate the C++ map-iterator walk against the ordered keys.
         let mut intersect = 0;
 
@@ -164,19 +171,25 @@ impl LocationMap {
         let mut cur: Option<(Address, SizePass)> =
             match self.themap.range(..addr.clone()).next_back() {
                 Some((k, v)) => Some((k.clone(), *v)),
-                None => self.themap.range(addr.clone()..).next().map(|(k, v)| (k.clone(), *v)),
+                None => self
+                    .themap
+                    .range(addr.clone()..)
+                    .next()
+                    .map(|(k, v)| (k.clone(), *v)),
             };
 
         // C++: advance past the stepped-back element when it does not overlap addr.
         if let Some((ck, cv)) = &cur {
             if addr.overlap(0, ck, cv.size) == -1 {
                 // ++iter : advance to the first key strictly greater than ck
-                cur = self.themap.range((
-                    std::ops::Bound::Excluded(ck.clone()),
-                    std::ops::Bound::Unbounded,
-                ))
-                .next()
-                .map(|(k, v)| (k.clone(), *v));
+                cur = self
+                    .themap
+                    .range((
+                        std::ops::Bound::Excluded(ck.clone()),
+                        std::ops::Bound::Unbounded,
+                    ))
+                    .next()
+                    .map(|(k, v)| (k.clone(), *v));
             }
         }
 
@@ -317,7 +330,11 @@ pub struct MemRange {
 
 impl MemRange {
     pub fn new(ad: Address, sz: int4, fl: uint4) -> MemRange {
-        MemRange { addr: ad, size: sz, flags: fl }
+        MemRange {
+            addr: ad,
+            size: sz,
+            flags: fl,
+        }
     }
 
     /// Does this range cover new addresses? (C++ `newAddresses`).
@@ -358,7 +375,9 @@ pub struct TaskList {
 impl TaskList {
     /// New empty list.
     pub fn new() -> TaskList {
-        TaskList { tasklist: Vec::new() }
+        TaskList {
+            tasklist: Vec::new(),
+        }
     }
 
     /// Add a range to the list, extending the last range if it intersects
@@ -452,7 +471,10 @@ impl Default for PriorityQueue {
 impl PriorityQueue {
     /// Constructor — `curdepth = -2` (C++ `PriorityQueue()`).
     pub fn new() -> PriorityQueue {
-        PriorityQueue { queue: Vec::new(), curdepth: -2 }
+        PriorityQueue {
+            queue: Vec::new(),
+            curdepth: -2,
+        }
     }
 
     /// Reset to an empty queue with space for `maxdepth+1` stacks
@@ -479,7 +501,9 @@ impl PriorityQueue {
     ///
     /// Must not be called when [`empty`](PriorityQueue::empty).
     pub fn extract(&mut self) -> BlockId {
-        let res = self.queue[self.curdepth as usize].pop().expect("PriorityQueue::extract on empty stack");
+        let res = self.queue[self.curdepth as usize]
+            .pop()
+            .expect("PriorityQueue::extract on empty stack");
         while self.queue[self.curdepth as usize].is_empty() {
             self.curdepth -= 1;
             if self.curdepth < 0 {
@@ -677,8 +701,15 @@ impl LoadGuard {
 
     /// Return true if the record still describes an active LOAD/STORE
     /// (C++ `isValid`, `heritage.hh:170`).
-    pub fn is_valid(&self, fd: &crate::funcdata::Funcdata, opc: unlace_num::opcodes::OpCode) -> bool {
-        fd.obank().get(self.op).map(|o| !o.is_dead() && o.code() == opc).unwrap_or(false)
+    pub fn is_valid(
+        &self,
+        fd: &crate::funcdata::Funcdata,
+        opc: unlace_num::opcodes::OpCode,
+    ) -> bool {
+        fd.obank()
+            .get(self.op)
+            .map(|o| !o.is_dead() && o.code() == opc)
+            .unwrap_or(false)
     }
 
     /// Convert partial value set analysis into a guard range (C++
@@ -902,7 +933,13 @@ pub struct Heritage {
     /// guards start in its writes, how many there are, the block of every call
     /// it would have guarded, in guard order, those calls and the kept ones.
     #[allow(clippy::type_complexity)]
-    persist_skips: Option<(usize, usize, Vec<BlockId>, Vec<crate::context::OpId>, crate::kuna_fasthash::FxHashSet<crate::context::OpId>)>,
+    persist_skips: Option<(
+        usize,
+        usize,
+        Vec<BlockId>,
+        Vec<crate::context::OpId>,
+        crate::kuna_fasthash::FxHashSet<crate::context::OpId>,
+    )>,
     /// (kuna) This pass's user operations with memory effects
     /// ([`super::kuna_memoryguard::memory_ops`]), found at most once.
     memory_ops: Option<Vec<crate::context::OpId>>,
@@ -1110,7 +1147,9 @@ impl Heritage {
     ) -> unlace_base::error::KunaResult<()> {
         let info = self.get_info_mut(spc);
         if delay < info.delay {
-            return Err(unlace_base::error::KunaError::lowlevel("Illegal deadcode delay setting"));
+            return Err(unlace_base::error::KunaError::lowlevel(
+                "Illegal deadcode delay setting",
+            ));
         }
         info.deadcodedelay = delay;
         Ok(())
@@ -1192,7 +1231,9 @@ impl Heritage {
     /// loop.
     pub fn build_adt(&mut self, fd: &crate::funcdata::Funcdata) {
         let bblocks = fd.bblocks_ref();
-        let root = bblocks.root.expect("Heritage::build_adt: bblocks root not constructed");
+        let root = bblocks
+            .root
+            .expect("Heritage::build_adt: bblocks root not constructed");
         let size = bblocks.block(root).get_size() as usize;
 
         let mut a: Vec<int4> = vec![0; size];
@@ -1255,7 +1296,10 @@ impl Heritage {
         for i in 1..size {
             // j = idom(block(i)).index
             let bi = bblocks.block(root).get_block(i as int4);
-            let idom = bblocks.block(bi).get_immed_dom().expect("non-root block has no idom");
+            let idom = bblocks
+                .block(bi)
+                .get_immed_dom()
+                .expect("non-root block has no idom");
             let j = bblocks.block(idom).get_index() as usize;
             if (self.flags[j] & heritage_flags::boundary_node) != 0 {
                 z[i] = j as int4;
@@ -1265,7 +1309,10 @@ impl Heritage {
         }
         for i in 0..upstart.len() {
             let v = upend[i];
-            let v_idom = bblocks.block(v).get_immed_dom().expect("up-edge head has no idom");
+            let v_idom = bblocks
+                .block(v)
+                .get_immed_dom()
+                .expect("up-edge head has no idom");
             let j = bblocks.block(v_idom).get_index();
             let mut k = bblocks.block(upstart[i]).get_index();
             while j < k {
@@ -1294,7 +1341,10 @@ impl Heritage {
         let aug_len = self.augment[i].len();
         for idx in 0..aug_len {
             let v = self.augment[i][idx];
-            let v_idom = bblocks.block(v).get_immed_dom().expect("augment edge head has no idom");
+            let v_idom = bblocks
+                .block(v)
+                .get_immed_dom()
+                .expect("augment edge head has no idom");
             if bblocks.block(v_idom).get_index() < j_q {
                 // idom(v) is a strict ancestor of qnode
                 let k = bblocks.block(v).get_index() as usize;
@@ -1527,7 +1577,11 @@ impl Heritage {
             add_indirects && super::kuna_stackstoreguard::indexed_enabled(fd, addr, write);
         for slot in 0..read.len() {
             let vn = read[slot];
-            let descend = fd.vbank().get(vn).expect("guard: stale read vn").num_descend();
+            let descend = fd
+                .vbank()
+                .get(vn)
+                .expect("guard: stale read vn")
+                .num_descend();
             if descend == 0 {
                 continue; // removeRevisitedMarkers may have eliminated descendant
             }
@@ -1560,9 +1614,15 @@ impl Heritage {
             if fd.vbank().get(vn).expect("guard: stale read vn").get_size() < size {
                 let newvn = self.normalize_read_size(fd, vn, op, addr, size);
                 read[slot] = newvn;
-                fd.vbank_mut().get_mut(newvn).expect("guard: new read vn").set_active_heritage();
+                fd.vbank_mut()
+                    .get_mut(newvn)
+                    .expect("guard: new read vn")
+                    .set_active_heritage();
             } else {
-                fd.vbank_mut().get_mut(vn).expect("guard: read vn").set_active_heritage();
+                fd.vbank_mut()
+                    .get_mut(vn)
+                    .expect("guard: read vn")
+                    .set_active_heritage();
             }
         }
 
@@ -1574,9 +1634,15 @@ impl Heritage {
         let mut partial_write_ops: Vec<crate::context::OpId> = Vec::new();
         if add_indirects {
             for &vn in write.iter() {
-                let Some(v) = fd.vbank().get(vn) else { continue };
+                let Some(v) = fd.vbank().get(vn) else {
+                    continue;
+                };
                 let Some(def) = v.get_def() else { continue };
-                if fd.obank().get(def).is_some_and(|o| o.code() == unlace_num::opcodes::OpCode::CPUI_INDIRECT) {
+                if fd
+                    .obank()
+                    .get(def)
+                    .is_some_and(|o| o.code() == unlace_num::opcodes::OpCode::CPUI_INDIRECT)
+                {
                     continue;
                 }
                 if v.get_size() < size {
@@ -1588,12 +1654,24 @@ impl Heritage {
         }
         for slot in 0..write.len() {
             let vn = write[slot];
-            if fd.vbank().get(vn).expect("guard: stale write vn").get_size() < size {
+            if fd
+                .vbank()
+                .get(vn)
+                .expect("guard: stale write vn")
+                .get_size()
+                < size
+            {
                 let newvn = self.normalize_write_size(fd, vn, addr, size);
                 write[slot] = newvn;
-                fd.vbank_mut().get_mut(newvn).expect("guard: new write vn").set_active_heritage();
+                fd.vbank_mut()
+                    .get_mut(newvn)
+                    .expect("guard: new write vn")
+                    .set_active_heritage();
             } else {
-                fd.vbank_mut().get_mut(vn).expect("guard: write vn").set_active_heritage();
+                fd.vbank_mut()
+                    .get_mut(vn)
+                    .expect("guard: write vn")
+                    .set_active_heritage();
             }
         }
 
@@ -1650,19 +1728,37 @@ impl Heritage {
             // `local_array[10]`.  Net +7 (Partial splitting #15-19, Wayoff array
             // #1, No-for-loop alias #3), regressed-set empty.
             fl |= fd.query_local_properties(addr, size, &usepoint);
-            let live = (self.prunes(fl, addr) && super::kuna_prunedssa::applies_to_calls(fd, addr)).then(|| {
-                super::kuna_prunedssa::live_calls(
-                    fd, fd.call_specs(), addr, size, read, &full_write_ops, &partial_write_ops,
-                )
-            });
-            let sparse = (self.persist_sparse && !revisit && super::kuna_persistcalls::applies(fd, fl, addr))
-                .then_some((&*read, &full_write_ops[..], &partial_write_ops[..]));
+            let live = (self.prunes(fl, addr) && super::kuna_prunedssa::applies_to_calls(fd, addr))
+                .then(|| {
+                    super::kuna_prunedssa::live_calls(
+                        fd,
+                        fd.call_specs(),
+                        addr,
+                        size,
+                        read,
+                        &full_write_ops,
+                        &partial_write_ops,
+                    )
+                });
+            let sparse = (self.persist_sparse
+                && !revisit
+                && super::kuna_persistcalls::applies(fd, fl, addr))
+            .then_some((&*read, &full_write_ops[..], &partial_write_ops[..]));
             self.guard_calls(fd, fl, addr, size, write, live.as_ref(), sparse);
             super::kuna_memoryguard::guard_memory(fd, &mut self.memory_ops, fl, addr, size, write);
             self.guard_returns(fd, fl, addr, size, write);
             if (fl & varnode_flags::persist) != 0 {
-                let heads = self.halt_loops.get_or_insert_with(|| super::kuna_haltloopguard::exitless_loops(fd));
-                super::kuna_haltloopguard::guard(fd, heads, fl, addr, write, &mut self.halt_loop_marks);
+                let heads = self
+                    .halt_loops
+                    .get_or_insert_with(|| super::kuna_haltloopguard::exitless_loops(fd));
+                super::kuna_haltloopguard::guard(
+                    fd,
+                    heads,
+                    fl,
+                    addr,
+                    write,
+                    &mut self.halt_loop_marks,
+                );
             }
             // (kuna `indexaliasguard`) `Architecture::highPtrPossible`
             // (architecture.hh:408) is `space type != IPTR_INTERNAL &&
@@ -1677,12 +1773,14 @@ impl Heritage {
                     .map(|s| s.get_type() != spacetype::IPTR_INTERNAL)
                     .unwrap_or(false);
             let stack_effects = crate::kuna_stackeffects::enabled_for(fd, addr, size);
-            let mut guarded_stores = if (high_ptr_possible && level >= LEVEL_FULL) || stack_effects {
+            let mut guarded_stores = if (high_ptr_possible && level >= LEVEL_FULL) || stack_effects
+            {
                 self.guard_stores(fd, addr, size, write, false)
             } else if high_ptr_possible && guard_stack_bytes {
                 self.guard_stores(fd, addr, size, write, true)
             } else {
-                if high_ptr_possible && level == LEVEL_GLOBAL && (fl & varnode_flags::readonly) == 0 {
+                if high_ptr_possible && level == LEVEL_GLOBAL && (fl & varnode_flags::readonly) == 0
+                {
                     self.guard_global_stores(fd, fl, addr, size, write);
                 }
                 Vec::new()
@@ -1693,8 +1791,14 @@ impl Heritage {
             if high_ptr_possible {
                 if level < LEVEL_FULL && self.spill_store_budget_ok {
                     super::kuna_spillstoreguard::build(
-                        fd, addr, size, &self.spill_stores, &guarded_stores, &self.spill_store_bounds,
-                        &mut self.spill_store_guards, write,
+                        fd,
+                        addr,
+                        size,
+                        &self.spill_stores,
+                        &guarded_stores,
+                        &self.spill_store_bounds,
+                        &mut self.spill_store_guards,
+                        write,
                     );
                 }
                 if level >= LEVEL_GLOBAL
@@ -1723,9 +1827,9 @@ impl Heritage {
     }
 
     fn protostack_restored_frame_alias(&mut self, fd: &crate::funcdata::Funcdata) -> bool {
-        *self.protostack_frame_reload.get_or_insert_with(|| {
-            crate::kuna_calleeprotostack::rebound_frame_base(fd)
-        })
+        *self
+            .protostack_frame_reload
+            .get_or_insert_with(|| crate::kuna_calleeprotostack::rebound_frame_base(fd))
     }
 
     /// (kuna `calleeprotostack`) Can a pointer in this function reach the stack
@@ -1756,9 +1860,12 @@ impl Heritage {
         {
             return true;
         }
-        if fd.get_arch().stack_views || fd.get_arch().stack_alias_deadstore
+        if fd.get_arch().stack_views
+            || fd.get_arch().stack_alias_deadstore
             || crate::kuna_localstackviews::preserves_range(
-                fd, &Address::new(Rc::clone(spc), offset), size,
+                fd,
+                &Address::new(Rc::clone(spc), offset),
+                size,
             )
         {
             if !spc.stack_grows_negative() {
@@ -1792,15 +1899,20 @@ impl Heritage {
         size: int4,
         write: &mut Vec<crate::context::VarnodeId>,
         live: Option<&super::kuna_prunedssa::LiveCalls>,
-        sparse: Option<(&[crate::context::VarnodeId], &[crate::context::OpId], &[crate::context::OpId])>,
+        sparse: Option<(
+            &[crate::context::VarnodeId],
+            &[crate::context::OpId],
+            &[crate::context::OpId],
+        )>,
     ) {
-        use crate::fspec::{effect_type, Containment, OFFSET_UNKNOWN};
+        use crate::fspec::{Containment, OFFSET_UNKNOWN, effect_type};
         use unlace_base::space::spacetype;
 
         let holdind = (fl & varnode_flags::addrtied) != 0;
         let mut deferred: Vec<crate::context::OpId> = Vec::new();
         self.persist_skips = None;
-        let readonly = self.readonly_unguarded && (fl & varnode_flags::readonly) != 0 && write.is_empty();
+        let readonly =
+            self.readonly_unguarded && (fl & varnode_flags::readonly) != 0 && write.is_empty();
         let mut pruned = false;
         // (kuna) `option calloverlap off|auto|in|full` — the two upstream partial-range
         // overlap guards.  See [`crate::p3_dataflow::kuna_calloverlap`].
@@ -1817,7 +1929,9 @@ impl Heritage {
         };
         // (kuna) `msvcbyval`: the stack ranges a constructor call builds as a
         // later call's by-value argument.  See [`crate::p4_calls::kuna_msvcbyval`].
-        let constructed = if fd.kuna_msvc_byval_sites().is_empty() || spc.get_type() != spacetype::IPTR_SPACEBASE {
+        let constructed = if fd.kuna_msvc_byval_sites().is_empty()
+            || spc.get_type() != spacetype::IPTR_SPACEBASE
+        {
             Vec::new()
         } else {
             crate::p4_calls::kuna_msvcbyval::constructed_ranges(fd, &qlst, &spc)
@@ -1859,9 +1973,16 @@ impl Heritage {
             let mut effecttype = fc.proto().has_effect(&trans_addr, size);
             if effecttype == effect_type::UNKNOWN_EFFECT
                 && ((super::kuna_leafmemory::preserves(fd, fc, addr, size)
-                        && !self.protostack_is_aliased(fd, &spc, addr.get_offset(), 1)
-                        && !self.protostack_is_aliased(fd, &spc,
-                            spc.wrap_offset(addr.get_offset().wrapping_add(size.saturating_sub(1) as uintb)), 1))
+                    && !self.protostack_is_aliased(fd, &spc, addr.get_offset(), 1)
+                    && !self.protostack_is_aliased(
+                        fd,
+                        &spc,
+                        spc.wrap_offset(
+                            addr.get_offset()
+                                .wrapping_add(size.saturating_sub(1) as uintb),
+                        ),
+                        1,
+                    ))
                     || crate::kuna_calleememory::preserves(fd, fc, addr, size)
                     || ((fl & varnode_flags::persist) != 0
                         && self.global_call_ranges.preserves(fd, fc, addr, size)))
@@ -1889,7 +2010,10 @@ impl Heritage {
                     ) && !self.protostack_is_aliased(fd, &spc, addr.get_offset(), size)
                         && !(self.protostack_restored_frame_alias(fd)
                             && crate::kuna_calleeprotostack::pointer_input_may_alias(
-                                fd, fc, addr.get_offset(), size,
+                                fd,
+                                fc,
+                                addr.get_offset(),
+                                size,
                             ))
                     {
                         effecttype = effect_type::UNAFFECTED;
@@ -1997,7 +2121,13 @@ impl Heritage {
                 effecttype = effect_type::UNAFFECTED;
             }
             if effecttype == effect_type::UNKNOWN_EFFECT
-                && crate::p4_calls::kuna_msvcbyval::constructs(&constructed, op, &spc, addr.get_offset(), size)
+                && crate::p4_calls::kuna_msvcbyval::constructs(
+                    &constructed,
+                    op,
+                    &spc,
+                    addr.get_offset(),
+                    size,
+                )
             {
                 effecttype = effect_type::KILLEDBYCALL;
             }
@@ -2015,7 +2145,9 @@ impl Heritage {
             if !preserved && fc.is_output_active() && tryregister {
                 let output_character = fc.proto().characterize_as_output(&trans_addr, size);
                 if output_character != Containment::NoContainment {
-                    if effecttype != effect_type::KILLEDBYCALL && fc.proto().is_auto_killed_by_call() {
+                    if effecttype != effect_type::KILLEDBYCALL
+                        && fc.proto().is_auto_killed_by_call()
+                    {
                         effecttype = effect_type::KILLEDBYCALL;
                     }
                     if output_character == Containment::ContainedBy {
@@ -2024,12 +2156,30 @@ impl Heritage {
                         // heritage.cc:1249/1293), gated by `option calloverlap full`, or
                         // `auto` for a narrow scalar slot.
                         if crate::p4_calls::kuna_registerslots::guard_output(
-                            fd, fc, addr, &trans_addr, size, write,
-                        ) || ((overlap_level >= crate::p3_dataflow::kuna_calloverlap::LEVEL_FULL
+                            fd,
+                            fc,
+                            addr,
+                            &trans_addr,
+                            size,
+                            write,
+                        ) || ((overlap_level
+                            >= crate::p3_dataflow::kuna_calloverlap::LEVEL_FULL
                             || (overlap_level == super::kuna_calloverlap::LEVEL_AUTO
-                                && super::kuna_calloverlap::auto_register(fd.get_arch().manage(), fc.proto(), &trans_addr, size, true)))
-                            && self
-                                .try_output_overlap_guard(fd, fc, addr, &trans_addr, size, write))
+                                && super::kuna_calloverlap::auto_register(
+                                    fd.get_arch().manage(),
+                                    fc.proto(),
+                                    &trans_addr,
+                                    size,
+                                    true,
+                                )))
+                            && self.try_output_overlap_guard(
+                                fd,
+                                fc,
+                                addr,
+                                &trans_addr,
+                                size,
+                                write,
+                            ))
                         {
                             // Range is handled, don't do additional guarding.
                             effecttype = effect_type::UNAFFECTED;
@@ -2055,7 +2205,13 @@ impl Heritage {
                     // effecttype = EffectRecord::unknown_effect;
                     effecttype = effect_type::UNKNOWN_EFFECT;
                     if self.try_output_stack_guard(
-                        fd, fc, addr, &trans_addr, size, output_character, write,
+                        fd,
+                        fc,
+                        addr,
+                        &trans_addr,
+                        size,
+                        output_character,
+                        write,
                     ) {
                         // Range is handled, don't do additional guarding.
                         effecttype = effect_type::UNAFFECTED;
@@ -2088,7 +2244,15 @@ impl Heritage {
             } else if effecttype == effect_type::UNKNOWN_EFFECT
                 || effecttype == effect_type::RETURN_ADDRESS
             {
-                let indop = super::kuna_renamereads::new_indirect(fd, op, addr, size, 0, &mut self.rename_reads, &mut self.guard_iops);
+                let indop = super::kuna_renamereads::new_indirect(
+                    fd,
+                    op,
+                    addr,
+                    size,
+                    0,
+                    &mut self.rename_reads,
+                    &mut self.guard_iops,
+                );
                 if let Some(out) = fd.obank().get(indop).and_then(|o| o.get_out()) {
                     if let Some(v) = fd.vbank_mut().get_mut(out) {
                         v.set_active_heritage();
@@ -2124,18 +2288,33 @@ impl Heritage {
         }
         if let Some((read, full, partial)) = sparse {
             let (mut keep, read_kept) = super::kuna_persistcalls::keep(
-                fd, &mut self.persist_memory, spc.get_index(), &deferred, read, full, partial,
+                fd,
+                &mut self.persist_memory,
+                spc.get_index(),
+                &deferred,
+                read,
+                full,
+                partial,
             );
-            let defs: Vec<crate::context::OpId> =
-                write.iter().filter_map(|&vn| fd.vbank().get(vn).and_then(|v| v.get_def())).collect();
-            let parent = |op: &crate::context::OpId| fd.obank().get(*op).and_then(|o| o.get_parent());
+            let defs: Vec<crate::context::OpId> = write
+                .iter()
+                .filter_map(|&vn| fd.vbank().get(vn).and_then(|v| v.get_def()))
+                .collect();
+            let parent =
+                |op: &crate::context::OpId| fd.obank().get(*op).and_then(|o| o.get_parent());
             let mut joins = Vec::new();
             while keep.len() < deferred.len() {
                 let mut blocks: Vec<BlockId> = defs.iter().filter_map(parent).collect();
-                blocks.extend(deferred.iter().filter(|op| keep.contains(op)).filter_map(parent));
+                blocks.extend(
+                    deferred
+                        .iter()
+                        .filter(|op| keep.contains(op))
+                        .filter_map(parent),
+                );
                 self.calc_multiequals(fd, &blocks);
                 joins = std::mem::take(&mut self.merge);
-                let stale = super::kuna_persistcalls::stale_calls(fd, &deferred, &keep, &defs, &joins);
+                let stale =
+                    super::kuna_persistcalls::stale_calls(fd, &deferred, &keep, &defs, &joins);
                 if stale.is_empty() {
                     break;
                 }
@@ -2148,12 +2327,19 @@ impl Heritage {
                 Default::default()
             };
             if sparse_range {
-                self.persist_pruned.push((spc.get_index(), addr.get_offset(), size));
+                self.persist_pruned
+                    .push((spc.get_index(), addr.get_offset(), size));
                 let blocks = deferred
                     .iter()
                     .filter_map(|&op| fd.obank().get(op).and_then(|o| o.get_parent()))
                     .collect();
-                self.persist_skips = Some((write.len(), keep.len(), blocks, deferred.clone(), keep.clone()));
+                self.persist_skips = Some((
+                    write.len(),
+                    keep.len(),
+                    blocks,
+                    deferred.clone(),
+                    keep.clone(),
+                ));
             }
             for op in deferred {
                 if !keep.contains(&op) {
@@ -2168,7 +2354,15 @@ impl Heritage {
                 if stale_in.contains(&op) {
                     flag |= crate::op::pcodeop_addlflags::kuna_persist_stale;
                 }
-                let indop = super::kuna_renamereads::new_indirect(fd, op, addr, size, 0, &mut self.rename_reads, &mut self.guard_iops);
+                let indop = super::kuna_renamereads::new_indirect(
+                    fd,
+                    op,
+                    addr,
+                    size,
+                    0,
+                    &mut self.rename_reads,
+                    &mut self.guard_iops,
+                );
                 if flag != 0 {
                     if let Some(o) = fd.obank_mut().get_mut(indop) {
                         o.set_additional_flag(flag);
@@ -2237,18 +2431,35 @@ impl Heritage {
                 return;
             }
             let partition = super::kuna_multiregargs::input_partition(
-                fc.proto(), fd.get_arch().manage(), trans_addr, size,
+                fc.proto(),
+                fd.get_arch().manage(),
+                trans_addr,
+                size,
             );
             if let Some(pieces) = partition {
                 if pieces.iter().all(|piece| {
                     crate::kuna_armfloatreturn::call_input_allowed(
-                        fd, fc, &piece.get_addr(), piece.size as int4,
+                        fd,
+                        fc,
+                        &piece.get_addr(),
+                        piece.size as int4,
                     )
                 }) {
                     for piece in pieces {
                         let piece_addr = piece.get_addr();
-                        if fc.get_active_input().which_trial(&piece_addr, piece.size as int4) < 0 {
-                            Self::truncated_input_trial(fd, fc, addr, size, &piece_addr, piece.size as int4);
+                        if fc
+                            .get_active_input()
+                            .which_trial(&piece_addr, piece.size as int4)
+                            < 0
+                        {
+                            Self::truncated_input_trial(
+                                fd,
+                                fc,
+                                addr,
+                                size,
+                                &piece_addr,
+                                piece.size as int4,
+                            );
                         }
                     }
                     return;
@@ -2256,7 +2467,13 @@ impl Heritage {
             }
             if overlap_level >= crate::p3_dataflow::kuna_calloverlap::LEVEL_IN
                 || (overlap_level == super::kuna_calloverlap::LEVEL_AUTO
-                    && super::kuna_calloverlap::auto_register(fd.get_arch().manage(), fc.proto(), trans_addr, size, false))
+                    && super::kuna_calloverlap::auto_register(
+                        fd.get_arch().manage(),
+                        fc.proto(),
+                        trans_addr,
+                        size,
+                        false,
+                    ))
             {
                 Self::guard_call_overlapping_input(fd, fc, addr, trans_addr, size);
             }
@@ -2319,12 +2536,20 @@ impl Heritage {
             return false;
         }
         let op = fc.get_op();
-        let call_addr = fd.obank().get(op).expect("guardCountedFloatInput: stale call").get_addr().clone();
+        let call_addr = fd
+            .obank()
+            .get(op)
+            .expect("guardCountedFloatInput: stale call")
+            .get_addr()
+            .clone();
         let big = addr.is_big_endian();
         let mut parts = Vec::with_capacity(tiles.len());
         for (taddr, tsize) in tiles {
             let read = fd.new_varnode(tsize, &taddr, None);
-            fd.vbank_mut().get_mut(read).expect("guardCountedFloatInput: read").set_active_heritage();
+            fd.vbank_mut()
+                .get_mut(read)
+                .expect("guardCountedFloatInput: read")
+                .set_active_heritage();
             let keep = tsize.min((eend - taddr.get_offset()) as int4);
             if keep == tsize {
                 parts.push(read);
@@ -2335,7 +2560,9 @@ impl Heritage {
             let _ = fd.op_set_input(sub, read, 0);
             let c = fd.new_constant(4, if big { (tsize - keep) as u64 } else { 0 });
             let _ = fd.op_set_input(sub, c, 1);
-            let out = fd.new_unique_out(keep, sub).expect("guardCountedFloatInput: subpiece out");
+            let out = fd
+                .new_unique_out(keep, sub)
+                .expect("guardCountedFloatInput: subpiece out");
             fd.op_insert_before(sub, op);
             parts.push(out);
         }
@@ -2350,7 +2577,9 @@ impl Heritage {
             fd.op_set_opcode(piece, typeop_skeleton(OpCode::CPUI_PIECE));
             let _ = fd.op_set_input(piece, acc, 0);
             let _ = fd.op_set_input(piece, low, 1);
-            acc = fd.new_unique_out(width, piece).expect("guardCountedFloatInput: piece out");
+            acc = fd
+                .new_unique_out(width, piece)
+                .expect("guardCountedFloatInput: piece out");
             fd.op_insert_before(piece, op);
         }
         fc.get_active_input().register_trial(&entry, 8);
@@ -2471,7 +2700,8 @@ impl Heritage {
         let call_op = fc.get_op();
         let trunc_size = vdata.size as int4;
         self.guard_output_overlap(fd, call_op, addr, size, &trunc_addr, trunc_size, write);
-        fc.get_active_output().register_trial(&trunc_addr, trunc_size);
+        fc.get_active_output()
+            .register_trial(&trunc_addr, trunc_size);
         true
     }
 
@@ -2689,7 +2919,10 @@ impl Heritage {
             // (`ParamEntry::contained_by`, fspec.hh:104): piece the smaller return
             // storage back into the range through a join of stack pieces.
             let mut vdata = VarnodeData::default();
-            if !fc.proto().get_biggest_contained_output(trans_addr, size, &mut vdata) {
+            if !fc
+                .proto()
+                .get_biggest_contained_output(trans_addr, size, &mut vdata)
+            {
                 return false;
             }
             let vspace = match vdata.space.clone() {
@@ -2731,7 +2964,14 @@ impl Heritage {
             vn_final = Some(v);
         }
         if size < ret_size {
-            let sub_piece = fd.new_op(2, fd.obank().get(call_op).expect("tryOutputStackGuard: stale call").get_addr().clone());
+            let sub_piece = fd.new_op(
+                2,
+                fd.obank()
+                    .get(call_op)
+                    .expect("tryOutputStackGuard: stale call")
+                    .get_addr()
+                    .clone(),
+            );
             fd.op_set_opcode(sub_piece, typeop_skeleton(OpCode::CPUI_SUBPIECE));
             let truncate_amount = ret_addr.justified_contain(ret_size, addr, size, false);
             let c = fd.new_constant(4, truncate_amount as i64 as u64);
@@ -2772,7 +3012,12 @@ impl Heritage {
         use unlace_num::opcodes::OpCode;
         let size_front = (ret_addr.get_offset().wrapping_sub(addr.get_offset())) as i64 as int4;
         let size_back = size - ret_size - size_front;
-        let call_addr = fd.obank().get(call_op).expect("guardOutputOverlapStack: stale call").get_addr().clone();
+        let call_addr = fd
+            .obank()
+            .get(call_op)
+            .expect("guardOutputOverlapStack: stale call")
+            .get_addr()
+            .clone();
         let mut insert_point = call_op;
         let mut vn_collect = match fd.obank().get(call_op).and_then(|o| o.get_out()) {
             Some(v) => v,
@@ -2977,14 +3222,19 @@ impl Heritage {
         use unlace_num::opcodes::OpCode;
         use unlace_num::pcoderaw::VarnodeData;
         let mut vdata = VarnodeData::default();
-        if !fd.get_func_proto().get_biggest_contained_output(range, range_size, &mut vdata) {
+        if !fd
+            .get_func_proto()
+            .get_biggest_contained_output(range, range_size, &mut vdata)
+        {
             return;
         }
         let vspace = match vdata.space.clone() {
             Some(s) => s,
             None => return,
         };
-        let Some(before) = vdata.offset.checked_sub(range.get_offset())
+        let Some(before) = vdata
+            .offset
+            .checked_sub(range.get_offset())
             .and_then(|n| int4::try_from(n).ok())
         else {
             return;
@@ -3041,7 +3291,15 @@ impl Heritage {
         }
         let after = range_size - before - piece_size;
         if split && after > 0 {
-            self.guard_returns_in_range(fd, addr, size, &(&trunc_addr + piece_size as i64), after, false, true);
+            self.guard_returns_in_range(
+                fd,
+                addr,
+                size,
+                &(&trunc_addr + piece_size as i64),
+                after,
+                false,
+                true,
+            );
         }
     }
 
@@ -3083,10 +3341,17 @@ impl Heritage {
         let spc = addr.get_space().expect("guard_stores: addr space").clone();
         let container = spc.get_contain().cloned();
         let stores: Vec<crate::context::OpId> = if indexed_bytes_only {
-            self.store_guard.iter()
-                .filter(|guard| Rc::ptr_eq(&guard.spc, &spc)
-                    && fd.obank().get(guard.op).and_then(|op| op.get_in(2))
-                        .and_then(|vn| fd.vbank().get(vn)).is_some_and(|vn| vn.get_size() == 1))
+            self.store_guard
+                .iter()
+                .filter(|guard| {
+                    Rc::ptr_eq(&guard.spc, &spc)
+                        && fd
+                            .obank()
+                            .get(guard.op)
+                            .and_then(|op| op.get_in(2))
+                            .and_then(|vn| fd.vbank().get(vn))
+                            .is_some_and(|vn| vn.get_size() == 1)
+                })
                 .map(|guard| guard.op)
                 .collect()
         } else {
@@ -3095,7 +3360,12 @@ impl Heritage {
         let mut guarded = Vec::new();
         for op in stores {
             let dead = fd.obank().get(op).map(|o| o.is_dead()).unwrap_or(true);
-            if dead || fd.obank().get(op).is_none_or(|o| o.code() != OpCode::CPUI_STORE) {
+            if dead
+                || fd
+                    .obank()
+                    .get(op)
+                    .is_none_or(|o| o.code() != OpCode::CPUI_STORE)
+            {
                 continue;
             }
             let store_space = match fd.obank().get(op).and_then(|o| o.get_in(0)) {
@@ -3105,18 +3375,33 @@ impl Heritage {
                 },
                 None => continue,
             };
-            let uses_spacebase =
-                fd.obank().get(op).map(|o| o.uses_spacebase_ptr()).unwrap_or(false);
-            let contained =
-                container.as_ref().map(|c| Rc::ptr_eq(c, &store_space)).unwrap_or(false);
+            let uses_spacebase = fd
+                .obank()
+                .get(op)
+                .map(|o| o.uses_spacebase_ptr())
+                .unwrap_or(false);
+            let contained = container
+                .as_ref()
+                .map(|c| Rc::ptr_eq(c, &store_space))
+                .unwrap_or(false);
             let escaped = crate::kuna_stackeffects::enabled_for(fd, addr, size)
                 && self.protostack_is_aliased(fd, &spc, addr.get_offset(), size);
-            let indirect_frame_store = contained && escaped && crate::kuna_stackeffects::unresolved_store(fd, op);
-            if !((contained && uses_spacebase) || Rc::ptr_eq(&spc, &store_space) || indirect_frame_store) {
+            let indirect_frame_store =
+                contained && escaped && crate::kuna_stackeffects::unresolved_store(fd, op);
+            if !((contained && uses_spacebase)
+                || Rc::ptr_eq(&spc, &store_space)
+                || indirect_frame_store)
+            {
                 continue;
             }
             let indop = super::kuna_renamereads::new_indirect(
-                fd, op, addr, size, pcodeop_flags::indirect_store, &mut self.rename_reads, &mut self.guard_iops,
+                fd,
+                op,
+                addr,
+                size,
+                pcodeop_flags::indirect_store,
+                &mut self.rename_reads,
+                &mut self.guard_iops,
             );
             guarded.push(op);
             let outvn = fd.obank().get(indop).and_then(|o| o.get_out());
@@ -3161,7 +3446,13 @@ impl Heritage {
         }
         for store in stores {
             let indop = super::kuna_renamereads::new_indirect(
-                fd, store, addr, size, pcodeop_flags::indirect_store, &mut self.rename_reads, &mut self.guard_iops,
+                fd,
+                store,
+                addr,
+                size,
+                pcodeop_flags::indirect_store,
+                &mut self.rename_reads,
+                &mut self.guard_iops,
             );
             let Some(outvn) = fd.obank().get(indop).and_then(|o| o.get_out()) else {
                 continue;
@@ -3188,26 +3479,35 @@ impl Heritage {
         size: int4,
         write: &mut Vec<crate::context::VarnodeId>,
     ) {
-        use crate::kuna_indexaliasguard::{stores_into, GLOBAL_STORE_BUDGET};
+        use crate::kuna_indexaliasguard::{GLOBAL_STORE_BUDGET, stores_into};
         use crate::op::pcodeop_flags;
 
-        let spc = addr.get_space().expect("guard_global_stores: addr space").clone();
+        let spc = addr
+            .get_space()
+            .expect("guard_global_stores: addr space")
+            .clone();
         let index = spc.get_index();
         let lo = addr.get_offset();
         let persist = (fl & varnode_flags::persist) != 0;
         if self.global_store_guards >= GLOBAL_STORE_BUDGET {
             if persist {
-                self.global_store_ranges.push((index, lo, lo.wrapping_add(size as u64), false));
+                self.global_store_ranges
+                    .push((index, lo, lo.wrapping_add(size as u64), false));
             }
             return;
         }
         if self.global_stores.as_ref().map(|c| c.0) != Some(index) {
             self.global_stores = Some((index, stores_into(fd, &spc, store_space_from_const)));
         }
-        let stores = self.global_stores.as_ref().map(|c| c.1.clone()).unwrap_or_default();
+        let stores = self
+            .global_stores
+            .as_ref()
+            .map(|c| c.1.clone())
+            .unwrap_or_default();
         let guarded = self.global_store_guards + stores.len() <= GLOBAL_STORE_BUDGET;
         if persist {
-            self.global_store_ranges.push((index, lo, lo.wrapping_add(size as u64), guarded));
+            self.global_store_ranges
+                .push((index, lo, lo.wrapping_add(size as u64), guarded));
         }
         if stores.is_empty() || !guarded {
             return;
@@ -3215,7 +3515,13 @@ impl Heritage {
         self.global_store_guards += stores.len();
         for op in stores {
             let indop = super::kuna_renamereads::new_indirect(
-                fd, op, addr, size, pcodeop_flags::indirect_store, &mut self.rename_reads, &mut self.guard_iops,
+                fd,
+                op,
+                addr,
+                size,
+                pcodeop_flags::indirect_store,
+                &mut self.rename_reads,
+                &mut self.guard_iops,
             );
             if let Some(out) = fd.obank().get(indop).and_then(|o| o.get_out()) {
                 if let Some(v) = fd.vbank_mut().get_mut(out) {
@@ -3286,7 +3592,7 @@ impl Heritage {
         write: &[crate::context::VarnodeId],
         partial_writes: Option<&[crate::context::VarnodeId]>,
     ) {
-        use crate::kuna_indexaliasguard::{loads_from, GLOBAL_LOAD_BUDGET};
+        use crate::kuna_indexaliasguard::{GLOBAL_LOAD_BUDGET, loads_from};
         use unlace_num::opcodes::OpCode;
 
         let writes = write
@@ -3302,7 +3608,10 @@ impl Heritage {
         if writes < 2 {
             return;
         }
-        let spc = addr.get_space().expect("guard_global_loads: addr space").clone();
+        let spc = addr
+            .get_space()
+            .expect("guard_global_loads: addr space")
+            .clone();
         let index = spc.get_index();
         if self.global_loads.as_ref().map(|c| c.0) != Some(index) {
             self.global_loads = Some((index, loads_from(fd, &spc, store_space_from_const)));
@@ -3324,12 +3633,13 @@ impl Heritage {
         }
         self.global_load_guards += loads.len();
         if let Some(writes) = partial_writes {
-            self.partial_global_loads.push(crate::kuna_partialglobalload::Guard {
-                addr: addr.clone(),
-                size,
-                writes: writes.to_vec(),
-                loads,
-            });
+            self.partial_global_loads
+                .push(crate::kuna_partialglobalload::Guard {
+                    addr: addr.clone(),
+                    size,
+                    writes: writes.to_vec(),
+                    loads,
+                });
             return;
         }
         let index = self.load_reads.add_range(addr, size);
@@ -3359,7 +3669,10 @@ impl Heritage {
     ) -> Vec<crate::context::VarnodeId> {
         use unlace_num::opcodes::OpCode;
 
-        let space = addr.get_space().expect("remove_revisited_markers: addr space").clone();
+        let space = addr
+            .get_space()
+            .expect("remove_revisited_markers: addr space")
+            .clone();
         if self.get_info(&space).deadremoved > 0 {
             self.bump_deadcode_delay_persisted(fd, &space);
             if !self.get_info(&space).warningissued {
@@ -3386,7 +3699,11 @@ impl Heritage {
                 .expect("remove_revisited_markers: stale op")
                 .get_parent()
                 .expect("remove_revisited_markers: marker op has no parent");
-            let code = fd.obank().get(op).expect("remove_revisited_markers: stale op").code();
+            let code = fd
+                .obank()
+                .get(op)
+                .expect("remove_revisited_markers: stale op")
+                .code();
 
             // `pos` is the C++ block iterator the SUBPIECE is inserted *before*;
             // `None` denotes `bl->endOp()` (append at the block's end).
@@ -3503,7 +3820,11 @@ impl Heritage {
         op: crate::context::OpId,
     ) -> bool {
         use unlace_num::opcodes::OpCode;
-        let code = fd.obank().get(op).expect("call_op_indirect_effect: stale op").code();
+        let code = fd
+            .obank()
+            .get(op)
+            .expect("call_op_indirect_effect: stale op")
+            .code();
         if code == OpCode::CPUI_CALL || code == OpCode::CPUI_CALLIND {
             // We should be able to get the callspec.
             match fd.get_call_specs_index(op) {
@@ -3531,7 +3852,12 @@ impl Heritage {
         size: int4,
     ) -> crate::context::VarnodeId {
         use unlace_num::opcodes::OpCode;
-        let op_addr = fd.obank().get(op).expect("normalize_read_size: stale op").get_addr().clone();
+        let op_addr = fd
+            .obank()
+            .get(op)
+            .expect("normalize_read_size: stale op")
+            .get_addr()
+            .clone();
         let newop = fd.new_op(2, op_addr);
         fd.op_set_opcode(newop, typeop_skeleton(OpCode::CPUI_SUBPIECE));
         let vn1 = fd.new_varnode(size, addr, None);
@@ -3541,23 +3867,29 @@ impl Heritage {
         // mirroring `varnode.cc:Varnode::overlap`).
         let (vloc, vsize, vbig) = {
             let v = fd.vbank().get(vn).expect("normalize_read_size: stale vn");
-            (v.get_addr().clone(), v.get_size(), v.get_addr().is_big_endian())
+            (
+                v.get_addr().clone(),
+                v.get_size(),
+                v.get_addr().is_big_endian(),
+            )
         };
         let overlap = if !vbig {
             vloc.overlap(0, addr, size)
         } else {
             let over = vloc.overlap(vsize - 1, addr, size);
-            if over != -1 {
-                size - 1 - over
-            } else {
-                -1
-            }
+            if over != -1 { size - 1 - over } else { -1 }
         };
-        let addr_size = addr.get_space().expect("normalize_read_size: addr space").get_addr_size();
+        let addr_size = addr
+            .get_space()
+            .expect("normalize_read_size: addr space")
+            .get_addr_size();
         let vn2 = fd.new_constant(addr_size as int4, overlap as uintb);
-        fd.op_set_input(newop, vn1, 0).expect("normalize_read_size: set input 0");
-        fd.op_set_input(newop, vn2, 1).expect("normalize_read_size: set input 1");
-        fd.op_set_output(newop, vn).expect("normalize_read_size: set output");
+        fd.op_set_input(newop, vn1, 0)
+            .expect("normalize_read_size: set input 0");
+        fd.op_set_input(newop, vn2, 1)
+            .expect("normalize_read_size: set input 1");
+        fd.op_set_output(newop, vn)
+            .expect("normalize_read_size: set output");
         if let Some(out) = fd.obank().get(newop).and_then(|o| o.get_out()) {
             if let Some(v) = fd.vbank_mut().get_mut(out) {
                 v.set_write_mask();
@@ -3594,7 +3926,8 @@ impl Heritage {
         let (op, vsize, vaddr, vbig) = {
             let v = fd.vbank().get(vn).expect("normalize_write_size: stale vn");
             (
-                v.get_def().expect("normalize_write_size: written vn has no def"),
+                v.get_def()
+                    .expect("normalize_write_size: written vn has no def"),
                 v.get_size(),
                 v.get_addr().clone(),
                 v.get_addr().is_big_endian(),
@@ -3606,16 +3939,24 @@ impl Heritage {
             vaddr.overlap(0, addr, size)
         } else {
             let over = vaddr.overlap(vsize - 1, addr, size);
-            if over != -1 {
-                size - 1 - over
-            } else {
-                -1
-            }
+            if over != -1 { size - 1 - over } else { -1 }
         };
         let mostsigsize = size - (overlap + vsize);
-        let op_addr = fd.obank().get(op).expect("normalize_write_size: stale def op").get_addr().clone();
-        let op_is_call = fd.obank().get(op).expect("normalize_write_size: stale def op").is_call();
-        let addr_size = addr.get_space().expect("normalize_write_size: addr space").get_addr_size();
+        let op_addr = fd
+            .obank()
+            .get(op)
+            .expect("normalize_write_size: stale def op")
+            .get_addr()
+            .clone();
+        let op_is_call = fd
+            .obank()
+            .get(op)
+            .expect("normalize_write_size: stale def op")
+            .is_call();
+        let addr_size = addr
+            .get_space()
+            .expect("normalize_write_size: addr space")
+            .get_addr_size();
 
         // --- Most-significant missing piece -------------------------------
         let mut mostvn: Option<crate::context::VarnodeId> = None;
@@ -3637,11 +3978,16 @@ impl Heritage {
                     .new_varnode_out(mostsigsize, &pieceaddr, newop)
                     .expect("normalize_write_size: new_varnode_out mostvn");
                 let big = fd.new_varnode(size, addr, None); // The new read
-                fd.vbank_mut().get_mut(big).expect("normalize_write_size: big").set_active_heritage();
+                fd.vbank_mut()
+                    .get_mut(big)
+                    .expect("normalize_write_size: big")
+                    .set_active_heritage();
                 fd.op_set_opcode(newop, typeop_skeleton(OpCode::CPUI_SUBPIECE));
-                fd.op_set_input(newop, big, 0).expect("normalize_write_size: SUBPIECE in0");
+                fd.op_set_input(newop, big, 0)
+                    .expect("normalize_write_size: SUBPIECE in0");
                 let c = fd.new_constant(addr_size as int4, (overlap + vsize) as uintb);
-                fd.op_set_input(newop, c, 1).expect("normalize_write_size: SUBPIECE in1");
+                fd.op_set_input(newop, c, 1)
+                    .expect("normalize_write_size: SUBPIECE in1");
                 fd.op_insert_before(newop, op);
                 mostvn = Some(mvn);
             }
@@ -3666,11 +4012,16 @@ impl Heritage {
                     .new_varnode_out(overlap, &pieceaddr, newop)
                     .expect("normalize_write_size: new_varnode_out leastvn");
                 let big = fd.new_varnode(size, addr, None); // The new read
-                fd.vbank_mut().get_mut(big).expect("normalize_write_size: big2").set_active_heritage();
+                fd.vbank_mut()
+                    .get_mut(big)
+                    .expect("normalize_write_size: big2")
+                    .set_active_heritage();
                 fd.op_set_opcode(newop, typeop_skeleton(OpCode::CPUI_SUBPIECE));
-                fd.op_set_input(newop, big, 0).expect("normalize_write_size: SUBPIECE2 in0");
+                fd.op_set_input(newop, big, 0)
+                    .expect("normalize_write_size: SUBPIECE2 in0");
                 let c = fd.new_constant(addr_size as int4, 0);
-                fd.op_set_input(newop, c, 1).expect("normalize_write_size: SUBPIECE2 in1");
+                fd.op_set_input(newop, c, 1)
+                    .expect("normalize_write_size: SUBPIECE2 in1");
                 fd.op_insert_before(newop, op);
                 leastvn = Some(lvn);
             }
@@ -3679,12 +4030,17 @@ impl Heritage {
         // --- Recombine the existing write with the least piece ------------
         let midvn: crate::context::VarnodeId = if overlap != 0 {
             let newop = fd.new_op(2, op_addr.clone());
-            let midaddr = if addr.is_big_endian() { vaddr.clone() } else { addr.clone() };
+            let midaddr = if addr.is_big_endian() {
+                vaddr.clone()
+            } else {
+                addr.clone()
+            };
             let mvn = fd
                 .new_varnode_out(overlap + vsize, &midaddr, newop)
                 .expect("normalize_write_size: new_varnode_out midvn");
             fd.op_set_opcode(newop, typeop_skeleton(OpCode::CPUI_PIECE));
-            fd.op_set_input(newop, vn, 0).expect("normalize_write_size: PIECE in0 (most sig)");
+            fd.op_set_input(newop, vn, 0)
+                .expect("normalize_write_size: PIECE in0 (most sig)");
             fd.op_set_input(newop, leastvn.expect("normalize_write_size: leastvn"), 1)
                 .expect("normalize_write_size: PIECE in1 (least sig)");
             fd.op_insert_after(newop, op);
@@ -3702,7 +4058,8 @@ impl Heritage {
             fd.op_set_opcode(newop, typeop_skeleton(OpCode::CPUI_PIECE));
             fd.op_set_input(newop, mostvn.expect("normalize_write_size: mostvn"), 0)
                 .expect("normalize_write_size: PIECE2 in0 (most sig)");
-            fd.op_set_input(newop, midvn, 1).expect("normalize_write_size: PIECE2 in1");
+            fd.op_set_input(newop, midvn, 1)
+                .expect("normalize_write_size: PIECE2 in1");
             let middef = fd
                 .vbank()
                 .get(midvn)
@@ -3715,67 +4072,110 @@ impl Heritage {
             midvn
         };
 
-        fd.vbank_mut().get_mut(vn).expect("normalize_write_size: vn write mask").set_write_mask();
+        fd.vbank_mut()
+            .get_mut(vn)
+            .expect("normalize_write_size: vn write mask")
+            .set_write_mask();
         bigout
     }
 
     /// Keep an unlocked entry value in the ABI's independently recoverable slots.
     fn entry_partition(
-        &self, fd: &crate::funcdata::Funcdata, addr: &Address, size: int4,
+        &self,
+        fd: &crate::funcdata::Funcdata,
+        addr: &Address,
+        size: int4,
     ) -> Option<Vec<unlace_num::pcoderaw::VarnodeData>> {
         let proto = fd.get_func_proto();
-        if !proto.has_model()
-            || proto.is_input_locked() || proto.possible_input_param(addr, size)
-        { return None; }
-        let pieces = super::kuna_multiregargs::input_partition(
-            proto, fd.get_arch().manage(), addr, size,
-        )?;
-        if !pieces.iter().all(|p| proto.possible_input_param(&p.get_addr(), p.size as int4)) {
+        if !proto.has_model() || proto.is_input_locked() || proto.possible_input_param(addr, size) {
+            return None;
+        }
+        let pieces =
+            super::kuna_multiregargs::input_partition(proto, fd.get_arch().manage(), addr, size)?;
+        if !pieces
+            .iter()
+            .all(|p| proto.possible_input_param(&p.get_addr(), p.size as int4))
+        {
             return None;
         }
         let end = addr.get_offset().checked_add(size as u64)?;
-        for input in fd.vbank().iter_def_flag(crate::varnode::varnode_flags::input) {
+        for input in fd
+            .vbank()
+            .iter_def_flag(crate::varnode::varnode_flags::input)
+        {
             let vn = fd.vbank().get(input)?;
             let a = vn.get_addr();
-            if a.get_space()?.get_index() != addr.get_space()?.get_index() { continue; }
+            if a.get_space()?.get_index() != addr.get_space()?.get_index() {
+                continue;
+            }
             let vnend = a.get_offset().checked_add(vn.get_size() as u64)?;
-            if vnend <= addr.get_offset() || a.get_offset() >= end { continue; }
-            if vn.is_type_lock() || vn.is_name_lock() || vn.is_locked_input()
-                || vn.is_unaffected() || vn.is_return_address() || vn.is_persist()
-                || vn.is_addr_tied() || (a == addr && vn.get_size() == size && vn.is_write_mask())
+            if vnend <= addr.get_offset() || a.get_offset() >= end {
+                continue;
+            }
+            if vn.is_type_lock()
+                || vn.is_name_lock()
+                || vn.is_locked_input()
+                || vn.is_unaffected()
+                || vn.is_return_address()
+                || vn.is_persist()
+                || vn.is_addr_tied()
+                || (a == addr && vn.get_size() == size && vn.is_write_mask())
             {
                 return None;
             }
             if !(a == addr && vn.get_size() == size)
-                && !pieces.iter().any(|p| p.get_addr() == *a && p.size as int4 == vn.get_size())
-            { return None; }
+                && !pieces
+                    .iter()
+                    .any(|p| p.get_addr() == *a && p.size as int4 == vn.get_size())
+            {
+                return None;
+            }
         }
         Some(pieces)
     }
 
     fn build_entry_partition(
-        &self, fd: &mut crate::funcdata::Funcdata, addr: &Address, size: int4,
+        &self,
+        fd: &mut crate::funcdata::Funcdata,
+        addr: &Address,
+        size: int4,
         partition: &[unlace_num::pcoderaw::VarnodeData],
     ) -> unlace_base::error::KunaResult<crate::context::VarnodeId> {
-        let existing = fd.vbank().iter_def_flag(crate::varnode::varnode_flags::input)
-            .find(|&id| fd.vbank().get(id).is_some_and(|v| v.get_addr() == addr && v.get_size() == size));
+        let existing = fd
+            .vbank()
+            .iter_def_flag(crate::varnode::varnode_flags::input)
+            .find(|&id| {
+                fd.vbank()
+                    .get(id)
+                    .is_some_and(|v| v.get_addr() == addr && v.get_size() == size)
+            });
         let whole = if let Some(vn) = existing {
             fd.vbank_mut().make_free(vn);
             vn
-        } else { fd.new_varnode(size, addr, None) };
+        } else {
+            fd.new_varnode(size, addr, None)
+        };
         let mut pieces = Vec::with_capacity(partition.len());
         for part in partition {
             let piece = crate::p3_dataflow::kuna_inputtile::new_tiled_input(
-                fd, part.size as int4, &part.get_addr(),
+                fd,
+                part.size as int4,
+                &part.get_addr(),
             )?;
-            fd.vbank_mut().get_mut(piece).expect("entry input slot").set_write_mask();
+            fd.vbank_mut()
+                .get_mut(piece)
+                .expect("entry input slot")
+                .set_write_mask();
             pieces.push(piece);
         }
         Ok(self.concat_pieces(fd, &pieces, None, whole))
     }
 
     fn new_entry_input(
-        &self, fd: &mut crate::funcdata::Funcdata, size: int4, addr: &Address,
+        &self,
+        fd: &mut crate::funcdata::Funcdata,
+        size: int4,
+        addr: &Address,
     ) -> unlace_base::error::KunaResult<crate::context::VarnodeId> {
         if let Some(partition) = self.entry_partition(fd, addr, size) {
             return self.build_entry_partition(fd, addr, size, &partition);
@@ -3799,12 +4199,20 @@ impl Heritage {
             return;
         }
         if input.len() == 1
-            && fd.vbank().get(input[0]).expect("guard_input: stale input").get_size() == size
+            && fd
+                .vbank()
+                .get(input[0])
+                .expect("guard_input: stale input")
+                .get_size()
+                == size
         {
             if let Some(partition) = self.entry_partition(fd, addr, size) {
-                let whole = self.build_entry_partition(fd, addr, size, &partition)
+                let whole = self
+                    .build_entry_partition(fd, addr, size, &partition)
                     .expect("guard_input: ABI entry partition");
-                fd.vbank_mut().get_mut(whole).expect("guard_input: partition output")
+                fd.vbank_mut()
+                    .get_mut(whole)
+                    .expect("guard_input: partition output")
                     .set_active_heritage();
             }
             return; // single input fills everything; links in automatically
@@ -3818,15 +4226,25 @@ impl Heritage {
         let mut newinput: Vec<crate::context::VarnodeId> = Vec::new();
         while cur < end {
             let candidate = input.get(i).copied();
-            let next = candidate.map(|vn| fd.vbank().get(vn).expect("guard_input: input vn")
-                .get_addr().get_offset()).unwrap_or(end);
+            let next = candidate
+                .map(|vn| {
+                    fd.vbank()
+                        .get(vn)
+                        .expect("guard_input: input vn")
+                        .get_addr()
+                        .get_offset()
+                })
+                .unwrap_or(end);
             if next > cur {
                 let gap = Address::new(Rc::clone(&spc), cur);
                 let width = (next - cur) as int4;
                 if let Some(partition) = self.entry_partition(fd, &gap, width) {
                     for piece in partition {
                         let vn = fd.new_varnode(piece.size as int4, &piece.get_addr(), None);
-                        newinput.push(fd.set_input_varnode(vn).expect("guard_input: ABI hole slot"));
+                        newinput.push(
+                            fd.set_input_varnode(vn)
+                                .expect("guard_input: ABI hole slot"),
+                        );
                     }
                 } else {
                     let vn = fd.new_varnode(width, &gap, None);
@@ -3836,7 +4254,9 @@ impl Heritage {
             } else {
                 let vn = candidate.expect("guard_input: input candidate");
                 i += 1;
-                cur = cur.wrapping_add(fd.vbank().get(vn).expect("guard_input: vn size").get_size() as u64);
+                cur = cur.wrapping_add(
+                    fd.vbank().get(vn).expect("guard_input: vn size").get_size() as u64,
+                );
                 newinput.push(vn);
             }
         }
@@ -3844,11 +4264,17 @@ impl Heritage {
             return; // will get linked in automatically
         }
         for &vn in &newinput {
-            fd.vbank_mut().get_mut(vn).expect("guard_input: write mask").set_write_mask();
+            fd.vbank_mut()
+                .get_mut(vn)
+                .expect("guard_input: write mask")
+                .set_write_mask();
         }
         let newout = fd.new_varnode(size, addr, None);
         let unified = self.concat_pieces(fd, &newinput, None, newout);
-        fd.vbank_mut().get_mut(unified).expect("guard_input: unified").set_active_heritage();
+        fd.vbank_mut()
+            .get_mut(unified)
+            .expect("guard_input: unified")
+            .set_active_heritage();
     }
 
     /// Perform one level of Varnode splitting to match a [`JoinRecord`] (C++
@@ -3867,7 +4293,11 @@ impl Heritage {
         let numpieces = joinrec.num_pieces();
         let mut recnum: i32 = 0;
         for &curvn in lastcombo.iter() {
-            let cursize = fd.vbank().get(curvn).expect("split_join_level: curvn").get_size();
+            let cursize = fd
+                .vbank()
+                .get(curvn)
+                .expect("split_join_level: curvn")
+                .get_size();
             if cursize == joinrec.get_piece(recnum).size as int4 {
                 nextlev.push(Some(curvn));
                 nextlev.push(None);
@@ -3922,7 +4352,9 @@ impl Heritage {
     ) {
         use unlace_num::opcodes::OpCode;
         // vn isFree, so loneDescend must be non-null.
-        let mut op = fd.lone_descend(vn).expect("split_join_read: vn has a lone descendant");
+        let mut op = fd
+            .lone_descend(vn)
+            .expect("split_join_read: vn has a lone descendant");
         let is_primitive = {
             let v = fd.vbank().get(vn).expect("split_join_read: vn");
             if v.is_type_lock() {
@@ -3943,16 +4375,30 @@ impl Heritage {
                 let leasthalf = nextlev[2 * i + 1];
                 let Some(leasthalf) = leasthalf else { continue }; // not split this level
                 let mosthalf = mosthalf.expect("split_join_read: most half present when split");
-                let opaddr = fd.obank().get(op).expect("split_join_read: op").get_addr().clone();
+                let opaddr = fd
+                    .obank()
+                    .get(op)
+                    .expect("split_join_read: op")
+                    .get_addr()
+                    .clone();
                 let concat = fd.new_op(2, opaddr);
                 fd.op_set_opcode(concat, piece_typeop.clone());
-                fd.op_set_output(concat, curvn).expect("split_join_read: set output");
-                fd.op_set_input(concat, mosthalf, 0).expect("split_join_read: set in0");
-                fd.op_set_input(concat, leasthalf, 1).expect("split_join_read: set in1");
+                fd.op_set_output(concat, curvn)
+                    .expect("split_join_read: set output");
+                fd.op_set_input(concat, mosthalf, 0)
+                    .expect("split_join_read: set in0");
+                fd.op_set_input(concat, leasthalf, 1)
+                    .expect("split_join_read: set in1");
                 fd.op_insert_before(concat, op);
                 if is_primitive {
-                    fd.vbank_mut().get_mut(mosthalf).expect("split_join_read: mosthalf").set_precis_hi();
-                    fd.vbank_mut().get_mut(leasthalf).expect("split_join_read: leasthalf").set_precis_lo();
+                    fd.vbank_mut()
+                        .get_mut(mosthalf)
+                        .expect("split_join_read: mosthalf")
+                        .set_precis_hi();
+                    fd.vbank_mut()
+                        .get_mut(leasthalf)
+                        .expect("split_join_read: leasthalf")
+                        .set_precis_lo();
                 } else {
                     fd.op_mark_no_collapse(concat);
                 }
@@ -4000,8 +4446,11 @@ impl Heritage {
                 let leasthalf = nextlev[2 * i + 1];
                 let Some(leasthalf) = leasthalf else { continue };
                 let mosthalf = mosthalf.expect("split_join_write: most half present when split");
-                let leastsize =
-                    fd.vbank().get(leasthalf).expect("split_join_write: leasthalf").get_size();
+                let leastsize = fd
+                    .vbank()
+                    .get(leasthalf)
+                    .expect("split_join_write: leasthalf")
+                    .get_size();
 
                 for (half, offset, high) in [(mosthalf, leastsize, true), (leasthalf, 0, false)] {
                     if fd.vbank().get(half).is_some_and(|v| v.is_constant()) {
@@ -4011,21 +4460,35 @@ impl Heritage {
                         bb_start.clone()
                     } else {
                         let prevop = op.expect("split_join_write: non-input has a def op");
-                        fd.obank().get(prevop).expect("split_join_write: op").get_addr().clone()
+                        fd.obank()
+                            .get(prevop)
+                            .expect("split_join_write: op")
+                            .get_addr()
+                            .clone()
                     };
                     let split = fd.new_op(2, opaddr);
                     fd.op_set_opcode(split, sub_typeop.clone());
-                    fd.op_set_output(split, half).expect("split_join_write: set output");
-                    fd.op_set_input(split, curvn, 0).expect("split_join_write: set input");
+                    fd.op_set_output(split, half)
+                        .expect("split_join_write: set output");
+                    fd.op_set_input(split, curvn, 0)
+                        .expect("split_join_write: set input");
                     let constant = fd.new_constant(4, offset as u64);
-                    fd.op_set_input(split, constant, 1).expect("split_join_write: set offset");
+                    fd.op_set_input(split, constant, 1)
+                        .expect("split_join_write: set offset");
                     match op {
                         None => fd.op_insert_begin(split, bb),
                         Some(prevop) => fd.op_insert_after(split, prevop),
                     }
                     if is_primitive {
-                        let value = fd.vbank_mut().get_mut(half).expect("split_join_write: half");
-                        if high { value.set_precis_hi(); } else { value.set_precis_lo(); }
+                        let value = fd
+                            .vbank_mut()
+                            .get_mut(half)
+                            .expect("split_join_write: half");
+                        if high {
+                            value.set_precis_hi();
+                        } else {
+                            value.set_precis_lo();
+                        }
                     }
                     op = Some(split);
                 }
@@ -4043,16 +4506,28 @@ impl Heritage {
         joinrec: &Rc<unlace_base::space::JoinRecord>,
     ) {
         use unlace_num::opcodes::OpCode;
-        let op = fd.lone_descend(vn).expect("float_extension_read: vn has a lone descendant");
-        let opaddr = fd.obank().get(op).expect("float_extension_read: op").get_addr().clone();
+        let op = fd
+            .lone_descend(vn)
+            .expect("float_extension_read: vn has a lone descendant");
+        let opaddr = fd
+            .obank()
+            .get(op)
+            .expect("float_extension_read: op")
+            .get_addr()
+            .clone();
         let trunc = fd.new_op(1, opaddr);
         // Float extensions have exactly 1 piece.
         let vdata = joinrec.get_piece(0);
-        let spc = vdata.space.clone().expect("float_extension_read: piece space");
+        let spc = vdata
+            .space
+            .clone()
+            .expect("float_extension_read: piece space");
         let bigvn = fd.new_varnode_space_off(vdata.size as int4, spc, vdata.offset);
         fd.op_set_opcode(trunc, typeop_skeleton(OpCode::CPUI_FLOAT_FLOAT2FLOAT));
-        fd.op_set_output(trunc, vn).expect("float_extension_read: set output");
-        fd.op_set_input(trunc, bigvn, 0).expect("float_extension_read: set in0");
+        fd.op_set_output(trunc, vn)
+            .expect("float_extension_read: set output");
+        fd.op_set_input(trunc, bigvn, 0)
+            .expect("float_extension_read: set in0");
         fd.op_insert_before(trunc, op);
     }
 
@@ -4065,8 +4540,16 @@ impl Heritage {
         joinrec: &Rc<unlace_base::space::JoinRecord>,
     ) {
         use unlace_num::opcodes::OpCode;
-        let op = fd.vbank().get(vn).expect("float_extension_write: vn").get_def();
-        let is_input = fd.vbank().get(vn).expect("float_extension_write: vn").is_input();
+        let op = fd
+            .vbank()
+            .get(vn)
+            .expect("float_extension_write: vn")
+            .get_def();
+        let is_input = fd
+            .vbank()
+            .get(vn)
+            .expect("float_extension_write: vn")
+            .is_input();
         // The entry block (index 0).
         let bb = fd.bblocks_get_block(0);
         let bb_start = fd.bblocks_block_start(bb);
@@ -4074,17 +4557,25 @@ impl Heritage {
             bb_start
         } else {
             let prevop = op.expect("float_extension_write: non-input has a def op");
-            fd.obank().get(prevop).expect("float_extension_write: op").get_addr().clone()
+            fd.obank()
+                .get(prevop)
+                .expect("float_extension_write: op")
+                .get_addr()
+                .clone()
         };
         let ext = fd.new_op(1, opaddr);
         // Float extensions have exactly 1 piece.
         let vdata = joinrec.get_piece(0);
-        let spc = vdata.space.clone().expect("float_extension_write: piece space");
+        let spc = vdata
+            .space
+            .clone()
+            .expect("float_extension_write: piece space");
         let outaddr = Address::new(spc, vdata.offset);
         fd.op_set_opcode(ext, typeop_skeleton(OpCode::CPUI_FLOAT_FLOAT2FLOAT));
         fd.new_varnode_out(vdata.size as int4, &outaddr, ext)
             .expect("float_extension_write: new_varnode_out");
-        fd.op_set_input(ext, vn, 0).expect("float_extension_write: set in0");
+        fd.op_set_input(ext, vn, 0)
+            .expect("float_extension_write: set in0");
         match op {
             None => fd.op_insert_begin(ext, bb),
             Some(prevop) => fd.op_insert_after(ext, prevop),
@@ -4117,17 +4608,30 @@ impl Heritage {
         let join_vns = fd.vbank().loc_space_ids(&joinspace);
         for vn in join_vns {
             // vn->getSpace() != joinspace would break; the snapshot is all-join.
-            let offset = fd.vbank().get(vn).expect("process_joins: vn").get_addr().get_offset();
+            let offset = fd
+                .vbank()
+                .get(vn)
+                .expect("process_joins: vn")
+                .get_addr()
+                .get_offset();
             let joinrec = fd
                 .get_arch()
                 .manage()
                 .find_join(offset)
                 .expect("process_joins: join Varnode has a JoinRecord");
-            let piecespace = joinrec.get_piece(0).space.clone().expect("process_joins: piece space");
+            let piecespace = joinrec
+                .get_piece(0)
+                .space
+                .clone()
+                .expect("process_joins: piece space");
 
             let (unified_size, vn_size, is_free) = {
                 let v = fd.vbank().get(vn).expect("process_joins: vn");
-                (joinrec.get_unified().size as int4, v.get_size(), v.is_free())
+                (
+                    joinrec.get_unified().size as int4,
+                    v.get_size(),
+                    v.is_free(),
+                )
             };
             if unified_size != vn_size {
                 panic!("Joined varnode does not match size of record");
@@ -4165,11 +4669,7 @@ impl Heritage {
     /// from the data flow.  Once the stack space is heritaged the placeholder has
     /// served its purpose and must come back out of the CALL, or it renders as a
     /// trailing argument the callee never takes.
-    fn clear_stack_placeholders(
-        &mut self,
-        fd: &mut crate::funcdata::Funcdata,
-        info_idx: usize,
-    ) {
+    fn clear_stack_placeholders(&mut self, fd: &mut crate::funcdata::Funcdata, info_idx: usize) {
         for i in 0..fd.num_calls() {
             let mut fc = fd.replace_call_specs(i);
             fc.abort_spacebase_relative(fd);
@@ -4182,7 +4682,11 @@ impl Heritage {
     /// on `varstack`, the value it holds at this point of renaming.
     #[allow(clippy::mutable_key_type)]
     fn mark_halt_loop(&mut self, varstack: &VariableStack, addrs: &[Address]) {
-        self.halt_loop_reach.extend(addrs.iter().filter_map(|a| varstack.get(a)?.last().copied()));
+        self.halt_loop_reach.extend(
+            addrs
+                .iter()
+                .filter_map(|a| varstack.get(a)?.last().copied()),
+        );
     }
 
     /// The heart of the renaming algorithm (C++ `Heritage::renameRecurse`,
@@ -4222,7 +4726,8 @@ impl Heritage {
         let mut halt_marks = if self.halt_loop_marks.is_empty() {
             None
         } else {
-            self.halt_loop_marks.remove(&(fd.bblocks_ref().block(bl).get_index() as usize))
+            self.halt_loop_marks
+                .remove(&(fd.bblocks_ref().block(bl).get_index() as usize))
         };
         for op in ops {
             if self.load_reads.has_guards() {
@@ -4234,30 +4739,41 @@ impl Heritage {
                     self.mark_halt_loop(varstack, &addrs);
                 }
                 // First replace reads with top of stack.
-                let ninput = fd.obank().get(op).expect("rename_recurse: stale op").num_input();
+                let ninput = fd
+                    .obank()
+                    .get(op)
+                    .expect("rename_recurse: stale op")
+                    .num_input();
                 let pending = super::kuna_renamereads::pending(fd, op);
                 for slot in 0..ninput {
-                    let (vnin, key, in_size) =
-                        match fd.obank().get(op).expect("rename_recurse: stale op").get_in(slot) {
-                            Some(vnin) => {
-                                let vinref = fd.vbank().get(vnin).expect("rename_recurse: stale in");
-                                if vinref.is_heritage_known() {
-                                    continue; // not free
-                                }
-                                if !vinref.is_active_heritage() {
-                                    continue; // Not being heritaged this round
-                                }
-                                let key = vinref.get_addr().clone();
-                                let in_size = vinref.get_size();
-                                fd.vbank_mut().get_mut(vnin).expect("rename_recurse: in").clear_active_heritage();
-                                (Some(vnin), key, in_size)
+                    let (vnin, key, in_size) = match fd
+                        .obank()
+                        .get(op)
+                        .expect("rename_recurse: stale op")
+                        .get_in(slot)
+                    {
+                        Some(vnin) => {
+                            let vinref = fd.vbank().get(vnin).expect("rename_recurse: stale in");
+                            if vinref.is_heritage_known() {
+                                continue; // not free
                             }
-                            None if pending => match super::kuna_renamereads::storage(fd, op) {
-                                Some((key, in_size)) => (None, key, in_size),
-                                None => continue,
-                            },
+                            if !vinref.is_active_heritage() {
+                                continue; // Not being heritaged this round
+                            }
+                            let key = vinref.get_addr().clone();
+                            let in_size = vinref.get_size();
+                            fd.vbank_mut()
+                                .get_mut(vnin)
+                                .expect("rename_recurse: in")
+                                .clear_active_heritage();
+                            (Some(vnin), key, in_size)
+                        }
+                        None if pending => match super::kuna_renamereads::storage(fd, op) {
+                            Some((key, in_size)) => (None, key, in_size),
                             None => continue,
-                        };
+                        },
+                        None => continue,
+                    };
                     let mut vnnew = match varstack.get(&key).and_then(|s| s.last().copied()) {
                         Some(top) => top,
                         None => {
@@ -4278,7 +4794,12 @@ impl Heritage {
                         }
                     };
                     if same_time {
-                        let def = fd.vbank().get(vnnew).expect("rename_recurse: vnnew").get_def().unwrap();
+                        let def = fd
+                            .vbank()
+                            .get(vnnew)
+                            .expect("rename_recurse: vnnew")
+                            .get_def()
+                            .unwrap();
                         // STUB(W4): the INDIRECT "same time" carve-out resolves
                         // the IOP-space constant in[1] back to its PcodeOp via
                         // `getOpFromConst`, which needs the IOP→op map.  This is
@@ -4304,24 +4825,49 @@ impl Heritage {
                             vnnew = copy;
                         }
                     }
-                    fd.op_set_input(op, vnnew, slot).expect("rename_recurse: op_set_input read");
+                    fd.op_set_input(op, vnnew, slot)
+                        .expect("rename_recurse: op_set_input read");
                     if let Some(vnin) = vnin {
-                        if fd.vbank().get(vnin).expect("rename_recurse: in").has_no_descend() {
-                            fd.delete_varnode(vnin).expect("rename_recurse: delete free read");
+                        if fd
+                            .vbank()
+                            .get(vnin)
+                            .expect("rename_recurse: in")
+                            .has_no_descend()
+                        {
+                            fd.delete_varnode(vnin)
+                                .expect("rename_recurse: delete free read");
                         }
                     }
                 }
             }
             // Then push writes onto stack.
-            let vnout = match fd.obank().get(op).expect("rename_recurse: stale op").get_out() {
+            let vnout = match fd
+                .obank()
+                .get(op)
+                .expect("rename_recurse: stale op")
+                .get_out()
+            {
                 Some(v) => v,
                 None => continue,
             };
-            if !fd.vbank().get(vnout).expect("rename_recurse: out").is_active_heritage() {
+            if !fd
+                .vbank()
+                .get(vnout)
+                .expect("rename_recurse: out")
+                .is_active_heritage()
+            {
                 continue; // Not a normalized write
             }
-            fd.vbank_mut().get_mut(vnout).expect("rename_recurse: out").clear_active_heritage();
-            let okey = fd.vbank().get(vnout).expect("rename_recurse: out").get_addr().clone();
+            fd.vbank_mut()
+                .get_mut(vnout)
+                .expect("rename_recurse: out")
+                .clear_active_heritage();
+            let okey = fd
+                .vbank()
+                .get(vnout)
+                .expect("rename_recurse: out")
+                .get_addr()
+                .clone();
             varstack.entry(okey).or_default().push(vnout);
             writelist.push(vnout);
         }
@@ -4345,7 +4891,11 @@ impl Heritage {
                 let mut leading = Vec::new();
                 let mut cur = fd.bb_op_head(subbl);
                 while let Some(o) = cur {
-                    if fd.obank().get(o).expect("rename_recurse: stale multiop").code()
+                    if fd
+                        .obank()
+                        .get(o)
+                        .expect("rename_recurse: stale multiop")
+                        .code()
                         != OpCode::CPUI_MULTIEQUAL
                     {
                         break;
@@ -4356,23 +4906,27 @@ impl Heritage {
                 leading
             };
             for multiop in subops {
-                let (vnin, key, in_size) =
-                    match fd.obank().get(multiop).expect("rename_recurse: multiop").get_in(slot) {
-                        Some(vnin) => {
-                            let vinref = fd.vbank().get(vnin).expect("rename_recurse: multi in");
-                            if vinref.is_heritage_known() {
-                                continue;
-                            }
-                            (Some(vnin), vinref.get_addr().clone(), vinref.get_size())
+                let (vnin, key, in_size) = match fd
+                    .obank()
+                    .get(multiop)
+                    .expect("rename_recurse: multiop")
+                    .get_in(slot)
+                {
+                    Some(vnin) => {
+                        let vinref = fd.vbank().get(vnin).expect("rename_recurse: multi in");
+                        if vinref.is_heritage_known() {
+                            continue;
                         }
-                        None if super::kuna_renamereads::pending(fd, multiop) => {
-                            match super::kuna_renamereads::storage(fd, multiop) {
-                                Some((key, in_size)) => (None, key, in_size),
-                                None => continue,
-                            }
+                        (Some(vnin), vinref.get_addr().clone(), vinref.get_size())
+                    }
+                    None if super::kuna_renamereads::pending(fd, multiop) => {
+                        match super::kuna_renamereads::storage(fd, multiop) {
+                            Some((key, in_size)) => (None, key, in_size),
+                            None => continue,
                         }
-                        None => continue,
-                    };
+                    }
+                    None => continue,
+                };
                 let mut vnnew = match varstack.get(&key).and_then(|s| s.last().copied()) {
                     Some(top) => top,
                     None => {
@@ -4387,10 +4941,17 @@ impl Heritage {
                         vnnew = copy;
                     }
                 }
-                fd.op_set_input(multiop, vnnew, slot).expect("rename_recurse: op_set_input multi");
+                fd.op_set_input(multiop, vnnew, slot)
+                    .expect("rename_recurse: op_set_input multi");
                 if let Some(vnin) = vnin {
-                    if fd.vbank().get(vnin).expect("rename_recurse: multi in").has_no_descend() {
-                        fd.delete_varnode(vnin).expect("rename_recurse: delete multi free in");
+                    if fd
+                        .vbank()
+                        .get(vnin)
+                        .expect("rename_recurse: multi in")
+                        .has_no_descend()
+                    {
+                        fd.delete_varnode(vnin)
+                            .expect("rename_recurse: delete multi free in");
                     }
                 }
             }
@@ -4405,7 +4966,12 @@ impl Heritage {
 
         // Pop this block's writes off the stack.
         for vnout in writelist {
-            let key = fd.vbank().get(vnout).expect("rename_recurse: pop out").get_addr().clone();
+            let key = fd
+                .vbank()
+                .get(vnout)
+                .expect("rename_recurse: pop out")
+                .get_addr()
+                .clone();
             if let Some(stack) = varstack.get_mut(&key) {
                 stack.pop();
             }
@@ -4467,8 +5033,13 @@ impl Heritage {
         let (addr, size) = self.load_reads.range(behind.range).clone();
         let load_addr = fd.obank().get(behind.load)?.get_addr().clone();
         let copyop = fd.new_op(1, load_addr);
-        let out = fd.new_varnode_out(size, &addr, copyop).expect("loadguardreads: COPY out");
-        fd.vbank_mut().get_mut(out).expect("loadguardreads: COPY out vn").set_addr_force();
+        let out = fd
+            .new_varnode_out(size, &addr, copyop)
+            .expect("loadguardreads: COPY out");
+        fd.vbank_mut()
+            .get_mut(out)
+            .expect("loadguardreads: COPY out vn")
+            .set_addr_force();
         fd.op_set_opcode_code(copyop, OpCode::CPUI_COPY);
         let _ = fd.op_set_input(copyop, vn, 0);
         fd.op_insert_before(copyop, behind.load);
@@ -4491,8 +5062,13 @@ impl Heritage {
                 continue;
             };
             let copyop = fd.new_op(1, load_addr);
-            let out = fd.new_varnode_out(size, &addr, copyop).expect("loadguardreads: COPY out");
-            fd.vbank_mut().get_mut(out).expect("loadguardreads: COPY out vn").set_addr_force();
+            let out = fd
+                .new_varnode_out(size, &addr, copyop)
+                .expect("loadguardreads: COPY out");
+            fd.vbank_mut()
+                .get_mut(out)
+                .expect("loadguardreads: COPY out vn")
+                .set_addr_force();
             fd.op_set_opcode_code(copyop, OpCode::CPUI_COPY);
             let _ = fd.op_set_input(copyop, vn, 0);
             fd.op_insert_before(copyop, load);
@@ -4502,11 +5078,7 @@ impl Heritage {
 
     /// Borrow a block's ops in execution order (C++ `bl->beginOp()..endOp()`),
     /// snapshotting into a `Vec` so the recursive walk can mutate the IR.
-    fn block_ops(
-        &self,
-        fd: &crate::funcdata::Funcdata,
-        bl: BlockId,
-    ) -> Vec<crate::context::OpId> {
+    fn block_ops(&self, fd: &crate::funcdata::Funcdata, bl: BlockId) -> Vec<crate::context::OpId> {
         fd.bb_ops(bl)
     }
 
@@ -4576,8 +5148,12 @@ impl Heritage {
     ) -> crate::context::VarnodeId {
         use unlace_num::opcodes::OpCode;
         let mut preexist = vnlist[0];
-        let isbigendian =
-            fd.vbank().get(preexist).expect("concat_pieces: vn0").get_addr().is_big_endian();
+        let isbigendian = fd
+            .vbank()
+            .get(preexist)
+            .expect("concat_pieces: vn0")
+            .get_addr()
+            .is_big_endian();
         // Resolve the insertion block + the op we insert *before* (None => block begin),
         // and the address each new op carries.
         let (bl, before, opaddress) = match insertop {
@@ -4591,11 +5167,21 @@ impl Heritage {
                 (start, head, fd.get_address().clone())
             }
             Some(op) => {
-                let parent =
-                    fd.obank().get(op).expect("concat_pieces: insertop").get_parent().expect(
-                        "concat_pieces: insertop has no parent",
-                    );
-                (parent, Some(op), fd.obank().get(op).expect("concat_pieces").get_addr().clone())
+                let parent = fd
+                    .obank()
+                    .get(op)
+                    .expect("concat_pieces: insertop")
+                    .get_parent()
+                    .expect("concat_pieces: insertop has no parent");
+                (
+                    parent,
+                    Some(op),
+                    fd.obank()
+                        .get(op)
+                        .expect("concat_pieces")
+                        .get_addr()
+                        .clone(),
+                )
             }
         };
         let piece_typeop = typeop_skeleton(OpCode::CPUI_PIECE);
@@ -4605,19 +5191,33 @@ impl Heritage {
             let newop = fd.new_op(2, opaddress.clone());
             fd.op_set_opcode(newop, piece_typeop.clone());
             let newvn = if i == n - 1 {
-                fd.op_set_output(newop, finalvn).expect("concat_pieces: op_set_output");
+                fd.op_set_output(newop, finalvn)
+                    .expect("concat_pieces: op_set_output");
                 finalvn
             } else {
-                let presize = fd.vbank().get(preexist).expect("concat_pieces: presize").get_size();
-                let vnsize = fd.vbank().get(vn).expect("concat_pieces: vnsize").get_size();
-                fd.new_unique_out(presize + vnsize, newop).expect("concat_pieces: new_unique_out")
+                let presize = fd
+                    .vbank()
+                    .get(preexist)
+                    .expect("concat_pieces: presize")
+                    .get_size();
+                let vnsize = fd
+                    .vbank()
+                    .get(vn)
+                    .expect("concat_pieces: vnsize")
+                    .get_size();
+                fd.new_unique_out(presize + vnsize, newop)
+                    .expect("concat_pieces: new_unique_out")
             };
             if isbigendian {
-                fd.op_set_input(newop, preexist, 0).expect("concat_pieces: set in0"); // most sig
-                fd.op_set_input(newop, vn, 1).expect("concat_pieces: set in1"); // least sig
+                fd.op_set_input(newop, preexist, 0)
+                    .expect("concat_pieces: set in0"); // most sig
+                fd.op_set_input(newop, vn, 1)
+                    .expect("concat_pieces: set in1"); // least sig
             } else {
-                fd.op_set_input(newop, vn, 0).expect("concat_pieces: set in0");
-                fd.op_set_input(newop, preexist, 1).expect("concat_pieces: set in1");
+                fd.op_set_input(newop, vn, 0)
+                    .expect("concat_pieces: set in0");
+                fd.op_set_input(newop, preexist, 1)
+                    .expect("concat_pieces: set in1");
             }
             fd.op_insert(newop, bl, before);
             preexist = newvn;
@@ -4669,7 +5269,11 @@ impl Heritage {
                         .expect("split_pieces: insertop")
                         .get_parent()
                         .expect("split_pieces: insertop has no parent");
-                    (parent, fd.obank().get(op).expect("split_pieces").get_addr().clone(), Some(op))
+                    (
+                        parent,
+                        fd.obank().get(op).expect("split_pieces").get_addr().clone(),
+                        Some(op),
+                    )
                 }
             };
         let sub_typeop = typeop_skeleton(OpCode::CPUI_SUBPIECE);
@@ -4685,10 +5289,13 @@ impl Heritage {
             } else {
                 vnoff.wrapping_sub(baseoff)
             });
-            fd.op_set_input(newop, startvn, 0).expect("split_pieces: set in0");
+            fd.op_set_input(newop, startvn, 0)
+                .expect("split_pieces: set in0");
             let cvn = fd.new_constant(4, diff);
-            fd.op_set_input(newop, cvn, 1).expect("split_pieces: set in1");
-            fd.op_set_output(newop, vn).expect("split_pieces: set output");
+            fd.op_set_input(newop, cvn, 1)
+                .expect("split_pieces: set in1");
+            fd.op_set_output(newop, vn)
+                .expect("split_pieces: set output");
             // C++ `opInsert(newop,bl,insertiter)` where insertiter points just
             // after the write (or block begin).  When `after_anchor` is set we
             // insert directly after it (op_insert_after); each successive piece
@@ -4719,7 +5326,10 @@ impl Heritage {
             .iter()
             .rev()
             .map_while(|&vn| {
-                let v = fd.vbank().get(vn).filter(|v| v.get_addr().get_offset() >= floor)?;
+                let v = fd
+                    .vbank()
+                    .get(vn)
+                    .filter(|v| v.get_addr().get_offset() >= floor)?;
                 Some((vn, v))
             })
             .filter(|(_, v)| !(v.is_write_mask() || v.is_free() && v.has_no_descend()))
@@ -4733,7 +5343,12 @@ impl Heritage {
         for &(vn, cut) in &wrapped {
             let (addr, size, written, input) = {
                 let v = fd.vbank().get(vn).expect("split_wrapped: vn");
-                (v.get_addr().clone(), v.get_size(), v.is_written(), v.is_input())
+                (
+                    v.get_addr().clone(),
+                    v.get_size(),
+                    v.is_written(),
+                    v.is_input(),
+                )
             };
             let refine = super::kuna_wrapsplit::wrap_refinement(size, cut);
             if written {
@@ -4744,8 +5359,13 @@ impl Heritage {
                 let mut reads = vec![vn];
                 for op in fd.descend_snapshot(vn).into_iter().skip(1) {
                     let copy = fd.new_varnode(size, &addr, None);
-                    let slot = fd.obank().get(op).expect("split_wrapped: reader").get_slot(vn);
-                    fd.op_set_input(op, copy, slot).expect("split_wrapped: reader slot");
+                    let slot = fd
+                        .obank()
+                        .get(op)
+                        .expect("split_wrapped: reader")
+                        .get_slot(vn);
+                    fd.op_set_input(op, copy, slot)
+                        .expect("split_wrapped: reader slot");
                     reads.push(copy);
                 }
                 for read in reads {
@@ -4789,9 +5409,17 @@ impl Heritage {
     ) {
         let (mut curaddr, mut sz, spc) = {
             let v = fd.vbank().get(vn).expect("split_by_refinement: vn");
-            (v.get_addr().clone(), v.get_size(), v.get_addr().get_space().expect("split_by_refinement: space").clone())
+            (
+                v.get_addr().clone(),
+                v.get_size(),
+                v.get_addr()
+                    .get_space()
+                    .expect("split_by_refinement: space")
+                    .clone(),
+            )
         };
-        let mut diff = spc.wrap_offset(curaddr.get_offset().wrapping_sub(addr.get_offset())) as usize;
+        let mut diff =
+            spc.wrap_offset(curaddr.get_offset().wrapping_sub(addr.get_offset())) as usize;
         let mut cutsz = refine[diff];
         if sz <= cutsz {
             return; // already refined
@@ -4801,8 +5429,7 @@ impl Heritage {
         sz -= cutsz;
         while sz > 0 {
             curaddr = &curaddr + i64::from(cutsz);
-            diff =
-                spc.wrap_offset(curaddr.get_offset().wrapping_sub(addr.get_offset())) as usize;
+            diff = spc.wrap_offset(curaddr.get_offset().wrapping_sub(addr.get_offset())) as usize;
             cutsz = refine[diff];
             if cutsz > sz {
                 cutsz = sz; // final piece
@@ -4831,13 +5458,22 @@ impl Heritage {
         let vnsize = fd.vbank().get(vn).expect("refine_read: vn").get_size();
         let replacevn = fd.new_unique(vnsize, None);
         // Read is free so has exactly one descend.
-        let op = fd.lone_descend(vn).expect("refine_read: free read has lone descend");
+        let op = fd
+            .lone_descend(vn)
+            .expect("refine_read: free read has lone descend");
         let slot = fd.obank().get(op).expect("refine_read: op").get_slot(vn);
         let pieces = newvn.clone();
         self.concat_pieces(fd, &pieces, Some(op), replacevn);
-        fd.op_set_input(op, replacevn, slot).expect("refine_read: op_set_input");
-        if fd.vbank().get(vn).expect("refine_read: vn").has_no_descend() {
-            fd.delete_varnode(vn).expect("refine_read: delete free read");
+        fd.op_set_input(op, replacevn, slot)
+            .expect("refine_read: op_set_input");
+        if fd
+            .vbank()
+            .get(vn)
+            .expect("refine_read: vn")
+            .has_no_descend()
+        {
+            fd.delete_varnode(vn)
+                .expect("refine_read: delete free read");
         } else {
             panic!("kuna heritage: refining non-free varnode");
         }
@@ -4868,13 +5504,18 @@ impl Heritage {
             (v.get_size(), v.get_addr().clone())
         };
         let replacevn = fd.new_unique(vnsize, None);
-        let def = fd.vbank().get(vn).expect("refine_write: vn").get_def().expect(
-            "refine_write: write has a def",
-        );
-        fd.op_set_output(def, replacevn).expect("refine_write: op_set_output");
+        let def = fd
+            .vbank()
+            .get(vn)
+            .expect("refine_write: vn")
+            .get_def()
+            .expect("refine_write: write has a def");
+        fd.op_set_output(def, replacevn)
+            .expect("refine_write: op_set_output");
         let pieces = newvn.clone();
         self.split_pieces(fd, &pieces, Some(def), &vnaddr, vnsize, replacevn);
-        fd.total_replace(vn, replacevn).expect("refine_write: total_replace");
+        fd.total_replace(vn, replacevn)
+            .expect("refine_write: total_replace");
         fd.delete_varnode(vn).expect("refine_write: delete vn");
     }
 
@@ -4899,7 +5540,10 @@ impl Heritage {
         };
         let pieces = newvn.clone();
         self.split_pieces(fd, &pieces, None, &vnaddr, vnsize, vn);
-        fd.vbank_mut().get_mut(vn).expect("refine_input: vn").set_write_mask();
+        fd.vbank_mut()
+            .get_mut(vn)
+            .expect("refine_input: vn")
+            .set_write_mask();
     }
 
     /// Find the common refinement of all reads and writes in the address range
@@ -4970,15 +5614,12 @@ impl Heritage {
                         if input_space.get_index() != space.get_index() {
                             return false;
                         }
-                        let input_start = space.wrap_offset(
-                            v.get_addr().get_offset().wrapping_sub(addr.get_offset()),
-                        ) as usize;
+                        let input_start = space
+                            .wrap_offset(v.get_addr().get_offset().wrapping_sub(addr.get_offset()))
+                            as usize;
                         let input_span = (input_start, input_start + v.get_size() as usize);
                         crate::p3_dataflow::kuna_inputrefinement::span_straddles_join(
-                            input_span,
-                            start,
-                            junction,
-                            end,
+                            input_span, start, junction, end,
                         )
                     })
                 },
@@ -4993,8 +5634,11 @@ impl Heritage {
                 .iter()
                 .filter_map(|&vn| {
                     let v = fd.vbank().get(vn).expect("refinement: marker");
-                    let start = space.wrap_offset(v.get_addr().get_offset().wrapping_sub(addr.get_offset()));
-                    parts.cut_span(start as usize, v.get_size() as usize).map(|span| (vn, span))
+                    let start = space
+                        .wrap_offset(v.get_addr().get_offset().wrapping_sub(addr.get_offset()));
+                    parts
+                        .cut_span(start as usize, v.get_size() as usize)
+                        .map(|span| (vn, span))
                 })
                 .collect();
             for (vn, (lo, hi)) in cut {
@@ -5006,9 +5650,22 @@ impl Heritage {
         let straddles = |vn: crate::context::VarnodeId| {
             !halves || crate::p3_dataflow::kuna_pairrefine::straddles_middle(fd, vn, &addr, size)
         };
-        let readvars: Vec<_> = readvars.iter().copied().chain(retired).filter(|&vn| straddles(vn)).collect();
-        let writevars: Vec<_> = writevars.iter().copied().filter(|&vn| straddles(vn)).collect();
-        let inputvars: Vec<_> = inputvars.iter().copied().filter(|&vn| straddles(vn)).collect();
+        let readvars: Vec<_> = readvars
+            .iter()
+            .copied()
+            .chain(retired)
+            .filter(|&vn| straddles(vn))
+            .collect();
+        let writevars: Vec<_> = writevars
+            .iter()
+            .copied()
+            .filter(|&vn| straddles(vn))
+            .collect();
+        let inputvars: Vec<_> = inputvars
+            .iter()
+            .copied()
+            .filter(|&vn| straddles(vn))
+            .collect();
         let mut newvn: Vec<crate::context::VarnodeId> = Vec::new();
         for &vn in &readvars {
             self.refine_read(fd, vn, &addr, &refine, &mut newvn);
@@ -5038,14 +5695,16 @@ impl Heritage {
         let mut curaddr = addr.clone();
         // First partition: this is the resiter the caller re-collects from.
         let resiter = pos;
-        self.disjoint.insert(pos, curaddr.clone(), sz, flags_at(cut));
+        self.disjoint
+            .insert(pos, curaddr.clone(), sz, flags_at(cut));
         self.globaldisjoint.add(curaddr.clone(), sz, curpass);
         pos += 1;
         cut += sz as usize;
         curaddr = &curaddr + i64::from(sz);
         while cut < size as usize {
             sz = refine[cut];
-            self.disjoint.insert(pos, curaddr.clone(), sz, flags_at(cut));
+            self.disjoint
+                .insert(pos, curaddr.clone(), sz, flags_at(cut));
             self.globaldisjoint.add(curaddr.clone(), sz, curpass);
             pos += 1;
             cut += sz as usize;
@@ -5087,34 +5746,48 @@ impl Heritage {
                 break;
             }
             let mut memrange = self.disjoint.get(idx).clone();
-            let maxw =
-                self.collect(fd, &mut memrange, &mut readvars, &mut writevars, &mut inputvars, &mut removevars);
+            let maxw = self.collect(
+                fd,
+                &mut memrange,
+                &mut readvars,
+                &mut writevars,
+                &mut inputvars,
+                &mut removevars,
+            );
             // refinement (heritage.cc:2611-2619): only when size>4 && max<size.
-            let byte_copy = memrange.addr.get_space()
+            let byte_copy = memrange
+                .addr
+                .get_space()
                 .zip(fd.get_arch().manage().get_stack_space())
                 .is_some_and(|(space, stack)| space.get_index() == stack.get_index())
                 && writevars.iter().any(|&vn| {
-                fd.vbank().get(vn).and_then(|v| v.get_def())
-                    .is_some_and(|op| fd.is_stack_byte_copy_op(op))
-            });
+                    fd.vbank()
+                        .get(vn)
+                        .and_then(|v| v.get_def())
+                        .is_some_and(|op| fd.is_stack_byte_copy_op(op))
+                });
             let pair_split = !byte_copy
                 && crate::p3_dataflow::kuna_pairrefine::split_pair(
-                    fd, &memrange.addr, memrange.size, maxw, &readvars, &writevars, &inputvars,
+                    fd,
+                    &memrange.addr,
+                    memrange.size,
+                    maxw,
+                    &readvars,
+                    &writevars,
+                    &inputvars,
                 );
             let normal = memrange.size > 4 && maxw < memrange.size;
             if byte_copy || pair_split || normal {
-                if let Some(refiter) =
-                    self.refinement(
-                        fd,
-                        idx,
-                        &readvars,
-                        &writevars,
-                        &inputvars,
-                        &removevars,
-                        byte_copy,
-                        pair_split && !normal,
-                    )
-                {
+                if let Some(refiter) = self.refinement(
+                    fd,
+                    idx,
+                    &readvars,
+                    &writevars,
+                    &inputvars,
+                    &removevars,
+                    byte_copy,
+                    pair_split && !normal,
+                ) {
                     idx = refiter;
                     memrange = self.disjoint.get(idx).clone();
                     self.collect(
@@ -5138,9 +5811,11 @@ impl Heritage {
                 if writevars.is_empty() && inputvars.is_empty() {
                     skip = true;
                 } else {
-                    let is_internal = memrange.addr.get_space().map(|s| {
-                        s.get_type() == spacetype::IPTR_INTERNAL
-                    }).unwrap_or(false);
+                    let is_internal = memrange
+                        .addr
+                        .get_space()
+                        .map(|s| s.get_type() == spacetype::IPTR_INTERNAL)
+                        .unwrap_or(false);
                     if is_internal || (memrange.old_addresses() && !memrange.retired_markers()) {
                         skip = true;
                     }
@@ -5164,7 +5839,15 @@ impl Heritage {
             self.guard_input(fd, &memrange.addr, size, &inputvars);
             let add_indirects = memrange.new_addresses();
             let revisit = memrange.old_addresses();
-            let fl = self.guard(fd, &memrange.addr, size, add_indirects, revisit, &mut readvars, &mut writevars);
+            let fl = self.guard(
+                fd,
+                &memrange.addr,
+                size,
+                add_indirects,
+                revisit,
+                &mut readvars,
+                &mut writevars,
+            );
             // calcMultiequals(writevars): the realized engine takes the write
             // *blocks* (the C++ derives them as `write[i]->getDef()->getParent()`
             // — the block each normalized write is defined in).  Inputs/written
@@ -5191,16 +5874,24 @@ impl Heritage {
             });
             self.calc_multiequals(fd, &write_blocks);
             if let Some((_, _, _, calls, keep)) = &persist_skips {
-                let defs: Vec<crate::context::OpId> =
-                    writevars.iter().filter_map(|&vn| fd.vbank().get(vn).and_then(|v| v.get_def())).collect();
-                if !super::kuna_persistcalls::stale_calls(fd, calls, keep, &defs, &self.merge).is_empty() {
+                let defs: Vec<crate::context::OpId> = writevars
+                    .iter()
+                    .filter_map(|&vn| fd.vbank().get(vn).and_then(|v| v.get_def()))
+                    .collect();
+                if !super::kuna_persistcalls::stale_calls(fd, calls, keep, &defs, &self.merge)
+                    .is_empty()
+                {
                     super::kuna_persistcalls::restart_full(fd);
                 }
             }
             if fl.is_some_and(|fl| !memrange.old_addresses() && self.prunes(fl, &memrange.addr))
                 && super::kuna_prunedssa::prune_merges(fd, &memrange.addr, size, &mut self.merge)
             {
-                let spc = memrange.addr.get_space().expect("place_multiequals: range space").clone();
+                let spc = memrange
+                    .addr
+                    .get_space()
+                    .expect("place_multiequals: range space")
+                    .clone();
                 self.seen_dead_code(&spc);
             }
             // Construct each MULTIEQUAL at its merge block. (kuna `persistcalls`)
@@ -5208,8 +5899,11 @@ impl Heritage {
             // order upstream places them and keep their numbers.
             let merge_blocks: Vec<(BlockId, bool)> = match skipped {
                 Some(full) => {
-                    let kept: crate::kuna_fasthash::FxHashSet<BlockId> = self.merge.iter().copied().collect();
-                    full.into_iter().map(|bl| (bl, kept.contains(&bl))).collect()
+                    let kept: crate::kuna_fasthash::FxHashSet<BlockId> =
+                        self.merge.iter().copied().collect();
+                    full.into_iter()
+                        .map(|bl| (bl, kept.contains(&bl)))
+                        .collect()
                 }
                 None => self.merge.iter().map(|&bl| (bl, true)).collect(),
             };
@@ -5225,9 +5919,17 @@ impl Heritage {
                 let vnout = fd
                     .new_varnode_out(size, &memrange.addr, multiop)
                     .expect("place_multiequals: new_varnode_out");
-                fd.vbank_mut().get_mut(vnout).expect("place_multiequals: vnout").set_active_heritage();
+                fd.vbank_mut()
+                    .get_mut(vnout)
+                    .expect("place_multiequals: vnout")
+                    .set_active_heritage();
                 fd.op_set_opcode(multiop, multi_typeop.clone());
-                super::kuna_renamereads::mark(fd, multiop, size_in as uint4, &mut self.rename_reads);
+                super::kuna_renamereads::mark(
+                    fd,
+                    multiop,
+                    size_in as uint4,
+                    &mut self.rename_reads,
+                );
                 fd.op_insert_begin(multiop, bl);
             }
             idx += 1;
@@ -5256,16 +5958,26 @@ impl Heritage {
         let mut ranges = 0u64;
         for i in 0..self.disjoint.len() {
             let range = self.disjoint.get(i);
-            if !range.new_addresses() || range.addr.get_space().map(|s| s.get_index()) != Some(ram.get_index()) {
+            if !range.new_addresses()
+                || range.addr.get_space().map(|s| s.get_index()) != Some(ram.get_index())
+            {
                 continue;
             }
-            if fd.get_arch().query_global_properties(&range.addr, range.size, &usepoint) & varnode_flags::readonly == 0 {
+            if fd
+                .get_arch()
+                .query_global_properties(&range.addr, range.size, &usepoint)
+                & varnode_flags::readonly
+                == 0
+            {
                 continue;
             }
             let end = &range.addr + i64::from(range.size);
             let read = fd.vbank().iter_loc_addr_range(&range.addr, &end).any(|vn| {
                 fd.vbank().get(vn).is_some_and(|v| {
-                    !v.is_written() && !v.is_input() && !v.is_heritage_known() && !v.has_no_descend()
+                    !v.is_written()
+                        && !v.is_input()
+                        && !v.is_heritage_known()
+                        && !v.has_no_descend()
                 })
             });
             if read {
@@ -5299,7 +6011,9 @@ impl Heritage {
         let mut ranges = 0u64;
         for i in 0..self.disjoint.len() {
             let range = self.disjoint.get(i);
-            if range.new_addresses() && range.addr.get_space().map(|s| s.get_index()) == Some(ram.get_index()) {
+            if range.new_addresses()
+                && range.addr.get_space().map(|s| s.get_index()) == Some(ram.get_index())
+            {
                 ranges += 1;
                 if ranges.saturating_mul(calls) >= threshold {
                     return true;
@@ -5312,7 +6026,9 @@ impl Heritage {
     /// (unlace decompile-all watchdog) Has the running pass's budget run out —
     /// its deadline passed, or its drive over the memory limit?
     fn deadline_passed(&self) -> bool {
-        let passed = self.deadline.is_some_and(crate::decompile_drive::budget_spent);
+        let passed = self
+            .deadline
+            .is_some_and(crate::decompile_drive::budget_spent);
         if passed {
             crate::decompile_drive::note_budget_site(|| "heritage".to_string());
         }
@@ -5328,7 +6044,11 @@ impl Heritage {
         op: crate::context::OpId,
         spc: &Rc<AddrSpace>,
     ) {
-        let uses = fd.obank().get(op).expect("generate_load_guard: stale op").uses_spacebase_ptr();
+        let uses = fd
+            .obank()
+            .get(op)
+            .expect("generate_load_guard: stale op")
+            .uses_spacebase_ptr();
         if !uses {
             self.load_guard.push(LoadGuard::set(op, spc, offset));
             fd.op_mark_spacebase_ptr(op);
@@ -5344,7 +6064,11 @@ impl Heritage {
         op: crate::context::OpId,
         spc: &Rc<AddrSpace>,
     ) {
-        let uses = fd.obank().get(op).expect("generate_store_guard: stale op").uses_spacebase_ptr();
+        let uses = fd
+            .obank()
+            .get(op)
+            .expect("generate_store_guard: stale op")
+            .uses_spacebase_ptr();
         if !uses {
             self.store_guard.push(LoadGuard::set(op, spc, offset));
             fd.op_mark_spacebase_ptr(op);
@@ -5363,7 +6087,11 @@ impl Heritage {
         let stores: Vec<crate::context::OpId> = fd.obank().iter_code(OpCode::CPUI_STORE).collect();
         let mut has_new = false;
         for op in stores {
-            let dead = fd.obank().get(op).expect("protect_free_stores: stale op").is_dead();
+            let dead = fd
+                .obank()
+                .get(op)
+                .expect("protect_free_stores: stale op")
+                .is_dead();
             if dead {
                 continue;
             }
@@ -5373,7 +6101,11 @@ impl Heritage {
                 None => continue,
             };
             loop {
-                let written = fd.vbank().get(vn).expect("protect_free_stores: stale vn").is_written();
+                let written = fd
+                    .vbank()
+                    .get(vn)
+                    .expect("protect_free_stores: stale vn")
+                    .is_written();
                 if !written {
                     break;
                 }
@@ -5382,9 +6114,17 @@ impl Heritage {
                     .get(vn)
                     .and_then(|v| v.get_def())
                     .expect("protect_free_stores: written vn has def");
-                let opc = fd.obank().get(def).expect("protect_free_stores: stale def").code();
+                let opc = fd
+                    .obank()
+                    .get(def)
+                    .expect("protect_free_stores: stale def")
+                    .code();
                 if opc == OpCode::CPUI_COPY {
-                    vn = fd.obank().get(def).and_then(|o| o.get_in(0)).expect("COPY in0");
+                    vn = fd
+                        .obank()
+                        .get(def)
+                        .and_then(|o| o.get_in(0))
+                        .expect("COPY in0");
                 } else if opc == OpCode::CPUI_INT_ADD
                     && fd
                         .obank()
@@ -5393,13 +6133,20 @@ impl Heritage {
                         .map(|v| fd.vbank().get(v).map(|x| x.is_constant()).unwrap_or(false))
                         .unwrap_or(false)
                 {
-                    vn = fd.obank().get(def).and_then(|o| o.get_in(0)).expect("INT_ADD in0");
+                    vn = fd
+                        .obank()
+                        .get(def)
+                        .and_then(|o| o.get_in(0))
+                        .expect("INT_ADD in0");
                 } else {
                     break;
                 }
             }
             let (is_free, same_spc) = {
-                let v = fd.vbank().get(vn).expect("protect_free_stores: stale vn (test)");
+                let v = fd
+                    .vbank()
+                    .get(vn)
+                    .expect("protect_free_stores: stale vn (test)");
                 (v.is_free(), Rc::ptr_eq(v.get_space(), spc))
             };
             if is_free && same_spc {
@@ -5410,7 +6157,11 @@ impl Heritage {
             }
         }
         self.spill_store_bounds = super::kuna_spillstoreguard::bounds(fd, &self.spill_stores);
-        self.spill_store_budget_ok = super::kuna_spillstoreguard::within_budget(fd, &self.spill_stores, &self.spill_store_bounds);
+        self.spill_store_budget_ok = super::kuna_spillstoreguard::within_budget(
+            fd,
+            &self.spill_stores,
+            &self.spill_store_bounds,
+        );
         has_new
     }
 
@@ -5462,9 +6213,19 @@ impl Heritage {
                 Some(v) => v,
                 None => continue,
             };
-            let descend: Vec<crate::context::OpId> =
-                fd.vbank().get(sp_input).expect("sp_input vn").descend_iter().collect();
-            path.push(StackNode { vn: sp_input, offset: 0, traversals: 0, descend, iter: 0 });
+            let descend: Vec<crate::context::OpId> = fd
+                .vbank()
+                .get(sp_input)
+                .expect("sp_input vn")
+                .descend_iter()
+                .collect();
+            path.push(StackNode {
+                vn: sp_input,
+                offset: 0,
+                traversals: 0,
+                descend,
+                iter: 0,
+            });
 
             while let Some(cur) = path.last_mut() {
                 if cur.iter >= cur.descend.len() {
@@ -5492,10 +6253,17 @@ impl Heritage {
                 macro_rules! descend_into {
                     ($outvn:expr_2021, $newoff:expr_2021, $newtrav:expr_2021) => {{
                         let ov = $outvn;
-                        let d: Vec<crate::context::OpId> =
-                            fd.vbank().get(ov).expect("descend_into: stale outvn").descend_iter().collect();
+                        let d: Vec<crate::context::OpId> = fd
+                            .vbank()
+                            .get(ov)
+                            .expect("descend_into: stale outvn")
+                            .descend_iter()
+                            .collect();
                         if !d.is_empty() {
-                            fd.vbank_mut().get_mut(ov).expect("descend_into: mark outvn").set_mark();
+                            fd.vbank_mut()
+                                .get_mut(ov)
+                                .expect("descend_into: mark outvn")
+                                .set_mark();
                             path.push(StackNode {
                                 vn: ov,
                                 offset: $newoff,
@@ -5504,7 +6272,11 @@ impl Heritage {
                                 iter: 0,
                             });
                             marked_vn.push(ov);
-                        } else if fd.vbank().get(ov).map(|v| v.get_space().get_type()).unwrap_or(spacetype::IPTR_CONSTANT)
+                        } else if fd
+                            .vbank()
+                            .get(ov)
+                            .map(|v| v.get_space().get_type())
+                            .unwrap_or(spacetype::IPTR_CONSTANT)
                             == spacetype::IPTR_SPACEBASE
                         {
                             unknown_stack_storage = true;
@@ -5514,28 +6286,43 @@ impl Heritage {
 
                 match code {
                     OpCode::CPUI_INT_ADD => {
-                        let slot = fd.obank().get(op).expect("discover: stale op").get_slot(cur_vn);
+                        let slot = fd
+                            .obank()
+                            .get(op)
+                            .expect("discover: stale op")
+                            .get_slot(cur_vn);
                         let other_vn = fd
                             .obank()
                             .get(op)
                             .and_then(|o| o.get_in(1 - slot))
                             .expect("INT_ADD other input");
-                        let other_is_const =
-                            fd.vbank().get(other_vn).map(|v| v.is_constant()).unwrap_or(false);
+                        let other_is_const = fd
+                            .vbank()
+                            .get(other_vn)
+                            .map(|v| v.is_constant())
+                            .unwrap_or(false);
                         let ov = match out_vn {
                             Some(v) => v,
                             None => continue,
                         };
                         if other_is_const {
-                            let other_off =
-                                fd.vbank().get(other_vn).expect("INT_ADD const").get_offset();
+                            let other_off = fd
+                                .vbank()
+                                .get(other_vn)
+                                .expect("INT_ADD const")
+                                .get_offset();
                             let new_offset = spc.wrap_offset(cur_offset.wrapping_add(other_off));
                             descend_into!(ov, new_offset, cur_traversals);
                         } else {
                             let moves_sp = fd.vbank().get(ov).is_some_and(|v| {
-                                *v.get_addr() == sp_addr && v.get_size() == stack_pointer.size as int4
+                                *v.get_addr() == sp_addr
+                                    && v.get_size() == stack_pointer.size as int4
                             });
-                            let dynamic = if moves_sp { stacknode_flags::dynamic_stack } else { 0 };
+                            let dynamic = if moves_sp {
+                                stacknode_flags::dynamic_stack
+                            } else {
+                                0
+                            };
                             descend_into!(
                                 ov,
                                 cur_offset,
@@ -5561,7 +6348,11 @@ impl Heritage {
                             Some(v) if small_const => v,
                             _ => continue,
                         };
-                        descend_into!(ov, cur_offset, cur_traversals | stacknode_flags::nonconstant_index);
+                        descend_into!(
+                            ov,
+                            cur_offset,
+                            cur_traversals | stacknode_flags::nonconstant_index
+                        );
                     }
                     OpCode::CPUI_SEGMENTOP => {
                         // Check that the stackpointer comes in as the inner pointer.
@@ -5603,7 +6394,9 @@ impl Heritage {
                         if in1 == Some(cur_vn) {
                             if cur_traversals != 0 {
                                 self.generate_store_guard(fd, cur_offset, op, spc);
-                                if let Some(guard) = self.store_guard.last_mut().filter(|g| g.op == op) {
+                                if let Some(guard) =
+                                    self.store_guard.last_mut().filter(|g| g.op == op)
+                                {
                                     guard.dynamic_stack =
                                         cur_traversals & stacknode_flags::dynamic_stack != 0;
                                 }
@@ -5654,13 +6447,19 @@ impl Heritage {
         for op in free {
             // If the STORE is now marked as using a spacebase ptr, it was
             // appropriately marked to begin with; nothing to clean up.
-            if fd.obank().get(op).expect("reprocess: stale op").uses_spacebase_ptr() {
+            if fd
+                .obank()
+                .get(op)
+                .expect("reprocess: stale op")
+                .uses_spacebase_ptr()
+            {
                 continue;
             }
             // Otherwise the STORE may have triggered unnecessary INDIRECTs.
             let mut ind_op = fd.op_previous_op(op);
             while let Some(iop) = ind_op {
-                if fd.obank().get(iop).expect("reprocess: stale indop").code() != OpCode::CPUI_INDIRECT
+                if fd.obank().get(iop).expect("reprocess: stale indop").code()
+                    != OpCode::CPUI_INDIRECT
                 {
                     break;
                 }
@@ -5668,7 +6467,11 @@ impl Heritage {
                     Some(v) => v,
                     None => break,
                 };
-                if fd.vbank().get(iop_vn).map(|v| v.get_space().get_type()).unwrap_or(spacetype::IPTR_CONSTANT)
+                if fd
+                    .vbank()
+                    .get(iop_vn)
+                    .map(|v| v.get_space().get_type())
+                    .unwrap_or(spacetype::IPTR_CONSTANT)
                     != spacetype::IPTR_IOP
                 {
                     break;
@@ -5679,12 +6482,25 @@ impl Heritage {
                 let next_op = fd.op_previous_op(iop);
                 let ind_out = fd.obank().get(iop).and_then(|o| o.get_out());
                 let same_space = ind_out
-                    .map(|o| Rc::ptr_eq(fd.vbank().get(o).expect("reprocess: stale indout").get_space(), spc))
+                    .map(|o| {
+                        Rc::ptr_eq(
+                            fd.vbank()
+                                .get(o)
+                                .expect("reprocess: stale indout")
+                                .get_space(),
+                            spc,
+                        )
+                    })
                     .unwrap_or(false);
                 if same_space {
-                    let in0 = fd.obank().get(iop).and_then(|o| o.get_in(0)).expect("INDIRECT in0");
+                    let in0 = fd
+                        .obank()
+                        .get(iop)
+                        .and_then(|o| o.get_in(0))
+                        .expect("INDIRECT in0");
                     let out = ind_out.expect("INDIRECT out");
-                    fd.total_replace(out, in0).expect("reprocess: total_replace");
+                    fd.total_replace(out, in0)
+                        .expect("reprocess: total_replace");
                     fd.op_destroy(iop); // get rid of the INDIRECT
                 }
                 ind_op = next_op;
@@ -5873,7 +6689,11 @@ impl Heritage {
                         }
                     }
                 } else if opc == OpCode::CPUI_INDIRECT
-                    && fd.obank().get(new_op).map(|o| o.is_indirect_store()).unwrap_or(false)
+                    && fd
+                        .obank()
+                        .get(new_op)
+                        .map(|o| o.is_indirect_store())
+                        .unwrap_or(false)
                 {
                     // An INDIRECT can be considered artificial if it is caused
                     // by a STORE.
@@ -5902,7 +6722,11 @@ impl Heritage {
     /// Given a COPY from a storage location to itself, propagate the input
     /// Varnode version of the storage location to all the ops reading the
     /// output, then eliminate the COPY.
-    fn propagate_copy_away(&mut self, fd: &mut crate::funcdata::Funcdata, op: crate::context::OpId) {
+    fn propagate_copy_away(
+        &mut self,
+        fd: &mut crate::funcdata::Funcdata,
+        op: crate::context::OpId,
+    ) {
         use unlace_num::opcodes::OpCode;
         let mut in_vn = match fd.obank().get(op).and_then(|o| o.get_in(0)) {
             Some(v) => v,
@@ -6032,7 +6856,10 @@ impl Heritage {
         // unit test) without changing the populated-CFG behavior.
         let block_count = {
             let bblocks = fd.bblocks_ref();
-            bblocks.root.map(|r| bblocks.block(r).get_size()).unwrap_or(0)
+            bblocks
+                .root
+                .map(|r| bblocks.block(r).get_size())
+                .unwrap_or(0)
         };
         if block_count == 0 {
             return Ok(());
@@ -6138,7 +6965,8 @@ impl Heritage {
                 let (key, prev, resolved_size) = self.globaldisjoint.add(vaddr, vsize, self.pass);
                 if prev == 0 {
                     // All new location being heritaged.
-                    self.disjoint.add(key, resolved_size, memrange_flags::new_addresses);
+                    self.disjoint
+                        .add(key, resolved_size, memrange_flags::new_addresses);
                 } else if prev == 2 {
                     // Completely contained in range from a previous pass.
                     let v = fd.vbank().get(vn).expect("heritage: stale vn (prev==2)");
@@ -6148,7 +6976,12 @@ impl Heritage {
                     if v.has_no_descend() {
                         continue;
                     }
-                    if super::kuna_persistcalls::crosses_skipped(fd, vn, &self.persist_pruned, false) {
+                    if super::kuna_persistcalls::crosses_skipped(
+                        fd,
+                        vn,
+                        &self.persist_pruned,
+                        false,
+                    ) {
                         super::kuna_persistcalls::restart_full(fd);
                     }
                     if !needwarning
@@ -6159,7 +6992,8 @@ impl Heritage {
                         self.bump_deadcode_delay_persisted(fd, &space);
                         warnvn = Some(vn);
                     }
-                    self.disjoint.add(key, resolved_size, memrange_flags::old_addresses);
+                    self.disjoint
+                        .add(key, resolved_size, memrange_flags::old_addresses);
                 } else {
                     // Partially contained in old range, but may contain new.
                     self.disjoint.add(
@@ -6167,7 +7001,8 @@ impl Heritage {
                         resolved_size,
                         memrange_flags::old_addresses | memrange_flags::new_addresses,
                     );
-                    if super::kuna_persistcalls::crosses_skipped(fd, vn, &self.persist_pruned, true) {
+                    if super::kuna_persistcalls::crosses_skipped(fd, vn, &self.persist_pruned, true)
+                    {
                         super::kuna_persistcalls::restart_full(fd);
                     }
                     let v = fd.vbank().get(vn).expect("heritage: stale vn (prev==1)");
@@ -6326,10 +7161,10 @@ impl Default for Heritage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::funcdata::Funcdata;
     use crate::context::ArchContext;
+    use crate::funcdata::Funcdata;
     use unlace_base::space::{
-        addrspace_flags, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+        AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags,
     };
 
     // ---- fixtures ---------------------------------------------------------
@@ -6337,7 +7172,8 @@ mod tests {
     fn build_manager() -> AddrSpaceManager {
         let mut m = AddrSpaceManager::new();
         m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+            .unwrap();
         m.insert_space(Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
             "ram",
@@ -6400,13 +7236,24 @@ mod tests {
         for big in [false, true] {
             let mut manager = build_manager();
             let register = Rc::new(AddrSpace::new(
-                spacetype::IPTR_PROCESSOR, "register", big, 4, 1, 3,
-                addrspace_flags::hasphysical, 1, 1,
+                spacetype::IPTR_PROCESSOR,
+                "register",
+                big,
+                4,
+                1,
+                3,
+                addrspace_flags::hasphysical,
+                1,
+                1,
             ));
             manager.insert_space(register.clone()).unwrap();
             let arch = Rc::new(ArchContext::new(manager));
-            let entry = Address::new(arch.manage().get_space_by_name("ram").unwrap().clone(), 0x1000);
-            let mut fd = Funcdata::new("func", "func", arch, entry.clone(), 0x10000000, 0x40).unwrap();
+            let entry = Address::new(
+                arch.manage().get_space_by_name("ram").unwrap().clone(),
+                0x1000,
+            );
+            let mut fd =
+                Funcdata::new("func", "func", arch, entry.clone(), 0x10000000, 0x40).unwrap();
             let block = build_cfg(&mut fd, 1, &[])[0];
             let call = fd.new_op(1, entry.clone());
             fd.op_set_opcode(call, typeop_skeleton(OpCode::CPUI_CALL));
@@ -6417,32 +7264,70 @@ mod tests {
             model.build_param_list("standard").unwrap();
             for (group, offset) in [0x24, 0x20].into_iter().enumerate() {
                 let entry = crate::fspec::ParamEntry::seed(
-                    group as int4, crate::dtype::type_class::TYPECLASS_GENERAL,
-                    register.clone(), offset, 4, 1, 0, 0, true, false,
-                    model.input().get_entry(), fd.get_arch().manage(),
-                ).unwrap();
+                    group as int4,
+                    crate::dtype::type_class::TYPECLASS_GENERAL,
+                    register.clone(),
+                    offset,
+                    4,
+                    1,
+                    0,
+                    0,
+                    true,
+                    false,
+                    model.input().get_entry(),
+                    fd.get_arch().manage(),
+                )
+                .unwrap();
                 model.input_mut().push_entry(entry);
             }
             model.input_mut().finish_decode();
             let mut specs = crate::fspec::FuncCallSpecs::new(call, entry);
             specs.proto_mut().set_internal(
-                Rc::new(model), Rc::new(crate::dtype::Datatype::new(0, crate::dtype::type_metatype::TYPE_VOID)),
+                Rc::new(model),
+                Rc::new(crate::dtype::Datatype::new(
+                    0,
+                    crate::dtype::type_metatype::TYPE_VOID,
+                )),
             );
             specs.init_active_input();
             let whole = Address::new(register.clone(), 0x20);
             for _ in 0..2 {
-                Heritage::guard_call_input(&mut fd, &mut specs, &whole, &whole, 8, crate::kuna_calloverlap::LEVEL_OFF);
+                Heritage::guard_call_input(
+                    &mut fd,
+                    &mut specs,
+                    &whole,
+                    &whole,
+                    8,
+                    crate::kuna_calloverlap::LEVEL_OFF,
+                );
             }
             for (slot, offset) in [0x20, 0x24].into_iter().enumerate() {
                 let piece = Address::new(register.clone(), offset);
-                let input = fd.obank().get(call).unwrap().get_in(slot as int4 + 1).unwrap();
+                let input = fd
+                    .obank()
+                    .get(call)
+                    .unwrap()
+                    .get_in(slot as int4 + 1)
+                    .unwrap();
                 let value = fd.vbank().get(input).unwrap();
                 assert_eq!(value.get_addr(), &piece);
                 assert_eq!(value.get_size(), 4);
                 let subpiece = fd.obank().get(value.get_def().unwrap()).unwrap();
                 assert_eq!(subpiece.code(), OpCode::CPUI_SUBPIECE);
-                let amount = fd.vbank().get(subpiece.get_in(1).unwrap()).unwrap().get_addr().get_offset();
-                assert_eq!(amount, if big { 4 - slot as u64 * 4 } else { slot as u64 * 4 });
+                let amount = fd
+                    .vbank()
+                    .get(subpiece.get_in(1).unwrap())
+                    .unwrap()
+                    .get_addr()
+                    .get_offset();
+                assert_eq!(
+                    amount,
+                    if big {
+                        4 - slot as u64 * 4
+                    } else {
+                        slot as u64 * 4
+                    }
+                );
             }
             assert_eq!(fd.obank().get(call).unwrap().num_input(), 3);
         }
@@ -6451,30 +7336,58 @@ mod tests {
     fn entry_partition_fixture(big: bool, wide: bool) -> (Funcdata, Address) {
         let mut manager = build_manager();
         let register = Rc::new(AddrSpace::new(
-            spacetype::IPTR_PROCESSOR, "register", big, 4, 1, 3,
-            addrspace_flags::hasphysical, 1, 1,
+            spacetype::IPTR_PROCESSOR,
+            "register",
+            big,
+            4,
+            1,
+            3,
+            addrspace_flags::hasphysical,
+            1,
+            1,
         ));
         manager.insert_space(register.clone()).unwrap();
         let arch = Rc::new(ArchContext::new(manager));
-        let entry = Address::new(arch.manage().get_space_by_name("ram").unwrap().clone(), 0x1000);
+        let entry = Address::new(
+            arch.manage().get_space_by_name("ram").unwrap().clone(),
+            0x1000,
+        );
         let mut fd = Funcdata::new("func", "func", arch, entry, 0x10000000, 0x40).unwrap();
         let block = build_cfg(&mut fd, 1, &[])[0];
         let root = fd.bblocks_ref().root.unwrap();
         fd.bblocks_mut().set_start_block(root, block);
         let mut model = crate::fspec::ProtoModel::new(fd.get_arch().manage());
         model.build_param_list("standard").unwrap();
-        let ranges = if wide { vec![(0x20, 8)] } else { vec![(0x20, 4), (0x24, 4)] };
+        let ranges = if wide {
+            vec![(0x20, 8)]
+        } else {
+            vec![(0x20, 4), (0x24, 4)]
+        };
         for (group, (offset, width)) in ranges.into_iter().enumerate() {
             let entry = crate::fspec::ParamEntry::seed(
-                group as int4, crate::dtype::type_class::TYPECLASS_GENERAL,
-                register.clone(), offset, width, 1, 0, 0, true, false,
-                model.input().get_entry(), fd.get_arch().manage(),
-            ).unwrap();
+                group as int4,
+                crate::dtype::type_class::TYPECLASS_GENERAL,
+                register.clone(),
+                offset,
+                width,
+                1,
+                0,
+                0,
+                true,
+                false,
+                model.input().get_entry(),
+                fd.get_arch().manage(),
+            )
+            .unwrap();
             model.input_mut().push_entry(entry);
         }
         model.input_mut().finish_decode();
         fd.get_func_proto_mut().set_internal(
-            Rc::new(model), Rc::new(crate::dtype::Datatype::new(0, crate::dtype::type_metatype::TYPE_VOID)),
+            Rc::new(model),
+            Rc::new(crate::dtype::Datatype::new(
+                0,
+                crate::dtype::type_metatype::TYPE_VOID,
+            )),
         );
         (fd, Address::new(register, 0x20))
     }
@@ -6489,17 +7402,32 @@ mod tests {
             let value = heritage.new_entry_input(&mut fd, 8, &addr).unwrap();
             assert_eq!(value, original);
             assert!(!fd.vbank().get(value).unwrap().is_input());
-            let piece = fd.obank().get(fd.vbank().get(value).unwrap().get_def().unwrap()).unwrap();
+            let piece = fd
+                .obank()
+                .get(fd.vbank().get(value).unwrap().get_def().unwrap())
+                .unwrap();
             assert_eq!(piece.code(), unlace_num::opcodes::OpCode::CPUI_PIECE);
             for slot in 0..2 {
                 let vn = fd.vbank().get(piece.get_in(slot).unwrap()).unwrap();
                 assert!(vn.is_input());
                 assert_eq!(vn.get_size(), 4);
-                assert_eq!(vn.get_addr().get_offset(), if big { 0x20 + slot as u64 * 4 } else { 0x24 - slot as u64 * 4 });
+                assert_eq!(
+                    vn.get_addr().get_offset(),
+                    if big {
+                        0x20 + slot as u64 * 4
+                    } else {
+                        0x24 - slot as u64 * 4
+                    }
+                );
             }
             let again = heritage.new_entry_input(&mut fd, 8, &addr).unwrap();
             assert!(fd.vbank().get(again).unwrap().is_written());
-            assert_eq!(fd.vbank().iter_def_flag(crate::varnode::varnode_flags::input).count(), 2);
+            assert_eq!(
+                fd.vbank()
+                    .iter_def_flag(crate::varnode::varnode_flags::input)
+                    .count(),
+                2
+            );
         }
     }
 
@@ -6520,21 +7448,31 @@ mod tests {
 
     #[test]
     fn entry_partition_declines_protected_whole_inputs_and_locked_slots() {
-        for flags in [0,
-            crate::varnode::varnode_flags::typelock, crate::varnode::varnode_flags::namelock,
-            crate::varnode::varnode_flags::persist, crate::varnode::varnode_flags::addrtied] {
+        for flags in [
+            0,
+            crate::varnode::varnode_flags::typelock,
+            crate::varnode::varnode_flags::namelock,
+            crate::varnode::varnode_flags::persist,
+            crate::varnode::varnode_flags::addrtied,
+        ] {
             let (mut fd, addr) = entry_partition_fixture(true, false);
             let whole = fd.new_varnode(8, &addr, None);
             fd.set_input_varnode(whole).unwrap();
-            if flags == 0 { fd.vbank_mut().get_mut(whole).unwrap().set_write_mask(); }
-            else { fd.vbank_mut().get_mut(whole).unwrap().set_flags_pub(flags); }
+            if flags == 0 {
+                fd.vbank_mut().get_mut(whole).unwrap().set_write_mask();
+            } else {
+                fd.vbank_mut().get_mut(whole).unwrap().set_flags_pub(flags);
+            }
             assert!(Heritage::new().entry_partition(&fd, &addr, 8).is_none());
             assert!(fd.vbank().get(whole).unwrap().is_input());
         }
         let (mut fd, addr) = entry_partition_fixture(true, false);
         let slot = fd.new_varnode(4, &addr, None);
         fd.set_input_varnode(slot).unwrap();
-        fd.vbank_mut().get_mut(slot).unwrap().set_flags_pub(crate::varnode::varnode_flags::typelock);
+        fd.vbank_mut()
+            .get_mut(slot)
+            .unwrap()
+            .set_flags_pub(crate::varnode::varnode_flags::typelock);
         assert!(Heritage::new().entry_partition(&fd, &addr, 8).is_none());
     }
 
@@ -6544,8 +7482,15 @@ mod tests {
         for i in 0..2 {
             let piece = crate::fspec::ParameterPieces {
                 addr: Address::new(addr.get_space().unwrap().clone(), 0x20 + i as u64 * 4),
-                type_: Some(Rc::new(crate::dtype::Datatype::new(4, crate::dtype::type_metatype::TYPE_INT))),
-                flags: if i == 1 { crate::fspec::parameter_pieces_flags::TYPELOCK } else { 0 },
+                type_: Some(Rc::new(crate::dtype::Datatype::new(
+                    4,
+                    crate::dtype::type_metatype::TYPE_INT,
+                ))),
+                flags: if i == 1 {
+                    crate::fspec::parameter_pieces_flags::TYPELOCK
+                } else {
+                    0
+                },
             };
             fd.get_func_proto_mut().set_param(i, "param", &piece);
         }
@@ -6565,9 +7510,15 @@ mod tests {
             assert!(value.is_written());
             assert!(value.is_active_heritage());
             assert!(!value.is_write_mask());
-            let block = fd.bblocks_ref().block(fd.bblocks_ref().root.unwrap()).get_block(0);
+            let block = fd
+                .bblocks_ref()
+                .block(fd.bblocks_ref().root.unwrap())
+                .get_block(0);
             let copy = fd.new_op(1, fd.get_address().clone());
-            fd.op_set_opcode(copy, typeop_skeleton(unlace_num::opcodes::OpCode::CPUI_COPY));
+            fd.op_set_opcode(
+                copy,
+                typeop_skeleton(unlace_num::opcodes::OpCode::CPUI_COPY),
+            );
             let read = fd.new_varnode(8, &addr, None);
             fd.vbank_mut().get_mut(read).unwrap().set_active_heritage();
             fd.op_set_input(copy, read, 0).unwrap();
@@ -6576,25 +7527,49 @@ mod tests {
             heritage.domchild = vec![vec![]];
             heritage.rename(&mut fd).unwrap();
             assert_eq!(fd.obank().get(copy).unwrap().get_in(0), Some(whole));
-            assert_eq!(fd.vbank().iter_def_flag(crate::varnode::varnode_flags::input).count(), 2);
-            let old_slots: Vec<_> = fd.vbank().iter_def_flag(crate::varnode::varnode_flags::input).collect();
+            assert_eq!(
+                fd.vbank()
+                    .iter_def_flag(crate::varnode::varnode_flags::input)
+                    .count(),
+                2
+            );
+            let old_slots: Vec<_> = fd
+                .vbank()
+                .iter_def_flag(crate::varnode::varnode_flags::input)
+                .collect();
             let tail_addr = Address::new(addr.get_space().unwrap().clone(), 0x28);
             let tail = fd.new_varnode(4, &tail_addr, None);
             fd.set_input_varnode(tail).unwrap();
             Heritage::new().guard_input(&mut fd, &addr, 12, &[tail]);
-            let inputs: Vec<_> = fd.vbank().iter_def_flag(crate::varnode::varnode_flags::input)
-                .map(|id| fd.vbank().get(id).unwrap().get_size()).collect();
+            let inputs: Vec<_> = fd
+                .vbank()
+                .iter_def_flag(crate::varnode::varnode_flags::input)
+                .map(|id| fd.vbank().get(id).unwrap().get_size())
+                .collect();
             assert_eq!(inputs, [4, 4, 4]);
-            let final_op = fd.obank().iter_alive()
-                .filter(|&op| fd.obank().get(op).unwrap().code() == unlace_num::opcodes::OpCode::CPUI_PIECE)
-                .find(|&op| fd.obank().get(op).unwrap().get_out()
-                    .is_some_and(|vn| fd.vbank().get(vn).unwrap().get_size() == 12)).unwrap();
+            let final_op = fd
+                .obank()
+                .iter_alive()
+                .filter(|&op| {
+                    fd.obank().get(op).unwrap().code() == unlace_num::opcodes::OpCode::CPUI_PIECE
+                })
+                .find(|&op| {
+                    fd.obank()
+                        .get(op)
+                        .unwrap()
+                        .get_out()
+                        .is_some_and(|vn| fd.vbank().get(vn).unwrap().get_size() == 12)
+                })
+                .unwrap();
             let final_piece = fd.obank().get(final_op).unwrap();
             let final_value = fd.vbank().get(final_piece.get_out().unwrap()).unwrap();
             assert!(final_value.is_written() && final_value.is_active_heritage());
             assert_eq!(final_piece.get_in(if big { 1 } else { 0 }), Some(tail));
             let pair = final_piece.get_in(if big { 0 } else { 1 }).unwrap();
-            let pair_op = fd.obank().get(fd.vbank().get(pair).unwrap().get_def().unwrap()).unwrap();
+            let pair_op = fd
+                .obank()
+                .get(fd.vbank().get(pair).unwrap().get_def().unwrap())
+                .unwrap();
             assert_eq!(pair_op.get_in(0), Some(old_slots[if big { 0 } else { 1 }]));
             assert_eq!(pair_op.get_in(1), Some(old_slots[if big { 1 } else { 0 }]));
         }
@@ -6633,7 +7608,7 @@ mod tests {
         let fd = build_fd();
         let mut lm = LocationMap::new();
         lm.add(raddr(&fd, 0x100), 4, 0); // pass 0: [0x100,0x104)
-                                         // pass 2: [0x102,0x10a) partially overlaps the old element.
+        // pass 2: [0x102,0x10a) partially overlaps the old element.
         let (key, intersect, _sz) = lm.add(raddr(&fd, 0x102), 8, 2);
         assert_eq!(intersect, 1);
         // The unified element starts at the old start 0x100 and carries the
@@ -6675,7 +7650,7 @@ mod tests {
         let mut lm = LocationMap::new();
         lm.add(raddr(&fd, 0x100), 4, 0); // [0x100,0x104)
         lm.add(raddr(&fd, 0x108), 4, 0); // [0x108,0x10c)
-                                         // A big new range spanning both gets unified into one element.
+        // A big new range spanning both gets unified into one element.
         let (key, _i, _sz) = lm.add(raddr(&fd, 0x100), 0x10, 1);
         assert_eq!(key, raddr(&fd, 0x100));
         // Only one element remains.
@@ -6813,10 +7788,16 @@ mod tests {
         let fd = build_fd();
         h.build_info_list(&fd);
         // info list has one entry per space
-        assert_eq!(h.infolist.len(), fd.get_arch().manage().num_spaces() as usize);
+        assert_eq!(
+            h.infolist.len(),
+            fd.get_arch().manage().num_spaces() as usize
+        );
         // idempotent
         h.build_info_list(&fd);
-        assert_eq!(h.infolist.len(), fd.get_arch().manage().num_spaces() as usize);
+        assert_eq!(
+            h.infolist.len(),
+            fd.get_arch().manage().num_spaces() as usize
+        );
         h.clear();
         assert_eq!(h.get_pass(), 0);
         assert!(h.infolist.is_empty() || h.infolist.iter().all(|i| !i.is_heritaged() || true));
@@ -6892,8 +7873,7 @@ mod tests {
         fd.op_set_opcode(below_op, copy());
         let _below_write = fd.new_varnode_out(8, &raddr(&fd, 0xff), below_op).unwrap();
 
-        let mut range =
-            MemRange::new(raddr(&fd, 0x100), 0x10, memrange_flags::new_addresses);
+        let mut range = MemRange::new(raddr(&fd, 0x100), 0x10, memrange_flags::new_addresses);
         let mut reads = Vec::new();
         let mut writes = Vec::new();
         let mut inputs = Vec::new();
@@ -6911,7 +7891,10 @@ mod tests {
         assert_eq!(writes, vec![write]);
         assert_eq!(inputs, vec![input]);
         assert!(removes.is_empty());
-        assert_eq!(maxsize, 4, "the larger writes below and at the end are excluded");
+        assert_eq!(
+            maxsize, 4,
+            "the larger writes below and at the end are excluded"
+        );
         assert!(range.new_addresses());
     }
 
@@ -6962,8 +7945,11 @@ mod tests {
 
     /// Map the computed `merge` block ids back to their indices, sorted.
     fn merge_indices(h: &Heritage, fd: &Funcdata) -> Vec<int4> {
-        let mut v: Vec<int4> =
-            h.merge_points().iter().map(|&b| fd.bblocks_ref().block(b).get_index()).collect();
+        let mut v: Vec<int4> = h
+            .merge_points()
+            .iter()
+            .map(|&b| fd.bblocks_ref().block(b).get_index())
+            .collect();
         v.sort_unstable();
         v
     }
@@ -7012,7 +7998,11 @@ mod tests {
         let mut fd = build_fd();
         let b = build_cfg(&mut fd, 4, &[(0, 1), (1, 2), (2, 1), (1, 3)]);
         // header has two preds (0 and the back-edge from 2); idom(1) = 0.
-        assert_eq!(fd.bblocks_ref().block(b[1]).size_in(), 2, "header has back-edge");
+        assert_eq!(
+            fd.bblocks_ref().block(b[1]).size_in(),
+            2,
+            "header has back-edge"
+        );
         assert_eq!(fd.bblocks_ref().block(b[1]).get_immed_dom(), Some(b[0]));
 
         let mut h = Heritage::new();
@@ -7050,7 +8040,11 @@ mod tests {
         h.calc_multiequals(&fd, &[b[3]]);
         // Iterated dominance frontier of the inner-body write: inner header (2)
         // and outer header (1).
-        assert_eq!(merge_indices(&h, &fd), vec![1, 2], "nested loop: phi at both headers");
+        assert_eq!(
+            merge_indices(&h, &fd),
+            vec![1, 2],
+            "nested loop: phi at both headers"
+        );
     }
 
     #[test]
@@ -7086,7 +8080,9 @@ mod tests {
             "stack", 3, 4, &ram, 0, true, false,
         ));
         manager.insert_space(stack.clone()).unwrap();
-        manager.insert_space(Rc::new(unlace_base::space::IopSpace::new(4))).unwrap();
+        manager
+            .insert_space(Rc::new(unlace_base::space::IopSpace::new(4)))
+            .unwrap();
         let arch = Rc::new(ArchContext::new(manager));
         let entry = Address::new(ram, 0x1000);
         let fd = Funcdata::new("func", "func", arch, entry, 0x10000000, 0x40).unwrap();
@@ -7149,9 +8145,15 @@ mod tests {
                 }
                 _ => unreachable!(),
             }
-            let error = h.rename_recurse(&mut fd, blocks[0], &mut stack).unwrap_err();
-            assert!(error.to_string().contains("requested input stack[0xfffffffa,0x100000004)"),
-                "{path}: {error}");
+            let error = h
+                .rename_recurse(&mut fd, blocks[0], &mut stack)
+                .unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("requested input stack[0xfffffffa,0x100000004)"),
+                "{path}: {error}"
+            );
         }
     }
 
@@ -7165,15 +8167,23 @@ mod tests {
         use unlace_num::opcodes::OpCode;
         let mut manager = build_manager();
         let ram = manager.get_space_by_name("ram").unwrap().clone();
-        let stack = Rc::new(unlace_base::space::SpacebaseSpace::new("stack", 3, 4, &ram, 0, true, false));
+        let stack = Rc::new(unlace_base::space::SpacebaseSpace::new(
+            "stack", 3, 4, &ram, 0, true, false,
+        ));
         manager.insert_space(stack.clone()).unwrap();
-        manager.insert_space(Rc::new(unlace_base::space::IopSpace::new(4))).unwrap();
+        manager
+            .insert_space(Rc::new(unlace_base::space::IopSpace::new(4)))
+            .unwrap();
         let arch = Rc::new(ArchContext::new(manager));
         let entry = Address::new(ram, 0x1000);
         let mut fd = Funcdata::new("func", "func", arch, entry, 0x10000000, 0x40).unwrap();
         let blocks = build_cfg(&mut fd, 4, &[(0, 1), (0, 2), (1, 3), (2, 3)]);
         let at = |off: u64| Address::new(stack.clone(), 0xffff_ffd8 + off);
-        let copy = |fd: &mut Funcdata, block: BlockId, input: crate::context::VarnodeId, out: &Address, size: int4| {
+        let copy = |fd: &mut Funcdata,
+                    block: BlockId,
+                    input: crate::context::VarnodeId,
+                    out: &Address,
+                    size: int4| {
             let op = fd.new_op(1, fd.get_address().clone());
             fd.op_set_opcode_code(op, OpCode::CPUI_COPY);
             fd.op_set_input(op, input, 0).unwrap();
@@ -7203,7 +8213,10 @@ mod tests {
         h.build_adt(&fd);
         h.heritage(&mut fd, None).unwrap();
         let phis = |fd: &Funcdata| {
-            fd.obank().iter_alive().filter(|&op| fd.obank().get(op).unwrap().code() == OpCode::CPUI_MULTIEQUAL).count()
+            fd.obank()
+                .iter_alive()
+                .filter(|&op| fd.obank().get(op).unwrap().code() == OpCode::CPUI_MULTIEQUAL)
+                .count()
         };
         assert_eq!(phis(&fd), 2, "one phi per 8-byte slot");
 
@@ -7220,11 +8233,20 @@ mod tests {
             }
             let (start, range) = h.globaldisjoint.find(v.get_addr()).expect("heritaged");
             let off = v.get_addr().get_offset() - start.get_offset();
-            assert!(off + v.get_size() as u64 <= range.size as u64,
-                "{:#x}+{} lies across the cover {:#x}+{}", v.get_addr().get_offset(), v.get_size(), start.get_offset(), range.size);
+            assert!(
+                off + v.get_size() as u64 <= range.size as u64,
+                "{:#x}+{} lies across the cover {:#x}+{}",
+                v.get_addr().get_offset(),
+                v.get_size(),
+                start.get_offset(),
+                range.size
+            );
         }
         let input = fd.obank().get(unaligned).unwrap().get_in(0).unwrap();
-        assert!(!fd.vbank().get(input).unwrap().is_free(), "the unaligned read is linked");
+        assert!(
+            !fd.vbank().get(input).unwrap().is_free(),
+            "the unaligned read is linked"
+        );
     }
 
     /// A 10-byte read at stack -6 of a 4-byte stack space runs past the top.
@@ -7249,10 +8271,18 @@ mod tests {
                 continue;
             }
             let off = v.get_addr().get_offset();
-            assert_eq!(super::super::kuna_wrapsplit::wrap_cut(off, v.get_size(), stack.get_highest()), None);
+            assert_eq!(
+                super::super::kuna_wrapsplit::wrap_cut(off, v.get_size(), stack.get_highest()),
+                None
+            );
             let (start, range) = h.globaldisjoint.find(v.get_addr()).expect("heritaged");
-            assert!(off - start.get_offset() + v.get_size() as u64 <= range.size as u64,
-                "{off:#x}+{} lies across the cover {:#x}+{}", v.get_size(), start.get_offset(), range.size);
+            assert!(
+                off - start.get_offset() + v.get_size() as u64 <= range.size as u64,
+                "{off:#x}+{} lies across the cover {:#x}+{}",
+                v.get_size(),
+                start.get_offset(),
+                range.size
+            );
         }
         let copy = *fd.bb_ops(block).last().unwrap();
         let whole = fd.obank().get(copy).unwrap().get_in(0).unwrap();
@@ -7283,7 +8313,12 @@ mod tests {
         let mut action = crate::coreaction_early::ActionHeritage::boxed("base");
         let mut ctx = ActionContext::new();
         assert_eq!(action.perform(&mut fd, &mut ctx), -1);
-        assert!(ctx.error.unwrap().to_string().contains("requested input stack"));
+        assert!(
+            ctx.error
+                .unwrap()
+                .to_string()
+                .contains("requested input stack")
+        );
         assert_eq!(fd.get_heritage_pass(), 0);
         let mut good = build_fd();
         build_cfg(&mut good, 1, &[]);
@@ -7304,7 +8339,11 @@ mod tests {
         // No Varnodes to rename; the dom-tree walk visits both blocks and
         // returns without creating or linking anything.
         h.rename(&mut fd).unwrap();
-        assert_eq!(fd.vbank().num_varnodes(), 0, "rename created no Varnodes on an empty function");
+        assert_eq!(
+            fd.vbank().num_varnodes(),
+            0,
+            "rename created no Varnodes on an empty function"
+        );
     }
 
     #[test]
@@ -7316,7 +8355,10 @@ mod tests {
         h.build_adt(&fd);
         // disjoint is empty -> no MULTIEQUALs placed.
         h.place_multiequals(&mut fd);
-        assert!(h.merge_points().is_empty(), "no disjoint ranges -> no phi blocks");
+        assert!(
+            h.merge_points().is_empty(),
+            "no disjoint ranges -> no phi blocks"
+        );
     }
 
     #[test]
@@ -7330,7 +8372,11 @@ mod tests {
         // places no phis, renames nothing, and bumps the pass counter.
         h.heritage(&mut fd, None).unwrap();
         assert_eq!(h.get_pass(), 1, "one heritage pass advances `pass` to 1");
-        assert_eq!(fd.vbank().num_varnodes(), 0, "empty function: no Varnodes created");
+        assert_eq!(
+            fd.vbank().num_varnodes(),
+            0,
+            "empty function: no Varnodes created"
+        );
     }
 
     /// END-TO-END SSA: the full driver (collect → guard → calcMultiequals →
@@ -7349,14 +8395,15 @@ mod tests {
     /// read linked to the phi's output.
     #[test]
     fn heritage_builds_real_ssa_on_a_diamond() {
-        use unlace_base::space::{addrspace_flags, ConstantSpace, UniqueSpace};
+        use unlace_base::space::{ConstantSpace, UniqueSpace, addrspace_flags};
         use unlace_num::opcodes::OpCode;
         // A manager whose `ram` space has heritage delay 0 (so the first pass
         // processes it — registers in a real cspec have delay 0; the shared
         // `build_manager` uses delay 1, which would skip pass 0).
         let mut m = AddrSpaceManager::new();
         m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+            .unwrap();
         m.insert_space(Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
             "ram",
@@ -7405,7 +8452,10 @@ mod tests {
         fd.op_insert_end(r3, b[3]);
 
         // Pre-heritage: the block-3 read input is free.
-        assert!(fd.vbank().get(rin).unwrap().is_free(), "pre-heritage read is free");
+        assert!(
+            fd.vbank().get(rin).unwrap().is_free(),
+            "pre-heritage read is free"
+        );
         let before_w1out_def = fd.vbank().get(w1out).unwrap().is_written();
         assert!(before_w1out_def, "the writes are defined");
 
@@ -7424,17 +8474,32 @@ mod tests {
         assert_eq!(phis.len(), 1, "exactly one phi placed");
         let phi = phis[0];
         let phi_block = fd.obank().get(phi).unwrap().get_parent().unwrap();
-        assert_eq!(fd.bblocks_ref().block(phi_block).get_index(), 3, "phi at the join block 3");
+        assert_eq!(
+            fd.bblocks_ref().block(phi_block).get_index(),
+            3,
+            "phi at the join block 3"
+        );
 
         // The phi has 2 inputs (block 3 has two preds) and an output at `loc`.
-        assert_eq!(fd.obank().get(phi).unwrap().num_input(), 2, "phi has 2 in-edges");
+        assert_eq!(
+            fd.obank().get(phi).unwrap().num_input(),
+            2,
+            "phi has 2 in-edges"
+        );
         let phi_out = fd.obank().get(phi).unwrap().get_out().unwrap();
-        assert_eq!(fd.vbank().get(phi_out).unwrap().get_addr(), &loc, "phi output at the loc");
+        assert_eq!(
+            fd.vbank().get(phi_out).unwrap().get_addr(),
+            &loc,
+            "phi output at the loc"
+        );
 
         // The block-3 read is now linked to the phi output (rename replaced the
         // free read with the reaching definition — the phi).
         let r3in = fd.obank().get(r3).unwrap().get_in(0).unwrap();
-        assert_eq!(r3in, phi_out, "block-3 read linked to the phi output (real SSA)");
+        assert_eq!(
+            r3in, phi_out,
+            "block-3 read linked to the phi output (real SSA)"
+        );
         assert!(
             !fd.vbank().get(r3in).unwrap().is_free(),
             "the linked read is no longer free"
@@ -7447,14 +8512,20 @@ mod tests {
             .iter()
             .filter_map(|&v| fd.vbank().get(v).unwrap().get_def())
             .collect();
-        assert!(in_defs.contains(&w1) && in_defs.contains(&w2), "phi merges the two writes");
+        assert!(
+            in_defs.contains(&w1) && in_defs.contains(&w2),
+            "phi merges the two writes"
+        );
 
         // Renaming filled the slots directly, and the two placeholders upstream
         // builds kept their creation indices: the next Varnode is numbered
         // after them.
         assert_eq!(fd.vbank().get(phi_out).unwrap().get_create_index(), first);
         assert_eq!(fd.vbank_mut().reserve_create_index(0), first + 3);
-        assert!(!super::super::kuna_renamereads::pending(&fd, phi), "phi no longer marked");
+        assert!(
+            !super::super::kuna_renamereads::pending(&fd, phi),
+            "phi no longer marked"
+        );
     }
 
     #[test]
@@ -7480,19 +8551,36 @@ mod tests {
         super::super::kuna_renamereads::mark(&mut fd, copy, 1, &mut pending);
         fd.op_insert_end(copy, b[2]);
         let copy_first = pending[1].1;
-        assert_eq!(copy_first, first + 4, "the slots' indices are taken when they are left empty");
+        assert_eq!(
+            copy_first,
+            first + 4,
+            "the slots' indices are taken when they are left empty"
+        );
 
         super::super::kuna_renamereads::finish(&mut fd, &mut pending);
         assert!(pending.is_empty());
         assert_eq!(fd.obank().get(phi).unwrap().get_in(0), Some(reached));
-        let slot = fd.obank().get(phi).unwrap().get_in(1).expect("unreached slot filled");
+        let slot = fd
+            .obank()
+            .get(phi)
+            .unwrap()
+            .get_in(1)
+            .expect("unreached slot filled");
         let v = fd.vbank().get(slot).unwrap();
         assert!(v.is_free() && !v.is_active_heritage());
         assert_eq!((v.get_addr(), v.get_size()), (&loc, 1));
         assert_eq!(v.get_create_index(), first + 1);
-        let slot = fd.obank().get(copy).unwrap().get_in(0).expect("COPY input filled");
+        let slot = fd
+            .obank()
+            .get(copy)
+            .unwrap()
+            .get_in(0)
+            .expect("COPY input filled");
         let v = fd.vbank().get(slot).unwrap();
-        assert!(v.is_free() && v.is_active_heritage(), "a guard read stays a heritage read");
+        assert!(
+            v.is_free() && v.is_active_heritage(),
+            "a guard read stays a heritage read"
+        );
         assert_eq!((v.get_addr(), v.get_size()), (&raddr(&fd, 0x200), 1));
         assert_eq!(v.get_create_index(), copy_first);
         assert!(!super::super::kuna_renamereads::pending(&fd, phi));
@@ -7507,7 +8595,10 @@ mod tests {
         let mut manager = build_manager();
         manager.insert_space(Rc::new(IopSpace::new(3))).unwrap();
         let glb = Rc::new(ArchContext::new(manager));
-        let entry = Address::new(Rc::clone(glb.manage().get_space_by_name("ram").unwrap()), 0x1000);
+        let entry = Address::new(
+            Rc::clone(glb.manage().get_space_by_name("ram").unwrap()),
+            0x1000,
+        );
         let mut fd = Funcdata::new("func", "func", glb, entry, 0x10000000, 0x40).unwrap();
         let b = build_cfg(&mut fd, 1, &[]);
         let call = fd.new_op(1, raddr(&fd, 0x1000));
@@ -7526,15 +8617,29 @@ mod tests {
         let iop = fd.obank().get(g1).unwrap().get_in(1).unwrap();
         assert_eq!(fd.obank().get(g2).unwrap().get_in(1), Some(iop));
         assert_eq!(fd.vbank().get(iop).unwrap().descend_iter().count(), 2);
-        assert_eq!(index(&fd, g2, None), index(&fd, g1, None) + 3, "a reuse keeps the numbering");
+        assert_eq!(
+            index(&fd, g2, None),
+            index(&fd, g1, None) + 3,
+            "a reuse keeps the numbering"
+        );
         assert_eq!(index(&fd, g1, Some(1)), index(&fd, g1, None) + 1);
         super::super::kuna_renamereads::finish(&mut fd, &mut pending);
         fd.op_destroy(g1);
         assert_eq!(fd.obank().get(g2).unwrap().get_in(1), Some(iop));
-        assert_eq!(fd.vbank().get(iop).unwrap().descend_iter().collect::<Vec<_>>(), vec![g2]);
+        assert_eq!(
+            fd.vbank()
+                .get(iop)
+                .unwrap()
+                .descend_iter()
+                .collect::<Vec<_>>(),
+            vec![g2]
+        );
         let mut wave = Default::default();
         crate::action::add_wave_ops(&fd, &mut wave, &[g1], &[iop]);
-        assert!(!wave.contains(&g2), "a removed guard's siblings are not its wave neighbours");
+        assert!(
+            !wave.contains(&g2),
+            "a removed guard's siblings are not its wave neighbours"
+        );
     }
 
     // ---- w10-proto-cluster verifier: processJoins join-space splitting ----
@@ -7560,7 +8665,11 @@ mod tests {
     }
 
     fn vstore(spc: &Rc<AddrSpace>, off: u64, size: u32) -> VarnodeStorage {
-        VarnodeStorage { space: Some(Rc::clone(spc)), offset: off, size }
+        VarnodeStorage {
+            space: Some(Rc::clone(spc)),
+            offset: off,
+            size,
+        }
     }
 
     fn build_fd_with_join() -> Funcdata {
@@ -7587,7 +8696,8 @@ mod tests {
     fn build_manager_iop() -> AddrSpaceManager {
         let mut m = AddrSpaceManager::new();
         m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+            .unwrap();
         m.insert_space(Rc::new(IopSpace::new(2))).unwrap();
         m.insert_space(Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
@@ -7641,12 +8751,26 @@ mod tests {
         // Both halves are *register* pieces at the recorded space/offset/size,
         // NOT newUnique temporaries (numinhalf==1 and (j-recnum)==2).
         let mv = fd.vbank().get(most).unwrap();
-        assert!(Rc::ptr_eq(mv.get_addr().get_space().unwrap(), &ram), "most half in ram (piece space)");
-        assert_eq!(mv.get_addr().get_offset(), 0x40, "most half at piece offset");
+        assert!(
+            Rc::ptr_eq(mv.get_addr().get_space().unwrap(), &ram),
+            "most half in ram (piece space)"
+        );
+        assert_eq!(
+            mv.get_addr().get_offset(),
+            0x40,
+            "most half at piece offset"
+        );
         assert_eq!(mv.get_size(), 8, "most half is the hi piece size");
         let lv = fd.vbank().get(least).unwrap();
-        assert!(Rc::ptr_eq(lv.get_addr().get_space().unwrap(), &ram), "least half in ram (piece space)");
-        assert_eq!(lv.get_addr().get_offset(), 0x48, "least half at piece offset");
+        assert!(
+            Rc::ptr_eq(lv.get_addr().get_space().unwrap(), &ram),
+            "least half in ram (piece space)"
+        );
+        assert_eq!(
+            lv.get_addr().get_offset(),
+            0x48,
+            "least half at piece offset"
+        );
         assert_eq!(lv.get_size(), 8, "least half is the lo piece size");
     }
 
@@ -7661,16 +8785,28 @@ mod tests {
             let blocks = build_cfg(&mut fd, 1, &[]);
             let ram = ram(&fd);
             let constant = fd.get_arch().manage().get_constant_space().unwrap().clone();
-            let pieces = [vstore(&ram, 0x40, 4), vstore(&constant, 0, 4), vstore(&ram, 0x50, 8)];
+            let pieces = [
+                vstore(&ram, 0x40, 4),
+                vstore(&constant, 0, 4),
+                vstore(&ram, 0x50, 8),
+            ];
             let join = fd.get_arch().manage().find_add_join(&pieces, 0).unwrap();
             let unified = join.get_unified();
             let address = Address::new(unified.space.clone().unwrap(), unified.offset);
             let h = Heritage::new();
             if write {
-                let (_, value) = make_marker(&mut fd, blocks[0], TOpCode::CPUI_COPY, &address, 16, 1);
+                let (_, value) =
+                    make_marker(&mut fd, blocks[0], TOpCode::CPUI_COPY, &address, 16, 1);
                 h.split_join_write(&mut fd, value, &join);
             } else {
-                let (op, _) = make_marker(&mut fd, blocks[0], TOpCode::CPUI_COPY, &Address::new(ram.clone(), 0x100), 16, 1);
+                let (op, _) = make_marker(
+                    &mut fd,
+                    blocks[0],
+                    TOpCode::CPUI_COPY,
+                    &Address::new(ram.clone(), 0x100),
+                    16,
+                    1,
+                );
                 let value = fd.new_varnode(16, &address, None);
                 fd.op_set_input(op, value, 0).unwrap();
                 h.split_join_read(&mut fd, value, &join);
@@ -7688,8 +8824,9 @@ mod tests {
                 }
                 if !write && op.code() == TOpCode::CPUI_PIECE {
                     padding_read |= (0..op.num_input()).any(|slot| {
-                        fd.vbank().get(op.get_in(slot).unwrap()).is_some_and(|v|
-                            v.is_constant() && v.get_size() == 4 && v.get_offset() == 0)
+                        fd.vbank().get(op.get_in(slot).unwrap()).is_some_and(|v| {
+                            v.is_constant() && v.get_size() == 4 && v.get_offset() == 0
+                        })
                     });
                 }
             }
@@ -7707,7 +8844,11 @@ mod tests {
         let mut fd = build_fd_with_join();
         let ram = ram(&fd);
         // Three pieces 8+8+8 = 24 logical.
-        let pieces = [vstore(&ram, 0x40, 8), vstore(&ram, 0x48, 8), vstore(&ram, 0x50, 8)];
+        let pieces = [
+            vstore(&ram, 0x40, 8),
+            vstore(&ram, 0x48, 8),
+            vstore(&ram, 0x50, 8),
+        ];
         let joinrec = fd.get_arch().manage().find_add_join(&pieces, 0).unwrap();
 
         // An already-8-byte Varnode equal to piece[0].size -> fast path.
@@ -7717,8 +8858,15 @@ mod tests {
         h.split_join_level(&mut fd, &[small], &mut nextlev, &joinrec);
 
         assert_eq!(nextlev.len(), 2, "fast path still emits a 2-1 pair");
-        assert_eq!(nextlev[0], Some(small), "fast path keeps the input vn as the most-half");
-        assert!(nextlev[1].is_none(), "fast path fills the least-half slot with None");
+        assert_eq!(
+            nextlev[0],
+            Some(small),
+            "fast path keeps the input vn as the most-half"
+        );
+        assert!(
+            nextlev[1].is_none(),
+            "fast path fills the least-half slot with None"
+        );
     }
 
     // (C): `process_joins` over a function whose join space holds NO Varnodes
@@ -7728,7 +8876,10 @@ mod tests {
     #[test]
     fn w10_proto_cluster_process_joins_empty_join_space_noop() {
         let mut fd = build_fd_with_join();
-        assert!(fd.get_arch().manage().get_join_space().is_some(), "fixture has a join space");
+        assert!(
+            fd.get_arch().manage().get_join_space().is_some(),
+            "fixture has a join space"
+        );
         // Seed a non-join Varnode so "no-op" is meaningfully observable.
         let ram = ram(&fd);
         let _v = fd.new_varnode_space_off(8, ram, 0x100);
@@ -7739,7 +8890,11 @@ mod tests {
         h.build_info_list(&fd);
         h.process_joins(&mut fd); // must be a clean no-op
 
-        assert_eq!(fd.vbank().num_varnodes(), nvarnodes_before, "no Varnodes added");
+        assert_eq!(
+            fd.vbank().num_varnodes(),
+            nvarnodes_before,
+            "no Varnodes added"
+        );
         assert_eq!(fd.obank().num_alive(), nops_before, "no ops added");
     }
 
@@ -7760,7 +8915,9 @@ mod tests {
         // opcode through the generic `inst[]` resolution (works for COPY/INDIRECT/
         // MULTIEQUAL alike).
         fd.op_set_opcode_code(op, code);
-        let out = fd.new_varnode_out(out_size, out_addr, op).expect("marker out");
+        let out = fd
+            .new_varnode_out(out_size, out_addr, op)
+            .expect("marker out");
         // Wire every input slot to a fresh constant so op_unlink's per-input
         // opUnsetInput has a real link to clear (C++ markers always have their
         // inputs set before removeRevisitedMarkers runs).
@@ -7785,14 +8942,19 @@ mod tests {
         // A COPY marker writing a 2-byte slice; the larger range is 4 bytes at addr.
         let addr = raddr(&fd, 0x100);
         let copy_out_addr = raddr(&fd, 0x100);
-        let (copy_op, copy_out) = make_marker(&mut fd, bl, TOpCode::CPUI_COPY, &copy_out_addr, 2, 1);
+        let (copy_op, copy_out) =
+            make_marker(&mut fd, bl, TOpCode::CPUI_COPY, &copy_out_addr, 2, 1);
         assert_eq!(fd.bb_ops(bl).len(), 1, "block has the COPY before removal");
 
         h.remove_revisited_markers(&mut fd, &[copy_out], &addr, 4);
 
         // C++ opUnlink: op removed from its block (parent cleared), opcode untouched.
         assert!(
-            fd.obank().get(copy_op).expect("copy op alive").get_parent().is_none(),
+            fd.obank()
+                .get(copy_op)
+                .expect("copy op alive")
+                .get_parent()
+                .is_none(),
             "return-form COPY is unlinked from its block"
         );
         assert_eq!(
@@ -7800,7 +8962,10 @@ mod tests {
             TOpCode::CPUI_COPY,
             "COPY is NOT rewritten to SUBPIECE (the COPY arm `continue`s before the SUBPIECE rewrite)"
         );
-        assert!(fd.bb_ops(bl).is_empty(), "block is empty after the COPY unlink");
+        assert!(
+            fd.bb_ops(bl).is_empty(),
+            "block is empty after the COPY unlink"
+        );
     }
 
     /// MULTIEQUAL branch: the marker is rewritten in place to a SUBPIECE of a
@@ -7818,8 +8983,7 @@ mod tests {
 
         let addr = raddr(&fd, 0x200);
         // Target MULTIEQUAL marker writes the low 2 bytes at addr (offset 0).
-        let (me_op, me_out) =
-            make_marker(&mut fd, bl, TOpCode::CPUI_MULTIEQUAL, &addr, 2, 2);
+        let (me_op, me_out) = make_marker(&mut fd, bl, TOpCode::CPUI_MULTIEQUAL, &addr, 2, 2);
         // A SECOND, trailing MULTIEQUAL follows it: the SUBPIECE must be inserted
         // AFTER this one (the `while (*pos)==MULTIEQUAL ++pos` skip loop).
         let trail_addr = raddr(&fd, 0x300);
@@ -7836,10 +9000,21 @@ mod tests {
         );
         // in0 = the new full-size free Varnode (size 4 at addr), in1 = const offset 0.
         let big = fd.obank().get(me_op).unwrap().get_in(0).unwrap();
-        assert_eq!(fd.vbank().get(big).unwrap().get_size(), 4, "SUBPIECE in0 is the full-size vn");
-        assert_eq!(fd.vbank().get(big).unwrap().get_addr(), &addr, "full-size vn at the range addr");
+        assert_eq!(
+            fd.vbank().get(big).unwrap().get_size(),
+            4,
+            "SUBPIECE in0 is the full-size vn"
+        );
+        assert_eq!(
+            fd.vbank().get(big).unwrap().get_addr(),
+            &addr,
+            "full-size vn at the range addr"
+        );
         let off = fd.obank().get(me_op).unwrap().get_in(1).unwrap();
-        assert!(fd.vbank().get(off).unwrap().is_constant(), "SUBPIECE in1 is a constant");
+        assert!(
+            fd.vbank().get(off).unwrap().is_constant(),
+            "SUBPIECE in1 is a constant"
+        );
         assert_eq!(
             fd.vbank().get(off).unwrap().get_addr().get_offset(),
             0,
@@ -7853,8 +9028,14 @@ mod tests {
         // Insertion order: the rewritten SUBPIECE must come AFTER the trailing
         // MULTIEQUAL (it skipped the trailing phi run).
         let ops = fd.bb_ops(bl);
-        let pos_sub = ops.iter().position(|&o| o == me_op).expect("SUBPIECE in block");
-        let pos_trail = ops.iter().position(|&o| o == trail_me).expect("trailing phi in block");
+        let pos_sub = ops
+            .iter()
+            .position(|&o| o == me_op)
+            .expect("SUBPIECE in block");
+        let pos_trail = ops
+            .iter()
+            .position(|&o| o == trail_me)
+            .expect("trailing phi in block");
         assert!(
             pos_sub > pos_trail,
             "SUBPIECE inserted after the trailing MULTIEQUAL (skip-trailing-phis loop), got sub@{pos_sub} trail@{pos_trail}"
@@ -7880,7 +9061,10 @@ mod tests {
             fd.op_insert(op, bl, None);
             op
         };
-        assert!(!fd.obank().get(target).unwrap().is_dead(), "target op is live/in-block");
+        assert!(
+            !fd.obank().get(target).unwrap().is_dead(),
+            "target op is live/in-block"
+        );
 
         // A spacer op between the target and the INDIRECT, so the insertion
         // point `++(target iter)` is a distinct op (not the INDIRECT itself):
@@ -7899,13 +9083,15 @@ mod tests {
 
         // The INDIRECT marker, in[1] = iop varnode encoding `target`.
         let addr = raddr(&fd, 0x400);
-        let (ind_op, ind_out) =
-            make_marker(&mut fd, bl, TOpCode::CPUI_INDIRECT, &addr, 2, 2);
+        let (ind_op, ind_out) = make_marker(&mut fd, bl, TOpCode::CPUI_INDIRECT, &addr, 2, 2);
         let iop = fd.new_varnode_iop(target);
         fd.op_set_input(ind_op, iop, 1).expect("set iop input");
         // Force the address on the marker output so we can observe clearAddrForce.
         fd.vbank_mut().get_mut(ind_out).unwrap().set_addr_force();
-        assert!(fd.vbank().get(ind_out).unwrap().is_addr_force(), "addr-force set pre-call");
+        assert!(
+            fd.vbank().get(ind_out).unwrap().is_addr_force(),
+            "addr-force set pre-call"
+        );
 
         h.remove_revisited_markers(&mut fd, &[ind_out], &addr, 4);
 
@@ -7922,9 +9108,18 @@ mod tests {
         // The SUBPIECE is inserted immediately AFTER the live target op (before
         // the spacer): C++ `pos = targetOp->getBasicIter(); ++pos;`.
         let ops = fd.bb_ops(bl);
-        let pos_sub = ops.iter().position(|&o| o == ind_op).expect("SUBPIECE in block");
-        let pos_target = ops.iter().position(|&o| o == target).expect("target in block");
-        let pos_spacer = ops.iter().position(|&o| o == spacer).expect("spacer in block");
+        let pos_sub = ops
+            .iter()
+            .position(|&o| o == ind_op)
+            .expect("SUBPIECE in block");
+        let pos_target = ops
+            .iter()
+            .position(|&o| o == target)
+            .expect("target in block");
+        let pos_spacer = ops
+            .iter()
+            .position(|&o| o == spacer)
+            .expect("spacer in block");
         assert!(
             pos_sub > pos_target && pos_sub < pos_spacer,
             "SUBPIECE inserted right after the target op (before the spacer), got sub@{pos_sub} target@{pos_target} spacer@{pos_spacer}"
@@ -7958,6 +9153,10 @@ mod tests {
             "offset operand == byte overlap (2) of the high slice into the LE range; widened int4->uintb"
         );
         // The constant is size 4 (C++ newConstant(4, offset)).
-        assert_eq!(fd.vbank().get(off).unwrap().get_size(), 4, "offset constant is 4 bytes");
+        assert_eq!(
+            fd.vbank().get(off).unwrap().get_size(),
+            4,
+            "offset constant is 4 bytes"
+        );
     }
 }

@@ -15,16 +15,19 @@
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_decomp::dtype::type_metatype;
 use unlace_decomp::kuna_langfacet::LangFacet;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// `true` if a runnable `go` toolchain is on PATH.
@@ -120,7 +123,8 @@ fn load(bin: &str) -> ConsoleProgram {
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
     let mut prog = bootstrap_from_object(bin, "", &spec_roots)
         .expect("bootstrap go fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
@@ -138,9 +142,12 @@ fn decompile_one_opt(bin: &str, option: Option<(&str, &str)>, name: &str) -> Str
     let mut prog: ConsoleProgram = bootstrap_from_object(bin, "", &spec_roots)
         .expect("bootstrap go fixture with built processor specs");
     if let Some((opt, v)) = option {
-        prog.arch_mut().set_kuna_option(opt, v).unwrap_or_else(|e| panic!("{opt} applies: {e:?}"));
+        prog.arch_mut()
+            .set_kuna_option(opt, v)
+            .unwrap_or_else(|e| panic!("{opt} applies: {e:?}"));
     }
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     let cmds = vec![
         format!("load function {name}"),
         "decompile".to_string(),
@@ -311,7 +318,10 @@ fn check_named_struct(arch: &str) {
         let version = unlace_analysis::loader::gobuildinfo::buildinfo_blob(&file)
             .and_then(unlace_analysis::loader::gobuildinfo::version_from_blob);
         if !matches!(version, Some((1, 18..=27))) {
-            assert!(tf.find_by_name("main.Point").unwrap().is_none(), "unsupported 32-bit layout");
+            assert!(
+                tf.find_by_name("main.Point").unwrap().is_none(),
+                "unsupported 32-bit layout"
+            );
             let _ = std::fs::remove_dir_all(&dir);
             return;
         }
@@ -320,14 +330,21 @@ fn check_named_struct(arch: &str) {
         .find_by_name("main.Point")
         .expect("factory lookup succeeds")
         .expect("main.Point interned from the typelinks");
-    assert_eq!(pt.get_metatype(), type_metatype::TYPE_STRUCT, "a struct shell");
+    assert_eq!(
+        pt.get_metatype(),
+        type_metatype::TYPE_STRUCT,
+        "a struct shell"
+    );
     assert_eq!(pt.get_size(), 4 * width, "two integers and a string header");
     for (i, offset) in [0, width, 2 * width].into_iter().enumerate() {
         assert_eq!(pt.get_field(i as i32).unwrap().offset, offset);
     }
     let envelope = tf.find_by_name("main.Envelope").unwrap().unwrap();
     assert_eq!(envelope.get_size(), 3 * width);
-    for (i, (name, offset)) in [("Lead", 0), ("Point", width), ("Tail", 2 * width)].into_iter().enumerate() {
+    for (i, (name, offset)) in [("Lead", 0), ("Point", width), ("Tail", 2 * width)]
+        .into_iter()
+        .enumerate()
+    {
         let field = envelope.get_field(i as i32).unwrap();
         assert_eq!((field.name.as_str(), field.offset), (name, offset));
     }
@@ -375,19 +392,31 @@ fn check_named_struct(arch: &str) {
     assert_eq!(back.get_field(1).unwrap().name, "First");
     assert!(std::rc::Rc::ptr_eq(&a, &back));
 
-
     // The header shells carry their facets (the W3 plane fills).
     assert_eq!(tf.kuna_lang_facet("go.string"), Some(LangFacet::GoString));
-    assert!(matches!(tf.kuna_lang_facet("go.slice"), Some(LangFacet::GoSlice { .. })));
+    assert!(matches!(
+        tf.kuna_lang_facet("go.slice"),
+        Some(LangFacet::GoSlice { .. })
+    ));
 
     // The definition renders as C for the type surfaces — the rendering is
     // also how the field names and layout are asserted (the field payload is
     // private to the factory).
-    let text =
-        unlace_decomp::kuna_structdefs::definition_text(&pt, unlace_decomp::kuna_langtypes::SpellCtx::OFF);
+    let text = unlace_decomp::kuna_structdefs::definition_text(
+        &pt,
+        unlace_decomp::kuna_langtypes::SpellCtx::OFF,
+    );
     // The C renderer uses declared aliases for the tag and the string-header member type.
-    for needle in ["main_Point".to_string(), format!("int{width} X"), format!("int{width} Y"), "go_string Tag;".to_string()] {
-        assert!(text.contains(&needle), "definition renders {needle}; got:\n{text}");
+    for needle in [
+        "main_Point".to_string(),
+        format!("int{width} X"),
+        format!("int{width} Y"),
+        "go_string Tag;".to_string(),
+    ] {
+        assert!(
+            text.contains(&needle),
+            "definition renders {needle}; got:\n{text}"
+        );
     }
 
     let _ = std::fs::remove_dir_all(&dir);

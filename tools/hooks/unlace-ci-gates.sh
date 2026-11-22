@@ -62,6 +62,7 @@ ignored_fixtures() {
   for f in $hits; do git grep -qF "$(basename "$f")" -- '*.rs' '*.xml' '*.md' '*.mjs' && bad+="$f"$'\n'; done
   [ -z "$bad" ] || { echo "ignored by the global gitignore but read by a tracked test (git add -f them):"; printf '%s' "$bad"; return 1; }
 }
+fmt() { (cd decompiler && cargo fmt --all --check >/dev/null) || { echo "run: cd decompiler && cargo fmt --all"; return 1; }; }
 build() { (cd decompiler && cargo build -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli); }
 specs() {
   local want got; want=$(find specs -name '*.slaspec' | wc -l); got=$(find specs -name '*.sla' | wc -l)
@@ -97,6 +98,7 @@ rusttest() {
 step forbidden-words forbidden_words
 step ignored-fixtures ignored_fixtures
 step test-layout python3 scripts/check_test_layout.py
+step fmt fmt
 if [ "$LEVEL" != fast ]; then
   # CI has no global gitignore; the repo tooling tests create a.exe / x.obj and expect git to see them.
   step test-tools env GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.excludesFile GIT_CONFIG_VALUE_0=/dev/null make test-tools

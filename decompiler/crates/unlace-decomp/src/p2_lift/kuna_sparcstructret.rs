@@ -36,8 +36,8 @@
 //! `data.beginOpDead()` / `--iter`) is ported directly against the op bank's
 //! `iter_dead()` ordering (ADR 0001's intrusive insert-list).
 
-use crate::funcdata::Funcdata;
 use crate::context::OpId;
+use crate::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
 
 /// (kuna) Toggle SPARC struct-return `unimp` BRANCHIND -> fall-through
@@ -84,14 +84,21 @@ impl SparcStructRetOption {
 const ILLEGAL_INSTRUCTION_TRAP: &str = "IllegalInstructionTrap";
 
 /// Neutralize a recognized producer when its output is available; otherwise leave it intact.
-pub fn neutralize_trap_producer(data: &mut Funcdata, producer: OpId) -> unlace_base::error::KunaResult<()> {
+pub fn neutralize_trap_producer(
+    data: &mut Funcdata,
+    producer: OpId,
+) -> unlace_base::error::KunaResult<()> {
     let Some(op) = data.obank().get(producer) else {
         return Ok(());
     };
     if op.code() != OpCode::CPUI_CALLOTHER {
         return Ok(());
     }
-    let Some(size) = op.get_out().and_then(|v| data.vbank().get(v)).map(|v| v.get_size()) else {
+    let Some(size) = op
+        .get_out()
+        .and_then(|v| data.vbank().get(v))
+        .map(|v| v.get_size())
+    else {
         return Ok(());
     };
     let zero = data.new_constant(size, 0);
@@ -101,7 +108,12 @@ pub fn neutralize_trap_producer(data: &mut Funcdata, producer: OpId) -> unlace_b
 }
 
 /// Find the IllegalInstructionTrap producer within the branch's instruction.
-pub fn kuna_sparc_struct_ret_trap_producer<F>(data: &Funcdata, branch: OpId, gate: bool, userop_name: F) -> Option<OpId>
+pub fn kuna_sparc_struct_ret_trap_producer<F>(
+    data: &Funcdata,
+    branch: OpId,
+    gate: bool,
+    userop_name: F,
+) -> Option<OpId>
 where
     F: Fn(u32) -> Option<String>,
 {
@@ -117,7 +129,8 @@ where
         if op.code() == OpCode::CPUI_CALLOTHER {
             if let Some(input) = op.get_in(0).and_then(|v| data.vbank().get(v)) {
                 if input.is_constant()
-                    && userop_name(input.get_offset() as u32).as_deref() == Some(ILLEGAL_INSTRUCTION_TRAP)
+                    && userop_name(input.get_offset() as u32).as_deref()
+                        == Some(ILLEGAL_INSTRUCTION_TRAP)
                 {
                     return Some(id);
                 }

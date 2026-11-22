@@ -40,7 +40,10 @@ fn funcstart_patterns_is_deferred_not_registered_at_load() {
             Compiler::Rustc,
             Compiler::Go,
         ] {
-            let ids: Vec<&str> = passes_for(compiler, format).iter().map(|p| p.id()).collect();
+            let ids: Vec<&str> = passes_for(compiler, format)
+                .iter()
+                .map(|p| p.id())
+                .collect();
             assert!(
                 !ids.contains(&"funcstart_patterns"),
                 "{compiler:?}/{format:?} must not sweep the pattern corpus at load"
@@ -75,6 +78,9 @@ fn deferred_entry_pass_rebases_a_relocatable_object() {
     let out = run_deferred_entry_passes(&bytes, &image, &arch, &|id| id == "funcstart_patterns");
     let ids: Vec<&str> = out.iter().map(|(id, _)| *id).collect();
     assert_eq!(ids, vec!["funcstart_patterns"]);
-    let entries: Vec<u64> = out.iter().flat_map(|(_, o)| o.entries.iter().copied()).collect();
+    let entries: Vec<u64> = out
+        .iter()
+        .flat_map(|(_, o)| o.entries.iter().copied())
+        .collect();
     assert_eq!(entries, vec![0x400038, 0x400095]);
 }

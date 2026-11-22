@@ -34,7 +34,9 @@ pub struct RuleWideSlice {
 
 impl RuleWideSlice {
     pub fn new(group: impl Into<String>) -> Self {
-        Self { group: group.into() }
+        Self {
+            group: group.into(),
+        }
     }
 }
 
@@ -43,11 +45,18 @@ fn size(data: &Funcdata, vn: VarnodeId) -> i32 {
 }
 
 fn set_op(data: &mut Funcdata, op: OpId, code: OpCode, inputs: &[VarnodeId]) {
-    data.op_set_all_input(op, inputs).expect("wide-slice inputs");
+    data.op_set_all_input(op, inputs)
+        .expect("wide-slice inputs");
     data.op_set_opcode(op, crate::typeop::seam_type_op_for(code));
 }
 
-fn insert(data: &mut Funcdata, before: OpId, code: OpCode, width: i32, inputs: &[VarnodeId]) -> VarnodeId {
+fn insert(
+    data: &mut Funcdata,
+    before: OpId,
+    code: OpCode,
+    width: i32,
+    inputs: &[VarnodeId],
+) -> VarnodeId {
     let address = data.obank().get(before).unwrap().get_addr().clone();
     let op = data.new_op(inputs.len() as i32, address);
     set_op(data, op, code, inputs);
@@ -85,8 +94,11 @@ impl Rule for RuleWideSlice {
         let Some(operation) = data.obank().get(op) else {
             return 0;
         };
-        let (Some(input), Some(offset), Some(output)) = (operation.get_in(0), operation.get_in(1), operation.get_out())
-        else {
+        let (Some(input), Some(offset), Some(output)) = (
+            operation.get_in(0),
+            operation.get_in(1),
+            operation.get_out(),
+        ) else {
             return 0;
         };
         let off = data.vbank().get(offset).unwrap();

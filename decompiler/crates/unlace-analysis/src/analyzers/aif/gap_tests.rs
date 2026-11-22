@@ -1,9 +1,9 @@
 use super::*;
 use crate::listing::decode::decode_one;
 use crate::listing::{DiscoveredFunction, Insn};
+use std::path::PathBuf;
 use unlace_base::{address::Address, error::KunaResult};
 use unlace_sleigh::{globalcontext::ContextInternal, loadimage::LoadImage, sleigh::Sleigh};
-use std::path::PathBuf;
 
 const BASE: u64 = 0x1000;
 
@@ -232,7 +232,8 @@ fn retiring_and_span_scanning_preserve_entries_and_first_decode_order() {
                 let mut reference = GapDecoder::new(&old, old_space, old_listing.exec_ranges());
                 let mut candidate = GapDecoder::new(&new, new_space, new_listing.exec_ranges());
                 let want = legacy_walk(&old_listing, &mut reference, strict, corroborate);
-                let got = run_aif_with_decoder(&new_listing, &mut candidate, strict, corroborate, None);
+                let got =
+                    run_aif_with_decoder(&new_listing, &mut candidate, strict, corroborate, None);
                 assert_eq!(
                     got, want,
                     "{kind}, strict={strict}, corroborate={corroborate}"
@@ -240,8 +241,10 @@ fn retiring_and_span_scanning_preserve_entries_and_first_decode_order() {
                 let accepted = matches!(kind, "call" | "backward")
                     || (!corroborate && matches!(kind, "leaf" | "forward" | "sparse"));
                 assert_eq!(got.contains(&(BASE + 0x400)), accepted, "{kind}");
-                assert_eq!(candidate.decoded_addresses,reference.decoded_addresses,
-                    "first-decode order changed: {kind}, strict={strict}, corroborate={corroborate}");
+                assert_eq!(
+                    candidate.decoded_addresses, reference.decoded_addresses,
+                    "first-decode order changed: {kind}, strict={strict}, corroborate={corroborate}"
+                );
                 assert!(candidate.peak_cache_len < reference.peak_cache_len / 2);
             }
         }
@@ -415,13 +418,27 @@ fn unchanged_frame_evidence_does_not_decode_or_validate_the_gap_again() {
         .collect();
     frames.validated(root, spans, &mut decoder);
     let roots = BTreeSet::from([root]);
-    let replacements = frames.reconcile(&listing, &listing, &mut decoder, &roots, &[], frame_policy());
+    let replacements = frames.reconcile(
+        &listing,
+        &listing,
+        &mut decoder,
+        &roots,
+        &[],
+        frame_policy(),
+    );
     assert_eq!(replacements, BTreeMap::from([(root, BASE + 0x400)]));
     assert!(!decoder.decoded_addresses.is_empty());
 
     let mut repeated = GapDecoder::new(&engine, space, listing.exec_ranges());
     assert_eq!(
-        frames.reconcile(&listing, &listing, &mut repeated, &roots, &[], frame_policy()),
+        frames.reconcile(
+            &listing,
+            &listing,
+            &mut repeated,
+            &roots,
+            &[],
+            frame_policy()
+        ),
         replacements
     );
     assert!(
@@ -470,12 +487,28 @@ fn expanded_fingerprints_reuse_only_context_neutral_frame_instructions() {
         listing.exec_ranges().to_vec(),
     );
     let roots = BTreeSet::from([root]);
-    assert!(frames
-        .reconcile(&listing, &unrelated, &mut decoder, &roots, &[], frame_policy())
-        .is_empty());
+    assert!(
+        frames
+            .reconcile(
+                &listing,
+                &unrelated,
+                &mut decoder,
+                &roots,
+                &[],
+                frame_policy()
+            )
+            .is_empty()
+    );
     let mut expanded = GapDecoder::new(&engine, space, listing.exec_ranges());
     assert_eq!(
-        frames.reconcile(&listing, &listing, &mut expanded, &roots, &[], frame_policy()),
+        frames.reconcile(
+            &listing,
+            &listing,
+            &mut expanded,
+            &roots,
+            &[],
+            frame_policy()
+        ),
         BTreeMap::from([(root, BASE + 0x400)])
     );
     assert!(
@@ -488,7 +521,13 @@ fn expanded_fingerprints_reuse_only_context_neutral_frame_instructions() {
 }
 
 fn frame_policy() -> GapWalk<'static> {
-    GapWalk { strict: true, corroborate: false, bracket: None, noppad: false, poolslide: None }
+    GapWalk {
+        strict: true,
+        corroborate: false,
+        bracket: None,
+        noppad: false,
+        poolslide: None,
+    }
 }
 
 #[test]
@@ -499,16 +538,37 @@ fn reconciled_prefix_keeps_its_instruction_records_as_a_frame_root() {
     let mut decoder = GapDecoder::new(&engine, Rc::clone(&space), listing.exec_ranges());
     decoder.full_capture = Some(Default::default());
     let body = check_valid_subroutine_strict(&mut decoder, &listing, root, root, u64::MAX).unwrap();
-    let spans = body.into_iter().map(|at| (at, decoder.probe(at).unwrap().len)).collect();
+    let spans = body
+        .into_iter()
+        .map(|at| (at, decoder.probe(at).unwrap().len))
+        .collect();
     let mut frames = ArmFrames::default();
     frames.validated(root, spans, &mut decoder);
     assert_eq!(
-        frames.reconcile(&listing, &listing, &mut decoder, &BTreeSet::from([root]), &[], frame_policy()),
+        frames.reconcile(
+            &listing,
+            &listing,
+            &mut decoder,
+            &BTreeSet::from([root]),
+            &[],
+            frame_policy()
+        ),
         BTreeMap::from([(root, prefix)]),
     );
 
     let mut rebuilt = GapDecoder::new(&engine, Rc::clone(&space), listing.exec_ranges());
-    assert!(frames.reconcile(&listing, &listing, &mut rebuilt, &BTreeSet::from([prefix]), &[], frame_policy()).is_empty());
+    assert!(
+        frames
+            .reconcile(
+                &listing,
+                &listing,
+                &mut rebuilt,
+                &BTreeSet::from([prefix]),
+                &[],
+                frame_policy()
+            )
+            .is_empty()
+    );
     assert_eq!(
         frames.replay(prefix, &engine, &space, &mut Default::default()),
         Some(4),
@@ -520,20 +580,46 @@ fn reconciled_prefix_keeps_its_instruction_records_as_a_frame_root() {
 fn a_rescan_through_the_shared_memo_decodes_nothing_again() {
     let (engine, space, listing) = hidden_fixture("call");
     let root = BASE + 0x404;
-    let memo = Rc::new(crate::listing::kuna_decodememo::DecodeMemo::new(listing.exec_ranges()));
+    let memo = Rc::new(crate::listing::kuna_decodememo::DecodeMemo::new(
+        listing.exec_ranges(),
+    ));
     let mut decoder = GapDecoder::new(&engine, Rc::clone(&space), listing.exec_ranges());
     decoder.share(Some(&memo));
     let body = check_valid_subroutine_strict(&mut decoder, &listing, root, root, u64::MAX).unwrap();
-    let spans = body.into_iter().map(|at| (at, decoder.probe(at).unwrap().len)).collect();
+    let spans = body
+        .into_iter()
+        .map(|at| (at, decoder.probe(at).unwrap().len))
+        .collect();
     let mut frames = ArmFrames::sharing(&memo);
     frames.validated(root, spans, &mut decoder);
     let roots = BTreeSet::from([root]);
-    let replacements = frames.reconcile(&listing, &listing, &mut decoder, &roots, &[], frame_policy());
+    let replacements = frames.reconcile(
+        &listing,
+        &listing,
+        &mut decoder,
+        &roots,
+        &[],
+        frame_policy(),
+    );
     assert_eq!(replacements, BTreeMap::from([(root, BASE + 0x400)]));
     assert!(!decoder.decoded_addresses.is_empty());
 
     let mut fresh = ArmFrames::sharing(&memo);
     let mut repeated = GapDecoder::new(&engine, space, listing.exec_ranges());
-    assert_eq!(fresh.reconcile(&listing, &listing, &mut repeated, &roots, &[], frame_policy()), replacements);
-    assert!(repeated.decoded_addresses.is_empty(), "a rescan decoded {:x?} again", repeated.decoded_addresses);
+    assert_eq!(
+        fresh.reconcile(
+            &listing,
+            &listing,
+            &mut repeated,
+            &roots,
+            &[],
+            frame_policy()
+        ),
+        replacements
+    );
+    assert!(
+        repeated.decoded_addresses.is_empty(),
+        "a rescan decoded {:x?} again",
+        repeated.decoded_addresses
+    );
 }

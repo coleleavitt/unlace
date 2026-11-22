@@ -11,24 +11,31 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn load() -> ConsoleProgram {
     let root = repo_root();
     let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
     let bin = root.join("decompiler/crates/unlace-analysis/tests/fixtures/regglobal_fmt_x86_64");
-    let mut prog = bootstrap_from_object(bin.to_str().expect("UTF-8 fixture path"), "", &spec_roots)
-        .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    let mut prog =
+        bootstrap_from_object(bin.to_str().expect("UTF-8 fixture path"), "", &spec_roots)
+            .expect("bootstrap fixture with built processor specs");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
 fn stream(prog: &ConsoleProgram) -> Vec<(String, u64)> {
-    prog.function_entries().map(|(n, a)| (n.to_string(), a.get_offset())).collect()
+    prog.function_entries()
+        .map(|(n, a)| (n.to_string(), a.get_offset()))
+        .collect()
 }
 
 fn code_addr(prog: &ConsoleProgram, vma: u64) -> Address {
@@ -47,7 +54,10 @@ fn code_addr(prog: &ConsoleProgram, vma: u64) -> Address {
 fn registration_matches_the_retain_and_push_model() {
     let mut prog = load();
     let mut model = stream(&prog);
-    assert!(model.len() > 100, "the fixture must carry enough symbols to be worth scanning");
+    assert!(
+        model.len() > 100,
+        "the fixture must carry enough symbols to be worth scanning"
+    );
 
     let existing = model[model.len() / 2].0.clone();
     let mut script: Vec<(String, u64)> =
@@ -59,15 +69,29 @@ fn registration_matches_the_retain_and_push_model() {
         model.retain(|(n, _)| n != name);
         model.push((name.clone(), *vma));
         prog.register_symbol(name, code_addr(&prog, *vma));
-        assert_eq!(stream(&prog), model, "stream diverged after registering {name} at {vma:#x}");
+        assert_eq!(
+            stream(&prog),
+            model,
+            "stream diverged after registering {name} at {vma:#x}"
+        );
     }
 
     assert_eq!(prog.num_symbols(), model.len());
-    assert_eq!(prog.lookup_symbol("churn").map(|a| a.get_offset()), Some(0xa000 + 299));
-    assert_eq!(prog.lookup_symbol("brand_new").map(|a| a.get_offset()), Some(0x9200));
+    assert_eq!(
+        prog.lookup_symbol("churn").map(|a| a.get_offset()),
+        Some(0xa000 + 299)
+    );
+    assert_eq!(
+        prog.lookup_symbol("brand_new").map(|a| a.get_offset()),
+        Some(0x9200)
+    );
     assert!(prog.lookup_symbol("never_registered").is_none());
     for (name, _) in &model {
-        let first = model.iter().find(|(n, _)| n == name).map(|(_, v)| *v).unwrap();
+        let first = model
+            .iter()
+            .find(|(n, _)| n == name)
+            .map(|(_, v)| *v)
+            .unwrap();
         assert_eq!(
             prog.lookup_symbol(name).map(|a| a.get_offset()),
             Some(first),
@@ -83,7 +107,11 @@ fn lookup_answers_with_the_first_record_of_a_name() {
     let prog = load();
     let records = stream(&prog);
     for (name, vma) in &records {
-        let first = records.iter().find(|(n, _)| n == name).map(|(_, v)| *v).unwrap();
+        let first = records
+            .iter()
+            .find(|(n, _)| n == name)
+            .map(|(_, v)| *v)
+            .unwrap();
         assert_eq!(
             prog.lookup_symbol(name).map(|a| a.get_offset()),
             Some(first),

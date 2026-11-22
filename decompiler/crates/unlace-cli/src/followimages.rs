@@ -23,7 +23,10 @@ pub(crate) fn take_limit(argv: &mut Vec<String>) -> Result<usize, String> {
     let mut i = 0;
     while i < argv.len() {
         let value = if argv[i] == "--follow-images" {
-            let value = argv.get(i + 1).cloned().ok_or("--follow-images requires a count")?;
+            let value = argv
+                .get(i + 1)
+                .cloned()
+                .ok_or("--follow-images requires a count")?;
             argv.drain(i..i + 2);
             value
         } else if let Some(value) = argv[i].strip_prefix("--follow-images=") {
@@ -34,13 +37,17 @@ pub(crate) fn take_limit(argv: &mut Vec<String>) -> Result<usize, String> {
             i += 1;
             continue;
         };
-        limit = value.parse().map_err(|_| format!("--follow-images takes a count, got {value:?}"))?;
+        limit = value
+            .parse()
+            .map_err(|_| format!("--follow-images takes a count, got {value:?}"))?;
     }
     Ok(limit)
 }
 
 fn address(token: &str) -> Option<u64> {
-    let digits = token.strip_prefix("0x").or_else(|| token.strip_prefix("0X"))?;
+    let digits = token
+        .strip_prefix("0x")
+        .or_else(|| token.strip_prefix("0X"))?;
     u64::from_str_radix(digits, 16).ok()
 }
 
@@ -55,10 +62,18 @@ pub(crate) fn apply(sub: &str, argv: &mut [String], limit: usize) {
     let Some(selected) = unlace_decomp::kuna_dyldcache::selected_image() else {
         return;
     };
-    let Some(cache) = argv.iter().find(|a| !a.starts_with('-') && is_dyld_cache_file(Path::new(a))).cloned() else {
+    let Some(cache) = argv
+        .iter()
+        .find(|a| !a.starts_with('-') && is_dyld_cache_file(Path::new(a)))
+        .cloned()
+    else {
         return;
     };
-    let addrs: Vec<(u64, bool)> = argv.iter().filter_map(|a| address(a)).map(|a| (a, through_stubs)).collect();
+    let addrs: Vec<(u64, bool)> = argv
+        .iter()
+        .filter_map(|a| address(a))
+        .map(|a| (a, through_stubs))
+        .collect();
     if addrs.is_empty() {
         return;
     }
@@ -72,7 +87,10 @@ pub(crate) fn apply(sub: &str, argv: &mut [String], limit: usize) {
             format!(" is a stub for {:#x}, which", step.target)
         };
         if step.loaded {
-            eprintln!("[kuna] {:#x}{stub} lies in {}; loading that image too", step.requested, step.image);
+            eprintln!(
+                "[kuna] {:#x}{stub} lies in {}; loading that image too",
+                step.requested, step.image
+            );
         } else {
             eprintln!(
                 "[kuna] {:#x}{stub} lies in {}, which is not loaded: add it to --image or raise --follow-images (now {limit})",
@@ -80,7 +98,10 @@ pub(crate) fn apply(sub: &str, argv: &mut [String], limit: usize) {
             );
             continue;
         }
-        for token in argv.iter_mut().filter(|t| address(t) == Some(step.requested)) {
+        for token in argv
+            .iter_mut()
+            .filter(|t| address(t) == Some(step.requested))
+        {
             *token = format!("{:#x}", step.target);
         }
     }
@@ -101,8 +122,9 @@ mod tests {
 
     #[test]
     fn the_flag_is_removed_and_the_last_count_wins() {
-        let mut argv: Vec<String> =
-            ["cache", "--follow-images", "0", "0x10", "--follow-images=3"].map(String::from).to_vec();
+        let mut argv: Vec<String> = ["cache", "--follow-images", "0", "0x10", "--follow-images=3"]
+            .map(String::from)
+            .to_vec();
         assert_eq!(take_limit(&mut argv), Ok(3));
         assert_eq!(argv, ["cache", "0x10"]);
         assert_eq!(take_limit(&mut argv), Ok(DEFAULT_LIMIT));

@@ -69,7 +69,7 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_decomp::fspec::{effect_type, PrototypePieces, EXTRAPOP_UNKNOWN};
+use unlace_decomp::fspec::{EXTRAPOP_UNKNOWN, PrototypePieces, effect_type};
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::translate::PcodeEmit;
@@ -788,11 +788,7 @@ impl<'a> Walker<'a> {
         let bits = ins[0].size.saturating_mul(8).min(64);
         let delta = |c: u64| {
             let d = sign_extend(c, bits);
-            if sub {
-                d.wrapping_neg()
-            } else {
-                d
-            }
+            if sub { d.wrapping_neg() } else { d }
         };
         match (a, b) {
             (Val::Const(x), Val::Const(y)) => {

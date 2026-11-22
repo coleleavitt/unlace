@@ -14,7 +14,7 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::error::KunaError;
 use unlace_base::marshal::{
-    ElementId, Encoder, PackedDecode, PackedEncode, ATTRIB_CONTENT, ATTRIB_INDEX, ATTRIB_NAME,
+    ATTRIB_CONTENT, ATTRIB_INDEX, ATTRIB_NAME, ElementId, Encoder, PackedDecode, PackedEncode,
 };
 use unlace_base::space::VarnodeStorage;
 
@@ -23,12 +23,12 @@ use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::translate::PcodeEmit;
 
 use unlace_decomp::engine_translate::EngineTranslate;
-use unlace_decomp::pcodeinject::{InjectContext, CALLOTHERFIXUP_TYPE};
+use unlace_decomp::pcodeinject::{CALLOTHERFIXUP_TYPE, InjectContext};
 use unlace_ghidra::client::GhidraClient;
 use unlace_ghidra::ids::{ELEM_COMMAND_GETREGISTER, ELEM_COMMAND_GETUSEROPNAME};
 use unlace_ghidra::process::GhidraProcess;
-use unlace_ghidra::protocol::{nibble_expand, string_data_size_header, WireError};
-use unlace_ghidra::translate::{build_registry, GhidraTranslate, TspecModel};
+use unlace_ghidra::protocol::{WireError, nibble_expand, string_data_size_header};
+use unlace_ghidra::translate::{GhidraTranslate, TspecModel, build_registry};
 
 // ---------------------------------------------------------------------------
 // MockJava wire builder
@@ -346,7 +346,10 @@ fn test_register_program_builds_live_architecture() {
         .burst(9);
 
     let mut process = GhidraProcess::new(Cursor::new(input.0), Vec::new());
-    assert_eq!(process.read_command().expect("registerProgram completes"), 0);
+    assert_eq!(
+        process.read_command().expect("registerProgram completes"),
+        0
+    );
     let (_, out) = process.into_inner();
 
     // registerProgram issued exactly one init query (the getUserOpName probe) —
@@ -563,8 +566,7 @@ const ARM_CAPTURED_REQUEST: &str =
 /// `<inst offset=4><addr space=3 offset=66844/><op code=1 size=1><addr space=4
 /// offset=32 size=4/><addr space=4 offset=32 size=4/></op></inst>` — ARM.cspec's
 /// `r0 = r0;` fixup body, already lifted for this one site.
-const ARM_CAPTURED_RESPONSE: &str =
-    "60e2d021844bd45183d043848a9c8b5be0ab2181d321814bd45184d041a0d321848b4bd45184d041a0d321848b9ba0e2";
+const ARM_CAPTURED_RESPONSE: &str = "60e2d021844bd45183d043848a9c8b5be0ab2181d321814bd45184d041a0d321848b4bd45184d041a0d321848b9ba0e2";
 
 fn unhex(s: &str) -> Vec<u8> {
     (0..s.len())
@@ -588,12 +590,7 @@ impl std::io::Write for SharedSink {
 
 #[derive(Default)]
 struct RecordEmit {
-    ops: Vec<(
-        Address,
-        OpCode,
-        Option<VarnodeData>,
-        Vec<VarnodeData>,
-    )>,
+    ops: Vec<(Address, OpCode, Option<VarnodeData>, Vec<VarnodeData>)>,
 }
 impl PcodeEmit for RecordEmit {
     fn dump(

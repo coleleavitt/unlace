@@ -52,10 +52,13 @@ impl OptionDeclOrder {
             other => {
                 return Err(KunaError::parse(format!(
                     "Unknown declorder value: {other} (expected natural|name)"
-                )))
+                )));
             }
         };
-        Ok((mode, format!("Local declaration order set to {}", mode.as_str())))
+        Ok((
+            mode,
+            format!("Local declaration order set to {}", mode.as_str()),
+        ))
     }
 }
 

@@ -113,11 +113,7 @@ impl<R: Read, W: Write> GhidraRemoteFetch<R, W> {
 }
 
 impl<R: Read, W: Write> RemoteProviderFetch for GhidraRemoteFetch<R, W> {
-    fn fetch_mapped_symbols(
-        &self,
-        addr: &Address,
-        decoder: &mut dyn Decoder,
-    ) -> KunaResult<bool> {
+    fn fetch_mapped_symbols(&self, addr: &Address, decoder: &mut dyn Decoder) -> KunaResult<bool> {
         self.client
             .borrow_mut()
             .get_mapped_symbols_xml(addr, decoder)
@@ -170,12 +166,7 @@ impl<R: Read, W: Write> RemoteProviderFetch for GhidraRemoteFetch<R, W> {
 }
 
 impl<R: Read, W: Write> RemoteTypeFetch for GhidraRemoteFetch<R, W> {
-    fn fetch_data_type(
-        &self,
-        name: &str,
-        id: u64,
-        decoder: &mut dyn Decoder,
-    ) -> KunaResult<bool> {
+    fn fetch_data_type(&self, name: &str, id: u64, decoder: &mut dyn Decoder) -> KunaResult<bool> {
         self.client
             .borrow_mut()
             .get_data_type(name, id, decoder)
@@ -211,7 +202,7 @@ mod tests {
 
     use unlace_base::marshal::{Encoder, PackedEncode};
 
-    use crate::translate::{build_registry, TspecModel};
+    use crate::translate::{TspecModel, build_registry};
 
     const TSPEC: &[u8] = b"<sleigh bigendian=\"false\" uniqbase=\"0x10000000\">\
 <spaces defaultspace=\"ram\">\

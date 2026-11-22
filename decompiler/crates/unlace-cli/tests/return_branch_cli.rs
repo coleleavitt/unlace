@@ -171,14 +171,19 @@ fn source(stem: &str, text: &str) -> PathBuf {
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 #[test]
 fn a_constant_jump_through_the_return_register_keeps_its_store() {
-    let Some(cc) = cross_tool("KUNA_RETURNBRANCH_MIPS_CC", &["clang", "clang-21", "clang-14"])
-    else {
+    let Some(cc) = cross_tool(
+        "KUNA_RETURNBRANCH_MIPS_CC",
+        &["clang", "clang-21", "clang-14"],
+    ) else {
         eprintln!("returnbranch replay: no cross compiler");
         return;
     };
-    let ld = cross_tool("KUNA_RETURNBRANCH_MIPS_LD", &["ld.lld", "ld.lld-21", "ld.lld-14"])
-        .as_deref()
-        .and_then(linker_path);
+    let ld = cross_tool(
+        "KUNA_RETURNBRANCH_MIPS_LD",
+        &["ld.lld", "ld.lld-21", "ld.lld-14"],
+    )
+    .as_deref()
+    .and_then(linker_path);
     let Some(ld) = ld else {
         eprintln!("returnbranch replay: no cross linker");
         return;
@@ -193,16 +198,27 @@ fn a_constant_jump_through_the_return_register_keeps_its_store() {
             eprintln!("returnbranch replay: no {} emulator", abi.name);
             continue;
         };
-        let entry = source(&format!("returnbranch-start-{}", abi.name), &start(abi.exit_syscall));
+        let entry = source(
+            &format!("returnbranch-start-{}", abi.name),
+            &start(abi.exit_syscall),
+        );
         for leading in ["", "\tnop\n"] {
-            let label = format!("{}{}", abi.name, if leading.is_empty() { "" } else { "-nop" });
+            let label = format!(
+                "{}{}",
+                abi.name,
+                if leading.is_empty() { "" } else { "-nop" }
+            );
             let bounce = source(
                 &format!("returnbranch-bounce-{label}"),
                 &BOUNCE.replace("LEADING", leading),
             );
             let original = common::scratch_file(&format!("returnbranch-{label}"), "elf");
             link(abi, &cc, &ld, "-O1", &[&bounce, &entry, &probe], &original);
-            assert_eq!(run(&qemu, &original), 0, "{label}: the original lost its store");
+            assert_eq!(
+                run(&qemu, &original),
+                0,
+                "{label}: the original lost its store"
+            );
 
             let printed = decompile(&original, &[]);
             assert!(printed.contains("*slot = value;"), "{label}: {printed}");
@@ -212,7 +228,11 @@ fn a_constant_jump_through_the_return_register_keeps_its_store() {
             let emitted = common::scratch_file(&format!("returnbranch-{label}-emitted"), "c");
             std::fs::write(
                 &emitted,
-                printed.lines().filter(|l| !l.starts_with("// ")).collect::<Vec<_>>().join("\n"),
+                printed
+                    .lines()
+                    .filter(|l| !l.starts_with("// "))
+                    .collect::<Vec<_>>()
+                    .join("\n"),
             )
             .unwrap();
             for level in ["-O0", "-O2"] {

@@ -25,7 +25,7 @@ use std::rc::Rc;
 
 use unlace_base::address::{Address, RangeList};
 use unlace_base::partmap::PartMap;
-use unlace_base::space::{spacetype, AddrSpace, ConstantSpace};
+use unlace_base::space::{AddrSpace, ConstantSpace, spacetype};
 use unlace_decomp::context::{GlobalEntry, GlobalQuery};
 use unlace_decomp::varnode::varnode_flags;
 
@@ -100,18 +100,42 @@ fn av1_containment_boundary_is_inclusive_last_and_first() {
     let usepoint = Address::new_invalid();
 
     // Exact whole-entry match: returns the entry's flags.
-    assert_eq!(gq.query_properties(&addr(&ram, 0x100), 4, &usepoint), flags, "exact [0x100,0x103] size-4 must match");
+    assert_eq!(
+        gq.query_properties(&addr(&ram, 0x100), 4, &usepoint),
+        flags,
+        "exact [0x100,0x103] size-4 must match"
+    );
     // A 1-byte read at the last covered byte still matches (last == end == 0x103).
-    assert_eq!(gq.query_properties(&addr(&ram, 0x103), 1, &usepoint), flags, "last-byte read must match (getLast()>=end boundary)");
+    assert_eq!(
+        gq.query_properties(&addr(&ram, 0x103), 1, &usepoint),
+        flags,
+        "last-byte read must match (getLast()>=end boundary)"
+    );
     // size 5 => end 0x104 > getLast 0x103 => NOT contained => no symbol, no owned scope => 0.
-    assert_eq!(gq.query_properties(&addr(&ram, 0x100), 5, &usepoint), 0, "one byte past getLast must NOT be contained");
+    assert_eq!(
+        gq.query_properties(&addr(&ram, 0x100), 5, &usepoint),
+        0,
+        "one byte past getLast must NOT be contained"
+    );
     // start 0x104 (just past the entry) => first(0x100) <= start but last(0x103) < end => not contained.
-    assert_eq!(gq.query_properties(&addr(&ram, 0x104), 1, &usepoint), 0, "read just past the entry must NOT match");
+    assert_eq!(
+        gq.query_properties(&addr(&ram, 0x104), 1, &usepoint),
+        0,
+        "read just past the entry must NOT match"
+    );
     // start 0x0FF (before the entry): first(0x100) > start => the explicit first-bound skip fires.
-    assert_eq!(gq.query_properties(&addr(&ram, 0x0FF), 4, &usepoint), 0, "a range starting before getFirst must NOT match (rangemap first<=addr)");
+    assert_eq!(
+        gq.query_properties(&addr(&ram, 0x0FF), 4, &usepoint),
+        0,
+        "a range starting before getFirst must NOT match (rangemap first<=addr)"
+    );
     // A different space index never matches (space_index filter).
     let ram_other = ram_space(7);
-    assert_eq!(gq.query_properties(&addr(&ram_other, 0x100), 4, &usepoint), 0, "an entry in another space must NOT match");
+    assert_eq!(
+        gq.query_properties(&addr(&ram_other, 0x100), 4, &usepoint),
+        0,
+        "an entry in another space must NOT match"
+    );
 }
 
 // ===========================================================================
@@ -176,7 +200,10 @@ fn av3_constant_address_never_matches() {
         PartMap::new(0u32),
     );
     let usepoint = Address::new_invalid();
-    assert!(cst.get_type() == spacetype::IPTR_CONSTANT, "fixture sanity: const space");
+    assert!(
+        cst.get_type() == spacetype::IPTR_CONSTANT,
+        "fixture sanity: const space"
+    );
     // Constant 0x40, size 4 => guarded to 0 regardless of entries/owned.
     assert_eq!(
         gq.query_properties(&addr(&cst, 0x40), 4, &usepoint),

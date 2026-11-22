@@ -25,7 +25,7 @@ use unlace_num::opcodes::OpCode;
 use crate::context::{BlockId, HighVariableId, VarnodeId};
 use crate::dtype::type_metatype;
 use crate::funcdata::Funcdata;
-use crate::kuna_libcnames::{folded_from, local_of, Evidence, LOOP, RESULT};
+use crate::kuna_libcnames::{Evidence, LOOP, RESULT, folded_from, local_of};
 
 /// Loop counter names by nesting depth, outermost first.
 const LOOP_NAMES: [&str; 5] = ["i", "j", "k", "m", "n"];
@@ -68,19 +68,33 @@ fn loop_counters(fd: &mut Funcdata, found: &mut BTreeMap<HighVariableId, Vec<Evi
     let loops = loops(fd);
     for (head, body) in &loops {
         let depth = loops.values().filter(|b| b.contains(head)).count();
-        let Some(&name) = LOOP_NAMES.get(depth.saturating_sub(1)) else { continue };
+        let Some(&name) = LOOP_NAMES.get(depth.saturating_sub(1)) else {
+            continue;
+        };
         for op in fd.bb_ops(*head) {
-            let Some(phi) = fd.obank().get(op).filter(|o| o.code() == OpCode::CPUI_MULTIEQUAL) else { continue };
+            let Some(phi) = fd
+                .obank()
+                .get(op)
+                .filter(|o| o.code() == OpCode::CPUI_MULTIEQUAL)
+            else {
+                continue;
+            };
             let at = (phi.get_addr().clone(), phi.get_time());
             let Some(out) = phi.get_out() else { continue };
-            let inputs: Vec<Option<VarnodeId>> = (0..phi.num_input()).map(|k| phi.get_in(k)).collect();
+            let inputs: Vec<Option<VarnodeId>> =
+                (0..phi.num_input()).map(|k| phi.get_in(k)).collect();
             let integer = fd.vbank().get(out).is_some_and(|v| {
-                matches!(v.get_type().get_metatype(), type_metatype::TYPE_INT | type_metatype::TYPE_UINT)
+                matches!(
+                    v.get_type().get_metatype(),
+                    type_metatype::TYPE_INT | type_metatype::TYPE_UINT
+                )
             });
             if !integer {
                 continue;
             }
-            let Some(high) = local_of(fd, out) else { continue };
+            let Some(high) = local_of(fd, out) else {
+                continue;
+            };
             let hb = fd.bblocks_ref().block(*head);
             let (mut entered, mut stepped) = (false, true);
             for (k, input) in inputs.iter().enumerate() {
@@ -95,7 +109,10 @@ fn loop_counters(fd: &mut Funcdata, found: &mut BTreeMap<HighVariableId, Vec<Evi
                 }
             }
             if entered && stepped {
-                found.entry(high).or_default().push((LOOP, at, -1, name, true));
+                found
+                    .entry(high)
+                    .or_default()
+                    .push((LOOP, at, -1, name, true));
             }
         }
     }
@@ -104,16 +121,32 @@ fn loop_counters(fd: &mut Funcdata, found: &mut BTreeMap<HighVariableId, Vec<Evi
 /// Is `vn` the local `high` plus or minus one, through copies and casts?
 fn steps(fd: &Funcdata, mut vn: VarnodeId, high: HighVariableId) -> bool {
     for _ in 0..STEP_DEPTH {
-        let Some(op) = fd.vbank().get(vn).and_then(|v| v.get_def()).and_then(|d| fd.obank().get(d)) else {
+        let Some(op) = fd
+            .vbank()
+            .get(vn)
+            .and_then(|v| v.get_def())
+            .and_then(|d| fd.obank().get(d))
+        else {
             return false;
         };
         let one = |slot: i32| {
-            op.get_in(slot).and_then(|v| fd.vbank().get(v)).is_some_and(|v| {
-                let mask = if v.get_size() >= 8 { u64::MAX } else { (1u64 << (8 * v.get_size())) - 1 };
-                v.is_constant() && (v.get_offset() == 1 || v.get_offset() == mask)
-            })
+            op.get_in(slot)
+                .and_then(|v| fd.vbank().get(v))
+                .is_some_and(|v| {
+                    let mask = if v.get_size() >= 8 {
+                        u64::MAX
+                    } else {
+                        (1u64 << (8 * v.get_size())) - 1
+                    };
+                    v.is_constant() && (v.get_offset() == 1 || v.get_offset() == mask)
+                })
         };
-        let counter = |slot: i32| op.get_in(slot).and_then(|v| fd.vbank().get(v)).and_then(|v| v.get_high()) == Some(high);
+        let counter = |slot: i32| {
+            op.get_in(slot)
+                .and_then(|v| fd.vbank().get(v))
+                .and_then(|v| v.get_high())
+                == Some(high)
+        };
         match op.code() {
             OpCode::CPUI_COPY | OpCode::CPUI_CAST => match op.get_in(0) {
                 Some(input) => vn = input,
@@ -129,17 +162,29 @@ fn steps(fd: &Funcdata, mut vn: VarnodeId, high: HighVariableId) -> bool {
 
 fn result(fd: &mut Funcdata, found: &mut BTreeMap<HighVariableId, Vec<Evidence>>) {
     let mut returned: Option<(HighVariableId, Evidence)> = None;
-    let blocks: Vec<BlockId> = (0..fd.bblocks_get_size()).map(|i| fd.bblocks_get_block(i)).collect();
+    let blocks: Vec<BlockId> = (0..fd.bblocks_get_size())
+        .map(|i| fd.bblocks_get_block(i))
+        .collect();
     for block in blocks {
-        let Some(op) = fd.bb_op_tail(block) else { continue };
-        let Some(ret) = fd.obank().get(op).filter(|o| o.code() == OpCode::CPUI_RETURN) else { continue };
+        let Some(op) = fd.bb_op_tail(block) else {
+            continue;
+        };
+        let Some(ret) = fd
+            .obank()
+            .get(op)
+            .filter(|o| o.code() == OpCode::CPUI_RETURN)
+        else {
+            continue;
+        };
         let at = (ret.get_addr().clone(), ret.get_time());
         let Some(value) = ret.get_in(1) else { continue };
         let value = folded_from(fd, value);
         if fd.vbank().get(value).is_some_and(|v| v.is_constant()) {
             continue;
         }
-        let Some(high) = local_of(fd, value) else { return };
+        let Some(high) = local_of(fd, value) else {
+            return;
+        };
         match &returned {
             Some((h, _)) if *h != high => return,
             Some(_) => {}

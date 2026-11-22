@@ -61,8 +61,8 @@ use unlace_base::space::AddrSpaceManager;
 use unlace_base::xml::{DocumentStorage, Element};
 
 use unlace_decomp::decompile_drive::{decompile_func, print_c};
-use unlace_decomp::options::{register_option_elements, OptionDatabase};
-use unlace_decomp::sleigh_arch::{register_sleigh_arch_ids, LanguageDatabase};
+use unlace_decomp::options::{OptionDatabase, register_option_elements};
+use unlace_decomp::sleigh_arch::{LanguageDatabase, register_sleigh_arch_ids};
 use unlace_decomp::xml_arch::{XmlArchitecture, XmlArchitectureCapability};
 
 use unlace_sleigh::loadimage::LoadImage;
@@ -70,11 +70,16 @@ use unlace_sleigh::loadimage_xml::register_loadimage_xml_ids;
 use unlace_sleigh::translate::register_translate_ids;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn attr(el: &Element, name: &str) -> Option<String> {
-    el.get_attribute_value(name).ok().map(|b| String::from_utf8_lossy(b).into_owned())
+    el.get_attribute_value(name)
+        .ok()
+        .map(|b| String::from_utf8_lossy(b).into_owned())
 }
 
 fn find_named(el: &Rc<Element>, name: &str, out: &mut Vec<Rc<Element>>) {
@@ -161,7 +166,12 @@ fn parse_datatest(path: &std::path::Path) -> Result<DataTest, String> {
         .filter_map(|c| parse_option_com(&String::from_utf8_lossy(c.get_content())))
         .collect();
 
-    Ok(DataTest { binaryimage, arch_id, symbols, options })
+    Ok(DataTest {
+        binaryimage,
+        arch_id,
+        symbols,
+        options,
+    })
 }
 
 struct DummyImg;
@@ -193,11 +203,13 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
 
     let capability = XmlArchitectureCapability::new();
     let mut arch = capability.build_architecture("datatest", "");
-    arch.build_loader(Rc::clone(&dt.binaryimage)).map_err(|e| format!("build_loader: {e}"))?;
+    arch.build_loader(Rc::clone(&dt.binaryimage))
+        .map_err(|e| format!("build_loader: {e}"))?;
 
     let mut db = LanguageDatabase::new();
     db.scan_for_sleigh_directories(root.join("specs").to_str().unwrap());
-    db.get_descriptions(&registry).map_err(|e| format!("collect ldefs: {e}"))?;
+    db.get_descriptions(&registry)
+        .map_err(|e| format!("collect ldefs: {e}"))?;
 
     arch.sleigh_mut().set_archid(&dt.arch_id);
     arch.sleigh_mut()
@@ -207,7 +219,10 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
         return Err("language index unresolved".to_string());
     }
 
-    let specs = arch.sleigh().build_spec_file(&db).map_err(|e| format!("build_spec_file: {e}"))?;
+    let specs = arch
+        .sleigh()
+        .build_spec_file(&db)
+        .map_err(|e| format!("build_spec_file: {e}"))?;
     let resolved_sla = specs.slafile.ok_or("build_spec_file resolved no .sla")?;
     let sla = std::fs::read(&resolved_sla).map_err(|e| format!("read sla: {e}"))?;
     arch.sleigh_mut()
@@ -229,7 +244,9 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
         .base_mut()
         .unwrap()
         .translate_mut()
-        .as_sleigh_mut().expect("standalone Sleigh engine").install_register_lookup()
+        .as_sleigh_mut()
+        .expect("standalone Sleigh engine")
+        .install_register_lookup()
         .map_err(|e| format!("install_register_lookup: {e}"))?;
 
     arch.sleigh_mut()
@@ -239,9 +256,13 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
         .map_err(|e| format!("init_post_engine: {e}"))?;
 
     let manager_ptr: *const AddrSpaceManager = arch.sleigh().base().unwrap().manage();
-    arch.open_image(unsafe { &*manager_ptr }, &registry).map_err(|e| format!("open_image: {e}"))?;
+    arch.open_image(unsafe { &*manager_ptr }, &registry)
+        .map_err(|e| format!("open_image: {e}"))?;
     let img = arch.take_loader().ok_or("loader vanished after open")?;
-    arch.sleigh_mut().base_mut().unwrap().set_loader(Box::new(img));
+    arch.sleigh_mut()
+        .base_mut()
+        .unwrap()
+        .set_loader(Box::new(img));
     Ok(arch)
 }
 
@@ -251,7 +272,9 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
 /// XmlArchitecture `open_image` symbol install, so direct CALLs to the
 /// binaryimage's `<symbol>` entries resolve.
 fn render_named(stem: &str, want: &[&str]) -> Result<Vec<(String, String)>, String> {
-    let path = repo_root().join("tests/datatests").join(format!("{stem}.xml"));
+    let path = repo_root()
+        .join("tests/datatests")
+        .join(format!("{stem}.xml"));
     let dt = parse_datatest(&path)?;
     let registry = build_registry();
     let mut xarch = bootstrap(&dt)?;
@@ -291,7 +314,10 @@ fn render_named(stem: &str, want: &[&str]) -> Result<Vec<(String, String)>, Stri
 /// same logical line.  Returns the raw substrings so the test can inspect both
 /// callee name and arg count.
 fn call_lines(body: &str) -> Vec<String> {
-    body.lines().map(|l| l.trim().to_string()).filter(|l| l.contains('(') && l.contains(')')).collect()
+    body.lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| l.contains('(') && l.contains(')'))
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -317,7 +343,10 @@ fn w10_callsite_noforloop_alias_recovers_per_call_args() {
             return;
         }
     };
-    let (_, body) = rendered.iter().find(|(n, _)| n == "noforloop_alias").expect("decompiled body");
+    let (_, body) = rendered
+        .iter()
+        .find(|(n, _)| n == "noforloop_alias")
+        .expect("decompiled body");
     eprintln!("--- noforloop_alias rendered ---\n{body}");
 
     // The two callees are `might_change` @0x40067b and `printf` @0x400440 (the
@@ -328,8 +357,14 @@ fn w10_callsite_noforloop_alias_recovers_per_call_args() {
     let calls = call_lines(body);
     let might = calls.iter().find(|l| l.contains("40067b(")).cloned();
     let printf = calls.iter().find(|l| l.contains("400440(")).cloned();
-    assert!(might.is_some(), "expected the might_change @40067b call line; calls={calls:?}");
-    assert!(printf.is_some(), "expected the printf @400440 call line; calls={calls:?}");
+    assert!(
+        might.is_some(),
+        "expected the might_change @40067b call line; calls={calls:?}"
+    );
+    assert!(
+        printf.is_some(),
+        "expected the printf @400440 call line; calls={calls:?}"
+    );
 
     // Extract the argument list inside a single call's paren group.  The args are
     // now resolved data-flow VALUES that can themselves contain nested parens and
@@ -392,8 +427,18 @@ fn w10_callsite_noforloop_alias_recovers_per_call_args() {
     // differ.  This is the load-bearing per-call ProtoModel-driven recovery.
     let mc = args_of(might.as_ref().unwrap(), "40067b");
     let pc = args_of(printf.as_ref().unwrap(), "400440");
-    assert_eq!(mc.len(), 1, "might_change should recover exactly 1 arg, got {mc:?} in `{}`", might.unwrap());
-    assert_eq!(pc.len(), 2, "printf should recover exactly 2 args, got {pc:?} in `{}`", printf.unwrap());
+    assert_eq!(
+        mc.len(),
+        1,
+        "might_change should recover exactly 1 arg, got {mc:?} in `{}`",
+        might.unwrap()
+    );
+    assert_eq!(
+        pc.len(),
+        2,
+        "printf should recover exactly 2 args, got {pc:?} in `{}`",
+        printf.unwrap()
+    );
 
     // VALUE RESOLUTION (w10-callarg-values): the recovered argument now renders as
     // the data-flow VALUE live at the call (the SSA Varnode reaching the call's
@@ -404,7 +449,11 @@ fn w10_callsite_noforloop_alias_recovers_per_call_args() {
     // constant address (`0x40085d`), not `RDI`.  (Naming the stack expression `i`
     // and rendering the string literal are the downstream type/stackvar/string
     // plane, LOSS-131.)
-    assert_ne!(mc[0], "RDI", "the call arg must resolve to the data-flow value, not the raw register RDI; got `{}`", mc[0]);
+    assert_ne!(
+        mc[0], "RDI",
+        "the call arg must resolve to the data-flow value, not the raw register RDI; got `{}`",
+        mc[0]
+    );
     // The resolved stack-address value.  After the W10 RSP L4/L5 stack-frame render
     // (`ActionNameVars::linkSpacebaseSymbol` namerec rename + the `&symbol` attach),
     // the recovered `&i` argument now renders as the NAMED stack variable — the
@@ -425,8 +474,16 @@ fn w10_callsite_noforloop_alias_recovers_per_call_args() {
          named stack var `v1`), got `{}`",
         mc[0]
     );
-    assert_ne!(pc[0], "RDI", "printf arg0 must resolve to the format-string value, not the raw register RDI; got `{}`", pc[0]);
-    assert_ne!(pc[1], "RSI", "printf arg1 must resolve to the data-flow value, not the raw register RSI; got `{}`", pc[1]);
+    assert_ne!(
+        pc[0], "RDI",
+        "printf arg0 must resolve to the format-string value, not the raw register RDI; got `{}`",
+        pc[0]
+    );
+    assert_ne!(
+        pc[1], "RSI",
+        "printf arg1 must resolve to the data-flow value, not the raw register RSI; got `{}`",
+        pc[1]
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -448,7 +505,10 @@ fn w10_callsite_deindirect_callind_and_direct_coexist() {
             return;
         }
     };
-    let (_, body) = rendered.iter().find(|(n, _)| n == "deindirect").expect("decompiled body");
+    let (_, body) = rendered
+        .iter()
+        .find(|(n, _)| n == "deindirect")
+        .expect("decompiled body");
     eprintln!("--- deindirect rendered ---\n{body}");
 
     // opCallind: an indirect call renders the dereference form `(*<expr>)(`.
@@ -460,7 +520,10 @@ fn w10_callsite_deindirect_callind_and_direct_coexist() {
     // name renders via the generic `sub_100580` fallback on this harness.
     let calls = call_lines(body);
     let puts = calls.iter().find(|l| l.contains("100580(")).cloned();
-    assert!(puts.is_some(), "expected a direct call to puts @100580; calls={calls:?}");
+    assert!(
+        puts.is_some(),
+        "expected a direct call to puts @100580; calls={calls:?}"
+    );
     let puts = puts.unwrap();
     let inner = &puts[puts.find("100580(").unwrap() + "100580(".len()..];
     let inner = inner.trim_start_matches('(');
@@ -470,9 +533,18 @@ fn w10_callsite_deindirect_callind_and_direct_coexist() {
     // operand the call passes), NOT the raw incoming register RDI.  Exactly one
     // comma-free argument is recovered (the System-V first slot).
     let inner = inner.trim();
-    assert!(!inner.is_empty(), "puts should recover exactly its 1 System-V arg; got empty");
-    assert!(!inner.contains(','), "puts should recover exactly 1 arg; got `{inner}`");
-    assert_ne!(inner, "RDI", "puts arg must resolve to the data-flow value, not the raw register RDI; got `{inner}`");
+    assert!(
+        !inner.is_empty(),
+        "puts should recover exactly its 1 System-V arg; got empty"
+    );
+    assert!(
+        !inner.contains(','),
+        "puts should recover exactly 1 arg; got `{inner}`"
+    );
+    assert_ne!(
+        inner, "RDI",
+        "puts arg must resolve to the data-flow value, not the raw register RDI; got `{inner}`"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -494,8 +566,10 @@ fn w10_callsite_dupptr_direct_call_arg_no_raw_op_form() {
             return;
         }
     };
-    let (_, body) =
-        rendered.iter().find(|(n, _)| n == "loadstore_fieldarray").expect("decompiled body");
+    let (_, body) = rendered
+        .iter()
+        .find(|(n, _)| n == "loadstore_fieldarray")
+        .expect("decompiled body");
     eprintln!("--- loadstore_fieldarray rendered ---\n{body}");
 
     // The direct call to initstruct @100684 recovers exactly 1 System-V arg, now
@@ -504,7 +578,10 @@ fn w10_callsite_dupptr_direct_call_arg_no_raw_op_form() {
     // (w10-callarg-values).
     let calls = call_lines(body);
     let isc = calls.iter().find(|l| l.contains("100684(")).cloned();
-    assert!(isc.is_some(), "expected the initstruct @100684 call; calls={calls:?}");
+    assert!(
+        isc.is_some(),
+        "expected the initstruct @100684 call; calls={calls:?}"
+    );
     let isc = isc.unwrap();
     // Extract the call's argument list by *balanced*-paren matching from the
     // opening `100684(` to its matching close.  A naive "first `)`" would stop
@@ -550,8 +627,14 @@ fn w10_callsite_dupptr_direct_call_arg_no_raw_op_form() {
         }
         n
     };
-    assert!(!inner.is_empty() && top_level_commas == 0, "initstruct should recover exactly 1 arg; got `{inner}`");
-    assert_ne!(inner, "RDI", "initstruct arg must resolve to the data-flow value, not the raw register RDI; got `{inner}`");
+    assert!(
+        !inner.is_empty() && top_level_commas == 0,
+        "initstruct should recover exactly 1 arg; got `{inner}`"
+    );
+    assert_ne!(
+        inner, "RDI",
+        "initstruct arg must resolve to the data-flow value, not the raw register RDI; got `{inner}`"
+    );
     // The resolved stack-address value.  After the W10 RSP L4/L5 stack-frame render
     // (`ActionNameVars::linkSpacebaseSymbol` namerec rename + the `&symbol` attach),
     // the recovered `&myval` argument now renders as the NAMED stack variable: the
@@ -575,5 +658,8 @@ fn w10_callsite_dupptr_direct_call_arg_no_raw_op_form() {
 
     // The pre-wave raw rendering MUST NOT appear: the call is the functional
     // `<callee>(arg)` form, never the raw `CALL(<target>)` op dump.
-    assert!(!body.contains("CALL("), "raw `CALL(...)` op-form must not appear:\n{body}");
+    assert!(
+        !body.contains("CALL("),
+        "raw `CALL(...)` op-form must not appear:\n{body}"
+    );
 }

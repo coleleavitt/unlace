@@ -58,8 +58,8 @@ use std::collections::BTreeSet;
 
 use crate::listing::Listing;
 
-use super::kuna_poolentry::{literal_target, wide, DecodeMode};
 use super::GapDecoder;
+use super::kuna_poolentry::{DecodeMode, literal_target, wide};
 
 /// Every word an instruction seen so far loads as a PC-relative literal, and the
 /// even values such words hold in Thumb code.
@@ -72,7 +72,11 @@ pub(super) struct LiteralWords<'a> {
 impl<'a> LiteralWords<'a> {
     /// The words the decoded Listing loads.
     pub(super) fn from_listing(listing: &Listing, mode: DecodeMode<'a>) -> Self {
-        let mut out = LiteralWords { mode, words: BTreeSet::new(), data_pointers: BTreeSet::new() };
+        let mut out = LiteralWords {
+            mode,
+            words: BTreeSet::new(),
+            data_pointers: BTreeSet::new(),
+        };
         for (&at, insn) in listing.instructions() {
             out.note(listing, at, &insn.mnemonic, &insn.operands);
         }
@@ -80,7 +84,12 @@ impl<'a> LiteralWords<'a> {
     }
 
     /// Add the words the speculative body `body` loads.
-    pub(super) fn add_body(&mut self, listing: &Listing, decoder: &GapDecoder, body: &BTreeSet<u64>) {
+    pub(super) fn add_body(
+        &mut self,
+        listing: &Listing,
+        decoder: &GapDecoder,
+        body: &BTreeSet<u64>,
+    ) {
         self.add_instructions(listing, decoder, body.iter().copied());
     }
 
@@ -97,15 +106,26 @@ impl<'a> LiteralWords<'a> {
     }
 
     fn note(&mut self, listing: &Listing, at: u64, mnemonic: &str, operands: &str) {
-        let starts = |p: &str| mnemonic.get(..p.len()).is_some_and(|m| m.eq_ignore_ascii_case(p));
+        let starts = |p: &str| {
+            mnemonic
+                .get(..p.len())
+                .is_some_and(|m| m.eq_ignore_ascii_case(p))
+        };
         if !(starts("ldr") || starts("vldr")) {
             return;
         }
-        let Some(target) = literal_target(at, operands, &self.mode) else { return };
+        let Some(target) = literal_target(at, operands, &self.mode) else {
+            return;
+        };
         let count = if wide(mnemonic) { 2 } else { 1 };
         let thumb = self.mode.pc_delta(at) == Some(4);
         for word in (0..count).map(|k| target + 4 * k) {
-            let in_exec = |v: u64| listing.exec_ranges().iter().any(|&(lo, hi)| lo <= v && v < hi);
+            let in_exec = |v: u64| {
+                listing
+                    .exec_ranges()
+                    .iter()
+                    .any(|&(lo, hi)| lo <= v && v < hi)
+            };
             if word % 4 == 0 && in_exec(word) && !listing.is_instruction_start(word) {
                 self.words.insert(word);
                 if thumb {
@@ -141,7 +161,8 @@ impl<'a> LiteralWords<'a> {
     }
 
     fn read(&self, at: u64, size: i32) -> Option<u64> {
-        let addr = unlace_base::address::Address::new(std::rc::Rc::clone(&self.mode.code_space), at);
+        let addr =
+            unlace_base::address::Address::new(std::rc::Rc::clone(&self.mode.code_space), at);
         self.mode.arch.read_loadimage_value(&addr, size).ok()
     }
 }

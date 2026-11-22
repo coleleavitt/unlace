@@ -59,7 +59,10 @@ const DISPLACEMENTS: [(u64, u64); 6] = [
 ];
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn index() -> XrefIndex {
@@ -67,22 +70,31 @@ fn index() -> XrefIndex {
 }
 
 fn index_of(fixture: &str) -> XrefIndex {
-    let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(fixture);
+    let bin = repo_root()
+        .join("decompiler/crates/unlace-analysis/tests/fixtures")
+        .join(fixture);
     let specs = repo_root().join("specs");
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
     let bytes = std::fs::read(&bin).expect("fixture readable");
     let file = object::File::parse(&*bytes).expect("fixture parses");
-    let seeds: Vec<u64> =
-        prog.function_entries_canonical().iter().map(|e| e.addr.get_offset()).collect();
+    let seeds: Vec<u64> = prog
+        .function_entries_canonical()
+        .iter()
+        .map(|e| e.addr.get_offset())
+        .collect();
     xrefs::build(&file, prog.arch(), prog.arch().translate(), &seeds)
 }
 
 fn to(idx: &XrefIndex, target: u64) -> Vec<(u64, XrefKind)> {
-    idx.refs_to(target).iter().map(|r| (r.from, r.kind)).collect()
+    idx.refs_to(target)
+        .iter()
+        .map(|r| (r.from, r.kind))
+        .collect()
 }
 
 /// The callbacks are reached only through GOT slots, which hold each entry
@@ -90,11 +102,29 @@ fn to(idx: &XrefIndex, target: u64) -> Vec<(u64, XrefKind)> {
 #[test]
 fn a_thumb_callback_read_through_the_got_is_referenced_from_the_slot_load() {
     let idx = index();
-    assert!(to(&idx, ON_EXPIRE).contains(&(READS_EXPIRE, XrefKind::Data)), "{:?}", to(&idx, ON_EXPIRE));
-    assert!(to(&idx, ON_REARM).contains(&(READS_REARM, XrefKind::Data)), "{:?}", to(&idx, ON_REARM));
-    assert_eq!(to(&idx, EXPIRE_SLOT).first(), Some(&(READS_EXPIRE, XrefKind::Read)));
-    assert_eq!(to(&idx, REARM_SLOT).first(), Some(&(READS_REARM, XrefKind::Read)));
-    assert!(to(&idx, GOT).contains(&(MAKES_BASE, XrefKind::Data)), "{:?}", to(&idx, GOT));
+    assert!(
+        to(&idx, ON_EXPIRE).contains(&(READS_EXPIRE, XrefKind::Data)),
+        "{:?}",
+        to(&idx, ON_EXPIRE)
+    );
+    assert!(
+        to(&idx, ON_REARM).contains(&(READS_REARM, XrefKind::Data)),
+        "{:?}",
+        to(&idx, ON_REARM)
+    );
+    assert_eq!(
+        to(&idx, EXPIRE_SLOT).first(),
+        Some(&(READS_EXPIRE, XrefKind::Read))
+    );
+    assert_eq!(
+        to(&idx, REARM_SLOT).first(),
+        Some(&(READS_REARM, XrefKind::Read))
+    );
+    assert!(
+        to(&idx, GOT).contains(&(MAKES_BASE, XrefKind::Data)),
+        "{:?}",
+        to(&idx, GOT)
+    );
     assert_eq!(idx.function_containing(READS_REARM), Some(ARM_TIMERS));
 }
 
@@ -114,7 +144,10 @@ fn a_thumb2_wide_literal_load_makes_a_base_and_a_string() {
 fn a_thumb_string_formed_from_a_mapped_looking_displacement_is_referenced() {
     let idx = index();
     assert_eq!(to(&idx, ARMING), vec![(FORMS_ARMING, XrefKind::Data)]);
-    assert_eq!(to(&idx, REARM_NEXT), vec![(FORMS_REARM_NEXT, XrefKind::Data)]);
+    assert_eq!(
+        to(&idx, REARM_NEXT),
+        vec![(FORMS_REARM_NEXT, XrefKind::Data)]
+    );
 }
 
 /// `_start` reads `table`'s slot through a base held in a scratch register.
@@ -142,8 +175,16 @@ const FORMS_RESETTING: u64 = 0x101da;
 fn a_switch_case_reads_its_slot_through_the_dispatch_base() {
     let idx = index();
     for (load, slot, callback) in CASE_SLOT_LOADS {
-        assert!(to(&idx, slot).contains(&(load, XrefKind::Read)), "{slot:#x}: {:?}", to(&idx, slot));
-        assert!(to(&idx, callback).contains(&(load, XrefKind::Data)), "{callback:#x}: {:?}", to(&idx, callback));
+        assert!(
+            to(&idx, slot).contains(&(load, XrefKind::Read)),
+            "{slot:#x}: {:?}",
+            to(&idx, slot)
+        );
+        assert!(
+            to(&idx, callback).contains(&(load, XrefKind::Data)),
+            "{callback:#x}: {:?}",
+            to(&idx, callback)
+        );
         assert_eq!(idx.function_containing(load), Some(PICK_TIMER));
     }
     assert_eq!(to(&idx, RESETTING), vec![(FORMS_RESETTING, XrefKind::Data)]);
@@ -154,9 +195,15 @@ fn a_switch_case_reads_its_slot_through_the_dispatch_base() {
 fn a_thumb_composed_displacement_is_not_filed_as_a_pointer() {
     let idx = index();
     for (load, word) in DISPLACEMENTS {
-        assert!(idx.refs_to(word).is_empty(), "{word:#x}: {:?}", idx.refs_to(word));
         assert!(
-            idx.refs_from_instruction(load).iter().all(|r| r.kind != XrefKind::Data),
+            idx.refs_to(word).is_empty(),
+            "{word:#x}: {:?}",
+            idx.refs_to(word)
+        );
+        assert!(
+            idx.refs_from_instruction(load)
+                .iter()
+                .all(|r| r.kind != XrefKind::Data),
             "{load:#x}: {:?}",
             idx.refs_from_instruction(load)
         );
@@ -182,11 +229,22 @@ fn an_odd_string_in_text_keeps_its_address_and_a_thumb_pointer_loses_its_bit() {
     let idx = index_of("picodd_thumb_le32");
     assert_eq!(
         to(&idx, AB),
-        vec![(LOCAL_CB_FORMS_AB, XrefKind::Data), (F1_FORMS_AB, XrefKind::Data)]
+        vec![
+            (LOCAL_CB_FORMS_AB, XrefKind::Data),
+            (F1_FORMS_AB, XrefKind::Data)
+        ]
     );
     assert_eq!(to(&idx, IJ), vec![(F4_FORMS_IJ, XrefKind::Data)]);
     assert!(to(&idx, AB - 1).is_empty(), "{:?}", to(&idx, AB - 1));
     assert!(to(&idx, IJ - 1).is_empty(), "{:?}", to(&idx, IJ - 1));
-    assert!(to(&idx, LOCAL_CB).contains(&(SET_LOCAL_FORMS_CB, XrefKind::Data)), "{:?}", to(&idx, LOCAL_CB));
-    assert!(to(&idx, F3).contains(&(SET_GLOBAL_READS_F3, XrefKind::Data)), "{:?}", to(&idx, F3));
+    assert!(
+        to(&idx, LOCAL_CB).contains(&(SET_LOCAL_FORMS_CB, XrefKind::Data)),
+        "{:?}",
+        to(&idx, LOCAL_CB)
+    );
+    assert!(
+        to(&idx, F3).contains(&(SET_GLOBAL_READS_F3, XrefKind::Data)),
+        "{:?}",
+        to(&idx, F3)
+    );
 }

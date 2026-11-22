@@ -1,7 +1,7 @@
 //! ELF instruction-set and compiler-model declarations beyond the container's
 //! address size. Explicit language targets bypass this selection.
+use object::{Architecture, Object, elf::*};
 use unlace_base::error::{KunaError, KunaResult};
-use object::{elf::*, Architecture, Object};
 
 const MIPS_32BITMODE: u32 = 0x100;
 const MIPS_FP64: u32 = 0x200;
@@ -136,7 +136,10 @@ fn select(flags: u32, elf64: bool, endian: &str, fp: MipsFloat) -> KunaResult<Se
         ));
     }
     Ok(Selection {
-        id: format!("MIPS:{endian}:{}:{variant}:{model}", if wide { 64 } else { 32 }),
+        id: format!(
+            "MIPS:{endian}:{}:{variant}:{model}",
+            if wide { 64 } else { 32 }
+        ),
         fp64_on_mips32,
     })
 }

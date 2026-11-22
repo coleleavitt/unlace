@@ -41,14 +41,14 @@
 
 use std::rc::Rc;
 
-use unlace_base::address::{calc_mask, Address};
+use unlace_base::address::{Address, calc_mask};
 use unlace_base::space::AddrSpace;
 use unlace_base::types::{int4, uintb};
 
 use unlace_num::opcodes::OpCode;
 
-use crate::funcdata::Funcdata;
 use crate::context::{OpId, VarnodeId};
+use crate::funcdata::Funcdata;
 
 #[cfg(test)]
 mod tests;
@@ -131,9 +131,7 @@ impl StackSolver {
 
         while let Some(cur) = workstack.pop() {
             // lower_bound(eqs, {var1=cur}, compare) — first eqn with var1>=cur.
-            let mut top = self
-                .eqs
-                .partition_point(|e| e.var1 < cur);
+            let mut top = self.eqs.partition_point(|e| e.var1 < cur);
             while top < self.eqs.len() && self.eqs[top].var1 == cur {
                 let var2 = self.eqs[top].var2;
                 let rhs = self.eqs[top].rhs;
@@ -152,7 +150,11 @@ impl StackSolver {
         let size = self.eqs.len();
         for i in 0..size {
             let e = self.eqs[i];
-            self.eqs.push(StackEqn { var1: e.var2, var2: e.var1, rhs: e.rhs.wrapping_neg() });
+            self.eqs.push(StackEqn {
+                var1: e.var2,
+                var2: e.var1,
+                rhs: e.rhs.wrapping_neg(),
+            });
         }
         self.eqs.sort_by(Self::compare); // stable_sort
     }
@@ -197,7 +199,10 @@ impl StackSolver {
     /// `lower_bound(vnlist,othervn,comparePointers)`).  Linear member search —
     /// see the module note.
     fn index_of(&self, othervn: VarnodeId) -> Option<int4> {
-        self.vnlist.iter().position(|&v| v == othervn).map(|i| i as int4)
+        self.vnlist
+            .iter()
+            .position(|&v| v == othervn)
+            .map(|i| i as int4)
     }
 
     /// The first exact equation the solution breaks, if any: a stack-pointer
@@ -217,8 +222,10 @@ impl StackSolver {
         let spacebase = Address::new(point_space, point.offset);
         let point_size = point.size as int4;
 
-        let refs: Vec<VarnodeId> =
-            data.vbank().iter_loc_size_addr(point_size, &spacebase).collect();
+        let refs: Vec<VarnodeId> = data
+            .vbank()
+            .iter_loc_size_addr(point_size, &spacebase)
+            .collect();
         for vn in refs {
             // C++ breaks at the first free spacebase reference.
             if data.vbank().get(vn).map(|v| v.is_free()).unwrap_or(true) {
@@ -232,7 +239,12 @@ impl StackSolver {
         if self.vnlist.is_empty() {
             return Ok(());
         }
-        if !data.vbank().get(self.vnlist[0]).map(|v| v.is_input()).unwrap_or(false) {
+        if !data
+            .vbank()
+            .get(self.vnlist[0])
+            .map(|v| v.is_input())
+            .unwrap_or(false)
+        {
             // C++ throw LowlevelError("Input value of stackpointer is not used")
             return Err(());
         }
@@ -256,19 +268,38 @@ impl StackSolver {
             };
             // (kuna) Arithmetic moving the stack pointer by a non-constant
             // amount: a runtime reservation.
-            if matches!(opc, OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB | OpCode::CPUI_INT_AND
-                | OpCode::CPUI_PTRADD | OpCode::CPUI_PTRSUB)
-                && data.obank().get(op).is_some_and(|o| {
-                    // PTRADD's third input is its element size, not an amount.
-                    let amounts = if opc == OpCode::CPUI_PTRADD { 2 } else { o.num_input() };
-                    (0..o.num_input()).any(|j| Self::addr_is(data, o.get_in(j), &spacebase))
-                        && (0..amounts).any(|j| !Self::addr_is(data, o.get_in(j), &spacebase) && !Self::is_const(data, o.get_in(j)))
-                })
-            {
+            if matches!(
+                opc,
+                OpCode::CPUI_INT_ADD
+                    | OpCode::CPUI_INT_SUB
+                    | OpCode::CPUI_INT_AND
+                    | OpCode::CPUI_PTRADD
+                    | OpCode::CPUI_PTRSUB
+            ) && data.obank().get(op).is_some_and(|o| {
+                // PTRADD's third input is its element size, not an amount.
+                let amounts = if opc == OpCode::CPUI_PTRADD {
+                    2
+                } else {
+                    o.num_input()
+                };
+                (0..o.num_input()).any(|j| Self::addr_is(data, o.get_in(j), &spacebase))
+                    && (0..amounts).any(|j| {
+                        !Self::addr_is(data, o.get_in(j), &spacebase)
+                            && !Self::is_const(data, o.get_in(j))
+                    })
+            }) {
                 self.dynamic[i] = true;
-                seeds.push((i, data.obank().get(op).and_then(|o| (0..o.num_input())
-                    .find_map(|j| o.get_in(j).filter(|&v| Self::addr_is(data, Some(v), &spacebase)))
-                    .and_then(|v| self.index_of(v)))));
+                seeds.push((
+                    i,
+                    data.obank().get(op).and_then(|o| {
+                        (0..o.num_input())
+                            .find_map(|j| {
+                                o.get_in(j)
+                                    .filter(|&v| Self::addr_is(data, Some(v), &spacebase))
+                            })
+                            .and_then(|v| self.index_of(v))
+                    }),
+                ));
             }
             match opc {
                 OpCode::CPUI_INT_ADD => {
@@ -294,22 +325,37 @@ impl StackSolver {
                         }
                     };
                     let rhs = Self::const_off(data, constvn) as int4;
-                    self.eqs.push(StackEqn { var1: i as int4, var2: idx, rhs });
+                    self.eqs.push(StackEqn {
+                        var1: i as int4,
+                        var2: idx,
+                        rhs,
+                    });
                 }
                 // (kuna) `sub sp,c` is `add sp,-c`: give it its equation, so a
                 // constant reservation on one path of a merge is solved, not
                 // equated with the other path.
                 OpCode::CPUI_INT_SUB
                     if Self::is_const(data, data.obank().get(op).and_then(|o| o.get_in(1)))
-                        && Self::addr_is(data, data.obank().get(op).and_then(|o| o.get_in(0)), &spacebase) =>
+                        && Self::addr_is(
+                            data,
+                            data.obank().get(op).and_then(|o| o.get_in(0)),
+                            &spacebase,
+                        ) =>
                 {
                     let othervn = data.obank().get(op).and_then(|o| o.get_in(0));
                     let Some(idx) = othervn.and_then(|o| self.index_of(o)) else {
                         self.missedvariables += 1;
                         continue;
                     };
-                    let rhs = (Self::const_off(data, data.obank().get(op).and_then(|o| o.get_in(1))) as int4).wrapping_neg();
-                    self.eqs.push(StackEqn { var1: i as int4, var2: idx, rhs });
+                    let rhs =
+                        (Self::const_off(data, data.obank().get(op).and_then(|o| o.get_in(1)))
+                            as int4)
+                            .wrapping_neg();
+                    self.eqs.push(StackEqn {
+                        var1: i as int4,
+                        var2: idx,
+                        rhs,
+                    });
                 }
                 OpCode::CPUI_COPY => {
                     let othervn = data.obank().get(op).and_then(|o| o.get_in(0));
@@ -324,7 +370,11 @@ impl StackSolver {
                             continue;
                         }
                     };
-                    self.eqs.push(StackEqn { var1: i as int4, var2: idx, rhs: 0 });
+                    self.eqs.push(StackEqn {
+                        var1: i as int4,
+                        var2: idx,
+                        rhs: 0,
+                    });
                 }
                 OpCode::CPUI_INDIRECT => {
                     let othervn = data.obank().get(op).and_then(|o| o.get_in(0));
@@ -387,9 +437,12 @@ impl StackSolver {
                     let ret_bytes = callee
                         .and_then(|fc_idx| {
                             let call = data.get_call_specs(fc_idx).get_op();
-                            data.obank().get(call).map(|c| c.get_addr().clone()).and_then(|at| {
-                                crate::kuna_calleepop::return_address_bytes(data, id, &at)
-                            })
+                            data.obank()
+                                .get(call)
+                                .map(|c| c.get_addr().clone())
+                                .and_then(|at| {
+                                    crate::kuna_calleepop::return_address_bytes(data, id, &at)
+                                })
                         })
                         .unwrap_or(RETURN_ADDRESS_ONLY);
                     let mut rhs = RETURN_ADDRESS_ONLY;
@@ -397,13 +450,18 @@ impl StackSolver {
                     if let (Some(sp), Some(out), Some(fc_idx)) = (othervn, out, callee) {
                         let entry = data.get_call_specs(fc_idx).get_entry_address().clone();
                         let call = data.get_call_specs(fc_idx).get_op();
-                        if let Some(guess) =
-                            crate::kuna_calleepopframe::guess_extra_pop(data, &spacebase, call, sp, out)
-                        {
+                        if let Some(guess) = crate::kuna_calleepopframe::guess_extra_pop(
+                            data, &spacebase, call, sp, out,
+                        ) {
                             rhs = guess;
                         } else {
                             let (guess, settles) = crate::kuna_calleepopslot::guess_extra_pop(
-                                data, &spacebase, &entry, sp, out, &self.settled,
+                                data,
+                                &spacebase,
+                                &entry,
+                                sp,
+                                out,
+                                &self.settled,
                             );
                             rhs = guess;
                             if settles {
@@ -412,7 +470,11 @@ impl StackSolver {
                         }
                     }
                     rhs += ret_bytes - RETURN_ADDRESS_ONLY;
-                    self.guess.push(StackEqn { var1: i as int4, var2: idx, rhs });
+                    self.guess.push(StackEqn {
+                        var1: i as int4,
+                        var2: idx,
+                        rhs,
+                    });
                 }
                 OpCode::CPUI_MULTIEQUAL => {
                     let n = data.obank().get(op).map(|o| o.num_input()).unwrap_or(0);
@@ -429,7 +491,11 @@ impl StackSolver {
                                 continue;
                             }
                         };
-                        self.eqs.push(StackEqn { var1: i as int4, var2: idx, rhs: 0 });
+                        self.eqs.push(StackEqn {
+                            var1: i as int4,
+                            var2: idx,
+                            rhs: 0,
+                        });
                     }
                 }
                 OpCode::CPUI_INT_AND => {
@@ -455,7 +521,11 @@ impl StackSolver {
                             continue;
                         }
                     };
-                    self.eqs.push(StackEqn { var1: i as int4, var2: idx, rhs: 0 });
+                    self.eqs.push(StackEqn {
+                        var1: i as int4,
+                        var2: idx,
+                        rhs: 0,
+                    });
                 }
                 _ => {
                     self.missedvariables += 1;
@@ -491,7 +561,10 @@ impl StackSolver {
         let soln = std::mem::take(&mut self.soln);
         (self.eqs, self.guess) = (eqs, guess);
         for &(i, input) in seeds {
-            let moved = input.and_then(|j| soln[j as usize]).zip(soln[i]).is_some_and(|(before, after)| before != after);
+            let moved = input
+                .and_then(|j| soln[j as usize])
+                .zip(soln[i])
+                .is_some_and(|(before, after)| before != after);
             if moved {
                 self.dynamic[i] = false;
             }
@@ -512,17 +585,31 @@ impl StackSolver {
                 if self.dynamic[i] {
                     continue;
                 }
-                let Some(op) = data.vbank().get(self.vnlist[i]).and_then(|v| v.get_def()).and_then(|o| data.obank().get(o)) else { continue };
+                let Some(op) = data
+                    .vbank()
+                    .get(self.vnlist[i])
+                    .and_then(|v| v.get_def())
+                    .and_then(|o| data.obank().get(o))
+                else {
+                    continue;
+                };
                 // The value follows its input forward: merges, copies,
                 // constant adjustments and call effects all carry the amount.
                 let forwarded = match op.code() {
-                    OpCode::CPUI_MULTIEQUAL | OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB | OpCode::CPUI_INT_AND
-                        | OpCode::CPUI_PTRSUB => op.num_input(),
+                    OpCode::CPUI_MULTIEQUAL
+                    | OpCode::CPUI_INT_ADD
+                    | OpCode::CPUI_INT_SUB
+                    | OpCode::CPUI_INT_AND
+                    | OpCode::CPUI_PTRSUB => op.num_input(),
                     OpCode::CPUI_PTRADD => 2,
                     OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_INDIRECT => 1,
                     _ => continue,
                 };
-                if (0..forwarded).any(|j| op.get_in(j).and_then(|v| self.index_of(v)).is_some_and(|x| self.dynamic[x as usize])) {
+                if (0..forwarded).any(|j| {
+                    op.get_in(j)
+                        .and_then(|v| self.index_of(v))
+                        .is_some_and(|x| self.dynamic[x as usize])
+                }) {
                     self.dynamic[i] = true;
                     changed = true;
                 }
@@ -534,18 +621,22 @@ impl StackSolver {
         // Only an equation joining a dynamic value to a fixed one is false;
         // relations among dynamic values stay, unanchored to entry SP.
         let dynamic = &self.dynamic;
-        self.eqs.retain(|e| dynamic[e.var1 as usize] == dynamic[e.var2 as usize]);
-        self.guess.retain(|e| dynamic[e.var1 as usize] == dynamic[e.var2 as usize]);
+        self.eqs
+            .retain(|e| dynamic[e.var1 as usize] == dynamic[e.var2 as usize]);
+        self.guess
+            .retain(|e| dynamic[e.var1 as usize] == dynamic[e.var2 as usize]);
     }
 
     /// (kuna) A literal, or a value that evaluates to one (`mov ax,8;
     /// sub sp,ax`): the adjustment then has its exact equation.
     fn is_const(data: &Funcdata, vn: Option<VarnodeId>) -> bool {
-        vn.and_then(|v| crate::kuna_bejoin::literal_value(data, v, 8)).is_some()
+        vn.and_then(|v| crate::kuna_bejoin::literal_value(data, v, 8))
+            .is_some()
     }
 
     fn const_off(data: &Funcdata, vn: Option<VarnodeId>) -> uintb {
-        vn.and_then(|v| crate::kuna_bejoin::literal_value(data, v, 8)).unwrap_or(0) as uintb
+        vn.and_then(|v| crate::kuna_bejoin::literal_value(data, v, 8))
+            .unwrap_or(0) as uintb
     }
 
     fn addr_is(data: &Funcdata, vn: Option<VarnodeId>, addr: &Address) -> bool {
@@ -563,11 +654,7 @@ pub(crate) fn addr_eq(a: &Address, b: &Address) -> bool {
 
 /// C++ `ActionStackPtrFlow::isStackRelative` (`coreaction.cc:344`): is `vn`
 /// defined as `spcbasein + const` (or `== spcbasein`)?  Returns the constant.
-fn is_stack_relative(
-    data: &Funcdata,
-    spcbasein: VarnodeId,
-    vn: VarnodeId,
-) -> Option<uintb> {
+fn is_stack_relative(data: &Funcdata, spcbasein: VarnodeId, vn: VarnodeId) -> Option<uintb> {
     if spcbasein == vn {
         return Some(0);
     }
@@ -689,8 +776,7 @@ fn repair(
             };
             match is_stack_relative(data, spcbasein, ptrvn) {
                 Some(constnew) => {
-                    let datasize =
-                        data.vbank().get(datavn).map(|v| v.get_size()).unwrap_or(0);
+                    let datasize = data.vbank().get(datavn).map(|v| v.get_size()).unwrap_or(0);
                     if constnew == constz && loadsize == datasize {
                         // matching store
                         if adjust_load(data, loadop, curop) {
@@ -739,13 +825,20 @@ pub(crate) fn check_clog(data: &mut Funcdata, id: &Rc<AddrSpace>, spcbase: int4)
     let point_size = point.size as int4;
     let mut clogcount: int4 = 0;
 
-    let refs: Vec<VarnodeId> =
-        data.vbank().iter_loc_size_addr(point_size, &spacebase).collect();
+    let refs: Vec<VarnodeId> = data
+        .vbank()
+        .iter_loc_size_addr(point_size, &spacebase)
+        .collect();
     if refs.is_empty() {
         return 0;
     }
     let spcbasein = refs[0];
-    if !data.vbank().get(spcbasein).map(|v| v.is_input()).unwrap_or(false) {
+    if !data
+        .vbank()
+        .get(spcbasein)
+        .map(|v| v.is_input())
+        .unwrap_or(false)
+    {
         return 0;
     }
     for &outvn in &refs[1..] {
@@ -922,7 +1015,11 @@ pub(crate) fn analyze_extra_pop(
                     let iop = crate::funcdata_varnode::op_iop_decode(off);
                     if let Some(fc_idx) = data.get_call_specs_index(iop) {
                         let comp = solver.companion[i];
-                        let soln2 = if comp >= 0 { solver.soln[comp as usize] } else { Some(0) };
+                        let soln2 = if comp >= 0 {
+                            solver.soln[comp as usize]
+                        } else {
+                            Some(0)
+                        };
                         if let Some(soln2) = soln2 {
                             data.get_call_specs_mut(fc_idx)
                                 .set_effective_extra_pop(soln.wrapping_sub(soln2));

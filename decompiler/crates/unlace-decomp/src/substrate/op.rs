@@ -56,10 +56,10 @@ use std::collections::BTreeMap;
 use std::ops::Bound;
 
 use unlace_base::address::{
-    calc_mask, coveringmask, leastsigbit_set, mostsigbit_set, pcode_left, pcode_right, popcount,
-    sign_extend_sized, Address, SeqNum,
+    Address, SeqNum, calc_mask, coveringmask, leastsigbit_set, mostsigbit_set, pcode_left,
+    pcode_right, popcount, sign_extend_sized,
 };
-use unlace_base::types::{int4, uint4, uintb, uintm, Wrap};
+use unlace_base::types::{Wrap, int4, uint4, uintb, uintm};
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{OpId, TypeOp, VarnodeId};
@@ -434,7 +434,11 @@ impl IntrusiveList {
 
     /// Iterate the op ids in list order (C++ `for(iter=begin;iter!=end;++iter)`).
     fn iter<'a>(&self, arena: &'a OpArena, kind: ListKind) -> IntrusiveIter<'a> {
-        IntrusiveIter { arena, kind, cur: self.head }
+        IntrusiveIter {
+            arena,
+            kind,
+            cur: self.head,
+        }
     }
 }
 
@@ -1025,7 +1029,10 @@ pub fn is_collapsible(op: &PcodeOp, vbank: &VarnodeBank) -> bool {
     }
     for i in 0..op.inrefs.len() {
         let vn = vbank
-            .get(op.get_in(i as int4).expect("isCollapsible: null input (C++ UB)"))
+            .get(
+                op.get_in(i as int4)
+                    .expect("isCollapsible: null input (C++ UB)"),
+            )
             .expect("isCollapsible: stale input id");
         if !vn.is_constant() {
             return false;
@@ -1056,7 +1063,10 @@ pub fn get_cse_hash(op: &PcodeOp, vbank: &VarnodeBank) -> uintm {
     let mut hash: uintm = ((out.get_size() as uintm) << 8) | (op.code() as i32 as uintm);
     for i in 0..op.inrefs.len() {
         let vn = vbank
-            .get(op.get_in(i as int4).expect("getCseHash: null input (C++ UB)"))
+            .get(
+                op.get_in(i as int4)
+                    .expect("getCseHash: null input (C++ UB)"),
+            )
             .expect("getCseHash: stale input id");
         // rotate-left by 8
         hash = (hash << 8) | (hash >> (std::mem::size_of::<uintm>() * 8 - 8));
@@ -1102,8 +1112,12 @@ pub fn is_cse_match(op: &PcodeOp, other: &PcodeOp, vbank: &VarnodeBank) -> bool 
         if id1 == id2 {
             continue;
         }
-        let vn1 = vbank.get(id1.expect("isCseMatch: null input (C++ UB)")).expect("stale id");
-        let vn2 = vbank.get(id2.expect("isCseMatch: null input (C++ UB)")).expect("stale id");
+        let vn1 = vbank
+            .get(id1.expect("isCseMatch: null input (C++ UB)"))
+            .expect("stale id");
+        let vn2 = vbank
+            .get(id2.expect("isCseMatch: null input (C++ UB)"))
+            .expect("stale id");
         if vn1.is_constant() && vn2.is_constant() && (vn1.get_offset() == vn2.get_offset()) {
             continue;
         }
@@ -1287,7 +1301,11 @@ pub fn get_nz_mask_local(
         OpCode::CPUI_PIECE => {
             let sa = in_size(1);
             let mut resmask = in_nz(0);
-            resmask = if sa < usize_uintb { resmask << (8 * sa) } else { 0 };
+            resmask = if sa < usize_uintb {
+                resmask << (8 * sa)
+            } else {
+                0
+            };
             resmask |= in_nz(1);
             resmask
         }
@@ -1429,7 +1447,12 @@ pub struct PieceNode {
 
 impl PieceNode {
     pub fn new(op: OpId, sl: int4, off: int4, l: bool) -> PieceNode {
-        PieceNode { piece_op: op, slot: sl, type_offset: off, leaf: l }
+        PieceNode {
+            piece_op: op,
+            slot: sl,
+            type_offset: off,
+            leaf: l,
+        }
     }
     /// Return `true` if this node is a leaf of the tree structure (C++ `isLeaf`).
     pub fn is_leaf(&self) -> bool {
@@ -1539,7 +1562,11 @@ pub fn piece_is_leaf_inner(
         return true;
     }
     if v.is_addr_tied() {
-        let root_addr = vbank.get(root_vn).expect("piece_is_leaf: stale root").get_addr().clone();
+        let root_addr = vbank
+            .get(root_vn)
+            .expect("piece_is_leaf: stale root")
+            .get_addr()
+            .clone();
         let addr = &root_addr + rel_offset as i64;
         if v.get_addr() != &addr {
             return true;
@@ -1560,7 +1587,16 @@ pub fn gather_pieces(
     base_offset: int4,
     root_offset: int4,
 ) {
-    gather_pieces_inner(stack, obank, vbank, root_vn, op, base_offset, root_offset, None)
+    gather_pieces_inner(
+        stack,
+        obank,
+        vbank,
+        root_vn,
+        op,
+        base_offset,
+        root_offset,
+        None,
+    )
 }
 
 /// [`gather_pieces`] with an optional Symbol-entry resolver threaded to
@@ -1588,16 +1624,35 @@ pub fn gather_pieces_inner(
         let opref = obank.get(op).expect("gather_pieces: stale op");
         let vn = opref.get_in(i).expect("gather_pieces: null PIECE input");
         let offset = if root_big_endian == (i == 1) {
-            let other = opref.get_in(1 - i).expect("gather_pieces: null PIECE input");
-            base_offset + vbank.get(other).expect("gather_pieces: stale other").get_size()
+            let other = opref
+                .get_in(1 - i)
+                .expect("gather_pieces: null PIECE input");
+            base_offset
+                + vbank
+                    .get(other)
+                    .expect("gather_pieces: stale other")
+                    .get_size()
         } else {
             base_offset
         };
         let res = piece_is_leaf_inner(obank, vbank, root_vn, vn, offset - root_offset, entry_of);
         stack.push(PieceNode::new(op, i, offset, res));
         if !res {
-            let def = vbank.get(vn).expect("gather_pieces: stale vn").get_def().expect("gather_pieces: non-leaf vn has no def");
-            gather_pieces_inner(stack, obank, vbank, root_vn, def, offset, root_offset, entry_of);
+            let def = vbank
+                .get(vn)
+                .expect("gather_pieces: stale vn")
+                .get_def()
+                .expect("gather_pieces: non-leaf vn has no def");
+            gather_pieces_inner(
+                stack,
+                obank,
+                vbank,
+                root_vn,
+                def,
+                offset,
+                root_offset,
+                entry_of,
+            );
         }
     }
 }
@@ -1694,11 +1749,16 @@ impl PcodeOpBank {
     /// (C++ `PcodeOpBank::addToCodeList`, `op.cc:911`).
     fn add_to_code_list(&mut self, op: OpId) {
         match self.arena[op].code() {
-            OpCode::CPUI_STORE => self.storelist.push_back(&mut self.arena, ListKind::Code, op),
+            OpCode::CPUI_STORE => self
+                .storelist
+                .push_back(&mut self.arena, ListKind::Code, op),
             OpCode::CPUI_LOAD => self.loadlist.push_back(&mut self.arena, ListKind::Code, op),
-            OpCode::CPUI_RETURN => self.returnlist.push_back(&mut self.arena, ListKind::Code, op),
+            OpCode::CPUI_RETURN => self
+                .returnlist
+                .push_back(&mut self.arena, ListKind::Code, op),
             OpCode::CPUI_CALLOTHER => {
-                self.useroplist.push_back(&mut self.arena, ListKind::Code, op)
+                self.useroplist
+                    .push_back(&mut self.arena, ListKind::Code, op)
             }
             _ => {}
         }
@@ -1751,7 +1811,8 @@ impl PcodeOpBank {
         self.optree.insert(sq, id);
         self.optree_epoch = self.optree_epoch.wrapping_add(1);
         self.arena[id].set_flag(pcodeop_flags::dead); // Start out life as dead
-        self.deadlist.push_back(&mut self.arena, ListKind::Insert, id);
+        self.deadlist
+            .push_back(&mut self.arena, ListKind::Insert, id);
         id
     }
 
@@ -1767,7 +1828,8 @@ impl PcodeOpBank {
         self.optree.insert(sq, id);
         self.optree_epoch = self.optree_epoch.wrapping_add(1);
         self.arena[id].set_flag(pcodeop_flags::dead);
-        self.deadlist.push_back(&mut self.arena, ListKind::Insert, id);
+        self.deadlist
+            .push_back(&mut self.arena, ListKind::Insert, id);
         id
     }
 
@@ -1819,7 +1881,8 @@ impl PcodeOpBank {
     pub fn mark_alive(&mut self, op: OpId) {
         self.deadlist.erase(&mut self.arena, ListKind::Insert, op);
         self.arena[op].clear_flag(pcodeop_flags::dead);
-        self.alivelist.push_back(&mut self.arena, ListKind::Insert, op);
+        self.alivelist
+            .push_back(&mut self.arena, ListKind::Insert, op);
     }
 
     /// Mark `op` dead: move it from the alive list to the dead list
@@ -1827,7 +1890,8 @@ impl PcodeOpBank {
     pub fn mark_dead(&mut self, op: OpId) {
         self.alivelist.erase(&mut self.arena, ListKind::Insert, op);
         self.arena[op].set_flag(pcodeop_flags::dead);
-        self.deadlist.push_back(&mut self.arena, ListKind::Insert, op);
+        self.deadlist
+            .push_back(&mut self.arena, ListKind::Insert, op);
     }
 
     /// Move `op` to right after `prev` in the dead list (C++ `insertAfterDead`,
@@ -1838,13 +1902,15 @@ impl PcodeOpBank {
         }
         self.deadlist.erase(&mut self.arena, ListKind::Insert, op);
         // insert immediately after `prev`.
-        self.deadlist.insert_after(&mut self.arena, ListKind::Insert, prev, op);
+        self.deadlist
+            .insert_after(&mut self.arena, ListKind::Insert, prev, op);
     }
 
     /// Insert a newly emitted raw operation before another raw operation.
     pub fn insert_before_dead(&mut self, op: OpId, before: OpId) {
         assert!(op != before && self.on_dead_list(op) && self.on_dead_list(before));
-        self.deadlist.splice_range(&mut self.arena, ListKind::Insert, op, op, Some(before));
+        self.deadlist
+            .splice_range(&mut self.arena, ListKind::Insert, op, op, Some(before));
     }
 
     /// Move the inclusive sequence `[firstop, lastop]` to right after `prev` in
@@ -1857,8 +1923,13 @@ impl PcodeOpBank {
         // degenerate-move guard
         if previter != Some(firstop) {
             // splice [first, last] to position `previter` (insert before it)
-            self.deadlist
-                .splice_range(&mut self.arena, ListKind::Insert, firstop, lastop, previter);
+            self.deadlist.splice_range(
+                &mut self.arena,
+                ListKind::Insert,
+                firstop,
+                lastop,
+                previter,
+            );
         }
     }
 
@@ -1943,7 +2014,11 @@ impl PcodeOpBank {
     /// search per op per rule pass in the decompiler's innermost loop.
     pub fn ops_after_seq(&self, sq: &SeqNum, n: usize, out: &mut Vec<OpId>) {
         out.clear();
-        for (_, &id) in self.optree.range((Bound::Excluded(sq), Bound::Unbounded)).take(n) {
+        for (_, &id) in self
+            .optree
+            .range((Bound::Excluded(sq), Bound::Unbounded))
+            .take(n)
+        {
             out.push(id);
         }
     }
@@ -1999,9 +2074,7 @@ impl PcodeOpBank {
             OpCode::CPUI_STORE => Box::new(self.storelist.iter(&self.arena, ListKind::Code)),
             OpCode::CPUI_LOAD => Box::new(self.loadlist.iter(&self.arena, ListKind::Code)),
             OpCode::CPUI_RETURN => Box::new(self.returnlist.iter(&self.arena, ListKind::Code)),
-            OpCode::CPUI_CALLOTHER => {
-                Box::new(self.useroplist.iter(&self.arena, ListKind::Code))
-            }
+            OpCode::CPUI_CALLOTHER => Box::new(self.useroplist.iter(&self.arena, ListKind::Code)),
             _ => Box::new(std::iter::empty()),
         }
     }
@@ -2094,11 +2167,11 @@ mod tests {
 
     use unlace_base::address::Address;
     use unlace_base::space::{
-        addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+        AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
     };
     use unlace_base::types::int4;
 
-    use crate::dtype::{type_metatype, Datatype};
+    use crate::dtype::{Datatype, type_metatype};
     use crate::varnode::VarnodeBank;
 
     fn dt(size: int4) -> Rc<Datatype> {
@@ -2109,7 +2182,8 @@ mod tests {
     fn build_manager() -> AddrSpaceManager {
         let mut m = AddrSpaceManager::new();
         m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+            .unwrap();
         m.insert_space(Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
             "ram",
@@ -2274,7 +2348,11 @@ mod tests {
         let e2 = bank.optree_epoch();
         assert_ne!(e1, e2, "create_seq must move the epoch");
         bank.destroy(a);
-        assert_ne!(e2, bank.optree_epoch(), "destroying an op must move the epoch");
+        assert_ne!(
+            e2,
+            bank.optree_epoch(),
+            "destroying an op must move the epoch"
+        );
     }
 
     #[test]
@@ -2285,9 +2363,15 @@ mod tests {
         let _b = bank.create_at(0, ram(&m, 0x200)); // uniq 1
         let _c = bank.create_at(0, ram(&m, 0x100)); // uniq 2
         // only the two ops at 0x100, in uniq order
-        let at: Vec<u32> = bank.iter_at(&ram(&m, 0x100)).map(|(k, _)| k.get_time()).collect();
+        let at: Vec<u32> = bank
+            .iter_at(&ram(&m, 0x100))
+            .map(|(k, _)| k.get_time())
+            .collect();
         assert_eq!(at, vec![0, 2]);
-        let at2: Vec<u32> = bank.iter_at(&ram(&m, 0x200)).map(|(k, _)| k.get_time()).collect();
+        let at2: Vec<u32> = bank
+            .iter_at(&ram(&m, 0x200))
+            .map(|(k, _)| k.get_time())
+            .collect();
         assert_eq!(at2, vec![1]);
         // target_lower_bound at 0x150 -> first op at-or-after == the 0x200 op
         let tgt = bank.target_lower_bound(&ram(&m, 0x150)).unwrap();
@@ -2330,7 +2414,9 @@ mod tests {
         let mut bank = PcodeOpBank::new();
         assert_eq!(bank.dead_front(), None);
         assert_eq!(bank.dead_back(), None);
-        let ops: Vec<OpId> = (0..5).map(|i| bank.create_at(0, ram(&m, 0x10 * i))).collect();
+        let ops: Vec<OpId> = (0..5)
+            .map(|i| bank.create_at(0, ram(&m, 0x10 * i)))
+            .collect();
 
         let scan: Vec<OpId> = bank.iter_dead().collect();
         assert_eq!(scan, ops);
@@ -2372,12 +2458,21 @@ mod tests {
     fn first_after_seq_id_agrees_with_first_after_seq() {
         let m = build_manager();
         let mut bank = PcodeOpBank::new();
-        let ops: Vec<OpId> = (0..4).map(|i| bank.create_at(0, ram(&m, 0x10 * i))).collect();
+        let ops: Vec<OpId> = (0..4)
+            .map(|i| bank.create_at(0, ram(&m, 0x10 * i)))
+            .collect();
         for &op in &ops {
             let sq = bank.get(op).unwrap().get_seq_num().clone();
-            assert_eq!(bank.first_after_seq_id(&sq), bank.first_after_seq(&sq).map(|(_, id)| id));
+            assert_eq!(
+                bank.first_after_seq_id(&sq),
+                bank.first_after_seq(&sq).map(|(_, id)| id)
+            );
         }
-        let last = bank.get(*ops.last().unwrap()).unwrap().get_seq_num().clone();
+        let last = bank
+            .get(*ops.last().unwrap())
+            .unwrap()
+            .get_seq_num()
+            .clone();
         assert_eq!(bank.first_after_seq_id(&last), None);
     }
 
@@ -2399,7 +2494,9 @@ mod tests {
     fn move_sequence_dead_vs_vec_model() {
         let m = build_manager();
         let mut bank = PcodeOpBank::new();
-        let ops: Vec<OpId> = (0..6).map(|i| bank.create_at(0, ram(&m, 0x10 * i))).collect();
+        let ops: Vec<OpId> = (0..6)
+            .map(|i| bank.create_at(0, ram(&m, 0x10 * i)))
+            .collect();
         // dead == [0,1,2,3,4,5]; move [1,2,3] to after 4 -> [0,4,1,2,3,5]
         bank.move_sequence_dead(ops[1], ops[3], ops[4]);
         let want = vec![ops[0], ops[4], ops[1], ops[2], ops[3], ops[5]];
@@ -2426,9 +2523,18 @@ mod tests {
         bank.change_opcode(s2, typeop(OpCode::CPUI_STORE));
         bank.change_opcode(r1, typeop(OpCode::CPUI_RETURN));
         // store list in insertion order
-        assert_eq!(bank.iter_code(OpCode::CPUI_STORE).collect::<Vec<_>>(), vec![s1, s2]);
-        assert_eq!(bank.iter_code(OpCode::CPUI_LOAD).collect::<Vec<_>>(), vec![l1]);
-        assert_eq!(bank.iter_code(OpCode::CPUI_RETURN).collect::<Vec<_>>(), vec![r1]);
+        assert_eq!(
+            bank.iter_code(OpCode::CPUI_STORE).collect::<Vec<_>>(),
+            vec![s1, s2]
+        );
+        assert_eq!(
+            bank.iter_code(OpCode::CPUI_LOAD).collect::<Vec<_>>(),
+            vec![l1]
+        );
+        assert_eq!(
+            bank.iter_code(OpCode::CPUI_RETURN).collect::<Vec<_>>(),
+            vec![r1]
+        );
         // a non-bucketed opcode yields empty
         assert_eq!(bank.iter_code(OpCode::CPUI_INT_ADD).count(), 0);
     }
@@ -2439,11 +2545,17 @@ mod tests {
         let mut bank = PcodeOpBank::new();
         let a = bank.create_at(2, ram(&m, 0x10));
         bank.change_opcode(a, typeop(OpCode::CPUI_STORE));
-        assert_eq!(bank.iter_code(OpCode::CPUI_STORE).collect::<Vec<_>>(), vec![a]);
+        assert_eq!(
+            bank.iter_code(OpCode::CPUI_STORE).collect::<Vec<_>>(),
+            vec![a]
+        );
         // re-assign to LOAD: must leave store list, join load list
         bank.change_opcode(a, typeop(OpCode::CPUI_LOAD));
         assert_eq!(bank.iter_code(OpCode::CPUI_STORE).count(), 0);
-        assert_eq!(bank.iter_code(OpCode::CPUI_LOAD).collect::<Vec<_>>(), vec![a]);
+        assert_eq!(
+            bank.iter_code(OpCode::CPUI_LOAD).collect::<Vec<_>>(),
+            vec![a]
+        );
         assert_eq!(bank.get(a).unwrap().code(), OpCode::CPUI_LOAD);
     }
 

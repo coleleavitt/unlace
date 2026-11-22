@@ -5,11 +5,23 @@ use std::process::Command;
 
 fn entries(path: &PathBuf, extra: &[&str]) -> Vec<u64> {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
-        .args(["functions", path.to_str().unwrap(), "--json", "--jobs", "1", "--mode", "reliable"])
+        .args([
+            "functions",
+            path.to_str().unwrap(),
+            "--json",
+            "--jobs",
+            "1",
+            "--mode",
+            "reliable",
+        ])
         .args(extra)
         .output()
         .expect("run source-built kuna");
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let doc: Value = serde_json::from_slice(&out.stdout).expect("functions JSON");
     doc["functions"]
         .as_array()
@@ -25,17 +37,25 @@ fn frame_recovery_keeps_the_tail_branch_target_the_default_inventory_finds() {
         .join(format!("arm-frame-retain-{}.elf", std::process::id()));
     let generator = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../unlace-analysis/tests/fixtures/arm_frame_retain.py");
-    assert!(Command::new("python3")
-        .arg(generator)
-        .arg(&path)
-        .status()
-        .expect("run authored fixture generator")
-        .success());
+    assert!(
+        Command::new("python3")
+            .arg(generator)
+            .arg(&path)
+            .status()
+            .expect("run authored fixture generator")
+            .success()
+    );
     let off = entries(&path, &["--option", "armframes", "off"]);
     assert!(off.contains(&0x1600) && !off.contains(&0x1500), "{off:x?}");
     let default = entries(&path, &[]);
-    assert!(default.contains(&0x1500) && default.contains(&0x1600), "{default:x?}");
+    assert!(
+        default.contains(&0x1500) && default.contains(&0x1600),
+        "{default:x?}"
+    );
     let frames = entries(&path, &["--option", "armframes", "on"]);
-    assert!(frames.contains(&0x1500) && frames.contains(&0x1600), "{frames:x?}");
+    assert!(
+        frames.contains(&0x1500) && frames.contains(&0x1600),
+        "{frames:x?}"
+    );
     std::fs::remove_file(path).unwrap();
 }

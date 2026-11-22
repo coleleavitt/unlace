@@ -23,9 +23,9 @@
 use std::rc::Rc;
 
 use unlace_base::address::RangeList;
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, addrspace_flags, spacetype};
 
-use unlace_decomp::dtype::{type_metatype, Datatype, TypeFactory, TypeFactoryImpl};
+use unlace_decomp::dtype::{Datatype, TypeFactory, TypeFactoryImpl, type_metatype};
 use unlace_decomp::varmap::{MapState, RangeHint, RangeType};
 
 fn space_ws(ws: u32) -> Rc<AddrSpace> {
@@ -122,7 +122,10 @@ fn verify_r2_initialize_endpoint_sstart_multiply_ws2() {
         last_sstart = state.next().sstart;
         last_start = state.next().start;
     }
-    assert_eq!(last_start, 0xFF, "endpoint start is wrapOffset(last+1)=0xFF");
+    assert_eq!(
+        last_start, 0xFF,
+        "endpoint start is wrapOffset(last+1)=0xFF"
+    );
     assert_eq!(
         last_sstart, 0xFE,
         "endpoint sstart chain must multiply by word-size: C++ (0xFF/2)*2 = 0xFE; \
@@ -167,7 +170,10 @@ fn verify_r2_initialize_sorts_on_multiplied_keys_ws2() {
     assert_eq!(keys[0], 0x10, "first hint key is word-rounded byte 0x10");
     assert_eq!(keys[1], 0x40, "second hint key is word-rounded byte 0x40");
     // Monotone non-decreasing (compare's primary key is sstart).
-    assert!(keys.windows(2).all(|w| w[0] <= w[1]), "initialize sort is by sstart");
+    assert!(
+        keys.windows(2).all(|w| w[0] <= w[1]),
+        "initialize sort is by sstart"
+    );
 }
 
 // ===========================================================================
@@ -202,7 +208,15 @@ fn verify_r2_merge_confuse_diff_plus_size_wraps_like_cpp() {
     let space = space_ws(1);
     let factory = factory();
 
-    let mut a = RangeHint::new(0, 4, 0, base(4, type_metatype::TYPE_INT), 0, RangeType::Fixed, -1);
+    let mut a = RangeHint::new(
+        0,
+        4,
+        0,
+        base(4, type_metatype::TYPE_INT),
+        0,
+        RangeType::Fixed,
+        -1,
+    );
     // sstart chosen so (int4)b.sstart == i32::MAX - 1; size 4 pushes the add over.
     let b_sstart: i64 = 0x7FFF_FFFE;
     let b = RangeHint::new(
@@ -225,6 +239,10 @@ fn verify_r2_merge_confuse_diff_plus_size_wraps_like_cpp() {
         "C++ silent wrap of (i32::MAX-1)+4 is negative, so `> size` is false and \
          size stays 4; a bare Rust `+` would panic in debug instead"
     );
-    assert_eq!(a.range_type, RangeType::Fixed, "size 4 is a power of two: stays fixed");
+    assert_eq!(
+        a.range_type,
+        RangeType::Fixed,
+        "size 4 is a power of two: stays fixed"
+    );
     assert_eq!(a.type_.get_metatype(), type_metatype::TYPE_UNKNOWN);
 }

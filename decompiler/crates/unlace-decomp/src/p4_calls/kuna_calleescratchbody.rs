@@ -121,8 +121,14 @@ pub fn scratch_body_is_a_body(
     let stack_pointer = manage
         .get_stack_space()
         .and_then(|s| s.get_spacebase(0).ok())
-        .and_then(|p| p.space.clone().map(|sp| (sp.get_index(), p.offset, p.size as u64)));
-    w.written_ranges().iter().any(|&(idx, off, sz)| !overlaps(stack_pointer, idx, off, sz))
+        .and_then(|p| {
+            p.space
+                .clone()
+                .map(|sp| (sp.get_index(), p.offset, p.size as u64))
+        });
+    w.written_ranges()
+        .iter()
+        .any(|&(idx, off, sz)| !overlaps(stack_pointer, idx, off, sz))
 }
 
 /// Does `[off, off+sz)` in space `idx` touch the named register range?

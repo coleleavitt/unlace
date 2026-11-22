@@ -8,13 +8,13 @@
 
 use std::rc::Rc;
 
+use object::read::{Object, ObjectSymbol};
 use unlace_base::address::Address;
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::dtype::Datatype;
-use unlace_decomp::fspec::{parameter_pieces_flags, ParameterPieces, PrototypePieces};
-use object::read::{Object, ObjectSymbol};
+use unlace_decomp::fspec::{ParameterPieces, PrototypePieces, parameter_pieces_flags};
 
-use super::encoding::{decode_ivar_type, TypeCtx};
+use super::encoding::{TypeCtx, decode_ivar_type};
 
 /// `(name, return encoding, argument encodings)` of the runtime entry points
 /// whose shape is fixed by objc4's `runtime.h` / `objc-internal.h`.
@@ -63,7 +63,11 @@ const RUNTIME: &[(&str, &str, &[&str])] = &[
     ("objc_terminate", "v", &[]),
     ("objc_autoreleasePoolPush", "^v", &[]),
     ("objc_autoreleasePoolPop", "v", &["^v"]),
-    ("objc_setProperty_nonatomic_copy", "v", &["@", ":", "@", "q"]),
+    (
+        "objc_setProperty_nonatomic_copy",
+        "v",
+        &["@", ":", "@", "q"],
+    ),
     ("objc_setProperty_nonatomic", "v", &["@", ":", "@", "q"]),
     ("objc_setProperty_atomic", "v", &["@", ":", "@", "q"]),
     ("objc_setProperty_atomic_copy", "v", &["@", ":", "@", "q"]),
@@ -92,14 +96,21 @@ fn pieces(name: &str, ret: &str, args: &[&str], tctx: &TypeCtx) -> Option<Protot
 /// imports — on the `__stubs` entry a call targets and on the pointer slot it
 /// reads — and for every `objc_retain_x<N>` / `objc_release_x<N>`, imported
 /// (libobjc exports them since objc4-838) or outlined into the image itself.
-pub fn prototypes(file: &object::File, bytes: &[u8], arch: &Architecture, tctx: &TypeCtx) -> Vec<(u64, PrototypePieces)> {
+pub fn prototypes(
+    file: &object::File,
+    bytes: &[u8],
+    arch: &Architecture,
+    tctx: &TypeCtx,
+) -> Vec<(u64, PrototypePieces)> {
     let mut out = Vec::new();
     let arm64 = file.architecture() == object::Architecture::Aarch64;
     for imp in crate::loader::macho_stubs::resolve_macho_imports(file, bytes) {
         if imp.kind != crate::loader::format::ImportSymKind::Import {
             continue;
         }
-        let Ok(n) = std::str::from_utf8(&imp.name) else { continue };
+        let Ok(n) = std::str::from_utf8(&imp.name) else {
+            continue;
+        };
         if let Some((name, ret, args)) = RUNTIME.iter().find(|(name, _, _)| *name == n) {
             out.extend(pieces(name, ret, args, tctx).map(|p| (imp.addr, p)));
         } else if let Some(reg) = outlined_register(n).filter(|_| arm64) {
@@ -120,7 +131,9 @@ pub fn prototypes(file: &object::File, bytes: &[u8], arch: &Architecture, tctx: 
 
 /// `objc_retain_x19` → `x19`; `None` for any other name.
 pub fn outlined_register(name: &str) -> Option<&str> {
-    let rest = name.strip_prefix("objc_retain_").or_else(|| name.strip_prefix("objc_release_"))?;
+    let rest = name
+        .strip_prefix("objc_retain_")
+        .or_else(|| name.strip_prefix("objc_release_"))?;
     let n: u32 = rest.strip_prefix('x')?.parse().ok()?;
     (n <= 28).then_some(rest)
 }
@@ -141,7 +154,11 @@ fn outlined(name: &str, reg: &str, arch: &Architecture, tctx: &TypeCtx) -> Optio
     let retains = name.starts_with("objc_retain_");
     let mut p = PrototypePieces {
         name: name.to_string(),
-        outtype: Some(if retains { Rc::clone(&obj) } else { decode_ivar_type("v", tctx)? }),
+        outtype: Some(if retains {
+            Rc::clone(&obj)
+        } else {
+            decode_ivar_type("v", tctx)?
+        }),
         intypes: vec![Rc::clone(&obj)],
         innames: vec!["obj".to_string()],
         first_var_arg_slot: -1,
@@ -162,7 +179,11 @@ mod tests {
     fn outlined_names_name_their_register() {
         assert_eq!(outlined_register("objc_retain_x19"), Some("x19"));
         assert_eq!(outlined_register("objc_release_x0"), Some("x0"));
-        assert_eq!(outlined_register("objc_retain_x29"), None, "the frame pointer is never used");
+        assert_eq!(
+            outlined_register("objc_retain_x29"),
+            None,
+            "the frame pointer is never used"
+        );
         assert_eq!(outlined_register("objc_retain"), None);
         assert_eq!(outlined_register("objc_retain_xa"), None);
     }
@@ -173,7 +194,13 @@ mod tests {
         for (name, ret, args) in RUNTIME {
             assert!(seen.insert(*name), "{name} listed twice");
             for e in std::iter::once(ret).chain(args.iter()) {
-                assert!(matches!(e.as_bytes()[0], b'@' | b'#' | b':' | b'*' | b'v' | b'B' | b'i' | b'q' | b'^'), "{name}: {e}");
+                assert!(
+                    matches!(
+                        e.as_bytes()[0],
+                        b'@' | b'#' | b':' | b'*' | b'v' | b'B' | b'i' | b'q' | b'^'
+                    ),
+                    "{name}: {e}"
+                );
             }
         }
     }

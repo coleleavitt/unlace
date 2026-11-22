@@ -2,9 +2,9 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
@@ -60,5 +60,4 @@ fn import_binding_covers_only_the_typed_macho_import_slot() {
         on.contains("(*dat_100002000)("),
         "ordinary __objc_msgrefs data must remain anonymous:\n{on}"
     );
-
 }

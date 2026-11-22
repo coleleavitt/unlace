@@ -7,11 +7,16 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn decompile(func: &str, nocall: bool) -> String {
@@ -22,12 +27,19 @@ fn decompile(func: &str, nocall: bool) -> String {
         .to_str()
         .expect("UTF-8 fixture path")
         .to_string();
-    let mut prog = bootstrap_from_object(&path, "", &spec_roots).expect("bootstrap fixture with built processor specs");
+    let mut prog = bootstrap_from_object(&path, "", &spec_roots)
+        .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
         .set_kuna_option("dwarfnocall", if nocall { "on" } else { "off" })
         .expect("dwarfnocall is a registered option");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
-    let cmds: Vec<String> = [format!("load function {func}"), "decompile".into(), "print C".into()].to_vec();
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
+    let cmds: Vec<String> = [
+        format!("load function {func}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .to_vec();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -45,10 +57,19 @@ fn decompile(func: &str, nocall: bool) -> String {
 #[test]
 fn removed_parameter_is_dropped_from_the_locked_prototype() {
     let off = decompile("work", false);
-    assert!(off.contains("work(int4 *p,int4 unused,int4 k)"), "off keeps the source list, got:\n{off}");
-    assert!(off.contains("if (unused <= 0)"), "off reads k under the removed parameter's name, got:\n{off}");
+    assert!(
+        off.contains("work(int4 *p,int4 unused,int4 k)"),
+        "off keeps the source list, got:\n{off}"
+    );
+    assert!(
+        off.contains("if (unused <= 0)"),
+        "off reads k under the removed parameter's name, got:\n{off}"
+    );
     let on = decompile("work", true);
-    assert!(on.contains("work(int4 *p,int4 k)"), "on drops `unused`, got:\n{on}");
+    assert!(
+        on.contains("work(int4 *p,int4 k)"),
+        "on drops `unused`, got:\n{on}"
+    );
     assert!(on.contains("if (k <= 0)"), "on reads k as k, got:\n{on}");
 }
 
@@ -56,7 +77,10 @@ fn removed_parameter_is_dropped_from_the_locked_prototype() {
 fn constant_parameter_is_dropped_and_callers_pass_what_the_call_takes() {
     assert!(decompile("pick", true).contains("pick(int4 a)"));
     let off = decompile("main", false);
-    assert!(off.contains("work(v1,argc + 2,k)"), "off passes an undefined third argument, got:\n{off}");
+    assert!(
+        off.contains("work(v1,argc + 2,k)"),
+        "off passes an undefined third argument, got:\n{off}"
+    );
     let on = decompile("main", true);
     assert!(on.contains("pick(argc);"), "got:\n{on}");
     assert!(on.contains("work(v1,argc + 2);"), "got:\n{on}");

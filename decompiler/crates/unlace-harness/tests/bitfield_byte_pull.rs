@@ -1,9 +1,12 @@
-use unlace_harness::testfunction::run_test_files_with_specs;
 use std::path::PathBuf;
+use unlace_harness::testfunction::run_test_files_with_specs;
 
 #[test]
 fn byte_aligned_bitfields_read_and_write_by_name() {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap();
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap();
     let fixture = root.join("tests/cli/fixtures/bitfield-byte-pull/byte-aligned-bitfields.xml");
     let specs = root.join("specs");
     let mut output = String::new();

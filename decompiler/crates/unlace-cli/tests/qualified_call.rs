@@ -9,8 +9,12 @@ fn partial_unit_declarations_preserve_the_indirect_call_result() {
         args.extend_from_slice(options);
         let (code, err, rc) = common::run_kuna(&args);
         assert_eq!(rc, 0, "{err}");
-        assert!(code.lines().any(|line| line.contains("if (")
-            && line.contains("initialize(") && line.contains("callback")), "{code}");
+        assert!(
+            code.lines().any(|line| line.contains("if (")
+                && line.contains("initialize(")
+                && line.contains("callback")),
+            "{code}"
+        );
         assert!(code.contains(" = 1;"), "{code}");
     }
 }

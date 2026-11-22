@@ -26,11 +26,11 @@ use crate::{
     funcdata::Funcdata,
     infra::architecture::Architecture,
 };
+use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::space::spacetype;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
-use std::rc::Rc;
 
 /// How an image passes a floating-point value in the variadic part of a call.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -156,7 +156,8 @@ pub fn counted_float_entry(
     }
     let (start, end) = (addr.get_offset(), addr.get_offset() + size as u64);
     let overlaps = |e: &Address| {
-        e.get_space().is_some_and(|s| s.get_index() == space.get_index())
+        e.get_space()
+            .is_some_and(|s| s.get_index() == space.get_index())
             && e.get_offset() < end
             && start < e.get_offset() + 8
             && !(e.get_offset() == start && size == 8)

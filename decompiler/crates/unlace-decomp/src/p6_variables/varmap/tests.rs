@@ -8,9 +8,9 @@
 use std::rc::Rc;
 
 use unlace_base::address::{Address, RangeList};
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, addrspace_flags, spacetype};
 
-use crate::dtype::{type_metatype, Datatype, TypeFactoryImpl};
+use crate::dtype::{Datatype, TypeFactoryImpl, type_metatype};
 
 use super::*;
 
@@ -137,7 +137,12 @@ fn const_absorbable_requires_copy_constant_and_primitive() {
     // `this` is an open INT; `b` is a copy-constant of >= size with unknown type.
     let mut this = hint(0x10, 4, base(4, type_metatype::TYPE_INT), RangeType::Open);
     this.highind = -1;
-    let mut b = hint(0x10, 4, base(4, type_metatype::TYPE_UNKNOWN), RangeType::Fixed);
+    let mut b = hint(
+        0x10,
+        4,
+        base(4, type_metatype::TYPE_UNKNOWN),
+        RangeType::Fixed,
+    );
     b.flags = COPY_CONSTANT;
     assert!(this.is_const_absorbable(&b));
 
@@ -146,8 +151,18 @@ fn const_absorbable_requires_copy_constant_and_primitive() {
     assert!(!this.is_const_absorbable(&b));
 
     // A struct `this` is not a primitive, so never const-absorbs.
-    let s = hint(0x10, 4, base(4, type_metatype::TYPE_STRUCT), RangeType::Open);
-    let mut bc = hint(0x10, 4, base(4, type_metatype::TYPE_UNKNOWN), RangeType::Fixed);
+    let s = hint(
+        0x10,
+        4,
+        base(4, type_metatype::TYPE_STRUCT),
+        RangeType::Open,
+    );
+    let mut bc = hint(
+        0x10,
+        4,
+        base(4, type_metatype::TYPE_UNKNOWN),
+        RangeType::Fixed,
+    );
     bc.flags = COPY_CONSTANT;
     assert!(!s.is_const_absorbable(&bc));
 }
@@ -182,7 +197,10 @@ fn reconcile_locked_union_array_interior() {
             &shell,
             vec![
                 crate::dtype::TypeField::new(
-                    0, 0, "bits", f.get_base(8, type_metatype::TYPE_UINT).unwrap(),
+                    0,
+                    0,
+                    "bits",
+                    f.get_base(8, type_metatype::TYPE_UINT).unwrap(),
                 ),
                 crate::dtype::TypeField::new(1, 0, "elements", elements),
             ],
@@ -195,8 +213,15 @@ fn reconcile_locked_union_array_interior() {
     for (offset, compatible) in [(0, true), (4, true), (1, false), (2, false)] {
         let mut member = hint(0x10 + offset, 4, real.clone(), RangeType::Fixed);
         member.flags = TYPELOCK;
-        assert_eq!(whole.reconcile(&member).unwrap(), compatible, "offset {offset}");
-        assert_eq!(whole.clone().merge(&member, &stack_space(), &f).is_ok(), compatible);
+        assert_eq!(
+            whole.reconcile(&member).unwrap(),
+            compatible,
+            "offset {offset}"
+        );
+        assert_eq!(
+            whole.clone().merge(&member, &stack_space(), &f).is_ok(),
+            compatible
+        );
     }
 }
 
@@ -249,8 +274,24 @@ fn preferred_open_thrown_out_when_not_reconciled() {
 fn absorb_extends_open_array_highind() {
     // An open int array [0..0] absorbs a second open int one element later with
     // its own indexing, extending highind.
-    let mut a = RangeHint::new(0x10, 4, 0x10, base(4, type_metatype::TYPE_INT), 0, RangeType::Open, 0);
-    let b = RangeHint::new(0x14, 4, 0x14, base(4, type_metatype::TYPE_INT), 0, RangeType::Open, 2);
+    let mut a = RangeHint::new(
+        0x10,
+        4,
+        0x10,
+        base(4, type_metatype::TYPE_INT),
+        0,
+        RangeType::Open,
+        0,
+    );
+    let b = RangeHint::new(
+        0x14,
+        4,
+        0x14,
+        base(4, type_metatype::TYPE_INT),
+        0,
+        RangeType::Open,
+        2,
+    );
     a.absorb(&b);
     assert_eq!(a.range_type, RangeType::Open);
     // diffsz = (0x14-0x10)/4 = 1; trialhi = b.highind(2)+1 = 3 > a.highind(0)
@@ -260,9 +301,20 @@ fn absorb_extends_open_array_highind() {
 #[test]
 fn absorb_keeps_byte_coverage_when_integer_element_width_changes() {
     for (width, old_width, high, expected) in [(4, 8, 5, 11), (8, 4, 4, 2)] {
-        let mut selected = hint(0x10, width, base(width, type_metatype::TYPE_UINT), RangeType::Fixed);
+        let mut selected = hint(
+            0x10,
+            width,
+            base(width, type_metatype::TYPE_UINT),
+            RangeType::Fixed,
+        );
         let indexed = RangeHint::new(
-            0x10, old_width, 0x10, base(old_width, type_metatype::TYPE_UNKNOWN), 0, RangeType::Open, high,
+            0x10,
+            old_width,
+            0x10,
+            base(old_width, type_metatype::TYPE_UNKNOWN),
+            0,
+            RangeType::Open,
+            high,
         );
         selected.absorb(&indexed);
         assert_eq!(selected.range_type, RangeType::Open);
@@ -275,7 +327,13 @@ fn a_locked_integer_does_not_take_distant_constants_after_a_width_conflict() {
     let mut locked = hint(0x10, 4, base(4, type_metatype::TYPE_INT), RangeType::Fixed);
     locked.flags = TYPELOCK;
     let indexed = RangeHint::new(
-        0x10, 8, 0x10, base(8, type_metatype::TYPE_UNKNOWN), 0, RangeType::Open, 5,
+        0x10,
+        8,
+        0x10,
+        base(8, type_metatype::TYPE_UNKNOWN),
+        0,
+        RangeType::Open,
+        5,
     );
     locked.absorb(&indexed);
     let mut unrelated = hint(0x20, 4, base(4, type_metatype::TYPE_INT), RangeType::Fixed);
@@ -285,7 +343,15 @@ fn a_locked_integer_does_not_take_distant_constants_after_a_width_conflict() {
 
 #[test]
 fn integer_piece_join_preserves_extent_element_boundaries_and_type_locks() {
-    let array = RangeHint::new(0x10, 8, 0x10, base(8, type_metatype::TYPE_UINT), 0, RangeType::Open, 5);
+    let array = RangeHint::new(
+        0x10,
+        8,
+        0x10,
+        base(8, type_metatype::TYPE_UINT),
+        0,
+        RangeType::Open,
+        5,
+    );
     for (offset, meta, flags) in [
         (0x40, type_metatype::TYPE_UINT, 0),
         (0x37, type_metatype::TYPE_UINT, 0),
@@ -295,7 +361,10 @@ fn integer_piece_join_preserves_extent_element_boundaries_and_type_locks() {
     ] {
         let mut candidate = hint(offset, 4, base(4, meta), RangeType::Fixed);
         candidate.flags = flags;
-        assert!(!array.clone().attempt_join(&candidate), "offset {offset:x}, {meta:?}, flags {flags}");
+        assert!(
+            !array.clone().attempt_join(&candidate),
+            "offset {offset:x}, {meta:?}, flags {flags}"
+        );
     }
     let piece = hint(0x3c, 4, base(4, type_metatype::TYPE_UINT), RangeType::Fixed);
     let mut locked = array;
@@ -317,8 +386,24 @@ fn attempt_join_concatenates_matching_array_elements() {
 
 #[test]
 fn attempt_join_refuses_endpoint() {
-    let mut a = RangeHint::new(0x10, 4, 0x10, base(4, type_metatype::TYPE_INT), 0, RangeType::Open, 3);
-    let term = RangeHint::new(0x14, 1, 0x14, base(1, type_metatype::TYPE_UNKNOWN), 0, RangeType::Endpoint, -2);
+    let mut a = RangeHint::new(
+        0x10,
+        4,
+        0x10,
+        base(4, type_metatype::TYPE_INT),
+        0,
+        RangeType::Open,
+        3,
+    );
+    let term = RangeHint::new(
+        0x14,
+        1,
+        0x14,
+        base(1, type_metatype::TYPE_UNKNOWN),
+        0,
+        RangeType::Endpoint,
+        -2,
+    );
     assert!(!a.attempt_join(&term)); // Don't merge with bounding range
 }
 
@@ -336,10 +421,29 @@ fn merge_two_typelocked_overlapping_is_an_error() {
     let space = stack_space();
     let factory = factory();
     // Non-contained (b overhangs a) and both locked → the LowlevelError path.
-    let mut a = RangeHint::new(0x10, 4, 0x10, base(4, type_metatype::TYPE_INT), TYPELOCK, RangeType::Fixed, -1);
-    let b = RangeHint::new(0x12, 8, 0x12, base(8, type_metatype::TYPE_UINT), TYPELOCK, RangeType::Fixed, -1);
+    let mut a = RangeHint::new(
+        0x10,
+        4,
+        0x10,
+        base(4, type_metatype::TYPE_INT),
+        TYPELOCK,
+        RangeType::Fixed,
+        -1,
+    );
+    let b = RangeHint::new(
+        0x12,
+        8,
+        0x12,
+        base(8, type_metatype::TYPE_UINT),
+        TYPELOCK,
+        RangeType::Fixed,
+        -1,
+    );
     let err = a.merge(&b, &space, &factory).unwrap_err();
-    assert!(err.to_string().contains("Overlapping forced variable types"));
+    assert!(
+        err.to_string()
+            .contains("Overlapping forced variable types")
+    );
 }
 
 #[test]
@@ -347,8 +451,24 @@ fn merge_confused_types_yields_unknown() {
     let space = stack_space();
     let factory = factory();
     // Non-contained, neither locked → resType 2 (confuse): unknown type, size grows.
-    let mut a = RangeHint::new(0x10, 4, 0x10, base(4, type_metatype::TYPE_INT), 0, RangeType::Fixed, -1);
-    let b = RangeHint::new(0x12, 4, 0x12, base(4, type_metatype::TYPE_UINT), 0, RangeType::Fixed, -1);
+    let mut a = RangeHint::new(
+        0x10,
+        4,
+        0x10,
+        base(4, type_metatype::TYPE_INT),
+        0,
+        RangeType::Fixed,
+        -1,
+    );
+    let b = RangeHint::new(
+        0x12,
+        4,
+        0x12,
+        base(4, type_metatype::TYPE_UINT),
+        0,
+        RangeType::Fixed,
+        -1,
+    );
     let ret = a.merge(&b, &space, &factory).unwrap();
     assert!(!ret); // merge always returns false on this path
     assert_eq!(a.type_.get_metatype(), type_metatype::TYPE_UNKNOWN);
@@ -363,8 +483,24 @@ fn merge_contained_prefers_this_when_locked() {
     let space = stack_space();
     let factory = factory();
     // a (locked, 8-byte) contains b (4-byte) at the same start → a absorbs b.
-    let mut a = RangeHint::new(0x10, 8, 0x10, base(8, type_metatype::TYPE_INT), TYPELOCK, RangeType::Fixed, -1);
-    let b = RangeHint::new(0x10, 4, 0x10, base(4, type_metatype::TYPE_INT), 0, RangeType::Fixed, -1);
+    let mut a = RangeHint::new(
+        0x10,
+        8,
+        0x10,
+        base(8, type_metatype::TYPE_INT),
+        TYPELOCK,
+        RangeType::Fixed,
+        -1,
+    );
+    let b = RangeHint::new(
+        0x10,
+        4,
+        0x10,
+        base(4, type_metatype::TYPE_INT),
+        0,
+        RangeType::Fixed,
+        -1,
+    );
     a.merge(&b, &space, &factory).unwrap();
     assert!(a.is_type_lock());
     assert_eq!(a.size, 8);
@@ -389,9 +525,27 @@ fn mapstate_initialize_sorts_and_terminates() {
     let mut state = MapState::new(Rc::clone(&space), &rn, &pm, dflt);
 
     // Add out-of-order fixed hints.
-    state.add_range_pub(0x30, Some(base(4, type_metatype::TYPE_INT)), 0, RangeType::Fixed, -1);
-    state.add_range_pub(0x10, Some(base(4, type_metatype::TYPE_INT)), 0, RangeType::Fixed, -1);
-    state.add_range_pub(0x20, Some(base(4, type_metatype::TYPE_INT)), 0, RangeType::Fixed, -1);
+    state.add_range_pub(
+        0x30,
+        Some(base(4, type_metatype::TYPE_INT)),
+        0,
+        RangeType::Fixed,
+        -1,
+    );
+    state.add_range_pub(
+        0x10,
+        Some(base(4, type_metatype::TYPE_INT)),
+        0,
+        RangeType::Fixed,
+        -1,
+    );
+    state.add_range_pub(
+        0x20,
+        Some(base(4, type_metatype::TYPE_INT)),
+        0,
+        RangeType::Fixed,
+        -1,
+    );
 
     assert!(state.initialize().unwrap());
 
@@ -421,8 +575,20 @@ fn mapstate_reconcile_collapses_same_keyed_duplicates() {
     // Two identical-key 4-byte hints at 0x10 (same start/size/flags), one UINT
     // one INT: reconcileDatatypes keeps a single entry with the more-specific
     // type and drops the duplicate (compare()==0).
-    state.add_range_pub(0x10, Some(base(4, type_metatype::TYPE_UINT)), 0, RangeType::Fixed, -1);
-    state.add_range_pub(0x10, Some(base(4, type_metatype::TYPE_INT)), 0, RangeType::Fixed, -1);
+    state.add_range_pub(
+        0x10,
+        Some(base(4, type_metatype::TYPE_UINT)),
+        0,
+        RangeType::Fixed,
+        -1,
+    );
+    state.add_range_pub(
+        0x10,
+        Some(base(4, type_metatype::TYPE_INT)),
+        0,
+        RangeType::Fixed,
+        -1,
+    );
 
     assert!(state.initialize().unwrap());
 
@@ -435,7 +601,10 @@ fn mapstate_reconcile_collapses_same_keyed_duplicates() {
             count_at_0x10 += 1;
         }
     }
-    assert_eq!(count_at_0x10, 1, "duplicate same-keyed hints collapse to one");
+    assert_eq!(
+        count_at_0x10, 1,
+        "duplicate same-keyed hints collapse to one"
+    );
 }
 
 #[test]
@@ -447,8 +616,20 @@ fn mapstate_addrange_drops_out_of_window_hints() {
     let pm = RangeList::new();
     let mut state = MapState::new(Rc::clone(&space), &rn, &pm, dflt);
 
-    state.add_range_pub(0x10, Some(base(4, type_metatype::TYPE_INT)), 0, RangeType::Fixed, -1); // in
-    state.add_range_pub(0x40, Some(base(4, type_metatype::TYPE_INT)), 0, RangeType::Fixed, -1); // out
+    state.add_range_pub(
+        0x10,
+        Some(base(4, type_metatype::TYPE_INT)),
+        0,
+        RangeType::Fixed,
+        -1,
+    ); // in
+    state.add_range_pub(
+        0x40,
+        Some(base(4, type_metatype::TYPE_INT)),
+        0,
+        RangeType::Fixed,
+        -1,
+    ); // out
 
     assert!(state.initialize().unwrap());
     let mut starts = vec![state.next().start];
@@ -481,8 +662,20 @@ fn mapstate_constructor_removes_param_ranges_from_window() {
     let pm = window(&space, 0x80, 0xff);
     let mut state = MapState::new(Rc::clone(&space), &rn, &pm, dflt);
 
-    state.add_range_pub(0x10, Some(base(4, type_metatype::TYPE_INT)), 0, RangeType::Fixed, -1); // kept
-    state.add_range_pub(0x90, Some(base(4, type_metatype::TYPE_INT)), 0, RangeType::Fixed, -1); // carved out
+    state.add_range_pub(
+        0x10,
+        Some(base(4, type_metatype::TYPE_INT)),
+        0,
+        RangeType::Fixed,
+        -1,
+    ); // kept
+    state.add_range_pub(
+        0x90,
+        Some(base(4, type_metatype::TYPE_INT)),
+        0,
+        RangeType::Fixed,
+        -1,
+    ); // carved out
 
     assert!(state.initialize().unwrap());
     let mut starts = vec![state.next().start];
@@ -526,7 +719,11 @@ impl AliasGatherAccess for MockGather {
     fn find_spacebase_input(&self, _space: &Rc<AddrSpace>) -> Option<crate::context::VarnodeId> {
         self.spacebase
     }
-    fn gather_additive_base(&mut self, _startvn: crate::context::VarnodeId, addbase: &mut Vec<AddBase>) {
+    fn gather_additive_base(
+        &mut self,
+        _startvn: crate::context::VarnodeId,
+        addbase: &mut Vec<AddBase>,
+    ) {
         addbase.extend(self.bases.iter().copied());
     }
     fn gather_offset(&mut self, vn: crate::context::VarnodeId) -> uintb {
@@ -557,7 +754,10 @@ fn alias_gather_converts_and_records_offsets() {
     offsets.insert(vn_key(ids[2]), 0x80u64);
     let mut mock = MockGather {
         spacebase: Some(ids[0]),
-        bases: vec![AddBase::new(ids[1], None), AddBase::new(ids[2], Some(ids[0]))],
+        bases: vec![
+            AddBase::new(ids[1], None),
+            AddBase::new(ids[2], Some(ids[0])),
+        ],
         offsets,
     };
 
@@ -638,13 +838,19 @@ fn split_direct_draws_the_boundary_from_the_rest_once_per_gather() {
     offsets.insert(vn_key(ids[3]), 0x18u64);
     let mut mock = MockGather {
         spacebase: Some(ids[0]),
-        bases: vec![AddBase::new(ids[1], None), AddBase::new(ids[2], None), AddBase::new(ids[3], None)],
+        bases: vec![
+            AddBase::new(ids[1], None),
+            AddBase::new(ids[2], None),
+            AddBase::new(ids[3], None),
+        ],
         offsets,
     };
     let mut checker = AliasChecker::new();
     checker.gather(Rc::clone(&space), None, false, &mut mock);
     let direct = ids[1];
-    let split = checker.split_direct(|b| (b.base == direct).then_some(4)).clone();
+    let split = checker
+        .split_direct(|b| (b.base == direct).then_some(4))
+        .clone();
     assert_eq!(split, (0x3000000, vec![(0x2000000, 4)]));
     assert_eq!(checker.split_direct(|_| None), &split);
 
@@ -676,7 +882,10 @@ fn refresh_split_for_redraws_the_split_only_when_a_gathered_pointer_changed_clas
     assert_eq!(checker.split_direct(now), &indirect);
 
     checker.refresh_split_for(ids[1], || Some(4));
-    assert_eq!(checker.split_direct(now), &(0x3000000, vec![(0x2000000, 4)]));
+    assert_eq!(
+        checker.split_direct(now),
+        &(0x3000000, vec![(0x2000000, 4)])
+    );
 
     checker.refresh_split_for(ids[1], || None);
     assert_eq!(checker.split_direct(|_| None), &indirect);
@@ -774,7 +983,10 @@ fn scope_local_add_symbol_maps_a_named_local() {
     // The symbol is mapped at the stack offset under the named local scope.
     let scope = sl.scope_id();
     let found = sl.database().find_overlap(scope, &addr, 4);
-    assert!(found.is_some(), "the mapped local must be findable by its stack address");
+    assert!(
+        found.is_some(),
+        "the mapped local must be findable by its stack address"
+    );
     assert_eq!(sl.database().symbol(sym).get_name(), "i");
 }
 
@@ -790,16 +1002,29 @@ fn scope_local_query_properties_marks_mapped_range_addrtied() {
     let spc = Rc::clone(sl.get_space_id());
     let inv = Address::new_invalid();
     let addr = Address::new(Rc::clone(&spc), 0xffff_ffff_ffff_ffe4);
-    sl.add_symbol("v", base(4, type_metatype::TYPE_INT), &addr, &inv).expect("addSymbol");
+    sl.add_symbol("v", base(4, type_metatype::TYPE_INT), &addr, &inv)
+        .expect("addSymbol");
 
     let fl = sl.query_properties(&addr, 4, &inv);
-    assert_ne!(fl & varnode_flags::mapped, 0, "a mapped stack symbol is `mapped`");
-    assert_ne!(fl & varnode_flags::addrtied, 0, "a mapped stack symbol is `addrtied`");
+    assert_ne!(
+        fl & varnode_flags::mapped,
+        0,
+        "a mapped stack symbol is `mapped`"
+    );
+    assert_ne!(
+        fl & varnode_flags::addrtied,
+        0,
+        "a mapped stack symbol is `addrtied`"
+    );
 
     // A range with NO mapped symbol returns 0 (no symbol, scope does not own it):
     // the conservative default that keeps the guard behavior unchanged off-symbol.
     let bare = Address::new(Rc::clone(&spc), 0xffff_ffff_ffff_ff00);
-    assert_eq!(sl.query_properties(&bare, 4, &inv), 0, "an unmapped range carries no flags");
+    assert_eq!(
+        sl.query_properties(&bare, 4, &inv),
+        0,
+        "an unmapped range carries no flags"
+    );
 }
 
 #[test]
@@ -817,14 +1042,19 @@ fn spacebase_get_sub_type_resolves_mapped_local_and_falls_back_to_unknown() {
         let elem = base(4, type_metatype::TYPE_INT);
         f.get_type_array(16, elem).expect("int4[16]")
     };
-    sl.add_symbol("c", Rc::clone(&arr_ty), &arr_addr, &inv).expect("addSymbol c");
+    sl.add_symbol("c", Rc::clone(&arr_ty), &arr_addr, &inv)
+        .expect("addSymbol c");
 
     // Inside the symbol: getSubType returns the symbol's type with newoff = byte
     // offset into the symbol (0 at its base).
     let (ty, newoff) = sl
         .spacebase_get_sub_type(0xffff_ffff_ffff_ffa8u64 as i64, &f)
         .expect("getSubType inside c");
-    assert_eq!(ty.get_size(), arr_ty.get_size(), "resolves the mapped array type");
+    assert_eq!(
+        ty.get_size(),
+        arr_ty.get_size(),
+        "resolves the mapped array type"
+    );
     assert_eq!(newoff, 0, "newoff is the in-symbol offset (0 at the base)");
 
     // Outside any symbol: NON-null TYPE_UNKNOWN(1) with newoff = 0 (the C++
@@ -861,13 +1091,18 @@ fn w10_spacebase_typing_get_sub_type_midsymbol_newoff_is_byte_offset_into_symbol
         let elem = base(4, type_metatype::TYPE_INT);
         f.get_type_array(16, elem).expect("int4[16]")
     };
-    sl.add_symbol("c", Rc::clone(&arr_ty), &arr_addr, &inv).expect("addSymbol c");
+    sl.add_symbol("c", Rc::clone(&arr_ty), &arr_addr, &inv)
+        .expect("addSymbol c");
 
     // addr = base + 0x10 (well within the 64-byte array)
     let (ty, newoff) = sl
         .spacebase_get_sub_type(base_off.wrapping_add(0x10) as i64, &f)
         .expect("getSubType mid-symbol");
-    assert_eq!(ty.get_size(), arr_ty.get_size(), "still the whole symbol's array type");
+    assert_eq!(
+        ty.get_size(),
+        arr_ty.get_size(),
+        "still the whole symbol's array type"
+    );
     assert_eq!(
         newoff, 0x10,
         "newoff must be the byte offset INTO the symbol (addr-base), not 0 and not the absolute addr"
@@ -886,8 +1121,14 @@ fn w10_spacebase_typing_nearest_forward_no_symbol_returns_negative() {
     let _ = &f;
     let probe: int8 = 0x100;
     let (distance, newoff, el_size) = sl.spacebase_nearest_arrayed_forward(probe, 128);
-    assert!(distance < 0, "no array forward from an unmapped offset => distance<0; got {distance}");
-    assert_eq!(newoff, probe, "the offset out-param is the unchanged probe on the negative path");
+    assert!(
+        distance < 0,
+        "no array forward from an unmapped offset => distance<0; got {distance}"
+    );
+    assert_eq!(
+        newoff, probe,
+        "the offset out-param is the unchanged probe on the negative path"
+    );
     assert_eq!(el_size, 0);
 }
 
@@ -909,10 +1150,10 @@ fn w10_spacebase_typing_nearest_backward_resolves_array_distance() {
         let elem = base(4, type_metatype::TYPE_INT);
         f.get_type_array(16, elem).expect("int4[16]")
     };
-    sl.add_symbol("c", Rc::clone(&arr_ty), &arr_addr, &inv).expect("addSymbol c");
+    sl.add_symbol("c", Rc::clone(&arr_ty), &arr_addr, &inv)
+        .expect("addSymbol c");
 
-    let (distance, newoff, _el) =
-        sl.spacebase_nearest_arrayed_backward(base_off as i64, 128, &f);
+    let (distance, newoff, _el) = sl.spacebase_nearest_arrayed_backward(base_off as i64, 128, &f);
     assert!(
         distance >= 0,
         "an access at the base of a mapped array must find an array backward; got {distance}"
@@ -928,12 +1169,19 @@ fn scope_local_reset_local_window_loads_proto_ranges() {
     let spc = Rc::clone(sl.get_space_id());
     let mut localr = RangeList::new();
     // A negative-offset local window (stack grows negative): [-0x100, -1].
-    localr.insert_range(Rc::clone(&spc), 0xffff_ffff_ffff_ff00, 0xffff_ffff_ffff_ffff);
+    localr.insert_range(
+        Rc::clone(&spc),
+        0xffff_ffff_ffff_ff00,
+        0xffff_ffff_ffff_ffff,
+    );
     let paramr = RangeList::new();
     sl.reset_local_window(&localr, &paramr, true);
     let inwin = Address::new(Rc::clone(&spc), 0xffff_ffff_ffff_ffe4);
     assert!(
-        sl.database().scope(sl.scope_id()).get_range_tree().in_range(&inwin, 1),
+        sl.database()
+            .scope(sl.scope_id())
+            .get_range_tree()
+            .in_range(&inwin, 1),
         "the local window must cover the negative stack offset",
     );
 }
@@ -964,14 +1212,23 @@ fn scope_local_restructure_builds_a_disjoint_cover() {
     state.add_fixed_type_pub(0x20, base(4, type_metatype::TYPE_INT), 0, &f);
 
     let overlaps = sl.restructure(&mut state, &f).expect("restructure");
-    assert!(!overlaps, "two disjoint hints reconcile without overlap problems");
+    assert!(
+        !overlaps,
+        "two disjoint hints reconcile without overlap problems"
+    );
 
     // Each hint produced a mapped local symbol at its stack offset.
     let scope = sl.scope_id();
     let a0 = Address::new(Rc::clone(&spc), 0x10);
     let a1 = Address::new(Rc::clone(&spc), 0x20);
-    assert!(sl.database().find_overlap(scope, &a0, 4).is_some(), "local at 0x10 created");
-    assert!(sl.database().find_overlap(scope, &a1, 4).is_some(), "local at 0x20 created");
+    assert!(
+        sl.database().find_overlap(scope, &a0, 4).is_some(),
+        "local at 0x10 created"
+    );
+    assert!(
+        sl.database().find_overlap(scope, &a1, 4).is_some(),
+        "local at 0x20 created"
+    );
 }
 
 type Hint = (uintb, Rc<Datatype>, uint4, RangeType, int4);
@@ -995,7 +1252,10 @@ fn restructured_start(hints: &[Hint], bases: Vec<intb>, off: uintb, size: int4) 
     sl.restructure(&mut state, &f).expect("restructure");
     let scope = sl.scope_id();
     let at = Address::new(Rc::clone(&spc), off);
-    let eref = sl.database().find_overlap(scope, &at, size).expect("a local");
+    let eref = sl
+        .database()
+        .find_overlap(scope, &at, size)
+        .expect("a local");
     sl.database().entry(scope, eref).get_addr().get_offset()
 }
 
@@ -1004,7 +1264,13 @@ fn scope_local_restructure_maps_tail_words_into_the_indexed_storage() {
     let word = base(4, type_metatype::TYPE_INT);
     for prefix in [None, Some(0x08), Some(0x0c)] {
         let mut hints = vec![
-            (0x08, base(8, type_metatype::TYPE_UNKNOWN), 0, RangeType::Open, 5),
+            (
+                0x08,
+                base(8, type_metatype::TYPE_UNKNOWN),
+                0,
+                RangeType::Open,
+                5,
+            ),
             (0x30, Rc::clone(&word), 0, RangeType::Fixed, -1),
             (0x34, Rc::clone(&word), 0, RangeType::Fixed, -1),
             (0x38, Rc::clone(&word), 0, RangeType::Fixed, -1),
@@ -1053,7 +1319,8 @@ fn scope_local_clear_unlocked_category_resets_layout_each_pass() {
     );
 
     // The per-pass reset drops that unlocked local.
-    sl.clear_unlocked_category_negative().expect("clearUnlockedCategory(-1)");
+    sl.clear_unlocked_category_negative()
+        .expect("clearUnlockedCategory(-1)");
     assert!(
         sl.database().find_overlap(scope, &a0, 1).is_none(),
         "clearUnlockedCategory(-1) removed the unlocked auto-recovered local",
@@ -1078,7 +1345,12 @@ fn verify_w10_sized_stackvn_resolve_default_name_whole_symbol_gate() {
     //     resolve_default_name at (0x40, 4) must rename it to `v1` (base 1).
     let whole_addr = Address::new(Rc::clone(&spc), 0x40);
     let s_whole = sl
-        .add_symbol("$$undef00000000", base(4, type_metatype::TYPE_INT), &whole_addr, &inv)
+        .add_symbol(
+            "$$undef00000000",
+            base(4, type_metatype::TYPE_INT),
+            &whole_addr,
+            &inv,
+        )
         .expect("add undefined whole symbol");
     assert!(sl.database().symbol(s_whole).is_name_undefined());
     let mut b: int4 = 1;
@@ -1088,19 +1360,31 @@ fn verify_w10_sized_stackvn_resolve_default_name_whole_symbol_gate() {
     assert_eq!(name, "v1", "whole-symbol undefined access renames to v1");
     assert_eq!(off, 0, "whole-symbol access has symbol-offset 0");
     assert_eq!(b, 2, "base advanced exactly once");
-    assert_eq!(sl.database().symbol(s_whole).get_name(), "v1", "rename was applied in-tree");
+    assert_eq!(
+        sl.database().symbol(s_whole).get_name(),
+        "v1",
+        "rename was applied in-tree"
+    );
 
     // (2) An undefined-named 8-byte symbol at 0x80; a 4-byte access at 0x84 is a
     //     PARTIAL/member access (sym_off != 0 and size != entry_size).  The gate
     //     must NOT rename it — the name stays undefined, base does not advance.
     let big_addr = Address::new(Rc::clone(&spc), 0x80);
     let s_big = sl
-        .add_symbol("$$undef00000001", base(8, type_metatype::TYPE_INT), &big_addr, &inv)
+        .add_symbol(
+            "$$undef00000001",
+            base(8, type_metatype::TYPE_INT),
+            &big_addr,
+            &inv,
+        )
         .expect("add undefined big symbol");
     let member_addr = Address::new(Rc::clone(&spc), 0x84);
     let mut b2: int4 = 5;
     let r2 = sl.resolve_default_name(&member_addr, 4, &mut b2);
-    assert!(r2.is_some(), "the member access still finds its covering symbol");
+    assert!(
+        r2.is_some(),
+        "the member access still finds its covering symbol"
+    );
     let (name2, off2, _) = r2.unwrap();
     assert_eq!(off2, 4, "member access carries the in-symbol byte offset");
     assert_eq!(
@@ -1166,7 +1450,10 @@ fn scope_local_build_variable_name_stack_convention() {
         &|_dt| String::new(),
         true,
     );
-    assert!(none.is_none(), "persistent varnodes fall through to the generic builder");
+    assert!(
+        none.is_none(),
+        "persistent varnodes fall through to the generic builder"
+    );
 }
 
 // ===========================================================================
@@ -1192,13 +1479,30 @@ fn adv_w10_compare_signed_start_on_real_stack_offsets() {
     // s0xffffffffffffffe0 (-32).  Signed: -32 < -12, so loopvar precedes count.
     let count_off: uintb = 0xfffffffffffffff4; // -12
     let loop_off: uintb = 0xffffffffffffffe0; // -32
-    assert!((count_off as intb) > (loop_off as intb), "fixture sanity: -12 > -32");
+    assert!(
+        (count_off as intb) > (loop_off as intb),
+        "fixture sanity: -12 > -32"
+    );
 
-    let count = hint(count_off, 4, base(4, type_metatype::TYPE_INT), RangeType::Fixed);
-    let loopvar = hint(loop_off, 8, base(8, type_metatype::TYPE_INT), RangeType::Fixed);
+    let count = hint(
+        count_off,
+        4,
+        base(4, type_metatype::TYPE_INT),
+        RangeType::Fixed,
+    );
+    let loopvar = hint(
+        loop_off,
+        8,
+        base(8, type_metatype::TYPE_INT),
+        RangeType::Fixed,
+    );
 
     // loopvar (-32) sorts strictly before count (-12).
-    assert_eq!(loopvar.compare(&count), -1, "deeper (more negative) stack slot first");
+    assert_eq!(
+        loopvar.compare(&count),
+        -1,
+        "deeper (more negative) stack slot first"
+    );
     assert_eq!(count.compare(&loopvar), 1);
 
     // Antisymmetry + the sort agrees (stable_sort uses compare_ranges).
@@ -1233,14 +1537,22 @@ fn adv_w10_gather_offset_ptradd_multiplier_one_vs_not() {
     let othervn_off_one: uintb = 1;
     let r_follow = base_v.wrapping_add(in1_gathered);
     assert_eq!(
-        if othervn_off_one == 1 { base_v.wrapping_add(in1_gathered) } else { base_v },
+        if othervn_off_one == 1 {
+            base_v.wrapping_add(in1_gathered)
+        } else {
+            base_v
+        },
         r_follow,
     );
 
     // multiplier 4, non-constant in1 -> do NOT follow in1 (truncated ADD tree)
     let othervn_off_four: uintb = 4;
     assert_eq!(
-        if othervn_off_four == 1 { base_v.wrapping_add(in1_gathered) } else { base_v },
+        if othervn_off_four == 1 {
+            base_v.wrapping_add(in1_gathered)
+        } else {
+            base_v
+        },
         base_v,
         "multiplier != 1 must not descend into in1 (C++ varmap.cc:844)"
     );
@@ -1420,14 +1732,24 @@ fn make_local_name_unique_among_skips_names_held_off_the_symbol_table() {
     assert_eq!(sl.make_local_name_unique_among("object", &none), "object");
 
     let taken: std::collections::BTreeSet<String> = ["object".to_string()].into();
-    assert_eq!(sl.make_local_name_unique_among("object", &taken), "object_00");
+    assert_eq!(
+        sl.make_local_name_unique_among("object", &taken),
+        "object_00"
+    );
 
     let addr = Address::new(Rc::clone(&spc), 0xffff_ffff_ffff_ffe4);
-    sl.add_symbol("object", base(8, type_metatype::TYPE_INT), &addr, &inv).expect("addSymbol");
-    assert_eq!(sl.make_local_name_unique_among("object", &none), "object_00");
+    sl.add_symbol("object", base(8, type_metatype::TYPE_INT), &addr, &inv)
+        .expect("addSymbol");
+    assert_eq!(
+        sl.make_local_name_unique_among("object", &none),
+        "object_00"
+    );
     let taken: std::collections::BTreeSet<String> =
         ["object_00".to_string(), "object_01".to_string()].into();
-    assert_eq!(sl.make_local_name_unique_among("object", &taken), "object_02");
+    assert_eq!(
+        sl.make_local_name_unique_among("object", &taken),
+        "object_02"
+    );
 }
 
 #[test]
@@ -1473,16 +1795,18 @@ fn parameter_entry_does_not_adopt_a_later_register_local() {
             .symbol,
         local
     );
-    assert!(scope
-        .add_param_symbol(
-            1,
-            "property",
-            base(4, type_metatype::TYPE_INT),
-            &addr,
-            &entry
-        )
-        .unwrap()
-        .is_none());
+    assert!(
+        scope
+            .add_param_symbol(
+                1,
+                "property",
+                base(4, type_metatype::TYPE_INT),
+                &addr,
+                &entry
+            )
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[test]
@@ -1500,10 +1824,12 @@ fn parameter_entry_reuses_a_whole_scope_storage_lock() {
             &Address::new_invalid(),
         )
         .unwrap();
-    assert!(scope
-        .add_param_symbol(1, "property", dtype, &addr, &entry)
-        .unwrap()
-        .is_none());
+    assert!(
+        scope
+            .add_param_symbol(1, "property", dtype, &addr, &entry)
+            .unwrap()
+            .is_none()
+    );
     assert_eq!(
         scope.symbol_category(host),
         crate::database::symbol_category::FUNCTION_PARAMETER
@@ -1560,7 +1886,9 @@ fn selected_register_entry_retains_its_name_and_type() {
             .get_metatype(),
         type_metatype::TYPE_UINT
     );
-    assert!(scope
-        .build_localtype_seed_at(&addr, 4, &missing, &types)
-        .is_none());
+    assert!(
+        scope
+            .build_localtype_seed_at(&addr, 4, &missing, &types)
+            .is_none()
+    );
 }

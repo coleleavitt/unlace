@@ -41,10 +41,10 @@
 
 use unlace_base::address::{calc_mask, signbit_negative};
 use unlace_base::types::{int4, uintb};
-use unlace_num::opcodes::{get_booleanflip, OpCode};
+use unlace_num::opcodes::{OpCode, get_booleanflip};
 
-use crate::op::PcodeOpBank;
 use crate::context::{OpId, VarnodeId};
+use crate::op::PcodeOpBank;
 use crate::varnode::VarnodeBank;
 
 // =============================================================================
@@ -78,8 +78,16 @@ impl PcodeOpNode {
     /// (arena-key equality is pointer-identity) and keys order identically.
     pub fn less(&self, op2: &PcodeOpNode, obank: &PcodeOpBank) -> bool {
         if self.op != op2.op {
-            let t1 = obank.get(self.op).expect("PcodeOpNode::less: stale op").get_seq_num().get_time();
-            let t2 = obank.get(op2.op).expect("PcodeOpNode::less: stale op").get_seq_num().get_time();
+            let t1 = obank
+                .get(self.op)
+                .expect("PcodeOpNode::less: stale op")
+                .get_seq_num()
+                .get_time();
+            let t2 = obank
+                .get(op2.op)
+                .expect("PcodeOpNode::less: stale op")
+                .get_seq_num()
+                .get_time();
             return t1 < t2;
         }
         if self.slot != op2.slot {
@@ -99,11 +107,30 @@ impl PcodeOpNode {
     /// `None`, so the comparison degrades to `None < None == false` (no order)
     /// rather than the W7 pointer order.  Carried for layout fidelity; the only
     /// consumer (`PcodeOpNode::compareByHigh`) is a W7-era sort.
-    pub fn compare_by_high(a: &PcodeOpNode, b: &PcodeOpNode, obank: &PcodeOpBank, vbank: &VarnodeBank) -> bool {
-        let avn = obank.get(a.op).expect("compare_by_high: stale op").get_in(a.slot).expect("compare_by_high: null in");
-        let bvn = obank.get(b.op).expect("compare_by_high: stale op").get_in(b.slot).expect("compare_by_high: null in");
-        let ahigh = vbank.get(avn).expect("compare_by_high: stale vn").get_high();
-        let bhigh = vbank.get(bvn).expect("compare_by_high: stale vn").get_high();
+    pub fn compare_by_high(
+        a: &PcodeOpNode,
+        b: &PcodeOpNode,
+        obank: &PcodeOpBank,
+        vbank: &VarnodeBank,
+    ) -> bool {
+        let avn = obank
+            .get(a.op)
+            .expect("compare_by_high: stale op")
+            .get_in(a.slot)
+            .expect("compare_by_high: null in");
+        let bvn = obank
+            .get(b.op)
+            .expect("compare_by_high: stale op")
+            .get_in(b.slot)
+            .expect("compare_by_high: null in");
+        let ahigh = vbank
+            .get(avn)
+            .expect("compare_by_high: stale vn")
+            .get_high();
+        let bhigh = vbank
+            .get(bvn)
+            .expect("compare_by_high: stale vn")
+            .get_high();
         ahigh < bhigh // STUB(W7): HighVariable order
     }
 }
@@ -144,7 +171,12 @@ impl TraverseNode {
 
     /// Return \b true if the alternate path looks more valid than the main path
     /// (C++ `TraverseNode::isAlternatePathValid`, `expression.cc:29-49`).
-    pub fn is_alternate_path_valid(vn: VarnodeId, flags: unlace_base::types::uint4, vbank: &VarnodeBank, obank: &PcodeOpBank) -> bool {
+    pub fn is_alternate_path_valid(
+        vn: VarnodeId,
+        flags: unlace_base::types::uint4,
+        vbank: &VarnodeBank,
+        obank: &PcodeOpBank,
+    ) -> bool {
         use traverse_flags::*;
         if (flags & (indirect | indirectalt)) == indirect {
             return true; // Main path traversed INDIRECT, alternate did not
@@ -159,7 +191,11 @@ impl TraverseNode {
         if vn_lone_descend(vn, vbank) == 0 {
             return false;
         }
-        let mut op = match vbank.get(vn).expect("isAlternatePathValid: stale vn").get_def() {
+        let mut op = match vbank
+            .get(vn)
+            .expect("isAlternatePathValid: stale vn")
+            .get_def()
+        {
             Some(o) => o,
             None => return true,
         };
@@ -167,11 +203,19 @@ impl TraverseNode {
             let o = obank.get(op).expect("isAlternatePathValid: stale op");
             o.is_incidental_copy() && o.code() == OpCode::CPUI_COPY
         } {
-            vn = obank.get(op).expect("isAlternatePathValid").get_in(0).expect("isAlternatePathValid: null in");
+            vn = obank
+                .get(op)
+                .expect("isAlternatePathValid")
+                .get_in(0)
+                .expect("isAlternatePathValid: null in");
             if vn_lone_descend(vn, vbank) == 0 {
                 return false;
             }
-            op = match vbank.get(vn).expect("isAlternatePathValid: stale vn").get_def() {
+            op = match vbank
+                .get(vn)
+                .expect("isAlternatePathValid: stale vn")
+                .get_def()
+            {
                 Some(o) => o,
                 None => return true,
             };
@@ -207,23 +251,40 @@ impl BooleanMatch {
     ///
     /// Only tests INT_LESS / INT_SLESS with one constant input (the `x < 9`
     /// vs `8 < x` scenario).
-    fn same_op_complement(bin1op: OpId, bin2op: OpId, vbank: &VarnodeBank, obank: &PcodeOpBank) -> bool {
+    fn same_op_complement(
+        bin1op: OpId,
+        bin2op: OpId,
+        vbank: &VarnodeBank,
+        obank: &PcodeOpBank,
+    ) -> bool {
         let b1 = obank.get(bin1op).expect("sameOpComplement: stale op");
         let opcode = b1.code();
         if opcode == OpCode::CPUI_INT_SLESS || opcode == OpCode::CPUI_INT_LESS {
             // Basically we test for the scenario like:  x < 9   8 < x
             let in1_1 = b1.get_in(1).expect("sameOpComplement: null in");
             let mut constslot: int4 = 0;
-            if vbank.get(in1_1).expect("sameOpComplement: stale vn").is_constant() {
+            if vbank
+                .get(in1_1)
+                .expect("sameOpComplement: stale vn")
+                .is_constant()
+            {
                 constslot = 1;
             }
             let b1_constslot = b1.get_in(constslot).expect("sameOpComplement: null in");
-            if !vbank.get(b1_constslot).expect("sameOpComplement: stale vn").is_constant() {
+            if !vbank
+                .get(b1_constslot)
+                .expect("sameOpComplement: stale vn")
+                .is_constant()
+            {
                 return false;
             }
             let b2 = obank.get(bin2op).expect("sameOpComplement: stale op");
             let b2_1mcs = b2.get_in(1 - constslot).expect("sameOpComplement: null in");
-            if !vbank.get(b2_1mcs).expect("sameOpComplement: stale vn").is_constant() {
+            if !vbank
+                .get(b2_1mcs)
+                .expect("sameOpComplement: stale vn")
+                .is_constant()
+            {
                 return false;
             }
             let b1_1mcs = b1.get_in(1 - constslot).expect("sameOpComplement: null in");
@@ -231,8 +292,14 @@ impl BooleanMatch {
             if !Self::varnode_same(b1_1mcs, b2_constslot, vbank) {
                 return false;
             }
-            let mut val1: uintb = vbank.get(b1_constslot).expect("sameOpComplement: stale vn").get_offset();
-            let mut val2: uintb = vbank.get(b2_1mcs).expect("sameOpComplement: stale vn").get_offset();
+            let mut val1: uintb = vbank
+                .get(b1_constslot)
+                .expect("sameOpComplement: stale vn")
+                .get_offset();
+            let mut val2: uintb = vbank
+                .get(b2_1mcs)
+                .expect("sameOpComplement: stale vn")
+                .get_offset();
             if constslot != 0 {
                 std::mem::swap(&mut val1, &mut val2);
             }
@@ -246,7 +313,10 @@ impl BooleanMatch {
             }
             if opcode == OpCode::CPUI_INT_SLESS {
                 // Corner case for signed
-                let sz = vbank.get(b1_constslot).expect("sameOpComplement: stale vn").get_size();
+                let sz = vbank
+                    .get(b1_constslot)
+                    .expect("sameOpComplement: stale vn")
+                    .get_size();
                 if signbit_negative(val2, sz) && !signbit_negative(val1, sz) {
                     return false;
                 }
@@ -279,7 +349,13 @@ impl BooleanMatch {
     // structure verbatim; collapsing it would obscure the distinct guards and
     // their comments, and this is rule-output-affecting code.
     #[allow(clippy::collapsible_if)]
-    pub fn evaluate(vn1: VarnodeId, vn2: VarnodeId, depth: int4, vbank: &VarnodeBank, obank: &PcodeOpBank) -> int4 {
+    pub fn evaluate(
+        vn1: VarnodeId,
+        vn2: VarnodeId,
+        depth: int4,
+        vbank: &VarnodeBank,
+        obank: &PcodeOpBank,
+    ) -> int4 {
         use boolean_match::*;
         if vn1 == vn2 {
             return same;
@@ -287,11 +363,19 @@ impl BooleanMatch {
         let op1: Option<OpId>;
         let opc1: OpCode;
         if vbank.get(vn1).expect("evaluate: stale vn").is_written() {
-            let o1 = vbank.get(vn1).expect("evaluate").get_def().expect("evaluate: written but no def");
+            let o1 = vbank
+                .get(vn1)
+                .expect("evaluate")
+                .get_def()
+                .expect("evaluate: written but no def");
             op1 = Some(o1);
             opc1 = obank.get(o1).expect("evaluate: stale op").code();
             if opc1 == OpCode::CPUI_BOOL_NEGATE {
-                let in0 = obank.get(o1).expect("evaluate").get_in(0).expect("evaluate: null in");
+                let in0 = obank
+                    .get(o1)
+                    .expect("evaluate")
+                    .get_in(0)
+                    .expect("evaluate: null in");
                 let mut res = Self::evaluate(in0, vn2, depth, vbank, obank);
                 // Flip same <-> complementary result
                 if res == same {
@@ -309,11 +393,19 @@ impl BooleanMatch {
         let op2: OpId;
         let opc2: OpCode;
         if vbank.get(vn2).expect("evaluate: stale vn").is_written() {
-            let o2 = vbank.get(vn2).expect("evaluate").get_def().expect("evaluate: written but no def");
+            let o2 = vbank
+                .get(vn2)
+                .expect("evaluate")
+                .get_def()
+                .expect("evaluate: written but no def");
             op2 = o2;
             opc2 = obank.get(o2).expect("evaluate: stale op").code();
             if opc2 == OpCode::CPUI_BOOL_NEGATE {
-                let in0 = obank.get(o2).expect("evaluate").get_in(0).expect("evaluate: null in");
+                let in0 = obank
+                    .get(o2)
+                    .expect("evaluate")
+                    .get_in(0)
+                    .expect("evaluate: null in");
                 let mut res = Self::evaluate(vn1, in0, depth, vbank, obank);
                 if res == same {
                     res = complementary;
@@ -329,21 +421,44 @@ impl BooleanMatch {
             Some(o) => o,
             None => return uncorrelated,
         };
-        if !obank.get(op1).expect("evaluate").is_bool_output() || !obank.get(op2).expect("evaluate").is_bool_output() {
+        if !obank.get(op1).expect("evaluate").is_bool_output()
+            || !obank.get(op2).expect("evaluate").is_bool_output()
+        {
             return uncorrelated;
         }
         if depth != 0
-            && (opc1 == OpCode::CPUI_BOOL_AND || opc1 == OpCode::CPUI_BOOL_OR || opc1 == OpCode::CPUI_BOOL_XOR)
+            && (opc1 == OpCode::CPUI_BOOL_AND
+                || opc1 == OpCode::CPUI_BOOL_OR
+                || opc1 == OpCode::CPUI_BOOL_XOR)
         {
-            if opc2 == OpCode::CPUI_BOOL_AND || opc2 == OpCode::CPUI_BOOL_OR || opc2 == OpCode::CPUI_BOOL_XOR {
+            if opc2 == OpCode::CPUI_BOOL_AND
+                || opc2 == OpCode::CPUI_BOOL_OR
+                || opc2 == OpCode::CPUI_BOOL_XOR
+            {
                 if opc1 == opc2
                     || (opc1 == OpCode::CPUI_BOOL_AND && opc2 == OpCode::CPUI_BOOL_OR)
                     || (opc1 == OpCode::CPUI_BOOL_OR && opc2 == OpCode::CPUI_BOOL_AND)
                 {
-                    let o1in0 = obank.get(op1).expect("evaluate").get_in(0).expect("evaluate: null in");
-                    let o1in1 = obank.get(op1).expect("evaluate").get_in(1).expect("evaluate: null in");
-                    let o2in0 = obank.get(op2).expect("evaluate").get_in(0).expect("evaluate: null in");
-                    let o2in1 = obank.get(op2).expect("evaluate").get_in(1).expect("evaluate: null in");
+                    let o1in0 = obank
+                        .get(op1)
+                        .expect("evaluate")
+                        .get_in(0)
+                        .expect("evaluate: null in");
+                    let o1in1 = obank
+                        .get(op1)
+                        .expect("evaluate")
+                        .get_in(1)
+                        .expect("evaluate: null in");
+                    let o2in0 = obank
+                        .get(op2)
+                        .expect("evaluate")
+                        .get_in(0)
+                        .expect("evaluate: null in");
+                    let o2in1 = obank
+                        .get(op2)
+                        .expect("evaluate")
+                        .get_in(1)
+                        .expect("evaluate: null in");
                     let mut pair1 = Self::evaluate(o1in0, o2in0, depth - 1, vbank, obank);
                     let pair2;
                     if pair1 == uncorrelated {
@@ -382,8 +497,16 @@ impl BooleanMatch {
                 let mut same_op = true;
                 let num_inputs = obank.get(op1).expect("evaluate").num_input();
                 for i in 0..num_inputs {
-                    let a = obank.get(op1).expect("evaluate").get_in(i).expect("evaluate: null in");
-                    let b = obank.get(op2).expect("evaluate").get_in(i).expect("evaluate: null in");
+                    let a = obank
+                        .get(op1)
+                        .expect("evaluate")
+                        .get_in(i)
+                        .expect("evaluate: null in");
+                    let b = obank
+                        .get(op2)
+                        .expect("evaluate")
+                        .get_in(i)
+                        .expect("evaluate: null in");
                     if !Self::varnode_same(a, b, vbank) {
                         same_op = false;
                         break;
@@ -407,13 +530,29 @@ impl BooleanMatch {
             if reorder {
                 slot2 = 1;
             }
-            let o1_slot1 = obank.get(op1).expect("evaluate").get_in(slot1).expect("evaluate: null in");
-            let o2_slot2 = obank.get(op2).expect("evaluate").get_in(slot2).expect("evaluate: null in");
+            let o1_slot1 = obank
+                .get(op1)
+                .expect("evaluate")
+                .get_in(slot1)
+                .expect("evaluate: null in");
+            let o2_slot2 = obank
+                .get(op2)
+                .expect("evaluate")
+                .get_in(slot2)
+                .expect("evaluate: null in");
             if !Self::varnode_same(o1_slot1, o2_slot2, vbank) {
                 return uncorrelated;
             }
-            let o1_1mslot1 = obank.get(op1).expect("evaluate").get_in(1 - slot1).expect("evaluate: null in");
-            let o2_1mslot2 = obank.get(op2).expect("evaluate").get_in(1 - slot2).expect("evaluate: null in");
+            let o1_1mslot1 = obank
+                .get(op1)
+                .expect("evaluate")
+                .get_in(1 - slot1)
+                .expect("evaluate: null in");
+            let o2_1mslot2 = obank
+                .get(op2)
+                .expect("evaluate")
+                .get_in(1 - slot2)
+                .expect("evaluate: null in");
             if !Self::varnode_same(o1_1mslot1, o2_1mslot2, vbank) {
                 return uncorrelated;
             }
@@ -452,9 +591,23 @@ impl BooleanExpressionMatch {
 
     /// Perform the correlation test on two CBRANCH operations (C++
     /// `BooleanExpressionMatch::verifyCondition`, `expression.cc:221-233`).
-    pub fn verify_condition(&mut self, op: OpId, iop: OpId, vbank: &VarnodeBank, obank: &PcodeOpBank) -> bool {
-        let op_in1 = obank.get(op).expect("verifyCondition: stale op").get_in(1).expect("verifyCondition: null in");
-        let iop_in1 = obank.get(iop).expect("verifyCondition: stale op").get_in(1).expect("verifyCondition: null in");
+    pub fn verify_condition(
+        &mut self,
+        op: OpId,
+        iop: OpId,
+        vbank: &VarnodeBank,
+        obank: &PcodeOpBank,
+    ) -> bool {
+        let op_in1 = obank
+            .get(op)
+            .expect("verifyCondition: stale op")
+            .get_in(1)
+            .expect("verifyCondition: null in");
+        let iop_in1 = obank
+            .get(iop)
+            .expect("verifyCondition: stale op")
+            .get_in(1)
+            .expect("verifyCondition: null in");
         let res = BooleanMatch::evaluate(op_in1, iop_in1, Self::MAX_DEPTH, vbank, obank);
         if res == boolean_match::uncorrelated {
             return false;
@@ -503,8 +656,17 @@ impl AdditiveEdge {
     /// C++ `AdditiveEdge` ctor: `vn` is
     /// resolved as `op->getIn(slot)` through the op bank.
     pub fn new(o: OpId, s: int4, m: Option<OpId>, obank: &PcodeOpBank) -> AdditiveEdge {
-        let vn = obank.get(o).expect("AdditiveEdge::new: stale op").get_in(s).expect("AdditiveEdge::new: null in");
-        AdditiveEdge { op: o, slot: s, vn, mult: m }
+        let vn = obank
+            .get(o)
+            .expect("AdditiveEdge::new: stale op")
+            .get_in(s)
+            .expect("AdditiveEdge::new: null in");
+        AdditiveEdge {
+            op: o,
+            slot: s,
+            vn,
+            mult: m,
+        }
     }
 
     /// Get the multiplier PcodeOp (C++ `getMultiplier`).
@@ -547,7 +709,11 @@ pub struct TermOrder {
 impl TermOrder {
     /// Construct given root PcodeOp (C++ `TermOrder(PcodeOp *rt)`).
     pub fn new(rt: OpId) -> TermOrder {
-        TermOrder { root: rt, terms: Vec::new(), sorter: Vec::new() }
+        TermOrder {
+            root: rt,
+            terms: Vec::new(),
+            sorter: Vec::new(),
+        }
     }
 
     /// Get the number of terms in the expression (C++ `getSize`).
@@ -576,8 +742,17 @@ impl TermOrder {
             let numinput = obank.get(curop).expect("collect: stale op").num_input();
             for i in 0..numinput {
                 // curvn is a node of the subtree IF
-                let curvn = obank.get(curop).expect("collect").get_in(i).expect("collect: null in");
-                if !fd.vbank().get(curvn).expect("collect: stale vn").is_written() {
+                let curvn = obank
+                    .get(curop)
+                    .expect("collect")
+                    .get_in(i)
+                    .expect("collect: null in");
+                if !fd
+                    .vbank()
+                    .get(curvn)
+                    .expect("collect: stale vn")
+                    .is_written()
+                {
                     self.terms.push(AdditiveEdge::new(curop, i, multop, obank));
                     continue;
                 }
@@ -585,17 +760,34 @@ impl TermOrder {
                     self.terms.push(AdditiveEdge::new(curop, i, multop, obank));
                     continue;
                 }
-                let subop = fd.vbank().get(curvn).expect("collect").get_def().expect("collect: written but no def");
+                let subop = fd
+                    .vbank()
+                    .get(curvn)
+                    .expect("collect")
+                    .get_def()
+                    .expect("collect: written but no def");
                 if obank.get(subop).expect("collect: stale op").code() != OpCode::CPUI_INT_ADD {
                     let subop_ref = obank.get(subop).expect("collect");
                     if subop_ref.code() == OpCode::CPUI_INT_MULT {
                         let subin1 = subop_ref.get_in(1).expect("collect: null in");
-                        if fd.vbank().get(subin1).expect("collect: stale vn").is_constant() {
+                        if fd
+                            .vbank()
+                            .get(subin1)
+                            .expect("collect: stale vn")
+                            .is_constant()
+                        {
                             let subin0 = subop_ref.get_in(0).expect("collect: null in");
-                            let addop = fd.vbank().get(subin0).expect("collect: stale vn").get_def();
+                            let addop =
+                                fd.vbank().get(subin0).expect("collect: stale vn").get_def();
                             if let Some(addop) = addop {
-                                if obank.get(addop).expect("collect: stale op").code() == OpCode::CPUI_INT_ADD {
-                                    let addout = obank.get(addop).expect("collect").get_out().expect("collect: no out");
+                                if obank.get(addop).expect("collect: stale op").code()
+                                    == OpCode::CPUI_INT_ADD
+                                {
+                                    let addout = obank
+                                        .get(addop)
+                                        .expect("collect")
+                                        .get_out()
+                                        .expect("collect: no out");
                                     if fd.lone_descend(addout).is_some() {
                                         opstack.push(addop);
                                         multstack.push(Some(subop));
@@ -658,7 +850,11 @@ impl TermOrder {
 
     /// The comparator predicate `op1 < op2` (C++ `TermOrder::additiveCompare`,
     /// `expression.hh:144-146`): `-1 == op1->getVarnode()->termOrder(op2->getVarnode())`.
-    pub fn additive_compare(op1: &AdditiveEdge, op2: &AdditiveEdge, fd: &crate::funcdata::Funcdata) -> bool {
+    pub fn additive_compare(
+        op1: &AdditiveEdge,
+        op2: &AdditiveEdge,
+        fd: &crate::funcdata::Funcdata,
+    ) -> bool {
         term_order(op1.get_varnode(), op2.get_varnode(), fd) == -1
     }
 }
@@ -680,7 +876,11 @@ impl TermOrder {
 pub fn term_order(this_vn: VarnodeId, op_vn: VarnodeId, fd: &crate::funcdata::Funcdata) -> int4 {
     let vbank = fd.vbank();
     let obank = fd.obank();
-    if vbank.get(this_vn).expect("termOrder: stale vn").is_constant() {
+    if vbank
+        .get(this_vn)
+        .expect("termOrder: stale vn")
+        .is_constant()
+    {
         if !vbank.get(op_vn).expect("termOrder: stale vn").is_constant() {
             return 1;
         }
@@ -696,8 +896,16 @@ pub fn term_order(this_vn: VarnodeId, op_vn: VarnodeId, fd: &crate::funcdata::Fu
         if let Some(def) = peel_int_mult_const(op, vbank, obank) {
             op = def;
         }
-        let vn_addr = vbank.get(vn).expect("termOrder: stale vn").get_addr().clone();
-        let op_addr = vbank.get(op).expect("termOrder: stale vn").get_addr().clone();
+        let vn_addr = vbank
+            .get(vn)
+            .expect("termOrder: stale vn")
+            .get_addr()
+            .clone();
+        let op_addr = vbank
+            .get(op)
+            .expect("termOrder: stale vn")
+            .get_addr()
+            .clone();
         if vn_addr < op_addr {
             return -1;
         }
@@ -710,7 +918,11 @@ pub fn term_order(this_vn: VarnodeId, op_vn: VarnodeId, fd: &crate::funcdata::Fu
 
 /// If `vn` is `INT_MULT` by a constant in slot 1, return its slot-0 input;
 /// else `None` (the `vn = vn->getDef()->getIn(0)` peel in `termOrder`).
-fn peel_int_mult_const(vn: VarnodeId, vbank: &VarnodeBank, obank: &PcodeOpBank) -> Option<VarnodeId> {
+fn peel_int_mult_const(
+    vn: VarnodeId,
+    vbank: &VarnodeBank,
+    obank: &PcodeOpBank,
+) -> Option<VarnodeId> {
     let v = vbank.get(vn).expect("peel: stale vn");
     if !v.is_written() {
         return None;
@@ -749,7 +961,11 @@ fn functional_equality_level0(vn1: VarnodeId, vn2: VarnodeId, vbank: &VarnodeBan
     }
     if v1.is_constant() {
         if v2.is_constant() {
-            return if v1.get_offset() == v2.get_offset() { 0 } else { -1 };
+            return if v1.get_offset() == v2.get_offset() {
+                0
+            } else {
+                -1
+            };
         }
         return -1;
     }
@@ -787,8 +1003,16 @@ pub fn functional_equality_level(
     {
         return -1; // Did not find at least one level of match
     }
-    let op1 = vbank.get(vn1).expect("funcEqLevel").get_def().expect("funcEqLevel: written no def");
-    let op2 = vbank.get(vn2).expect("funcEqLevel").get_def().expect("funcEqLevel: written no def");
+    let op1 = vbank
+        .get(vn1)
+        .expect("funcEqLevel")
+        .get_def()
+        .expect("funcEqLevel: written no def");
+    let op2 = vbank
+        .get(vn2)
+        .expect("funcEqLevel")
+        .get_def()
+        .expect("funcEqLevel: written no def");
     let opc = obank.get(op1).expect("funcEqLevel: stale op").code();
 
     if opc != obank.get(op2).expect("funcEqLevel: stale op").code() {
@@ -815,7 +1039,9 @@ pub fn functional_equality_level(
     if opc == OpCode::CPUI_LOAD {
         // We assume two loads produce the same result if the address is the same
         // and the loads occur in the same instruction
-        if obank.get(op1).expect("funcEqLevel").get_addr() != obank.get(op2).expect("funcEqLevel").get_addr() {
+        if obank.get(op1).expect("funcEqLevel").get_addr()
+            != obank.get(op2).expect("funcEqLevel").get_addr()
+        {
             return -1;
         }
     }
@@ -823,18 +1049,40 @@ pub fn functional_equality_level(
         if opc != OpCode::CPUI_PTRADD {
             return -1;
         }
-        let o1in2 = obank.get(op1).expect("funcEqLevel").get_in(2).expect("funcEqLevel: null in");
-        let o2in2 = obank.get(op2).expect("funcEqLevel").get_in(2).expect("funcEqLevel: null in");
-        if vbank.get(o1in2).expect("funcEqLevel: stale vn").get_offset()
-            != vbank.get(o2in2).expect("funcEqLevel: stale vn").get_offset()
+        let o1in2 = obank
+            .get(op1)
+            .expect("funcEqLevel")
+            .get_in(2)
+            .expect("funcEqLevel: null in");
+        let o2in2 = obank
+            .get(op2)
+            .expect("funcEqLevel")
+            .get_in(2)
+            .expect("funcEqLevel: null in");
+        if vbank
+            .get(o1in2)
+            .expect("funcEqLevel: stale vn")
+            .get_offset()
+            != vbank
+                .get(o2in2)
+                .expect("funcEqLevel: stale vn")
+                .get_offset()
         {
             return -1;
         }
         num = 2; // Otherwise treat as having 2 inputs
     }
     for i in 0..num {
-        res1[i as usize] = obank.get(op1).expect("funcEqLevel").get_in(i).expect("funcEqLevel: null in");
-        res2[i as usize] = obank.get(op2).expect("funcEqLevel").get_in(i).expect("funcEqLevel: null in");
+        res1[i as usize] = obank
+            .get(op1)
+            .expect("funcEqLevel")
+            .get_in(i)
+            .expect("funcEqLevel: null in");
+        res2[i as usize] = obank
+            .get(op2)
+            .expect("funcEqLevel")
+            .get_in(i)
+            .expect("funcEqLevel: null in");
     }
 
     testval = functional_equality_level0(res1[0], res2[0], vbank);
@@ -899,7 +1147,12 @@ pub fn functional_equality_level(
 /// Determine if two Varnodes hold the same value (C++ `functionalEquality`,
 /// `expression.cc:713-719`).  Only returns \b true if it can be immediately
 /// determined they are equivalent.
-pub fn functional_equality(vn1: VarnodeId, vn2: VarnodeId, vbank: &VarnodeBank, obank: &PcodeOpBank) -> bool {
+pub fn functional_equality(
+    vn1: VarnodeId,
+    vn2: VarnodeId,
+    vbank: &VarnodeBank,
+    obank: &PcodeOpBank,
+) -> bool {
     let mut buf1: [VarnodeId; 2] = [vn1, vn1];
     let mut buf2: [VarnodeId; 2] = [vn2, vn2];
     functional_equality_level(vn1, vn2, &mut buf1, &mut buf2, vbank, obank) == 0
@@ -908,7 +1161,13 @@ pub fn functional_equality(vn1: VarnodeId, vn2: VarnodeId, vbank: &VarnodeBank, 
 /// Return true if `vn1` and `vn2` are verifiably different values (C++
 /// `functionalDifference`, `expression.cc:728-753`).  This is a rather
 /// speculative test; `depth` bounds the recursion.
-pub fn functional_difference(vn1: VarnodeId, vn2: VarnodeId, depth: int4, vbank: &VarnodeBank, obank: &PcodeOpBank) -> bool {
+pub fn functional_difference(
+    vn1: VarnodeId,
+    vn2: VarnodeId,
+    depth: int4,
+    vbank: &VarnodeBank,
+    obank: &PcodeOpBank,
+) -> bool {
     if vn1 == vn2 {
         return false;
     }
@@ -930,7 +1189,9 @@ pub fn functional_difference(vn1: VarnodeId, vn2: VarnodeId, depth: int4, vbank:
     }
     let op1 = v1.get_def().expect("funcDiff: written no def");
     let op2 = v2.get_def().expect("funcDiff: written no def");
-    if obank.get(op1).expect("funcDiff: stale op").code() != obank.get(op2).expect("funcDiff: stale op").code() {
+    if obank.get(op1).expect("funcDiff: stale op").code()
+        != obank.get(op2).expect("funcDiff: stale op").code()
+    {
         return true;
     }
     let num = obank.get(op1).expect("funcDiff").num_input();
@@ -942,8 +1203,16 @@ pub fn functional_difference(vn1: VarnodeId, vn2: VarnodeId, depth: int4, vbank:
     }
     let depth = depth - 1;
     for i in 0..num {
-        let a = obank.get(op1).expect("funcDiff").get_in(i).expect("funcDiff: null in");
-        let b = obank.get(op2).expect("funcDiff").get_in(i).expect("funcDiff: null in");
+        let a = obank
+            .get(op1)
+            .expect("funcDiff")
+            .get_in(i)
+            .expect("funcDiff: null in");
+        let b = obank
+            .get(op2)
+            .expect("funcDiff")
+            .get_in(i)
+            .expect("funcDiff: null in");
         if functional_difference(a, b, depth, vbank, obank) {
             return true;
         }
@@ -959,7 +1228,12 @@ pub fn functional_difference(vn1: VarnodeId, vn2: VarnodeId, depth: int4, vbank:
 /// and COPY collecting offsets (C++ `rootPointer`, `expression.cc:761-786`).
 ///
 /// Returns the reached Varnode and passes back the accumulated `offset`.
-pub fn root_pointer(mut vn: VarnodeId, offset: &mut uintb, vbank: &VarnodeBank, obank: &PcodeOpBank) -> VarnodeId {
+pub fn root_pointer(
+    mut vn: VarnodeId,
+    offset: &mut uintb,
+    vbank: &VarnodeBank,
+    obank: &PcodeOpBank,
+) -> VarnodeId {
     *offset = 0;
     loop {
         let v = vbank.get(vn).expect("rootPointer: stale vn");
@@ -969,18 +1243,40 @@ pub fn root_pointer(mut vn: VarnodeId, offset: &mut uintb, vbank: &VarnodeBank, 
         let op = v.get_def().expect("rootPointer: written no def");
         let opc = obank.get(op).expect("rootPointer: stale op").code();
         if opc == OpCode::CPUI_PTRSUB {
-            let in1 = obank.get(op).expect("rootPointer").get_in(1).expect("rootPointer: null in");
-            *offset = offset.wrapping_add(vbank.get(in1).expect("rootPointer: stale vn").get_offset());
-            vn = obank.get(op).expect("rootPointer").get_in(0).expect("rootPointer: null in");
+            let in1 = obank
+                .get(op)
+                .expect("rootPointer")
+                .get_in(1)
+                .expect("rootPointer: null in");
+            *offset =
+                offset.wrapping_add(vbank.get(in1).expect("rootPointer: stale vn").get_offset());
+            vn = obank
+                .get(op)
+                .expect("rootPointer")
+                .get_in(0)
+                .expect("rootPointer: null in");
         } else if opc == OpCode::CPUI_INT_ADD {
-            let cvn = obank.get(op).expect("rootPointer").get_in(1).expect("rootPointer: null in");
+            let cvn = obank
+                .get(op)
+                .expect("rootPointer")
+                .get_in(1)
+                .expect("rootPointer: null in");
             if !vbank.get(cvn).expect("rootPointer: stale vn").is_constant() {
                 break;
             }
-            *offset = offset.wrapping_add(vbank.get(cvn).expect("rootPointer: stale vn").get_offset());
-            vn = obank.get(op).expect("rootPointer").get_in(0).expect("rootPointer: null in");
+            *offset =
+                offset.wrapping_add(vbank.get(cvn).expect("rootPointer: stale vn").get_offset());
+            vn = obank
+                .get(op)
+                .expect("rootPointer")
+                .get_in(0)
+                .expect("rootPointer: null in");
         } else if opc == OpCode::CPUI_COPY {
-            vn = obank.get(op).expect("rootPointer").get_in(0).expect("rootPointer: null in");
+            vn = obank
+                .get(op)
+                .expect("rootPointer")
+                .get_in(0)
+                .expect("rootPointer: null in");
         } else {
             break;
         }
@@ -990,7 +1286,12 @@ pub fn root_pointer(mut vn: VarnodeId, offset: &mut uintb, vbank: &VarnodeBank, 
 
 /// Determine if two pointer Varnodes always hold the same value (C++
 /// `pointerEquality`, `expression.cc:792-802`).
-pub fn pointer_equality(vn1: VarnodeId, vn2: VarnodeId, vbank: &VarnodeBank, obank: &PcodeOpBank) -> bool {
+pub fn pointer_equality(
+    vn1: VarnodeId,
+    vn2: VarnodeId,
+    vbank: &VarnodeBank,
+    obank: &PcodeOpBank,
+) -> bool {
     let mut off1: uintb = 0;
     let mut off2: uintb = 0;
     if vn1 == vn2 {
@@ -1029,11 +1330,7 @@ fn vn_lone_descend(vn: VarnodeId, vbank: &VarnodeBank) -> int4 {
             return 0; // more than one => loneDescend() == 0
         }
     }
-    if found && count == 1 {
-        1
-    } else {
-        0
-    }
+    if found && count == 1 { 1 } else { 0 }
 }
 
 // =============================================================================
@@ -1082,7 +1379,10 @@ impl AddExpression {
         AddExpression {
             constval: 0,
             num_terms: 0,
-            terms: [AddTerm { vn: VarnodeId::default(), coeff: 0 }; 2],
+            terms: [AddTerm {
+                vn: VarnodeId::default(),
+                coeff: 0,
+            }; 2],
         }
     }
 
@@ -1099,21 +1399,40 @@ impl AddExpression {
     /// `AddExpression::gather`, `expression.cc:334-364`).  INT_ADD either
     /// contributes to the constant sum or is recursively walked; term
     /// coefficients are collected from INT_MULT with a constant.
-    fn gather(&mut self, vn: VarnodeId, mut coeff: uintb, mut depth: int4, vbank: &VarnodeBank, obank: &PcodeOpBank) {
+    fn gather(
+        &mut self,
+        vn: VarnodeId,
+        mut coeff: uintb,
+        mut depth: int4,
+        vbank: &VarnodeBank,
+        obank: &PcodeOpBank,
+    ) {
         let v = vbank.get(vn).expect("AddExpression::gather: stale vn");
         if v.is_constant() {
-            self.constval = self.constval.wrapping_add(coeff.wrapping_mul(v.get_offset()));
+            self.constval = self
+                .constval
+                .wrapping_add(coeff.wrapping_mul(v.get_offset()));
             self.constval &= calc_mask(v.get_size());
             return;
         }
         if v.is_written() {
-            let op = v.get_def().expect("AddExpression::gather: written vn has no def");
+            let op = v
+                .get_def()
+                .expect("AddExpression::gather: written vn has no def");
             let o = obank.get(op).expect("AddExpression::gather: stale op");
             let opc = o.code();
             if opc == OpCode::CPUI_INT_ADD {
-                let in0 = o.get_in(0).expect("AddExpression::gather: null INT_ADD in0");
-                let in1 = o.get_in(1).expect("AddExpression::gather: null INT_ADD in1");
-                if !vbank.get(in1).expect("AddExpression::gather: stale vn").is_constant() {
+                let in0 = o
+                    .get_in(0)
+                    .expect("AddExpression::gather: null INT_ADD in0");
+                let in1 = o
+                    .get_in(1)
+                    .expect("AddExpression::gather: null INT_ADD in1");
+                if !vbank
+                    .get(in1)
+                    .expect("AddExpression::gather: stale vn")
+                    .is_constant()
+                {
                     depth -= 1;
                 }
                 if depth >= 0 {
@@ -1122,8 +1441,12 @@ impl AddExpression {
                     return;
                 }
             } else if opc == OpCode::CPUI_INT_MULT {
-                let in0 = o.get_in(0).expect("AddExpression::gather: null INT_MULT in0");
-                let in1 = o.get_in(1).expect("AddExpression::gather: null INT_MULT in1");
+                let in0 = o
+                    .get_in(0)
+                    .expect("AddExpression::gather: null INT_MULT in0");
+                let in1 = o
+                    .get_in(1)
+                    .expect("AddExpression::gather: null INT_MULT in1");
                 let in1v = vbank.get(in1).expect("AddExpression::gather: stale vn");
                 if in1v.is_constant() {
                     coeff = coeff.wrapping_mul(in1v.get_offset());
@@ -1139,21 +1462,48 @@ impl AddExpression {
     /// Gather up to two non-constant additive terms, given two root Varnodes
     /// being subtracted (C++ `AddExpression::gatherTwoTermsSubtract`,
     /// `expression.cc:369-375`).
-    pub fn gather_two_terms_subtract(&mut self, a: VarnodeId, b: VarnodeId, vbank: &VarnodeBank, obank: &PcodeOpBank) {
-        let a_const = vbank.get(a).expect("gatherTwoTermsSubtract: stale a").is_constant();
-        let b_const = vbank.get(b).expect("gatherTwoTermsSubtract: stale b").is_constant();
+    pub fn gather_two_terms_subtract(
+        &mut self,
+        a: VarnodeId,
+        b: VarnodeId,
+        vbank: &VarnodeBank,
+        obank: &PcodeOpBank,
+    ) {
+        let a_const = vbank
+            .get(a)
+            .expect("gatherTwoTermsSubtract: stale a")
+            .is_constant();
+        let b_const = vbank
+            .get(b)
+            .expect("gatherTwoTermsSubtract: stale b")
+            .is_constant();
         let depth: int4 = if a_const || b_const { 1 } else { 0 };
         self.gather(a, 1, depth, vbank, obank);
-        let b_size = vbank.get(b).expect("gatherTwoTermsSubtract: stale b").get_size();
+        let b_size = vbank
+            .get(b)
+            .expect("gatherTwoTermsSubtract: stale b")
+            .get_size();
         self.gather(b, calc_mask(b_size), depth, vbank, obank);
     }
 
     /// Gather up to two non-constant additive terms, given two root Varnodes
     /// being added (C++ `AddExpression::gatherTwoTermsAdd`,
     /// `expression.cc:380-386`).
-    pub fn gather_two_terms_add(&mut self, a: VarnodeId, b: VarnodeId, vbank: &VarnodeBank, obank: &PcodeOpBank) {
-        let a_const = vbank.get(a).expect("gatherTwoTermsAdd: stale a").is_constant();
-        let b_const = vbank.get(b).expect("gatherTwoTermsAdd: stale b").is_constant();
+    pub fn gather_two_terms_add(
+        &mut self,
+        a: VarnodeId,
+        b: VarnodeId,
+        vbank: &VarnodeBank,
+        obank: &PcodeOpBank,
+    ) {
+        let a_const = vbank
+            .get(a)
+            .expect("gatherTwoTermsAdd: stale a")
+            .is_constant();
+        let b_const = vbank
+            .get(b)
+            .expect("gatherTwoTermsAdd: stale b")
+            .is_constant();
         let depth: int4 = if a_const || b_const { 1 } else { 0 };
         self.gather(a, 1, depth, vbank, obank);
         self.gather(b, 1, depth, vbank, obank);
@@ -1161,13 +1511,23 @@ impl AddExpression {
 
     /// Gather up to two non-constant additive terms at the given root (C++
     /// `AddExpression::gatherTwoTermsRoot`, `expression.cc:390-394`).
-    pub fn gather_two_terms_root(&mut self, root: VarnodeId, vbank: &VarnodeBank, obank: &PcodeOpBank) {
+    pub fn gather_two_terms_root(
+        &mut self,
+        root: VarnodeId,
+        vbank: &VarnodeBank,
+        obank: &PcodeOpBank,
+    ) {
         self.gather(root, 1, 1, vbank, obank);
     }
 
     /// Determine if two expressions are equivalent (C++
     /// `AddExpression::isEquivalent`, `expression.cc:310-327`).
-    pub fn is_equivalent(&self, op2: &AddExpression, vbank: &VarnodeBank, obank: &PcodeOpBank) -> bool {
+    pub fn is_equivalent(
+        &self,
+        op2: &AddExpression,
+        vbank: &VarnodeBank,
+        obank: &PcodeOpBank,
+    ) -> bool {
         if self.constval != op2.constval {
             return false;
         }

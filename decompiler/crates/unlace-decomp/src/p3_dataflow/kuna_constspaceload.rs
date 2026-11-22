@@ -105,7 +105,9 @@ impl RuleConstSpaceLoad {
 
     /// Build the rule for `group`.
     pub fn with_group(group: &str) -> RuleConstSpaceLoad {
-        RuleConstSpaceLoad { group: group.to_string() }
+        RuleConstSpaceLoad {
+            group: group.to_string(),
+        }
     }
 }
 
@@ -118,7 +120,9 @@ impl Rule for RuleConstSpaceLoad {
         if !grouplist.contains(&self.group) {
             return None;
         }
-        Some(Box::new(RuleConstSpaceLoad { group: self.group.clone() }))
+        Some(Box::new(RuleConstSpaceLoad {
+            group: self.group.clone(),
+        }))
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
@@ -169,7 +173,8 @@ impl Rule for RuleConstSpaceLoad {
 
         // `RuleLoadVarnode`'s order: overwrite the space operand first, then drop
         // the pointer slot, so neither Varnode is ever left without a descendant.
-        data.op_set_input(op, ptr, 0).expect("RuleConstSpaceLoad: opSetInput");
+        data.op_set_input(op, ptr, 0)
+            .expect("RuleConstSpaceLoad: opSetInput");
         data.op_remove_input(op, 1);
         data.op_set_opcode(op, crate::typeop::type_op_for(OpCode::CPUI_COPY));
         1

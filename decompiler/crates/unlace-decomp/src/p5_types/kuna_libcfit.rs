@@ -42,7 +42,7 @@
 use std::rc::Rc;
 
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use unlace_base::types::int4;
 
@@ -52,8 +52,12 @@ pub(crate) fn overruns(data: &Funcdata, op: OpId, slot: int4, ct: &Datatype) -> 
     if !data.get_arch().libctypes {
         return false;
     }
-    let Some(size) = libc_pointee_size(ct) else { return false };
-    let Some(vn) = data.obank().get(op).and_then(|o| o.get_in(slot)) else { return false };
+    let Some(size) = libc_pointee_size(ct) else {
+        return false;
+    };
+    let Some(vn) = data.obank().get(op).and_then(|o| o.get_in(slot)) else {
+        return false;
+    };
     reached_outside(data, vn, size)
 }
 
@@ -63,7 +67,9 @@ pub(crate) fn refuses(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
     if !data.get_arch().libctypes {
         return false;
     }
-    let Some(size) = libc_pointee_size(ct) else { return false };
+    let Some(size) = libc_pointee_size(ct) else {
+        return false;
+    };
     reached_outside(data, vn, size)
 }
 
@@ -92,8 +98,12 @@ fn reached_outside(data: &Funcdata, vn: VarnodeId, size: i64) -> bool {
     let Some((accesses, places, _)) = crate::kuna_protoorder::accesses_through(data, &[vn]) else {
         return false;
     };
-    places.iter().any(|&(at, stride)| !fits(at, stride, 1, size))
-        || accesses.iter().any(|a| !fits(a.at, a.stride, a.size as i64, size))
+    places
+        .iter()
+        .any(|&(at, stride)| !fits(at, stride, 1, size))
+        || accesses
+            .iter()
+            .any(|a| !fits(a.at, a.stride, a.size as i64, size))
 }
 
 /// Can `width` bytes at `at` (plus any multiple of `stride`) lie inside an

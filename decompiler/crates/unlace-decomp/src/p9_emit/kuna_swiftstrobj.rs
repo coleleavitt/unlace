@@ -57,7 +57,10 @@ fn tagged_by_every_use(data: &Funcdata, vn: VarnodeId) -> bool {
     if data.vbank().get(vn).map(|v| v.get_size()) != Some(8) {
         return false;
     }
-    let first = data.lone_descend(vn).and_then(|op| data.obank().get(op)).map(|o| o.code());
+    let first = data
+        .lone_descend(vn)
+        .and_then(|op| data.obank().get(op))
+        .map(|o| o.code());
     if !matches!(
         first,
         Some(OpCode::CPUI_COPY | OpCode::CPUI_MULTIEQUAL | OpCode::CPUI_INDIRECT)
@@ -68,9 +71,13 @@ fn tagged_by_every_use(data: &Funcdata, vn: VarnodeId) -> bool {
     let mut work: VecDeque<(VarnodeId, usize)> = VecDeque::from([(vn, 0)]);
     let mut tagged = false;
     while let Some((cur, hops)) = work.pop_front() {
-        let Some(v) = data.vbank().get(cur) else { return false };
+        let Some(v) = data.vbank().get(cur) else {
+            return false;
+        };
         for op in v.descend_iter() {
-            let Some(o) = data.obank().get(op) else { return false };
+            let Some(o) = data.obank().get(op) else {
+                return false;
+            };
             let slot = o.get_slot(cur);
             match o.code() {
                 OpCode::CPUI_INT_OR => {
@@ -104,7 +111,9 @@ fn tagged_by_every_use(data: &Funcdata, vn: VarnodeId) -> bool {
 
 /// Do the read-only bytes [`NATIVE_BIAS`] past `addr` open a large literal?
 fn opens_large_literal(data: &Funcdata, addr: &Address) -> bool {
-    let Some(space) = addr.get_space() else { return false };
+    let Some(space) = addr.get_space() else {
+        return false;
+    };
     if space.get_word_size() != 1 {
         return false;
     }
@@ -113,7 +122,8 @@ fn opens_large_literal(data: &Funcdata, addr: &Address) -> bool {
         space.wrap_offset(addr.get_offset().wrapping_add(NATIVE_BIAS)),
     );
     let arch = data.get_arch();
-    if arch.query_global_properties(&lit, 1, &Address::new_invalid()) & varnode_flags::readonly == 0 {
+    if arch.query_global_properties(&lit, 1, &Address::new_invalid()) & varnode_flags::readonly == 0
+    {
         return false;
     }
     let mut head = [0u8; MIN_LARGE_LITERAL];

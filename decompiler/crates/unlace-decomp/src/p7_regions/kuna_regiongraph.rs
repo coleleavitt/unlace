@@ -45,7 +45,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::kuna_fasthash::{FxHashMap, FxHashSet};
 
 use unlace_base::error::{KunaError, KunaResult};
-use unlace_base::types::{int4, uint4, uintb, Wrap};
+use unlace_base::types::{Wrap, int4, uint4, uintb};
 
 use crate::context::BlockId;
 
@@ -249,7 +249,11 @@ impl KunaNodePool {
     /// The ordered key for `id` (mirrors `KunaNodeOrder` on the node).
     pub fn key(&self, id: KunaNodeId) -> KunaNodeKey {
         let n = self.get(id);
-        KunaNodeKey { addr: n.addr, ident: n.ident, id }
+        KunaNodeKey {
+            addr: n.addr,
+            ident: n.ident,
+            id,
+        }
     }
 }
 
@@ -290,7 +294,10 @@ pub struct KunaRegionGraph {
 impl KunaRegionGraph {
     /// An empty graph.
     pub fn new() -> KunaRegionGraph {
-        KunaRegionGraph { nodes: BTreeMap::new(), keyof: BTreeMap::new() }
+        KunaRegionGraph {
+            nodes: BTreeMap::new(),
+            keyof: BTreeMap::new(),
+        }
     }
 
     /// Is the node in the graph? (C++ `containsNode`).
@@ -410,22 +417,26 @@ impl KunaRegionGraph {
 
     /// In-neighbors in insertion order (C++ `getPreds`).
     pub fn get_preds(&self, n: KunaNodeId) -> KunaResult<&[KunaNodeId]> {
-        let key = self
-            .key_of(n)
-            .ok_or_else(|| KunaError::lowlevel("kuna regiongraph: getPreds of node not in graph"))?;
+        let key = self.key_of(n).ok_or_else(|| {
+            KunaError::lowlevel("kuna regiongraph: getPreds of node not in graph")
+        })?;
         Ok(&self.nodes[&key].preds)
     }
 
     /// Out-neighbors in insertion order (C++ `getSuccs`).
     pub fn get_succs(&self, n: KunaNodeId) -> KunaResult<&[KunaNodeId]> {
-        let key = self
-            .key_of(n)
-            .ok_or_else(|| KunaError::lowlevel("kuna regiongraph: getSuccs of node not in graph"))?;
+        let key = self.key_of(n).ok_or_else(|| {
+            KunaError::lowlevel("kuna regiongraph: getSuccs of node not in graph")
+        })?;
         Ok(&self.nodes[&key].succs)
     }
 
     /// Out-neighbors in `KunaNodeOrder` (C++ `getSortedSuccs`).
-    pub fn get_sorted_succs(&self, pool: &KunaNodePool, n: KunaNodeId) -> KunaResult<Vec<KunaNodeId>> {
+    pub fn get_sorted_succs(
+        &self,
+        pool: &KunaNodePool,
+        n: KunaNodeId,
+    ) -> KunaResult<Vec<KunaNodeId>> {
         let mut res = self.get_succs(n)?.to_vec();
         res.sort_by(|&a, &b| pool.key(a).cmp(&pool.key(b)));
         Ok(res)
@@ -445,7 +456,11 @@ impl KunaRegionGraph {
     }
 
     /// Snapshot in-edges (C++ `inEdges`).
-    pub fn in_edges(&self, n: KunaNodeId, res: &mut Vec<(KunaNodeId, KunaNodeId)>) -> KunaResult<()> {
+    pub fn in_edges(
+        &self,
+        n: KunaNodeId,
+        res: &mut Vec<(KunaNodeId, KunaNodeId)>,
+    ) -> KunaResult<()> {
         for &p in self.get_preds(n)? {
             res.push((p, n));
         }
@@ -453,7 +468,11 @@ impl KunaRegionGraph {
     }
 
     /// Snapshot out-edges (C++ `outEdges`).
-    pub fn out_edges(&self, n: KunaNodeId, res: &mut Vec<(KunaNodeId, KunaNodeId)>) -> KunaResult<()> {
+    pub fn out_edges(
+        &self,
+        n: KunaNodeId,
+        res: &mut Vec<(KunaNodeId, KunaNodeId)>,
+    ) -> KunaResult<()> {
         for &s in self.get_succs(n)? {
             res.push((n, s));
         }
@@ -574,7 +593,11 @@ pub fn kuna_dfs_back_edges(
         cursor: int4,
     }
     let mut stack: Vec<Frame> = Vec::new();
-    stack.push(Frame { node: start, children: g.get_sorted_succs(pool, start)?, cursor: 0 });
+    stack.push(Frame {
+        node: start,
+        children: g.get_sorted_succs(pool, start)?,
+        cursor: 0,
+    });
     while !stack.is_empty() {
         // C++ takes `frame = stack.back()` by reference, then may push (which
         // invalidates it); we re-borrow per branch to mirror that safely.
@@ -594,7 +617,11 @@ pub fn kuna_dfs_back_edges(
             } else if !finished.contains(&child) {
                 // NOTE: push invalidates the C++ `frame`; nothing below uses it.
                 let children = g.get_sorted_succs(pool, child)?;
-                stack.push(Frame { node: child, children, cursor: 0 });
+                stack.push(Frame {
+                    node: child,
+                    children,
+                    cursor: 0,
+                });
             }
         } else {
             finished.insert(node);
@@ -644,7 +671,11 @@ pub fn kuna_dfs_postorder_deterministic(
 
 /// BFS shortest path length between two nodes; -1 if unreachable
 /// (C++ `kunaShortestPathLength`).
-fn kuna_shortest_path_length(g: &KunaRegionGraph, a: KunaNodeId, b: KunaNodeId) -> KunaResult<int4> {
+fn kuna_shortest_path_length(
+    g: &KunaRegionGraph,
+    a: KunaNodeId,
+    b: KunaNodeId,
+) -> KunaResult<int4> {
     if a == b {
         return Ok(0);
     }
@@ -693,7 +724,11 @@ fn kuna_edge_sum_cmp(
     let carryb = sumb < b0;
     // If the carries differ, carryb decides the order (true => a < b).
     if carrya != carryb {
-        return if carryb { std::cmp::Ordering::Less } else { std::cmp::Ordering::Greater };
+        return if carryb {
+            std::cmp::Ordering::Less
+        } else {
+            std::cmp::Ordering::Greater
+        };
     }
     suma.cmp(&sumb)
 }
@@ -747,7 +782,10 @@ pub fn kuna_quasi_topo_sort(
                 continue;
             }
             let mut stack: Vec<TFrame> = Vec::new();
-            stack.push(TFrame { node: root, child: 0 });
+            stack.push(TFrame {
+                node: root,
+                child: 0,
+            });
             tarjan_index[root as usize] = counter;
             tarjan_low[root as usize] = counter;
             counter += 1;
@@ -831,13 +869,14 @@ pub fn kuna_quasi_topo_sort(
         let mut j = i as int4 - 1;
         while j >= 0 {
             let other = big_sccs[j as usize];
-            let greater: bool = if scc_members[other as usize].len() != scc_members[key as usize].len() {
-                scc_members[other as usize].len() > scc_members[key as usize].len()
-            } else if scc_min_addr[other as usize] != scc_min_addr[key as usize] {
-                scc_min_addr[other as usize] > scc_min_addr[key as usize]
-            } else {
-                scc_min_ident[other as usize] > scc_min_ident[key as usize]
-            };
+            let greater: bool =
+                if scc_members[other as usize].len() != scc_members[key as usize].len() {
+                    scc_members[other as usize].len() > scc_members[key as usize].len()
+                } else if scc_min_addr[other as usize] != scc_min_addr[key as usize] {
+                    scc_min_addr[other as usize] > scc_min_addr[key as usize]
+                } else {
+                    scc_min_ident[other as usize] > scc_min_ident[key as usize]
+                };
             if !greater {
                 break;
             }
@@ -951,7 +990,9 @@ pub fn kuna_quasi_topo_sort(
     } else if heads.len() == 1 {
         head = heads[0];
     } else {
-        return Err(KunaError::lowlevel("kuna regiongraph: collapsed graph has no head"));
+        return Err(KunaError::lowlevel(
+            "kuna regiongraph: collapsed graph has no head",
+        ));
     }
 
     // Deterministic DFS postorder over the collapsed integer graph.
@@ -1110,13 +1151,21 @@ fn kuna_append_scc(
 
 /// The checks shared by [`kuna_subgraph_between_nodes`] and
 /// [`kuna_slice_visits`]: `source` and every frontier node are in `g`.
-fn check_slice_ends(g: &KunaRegionGraph, source: KunaNodeId, frontier: &KunaNodeSet) -> KunaResult<()> {
+fn check_slice_ends(
+    g: &KunaRegionGraph,
+    source: KunaNodeId,
+    frontier: &KunaNodeSet,
+) -> KunaResult<()> {
     if !g.contains_node(source) {
-        return Err(KunaError::lowlevel("kuna regiongraph: slice source not in graph"));
+        return Err(KunaError::lowlevel(
+            "kuna regiongraph: slice source not in graph",
+        ));
     }
     for fk in frontier.iter() {
         if !g.contains_node(fk.id) {
-            return Err(KunaError::lowlevel("kuna regiongraph: slice frontier node not in graph"));
+            return Err(KunaError::lowlevel(
+                "kuna regiongraph: slice frontier node not in graph",
+            ));
         }
     }
     Ok(())
@@ -1503,7 +1552,7 @@ impl KunaIncrementalDominators {
                         None => {
                             return Err(KunaError::lowlevel(
                                 "kuna regiongraph: broken dom chain in initDfs",
-                            ))
+                            ));
                         }
                     }
                 }
@@ -1582,10 +1631,9 @@ impl KunaIncrementalDominators {
         self.update_inverted_domtree(pool);
 
         // Climb out of the replaced set to find the new node's dominator.
-        let mut new_dom = *self
-            .doms
-            .get(&replaced_head)
-            .ok_or_else(|| KunaError::lowlevel("kuna regiongraph: replaced head has no dominator"))?;
+        let mut new_dom = *self.doms.get(&replaced_head).ok_or_else(|| {
+            KunaError::lowlevel("kuna regiongraph: replaced head has no dominator")
+        })?;
         while replaced_nodes.contains(&pool.key(new_dom)) && new_dom != self.start {
             new_dom = *self.doms.get(&new_dom).ok_or_else(|| {
                 KunaError::lowlevel("kuna regiongraph: broken dom chain in graphUpdated")
@@ -1629,7 +1677,10 @@ impl KunaIncrementalDominators {
         }
 
         // Keep the inverted dom tree up to date.
-        self.inverted_dom_tree.entry(new_dom).or_default().push(new_node);
+        self.inverted_dom_tree
+            .entry(new_dom)
+            .or_default()
+            .push(new_node);
         self.inverted_dom_tree.insert(new_node, new_node_doms);
         for ri in replaced_nodes.iter() {
             let rn = ri.id;
@@ -1667,7 +1718,7 @@ impl KunaIncrementalDominators {
                 _ => {
                     return Err(KunaError::lowlevel(
                         "kuna regiongraph: incremental dominators diverged",
-                    ))
+                    ));
                 }
             }
         }
@@ -1684,7 +1735,7 @@ impl KunaIncrementalDominators {
                     _ => {
                         return Err(KunaError::lowlevel(
                             "kuna regiongraph: incremental frontiers diverged",
-                        ))
+                        ));
                     }
                 }
             }
@@ -1705,7 +1756,10 @@ mod tests {
 
     impl Builder {
         fn new() -> Builder {
-            Builder { pool: KunaNodePool::new(), next_ident: 0 }
+            Builder {
+                pool: KunaNodePool::new(),
+                next_ident: 0,
+            }
         }
 
         /// Allocate a synthetic block node at `addr` (ident auto-increments,
@@ -1716,7 +1770,11 @@ mod tests {
             self.pool.make(NodeKind::Block, addr, id)
         }
 
-        fn graph(&self, edges: &[(KunaNodeId, KunaNodeId)], extra: &[KunaNodeId]) -> KunaRegionGraph {
+        fn graph(
+            &self,
+            edges: &[(KunaNodeId, KunaNodeId)],
+            extra: &[KunaNodeId],
+        ) -> KunaRegionGraph {
             let mut g = KunaRegionGraph::new();
             for &n in extra {
                 g.add_node(&self.pool, n);
@@ -1768,7 +1826,9 @@ mod tests {
         for &node in &reachable {
             let mut node_dominators = BTreeSet::new();
             for &candidate in &reachable {
-                if candidate == node || !reachable_without(graph, start, Some(candidate)).contains(&node) {
+                if candidate == node
+                    || !reachable_without(graph, start, Some(candidate)).contains(&node)
+                {
                     node_dominators.insert(candidate);
                 }
             }
@@ -2000,7 +2060,15 @@ mod tests {
             (unreachable_b, unreachable_a),
             (unreachable_a, exit),
         ];
-        let nodes = [start, loop_head, loop_body, irreducible_a, irreducible_b, irreducible_join, exit];
+        let nodes = [
+            start,
+            loop_head,
+            loop_body,
+            irreducible_a,
+            irreducible_b,
+            irreducible_join,
+            exit,
+        ];
         let graph = b.graph(&edges, &nodes);
         let mut reversed_edges = edges.to_vec();
         reversed_edges.reverse();
@@ -2020,7 +2088,10 @@ mod tests {
         let mut permuted = BTreeMap::new();
         permuted.insert(unrelated, unrelated);
         kuna_immediate_dominators(&b.pool, &permuted_graph, start, &mut permuted).unwrap();
-        assert_eq!(permuted, actual, "edge insertion order must not change dominators");
+        assert_eq!(
+            permuted, actual,
+            "edge insertion order must not change dominators"
+        );
     }
 
     #[test]
@@ -2128,7 +2199,10 @@ mod tests {
                     continue;
                 }
                 res.add_edge(pool, node, succ);
-                if !traversed.contains(&succ) && !frontier.contains(&pool.key(succ)) && can_reach.contains(&succ) {
+                if !traversed.contains(&succ)
+                    && !frontier.contains(&pool.key(succ))
+                    && can_reach.contains(&succ)
+                {
                     queue.push(succ);
                 }
             }
@@ -2137,7 +2211,9 @@ mod tests {
             let dangling: Vec<KunaNodeId> = res
                 .iter_adj()
                 .filter(|(k, adj)| {
-                    k.id != source && !frontier.contains(k) && (adj.succs.is_empty() || adj.preds.is_empty())
+                    k.id != source
+                        && !frontier.contains(k)
+                        && (adj.succs.is_empty() || adj.preds.is_empty())
                 })
                 .map(|(k, _)| k.id)
                 .collect();
@@ -2160,13 +2236,17 @@ mod tests {
     fn a_slice_matches_the_slice_of_a_copy_and_holds_every_node_its_walk_visits() {
         let mut random = 0x9c1d_44e2_0b7f_35a1u64;
         let mut next = |n: u64| {
-            random = random.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            random = random
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             (random >> 33) % n
         };
         let mut visited_any = 0;
         for sample in 0..300 {
             let mut b = Builder::new();
-            let nodes: Vec<_> = (0..3 + sample % 9).map(|n| b.node(0x10 * (n % 5))).collect();
+            let nodes: Vec<_> = (0..3 + sample % 9)
+                .map(|n| b.node(0x10 * (n % 5)))
+                .collect();
             let mut edges = Vec::new();
             for &from in &nodes {
                 for &to in &nodes {
@@ -2181,12 +2261,14 @@ mod tests {
                 let frontier = b.set(&picked);
                 for include in [true, false] {
                     let mut res = KunaRegionGraph::new();
-                    kuna_subgraph_between_nodes(&b.pool, &g, source, &frontier, include, &mut res).unwrap();
+                    kuna_subgraph_between_nodes(&b.pool, &g, source, &frontier, include, &mut res)
+                        .unwrap();
                     let copy = slice_on_a_copy(&b.pool, &g, source, &frontier, include);
                     assert_eq!(format!("{res:?}"), format!("{copy:?}"), "graph {sample}");
                 }
                 let mut res = KunaRegionGraph::new();
-                kuna_subgraph_between_nodes(&b.pool, &g, source, &frontier, true, &mut res).unwrap();
+                kuna_subgraph_between_nodes(&b.pool, &g, source, &frontier, true, &mut res)
+                    .unwrap();
                 let mut visited = Vec::new();
                 let hit = kuna_slice_visits(&g, &b.pool, source, &frontier, |n| {
                     visited.push(n);
@@ -2194,11 +2276,15 @@ mod tests {
                 });
                 assert!(!hit.unwrap());
                 for n in visited.iter().filter(|&&n| n != source) {
-                    assert!(res.contains_node(*n), "graph {sample}: visited {n:?} is not in the slice");
+                    assert!(
+                        res.contains_node(*n),
+                        "graph {sample}: visited {n:?} is not in the slice"
+                    );
                     visited_any += 1;
                 }
                 let target = visited.last().copied();
-                let stops = kuna_slice_visits(&g, &b.pool, source, &frontier, |n| Some(n) == target);
+                let stops =
+                    kuna_slice_visits(&g, &b.pool, source, &frontier, |n| Some(n) == target);
                 assert_eq!(stops.unwrap(), target.is_some());
             }
         }
@@ -2214,12 +2300,30 @@ mod tests {
         let g = b.graph(&[(a, c)], &[]);
         let empty = KunaNodeSet::new();
         // source not in graph.
-        assert!(kuna_subgraph_between_nodes(&b.pool, &g, orphan, &empty, true, &mut KunaRegionGraph::new())
-            .is_err());
+        assert!(
+            kuna_subgraph_between_nodes(
+                &b.pool,
+                &g,
+                orphan,
+                &empty,
+                true,
+                &mut KunaRegionGraph::new()
+            )
+            .is_err()
+        );
         // frontier node not in graph.
         let bad_front = b.set(&[orphan]);
-        assert!(kuna_subgraph_between_nodes(&b.pool, &g, a, &bad_front, true, &mut KunaRegionGraph::new())
-            .is_err());
+        assert!(
+            kuna_subgraph_between_nodes(
+                &b.pool,
+                &g,
+                a,
+                &bad_front,
+                true,
+                &mut KunaRegionGraph::new()
+            )
+            .is_err()
+        );
         assert!(kuna_slice_visits(&g, &b.pool, orphan, &empty, |_| true).is_err());
         assert!(kuna_slice_visits(&g, &b.pool, a, &bad_front, |_| true).is_err());
     }

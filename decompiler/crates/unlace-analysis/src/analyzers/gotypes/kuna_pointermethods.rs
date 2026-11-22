@@ -7,8 +7,8 @@ use object::{Object, ObjectSection, ObjectSymbol};
 use crate::pclntab::MethodEntries;
 
 use super::{
-    read_go_name, read_type, word, GoImage, GoType, TypeMeta, KIND_FUNC, KIND_INT, KIND_INT64,
-    KIND_POINTER, KIND_STRUCT, KIND_UINT, KIND_UINT64, TFLAG_NAMED,
+    GoImage, GoType, KIND_FUNC, KIND_INT, KIND_INT64, KIND_POINTER, KIND_STRUCT, KIND_UINT,
+    KIND_UINT64, TFLAG_NAMED, TypeMeta, read_go_name, read_type, word,
 };
 
 const UNCOMMON: u8 = 1;

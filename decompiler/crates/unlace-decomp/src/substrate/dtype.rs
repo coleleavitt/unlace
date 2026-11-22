@@ -364,9 +364,7 @@ pub fn string2metatype(metastring: &str) -> KunaResult<type_metatype> {
         Some(b'v') => (metastring == "void").then_some(TYPE_VOID),
         _ => None,
     };
-    res.ok_or_else(|| {
-        KunaError::lowlevel(format!("Unknown metatype: {metastring}"))
-    })
+    res.ok_or_else(|| KunaError::lowlevel(format!("Unknown metatype: {metastring}")))
 }
 
 /// Given a description of a data-type \e class, return the [`type_class`]
@@ -391,17 +389,13 @@ pub fn string2typeclass(classstring: &str) -> KunaResult<type_class> {
         Some(b'g') => (classstring == "general").then_some(TYPECLASS_GENERAL),
         Some(b'h') => (classstring == "hiddenret").then_some(TYPECLASS_HIDDENRET),
         Some(b'f') => (classstring == "float").then_some(TYPECLASS_FLOAT),
-        Some(b'p') => {
-            (classstring == "ptr" || classstring == "pointer").then_some(TYPECLASS_PTR)
-        }
+        Some(b'p') => (classstring == "ptr" || classstring == "pointer").then_some(TYPECLASS_PTR),
         Some(b'v') => (classstring == "vector").then_some(TYPECLASS_VECTOR),
         // C++: 'u' "unknown" maps to the general purpose class.
         Some(b'u') => (classstring == "unknown").then_some(TYPECLASS_GENERAL),
         _ => None,
     };
-    res.ok_or_else(|| {
-        KunaError::lowlevel(format!("Unknown data-type class: {classstring}"))
-    })
+    res.ok_or_else(|| KunaError::lowlevel(format!("Unknown data-type class: {classstring}")))
 }
 
 /// Convert a data-type metatype to a data-type class (C++ `metatype2typeclass`,
@@ -488,7 +482,12 @@ pub struct TypeField {
 impl TypeField {
     /// Construct from components (C++ `TypeField(int4,int4,const string&,Datatype*)`).
     pub fn new(ident: int4, offset: int4, name: impl Into<String>, ct: Rc<Datatype>) -> TypeField {
-        TypeField { ident, offset, name: name.into(), field_type: ct }
+        TypeField {
+            ident,
+            offset,
+            name: name.into(),
+            field_type: ct,
+        }
     }
 
     /// Compare field end-point to a given offset (C++ `TypeField::compareMaxByte`,
@@ -596,13 +595,25 @@ impl TypeBitField {
     /// order, each a signed `int4` tie-break.
     fn bits_compare(&self, op2: &TypeBitField) -> int4 {
         if self.byte_offset != op2.byte_offset {
-            return if self.byte_offset < op2.byte_offset { -1 } else { 1 };
+            return if self.byte_offset < op2.byte_offset {
+                -1
+            } else {
+                1
+            };
         }
         if self.byte_size != op2.byte_size {
-            return if self.byte_size < op2.byte_size { -1 } else { 1 };
+            return if self.byte_size < op2.byte_size {
+                -1
+            } else {
+                1
+            };
         }
         if self.least_sig_bit != op2.least_sig_bit {
-            return if self.least_sig_bit < op2.least_sig_bit { -1 } else { 1 };
+            return if self.least_sig_bit < op2.least_sig_bit {
+                -1
+            } else {
+                1
+            };
         }
         if self.num_bits != op2.num_bits {
             return if self.num_bits < op2.num_bits { -1 } else { 1 };
@@ -699,7 +710,10 @@ impl BitFieldTriple {
     /// TypeBitField*,int4)`, type.hh:352-353).  The `immedContainer` argument is
     /// dropped — see the type doc.
     pub fn new(bits: TypeBitField, off: int4) -> BitFieldTriple {
-        BitFieldTriple { bitfield: bits, offset: off }
+        BitFieldTriple {
+            bitfield: bits,
+            offset: off,
+        }
     }
 
     /// Comparator putting bitfields in byte order, least to most significant
@@ -1280,7 +1294,12 @@ impl Datatype {
     pub fn get_ptr_into(&self) -> KunaResult<Option<(Rc<Datatype>, int4)>> {
         match &self.kind {
             DatatypeKind::Pointer { ptrto, .. } => Ok(Some((Self::completed_record(ptrto), 0))),
-            DatatypeKind::PointerRel { ptrto, parent, offset, .. } => {
+            DatatypeKind::PointerRel {
+                ptrto,
+                parent,
+                offset,
+                ..
+            } => {
                 // C++ TypePointerRel::getPtrInto (type.cc:3060-3070): a relative
                 // pointer into a STRUCT/UNION points directly at the composite
                 // (off = 0); otherwise it points `offset` into the parent.
@@ -1326,7 +1345,11 @@ impl Datatype {
     /// for non-partial-struct kinds.
     pub fn get_component_for_ptr(&self) -> Option<Rc<Datatype>> {
         match &self.kind {
-            DatatypeKind::PartialStruct { container, stripped, offset } => {
+            DatatypeKind::PartialStruct {
+                container,
+                stripped,
+                offset,
+            } => {
                 if container.get_metatype() == type_metatype::TYPE_ARRAY {
                     if let Some(eltype) = container.get_array_base() {
                         if eltype.get_metatype() != type_metatype::TYPE_UNKNOWN
@@ -1379,9 +1402,10 @@ impl Datatype {
     /// which the bare `Datatype::get_sub_type` cannot reach (it has no `glb`).
     pub fn spacebase_parts(&self) -> Option<(Option<Rc<AddrSpace>>, Address)> {
         match &self.kind {
-            DatatypeKind::Spacebase { spaceid, localframe } => {
-                Some((spaceid.clone(), localframe.clone()))
-            }
+            DatatypeKind::Spacebase {
+                spaceid,
+                localframe,
+            } => Some((spaceid.clone(), localframe.clone())),
             _ => None,
         }
     }
@@ -1441,7 +1465,9 @@ impl Datatype {
     /// `None` for non-relative-pointers.
     pub fn get_address_offset(&self) -> Option<int4> {
         match &self.kind {
-            DatatypeKind::PointerRel { offset, wordsize, .. } => {
+            DatatypeKind::PointerRel {
+                offset, wordsize, ..
+            } => {
                 // cast: getAddressOffset returns int4; byteToAddressInt(int4,..) fits int4.
                 Some(AddrSpace::byte_to_address_int(*offset as i64, *wordsize) as int4)
             }
@@ -1479,7 +1505,13 @@ impl Datatype {
     /// container (vs. the basic ptrto form)?  `None` for non-relative-pointers.
     pub fn evaluate_thru_parent(&self, addr_off: u64) -> Option<bool> {
         match &self.kind {
-            DatatypeKind::PointerRel { ptrto, wordsize, parent, offset, .. } => {
+            DatatypeKind::PointerRel {
+                ptrto,
+                wordsize,
+                parent,
+                offset,
+                ..
+            } => {
                 let ptrto = Self::completed_record(ptrto);
                 let parent = Self::completed_record(parent);
                 let byte_off = AddrSpace::address_to_byte(addr_off, *wordsize);
@@ -1488,8 +1520,7 @@ impl Datatype {
                 {
                     return Some(false);
                 }
-                let byte_off = byte_off
-                    .wrapping_add(*offset as u64)
+                let byte_off = byte_off.wrapping_add(*offset as u64)
                     & unlace_base::address::calc_mask(self.get_size());
                 Some(byte_off < parent.get_size() as u64)
             }
@@ -1551,7 +1582,12 @@ impl Datatype {
                 Ok(self.compare_base(op))
             }
             // TypePointer::compare (type.cc:1074-1093).
-            DatatypeKind::Pointer { ptrto, spaceid, wordsize, .. } => {
+            DatatypeKind::Pointer {
+                ptrto,
+                spaceid,
+                wordsize,
+                ..
+            } => {
                 // Both must be pointers (the matching submeta guarantees op is a
                 // TypePointer, not a TypePointerRel: their submetas are disjoint).
                 self.compare_pointer_body(op, level, ptrto, spaceid.as_ref(), *wordsize)
@@ -1588,20 +1624,25 @@ impl Datatype {
             // TypeSpacebase::compare (type.cc:3498-3502): delegates to compareDependency.
             DatatypeKind::Spacebase { .. } => self.compare_dependency(op),
             // TypePartialStruct::compare (type.cc:2829-2843).
-            DatatypeKind::PartialStruct { container, offset, .. } => {
-                self.compare_partial(op, level, container, *offset)
-            }
+            DatatypeKind::PartialStruct {
+                container, offset, ..
+            } => self.compare_partial(op, level, container, *offset),
             // TypePartialUnion::compare (type.cc:2902-2916).
-            DatatypeKind::PartialUnion { container, offset, .. } => {
-                self.compare_partial(op, level, container, *offset)
-            }
+            DatatypeKind::PartialUnion {
+                container, offset, ..
+            } => self.compare_partial(op, level, container, *offset),
             // TypePartialEnum::compare (type.cc:2715-2729).
             DatatypeKind::PartialEnum { parent, offset, .. } => {
                 self.compare_partial(op, level, parent, *offset)
             }
             // TypePointerRel::compare (type.cc:3072-3090): compare as plain
             // pointers first, then the formal-vs-ephemeral tie-break on `stripped`.
-            DatatypeKind::PointerRel { ptrto, wordsize, stripped, .. } => {
+            DatatypeKind::PointerRel {
+                ptrto,
+                wordsize,
+                stripped,
+                ..
+            } => {
                 let res = self.compare_pointer_body(op, level, ptrto, None, *wordsize)?;
                 if res != 0 {
                     return Ok(res);
@@ -1714,11 +1755,13 @@ impl Datatype {
                 return Ok(if f1.name < f2.name { -1 } else { 1 });
             }
             if f1.field_type.get_metatype() != f2.field_type.get_metatype() {
-                return Ok(if f1.field_type.get_metatype() < f2.field_type.get_metatype() {
-                    -1
-                } else {
-                    1
-                });
+                return Ok(
+                    if f1.field_type.get_metatype() < f2.field_type.get_metatype() {
+                        -1
+                    } else {
+                        1
+                    },
+                );
             }
         }
         level -= 1;
@@ -1839,9 +1882,12 @@ impl Datatype {
     /// `compareDependency` overrides where the C++ casts `&op` to `TypePointer *`.
     fn as_plain_pointer(&self) -> Option<PlainPointerView<'_>> {
         match &self.kind {
-            DatatypeKind::Pointer { ptrto, spaceid, wordsize, .. } => {
-                Some((ptrto, spaceid.as_ref(), *wordsize))
-            }
+            DatatypeKind::Pointer {
+                ptrto,
+                spaceid,
+                wordsize,
+                ..
+            } => Some((ptrto, spaceid.as_ref(), *wordsize)),
             _ => None,
         }
     }
@@ -1855,10 +1901,15 @@ impl Datatype {
     /// always `None` for the `PointerRel` arm.  `None` for non-pointers.
     fn as_any_pointer(&self) -> Option<PlainPointerView<'_>> {
         match &self.kind {
-            DatatypeKind::Pointer { ptrto, spaceid, wordsize, .. } => {
-                Some((ptrto, spaceid.as_ref(), *wordsize))
-            }
-            DatatypeKind::PointerRel { ptrto, wordsize, .. } => Some((ptrto, None, *wordsize)),
+            DatatypeKind::Pointer {
+                ptrto,
+                spaceid,
+                wordsize,
+                ..
+            } => Some((ptrto, spaceid.as_ref(), *wordsize)),
+            DatatypeKind::PointerRel {
+                ptrto, wordsize, ..
+            } => Some((ptrto, None, *wordsize)),
             _ => None,
         }
     }
@@ -1869,11 +1920,21 @@ impl Datatype {
     #[allow(clippy::type_complexity)]
     fn as_pointer_rel(
         &self,
-    ) -> Option<(&Rc<Datatype>, uint4, Option<&Rc<Datatype>>, &Rc<Datatype>, int4)> {
+    ) -> Option<(
+        &Rc<Datatype>,
+        uint4,
+        Option<&Rc<Datatype>>,
+        &Rc<Datatype>,
+        int4,
+    )> {
         match &self.kind {
-            DatatypeKind::PointerRel { ptrto, wordsize, stripped, parent, offset } => {
-                Some((ptrto, *wordsize, stripped.as_ref(), parent, *offset))
-            }
+            DatatypeKind::PointerRel {
+                ptrto,
+                wordsize,
+                stripped,
+                parent,
+                offset,
+            } => Some((ptrto, *wordsize, stripped.as_ref(), parent, *offset)),
             _ => None,
         }
     }
@@ -1947,8 +2008,12 @@ impl Datatype {
     /// if not a partial kind.
     fn as_partial_whole(&self) -> Option<(&Rc<Datatype>, int4)> {
         match &self.kind {
-            DatatypeKind::PartialStruct { container, offset, .. } => Some((container, *offset)),
-            DatatypeKind::PartialUnion { container, offset, .. } => Some((container, *offset)),
+            DatatypeKind::PartialStruct {
+                container, offset, ..
+            } => Some((container, *offset)),
+            DatatypeKind::PartialUnion {
+                container, offset, ..
+            } => Some((container, *offset)),
             DatatypeKind::PartialEnum { parent, offset, .. } => Some((parent, *offset)),
             _ => None,
         }
@@ -1968,9 +2033,10 @@ impl Datatype {
     /// casts `&op` to `TypeSpacebase *`.  `None` if not a spacebase.
     fn as_spacebase(&self) -> Option<(Option<&Rc<AddrSpace>>, &Address)> {
         match &self.kind {
-            DatatypeKind::Spacebase { spaceid, localframe } => {
-                Some((spaceid.as_ref(), localframe))
-            }
+            DatatypeKind::Spacebase {
+                spaceid,
+                localframe,
+            } => Some((spaceid.as_ref(), localframe)),
             _ => None,
         }
     }
@@ -2113,11 +2179,22 @@ impl Datatype {
             };
             let indirect = a.is_indirect_storage().cmp(&b.is_indirect_storage());
             if indirect != std::cmp::Ordering::Equal {
-                return Ok(if indirect == std::cmp::Ordering::Less { -1 } else { 1 });
+                return Ok(if indirect == std::cmp::Ordering::Less {
+                    -1
+                } else {
+                    1
+                });
             }
-            let storage = a.get_address().cmp(&b.get_address()).then(a.get_size().cmp(&b.get_size()));
+            let storage = a
+                .get_address()
+                .cmp(&b.get_address())
+                .then(a.get_size().cmp(&b.get_size()));
             if storage != std::cmp::Ordering::Equal {
-                return Ok(if storage == std::cmp::Ordering::Less { -1 } else { 1 });
+                return Ok(if storage == std::cmp::Ordering::Less {
+                    -1
+                } else {
+                    1
+                });
             }
         }
         Ok(0)
@@ -2131,20 +2208,21 @@ impl Datatype {
     /// pointer identity in C++; address spaces are unique singletons, so two
     /// spaces are "the same" iff they share an `Rc` allocation, and otherwise
     /// they are ordered by `getIndex()` (which is itself unique per space).
-    fn compare_pointer_space(
-        a: Option<&Rc<AddrSpace>>,
-        b: Option<&Rc<AddrSpace>>,
-    ) -> Option<int4> {
+    fn compare_pointer_space(a: Option<&Rc<AddrSpace>>, b: Option<&Rc<AddrSpace>>) -> Option<int4> {
         match (a, b) {
             (None, None) => None,
-            (None, Some(_)) => Some(1),  // self has no space -> comes later
+            (None, Some(_)) => Some(1), // self has no space -> comes later
             (Some(_), None) => Some(-1), // other has no space -> self earlier
             (Some(sa), Some(sb)) => {
                 if Rc::ptr_eq(sa, sb) {
                     None // same space
                 } else {
                     // getIndex() is unique per space, so it never ties here.
-                    Some(if sa.get_index() < sb.get_index() { -1 } else { 1 })
+                    Some(if sa.get_index() < sb.get_index() {
+                        -1
+                    } else {
+                        1
+                    })
                 }
             }
         }
@@ -2168,7 +2246,8 @@ impl Datatype {
         }
         // cast: `as_ptr` addresses ordered like the C++ raw pointers.
         let identity = |ct: &Rc<Datatype>| {
-            ct.record_completion.as_ref()
+            ct.record_completion
+                .as_ref()
                 .map_or(Rc::as_ptr(ct) as usize, |link| Rc::as_ptr(link) as usize)
         };
         let pa = identity(a);
@@ -2177,10 +2256,17 @@ impl Datatype {
             return 0;
         }
         let linked = a.record_completion.is_some();
-        let order = a.id.cmp(&b.id)
-            .then(linked.cmp(&b.record_completion.is_some()))
-            .then_with(|| if linked { std::cmp::Ordering::Equal } else { Self::compare_dependency_shape(a, b) })
-            .then(pa.cmp(&pb));
+        let order =
+            a.id.cmp(&b.id)
+                .then(linked.cmp(&b.record_completion.is_some()))
+                .then_with(|| {
+                    if linked {
+                        std::cmp::Ordering::Equal
+                    } else {
+                        Self::compare_dependency_shape(a, b)
+                    }
+                })
+                .then(pa.cmp(&pb));
         match order {
             std::cmp::Ordering::Less => -1,
             _ => 1,
@@ -2203,7 +2289,8 @@ impl Datatype {
         }
         DEPTH.set(depth + 1);
         let _restore = Restore(depth);
-        a.compare_dependency(b).map_or(std::cmp::Ordering::Equal, |c| c.cmp(&0))
+        a.compare_dependency(b)
+            .map_or(std::cmp::Ordering::Equal, |c| c.cmp(&0))
     }
 
     /// Internal-invariant error for a `TypePointer` override reached with a
@@ -2265,9 +2352,18 @@ impl Datatype {
             // compare(), this compares submeta then ptrto-identity/wordsize/
             // spaceid, and finishes with (op.size - size) — it does NOT call the
             // base body's size comparison up front.
-            DatatypeKind::Pointer { ptrto, spaceid, wordsize, .. } => {
+            DatatypeKind::Pointer {
+                ptrto,
+                spaceid,
+                wordsize,
+                ..
+            } => {
                 if self.submeta != op.get_sub_meta() {
-                    return Ok(if self.submeta < op.get_sub_meta() { -1 } else { 1 });
+                    return Ok(if self.submeta < op.get_sub_meta() {
+                        -1
+                    } else {
+                        1
+                    });
                 }
                 // Both must be pointers.
                 let (op_ptrto, op_spaceid, op_wordsize) = op
@@ -2289,7 +2385,11 @@ impl Datatype {
             // TypeArray::compareDependency (type.cc:1377-1384).
             DatatypeKind::Array { arrayof, .. } => {
                 if self.submeta != op.get_sub_meta() {
-                    return Ok(if self.submeta < op.get_sub_meta() { -1 } else { 1 });
+                    return Ok(if self.submeta < op.get_sub_meta() {
+                        -1
+                    } else {
+                        1
+                    });
                 }
                 // Both must be arrays.
                 let op_arrayof = op
@@ -2312,17 +2412,18 @@ impl Datatype {
             // TypeCode::compareDependency (type.cc:3324-3350).
             DatatypeKind::Code { proto } => self.compare_dependency_code(op, proto.as_ref()),
             // TypeSpacebase::compareDependency (type.cc:3504-3514).
-            DatatypeKind::Spacebase { spaceid, localframe } => {
-                self.compare_dependency_spacebase(op, spaceid.as_ref(), localframe)
-            }
+            DatatypeKind::Spacebase {
+                spaceid,
+                localframe,
+            } => self.compare_dependency_spacebase(op, spaceid.as_ref(), localframe),
             // TypePartialStruct/Union/Enum::compareDependency — identical shape
             // (type.cc:2845-2853, 2918-2926, 2731-2739).
-            DatatypeKind::PartialStruct { container, offset, .. } => {
-                self.compare_dependency_partial(op, container, *offset)
-            }
-            DatatypeKind::PartialUnion { container, offset, .. } => {
-                self.compare_dependency_partial(op, container, *offset)
-            }
+            DatatypeKind::PartialStruct {
+                container, offset, ..
+            } => self.compare_dependency_partial(op, container, *offset),
+            DatatypeKind::PartialUnion {
+                container, offset, ..
+            } => self.compare_dependency_partial(op, container, *offset),
             DatatypeKind::PartialEnum { parent, offset, .. } => {
                 self.compare_dependency_partial(op, parent, *offset)
             }
@@ -2330,9 +2431,19 @@ impl Datatype {
             // then ptrto-identity, offset, parent-identity, wordsize, then
             // (op.size - size).  ptrto/parent are compared by object identity
             // exactly as in C++ (raw-pointer `<`), via Rc::as_ptr.
-            DatatypeKind::PointerRel { ptrto, wordsize, parent, offset, .. } => {
+            DatatypeKind::PointerRel {
+                ptrto,
+                wordsize,
+                parent,
+                offset,
+                ..
+            } => {
                 if self.submeta != op.get_sub_meta() {
-                    return Ok(if self.submeta < op.get_sub_meta() { -1 } else { 1 });
+                    return Ok(if self.submeta < op.get_sub_meta() {
+                        -1
+                    } else {
+                        1
+                    });
                 }
                 let (op_ptrto, op_wordsize, _, op_parent, op_offset) = op
                     .as_pointer_rel()
@@ -2432,7 +2543,11 @@ impl Datatype {
             .as_enum_namemap()
             .ok_or_else(|| Datatype::enum_invariant_err("compareDependency"))?;
         if namemap.len() != op_namemap.len() {
-            return Ok(if namemap.len() < op_namemap.len() { -1 } else { 1 });
+            return Ok(if namemap.len() < op_namemap.len() {
+                -1
+            } else {
+                1
+            });
         }
         // BTreeMap iteration is in key order, matching std::map.
         for ((v1, n1), (v2, n2)) in namemap.iter().zip(op_namemap.iter()) {
@@ -2469,8 +2584,7 @@ impl Datatype {
         }
         // compareBasic == 2 implies both protos are present.
         let proto = proto.ok_or_else(|| Datatype::code_invariant_err("compareDependency"))?;
-        let op_proto =
-            op_proto.ok_or_else(|| Datatype::code_invariant_err("compareDependency"))?;
+        let op_proto = op_proto.ok_or_else(|| Datatype::code_invariant_err("compareDependency"))?;
         let nump = proto.num_params();
         for i in 0..nump {
             let param = proto
@@ -2539,7 +2653,11 @@ impl Datatype {
         offset: int4,
     ) -> KunaResult<int4> {
         if self.submeta != op.get_sub_meta() {
-            return Ok(if self.submeta < op.get_sub_meta() { -1 } else { 1 });
+            return Ok(if self.submeta < op.get_sub_meta() {
+                -1
+            } else {
+                1
+            });
         }
         let (op_whole, op_offset) = op
             .as_partial_whole()
@@ -2783,11 +2901,7 @@ impl Datatype {
     /// of `align`.
     pub fn calc_align_size(sz: int4, align: int4) -> int4 {
         let mod_ = sz % align;
-        if mod_ != 0 {
-            sz + (align - mod_)
-        } else {
-            sz
-        }
+        if mod_ != 0 { sz + (align - mod_) } else { sz }
     }
 
     // -- Structured-walk virtuals (type.hh:251-300) — W6 --------------------
@@ -2851,7 +2965,9 @@ impl Datatype {
             // TypePartialStruct::getSubType (type.cc:2802-2816): descend into the
             // container, going down further while the component spills past this
             // partial's range.
-            DatatypeKind::PartialStruct { container, offset, .. } => {
+            DatatypeKind::PartialStruct {
+                container, offset, ..
+            } => {
                 let size_left: int8 = self.size as int8 - off;
                 let mut off = off + *offset as int8;
                 let mut ct = Rc::clone(container);
@@ -2922,7 +3038,9 @@ impl Datatype {
                 Ok(self.size - off) // Distance to end of structure
             }
             // TypePartialStruct::getHoleSize (type.cc:2818-2827).
-            DatatypeKind::PartialStruct { container, offset, .. } => {
+            DatatypeKind::PartialStruct {
+                container, offset, ..
+            } => {
                 let size_left = self.size - off;
                 let off = off + *offset;
                 let mut res = container.get_hole_size(off)?;
@@ -2979,8 +3097,9 @@ impl Datatype {
                     if diff + remain > max {
                         break;
                     }
-                    let (distance, _suboff, sub_el) =
-                        subfield.field_type.nearest_arrayed_component_forward(remain, max)?;
+                    let (distance, _suboff, sub_el) = subfield
+                        .field_type
+                        .nearest_arrayed_component_forward(remain, max)?;
                     if distance >= 0 {
                         let distance = diff + remain + distance;
                         if distance > max {
@@ -3097,18 +3216,32 @@ impl Datatype {
     pub fn is_ptrsub_matching(&self, off: int8, extra: int8, multiplier: int8) -> KunaResult<bool> {
         match &self.kind {
             // TypePointer::isPtrsubMatching (type.cc:1260-1312).
-            DatatypeKind::Pointer { ptrto, wordsize, .. } => {
-                Datatype::is_ptrsub_matching_pointer(
-                    &Self::completed_record(ptrto), *wordsize, off, extra, multiplier,
-                )
-            }
+            DatatypeKind::Pointer {
+                ptrto, wordsize, ..
+            } => Datatype::is_ptrsub_matching_pointer(
+                &Self::completed_record(ptrto),
+                *wordsize,
+                off,
+                extra,
+                multiplier,
+            ),
             // TypePointerRel::isPtrsubMatching (type.cc:3138-3147): if a stripped
             // (formal) form exists, defer to the inherited TypePointer body;
             // otherwise the relative-pointer bound check against the parent.
-            DatatypeKind::PointerRel { ptrto, wordsize, stripped, parent, offset } => {
+            DatatypeKind::PointerRel {
+                ptrto,
+                wordsize,
+                stripped,
+                parent,
+                offset,
+            } => {
                 if stripped.is_some() {
                     return Datatype::is_ptrsub_matching_pointer(
-                        &Self::completed_record(ptrto), *wordsize, off, extra, multiplier,
+                        &Self::completed_record(ptrto),
+                        *wordsize,
+                        off,
+                        extra,
+                        multiplier,
                     );
                 }
                 let i_off = AddrSpace::address_to_byte_int(off, *wordsize);
@@ -3401,9 +3534,7 @@ impl Datatype {
             }
             // TypePartialUnion::findCompatibleResolve (type.cc:2988-2992):
             // delegate to the container union.
-            DatatypeKind::PartialUnion { container, .. } => {
-                container.find_compatible_resolve(ct)
-            }
+            DatatypeKind::PartialUnion { container, .. } => container.find_compatible_resolve(ct),
             _ => Ok(-1), // base default (type.cc:600-604)
         }
     }
@@ -3538,7 +3669,9 @@ impl Datatype {
     /// delegates to the parent.
     pub fn get_matches(&self, val: u64) -> KunaResult<EnumRepresentation> {
         match &self.kind {
-            DatatypeKind::Enum { namemap } => Ok(Datatype::enum_get_matches(namemap, self.size, val, 0)),
+            DatatypeKind::Enum { namemap } => {
+                Ok(Datatype::enum_get_matches(namemap, self.size, val, 0))
+            }
             DatatypeKind::PartialEnum { parent, offset, .. } => {
                 // C++ `val <<= 8*offset; rep.shiftAmount = offset * 8;`
                 let shifted = val.wrapping_shl(8u32.wrapping_mul(*offset as u32));
@@ -3547,7 +3680,12 @@ impl Datatype {
                 let namemap = parent
                     .as_enum_namemap()
                     .ok_or_else(|| Datatype::enum_invariant_err("getMatches"))?;
-                Ok(Datatype::enum_get_matches(namemap, parent.size, shifted, shift_amount))
+                Ok(Datatype::enum_get_matches(
+                    namemap,
+                    parent.size,
+                    shifted,
+                    shift_amount,
+                ))
             }
             _ => Err(Datatype::enum_invariant_err("getMatches")),
         }
@@ -3562,7 +3700,11 @@ impl Datatype {
         mut val: u64,
         shift_amount: int4,
     ) -> EnumRepresentation {
-        let mut rep = EnumRepresentation { match_name: Vec::new(), complement: false, shift_amount };
+        let mut rep = EnumRepresentation {
+            match_name: Vec::new(),
+            complement: false,
+            shift_amount,
+        };
         for count in 0..2 {
             let mut allmatch = true;
             if val == 0 {
@@ -3581,7 +3723,10 @@ impl Datatype {
                     // -> first key strictly greater than target; the BTreeMap
                     // range `(target, ∞)` next() is the same iterator.
                     let next_greater = namemap
-                        .range((std::ops::Bound::Excluded(target), std::ops::Bound::Unbounded))
+                        .range((
+                            std::ops::Bound::Excluded(target),
+                            std::ops::Bound::Unbounded,
+                        ))
                         .next();
                     // C++ `if (iter == namemap.begin()) break;` — there is no
                     // entry <= target.  upper_bound being begin() means even the
@@ -3708,7 +3853,10 @@ impl Datatype {
             }
         }
         self.align_size = Datatype::calc_align_size(self.size, self.alignment);
-        self.kind = DatatypeKind::Struct { field: fd, bitfield: bit };
+        self.kind = DatatypeKind::Struct {
+            field: fd,
+            bitfield: bit,
+        };
     }
 
     /// Copy a list of fields into a union, establishing size/alignment (C++
@@ -3985,7 +4133,9 @@ pub trait TypeFactory {
     /// characters but extend, compare and convert by their own sign. The
     /// default body errs; the concrete `TypeFactoryImpl` overrides it.
     fn get_type_char_signed(&self, _name: &str, _m: type_metatype) -> KunaResult<Rc<Datatype>> {
-        Err(KunaError::lowlevel("signed character types are not supported by this factory"))
+        Err(KunaError::lowlevel(
+            "signed character types are not supported by this factory",
+        ))
     }
     /// Get an "anonymous" function data-type (C++ `getTypeCode(void)`).
     fn get_type_code(&self) -> KunaResult<Rc<Datatype>>;
@@ -4081,11 +4231,7 @@ pub trait TypeFactory {
     /// to `getBase(1,TYPE_UNKNOWN)` when the offset is non-positive or escapes
     /// the container.  A default body, written in terms of `get_sub_type` (on
     /// `Datatype`) and `get_base` (on the factory), so every factory shares it.
-    fn get_ptr_to_from_parent(
-        &self,
-        base: Rc<Datatype>,
-        off: int4,
-    ) -> KunaResult<Rc<Datatype>> {
+    fn get_ptr_to_from_parent(&self, base: Rc<Datatype>, off: int4) -> KunaResult<Rc<Datatype>> {
         if off > 0 {
             let mut curoff: int8 = off as int8;
             let mut base = base;
@@ -4172,7 +4318,9 @@ pub trait TypeFactory {
         _s: int4,
         _m: type_metatype,
     ) -> KunaResult<Rc<Datatype>> {
-        Err(KunaError::lowlevel("TypeFactory::getTypeEnum(sized) not supported by this factory"))
+        Err(KunaError::lowlevel(
+            "TypeFactory::getTypeEnum(sized) not supported by this factory",
+        ))
     }
     /// Create a "spacebase" type (C++ `getTypeSpacebase`).
     fn get_type_spacebase(&self, id: Rc<AddrSpace>, addr: &Address) -> KunaResult<Rc<Datatype>>;
@@ -4211,13 +4359,17 @@ pub trait TypeFactory {
     }
     /// Rename an interned data-type (C++ `setName`).
     fn set_name(&self, _ct: &Rc<Datatype>, _n: &str) -> KunaResult<Rc<Datatype>> {
-        Err(KunaError::lowlevel("TypeFactory::setName not supported by this factory"))
+        Err(KunaError::lowlevel(
+            "TypeFactory::setName not supported by this factory",
+        ))
     }
     /// Force the integer display format of an interned data-type (C++
     /// `TypeFactory::setDisplayFormat` → `Datatype::setDisplayFormat`,
     /// type.cc:201).  Returns the re-interned type carrying the new format.
     fn set_display_format(&self, _ct: &Rc<Datatype>, _format: uint4) -> KunaResult<Rc<Datatype>> {
-        Err(KunaError::lowlevel("TypeFactory::setDisplayFormat not supported by this factory"))
+        Err(KunaError::lowlevel(
+            "TypeFactory::setDisplayFormat not supported by this factory",
+        ))
     }
     /// Assign fields to an incomplete struct (C++ `assignRawFields(TypeStruct*)`).
     fn assign_raw_fields_struct(
@@ -4226,7 +4378,9 @@ pub trait TypeFactory {
         _fd: Vec<TypeField>,
         _bit: Vec<TypeBitField>,
     ) -> KunaResult<Rc<Datatype>> {
-        Err(KunaError::lowlevel("TypeFactory::assignRawFields not supported by this factory"))
+        Err(KunaError::lowlevel(
+            "TypeFactory::assignRawFields not supported by this factory",
+        ))
     }
     /// Assign fields to an incomplete union (C++ `assignRawFields(TypeUnion*)`).
     fn assign_raw_fields_union(
@@ -4234,7 +4388,9 @@ pub trait TypeFactory {
         _ct: &Rc<Datatype>,
         _fd: Vec<TypeField>,
     ) -> KunaResult<Rc<Datatype>> {
-        Err(KunaError::lowlevel("TypeFactory::assignRawFields not supported by this factory"))
+        Err(KunaError::lowlevel(
+            "TypeFactory::assignRawFields not supported by this factory",
+        ))
     }
     /// (kuna `dwarfstructs`) Install fields on an incomplete struct with the
     /// layout supplied VERBATIM: each field's own offset, the total size and the
@@ -4257,7 +4413,9 @@ pub trait TypeFactory {
         _align: int4,
         _extra_flags: uint4,
     ) -> KunaResult<Rc<Datatype>> {
-        Err(KunaError::lowlevel("TypeFactory::setFields(raw struct) not supported by this factory"))
+        Err(KunaError::lowlevel(
+            "TypeFactory::setFields(raw struct) not supported by this factory",
+        ))
     }
     /// (kuna `dwarfstructs`) The union arm of [`Self::set_fields_struct_raw`]:
     /// every field sits at offset 0, so only the total size and alignment are
@@ -4269,7 +4427,9 @@ pub trait TypeFactory {
         _size: int4,
         _align: int4,
     ) -> KunaResult<Rc<Datatype>> {
-        Err(KunaError::lowlevel("TypeFactory::setFields(raw union) not supported by this factory"))
+        Err(KunaError::lowlevel(
+            "TypeFactory::setFields(raw union) not supported by this factory",
+        ))
     }
     /// Install enum value/name map on an interned enum (C++ `setEnumValues`).
     fn set_enum_values(
@@ -4277,7 +4437,9 @@ pub trait TypeFactory {
         _ct: &Rc<Datatype>,
         _nmap: std::collections::BTreeMap<u64, String>,
     ) -> KunaResult<Rc<Datatype>> {
-        Err(KunaError::lowlevel("TypeFactory::setEnumValues not supported by this factory"))
+        Err(KunaError::lowlevel(
+            "TypeFactory::setEnumValues not supported by this factory",
+        ))
     }
     /// Create (or find) a typedef of a data-type (C++ `getTypedef`).
     fn get_typedef(
@@ -4287,11 +4449,15 @@ pub trait TypeFactory {
         _id: uint8,
         _format: uint4,
     ) -> KunaResult<Rc<Datatype>> {
-        Err(KunaError::lowlevel("TypeFactory::getTypedef not supported by this factory"))
+        Err(KunaError::lowlevel(
+            "TypeFactory::getTypedef not supported by this factory",
+        ))
     }
     /// Remove a data-type from the container (C++ `destroyType`).
     fn destroy_type(&self, _ct: &Rc<Datatype>) -> KunaResult<()> {
-        Err(KunaError::lowlevel("TypeFactory::destroyType not supported by this factory"))
+        Err(KunaError::lowlevel(
+            "TypeFactory::destroyType not supported by this factory",
+        ))
     }
 
     /// (kuna `dwarfvariants`) Record the recovered geometry of a DWARF
@@ -4327,7 +4493,9 @@ pub trait TypeFactory {
         _name: &str,
         _facet: crate::kuna_langfacet::LangFacet,
     ) -> KunaResult<()> {
-        Err(KunaError::lowlevel("kuna_register_lang_facet unsupported".to_string()))
+        Err(KunaError::lowlevel(
+            "kuna_register_lang_facet unsupported".to_string(),
+        ))
     }
 
     /// (kuna multilang W3) The language facet recorded for the named type.
@@ -4555,8 +4723,7 @@ impl Datatype {
             if self.is_variable_length() {
                 // For a variable-length base: the size-independent id plus the
                 // size of this instance.
-                encoder
-                    .write_unsigned_integer(&ATTRIB_ID, Datatype::hash_size(self.id, self.size));
+                encoder.write_unsigned_integer(&ATTRIB_ID, Datatype::hash_size(self.id, self.size));
                 encoder.write_signed_integer(&ATTRIB_SIZE, self.size as i64);
             } else {
                 encoder.write_unsigned_integer(&ATTRIB_ID, self.id);
@@ -4572,14 +4739,17 @@ impl Datatype {
     /// (C++ `Datatype::encode` + every subclass override, type.cc).  Composite
     /// data-types descend one level, describing components by reference.
     pub fn encode(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> KunaResult<()> {
+        use unlace_base::marshal::ATTRIB_OFFSET;
         use unlace_base::marshal::{
             ATTRIB_CONTENT, ATTRIB_NAME, ATTRIB_SPACE, ATTRIB_VALUE, ATTRIB_WORDSIZE, ELEM_OFF,
             ELEM_VAL, ELEM_VOID,
         };
-        use unlace_base::marshal::ATTRIB_OFFSET;
         if let Some(base) = &self.qualified_base {
             encoder.open_element(&crate::kuna_typequal::ELEM_QUALIFIED);
-            encoder.write_unsigned_integer(&unlace_base::marshal::ATTRIB_VALUE, self.qualifiers as u64);
+            encoder.write_unsigned_integer(
+                &unlace_base::marshal::ATTRIB_VALUE,
+                self.qualifiers as u64,
+            );
             base.encode_ref(encoder)?;
             encoder.close_element(&crate::kuna_typequal::ELEM_QUALIFIED);
             return Ok(());
@@ -4636,7 +4806,12 @@ impl Datatype {
                 encoder.close_element(elem_type);
             }
             // TypePointer::encode (type.cc:1130).
-            DatatypeKind::Pointer { ptrto, spaceid, wordsize, .. } => {
+            DatatypeKind::Pointer {
+                ptrto,
+                spaceid,
+                wordsize,
+                ..
+            } => {
                 encoder.open_element(elem_type);
                 self.encode_basic(self.metatype, -1, encoder)?;
                 if *wordsize != 1 {
@@ -4697,7 +4872,10 @@ impl Datatype {
                 encoder.close_element(elem_type);
             }
             // TypeSpacebase::encode (type.cc:3552).
-            DatatypeKind::Spacebase { spaceid, localframe } => {
+            DatatypeKind::Spacebase {
+                spaceid,
+                localframe,
+            } => {
                 encoder.open_element(elem_type);
                 self.encode_basic(self.metatype, -1, encoder)?;
                 if let Some(spc) = spaceid {
@@ -4714,7 +4892,9 @@ impl Datatype {
                 encoder.close_element(elem_type);
             }
             // TypePartialUnion::encode (type.cc:2948).
-            DatatypeKind::PartialUnion { container, offset, .. } => {
+            DatatypeKind::PartialUnion {
+                container, offset, ..
+            } => {
                 encoder.open_element(elem_type);
                 self.encode_basic(self.metatype, -1, encoder)?;
                 encoder.write_signed_integer(&ATTRIB_OFFSET, *offset as i64);
@@ -4732,7 +4912,13 @@ impl Datatype {
             // TypePointerRel::encode (type.cc:3125): metatype re-spelled as
             // ptrrel, the pointed-to type in FULL form, the parent by ref, and
             // the byte offset as an <off> child.
-            DatatypeKind::PointerRel { ptrto, wordsize, parent, offset, .. } => {
+            DatatypeKind::PointerRel {
+                ptrto,
+                wordsize,
+                parent,
+                offset,
+                ..
+            } => {
                 encoder.open_element(elem_type);
                 self.encode_basic(type_metatype::TYPE_PTRREL, -1, encoder)?;
                 if *wordsize != 1 {
@@ -4778,8 +4964,10 @@ impl TypeBitField {
         encoder.write_string(&ATTRIB_NAME, self.name.as_bytes());
         encoder.write_signed_integer(&ATTRIB_OFFSET, self.byte_offset as i64);
         encoder.write_signed_integer(&ATTRIB_SIZE, self.num_bits as i64);
-        encoder
-            .write_signed_integer(&unlace_base::address::ATTRIB_FIRST, self.least_sig_bit as i64);
+        encoder.write_signed_integer(
+            &unlace_base::address::ATTRIB_FIRST,
+            self.least_sig_bit as i64,
+        );
         self.field_type.encode_ref(encoder)?;
         encoder.close_element(elem_bitfield);
         Ok(())
@@ -4794,12 +4982,7 @@ impl TypeBitField {
 pub trait RemoteTypeFetch {
     /// getDataType(name, id): ingest the packed `<type>` response into
     /// `decoder`.  `Ok(false)` = the host does not know the type.
-    fn fetch_data_type(
-        &self,
-        name: &str,
-        id: u64,
-        decoder: &mut dyn Decoder,
-    ) -> KunaResult<bool>;
+    fn fetch_data_type(&self, name: &str, id: u64, decoder: &mut dyn Decoder) -> KunaResult<bool>;
 }
 
 /// The union of every wire type element's attributes, gathered by one scan
@@ -5172,8 +5355,11 @@ impl TypeFactoryImpl {
             self.size_of_int.set(s);
         }
         if self.size_of_long.get() == 0 {
-            self.size_of_long
-                .set(if self.size_of_int.get() == 4 { 8 } else { self.size_of_int.get() });
+            self.size_of_long.set(if self.size_of_int.get() == 4 {
+                8
+            } else {
+                self.size_of_int.get()
+            });
         }
         if self.size_of_char.get() == 0 {
             self.size_of_char.set(1);
@@ -5271,7 +5457,9 @@ impl TypeFactoryImpl {
         let m = self.align_map.borrow();
         if size as usize >= m.len() {
             if m.is_empty() {
-                return Err(KunaError::lowlevel("TypeFactory alignment map not initialized"));
+                return Err(KunaError::lowlevel(
+                    "TypeFactory alignment map not initialized",
+                ));
             }
             return Ok(m[m.len() - 1]);
         }
@@ -5307,13 +5495,20 @@ impl TypeFactoryImpl {
         } else {
             names.partition_point(|dt| dt.name.as_str() < n)
         };
-        names.get(at).filter(|dt| dt.name == n && (id == 0 || dt.id == id)).map(Rc::clone)
+        names
+            .get(at)
+            .filter(|dt| dt.name == n && (id == 0 || dt.id == id))
+            .map(Rc::clone)
     }
 
     /// Search by name and/or id, applying the variable-length size hash (C++
     /// `TypeFactory::findById`, type.cc:3832-3839).
     fn find_by_id(&self, n: &str, id: uint8, sz: int4) -> Option<Rc<Datatype>> {
-        let id = if sz > 0 { Datatype::hash_size(id, sz) } else { id };
+        let id = if sz > 0 {
+            Datatype::hash_size(id, sz)
+        } else {
+            id
+        };
         self.find_by_id_local(n, id)
     }
 
@@ -5322,7 +5517,10 @@ impl TypeFactoryImpl {
     /// is the tree element that compares `compareDependency`-equal to `ct`.
     fn find_no_name(&self, ct: &Rc<Datatype>) -> Option<Rc<Datatype>> {
         let store = self.store.borrow();
-        store.tree.get(&TreeKey(Rc::clone(ct))).map(|k| Rc::clone(&k.0))
+        store
+            .tree
+            .get(&TreeKey(Rc::clone(ct)))
+            .map(|k| Rc::clone(&k.0))
     }
 
     /// Insert a fully-built data-type pointer into the cross-reference sets (C++
@@ -5343,9 +5541,7 @@ impl TypeFactoryImpl {
             // Keep nametree ordered by (name,id) (C++ DatatypeNameCompare).
             let pos = store
                 .nametree
-                .binary_search_by(|dt| {
-                    dt.name.cmp(&newtype.name).then(dt.id.cmp(&newtype.id))
-                })
+                .binary_search_by(|dt| dt.name.cmp(&newtype.name).then(dt.id.cmp(&newtype.id)))
                 .unwrap_or_else(|e| e);
             store.nametree.insert(pos, newtype);
         }
@@ -5488,7 +5684,9 @@ impl TypeFactoryImpl {
                 ty = element;
             }
             if ty.is_incomplete() {
-                return Err(KunaError::lowlevel("Record field has incomplete by-value type"));
+                return Err(KunaError::lowlevel(
+                    "Record field has incomplete by-value type",
+                ));
             }
         }
         // TypeStruct::assignFieldOffsets(fd,bit,newSize,newAlign,flags).
@@ -5510,7 +5708,9 @@ impl TypeFactoryImpl {
                 ty = element;
             }
             if ty.is_incomplete() {
-                return Err(KunaError::lowlevel("Record field has incomplete by-value type"));
+                return Err(KunaError::lowlevel(
+                    "Record field has incomplete by-value type",
+                ));
             }
         }
         // TypeUnion::assignFieldOffsets(fd,newSize,newAlign,ct).
@@ -5530,7 +5730,9 @@ impl TypeFactoryImpl {
         extra_flags: uint4,
     ) -> KunaResult<Rc<Datatype>> {
         if !ct.is_incomplete() {
-            return Err(KunaError::lowlevel("Can only set fields on an incomplete structure"));
+            return Err(KunaError::lowlevel(
+                "Can only set fields on an incomplete structure",
+            ));
         }
         let mut newct = (**ct).clone();
         newct.set_struct_fields(fd, bit, new_size, new_align);
@@ -5556,7 +5758,9 @@ impl TypeFactoryImpl {
         extra_flags: uint4,
     ) -> KunaResult<Rc<Datatype>> {
         if !ct.is_incomplete() {
-            return Err(KunaError::lowlevel("Can only set fields on an incomplete union"));
+            return Err(KunaError::lowlevel(
+                "Can only set fields on an incomplete union",
+            ));
         }
         let mut newct = (**ct).clone();
         newct.set_union_fields(fd, new_size, new_align);
@@ -5611,7 +5815,11 @@ impl TypeFactoryImpl {
         id: uint8,
         format: uint4,
     ) -> KunaResult<Rc<Datatype>> {
-        let id = if id == 0 { Datatype::hash_name(name) } else { id };
+        let id = if id == 0 {
+            Datatype::hash_name(name)
+        } else {
+            id
+        };
         if let Some(res) = self.find_by_id_local(name, id) {
             // C++ `if (ct != res->getTypedef())` throws.
             let same = matches!(res.get_typedef(), Some(t) if Rc::ptr_eq(t, ct));
@@ -5648,11 +5856,19 @@ impl TypeFactoryImpl {
         if completed.is_incomplete() {
             return Ok(());
         }
-        let aliases: Vec<_> = self.store.borrow().nametree.iter().filter(|alias| {
-            alias.is_incomplete() && alias.get_typedef().is_some_and(|base| {
-                Rc::ptr_eq(&Datatype::completed_record(base), completed)
+        let aliases: Vec<_> = self
+            .store
+            .borrow()
+            .nametree
+            .iter()
+            .filter(|alias| {
+                alias.is_incomplete()
+                    && alias.get_typedef().is_some_and(|base| {
+                        Rc::ptr_eq(&Datatype::completed_record(base), completed)
+                    })
             })
-        }).cloned().collect();
+            .cloned()
+            .collect();
         for alias in aliases {
             let mut ready = (**completed).clone();
             ready.name = alias.name.clone();
@@ -5810,7 +6026,10 @@ impl TypeFactoryImpl {
             // Common step for VOID/UNKNOWN/BOOL/CODE/FLOAT (and the INT/UINT
             // fallthrough that did not `continue` above).
             if handled_char
-                || matches!(meta, TYPE_VOID | TYPE_UNKNOWN | TYPE_BOOL | TYPE_CODE | TYPE_FLOAT)
+                || matches!(
+                    meta,
+                    TYPE_VOID | TYPE_UNKNOWN | TYPE_BOOL | TYPE_CODE | TYPE_FLOAT
+                )
             {
                 let row = ct.get_size() as usize;
                 let col = (ct.get_metatype().as_i32() - float_idx) as usize;
@@ -5866,9 +6085,7 @@ impl TypeFactoryImpl {
             }
             let ct = self
                 .find_by_id_or_remote(&newname, newid, size)?
-                .ok_or_else(|| {
-                    KunaError::lowlevel(format!("Unable to resolve type: {newname}"))
-                })?;
+                .ok_or_else(|| KunaError::lowlevel(format!("Unable to resolve type: {newname}")))?;
             decoder.close_element(elem_id)?;
             return Ok(ct);
         }
@@ -5939,7 +6156,8 @@ impl TypeFactoryImpl {
             return Ok(ct);
         }
         if elem_id == crate::kuna_typequal::ELEM_QUALIFIED.get_id() {
-            let qualifiers = decoder.read_unsigned_integer_id(&unlace_base::marshal::ATTRIB_VALUE)?;
+            let qualifiers =
+                decoder.read_unsigned_integer_id(&unlace_base::marshal::ATTRIB_VALUE)?;
             if qualifiers == 0 || qualifiers & !7 != 0 {
                 return Err(KunaError::decoder("Invalid C type qualifiers"));
             }
@@ -5953,9 +6171,9 @@ impl TypeFactoryImpl {
             return Ok(ct);
         }
         let b = Self::decode_wire_type_attribs(decoder, forcecore)?;
-        let meta = b.metatype.ok_or_else(|| {
-            KunaError::decoder("type element missing metatype attribute")
-        })?;
+        let meta = b
+            .metatype
+            .ok_or_else(|| KunaError::decoder("type element missing metatype attribute"))?;
         let ct = match meta {
             TYPE_PTR => {
                 let ptrto = self.decode_type(decoder)?;
@@ -5966,9 +6184,8 @@ impl TypeFactoryImpl {
                 let ptrto = self.decode_type(decoder)?;
                 let parent = self.decode_type(decoder)?;
                 let off_el = decoder.open_element_id(&unlace_base::marshal::ELEM_OFF)?;
-                let off = decoder
-                    .read_signed_integer_id(&unlace_base::marshal::ATTRIB_CONTENT)?
-                    as int4;
+                let off =
+                    decoder.read_signed_integer_id(&unlace_base::marshal::ATTRIB_CONTENT)? as int4;
                 decoder.close_element(off_el)?;
                 self.get_type_pointer_rel_full(
                     b.size,
@@ -6012,7 +6229,11 @@ impl TypeFactoryImpl {
                     decoder.close_element_skipping(sub)?;
                 }
                 let mut en = Datatype::new(b.size, meta);
-                en.metatype = if meta == TYPE_ENUM_INT { TYPE_INT } else { TYPE_UINT };
+                en.metatype = if meta == TYPE_ENUM_INT {
+                    TYPE_INT
+                } else {
+                    TYPE_UINT
+                };
                 en.flags |= flags::enumtype | b.extra_flags(forcecore);
                 en.kind = DatatypeKind::Enum { namemap };
                 b.apply_names(&mut en);
@@ -6136,11 +6357,8 @@ impl TypeFactoryImpl {
         } else {
             type_metatype::TYPE_STRUCT
         };
-        let mut stub = Datatype::new_with_align(
-            b.size,
-            if b.alignment > 0 { b.alignment } else { -1 },
-            meta,
-        );
+        let mut stub =
+            Datatype::new_with_align(b.size, if b.alignment > 0 { b.alignment } else { -1 }, meta);
         stub.flags |= flags::type_incomplete | b.extra_flags(forcecore);
         stub.kind = if is_union {
             DatatypeKind::Union { field: Vec::new() }
@@ -6176,8 +6394,7 @@ impl TypeFactoryImpl {
                     break;
                 }
                 if aid == unlace_base::marshal::ATTRIB_NAME.get_id() {
-                    fname =
-                        String::from_utf8_lossy(&decoder.read_string()?).into_owned();
+                    fname = String::from_utf8_lossy(&decoder.read_string()?).into_owned();
                 } else if aid == unlace_base::marshal::ATTRIB_OFFSET.get_id() {
                     foffset = decoder.read_signed_integer()? as int4;
                 } else if aid == unlace_base::marshal::ATTRIB_ID.get_id() {
@@ -6234,8 +6451,7 @@ impl TypeFactoryImpl {
             if aid == unlace_base::marshal::ATTRIB_NAME.get_id() {
                 b.name = String::from_utf8_lossy(&decoder.read_string()?).into_owned();
             } else if aid == crate::jumptable::ATTRIB_LABEL.get_id() {
-                b.display =
-                    String::from_utf8_lossy(&decoder.read_string()?).into_owned();
+                b.display = String::from_utf8_lossy(&decoder.read_string()?).into_owned();
             } else if aid == unlace_base::marshal::ATTRIB_ID.get_id() {
                 b.id = decoder.read_unsigned_integer()?;
             } else if aid == unlace_base::marshal::ATTRIB_SIZE.get_id() {
@@ -6298,8 +6514,7 @@ impl TypeFactoryImpl {
             store.tree.iter().map(|k| Rc::clone(&k.0)).collect()
         };
         let mut deporder: Vec<Rc<Datatype>> = Vec::with_capacity(entries.len());
-        let mut mark: std::collections::HashSet<*const Datatype> =
-            std::collections::HashSet::new();
+        let mut mark: std::collections::HashSet<*const Datatype> = std::collections::HashSet::new();
         for ct in &entries {
             Self::order_recurse(&mut deporder, &mut mark, ct);
         }
@@ -6338,7 +6553,8 @@ impl TypeFactoryImpl {
     /// Get the unique "void" data-type (C++ `TypeFactory::getTypeVoid`,
     /// type.cc:4056-4069).
     fn get_type_void_impl(&self) -> KunaResult<Rc<Datatype>> {
-        let void_col = (type_metatype::TYPE_VOID.as_i32() - type_metatype::TYPE_FLOAT.as_i32()) as usize;
+        let void_col =
+            (type_metatype::TYPE_VOID.as_i32() - type_metatype::TYPE_FLOAT.as_i32()) as usize;
         if let Some(ct) = self.store.borrow().typecache[0][void_col].clone() {
             return Ok(ct);
         }
@@ -6355,7 +6571,9 @@ impl TypeFactoryImpl {
             let mut store = self.store.borrow_mut();
             store.tree.insert(TreeKey(Rc::clone(&ct)));
             store.nametree.push(Rc::clone(&ct));
-            store.nametree.sort_by(|a, b| a.name.cmp(&b.name).then(a.id.cmp(&b.id)));
+            store
+                .nametree
+                .sort_by(|a, b| a.name.cmp(&b.name).then(a.id.cmp(&b.id)));
             store.typecache[0][void_col] = Some(Rc::clone(&ct));
         }
         Ok(ct)
@@ -6420,12 +6638,15 @@ impl TypeFactoryImpl {
     /// ordinary error, not an invariant. GH-339.
     fn get_base_impl(&self, s: int4, m: type_metatype) -> KunaResult<Rc<Datatype>> {
         if s < 0 {
-            return Err(KunaError::lowlevel(format!("getBase: negative data-type size {s}")));
+            return Err(KunaError::lowlevel(format!(
+                "getBase: negative data-type size {s}"
+            )));
         }
         let float_idx = type_metatype::TYPE_FLOAT.as_i32();
         if s < 9 {
             if m.as_i32() >= float_idx {
-                let cached = self.store.borrow().typecache[s as usize][(m.as_i32() - float_idx) as usize]
+                let cached = self.store.borrow().typecache[s as usize]
+                    [(m.as_i32() - float_idx) as usize]
                     .clone();
                 if let Some(ct) = cached {
                     return Ok(ct);
@@ -6449,7 +6670,9 @@ impl TypeFactoryImpl {
             let unk = self.store.borrow().typecache[1][unk_col]
                 .clone()
                 .ok_or_else(|| {
-                    KunaError::lowlevel("getBase: TYPE_UNKNOWN size-1 not cached for oversize array")
+                    KunaError::lowlevel(
+                        "getBase: TYPE_UNKNOWN size-1 not cached for oversize array",
+                    )
                 })?;
             let arr = self.get_type_array_impl(s, unk)?;
             return self.find_add((*arr).clone());
@@ -6481,13 +6704,16 @@ impl TypeFactoryImpl {
                 return Ok(res);
             }
         }
-        Err(KunaError::lowlevel("Request for unsupported character data-type"))
+        Err(KunaError::lowlevel(
+            "Request for unsupported character data-type",
+        ))
     }
 
     /// Retrieve or create the core anonymous "code" data-type (C++
     /// `TypeFactory::getTypeCode(void)`, type.cc:4173-4182).
     fn get_type_code_impl(&self) -> KunaResult<Rc<Datatype>> {
-        let code_col = (type_metatype::TYPE_CODE.as_i32() - type_metatype::TYPE_FLOAT.as_i32()) as usize;
+        let code_col =
+            (type_metatype::TYPE_CODE.as_i32() - type_metatype::TYPE_FLOAT.as_i32()) as usize;
         if let Some(ct) = self.store.borrow().typecache[1][code_col].clone() {
             return Ok(ct);
         }
@@ -6556,7 +6782,9 @@ impl TypeFactoryImpl {
         tc.flags |= flags::variable_length;
         let mut fp = crate::fspec::FuncProto::new();
         fp.seed_locked_from_pieces(proto, model, voidtype, self, &manager_rc)?;
-        tc.kind = DatatypeKind::Code { proto: Some(Rc::new(fp)) };
+        tc.kind = DatatypeKind::Code {
+            proto: Some(Rc::new(fp)),
+        };
 
         // markComplete(): clear type_incomplete.
         tc.flags &= !flags::type_incomplete;
@@ -6608,7 +6836,12 @@ impl TypeFactoryImpl {
         if pt.needs_resolution() && ptrto_meta != type_metatype::TYPE_PTR {
             p.flags |= flags::needs_resolution;
         }
-        p.kind = DatatypeKind::Pointer { ptrto: pt, spaceid: None, truncate: None, wordsize: ws };
+        p.kind = DatatypeKind::Pointer {
+            ptrto: pt,
+            spaceid: None,
+            truncate: None,
+            wordsize: ws,
+        };
         p
     }
 
@@ -6616,7 +6849,13 @@ impl TypeFactoryImpl {
     /// (C++ `TypePointer::calcTruncate`, type.cc:1195-1204).
     fn calc_truncate(&self, res: Rc<Datatype>) -> KunaResult<Rc<Datatype>> {
         let alt = self.size_of_alt_pointer.get();
-        let has_truncate = matches!(&res.kind, DatatypeKind::Pointer { truncate: Some(_), .. });
+        let has_truncate = matches!(
+            &res.kind,
+            DatatypeKind::Pointer {
+                truncate: Some(_),
+                ..
+            }
+        );
         if has_truncate || res.size != alt {
             return Ok(res);
         }
@@ -6690,7 +6929,12 @@ impl TypeFactoryImpl {
     }
 
     /// Construct an absolute pointer (C++ `getTypePointer`, type.cc:4341-4350).
-    fn get_type_pointer_impl(&self, s: int4, pt: Rc<Datatype>, ws: uint4) -> KunaResult<Rc<Datatype>> {
+    fn get_type_pointer_impl(
+        &self,
+        s: int4,
+        pt: Rc<Datatype>,
+        ws: uint4,
+    ) -> KunaResult<Rc<Datatype>> {
         let mut pt = pt;
         if pt.has_stripped() {
             if let Some(st) = pt.get_stripped() {
@@ -6728,9 +6972,9 @@ impl TypeFactoryImpl {
 
     /// Build a resized pointer (C++ `resizePointer`, type.cc:4545-4553).
     fn resize_pointer_impl(&self, ptr: &Rc<Datatype>, new_size: int4) -> KunaResult<Rc<Datatype>> {
-        let mut pt = ptr.get_ptr_to().ok_or_else(|| {
-            KunaError::lowlevel("resizePointer: argument is not a pointer")
-        })?;
+        let mut pt = ptr
+            .get_ptr_to()
+            .ok_or_else(|| KunaError::lowlevel("resizePointer: argument is not a pointer"))?;
         if pt.has_stripped() {
             if let Some(st) = pt.get_stripped() {
                 pt = st;
@@ -6750,7 +6994,10 @@ impl TypeFactoryImpl {
         if as_ == 1 {
             a.flags |= flags::needs_resolution;
         }
-        a.kind = DatatypeKind::Array { arrayof: ao, arraysize: as_ };
+        a.kind = DatatypeKind::Array {
+            arrayof: ao,
+            arraysize: as_,
+        };
         a
     }
 
@@ -6772,7 +7019,10 @@ impl TypeFactoryImpl {
         let mut tmp = Datatype::new_with_align(0, -1, type_metatype::TYPE_STRUCT);
         tmp.flags |= flags::type_incomplete;
         tmp.record_completion = declared.then(|| Rc::new(RefCell::new(std::rc::Weak::new())));
-        tmp.kind = DatatypeKind::Struct { field: Vec::new(), bitfield: Vec::new() };
+        tmp.kind = DatatypeKind::Struct {
+            field: Vec::new(),
+            bitfield: Vec::new(),
+        };
         tmp.name = n.to_string();
         tmp.display_name = n.to_string();
         tmp.id = Datatype::hash_name(n);
@@ -6792,7 +7042,9 @@ impl TypeFactoryImpl {
         // If the container is itself a partial struct, unwrap to the real parent
         // and fold the offset (`contain = partial->getParent(); off += ...`).
         let (contain, off) = if contain.get_metatype() == type_metatype::TYPE_PARTIALSTRUCT {
-            let parent = contain.get_partial_base().unwrap_or_else(|| Rc::clone(&contain));
+            let parent = contain
+                .get_partial_base()
+                .unwrap_or_else(|| Rc::clone(&contain));
             let poff = contain.get_partial_offset().unwrap_or(0);
             (parent, off + poff)
         } else {
@@ -6809,7 +7061,11 @@ impl TypeFactoryImpl {
         if contain.has_bitfields() && contain.has_bit_fields_in_range(off, sz) {
             tps.flags |= flags::has_bitfields;
         }
-        tps.kind = DatatypeKind::PartialStruct { stripped: strip, container: contain, offset: off };
+        tps.kind = DatatypeKind::PartialStruct {
+            stripped: strip,
+            container: contain,
+            offset: off,
+        };
         self.find_add(tps)
     }
 
@@ -6839,7 +7095,11 @@ impl TypeFactoryImpl {
         let strip = self.get_base_impl(sz, type_metatype::TYPE_UNKNOWN)?;
         let mut tpu = Datatype::new_with_align(sz, -1, type_metatype::TYPE_PARTIALUNION);
         tpu.flags |= contain.inherit_for_partial() | flags::needs_resolution;
-        tpu.kind = DatatypeKind::PartialUnion { stripped: strip, container: contain, offset: off };
+        tpu.kind = DatatypeKind::PartialUnion {
+            stripped: strip,
+            container: contain,
+            offset: off,
+        };
         self.find_add(tpu)
     }
 
@@ -6863,9 +7123,14 @@ impl TypeFactoryImpl {
         tmp.name = n.to_string();
         tmp.display_name = n.to_string();
         tmp.flags |= flags::enumtype;
-        tmp.metatype =
-            if m == type_metatype::TYPE_ENUM_INT { type_metatype::TYPE_INT } else { type_metatype::TYPE_UINT };
-        tmp.kind = DatatypeKind::Enum { namemap: std::collections::BTreeMap::new() };
+        tmp.metatype = if m == type_metatype::TYPE_ENUM_INT {
+            type_metatype::TYPE_INT
+        } else {
+            type_metatype::TYPE_UINT
+        };
+        tmp.kind = DatatypeKind::Enum {
+            namemap: std::collections::BTreeMap::new(),
+        };
         tmp.id = Datatype::hash_name(n);
         self.find_add(tmp)
     }
@@ -6895,7 +7160,11 @@ impl TypeFactoryImpl {
         tpe.flags |= flags::enumtype;
         tpe.flags |= contain.inherit_for_partial();
         tpe.flags |= flags::has_stripped;
-        tpe.kind = DatatypeKind::PartialEnum { stripped: strip, parent: contain, offset: off };
+        tpe.kind = DatatypeKind::PartialEnum {
+            stripped: strip,
+            parent: contain,
+            offset: off,
+        };
         self.find_add(tpe)
     }
 
@@ -6907,7 +7176,10 @@ impl TypeFactoryImpl {
     ) -> KunaResult<Rc<Datatype>> {
         // TypeSpacebase(id,addr,glb): Datatype(0,1,TYPE_SPACEBASE).
         let mut tsb = Datatype::new_with_align(0, 1, type_metatype::TYPE_SPACEBASE);
-        tsb.kind = DatatypeKind::Spacebase { spaceid: Some(id), localframe: addr.clone() };
+        tsb.kind = DatatypeKind::Spacebase {
+            spaceid: Some(id),
+            localframe: addr.clone(),
+        };
         self.find_add(tsb)
     }
 
@@ -6920,9 +7192,9 @@ impl TypeFactoryImpl {
         off: int4,
     ) -> KunaResult<Rc<Datatype>> {
         let size = parent_ptr.get_size();
-        let ws = parent_ptr.get_word_size().ok_or_else(|| {
-            KunaError::lowlevel("getTypePointerRel: parentPtr is not a pointer")
-        })?;
+        let ws = parent_ptr
+            .get_word_size()
+            .ok_or_else(|| KunaError::lowlevel("getTypePointerRel: parentPtr is not a pointer"))?;
         let parent = parent_ptr
             .get_ptr_to()
             .ok_or_else(|| KunaError::lowlevel("getTypePointerRel: parentPtr is not a pointer"))?;
@@ -6992,7 +7264,9 @@ impl TypeFactoryImpl {
     /// when it points at an unknown type.
     fn mark_ephemeral(&self, tp: &mut Datatype) -> KunaResult<()> {
         let (ptrto, ws) = match &tp.kind {
-            DatatypeKind::PointerRel { ptrto, wordsize, .. } => (Rc::clone(ptrto), *wordsize),
+            DatatypeKind::PointerRel {
+                ptrto, wordsize, ..
+            } => (Rc::clone(ptrto), *wordsize),
             _ => return Err(KunaError::lowlevel("markEphemeral: not a relative pointer")),
         };
         let stripped = self.get_type_pointer_impl(tp.size, Rc::clone(&ptrto), ws)?;
@@ -7149,7 +7423,9 @@ impl TypeFactoryImpl {
     fn concretize_impl(&self, ct: Rc<Datatype>) -> KunaResult<Rc<Datatype>> {
         if ct.get_metatype() == type_metatype::TYPE_CODE {
             if ct.get_size() != 1 {
-                return Err(KunaError::lowlevel("Primitive code data-type that is not size 1"));
+                return Err(KunaError::lowlevel(
+                    "Primitive code data-type that is not size 1",
+                ));
             }
             return self.get_base_impl(1, type_metatype::TYPE_UNKNOWN);
         }
@@ -7180,12 +7456,22 @@ impl TypeFactoryImpl {
         allow_array_wrap: bool,
     ) -> KunaResult<(Option<Rc<Datatype>>, int8, Option<Rc<Datatype>>, int8)> {
         match &ptr.kind {
-            DatatypeKind::Pointer { ptrto, wordsize, .. } => {
-                self.down_chain_pointer(
-                    ptr, &Datatype::completed_record(ptrto), *wordsize, off, allow_array_wrap,
-                )
-            }
-            DatatypeKind::PointerRel { ptrto, wordsize, parent, offset, .. } => {
+            DatatypeKind::Pointer {
+                ptrto, wordsize, ..
+            } => self.down_chain_pointer(
+                ptr,
+                &Datatype::completed_record(ptrto),
+                *wordsize,
+                off,
+                allow_array_wrap,
+            ),
+            DatatypeKind::PointerRel {
+                ptrto,
+                wordsize,
+                parent,
+                offset,
+                ..
+            } => {
                 // TypePointerRel::downChain (type.cc:3120-3136).
                 let ptrto = Datatype::completed_record(ptrto);
                 let ptrto_meta = ptrto.get_metatype();
@@ -7201,7 +7487,8 @@ impl TypeFactoryImpl {
                 // `int8 relOff = (off + offset) & calc_mask(size);` — the int8 `&`
                 // uintb promotes to uint8, masks, then truncates back to int8.
                 let rel_off = (((off + *offset as int8) as uint8)
-                    & unlace_base::address::calc_mask(ptr.size)) as int8;
+                    & unlace_base::address::calc_mask(ptr.size))
+                    as int8;
                 if rel_off < 0 || rel_off >= parent.get_size() as int8 {
                     return Ok((None, off, None, 0)); // Don't shift beyond container
                 }
@@ -7339,7 +7626,11 @@ impl TypeFactory for TypeFactoryImpl {
         let submeta = match m {
             type_metatype::TYPE_INT => sub_metatype::SUB_INT_CHAR,
             type_metatype::TYPE_UINT => sub_metatype::SUB_UINT_CHAR,
-            _ => return Err(KunaError::lowlevel("a character type is signed or unsigned")),
+            _ => {
+                return Err(KunaError::lowlevel(
+                    "a character type is signed or unsigned",
+                ));
+            }
         };
         let mut tc = Datatype::new(1, m);
         tc.name = name.to_string();
@@ -7581,18 +7872,26 @@ impl TypeFactory for TypeFactoryImpl {
         self.variant_layouts.borrow().get(name).map(Rc::clone)
     }
     fn kuna_variant_layouts(&self) -> Vec<Rc<crate::kuna_dwarfvariants::VariantLayout>> {
-        self.variant_layouts.borrow().values().map(Rc::clone).collect()
+        self.variant_layouts
+            .borrow()
+            .values()
+            .map(Rc::clone)
+            .collect()
     }
     fn kuna_register_lang_facet(
         &self,
         name: &str,
         facet: crate::kuna_langfacet::LangFacet,
     ) -> KunaResult<()> {
-        self.lang_facets.borrow_mut().insert(name.to_string(), facet);
+        self.lang_facets
+            .borrow_mut()
+            .insert(name.to_string(), facet);
         Ok(())
     }
     fn kuna_mark_ambiguous_go_type(&self, name: &str) {
-        self.go_ambiguous_types.borrow_mut().insert(name.to_string());
+        self.go_ambiguous_types
+            .borrow_mut()
+            .insert(name.to_string());
     }
     fn kuna_is_ambiguous_go_type(&self, name: &str) -> bool {
         self.go_ambiguous_types.borrow().contains(name)
@@ -7602,7 +7901,9 @@ impl TypeFactory for TypeFactoryImpl {
     }
     fn kuna_prefer_named_pointer(&self, ptr: &Rc<Datatype>) {
         if let Some(to) = ptr.get_ptr_to() {
-            self.named_pointers.borrow_mut().insert(to.get_id(), Rc::clone(ptr));
+            self.named_pointers
+                .borrow_mut()
+                .insert(to.get_id(), Rc::clone(ptr));
         }
     }
 }
@@ -7758,19 +8059,40 @@ mod tests {
     /// and therefore errors (type.cc 'p' branch omits it).
     #[test]
     fn partenum_string_is_not_decodable() {
-        assert_eq!(metatype2string(type_metatype::TYPE_PARTIALENUM).unwrap(), "partenum");
+        assert_eq!(
+            metatype2string(type_metatype::TYPE_PARTIALENUM).unwrap(),
+            "partenum"
+        );
         assert!(string2metatype("partenum").is_err());
     }
 
     /// A couple of the load-bearing exact spellings (used in encode/decode).
     #[test]
     fn metatype_string_exact_spellings() {
-        assert_eq!(metatype2string(type_metatype::TYPE_PARTIALUNION).unwrap(), "partunion");
-        assert_eq!(metatype2string(type_metatype::TYPE_PARTIALSTRUCT).unwrap(), "partstruct");
-        assert_eq!(metatype2string(type_metatype::TYPE_PARTIALENUM).unwrap(), "partenum");
-        assert_eq!(metatype2string(type_metatype::TYPE_ENUM_INT).unwrap(), "enum_int");
-        assert_eq!(metatype2string(type_metatype::TYPE_ENUM_UINT).unwrap(), "enum_uint");
-        assert_eq!(metatype2string(type_metatype::TYPE_SPACEBASE).unwrap(), "spacebase");
+        assert_eq!(
+            metatype2string(type_metatype::TYPE_PARTIALUNION).unwrap(),
+            "partunion"
+        );
+        assert_eq!(
+            metatype2string(type_metatype::TYPE_PARTIALSTRUCT).unwrap(),
+            "partstruct"
+        );
+        assert_eq!(
+            metatype2string(type_metatype::TYPE_PARTIALENUM).unwrap(),
+            "partenum"
+        );
+        assert_eq!(
+            metatype2string(type_metatype::TYPE_ENUM_INT).unwrap(),
+            "enum_int"
+        );
+        assert_eq!(
+            metatype2string(type_metatype::TYPE_ENUM_UINT).unwrap(),
+            "enum_uint"
+        );
+        assert_eq!(
+            metatype2string(type_metatype::TYPE_SPACEBASE).unwrap(),
+            "spacebase"
+        );
     }
 
     #[test]
@@ -7855,7 +8177,10 @@ mod tests {
     fn array_kind_payload() {
         let elem = Rc::new(Datatype::new(2, type_metatype::TYPE_INT));
         let mut a = Datatype::new_with_align(20, -1, type_metatype::TYPE_ARRAY);
-        a.kind = DatatypeKind::Array { arrayof: Rc::clone(&elem), arraysize: 10 };
+        a.kind = DatatypeKind::Array {
+            arrayof: Rc::clone(&elem),
+            arraysize: 10,
+        };
         assert_eq!(a.num_depend(), 1);
         assert_eq!(a.num_elements(), Some(10));
         assert_eq!(a.get_array_base().unwrap().get_size(), 2);
@@ -7864,10 +8189,23 @@ mod tests {
     /// Struct field count drives num_depend/get_depend.
     #[test]
     fn struct_kind_payload() {
-        let f0 = TypeField::new(0, 0, "a", Rc::new(Datatype::new(4, type_metatype::TYPE_INT)));
-        let f1 = TypeField::new(1, 4, "b", Rc::new(Datatype::new(2, type_metatype::TYPE_INT)));
+        let f0 = TypeField::new(
+            0,
+            0,
+            "a",
+            Rc::new(Datatype::new(4, type_metatype::TYPE_INT)),
+        );
+        let f1 = TypeField::new(
+            1,
+            4,
+            "b",
+            Rc::new(Datatype::new(2, type_metatype::TYPE_INT)),
+        );
         let mut s = Datatype::new_with_align(8, -1, type_metatype::TYPE_STRUCT);
-        s.kind = DatatypeKind::Struct { field: vec![f0, f1], bitfield: vec![] };
+        s.kind = DatatypeKind::Struct {
+            field: vec![f0, f1],
+            bitfield: vec![],
+        };
         assert_eq!(s.num_depend(), 2);
         assert_eq!(s.get_depend(1).unwrap().get_size(), 2);
         assert!(s.get_depend(2).is_none());
@@ -7921,7 +8259,10 @@ mod tests {
     #[test]
     fn compare_struct_implemented() {
         let mut s = Datatype::new_with_align(8, -1, type_metatype::TYPE_STRUCT);
-        s.kind = DatatypeKind::Struct { field: vec![], bitfield: vec![] };
+        s.kind = DatatypeKind::Struct {
+            field: vec![],
+            bitfield: vec![],
+        };
         let other = s.clone();
         assert_eq!(s.compare(&other, 10).unwrap(), 0);
         // A struct with one field vs an empty struct: base compare ties (same
@@ -7964,7 +8305,10 @@ mod tests {
         let mut elem = Datatype::new_with_align(4, 4, type_metatype::TYPE_INT);
         elem.align_size = 4;
         let mut arr = Datatype::new_with_align(8, 4, type_metatype::TYPE_ARRAY);
-        arr.kind = DatatypeKind::Array { arrayof: Rc::new(elem), arraysize: 2 };
+        arr.kind = DatatypeKind::Array {
+            arrayof: Rc::new(elem),
+            arraysize: 2,
+        };
         let mut p_arr = Datatype::new_with_align(8, -1, type_metatype::TYPE_PTR);
         p_arr.kind = DatatypeKind::Pointer {
             ptrto: Rc::new(arr),
@@ -8010,12 +8354,23 @@ mod tests {
         // Array of one element of equal size -> recurses to the element.
         let elem = Rc::new(Datatype::new(4, type_metatype::TYPE_INT));
         let mut a = Datatype::new_with_align(4, -1, type_metatype::TYPE_ARRAY);
-        a.kind = DatatypeKind::Array { arrayof: elem, arraysize: 1 };
+        a.kind = DatatypeKind::Array {
+            arrayof: elem,
+            arraysize: 1,
+        };
         assert!(a.is_primitive_whole());
         // Struct with a smaller single component -> not whole (size mismatch).
-        let f0 = TypeField::new(0, 0, "a", Rc::new(Datatype::new(4, type_metatype::TYPE_INT)));
+        let f0 = TypeField::new(
+            0,
+            0,
+            "a",
+            Rc::new(Datatype::new(4, type_metatype::TYPE_INT)),
+        );
         let mut s = Datatype::new_with_align(8, -1, type_metatype::TYPE_STRUCT);
-        s.kind = DatatypeKind::Struct { field: vec![f0], bitfield: vec![] };
+        s.kind = DatatypeKind::Struct {
+            field: vec![f0],
+            bitfield: vec![],
+        };
         assert!(!s.is_primitive_whole());
     }
 
@@ -8044,7 +8399,12 @@ mod tests {
         wordsize: uint4,
     ) -> Datatype {
         let mut p = Datatype::new_with_align(8, -1, type_metatype::TYPE_PTR);
-        p.kind = DatatypeKind::Pointer { ptrto, spaceid, truncate: None, wordsize };
+        p.kind = DatatypeKind::Pointer {
+            ptrto,
+            spaceid,
+            truncate: None,
+            wordsize,
+        };
         p
     }
 
@@ -8272,8 +8632,14 @@ mod tests {
 
         // base default for a non-array: -1.
         let int4_t = Datatype::new(4, type_metatype::TYPE_INT);
-        assert_eq!(int4_t.nearest_arrayed_component_forward(0, 128).unwrap().0, -1);
-        assert_eq!(int4_t.nearest_arrayed_component_backward(0, 128).unwrap().0, -1);
+        assert_eq!(
+            int4_t.nearest_arrayed_component_forward(0, 128).unwrap().0,
+            -1
+        );
+        assert_eq!(
+            int4_t.nearest_arrayed_component_backward(0, 128).unwrap().0,
+            -1
+        );
     }
 
     /// `TypeArray::getHoleSize` (type.cc:1415-1420) renormalizes into the element
@@ -8327,7 +8693,13 @@ mod tests {
     ) -> Datatype {
         let mut pr = Datatype::new_with_align(8, -1, type_metatype::TYPE_PTRREL);
         pr.submeta = sub_metatype::SUB_PTRREL;
-        pr.kind = DatatypeKind::PointerRel { ptrto, wordsize, stripped, parent, offset };
+        pr.kind = DatatypeKind::PointerRel {
+            ptrto,
+            wordsize,
+            stripped,
+            parent,
+            offset,
+        };
         pr
     }
 
@@ -8340,8 +8712,7 @@ mod tests {
         let parent = Rc::new(Datatype::new(16, type_metatype::TYPE_STRUCT));
         let strip: Rc<Datatype> = Rc::new(make_pointer(Rc::clone(&int4_t), None, 1));
         let formal = make_pointer_rel(Rc::clone(&int4_t), 1, None, Rc::clone(&parent), 4);
-        let ephemeral =
-            make_pointer_rel(Rc::clone(&int4_t), 1, Some(strip), Rc::clone(&parent), 4);
+        let ephemeral = make_pointer_rel(Rc::clone(&int4_t), 1, Some(strip), Rc::clone(&parent), 4);
         // formal (None) vs ephemeral (Some) -> formal preferred (earlier) = -1.
         assert_eq!(formal.compare(&ephemeral, 10).unwrap(), -1);
         assert_eq!(ephemeral.compare(&formal, 10).unwrap(), 1);
@@ -8393,8 +8764,10 @@ mod tests {
     fn wire_encode_roundtrips_through_decode_type() {
         use unlace_base::marshal::{Decoder, PackedDecode, PackedEncode};
         let f = factory();
-        f.set_core_type("int", 4, type_metatype::TYPE_INT, false).unwrap();
-        f.set_core_type("undefined", 1, type_metatype::TYPE_UNKNOWN, false).unwrap();
+        f.set_core_type("int", 4, type_metatype::TYPE_INT, false)
+            .unwrap();
+        f.set_core_type("undefined", 1, type_metatype::TYPE_UNKNOWN, false)
+            .unwrap();
         f.cache_core_types().unwrap();
         let m = unlace_base::space::AddrSpaceManager::new();
         let roundtrip = |t: &Rc<Datatype>, full: bool| -> Rc<Datatype> {
@@ -8412,26 +8785,47 @@ mod tests {
             f.decode_type(&mut d).unwrap()
         };
 
-        let i4 = crate::dtype::TypeFactory::find_by_name(&f, "int").unwrap().unwrap();
+        let i4 = crate::dtype::TypeFactory::find_by_name(&f, "int")
+            .unwrap()
+            .unwrap();
         assert_ne!(i4.get_id(), 0, "core types carry hashed ids");
         let back = roundtrip(&i4, false);
-        assert!(Rc::ptr_eq(&back, &i4), "<typeref> resolves to the same interned type");
+        assert!(
+            Rc::ptr_eq(&back, &i4),
+            "<typeref> resolves to the same interned type"
+        );
 
         let p = crate::dtype::TypeFactory::get_type_pointer(&f, 8, Rc::clone(&i4), 1).unwrap();
-        assert_eq!(p.get_id(), 0, "derived pointer has no id -> full <type> form");
+        assert_eq!(
+            p.get_id(),
+            0,
+            "derived pointer has no id -> full <type> form"
+        );
         let back = roundtrip(&p, false);
-        assert!(Rc::ptr_eq(&back, &p), "full <type ptr> re-interns to the same object");
+        assert!(
+            Rc::ptr_eq(&back, &p),
+            "full <type ptr> re-interns to the same object"
+        );
 
         let a = crate::dtype::TypeFactory::get_type_array(&f, 5, Rc::clone(&i4)).unwrap();
         let back = roundtrip(&a, true);
-        assert!(Rc::ptr_eq(&back, &a), "full <type array> re-interns to the same object");
+        assert!(
+            Rc::ptr_eq(&back, &a),
+            "full <type array> re-interns to the same object"
+        );
     }
 
     /// `decode_integer_format` is the inverse of the wire format vocabulary
     /// (`wire_integer_format`), and errors on out-of-range codes.
     #[test]
     fn decode_integer_format_vocabulary() {
-        for (code, s) in [(1u32, "hex"), (2, "dec"), (3, "oct"), (4, "bin"), (5, "char")] {
+        for (code, s) in [
+            (1u32, "hex"),
+            (2, "dec"),
+            (3, "oct"),
+            (4, "bin"),
+            (5, "char"),
+        ] {
             assert_eq!(Datatype::decode_integer_format(code).unwrap(), s);
             assert_eq!(wire_integer_format(s), code);
         }
@@ -8461,15 +8855,25 @@ mod tests {
     fn factory_negative_size_is_an_error_not_a_panic() {
         use type_metatype::*;
         let f = factory();
-        f.set_core_type("undefined", 1, TYPE_UNKNOWN, false).unwrap();
+        f.set_core_type("undefined", 1, TYPE_UNKNOWN, false)
+            .unwrap();
         f.set_core_type("char", 1, TYPE_INT, true).unwrap();
         f.cache_core_types().unwrap();
 
         // The two sign-bit patterns a 32-bit-truncated `st_size` produces.
         for s in [-1i32, -16, i32::MIN] {
-            assert!(f.get_base(s, TYPE_UNKNOWN).is_err(), "getBase({s}) must be an error");
-            assert!(f.get_base_no_char(s, TYPE_INT).is_err(), "getBaseNoChar({s}) must be an error");
-            assert!(f.get_type_char(s).is_err(), "getTypeChar({s}) must be an error");
+            assert!(
+                f.get_base(s, TYPE_UNKNOWN).is_err(),
+                "getBase({s}) must be an error"
+            );
+            assert!(
+                f.get_base_no_char(s, TYPE_INT).is_err(),
+                "getBaseNoChar({s}) must be an error"
+            );
+            assert!(
+                f.get_type_char(s).is_err(),
+                "getTypeChar({s}) must be an error"
+            );
         }
         // The valid domain is untouched.
         assert!(f.get_base(4, TYPE_UNKNOWN).is_ok());
@@ -8483,7 +8887,10 @@ mod tests {
         let f = factory();
         let i4_a = f.get_base(4, type_metatype::TYPE_INT).unwrap();
         let i4_b = f.get_base(4, type_metatype::TYPE_INT).unwrap();
-        assert!(Rc::ptr_eq(&i4_a, &i4_b), "identical getBase requests dedup to one object");
+        assert!(
+            Rc::ptr_eq(&i4_a, &i4_b),
+            "identical getBase requests dedup to one object"
+        );
         let i8 = f.get_base(8, type_metatype::TYPE_INT).unwrap();
         assert!(!Rc::ptr_eq(&i4_a, &i8), "different size -> distinct object");
 
@@ -8510,9 +8917,14 @@ mod tests {
         let alias = f.find_add(alias).unwrap();
         let first = f.find_by_name("struct_1").unwrap().unwrap();
         assert_eq!(first.get_id(), 7, "the lowest id under a shared name");
-        let held = f.find_by_id_local("struct_1", Datatype::hash_name("struct_1")).unwrap();
+        let held = f
+            .find_by_id_local("struct_1", Datatype::hash_name("struct_1"))
+            .unwrap();
         assert_eq!(held.get_metatype(), type_metatype::TYPE_STRUCT);
-        assert!(Rc::ptr_eq(&f.find_by_id_local("struct_1", 7).unwrap(), &alias));
+        assert!(Rc::ptr_eq(
+            &f.find_by_id_local("struct_1", 7).unwrap(),
+            &alias
+        ));
         assert!(f.find_by_id_local("struct_1", 8).is_none());
         for absent in ["struct_", "struct_11", "struct_3", "a", "zzz", ""] {
             assert!(f.find_by_name(absent).unwrap().is_none(), "{absent:?}");
@@ -8535,7 +8947,8 @@ mod tests {
         f.set_core_type("byte", 1, TYPE_UINT, false).unwrap();
         f.set_core_type("sbyte", 1, TYPE_INT, false).unwrap(); // non-char 1-byte INT
         f.set_core_type("char", 1, TYPE_INT, true).unwrap(); // chartype -> ASCII
-        f.set_core_type("undefined", 1, TYPE_UNKNOWN, false).unwrap();
+        f.set_core_type("undefined", 1, TYPE_UNKNOWN, false)
+            .unwrap();
         f.set_core_type("int", 4, TYPE_INT, false).unwrap();
         f.set_core_type("double", 8, TYPE_FLOAT, false).unwrap();
         f.cache_core_types().unwrap();
@@ -8543,10 +8956,16 @@ mod tests {
         // getBase(1,TYPE_INT) prefers the ASCII char (cacheCoreTypes seeds the
         // typecache[1][INT] slot with the char).
         let c = f.get_base(1, TYPE_INT).unwrap();
-        assert!(c.is_ascii(), "getBase(1,INT) returns the char (preferred over nochar)");
+        assert!(
+            c.is_ascii(),
+            "getBase(1,INT) returns the char (preferred over nochar)"
+        );
         // getBaseNoChar(1,TYPE_INT) returns the cached type_nochar instead.
         let nc = f.get_base_no_char(1, TYPE_INT).unwrap();
-        assert!(!nc.is_ascii(), "getBaseNoChar(1,INT) returns the non-char int");
+        assert!(
+            !nc.is_ascii(),
+            "getBaseNoChar(1,INT) returns the non-char int"
+        );
         // getTypeChar(1) returns the cached 1-byte char.
         let ch = f.get_type_char(1).unwrap();
         assert!(ch.is_ascii());
@@ -8633,7 +9052,9 @@ mod tests {
             e.display_name = "flags".to_string();
             e.flags |= flags::enumtype;
             e.metatype = TYPE_UINT;
-            e.kind = DatatypeKind::Enum { namemap: std::collections::BTreeMap::new() };
+            e.kind = DatatypeKind::Enum {
+                namemap: std::collections::BTreeMap::new(),
+            };
             e.id = Datatype::hash_name("flags");
             f.find_add(e).unwrap()
         };
@@ -8664,7 +9085,11 @@ mod tests {
                 pe.has_stripped(),
                 "TypePartialEnum sets has_stripped (type.cc:2687) (off={off},sz={sz})"
             );
-            assert_eq!(pe.get_size(), sz, "partial covers exactly the requested size");
+            assert_eq!(
+                pe.get_size(),
+                sz,
+                "partial covers exactly the requested size"
+            );
         }
     }
 
@@ -8688,7 +9113,9 @@ mod tests {
             e.display_name = "flags".to_string();
             e.flags |= flags::enumtype;
             e.metatype = TYPE_UINT;
-            e.kind = DatatypeKind::Enum { namemap: std::collections::BTreeMap::new() };
+            e.kind = DatatypeKind::Enum {
+                namemap: std::collections::BTreeMap::new(),
+            };
             e.id = Datatype::hash_name("flags");
             f.find_add(e).unwrap()
         };
@@ -8705,15 +9132,24 @@ mod tests {
 
         // Whole field (offset 8, size 8) -> the enum itself (perfect size match).
         let whole = f.get_exact_piece(Rc::clone(&s), 8, 8).unwrap().unwrap();
-        assert!(Rc::ptr_eq(&whole, &en), "perfect-size read of the field is the enum");
+        assert!(
+            Rc::ptr_eq(&whole, &en),
+            "perfect-size read of the field is the enum"
+        );
         // ptrenumlow: 1-byte low slice of the field (struct offset 8) -> enum.
         let low = f.get_exact_piece(Rc::clone(&s), 8, 1).unwrap().unwrap();
-        assert!(low.is_enum_type(), "byte slice of an enum field stays an enum");
+        assert!(
+            low.is_enum_type(),
+            "byte slice of an enum field stays an enum"
+        );
         assert_eq!(low.get_metatype(), TYPE_UINT);
         assert_eq!(low.get_size(), 1);
         // ptrenumhigh: 4-byte high slice of the field (struct offset 12) -> enum.
         let high = f.get_exact_piece(Rc::clone(&s), 12, 4).unwrap().unwrap();
-        assert!(high.is_enum_type(), "high dword slice of an enum field stays an enum");
+        assert!(
+            high.is_enum_type(),
+            "high dword slice of an enum field stays an enum"
+        );
         assert_eq!(high.get_metatype(), TYPE_UINT);
         assert_eq!(high.get_size(), 4);
         // The C++ partial-enum carries the offset into the parent enum (the
@@ -8790,7 +9226,10 @@ mod tests {
         // dependentOrder: the component precedes its container.
         let order = f.dependent_order();
         let pos = |t: &Rc<Datatype>| {
-            order.iter().position(|c| Rc::ptr_eq(c, t)).expect("type is in dependentOrder")
+            order
+                .iter()
+                .position(|c| Rc::ptr_eq(c, t))
+                .expect("type is in dependentOrder")
         };
         assert!(
             pos(&inner) < pos(&outer),
@@ -8840,8 +9279,7 @@ mod tests {
         // Terminates (would loop forever without the mark set) and each object
         // appears EXACTLY once.
         let order = f.dependent_order();
-        let mut seen: std::collections::HashSet<*const Datatype> =
-            std::collections::HashSet::new();
+        let mut seen: std::collections::HashSet<*const Datatype> = std::collections::HashSet::new();
         for ct in &order {
             assert!(
                 seen.insert(Rc::as_ptr(ct)),
@@ -8850,9 +9288,12 @@ mod tests {
             );
         }
         // The completed structs and both pointers are all present.
-        for (what, t) in
-            [("cycA", &a1), ("cycB", &b1), ("cycA *", &pa), ("cycB *", &pb)]
-        {
+        for (what, t) in [
+            ("cycA", &a1),
+            ("cycB", &b1),
+            ("cycA *", &pa),
+            ("cycB *", &pb),
+        ] {
             assert!(
                 order.iter().any(|c| Rc::ptr_eq(c, t)),
                 "`{what}` missing from dependentOrder"
@@ -8900,13 +9341,19 @@ mod tests {
         assert!(Rc::ptr_eq(&at8, &i4), "offset 8 resolves to field c (int)");
         // offset 4 lands on field `b` (the float).
         let at4 = f.get_ptr_to_from_parent(Rc::clone(&s), 4).unwrap();
-        assert!(Rc::ptr_eq(&at4, &f4), "offset 4 resolves to field b (float)");
+        assert!(
+            Rc::ptr_eq(&at4, &f4),
+            "offset 4 resolves to field b (float)"
+        );
         // offset 0 is the non-positive fallback -> getBase(1,TYPE_UNKNOWN).
         let at0 = f.get_ptr_to_from_parent(Rc::clone(&s), 0).unwrap();
         assert!(Rc::ptr_eq(&at0, &unk1), "offset 0 falls back to unknown1");
         // offset 100 escapes the container -> getSubType yields None -> unknown1.
         let oob = f.get_ptr_to_from_parent(Rc::clone(&s), 100).unwrap();
-        assert!(Rc::ptr_eq(&oob, &unk1), "escaping offset falls back to unknown1");
+        assert!(
+            Rc::ptr_eq(&oob, &unk1),
+            "escaping offset falls back to unknown1"
+        );
     }
 
     /// `downChain` on a pointer-to-struct descends to the field pointer and passes
@@ -8990,8 +9437,7 @@ mod tests {
     /// byteSize 1.
     fn myfoo_byte0_bitfields() -> Vec<TypeBitField> {
         let mk = |id, lsb, nb, name: &str, meta| {
-            let mut bf =
-                TypeBitField::new(id, nb, false, name, Rc::new(Datatype::new(4, meta)));
+            let mut bf = TypeBitField::new(id, nb, false, name, Rc::new(Datatype::new(4, meta)));
             // TypeBitField::new puts the field at lsb 0; place it at the real
             // container position for the layout the struct holds.
             bf.least_sig_bit = lsb;
@@ -9006,7 +9452,11 @@ mod tests {
         ]
     }
 
-    fn struct_with_bitfields(field: Vec<TypeField>, bitfield: Vec<TypeBitField>, size: int4) -> Datatype {
+    fn struct_with_bitfields(
+        field: Vec<TypeField>,
+        bitfield: Vec<TypeBitField>,
+        size: int4,
+    ) -> Datatype {
         let mut s = Datatype::new_with_align(size, 4, type_metatype::TYPE_STRUCT);
         if !bitfield.is_empty() {
             s.flags |= flags::has_bitfields;
@@ -9085,7 +9535,9 @@ mod tests {
                 TypeField::new(0, 0, "next", Rc::clone(&early)),
                 TypeField::new(1, 8, "value", Rc::clone(&int4)),
             ];
-            let full = f.set_fields_struct_raw(&stub, fields, Vec::new(), 16, 8, 0).unwrap();
+            let full = f
+                .set_fields_struct_raw(&stub, fields, Vec::new(), 16, 8, 0)
+                .unwrap();
             let seen = early.get_ptr_to().unwrap();
             assert_eq!(Rc::ptr_eq(&seen, &full), declared, "{name}");
             assert_eq!(seen.is_incomplete(), !declared, "{name}");
@@ -9127,10 +9579,9 @@ mod tests {
         let int = &Rc::new(Datatype::new(4, type_metatype::TYPE_INT));
         uints.extend((0..32).map(|_| uint4()));
         let shape = int.compare_dependency(&uints[0]).unwrap().signum();
-        let Some(uint) = uints
-            .iter()
-            .find(|u| ((Rc::as_ptr(int) as i128) - (Rc::as_ptr(u) as i128)).signum() as int4 != shape)
-        else {
+        let Some(uint) = uints.iter().find(|u| {
+            ((Rc::as_ptr(int) as i128) - (Rc::as_ptr(u) as i128)).signum() as int4 != shape
+        }) else {
             return;
         };
         let chain = |leaf: &Rc<Datatype>| {
@@ -9144,11 +9595,14 @@ mod tests {
         let before = a.compare_dependency(&b).unwrap().signum();
         let code = || {
             let mut c = Datatype::new(1, type_metatype::TYPE_CODE);
-            c.kind = DatatypeKind::Code { proto: Some(Rc::new(crate::fspec::FuncProto::new())) };
+            c.kind = DatatypeKind::Code {
+                proto: Some(Rc::new(crate::fspec::FuncProto::new())),
+            };
             Rc::new(make_pointer(Rc::new(c), None, 1))
         };
         let (p1, p2) = (code(), code());
-        let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| p1.compare_dependency(&p2)));
+        let caught =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| p1.compare_dependency(&p2)));
         assert!(caught.is_err());
         assert_eq!(before, shape);
         assert_eq!(a.compare_dependency(&b).unwrap().signum(), before);

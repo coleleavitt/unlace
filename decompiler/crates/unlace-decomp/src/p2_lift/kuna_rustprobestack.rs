@@ -46,7 +46,7 @@ pub fn parse_mode(value: &str) -> Result<(RustProbestackMode, String), String> {
         other => {
             return Err(format!(
                 "unknown rustprobestack value {other:?} (expected off, auto or always)"
-            ))
+            ));
         }
     };
     Ok((

@@ -34,8 +34,8 @@
 //! The `vfunc_` stem, not `vftable_`: the slot's target is code, and the vftable data
 //! object at `base` is what carries the unindexed `<Class>::vftable` label.
 
-use object::read::{Object, ObjectSection};
 use object::SectionKind;
+use object::read::{Object, ObjectSection};
 
 use super::models::ImageBytes;
 use super::refkind::RefKind;
@@ -171,7 +171,9 @@ mod tests {
         // 0x20 stays NULL (terminator).
         // A non-text pointer right after (into .rdata) — also a boundary if reached.
         put_u64(&mut rdata, 0x28, ib + 0x2000);
-        let ranges = TextRanges { ranges: vec![(ib + 0x1000, ib + 0x1080)] };
+        let ranges = TextRanges {
+            ranges: vec![(ib + 0x1000, ib + 0x1080)],
+        };
         (rdata, rk, ranges)
     }
 
@@ -202,7 +204,9 @@ mod tests {
         let mut rdata = vec![0u8; 0x40];
         rdata[0x00..0x08].copy_from_slice(&(ib + 0x1004).to_le_bytes());
         // 0x08 NULL terminator.
-        let ranges = TextRanges { ranges: vec![(ib + 0x1000, ib + 0x1080)] };
+        let ranges = TextRanges {
+            ranges: vec![(ib + 0x1000, ib + 0x1080)],
+        };
         let img = ImageBytes::from_spans(vec![(ib + 0x2010, &rdata)]);
         let vt = walk_vftable(&img, &rk, &ranges, ib + 0x2010).unwrap();
         assert_eq!(vt.slots, vec![ib + 0x1004]);

@@ -103,12 +103,16 @@ pub struct PendingExtend {
 /// Is `addr` in a stack (spacebase) space? A missing space answers `true`, so an
 /// unresolvable location is treated as the un-comparable case.
 fn is_stack(addr: &Address) -> bool {
-    addr.get_space().map(|s| s.get_type() == spacetype::IPTR_SPACEBASE).unwrap_or(true)
+    addr.get_space()
+        .map(|s| s.get_type() == spacetype::IPTR_SPACEBASE)
+        .unwrap_or(true)
 }
 
 /// Do two storage locations share a byte?
 fn overlaps(a: &Address, asz: int4, b: &Address, bsz: int4) -> bool {
-    let (Some(sa), Some(sb)) = (a.get_space(), b.get_space()) else { return false };
+    let (Some(sa), Some(sb)) = (a.get_space(), b.get_space()) else {
+        return false;
+    };
     if sa.get_index() != sb.get_index() {
         return false;
     }
@@ -154,7 +158,9 @@ pub fn capture_partial_call(fc: &FuncCallSpecs, data: &Funcdata) -> Option<Pendi
         if slot < 1 {
             continue;
         }
-        let Some(vn) = data.obank().get(op).and_then(|o| o.get_in(slot)) else { continue };
+        let Some(vn) = data.obank().get(op).and_then(|o| o.get_in(slot)) else {
+            continue;
+        };
         // The normal path would insert a truncating SUBPIECE here; the retry runs
         // after the trials are gone, so an oversized Varnode is declined instead.
         if data.vbank().get(vn).map(|v| v.get_size()) != Some(t.get_size()) {
@@ -165,7 +171,12 @@ pub fn capture_partial_call(fc: &FuncCallSpecs, data: &Funcdata) -> Option<Pendi
     if recovered.is_empty() || candidates.is_empty() {
         return None;
     }
-    Some(PendingExtend { op, entry: fc.get_entry_address().clone(), recovered, candidates })
+    Some(PendingExtend {
+        op,
+        entry: fc.get_entry_address().clone(),
+        recovered,
+        candidates,
+    })
 }
 
 /// Retry every captured call site now that the pass has finalized all of them.
@@ -202,7 +213,12 @@ pub fn uncovered_argument_locations(
 fn entry_locations(entries: &[ParamEntry]) -> Vec<(Address, int4)> {
     entries
         .iter()
-        .map(|e| (Address::new(std::rc::Rc::clone(e.get_space()), e.get_base()), e.get_size()))
+        .map(|e| {
+            (
+                Address::new(std::rc::Rc::clone(e.get_space()), e.get_base()),
+                e.get_size(),
+            )
+        })
         .collect()
 }
 
@@ -213,14 +229,13 @@ fn entry_locations(entries: &[ParamEntry]) -> Vec<(Address, int4)> {
 /// location while the first stays absent would be worse than covering neither.
 /// The candidates are consumed left to right, so a location out of prototype
 /// order does not match.
-pub fn plan_tail(
-    tail: &[(Address, int4)],
-    candidates: &[(Address, int4)],
-) -> Option<Vec<int4>> {
+pub fn plan_tail(tail: &[(Address, int4)], candidates: &[(Address, int4)]) -> Option<Vec<int4>> {
     let mut picked = Vec::new();
     let mut next = 0usize;
     for (wa, wsz) in tail {
-        let k = candidates[next..].iter().position(|(ca, csz)| ca == wa && csz == wsz)?;
+        let k = candidates[next..]
+            .iter()
+            .position(|(ca, csz)| ca == wa && csz == wsz)?;
         picked.push((next + k) as int4);
         next += k + 1;
     }
@@ -241,7 +256,9 @@ fn callee_body_agrees(
     witness: &[(Address, int4)],
     tail: &[(Address, int4)],
 ) -> bool {
-    let Some(live) = data.kuna_callee_entry_dead(entry) else { return false };
+    let Some(live) = data.kuna_callee_entry_dead(entry) else {
+        return false;
+    };
     if !live.is_complete() {
         return false;
     }
@@ -259,9 +276,7 @@ fn extend_one(data: &mut Funcdata, p: &PendingExtend) -> bool {
     let keep = p.recovered.len() + 1;
     match data.obank().get(p.op) {
         Some(o)
-            if !o.is_dead()
-                && o.code() == OpCode::CPUI_CALL
-                && o.num_input() == keep as int4 => {}
+            if !o.is_dead() && o.code() == OpCode::CPUI_CALL && o.num_input() == keep as int4 => {}
         _ => return false,
     }
     let format_witness = crate::p4_calls::kuna_formatwitness::best_witness(&p.entry, p.op, data);
@@ -285,12 +300,18 @@ fn extend_one(data: &mut Funcdata, p: &PendingExtend) -> bool {
     let tail = &witness[p.recovered.len()..];
     // All or nothing: every missing location needs a live, right-width Varnode
     // still standing at this site, in prototype order.
-    let locs: Vec<(Address, int4)> =
-        p.candidates.iter().map(|(a, sz, _)| (a.clone(), *sz)).collect();
-    let Some(picked) = plan_tail(tail, &locs) else { return false };
-    let promoted: Vec<VarnodeId> =
-        picked.iter().map(|i| p.candidates[*i as usize].2).collect();
-    let Some(idx) = data.get_call_specs_index(p.op) else { return false };
+    let locs: Vec<(Address, int4)> = p
+        .candidates
+        .iter()
+        .map(|(a, sz, _)| (a.clone(), *sz))
+        .collect();
+    let Some(picked) = plan_tail(tail, &locs) else {
+        return false;
+    };
+    let promoted: Vec<VarnodeId> = picked.iter().map(|i| p.candidates[*i as usize].2).collect();
+    let Some(idx) = data.get_call_specs_index(p.op) else {
+        return false;
+    };
     let entries = {
         let fc = data.get_call_specs(idx);
         if !fc.proto().has_model() {
@@ -321,7 +342,8 @@ fn extend_one(data: &mut Funcdata, p: &PendingExtend) -> bool {
         return false;
     }
     // Record where the arguments lived so a later extension can witness this site.
-    data.get_call_specs_mut(idx).set_final_input_storage(witness);
+    data.get_call_specs_mut(idx)
+        .set_final_input_storage(witness);
     true
 }
 

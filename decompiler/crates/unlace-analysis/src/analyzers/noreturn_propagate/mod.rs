@@ -86,8 +86,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::listing::model::Insn;
 use crate::listing::Listing;
+use crate::listing::model::Insn;
 use crate::loader::format::{ImportSym, ImportSymKind};
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, NoReturnFact, Phase};
 
@@ -139,7 +139,14 @@ impl AnalysisPass for NoReturnPropagatePass {
         let reach = ctx.arch.analysis_noreturn_reach;
         let resuming_entry = crate::pclntab::kuna_gomcall::resuming_entry(ctx, listing);
         let slot_calls = terminal_slot_calls(listing, ctx.file);
-        for fact in propagate_noreturn(listing, &error_recog, &slot_calls, reach, &stubs, resuming_entry) {
+        for fact in propagate_noreturn(
+            listing,
+            &error_recog,
+            &slot_calls,
+            reach,
+            &stubs,
+            resuming_entry,
+        ) {
             out.noreturn.push(fact);
         }
         // (kuna, Ghidra-gap) Emit every `call error(nonzero,…)` site so the decompile
@@ -159,10 +166,7 @@ impl AnalysisPass for NoReturnPropagatePass {
 /// this collects EVERY such call site — the fall-through prune is what stops the
 /// flow-follower from walking past the call into the next function (the docolon→eval6
 /// boundary-overrun class). Reuses the recognizer's per-call-site value check.
-fn collect_error_noreturn_callsites(
-    listing: &Listing,
-    error_recog: &ErrorRecognizer,
-) -> Vec<u64> {
+fn collect_error_noreturn_callsites(listing: &Listing, error_recog: &ErrorRecognizer) -> Vec<u64> {
     let mut sites = Vec::new();
     if error_recog.error_addrs.is_empty() {
         return sites;
@@ -267,12 +271,18 @@ impl<'a> InstructionBody for BTreeMap<u64, &'a Insn> {
 impl ErrorRecognizer {
     /// A disabled recognizer (no addresses ⇒ never matches).
     fn disabled() -> Self {
-        ErrorRecognizer { error_addrs: BTreeSet::new(), exit_sites: BTreeSet::new() }
+        ErrorRecognizer {
+            error_addrs: BTreeSet::new(),
+            exit_sites: BTreeSet::new(),
+        }
     }
 
     /// A recognizer whose only terminal call sites are the DOS exits `sites`.
     fn dos_exits(sites: &[u64]) -> Self {
-        ErrorRecognizer { error_addrs: BTreeSet::new(), exit_sites: sites.iter().copied().collect() }
+        ErrorRecognizer {
+            error_addrs: BTreeSet::new(),
+            exit_sites: sites.iter().copied().collect(),
+        }
     }
 
     /// Collect the `error`/`error_at_line` entry addresses from the object: the
@@ -284,9 +294,7 @@ impl ErrorRecognizer {
         let is_error_name = |n: &str| n == "error" || n == "error_at_line";
         // Dynamic imports (PLT stubs): the common dynamically-linked case.
         for p in imports {
-            if let Ok(n) =
-                String::from_utf8(crate::loader::elf_plt::strip_version(&p.name))
-            {
+            if let Ok(n) = String::from_utf8(crate::loader::elf_plt::strip_version(&p.name)) {
                 if is_error_name(n.trim_start_matches('_')) {
                     error_addrs.insert(p.addr);
                 }
@@ -300,7 +308,10 @@ impl ErrorRecognizer {
                 }
             }
         }
-        ErrorRecognizer { error_addrs, exit_sites: BTreeSet::new() }
+        ErrorRecognizer {
+            error_addrs,
+            exit_sites: BTreeSet::new(),
+        }
     }
 
     /// Is `entry` the `error`/`error_at_line` function?
@@ -730,7 +741,10 @@ fn terminal_slot_calls(listing: &Listing, file: &object::File) -> BTreeSet<u64> 
     use object::read::Object;
     let mut out = BTreeSet::new();
     let arch = file.architecture();
-    if !matches!(arch, object::Architecture::X86_64 | object::Architecture::I386 | object::Architecture::Aarch64) {
+    if !matches!(
+        arch,
+        object::Architecture::X86_64 | object::Architecture::I386 | object::Architecture::Aarch64
+    ) {
         return out;
     }
     for (&vma, insn) in listing.instructions() {
@@ -751,11 +765,18 @@ fn terminal_slot_calls(listing: &Listing, file: &object::File) -> BTreeSet<u64> 
 /// The slot an x86 `[notrack] call [rip+disp32]` / `call [abs32]` at `vma` reads.
 fn x86_call_slot(file: &object::File, vma: u64, len: u32, wide: bool) -> Option<u64> {
     let bytes = bytes_at(file, vma, len as usize)?;
-    let op = if bytes.first() == Some(&0x3e) { &bytes[1..] } else { bytes };
-    let [0xff, 0x15, d0, d1, d2, d3] = *op else { return None };
+    let op = if bytes.first() == Some(&0x3e) {
+        &bytes[1..]
+    } else {
+        bytes
+    };
+    let [0xff, 0x15, d0, d1, d2, d3] = *op else {
+        return None;
+    };
     let disp = u32::from_le_bytes([d0, d1, d2, d3]);
     Some(if wide {
-        vma.wrapping_add(u64::from(len)).wrapping_add(disp as i32 as i64 as u64)
+        vma.wrapping_add(u64::from(len))
+            .wrapping_add(disp as i32 as i64 as u64)
     } else {
         u64::from(disp)
     })
@@ -765,7 +786,8 @@ fn x86_call_slot(file: &object::File, vma: u64, len: u32, wide: bool) -> Option<
 /// `ldr xN, [xM, #imm]` within four instructions, and the nearest `adrp xM`
 /// before that load, with neither register written in between.
 fn aarch64_call_slot(file: &object::File, vma: u64) -> Option<u64> {
-    let word = |at: u64| bytes_at(file, at, 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
+    let word =
+        |at: u64| bytes_at(file, at, 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
     let blr = word(vma)?;
     if blr & 0xffff_fc1f != 0xd63f_0000 {
         return None;
@@ -810,7 +832,9 @@ fn is_store_or_branch(w: u32) -> bool {
 /// The `len` file bytes at `vma`, from the section that holds them.
 fn bytes_at<'a>(file: &'a object::File, vma: u64, len: usize) -> Option<&'a [u8]> {
     use object::read::{Object, ObjectSection};
-    let sec = file.sections().find(|s| vma >= s.address() && vma < s.address() + s.size())?;
+    let sec = file
+        .sections()
+        .find(|s| vma >= s.address() && vma < s.address() + s.size())?;
     let data = sec.data().ok()?;
     let start = usize::try_from(vma - sec.address()).ok()?;
     data.get(start..start.checked_add(len)?)
@@ -821,7 +845,14 @@ fn bytes_at<'a>(file: &'a object::File, vma: u64, len: usize) -> Option<&'a [u8]
 /// when every path it can take ends at one, or at a call to a function already
 /// concluded.
 pub(crate) fn propagate_exits(listing: &Listing, sites: &[u64], reach: bool) -> Vec<NoReturnFact> {
-    propagate_noreturn(listing, &ErrorRecognizer::dos_exits(sites), &BTreeSet::new(), reach, &BTreeSet::new(), None)
+    propagate_noreturn(
+        listing,
+        &ErrorRecognizer::dos_exits(sites),
+        &BTreeSet::new(),
+        reach,
+        &BTreeSet::new(),
+        None,
+    )
 }
 
 /// Run the call-graph no-return propagation over the Listing and return the
@@ -867,9 +898,16 @@ fn propagate_noreturn(
             }
             // The strict tail-call rule first (cheap, proven); then, if enabled, the
             // CFG-reachability generalization (Ghidra's `targetOnlyCallsNoReturn`).
-            let concluded = function_is_no_return(listing, entry, &terminal, slot_calls, error_recog)
-                || (reach
-                    && function_reaches_only_noreturn(listing, entry, &terminal, slot_calls, error_recog));
+            let concluded =
+                function_is_no_return(listing, entry, &terminal, slot_calls, error_recog)
+                    || (reach
+                        && function_reaches_only_noreturn(
+                            listing,
+                            entry,
+                            &terminal,
+                            slot_calls,
+                            error_recog,
+                        ));
             if concluded {
                 let name = listing
                     .function_at(entry)
@@ -906,7 +944,12 @@ mod tests {
     // --- reach walk: a conditional jump to a no-return target still returns via its
     //     fall-through (the GCC hot/cold-split regression) --------------------------
 
-    fn mk_insn(addr: u64, ft: Option<u64>, flow: crate::listing::model::FlowType, flows: Vec<u64>) -> crate::listing::model::Insn {
+    fn mk_insn(
+        addr: u64,
+        ft: Option<u64>,
+        flow: crate::listing::model::FlowType,
+        flows: Vec<u64>,
+    ) -> crate::listing::model::Insn {
         crate::listing::model::Insn {
             addr,
             len: 2,
@@ -928,14 +971,20 @@ mod tests {
     #[test]
     fn reach_walk_follows_conditional_jump_fallthrough_to_ret() {
         use std::collections::{BTreeMap, BTreeSet};
-        let straight = crate::listing::model::FlowType { has_fallthrough: true, ..Default::default() };
+        let straight = crate::listing::model::FlowType {
+            has_fallthrough: true,
+            ..Default::default()
+        };
         let cjump = crate::listing::model::FlowType {
             is_jump: true,
             is_conditional: true,
             has_fallthrough: true,
             ..Default::default()
         };
-        let ret = crate::listing::model::FlowType { is_terminal: true, ..Default::default() };
+        let ret = crate::listing::model::FlowType {
+            is_terminal: true,
+            ..Default::default()
+        };
         // entry → cjump[→ 0x100 terminal] (fall-through) → RET
         let insns = vec![
             mk_insn(0x0, Some(0x2), straight, vec![]),
@@ -943,20 +992,39 @@ mod tests {
             mk_insn(0x4, Some(0x6), straight, vec![]),
             mk_insn(0x6, None, ret, vec![]),
         ];
-        let body: BTreeMap<u64, &crate::listing::model::Insn> = insns.iter().map(|i| (i.addr, i)).collect();
+        let body: BTreeMap<u64, &crate::listing::model::Insn> =
+            insns.iter().map(|i| (i.addr, i)).collect();
         let terminal: BTreeSet<u64> = [0x100].into_iter().collect();
         let recog = super::ErrorRecognizer::disabled();
         assert!(
-            !super::reaches_only_noreturn_walk(&body, 0x0, Some(0x100), &terminal, &BTreeSet::new(), &recog),
+            !super::reaches_only_noreturn_walk(
+                &body,
+                0x0,
+                Some(0x100),
+                &terminal,
+                &BTreeSet::new(),
+                &recog
+            ),
             "a function that returns on the conditional-jump fall-through must NOT be no-return"
         );
 
         // Control: an UNCONDITIONAL jump to the terminal (no fall-through) IS no-return.
-        let ujump = crate::listing::model::FlowType { is_jump: true, ..Default::default() };
+        let ujump = crate::listing::model::FlowType {
+            is_jump: true,
+            ..Default::default()
+        };
         let only = vec![mk_insn(0x0, None, ujump, vec![0x100])];
-        let body2: BTreeMap<u64, &crate::listing::model::Insn> = only.iter().map(|i| (i.addr, i)).collect();
+        let body2: BTreeMap<u64, &crate::listing::model::Insn> =
+            only.iter().map(|i| (i.addr, i)).collect();
         assert!(
-            super::reaches_only_noreturn_walk(&body2, 0x0, Some(0x100), &terminal, &BTreeSet::new(), &recog),
+            super::reaches_only_noreturn_walk(
+                &body2,
+                0x0,
+                Some(0x100),
+                &terminal,
+                &BTreeSet::new(),
+                &recog
+            ),
             "an unconditional jump whose only target is no-return IS no-return"
         );
     }
@@ -1015,7 +1083,10 @@ mod tests {
         let b = insn("XOR", "EAX,EAX", false, false);
         let c = insn("CALL", "0x4de0", true, false);
         let body: Vec<(u64, &Insn)> = vec![(0, &a), (1, &b), (2, &c)];
-        assert!(arg0_is_nonzero_const(&body, 2), "MOV EDI,0x2 is a nonzero status");
+        assert!(
+            arg0_is_nonzero_const(&body, 2),
+            "MOV EDI,0x2 is a nonzero status"
+        );
     }
 
     #[test]
@@ -1033,10 +1104,16 @@ mod tests {
         // MOV EDI,0x2 then an intervening CALL clobbers edi → reject.
         let m2 = insn("MOV", "EDI,0x2", false, false);
         let clobber = insn("CALL", "0x1234", true, false);
-        assert!(!arg0_is_nonzero_const(&vec![(0, &m2), (1, &clobber), (2, &call)], 2));
+        assert!(!arg0_is_nonzero_const(
+            &vec![(0, &m2), (1, &clobber), (2, &call)],
+            2
+        ));
         // A branch between the def and the call breaks dominance → reject.
         let br = insn("JMP", "0x9", false, true);
-        assert!(!arg0_is_nonzero_const(&vec![(0, &m2), (1, &br), (2, &call)], 2));
+        assert!(!arg0_is_nonzero_const(
+            &vec![(0, &m2), (1, &br), (2, &call)],
+            2
+        ));
         // No writer at all → reject.
         assert!(!arg0_is_nonzero_const(&vec![(0, &call)], 0));
     }
@@ -1160,7 +1237,14 @@ mod tests {
         const NEXT: u64 = 0x200;
         let body: BTreeMap<u64, &Insn> = insns.iter().map(|i| (i.addr, i)).collect();
         let terminal: BTreeSet<u64> = [0x50u64].into_iter().collect();
-        reaches_only_noreturn_walk(&body, 0x100, Some(NEXT), &terminal, &BTreeSet::new(), &ErrorRecognizer::disabled())
+        reaches_only_noreturn_walk(
+            &body,
+            0x100,
+            Some(NEXT),
+            &terminal,
+            &BTreeSet::new(),
+            &ErrorRecognizer::disabled(),
+        )
     }
     const ABORT: u64 = 0x50;
 
@@ -1173,9 +1257,39 @@ mod tests {
         use crate::listing::model::DiscoveredFunction;
         let stub = |entry: u64| {
             [
-                rinsn(entry, Some(entry + 4), vec![], false, false, false, false, false, true),
-                rinsn(entry + 4, Some(entry + 8), vec![], false, false, false, false, false, true),
-                rinsn(entry + 8, Some(entry + 16), vec![], true, false, false, true, true, true),
+                rinsn(
+                    entry,
+                    Some(entry + 4),
+                    vec![],
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    true,
+                ),
+                rinsn(
+                    entry + 4,
+                    Some(entry + 8),
+                    vec![],
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    true,
+                ),
+                rinsn(
+                    entry + 8,
+                    Some(entry + 16),
+                    vec![],
+                    true,
+                    false,
+                    false,
+                    true,
+                    true,
+                    true,
+                ),
             ]
         };
         let func = |entry: u64, has_no_return: bool| DiscoveredFunction {
@@ -1186,7 +1300,17 @@ mod tests {
             call_fixup: None,
         };
         let mut insns: Vec<Insn> = [0x10, 0x20].into_iter().flat_map(stub).collect();
-        insns.push(rinsn(0x30, None, vec![], false, false, true, false, false, false));
+        insns.push(rinsn(
+            0x30,
+            None,
+            vec![],
+            false,
+            false,
+            true,
+            false,
+            false,
+            false,
+        ));
         let listing = Listing::from_model_for_test(
             insns,
             vec![func(0x10, false), func(0x20, true), func(0x30, false)],
@@ -1195,7 +1319,10 @@ mod tests {
         );
         let recog = ErrorRecognizer::disabled();
         let concluded = |stubs: &BTreeSet<u64>| -> Vec<u64> {
-            propagate_noreturn(&listing, &recog, &BTreeSet::new(), true, stubs, None).iter().map(|f| f.addr).collect()
+            propagate_noreturn(&listing, &recog, &BTreeSet::new(), true, stubs, None)
+                .iter()
+                .map(|f| f.addr)
+                .collect()
         };
         assert_eq!(concluded(&BTreeSet::new()), vec![0x10]);
         assert!(concluded(&[0x10, 0x20].into_iter().collect()).is_empty());
@@ -1204,8 +1331,21 @@ mod tests {
     #[test]
     fn reach_tail_noreturn_call_is_noreturn() {
         // 0x100: call ABORT  (terminal callee, no return anywhere)
-        let b = [rinsn(0x100, Some(0x105), vec![ABORT], true, false, false, false, false, true)];
-        assert!(walk(&b), "a body whose only path ends in call abort is no-return");
+        let b = [rinsn(
+            0x100,
+            Some(0x105),
+            vec![ABORT],
+            true,
+            false,
+            false,
+            false,
+            false,
+            true,
+        )];
+        assert!(
+            walk(&b),
+            "a body whose only path ends in call abort is no-return"
+        );
     }
 
     #[test]
@@ -1215,10 +1355,23 @@ mod tests {
         // fall-through is never followed).
         // 0x100: call ABORT (ft->0x105)   0x105: ret
         let b = [
-            rinsn(0x100, Some(0x105), vec![ABORT], true, false, false, false, false, true),
+            rinsn(
+                0x100,
+                Some(0x105),
+                vec![ABORT],
+                true,
+                false,
+                false,
+                false,
+                false,
+                true,
+            ),
             rinsn(0x105, None, vec![], false, false, true, false, false, false),
         ];
-        assert!(walk(&b), "mid-body call abort with an unreachable ret tail is no-return");
+        assert!(
+            walk(&b),
+            "mid-body call abort with an unreachable ret tail is no-return"
+        );
     }
 
     #[test]
@@ -1227,11 +1380,44 @@ mod tests {
         // 0x100: jmp [table]  (computed, flows=[0x110,0x120])
         // 0x110: call ABORT   0x120: call ABORT
         let b = [
-            rinsn(0x100, None, vec![0x110, 0x120], false, true, false, true, true, false),
-            rinsn(0x110, Some(0x115), vec![ABORT], true, false, false, false, false, true),
-            rinsn(0x120, Some(0x125), vec![ABORT], true, false, false, false, false, true),
+            rinsn(
+                0x100,
+                None,
+                vec![0x110, 0x120],
+                false,
+                true,
+                false,
+                true,
+                true,
+                false,
+            ),
+            rinsn(
+                0x110,
+                Some(0x115),
+                vec![ABORT],
+                true,
+                false,
+                false,
+                false,
+                false,
+                true,
+            ),
+            rinsn(
+                0x120,
+                Some(0x125),
+                vec![ABORT],
+                true,
+                false,
+                false,
+                false,
+                false,
+                true,
+            ),
         ];
-        assert!(walk(&b), "a switch whose every arm ends in call abort is no-return");
+        assert!(
+            walk(&b),
+            "a switch whose every arm ends in call abort is no-return"
+        );
     }
 
     #[test]
@@ -1239,10 +1425,23 @@ mod tests {
         // 0x100: call FOO (returning, ft->0x105)  0x105: ret  → a RETURN is reachable.
         let foo = 0x60; // NOT in the terminal set
         let b = [
-            rinsn(0x100, Some(0x105), vec![foo], true, false, false, false, false, true),
+            rinsn(
+                0x100,
+                Some(0x105),
+                vec![foo],
+                true,
+                false,
+                false,
+                false,
+                false,
+                true,
+            ),
             rinsn(0x105, None, vec![], false, false, true, false, false, false),
         ];
-        assert!(!walk(&b), "a reachable ret after a returning call ⇒ returns");
+        assert!(
+            !walk(&b),
+            "a reachable ret after a returning call ⇒ returns"
+        );
     }
 
     #[test]
@@ -1250,33 +1449,95 @@ mod tests {
         // 0x100: jz 0x120 (cond, flows=[0x120], ft->0x110)
         // 0x110: call ABORT (dies)   0x120: ret (REACHABLE via the branch)
         let b = [
-            rinsn(0x100, Some(0x110), vec![0x120], false, true, false, false, false, true),
-            rinsn(0x110, Some(0x115), vec![ABORT], true, false, false, false, false, true),
+            rinsn(
+                0x100,
+                Some(0x110),
+                vec![0x120],
+                false,
+                true,
+                false,
+                false,
+                false,
+                true,
+            ),
+            rinsn(
+                0x110,
+                Some(0x115),
+                vec![ABORT],
+                true,
+                false,
+                false,
+                false,
+                false,
+                true,
+            ),
             rinsn(0x120, None, vec![], false, false, true, false, false, false),
         ];
-        assert!(!walk(&b), "a reachable ret on the taken branch ⇒ returns (conservative)");
+        assert!(
+            !walk(&b),
+            "a reachable ret on the taken branch ⇒ returns (conservative)"
+        );
     }
 
     #[test]
     fn reach_unresolved_indirect_jump_is_rejected() {
         // 0x100: jmp rax (indirect, NO resolved flows) → cannot prove.
-        let b = [rinsn(0x100, None, vec![], false, true, false, true, true, false)];
-        assert!(!walk(&b), "an unresolved indirect jump ⇒ cannot conclude no-return");
+        let b = [rinsn(
+            0x100,
+            None,
+            vec![],
+            false,
+            true,
+            false,
+            true,
+            true,
+            false,
+        )];
+        assert!(
+            !walk(&b),
+            "an unresolved indirect jump ⇒ cannot conclude no-return"
+        );
     }
 
     #[test]
     fn reach_escape_to_returning_neighbour_is_rejected() {
         // 0x100: jmp 0x9999 (direct, target OUTSIDE body, not terminal) → escape.
-        let b = [rinsn(0x100, None, vec![0x9999], false, true, false, false, false, false)];
-        assert!(!walk(&b), "a tail jump escaping the body to a neighbour ⇒ cannot conclude");
+        let b = [rinsn(
+            0x100,
+            None,
+            vec![0x9999],
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+        )];
+        assert!(
+            !walk(&b),
+            "a tail jump escaping the body to a neighbour ⇒ cannot conclude"
+        );
     }
 
     #[test]
     fn reach_call_with_no_fallthrough_to_returning_callee_is_rejected() {
         // 0x100: call FOO with no modelled fall-through, FOO not terminal → uncertain.
         let foo = 0x60;
-        let b = [rinsn(0x100, None, vec![foo], true, false, false, false, false, false)];
-        assert!(!walk(&b), "a call with no fall-through to a non-terminal callee ⇒ reject");
+        let b = [rinsn(
+            0x100,
+            None,
+            vec![foo],
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+        )];
+        assert!(
+            !walk(&b),
+            "a call with no fall-through to a non-terminal callee ⇒ reject"
+        );
     }
 
     #[test]

@@ -51,7 +51,7 @@ use object::Object;
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, CommentFact, Phase};
 
-use super::{dwarf_section_data, Reader};
+use super::{Reader, dwarf_section_data};
 
 /// Port of `DWARFLineInfoCommentScript`: install DWARF `.debug_line` source-line
 /// `file:line` annotations as instruction comments. Gated on `dwarf_lines`
@@ -99,7 +99,9 @@ impl AnalysisPass for DwarfLinesPass {
 
         let mut units = dwarf.units();
         while let Ok(Some(header)) = units.next() {
-            let Ok(unit) = dwarf.unit(header) else { continue };
+            let Ok(unit) = dwarf.unit(header) else {
+                continue;
+            };
             // 1. The subprogram ranges in this CU (the buckets the rows hang on).
             let ranges = func_ranges(&dwarf, &unit);
             if ranges.is_empty() {
@@ -113,8 +115,10 @@ impl AnalysisPass for DwarfLinesPass {
         // Stable output: sort by (func, addr); a single comment per address (keep
         // the first), so the printed annotation set is deterministic regardless of
         // CU / row iteration order.
-        out.comments.sort_by(|a, b| (a.func_addr, a.addr).cmp(&(b.func_addr, b.addr)));
-        out.comments.dedup_by(|a, b| a.func_addr == b.func_addr && a.addr == b.addr);
+        out.comments
+            .sort_by(|a, b| (a.func_addr, a.addr).cmp(&(b.func_addr, b.addr)));
+        out.comments
+            .dedup_by(|a, b| a.func_addr == b.func_addr && a.addr == b.addr);
         out
     }
 }
@@ -200,7 +204,11 @@ fn collect_line_comments(
         };
         let file = file_name(dwarf, unit, header, row.file_index());
         let text = format!("{file}:{}", line.get());
-        out.push(CommentFact { func_addr: func.low, addr, text });
+        out.push(CommentFact {
+            func_addr: func.low,
+            addr,
+            text,
+        });
     }
 }
 

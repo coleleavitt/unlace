@@ -18,9 +18,9 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use unlace_base::address::{calc_mask, Address, Range};
+use unlace_base::address::{Address, Range, calc_mask};
 use unlace_base::error::{KunaError, KunaResult};
-use unlace_base::marshal::{Decoder, ElementId, Encoder, IdRegistry, ATTRIB_NAME, ATTRIB_VAL};
+use unlace_base::marshal::{ATTRIB_NAME, ATTRIB_VAL, Decoder, ElementId, Encoder, IdRegistry};
 use unlace_base::partmap::PartMap;
 use unlace_base::space::AddrSpace;
 use unlace_base::types::Wrap;
@@ -99,7 +99,13 @@ impl ContextBitRange {
         let endbit = ebit - word * 32;
         let shift = 32 - endbit - 1;
         let mask = (!0u32) >> ((startbit + shift) as u32);
-        ContextBitRange { word, startbit, endbit, shift, mask }
+        ContextBitRange {
+            word,
+            startbit,
+            endbit,
+            shift,
+            mask,
+        }
     }
 
     /// Right shift needed to unpack the value.
@@ -679,7 +685,7 @@ impl Clone for FreeArray {
     /// being set" — the mask is zeroed.
     fn clone(&self) -> FreeArray {
         FreeArray {
-            array: self.array.clone(), // Copy value at split point
+            array: self.array.clone(),         // Copy value at split point
             mask: vec![0u32; self.mask.len()], // but not fact that value is being set
         }
     }
@@ -928,7 +934,9 @@ impl ContextDatabase for ContextInternal {
         // non-negative bit positions)
         let sz = sbit / 32 + 1;
         if ebit / 32 + 1 != sz {
-            return Err(KunaError::lowlevel("Context variable does not fit in one word"));
+            return Err(KunaError::lowlevel(
+                "Context variable does not fit in one word",
+            ));
         }
         if sz > self.size {
             self.size = sz;
@@ -1154,7 +1162,10 @@ impl ContextCache {
     }
 
     /// Context words as seen by the decoder, including read overrides.
-    pub(crate) fn effective_context<'a>(&'a self, context: &'a [u32]) -> impl Iterator<Item = u32> + 'a {
+    pub(crate) fn effective_context<'a>(
+        &'a self,
+        context: &'a [u32],
+    ) -> impl Iterator<Item = u32> + 'a {
         context.iter().enumerate().map(|(i, &word)| {
             let (mask, value) = self.read_overrides.get(i).copied().unwrap_or_default();
             (word & !mask) | value
@@ -1192,7 +1203,10 @@ impl ContextCache {
         } else {
             database.get_context(addr)
         };
-        for (word, effective) in buf[..n].iter_mut().zip(self.effective_context(&context[..n])) {
+        for (word, effective) in buf[..n]
+            .iter_mut()
+            .zip(self.effective_context(&context[..n]))
+        {
             *word = effective;
         }
     }
@@ -1218,7 +1232,12 @@ impl ContextCache {
         if !self.allowset {
             return;
         }
-        let mask = mask & self.write_masks.get(num as usize).copied().unwrap_or(u32::MAX);
+        let mask = mask
+            & self
+                .write_masks
+                .get(num as usize)
+                .copied()
+                .unwrap_or(u32::MAX);
         if mask == 0 {
             return;
         }
@@ -1252,7 +1271,12 @@ impl ContextCache {
         if !self.allowset {
             return;
         }
-        let mask = mask & self.write_masks.get(num as usize).copied().unwrap_or(u32::MAX);
+        let mask = mask
+            & self
+                .write_masks
+                .get(num as usize)
+                .copied()
+                .unwrap_or(u32::MAX);
         if mask == 0 {
             return;
         }
@@ -1275,7 +1299,7 @@ impl ContextCache {
 mod tests {
     use super::*;
     use unlace_base::marshal::{PackedDecode, PackedEncode, XmlDecode, XmlEncode};
-    use unlace_base::space::{addrspace_flags, spacetype, AddrSpaceManager, ConstantSpace};
+    use unlace_base::space::{AddrSpaceManager, ConstantSpace, addrspace_flags, spacetype};
 
     /// Build a manager with a constant space (index 0), two 4-byte code
     /// spaces "ram" (index 1) and "ram2" (index 2), a little-endian
@@ -1284,8 +1308,14 @@ mod tests {
     fn test_manager() -> AddrSpaceManager {
         let mut manager = AddrSpaceManager::new();
         manager.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-        for (i, (name, bigend)) in
-            [("ram", false), ("ram2", false), ("reg", false), ("breg", true)].iter().enumerate()
+        for (i, (name, bigend)) in [
+            ("ram", false),
+            ("ram2", false),
+            ("reg", false),
+            ("breg", true),
+        ]
+        .iter()
+        .enumerate()
         {
             let spc = AddrSpace::new(
                 spacetype::IPTR_PROCESSOR,
@@ -1329,7 +1359,8 @@ mod tests {
     }
 
     fn get(db: &ContextInternal, manager: &AddrSpaceManager, nm: &[u8], off: u64) -> u32 {
-        db.get_variable_value(nm, &addr(manager, "ram", off)).unwrap()
+        db.get_variable_value(nm, &addr(manager, "ram", off))
+            .unwrap()
     }
 
     #[test]
@@ -1339,12 +1370,21 @@ mod tests {
         let r2 = ContextBitRange::new(4, 6);
         assert_eq!((r2.get_word(), r2.get_shift(), r2.get_mask()), (0, 25, 0x7));
         let r3 = ContextBitRange::new(32, 47);
-        assert_eq!((r3.get_word(), r3.get_shift(), r3.get_mask()), (1, 16, 0xffff));
+        assert_eq!(
+            (r3.get_word(), r3.get_shift(), r3.get_mask()),
+            (1, 16, 0xffff)
+        );
         let bit = ContextBitRange::new(8, 8);
-        assert_eq!((bit.get_word(), bit.get_shift(), bit.get_mask()), (0, 23, 0x1));
+        assert_eq!(
+            (bit.get_word(), bit.get_shift(), bit.get_mask()),
+            (0, 23, 0x1)
+        );
         // full-word value
         let full = ContextBitRange::new(0, 31);
-        assert_eq!((full.get_word(), full.get_shift(), full.get_mask()), (0, 0, 0xffff_ffff));
+        assert_eq!(
+            (full.get_word(), full.get_shift(), full.get_mask()),
+            (0, 0, 0xffff_ffff)
+        );
 
         let mut blob = [0u32; 2];
         r.set_value(&mut blob, 0xab);
@@ -1419,7 +1459,7 @@ mod tests {
     fn decode_scope_restores_nested_ranges_boundaries_and_cache_on_unwind() {
         use crate::kuna_contextscope::DecodeContextScope;
         use std::cell::RefCell;
-        use std::panic::{catch_unwind, AssertUnwindSafe};
+        use std::panic::{AssertUnwindSafe, catch_unwind};
         let manager = test_manager();
         let mut original = test_db();
         for (name, offset, value) in [
@@ -1689,13 +1729,16 @@ mod tests {
         assert_eq!(get(&db, &manager, b"fldA", 0x0), 0xab);
         assert_eq!(get(&db, &manager, b"wide", 0xffff_ffff), 0xdead_beef);
         // unknown variable -> C++ LowlevelError
-        let err = db.get_variable_value(b"nope", &addr(&manager, "ram", 0)).unwrap_err();
+        let err = db
+            .get_variable_value(b"nope", &addr(&manager, "ram", 0))
+            .unwrap_err();
         assert_eq!(err.to_string(), "Non-existent context variable: nope");
         // a variable crossing a word boundary is rejected
         let err = db.register_variable(b"bad", 30, 33).unwrap_err();
         assert_eq!(err.to_string(), "Context variable does not fit in one word");
         // once the database has split points, registration is frozen
-        db.set_variable(b"fldA", &addr(&manager, "ram", 0x100), 1).unwrap();
+        db.set_variable(b"fldA", &addr(&manager, "ram", 0x100), 1)
+            .unwrap();
         let err = db.register_variable(b"late", 17, 18).unwrap_err();
         assert_eq!(
             err.to_string(),
@@ -1711,24 +1754,28 @@ mod tests {
         let manager = test_manager();
         let mut db = test_db();
         // A set at 0x100 paints from 0x100 to the end of the space
-        db.set_variable(b"fldA", &addr(&manager, "ram", 0x100), 5).unwrap();
+        db.set_variable(b"fldA", &addr(&manager, "ram", 0x100), 5)
+            .unwrap();
         assert_eq!(get(&db, &manager, b"fldA", 0xff), 0);
         assert_eq!(get(&db, &manager, b"fldA", 0x100), 5);
         assert_eq!(get(&db, &manager, b"fldA", 0x5000), 5);
         // B set at 0x200: A keeps its painted value across the new split
-        db.set_variable(b"fldB", &addr(&manager, "ram", 0x200), 7).unwrap();
+        db.set_variable(b"fldB", &addr(&manager, "ram", 0x200), 7)
+            .unwrap();
         assert_eq!(get(&db, &manager, b"fldB", 0x200), 7);
         assert_eq!(get(&db, &manager, b"fldB", 0x1ff), 0);
         assert_eq!(get(&db, &manager, b"fldA", 0x200), 5);
         // A set at 0x50 stops painting at 0x100 (A's mask is set there)
-        db.set_variable(b"fldA", &addr(&manager, "ram", 0x50), 9).unwrap();
+        db.set_variable(b"fldA", &addr(&manager, "ram", 0x50), 9)
+            .unwrap();
         assert_eq!(get(&db, &manager, b"fldA", 0x4f), 0);
         assert_eq!(get(&db, &manager, b"fldA", 0x50), 9);
         assert_eq!(get(&db, &manager, b"fldA", 0xff), 9);
         assert_eq!(get(&db, &manager, b"fldA", 0x100), 5);
         // B set at 0x50 flows THROUGH the 0x100 boundary (only A was set
         // there) and stops at 0x200 where B was set
-        db.set_variable(b"fldB", &addr(&manager, "ram", 0x50), 3).unwrap();
+        db.set_variable(b"fldB", &addr(&manager, "ram", 0x50), 3)
+            .unwrap();
         assert_eq!(get(&db, &manager, b"fldB", 0x50), 3);
         assert_eq!(get(&db, &manager, b"fldB", 0x100), 3);
         assert_eq!(get(&db, &manager, b"fldB", 0x1ff), 3);
@@ -1758,13 +1805,15 @@ mod tests {
         assert_eq!(get(&db, &manager, b"fldA", 0x2000), 0);
         // a set below the region stops at its first boundary (mask set at
         // 0x1000)
-        db.set_variable(b"fldA", &addr(&manager, "ram", 0x500), 2).unwrap();
+        db.set_variable(b"fldA", &addr(&manager, "ram", 0x500), 2)
+            .unwrap();
         assert_eq!(get(&db, &manager, b"fldA", 0x500), 2);
         assert_eq!(get(&db, &manager, b"fldA", 0xfff), 2);
         assert_eq!(get(&db, &manager, b"fldA", 0x1000), 4);
         // a set inside the region paints through the region's end split
         // (0x2000 has no explicitly-set mask) out to the end of the space
-        db.set_variable(b"fldA", &addr(&manager, "ram", 0x1800), 6).unwrap();
+        db.set_variable(b"fldA", &addr(&manager, "ram", 0x1800), 6)
+            .unwrap();
         assert_eq!(get(&db, &manager, b"fldA", 0x17ff), 4);
         assert_eq!(get(&db, &manager, b"fldA", 0x1800), 6);
         assert_eq!(get(&db, &manager, b"fldA", 0x2000), 6);
@@ -1793,7 +1842,12 @@ mod tests {
         let num = var.get_word();
         let mask = var.get_mask() << var.get_shift();
         // (already shifted) value 0x42 in fldB's field
-        db.set_context_change_point(&addr(&manager, "ram", 0x100), num, mask, 0x42 << var.get_shift());
+        db.set_context_change_point(
+            &addr(&manager, "ram", 0x100),
+            num,
+            mask,
+            0x42 << var.get_shift(),
+        );
         assert_eq!(get(&db, &manager, b"fldB", 0x100), 0x42);
         assert_eq!(get(&db, &manager, b"fldB", 0xff), 0);
         db.set_context_region(
@@ -1817,7 +1871,8 @@ mod tests {
         // empty database: whole space
         let (_, first, last) = db.get_context_bounds(&addr(&manager, "ram", 0x500));
         assert_eq!((first, last), (0, ram_highest));
-        db.set_variable(b"fldA", &addr(&manager, "ram", 0x100), 5).unwrap();
+        db.set_variable(b"fldA", &addr(&manager, "ram", 0x100), 5)
+            .unwrap();
         // below the split: no lower bound in this space
         let (blob, first, last) = db.get_context_bounds(&addr(&manager, "ram", 0x80));
         assert_eq!((first, last), (0, 0xff));
@@ -1840,7 +1895,8 @@ mod tests {
         let var = db.get_variable(b"fldA").unwrap();
         let (num, mask) = (var.get_word(), var.get_mask() << var.get_shift());
         // a pre-existing explicit set at 0x200
-        db.set_variable(b"fldA", &addr(&manager, "ram", 0x200), 7).unwrap();
+        db.set_variable(b"fldA", &addr(&manager, "ram", 0x200), 7)
+            .unwrap();
 
         let mut cache = ContextCache::new();
         let mut buf = [0u32; 2];
@@ -1852,7 +1908,13 @@ mod tests {
         // a set within the cached range invalidates the cache, and the
         // paint stops at the 0x200 flow boundary
         cache.get_context(&db, &addr(&manager, "ram", 0x100), &mut buf);
-        cache.set_context(&mut db, &addr(&manager, "ram", 0x180), num, mask, 5 << var.get_shift());
+        cache.set_context(
+            &mut db,
+            &addr(&manager, "ram", 0x180),
+            num,
+            mask,
+            5 << var.get_shift(),
+        );
         cache.get_context(&db, &addr(&manager, "ram", 0x190), &mut buf);
         assert_eq!(var.get_value(&buf), 5);
         cache.get_context(&db, &addr(&manager, "ram", 0x17f), &mut buf);
@@ -1864,7 +1926,13 @@ mod tests {
         // observed (the cache serves fresh blob values; C++ reads through
         // its cached pointer the same way)
         cache.get_context(&db, &addr(&manager, "ram", 0x300), &mut buf); // cache [0x200,highest]
-        cache.set_context(&mut db, &addr(&manager, "ram", 0x1c0), num, mask, 3 << var.get_shift());
+        cache.set_context(
+            &mut db,
+            &addr(&manager, "ram", 0x1c0),
+            num,
+            mask,
+            3 << var.get_shift(),
+        );
         // paint [0x1c0,0x200) only -- 0x200 has fldA's mask set
         cache.get_context(&db, &addr(&manager, "ram", 0x300), &mut buf);
         assert_eq!(var.get_value(&buf), 7);
@@ -1873,7 +1941,13 @@ mod tests {
 
         // allow_set(false) drops sets entirely
         cache.allow_set(false);
-        cache.set_context(&mut db, &addr(&manager, "ram", 0x300), num, mask, 1 << var.get_shift());
+        cache.set_context(
+            &mut db,
+            &addr(&manager, "ram", 0x300),
+            num,
+            mask,
+            1 << var.get_shift(),
+        );
         cache.get_context(&db, &addr(&manager, "ram", 0x300), &mut buf);
         assert_eq!(var.get_value(&buf), 7);
         cache.allow_set(true);
@@ -1934,42 +2008,86 @@ mod tests {
         {
             let tset = db.get_tracked_default();
             tset.push(TrackedContext {
-                loc: VarnodeData { space: Some(space(&manager, "reg")), offset: 0, size: 8 },
+                loc: VarnodeData {
+                    space: Some(space(&manager, "reg")),
+                    offset: 0,
+                    size: 8,
+                },
                 val: 0x1122_3344_5566_7788,
             });
             tset.push(TrackedContext {
-                loc: VarnodeData { space: Some(space(&manager, "breg")), offset: 0x10, size: 8 },
+                loc: VarnodeData {
+                    space: Some(space(&manager, "breg")),
+                    offset: 0x10,
+                    size: 8,
+                },
                 val: 0x1122_3344_5566_7788,
             });
         }
         // exact match
-        let mem = VarnodeData { space: Some(space(&manager, "reg")), offset: 0, size: 8 };
+        let mem = VarnodeData {
+            space: Some(space(&manager, "reg")),
+            offset: 0,
+            size: 8,
+        };
         assert_eq!(db.get_tracked_value(&mem, &point), 0x1122_3344_5566_7788);
         // little endian: sub-register at +4 takes the high bytes
-        let mem = VarnodeData { space: Some(space(&manager, "reg")), offset: 4, size: 4 };
+        let mem = VarnodeData {
+            space: Some(space(&manager, "reg")),
+            offset: 4,
+            size: 4,
+        };
         assert_eq!(db.get_tracked_value(&mem, &point), 0x1122_3344);
         // little endian: sub-register at +0 takes the low bytes
-        let mem = VarnodeData { space: Some(space(&manager, "reg")), offset: 0, size: 4 };
+        let mem = VarnodeData {
+            space: Some(space(&manager, "reg")),
+            offset: 0,
+            size: 4,
+        };
         assert_eq!(db.get_tracked_value(&mem, &point), 0x5566_7788);
         // big endian, single byte reads: last byte is unshifted, first byte
         // is shifted down by the full distance to the tracked end
-        let mem = VarnodeData { space: Some(space(&manager, "breg")), offset: 0x17, size: 1 };
+        let mem = VarnodeData {
+            space: Some(space(&manager, "breg")),
+            offset: 0x17,
+            size: 1,
+        };
         assert_eq!(db.get_tracked_value(&mem, &point), 0x88);
-        let mem = VarnodeData { space: Some(space(&manager, "breg")), offset: 0x10, size: 1 };
+        let mem = VarnodeData {
+            space: Some(space(&manager, "breg")),
+            offset: 0x10,
+            size: 1,
+        };
         assert_eq!(db.get_tracked_value(&mem, &point), 0x11);
         // big endian, multi-byte sub-register: the C++ shift is
         // `8*(tendoff - mem.offset)` (NOT `tendoff - endoff`), which
         // over-shifts unless the read is one byte or the whole register —
         // transcribed as-is, the C++ is the spec
-        let mem = VarnodeData { space: Some(space(&manager, "breg")), offset: 0x10, size: 4 };
+        let mem = VarnodeData {
+            space: Some(space(&manager, "breg")),
+            offset: 0x10,
+            size: 4,
+        };
         assert_eq!(db.get_tracked_value(&mem, &point), 0x11);
         // big endian exact match is returned untrimmed
-        let mem = VarnodeData { space: Some(space(&manager, "breg")), offset: 0x10, size: 8 };
+        let mem = VarnodeData {
+            space: Some(space(&manager, "breg")),
+            offset: 0x10,
+            size: 8,
+        };
         assert_eq!(db.get_tracked_value(&mem, &point), 0x1122_3344_5566_7788);
         // not contained / not tracked -> 0
-        let mem = VarnodeData { space: Some(space(&manager, "reg")), offset: 6, size: 4 };
+        let mem = VarnodeData {
+            space: Some(space(&manager, "reg")),
+            offset: 6,
+            size: 4,
+        };
         assert_eq!(db.get_tracked_value(&mem, &point), 0);
-        let mem = VarnodeData { space: Some(space(&manager, "ram")), offset: 0, size: 4 };
+        let mem = VarnodeData {
+            space: Some(space(&manager, "ram")),
+            offset: 0,
+            size: 4,
+        };
         assert_eq!(db.get_tracked_value(&mem, &point), 0);
     }
 
@@ -1980,12 +2098,23 @@ mod tests {
         {
             let tset = db.create_set(&addr(&manager, "ram", 0x100), &addr(&manager, "ram", 0x200));
             tset.push(TrackedContext {
-                loc: VarnodeData { space: Some(space(&manager, "reg")), offset: 0, size: 4 },
+                loc: VarnodeData {
+                    space: Some(space(&manager, "reg")),
+                    offset: 0,
+                    size: 4,
+                },
                 val: 0x55,
             });
         }
-        let mem = VarnodeData { space: Some(space(&manager, "reg")), offset: 0, size: 4 };
-        assert_eq!(db.get_tracked_value(&mem, &addr(&manager, "ram", 0x150)), 0x55);
+        let mem = VarnodeData {
+            space: Some(space(&manager, "reg")),
+            offset: 0,
+            size: 4,
+        };
+        assert_eq!(
+            db.get_tracked_value(&mem, &addr(&manager, "ram", 0x150)),
+            0x55
+        );
         // before the range and at/after its open end: the (empty) copies
         assert_eq!(db.get_tracked_value(&mem, &addr(&manager, "ram", 0xff)), 0);
         assert_eq!(db.get_tracked_value(&mem, &addr(&manager, "ram", 0x200)), 0);
@@ -1998,7 +2127,11 @@ mod tests {
         let manager = test_manager();
         let registry = test_registry();
         let tcont = TrackedContext {
-            loc: VarnodeData { space: Some(space(&manager, "reg")), offset: 0x8, size: 4 },
+            loc: VarnodeData {
+                space: Some(space(&manager, "reg")),
+                offset: 0x8,
+                size: 4,
+            },
             val: 0x1234_5678,
         };
         // XML
@@ -2039,13 +2172,20 @@ mod tests {
         }
         assert!(empty.is_empty());
 
-        db.set_variable(b"fldA", &addr(&manager, "ram", 0x100), 5).unwrap();
-        db.set_variable(b"fldB", &addr(&manager, "ram", 0x200), 7).unwrap();
-        db.set_variable(b"wide", &addr(&manager, "ram", 0x100), 0xcafe).unwrap();
+        db.set_variable(b"fldA", &addr(&manager, "ram", 0x100), 5)
+            .unwrap();
+        db.set_variable(b"fldB", &addr(&manager, "ram", 0x200), 7)
+            .unwrap();
+        db.set_variable(b"wide", &addr(&manager, "ram", 0x100), 0xcafe)
+            .unwrap();
         {
             let tset = db.create_set(&addr(&manager, "ram", 0x300), &addr(&manager, "ram", 0x400));
             tset.push(TrackedContext {
-                loc: VarnodeData { space: Some(space(&manager, "reg")), offset: 0, size: 4 },
+                loc: VarnodeData {
+                    space: Some(space(&manager, "reg")),
+                    offset: 0,
+                    size: 4,
+                },
                 val: 0x99,
             });
         }
@@ -2076,9 +2216,21 @@ mod tests {
             assert_eq!(get(&back, &manager, b"fldB", 0x1ff), 0, "{codec}");
             assert_eq!(get(&back, &manager, b"fldB", 0x200), 7, "{codec}");
             assert_eq!(get(&back, &manager, b"wide", 0x100), 0xcafe, "{codec}");
-            let mem = VarnodeData { space: Some(space(&manager, "reg")), offset: 0, size: 4 };
-            assert_eq!(back.get_tracked_value(&mem, &addr(&manager, "ram", 0x350)), 0x99, "{codec}");
-            assert_eq!(back.get_tracked_value(&mem, &addr(&manager, "ram", 0x2ff)), 0, "{codec}");
+            let mem = VarnodeData {
+                space: Some(space(&manager, "reg")),
+                offset: 0,
+                size: 4,
+            };
+            assert_eq!(
+                back.get_tracked_value(&mem, &addr(&manager, "ram", 0x350)),
+                0x99,
+                "{codec}"
+            );
+            assert_eq!(
+                back.get_tracked_value(&mem, &addr(&manager, "ram", 0x2ff)),
+                0,
+                "{codec}"
+            );
         }
     }
 
@@ -2108,8 +2260,15 @@ mod tests {
         assert_eq!(get(&db, &manager, b"fldA", 0x200), 0);
         assert_eq!(get(&db, &manager, b"fldA", 0xff), 0);
         assert_eq!(get(&db, &manager, b"flag", 0x180), 1);
-        let mem = VarnodeData { space: Some(space(&manager, "reg")), offset: 0, size: 4 };
-        assert_eq!(db.get_tracked_value(&mem, &addr(&manager, "ram", 0x150)), 0x55);
+        let mem = VarnodeData {
+            space: Some(space(&manager, "reg")),
+            offset: 0,
+            size: 4,
+        };
+        assert_eq!(
+            db.get_tracked_value(&mem, &addr(&manager, "ram", 0x150)),
+            0x55
+        );
         assert_eq!(db.get_tracked_value(&mem, &addr(&manager, "ram", 0x250)), 0);
 
         // an unexpected child is a hard error, as in C++

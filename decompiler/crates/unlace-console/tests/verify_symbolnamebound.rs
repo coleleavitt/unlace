@@ -22,13 +22,16 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_decomp::kuna_symbolnamebound::{bound_scope_path, DEFAULT_SCOPE_DEPTH};
+use unlace_decomp::kuna_symbolnamebound::{DEFAULT_SCOPE_DEPTH, bound_scope_path};
 
 /// The fixture's symbol nests 1000 `::` components (`deep_scope_x86_64.s`).
 const FIXTURE_DEPTH: usize = 1000;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture(name: &str) -> String {
@@ -63,7 +66,10 @@ fn load(bin: &str) -> Result<Loaded, String> {
     let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
     let prog = bootstrap_from_object(bin, "", &spec_roots);
     let out = prog.map(|p| Loaded {
-        names: p.function_entries().map(|(name, _)| name.to_string()).collect(),
+        names: p
+            .function_entries()
+            .map(|(name, _)| name.to_string())
+            .collect(),
         scopes: p.arch().symboltab.num_scopes(),
         original_resolves: p.lookup_symbol(&original_name()).is_some(),
     });
@@ -147,14 +153,22 @@ fn the_folded_spelling_is_deterministic() {
     let bin = fixture("deep_scope_x86_64");
     let a = deep_name(&load(&bin).expect("load"));
     let b = deep_name(&load(&bin).expect("load"));
-    assert_eq!(a, b, "two loads of the same bytes must produce the same folded name");
+    assert_eq!(
+        a, b,
+        "two loads of the same bytes must produce the same folded name"
+    );
     assert!(a.contains("__x"), "the fold must carry its hash: {a}");
 
     // The synthetic component is identifier-safe: it is re-split on `::` and
     // reaches emitted C verbatim.
-    let synth = a.split("::").find(|c| c.contains("__x")).expect("a folded component");
+    let synth = a
+        .split("::")
+        .find(|c| c.contains("__x"))
+        .expect("a folded component");
     assert!(
-        synth.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_'),
+        synth
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_'),
         "folded component must be identifier-safe: {synth}"
     );
 }

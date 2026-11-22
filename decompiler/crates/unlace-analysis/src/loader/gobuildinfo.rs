@@ -24,8 +24,8 @@
 //! ([`blob_is_buildinfo`]), so a stray copy of the magic string is not
 //! evidence.
 
-use object::read::{Object, ObjectSection};
 use object::SectionFlags;
+use object::read::{Object, ObjectSection};
 
 /// Section names the build-info blob lives under, per format.
 const BUILDINFO_SECTIONS: [&str; 2] = [".go.buildinfo", "__go_buildinfo"];
@@ -110,7 +110,11 @@ fn stated_release<'a>(
         return None;
     }
     let release = |text: &[u8]| {
-        is_version_string(text).then(|| core::str::from_utf8(text).ok().and_then(|s| parse_go_version(s.trim())))
+        is_version_string(text).then(|| {
+            core::str::from_utf8(text)
+                .ok()
+                .and_then(|s| parse_go_version(s.trim()))
+        })
     };
     if flags & 0x2 != 0 {
         if blob[16..HEADER_SIZE].iter().any(|&b| b != 0) {
@@ -133,20 +137,28 @@ fn stated_release<'a>(
     };
     let header = read(word(&blob[16..]), 2 * ptr_size)?;
     let (ptr, len) = (word(header), word(&header[ptr_size..]));
-    let len = usize::try_from(len).ok().filter(|&l| l <= MAX_VERSION_LEN)?;
+    let len = usize::try_from(len)
+        .ok()
+        .filter(|&l| l <= MAX_VERSION_LEN)?;
     release(read(ptr, len)?)
 }
 
 /// `true` when `blob` opens with a complete, well-formed build-info header
 /// ([`stated_release`]).
-pub fn blob_is_buildinfo<'a>(blob: &[u8], read: impl FnMut(u64, usize) -> Option<&'a [u8]>) -> bool {
+pub fn blob_is_buildinfo<'a>(
+    blob: &[u8],
+    read: impl FnMut(u64, usize) -> Option<&'a [u8]>,
+) -> bool {
     stated_release(blob, read).is_some()
 }
 
 /// The toolchain version from a build-info blob of either form: inline
 /// strings, or the pre-go1.18 pointer to a Go string header, resolved through
 /// `read`.
-pub fn go_version<'a>(blob: &[u8], read: impl FnMut(u64, usize) -> Option<&'a [u8]>) -> Option<(u16, u16)> {
+pub fn go_version<'a>(
+    blob: &[u8],
+    read: impl FnMut(u64, usize) -> Option<&'a [u8]>,
+) -> Option<(u16, u16)> {
     stated_release(blob, read).flatten()
 }
 
@@ -158,7 +170,8 @@ pub fn go_version<'a>(blob: &[u8], read: impl FnMut(u64, usize) -> Option<&'a [u
 /// strided pass over its `.data`. `None` on any other format.
 pub fn pe_buildinfo_blob<'a>(file: &'a object::File<'a>) -> Option<&'a [u8]> {
     use object::pe::{
-        IMAGE_SCN_ALIGN_MASK, IMAGE_SCN_CNT_INITIALIZED_DATA, IMAGE_SCN_MEM_READ, IMAGE_SCN_MEM_WRITE,
+        IMAGE_SCN_ALIGN_MASK, IMAGE_SCN_CNT_INITIALIZED_DATA, IMAGE_SCN_MEM_READ,
+        IMAGE_SCN_MEM_WRITE,
     };
     if file.format() != object::BinaryFormat::Pe {
         return None;
@@ -179,7 +192,8 @@ pub fn pe_buildinfo_blob<'a>(file: &'a object::File<'a>) -> Option<&'a [u8]> {
         .map(|off| &data[off..])
         .find(|blob| {
             blob_is_buildinfo(blob, |vma, len| {
-                img.get_or_insert_with(|| crate::pclntab::ImageBytes::new(file)).read(vma, len)
+                img.get_or_insert_with(|| crate::pclntab::ImageBytes::new(file))
+                    .read(vma, len)
             })
         })
 }
@@ -228,13 +242,19 @@ mod tests {
     #[test]
     fn only_a_complete_header_is_buildinfo() {
         assert!(blob_is_buildinfo(&blob("go1.21.3", 2), unmapped));
-        assert!(blob_is_buildinfo(&blob("devel go1.23-0a1b2c3", 2), unmapped));
+        assert!(blob_is_buildinfo(
+            &blob("devel go1.23-0a1b2c3", 2),
+            unmapped
+        ));
         let mut ptr4 = blob("go1.22.1", 2);
         ptr4[14] = 4;
         assert!(blob_is_buildinfo(&ptr4, unmapped));
 
         let bare: Vec<u8> = MAGIC.iter().copied().chain([0u8; 18]).collect();
-        assert!(!blob_is_buildinfo(&bare, unmapped), "the magic string alone");
+        assert!(
+            !blob_is_buildinfo(&bare, unmapped),
+            "the magic string alone"
+        );
         let mut bad = blob("go1.21.3", 2);
         bad[14] = 3;
         assert!(!blob_is_buildinfo(&bad, unmapped), "pointer size 3");
@@ -245,12 +265,24 @@ mod tests {
         bad[20] = 1;
         assert!(!blob_is_buildinfo(&bad, unmapped), "nonzero header padding");
         assert!(!blob_is_buildinfo(&blob("", 2), unmapped), "empty version");
-        assert!(!blob_is_buildinfo(&blob("v1.2.3", 2), unmapped), "not a toolchain version");
-        assert!(!blob_is_buildinfo(&blob("go1\x01", 2), unmapped), "control bytes");
+        assert!(
+            !blob_is_buildinfo(&blob("v1.2.3", 2), unmapped),
+            "not a toolchain version"
+        );
+        assert!(
+            !blob_is_buildinfo(&blob("go1\x01", 2), unmapped),
+            "control bytes"
+        );
         let mut cut = blob("go1.21.3", 2);
         cut.truncate(36);
-        assert!(!blob_is_buildinfo(&cut, unmapped), "version runs off the end");
-        assert!(!blob_is_buildinfo(&MAGIC[..], unmapped), "short of a header");
+        assert!(
+            !blob_is_buildinfo(&cut, unmapped),
+            "version runs off the end"
+        );
+        assert!(
+            !blob_is_buildinfo(&MAGIC[..], unmapped),
+            "short of a header"
+        );
     }
 
     #[test]
@@ -270,8 +302,17 @@ mod tests {
         assert!(blob_is_buildinfo(&b, read));
         assert_eq!(stated_release(&b, read), Some(Some((1, 16))));
         assert_eq!(go_version(&b, read), Some((1, 16)));
-        let dangling = |vma: u64, len: usize| if vma == 0x5000 { header.get(..len) } else { None };
-        assert!(!blob_is_buildinfo(&b, dangling), "the version pointer leads nowhere");
+        let dangling = |vma: u64, len: usize| {
+            if vma == 0x5000 {
+                header.get(..len)
+            } else {
+                None
+            }
+        };
+        assert!(
+            !blob_is_buildinfo(&b, dangling),
+            "the version pointer leads nowhere"
+        );
         assert!(!blob_is_buildinfo(&b, unmapped));
     }
 
@@ -292,9 +333,7 @@ mod tests {
     fn corpus_binaries_state_their_toolchains() {
         // The campaign corpus carries both eras; missing files skip (the
         // corpus is machine-local state, not a repo fixture).
-        for (p, want) in [
-            ("/home/mahaloz/kwt/multilang/corpus/go/hello", (1u16, 22u16)),
-        ] {
+        for (p, want) in [("/home/mahaloz/kwt/multilang/corpus/go/hello", (1u16, 22u16))] {
             if let Ok(bytes) = std::fs::read(p) {
                 assert_eq!(go_toolchain_version(&bytes), Some(want), "{p}");
             }

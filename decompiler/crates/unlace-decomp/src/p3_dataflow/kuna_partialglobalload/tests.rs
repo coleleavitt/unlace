@@ -1,10 +1,10 @@
 use super::*;
 use crate::context::ArchContext;
-use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, IopSpace,
-    SpacebaseSpace, UniqueSpace,
-};
 use std::rc::Rc;
+use unlace_base::space::{
+    AddrSpace, AddrSpaceManager, ConstantSpace, IopSpace, SpacebaseSpace, UniqueSpace,
+    addrspace_flags, spacetype,
+};
 
 fn function() -> (Funcdata, Rc<AddrSpace>, VarnodeId) {
     let mut manager = AddrSpaceManager::new();

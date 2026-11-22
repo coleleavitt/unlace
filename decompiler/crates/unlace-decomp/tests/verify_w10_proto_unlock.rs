@@ -44,7 +44,10 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn specs_root() -> PathBuf {
@@ -187,7 +190,10 @@ fn w10_proto_unlock_const_return_collapses_no_tied_roundtrip() {
         (t.ends_with("= 0;") || t.ends_with("= 1;"))
             && !t.contains('.')
             && !t.contains('[')
-            && t.split('=').next().map(|lhs| lhs.trim().split_whitespace().count() == 1).unwrap_or(false)
+            && t.split('=')
+                .next()
+                .map(|lhs| lhs.trim().split_whitespace().count() == 1)
+                .unwrap_or(false)
     });
     assert!(
         !has_const_assign_to_eax,
@@ -261,6 +267,9 @@ fn w10_proto_unlock_join_and_untie_are_deterministic() {
             }
         };
         let b = dump_body(&rust_test_bin(), stem).expect("second dump");
-        assert_eq!(a, b, "{stem} body is nondeterministic across runs (join/un-tie order leak)");
+        assert_eq!(
+            a, b,
+            "{stem} body is nondeterministic across runs (join/un-tie order leak)"
+        );
     }
 }

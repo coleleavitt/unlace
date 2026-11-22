@@ -83,7 +83,7 @@
 use std::collections::BTreeMap;
 
 use unlace_base::address::{
-    calc_mask, leastsigbit_set, mostsigbit_set, sign_extend_sized, Address,
+    Address, calc_mask, leastsigbit_set, mostsigbit_set, sign_extend_sized,
 };
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::space::AddrSpace;
@@ -91,10 +91,10 @@ use unlace_base::types::{int4, int8, uint4, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{ActionGroupList, Rule, RuleSpec};
-use crate::dtype::{type_class, type_metatype, Datatype, TypeFactory};
+use crate::context::{ArchHandle, OpId, TypeOp, VarnodeId};
+use crate::dtype::{Datatype, TypeFactory, type_class, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::op::pcodeop_flags;
-use crate::context::{ArchHandle, OpId, TypeOp, VarnodeId};
 use crate::transform::{LaneDescription, TVarRef, TransformManager};
 use std::rc::Rc;
 
@@ -290,7 +290,11 @@ impl SubvariableFlow {
     fn does_or_set(data: &Funcdata, orop: OpId, mask: uintb) -> int4 {
         let o = data.obank().get(orop).expect("does_or_set: stale op");
         let in1 = o.get_in(1).expect("does_or_set: missing in1");
-        let index: int4 = if data.vbank().get(in1).expect("vn").is_constant() { 1 } else { 0 };
+        let index: int4 = if data.vbank().get(in1).expect("vn").is_constant() {
+            1
+        } else {
+            0
+        };
         let inx = o.get_in(index).expect("does_or_set: missing in[index]");
         if !data.vbank().get(inx).expect("vn").is_constant() {
             return -1;
@@ -308,7 +312,11 @@ impl SubvariableFlow {
     fn does_and_clear(data: &Funcdata, andop: OpId, mask: uintb) -> int4 {
         let o = data.obank().get(andop).expect("does_and_clear: stale op");
         let in1 = o.get_in(1).expect("does_and_clear: missing in1");
-        let index: int4 = if data.vbank().get(in1).expect("vn").is_constant() { 1 } else { 0 };
+        let index: int4 = if data.vbank().get(in1).expect("vn").is_constant() {
+            1
+        } else {
+            0
+        };
         let inx = o.get_in(index).expect("does_and_clear: missing in[index]");
         if !data.vbank().get(inx).expect("vn").is_constant() {
             return -1;
@@ -341,7 +349,12 @@ impl SubvariableFlow {
             return (None, false);
         }
         // Already seen before
-        if data.vbank().get(vn).expect("set_replacement: stale vn").is_mark() {
+        if data
+            .vbank()
+            .get(vn)
+            .expect("set_replacement: stale vn")
+            .is_mark()
+        {
             let res = *self.varmap.get(&vn).expect("marked vn must be in varmap");
             let inworklist = false;
             if self.rv(res).mask != mask {
@@ -398,7 +411,10 @@ impl SubvariableFlow {
                 // Not a flag
                 // If the logical variable is not a flag, don't consider the case where multiple variables
                 // are packed into a single location, i.e. always consider it a single variable
-                if (!self.aggressive) && ((v.get_consume() & !mask) != 0) && !self.zero_above(v, mask) {
+                if (!self.aggressive)
+                    && ((v.get_consume() & !mask) != 0)
+                    && !self.zero_above(v, mask)
+                {
                     if leaf_ok && self.can_be_leaf(v, mask) {
                         return (Some(self.add_leaf(data, vn, mask)), false);
                     }
@@ -440,7 +456,10 @@ impl SubvariableFlow {
             def: None,
         });
         self.varmap.insert(vn, res);
-        data.vbank_mut().get_mut(vn).expect("set_replacement: stale vn").set_mark();
+        data.vbank_mut()
+            .get_mut(vn)
+            .expect("set_replacement: stale vn")
+            .set_mark();
 
         let mut inworklist = true;
         // Check if vn already represents the logical variable being traced
@@ -450,8 +469,12 @@ impl SubvariableFlow {
                 self.rv_mut(res).replacement = Some(vn);
             } else if mask == 1 {
                 let bool_out = if is_written {
-                    let defop =
-                        data.vbank().get(vn).expect("vn").get_def().expect("written vn has def");
+                    let defop = data
+                        .vbank()
+                        .get(vn)
+                        .expect("vn")
+                        .get_def()
+                        .expect("written vn has def");
                     data.obank().get(defop).expect("stale def").is_bool_output()
                 } else {
                     false
@@ -478,7 +501,11 @@ impl SubvariableFlow {
         // The defining op of the *original*
         // Varnode the placeholder shadows (callers only reach here on real vns).
         let vn = self.rv(outrvn).vn.expect("createOp: outrvn has no vn");
-        let op = data.vbank().get(vn).expect("createOp: stale outrvn vn").get_def();
+        let op = data
+            .vbank()
+            .get(vn)
+            .expect("createOp: stale outrvn vn")
+            .get_def();
         self.oplist.push(ReplaceOp {
             op,
             replacement: None,
@@ -559,7 +586,9 @@ impl SubvariableFlow {
             return Ok(false);
         }
         let r = self.rv(rvn);
-        if r.vn.is_some_and(|vn| crate::kuna_truncarg::drops_only_zero_bits(data, vn, r.mask)) {
+        if r.vn
+            .is_some_and(|vn| crate::kuna_truncarg::drops_only_zero_bits(data, vn, r.mask))
+        {
             self.zext_pulls.push((op, slot));
         }
         self.patchlist.push(PatchRecord {
@@ -607,7 +636,13 @@ impl SubvariableFlow {
             if returns_integer_pair(data, vn) {
                 return Ok(false);
             }
-            if crate::kuna_zextreturn::zero_extended_word(data, vn, vn, self.rv(rvn).mask, self.flowsize) {
+            if crate::kuna_zextreturn::zero_extended_word(
+                data,
+                vn,
+                vn,
+                self.rv(rvn).mask,
+                self.flowsize,
+            ) {
                 return Ok(false);
             }
         }
@@ -615,7 +650,12 @@ impl SubvariableFlow {
             // If there's something outside the mask being consumed, don't truncate.
             let vn = self.rv(rvn).vn.expect("try_return_pull: rvn vn");
             let rmask = self.rv(rvn).mask;
-            if (data.vbank().get(vn).expect("try_return_pull: stale rvn vn").get_consume() & !rmask)
+            if (data
+                .vbank()
+                .get(vn)
+                .expect("try_return_pull: stale rvn vn")
+                .get_consume()
+                & !rmask)
                 != 0
             {
                 return Ok(false);
@@ -650,15 +690,31 @@ impl SubvariableFlow {
                 };
                 if inworklist {
                     self.worklist.push(rep);
-                } else if data.vbank().get(retvn).expect("try_return_pull: stale retvn").is_constant()
+                } else if data
+                    .vbank()
+                    .get(retvn)
+                    .expect("try_return_pull: stale retvn")
+                    .is_constant()
                     && retop != op
                 {
                     // Trace won't revisit this RETURN, so generate the patch now.
                     if let Some(storage) = self.rv(rvn).vn {
-                        if crate::kuna_zextreturn::zero_extended_word(data, retvn, storage, rmask, self.flowsize) {
+                        if crate::kuna_zextreturn::zero_extended_word(
+                            data,
+                            retvn,
+                            storage,
+                            rmask,
+                            self.flowsize,
+                        ) {
                             return Ok(false);
                         }
-                        if crate::kuna_zextreturn::unsigned_trim(data, retvn, storage, rmask, self.flowsize) {
+                        if crate::kuna_zextreturn::unsigned_trim(
+                            data,
+                            retvn,
+                            storage,
+                            rmask,
+                            self.flowsize,
+                        ) {
                             self.zext_returns.push(retop);
                         }
                     }
@@ -675,7 +731,9 @@ impl SubvariableFlow {
             self.returns_traversed = true;
         }
         let r = self.rv(rvn);
-        if r.vn.is_some_and(|vn| crate::kuna_zextreturn::unsigned_trim(data, vn, vn, r.mask, self.flowsize)) {
+        if r.vn.is_some_and(|vn| {
+            crate::kuna_zextreturn::unsigned_trim(data, vn, vn, r.mask, self.flowsize)
+        }) {
             self.zext_returns.push(op);
         }
         self.patchlist.push(PatchRecord {
@@ -693,12 +751,7 @@ impl SubvariableFlow {
     /// the given INDIRECT/CALL op (C++ `SubvariableFlow::tryCallReturnPush`).
     ///
     /// STUB(W4): `fd->getCallSpecs(op)` / `isOutputLocked` / `isOutputActive`.
-    fn try_call_return_push(
-        &mut self,
-        data: &Funcdata,
-        op: OpId,
-        rvn: RvId,
-    ) -> KunaResult<bool> {
+    fn try_call_return_push(&mut self, data: &Funcdata, op: OpId, rvn: RvId) -> KunaResult<bool> {
         if !self.aggressive {
             let vn = self.rv(rvn).vn.expect("try_call_return_push: rvn vn");
             if (data.vbank().get(vn).expect("vn").get_consume() & !self.rv(rvn).mask) != 0 {
@@ -780,15 +833,26 @@ impl SubvariableFlow {
     /// (kuna `regnarrow`) Can the flow read `v`'s logical value as a SUBPIECE
     /// of it: a written container whose logical value is its low bytes?
     fn can_be_leaf(&self, v: &crate::varnode::Varnode, mask: uintb) -> bool {
-        self.zext_uses && v.is_written() && mask == calc_mask(self.flowsize)
+        self.zext_uses
+            && v.is_written()
+            && mask == calc_mask(self.flowsize)
             && v.get_size() > self.flowsize
     }
 
     /// (kuna `regnarrow`) Enter `vn` in the flow as a leaf.
     fn add_leaf(&mut self, data: &mut Funcdata, vn: VarnodeId, mask: uintb) -> RvId {
-        let res = self.new_rv(ReplaceVarnode { vn: Some(vn), replacement: None, mask, val: 0, def: None });
+        let res = self.new_rv(ReplaceVarnode {
+            vn: Some(vn),
+            replacement: None,
+            mask,
+            val: 0,
+            def: None,
+        });
         self.varmap.insert(vn, res);
-        data.vbank_mut().get_mut(vn).expect("add_leaf: stale vn").set_mark();
+        data.vbank_mut()
+            .get_mut(vn)
+            .expect("add_leaf: stale vn")
+            .set_mark();
         self.leaves.push(res);
         res
     }
@@ -796,10 +860,18 @@ impl SubvariableFlow {
     /// (kuna `regnarrow`) Does the zero-extended flow trace `rvn`'s definition
     /// back through a narrower copy of it, rather than reading it as a leaf?
     fn traceable_def(&self, data: &Funcdata, rvn: RvId) -> bool {
-        let Some(v) = self.rv(rvn).vn.and_then(|vn| data.vbank().get(vn)) else { return false };
-        let Some(o) = v.get_def().and_then(|d| data.obank().get(d)) else { return true };
+        let Some(v) = self.rv(rvn).vn.and_then(|vn| data.vbank().get(vn)) else {
+            return false;
+        };
+        let Some(o) = v.get_def().and_then(|d| data.obank().get(d)) else {
+            return true;
+        };
         let mask = self.rv(rvn).mask;
-        let constant = |k: int4| o.get_in(k).and_then(|c| data.vbank().get(c)).is_some_and(|c| c.is_constant());
+        let constant = |k: int4| {
+            o.get_in(k)
+                .and_then(|c| data.vbank().get(c))
+                .is_some_and(|c| c.is_constant())
+        };
         match o.code() {
             OpCode::CPUI_COPY
             | OpCode::CPUI_MULTIEQUAL
@@ -811,7 +883,10 @@ impl SubvariableFlow {
             | OpCode::CPUI_INT_SEXT => true,
             OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_MULT => (mask & 1) != 0,
             OpCode::CPUI_INT_LEFT => constant(1),
-            OpCode::CPUI_SUBPIECE => o.get_in(1).and_then(|c| data.vbank().get(c)).is_some_and(|c| c.get_offset() == 0),
+            OpCode::CPUI_SUBPIECE => o
+                .get_in(1)
+                .and_then(|c| data.vbank().get(c))
+                .is_some_and(|c| c.get_offset() == 0),
             _ => false,
         }
     }
@@ -825,20 +900,28 @@ impl SubvariableFlow {
     /// per path; a user-op's register operand (a syscall number) keeps the
     /// register's width.
     fn zext_route(&self, data: &Funcdata, op: OpId, vn: VarnodeId, mask: uintb) -> ZextRoute {
-        let Some(o) = data.obank().get(op) else { return ZextRoute::Abort };
-        let read_low = |x: Option<VarnodeId>| {
-            x.and_then(|x| data.vbank().get(x)).is_some_and(|x| (x.get_consume() & !mask) == 0)
+        let Some(o) = data.obank().get(op) else {
+            return ZextRoute::Abort;
         };
-        let plain_out = o.get_out().and_then(|x| data.vbank().get(x)).is_none_or(|x| {
-            !x.is_addr_tied() && !x.is_persist() && !x.is_addr_force()
-        });
+        let read_low = |x: Option<VarnodeId>| {
+            x.and_then(|x| data.vbank().get(x))
+                .is_some_and(|x| (x.get_consume() & !mask) == 0)
+        };
+        let plain_out = o
+            .get_out()
+            .and_then(|x| data.vbank().get(x))
+            .is_none_or(|x| !x.is_addr_tied() && !x.is_persist() && !x.is_addr_force());
         if !plain_out {
             return match o.code() {
                 OpCode::CPUI_INDIRECT | OpCode::CPUI_MULTIEQUAL => ZextRoute::Abort,
                 _ => ZextRoute::Extend,
             };
         }
-        let constant = |k: int4| o.get_in(k).and_then(|c| data.vbank().get(c)).filter(|c| c.is_constant());
+        let constant = |k: int4| {
+            o.get_in(k)
+                .and_then(|c| data.vbank().get(c))
+                .filter(|c| c.is_constant())
+        };
         match o.code() {
             OpCode::CPUI_MULTIEQUAL => ZextRoute::Trace,
             OpCode::CPUI_SUBPIECE => {
@@ -848,17 +931,22 @@ impl SubvariableFlow {
                     ZextRoute::Extend
                 }
             }
-            OpCode::CPUI_INDIRECT | OpCode::CPUI_RETURN | OpCode::CPUI_CALLOTHER => ZextRoute::Abort,
+            OpCode::CPUI_INDIRECT | OpCode::CPUI_RETURN | OpCode::CPUI_CALLOTHER => {
+                ZextRoute::Abort
+            }
             OpCode::CPUI_COPY if Self::returned(data, o.get_out()) => ZextRoute::Abort,
             OpCode::CPUI_COPY => ZextRoute::Trace,
             OpCode::CPUI_INT_AND if constant(1).is_some() => {
-                if constant(1).is_some_and(|c| c.get_offset() & mask != 0) && read_low(o.get_out()) {
+                if constant(1).is_some_and(|c| c.get_offset() & mask != 0) && read_low(o.get_out())
+                {
                     ZextRoute::Trace
                 } else {
                     ZextRoute::Extend
                 }
             }
-            OpCode::CPUI_INT_OR if constant(1).is_some_and(|c| mask & !c.get_offset() == 0) => ZextRoute::Extend,
+            OpCode::CPUI_INT_OR if constant(1).is_some_and(|c| mask & !c.get_offset() == 0) => {
+                ZextRoute::Extend
+            }
             OpCode::CPUI_INT_AND
             | OpCode::CPUI_INT_OR
             | OpCode::CPUI_INT_XOR
@@ -890,9 +978,21 @@ impl SubvariableFlow {
     /// would be converted by C from whatever sign it is declared with, so such
     /// a web is not narrowed.
     fn narrow_param(&self, data: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
-        let Some(slot) = data.obank().get(op).map(|o| o.get_slot(vn)).filter(|&s| s >= 1) else { return false };
-        let Some(idx) = data.get_call_specs_index(op) else { return false };
-        data.get_call_specs(idx).proto().get_param(slot - 1).is_some_and(|p| p.get_size() <= self.flowsize)
+        let Some(slot) = data
+            .obank()
+            .get(op)
+            .map(|o| o.get_slot(vn))
+            .filter(|&s| s >= 1)
+        else {
+            return false;
+        };
+        let Some(idx) = data.get_call_specs_index(op) else {
+            return false;
+        };
+        data.get_call_specs(idx)
+            .proto()
+            .get_param(slot - 1)
+            .is_some_and(|p| p.get_size() <= self.flowsize)
     }
 
     /// (kuna `regsigned`) How the sign-extended flow of `vn` crosses `op`, one
@@ -903,21 +1003,29 @@ impl SubvariableFlow {
     /// sign-extended trace); a call argument does when its parameter is no
     /// wider; every other reader takes the sign extension of the narrow value.
     fn sext_route(&self, data: &Funcdata, op: OpId, vn: VarnodeId) -> ZextRoute {
-        let Some(o) = data.obank().get(op) else { return ZextRoute::Abort };
-        let plain_out = o.get_out().and_then(|x| data.vbank().get(x)).is_none_or(|x| {
-            !x.is_addr_tied() && !x.is_persist() && !x.is_addr_force()
-        });
+        let Some(o) = data.obank().get(op) else {
+            return ZextRoute::Abort;
+        };
+        let plain_out = o
+            .get_out()
+            .and_then(|x| data.vbank().get(x))
+            .is_none_or(|x| !x.is_addr_tied() && !x.is_persist() && !x.is_addr_force());
         if !plain_out {
             return match o.code() {
                 OpCode::CPUI_INDIRECT | OpCode::CPUI_MULTIEQUAL => ZextRoute::Abort,
                 _ => ZextRoute::Extend,
             };
         }
-        let constant = |k: int4| o.get_in(k).and_then(|c| data.vbank().get(c)).filter(|c| c.is_constant());
+        let constant = |k: int4| {
+            o.get_in(k)
+                .and_then(|c| data.vbank().get(c))
+                .filter(|c| c.is_constant())
+        };
         match o.code() {
-            OpCode::CPUI_INDIRECT | OpCode::CPUI_RETURN | OpCode::CPUI_CALLOTHER | OpCode::CPUI_BRANCHIND => {
-                ZextRoute::Abort
-            }
+            OpCode::CPUI_INDIRECT
+            | OpCode::CPUI_RETURN
+            | OpCode::CPUI_CALLOTHER
+            | OpCode::CPUI_BRANCHIND => ZextRoute::Abort,
             OpCode::CPUI_COPY if Self::returned(data, o.get_out()) => ZextRoute::Abort,
             OpCode::CPUI_COPY
             | OpCode::CPUI_MULTIEQUAL
@@ -926,10 +1034,17 @@ impl SubvariableFlow {
             | OpCode::CPUI_INT_XOR
             | OpCode::CPUI_INT_OR
             | OpCode::CPUI_INT_AND => ZextRoute::Trace,
-            OpCode::CPUI_INT_SRIGHT if constant(1).is_some() && o.get_in(0) == Some(vn) => ZextRoute::Trace,
+            OpCode::CPUI_INT_SRIGHT if constant(1).is_some() && o.get_in(0) == Some(vn) => {
+                ZextRoute::Trace
+            }
             OpCode::CPUI_SUBPIECE => {
-                let out = o.get_out().and_then(|x| data.vbank().get(x)).map(|x| x.get_size());
-                if constant(1).is_some_and(|c| c.get_offset() == 0) && out.is_some_and(|n| n <= self.flowsize) {
+                let out = o
+                    .get_out()
+                    .and_then(|x| data.vbank().get(x))
+                    .map(|x| x.get_size());
+                if constant(1).is_some_and(|c| c.get_offset() == 0)
+                    && out.is_some_and(|n| n <= self.flowsize)
+                {
                     ZextRoute::Trace
                 } else {
                     ZextRoute::Extend
@@ -950,8 +1065,11 @@ impl SubvariableFlow {
     /// in front of a returned value?
     fn returned(data: &Funcdata, vn: Option<VarnodeId>) -> bool {
         vn.and_then(|vn| data.vbank().get(vn)).is_some_and(|v| {
-            v.descend_iter()
-                .any(|op| data.obank().get(op).is_some_and(|o| o.code() == OpCode::CPUI_RETURN))
+            v.descend_iter().any(|op| {
+                data.obank()
+                    .get(op)
+                    .is_some_and(|o| o.code() == OpCode::CPUI_RETURN)
+            })
         })
     }
 
@@ -1001,7 +1119,9 @@ impl SubvariableFlow {
                         if !self.zero_above(data.vbank().get(rvn_vn).expect("vn"), mask) {
                             return Ok(false);
                         }
-                        let Some(k) = self.unpatched_slot(data, op, rvn_vn) else { return Ok(false) };
+                        let Some(k) = self.unpatched_slot(data, op, rvn_vn) else {
+                            return Ok(false);
+                        };
                         self.patchlist.push(PatchRecord {
                             typ: PatchType::ZextUsePatch,
                             patch_op: op,
@@ -1039,7 +1159,12 @@ impl SubvariableFlow {
                     hcount += 1;
                 }
                 OpCode::CPUI_INT_AND => {
-                    let in1 = data.obank().get(op).expect("stale op").get_in(1).expect("in1");
+                    let in1 = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(1)
+                        .expect("in1");
                     let in1c = data.vbank().get(in1).expect("vn").is_constant();
                     let in1off = data.vbank().get(in1).expect("vn").get_offset();
                     let mask = self.rv(rvn).mask;
@@ -1080,11 +1205,19 @@ impl SubvariableFlow {
                     if (self.rv(rvn).mask & 1) == 0 {
                         return Ok(false); // Cannot account for carry
                     }
-                    let other = data.obank().get(op).expect("stale op").get_in(1 - slot).expect("in");
-                    let mut sa = leastsigbit_set(data.vbank().get(other).expect("vn").get_nz_mask());
+                    let other = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(1 - slot)
+                        .expect("in");
+                    let mut sa =
+                        leastsigbit_set(data.vbank().get(other).expect("vn").get_nz_mask());
                     sa &= !7; // Should be nearest multiple of 8
-                    if sa < 0 || self.bitsize + sa > uintb::BITS as int4
-                        || self.bitsize + sa > 8 * data.vbank().get(rvn_vn).expect("vn").get_size() {
+                    if sa < 0
+                        || self.bitsize + sa > uintb::BITS as int4
+                        || self.bitsize + sa > 8 * data.vbank().get(rvn_vn).expect("vn").get_size()
+                    {
                         return Ok(false);
                     }
                     let rop = self.create_op_down(OpCode::CPUI_INT_MULT, 2, op, rvn, slot);
@@ -1101,8 +1234,18 @@ impl SubvariableFlow {
                     if (self.bitsize & 7) != 0 {
                         return Ok(false); // Must be a whole number of bytes
                     }
-                    let i0 = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
-                    let i1 = data.obank().get(op).expect("stale op").get_in(1).expect("in1");
+                    let i0 = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(0)
+                        .expect("in0");
+                    let i1 = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(1)
+                        .expect("in1");
                     if !Self::is_zero_extended(data, i0, self.flowsize)? {
                         return Ok(false);
                     }
@@ -1141,7 +1284,12 @@ impl SubvariableFlow {
                         hcount += 1;
                         continue;
                     }
-                    let in1 = data.obank().get(op).expect("stale op").get_in(1).expect("in1");
+                    let in1 = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(1)
+                        .expect("in1");
                     if !data.vbank().get(in1).expect("vn").is_constant() {
                         return Ok(false); // Dynamic shift
                     }
@@ -1189,7 +1337,12 @@ impl SubvariableFlow {
                         hcount += 1;
                         continue;
                     }
-                    let in1 = data.obank().get(op).expect("stale op").get_in(1).expect("in1");
+                    let in1 = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(1)
+                        .expect("in1");
                     if !data.vbank().get(in1).expect("vn").is_constant() {
                         return Ok(false);
                     }
@@ -1211,7 +1364,12 @@ impl SubvariableFlow {
                     }
                     let ov = outvn.expect("outvn");
                     let outsize = data.vbank().get(ov).expect("vn").get_size();
-                    let i0 = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
+                    let i0 = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(0)
+                        .expect("in0");
                     let i0nz = data.vbank().get(i0).expect("vn").get_nz_mask();
                     if (outsize == self.flowsize) && ((newmask & 1) == 1) && (i0nz == mask) {
                         self.add_terminal_patch(op, rvn);
@@ -1235,7 +1393,12 @@ impl SubvariableFlow {
                     hcount += 1;
                 }
                 OpCode::CPUI_SUBPIECE => {
-                    let in1 = data.obank().get(op).expect("stale op").get_in(1).expect("in1");
+                    let in1 = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(1)
+                        .expect("in1");
                     let byte_offset = data.vbank().get(in1).expect("vn").get_offset();
                     if byte_offset >= (uintb::BITS / 8) as uintb {
                         return Ok(false);
@@ -1270,10 +1433,20 @@ impl SubvariableFlow {
                     hcount += 1;
                 }
                 OpCode::CPUI_PIECE => {
-                    let i0 = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
+                    let i0 = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(0)
+                        .expect("in0");
                     let mask = self.rv(rvn).mask;
                     let newmask = if rvn_vn == i0 {
-                        let i1 = data.obank().get(op).expect("stale op").get_in(1).expect("in1");
+                        let i1 = data
+                            .obank()
+                            .get(op)
+                            .expect("stale op")
+                            .get_in(1)
+                            .expect("in1");
                         let i1size = data.vbank().get(i1).expect("vn").get_size();
                         if !(1..8).contains(&i1size) {
                             return Ok(false);
@@ -1293,8 +1466,12 @@ impl SubvariableFlow {
                     hcount += 1;
                 }
                 OpCode::CPUI_INT_LESS | OpCode::CPUI_INT_LESSEQUAL => {
-                    let othervn =
-                        data.obank().get(op).expect("stale op").get_in(1 - slot).expect("in"); // The OTHER side
+                    let othervn = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(1 - slot)
+                        .expect("in"); // The OTHER side
                     let mask = self.rv(rvn).mask;
                     let rvn_nz = data.vbank().get(rvn_vn).expect("vn").get_nz_mask();
                     if (!self.aggressive) && ((rvn_nz | mask) != mask) {
@@ -1317,8 +1494,12 @@ impl SubvariableFlow {
                     hcount += 1;
                 }
                 OpCode::CPUI_INT_NOTEQUAL | OpCode::CPUI_INT_EQUAL => {
-                    let othervn =
-                        data.obank().get(op).expect("stale op").get_in(1 - slot).expect("in"); // The OTHER side
+                    let othervn = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(1 - slot)
+                        .expect("in"); // The OTHER side
                     let mask = self.rv(rvn).mask;
                     if self.bitsize != 1 {
                         let rvn_nz = data.vbank().get(rvn_vn).expect("vn").get_nz_mask();
@@ -1362,8 +1543,7 @@ impl SubvariableFlow {
                         if booldir {
                             self.add_terminal_patch(op, rvn);
                         } else {
-                            let rop =
-                                self.create_op_down(OpCode::CPUI_BOOL_NEGATE, 1, op, rvn, 0);
+                            let rop = self.create_op_down(OpCode::CPUI_BOOL_NEGATE, 1, op, rvn, 0);
                             self.create_new_out(rop, 1u64);
                             let out = self.oplist[rop].output.expect("created out");
                             self.add_terminal_patch(op, out);
@@ -1460,7 +1640,12 @@ impl SubvariableFlow {
                 let numin = data.obank().get(op).expect("stale op").num_input();
                 let rop = self.create_op(data, code, numin, rvn);
                 for i in 0..numin {
-                    let ini = data.obank().get(op).expect("stale op").get_in(i).expect("in");
+                    let ini = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(i)
+                        .expect("in");
                     if !self.create_link(data, rop, mask, i, ini)? {
                         return Ok(false);
                     }
@@ -1471,12 +1656,27 @@ impl SubvariableFlow {
                 let sa = Self::does_and_clear(data, op, mask);
                 if sa != -1 {
                     let rop = self.create_op(data, OpCode::CPUI_COPY, 1, rvn);
-                    let insa = data.obank().get(op).expect("stale op").get_in(sa).expect("in");
+                    let insa = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(sa)
+                        .expect("in");
                     self.add_constant(data, Some(rop), mask, 0, insa);
                 } else {
                     let rop = self.create_op(data, OpCode::CPUI_INT_AND, 2, rvn);
-                    let i0 = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
-                    let i1 = data.obank().get(op).expect("stale op").get_in(1).expect("in1");
+                    let i0 = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(0)
+                        .expect("in0");
+                    let i1 = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(1)
+                        .expect("in1");
                     if !self.create_link(data, rop, mask, 0, i0)? {
                         return Ok(false);
                     }
@@ -1490,12 +1690,27 @@ impl SubvariableFlow {
                 let sa = Self::does_or_set(data, op, mask);
                 if sa != -1 {
                     let rop = self.create_op(data, OpCode::CPUI_COPY, 1, rvn);
-                    let insa = data.obank().get(op).expect("stale op").get_in(sa).expect("in");
+                    let insa = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(sa)
+                        .expect("in");
                     self.add_constant(data, Some(rop), mask, 0, insa);
                 } else {
                     let rop = self.create_op(data, OpCode::CPUI_INT_OR, 2, rvn);
-                    let i0 = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
-                    let i1 = data.obank().get(op).expect("stale op").get_in(1).expect("in1");
+                    let i0 = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(0)
+                        .expect("in0");
+                    let i1 = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(1)
+                        .expect("in1");
                     if !self.create_link(data, rop, mask, 0, i0)? {
                         return Ok(false);
                     }
@@ -1506,7 +1721,12 @@ impl SubvariableFlow {
                 Ok(true)
             }
             OpCode::CPUI_INT_ZEXT | OpCode::CPUI_INT_SEXT => {
-                let i0 = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
+                let i0 = data
+                    .obank()
+                    .get(op)
+                    .expect("stale op")
+                    .get_in(0)
+                    .expect("in0");
                 let i0size = data.vbank().get(i0).expect("vn").get_size();
                 if (mask & calc_mask(i0size)) != mask {
                     if (mask & 1) != 0 && self.flowsize > i0size {
@@ -1531,8 +1751,18 @@ impl SubvariableFlow {
                 } else {
                     self.create_op(data, OpCode::CPUI_INT_ADD, 2, rvn)
                 };
-                let i0 = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
-                let i1 = data.obank().get(op).expect("stale op").get_in(1).expect("in1");
+                let i0 = data
+                    .obank()
+                    .get(op)
+                    .expect("stale op")
+                    .get_in(0)
+                    .expect("in0");
+                let i1 = data
+                    .obank()
+                    .get(op)
+                    .expect("stale op")
+                    .get_in(1)
+                    .expect("in1");
                 if !self.create_link(data, rop, mask, 0, i0)? {
                     return Ok(false);
                 }
@@ -1542,7 +1772,12 @@ impl SubvariableFlow {
                 Ok(true)
             }
             OpCode::CPUI_INT_LEFT => {
-                let i1 = data.obank().get(op).expect("stale op").get_in(1).expect("in1");
+                let i1 = data
+                    .obank()
+                    .get(op)
+                    .expect("stale op")
+                    .get_in(1)
+                    .expect("in1");
                 if !data.vbank().get(i1).expect("vn").is_constant() {
                     return Ok(false); // break -- Dynamic shift
                 }
@@ -1560,7 +1795,12 @@ impl SubvariableFlow {
                 }
                 if (newmask << sa) == mask {
                     let rop = self.create_op(data, OpCode::CPUI_COPY, 1, rvn);
-                    let i0 = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
+                    let i0 = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(0)
+                        .expect("in0");
                     if !self.create_link(data, rop, newmask, 0, i0)? {
                         return Ok(false);
                     }
@@ -1570,7 +1810,12 @@ impl SubvariableFlow {
                     return Ok(false); // Can't assume zeroes are shifted into least sig bits
                 }
                 let rop = self.create_op(data, OpCode::CPUI_INT_LEFT, 2, rvn);
-                let i0 = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
+                let i0 = data
+                    .obank()
+                    .get(op)
+                    .expect("stale op")
+                    .get_in(0)
+                    .expect("in0");
                 if !self.create_link(data, rop, mask, 0, i0)? {
                     return Ok(false);
                 }
@@ -1579,7 +1824,12 @@ impl SubvariableFlow {
                 Ok(true)
             }
             OpCode::CPUI_INT_RIGHT => {
-                let i1 = data.obank().get(op).expect("stale op").get_in(1).expect("in1");
+                let i1 = data
+                    .obank()
+                    .get(op)
+                    .expect("stale op")
+                    .get_in(1)
+                    .expect("in1");
                 if !data.vbank().get(i1).expect("vn").is_constant() {
                     return Ok(false); // break -- Dynamic shift
                 }
@@ -1588,7 +1838,12 @@ impl SubvariableFlow {
                     return Ok(false);
                 }
                 let sa = sa as int4;
-                let i0 = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
+                let i0 = data
+                    .obank()
+                    .get(op)
+                    .expect("stale op")
+                    .get_in(0)
+                    .expect("in0");
                 let i0size = data.vbank().get(i0).expect("vn").get_size();
                 let newmask = (mask << sa) & calc_mask(i0size);
                 if newmask == 0 {
@@ -1607,7 +1862,12 @@ impl SubvariableFlow {
                 Ok(true)
             }
             OpCode::CPUI_INT_SRIGHT => {
-                let i1 = data.obank().get(op).expect("stale op").get_in(1).expect("in1");
+                let i1 = data
+                    .obank()
+                    .get(op)
+                    .expect("stale op")
+                    .get_in(1)
+                    .expect("in1");
                 if !data.vbank().get(i1).expect("vn").is_constant() {
                     return Ok(false); // break -- Dynamic shift
                 }
@@ -1616,7 +1876,12 @@ impl SubvariableFlow {
                     return Ok(false);
                 }
                 let sa = sa as int4;
-                let i0 = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
+                let i0 = data
+                    .obank()
+                    .get(op)
+                    .expect("stale op")
+                    .get_in(0)
+                    .expect("in0");
                 let i0size = data.vbank().get(i0).expect("vn").get_size();
                 let newmask = (mask << sa) & calc_mask(i0size);
                 if (newmask >> sa) != mask {
@@ -1631,14 +1896,24 @@ impl SubvariableFlow {
             OpCode::CPUI_INT_MULT => {
                 let sa = leastsigbit_set(mask);
                 if sa != 0 {
-                    let i1 = data.obank().get(op).expect("stale op").get_in(1).expect("in1");
+                    let i1 = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(1)
+                        .expect("in1");
                     let sa2 = leastsigbit_set(data.vbank().get(i1).expect("vn").get_nz_mask());
                     if sa2 < sa {
                         return Ok(false); // Cannot deal with carries into logical multiply
                     }
                     let newmask = mask >> sa;
                     let rop = self.create_op(data, OpCode::CPUI_INT_MULT, 2, rvn);
-                    let i0 = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
+                    let i0 = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(0)
+                        .expect("in0");
                     if !self.create_link(data, rop, newmask, 0, i0)? {
                         return Ok(false);
                     }
@@ -1651,8 +1926,18 @@ impl SubvariableFlow {
                     } else {
                         self.create_op(data, OpCode::CPUI_INT_MULT, 2, rvn)
                     };
-                    let i0 = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
-                    let i1 = data.obank().get(op).expect("stale op").get_in(1).expect("in1");
+                    let i0 = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(0)
+                        .expect("in0");
+                    let i1 = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(1)
+                        .expect("in1");
                     if !self.create_link(data, rop, mask, 0, i0)? {
                         return Ok(false);
                     }
@@ -1669,8 +1954,18 @@ impl SubvariableFlow {
                 if (self.bitsize & 7) != 0 {
                     return Ok(false); // Must be a whole number of bytes
                 }
-                let i0 = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
-                let i1 = data.obank().get(op).expect("stale op").get_in(1).expect("in1");
+                let i0 = data
+                    .obank()
+                    .get(op)
+                    .expect("stale op")
+                    .get_in(0)
+                    .expect("in0");
+                let i1 = data
+                    .obank()
+                    .get(op)
+                    .expect("stale op")
+                    .get_in(1)
+                    .expect("in1");
                 if !Self::is_zero_extended(data, i0, self.flowsize)? {
                     return Ok(false);
                 }
@@ -1687,7 +1982,12 @@ impl SubvariableFlow {
                 Ok(true)
             }
             OpCode::CPUI_SUBPIECE => {
-                let i1 = data.obank().get(op).expect("stale op").get_in(1).expect("in1");
+                let i1 = data
+                    .obank()
+                    .get(op)
+                    .expect("stale op")
+                    .get_in(1)
+                    .expect("in1");
                 let byte_offset = data.vbank().get(i1).expect("vn").get_offset();
                 if byte_offset >= (uintb::BITS / 8) as uintb {
                     return Ok(false);
@@ -1698,14 +1998,24 @@ impl SubvariableFlow {
                     return Ok(false);
                 }
                 let rop = self.create_op(data, OpCode::CPUI_COPY, 1, rvn);
-                let i0 = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
+                let i0 = data
+                    .obank()
+                    .get(op)
+                    .expect("stale op")
+                    .get_in(0)
+                    .expect("in0");
                 if !self.create_link(data, rop, newmask, 0, i0)? {
                     return Ok(false);
                 }
                 Ok(true)
             }
             OpCode::CPUI_PIECE => {
-                let i1 = data.obank().get(op).expect("stale op").get_in(1).expect("in1");
+                let i1 = data
+                    .obank()
+                    .get(op)
+                    .expect("stale op")
+                    .get_in(1)
+                    .expect("in1");
                 let i1size = data.vbank().get(i1).expect("vn").get_size();
                 if (mask & calc_mask(i1size)) == mask {
                     let rop = self.create_op(data, OpCode::CPUI_COPY, 1, rvn);
@@ -1721,7 +2031,12 @@ impl SubvariableFlow {
                 let newmask = mask >> sa;
                 if (newmask << sa) == mask {
                     let rop = self.create_op(data, OpCode::CPUI_COPY, 1, rvn);
-                    let i0 = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
+                    let i0 = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(0)
+                        .expect("in0");
                     if !self.create_link(data, rop, newmask, 0, i0)? {
                         return Ok(false);
                     }
@@ -1795,7 +2110,9 @@ impl SubvariableFlow {
                     ZextRoute::Trace => {}
                     ZextRoute::Abort => return Ok(false),
                     ZextRoute::Extend => {
-                        let Some(k) = self.unpatched_slot(data, op, rvn_vn) else { return Ok(false) };
+                        let Some(k) = self.unpatched_slot(data, op, rvn_vn) else {
+                            return Ok(false);
+                        };
                         self.patchlist.push(PatchRecord {
                             typ: PatchType::ZextUsePatch,
                             patch_op: op,
@@ -1831,7 +2148,12 @@ impl SubvariableFlow {
                     hcount += 1;
                 }
                 OpCode::CPUI_INT_SRIGHT => {
-                    let i1 = data.obank().get(op).expect("stale op").get_in(1).expect("in1");
+                    let i1 = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(1)
+                        .expect("in1");
                     if !data.vbank().get(i1).expect("vn").is_constant() {
                         return Ok(false); // Right now we only deal with constant shifts
                     }
@@ -1844,7 +2166,12 @@ impl SubvariableFlow {
                     hcount += 1;
                 }
                 OpCode::CPUI_SUBPIECE => {
-                    let i1 = data.obank().get(op).expect("stale op").get_in(1).expect("in1");
+                    let i1 = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(1)
+                        .expect("in1");
                     if data.vbank().get(i1).expect("vn").get_offset() != 0 {
                         return Ok(false); // Only allow proper truncation
                     }
@@ -1866,8 +2193,12 @@ impl SubvariableFlow {
                 | OpCode::CPUI_INT_SLESSEQUAL
                 | OpCode::CPUI_INT_EQUAL
                 | OpCode::CPUI_INT_NOTEQUAL => {
-                    let othervn =
-                        data.obank().get(op).expect("stale op").get_in(1 - slot).expect("in"); // The OTHER side
+                    let othervn = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(1 - slot)
+                        .expect("in"); // The OTHER side
                     if !self.create_compare_bridge(data, op, rvn, slot, othervn)? {
                         return Ok(false);
                     }
@@ -1934,7 +2265,12 @@ impl SubvariableFlow {
                 let numin = data.obank().get(op).expect("stale op").num_input();
                 let rop = self.create_op(data, code, numin, rvn);
                 for i in 0..numin {
-                    let ini = data.obank().get(op).expect("stale op").get_in(i).expect("in");
+                    let ini = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(i)
+                        .expect("in");
                     if !self.create_link(data, rop, mask, i, ini)? {
                         return Ok(false);
                     }
@@ -1942,7 +2278,12 @@ impl SubvariableFlow {
                 Ok(true)
             }
             OpCode::CPUI_INT_ZEXT => {
-                let i0 = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
+                let i0 = data
+                    .obank()
+                    .get(op)
+                    .expect("stale op")
+                    .get_in(0)
+                    .expect("in0");
                 if data.vbank().get(i0).expect("vn").get_size() < self.flowsize {
                     // zero extension from a smaller size still acts as a signed extension
                     self.add_push(data, op, rvn)?;
@@ -1951,7 +2292,12 @@ impl SubvariableFlow {
                 Ok(false) // break
             }
             OpCode::CPUI_INT_SEXT => {
-                let i0 = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
+                let i0 = data
+                    .obank()
+                    .get(op)
+                    .expect("stale op")
+                    .get_in(0)
+                    .expect("in0");
                 if self.flowsize != data.vbank().get(i0).expect("vn").get_size() {
                     return Ok(false);
                 }
@@ -1963,12 +2309,22 @@ impl SubvariableFlow {
             }
             OpCode::CPUI_INT_SRIGHT => {
                 // A sign-extended logical value is arithmetically right-shifted
-                let i1 = data.obank().get(op).expect("stale op").get_in(1).expect("in1");
+                let i1 = data
+                    .obank()
+                    .get(op)
+                    .expect("stale op")
+                    .get_in(1)
+                    .expect("in1");
                 if !data.vbank().get(i1).expect("vn").is_constant() {
                     return Ok(false);
                 }
                 let rop = self.create_op(data, OpCode::CPUI_INT_SRIGHT, 2, rvn);
-                let i0 = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
+                let i0 = data
+                    .obank()
+                    .get(op)
+                    .expect("stale op")
+                    .get_in(0)
+                    .expect("in0");
                 if !self.create_link(data, rop, mask, 0, i0)? {
                     return Ok(false); // Keep the same mask
                 }
@@ -2030,7 +2386,12 @@ impl SubvariableFlow {
 
     /// The constructor's `createLink((ReplaceOp *)0, mask, 0, root)` — the only
     /// call with a null `rop` (C++ `SubvariableFlow::createLink` with `rop==0`).
-    fn create_link_root(&mut self, data: &mut Funcdata, mask: uintb, vn: VarnodeId) -> KunaResult<bool> {
+    fn create_link_root(
+        &mut self,
+        data: &mut Funcdata,
+        mask: uintb,
+        vn: VarnodeId,
+    ) -> KunaResult<bool> {
         let (rep, inworklist) = self.set_replacement(data, vn, mask, false);
         let rep = match rep {
             Some(r) => r,
@@ -2086,7 +2447,11 @@ impl SubvariableFlow {
         slot: uint4,
         constvn: VarnodeId,
     ) -> RvId {
-        let constoff = data.vbank().get(constvn).expect("add_constant: stale const vn").get_offset();
+        let constoff = data
+            .vbank()
+            .get(constvn)
+            .expect("add_constant: stale const vn")
+            .get_offset();
         // Calculate the actual constant value
         let sa = leastsigbit_set(mask);
         let val = (mask & constoff) >> sa;
@@ -2199,7 +2564,11 @@ impl SubvariableFlow {
     /// Mark a subgraph variable flowing to an operation that extends it by padding
     /// with zero bits (C++ `SubvariableFlow::addExtensionPatch`).
     fn add_extension_patch(&mut self, rvn: RvId, pushop: OpId, sa: int4) {
-        let slot = if sa == -1 { leastsigbit_set(self.rv(rvn).mask) } else { sa };
+        let slot = if sa == -1 {
+            leastsigbit_set(self.rv(rvn).mask)
+        } else {
+            sa
+        };
         self.patchlist.push(PatchRecord {
             typ: PatchType::ExtensionPatch,
             patch_op: pushop,
@@ -2286,7 +2655,11 @@ impl SubvariableFlow {
     /// logical input (C++ `SubvariableFlow::replaceInput`, subflow.cc:1258).
     fn replace_input(&mut self, data: &mut Funcdata, rvn: RvId) -> KunaResult<()> {
         let vn = self.rv(rvn).vn.expect("replace_input: rvn vn");
-        let size = data.vbank().get(vn).expect("replace_input: stale vn").get_size();
+        let size = data
+            .vbank()
+            .get(vn)
+            .expect("replace_input: stale vn")
+            .get_size();
         let newvn = data.new_unique(size, None);
         let newvn = data.set_input_varnode(newvn)?;
         data.total_replace(vn, newvn)?;
@@ -2314,7 +2687,12 @@ impl SubvariableFlow {
             return Ok(repl);
         }
         let vn = self.rv(rvn).vn.expect("get_replace_varnode: rvn vn");
-        if data.vbank().get(vn).expect("get_replace_varnode: stale vn").is_constant() {
+        if data
+            .vbank()
+            .get(vn)
+            .expect("get_replace_varnode: stale vn")
+            .is_constant()
+        {
             let val = self.rv(rvn).val;
             let new_vn = data.new_constant(self.flowsize, val);
             // STUB(W4): EquateSymbol propagation — getSymbolEntry is null in the W4
@@ -2323,7 +2701,11 @@ impl SubvariableFlow {
             return Ok(new_vn);
         }
 
-        let isinput = data.vbank().get(vn).expect("get_replace_varnode: stale vn").is_input();
+        let isinput = data
+            .vbank()
+            .get(vn)
+            .expect("get_replace_varnode: stale vn")
+            .is_input();
         if self.use_same_address(data, rvn) {
             let addr = self.get_replacement_address(data, rvn)?;
             if isinput {
@@ -2336,11 +2718,17 @@ impl SubvariableFlow {
             self.rv_mut(rvn).replacement = Some(repl);
         }
         if isinput {
-            let repl = self.rv(rvn).replacement.expect("get_replace_varnode: replacement set above");
+            let repl = self
+                .rv(rvn)
+                .replacement
+                .expect("get_replace_varnode: replacement set above");
             let new_repl = data.set_input_varnode(repl)?;
             self.rv_mut(rvn).replacement = Some(new_repl);
         }
-        let replacement = self.rv(rvn).replacement.expect("get_replace_varnode: replacement set");
+        let replacement = self
+            .rv(rvn)
+            .replacement
+            .expect("get_replace_varnode: replacement set");
         let source = self.rv(rvn).vn.expect("get_replace_varnode: original set");
         let mask = self.rv(rvn).mask;
         let shift = leastsigbit_set(mask);
@@ -2357,7 +2745,10 @@ impl SubvariableFlow {
     /// Extend the subgraph from the next node in the worklist
     /// (C++ `SubvariableFlow::processNextWork`).
     fn process_next_work(&mut self, data: &mut Funcdata) -> KunaResult<bool> {
-        let rvn = self.worklist.pop().expect("process_next_work: empty worklist");
+        let rvn = self
+            .worklist
+            .pop()
+            .expect("process_next_work: empty worklist");
 
         if self.sextrestrictions {
             if !self.trace_backward_sext(data, rvn)? {
@@ -2547,15 +2938,21 @@ impl SubvariableFlow {
             let push_op = self.patchlist[piter].patch_op;
             let in1 = self.patchlist[piter].in1;
             let new_vn = self.get_replace_varnode(data, in1)?;
-            let old_vn =
-                data.obank().get(push_op).expect("do_replacement: stale push op").get_out().expect(
-                    "do_replacement: push op has no output",
-                );
+            let old_vn = data
+                .obank()
+                .get(push_op)
+                .expect("do_replacement: stale push op")
+                .get_out()
+                .expect("do_replacement: push op has no output");
             data.op_set_output(push_op, new_vn)?;
 
             // Create placeholder defining op for old Varnode, until dead code cleans it up
-            let push_addr =
-                data.obank().get(push_op).expect("do_replacement: stale push op").get_addr().clone();
+            let push_addr = data
+                .obank()
+                .get(push_op)
+                .expect("do_replacement: stale push op")
+                .get_addr()
+                .clone();
             let new_zext = data.new_op(1, push_addr);
             data.op_set_opcode_code(new_zext, OpCode::CPUI_INT_ZEXT);
             data.op_set_input(new_zext, new_vn, 0)?;
@@ -2571,11 +2968,20 @@ impl SubvariableFlow {
                 continue;
             }
             let wide = self.rv(rvn).vn.expect("do_replacement: leaf vn");
-            let def = data.vbank().get(wide).and_then(|v| v.get_def()).expect("do_replacement: leaf def");
+            let def = data
+                .vbank()
+                .get(wide)
+                .and_then(|v| v.get_def())
+                .expect("do_replacement: leaf def");
             let lsb = (leastsigbit_set(self.rv(rvn).mask) / 8) as uintb;
             let narrow = data.new_unique(self.flowsize, None);
             self.rv_mut(rvn).replacement = Some(narrow);
-            let addr = data.obank().get(def).expect("do_replacement: stale leaf def").get_addr().clone();
+            let addr = data
+                .obank()
+                .get(def)
+                .expect("do_replacement: stale leaf def")
+                .get_addr()
+                .clone();
             let sub = data.new_op(2, addr);
             data.op_set_opcode_code(sub, OpCode::CPUI_SUBPIECE);
             data.op_set_output(sub, narrow)?;
@@ -2587,14 +2993,23 @@ impl SubvariableFlow {
 
         // Define all the outputs first
         for idx in 0..self.oplist.len() {
-            let op = self.oplist[idx].op.expect("do_replacement: ReplaceOp has no op");
+            let op = self.oplist[idx]
+                .op
+                .expect("do_replacement: ReplaceOp has no op");
             let numparams = self.oplist[idx].numparams;
             let opc = self.oplist[idx].opc;
-            let addr = data.obank().get(op).expect("do_replacement: stale op").get_addr().clone();
+            let addr = data
+                .obank()
+                .get(op)
+                .expect("do_replacement: stale op")
+                .get_addr()
+                .clone();
             let newop = data.new_op(numparams, addr);
             self.oplist[idx].replacement = Some(newop);
             data.op_set_opcode_code(newop, opc);
-            let rout = self.oplist[idx].output.expect("do_replacement: ReplaceOp has no output");
+            let rout = self.oplist[idx]
+                .output
+                .expect("do_replacement: ReplaceOp has no output");
             let outvn = self.get_replace_varnode(data, rout)?;
             data.op_set_output(newop, outvn)?;
             data.op_insert_after(newop, op);
@@ -2602,7 +3017,9 @@ impl SubvariableFlow {
 
         // Set all the inputs
         for idx in 0..self.oplist.len() {
-            let newop = self.oplist[idx].replacement.expect("do_replacement: op not materialized");
+            let newop = self.oplist[idx]
+                .replacement
+                .expect("do_replacement: op not materialized");
             let inlen = self.oplist[idx].input.len();
             for i in 0..inlen {
                 let rin = self.oplist[idx].input[i].expect("do_replacement: input slot is null");
@@ -2620,7 +3037,11 @@ impl SubvariableFlow {
             match typ {
                 PatchType::CopyPatch => {
                     loop {
-                        let n = data.obank().get(pullop).expect("do_replacement: stale pullop").num_input();
+                        let n = data
+                            .obank()
+                            .get(pullop)
+                            .expect("do_replacement: stale pullop")
+                            .num_input();
                         if n <= 1 {
                             break;
                         }
@@ -2633,7 +3054,9 @@ impl SubvariableFlow {
                 }
                 PatchType::ComparePatch => {
                     let in1 = self.patchlist[piter].in1;
-                    let in2 = self.patchlist[piter].in2.expect("compare_patch: in2 is null");
+                    let in2 = self.patchlist[piter]
+                        .in2
+                        .expect("compare_patch: in2 is null");
                     let v1 = self.get_replace_varnode(data, in1)?;
                     let v2 = self.get_replace_varnode(data, in2)?;
                     data.op_set_input(pullop, v1, 0)?;
@@ -2672,8 +3095,11 @@ impl SubvariableFlow {
                         .get_size();
                     if sa == 0 {
                         let invec: Vec<VarnodeId> = vec![in_vn];
-                        let in_size =
-                            data.vbank().get(in_vn).expect("do_replacement: stale in vn").get_size();
+                        let in_size = data
+                            .vbank()
+                            .get(in_vn)
+                            .expect("do_replacement: stale in vn")
+                            .get_size();
                         let opc = if in_size == out_size {
                             OpCode::CPUI_COPY
                         } else {
@@ -2683,8 +3109,11 @@ impl SubvariableFlow {
                         data.op_set_all_input(pullop, &invec)?;
                     } else {
                         let mut invec: Vec<VarnodeId> = Vec::new();
-                        let in_size =
-                            data.vbank().get(in_vn).expect("do_replacement: stale in vn").get_size();
+                        let in_size = data
+                            .vbank()
+                            .get(in_vn)
+                            .expect("do_replacement: stale in vn")
+                            .get_size();
                         if in_size != out_size {
                             let pull_addr = data
                                 .obank()
@@ -2715,12 +3144,26 @@ impl SubvariableFlow {
                     let in1 = self.patchlist[piter].in1;
                     let narrow = self.get_replace_varnode(data, in1)?;
                     let (wide, pull_addr) = {
-                        let o = data.obank().get(pullop).expect("do_replacement: stale pullop");
-                        (o.get_in(slot).expect("zext_use_patch: empty slot"), o.get_addr().clone())
+                        let o = data
+                            .obank()
+                            .get(pullop)
+                            .expect("do_replacement: stale pullop");
+                        (
+                            o.get_in(slot).expect("zext_use_patch: empty slot"),
+                            o.get_addr().clone(),
+                        )
                     };
-                    let size = data.vbank().get(wide).expect("do_replacement: stale wide vn").get_size();
+                    let size = data
+                        .vbank()
+                        .get(wide)
+                        .expect("do_replacement: stale wide vn")
+                        .get_size();
                     let zext_op = data.new_op(1, pull_addr);
-                    let ext = if self.sextrestrictions { OpCode::CPUI_INT_SEXT } else { OpCode::CPUI_INT_ZEXT };
+                    let ext = if self.sextrestrictions {
+                        OpCode::CPUI_INT_SEXT
+                    } else {
+                        OpCode::CPUI_INT_ZEXT
+                    };
                     data.op_set_opcode_code(zext_op, ext);
                     let zout = data.new_unique_out(size, zext_op)?;
                     data.op_set_input(zext_op, narrow, 0)?;
@@ -2739,8 +3182,11 @@ impl SubvariableFlow {
                     let in1 = self.patchlist[piter].in1;
                     let invn = self.get_replace_varnode(data, in1)?;
                     data.op_set_input(zext_op, invn, 0)?;
-                    let invn_size =
-                        data.vbank().get(invn).expect("do_replacement: stale invn").get_size();
+                    let invn_size = data
+                        .vbank()
+                        .get(invn)
+                        .expect("do_replacement: stale invn")
+                        .get_size();
                     let sizeout = preferred_zext_size(invn_size);
                     let outvn = data.new_unique_out(sizeout, zext_op)?;
                     data.op_insert_before(zext_op, pullop);
@@ -2957,7 +3403,12 @@ impl Rule for RuleSubvarCompZero {
         // We do a basic check that the stream from which it looks like
         // the bit is getting pulled is not fully consumed
         if data.vbank().get(vn).expect("vn").is_written() {
-            let andop = data.vbank().get(vn).expect("vn").get_def().expect("written vn def");
+            let andop = data
+                .vbank()
+                .get(vn)
+                .expect("vn")
+                .get_def()
+                .expect("written vn def");
             let ao = data.obank().get(andop).expect("stale def");
             if ao.num_input() == 0 {
                 return 0;
@@ -3097,7 +3548,10 @@ pub struct RuleSubvarSext {
 impl RuleSubvarSext {
     /// Construct with the rule's stage group (C++ sets `isaggressive = false`).
     pub fn new(g: impl Into<String>) -> RuleSubvarSext {
-        RuleSubvarSext { group: g.into(), isaggressive: 0 }
+        RuleSubvarSext {
+            group: g.into(),
+            isaggressive: 0,
+        }
     }
 }
 
@@ -3124,7 +3578,8 @@ impl Rule for RuleSubvarSext {
         let invsize = data.vbank().get(invn).expect("vn").get_size();
         let mask = calc_mask(invsize);
 
-        let (applied, returned) = run_subflow_returning(data, vn, mask, self.isaggressive != 0, true, false);
+        let (applied, returned) =
+            run_subflow_returning(data, vn, mask, self.isaggressive != 0, true, false);
         if returned {
             crate::kuna_callrettype::note_returned_extension(data, true, invsize);
         }
@@ -3153,19 +3608,29 @@ impl Rule for RuleSubvarSext {
 /// it, and a zeroed `RDX` is usually `-fzero-call-used-regs` scrubbing it after
 /// an `int` function.
 fn returns_integer_pair(data: &Funcdata, vn: VarnodeId) -> bool {
-    let Some(v) = data.vbank().get(vn) else { return false };
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
     let size = v.get_size();
     if size > 8 {
         return false;
     }
     let proto = data.get_func_proto();
-    let Some(out) = proto.has_model().then(|| proto.model().output_list()).flatten() else { return false };
+    let Some(out) = proto
+        .has_model()
+        .then(|| proto.model().output_list())
+        .flatten()
+    else {
+        return false;
+    };
     let widest = out
         .get_entry()
         .iter()
         .filter(|e| {
-            matches!(e.get_type(), type_class::TYPECLASS_GENERAL | type_class::TYPECLASS_PTR)
-                && e.get_join_record().is_none()
+            matches!(
+                e.get_type(),
+                type_class::TYPECLASS_GENERAL | type_class::TYPECLASS_PTR
+            ) && e.get_join_record().is_none()
         })
         .map(|e| e.get_size())
         .max()
@@ -3177,7 +3642,9 @@ fn returns_integer_pair(data: &Funcdata, vn: VarnodeId) -> bool {
     if !addr.is_join() {
         return true;
     }
-    let Ok(rec) = data.get_arch().manage().find_join(addr.get_offset()) else { return false };
+    let Ok(rec) = data.get_arch().manage().find_join(addr.get_offset()) else {
+        return false;
+    };
     let (hi, lo) = (rec.get_piece(0), rec.get_piece(rec.num_pieces() - 1));
     match (hi.space.as_ref(), lo.space.as_ref()) {
         (Some(hs), Some(ls)) if hs.get_index() == ls.get_index() => {
@@ -3223,18 +3690,31 @@ fn run_subflow(
 /// letting every reader that needs a container's full width take the zero
 /// extension of the logical value when the container's other bits are known
 /// zero. The original Varnodes the flow rebuilt, when the function changed.
-pub fn run_zext_uses(data: &mut Funcdata, root: VarnodeId, mask: uintb) -> Option<(Vec<VarnodeId>, Vec<VarnodeId>)> {
+pub fn run_zext_uses(
+    data: &mut Funcdata,
+    root: VarnodeId,
+    mask: uintb,
+) -> Option<(Vec<VarnodeId>, Vec<VarnodeId>)> {
     run_ext_uses(data, root, mask, false)
 }
 
 /// (kuna `regsigned`) [`run_zext_uses`] for a web whose containers hold the
 /// sign extension of the logical value: a reader that needs the container's
 /// width reads the `INT_SEXT` of the narrow value.
-pub fn run_sext_uses(data: &mut Funcdata, root: VarnodeId, mask: uintb) -> Option<(Vec<VarnodeId>, Vec<VarnodeId>)> {
+pub fn run_sext_uses(
+    data: &mut Funcdata,
+    root: VarnodeId,
+    mask: uintb,
+) -> Option<(Vec<VarnodeId>, Vec<VarnodeId>)> {
     run_ext_uses(data, root, mask, true)
 }
 
-fn run_ext_uses(data: &mut Funcdata, root: VarnodeId, mask: uintb, sext: bool) -> Option<(Vec<VarnodeId>, Vec<VarnodeId>)> {
+fn run_ext_uses(
+    data: &mut Funcdata,
+    root: VarnodeId,
+    mask: uintb,
+    sext: bool,
+) -> Option<(Vec<VarnodeId>, Vec<VarnodeId>)> {
     let mut subflow = SubvariableFlow::new_with(data, root, mask, false, sext, false, true).ok()?;
     if !matches!(subflow.do_trace(data), Ok(true)) {
         return None;
@@ -3302,7 +3782,10 @@ fn lane_above(rvn: TVarRef) -> TVarRef {
 /// case where `SplitFlow` only ever needs the 2-lane `rvn`/`rvn+1`).
 fn lane_at(rvn: TVarRef, i: int4) -> TVarRef {
     match rvn {
-        TVarRef::Piece { key, idx } => TVarRef::Piece { key, idx: idx + i as usize },
+        TVarRef::Piece { key, idx } => TVarRef::Piece {
+            key,
+            idx: idx + i as usize,
+        },
         // The C++ only ever does `rvn + i` on a piece-array element (a split
         // lane); a `New(_)` here would be a porting bug.
         TVarRef::New(_) => panic!("lane_at on a non-piece TransformVar"),
@@ -3314,7 +3797,11 @@ fn lane_at(rvn: TVarRef, i: int4) -> TVarRef {
 /// the function's space manager; used by `LaneDivide::buildStore`/`buildLoad` to
 /// recover the STORE/LOAD target space.
 fn space_from_const(data: &Funcdata, vn: VarnodeId) -> Rc<unlace_base::space::AddrSpace> {
-    let idx = data.vbank().get(vn).expect("space_from_const: stale vn").get_offset() as int4;
+    let idx = data
+        .vbank()
+        .get(vn)
+        .expect("space_from_const: stale vn")
+        .get_offset() as int4;
     Rc::clone(
         data.get_arch()
             .manage()
@@ -3337,7 +3824,11 @@ pub struct SplitFlow {
 impl SplitFlow {
     /// C++ `SplitFlow::SplitFlow` (subflow.cc:2011).
     pub fn new(data: &mut Funcdata, root: VarnodeId, low_size: int4) -> SplitFlow {
-        let root_size = data.vbank().get(root).expect("SplitFlow: stale root").get_size();
+        let root_size = data
+            .vbank()
+            .get(root)
+            .expect("SplitFlow: stale root")
+            .get_size();
         let mut sf = SplitFlow {
             tm: TransformManager::new(),
             // laneDescription(root->getSize(), lowSize, root->getSize()-lowSize)
@@ -3371,7 +3862,10 @@ impl SplitFlow {
         let is_const = v.is_constant();
         // newSplit: Create new ReplaceVarnode and put it in map
         let res = self.tm.new_split(data, vn, &self.lane_description);
-        data.vbank_mut().get_mut(vn).expect("set_replacement: stale vn").set_mark();
+        data.vbank_mut()
+            .get_mut(vn)
+            .expect("set_replacement: stale vn")
+            .set_mark();
         if !is_const {
             self.worklist.push(res);
         }
@@ -3384,7 +3878,12 @@ impl SplitFlow {
         let outvn = if slot == -1 {
             rvn
         } else {
-            let out = data.obank().get(op).expect("add_op: stale op").get_out().expect("add_op: out");
+            let out = data
+                .obank()
+                .get(op)
+                .expect("add_op: stale op")
+                .get_out()
+                .expect("add_op: out");
             match self.set_replacement(data, out) {
                 Some(o) => o,
                 None => return false,
@@ -3401,7 +3900,12 @@ impl SplitFlow {
         let hi_op = self.tm.new_op_replace(numinput, code, op);
         let mut num_param = numinput;
         if code == OpCode::CPUI_INDIRECT {
-            let in1 = data.obank().get(op).expect("add_op: stale op").get_in(1).expect("add_op: in1");
+            let in1 = data
+                .obank()
+                .get(op)
+                .expect("add_op: stale op")
+                .get_in(1)
+                .expect("add_op: in1");
             let iop_lo = self.tm.new_iop(data, in1);
             self.tm.op_set_input(lo_op, iop_lo, 1);
             let iop_hi = self.tm.new_iop(data, in1);
@@ -3414,7 +3918,12 @@ impl SplitFlow {
             let invn = if i == slot {
                 rvn
             } else {
-                let ini = data.obank().get(op).expect("add_op: stale op").get_in(i).expect("add_op: in");
+                let ini = data
+                    .obank()
+                    .get(op)
+                    .expect("add_op: stale op")
+                    .get_in(i)
+                    .expect("add_op: in");
                 match self.set_replacement(data, ini) {
                     Some(iv) => iv,
                     None => return false,
@@ -3431,16 +3940,33 @@ impl SplitFlow {
     /// Try to trace the pair of logical values forward through reading ops (C++
     /// `SplitFlow::traceForward`, subflow.cc:1834).
     fn trace_forward(&mut self, data: &mut Funcdata, rvn: TVarRef) -> bool {
-        let origvn = self.tm.var(rvn).get_original().expect("trace_forward: rvn original");
+        let origvn = self
+            .tm
+            .var(rvn)
+            .get_original()
+            .expect("trace_forward: rvn original");
         let descend: Vec<OpId> = data.descend_snapshot(origvn);
         for &op in descend.iter() {
-            let outvn = data.obank().get(op).expect("trace_forward: stale op").get_out();
+            let outvn = data
+                .obank()
+                .get(op)
+                .expect("trace_forward: stale op")
+                .get_out();
             if let Some(ov) = outvn {
-                if data.vbank().get(ov).expect("trace_forward: stale outvn").is_mark() {
+                if data
+                    .vbank()
+                    .get(ov)
+                    .expect("trace_forward: stale outvn")
+                    .is_mark()
+                {
                     continue;
                 }
             }
-            let code = data.obank().get(op).expect("trace_forward: stale op").code();
+            let code = data
+                .obank()
+                .get(op)
+                .expect("trace_forward: stale op")
+                .code();
             match code {
                 OpCode::CPUI_COPY
                 | OpCode::CPUI_MULTIEQUAL
@@ -3448,20 +3974,40 @@ impl SplitFlow {
                 | OpCode::CPUI_INT_AND
                 | OpCode::CPUI_INT_OR
                 | OpCode::CPUI_INT_XOR => {
-                    let slot = data.obank().get(op).expect("trace_forward: stale op").get_slot(origvn);
+                    let slot = data
+                        .obank()
+                        .get(op)
+                        .expect("trace_forward: stale op")
+                        .get_slot(origvn);
                     if !self.add_op(data, op, rvn, slot) {
                         return false;
                     }
                 }
                 OpCode::CPUI_SUBPIECE => {
                     let ov = outvn.expect("trace_forward: SUBPIECE out");
-                    let ovv = data.vbank().get(ov).expect("trace_forward: stale subpiece out");
+                    let ovv = data
+                        .vbank()
+                        .get(ov)
+                        .expect("trace_forward: stale subpiece out");
                     if ovv.is_precis_lo() || ovv.is_precis_hi() {
                         return false; // Do not split if we know value comes from double precision pieces
                     }
-                    let in1 = data.obank().get(op).expect("trace_forward: stale op").get_in(1).expect("in1");
-                    let val = data.vbank().get(in1).expect("trace_forward: stale in1").get_offset();
-                    let out_size = data.vbank().get(ov).expect("trace_forward: stale out").get_size();
+                    let in1 = data
+                        .obank()
+                        .get(op)
+                        .expect("trace_forward: stale op")
+                        .get_in(1)
+                        .expect("in1");
+                    let val = data
+                        .vbank()
+                        .get(in1)
+                        .expect("trace_forward: stale in1")
+                        .get_offset();
+                    let out_size = data
+                        .vbank()
+                        .get(ov)
+                        .expect("trace_forward: stale out")
+                        .get_size();
                     if val == 0 && out_size == self.lane_description.get_size(0) {
                         let rop = self.tm.new_preexisting_op(1, OpCode::CPUI_COPY, op); // Grabs the low piece
                         self.tm.op_set_input(rop, rvn, 0);
@@ -3475,8 +4021,16 @@ impl SplitFlow {
                     }
                 }
                 OpCode::CPUI_INT_LEFT => {
-                    let tmpvn = data.obank().get(op).expect("trace_forward: stale op").get_in(1).expect("in1");
-                    let tv = data.vbank().get(tmpvn).expect("trace_forward: stale shift amt");
+                    let tmpvn = data
+                        .obank()
+                        .get(op)
+                        .expect("trace_forward: stale op")
+                        .get_in(1)
+                        .expect("in1");
+                    let tv = data
+                        .vbank()
+                        .get(tmpvn)
+                        .expect("trace_forward: stale shift amt");
                     if !tv.is_constant() {
                         return false;
                     }
@@ -3489,16 +4043,36 @@ impl SplitFlow {
                     self.tm.op_set_input(zextrop, rvn, 0); // Input is just the low piece
                     let uout = self.tm.new_unique(self.lane_description.get_whole_size());
                     self.tm.op_set_output(zextrop, uout);
-                    let zout = self.tm.op(zextrop).get_out().expect("trace_forward: zext out");
+                    let zout = self
+                        .tm
+                        .op(zextrop)
+                        .get_out()
+                        .expect("trace_forward: zext out");
                     self.tm.op_set_input(rop, zout, 0);
-                    let in1size = data.vbank().get(tmpvn).expect("trace_forward: stale in1").get_size();
-                    let in1off = data.vbank().get(tmpvn).expect("trace_forward: stale in1").get_offset();
+                    let in1size = data
+                        .vbank()
+                        .get(tmpvn)
+                        .expect("trace_forward: stale in1")
+                        .get_size();
+                    let in1off = data
+                        .vbank()
+                        .get(tmpvn)
+                        .expect("trace_forward: stale in1")
+                        .get_offset();
                     let cst = self.tm.new_constant(in1size, 0, in1off); // Original shift amount
                     self.tm.op_set_input(rop, cst, 1);
                 }
                 OpCode::CPUI_INT_SRIGHT | OpCode::CPUI_INT_RIGHT => {
-                    let tmpvn = data.obank().get(op).expect("trace_forward: stale op").get_in(1).expect("in1");
-                    let tv = data.vbank().get(tmpvn).expect("trace_forward: stale shift amt");
+                    let tmpvn = data
+                        .obank()
+                        .get(op)
+                        .expect("trace_forward: stale op")
+                        .get_in(1)
+                        .expect("in1");
+                    let tv = data
+                        .vbank()
+                        .get(tmpvn)
+                        .expect("trace_forward: stale shift amt");
                     if !tv.is_constant() {
                         return false;
                     }
@@ -3522,9 +4096,17 @@ impl SplitFlow {
                         self.tm.op_set_input(extrop, lane_above(rvn), 0); // Input is the high piece
                         let uout = self.tm.new_unique(self.lane_description.get_whole_size());
                         self.tm.op_set_output(extrop, uout);
-                        let eout = self.tm.op(extrop).get_out().expect("trace_forward: ext out");
+                        let eout = self
+                            .tm
+                            .op(extrop)
+                            .get_out()
+                            .expect("trace_forward: ext out");
                         self.tm.op_set_input(rop, eout, 0);
-                        let in1size = data.vbank().get(tmpvn).expect("trace_forward: stale in1").get_size();
+                        let in1size = data
+                            .vbank()
+                            .get(tmpvn)
+                            .expect("trace_forward: stale in1")
+                            .get_size();
                         let cst = self.tm.new_constant(in1size, 0, remain_shift); // Shift any remaining bits
                         self.tm.op_set_input(rop, cst, 1);
                     }
@@ -3538,13 +4120,26 @@ impl SplitFlow {
     /// Try to trace the pair of logical values backward through the defining op
     /// (C++ `SplitFlow::traceBackward`, subflow.cc:1927).
     fn trace_backward(&mut self, data: &mut Funcdata, rvn: TVarRef) -> bool {
-        let origvn = self.tm.var(rvn).get_original().expect("trace_backward: rvn original");
-        let op = match data.vbank().get(origvn).expect("trace_backward: stale origvn").get_def() {
+        let origvn = self
+            .tm
+            .var(rvn)
+            .get_original()
+            .expect("trace_backward: rvn original");
+        let op = match data
+            .vbank()
+            .get(origvn)
+            .expect("trace_backward: stale origvn")
+            .get_def()
+        {
             Some(o) => o,
             None => return true, // If vn is input
         };
 
-        let code = data.obank().get(op).expect("trace_backward: stale op").code();
+        let code = data
+            .obank()
+            .get(op)
+            .expect("trace_backward: stale op")
+            .code();
         match code {
             OpCode::CPUI_COPY
             | OpCode::CPUI_MULTIEQUAL
@@ -3557,12 +4152,26 @@ impl SplitFlow {
                 }
             }
             OpCode::CPUI_PIECE => {
-                let in0 = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
-                let in1 = data.obank().get(op).expect("stale op").get_in(1).expect("in1");
-                if data.vbank().get(in0).expect("stale in0").get_size() != self.lane_description.get_size(1) {
+                let in0 = data
+                    .obank()
+                    .get(op)
+                    .expect("stale op")
+                    .get_in(0)
+                    .expect("in0");
+                let in1 = data
+                    .obank()
+                    .get(op)
+                    .expect("stale op")
+                    .get_in(1)
+                    .expect("in1");
+                if data.vbank().get(in0).expect("stale in0").get_size()
+                    != self.lane_description.get_size(1)
+                {
                     return false;
                 }
-                if data.vbank().get(in1).expect("stale in1").get_size() != self.lane_description.get_size(0) {
+                if data.vbank().get(in1).expect("stale in1").get_size()
+                    != self.lane_description.get_size(0)
+                {
                     return false;
                 }
                 let lo_op = self.tm.new_op_replace(1, OpCode::CPUI_COPY, op);
@@ -3575,12 +4184,26 @@ impl SplitFlow {
                 self.tm.op_set_output(hi_op, lane_above(rvn)); // Most sig -> high
             }
             OpCode::CPUI_INT_ZEXT => {
-                let in0 = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
-                let out = data.obank().get(op).expect("stale op").get_out().expect("out");
-                if data.vbank().get(in0).expect("stale in0").get_size() != self.lane_description.get_size(0) {
+                let in0 = data
+                    .obank()
+                    .get(op)
+                    .expect("stale op")
+                    .get_in(0)
+                    .expect("in0");
+                let out = data
+                    .obank()
+                    .get(op)
+                    .expect("stale op")
+                    .get_out()
+                    .expect("out");
+                if data.vbank().get(in0).expect("stale in0").get_size()
+                    != self.lane_description.get_size(0)
+                {
                     return false;
                 }
-                if data.vbank().get(out).expect("stale out").get_size() != self.lane_description.get_whole_size() {
+                if data.vbank().get(out).expect("stale out").get_size()
+                    != self.lane_description.get_whole_size()
+                {
                     return false;
                 }
                 let lo_op = self.tm.new_op_replace(1, OpCode::CPUI_COPY, op);
@@ -3588,12 +4211,19 @@ impl SplitFlow {
                 let pre0 = self.tm.get_preexisting_varnode(data, in0);
                 self.tm.op_set_input(lo_op, pre0, 0);
                 self.tm.op_set_output(lo_op, rvn); // ZEXT input -> low
-                let zero = self.tm.new_constant(self.lane_description.get_size(1), 0, 0);
+                let zero = self
+                    .tm
+                    .new_constant(self.lane_description.get_size(1), 0, 0);
                 self.tm.op_set_input(hi_op, zero, 0);
                 self.tm.op_set_output(hi_op, lane_above(rvn)); // zero -> high
             }
             OpCode::CPUI_INT_LEFT => {
-                let cvn = data.obank().get(op).expect("stale op").get_in(1).expect("in1");
+                let cvn = data
+                    .obank()
+                    .get(op)
+                    .expect("stale op")
+                    .get_in(1)
+                    .expect("in1");
                 let cv = data.vbank().get(cvn).expect("stale cvn");
                 if !cv.is_constant() {
                     return false;
@@ -3601,16 +4231,33 @@ impl SplitFlow {
                 if cv.get_offset() != (self.lane_description.get_size(0) * 8) as uintb {
                     return false;
                 }
-                let mut invn = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
+                let mut invn = data
+                    .obank()
+                    .get(op)
+                    .expect("stale op")
+                    .get_in(0)
+                    .expect("in0");
                 if !data.vbank().get(invn).expect("stale invn").is_written() {
                     return false;
                 }
-                let zext_op = data.vbank().get(invn).expect("stale invn").get_def().expect("zext def");
+                let zext_op = data
+                    .vbank()
+                    .get(invn)
+                    .expect("stale invn")
+                    .get_def()
+                    .expect("zext def");
                 if data.obank().get(zext_op).expect("stale zext").code() != OpCode::CPUI_INT_ZEXT {
                     return false;
                 }
-                invn = data.obank().get(zext_op).expect("stale zext").get_in(0).expect("zext in0");
-                if data.vbank().get(invn).expect("stale invn").get_size() != self.lane_description.get_size(1) {
+                invn = data
+                    .obank()
+                    .get(zext_op)
+                    .expect("stale zext")
+                    .get_in(0)
+                    .expect("zext in0");
+                if data.vbank().get(invn).expect("stale invn").get_size()
+                    != self.lane_description.get_size(1)
+                {
                     return false;
                 }
                 if data.vbank().get(invn).expect("stale invn").is_free() {
@@ -3618,7 +4265,9 @@ impl SplitFlow {
                 }
                 let lo_op = self.tm.new_op_replace(1, OpCode::CPUI_COPY, op);
                 let hi_op = self.tm.new_op_replace(1, OpCode::CPUI_COPY, op);
-                let zero = self.tm.new_constant(self.lane_description.get_size(0), 0, 0);
+                let zero = self
+                    .tm
+                    .new_constant(self.lane_description.get_size(0), 0, 0);
                 self.tm.op_set_input(lo_op, zero, 0);
                 self.tm.op_set_output(lo_op, rvn); // zero -> low
                 let pre = self.tm.get_preexisting_varnode(data, invn);
@@ -3633,7 +4282,10 @@ impl SplitFlow {
     /// Process the next logical value on the worklist (C++
     /// `SplitFlow::processNextWork`, subflow.cc:2000).
     fn process_next_work(&mut self, data: &mut Funcdata) -> bool {
-        let rvn = self.worklist.pop().expect("process_next_work: empty worklist");
+        let rvn = self
+            .worklist
+            .pop()
+            .expect("process_next_work: empty worklist");
         if !self.trace_backward(data, rvn) {
             return false;
         }
@@ -3693,12 +4345,22 @@ impl Rule for RuleSplitFlow {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        let in1 = data.obank().get(op).expect("stale op").get_in(1).expect("in1");
+        let in1 = data
+            .obank()
+            .get(op)
+            .expect("stale op")
+            .get_in(1)
+            .expect("in1");
         let lo_size = data.vbank().get(in1).expect("stale in1").get_offset() as int4;
         if lo_size == 0 {
             return 0; // Make sure SUBPIECE doesn't take least significant part
         }
-        let vn = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
+        let vn = data
+            .obank()
+            .get(op)
+            .expect("stale op")
+            .get_in(0)
+            .expect("in0");
         let vv = data.vbank().get(vn).expect("stale vn");
         if !vv.is_written() {
             return 0;
@@ -3706,21 +4368,41 @@ impl Rule for RuleSplitFlow {
         if vv.is_precis_lo() || vv.is_precis_hi() {
             return 0;
         }
-        let out = data.obank().get(op).expect("stale op").get_out().expect("out");
+        let out = data
+            .obank()
+            .get(op)
+            .expect("stale op")
+            .get_out()
+            .expect("out");
         let out_size = data.vbank().get(out).expect("stale out").get_size();
         let vn_size = data.vbank().get(vn).expect("stale vn").get_size();
         if out_size + lo_size != vn_size {
             return 0; // Make sure SUBPIECE is taking most significant part
         }
         let mut concat_op: Option<OpId> = None;
-        let mut multi_op = data.vbank().get(vn).expect("stale vn").get_def().expect("vn def");
+        let mut multi_op = data
+            .vbank()
+            .get(vn)
+            .expect("stale vn")
+            .get_def()
+            .expect("vn def");
         while data.obank().get(multi_op).expect("stale multi").code() == OpCode::CPUI_INDIRECT {
             // PIECE may come through INDIRECT
-            let tmpvn = data.obank().get(multi_op).expect("stale multi").get_in(0).expect("indirect in0");
+            let tmpvn = data
+                .obank()
+                .get(multi_op)
+                .expect("stale multi")
+                .get_in(0)
+                .expect("indirect in0");
             if !data.vbank().get(tmpvn).expect("stale tmpvn").is_written() {
                 return 0;
             }
-            multi_op = data.vbank().get(tmpvn).expect("stale tmpvn").get_def().expect("tmpvn def");
+            multi_op = data
+                .vbank()
+                .get(tmpvn)
+                .expect("stale tmpvn")
+                .get_def()
+                .expect("tmpvn def");
         }
         let multi_code = data.obank().get(multi_op).expect("stale multi").code();
         if multi_code == OpCode::CPUI_PIECE {
@@ -3732,11 +4414,21 @@ impl Rule for RuleSplitFlow {
             // Otherwise PIECE comes through MULTIEQUAL
             let ninput = data.obank().get(multi_op).expect("stale multi").num_input();
             for i in 0..ninput {
-                let invn = data.obank().get(multi_op).expect("stale multi").get_in(i).expect("multi in");
+                let invn = data
+                    .obank()
+                    .get(multi_op)
+                    .expect("stale multi")
+                    .get_in(i)
+                    .expect("multi in");
                 if !data.vbank().get(invn).expect("stale invn").is_written() {
                     continue;
                 }
-                let tmp_op = data.vbank().get(invn).expect("stale invn").get_def().expect("invn def");
+                let tmp_op = data
+                    .vbank()
+                    .get(invn)
+                    .expect("stale invn")
+                    .get_def()
+                    .expect("invn def");
                 if data.obank().get(tmp_op).expect("stale tmp").code() == OpCode::CPUI_PIECE {
                     concat_op = Some(tmp_op);
                     break;
@@ -3747,7 +4439,12 @@ impl Rule for RuleSplitFlow {
             Some(c) => c,
             None => return 0, // Didn't find the concatenate
         };
-        let cin1 = data.obank().get(concat_op).expect("stale concat").get_in(1).expect("concat in1");
+        let cin1 = data
+            .obank()
+            .get(concat_op)
+            .expect("stale concat")
+            .get_in(1)
+            .expect("concat in1");
         if data.vbank().get(cin1).expect("stale cin1").get_size() != lo_size {
             return 0;
         }
@@ -3897,7 +4594,10 @@ impl SplitDatatype {
                     let hole = ct.get_hole_size(offset)?;
                     if hole > 0 {
                         let hole = if hole > 8 { 8 } else { hole };
-                        return Ok((Some(types.get_base(hole, type_metatype::TYPE_UNKNOWN)?), true));
+                        return Ok((
+                            Some(types.get_base(hole, type_metatype::TYPE_UNKNOWN)?),
+                            true,
+                        ));
                     }
                     return Ok((None, false));
                 }
@@ -3933,13 +4633,17 @@ impl SplitDatatype {
                 }
             }
             type_metatype::TYPE_PARTIALSTRUCT => {
-                let sub = ct.get_partial_base().expect("TYPE_PARTIALSTRUCT has parent");
+                let sub = ct
+                    .get_partial_base()
+                    .expect("TYPE_PARTIALSTRUCT has parent");
                 if sub.get_metatype() == type_metatype::TYPE_ARRAY {
                     if !self.split_arrays {
                         return -1;
                     }
                     let subsub = sub.get_array_base().expect("array base");
-                    if subsub.get_metatype() != type_metatype::TYPE_UNKNOWN || subsub.get_size() != 1 {
+                    if subsub.get_metatype() != type_metatype::TYPE_UNKNOWN
+                        || subsub.get_size() != 1
+                    {
                         1
                     } else {
                         2
@@ -4022,7 +4726,11 @@ impl SplitDatatype {
                     types.get_base(cur_out.get_size(), type_metatype::TYPE_UNKNOWN)?
                 };
                 let osize = cur_out.get_size();
-                self.data_type_pieces.push(Component { in_type: cur_in, out_type: cur_out, offset: cur_off });
+                self.data_type_pieces.push(Component {
+                    in_type: cur_in,
+                    out_type: cur_out,
+                    offset: cur_off,
+                });
                 size_left -= osize;
                 cur_off += osize;
                 if out_hole {
@@ -4044,7 +4752,11 @@ impl SplitDatatype {
                 };
                 let cur_out = types.get_base(cur_in.get_size(), type_metatype::TYPE_UNKNOWN)?;
                 let isize = cur_in.get_size();
-                self.data_type_pieces.push(Component { in_type: cur_in, out_type: cur_out, offset: cur_off });
+                self.data_type_pieces.push(Component {
+                    in_type: cur_in,
+                    out_type: cur_out,
+                    offset: cur_off,
+                });
                 size_left -= isize;
                 cur_off += isize;
                 if in_hole {
@@ -4072,7 +4784,8 @@ impl SplitDatatype {
                 while cur_in.get_size() != cur_out.get_size() {
                     if cur_in.get_size() > cur_out.get_size() {
                         if in_hole {
-                            cur_in = types.get_base(cur_out.get_size(), type_metatype::TYPE_UNKNOWN)?;
+                            cur_in =
+                                types.get_base(cur_out.get_size(), type_metatype::TYPE_UNKNOWN)?;
                         } else {
                             let (ci, ih) = self.get_component(types, &cur_in, 0)?;
                             in_hole = ih;
@@ -4093,7 +4806,11 @@ impl SplitDatatype {
                     }
                 }
                 let isize = cur_in.get_size();
-                self.data_type_pieces.push(Component { in_type: cur_in, out_type: cur_out, offset: cur_off });
+                self.data_type_pieces.push(Component {
+                    in_type: cur_in,
+                    out_type: cur_out,
+                    offset: cur_off,
+                });
                 size_left -= isize;
                 cur_off += isize;
             }
@@ -4108,16 +4825,31 @@ impl SplitDatatype {
         // store the program performs; splitting it turns one invisible whole-range
         // assignment into per-element assignments that survive
         // `Merge::mark_internal_copies` and print as stores into `.rodata`.
-        let out_vn = data.obank().get(copy_op).expect("stale copy").get_out().expect("copy out");
+        let out_vn = data
+            .obank()
+            .get(copy_op)
+            .expect("stale copy")
+            .get_out()
+            .expect("copy out");
         if data.vbank().get(out_vn).expect("stale out").is_read_only() {
             return false;
         }
-        let in_vn = data.obank().get(copy_op).expect("stale copy").get_in(0).expect("copy in0");
+        let in_vn = data
+            .obank()
+            .get(copy_op)
+            .expect("stale copy")
+            .get_in(0)
+            .expect("copy in0");
         if data.vbank().get(in_vn).expect("stale in").is_input() {
             return false;
         }
         if data.vbank().get(in_vn).expect("stale in").is_addr_tied() {
-            let out_vn = data.obank().get(copy_op).expect("stale copy").get_out().expect("copy out");
+            let out_vn = data
+                .obank()
+                .get(copy_op)
+                .expect("stale copy")
+                .get_out()
+                .expect("copy out");
             if data.vbank().get(out_vn).expect("stale out").is_addr_tied()
                 && data.vbank().get(out_vn).expect("stale out").get_addr()
                     == data.vbank().get(in_vn).expect("stale in").get_addr()
@@ -4125,7 +4857,12 @@ impl SplitDatatype {
                 return false;
             }
         } else if data.vbank().get(in_vn).expect("stale in").is_written() {
-            let def = data.vbank().get(in_vn).expect("stale in").get_def().expect("in def");
+            let def = data
+                .vbank()
+                .get(in_vn)
+                .expect("stale in")
+                .get_def()
+                .expect("in def");
             if data.obank().get(def).expect("stale def").code() == OpCode::CPUI_LOAD
                 && data.lone_descend(in_vn) == Some(copy_op)
             {
@@ -4149,16 +4886,36 @@ impl SplitDatatype {
         if !data.vbank().get(vn).expect("stale vn").is_written() {
             return Ok(false);
         }
-        let op = data.vbank().get(vn).expect("stale vn").get_def().expect("vn def");
+        let op = data
+            .vbank()
+            .get(vn)
+            .expect("stale vn")
+            .get_def()
+            .expect("vn def");
         let opc = data.obank().get(op).expect("stale def").code();
         if opc == OpCode::CPUI_INT_ZEXT {
-            let i0 = data.obank().get(op).expect("stale def").get_in(0).expect("zext in0");
+            let i0 = data
+                .obank()
+                .get(op)
+                .expect("stale def")
+                .get_in(0)
+                .expect("zext in0");
             if !data.vbank().get(i0).expect("stale in0").is_constant() {
                 return Ok(false);
             }
         } else if opc == OpCode::CPUI_PIECE {
-            let i0 = data.obank().get(op).expect("stale def").get_in(0).expect("piece in0");
-            let i1 = data.obank().get(op).expect("stale def").get_in(1).expect("piece in1");
+            let i0 = data
+                .obank()
+                .get(op)
+                .expect("stale def")
+                .get_in(0)
+                .expect("piece in0");
+            let i1 = data
+                .obank()
+                .get(op)
+                .expect("stale def")
+                .get_in(1)
+                .expect("piece in1");
             if !data.vbank().get(i0).expect("stale in0").is_constant()
                 || !data.vbank().get(i1).expect("stale in1").is_constant()
             {
@@ -4168,18 +4925,38 @@ impl SplitDatatype {
             return Ok(false);
         }
         let full_size = data.vbank().get(vn).expect("stale vn").get_size();
-        let is_big_endian = data.vbank().get(vn).expect("stale vn").get_space().is_big_endian();
+        let is_big_endian = data
+            .vbank()
+            .get(vn)
+            .expect("stale vn")
+            .get_space()
+            .is_big_endian();
         let hi: uintb;
         let lo: uintb;
         let losize: int4;
         if opc == OpCode::CPUI_INT_ZEXT {
-            let i0 = data.obank().get(op).expect("stale def").get_in(0).expect("zext in0");
+            let i0 = data
+                .obank()
+                .get(op)
+                .expect("stale def")
+                .get_in(0)
+                .expect("zext in0");
             hi = 0;
             lo = data.vbank().get(i0).expect("stale in0").get_offset();
             losize = data.vbank().get(i0).expect("stale in0").get_size();
         } else {
-            let i0 = data.obank().get(op).expect("stale def").get_in(0).expect("piece in0");
-            let i1 = data.obank().get(op).expect("stale def").get_in(1).expect("piece in1");
+            let i0 = data
+                .obank()
+                .get(op)
+                .expect("stale def")
+                .get_in(0)
+                .expect("piece in0");
+            let i1 = data
+                .obank()
+                .get(op)
+                .expect("stale def")
+                .get_in(1)
+                .expect("piece in1");
             hi = data.vbank().get(i0).expect("stale in0").get_offset();
             lo = data.vbank().get(i1).expect("stale in1").get_offset();
             losize = data.vbank().get(i1).expect("stale in1").get_size();
@@ -4199,7 +4976,10 @@ impl SplitDatatype {
             let val = super::kuna_constantbytes::pair(hi, lo, losize, sa, dt.get_size());
             let out_vn = data.new_constant(dt.get_size(), val);
             in_varnodes.push(out_vn);
-            data.vbank_mut().get_mut(out_vn).expect("stale const").update_type(dt);
+            data.vbank_mut()
+                .get_mut(out_vn)
+                .expect("stale const")
+                .update_type(dt);
         }
         data.op_destroy(op);
         Ok(true)
@@ -4226,7 +5006,10 @@ impl SplitDatatype {
             let val = super::kuna_constantbytes::word(base_val, off, dt.get_size());
             let out_vn = data.new_constant(dt.get_size(), val);
             in_varnodes.push(out_vn);
-            data.vbank_mut().get_mut(out_vn).expect("stale const").update_type(dt);
+            data.vbank_mut()
+                .get_mut(out_vn)
+                .expect("stale const")
+                .update_type(dt);
         }
     }
 
@@ -4242,9 +5025,19 @@ impl SplitDatatype {
         if self.generate_constants(data, root_vn, in_varnodes)? {
             return Ok(());
         }
-        let base_addr = data.vbank().get(root_vn).expect("stale root").get_addr().clone();
+        let base_addr = data
+            .vbank()
+            .get(root_vn)
+            .expect("stale root")
+            .get_addr()
+            .clone();
         let root_size = data.vbank().get(root_vn).expect("stale root").get_size();
-        let follow_addr = data.obank().get(follow_op).expect("stale follow").get_addr().clone();
+        let follow_addr = data
+            .obank()
+            .get(follow_op)
+            .expect("stale follow")
+            .get_addr()
+            .clone();
         for i in 0..self.data_type_pieces.len() {
             let dt = Rc::clone(&self.data_type_pieces[i].in_type);
             let mut off = self.data_type_pieces[i].offset;
@@ -4261,7 +5054,10 @@ impl SplitDatatype {
             data.op_set_input(subpiece, offconst, 1)?;
             let out_vn = data.new_varnode_out(dt.get_size(), &addr, subpiece)?;
             in_varnodes.push(out_vn);
-            data.vbank_mut().get_mut(out_vn).expect("stale sub out").update_type(dt);
+            data.vbank_mut()
+                .get_mut(out_vn)
+                .expect("stale sub out")
+                .update_type(dt);
             data.op_insert_before(subpiece, follow_op);
             crate::kuna_aggregatefields::collapse_split_truncation(data, subpiece);
         }
@@ -4276,7 +5072,12 @@ impl SplitDatatype {
         root_vn: VarnodeId,
         out_varnodes: &mut Vec<VarnodeId>,
     ) -> KunaResult<()> {
-        let base_addr = data.vbank().get(root_vn).expect("stale root").get_addr().clone();
+        let base_addr = data
+            .vbank()
+            .get(root_vn)
+            .expect("stale root")
+            .get_addr()
+            .clone();
         for i in 0..self.data_type_pieces.len() {
             let dt = Rc::clone(&self.data_type_pieces[i].out_type);
             let off = self.data_type_pieces[i].offset;
@@ -4297,16 +5098,38 @@ impl SplitDatatype {
         previous_op: OpId,
         out_varnodes: &[VarnodeId],
     ) -> KunaResult<()> {
-        if data.vbank().get(root_vn).expect("stale root").has_no_descend() {
+        if data
+            .vbank()
+            .get(root_vn)
+            .expect("stale root")
+            .has_no_descend()
+        {
             return Ok(()); // Don't need to produce concatenation if unused
         }
-        let base_addr = data.vbank().get(root_vn).expect("stale root").get_addr().clone();
-        let prev_addr = data.obank().get(previous_op).expect("stale prev").get_addr().clone();
-        let address_tied = data.vbank().get(root_vn).expect("stale root").is_addr_tied();
+        let base_addr = data
+            .vbank()
+            .get(root_vn)
+            .expect("stale root")
+            .get_addr()
+            .clone();
+        let prev_addr = data
+            .obank()
+            .get(previous_op)
+            .expect("stale prev")
+            .get_addr()
+            .clone();
+        let address_tied = data
+            .vbank()
+            .get(root_vn)
+            .expect("stale root")
+            .is_addr_tied();
         // We are creating a CONCAT stack, mark varnodes appropriately.
         if !address_tied {
             for &ov in out_varnodes {
-                data.vbank_mut().get_mut(ov).expect("stale out").set_proto_partial();
+                data.vbank_mut()
+                    .get_mut(ov)
+                    .expect("stale out")
+                    .set_proto_partial();
             }
         }
         let mut vn: VarnodeId;
@@ -4326,12 +5149,19 @@ impl SplitDatatype {
                 }
                 pre_op = concat_op;
                 let sz = data.vbank().get(vn).expect("stale vn").get_size()
-                    + data.vbank().get(out_varnodes[i]).expect("stale out").get_size();
+                    + data
+                        .vbank()
+                        .get(out_varnodes[i])
+                        .expect("stale out")
+                        .get_size();
                 let mut addr = base_addr.clone();
                 addr.renormalize(sz, data.get_arch().manage())?;
                 vn = data.new_varnode_out(sz, &addr, concat_op)?;
                 if !address_tied {
-                    data.vbank_mut().get_mut(vn).expect("stale vn").set_proto_partial();
+                    data.vbank_mut()
+                        .get_mut(vn)
+                        .expect("stale vn")
+                        .set_proto_partial();
                 }
                 i += 1;
             }
@@ -4349,17 +5179,32 @@ impl SplitDatatype {
                 }
                 pre_op = concat_op;
                 let sz = data.vbank().get(vn).expect("stale vn").get_size()
-                    + data.vbank().get(out_varnodes[i as usize]).expect("stale out").get_size();
-                let mut addr = data.vbank().get(out_varnodes[i as usize]).expect("stale out").get_addr().clone();
+                    + data
+                        .vbank()
+                        .get(out_varnodes[i as usize])
+                        .expect("stale out")
+                        .get_size();
+                let mut addr = data
+                    .vbank()
+                    .get(out_varnodes[i as usize])
+                    .expect("stale out")
+                    .get_addr()
+                    .clone();
                 addr.renormalize(sz, data.get_arch().manage())?;
                 vn = data.new_varnode_out(sz, &addr, concat_op)?;
                 if !address_tied {
-                    data.vbank_mut().get_mut(vn).expect("stale vn").set_proto_partial();
+                    data.vbank_mut()
+                        .get_mut(vn)
+                        .expect("stale vn")
+                        .set_proto_partial();
                 }
                 i -= 1;
             }
         }
-        data.obank_mut().get_mut(concat_op).expect("stale concat").set_partial_root();
+        data.obank_mut()
+            .get_mut(concat_op)
+            .expect("stale concat")
+            .set_partial_root();
         data.op_set_output(concat_op, root_vn)?;
         if !address_tied {
             data.with_covermerge(|merge, data| merge.register_proto_partial_root(data, root_vn));
@@ -4383,10 +5228,19 @@ impl SplitDatatype {
         ptr_varnodes: &mut Vec<VarnodeId>,
         is_input: bool,
     ) -> KunaResult<()> {
-        let base_type = ptr_type.get_ptr_to().expect("buildPointers: ptrType not a pointer");
-        let word_size = ptr_type.get_word_size().expect("buildPointers: ptrType wordsize");
+        let base_type = ptr_type
+            .get_ptr_to()
+            .expect("buildPointers: ptrType not a pointer");
+        let word_size = ptr_type
+            .get_word_size()
+            .expect("buildPointers: ptrType wordsize");
         let ptr_size = ptr_type.get_size();
-        let follow_addr = data.obank().get(follow_op).expect("stale follow").get_addr().clone();
+        let follow_addr = data
+            .obank()
+            .get(follow_op)
+            .expect("stale follow")
+            .get_addr()
+            .clone();
         for i in 0..self.data_type_pieces.len() {
             let match_type = if is_input {
                 Rc::clone(&self.data_type_pieces[i].in_type)
@@ -4424,7 +5278,8 @@ impl SplitDatatype {
                     }
                 }
                 let res_type = if new_type.needs_resolution() {
-                    self.resolver.resolve(if is_input { 0 } else { 1 }, &new_type)
+                    self.resolver
+                        .resolve(if is_input { 0 } else { 1 }, &new_type)
                 } else {
                     Rc::clone(&new_type)
                 };
@@ -4453,12 +5308,16 @@ impl SplitDatatype {
                     let szconst = data.new_constant(in_ptr_size, sz as uintb);
                     data.op_set_input(new_op, szconst, 2)?;
                     let index_size = data.vbank().get(index_vn).expect("stale idx").get_size();
-                    let index_type = self.types()?.get_base(index_size, type_metatype::TYPE_INT)?;
-                    data.vbank_mut().get_mut(index_vn).expect("stale idx").update_type(index_type);
+                    let index_type = self
+                        .types()?
+                        .get_base(index_size, type_metatype::TYPE_INT)?;
+                    data.vbank_mut()
+                        .get_mut(index_vn)
+                        .expect("stale idx")
+                        .update_type(index_type);
                 } else {
                     // cast: byteToAddressInt(int8,..) stays within int8.
-                    let final_offset =
-                        AddrSpace::byte_to_address_int(cur_off - new_off, word_size);
+                    let final_offset = AddrSpace::byte_to_address_int(cur_off - new_off, word_size);
                     new_op = data.new_op(2, follow_addr.clone());
                     data.op_set_opcode(new_op, crate::typeop::type_op_for(OpCode::CPUI_PTRSUB));
                     data.op_set_input(new_op, in_ptr, 0)?;
@@ -4469,10 +5328,15 @@ impl SplitDatatype {
                 // resolver.inheritResolution — no-op for non-union types (W6/W7).
                 let in_ptr_size = data.vbank().get(in_ptr).expect("stale ptr").get_size();
                 in_ptr = data.new_unique_out(in_ptr_size, new_op)?;
-                let tmp_ptr = self
-                    .types()?
-                    .get_type_pointer_strip_array(ptr_size, Rc::clone(&new_type), word_size)?;
-                data.vbank_mut().get_mut(in_ptr).expect("stale ptr").update_type(tmp_ptr);
+                let tmp_ptr = self.types()?.get_type_pointer_strip_array(
+                    ptr_size,
+                    Rc::clone(&new_type),
+                    word_size,
+                )?;
+                data.vbank_mut()
+                    .get_mut(in_ptr)
+                    .expect("stale ptr")
+                    .update_type(tmp_ptr);
                 data.op_insert_before(new_op, follow_op);
                 tmp_type = res_type;
                 cur_off = new_off;
@@ -4488,7 +5352,12 @@ impl SplitDatatype {
     /// Does the given Varnode have an arithmetic op as a descendant (C++
     /// `SplitDatatype::isArithmeticInput`, subflow.cc:2688).
     fn is_arithmetic_input(data: &Funcdata, vn: VarnodeId) -> bool {
-        let descend: Vec<OpId> = data.vbank().get(vn).expect("stale vn").descend_iter().collect();
+        let descend: Vec<OpId> = data
+            .vbank()
+            .get(vn)
+            .expect("stale vn")
+            .descend_iter()
+            .collect();
         for op in descend {
             if crate::typeop::type_op_info(data.obank().get(op).expect("stale desc").code())
                 .is_arithmetic_op()
@@ -4505,7 +5374,12 @@ impl SplitDatatype {
         if !data.vbank().get(vn).expect("stale vn").is_written() {
             return false;
         }
-        let def = data.vbank().get(vn).expect("stale vn").get_def().expect("vn def");
+        let def = data
+            .vbank()
+            .get(vn)
+            .expect("stale vn")
+            .get_def()
+            .expect("vn def");
         crate::typeop::type_op_info(data.obank().get(def).expect("stale def").code())
             .is_arithmetic_op()
     }
@@ -4521,7 +5395,12 @@ impl SplitDatatype {
         if !self.test_copy_constraints(data, copy_op) {
             return Ok(false);
         }
-        let in_vn = data.obank().get(copy_op).expect("stale copy").get_in(0).expect("copy in0");
+        let in_vn = data
+            .obank()
+            .get(copy_op)
+            .expect("stale copy")
+            .get_in(0)
+            .expect("copy in0");
         let in_constant = data.vbank().get(in_vn).expect("stale in").is_constant();
         let types = self.types_clone()?;
         if !self.test_datatype_compatibility(&*types, in_type, out_type, in_constant)? {
@@ -4530,23 +5409,43 @@ impl SplitDatatype {
         if Self::is_arithmetic_output(data, in_vn) {
             return Ok(false); // Sanity check on input
         }
-        let out_vn = data.obank().get(copy_op).expect("stale copy").get_out().expect("copy out");
+        let out_vn = data
+            .obank()
+            .get(copy_op)
+            .expect("stale copy")
+            .get_out()
+            .expect("copy out");
         if Self::is_arithmetic_input(data, out_vn) {
             return Ok(false); // Sanity check on output
         }
         let mut in_varnodes: Vec<VarnodeId> = Vec::new();
         let mut out_varnodes: Vec<VarnodeId> = Vec::new();
-        let _unres_out_type = data.vbank().get(out_vn).expect("stale out").get_type().clone();
+        let _unres_out_type = data
+            .vbank()
+            .get(out_vn)
+            .expect("stale out")
+            .get_type()
+            .clone();
         // resolver.addResolution(0, unresOutType, copyOp, -1) — no-op (non-union).
         if in_constant {
-            let big = data.vbank().get(out_vn).expect("stale out").get_space().is_big_endian();
+            let big = data
+                .vbank()
+                .get(out_vn)
+                .expect("stale out")
+                .get_space()
+                .is_big_endian();
             self.build_in_constants(data, in_vn, &mut in_varnodes, big);
         } else {
             self.build_in_subpieces(data, in_vn, copy_op, &mut in_varnodes)?;
         }
         self.build_out_varnodes(data, out_vn, &mut out_varnodes)?;
         self.build_out_concats(data, out_vn, copy_op, &out_varnodes)?;
-        let copy_addr = data.obank().get(copy_op).expect("stale copy").get_addr().clone();
+        let copy_addr = data
+            .obank()
+            .get(copy_op)
+            .expect("stale copy")
+            .get_addr()
+            .clone();
         for i in 0..in_varnodes.len() {
             let new_copy_op = data.new_op(1, copy_addr.clone());
             data.op_set_opcode(new_copy_op, crate::typeop::type_op_for(OpCode::CPUI_COPY));
@@ -4572,7 +5471,12 @@ impl SplitDatatype {
         in_type: &Rc<Datatype>,
     ) -> KunaResult<bool> {
         self.is_load_store = true;
-        let mut out_vn = data.obank().get(load_op).expect("stale load").get_out().expect("load out");
+        let mut out_vn = data
+            .obank()
+            .get(load_op)
+            .expect("stale load")
+            .get_out()
+            .expect("load out");
         let mut copy_op: Option<OpId> = None;
         if !data.vbank().get(out_vn).expect("stale out").is_addr_tied() {
             copy_op = data.lone_descend(out_vn);
@@ -4595,9 +5499,19 @@ impl SplitDatatype {
             }
         }
         if let Some(cop) = copy_op {
-            out_vn = data.obank().get(cop).expect("stale copy").get_out().expect("copy out");
+            out_vn = data
+                .obank()
+                .get(cop)
+                .expect("stale copy")
+                .get_out()
+                .expect("copy out");
         }
-        let out_type = data.vbank().get(out_vn).expect("stale out").get_type_def_facing().clone();
+        let out_type = data
+            .vbank()
+            .get(out_vn)
+            .expect("stale out")
+            .get_type_def_facing()
+            .clone();
         let types = self.types_clone()?;
         if !self.test_datatype_compatibility(&*types, in_type, &out_type, false)? {
             return Ok(false);
@@ -4615,12 +5529,30 @@ impl SplitDatatype {
         let root_ptr = root.pointer;
         let root_ptr_type = root.ptr_type.clone().expect("root ptrType");
         let root_base = root.base_offset;
-        self.build_pointers(data, root_ptr, &root_ptr_type, root_base, load_op, &mut ptr_varnodes, true)?;
+        self.build_pointers(
+            data,
+            root_ptr,
+            &root_ptr_type,
+            root_base,
+            load_op,
+            &mut ptr_varnodes,
+            true,
+        )?;
         self.build_out_varnodes(data, out_vn, &mut out_varnodes)?;
         self.build_out_concats(data, out_vn, insert_point, &out_varnodes)?;
-        let load_in0 = data.obank().get(load_op).expect("stale load").get_in(0).expect("load in0");
+        let load_in0 = data
+            .obank()
+            .get(load_op)
+            .expect("stale load")
+            .get_in(0)
+            .expect("load in0");
         let spc = space_from_const(data, load_in0);
-        let insert_addr = data.obank().get(insert_point).expect("stale insert").get_addr().clone();
+        let insert_addr = data
+            .obank()
+            .get(insert_point)
+            .expect("stale insert")
+            .get_addr()
+            .clone();
         for i in 0..ptr_varnodes.len() {
             let new_load_op = data.new_op(2, insert_addr.clone());
             data.op_set_opcode(new_load_op, crate::typeop::type_op_for(OpCode::CPUI_LOAD));
@@ -4642,10 +5574,16 @@ impl SplitDatatype {
     /// `copy_op`, or do they sit in different blocks?
     fn store_or_call_between(data: &Funcdata, load_op: OpId, copy_op: OpId) -> bool {
         let parent = data.obank().get(load_op).expect("stale load").get_parent();
-        if parent.is_none() || parent != data.obank().get(copy_op).expect("stale copy").get_parent() {
+        if parent.is_none() || parent != data.obank().get(copy_op).expect("stale copy").get_parent()
+        {
             return true;
         }
-        let mut cur = data.obank().get(load_op).expect("stale load").basic_neighbours().1;
+        let mut cur = data
+            .obank()
+            .get(load_op)
+            .expect("stale load")
+            .basic_neighbours()
+            .1;
         while let Some(op) = cur {
             if op == copy_op {
                 return false;
@@ -4667,11 +5605,21 @@ impl SplitDatatype {
         out_type: &Rc<Datatype>,
     ) -> KunaResult<bool> {
         self.is_load_store = true;
-        let in_vn = data.obank().get(store_op).expect("stale store").get_in(2).expect("store in2");
+        let in_vn = data
+            .obank()
+            .get(store_op)
+            .expect("stale store")
+            .get_in(2)
+            .expect("store in2");
         let mut load_op: Option<OpId> = None;
         let mut in_type: Option<Rc<Datatype>> = None;
         if data.vbank().get(in_vn).expect("stale in").is_written() {
-            let def = data.vbank().get(in_vn).expect("stale in").get_def().expect("in def");
+            let def = data
+                .vbank()
+                .get(in_vn)
+                .expect("stale in")
+                .get_def()
+                .expect("in def");
             if data.obank().get(def).expect("stale def").code() == OpCode::CPUI_LOAD
                 && data.lone_descend(in_vn) == Some(store_op)
             {
@@ -4684,8 +5632,13 @@ impl SplitDatatype {
             }
         }
         if in_type.is_none() {
-            in_type =
-                Some(data.vbank().get(in_vn).expect("stale in").get_type_read_facing(store_op).clone());
+            in_type = Some(
+                data.vbank()
+                    .get(in_vn)
+                    .expect("stale in")
+                    .get_type_read_facing(store_op)
+                    .clone(),
+            );
         }
         let mut in_type = in_type.expect("inType set above");
         let in_constant = data.vbank().get(in_vn).expect("stale in").is_constant();
@@ -4694,7 +5647,12 @@ impl SplitDatatype {
             if load_op.is_some() {
                 // Not compatible considering the LOAD; retry without the LOAD.
                 load_op = None;
-                in_type = data.vbank().get(in_vn).expect("stale in").get_type_read_facing(store_op).clone();
+                in_type = data
+                    .vbank()
+                    .get(in_vn)
+                    .expect("stale in")
+                    .get_type_read_facing(store_op)
+                    .clone();
                 self.data_type_pieces.clear();
                 if !self.test_datatype_compatibility(&*types, &in_type, out_type, in_constant)? {
                     return Ok(false);
@@ -4716,7 +5674,12 @@ impl SplitDatatype {
                 return Ok(false);
             }
         }
-        let store_in0 = data.obank().get(store_op).expect("stale store").get_in(0).expect("store in0");
+        let store_in0 = data
+            .obank()
+            .get(store_op)
+            .expect("stale store")
+            .get_in(0)
+            .expect("store in0");
         let store_space = space_from_const(data, store_in0);
         let mut in_varnodes: Vec<VarnodeId> = Vec::new();
         if in_constant {
@@ -4727,9 +5690,19 @@ impl SplitDatatype {
             let lr_type = load_root.ptr_type.clone().expect("load root ptrType");
             let lr_base = load_root.base_offset;
             self.build_pointers(data, lr_ptr, &lr_type, lr_base, lop, &mut load_ptrs, true)?;
-            let load_in0 = data.obank().get(lop).expect("stale load").get_in(0).expect("load in0");
+            let load_in0 = data
+                .obank()
+                .get(lop)
+                .expect("stale load")
+                .get_in(0)
+                .expect("load in0");
             let load_space = space_from_const(data, load_in0);
-            let load_addr = data.obank().get(lop).expect("stale load").get_addr().clone();
+            let load_addr = data
+                .obank()
+                .get(lop)
+                .expect("stale load")
+                .get_addr()
+                .clone();
             // Parallel loop over load_ptrs and dataTypePieces (equal length): the
             // C++ indexes both by `i`; iterate the pointer chain by value here.
             for (i, load_ptr) in load_ptrs.iter().copied().enumerate() {
@@ -4740,7 +5713,10 @@ impl SplitDatatype {
                 data.op_set_input(new_load_op, load_ptr, 1)?;
                 let dt = Rc::clone(&self.data_type_pieces[i].in_type);
                 let vn = data.new_unique_out(dt.get_size(), new_load_op)?;
-                data.vbank_mut().get_mut(vn).expect("stale load out").update_type(dt);
+                data.vbank_mut()
+                    .get_mut(vn)
+                    .expect("stale load out")
+                    .update_type(dt);
                 in_varnodes.push(vn);
                 data.op_insert_before(new_load_op, lop);
             }
@@ -4749,19 +5725,37 @@ impl SplitDatatype {
         }
 
         let mut store_ptrs: Vec<VarnodeId> = Vec::new();
-        if data.vbank().get(store_root.pointer).expect("stale root").is_addr_tied() {
+        if data
+            .vbank()
+            .get(store_root.pointer)
+            .expect("stale root")
+            .is_addr_tied()
+        {
             store_root.duplicate_to_temp(data, store_op)?;
         }
         let sr_ptr = store_root.pointer;
         let sr_type = store_root.ptr_type.clone().expect("store root ptrType");
         let sr_base = store_root.base_offset;
-        self.build_pointers(data, sr_ptr, &sr_type, sr_base, store_op, &mut store_ptrs, false)?;
+        self.build_pointers(
+            data,
+            sr_ptr,
+            &sr_type,
+            sr_base,
+            store_op,
+            &mut store_ptrs,
+            false,
+        )?;
         // Preserve original STORE object (INDIRECT refs stay valid); convert it
         // into the first of the smaller STOREs.
         data.op_set_input(store_op, store_ptrs[0], 1)?;
         data.op_set_input(store_op, in_varnodes[0], 2)?;
         let mut last_store = store_op;
-        let store_addr = data.obank().get(store_op).expect("stale store").get_addr().clone();
+        let store_addr = data
+            .obank()
+            .get(store_op)
+            .expect("stale store")
+            .get_addr()
+            .clone();
         for i in 1..store_ptrs.len() {
             let new_store_op = data.new_op(3, store_addr.clone());
             data.op_set_opcode(new_store_op, crate::typeop::type_op_for(OpCode::CPUI_STORE));
@@ -4790,7 +5784,12 @@ impl SplitDatatype {
         size: int4,
     ) -> Option<Rc<Datatype>> {
         let in1 = data.obank().get(load_store).expect("stale ls").get_in(1)?;
-        let ptr_type = data.vbank().get(in1).expect("stale in1").get_type_read_facing(load_store).clone();
+        let ptr_type = data
+            .vbank()
+            .get(in1)
+            .expect("stale in1")
+            .get_type_read_facing(load_store)
+            .clone();
         if ptr_type.get_metatype() != type_metatype::TYPE_PTR {
             return None;
         }
@@ -4818,11 +5817,13 @@ impl SplitDatatype {
                 }
             }
         } else if metain == type_metatype::TYPE_STRUCT || metain == type_metatype::TYPE_ARRAY {
-            return tlst.get_exact_piece(res_type, base_offset, size).ok().flatten();
+            return tlst
+                .get_exact_piece(res_type, base_offset, size)
+                .ok()
+                .flatten();
         }
         None
     }
-
 
     /// Clone the held factory `Rc` so it can be borrowed (`&*`) as the explicit
     /// `types` argument of `test_datatype_compatibility`/`get_component` while
@@ -4859,11 +5860,21 @@ impl RootPointer {
         if !data.vbank().get(pointer).expect("stale ptr").is_written() {
             return false;
         }
-        let add_op = data.vbank().get(pointer).expect("stale ptr").get_def().expect("ptr def");
+        let add_op = data
+            .vbank()
+            .get(pointer)
+            .expect("stale ptr")
+            .get_def()
+            .expect("ptr def");
         let opc = data.obank().get(add_op).expect("stale add").code();
         let off: int4;
         if opc == OpCode::CPUI_PTRSUB || opc == OpCode::CPUI_INT_ADD || opc == OpCode::CPUI_PTRADD {
-            let cvn = data.obank().get(add_op).expect("stale add").get_in(1).expect("add in1");
+            let cvn = data
+                .obank()
+                .get(add_op)
+                .expect("stale add")
+                .get_in(1)
+                .expect("add in1");
             if !data.vbank().get(cvn).expect("stale cvn").is_constant() {
                 return false;
             }
@@ -4874,8 +5885,18 @@ impl RootPointer {
         } else {
             return false;
         }
-        let tmp_pointer = data.obank().get(add_op).expect("stale add").get_in(0).expect("add in0");
-        let ct = data.vbank().get(tmp_pointer).expect("stale tmp").get_type_read_facing(add_op).clone();
+        let tmp_pointer = data
+            .obank()
+            .get(add_op)
+            .expect("stale add")
+            .get_in(0)
+            .expect("add in0");
+        let ct = data
+            .vbank()
+            .get(tmp_pointer)
+            .expect("stale tmp")
+            .get_type_read_facing(add_op)
+            .clone();
         if ct.get_metatype() != type_metatype::TYPE_PTR {
             return false;
         }
@@ -4894,7 +5915,12 @@ impl RootPointer {
         self.ptr_type = Some(ct);
         let mut off = off;
         if opc == OpCode::CPUI_PTRADD {
-            let i2 = data.obank().get(add_op).expect("stale add").get_in(2).expect("ptradd in2");
+            let i2 = data
+                .obank()
+                .get(add_op)
+                .expect("stale add")
+                .get_in(2)
+                .expect("ptradd in2");
             // cast: PTRADD element multiplier is int4-range.
             off *= data.vbank().get(i2).expect("stale i2").get_offset() as int4;
         }
@@ -4923,13 +5949,27 @@ impl RootPointer {
             value_type = value_type.get_array_base().expect("array base");
             implied_base = Some(Rc::clone(&value_type)); // allow implied array (pointer to element)
         }
-        let key = if data.obank().get(op).expect("stale op").code() == OpCode::CPUI_LOAD { 0 } else { 1 };
+        let key = if data.obank().get(op).expect("stale op").code() == OpCode::CPUI_LOAD {
+            0
+        } else {
+            1
+        };
         self.load_store = Some(op);
         self.base_offset = 0;
-        let in1 = data.obank().get(op).expect("stale op").get_in(1).expect("ls in1");
+        let in1 = data
+            .obank()
+            .get(op)
+            .expect("stale op")
+            .get_in(1)
+            .expect("ls in1");
         self.first_pointer = Some(in1);
         self.pointer = in1;
-        let ct = data.vbank().get(in1).expect("stale in1").get_type_read_facing(op).clone();
+        let ct = data
+            .vbank()
+            .get(in1)
+            .expect("stale in1")
+            .get_type_read_facing(op)
+            .clone();
         if ct.get_metatype() != type_metatype::TYPE_PTR {
             return Ok(false);
         }
@@ -4944,14 +5984,23 @@ impl RootPointer {
             if !self.back_up_pointer(data, implied_base.as_ref()) {
                 return Ok(false);
             }
-            let cur_ptr_to = self.ptr_type.as_ref().expect("ptrType").get_ptr_to().expect("ptrTo");
+            let cur_ptr_to = self
+                .ptr_type
+                .as_ref()
+                .expect("ptrType")
+                .get_ptr_to()
+                .expect("ptrTo");
             if !Rc::ptr_eq(&cur_ptr_to, &value_type) {
                 return Ok(false);
             }
         }
         // Back up to pointers to containing structures or arrays.
         for _ in 0..3 {
-            if data.vbank().get(self.pointer).expect("stale ptr").is_addr_tied()
+            if data
+                .vbank()
+                .get(self.pointer)
+                .expect("stale ptr")
+                .is_addr_tied()
                 || data.lone_descend(self.pointer).is_none()
             {
                 break;
@@ -4969,7 +6018,10 @@ impl RootPointer {
     fn duplicate_to_temp(&mut self, data: &mut Funcdata, follow_op: OpId) -> KunaResult<()> {
         let new_root = data.build_copy_temp(self.pointer, follow_op)?;
         let ptr_type = self.ptr_type.clone().expect("ptrType");
-        data.vbank_mut().get_mut(new_root).expect("stale new root").update_type(ptr_type);
+        data.vbank_mut()
+            .get_mut(new_root)
+            .expect("stale new root")
+            .update_type(ptr_type);
         self.pointer = new_root;
         Ok(())
     }
@@ -4980,10 +6032,24 @@ impl RootPointer {
         let mut first = self.first_pointer.expect("firstPointer");
         while first != self.pointer
             && !data.vbank().get(first).expect("stale first").is_addr_tied()
-            && data.vbank().get(first).expect("stale first").has_no_descend()
+            && data
+                .vbank()
+                .get(first)
+                .expect("stale first")
+                .has_no_descend()
         {
-            let tmp_op = data.vbank().get(first).expect("stale first").get_def().expect("first def");
-            first = data.obank().get(tmp_op).expect("stale tmp").get_in(0).expect("tmp in0");
+            let tmp_op = data
+                .vbank()
+                .get(first)
+                .expect("stale first")
+                .get_def()
+                .expect("first def");
+            first = data
+                .obank()
+                .get(tmp_op)
+                .expect("stale tmp")
+                .get_in(0)
+                .expect("tmp in0");
             data.op_destroy(tmp_op);
         }
         self.first_pointer = Some(first);
@@ -5019,10 +6085,30 @@ impl Rule for RuleSplitCopy {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        let in0 = data.obank().get(op).expect("stale op").get_in(0).expect("copy in0");
-        let in_type = data.vbank().get(in0).expect("stale in0").get_type_read_facing(op).clone();
-        let out = data.obank().get(op).expect("stale op").get_out().expect("copy out");
-        let out_type = data.vbank().get(out).expect("stale out").get_type_def_facing().clone();
+        let in0 = data
+            .obank()
+            .get(op)
+            .expect("stale op")
+            .get_in(0)
+            .expect("copy in0");
+        let in_type = data
+            .vbank()
+            .get(in0)
+            .expect("stale in0")
+            .get_type_read_facing(op)
+            .clone();
+        let out = data
+            .obank()
+            .get(op)
+            .expect("stale op")
+            .get_out()
+            .expect("copy out");
+        let out_type = data
+            .vbank()
+            .get(out)
+            .expect("stale out")
+            .get_type_def_facing()
+            .clone();
         let metain = in_type.get_metatype();
         let metaout = out_type.get_metatype();
         if metain != type_metatype::TYPE_PARTIALSTRUCT
@@ -5071,7 +6157,12 @@ impl Rule for RuleSplitLoad {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        let out = data.obank().get(op).expect("stale op").get_out().expect("out");
+        let out = data
+            .obank()
+            .get(op)
+            .expect("stale op")
+            .get_out()
+            .expect("out");
         let out_size = data.vbank().get(out).expect("stale out").get_size();
         let in_type = match SplitDatatype::get_value_datatype(data, op, out_size) {
             Some(t) => t,
@@ -5121,7 +6212,12 @@ impl Rule for RuleSplitStore {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        let in2 = data.obank().get(op).expect("stale op").get_in(2).expect("store in2");
+        let in2 = data
+            .obank()
+            .get(op)
+            .expect("stale op")
+            .get_in(2)
+            .expect("store in2");
         let in2_size = data.vbank().get(in2).expect("stale in2").get_size();
         let out_type = match SplitDatatype::get_value_datatype(data, op, in2_size) {
             Some(t) => t,
@@ -5187,29 +6283,59 @@ impl RuleDumptyHumpLate {
     /// Body of `applyOp` (C++ `RuleDumptyHumpLate::applyOp`, subflow.cc:3027),
     /// returning `KunaResult` so the funcdata mutations can use `?`.
     fn apply_op_inner(op: OpId, data: &mut Funcdata) -> KunaResult<int4> {
-        let in0 = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
+        let in0 = data
+            .obank()
+            .get(op)
+            .expect("stale op")
+            .get_in(0)
+            .expect("in0");
         if !data.vbank().get(in0).expect("stale in0").is_written() {
             return Ok(0);
         }
-        let mut piece_op = data.vbank().get(in0).expect("stale in0").get_def().expect("in0 def");
+        let mut piece_op = data
+            .vbank()
+            .get(in0)
+            .expect("stale in0")
+            .get_def()
+            .expect("in0 def");
         if data.obank().get(piece_op).expect("stale piece").code() != OpCode::CPUI_PIECE {
             return Ok(0);
         }
-        let out = data.obank().get(op).expect("stale op").get_out().expect("out");
+        let out = data
+            .obank()
+            .get(op)
+            .expect("stale op")
+            .get_out()
+            .expect("out");
         let out_size = data.vbank().get(out).expect("stale out").get_size();
-        let in1 = data.obank().get(op).expect("stale op").get_in(1).expect("in1");
+        let in1 = data
+            .obank()
+            .get(op)
+            .expect("stale op")
+            .get_in(1)
+            .expect("in1");
         let mut trunc = data.vbank().get(in1).expect("stale in1").get_offset() as int4;
         let mut vn = in0;
         loop {
             // Try to backtrack thru PIECE to the component vn is truncated from
-            let p_in1 = data.obank().get(piece_op).expect("stale piece").get_in(1).expect("piece in1");
+            let p_in1 = data
+                .obank()
+                .get(piece_op)
+                .expect("stale piece")
+                .get_in(1)
+                .expect("piece in1");
             let mut trial_vn = p_in1; // Assume the least significant component
             let mut trial_trunc = trunc;
             let trial_vn_size = data.vbank().get(trial_vn).expect("stale trial").get_size();
             if trunc >= trial_vn_size {
                 // Test for truncation from the most significant part
                 trial_trunc -= trial_vn_size; // How much is truncated
-                trial_vn = data.obank().get(piece_op).expect("stale piece").get_in(0).expect("piece in0");
+                trial_vn = data
+                    .obank()
+                    .get(piece_op)
+                    .expect("stale piece")
+                    .get_in(0)
+                    .expect("piece in0");
             }
             let trial_vn_size = data.vbank().get(trial_vn).expect("stale trial").get_size();
             if out_size + trial_trunc > trial_vn_size {
@@ -5223,7 +6349,12 @@ impl RuleDumptyHumpLate {
             if !data.vbank().get(vn).expect("stale vn").is_written() {
                 break;
             }
-            piece_op = data.vbank().get(vn).expect("stale vn").get_def().expect("vn def");
+            piece_op = data
+                .vbank()
+                .get(vn)
+                .expect("stale vn")
+                .get_def()
+                .expect("vn def");
             if data.obank().get(piece_op).expect("stale piece").code() != OpCode::CPUI_PIECE {
                 break;
             }
@@ -5232,16 +6363,31 @@ impl RuleDumptyHumpLate {
             return Ok(0); // Didn't backtrack thru any PIECE
         }
         if data.vbank().get(vn).expect("stale vn").is_written() {
-            let vndef = data.vbank().get(vn).expect("stale vn").get_def().expect("vn def");
+            let vndef = data
+                .vbank()
+                .get(vn)
+                .expect("stale vn")
+                .get_def()
+                .expect("vn def");
             if data.obank().get(vndef).expect("stale vndef").code() == OpCode::CPUI_COPY {
-                vn = data.obank().get(vndef).expect("stale vndef").get_in(0).expect("copy in0");
+                vn = data
+                    .obank()
+                    .get(vndef)
+                    .expect("stale vndef")
+                    .get_in(0)
+                    .expect("copy in0");
             }
         }
         let vn_size = data.vbank().get(vn).expect("stale vn").get_size();
         let remove_op: OpId;
         if out_size != vn_size {
             // Component does not match size exactly.  Preserve SUBPIECE.
-            remove_op = data.vbank().get(in0).expect("stale in0").get_def().expect("in0 def");
+            remove_op = data
+                .vbank()
+                .get(in0)
+                .expect("stale in0")
+                .get_def()
+                .expect("in0 def");
             let in1off = data.vbank().get(in1).expect("stale in1").get_offset();
             if in1off != trunc as uintb {
                 let cst = data.new_constant(4, trunc as uintb);
@@ -5250,7 +6396,12 @@ impl RuleDumptyHumpLate {
             data.op_set_input(op, vn, 0)?;
         } else if data.vbank().get(out).expect("stale out").is_auto_live() {
             // Exact match but output address fixed.  Change SUBPIECE to COPY.
-            remove_op = data.vbank().get(in0).expect("stale in0").get_def().expect("in0 def");
+            remove_op = data
+                .vbank()
+                .get(in0)
+                .expect("stale in0")
+                .get_def()
+                .expect("in0 def");
             data.op_remove_input(op, 1);
             // fd->opSetOpcode(op, CPUI_COPY).  STUB(W6): glb->inst[CPUI_COPY] — the
             // TypeOp flag word is transcribed inline from typeop.cc
@@ -5269,7 +6420,12 @@ impl RuleDumptyHumpLate {
             remove_op = op;
             data.total_replace(out, vn)?;
         }
-        let remove_out = data.obank().get(remove_op).expect("stale remove").get_out().expect("remove out");
+        let remove_out = data
+            .obank()
+            .get(remove_op)
+            .expect("stale remove")
+            .get_out()
+            .expect("remove out");
         let rov = data.vbank().get(remove_out).expect("stale remove out");
         if rov.has_no_descend() && !rov.is_auto_live() {
             let mut scratch: Vec<OpId> = Vec::new();
@@ -5305,11 +6461,19 @@ struct SubfloatState {
 
 impl SubfloatState {
     fn new(op: OpId) -> SubfloatState {
-        SubfloatState { op, slot: 0, max_precision: 0 }
+        SubfloatState {
+            op,
+            slot: 0,
+            max_precision: 0,
+        }
     }
     /// Accumulate precision from an input (C++ `State::incorporateInputSize`).
     fn incorporate_input_size(&mut self, sz: int4) {
-        self.max_precision = if self.max_precision < sz { sz } else { self.max_precision };
+        self.max_precision = if self.max_precision < sz {
+            sz
+        } else {
+            self.max_precision
+        };
     }
 }
 
@@ -5363,10 +6527,20 @@ impl SubfloatFlow {
     /// Maximum floating-point precision reaching a Varnode (C++
     /// `SubfloatFlow::maxPrecision`, subflow.cc:3094).
     fn max_precision(&mut self, data: &mut Funcdata, vn: VarnodeId) -> int4 {
-        if !data.vbank().get(vn).expect("max_precision: stale vn").is_written() {
+        if !data
+            .vbank()
+            .get(vn)
+            .expect("max_precision: stale vn")
+            .is_written()
+        {
             return data.vbank().get(vn).expect("stale vn").get_size();
         }
-        let op = data.vbank().get(vn).expect("stale vn").get_def().expect("vn def");
+        let op = data
+            .vbank()
+            .get(vn)
+            .expect("stale vn")
+            .get_def()
+            .expect("vn def");
         let vn_size = data.vbank().get(vn).expect("stale vn").get_size();
         match data.obank().get(op).expect("stale op").code() {
             OpCode::CPUI_MULTIEQUAL
@@ -5382,7 +6556,12 @@ impl SubfloatFlow {
             | OpCode::CPUI_FLOAT_MULT
             | OpCode::CPUI_FLOAT_DIV => return 0, // Delay checking other binary ops
             OpCode::CPUI_FLOAT_FLOAT2FLOAT | OpCode::CPUI_FLOAT_INT2FLOAT => {
-                let in0 = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
+                let in0 = data
+                    .obank()
+                    .get(op)
+                    .expect("stale op")
+                    .get_in(0)
+                    .expect("in0");
                 let in0_size = data.vbank().get(in0).expect("stale in0").get_size();
                 if in0_size > vn_size {
                     return vn_size;
@@ -5403,25 +6582,48 @@ impl SubfloatFlow {
             let st_idx = op_stack.len() - 1;
             let state_op = op_stack[st_idx].op;
             let state_slot = op_stack[st_idx].slot;
-            let numin = data.obank().get(state_op).expect("stale state op").num_input();
+            let numin = data
+                .obank()
+                .get(state_op)
+                .expect("stale state op")
+                .num_input();
             if state_slot >= numin {
                 max = op_stack[st_idx].max_precision;
-                data.obank_mut().get_mut(state_op).expect("stale state op").clear_mark();
-                self.max_precision_map.insert(state_op, op_stack[st_idx].max_precision);
+                data.obank_mut()
+                    .get_mut(state_op)
+                    .expect("stale state op")
+                    .clear_mark();
+                self.max_precision_map
+                    .insert(state_op, op_stack[st_idx].max_precision);
                 op_stack.pop();
                 if let Some(last) = op_stack.last_mut() {
                     last.incorporate_input_size(max);
                 }
                 continue;
             }
-            let next_vn = data.obank().get(state_op).expect("stale state op").get_in(state_slot).expect("in");
+            let next_vn = data
+                .obank()
+                .get(state_op)
+                .expect("stale state op")
+                .get_in(state_slot)
+                .expect("in");
             op_stack[st_idx].slot += 1;
-            if !data.vbank().get(next_vn).expect("stale next_vn").is_written() {
+            if !data
+                .vbank()
+                .get(next_vn)
+                .expect("stale next_vn")
+                .is_written()
+            {
                 let sz = data.vbank().get(next_vn).expect("stale next_vn").get_size();
                 op_stack[st_idx].incorporate_input_size(sz);
                 continue;
             }
-            let next_op = data.vbank().get(next_vn).expect("stale next_vn").get_def().expect("next def");
+            let next_op = data
+                .vbank()
+                .get(next_vn)
+                .expect("stale next_vn")
+                .get_def()
+                .expect("next def");
             if data.obank().get(next_op).expect("stale next_op").is_mark() {
                 continue; // Truncate the cycle edge
             }
@@ -5439,7 +6641,10 @@ impl SubfloatFlow {
                         // Seen the op before, incorporate cached precision
                         op_stack[st_idx].incorporate_input_size(*v);
                     } else {
-                        data.obank_mut().get_mut(next_op).expect("stale next_op").set_mark();
+                        data.obank_mut()
+                            .get_mut(next_op)
+                            .expect("stale next_op")
+                            .set_mark();
                         op_stack.push(SubfloatState::new(next_op)); // Recursively push
                     }
                 }
@@ -5448,7 +6653,12 @@ impl SubfloatFlow {
                 | OpCode::CPUI_FLOAT_MULT
                 | OpCode::CPUI_FLOAT_DIV => {}
                 OpCode::CPUI_FLOAT_FLOAT2FLOAT | OpCode::CPUI_FLOAT_INT2FLOAT => {
-                    let nin0 = data.obank().get(next_op).expect("stale next_op").get_in(0).expect("in0");
+                    let nin0 = data
+                        .obank()
+                        .get(next_op)
+                        .expect("stale next_op")
+                        .get_in(0)
+                        .expect("in0");
                     let nin0_size = data.vbank().get(nin0).expect("stale nin0").get_size();
                     if nin0_size > next_vn_size {
                         op_stack[st_idx].incorporate_input_size(next_vn_size);
@@ -5466,8 +6676,18 @@ impl SubfloatFlow {
     /// `SubfloatFlow::exceedsPrecision`, subflow.cc:3201).
     /// Arithmetic keeps its rounding width even when its inputs were widened.
     fn exceeds_precision(&mut self, data: &mut Funcdata, op: OpId) -> bool {
-        let in0 = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
-        let in1 = data.obank().get(op).expect("stale op").get_in(1).expect("in1");
+        let in0 = data
+            .obank()
+            .get(op)
+            .expect("stale op")
+            .get_in(0)
+            .expect("in0");
+        let in1 = data
+            .obank()
+            .get(op)
+            .expect("stale op")
+            .get_in(1)
+            .expect("in1");
         if matches!(
             data.obank().get(op).expect("stale op").code(),
             OpCode::CPUI_FLOAT_ADD
@@ -5487,7 +6707,11 @@ impl SubfloatFlow {
     /// Create/return a placeholder for a Varnode (C++
     /// `SubfloatFlow::setReplacement`, subflow.cc:3215).  `None` is the C++
     /// `(TransformVar *)0`.
-    fn set_replacement(&mut self, data: &mut Funcdata, vn: VarnodeId) -> KunaResult<Option<TVarRef>> {
+    fn set_replacement(
+        &mut self,
+        data: &mut Funcdata,
+        vn: VarnodeId,
+    ) -> KunaResult<Option<TVarRef>> {
         let v = data.vbank().get(vn).expect("set_replacement: stale vn");
         if v.is_mark() {
             // Already seen before
@@ -5543,7 +6767,11 @@ impl SubfloatFlow {
     /// Trace logical value forward through descendant Varnodes (C++
     /// `SubfloatFlow::traceForward`, subflow.cc:3264).
     fn trace_forward(&mut self, data: &mut Funcdata, rvn: TVarRef) -> KunaResult<bool> {
-        let vn = self.tm.var(rvn).get_original().expect("trace_forward: rvn original");
+        let vn = self
+            .tm
+            .var(rvn)
+            .get_original()
+            .expect("trace_forward: rvn original");
         let descend: Vec<OpId> = data.descend_snapshot(vn);
         for (idx, &op) in descend.iter().enumerate() {
             let outvn = data.obank().get(op).expect("stale op").get_out();
@@ -5610,18 +6838,24 @@ impl SubfloatFlow {
                         return Ok(false);
                     }
                     let mut slot = data.obank().get(op).expect("stale op").get_slot(vn);
-                    let other = data.obank().get(op).expect("stale op").get_in(1 - slot).expect("other in");
+                    let other = data
+                        .obank()
+                        .get(op)
+                        .expect("stale op")
+                        .get_in(1 - slot)
+                        .expect("other in");
                     let rvn2 = match self.set_replacement(data, other)? {
                         Some(r) => r,
                         None => return Ok(false),
                     };
                     if rvn == rvn2 {
                         // Back up one to our original iterator (descend[..idx]).
-                        slot = data
-                            .obank()
-                            .get(op)
-                            .expect("stale op")
-                            .get_repeat_slot(vn, slot, &descend[..idx], op);
+                        slot = data.obank().get(op).expect("stale op").get_repeat_slot(
+                            vn,
+                            slot,
+                            &descend[..idx],
+                            op,
+                        );
                     }
                     if self.tm.preexisting_guard(slot, rvn2) {
                         let rop = self.tm.new_preexisting_op(2, code, op);
@@ -5644,7 +6878,11 @@ impl SubfloatFlow {
     /// Trace a logical value backward through its defining op (C++
     /// `SubfloatFlow::traceBackward`, subflow.cc:3354).
     fn trace_backward(&mut self, data: &mut Funcdata, rvn: TVarRef) -> KunaResult<bool> {
-        let origvn = self.tm.var(rvn).get_original().expect("trace_backward: rvn original");
+        let origvn = self
+            .tm
+            .var(rvn)
+            .get_original()
+            .expect("trace_backward: rvn original");
         let op = match data.vbank().get(origvn).expect("stale origvn").get_def() {
             Some(o) => o,
             None => return Ok(true), // If vn is input
@@ -5684,7 +6922,12 @@ impl SubfloatFlow {
                 let numin = data.obank().get(op).expect("stale op").num_input();
                 for i in 0..numin {
                     if self.tm.op(rop).get_in(i).is_none() {
-                        let ini = data.obank().get(op).expect("stale op").get_in(i).expect("in");
+                        let ini = data
+                            .obank()
+                            .get(op)
+                            .expect("stale op")
+                            .get_in(i)
+                            .expect("in");
                         let newvar = match self.set_replacement(data, ini)? {
                             Some(v) => v,
                             None => return Ok(false),
@@ -5695,14 +6938,25 @@ impl SubfloatFlow {
                 Ok(true)
             }
             OpCode::CPUI_FLOAT_INT2FLOAT => {
-                let invn = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
+                let invn = data
+                    .obank()
+                    .get(op)
+                    .expect("stale op")
+                    .get_in(0)
+                    .expect("in0");
                 let iv = data.vbank().get(invn).expect("stale invn");
                 if !iv.is_constant() && iv.is_free() {
                     return Ok(false);
                 }
                 let original_size = data.vbank().get(origvn).expect("stale origvn").get_size();
                 let constant = iv.is_constant().then(|| iv.get_offset());
-                if !super::kuna_intfloatround::lowers(&self.arch, iv.get_size(), constant, original_size, self.precision) {
+                if !super::kuna_intfloatround::lowers(
+                    &self.arch,
+                    iv.get_size(),
+                    constant,
+                    original_size,
+                    self.precision,
+                ) {
                     return Ok(false);
                 }
                 let rop = self.tm.new_op_replace(1, OpCode::CPUI_FLOAT_INT2FLOAT, op);
@@ -5712,10 +6966,16 @@ impl SubfloatFlow {
                 Ok(true)
             }
             OpCode::CPUI_FLOAT_FLOAT2FLOAT => {
-                let invn = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
+                let invn = data
+                    .obank()
+                    .get(op)
+                    .expect("stale op")
+                    .get_in(0)
+                    .expect("in0");
                 let iv = data.vbank().get(invn).expect("stale invn");
                 let original_size = data.vbank().get(origvn).expect("stale origvn").get_size();
-                if iv.get_size() == self.precision && !super::kuna_floatquiet::can_elide(data, invn) {
+                if iv.get_size() == self.precision && !super::kuna_floatquiet::can_elide(data, invn)
+                {
                     return Ok(false);
                 }
                 if iv.get_size() > original_size && self.precision < original_size {
@@ -5757,7 +7017,10 @@ impl SubfloatFlow {
     /// Push the trace one hop from the worklist top (C++
     /// `SubfloatFlow::processNextWork`, subflow.cc:3442).
     fn process_next_work(&mut self, data: &mut Funcdata) -> KunaResult<bool> {
-        let rvn = self.worklist.pop().expect("process_next_work: empty worklist");
+        let rvn = self
+            .worklist
+            .pop()
+            .expect("process_next_work: empty worklist");
         if !self.trace_backward(data, rvn)? {
             return Ok(false);
         }
@@ -5875,11 +7138,23 @@ impl LaneDivide {
         let v = data.vbank().get(vn).expect("set_replacement: stale vn");
         if v.is_mark() {
             // Already seen before
-            return Some(self.tm.get_split_subset(data, vn, &self.description, num_lanes, skip_lanes));
+            return Some(self.tm.get_split_subset(
+                data,
+                vn,
+                &self.description,
+                num_lanes,
+                skip_lanes,
+            ));
         }
 
         if v.is_constant() {
-            return Some(self.tm.new_split_subset(data, vn, &self.description, num_lanes, skip_lanes));
+            return Some(self.tm.new_split_subset(
+                data,
+                vn,
+                &self.description,
+                num_lanes,
+                skip_lanes,
+            ));
         }
 
         // Allow free varnodes to be split (the C++ keeps the isFree() abort
@@ -5896,10 +7171,19 @@ impl LaneDivide {
         }
 
         let is_free = v.is_free();
-        data.vbank_mut().get_mut(vn).expect("set_replacement: stale vn").set_mark();
-        let res = self.tm.new_split_subset(data, vn, &self.description, num_lanes, skip_lanes);
+        data.vbank_mut()
+            .get_mut(vn)
+            .expect("set_replacement: stale vn")
+            .set_mark();
+        let res = self
+            .tm
+            .new_split_subset(data, vn, &self.description, num_lanes, skip_lanes);
         if !is_free {
-            self.work_list.push(LaneWorkNode { lanes: res, num_lanes, skip_lanes });
+            self.work_list.push(LaneWorkNode {
+                lanes: res,
+                num_lanes,
+                skip_lanes,
+            });
         }
         Some(res)
     }
@@ -5950,21 +7234,43 @@ impl LaneDivide {
         num_lanes: int4,
         skip_lanes: int4,
     ) -> bool {
-        let high_vn = data.obank().get(op).expect("build_piece: stale op").get_in(0).expect("in0");
-        let low_vn = data.obank().get(op).expect("build_piece: stale op").get_in(1).expect("in1");
-        let low_size = data.vbank().get(low_vn).expect("build_piece: stale lowVn").get_size();
-        let high_size = data.vbank().get(high_vn).expect("build_piece: stale highVn").get_size();
+        let high_vn = data
+            .obank()
+            .get(op)
+            .expect("build_piece: stale op")
+            .get_in(0)
+            .expect("in0");
+        let low_vn = data
+            .obank()
+            .get(op)
+            .expect("build_piece: stale op")
+            .get_in(1)
+            .expect("in1");
+        let low_size = data
+            .vbank()
+            .get(low_vn)
+            .expect("build_piece: stale lowVn")
+            .get_size();
+        let high_size = data
+            .vbank()
+            .get(high_vn)
+            .expect("build_piece: stale highVn")
+            .get_size();
 
-        let (high_lanes, high_skip) =
-            match self.description.restriction(num_lanes, skip_lanes, low_size, high_size) {
-                Some(v) => v,
-                None => return false,
-            };
-        let (low_lanes, low_skip) =
-            match self.description.restriction(num_lanes, skip_lanes, 0, low_size) {
-                Some(v) => v,
-                None => return false,
-            };
+        let (high_lanes, high_skip) = match self
+            .description
+            .restriction(num_lanes, skip_lanes, low_size, high_size)
+        {
+            Some(v) => v,
+            None => return false,
+        };
+        let (low_lanes, low_skip) = match self
+            .description
+            .restriction(num_lanes, skip_lanes, 0, low_size)
+        {
+            Some(v) => v,
+            None => return false,
+        };
         if high_lanes == 1 {
             let high_rvn = self.tm.get_preexisting_varnode(data, high_vn);
             let rop = self.tm.new_op_replace(1, OpCode::CPUI_COPY, op);
@@ -5980,7 +7286,8 @@ impl LaneDivide {
             for i in 0..high_lanes {
                 let rop = self.tm.new_op_replace(1, OpCode::CPUI_COPY, op);
                 self.tm.op_set_input(rop, lane_at(high_rvn, i), 0);
-                self.tm.op_set_output(rop, lane_at(out_vars, out_high_start + i));
+                self.tm
+                    .op_set_output(rop, lane_at(out_vars, out_high_start + i));
             }
         }
         if low_lanes == 1 {
@@ -6014,9 +7321,18 @@ impl LaneDivide {
         skip_lanes: int4,
     ) -> bool {
         let mut in_var_sets: Vec<TVarRef> = Vec::new();
-        let num_input = data.obank().get(op).expect("build_multiequal: stale op").num_input();
+        let num_input = data
+            .obank()
+            .get(op)
+            .expect("build_multiequal: stale op")
+            .num_input();
         for i in 0..num_input {
-            let ini = data.obank().get(op).expect("build_multiequal: stale op").get_in(i).expect("in");
+            let ini = data
+                .obank()
+                .get(op)
+                .expect("build_multiequal: stale op")
+                .get_in(i)
+                .expect("in");
             let in_vn = match self.set_replacement(data, ini, num_lanes, skip_lanes) {
                 Some(v) => v,
                 None => return false,
@@ -6024,10 +7340,13 @@ impl LaneDivide {
             in_var_sets.push(in_vn);
         }
         for i in 0..num_lanes {
-            let rop = self.tm.new_op_replace(num_input, OpCode::CPUI_MULTIEQUAL, op);
+            let rop = self
+                .tm
+                .new_op_replace(num_input, OpCode::CPUI_MULTIEQUAL, op);
             self.tm.op_set_output(rop, lane_at(out_vars, i));
             for j in 0..num_input {
-                self.tm.op_set_input(rop, lane_at(in_var_sets[j as usize], i), j);
+                self.tm
+                    .op_set_input(rop, lane_at(in_var_sets[j as usize], i), j);
             }
         }
         true
@@ -6043,7 +7362,12 @@ impl LaneDivide {
         num_lanes: int4,
         skip_lanes: int4,
     ) -> bool {
-        let in0 = data.obank().get(op).expect("build_indirect: stale op").get_in(0).expect("in0");
+        let in0 = data
+            .obank()
+            .get(op)
+            .expect("build_indirect: stale op")
+            .get_in(0)
+            .expect("in0");
         let in_vn = match self.set_replacement(data, in0, num_lanes, skip_lanes) {
             Some(v) => v,
             None => return false,
@@ -6052,7 +7376,12 @@ impl LaneDivide {
             let rop = self.tm.new_op_replace(2, OpCode::CPUI_INDIRECT, op);
             self.tm.op_set_output(rop, lane_at(out_vars, i));
             self.tm.op_set_input(rop, lane_at(in_vn, i), 0);
-            let in1 = data.obank().get(op).expect("build_indirect: stale op").get_in(1).expect("in1");
+            let in1 = data
+                .obank()
+                .get(op)
+                .expect("build_indirect: stale op")
+                .get_in(1)
+                .expect("in1");
             let iop = self.tm.new_iop(data, in1);
             self.tm.op_set_input(rop, iop, 1);
             self.tm.inherit_indirect(rop, data, op);
@@ -6069,22 +7398,52 @@ impl LaneDivide {
         num_lanes: int4,
         skip_lanes: int4,
     ) -> bool {
-        let in2 = data.obank().get(op).expect("build_store: stale op").get_in(2).expect("in2");
+        let in2 = data
+            .obank()
+            .get(op)
+            .expect("build_store: stale op")
+            .get_in(2)
+            .expect("in2");
         let in_vars = match self.set_replacement(data, in2, num_lanes, skip_lanes) {
             Some(v) => v,
             None => return false,
         };
-        let in0 = data.obank().get(op).expect("build_store: stale op").get_in(0).expect("in0");
-        let space_const = data.vbank().get(in0).expect("build_store: stale in0").get_offset();
-        let space_const_size = data.vbank().get(in0).expect("build_store: stale in0").get_size();
+        let in0 = data
+            .obank()
+            .get(op)
+            .expect("build_store: stale op")
+            .get_in(0)
+            .expect("in0");
+        let space_const = data
+            .vbank()
+            .get(in0)
+            .expect("build_store: stale in0")
+            .get_offset();
+        let space_const_size = data
+            .vbank()
+            .get(in0)
+            .expect("build_store: stale in0")
+            .get_size();
         let spc = space_from_const(data, in0); // Address space being stored to
-        let orig_ptr = data.obank().get(op).expect("build_store: stale op").get_in(1).expect("in1");
-        let orig_ptr_v = data.vbank().get(orig_ptr).expect("build_store: stale origPtr");
+        let orig_ptr = data
+            .obank()
+            .get(op)
+            .expect("build_store: stale op")
+            .get_in(1)
+            .expect("in1");
+        let orig_ptr_v = data
+            .vbank()
+            .get(orig_ptr)
+            .expect("build_store: stale origPtr");
         if orig_ptr_v.is_free() && !orig_ptr_v.is_constant() {
             return false;
         }
         let base_ptr = self.tm.get_preexisting_varnode(data, orig_ptr);
-        let ptr_size = data.vbank().get(orig_ptr).expect("build_store: stale origPtr").get_size();
+        let ptr_size = data
+            .vbank()
+            .get(orig_ptr)
+            .expect("build_store: stale origPtr")
+            .get_size();
         // Order lanes by pointer offset.  little = least to most, big = most to least.
         let mut byte_pos: int8 = 0;
         let is_big = spc.is_big_endian();
@@ -6122,17 +7481,42 @@ impl LaneDivide {
         num_lanes: int4,
         skip_lanes: int4,
     ) -> bool {
-        let in0 = data.obank().get(op).expect("build_load: stale op").get_in(0).expect("in0");
-        let space_const = data.vbank().get(in0).expect("build_load: stale in0").get_offset();
-        let space_const_size = data.vbank().get(in0).expect("build_load: stale in0").get_size();
+        let in0 = data
+            .obank()
+            .get(op)
+            .expect("build_load: stale op")
+            .get_in(0)
+            .expect("in0");
+        let space_const = data
+            .vbank()
+            .get(in0)
+            .expect("build_load: stale in0")
+            .get_offset();
+        let space_const_size = data
+            .vbank()
+            .get(in0)
+            .expect("build_load: stale in0")
+            .get_size();
         let spc = space_from_const(data, in0); // Address space being loaded from
-        let orig_ptr = data.obank().get(op).expect("build_load: stale op").get_in(1).expect("in1");
-        let orig_ptr_v = data.vbank().get(orig_ptr).expect("build_load: stale origPtr");
+        let orig_ptr = data
+            .obank()
+            .get(op)
+            .expect("build_load: stale op")
+            .get_in(1)
+            .expect("in1");
+        let orig_ptr_v = data
+            .vbank()
+            .get(orig_ptr)
+            .expect("build_load: stale origPtr");
         if orig_ptr_v.is_free() && !orig_ptr_v.is_constant() {
             return false;
         }
         let base_ptr = self.tm.get_preexisting_varnode(data, orig_ptr);
-        let ptr_size = data.vbank().get(orig_ptr).expect("build_load: stale origPtr").get_size();
+        let ptr_size = data
+            .vbank()
+            .get(orig_ptr)
+            .expect("build_load: stale origPtr")
+            .get_size();
         let mut byte_pos: int8 = 0;
         let is_big = spc.is_big_endian();
         for c in 0..num_lanes {
@@ -6169,11 +7553,25 @@ impl LaneDivide {
         num_lanes: int4,
         skip_lanes: int4,
     ) -> bool {
-        let in1 = data.obank().get(op).expect("build_right_shift: stale op").get_in(1).expect("in1");
-        if !data.vbank().get(in1).expect("build_right_shift: stale in1").is_constant() {
+        let in1 = data
+            .obank()
+            .get(op)
+            .expect("build_right_shift: stale op")
+            .get_in(1)
+            .expect("in1");
+        if !data
+            .vbank()
+            .get(in1)
+            .expect("build_right_shift: stale in1")
+            .is_constant()
+        {
             return false;
         }
-        let mut shift_size = data.vbank().get(in1).expect("build_right_shift: stale in1").get_offset() as int4;
+        let mut shift_size = data
+            .vbank()
+            .get(in1)
+            .expect("build_right_shift: stale in1")
+            .get_offset() as int4;
         if (shift_size & 7) != 0 {
             return false; // Not a multiple of 8
         }
@@ -6192,7 +7590,12 @@ impl LaneDivide {
             src_lane += 1;
             dest_lane += 1;
         }
-        let in0 = data.obank().get(op).expect("build_right_shift: stale op").get_in(0).expect("in0");
+        let in0 = data
+            .obank()
+            .get(op)
+            .expect("build_right_shift: stale op")
+            .get_in(0)
+            .expect("in0");
         let in_vars = match self.set_replacement(data, in0, num_lanes, skip_lanes) {
             Some(v) => v,
             None => return false,
@@ -6207,7 +7610,9 @@ impl LaneDivide {
         for zero_lane in (num_lanes - (start_lane - skip_lanes))..num_lanes {
             let rop = self.tm.new_op_replace(1, OpCode::CPUI_COPY, op);
             self.tm.op_set_output(rop, lane_at(out_vars, zero_lane));
-            let cst = self.tm.new_constant(self.description.get_size(zero_lane), 0, 0);
+            let cst = self
+                .tm
+                .new_constant(self.description.get_size(zero_lane), 0, 0);
             self.tm.op_set_input(rop, cst, 0);
         }
         true
@@ -6223,11 +7628,25 @@ impl LaneDivide {
         num_lanes: int4,
         skip_lanes: int4,
     ) -> bool {
-        let in1 = data.obank().get(op).expect("build_left_shift: stale op").get_in(1).expect("in1");
-        if !data.vbank().get(in1).expect("build_left_shift: stale in1").is_constant() {
+        let in1 = data
+            .obank()
+            .get(op)
+            .expect("build_left_shift: stale op")
+            .get_in(1)
+            .expect("in1");
+        if !data
+            .vbank()
+            .get(in1)
+            .expect("build_left_shift: stale in1")
+            .is_constant()
+        {
             return false;
         }
-        let mut shift_size = data.vbank().get(in1).expect("build_left_shift: stale in1").get_offset() as int4;
+        let mut shift_size = data
+            .vbank()
+            .get(in1)
+            .expect("build_left_shift: stale in1")
+            .get_offset() as int4;
         if (shift_size & 7) != 0 {
             return false; // Not a multiple of 8
         }
@@ -6246,7 +7665,12 @@ impl LaneDivide {
             src_lane += 1;
             dest_lane += 1;
         }
-        let in0 = data.obank().get(op).expect("build_left_shift: stale op").get_in(0).expect("in0");
+        let in0 = data
+            .obank()
+            .get(op)
+            .expect("build_left_shift: stale op")
+            .get_in(0)
+            .expect("in0");
         let in_vars = match self.set_replacement(data, in0, num_lanes, skip_lanes) {
             Some(v) => v,
             None => return false,
@@ -6254,7 +7678,9 @@ impl LaneDivide {
         for zero_lane in 0..(start_lane - skip_lanes) {
             let rop = self.tm.new_op_replace(1, OpCode::CPUI_COPY, op);
             self.tm.op_set_output(rop, lane_at(out_vars, zero_lane));
-            let cst = self.tm.new_constant(self.description.get_size(zero_lane), 0, 0);
+            let cst = self
+                .tm
+                .new_constant(self.description.get_size(zero_lane), 0, 0);
             self.tm.op_set_input(rop, cst, 0);
         }
         self.build_unary_op(
@@ -6277,13 +7703,24 @@ impl LaneDivide {
         num_lanes: int4,
         skip_lanes: int4,
     ) -> bool {
-        let invn = data.obank().get(op).expect("build_zext: stale op").get_in(0).expect("in0");
-        let in_size = data.vbank().get(invn).expect("build_zext: stale invn").get_size();
-        let (in_lanes, in_skip) =
-            match self.description.restriction(num_lanes, skip_lanes, 0, in_size) {
-                Some(v) => v,
-                None => return false,
-            };
+        let invn = data
+            .obank()
+            .get(op)
+            .expect("build_zext: stale op")
+            .get_in(0)
+            .expect("in0");
+        let in_size = data
+            .vbank()
+            .get(invn)
+            .expect("build_zext: stale invn")
+            .get_size();
+        let (in_lanes, in_skip) = match self
+            .description
+            .restriction(num_lanes, skip_lanes, 0, in_size)
+        {
+            Some(v) => v,
+            None => return false,
+        };
         // inSkip should always come back as equal to skipLanes
         if in_lanes == 1 {
             let rop = self.tm.new_op_replace(1, OpCode::CPUI_COPY, op);
@@ -6304,7 +7741,9 @@ impl LaneDivide {
         for i in 0..(num_lanes - in_lanes) {
             // Write 0 constants to remaining lanes
             let rop = self.tm.new_op_replace(1, OpCode::CPUI_COPY, op);
-            let cst = self.tm.new_constant(self.description.get_size(skip_lanes + in_lanes + i), 0, 0);
+            let cst =
+                self.tm
+                    .new_constant(self.description.get_size(skip_lanes + in_lanes + i), 0, 0);
             self.tm.op_set_input(rop, cst, 0);
             self.tm.op_set_output(rop, lane_at(out_vars, in_lanes + i));
         }
@@ -6320,27 +7759,61 @@ impl LaneDivide {
         num_lanes: int4,
         skip_lanes: int4,
     ) -> bool {
-        let origvn = self.tm.var(rvn).get_original().expect("trace_forward: rvn original");
+        let origvn = self
+            .tm
+            .var(rvn)
+            .get_original()
+            .expect("trace_forward: rvn original");
         let descend: Vec<OpId> = data.descend_snapshot(origvn);
         for &op in descend.iter() {
-            let outvn = data.obank().get(op).expect("trace_forward: stale op").get_out();
+            let outvn = data
+                .obank()
+                .get(op)
+                .expect("trace_forward: stale op")
+                .get_out();
             if let Some(ov) = outvn {
-                if data.vbank().get(ov).expect("trace_forward: stale outvn").is_mark() {
+                if data
+                    .vbank()
+                    .get(ov)
+                    .expect("trace_forward: stale outvn")
+                    .is_mark()
+                {
                     continue;
                 }
             }
-            let code = data.obank().get(op).expect("trace_forward: stale op").code();
+            let code = data
+                .obank()
+                .get(op)
+                .expect("trace_forward: stale op")
+                .code();
             match code {
                 OpCode::CPUI_SUBPIECE => {
                     let ov = outvn.expect("trace_forward: SUBPIECE out");
-                    let in1 = data.obank().get(op).expect("trace_forward: stale op").get_in(1).expect("in1");
-                    let byte_pos = data.vbank().get(in1).expect("trace_forward: stale in1").get_offset() as int4;
-                    let out_size = data.vbank().get(ov).expect("trace_forward: stale out").get_size();
-                    match self.description.restriction(num_lanes, skip_lanes, byte_pos, out_size) {
+                    let in1 = data
+                        .obank()
+                        .get(op)
+                        .expect("trace_forward: stale op")
+                        .get_in(1)
+                        .expect("in1");
+                    let byte_pos = data
+                        .vbank()
+                        .get(in1)
+                        .expect("trace_forward: stale in1")
+                        .get_offset() as int4;
+                    let out_size = data
+                        .vbank()
+                        .get(ov)
+                        .expect("trace_forward: stale out")
+                        .get_size();
+                    match self
+                        .description
+                        .restriction(num_lanes, skip_lanes, byte_pos, out_size)
+                    {
                         Some((out_lanes, out_skip)) => {
                             if out_lanes == 1 {
                                 let rop = self.tm.new_preexisting_op(1, OpCode::CPUI_COPY, op);
-                                self.tm.op_set_input(rop, lane_at(rvn, out_skip - skip_lanes), 0);
+                                self.tm
+                                    .op_set_input(rop, lane_at(rvn, out_skip - skip_lanes), 0);
                             } else {
                                 match self.set_replacement(data, ov, out_lanes, out_skip) {
                                     Some(_) => {}
@@ -6351,10 +7824,11 @@ impl LaneDivide {
                         }
                         None => {
                             if self.allow_subpiece_terminator {
-                                let lane_index = self
-                                    .description
-                                    .get_boundary(byte_pos + self.description.get_position(skip_lanes));
-                                if lane_index < 0 || lane_index >= self.description.get_num_lanes() {
+                                let lane_index = self.description.get_boundary(
+                                    byte_pos + self.description.get_position(skip_lanes),
+                                );
+                                if lane_index < 0 || lane_index >= self.description.get_num_lanes()
+                                {
                                     return false; // Does piece start on lane boundary?
                                 }
                                 if self.description.get_size(lane_index) <= out_size {
@@ -6362,7 +7836,8 @@ impl LaneDivide {
                                 }
                                 // Treat SUBPIECE as terminating
                                 let rop = self.tm.new_preexisting_op(2, OpCode::CPUI_SUBPIECE, op);
-                                self.tm.op_set_input(rop, lane_at(rvn, lane_index - skip_lanes), 0);
+                                self.tm
+                                    .op_set_input(rop, lane_at(rvn, lane_index - skip_lanes), 0);
                                 let cst = self.tm.new_constant(4, 0, 0);
                                 self.tm.op_set_input(rop, cst, 1);
                             } else {
@@ -6373,15 +7848,35 @@ impl LaneDivide {
                 }
                 OpCode::CPUI_PIECE => {
                     let ov = outvn.expect("trace_forward: PIECE out");
-                    let in0 = data.obank().get(op).expect("trace_forward: stale op").get_in(0).expect("in0");
+                    let in0 = data
+                        .obank()
+                        .get(op)
+                        .expect("trace_forward: stale op")
+                        .get_in(0)
+                        .expect("in0");
                     let byte_pos = if in0 == origvn {
-                        let in1 = data.obank().get(op).expect("trace_forward: stale op").get_in(1).expect("in1");
-                        data.vbank().get(in1).expect("trace_forward: stale in1").get_size()
+                        let in1 = data
+                            .obank()
+                            .get(op)
+                            .expect("trace_forward: stale op")
+                            .get_in(1)
+                            .expect("in1");
+                        data.vbank()
+                            .get(in1)
+                            .expect("trace_forward: stale in1")
+                            .get_size()
                     } else {
                         0
                     };
-                    let out_size = data.vbank().get(ov).expect("trace_forward: stale out").get_size();
-                    match self.description.extension(num_lanes, skip_lanes, byte_pos, out_size) {
+                    let out_size = data
+                        .vbank()
+                        .get(ov)
+                        .expect("trace_forward: stale out")
+                        .get_size();
+                    match self
+                        .description
+                        .extension(num_lanes, skip_lanes, byte_pos, out_size)
+                    {
                         Some((out_lanes, out_skip)) => {
                             match self.set_replacement(data, ov, out_lanes, out_skip) {
                                 Some(_) => {}
@@ -6407,8 +7902,18 @@ impl LaneDivide {
                     // Don't create the placeholder ops, let traceBackward make them
                 }
                 OpCode::CPUI_INT_RIGHT => {
-                    let in1 = data.obank().get(op).expect("trace_forward: stale op").get_in(1).expect("in1");
-                    if !data.vbank().get(in1).expect("trace_forward: stale in1").is_constant() {
+                    let in1 = data
+                        .obank()
+                        .get(op)
+                        .expect("trace_forward: stale op")
+                        .get_in(1)
+                        .expect("in1");
+                    if !data
+                        .vbank()
+                        .get(in1)
+                        .expect("trace_forward: stale in1")
+                        .is_constant()
+                    {
                         return false; // Trace must come through op->getIn(0)
                     }
                     let ov = outvn.expect("trace_forward: INT_RIGHT out");
@@ -6419,7 +7924,12 @@ impl LaneDivide {
                     // Don't create the placeholder ops, let traceBackward make them
                 }
                 OpCode::CPUI_STORE => {
-                    let in2 = data.obank().get(op).expect("trace_forward: stale op").get_in(2).expect("in2");
+                    let in2 = data
+                        .obank()
+                        .get(op)
+                        .expect("trace_forward: stale op")
+                        .get_in(2)
+                        .expect("in2");
                     if in2 != origvn {
                         return false; // Can only propagate through value being stored
                     }
@@ -6442,15 +7952,33 @@ impl LaneDivide {
         num_lanes: int4,
         skip_lanes: int4,
     ) -> bool {
-        let origvn = self.tm.var(rvn).get_original().expect("trace_backward: rvn original");
-        let op = match data.vbank().get(origvn).expect("trace_backward: stale origvn").get_def() {
+        let origvn = self
+            .tm
+            .var(rvn)
+            .get_original()
+            .expect("trace_backward: rvn original");
+        let op = match data
+            .vbank()
+            .get(origvn)
+            .expect("trace_backward: stale origvn")
+            .get_def()
+        {
             Some(o) => o,
             None => return true, // If vn is input
         };
-        let code = data.obank().get(op).expect("trace_backward: stale op").code();
+        let code = data
+            .obank()
+            .get(op)
+            .expect("trace_backward: stale op")
+            .code();
         match code {
             OpCode::CPUI_INT_NEGATE | OpCode::CPUI_COPY => {
-                let in0 = data.obank().get(op).expect("trace_backward: stale op").get_in(0).expect("in0");
+                let in0 = data
+                    .obank()
+                    .get(op)
+                    .expect("trace_backward: stale op")
+                    .get_in(0)
+                    .expect("in0");
                 let in_vars = match self.set_replacement(data, in0, num_lanes, skip_lanes) {
                     Some(v) => v,
                     None => return false,
@@ -6458,12 +7986,22 @@ impl LaneDivide {
                 self.build_unary_op(code, op, in_vars, rvn, num_lanes);
             }
             OpCode::CPUI_INT_AND | OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR => {
-                let in0 = data.obank().get(op).expect("trace_backward: stale op").get_in(0).expect("in0");
+                let in0 = data
+                    .obank()
+                    .get(op)
+                    .expect("trace_backward: stale op")
+                    .get_in(0)
+                    .expect("in0");
                 let in0_vars = match self.set_replacement(data, in0, num_lanes, skip_lanes) {
                     Some(v) => v,
                     None => return false,
                 };
-                let in1 = data.obank().get(op).expect("trace_backward: stale op").get_in(1).expect("in1");
+                let in1 = data
+                    .obank()
+                    .get(op)
+                    .expect("trace_backward: stale op")
+                    .get_in(1)
+                    .expect("in1");
                 let in1_vars = match self.set_replacement(data, in1, num_lanes, skip_lanes) {
                     Some(v) => v,
                     None => return false,
@@ -6481,15 +8019,35 @@ impl LaneDivide {
                 }
             }
             OpCode::CPUI_SUBPIECE => {
-                let in_vn = data.obank().get(op).expect("trace_backward: stale op").get_in(0).expect("in0");
-                let in1 = data.obank().get(op).expect("trace_backward: stale op").get_in(1).expect("in1");
-                let byte_pos = data.vbank().get(in1).expect("trace_backward: stale in1").get_offset() as int4;
-                let in_size = data.vbank().get(in_vn).expect("trace_backward: stale inVn").get_size();
-                let (in_lanes, in_skip) =
-                    match self.description.extension(num_lanes, skip_lanes, byte_pos, in_size) {
-                        Some(v) => v,
-                        None => return false,
-                    };
+                let in_vn = data
+                    .obank()
+                    .get(op)
+                    .expect("trace_backward: stale op")
+                    .get_in(0)
+                    .expect("in0");
+                let in1 = data
+                    .obank()
+                    .get(op)
+                    .expect("trace_backward: stale op")
+                    .get_in(1)
+                    .expect("in1");
+                let byte_pos = data
+                    .vbank()
+                    .get(in1)
+                    .expect("trace_backward: stale in1")
+                    .get_offset() as int4;
+                let in_size = data
+                    .vbank()
+                    .get(in_vn)
+                    .expect("trace_backward: stale inVn")
+                    .get_size();
+                let (in_lanes, in_skip) = match self
+                    .description
+                    .extension(num_lanes, skip_lanes, byte_pos, in_size)
+                {
+                    Some(v) => v,
+                    None => return false,
+                };
                 let in_vars = match self.set_replacement(data, in_vn, in_lanes, in_skip) {
                     Some(v) => v,
                     None => return false,
@@ -6535,7 +8093,10 @@ impl LaneDivide {
     /// Process the next Varnode on the work list (C++
     /// `LaneDivide::processNextWork`, subflow.cc:4100).
     fn process_next_work(&mut self, data: &mut Funcdata) -> bool {
-        let node = self.work_list.pop().expect("process_next_work: empty worklist");
+        let node = self
+            .work_list
+            .pop()
+            .expect("process_next_work: empty worklist");
         let rvn = node.lanes;
         let num_lanes = node.num_lanes;
         let skip_lanes = node.skip_lanes;
@@ -6612,8 +8173,18 @@ impl Rule for RuleSubfloatConvert {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        let invn = data.obank().get(op).expect("stale op").get_in(0).expect("in0");
-        let outvn = data.obank().get(op).expect("stale op").get_out().expect("out");
+        let invn = data
+            .obank()
+            .get(op)
+            .expect("stale op")
+            .get_in(0)
+            .expect("in0");
+        let outvn = data
+            .obank()
+            .get(op)
+            .expect("stale op")
+            .get_out()
+            .expect("out");
         let insize = data.vbank().get(invn).expect("stale invn").get_size();
         let outsize = data.vbank().get(outvn).expect("stale outvn").get_size();
         if outsize > insize {
@@ -6659,7 +8230,10 @@ impl Rule for RuleSubfloatConvert {
 /// placeholder, as the W5 subvar entries already document).
 pub fn specs() -> Vec<RuleSpec> {
     vec![
-        RuleSpec { group: "subvar_and_grp", ctor: || Box::new(RuleSubvarAnd::new("subvar_and_grp")) },
+        RuleSpec {
+            group: "subvar_and_grp",
+            ctor: || Box::new(RuleSubvarAnd::new("subvar_and_grp")),
+        },
         // NOTE: groups are placeholders; W8 supplies the real stage-group
         // strings from coreaction.cc when it assembles universalAction.  The
         // load-bearing facts here are the rule set, their order, and that each
@@ -6684,10 +8258,22 @@ pub fn specs() -> Vec<RuleSpec> {
             group: "subvar_sext_grp",
             ctor: || Box::new(RuleSubvarSext::new("subvar_sext_grp")),
         },
-        RuleSpec { group: "splitflow_grp", ctor: || Box::new(RuleSplitFlow::new("splitflow_grp")) },
-        RuleSpec { group: "splitcopy_grp", ctor: || Box::new(RuleSplitCopy::new("splitcopy_grp")) },
-        RuleSpec { group: "splitload_grp", ctor: || Box::new(RuleSplitLoad::new("splitload_grp")) },
-        RuleSpec { group: "splitstore_grp", ctor: || Box::new(RuleSplitStore::new("splitstore_grp")) },
+        RuleSpec {
+            group: "splitflow_grp",
+            ctor: || Box::new(RuleSplitFlow::new("splitflow_grp")),
+        },
+        RuleSpec {
+            group: "splitcopy_grp",
+            ctor: || Box::new(RuleSplitCopy::new("splitcopy_grp")),
+        },
+        RuleSpec {
+            group: "splitload_grp",
+            ctor: || Box::new(RuleSplitLoad::new("splitload_grp")),
+        },
+        RuleSpec {
+            group: "splitstore_grp",
+            ctor: || Box::new(RuleSplitStore::new("splitstore_grp")),
+        },
         RuleSpec {
             group: "dumptyhumplate_grp",
             ctor: || Box::new(RuleDumptyHumpLate::new("dumptyhumplate_grp")),
@@ -6710,22 +8296,25 @@ mod tests {
 
     use unlace_base::address::Address;
     use unlace_base::space::{
-        addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace,
-        IopSpace, UniqueSpace,
+        AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace,
+        addrspace_flags, spacetype,
     };
 
-    use crate::dtype::{type_metatype, Datatype, TypeFactory};
     use crate::context::{ArchContext, TypeOp};
+    use crate::dtype::{Datatype, TypeFactory, type_metatype};
     use crate::varnode::DefOpInfo;
 
     // ---- scaffolding (mirrors funcdata_varnode.rs test scaffolding) --------
 
-    fn build_manager() -> AddrSpaceManager { build_manager_endian(false) }
+    fn build_manager() -> AddrSpaceManager {
+        build_manager_endian(false)
+    }
 
     fn build_manager_endian(big_endian: bool) -> AddrSpaceManager {
         let mut m = AddrSpaceManager::new();
         m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+            .unwrap();
         m.insert_space(Rc::new(IopSpace::new(2))).unwrap();
         m.insert_space(Rc::new(FspecSpace::new(3))).unwrap();
         m.insert_space(Rc::new(AddrSpace::new(
@@ -6754,7 +8343,15 @@ mod tests {
     fn build_fd_endian(big_endian: bool) -> Funcdata {
         let glb = Rc::new(ArchContext::new(build_manager_endian(big_endian)));
         let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
-        Funcdata::new("func", "func", glb, Address::new(ram, 0x1000), 0x10000000, 0x40).unwrap()
+        Funcdata::new(
+            "func",
+            "func",
+            glb,
+            Address::new(ram, 0x1000),
+            0x10000000,
+            0x40,
+        )
+        .unwrap()
     }
 
     fn ram(fd: &Funcdata) -> Rc<AddrSpace> {
@@ -6765,8 +8362,8 @@ mod tests {
         Rc::new(Datatype::new(size, type_metatype::TYPE_UNKNOWN))
     }
 
-    fn no_replace(
-    ) -> impl FnMut(&mut crate::varnode::VarnodeBank, VarnodeId, VarnodeId) -> KunaResult<()> {
+    fn no_replace()
+    -> impl FnMut(&mut crate::varnode::VarnodeBank, VarnodeId, VarnodeId) -> KunaResult<()> {
         |_: &mut crate::varnode::VarnodeBank, _: VarnodeId, _: VarnodeId| -> KunaResult<()> {
             Ok(())
         }
@@ -6777,7 +8374,8 @@ mod tests {
         let r = ram(fd);
         let pc = Address::new(r, off);
         let op = fd.obank_mut().create_at(ninput, pc);
-        fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
+        fd.obank_mut()
+            .change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
         op
     }
 
@@ -6797,13 +8395,19 @@ mod tests {
     /// Wire `vn` as input `slot` of `op` (descend list + op input).
     fn wire_in(fd: &mut Funcdata, op: OpId, vn: VarnodeId, slot: int4) {
         fd.vbank_mut().add_descend(vn, op).unwrap();
-        fd.obank_mut().get_mut(op).unwrap().set_input(Some(vn), slot);
+        fd.obank_mut()
+            .get_mut(op)
+            .unwrap()
+            .set_input(Some(vn), slot);
     }
 
     /// Make `vn` the output of `defop` (promote to written).
     fn wire_out(fd: &mut Funcdata, defop: OpId, vn: VarnodeId) -> VarnodeId {
         let seq = fd.obank().get(defop).unwrap().get_seq_num().clone();
-        let info = DefOpInfo { id: defop, seqnum: seq };
+        let info = DefOpInfo {
+            id: defop,
+            seqnum: seq,
+        };
         let vn = fd.vbank_mut().set_def(vn, info, &mut no_replace()).unwrap();
         fd.obank_mut().get_mut(defop).unwrap().set_output(Some(vn));
         vn
@@ -6822,7 +8426,8 @@ mod tests {
                 wire_in(&mut fd, copy, home, 0);
                 let root = wire_out(&mut fd, copy, root);
                 fd.kuna_inherit_storage(root, home);
-                let mut subflow = SubvariableFlow::new(&mut fd, root, mask, true, false, false).unwrap();
+                let mut subflow =
+                    SubvariableFlow::new(&mut fd, root, mask, true, false, false).unwrap();
                 let rvn = subflow.varmap[&root];
                 let replacement = subflow.get_replace_varnode(&mut fd, rvn).unwrap();
                 let sources = fd.kuna_storage_sources(replacement);
@@ -6831,7 +8436,10 @@ mod tests {
                 } else {
                     assert_eq!(sources.len(), 1);
                     assert_eq!(sources[0].size, 2);
-                    assert_eq!(sources[0].address.get_offset(), if big_endian { 0x84 } else { 0x82 });
+                    assert_eq!(
+                        sources[0].address.get_offset(),
+                        if big_endian { 0x84 } else { 0x82 }
+                    );
                 }
             }
         }
@@ -6855,7 +8463,11 @@ mod tests {
             let op = mk_op(&mut fd, 0x1000, 2, code);
             wire_in(&mut fd, op, input, 0);
             wire_in(&mut fd, op, amount, 1);
-            let output = mk_reg(&mut fd, 0x80, if code == OpCode::CPUI_SUBPIECE { 1 } else { 8 });
+            let output = mk_reg(
+                &mut fd,
+                0x80,
+                if code == OpCode::CPUI_SUBPIECE { 1 } else { 8 },
+            );
             let output = wire_out(&mut fd, op, output);
             let mut flow = SubvariableFlow::new(&mut fd, output, mask, true, false, false).unwrap();
             let root = flow.varmap[&output];
@@ -6877,13 +8489,20 @@ mod tests {
             let mut flow = SubvariableFlow::new(&mut fd, output, 0xff, true, false, false).unwrap();
             assert!(flow.valid);
             let root = flow.varmap[&output];
-            assert!(!flow.trace_backward(&mut fd, root).unwrap(), "offset {offset:#x}");
+            assert!(
+                !flow.trace_backward(&mut fd, root).unwrap(),
+                "offset {offset:#x}"
+            );
         }
     }
 
     #[test]
     fn subvariable_rejects_oversized_bit_shifts_in_both_directions() {
-        for code in [OpCode::CPUI_INT_LEFT, OpCode::CPUI_INT_RIGHT, OpCode::CPUI_INT_SRIGHT] {
+        for code in [
+            OpCode::CPUI_INT_LEFT,
+            OpCode::CPUI_INT_RIGHT,
+            OpCode::CPUI_INT_SRIGHT,
+        ] {
             for offset in [64, 65, 0x8000_0000, 1u64 << 32, u64::MAX] {
                 for forward in [false, true] {
                     let mut fd = build_fd();
@@ -6895,11 +8514,15 @@ mod tests {
                     let output = mk_reg(&mut fd, 0x80, 8);
                     let output = wire_out(&mut fd, op, output);
                     let vn = if forward { input } else { output };
-                    let mut flow = SubvariableFlow::new(&mut fd, vn, 0xff, true, false, false).unwrap();
+                    let mut flow =
+                        SubvariableFlow::new(&mut fd, vn, 0xff, true, false, false).unwrap();
                     assert!(flow.valid);
                     let root = flow.varmap[&vn];
-                    let result = if forward { flow.trace_forward(&mut fd, root) }
-                        else { flow.trace_backward(&mut fd, root) };
+                    let result = if forward {
+                        flow.trace_forward(&mut fd, root)
+                    } else {
+                        flow.trace_backward(&mut fd, root)
+                    };
                     assert!(!result.unwrap(), "{code:?} {offset:#x}, forward={forward}");
                 }
             }
@@ -6919,7 +8542,10 @@ mod tests {
             wire_out(&mut fd, op, output);
             let mut flow = SubvariableFlow::new(&mut fd, high, 0xff, true, false, false).unwrap();
             let root = flow.varmap[&high];
-            assert!(!flow.trace_forward(&mut fd, root).unwrap(), "low size {low_size}");
+            assert!(
+                !flow.trace_forward(&mut fd, root).unwrap(),
+                "low size {low_size}"
+            );
         }
     }
 
@@ -6933,7 +8559,8 @@ mod tests {
         wire_in(&mut fd, op, amount, 1);
         let output = mk_reg(&mut fd, 0x80, 8);
         let output = wire_out(&mut fd, op, output);
-        let mut flow = SubvariableFlow::new(&mut fd, output, 1u64 << 63, true, false, false).unwrap();
+        let mut flow =
+            SubvariableFlow::new(&mut fd, output, 1u64 << 63, true, false, false).unwrap();
         let root = flow.varmap[&output];
         assert!(!flow.trace_backward(&mut fd, root).unwrap());
         let zero_mask = flow.set_replacement(&mut fd, input, 0, true);
@@ -6954,7 +8581,9 @@ mod tests {
                 wire_out(&mut fd, op, output);
                 let count = if code == OpCode::CPUI_SUBPIECE {
                     RuleSubvarSubpiece::new("base").apply_op(op, &mut fd)
-                } else { RuleSubvarShift::new("base").apply_op(op, &mut fd) };
+                } else {
+                    RuleSubvarShift::new("base").apply_op(op, &mut fd)
+                };
                 assert_eq!(count, 0, "{code:?} {offset:#x}");
                 assert_eq!(fd.obank().get(op).unwrap().code(), code);
             }
@@ -7144,7 +8773,11 @@ mod tests {
         assert!(sf.do_trace(&mut fd).unwrap());
         assert_eq!(sf.pullcount, 1);
         // A backward COPY ReplaceOp was created (shadowing the def COPY).
-        assert!(sf.oplist.iter().any(|r| r.opc == OpCode::CPUI_COPY && r.op == Some(copyop)));
+        assert!(
+            sf.oplist
+                .iter()
+                .any(|r| r.opc == OpCode::CPUI_COPY && r.op == Some(copyop))
+        );
     }
 
     // ---- rule heads: detection guards return 0 cleanly ---------------------
@@ -7181,7 +8814,10 @@ mod tests {
 
     #[test]
     fn rule_get_op_lists_match_cpp() {
-        assert_eq!(RuleSubvarAnd::new("g").get_op_list(), vec![OpCode::CPUI_INT_AND]);
+        assert_eq!(
+            RuleSubvarAnd::new("g").get_op_list(),
+            vec![OpCode::CPUI_INT_AND]
+        );
         assert_eq!(
             RuleSubvarSubpiece::new("g").get_op_list(),
             vec![OpCode::CPUI_SUBPIECE]
@@ -7190,15 +8826,39 @@ mod tests {
             RuleSubvarCompZero::new("g").get_op_list(),
             vec![OpCode::CPUI_INT_NOTEQUAL, OpCode::CPUI_INT_EQUAL]
         );
-        assert_eq!(RuleSubvarShift::new("g").get_op_list(), vec![OpCode::CPUI_INT_RIGHT]);
-        assert_eq!(RuleSubvarZext::new("g").get_op_list(), vec![OpCode::CPUI_INT_ZEXT]);
-        assert_eq!(RuleSubvarSext::new("g").get_op_list(), vec![OpCode::CPUI_INT_SEXT]);
+        assert_eq!(
+            RuleSubvarShift::new("g").get_op_list(),
+            vec![OpCode::CPUI_INT_RIGHT]
+        );
+        assert_eq!(
+            RuleSubvarZext::new("g").get_op_list(),
+            vec![OpCode::CPUI_INT_ZEXT]
+        );
+        assert_eq!(
+            RuleSubvarSext::new("g").get_op_list(),
+            vec![OpCode::CPUI_INT_SEXT]
+        );
         // w8x-subflow-splits rules.
-        assert_eq!(RuleSplitFlow::new("g").get_op_list(), vec![OpCode::CPUI_SUBPIECE]);
-        assert_eq!(RuleSplitCopy::new("g").get_op_list(), vec![OpCode::CPUI_COPY]);
-        assert_eq!(RuleSplitLoad::new("g").get_op_list(), vec![OpCode::CPUI_LOAD]);
-        assert_eq!(RuleSplitStore::new("g").get_op_list(), vec![OpCode::CPUI_STORE]);
-        assert_eq!(RuleDumptyHumpLate::new("g").get_op_list(), vec![OpCode::CPUI_SUBPIECE]);
+        assert_eq!(
+            RuleSplitFlow::new("g").get_op_list(),
+            vec![OpCode::CPUI_SUBPIECE]
+        );
+        assert_eq!(
+            RuleSplitCopy::new("g").get_op_list(),
+            vec![OpCode::CPUI_COPY]
+        );
+        assert_eq!(
+            RuleSplitLoad::new("g").get_op_list(),
+            vec![OpCode::CPUI_LOAD]
+        );
+        assert_eq!(
+            RuleSplitStore::new("g").get_op_list(),
+            vec![OpCode::CPUI_STORE]
+        );
+        assert_eq!(
+            RuleDumptyHumpLate::new("g").get_op_list(),
+            vec![OpCode::CPUI_SUBPIECE]
+        );
         assert_eq!(
             RuleSubfloatConvert::new("g").get_op_list(),
             vec![OpCode::CPUI_FLOAT_FLOAT2FLOAT]
@@ -7210,8 +8870,7 @@ mod tests {
         let s = specs();
         assert_eq!(s.len(), 12);
         // Each ctor builds a rule whose getOpList matches the C++ definition order.
-        let lists: Vec<Vec<OpCode>> =
-            s.iter().map(|sp| (sp.ctor)().get_op_list()).collect();
+        let lists: Vec<Vec<OpCode>> = s.iter().map(|sp| (sp.ctor)().get_op_list()).collect();
         assert_eq!(lists[0], vec![OpCode::CPUI_INT_AND]); // subvar_and
         assert_eq!(lists[1], vec![OpCode::CPUI_SUBPIECE]); // subvar_subpiece
         assert_eq!(
@@ -7493,22 +9152,35 @@ mod tests {
                 let mut splitter = SplitDatatype::new(3);
                 for (offset, size) in [(0, 8), (8, 4)] {
                     splitter.data_type_pieces.push(Component {
-                        in_type: unk(size), out_type: unk(size), offset,
+                        in_type: unk(size),
+                        out_type: unk(size),
+                        offset,
                     });
                 }
                 let mut parts = Vec::new();
-                splitter.build_in_subpieces(&mut fd, source, copy, &mut parts).unwrap();
+                splitter
+                    .build_in_subpieces(&mut fd, source, copy, &mut parts)
+                    .unwrap();
                 crate::kuna_aggregatefields::discard_unused_truncations(&mut fd, source);
                 if truncated {
                     let def = fd.vbank().get(source).unwrap().get_def().unwrap();
-                    assert!(!fd.obank().get(def).unwrap().is_dead(), "the COPY still reads this slice");
+                    assert!(
+                        !fd.obank().get(def).unwrap().is_dead(),
+                        "the COPY still reads this slice"
+                    );
                 }
                 for (i, part) in parts.into_iter().enumerate() {
-                    let op = fd.obank().get(fd.vbank().get(part).unwrap().get_def().unwrap()).unwrap();
+                    let op = fd
+                        .obank()
+                        .get(fd.vbank().get(part).unwrap().get_def().unwrap())
+                        .unwrap();
                     assert_eq!(op.get_in(0), Some(whole));
                     let offset = fd.vbank().get(op.get_in(1).unwrap()).unwrap().get_offset();
-                    let expected = if big_endian { [8, 4][i] }
-                        else { [0, 8][i] + if truncated { 4 } else { 0 } };
+                    let expected = if big_endian {
+                        [8, 4][i]
+                    } else {
+                        [0, 8][i] + if truncated { 4 } else { 0 }
+                    };
                     assert_eq!(offset, expected);
                 }
                 let def = fd.vbank().get(source).unwrap().get_def();
@@ -7613,7 +9285,10 @@ mod tests {
         let outvn = mk_reg(&mut fd, 0x80, 8);
         wire_in(&mut fd, copyop, src, 0);
         let _ = wire_out(&mut fd, copyop, outvn);
-        assert!(!sd.test_copy_constraints(&fd, copyop), "input must be rejected");
+        assert!(
+            !sd.test_copy_constraints(&fd, copyop),
+            "input must be rejected"
+        );
 
         // (b) written non-input, non-LOAD def -> the LOAD-lone-descend arm is
         // skipped and the method returns true (the splittable case).
@@ -7628,7 +9303,10 @@ mod tests {
         let outvn = mk_reg(&mut fd, 0x88, 8);
         wire_in(&mut fd, copyop, mid, 0);
         let _ = wire_out(&mut fd, copyop, outvn);
-        assert!(sd.test_copy_constraints(&fd, copyop), "written non-LOAD input is splittable");
+        assert!(
+            sd.test_copy_constraints(&fd, copyop),
+            "written non-LOAD input is splittable"
+        );
 
         // (c) written LOAD def whose lone descendant is the COPY -> false
         // (handled by splitCopy()).  Exercises inVn->getDef()->code()==LOAD and
@@ -7675,8 +9353,16 @@ mod tests {
 
         // Two int2 pieces at offsets 0 and 2 (low half of the ZEXT value).
         let int2 = Rc::new(Datatype::new(2, type_metatype::TYPE_INT));
-        sd.data_type_pieces.push(Component { in_type: Rc::clone(&int2), out_type: Rc::clone(&int2), offset: 0 });
-        sd.data_type_pieces.push(Component { in_type: Rc::clone(&int2), out_type: Rc::clone(&int2), offset: 2 });
+        sd.data_type_pieces.push(Component {
+            in_type: Rc::clone(&int2),
+            out_type: Rc::clone(&int2),
+            offset: 0,
+        });
+        sd.data_type_pieces.push(Component {
+            in_type: Rc::clone(&int2),
+            out_type: Rc::clone(&int2),
+            offset: 2,
+        });
         let mut inv: Vec<VarnodeId> = Vec::new();
         assert!(sd.generate_constants(&mut fd, zout, &mut inv).unwrap());
         assert_eq!(inv.len(), 2);
@@ -7699,7 +9385,11 @@ mod tests {
         let sinkout = mk_reg(&mut fd, 0x90, 16);
         let _ = wire_out(&mut fd, sink, sinkout);
         let big = Rc::new(Datatype::new(16, type_metatype::TYPE_INT)); // > sizeof(uintb)
-        sd.data_type_pieces.push(Component { in_type: Rc::clone(&big), out_type: Rc::clone(&big), offset: 0 });
+        sd.data_type_pieces.push(Component {
+            in_type: Rc::clone(&big),
+            out_type: Rc::clone(&big),
+            offset: 0,
+        });
         let mut inv: Vec<VarnodeId> = Vec::new();
         assert!(!sd.generate_constants(&mut fd, zout, &mut inv).unwrap());
         assert!(inv.is_empty(), "oversize piece must clear the accumulator");
@@ -7707,19 +9397,25 @@ mod tests {
 
     fn pieces_with_byte_oracle(bytes: &[u8], big_endian: bool) -> (SplitDatatype, Vec<u64>) {
         let mut memory = bytes.to_vec();
-        if big_endian { memory.reverse(); }
+        if big_endian {
+            memory.reverse();
+        }
         let mut split = SplitDatatype::new(3);
         let mut expected = Vec::new();
         for size in [1, 2, 4, 8] {
             for offset in 0..=memory.len() - size {
                 let ty = Rc::new(Datatype::new(size as i32, type_metatype::TYPE_UINT));
-                split.data_type_pieces.push(Component { in_type: ty.clone(), out_type: ty, offset: offset as i32 });
+                split.data_type_pieces.push(Component {
+                    in_type: ty.clone(),
+                    out_type: ty,
+                    offset: offset as i32,
+                });
                 let mut value = [0u8; 8];
                 if big_endian {
-                    value[8-size..].copy_from_slice(&memory[offset..offset+size]);
+                    value[8 - size..].copy_from_slice(&memory[offset..offset + size]);
                     expected.push(u64::from_be_bytes(value));
                 } else {
-                    value[..size].copy_from_slice(&memory[offset..offset+size]);
+                    value[..size].copy_from_slice(&memory[offset..offset + size]);
                     expected.push(u64::from_le_bytes(value));
                 }
             }
@@ -7738,8 +9434,14 @@ mod tests {
                 let root = mk_const(&mut fd, 16, payload);
                 let mut parts = Vec::new();
                 split.build_in_constants(&mut fd, root, &mut parts, big_endian);
-                let actual: Vec<_> = parts.iter().map(|&v| fd.vbank().get(v).unwrap().get_offset()).collect();
-                assert_eq!(actual, expected, "big_endian={big_endian}, payload={payload:x}");
+                let actual: Vec<_> = parts
+                    .iter()
+                    .map(|&v| fd.vbank().get(v).unwrap().get_offset())
+                    .collect();
+                assert_eq!(
+                    actual, expected,
+                    "big_endian={big_endian}, payload={payload:x}"
+                );
             }
         }
     }
@@ -7748,24 +9450,39 @@ mod tests {
     fn split_extended_constants_use_byte_offsets_across_both_words() {
         for big_endian in [false, true] {
             for (low_size, high_size) in [(4, 4), (8, 8), (16, 8)] {
-                for (low, high) in [(0u64, 0u64), (u64::MAX, u64::MAX), (0xfedcba9876543210, 0x0123456789abcdef)] {
+                for (low, high) in [
+                    (0u64, 0u64),
+                    (u64::MAX, u64::MAX),
+                    (0xfedcba9876543210, 0x0123456789abcdef),
+                ] {
                     for zero_extend in [false, true] {
                         let mut bytes = vec![0u8; low_size + high_size];
                         let n = low_size.min(8);
                         bytes[..n].copy_from_slice(&low.to_le_bytes()[..n]);
                         if !zero_extend {
                             let n = high_size.min(8);
-                            bytes[low_size..low_size+n].copy_from_slice(&high.to_le_bytes()[..n]);
+                            bytes[low_size..low_size + n].copy_from_slice(&high.to_le_bytes()[..n]);
                         }
                         let (split, expected) = pieces_with_byte_oracle(&bytes, big_endian);
                         let mut fd = build_fd_endian(big_endian);
-                        let lo = mk_const(&mut fd, low_size as i32, low & calc_mask(low_size as i32));
-                        let opcode = if zero_extend { OpCode::CPUI_INT_ZEXT } else { OpCode::CPUI_PIECE };
+                        let lo =
+                            mk_const(&mut fd, low_size as i32, low & calc_mask(low_size as i32));
+                        let opcode = if zero_extend {
+                            OpCode::CPUI_INT_ZEXT
+                        } else {
+                            OpCode::CPUI_PIECE
+                        };
                         let op = mk_op(&mut fd, 0x80, if zero_extend { 1 } else { 2 }, opcode);
-                        if zero_extend { wire_in(&mut fd, op, lo, 0); }
-                        else {
-                            let hi = mk_const(&mut fd, high_size as i32, high & calc_mask(high_size as i32));
-                            wire_in(&mut fd, op, hi, 0); wire_in(&mut fd, op, lo, 1);
+                        if zero_extend {
+                            wire_in(&mut fd, op, lo, 0);
+                        } else {
+                            let hi = mk_const(
+                                &mut fd,
+                                high_size as i32,
+                                high & calc_mask(high_size as i32),
+                            );
+                            wire_in(&mut fd, op, hi, 0);
+                            wire_in(&mut fd, op, lo, 1);
                         }
                         let root = mk_reg(&mut fd, 0x50, bytes.len() as i32);
                         let root = wire_out(&mut fd, op, root);
@@ -7773,8 +9490,14 @@ mod tests {
                         wire_in(&mut fd, sink, root, 0);
                         let mut parts = Vec::new();
                         assert!(split.generate_constants(&mut fd, root, &mut parts).unwrap());
-                        let actual: Vec<_> = parts.iter().map(|&v| fd.vbank().get(v).unwrap().get_offset()).collect();
-                        assert_eq!(actual, expected, "big_endian={big_endian}, lo={low_size}, hi={high_size}, zext={zero_extend}");
+                        let actual: Vec<_> = parts
+                            .iter()
+                            .map(|&v| fd.vbank().get(v).unwrap().get_offset())
+                            .collect();
+                        assert_eq!(
+                            actual, expected,
+                            "big_endian={big_endian}, lo={low_size}, hi={high_size}, zext={zero_extend}"
+                        );
                     }
                 }
             }
@@ -7869,7 +9592,10 @@ mod tests {
         assert!(!ok, "slot 0 must bail (return-address container)");
         assert_eq!(sf.pullcount, before, "slot-0 bail must not bump pullcount");
         assert!(sf.patchlist.is_empty(), "slot-0 bail must not patch");
-        assert!(!sf.returns_traversed, "slot-0 bail must not mark returns traversed");
+        assert!(
+            !sf.returns_traversed,
+            "slot-0 bail must not mark returns traversed"
+        );
     }
 
     #[test]
@@ -7886,7 +9612,10 @@ mod tests {
         let ok = sf.try_return_pull(&mut fd, retop, rvn, 1).unwrap();
         assert!(!ok, "consume outside mask (non-aggressive) must bail");
         assert!(sf.patchlist.is_empty(), "consume-bail must not patch");
-        assert!(!sf.returns_traversed, "consume-bail must not mark returns traversed");
+        assert!(
+            !sf.returns_traversed,
+            "consume-bail must not mark returns traversed"
+        );
         // Sanity: the SAME setup with aggressive=true does NOT bail on consume
         // (the consume gate is skipped) and reaches the terminal trim.
         let (mut fd2, retop2, root2) = return_setup(1, 0xffff);
@@ -7925,7 +9654,11 @@ mod tests {
         let patches_mid = sf.patchlist.len();
         let ok2 = sf.try_return_pull(&mut fd, retop, rvn, 1).unwrap();
         assert!(ok2);
-        assert_eq!(sf.pullcount, mid + 1, "second call adds exactly one terminal");
+        assert_eq!(
+            sf.pullcount,
+            mid + 1,
+            "second call adds exactly one terminal"
+        );
         assert_eq!(
             sf.patchlist.len(),
             patches_mid + 1,

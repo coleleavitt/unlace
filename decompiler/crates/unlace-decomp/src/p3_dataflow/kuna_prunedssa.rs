@@ -67,7 +67,10 @@ pub(crate) fn applies(fl: u32, addr: &Address, pass: int4, deadcode_delay: int4)
 
 /// Do the call guards of the range qualify for [`live_calls`]?
 pub(crate) fn applies_to_calls(fd: &Funcdata, addr: &Address) -> bool {
-    fd.num_calls() >= 2 && addr.get_space().is_some_and(|s| s.get_type() == spacetype::IPTR_SPACEBASE)
+    fd.num_calls() >= 2
+        && addr
+            .get_space()
+            .is_some_and(|s| s.get_type() == spacetype::IPTR_SPACEBASE)
 }
 
 /// The calls of `calls` after which a read of the stack range `addr:size` can
@@ -96,7 +99,9 @@ pub(crate) fn live_calls(
     for &op in full {
         push(fd, op, KILL, &mut events);
     }
-    let spc = addr.get_space().expect("live_calls: stack range has a space");
+    let spc = addr
+        .get_space()
+        .expect("live_calls: stack range has a space");
     for fc in calls {
         let op = fc.get_op();
         push(fd, op, CALL, &mut events);
@@ -124,20 +129,32 @@ pub(crate) fn live_calls(
 /// Drop from `merges` every join at which the range `addr:size` is not live,
 /// judged from its reads and writes as `Heritage::guard` left them. Returns
 /// whether any join was dropped.
-pub(crate) fn prune_merges(fd: &Funcdata, addr: &Address, size: int4, merges: &mut Vec<BlockId>) -> bool {
-    let joins_prune = addr
-        .get_space()
-        .is_some_and(|s| matches!(s.get_type(), spacetype::IPTR_INTERNAL | spacetype::IPTR_SPACEBASE));
+pub(crate) fn prune_merges(
+    fd: &Funcdata,
+    addr: &Address,
+    size: int4,
+    merges: &mut Vec<BlockId>,
+) -> bool {
+    let joins_prune = addr.get_space().is_some_and(|s| {
+        matches!(
+            s.get_type(),
+            spacetype::IPTR_INTERNAL | spacetype::IPTR_SPACEBASE
+        )
+    });
     if merges.is_empty() || !joins_prune {
         return false;
     }
     let mut events: Vec<Event> = Vec::new();
     let end = addr + i64::from(size);
     for vn in fd.vbank().iter_loc_addr_range(addr, &end) {
-        let Some(v) = fd.vbank().get(vn) else { continue };
+        let Some(v) = fd.vbank().get(vn) else {
+            continue;
+        };
         if v.is_written() {
             let Some(def) = v.get_def() else { continue };
-            let Some(op) = fd.obank().get(def) else { continue };
+            let Some(op) = fd.obank().get(def) else {
+                continue;
+            };
             if op.code() == OpCode::CPUI_INDIRECT && !op.is_indirect_creation() {
                 continue;
             }
@@ -165,7 +182,12 @@ pub(crate) fn prune_merges(fd: &Funcdata, addr: &Address, size: int4, merges: &m
 fn push(fd: &Funcdata, op: OpId, kind: u8, events: &mut Vec<Event>) {
     if let Some(o) = fd.obank().get(op) {
         if let Some(bl) = o.get_parent() {
-            events.push((fd.bblocks_ref().block(bl).get_index() as usize, o.get_seq_num().get_order(), kind, op));
+            events.push((
+                fd.bblocks_ref().block(bl).get_index() as usize,
+                o.get_seq_num().get_order(),
+                kind,
+                op,
+            ));
         }
     }
 }
@@ -189,7 +211,11 @@ impl Liveness {
         let mut work: Vec<usize> = Vec::new();
         for block in events.chunk_by(|a, b| a.0 == b.0) {
             let bl = block[0].0;
-            if block.iter().find(|e| e.2 != CALL).is_some_and(|e| e.2 == USE) {
+            if block
+                .iter()
+                .find(|e| e.2 != CALL)
+                .is_some_and(|e| e.2 == USE)
+            {
                 live_in[bl] = true;
                 work.push(bl);
             }
@@ -255,7 +281,8 @@ fn call_reads(
     }
     let off = spc.wrap_offset(addr.get_offset().wrapping_sub(fc.get_spacebase_offset()));
     let trans = Address::new(std::rc::Rc::clone(spc), off);
-    (fc.is_input_active() && fc.proto().characterize_as_input_param(&trans, size) != Containment::NoContainment)
+    (fc.is_input_active()
+        && fc.proto().characterize_as_input_param(&trans, size) != Containment::NoContainment)
         || ((fc.is_output_active() || fc.is_stack_output_lock())
             && fc.proto().characterize_as_output(&trans, size) != Containment::NoContainment)
 }

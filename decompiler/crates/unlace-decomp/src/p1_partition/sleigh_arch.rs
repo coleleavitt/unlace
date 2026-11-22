@@ -68,8 +68,8 @@ use std::borrow::Cow;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::filemanage::FileManage;
 use unlace_base::marshal::{
-    AttributeId, Decoder, ElementId, IdRegistry, XmlDecode, ATTRIB_CONTENT, ATTRIB_ID, ATTRIB_NAME,
-    ATTRIB_SIZE,
+    ATTRIB_CONTENT, ATTRIB_ID, ATTRIB_NAME, ATTRIB_SIZE, AttributeId, Decoder, ElementId,
+    IdRegistry, XmlDecode,
 };
 use unlace_base::space::AddrSpaceManager;
 use unlace_base::types::int4;
@@ -77,7 +77,7 @@ use unlace_base::types::int4;
 use unlace_sleigh::globalcontext::ContextInternal;
 use unlace_sleigh::loadimage::LoadImage;
 use unlace_sleigh::sleigh::Sleigh;
-use unlace_sleigh::translate::{TruncationTag, ELEM_TRUNCATE_SPACE};
+use unlace_sleigh::translate::{ELEM_TRUNCATE_SPACE, TruncationTag};
 
 use crate::architecture::Architecture;
 use crate::kuna_memoryspecs::{self, MemorySpecs, SpecRoot};
@@ -592,9 +592,21 @@ impl LanguageDatabase {
         let mut procdir2: Vec<String> = Vec::new();
         let mut languagesubdirs: Vec<String> = Vec::new();
 
-        kuna_memoryspecs::scan_directory_recursive(&self.mounts, &mut ghidradir, "Ghidra", rootpath, 2);
+        kuna_memoryspecs::scan_directory_recursive(
+            &self.mounts,
+            &mut ghidradir,
+            "Ghidra",
+            rootpath,
+            2,
+        );
         for g in &ghidradir {
-            kuna_memoryspecs::scan_directory_recursive(&self.mounts, &mut procdir, "Processors", g, 1); // Processors structure
+            kuna_memoryspecs::scan_directory_recursive(
+                &self.mounts,
+                &mut procdir,
+                "Processors",
+                g,
+                1,
+            ); // Processors structure
             kuna_memoryspecs::scan_directory_recursive(&self.mounts, &mut procdir, "contrib", g, 1);
         }
         if !procdir.is_empty() {
@@ -604,12 +616,24 @@ impl LanguageDatabase {
 
             let mut datadirs: Vec<String> = Vec::new();
             for p in &procdir2 {
-                kuna_memoryspecs::scan_directory_recursive(&self.mounts, &mut datadirs, "data", p, 1);
+                kuna_memoryspecs::scan_directory_recursive(
+                    &self.mounts,
+                    &mut datadirs,
+                    "data",
+                    p,
+                    1,
+                );
             }
 
             let mut languagedirs: Vec<String> = Vec::new();
             for d in &datadirs {
-                kuna_memoryspecs::scan_directory_recursive(&self.mounts, &mut languagedirs, "languages", d, 1);
+                kuna_memoryspecs::scan_directory_recursive(
+                    &self.mounts,
+                    &mut languagedirs,
+                    "languages",
+                    d,
+                    1,
+                );
             }
 
             for l in &languagedirs {
@@ -637,11 +661,7 @@ impl LanguageDatabase {
     /// `sleigh_arch.cc:423`).  Walks `language.numTruncations()` and applies
     /// `trans->truncateSpace`.  (The manager truncates through interior
     /// mutability, so a `&AddrSpaceManager` suffices, matching unlace-base.)
-    pub fn modify_spaces(
-        &self,
-        languageindex: int4,
-        manager: &AddrSpaceManager,
-    ) -> KunaResult<()> {
+    pub fn modify_spaces(&self, languageindex: int4, manager: &AddrSpaceManager) -> KunaResult<()> {
         let language = &self.description[languageindex as usize];
         for i in 0..language.num_truncations() {
             let tag = language.get_truncation(i);
@@ -821,7 +841,9 @@ impl SleighArchitecture {
             i += 1;
         }
         if self.languageindex == -1 {
-            return Err(KunaError::lowlevel(format!("No sleigh specification for {baseid}")));
+            return Err(KunaError::lowlevel(format!(
+                "No sleigh specification for {baseid}"
+            )));
         }
         Ok(())
     }
@@ -857,10 +879,25 @@ impl SleighArchitecture {
         let mut compilerfile = String::new();
         let mut slafile = String::new();
 
-        kuna_memoryspecs::find_file(&db.mounts, &db.specpaths, &mut processorfile, language.get_processor_spec());
-        kuna_memoryspecs::find_file(&db.mounts, &db.specpaths, &mut compilerfile, compilertag.get_spec());
+        kuna_memoryspecs::find_file(
+            &db.mounts,
+            &db.specpaths,
+            &mut processorfile,
+            language.get_processor_spec(),
+        );
+        kuna_memoryspecs::find_file(
+            &db.mounts,
+            &db.specpaths,
+            &mut compilerfile,
+            compilertag.get_spec(),
+        );
         if !language_reuse {
-            kuna_memoryspecs::find_file(&db.mounts, &db.specpaths, &mut slafile, language.get_sla_file());
+            kuna_memoryspecs::find_file(
+                &db.mounts,
+                &db.specpaths,
+                &mut slafile,
+                language.get_sla_file(),
+            );
             if slafile.is_empty() {
                 return Err(KunaError::sleigh(format!(
                     "Could not find .sla file for {}",
@@ -871,7 +908,11 @@ impl SleighArchitecture {
         Ok(BuildSpecFiles {
             processorfile,
             compilerfile,
-            slafile: if slafile.is_empty() { None } else { Some(slafile) },
+            slafile: if slafile.is_empty() {
+                None
+            } else {
+                Some(slafile)
+            },
             language_reuse,
         })
     }
@@ -915,7 +956,10 @@ impl SleighArchitecture {
     /// header is the slice the leaf-frontend `encode` paths prepend.  Returns the
     /// two attribute pairs the C++ would write, in C++ order.
     pub fn encode_header(&self) -> Vec<(AttributeId, String)> {
-        vec![(ATTRIB_NAME, self.filename.clone()), (ATTRIB_TARGET, self.target.clone())]
+        vec![
+            (ATTRIB_NAME, self.filename.clone()),
+            (ATTRIB_TARGET, self.target.clone()),
+        ]
     }
 
     /// \brief Restore from basic attributes of an executable (C++
@@ -1003,7 +1047,10 @@ pub fn normalize_architecture(nm: &str) -> KunaResult<String> {
         // C++ `find(':',curpos+1)` with curpos==0 -> start at 1).
         let start = curpos + 1;
         let found = if start <= bytes.len() {
-            bytes[start..].iter().position(|&c| c == b':').map(|p| start + p)
+            bytes[start..]
+                .iter()
+                .position(|&c| c == b':')
+                .map(|p| start + p)
         } else {
             None
         };
@@ -1026,7 +1073,10 @@ pub fn normalize_architecture(nm: &str) -> KunaResult<String> {
     let size = &nm[pos[1] + 1..pos[2]];
 
     let (variant, compile): (String, String) = if i == 4 {
-        (nm[pos[2] + 1..pos[3]].to_string(), nm[pos[3] + 1..].to_string())
+        (
+            nm[pos[2] + 1..pos[3]].to_string(),
+            nm[pos[3] + 1..].to_string(),
+        )
     } else {
         (nm[pos[2] + 1..].to_string(), "default".to_string())
     };

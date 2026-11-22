@@ -28,22 +28,22 @@
 use std::collections::HashSet;
 use std::rc::Rc;
 
-use object::read::{Object, ObjectSymbol};
 use object::SymbolKind;
+use object::read::{Object, ObjectSymbol};
 
 use unlace_base::error::KunaResult;
 use unlace_base::types::uint4;
-use unlace_decomp::dtype::{type_metatype, Datatype, TypeFactory};
+use unlace_decomp::dtype::{Datatype, TypeFactory, type_metatype};
 use unlace_decomp::fspec::PrototypePieces;
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
-pub mod kuna_libgcc;
 pub mod kuna_importvote;
 mod kuna_libcnames;
-pub mod kuna_nameladder;
 pub mod kuna_libcsigs;
 pub mod kuna_libctypes;
+pub mod kuna_libgcc;
+pub mod kuna_nameladder;
 pub mod kuna_win32sigs;
 pub mod kuna_x87intrinsics;
 
@@ -131,69 +131,391 @@ struct Sig {
 /// `void *`. Keep entries conservative and correct.
 const LIBC: &[(&str, Sig)] = &[
     // stdio
-    ("puts", Sig { ret: Ty::Int, params: &[Ty::CharPtr], vararg: -1 }),
-    ("printf", Sig { ret: Ty::Int, params: &[Ty::CharPtr], vararg: 1 }),
-    ("fputs", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::VoidPtr], vararg: -1 }),
-    ("fprintf", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::CharPtr], vararg: 2 }),
-    ("sprintf", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtr], vararg: 2 }),
-    ("snprintf", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::Size, Ty::CharPtr], vararg: 3 }),
-    ("scanf", Sig { ret: Ty::Int, params: &[Ty::CharPtr], vararg: 1 }),
-    ("sscanf", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtr], vararg: 2 }),
-    ("perror", Sig { ret: Ty::Void, params: &[Ty::CharPtr], vararg: -1 }),
-    ("fopen", Sig { ret: Ty::VoidPtr, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
+    (
+        "puts",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "printf",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr],
+            vararg: 1,
+        },
+    ),
+    (
+        "fputs",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "fprintf",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::CharPtr],
+            vararg: 2,
+        },
+    ),
+    (
+        "sprintf",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: 2,
+        },
+    ),
+    (
+        "snprintf",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::Size, Ty::CharPtr],
+            vararg: 3,
+        },
+    ),
+    (
+        "scanf",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr],
+            vararg: 1,
+        },
+    ),
+    (
+        "sscanf",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: 2,
+        },
+    ),
+    (
+        "perror",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "fopen",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
     // locale.h — `char *setlocale(int category, const char *locale)`.  Without
     // this prototype the call's result is an untyped `undefined8`, so a wrapper
     // whose last act is `return setlocale(cat, NULL);` (e.g. gnulib's
     // `setlocale_null_androidfix`, a tail call at -O2) loses both the recovered
     // return value and the `char *` type.  See docs/features/setlocale-rettype/.
-    ("setlocale", Sig { ret: Ty::CharPtr, params: &[Ty::Int, Ty::CharPtr], vararg: -1 }),
+    (
+        "setlocale",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::Int, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
     // string.h
-    ("strlen", Sig { ret: Ty::Size, params: &[Ty::CharPtr], vararg: -1 }),
-    ("strcmp", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("strncmp", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size], vararg: -1 }),
-    ("strcpy", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("strncpy", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size], vararg: -1 }),
-    ("strcat", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("strchr", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::Int], vararg: -1 }),
-    ("strstr", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("atoi", Sig { ret: Ty::Int, params: &[Ty::CharPtr], vararg: -1 }),
+    (
+        "strlen",
+        Sig {
+            ret: Ty::Size,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "strcmp",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "strncmp",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "strcpy",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "strncpy",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "strcat",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "strchr",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "strstr",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "atoi",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
     // stdlib / mem
-    ("malloc", Sig { ret: Ty::VoidPtr, params: &[Ty::Size], vararg: -1 }),
-    ("calloc", Sig { ret: Ty::VoidPtr, params: &[Ty::Size, Ty::Size], vararg: -1 }),
-    ("realloc", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr, Ty::Size], vararg: -1 }),
-    ("free", Sig { ret: Ty::Void, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("memcpy", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::Size], vararg: -1 }),
-    ("memmove", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::Size], vararg: -1 }),
-    ("memset", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr, Ty::Int, Ty::Size], vararg: -1 }),
+    (
+        "malloc",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "calloc",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Size, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "realloc",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "free",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "memcpy",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "memmove",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "memset",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::Int, Ty::Size],
+            vararg: -1,
+        },
+    ),
     // sys/ptrace.h — `long ptrace(int request, pid_t pid, void *addr, void *data)`.
     // glibc DECLARES it variadic (`long ptrace(enum __ptrace_request, ...)`), so no
     // body analysis can derive the arity; the four fixed slots are glibc's own
     // (`sysdeps/unix/sysv/linux/ptrace.c` fetches `pid_t`, `void *`, `void *` after
     // the request with `va_arg`), which is also the call form ptrace(2) documents.
-    ("ptrace", Sig { ret: Ty::Long, params: &[Ty::Int, Ty::Int, Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
+    (
+        "ptrace",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::Int, Ty::Int, Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
 ];
 
 /// The Itanium `operator new` / `operator delete` imports, by mangled name
 /// (`m` = 64-bit `size_t`, `j` = 32-bit). Seeded while `cppsig` is on.
 const CXX_ALLOC: &[(&str, Sig)] = &[
-    ("_Znwm", Sig { ret: Ty::VoidPtr, params: &[Ty::Size], vararg: -1 }),
-    ("_Znam", Sig { ret: Ty::VoidPtr, params: &[Ty::Size], vararg: -1 }),
-    ("_Znwj", Sig { ret: Ty::VoidPtr, params: &[Ty::Size], vararg: -1 }),
-    ("_Znaj", Sig { ret: Ty::VoidPtr, params: &[Ty::Size], vararg: -1 }),
-    ("_ZnwmRKSt9nothrow_t", Sig { ret: Ty::VoidPtr, params: &[Ty::Size, Ty::VoidPtr], vararg: -1 }),
-    ("_ZnamRKSt9nothrow_t", Sig { ret: Ty::VoidPtr, params: &[Ty::Size, Ty::VoidPtr], vararg: -1 }),
-    ("_ZnwjRKSt9nothrow_t", Sig { ret: Ty::VoidPtr, params: &[Ty::Size, Ty::VoidPtr], vararg: -1 }),
-    ("_ZnajRKSt9nothrow_t", Sig { ret: Ty::VoidPtr, params: &[Ty::Size, Ty::VoidPtr], vararg: -1 }),
-    ("_ZnwmSt11align_val_t", Sig { ret: Ty::VoidPtr, params: &[Ty::Size, Ty::Size], vararg: -1 }),
-    ("_ZnamSt11align_val_t", Sig { ret: Ty::VoidPtr, params: &[Ty::Size, Ty::Size], vararg: -1 }),
-    ("_ZdlPv", Sig { ret: Ty::Void, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("_ZdaPv", Sig { ret: Ty::Void, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("_ZdlPvm", Sig { ret: Ty::Void, params: &[Ty::VoidPtr, Ty::Size], vararg: -1 }),
-    ("_ZdaPvm", Sig { ret: Ty::Void, params: &[Ty::VoidPtr, Ty::Size], vararg: -1 }),
-    ("_ZdlPvj", Sig { ret: Ty::Void, params: &[Ty::VoidPtr, Ty::Size], vararg: -1 }),
-    ("_ZdaPvj", Sig { ret: Ty::Void, params: &[Ty::VoidPtr, Ty::Size], vararg: -1 }),
-    ("_ZdlPvSt11align_val_t", Sig { ret: Ty::Void, params: &[Ty::VoidPtr, Ty::Size], vararg: -1 }),
-    ("_ZdlPvmSt11align_val_t", Sig { ret: Ty::Void, params: &[Ty::VoidPtr, Ty::Size, Ty::Size], vararg: -1 }),
+    (
+        "_Znwm",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "_Znam",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "_Znwj",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "_Znaj",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "_ZnwmRKSt9nothrow_t",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Size, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "_ZnamRKSt9nothrow_t",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Size, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "_ZnwjRKSt9nothrow_t",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Size, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "_ZnajRKSt9nothrow_t",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Size, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "_ZnwmSt11align_val_t",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Size, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "_ZnamSt11align_val_t",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Size, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "_ZdlPv",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "_ZdaPv",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "_ZdlPvm",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "_ZdaPvm",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "_ZdlPvj",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "_ZdaPvj",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "_ZdlPvSt11align_val_t",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "_ZdlPvmSt11align_val_t",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr, Ty::Size, Ty::Size],
+            vararg: -1,
+        },
+    ),
 ];
 
 /// Build the kuna [`Datatype`] for a [`Ty`] using the architecture's type factory.
@@ -269,7 +591,8 @@ fn build_pieces(
         first_var_arg_slot: sig.vararg,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: kuna_libcnames::library_names(name).filter(|n| n.params.len() == sig.params.len()),
+        kuna_library_names: kuna_libcnames::library_names(name)
+            .filter(|n| n.params.len() == sig.params.len()),
     })
 }
 
@@ -355,7 +678,11 @@ pub(crate) fn resolved_import_addrs(file: &object::File, bytes: &[u8]) -> Vec<(S
     crate::loader::format::resolve_imports(file, bytes)
         .into_iter()
         .filter(|sym| sym.kind == crate::loader::format::ImportSymKind::Import)
-        .filter_map(|imp| String::from_utf8(imp.name).ok().map(|name| (name, imp.addr)))
+        .filter_map(|imp| {
+            String::from_utf8(imp.name)
+                .ok()
+                .map(|name| (name, imp.addr))
+        })
         .collect()
 }
 
@@ -401,7 +728,10 @@ fn seed_named_prototypes(
     if !ladder {
         return;
     }
-    let mut spelled: Vec<&String> = names.iter().filter(|n| table.iter().all(|(t, _)| t != n)).collect();
+    let mut spelled: Vec<&String> = names
+        .iter()
+        .filter(|n| table.iter().all(|(t, _)| t != n))
+        .collect();
     spelled.sort_unstable();
     for present in spelled {
         let hit = kuna_nameladder::fallbacks(present)
@@ -487,8 +817,7 @@ fn present_function_names(file: &object::File, bytes: &[u8]) -> HashSet<String> 
             continue;
         }
         if let Ok(n) = sym.name() {
-            if let Ok(n) = String::from_utf8(crate::loader::elf_plt::strip_version(n.as_bytes()))
-            {
+            if let Ok(n) = String::from_utf8(crate::loader::elf_plt::strip_version(n.as_bytes())) {
                 present.insert(n);
             }
         }
@@ -518,8 +847,7 @@ fn defined_function_names(file: &object::File, bytes: &[u8]) -> HashSet<String> 
             continue;
         }
         if let Ok(n) = sym.name() {
-            if let Ok(n) = String::from_utf8(crate::loader::elf_plt::strip_version(n.as_bytes()))
-            {
+            if let Ok(n) = String::from_utf8(crate::loader::elf_plt::strip_version(n.as_bytes())) {
                 defined.insert(n);
             }
         }
@@ -545,13 +873,16 @@ fn imported_function_names(file: &object::File, bytes: &[u8]) -> HashSet<String>
             continue;
         }
         if let Ok(n) = sym.name() {
-            if let Ok(n) = String::from_utf8(crate::loader::elf_plt::strip_version(n.as_bytes()))
-            {
+            if let Ok(n) = String::from_utf8(crate::loader::elf_plt::strip_version(n.as_bytes())) {
                 imported.insert(n);
             }
         }
     }
-    imported.extend(resolved_import_addrs(file, bytes).into_iter().map(|(name, _)| name));
+    imported.extend(
+        resolved_import_addrs(file, bytes)
+            .into_iter()
+            .map(|(name, _)| name),
+    );
     imported
 }
 
@@ -654,10 +985,26 @@ impl AnalysisPass for LibProtoPass {
         let present = loaded_function_names(ctx.file, ctx.bytes, &reloc_imports, false);
         let types = ctx.arch.types();
         let (_addr_size, word_size) = ctx.arch.data_org();
-        seed_named_prototypes(&mut out, &present, LIBC, types, word_size, L, ctx.arch.analysis_nameladder);
+        seed_named_prototypes(
+            &mut out,
+            &present,
+            LIBC,
+            types,
+            word_size,
+            L,
+            ctx.arch.analysis_nameladder,
+        );
         seed_resolved_prototypes(&mut out, &imports, LIBC, types, word_size, L);
         if ctx.arch.analysis_cppsig.enabled() {
-            seed_named_prototypes(&mut out, &present, CXX_ALLOC, types, word_size, L, ctx.arch.analysis_nameladder);
+            seed_named_prototypes(
+                &mut out,
+                &present,
+                CXX_ALLOC,
+                types,
+                word_size,
+                L,
+                ctx.arch.analysis_nameladder,
+            );
             seed_resolved_prototypes(&mut out, &imports, CXX_ALLOC, types, word_size, L);
         }
         out.c_runtime_imports = crate::loader::pe_iat::c_runtime_import_names(ctx.bytes);
@@ -672,8 +1019,8 @@ mod tests {
     #[test]
     fn notype_call_imports_gain_prototypes_but_data_relocations_do_not() {
         use object::{
-            write, Architecture, BinaryFormat, Endianness, RelocationFlags, SymbolFlags,
-            SymbolScope,
+            Architecture, BinaryFormat, Endianness, RelocationFlags, SymbolFlags, SymbolScope,
+            write,
         };
         for (architecture, endian, code, relocation) in [
             (
@@ -764,8 +1111,11 @@ mod tests {
                 );
                 for imported_only in [false, true] {
                     let names = loaded_function_names(&file, &bytes, &reloc_imports, imported_only);
-                    assert_eq!(names.contains("memset"), call_target && !same_named_definition,
-                        "name parking: {architecture:?}, call={call_target}, definition={same_named_definition}, imported={imported_only}");
+                    assert_eq!(
+                        names.contains("memset"),
+                        call_target && !same_named_definition,
+                        "name parking: {architecture:?}, call={call_target}, definition={same_named_definition}, imported={imported_only}"
+                    );
                 }
                 let defined = unambiguous_defined_function_names(&file, &bytes, &reloc_imports);
                 assert!(
@@ -798,8 +1148,8 @@ mod tests {
     #[test]
     fn notype_address_materialization_in_text_is_not_a_function_import() {
         use object::{
-            write, Architecture, BinaryFormat, Endianness, RelocationFlags, SymbolFlags,
-            SymbolScope,
+            Architecture, BinaryFormat, Endianness, RelocationFlags, SymbolFlags, SymbolScope,
+            write,
         };
         let sparc: Vec<_> = [0x03000000u32, 0x82106000, 0x81c3e008, 0x01000000]
             .into_iter()
@@ -881,7 +1231,12 @@ mod tests {
         types.set_max_basetype_size(8);
         types.setup_sizes(Some(8), 8, 4);
         types
-            .set_core_type("char", 1, unlace_decomp::dtype::type_metatype::TYPE_INT, true)
+            .set_core_type(
+                "char",
+                1,
+                unlace_decomp::dtype::type_metatype::TYPE_INT,
+                true,
+            )
             .expect("char core type");
         types.cache_core_types().expect("cache core types");
         types
@@ -919,8 +1274,16 @@ mod tests {
             let (pieces, got) = variadic_format_prototype(name, &types, 8, Opaque)
                 .unwrap_or_else(|| panic!("{name} is a format function"));
             assert_eq!(got, slot, "{name} format slot");
-            assert_eq!(pieces.intypes.len(), slot + 1, "{name} fixed parameter count");
-            assert_eq!(pieces.first_var_arg_slot as usize, slot + 1, "{name} vararg slot");
+            assert_eq!(
+                pieces.intypes.len(),
+                slot + 1,
+                "{name} fixed parameter count"
+            );
+            assert_eq!(
+                pieces.first_var_arg_slot as usize,
+                slot + 1,
+                "{name} vararg slot"
+            );
         }
     }
 
@@ -932,11 +1295,19 @@ mod tests {
             // Variadic, but the varargs are not governed by the trailing char *.
             "execlp",
             // Variadic with a non-pointer last fixed parameter.
-            "open", "openat", "fcntl", "ioctl",
+            "open",
+            "openat",
+            "fcntl",
+            "ioctl",
             // The `v*` forms take a va_list, not varargs.
-            "vsnprintf", "vasprintf", "__vfprintf_chk",
+            "vsnprintf",
+            "vasprintf",
+            "__vfprintf_chk",
             // Not variadic at all, and not in the tables at all.
-            "puts", "memcpy", "sub_401136", "",
+            "puts",
+            "memcpy",
+            "sub_401136",
+            "",
         ] {
             assert!(
                 variadic_format_prototype(name, &types, 8, Opaque).is_none(),
@@ -973,7 +1344,10 @@ mod tests {
         assert!(matches!(sig.ret, Ty::CharPtr), "setlocale returns char *");
         assert_eq!(sig.params.len(), 2, "setlocale takes (int, const char *)");
         assert!(matches!(sig.params[0], Ty::Int), "category is int");
-        assert!(matches!(sig.params[1], Ty::CharPtr), "locale is const char *");
+        assert!(
+            matches!(sig.params[1], Ty::CharPtr),
+            "locale is const char *"
+        );
         assert_eq!(sig.vararg, -1, "setlocale is not variadic");
     }
 
@@ -982,14 +1356,20 @@ mod tests {
         // glibc DECLARES `long ptrace(enum __ptrace_request, ...)`, so a stripped
         // static image gives argument recovery nothing to work from. The four
         // fixed slots are the ones glibc's own wrapper fetches with `va_arg`.
-        let (_, sig) = LIBC.iter().find(|(n, _)| *n == "ptrace").expect("table knows ptrace");
+        let (_, sig) = LIBC
+            .iter()
+            .find(|(n, _)| *n == "ptrace")
+            .expect("table knows ptrace");
         assert!(matches!(sig.ret, Ty::Long), "ptrace returns long");
         assert_eq!(sig.params.len(), 4, "request, pid, addr, data");
         assert!(matches!(sig.params[0], Ty::Int));
         assert!(matches!(sig.params[1], Ty::Int));
         assert!(matches!(sig.params[2], Ty::VoidPtr));
         assert!(matches!(sig.params[3], Ty::VoidPtr));
-        assert_eq!(sig.vararg, -1, "the fixed form is what a caller is typed against");
+        assert_eq!(
+            sig.vararg, -1,
+            "the fixed form is what a caller is typed against"
+        );
     }
 
     #[test]
@@ -1003,13 +1383,31 @@ mod tests {
         types.set_max_basetype_size(8);
         types.setup_sizes(Some(4), 4, 4);
         let _ = types.cache_core_types();
-        let base = declared_libc_prototype("ptrace", &types, 1, unlace_decomp::kuna_libctypes::LibcTypesLayout::Opaque).expect("base table name");
+        let base = declared_libc_prototype(
+            "ptrace",
+            &types,
+            1,
+            unlace_decomp::kuna_libctypes::LibcTypesLayout::Opaque,
+        )
+        .expect("base table name");
         assert_eq!(base.name, "ptrace");
         assert_eq!(base.intypes.len(), 4);
-        let ext = declared_libc_prototype("read", &types, 1, unlace_decomp::kuna_libctypes::LibcTypesLayout::Opaque).expect("extension table name");
+        let ext = declared_libc_prototype(
+            "read",
+            &types,
+            1,
+            unlace_decomp::kuna_libctypes::LibcTypesLayout::Opaque,
+        )
+        .expect("extension table name");
         assert_eq!(ext.intypes.len(), 3, "ssize_t read(int, void *, size_t)");
         assert!(
-            declared_libc_prototype("sub_8049027", &types, 1, unlace_decomp::kuna_libctypes::LibcTypesLayout::Opaque).is_none(),
+            declared_libc_prototype(
+                "sub_8049027",
+                &types,
+                1,
+                unlace_decomp::kuna_libctypes::LibcTypesLayout::Opaque
+            )
+            .is_none(),
             "a name neither table knows is left alone"
         );
     }
@@ -1025,7 +1423,10 @@ mod tests {
         let present = present_function_names(&file, &bytes);
         for want in ["puts", "printf", "strcmp"] {
             assert!(present.contains(want), "fauxware should import {want}");
-            assert!(LIBC.iter().any(|(n, _)| n == &want), "table should know {want}");
+            assert!(
+                LIBC.iter().any(|(n, _)| n == &want),
+                "table should know {want}"
+            );
         }
     }
 
@@ -1042,8 +1443,14 @@ mod tests {
         assert_eq!(file.format(), object::BinaryFormat::Pe, "fixture is a PE");
         let present = present_function_names(&file, &bytes);
         for want in ["puts", "printf"] {
-            assert!(present.contains(want), "PE present-names must include {want}: {present:?}");
-            assert!(LIBC.iter().any(|(n, _)| n == &want), "table should know {want}");
+            assert!(
+                present.contains(want),
+                "PE present-names must include {want}: {present:?}"
+            );
+            assert!(
+                LIBC.iter().any(|(n, _)| n == &want),
+                "table should know {want}"
+            );
         }
     }
 
@@ -1052,16 +1459,25 @@ mod tests {
         // The IAT-resolver half: in a *stripped* PE there is no COFF symtab `puts`,
         // so the import names come purely from `resolve_imports`. They must still
         // be present so the prototype seeds (the stripped-binary proof).
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/pe_imports_stripped.exe");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/pe_imports_stripped.exe"
+        );
         let bytes = std::fs::read(path).expect("read pe_imports_stripped.exe");
         let file = object::File::parse(bytes.as_slice()).expect("parse stripped PE");
         let present = present_function_names(&file, &bytes);
-        assert!(present.contains("puts"), "stripped PE must name `puts` via the IAT: {present:?}");
+        assert!(
+            present.contains("puts"),
+            "stripped PE must name `puts` via the IAT: {present:?}"
+        );
     }
 
     #[test]
     fn pe_import_prototype_is_seeded_at_iat_and_veneer_but_not_export() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/libcsigs_pe_x86_64.exe");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/libcsigs_pe_x86_64.exe"
+        );
         let bytes = std::fs::read(path).expect("read duplicate-name PE fixture");
         let file = object::File::parse(bytes.as_slice()).expect("parse duplicate-name PE fixture");
         let all = crate::loader::format::resolve_imports(&file, &bytes);
@@ -1081,8 +1497,11 @@ mod tests {
         );
 
         let imports = resolved_import_addrs(&file, &bytes);
-        let memcmp: Vec<u64> =
-            imports.iter().filter(|(name, _)| name == "memcmp").map(|(_, addr)| *addr).collect();
+        let memcmp: Vec<u64> = imports
+            .iter()
+            .filter(|(name, _)| name == "memcmp")
+            .map(|(_, addr)| *addr)
+            .collect();
         assert_eq!(
             memcmp,
             vec![0x140002050, 0x140001080],
@@ -1103,7 +1522,15 @@ mod tests {
             !imported.contains("memcmp"),
             "a same-named resolver export makes global by-name parking ambiguous"
         );
-        seed_named_prototypes(&mut out, &imported, kuna_libcsigs::LIBC_EXT, &types, 1, L, false);
+        seed_named_prototypes(
+            &mut out,
+            &imported,
+            kuna_libcsigs::LIBC_EXT,
+            &types,
+            1,
+            L,
+            false,
+        );
         seed_resolved_prototypes(&mut out, &imports, kuna_libcsigs::LIBC_EXT, &types, 1, L);
         let seeded: Vec<(u64, usize)> = out
             .prototypes_at
@@ -1143,8 +1570,11 @@ mod tests {
         types.cache_core_types().expect("cache core types");
         let mut out = AnalysisOutput::default();
         seed_named_prototypes(&mut out, &candidates, LIBC, &types, 1, L, false);
-        let names: HashSet<&str> =
-            out.prototypes.iter().map(|pieces| pieces.name.as_str()).collect();
+        let names: HashSet<&str> = out
+            .prototypes
+            .iter()
+            .map(|pieces| pieces.name.as_str())
+            .collect();
 
         assert!(
             !candidates.contains("puts"),
@@ -1154,17 +1584,29 @@ mod tests {
             !names.contains("puts"),
             "the base pass must not park the conflicting name"
         );
-        assert!(names.contains("printf"), "import-only compatibility is preserved");
-        assert!(names.contains("strcmp"), "defined-only base matching is preserved");
+        assert!(
+            names.contains("printf"),
+            "import-only compatibility is preserved"
+        );
+        assert!(
+            names.contains("strcmp"),
+            "defined-only base matching is preserved"
+        );
     }
 
     #[test]
     fn base_table_imports_keep_name_matching_and_gain_address_keys() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/pe_imports_stripped.exe");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/pe_imports_stripped.exe"
+        );
         let bytes = std::fs::read(path).expect("read stripped PE fixture");
         let file = object::File::parse(bytes.as_slice()).expect("parse stripped PE fixture");
         let present = loaded_function_names(&file, &bytes, &[], false);
-        assert!(present.contains("puts"), "the compatible by-name match remains available");
+        assert!(
+            present.contains("puts"),
+            "the compatible by-name match remains available"
+        );
 
         let imports = resolved_import_addrs(&file, &bytes);
         let types = unlace_decomp::dtype::TypeFactoryImpl::new();
@@ -1199,8 +1641,15 @@ mod tests {
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/macho_imports");
         let bytes = std::fs::read(path).expect("read macho_imports");
         let file = object::File::parse(bytes.as_slice()).expect("parse macho_imports");
-        assert_eq!(file.format(), object::BinaryFormat::MachO, "fixture is Mach-O");
+        assert_eq!(
+            file.format(),
+            object::BinaryFormat::MachO,
+            "fixture is Mach-O"
+        );
         let present = present_function_names(&file, &bytes);
-        assert!(present.contains("printf"), "Mach-O must name `printf` via __stubs: {present:?}");
+        assert!(
+            present.contains("printf"),
+            "Mach-O must name `printf` via __stubs: {present:?}"
+        );
     }
 }

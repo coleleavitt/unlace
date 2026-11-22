@@ -125,10 +125,17 @@ pub(crate) fn c_runtime_import_names(bytes: &[u8]) -> Vec<String> {
 
 fn c_runtime_names<Pe: ImageNtHeaders>(pe: &PeFile<Pe>) -> Vec<String> {
     let mut names = Vec::new();
-    let Ok(Some(it)) = pe.import_table() else { return names };
-    let Ok(mut descs) = it.descriptors() else { return names };
+    let Ok(Some(it)) = pe.import_table() else {
+        return names;
+    };
+    let Ok(mut descs) = it.descriptors() else {
+        return names;
+    };
     while let Ok(Some(desc)) = descs.next() {
-        let dll = it.name(desc.name.get(LE)).unwrap_or(b"").to_ascii_lowercase();
+        let dll = it
+            .name(desc.name.get(LE))
+            .unwrap_or(b"")
+            .to_ascii_lowercase();
         if !is_c_runtime_dll(&dll) {
             continue;
         }
@@ -136,7 +143,9 @@ fn c_runtime_names<Pe: ImageNtHeaders>(pe: &PeFile<Pe>) -> Vec<String> {
             0 => desc.first_thunk.get(LE),
             oft => oft,
         };
-        let Ok(mut thunks) = it.thunks(int_rva) else { continue };
+        let Ok(mut thunks) = it.thunks(int_rva) else {
+            continue;
+        };
         while let Ok(Some(thunk)) = thunks.next::<Pe>() {
             if let Ok(object::read::pe::Import::Name(_, n)) = it.import::<Pe>(thunk) {
                 if let Ok(name) = std::str::from_utf8(n) {
@@ -159,7 +168,8 @@ fn is_c_runtime_dll(dll: &[u8]) -> bool {
 /// [`resolve_pe_import_slots`] over a typed `PeFile`: reuse the INT/IAT lockstep
 /// walk purely for its slot-VA side table, then widen each slot to its pointer.
 fn slot_ranges<Pe: ImageNtHeaders>(pe: &PeFile<Pe>, ptr: u64) -> Vec<(u64, u64)> {
-    let mut slot_to_name: std::collections::HashMap<u64, Vec<u8>> = std::collections::HashMap::new();
+    let mut slot_to_name: std::collections::HashMap<u64, Vec<u8>> =
+        std::collections::HashMap::new();
     let mut discard: Vec<ImportSym> = Vec::new();
     if let Ok(Some(it)) = pe.import_table() {
         walk_import_table::<Pe>(
@@ -172,7 +182,10 @@ fn slot_ranges<Pe: ImageNtHeaders>(pe: &PeFile<Pe>, ptr: u64) -> Vec<(u64, u64)>
     }
     let mut slots: Vec<u64> = slot_to_name.into_keys().collect();
     slots.sort_unstable();
-    slots.into_iter().map(|s| (s, s.wrapping_add(ptr))).collect()
+    slots
+        .into_iter()
+        .map(|s| (s, s.wrapping_add(ptr)))
+        .collect()
 }
 
 /// Walk the Import Directory of a typed `PeFile`, pairing the INT (names) and IAT
@@ -189,7 +202,8 @@ fn collect<Pe: ImageNtHeaders>(
     let image_base = pe.relative_address_base(); // = optional-header ImageBase
 
     // The IAT slot VA → name map, also used to name the `FF 25` thunk veneers.
-    let mut slot_to_name: std::collections::HashMap<u64, Vec<u8>> = std::collections::HashMap::new();
+    let mut slot_to_name: std::collections::HashMap<u64, Vec<u8>> =
+        std::collections::HashMap::new();
 
     if let Ok(Some(it)) = pe.import_table() {
         walk_import_table::<Pe>(&it, image_base, ptr, &mut out, &mut slot_to_name);
@@ -207,7 +221,11 @@ fn collect<Pe: ImageNtHeaders>(
     // is already folded into `Export::address` by `object`.
     for (addr, name, code) in named_exports(neutral) {
         if code {
-            out.push(ImportSym { addr, name, kind: ImportSymKind::Export });
+            out.push(ImportSym {
+                addr,
+                name,
+                kind: ImportSymKind::Export,
+            });
         }
     }
 
@@ -220,17 +238,22 @@ fn named_exports(neutral: &object::File) -> Vec<(u64, Vec<u8>, bool)> {
     let Ok(exports) = neutral.exports() else {
         return Vec::new();
     };
-    let code_ranges: Vec<_> = neutral.sections().filter_map(|section| {
-        let flags = super::format::pe::coff_section_bits(section.kind(), section.flags());
-        (flags & unlace_sleigh::loadimage::section_flags::CODE != 0)
-            .then_some((section.address(), section.size()))
-    }).collect();
+    let code_ranges: Vec<_> = neutral
+        .sections()
+        .filter_map(|section| {
+            let flags = super::format::pe::coff_section_bits(section.kind(), section.flags());
+            (flags & unlace_sleigh::loadimage::section_flags::CODE != 0)
+                .then_some((section.address(), section.size()))
+        })
+        .collect();
     exports
         .into_iter()
         .filter(|e| !e.name().is_empty())
         .map(|e| {
             let addr = e.address();
-            let code = code_ranges.iter().any(|&(start, size)| addr >= start && addr - start < size);
+            let code = code_ranges
+                .iter()
+                .any(|&(start, size)| addr >= start && addr - start < size);
             (addr, e.name().to_vec(), code)
         })
         .collect()
@@ -274,7 +297,11 @@ fn walk_import_table<Pe: ImageNtHeaders>(
         // / `getFirstThunk()` preference.
         let int_rva = {
             let oft = desc.original_first_thunk.get(LE);
-            if oft != 0 { oft } else { desc.first_thunk.get(LE) }
+            if oft != 0 {
+                oft
+            } else {
+                desc.first_thunk.get(LE)
+            }
         };
         let iat_rva = desc.first_thunk.get(LE) as u64;
 
@@ -288,7 +315,9 @@ fn walk_import_table<Pe: ImageNtHeaders>(
                 Ok(Some(t)) => t,
                 _ => break, // end of this descriptor's thunk list (or a read error)
             };
-            let slot_va = image_base.wrapping_add(iat_rva).wrapping_add(i.wrapping_mul(ptr));
+            let slot_va = image_base
+                .wrapping_add(iat_rva)
+                .wrapping_add(i.wrapping_mul(ptr));
             let name: Vec<u8> = match it.import::<Pe>(thunk) {
                 Ok(object::read::pe::Import::Name(_hint, n)) => n.to_vec(),
                 Ok(object::read::pe::Import::Ordinal(ord)) => ordinal_import_name(dll, ord),
@@ -348,7 +377,9 @@ fn decode_iat_thunks(
     let is_64 = file.is_64();
     let is_x86 = matches!(
         file.architecture(),
-        object::Architecture::X86_64 | object::Architecture::X86_64_X32 | object::Architecture::I386
+        object::Architecture::X86_64
+            | object::Architecture::X86_64_X32
+            | object::Architecture::I386
     );
     if !is_x86 {
         return; // `FF 25` is x86-only; other arches use a different call shape.
@@ -363,7 +394,8 @@ fn decode_iat_thunks(
             _ => 0,
         };
         // Only executable sections carry thunk veneers.
-        let exec = characteristics & object::pe::IMAGE_SCN_MEM_EXECUTE != 0 || sec.kind() == object::SectionKind::Text;
+        let exec = characteristics & object::pe::IMAGE_SCN_MEM_EXECUTE != 0
+            || sec.kind() == object::SectionKind::Text;
         if exec {
             code.push((sec.address(), data));
         }
@@ -391,7 +423,14 @@ fn decode_thunks(
     let mut rex_tails: HashSet<u64> = HashSet::new();
     let track = is_64;
     for &(vma, data) in code {
-        decode_ff25(vma, data, is_64, slot_to_name, out, track.then_some(&mut rex_tails));
+        decode_ff25(
+            vma,
+            data,
+            is_64,
+            slot_to_name,
+            out,
+            track.then_some(&mut rex_tails),
+        );
     }
     if rex_tails.is_empty() {
         return;
@@ -567,7 +606,11 @@ mod tests {
         for op in [&[0xE8u8][..], &[0xE9], &[0x0F, 0x85], &[0x48, 0x8D, 0x0D]] {
             let caller = rel32(op, caller_at, thunk);
             let code = [(vma, &text[..]), (caller_at, &caller[..])];
-            assert_eq!(thunk_addrs(&code, true, &map), vec![thunk], "referenced by {op:x?}");
+            assert_eq!(
+                thunk_addrs(&code, true, &map),
+                vec![thunk],
+                "referenced by {op:x?}"
+            );
         }
         let unrelated = rel32(&[0xE8], caller_at, thunk + 1);
         let code = [(vma, &text[..]), (caller_at, &unrelated[..])];
@@ -589,16 +632,24 @@ mod tests {
     /// `ws2_32_Ordinal_115`.
     #[test]
     fn ordinal_name_synthesis() {
-        assert_eq!(synth_ordinal_name(b"ws2_32.dll", 115), b"ws2_32_Ordinal_115".to_vec());
-        assert_eq!(synth_ordinal_name(b"KERNEL32.dll", 7), b"KERNEL32_Ordinal_7".to_vec());
+        assert_eq!(
+            synth_ordinal_name(b"ws2_32.dll", 115),
+            b"ws2_32_Ordinal_115".to_vec()
+        );
+        assert_eq!(
+            synth_ordinal_name(b"KERNEL32.dll", 7),
+            b"KERNEL32_Ordinal_7".to_vec()
+        );
         // No extension: the whole string is the stem.
         assert_eq!(synth_ordinal_name(b"mylib", 3), b"mylib_Ordinal_3".to_vec());
     }
 
     #[test]
     fn c_runtime_names_come_from_crt_dlls_only() {
-        let path =
-            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/calleepopframe_pe_i386.exe");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/calleepopframe_pe_i386.exe"
+        );
         let bytes = std::fs::read(path).expect("read fixture");
         assert_eq!(c_runtime_import_names(&bytes), vec!["memset".to_string()]);
         let crt = [
@@ -612,7 +663,13 @@ mod tests {
         for dll in crt {
             assert!(is_c_runtime_dll(dll.as_bytes()), "{dll}");
         }
-        for dll in ["ws2_32.dll", "advapi32.dll", "kernel32.dll", "msvcp140.dll", "ntdll.dll"] {
+        for dll in [
+            "ws2_32.dll",
+            "advapi32.dll",
+            "kernel32.dll",
+            "msvcp140.dll",
+            "ntdll.dll",
+        ] {
             assert!(!is_c_runtime_dll(dll.as_bytes()), "{dll}");
         }
     }

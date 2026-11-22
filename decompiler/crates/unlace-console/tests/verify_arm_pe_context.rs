@@ -58,7 +58,8 @@ fn explicit_thumb_mode_uses_container_mapping() {
         "ARM:LE:32:v4t:default",
         &specs(),
         Some(ArmIsa::Thumb),
-    ).expect("bootstrap fixture with built processor specs");
+    )
+    .expect("bootstrap fixture with built processor specs");
     program.commit_pending_analysis().unwrap();
     let entry = program.find_entry_at(0x401001).unwrap();
     let result = decompile_targets(&mut program, vec![entry], true, false, false);

@@ -56,12 +56,12 @@
 //!   that, so the recursive mint in [`super::named_aggregate`] terminates by
 //!   construction rather than by a depth counter.
 
+use std::rc::Rc;
 use unlace_base::error::KunaResult;
 use unlace_base::types::{int4, uint4};
-use unlace_decomp::dtype::{type_metatype, Datatype, TypeFactory, TypeField};
-use std::rc::Rc;
+use unlace_decomp::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
 
-use super::{named_aggregate, Layout};
+use super::{Layout, named_aggregate};
 
 /// The type of one field of a published layout. Spelled in C terms rather than
 /// in glibc's `__dev_t`/`__off_t` typedefs, which carry no more information than
@@ -243,7 +243,10 @@ pub(super) const GLIBC_LAYOUTS: &[(&str, &[GlibcField])] = &[
 /// The published layout of `name`, or `None` for an aggregate that stays an
 /// opaque shell under `glibc` too.
 pub(super) fn layout_for(name: &str) -> Option<&'static [GlibcField]> {
-    GLIBC_LAYOUTS.iter().find(|(n, _)| *n == name).map(|(_, fields)| *fields)
+    GLIBC_LAYOUTS
+        .iter()
+        .find(|(n, _)| *n == name)
+        .map(|(_, fields)| *fields)
 }
 
 /// Intern the type of one field.

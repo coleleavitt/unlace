@@ -73,8 +73,12 @@ pub fn match_entry_guard_loop(
             continue;
         }
         let call_op = fc.get_op();
-        let Some(op) = data.obank().get(call_op) else { continue };
-        let Some(grow) = op.get_parent() else { continue };
+        let Some(op) = data.obank().get(call_op) else {
+            continue;
+        };
+        let Some(grow) = op.get_parent() else {
+            continue;
+        };
         let blocks = data.bblocks_ref();
         if !matches!(blocks.block(grow).kind(), BlockKind::Basic(_)) {
             continue;
@@ -94,8 +98,12 @@ pub fn match_entry_guard_loop(
             continue;
         }
         // The guard's terminal op is the conditional the runtime planted.
-        let Some(tail) = data.bb_op_tail(guard) else { continue };
-        let Some(tail_op) = data.obank().get(tail) else { continue };
+        let Some(tail) = data.bb_op_tail(guard) else {
+            continue;
+        };
+        let Some(tail_op) = data.obank().get(tail) else {
+            continue;
+        };
         if tail_op.code() != OpCode::CPUI_CBRANCH {
             continue;
         }
@@ -112,7 +120,12 @@ pub fn match_entry_guard_loop(
         let guard_edge = (0..2)
             .find(|&j| blocks.block(guard).get_out(j) == grow)
             .expect("entry-guard loop: G is one of S's two out-edges");
-        return Some(EntryGuardLoop { guard_block: guard, guard_edge, grow_block: grow, call_op });
+        return Some(EntryGuardLoop {
+            guard_block: guard,
+            guard_edge,
+            grow_block: grow,
+            call_op,
+        });
     }
     None
 }
@@ -143,8 +156,12 @@ pub fn match_entry_guard_halt(
             continue;
         }
         let call_op = fc.get_op();
-        let Some(op) = data.obank().get(call_op) else { continue };
-        let Some(grow) = op.get_parent() else { continue };
+        let Some(op) = data.obank().get(call_op) else {
+            continue;
+        };
+        let Some(grow) = op.get_parent() else {
+            continue;
+        };
         let blocks = data.bblocks_ref();
         if !matches!(blocks.block(grow).kind(), BlockKind::Basic(_)) {
             continue;
@@ -172,15 +189,24 @@ pub fn match_entry_guard_halt(
         if blocks.block(guard).size_out() != 2 || blocks.block(guard).size_in() != 0 {
             continue;
         }
-        let Some(tail) = data.bb_op_tail(guard) else { continue };
-        let Some(tail_op) = data.obank().get(tail) else { continue };
+        let Some(tail) = data.bb_op_tail(guard) else {
+            continue;
+        };
+        let Some(tail_op) = data.obank().get(tail) else {
+            continue;
+        };
         if tail_op.code() != OpCode::CPUI_CBRANCH {
             continue;
         }
         let guard_edge = (0..2)
             .find(|&j| blocks.block(guard).get_out(j) == grow)
             .expect("entry-guard halt: G is one of S's two out-edges");
-        return Some(EntryGuardLoop { guard_block: guard, guard_edge, grow_block: grow, call_op });
+        return Some(EntryGuardLoop {
+            guard_block: guard,
+            guard_edge,
+            grow_block: grow,
+            call_op,
+        });
     }
     None
 }
@@ -238,8 +264,12 @@ pub fn match_guarded_cold_call(
             continue;
         }
         let call_op = fc.get_op();
-        let Some(op) = data.obank().get(call_op) else { continue };
-        let Some(cold) = op.get_parent() else { continue };
+        let Some(op) = data.obank().get(call_op) else {
+            continue;
+        };
+        let Some(cold) = op.get_parent() else {
+            continue;
+        };
         let blocks = data.bblocks_ref();
         if !matches!(blocks.block(cold).kind(), BlockKind::Basic(_)) {
             continue;
@@ -258,14 +288,20 @@ pub fn match_guarded_cold_call(
         if blocks.block(guard).size_out() != 2 {
             continue;
         }
-        let Some(tail) = data.bb_op_tail(guard) else { continue };
-        let Some(tail_op) = data.obank().get(tail) else { continue };
+        let Some(tail) = data.bb_op_tail(guard) else {
+            continue;
+        };
+        let Some(tail_op) = data.obank().get(tail) else {
+            continue;
+        };
         if tail_op.code() != OpCode::CPUI_CBRANCH {
             continue;
         }
         // The hot arm must close the diamond in one hop.
         let guard_edge = (0..2).find(|&j| blocks.block(guard).get_out(j) == cold);
-        let Some(guard_edge) = guard_edge else { continue };
+        let Some(guard_edge) = guard_edge else {
+            continue;
+        };
         if blocks.block(guard).get_out(1 - guard_edge) != join {
             continue;
         }
@@ -273,7 +309,12 @@ pub fn match_guarded_cold_call(
         if block_has_other_call(data, cold, call_op) {
             continue;
         }
-        return Some(GuardedColdCall { guard_block: guard, guard_edge, cold_block: cold, call_op });
+        return Some(GuardedColdCall {
+            guard_block: guard,
+            guard_edge,
+            cold_block: cold,
+            call_op,
+        });
     }
     None
 }
@@ -394,16 +435,16 @@ fn barrier_threads_return(data: &Funcdata, call_op: OpId, arm: BlockId) -> bool 
         stack.push((out, 0));
     }
     for aop in data.bb_ops(arm) {
-        let Some(o) = data.obank().get(aop) else { continue };
+        let Some(o) = data.obank().get(aop) else {
+            continue;
+        };
         if o.code() != OpCode::CPUI_INDIRECT {
             continue;
         }
         let affects_call = o
             .get_in(1)
             .and_then(|iop| data.vbank().get(iop))
-            .map(|iv| {
-                crate::funcdata_varnode::op_iop_decode(iv.get_addr().get_offset()) == call_op
-            })
+            .map(|iv| crate::funcdata_varnode::op_iop_decode(iv.get_addr().get_offset()) == call_op)
             .unwrap_or(false);
         if affects_call {
             if let Some(out) = o.get_out() {
@@ -418,9 +459,13 @@ fn barrier_threads_return(data: &Funcdata, call_op: OpId, arm: BlockId) -> bool 
         if depth > 24 || !seen.insert(vn) {
             continue;
         }
-        let Some(v) = data.vbank().get(vn) else { continue };
+        let Some(v) = data.vbank().get(vn) else {
+            continue;
+        };
         for reader in v.descend_iter() {
-            let Some(r) = data.obank().get(reader) else { continue };
+            let Some(r) = data.obank().get(reader) else {
+                continue;
+            };
             if r.code() == OpCode::CPUI_RETURN {
                 return true;
             }
@@ -468,9 +513,13 @@ fn barrier_threads_return(data: &Funcdata, call_op: OpId, arm: BlockId) -> bool 
 /// write through.
 fn vn_roots_at_call(data: &Funcdata, mut vn: VarnodeId, root_op: OpId, arm: BlockId) -> bool {
     for _ in 0..16 {
-        let Some(v) = data.vbank().get(vn) else { return false };
+        let Some(v) = data.vbank().get(vn) else {
+            return false;
+        };
         let Some(def) = v.get_def() else { return false };
-        let Some(op) = data.obank().get(def) else { return false };
+        let Some(op) = data.obank().get(def) else {
+            return false;
+        };
         if def == root_op {
             return true;
         }
@@ -518,16 +567,25 @@ fn cond_reads_global_flag(data: &Funcdata, cond: VarnodeId) -> bool {
         if depth > 6 {
             continue;
         }
-        let Some(v) = data.vbank().get(vn) else { continue };
+        let Some(v) = data.vbank().get(vn) else {
+            continue;
+        };
         if v.get_space().get_name() == "ram" {
             return true;
         }
         let Some(def) = v.get_def() else { continue };
-        let Some(op) = data.obank().get(def) else { continue };
+        let Some(op) = data.obank().get(def) else {
+            continue;
+        };
         match op.code() {
             OpCode::CPUI_LOAD => {
                 if let Some(ptr) = op.get_in(1) {
-                    if data.vbank().get(ptr).map(|p| p.is_constant()).unwrap_or(false) {
+                    if data
+                        .vbank()
+                        .get(ptr)
+                        .map(|p| p.is_constant())
+                        .unwrap_or(false)
+                    {
                         return true;
                     }
                     stack.push((ptr, depth + 1));
@@ -585,8 +643,12 @@ pub fn match_guarded_cold_call_phi(
             continue;
         }
         let call_op = fc.get_op();
-        let Some(op) = data.obank().get(call_op) else { continue };
-        let Some(cold) = op.get_parent() else { continue };
+        let Some(op) = data.obank().get(call_op) else {
+            continue;
+        };
+        let Some(cold) = op.get_parent() else {
+            continue;
+        };
         let blocks = data.bblocks_ref();
         if !matches!(blocks.block(cold).kind(), BlockKind::Basic(_)) {
             continue;
@@ -621,12 +683,18 @@ pub fn match_guarded_cold_call_phi(
             if blocks.block(guard).size_out() != 2 {
                 continue 'calls;
             }
-            let Some(tail) = data.bb_op_tail(guard) else { continue 'calls };
-            let Some(tail_op) = data.obank().get(tail) else { continue 'calls };
+            let Some(tail) = data.bb_op_tail(guard) else {
+                continue 'calls;
+            };
+            let Some(tail_op) = data.obank().get(tail) else {
+                continue 'calls;
+            };
             if tail_op.code() != OpCode::CPUI_CBRANCH {
                 continue 'calls;
             }
-            let Some(cond) = tail_op.get_in(1) else { continue 'calls };
+            let Some(cond) = tail_op.get_in(1) else {
+                continue 'calls;
+            };
             if !cond_reads_global_flag(data, cond) {
                 continue 'calls;
             }
@@ -640,20 +708,28 @@ pub fn match_guarded_cold_call_phi(
         }
         // Bookkeeping ops only, buffer-rooted stores only, no escaping value.
         for aop in data.bb_ops(cold) {
-            let Some(o) = data.obank().get(aop) else { continue 'calls };
+            let Some(o) = data.obank().get(aop) else {
+                continue 'calls;
+            };
             if aop != call_op && !wbarm_op_allowed(o.code()) {
                 continue 'calls;
             }
             if o.code() == OpCode::CPUI_STORE {
-                let Some(ptr) = o.get_in(1) else { continue 'calls };
+                let Some(ptr) = o.get_in(1) else {
+                    continue 'calls;
+                };
                 if !vn_roots_at_call(data, ptr, call_op, cold) {
                     continue 'calls;
                 }
             }
             if let Some(out) = o.get_out() {
-                let Some(v) = data.vbank().get(out) else { continue 'calls };
+                let Some(v) = data.vbank().get(out) else {
+                    continue 'calls;
+                };
                 for reader in v.descend_iter() {
-                    let Some(r) = data.obank().get(reader) else { continue 'calls };
+                    let Some(r) = data.obank().get(reader) else {
+                        continue 'calls;
+                    };
                     match r.get_parent() {
                         Some(p) if p == cold => {}
                         Some(p) if p == join && r.code() == OpCode::CPUI_MULTIEQUAL => {}
@@ -662,7 +738,11 @@ pub fn match_guarded_cold_call_phi(
                 }
             }
         }
-        return Some(GuardedColdCallPhi { guard_edges, cold_block: cold, call_op });
+        return Some(GuardedColdCallPhi {
+            guard_edges,
+            cold_block: cold,
+            call_op,
+        });
     }
     None
 }

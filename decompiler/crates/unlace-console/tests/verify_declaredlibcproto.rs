@@ -18,8 +18,8 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_console::decompile_step::{decompile_one, DecompileSeed};
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::decompile_step::{DecompileSeed, decompile_one};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 /// The caller, whose loop pushes four `ptrace` arguments per iteration.
 const CALLER: u64 = 0x8049000;
@@ -27,23 +27,32 @@ const CALLER: u64 = 0x8049000;
 const WRAPPER: u64 = 0x8049027;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Bootstrap the fixture.
 fn load() -> ConsoleProgram {
     let root = repo_root();
     let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
-    let bin =
-        root.join("decompiler/crates/unlace-analysis/tests/fixtures/declaredlibcproto_i386");
-    let mut prog = bootstrap_from_object(bin.to_str().expect("UTF-8 fixture path"), "", &spec_roots)
-        .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    let bin = root.join("decompiler/crates/unlace-analysis/tests/fixtures/declaredlibcproto_i386");
+    let mut prog =
+        bootstrap_from_object(bin.to_str().expect("UTF-8 fixture path"), "", &spec_roots)
+            .expect("bootstrap fixture with built processor specs");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
 fn code_addr(prog: &ConsoleProgram, vma: u64) -> Address {
-    let space = prog.arch().manage().get_default_code_space().expect("code space").clone();
+    let space = prog
+        .arch()
+        .manage()
+        .get_default_code_space()
+        .expect("code space")
+        .clone();
     Address::new(Rc::clone(&space), vma)
 }
 
@@ -51,7 +60,9 @@ fn code_addr(prog: &ConsoleProgram, vma: u64) -> Address {
 fn caller_body() -> String {
     let mut prog = load();
     let wrapper = code_addr(&prog, WRAPPER);
-    let name = prog.declare_function(wrapper, Some("ptrace"), 0).expect("the declaration lands");
+    let name = prog
+        .declare_function(wrapper, Some("ptrace"), 0)
+        .expect("the declaration lands");
     assert_eq!(name, "ptrace");
 
     let entry = code_addr(&prog, CALLER);
@@ -87,7 +98,8 @@ fn a_declared_libc_name_types_the_call_it_names() {
 fn a_name_the_tables_do_not_know_parks_nothing() {
     let mut prog = load();
     let wrapper = code_addr(&prog, WRAPPER);
-    prog.declare_function(wrapper, Some("stage1"), 0).expect("the declaration lands");
+    prog.declare_function(wrapper, Some("stage1"), 0)
+        .expect("the declaration lands");
 
     let entry = code_addr(&prog, CALLER);
     let step = decompile_one(
@@ -100,7 +112,10 @@ fn a_name_the_tables_do_not_know_parks_nothing() {
     );
     let fd = step.result.expect("the caller decompiles");
     let body = unlace_decomp::decompile_drive::print_c(prog.arch_mut(), &fd);
-    assert!(body.contains("stage1("), "the declared name renders, got:\n{body}");
+    assert!(
+        body.contains("stage1("),
+        "the declared name renders, got:\n{body}"
+    );
     assert!(
         !body.contains("NULL"),
         "an unknown name must not acquire a signature, got:\n{body}"

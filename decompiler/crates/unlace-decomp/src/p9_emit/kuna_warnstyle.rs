@@ -48,7 +48,7 @@ impl OptionWarnStyle {
             other => {
                 return Err(KunaError::parse(format!(
                     "Unknown warnstyle value: {other} (expected inline|banner)"
-                )))
+                )));
             }
         };
         Ok((val, format!("Warning style set to {p1}")))

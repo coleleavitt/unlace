@@ -34,11 +34,36 @@ pub struct Walk {
     pub undecoded: Vec<String>,
 }
 
-const LZMA: [u8; 16] = guid(0xEE4E5898, 0x3914, 0x4259, [0x9D, 0x6E, 0xDC, 0x7B, 0xD7, 0x94, 0x03, 0xCF]);
-const LZMA_F86: [u8; 16] = guid(0xD42AE6BD, 0x1352, 0x4BFB, [0x90, 0x9A, 0xCA, 0x72, 0xA6, 0xEA, 0xE8, 0x89]);
-const BROTLI: [u8; 16] = guid(0x3D532050, 0x5CDA, 0x4FD0, [0x87, 0x9E, 0x0F, 0x7F, 0x63, 0x0D, 0x5A, 0xFB]);
-const TIANO: [u8; 16] = guid(0xA31280AD, 0x481E, 0x41B6, [0x95, 0xE8, 0x12, 0x7F, 0x4C, 0x98, 0x47, 0x79]);
-const CRC32: [u8; 16] = guid(0xFC1BCDB0, 0x7D31, 0x49AA, [0x93, 0x6A, 0xA4, 0x60, 0x0D, 0x9D, 0xD0, 0x83]);
+const LZMA: [u8; 16] = guid(
+    0xEE4E5898,
+    0x3914,
+    0x4259,
+    [0x9D, 0x6E, 0xDC, 0x7B, 0xD7, 0x94, 0x03, 0xCF],
+);
+const LZMA_F86: [u8; 16] = guid(
+    0xD42AE6BD,
+    0x1352,
+    0x4BFB,
+    [0x90, 0x9A, 0xCA, 0x72, 0xA6, 0xEA, 0xE8, 0x89],
+);
+const BROTLI: [u8; 16] = guid(
+    0x3D532050,
+    0x5CDA,
+    0x4FD0,
+    [0x87, 0x9E, 0x0F, 0x7F, 0x63, 0x0D, 0x5A, 0xFB],
+);
+const TIANO: [u8; 16] = guid(
+    0xA31280AD,
+    0x481E,
+    0x41B6,
+    [0x95, 0xE8, 0x12, 0x7F, 0x4C, 0x98, 0x47, 0x79],
+);
+const CRC32: [u8; 16] = guid(
+    0xFC1BCDB0,
+    0x7D31,
+    0x49AA,
+    [0x93, 0x6A, 0xA4, 0x60, 0x0D, 0x9D, 0xD0, 0x83],
+);
 const MAX_DEPTH: usize = 8;
 const MAX_OUTPUT: usize = 256 << 20;
 
@@ -46,7 +71,10 @@ const fn guid(d1: u32, d2: u16, d3: u16, d4: [u8; 8]) -> [u8; 16] {
     let a = d1.to_le_bytes();
     let b = d2.to_le_bytes();
     let c = d3.to_le_bytes();
-    [a[0], a[1], a[2], a[3], b[0], b[1], c[0], c[1], d4[0], d4[1], d4[2], d4[3], d4[4], d4[5], d4[6], d4[7]]
+    [
+        a[0], a[1], a[2], a[3], b[0], b[1], c[0], c[1], d4[0], d4[1], d4[2], d4[3], d4[4], d4[5],
+        d4[6], d4[7],
+    ]
 }
 
 /// The registry form `XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX` of a GUID's bytes.
@@ -74,7 +102,9 @@ fn u64_at(b: &[u8], at: usize) -> Option<u64> {
 
 /// Does `bytes` hold a firmware volume header anywhere?
 pub fn has_volume(bytes: &[u8]) -> bool {
-    (0..bytes.len().saturating_sub(0x38)).step_by(8).any(|off| volume_len(bytes, off).is_some())
+    (0..bytes.len().saturating_sub(0x38))
+        .step_by(8)
+        .any(|off| volume_len(bytes, off).is_some())
 }
 
 fn volume_len(bytes: &[u8], off: usize) -> Option<usize> {
@@ -116,23 +146,37 @@ fn volume(fv: &[u8], depth: usize, w: &mut Walk) {
             off = off.max(ext + size as usize);
         }
     }
-    let erased = if u32_at(fv, 0x2c).unwrap_or(0) & 0x800 != 0 { 0xff } else { 0x00 };
+    let erased = if u32_at(fv, 0x2c).unwrap_or(0) & 0x800 != 0 {
+        0xff
+    } else {
+        0x00
+    };
     loop {
         off = (off + 7) & !7;
-        let Some(head) = fv.get(off..off + 24) else { break };
+        let Some(head) = fv.get(off..off + 24) else {
+            break;
+        };
         if head.iter().all(|&b| b == erased) || head[..16].iter().all(|&b| b == 0xff) {
             break;
         }
         let large = head[0x13] & 0x01 != 0;
         let (size, hsize) = if large {
-            (u64_at(fv, off + 24).and_then(|s| usize::try_from(s).ok()).unwrap_or(0), 32)
+            (
+                u64_at(fv, off + 24)
+                    .and_then(|s| usize::try_from(s).ok())
+                    .unwrap_or(0),
+                32,
+            )
         } else {
             (u24_at(head, 0x14).unwrap_or(0), 24)
         };
         if size < hsize || off + size > fv.len() {
             break;
         }
-        let file = File { guid: guid_string(&head[..16]), file_type: head[0x12] };
+        let file = File {
+            guid: guid_string(&head[..16]),
+            file_type: head[0x12],
+        };
         let body = &fv[off + hsize..off + size];
         match file.file_type {
             0xf0 => {}
@@ -182,17 +226,25 @@ fn sections(mut data: &[u8], file: &File, depth: usize, w: &mut Walk, found: &mu
         match kind {
             0x01 if depth < MAX_DEPTH => match (u32_at(body, 0), body.get(4)) {
                 (Some(_), Some(0)) => sections(&body[5..], file, depth + 1, w, found),
-                (Some(_), Some(1)) => match super::tiano::decompress_either(&body[5..], super::tiano::Variant::Efi) {
-                    Ok(out) => sections(&out, file, depth + 1, w, found),
-                    Err(reason) => w.undecoded.push(format!("{}: {reason}", file.guid)),
-                },
-                _ => w.undecoded.push(format!("{}: unknown compression type", file.guid)),
+                (Some(_), Some(1)) => {
+                    match super::tiano::decompress_either(&body[5..], super::tiano::Variant::Efi) {
+                        Ok(out) => sections(&out, file, depth + 1, w, found),
+                        Err(reason) => w.undecoded.push(format!("{}: {reason}", file.guid)),
+                    }
+                }
+                _ => w
+                    .undecoded
+                    .push(format!("{}: unknown compression type", file.guid)),
             },
             0x02 if depth < MAX_DEPTH => guided(body, file, depth, w, found),
             0x10 => found.images.push((false, body.to_vec())),
             0x12 => found.images.push((true, body.to_vec())),
             0x15 => {
-                let units: Vec<u16> = body.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).take_while(|&u| u != 0).collect();
+                let units: Vec<u16> = body
+                    .chunks_exact(2)
+                    .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                    .take_while(|&u| u != 0)
+                    .collect();
                 found.name = String::from_utf16(&units).ok().filter(|n| !n.is_empty());
             }
             0x17 if depth < MAX_DEPTH => scan_volumes(body, depth + 1, w),
@@ -207,8 +259,15 @@ fn sections(mut data: &[u8], file: &File, depth: usize, w: &mut Walk, found: &mu
 }
 
 fn guided(body: &[u8], file: &File, depth: usize, w: &mut Walk, found: &mut Found) {
-    let (Some(g), Some(data_off)) = (body.get(..16), u16_at(body, 16)) else { return };
-    let Some(payload) = (data_off as usize).checked_sub(4).and_then(|o| body.get(o..)) else { return };
+    let (Some(g), Some(data_off)) = (body.get(..16), u16_at(body, 16)) else {
+        return;
+    };
+    let Some(payload) = (data_off as usize)
+        .checked_sub(4)
+        .and_then(|o| body.get(o..))
+    else {
+        return;
+    };
     let decoded = match <[u8; 16]>::try_from(g).ok() {
         Some(LZMA) => lzma(payload),
         Some(LZMA_F86) => lzma(payload).map(|mut out| {
@@ -233,8 +292,13 @@ pub fn lzma(data: &[u8]) -> Result<Vec<u8>, String> {
     if declared != u64::MAX && declared > MAX_OUTPUT as u64 {
         return Err(format!("LZMA output {declared} bytes is too large"));
     }
-    let mut out = Vec::with_capacity(if declared == u64::MAX { 0 } else { declared as usize });
-    lzma_rs::lzma_decompress(&mut std::io::BufReader::new(data), &mut out).map_err(|e| format!("LZMA: {e}"))?;
+    let mut out = Vec::with_capacity(if declared == u64::MAX {
+        0
+    } else {
+        declared as usize
+    });
+    lzma_rs::lzma_decompress(&mut std::io::BufReader::new(data), &mut out)
+        .map_err(|e| format!("LZMA: {e}"))?;
     Ok(out)
 }
 
@@ -242,7 +306,9 @@ pub fn lzma(data: &[u8]) -> Result<Vec<u8>, String> {
 pub fn brotli(data: &[u8]) -> Result<Vec<u8>, String> {
     let mut last = String::new();
     for skip in [16usize, 8, 0] {
-        let Some(stream) = data.get(skip..) else { continue };
+        let Some(stream) = data.get(skip..) else {
+            continue;
+        };
         let mut out = Vec::new();
         let reader = brotli_decompressor::Decompressor::new(stream, 4096);
         match reader.take(MAX_OUTPUT as u64).read_to_end(&mut out) {
@@ -368,10 +434,14 @@ mod tests {
     #[test]
     fn an_lzma_section_is_decoded_and_its_name_kept() {
         let mut inner = section(0x10, b"MZ-inner-image");
-        let name: Vec<u8> = "DiskIoDxe\0".encode_utf16().flat_map(u16::to_le_bytes).collect();
+        let name: Vec<u8> = "DiskIoDxe\0"
+            .encode_utf16()
+            .flat_map(u16::to_le_bytes)
+            .collect();
         inner.extend(section(0x15, &name));
         let mut packed = Vec::new();
-        lzma_rs::lzma_compress(&mut std::io::BufReader::new(inner.as_slice()), &mut packed).unwrap();
+        lzma_rs::lzma_compress(&mut std::io::BufReader::new(inner.as_slice()), &mut packed)
+            .unwrap();
         let mut guided_body = LZMA.to_vec();
         guided_body.extend(24u16.to_le_bytes());
         guided_body.extend(1u16.to_le_bytes());
@@ -384,8 +454,16 @@ mod tests {
 
     #[test]
     fn standard_and_tiano_compressed_files_are_decoded() {
-        let fv = std::fs::read(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/uefi_tiano_efi_compressed.fv")).unwrap();
-        let plain = std::fs::read(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/uefi_diskio_x64.efi")).unwrap();
+        let fv = std::fs::read(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/uefi_tiano_efi_compressed.fv"),
+        )
+        .unwrap();
+        let plain = std::fs::read(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/uefi_diskio_x64.efi"),
+        )
+        .unwrap();
         let w = walk(&fv);
         assert!(w.undecoded.is_empty(), "{:?}", w.undecoded);
         assert_eq!(w.modules.len(), 2);

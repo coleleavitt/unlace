@@ -8,13 +8,13 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace,
-    UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace, addrspace_flags,
+    spacetype,
 };
 use unlace_base::types::int4;
 
 use crate::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::varnode::{DefOpInfo, VarnodeBank};
 
 use super::*;
@@ -24,7 +24,8 @@ use super::*;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(IopSpace::new(2))).unwrap();
     m.insert_space(Rc::new(FspecSpace::new(3))).unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
@@ -83,7 +84,10 @@ fn set_output(fd: &mut Funcdata, op: OpId, off: u64, size: int4) -> VarnodeId {
     let r = ram(fd);
     let vn = fd.new_varnode(size, &Address::new(r, off), Some(unk(size)));
     let seq = fd.obank().get(op).unwrap().get_seq_num().clone();
-    let info = DefOpInfo { id: op, seqnum: seq };
+    let info = DefOpInfo {
+        id: op,
+        seqnum: seq,
+    };
     let vn = fd.vbank_mut().set_def(vn, info, &mut no_replace()).unwrap();
     fd.obank_mut().get_mut(op).unwrap().set_output(Some(vn));
     vn
@@ -93,11 +97,21 @@ fn set_output(fd: &mut Funcdata, op: OpId, off: u64, size: int4) -> VarnodeId {
 /// `get_in`/`get_def` and never a descend list, and a free Varnode refuses a
 /// second descendant.
 fn wire(fd: &mut Funcdata, vn: VarnodeId, op: OpId, slot: int4) {
-    fd.obank_mut().get_mut(op).unwrap().set_input(Some(vn), slot);
+    fd.obank_mut()
+        .get_mut(op)
+        .unwrap()
+        .set_input(Some(vn), slot);
 }
 
 /// `out = opc(a, b)` at `off`.
-fn binop(fd: &mut Funcdata, bl: BlockId, off: u64, opc: OpCode, a: VarnodeId, b: VarnodeId) -> OpId {
+fn binop(
+    fd: &mut Funcdata,
+    bl: BlockId,
+    off: u64,
+    opc: OpCode,
+    a: VarnodeId,
+    b: VarnodeId,
+) -> OpId {
     let op = mk_op(fd, bl, 2, off, opc);
     wire(fd, a, op, 0);
     wire(fd, b, op, 1);
@@ -153,10 +167,12 @@ fn self_and_and_self_or_are_real_uses() {
         let bl = mk_block(&mut fd);
         let a = mk_vn(&mut fd, 0x40, 8);
         let op = binop(&mut fd, bl, 0x2000, opc, a, a);
-        assert!(!op_discards_operand(&fd, op), "{opc:?} must stay a real use");
+        assert!(
+            !op_discards_operand(&fd, op),
+            "{opc:?} must stay a real use"
+        );
     }
 }
-
 
 // --- structural sameness ----------------------------------------------------
 

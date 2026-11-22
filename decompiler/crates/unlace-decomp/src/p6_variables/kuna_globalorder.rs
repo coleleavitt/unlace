@@ -204,11 +204,11 @@ mod tests {
     use super::*;
     use crate::context::{ArchContext, TypeOp};
     use crate::op::pcodeop_flags;
+    use std::rc::Rc;
     use unlace_base::address::Address;
     use unlace_base::space::{
-        addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+        AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
     };
-    use std::rc::Rc;
 
     // A global-state phi entering a cleanup loop is bookkeeping for prior
     // writes. Treating its outgoing COPY as a fresh computation made the

@@ -4,8 +4,8 @@ use std::fs::File;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use unlace_base::error::{KunaError, KunaResult};
 use memmap2::{Mmap, MmapOptions};
+use unlace_base::error::{KunaError, KunaResult};
 
 #[derive(Clone, Debug)]
 pub enum ImageBytes {
@@ -36,7 +36,11 @@ impl ImageBytes {
             return Ok(None);
         };
         let filetype = |word: [u8; 4], little: bool| {
-            if little { u32::from_le_bytes(word) } else { u32::from_be_bytes(word) }
+            if little {
+                u32::from_le_bytes(word)
+            } else {
+                u32::from_be_bytes(word)
+            }
         };
         let header = mapping.get(..16).and_then(|header| {
             let word: [u8; 4] = header[12..16].try_into().ok()?;
@@ -86,14 +90,23 @@ mod tests {
         let thin = ImageBytes::map_thin_macho(&format!("{fixtures}/macho_objc_arm64")).unwrap();
         assert!(thin.is_some_and(|bytes| bytes.starts_with(&[0xcf, 0xfa, 0xed, 0xfe])));
         let fileset = format!("{fixtures}/kernelcache/fileset.macho");
-        assert!(ImageBytes::map_thin_macho(&fileset).unwrap().is_none(), "MH_FILESET entry selection");
+        assert!(
+            ImageBytes::map_thin_macho(&fileset).unwrap().is_none(),
+            "MH_FILESET entry selection"
+        );
     }
 
     #[test]
     fn a_load_without_mmap_keeps_the_owned_path() {
         use unlace_decomp::kuna_loadoptions::LoadOptions;
-        let thin = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/macho_objc_arm64");
-        let owned = LoadOptions { load_mmap: false, ..LoadOptions::default() };
+        let thin = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/macho_objc_arm64"
+        );
+        let owned = LoadOptions {
+            load_mmap: false,
+            ..LoadOptions::default()
+        };
         let _load = owned.enter();
         assert!(ImageBytes::map_thin_macho(thin).unwrap().is_none());
         let _load = LoadOptions::default().enter();

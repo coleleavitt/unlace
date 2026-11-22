@@ -26,13 +26,13 @@ use std::rc::Rc;
 use unlace_base::address::ELEM_ADDR;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::marshal::{
-    Decoder, Encoder, IdRegistry, PackedDecode, PackedEncode, XmlDecode, XmlEncode, ATTRIB_ALIGN,
-    ATTRIB_BIGENDIAN, ATTRIB_CONSTRUCTOR, ATTRIB_CONTENT, ATTRIB_DESTRUCTOR, ATTRIB_EXTRAPOP,
-    ATTRIB_FORMAT, ATTRIB_ID, ATTRIB_INDEX, ATTRIB_METATYPE, ATTRIB_MODEL, ATTRIB_NAME,
-    ATTRIB_SPACE, ATTRIB_VAL, ATTRIB_VALUE, ELEM_DATA, ELEM_INPUT, ELEM_OFF, ELEM_OUTPUT,
-    ELEM_SYMBOL, ELEM_TARGET,
+    ATTRIB_ALIGN, ATTRIB_BIGENDIAN, ATTRIB_CONSTRUCTOR, ATTRIB_CONTENT, ATTRIB_DESTRUCTOR,
+    ATTRIB_EXTRAPOP, ATTRIB_FORMAT, ATTRIB_ID, ATTRIB_INDEX, ATTRIB_METATYPE, ATTRIB_MODEL,
+    ATTRIB_NAME, ATTRIB_SPACE, ATTRIB_VAL, ATTRIB_VALUE, Decoder, ELEM_DATA, ELEM_INPUT, ELEM_OFF,
+    ELEM_OUTPUT, ELEM_SYMBOL, ELEM_TARGET, Encoder, IdRegistry, PackedDecode, PackedEncode,
+    XmlDecode, XmlEncode,
 };
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, addrspace_flags, spacetype};
 
 /// C++ `TestAddrSpaceManager::TestAddrSpaceManager` + `MarshalTestEnvironment::build`
 fn the_environ_build() -> AddrSpaceManager {
@@ -143,9 +143,13 @@ fn test_unsigned_attributes_decode<D: Decoder>(decoder: &mut D, out_stream: &[u8
     assert_eq!(val, 3);
     val = decoder.read_unsigned_integer_id(&ATTRIB_BIGENDIAN).unwrap();
     assert_eq!(val, 0x100);
-    val = decoder.read_unsigned_integer_id(&ATTRIB_CONSTRUCTOR).unwrap();
+    val = decoder
+        .read_unsigned_integer_id(&ATTRIB_CONSTRUCTOR)
+        .unwrap();
     assert_eq!(val, 0x1fffff);
-    val = decoder.read_unsigned_integer_id(&ATTRIB_DESTRUCTOR).unwrap();
+    val = decoder
+        .read_unsigned_integer_id(&ATTRIB_DESTRUCTOR)
+        .unwrap();
     assert_eq!(val, 0xabcdefa);
     val = decoder.read_unsigned_integer_id(&ATTRIB_EXTRAPOP).unwrap();
     assert_eq!(val, 0x300000000);
@@ -279,7 +283,8 @@ fn marshal_mixed_xml() {
 }
 
 /// C++ `longString` (testmarshal.cc:271-273)
-const LONG_STRING: &[u8] = b"one to three four five six seven eight nine ten eleven twelve thirteen \
+const LONG_STRING: &[u8] =
+    b"one to three four five six seven eight nine ten eleven twelve thirteen \
 fourteen fifteen sixteen seventeen eighteen nineteen twenty twenty one \
 blahblahblahblahblahblahblahblahblahblahblahblahblahblahblahblahblahblah";
 
@@ -293,7 +298,10 @@ fn test_attributes_encode<E: Encoder>(encoder: &mut E, spc_manager: &AddrSpaceMa
     encoder.write_space(&ATTRIB_SPACE, spc);
     encoder.write_string(&ATTRIB_VAL, b""); // Empty string
     encoder.write_string(&ATTRIB_VALUE, b"hello");
-    encoder.write_string(&ATTRIB_CONSTRUCTOR, b"<<\xe2\x82\xac>>&\"bl a  h'\\bleh\n\t");
+    encoder.write_string(
+        &ATTRIB_CONSTRUCTOR,
+        b"<<\xe2\x82\xac>>&\"bl a  h'\\bleh\n\t",
+    );
     encoder.write_string(&ATTRIB_DESTRUCTOR, LONG_STRING);
     encoder.close_element(&ELEM_DATA);
 }
@@ -539,10 +547,7 @@ fn test_closemismatch_decode<D: Decoder>(decoder: &mut D, out_stream: &[u8]) {
     decoder.ingest_stream(out_stream).unwrap();
     let el1 = decoder.open_element_id(&ELEM_INPUT).unwrap();
     // C++: try { decoder.closeElement(el1); } catch(DecoderError&)
-    let saw_close_mismatch = matches!(
-        decoder.close_element(el1),
-        Err(KunaError::Decoder { .. })
-    );
+    let saw_close_mismatch = matches!(decoder.close_element(el1), Err(KunaError::Decoder { .. }));
     assert!(saw_close_mismatch);
 }
 

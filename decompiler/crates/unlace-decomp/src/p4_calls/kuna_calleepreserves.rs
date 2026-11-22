@@ -99,8 +99,8 @@ use unlace_base::marshal::ElementId;
 use unlace_base::space::spacetype;
 use unlace_base::types::int4;
 
-use crate::funcdata::Funcdata;
 use crate::fspec::FuncCallSpecs;
+use crate::funcdata::Funcdata;
 
 /// Marshaling element `<calleepreserves>` (kuna 4000+ range; 4146 = the previous
 /// kuna element).
@@ -115,10 +115,7 @@ pub const ELEM_CALLEEPRESERVES: ElementId = ElementId::new("calleepreserves", 41
 /// that one is — the per-function `ArchContext` the pipeline runs against carries
 /// the load image but no translator, so this is the last point the callee's
 /// instructions can be read at all.
-pub fn seed_callee_preserves(
-    arch: &mut crate::architecture::Architecture,
-    data: &mut Funcdata,
-) {
+pub fn seed_callee_preserves(arch: &mut crate::architecture::Architecture, data: &mut Funcdata) {
     crate::kuna_rustabi::seed_callee_write_probe(arch, data);
 }
 
@@ -149,7 +146,9 @@ pub fn callee_preserves_range(
     if entry.is_invalid() || fc.plt_stub().is_some() {
         return false;
     }
-    let Some(w) = data.kuna_callee_ret_writes(entry) else { return false };
+    let Some(w) = data.kuna_callee_ret_writes(entry) else {
+        return false;
+    };
     if !w.proves_untouched_for(crate::kuna_rustabi::call_model(fc.proto()), addr, size) {
         return false;
     }
@@ -183,7 +182,11 @@ fn body_departs_from_convention(
     let stack_pointer = manage
         .get_stack_space()
         .and_then(|s| s.get_spacebase(0).ok())
-        .and_then(|p| p.space.clone().map(|sp| (sp.get_index(), p.offset, p.size as u64)));
+        .and_then(|p| {
+            p.space
+                .clone()
+                .map(|sp| (sp.get_index(), p.offset, p.size as u64))
+        });
     for &(idx, off, sz) in w.written_ranges() {
         if let Some((sidx, soff, ssz)) = stack_pointer {
             if idx == sidx && off < soff + ssz && soff < off + sz as u64 {
@@ -193,7 +196,9 @@ fn body_departs_from_convention(
         if w.is_return_target(idx, off, sz) {
             continue;
         }
-        let Some(space) = manage.get_space(idx) else { continue };
+        let Some(space) = manage.get_space(idx) else {
+            continue;
+        };
         let waddr = Address::new(std::rc::Rc::clone(space), off);
         if fc.proto().has_effect(&waddr, sz) == crate::fspec::effect_type::UNAFFECTED {
             return true;

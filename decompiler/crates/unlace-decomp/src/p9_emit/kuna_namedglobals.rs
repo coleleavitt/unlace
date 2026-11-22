@@ -7,7 +7,7 @@ use unlace_num::opcodes::OpCode;
 
 use crate::architecture::Architecture;
 use crate::context::VarnodeId;
-use crate::dtype::{type_metatype, Datatype, TypeFactory};
+use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
 
 #[derive(Debug, Default)]
@@ -57,12 +57,19 @@ impl References {
         let size = vn.get_size();
         let assigned = loaded
             && vn.is_explicit()
-            && vn.get_def().and_then(|d| fd.obank().get(d)).is_some_and(|d| d.code() == OpCode::CPUI_LOAD);
+            && vn
+                .get_def()
+                .and_then(|d| fd.obank().get(d))
+                .is_some_and(|d| d.code() == OpCode::CPUI_LOAD);
         let entry = self.accesses.entry(key).or_default();
         let read = if write || !is_integer(ty) || !is_integer(vn.get_type()) {
             Some(Rc::clone(vn.get_type()))
         } else {
-            match if assigned { Ok(None) } else { signedness(fd, value, 0) } {
+            match if assigned {
+                Ok(None)
+            } else {
+                signedness(fd, value, 0)
+            } {
                 Ok(None) => {
                     entry.agnostic = true;
                     None
@@ -79,19 +86,37 @@ impl References {
             }
         };
         if let Some(t) = read {
-            push_new(if write { &mut entry.writes } else { &mut entry.exact }, t);
+            push_new(
+                if write {
+                    &mut entry.writes
+                } else {
+                    &mut entry.exact
+                },
+                t,
+            );
         }
     }
 
     /// A varnode printed by a global's name: one in program data is that
     /// storage, and a register copy merged into the global's variable reads
     /// the storage of the instance that is.
-    pub fn record_named(&mut self, fd: &Funcdata, arch: &Architecture, value: VarnodeId, write: bool, name: &str) {
+    pub fn record_named(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        value: VarnodeId,
+        write: bool,
+        name: &str,
+    ) {
         let Some(vn) = fd.vbank().get(value) else {
             return;
         };
-        let data = arch.manage().get_default_data_space().map(|s| s.get_index());
-        let in_data = |v: &crate::varnode::Varnode| v.get_addr().get_space().map(|s| s.get_index()) == data;
+        let data = arch
+            .manage()
+            .get_default_data_space()
+            .map(|s| s.get_index());
+        let in_data =
+            |v: &crate::varnode::Varnode| v.get_addr().get_space().map(|s| s.get_index()) == data;
         let storage = if in_data(vn) {
             Some(vn.get_addr().clone())
         } else {
@@ -116,7 +141,11 @@ impl References {
         let (Some(a), Some(whole)) = (self.accesses.get(key), self.objects.get(key)) else {
             return Vec::new();
         };
-        let float = a.exact.iter().chain(&a.writes).any(|t| t.get_metatype() == type_metatype::TYPE_FLOAT);
+        let float = a
+            .exact
+            .iter()
+            .chain(&a.writes)
+            .any(|t| t.get_metatype() == type_metatype::TYPE_FLOAT);
         let mut out: Vec<&Rc<Datatype>> = a.exact.iter().collect();
         if float {
             out.extend(&a.writes);
@@ -223,7 +252,9 @@ impl References {
     /// Each object with the types its whole-width scalar accesses declare it
     /// at (empty when the function only addresses it or reads part of it).
     pub fn objects(&self) -> impl Iterator<Item = (u64, &str, &Rc<Datatype>, Vec<&Rc<Datatype>>)> {
-        self.objects.iter().map(|(key, ty)| (key.0, key.1.as_str(), ty, self.declared(key)))
+        self.objects
+            .iter()
+            .map(|(key, ty)| (key.0, key.1.as_str(), ty, self.declared(key)))
     }
 }
 
@@ -245,39 +276,81 @@ fn signedness(fd: &Funcdata, id: VarnodeId, depth: u32) -> Result<Option<type_me
     }
     let (wide, address) = (vn.get_size() >= 4, vn.get_size() >= 8);
     let zero = |other: Option<VarnodeId>| {
-        other.and_then(|v| fd.vbank().get(v)).is_some_and(|v| v.is_constant() && v.get_offset() == 0)
+        other
+            .and_then(|v| fd.vbank().get(v))
+            .is_some_and(|v| v.is_constant() && v.get_offset() == 0)
     };
     let mut want = None;
     for op in vn.descend_iter() {
         let o = fd.obank().get(op).ok_or(())?;
         let first = o.get_in(0) == Some(id);
         let need = match o.code() {
-            Op::CPUI_RETURN | Op::CPUI_MULTIEQUAL | Op::CPUI_INDIRECT | Op::CPUI_SUBPIECE | Op::CPUI_PIECE
+            Op::CPUI_RETURN
+            | Op::CPUI_MULTIEQUAL
+            | Op::CPUI_INDIRECT
+            | Op::CPUI_SUBPIECE
+            | Op::CPUI_PIECE
             | Op::CPUI_CAST => None,
-            Op::CPUI_INT_EQUAL | Op::CPUI_INT_NOTEQUAL if wide || zero(o.get_in(if first { 1 } else { 0 })) => None,
+            Op::CPUI_INT_EQUAL | Op::CPUI_INT_NOTEQUAL
+                if wide || zero(o.get_in(if first { 1 } else { 0 })) =>
+            {
+                None
+            }
             Op::CPUI_CALL | Op::CPUI_CALLIND if !first => None,
             Op::CPUI_STORE if o.get_in(1) != Some(id) || address => None,
             Op::CPUI_LOAD if address => None,
             Op::CPUI_INT_SRIGHT | Op::CPUI_INT_RIGHT if !first => None,
-            Op::CPUI_COPY | Op::CPUI_INT_ADD | Op::CPUI_INT_SUB | Op::CPUI_INT_MULT | Op::CPUI_INT_AND
-            | Op::CPUI_INT_OR | Op::CPUI_INT_XOR | Op::CPUI_INT_NEGATE | Op::CPUI_INT_2COMP | Op::CPUI_INT_LEFT => {
+            Op::CPUI_COPY
+            | Op::CPUI_INT_ADD
+            | Op::CPUI_INT_SUB
+            | Op::CPUI_INT_MULT
+            | Op::CPUI_INT_AND
+            | Op::CPUI_INT_OR
+            | Op::CPUI_INT_XOR
+            | Op::CPUI_INT_NEGATE
+            | Op::CPUI_INT_2COMP
+            | Op::CPUI_INT_LEFT => {
                 let out = o.get_out().ok_or(())?;
                 let v = fd.vbank().get(out).ok_or(())?;
                 if v.get_size() != vn.get_size() {
                     return Err(());
                 }
-                if v.is_explicit() { None } else { signedness(fd, out, depth + 1)? }
+                if v.is_explicit() {
+                    None
+                } else {
+                    signedness(fd, out, depth + 1)?
+                }
             }
-            Op::CPUI_INT_SLESS | Op::CPUI_INT_SLESSEQUAL | Op::CPUI_INT_SDIV | Op::CPUI_INT_SREM
-            | Op::CPUI_INT_SRIGHT | Op::CPUI_INT_SEXT | Op::CPUI_FLOAT_INT2FLOAT => Some(TYPE_INT),
-            Op::CPUI_INT_LESS | Op::CPUI_INT_LESSEQUAL | Op::CPUI_INT_DIV | Op::CPUI_INT_REM | Op::CPUI_INT_RIGHT
+            Op::CPUI_INT_SLESS
+            | Op::CPUI_INT_SLESSEQUAL
+            | Op::CPUI_INT_SDIV
+            | Op::CPUI_INT_SREM
+            | Op::CPUI_INT_SRIGHT
+            | Op::CPUI_INT_SEXT
+            | Op::CPUI_FLOAT_INT2FLOAT => Some(TYPE_INT),
+            Op::CPUI_INT_LESS
+            | Op::CPUI_INT_LESSEQUAL
+            | Op::CPUI_INT_DIV
+            | Op::CPUI_INT_REM
+            | Op::CPUI_INT_RIGHT
             | Op::CPUI_INT_ZEXT => Some(TYPE_UINT),
-            Op::CPUI_FLOAT_ADD | Op::CPUI_FLOAT_SUB | Op::CPUI_FLOAT_MULT | Op::CPUI_FLOAT_DIV | Op::CPUI_FLOAT_NEG
-            | Op::CPUI_FLOAT_ABS | Op::CPUI_FLOAT_SQRT | Op::CPUI_FLOAT_LESS | Op::CPUI_FLOAT_LESSEQUAL
-            | Op::CPUI_FLOAT_EQUAL | Op::CPUI_FLOAT_NOTEQUAL | Op::CPUI_FLOAT_NAN | Op::CPUI_FLOAT_FLOAT2FLOAT
-            | Op::CPUI_FLOAT_TRUNC | Op::CPUI_FLOAT_CEIL | Op::CPUI_FLOAT_FLOOR | Op::CPUI_FLOAT_ROUND => {
-                Some(TYPE_FLOAT)
-            }
+            Op::CPUI_FLOAT_ADD
+            | Op::CPUI_FLOAT_SUB
+            | Op::CPUI_FLOAT_MULT
+            | Op::CPUI_FLOAT_DIV
+            | Op::CPUI_FLOAT_NEG
+            | Op::CPUI_FLOAT_ABS
+            | Op::CPUI_FLOAT_SQRT
+            | Op::CPUI_FLOAT_LESS
+            | Op::CPUI_FLOAT_LESSEQUAL
+            | Op::CPUI_FLOAT_EQUAL
+            | Op::CPUI_FLOAT_NOTEQUAL
+            | Op::CPUI_FLOAT_NAN
+            | Op::CPUI_FLOAT_FLOAT2FLOAT
+            | Op::CPUI_FLOAT_TRUNC
+            | Op::CPUI_FLOAT_CEIL
+            | Op::CPUI_FLOAT_FLOOR
+            | Op::CPUI_FLOAT_ROUND => Some(TYPE_FLOAT),
             _ => return Err(()),
         };
         match (want, need) {

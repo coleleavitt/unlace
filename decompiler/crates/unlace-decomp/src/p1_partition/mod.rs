@@ -13,6 +13,6 @@ pub mod kuna_litpoolconst;
 pub mod kuna_memoryspecs; // (kuna) spec trees supplied from memory
 pub mod kuna_mzdgroup; // (kuna) an MS-DOS executable's functions run with DS holding its data segment
 pub mod kuna_octeonid; // (kuna) Octeon language IDs, built by the loader and read by call recovery
-pub mod sleigh_arch;
 pub mod raw_arch;
+pub mod sleigh_arch;
 pub mod xml_arch;

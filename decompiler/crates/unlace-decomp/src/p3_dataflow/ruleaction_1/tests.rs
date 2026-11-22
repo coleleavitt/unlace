@@ -11,18 +11,18 @@
 
 use std::rc::Rc;
 
-use unlace_base::address::{calc_mask, Address};
+use unlace_base::address::{Address, calc_mask};
 use unlace_base::error::KunaResult;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace,
-    UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace, addrspace_flags,
+    spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use super::*;
-use crate::dtype::{type_metatype, Datatype};
 use crate::context::{ArchContext, TypeOp, VarnodeId};
+use crate::dtype::{Datatype, type_metatype};
 use crate::varnode::{DefOpInfo, VarnodeBank};
 
 // -----------------------------------------------------------------------------
@@ -32,7 +32,8 @@ use crate::varnode::{DefOpInfo, VarnodeBank};
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(IopSpace::new(2))).unwrap();
     m.insert_space(Rc::new(FspecSpace::new(3))).unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
@@ -87,7 +88,8 @@ fn make_op_n(fd: &mut Funcdata, off: u64, opc: OpCode, ninputs: int4, flags: u32
     let pc = Address::new(ram(fd), off);
     let id = fd.obank_mut().create_at(ninputs, pc);
     fd.obank_mut().mark_alive(id);
-    fd.obank_mut().change_opcode(id, TypeOp::new(opc, flags, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(id, TypeOp::new(opc, flags, format!("{opc:?}")));
     id
 }
 
@@ -111,10 +113,14 @@ fn make_written(fd: &mut Funcdata, off: u64, size: int4, defopc: OpCode) -> (Var
     let pc = Address::new(ram(fd), off);
     let defop = fd.obank_mut().create_at(2, pc);
     fd.obank_mut().mark_alive(defop);
-    fd.obank_mut().change_opcode(defop, TypeOp::new(defopc, 0, format!("{defopc:?}")));
+    fd.obank_mut()
+        .change_opcode(defop, TypeOp::new(defopc, 0, format!("{defopc:?}")));
     let vn = fd.new_varnode(size, &Address::new(ram(fd), off), Some(unk(size)));
     let seq = fd.obank().get(defop).unwrap().get_seq_num().clone();
-    let info = DefOpInfo { id: defop, seqnum: seq };
+    let info = DefOpInfo {
+        id: defop,
+        seqnum: seq,
+    };
     let vn = fd.vbank_mut().set_def(vn, info, &mut no_replace()).unwrap();
     fd.obank_mut().get_mut(defop).unwrap().set_output(Some(vn));
     (vn, defop)
@@ -125,7 +131,10 @@ fn make_written(fd: &mut Funcdata, off: u64, size: int4, defopc: OpCode) -> (Var
 fn give_output(fd: &mut Funcdata, op: OpId, off: u64, size: int4) -> VarnodeId {
     let vn = fd.new_varnode(size, &Address::new(ram(fd), off), Some(unk(size)));
     let seq = fd.obank().get(op).unwrap().get_seq_num().clone();
-    let info = DefOpInfo { id: op, seqnum: seq };
+    let info = DefOpInfo {
+        id: op,
+        seqnum: seq,
+    };
     let vn = fd.vbank_mut().set_def(vn, info, &mut no_replace()).unwrap();
     fd.obank_mut().get_mut(op).unwrap().set_output(Some(vn));
     vn
@@ -134,7 +143,10 @@ fn give_output(fd: &mut Funcdata, op: OpId, off: u64, size: int4) -> VarnodeId {
 /// Wire `vn` as input slot `slot` of `op` (descend link + op input).
 fn wire_input(fd: &mut Funcdata, op: OpId, vn: VarnodeId, slot: int4) {
     fd.vbank_mut().add_descend(vn, op).unwrap();
-    fd.obank_mut().get_mut(op).unwrap().set_input(Some(vn), slot);
+    fd.obank_mut()
+        .get_mut(op)
+        .unwrap()
+        .set_input(Some(vn), slot);
 }
 
 fn code_of(fd: &Funcdata, op: OpId) -> OpCode {
@@ -171,7 +183,10 @@ fn specs_lists_25_rules_in_cpp_order() {
     let gl = group();
     for spec in &s {
         let r = (spec.ctor)();
-        assert!(r.clone_rule(&gl).is_some(), "every spec clones into its group");
+        assert!(
+            r.clone_rule(&gl).is_some(),
+            "every spec clones into its group"
+        );
     }
 }
 
@@ -198,7 +213,10 @@ fn bxor2notequal_rewrites_opcode() {
 
 #[test]
 fn bxor2notequal_op_list() {
-    assert_eq!(RuleBxor2NotEqual::new("g").get_op_list(), vec![OpCode::CPUI_BOOL_XOR]);
+    assert_eq!(
+        RuleBxor2NotEqual::new("g").get_op_list(),
+        vec![OpCode::CPUI_BOOL_XOR]
+    );
 }
 
 // -----------------------------------------------------------------------------
@@ -362,18 +380,33 @@ fn ormask_full_mask_completes_copy_of_duplicated_constant() {
     wire_input(&mut fd, op, full, 1);
     let _out = give_output(&mut fd, op, 0x80, 4);
     let mut r = RuleOrMask::new("analysis");
-    assert_eq!(r.apply_op(op, &mut fd), 1, "transform completes since the constant-dup guard");
+    assert_eq!(
+        r.apply_op(op, &mut fd),
+        1,
+        "transform completes since the constant-dup guard"
+    );
     // op is now a single-input COPY of a constant equal to the full mask.
     assert_eq!(code_of(&fd, op), OpCode::CPUI_COPY);
     assert_eq!(numin(&fd, op), 1, "the slot-1 constant input was removed");
     let cin = in_of(&fd, op, 0).expect("COPY input slot 0");
     assert!(is_const(&fd, cin), "COPY reads a constant");
-    assert_eq!(off_of(&fd, cin), calc_mask(4), "the duplicated constant carries the full mask");
+    assert_eq!(
+        off_of(&fd, cin),
+        calc_mask(4),
+        "the duplicated constant carries the full mask"
+    );
     // The constant feeding the COPY is a FRESH duplicate, not the original `full`
     // (the dup guard re-creates it because `full` already had a descendant).
-    assert_ne!(cin, full, "re-duplicated, not aliased to the shared constant");
+    assert_ne!(
+        cin, full,
+        "re-duplicated, not aliased to the shared constant"
+    );
     // The original `full` constant lost its only descendant (opRemoveInput).
-    assert_eq!(fd.vbank().get(full).unwrap().num_descend(), 0, "original constant is now free");
+    assert_eq!(
+        fd.vbank().get(full).unwrap().num_descend(),
+        0,
+        "original constant is now free"
+    );
 }
 
 #[test]
@@ -953,7 +986,11 @@ fn collectterms_lumps_two_nonzero_constants() {
     let _out = give_output(&mut fd, op, 0x80, 4);
 
     let mut r = RuleCollectTerms::new("analysis");
-    assert_eq!(r.apply_op(op, &mut fd), 1, "two non-zero constants are lumped");
+    assert_eq!(
+        r.apply_op(op, &mut fd),
+        1,
+        "two non-zero constants are lumped"
+    );
 
     // The two constant slots now hold {0, 8} in some order across the two ADDs —
     // the lumped 8 lands on the LAST constant in sorter order, the earlier one is
@@ -968,7 +1005,11 @@ fn collectterms_lumps_two_nonzero_constants() {
         .collect();
     let mut sorted = cvals.clone();
     sorted.sort_unstable();
-    assert_eq!(sorted, vec![0, 8], "the two constants are lumped to {{0, 8}}");
+    assert_eq!(
+        sorted,
+        vec![0, 8],
+        "the two constants are lumped to {{0, 8}}"
+    );
     // x is untouched as the non-constant term.
     assert_eq!(in_of(&fd, sub, 0), Some(x), "x stays in place");
 }
@@ -1066,7 +1107,10 @@ fn intlessequal_rewrites_x_le_c_to_x_lt_c_plus_1() {
     assert_eq!(code_of(&fd, op), OpCode::CPUI_INT_LESS, "LESSEQUAL -> LESS");
     assert_eq!(in_of(&fd, op, 0), Some(x), "x stays in slot 0");
     let newc = in_of(&fd, op, 1).expect("slot 1 set");
-    assert!(is_const(&fd, newc) && off_of(&fd, newc) == 6, "constant became c+1");
+    assert!(
+        is_const(&fd, newc) && off_of(&fd, newc) == 6,
+        "constant became c+1"
+    );
     // (kuna) provenance: the rewritten op carries the canonical-LESSEQUAL mark.
     assert!(
         fd.obank().get(op).unwrap().is_canonical_lessequal(),
@@ -1173,12 +1217,7 @@ fn earlyremoval_destroys_unused_op() {
     let inp = make_reg(&mut fd, 0x40, 4);
     wire_input(&mut fd, op, inp, 0);
     let _out = give_output(&mut fd, op, 0x80, 4);
-    let does_dead = fd
-        .vbank()
-        .get(_out)
-        .unwrap()
-        .get_space()
-        .does_deadcode();
+    let does_dead = fd.vbank().get(_out).unwrap().get_space().does_deadcode();
     // The real pipeline builds the per-space heritage info list in
     // startProcessing before any rule runs; deadRemovalAllowedSeen indexes it.
     fd.ensure_heritage_info_list();

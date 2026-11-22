@@ -26,15 +26,15 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::marshal::XmlEncode;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_num::opcodes::OpCode;
 
+use unlace_decomp::context::{ArchContext, BlockId, OpId, TypeOp};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::op::pcodeop_flags;
-use unlace_decomp::paramid::{param_rank, ParamIDIO, ParamMeasure};
-use unlace_decomp::context::{ArchContext, BlockId, OpId, TypeOp};
-use unlace_decomp::signature::{set_settings, sig_mods, simple_signature, GraphSigManager};
+use unlace_decomp::paramid::{ParamIDIO, ParamMeasure, param_rank};
+use unlace_decomp::signature::{GraphSigManager, set_settings, sig_mods, simple_signature};
 
 // The signature settings live in a process-global atomic (the faithful C++
 // `SigManager::settings` static).  Serialize the settings-touching tests in this
@@ -44,7 +44,8 @@ static SETTINGS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -107,14 +108,21 @@ fn cpoolref_high_offset_must_not_panic() {
 
     // out = CPOOLREF(ref, tag) where tag's offset has high bits set.
     // CPOOLREF hashes `op->getIn(numInput-1)->getOffset()` -> the tag constant.
-    let cpool = add_op(&mut fd, bl, OpCode::CPUI_CPOOLREF, 2, Address::new(Rc::clone(&rs), 0x1000));
+    let cpool = add_op(
+        &mut fd,
+        bl,
+        OpCode::CPUI_CPOOLREF,
+        2,
+        Address::new(Rc::clone(&rs), 0x1000),
+    );
     let refvn = fd.new_constant(8, 0x10);
     // 0xFFFF_FFFF_FFFF_FFFF: every top bit set -> ophash<<18 overflows u64.
     let tag = fd.new_constant(8, 0xFFFF_FFFF_FFFF_FFFF);
     fd.op_set_input(cpool, refvn, 0).unwrap();
     fd.op_set_input(cpool, tag, 1).unwrap();
-    let _out =
-        fd.new_varnode_out(8, &Address::new(Rc::clone(&rs), 0x200), cpool).unwrap();
+    let _out = fd
+        .new_varnode_out(8, &Address::new(Rc::clone(&rs), 0x200), cpool)
+        .unwrap();
     fd.structure_reset();
 
     let mut mgr = GraphSigManager::new().unwrap();
@@ -127,7 +135,11 @@ fn cpoolref_high_offset_must_not_panic() {
     let mut mgr2 = GraphSigManager::new().unwrap();
     mgr2.set_current_function(&fd).unwrap();
     mgr2.generate(&fd);
-    assert_eq!(v1, mgr2.get_signature_vector(), "CPOOLREF high-offset hash must be deterministic");
+    assert_eq!(
+        v1,
+        mgr2.get_signature_vector(),
+        "CPOOLREF high-offset hash must be deterministic"
+    );
 }
 
 /// `simple_signature` emits one `<sig val=..>` per feature, and the underlying
@@ -147,11 +159,25 @@ fn simple_signature_feature_vector_is_sorted_and_deterministic() {
     let p = fd.new_varnode(4, &Address::new(Rc::clone(&rs), 0x100), None);
     let p = fd.set_input_varnode(p).unwrap();
     let c = fd.new_constant(4, 5);
-    let add = add_op(&mut fd, bl, OpCode::CPUI_INT_ADD, 2, Address::new(Rc::clone(&rs), 0x1000));
-    let out = fd.new_varnode_out(4, &Address::new(Rc::clone(&rs), 0x200), add).unwrap();
+    let add = add_op(
+        &mut fd,
+        bl,
+        OpCode::CPUI_INT_ADD,
+        2,
+        Address::new(Rc::clone(&rs), 0x1000),
+    );
+    let out = fd
+        .new_varnode_out(4, &Address::new(Rc::clone(&rs), 0x200), add)
+        .unwrap();
     fd.op_set_input(add, p, 0).unwrap();
     fd.op_set_input(add, c, 1).unwrap();
-    let ret = add_op(&mut fd, bl, OpCode::CPUI_RETURN, 2, Address::new(Rc::clone(&rs), 0x1004));
+    let ret = add_op(
+        &mut fd,
+        bl,
+        OpCode::CPUI_RETURN,
+        2,
+        Address::new(Rc::clone(&rs), 0x1004),
+    );
     let iop = fd.new_constant(8, 0);
     fd.op_set_input(ret, iop, 0).unwrap();
     fd.op_set_input(ret, out, 1).unwrap();
@@ -162,7 +188,10 @@ fn simple_signature_feature_vector_is_sorted_and_deterministic() {
     m.generate(&fd);
     let v = m.get_signature_vector();
     assert!(!v.is_empty());
-    assert!(v.windows(2).all(|w| w[0] <= w[1]), "feature vector must be sorted: {v:?}");
+    assert!(
+        v.windows(2).all(|w| w[0] <= w[1]),
+        "feature vector must be sorted: {v:?}"
+    );
 
     // simple_signature emits exactly one <sig> per (sorted) feature.
     let mut buf: Vec<u8> = Vec::new();
@@ -188,8 +217,16 @@ fn paramid_direct_read_hits_terminal_rank() {
 
     let p = fd.new_varnode(4, &Address::new(Rc::clone(&rs), 0x100), None);
     let p = fd.set_input_varnode(p).unwrap();
-    let add = add_op(&mut fd, bl, OpCode::CPUI_INT_ADD, 2, Address::new(Rc::clone(&rs), 0x1000));
-    let _out = fd.new_varnode_out(4, &Address::new(Rc::clone(&rs), 0x200), add).unwrap();
+    let add = add_op(
+        &mut fd,
+        bl,
+        OpCode::CPUI_INT_ADD,
+        2,
+        Address::new(Rc::clone(&rs), 0x1000),
+    );
+    let _out = fd
+        .new_varnode_out(4, &Address::new(Rc::clone(&rs), 0x200), add)
+        .unwrap();
     fd.op_set_input(add, p, 0).unwrap();
     fd.op_set_input(add, p, 1).unwrap();
     fd.structure_reset();

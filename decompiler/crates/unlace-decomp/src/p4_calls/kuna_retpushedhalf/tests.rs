@@ -12,8 +12,8 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, SpacebaseSpace,
-    UniqueSpace, VarnodeStorage,
+    AddrSpace, AddrSpaceManager, ConstantSpace, SpacebaseSpace, UniqueSpace, VarnodeStorage,
+    addrspace_flags, spacetype,
 };
 
 use crate::context::{ArchContext, TypeOp};
@@ -26,7 +26,8 @@ const R8: u64 = 0x80;
 fn build_fd() -> Funcdata {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     let regspc = Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "register",
@@ -39,18 +40,36 @@ fn build_fd() -> Funcdata {
         1,
     ));
     m.insert_space(Rc::clone(&regspc)).unwrap();
-    m.insert_space(Rc::new(SpacebaseSpace::new("stack", 3, 8, &regspc, 1, true, false))).unwrap();
+    m.insert_space(Rc::new(SpacebaseSpace::new(
+        "stack", 3, 8, &regspc, 1, true, false,
+    )))
+    .unwrap();
     let stackspc = Rc::clone(m.get_stack_space().unwrap());
-    let sp = VarnodeStorage { space: Some(Rc::clone(&regspc)), offset: RSP, size: 8 };
+    let sp = VarnodeStorage {
+        space: Some(Rc::clone(&regspc)),
+        offset: RSP,
+        size: 8,
+    };
     m.add_spacebase_pointer(&stackspc, &sp, 8, true).unwrap();
 
     let glb = Rc::new(ArchContext::new(m));
-    let entry = Address::new(Rc::clone(glb.manage().get_space_by_name("register").unwrap()), 0x1000);
+    let entry = Address::new(
+        Rc::clone(glb.manage().get_space_by_name("register").unwrap()),
+        0x1000,
+    );
     Funcdata::new("func", "func", glb, entry, 0x1000_0000, 0x40).unwrap()
 }
 
 fn reg(fd: &Funcdata, off: u64) -> Address {
-    Address::new(Rc::clone(fd.get_arch().manage().get_space_by_name("register").unwrap()), off)
+    Address::new(
+        Rc::clone(
+            fd.get_arch()
+                .manage()
+                .get_space_by_name("register")
+                .unwrap(),
+        ),
+        off,
+    )
 }
 
 fn mk_op(fd: &mut Funcdata, ninput: int4, opc: OpCode) -> OpId {
@@ -119,9 +138,15 @@ fn push_one_register_and_pop_another_marks_only_the_source() {
     let mut fd = build_fd();
     push(&mut fd, R8);
     pop(&mut fd, RDX);
-    assert!(is_push_only(&fd, R8), "R8 is stored by a stack-adjusting op and never written");
+    assert!(
+        is_push_only(&fd, R8),
+        "R8 is stored by a stack-adjusting op and never written"
+    );
     assert!(!is_push_only(&fd, RDX), "RDX is written by the pop");
-    assert!(!is_push_only(&fd, RSP), "the stack pointer itself is never a saved value");
+    assert!(
+        !is_push_only(&fd, RSP),
+        "the stack pointer itself is never a saved value"
+    );
 }
 
 /// The ordinary callee-saved save/restore: the pop writes the register back, so
@@ -144,7 +169,10 @@ fn a_later_write_of_any_width_disqualifies_the_saved_register() {
     let out = reg(&fd, R8);
     fd.new_varnode_out(4, &out, op).unwrap();
     observe_instruction(&mut fd, &[op]);
-    assert!(!is_push_only(&fd, R8), "a 4-byte write overlaps the 8-byte saved register");
+    assert!(
+        !is_push_only(&fd, R8),
+        "a 4-byte write overlaps the 8-byte saved register"
+    );
 }
 
 /// A store that is not part of a stack adjustment is an ordinary memory write,
@@ -156,4 +184,3 @@ fn a_store_without_a_stack_adjustment_records_nothing() {
     observe_instruction(&mut fd, &[s]);
     assert!(!is_push_only(&fd, R8));
 }
-

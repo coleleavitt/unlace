@@ -484,8 +484,8 @@ mod tests {
 
     use unlace_base::error::{KunaError, KunaResult};
     use unlace_base::space::{
-        addrspace_flags, AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace,
-        RegisterLookup, UniqueSpace, VarnodeStorage,
+        AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, RegisterLookup,
+        UniqueSpace, VarnodeStorage, addrspace_flags,
     };
 
     use crate::action::Rule;
@@ -794,10 +794,11 @@ mod tests {
         assert!(!fd.kuna_is_call_transport(meaningful));
         let write = fd.vbank().get(meaningful).unwrap().get_def().unwrap();
         let instruction = fd.obank().get(write).unwrap().get_addr();
-        assert!(fd
-            .kuna_storage_sources(source)
-            .iter()
-            .any(|home| home.write_address.as_ref() == Some(instruction)));
+        assert!(
+            fd.kuna_storage_sources(source)
+                .iter()
+                .any(|home| home.write_address.as_ref() == Some(instruction))
+        );
     }
 
     #[test]
@@ -846,10 +847,11 @@ mod tests {
                 fd.kuna_inherit_storage(value, later_home);
                 assert!(!fd.kuna_is_call_transport(first_home));
                 fd.kuna_inherit_storage(value, first_home);
-                assert!(fd
-                    .kuna_storage_sources(value)
-                    .iter()
-                    .any(|home| home.address == address));
+                assert!(
+                    fd.kuna_storage_sources(value)
+                        .iter()
+                        .any(|home| home.address == address)
+                );
             }
         }
     }

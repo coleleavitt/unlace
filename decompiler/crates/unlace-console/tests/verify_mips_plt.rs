@@ -32,11 +32,16 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// The vendored linked MIPS32 (big-endian) fixture.
@@ -60,9 +65,18 @@ fn mips32_imports_are_named_in_decompiled_c() {
 
     // The imports are resolvable as functions (the elf_plt MIPS markup), and the
     // local `.symtab` `main` resolves.
-    assert!(prog.lookup_symbol("puts").is_some(), "MIPS import `puts` not resolved by the loader");
-    assert!(prog.lookup_symbol("printf").is_some(), "MIPS import `printf` not resolved by the loader");
-    assert!(prog.lookup_symbol("main").is_some(), "defined `main` not resolved by the loader");
+    assert!(
+        prog.lookup_symbol("puts").is_some(),
+        "MIPS import `puts` not resolved by the loader"
+    );
+    assert!(
+        prog.lookup_symbol("printf").is_some(),
+        "MIPS import `printf` not resolved by the loader"
+    );
+    assert!(
+        prog.lookup_symbol("main").is_some(),
+        "defined `main` not resolved by the loader"
+    );
 
     // Drive `load function main` → `decompile` → `print C`.
     let cmds: Vec<String> = ["load function main", "decompile", "print C"]
@@ -82,12 +96,21 @@ fn mips32_imports_are_named_in_decompiled_c() {
     }
     let out = status.optr.clone();
 
-    assert!(out.contains("main"), "expected a decompiled `main` body, got:\n{out}");
+    assert!(
+        out.contains("main"),
+        "expected a decompiled `main` body, got:\n{out}"
+    );
 
     // The library calls are named (the `$gp`-relative GOT load was folded to the
     // stub address and resolved to the import name)...
-    assert!(out.contains("puts("), "expected a `puts(` call, got:\n{out}");
-    assert!(out.contains("printf("), "expected a `printf(` call, got:\n{out}");
+    assert!(
+        out.contains("puts("),
+        "expected a `puts(` call, got:\n{out}"
+    );
+    assert!(
+        out.contains("printf("),
+        "expected a `printf(` call, got:\n{out}"
+    );
     // ...and the raw GOT-slot loads are gone for those call sites (the unresolved
     // `(*(code *)(dat_411040 & ...))(...)` placeholders).
     assert!(

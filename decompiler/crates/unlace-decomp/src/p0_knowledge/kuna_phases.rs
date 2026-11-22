@@ -512,7 +512,11 @@ fn option_heading(st: &KunaSettable) -> String {
         st.option,
         st.values.replace('|', " | "),
         st.shipped,
-        if st.destructive { " (destructive opt-in)" } else { "" },
+        if st.destructive {
+            " (destructive opt-in)"
+        } else {
+            ""
+        },
     )
 }
 
@@ -609,9 +613,21 @@ pub fn emit_catalog_markdown() -> String {
 
     // ---- per-tier sections --------------------------------------------------
     let sections = [
-        ("transform", "## Toggleable transforms", "The control surface: each of these can make output worse on the wrong source shape, so each stays flippable."),
-        ("analysis", "## Analysis & loader passes", "Program-prep enablement: what is discovered, decoded, and named before any function is decompiled."),
-        ("core", "## Core rendering defaults", "Part of the decompiler; not the control surface. Flip only to reproduce upstream Ghidra output byte-for-byte or for unusual downstream consumers."),
+        (
+            "transform",
+            "## Toggleable transforms",
+            "The control surface: each of these can make output worse on the wrong source shape, so each stays flippable.",
+        ),
+        (
+            "analysis",
+            "## Analysis & loader passes",
+            "Program-prep enablement: what is discovered, decoded, and named before any function is decompiled.",
+        ),
+        (
+            "core",
+            "## Core rendering defaults",
+            "Part of the decompiler; not the control surface. Flip only to reproduce upstream Ghidra output byte-for-byte or for unusual downstream consumers.",
+        ),
     ];
     for (tier, heading, blurb) in sections {
         out.push_str(heading);

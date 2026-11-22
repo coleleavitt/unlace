@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::context::OpId;
-use crate::dtype::{type_metatype, Datatype, TypeFactory, TypeField};
+use crate::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::p4_calls::fspec::FuncCallSpecs;
 
@@ -61,10 +61,14 @@ pub fn view_struct(types: &dyn TypeFactory, v: &KallocView) -> Option<Rc<Datatyp
     }
     let size = v.size as i32;
     if let Some(existing) = types.find_by_name(&v.name).ok()? {
-        let same = existing.get_metatype() == type_metatype::TYPE_STRUCT && !existing.is_incomplete() && existing.get_size() == size;
+        let same = existing.get_metatype() == type_metatype::TYPE_STRUCT
+            && !existing.is_incomplete()
+            && existing.get_size() == size;
         return same.then_some(existing);
     }
-    let ptr = types.get_type_pointer(8, types.get_type_void().ok()?, 1).ok()?;
+    let ptr = types
+        .get_type_pointer(8, types.get_type_void().ok()?, 1)
+        .ok()?;
     let word = types.get_base(8, type_metatype::TYPE_UNKNOWN).ok()?;
     let byte = types.get_base(1, type_metatype::TYPE_UNKNOWN).ok()?;
     let mut fields = Vec::new();
@@ -82,13 +86,25 @@ pub fn view_struct(types: &dyn TypeFactory, v: &KallocView) -> Option<Rc<Datatyp
             _ if len == 8 => Rc::clone(&word),
             _ => types.get_type_array(len, Rc::clone(&byte)).ok()?,
         };
-        let field = if off == 0 && v.is_class && kind == '1' { "vtable".to_string() } else { format!("field_0x{off:x}") };
+        let field = if off == 0 && v.is_class && kind == '1' {
+            "vtable".to_string()
+        } else {
+            format!("field_0x{off:x}")
+        };
         fields.push(TypeField::new(fields.len() as i32, off, field, ty));
         off += len;
     }
-    let align = if size % 8 == 0 { 8 } else if size % 4 == 0 { 4 } else { 1 };
+    let align = if size % 8 == 0 {
+        8
+    } else if size % 4 == 0 {
+        4
+    } else {
+        1
+    };
     let shell = types.get_type_struct(&v.name).ok()?;
-    types.set_fields_struct_raw(&shell, fields, Vec::new(), size, align, 0).ok()
+    types
+        .set_fields_struct_raw(&shell, fields, Vec::new(), size, align, 0)
+        .ok()
 }
 
 /// `TypeOpCall::getOutputLocal` for a typed allocation: a pointer to what the
@@ -99,14 +115,20 @@ pub fn allocated_type(data: &Funcdata, op: OpId, fc: &FuncCallSpecs) -> Option<R
         return None;
     }
     let name = fc.get_name();
-    TYPED_ALLOCATORS.iter().find(|(n, returns, _)| *returns && *n == name)?;
+    TYPED_ALLOCATORS
+        .iter()
+        .find(|(n, returns, _)| *returns && *n == name)?;
     let view = data.obank().get(op)?.get_in(1)?;
-    let v = arch.kuna_kalloc_types.get(&crate::kuna_objcrettype::constant_address(data, view, 0)?)?;
+    let v = arch
+        .kuna_kalloc_types
+        .get(&crate::kuna_objcrettype::constant_address(data, view, 0)?)?;
     let types = arch.types()?;
     let space = arch.manage.get_default_data_space()?;
     let (ptr_size, word) = (space.get_addr_size() as i32, space.get_word_size());
     let target = if v.pointers {
-        types.get_type_pointer(ptr_size, types.get_type_void().ok()?, word).ok()?
+        types
+            .get_type_pointer(ptr_size, types.get_type_void().ok()?, word)
+            .ok()?
     } else {
         view_struct(types, v)?
     };
@@ -124,12 +146,24 @@ mod tests {
         types.set_max_basetype_size(8);
         types.setup_sizes(Some(8), 8, 4);
         types.cache_core_types().unwrap();
-        let v = KallocView { name: "Widget".into(), signature: "12".into(), size: 0x14, is_class: true, pointers: false };
-        assert!(types.find_by_name("Widget").unwrap().is_none(), "nothing is interned before use");
+        let v = KallocView {
+            name: "Widget".into(),
+            signature: "12".into(),
+            size: 0x14,
+            is_class: true,
+            pointers: false,
+        };
+        assert!(
+            types.find_by_name("Widget").unwrap().is_none(),
+            "nothing is interned before use"
+        );
         let st = view_struct(types, &v).unwrap();
         assert_eq!(st.get_size(), 0x14);
         assert!(Rc::ptr_eq(&st, &view_struct(types, &v).unwrap()));
         let other = KallocView { size: 0x20, ..v };
-        assert!(view_struct(types, &other).is_none(), "a different size never reuses the name");
+        assert!(
+            view_struct(types, &other).is_none(),
+            "a different size never reuses the name"
+        );
     }
 }

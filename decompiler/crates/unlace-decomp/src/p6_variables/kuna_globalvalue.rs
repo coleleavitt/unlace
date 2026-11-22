@@ -32,7 +32,7 @@ use unlace_num::opcodes::OpCode;
 
 use crate::context::{HighVariableId, VarnodeId};
 use crate::merge::MergeContext;
-use crate::p3_dataflow::kuna_globalstorekeep::{passes_signedness, reads_signedness, WALK_BOUND};
+use crate::p3_dataflow::kuna_globalstorekeep::{WALK_BOUND, passes_signedness, reads_signedness};
 
 /// Must HighVariables `a` and `b` stay apart because one is a global and the
 /// other a value a sign-sensitive operation reads, and that no load of the
@@ -93,7 +93,9 @@ fn loaded(ctx: &mut dyn MergeContext, global: HighVariableId, value: HighVariabl
 /// declared with its own type, and a cast states its type, so either ends the
 /// walk.
 fn read_sign_sensitively(ctx: &mut dyn MergeContext, value: HighVariableId) -> bool {
-    let mut stack: Vec<VarnodeId> = (0..ctx.high_num_instances(value)).map(|i| ctx.high_get_instance(value, i)).collect();
+    let mut stack: Vec<VarnodeId> = (0..ctx.high_num_instances(value))
+        .map(|i| ctx.high_get_instance(value, i))
+        .collect();
     let mut seen = std::collections::BTreeSet::new();
     while let Some(vn) = stack.pop() {
         if !seen.insert(vn) {
@@ -113,7 +115,12 @@ fn read_sign_sensitively(ctx: &mut dyn MergeContext, value: HighVariableId) -> b
                 if ctx.op_in(op, slot) != Some(vn) {
                     continue;
                 }
-                let other = if n == 2 { ctx.op_in(op, 1 - slot).and_then(|o| ctx.vn_constant_value(o)) } else { None };
+                let other = if n == 2 {
+                    ctx.op_in(op, 1 - slot)
+                        .and_then(|o| ctx.vn_constant_value(o))
+                } else {
+                    None
+                };
                 if reads_signedness(code, slot, size, other) {
                     return true;
                 }
@@ -139,7 +146,9 @@ fn read_sign_sensitively(ctx: &mut dyn MergeContext, value: HighVariableId) -> b
 /// keeping it apart would print the COPYs that write it back as stores the
 /// binary never makes.
 fn holds_global(ctx: &mut dyn MergeContext, value: HighVariableId, global: HighVariableId) -> bool {
-    let mut stack: Vec<VarnodeId> = (0..ctx.high_num_instances(value)).map(|i| ctx.high_get_instance(value, i)).collect();
+    let mut stack: Vec<VarnodeId> = (0..ctx.high_num_instances(value))
+        .map(|i| ctx.high_get_instance(value, i))
+        .collect();
     let mut seen = std::collections::BTreeSet::new();
     while let Some(vn) = stack.pop() {
         if !seen.insert(vn) {
@@ -156,7 +165,9 @@ fn holds_global(ctx: &mut dyn MergeContext, value: HighVariableId, global: HighV
         };
         match ctx.op_code(def) {
             OpCode::CPUI_COPY | OpCode::CPUI_CAST => stack.extend(ctx.op_in(def, 0)),
-            OpCode::CPUI_MULTIEQUAL => stack.extend((0..ctx.op_num_input(def)).filter_map(|i| ctx.op_in(def, i))),
+            OpCode::CPUI_MULTIEQUAL => {
+                stack.extend((0..ctx.op_num_input(def)).filter_map(|i| ctx.op_in(def, i)))
+            }
             _ => return false,
         }
     }

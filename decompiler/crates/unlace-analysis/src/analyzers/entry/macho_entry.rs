@@ -13,11 +13,11 @@
 //! binaries select one slice (x86-64, then arm64, then first), as in
 //! [`crate::loader::macho_stubs`].
 
-use object::macho::{MachHeader32, MachHeader64, SECTION_TYPE, S_MOD_INIT_FUNC_POINTERS};
+use object::macho::{MachHeader32, MachHeader64, S_MOD_INIT_FUNC_POINTERS, SECTION_TYPE};
+use object::read::Object;
 use object::read::macho::{
     FatArch, LoadCommandVariant, MachHeader, MachOFatFile32, MachOFatFile64, Section, Segment,
 };
-use object::read::Object;
 use object::{Architecture, Endianness, FileKind};
 
 /// Collect Mach-O function-start candidate VMAs: the `LC_MAIN` entry,
@@ -203,13 +203,7 @@ where
 /// pushing each absolute function-start VMA. The first delta is relative to
 /// `text_base`; each subsequent delta accumulates onto the running address. A
 /// zero delta terminates the list (the trailing padding).
-fn decode_function_starts(
-    bytes: &[u8],
-    off: u64,
-    size: u64,
-    text_base: u64,
-    out: &mut Vec<u64>,
-) {
+fn decode_function_starts(bytes: &[u8], off: u64, size: u64, text_base: u64, out: &mut Vec<u64>) {
     let start = off as usize;
     let end = match start.checked_add(size as usize) {
         Some(e) if e <= bytes.len() => e,
@@ -256,8 +250,14 @@ fn read_init_pointers<Mach>(
         let o = i * ptr;
         let p = if ptr == 8 {
             u64::from_le_bytes([
-                data[o], data[o + 1], data[o + 2], data[o + 3],
-                data[o + 4], data[o + 5], data[o + 6], data[o + 7],
+                data[o],
+                data[o + 1],
+                data[o + 2],
+                data[o + 3],
+                data[o + 4],
+                data[o + 5],
+                data[o + 6],
+                data[o + 7],
             ])
         } else {
             u32::from_le_bytes([data[o], data[o + 1], data[o + 2], data[o + 3]]) as u64
@@ -287,7 +287,8 @@ where
         if let Ok(Some((segment, _))) = Mach::Segment::from_command(command) {
             let vmaddr: u64 = segment.vmaddr(endian).into();
             let vmsize: u64 = segment.vmsize(endian).into();
-            if sec_addr >= vmaddr && sec_addr.wrapping_add(sec_size) <= vmaddr.wrapping_add(vmsize) {
+            if sec_addr >= vmaddr && sec_addr.wrapping_add(sec_size) <= vmaddr.wrapping_add(vmsize)
+            {
                 let fileoff: u64 = segment.fileoff(endian).into();
                 let file_pos = fileoff.wrapping_add(sec_addr - vmaddr) as usize;
                 let file_end = file_pos.checked_add(sec_size as usize)?;
@@ -344,7 +345,11 @@ fn select_fat_arch<Fat: FatArch>(arches: &[Fat]) -> Option<&Fat> {
     arches
         .iter()
         .find(|a| a.architecture() == Architecture::X86_64)
-        .or_else(|| arches.iter().find(|a| a.architecture() == Architecture::Aarch64))
+        .or_else(|| {
+            arches
+                .iter()
+                .find(|a| a.architecture() == Architecture::Aarch64)
+        })
         .or_else(|| arches.first())
 }
 
@@ -368,8 +373,14 @@ mod tests {
         let file = object::File::parse(bytes.as_slice()).expect("parse macho_imports");
         assert_eq!(file.architecture(), Architecture::X86_64);
         let cands = macho_entry_candidates(&file, bytes.as_slice());
-        assert!(cands.contains(&0x1000005a0), "_compute 0x1000005a0 missing (FUNCTION_STARTS)");
-        assert!(cands.contains(&0x1000005b0), "_main/entry 0x1000005b0 missing");
+        assert!(
+            cands.contains(&0x1000005a0),
+            "_compute 0x1000005a0 missing (FUNCTION_STARTS)"
+        );
+        assert!(
+            cands.contains(&0x1000005b0),
+            "_main/entry 0x1000005b0 missing"
+        );
         assert!(!cands.contains(&0), "no zero candidate");
     }
 
@@ -382,8 +393,14 @@ mod tests {
         let file = object::File::parse(bytes.as_slice()).expect("parse macho_imports_arm64");
         assert_eq!(file.architecture(), Architecture::Aarch64);
         let cands = macho_entry_candidates(&file, bytes.as_slice());
-        assert!(cands.contains(&0x100000560), "_compute 0x100000560 missing (FUNCTION_STARTS)");
-        assert!(cands.contains(&0x10000056c), "_main/entry 0x10000056c missing");
+        assert!(
+            cands.contains(&0x100000560),
+            "_compute 0x100000560 missing (FUNCTION_STARTS)"
+        );
+        assert!(
+            cands.contains(&0x10000056c),
+            "_main/entry 0x10000056c missing"
+        );
     }
 
     /// `LC_MAIN` alone: `__TEXT.vmaddr + entryoff` is the routine `dyld` calls as
@@ -415,7 +432,10 @@ mod tests {
     fn lc_main_entry_vma_refuses_non_macho() {
         assert_eq!(macho_main_entry_vma(&fixture("cet_pie_x86_64")), None);
         assert_eq!(macho_main_entry_vma(&[]), None);
-        assert_eq!(macho_main_entry_vma(&[0xcf, 0xfa, 0xed, 0xfe, 0, 0, 0]), None);
+        assert_eq!(
+            macho_main_entry_vma(&[0xcf, 0xfa, 0xed, 0xfe, 0, 0, 0]),
+            None
+        );
     }
 
     /// ULEB128 delta decoding: the x86-64 fixture's table is two deltas

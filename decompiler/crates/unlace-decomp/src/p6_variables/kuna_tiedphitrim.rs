@@ -70,7 +70,10 @@ pub fn tied_slots(ctx: &mut dyn MergeContext, op: OpId) -> Option<(Vec<int4>, Ad
     }
     let storage = storage?;
     let bl = ctx.op_parent(op);
-    if slots.iter().any(|&slot| ctx.block_dominates(bl, ctx.block_in(bl, slot))) {
+    if slots
+        .iter()
+        .any(|&slot| ctx.block_dominates(bl, ctx.block_in(bl, slot)))
+    {
         return None;
     }
     let latch: Vec<VarnodeId> = untied
@@ -105,7 +108,11 @@ pub fn tied_slots(ctx: &mut dyn MergeContext, op: OpId) -> Option<(Vec<int4>, Ad
 /// Does `vn`'s value come, directly or through defining ops, from a value
 /// defined inside `body`?  The backward walk stops at inputs, constants and
 /// address-tied values (which carry their own storage's identity).
-fn derives_from_loop(ctx: &mut dyn MergeContext, vn: VarnodeId, body: &std::collections::BTreeSet<crate::context::BlockId>) -> bool {
+fn derives_from_loop(
+    ctx: &mut dyn MergeContext,
+    vn: VarnodeId,
+    body: &std::collections::BTreeSet<crate::context::BlockId>,
+) -> bool {
     let mut stack = vec![vn];
     let mut seen = std::collections::BTreeSet::new();
     while let Some(v) = stack.pop() {
@@ -129,7 +136,10 @@ fn derives_from_loop(ctx: &mut dyn MergeContext, vn: VarnodeId, body: &std::coll
 /// The set of blocks that form the loop headed by `bl`: those `bl` dominates
 /// from which `bl` is reachable (walking predecessors that `bl` dominates, back
 /// from `bl`'s latch predecessors), plus `bl` itself.
-fn loop_body(ctx: &mut dyn MergeContext, bl: crate::context::BlockId) -> std::collections::BTreeSet<crate::context::BlockId> {
+fn loop_body(
+    ctx: &mut dyn MergeContext,
+    bl: crate::context::BlockId,
+) -> std::collections::BTreeSet<crate::context::BlockId> {
     let mut body = std::collections::BTreeSet::new();
     body.insert(bl);
     let mut stack: Vec<crate::context::BlockId> = (0..ctx.block_num_in(bl))
@@ -186,7 +196,12 @@ pub fn intersects(
 }
 
 /// Can a pointer observe the storage `addr` of `vn`'s address-tied `high`?
-fn observable(ctx: &mut dyn MergeContext, vn: VarnodeId, high: HighVariableId, addr: &Address) -> bool {
+fn observable(
+    ctx: &mut dyn MergeContext,
+    vn: VarnodeId,
+    high: HighVariableId,
+    addr: &Address,
+) -> bool {
     let Some(space) = addr.get_space() else {
         return false;
     };
@@ -196,7 +211,10 @@ fn observable(ctx: &mut dyn MergeContext, vn: VarnodeId, high: HighVariableId, a
     if space.get_type() != spacetype::IPTR_SPACEBASE {
         return true;
     }
-    if ctx.bank_tied_varnode(high).is_some_and(|tied| ctx.vn_has_no_local_alias(tied)) {
+    if ctx
+        .bank_tied_varnode(high)
+        .is_some_and(|tied| ctx.vn_has_no_local_alias(tied))
+    {
         return false;
     }
     let bits = 64 - 8 * space.get_addr_size().min(8);
@@ -235,4 +253,3 @@ fn loaded(ctx: &mut dyn MergeContext, vn: VarnodeId) -> bool {
     }
     false
 }
-

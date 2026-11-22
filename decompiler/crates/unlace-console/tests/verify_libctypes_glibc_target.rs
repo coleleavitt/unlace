@@ -31,7 +31,7 @@ use std::rc::Rc;
 use std::sync::Mutex;
 
 use unlace_base::address::Address;
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_decomp::kuna_libctypes::LIBCTYPES_ENV;
 
 /// `bump` in the MIPS fixture; `next_byte` in the x86-64 one. Any code address
@@ -44,7 +44,10 @@ const X86_64_ENTRY: u64 = 0x1189;
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Bootstrap `fixture` with `libctypes` asking for `glibc`, declare `getgrnam` at `entry`,
@@ -52,20 +55,33 @@ fn repo_root() -> PathBuf {
 fn declared_group(fixture: &str, entry: u64) -> Option<Rc<unlace_decomp::dtype::Datatype>> {
     let root = repo_root();
     let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
-    let bin = root.join("decompiler/crates/unlace-analysis/tests/fixtures").join(fixture);
+    let bin = root
+        .join("decompiler/crates/unlace-analysis/tests/fixtures")
+        .join(fixture);
     // The named shells are interned inside `load file`, upstream of every `option`
     // command, so the value has to be in the environment before the bootstrap.
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var(LIBCTYPES_ENV, "glibc") };
-    let mut prog: ConsoleProgram = bootstrap_from_object(bin.to_str().expect("UTF-8 fixture path"), "", &spec_roots)
-        // FIXME: Audit that the environment access only happens in single-threaded code.
-        .inspect_err(|_| unsafe { std::env::remove_var(LIBCTYPES_ENV) })
-        .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
-    let space = prog.arch().manage().get_default_code_space().expect("code space").clone();
+    let mut prog: ConsoleProgram =
+        bootstrap_from_object(bin.to_str().expect("UTF-8 fixture path"), "", &spec_roots)
+            // FIXME: Audit that the environment access only happens in single-threaded code.
+            .inspect_err(|_| unsafe { std::env::remove_var(LIBCTYPES_ENV) })
+            .expect("bootstrap fixture with built processor specs");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
+    let space = prog
+        .arch()
+        .manage()
+        .get_default_code_space()
+        .expect("code space")
+        .clone();
     prog.declare_function(Address::new(Rc::clone(&space), entry), Some("getgrnam"), 0)
         .expect("the declaration lands");
-    let held = prog.arch().types().find_by_name("group").expect("type lookup");
+    let held = prog
+        .arch()
+        .types()
+        .find_by_name("group")
+        .expect("type lookup");
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var(LIBCTYPES_ENV) };
     held
@@ -77,7 +93,10 @@ fn an_accepted_target_mints_the_published_group() {
     let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     let group = declared_group("libctypes_glibc_x86_64", X86_64_ENTRY);
     let group = group.expect("an x86-64 glibc ELF takes the named declaration");
-    assert!(!group.is_incomplete(), "an x86-64 glibc ELF takes the fields");
+    assert!(
+        !group.is_incomplete(),
+        "an x86-64 glibc ELF takes the fields"
+    );
     assert_eq!(group.get_size(), 32, "the published width");
     let first = group.get_field(0).expect("a first member");
     assert_eq!(first.name, "gr_name");

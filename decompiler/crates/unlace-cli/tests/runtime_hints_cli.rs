@@ -48,7 +48,10 @@ fn summary_json_carries_the_runtime_array() {
     assert!(!err.contains("note:"), "the summary already says it: {err}");
 
     let (text, _, _) = run_kuna(&["functions", &bin, "--summary"]);
-    assert!(text.contains(&format!("runtime\tpyinstaller\t{PYI_HINT}")), "{text}");
+    assert!(
+        text.contains(&format!("runtime\tpyinstaller\t{PYI_HINT}")),
+        "{text}"
+    );
 }
 
 #[test]
@@ -68,7 +71,10 @@ fn other_subcommands_note_the_hint_on_stderr_only() {
     assert_eq!(code, 0, "{err}");
     assert_eq!(err.matches("note:").count(), 1, "{err}");
     assert!(err.contains(PYI_HINT), "{err}");
-    assert!(!out.contains("pyinstxtractor"), "stdout stays the document: {out}");
+    assert!(
+        !out.contains("pyinstxtractor"),
+        "stdout stays the document: {out}"
+    );
 
     let (out, err, _) = run_kuna(&["decompile", &bin, "vm", "--json"]);
     assert!(err.contains(PYI_HINT), "{err}");
@@ -82,12 +88,18 @@ fn a_rust_image_without_comment_reports_its_release_and_crates() {
     assert_eq!(code, 0, "{err}");
     assert!(out.contains("\"id\": \"rust\""), "{out}");
     assert!(out.contains("\"version\": \"1.95.0\""), "{out}");
-    assert!(out.contains("Rust binary (rustc 1.95.0): output defaults to --language rust"), "{out}");
+    assert!(
+        out.contains("Rust binary (rustc 1.95.0): output defaults to --language rust"),
+        "{out}"
+    );
     assert!(out.contains("\"name\": \"arrayvec\""), "{out}");
     assert!(out.contains("\"version\": \"0.7.6\""), "{out}");
 
     let (text, _, _) = run_kuna(&["functions", &bin, "--summary"]);
-    assert!(text.contains("runtime\trust\tRust binary (rustc 1.95.0)"), "{text}");
+    assert!(
+        text.contains("runtime\trust\tRust binary (rustc 1.95.0)"),
+        "{text}"
+    );
     assert!(text.contains("crate\tarrayvec\t0.7.6"), "{text}");
 }
 

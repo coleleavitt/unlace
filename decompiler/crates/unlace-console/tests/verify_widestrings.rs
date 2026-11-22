@@ -25,11 +25,16 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture() -> PathBuf {
@@ -54,10 +59,14 @@ fn decompile_entry_with(widestrings: bool, operand_refs: bool) -> String {
         .expect("bootstrap fixture with built processor specs");
     prog.arch_mut().analysis_widestrings = widestrings;
     prog.arch_mut().analysis_operand_refs = operand_refs;
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
-    let cmds: Vec<String> =
-        vec!["load function sub_140001000".into(), "decompile".into(), "print C".into()];
+    let cmds: Vec<String> = vec![
+        "load function sub_140001000".into(),
+        "decompile".into(),
+        "print C".into(),
+    ];
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -142,12 +151,17 @@ fn the_commit_plants_a_symbol_at_the_wide_literal() {
         let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
             .expect("bootstrap fixture with built processor specs");
         prog.arch_mut().analysis_widestrings = on;
-        prog.commit_pending_analysis().expect("analysis commit succeeds");
+        prog.commit_pending_analysis()
+            .expect("analysis commit succeeds");
         let arch = prog.arch();
         let global = arch.symboltab.get_global_scope().expect("global scope");
-        let found = !arch.symboltab.query_by_name(global, "s_140002100").is_empty();
+        let found = !arch
+            .symboltab
+            .query_by_name(global, "s_140002100")
+            .is_empty();
         assert_eq!(
-            found, want,
+            found,
+            want,
             "widestrings={on}: expected the wide literal's data symbol \
              `s_140002100` to be {}",
             if want { "planted" } else { "absent" }

@@ -115,9 +115,9 @@ use std::rc::Rc;
 use unlace_base::error::KunaResult;
 use unlace_num::opcodes::OpCode;
 
+use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::options::on_or_off;
-use crate::context::{OpId, VarnodeId};
 
 /// (kuna) Is the call output `vn` order-safe to fold into its single use?
 ///
@@ -379,7 +379,8 @@ fn statement_reads_indirect_output_of(data: &Funcdata, statement: OpId, call: Op
             return false;
         };
         if definition.code() == OpCode::CPUI_INDIRECT {
-            return definition.get_in(1)
+            return definition
+                .get_in(1)
                 .and_then(|input| data.vbank().get(input))
                 .map(|input| crate::funcdata_varnode::op_iop_decode(input.get_offset()))
                 == Some(call);
@@ -388,7 +389,9 @@ fn statement_reads_indirect_output_of(data: &Funcdata, statement: OpId, call: Op
             return false;
         }
         (0..definition.num_input()).any(|slot| {
-            definition.get_in(slot).is_none_or(|input| reads(data, input, call, budget))
+            definition
+                .get_in(slot)
+                .is_none_or(|input| reads(data, input, call, budget))
         })
     }
 
@@ -397,7 +400,9 @@ fn statement_reads_indirect_output_of(data: &Funcdata, statement: OpId, call: Op
     };
     let mut budget = 64;
     (0..statement.num_input()).any(|slot| {
-        statement.get_in(slot).is_none_or(|input| reads(data, input, call, &mut budget))
+        statement
+            .get_in(slot)
+            .is_none_or(|input| reads(data, input, call, &mut budget))
     })
 }
 
@@ -409,14 +414,22 @@ fn op_is_statement(data: &Funcdata, op: OpId) -> bool {
         return false;
     }
     if op.code() == OpCode::CPUI_COPY {
-        let source = op.get_in(0).and_then(|input| data.vbank().get(input)).and_then(|value| value.get_high());
-        let output = op.get_out().and_then(|output| data.vbank().get(output)).and_then(|value| value.get_high());
+        let source = op
+            .get_in(0)
+            .and_then(|input| data.vbank().get(input))
+            .and_then(|value| value.get_high());
+        let output = op
+            .get_out()
+            .and_then(|output| data.vbank().get(output))
+            .and_then(|value| value.get_high());
         if source.is_some() && source == output {
             return false;
         }
     }
     op.get_out().is_none_or(|output| {
-        data.vbank().get(output).is_none_or(|value| !value.is_implied())
+        data.vbank()
+            .get(output)
+            .is_none_or(|value| !value.is_implied())
     })
 }
 

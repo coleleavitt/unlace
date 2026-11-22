@@ -77,9 +77,9 @@ use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{ActionGroupList, Rule, RuleSpec};
-use crate::dtype::{type_metatype, BitFieldTriple, Datatype};
-use crate::funcdata::Funcdata;
 use crate::context::VarnodeId;
+use crate::dtype::{BitFieldTriple, Datatype, type_metatype};
+use crate::funcdata::Funcdata;
 
 /// `func->getArch()->getDefaultDataSpace()->isBigEndian()` — the endianness the
 /// `BitFieldTransform` base records.  All bitfield rule bodies read it the same
@@ -113,12 +113,17 @@ pub(crate) fn whole_byte_field_value(
             for field in bitfield {
                 let mut bits = field.bits();
                 bits.minimize_container();
-                if bits.byte_offset as i64 == off && bits.byte_size == size && bits.num_bits == 8 * size {
+                if bits.byte_offset as i64 == off
+                    && bits.byte_size == size
+                    && bits.num_bits == 8 * size
+                {
                     return tlst.resize_integer(Rc::clone(&field.field_type), size).ok();
                 }
             }
         }
-        let (Some(sub), next) = dt.get_sub_type(off).ok()? else { return None };
+        let (Some(sub), next) = dt.get_sub_type(off).ok()? else {
+            return None;
+        };
         dt = sub;
         off = next;
     }
@@ -179,13 +184,7 @@ impl BitRange {
 
     /// Construct fully (C++ `BitRange(int4,int4,int4,int4,bool)`,
     /// address.hh:268-269).
-    pub fn new(
-        b_off: int4,
-        b_size: int4,
-        least: int4,
-        num: int4,
-        big_endian: bool,
-    ) -> BitRange {
+    pub fn new(b_off: int4, b_size: int4, least: int4, num: int4, big_endian: bool) -> BitRange {
         BitRange {
             byte_offset: b_off,
             byte_size: b_size,
@@ -222,10 +221,18 @@ impl BitRange {
     /// each a signed tie-break, all equal yielding `0`.
     pub fn compare(&self, op2: &BitRange) -> int4 {
         if self.byte_offset != op2.byte_offset {
-            return if self.byte_offset < op2.byte_offset { -1 } else { 1 };
+            return if self.byte_offset < op2.byte_offset {
+                -1
+            } else {
+                1
+            };
         }
         if self.byte_size != op2.byte_size {
-            return if self.byte_size < op2.byte_size { -1 } else { 1 };
+            return if self.byte_size < op2.byte_size {
+                -1
+            } else {
+                1
+            };
         }
         if self.least_sig_bit != op2.least_sig_bit {
             return if self.least_sig_bit < op2.least_sig_bit {
@@ -521,8 +528,7 @@ impl BitFieldNodeState {
         fld: &crate::dtype::TypeBitField,
     ) -> BitFieldNodeState {
         let field_bits = fld.bits();
-        let field_is_int =
-            fld.field_type.get_metatype() == type_metatype::TYPE_INT;
+        let field_is_int = fld.field_type.get_metatype() == type_metatype::TYPE_INT;
         let bits_field = BitRange::in_container(&field_bits, used.byte_offset, used.byte_size);
         let orig_least_sig_bit = bits_field.least_sig_bit;
         let is_sign_extended = field_is_int && bits_field.is_most_significant();
@@ -542,7 +548,12 @@ impl BitFieldNodeState {
     /// The C++ initializer is
     /// `bitsField(used.byteOffset,used.byteSize,leastSig,numBits,used.isBigEndian)`;
     /// `field` is null and `isSignExtended` is `false`.
-    pub fn hole(used: &BitRange, vn: VarnodeId, least_sig: int4, num_bits: int4) -> BitFieldNodeState {
+    pub fn hole(
+        used: &BitRange,
+        vn: VarnodeId,
+        least_sig: int4,
+        num_bits: int4,
+    ) -> BitFieldNodeState {
         let bits_field = BitRange::new(
             used.byte_offset,
             used.byte_size,
@@ -605,8 +616,7 @@ impl BitFieldNodeState {
     pub fn does_sign_extension_match(&self) -> bool {
         match &self.field {
             FieldRef::Field(f) => {
-                self.is_sign_extended
-                    == (f.field_type.get_metatype() == type_metatype::TYPE_INT)
+                self.is_sign_extended == (f.field_type.get_metatype() == type_metatype::TYPE_INT)
             }
             FieldRef::Hole => false,
         }
@@ -670,8 +680,7 @@ impl BitFieldTransform {
         } else if meta == type_metatype::TYPE_PARTIALSTRUCT {
             // (`getParent` returns the `container`, which is `get_partial_base` for a
             // partial-struct; `getOffset` is `get_partial_offset`.)
-            if let (Some(parent), Some(part_off)) =
-                (dt.get_partial_base(), dt.get_partial_offset())
+            if let (Some(parent), Some(part_off)) = (dt.get_partial_base(), dt.get_partial_offset())
             {
                 if parent.get_metatype() == type_metatype::TYPE_STRUCT {
                     initial_offset = off + part_off;
@@ -736,8 +745,12 @@ impl BitFieldTransform {
             if field_pos > pos {
                 // We have a hole.
                 if follow_holes {
-                    self.work_list
-                        .push(BitFieldNodeState::hole(&bitrange, vn, pos, field_pos - pos));
+                    self.work_list.push(BitFieldNodeState::hole(
+                        &bitrange,
+                        vn,
+                        pos,
+                        field_pos - pos,
+                    ));
                 }
                 pos = field_pos;
             }
@@ -757,8 +770,12 @@ impl BitFieldTransform {
         }
         if pos < vn_bit_size && follow_holes {
             // Final hole.
-            self.work_list
-                .push(BitFieldNodeState::hole(&bitrange, vn, pos, vn_bit_size - pos));
+            self.work_list.push(BitFieldNodeState::hole(
+                &bitrange,
+                vn,
+                pos,
+                vn_bit_size - pos,
+            ));
         }
     }
 }
@@ -842,17 +859,23 @@ impl Rule for RuleBitFieldStore {
             Some(v) => v,
             None => return 0,
         };
-        if data.vbank().get(vn).map(|v| v.is_written()).unwrap_or(false) {
+        if data
+            .vbank()
+            .get(vn)
+            .map(|v| v.is_written())
+            .unwrap_or(false)
+        {
             let def = data.vbank().get(vn).unwrap().get_def().unwrap();
             if data.obank().get(def).map(|o| o.code()) == Some(OpCode::CPUI_INSERT) {
                 return 0;
             }
         }
         let big_endian = bitfield_big_endian(data);
-        let mut transform = match insert::BitFieldInsertTransform::new(data, op, &dt, off, big_endian) {
-            Some(t) => t,
-            None => return 0,
-        };
+        let mut transform =
+            match insert::BitFieldInsertTransform::new(data, op, &dt, off, big_endian) {
+                Some(t) => t,
+                None => return 0,
+            };
         if !transform.do_trace(data) {
             return 0;
         }
@@ -889,7 +912,8 @@ impl Rule for RuleBitFieldOut {
             return 0;
         }
         let big_endian = bitfield_big_endian(data);
-        let mut transform = match insert::BitFieldInsertTransform::new(data, op, &dt, 0, big_endian) {
+        let mut transform = match insert::BitFieldInsertTransform::new(data, op, &dt, 0, big_endian)
+        {
             Some(t) => t,
             None => return 0,
         };
@@ -929,7 +953,12 @@ impl Rule for RuleBitFieldLoad {
         if !dt.has_bitfields() {
             return 0;
         }
-        if data.obank().get(op).map(|o| o.not_printed()).unwrap_or(true) {
+        if data
+            .obank()
+            .get(op)
+            .map(|o| o.not_printed())
+            .unwrap_or(true)
+        {
             return 0; // LOAD visited before
         }
         let out = match data.obank().get(op).and_then(|o| o.get_out()) {
@@ -937,7 +966,8 @@ impl Rule for RuleBitFieldLoad {
             None => return 0,
         };
         let big_endian = bitfield_big_endian(data);
-        let mut transform = match pull::BitFieldPullTransform::new(data, out, &dt, off, big_endian) {
+        let mut transform = match pull::BitFieldPullTransform::new(data, out, &dt, off, big_endian)
+        {
             Some(t) => t,
             None => return 0,
         };
@@ -1060,12 +1090,30 @@ impl Rule for RuleInsertAbsorb {
 /// real stage group when it places them.
 pub fn specs() -> Vec<RuleSpec> {
     vec![
-        RuleSpec { group: "", ctor: || Box::new(RuleBitFieldStore) },
-        RuleSpec { group: "", ctor: || Box::new(RuleBitFieldOut) },
-        RuleSpec { group: "", ctor: || Box::new(RuleBitFieldLoad) },
-        RuleSpec { group: "", ctor: || Box::new(RuleBitFieldIn) },
-        RuleSpec { group: "", ctor: || Box::new(RulePullAbsorb) },
-        RuleSpec { group: "", ctor: || Box::new(RuleInsertAbsorb) },
+        RuleSpec {
+            group: "",
+            ctor: || Box::new(RuleBitFieldStore),
+        },
+        RuleSpec {
+            group: "",
+            ctor: || Box::new(RuleBitFieldOut),
+        },
+        RuleSpec {
+            group: "",
+            ctor: || Box::new(RuleBitFieldLoad),
+        },
+        RuleSpec {
+            group: "",
+            ctor: || Box::new(RuleBitFieldIn),
+        },
+        RuleSpec {
+            group: "",
+            ctor: || Box::new(RulePullAbsorb),
+        },
+        RuleSpec {
+            group: "",
+            ctor: || Box::new(RuleInsertAbsorb),
+        },
     ]
 }
 

@@ -132,7 +132,11 @@ fn generic_powerpc_failure_explains_the_explicit_isa_override() {
             )
             .unwrap();
             // A big-endian image that declares ELFv2 takes the ELFv2 compiler spec.
-            let compiler = if name == "BE" && abi == 2 { "elfv2" } else { "default" };
+            let compiler = if name == "BE" && abi == 2 {
+                "elfv2"
+            } else {
+                "default"
+            };
             assert_eq!(
                 loader.get_arch_type(),
                 format!("{generic}:{compiler}").as_bytes()

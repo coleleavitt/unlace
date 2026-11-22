@@ -58,7 +58,11 @@ impl fmt::Display for NrvError {
                 write!(f, "block decoded to {got} bytes, header declared {want}")
             }
             NrvError::InputNotConsumed { got, want } => {
-                write!(f, "block left {} of {want} compressed bytes unread", want.saturating_sub(*got))
+                write!(
+                    f,
+                    "block left {} of {want} compressed bytes unread",
+                    want.saturating_sub(*got)
+                )
             }
         }
     }
@@ -185,10 +189,16 @@ pub fn decompress(
     }
 
     if dst.len() != u_len {
-        return Err(NrvError::Truncated { got: dst.len(), want: u_len });
+        return Err(NrvError::Truncated {
+            got: dst.len(),
+            want: u_len,
+        });
     }
     if bits.consumed() != src.len() {
-        return Err(NrvError::InputNotConsumed { got: bits.consumed(), want: src.len() });
+        return Err(NrvError::InputNotConsumed {
+            got: bits.consumed(),
+            want: src.len(),
+        });
     }
     Ok(dst)
 }
@@ -206,7 +216,13 @@ struct BitReader<'a> {
 
 impl<'a> BitReader<'a> {
     fn new(src: &'a [u8], order: BitOrder) -> Self {
-        BitReader { src, ilen: 0, bb: 0, bc: 0, order }
+        BitReader {
+            src,
+            ilen: 0,
+            bb: 0,
+            bc: 0,
+            order,
+        }
     }
 
     fn consumed(&self) -> usize {
@@ -276,8 +292,13 @@ mod tests {
                 .join("tests/fixtures/upx_packed_x86_64"),
         )
         .expect("fixture");
-        let out = decompress(Variant::Nrv2b, BitOrder::Le32, &image[0x10c..0x10c + 226], 792)
-            .expect("first block decodes");
+        let out = decompress(
+            Variant::Nrv2b,
+            BitOrder::Le32,
+            &image[0x10c..0x10c + 226],
+            792,
+        )
+        .expect("first block decodes");
         assert_eq!(out.len(), 792);
         assert_eq!(&out[..8], b"\x7fELF\x02\x01\x01\x00");
         assert_eq!(&out[8..16], &[0u8; 8]);
@@ -299,7 +320,9 @@ mod tests {
     /// an error: silently truncating would be a corrupt image.
     #[test]
     fn a_declared_length_that_is_too_small_is_rejected() {
-        let src = [0xf6, 0xfb, 0x21, 0xff, 0x7f, 0x45, 0x4c, 0x46, 0x02, 0x01, 0x01, 0x00];
+        let src = [
+            0xf6, 0xfb, 0x21, 0xff, 0x7f, 0x45, 0x4c, 0x46, 0x02, 0x01, 0x01, 0x00,
+        ];
         assert!(matches!(
             decompress(Variant::Nrv2b, BitOrder::Le32, &src, 4),
             Err(NrvError::OutputOverrun)

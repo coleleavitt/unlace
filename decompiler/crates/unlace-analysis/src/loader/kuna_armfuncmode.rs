@@ -66,11 +66,19 @@ pub fn arm_func_mode_paints(file: &object::File) -> Vec<ContextPaint> {
         .filter(|sym| sym.kind() == SymbolKind::Text && sym.is_definition() && sym.address() != 0)
         .filter_map(|sym| {
             let index = sym.section_index()?;
-            Some((sym.address(), sym.size(), index, executable_end(file, index)?))
+            Some((
+                sym.address(),
+                sym.size(),
+                index,
+                executable_end(file, index)?,
+            ))
         })
         .collect();
-    let thumb: BTreeSet<u64> =
-        functions.iter().filter(|(addr, ..)| addr & 1 != 0).map(|(addr, ..)| addr & !1).collect();
+    let thumb: BTreeSet<u64> = functions
+        .iter()
+        .filter(|(addr, ..)| addr & 1 != 0)
+        .map(|(addr, ..)| addr & !1)
+        .collect();
     let Some(&first_thumb) = thumb.first() else {
         return Vec::new();
     };
@@ -101,10 +109,22 @@ pub fn arm_func_mode_paints(file: &object::File) -> Vec<ContextPaint> {
             .section_by_index(index)
             .ok()
             .and_then(|section| Some((section.address(), section.data().ok()?)))
-            .map_or(end, |(base, data)| a32_reach(data, base, little, addr, end, limit, &noreturn));
-        paints.push(ContextPaint { addr, end: Some(end), var: TMODE, value: 0 });
+            .map_or(end, |(base, data)| {
+                a32_reach(data, base, little, addr, end, limit, &noreturn)
+            });
+        paints.push(ContextPaint {
+            addr,
+            end: Some(end),
+            var: TMODE,
+            value: 0,
+        });
         if end < next_start(addr) {
-            paints.push(ContextPaint { addr: end, end: None, var: TMODE, value: 1 });
+            paints.push(ContextPaint {
+                addr: end,
+                end: None,
+                var: TMODE,
+                value: 1,
+            });
         }
     }
     paints
@@ -130,7 +150,11 @@ fn a32_reach(
     let word = |at: u64| -> Option<u32> {
         let offset = usize::try_from(at.checked_sub(base)?).ok()?;
         let bytes: [u8; 4] = data.get(offset..offset.checked_add(4)?)?.try_into().ok()?;
-        Some(if little { u32::from_le_bytes(bytes) } else { u32::from_be_bytes(bytes) })
+        Some(if little {
+            u32::from_le_bytes(bytes)
+        } else {
+            u32::from_be_bytes(bytes)
+        })
     };
     let target = |at: u64, insn: u32| -> Option<u64> {
         if insn >> 28 == 0xF || (insn >> 25) & 7 != 0b101 {
@@ -145,7 +169,12 @@ fn a32_reach(
         }
         let pc = at.checked_add(8)?;
         let imm = u64::from(insn & 0xFFF);
-        if insn & (1 << 23) != 0 { pc.checked_add(imm) } else { pc.checked_sub(imm) }.map(|lit| lit & !3)
+        if insn & (1 << 23) != 0 {
+            pc.checked_add(imm)
+        } else {
+            pc.checked_sub(imm)
+        }
+        .map(|lit| lit & !3)
     };
     let stops = |at: u64, insn: u32| {
         insn >> 28 == 0xE
@@ -154,7 +183,8 @@ fn a32_reach(
                 || (insn & 0x0FFF_8000) == 0x08BD_8000
                 || insn == 0xE49D_F004
                 || insn == 0xE1A0_F00E
-                || ((insn >> 24) & 0xF == 0b1011 && target(at, insn).is_some_and(|to| noreturn.contains(&to))))
+                || ((insn >> 24) & 0xF == 0b1011
+                    && target(at, insn).is_some_and(|to| noreturn.contains(&to))))
     };
     let mut pool: BTreeSet<u64> = BTreeSet::new();
     let mut at = addr & !3;
@@ -178,7 +208,12 @@ fn a32_reach(
         at += 4;
     }
     while let Some(start) = queue.pop() {
-        if start < end || start >= limit || start & 3 != 0 || walked.contains(&start) || pool.contains(&start) {
+        if start < end
+            || start >= limit
+            || start & 3 != 0
+            || walked.contains(&start)
+            || pool.contains(&start)
+        {
             continue;
         }
         let mut run: BTreeSet<u64> = BTreeSet::new();
@@ -187,7 +222,11 @@ fn a32_reach(
         let mut at = start;
         let mut stopped = false;
         while at < limit {
-            if pool.contains(&at) || run_pool.contains(&at) || walked.contains(&at) || !run.insert(at) {
+            if pool.contains(&at)
+                || run_pool.contains(&at)
+                || walked.contains(&at)
+                || !run.insert(at)
+            {
                 stopped = true;
                 break;
             }
@@ -225,7 +264,10 @@ impl AnalysisPass for ArmFuncModePass {
     }
 
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
-        AnalysisOutput { context_paints: arm_func_mode_paints(ctx.file), ..AnalysisOutput::default() }
+        AnalysisOutput {
+            context_paints: arm_func_mode_paints(ctx.file),
+            ..AnalysisOutput::default()
+        }
     }
 }
 
@@ -253,7 +295,10 @@ mod tests {
     fn a_direct_a32_branch_past_the_extent_keeps_its_target_a32() {
         let paints = paints("arm_funcmode_helper_o2_le32.so");
         let a32 = paints.iter().find(|(addr, ..)| *addr == 0x101f8).copied();
-        assert!(a32.is_some_and(|(_, end, value)| value == 0 && end.is_some_and(|end| end > 0x1020c)), "{paints:x?}");
+        assert!(
+            a32.is_some_and(|(_, end, value)| value == 0 && end.is_some_and(|end| end > 0x1020c)),
+            "{paints:x?}"
+        );
     }
 
     #[test]

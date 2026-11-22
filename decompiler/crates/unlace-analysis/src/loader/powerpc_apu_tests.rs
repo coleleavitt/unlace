@@ -1,7 +1,7 @@
 use super::kuna_ppcaputarget::{language_id_when, notes_when};
 use crate::loadimage_object::ObjectLoadImage;
+use object::{Architecture, BinaryFormat, Endianness, FileFlags, SectionKind, write::Object};
 use unlace_sleigh::loadimage::LoadImage;
-use object::{write::Object, Architecture, BinaryFormat, Endianness, FileFlags, SectionKind};
 
 fn image(arch: Architecture, little: bool, flags: u32, apus: Option<&[u32]>) -> Vec<u8> {
     let endian = if little {

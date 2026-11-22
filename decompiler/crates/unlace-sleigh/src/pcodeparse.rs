@@ -19,7 +19,7 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use unlace_base::space::{spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::Wrap;
 use unlace_num::opcodes::OpCode;
 
@@ -169,10 +169,7 @@ impl SnippetSymbol {
 ///
 /// Returns `None` for the kinds that have no `getVarnode()` (Space/UserOp);
 /// the grammar never calls `getVarnode()` on those.
-pub fn get_varnode_tpl(
-    sym: &SnippetSymbol,
-    constant_space: &Rc<AddrSpace>,
-) -> Option<VarnodeTpl> {
+pub fn get_varnode_tpl(sym: &SnippetSymbol, constant_space: &Rc<AddrSpace>) -> Option<VarnodeTpl> {
     match sym {
         // C++ VarnodeSymbol::getVarnode:
         //   new VarnodeTpl(ConstTpl(fix.space),ConstTpl(real,fix.offset),
@@ -307,52 +304,190 @@ struct IdentRec {
 /// C++ `PcodeLexer::idents[]` — the **sorted** keyword/operator table.
 /// `findIdentifier` binary-searches it (the order must stay byte-sorted).
 const IDENTS: &[IdentRec] = &[
-    IdentRec { nm: b"!=", tok: || Token::NotEqual },
-    IdentRec { nm: b"&&", tok: || Token::BoolAnd },
-    IdentRec { nm: b"<<", tok: || Token::Left },
-    IdentRec { nm: b"<=", tok: || Token::Lessequal },
-    IdentRec { nm: b"==", tok: || Token::Equal },
-    IdentRec { nm: b">=", tok: || Token::Greatequal },
-    IdentRec { nm: b">>", tok: || Token::Right },
-    IdentRec { nm: b"^^", tok: || Token::BoolXor },
-    IdentRec { nm: b"||", tok: || Token::BoolOr },
-    IdentRec { nm: b"abs", tok: || Token::Abs },
-    IdentRec { nm: b"borrow", tok: || Token::Borrow },
-    IdentRec { nm: b"call", tok: || Token::CallKey },
-    IdentRec { nm: b"carry", tok: || Token::Carry },
-    IdentRec { nm: b"ceil", tok: || Token::Ceil },
-    IdentRec { nm: b"f!=", tok: || Token::Fnotequal },
-    IdentRec { nm: b"f*", tok: || Token::Fmult },
-    IdentRec { nm: b"f+", tok: || Token::Fadd },
-    IdentRec { nm: b"f-", tok: || Token::Fsub },
-    IdentRec { nm: b"f/", tok: || Token::Fdiv },
-    IdentRec { nm: b"f<", tok: || Token::Fless },
-    IdentRec { nm: b"f<=", tok: || Token::Flessequal },
-    IdentRec { nm: b"f==", tok: || Token::Fequal },
-    IdentRec { nm: b"f>", tok: || Token::Fgreat },
-    IdentRec { nm: b"f>=", tok: || Token::Fgreatequal },
-    IdentRec { nm: b"float2float", tok: || Token::Float2float },
-    IdentRec { nm: b"floor", tok: || Token::Floor },
-    IdentRec { nm: b"goto", tok: || Token::GotoKey },
-    IdentRec { nm: b"if", tok: || Token::IfKey },
-    IdentRec { nm: b"int2float", tok: || Token::Int2float },
-    IdentRec { nm: b"local", tok: || Token::LocalKey },
-    IdentRec { nm: b"nan", tok: || Token::Nan },
-    IdentRec { nm: b"return", tok: || Token::ReturnKey },
-    IdentRec { nm: b"round", tok: || Token::Round },
-    IdentRec { nm: b"s%", tok: || Token::Srem },
-    IdentRec { nm: b"s/", tok: || Token::Sdiv },
-    IdentRec { nm: b"s<", tok: || Token::Sless },
-    IdentRec { nm: b"s<=", tok: || Token::Slessequal },
-    IdentRec { nm: b"s>", tok: || Token::Sgreat },
-    IdentRec { nm: b"s>=", tok: || Token::Sgreatequal },
-    IdentRec { nm: b"s>>", tok: || Token::Sright },
-    IdentRec { nm: b"sborrow", tok: || Token::Sborrow },
-    IdentRec { nm: b"scarry", tok: || Token::Scarry },
-    IdentRec { nm: b"sext", tok: || Token::Sext },
-    IdentRec { nm: b"sqrt", tok: || Token::Sqrt },
-    IdentRec { nm: b"trunc", tok: || Token::Trunc },
-    IdentRec { nm: b"zext", tok: || Token::Zext },
+    IdentRec {
+        nm: b"!=",
+        tok: || Token::NotEqual,
+    },
+    IdentRec {
+        nm: b"&&",
+        tok: || Token::BoolAnd,
+    },
+    IdentRec {
+        nm: b"<<",
+        tok: || Token::Left,
+    },
+    IdentRec {
+        nm: b"<=",
+        tok: || Token::Lessequal,
+    },
+    IdentRec {
+        nm: b"==",
+        tok: || Token::Equal,
+    },
+    IdentRec {
+        nm: b">=",
+        tok: || Token::Greatequal,
+    },
+    IdentRec {
+        nm: b">>",
+        tok: || Token::Right,
+    },
+    IdentRec {
+        nm: b"^^",
+        tok: || Token::BoolXor,
+    },
+    IdentRec {
+        nm: b"||",
+        tok: || Token::BoolOr,
+    },
+    IdentRec {
+        nm: b"abs",
+        tok: || Token::Abs,
+    },
+    IdentRec {
+        nm: b"borrow",
+        tok: || Token::Borrow,
+    },
+    IdentRec {
+        nm: b"call",
+        tok: || Token::CallKey,
+    },
+    IdentRec {
+        nm: b"carry",
+        tok: || Token::Carry,
+    },
+    IdentRec {
+        nm: b"ceil",
+        tok: || Token::Ceil,
+    },
+    IdentRec {
+        nm: b"f!=",
+        tok: || Token::Fnotequal,
+    },
+    IdentRec {
+        nm: b"f*",
+        tok: || Token::Fmult,
+    },
+    IdentRec {
+        nm: b"f+",
+        tok: || Token::Fadd,
+    },
+    IdentRec {
+        nm: b"f-",
+        tok: || Token::Fsub,
+    },
+    IdentRec {
+        nm: b"f/",
+        tok: || Token::Fdiv,
+    },
+    IdentRec {
+        nm: b"f<",
+        tok: || Token::Fless,
+    },
+    IdentRec {
+        nm: b"f<=",
+        tok: || Token::Flessequal,
+    },
+    IdentRec {
+        nm: b"f==",
+        tok: || Token::Fequal,
+    },
+    IdentRec {
+        nm: b"f>",
+        tok: || Token::Fgreat,
+    },
+    IdentRec {
+        nm: b"f>=",
+        tok: || Token::Fgreatequal,
+    },
+    IdentRec {
+        nm: b"float2float",
+        tok: || Token::Float2float,
+    },
+    IdentRec {
+        nm: b"floor",
+        tok: || Token::Floor,
+    },
+    IdentRec {
+        nm: b"goto",
+        tok: || Token::GotoKey,
+    },
+    IdentRec {
+        nm: b"if",
+        tok: || Token::IfKey,
+    },
+    IdentRec {
+        nm: b"int2float",
+        tok: || Token::Int2float,
+    },
+    IdentRec {
+        nm: b"local",
+        tok: || Token::LocalKey,
+    },
+    IdentRec {
+        nm: b"nan",
+        tok: || Token::Nan,
+    },
+    IdentRec {
+        nm: b"return",
+        tok: || Token::ReturnKey,
+    },
+    IdentRec {
+        nm: b"round",
+        tok: || Token::Round,
+    },
+    IdentRec {
+        nm: b"s%",
+        tok: || Token::Srem,
+    },
+    IdentRec {
+        nm: b"s/",
+        tok: || Token::Sdiv,
+    },
+    IdentRec {
+        nm: b"s<",
+        tok: || Token::Sless,
+    },
+    IdentRec {
+        nm: b"s<=",
+        tok: || Token::Slessequal,
+    },
+    IdentRec {
+        nm: b"s>",
+        tok: || Token::Sgreat,
+    },
+    IdentRec {
+        nm: b"s>=",
+        tok: || Token::Sgreatequal,
+    },
+    IdentRec {
+        nm: b"s>>",
+        tok: || Token::Sright,
+    },
+    IdentRec {
+        nm: b"sborrow",
+        tok: || Token::Sborrow,
+    },
+    IdentRec {
+        nm: b"scarry",
+        tok: || Token::Scarry,
+    },
+    IdentRec {
+        nm: b"sext",
+        tok: || Token::Sext,
+    },
+    IdentRec {
+        nm: b"sqrt",
+        tok: || Token::Sqrt,
+    },
+    IdentRec {
+        nm: b"trunc",
+        tok: || Token::Trunc,
+    },
+    IdentRec {
+        nm: b"zext",
+        tok: || Token::Zext,
+    },
 ];
 
 /// C++ `PcodeLexer`: the snippet lexer. Reads bytes from an in-memory buffer
@@ -896,10 +1031,7 @@ impl<'a> PcodeSnippet<'a> {
         if self.tree.contains_key(name) {
             self.report_error(
                 None,
-                &format!(
-                    "Duplicate symbol name: {}",
-                    String::from_utf8_lossy(name)
-                ),
+                &format!("Duplicate symbol name: {}", String::from_utf8_lossy(name)),
             );
             return;
         }
@@ -1400,7 +1532,9 @@ impl<'p, 'l, 's> Parser<'p, 'l, 's> {
             // specificsymbol can also start `varnode ':' INTEGER '='`
             //   (illegal-truncation) and `varnode '(' INTEGER ')'`
             //   (illegal-subpiece) error productions.
-            Token::VarSym(_) | Token::OperandSym(_) | Token::JumpSym(_) => self.parse_lhs_statement(),
+            Token::VarSym(_) | Token::OperandSym(_) | Token::JumpSym(_) => {
+                self.parse_lhs_statement()
+            }
             // STRING-leading statements (the temporary-declaration / unknown-
             // varnode forms):
             //   STRING '=' expr ';'
@@ -1433,7 +1567,10 @@ impl<'p, 'l, 's> Parser<'p, 'l, 's> {
             return None;
         }
         // createOpNoOut(CPUI_BRANCH, new ExprTree(jumpdest))
-        Some(self.pcode.create_op_no_out(OpCode::CPUI_BRANCH, ExprTree::new(jd)))
+        Some(
+            self.pcode
+                .create_op_no_out(OpCode::CPUI_BRANCH, ExprTree::new(jd)),
+        )
     }
 
     /// `CALL_KEY jumpdest ';' | CALL_KEY '[' expr ']' ';'`
@@ -1454,7 +1591,10 @@ impl<'p, 'l, 's> Parser<'p, 'l, 's> {
         if !self.expect_char(b';') {
             return None;
         }
-        Some(self.pcode.create_op_no_out(OpCode::CPUI_CALL, ExprTree::new(jd)))
+        Some(
+            self.pcode
+                .create_op_no_out(OpCode::CPUI_CALL, ExprTree::new(jd)),
+        )
     }
 
     /// `RETURN_KEY ';'  (error) | RETURN_KEY '[' expr ']' ';'`
@@ -1492,7 +1632,10 @@ impl<'p, 'l, 's> Parser<'p, 'l, 's> {
             return None;
         }
         // createOpNoOut(CPUI_CBRANCH, new ExprTree(jumpdest), cond)
-        Some(self.pcode.create_op_no_out2(OpCode::CPUI_CBRANCH, ExprTree::new(jd), cond))
+        Some(
+            self.pcode
+                .create_op_no_out2(OpCode::CPUI_CBRANCH, ExprTree::new(jd), cond),
+        )
     }
 
     /// lhsvarnode-leading statements. `lhsvarnode: specificsymbol`. Also the
@@ -1535,7 +1678,10 @@ impl<'p, 'l, 's> Parser<'p, 'l, 's> {
             if !self.expect_char(b';') {
                 return None;
             }
-            match self.pcode.assign_bit_range(vn, off as u32, nbits as u32, rhs) {
+            match self
+                .pcode
+                .assign_bit_range(vn, off as u32, nbits as u32, rhs)
+            {
                 Ok(ops) => return Some(ops),
                 Err(_) => {
                     self.failed = true;
@@ -2080,11 +2226,10 @@ impl<'p, 'l, 's> Parser<'p, 'l, 's> {
                 return None;
             }
             let symvn = specificsymbol_varnode(&sym, &constspace);
-            return Some(self.pcode.create_op2(
-                OpCode::CPUI_SUBPIECE,
-                ExprTree::new(symvn),
-                iv,
-            ));
+            return Some(
+                self.pcode
+                    .create_op2(OpCode::CPUI_SUBPIECE, ExprTree::new(symvn), iv),
+            );
         }
         if self.is_char(b':') {
             self.advance();
@@ -2255,8 +2400,7 @@ fn specificsymbol_varnode(tok: &Token, constspace: &Rc<AddrSpace>) -> VarnodeTpl
         Token::VarSym(s) | Token::OperandSym(s) | Token::JumpSym(s) => s,
         _ => unreachable!("specificsymbol_varnode on a non-symbol token"),
     };
-    get_varnode_tpl(sym, constspace)
-        .expect("specificsymbol has no getVarnode (internal invariant)")
+    get_varnode_tpl(sym, constspace).expect("specificsymbol has no getVarnode (internal invariant)")
 }
 
 /// `$2->getName()` for a specificsymbol terminal — the declared symbol name,

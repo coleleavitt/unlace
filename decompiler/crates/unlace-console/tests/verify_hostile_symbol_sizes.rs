@@ -41,12 +41,15 @@ use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture(name: &str) -> String {
@@ -80,11 +83,17 @@ fn load(name: &str) -> Loaded {
     prog.commit_pending_analysis()
         .unwrap_or_else(|e| panic!("`read symbols` must survive `{name}`: {}", e.explain()));
 
-    let names: Vec<String> =
-        prog.function_entries().map(|(n, _)| n.to_string()).collect();
+    let names: Vec<String> = prog
+        .function_entries()
+        .map(|(n, _)| n.to_string())
+        .collect();
 
-    let cmds: Vec<String> =
-        ["load function main".into(), "decompile".into(), "print C".into()].to_vec();
+    let cmds: Vec<String> = [
+        "load function main".into(),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .to_vec();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -96,7 +105,10 @@ fn load(name: &str) -> Loaded {
     for _ in 0..count {
         execute(&mut status);
     }
-    Loaded { code: status.optr.clone(), names }
+    Loaded {
+        code: status.optr.clone(),
+        names,
+    }
 }
 
 /// Every fixture is the same two-line program (`main` returns `g_a`) and differs

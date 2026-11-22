@@ -91,7 +91,10 @@ pub const SWI_USEROP: &str = "swi";
 /// `windows` (MSVC) and `clangwindows` (clang-cl), both of which emit `__fastfail`.
 /// Borland's two predate it and are not accepted.
 pub fn archid_is_windows(archid: &str) -> bool {
-    matches!(archid.rsplit(':').next(), Some("windows") | Some("clangwindows"))
+    matches!(
+        archid.rsplit(':').next(),
+        Some("windows") | Some("clangwindows")
+    )
 }
 
 /// Is `op` the `CALLIND` half of a Windows `int 0x29` (`__fastfail`)?

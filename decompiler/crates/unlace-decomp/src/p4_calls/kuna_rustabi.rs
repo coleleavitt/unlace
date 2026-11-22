@@ -144,7 +144,7 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
-use unlace_base::space::{spacetype, VarnodeStorage};
+use unlace_base::space::{VarnodeStorage, spacetype};
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
@@ -210,7 +210,13 @@ pub fn parse_rust_abi_mode(p1: &str) -> KunaResult<(RustAbiMode, String)> {
         "always" => RustAbiMode::Always,
         _ => return Err(KunaError::parse("Must specify off, auto or always")),
     };
-    Ok((mode, format!("Rust return-ABI pair recovery set to {} form", mode.as_str())))
+    Ok((
+        mode,
+        format!(
+            "Rust return-ABI pair recovery set to {} form",
+            mode.as_str()
+        ),
+    ))
 }
 
 /// Is the Rust return-ABI rule live for this function?
@@ -258,7 +264,9 @@ pub fn classify_return_pair(data: &Funcdata, second: VarnodeId, first: VarnodeId
 /// [`crate::kuna_returnuncomputed`] exists to drop. Asking here as well keeps
 /// this rule from holding a pair alive for the phantom-killer to have to undo.
 fn carries_a_payload(data: &Funcdata, vn: VarnodeId) -> bool {
-    let Some(v) = data.vbank().get(vn) else { return false };
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
     if v.is_constant() {
         return true;
     }
@@ -276,7 +284,9 @@ fn carries_a_payload(data: &Funcdata, vn: VarnodeId) -> bool {
 /// and `and $0x1,%eax`, which is how rustc materializes a two-variant tag at
 /// `-C opt-level=2`; the first catches the branchy `mov $0` / `mov $1` form.
 fn is_discriminant_shaped(data: &Funcdata, vn: VarnodeId) -> bool {
-    let Some(v) = data.vbank().get(vn) else { return false };
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
     if v.is_constant() {
         return v.get_offset() <= DISCRIMINANT_MASK;
     }
@@ -296,7 +306,9 @@ fn traces_to_incoming_pointer(data: &Funcdata, vn: VarnodeId, depth: u32) -> boo
     if depth >= MAX_DEPTH {
         return false;
     }
-    let Some(v) = data.vbank().get(vn) else { return false };
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
     let Some(def) = v.get_def() else {
         // An unwritten Varnode in input-parameter storage, pointer-sized.
         if !v.is_input() {
@@ -308,13 +320,17 @@ fn traces_to_incoming_pointer(data: &Funcdata, vn: VarnodeId, depth: u32) -> boo
         }
         return data.get_func_proto().possible_input_param(&addr, size);
     };
-    let Some(op) = data.obank().get(def) else { return false };
+    let Some(op) = data.obank().get(def) else {
+        return false;
+    };
     let inputs: Vec<VarnodeId> = match op.code() {
         OpCode::CPUI_COPY | OpCode::CPUI_INDIRECT => op.get_in(0).into_iter().collect(),
         OpCode::CPUI_MULTIEQUAL => (0..op.num_input()).filter_map(|i| op.get_in(i)).collect(),
         _ => return false,
     };
-    inputs.into_iter().any(|i| traces_to_incoming_pointer(data, i, depth + 1))
+    inputs
+        .into_iter()
+        .any(|i| traces_to_incoming_pointer(data, i, depth + 1))
 }
 
 /// Does `vn` hold a recovered register pair that must survive intact?
@@ -333,11 +349,15 @@ pub fn holds_scalar_pair(data: &Funcdata, vn: VarnodeId) -> bool {
     if !live(data) {
         return false;
     }
-    let Some(v) = data.vbank().get(vn) else { return false };
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
     if !v.get_addr().is_join() {
         return false;
     }
-    let Some((hi, lo)) = pair_pieces(data, vn, 0) else { return false };
+    let Some((hi, lo)) = pair_pieces(data, vn, 0) else {
+        return false;
+    };
     let high_first = crate::kuna_bejoin::first_register_holds_high(data, vn);
     let (second, first) = if high_first { (lo, hi) } else { (hi, lo) };
     classify_return_pair(data, second, first) == ReturnRepr::ScalarPair
@@ -415,8 +435,14 @@ impl CalleeReturnWrites {
         if !self.complete {
             return false;
         }
-        let Some(sp) = addr.get_space() else { return false };
-        let (idx, off, end) = (sp.get_index(), addr.get_offset(), addr.get_offset() + size as u64);
+        let Some(sp) = addr.get_space() else {
+            return false;
+        };
+        let (idx, off, end) = (
+            sp.get_index(),
+            addr.get_offset(),
+            addr.get_offset() + size as u64,
+        );
         if self.store_spaces.contains(&idx) {
             return false;
         }
@@ -435,8 +461,14 @@ impl CalleeReturnWrites {
     /// ones: a value an earlier call's argument left in `r1` that survives a
     /// leaf reaches the next call as a value the caller wrote, and the caller-side
     /// argument recovery reads it as one more argument than the callee takes.
-    pub fn proves_untouched_for(&self, model: Option<&crate::fspec::ProtoModel>, addr: &Address, size: int4) -> bool {
-        self.proves_untouched(addr, size) && !(self.through_mode_switch && passes_arguments_in(model, addr, size))
+    pub fn proves_untouched_for(
+        &self,
+        model: Option<&crate::fspec::ProtoModel>,
+        addr: &Address,
+        size: int4,
+    ) -> bool {
+        self.proves_untouched(addr, size)
+            && !(self.through_mode_switch && passes_arguments_in(model, addr, size))
     }
 
     /// The processor-space ranges the walk recorded before it stopped, as
@@ -479,9 +511,9 @@ impl CalleeReturnWrites {
     /// says nothing about the body, even where a compiler spec lists it as
     /// preserved.
     pub fn is_return_target(&self, idx: int4, off: u64, sz: int4) -> bool {
-        self.return_targets
-            .iter()
-            .any(|&(ridx, roff, rsz)| ridx == idx && roff < off + sz as u64 && off < roff + rsz as u64)
+        self.return_targets.iter().any(|&(ridx, roff, rsz)| {
+            ridx == idx && roff < off + sz as u64 && off < roff + rsz as u64
+        })
     }
 
     /// Assemble a summary from its parts, for tests that pin a seam's reading of
@@ -553,9 +585,15 @@ impl CalleeReturnWrites {
 /// `[addr, addr+size)`?  Asked of the model, not of one prototype: the reader
 /// at risk is the NEXT call, whose own prototype is not known here.  No model,
 /// or one with no input list, answers yes.
-pub fn passes_arguments_in(model: Option<&crate::fspec::ProtoModel>, addr: &Address, size: int4) -> bool {
+pub fn passes_arguments_in(
+    model: Option<&crate::fspec::ProtoModel>,
+    addr: &Address,
+    size: int4,
+) -> bool {
     match model.and_then(|m| m.input_opt()) {
-        Some(input) => input.characterize_as_param(addr, size) != crate::fspec::Containment::NoContainment,
+        Some(input) => {
+            input.characterize_as_param(addr, size) != crate::fspec::Containment::NoContainment
+        }
         None => true,
     }
 }
@@ -594,7 +632,10 @@ struct ProbeEmit {
     writes: Vec<(int4, u64, int4)>,
     return_targets: Vec<(int4, u64, int4)>,
     store_spaces: Vec<int4>,
-    loads: Vec<(unlace_num::pcoderaw::VarnodeData, unlace_num::pcoderaw::VarnodeData)>,
+    loads: Vec<(
+        unlace_num::pcoderaw::VarnodeData,
+        unlace_num::pcoderaw::VarnodeData,
+    )>,
     return_inputs: Vec<unlace_num::pcoderaw::VarnodeData>,
     targets: Vec<Address>,
     ends_flow: bool,
@@ -615,24 +656,39 @@ struct ProbeEmit {
 }
 
 impl ProbeEmit {
-    fn same_storage(a: &unlace_num::pcoderaw::VarnodeData, b: &unlace_num::pcoderaw::VarnodeData) -> bool {
-        a.offset == b.offset && a.size == b.size
-            && a.space.as_ref().zip(b.space.as_ref()).is_some_and(|(a,b)| a.get_index() == b.get_index())
+    fn same_storage(
+        a: &unlace_num::pcoderaw::VarnodeData,
+        b: &unlace_num::pcoderaw::VarnodeData,
+    ) -> bool {
+        a.offset == b.offset
+            && a.size == b.size
+            && a.space
+                .as_ref()
+                .zip(b.space.as_ref())
+                .is_some_and(|(a, b)| a.get_index() == b.get_index())
     }
 
     fn return_only_memory_reads(&self, stack: &[unlace_num::pcoderaw::VarnodeData]) -> bool {
-        self.loads.len() == 1 && self.loads.first().is_some_and(|(out,ptr)| {
-            self.return_inputs.iter().any(|target| Self::same_storage(out,target))
-                && stack.iter().any(|sp| Self::same_storage(ptr,sp) && out.size == sp.size)
-        })
+        self.loads.len() == 1
+            && self.loads.first().is_some_and(|(out, ptr)| {
+                self.return_inputs
+                    .iter()
+                    .any(|target| Self::same_storage(out, target))
+                    && stack
+                        .iter()
+                        .any(|sp| Self::same_storage(ptr, sp) && out.size == sp.size)
+            })
     }
 
     fn changes_stack_outside_return(&self, stack: &[unlace_num::pcoderaw::VarnodeData]) -> bool {
-        self.return_inputs.is_empty() && self.writes.iter().any(|&(idx,off,size)| {
-            stack.iter().any(|sp| sp.space.as_ref().is_some_and(|s| s.get_index() == idx)
-                && off < sp.offset.saturating_add(u64::from(sp.size))
-                && sp.offset < off.saturating_add(size as u64))
-        })
+        self.return_inputs.is_empty()
+            && self.writes.iter().any(|&(idx, off, size)| {
+                stack.iter().any(|sp| {
+                    sp.space.as_ref().is_some_and(|s| s.get_index() == idx)
+                        && off < sp.offset.saturating_add(u64::from(sp.size))
+                        && sp.offset < off.saturating_add(size as u64)
+                })
+            })
     }
 
     fn resolve_calls(&mut self, no_return: &impl Fn(&Address) -> bool) -> Vec<(Address, bool)> {
@@ -671,7 +727,9 @@ impl ProbeEmit {
         outvar: Option<&unlace_num::pcoderaw::VarnodeData>,
         vars: &[unlace_num::pcoderaw::VarnodeData],
     ) -> bool {
-        let Some(swi) = self.fastfail_swi else { return false };
+        let Some(swi) = self.fastfail_swi else {
+            return false;
+        };
         if vars.len() != 2 || self.const_value(&vars[0]) != Some(swi as u64) {
             return false;
         }
@@ -751,20 +809,24 @@ impl unlace_sleigh::translate::PcodeEmit for ProbeEmit {
                     self.unresolved = true;
                 }
             }
-            OpCode::CPUI_CALL => {
-                match vars.first().and_then(|v| v.space.as_ref()) {
-                    Some(sp) if sp.get_type() == spacetype::IPTR_PROCESSOR => {
-                        self.calls.push(Address::new(Rc::clone(sp), vars[0].offset));
-                    }
-                    _ => self.unresolved = true,
+            OpCode::CPUI_CALL => match vars.first().and_then(|v| v.space.as_ref()) {
+                Some(sp) if sp.get_type() == spacetype::IPTR_PROCESSOR => {
+                    self.calls.push(Address::new(Rc::clone(sp), vars[0].offset));
                 }
-            }
+                _ => self.unresolved = true,
+            },
             OpCode::CPUI_BRANCHIND => self.unresolved = true,
             OpCode::CPUI_RETURN => {
                 self.ends_flow = true;
-                if let Some(v) = vars.first() { self.return_inputs.push(v.clone()); }
                 if let Some(v) = vars.first() {
-                    if let Some(sp) = v.space.as_ref().filter(|sp| sp.get_type() == spacetype::IPTR_PROCESSOR) {
+                    self.return_inputs.push(v.clone());
+                }
+                if let Some(v) = vars.first() {
+                    if let Some(sp) = v
+                        .space
+                        .as_ref()
+                        .filter(|sp| sp.get_type() == spacetype::IPTR_PROCESSOR)
+                    {
                         let target = (sp.get_index(), v.offset, v.size as int4);
                         if self.writes.contains(&target) {
                             self.return_targets.push(target);
@@ -777,7 +839,9 @@ impl unlace_sleigh::translate::PcodeEmit for ProbeEmit {
             OpCode::CPUI_LOAD => {
                 if let (Some(out), Some(ptr)) = (outvar, vars.get(1)) {
                     self.loads.push((out.clone(), ptr.clone()));
-                } else { self.unresolved = true; }
+                } else {
+                    self.unresolved = true;
+                }
             }
             OpCode::CPUI_STORE => {
                 if let Some(v) = vars.first() {
@@ -794,7 +858,8 @@ impl unlace_sleigh::translate::PcodeEmit for ProbeEmit {
                         self.internal_branch = true;
                     }
                     Some(sp) => {
-                        self.targets.push(Address::new(Rc::clone(sp), vars[0].offset));
+                        self.targets
+                            .push(Address::new(Rc::clone(sp), vars[0].offset));
                         if opc == OpCode::CPUI_BRANCH {
                             self.ends_flow = true;
                         }
@@ -847,7 +912,8 @@ pub fn probe_callee_return_writes<T: unlace_sleigh::translate::Translate + ?Size
         res.complete = false;
         return res;
     }
-    let return_stack: Vec<_> = ["ESP", "RSP"].iter()
+    let return_stack: Vec<_> = ["ESP", "RSP"]
+        .iter()
         .filter_map(|name| tr.probe_register(name))
         .map(|storage| unlace_sleigh::translate::varnode_data_from_storage(&storage))
         .collect();
@@ -879,7 +945,8 @@ pub fn probe_callee_return_writes<T: unlace_sleigh::translate::Translate + ?Size
                 break;
             }
         };
-        res.reads_nonreturn_memory |= !emit.loads.is_empty() && !emit.return_only_memory_reads(&return_stack);
+        res.reads_nonreturn_memory |=
+            !emit.loads.is_empty() && !emit.return_only_memory_reads(&return_stack);
         res.writes_stack_outside_return |= emit.changes_stack_outside_return(&return_stack);
         res.call_facts.extend(emit.resolve_calls(&no_return));
         res.instructions += 1;
@@ -950,9 +1017,10 @@ pub fn classify_call_output_pair(
     if finalvn.len() != 2 {
         return CallPairRepr::Scalar;
     }
-    let (Some((first_addr, first_size)), Some((second_addr, second_size))) =
-        (register_piece(data, finalvn[0]), register_piece(data, finalvn[1]))
-    else {
+    let (Some((first_addr, first_size)), Some((second_addr, second_size))) = (
+        register_piece(data, finalvn[0]),
+        register_piece(data, finalvn[1]),
+    ) else {
         return CallPairRepr::Scalar;
     };
     // Two halves of one value are two DIFFERENT, non-overlapping registers.
@@ -969,7 +1037,13 @@ pub fn classify_call_output_pair(
     // The second register's half has to be read; a pair nothing consumes is not
     // worth forming and its INDIRECT creation would simply be replaced by a dead
     // one.
-    if data.vbank().get(finalvn[1]).map(|v| v.num_descend()).unwrap_or(0) == 0 {
+    if data
+        .vbank()
+        .get(finalvn[1])
+        .map(|v| v.num_descend())
+        .unwrap_or(0)
+        == 0
+    {
         return CallPairRepr::Scalar;
     }
     // The one piece of callee evidence this seam can obtain: a bounded decode of
@@ -1007,10 +1081,7 @@ pub fn seed_callee_return_writes(
 /// [`seed_callee_return_writes`] and
 /// [`crate::p4_calls::kuna_calleepreserves::seed_callee_preserves`], and the
 /// per-image cache means whichever runs first pays for the decode.
-pub fn seed_callee_write_probe(
-    arch: &mut crate::architecture::Architecture,
-    data: &mut Funcdata,
-) {
+pub fn seed_callee_write_probe(arch: &mut crate::architecture::Architecture, data: &mut Funcdata) {
     let userops = ProbeUserOps {
         fastfail_swi: fastfail_swi_userop(arch),
         mode_switch: arch
@@ -1029,9 +1100,13 @@ pub fn seed_callee_write_probe(
     for e in entries {
         let Some(sp) = e.get_space() else { continue };
         let key = (sp.get_index(), e.get_offset());
-        let no_return = |target: &Address| crate::p4_calls::kuna_calleenoreturn::is_no_return(arch, target);
-        let reusable = arch.kuna_callee_write_cache.get(&key)
-            .is_some_and(|w| w.call_facts.iter().all(|(target, terminal)| no_return(target) == *terminal));
+        let no_return =
+            |target: &Address| crate::p4_calls::kuna_calleenoreturn::is_no_return(arch, target);
+        let reusable = arch.kuna_callee_write_cache.get(&key).is_some_and(|w| {
+            w.call_facts
+                .iter()
+                .all(|(target, terminal)| no_return(target) == *terminal)
+        });
         if !reusable {
             let probed = probe_callee_return_writes(arch.translate(), &e, userops, no_return);
             arch.kuna_callee_write_cache.insert(key, Rc::new(probed));
@@ -1090,12 +1165,17 @@ pub fn build_call_output_pair(
         return false;
     }
     let (lo, hi) = (finalvn[order.0 as usize], finalvn[order.1 as usize]);
-    let Some((lo_addr, lo_size)) = register_piece(data, lo) else { return false };
-    let Some((hi_addr, hi_size)) = register_piece(data, hi) else { return false };
+    let Some((lo_addr, lo_size)) = register_piece(data, lo) else {
+        return false;
+    };
+    let Some((hi_addr, hi_size)) = register_piece(data, hi) else {
+        return false;
+    };
     let Some(call_addr) = data.obank().get(callop).map(|o| o.get_addr().clone()) else {
         return false;
     };
-    let Some(joinaddr) = pair_join_address(data, &hi_addr, hi_size, &lo_addr, lo_size, &call_addr) else {
+    let Some(joinaddr) = pair_join_address(data, &hi_addr, hi_size, &lo_addr, lo_size, &call_addr)
+    else {
         return false;
     };
     let Ok(whole) = data.new_varnode_out(hi_size + lo_size, &joinaddr, callop) else {
@@ -1141,25 +1221,46 @@ pub fn pair_join_address(
 ) -> Option<Address> {
     let manage = data.get_arch().manage.clone();
     let rl = manage.register_lookup()?;
-    let addr = manage.construct_join_address(rl.as_ref(), hi, hi_size, lo, lo_size).ok()?;
+    let addr = manage
+        .construct_join_address(rl.as_ref(), hi, hi_size, lo, lo_size)
+        .ok()?;
     if addr.is_join() || !crate::kuna_bejoin::live(data) {
         return Some(addr);
     }
     let persist = crate::varnode::varnode_flags::persist;
-    if data.get_arch().query_global_properties(&addr, hi_size + lo_size, usepoint) & persist == 0 {
+    if data
+        .get_arch()
+        .query_global_properties(&addr, hi_size + lo_size, usepoint)
+        & persist
+        == 0
+    {
         return Some(addr);
     }
     let pieces = [
-        VarnodeStorage { space: hi.get_space().cloned(), offset: hi.get_offset(), size: hi_size as u32 },
-        VarnodeStorage { space: lo.get_space().cloned(), offset: lo.get_offset(), size: lo_size as u32 },
+        VarnodeStorage {
+            space: hi.get_space().cloned(),
+            offset: hi.get_offset(),
+            size: hi_size as u32,
+        },
+        VarnodeStorage {
+            space: lo.get_space().cloned(),
+            offset: lo.get_offset(),
+            size: lo_size as u32,
+        },
     ];
-    manage.find_add_join(&pieces, 0).ok().map(|j| j.get_unified().get_addr())
+    manage
+        .find_add_join(&pieces, 0)
+        .ok()
+        .map(|j| j.get_unified().get_addr())
 }
 
 /// The pointer width of this architecture (the default code space's address
 /// size), or `None` when the manager has no default code space.
 fn pointer_size(data: &Funcdata) -> Option<int4> {
-    data.get_arch().manage.get_default_code_space().map(|s| s.get_addr_size() as int4)
+    data.get_arch()
+        .manage
+        .get_default_code_space()
+        .map(|s| s.get_addr_size() as int4)
 }
 
 /// The (address, size) of a Varnode that is a plain register piece defined by an

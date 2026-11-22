@@ -17,11 +17,16 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Bootstrap the C++ fixture, commit the DWARF facts, decompile `func` and return
@@ -33,7 +38,8 @@ fn decompile(func: &str) -> String {
 
     let path = root
         .join("decompiler/crates/unlace-analysis/tests/fixtures/cppproto_x86_64")
-        .to_str().expect("UTF-8 fixture path")
+        .to_str()
+        .expect("UTF-8 fixture path")
         .to_string();
     let mut prog = bootstrap_from_object(&path, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
@@ -41,11 +47,18 @@ fn decompile(func: &str) -> String {
     // DWARF arm alone: `cppsig` reads the same shapes off the mangled symbol.
     // Their interaction — DWARF wins where both reach a function — is asserted in
     // `verify_cppsig.rs`.
-    prog.arch_mut().set_kuna_option("cppsig", "off").expect("cppsig is a registered option");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.arch_mut()
+        .set_kuna_option("cppsig", "off")
+        .expect("cppsig is a registered option");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
-    let cmds: Vec<String> =
-        [format!("load function {func}"), "decompile".into(), "print C".into()].to_vec();
+    let cmds: Vec<String> = [
+        format!("load function {func}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .to_vec();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);

@@ -58,7 +58,13 @@ fn a_pointer_table_with_printable_entries_round_trips() {
         for cc in &compilers {
             for level in ["-O0", "-O2"] {
                 let out = Command::new(cc)
-                    .args(["-std=gnu11", "-w", level, "-fno-strict-aliasing", "-DPTRSLOT_HARNESS"])
+                    .args([
+                        "-std=gnu11",
+                        "-w",
+                        level,
+                        "-fno-strict-aliasing",
+                        "-DPTRSLOT_HARNESS",
+                    ])
                     .args(common::CC_GCC15_DEMOTE)
                     .arg("-o")
                     .arg(&exe)
@@ -90,11 +96,21 @@ fn a_pointer_table_with_printable_entries_round_trips() {
 #[test]
 fn a_pointer_table_at_a_printable_base_is_not_a_string() {
     let fixture = "ptrslot_gcc_O1_i386";
-    let (printed, stderr, code) =
-        common::run_kuna(&["decompile-all", &common::fixture(fixture), "--functions", FUNCS]);
+    let (printed, stderr, code) = common::run_kuna(&[
+        "decompile-all",
+        &common::fixture(fixture),
+        "--functions",
+        FUNCS,
+    ]);
     assert_eq!(code, 0, "{fixture}: {stderr}");
-    assert!(!printed.contains('"'), "{fixture}: the table prints as a string literal:\n{printed}");
+    assert!(
+        !printed.contains('"'),
+        "{fixture}: the table prints as a string literal:\n{printed}"
+    );
     for want in ["tbl[a0])()", "pick(tbl,a0);", "*a0 = (unsigned int)tbl;"] {
-        assert!(printed.contains(want), "{fixture}: missing `{want}`:\n{printed}");
+        assert!(
+            printed.contains(want),
+            "{fixture}: missing `{want}`:\n{printed}"
+        );
     }
 }

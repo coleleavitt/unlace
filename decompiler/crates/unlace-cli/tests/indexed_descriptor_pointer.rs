@@ -207,10 +207,17 @@ API float send_heap(__UINTPTR_TYPE__ heap){Descriptor d;d.character.length=4;d.c
     };
     let (_, _, first) = build(0);
     let (entry, consumer, arena) = build(first + 64);
-    assert_eq!(arena, first, "arena moved when its address became a constant");
+    assert_eq!(
+        arena, first,
+        "arena moved when its address became a constant"
+    );
     let wide = target.starts_with("x86_64");
     let name = if wide { "send_heap" } else { "_send_heap" };
-    let word = if wide { "unsigned long long" } else { "unsigned int" };
+    let word = if wide {
+        "unsigned long long"
+    } else {
+        "unsigned int"
+    };
     let output = root.join("out");
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
     cmd.arg("decompile-project")
@@ -219,7 +226,17 @@ API float send_heap(__UINTPTR_TYPE__ heap){Descriptor d;d.character.length=4;d.c
         .arg(&output)
         .arg("--sleighpath")
         .arg(common::repo_root().join("specs"))
-        .args(["--option", "stackviews", "on", "--option", "realtypes", "on", "--option", "ctypes", "on"])
+        .args([
+            "--option",
+            "stackviews",
+            "on",
+            "--option",
+            "realtypes",
+            "on",
+            "--option",
+            "ctypes",
+            "on",
+        ])
         .arg("--assert-strict");
     for fact in [
         format!("prototype 0x{entry:x} float __cdecl send_heap({word} heap)"),

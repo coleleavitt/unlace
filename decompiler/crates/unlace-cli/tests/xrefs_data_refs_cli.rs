@@ -24,7 +24,11 @@ fn xrefs(args: &[&str]) -> String {
         .args(args)
         .output()
         .expect("run unlace xrefs");
-    assert!(out.status.success(), "unlace xrefs {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "unlace xrefs {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     String::from_utf8_lossy(&out.stdout).into_owned()
 }
 
@@ -53,7 +57,10 @@ fn a_stored_function_pointer_is_a_pointer_row() {
         assert_eq!(row["source"], "chained-fixups");
 
         let label = json(&[&fixture(name), "--to", "0x100000440"]);
-        assert_eq!(label["data_refs"][0]["from_address_hex"], "0x100004000", "{name}: audit_label_ptr");
+        assert_eq!(
+            label["data_refs"][0]["from_address_hex"], "0x100004000",
+            "{name}: audit_label_ptr"
+        );
     }
 }
 
@@ -64,9 +71,15 @@ fn a_stored_function_pointer_is_a_pointer_row() {
 fn kind_filters_pointer_rows() {
     let bin = fixture("macho_ptrslots_offset_arm64");
     let only = json(&[&bin, "--to", "_audit_target", "--kind", "pointer"]);
-    assert_eq!((only["count"].as_u64(), only["data_refs_count"].as_u64()), (Some(0), Some(1)));
+    assert_eq!(
+        (only["count"].as_u64(), only["data_refs_count"].as_u64()),
+        (Some(0), Some(1))
+    );
     let calls = json(&[&bin, "--to", "_audit_target", "--kind", "call"]);
-    assert_eq!((calls["count"].as_u64(), calls["data_refs_count"].as_u64()), (Some(1), Some(0)));
+    assert_eq!(
+        (calls["count"].as_u64(), calls["data_refs_count"].as_u64()),
+        (Some(1), Some(0))
+    );
     let text = xrefs(&[&bin, "--to", "_audit_target"]);
     assert!(
         text.contains("# 1 data-held pointer to _audit_target @ 0x1000003c8 (chained-fixups)\n0x100004008\tpointer\t"),
@@ -78,11 +91,18 @@ fn kind_filters_pointer_rows() {
 /// pointers in rebase opcodes; a non-PIE ELF lists none and says so.
 #[test]
 fn coverage_is_reported_per_image() {
-    let slot = json(&[&fixture("macho_ptrslots_offset_arm64"), "--from", "0x100004008"]);
+    let slot = json(&[
+        &fixture("macho_ptrslots_offset_arm64"),
+        "--from",
+        "0x100004008",
+    ]);
     assert_eq!(slot["data_refs"][0]["to_address_hex"], "0x1000003c8");
     let classic = json(&[&fixture("macho_objc"), "--to", "0x100003000"]);
     assert_eq!(classic["data_refs_coverage"], "rebase-opcodes");
-    assert_eq!(classic["data_refs"][0]["from_address_hex"], "0x100002000", "the __objc_classlist entry");
+    assert_eq!(
+        classic["data_refs"][0]["from_address_hex"], "0x100002000",
+        "the __objc_classlist entry"
+    );
     let plain = json(&[&fixture("fauxware"), "--to", "main"]);
     assert_eq!(plain["data_refs_coverage"], "none");
     assert_eq!(plain["data_refs_count"], 0);
@@ -106,14 +126,34 @@ fn a_shared_objects_exported_function_table_is_listed() {
 fn an_x86_operand_is_the_instructions_row_and_a_text_table_is_a_pointer() {
     let exe = fixture("dataptrs_textptr_i386.exe");
     let rows = |doc: &serde_json::Value| -> Vec<String> {
-        doc["data_refs"].as_array().unwrap().iter().map(|r| r["from_address_hex"].as_str().unwrap().to_string()).collect()
+        doc["data_refs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["from_address_hex"].as_str().unwrap().to_string())
+            .collect()
     };
     let dispatch = json(&[&exe, "--to", "0x401013"]);
     assert_eq!(dispatch["data_refs_coverage"], "base-relocations");
-    assert_eq!(rows(&dispatch), ["0x401058", "0x403004"], "the mov's operand 0x40104f is not a pointer row: {dispatch}");
-    assert!(dispatch["xrefs"].as_array().unwrap().iter().any(|r| r["from_address_hex"] == "0x40104e"), "{dispatch}");
+    assert_eq!(
+        rows(&dispatch),
+        ["0x401058", "0x403004"],
+        "the mov's operand 0x40104f is not a pointer row: {dispatch}"
+    );
+    assert!(
+        dispatch["xrefs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["from_address_hex"] == "0x40104e"),
+        "{dispatch}"
+    );
     let helper = json(&[&exe, "--to", "0x40104e"]);
-    assert_eq!(rows(&helper), ["0x401054", "0x403000"], "the push's operand 0x401001 is not a pointer row: {helper}");
+    assert_eq!(
+        rows(&helper),
+        ["0x401054", "0x403000"],
+        "the push's operand 0x401001 is not a pointer row: {helper}"
+    );
 }
 
 /// A copy of fixture `name` with `patch` applied, under cargo's scratch
@@ -189,7 +229,12 @@ fn an_unreadable_base_relocation_directory_makes_the_list_partial() {
     let broken = patched("dataptrs_textptr_i386.exe", |bytes| {
         let pe = u32::from_le_bytes(bytes[0x3c..0x40].try_into().unwrap()) as usize;
         let optional = pe + 24;
-        let directories = optional + if bytes[optional..optional + 2] == [0x0b, 0x02] { 112 } else { 96 };
+        let directories = optional
+            + if bytes[optional..optional + 2] == [0x0b, 0x02] {
+                112
+            } else {
+                96
+            };
         let basereloc = directories + 5 * 8;
         bytes[basereloc..basereloc + 4].copy_from_slice(&0x7fff_0000u32.to_le_bytes());
     });
@@ -197,7 +242,10 @@ fn an_unreadable_base_relocation_directory_makes_the_list_partial() {
     assert_eq!(doc["data_refs_coverage"], "partial", "{doc}");
     assert_eq!(doc["data_refs_count"], 0, "{doc}");
     let reason = doc["data_refs_reason"].as_str().unwrap_or_default();
-    assert!(reason.starts_with("the base-relocation directory (RVA 0x7fff0000,"), "{doc}");
+    assert!(
+        reason.starts_with("the base-relocation directory (RVA 0x7fff0000,"),
+        "{doc}"
+    );
 }
 
 /// Metadata kuna does not read is `unsupported`, not `none`: a MIPS image's
@@ -207,14 +255,29 @@ fn an_unreadable_base_relocation_directory_makes_the_list_partial() {
 fn metadata_kuna_does_not_read_is_unsupported() {
     let mips = json(&[&fixture("mipsstubs_noreturn_el.so"), "--to", "say"]);
     assert_eq!(mips["data_refs_coverage"], "unsupported", "{mips}");
-    assert!(mips["data_refs_reason"].as_str().unwrap_or_default().starts_with("MIPS"), "{mips}");
+    assert!(
+        mips["data_refs_reason"]
+            .as_str()
+            .unwrap_or_default()
+            .starts_with("MIPS"),
+        "{mips}"
+    );
     let text = xrefs(&[&fixture("mipsstubs_noreturn_el.so"), "--to", "say"]);
-    assert!(text.contains("# data-held pointers to say @ 0x494 not listed (unsupported: MIPS"), "{text}");
+    assert!(
+        text.contains("# data-held pointers to say @ 0x494 not listed (unsupported: MIPS"),
+        "{text}"
+    );
     let object = json(&[&fixture("armfloatargs_calls_arm-O0.o"), "--to", "k7"]);
     assert_eq!(object["data_refs_coverage"], "unsupported", "{object}");
     let plain = json(&[&fixture("fauxware"), "--to", "main"]);
     assert_eq!(plain["data_refs_coverage"], "none");
-    assert!(plain["data_refs_reason"].as_str().unwrap_or_default().contains("ET_EXEC"), "{plain}");
+    assert!(
+        plain["data_refs_reason"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("ET_EXEC"),
+        "{plain}"
+    );
 }
 
 /// Packed `SHT_RELR` relocations list their slots like any `RELATIVE` one.
@@ -223,7 +286,10 @@ fn relr_relocations_are_pointer_rows() {
     let doc = json(&[&fixture("relr_so_x86_64.so"), "--to", "0x1010"]);
     assert_eq!(doc["data_refs_coverage"], "dynamic-relocations", "{doc}");
     assert_eq!(doc["data_refs_count"], 1, "{doc}");
-    assert_eq!(doc["data_refs"][0]["from_address_hex"], "0x4038", "exported_tab[1]: {doc}");
+    assert_eq!(
+        doc["data_refs"][0]["from_address_hex"], "0x4038",
+        "exported_tab[1]: {doc}"
+    );
 }
 
 /// An image of a kernel collection or dyld shared cache (`MH_DYLIB_IN_CACHE`)
@@ -236,12 +302,32 @@ fn a_cache_images_pointers_are_unsupported_not_none() {
     let cache = fixture("dyld_cache_arm64e/dyld_shared_cache_arm64e");
     let queries: [&[&str]; 3] = [
         &[&collection, "--to", "0xfffffe0007007840"],
-        &[&collection, "--to", "0xfffffe0007007840", "--option", "kernelcache", "com.example.driver.PMGR"],
-        &[&cache, "--to", "0x180002800", "--option", "dyldimage", "libcaller.dylib"],
+        &[
+            &collection,
+            "--to",
+            "0xfffffe0007007840",
+            "--option",
+            "kernelcache",
+            "com.example.driver.PMGR",
+        ],
+        &[
+            &cache,
+            "--to",
+            "0x180002800",
+            "--option",
+            "dyldimage",
+            "libcaller.dylib",
+        ],
     ];
     for args in queries {
         let doc = json(args);
         assert_eq!(doc["data_refs_coverage"], "unsupported", "{args:?}: {doc}");
-        assert!(doc["data_refs_reason"].as_str().unwrap_or_default().contains("MH_DYLIB_IN_CACHE"), "{doc}");
+        assert!(
+            doc["data_refs_reason"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("MH_DYLIB_IN_CACHE"),
+            "{doc}"
+        );
     }
 }

@@ -25,15 +25,22 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture(name: &str) -> PathBuf {
-    repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(name)
+    repo_root()
+        .join("decompiler/crates/unlace-analysis/tests/fixtures")
+        .join(name)
 }
 
 /// Bootstrap a fixture and drive `load function <fn>` -> `decompile` -> `print C`,
@@ -58,7 +65,11 @@ fn decompile_c_with(fixture_name: &str, func: &str, pre_options: &[&str]) -> Str
         .expect("bootstrap fixture with built processor specs");
 
     let mut cmds: Vec<String> = pre_options.iter().map(|s| s.to_string()).collect();
-    cmds.extend([format!("load function {func}"), "decompile".into(), "print C".into()]);
+    cmds.extend([
+        format!("load function {func}"),
+        "decompile".into(),
+        "print C".into(),
+    ]);
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -150,8 +161,11 @@ fn dwarf_lines_annotate_source_locations() {
     // surviving op to hang on and `CommentSorter` excises it (the same reason
     // cet_pie's write-once locals never render, see the typed-signature test). We
     // assert a body line (124) that maps to a surviving statement instead.
-    let on =
-        decompile_c_with("cet_pie_x86_64", "elaborate_debug_symbol", &["option dwarf_lines on"]);
+    let on = decompile_c_with(
+        "cet_pie_x86_64",
+        "elaborate_debug_symbol",
+        &["option dwarf_lines on"],
+    );
     assert!(
         on.contains("elaborate_debug_symbol"),
         "expected the function name in the output, got:\n{on}"

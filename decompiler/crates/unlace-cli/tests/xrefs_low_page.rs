@@ -25,7 +25,10 @@ fn rows(binary: &str, direction: &str, target: &str) -> Vec<(String, String, u64
         .map(|r| {
             (
                 r["kind"].as_str().unwrap().to_owned(),
-                r["from_function"]["name"].as_str().unwrap_or("-").to_owned(),
+                r["from_function"]["name"]
+                    .as_str()
+                    .unwrap_or("-")
+                    .to_owned(),
                 r["from_address"].as_u64().unwrap(),
                 r["to_address"].as_u64().unwrap(),
             )
@@ -43,41 +46,80 @@ fn an_adrp_pair_into_a_dylibs_first_page_is_a_reference() {
     let bin = "lowpage_macho_arm64";
     let target = rows(bin, "--to", "_audit_target");
     assert!(has(&target, "call", "_audit_direct"), "{target:?}");
-    assert!(target.iter().any(|(k, f, at, _)| k == "data" && f == "_audit_address" && *at == 0x398), "{target:?}");
-    assert!(has(&target, "data", "_audit_adr"), "adr x0, _audit_target: {target:?}");
+    assert!(
+        target
+            .iter()
+            .any(|(k, f, at, _)| k == "data" && f == "_audit_address" && *at == 0x398),
+        "{target:?}"
+    );
+    assert!(
+        has(&target, "data", "_audit_adr"),
+        "adr x0, _audit_target: {target:?}"
+    );
     let from = rows(bin, "--from", "_audit_address");
-    assert_eq!(from.iter().map(|r| (r.0.as_str(), r.3)).collect::<Vec<_>>(), [("data", 0x378)], "{from:?}");
+    assert_eq!(
+        from.iter().map(|r| (r.0.as_str(), r.3)).collect::<Vec<_>>(),
+        [("data", 0x378)],
+        "{from:?}"
+    );
     let string = rows(bin, "--to", "0x3d4");
-    assert!(has(&string, "data", "_audit_string"), "adrp + add of a __cstring literal: {string:?}");
+    assert!(
+        has(&string, "data", "_audit_string"),
+        "adrp + add of a __cstring literal: {string:?}"
+    );
     let word = rows(bin, "--to", "_audit_word");
-    assert!(has(&word, "read", "_audit_read"), "adrp + ldr of a __TEXT,__const word: {word:?}");
+    assert!(
+        has(&word, "read", "_audit_read"),
+        "adrp + ldr of a __TEXT,__const word: {word:?}"
+    );
 }
 
 #[test]
 fn a_pc_relative_form_into_an_elf_first_page_is_a_reference() {
     let lea = rows("lowpage_x86_64", "--to", "audit_text");
-    assert!(has(&lea, "data", "audit_string"), "lea rax,[rip+...]: {lea:?}");
+    assert!(
+        has(&lea, "data", "audit_string"),
+        "lea rax,[rip+...]: {lea:?}"
+    );
     let table = rows("lowpage_x86_64", "--to", "audit_words");
-    assert!(has(&table, "data", "audit_table"), "lea rcx,[rip+...] before an indexed load: {table:?}");
+    assert!(
+        has(&table, "data", "audit_table"),
+        "lea rcx,[rip+...] before an indexed load: {table:?}"
+    );
     let auipc = rows("lowpage_rv64", "--to", "audit_text");
-    assert!(has(&auipc, "data", "audit_string"), "auipc + addi: {auipc:?}");
+    assert!(
+        has(&auipc, "data", "audit_string"),
+        "auipc + addi: {auipc:?}"
+    );
     let load = rows("lowpage_rv64", "--to", "audit_words");
     assert!(has(&load, "read", "audit_read"), "auipc + lw: {load:?}");
     let gotoff = rows("lowpage_i386", "--to", "audit_text");
-    assert!(has(&gotoff, "data", "audit_string"), "lea eax,[ebx+GOTOFF]: {gotoff:?}");
+    assert!(
+        has(&gotoff, "data", "audit_string"),
+        "lea eax,[ebx+GOTOFF]: {gotoff:?}"
+    );
     let read = rows("lowpage_i386", "--to", "audit_words");
-    assert!(has(&read, "read", "audit_read"), "mov eax,[ebx+GOTOFF]: {read:?}");
+    assert!(
+        has(&read, "read", "audit_read"),
+        "mov eax,[ebx+GOTOFF]: {read:?}"
+    );
 }
 
 #[test]
 fn an_arm_adr_into_a_low_image_is_a_reference() {
     let text = rows("lowpage_arm", "--to", "audit_text");
     assert!(has(&text, "data", "audit_a32"), "A32 adr: {text:?}");
-    assert!(has(&text, "data", "audit_thumb_wide"), "Thumb adr.w: {text:?}");
+    assert!(
+        has(&text, "data", "audit_thumb_wide"),
+        "Thumb adr.w: {text:?}"
+    );
     let words = rows("lowpage_arm", "--to", "audit_words");
     assert!(has(&words, "data", "audit_thumb"), "Thumb adr: {words:?}");
     let field = rows("lowpage_arm", "--to", "0x13c");
-    assert!(has(&field, "read", "audit_thumb"), "Thumb adr + ldr [r0,#4]: {field:?}");
+    assert!(
+        has(&field, "read", "audit_thumb"),
+        "Thumb adr + ldr [r0,#4]: {field:?}"
+    );
 }
 
 /// Each `control_number(s)` builds the addresses the `audit_*` functions form,

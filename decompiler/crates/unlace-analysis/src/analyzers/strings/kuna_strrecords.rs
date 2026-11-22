@@ -58,8 +58,8 @@
 //! commit arm's occupied-address guard, so prefix/suffix sharing renders
 //! through the containing literal.
 
-use object::read::{Object, ObjectSection};
 use object::RelocationFlags;
+use object::read::{Object, ObjectSection};
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase, StringFact};
 
@@ -100,7 +100,12 @@ pub(crate) fn ro_regions<'a>(file: &'a object::File) -> Vec<RoRegion<'a>> {
                 object::SectionKind::ReadOnlyData | object::SectionKind::ReadOnlyString
             ) || s.name().is_ok_and(|n| n == ".data.rel.ro")
         })
-        .filter_map(|s| Some(RoRegion { vma: s.address(), data: s.data().ok()? }))
+        .filter_map(|s| {
+            Some(RoRegion {
+                vma: s.address(),
+                data: s.data().ok()?,
+            })
+        })
         .collect()
 }
 
@@ -109,19 +114,29 @@ pub(crate) fn ro_regions<'a>(file: &'a object::File) -> Vec<RoRegion<'a>> {
 fn go_slot_regions<'a>(file: &'a object::File) -> Vec<RoRegion<'a>> {
     file.sections()
         .filter(|s| s.name().is_ok_and(|n| n == ".data" || n == ".noptrdata"))
-        .filter_map(|s| Some(RoRegion { vma: s.address(), data: s.data().ok()? }))
+        .filter_map(|s| {
+            Some(RoRegion {
+                vma: s.address(),
+                data: s.data().ok()?,
+            })
+        })
         .collect()
 }
 
 /// Is this record text? Valid UTF-8 whose chars are >=90% printable or
 /// whitespace — the engine rule's text-evidence test, applied to exact bytes.
 pub(crate) fn is_text(bytes: &[u8]) -> bool {
-    let Ok(s) = core::str::from_utf8(bytes) else { return false };
+    let Ok(s) = core::str::from_utf8(bytes) else {
+        return false;
+    };
     let total = s.chars().count();
     if total == 0 {
         return false;
     }
-    let good = s.chars().filter(|c| !c.is_control() || c.is_whitespace()).count();
+    let good = s
+        .chars()
+        .filter(|c| !c.is_control() || c.is_whitespace())
+        .count();
     good * 10 >= total * 9
 }
 
@@ -135,7 +150,10 @@ fn record_at(regions: &[RoRegion], ptr: u64, len: u64, min_len: u64) -> Option<S
     if !is_text(bytes) {
         return None;
     }
-    Some(StringFact { addr: ptr, len: len as u32 })
+    Some(StringFact {
+        addr: ptr,
+        len: len as u32,
+    })
 }
 
 /// Read a little-endian pointer-width word.
@@ -151,8 +169,7 @@ pub(crate) fn read_word(bytes: &[u8]) -> u64 {
 /// whose companion `len` word is unrelocated raw bytes.
 fn scan_reloc_records(file: &object::File, regions: &[RoRegion], width: u64) -> Vec<StringFact> {
     let mut out = Vec::new();
-    let Some((r_relative, _, _)) =
-        crate::loader::kuna_dynrelocs::reloc_triple(file.architecture())
+    let Some((r_relative, _, _)) = crate::loader::kuna_dynrelocs::reloc_triple(file.architecture())
     else {
         return out;
     };
@@ -163,7 +180,9 @@ fn scan_reloc_records(file: &object::File, regions: &[RoRegion], width: u64) -> 
     }
     let slots: std::collections::HashSet<u64> = relocs.iter().map(|(off, _)| *off).collect();
     for (off, rel) in &relocs {
-        let RelocationFlags::Elf { r_type } = rel.flags() else { continue };
+        let RelocationFlags::Elf { r_type } = rel.flags() else {
+            continue;
+        };
         if r_type != r_relative {
             continue;
         }
@@ -173,8 +192,12 @@ fn scan_reloc_records(file: &object::File, regions: &[RoRegion], width: u64) -> 
         if slots.contains(&(off + width)) {
             continue;
         }
-        let Some(region) = regions.iter().find(|r| r.contains(*off)) else { continue };
-        let Some(len_bytes) = region.bytes(off + width, width) else { continue };
+        let Some(region) = regions.iter().find(|r| r.contains(*off)) else {
+            continue;
+        };
+        let Some(len_bytes) = region.bytes(off + width, width) else {
+            continue;
+        };
         let len = read_word(len_bytes);
         let target = rel.addend() as u64;
         if let Some(fact) = record_at(regions, target, len, 1) {
@@ -256,7 +279,10 @@ impl AnalysisPass for StrRecordPass {
         // occupied-address guard.
         facts.sort_by_key(|f| (f.addr, core::cmp::Reverse(f.len)));
         facts.dedup_by_key(|f| f.addr);
-        AnalysisOutput { bounded_strings: facts, ..Default::default() }
+        AnalysisOutput {
+            bounded_strings: facts,
+            ..Default::default()
+        }
     }
 }
 
@@ -275,7 +301,9 @@ mod tests {
         assert!(is_text(b"!"));
         assert!(is_text(b"line\nbreak\tok "));
         assert!(!is_text(&[0xff, 0xfe, 0x00, 0x41]));
-        assert!(!is_text(&[0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0b][..]));
+        assert!(!is_text(
+            &[0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0b][..]
+        ));
         assert!(!is_text(b""));
     }
 
@@ -346,9 +374,18 @@ mod tests {
     #[test]
     fn same_start_dedup_keeps_the_longest() {
         let mut facts = vec![
-            StringFact { addr: 0x2000, len: 5 },
-            StringFact { addr: 0x2000, len: 17 },
-            StringFact { addr: 0x2020, len: 4 },
+            StringFact {
+                addr: 0x2000,
+                len: 5,
+            },
+            StringFact {
+                addr: 0x2000,
+                len: 17,
+            },
+            StringFact {
+                addr: 0x2020,
+                len: 4,
+            },
         ];
         facts.sort_by_key(|f| (f.addr, core::cmp::Reverse(f.len)));
         facts.dedup_by_key(|f| f.addr);

@@ -1,5 +1,5 @@
 use super::*;
-use crate::dtype::{type_metatype, TypeFactory, TypeFactoryImpl};
+use crate::dtype::{TypeFactory, TypeFactoryImpl, type_metatype};
 use unlace_base::marshal::{Decoder, PackedDecode, PackedEncode};
 
 #[test]

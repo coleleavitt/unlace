@@ -73,7 +73,10 @@ fn decompile(bin: &str, func: &str, json: bool) -> String {
 #[test]
 fn a_c_symbol_starting_with_r_does_not_select_the_rust_language() {
     let bin = fixture("macho_rustlike_symbol");
-    let (json, body) = (decompile(&bin, "_main", true), decompile(&bin, "_main", false));
+    let (json, body) = (
+        decompile(&bin, "_main", true),
+        decompile(&bin, "_main", false),
+    );
     assert!(
         json.contains("\"language\": \"c-language\""),
         "the image is a C program; got:\n{json}"
@@ -87,7 +90,10 @@ fn a_c_symbol_starting_with_r_does_not_select_the_rust_language() {
         "the C declaration must be emitted; got:\n{body}"
     );
     for absent in ["unsafe fn", "mut a0", "-> u64"] {
-        assert!(!body.contains(absent), "Rust output survived ({absent}):\n{body}");
+        assert!(
+            !body.contains(absent),
+            "Rust output survived ({absent}):\n{body}"
+        );
     }
 }
 
@@ -99,7 +105,10 @@ fn the_rename_changes_nothing_but_the_symbol() {
         decompile(&fixture("macho_rustlike_symbol"), "_main", false),
         decompile(&fixture("macho_imports"), "_main", false),
     );
-    assert_eq!(witness, twin, "the string-table edit moved the decompilation");
+    assert_eq!(
+        witness, twin,
+        "the string-table edit moved the decompilation"
+    );
 }
 
 /// The positive control: a real rustc binary still detects as Rust and still
@@ -107,8 +116,10 @@ fn the_rename_changes_nothing_but_the_symbol() {
 #[test]
 fn a_real_rust_binary_still_reads_as_rust() {
     let bin = fixture("rust_hello_x86_64");
-    let (json, body) =
-        (decompile(&bin, "black_box", true), decompile(&bin, "black_box", false));
+    let (json, body) = (
+        decompile(&bin, "black_box", true),
+        decompile(&bin, "black_box", false),
+    );
     assert!(
         json.contains("\"language\": \"rust-language\""),
         "rustc binaries must still select the Rust language; got:\n{json}"

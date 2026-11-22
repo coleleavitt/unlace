@@ -190,9 +190,8 @@ fn stack_pointer_offset(
     if v.is_constant() {
         return None;
     }
-    let is_sp_storage = Rc::ptr_eq(v.get_space(), &sp.0)
-        && v.get_offset() == sp.1
-        && v.get_size() == sp.2;
+    let is_sp_storage =
+        Rc::ptr_eq(v.get_space(), &sp.0) && v.get_offset() == sp.1 && v.get_size() == sp.2;
     if is_sp_storage || v.is_spacebase() {
         if !v.is_written() {
             return Some(0); // the entry stack pointer itself
@@ -391,7 +390,12 @@ fn cookie_check_op(
         return None;
     }
     if let Some(out) = o.get_out() {
-        if data.vbank().get(out).map(|v| !v.has_no_descend()).unwrap_or(true) {
+        if data
+            .vbank()
+            .get(out)
+            .map(|v| !v.has_no_descend())
+            .unwrap_or(true)
+        {
             return None;
         }
     }
@@ -414,7 +418,9 @@ fn cookie_check_op(
 
 /// The CALL op to strip, with the entry-side scramble ops feeding it.
 fn call_has_locked_void_output(data: &Funcdata, op: OpId) -> bool {
-    let Some(index) = data.get_call_specs_index(op) else { return false };
+    let Some(index) = data.get_call_specs_index(op) else {
+        return false;
+    };
     let proto = data.get_call_specs(index).proto();
     proto.is_output_locked()
         && proto.get_output_type().map(|ty| ty.get_metatype())
@@ -434,7 +440,9 @@ fn cookie_check_calls(
             continue;
         }
         if skip_marked {
-            let Some(callop) = data.obank().get(op) else { continue };
+            let Some(callop) = data.obank().get(op) else {
+                continue;
+            };
             let site = callop.get_addr();
             if data.get_override().is_msvc_cookie_call(site) {
                 continue;
@@ -467,7 +475,10 @@ pub struct ActionStripMsvcStackGuard {
 impl ActionStripMsvcStackGuard {
     /// Construct the action in the given group.
     pub fn new(enabled: bool, g: impl Into<String>) -> ActionStripMsvcStackGuard {
-        ActionStripMsvcStackGuard { base: ActionBase::new(0, "stripmsvcstackguard", g), enabled }
+        ActionStripMsvcStackGuard {
+            base: ActionBase::new(0, "stripmsvcstackguard", g),
+            enabled,
+        }
     }
 }
 
@@ -493,21 +504,35 @@ impl Action for ActionStripMsvcStackGuard {
         if data.num_calls() == 0 {
             return 0;
         }
-        let Some(sp) = stack_pointer_storage(data) else { return 0 };
+        let Some(sp) = stack_pointer_storage(data) else {
+            return 0;
+        };
         let calls = cookie_check_calls(data, &sp, !strip, !strip);
         if !strip {
             if calls.is_empty() {
                 return 0;
             }
             for (op, _) in calls {
-                let site = data.obank().get(op).expect("cookie checker op").get_addr().clone();
+                let site = data
+                    .obank()
+                    .get(op)
+                    .expect("cookie checker op")
+                    .get_addr()
+                    .clone();
                 data.get_override_mut().insert_msvc_cookie_call(site);
             }
             data.set_restart_pending(true);
             return 0;
         }
-        let Some((op, inits)) = calls.into_iter().find(|(op, _)| pop_is_stated(data, *op)) else { return 0 };
-        let site = data.obank().get(op).expect("cookie checker op").get_addr().clone();
+        let Some((op, inits)) = calls.into_iter().find(|(op, _)| pop_is_stated(data, *op)) else {
+            return 0;
+        };
+        let site = data
+            .obank()
+            .get(op)
+            .expect("cookie checker op")
+            .get_addr()
+            .clone();
         if !data.get_override().is_msvc_cookie_call(&site) {
             data.get_override_mut().insert_msvc_cookie_call(site);
             data.set_restart_pending(true);

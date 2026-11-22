@@ -7,21 +7,50 @@ fn decompile(bytes: &[u8], entry: &str, enabled: bool) -> String {
     let path = common::scratch_file("ppc32-call-contract", "elf");
     std::fs::write(&path, bytes).unwrap();
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
-        .args(["decompile", path.to_str().unwrap(), entry, "--mode", "fast", "--option", "voidtailreturn", "off", "--option", "ppc32picimports", if enabled { "on" } else { "off" }])
-        .output().unwrap();
+        .args([
+            "decompile",
+            path.to_str().unwrap(),
+            entry,
+            "--mode",
+            "fast",
+            "--option",
+            "voidtailreturn",
+            "off",
+            "--option",
+            "ppc32picimports",
+            if enabled { "on" } else { "off" },
+        ])
+        .output()
+        .unwrap();
     std::fs::remove_file(path).unwrap();
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     String::from_utf8(out.stdout).unwrap()
 }
 
 #[test]
 fn terminal_calls_do_not_name_shared_stubs() {
     use object::Object;
-    for (plt, little) in [fixture::Plt::Short, fixture::Plt::Long].into_iter().flat_map(|p| [false, true].map(|l| (p,l))) {
+    for (plt, little) in [fixture::Plt::Short, fixture::Plt::Long]
+        .into_iter()
+        .flat_map(|p| [false, true].map(|l| (p, l)))
+    {
         let mut f = fixture::Fixture::new(plt);
         f.little = little;
         f.pic_collision = true;
-        f.caller = Some(vec![if matches!(plt, fixture::Plt::Short) { 0x3bc02800 } else { 0x3fc00002 }, 0x480007fd, 0x38600007, 0x4e800020]);
+        f.caller = Some(vec![
+            if matches!(plt, fixture::Plt::Short) {
+                0x3bc02800
+            } else {
+                0x3fc00002
+            },
+            0x480007fd,
+            0x38600007,
+            0x4e800020,
+        ]);
         let bytes = f.bytes();
         let off = decompile(&bytes, "check", false);
         let on = decompile(&bytes, "check", true);
@@ -42,7 +71,10 @@ fn returning_callers_are_left_unchanged() {
         f.little = little;
         f.pic_collision = true;
         let bytes = f.bytes();
-        assert_eq!(decompile(&bytes, "check", false), decompile(&bytes, "check", true));
+        assert_eq!(
+            decompile(&bytes, "check", false),
+            decompile(&bytes, "check", true)
+        );
     }
 }
 
@@ -52,31 +84,77 @@ fn callback_entries_keep_reachable_returns() {
     for name in ["base-spill", "local-fallthrough", "internal-link"] {
         cases.push((name, "check", "return 7;"));
     }
-    for name in ["indirect-chain", "literal", "literal-halfword", "store-word-halfword", "shift-spill", "stack-bytes", "unproved-stub", "callee-output"] {
+    for name in [
+        "indirect-chain",
+        "literal",
+        "literal-halfword",
+        "store-word-halfword",
+        "shift-spill",
+        "stack-bytes",
+        "unproved-stub",
+        "callee-output",
+    ] {
         cases.push((name, "check2", "return 7;"));
     }
-    for name in ["tail-callback", "callee-callback", "callback-shift", "callback-call-clobber", "unsupported-rfi", "unsupported-tar", "string-store", "split-store", "unaligned-data", "composed-words", "vector-copy", "mapped-data", "note-valid", "resolver", "store-halfword", "stub-interior", "stub-interior-direct", "stub-interior-literal", "byte-composed", "lr-alias-returning"] {
+    for name in [
+        "tail-callback",
+        "callee-callback",
+        "callback-shift",
+        "callback-call-clobber",
+        "unsupported-rfi",
+        "unsupported-tar",
+        "string-store",
+        "split-store",
+        "unaligned-data",
+        "composed-words",
+        "vector-copy",
+        "mapped-data",
+        "note-valid",
+        "resolver",
+        "store-halfword",
+        "stub-interior",
+        "stub-interior-direct",
+        "stub-interior-literal",
+        "byte-composed",
+        "lr-alias-returning",
+    ] {
         cases.push((name, "0x1004", "return;"));
     }
-    cases.extend([("return-export", "0x1014", "return 7;"), ("float-copy", "0x1008", "return;")]);
+    cases.extend([
+        ("return-export", "0x1014", "return 7;"),
+        ("float-copy", "0x1008", "return;"),
+    ]);
     for (name, entry, expected) in cases {
         for little in [false, true] {
             let bytes = fixture::proof_gap(name, little);
             let on = decompile(&bytes, entry, true);
-            assert!(on.contains(expected) && !on.contains("__stack_chk_fail(") && !on.contains("no-return"), "{name} little={little}: {on}");
-            assert_eq!(on, decompile(&bytes, entry, false), "{name} little={little}");
+            assert!(
+                on.contains(expected)
+                    && !on.contains("__stack_chk_fail(")
+                    && !on.contains("no-return"),
+                "{name} little={little}: {on}"
+            );
+            assert_eq!(
+                on,
+                decompile(&bytes, entry, false),
+                "{name} little={little}"
+            );
         }
     }
 }
 
 #[test]
 fn memory_spills_and_computed_returns_are_not_slot_proofs() {
-    let spill = vec![0x7c0802a6,0x9421fff0,0x90010014,0x93c10008,
-        0x3bc02800,0x93c10004,0x3bc02804,0x480007e5,
-        0x83c10004,0x480007dd,0x38600007,0x83c10008,0x80010014,0x38210010,0x7c0803a6,0x4e800020];
-    let dispatch = vec![0x7c0802a6,0x9421ffe0,0x90010024,0x93c10018,
-        0x3bc02804,0x2c030000,0x41820010,0x3800102c,0x7c0803a6,0x4e800020,
-        0x3bc02800,0x480007d5,0x38600007,0x83c10018,0x80010024,0x38210020,0x7c0803a6,0x4e800020];
+    let spill = vec![
+        0x7c0802a6, 0x9421fff0, 0x90010014, 0x93c10008, 0x3bc02800, 0x93c10004, 0x3bc02804,
+        0x480007e5, 0x83c10004, 0x480007dd, 0x38600007, 0x83c10008, 0x80010014, 0x38210010,
+        0x7c0803a6, 0x4e800020,
+    ];
+    let dispatch = vec![
+        0x7c0802a6, 0x9421ffe0, 0x90010024, 0x93c10018, 0x3bc02804, 0x2c030000, 0x41820010,
+        0x3800102c, 0x7c0803a6, 0x4e800020, 0x3bc02800, 0x480007d5, 0x38600007, 0x83c10018,
+        0x80010024, 0x38210020, 0x7c0803a6, 0x4e800020,
+    ];
     for code in [spill, dispatch] {
         for little in [false, true] {
             let mut f = fixture::Fixture::new(fixture::Plt::Short);
@@ -96,7 +174,9 @@ fn direct_indirect_and_tail_calls_use_the_same_slot_proof() {
     for little in [false, true] {
         for code in [
             vec![0x3bc02800, 0x480007fd, 0x38600007, 0x4e800020],
-            vec![0x3bc02800, 0x817e0800, 0x7d6903a6, 0x4e800421, 0x38600007, 0x4e800020],
+            vec![
+                0x3bc02800, 0x817e0800, 0x7d6903a6, 0x4e800421, 0x38600007, 0x4e800020,
+            ],
             vec![0x3bc02800, 0x817e0800, 0x7d6903a6, 0x4e800420],
             vec![0x3bc02800, 0x480007fc],
         ] {
@@ -105,7 +185,10 @@ fn direct_indirect_and_tail_calls_use_the_same_slot_proof() {
             f.pic_collision = true;
             f.caller = Some(code.clone());
             let on = decompile(&f.bytes(), "check", true);
-            assert!(on.contains("__stack_chk_fail("), "little={little}, code={code:x?}: {on}");
+            assert!(
+                on.contains("__stack_chk_fail("),
+                "little={little}, code={code:x?}: {on}"
+            );
             assert!(!on.contains("return 7;"), "{on}");
         }
     }
@@ -117,11 +200,14 @@ fn shared_call_instruction_is_scoped_to_its_entry() {
         let mut f = fixture::Fixture::new(fixture::Plt::Short);
         f.little = little;
         f.pic_collision = true;
-        f.caller = Some(vec![0x3bc02800,0x480007fd,0x38600007,0x4e800020]);
+        f.caller = Some(vec![0x3bc02800, 0x480007fd, 0x38600007, 0x4e800020]);
         let bytes = f.bytes();
         assert!(decompile(&bytes, "check", true).contains("__stack_chk_fail("));
         let interior = decompile(&bytes, "0x1004", true);
-        assert!(interior.contains("return 7;") && !interior.contains("__stack_chk_fail("), "{interior}");
+        assert!(
+            interior.contains("return 7;") && !interior.contains("__stack_chk_fail("),
+            "{interior}"
+        );
     }
 }
 
@@ -137,15 +223,28 @@ fn slots_are_metadata_without_enabling_pic_resolution() {
         let file = object::File::parse(bytes.as_slice()).unwrap();
         let slots = unlace_analysis::loader::kuna_ppc32_imports::pic_slots(&file);
         assert_eq!(slots.len(), 2);
-        assert_eq!((slots[0].address, slots[0].name.as_str(), slots[0].no_return), (0x3000, "__stack_chk_fail", true));
-        assert_eq!((slots[1].address, slots[1].name.as_str(), slots[1].no_return), (0x3004, "extra", false));
+        assert_eq!(
+            (slots[0].address, slots[0].name.as_str(), slots[0].no_return),
+            (0x3000, "__stack_chk_fail", true)
+        );
+        assert_eq!(
+            (slots[1].address, slots[1].name.as_str(), slots[1].no_return),
+            (0x3004, "extra", false)
+        );
         assert!(unlace_analysis::loader::format::resolve_imports(&file, &bytes).is_empty());
-        for (relocation, addend) in [(object::elf::R_PPC_ADDR32, 0), (object::elf::R_PPC_JMP_SLOT, 4)] {
+        for (relocation, addend) in [
+            (object::elf::R_PPC_ADDR32, 0),
+            (object::elf::R_PPC_JMP_SLOT, 4),
+        ] {
             f.relocation = relocation;
             f.addend = addend;
             let bytes = f.bytes();
             let file = object::File::parse(bytes.as_slice()).unwrap();
-            assert!(!unlace_analysis::loader::kuna_ppc32_imports::pic_slots(&file).iter().any(|s| s.address == 0x3000));
+            assert!(
+                !unlace_analysis::loader::kuna_ppc32_imports::pic_slots(&file)
+                    .iter()
+                    .any(|s| s.address == 0x3000)
+            );
         }
     }
 }
@@ -155,26 +254,105 @@ fn call_names_and_xrefs_agree_without_renaming_functions() {
     let (returning, terminal) = fixture::cache_pair();
     let path = common::scratch_file("ppc32-scoped-xrefs", "elf");
     let run = |args: &[&str]| {
-        let out = Command::new(env!("CARGO_BIN_EXE_unlace")).args(args).output().unwrap();
-        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
         String::from_utf8(out.stdout).unwrap()
     };
     std::fs::write(&path, terminal).unwrap();
     let p = path.to_str().unwrap();
-    assert_eq!(run(&["functions",p,"--json","--option","ppc32picimports","off"]), run(&["functions",p,"--json","--option","ppc32picimports","on"]));
-    let refs = run(&["xrefs",p,"--to","__stack_chk_fail","--json","--option","ppc32picimports","on"]);
+    assert_eq!(
+        run(&[
+            "functions",
+            p,
+            "--json",
+            "--option",
+            "ppc32picimports",
+            "off"
+        ]),
+        run(&[
+            "functions",
+            p,
+            "--json",
+            "--option",
+            "ppc32picimports",
+            "on"
+        ])
+    );
+    let refs = run(&[
+        "xrefs",
+        p,
+        "--to",
+        "__stack_chk_fail",
+        "--json",
+        "--option",
+        "ppc32picimports",
+        "on",
+    ]);
     let refs: serde_json::Value = serde_json::from_str(&refs).unwrap();
     assert!(!refs["xrefs"].as_array().unwrap().is_empty(), "{refs}");
-    let off = run(&["decompile",p,"check","--mode","fast","--option","ppc32picimports","on","--option","noreturn_known","off"]);
-    assert!(off.contains("return 7;") && !off.contains("__stack_chk_fail("), "{off}");
-    for jobs in ["1","2"] {
-        let all = run(&["decompile-all",p,"--mode","fast","--json","--jobs",jobs,"--option","ppc32picimports","on"]);
+    let off = run(&[
+        "decompile",
+        p,
+        "check",
+        "--mode",
+        "fast",
+        "--option",
+        "ppc32picimports",
+        "on",
+        "--option",
+        "noreturn_known",
+        "off",
+    ]);
+    assert!(
+        off.contains("return 7;") && !off.contains("__stack_chk_fail("),
+        "{off}"
+    );
+    for jobs in ["1", "2"] {
+        let all = run(&[
+            "decompile-all",
+            p,
+            "--mode",
+            "fast",
+            "--json",
+            "--jobs",
+            jobs,
+            "--option",
+            "ppc32picimports",
+            "on",
+        ]);
         let all: serde_json::Value = serde_json::from_str(&all).unwrap();
-        let check = all["functions"].as_array().unwrap().iter().find(|f| f["name"] == "check").unwrap();
-        assert!(check["code"].as_str().unwrap().contains("__stack_chk_fail("), "{check}");
+        let check = all["functions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|f| f["name"] == "check")
+            .unwrap();
+        assert!(
+            check["code"]
+                .as_str()
+                .unwrap()
+                .contains("__stack_chk_fail("),
+            "{check}"
+        );
     }
     std::fs::write(&path, returning).unwrap();
-    let refs = run(&["xrefs",p,"--to","__stack_chk_fail","--json","--option","ppc32picimports","on"]);
+    let refs = run(&[
+        "xrefs",
+        p,
+        "--to",
+        "__stack_chk_fail",
+        "--json",
+        "--option",
+        "ppc32picimports",
+        "on",
+    ]);
     let refs: serde_json::Value = serde_json::from_str(&refs).unwrap();
     assert!(refs["xrefs"].as_array().unwrap().is_empty(), "{refs}");
     std::fs::remove_file(path).unwrap();
@@ -190,16 +368,39 @@ fn shared_tail_calls_have_the_same_import_in_decompilation_and_xrefs() {
         f.second_caller = Some(vec![0x3bc02804, 0x480007f5, 0x38600007, 0x4e800020]);
         let bytes = f.bytes();
         assert!(decompile(&bytes, "check", true).contains("__stack_chk_fail("));
-        assert_eq!(decompile(&bytes, "check2", false), decompile(&bytes, "check2", true));
+        assert_eq!(
+            decompile(&bytes, "check2", false),
+            decompile(&bytes, "check2", true)
+        );
         let path = common::scratch_file("ppc32-shared-tail-xrefs", "elf");
         std::fs::write(&path, bytes).unwrap();
         let query = |direction: &str, target: &str, enabled: bool| {
             let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
-                .args(["xrefs", path.to_str().unwrap(), direction, target, "--json", "--kind", "call",
-                    "--mode", "fast", "--option", "ppc32picimports", if enabled { "on" } else { "off" }])
-                .output().unwrap();
-            assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-            serde_json::from_slice::<serde_json::Value>(&out.stdout).unwrap()["xrefs"].as_array().unwrap().clone()
+                .args([
+                    "xrefs",
+                    path.to_str().unwrap(),
+                    direction,
+                    target,
+                    "--json",
+                    "--kind",
+                    "call",
+                    "--mode",
+                    "fast",
+                    "--option",
+                    "ppc32picimports",
+                    if enabled { "on" } else { "off" },
+                ])
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            serde_json::from_slice::<serde_json::Value>(&out.stdout).unwrap()["xrefs"]
+                .as_array()
+                .unwrap()
+                .clone()
         };
         assert!(query("--to", "0x3000", false).is_empty());
         let incoming = query("--to", "__stack_chk_fail", true);
@@ -208,11 +409,28 @@ fn shared_tail_calls_have_the_same_import_in_decompilation_and_xrefs() {
         assert_eq!(incoming[0]["to_address"], 0x3000);
         assert_eq!(incoming[0]["from_function"]["address"], 0x1000);
         assert_eq!(query("--to", "0x3000", true), incoming);
-        assert!(query("--from", "check", true).iter().any(|r| r["from_address"] == 0x100c && r["to_address"] == 0x3000));
-        assert!(!query("--from", "check2", true).iter().any(|r| r["to_address"] == 0x3000));
+        assert!(
+            query("--from", "check", true)
+                .iter()
+                .any(|r| r["from_address"] == 0x100c && r["to_address"] == 0x3000)
+        );
+        assert!(
+            !query("--from", "check2", true)
+                .iter()
+                .any(|r| r["to_address"] == 0x3000)
+        );
         let text = Command::new(env!("CARGO_BIN_EXE_unlace"))
-            .args(["xrefs", path.to_str().unwrap(), "--to", "__stack_chk_fail", "--option", "ppc32picimports", "on"])
-            .output().unwrap();
+            .args([
+                "xrefs",
+                path.to_str().unwrap(),
+                "--to",
+                "__stack_chk_fail",
+                "--option",
+                "ppc32picimports",
+                "on",
+            ])
+            .output()
+            .unwrap();
         assert!(text.status.success());
         assert!(String::from_utf8_lossy(&text.stdout).contains("check+0xc"));
         f.second_caller.as_mut().unwrap()[0] = 0x3bc02800;
@@ -221,10 +439,22 @@ fn shared_tail_calls_have_the_same_import_in_decompilation_and_xrefs() {
         assert_eq!(shared.len(), 1);
         assert!(shared[0]["from_function"].is_null(), "{shared:?}");
         let text = Command::new(env!("CARGO_BIN_EXE_unlace"))
-            .args(["xrefs", path.to_str().unwrap(), "--to", "__stack_chk_fail", "--option", "ppc32picimports", "on"])
-            .output().unwrap();
+            .args([
+                "xrefs",
+                path.to_str().unwrap(),
+                "--to",
+                "__stack_chk_fail",
+                "--option",
+                "ppc32picimports",
+                "on",
+            ])
+            .output()
+            .unwrap();
         let text = String::from_utf8(text.stdout).unwrap();
-        assert!(text.contains("0x100c\tcall\t0x100c\t") && !text.contains("check"), "{text}");
+        assert!(
+            text.contains("0x100c\tcall\t0x100c\t") && !text.contains("check"),
+            "{text}"
+        );
         for (name, entry) in [("check", 0x1000), ("check2", 0x1008)] {
             let rows = query("--from", name, true);
             let call = rows.iter().find(|r| r["to_address"] == 0x3000).unwrap();
@@ -241,16 +471,26 @@ fn every_path_to_a_call_must_agree_on_its_slot() {
             let mut f = fixture::Fixture::new(fixture::Plt::Short);
             f.pic_collision = true;
             f.little = little;
-            f.caller = Some(vec![0x2c030000,0x4182000c,0x3bc02800,0x48000008,
+            f.caller = Some(vec![
+                0x2c030000,
+                0x4182000c,
+                0x3bc02800,
+                0x48000008,
                 if conflict { 0x3bc02804 } else { 0x3bc02800 },
-                0x480007ed,0x38600007,0x4e800020]);
+                0x480007ed,
+                0x38600007,
+                0x4e800020,
+            ]);
             let bytes = f.bytes();
             let on = decompile(&bytes, "check", true);
             if conflict {
                 assert!(!on.contains("__stack_chk_fail("), "{on}");
                 assert_eq!(on, decompile(&bytes, "check", false));
             } else {
-                assert!(on.contains("__stack_chk_fail(") && !on.contains("return 7;"), "{on}");
+                assert!(
+                    on.contains("__stack_chk_fail(") && !on.contains("return 7;"),
+                    "{on}"
+                );
             }
         }
     }
@@ -264,8 +504,10 @@ fn a_stack_derived_address_outside_the_frame_is_not_private_memory() {
         f.little = little;
         // A stack-relative offset can wrap into mapped import data. It is not
         // a private spill merely because the address expression contains r1.
-        f.caller = Some(vec![0x3bc02800,0x3d808000,0x618c3000,0x7d616214,
-            0x906b0000,0x480007ed,0x38600007,0x4e800020]);
+        f.caller = Some(vec![
+            0x3bc02800, 0x3d808000, 0x618c3000, 0x7d616214, 0x906b0000, 0x480007ed, 0x38600007,
+            0x4e800020,
+        ]);
         let bytes = f.bytes();
         let on = decompile(&bytes, "check", true);
         assert!(!on.contains("__stack_chk_fail("), "{on}");
@@ -291,24 +533,51 @@ fn indirect_xrefs_include_decoded_instructions() {
             let mut f = fixture::Fixture::new(fixture::Plt::Short);
             f.little = little;
             f.pic_collision = true;
-            f.caller = Some(vec![0x3bc02800, 0x817e0800, 0x7d6903a6, transfer, 0x38600007, 0x4e800020]);
+            f.caller = Some(vec![
+                0x3bc02800, 0x817e0800, 0x7d6903a6, transfer, 0x38600007, 0x4e800020,
+            ]);
             let path = common::scratch_file("ppc32-indirect-xref-text", "elf");
             std::fs::write(&path, f.bytes()).unwrap();
             for (direction, target) in [("--from", "check"), ("--to", "__stack_chk_fail")] {
                 for json in [false, true] {
                     let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
-                    cmd.args(["xrefs", path.to_str().unwrap(), direction, target, "--kind", "call",
-                        "--mode", "fast", "--option", "ppc32picimports", "on"]);
-                    if json { cmd.arg("--json"); }
-                    let out = cmd.output().unwrap();
-                    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+                    cmd.args([
+                        "xrefs",
+                        path.to_str().unwrap(),
+                        direction,
+                        target,
+                        "--kind",
+                        "call",
+                        "--mode",
+                        "fast",
+                        "--option",
+                        "ppc32picimports",
+                        "on",
+                    ]);
                     if json {
-                        let result: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+                        cmd.arg("--json");
+                    }
+                    let out = cmd.output().unwrap();
+                    assert!(
+                        out.status.success(),
+                        "{}",
+                        String::from_utf8_lossy(&out.stderr)
+                    );
+                    if json {
+                        let result: serde_json::Value =
+                            serde_json::from_slice(&out.stdout).unwrap();
                         let rows = result["xrefs"].as_array().unwrap();
-                        let edge = rows.iter().find(|r| r["from_address"] == 0x100c && r["to_address"] == 0x3000).unwrap();
+                        let edge = rows
+                            .iter()
+                            .find(|r| r["from_address"] == 0x100c && r["to_address"] == 0x3000)
+                            .unwrap();
                         assert_eq!(edge["instruction"], text, "{edge}");
                     } else {
-                        assert!(String::from_utf8_lossy(&out.stdout).contains(&format!("\t{text}\n")), "{}", String::from_utf8_lossy(&out.stdout));
+                        assert!(
+                            String::from_utf8_lossy(&out.stdout).contains(&format!("\t{text}\n")),
+                            "{}",
+                            String::from_utf8_lossy(&out.stdout)
+                        );
                     }
                 }
             }
@@ -321,8 +590,14 @@ fn indirect_xrefs_include_decoded_instructions() {
 fn call_clobbers_reach_slot_loads_at_joins() {
     for little in [false, true] {
         for code in [
-            vec![0x3bc02804, 0x480007fd, 0x3bc02800, 0x817e0800, 0x7d6903a6, 0x4e800421, 0x38600007, 0x4e800020],
-            vec![0x3bc02800, 0x2c030000, 0x41820010, 0x3bc02804, 0x480007f1, 0x3bc02800, 0x480007e9, 0x38600007, 0x4e800020],
+            vec![
+                0x3bc02804, 0x480007fd, 0x3bc02800, 0x817e0800, 0x7d6903a6, 0x4e800421, 0x38600007,
+                0x4e800020,
+            ],
+            vec![
+                0x3bc02800, 0x2c030000, 0x41820010, 0x3bc02804, 0x480007f1, 0x3bc02800, 0x480007e9,
+                0x38600007, 0x4e800020,
+            ],
         ] {
             let mut f = fixture::Fixture::new(fixture::Plt::Short);
             f.little = little;
@@ -339,15 +614,23 @@ fn call_clobbers_reach_slot_loads_at_joins() {
 #[test]
 fn targets_loaded_before_a_call_survive_only_in_preserved_registers() {
     for little in [false, true] {
-        for (load, ctr, preserved) in [(0x81de0800, 0x7dc903a6, true), (0x819e0800, 0x7d8903a6, false)] {
+        for (load, ctr, preserved) in [
+            (0x81de0800, 0x7dc903a6, true),
+            (0x819e0800, 0x7d8903a6, false),
+        ] {
             let mut f = fixture::Fixture::new(fixture::Plt::Short);
             f.little = little;
             f.pic_collision = true;
-            f.caller = Some(vec![0x3bc02800, load, 0x3bc02804, 0x480007f5, ctr, 0x4e800421, 0x38600007, 0x4e800020]);
+            f.caller = Some(vec![
+                0x3bc02800, load, 0x3bc02804, 0x480007f5, ctr, 0x4e800421, 0x38600007, 0x4e800020,
+            ]);
             let bytes = f.bytes();
             let on = decompile(&bytes, "check", true);
             if preserved {
-                assert!(on.contains("extra(") && on.contains("__stack_chk_fail("), "{on}");
+                assert!(
+                    on.contains("extra(") && on.contains("__stack_chk_fail("),
+                    "{on}"
+                );
                 assert!(!on.contains("return 7;"), "{on}");
             } else {
                 assert_eq!(on, decompile(&bytes, "check", false));
@@ -365,16 +648,17 @@ fn distinct_stubs_do_not_hide_imported_slot_writes() {
         f.pic_collision = true;
         f.import = "memcpy";
         f.second_stub = true;
-        let mut code = vec![0x7c0802a6,0x9421ffe0,0x90010024,0x93c10018,
-            0x3bc02800,0x39601100,0x91610008,0x38603004,0x38810008,0x38a00004,
-            0x480007d9,0x3bde0008,0x480007e1,0x38600007,0x83c10018,
-            0x80010024,0x38210020,0x7c0803a6,0x4e800020];
-        code.resize(0x100/4,0x60000000);
-        code.extend([0x38600009,0x4e800020]);
+        let mut code = vec![
+            0x7c0802a6, 0x9421ffe0, 0x90010024, 0x93c10018, 0x3bc02800, 0x39601100, 0x91610008,
+            0x38603004, 0x38810008, 0x38a00004, 0x480007d9, 0x3bde0008, 0x480007e1, 0x38600007,
+            0x83c10018, 0x80010024, 0x38210020, 0x7c0803a6, 0x4e800020,
+        ];
+        code.resize(0x100 / 4, 0x60000000);
+        code.extend([0x38600009, 0x4e800020]);
         f.caller = Some(code);
         let mut bytes = f.bytes();
         let off = bytes.windows(6).position(|b| b == b"extra\0").unwrap();
-        bytes[off..off+6].copy_from_slice(b"abort\0");
+        bytes[off..off + 6].copy_from_slice(b"abort\0");
         let on = decompile(&bytes, "check", true);
         assert!(on.contains("return 7;") && !on.contains("abort("), "{on}");
         assert_eq!(on, decompile(&bytes, "check", false));
@@ -390,10 +674,16 @@ fn a_proved_flow_drops_the_discarded_flows_warnings() {
         f.caller = Some(vec![0x3bc02800, 0x480007fd, 0, 0]);
         let bytes = f.bytes();
         let off = decompile(&bytes, "check", false);
-        assert!(off.contains("halt_baddata") && off.contains("bad instruction"), "{off}");
+        assert!(
+            off.contains("halt_baddata") && off.contains("bad instruction"),
+            "{off}"
+        );
         let on = decompile(&bytes, "check", true);
         assert!(on.contains("__stack_chk_fail(); // no-return"), "{on}");
-        assert!(!on.contains("warn") && !on.contains("bad instruction"), "little={little}: {on}");
+        assert!(
+            !on.contains("warn") && !on.contains("bad instruction"),
+            "little={little}: {on}"
+        );
     }
 }
 
@@ -410,24 +700,67 @@ fn xrefs_prove_only_the_entries_a_query_can_report() {
         std::fs::write(&path, f.bytes()).unwrap();
         let query = |args: &[&str]| {
             let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
-            cmd.arg("xrefs").arg(&path).args(args)
-                .args(["--json", "--mode", "fast", "--option", "ppc32picimports", "on"]);
+            cmd.arg("xrefs").arg(&path).args(args).args([
+                "--json",
+                "--mode",
+                "fast",
+                "--option",
+                "ppc32picimports",
+                "on",
+            ]);
             let out = cmd.output().unwrap();
-            assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+            assert!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
             let result: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
-            let failed = result["coverage"]["notes"].as_array().unwrap().iter()
+            let failed = result["coverage"]["notes"]
+                .as_array()
+                .unwrap()
+                .iter()
                 .filter_map(|n| n.as_str())
                 .any(|n| n.starts_with("ppc32picimports: 1 of ") && n.contains("check2 @ 0x100c"));
-            let calls = result["xrefs"].as_array().unwrap().iter()
+            let calls = result["xrefs"]
+                .as_array()
+                .unwrap()
+                .iter()
                 .any(|r| r["from_address"] == 0x1004 && r["to_address"] == 0x3000);
-            (calls, failed, String::from_utf8_lossy(&out.stderr).contains("check2 @ 0x100c"))
+            (
+                calls,
+                failed,
+                String::from_utf8_lossy(&out.stderr).contains("check2 @ 0x100c"),
+            )
         };
-        assert_eq!(query(&["--to", "__stack_chk_fail"]), (true, true, true), "little={little}");
-        assert_eq!(query(&["--to", "0x3000"]), (true, true, true), "little={little}");
-        assert_eq!(query(&["--from", "check"]), (true, false, false), "little={little}");
-        assert_eq!(query(&["--from", "check2"]), (false, true, true), "little={little}");
-        assert_eq!(query(&["--to", "check"]), (false, false, false), "little={little}");
-        assert_eq!(query(&["--to", "__stack_chk_fail", "--kind", "data"]), (false, false, false));
+        assert_eq!(
+            query(&["--to", "__stack_chk_fail"]),
+            (true, true, true),
+            "little={little}"
+        );
+        assert_eq!(
+            query(&["--to", "0x3000"]),
+            (true, true, true),
+            "little={little}"
+        );
+        assert_eq!(
+            query(&["--from", "check"]),
+            (true, false, false),
+            "little={little}"
+        );
+        assert_eq!(
+            query(&["--from", "check2"]),
+            (false, true, true),
+            "little={little}"
+        );
+        assert_eq!(
+            query(&["--to", "check"]),
+            (false, false, false),
+            "little={little}"
+        );
+        assert_eq!(
+            query(&["--to", "__stack_chk_fail", "--kind", "data"]),
+            (false, false, false)
+        );
         std::fs::remove_file(path).unwrap();
     }
 }

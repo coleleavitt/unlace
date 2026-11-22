@@ -32,7 +32,7 @@ use unlace_base::types::int4;
 
 use crate::context::VarnodeId;
 use crate::dtype::Datatype;
-use crate::fspec::{PrototypePieces, ProtoModel};
+use crate::fspec::{ProtoModel, PrototypePieces};
 use crate::funcdata::Funcdata;
 
 /// One runtime argument: where the calling convention puts it, its name and its
@@ -67,7 +67,9 @@ impl Runtime {
         manager: &unlace_base::space::AddrSpaceManager,
     ) -> Option<Runtime> {
         let mut res = Vec::new();
-        model.assign_parameter_storage(decl, &mut res, true, types, manager).ok()?;
+        model
+            .assign_parameter_storage(decl, &mut res, true, types, manager)
+            .ok()?;
         if res.len() != decl.intypes.len() + 1 {
             return None;
         }
@@ -86,18 +88,31 @@ impl Runtime {
             .input()
             .get_entry()
             .iter()
-            .map(|e| (Address::new(Rc::clone(e.get_space()), e.get_base()), e.get_size()))
+            .map(|e| {
+                (
+                    Address::new(Rc::clone(e.get_space()), e.get_base()),
+                    e.get_size(),
+                )
+            })
             .collect();
         let mut output = decl.clone();
         output.intypes.clear();
         output.innames.clear();
         output.input_storage.clear();
-        Some(Runtime { slots, entries, output, typed: Cell::new(false) })
+        Some(Runtime {
+            slots,
+            entries,
+            output,
+            typed: Cell::new(false),
+        })
     }
 
     /// A copy for one drive, with nothing typed yet.
     pub fn fresh(&self) -> Rc<Runtime> {
-        Rc::new(Runtime { typed: Cell::new(false), ..self.clone() })
+        Rc::new(Runtime {
+            typed: Cell::new(false),
+            ..self.clone()
+        })
     }
 }
 
@@ -112,11 +127,19 @@ fn overlaps(a: &Address, asize: int4, b: &Address, bsize: int4) -> bool {
 pub fn read_slots(data: &Funcdata) -> Option<usize> {
     let rt = data.kuna_elfmain()?;
     let mut read: Vec<(Address, int4)> = Vec::new();
-    for id in data.vbank().iter_def_flag(crate::varnode::varnode_flags::input) {
-        let Some(v) = data.vbank().get(id) else { continue };
+    for id in data
+        .vbank()
+        .iter_def_flag(crate::varnode::varnode_flags::input)
+    {
+        let Some(v) = data.vbank().get(id) else {
+            continue;
+        };
         if v.is_input()
             && !v.has_no_descend()
-            && rt.entries.iter().any(|(ea, es)| overlaps(v.get_addr(), v.get_size(), ea, *es))
+            && rt
+                .entries
+                .iter()
+                .any(|(ea, es)| overlaps(v.get_addr(), v.get_size(), ea, *es))
         {
             read.push((v.get_addr().clone(), v.get_size()));
         }
@@ -133,7 +156,9 @@ pub fn read_slots(data: &Funcdata) -> Option<usize> {
 fn slot_of<'a>(data: &'a Funcdata, addr: &Address, size: int4) -> Option<&'a Slot> {
     let rt = data.kuna_elfmain()?;
     let k = read_slots(data)?;
-    rt.slots[..k].iter().find(|s| &s.addr == addr && s.size == size)
+    rt.slots[..k]
+        .iter()
+        .find(|s| &s.addr == addr && s.size == size)
 }
 
 /// The runtime type of the function input `vn`, when it is one of the runtime
@@ -152,9 +177,12 @@ pub fn input_type(data: &Funcdata, vn: VarnodeId) -> Option<Rc<Datatype>> {
 /// synthesis gives way to it as it does to the type every caller passes: an
 /// `argv` read at `argv[0]` and `argv[1]` is the vector, not a two-field record.
 pub fn took_runtime_type(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
-    let Some(v) = data.vbank().get(vn) else { return false };
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
     v.is_input()
-        && slot_of(data, v.get_addr(), v.get_size()).is_some_and(|s| crate::kuna_calleevote::same_type(&s.ct, ct))
+        && slot_of(data, v.get_addr(), v.get_size())
+            .is_some_and(|s| crate::kuna_calleevote::same_type(&s.ct, ct))
 }
 
 /// The runtime name of the recovered parameter in `addr`/`size`.
@@ -169,18 +197,25 @@ pub fn param_name(data: &Funcdata, addr: &Address, size: int4) -> Option<String>
 /// the drive decompiles it again without the seed, so it prints exactly what it
 /// prints with the option off.
 pub fn settled(fd: &Funcdata) -> bool {
-    let Some(rt) = fd.kuna_elfmain() else { return true };
+    let Some(rt) = fd.kuna_elfmain() else {
+        return true;
+    };
     let proto = fd.get_func_proto();
     let params: Vec<(Address, int4, String)> = (0..proto.num_params())
         .filter_map(|i| proto.get_param(i))
         .map(|p| (p.get_address(), p.get_size(), p.get_name().to_string()))
         .collect();
-    let named = params.iter().any(|(_, _, n)| rt.slots.iter().any(|s| &s.name == n));
+    let named = params
+        .iter()
+        .any(|(_, _, n)| rt.slots.iter().any(|s| &s.name == n));
     match read_slots(fd) {
         Some(0) => params.is_empty() && !rt.typed.get() && !named,
         Some(k) => {
             params.len() == k
-                && params.iter().zip(&rt.slots).all(|((a, size, n), s)| a == &s.addr && *size == s.size && n == &s.name)
+                && params
+                    .iter()
+                    .zip(&rt.slots)
+                    .all(|((a, size, n), s)| a == &s.addr && *size == s.size && n == &s.name)
         }
         None => false,
     }

@@ -57,9 +57,9 @@ use std::collections::BTreeMap;
 use unlace_analysis::strings::kuna_stringinv::{self, FoundString, Termination};
 
 use crate::args::take_value as take;
-use crate::decompile_all::{load_program, mode_options_for_binary, Args, DriverDefaults};
+use crate::decompile_all::{Args, DriverDefaults, load_program, mode_options_for_binary};
 use crate::function_info::{function_json, function_name, owning_function};
-use crate::jsonfmt::{dumps_indent2, Json};
+use crate::jsonfmt::{Json, dumps_indent2};
 
 /// The parsed command line.
 pub(crate) struct StringsArgs {
@@ -115,7 +115,10 @@ pub fn run(argv: &[String]) -> i32 {
 pub(crate) fn query(args: &StringsArgs) -> Result<String, String> {
     let bytes = args.raw.image(
         &args.binary,
-        unlace_analysis::loader::macho_fat::slice_pref(args.slice.as_deref(), args.target.as_deref()),
+        unlace_analysis::loader::macho_fat::slice_pref(
+            args.slice.as_deref(),
+            args.target.as_deref(),
+        ),
         args.target.as_deref(),
     )?;
     let options =
@@ -135,21 +138,28 @@ pub(crate) fn query(args: &StringsArgs) -> Result<String, String> {
         section: args.section.clone(),
         termination: args.termination,
     };
-    let inv = match view.as_ref().filter(|v| v.bytes.as_ptr() == scanned.as_ptr()) {
+    let inv = match view
+        .as_ref()
+        .filter(|v| v.bytes.as_ptr() == scanned.as_ptr())
+    {
         Some(view) => kuna_stringinv::inventory_in_image(&file, &query, &view.ranges),
         None => kuna_stringinv::inventory(&file, &query),
     };
     if let Some(want) = &args.section
-        && !inv.regions.iter().any(|n| n == want || n.strip_prefix('.') == Some(want.as_str())) {
-            let mut have: Vec<&str> = inv.regions.iter().map(String::as_str).collect();
-            have.dedup();
-            let have = if have.is_empty() {
-                "the image has no scannable sections".to_string()
-            } else {
-                format!("have: {}", have.join(", "))
-            };
-            return Err(format!("no section named {want:?} ({have})"));
-        }
+        && !inv
+            .regions
+            .iter()
+            .any(|n| n == want || n.strip_prefix('.') == Some(want.as_str()))
+    {
+        let mut have: Vec<&str> = inv.regions.iter().map(String::as_str).collect();
+        have.dedup();
+        let have = if have.is_empty() {
+            "the image has no scannable sections".to_string()
+        } else {
+            format!("have: {}", have.join(", "))
+        };
+        return Err(format!("no section named {want:?} ({have})"));
+    }
 
     let mut truncated_filter = false;
     let found: Vec<FoundString> = inv
@@ -170,7 +180,11 @@ pub(crate) fn query(args: &StringsArgs) -> Result<String, String> {
     let rows = if args.no_xrefs || found.is_empty() {
         found
             .into_iter()
-            .map(|found| Row { found, xrefs_count: 0, functions: Vec::new() })
+            .map(|found| Row {
+                found,
+                xrefs_count: 0,
+                functions: Vec::new(),
+            })
             .collect()
     } else {
         attribute(args, options, &file, found)?
@@ -183,7 +197,10 @@ pub(crate) fn query(args: &StringsArgs) -> Result<String, String> {
         );
     }
     Ok(if args.json {
-        format!("{}\n", dumps_indent2(&result_json(args, inv.from_segments, &rows)))
+        format!(
+            "{}\n",
+            dumps_indent2(&result_json(args, inv.from_segments, &rows))
+        )
     } else {
         render_text(args, inv.from_segments, &rows)
     })
@@ -230,12 +247,8 @@ fn attribute(
         .map(|e| (e.addr.get_offset(), e.name))
         .collect();
     let seeds: Vec<u64> = inventory.keys().copied().collect();
-    let index = unlace_analysis::listing::xrefs::build(
-        file,
-        prog.arch(),
-        prog.arch().translate(),
-        &seeds,
-    );
+    let index =
+        unlace_analysis::listing::xrefs::build(file, prog.arch(), prog.arch().translate(), &seeds);
 
     // A name is looked up once per referencing function, not once per row: a
     // prompt string referenced from twenty sites resolves one entry.
@@ -264,7 +277,11 @@ fn attribute(
                 }
             }
             functions.sort();
-            Row { found, xrefs_count, functions }
+            Row {
+                found,
+                xrefs_count,
+                functions,
+            }
         })
         .collect())
 }
@@ -298,14 +315,32 @@ fn result_json(args: &StringsArgs, from_segments: bool, rows: &[Row]) -> Json {
             .map(|row| {
                 Json::Object(vec![
                     ("address".into(), Json::Number(row.found.addr.to_string())),
-                    ("address_hex".into(), Json::Str(format!("0x{:x}", row.found.addr))),
+                    (
+                        "address_hex".into(),
+                        Json::Str(format!("0x{:x}", row.found.addr)),
+                    ),
                     ("text".into(), Json::Str(row.found.text.clone())),
-                    ("length".into(), Json::Number(row.found.char_len.to_string())),
-                    ("byte_length".into(), Json::Number(row.found.byte_len.to_string())),
-                    ("nul_terminated".into(), Json::Bool(row.found.nul_terminated)),
-                    ("encoding".into(), Json::Str(row.found.encoding.as_str().to_string())),
+                    (
+                        "length".into(),
+                        Json::Number(row.found.char_len.to_string()),
+                    ),
+                    (
+                        "byte_length".into(),
+                        Json::Number(row.found.byte_len.to_string()),
+                    ),
+                    (
+                        "nul_terminated".into(),
+                        Json::Bool(row.found.nul_terminated),
+                    ),
+                    (
+                        "encoding".into(),
+                        Json::Str(row.found.encoding.as_str().to_string()),
+                    ),
                     ("section".into(), optional_str(row.found.section.as_deref())),
-                    ("xrefs_count".into(), Json::Number(row.xrefs_count.to_string())),
+                    (
+                        "xrefs_count".into(),
+                        Json::Number(row.xrefs_count.to_string()),
+                    ),
                     (
                         "functions".into(),
                         Json::Array(
@@ -322,11 +357,23 @@ fn result_json(args: &StringsArgs, from_segments: bool, rows: &[Row]) -> Json {
     Json::Object(vec![
         ("binary".into(), Json::Str(args.binary.clone())),
         ("encoding".into(), Json::Str(args.encoding_label.clone())),
-        ("min_length".into(), Json::Number(args.min_length.to_string())),
-        ("filter".into(), optional_str(args.filter.as_ref().map(|(p, _)| p.as_str()))),
+        (
+            "min_length".into(),
+            Json::Number(args.min_length.to_string()),
+        ),
+        (
+            "filter".into(),
+            optional_str(args.filter.as_ref().map(|(p, _)| p.as_str())),
+        ),
         ("section".into(), optional_str(args.section.as_deref())),
-        ("termination".into(), Json::Str(termination_label(args.termination).to_string())),
-        ("scanned".into(), Json::Str(scanned_label(from_segments).to_string())),
+        (
+            "termination".into(),
+            Json::Str(termination_label(args.termination).to_string()),
+        ),
+        (
+            "scanned".into(),
+            Json::Str(scanned_label(from_segments).to_string()),
+        ),
         ("xrefs".into(), Json::Bool(!args.no_xrefs)),
         ("count".into(), Json::Number(rows.len().to_string())),
         ("strings".into(), strings),
@@ -371,7 +418,11 @@ fn render_text(args: &StringsArgs, from_segments: bool, rows: &[Row]) -> String 
         let functions = if row.functions.is_empty() {
             "-".to_string()
         } else {
-            row.functions.iter().map(|(_, n)| n.as_str()).collect::<Vec<_>>().join(",")
+            row.functions
+                .iter()
+                .map(|(_, n)| n.as_str())
+                .collect::<Vec<_>>()
+                .join(",")
         };
         let _ = writeln!(
             out,
@@ -418,8 +469,9 @@ pub(crate) fn parse_args(argv: &[String]) -> Result<StringsArgs, String> {
             "--json" => json = true,
             "--min-length" => {
                 let v = take(argv, &mut i, "--min-length")?;
-                let n: usize =
-                    v.parse().map_err(|_| format!("--min-length wants a number, not {v:?}"))?;
+                let n: usize = v
+                    .parse()
+                    .map_err(|_| format!("--min-length wants a number, not {v:?}"))?;
                 if n == 0 {
                     return Err("--min-length must be at least 1".into());
                 }
@@ -479,7 +531,9 @@ pub(crate) fn parse_args(argv: &[String]) -> Result<StringsArgs, String> {
         "utf16" => (false, false, true),
         "all" => (true, true, true),
         other => {
-            return Err(format!("unknown --encoding {other:?} (ascii, utf8, utf16, all)"))
+            return Err(format!(
+                "unknown --encoding {other:?} (ascii, utf8, utf16, all)"
+            ));
         }
     };
     raw.check(target.as_deref())?;

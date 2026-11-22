@@ -16,13 +16,13 @@
 //! Helper outputs use [`Funcdata::new_unique_out`] so the function owns
 //! def-use, high-variable and lane bookkeeping.
 
-use unlace_base::address::{calc_mask, Address};
+use unlace_base::address::{Address, calc_mask};
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{ActionGroupList, Rule, RuleSpec};
-use crate::funcdata::Funcdata;
 use crate::context::{OpId, VarnodeId};
+use crate::funcdata::Funcdata;
 
 /// (kuna GH-8913) Fuse an 8-bit carry-chained 16-bit add reassembled by CONCAT
 /// (C++ `RuleAddCarryChain`).
@@ -34,11 +34,15 @@ pub struct RuleAddCarryChain {
 impl RuleAddCarryChain {
     /// Default group `"analysis"`.
     pub fn new() -> RuleAddCarryChain {
-        RuleAddCarryChain { group: String::from("analysis") }
+        RuleAddCarryChain {
+            group: String::from("analysis"),
+        }
     }
     /// Construct with an explicit group.
     pub fn with_group(group: impl Into<String>) -> RuleAddCarryChain {
-        RuleAddCarryChain { group: group.into() }
+        RuleAddCarryChain {
+            group: group.into(),
+        }
     }
 }
 
@@ -58,7 +62,9 @@ impl Rule for RuleAddCarryChain {
         if !grouplist.contains(&self.group) {
             return None;
         }
-        Some(Box::new(RuleAddCarryChain { group: self.group.clone() }))
+        Some(Box::new(RuleAddCarryChain {
+            group: self.group.clone(),
+        }))
     }
 
     /// C++ `RuleAddCarryChain::applyOp` (`kuna_addcarrychain.cc:77`) — transcribed.
@@ -133,7 +139,8 @@ impl Rule for RuleAddCarryChain {
         // Build  PIECE(hipart, baselo)  -- the 16-bit base.
         let baseop = data.new_op(2, pc.clone());
         let base_outsize = vn_size(data, hipart) + vn_size(data, baselo);
-        let _base_out = data.new_unique_out(base_outsize, baseop)
+        let _base_out = data
+            .new_unique_out(base_outsize, baseop)
             .expect("RuleAddCarryChain: newUniqueOut(base) (internal invariant)");
         // Resolve glb->inst[CPUI_PIECE]
         // through the W6 inst[] table so the op carries the real `binary` eval-type
@@ -150,7 +157,8 @@ impl Rule for RuleAddCarryChain {
 
         // Build  zext(index)  to the output width.
         let zextop = data.new_op(1, pc);
-        let _zext_out = data.new_unique_out(outsize, zextop)
+        let _zext_out = data
+            .new_unique_out(outsize, zextop)
             .expect("RuleAddCarryChain: newUniqueOut(zext) (internal invariant)");
         // Resolve glb->inst[] (W6).
         data.op_set_opcode_code(zextop, OpCode::CPUI_INT_ZEXT);
@@ -161,10 +169,20 @@ impl Rule for RuleAddCarryChain {
         // Rewrite the PIECE op itself into the wide add:  out = base + zext(index).
         // Resolve glb->inst[] (W6).
         data.op_set_opcode_code(op, OpCode::CPUI_INT_ADD);
-        let base_out = data.obank().get(baseop).expect("baseop live").get_out().expect("baseop out");
+        let base_out = data
+            .obank()
+            .get(baseop)
+            .expect("baseop live")
+            .get_out()
+            .expect("baseop out");
         data.op_set_input(op, base_out, 0)
             .expect("RuleAddCarryChain: opSetInput op.0");
-        let zext_out = data.obank().get(zextop).expect("zextop live").get_out().expect("zextop out");
+        let zext_out = data
+            .obank()
+            .get(zextop)
+            .expect("zextop live")
+            .get_out()
+            .expect("zextop out");
         data.op_set_input(op, zext_out, 1)
             .expect("RuleAddCarryChain: opSetInput op.1");
         1
@@ -280,10 +298,16 @@ fn op_code(data: &Funcdata, op: OpId) -> OpCode {
     data.obank().get(op).expect("op_code: stale op").code()
 }
 fn vn_is_constant(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).map(|v| v.is_constant()).unwrap_or(false)
+    data.vbank()
+        .get(vn)
+        .map(|v| v.is_constant())
+        .unwrap_or(false)
 }
 fn vn_is_written(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).map(|v| v.is_written()).unwrap_or(false)
+    data.vbank()
+        .get(vn)
+        .map(|v| v.is_written())
+        .unwrap_or(false)
 }
 fn vn_def(data: &Funcdata, vn: VarnodeId) -> Option<OpId> {
     data.vbank().get(vn).and_then(|v| v.get_def())

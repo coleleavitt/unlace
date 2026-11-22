@@ -84,7 +84,9 @@ pub struct ActionEarlyReturn {
 impl ActionEarlyReturn {
     /// Construct in group `g`.
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionEarlyReturn { base: ActionBase::new(0, "earlyreturn", g) })
+        Box::new(ActionEarlyReturn {
+            base: ActionBase::new(0, "earlyreturn", g),
+        })
     }
 }
 
@@ -99,7 +101,9 @@ impl Action for ActionEarlyReturn {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionEarlyReturn { base: self.base.clone() }))
+        Some(Box::new(ActionEarlyReturn {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // P0 assertion `option earlyreturn on|off`, carried on the Architecture boundary.
@@ -134,6 +138,9 @@ impl OptionEarlyReturn {
     pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
-        Ok((val, format!("Const-guard early-return hoisting turned {prop}")))
+        Ok((
+            val,
+            format!("Const-guard early-return hoisting turned {prop}"),
+        ))
     }
 }

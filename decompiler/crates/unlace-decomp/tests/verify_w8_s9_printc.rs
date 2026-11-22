@@ -32,8 +32,8 @@
 
 use unlace_base::types::{int4, uintb};
 use unlace_decomp::printc::{
-    display_format, format_float_token, format_integer_token, print_char_hex_escape,
-    print_unicode, resolve_integer_format, FloatClass,
+    FloatClass, display_format, format_float_token, format_integer_token, print_char_hex_escape,
+    print_unicode, resolve_integer_format,
 };
 use unlace_decomp::printlanguage::unicode_needs_escape;
 
@@ -66,7 +66,10 @@ fn printc_w8_char_hex_escape_negative_matches_cpp_bit_pattern() {
         print_char_hex_escape(&mut got, v as int4);
         let want = oracle_char_hex_escape(v);
         assert_eq!(got, want, "char_hex_escape mismatch for {v:#x}");
-        assert!(!got.contains('-'), "negative codepoint must not print a '-': {got:?}");
+        assert!(
+            !got.contains('-'),
+            "negative codepoint must not print a '-': {got:?}"
+        );
         assert!(
             got.starts_with("\\x") && got.len() == 2 + 8,
             "negative int4 escapes to 8 hex digits: {got:?}"
@@ -74,13 +77,24 @@ fn printc_w8_char_hex_escape_negative_matches_cpp_bit_pattern() {
     }
 
     // Positive width boundaries: setw(2)/setw(4)/setw(8) zero-fill minimums.
-    let cases = [(0x0, "\\x00"), (0x7, "\\x07"), (0xff, "\\xff"), (0x100, "\\x0100"),
-                 (0xffff, "\\xffff"), (0x1_0000, "\\x00010000"), (0xdead_beefu32 as i32, "\\xdeadbeef")];
+    let cases = [
+        (0x0, "\\x00"),
+        (0x7, "\\x07"),
+        (0xff, "\\xff"),
+        (0x100, "\\x0100"),
+        (0xffff, "\\xffff"),
+        (0x1_0000, "\\x00010000"),
+        (0xdead_beefu32 as i32, "\\xdeadbeef"),
+    ];
     for (v, want) in cases {
         let mut got = String::new();
         print_char_hex_escape(&mut got, v as int4);
         assert_eq!(got, want, "boundary width mismatch for {v:#x}");
-        assert_eq!(got, oracle_char_hex_escape(v), "oracle disagreement for {v:#x}");
+        assert_eq!(
+            got,
+            oracle_char_hex_escape(v),
+            "oracle disagreement for {v:#x}"
+        );
     }
 }
 
@@ -88,7 +102,11 @@ fn printc_w8_char_hex_escape_negative_matches_cpp_bit_pattern() {
 /// `mask = calc_mask(sz); flip = val^mask; print_negsign = flip < val;
 ///  if (print_negsign) val = flip+1;` — unsigned, wraps.
 fn oracle_resolve_sign(val: uintb, sz: int4) -> (bool, uintb) {
-    let mask: uintb = if sz >= 8 { u64::MAX } else { (1u64 << (sz * 8)) - 1 };
+    let mask: uintb = if sz >= 8 {
+        u64::MAX
+    } else {
+        (1u64 << (sz * 8)) - 1
+    };
     let flip = val ^ mask;
     let neg = flip < val;
     if neg {
@@ -191,21 +209,34 @@ fn printc_w8_print_unicode_raw_branch_matches_writeutf8_for_all_reachable() {
             "reachable codepoint {cp:#x} must be a valid scalar (no silent drop)"
         );
         let want = oracle_writeutf8(cp);
-        assert_eq!(got.as_bytes(), want.as_slice(), "utf8 byte mismatch at {cp:#x}");
+        assert_eq!(
+            got.as_bytes(),
+            want.as_slice(),
+            "utf8 byte mismatch at {cp:#x}"
+        );
         reachable_checked += 1;
     }
     // Sanity: we actually exercised a large body of the raw branch (not vacuous).
-    assert!(reachable_checked > 1000, "expected many reachable codepoints, got {reachable_checked}");
+    assert!(
+        reachable_checked > 1000,
+        "expected many reachable codepoints, got {reachable_checked}"
+    );
 
     // A specific multi-byte boundary: U+00E9 'é' (2-byte) and U+0800 (3-byte,
     // first 3-byte codepoint), both in printable/non-escaped ranges.
-    for &cp in &[0x00e9i32, 0x0800, 0x2fa1f /* just under the escape cliff */] {
+    for &cp in &[
+        0x00e9i32, 0x0800, 0x2fa1f, /* just under the escape cliff */
+    ] {
         if unicode_needs_escape(cp) {
             continue;
         }
         let mut got = String::new();
         print_unicode(&mut got, cp as int4);
-        assert_eq!(got.as_bytes(), oracle_writeutf8(cp).as_slice(), "multi-byte mismatch {cp:#x}");
+        assert_eq!(
+            got.as_bytes(),
+            oracle_writeutf8(cp).as_slice(),
+            "multi-byte mismatch {cp:#x}"
+        );
     }
 }
 
@@ -213,23 +244,53 @@ fn printc_w8_print_unicode_raw_branch_matches_writeutf8_for_all_reachable() {
 fn printc_w8_format_float_dot_zero_and_scinote_boundary() {
     // looksLikeFloat keys on bytes '.' or 'e' (printc.cc:1480-1483).
     // No '.'/'e' -> ".0" appended.
-    assert_eq!(format_float_token(FloatClass::Normal, false, "100", false), "100.0");
-    assert_eq!(format_float_token(FloatClass::Normal, false, "0", false), "0.0");
-    assert_eq!(format_float_token(FloatClass::Normal, false, "-7", false), "-7.0");
+    assert_eq!(
+        format_float_token(FloatClass::Normal, false, "100", false),
+        "100.0"
+    );
+    assert_eq!(
+        format_float_token(FloatClass::Normal, false, "0", false),
+        "0.0"
+    );
+    assert_eq!(
+        format_float_token(FloatClass::Normal, false, "-7", false),
+        "-7.0"
+    );
     // Has '.' -> untouched.
-    assert_eq!(format_float_token(FloatClass::Normal, false, "3.5", false), "3.5");
+    assert_eq!(
+        format_float_token(FloatClass::Normal, false, "3.5", false),
+        "3.5"
+    );
     // Has 'e' -> untouched (no double-suffix).
-    assert_eq!(format_float_token(FloatClass::Normal, false, "1e9", false), "1e9");
+    assert_eq!(
+        format_float_token(FloatClass::Normal, false, "1e9", false),
+        "1e9"
+    );
     // 'E' uppercase is NOT in the C++ test (only lowercase 'e'); FloatFormat
     // emits lowercase, but verify we don't accidentally treat 'E' as float-like.
-    assert_eq!(format_float_token(FloatClass::Normal, false, "1E9", false), "1E9.0");
+    assert_eq!(
+        format_float_token(FloatClass::Normal, false, "1E9", false),
+        "1E9.0"
+    );
     // force_scinote bypasses the fix-up entirely (printc.cc:1473-1475): the
     // string is used verbatim even if it somehow lacks '.'/'e'.
-    assert_eq!(format_float_token(FloatClass::Normal, false, "100", true), "100");
+    assert_eq!(
+        format_float_token(FloatClass::Normal, false, "100", true),
+        "100"
+    );
     // Special classes ignore the decimal entirely.
-    assert_eq!(format_float_token(FloatClass::Infinity, true, "ignored", false), "-INFINITY");
-    assert_eq!(format_float_token(FloatClass::Nan, false, "ignored", true), "NAN");
-    assert_eq!(format_float_token(FloatClass::Unknown, true, "ignored", false), "FLOAT_UNKNOWN");
+    assert_eq!(
+        format_float_token(FloatClass::Infinity, true, "ignored", false),
+        "-INFINITY"
+    );
+    assert_eq!(
+        format_float_token(FloatClass::Nan, false, "ignored", true),
+        "NAN"
+    );
+    assert_eq!(
+        format_float_token(FloatClass::Unknown, true, "ignored", false),
+        "FLOAT_UNKNOWN"
+    );
 }
 
 #[test]
@@ -238,33 +299,87 @@ fn printc_w8_format_integer_char_high_byte_and_wide_split() {
     // byte, NOT a unicode interpretation); else printUnicode.
     // 0x80 in 1 byte -> '\x80'.
     assert_eq!(
-        format_integer_token(false, 0x80, display_format::FORCE_CHAR, 1, false, false, false, ""),
+        format_integer_token(
+            false,
+            0x80,
+            display_format::FORCE_CHAR,
+            1,
+            false,
+            false,
+            false,
+            ""
+        ),
         "'\\x80'"
     );
     // 0xff in 1 byte -> '\xff' (a high byte, escaped, not é).
     assert_eq!(
-        format_integer_token(false, 0xff, display_format::FORCE_CHAR, 1, false, false, false, ""),
+        format_integer_token(
+            false,
+            0xff,
+            display_format::FORCE_CHAR,
+            1,
+            false,
+            false,
+            false,
+            ""
+        ),
         "'\\xff'"
     );
     // 0xe9 in 2 bytes (sz>1) does NOT take the high-byte escape branch (guard is
     // `sz == 1`): it goes through printUnicode, emitting raw é (U+00E9 printable).
     assert_eq!(
-        format_integer_token(false, 0xe9, display_format::FORCE_CHAR, 2, false, false, false, ""),
+        format_integer_token(
+            false,
+            0xe9,
+            display_format::FORCE_CHAR,
+            2,
+            false,
+            false,
+            false,
+            ""
+        ),
         "'é'"
     );
     // Wide prefix only when doEmitWideCharPrefix && sz>1.
     assert_eq!(
-        format_integer_token(false, b'A' as u64, display_format::FORCE_CHAR, 2, false, false, true, ""),
+        format_integer_token(
+            false,
+            b'A' as u64,
+            display_format::FORCE_CHAR,
+            2,
+            false,
+            false,
+            true,
+            ""
+        ),
         "L'A'"
     );
     // wide_char_prefix true but sz==1 -> no 'L' (guard `sz > 1`).
     assert_eq!(
-        format_integer_token(false, b'A' as u64, display_format::FORCE_CHAR, 1, false, false, true, ""),
+        format_integer_token(
+            false,
+            b'A' as u64,
+            display_format::FORCE_CHAR,
+            1,
+            false,
+            false,
+            true,
+            ""
+        ),
         "'A'"
     );
     // A control char inside the char literal escapes via print_unicode.
     assert_eq!(
-        format_integer_token(false, 0x09, display_format::FORCE_CHAR, 1, false, false, false, ""),
+        format_integer_token(
+            false,
+            0x09,
+            display_format::FORCE_CHAR,
+            1,
+            false,
+            false,
+            false,
+            ""
+        ),
         "'\\t'"
     );
 }

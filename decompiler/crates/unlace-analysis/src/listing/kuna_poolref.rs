@@ -47,8 +47,8 @@
 //! entry, a `.data` pointer) is whatever the loader or the program last wrote
 //! there, and the image's copy of it is not evidence of anything.
 
-use object::read::{Object, ObjectSection};
 use object::SectionKind;
+use object::read::{Object, ObjectSection};
 
 /// ELF section-header flag `SHF_WRITE` (the section is writable at run time).
 const SHF_WRITE: u64 = 0x1;
@@ -83,17 +83,29 @@ impl<'a> PoolImage<'a> {
             let hi = lo.saturating_add(size.min(data.len() as u64));
             ro.push((lo, hi, data));
         }
-        Self::from_ranges(ro, if file.is_64() { 8 } else { 4 }, file.is_little_endian())
+        Self::from_ranges(
+            ro,
+            if file.is_64() { 8 } else { 4 },
+            file.is_little_endian(),
+        )
     }
 
     /// [`Self::new`] over an already-collected range list, which is what makes
     /// the dereference testable without an image on disk.
-    pub(super) fn from_ranges(mut ro: Vec<(u64, u64, &'a [u8])>, ptr: u32, little_endian: bool) -> Option<Self> {
+    pub(super) fn from_ranges(
+        mut ro: Vec<(u64, u64, &'a [u8])>,
+        ptr: u32,
+        little_endian: bool,
+    ) -> Option<Self> {
         if ro.is_empty() {
             return None;
         }
         ro.sort_unstable_by_key(|&(lo, _, _)| lo);
-        Some(PoolImage { ro, ptr, little_endian })
+        Some(PoolImage {
+            ro,
+            ptr,
+            little_endian,
+        })
     }
 
     /// The address a `width`-byte read of `at` yields, when that read is a
@@ -119,12 +131,16 @@ impl<'a> PoolImage<'a> {
         self.ro.iter().flat_map(move |&(lo, hi, data)| {
             let len = ((hi - lo) as usize).min(data.len());
             let lead = (ptr - (lo as usize % ptr)) % ptr;
-            data[..len].get(lead..).unwrap_or(&[]).chunks_exact(ptr).map(move |b| match (ptr, self.little_endian) {
-                (8, true) => u64::from_le_bytes(b.try_into().unwrap()),
-                (8, false) => u64::from_be_bytes(b.try_into().unwrap()),
-                (_, true) => u64::from(u32::from_le_bytes(b.try_into().unwrap())),
-                (_, false) => u64::from(u32::from_be_bytes(b.try_into().unwrap())),
-            })
+            data[..len]
+                .get(lead..)
+                .unwrap_or(&[])
+                .chunks_exact(ptr)
+                .map(move |b| match (ptr, self.little_endian) {
+                    (8, true) => u64::from_le_bytes(b.try_into().unwrap()),
+                    (8, false) => u64::from_be_bytes(b.try_into().unwrap()),
+                    (_, true) => u64::from(u32::from_le_bytes(b.try_into().unwrap())),
+                    (_, false) => u64::from(u32::from_be_bytes(b.try_into().unwrap())),
+                })
         })
     }
 
@@ -139,7 +155,11 @@ impl<'a> PoolImage<'a> {
             let Ok(data) = sec.data() else { continue };
             for b in data.windows(4) {
                 let b: [u8; 4] = b.try_into().unwrap();
-                let v = u64::from(if self.little_endian { u32::from_le_bytes(b) } else { u32::from_be_bytes(b) });
+                let v = u64::from(if self.little_endian {
+                    u32::from_le_bytes(b)
+                } else {
+                    u32::from_be_bytes(b)
+                });
                 if v % ptr == 0 && v >= lo && v < hi && self.contains_bytes(v, ptr) {
                     out.insert(v);
                 }
@@ -156,13 +176,23 @@ impl<'a> PoolImage<'a> {
 
     /// Whether a complete read stays inside the declared read-only file range.
     pub(super) fn contains_bytes(&self, vma: u64, width: u64) -> bool {
-        let Some(end) = vma.checked_add(width) else { return false };
-        let Some(i) = self.ro.partition_point(|&(lo, _, _)| lo <= vma).checked_sub(1) else {
+        let Some(end) = vma.checked_add(width) else {
+            return false;
+        };
+        let Some(i) = self
+            .ro
+            .partition_point(|&(lo, _, _)| lo <= vma)
+            .checked_sub(1)
+        else {
             return false;
         };
         let (lo, hi, data) = self.ro[i];
-        width != 0 && vma < hi && end <= hi
-            && end.checked_sub(lo).is_some_and(|offset| offset <= data.len() as u64)
+        width != 0
+            && vma < hi
+            && end <= hi
+            && end
+                .checked_sub(lo)
+                .is_some_and(|offset| offset <= data.len() as u64)
     }
 
     /// The signed 32-bit word at `vma`, when `vma` is 4-byte aligned and lies in
@@ -175,7 +205,11 @@ impl<'a> PoolImage<'a> {
         }
         let b = self.bytes_at(vma, 4)?;
         let b: [u8; 4] = b.try_into().ok()?;
-        Some(if self.little_endian { i32::from_le_bytes(b) } else { i32::from_be_bytes(b) })
+        Some(if self.little_endian {
+            i32::from_le_bytes(b)
+        } else {
+            i32::from_be_bytes(b)
+        })
     }
 
     /// The pointer-sized word at `vma`, when `vma` is pointer-aligned and lies in
@@ -218,19 +252,29 @@ impl<'a> PoolImage<'a> {
             _ => return None,
         };
         let bits = 8 * width;
-        Some(if signed && raw >> (bits - 1) == 1 { (raw | (u64::MAX << bits)) as i64 } else { raw as i64 })
+        Some(if signed && raw >> (bits - 1) == 1 {
+            (raw | (u64::MAX << bits)) as i64
+        } else {
+            raw as i64
+        })
     }
 
     /// The `[lo, hi)` range of the read-only section holding `vma`.
     pub(super) fn section_of(&self, vma: u64) -> Option<(u64, u64)> {
-        let i = self.ro.partition_point(|&(lo, _, _)| lo <= vma).checked_sub(1)?;
+        let i = self
+            .ro
+            .partition_point(|&(lo, _, _)| lo <= vma)
+            .checked_sub(1)?;
         let (lo, hi, _) = self.ro[i];
         (vma < hi).then_some((lo, hi))
     }
 
     /// The `width` bytes of read-only image content at `vma`.
     pub(super) fn bytes_at(&self, vma: u64, width: u32) -> Option<&'a [u8]> {
-        let i = self.ro.partition_point(|&(lo, _, _)| lo <= vma).checked_sub(1)?;
+        let i = self
+            .ro
+            .partition_point(|&(lo, _, _)| lo <= vma)
+            .checked_sub(1)?;
         let (lo, hi, data) = self.ro[i];
         if vma >= hi {
             return None;
@@ -331,7 +375,10 @@ mod tests {
     #[test]
     fn the_word_is_read_in_the_images_own_byte_order() {
         let be = PoolImage::from_ranges(vec![(0x1000, 0x100c, &POOL[..])], 4, false).unwrap();
-        assert_eq!(be.follow(0x1000, 4, &[(0x400000, 0x401000)]), Some(0x400000));
+        assert_eq!(
+            be.follow(0x1000, 4, &[(0x400000, 0x401000)]),
+            Some(0x400000)
+        );
         let img = PoolImage::from_ranges(vec![(0x1000, 0x100c, &POOL[..])], 8, true).unwrap();
         assert_eq!(img.follow(0x1000, 8, &MAPPED), None); // 0x2a00004000 lands nowhere
     }

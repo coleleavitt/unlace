@@ -31,13 +31,16 @@
 //!
 use std::path::PathBuf;
 
-use unlace_analysis::loadimage_object::ObjectLoadImage;
 use unlace_analysis::fid::build::build_records;
 use unlace_analysis::fid::db::{FidDatabase, FidDb};
+use unlace_analysis::loadimage_object::ObjectLoadImage;
 use unlace_console::engine::bootstrap_from_object;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture_o() -> PathBuf {
@@ -57,7 +60,10 @@ fn records_for_fixture() -> Vec<unlace_analysis::fid::db::FidRecord> {
     let specs = root.join("specs");
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
 
-    let bin = fixture_o().to_str().expect("UTF-8 fixture path").to_string();
+    let bin = fixture_o()
+        .to_str()
+        .expect("UTF-8 fixture path")
+        .to_string();
     // The fixture is x86-64; pass the language explicitly so the bootstrap
     // resolves `x86:LE:64:default` (the `.o`'s machine is EM_X86_64, which
     // derives to the same id — the explicit target just pins it).
@@ -71,7 +77,9 @@ fn records_for_fixture() -> Vec<unlace_analysis::fid::db::FidRecord> {
         &bytes,
         &image,
         arch,
-        arch.translate().as_sleigh().expect("standalone Sleigh engine"),
+        arch.translate()
+            .as_sleigh()
+            .expect("standalone Sleigh engine"),
     )
 }
 
@@ -96,8 +104,17 @@ fn generator_recovers_the_three_functions_by_name() {
     // Each is a real, distinctive fingerprint: non-trivial code-unit size and a
     // full hash that is not the FNV offset basis (i.e. bytes were actually mixed).
     for r in &records {
-        assert!(r.code_unit_size >= 4, "{}: code_unit_size {} < 4", r.name, r.code_unit_size);
-        assert_ne!(r.full_hash, 0xcbf2_9ce4_8422_2325, "{}: full hash is the empty basis", r.name);
+        assert!(
+            r.code_unit_size >= 4,
+            "{}: code_unit_size {} < 4",
+            r.name,
+            r.code_unit_size
+        );
+        assert_ne!(
+            r.full_hash, 0xcbf2_9ce4_8422_2325,
+            "{}: full hash is the empty basis",
+            r.name
+        );
     }
 
     // The three functions have distinct full hashes (no collision in the fixture).
@@ -105,7 +122,11 @@ fn generator_recovers_the_three_functions_by_name() {
     hashes.sort_unstable();
     let n = hashes.len();
     hashes.dedup();
-    assert_eq!(hashes.len(), n, "the fixture functions must have distinct full hashes");
+    assert_eq!(
+        hashes.len(),
+        n,
+        "the fixture functions must have distinct full hashes"
+    );
 }
 
 #[test]
@@ -123,7 +144,11 @@ fn generator_records_round_trip_through_the_db() {
     assert_eq!(back.record_count(), records.len());
     for want in &records {
         let got = back.find_by_full_hash(want.full_hash);
-        assert!(got.iter().any(|r| r == want), "{} not recovered by full hash", want.name);
+        assert!(
+            got.iter().any(|r| r == want),
+            "{} not recovered by full hash",
+            want.name
+        );
     }
 }
 

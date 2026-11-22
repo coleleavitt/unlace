@@ -161,7 +161,12 @@ impl RestartLog {
     /// Record a restart trigger, formatting the given site address as the
     /// detail — port of the `Address`-overload `kunaRecordRestart`
     /// (`kuna_restartlog.cc:79`), which does `site.printRaw(oss)`.
-    pub fn record_at(&mut self, fd: &Funcdata, reason: KunaRestartReason, site: &unlace_base::address::Address) {
+    pub fn record_at(
+        &mut self,
+        fd: &Funcdata,
+        reason: KunaRestartReason,
+        site: &unlace_base::address::Address,
+    ) {
         let mut detail = String::new();
         // printRaw cannot fail for a real address; an invalid space prints
         // "invalid_addr". Fall back to empty on the (unreachable) error path.

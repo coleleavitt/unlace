@@ -73,7 +73,10 @@ fn find_empty_lookup_returns_none_no_underflow_panic() {
     set_index(&mut g, b[0], 7);
     let lookup: Vec<(int4, usize)> = Vec::new();
     let res = LoopBody::find(b[0], &lookup, &g);
-    assert_eq!(res, None, "empty looporder must return None without panicking");
+    assert_eq!(
+        res, None,
+        "empty looporder must return None without panicking"
+    );
 }
 
 #[test]
@@ -108,10 +111,26 @@ fn find_three_elements_walks_both_branches() {
 
     let lookup = lookup_sorted(&[(9, 300), (2, 100), (5, 200)]); // unsorted input -> sorted
 
-    assert_eq!(LoopBody::find(blk[0], &lookup, &g), Some(100), "head==2 hit");
-    assert_eq!(LoopBody::find(blk[1], &lookup, &g), Some(200), "head==5 hit");
-    assert_eq!(LoopBody::find(blk[2], &lookup, &g), Some(300), "head==9 hit");
-    assert_eq!(LoopBody::find(blk[3], &lookup, &g), None, "head==7 miss between entries");
+    assert_eq!(
+        LoopBody::find(blk[0], &lookup, &g),
+        Some(100),
+        "head==2 hit"
+    );
+    assert_eq!(
+        LoopBody::find(blk[1], &lookup, &g),
+        Some(200),
+        "head==5 hit"
+    );
+    assert_eq!(
+        LoopBody::find(blk[2], &lookup, &g),
+        Some(300),
+        "head==9 hit"
+    );
+    assert_eq!(
+        LoopBody::find(blk[3], &lookup, &g),
+        None,
+        "head==7 miss between entries"
+    );
 }
 
 #[test]
@@ -160,7 +179,11 @@ fn merge_identical_heads_accumulates_tails_and_truncates() {
     LoopBody::merge_identical_heads(&mut looporder, &mut loopbody);
 
     // looporder truncated to the survivors, in order [lb0, lb2].
-    assert_eq!(looporder, vec![0usize, 2], "looporder keeps survivors lb0,lb2");
+    assert_eq!(
+        looporder,
+        vec![0usize, 2],
+        "looporder keeps survivors lb0,lb2"
+    );
     // lb1 marked subsumed (head None).
     assert_eq!(loopbody[1].get_head(), None, "lb1 subsumed -> head None");
     // lb0 still has head H, and inherited T2 as a second tail.
@@ -184,7 +207,11 @@ fn merge_identical_heads_no_merge_is_identity() {
     let mut looporder = vec![0usize, 1];
     LoopBody::merge_identical_heads(&mut looporder, &mut loopbody);
 
-    assert_eq!(looporder, vec![0usize, 1], "distinct heads -> looporder unchanged");
+    assert_eq!(
+        looporder,
+        vec![0usize, 1],
+        "distinct heads -> looporder unchanged"
+    );
     assert_eq!(loopbody[0].get_head(), Some(blk[0]));
     assert_eq!(loopbody[1].get_head(), Some(blk[2]));
 }
@@ -207,7 +234,11 @@ fn merge_identical_heads_all_same_head_collapses_to_one() {
     let mut looporder = vec![0usize, 1, 2, 3];
     LoopBody::merge_identical_heads(&mut looporder, &mut bodies);
 
-    assert_eq!(looporder, vec![0usize], "all-same-head collapses to single survivor");
+    assert_eq!(
+        looporder,
+        vec![0usize],
+        "all-same-head collapses to single survivor"
+    );
     assert_eq!(bodies[0].get_head(), Some(h));
     for s in &bodies[1..] {
         assert_eq!(s.get_head(), None, "every other body subsumed");

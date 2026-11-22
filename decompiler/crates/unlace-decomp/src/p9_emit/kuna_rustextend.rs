@@ -1,6 +1,6 @@
 //! Preserve numeric signedness when extending Rust's unsigned text storage.
 
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 
 pub(crate) fn signed_text_input(input: &Datatype, output: &Datatype) -> Option<&'static str> {
     if input.get_metatype() != type_metatype::TYPE_INT
@@ -8,8 +8,10 @@ pub(crate) fn signed_text_input(input: &Datatype, output: &Datatype) -> Option<&
         || !input.is_core_type()
         || output.get_size() <= input.get_size()
         || !matches!(output.get_size(), 2 | 4 | 8 | 16)
-        || !matches!(output.get_metatype(),
-            type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN)
+        || !matches!(
+            output.get_metatype(),
+            type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN
+        )
     {
         return None;
     }

@@ -40,14 +40,17 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixtures() -> PathBuf {
@@ -125,7 +128,10 @@ fn macho_x64_decompiles_with_named_printf() {
     // The linked exe loads with the x86-64 (SysV/gcc) spec — macOS x86-64 is
     // System V AMD64, the same cspec Ghidra labels `gcc`.
     let desc = prog.description().to_string();
-    assert!(desc.contains("x86"), "Mach-O: expected x86 spec, got {desc:?}");
+    assert!(
+        desc.contains("x86"),
+        "Mach-O: expected x86 spec, got {desc:?}"
+    );
     // The defined `_main` and the imported `printf` resolve as functions.
     assert!(
         prog.lookup_symbol("_main").is_some(),
@@ -139,7 +145,10 @@ fn macho_x64_decompiles_with_named_printf() {
     // Decompile by the defined-function name (`_main`).
     let out = decompile_func(prog, "load function _main");
 
-    assert!(out.contains("printf("), "Mach-O: expected a `printf(` call, got:\n{out}");
+    assert!(
+        out.contains("printf("),
+        "Mach-O: expected a `printf(` call, got:\n{out}"
+    );
     // The call is the named import, not an unnamed stub.
     assert!(
         !out.contains(&format!("sub_{X64_PRINTF_STUB:x}")),
@@ -172,20 +181,27 @@ fn macho_x64_names_printf_stub_by_address() {
 #[test]
 fn macho_batch_targets_exclude_import_pointer_slots() {
     let mut prog = boot("macho_imports");
-    prog.commit_pending_analysis().expect("Mach-O analysis commit must succeed");
+    prog.commit_pending_analysis()
+        .expect("Mach-O analysis commit must succeed");
 
     let canonical = prog.function_entries_canonical();
     assert!(
-        canonical.iter().any(|entry| entry.addr.get_offset() == X64_PRINTF_PTR),
+        canonical
+            .iter()
+            .any(|entry| entry.addr.get_offset() == X64_PRINTF_PTR),
         "Mach-O: canonical inventory must retain the printf pointer slot"
     );
     let executable = prog.function_entries_executable();
     assert!(
-        executable.iter().any(|entry| entry.addr.get_offset() == X64_PRINTF_STUB),
+        executable
+            .iter()
+            .any(|entry| entry.addr.get_offset() == X64_PRINTF_STUB),
         "Mach-O: executable inventory must retain the printf stub"
     );
     assert!(
-        !executable.iter().any(|entry| entry.addr.get_offset() == X64_PRINTF_PTR),
+        !executable
+            .iter()
+            .any(|entry| entry.addr.get_offset() == X64_PRINTF_PTR),
         "Mach-O: executable inventory must exclude the printf pointer slot"
     );
     assert!(

@@ -4,7 +4,7 @@ use std::collections::{BTreeSet, HashMap};
 
 use object::{Object, ObjectSection, ObjectSymbol};
 
-use super::{report, Profile, ProfileSignature, Report};
+use super::{Profile, ProfileSignature, Report, report};
 use crate::listing::Listing;
 
 pub struct Request {
@@ -192,7 +192,9 @@ mod tests {
     #[test]
     fn only_complete_rust_library_source_commits_are_reported() {
         let hash = "9d871b0617a4b3d6610b7cee0ab5310dcb542c62";
-        let text = format!("/rustc/{hash}/library/core/src/lib.rs\0/rustc/{hash}/library/std/src/lib.rs\0/rustc/{hash}/user/payload\0/rustc/9d871b061/library/core/src/lib.rs");
+        let text = format!(
+            "/rustc/{hash}/library/core/src/lib.rs\0/rustc/{hash}/library/std/src/lib.rs\0/rustc/{hash}/user/payload\0/rustc/9d871b061/library/core/src/lib.rs"
+        );
         let result = from_sections(b"GCC\0not rustc version 1.71.0\0", text.as_bytes());
         assert!(result.rustc_records.is_empty());
         assert_eq!(result.source_commits, [hash]);

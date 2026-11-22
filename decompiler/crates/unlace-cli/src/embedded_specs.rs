@@ -55,7 +55,9 @@ fn unpack_into_cache(id: &str, files: &[(&str, &[u8])]) -> Result<PathBuf, Strin
 #[cfg_attr(not(feature = "embed-specs"), allow(dead_code))]
 fn cache_bases() -> Vec<PathBuf> {
     let var = |name: &str| {
-        std::env::var_os(name).filter(|v| !v.is_empty()).map(PathBuf::from)
+        std::env::var_os(name)
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from)
     };
     let user_cache = if cfg!(windows) {
         var("LOCALAPPDATA")
@@ -66,9 +68,18 @@ fn cache_bases() -> Vec<PathBuf> {
             .filter(|dir| dir.is_absolute())
             .or_else(|| var("HOME").map(|home| home.join(".cache")))
     };
-    let user = std::env::var("USER").or_else(|_| std::env::var("USERNAME")).unwrap_or_default();
-    let temp = if user.is_empty() { "unlace".to_string() } else { format!("unlace-{user}") };
-    let mut bases: Vec<PathBuf> = user_cache.into_iter().map(|dir| dir.join("unlace")).collect();
+    let user = std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .unwrap_or_default();
+    let temp = if user.is_empty() {
+        "unlace".to_string()
+    } else {
+        format!("unlace-{user}")
+    };
+    let mut bases: Vec<PathBuf> = user_cache
+        .into_iter()
+        .map(|dir| dir.join("unlace"))
+        .collect();
     bases.push(std::env::temp_dir().join(temp));
     bases
 }
@@ -145,7 +156,9 @@ fn acquire(lock: &fs::File, wait: Duration) -> Result<(), String> {
                 pause = (pause * 2).min(Duration::from_millis(25));
             }
             Err(fs::TryLockError::WouldBlock) => {
-                return Err(format!("another process held the unpack lock for over {wait:?}"));
+                return Err(format!(
+                    "another process held the unpack lock for over {wait:?}"
+                ));
             }
             Err(fs::TryLockError::Error(e)) => return Err(e.to_string()),
         }
@@ -154,7 +167,9 @@ fn acquire(lock: &fs::File, wait: Duration) -> Result<(), String> {
 
 fn write_tree(staging: &Path, id: &str, files: &[(&str, &[u8])]) -> Result<(), String> {
     for (rel, bytes) in files {
-        let path = rel.split('/').fold(staging.to_path_buf(), |p, part| p.join(part));
+        let path = rel
+            .split('/')
+            .fold(staging.to_path_buf(), |p, part| p.join(part));
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
         }
@@ -168,13 +183,19 @@ mod tests {
     use super::*;
 
     const FILES: &[(&str, &[u8])] = &[
-        ("Ghidra/Processors/x86/data/languages/x86.ldefs", b"<language_definitions/>"),
-        ("Ghidra/Processors/x86/data/languages/x86-64.sla", b"\x00sla"),
+        (
+            "Ghidra/Processors/x86/data/languages/x86.ldefs",
+            b"<language_definitions/>",
+        ),
+        (
+            "Ghidra/Processors/x86/data/languages/x86-64.sla",
+            b"\x00sla",
+        ),
     ];
 
     fn sandbox(tag: &str) -> PathBuf {
-        let dir = std::env::temp_dir()
-            .join(format!("kuna_embedded_specs_{}_{tag}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("kuna_embedded_specs_{}_{tag}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         dir
     }
@@ -188,12 +209,18 @@ mod tests {
         for (rel, bytes) in FILES {
             assert_eq!(fs::read(dir.join(rel)).unwrap(), *bytes, "{rel}");
         }
-        let mut names: Vec<_> = fs::read_dir(&base).unwrap().map(|e| e.unwrap().file_name()).collect();
+        let mut names: Vec<_> = fs::read_dir(&base)
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
         names.sort();
-        assert_eq!(names, vec![
-            std::ffi::OsString::from(".specs-0123.lock"),
-            std::ffi::OsString::from("specs-0123"),
-        ]);
+        assert_eq!(
+            names,
+            vec![
+                std::ffi::OsString::from(".specs-0123.lock"),
+                std::ffi::OsString::from("specs-0123"),
+            ]
+        );
         let _ = fs::remove_dir_all(&base);
     }
 
@@ -203,7 +230,10 @@ mod tests {
         let dir = unpack(&base, "0123", FILES).expect("first unpack");
         fs::write(dir.join("sentinel"), b"kept").unwrap();
         assert_eq!(unpack(&base, "0123", FILES).expect("second unpack"), dir);
-        assert!(dir.join("sentinel").is_file(), "a finished tree was rewritten");
+        assert!(
+            dir.join("sentinel").is_file(),
+            "a finished tree was rewritten"
+        );
         let _ = fs::remove_dir_all(&base);
     }
 
@@ -222,11 +252,19 @@ mod tests {
     fn concurrent_first_runs_settle_on_one_tree() {
         let base = sandbox("race");
         let dirs: Vec<PathBuf> = std::thread::scope(|s| {
-            let runs: Vec<_> = (0..8).map(|_| s.spawn(|| unpack(&base, "0123", FILES))).collect();
-            runs.into_iter().map(|r| r.join().unwrap().expect("unpack")).collect()
+            let runs: Vec<_> = (0..8)
+                .map(|_| s.spawn(|| unpack(&base, "0123", FILES)))
+                .collect();
+            runs.into_iter()
+                .map(|r| r.join().unwrap().expect("unpack"))
+                .collect()
         });
         assert!(dirs.iter().all(|d| *d == base.join("specs-0123")));
-        assert_eq!(fs::read_dir(&base).unwrap().count(), 2, "staging left behind");
+        assert_eq!(
+            fs::read_dir(&base).unwrap().count(),
+            2,
+            "staging left behind"
+        );
         let _ = fs::remove_dir_all(&base);
     }
 
@@ -242,14 +280,18 @@ mod tests {
             }
             let barrier = std::sync::Barrier::new(8);
             std::thread::scope(|scope| {
-                let runs: Vec<_> = (0..8).map(|_| scope.spawn(|| {
-                    barrier.wait();
-                    let dir = unpack(&root, "0123", FILES).expect("repair");
-                    for (rel, bytes) in FILES {
-                        assert_eq!(fs::read(dir.join(rel)).unwrap(), *bytes, "{rel}");
-                    }
-                    assert!(dir.join(COMPLETE).is_file());
-                })).collect();
+                let runs: Vec<_> = (0..8)
+                    .map(|_| {
+                        scope.spawn(|| {
+                            barrier.wait();
+                            let dir = unpack(&root, "0123", FILES).expect("repair");
+                            for (rel, bytes) in FILES {
+                                assert_eq!(fs::read(dir.join(rel)).unwrap(), *bytes, "{rel}");
+                            }
+                            assert!(dir.join(COMPLETE).is_file());
+                        })
+                    })
+                    .collect();
                 for run in runs {
                     run.join().unwrap();
                 }

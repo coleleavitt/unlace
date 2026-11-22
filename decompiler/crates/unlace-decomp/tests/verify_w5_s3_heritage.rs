@@ -26,22 +26,23 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 
-use unlace_decomp::heritage::{Heritage, LocationMap, PriorityQueue, TaskList};
-use unlace_decomp::overrides::Override;
-use unlace_decomp::kuna_restartlog::RestartLog;
 use unlace_decomp::context::{ArchContext, BlockId};
 use unlace_decomp::funcdata::Funcdata;
+use unlace_decomp::heritage::{Heritage, LocationMap, PriorityQueue, TaskList};
+use unlace_decomp::kuna_restartlog::RestartLog;
+use unlace_decomp::overrides::Override;
 
 // ---- fixtures (mirroring the in-module ones) ------------------------------
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -91,8 +92,11 @@ fn build_cfg(fd: &mut Funcdata, n: usize, edges: &[(usize, usize)]) -> Vec<Block
 }
 
 fn merge_indices(h: &Heritage, fd: &Funcdata) -> Vec<int4> {
-    let mut v: Vec<int4> =
-        h.merge_points().iter().map(|&b| fd.bblocks_ref().block(b).get_index()).collect();
+    let mut v: Vec<int4> = h
+        .merge_points()
+        .iter()
+        .map(|&b| fd.bblocks_ref().block(b).get_index())
+        .collect();
     v.sort_unstable();
     v
 }
@@ -122,8 +126,15 @@ fn location_map_add_skips_nonoverlapping_leading_then_unions_later() {
     //   first key >= 0x202 is end; --iter -> 0x200, which DOES overlap 0x202,
     //   so NO ++iter, first-block branch taken, contained -> intersect 2.
     let (key, intersect, _sz) = lm.add(raddr(&fd, 0x202), 4, 7);
-    assert_eq!(key, raddr(&fd, 0x200), "contained sub-range returns containing element");
-    assert_eq!(intersect, 2, "fully contained in older range -> intersect 2");
+    assert_eq!(
+        key,
+        raddr(&fd, 0x200),
+        "contained sub-range returns containing element"
+    );
+    assert_eq!(
+        intersect, 2,
+        "fully contained in older range -> intersect 2"
+    );
     assert_eq!(lm.get(&key).unwrap().pass, 3, "older pass preserved");
     // The low [0x100,0x104) element must be untouched.
     assert_eq!(lm.get(&raddr(&fd, 0x100)).unwrap().pass, 5);
@@ -147,7 +158,11 @@ fn location_map_add_between_elements_is_fresh_disjoint() {
     let (key, intersect, _sz) = lm.add(raddr(&fd, 0x200), 4, 9);
     assert_eq!(key, raddr(&fd, 0x200));
     assert_eq!(intersect, 0, "disjoint insert -> intersect 0");
-    assert_eq!(lm.get(&key).unwrap().pass, 9, "fresh element keeps its own pass");
+    assert_eq!(
+        lm.get(&key).unwrap().pass,
+        9,
+        "fresh element keeps its own pass"
+    );
     assert_eq!(lm.iter().count(), 3);
 }
 
@@ -184,8 +199,16 @@ fn location_map_find_pass_end_boundary_exclusive() {
     let mut lm = LocationMap::new();
     lm.add(raddr(&fd, 0x200), 4, 3); // covers 0x200..0x203 inclusive
     assert_eq!(lm.find_pass(&raddr(&fd, 0x203)), 3, "last in-range byte");
-    assert_eq!(lm.find_pass(&raddr(&fd, 0x204)), -1, "one past the end is unheritaged");
-    assert_eq!(lm.find_pass(&raddr(&fd, 0x1ff)), -1, "one before the start is unheritaged");
+    assert_eq!(
+        lm.find_pass(&raddr(&fd, 0x204)),
+        -1,
+        "one past the end is unheritaged"
+    );
+    assert_eq!(
+        lm.find_pass(&raddr(&fd, 0x1ff)),
+        -1,
+        "one before the start is unheritaged"
+    );
 }
 
 // ===========================================================================
@@ -226,7 +249,11 @@ fn priority_queue_drains_across_empty_intermediate_depths() {
     assert!(!pq.empty());
     assert_eq!(pq.extract(), b[1], "highest depth first");
     // curdepth must have drained from 3 down past empty 2,1 to 0.
-    assert_eq!(pq.extract(), b[0], "drains across empty intermediate stacks");
+    assert_eq!(
+        pq.extract(),
+        b[0],
+        "drains across empty intermediate stacks"
+    );
     assert!(pq.empty(), "curdepth reached -1 sentinel");
 }
 
@@ -241,15 +268,27 @@ fn priority_queue_drains_across_empty_intermediate_depths() {
 #[test]
 fn phi_placement_three_way_join_single_phi() {
     let mut fd = build_fd();
-    let b = build_cfg(&mut fd, 5, &[(0, 1), (0, 2), (0, 3), (1, 4), (2, 4), (3, 4)]);
-    assert_eq!(fd.bblocks_ref().block(b[4]).size_in(), 3, "join has 3 preds");
+    let b = build_cfg(
+        &mut fd,
+        5,
+        &[(0, 1), (0, 2), (0, 3), (1, 4), (2, 4), (3, 4)],
+    );
+    assert_eq!(
+        fd.bblocks_ref().block(b[4]).size_in(),
+        3,
+        "join has 3 preds"
+    );
     assert_eq!(fd.bblocks_ref().block(b[4]).get_immed_dom(), Some(b[0]));
 
     let mut h = Heritage::new();
     h.build_info_list(&fd);
     h.build_adt(&fd);
     h.calc_multiequals(&fd, &[b[2]]);
-    assert_eq!(merge_indices(&h, &fd), vec![4], "3-way join: exactly one phi at the join");
+    assert_eq!(
+        merge_indices(&h, &fd),
+        vec![4],
+        "3-way join: exactly one phi at the join"
+    );
 }
 
 /// A write in TWO blocks of the 3-way join still yields exactly one phi (the
@@ -257,12 +296,20 @@ fn phi_placement_three_way_join_single_phi() {
 #[test]
 fn phi_placement_three_way_join_two_writes_still_single_phi() {
     let mut fd = build_fd();
-    let b = build_cfg(&mut fd, 5, &[(0, 1), (0, 2), (0, 3), (1, 4), (2, 4), (3, 4)]);
+    let b = build_cfg(
+        &mut fd,
+        5,
+        &[(0, 1), (0, 2), (0, 3), (1, 4), (2, 4), (3, 4)],
+    );
     let mut h = Heritage::new();
     h.build_info_list(&fd);
     h.build_adt(&fd);
     h.calc_multiequals(&fd, &[b[1], b[3]]);
-    assert_eq!(merge_indices(&h, &fd), vec![4], "two writes, one join -> still one phi");
+    assert_eq!(
+        merge_indices(&h, &fd),
+        vec![4],
+        "two writes, one join -> still one phi"
+    );
 }
 
 /// Stacked diamonds, write in the FIRST diamond only.  Two diamonds:
@@ -281,7 +328,16 @@ fn phi_placement_stacked_diamonds_first_write_no_phi_at_dominated_join() {
     let b = build_cfg(
         &mut fd,
         7,
-        &[(0, 1), (0, 2), (1, 3), (2, 3), (3, 4), (3, 5), (4, 6), (5, 6)],
+        &[
+            (0, 1),
+            (0, 2),
+            (1, 3),
+            (2, 3),
+            (3, 4),
+            (3, 5),
+            (4, 6),
+            (5, 6),
+        ],
     );
     assert_eq!(fd.bblocks_ref().block(b[3]).get_immed_dom(), Some(b[0]));
     assert_eq!(fd.bblocks_ref().block(b[6]).get_immed_dom(), Some(b[3]));
@@ -309,7 +365,16 @@ fn phi_placement_stacked_diamonds_mid_write_phi_at_second_join_only() {
     let b = build_cfg(
         &mut fd,
         7,
-        &[(0, 1), (0, 2), (1, 3), (2, 3), (3, 4), (3, 5), (4, 6), (5, 6)],
+        &[
+            (0, 1),
+            (0, 2),
+            (1, 3),
+            (2, 3),
+            (3, 4),
+            (3, 5),
+            (4, 6),
+            (5, 6),
+        ],
     );
     let mut h = Heritage::new();
     h.build_info_list(&fd);
@@ -334,7 +399,8 @@ fn bump_deadcode_delay_spacebase_installs_once_then_suppresses() {
     // Build a manager that includes a SPACEBASE "stack" space.
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",

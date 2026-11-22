@@ -55,7 +55,7 @@ fn parse_bound(p1: &str, what: &str) -> KunaResult<int4> {
         _ => {
             return Err(KunaError::parse(format!(
                 "Bad {what}: {p1:?} is not a decimal count"
-            )))
+            )));
         }
     };
     if val > MAX_BOUND {

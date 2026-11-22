@@ -1,6 +1,6 @@
-use unlace_base::address::Address;
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
 use std::path::PathBuf;
+use unlace_base::address::Address;
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 fn program(language: &str) -> ConsoleProgram {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");

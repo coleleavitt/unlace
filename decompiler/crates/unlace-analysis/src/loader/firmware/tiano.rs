@@ -68,13 +68,23 @@ impl Sd<'_> {
     }
 
     fn get_bits(&mut self, n: u16) -> u32 {
-        let out = if n == 0 { 0 } else { self.bit_buf >> (BITBUFSIZ - u32::from(n)) };
+        let out = if n == 0 {
+            0
+        } else {
+            self.bit_buf >> (BITBUFSIZ - u32::from(n))
+        };
         self.fill_buf(n);
         out
     }
 
     /// `MakeTable`; false on a corrupt table.
-    fn make_table(&mut self, num_char: usize, bit_len: &[u8], table_bits: u16, which: TableKind) -> bool {
+    fn make_table(
+        &mut self,
+        num_char: usize,
+        bit_len: &[u8],
+        table_bits: u16,
+        which: TableKind,
+    ) -> bool {
         let mut count = [0u16; 17];
         let mut weight = [0u16; 17];
         let mut start = [0u16; 18];
@@ -139,7 +149,11 @@ impl Sd<'_> {
                     if node >= self.left.len() {
                         return false;
                     }
-                    slot = if index3 & mask != 0 { Slot::Right(node) } else { Slot::Left(node) };
+                    slot = if index3 & mask != 0 {
+                        Slot::Right(node)
+                    } else {
+                        Slot::Left(node)
+                    };
                     index3 <<= 1;
                     rest -= 1;
                 }
@@ -180,14 +194,22 @@ impl Sd<'_> {
             if i >= self.left.len() || mask == 0 {
                 return 0;
             }
-            val = if self.bit_buf & mask != 0 { self.right[i] } else { self.left[i] };
+            val = if self.bit_buf & mask != 0 {
+                self.right[i]
+            } else {
+                self.left[i]
+            };
             mask >>= 1;
         }
         val
     }
 
     fn decode_p(&mut self) -> u32 {
-        let val = self.walk(self.pt_table[(self.bit_buf >> (BITBUFSIZ - 8)) as usize], MAXNP, 8);
+        let val = self.walk(
+            self.pt_table[(self.bit_buf >> (BITBUFSIZ - 8)) as usize],
+            MAXNP,
+            8,
+        );
         self.fill_buf(u16::from(self.pt_len[val as usize]));
         if val > 1 {
             (1u32 << (val - 1)) + self.get_bits(val - 1)
@@ -244,7 +266,11 @@ impl Sd<'_> {
         }
         let mut index = 0usize;
         while index < number && index < NC {
-            let c = self.walk(self.pt_table[(self.bit_buf >> (BITBUFSIZ - 8)) as usize], NT, 8);
+            let c = self.walk(
+                self.pt_table[(self.bit_buf >> (BITBUFSIZ - 8)) as usize],
+                NT,
+                8,
+            );
             self.fill_buf(u16::from(self.pt_len[c as usize]));
             if c <= 2 {
                 let run = match c {
@@ -284,7 +310,11 @@ impl Sd<'_> {
             }
         }
         self.block_size = self.block_size.wrapping_sub(1);
-        let c = self.walk(self.c_table[(self.bit_buf >> (BITBUFSIZ - 12)) as usize], NC, 12);
+        let c = self.walk(
+            self.c_table[(self.bit_buf >> (BITBUFSIZ - 12)) as usize],
+            NC,
+            12,
+        );
         self.fill_buf(u16::from(self.c_len[c as usize]));
         c
     }
@@ -338,10 +368,18 @@ enum Slot {
 
 /// Decompress an EFI 1.1 or Tiano stream (8-byte size header first).
 pub fn decompress(data: &[u8], variant: Variant) -> Result<Vec<u8>, String> {
-    let word = |at: usize| data.get(at..at + 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
-    let (Some(comp), Some(orig)) = (word(0), word(4)) else { return Err("short EFI/Tiano header".into()) };
+    let word = |at: usize| {
+        data.get(at..at + 4)
+            .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+    };
+    let (Some(comp), Some(orig)) = (word(0), word(4)) else {
+        return Err("short EFI/Tiano header".into());
+    };
     if comp as usize > data.len() - 8 {
-        return Err(format!("EFI/Tiano compressed size {comp} past the {} bytes given", data.len() - 8));
+        return Err(format!(
+            "EFI/Tiano compressed size {comp} past the {} bytes given",
+            data.len() - 8
+        ));
     }
     if orig > 256 << 20 {
         return Err(format!("EFI/Tiano original size {orig} is too large"));
@@ -379,7 +417,11 @@ pub fn decompress(data: &[u8], variant: Variant) -> Result<Vec<u8>, String> {
 /// Decompress trying `first`, then the other variant: the standard
 /// compression section names EFI 1.1, but some firmware stores Tiano there.
 pub fn decompress_either(data: &[u8], first: Variant) -> Result<Vec<u8>, String> {
-    let other = if first == Variant::Efi { Variant::Tiano } else { Variant::Efi };
+    let other = if first == Variant::Efi {
+        Variant::Tiano
+    } else {
+        Variant::Efi
+    };
     decompress(data, first).or_else(|e| decompress(data, other).map_err(|_| e))
 }
 
@@ -388,15 +430,29 @@ mod tests {
     use super::*;
 
     fn fixture(name: &str) -> Vec<u8> {
-        std::fs::read(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures").join(name)).unwrap()
+        std::fs::read(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures")
+                .join(name),
+        )
+        .unwrap()
     }
 
     #[test]
     fn both_variants_round_trip_edk2_tianocompress_output() {
         let plain = fixture("uefi_diskio_x64.efi");
-        assert_eq!(decompress(&fixture("uefi_diskio_x64.tiano"), Variant::Tiano).unwrap(), plain);
-        assert_eq!(decompress(&fixture("uefi_diskio_x64.eficomp"), Variant::Efi).unwrap(), plain);
-        assert_eq!(decompress_either(&fixture("uefi_diskio_x64.tiano"), Variant::Efi).unwrap(), plain);
+        assert_eq!(
+            decompress(&fixture("uefi_diskio_x64.tiano"), Variant::Tiano).unwrap(),
+            plain
+        );
+        assert_eq!(
+            decompress(&fixture("uefi_diskio_x64.eficomp"), Variant::Efi).unwrap(),
+            plain
+        );
+        assert_eq!(
+            decompress_either(&fixture("uefi_diskio_x64.tiano"), Variant::Efi).unwrap(),
+            plain
+        );
     }
 
     #[test]

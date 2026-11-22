@@ -63,7 +63,8 @@ pub fn te_as_pe(te: &[u8]) -> Option<Vec<u8>> {
         let virtual_address = field(record, 12);
         let raw_size = field(record, 16);
         let raw_pointer = field(record, 20);
-        image_end = image_end.max(u64::from(virtual_address) + u64::from(virtual_size.max(raw_size)));
+        image_end =
+            image_end.max(u64::from(virtual_address) + u64::from(virtual_size.max(raw_size)));
         if raw_pointer != 0 {
             record[20..24].copy_from_slice(&raw_pointer.checked_add(shift)?.to_le_bytes());
         }
@@ -75,7 +76,10 @@ pub fn te_as_pe(te: &[u8]) -> Option<Vec<u8>> {
     out[..2].copy_from_slice(b"MZ");
     let pe = header_len - 24 - optional_size;
     out[0x3c..0x40].copy_from_slice(&(pe as u32).to_le_bytes());
-    let mut w = Writer { buf: &mut out, at: pe };
+    let mut w = Writer {
+        buf: &mut out,
+        at: pe,
+    };
     w.bytes(b"PE\0\0");
     w.u16(machine);
     w.u16(nsections as u16);
@@ -160,7 +164,12 @@ pub fn raw_as_elf(image: &[u8], base: u64, entry: u64, language: &str) -> Option
     out[4] = if wide { 2 } else { 1 };
     out[5] = if big { 2 } else { 1 };
     out[6] = 1;
-    let mut w = Endian { buf: &mut out, at: 16, big, wide };
+    let mut w = Endian {
+        buf: &mut out,
+        at: 16,
+        big,
+        wide,
+    };
     w.u16(2);
     w.u16(machine);
     w.u32(1);
@@ -197,7 +206,12 @@ pub fn raw_as_elf(image: &[u8], base: u64, entry: u64, language: &str) -> Option
 
     out[data_at..names_at].copy_from_slice(image);
     out[names_at..names_at + names.len()].copy_from_slice(names);
-    let mut w = Endian { buf: &mut out, at: sections_at + shsize, big, wide };
+    let mut w = Endian {
+        buf: &mut out,
+        at: sections_at + shsize,
+        big,
+        wide,
+    };
     section(&mut w, 1, 1, 7, base, data_at as u64, len);
     section(&mut w, 7, 3, 0, 0, names_at as u64, names.len() as u64);
     Some(out)
@@ -309,13 +323,15 @@ impl Endian<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::loadimage_te::synthetic::{TeImage, CODE_RVA, IMAGE_BASE};
+    use crate::loadimage_te::synthetic::{CODE_RVA, IMAGE_BASE, TeImage};
     use object::{Object, ObjectSection};
 
     #[test]
     fn te_view_maps_sections_where_the_te_loader_does() {
         let code = [0x31, 0xc0, 0xc3];
-        let te = TeImage::arm(&code).machine(object::pe::IMAGE_FILE_MACHINE_AMD64).build();
+        let te = TeImage::arm(&code)
+            .machine(object::pe::IMAGE_FILE_MACHINE_AMD64)
+            .build();
         let pe = te_as_pe(&te).unwrap();
         let file = object::File::parse(pe.as_slice()).unwrap();
         assert_eq!(file.architecture(), object::Architecture::X86_64);
@@ -353,7 +369,11 @@ mod tests {
             assert_eq!(file.architecture(), arch, "{language}");
             assert_eq!(file.entry(), 0x8000_0004, "{language}");
             let text = file.section_by_name(".text").unwrap();
-            assert_eq!((text.address(), text.data().unwrap()), (0x8000_0000, image.as_slice()), "{language}");
+            assert_eq!(
+                (text.address(), text.data().unwrap()),
+                (0x8000_0000, image.as_slice()),
+                "{language}"
+            );
         }
         assert!(raw_as_elf(&image, 0, 0, "x86").is_none());
     }

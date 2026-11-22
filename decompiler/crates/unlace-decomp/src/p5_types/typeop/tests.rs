@@ -8,7 +8,7 @@
 //! binary/unary/func classes and the size-only per-op overrides.
 
 use super::*;
-use crate::dtype::{type_metatype, TypeFactoryImpl};
+use crate::dtype::{TypeFactoryImpl, type_metatype};
 
 /// One expected row of the canonical table, transcribed from `typeop.cc`.
 struct Row {
@@ -59,9 +59,24 @@ fn expected_table() -> Vec<Row> {
         b!(CPUI_COPY, pf::unary | pf::nocollapse, 0, "copy"),
         b!(CPUI_LOAD, pf::special | pf::nocollapse, 0, "load"),
         b!(CPUI_STORE, pf::special | pf::nocollapse, 0, "store"),
-        b!(CPUI_BRANCH, pf::special | pf::branch | pf::coderef | pf::nocollapse, 0, "goto"),
-        b!(CPUI_CBRANCH, pf::special | pf::branch | pf::coderef | pf::nocollapse, 0, "goto"),
-        b!(CPUI_BRANCHIND, pf::special | pf::branch | pf::nocollapse, 0, "switch"),
+        b!(
+            CPUI_BRANCH,
+            pf::special | pf::branch | pf::coderef | pf::nocollapse,
+            0,
+            "goto"
+        ),
+        b!(
+            CPUI_CBRANCH,
+            pf::special | pf::branch | pf::coderef | pf::nocollapse,
+            0,
+            "goto"
+        ),
+        b!(
+            CPUI_BRANCHIND,
+            pf::special | pf::branch | pf::nocollapse,
+            0,
+            "switch"
+        ),
         b!(
             CPUI_CALL,
             pf::special | pf::call | pf::has_callspec | pf::coderef | pf::nocollapse,
@@ -74,17 +89,48 @@ fn expected_table() -> Vec<Row> {
             0,
             "callind"
         ),
-        b!(CPUI_CALLOTHER, pf::special | pf::call | pf::nocollapse, 0, "syscall"),
+        b!(
+            CPUI_CALLOTHER,
+            pf::special | pf::call | pf::nocollapse,
+            0,
+            "syscall"
+        ),
         b!(
             CPUI_RETURN,
             pf::special | pf::returns | pf::nocollapse | pf::return_copy,
             0,
             "return"
         ),
-        b!(CPUI_MULTIEQUAL, pf::special | pf::marker | pf::nocollapse, 0, "?"),
-        b!(CPUI_INDIRECT, pf::special | pf::marker | pf::nocollapse, 0, "[]"),
-        t!(CPUI_PIECE, pf::binary, 0, "CONCAT", Func, TYPE_UNKNOWN, TYPE_UNKNOWN),
-        t!(CPUI_SUBPIECE, pf::binary, 0, "SUB", Func, TYPE_UNKNOWN, TYPE_UNKNOWN),
+        b!(
+            CPUI_MULTIEQUAL,
+            pf::special | pf::marker | pf::nocollapse,
+            0,
+            "?"
+        ),
+        b!(
+            CPUI_INDIRECT,
+            pf::special | pf::marker | pf::nocollapse,
+            0,
+            "[]"
+        ),
+        t!(
+            CPUI_PIECE,
+            pf::binary,
+            0,
+            "CONCAT",
+            Func,
+            TYPE_UNKNOWN,
+            TYPE_UNKNOWN
+        ),
+        t!(
+            CPUI_SUBPIECE,
+            pf::binary,
+            0,
+            "SUB",
+            Func,
+            TYPE_UNKNOWN,
+            TYPE_UNKNOWN
+        ),
         t!(
             CPUI_INT_EQUAL,
             pf::binary | pf::booloutput | pf::commutative,
@@ -139,8 +185,24 @@ fn expected_table() -> Vec<Row> {
             TYPE_BOOL,
             TYPE_UINT
         ),
-        t!(CPUI_INT_ZEXT, pf::unary, 0, "ZEXT", Func, TYPE_UINT, TYPE_UINT),
-        t!(CPUI_INT_SEXT, pf::unary, 0, "SEXT", Func, TYPE_INT, TYPE_INT),
+        t!(
+            CPUI_INT_ZEXT,
+            pf::unary,
+            0,
+            "ZEXT",
+            Func,
+            TYPE_UINT,
+            TYPE_UINT
+        ),
+        t!(
+            CPUI_INT_SEXT,
+            pf::unary,
+            0,
+            "SEXT",
+            Func,
+            TYPE_INT,
+            TYPE_INT
+        ),
         t!(
             CPUI_INT_ADD,
             pf::binary | pf::commutative,
@@ -339,9 +401,24 @@ fn expected_table() -> Vec<Row> {
             TYPE_BOOL,
             TYPE_BOOL
         ),
-        b!(CPUI_CAST, pf::unary | pf::special | pf::nocollapse, 0, "(cast)"),
-        b!(CPUI_PTRADD, pf::ternary | pf::nocollapse, af::arithmetic_op, "+"),
-        b!(CPUI_PTRSUB, pf::binary | pf::nocollapse, af::arithmetic_op, "->"),
+        b!(
+            CPUI_CAST,
+            pf::unary | pf::special | pf::nocollapse,
+            0,
+            "(cast)"
+        ),
+        b!(
+            CPUI_PTRADD,
+            pf::ternary | pf::nocollapse,
+            af::arithmetic_op,
+            "+"
+        ),
+        b!(
+            CPUI_PTRSUB,
+            pf::binary | pf::nocollapse,
+            af::arithmetic_op,
+            "->"
+        ),
         t!(
             CPUI_FLOAT_EQUAL,
             pf::binary | pf::booloutput | pf::commutative,
@@ -423,9 +500,33 @@ fn expected_table() -> Vec<Row> {
             TYPE_FLOAT,
             TYPE_FLOAT
         ),
-        t!(CPUI_FLOAT_NEG, pf::unary, af::floatingpoint_op, "-", Unary, TYPE_FLOAT, TYPE_FLOAT),
-        t!(CPUI_FLOAT_ABS, pf::unary, af::floatingpoint_op, "ABS", Func, TYPE_FLOAT, TYPE_FLOAT),
-        t!(CPUI_FLOAT_SQRT, pf::unary, af::floatingpoint_op, "SQRT", Func, TYPE_FLOAT, TYPE_FLOAT),
+        t!(
+            CPUI_FLOAT_NEG,
+            pf::unary,
+            af::floatingpoint_op,
+            "-",
+            Unary,
+            TYPE_FLOAT,
+            TYPE_FLOAT
+        ),
+        t!(
+            CPUI_FLOAT_ABS,
+            pf::unary,
+            af::floatingpoint_op,
+            "ABS",
+            Func,
+            TYPE_FLOAT,
+            TYPE_FLOAT
+        ),
+        t!(
+            CPUI_FLOAT_SQRT,
+            pf::unary,
+            af::floatingpoint_op,
+            "SQRT",
+            Func,
+            TYPE_FLOAT,
+            TYPE_FLOAT
+        ),
         t!(
             CPUI_FLOAT_INT2FLOAT,
             pf::unary,
@@ -444,8 +545,24 @@ fn expected_table() -> Vec<Row> {
             TYPE_FLOAT,
             TYPE_FLOAT
         ),
-        t!(CPUI_FLOAT_TRUNC, pf::unary, af::floatingpoint_op, "TRUNC", Func, TYPE_INT, TYPE_FLOAT),
-        t!(CPUI_FLOAT_CEIL, pf::unary, af::floatingpoint_op, "CEIL", Func, TYPE_FLOAT, TYPE_FLOAT),
+        t!(
+            CPUI_FLOAT_TRUNC,
+            pf::unary,
+            af::floatingpoint_op,
+            "TRUNC",
+            Func,
+            TYPE_INT,
+            TYPE_FLOAT
+        ),
+        t!(
+            CPUI_FLOAT_CEIL,
+            pf::unary,
+            af::floatingpoint_op,
+            "CEIL",
+            Func,
+            TYPE_FLOAT,
+            TYPE_FLOAT
+        ),
         t!(
             CPUI_FLOAT_FLOOR,
             pf::unary,
@@ -467,11 +584,51 @@ fn expected_table() -> Vec<Row> {
         b!(CPUI_SEGMENTOP, pf::special | pf::nocollapse, 0, "segmentop"),
         b!(CPUI_CPOOLREF, pf::special | pf::nocollapse, 0, "cpoolref"),
         b!(CPUI_NEW, pf::special | pf::call | pf::nocollapse, 0, "new"),
-        t!(CPUI_INSERT, pf::ternary, 0, "INSERT", Func, TYPE_UNKNOWN, TYPE_INT),
-        t!(CPUI_ZPULL, pf::ternary, 0, "ZPULL", Func, TYPE_UINT, TYPE_INT),
-        t!(CPUI_POPCOUNT, pf::unary, 0, "POPCOUNT", Func, TYPE_INT, TYPE_UNKNOWN),
-        t!(CPUI_LZCOUNT, pf::unary, 0, "LZCOUNT", Func, TYPE_INT, TYPE_UNKNOWN),
-        t!(CPUI_SPULL, pf::ternary, 0, "SPULL", Func, TYPE_INT, TYPE_INT),
+        t!(
+            CPUI_INSERT,
+            pf::ternary,
+            0,
+            "INSERT",
+            Func,
+            TYPE_UNKNOWN,
+            TYPE_INT
+        ),
+        t!(
+            CPUI_ZPULL,
+            pf::ternary,
+            0,
+            "ZPULL",
+            Func,
+            TYPE_UINT,
+            TYPE_INT
+        ),
+        t!(
+            CPUI_POPCOUNT,
+            pf::unary,
+            0,
+            "POPCOUNT",
+            Func,
+            TYPE_INT,
+            TYPE_UNKNOWN
+        ),
+        t!(
+            CPUI_LZCOUNT,
+            pf::unary,
+            0,
+            "LZCOUNT",
+            Func,
+            TYPE_INT,
+            TYPE_UNKNOWN
+        ),
+        t!(
+            CPUI_SPULL,
+            pf::ternary,
+            0,
+            "SPULL",
+            Func,
+            TYPE_INT,
+            TYPE_INT
+        ),
     ]
 }
 
@@ -500,7 +657,11 @@ fn exhaustive_per_opcode_flag_words() {
 #[test]
 fn register_instructions_vector_shape() {
     let inst = register_instructions();
-    assert_eq!(inst.len(), OpCode::CPUI_MAX as usize, "inst[] length is CPUI_MAX");
+    assert_eq!(
+        inst.len(),
+        OpCode::CPUI_MAX as usize,
+        "inst[] length is CPUI_MAX"
+    );
     // index 0 (no CPUI_* == 0) is null.
     assert!(inst[0].is_none(), "inst[0] is null (no opcode 0)");
     // The unused discriminant 45 (between FLOAT_LESSEQUAL=44 and FLOAT_NAN=46).
@@ -512,7 +673,11 @@ fn register_instructions_vector_shape() {
     }
     // Exactly REGISTERED_OPCODES.len() slots are populated.
     let populated = inst.iter().filter(|s| s.is_some()).count();
-    assert_eq!(populated, REGISTERED_OPCODES.len(), "no extra/missing slots");
+    assert_eq!(
+        populated,
+        REGISTERED_OPCODES.len(),
+        "no extra/missing slots"
+    );
 }
 
 /// `to_type_op`/`type_op_for` carry the `(opcode, flags, name)` triple the W3
@@ -529,7 +694,10 @@ fn type_op_triple_matches_table() {
     // Spot-check the literal the old `ruleaction_5::type_op_lookup` produced for
     // INT_EQUAL: binary|booloutput|commutative, "==".
     let eq = type_op_for(OpCode::CPUI_INT_EQUAL);
-    assert_eq!(eq.get_flags(), pf::binary | pf::booloutput | pf::commutative);
+    assert_eq!(
+        eq.get_flags(),
+        pf::binary | pf::booloutput | pf::commutative
+    );
     assert_eq!(eq.get_name(), "==");
 }
 
@@ -580,20 +748,50 @@ fn w10_doublemove_arith_or_float_classification() {
         i.is_arithmetic_op() || i.is_floating_point_op()
     };
     // Wholes that DO produce/read a logical whole.
-    assert!(arith_or_float(OpCode::CPUI_INT_ADD), "INT_ADD is arithmetic");
-    assert!(arith_or_float(OpCode::CPUI_INT_MULT), "INT_MULT is arithmetic");
-    assert!(arith_or_float(OpCode::CPUI_INT_SUB), "INT_SUB is arithmetic");
-    assert!(arith_or_float(OpCode::CPUI_FLOAT_ADD), "FLOAT_ADD is floating-point");
-    assert!(arith_or_float(OpCode::CPUI_FLOAT_MULT), "FLOAT_MULT is floating-point");
+    assert!(
+        arith_or_float(OpCode::CPUI_INT_ADD),
+        "INT_ADD is arithmetic"
+    );
+    assert!(
+        arith_or_float(OpCode::CPUI_INT_MULT),
+        "INT_MULT is arithmetic"
+    );
+    assert!(
+        arith_or_float(OpCode::CPUI_INT_SUB),
+        "INT_SUB is arithmetic"
+    );
+    assert!(
+        arith_or_float(OpCode::CPUI_FLOAT_ADD),
+        "FLOAT_ADD is floating-point"
+    );
+    assert!(
+        arith_or_float(OpCode::CPUI_FLOAT_MULT),
+        "FLOAT_MULT is floating-point"
+    );
     // The piece-forming / move opcodes must NOT be mistaken for a logical whole.
-    assert!(!arith_or_float(OpCode::CPUI_COPY), "COPY is neither (typeop.cc:391)");
-    assert!(!arith_or_float(OpCode::CPUI_PIECE), "PIECE is neither (typeop.cc:2039)");
-    assert!(!arith_or_float(OpCode::CPUI_SUBPIECE), "SUBPIECE is neither");
+    assert!(
+        !arith_or_float(OpCode::CPUI_COPY),
+        "COPY is neither (typeop.cc:391)"
+    );
+    assert!(
+        !arith_or_float(OpCode::CPUI_PIECE),
+        "PIECE is neither (typeop.cc:2039)"
+    );
+    assert!(
+        !arith_or_float(OpCode::CPUI_SUBPIECE),
+        "SUBPIECE is neither"
+    );
     // Logical (bitwise) ops are also NOT arithmetic/float — the comment in
     // attemptMarking notes it is "hard to tell" for logical ops, and the C++
     // deliberately declines them.
-    assert!(!arith_or_float(OpCode::CPUI_INT_AND), "INT_AND is logical, not arith/float");
-    assert!(!arith_or_float(OpCode::CPUI_INT_OR), "INT_OR is logical, not arith/float");
+    assert!(
+        !arith_or_float(OpCode::CPUI_INT_AND),
+        "INT_AND is logical, not arith/float"
+    );
+    assert!(
+        !arith_or_float(OpCode::CPUI_INT_OR),
+        "INT_OR is logical, not arith/float"
+    );
 }
 
 /// Build a factory wired with the alignment map + a max base size of 8, the
@@ -612,25 +810,39 @@ fn factory() -> TypeFactoryImpl {
 fn get_output_local_matrix() {
     let f = factory();
     // TypeOpIntAdd: metaout INT.
-    let out = type_op_info(OpCode::CPUI_INT_ADD).get_output_local(&f, 4).unwrap();
+    let out = type_op_info(OpCode::CPUI_INT_ADD)
+        .get_output_local(&f, 4)
+        .unwrap();
     assert_eq!(out.get_metatype(), TYPE_INT);
     assert_eq!(out.get_size(), 4);
     // TypeOpIntDiv: metaout UINT.
-    let out = type_op_info(OpCode::CPUI_INT_DIV).get_output_local(&f, 4).unwrap();
+    let out = type_op_info(OpCode::CPUI_INT_DIV)
+        .get_output_local(&f, 4)
+        .unwrap();
     assert_eq!(out.get_metatype(), TYPE_UINT);
     // TypeOpEqual: metaout BOOL (size-1 output).
-    let out = type_op_info(OpCode::CPUI_INT_EQUAL).get_output_local(&f, 1).unwrap();
+    let out = type_op_info(OpCode::CPUI_INT_EQUAL)
+        .get_output_local(&f, 1)
+        .unwrap();
     assert_eq!(out.get_metatype(), TYPE_BOOL);
     // TypeOpFloatAdd: metaout FLOAT.
-    let out = type_op_info(OpCode::CPUI_FLOAT_ADD).get_output_local(&f, 8).unwrap();
+    let out = type_op_info(OpCode::CPUI_FLOAT_ADD)
+        .get_output_local(&f, 8)
+        .unwrap();
     assert_eq!(out.get_metatype(), TYPE_FLOAT);
     // TypeOpPtradd / TypeOpPtrsub: override to TYPE_INT regardless of class.
-    let out = type_op_info(OpCode::CPUI_PTRADD).get_output_local(&f, 8).unwrap();
+    let out = type_op_info(OpCode::CPUI_PTRADD)
+        .get_output_local(&f, 8)
+        .unwrap();
     assert_eq!(out.get_metatype(), TYPE_INT);
-    let out = type_op_info(OpCode::CPUI_PTRSUB).get_output_local(&f, 8).unwrap();
+    let out = type_op_info(OpCode::CPUI_PTRSUB)
+        .get_output_local(&f, 8)
+        .unwrap();
     assert_eq!(out.get_metatype(), TYPE_INT);
     // TypeOpCopy (Base): default TYPE_UNKNOWN.
-    let out = type_op_info(OpCode::CPUI_COPY).get_output_local(&f, 4).unwrap();
+    let out = type_op_info(OpCode::CPUI_COPY)
+        .get_output_local(&f, 4)
+        .unwrap();
     assert_eq!(out.get_metatype(), TYPE_UNKNOWN);
 }
 
@@ -641,80 +853,129 @@ fn get_output_local_matrix() {
 fn get_input_local_matrix() {
     let f = factory();
     // TypeOpIntAdd: metain INT for any slot.
-    let i = type_op_info(OpCode::CPUI_INT_ADD).get_input_local(&f, 0, 4).unwrap();
+    let i = type_op_info(OpCode::CPUI_INT_ADD)
+        .get_input_local(&f, 0, 4)
+        .unwrap();
     assert_eq!(i.get_metatype(), TYPE_INT);
     // TypeOpIntLess: metain UINT.
-    let i = type_op_info(OpCode::CPUI_INT_LESS).get_input_local(&f, 0, 4).unwrap();
+    let i = type_op_info(OpCode::CPUI_INT_LESS)
+        .get_input_local(&f, 0, 4)
+        .unwrap();
     assert_eq!(i.get_metatype(), TYPE_UINT);
     // TypeOpFloatAdd: metain FLOAT.
-    let i = type_op_info(OpCode::CPUI_FLOAT_ADD).get_input_local(&f, 0, 8).unwrap();
+    let i = type_op_info(OpCode::CPUI_FLOAT_ADD)
+        .get_input_local(&f, 0, 8)
+        .unwrap();
     assert_eq!(i.get_metatype(), TYPE_FLOAT);
 
     // TypeOpIntLeft: slot 1 -> getBaseNoChar(size, TYPE_INT); slot 0 -> metain INT.
-    let s1 = type_op_info(OpCode::CPUI_INT_LEFT).get_input_local(&f, 1, 4).unwrap();
+    let s1 = type_op_info(OpCode::CPUI_INT_LEFT)
+        .get_input_local(&f, 1, 4)
+        .unwrap();
     assert_eq!(s1.get_metatype(), TYPE_INT);
-    let s0 = type_op_info(OpCode::CPUI_INT_LEFT).get_input_local(&f, 0, 4).unwrap();
+    let s0 = type_op_info(OpCode::CPUI_INT_LEFT)
+        .get_input_local(&f, 0, 4)
+        .unwrap();
     assert_eq!(s0.get_metatype(), TYPE_INT);
     // TypeOpIntRight: slot 1 -> INT (not UINT, despite metain UINT — the slot-1
     // shift count is INT per getInputLocal override).
-    let s1 = type_op_info(OpCode::CPUI_INT_RIGHT).get_input_local(&f, 1, 4).unwrap();
+    let s1 = type_op_info(OpCode::CPUI_INT_RIGHT)
+        .get_input_local(&f, 1, 4)
+        .unwrap();
     assert_eq!(s1.get_metatype(), TYPE_INT);
     // slot 0 of INT_RIGHT falls to metain (UINT).
-    let s0 = type_op_info(OpCode::CPUI_INT_RIGHT).get_input_local(&f, 0, 4).unwrap();
+    let s0 = type_op_info(OpCode::CPUI_INT_RIGHT)
+        .get_input_local(&f, 0, 4)
+        .unwrap();
     assert_eq!(s0.get_metatype(), TYPE_UINT);
     // INT_SRIGHT slot 1 -> INT.
-    let s1 = type_op_info(OpCode::CPUI_INT_SRIGHT).get_input_local(&f, 1, 4).unwrap();
+    let s1 = type_op_info(OpCode::CPUI_INT_SRIGHT)
+        .get_input_local(&f, 1, 4)
+        .unwrap();
     assert_eq!(s1.get_metatype(), TYPE_INT);
 
     // TypeOpPtradd / TypeOpPtrsub / TypeOpCpoolref: TYPE_INT.
     assert_eq!(
-        type_op_info(OpCode::CPUI_PTRADD).get_input_local(&f, 0, 8).unwrap().get_metatype(),
+        type_op_info(OpCode::CPUI_PTRADD)
+            .get_input_local(&f, 0, 8)
+            .unwrap()
+            .get_metatype(),
         TYPE_INT
     );
     assert_eq!(
-        type_op_info(OpCode::CPUI_PTRSUB).get_input_local(&f, 1, 8).unwrap().get_metatype(),
+        type_op_info(OpCode::CPUI_PTRSUB)
+            .get_input_local(&f, 1, 8)
+            .unwrap()
+            .get_metatype(),
         TYPE_INT
     );
     assert_eq!(
-        type_op_info(OpCode::CPUI_CPOOLREF).get_input_local(&f, 0, 4).unwrap().get_metatype(),
+        type_op_info(OpCode::CPUI_CPOOLREF)
+            .get_input_local(&f, 0, 4)
+            .unwrap()
+            .get_metatype(),
         TYPE_INT
     );
 
     // TypeOpCbranch: slot 1 -> BOOL.
     assert_eq!(
-        type_op_info(OpCode::CPUI_CBRANCH).get_input_local(&f, 1, 1).unwrap().get_metatype(),
+        type_op_info(OpCode::CPUI_CBRANCH)
+            .get_input_local(&f, 1, 1)
+            .unwrap()
+            .get_metatype(),
         TYPE_BOOL
     );
 
     // TypeOpInsert: slots <=1 -> UNKNOWN; slot 2 -> metain INT.
     assert_eq!(
-        type_op_info(OpCode::CPUI_INSERT).get_input_local(&f, 0, 4).unwrap().get_metatype(),
+        type_op_info(OpCode::CPUI_INSERT)
+            .get_input_local(&f, 0, 4)
+            .unwrap()
+            .get_metatype(),
         TYPE_UNKNOWN
     );
     assert_eq!(
-        type_op_info(OpCode::CPUI_INSERT).get_input_local(&f, 1, 4).unwrap().get_metatype(),
+        type_op_info(OpCode::CPUI_INSERT)
+            .get_input_local(&f, 1, 4)
+            .unwrap()
+            .get_metatype(),
         TYPE_UNKNOWN
     );
     assert_eq!(
-        type_op_info(OpCode::CPUI_INSERT).get_input_local(&f, 2, 4).unwrap().get_metatype(),
+        type_op_info(OpCode::CPUI_INSERT)
+            .get_input_local(&f, 2, 4)
+            .unwrap()
+            .get_metatype(),
         TYPE_INT
     );
 
     // TypeOpZpull / TypeOpSpull: slot 0 -> UNKNOWN; other slots -> metain.
     assert_eq!(
-        type_op_info(OpCode::CPUI_ZPULL).get_input_local(&f, 0, 4).unwrap().get_metatype(),
+        type_op_info(OpCode::CPUI_ZPULL)
+            .get_input_local(&f, 0, 4)
+            .unwrap()
+            .get_metatype(),
         TYPE_UNKNOWN
     );
     assert_eq!(
-        type_op_info(OpCode::CPUI_ZPULL).get_input_local(&f, 1, 4).unwrap().get_metatype(),
+        type_op_info(OpCode::CPUI_ZPULL)
+            .get_input_local(&f, 1, 4)
+            .unwrap()
+            .get_metatype(),
         TYPE_INT
     );
     assert_eq!(
-        type_op_info(OpCode::CPUI_SPULL).get_input_local(&f, 0, 4).unwrap().get_metatype(),
+        type_op_info(OpCode::CPUI_SPULL)
+            .get_input_local(&f, 0, 4)
+            .unwrap()
+            .get_metatype(),
         TYPE_UNKNOWN
     );
     assert_eq!(
-        type_op_info(OpCode::CPUI_SPULL).get_input_local(&f, 2, 4).unwrap().get_metatype(),
+        type_op_info(OpCode::CPUI_SPULL)
+            .get_input_local(&f, 2, 4)
+            .unwrap()
+            .get_metatype(),
         TYPE_INT
     );
 }
@@ -739,7 +1000,10 @@ fn float_sign_manipulation_cases() {
         OpCode::CPUI_MAX
     );
     // INT_AND with no constant slot 1 -> CPUI_MAX.
-    assert_eq!(float_sign_manipulation(OpCode::CPUI_INT_AND, None), OpCode::CPUI_MAX);
+    assert_eq!(
+        float_sign_manipulation(OpCode::CPUI_INT_AND, None),
+        OpCode::CPUI_MAX
+    );
     // INT_XOR with offset == val ^ (val>>1) (the sign bit) -> FLOAT_NEG.
     let neg_off = mask8 ^ (mask8 >> 1); // == 0x8000000000000000
     assert_eq!(
@@ -767,8 +1031,14 @@ fn select_java_operators_toggle() {
 
     // Default (C) state, as registered.
     assert_eq!(inst[OpCode::CPUI_INT_RIGHT as usize].unwrap().name, ">>");
-    assert_eq!(inst[OpCode::CPUI_INT_RIGHT as usize].unwrap().metaout, TYPE_UINT);
-    assert_eq!(inst[OpCode::CPUI_INT_ZEXT as usize].unwrap().metaout, TYPE_UINT);
+    assert_eq!(
+        inst[OpCode::CPUI_INT_RIGHT as usize].unwrap().metaout,
+        TYPE_UINT
+    );
+    assert_eq!(
+        inst[OpCode::CPUI_INT_ZEXT as usize].unwrap().metaout,
+        TYPE_UINT
+    );
 
     // Switch to Java.
     select_java_operators(&mut inst, true);
@@ -792,15 +1062,24 @@ fn select_java_operators_toggle() {
         assert_eq!(rec.metaout, TYPE_INT, "{opc:?} metaout Java");
     }
     // An untouched op (INT_ADD) keeps its registered metatypes.
-    assert_eq!(inst[OpCode::CPUI_INT_ADD as usize].unwrap().metaout, TYPE_INT);
+    assert_eq!(
+        inst[OpCode::CPUI_INT_ADD as usize].unwrap().metaout,
+        TYPE_INT
+    );
 
     // Switch back to C.
     select_java_operators(&mut inst, false);
     let r = inst[OpCode::CPUI_INT_RIGHT as usize].unwrap();
     assert_eq!(r.name, ">>");
     assert_eq!(r.metaout, TYPE_UINT);
-    assert_eq!(inst[OpCode::CPUI_INT_ZEXT as usize].unwrap().metaout, TYPE_UINT);
-    assert_eq!(inst[OpCode::CPUI_INT_AND as usize].unwrap().metaout, TYPE_UINT);
+    assert_eq!(
+        inst[OpCode::CPUI_INT_ZEXT as usize].unwrap().metaout,
+        TYPE_UINT
+    );
+    assert_eq!(
+        inst[OpCode::CPUI_INT_AND as usize].unwrap().metaout,
+        TYPE_UINT
+    );
 }
 
 /// `type_op_info(CPUI_MAX)` panics (matches the null `inst[CPUI_MAX]` in C++).
@@ -826,13 +1105,28 @@ fn seam_type_op_for_answers_for_every_opcode() {
         };
         let t = seam_type_op_for(opc);
         assert_eq!(t.get_opcode(), opc);
-        assert_eq!(t.get_flags(), type_op_info(opc).get_flags(), "{opc:?} seam vs inst[]");
-        assert_ne!(t.get_flags(), 0, "{opc:?}: no property bits (an eval-type is required)");
+        assert_eq!(
+            t.get_flags(),
+            type_op_info(opc).get_flags(),
+            "{opc:?} seam vs inst[]"
+        );
+        assert_ne!(
+            t.get_flags(),
+            0,
+            "{opc:?}: no property bits (an eval-type is required)"
+        );
         assert!(!t.get_name().is_empty(), "{opc:?}: no display name");
-        assert!(try_type_op_info(opc).is_some(), "{opc:?} must have an inst[] record");
+        assert!(
+            try_type_op_info(opc).is_some(),
+            "{opc:?} must have an inst[] record"
+        );
         seen += 1;
     }
-    assert_eq!(seen, REGISTERED_OPCODES.len(), "every registered op-code must be reachable");
+    assert_eq!(
+        seen,
+        REGISTERED_OPCODES.len(),
+        "every registered op-code must be reachable"
+    );
 }
 
 /// The `CPUI_MAX` sentinel is the one op-code with no `inst[]` entry: the seam
@@ -849,8 +1143,14 @@ fn seam_type_op_for_degrades_on_the_sentinel() {
 /// with exactly the `typeop.cc` property words (the regression this seam fixes).
 #[test]
 fn seam_covers_the_opcodes_the_whitelists_missed() {
-    assert_eq!(seam_type_op_for(OpCode::CPUI_INT_SRIGHT).get_flags(), pf::binary);
-    assert_eq!(seam_type_op_for(OpCode::CPUI_FLOAT_INT2FLOAT).get_flags(), pf::unary);
+    assert_eq!(
+        seam_type_op_for(OpCode::CPUI_INT_SRIGHT).get_flags(),
+        pf::binary
+    );
+    assert_eq!(
+        seam_type_op_for(OpCode::CPUI_FLOAT_INT2FLOAT).get_flags(),
+        pf::unary
+    );
     assert_eq!(
         seam_type_op_for(OpCode::CPUI_FLOAT_LESS).get_flags(),
         pf::binary | pf::booloutput

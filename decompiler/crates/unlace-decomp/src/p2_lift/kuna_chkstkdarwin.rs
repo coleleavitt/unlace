@@ -90,7 +90,9 @@ fn value_before(
                 input_value(data, cur, 0, budget)?,
                 input_value(data, cur, 1, budget)?,
             ) {
-                (Value::Constant(a), Value::Constant(b)) => Some(Value::Constant(a.wrapping_add(b))),
+                (Value::Constant(a), Value::Constant(b)) => {
+                    Some(Value::Constant(a.wrapping_add(b)))
+                }
                 _ => None,
             },
             OpCode::CPUI_LOAD => {
@@ -191,7 +193,8 @@ impl Action for ActionChkstkDarwin {
         })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data.get_arch().chkstk_darwin || data.get_heritage_pass() != 0 || data.num_calls() == 0 {
+        if !data.get_arch().chkstk_darwin || data.get_heritage_pass() != 0 || data.num_calls() == 0
+        {
             return 0;
         }
         let probes: Vec<OpId> = data

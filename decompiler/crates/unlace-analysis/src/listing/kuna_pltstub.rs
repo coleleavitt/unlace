@@ -41,12 +41,12 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use unlace_base::space::{spacetype, AddrSpace};
 use object::{Object, ObjectSection};
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
-use super::xrefs::{in_range, FullOp, XrefKind};
+use super::xrefs::{FullOp, XrefKind, in_range};
 use crate::analyzers::entry::kuna_fdeinterior::STUB_SECTIONS;
 
 /// The most constant adds a chain may take before its load: one in the
@@ -78,9 +78,18 @@ pub(super) struct PltStubs<'a> {
 }
 
 impl<'a> PltStubs<'a> {
-    pub(super) fn new(data_space: Option<&'a Rc<AddrSpace>>, mapped: &'a [(u64, u64)], mut plt: Vec<(u64, u64)>) -> Self {
+    pub(super) fn new(
+        data_space: Option<&'a Rc<AddrSpace>>,
+        mapped: &'a [(u64, u64)],
+        mut plt: Vec<(u64, u64)>,
+    ) -> Self {
         plt.sort_unstable();
-        PltStubs { data_space, mapped, plt, open: HashMap::new() }
+        PltStubs {
+            data_space,
+            mapped,
+            plt,
+            open: HashMap::new(),
+        }
     }
 
     /// The matcher for `file`, or `None` when it has no stub section: without
@@ -113,14 +122,21 @@ impl<'a> PltStubs<'a> {
         text: &str,
     ) -> Vec<Held> {
         if !in_range(&self.plt, vma) {
-            return self.open.remove(&vma).map(|chain| chain.held).unwrap_or_default();
+            return self
+                .open
+                .remove(&vma)
+                .map(|chain| chain.held)
+                .unwrap_or_default();
         }
         let next = vma.wrapping_add(u64::from(len));
         let mut released = Vec::new();
         if let Some(mut chain) = self.open.remove(&vma) {
             let mut values = Values::holding(self.data_space, &chain);
             if chain.adds > 0 {
-                if let Some(slot) = values.load_jump(ops).filter(|&slot| in_range(self.mapped, slot)) {
+                if let Some(slot) = values
+                    .load_jump(ops)
+                    .filter(|&slot| in_range(self.mapped, slot))
+                {
                     drefs.retain(|&(_, kind)| kind != XrefKind::Data);
                     if !drefs.contains(&(slot, XrefKind::Read)) {
                         drefs.push((slot, XrefKind::Read));
@@ -133,16 +149,31 @@ impl<'a> PltStubs<'a> {
                     chain.value = value;
                     chain.adds += 1;
                     hold(&mut chain.held, vma, drefs, text);
-                    released.extend(self.open.insert(next, chain).into_iter().flat_map(|c| c.held));
+                    released.extend(
+                        self.open
+                            .insert(next, chain)
+                            .into_iter()
+                            .flat_map(|c| c.held),
+                    );
                     return released;
                 }
             }
             released = chain.held;
         }
         if let Some((reg, value)) = Values::new(self.data_space).single_write(ops) {
-            let mut chain = Chain { reg, value, adds: 0, held: Vec::new() };
+            let mut chain = Chain {
+                reg,
+                value,
+                adds: 0,
+                held: Vec::new(),
+            };
             hold(&mut chain.held, vma, drefs, text);
-            released.extend(self.open.insert(next, chain).into_iter().flat_map(|c| c.held));
+            released.extend(
+                self.open
+                    .insert(next, chain)
+                    .into_iter()
+                    .flat_map(|c| c.held),
+            );
         }
         released
     }
@@ -150,7 +181,10 @@ impl<'a> PltStubs<'a> {
     /// The rows of every chain still open when the body drains, to file as
     /// they were.
     pub(super) fn drain(&mut self) -> Vec<Held> {
-        self.open.drain().flat_map(|(_, chain)| chain.held).collect()
+        self.open
+            .drain()
+            .flat_map(|(_, chain)| chain.held)
+            .collect()
     }
 }
 
@@ -172,7 +206,10 @@ struct Values<'a> {
 
 impl<'a> Values<'a> {
     fn new(data_space: Option<&'a Rc<AddrSpace>>) -> Self {
-        Values { data_space, known: HashMap::new() }
+        Values {
+            data_space,
+            known: HashMap::new(),
+        }
     }
 
     /// The values at the start of an instruction a chain reaches: only its
@@ -207,7 +244,11 @@ impl<'a> Values<'a> {
     /// Evaluate one arithmetic op, recording its output.
     fn eval(&mut self, op: &FullOp) -> Option<()> {
         let out = op.out.as_ref()?;
-        let mask = if out.size >= 8 { u64::MAX } else { (1u64 << (out.size * 8)) - 1 };
+        let mask = if out.size >= 8 {
+            u64::MAX
+        } else {
+            (1u64 << (out.size * 8)) - 1
+        };
         let value = match (op.opcode, op.ins.as_slice()) {
             (OpCode::CPUI_COPY, [a]) => self.value(a)?,
             (OpCode::CPUI_INT_ADD, [a, b]) => self.value(a)?.wrapping_add(self.value(b)?),
@@ -257,18 +298,22 @@ impl<'a> Values<'a> {
             }
             let step = match (op.opcode, op.ins.as_slice()) {
                 (OpCode::CPUI_COPY, [a]) => Self::derived(&derived, a),
-                (OpCode::CPUI_INT_ADD, [a, b]) => match (Self::derived(&derived, a), Self::derived(&derived, b)) {
-                    (Some(_), Some(_)) | (None, None) => None,
-                    (Some(_), None) => self.constant(&derived, b).then_some(true),
-                    (None, Some(_)) => self.constant(&derived, a).then_some(true),
-                },
-                (OpCode::CPUI_INT_SUB, [a, b]) => {
-                    Self::derived(&derived, a).filter(|_| self.constant(&derived, b)).map(|_| true)
+                (OpCode::CPUI_INT_ADD, [a, b]) => {
+                    match (Self::derived(&derived, a), Self::derived(&derived, b)) {
+                        (Some(_), Some(_)) | (None, None) => None,
+                        (Some(_), None) => self.constant(&derived, b).then_some(true),
+                        (None, Some(_)) => self.constant(&derived, a).then_some(true),
+                    }
                 }
+                (OpCode::CPUI_INT_SUB, [a, b]) => Self::derived(&derived, a)
+                    .filter(|_| self.constant(&derived, b))
+                    .map(|_| true),
                 _ => None,
             };
             let evaluated = self.eval(op).is_some();
-            let Some(out) = op.out.as_ref().and_then(Self::key) else { continue };
+            let Some(out) = op.out.as_ref().and_then(Self::key) else {
+                continue;
+            };
             match step {
                 Some(added) => derived.insert(out, added),
                 None => derived.remove(&out),
@@ -312,7 +357,9 @@ impl<'a> Values<'a> {
                 OpCode::CPUI_LOAD => op.ins.get(1).and_then(|at| self.value(at)),
                 _ => op.ins.iter().find_map(from),
             };
-            let Some(out) = op.out.as_ref().and_then(Self::key) else { continue };
+            let Some(out) = op.out.as_ref().and_then(Self::key) else {
+                continue;
+            };
             match slot {
                 Some(slot) => {
                     loaded.insert(out, slot);
@@ -366,7 +413,11 @@ mod tests {
     }
 
     fn vn(space: &Rc<AddrSpace>, offset: u64, size: u32) -> VarnodeData {
-        VarnodeData { space: Some(Rc::clone(space)), offset, size }
+        VarnodeData {
+            space: Some(Rc::clone(space)),
+            offset,
+            size,
+        }
     }
 
     fn op(opcode: OpCode, out: Option<VarnodeData>, ins: Vec<VarnodeData>) -> FullOp {
@@ -381,14 +432,26 @@ mod tests {
 
     /// `add ip,pc,#0` as the ARM SLEIGH lifts it: a copy of `pc + 8`.
     fn adr(s: &Spaces, value: u64) -> Vec<FullOp> {
-        vec![op(OpCode::CPUI_COPY, Some(vn(&s.reg, IP, 4)), vec![vn(&s.konst, value, 4)])]
+        vec![op(
+            OpCode::CPUI_COPY,
+            Some(vn(&s.reg, IP, 4)),
+            vec![vn(&s.konst, value, 4)],
+        )]
     }
 
     /// `add ip,ip,#imm`, with one of the flag ops it also computes.
     fn add(s: &Spaces, imm: u64) -> Vec<FullOp> {
         vec![
-            op(OpCode::CPUI_INT_CARRY, Some(vn(&s.reg, 0x66, 1)), vec![vn(&s.reg, IP, 4), vn(&s.konst, imm, 4)]),
-            op(OpCode::CPUI_INT_ADD, Some(vn(&s.reg, IP, 4)), vec![vn(&s.reg, IP, 4), vn(&s.konst, imm, 4)]),
+            op(
+                OpCode::CPUI_INT_CARRY,
+                Some(vn(&s.reg, 0x66, 1)),
+                vec![vn(&s.reg, IP, 4), vn(&s.konst, imm, 4)],
+            ),
+            op(
+                OpCode::CPUI_INT_ADD,
+                Some(vn(&s.reg, IP, 4)),
+                vec![vn(&s.reg, IP, 4), vn(&s.konst, imm, 4)],
+            ),
         ]
     }
 
@@ -396,15 +459,32 @@ mod tests {
     fn ldr_pc(s: &Spaces, imm: u64) -> Vec<FullOp> {
         let loaded = vn(&s.uniq, 0xa7300, 4);
         vec![
-            op(OpCode::CPUI_INT_ADD, Some(vn(&s.reg, IP, 4)), vec![vn(&s.reg, IP, 4), vn(&s.konst, imm, 4)]),
-            op(OpCode::CPUI_LOAD, Some(loaded.clone()), vec![vn(&s.konst, 3, 8), vn(&s.reg, IP, 4)]),
-            op(OpCode::CPUI_INT_AND, Some(vn(&s.reg, PC, 4)), vec![loaded, vn(&s.konst, 0xffff_fffe, 4)]),
+            op(
+                OpCode::CPUI_INT_ADD,
+                Some(vn(&s.reg, IP, 4)),
+                vec![vn(&s.reg, IP, 4), vn(&s.konst, imm, 4)],
+            ),
+            op(
+                OpCode::CPUI_LOAD,
+                Some(loaded.clone()),
+                vec![vn(&s.konst, 3, 8), vn(&s.reg, IP, 4)],
+            ),
+            op(
+                OpCode::CPUI_INT_AND,
+                Some(vn(&s.reg, PC, 4)),
+                vec![loaded, vn(&s.konst, 0xffff_fffe, 4)],
+            ),
             op(OpCode::CPUI_BRANCHIND, None, vec![vn(&s.reg, PC, 4)]),
         ]
     }
 
     /// Drive one instruction, returning its rows and the rows released.
-    fn step(stubs: &mut PltStubs, vma: u64, ops: &[FullOp], drefs: &[(u64, XrefKind)]) -> (Vec<(u64, XrefKind)>, Vec<Held>) {
+    fn step(
+        stubs: &mut PltStubs,
+        vma: u64,
+        ops: &[FullOp],
+        drefs: &[(u64, XrefKind)],
+    ) -> (Vec<(u64, XrefKind)>, Vec<Held>) {
         let mut drefs = drefs.to_vec();
         let released = stubs.step(vma, 4, ops, &mut drefs, "text");
         (drefs, released)
@@ -418,9 +498,23 @@ mod tests {
         let s = spaces();
         assert!(!in_range(MAPPED, 0x3008));
         let mut stubs = PltStubs::new(Some(&s.ram), MAPPED, PLT.to_vec());
-        assert_eq!(step(&mut stubs, 0x1000, &adr(&s, 0x3008), &[]), (vec![], vec![]));
-        assert_eq!(step(&mut stubs, 0x1004, &add(&s, 0x100000), &[(0x100000, XrefKind::Data)]), (vec![], vec![]));
-        assert_eq!(step(&mut stubs, 0x1008, &ldr_pc(&s, 0x10), &[]), (vec![(0x103018, XrefKind::Read)], vec![]));
+        assert_eq!(
+            step(&mut stubs, 0x1000, &adr(&s, 0x3008), &[]),
+            (vec![], vec![])
+        );
+        assert_eq!(
+            step(
+                &mut stubs,
+                0x1004,
+                &add(&s, 0x100000),
+                &[(0x100000, XrefKind::Data)]
+            ),
+            (vec![], vec![])
+        );
+        assert_eq!(
+            step(&mut stubs, 0x1008, &ldr_pc(&s, 0x10), &[]),
+            (vec![(0x103018, XrefKind::Read)], vec![])
+        );
         assert!(stubs.drain().is_empty());
     }
 
@@ -429,11 +523,31 @@ mod tests {
     fn a_broken_chain_files_its_rows() {
         let s = spaces();
         let mut stubs = PltStubs::new(Some(&s.ram), MAPPED, PLT.to_vec());
-        assert_eq!(step(&mut stubs, 0x1000, &adr(&s, 0x2000), &[(0x2000, XrefKind::Data)]), (vec![], vec![]));
-        let store = vec![op(OpCode::CPUI_STORE, None, vec![vn(&s.konst, 3, 8), vn(&s.reg, IP, 4), vn(&s.reg, 0, 4)])];
+        assert_eq!(
+            step(
+                &mut stubs,
+                0x1000,
+                &adr(&s, 0x2000),
+                &[(0x2000, XrefKind::Data)]
+            ),
+            (vec![], vec![])
+        );
+        let store = vec![op(
+            OpCode::CPUI_STORE,
+            None,
+            vec![vn(&s.konst, 3, 8), vn(&s.reg, IP, 4), vn(&s.reg, 0, 4)],
+        )];
         let (rows, released) = step(&mut stubs, 0x1004, &store, &[]);
-        assert_eq!((rows, released), (vec![], vec![(0x1000, 0x2000, "text".to_string())]));
-        step(&mut stubs, 0x2000, &adr(&s, 0x3000), &[(0x3000, XrefKind::Data)]);
+        assert_eq!(
+            (rows, released),
+            (vec![], vec![(0x1000, 0x2000, "text".to_string())])
+        );
+        step(
+            &mut stubs,
+            0x2000,
+            &adr(&s, 0x3000),
+            &[(0x3000, XrefKind::Data)],
+        );
         assert_eq!(stubs.drain(), vec![(0x2000, 0x3000, "text".to_string())]);
     }
 
@@ -444,8 +558,18 @@ mod tests {
     fn an_overwrite_is_not_an_add() {
         let s = spaces();
         let mut stubs = PltStubs::new(Some(&s.ram), MAPPED, PLT.to_vec());
-        step(&mut stubs, 0x1000, &adr(&s, 0x1800), &[(0x1800, XrefKind::Data)]);
-        let (_, released) = step(&mut stubs, 0x1004, &adr(&s, 0x101000), &[(0x101000, XrefKind::Data)]);
+        step(
+            &mut stubs,
+            0x1000,
+            &adr(&s, 0x1800),
+            &[(0x1800, XrefKind::Data)],
+        );
+        let (_, released) = step(
+            &mut stubs,
+            0x1004,
+            &adr(&s, 0x101000),
+            &[(0x101000, XrefKind::Data)],
+        );
         assert_eq!(released, vec![(0x1000, 0x1800, "text".to_string())]);
         let (rows, released) = step(&mut stubs, 0x1008, &ldr_pc(&s, 0xc), &[]);
         assert_eq!(rows, vec![]);
@@ -458,15 +582,34 @@ mod tests {
     #[test]
     fn a_step_must_add_one_constant() {
         let s = spaces();
-        let double = vec![op(OpCode::CPUI_INT_ADD, Some(vn(&s.reg, IP, 4)), vec![vn(&s.reg, IP, 4), vn(&s.reg, IP, 4)])];
-        let copy = vec![op(OpCode::CPUI_COPY, Some(vn(&s.reg, IP, 4)), vec![vn(&s.reg, IP, 4)])];
+        let double = vec![op(
+            OpCode::CPUI_INT_ADD,
+            Some(vn(&s.reg, IP, 4)),
+            vec![vn(&s.reg, IP, 4), vn(&s.reg, IP, 4)],
+        )];
+        let copy = vec![op(
+            OpCode::CPUI_COPY,
+            Some(vn(&s.reg, IP, 4)),
+            vec![vn(&s.reg, IP, 4)],
+        )];
         // Each load's immediate puts the slot the old rule took at 0x100000.
         for (step_ops, imm) in [(double, 0xfd000), (copy, 0xfe800)] {
             let mut stubs = PltStubs::new(Some(&s.ram), MAPPED, PLT.to_vec());
-            step(&mut stubs, 0x1000, &adr(&s, 0x1800), &[(0x1800, XrefKind::Data)]);
+            step(
+                &mut stubs,
+                0x1000,
+                &adr(&s, 0x1800),
+                &[(0x1800, XrefKind::Data)],
+            );
             let (rows, released) = step(&mut stubs, 0x1004, &step_ops, &[]);
-            assert_eq!((rows, released), (vec![], vec![(0x1000, 0x1800, "text".to_string())]));
-            assert_eq!(step(&mut stubs, 0x1008, &ldr_pc(&s, imm), &[]), (vec![], vec![]));
+            assert_eq!(
+                (rows, released),
+                (vec![], vec![(0x1000, 0x1800, "text".to_string())])
+            );
+            assert_eq!(
+                step(&mut stubs, 0x1008, &ldr_pc(&s, imm), &[]),
+                (vec![], vec![])
+            );
         }
     }
 
@@ -477,13 +620,32 @@ mod tests {
         let s = spaces();
         let t = vn(&s.uniq, 0x200, 4);
         let add_t = vec![
-            op(OpCode::CPUI_COPY, Some(t.clone()), vec![vn(&s.konst, 0x100000, 4)]),
-            op(OpCode::CPUI_INT_ADD, Some(vn(&s.reg, IP, 4)), vec![t, vn(&s.reg, IP, 4)]),
+            op(
+                OpCode::CPUI_COPY,
+                Some(t.clone()),
+                vec![vn(&s.konst, 0x100000, 4)],
+            ),
+            op(
+                OpCode::CPUI_INT_ADD,
+                Some(vn(&s.reg, IP, 4)),
+                vec![t, vn(&s.reg, IP, 4)],
+            ),
         ];
         let mut stubs = PltStubs::new(Some(&s.ram), MAPPED, PLT.to_vec());
-        step(&mut stubs, 0x1000, &adr(&s, 0x1008), &[(0x1008, XrefKind::Data)]);
-        assert_eq!(step(&mut stubs, 0x1004, &add_t, &[(0x100000, XrefKind::Data)]), (vec![], vec![]));
-        assert_eq!(step(&mut stubs, 0x1008, &ldr_pc(&s, 0x10), &[]), (vec![(0x101018, XrefKind::Read)], vec![]));
+        step(
+            &mut stubs,
+            0x1000,
+            &adr(&s, 0x1008),
+            &[(0x1008, XrefKind::Data)],
+        );
+        assert_eq!(
+            step(&mut stubs, 0x1004, &add_t, &[(0x100000, XrefKind::Data)]),
+            (vec![], vec![])
+        );
+        assert_eq!(
+            step(&mut stubs, 0x1008, &ldr_pc(&s, 0x10), &[]),
+            (vec![(0x101018, XrefKind::Read)], vec![])
+        );
     }
 
     /// `ldm ip,{r0,pc}` loads two words and jumps to the second: the slot is
@@ -495,14 +657,39 @@ mod tests {
         let r0 = vn(&s.reg, 0x20, 4);
         let at = vn(&s.uniq, 0x100, 4);
         let ldm = vec![
-            op(OpCode::CPUI_LOAD, Some(r0), vec![vn(&s.konst, 3, 8), vn(&s.reg, IP, 4)]),
-            op(OpCode::CPUI_INT_ADD, Some(at.clone()), vec![vn(&s.reg, IP, 4), vn(&s.konst, 4, 4)]),
-            op(OpCode::CPUI_LOAD, Some(vn(&s.reg, PC, 4)), vec![vn(&s.konst, 3, 8), at]),
+            op(
+                OpCode::CPUI_LOAD,
+                Some(r0),
+                vec![vn(&s.konst, 3, 8), vn(&s.reg, IP, 4)],
+            ),
+            op(
+                OpCode::CPUI_INT_ADD,
+                Some(at.clone()),
+                vec![vn(&s.reg, IP, 4), vn(&s.konst, 4, 4)],
+            ),
+            op(
+                OpCode::CPUI_LOAD,
+                Some(vn(&s.reg, PC, 4)),
+                vec![vn(&s.konst, 3, 8), at],
+            ),
             op(OpCode::CPUI_BRANCHIND, None, vec![vn(&s.reg, PC, 4)]),
         ];
-        step(&mut stubs, 0x1000, &adr(&s, 0x1008), &[(0x1008, XrefKind::Data)]);
-        step(&mut stubs, 0x1004, &add(&s, 0x100000), &[(0x100000, XrefKind::Data)]);
-        assert_eq!(step(&mut stubs, 0x1008, &ldm, &[]), (vec![(0x10100c, XrefKind::Read)], vec![]));
+        step(
+            &mut stubs,
+            0x1000,
+            &adr(&s, 0x1008),
+            &[(0x1008, XrefKind::Data)],
+        );
+        step(
+            &mut stubs,
+            0x1004,
+            &add(&s, 0x100000),
+            &[(0x100000, XrefKind::Data)],
+        );
+        assert_eq!(
+            step(&mut stubs, 0x1008, &ldm, &[]),
+            (vec![(0x10100c, XrefKind::Read)], vec![])
+        );
     }
 
     /// A load-and-jump that reloads the chain register and then jumps through
@@ -513,15 +700,39 @@ mod tests {
         let s = spaces();
         let mut stubs = PltStubs::new(Some(&s.ram), MAPPED, PLT.to_vec());
         let reload = vec![
-            op(OpCode::CPUI_LOAD, Some(vn(&s.reg, IP, 4)), vec![vn(&s.konst, 3, 8), vn(&s.reg, IP, 4)]),
-            op(OpCode::CPUI_LOAD, Some(vn(&s.reg, PC, 4)), vec![vn(&s.konst, 3, 8), vn(&s.reg, IP, 4)]),
+            op(
+                OpCode::CPUI_LOAD,
+                Some(vn(&s.reg, IP, 4)),
+                vec![vn(&s.konst, 3, 8), vn(&s.reg, IP, 4)],
+            ),
+            op(
+                OpCode::CPUI_LOAD,
+                Some(vn(&s.reg, PC, 4)),
+                vec![vn(&s.konst, 3, 8), vn(&s.reg, IP, 4)],
+            ),
             op(OpCode::CPUI_BRANCHIND, None, vec![vn(&s.reg, PC, 4)]),
         ];
-        step(&mut stubs, 0x1000, &adr(&s, 0x1008), &[(0x1008, XrefKind::Data)]);
-        step(&mut stubs, 0x1004, &add(&s, 0x100000), &[(0x100000, XrefKind::Data)]);
+        step(
+            &mut stubs,
+            0x1000,
+            &adr(&s, 0x1008),
+            &[(0x1008, XrefKind::Data)],
+        );
+        step(
+            &mut stubs,
+            0x1004,
+            &add(&s, 0x100000),
+            &[(0x100000, XrefKind::Data)],
+        );
         let (rows, released) = step(&mut stubs, 0x1008, &reload, &[]);
         assert_eq!(rows, vec![]);
-        assert_eq!(released, vec![(0x1000, 0x1008, "text".to_string()), (0x1004, 0x100000, "text".to_string())]);
+        assert_eq!(
+            released,
+            vec![
+                (0x1000, 0x1008, "text".to_string()),
+                (0x1004, 0x100000, "text".to_string())
+            ]
+        );
     }
 
     /// A veneer outside the `.plt` built like a stub (`adr; add; ldr pc`) is
@@ -531,10 +742,19 @@ mod tests {
         let s = spaces();
         let mut stubs = PltStubs::new(Some(&s.ram), MAPPED, PLT.to_vec());
         let adr_rows = [(0x1800, XrefKind::Data)];
-        assert_eq!(step(&mut stubs, 0x4000, &adr(&s, 0x1800), &adr_rows), (adr_rows.to_vec(), vec![]));
+        assert_eq!(
+            step(&mut stubs, 0x4000, &adr(&s, 0x1800), &adr_rows),
+            (adr_rows.to_vec(), vec![])
+        );
         let add_rows = [(0x100000, XrefKind::Data)];
-        assert_eq!(step(&mut stubs, 0x4004, &add(&s, 0x100000), &add_rows), (add_rows.to_vec(), vec![]));
-        assert_eq!(step(&mut stubs, 0x4008, &ldr_pc(&s, 0x10), &[]), (vec![], vec![]));
+        assert_eq!(
+            step(&mut stubs, 0x4004, &add(&s, 0x100000), &add_rows),
+            (add_rows.to_vec(), vec![])
+        );
+        assert_eq!(
+            step(&mut stubs, 0x4008, &ldr_pc(&s, 0x10), &[]),
+            (vec![], vec![])
+        );
         assert!(stubs.drain().is_empty());
     }
 
@@ -544,10 +764,26 @@ mod tests {
     fn an_unmapped_slot_is_no_stub() {
         let s = spaces();
         let mut stubs = PltStubs::new(Some(&s.ram), MAPPED, PLT.to_vec());
-        step(&mut stubs, 0x1000, &adr(&s, 0x1008), &[(0x1008, XrefKind::Data)]);
-        step(&mut stubs, 0x1004, &add(&s, 0x100000), &[(0x100000, XrefKind::Data)]);
+        step(
+            &mut stubs,
+            0x1000,
+            &adr(&s, 0x1008),
+            &[(0x1008, XrefKind::Data)],
+        );
+        step(
+            &mut stubs,
+            0x1004,
+            &add(&s, 0x100000),
+            &[(0x100000, XrefKind::Data)],
+        );
         let (rows, released) = step(&mut stubs, 0x1008, &ldr_pc(&s, 0x4000), &[]);
         assert_eq!(rows, vec![]);
-        assert_eq!(released, vec![(0x1000, 0x1008, "text".to_string()), (0x1004, 0x100000, "text".to_string())]);
+        assert_eq!(
+            released,
+            vec![
+                (0x1000, 0x1008, "text".to_string()),
+                (0x1004, 0x100000, "text".to_string())
+            ]
+        );
     }
 }

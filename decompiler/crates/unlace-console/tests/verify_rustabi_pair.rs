@@ -34,15 +34,22 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture(name: &str) -> PathBuf {
-    repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(name)
+    repo_root()
+        .join("decompiler/crates/unlace-analysis/tests/fixtures")
+        .join(name)
 }
 
 /// Bootstrap `bin`, apply `options` (before the analysis commit, as the CLI does),
@@ -52,7 +59,10 @@ fn decompile(bin: &str, func: &str, options: &[&str]) -> String {
     let specs = root.join("specs");
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
 
-    let path = fixture(bin).to_str().expect("UTF-8 fixture path").to_string();
+    let path = fixture(bin)
+        .to_str()
+        .expect("UTF-8 fixture path")
+        .to_string();
     let mut prog = bootstrap_from_object(&path, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
 
@@ -66,7 +76,8 @@ fn decompile(bin: &str, func: &str, options: &[&str]) -> String {
     {
         let data = status.get_data_mut(DECOMPILE_MODULE).unwrap();
         let dcp = data.as_any_mut().downcast_mut::<IfaceDecompData>().unwrap();
-        prog.commit_pending_analysis().expect("analysis commit succeeds");
+        prog.commit_pending_analysis()
+            .expect("analysis commit succeeds");
         dcp.conf = Some(prog);
     }
     for _ in 0..count {
@@ -171,7 +182,11 @@ fn auto_cannot_change_a_c_binary() {
     // `on` carries the option's confirmation line ahead of the decompilation;
     // compare the emitted C, which is the thing that must not move.
     let body = |s: &str| s[s.find("Decompiling").unwrap_or(0)..].to_string();
-    assert_eq!(body(&off), body(&on), "`auto` must be inert on a non-Rust image");
+    assert_eq!(
+        body(&off),
+        body(&on),
+        "`auto` must be inert on a non-Rust image"
+    );
 }
 
 /// Every `vN` local the emitted body declares.
@@ -179,8 +194,12 @@ fn declared_locals(code: &str) -> Vec<String> {
     let mut out = Vec::new();
     for line in code.lines() {
         let body = line.split("//").next().unwrap_or("");
-        let Some(name) = body.trim_end().strip_suffix(';') else { continue };
-        let Some(last) = name.rsplit([' ', '*']).next() else { continue };
+        let Some(name) = body.trim_end().strip_suffix(';') else {
+            continue;
+        };
+        let Some(last) = name.rsplit([' ', '*']).next() else {
+            continue;
+        };
         let last = last.trim_end_matches(|c: char| c == ']' || c.is_ascii_digit() || c == '[');
         // A declaration is `<type> vN;` / `<type> vN [k];`; anything with an `=`
         // or a `(` is a statement.
@@ -189,10 +208,14 @@ fn declared_locals(code: &str) -> Vec<String> {
         }
         let ident = name.split_whitespace().last().unwrap_or("");
         let ident = ident.split('[').next().unwrap_or("");
-        if last.is_empty() && ident.starts_with('v') && ident[1..].chars().all(|c| c.is_ascii_digit())
+        if last.is_empty()
+            && ident.starts_with('v')
+            && ident[1..].chars().all(|c| c.is_ascii_digit())
         {
             out.push(ident.to_string());
-        } else if ident.starts_with('v') && ident.len() > 1 && ident[1..].chars().all(|c| c.is_ascii_digit())
+        } else if ident.starts_with('v')
+            && ident.len() > 1
+            && ident[1..].chars().all(|c| c.is_ascii_digit())
         {
             out.push(ident.to_string());
         }

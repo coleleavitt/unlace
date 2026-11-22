@@ -2,12 +2,12 @@
 
 use std::rc::Rc;
 
-use super::kuna_rustarrayaddr::{array_place, RAW_ADDRESS};
+use super::kuna_rustarrayaddr::{RAW_ADDRESS, array_place};
 use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::printc::{op_key, PrintC};
+use crate::printc::{PrintC, op_key};
 use crate::printlanguage::modifiers;
 use unlace_num::opcodes::OpCode;
 

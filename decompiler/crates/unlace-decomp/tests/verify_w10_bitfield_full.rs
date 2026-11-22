@@ -27,7 +27,7 @@
 use std::rc::Rc;
 
 use unlace_decomp::bitfield::BitRange;
-use unlace_decomp::dtype::{flags, type_metatype, Datatype, DatatypeKind, TypeBitField};
+use unlace_decomp::dtype::{Datatype, DatatypeKind, TypeBitField, flags, type_metatype};
 
 /// Build a bitfield with an explicit container layout (byte offset / size, LSB,
 /// width, endianness).
@@ -50,7 +50,10 @@ fn struct_with(bitfield: Vec<TypeBitField>, size: i32) -> Datatype {
     if !bitfield.is_empty() {
         s.flags |= flags::has_bitfields;
     }
-    s.kind = DatatypeKind::Struct { field: vec![], bitfield };
+    s.kind = DatatypeKind::Struct {
+        field: vec![],
+        bitfield,
+    };
     s
 }
 
@@ -127,11 +130,13 @@ fn w10bff_find_matching_endianness_is_load_bearing() {
     // The two window-extreme fields (least- and most-significant in memory) must
     // both be found under the big-endian search direction — the regression case.
     assert!(
-        s.find_matching_bit_field(&BitRange::new(0, 1, 0, 1, true)).is_some(),
+        s.find_matching_bit_field(&BitRange::new(0, 1, 0, 1, true))
+            .is_some(),
         "BE query for the least-significant field (fieldb) must match"
     );
     assert!(
-        s.find_matching_bit_field(&BitRange::new(0, 1, 4, 4, true)).is_some(),
+        s.find_matching_bit_field(&BitRange::new(0, 1, 4, 4, true))
+            .is_some(),
         "BE query for the most-significant field (sfield4) must match"
     );
 }
@@ -152,7 +157,10 @@ fn w10bff_find_matching_multiprobe_narrowing() {
             .find_matching_bit_field(&BitRange::new(0, 1, lsb, 1, false))
             .unwrap_or_else(|| panic!("LE multiprobe must find lsb={lsb}"));
         assert_eq!(m.least_sig_bit, lsb);
-        assert_eq!(m.ident, lsb, "binary search returned the wrong field for lsb={lsb}");
+        assert_eq!(
+            m.ident, lsb,
+            "binary search returned the wrong field for lsb={lsb}"
+        );
     }
 }
 
@@ -173,13 +181,23 @@ fn w10bff_find_matching_partial_and_empty() {
     );
     // A range entirely past the populated bits.
     let beyond = BitRange::new(1, 1, 0, 1, true);
-    assert!(s.find_matching_bit_field(&beyond).is_none(), "out-of-range query is no match");
+    assert!(
+        s.find_matching_bit_field(&beyond).is_none(),
+        "out-of-range query is no match"
+    );
     // Empty struct: max = bitfield.len() - 1 = -1, loop skipped, no panic.
     let empty = struct_with(vec![], 4);
-    assert!(empty.find_matching_bit_field(&BitRange::new(0, 1, 0, 1, false)).is_none());
+    assert!(
+        empty
+            .find_matching_bit_field(&BitRange::new(0, 1, 0, 1, false))
+            .is_none()
+    );
     // A non-struct (a plain int) must also safely return None.
     let prim = Datatype::new(4, type_metatype::TYPE_UINT);
-    assert!(prim.find_matching_bit_field(&BitRange::new(0, 1, 0, 1, false)).is_none());
+    assert!(
+        prim.find_matching_bit_field(&BitRange::new(0, 1, 0, 1, false))
+            .is_none()
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -194,14 +212,16 @@ fn w10bff_find_matching_requires_exact_range() {
     let s = myfoo_word0_be();
     // Exact field3 (lsb1, nb3) -> match.
     assert_eq!(
-        s.find_matching_bit_field(&BitRange::new(0, 1, 1, 3, true)).map(|m| m.ident),
+        s.find_matching_bit_field(&BitRange::new(0, 1, 1, 3, true))
+            .map(|m| m.ident),
         Some(1),
         "exact range must match field3"
     );
     // field3 widened by one bit (lsb1, nb4) now spills into sfield4 -> no exact
     // match (overlapTest != 0 for the probed field).
     assert!(
-        s.find_matching_bit_field(&BitRange::new(0, 1, 1, 4, true)).is_none(),
+        s.find_matching_bit_field(&BitRange::new(0, 1, 1, 4, true))
+            .is_none(),
         "a range wider than the field must not match it"
     );
 }

@@ -1,15 +1,17 @@
 use super::*;
 use crate::{context::ArchContext, context::TypeOp, dtype::Datatype};
+use std::rc::Rc;
 use unlace_base::{
     address::Address,
-    space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace},
+    space::{AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype},
 };
-use std::rc::Rc;
 
 fn fixture() -> (Funcdata, OpId) {
     let mut manager = AddrSpaceManager::new();
     manager.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    manager.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    manager
+        .insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     let ram = Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -41,7 +43,12 @@ fn fixture() -> (Funcdata, OpId) {
 }
 
 fn input(fd: &mut Funcdata, width: i32, offset: u64) -> VarnodeId {
-    let ram = fd.get_arch().manage().get_space_by_name("ram").unwrap().clone();
+    let ram = fd
+        .get_arch()
+        .manage()
+        .get_space_by_name("ram")
+        .unwrap()
+        .clone();
     let vn = fd.vbank_mut().create(
         width,
         Address::new(ram, offset),
@@ -106,7 +113,11 @@ fn check_slice(
     let expected = evaluate(fd, result, inputs);
     let op = fd.vbank().get(result).unwrap().get_def().unwrap();
     assert_eq!(RuleWideSlice::new("analysis").apply_op(op, fd), 1);
-    assert_eq!(evaluate(fd, result, inputs), expected, "offset={offset}, width={width}");
+    assert_eq!(
+        evaluate(fd, result, inputs),
+        expected,
+        "offset={offset}, width={width}"
+    );
 }
 
 #[test]
@@ -122,7 +133,14 @@ fn slices_across_wide_piece_boundaries_preserve_all_bits() {
                 let lo = input(&mut fd, lo_size, 0x300);
                 let value = insert(&mut fd, anchor, CPUI_PIECE, hi_size + lo_size, &[hi, lo]);
                 for bits in [0, u128::MAX, 0x0123456789abcdeffedcba9876543210] {
-                    check_slice(&mut fd, anchor, value, offset, width, &[(hi, bits), (lo, !bits)]);
+                    check_slice(
+                        &mut fd,
+                        anchor,
+                        value,
+                        offset,
+                        width,
+                        &[(hi, bits), (lo, !bits)],
+                    );
                 }
             }
         }

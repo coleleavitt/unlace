@@ -2,10 +2,10 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, JoinSpace,
-    SpacebaseSpace, UniqueSpace, VarnodeStorage,
+    AddrSpace, AddrSpaceManager, ConstantSpace, JoinSpace, SpacebaseSpace, UniqueSpace,
+    VarnodeStorage, addrspace_flags, spacetype,
 };
-use unlace_decomp::dtype::{type_metatype, Datatype, TypeFactoryImpl};
+use unlace_decomp::dtype::{Datatype, TypeFactoryImpl, type_metatype};
 use unlace_decomp::varmap::ScopeLocal;
 use unlace_decomp::varnode::varnode_flags;
 
@@ -99,12 +99,16 @@ fn register_symbols_resolve_by_usepoint_for_name_and_type() {
     assert_eq!(scope.database().symbol(first).get_name(), "v1");
     assert_eq!(scope.database().symbol(second).get_name(), "v2");
 
-    assert!(scope
-        .query_container_for_link(&register, &unrelated_use)
-        .is_none());
-    assert!(scope
-        .build_localtype_seed_at(&register, 4, &unrelated_use, &types)
-        .is_none());
+    assert!(
+        scope
+            .query_container_for_link(&register, &unrelated_use)
+            .is_none()
+    );
+    assert!(
+        scope
+            .build_localtype_seed_at(&register, 4, &unrelated_use, &types)
+            .is_none()
+    );
 
     let whole_function = Address::new(register.get_space().unwrap().clone(), 0x28);
     let unscoped = Address::new_invalid();
@@ -170,9 +174,11 @@ fn register_type_seeds_select_the_whole_requested_storage_width() {
         .unwrap();
     assert_eq!(narrow_type.get_size(), 4);
     assert_eq!(narrow_type.get_metatype(), type_metatype::TYPE_UINT);
-    assert!(scope
-        .build_localtype_seed_at(&register, 16, &usepoint, &types)
-        .is_none());
+    assert!(
+        scope
+            .build_localtype_seed_at(&register, 16, &usepoint, &types)
+            .is_none()
+    );
 }
 
 #[test]
@@ -232,9 +238,11 @@ fn full_width_type_seeds_preserve_wrapped_stack_precision_entries() {
         types.set_max_basetype_size(8);
         let start = Address::new(stack, 0xffff_fffc);
 
-        assert!(scope
-            .query_container_for_link_width(&start, 8, &invalid)
-            .is_none());
+        assert!(
+            scope
+                .query_container_for_link_width(&start, 8, &invalid)
+                .is_none()
+        );
         let dtype = scope
             .build_localtype_seed_at(&start, 8, &invalid, &types)
             .expect("a wrapped scalar uses its whole symbol type through a precision entry");

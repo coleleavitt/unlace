@@ -39,7 +39,10 @@ fn x86_cdecl_bodies_pop_the_return_address_and_stdcall_bodies_their_arguments() 
     let udiv = xml.lines().find(|l| l.contains("__udivdi3")).unwrap();
     assert!(udiv.contains("ESP = ESP + 4;") && !udiv.contains("ESP + 16;"));
     let alldiv = xml.lines().find(|l| l.contains("\"__alldiv\"")).unwrap();
-    assert!(alldiv.contains("a s/ b") && alldiv.ends_with("ESP = ESP + 16;]]></body></pcode></callfixup>"));
+    assert!(
+        alldiv.contains("a s/ b")
+            && alldiv.ends_with("ESP = ESP + 16;]]></body></pcode></callfixup>")
+    );
 }
 
 #[test]
@@ -56,6 +59,9 @@ fn guard_admits_32_bit_x86_and_arm_only() {
     let arm = |n: &[u8]| ARM_REGISTERS.iter().any(|r| r.as_bytes() == n);
     assert_eq!(helper_abi(all, 4, false), Some(HelperAbi::X86));
     assert_eq!(helper_abi(all, 8, false), None);
-    assert_eq!(helper_abi(arm, 4, true), Some(HelperAbi::Arm { big_endian: true }));
+    assert_eq!(
+        helper_abi(arm, 4, true),
+        Some(HelperAbi::Arm { big_endian: true })
+    );
     assert_eq!(helper_abi(|_| false, 4, false), None);
 }

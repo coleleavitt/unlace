@@ -51,8 +51,8 @@ fn render(expr: Expr) -> String {
 
 #[test]
 fn go_operator_tiers_preserve_nested_operands() {
-    use tokens::*;
     use Expr::Leaf as L;
+    use tokens::*;
     for (expr, expected) in [
         (
             binary(&BITWISE_AND, L("a"), binary(&SHIFT_SRIGHT, L("b"), L("63"))),
@@ -193,7 +193,11 @@ fn go_type_spelling_preserves_machine_widths() {
 
 #[test]
 fn package_local_record_names_reach_pointer_and_array_types() {
-    let cx = SpellCtx { lang: OutLang::Go, go_package: Some(Rc::from("main")), ..SpellCtx::OFF };
+    let cx = SpellCtx {
+        lang: OutLang::Go,
+        go_package: Some(Rc::from("main")),
+        ..SpellCtx::OFF
+    };
     for (name, expected) in [("main.point", "*point"), ("other.point", "*other.point")] {
         let mut record = Datatype::new_with_align(16, 8, type_metatype::TYPE_STRUCT);
         record.name = name.into();
@@ -201,8 +205,14 @@ fn package_local_record_names_reach_pointer_and_array_types() {
         let ptr = pointer(Rc::new(record));
         assert_eq!(GO_SPELLER.declarator(&cx, &ptr).0, expected);
         let mut array = Datatype::new_with_align(16, 8, type_metatype::TYPE_ARRAY);
-        array.kind = DatatypeKind::Array { arrayof: ptr, arraysize: 2 };
-        assert_eq!(GO_SPELLER.declarator(&cx, &Rc::new(array)).0, format!("[2]{expected}"));
+        array.kind = DatatypeKind::Array {
+            arrayof: ptr,
+            arraysize: 2,
+        };
+        assert_eq!(
+            GO_SPELLER.declarator(&cx, &Rc::new(array)).0,
+            format!("[2]{expected}")
+        );
     }
 }
 

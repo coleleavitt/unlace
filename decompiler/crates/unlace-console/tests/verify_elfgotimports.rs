@@ -16,9 +16,9 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_decomp::decompile_drive::build_and_follow_flow;
@@ -47,17 +47,28 @@ const AARCH64: Fixture = Fixture {
         (0x104f4, "return *dat_205c8;", "return environ;"),
         (0x10504, "return *dat_205d0;", "return stdout;"),
         (0x10514, "return exported_value;", "return exported_value;"),
-        (0x10524, "return &exported_value;", "return &exported_value;"),
+        (
+            0x10524,
+            "return &exported_value;",
+            "return &exported_value;",
+        ),
     ],
 };
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn name_at(prog: &ConsoleProgram, vma: u64) -> String {
-    let code_space =
-        prog.arch().manage().get_default_code_space().expect("a default code space").clone();
+    let code_space = prog
+        .arch()
+        .manage()
+        .get_default_code_space()
+        .expect("a default code space")
+        .clone();
     let addr = Address::new(Rc::clone(&code_space), vma);
     match prog.arch().symboltab.find_function_across_scopes(&addr) {
         Some((sid, _)) => prog.arch().symboltab.symbol(sid).get_name().to_string(),
@@ -69,7 +80,9 @@ fn name_at(prog: &ConsoleProgram, vma: u64) -> String {
 fn render(bin: &str, vma: u64, on: bool) -> String {
     let root = repo_root();
     let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
-    let path = root.join("decompiler/crates/unlace-analysis/tests/fixtures").join(bin);
+    let path = root
+        .join("decompiler/crates/unlace-analysis/tests/fixtures")
+        .join(bin);
     assert!(path.exists(), "missing fixture {path:?}");
 
     let mut prog = bootstrap_from_object(path.to_str().unwrap(), "", &spec_roots)
@@ -77,15 +90,25 @@ fn render(bin: &str, vma: u64, on: bool) -> String {
     prog.arch_mut()
         .set_kuna_option("importdata", if on { "on" } else { "off" })
         .expect("importdata flips");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
     let name = name_at(&prog, vma);
-    let code_space =
-        prog.arch().manage().get_default_code_space().expect("a default code space").clone();
+    let code_space = prog
+        .arch()
+        .manage()
+        .get_default_code_space()
+        .expect("a default code space")
+        .clone();
     let fd = {
         let arch = prog.arch_mut();
-        build_and_follow_flow(arch, &name, Address::new(code_space, vma), unlace_console::engine::UNBOUNDED_SIZE)
-            .expect("the funcdata builds")
+        build_and_follow_flow(
+            arch,
+            &name,
+            Address::new(code_space, vma),
+            unlace_console::engine::UNBOUNDED_SIZE,
+        )
+        .expect("the funcdata builds")
     };
     let cmds: Vec<String> = ["decompile".into(), "print C".into()].to_vec();
     let count = cmds.len();
@@ -107,8 +130,16 @@ fn assert_fixture(fx: &Fixture) {
     for &(vma, off_line, on_line) in &fx.reads {
         let off = render(fx.bin, vma, false);
         let on = render(fx.bin, vma, true);
-        assert!(off.contains(off_line), "[{}] 0x{vma:x} importdata off must read `{off_line}`:\n{off}", fx.bin);
-        assert!(on.contains(on_line), "[{}] 0x{vma:x} importdata on must read `{on_line}`:\n{on}", fx.bin);
+        assert!(
+            off.contains(off_line),
+            "[{}] 0x{vma:x} importdata off must read `{off_line}`:\n{off}",
+            fx.bin
+        );
+        assert!(
+            on.contains(on_line),
+            "[{}] 0x{vma:x} importdata on must read `{on_line}`:\n{on}",
+            fx.bin
+        );
     }
 }
 

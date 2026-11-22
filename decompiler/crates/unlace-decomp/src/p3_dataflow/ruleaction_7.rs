@@ -48,14 +48,14 @@
 //! Every stub is also recorded in this item's `losses` output.
 
 use unlace_base::address::{calc_mask, mostsigbit_set, popcount, signbit_negative};
-use unlace_base::types::{int4, uintb, Wrap};
+use unlace_base::types::{Wrap, int4, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{ActionGroupList, Rule, RuleSpec};
+use crate::context::{BlockId, OpId, TypeOp, VarnodeId};
 use crate::expression::functional_equality;
 use crate::funcdata::Funcdata;
 use crate::op::pcodeop_flags;
-use crate::context::{BlockId, OpId, TypeOp, VarnodeId};
 
 // =============================================================================
 // STUB(W6): glb->inst[opc] resolver
@@ -95,22 +95,34 @@ fn op_out(data: &Funcdata, op: OpId) -> Option<VarnodeId> {
 /// `op->numInput()`
 #[inline]
 fn op_num_input(data: &Funcdata, op: OpId) -> int4 {
-    data.obank().get(op).expect("op_num_input: stale op").num_input()
+    data.obank()
+        .get(op)
+        .expect("op_num_input: stale op")
+        .num_input()
 }
 /// `op->getSlot(vn)`
 #[inline]
 fn op_slot(data: &Funcdata, op: OpId, vn: VarnodeId) -> int4 {
-    data.obank().get(op).expect("op_slot: stale op").get_slot(vn)
+    data.obank()
+        .get(op)
+        .expect("op_slot: stale op")
+        .get_slot(vn)
 }
 /// `vn->isConstant()`
 #[inline]
 fn vn_is_constant(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).expect("vn_is_constant: stale vn").is_constant()
+    data.vbank()
+        .get(vn)
+        .expect("vn_is_constant: stale vn")
+        .is_constant()
 }
 /// `vn->getOffset()`
 #[inline]
 fn vn_offset(data: &Funcdata, vn: VarnodeId) -> uintb {
-    data.vbank().get(vn).expect("vn_offset: stale vn").get_offset()
+    data.vbank()
+        .get(vn)
+        .expect("vn_offset: stale vn")
+        .get_offset()
 }
 /// `vn->getSize()`
 #[inline]
@@ -120,12 +132,18 @@ fn vn_size(data: &Funcdata, vn: VarnodeId) -> int4 {
 /// `vn->isWritten()`
 #[inline]
 fn vn_is_written(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).expect("vn_is_written: stale vn").is_written()
+    data.vbank()
+        .get(vn)
+        .expect("vn_is_written: stale vn")
+        .is_written()
 }
 /// `vn->isFree()`
 #[inline]
 fn vn_is_free(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).expect("vn_is_free: stale vn").is_free()
+    data.vbank()
+        .get(vn)
+        .expect("vn_is_free: stale vn")
+        .is_free()
 }
 /// `vn->getDef()`
 #[inline]
@@ -135,29 +153,45 @@ fn vn_def(data: &Funcdata, vn: VarnodeId) -> Option<OpId> {
 /// `vn->isAddrTied()`
 #[inline]
 fn vn_is_addr_tied(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).expect("vn_is_addr_tied: stale vn").is_addr_tied()
+    data.vbank()
+        .get(vn)
+        .expect("vn_is_addr_tied: stale vn")
+        .is_addr_tied()
 }
 /// `vn->beginDescend()..endDescend()` snapshotted to a Vec (rules mutate during
 /// iteration; the C++ holds a live list iterator — collecting first is the
 /// arena-safe equivalent that preserves descend-list order).
 #[inline]
 fn vn_descend(data: &Funcdata, vn: VarnodeId) -> Vec<OpId> {
-    data.vbank().get(vn).expect("vn_descend: stale vn").descend_iter().collect()
+    data.vbank()
+        .get(vn)
+        .expect("vn_descend: stale vn")
+        .descend_iter()
+        .collect()
 }
 /// `op->isBoolOutput()`
 #[inline]
 fn op_is_bool_output(data: &Funcdata, op: OpId) -> bool {
-    data.obank().get(op).expect("op_is_bool_output: stale op").is_bool_output()
+    data.obank()
+        .get(op)
+        .expect("op_is_bool_output: stale op")
+        .is_bool_output()
 }
 /// `op->isBooleanFlip()`
 #[inline]
 fn op_is_boolean_flip(data: &Funcdata, op: OpId) -> bool {
-    data.obank().get(op).expect("op_is_boolean_flip: stale op").is_boolean_flip()
+    data.obank()
+        .get(op)
+        .expect("op_is_boolean_flip: stale op")
+        .is_boolean_flip()
 }
 /// `op->getParent()`
 #[inline]
 fn op_get_parent(data: &Funcdata, op: OpId) -> Option<BlockId> {
-    data.obank().get(op).expect("op_get_parent: stale op").get_parent()
+    data.obank()
+        .get(op)
+        .expect("op_get_parent: stale op")
+        .get_parent()
 }
 /// `op->getOpcode()->isFloatingPointOp()` — resolved through the canonical
 /// `inst[]` table (`type_op_info`); the op's cached `TypeOp` stub on the op
@@ -279,7 +313,8 @@ impl Rule for RuleSignDiv2 {
         data.op_set_input(op, a, 0).expect("signdiv2: opSetInput a");
         let asize = vn_size(data, a);
         let two = data.new_constant(asize, 2);
-        data.op_set_input(op, two, 1).expect("signdiv2: opSetInput 2");
+        data.op_set_input(op, two, 1)
+            .expect("signdiv2: opSetInput 2");
         data.op_set_opcode(op, typeop_for(OpCode::CPUI_INT_SDIV));
         1
     }
@@ -376,9 +411,11 @@ impl Rule for RuleDivChain {
         if opc2 == OpCode::CPUI_INT_SDIV && bitcount > sz * 8 - 2 {
             return 0;
         }
-        data.op_set_input(op, base_vn, 0).expect("divchain: opSetInput base");
+        data.op_set_input(op, base_vn, 0)
+            .expect("divchain: opSetInput base");
         let c = data.new_constant(sz, resval);
-        data.op_set_input(op, c, 1).expect("divchain: opSetInput resval");
+        data.op_set_input(op, c, 1)
+            .expect("divchain: opSetInput resval");
         1
     }
 }
@@ -438,7 +475,8 @@ impl Rule for RuleSignForm {
         data.op_set_input(op, a, 0).expect("signform: opSetInput a");
         let n = 8 * vn_size(data, a) - 1;
         let cn = data.new_constant(4, n as uintb);
-        data.op_set_input(op, cn, 1).expect("signform: opSetInput n");
+        data.op_set_input(op, cn, 1)
+            .expect("signform: opSetInput n");
         data.op_set_opcode(op, typeop_for(OpCode::CPUI_INT_SRIGHT));
         1
     }
@@ -558,7 +596,8 @@ impl Rule for RuleSignForm2 {
         } else {
             return 0;
         }
-        data.op_set_input(op, a, 0).expect("signform2: opSetInput a");
+        data.op_set_input(op, a, 0)
+            .expect("signform2: opSetInput a");
         // return 0;   (faithful: the input set is NOT reported as a change)
         0
     }
@@ -646,8 +685,10 @@ impl Rule for RuleSignNearMult {
         if vn_is_free(data, x) {
             return 0;
         }
-        let mut n = vn_offset(data, op_in(data, unshiftop, 1).expect("signnearmult: unshiftop in1"))
-            as int4;
+        let mut n = vn_offset(
+            data,
+            op_in(data, unshiftop, 1).expect("signnearmult: unshiftop in1"),
+        ) as int4;
         if n <= 0 {
             return 0;
         }
@@ -672,14 +713,19 @@ impl Rule for RuleSignNearMult {
         if op_code(data, sshiftop) != OpCode::CPUI_INT_SRIGHT {
             return 0;
         }
-        if !vn_is_constant(data, op_in(data, sshiftop, 1).expect("signnearmult: sshiftop in1")) {
+        if !vn_is_constant(
+            data,
+            op_in(data, sshiftop, 1).expect("signnearmult: sshiftop in1"),
+        ) {
             return 0;
         }
         if op_in(data, sshiftop, 0).expect("signnearmult: sshiftop in0") != x {
             return 0;
         }
-        let val = vn_offset(data, op_in(data, sshiftop, 1).expect("signnearmult: sshiftop in1"))
-            as int4;
+        let val = vn_offset(
+            data,
+            op_in(data, sshiftop, 1).expect("signnearmult: sshiftop in1"),
+        ) as int4;
         if val != 8 * vn_size(data, x) - 1 {
             return 0;
         }
@@ -687,7 +733,12 @@ impl Rule for RuleSignNearMult {
         // Same x86 shift-count masking as `mask` above; ADR-0003 `wshl` so a
         // >8-byte shiftvn (`n` > 63) wraps instead of panicking. `n > 0` holds.
         let pow: uintb = (1u64).wshl(n as u32);
-        let addr = data.obank().get(op).expect("signnearmult: op").get_addr().clone();
+        let addr = data
+            .obank()
+            .get(op)
+            .expect("signnearmult: op")
+            .get_addr()
+            .clone();
         let newdiv = data.new_op(2, addr);
         data.op_set_opcode(newdiv, typeop_for(OpCode::CPUI_INT_SDIV));
         // -- STUB(W3-output): newUniqueOut -> opSetOutput (deferred split-borrow).
@@ -696,13 +747,16 @@ impl Rule for RuleSignNearMult {
         if data.op_set_output(newdiv, divvn).is_err() {
             return 0; // STUB(W3-output): construction deferred; see module doc.
         }
-        data.op_set_input(newdiv, x, 0).expect("signnearmult: newdiv in0");
+        data.op_set_input(newdiv, x, 0)
+            .expect("signnearmult: newdiv in0");
         let c1 = data.new_constant(xsize, pow);
-        data.op_set_input(newdiv, c1, 1).expect("signnearmult: newdiv in1");
+        data.op_set_input(newdiv, c1, 1)
+            .expect("signnearmult: newdiv in1");
         data.op_insert_before(newdiv, op);
 
         data.op_set_opcode(op, typeop_for(OpCode::CPUI_INT_MULT));
-        data.op_set_input(op, divvn, 0).expect("signnearmult: op in0");
+        data.op_set_input(op, divvn, 0)
+            .expect("signnearmult: op in0");
         let c2 = data.new_constant(xsize, pow);
         data.op_set_input(op, c2, 1).expect("signnearmult: op in1");
         1
@@ -788,14 +842,17 @@ impl Rule for RuleModOpt {
                 if lvn != x {
                     continue;
                 }
-                data.op_set_input(addop, x, 0).expect("modopt: opSetInput x");
+                data.op_set_input(addop, x, 0)
+                    .expect("modopt: opSetInput x");
                 if vn_is_constant(data, div) {
                     let dsize = vn_size(data, div);
                     let doff = vn_offset(data, div);
                     let c = data.new_constant(dsize, doff);
-                    data.op_set_input(addop, c, 1).expect("modopt: opSetInput div const");
+                    data.op_set_input(addop, c, 1)
+                        .expect("modopt: opSetInput div const");
                 } else {
-                    data.op_set_input(addop, div, 1).expect("modopt: opSetInput div");
+                    data.op_set_input(addop, div, 1)
+                        .expect("modopt: opSetInput div");
                 }
                 // Remainder of proper signedness
                 if op_code(data, op) == OpCode::CPUI_INT_DIV {
@@ -959,8 +1016,10 @@ impl Rule for RuleSignMod2nOpt {
                         a_slot += 1;
                         continue;
                     }
-                    if vn_offset(data, op_in(data, sub_op, 1).expect("signmod2nopt: subOp in1"))
-                        != 0
+                    if vn_offset(
+                        data,
+                        op_in(data, sub_op, 1).expect("signmod2nopt: subOp in1"),
+                    ) != 0
                     {
                         a_slot += 1;
                         continue;
@@ -1009,8 +1068,10 @@ impl Rule for RuleSignMod2nOpt {
                 if op_code(data, sub_op) != OpCode::CPUI_SUBPIECE {
                     continue;
                 }
-                if (vn_offset(data, op_in(data, sub_op, 1).expect("signmod2nopt: subOp2 in1"))
-                    as int4)
+                if (vn_offset(
+                    data,
+                    op_in(data, sub_op, 1).expect("signmod2nopt: subOp2 in1"),
+                ) as int4)
                     != trunc_size
                 {
                     continue;
@@ -1022,10 +1083,12 @@ impl Rule for RuleSignMod2nOpt {
             }
 
             data.op_set_opcode(base_op, typeop_for(OpCode::CPUI_INT_SREM));
-            data.op_set_input(base_op, a, 0).expect("signmod2nopt: baseOp in0");
+            data.op_set_input(base_op, a, 0)
+                .expect("signmod2nopt: baseOp in0");
             let asize = vn_size(data, a);
             let c = data.new_constant(asize, mask + 1);
-            data.op_set_input(base_op, c, 1).expect("signmod2nopt: baseOp in1");
+            data.op_set_input(base_op, c, 1)
+                .expect("signmod2nopt: baseOp in1");
             return 1;
         }
         0
@@ -1126,8 +1189,10 @@ impl Rule for RuleSignMod2Opt {
             if op_code(data, sub_op) != OpCode::CPUI_SUBPIECE {
                 return 0;
             }
-            let trunc_amt =
-                vn_offset(data, op_in(data, sub_op, 1).expect("signmod2opt: subOp in1")) as int4;
+            let trunc_amt = vn_offset(
+                data,
+                op_in(data, sub_op, 1).expect("signmod2opt: subOp in1"),
+            ) as int4;
             // Must truncate all but high part
             let sub_in0 = op_in(data, sub_op, 0).expect("signmod2opt: subOp in0");
             if trunc_amt + vn_size(data, base) != vn_size(data, sub_in0) {
@@ -1138,7 +1203,11 @@ impl Rule for RuleSignMod2Opt {
             if op_code(data, sub_op2) != OpCode::CPUI_SUBPIECE {
                 return 0;
             }
-            if vn_offset(data, op_in(data, sub_op2, 1).expect("signmod2opt: subOp2 in1")) != 0 {
+            if vn_offset(
+                data,
+                op_in(data, sub_op2, 1).expect("signmod2opt: subOp2 in1"),
+            ) != 0
+            {
                 return 0;
             }
             other_base = op_in(data, sub_op2, 0).expect("signmod2opt: subOp2 in0");
@@ -1172,10 +1241,12 @@ impl Rule for RuleSignMod2Opt {
                 continue;
             }
             data.op_set_opcode(root_op, typeop_for(OpCode::CPUI_INT_SREM));
-            data.op_set_input(root_op, base, 0).expect("signmod2opt: rootOp in0");
+            data.op_set_input(root_op, base, 0)
+                .expect("signmod2opt: rootOp in0");
             let bsize = vn_size(data, base);
             let c = data.new_constant(bsize, 2);
-            data.op_set_input(root_op, c, 1).expect("signmod2opt: rootOp in1");
+            data.op_set_input(root_op, c, 1)
+                .expect("signmod2opt: rootOp in1");
             return 1;
         }
         0
@@ -1293,7 +1364,11 @@ impl RuleSignMod2nOpt2 {
             return None;
         }
         let base = base.expect("checkMultiequalForm: base set when slot<=1");
-        let bl = data.obank().get(op).expect("checkMultiequalForm: op").get_parent()?;
+        let bl = data
+            .obank()
+            .get(op)
+            .expect("checkMultiequalForm: op")
+            .get_parent()?;
         let mut inner_slot: int4 = 0;
         let mut inner = block_get_in(data, bl, inner_slot);
         if block_size_out(data, inner) != 1 || block_size_in(data, inner) != 1 {
@@ -1326,14 +1401,21 @@ impl RuleSignMod2nOpt2 {
         if vn_offset(data, less_in1) != 0 {
             return None;
         }
-        let cbranch_flip =
-            data.obank().get(cbranch).expect("checkMultiequalForm: cbranch").is_boolean_flip();
+        let cbranch_flip = data
+            .obank()
+            .get(cbranch)
+            .expect("checkMultiequalForm: cbranch")
+            .is_boolean_flip();
         let neg_block = if cbranch_flip {
             block_get_false_out(data, decision)
         } else {
             block_get_true_out(data, decision)
         };
-        let neg_slot = if neg_block == inner { inner_slot } else { 1 - inner_slot };
+        let neg_slot = if neg_block == inner {
+            inner_slot
+        } else {
+            1 - inner_slot
+        };
         if neg_slot != slot {
             return None;
         }
@@ -1421,11 +1503,13 @@ impl Rule for RuleSignMod2nOpt2 {
                 continue;
             }
             if slot == 0 {
-                data.op_set_input(root_op, base, 0).expect("signmod2nopt2: rootOp in0");
+                data.op_set_input(root_op, base, 0)
+                    .expect("signmod2nopt2: rootOp in0");
             }
             let bsize = vn_size(data, base);
             let c = data.new_constant(bsize, npow);
-            data.op_set_input(root_op, c, 1).expect("signmod2nopt2: rootOp in1");
+            data.op_set_input(root_op, c, 1)
+                .expect("signmod2nopt2: rootOp in1");
             data.op_set_opcode(root_op, typeop_for(OpCode::CPUI_INT_SREM));
             return 1;
         }
@@ -1470,9 +1554,12 @@ impl Rule for RuleSegment {
 
     /// C++ `RuleSegment::applyOp` (ruleaction.cc:9025).
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        let (Some(in0), Some(vn1), Some(vn2), Some(out)) =
-            (op_in(data, op, 0), op_in(data, op, 1), op_in(data, op, 2), op_out(data, op))
-        else {
+        let (Some(in0), Some(vn1), Some(vn2), Some(out)) = (
+            op_in(data, op, 0),
+            op_in(data, op, 1),
+            op_in(data, op, 2),
+            op_out(data, op),
+        ) else {
             return 0;
         };
         let glb = std::rc::Rc::clone(data.get_arch());
@@ -1496,7 +1583,9 @@ impl Rule for RuleSegment {
             if !contiguous_test(data, vn1, vn2) {
                 return 0;
             }
-            let Some(whole) = find_contiguous_whole(data, vn1) else { return 0 };
+            let Some(whole) = find_contiguous_whole(data, vn1) else {
+                return 0;
+            };
             if vn_is_free(data, whole) {
                 return 0;
             }
@@ -1520,7 +1609,9 @@ fn contiguous_test(data: &Funcdata, vn1: VarnodeId, vn2: VarnodeId) -> bool {
     if is_input(vn1) || is_input(vn2) {
         return false;
     }
-    let (Some(op1), Some(op2)) = (vn_def(data, vn1), vn_def(data, vn2)) else { return false };
+    let (Some(op1), Some(op2)) = (vn_def(data, vn1), vn_def(data, vn2)) else {
+        return false;
+    };
     if op_code(data, op1) != OpCode::CPUI_SUBPIECE || op_code(data, op2) != OpCode::CPUI_SUBPIECE {
         return false;
     }
@@ -1528,7 +1619,9 @@ fn contiguous_test(data: &Funcdata, vn1: VarnodeId, vn2: VarnodeId) -> bool {
     if op_in(data, op2, 0) != vnwhole {
         return false;
     }
-    let (Some(lo_off), Some(hi_off)) = (op_in(data, op2, 1), op_in(data, op1, 1)) else { return false };
+    let (Some(lo_off), Some(hi_off)) = (op_in(data, op2, 1), op_in(data, op1, 1)) else {
+        return false;
+    };
     if vn_offset(data, lo_off) != 0 {
         return false; // Must be least sig
     }
@@ -1539,7 +1632,9 @@ fn contiguous_test(data: &Funcdata, vn1: VarnodeId, vn2: VarnodeId) -> bool {
 /// was cut from.
 fn find_contiguous_whole(data: &Funcdata, vn1: VarnodeId) -> Option<VarnodeId> {
     let def = vn_def(data, vn1)?;
-    (op_code(data, def) == OpCode::CPUI_SUBPIECE).then(|| op_in(data, def, 0)).flatten()
+    (op_code(data, def) == OpCode::CPUI_SUBPIECE)
+        .then(|| op_in(data, def, 0))
+        .flatten()
 }
 
 // =============================================================================
@@ -1563,36 +1658,57 @@ impl RulePtrFlow {
 
     /// Whether the default data space is truncated.
     pub(crate) fn is_live(data: &Funcdata) -> bool {
-        data.get_arch().manage().get_default_data_space().is_some_and(|s| s.is_truncated())
+        data.get_arch()
+            .manage()
+            .get_default_data_space()
+            .is_some_and(|s| s.is_truncated())
     }
 
     /// Narrow only the address operand; other uses of the full value retain it.
-    fn truncate_pointer(data: &mut Funcdata, op: OpId, vn: VarnodeId, slot: int4, size: int4) -> VarnodeId {
+    fn truncate_pointer(
+        data: &mut Funcdata,
+        op: OpId,
+        vn: VarnodeId,
+        slot: int4,
+        size: int4,
+    ) -> VarnodeId {
         if vn_is_constant(data, vn) {
             let value = data.new_constant(size, vn_offset(data, vn) & calc_mask(size));
-            data.op_set_input(op, value, slot).expect("truncated constant pointer");
+            data.op_set_input(op, value, slot)
+                .expect("truncated constant pointer");
             return value;
         }
-        let address = data.obank().get(op).expect("pointer use").get_addr().clone();
+        let address = data
+            .obank()
+            .get(op)
+            .expect("pointer use")
+            .get_addr()
+            .clone();
         let trunc = data.new_op(2, address);
         data.op_set_opcode_code(trunc, OpCode::CPUI_SUBPIECE);
         let zero = data.new_constant(vn_size(data, vn), 0);
-        data.op_set_input(trunc, zero, 1).expect("pointer truncation offset");
+        data.op_set_input(trunc, zero, 1)
+            .expect("pointer truncation offset");
         let value = data.vbank().get(vn).expect("pointer value");
         let mut storage = value.get_addr().clone();
         let narrowed = if storage.get_space().expect("pointer storage").get_type()
             == unlace_base::space::spacetype::IPTR_INTERNAL
         {
-            data.new_unique_out(size, trunc).expect("truncated unique pointer")
+            data.new_unique_out(size, trunc)
+                .expect("truncated unique pointer")
         } else {
             if storage.is_big_endian() {
                 storage = &storage + i64::from(value.get_size() - size);
             }
-            storage.renormalize(size, data.get_arch().manage()).expect("pointer storage");
-            data.new_varnode_out(size, &storage, trunc).expect("truncated pointer")
+            storage
+                .renormalize(size, data.get_arch().manage())
+                .expect("pointer storage");
+            data.new_varnode_out(size, &storage, trunc)
+                .expect("truncated pointer")
         };
         data.op_set_input(trunc, vn, 0).expect("full pointer input");
-        data.op_set_input(op, narrowed, slot).expect("narrow pointer use");
+        data.op_set_input(op, narrowed, slot)
+            .expect("narrow pointer use");
         data.op_insert_before(trunc, op);
         narrowed
     }
@@ -1607,8 +1723,16 @@ impl RulePtrFlow {
             | OpCode::CPUI_INDIRECT
             | OpCode::CPUI_PTRSUB
             | OpCode::CPUI_PTRADD => {
-                if !data.obank().get(op).expect("trialSetPtrFlow: op").is_ptr_flow() {
-                    data.obank_mut().get_mut(op).expect("trialSetPtrFlow: op").set_ptr_flow();
+                if !data
+                    .obank()
+                    .get(op)
+                    .expect("trialSetPtrFlow: op")
+                    .is_ptr_flow()
+                {
+                    data.obank_mut()
+                        .get_mut(op)
+                        .expect("trialSetPtrFlow: op")
+                        .set_ptr_flow();
                     return true;
                 }
             }
@@ -1621,8 +1745,16 @@ impl RulePtrFlow {
     /// `RulePtrFlow::propagateFlowToDef`).  Returns `true` if changed.
     fn propagate_flow_to_def(data: &mut Funcdata, vn: VarnodeId) -> bool {
         let mut made_change = false;
-        if !data.vbank().get(vn).expect("propagateFlowToDef: vn").is_ptr_flow() {
-            data.vbank_mut().get_mut(vn).expect("propagateFlowToDef: vn").set_ptr_flow();
+        if !data
+            .vbank()
+            .get(vn)
+            .expect("propagateFlowToDef: vn")
+            .is_ptr_flow()
+        {
+            data.vbank_mut()
+                .get_mut(vn)
+                .expect("propagateFlowToDef: vn")
+                .set_ptr_flow();
             made_change = true;
         }
         if !vn_is_written(data, vn) {
@@ -1639,8 +1771,16 @@ impl RulePtrFlow {
     /// `RulePtrFlow::propagateFlowToReads`).  Returns `true` if changed.
     fn propagate_flow_to_reads(data: &mut Funcdata, vn: VarnodeId) -> bool {
         let mut made_change = false;
-        if !data.vbank().get(vn).expect("propagateFlowToReads: vn").is_ptr_flow() {
-            data.vbank_mut().get_mut(vn).expect("propagateFlowToReads: vn").set_ptr_flow();
+        if !data
+            .vbank()
+            .get(vn)
+            .expect("propagateFlowToReads: vn")
+            .is_ptr_flow()
+        {
+            data.vbank_mut()
+                .get_mut(vn)
+                .expect("propagateFlowToReads: vn")
+                .set_ptr_flow();
             made_change = true;
         }
         for op in vn_descend(data, vn) {
@@ -1693,11 +1833,19 @@ impl Rule for RulePtrFlow {
         let mut made_change = 0;
         match op_code(data, op) {
             OpCode::CPUI_CALLOTHER => {
-                let Some(effect) = crate::kuna_octeoneffects::effect(data, op) else { return 0 };
-                if !effect.addressed() { return 0; }
-                let Some(space) = data.get_arch().manage().get_default_data_space() else { return 0 };
+                let Some(effect) = crate::kuna_octeoneffects::effect(data, op) else {
+                    return 0;
+                };
+                if !effect.addressed() {
+                    return 0;
+                }
+                let Some(space) = data.get_arch().manage().get_default_data_space() else {
+                    return 0;
+                };
                 let size = space.get_addr_size() as int4;
-                let Some(mut vn) = op_in(data, op, 1) else { return 0 };
+                let Some(mut vn) = op_in(data, op, 1) else {
+                    return 0;
+                };
                 if vn_size(data, vn) > size {
                     vn = Self::truncate_pointer(data, op, vn, 1, size);
                     made_change = 1;
@@ -1712,7 +1860,10 @@ impl Rule for RulePtrFlow {
                 if index >= manager.num_spaces() as u64 {
                     return 0;
                 }
-                let size = manager.get_space(index as int4).expect("memory space").get_addr_size() as int4;
+                let size = manager
+                    .get_space(index as int4)
+                    .expect("memory space")
+                    .get_addr_size() as int4;
                 let mut vn = op_in(data, op, 1).expect("memory pointer");
                 if vn_size(data, vn) > size {
                     vn = Self::truncate_pointer(data, op, vn, 1, size);
@@ -1836,7 +1987,8 @@ impl Rule for RuleNegateNegate {
         if vn_is_free(data, vn2) {
             return 0;
         }
-        data.op_set_input(op, vn2, 0).expect("negatenegate: opSetInput vn2");
+        data.op_set_input(op, vn2, 0)
+            .expect("negatenegate: opSetInput vn2");
         data.op_set_opcode(op, typeop_for(OpCode::CPUI_COPY));
         1
     }
@@ -1868,7 +2020,12 @@ impl RuleConditionalMove {
             return None;
         }
         let op = vn_def(data, vn).expect("checkBoolean: vn written");
-        if data.obank().get(op).expect("checkBoolean: op").is_bool_output() {
+        if data
+            .obank()
+            .get(op)
+            .expect("checkBoolean: op")
+            .is_bool_output()
+        {
             return Some(vn);
         }
         if op_code(data, op) == OpCode::CPUI_COPY {
@@ -1909,7 +2066,13 @@ impl RuleConditionalMove {
             return true;
         }
         let op = vn_def(data, vn).expect("gatherExpression: vn written");
-        if data.obank().get(op).expect("gatherExpression: op").get_parent() != Some(branch) {
+        if data
+            .obank()
+            .get(op)
+            .expect("gatherExpression: op")
+            .get_parent()
+            != Some(branch)
+        {
             return true; // Can propagate if value formed before branch
         }
         ops.push(op);
@@ -1917,7 +2080,11 @@ impl RuleConditionalMove {
         while pos < ops.len() {
             let op = ops[pos];
             pos += 1;
-            if data.obank().get(op).expect("gatherExpression: op").get_eval_type()
+            if data
+                .obank()
+                .get(op)
+                .expect("gatherExpression: op")
+                .get_eval_type()
                 == pcodeop_flags::special
             {
                 return false;
@@ -1932,7 +2099,10 @@ impl RuleConditionalMove {
                 if vn_is_written(data, in0)
                     && in0_def
                         .map(|d| {
-                            data.obank().get(d).expect("gatherExpression: def").get_parent()
+                            data.obank()
+                                .get(d)
+                                .expect("gatherExpression: def")
+                                .get_parent()
                                 == Some(branch)
                         })
                         .unwrap_or(false)
@@ -1968,9 +2138,14 @@ impl RuleConditionalMove {
         if !ops.is_empty() {
             // by seqnum order
             ops.sort_by_key(|&o| {
-                data.obank().get(o).expect("constructBool: stale op").get_seq_num().get_order()
+                data.obank()
+                    .get(o)
+                    .expect("constructBool: stale op")
+                    .get_seq_num()
+                    .get_order()
             });
-            data.clone_expression(ops, insertop).expect("constructBool: cloneExpression")
+            data.clone_expression(ops, insertop)
+                .expect("constructBool: cloneExpression")
         } else {
             vn
         }
@@ -2044,7 +2219,9 @@ impl Rule for RuleConditionalMove {
             return 0;
         }
         // (kuna javatry) An exception edge selects no value.
-        if crate::kuna_javatry::dispatch_handler(data, cbranch).is_some() || crate::kuna_javatry::is_throws_edge(data, cbranch) {
+        if crate::kuna_javatry::dispatch_handler(data, cbranch).is_some()
+            || crate::kuna_javatry::is_throws_edge(data, cbranch)
+        {
             return 0;
         }
 
@@ -2068,7 +2245,12 @@ impl Rule for RuleConditionalMove {
         } else {
             block_get_true_out(data, rootblock0) != inblock1
         };
-        if data.obank().get(cbranch).expect("condmove: cbranch").is_boolean_flip() {
+        if data
+            .obank()
+            .get(cbranch)
+            .expect("condmove: cbranch")
+            .is_boolean_flip()
+        {
             path0istrue = !path0istrue;
         }
 
@@ -2094,14 +2276,20 @@ impl Rule for RuleConditionalMove {
                     andorselect = !andorselect;
                     let _ = &mut boolvn;
                 }
-                let opc = if andorselect { OpCode::CPUI_BOOL_OR } else { OpCode::CPUI_BOOL_AND };
+                let opc = if andorselect {
+                    OpCode::CPUI_BOOL_OR
+                } else {
+                    OpCode::CPUI_BOOL_AND
+                };
                 data.op_uninsert(op);
                 data.op_set_opcode_code(op, opc);
                 data.op_insert_begin(op, bb);
                 let firstvn = RuleConditionalMove::construct_bool(data, bool0, op, &mut op_list0);
                 let secondvn = RuleConditionalMove::construct_bool(data, bool1, op, &mut op_list1);
-                data.op_set_input(op, firstvn, 0).expect("condmove: set in0");
-                data.op_set_input(op, secondvn, 1).expect("condmove: set in1");
+                data.op_set_input(op, firstvn, 0)
+                    .expect("condmove: set in0");
+                data.op_set_input(op, secondvn, 1)
+                    .expect("condmove: set in1");
                 return 1;
             } else if inblock1 == rootblock0 {
                 let boolvn = op_in(data, cbranch, 1).expect("condmove: cbranch in1");
@@ -2121,13 +2309,19 @@ impl Rule for RuleConditionalMove {
                     andorselect = !andorselect;
                 }
                 data.op_uninsert(op);
-                let opc = if andorselect { OpCode::CPUI_BOOL_OR } else { OpCode::CPUI_BOOL_AND };
+                let opc = if andorselect {
+                    OpCode::CPUI_BOOL_OR
+                } else {
+                    OpCode::CPUI_BOOL_AND
+                };
                 data.op_set_opcode_code(op, opc);
                 data.op_insert_begin(op, bb);
                 let firstvn = RuleConditionalMove::construct_bool(data, bool1, op, &mut op_list1);
                 let secondvn = RuleConditionalMove::construct_bool(data, bool0, op, &mut op_list0);
-                data.op_set_input(op, firstvn, 0).expect("condmove: set in0");
-                data.op_set_input(op, secondvn, 1).expect("condmove: set in1");
+                data.op_set_input(op, firstvn, 0)
+                    .expect("condmove: set in0");
+                data.op_set_input(op, secondvn, 1)
+                    .expect("condmove: set in1");
                 return 1;
             }
             return 0;
@@ -2135,7 +2329,12 @@ impl Rule for RuleConditionalMove {
 
         // Below here some change is being made.
         data.op_uninsert(op); // Changing from MULTIEQUAL, this should be reinserted
-        let out_vn = data.obank().get(op).expect("condmove: op").get_out().expect("condmove: out");
+        let out_vn = data
+            .obank()
+            .get(op)
+            .expect("condmove: op")
+            .get_out()
+            .expect("condmove: out");
         let sz = vn_size(data, out_vn);
         if bool0_const && bool1_const {
             if vn_offset(data, bool0) == vn_offset(data, bool1) {
@@ -2155,16 +2354,19 @@ impl Rule for RuleConditionalMove {
                         data.op_set_opcode_code(op, OpCode::CPUI_COPY);
                     }
                     data.op_insert_begin(op, bb);
-                    data.op_set_input(op, boolvn, 0).expect("condmove: set boolvn");
+                    data.op_set_input(op, boolvn, 0)
+                        .expect("condmove: set boolvn");
                 } else {
                     data.op_set_opcode_code(op, OpCode::CPUI_INT_ZEXT);
                     data.op_insert_begin(op, bb);
                     let boolvn = if needcomplement {
-                        data.op_bool_negate(boolvn, op, false).expect("condmove: opBoolNegate")
+                        data.op_bool_negate(boolvn, op, false)
+                            .expect("condmove: opBoolNegate")
                     } else {
                         boolvn
                     };
-                    data.op_set_input(op, boolvn, 0).expect("condmove: set boolvn");
+                    data.op_set_input(op, boolvn, 0)
+                        .expect("condmove: set boolvn");
                 }
             }
         } else if bool0_const {
@@ -2178,11 +2380,15 @@ impl Rule for RuleConditionalMove {
             data.op_insert_begin(op, bb);
             let mut boolvn = op_in(data, cbranch, 1).expect("condmove: cbranch in1");
             if needcomplement {
-                boolvn = data.op_bool_negate(boolvn, op, false).expect("condmove: opBoolNegate");
+                boolvn = data
+                    .op_bool_negate(boolvn, op, false)
+                    .expect("condmove: opBoolNegate");
             }
             let body1 = RuleConditionalMove::construct_bool(data, bool1, op, &mut op_list1);
-            data.op_set_input(op, boolvn, 0).expect("condmove: set boolvn");
-            data.op_set_input(op, body1, 1).expect("condmove: set body1");
+            data.op_set_input(op, boolvn, 0)
+                .expect("condmove: set boolvn");
+            data.op_set_input(op, body1, 1)
+                .expect("condmove: set body1");
         } else {
             // bool1 must be constant
             let needcomplement = path0istrue == (vn_offset(data, bool1) != 0);
@@ -2195,11 +2401,15 @@ impl Rule for RuleConditionalMove {
             data.op_insert_begin(op, bb);
             let mut boolvn = op_in(data, cbranch, 1).expect("condmove: cbranch in1");
             if needcomplement {
-                boolvn = data.op_bool_negate(boolvn, op, false).expect("condmove: opBoolNegate");
+                boolvn = data
+                    .op_bool_negate(boolvn, op, false)
+                    .expect("condmove: opBoolNegate");
             }
             let body0 = RuleConditionalMove::construct_bool(data, bool0, op, &mut op_list0);
-            data.op_set_input(op, boolvn, 0).expect("condmove: set boolvn");
-            data.op_set_input(op, body0, 1).expect("condmove: set body0");
+            data.op_set_input(op, boolvn, 0)
+                .expect("condmove: set boolvn");
+            data.op_set_input(op, body0, 1)
+                .expect("condmove: set body0");
         }
         1
     }
@@ -2268,14 +2478,16 @@ impl Rule for RuleFloatCast {
                     return 0;
                 }
                 // The remaining conversion, if any, still performs NaN quieting.
-                data.op_set_input(op, vn2, 0).expect("floatcast: superfluous in0");
+                data.op_set_input(op, vn2, 0)
+                    .expect("floatcast: superfluous in0");
                 if outsize == insize2 {
                     data.op_set_opcode(op, typeop_for(OpCode::CPUI_COPY)); // identity
                 }
                 return 1;
             } else if insize2 < insize1 {
                 // Convert two increases -> one combined increase
-                data.op_set_input(op, vn2, 0).expect("floatcast: combine in0");
+                data.op_set_input(op, vn2, 0)
+                    .expect("floatcast: combine in0");
                 return 1;
             }
         } else if opc2 == OpCode::CPUI_FLOAT_INT2FLOAT && opc1 == OpCode::CPUI_FLOAT_FLOAT2FLOAT {
@@ -2283,7 +2495,8 @@ impl Rule for RuleFloatCast {
                 return 0;
             }
             // Convert integer straight into final float size
-            data.op_set_input(op, vn2, 0).expect("floatcast: int2float in0");
+            data.op_set_input(op, vn2, 0)
+                .expect("floatcast: int2float in0");
             data.op_set_opcode(op, typeop_for(OpCode::CPUI_FLOAT_INT2FLOAT));
             return 1;
         } else if opc2 == OpCode::CPUI_FLOAT_FLOAT2FLOAT && opc1 == OpCode::CPUI_FLOAT_TRUNC {
@@ -2440,14 +2653,23 @@ fn ignorenan_test_for_comparison(
     } else if opc == OpCode::CPUI_INT_EQUAL || opc == OpCode::CPUI_INT_NOTEQUAL {
         let vn = op_in(data, op, 1 - slot).expect("ignorenan: inteq in");
         if ignorenan_check_back_for_compare(data, float_var, vn) {
-            let cval = if match_code == OpCode::CPUI_BOOL_OR { 0 } else { 1 };
+            let cval = if match_code == OpCode::CPUI_BOOL_OR {
+                0
+            } else {
+                1
+            };
             let c = data.new_constant(1, cval);
-            data.op_set_input(op, c, slot).expect("ignorenan: inteq const");
+            data.op_set_input(op, c, slot)
+                .expect("ignorenan: inteq const");
             *count += 1;
         }
     } else if opc == OpCode::CPUI_CBRANCH {
         let parent = op_get_parent(data, op).expect("ignorenan: cbranch parent");
-        let mut out_dir = if match_code == OpCode::CPUI_BOOL_OR { 0 } else { 1 };
+        let mut out_dir = if match_code == OpCode::CPUI_BOOL_OR {
+            0
+        } else {
+            1
+        };
         if op_is_boolean_flip(data, op) {
             out_dir = 1 - out_dir;
         }
@@ -2461,9 +2683,14 @@ fn ignorenan_test_for_comparison(
                 if ob0 == other_branch || ob1 == other_branch {
                     let cmpvn = op_in(data, last_op, 1).expect("ignorenan: lastop in1");
                     if ignorenan_check_back_for_compare(data, float_var, cmpvn) {
-                        let cval = if match_code == OpCode::CPUI_BOOL_OR { 0 } else { 1 };
+                        let cval = if match_code == OpCode::CPUI_BOOL_OR {
+                            0
+                        } else {
+                            1
+                        };
                         let c = data.new_constant(1, cval);
-                        data.op_set_input(op, c, 1).expect("ignorenan: cbranch const");
+                        data.op_set_input(op, c, 1)
+                            .expect("ignorenan: cbranch const");
                         *count += 1;
                     }
                 }
@@ -2543,11 +2770,7 @@ impl Rule for RuleIgnoreNan {
                 }
             }
         }
-        if count > 0 {
-            1
-        } else {
-            0
-        }
+        if count > 0 { 1 } else { 0 }
     }
 }
 
@@ -2595,25 +2818,70 @@ fn block_get_false_out(data: &Funcdata, bl: BlockId) -> BlockId {
 /// `RuleSegment` is `"segment"`.
 pub fn specs() -> Vec<RuleSpec> {
     vec![
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleSignDiv2::new()) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleDivChain::new()) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleSignForm::new()) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleSignForm2::new()) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleSignNearMult::new()) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleModOpt::new()) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleSignMod2nOpt::new()) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleSignMod2Opt::new()) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleSignMod2nOpt2::new()) },
-        RuleSpec { group: "segment", ctor: || Box::new(RuleSegment::new()) },
-        RuleSpec { group: "subvar", ctor: || Box::new(RulePtrFlow::new(false)) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleNegateNegate::new()) },
-        RuleSpec { group: "conditionalexe", ctor: || Box::new(RuleConditionalMove::new()) },
-        RuleSpec { group: "floatprecision", ctor: || Box::new(RuleFloatCast::new()) },
-        RuleSpec { group: "floatprecision", ctor: || Box::new(RuleIgnoreNan::new()) },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleSignDiv2::new()),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleDivChain::new()),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleSignForm::new()),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleSignForm2::new()),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleSignNearMult::new()),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleModOpt::new()),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleSignMod2nOpt::new()),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleSignMod2Opt::new()),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleSignMod2nOpt2::new()),
+        },
+        RuleSpec {
+            group: "segment",
+            ctor: || Box::new(RuleSegment::new()),
+        },
+        RuleSpec {
+            group: "subvar",
+            ctor: || Box::new(RulePtrFlow::new(false)),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleNegateNegate::new()),
+        },
+        RuleSpec {
+            group: "conditionalexe",
+            ctor: || Box::new(RuleConditionalMove::new()),
+        },
+        RuleSpec {
+            group: "floatprecision",
+            ctor: || Box::new(RuleFloatCast::new()),
+        },
+        RuleSpec {
+            group: "floatprecision",
+            ctor: || Box::new(RuleIgnoreNan::new()),
+        },
     ]
 }
 
 #[cfg(test)]
-mod tests;
-#[cfg(test)]
 mod ptrflow_tests;
+#[cfg(test)]
+mod tests;

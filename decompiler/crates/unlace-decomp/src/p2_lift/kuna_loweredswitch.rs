@@ -90,21 +90,21 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
-use unlace_base::address::{calc_mask, Address};
+use unlace_base::address::{Address, calc_mask};
 use unlace_base::error::KunaResult;
-use unlace_base::space::{spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::{int4, uint4, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
-use crate::block::{block_get_start, BlockType};
+use crate::block::{BlockType, block_get_start};
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::kuna_loweredswitchlabels::{reconcile_range_signedness, LoweredSwitchSignedness};
+use crate::kuna_loweredswitchlabels::{LoweredSwitchSignedness, reconcile_range_signedness};
 use crate::options::on_or_off;
-use crate::p2_lift::kuna_loweredswitchvalue::{verify_installed_switch_values, ValueCheck};
 use crate::p2_lift::kuna_loweredswitchexact::record_is_exact;
-use crate::p2_lift::kuna_loweredswitchheads::{case_body_entered_elsewhere, cascade_heads};
+use crate::p2_lift::kuna_loweredswitchheads::{cascade_heads, case_body_entered_elsewhere};
+use crate::p2_lift::kuna_loweredswitchvalue::{ValueCheck, verify_installed_switch_values};
 
 use unlace_base::marshal::ElementId;
 
@@ -211,8 +211,14 @@ impl KunaLoweredSwitchStore {
     }
 
     /// The `idx`-th record of `fd`.
-    pub fn record_mut(&mut self, fd: &Funcdata, idx: usize) -> Option<&mut KunaLoweredSwitchRecord> {
-        self.table.get_mut(&key_for_func(fd)).and_then(|v| v.get_mut(idx))
+    pub fn record_mut(
+        &mut self,
+        fd: &Funcdata,
+        idx: usize,
+    ) -> Option<&mut KunaLoweredSwitchRecord> {
+        self.table
+            .get_mut(&key_for_func(fd))
+            .and_then(|v| v.get_mut(idx))
     }
 }
 
@@ -442,11 +448,7 @@ fn normalize_selector_constant(
             } else {
                 low
             };
-            if raw == expected {
-                Some(low)
-            } else {
-                None
-            }
+            if raw == expected { Some(low) } else { None }
         }
         None => None,
     }
@@ -916,7 +918,11 @@ fn recover_cascade(
 
     // RULE3: need >= 3 cases.  `loweredswitch tree` moves the floor to 2 and the
     // cap to 64 for a binary-search cascade; a linear chain keeps 3 to 16.
-    let (floor, cap) = if saw_range && data.get_arch().lowered_switch_tree { (2, 64) } else { (3, 16) };
+    let (floor, cap) = if saw_range && data.get_arch().lowered_switch_tree {
+        (2, 64)
+    } else {
+        (3, 16)
+    };
     if cases.len() < floor {
         return None;
     }
@@ -978,7 +984,10 @@ fn recover_cascade(
             return None;
         }
         let blocks = data.bblocks_ref();
-        if case_blocks.iter().any(|&b| blocks.block(b).size_in() != 1 || !blocks.dominates(startbb, Some(b))) {
+        if case_blocks
+            .iter()
+            .any(|&b| blocks.block(b).size_in() != 1 || !blocks.dominates(startbb, Some(b)))
+        {
             return None;
         }
         path_signedness
@@ -1224,7 +1233,14 @@ impl ActionLowerSwitchDetect {
         let mut tied: Vec<(uint4, VarnodeId)> = var_count
             .iter()
             .filter(|(_, count)| **count == best)
-            .map(|(var, _)| (data.vbank().get(*var).map_or(u32::MAX, |v| v.get_create_index()), *var))
+            .map(|(var, _)| {
+                (
+                    data.vbank()
+                        .get(*var)
+                        .map_or(u32::MAX, |v| v.get_create_index()),
+                    *var,
+                )
+            })
             .collect();
         tied.sort_unstable();
         for (_, swvar) in tied {
@@ -1236,7 +1252,12 @@ impl ActionLowerSwitchDetect {
     }
 
     /// Record the first cascade on `swvar` that recovers, and request a restart.
-    fn record_cascade(&mut self, data: &mut Funcdata, cmpmap: &BTreeMap<BlockId, CmpNode>, swvar: VarnodeId) -> bool {
+    fn record_cascade(
+        &mut self,
+        data: &mut Funcdata,
+        cmpmap: &BTreeMap<BlockId, CmpNode>,
+        swvar: VarnodeId,
+    ) -> bool {
         // Find the head: a cascade node for swvar that no other cascade node
         // continues into.
         let mut is_child: BTreeSet<BlockId> = BTreeSet::new();
@@ -1257,8 +1278,11 @@ impl ActionLowerSwitchDetect {
                 }
             }
         }
-        let spine: BTreeSet<BlockId> =
-            cmpmap.iter().filter(|(_, cn)| cn.var == Some(swvar)).map(|(bl, _)| *bl).collect();
+        let spine: BTreeSet<BlockId> = cmpmap
+            .iter()
+            .filter(|(_, cn)| cn.var == Some(swvar))
+            .map(|(bl, _)| *bl)
+            .collect();
         let heads = cascade_heads(&spine, &is_child);
         for (i, root) in heads.into_iter().enumerate() {
             let head = advance_past_guards(data, root, cmpmap, swvar);
@@ -1269,7 +1293,10 @@ impl ActionLowerSwitchDetect {
             if !record_is_exact(data, head, &spine, swvar, &rec) {
                 continue;
             }
-            if i > 0 && (data.bblocks_ref().block(head).size_in() > 1 || case_body_entered_elsewhere(data, head, &rec)) {
+            if i > 0
+                && (data.bblocks_ref().block(head).size_in() > 1
+                    || case_body_entered_elsewhere(data, head, &rec))
+            {
                 continue;
             }
             self.store.borrow_mut().push(data, rec);
@@ -1463,10 +1490,12 @@ impl ActionLowerSwitchInstall {
                 Ok(Some((_idx, read_head_operand))) => {
                     if let Some(rec) = self.store.borrow_mut().record_mut(data, i) {
                         rec.value.read_head_operand = read_head_operand;
-                        if rec.value.state == crate::p2_lift::kuna_loweredswitchvalue::ValueState::Verified
+                        if rec.value.state
+                            == crate::p2_lift::kuna_loweredswitchvalue::ValueState::Verified
                             && rec.value.verified_read != Some(read_head_operand)
                         {
-                            rec.value.state = crate::p2_lift::kuna_loweredswitchvalue::ValueState::Unchecked;
+                            rec.value.state =
+                                crate::p2_lift::kuna_loweredswitchvalue::ValueState::Unchecked;
                         }
                     }
                     changed += 1
@@ -1552,10 +1581,17 @@ impl OptionLowerSwitch {
     /// `all` values.  Returns the resolved mode plus the confirmation message;
     /// the caller writes the mode into the `Architecture`.
     pub fn apply(&self, p1: &str) -> KunaResult<(LoweredSwitchMode, String)> {
-        let widened = |what: &str| format!("Lowered comparison-cascade switch recovery turned on, {what}");
+        let widened =
+            |what: &str| format!("Lowered comparison-cascade switch recovery turned on, {what}");
         Ok(match p1.trim() {
-            "linear" => (LoweredSwitchMode::Linear, widened("linear equality chains included")),
-            "tree" => (LoweredSwitchMode::Tree, widened("compare trees of 2 to 64 cases included")),
+            "linear" => (
+                LoweredSwitchMode::Linear,
+                widened("linear equality chains included"),
+            ),
+            "tree" => (
+                LoweredSwitchMode::Tree,
+                widened("compare trees of 2 to 64 cases included"),
+            ),
             "all" => (
                 LoweredSwitchMode::All,
                 widened("linear equality chains and compare trees of 2 to 64 cases included"),
@@ -1564,7 +1600,11 @@ impl OptionLowerSwitch {
                 let val = on_or_off(other)?;
                 let prop = if val { "on" } else { "off" };
                 (
-                    if val { LoweredSwitchMode::On } else { LoweredSwitchMode::Off },
+                    if val {
+                        LoweredSwitchMode::On
+                    } else {
+                        LoweredSwitchMode::Off
+                    },
                     format!("Lowered comparison-cascade switch recovery turned {prop}"),
                 )
             }

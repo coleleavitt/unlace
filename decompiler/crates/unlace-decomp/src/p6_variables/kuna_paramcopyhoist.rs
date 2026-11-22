@@ -99,7 +99,10 @@ impl OptionParamCopyHoist {
     pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
-        Ok((val, format!("Parameter copy-shadow entry-block hoist turned {prop}")))
+        Ok((
+            val,
+            format!("Parameter copy-shadow entry-block hoist turned {prop}"),
+        ))
     }
 }
 
@@ -114,7 +117,9 @@ pub struct ActionParamCopyHoist {
 impl ActionParamCopyHoist {
     /// Construct in group `g`.
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionParamCopyHoist { base: ActionBase::new(0, "paramcopyhoist", g) })
+        Box::new(ActionParamCopyHoist {
+            base: ActionBase::new(0, "paramcopyhoist", g),
+        })
     }
 }
 
@@ -129,7 +134,9 @@ impl Action for ActionParamCopyHoist {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionParamCopyHoist { base: self.base.clone() }))
+        Some(Box::new(ActionParamCopyHoist {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // P0 assertion `option paramcopyhoist on|off`, carried on the Architecture
@@ -141,8 +148,11 @@ impl Action for ActionParamCopyHoist {
             return 0;
         }
         let entry = data.bblocks_get_block(0);
-        let candidates: Vec<OpId> =
-            data.obank().iter_alive().filter(|&op| is_hoistable(data, op, entry)).collect();
+        let candidates: Vec<OpId> = data
+            .obank()
+            .iter_alive()
+            .filter(|&op| is_hoistable(data, op, entry))
+            .collect();
         let candidates = one_per_high(data, candidates);
         if candidates.is_empty() {
             return 0;
@@ -173,7 +183,10 @@ impl Action for ActionParamCopyHoist {
 /// construct and closes the hole.
 fn one_per_high(fd: &Funcdata, candidates: Vec<OpId>) -> Vec<OpId> {
     let high_of = |op: OpId| {
-        fd.obank().get(op).and_then(|o| o.get_out()).and_then(|v| fd.vbank().get(v)?.get_high())
+        fd.obank()
+            .get(op)
+            .and_then(|o| o.get_out())
+            .and_then(|v| fd.vbank().get(v)?.get_high())
     };
     candidates
         .iter()
@@ -188,7 +201,9 @@ fn one_per_high(fd: &Funcdata, candidates: Vec<OpId>) -> Vec<OpId> {
 /// Is `op` a printing COPY of a function input whose output can legally be defined in
 /// the entry block instead of where it sits now?
 fn is_hoistable(fd: &Funcdata, op: OpId, entry: BlockId) -> bool {
-    let Some(o) = fd.obank().get(op) else { return false };
+    let Some(o) = fd.obank().get(op) else {
+        return false;
+    };
     if o.code() != OpCode::CPUI_COPY || o.not_printed() {
         return false;
     }
@@ -211,17 +226,27 @@ fn is_hoistable(fd: &Funcdata, op: OpId, entry: BlockId) -> bool {
     // `Merge::mergeIndirect`'s call-adjacent snip, a different Cover shape that is
     // deliberately left alone; a copy with an ordinary value read is a computation,
     // not a copy-shadow.
-    let reads: Vec<OpId> =
-        fd.vbank().get(out_vn).map(|v| v.descend_iter().collect()).unwrap_or_default();
+    let reads: Vec<OpId> = fd
+        .vbank()
+        .get(out_vn)
+        .map(|v| v.descend_iter().collect())
+        .unwrap_or_default();
     let code_of = |r: OpId| fd.obank().get(r).map(|x| x.code());
-    if !reads.iter().any(|&r| code_of(r) == Some(OpCode::CPUI_MULTIEQUAL))
+    if !reads
+        .iter()
+        .any(|&r| code_of(r) == Some(OpCode::CPUI_MULTIEQUAL))
         || !reads.iter().all(|&r| {
-            matches!(code_of(r), Some(OpCode::CPUI_MULTIEQUAL) | Some(OpCode::CPUI_INDIRECT))
+            matches!(
+                code_of(r),
+                Some(OpCode::CPUI_MULTIEQUAL) | Some(OpCode::CPUI_INDIRECT)
+            )
         })
     {
         return false;
     }
-    let Some(high) = fd.vbank().get(out_vn).and_then(|v| v.get_high()) else { return false };
+    let Some(high) = fd.vbank().get(out_vn).and_then(|v| v.get_high()) else {
+        return false;
+    };
     cover_admits_hoist(fd, high, out_vn, root_vn, &reads, entry)
 }
 
@@ -231,7 +256,9 @@ fn is_hoistable(fd: &Funcdata, op: OpId, entry: BlockId) -> bool {
 /// it is written is also an SSA input, and hoisting those is outside this feature's
 /// measured scope (and outside what the option's name promises).
 fn is_incoming_parameter(fd: &Funcdata, vn: VarnodeId) -> bool {
-    let Some(v) = fd.vbank().get(vn) else { return false };
+    let Some(v) = fd.vbank().get(vn) else {
+        return false;
+    };
     if !v.is_input() {
         return false;
     }
@@ -258,9 +285,15 @@ fn cover_admits_hoist(
     let ctx = crate::funcdata::FuncdataCoverCtx::new(fd);
 
     let mut b_cover = Cover::new();
-    let n = fd.high_bank().get(high).map(|h| h.num_instances()).unwrap_or(0);
+    let n = fd
+        .high_bank()
+        .get(high)
+        .map(|h| h.num_instances())
+        .unwrap_or(0);
     for i in 0..n {
-        let Some(vn) = fd.high_bank().get(high).map(|h| h.get_instance(i)) else { return false };
+        let Some(vn) = fd.high_bank().get(high).map(|h| h.get_instance(i)) else {
+            return false;
+        };
         if vn == out_vn || instance_shadows_root(fd, vn, root_vn) {
             continue;
         }
@@ -280,7 +313,9 @@ fn cover_admits_hoist(
 /// `buildDominantCopy`'s instance filter: a COPY whose input copy-shadows the trim
 /// root carries the same value, so it contributes no independent range.
 fn instance_shadows_root(fd: &Funcdata, vn: VarnodeId, root_vn: VarnodeId) -> bool {
-    let Some(v) = fd.vbank().get(vn) else { return false };
+    let Some(v) = fd.vbank().get(vn) else {
+        return false;
+    };
     if !v.is_written() {
         return false;
     }

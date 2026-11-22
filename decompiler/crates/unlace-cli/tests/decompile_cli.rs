@@ -26,7 +26,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Any existing binary works: the stub never reads it (the CLI only
@@ -71,9 +74,12 @@ fn stub_decomp_dbg(tag: &str, c_body: &str, transcript: &str, stderr_text: &str)
          exit 0\n"
     );
     let mut fh = std::fs::File::create(&path).expect("create the decomp_dbg stub");
-    fh.write_all(script.as_bytes()).expect("write the decomp_dbg stub");
+    fh.write_all(script.as_bytes())
+        .expect("write the decomp_dbg stub");
     drop(fh);
-    let mut perms = std::fs::metadata(&path).expect("stat the stub").permissions();
+    let mut perms = std::fs::metadata(&path)
+        .expect("stat the stub")
+        .permissions();
     perms.set_mode(0o755);
     std::fs::set_permissions(&path, perms).expect("chmod the stub");
     path
@@ -81,7 +87,13 @@ fn stub_decomp_dbg(tag: &str, c_body: &str, transcript: &str, stderr_text: &str)
 
 fn run_decompile(stub: &Path, target: &str) -> (String, String, Option<i32>) {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
-        .args(["decompile", &fauxware(), target, "--decomp-dbg", stub.to_str().unwrap()])
+        .args([
+            "decompile",
+            &fauxware(),
+            target,
+            "--decomp-dbg",
+            stub.to_str().unwrap(),
+        ])
         .output()
         .expect("failed to spawn the kuna binary");
     (
@@ -110,7 +122,11 @@ fn pipeline_abort_reports_the_reason_and_exits_nonzero() {
     let (stdout, stderr, code) = run_decompile(&stub, "main");
     let _ = std::fs::remove_file(&stub);
 
-    assert_eq!(code, Some(1), "a failed function must not report success\n{stderr}");
+    assert_eq!(
+        code,
+        Some(1),
+        "a failed function must not report success\n{stderr}"
+    );
     assert!(
         stderr.contains("decompilation failed for sub_3994"),
         "the reason must reach stderr, got: {stderr}"
@@ -141,9 +157,16 @@ fn clean_run_still_exits_zero() {
     let (stdout, stderr, code) = run_decompile(&stub, "main");
     let _ = std::fs::remove_file(&stub);
 
-    assert_eq!(code, Some(0), "a healthy function stays a success\n{stderr}");
+    assert_eq!(
+        code,
+        Some(0),
+        "a healthy function stays a success\n{stderr}"
+    );
     assert!(stdout.contains("void main(void)"), "got: {stdout}");
-    assert!(!stderr.contains("error:"), "no error is reported, got: {stderr}");
+    assert!(
+        !stderr.contains("error:"),
+        "no error is reported, got: {stderr}"
+    );
 }
 
 #[test]
@@ -235,7 +258,11 @@ fn raw_image_target_with_a_space_reaches_the_engine() {
         .expect("run unlace decompile over a real-mode raw image");
     let _ = std::fs::remove_file(&raw);
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(out.status.success(), "{stdout}\n{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{stdout}\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert!(stdout.contains("return 7;"), "{stdout}");
 }
 
@@ -273,7 +300,10 @@ fn a_print_refused_at_the_budget_reports_the_budget() {
             && stderr.contains(": per-function decompile budget exceeded (2 s) in rendering C"),
         "got: {stderr}"
     );
-    assert!(stderr.contains("--max-fn-seconds N sets the budget"), "got: {stderr}");
+    assert!(
+        stderr.contains("--max-fn-seconds N sets the budget"),
+        "got: {stderr}"
+    );
     assert!(!stderr.contains("no C output"), "got: {stderr}");
 }
 
@@ -299,10 +329,16 @@ fn analysis_commit_failure_is_reported_and_exits_nonzero() {
     let (_stdout, stderr, code) = run_decompile(&stub, "main");
     let _ = std::fs::remove_file(&stub);
 
-    assert_eq!(code, Some(1), "a dropped analysis commit must not report success\n{stderr}");
+    assert_eq!(
+        code,
+        Some(1),
+        "a dropped analysis commit must not report success\n{stderr}"
+    );
     assert!(
-        stderr.contains("read symbols (analysis commit) failed: \
-                         g_a symbol created with zero size type"),
+        stderr.contains(
+            "read symbols (analysis commit) failed: \
+                         g_a symbol created with zero size type"
+        ),
         "the in-process surfaces' wording must be reproduced verbatim, got: {stderr}"
     );
 }
@@ -324,7 +360,11 @@ fn an_unrelated_console_diagnostic_is_not_a_commit_failure() {
     let (stdout, stderr, code) = run_decompile(&stub, "main");
     let _ = std::fs::remove_file(&stub);
 
-    assert_eq!(code, Some(0), "an unrelated diagnostic must not be misattributed\n{stderr}");
+    assert_eq!(
+        code,
+        Some(0),
+        "an unrelated diagnostic must not be misattributed\n{stderr}"
+    );
     assert!(stdout.contains("void main(void)"), "got: {stdout}");
 }
 
@@ -347,12 +387,19 @@ fn a_refused_option_value_is_reported_and_exits_nonzero() {
     let (stdout, stderr, code) = run_decompile(&stub, "main");
     let _ = std::fs::remove_file(&stub);
 
-    assert_eq!(code, Some(1), "a refused option must not report success\n{stderr}");
+    assert_eq!(
+        code,
+        Some(1),
+        "a refused option must not report success\n{stderr}"
+    );
     assert!(
         stderr.contains("option realtypes: Must specify toggle value, on/off"),
         "the in-process surfaces' wording must be reproduced verbatim, got: {stderr}"
     );
-    assert!(!stdout.contains("void main(void)"), "the default C is not the answer: {stdout}");
+    assert!(
+        !stdout.contains("void main(void)"),
+        "the default C is not the answer: {stdout}"
+    );
 }
 
 /// A load failure with no reason printed keeps the generic wording — it is the
@@ -393,9 +440,7 @@ fn run_pe_decompile(binary: &str, target: &str, extra: &[&str]) -> std::process:
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
     cmd.args(["decompile", binary, target, "--sleighpath", specs.as_str()]);
     cmd.args(extra);
-    cmd
-        .output()
-        .expect("run unlace decompile on PE fixture")
+    cmd.output().expect("run unlace decompile on PE fixture")
 }
 
 /// An IAT word is a call-binding address, not a body, regardless of section
@@ -447,9 +492,20 @@ fn pe_iat_body_selection_refuses_name_address_and_adjacent_slots() {
         let out = run_pe_decompile(binary, target, &extra);
         let stdout = String::from_utf8_lossy(&out.stdout);
         let stderr = String::from_utf8_lossy(&out.stderr);
-        assert_eq!(out.status.code(), Some(1), "{target} must be refused: {stderr}");
-        assert!(stdout.trim().is_empty(), "{target} emitted a body:\n{stdout}");
-        assert_eq!(stderr, format!("error: {expected}\n"), "unstable diagnostic for {target}");
+        assert_eq!(
+            out.status.code(),
+            Some(1),
+            "{target} must be refused: {stderr}"
+        );
+        assert!(
+            stdout.trim().is_empty(),
+            "{target} emitted a body:\n{stdout}"
+        );
+        assert_eq!(
+            stderr,
+            format!("error: {expected}\n"),
+            "unstable diagnostic for {target}"
+        );
         assert!(!stderr.contains("CARRY1(") && !stderr.contains("*v"));
     }
 }
@@ -474,7 +530,11 @@ fn pe_import_thunk_and_real_function_still_decompile_with_named_prototypes() {
     let caller = run_pe_decompile(&executable, "0x401010", &["--addr"]);
     let caller_stderr = String::from_utf8_lossy(&caller.stderr);
     let caller_stdout = String::from_utf8_lossy(&caller.stdout);
-    assert_eq!(caller.status.code(), Some(0), "real entry failed: {caller_stderr}");
+    assert_eq!(
+        caller.status.code(),
+        Some(0),
+        "real entry failed: {caller_stderr}"
+    );
     assert!(
         caller_stdout.contains("VirtualAlloc(") && caller_stdout.contains("GetModuleHandleA("),
         "the import calls no longer deindirect by name:\n{caller_stdout}"
@@ -491,9 +551,16 @@ fn pe_iat_json_selection_is_a_non_success_without_code() {
     let stderr = String::from_utf8_lossy(&out.stderr);
     let expected = "selector \"0x401000\" identifies import VirtualAlloc at 0x401000; \
                     the IAT slot contains a loader-written pointer, not a function body";
-    assert_eq!(out.status.code(), Some(1), "JSON selection must fail: {stderr}");
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "JSON selection must fail: {stderr}"
+    );
     assert_eq!(stderr, format!("error: {expected}\n"));
-    assert!(stdout.contains("\"functions\": []"), "a code record escaped:\n{stdout}");
+    assert!(
+        stdout.contains("\"functions\": []"),
+        "a code record escaped:\n{stdout}"
+    );
     let json_expected = expected.replace('"', "\\\"");
     assert!(
         stdout.contains(&json_expected),
@@ -520,8 +587,15 @@ fn msvc_constructor_return_survives_a_void_member_with_its_signature() {
         .trim()
         .split_once(" = ")
         .unwrap_or_else(|| panic!("the constructor's result was dropped:\n{stdout}"));
-    for read in [format!("Arr::Reset({object});"), format!("Use({object});"), format!("return {object};")] {
-        assert!(stdout.contains(&read), "{read} does not read the constructed object:\n{stdout}");
+    for read in [
+        format!("Arr::Reset({object});"),
+        format!("Use({object});"),
+        format!("return {object};"),
+    ] {
+        assert!(
+            stdout.contains(&read),
+            "{read} does not read the constructed object:\n{stdout}"
+        );
     }
 }
 
@@ -563,7 +637,15 @@ fn every_surface_reports_the_same_load_failure() {
         ("decompile", vec!["decompile", bin.as_str(), "main"]),
         ("functions", vec!["functions", bin.as_str()]),
         ("decompile-all", vec!["decompile-all", bin.as_str()]),
-        ("decompile-project", vec!["decompile-project", bin.as_str(), "-o", project_out.as_str()]),
+        (
+            "decompile-project",
+            vec![
+                "decompile-project",
+                bin.as_str(),
+                "-o",
+                project_out.as_str(),
+            ],
+        ),
     ];
 
     let mut reports: Vec<(&str, String)> = Vec::new();
@@ -574,14 +656,20 @@ fn every_surface_reports_the_same_load_failure() {
             .output()
             .expect("failed to spawn the kuna binary");
         let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
-        assert_eq!(out.status.code(), Some(1), "{name} must fail the load: {stderr}");
+        assert_eq!(
+            out.status.code(),
+            Some(1),
+            "{name} must fail the load: {stderr}"
+        );
         reports.push((name, stderr.trim().to_string()));
     }
     let _ = std::fs::remove_dir_all(&project_out);
 
     let prefix = format!(
         "error: could not build an architecture for {}: No sleigh specification for x86:LE:64:default",
-        std::fs::canonicalize(&bin).expect("the fixture is checked in").display()
+        std::fs::canonicalize(&bin)
+            .expect("the fixture is checked in")
+            .display()
     );
     let first = &reports[0].1;
     assert!(first.starts_with(&prefix), "{}: {first}", reports[0].0);
@@ -633,7 +721,13 @@ fn a_binary_under_a_spaced_directory_decompiles() {
     std::fs::copy(fauxware(), &bin).expect("copy the fixture into the spaced dir");
 
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
-        .args(["decompile", bin.to_str().unwrap(), "main", "--sleighpath", specs().as_str()])
+        .args([
+            "decompile",
+            bin.to_str().unwrap(),
+            "main",
+            "--sleighpath",
+            specs().as_str(),
+        ])
         .output()
         .expect("failed to spawn the kuna binary");
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
@@ -644,8 +738,15 @@ fn a_binary_under_a_spaced_directory_decompiles() {
         !stderr.contains("Unable to recognize imagefile"),
         "the path was split on its space, got: {stderr}"
     );
-    assert_eq!(out.status.code(), Some(0), "the load must succeed: {stderr}");
-    assert!(stdout.contains("main"), "C for main must reach stdout, got: {stdout}");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "the load must succeed: {stderr}"
+    );
+    assert!(
+        stdout.contains("main"),
+        "C for main must reach stdout, got: {stdout}"
+    );
 }
 
 /// The same defect on the output side, and the one that does not need a spaced
@@ -658,7 +759,13 @@ fn a_binary_under_a_spaced_directory_decompiles() {
 fn a_spaced_temp_dir_still_yields_c() {
     let dir = spaced_dir("tmp");
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
-        .args(["decompile", fauxware().as_str(), "main", "--sleighpath", specs().as_str()])
+        .args([
+            "decompile",
+            fauxware().as_str(),
+            "main",
+            "--sleighpath",
+            specs().as_str(),
+        ])
         .env("TMPDIR", &dir)
         .output()
         .expect("failed to spawn the kuna binary");
@@ -672,16 +779,24 @@ fn a_spaced_temp_dir_still_yields_c() {
     // path above `dir`), that file belongs to someone else and deleting it
     // would be the same data loss the test exists to catch.
     let clobbered = dir.to_str().unwrap().split(' ').next().unwrap().to_string();
-    let ours = !dir.parent().is_some_and(|p| p.to_string_lossy().contains(' '));
+    let ours = !dir
+        .parent()
+        .is_some_and(|p| p.to_string_lossy().contains(' '));
     let clobber_existed = ours && Path::new(&clobbered).exists();
     let _ = std::fs::remove_dir_all(&dir);
     if clobber_existed {
         let _ = std::fs::remove_file(&clobbered);
     }
 
-    assert!(!stderr.contains("no C output"), "the redirect was truncated, got: {stderr}");
+    assert!(
+        !stderr.contains("no C output"),
+        "the redirect was truncated, got: {stderr}"
+    );
     assert_eq!(out.status.code(), Some(0), "the run must succeed: {stderr}");
-    assert!(stdout.contains("main"), "C for main must reach stdout, got: {stdout}");
+    assert!(
+        stdout.contains("main"),
+        "C for main must reach stdout, got: {stdout}"
+    );
     assert!(
         ours,
         "the scratch parent {:?} contains a space, so the split lands in ITS name and the \
@@ -711,8 +826,8 @@ fn a_spaced_temp_dir_still_yields_c() {
 /// sites including the one that was already correct.
 #[test]
 fn a_call_that_finalizes_before_its_witness_recovers_its_argument() {
-    let bin = repo_root()
-        .join("decompiler/crates/unlace-analysis/tests/fixtures/alignednew_x86_64");
+    let bin =
+        repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/alignednew_x86_64");
     let run = |extra: &[&str]| -> Option<String> {
         let mut argv: Vec<String> = vec![
             "decompile".into(),
@@ -727,17 +842,27 @@ fn a_call_that_finalizes_before_its_witness_recovers_its_argument() {
             .output()
             .expect("failed to spawn the kuna binary");
         let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
-        assert_eq!(out.status.code(), Some(0), "unlace decompile failed: {stderr}");
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "unlace decompile failed: {stderr}"
+        );
         Some(String::from_utf8_lossy(&out.stdout).into_owned())
     };
 
     let Some(on) = run(&[]) else { return };
-    assert!(!on.contains("callee()"), "the argument is still dropped:\n{on}");
+    assert!(
+        !on.contains("callee()"),
+        "the argument is still dropped:\n{on}"
+    );
     assert!(
         !on.contains("callee(a0,") && !on.contains("callee(a0 + 0x27,"),
         "an argument was fabricated rather than recovered:\n{on}"
     );
-    assert!(on.contains("callee(a0);"), "the recovered value is not a0:\n{on}");
+    assert!(
+        on.contains("callee(a0);"),
+        "the recovered value is not a0:\n{on}"
+    );
     assert!(
         on.contains("callee(a0 + 0x27)"),
         "the site that was already correct changed:\n{on}"
@@ -788,7 +913,11 @@ fn a_generated_name_the_inventory_prints_is_selectable_by_decompile() {
         .expect("failed to spawn the kuna binary");
     let inventory = String::from_utf8_lossy(&listed.stdout).into_owned();
     let inventory_err = String::from_utf8_lossy(&listed.stderr).into_owned();
-    assert_eq!(listed.status.code(), Some(0), "functions must succeed: {inventory_err}");
+    assert_eq!(
+        listed.status.code(),
+        Some(0),
+        "functions must succeed: {inventory_err}"
+    );
     assert!(
         inventory.contains("\"sub_410\""),
         "the inventory must still report the generated name, got:\n{inventory}"
@@ -812,8 +941,15 @@ fn a_generated_name_the_inventory_prints_is_selectable_by_decompile() {
         !stderr.contains("no function"),
         "a listed name must not be rejected by the selector, got: {stderr}"
     );
-    assert_eq!(out.status.code(), Some(0), "decompile by generated name must succeed: {stderr}");
-    assert!(stdout.contains("sub_410"), "the C must be for the selected entry, got:\n{stdout}");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "decompile by generated name must succeed: {stderr}"
+    );
+    assert!(
+        stdout.contains("sub_410"),
+        "the C must be for the selected entry, got:\n{stdout}"
+    );
 }
 
 /// The other half of the contract: the wider inventory is paid for only where it
@@ -851,7 +987,10 @@ fn a_name_that_already_resolved_is_not_re_decompiled_wider() {
         !stdout.contains("funcboundflow"),
         "the retry must not fire for a name that already resolved, got:\n{stdout}"
     );
-    assert!(stdout.contains("while ("), "the real body is a loop, got:\n{stdout}");
+    assert!(
+        stdout.contains("while ("),
+        "the real body is a loop, got:\n{stdout}"
+    );
 }
 
 /// RE-need `text-output-silently-ignores`: a prototype assertion whose
@@ -888,8 +1027,15 @@ fn a_prototype_declared_under_another_name_binds_on_both_surfaces() {
             .output()
             .expect("failed to spawn the kuna binary");
         let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
-        assert_eq!(out.status.code(), Some(0), "unlace decompile failed: {stderr}");
-        assert!(!stderr.contains("rejected"), "the directive was rejected: {stderr}");
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "unlace decompile failed: {stderr}"
+        );
+        assert!(
+            !stderr.contains("rejected"),
+            "the directive was rejected: {stderr}"
+        );
         Some(String::from_utf8_lossy(&out.stdout).into_owned())
     };
 
@@ -945,15 +1091,24 @@ fn a_prototype_at_an_entry_address_binds_on_both_surfaces() {
             .output()
             .expect("failed to spawn the kuna binary");
         let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
-        assert_eq!(out.status.code(), Some(0), "unlace decompile failed: {stderr}");
-        assert!(!stderr.contains("rejected"), "the directive was rejected: {stderr}");
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "unlace decompile failed: {stderr}"
+        );
+        assert!(
+            !stderr.contains("rejected"),
+            "the directive was rejected: {stderr}"
+        );
         Some(String::from_utf8_lossy(&out.stdout).into_owned())
     };
 
     // The selected function itself, addressed by its entry.
     let selected = "prototype 0x400664 void *hashit(void *out,void *input)";
     for surface in [&[][..], &["--json"][..]] {
-        let Some(out) = run(selected, surface) else { return };
+        let Some(out) = run(selected, surface) else {
+            return;
+        };
         assert!(
             out.contains("void * authenticate(void *out,void *input)"),
             "the address-form signature did not reach 0x400664 ({surface:?}):\n{out}"
@@ -964,7 +1119,9 @@ fn a_prototype_at_an_entry_address_binds_on_both_surfaces() {
     // the call site targets), and the read side's own key.
     let callee = "prototype 0x400550 int4 strcmp(char *a,char *b,unsigned long n)";
     for surface in [&[][..], &["--json"][..]] {
-        let Some(out) = run(callee, surface) else { return };
+        let Some(out) = run(callee, surface) else {
+            return;
+        };
         assert!(
             out.contains("strcmp(a1,sneaky,"),
             "the declared third argument never reached the call site ({surface:?}):\n{out}"
@@ -1016,7 +1173,12 @@ fn an_address_inside_a_function_is_decompiled_with_a_note_naming_it() {
     let bin = fauxware();
     let sp = specs();
     let fixture = |name: &str| {
-        repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(name).to_str().unwrap().to_string()
+        repo_root()
+            .join("decompiler/crates/unlace-analysis/tests/fixtures")
+            .join(name)
+            .to_str()
+            .unwrap()
+            .to_string()
     };
     let run = |extra: &[&str]| {
         let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
@@ -1045,46 +1207,104 @@ fn an_address_inside_a_function_is_decompiled_with_a_note_naming_it() {
     for selection in [&["0x400668", "--addr"][..], &["sub_400668"]] {
         let (c, stderr) = run(&[&["decompile", &bin][..], selection].concat());
         assert!(c.contains("sub_400668("), "{c}");
-        assert_eq!(stderr.matches(&fauxware_note).count(), 1, "{selection:?}: {stderr}");
+        assert_eq!(
+            stderr.matches(&fauxware_note).count(),
+            1,
+            "{selection:?}: {stderr}"
+        );
         let (doc, stderr) = run(&[&["decompile", &bin][..], selection, &["--json"]].concat());
         assert!(doc.contains(interior), "{doc}");
-        assert_eq!(stderr.matches(&fauxware_note).count(), 1, "{selection:?}: {stderr}");
+        assert_eq!(
+            stderr.matches(&fauxware_note).count(),
+            1,
+            "{selection:?}: {stderr}"
+        );
     }
 
     let (doc, stderr) = run(&[
-        "decompile-all", &bin, "--addr", "0x400668", "--addr", "0x400668", "--functions", "sub_400668",
-        "--addr", "0x400664", "--json",
+        "decompile-all",
+        &bin,
+        "--addr",
+        "0x400668",
+        "--addr",
+        "0x400668",
+        "--functions",
+        "sub_400668",
+        "--addr",
+        "0x400664",
+        "--json",
     ]);
     assert_eq!(doc.matches("\"interior_to\"").count(), 1, "{doc}");
     assert!(doc.contains(interior), "{doc}");
-    assert_eq!(stderr.matches("is interior to").count(), 1, "one note per record: {stderr}");
+    assert_eq!(
+        stderr.matches("is interior to").count(),
+        1,
+        "one note per record: {stderr}"
+    );
 
     let out = std::env::temp_dir().join(format!("kuna_interior_project_{}", std::process::id()));
-    let (_, stderr) = run(&["decompile-project", &bin, "--addr", "0x400668", "-o", out.to_str().unwrap()]);
+    let (_, stderr) = run(&[
+        "decompile-project",
+        &bin,
+        "--addr",
+        "0x400668",
+        "-o",
+        out.to_str().unwrap(),
+    ]);
     let _ = std::fs::remove_dir_all(&out);
     assert_eq!(stderr.matches(&fauxware_note).count(), 1, "{stderr}");
 
     let thumb = fixture("arm_thumb_linked_le32");
     let (c, stderr) = run(&["decompile", &thumb, "0x100bd", "--addr"]);
     assert!(c.contains("sub_100bc("), "{c}");
-    assert!(stderr.contains(&note("0x100bc", "compute", "0x100b8", "0x4")), "{stderr}");
-    let (_, stderr) = run(&["decompile-all", &thumb, "--addr", "0x100bd", "--addr", "0x100bc", "--json"]);
+    assert!(
+        stderr.contains(&note("0x100bc", "compute", "0x100b8", "0x4")),
+        "{stderr}"
+    );
+    let (_, stderr) = run(&[
+        "decompile-all",
+        &thumb,
+        "--addr",
+        "0x100bd",
+        "--addr",
+        "0x100bc",
+        "--json",
+    ]);
     assert_eq!(stderr.matches("is interior to").count(), 1, "{stderr}");
 
     let object = fixture("calleevote_ops_x86_64.o");
     for selection in [".text+0x24", "1:0x24"] {
         let (_, stderr) = run(&["decompile", &object, selection, "--addr"]);
-        assert!(stderr.contains(&note("0x400024", "fwd", "0x400020", "0x4")), "{selection}: {stderr}");
+        assert!(
+            stderr.contains(&note("0x400024", "fwd", "0x400020", "0x4")),
+            "{selection}: {stderr}"
+        );
     }
 
     let (by_addr, stderr) = run(&["decompile", &bin, "0x400664", "--addr", "--json"]);
-    assert!(!by_addr.contains("interior_to") && !stderr.contains("interior"), "{by_addr}\n{stderr}");
+    assert!(
+        !by_addr.contains("interior_to") && !stderr.contains("interior"),
+        "{by_addr}\n{stderr}"
+    );
     let (by_name, stderr) = run(&["decompile", &bin, "authenticate", "--json"]);
-    assert_eq!(by_addr, by_name, "an entry's record is the same however it was selected");
+    assert_eq!(
+        by_addr, by_name,
+        "an entry's record is the same however it was selected"
+    );
     assert!(!stderr.contains("interior"), "{stderr}");
 
-    let (_, stderr) = run(&["decompile", &bin, "0x400668", "--addr", "--define-function", "0x400668"]);
-    assert!(!stderr.contains("interior"), "a declared entry is not interior: {stderr}");
+    let (_, stderr) = run(&[
+        "decompile",
+        &bin,
+        "0x400668",
+        "--addr",
+        "--define-function",
+        "0x400668",
+    ]);
+    assert!(
+        !stderr.contains("interior"),
+        "a declared entry is not interior: {stderr}"
+    );
 }
 
 #[test]
@@ -1098,14 +1318,19 @@ fn unavailable_output_directory_fails_before_the_console_starts() {
     let result = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["decompile", &fauxware(), "main", "--decomp-dbg"])
         .arg(&stub)
-        .arg("--sleighpath").arg(repo_root().join("specs"))
-        .env("TMPDIR", &missing).env("TMP", &missing).env("TEMP", &missing)
+        .arg("--sleighpath")
+        .arg(repo_root().join("specs"))
+        .env("TMPDIR", &missing)
+        .env("TMP", &missing)
+        .env("TEMP", &missing)
         .env("KUNA_STUB_MARKER", &marker)
-        .output().expect("run text decompilation");
+        .output()
+        .expect("run text decompilation");
     assert_eq!(result.status.code(), Some(1));
     assert!(result.stdout.is_empty());
-    assert!(String::from_utf8_lossy(&result.stderr)
-        .contains("could not create temporary output file"));
+    assert!(
+        String::from_utf8_lossy(&result.stderr).contains("could not create temporary output file")
+    );
     assert!(!marker.exists());
     assert!(!missing.exists());
 }
@@ -1116,7 +1341,9 @@ fn console_output_files_are_removed_after_success_empty_output_and_failure() {
     let staging = scratch.path().join("outputs");
     std::fs::create_dir(&staging).unwrap();
     let stub = scratch.path().join("console");
-    std::fs::write(&stub, r#"#!/bin/sh
+    std::fs::write(
+        &stub,
+        r#"#!/bin/sh
 while IFS= read -r line; do
   case "$line" in
     'openfile write '*)
@@ -1130,21 +1357,32 @@ while IFS= read -r line; do
   esac
 done
 printf '%s\n' "$KUNA_STUB_TRANSCRIPT"
-"#).unwrap();
+"#,
+    )
+    .unwrap();
     std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o700)).unwrap();
     for regions in [false, true] {
         for (write, transcript, status, error) in [
             ("1", "Decompiling main", 0, ""),
             ("0", "Decompiling main", 1, "no C output"),
-            ("1", "Decompiling main\nSkipping main: test pipeline failure", 1,
-             "decompilation failed for main"),
+            (
+                "1",
+                "Decompiling main\nSkipping main: test pipeline failure",
+                1,
+                "decompilation failed for main",
+            ),
         ] {
             let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
-            command.args(["decompile", &fauxware(), "main", "--decomp-dbg"])
+            command
+                .args(["decompile", &fauxware(), "main", "--decomp-dbg"])
                 .arg(&stub)
-                .arg("--sleighpath").arg(repo_root().join("specs"))
-                .env("TMPDIR", &staging).env("TMP", &staging).env("TEMP", &staging)
-                .env("KUNA_STUB_WRITE", write).env("KUNA_STUB_TRANSCRIPT", transcript);
+                .arg("--sleighpath")
+                .arg(repo_root().join("specs"))
+                .env("TMPDIR", &staging)
+                .env("TMP", &staging)
+                .env("TEMP", &staging)
+                .env("KUNA_STUB_WRITE", write)
+                .env("KUNA_STUB_TRANSCRIPT", transcript);
             if regions {
                 command.arg("--regions");
             }
@@ -1201,7 +1439,11 @@ fn a_prototype_binds_to_the_address_the_run_selected() {
         !stderr.contains("no function starts at 0x400678"),
         "the run rejected the address it decompiled:\n{stderr}"
     );
-    assert_eq!(out.status.code(), Some(0), "--assert-strict failed: {stderr}");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "--assert-strict failed: {stderr}"
+    );
     assert!(
         stdout.contains("(char *user,char *pass)"),
         "the declared signature never reached the selection:\n{stdout}"

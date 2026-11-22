@@ -20,7 +20,8 @@ fn registry() -> IdRegistry {
 fn decode_ldefs(xml: &str) -> LanguageDatabase {
     let reg = registry();
     let mut db = LanguageDatabase::new();
-    db.load_language_definitions(xml.as_bytes(), &reg).expect("decode definitions");
+    db.load_language_definitions(xml.as_bytes(), &reg)
+        .expect("decode definitions");
     db
 }
 
@@ -168,7 +169,10 @@ fn normalize_processor_endian_size() {
 #[test]
 fn normalize_architecture_field_count_boundaries() {
     // exactly 4 fields -> compiler "default" appended.
-    assert_eq!(normalize_architecture("ARM:LE:32:v8").unwrap(), "ARM:LE:32:v8:default");
+    assert_eq!(
+        normalize_architecture("ARM:LE:32:v8").unwrap(),
+        "ARM:LE:32:v8:default"
+    );
     // exactly 5 fields preserved.
     assert_eq!(
         normalize_architecture("ARM:LE:32:v8:default").unwrap(),
@@ -230,12 +234,14 @@ fn resolve_architecture_uses_arch_type_when_target_empty_or_default() {
     let db = synthetic_db();
     // Empty target -> archid comes from arch_type (the loader's getArchType).
     let mut sa = SleighArchitecture::new("file", "");
-    sa.resolve_architecture(&db, "x86:LE:64:default:gcc").unwrap();
+    sa.resolve_architecture(&db, "x86:LE:64:default:gcc")
+        .unwrap();
     assert_eq!(sa.language_index(), 0);
 
     // target == "default" -> same.
     let mut sa2 = SleighArchitecture::new("file", "default");
-    sa2.resolve_architecture(&db, "x86:LE:64:default:gcc").unwrap();
+    sa2.resolve_architecture(&db, "x86:LE:64:default:gcc")
+        .unwrap();
     assert_eq!(sa2.language_index(), 0);
 }
 
@@ -246,7 +252,10 @@ fn resolve_architecture_deprecated_warns() {
     sa.resolve_architecture(&db, "").unwrap();
     assert_eq!(sa.language_index(), 1);
     // The deprecation warning was written to the error console.
-    assert!(sa.error_text().contains("deprecated"), "expected deprecation warning");
+    assert!(
+        sa.error_text().contains("deprecated"),
+        "expected deprecation warning"
+    );
 }
 
 #[test]

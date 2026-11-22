@@ -464,12 +464,16 @@ mod tests {
     fn component_graphs_cover_their_sources_and_workspace_inputs() {
         let root = workspace("coverage");
         let engine_fingerprint = calculate(&root, "unlace-console").unwrap();
-        assert!(engine_fingerprint
-            .watched
-            .contains(&root.join("Cargo.toml")));
-        assert!(engine_fingerprint
-            .watched
-            .contains(&root.join("Cargo.lock")));
+        assert!(
+            engine_fingerprint
+                .watched
+                .contains(&root.join("Cargo.toml"))
+        );
+        assert!(
+            engine_fingerprint
+                .watched
+                .contains(&root.join("Cargo.lock"))
+        );
         let engine = engine_fingerprint.value;
         let harness = calculate(&root, "unlace-harness").unwrap().value;
 

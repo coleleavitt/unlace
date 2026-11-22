@@ -14,7 +14,7 @@ use object::{Object, ObjectSection};
 use std::collections::{BTreeSet, HashMap};
 
 mod decode;
-pub use decode::{decode, Line, Routine, Trace};
+pub use decode::{Line, Routine, Trace, decode};
 
 pub struct CvfTracePass;
 pub struct CvfTraceLinesPass;
@@ -31,17 +31,20 @@ fn facts(ctx: &AnalysisCtx) -> Option<(Vec<Routine>, Vec<Line>)> {
     let bytes = ctx.file.section_by_name(".trace")?.data().ok()?;
     let trace = decode(bytes);
     if trace.truncated {
-        let image = ctx.image_path.map(|p| p.display().to_string()).unwrap_or_default();
+        let image = ctx
+            .image_path
+            .map(|p| p.display().to_string())
+            .unwrap_or_default();
         unlace_base::notes::say_once(
             &image,
-            &format!("[kuna cvftrace] {image}: .trace exceeds the decoder's size caps; later records ignored"),
+            &format!(
+                "[kuna cvftrace] {image}: .trace exceeds the decoder's size caps; later records ignored"
+            ),
         );
     }
     let executable = |addr: u64| {
         ctx.file.sections().any(|s| {
-            crate::entry::is_executable(&s)
-                && addr >= s.address()
-                && addr - s.address() < s.size()
+            crate::entry::is_executable(&s) && addr >= s.address() && addr - s.address() < s.size()
         })
     };
     let mut addrs: HashMap<&str, BTreeSet<u64>> = HashMap::new();

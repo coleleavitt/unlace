@@ -13,15 +13,20 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 const SECOND: &str = "sub_40100c";
 const FIRST: &str = "sub_401000";
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn bootstrap() -> ConsoleProgram {
@@ -30,14 +35,19 @@ fn bootstrap() -> ConsoleProgram {
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
 fn decompile(prog: ConsoleProgram, name: &str) -> String {
-    let cmds: Vec<String> = [format!("load function {name}"), "decompile".into(), "print C".into()]
-        .into_iter()
-        .collect();
+    let cmds: Vec<String> = [
+        format!("load function {name}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .into_iter()
+    .collect();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -55,11 +65,17 @@ fn decompile(prog: ConsoleProgram, name: &str) -> String {
 #[test]
 fn second_cold_entry_is_a_function() {
     let prog = bootstrap();
-    assert!(prog.lookup_symbol(FIRST).is_some(), "the FDE start {FIRST} must survive");
+    assert!(
+        prog.lookup_symbol(FIRST).is_some(),
+        "the FDE start {FIRST} must survive"
+    );
     assert!(
         prog.lookup_symbol(SECOND).is_some(),
         "0x40100c is entered by `je` from check@0x401030 after a ud2 — it must be a function"
     );
     let body = decompile(prog, SECOND);
-    assert!(body.contains(SECOND), "expected a decompiled body for {SECOND}, got:\n{body}");
+    assert!(
+        body.contains(SECOND),
+        "expected a decompiled body for {SECOND}, got:\n{body}"
+    );
 }

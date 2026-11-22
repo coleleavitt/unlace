@@ -1,7 +1,7 @@
 //! Opt-in C byte transfers for direct, nonvolatile mapped byte-array accesses.
 
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 
 pub(crate) struct Access {
@@ -136,5 +136,7 @@ pub(crate) fn preamble(size: i32, big: bool) -> String {
             format!("  b[{i}] = (unsigned char)(value >> {shift});\n")
         })
         .collect::<String>();
-    format!("#ifndef {guard}\n#define {guard}\n#include <stdint.h>\n#include <limits.h>\n_Static_assert(CHAR_BIT == 8, \"bytearrayc requires 8-bit bytes\");\nstatic inline uint{bits}_t {load}(const void *p)\n{{\n  const unsigned char *b = p;\n  return (uint{bits}_t)({terms});\n}}\nstatic inline void {store}(void *p, uint{bits}_t value)\n{{\n  unsigned char *b = p;\n{stores}}}\n#endif\n")
+    format!(
+        "#ifndef {guard}\n#define {guard}\n#include <stdint.h>\n#include <limits.h>\n_Static_assert(CHAR_BIT == 8, \"bytearrayc requires 8-bit bytes\");\nstatic inline uint{bits}_t {load}(const void *p)\n{{\n  const unsigned char *b = p;\n  return (uint{bits}_t)({terms});\n}}\nstatic inline void {store}(void *p, uint{bits}_t value)\n{{\n  unsigned char *b = p;\n{stores}}}\n#endif\n"
+    )
 }

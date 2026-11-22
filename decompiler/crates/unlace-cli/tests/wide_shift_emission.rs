@@ -116,12 +116,17 @@ fn fixed_wide_shifts_keep_their_spelling_by_default() {
     let root = common::repo_root().join("tests/fixtures/wide-integer-emission");
     for file in ["x86-64.elf", "aarch64.elf", "ppc64.elf", "mips64.elf"] {
         let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
-        command.arg("decompile").arg(root.join(file)).arg("shift63").args([
-            "--assert-strict",
-            "--assert",
-            "prototype shift63 long long shift63(long long value)",
-        ]);
-        let code = String::from_utf8(common::process::required_output(&mut command).stdout).unwrap();
+        command
+            .arg("decompile")
+            .arg(root.join(file))
+            .arg("shift63")
+            .args([
+                "--assert-strict",
+                "--assert",
+                "prototype shift63 long long shift63(long long value)",
+            ]);
+        let code =
+            String::from_utf8(common::process::required_output(&mut command).stdout).unwrap();
         assert!(code.contains("return value << 0x3f;"), "{file}: {code}");
         assert!(!code.contains("unsigned long"), "{file}: {code}");
     }

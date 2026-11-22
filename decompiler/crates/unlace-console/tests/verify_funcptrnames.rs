@@ -1,7 +1,8 @@
+use std::path::PathBuf;
 use unlace_base::address::Address;
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_console::kuna_console::register_kuna_commands;
@@ -10,7 +11,6 @@ use unlace_decomp::options::NamespaceStrategy;
 use unlace_decomp::printlanguage::NamespaceStrategy::{
     AllNamespaces, MinimalNamespaces, NoNamespaces,
 };
-use std::path::PathBuf;
 
 fn inspect<T>(caller: &str, check: impl FnOnce(&mut IfaceDecompData) -> T) -> T {
     inspect_with_setup(caller, |_| {}, check)
@@ -22,8 +22,9 @@ fn inspect_with_setup<T>(
     check: impl FnOnce(&mut IfaceDecompData) -> T,
 ) -> T {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
-    let fixture = root
-        .join("decompiler/crates/unlace-analysis/tests/fixtures/function_pointer_namespaces_x86_64");
+    let fixture = root.join(
+        "decompiler/crates/unlace-analysis/tests/fixtures/function_pointer_namespaces_x86_64",
+    );
     let mut program = bootstrap_from_object(
         fixture.to_str().unwrap(),
         "",
@@ -140,24 +141,28 @@ fn renamed_and_interior_function_references_decline_qualification() {
         let target = program.lookup_symbol("left::target").unwrap();
         let interior = Address::new(target.get_space().unwrap().clone(), target.get_offset() + 1);
         let fd = data.fd.as_ref().unwrap();
-        assert!(kuna_funcptrnames::prefix(
-            fd,
-            program.arch(),
-            &target,
-            fd.get_address(),
-            "asserted_callback",
-            MinimalNamespaces
-        )
-        .is_none());
-        assert!(kuna_funcptrnames::prefix(
-            fd,
-            program.arch(),
-            &interior,
-            fd.get_address(),
-            "target",
-            MinimalNamespaces
-        )
-        .is_none());
+        assert!(
+            kuna_funcptrnames::prefix(
+                fd,
+                program.arch(),
+                &target,
+                fd.get_address(),
+                "asserted_callback",
+                MinimalNamespaces
+            )
+            .is_none()
+        );
+        assert!(
+            kuna_funcptrnames::prefix(
+                fd,
+                program.arch(),
+                &interior,
+                fd.get_address(),
+                "target",
+                MinimalNamespaces
+            )
+            .is_none()
+        );
     });
 }
 
@@ -175,15 +180,17 @@ fn data_symbols_do_not_gain_function_qualification() {
             .get_arch()
             .name_for_global_varnode_scoped(&target, 1, fd.get_address())
             .unwrap();
-        assert!(kuna_funcptrnames::prefix(
-            fd,
-            program.arch(),
-            &target,
-            fd.get_address(),
-            &name,
-            MinimalNamespaces
-        )
-        .is_none());
+        assert!(
+            kuna_funcptrnames::prefix(
+                fd,
+                program.arch(),
+                &target,
+                fd.get_address(),
+                &name,
+                MinimalNamespaces
+            )
+            .is_none()
+        );
     });
 }
 
@@ -204,21 +211,33 @@ fn conflicting_live_and_snapshot_scopes_do_not_choose_a_namespace() {
             )
             .unwrap();
         let fd = data.fd.as_ref().unwrap();
-        assert!(kuna_funcptrnames::prefix(
-            fd,
-            program.arch(),
-            &target,
-            fd.get_address(),
-            "target",
-            MinimalNamespaces
-        )
-        .is_none());
+        assert!(
+            kuna_funcptrnames::prefix(
+                fd,
+                program.arch(),
+                &target,
+                fd.get_address(),
+                "target",
+                MinimalNamespaces
+            )
+            .is_none()
+        );
     });
 }
 
 #[test]
 fn function_values_decline_scopes_that_are_not_plain_cpp_names() {
-    for scope_name in ["&T", "*mut T", "char", "bool", "Box<int>", "{impl#0}", "crate-name", "0scope", "safe_scope"] {
+    for scope_name in [
+        "&T",
+        "*mut T",
+        "char",
+        "bool",
+        "Box<int>",
+        "{impl#0}",
+        "crate-name",
+        "0scope",
+        "safe_scope",
+    ] {
         inspect_with_setup(
             "foreign_address",
             |program| {
@@ -227,24 +246,41 @@ fn function_values_decline_scopes_that_are_not_plain_cpp_names() {
                 let (old, _) = arch.symboltab.find_function_across_scopes(&target).unwrap();
                 arch.symboltab.remove_symbol(old);
                 let spaces = arch.manage().num_spaces();
-                let (scope, name) = arch.symboltab
-                    .find_create_scope_from_symbol_name(&format!("{scope_name}::target"), "::", None, spaces)
+                let (scope, name) = arch
+                    .symboltab
+                    .find_create_scope_from_symbol_name(
+                        &format!("{scope_name}::target"),
+                        "::",
+                        None,
+                        spaces,
+                    )
                     .unwrap();
                 let ty = arch.types().get_type_code().unwrap();
-                arch.symboltab.add_function(scope, &target, &name, arch.min_funcsymbol_size, ty).unwrap();
+                arch.symboltab
+                    .add_function(scope, &target, &name, arch.min_funcsymbol_size, ty)
+                    .unwrap();
             },
             |data| {
                 let program = data.conf.as_ref().unwrap();
                 let target = program.lookup_symbol("left::target").unwrap();
                 let fd = data.fd.as_ref().unwrap();
-                let (name, offset, _, path) = fd.get_arch()
-                    .name_for_global_varnode_scoped(&target, 1, fd.get_address()).unwrap();
+                let (name, offset, _, path) = fd
+                    .get_arch()
+                    .name_for_global_varnode_scoped(&target, 1, fd.get_address())
+                    .unwrap();
                 assert_eq!(name, "target");
                 assert_eq!(offset, 0);
                 assert_eq!(path, vec![scope_name.to_string()]);
                 for strategy in [MinimalNamespaces, AllNamespaces] {
                     assert_eq!(
-                        kuna_funcptrnames::prefix(fd, program.arch(), &target, fd.get_address(), "target", strategy),
+                        kuna_funcptrnames::prefix(
+                            fd,
+                            program.arch(),
+                            &target,
+                            fd.get_address(),
+                            "target",
+                            strategy
+                        ),
                         (scope_name == "safe_scope").then(|| vec![scope_name.to_string()])
                     );
                 }
@@ -291,12 +327,28 @@ fn rust_function_addresses_keep_the_root_around_local_collisions() {
 #[test]
 fn rust_function_addresses_quote_modules_without_inventing_type_paths() {
     for (scope_name, prefix) in [
-        ("safe_scope", "safe_scope::"), ("type", "r#type::"),
-        ("const", "r#const::"), ("struct", "r#struct::"), ("return", "r#return::"),
-        ("&T", ""), ("&<T>", ""), ("*mut T", ""), ("Box<int>", ""),
-        ("crate", ""), ("self", ""), ("Self", ""), ("super", ""), ("_", ""),
-        ("char", ""), ("bool", ""), ("str", ""), ("u8", ""), ("f32", ""),
-        ("{impl#0}", ""), ("crate-name", ""), ("0scope", ""),
+        ("safe_scope", "safe_scope::"),
+        ("type", "r#type::"),
+        ("const", "r#const::"),
+        ("struct", "r#struct::"),
+        ("return", "r#return::"),
+        ("&T", ""),
+        ("&<T>", ""),
+        ("*mut T", ""),
+        ("Box<int>", ""),
+        ("crate", ""),
+        ("self", ""),
+        ("Self", ""),
+        ("super", ""),
+        ("_", ""),
+        ("char", ""),
+        ("bool", ""),
+        ("str", ""),
+        ("u8", ""),
+        ("f32", ""),
+        ("{impl#0}", ""),
+        ("crate-name", ""),
+        ("0scope", ""),
     ] {
         inspect_with_setup(
             "scope_shadow",
@@ -306,15 +358,26 @@ fn rust_function_addresses_quote_modules_without_inventing_type_paths() {
                 let (old, _) = arch.symboltab.find_function_across_scopes(&target).unwrap();
                 arch.symboltab.remove_symbol(old);
                 let spaces = arch.manage().num_spaces();
-                let (scope, name) = arch.symboltab
-                    .find_create_scope_from_symbol_name(&format!("{scope_name}::target"), "::", None, spaces)
+                let (scope, name) = arch
+                    .symboltab
+                    .find_create_scope_from_symbol_name(
+                        &format!("{scope_name}::target"),
+                        "::",
+                        None,
+                        spaces,
+                    )
                     .unwrap();
                 let ty = arch.types().get_type_code().unwrap();
-                arch.symboltab.add_function(scope, &target, &name, arch.min_funcsymbol_size, ty).unwrap();
+                arch.symboltab
+                    .add_function(scope, &target, &name, arch.min_funcsymbol_size, ty)
+                    .unwrap();
             },
             |data| {
                 let text = render_rust_between_c(data);
-                assert!(text.contains(&format!("return {prefix}target as u64;")), "{scope_name}: {text}");
+                assert!(
+                    text.contains(&format!("return {prefix}target as u64;")),
+                    "{scope_name}: {text}"
+                );
             },
         );
     }
@@ -336,7 +399,10 @@ fn rust_function_addresses_resolve_from_the_callers_module() {
                 (NamespaceStrategy::None, ""),
             ] {
                 let text = render_rust_between_c_with_strategy(data, strategy);
-                assert!(text.contains(&format!("return {prefix}target as u64;")), "{caller}: {text}");
+                assert!(
+                    text.contains(&format!("return {prefix}target as u64;")),
+                    "{caller}: {text}"
+                );
             }
         });
     }
@@ -352,11 +418,14 @@ fn rust_function_addresses_use_relative_descendant_modules() {
             let (old, _) = arch.symboltab.find_function_across_scopes(&target).unwrap();
             arch.symboltab.remove_symbol(old);
             let spaces = arch.manage().num_spaces();
-            let (scope, name) = arch.symboltab
+            let (scope, name) = arch
+                .symboltab
                 .find_create_scope_from_symbol_name("left::child::target", "::", None, spaces)
                 .unwrap();
             let ty = arch.types().get_type_code().unwrap();
-            arch.symboltab.add_function(scope, &target, &name, arch.min_funcsymbol_size, ty).unwrap();
+            arch.symboltab
+                .add_function(scope, &target, &name, arch.min_funcsymbol_size, ty)
+                .unwrap();
         },
         |data| {
             let text = render_rust_between_c(data);

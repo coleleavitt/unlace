@@ -54,9 +54,18 @@ use crate::dtype::{Datatype, DatatypeKind, TypeFactory, TypeFactoryImpl, TypeFie
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum TypeRecipe {
     /// A type the factory holds by name.
-    Named { name: String, id: u64, meta: i32, size: int4 },
+    Named {
+        name: String,
+        id: u64,
+        meta: i32,
+        size: int4,
+    },
     /// `ptrto *`, of `size` bytes, addressing `wordsize` units.
-    Pointer { size: int4, wordsize: u32, to: Box<TypeRecipe> },
+    Pointer {
+        size: int4,
+        wordsize: u32,
+        to: Box<TypeRecipe>,
+    },
     /// `elem[count]`.
     Array { count: int4, elem: Box<TypeRecipe> },
     /// `Datatype::new(size, TYPE_UNKNOWN)`.
@@ -78,15 +87,16 @@ impl TypeRecipe {
             return None;
         }
         match &ct.kind {
-            DatatypeKind::Pointer { ptrto, spaceid: None, truncate: None, wordsize }
-                if ct.get_name().is_empty() =>
-            {
-                Some(TypeRecipe::Pointer {
-                    size: ct.get_size(),
-                    wordsize: *wordsize,
-                    to: Box::new(Self::of_depth(ptrto, depth + 1)?),
-                })
-            }
+            DatatypeKind::Pointer {
+                ptrto,
+                spaceid: None,
+                truncate: None,
+                wordsize,
+            } if ct.get_name().is_empty() => Some(TypeRecipe::Pointer {
+                size: ct.get_size(),
+                wordsize: *wordsize,
+                to: Box::new(Self::of_depth(ptrto, depth + 1)?),
+            }),
             DatatypeKind::Array { arrayof, arraysize } if ct.get_name().is_empty() => {
                 Some(TypeRecipe::Array {
                     count: *arraysize,
@@ -99,7 +109,9 @@ impl TypeRecipe {
             | DatatypeKind::PartialUnion { .. }
             | DatatypeKind::PartialEnum { .. }
             | DatatypeKind::Spacebase { .. } => None,
-            _ if ct.is_unknown_placeholder() => Some(TypeRecipe::Placeholder { size: ct.get_size() }),
+            _ if ct.is_unknown_placeholder() => Some(TypeRecipe::Placeholder {
+                size: ct.get_size(),
+            }),
             _ if ct.get_name().is_empty() => None,
             // A synthesized structure is named by the process that minted it.
             _ if ledger::minted_number(ct).is_some() => None,
@@ -127,11 +139,16 @@ impl TypeRecipe {
     pub fn build(&self, types: &dyn TypeFactory) -> Option<Rc<Datatype>> {
         let ct = match self {
             TypeRecipe::Named { name, .. } => types.find_by_name(name).ok().flatten()?,
-            TypeRecipe::Pointer { size, wordsize, to } => {
-                types.get_type_pointer(*size, to.build(types)?, *wordsize).ok()?
+            TypeRecipe::Pointer { size, wordsize, to } => types
+                .get_type_pointer(*size, to.build(types)?, *wordsize)
+                .ok()?,
+            TypeRecipe::Array { count, elem } => {
+                types.get_type_array(*count, elem.build(types)?).ok()?
             }
-            TypeRecipe::Array { count, elem } => types.get_type_array(*count, elem.build(types)?).ok()?,
-            TypeRecipe::Placeholder { size } => Rc::new(Datatype::new(*size, crate::dtype::type_metatype::TYPE_UNKNOWN)),
+            TypeRecipe::Placeholder { size } => Rc::new(Datatype::new(
+                *size,
+                crate::dtype::type_metatype::TYPE_UNKNOWN,
+            )),
         };
         (TypeRecipe::of(&ct).as_ref() == Some(self)).then_some(ct)
     }
@@ -154,7 +171,10 @@ impl AtLoad {
             .filter(|t| !t.get_name().is_empty() && t.get_id() != 0)
             .map(|t| t.get_id())
             .collect();
-        AtLoad { ids, held: held_names(types) }
+        AtLoad {
+            ids,
+            held: held_names(types),
+        }
     }
 
     /// The `struct_N` names held at load, which [`forget_minted`] keeps.
@@ -268,7 +288,9 @@ impl FunctionRecord {
         let mut out: Vec<(&SynthRequest, &Answer)> = Vec::new();
         for (q, a) in self.requests.iter().zip(&self.answers) {
             match out.iter().find(|(seen, _)| *seen == q) {
-                Some((_, first)) if first.as_ref().map(|x| &x.0) != a.as_ref().map(|x| &x.0) => return None,
+                Some((_, first)) if first.as_ref().map(|x| &x.0) != a.as_ref().map(|x| &x.0) => {
+                    return None;
+                }
                 Some(_) => {}
                 None => out.push((q, a)),
             }
@@ -305,7 +327,12 @@ pub type ShardHandle = Rc<RefCell<ShardHook>>;
 
 impl ShardHook {
     fn with(mode: Mode, at_load: Rc<AtLoad>) -> ShardHandle {
-        Rc::new(RefCell::new(ShardHook { mode, at_load, record: FunctionRecord::default(), answered: Vec::new() }))
+        Rc::new(RefCell::new(ShardHook {
+            mode,
+            at_load,
+            record: FunctionRecord::default(),
+            answered: Vec::new(),
+        }))
     }
 
     /// A hook that records every lookup and lets the ledger answer.
@@ -337,11 +364,14 @@ impl ShardHook {
     /// Remember what a recording worker's own ledger answered `request` with,
     /// and, the first time a name comes back, that `request` minted it.
     fn own_answer(&mut self, answer: Option<&Datatype>, request: SynthRequest) {
-        let Mode::Record(minted) = &mut self.mode else { return };
+        let Mode::Record(minted) = &mut self.mode else {
+            return;
+        };
         let held = &self.at_load.held;
         let answer = answer.map(|ct| {
             let name = ct.get_name().to_string();
-            let def = (!held.contains(&name)).then(|| minted.entry(name.clone()).or_insert(request).clone());
+            let def = (!held.contains(&name))
+                .then(|| minted.entry(name.clone()).or_insert(request).clone());
             (name, def)
         });
         self.record.answers.push(answer);
@@ -389,7 +419,11 @@ pub(super) fn lookup(
     // same layout again -- and whether it does depends on what the process
     // decompiled before, so a repeat is answered as the first asking was and
     // does not take a queued answer.
-    let repeat = hook.answered.iter().find(|(q, _)| *q == request).map(|(_, a)| a.clone());
+    let repeat = hook
+        .answered
+        .iter()
+        .find(|(q, _)| *q == request)
+        .map(|(_, a)| a.clone());
     let answer = match (&mut hook.mode, repeat) {
         (Mode::Force(_), Some(answer)) => Some(answer),
         (Mode::Force(queue), None) => {
@@ -408,8 +442,11 @@ pub(super) fn lookup(
         }
         Some(None) => None,
         Some(Some(name)) => {
-            let held =
-                types.find_by_name(&name).ok().flatten().filter(|t| ledger::minted_number(t).is_some());
+            let held = types
+                .find_by_name(&name)
+                .ok()
+                .flatten()
+                .filter(|t| ledger::minted_number(t).is_some());
             if held.is_none() {
                 hook.record.off_script = true;
             }
@@ -430,7 +467,11 @@ enum Slot {
     /// A probe that could not answer; the ledger's scan stops here.
     Unknown,
     /// A synthesized structure.
-    Synth { size: int4, layout: Layout, members: Vec<Member> },
+    Synth {
+        size: int4,
+        layout: Layout,
+        members: Vec<Member>,
+    },
 }
 
 /// A non-minting lookup whose answer would have been a mint.
@@ -468,7 +509,10 @@ impl Replay {
                 Err(_) => Slot::Unknown,
             })
             .collect();
-        Replay { slots, minted: Vec::new() }
+        Replay {
+            slots,
+            minted: Vec::new(),
+        }
     }
 
     /// The synthesized slots whose size lies in `sizes`, and the first free
@@ -492,7 +536,9 @@ impl Replay {
 
     fn synth(&self, n: usize) -> (&Layout, &[Member]) {
         match &self.slots[n] {
-            Slot::Synth { layout, members, .. } => (layout, members),
+            Slot::Synth {
+                layout, members, ..
+            } => (layout, members),
             _ => unreachable!("entries yields synthesized slots only"),
         }
     }
@@ -613,7 +659,9 @@ pub fn rename_identifiers(text: &str, map: &[(String, String)], keep: &[String])
 }
 
 pub fn rename_identifiers_with(
-    text: &str, map: &[(String, String)], keep: &[String],
+    text: &str,
+    map: &[(String, String)],
+    keep: &[String],
     mut renamed: impl FnMut(usize, usize, &str),
 ) -> Option<String> {
     const PREFIX: &[u8] = b"struct_";
@@ -719,7 +767,9 @@ pub fn forget_minted(types: &TypeFactoryImpl, held: &[String]) -> Result<(), Str
             if ledger::minted_number(&ct).is_none() {
                 break;
             }
-            types.destroy_type(&ct).map_err(|e| format!("{name}: {}", e.explain()))?;
+            types
+                .destroy_type(&ct)
+                .map_err(|e| format!("{name}: {}", e.explain()))?;
             gone.push(ct);
         }
     }
@@ -730,14 +780,20 @@ pub fn forget_minted(types: &TypeFactoryImpl, held: &[String]) -> Result<(), Str
         gone.iter().map(|ct| (Rc::as_ptr(ct), true)).collect();
     for ct in types.dependent_order() {
         if reaches(&ct, &mut built_on, 0) && !ct.is_core_type() {
-            types.destroy_type(&ct).map_err(|e| format!("{}: {}", ct.get_name(), e.explain()))?;
+            types
+                .destroy_type(&ct)
+                .map_err(|e| format!("{}: {}", ct.get_name(), e.explain()))?;
         }
     }
     Ok(())
 }
 
 /// Is `ct` a minted structure of `seen`, or built on one?
-fn reaches(ct: &Rc<Datatype>, seen: &mut std::collections::HashMap<*const Datatype, bool>, depth: u32) -> bool {
+fn reaches(
+    ct: &Rc<Datatype>,
+    seen: &mut std::collections::HashMap<*const Datatype, bool>,
+    depth: u32,
+) -> bool {
     if let Some(&known) = seen.get(&Rc::as_ptr(ct)) {
         return known;
     }
@@ -746,14 +802,20 @@ fn reaches(ct: &Rc<Datatype>, seen: &mut std::collections::HashMap<*const Dataty
     }
     let parts: Vec<Rc<Datatype>> = match &ct.kind {
         DatatypeKind::Pointer { .. } => ct.get_ptr_to().into_iter().collect(),
-        DatatypeKind::PointerRel { parent, .. } => {
-            ct.get_ptr_to().into_iter().chain(std::iter::once(Rc::clone(parent))).collect()
-        },
+        DatatypeKind::PointerRel { parent, .. } => ct
+            .get_ptr_to()
+            .into_iter()
+            .chain(std::iter::once(Rc::clone(parent)))
+            .collect(),
         DatatypeKind::Array { arrayof, .. } => vec![Rc::clone(arrayof)],
-        DatatypeKind::PartialStruct { container, .. } | DatatypeKind::PartialUnion { container, .. } => {
+        DatatypeKind::PartialStruct { container, .. }
+        | DatatypeKind::PartialUnion { container, .. } => {
             vec![Rc::clone(container)]
         }
-        _ => ct.get_typedef().map(|t| vec![Rc::clone(t)]).unwrap_or_default(),
+        _ => ct
+            .get_typedef()
+            .map(|t| vec![Rc::clone(t)])
+            .unwrap_or_default(),
     };
     let hit = parts.iter().any(|p| reaches(p, seen, depth + 1));
     seen.insert(Rc::as_ptr(ct), hit);
@@ -763,7 +825,10 @@ fn reaches(ct: &Rc<Datatype>, seen: &mut std::collections::HashMap<*const Dataty
 /// Mint every structure of `table` into `types`, in order, exactly as the
 /// ledger mints one, and check that each holds the layout the replay decided
 /// with.
-pub fn install_table(types: &dyn TypeFactory, table: &[(String, SynthRequest)]) -> Result<(), String> {
+pub fn install_table(
+    types: &dyn TypeFactory,
+    table: &[(String, SynthRequest)],
+) -> Result<(), String> {
     for (name, req) in table {
         let fields = req
             .fields
@@ -777,12 +842,17 @@ pub fn install_table(types: &dyn TypeFactory, table: &[(String, SynthRequest)]) 
         if types.find_by_name(name).ok().flatten().is_some() {
             return Err(format!("{name}: the name is already held"));
         }
-        let shell = types.get_type_struct(name).map_err(|e| format!("{name}: {}", e.explain()))?;
+        let shell = types
+            .get_type_struct(name)
+            .map_err(|e| format!("{name}: {}", e.explain()))?;
         let ct = types
             .set_fields_struct_raw(&shell, fields, Vec::new(), req.size, 1, 0)
             .map_err(|e| format!("{name}: {}", e.explain()))?;
-        if ledger::layout_of(&ct).as_ref() != Some(&req.want) || ledger::members_of(&ct) != req.own {
-            return Err(format!("{name}: the rebuilt layout differs from the recorded one"));
+        if ledger::layout_of(&ct).as_ref() != Some(&req.want) || ledger::members_of(&ct) != req.own
+        {
+            return Err(format!(
+                "{name}: the rebuilt layout differs from the recorded one"
+            ));
         }
     }
     Ok(())
@@ -847,7 +917,12 @@ impl Reader<'_> {
 
 fn put_recipe(out: &mut Vec<u8>, r: &TypeRecipe) {
     match r {
-        TypeRecipe::Named { name, id, meta, size } => {
+        TypeRecipe::Named {
+            name,
+            id,
+            meta,
+            size,
+        } => {
             out.push(0);
             put_str(out, name);
             out.extend_from_slice(&id.to_le_bytes());
@@ -877,13 +952,21 @@ fn read_recipe(r: &mut Reader, depth: u32) -> Option<TypeRecipe> {
         return None;
     }
     Some(match r.u8()? {
-        0 => TypeRecipe::Named { name: r.string()?, id: r.u64()?, meta: r.i32()?, size: r.i32()? },
+        0 => TypeRecipe::Named {
+            name: r.string()?,
+            id: r.u64()?,
+            meta: r.i32()?,
+            size: r.i32()?,
+        },
         1 => TypeRecipe::Pointer {
             size: r.i32()?,
             wordsize: r.u32()?,
             to: Box::new(read_recipe(r, depth + 1)?),
         },
-        2 => TypeRecipe::Array { count: r.i32()?, elem: Box::new(read_recipe(r, depth + 1)?) },
+        2 => TypeRecipe::Array {
+            count: r.i32()?,
+            elem: Box::new(read_recipe(r, depth + 1)?),
+        },
         3 => TypeRecipe::Placeholder { size: r.i32()? },
         _ => return None,
     })
@@ -960,7 +1043,11 @@ fn read_request(r: &mut Reader) -> Option<SynthRequest> {
         let offset = r.i32()?;
         let msize = r.i32()?;
         let claim = if r.bool()? { Some(read_key(r)?) } else { None };
-        own.push(Member { offset, size: msize, claim });
+        own.push(Member {
+            offset,
+            size: msize,
+            claim,
+        });
     }
     let nu = r.count()?;
     let mut unclaimed = Vec::with_capacity(nu);
@@ -973,10 +1060,28 @@ fn read_request(r: &mut Reader) -> Option<SynthRequest> {
         let ident = r.i32()?;
         let offset = r.i32()?;
         let name = r.string()?;
-        let ty = if r.bool()? { Some(read_recipe(r, 0)?) } else { None };
-        fields.push(FieldRecipe { ident, offset, name, ty });
+        let ty = if r.bool()? {
+            Some(read_recipe(r, 0)?)
+        } else {
+            None
+        };
+        fields.push(FieldRecipe {
+            ident,
+            offset,
+            name,
+            ty,
+        });
     }
-    Some(SynthRequest { size, want: Layout { size: want_size, fields: keys }, own, unclaimed, fields })
+    Some(SynthRequest {
+        size,
+        want: Layout {
+            size: want_size,
+            fields: keys,
+        },
+        own,
+        unclaimed,
+        fields,
+    })
 }
 
 fn put_answer(out: &mut Vec<u8>, a: &Answer) {
@@ -1001,7 +1106,11 @@ fn read_answer(r: &mut Reader) -> Option<Answer> {
         return Some(None);
     }
     let name = r.string()?;
-    let def = if r.bool()? { Some(read_request(r)?) } else { None };
+    let def = if r.bool()? {
+        Some(read_request(r)?)
+    } else {
+        None
+    };
     Some(Some((name, def)))
 }
 
@@ -1034,7 +1143,14 @@ impl FunctionRecord {
         for _ in 0..n {
             answers.push(read_answer(&mut r)?);
         }
-        Some((FunctionRecord { requests, answers, off_script }, r.pos))
+        Some((
+            FunctionRecord {
+                requests,
+                answers,
+                off_script,
+            },
+            r.pos,
+        ))
     }
 }
 

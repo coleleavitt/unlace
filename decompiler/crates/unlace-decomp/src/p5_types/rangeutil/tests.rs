@@ -61,7 +61,11 @@ impl OracleRange {
             }
             b / 8
         };
-        OracleRange { elements, mask, bytes }
+        OracleRange {
+            elements,
+            mask,
+            bytes,
+        }
     }
 
     /// `set_intersect` (`testcirclerange.cc:202`).
@@ -247,7 +251,14 @@ fn circlerange_intersect_subset() {
     assert!(test_intersect(1, 250, 240, 5, 1, 1)); // intersect3
     assert!(test_intersect(4, 100, 248, 52, 4, 1)); // intersect4 (step 4)
     // intersect5: 8-byte, large offsets, step 2 (the trickiest)
-    assert!(test_intersect(0x100000, 0x1000fe, 0xfffffffffffffff0, 0xfffffffffffffffe, 2, 8));
+    assert!(test_intersect(
+        0x100000,
+        0x1000fe,
+        0xfffffffffffffff0,
+        0xfffffffffffffffe,
+        2,
+        8
+    ));
     assert!(test_intersect(0xffe0, 0x20, 0, 0x20, 2, 2)); // intersect7 (wrap, step 2)
     assert!(test_intersect(0x80, 0x8, 0xd0, 0x80, 1, 1)); // intersect8 (double wrap)
 }
@@ -450,13 +461,55 @@ fn test_pullback_unary_oracle(
 #[test]
 fn circlerange_pullback_unary_oracle() {
     // negate cases (testcirclerange.cc:440-450)
-    assert!(test_pullback_unary_oracle(1, 20, 1, 4, OpCode::CPUI_INT_NEGATE, 4));
-    assert!(test_pullback_unary_oracle(0xf0, 0x10, 1, 1, OpCode::CPUI_INT_NEGATE, 1));
-    assert!(test_pullback_unary_oracle(0x10, 0x30, 4, 4, OpCode::CPUI_INT_NEGATE, 4));
+    assert!(test_pullback_unary_oracle(
+        1,
+        20,
+        1,
+        4,
+        OpCode::CPUI_INT_NEGATE,
+        4
+    ));
+    assert!(test_pullback_unary_oracle(
+        0xf0,
+        0x10,
+        1,
+        1,
+        OpCode::CPUI_INT_NEGATE,
+        1
+    ));
+    assert!(test_pullback_unary_oracle(
+        0x10,
+        0x30,
+        4,
+        4,
+        OpCode::CPUI_INT_NEGATE,
+        4
+    ));
     // 2comp cases (testcirclerange.cc:464-474)
-    assert!(test_pullback_unary_oracle(1, 20, 1, 4, OpCode::CPUI_INT_2COMP, 4));
-    assert!(test_pullback_unary_oracle(0xf0, 0x10, 1, 1, OpCode::CPUI_INT_2COMP, 1));
-    assert!(test_pullback_unary_oracle(0x10, 0x30, 4, 4, OpCode::CPUI_INT_2COMP, 4));
+    assert!(test_pullback_unary_oracle(
+        1,
+        20,
+        1,
+        4,
+        OpCode::CPUI_INT_2COMP,
+        4
+    ));
+    assert!(test_pullback_unary_oracle(
+        0xf0,
+        0x10,
+        1,
+        1,
+        OpCode::CPUI_INT_2COMP,
+        1
+    ));
+    assert!(test_pullback_unary_oracle(
+        0x10,
+        0x30,
+        4,
+        4,
+        OpCode::CPUI_INT_2COMP,
+        4
+    ));
 }
 
 /// `testPullbackBinary` for ADD/SUB (`testcirclerange.cc:97`).  recoverInputBinary
@@ -489,11 +542,43 @@ fn test_pullback_binary_oracle(
 #[test]
 fn circlerange_pullback_binary_oracle() {
     // add cases (testcirclerange.cc:536-546)
-    assert!(test_pullback_binary_oracle(1, 20, 1, 4, OpCode::CPUI_INT_ADD, 0, 0xfffffffd));
-    assert!(test_pullback_binary_oracle(0x10, 0x30, 4, 4, OpCode::CPUI_INT_ADD, 0, 0xfffffffd));
+    assert!(test_pullback_binary_oracle(
+        1,
+        20,
+        1,
+        4,
+        OpCode::CPUI_INT_ADD,
+        0,
+        0xfffffffd
+    ));
+    assert!(test_pullback_binary_oracle(
+        0x10,
+        0x30,
+        4,
+        4,
+        OpCode::CPUI_INT_ADD,
+        0,
+        0xfffffffd
+    ));
     // sub cases (testcirclerange.cc:560-570)
-    assert!(test_pullback_binary_oracle(1, 20, 1, 4, OpCode::CPUI_INT_SUB, 0, 0xfffffffd));
-    assert!(test_pullback_binary_oracle(0x10, 0x30, 4, 4, OpCode::CPUI_INT_SUB, 0, 0xfffffffd));
+    assert!(test_pullback_binary_oracle(
+        1,
+        20,
+        1,
+        4,
+        OpCode::CPUI_INT_SUB,
+        0,
+        0xfffffffd
+    ));
+    assert!(test_pullback_binary_oracle(
+        0x10,
+        0x30,
+        4,
+        4,
+        OpCode::CPUI_INT_SUB,
+        0,
+        0xfffffffd
+    ));
 }
 
 // ---------------------------------------------------------------------------
@@ -531,11 +616,39 @@ fn test_push_unary_oracle(
 #[test]
 fn circlerange_push_unary_oracle() {
     // pushzext1/3 (testcirclerange.cc:804-814)
-    assert!(test_push_unary_oracle(1, 20, 1, 2, OpCode::CPUI_INT_ZEXT, 4));
-    assert!(test_push_unary_oracle(0x10, 0x30, 4, 2, OpCode::CPUI_INT_ZEXT, 4));
+    assert!(test_push_unary_oracle(
+        1,
+        20,
+        1,
+        2,
+        OpCode::CPUI_INT_ZEXT,
+        4
+    ));
+    assert!(test_push_unary_oracle(
+        0x10,
+        0x30,
+        4,
+        2,
+        OpCode::CPUI_INT_ZEXT,
+        4
+    ));
     // pushsext1/3 (testcirclerange.cc:832-842)
-    assert!(test_push_unary_oracle(1, 20, 1, 2, OpCode::CPUI_INT_SEXT, 4));
-    assert!(test_push_unary_oracle(0x10, 0x30, 4, 2, OpCode::CPUI_INT_SEXT, 4));
+    assert!(test_push_unary_oracle(
+        1,
+        20,
+        1,
+        2,
+        OpCode::CPUI_INT_SEXT,
+        4
+    ));
+    assert!(test_push_unary_oracle(
+        0x10,
+        0x30,
+        4,
+        2,
+        OpCode::CPUI_INT_SEXT,
+        4
+    ));
     // pushzext7: single value 0 (testcirclerange.cc:828)
     assert!(test_push_unary_oracle(0, 0, 4, 1, OpCode::CPUI_INT_ZEXT, 2));
 }
@@ -618,11 +731,17 @@ fn circlerange_size_and_predicates() {
 fn circlerange_nzmask_stride_must_fit_the_step() {
     let mut r = CircleRange::new_empty();
     assert!(r.set_nz_mask(0x0000_0000_ffff_fff0, 8));
-    assert_eq!((r.get_min(), r.get_end(), r.get_step()), (0, 0x1_0000_0000, 16));
+    assert_eq!(
+        (r.get_min(), r.get_end(), r.get_step()),
+        (0, 0x1_0000_0000, 16)
+    );
 
     let mut widest = CircleRange::new_empty();
     assert!(widest.set_nz_mask(0xffff_ffff_c000_0000, 8));
-    assert_eq!((widest.get_min(), widest.get_end(), widest.get_step()), (0, 0, 1 << 30));
+    assert_eq!(
+        (widest.get_min(), widest.get_end(), widest.get_step()),
+        (0, 0, 1 << 30)
+    );
 
     for nz in [0xffff_ffff_8000_0000u64, 0xffff_fff8_0000_0000, 1 << 63] {
         let mut wide = CircleRange::new_empty();
@@ -731,7 +850,10 @@ fn valuesetsolver_topological_order_linear() {
     let n2 = solver.alloc_value_set();
     solver.push_root(n0);
 
-    let graph = StaticGraph { succ: vec![vec![n1], vec![n2], vec![]], root_succ: vec![n0] };
+    let graph = StaticGraph {
+        succ: vec![vec![n1], vec![n2], vec![]],
+        root_succ: vec![n0],
+    };
     solver.establish_topological_order(&graph);
     assert_eq!(solver.iteration_order(), vec![n0, n1, n2]);
     // no component heads in an acyclic chain
@@ -750,8 +872,10 @@ fn valuesetsolver_topological_order_with_cycle() {
     let n2 = solver.alloc_value_set();
     solver.push_root(n0);
 
-    let graph =
-        StaticGraph { succ: vec![vec![n1], vec![n2], vec![n1]], root_succ: vec![n0] };
+    let graph = StaticGraph {
+        succ: vec![vec![n1], vec![n2], vec![n1]],
+        root_succ: vec![n0],
+    };
     solver.establish_topological_order(&graph);
     let order = solver.iteration_order();
     assert_eq!(order, vec![n0, n1, n2]);
@@ -778,9 +902,15 @@ fn zero_extension_constraints_preserve_both_branch_domains() {
         narrow_false.invert();
         wide_false.invert();
         for value in 0..=0xff {
-            assert_eq!(wide.contains_val(value), narrow.contains_val(value), "true edge {value:x}");
             assert_eq!(
-                wide_false.contains_val(value), narrow_false.contains_val(value), "false edge {value:x}"
+                wide.contains_val(value),
+                narrow.contains_val(value),
+                "true edge {value:x}"
+            );
+            assert_eq!(
+                wide_false.contains_val(value),
+                narrow_false.contains_val(value),
+                "false edge {value:x}"
             );
         }
     }

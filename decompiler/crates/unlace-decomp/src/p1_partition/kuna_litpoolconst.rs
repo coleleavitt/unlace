@@ -69,7 +69,11 @@ pub fn code_const_ranges(
     sections: &[RegionSnapshot],
     segments: &[RegionSnapshot],
 ) -> Vec<(u64, u64)> {
-    let rows = if sections.iter().any(is_code_const) { sections } else { segments };
+    let rows = if sections.iter().any(is_code_const) {
+        sections
+    } else {
+        segments
+    };
     let mut out: Vec<(u64, u64)> = rows
         .iter()
         .filter(|row| is_code_const(row))

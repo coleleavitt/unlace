@@ -236,7 +236,9 @@ mod tests {
 
     fn image_program(name: &str) -> ConsoleProgram {
         let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let fixture = root.join("../unlace-cli/tests/fixtures/callwide").join(name);
+        let fixture = root
+            .join("../unlace-cli/tests/fixtures/callwide")
+            .join(name);
         let specs = root.join("../../..").join("specs");
         crate::engine::bootstrap_from_image_with_isa(
             fixture.to_str().unwrap(),
@@ -261,11 +263,12 @@ mod tests {
         let caller = prog
             .resolve_entry(&EntrySelector::Name("caller64".into()))
             .unwrap();
-        assert!(prog
-            .arch()
-            .symboltab
-            .function_proto_pieces_across_scopes(&caller.addr)
-            .is_none());
+        assert!(
+            prog.arch()
+                .symboltab
+                .function_proto_pieces_across_scopes(&caller.addr)
+                .is_none()
+        );
         let bytes = prog.callwide.image.as_ref().unwrap();
         assert!(facts(&prog, bytes).is_some());
         let strict = unlace_analysis::dwarf::callwide_declarations(
@@ -274,9 +277,11 @@ mod tests {
             &declaration_inventory(&prog),
         )
         .unwrap();
-        assert!(strict
-            .iter()
-            .any(|(entry, _)| *entry == caller.addr.get_offset()));
+        assert!(
+            strict
+                .iter()
+                .any(|(entry, _)| *entry == caller.addr.get_offset())
+        );
         let narrow = prog
             .arch()
             .types()
@@ -296,11 +301,12 @@ mod tests {
         );
         prepare(&mut prog);
         assert!(prog.arch().kuna_callwide.is_empty());
-        assert!(prog
-            .arch()
-            .symboltab
-            .function_proto_pieces_across_scopes(&caller.addr)
-            .is_none());
+        assert!(
+            prog.arch()
+                .symboltab
+                .function_proto_pieces_across_scopes(&caller.addr)
+                .is_none()
+        );
         assert!(prog.arch().function_prototype_model("caller64").is_none());
     }
 
@@ -321,29 +327,35 @@ mod tests {
         let unused = prog
             .resolve_entry(&EntrySelector::Name("consume_two32".into()))
             .unwrap();
-        assert!(prog
-            .arch()
-            .symboltab
-            .function_proto_pieces_across_scopes(&caller.addr)
-            .is_none());
-        assert!(prog
-            .arch()
-            .function_prototype_model("consume_two32")
-            .is_none());
+        assert!(
+            prog.arch()
+                .symboltab
+                .function_proto_pieces_across_scopes(&caller.addr)
+                .is_none()
+        );
+        assert!(
+            prog.arch()
+                .function_prototype_model("consume_two32")
+                .is_none()
+        );
         prepare(&mut prog);
         assert!(!prog.arch().kuna_callwide.is_empty());
-        assert!(prog
-            .arch()
-            .kuna_callwide
-            .needed_declaration(caller.addr.get_offset()));
-        assert!(prog
-            .arch()
-            .kuna_callwide
-            .needed_declaration(ignored.addr.get_offset()));
-        assert!(!prog
-            .arch()
-            .kuna_callwide
-            .needed_declaration(unused.addr.get_offset()));
+        assert!(
+            prog.arch()
+                .kuna_callwide
+                .needed_declaration(caller.addr.get_offset())
+        );
+        assert!(
+            prog.arch()
+                .kuna_callwide
+                .needed_declaration(ignored.addr.get_offset())
+        );
+        assert!(
+            !prog
+                .arch()
+                .kuna_callwide
+                .needed_declaration(unused.addr.get_offset())
+        );
         let ignored_contract = prog
             .arch()
             .symboltab
@@ -369,10 +381,11 @@ mod tests {
                 .get_size(),
             8
         );
-        assert!(prog
-            .arch()
-            .function_prototype_model("consume_two32")
-            .is_none());
+        assert!(
+            prog.arch()
+                .function_prototype_model("consume_two32")
+                .is_none()
+        );
     }
 
     #[test]
@@ -388,27 +401,29 @@ mod tests {
             let caller = prog
                 .resolve_entry(&EntrySelector::Name("caller64".into()))
                 .unwrap();
-            assert!(prog
-                .arch()
-                .symboltab
-                .function_proto_pieces_across_scopes(&caller.addr)
-                .is_none());
+            assert!(
+                prog.arch()
+                    .symboltab
+                    .function_proto_pieces_across_scopes(&caller.addr)
+                    .is_none()
+            );
             let bytes = prog.callwide.image.as_ref().unwrap();
             assert!(facts(&prog, bytes).is_some());
             prepare(&mut prog);
             assert!(prog.arch().kuna_callwide.is_empty(), "{}", mode.as_str());
-            assert!(prog
-                .arch()
-                .symboltab
-                .function_proto_pieces_across_scopes(&caller.addr)
-                .is_none());
+            assert!(
+                prog.arch()
+                    .symboltab
+                    .function_proto_pieces_across_scopes(&caller.addr)
+                    .is_none()
+            );
             assert!(prog.arch().function_prototype_model("caller64").is_none());
         }
     }
 
     #[test]
     fn external_option_model_mode_and_kassert_commands_reopen_preflight() {
-        use crate::ifacedecomp::{register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+        use crate::ifacedecomp::{DECOMPILE_MODULE, IfaceDecompData, register_decomp_commands};
         use crate::ifaceterm::ConsoleCommands;
         let commands = [
             "option callwide off",
@@ -447,9 +462,7 @@ mod tests {
                 .downcast_mut::<IfaceDecompData>()
                 .unwrap();
             let prog = data.conf.as_mut().unwrap();
-            if prog.arch().call_wide
-                && prog.arch().be_join.proves()
-            {
+            if prog.arch().call_wide && prog.arch().be_join.proves() {
                 prepare(prog);
                 assert!(prog.callwide.frozen, "completed preflight before {command}");
             }
@@ -608,14 +621,16 @@ mod tests {
                 .unwrap();
         assert_eq!(resolved[0].entry, 0x1000);
         assert_eq!(resolved[0].source, DeclarationSource::Dwarf);
-        assert!(resolve_declarations(
-            &records,
-            [
-                (0x1000, "sink".into(), vec![]),
-                (0x2000, "sink".into(), vec![])
-            ]
-        )
-        .is_none());
+        assert!(
+            resolve_declarations(
+                &records,
+                [
+                    (0x1000, "sink".into(), vec![]),
+                    (0x2000, "sink".into(), vec![])
+                ]
+            )
+            .is_none()
+        );
     }
 
     #[test]
@@ -669,10 +684,7 @@ pub(crate) fn target_declaration(
 
 /// A refusal is stable until an external mutation; no selected function can supply a positive fact.
 pub fn prepare(prog: &mut ConsoleProgram) {
-    if !prog.arch().call_wide
-        || !prog.arch().be_join.proves()
-        || prog.callwide.frozen
-    {
+    if !prog.arch().call_wide || !prog.arch().be_join.proves() || prog.callwide.frozen {
         return;
     }
     unlace_decomp::kuna_mipsunaligned::paint(prog.arch_mut());
@@ -817,7 +829,9 @@ fn ingest_dwarf(prog: &mut ConsoleProgram) {
         .image
         .as_deref()
         .and_then(|bytes| unlace_analysis::loadimage_object::parse_object(bytes).ok())
-        .and_then(|file| unlace_analysis::dwarf::callwide_declarations(&file, prog.arch(), &entries));
+        .and_then(|file| {
+            unlace_analysis::dwarf::callwide_declarations(&file, prog.arch(), &entries)
+        });
     match declarations {
         Some(declarations) => {
             for (entry, pieces) in declarations {
@@ -992,7 +1006,8 @@ fn facts(prog: &ConsoleProgram, bytes: &[u8]) -> Option<Facts> {
     open.insert(file.entry());
     for &entry in &seeds {
         for r in index.refs_to(entry) {
-            if r.kind == unlace_analysis::listing::xrefs::XrefKind::Call && owner(r.from).is_some() {
+            if r.kind == unlace_analysis::listing::xrefs::XrefKind::Call && owner(r.from).is_some()
+            {
                 observed.insert((r.from, entry));
             } else {
                 open.insert(entry);

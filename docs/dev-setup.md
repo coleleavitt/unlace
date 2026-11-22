@@ -53,7 +53,8 @@ machine-wide slots.
 tools/hooks/unlace-ci-gates.sh [fast|parity|full]   # default parity
 ```
 
-- `fast`: forbidden words (no IDA/Hex-Rays text in a branch meant for Noelo-Lab/kuna;
+- `fast`: rustfmt (`cargo fmt --all --check`; `decompiler/rustfmt.toml` sets the 2024 edition
+  and style), forbidden words (no IDA/Hex-Rays text in a branch meant for Noelo-Lab/kuna;
   skipped on `main`), ignored fixtures, `scripts/check_test_layout.py`.
 - `parity` adds: `make test-tools`, build, specs, lint (clippy `-D warnings` on
   unlace-cli/base/num), `make test` (PARITY OK 675/675), `make test-stages` (PARITY OK),

@@ -23,7 +23,10 @@ use unlace_analysis::listing::{
 use unlace_console::engine::bootstrap_from_object;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fauxware() -> PathBuf {
@@ -105,7 +108,10 @@ fn listing_query_surface_partition_functions_and_xrefs() {
         "the image base (0x400000, a non-exec address) must partition as Data, got {:?}",
         listing.code_unit_at(0x400000)
     );
-    assert!(!listing.is_undefined(0x400000), "a non-exec address is Data, not Undefined");
+    assert!(
+        !listing.is_undefined(0x400000),
+        "a non-exec address is Data, not Undefined"
+    );
 
     // `num_instructions` is non-trivial (the walk recovered the program).
     assert!(
@@ -188,7 +194,9 @@ fn listing_query_surface_partition_functions_and_xrefs() {
     // `refs_to(authenticate)` contains the call site, kind == Call.
     let to_auth = listing.refs_to(AUTHENTICATE);
     assert!(
-        to_auth.iter().any(|r| r.from == CALL_AUTH && r.kind == RefKind::Call),
+        to_auth
+            .iter()
+            .any(|r| r.from == CALL_AUTH && r.kind == RefKind::Call),
         "refs_to(authenticate {AUTHENTICATE:#x}) must contain the Call site {CALL_AUTH:#x}; \
          got {:#x?}",
         to_auth.iter().map(|r| (r.from, r.kind)).collect::<Vec<_>>()
@@ -212,8 +220,11 @@ fn listing_query_surface_partition_functions_and_xrefs() {
         listing.has_refs_to(AUTHENTICATE),
         "has_refs_to(authenticate) must be true"
     );
-    let call_refs_to_auth =
-        listing.refs_to(AUTHENTICATE).iter().filter(|r| r.kind == RefKind::Call).count();
+    let call_refs_to_auth = listing
+        .refs_to(AUTHENTICATE)
+        .iter()
+        .filter(|r| r.kind == RefKind::Call)
+        .count();
     assert_eq!(
         call_refs_to_auth, 1,
         "authenticate is called from exactly one site; Call ref_count = {call_refs_to_auth}"
@@ -234,7 +245,9 @@ fn listing_query_surface_partition_functions_and_xrefs() {
     // `refs_from(call_site)` carries the outgoing Call edge to authenticate.
     let from_call = listing.refs_from(CALL_AUTH);
     assert!(
-        from_call.iter().any(|r| r.to == AUTHENTICATE && r.kind == RefKind::Call),
+        from_call
+            .iter()
+            .any(|r| r.to == AUTHENTICATE && r.kind == RefKind::Call),
         "refs_from({CALL_AUTH:#x}) must contain the outgoing Call to authenticate; got {:#x?}",
         from_call.iter().map(|r| (r.to, r.kind)).collect::<Vec<_>>()
     );
@@ -243,7 +256,11 @@ fn listing_query_surface_partition_functions_and_xrefs() {
     assert!(
         listing.refs_from(RET).is_empty(),
         "the terminal `ret` at {RET:#x} files no outgoing reference, got {:#x?}",
-        listing.refs_from(RET).iter().map(|r| (r.to, r.kind)).collect::<Vec<_>>()
+        listing
+            .refs_from(RET)
+            .iter()
+            .map(|r| (r.to, r.kind))
+            .collect::<Vec<_>>()
     );
 
     // Diagnostic sample for the PR body / report.
@@ -308,7 +325,10 @@ fn a_partition_only_listing_walks_identically_and_files_no_references() {
     let full = build(ListingDetail::FULL);
     let lean = build(ListingDetail::PARTITION_ONLY);
 
-    assert!(full.has_refs() && !lean.has_refs(), "each build must report what it captured");
+    assert!(
+        full.has_refs() && !lean.has_refs(),
+        "each build must report what it captured"
+    );
     assert!(
         full.num_instructions() > 50 && full.function_count() > 2,
         "the fixture must decode a real program or the comparison is vacuous \
@@ -341,14 +361,37 @@ fn a_partition_only_listing_walks_identically_and_files_no_references() {
 
     // The full build has real edges at the sites the query gate pins; the lean
     // build answers "none" at every one of them rather than a wrong subset.
-    assert!(full.has_refs_to(AUTHENTICATE), "the full build must see the call to authenticate");
-    assert!(!full.refs_from(CALL_AUTH).is_empty(), "the full build must see the call site's edge");
-    assert_eq!(lean.ref_source_iter().count(), 0, "a partition-only build files no ref sources");
+    assert!(
+        full.has_refs_to(AUTHENTICATE),
+        "the full build must see the call to authenticate"
+    );
+    assert!(
+        !full.refs_from(CALL_AUTH).is_empty(),
+        "the full build must see the call site's edge"
+    );
+    assert_eq!(
+        lean.ref_source_iter().count(),
+        0,
+        "a partition-only build files no ref sources"
+    );
     for &vma in &[MAIN, MAIN_MID, AUTHENTICATE, CALL_AUTH, RET, CSU_INIT] {
-        assert!(lean.refs_to(vma).is_empty(), "refs_to({vma:#x}) must be empty");
-        assert!(lean.refs_from(vma).is_empty(), "refs_from({vma:#x}) must be empty");
-        assert!(!lean.has_refs_to(vma), "has_refs_to({vma:#x}) must be false");
-        assert_eq!(lean.ref_count_to(vma), 0, "ref_count_to({vma:#x}) must be 0");
+        assert!(
+            lean.refs_to(vma).is_empty(),
+            "refs_to({vma:#x}) must be empty"
+        );
+        assert!(
+            lean.refs_from(vma).is_empty(),
+            "refs_from({vma:#x}) must be empty"
+        );
+        assert!(
+            !lean.has_refs_to(vma),
+            "has_refs_to({vma:#x}) must be false"
+        );
+        assert_eq!(
+            lean.ref_count_to(vma),
+            0,
+            "ref_count_to({vma:#x}) must be 0"
+        );
     }
 
     eprintln!(

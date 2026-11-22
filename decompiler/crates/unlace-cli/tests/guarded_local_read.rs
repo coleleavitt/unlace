@@ -88,7 +88,12 @@ fn check_guarded_stack_read(target: &str, code: &str, qualifier: &str, preloaded
 fn guarded_x86_stack_capture_preserves_call_effects() {
     for qualifier in ["", "volatile "] {
         for preloaded in [false, true] {
-            check_guarded_stack_read("x86:LE:64:default:gcc", "534883ec10488d7c240ce8f10000006685c0741d8b5c240cc744240c17000000488d7c240ce8d601000089dfe8cf020000c744240c07000000488d7c240ce8bd0100008b44240c4883c4105bc3", qualifier, preloaded);
+            check_guarded_stack_read(
+                "x86:LE:64:default:gcc",
+                "534883ec10488d7c240ce8f10000006685c0741d8b5c240cc744240c17000000488d7c240ce8d601000089dfe8cf020000c744240c07000000488d7c240ce8bd0100008b44240c4883c4105bc3",
+                qualifier,
+                preloaded,
+            );
         }
     }
 }
@@ -97,7 +102,12 @@ fn guarded_x86_stack_capture_preserves_call_effects() {
 fn guarded_sparc_stack_capture_preserves_call_effects() {
     for qualifier in ["", "volatile "] {
         for preloaded in [false, true] {
-            check_guarded_stack_read("sparc:BE:32:default", "9de3bfa04000003f9007bffc80a220000248000901000000f007bffcb2102017f227bffc400000779007bffc400000b590100018b0102007f027bffc400000719007bffcf007bffc81c7e00881e80000", qualifier, preloaded);
+            check_guarded_stack_read(
+                "sparc:BE:32:default",
+                "9de3bfa04000003f9007bffc80a220000248000901000000f007bffcb2102017f227bffc400000779007bffc400000b590100018b0102007f027bffc400000719007bffcf007bffc81c7e00881e80000",
+                qualifier,
+                preloaded,
+            );
         }
     }
 }

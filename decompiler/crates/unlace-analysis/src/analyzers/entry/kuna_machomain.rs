@@ -52,9 +52,9 @@
 //! - an image that already defines a symbol spelled `main`, so the by-name
 //!   prototype park can never land on a different function.
 
+use object::read::{Object, ObjectSymbol};
 use unlace_decomp::dtype::type_metatype;
 use unlace_decomp::fspec::PrototypePieces;
-use object::read::{Object, ObjectSymbol};
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
@@ -111,10 +111,17 @@ fn entry_main_vma(file: &object::File, bytes: &[u8]) -> Option<u64> {
     // A named entry has a better name coming from whatever named it, and an image
     // that already spells a symbol `main` would make the by-name prototype park
     // ambiguous.
-    if existing_function_addrs(file, bytes).binary_search(&vma).is_ok() {
+    if existing_function_addrs(file, bytes)
+        .binary_search(&vma)
+        .is_ok()
+    {
         return None;
     }
-    if file.symbols().chain(file.dynamic_symbols()).any(|s| s.name() == Ok(MAIN)) {
+    if file
+        .symbols()
+        .chain(file.dynamic_symbols())
+        .any(|s| s.name() == Ok(MAIN))
+    {
         return None;
     }
     Some(vma)
@@ -168,8 +175,16 @@ mod tests {
     /// a named entry is left alone.
     #[test]
     fn defers_to_an_entry_that_already_carries_a_symbol() {
-        assert_eq!(claim("macho_imports"), None, "the named twin must be refused");
-        assert_eq!(claim("macho_imports_arm64"), None, "arch-independent refusal");
+        assert_eq!(
+            claim("macho_imports"),
+            None,
+            "the named twin must be refused"
+        );
+        assert_eq!(
+            claim("macho_imports_arm64"),
+            None,
+            "arch-independent refusal"
+        );
     }
 
     /// Structurally inert off Mach-O: an ELF executable and a PE both contribute

@@ -57,8 +57,12 @@ mod tests {
                 assert_eq!(hard_float(&id("unknown")), None);
             }
         }
-        for id in ["MIPS:BE:64:64-32addr:n32", "MIPS:BE:64:default:default", "MIPS:LE:64:octeon3:default",
-            "x86:LE:64:default:gcc"] {
+        for id in [
+            "MIPS:BE:64:64-32addr:n32",
+            "MIPS:BE:64:default:default",
+            "MIPS:LE:64:octeon3:default",
+            "x86:LE:64:default:gcc",
+        ] {
             assert_eq!(hard_float(id), None);
         }
     }

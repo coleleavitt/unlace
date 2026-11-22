@@ -90,9 +90,15 @@ int main(int argc, char **argv) {
             continue;
         }
         for optimization in ["0", "2"] {
-            std::fs::write(&source, format!("{helpers}
+            std::fs::write(
+                &source,
+                format!(
+                    "{helpers}
 {body}
-{main}")).unwrap();
+{main}"
+                ),
+            )
+            .unwrap();
             let binary = compile(compiler, &source, optimization);
             for &input in INPUTS {
                 let native = values(

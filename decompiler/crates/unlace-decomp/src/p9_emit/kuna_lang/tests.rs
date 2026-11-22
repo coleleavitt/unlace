@@ -76,7 +76,11 @@ fn no_c_token_forces_parens() {
         &tokens::LESS_THAN,
         &tokens::SHIFT_LEFT,
     ] {
-        assert!(!tok.paren_before_angle, "C token `{}` must not force parens", tok.print1);
+        assert!(
+            !tok.paren_before_angle,
+            "C token `{}` must not force parens",
+            tok.print1
+        );
     }
 }
 
@@ -110,9 +114,16 @@ fn c_token_mapping_is_the_identity() {
         &tokens::SHIFT_LEFT,
         &tokens::ASSIGNMENT,
     ] {
-        assert!(std::ptr::eq(map(tok), tok), "C must not remap `{}`", tok.print1);
+        assert!(
+            std::ptr::eq(map(tok), tok),
+            "C must not remap `{}`",
+            tok.print1
+        );
     }
-    assert!(std::ptr::eq(OutLang::C.profile().tok_typecast, &tokens::TYPECAST));
+    assert!(std::ptr::eq(
+        OutLang::C.profile().tok_typecast,
+        &tokens::TYPECAST
+    ));
 }
 
 #[test]
@@ -153,9 +164,14 @@ fn c_caps_describe_c() {
 fn c_ladder_reproduces_the_ported_token_table() {
     for tok in all_c_tokens() {
         let tier = prec_of(tok).unwrap_or_else(|| {
-            panic!("no tier for `{}` (precedence {})", tok.print1, tok.precedence)
+            panic!(
+                "no tier for `{}` (precedence {})",
+                tok.print1, tok.precedence
+            )
         });
-        let rank = C_LADDER.rank(tier).unwrap_or_else(|| panic!("C ladder does not rank {tier:?}"));
+        let rank = C_LADDER
+            .rank(tier)
+            .unwrap_or_else(|| panic!("C ladder does not rank {tier:?}"));
         assert_eq!(
             rank, tok.precedence,
             "`{}` is {tier:?}; the ladder ranks that {rank}, the table says {}",
@@ -170,11 +186,17 @@ fn c_ladder_reproduces_the_ported_token_table() {
 /// twice with different ranks).
 #[test]
 fn ladders_are_ordered_and_unambiguous() {
-    for (name, ladder) in [("C", &C_LADDER), ("Rust", &crate::kuna_langrust::RUST_LADDER)] {
+    for (name, ladder) in [
+        ("C", &C_LADDER),
+        ("Rust", &crate::kuna_langrust::RUST_LADDER),
+    ] {
         let mut seen: Vec<Prec> = Vec::new();
         let mut last = int4::MIN;
         for (tier, rank) in ladder.tiers() {
-            assert!(rank >= last, "{name}: {tier:?} at {rank} follows {last}; ladder must not go backwards");
+            assert!(
+                rank >= last,
+                "{name}: {tier:?} at {rank} follows {last}; ladder must not go backwards"
+            );
             last = rank;
             assert!(!seen.contains(&tier), "{name}: tier {tier:?} ranked twice");
             seen.push(tier);
@@ -192,7 +214,15 @@ fn a_tier_a_language_does_not_move_keeps_its_c_rank() {
     let rust = &crate::kuna_langrust::RUST_LADDER;
     // The four tiers Rust genuinely relocates, plus Cast which it gives a tier
     // of its own. Everything else must match C.
-    let moved = [Prec::Equality, Prec::Relational, Prec::BitOr, Prec::BitXor, Prec::BitAnd, Prec::LogXor, Prec::Cast];
+    let moved = [
+        Prec::Equality,
+        Prec::Relational,
+        Prec::BitOr,
+        Prec::BitXor,
+        Prec::BitAnd,
+        Prec::LogXor,
+        Prec::Cast,
+    ];
     for (tier, rank) in rust.tiers() {
         if moved.contains(&tier) {
             continue;

@@ -61,8 +61,20 @@ use crate::kuna_strlenscan::{eval, taken};
 fn field(data: &Funcdata, mut v: VarnodeId) -> Option<(VarnodeId, u64)> {
     let mut off = 0u64;
     for _ in 0..4 {
-        let Some(d) = data.vbank().get(v)?.get_def().and_then(|d| data.obank().get(d)) else { return Some((v, off)) };
-        let k = |i: int4| d.get_in(i).and_then(|x| data.vbank().get(x)).filter(|x| x.is_constant()).map(|x| x.get_offset());
+        let Some(d) = data
+            .vbank()
+            .get(v)?
+            .get_def()
+            .and_then(|d| data.obank().get(d))
+        else {
+            return Some((v, off));
+        };
+        let k = |i: int4| {
+            d.get_in(i)
+                .and_then(|x| data.vbank().get(x))
+                .filter(|x| x.is_constant())
+                .map(|x| x.get_offset())
+        };
         match d.code() {
             OpCode::CPUI_COPY | OpCode::CPUI_CAST => v = d.get_in(0)?,
             OpCode::CPUI_INT_ADD | OpCode::CPUI_PTRSUB if k(1).is_some() => {
@@ -145,7 +157,10 @@ fn def_op(data: &Funcdata, v: VarnodeId) -> Option<(OpId, &crate::op::PcodeOp)> 
 }
 
 fn constant(data: &Funcdata, v: VarnodeId) -> Option<u64> {
-    data.vbank().get(v).filter(|n| n.is_constant()).map(|n| n.get_offset())
+    data.vbank()
+        .get(v)
+        .filter(|n| n.is_constant())
+        .map(|n| n.get_offset())
 }
 
 fn size(data: &Funcdata, v: VarnodeId) -> int4 {
@@ -153,7 +168,9 @@ fn size(data: &Funcdata, v: VarnodeId) -> int4 {
 }
 
 fn is_sp(data: &Funcdata, v: VarnodeId) -> bool {
-    data.vbank().get(v).is_some_and(|n| n.is_spacebase() && n.is_input())
+    data.vbank()
+        .get(v)
+        .is_some_and(|n| n.is_spacebase() && n.is_input())
 }
 
 /// The stack offset of `SP + c`, through COPYs and CASTs.
@@ -162,7 +179,9 @@ fn sp_offset(data: &Funcdata, mut v: VarnodeId) -> Option<i64> {
         let (_, o) = def_op(data, v)?;
         match o.code() {
             OpCode::CPUI_COPY | OpCode::CPUI_CAST => v = o.get_in(0)?,
-            OpCode::CPUI_INT_ADD | OpCode::CPUI_PTRSUB if is_sp(data, o.get_in(0)?) => return Some(constant(data, o.get_in(1)?)? as i64),
+            OpCode::CPUI_INT_ADD | OpCode::CPUI_PTRSUB if is_sp(data, o.get_in(0)?) => {
+                return Some(constant(data, o.get_in(1)?)? as i64);
+            }
             _ => return None,
         }
     }
@@ -185,7 +204,10 @@ fn guard(data: &Funcdata, c: BlockId) -> Option<(VarnodeId, Vec<OpId>, Class, Bl
         ops.push(d);
         match o.code() {
             OpCode::CPUI_BOOL_NEGATE => v = o.get_in(0)?,
-            OpCode::CPUI_INT_LESS | OpCode::CPUI_INT_LESSEQUAL | OpCode::CPUI_INT_SLESS | OpCode::CPUI_INT_SLESSEQUAL => break o,
+            OpCode::CPUI_INT_LESS
+            | OpCode::CPUI_INT_LESSEQUAL
+            | OpCode::CPUI_INT_SLESS
+            | OpCode::CPUI_INT_SLESSEQUAL => break o,
             _ => return None,
         }
         if ops.len() > 4 {
@@ -201,10 +223,15 @@ fn guard(data: &Funcdata, c: BlockId) -> Option<(VarnodeId, Vec<OpId>, Class, Bl
     if !matches!(size(data, x), 4 | 8) {
         return None;
     }
-    let goes = |val: u64| eval(data, cond, &[(x, val)], &[c], 0).map(|r| if r != 0 { t } else { f });
+    let goes =
+        |val: u64| eval(data, cond, &[(x, val)], &[c], 0).map(|r| if r != 0 { t } else { f });
     let arms = |lo: u64, limit: u64, step: u64, most: u64| -> Option<(BlockId, BlockId)> {
         let (r, m) = (goes(lo)?, goes(limit)?);
-        (r != m && (1..=most).any(|n| goes(limit - step * n) == Some(r) && goes(limit - step * n + step) == Some(m))).then_some((r, m))
+        (r != m
+            && (1..=most).any(|n| {
+                goes(limit - step * n) == Some(r) && goes(limit - step * n + step) == Some(m)
+            }))
+        .then_some((r, m))
     };
     let (class, (r, m)) = match arms(0, 48, 8, 2) {
         Some(rm) => (Class::Gp, rm),
@@ -218,7 +245,10 @@ fn guard(data: &Funcdata, c: BlockId) -> Option<(VarnodeId, Vec<OpId>, Class, Bl
 
 impl Cls {
     fn new_web(&mut self, class: Option<Class>) -> usize {
-        self.webs.push(Web { class, ..Web::default() });
+        self.webs.push(Web {
+            class,
+            ..Web::default()
+        });
         self.webs.len() - 1
     }
 
@@ -245,8 +275,17 @@ impl Cls {
             match def_op(data, v) {
                 None => return None,
                 Some((_, o)) => match o.code() {
-                    OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_INT_ZEXT | OpCode::CPUI_INT_SEXT | OpCode::CPUI_INDIRECT | OpCode::CPUI_MULTIEQUAL => {
-                        let n = if matches!(o.code(), OpCode::CPUI_MULTIEQUAL) { o.num_input() } else { 1 };
+                    OpCode::CPUI_COPY
+                    | OpCode::CPUI_CAST
+                    | OpCode::CPUI_INT_ZEXT
+                    | OpCode::CPUI_INT_SEXT
+                    | OpCode::CPUI_INDIRECT
+                    | OpCode::CPUI_MULTIEQUAL => {
+                        let n = if matches!(o.code(), OpCode::CPUI_MULTIEQUAL) {
+                            o.num_input()
+                        } else {
+                            1
+                        };
                         for i in 0..n {
                             let input = o.get_in(i)?;
                             match constant(data, input) {
@@ -264,7 +303,9 @@ impl Cls {
                             }
                         }
                     }
-                    OpCode::CPUI_INT_ADD if constant(data, o.get_in(1)?).is_some() => work.push(o.get_in(0)?),
+                    OpCode::CPUI_INT_ADD if constant(data, o.get_in(1)?).is_some() => {
+                        work.push(o.get_in(0)?)
+                    }
                     OpCode::CPUI_LOAD => {
                         let (base, off) = field(data, o.get_in(1)?)?;
                         if off != field_off || size(data, v) != 4 || ap.is_some_and(|a| a != base) {
@@ -279,17 +320,28 @@ impl Cls {
                 let o = data.obank().get(u)?;
                 let out = o.get_out();
                 match o.code() {
-                    OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_INT_ZEXT | OpCode::CPUI_INT_SEXT | OpCode::CPUI_MULTIEQUAL => work.push(out?),
+                    OpCode::CPUI_COPY
+                    | OpCode::CPUI_CAST
+                    | OpCode::CPUI_INT_ZEXT
+                    | OpCode::CPUI_INT_SEXT
+                    | OpCode::CPUI_MULTIEQUAL => work.push(out?),
                     OpCode::CPUI_INDIRECT if o.get_in(0) == Some(v) => work.push(out?),
                     OpCode::CPUI_INT_ADD => {
-                        let other = if o.get_in(0) == Some(v) { o.get_in(1)? } else { o.get_in(0)? };
+                        let other = if o.get_in(0) == Some(v) {
+                            o.get_in(1)?
+                        } else {
+                            o.get_in(0)?
+                        };
                         if constant(data, other).is_some() {
                             work.push(out?);
                         } else {
                             addrs.push((u, other));
                         }
                     }
-                    OpCode::CPUI_INT_LESS | OpCode::CPUI_INT_LESSEQUAL | OpCode::CPUI_INT_SLESS | OpCode::CPUI_INT_SLESSEQUAL => compares.push(u),
+                    OpCode::CPUI_INT_LESS
+                    | OpCode::CPUI_INT_LESSEQUAL
+                    | OpCode::CPUI_INT_SLESS
+                    | OpCode::CPUI_INT_SLESSEQUAL => compares.push(u),
                     OpCode::CPUI_STORE if o.get_in(2) == Some(v) => stores.push(u),
                     _ => return None,
                 }
@@ -317,7 +369,13 @@ impl Cls {
             self.stores.insert(s, w);
         }
         for (add, save) in addrs {
-            if !self.save_area(data, save, ap) || data.obank().get(add).and_then(|o| o.get_out()).is_none_or(|o| size(data, o) != 8) {
+            if !self.save_area(data, save, ap)
+                || data
+                    .obank()
+                    .get(add)
+                    .and_then(|o| o.get_out())
+                    .is_none_or(|o| size(data, o) != 8)
+            {
                 self.webs[w].bad = true;
                 continue;
             }
@@ -333,7 +391,11 @@ impl Cls {
         match ap {
             None => sp_offset(data, v).is_some_and(|c| c < 0),
             Some(ap) => {
-                let ok = def_op(data, v).is_some_and(|(_, o)| o.code() == OpCode::CPUI_LOAD && o.get_in(1).and_then(|p| field(data, p)) == Some((ap, 16)) && size(data, v) == 8);
+                let ok = def_op(data, v).is_some_and(|(_, o)| {
+                    o.code() == OpCode::CPUI_LOAD
+                        && o.get_in(1).and_then(|p| field(data, p)) == Some((ap, 16))
+                        && size(data, v) == 8
+                });
                 if ok {
                     self.va.insert(v, Va::Save);
                 }
@@ -350,11 +412,19 @@ impl Cls {
                 continue;
             }
             for u in data.descend_snapshot(v) {
-                let Some(o) = data.obank().get(u) else { continue };
+                let Some(o) = data.obank().get(u) else {
+                    continue;
+                };
                 match o.code() {
                     OpCode::CPUI_COPY | OpCode::CPUI_CAST => work.extend(o.get_out()),
                     OpCode::CPUI_LOAD if o.get_in(1) == Some(v) => {
-                        self.reads.insert(u, Read { off: Some(w), ovf: None });
+                        self.reads.insert(
+                            u,
+                            Read {
+                                off: Some(w),
+                                ovf: None,
+                            },
+                        );
                     }
                     OpCode::CPUI_MULTIEQUAL => {}
                     _ => self.webs[w].bad = true,
@@ -387,7 +457,9 @@ impl Cls {
             }
             let (_, o) = def_op(data, v)?;
             match o.code() {
-                OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_INDIRECT => work.push(o.get_in(0)?),
+                OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_INDIRECT => {
+                    work.push(o.get_in(0)?)
+                }
                 OpCode::CPUI_MULTIEQUAL => {
                     for i in 0..o.num_input() {
                         let input = o.get_in(i)?;
@@ -405,8 +477,17 @@ impl Cls {
                     }
                     rooted = true;
                 }
-                OpCode::CPUI_INT_ADD if constant(data, o.get_in(1)?).is_some_and(|k| k % 8 == 0) => work.push(o.get_in(0)?),
-                OpCode::CPUI_PTRADD if constant(data, o.get_in(1)?).is_some() && constant(data, o.get_in(2)?).is_some() => work.push(o.get_in(0)?),
+                OpCode::CPUI_INT_ADD
+                    if constant(data, o.get_in(1)?).is_some_and(|k| k % 8 == 0) =>
+                {
+                    work.push(o.get_in(0)?)
+                }
+                OpCode::CPUI_PTRADD
+                    if constant(data, o.get_in(1)?).is_some()
+                        && constant(data, o.get_in(2)?).is_some() =>
+                {
+                    work.push(o.get_in(0)?)
+                }
                 OpCode::CPUI_LOAD => {
                     let (base, off) = field(data, o.get_in(1)?)?;
                     if off != 8 || size(data, v) != 8 || ap.is_some_and(|a| a != base) {
@@ -422,11 +503,26 @@ impl Cls {
                 match o.code() {
                     OpCode::CPUI_COPY | OpCode::CPUI_CAST => work.push(o.get_out()?),
                     OpCode::CPUI_INDIRECT if o.get_in(0) == Some(v) => work.push(o.get_out()?),
-                    OpCode::CPUI_INT_ADD if o.get_in(0) == Some(v) && constant(data, o.get_in(1)?).is_some_and(|k| k % 8 == 0) => work.push(o.get_out()?),
-                    OpCode::CPUI_PTRADD if o.get_in(0) == Some(v) && constant(data, o.get_in(1)?).is_some() && constant(data, o.get_in(2)?).is_some() => work.push(o.get_out()?),
+                    OpCode::CPUI_INT_ADD
+                        if o.get_in(0) == Some(v)
+                            && constant(data, o.get_in(1)?).is_some_and(|k| k % 8 == 0) =>
+                    {
+                        work.push(o.get_out()?)
+                    }
+                    OpCode::CPUI_PTRADD
+                        if o.get_in(0) == Some(v)
+                            && constant(data, o.get_in(1)?).is_some()
+                            && constant(data, o.get_in(2)?).is_some() =>
+                    {
+                        work.push(o.get_out()?)
+                    }
                     OpCode::CPUI_MULTIEQUAL => {
-                        let ins: Vec<VarnodeId> = (0..o.num_input()).filter_map(|i| o.get_in(i)).collect();
-                        if !ins.iter().any(|&i| matches!(self.va.get(&i), Some(Va::Addr(_)))) {
+                        let ins: Vec<VarnodeId> =
+                            (0..o.num_input()).filter_map(|i| o.get_in(i)).collect();
+                        if !ins
+                            .iter()
+                            .any(|&i| matches!(self.va.get(&i), Some(Va::Addr(_))))
+                        {
                             work.push(o.get_out()?);
                         }
                     }
@@ -454,21 +550,42 @@ impl Cls {
             self.stores.insert(s, w);
         }
         for r in reads {
-            self.reads.insert(r, Read { off: None, ovf: Some(w) });
+            self.reads.insert(
+                r,
+                Read {
+                    off: None,
+                    ovf: Some(w),
+                },
+            );
         }
         Some(w)
     }
 
     /// The joins of register and overflow addresses, and their reads.
     fn joins(&mut self, data: &Funcdata) {
-        let addrs: Vec<VarnodeId> = self.va.iter().filter(|(_, k)| matches!(k, Va::Addr(_))).map(|(v, _)| *v).collect();
-        let mut work: Vec<OpId> = addrs.iter().flat_map(|&a| data.descend_snapshot(a)).filter(|&u| data.obank().get(u).is_some_and(|o| o.code() == OpCode::CPUI_MULTIEQUAL)).collect();
+        let addrs: Vec<VarnodeId> = self
+            .va
+            .iter()
+            .filter(|(_, k)| matches!(k, Va::Addr(_)))
+            .map(|(v, _)| *v)
+            .collect();
+        let mut work: Vec<OpId> = addrs
+            .iter()
+            .flat_map(|&a| data.descend_snapshot(a))
+            .filter(|&u| {
+                data.obank()
+                    .get(u)
+                    .is_some_and(|o| o.code() == OpCode::CPUI_MULTIEQUAL)
+            })
+            .collect();
         let mut seen = HashSet::new();
         while let Some(phi) = work.pop() {
             if !seen.insert(phi) || seen.len() > 128 {
                 continue;
             }
-            let Some(o) = data.obank().get(phi) else { continue };
+            let Some(o) = data.obank().get(phi) else {
+                continue;
+            };
             let Some(out) = o.get_out() else { continue };
             let ins: Vec<VarnodeId> = (0..o.num_input()).filter_map(|i| o.get_in(i)).collect();
             let mut off = None;
@@ -482,7 +599,10 @@ impl Cls {
                 match kind {
                     Some(Va::Addr(w)) => ok &= off.replace(w).is_none_or(|x| x == w),
                     Some(Va::Ovf(w)) => ok &= ovf.replace(w).is_none_or(|x| x == w),
-                    Some(Va::Merged(w, v)) => ok &= off.replace(w).is_none_or(|x| x == w) && ovf.replace(v).is_none_or(|x| x == v),
+                    Some(Va::Merged(w, v)) => {
+                        ok &= off.replace(w).is_none_or(|x| x == w)
+                            && ovf.replace(v).is_none_or(|x| x == v)
+                    }
                     _ => {
                         // A join input still to be classified waits for its own phi.
                         ok = false;
@@ -504,10 +624,18 @@ impl Cls {
                 continue;
             }
             for u in data.descend_snapshot(out) {
-                let Some(uo) = data.obank().get(u) else { continue };
+                let Some(uo) = data.obank().get(u) else {
+                    continue;
+                };
                 match uo.code() {
                     OpCode::CPUI_LOAD if uo.get_in(1) == Some(out) => {
-                        self.reads.insert(u, Read { off: Some(w), ovf: Some(v) });
+                        self.reads.insert(
+                            u,
+                            Read {
+                                off: Some(w),
+                                ovf: Some(v),
+                            },
+                        );
                     }
                     OpCode::CPUI_MULTIEQUAL => work.push(u),
                     _ => {
@@ -521,7 +649,9 @@ impl Cls {
 
     fn classify(data: &Funcdata) -> Cls {
         let mut cls = Cls::default();
-        let blocks: Vec<BlockId> = (0..data.bblocks_get_size()).map(|i| data.bblocks_get_block(i)).collect();
+        let blocks: Vec<BlockId> = (0..data.bblocks_get_size())
+            .map(|i| data.bblocks_get_block(i))
+            .collect();
         let mut tests = Vec::new();
         for &c in &blocks {
             if let Some(g) = guard(data, c) {
@@ -534,7 +664,9 @@ impl Cls {
         }
         for &b in &blocks {
             for op in data.bb_ops(b) {
-                let Some(o) = data.obank().get(op) else { continue };
+                let Some(o) = data.obank().get(op) else {
+                    continue;
+                };
                 if o.code() == OpCode::CPUI_LOAD {
                     if let (Some(p), Some(out)) = (o.get_in(1), o.get_out()) {
                         if let Some(f) = field(data, p) {
@@ -555,7 +687,10 @@ impl Cls {
             .fields
             .iter()
             .filter(|((base, off), _)| aps.contains(base) && matches!(off, 0 | 4))
-            .flat_map(|((_, off), vs)| vs.iter().map(move |&v| (v, if *off == 0 { Class::Gp } else { Class::Fp })))
+            .flat_map(|((_, off), vs)| {
+                vs.iter()
+                    .map(move |&v| (v, if *off == 0 { Class::Gp } else { Class::Fp }))
+            })
             .collect();
         for (v, class) in reloads {
             if !cls.va.contains_key(&v) {
@@ -564,7 +699,9 @@ impl Cls {
         }
         for i in 0..cls.sites.len() {
             for op in data.bb_ops(cls.sites[i].m) {
-                let Some(o) = data.obank().get(op) else { continue };
+                let Some(o) = data.obank().get(op) else {
+                    continue;
+                };
                 if o.code() == OpCode::CPUI_LOAD && !cls.reads.contains_key(&op) {
                     if let Some(p) = o.get_in(1) {
                         cls.overflow_web(data, p);
@@ -579,18 +716,32 @@ impl Cls {
     fn is_va_op(&self, data: &Funcdata, op: OpId) -> bool {
         self.guards.contains(&op)
             || self.stores.contains_key(&op)
-            || data.obank().get(op).and_then(|o| o.get_out()).is_some_and(|v| self.va.contains_key(&v))
+            || data
+                .obank()
+                .get(op)
+                .and_then(|o| o.get_out())
+                .is_some_and(|v| self.va.contains_key(&v))
     }
 
     fn read_webs(&self, op: OpId) -> impl Iterator<Item = usize> + '_ {
-        self.reads.get(&op).into_iter().flat_map(|r| r.off.into_iter().chain(r.ovf))
+        self.reads
+            .get(&op)
+            .into_iter()
+            .flat_map(|r| r.off.into_iter().chain(r.ovf))
     }
 }
 
 fn is_effect(code: OpCode) -> bool {
     matches!(
         code,
-        OpCode::CPUI_LOAD | OpCode::CPUI_STORE | OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_CALLOTHER | OpCode::CPUI_RETURN | OpCode::CPUI_NEW | OpCode::CPUI_BRANCHIND
+        OpCode::CPUI_LOAD
+            | OpCode::CPUI_STORE
+            | OpCode::CPUI_CALL
+            | OpCode::CPUI_CALLIND
+            | OpCode::CPUI_CALLOTHER
+            | OpCode::CPUI_RETURN
+            | OpCode::CPUI_NEW
+            | OpCode::CPUI_BRANCHIND
     )
 }
 
@@ -674,36 +825,61 @@ impl<'a> Walk<'a> {
         if depth > 24 || self.cls.va.contains_key(&a) || self.cls.va.contains_key(&b) {
             return false;
         }
-        let (Some((da, oa)), Some((db, ob))) = (def_op(data, a), def_op(data, b)) else { return false };
-        let (Some(ba), Some(bb)) = (oa.get_parent(), ob.get_parent()) else { return false };
+        let (Some((da, oa)), Some((db, ob))) = (def_op(data, a), def_op(data, b)) else {
+            return false;
+        };
+        let (Some(ba), Some(bb)) = (oa.get_parent(), ob.get_parent()) else {
+            return false;
+        };
         if !self.m_vis.contains(&ba) || !self.r_vis.contains(&bb) {
             return false;
         }
-        if oa.code() != ob.code() || is_effect(oa.code()) || oa.code() == OpCode::CPUI_MULTIEQUAL || oa.num_input() != ob.num_input() || size(data, a) != size(data, b) {
+        if oa.code() != ob.code()
+            || is_effect(oa.code())
+            || oa.code() == OpCode::CPUI_MULTIEQUAL
+            || oa.num_input() != ob.num_input()
+            || size(data, a) != size(data, b)
+        {
             return false;
         }
         if oa.code() == OpCode::CPUI_INDIRECT {
-            let iop = |o: &crate::op::PcodeOp| o.get_in(1).and_then(|v| data.vbank().get(v)).map(|v| {
-                use slotmap::KeyData;
-                OpId::from(KeyData::from_ffi(v.get_offset()))
-            });
+            let iop = |o: &crate::op::PcodeOp| {
+                o.get_in(1).and_then(|v| data.vbank().get(v)).map(|v| {
+                    use slotmap::KeyData;
+                    OpId::from(KeyData::from_ffi(v.get_offset()))
+                })
+            };
             let (ia, ib) = (iop(oa), iop(ob));
             let paired = match (ia, ib) {
-                (Some(x), Some(y)) => self.ops.get(&x) == Some(&y) || (self.cls.is_va_op(data, x) && self.cls.is_va_op(data, y)),
+                (Some(x), Some(y)) => {
+                    self.ops.get(&x) == Some(&y)
+                        || (self.cls.is_va_op(data, x) && self.cls.is_va_op(data, y))
+                }
                 _ => false,
             };
-            let ok = paired && self.eq(oa.get_in(0).unwrap_or(a), ob.get_in(0).unwrap_or(b), depth + 1);
+            let ok = paired
+                && self.eq(
+                    oa.get_in(0).unwrap_or(a),
+                    ob.get_in(0).unwrap_or(b),
+                    depth + 1,
+                );
             if ok {
                 self.sigma.insert(a, b);
             }
             return ok;
         }
         let n = oa.num_input();
-        let ins = |o: &crate::op::PcodeOp| -> Vec<VarnodeId> { (0..n).filter_map(|i| o.get_in(i)).collect() };
+        let ins = |o: &crate::op::PcodeOp| -> Vec<VarnodeId> {
+            (0..n).filter_map(|i| o.get_in(i)).collect()
+        };
         let (ia, ib) = (ins(oa), ins(ob));
         let _ = (da, db);
         let straight = ia.iter().zip(&ib).all(|(&x, &y)| self.eq(x, y, depth + 1));
-        let ok = straight || (n == 2 && commutes(oa.code()) && self.eq(ia[0], ib[1], depth + 1) && self.eq(ia[1], ib[0], depth + 1));
+        let ok = straight
+            || (n == 2
+                && commutes(oa.code())
+                && self.eq(ia[0], ib[1], depth + 1)
+                && self.eq(ia[1], ib[0], depth + 1));
         if ok {
             self.sigma.insert(a, b);
         }
@@ -714,10 +890,21 @@ impl<'a> Walk<'a> {
     /// r-side enters `r`: `t` with each phi of `r.b` read on the edge from
     /// `r.from`, and each op `t` computes in the r-side segment `seg` matched
     /// by the same op on the m-side.
-    fn eq_entry(&mut self, x: VarnodeId, t: VarnodeId, r: Pos, seg: &[BlockId], depth: u32) -> bool {
+    fn eq_entry(
+        &mut self,
+        x: VarnodeId,
+        t: VarnodeId,
+        r: Pos,
+        seg: &[BlockId],
+        depth: u32,
+    ) -> bool {
         let data = self.data;
-        let Some((_, ot)) = def_op(data, t) else { return self.eq(x, t, depth) };
-        let Some(bt) = ot.get_parent() else { return false };
+        let Some((_, ot)) = def_op(data, t) else {
+            return self.eq(x, t, depth);
+        };
+        let Some(bt) = ot.get_parent() else {
+            return false;
+        };
         if ot.code() == OpCode::CPUI_MULTIEQUAL && bt == r.b {
             let i = data.bblocks_ref().block(r.b).get_in_index(r.from);
             return ot.get_in(i).is_some_and(|y| self.eq(x, y, depth));
@@ -725,18 +912,30 @@ impl<'a> Walk<'a> {
         if !seg.contains(&bt) || depth > 24 {
             return self.eq(x, t, depth);
         }
-        if constant(data, x).is_some() || self.cls.va.contains_key(&x) || self.cls.va.contains_key(&t) {
+        if constant(data, x).is_some()
+            || self.cls.va.contains_key(&x)
+            || self.cls.va.contains_key(&t)
+        {
             return false;
         }
-        let Some((_, ox)) = def_op(data, x) else { return false };
-        if ox.code() != ot.code() || is_effect(ot.code()) || ot.code() == OpCode::CPUI_MULTIEQUAL || ox.num_input() != ot.num_input() || size(data, x) != size(data, t) {
+        let Some((_, ox)) = def_op(data, x) else {
+            return false;
+        };
+        if ox.code() != ot.code()
+            || is_effect(ot.code())
+            || ot.code() == OpCode::CPUI_MULTIEQUAL
+            || ox.num_input() != ot.num_input()
+            || size(data, x) != size(data, t)
+        {
             return false;
         }
         if !ox.get_parent().is_some_and(|b| self.m_vis.contains(&b)) {
             return false;
         }
         let n = ot.num_input();
-        let ins = |o: &crate::op::PcodeOp| -> Vec<VarnodeId> { (0..n).filter_map(|i| o.get_in(i)).collect() };
+        let ins = |o: &crate::op::PcodeOp| -> Vec<VarnodeId> {
+            (0..n).filter_map(|i| o.get_in(i)).collect()
+        };
         let (ix, it) = (ins(ox), ins(ot));
         ix.iter().zip(&it).all(|(&a, &b)| match constant(data, b) {
             Some(k) => constant(data, a) == Some(k),
@@ -796,7 +995,12 @@ impl<'a> Walk<'a> {
         self.data
             .bb_ops(b)
             .into_iter()
-            .filter(|&op| self.op(op).is_some_and(|o| o.code() == OpCode::CPUI_MULTIEQUAL && o.get_out().is_some_and(|v| !self.cls.va.contains_key(&v))))
+            .filter(|&op| {
+                self.op(op).is_some_and(|o| {
+                    o.code() == OpCode::CPUI_MULTIEQUAL
+                        && o.get_out().is_some_and(|v| !self.cls.va.contains_key(&v))
+                })
+            })
             .collect()
     }
 
@@ -814,27 +1018,43 @@ impl<'a> Walk<'a> {
             let k = |i: int4| o.get_in(i).and_then(|x| constant(data, x));
             let (a, b) = (o.get_in(0), o.get_in(1));
             let sz = a.map_or(8, |a| size(data, a)).clamp(1, 8);
-            let mask = if sz >= 8 { u64::MAX } else { (1u64 << (8 * sz)) - 1 };
-            let atleast = |signed: bool, x: Option<VarnodeId>, t: u64, n: bool| x.map(|x| (Pred::AtLeast(signed, x, t & mask), n));
+            let mask = if sz >= 8 {
+                u64::MAX
+            } else {
+                (1u64 << (8 * sz)) - 1
+            };
+            let atleast = |signed: bool, x: Option<VarnodeId>, t: u64, n: bool| {
+                x.map(|x| (Pred::AtLeast(signed, x, t & mask), n))
+            };
             let got = match o.code() {
                 OpCode::CPUI_BOOL_NEGATE => {
                     neg = !neg;
                     v = o.get_in(0).unwrap_or(v);
                     continue;
                 }
-                code @ (OpCode::CPUI_INT_LESS | OpCode::CPUI_INT_SLESS | OpCode::CPUI_INT_LESSEQUAL | OpCode::CPUI_INT_SLESSEQUAL) => {
-                    let signed = matches!(code, OpCode::CPUI_INT_SLESS | OpCode::CPUI_INT_SLESSEQUAL);
+                code @ (OpCode::CPUI_INT_LESS
+                | OpCode::CPUI_INT_SLESS
+                | OpCode::CPUI_INT_LESSEQUAL
+                | OpCode::CPUI_INT_SLESSEQUAL) => {
+                    let signed =
+                        matches!(code, OpCode::CPUI_INT_SLESS | OpCode::CPUI_INT_SLESSEQUAL);
                     let strict = matches!(code, OpCode::CPUI_INT_LESS | OpCode::CPUI_INT_SLESS);
                     match (k(0), k(1)) {
-                        (None, Some(c)) => atleast(signed, a, if strict { c } else { c.wrapping_add(1) }, true),
-                        (Some(c), None) => atleast(signed, b, if strict { c.wrapping_add(1) } else { c }, false),
+                        (None, Some(c)) => {
+                            atleast(signed, a, if strict { c } else { c.wrapping_add(1) }, true)
+                        }
+                        (Some(c), None) => {
+                            atleast(signed, b, if strict { c.wrapping_add(1) } else { c }, false)
+                        }
                         _ => None,
                     }
                 }
                 code @ (OpCode::CPUI_INT_EQUAL | OpCode::CPUI_INT_NOTEQUAL) => {
                     let n = code == OpCode::CPUI_INT_NOTEQUAL;
                     match (k(0), k(1), a, b) {
-                        (None, Some(c), Some(x), _) | (Some(c), None, _, Some(x)) => Some((Pred::EqConst(x, c), n)),
+                        (None, Some(c), Some(x), _) | (Some(c), None, _, Some(x)) => {
+                            Some((Pred::EqConst(x, c), n))
+                        }
                         (None, None, Some(x), Some(y)) => Some((Pred::Eq(x, y), n)),
                         _ => None,
                     }
@@ -851,9 +1071,14 @@ impl<'a> Walk<'a> {
 
     fn same_pred(&mut self, a: &Pred, b: &Pred) -> bool {
         match (a, b) {
-            (Pred::AtLeast(s, x, t), Pred::AtLeast(s2, y, t2)) => s == s2 && t == t2 && self.eq(*x, *y, 0),
+            (Pred::AtLeast(s, x, t), Pred::AtLeast(s2, y, t2)) => {
+                s == s2 && t == t2 && self.eq(*x, *y, 0)
+            }
             (Pred::EqConst(x, c), Pred::EqConst(y, c2)) => c == c2 && self.eq(*x, *y, 0),
-            (Pred::Eq(x, x2), Pred::Eq(y, y2)) => (self.eq(*x, *y, 0) && self.eq(*x2, *y2, 0)) || (self.eq(*x, *y2, 0) && self.eq(*x2, *y, 0)),
+            (Pred::Eq(x, x2), Pred::Eq(y, y2)) => {
+                (self.eq(*x, *y, 0) && self.eq(*x2, *y2, 0))
+                    || (self.eq(*x, *y2, 0) && self.eq(*x2, *y, 0))
+            }
             (Pred::Value(x), Pred::Value(y)) => self.eq(*x, *y, 0),
             _ => false,
         }
@@ -873,13 +1098,26 @@ impl<'a> Walk<'a> {
                 break;
             }
             vis.extend(seg.iter().copied());
-            p = Pos { b: blk.get_out(0), from: last };
+            p = Pos {
+                b: blk.get_out(0),
+                from: last,
+            };
         }
         p
     }
 
     fn prove(&mut self, site: &Site) -> bool {
-        let mut work = vec![(Pos { b: site.m, from: site.c }, Pos { b: site.r, from: site.c }, true)];
+        let mut work = vec![(
+            Pos {
+                b: site.m,
+                from: site.c,
+            },
+            Pos {
+                b: site.r,
+                from: site.c,
+            },
+            true,
+        )];
         let mut steps = 0;
         while let Some((m, r, first)) = work.pop() {
             steps += 1;
@@ -899,7 +1137,11 @@ impl<'a> Walk<'a> {
             };
             if m.b == r.b {
                 for phi in self.phis(m.b) {
-                    let (Some(x), Some(y)) = (self.phi_in(phi, m.b, m.from), self.phi_in(phi, r.b, r.from)) else { return false };
+                    let (Some(x), Some(y)) =
+                        (self.phi_in(phi, m.b, m.from), self.phi_in(phi, r.b, r.from))
+                    else {
+                        return false;
+                    };
                     if !self.eq(x, y, 0) {
                         return false;
                     }
@@ -911,7 +1153,12 @@ impl<'a> Walk<'a> {
             self.m_vis.insert(m.b);
             self.r_vis.insert(r.b);
             for phi in self.phis(m.b) {
-                let (Some(out), Some(x)) = (self.op(phi).and_then(|o| o.get_out()), self.phi_in(phi, m.b, m.from)) else { return false };
+                let (Some(out), Some(x)) = (
+                    self.op(phi).and_then(|o| o.get_out()),
+                    self.phi_in(phi, m.b, m.from),
+                ) else {
+                    return false;
+                };
                 if let Some(&target) = self.sigma.get(&out) {
                     let seg = self.segment(r.b);
                     if !self.eq_entry(x, target, r, &seg, 0) {
@@ -921,7 +1168,12 @@ impl<'a> Walk<'a> {
                 }
                 let mut target = None;
                 for &p in &r_phis {
-                    let (Some(pout), Some(y)) = (self.op(p).and_then(|o| o.get_out()), self.phi_in(p, r.b, r.from)) else { continue };
+                    let (Some(pout), Some(y)) = (
+                        self.op(p).and_then(|o| o.get_out()),
+                        self.phi_in(p, r.b, r.from),
+                    ) else {
+                        continue;
+                    };
                     if self.phi_targets.contains(&pout) {
                         continue;
                     }
@@ -954,7 +1206,9 @@ impl<'a> Walk<'a> {
             let (sm, sr) = (self.segment(m.b), self.segment(r.b));
             self.m_vis.extend(sm.iter().copied());
             self.r_vis.extend(sr.iter().copied());
-            let (Some(em), Some(er)) = (self.effects(&sm), self.effects(&sr)) else { return false };
+            let (Some(em), Some(er)) = (self.effects(&sm), self.effects(&sr)) else {
+                return false;
+            };
             if em.len() != er.len() {
                 return false;
             }
@@ -963,16 +1217,39 @@ impl<'a> Walk<'a> {
                     return false;
                 }
             }
-            let (Some(&lm), Some(&lr)) = (sm.last(), sr.last()) else { return false };
+            let (Some(&lm), Some(&lr)) = (sm.last(), sr.last()) else {
+                return false;
+            };
             let g = self.data.bblocks_ref();
             let (bm, br) = (g.block(lm), g.block(lr));
             match (bm.size_out(), br.size_out()) {
                 (0, 0) => {}
-                (1, 1) => work.push((Pos { b: bm.get_out(0), from: lm }, Pos { b: br.get_out(0), from: lr }, false)),
+                (1, 1) => work.push((
+                    Pos {
+                        b: bm.get_out(0),
+                        from: lm,
+                    },
+                    Pos {
+                        b: br.get_out(0),
+                        from: lr,
+                    },
+                    false,
+                )),
                 (2, 2) => {
-                    let (Some((tm, fm)), Some((tr, fr))) = (taken(self.data, lm), taken(self.data, lr)) else { return false };
-                    let cond = |b: BlockId| self.data.bb_op_tail(b).and_then(|t| self.op(t)).and_then(|o| o.get_in(1));
-                    let (Some(cm), Some(cr)) = (cond(lm), cond(lr)) else { return false };
+                    let (Some((tm, fm)), Some((tr, fr))) =
+                        (taken(self.data, lm), taken(self.data, lr))
+                    else {
+                        return false;
+                    };
+                    let cond = |b: BlockId| {
+                        self.data
+                            .bb_op_tail(b)
+                            .and_then(|t| self.op(t))
+                            .and_then(|o| o.get_in(1))
+                    };
+                    let (Some(cm), Some(cr)) = (cond(lm), cond(lr)) else {
+                        return false;
+                    };
                     let ((pm, nm), (pr, nr)) = (self.pred(cm), self.pred(cr));
                     if !self.same_pred(&pm, &pr) {
                         return false;
@@ -984,20 +1261,32 @@ impl<'a> Walk<'a> {
                 _ => return false,
             }
         }
-        self.shared.iter().all(|b| !self.m_vis.contains(b) && !self.r_vis.contains(b))
+        self.shared
+            .iter()
+            .all(|b| !self.m_vis.contains(b) && !self.r_vis.contains(b))
     }
 
     fn same_effect(&mut self, a: OpId, b: OpId) -> bool {
         let data = self.data;
-        let (Some(oa), Some(ob)) = (self.op(a), self.op(b)) else { return false };
+        let (Some(oa), Some(ob)) = (self.op(a), self.op(b)) else {
+            return false;
+        };
         let (ra, rb) = (self.is_read(a), self.is_read(b));
         if ra || rb {
             if !(ra && rb) {
                 return false;
             }
-            let class = |op: OpId| self.cls.reads.get(&op).and_then(|r| r.off).and_then(|w| self.cls.webs[w].class);
+            let class = |op: OpId| {
+                self.cls
+                    .reads
+                    .get(&op)
+                    .and_then(|r| r.off)
+                    .and_then(|w| self.cls.webs[w].class)
+            };
             let (ca, cb) = (class(a), class(b));
-            let (Some(xa), Some(xb)) = (oa.get_out(), ob.get_out()) else { return false };
+            let (Some(xa), Some(xb)) = (oa.get_out(), ob.get_out()) else {
+                return false;
+            };
             if size(data, xa) != size(data, xb) || (ca.is_some() && cb.is_some() && ca != cb) {
                 return false;
             }
@@ -1007,14 +1296,29 @@ impl<'a> Walk<'a> {
             self.sigma.insert(xa, xb);
             return true;
         }
-        if oa.code() != ob.code() || oa.num_input() != ob.num_input() || oa.get_out().is_some() != ob.get_out().is_some() {
+        if oa.code() != ob.code()
+            || oa.num_input() != ob.num_input()
+            || oa.get_out().is_some() != ob.get_out().is_some()
+        {
             return false;
         }
         for i in 0..oa.num_input() {
-            let (Some(x), Some(y)) = (oa.get_in(i), ob.get_in(i)) else { return false };
-            let plain = |v: VarnodeId| data.vbank().get(v).is_some_and(|n| !n.is_constant() && n.get_def().is_none() && !n.is_input());
+            let (Some(x), Some(y)) = (oa.get_in(i), ob.get_in(i)) else {
+                return false;
+            };
+            let plain = |v: VarnodeId| {
+                data.vbank()
+                    .get(v)
+                    .is_some_and(|n| !n.is_constant() && n.get_def().is_none() && !n.is_input())
+            };
             let ok = if i == 0 && matches!(oa.code(), OpCode::CPUI_CALL) || plain(x) && plain(y) {
-                data.vbank().get(x).map(|n| (n.get_addr().clone(), n.get_size())) == data.vbank().get(y).map(|n| (n.get_addr().clone(), n.get_size()))
+                data.vbank()
+                    .get(x)
+                    .map(|n| (n.get_addr().clone(), n.get_size()))
+                    == data
+                        .vbank()
+                        .get(y)
+                        .map(|n| (n.get_addr().clone(), n.get_size()))
             } else {
                 self.eq(x, y, 0)
             };
@@ -1087,7 +1391,12 @@ fn find(data: &Funcdata, cls: &Cls) -> Option<Plan> {
     }
     let mut live: HashSet<usize> = (0..n).filter(|&w| !cls.webs[w].bad).collect();
     for _ in 0..4 {
-        let fold: HashMap<BlockId, BlockId> = cls.sites.iter().filter(|s| live.contains(&s.web)).map(|s| (s.c, s.r)).collect();
+        let fold: HashMap<BlockId, BlockId> = cls
+            .sites
+            .iter()
+            .filter(|s| live.contains(&s.web))
+            .map(|s| (s.c, s.r))
+            .collect();
         let mut p = parent.clone();
         let mut failed: HashSet<usize> = HashSet::new();
         let mut m_reads = Vec::new();
@@ -1118,7 +1427,10 @@ fn find(data: &Funcdata, cls: &Cls) -> Option<Plan> {
             }
             m_reads.extend(walk.m_reads);
         }
-        let cut: HashSet<(BlockId, BlockId)> = fold.iter().filter_map(|(&c, _)| cls.sites.iter().find(|s| s.c == c).map(|s| (c, s.m))).collect();
+        let cut: HashSet<(BlockId, BlockId)> = fold
+            .iter()
+            .filter_map(|(&c, _)| cls.sites.iter().find(|s| s.c == c).map(|s| (c, s.m)))
+            .collect();
         let reach = reachable(data, &cut);
         for (&op, r) in &cls.reads {
             let at = data.obank().get(op).and_then(|o| o.get_parent());
@@ -1127,24 +1439,43 @@ fn find(data: &Funcdata, cls: &Cls) -> Option<Plan> {
             }
         }
         for &op in &m_reads {
-            if data.obank().get(op).and_then(|o| o.get_parent()).is_some_and(|b| reach.contains(&b)) {
+            if data
+                .obank()
+                .get(op)
+                .and_then(|o| o.get_parent())
+                .is_some_and(|b| reach.contains(&b))
+            {
                 failed.extend(cls.read_webs(op));
             }
         }
         // Every web of a group with a failed web fails.
-        let bad_roots: HashSet<usize> = (0..n).filter(|&w| failed.contains(&w) || !live.contains(&w)).map(|w| root(&mut p, w)).collect();
-        let next: HashSet<usize> = live.iter().copied().filter(|&w| !bad_roots.contains(&root(&mut p, w))).collect();
+        let bad_roots: HashSet<usize> = (0..n)
+            .filter(|&w| failed.contains(&w) || !live.contains(&w))
+            .map(|w| root(&mut p, w))
+            .collect();
+        let next: HashSet<usize> = live
+            .iter()
+            .copied()
+            .filter(|&w| !bad_roots.contains(&root(&mut p, w)))
+            .collect();
         if next == live {
             if fold.is_empty() {
                 return None;
             }
-            let mut plan = Plan { sites: cut.into_iter().collect(), reads: Vec::new(), stores: Vec::new(), ssa: None };
+            let mut plan = Plan {
+                sites: cut.into_iter().collect(),
+                reads: Vec::new(),
+                stores: Vec::new(),
+                ssa: None,
+            };
             plan.sites.sort();
             let mut reads: Vec<(&OpId, &Read)> = cls.reads.iter().collect();
             reads.sort_by_key(|(op, _)| **op);
             for (&op, r) in reads {
                 let at = data.obank().get(op).and_then(|o| o.get_parent());
-                if !at.is_some_and(|b| reach.contains(&b)) || !cls.read_webs(op).all(|w| live.contains(&w)) {
+                if !at.is_some_and(|b| reach.contains(&b))
+                    || !cls.read_webs(op).all(|w| live.contains(&w))
+                {
                     continue;
                 }
                 let Some(w) = r.off else { continue };
@@ -1158,7 +1489,12 @@ fn find(data: &Funcdata, cls: &Cls) -> Option<Plan> {
                     });
                 }
             }
-            let mut stores: Vec<OpId> = cls.stores.iter().filter(|(_, w)| live.contains(w)).map(|(op, _)| *op).collect();
+            let mut stores: Vec<OpId> = cls
+                .stores
+                .iter()
+                .filter(|(_, w)| live.contains(w))
+                .map(|(op, _)| *op)
+                .collect();
             stores.sort();
             plan.stores = stores;
             return (!plan.reads.is_empty()).then_some(plan);
@@ -1173,14 +1509,26 @@ fn find(data: &Funcdata, cls: &Cls) -> Option<Plan> {
 
 /// Destroy `store` and the INDIRECTs it left.
 fn destroy_store(data: &mut Funcdata, store: OpId) -> unlace_base::error::KunaResult<()> {
-    let Some(b) = data.obank().get(store).and_then(|o| o.get_parent()) else { return Ok(()) };
+    let Some(b) = data.obank().get(store).and_then(|o| o.get_parent()) else {
+        return Ok(());
+    };
     for op in data.bb_ops(b) {
-        let made = data.obank().get(op).filter(|o| o.code() == OpCode::CPUI_INDIRECT).and_then(|o| o.get_in(1)).and_then(|iop| data.vbank().get(iop)).is_some_and(|v| {
-            use slotmap::KeyData;
-            OpId::from(KeyData::from_ffi(v.get_offset())) == store
-        });
+        let made = data
+            .obank()
+            .get(op)
+            .filter(|o| o.code() == OpCode::CPUI_INDIRECT)
+            .and_then(|o| o.get_in(1))
+            .and_then(|iop| data.vbank().get(iop))
+            .is_some_and(|v| {
+                use slotmap::KeyData;
+                OpId::from(KeyData::from_ffi(v.get_offset())) == store
+            });
         if made {
-            if let Some((out, input)) = data.obank().get(op).and_then(|o| Some((o.get_out()?, o.get_in(0)?))) {
+            if let Some((out, input)) = data
+                .obank()
+                .get(op)
+                .and_then(|o| Some((o.get_out()?, o.get_in(0)?)))
+            {
                 data.total_replace(out, input)?;
             }
             data.op_destroy(op);
@@ -1194,16 +1542,37 @@ fn destroy_store(data: &mut Funcdata, store: OpId) -> unlace_base::error::KunaRe
 /// registers the function reads other than to spill them to the stack.
 fn named_registers(data: &Funcdata) -> u64 {
     use unlace_base::address::Address;
-    let Some(lookup) = data.get_arch().manage().register_lookup() else { return 0 };
+    let Some(lookup) = data.get_arch().manage().register_lookup() else {
+        return 0;
+    };
     let mut n = 0;
     for name in ["RDI", "RSI", "RDX", "RCX", "R8", "R9"] {
-        let Some(st) = lookup.probe_register(name) else { break };
+        let Some(st) = lookup.probe_register(name) else {
+            break;
+        };
         let Some(space) = st.space.clone() else { break };
         let addr = Address::new(space, st.offset);
-        let Some(v) = [8, 4].into_iter().find_map(|size| data.vbank().find_input(size, &addr)) else { break };
+        let Some(v) = [8, 4]
+            .into_iter()
+            .find_map(|size| data.vbank().find_input(size, &addr))
+        else {
+            break;
+        };
         let spill = |op: &OpId| {
             data.obank().get(*op).is_some_and(|o| {
-                o.code() == OpCode::CPUI_COPY && o.get_out().and_then(|w| data.vbank().get(w)).is_some_and(|w| w.get_addr().get_space().is_some_and(|s| Some(s.get_index()) == data.get_arch().manage().get_stack_space().map(|t| t.get_index())))
+                o.code() == OpCode::CPUI_COPY
+                    && o.get_out()
+                        .and_then(|w| data.vbank().get(w))
+                        .is_some_and(|w| {
+                            w.get_addr().get_space().is_some_and(|s| {
+                                Some(s.get_index())
+                                    == data
+                                        .get_arch()
+                                        .manage()
+                                        .get_stack_space()
+                                        .map(|t| t.get_index())
+                            })
+                        })
             })
         };
         if data.descend_snapshot(v).iter().all(spill) {
@@ -1216,7 +1585,11 @@ fn named_registers(data: &Funcdata) -> u64 {
 
 fn has_va_start(data: &Funcdata) -> bool {
     data.obank().iter_alive().any(|op| {
-        data.obank().get(op).is_some_and(|o| o.code() == OpCode::CPUI_CALLOTHER && o.get_in(0).and_then(|v| constant(data, v)) == Some(crate::userop::BUILTIN_VA_START as u64))
+        data.obank().get(op).is_some_and(|o| {
+            o.code() == OpCode::CPUI_CALLOTHER
+                && o.get_in(0).and_then(|v| constant(data, v))
+                    == Some(crate::userop::BUILTIN_VA_START as u64)
+        })
     })
 }
 
@@ -1234,7 +1607,11 @@ fn rewrite(data: &mut Funcdata, plan: &Plan) -> unlace_base::error::KunaResult<(
         data.op_set_opcode(op, crate::typeop::type_op_for(OpCode::CPUI_CALLOTHER));
     }
     for &s in &plan.stores {
-        if data.obank().get(s).is_some_and(|o| o.get_parent().is_some()) {
+        if data
+            .obank()
+            .get(s)
+            .is_some_and(|o| o.get_parent().is_some())
+        {
             destroy_store(data, s)?;
         }
     }
@@ -1249,10 +1626,18 @@ fn rewrite(data: &mut Funcdata, plan: &Plan) -> unlace_base::error::KunaResult<(
     if let Some((gp, fp)) = plan.ssa {
         if !has_va_start(data) && data.bblocks_get_size() > 0 {
             let entry = data.bblocks_get_block(0);
-            let at = data.bb_op_head(entry).and_then(|o| data.obank().get(o)).map(|o| o.get_addr().clone()).ok_or_else(|| KunaError::lowlevel("vaarg: empty entry"))?;
+            let at = data
+                .bb_op_head(entry)
+                .and_then(|o| data.obank().get(o))
+                .map(|o| o.get_addr().clone())
+                .ok_or_else(|| KunaError::lowlevel("vaarg: empty entry"))?;
             let fp = fp.unwrap_or(48);
             let gp = gp.unwrap_or_else(|| 8 * named_registers(data));
-            let last = crate::kuna_vastart::last_named(data, (gp / 8 + (fp - 48) / 16) as int4, (gp / 8) as int4);
+            let last = crate::kuna_vastart::last_named(
+                data,
+                (gp / 8 + (fp - 48) / 16) as int4,
+                (gp / 8) as int4,
+            );
             let call = data.new_op(if last.is_some() { 3 } else { 2 }, at);
             data.op_set_opcode_code(call, OpCode::CPUI_CALLOTHER);
             let idv = data.new_constant(4, crate::userop::BUILTIN_VA_START as uintb);
@@ -1271,7 +1656,6 @@ fn rewrite(data: &mut Funcdata, plan: &Plan) -> unlace_base::error::KunaResult<(
     Ok(())
 }
 
-
 /// Fold the `va_arg` expansion into one call (see the module docs).
 pub struct ActionVaArg {
     base: ActionBase,
@@ -1279,7 +1663,9 @@ pub struct ActionVaArg {
 
 impl ActionVaArg {
     pub fn boxed(g: &str) -> Box<dyn Action> {
-        Box::new(ActionVaArg { base: ActionBase::new(0, "vaarg", g) })
+        Box::new(ActionVaArg {
+            base: ActionBase::new(0, "vaarg", g),
+        })
     }
 }
 
@@ -1291,7 +1677,11 @@ impl Action for ActionVaArg {
         &mut self.base
     }
     fn clone_filtered(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Action>> {
-        grouplist.contains(self.get_group()).then(|| Box::new(ActionVaArg { base: self.base.clone() }) as Box<dyn Action>)
+        grouplist.contains(self.get_group()).then(|| {
+            Box::new(ActionVaArg {
+                base: self.base.clone(),
+            }) as Box<dyn Action>
+        })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data.get_arch().va_arg {
@@ -1301,7 +1691,9 @@ impl Action for ActionVaArg {
         if cls.sites.is_empty() {
             return 0;
         }
-        let Some(plan) = find(data, &cls) else { return 0 };
+        let Some(plan) = find(data, &cls) else {
+            return 0;
+        };
         if rewrite(data, &plan).is_err() {
             return 0;
         }

@@ -1,19 +1,49 @@
 use super::*;
-use std::rc::Rc;
-use unlace_base::{address::Address, space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace}};
 use crate::context::{ArchContext, TypeOp};
+use std::rc::Rc;
+use unlace_base::{
+    address::Address,
+    space::{
+        AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace,
+        addrspace_flags, spacetype,
+    },
+};
 
 fn fixture() -> (Funcdata, VarnodeStorage, VarnodeId) {
     let mut manage = AddrSpaceManager::new();
     manage.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    manage.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    manage
+        .insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     manage.insert_space(Rc::new(IopSpace::new(2))).unwrap();
     manage.insert_space(Rc::new(FspecSpace::new(3))).unwrap();
-    let ram = Rc::new(AddrSpace::new(spacetype::IPTR_PROCESSOR, "ram", false, 4, 1, 4, addrspace_flags::hasphysical, 1, 1));
+    let ram = Rc::new(AddrSpace::new(
+        spacetype::IPTR_PROCESSOR,
+        "ram",
+        false,
+        4,
+        1,
+        4,
+        addrspace_flags::hasphysical,
+        1,
+        1,
+    ));
     manage.insert_space(Rc::clone(&ram)).unwrap();
     let ctx = Rc::new(ArchContext::new(manage));
-    let mut fd = Funcdata::new("frame", "frame", ctx, Address::new(Rc::clone(&ram), 0x1000), 0x10000000, 0x40).unwrap();
-    let sp = VarnodeStorage { space: Some(Rc::clone(&ram)), offset: 0x80, size: 4 };
+    let mut fd = Funcdata::new(
+        "frame",
+        "frame",
+        ctx,
+        Address::new(Rc::clone(&ram), 0x1000),
+        0x10000000,
+        0x40,
+    )
+    .unwrap();
+    let sp = VarnodeStorage {
+        space: Some(Rc::clone(&ram)),
+        offset: 0x80,
+        size: 4,
+    };
     let base = fd.new_varnode(4, &Address::new(ram, 0x80), None);
     let base = fd.set_input_varnode(base).unwrap();
     (fd, sp, base)
@@ -23,7 +53,9 @@ fn operation(fd: &mut Funcdata, code: OpCode, ins: &[VarnodeId], width: int4) ->
     let ram = Rc::clone(fd.get_arch().manage().get_space_by_name("ram").unwrap());
     let op = fd.new_op(ins.len() as int4, Address::new(ram, 0x1020));
     fd.op_set_opcode(op, TypeOp::new(code, 0, format!("{code:?}")));
-    for (slot, &vn) in ins.iter().enumerate() { fd.op_set_input(op, vn, slot as int4).unwrap(); }
+    for (slot, &vn) in ins.iter().enumerate() {
+        fd.op_set_input(op, vn, slot as int4).unwrap();
+    }
     fd.new_unique_out(width, op).unwrap()
 }
 
@@ -52,7 +84,9 @@ fn unknown_bases_phi_nodes_width_changes_and_long_chains_are_declined() {
     let wide = operation(&mut fd, OpCode::CPUI_COPY, &[base], 8);
     assert_eq!(frame_slot(&fd, wide, &sp), None);
     let mut ptr = base;
-    for _ in 0..65 { ptr = operation(&mut fd, OpCode::CPUI_COPY, &[ptr], 4); }
+    for _ in 0..65 {
+        ptr = operation(&mut fd, OpCode::CPUI_COPY, &[ptr], 4);
+    }
     assert_eq!(frame_slot(&fd, ptr, &sp), None);
 }
 

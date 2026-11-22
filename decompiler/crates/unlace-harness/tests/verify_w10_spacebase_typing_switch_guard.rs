@@ -20,7 +20,10 @@ use std::path::PathBuf;
 use unlace_harness::testfunction::run_test_files_with_specs;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn x86_64_sla() -> PathBuf {

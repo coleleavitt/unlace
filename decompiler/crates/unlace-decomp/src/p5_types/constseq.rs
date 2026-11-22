@@ -6,16 +6,16 @@
 //! and preserve the surrounding dataflow. Constant-fill and read-only-string
 //! recovery reuse the same collection and replacement machinery.
 
+use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::types::{int4, int8, uintb};
 use unlace_num::opcodes::OpCode;
-use std::rc::Rc;
 
 use crate::action::{ActionGroupList, Rule, RuleSpec};
-use crate::dtype::{type_metatype, Datatype, TypeFactory};
+use crate::context::{OpId, VarnodeId};
+use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::op::pcodeop_flags;
-use crate::context::{OpId, VarnodeId};
 use crate::userop::{BUILTIN_MEMCPY, BUILTIN_MEMSET, BUILTIN_STRNCPY, BUILTIN_WCSNCPY};
 
 /// Helper holding a data-flow edge and optionally a memory offset being COPYed
@@ -39,7 +39,12 @@ pub(crate) struct WriteNode {
 impl WriteNode {
     /// C++ `WriteNode(uint8 off,PcodeOp *o,int4 sl)`, with the block order cached.
     pub(crate) fn new(off: u64, op: OpId, slot: int4, order: u32) -> Self {
-        WriteNode { offset: off, op, slot, order }
+        WriteNode {
+            offset: off,
+            op,
+            slot,
+            order,
+        }
     }
 }
 
@@ -74,7 +79,12 @@ impl ArraySequence {
     /// (C++ `ArraySequence::ArraySequence`).  `rootOp`/`block` are tracked by the
     /// concrete driver in the Rust port (the base only needs `char_type`).
     pub(crate) fn new(char_type: Rc<Datatype>) -> Self {
-        ArraySequence { char_type, num_elements: 0, move_ops: Vec::new(), byte_array: Vec::new() }
+        ArraySequence {
+            char_type,
+            num_elements: 0,
+            move_ops: Vec::new(),
+            byte_array: Vec::new(),
+        }
     }
 
     /// Return `true` if a sequence was found (C++ `ArraySequence::isValid`).
@@ -291,7 +301,11 @@ struct IndirectPair {
 
 impl IndirectPair {
     fn new(in_vn: VarnodeId, out_vn: VarnodeId) -> Self {
-        IndirectPair { in_vn, out_vn, duplicate: false }
+        IndirectPair {
+            in_vn,
+            out_vn,
+            duplicate: false,
+        }
     }
 }
 
@@ -324,9 +338,12 @@ struct HeapSequence {
 impl HeapSequence {
     /// C++ `HeapSequence::HeapSequence(Funcdata&,Datatype*,PcodeOp *root)`.
     fn new(data: &Funcdata, ct: Rc<Datatype>, root: OpId) -> HeapSequence {
-        let block = data.obank().get(root).expect("HeapSequence: stale root").get_parent().expect(
-            "HeapSequence: root has no parent block",
-        );
+        let block = data
+            .obank()
+            .get(root)
+            .expect("HeapSequence: stale root")
+            .get_parent()
+            .expect("HeapSequence: root has no parent block");
         let space_idx = {
             let in0 = op_get_in(data, root, 0);
             vn_get_offset(data, in0)
@@ -384,12 +401,19 @@ impl HeapSequence {
         self.base_pointer = op_get_in(data, self.root_op, 1);
         self.immed_read = self.root_op;
         loop {
-            let v = data.vbank().get(self.base_pointer).expect("findBasePointer: stale vn");
+            let v = data
+                .vbank()
+                .get(self.base_pointer)
+                .expect("findBasePointer: stale vn");
             if !v.is_written() {
                 break;
             }
             let op = v.get_def().expect("findBasePointer: written vn has no def");
-            let opc = data.obank().get(op).expect("findBasePointer: stale op").code();
+            let opc = data
+                .obank()
+                .get(op)
+                .expect("findBasePointer: stale op")
+                .code();
             if opc == OpCode::CPUI_PTRADD {
                 let in2 = op_get_in(data, op, 2);
                 let sz = vn_get_offset(data, in2);
@@ -407,7 +431,11 @@ impl HeapSequence {
     /// C++ `HeapSequence::findDuplicateBases`.
     fn find_duplicate_bases(&self, data: &Funcdata, duplist: &mut Vec<VarnodeId>) {
         let bp = self.base_pointer;
-        let bp_written = data.vbank().get(bp).expect("findDuplicateBases: stale bp").is_written();
+        let bp_written = data
+            .vbank()
+            .get(bp)
+            .expect("findDuplicateBases: stale bp")
+            .is_written();
         if !bp_written {
             duplist.push(bp);
             return;
@@ -415,7 +443,10 @@ impl HeapSequence {
         let mut op = data.vbank().get(bp).unwrap().get_def().unwrap();
         let mut opc = data.obank().get(op).expect("stale op").code();
         let in1_const = |d: &Funcdata, o: OpId| -> bool {
-            d.vbank().get(op_get_in(d, o, 1)).map(|v| v.is_constant()).unwrap_or(false)
+            d.vbank()
+                .get(op_get_in(d, o, 1))
+                .map(|v| v.is_constant())
+                .unwrap_or(false)
         };
         if (opc != OpCode::CPUI_PTRSUB && opc != OpCode::CPUI_INT_ADD && opc != OpCode::CPUI_PTRADD)
             || !in1_const(data, op)
@@ -437,8 +468,11 @@ impl HeapSequence {
             }
             offset.push(off);
             copy_root = op_get_in(data, op, 0);
-            let cr_written =
-                data.vbank().get(copy_root).expect("stale copy_root").is_written();
+            let cr_written = data
+                .vbank()
+                .get(copy_root)
+                .expect("stale copy_root")
+                .is_written();
             if !cr_written {
                 break;
             }
@@ -536,7 +570,11 @@ impl HeapSequence {
             return v.get_offset();
         }
         let is_add = v.is_written()
-            && data.obank().get(v.get_def().unwrap()).map(|o| o.code()).unwrap_or(OpCode::CPUI_COPY)
+            && data
+                .obank()
+                .get(v.get_def().unwrap())
+                .map(|o| o.code())
+                .unwrap_or(OpCode::CPUI_COPY)
                 == OpCode::CPUI_INT_ADD;
         if !is_add || max_depth == 0 {
             non_const.push(vn);
@@ -580,8 +618,10 @@ impl HeapSequence {
                 break;
             }
         }
-        unlace_base::space::AddrSpace::address_to_byte_int(res as i64, self.store_space.get_word_size())
-            as u64
+        unlace_base::space::AddrSpace::address_to_byte_int(
+            res as i64,
+            self.store_space.get_word_size(),
+        ) as u64
     }
 
     /// C++ `HeapSequence::setsEqual`.
@@ -617,8 +657,8 @@ impl HeapSequence {
         if (init_stores.len() as int4) + 1 < ArraySequence::MINIMUM_SEQUENCE_LENGTH {
             return false;
         }
-        let max_size =
-            (ArraySequence::MAXIMUM_SEQUENCE_LENGTH as u64) * (self.base.char_type.get_align_size() as u64);
+        let max_size = (ArraySequence::MAXIMUM_SEQUENCE_LENGTH as u64)
+            * (self.base.char_type.get_align_size() as u64);
         let wrap_mask = unlace_base::address::calc_mask(self.store_space.get_addr_size() as i32);
         let root_in1 = op_get_in(data, self.root_op, 1);
         let mut non_const_adds = Vec::new();
@@ -641,8 +681,15 @@ impl HeapSequence {
                 self.base.move_ops.push(WriteNode::new(diff, op, -1, order));
             }
         }
-        let root_order = data.obank().get(self.root_op).unwrap().get_seq_num().get_order();
-        self.base.move_ops.push(WriteNode::new(0, self.root_op, -1, root_order));
+        let root_order = data
+            .obank()
+            .get(self.root_op)
+            .unwrap()
+            .get_seq_num()
+            .get_order();
+        self.base
+            .move_ops
+            .push(WriteNode::new(0, self.root_op, -1, root_order));
         true
     }
 
@@ -651,13 +698,20 @@ impl HeapSequence {
         let insert_point = self.base.move_ops[0].op;
         let root_in1 = op_get_in(data, self.root_op, 1);
         let char_ptr_type = Rc::clone(
-            data.vbank().get(root_in1).expect("buildStringCopy: stale ptr vn").get_type_read_facing(self.root_op),
+            data.vbank()
+                .get(root_in1)
+                .expect("buildStringCopy: stale ptr vn")
+                .get_type_read_facing(self.root_op),
         );
         let num_bytes = self.base.num_elements * self.base.char_type.get_size();
         let insert_addr = data.obank().get(insert_point).unwrap().get_addr().clone();
         let byte_array = self.base.byte_array.clone();
-        let src_ptr =
-            data.get_internal_string(&byte_array, num_bytes, Rc::clone(&char_ptr_type), insert_point)?;
+        let src_ptr = data.get_internal_string(
+            &byte_array,
+            num_bytes,
+            Rc::clone(&char_ptr_type),
+            insert_point,
+        )?;
 
         let mut dest_ptr = self.base_pointer;
         if self.base_offset != 0 || !self.non_const_adds.is_empty() {
@@ -678,7 +732,10 @@ impl HeapSequence {
                     data.op_set_input(add_op, self.non_const_adds[i], 1).ok();
                     let iv_size = data.vbank().get(iv).unwrap().get_size();
                     let new_iv = data.new_unique_out(iv_size, add_op).expect("newUniqueOut");
-                    data.vbank_mut().get_mut(new_iv).unwrap().update_type(Rc::clone(&int_type));
+                    data.vbank_mut()
+                        .get_mut(new_iv)
+                        .unwrap()
+                        .update_type(Rc::clone(&int_type));
                     data.op_insert_before(add_op, insert_point);
                     iv = new_iv;
                 }
@@ -687,7 +744,10 @@ impl HeapSequence {
             if self.base_offset != 0 {
                 let num_el = self.base_offset / (self.base.char_type.get_align_size() as u64);
                 let cvn = data.new_constant(bp_size, num_el);
-                data.vbank_mut().get_mut(cvn).unwrap().update_type(Rc::clone(&int_type));
+                data.vbank_mut()
+                    .get_mut(cvn)
+                    .unwrap()
+                    .update_type(Rc::clone(&int_type));
                 match index_vn {
                     None => index_vn = Some(cvn),
                     Some(iv) => {
@@ -697,7 +757,10 @@ impl HeapSequence {
                         data.op_set_input(add_op, cvn, 1).ok();
                         let iv_size = data.vbank().get(iv).unwrap().get_size();
                         let new_iv = data.new_unique_out(iv_size, add_op).expect("newUniqueOut");
-                        data.vbank_mut().get_mut(new_iv).unwrap().update_type(Rc::clone(&int_type));
+                        data.vbank_mut()
+                            .get_mut(new_iv)
+                            .unwrap()
+                            .update_type(Rc::clone(&int_type));
                         data.op_insert_before(add_op, insert_point);
                         index_vn = Some(new_iv);
                     }
@@ -708,11 +771,15 @@ impl HeapSequence {
             data.op_set_opcode_code(ptr_add, OpCode::CPUI_PTRADD);
             let dp = data.new_unique_out(bp_size, ptr_add).expect("newUniqueOut");
             data.op_set_input(ptr_add, self.base_pointer, 0).ok();
-            data.op_set_input(ptr_add, index_vn.expect("index_vn set"), 1).ok();
+            data.op_set_input(ptr_add, index_vn.expect("index_vn set"), 1)
+                .ok();
             let align = self.base.char_type.get_align_size();
             let align_con = data.new_constant(bp_size, align as u64);
             data.op_set_input(ptr_add, align_con, 2).ok();
-            data.vbank_mut().get_mut(dp).unwrap().update_type(Rc::clone(&char_ptr_type));
+            data.vbank_mut()
+                .get_mut(dp)
+                .unwrap()
+                .update_type(Rc::clone(&char_ptr_type));
             data.op_insert_before(ptr_add, insert_point);
             // (kuna) inheritUnionField on a union base pointer omitted — the heap
             // sequence's base pointer is a plain typed pointer in the ported tests;
@@ -723,7 +790,10 @@ impl HeapSequence {
         let (built_in_id, index) = self.base.select_string_copy_function(data);
         let copy_op = data.new_op(4, insert_addr.clone());
         data.op_set_opcode_code(copy_op, OpCode::CPUI_CALLOTHER);
-        data.obank_mut().get_mut(copy_op).unwrap().clear_flag(pcodeop_flags::call);
+        data.obank_mut()
+            .get_mut(copy_op)
+            .unwrap()
+            .clear_flag(pcodeop_flags::call);
         let id_con = data.new_constant(4, built_in_id);
         data.op_set_input(copy_op, id_con, 0).ok();
         data.op_set_input(copy_op, dest_ptr, 1).ok();
@@ -768,7 +838,12 @@ impl HeapSequence {
             };
             let mut has_use = false;
             for use_op in data.descend_snapshot(outvn) {
-                if !data.obank().get(use_op).map(|o| o.is_mark()).unwrap_or(false) {
+                if !data
+                    .obank()
+                    .get(use_op)
+                    .map(|o| o.is_mark())
+                    .unwrap_or(false)
+                {
                     has_use = true;
                     break;
                 }
@@ -781,7 +856,12 @@ impl HeapSequence {
                         break;
                     }
                     let def_op = v.get_def().unwrap();
-                    if !data.obank().get(def_op).map(|o| o.is_mark()).unwrap_or(false) {
+                    if !data
+                        .obank()
+                        .get(def_op)
+                        .map(|o| o.is_mark())
+                        .unwrap_or(false)
+                    {
                         break;
                     }
                     invn = op_get_in(data, def_op, 0);
@@ -947,10 +1027,12 @@ impl StringSequence {
         root: OpId,
         addr: Address,
     ) -> Option<StringSequence> {
-        let block =
-            data.obank().get(root).expect("StringSequence: stale root").get_parent().expect(
-                "StringSequence: root has no parent block",
-            );
+        let block = data
+            .obank()
+            .get(root)
+            .expect("StringSequence: stale root")
+            .get_parent()
+            .expect("StringSequence: root has no parent block");
         let mut seq = StringSequence {
             base: ArraySequence::new(ct),
             root_op: root,
@@ -1006,8 +1088,10 @@ impl StringSequence {
                 }
             }
         }
-        let parent_matches_ct =
-            parent_type.as_ref().map(|p| Rc::ptr_eq(p, &seq.base.char_type)).unwrap_or(false);
+        let parent_matches_ct = parent_type
+            .as_ref()
+            .map(|p| Rc::ptr_eq(p, &seq.base.char_type))
+            .unwrap_or(false);
         if !parent_matches_ct {
             return Some(seq);
         }
@@ -1023,10 +1107,14 @@ impl StringSequence {
             return Some(seq);
         }
         let arr_size = array_type.get_size()
-            - (seq.root_addr.get_offset().wrapping_sub(seq.start_addr.get_offset()) as int4);
+            - (seq
+                .root_addr
+                .get_offset()
+                .wrapping_sub(seq.start_addr.get_offset()) as int4);
         let big_endian = seq.root_addr.is_big_endian();
         seq.base.num_elements =
-            seq.base.form_byte_array(data, arr_size, 0, seq.root_addr.get_offset(), big_endian);
+            seq.base
+                .form_byte_array(data, arr_size, 0, seq.root_addr.get_offset(), big_endian);
         Some(seq)
     }
 
@@ -1071,10 +1159,14 @@ impl StringSequence {
         // endLoc(endAddr) == lower_bound(endAddr + 1); the half-open window is
         // [beginAddr, endAddr + 1).
         let scan_end = &end_addr + 1;
-        let ids: Vec<VarnodeId> =
-            data.vbank().iter_loc_addr_range(&begin_addr, &scan_end).collect();
-        let mut diff: int4 =
-            self.root_addr.get_offset().wrapping_sub(self.start_addr.get_offset()) as int4;
+        let ids: Vec<VarnodeId> = data
+            .vbank()
+            .iter_loc_addr_range(&begin_addr, &scan_end)
+            .collect();
+        let mut diff: int4 = self
+            .root_addr
+            .get_offset()
+            .wrapping_sub(self.start_addr.get_offset()) as int4;
         let align = self.base.char_type.get_align_size();
         let char_size = self.base.char_type.get_size();
         for vn in ids {
@@ -1083,21 +1175,31 @@ impl StringSequence {
                 continue;
             }
             let op = v.get_def().expect("collectCopyOps: written vn has no def");
-            if data.obank().get(op).expect("collectCopyOps: stale op").code() != OpCode::CPUI_COPY {
+            if data
+                .obank()
+                .get(op)
+                .expect("collectCopyOps: stale op")
+                .code()
+                != OpCode::CPUI_COPY
+            {
                 continue;
             }
             if data.obank().get(op).unwrap().get_parent() != Some(self.block) {
                 continue;
             }
             let in0 = op_get_in(data, op, 0);
-            if !data.vbank().get(in0).map(|x| x.is_constant()).unwrap_or(false) {
+            if !data
+                .vbank()
+                .get(in0)
+                .map(|x| x.is_constant())
+                .unwrap_or(false)
+            {
                 continue;
             }
             if v.get_size() != char_size {
                 return false;
             }
-            let tmp_diff: int4 =
-                v.get_offset().wrapping_sub(self.start_addr.get_offset()) as int4;
+            let tmp_diff: int4 = v.get_offset().wrapping_sub(self.start_addr.get_offset()) as int4;
             if tmp_diff < diff {
                 if tmp_diff + align == diff {
                     return false; // COPY to previous element, root is not first
@@ -1113,7 +1215,9 @@ impl StringSequence {
                 diff = tmp_diff; // Advanced by one character
             }
             let order = data.obank().get(op).unwrap().get_seq_num().get_order();
-            self.base.move_ops.push(WriteNode::new(v.get_offset(), op, -1, order));
+            self.base
+                .move_ops
+                .push(WriteNode::new(v.get_offset(), op, -1, order));
         }
         self.base.move_ops.len() as int4 >= ArraySequence::MINIMUM_SEQUENCE_LENGTH
     }
@@ -1123,7 +1227,11 @@ impl StringSequence {
     /// Build a typed pointer (in)to the containing Symbol at `rootAddr`, emitting
     /// PTRSUB/PTRADD ops before `insert_point` with the appropriate pointer
     /// data-types, and return the final pointer Varnode.
-    fn construct_typed_pointer(&self, data: &mut Funcdata, insert_point: OpId) -> Option<VarnodeId> {
+    fn construct_typed_pointer(
+        &self,
+        data: &mut Funcdata,
+        insert_point: OpId,
+    ) -> Option<VarnodeId> {
         use crate::dtype::TypeFactory;
         let spc = self.root_addr.get_space()?.clone();
         let types = data.get_arch().types_rc()?;
@@ -1148,11 +1256,16 @@ impl StringSequence {
         let mut cur_type = types
             .get_type_pointer_strip_array(sp_size, Rc::clone(&base_type), spc.get_word_size())
             .ok()?;
-        data.vbank_mut().get_mut(space_ptr)?.update_type(Rc::clone(&cur_type));
+        data.vbank_mut()
+            .get_mut(space_ptr)?
+            .update_type(Rc::clone(&cur_type));
         let mut cur_off: int8 = self.root_addr.get_offset().wrapping_sub(self.entry.first) as int8;
         while !Rc::ptr_eq(&base_type, &self.base.char_type) {
             let el_size: int4 = if base_type.get_metatype() == type_metatype::TYPE_ARRAY {
-                base_type.get_array_base().map(|b| b.get_align_size()).unwrap_or(-1)
+                base_type
+                    .get_array_base()
+                    .map(|b| b.get_align_size())
+                    .unwrap_or(-1)
             } else {
                 -1
             };
@@ -1202,14 +1315,17 @@ impl StringSequence {
             }
             data.op_set_input(ptr_op, space_ptr, 0).ok();
             if cur_type.needs_resolution() {
-                data.inherit_union_field_ptr(Rc::clone(&cur_type), ptr_op, 0, insert_point, -1).ok();
+                data.inherit_union_field_ptr(Rc::clone(&cur_type), ptr_op, 0, insert_point, -1)
+                    .ok();
             }
             space_ptr = data.new_unique_out(sp_size, ptr_op).ok()?;
             data.op_insert_before(ptr_op, insert_point);
             cur_type = types
                 .get_type_pointer_strip_array(sp_size, Rc::clone(&base_type), spc.get_word_size())
                 .ok()?;
-            data.vbank_mut().get_mut(space_ptr)?.update_type(Rc::clone(&cur_type));
+            data.vbank_mut()
+                .get_mut(space_ptr)?
+                .update_type(Rc::clone(&cur_type));
             cur_off = new_off;
         }
         if cur_off != 0 {
@@ -1224,9 +1340,15 @@ impl StringSequence {
             space_ptr = data.new_unique_out(sp_size, add_op).ok()?;
             data.op_insert_before(add_op, insert_point);
             cur_type = types
-                .get_type_pointer(sp_size, Rc::clone(&self.base.char_type), spc.get_word_size())
+                .get_type_pointer(
+                    sp_size,
+                    Rc::clone(&self.base.char_type),
+                    spc.get_word_size(),
+                )
                 .ok()?;
-            data.vbank_mut().get_mut(space_ptr)?.update_type(Rc::clone(&cur_type));
+            data.vbank_mut()
+                .get_mut(space_ptr)?
+                .update_type(Rc::clone(&cur_type));
         }
         Some(space_ptr)
     }
@@ -1256,12 +1378,15 @@ impl StringSequence {
             )
             .ok()?;
         let byte_array = self.base.byte_array.clone();
-        let src_ptr = data.get_internal_string(&byte_array, num_bytes, char_ptr_type, insert_point)?;
+        let src_ptr =
+            data.get_internal_string(&byte_array, num_bytes, char_ptr_type, insert_point)?;
         let (built_in_id, index) = self.base.select_string_copy_function(data);
         let insert_addr = data.obank().get(insert_point)?.get_addr().clone();
         let copy_op = data.new_op(4, insert_addr);
         data.op_set_opcode_code(copy_op, OpCode::CPUI_CALLOTHER);
-        data.obank_mut().get_mut(copy_op)?.clear_flag(pcodeop_flags::call);
+        data.obank_mut()
+            .get_mut(copy_op)?
+            .clear_flag(pcodeop_flags::call);
         let id_con = data.new_constant(4, built_in_id);
         data.op_set_input(copy_op, id_con, 0).ok();
         let dest_ptr = self.construct_typed_pointer(data, insert_point)?;
@@ -1269,7 +1394,8 @@ impl StringSequence {
         data.op_set_input(copy_op, src_ptr, 2).ok();
         let dest_ty = Rc::clone(data.vbank().get(dest_ptr)?.get_type_def_facing());
         if dest_ty.needs_resolution() {
-            data.inherit_union_field_ptr(dest_ty, copy_op, 1, insert_point, -1).ok();
+            data.inherit_union_field_ptr(dest_ty, copy_op, 1, insert_point, -1)
+                .ok();
         }
         let len_vn = data.new_constant(4, index as u64);
         if let Ok(int4t) = types.get_base(4, type_metatype::TYPE_INT) {
@@ -1295,15 +1421,29 @@ impl StringSequence {
         for op in data.descend_snapshot(vn) {
             if let Some(&idx) = xref.get(&op) {
                 // Seen the PIECE twice: merge offsets, drop the recorded point, add the PIECE.
-                let off = points[idx].alive.map(|p| p.offset.min(cur_node.offset)).unwrap_or(cur_node.offset);
+                let off = points[idx]
+                    .alive
+                    .map(|p| p.offset.min(cur_node.offset))
+                    .unwrap_or(cur_node.offset);
                 points[idx].alive = None; // erase
-                let order = data.obank().get(op).map(|o| o.get_seq_num().get_order()).unwrap_or(0);
+                let order = data
+                    .obank()
+                    .get(op)
+                    .map(|o| o.get_seq_num().get_order())
+                    .unwrap_or(0);
                 dead_ops.push(WriteNode::new(off, op, -1, order));
                 xref.remove(&op);
             } else {
                 let slot = data.obank().get(op).map(|o| o.get_slot(vn)).unwrap_or(-1);
-                points.push(RemovePoint { alive: Some(WriteNode::new(cur_node.offset, op, slot, 0)) });
-                if data.obank().get(op).map(|o| o.code() == OpCode::CPUI_PIECE).unwrap_or(false) {
+                points.push(RemovePoint {
+                    alive: Some(WriteNode::new(cur_node.offset, op, slot, 0)),
+                });
+                if data
+                    .obank()
+                    .get(op)
+                    .map(|o| o.code() == OpCode::CPUI_PIECE)
+                    .unwrap_or(false)
+                {
                     xref.insert(op, points.len() - 1);
                 }
             }
@@ -1312,15 +1452,28 @@ impl StringSequence {
 
     /// C++ `StringSequence::removeCopyOps`.
     fn remove_copy_ops(&self, data: &mut Funcdata, replace_op: OpId) {
-        let mut concat_set: std::collections::HashMap<OpId, usize> = std::collections::HashMap::new();
+        let mut concat_set: std::collections::HashMap<OpId, usize> =
+            std::collections::HashMap::new();
         let mut points: Vec<RemovePoint> = Vec::new();
         let mut dead_ops: Vec<WriteNode> = Vec::new();
         for i in 0..self.base.move_ops.len() {
-            Self::remove_forward(data, self.base.move_ops[i], &mut concat_set, &mut points, &mut dead_ops);
+            Self::remove_forward(
+                data,
+                self.base.move_ops[i],
+                &mut concat_set,
+                &mut points,
+                &mut dead_ops,
+            );
         }
         let mut pos = 0;
         while pos < dead_ops.len() {
-            Self::remove_forward(data, dead_ops[pos], &mut concat_set, &mut points, &mut dead_ops);
+            Self::remove_forward(
+                data,
+                dead_ops[pos],
+                &mut concat_set,
+                &mut points,
+                &mut dead_ops,
+            );
             pos += 1;
         }
         let replace_addr = data.obank().get(replace_op).unwrap().get_addr().clone();
@@ -1337,7 +1490,12 @@ impl StringSequence {
                 .vbank()
                 .get(vn)
                 .and_then(|v| v.get_def())
-                .map(|d| data.obank().get(d).map(|o| o.code() == OpCode::CPUI_INDIRECT).unwrap_or(false))
+                .map(|d| {
+                    data.obank()
+                        .get(d)
+                        .map(|o| o.code() == OpCode::CPUI_INDIRECT)
+                        .unwrap_or(false)
+                })
                 .unwrap_or(false);
             if !is_indirect {
                 let sz = data.vbank().get(vn).unwrap().get_size();
@@ -1447,8 +1605,10 @@ impl StringSequence {
                 }
             }
         }
-        let parent_matches_ct =
-            parent_type.as_ref().map(|p| Rc::ptr_eq(p, &seq.base.char_type)).unwrap_or(false);
+        let parent_matches_ct = parent_type
+            .as_ref()
+            .map(|p| Rc::ptr_eq(p, &seq.base.char_type))
+            .unwrap_or(false);
         if !parent_matches_ct {
             return None;
         }
@@ -1476,10 +1636,14 @@ impl StringSequence {
             self.start_addr.clone()
         };
         let scan_end = &end_addr + 1;
-        let ids: Vec<VarnodeId> =
-            data.vbank().iter_loc_addr_range(&begin_addr, &scan_end).collect();
-        let mut diff: int4 =
-            self.root_addr.get_offset().wrapping_sub(self.start_addr.get_offset()) as int4;
+        let ids: Vec<VarnodeId> = data
+            .vbank()
+            .iter_loc_addr_range(&begin_addr, &scan_end)
+            .collect();
+        let mut diff: int4 = self
+            .root_addr
+            .get_offset()
+            .wrapping_sub(self.start_addr.get_offset()) as int4;
         let align = self.base.char_type.get_align_size();
         let char_size = self.base.char_type.get_size();
         for vn in ids {
@@ -1487,15 +1651,28 @@ impl StringSequence {
             if !v.is_written() {
                 continue;
             }
-            let op = v.get_def().expect("collect_fill_run: written vn has no def");
-            if data.obank().get(op).expect("collect_fill_run: stale op").code() != OpCode::CPUI_COPY {
+            let op = v
+                .get_def()
+                .expect("collect_fill_run: written vn has no def");
+            if data
+                .obank()
+                .get(op)
+                .expect("collect_fill_run: stale op")
+                .code()
+                != OpCode::CPUI_COPY
+            {
                 continue;
             }
             if data.obank().get(op).unwrap().get_parent() != Some(self.block) {
                 continue;
             }
             let in0 = op_get_in(data, op, 0);
-            if !data.vbank().get(in0).map(|x| x.is_constant()).unwrap_or(false) {
+            if !data
+                .vbank()
+                .get(in0)
+                .map(|x| x.is_constant())
+                .unwrap_or(false)
+            {
                 continue;
             }
             // A memset element COPY is exactly one array element wide (the SIMD
@@ -1503,8 +1680,7 @@ impl StringSequence {
             if v.get_size() != char_size {
                 return false;
             }
-            let tmp_diff: int4 =
-                v.get_offset().wrapping_sub(self.start_addr.get_offset()) as int4;
+            let tmp_diff: int4 = v.get_offset().wrapping_sub(self.start_addr.get_offset()) as int4;
             if tmp_diff < diff {
                 if tmp_diff + align == diff {
                     return false;
@@ -1521,7 +1697,9 @@ impl StringSequence {
             }
             let order = data.obank().get(op).unwrap().get_seq_num().get_order();
             // slot carries the COPY byte size (the fill stride), not -1.
-            self.base.move_ops.push(WriteNode::new(v.get_offset(), op, v.get_size(), order));
+            self.base
+                .move_ops
+                .push(WriteNode::new(v.get_offset(), op, v.get_size(), order));
         }
         self.base.move_ops.len() as int4 >= ArraySequence::MINIMUM_SEQUENCE_LENGTH
     }
@@ -1549,7 +1727,9 @@ impl StringSequence {
         let types = data.get_arch().types_rc()?;
         let memset_op = data.new_op(4, insert_addr);
         data.op_set_opcode_code(memset_op, OpCode::CPUI_CALLOTHER);
-        data.obank_mut().get_mut(memset_op)?.clear_flag(pcodeop_flags::call);
+        data.obank_mut()
+            .get_mut(memset_op)?
+            .clear_flag(pcodeop_flags::call);
         let id_con = data.new_constant(4, BUILTIN_MEMSET as uintb);
         data.op_set_input(memset_op, id_con, 0).ok();
         // in1 = constructTypedPointer(insertPoint).
@@ -1558,7 +1738,8 @@ impl StringSequence {
         if let Ok(dest_v) = data.vbank().get(dest_ptr).ok_or(()) {
             let dest_ty = Rc::clone(dest_v.get_type_def_facing());
             if dest_ty.needs_resolution() {
-                data.inherit_union_field_ptr(dest_ty, memset_op, 1, insert_point, -1).ok();
+                data.inherit_union_field_ptr(dest_ty, memset_op, 1, insert_point, -1)
+                    .ok();
             }
         }
         let int4t = types.get_base(4, type_metatype::TYPE_INT).ok();
@@ -1693,7 +1874,9 @@ impl Rule for RuleStringCopy {
         if !grouplist.contains(&self.group) {
             return None;
         }
-        Some(Box::new(RuleStringCopy { group: self.group.clone() }))
+        Some(Box::new(RuleStringCopy {
+            group: self.group.clone(),
+        }))
     }
 
     /// C++ `RuleStringCopy::applyOp` (`constseq.cc:981`).
@@ -1702,14 +1885,24 @@ impl Rule for RuleStringCopy {
             Some(v) => v,
             None => return 0,
         };
-        if !data.vbank().get(in0).map(|v| v.is_constant()).unwrap_or(false) {
+        if !data
+            .vbank()
+            .get(in0)
+            .map(|v| v.is_constant())
+            .unwrap_or(false)
+        {
             return 0;
         }
         let outvn = match data.obank().get(op).and_then(|o| o.get_out()) {
             Some(v) => v,
             None => return 0,
         };
-        let ct = Rc::clone(data.vbank().get(outvn).expect("RuleStringCopy: stale outvn").get_type_def_facing());
+        let ct = Rc::clone(
+            data.vbank()
+                .get(outvn)
+                .expect("RuleStringCopy: stale outvn")
+                .get_type_def_facing(),
+        );
         if !ct.is_char_print() {
             return 0;
         }
@@ -1795,7 +1988,9 @@ impl Rule for RuleStringStore {
         if !grouplist.contains(&self.group) {
             return None;
         }
-        Some(Box::new(RuleStringStore { group: self.group.clone() }))
+        Some(Box::new(RuleStringStore {
+            group: self.group.clone(),
+        }))
     }
 
     /// C++ `RuleStringStore::applyOp` (`constseq.cc:1013`).
@@ -1804,7 +1999,12 @@ impl Rule for RuleStringStore {
             Some(v) => v,
             None => return 0,
         };
-        if !data.vbank().get(in2).map(|v| v.is_constant()).unwrap_or(false) {
+        if !data
+            .vbank()
+            .get(in2)
+            .map(|v| v.is_constant())
+            .unwrap_or(false)
+        {
             return 0;
         }
         let ptrvn = match data.obank().get(op).and_then(|o| o.get_in(1)) {
@@ -1812,7 +2012,10 @@ impl Rule for RuleStringStore {
             None => return 0,
         };
         let ct = Rc::clone(
-            data.vbank().get(ptrvn).expect("RuleStringStore: stale ptrvn").get_type_read_facing(op),
+            data.vbank()
+                .get(ptrvn)
+                .expect("RuleStringStore: stale ptrvn")
+                .get_type_read_facing(op),
         );
         if ct.get_metatype() != type_metatype::TYPE_PTR {
             return 0;
@@ -1846,8 +2049,14 @@ impl Rule for RuleStringStore {
 /// that slot group.  The per-file placeholder is `"analysis"`.
 pub fn specs() -> Vec<RuleSpec> {
     vec![
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleStringCopy::new("analysis")) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleStringStore::new("analysis")) },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleStringCopy::new("analysis")),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleStringStore::new("analysis")),
+        },
     ]
 }
 
@@ -1857,7 +2066,10 @@ pub fn specs() -> Vec<RuleSpec> {
 
 #[inline]
 fn vn_get_offset(data: &Funcdata, vn: VarnodeId) -> uintb {
-    data.vbank().get(vn).expect("constseq: stale vn").get_offset()
+    data.vbank()
+        .get(vn)
+        .expect("constseq: stale vn")
+        .get_offset()
 }
 #[inline]
 fn op_get_in(data: &Funcdata, op: OpId, slot: int4) -> VarnodeId {

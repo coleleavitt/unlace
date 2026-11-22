@@ -28,8 +28,8 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use object::read::macho::{LoadCommandVariant, MachHeader};
 use object::FileKind;
+use object::read::macho::{LoadCommandVariant, MachHeader};
 
 /// `selector → type encoding` for every declaration under `root` that this
 /// image's frameworks reach; `None` marks a selector declared two ways.
@@ -56,14 +56,28 @@ pub fn signatures(root: &Path, frameworks: &[String]) -> HashMap<String, Option<
 pub fn linked_frameworks(file: &object::File, bytes: &[u8]) -> Vec<String> {
     fn collect<Mach: MachHeader<Endian = object::Endianness>>(bytes: &[u8]) -> Vec<String> {
         let mut out = Vec::new();
-        let Ok(header) = Mach::parse(bytes, 0) else { return out };
-        let Ok(endian) = header.endian() else { return out };
-        let Ok(mut commands) = header.load_commands(endian, bytes, 0) else { return out };
+        let Ok(header) = Mach::parse(bytes, 0) else {
+            return out;
+        };
+        let Ok(endian) = header.endian() else {
+            return out;
+        };
+        let Ok(mut commands) = header.load_commands(endian, bytes, 0) else {
+            return out;
+        };
         while let Ok(Some(command)) = commands.next() {
-            let Ok(LoadCommandVariant::Dylib(dylib)) = command.variant() else { continue };
-            let Ok(name) = command.string(endian, dylib.dylib.name) else { continue };
+            let Ok(LoadCommandVariant::Dylib(dylib)) = command.variant() else {
+                continue;
+            };
+            let Ok(name) = command.string(endian, dylib.dylib.name) else {
+                continue;
+            };
             let name = String::from_utf8_lossy(name);
-            if let Some(fw) = name.rsplit('/').nth(1).and_then(|d| d.strip_suffix(".framework")) {
+            if let Some(fw) = name
+                .rsplit('/')
+                .nth(1)
+                .and_then(|d| d.strip_suffix(".framework"))
+            {
                 out.push(fw.to_string());
             }
         }
@@ -86,9 +100,14 @@ fn headers(root: &Path, frameworks: &[String]) -> Vec<PathBuf> {
     let mut out = Vec::new();
     if fw_root.is_dir() {
         let dirs: Vec<PathBuf> = if frameworks.is_empty() {
-            std::fs::read_dir(&fw_root).map(|d| d.flatten().map(|e| e.path()).collect()).unwrap_or_default()
+            std::fs::read_dir(&fw_root)
+                .map(|d| d.flatten().map(|e| e.path()).collect())
+                .unwrap_or_default()
         } else {
-            frameworks.iter().map(|f| fw_root.join(format!("{f}.framework"))).collect()
+            frameworks
+                .iter()
+                .map(|f| fw_root.join(format!("{f}.framework")))
+                .collect()
         };
         for dir in dirs {
             walk(&dir.join("Headers"), &mut out, 0);
@@ -104,7 +123,9 @@ fn walk(dir: &Path, out: &mut Vec<PathBuf>, depth: usize) {
     if depth > 8 {
         return;
     }
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
@@ -184,15 +205,30 @@ impl Types {
     fn scan_typedefs(&mut self, text: &str) {
         for stmt in statements(text) {
             // The statement may start with what preceded the last `;` (`@end`).
-            let Some(k) = stmt.find("typedef ").filter(|&k| k == 0 || stmt.as_bytes()[k - 1].is_ascii_whitespace()) else { continue };
+            let Some(k) = stmt
+                .find("typedef ")
+                .filter(|&k| k == 0 || stmt.as_bytes()[k - 1].is_ascii_whitespace())
+            else {
+                continue;
+            };
             let rest = stmt[k + 8..].trim();
             // typedef NS_ENUM(NSInteger, Name) { … }  /  NS_OPTIONS / NS_CLOSED_ENUM / NS_ERROR_ENUM(domain, Name)
             if let Some((macro_name, inner)) = rest.split_once('(') {
                 let m = macro_name.trim();
                 if m.starts_with("NS_") && (m.ends_with("ENUM") || m.ends_with("OPTIONS")) {
-                    let args: Vec<&str> = inner.split(')').next().unwrap_or("").split(',').map(str::trim).collect();
+                    let args: Vec<&str> = inner
+                        .split(')')
+                        .next()
+                        .unwrap_or("")
+                        .split(',')
+                        .map(str::trim)
+                        .collect();
                     if let [base, name] = args[..] {
-                        let base = if m == "NS_ERROR_ENUM" { "NSInteger" } else { base };
+                        let base = if m == "NS_ERROR_ENUM" {
+                            "NSInteger"
+                        } else {
+                            base
+                        };
                         self.typedefs.insert(name.to_string(), base.to_string());
                     }
                     continue;
@@ -200,7 +236,11 @@ impl Types {
             }
             // typedef enum Name : Base { … } Name;  /  typedef enum : Base { … } Name;
             if let Some(rest) = rest.strip_prefix("enum") {
-                let base = rest.split('{').next().and_then(|h| h.split_once(':')).map(|(_, b)| b.trim().to_string());
+                let base = rest
+                    .split('{')
+                    .next()
+                    .and_then(|h| h.split_once(':'))
+                    .map(|(_, b)| b.trim().to_string());
                 let name = last_ident(after_braces(rest));
                 if let (Some(base), Some(name)) = (base, name) {
                     self.typedefs.insert(name, base);
@@ -212,8 +252,15 @@ impl Types {
                 let tail = after_braces(rest);
                 let name = last_ident(tail);
                 if let Some(name) = name {
-                    let tag = rest.split(|c: char| c == '{' || c == '*').next().unwrap_or("").trim();
-                    let tag = tag.split_whitespace().find(|t| !t.starts_with("__attribute__") && !t.starts_with('(')).unwrap_or("");
+                    let tag = rest
+                        .split(|c: char| c == '{' || c == '*')
+                        .next()
+                        .unwrap_or("")
+                        .trim();
+                    let tag = tag
+                        .split_whitespace()
+                        .find(|t| !t.starts_with("__attribute__") && !t.starts_with('('))
+                        .unwrap_or("");
                     let value = if tail.contains('*') {
                         "void *".to_string()
                     } else if tag.is_empty() || tag == name {
@@ -226,7 +273,12 @@ impl Types {
                 continue;
             }
             if rest.contains("(^") {
-                if let Some(name) = rest.split("(^").nth(1).and_then(|s| s.split(')').next()).map(str::trim) {
+                if let Some(name) = rest
+                    .split("(^")
+                    .nth(1)
+                    .and_then(|s| s.split(')').next())
+                    .map(str::trim)
+                {
                     if !name.is_empty() {
                         self.typedefs.insert(name.to_string(), "@?".to_string());
                     }
@@ -255,10 +307,42 @@ impl Types {
         let toks: Vec<&str> = toks
             .iter()
             .copied()
-            .filter(|t| !matches!(*t, "nullable" | "nonnull" | "null_unspecified" | "null_resettable" | "_Nullable" | "_Nonnull" | "_Null_unspecified" | "__kindof" | "const" | "volatile" | "__unsafe_unretained" | "__weak" | "__strong" | "__autoreleasing" | "in" | "out" | "inout" | "bycopy" | "byref" | "oneway" | "struct" | "enum" | "union" | "NS_NOESCAPE"))
+            .filter(|t| {
+                !matches!(
+                    *t,
+                    "nullable"
+                        | "nonnull"
+                        | "null_unspecified"
+                        | "null_resettable"
+                        | "_Nullable"
+                        | "_Nonnull"
+                        | "_Null_unspecified"
+                        | "__kindof"
+                        | "const"
+                        | "volatile"
+                        | "__unsafe_unretained"
+                        | "__weak"
+                        | "__strong"
+                        | "__autoreleasing"
+                        | "in"
+                        | "out"
+                        | "inout"
+                        | "bycopy"
+                        | "byref"
+                        | "oneway"
+                        | "struct"
+                        | "enum"
+                        | "union"
+                        | "NS_NOESCAPE"
+                )
+            })
             .filter(|t| !t.starts_with('<') && !t.starts_with("__attribute__"))
             .collect();
-        let groups: Vec<&str> = toks.iter().copied().filter(|t| t.starts_with('(')).collect();
+        let groups: Vec<&str> = toks
+            .iter()
+            .copied()
+            .filter(|t| t.starts_with('('))
+            .collect();
         if text.trim() == "@?" || groups.first().is_some_and(|g| g.contains('^')) {
             return Some("@?".to_string());
         }
@@ -277,7 +361,9 @@ impl Types {
                 ("void", 1) => "^v".to_string(),
                 (b, 1) if b == "id" || b == "instancetype" => "^@".to_string(),
                 (b, 1) if is_class_name(b) => format!("@\"{b}\""),
-                (b, 1) if self.typedefs.get(b).is_some_and(|t| is_class_name(t)) => format!("@\"{}\"", self.typedefs[b]),
+                (b, 1) if self.typedefs.get(b).is_some_and(|t| is_class_name(t)) => {
+                    format!("@\"{}\"", self.typedefs[b])
+                }
                 _ => "^v".to_string(),
             });
         }
@@ -323,7 +409,11 @@ fn scan_declarations(text: &str, types: &Types, out: &mut HashMap<String, Option
             depth += t.matches('{').count() as i32 - t.matches('}').count() as i32;
             continue;
         }
-        if t.starts_with("@optional") || t.starts_with("@required") || t.starts_with("@class") || t.is_empty() {
+        if t.starts_with("@optional")
+            || t.starts_with("@required")
+            || t.starts_with("@class")
+            || t.is_empty()
+        {
             continue;
         }
         stmt.push_str(t);
@@ -427,7 +517,9 @@ fn method(s: &str, types: &Types) -> Option<(String, Option<String>)> {
     }
     // A declaration with a type this reader cannot spell still claims its
     // selector, so another class's spelling of it is not taken for this one.
-    let Some(mut enc) = types.encode(&ret, 0) else { return Some((sel, None)) };
+    let Some(mut enc) = types.encode(&ret, 0) else {
+        return Some((sel, None));
+    };
     for e in encs {
         let Some(e) = e else { return Some((sel, None)) };
         enc.push_str(&e);
@@ -439,7 +531,11 @@ fn method(s: &str, types: &Types) -> Option<(String, Option<String>)> {
 fn property(rest: &str, types: &Types) -> Vec<(String, Option<String>)> {
     let b = rest.as_bytes();
     let mut i = 0;
-    let attrs = if b.first() == Some(&b'(') { paren_group(b, &mut i).unwrap_or_default() } else { String::new() };
+    let attrs = if b.first() == Some(&b'(') {
+        paren_group(b, &mut i).unwrap_or_default()
+    } else {
+        String::new()
+    };
     let mut readonly = false;
     let mut getter = None;
     let mut setter = None;
@@ -454,7 +550,12 @@ fn property(rest: &str, types: &Types) -> Vec<(String, Option<String>)> {
     }
     let decl = &rest[i..];
     let (ty, name) = if let Some(k) = decl.find("(^").or_else(|| decl.find("(*")) {
-        let name = decl[k + 2..].split(')').next().unwrap_or("").trim().to_string();
+        let name = decl[k + 2..]
+            .split(')')
+            .next()
+            .unwrap_or("")
+            .trim()
+            .to_string();
         (decl.to_string(), name)
     } else {
         let toks = tokens(decl);
@@ -468,11 +569,18 @@ fn property(rest: &str, types: &Types) -> Vec<(String, Option<String>)> {
         return Vec::new();
     }
     let enc = types.encode(&ty, 0);
-    let mut out = vec![(getter.unwrap_or_else(|| name.clone()), enc.as_ref().map(|e| format!("{e}@:")))];
+    let mut out = vec![(
+        getter.unwrap_or_else(|| name.clone()),
+        enc.as_ref().map(|e| format!("{e}@:")),
+    )];
     if !readonly {
         let setter = setter.unwrap_or_else(|| {
             let mut c = name.chars();
-            format!("set{}{}", c.next().map(|f| f.to_ascii_uppercase()).unwrap_or_default(), c.as_str())
+            format!(
+                "set{}{}",
+                c.next().map(|f| f.to_ascii_uppercase()).unwrap_or_default(),
+                c.as_str()
+            )
         });
         out.push((format!("{setter}:"), enc.map(|e| format!("v@:{e}"))));
     }
@@ -515,7 +623,8 @@ fn tokens(text: &str) -> Vec<&str> {
             i += 1;
         } else if c.is_ascii_alphanumeric() || c == b'_' || !c.is_ascii() {
             let s = i;
-            while i < b.len() && (b[i].is_ascii_alphanumeric() || b[i] == b'_' || !b[i].is_ascii()) {
+            while i < b.len() && (b[i].is_ascii_alphanumeric() || b[i] == b'_' || !b[i].is_ascii())
+            {
                 i += 1;
             }
             out.push(&text[s..i]);
@@ -551,7 +660,11 @@ fn drop_macros<'a>(toks: &[&'a str]) -> Vec<&'a str> {
         .iter()
         .position(|t| {
             t.starts_with("__attribute__")
-                || (t.len() > 2 && t.contains('_') && t.bytes().all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_') && !t.starts_with("__"))
+                || (t.len() > 2
+                    && t.contains('_')
+                    && t.bytes()
+                        .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_')
+                    && !t.starts_with("__"))
         })
         .unwrap_or(toks.len());
     toks[..end].to_vec()
@@ -559,19 +672,27 @@ fn drop_macros<'a>(toks: &[&'a str]) -> Vec<&'a str> {
 
 fn is_ident(t: &str) -> bool {
     let mut cs = t.chars();
-    cs.next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_') && cs.all(|c| c.is_ascii_alphanumeric() || c == '_')
+    cs.next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && cs.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
 /// A class-like name: an identifier starting with an uppercase letter that is
 /// not a C scalar or a by-value struct.
 fn is_class_name(t: &str) -> bool {
-    is_ident(t) && t.starts_with(|c: char| c.is_ascii_uppercase()) && scalar(t).is_none() && by_value_struct(t).is_none()
+    is_ident(t)
+        && t.starts_with(|c: char| c.is_ascii_uppercase())
+        && scalar(t).is_none()
+        && by_value_struct(t).is_none()
 }
 
 fn last_ident(text: &str) -> Option<String> {
     let toks = tokens(text);
     let toks = drop_macros(&toks);
-    toks.iter().rev().find(|t| is_ident(t)).map(|t| t.to_string())
+    toks.iter()
+        .rev()
+        .find(|t| is_ident(t))
+        .map(|t| t.to_string())
 }
 
 /// The text after a `{ … }` block, or the whole text without one.
@@ -627,10 +748,13 @@ fn scalar(t: &str) -> Option<&'static str> {
         "unsigned short" | "uint16_t" | "UInt16" | "unichar" => "S",
         "int" | "signed int" | "signed" | "int32_t" | "SInt32" | "OSStatus" => "i",
         "unsigned int" | "unsigned" | "uint32_t" | "UInt32" | "FourCharCode" | "OSType" => "I",
-        "long" | "signed long" | "long long" | "int64_t" | "SInt64" | "intptr_t" | "ssize_t" | "NSInteger" | "CFIndex" | "ptrdiff_t" => "q",
-        "unsigned long" | "unsigned long long" | "uint64_t" | "UInt64" | "uintptr_t" | "size_t" | "NSUInteger" | "CFTypeID" | "CFOptionFlags" | "CFHashCode" => "Q",
+        "long" | "signed long" | "long long" | "int64_t" | "SInt64" | "intptr_t" | "ssize_t"
+        | "NSInteger" | "CFIndex" | "ptrdiff_t" => "q",
+        "unsigned long" | "unsigned long long" | "uint64_t" | "UInt64" | "uintptr_t" | "size_t"
+        | "NSUInteger" | "CFTypeID" | "CFOptionFlags" | "CFHashCode" => "Q",
         "float" | "Float32" | "UILayoutPriority" => "f",
-        "double" | "Float64" | "CGFloat" | "NSTimeInterval" | "CFTimeInterval" | "CFAbsoluteTime" => "d",
+        "double" | "Float64" | "CGFloat" | "NSTimeInterval" | "CFTimeInterval"
+        | "CFAbsoluteTime" => "d",
         _ => return None,
     })
 }
@@ -672,22 +796,64 @@ mod tests {
         let get = |s: &str| sigs.get(s).cloned().flatten();
         assert_eq!(get("setAlpha:").as_deref(), Some("v@:d"));
         assert_eq!(get("alpha").as_deref(), Some("d@:"));
-        assert_eq!(get("setFrame:").as_deref(), Some("v@:{CGRect={CGPoint=dd}{CGSize=dd}}"));
+        assert_eq!(
+            get("setFrame:").as_deref(),
+            Some("v@:{CGRect={CGPoint=dd}{CGSize=dd}}")
+        );
         assert_eq!(get("setTag:").as_deref(), Some("v@:q"));
-        assert_eq!(sigs.get("setBadge:"), Some(&None), "Gadget's unspellable setBadge: claims the selector too");
-        assert_eq!(get("setOnChange:").as_deref(), Some("v@:@?"), "a block property");
-        assert_eq!(get("setHandler:").as_deref(), Some("v@:@?"), "a named block typedef");
+        assert_eq!(
+            sigs.get("setBadge:"),
+            Some(&None),
+            "Gadget's unspellable setBadge: claims the selector too"
+        );
+        assert_eq!(
+            get("setOnChange:").as_deref(),
+            Some("v@:@?"),
+            "a block property"
+        );
+        assert_eq!(
+            get("setHandler:").as_deref(),
+            Some("v@:@?"),
+            "a named block typedef"
+        );
         assert_eq!(get("isHidden").as_deref(), Some("B@:"));
         assert_eq!(get("setHidden:").as_deref(), Some("v@:B"));
-        assert!(!sigs.contains_key("hidden"), "getter=isHidden replaces the plain getter");
+        assert!(
+            !sigs.contains_key("hidden"),
+            "getter=isHidden replaces the plain getter"
+        );
         assert_eq!(get("superview").as_deref(), Some("@\"Widget\"@:"));
-        assert!(!sigs.contains_key("setSuperview:"), "readonly has no setter");
-        assert_eq!(get("insertSubview:atIndex:").as_deref(), Some("v@:@\"Widget\"q"));
-        assert_eq!(get("setContentMode:").as_deref(), Some("v@:q"), "NS_ENUM resolves to its base");
-        assert_eq!(get("animateWithDuration:animations:").as_deref(), Some("v@:d@?"));
-        assert_eq!(get("setTitle:").as_deref(), Some("v@:@\"NSString\""), "a typed-enum string");
-        assert_eq!(sigs.get("setOpaqueThing:"), Some(&None), "an unknown struct is not guessed");
-        assert_eq!(get("convertRect:").as_deref(), Some("{CGRect={CGPoint=dd}{CGSize=dd}}@:{CGRect={CGPoint=dd}{CGSize=dd}}"));
+        assert!(
+            !sigs.contains_key("setSuperview:"),
+            "readonly has no setter"
+        );
+        assert_eq!(
+            get("insertSubview:atIndex:").as_deref(),
+            Some("v@:@\"Widget\"q")
+        );
+        assert_eq!(
+            get("setContentMode:").as_deref(),
+            Some("v@:q"),
+            "NS_ENUM resolves to its base"
+        );
+        assert_eq!(
+            get("animateWithDuration:animations:").as_deref(),
+            Some("v@:d@?")
+        );
+        assert_eq!(
+            get("setTitle:").as_deref(),
+            Some("v@:@\"NSString\""),
+            "a typed-enum string"
+        );
+        assert_eq!(
+            sigs.get("setOpaqueThing:"),
+            Some(&None),
+            "an unknown struct is not guessed"
+        );
+        assert_eq!(
+            get("convertRect:").as_deref(),
+            Some("{CGRect={CGPoint=dd}{CGSize=dd}}@:{CGRect={CGPoint=dd}{CGSize=dd}}")
+        );
     }
 
     #[test]
@@ -695,7 +861,11 @@ mod tests {
         let mut out = HashMap::new();
         record(&mut out, "setView:".into(), Some("v@:@\"UIView\"".into()));
         record(&mut out, "setView:".into(), Some("v@:@\"NSView\"".into()));
-        assert_eq!(out["setView:"].as_deref(), Some("v@:@"), "two classes named: neither is kept");
+        assert_eq!(
+            out["setView:"].as_deref(),
+            Some("v@:@"),
+            "two classes named: neither is kept"
+        );
         record(&mut out, "setFrame:".into(), Some("v@:@\"UIView\"".into()));
         record(&mut out, "setFrame:".into(), Some("v@:@\"UIView\"".into()));
         assert_eq!(out["setFrame:"].as_deref(), Some("v@:@\"UIView\""));
@@ -725,8 +895,14 @@ mod tests {
         let mut out = HashMap::new();
         scan_declarations(&text, &types, &mut out);
         assert_eq!(out.get("setAlpha:"), Some(&None));
-        assert_eq!(out.get("setBeta:").cloned().flatten().as_deref(), Some("v@:d"));
-        assert_eq!(out.get("setTitle:").cloned().flatten().as_deref(), Some("v@:@\"NSString\""));
+        assert_eq!(
+            out.get("setBeta:").cloned().flatten().as_deref(),
+            Some("v@:d")
+        );
+        assert_eq!(
+            out.get("setTitle:").cloned().flatten().as_deref(),
+            Some("v@:@\"NSString\"")
+        );
     }
 
     /// A parenthesized declarator is a block only when it is a caret: a C
@@ -763,7 +939,9 @@ mod tests {
 
     #[test]
     fn comments_and_preprocessor_lines_are_dropped() {
-        let t = strip_comments("#import <X.h>\n- (void)a; // c\n/* multi\nline */ - (void)b;\n#define Y \\\n  1\n@property (copy) NSString *s; // \"quoted\"\n");
+        let t = strip_comments(
+            "#import <X.h>\n- (void)a; // c\n/* multi\nline */ - (void)b;\n#define Y \\\n  1\n@property (copy) NSString *s; // \"quoted\"\n",
+        );
         assert!(!t.contains("import") && !t.contains("multi") && !t.contains("define"));
         assert!(t.contains("- (void)a;") && t.contains("- (void)b;") && t.contains("NSString *s;"));
     }

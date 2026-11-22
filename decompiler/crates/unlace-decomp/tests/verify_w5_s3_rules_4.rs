@@ -30,17 +30,17 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 
 use unlace_decomp::action::{ActionGroupList, Rule};
-use unlace_decomp::dtype::{type_metatype, Datatype};
+use unlace_decomp::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
+use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::ruleaction_4::{
     RuleHumptyOr, RuleLoadVarnode, RuleShiftAnd, RuleStoreVarnode, RuleSubExtComm, RuleSubZext,
 };
-use unlace_decomp::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
 use unlace_decomp::varnode::DefOpInfo;
 use unlace_num::opcodes::OpCode;
 
@@ -51,7 +51,8 @@ use unlace_num::opcodes::OpCode;
 fn build_fd() -> Funcdata {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -98,7 +99,9 @@ fn mk_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
 fn mk_vn(fd: &mut Funcdata, s: int4, off: u64) -> VarnodeId {
     let r = ram(fd);
     let vn = fd.vbank_mut().create(s, Address::new(r, off), dt(s));
-    fd.vbank_mut().set_input(vn, &mut |_, _, _| Ok(())).expect("set_input")
+    fd.vbank_mut()
+        .set_input(vn, &mut |_, _, _| Ok(()))
+        .expect("set_input")
 }
 
 /// Fresh unique output of `op` (public-API mirror of `new_unique_out`).
@@ -158,7 +161,10 @@ fn shiftand_right_shift_64_matches_cpp_no_panic() {
     let shop = build_shift_and(&mut fd, OpCode::CPUI_INT_RIGHT, 1, 0xff, 64);
     // C++ oracle: returns 0 (AND not bypassed). Port: panics here.
     let res = RuleShiftAnd::new().apply_op(shop, &mut fd);
-    assert_eq!(res, 0, "C++ x86-masked shift-by-64 declines; rule must not bypass");
+    assert_eq!(
+        res, 0,
+        "C++ x86-masked shift-by-64 declines; rule must not bypass"
+    );
 }
 
 // `(V & 0xff) << 64` on a size-1 value.  C++: `nzm <<= 64` -> nzm unchanged
@@ -296,7 +302,10 @@ fn subzext_right_shift_64_matches_cpp_no_panic() {
     // INT_RIGHT becomes sa = (64 & 63) + 0*8 == 64; the AND mask is the unshifted
     // calc_mask(midsize=4) == 0xffffffff (since `64 & 63 == 0` masks nothing).
     let res = RuleSubZext::new().apply_op(zop, &mut fd);
-    assert_eq!(res, 1, "x86-masked >>64 must fold (port must use wrapping shift, not panic)");
+    assert_eq!(
+        res, 1,
+        "x86-masked >>64 must fold (port must use wrapping shift, not panic)"
+    );
     assert_eq!(fd.obank().get(zop).unwrap().code(), OpCode::CPUI_INT_AND);
     let maskc = fd.obank().get(zop).unwrap().get_in(1).unwrap();
     assert_eq!(
@@ -328,7 +337,10 @@ fn shiftand_mult_power_of_two_large_sa_no_panic() {
     // nzm(MAX)<<40 has bits[40..64]; mask(0xffff)<<40 has bits[40..56].
     // (mask & nzm) == mask != nzm -> declines.  Must not panic on `<< 40`.
     let res = RuleShiftAnd::new().apply_op(shop, &mut fd);
-    assert_eq!(res, 0, "MULT->LEFT with sa=40: (mask&nzm)!=nzm declines, no panic");
+    assert_eq!(
+        res, 0,
+        "MULT->LEFT with sa=40: (mask&nzm)!=nzm declines, no panic"
+    );
 }
 
 // A companion guard on the same MULT route: a non-power-of-two multiplier must be

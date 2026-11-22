@@ -48,14 +48,16 @@ const LENGTHS_LARGE: [u16; 24] = [
     0x2003, 0x3000, 0x4002, 0x4003, 0x4004, 0x500a, 0x500b, 0x500c, 0x601a, 0x601b, 0x703a, 0x703b,
     0x703c, 0x807a, 0x807b, 0x807c, 0x90fa, 0x90fb, 0x90fc, 0x90fd, 0x90fe, 0x90ff, 0x601c, 0x2002,
 ];
-const LENGTHS_SMALL: [u16; 9] =
-    [0x2000, 0x3004, 0x3005, 0x400c, 0x400d, 0x400e, 0x400f, 0x3003, 0x3002];
+const LENGTHS_SMALL: [u16; 9] = [
+    0x2000, 0x3004, 0x3005, 0x400c, 0x400d, 0x400e, 0x400f, 0x3003, 0x3002,
+];
 const LENGTHS_V120_LARGE: [u16; 21] = [
     0x2003, 0x3000, 0x4005, 0x4006, 0x5006, 0x5007, 0x6008, 0x6009, 0x7020, 0x7021, 0x7022, 0x7023,
     0x8048, 0x8049, 0x804a, 0x9096, 0x9097, 0x6013, 0x2002, 0x4007, 0x5005,
 ];
-const LENGTHS_V120_SMALL: [u16; 11] =
-    [0x2003, 0x3000, 0x4004, 0x4005, 0x500e, 0x601e, 0x601f, 0x4006, 0x2002, 0x4003, 0x4002];
+const LENGTHS_V120_SMALL: [u16; 11] = [
+    0x2003, 0x3000, 0x4004, 0x4005, 0x500e, 0x601e, 0x601f, 0x4006, 0x2002, 0x4003, 0x4002,
+];
 const OFFSETS: [u16; 32] = [
     0x1001, 0x4000, 0x4001, 0x5004, 0x5005, 0x5006, 0x5007, 0x6010, 0x6011, 0x6012, 0x6013, 0x6014,
     0x6015, 0x6016, 0x702e, 0x702f, 0x7030, 0x7031, 0x7032, 0x7033, 0x7034, 0x7035, 0x7036, 0x7037,
@@ -71,8 +73,14 @@ const OFFSETS_V120: [u16; 32] = [
 /// uncompressed area leaves nine bytes of stale memory in the history that later
 /// matches copy from. Those bytes sit at a fixed offset from the start of code.
 const HISTORY_HACKS: [(usize, [u8; 9]); 2] = [
-    (19652, [0xb8, 0x1d, 0xf9, 0x7f, 0x17, 0x14, 0xd3, 0xb5, 0xbe]),
-    (20084, [0xaa, 0x8a, 0x07, 0xa4, 0x89, 0xc9, 0x97, 0x21, 0x58]),
+    (
+        19652,
+        [0xb8, 0x1d, 0xf9, 0x7f, 0x17, 0x14, 0xd3, 0xb5, 0xbe],
+    ),
+    (
+        20084,
+        [0xaa, 0x8a, 0x07, 0xa4, 0x89, 0xc9, 0x97, 0x21, 0x58],
+    ),
 ];
 const UNCOMPRESSED_SIG: [u8; 8] = *b"PKLITE\x26\xa3";
 
@@ -89,7 +97,13 @@ impl Lengths {
     fn of(p: &Params) -> (Lengths, &'static [u16]) {
         match (p.large, p.v120) {
             (true, false) => (
-                Lengths { long: 22, two: 23, two_high: None, zero_literal: None, long_bias: 25 },
+                Lengths {
+                    long: 22,
+                    two: 23,
+                    two_high: None,
+                    zero_literal: None,
+                    long_bias: 25,
+                },
                 &LENGTHS_LARGE,
             ),
             (true, true) => (
@@ -103,7 +117,13 @@ impl Lengths {
                 &LENGTHS_V120_LARGE,
             ),
             (false, false) => (
-                Lengths { long: 7, two: 8, two_high: None, zero_literal: None, long_bias: 10 },
+                Lengths {
+                    long: 7,
+                    two: 8,
+                    two_high: None,
+                    zero_literal: None,
+                    long_bias: 10,
+                },
                 &LENGTHS_SMALL,
             ),
             (false, true) => (
@@ -172,7 +192,12 @@ struct Reader<'a> {
 
 impl<'a> Reader<'a> {
     fn new(data: &'a [u8], pos: usize) -> Result<Self, PkliteError> {
-        let mut r = Reader { data, pos, word: 0, left: 0 };
+        let mut r = Reader {
+            data,
+            pos,
+            word: 0,
+            left: 0,
+        };
         r.fill()?;
         Ok(r)
     }
@@ -262,7 +287,11 @@ pub(super) fn decompress(
     let lengths = Tree::new(table);
     let offsets = Tree::new(if p.v120 { &OFFSETS_V120 } else { &OFFSETS });
     let mut r = Reader::new(file, pos)?;
-    let mut w = Window { out: Vec::new(), ring: vec![0u8; WINDOW], cur: 0 };
+    let mut w = Window {
+        out: Vec::new(),
+        ring: vec![0u8; WINDOW],
+        cur: 0,
+    };
     let mut unc_area: Option<(usize, bool)> = None;
 
     loop {
@@ -294,7 +323,7 @@ pub(super) fn decompress(
                 0xfd | 0xfe => {
                     return Err(corrupt(&format!(
                         "escape code {b:#04x} in a small-compression stream"
-                    )))
+                    )));
                 }
                 _ => (usize::from(b) + sym.long_bias, None),
             }
@@ -333,7 +362,11 @@ pub(super) fn decompress(
         w.copy(dist, len)?;
     }
 
-    Ok(Decoded { bytes: w.out, end: r.pos, uncompressed_area: unc_area.is_some() })
+    Ok(Decoded {
+        bytes: w.out,
+        end: r.pos,
+        uncompressed_area: unc_area.is_some(),
+    })
 }
 
 /// An uncompressed area: a length byte and that many stored bytes. The original
@@ -387,7 +420,10 @@ mod tests {
             let kraft: u64 = table.iter().map(|e| 1u64 << (12 - (e >> 12))).sum();
             assert_eq!(kraft, 1 << 12, "{table:x?}");
             let tree = Tree::new(table);
-            assert!(tree.nodes.iter().all(|n| n[0] != 0 && n[1] != 0), "{table:x?}");
+            assert!(
+                tree.nodes.iter().all(|n| n[0] != 0 && n[1] != 0),
+                "{table:x?}"
+            );
         }
     }
 }

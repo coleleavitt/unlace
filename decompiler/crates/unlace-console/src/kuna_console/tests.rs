@@ -82,19 +82,40 @@ fn kuna_command_prefixes_expand() {
     // The abbreviations the kuna datatests / kuna.catalog drive.
     assert_eq!(status.resolve("phase list").unwrap(), vec!["phase", "list"]);
     assert_eq!(status.resolve("phase map").unwrap(), vec!["phase", "map"]);
-    assert_eq!(status.resolve("phase status").unwrap(), vec!["phase", "status"]);
-    assert_eq!(status.resolve("phase catalog").unwrap(), vec!["phase", "catalog"]);
-    assert_eq!(status.resolve("phase cat").unwrap(), vec!["phase", "catalog"]);
+    assert_eq!(
+        status.resolve("phase status").unwrap(),
+        vec!["phase", "status"]
+    );
+    assert_eq!(
+        status.resolve("phase catalog").unwrap(),
+        vec!["phase", "catalog"]
+    );
+    assert_eq!(
+        status.resolve("phase cat").unwrap(),
+        vec!["phase", "catalog"]
+    );
     // Deprecated `stage ...` aliases keep resolving.
     assert_eq!(status.resolve("stage list").unwrap(), vec!["stage", "list"]);
-    assert_eq!(status.resolve("stage catalog").unwrap(), vec!["stage", "catalog"]);
+    assert_eq!(
+        status.resolve("stage catalog").unwrap(),
+        vec!["stage", "catalog"]
+    );
     assert_eq!(status.resolve("kassert list").unwrap(), vec!["kassert"]);
     assert_eq!(status.resolve("pipeline list").unwrap(), vec!["pipeline"]);
     assert_eq!(status.resolve("quality").unwrap(), vec!["quality"]);
     assert_eq!(status.resolve("functions").unwrap(), vec!["functions"]);
-    assert_eq!(status.resolve("region tree").unwrap(), vec!["region", "tree"]);
-    assert_eq!(status.resolve("region blocks").unwrap(), vec!["region", "blocks"]);
-    assert_eq!(status.resolve("region walk").unwrap(), vec!["region", "walk"]);
+    assert_eq!(
+        status.resolve("region tree").unwrap(),
+        vec!["region", "tree"]
+    );
+    assert_eq!(
+        status.resolve("region blocks").unwrap(),
+        vec!["region", "blocks"]
+    );
+    assert_eq!(
+        status.resolve("region walk").unwrap(),
+        vec!["region", "walk"]
+    );
     assert_eq!(status.resolve("restarts").unwrap(), vec!["restarts"]);
 }
 
@@ -109,10 +130,22 @@ fn kuna_command_prefixes_expand() {
 #[test]
 fn map_prototype_does_not_shadow_the_upstream_map_commands() {
     let mut status = console(&[]);
-    assert_eq!(status.resolve("map prototype f void f(void)").unwrap(), vec!["map", "prototype"]);
-    assert_eq!(status.resolve("map param 0 %RDI int4 x").unwrap(), vec!["map", "param"]);
-    assert_eq!(status.resolve("map addr 0x1000 int4 g").unwrap(), vec!["map", "address"]);
-    assert_eq!(status.resolve("map fun 0x1000").unwrap(), vec!["map", "function"]);
+    assert_eq!(
+        status.resolve("map prototype f void f(void)").unwrap(),
+        vec!["map", "prototype"]
+    );
+    assert_eq!(
+        status.resolve("map param 0 %RDI int4 x").unwrap(),
+        vec!["map", "param"]
+    );
+    assert_eq!(
+        status.resolve("map addr 0x1000 int4 g").unwrap(),
+        vec!["map", "address"]
+    );
+    assert_eq!(
+        status.resolve("map fun 0x1000").unwrap(),
+        vec!["map", "function"]
+    );
 }
 
 /// Both operands are required, and the guards read like the rest of the module
@@ -161,9 +194,9 @@ fn stage_list_prints_the_stage_model_header_and_all_stages() {
     // The artifact line follows each phase.
     assert!(out.contains("        artifact: text + position maps\n"));
     // The sub-phase section header.
-    assert!(out.contains(
-        "Sub-phases (named decision points; LATENT = no override surface today):\n"
-    ));
+    assert!(
+        out.contains("Sub-phases (named decision points; LATENT = no override surface today):\n")
+    );
     // Sub-phase rows carry decision/assertion/rewind/exposure lines.
     assert!(out.contains("        decision: "));
     assert!(out.contains("   rewind: "));
@@ -227,7 +260,11 @@ fn stage_catalog_full_matches_w4_emitter_byte_for_byte() {
     let expected = emit_catalog_json(|_| None);
     assert_eq!(out, expected);
     // Spot-check the JSON framing the catalog parser depends on.
-    assert!(out.starts_with("[\n  {\"option\": "), "out head: {:?}", &out[..40.min(out.len())]);
+    assert!(
+        out.starts_with("[\n  {\"option\": "),
+        "out head: {:?}",
+        &out[..40.min(out.len())]
+    );
     assert!(out.ends_with("}\n]\n"), "out tail differs");
 }
 
@@ -237,14 +274,19 @@ fn stage_catalog_single_option_matches_w4_emitter() {
     let expected = emit_catalog_json_one("returnpair", None).expect("returnpair is a settable");
     assert_eq!(out, expected);
     assert!(out.contains("\"option\": \"returnpair\""), "out: {out:?}");
-    assert!(out.contains("\"destructive_as_default\": true"), "out: {out:?}");
+    assert!(
+        out.contains("\"destructive_as_default\": true"),
+        "out: {out:?}"
+    );
 }
 
 #[test]
 fn stage_catalog_unknown_option_is_execution_error() {
     let out = run_one("phase catalog nosuchoption");
     assert!(
-        out.contains("Execution error: Unknown settable option: nosuchoption (try `phase catalog`)"),
+        out.contains(
+            "Execution error: Unknown settable option: nosuchoption (try `phase catalog`)"
+        ),
         "out: {out:?}"
     );
 }
@@ -257,7 +299,10 @@ fn stage_catalog_unknown_option_is_execution_error() {
 fn kassert_without_image_is_no_load_image_present() {
     // dcp->conf is null with no program loaded.
     let out = run_one("kassert P3 comparison-canonicalization canonical");
-    assert!(out.contains("Execution error: No load image present"), "out: {out:?}");
+    assert!(
+        out.contains("Execution error: No load image present"),
+        "out: {out:?}"
+    );
 }
 
 #[test]
@@ -265,7 +310,10 @@ fn kassert_list_with_no_image_still_guards_on_image() {
     // C++ checks dcp->conf BEFORE the `list` branch, so `kassert list` with no
     // program is "No load image present", not an empty list.
     let out = run_one("kassert list");
-    assert!(out.contains("Execution error: No load image present"), "out: {out:?}");
+    assert!(
+        out.contains("Execution error: No load image present"),
+        "out: {out:?}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -275,19 +323,28 @@ fn kassert_list_with_no_image_still_guards_on_image() {
 #[test]
 fn stage_status_without_image_is_no_load_image_present() {
     let out = run_one("phase status");
-    assert!(out.contains("Execution error: No load image present"), "out: {out:?}");
+    assert!(
+        out.contains("Execution error: No load image present"),
+        "out: {out:?}"
+    );
 }
 
 #[test]
 fn restarts_without_function_is_no_function_selected() {
     let out = run_one("restarts");
-    assert!(out.contains("Execution error: No function selected"), "out: {out:?}");
+    assert!(
+        out.contains("Execution error: No function selected"),
+        "out: {out:?}"
+    );
 }
 
 #[test]
 fn quality_without_function_is_no_function_selected() {
     let out = run_one("quality");
-    assert!(out.contains("Execution error: No function selected"), "out: {out:?}");
+    assert!(
+        out.contains("Execution error: No function selected"),
+        "out: {out:?}"
+    );
 }
 
 #[test]
@@ -297,8 +354,18 @@ fn pipeline_list_prints_the_variants_with_no_program() {
     assert!(out.contains(
         "Named pipeline variants (group filters over the universal action; P0 pipeline-variant sub-phase):\n"
     ), "out: {out:?}");
-    for v in ["decompile", "jumptable", "normalize", "paramid", "register", "firstpass"] {
-        assert!(out.contains(&format!("  {v}\n")), "missing variant {v}: {out:?}");
+    for v in [
+        "decompile",
+        "jumptable",
+        "normalize",
+        "paramid",
+        "register",
+        "firstpass",
+    ] {
+        assert!(
+            out.contains(&format!("  {v}\n")),
+            "missing variant {v}: {out:?}"
+        );
     }
     // No program loaded -> no `(current)` marker.
     assert!(!out.contains("(current)"), "out: {out:?}");
@@ -315,7 +382,9 @@ fn pipeline_bare_word_lists_like_list() {
 fn pipeline_unknown_variant_is_parse_error() {
     let out = run_one("pipeline bogusvariant");
     assert!(
-        out.contains("Command parsing error: Unknown pipeline variant: bogusvariant (try `pipeline list`)"),
+        out.contains(
+            "Command parsing error: Unknown pipeline variant: bogusvariant (try `pipeline list`)"
+        ),
         "out: {out:?}"
     );
 }
@@ -426,8 +495,14 @@ fn w9_con_kuna_console_stage_catalog_single_option_skips_leading_ws() {
     let expected = emit_catalog_json_one("returnpair", None).expect("returnpair is a settable");
     assert_eq!(out, expected, "leading-ws single-option form drifted");
     // Single-row form: starts with the object brace, not the array bracket.
-    assert!(out.starts_with("  {\"option\": \"returnpair\""), "not single-row: {out:?}");
-    assert!(!out.starts_with('['), "emitted the full array instead of one row: {out:?}");
+    assert!(
+        out.starts_with("  {\"option\": \"returnpair\""),
+        "not single-row: {out:?}"
+    );
+    assert!(
+        !out.starts_with('['),
+        "emitted the full array instead of one row: {out:?}"
+    );
 }
 
 /// A bare `phase catalog` (no option, no program) must equal the full W4 emitter
@@ -439,5 +514,8 @@ fn w9_con_kuna_console_stage_catalog_bare_is_full_array() {
     // Drives the deprecated `phase catalog` alias on purpose: alias smoke test.
     let out = run_one("stage catalog");
     assert_eq!(out, emit_catalog_json(|_| None));
-    assert!(out.starts_with("[\n"), "full form must open with the JSON array: {out:?}");
+    assert!(
+        out.starts_with("[\n"),
+        "full form must open with the JSON array: {out:?}"
+    );
 }

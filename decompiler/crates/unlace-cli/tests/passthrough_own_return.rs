@@ -356,7 +356,8 @@ fn a_forwarder_still_hands_back_its_callee_result() {
     let text = decompile(&arm_image());
     let body = function(&text, "w_high");
     assert!(
-        body.contains("unsigned long long w_high(") && body.contains("return (unsigned int)provider(a0);"),
+        body.contains("unsigned long long w_high(")
+            && body.contains("return (unsigned int)provider(a0);"),
         "{text}"
     );
     let text = decompile(&x86_image());

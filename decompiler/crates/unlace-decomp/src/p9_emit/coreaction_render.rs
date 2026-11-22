@@ -108,15 +108,15 @@
 use std::collections::HashSet;
 use std::rc::Rc;
 
-use unlace_base::address::{bit_transitions, Address};
+use unlace_base::address::{Address, bit_transitions};
+use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::space::AddrSpace;
 use unlace_base::types::uintb;
-use unlace_base::error::{KunaError, KunaResult};
 
-use crate::action::{ruleflags, Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
-use crate::dtype::{type_metatype, Datatype};
-use crate::funcdata::Funcdata;
+use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult, ruleflags};
 use crate::context::GlobalContainer;
+use crate::dtype::{Datatype, type_metatype};
+use crate::funcdata::Funcdata;
 use crate::subflow::LaneDivide;
 use crate::transform::{LaneDescription, LanedRegister};
 
@@ -231,7 +231,9 @@ impl Action for ActionLaneDivide {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionLaneDivide { base: self.base.clone() }))
+        Some(Box::new(ActionLaneDivide {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:600 — ActionLaneDivide::apply
@@ -251,7 +253,12 @@ impl Action for ActionLaneDivide {
                 let mut idx = 0;
                 while idx < viter.len() {
                     let vn = viter[idx];
-                    if data.vbank().get(vn).expect("ActionLaneDivide: stale vn").has_no_descend() {
+                    if data
+                        .vbank()
+                        .get(vn)
+                        .expect("ActionLaneDivide: stale vn")
+                        .has_no_descend()
+                    {
                         idx += 1;
                         continue;
                     }
@@ -306,13 +313,26 @@ fn lane_divide_collect_lane_sizes(
     // step 0: descendants
     for &op in descend.iter() {
         // A big register split into pieces.
-        if data.obank().get(op).expect("collect_lane_sizes: stale op").code()
+        if data
+            .obank()
+            .get(op)
+            .expect("collect_lane_sizes: stale op")
+            .code()
             != OpCode::CPUI_SUBPIECE
         {
             continue;
         }
-        let out = data.obank().get(op).expect("collect_lane_sizes: stale op").get_out().expect("out");
-        let cur_size = data.vbank().get(out).expect("collect_lane_sizes: stale out").get_size();
+        let out = data
+            .obank()
+            .get(op)
+            .expect("collect_lane_sizes: stale op")
+            .get_out()
+            .expect("out");
+        let cur_size = data
+            .vbank()
+            .get(out)
+            .expect("collect_lane_sizes: stale out")
+            .get_size();
         if allowed_lanes.allowed_lane(cur_size) {
             check_lanes.add_lane_size(cur_size); // Register this possible size
         }
@@ -324,13 +344,37 @@ fn lane_divide_collect_lane_sizes(
     }
     let op = v.get_def().expect("collect_lane_sizes: written vn has def");
     // A big register formed from smaller pieces.
-    if data.obank().get(op).expect("collect_lane_sizes: stale def op").code() != OpCode::CPUI_PIECE {
+    if data
+        .obank()
+        .get(op)
+        .expect("collect_lane_sizes: stale def op")
+        .code()
+        != OpCode::CPUI_PIECE
+    {
         return;
     }
-    let in0 = data.obank().get(op).expect("collect_lane_sizes: stale def op").get_in(0).expect("in0");
-    let in1 = data.obank().get(op).expect("collect_lane_sizes: stale def op").get_in(1).expect("in1");
-    let mut cur_size = data.vbank().get(in0).expect("collect_lane_sizes: stale in0").get_size();
-    let tmp_size = data.vbank().get(in1).expect("collect_lane_sizes: stale in1").get_size();
+    let in0 = data
+        .obank()
+        .get(op)
+        .expect("collect_lane_sizes: stale def op")
+        .get_in(0)
+        .expect("in0");
+    let in1 = data
+        .obank()
+        .get(op)
+        .expect("collect_lane_sizes: stale def op")
+        .get_in(1)
+        .expect("in1");
+    let mut cur_size = data
+        .vbank()
+        .get(in0)
+        .expect("collect_lane_sizes: stale in0")
+        .get_size();
+    let tmp_size = data
+        .vbank()
+        .get(in1)
+        .expect("collect_lane_sizes: stale in1")
+        .get_size();
     if tmp_size < cur_size {
         cur_size = tmp_size;
     }
@@ -431,7 +475,10 @@ impl Action for ActionSegmentize {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionSegmentize { base: self.base.clone(), localcount: 0 }))
+        Some(Box::new(ActionSegmentize {
+            base: self.base.clone(),
+            localcount: 0,
+        }))
     }
     /// C++ `ActionSegmentize::reset`: `{ localcount = 0; }`.
     fn reset(&mut self, _data: &mut Funcdata) {
@@ -451,11 +498,15 @@ impl Action for ActionSegmentize {
         }
         self.localcount = 1; // Mark as having performed once
         for i in 0..numops {
-            let Some(segdef) = glb.get_segment_op(i) else { continue };
+            let Some(segdef) = glb.get_segment_op(i) else {
+                continue;
+            };
             let uindex = segdef.useropindex as uintb;
             let roots: Vec<OpId> = data.obank().iter_code(OpCode::CPUI_CALLOTHER).collect();
             for segroot in roots {
-                let Some(op) = data.obank().get(segroot) else { continue };
+                let Some(op) = data.obank().get(segroot) else {
+                    continue;
+                };
                 if op.is_dead() {
                     continue;
                 }
@@ -471,7 +522,9 @@ impl Action for ActionSegmentize {
                     ));
                     continue;
                 }
-                let (Some(in1), Some(in2)) = (op.get_in(1), op.get_in(2)) else { continue };
+                let (Some(in1), Some(in2)) = (op.get_in(1), op.get_in(2)) else {
+                    continue;
+                };
                 let mut innervn = in1;
                 let basevn = if segdef.baseinsize != 0 {
                     innervn = in2;
@@ -493,7 +546,11 @@ impl Action for ActionSegmentize {
                 {
                     continue;
                 }
-                let n = data.obank().get(segroot).map(|o| o.num_input()).unwrap_or(0);
+                let n = data
+                    .obank()
+                    .get(segroot)
+                    .map(|o| o.num_input())
+                    .unwrap_or(0);
                 for j in (3..n).rev() {
                     data.op_remove_input(segroot, j); // Remove anything else
                 }
@@ -529,7 +586,9 @@ pub struct ActionForceGoto {
 impl ActionForceGoto {
     /// Construct in group `g` (C++ `ActionForceGoto::ActionForceGoto`).
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionForceGoto { base: ActionBase::new(0, "forcegoto", g) })
+        Box::new(ActionForceGoto {
+            base: ActionBase::new(0, "forcegoto", g),
+        })
     }
 }
 
@@ -544,7 +603,9 @@ impl Action for ActionForceGoto {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionForceGoto { base: self.base.clone() }))
+        Some(Box::new(ActionForceGoto {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, _data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:686 — ActionForceGoto::apply
@@ -572,7 +633,9 @@ pub struct ActionMultiCse {
 impl ActionMultiCse {
     /// Construct in group `g` (C++ `ActionMultiCse::ActionMultiCse`).
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionMultiCse { base: ActionBase::new(0, "multicse", g) })
+        Box::new(ActionMultiCse {
+            base: ActionBase::new(0, "multicse", g),
+        })
     }
 }
 
@@ -587,7 +650,9 @@ impl Action for ActionMultiCse {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionMultiCse { base: self.base.clone() }))
+        Some(Box::new(ActionMultiCse {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, _data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:894 — ActionMultiCse::apply
@@ -621,7 +686,9 @@ pub struct ActionShadowVar {
 impl ActionShadowVar {
     /// Construct in group `g` (C++ `ActionShadowVar::ActionShadowVar`).
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionShadowVar { base: ActionBase::new(0, "shadowvar", g) })
+        Box::new(ActionShadowVar {
+            base: ActionBase::new(0, "shadowvar", g),
+        })
     }
 }
 
@@ -636,7 +703,9 @@ impl Action for ActionShadowVar {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionShadowVar { base: self.base.clone() }))
+        Some(Box::new(ActionShadowVar {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, _data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:907 — ActionShadowVar::apply
@@ -704,7 +773,10 @@ impl Action for ActionConstantPtr {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionConstantPtr { base: self.base.clone(), localcount: 0 }))
+        Some(Box::new(ActionConstantPtr {
+            base: self.base.clone(),
+            localcount: 0,
+        }))
     }
     /// C++ `ActionConstantPtr::reset`: `{ localcount = 0; }`.
     fn reset(&mut self, data: &mut Funcdata) {
@@ -757,8 +829,13 @@ impl Action for ActionConstantPtr {
         // pass from the same snapshot the loop walks.
         let mut numeric: HashSet<uintb> = HashSet::new();
         for &c in &constants {
-            let Some(off) = data.vbank().get(c).map(|v| v.get_offset()) else { continue };
-            let Some(code) = data.lone_descend(c).and_then(|d| data.obank().get(d)).map(|o| o.code())
+            let Some(off) = data.vbank().get(c).map(|v| v.get_offset()) else {
+                continue;
+            };
+            let Some(code) = data
+                .lone_descend(c)
+                .and_then(|d| data.obank().get(d))
+                .map(|o| o.code())
             else {
                 continue;
             };
@@ -810,7 +887,11 @@ impl Action for ActionConstantPtr {
                 Some(s) => s,
                 None => continue,
             };
-            let slot = data.obank().get(op).expect("constantptr: stale op").get_slot(vn);
+            let slot = data
+                .obank()
+                .get(op)
+                .expect("constantptr: stale op")
+                .get_slot(vn);
             let opc = data.obank().get(op).expect("constantptr: stale op").code();
             if opc == OpCode::CPUI_INT_ADD {
                 // Make sure the other side is not a spacebase already.
@@ -820,7 +901,12 @@ impl Action for ActionConstantPtr {
                     .expect("constantptr: stale op")
                     .get_in(1 - slot)
                     .expect("constantptr: INT_ADD missing other input");
-                if data.vbank().get(other).map(|v| v.is_spacebase()).unwrap_or(false) {
+                if data
+                    .vbank()
+                    .get(other)
+                    .map(|v| v.is_spacebase())
+                    .unwrap_or(false)
+                {
                     continue;
                 }
             } else if opc == OpCode::CPUI_PTRSUB || opc == OpCode::CPUI_PTRADD {
@@ -830,7 +916,10 @@ impl Action for ActionConstantPtr {
             let mut full_encoding: uintb = 0;
             let resolved = is_pointer(data, &rspc, vn, op, slot, &numeric, &mut full_encoding);
             // Set check flag AFTER searching for the symbol.
-            data.vbank_mut().get_mut(vn).expect("constantptr: stale vn").set_ptr_check();
+            data.vbank_mut()
+                .get_mut(vn)
+                .expect("constantptr: stale vn")
+                .set_ptr_check();
             if let Some((entry, rampoint)) = resolved {
                 // (kuna) A Swift string object lands 32 bytes before its literal.
                 if crate::kuna_swiftstrobj::is_string_object(data, vn, &rampoint) {
@@ -869,10 +958,9 @@ impl Action for ActionConstantPtr {
                         .filter(|e| e.is_char_print())
                     {
                         use crate::dtype::TypeFactory as _;
-                        let charptr = data
-                            .get_arch()
-                            .types_rc()
-                            .and_then(|t| t.get_type_pointer(size, elem, rspc.get_word_size()).ok());
+                        let charptr = data.get_arch().types_rc().and_then(|t| {
+                            t.get_type_pointer(size, elem, rspc.get_word_size()).ok()
+                        });
                         if let Some(charptr) = charptr {
                             if let Some(v) = data.vbank_mut().get_mut(vn) {
                                 v.update_type_locked(charptr, true, true);
@@ -907,7 +995,11 @@ impl Action for ActionConstantPtr {
 /// looking for a LOAD/STORE whose space-id constant names the access space, or a
 /// pointer data-type carrying a space attribute.  Returns the discovered space or
 /// `None`.
-fn search_for_space_attribute(data: &Funcdata, mut vn: VarnodeId, mut op: OpId) -> Option<Rc<AddrSpace>> {
+fn search_for_space_attribute(
+    data: &Funcdata,
+    mut vn: VarnodeId,
+    mut op: OpId,
+) -> Option<Rc<AddrSpace>> {
     for _ in 0..3 {
         // If the Varnode is explicitly a pointer carrying a space attribute, use it.
         let dt = Rc::clone(data.vbank().get(vn)?.get_type());
@@ -970,7 +1062,11 @@ fn search_for_space_attribute(data: &Funcdata, mut vn: VarnodeId, mut op: OpId) 
 /// Resolve `vn->getSpaceFromConst()`: the constant Varnode encodes a space-id in
 /// its offset (C++ `Varnode::getSpaceFromConst`, the LOAD/STORE space argument).
 fn space_from_const(data: &Funcdata, vn: VarnodeId) -> Rc<AddrSpace> {
-    let idx = data.vbank().get(vn).expect("space_from_const: stale vn").get_offset() as int4;
+    let idx = data
+        .vbank()
+        .get(vn)
+        .expect("space_from_const: stale vn")
+        .get_offset() as int4;
     Rc::clone(
         data.get_arch()
             .manage()
@@ -1044,12 +1140,21 @@ fn declared_slot_infers(data: &Funcdata, dt: &Datatype) -> Option<bool> {
 /// output's type ([`declared_slot_infers`]); every other COPY honors
 /// `glb->infer_pointers`.
 fn check_copy(data: &Funcdata, op: OpId) -> bool {
-    let ret_op = data.obank().get(op).and_then(|o| o.get_out()).and_then(|out| data.lone_descend(out));
-    let feeds_return =
-        ret_op.and_then(|r| data.obank().get(r)).is_some_and(|r| r.code() == OpCode::CPUI_RETURN);
+    let ret_op = data
+        .obank()
+        .get(op)
+        .and_then(|o| o.get_out())
+        .and_then(|out| data.lone_descend(out));
+    let feeds_return = ret_op
+        .and_then(|r| data.obank().get(r))
+        .is_some_and(|r| r.code() == OpCode::CPUI_RETURN);
     let proto = data.get_func_proto();
     if feeds_return && proto.is_output_locked() {
-        if let Some(verdict) = proto.get_output().get_type().and_then(|t| declared_slot_infers(data, t)) {
+        if let Some(verdict) = proto
+            .get_output()
+            .get_type()
+            .and_then(|t| declared_slot_infers(data, t))
+        {
             return verdict;
         }
     }
@@ -1061,10 +1166,15 @@ fn check_copy(data: &Funcdata, op: OpId) -> bool {
 /// is judged by that parameter's type ([`declared_slot_infers`]); any other call
 /// input honors `glb->infer_pointers`.
 fn check_call_input(data: &Funcdata, op: OpId, slot: int4) -> bool {
-    let fc = data.get_call_specs_index(op).map(|i| data.get_call_specs(i));
+    let fc = data
+        .get_call_specs_index(op)
+        .map(|i| data.get_call_specs(i));
     if let Some(fc) = fc.filter(|fc| fc.is_input_locked() && fc.proto().num_params() > slot - 1) {
-        if let Some(verdict) =
-            fc.proto().get_param(slot - 1).and_then(|p| p.get_type()).and_then(|t| declared_slot_infers(data, t))
+        if let Some(verdict) = fc
+            .proto()
+            .get_param(slot - 1)
+            .and_then(|p| p.get_type())
+            .and_then(|t| declared_slot_infers(data, t))
         {
             return verdict;
         }
@@ -1093,9 +1203,15 @@ fn is_pointer(
     let mut needexacthit;
     let rampoint;
     // Are we explicitly marked as a pointer?
-    let read_facing_meta = data.vbank().get(vn)?.get_type_read_facing(op).get_metatype();
+    let read_facing_meta = data
+        .vbank()
+        .get(vn)?
+        .get_type_read_facing(op)
+        .get_metatype();
     if read_facing_meta == type_metatype::TYPE_PTR {
-        rampoint = glb.resolve_constant(spc, vn_offset, vn_size, &op_addr, full_encoding).ok()?;
+        rampoint = glb
+            .resolve_constant(spc, vn_offset, vn_size, &op_addr, full_encoding)
+            .ok()?;
         needexacthit = false;
     } else {
         if data.vbank().get(vn)?.is_type_lock() {
@@ -1123,12 +1239,20 @@ fn is_pointer(
             }
             OpCode::CPUI_INT_ADD => {
                 let outvn = data.obank().get(op)?.get_out()?;
-                if data.vbank().get(outvn)?.get_type_def_facing().get_metatype()
+                if data
+                    .vbank()
+                    .get(outvn)?
+                    .get_type_def_facing()
+                    .get_metatype()
                     == type_metatype::TYPE_PTR
                 {
                     // Is there another pointer base in this expression?
                     let other = data.obank().get(op)?.get_in(1 - slot)?;
-                    if data.vbank().get(other)?.get_type_read_facing(op).get_metatype()
+                    if data
+                        .vbank()
+                        .get(other)?
+                        .get_type_read_facing(op)
+                        .get_metatype()
                         == type_metatype::TYPE_PTR
                     {
                         return None; // If so, we are not a pointer
@@ -1185,7 +1309,9 @@ fn is_pointer(
         if !declared_ok {
             return None;
         }
-        rampoint = glb.resolve_constant(spc, vn_offset, vn_size, &op_addr, full_encoding).ok()?;
+        rampoint = glb
+            .resolve_constant(spc, vn_offset, vn_size, &op_addr, full_encoding)
+            .ok()?;
     }
 
     if rampoint.is_invalid() {
@@ -1213,9 +1339,14 @@ fn is_pointer(
     // (kuna) An import slot holds the import's function Symbol so a call through
     // the slot binds to it, but a constant equal to the slot is the slot's own
     // address, which the function's name would misstate.
-    let code = entry.symbol_type.as_ref().is_some_and(|t| t.get_metatype() == type_metatype::TYPE_CODE);
+    let code = entry
+        .symbol_type
+        .as_ref()
+        .is_some_and(|t| t.get_metatype() == type_metatype::TYPE_CODE);
     if code
-        && glb.query_global_properties(&rampoint, vn_size, &invalid) & crate::varnode::varnode_flags::externref != 0
+        && glb.query_global_properties(&rampoint, vn_size, &invalid)
+            & crate::varnode::varnode_flags::externref
+            != 0
     {
         return None;
     }
@@ -1239,7 +1370,8 @@ fn kuna_const_is_function_entry(
 ) -> bool {
     let glb = data.get_arch();
     let mut full_encoding: uintb = 0;
-    let rampoint = match glb.resolve_constant(spc, vn_offset, vn_size, op_addr, &mut full_encoding) {
+    let rampoint = match glb.resolve_constant(spc, vn_offset, vn_size, op_addr, &mut full_encoding)
+    {
         Ok(r) => r,
         Err(_) => return false,
     };
@@ -1247,18 +1379,20 @@ fn kuna_const_is_function_entry(
     // address equals rampoint.  The frozen snapshot carries the Symbol type; a
     // function Symbol is TYPE_CODE.
     let invalid = Address::new_invalid();
-    let function_entry = glb.query_container_global(&rampoint, 1, &invalid).and_then(|e| {
-        let is_code = e
-            .symbol_type
-            .as_ref()
-            .map(|t| t.get_metatype() == type_metatype::TYPE_CODE)
-            .unwrap_or(false);
-        if is_code && e.entry_addr == rampoint {
-            Some(e.entry_addr)
-        } else {
-            None
-        }
-    });
+    let function_entry = glb
+        .query_container_global(&rampoint, 1, &invalid)
+        .and_then(|e| {
+            let is_code = e
+                .symbol_type
+                .as_ref()
+                .map(|t| t.get_metatype() == type_metatype::TYPE_CODE)
+                .unwrap_or(false);
+            if is_code && e.entry_addr == rampoint {
+                Some(e.entry_addr)
+            } else {
+                None
+            }
+        });
     crate::kuna_inferfuncentry::kuna_is_function_entry(Some(&rampoint), function_entry.as_ref())
 }
 
@@ -1275,7 +1409,9 @@ pub struct ActionDeindirect {
 impl ActionDeindirect {
     /// Construct in group `g` (C++ `ActionDeindirect::ActionDeindirect`).
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionDeindirect { base: ActionBase::new(0, "deindirect", g) })
+        Box::new(ActionDeindirect {
+            base: ActionBase::new(0, "deindirect", g),
+        })
     }
 }
 
@@ -1290,7 +1426,9 @@ impl Action for ActionDeindirect {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionDeindirect { base: self.base.clone() }))
+        Some(Box::new(ActionDeindirect {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:1235 — ActionDeindirect::apply.  For each CALLIND whose
@@ -1320,9 +1458,7 @@ impl Action for ActionDeindirect {
                     .filter(|v| v.is_written())
                     .and_then(|v| v.get_def());
                 match def {
-                    Some(d)
-                        if data.obank().get(d).map(|o| o.code()) == Some(OpCode::CPUI_COPY) =>
-                    {
+                    Some(d) if data.obank().get(d).map(|o| o.code()) == Some(OpCode::CPUI_COPY) => {
                         match data.obank().get(d).and_then(|o| o.get_in(0)) {
                             Some(nv) => vn = nv,
                             None => break,
@@ -1332,7 +1468,13 @@ impl Action for ActionDeindirect {
                 }
             }
 
-            if data.vbank().get(vn).is_some_and(|v| v.is_synthetic_literal()) { continue; }
+            if data
+                .vbank()
+                .get(vn)
+                .is_some_and(|v| v.is_synthetic_literal())
+            {
+                continue;
+            }
             let v = match data.vbank().get(vn) {
                 Some(v) => v,
                 None => continue,
@@ -1374,7 +1516,9 @@ impl Action for ActionDeindirect {
                 let inline = proto.is_inline();
                 // (kuna) A declaration the early slot query locked outranks the
                 // symbol's recovered prototype.
-                let proto = if data.get_call_specs(i).proto().is_input_locked() && !proto.is_input_locked() {
+                let proto = if data.get_call_specs(i).proto().is_input_locked()
+                    && !proto.is_input_locked()
+                {
                     let mut declared = crate::fspec::FuncProto::new();
                     declared.copy(data.get_call_specs(i).proto());
                     std::rc::Rc::new(declared)
@@ -1383,8 +1527,15 @@ impl Action for ActionDeindirect {
                 };
                 let mut fc = data.replace_call_specs(i);
                 let mut restartlog = crate::kuna_restartlog::RestartLog::new();
-                let r =
-                    fc.deindirect(data, entry, &name, &proto, no_return, inline, &mut restartlog);
+                let r = fc.deindirect(
+                    data,
+                    entry,
+                    &name,
+                    &proto,
+                    no_return,
+                    inline,
+                    &mut restartlog,
+                );
                 data.restore_call_specs_at(i, fc);
                 r.expect("ActionDeindirect: deindirect failed");
                 count += 1;
@@ -1482,8 +1633,20 @@ fn directwrite_apply(data: &mut Funcdata, propagate_indirect: bool) -> ApplyResu
     // Collect legal inputs and other auto direct writes.
     let all_locs: Vec<VarnodeId> = data.vbank().iter_loc().collect();
     for vn in all_locs {
-        data.vbank_mut().get_mut(vn).expect("directwrite: stale vn").clear_direct_write();
-        let (is_input, is_persist, is_spacebase, is_written, is_constant, is_indirect_zero, addr, sz) = {
+        data.vbank_mut()
+            .get_mut(vn)
+            .expect("directwrite: stale vn")
+            .clear_direct_write();
+        let (
+            is_input,
+            is_persist,
+            is_spacebase,
+            is_written,
+            is_constant,
+            is_indirect_zero,
+            addr,
+            sz,
+        ) = {
             let v = data.vbank().get(vn).expect("directwrite: stale vn");
             (
                 v.is_input(),
@@ -1512,7 +1675,12 @@ fn directwrite_apply(data: &mut Funcdata, propagate_indirect: bool) -> ApplyResu
                 worklist.push(vn);
             }
         } else if is_written {
-            let opid = data.vbank().get(vn).expect("dw").get_def().expect("written vn has def");
+            let opid = data
+                .vbank()
+                .get(vn)
+                .expect("dw")
+                .get_def()
+                .expect("written vn has def");
             let (is_marker, opc) = {
                 let o = data.obank().get(opid).expect("dw: stale def");
                 (o.is_marker(), o.code())
@@ -1535,8 +1703,7 @@ fn directwrite_apply(data: &mut Funcdata, propagate_indirect: bool) -> ApplyResu
                             .expect("COPY in0");
                         // Through possible multiple COPYs.
                         if data.vbank().get(invn).expect("dw").is_written() {
-                            let curop =
-                                data.vbank().get(invn).expect("dw").get_def().expect("def");
+                            let curop = data.vbank().get(invn).expect("dw").get_def().expect("def");
                             if data.obank().get(curop).expect("dw").code() == OpCode::CPUI_COPY {
                                 invn = data
                                     .obank()
@@ -1549,9 +1716,10 @@ fn directwrite_apply(data: &mut Funcdata, propagate_indirect: bool) -> ApplyResu
                         let src_from_marker = {
                             let iv = data.vbank().get(invn).expect("dw");
                             iv.is_written()
-                                && iv.get_def().map(|d| {
-                                    data.obank().get(d).expect("dw").is_marker()
-                                }).unwrap_or(false)
+                                && iv
+                                    .get_def()
+                                    .map(|d| data.obank().get(d).expect("dw").is_marker())
+                                    .unwrap_or(false)
                         };
                         if src_from_marker {
                             data.vbank_mut().get_mut(vn).expect("dw").set_direct_write();
@@ -1592,7 +1760,12 @@ fn directwrite_apply(data: &mut Funcdata, propagate_indirect: bool) -> ApplyResu
         for op in descend {
             let (is_assignment, dvn, opc, is_indirect_store) = {
                 let o = data.obank().get(op).expect("dw: stale descend op");
-                (o.is_assignment(), o.get_out(), o.code(), o.is_indirect_store())
+                (
+                    o.is_assignment(),
+                    o.get_out(),
+                    o.code(),
+                    o.is_indirect_store(),
+                )
             };
             if !is_assignment {
                 continue;
@@ -1603,7 +1776,10 @@ fn directwrite_apply(data: &mut Funcdata, propagate_indirect: bool) -> ApplyResu
             };
             let already = data.vbank().get(dvn).expect("dw").is_direct_write();
             if !already {
-                data.vbank_mut().get_mut(dvn).expect("dw").set_direct_write();
+                data.vbank_mut()
+                    .get_mut(dvn)
+                    .expect("dw")
+                    .set_direct_write();
                 if propagate_indirect || opc != OpCode::CPUI_INDIRECT || is_indirect_store {
                     worklist.push(dvn);
                 }
@@ -1626,7 +1802,9 @@ pub struct ActionLikelyTrash {
 impl ActionLikelyTrash {
     /// Construct in group `g` (C++ `ActionLikelyTrash::ActionLikelyTrash`).
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionLikelyTrash { base: ActionBase::new(0, "likelytrash", g) })
+        Box::new(ActionLikelyTrash {
+            base: ActionBase::new(0, "likelytrash", g),
+        })
     }
 }
 
@@ -1641,7 +1819,9 @@ impl Action for ActionLikelyTrash {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionLikelyTrash { base: self.base.clone() }))
+        Some(Box::new(ActionLikelyTrash {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, _data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:2198 — ActionLikelyTrash::apply
@@ -1703,7 +1883,10 @@ impl Action for ActionRestructureVarnode {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionRestructureVarnode { base: self.base.clone(), numpass: 0 }))
+        Some(Box::new(ActionRestructureVarnode {
+            base: self.base.clone(),
+            numpass: 0,
+        }))
     }
     /// C++ `ActionRestructureVarnode::reset`: `{ numpass = 0; }`.
     fn reset(&mut self, _data: &mut Funcdata) {
@@ -1772,7 +1955,9 @@ impl Action for ActionMappedLocalSync {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionMappedLocalSync { base: self.base.clone() }))
+        Some(Box::new(ActionMappedLocalSync {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:2355 — ActionMappedLocalSync::apply
@@ -1819,7 +2004,9 @@ impl Action for ActionMapGlobals {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionMapGlobals { base: self.base.clone() }))
+        Some(Box::new(ActionMapGlobals {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         map_globals(data);
@@ -1874,7 +2061,10 @@ fn map_globals(data: &mut Funcdata) {
                 let ct = if exact {
                     Some(Rc::clone(maxvn.get_type()))
                 } else {
-                    arch.types().and_then(|t| t.get_base(size as int4, crate::dtype::type_metatype::TYPE_UNKNOWN).ok())
+                    arch.types().and_then(|t| {
+                        t.get_base(size as int4, crate::dtype::type_metatype::TYPE_UNKNOWN)
+                            .ok()
+                    })
                 };
                 if let Some(ct) = ct {
                     new_globals.push((addr.clone(), ct));
@@ -1895,7 +2085,9 @@ fn map_globals(data: &mut Funcdata) {
                 .global_data_symbol_at(a)
                 .is_some_and(|(f, sz, _)| a_end <= f.wrapping_add(sz as u64))
                 || covers.iter().any(|(c, csz, _)| {
-                    same_space(c, a) && c.get_offset() <= a.get_offset() && a_end <= c.get_offset() + *csz as u64
+                    same_space(c, a)
+                        && c.get_offset() <= a.get_offset()
+                        && a_end <= c.get_offset() + *csz as u64
                 });
             if !held {
                 let diff = a.get_offset().wrapping_sub(first);
@@ -1906,7 +2098,9 @@ fn map_globals(data: &mut Funcdata) {
     data.set_global_covers(covers);
     data.set_new_globals(new_globals);
     if inconsistent {
-        data.warning_header("Globals starting with '_' overlap smaller symbols at the same address");
+        data.warning_header(
+            "Globals starting with '_' overlap smaller symbols at the same address",
+        );
     }
 }
 
@@ -1930,12 +2124,18 @@ pub struct ActionDeadCode {
 impl ActionDeadCode {
     /// Construct in group `g` (C++ `ActionDeadCode::ActionDeadCode`).
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionDeadCode { base: ActionBase::new(0, "deadcode", g), narrow_inputs: false })
+        Box::new(ActionDeadCode {
+            base: ActionBase::new(0, "deadcode", g),
+            narrow_inputs: false,
+        })
     }
 
     /// (kuna `narrowargs`) The `fullloop` pass that also narrows register inputs.
     pub fn boxed_narrowing(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionDeadCode { base: ActionBase::new(0, "deadcode", g), narrow_inputs: true })
+        Box::new(ActionDeadCode {
+            base: ActionBase::new(0, "deadcode", g),
+            narrow_inputs: true,
+        })
     }
 }
 
@@ -1950,7 +2150,10 @@ impl Action for ActionDeadCode {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionDeadCode { base: self.base.clone(), narrow_inputs: self.narrow_inputs }))
+        Some(Box::new(ActionDeadCode {
+            base: self.base.clone(),
+            narrow_inputs: self.narrow_inputs,
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:4146 — ActionDeadCode::apply.
@@ -1991,7 +2194,12 @@ fn dc_push_consumed(data: &mut Funcdata, val: u64, vn: VarnodeId, worklist: &mut
     let (newval, vacuous, listed, written) = {
         let v = data.vbank().get(vn).expect("pushConsumed: stale vn");
         let newval = (val | v.get_consume()) & calc_mask(v.get_size());
-        (newval, v.is_consume_vacuous(), v.is_consume_list(), v.is_written())
+        (
+            newval,
+            v.is_consume_vacuous(),
+            v.is_consume_list(),
+            v.is_written(),
+        )
     };
     {
         let v = data.vbank().get(vn).expect("pushConsumed: stale vn");
@@ -1999,7 +2207,10 @@ fn dc_push_consumed(data: &mut Funcdata, val: u64, vn: VarnodeId, worklist: &mut
             return;
         }
     }
-    let vm = data.vbank_mut().get_mut(vn).expect("pushConsumed: stale vn");
+    let vm = data
+        .vbank_mut()
+        .get_mut(vn)
+        .expect("pushConsumed: stale vn");
     vm.set_consume_vacuous();
     if !listed {
         vm.set_consume_list();
@@ -2020,26 +2231,53 @@ fn dc_propagate_consumed(data: &mut Funcdata, worklist: &mut Vec<VarnodeId>) {
     let vn = worklist.pop().expect("propagateConsumed: empty worklist");
     let (outc, opid, vn_size) = {
         let v = data.vbank().get(vn).expect("propagateConsumed: stale vn");
-        (v.get_consume(), v.get_def().expect("propagateConsumed: vn is written"), v.get_size())
+        (
+            v.get_consume(),
+            v.get_def().expect("propagateConsumed: vn is written"),
+            v.get_size(),
+        )
     };
-    data.vbank_mut().get_mut(vn).expect("propagateConsumed: stale vn").clear_consume_list();
+    data.vbank_mut()
+        .get_mut(vn)
+        .expect("propagateConsumed: stale vn")
+        .clear_consume_list();
 
-    let opc = data.obank().get(opid).expect("propagateConsumed: stale op").code();
+    let opc = data
+        .obank()
+        .get(opid)
+        .expect("propagateConsumed: stale op")
+        .code();
     // input accessor helper.
     let in_n = |data: &Funcdata, slot: i32| -> VarnodeId {
-        data.obank().get(opid).expect("propagateConsumed: stale op").get_in(slot).expect("null in")
+        data.obank()
+            .get(opid)
+            .expect("propagateConsumed: stale op")
+            .get_in(slot)
+            .expect("null in")
     };
     let in_is_const = |data: &Funcdata, slot: i32| -> bool {
-        data.vbank().get(in_n(data, slot)).expect("stale in").is_constant()
+        data.vbank()
+            .get(in_n(data, slot))
+            .expect("stale in")
+            .is_constant()
     };
     let in_off = |data: &Funcdata, slot: i32| -> u64 {
-        data.vbank().get(in_n(data, slot)).expect("stale in").get_offset()
+        data.vbank()
+            .get(in_n(data, slot))
+            .expect("stale in")
+            .get_offset()
     };
     let in_size = |data: &Funcdata, slot: i32| -> i32 {
-        data.vbank().get(in_n(data, slot)).expect("stale in").get_size()
+        data.vbank()
+            .get(in_n(data, slot))
+            .expect("stale in")
+            .get_size()
     };
     let in_nzmask = |data: &Funcdata, slot: i32| -> u64 {
-        data.vbank().get(in_n(data, slot)).expect("stale in").get_nz_mask()
+        data.vbank()
+            .get(in_n(data, slot))
+            .expect("stale in")
+            .get_nz_mask()
     };
     let usize_bits = (std::mem::size_of::<u64>()) as i32; // sizeof(uintb)
 
@@ -2221,7 +2459,11 @@ fn dc_propagate_consumed(data: &mut Funcdata, worklist: &mut Vec<VarnodeId>) {
         | OpCode::CPUI_INT_LESSEQUAL
         | OpCode::CPUI_INT_EQUAL
         | OpCode::CPUI_INT_NOTEQUAL => {
-            let a = if outc == 0 { 0 } else { in_nzmask(data, 0) | in_nzmask(data, 1) };
+            let a = if outc == 0 {
+                0
+            } else {
+                in_nzmask(data, 0) | in_nzmask(data, 1)
+            };
             let (i0, i1) = (in_n(data, 0), in_n(data, 1));
             dc_push_consumed(data, a, i0, worklist);
             dc_push_consumed(data, a, i1, worklist);
@@ -2264,7 +2506,11 @@ fn dc_propagate_consumed(data: &mut Funcdata, worklist: &mut Vec<VarnodeId>) {
             // Call output doesn't indicate consumption of inputs.
         }
         OpCode::CPUI_FLOAT_INT2FLOAT => {
-            let a = if outc != 0 { coveringmask(in_nzmask(data, 0)) } else { 0 };
+            let a = if outc != 0 {
+                coveringmask(in_nzmask(data, 0))
+            } else {
+                0
+            };
             let i0 = in_n(data, 0);
             dc_push_consumed(data, a, i0, worklist);
         }
@@ -2284,23 +2530,49 @@ fn dc_propagate_consumed(data: &mut Funcdata, worklist: &mut Vec<VarnodeId>) {
 /// with a zero constant, and its defining op is destroyed (calls keep the op
 /// but lose their output).  Returns true if the Varnode was eliminated.
 fn dc_never_consumed(data: &mut Funcdata, vn: VarnodeId) -> bool {
-    if data.vbank().get(vn).expect("neverConsumed: stale vn").get_size() > std::mem::size_of::<u64>() as i32 {
+    if data
+        .vbank()
+        .get(vn)
+        .expect("neverConsumed: stale vn")
+        .get_size()
+        > std::mem::size_of::<u64>() as i32
+    {
         return false; // Not enough precision to really tell
     }
-    let size = data.vbank().get(vn).expect("neverConsumed: stale vn").get_size();
+    let size = data
+        .vbank()
+        .get(vn)
+        .expect("neverConsumed: stale vn")
+        .get_size();
     // Replace vn with 0 wherever it is read.
-    let readers: Vec<OpId> =
-        data.vbank().get(vn).expect("neverConsumed: stale vn").descend_iter().collect();
+    let readers: Vec<OpId> = data
+        .vbank()
+        .get(vn)
+        .expect("neverConsumed: stale vn")
+        .descend_iter()
+        .collect();
     for op in readers {
         let slot = data.obank().get(op).map(|o| o.get_slot(vn)).unwrap_or(-1);
         if slot < 0 {
             continue;
         }
         let zero = data.new_constant(size, 0);
-        data.op_set_input(op, zero, slot).expect("neverConsumed: opSetInput");
+        data.op_set_input(op, zero, slot)
+            .expect("neverConsumed: opSetInput");
     }
-    let op = data.vbank().get(vn).expect("neverConsumed: stale vn").get_def().expect("def");
-    if data.obank().get(op).expect("neverConsumed: stale op").is_call() && !crate::kuna_roundingops::is_pure_call(data, op) {
+    let op = data
+        .vbank()
+        .get(vn)
+        .expect("neverConsumed: stale vn")
+        .get_def()
+        .expect("def");
+    if data
+        .obank()
+        .get(op)
+        .expect("neverConsumed: stale op")
+        .is_call()
+        && !crate::kuna_roundingops::is_pure_call(data, op)
+    {
         data.op_unset_output(op);
     } else {
         data.op_destroy(op);
@@ -2316,7 +2588,10 @@ fn dc_gather_consumed_return(data: &Funcdata) -> u64 {
     }
     let mut consume_val = 0u64;
     for op in data.obank().iter_code(OpCode::CPUI_RETURN) {
-        let o = data.obank().get(op).expect("gatherConsumedReturn: stale op");
+        let o = data
+            .obank()
+            .get(op)
+            .expect("gatherConsumedReturn: stale op");
         if o.is_dead() {
             continue;
         }
@@ -2353,7 +2628,11 @@ fn dc_gather_consumed_return(data: &Funcdata) -> u64 {
 /// up front (a `&self` borrow of `qlst`), then released before the `&mut`
 /// `dc_push_consumed` calls — the same borrow-splitting convention the rest of
 /// this module uses.
-fn dc_mark_consumed_parameters(data: &mut Funcdata, call_index: int4, worklist: &mut Vec<VarnodeId>) {
+fn dc_mark_consumed_parameters(
+    data: &mut Funcdata,
+    call_index: int4,
+    worklist: &mut Vec<VarnodeId>,
+) {
     // PcodeOp *callOp = fc->getOp();  plus the prototype flags.
     let (call_op, fully_consumed, slot_consumed) = {
         let fc = data.get_call_specs(call_index);
@@ -2361,11 +2640,16 @@ fn dc_mark_consumed_parameters(data: &mut Funcdata, call_index: int4, worklist: 
         let fully_consumed = fc.is_input_locked() || fc.is_input_active();
         // Gather getInputBytesConsumed(i) for each parameter slot while `fc`'s
         // borrow is live (only needed on the non-fully-consumed path).
-        let n = data.obank().get(call_op).map(|o| o.num_input()).unwrap_or(0);
+        let n = data
+            .obank()
+            .get(call_op)
+            .map(|o| o.num_input())
+            .unwrap_or(0);
         let mut slot_consumed: Vec<int4> = Vec::new();
         if !fully_consumed {
             for i in 1..n {
-                let stated = crate::kuna_narrowargs::stated_bytes_consumed(data, fc, (i - 1) as usize);
+                let stated =
+                    crate::kuna_narrowargs::stated_bytes_consumed(data, fc, (i - 1) as usize);
                 slot_consumed.push(match (fc.get_input_bytes_consumed(i), stated) {
                     (0, s) => s,
                     (c, 0) => c,
@@ -2380,7 +2664,11 @@ fn dc_mark_consumed_parameters(data: &mut Funcdata, call_index: int4, worklist: 
     if let Some(in0) = data.obank().get(call_op).and_then(|o| o.get_in(0)) {
         dc_push_consumed(data, !0u64, in0, worklist);
     }
-    let n = data.obank().get(call_op).map(|o| o.num_input()).unwrap_or(0);
+    let n = data
+        .obank()
+        .get(call_op)
+        .map(|o| o.num_input())
+        .unwrap_or(0);
     if fully_consumed {
         // Locked or in active recovery: treat all parameters as fully consumed.
         for i in 1..n {
@@ -2396,7 +2684,10 @@ fn dc_mark_consumed_parameters(data: &mut Funcdata, call_index: int4, worklist: 
             None => continue,
         };
         let mut consume_val = {
-            let v = data.vbank().get(vn).expect("markConsumedParameters: stale param vn");
+            let v = data
+                .vbank()
+                .get(vn)
+                .expect("markConsumedParameters: stale param vn");
             if v.is_auto_live() {
                 !0u64
             } else {
@@ -2431,7 +2722,9 @@ fn dc_is_eventual_constant(data: &Funcdata, vn: VarnodeId, max_binary: i32, max_
         if !v.is_written() {
             return false;
         }
-        let op = v.get_def().expect("isEventualConstant: written vn has no def");
+        let op = v
+            .get_def()
+            .expect("isEventualConstant: written vn has no def");
         let o = data.obank().get(op).expect("isEventualConstant: stale op");
         match o.code() {
             OpCode::CPUI_LOAD => {
@@ -2521,7 +2814,10 @@ fn dc_last_chance_load(data: &mut Funcdata, worklist: &mut Vec<VarnodeId>) -> bo
                 && dc_is_eventual_constant(data, ptr, 3, 1));
         if eventual {
             dc_push_consumed(data, !0u64, vn, worklist);
-            data.vbank_mut().get_mut(vn).expect("lastChanceLoad: stale out").set_auto_live_hold();
+            data.vbank_mut()
+                .get_mut(vn)
+                .expect("lastChanceLoad: stale out")
+                .set_auto_live_hold();
             res = true;
         }
     }
@@ -2577,7 +2873,9 @@ fn deadcode_apply(data: &mut Funcdata) -> ApplyResult {
     // Rc handles are cheap clones that decouple the borrow.
     let spaces: Vec<Rc<AddrSpace>> = {
         let manage = data.get_arch().manage();
-        (0..manage.num_spaces()).filter_map(|i| manage.get_space(i).map(Rc::clone)).collect()
+        (0..manage.num_spaces())
+            .filter_map(|i| manage.get_space(i).map(Rc::clone))
+            .collect()
     };
     for spc in &spaces {
         let spc = Rc::clone(spc);
@@ -2597,13 +2895,26 @@ fn deadcode_apply(data: &mut Funcdata) -> ApplyResult {
     let return_consume = dc_gather_consumed_return(data);
     let alive: Vec<OpId> = data.obank().iter_alive().collect();
     for op in alive {
-        data.obank_mut().get_mut(op).expect("deadcode: stale op").clear_indirect_source();
+        data.obank_mut()
+            .get_mut(op)
+            .expect("deadcode: stale op")
+            .clear_indirect_source();
         let (is_call, is_assignment, opc, n) = {
             let o = data.obank().get(op).expect("deadcode: stale op");
-            (o.is_call() && !crate::kuna_roundingops::is_pure_call(data, op), o.is_assignment(), o.code(), o.num_input())
+            (
+                o.is_call() && !crate::kuna_roundingops::is_pure_call(data, op),
+                o.is_assignment(),
+                o.code(),
+                o.num_input(),
+            )
         };
         if is_call {
-            if data.obank().get(op).expect("stale op").is_call_without_spec() {
+            if data
+                .obank()
+                .get(op)
+                .expect("stale op")
+                .is_call_without_spec()
+            {
                 for i in 0..n {
                     if let Some(ii) = data.obank().get(op).expect("stale op").get_in(i) {
                         dc_push_consumed(data, !0u64, ii, &mut worklist);
@@ -2714,7 +3025,11 @@ fn deadcode_apply(data: &mut Funcdata) -> ApplyResult {
             if !written {
                 continue;
             }
-            let vacflag = data.vbank().get(vn).expect("sweep: stale vn").is_consume_vacuous();
+            let vacflag = data
+                .vbank()
+                .get(vn)
+                .expect("sweep: stale vn")
+                .is_consume_vacuous();
             {
                 let vm = data.vbank_mut().get_mut(vn).expect("sweep: stale vn");
                 vm.clear_consume_list();
@@ -2722,9 +3037,16 @@ fn deadcode_apply(data: &mut Funcdata) -> ApplyResult {
             }
             if !vacflag {
                 // Not even vacuously consumed -> remove the defining op.
-                let op = data.vbank().get(vn).expect("sweep: stale vn").get_def().expect("def");
+                let op = data
+                    .vbank()
+                    .get(vn)
+                    .expect("sweep: stale vn")
+                    .get_def()
+                    .expect("def");
                 changecount += 1;
-                if data.obank().get(op).expect("sweep: stale op").is_call() && !crate::kuna_roundingops::is_pure_call(data, op) {
+                if data.obank().get(op).expect("sweep: stale op").is_call()
+                    && !crate::kuna_roundingops::is_pure_call(data, op)
+                {
                     data.op_unset_output(op);
                 } else {
                     data.op_destroy(op);
@@ -2761,7 +3083,9 @@ impl ActionConditionalConst {
     /// Construct in group `g` (C++
     /// `ActionConditionalConst::ActionConditionalConst`).
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionConditionalConst { base: ActionBase::new(0, "condconst", g) })
+        Box::new(ActionConditionalConst {
+            base: ActionBase::new(0, "condconst", g),
+        })
     }
 }
 
@@ -2776,7 +3100,9 @@ impl Action for ActionConditionalConst {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionConditionalConst { base: self.base.clone() }))
+        Some(Box::new(ActionConditionalConst {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:4748 — ActionConditionalConst::apply.  The full
@@ -2801,7 +3127,9 @@ pub struct ActionSwitchNorm {
 impl ActionSwitchNorm {
     /// Construct in group `g` (C++ `ActionSwitchNorm::ActionSwitchNorm`).
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionSwitchNorm { base: ActionBase::new(0, "switchnorm", g) })
+        Box::new(ActionSwitchNorm {
+            base: ActionBase::new(0, "switchnorm", g),
+        })
     }
 }
 
@@ -2816,7 +3144,9 @@ impl Action for ActionSwitchNorm {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionSwitchNorm { base: self.base.clone() }))
+        Some(Box::new(ActionSwitchNorm {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:4782 — ActionSwitchNorm::apply
@@ -2837,9 +3167,7 @@ impl Action for ActionSwitchNorm {
             }
             // Take the table out of the function so it can be mutated against
             // `&mut Funcdata` (the recover/fold helpers read/write the IR).
-            let placeholder = crate::jumptable::JumpTable::new(
-                data.get_address().clone(),
-            );
+            let placeholder = crate::jumptable::JumpTable::new(data.get_address().clone());
             let mut jt = std::mem::replace(data.get_jump_table_mut(i), placeholder);
             if !jt.is_labelled() {
                 // matchModel / recoverLabels / foldInNormalization.  Any low-level
@@ -2880,7 +3208,9 @@ impl ActionUnjustifiedParams {
     /// Construct in group `g` (C++
     /// `ActionUnjustifiedParams::ActionUnjustifiedParams`).
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionUnjustifiedParams { base: ActionBase::new(0, "unjustparams", g) })
+        Box::new(ActionUnjustifiedParams {
+            base: ActionBase::new(0, "unjustparams", g),
+        })
     }
 }
 
@@ -2895,7 +3225,9 @@ impl Action for ActionUnjustifiedParams {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionUnjustifiedParams { base: self.base.clone() }))
+        Some(Box::new(ActionUnjustifiedParams {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:5018 — ActionUnjustifiedParams::apply
@@ -2923,8 +3255,10 @@ impl Action for ActionUnjustifiedParams {
         // Snapshot the input list once; `adjustInputVarnodes` rewrites it, so we
         // re-seek (C++ resets the iterator after each adjustment).
         loop {
-            let inputs: Vec<crate::context::VarnodeId> =
-                data.vbank().iter_def_flag(crate::varnode::varnode_flags::input).collect();
+            let inputs: Vec<crate::context::VarnodeId> = data
+                .vbank()
+                .iter_def_flag(crate::varnode::varnode_flags::input)
+                .collect();
             let mut adjusted = false;
             'scan: for (idx, &vn) in inputs.iter().enumerate() {
                 let (vn_addr, vn_size) = {
@@ -2955,7 +3289,10 @@ impl Action for ActionUnjustifiedParams {
                             Some(v) => v,
                             None => continue,
                         };
-                        if v.get_addr().get_space().map_or(true, |s| !Rc::ptr_eq(s, &vspace)) {
+                        if v.get_addr()
+                            .get_space()
+                            .map_or(true, |s| !Rc::ptr_eq(s, &vspace))
+                        {
                             continue;
                         }
                         let ooff = v.get_addr().get_offset();
@@ -2974,7 +3311,10 @@ impl Action for ActionUnjustifiedParams {
                             Some(v) => v,
                             None => continue,
                         };
-                        if v.get_addr().get_space().map_or(true, |s| !Rc::ptr_eq(s, &vspace)) {
+                        if v.get_addr()
+                            .get_space()
+                            .map_or(true, |s| !Rc::ptr_eq(s, &vspace))
+                        {
                             continue;
                         }
                         let foff = v.get_addr().get_offset();
@@ -3032,7 +3372,9 @@ impl ActionDynamicMapping {
     /// Construct in group `g` (C++
     /// `ActionDynamicMapping::ActionDynamicMapping`).
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionDynamicMapping { base: ActionBase::new(0, "dynamicmapping", g) })
+        Box::new(ActionDynamicMapping {
+            base: ActionBase::new(0, "dynamicmapping", g),
+        })
     }
 }
 
@@ -3047,7 +3389,9 @@ impl Action for ActionDynamicMapping {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionDynamicMapping { base: self.base.clone() }))
+        Some(Box::new(ActionDynamicMapping {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:5106 — ActionDynamicMapping::apply
@@ -3097,7 +3441,9 @@ impl Action for ActionDynamicSymbols {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionDynamicSymbols { base: self.base.clone() }))
+        Some(Box::new(ActionDynamicSymbols {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:5123 — ActionDynamicSymbols::apply
@@ -3150,7 +3496,9 @@ impl Action for ActionInternalStorage {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionInternalStorage { base: self.base.clone() }))
+        Some(Box::new(ActionInternalStorage {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:5192 — ActionInternalStorage::apply (marking only, no
@@ -3248,7 +3596,10 @@ impl Action for ActionInferTypes {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionInferTypes { base: self.base.clone(), localcount: 0 }))
+        Some(Box::new(ActionInferTypes {
+            base: self.base.clone(),
+            localcount: 0,
+        }))
     }
     /// C++ `ActionInferTypes::reset`: `{ localcount = 0; }`.
     fn reset(&mut self, _data: &mut Funcdata) {
@@ -3279,7 +3630,9 @@ impl Action for ActionInferTypes {
         // a full pass has run and changed nothing.  A function whose first pass
         // is already at the fixpoint is settled too -- a lattice that never
         // needed to move is still decided.
-        if crate::kuna_floatreg::with_moved_memo(|| crate::coreaction_infertypes::run_infer_types(data)) {
+        if crate::kuna_floatreg::with_moved_memo(|| {
+            crate::coreaction_infertypes::run_infer_types(data)
+        }) {
             self.localcount += 1;
             data.set_kuna_infertypes_settled(false);
         } else {

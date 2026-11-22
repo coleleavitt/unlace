@@ -81,8 +81,8 @@
 
 pub mod kuna_cppsig;
 // (kuna) Swift demangling (`$s` stable mangling + the ObjC runtime's `_Tt` names).
-pub mod kuna_swift;
 mod kuna_msvcsig;
+pub mod kuna_swift;
 
 /// `GnuDemangler.GLOBAL_PREFIX` (`GnuDemangler.java:35`).
 const GLOBAL_PREFIX: &str = "_GLOBAL_";
@@ -245,7 +245,8 @@ fn rust_spelling(demangled: &rustc_demangle::Demangle<'_>) -> String {
     let raw = demangled.as_str();
     let legacy = raw.starts_with("_ZN") || raw.starts_with("__ZN") || raw.starts_with("ZN");
     let uppercase_tail = legacy
-        && raw.rsplit_once("17h")
+        && raw
+            .rsplit_once("17h")
             .and_then(|(_, tail)| tail.get(..16).zip(tail.get(16..)))
             .is_some_and(|(digits, end)| {
                 (end == "E" || end.starts_with("E."))
@@ -304,7 +305,7 @@ pub fn normalize_rust_name(name: &str) -> String {
                         break;
                     }
                 }
-                    _ => {}
+                _ => {}
             }
             // ` as ` (trait qualifier) or ` for ` (inherent impl) at depth 1
             // separates the two paths the group carries.
@@ -326,7 +327,11 @@ pub fn normalize_rust_name(name: &str) -> String {
             Some((a, w, Sep::As)) => {
                 let lhs = cur[open + 1..a].trim();
                 let rhs = cur[a + w..close].trim();
-                if lhs.starts_with("impl ") { rhs.to_string() } else { lhs.to_string() }
+                if lhs.starts_with("impl ") {
+                    rhs.to_string()
+                } else {
+                    lhs.to_string()
+                }
             }
             // `<impl Trait for Type>::m` keeps the TYPE, for the same reason.
             Some((a, w, Sep::For)) => cur[a + w..close].trim().to_string(),
@@ -427,7 +432,8 @@ pub fn demangle_name(raw: &str) -> Option<String> {
             .no_params()
             .no_return_type();
         if let Ok(d) = sym.demangle_with_options(&opts) {
-            let reduced = strip_legacy_rust_hash(&strip_bracket_groups(&name_anonymous_namespaces(&d)));
+            let reduced =
+                strip_legacy_rust_hash(&strip_bracket_groups(&name_anonymous_namespaces(&d)));
             if !reduced.is_empty() && reduced != raw {
                 return Some(reduced);
             }
@@ -465,7 +471,9 @@ fn name_msvc_special_members(name: &str) -> String {
         if let Some(inner) = part.strip_prefix('`').and_then(|p| p.strip_suffix('\'')) {
             if inner.contains("::") {
                 parts.extend(
-                    name_msvc_special_members(inner).split("::").map(str::to_string),
+                    name_msvc_special_members(inner)
+                        .split("::")
+                        .map(str::to_string),
                 );
                 continue;
             }
@@ -545,7 +553,9 @@ fn msvc_identifier(phrase: &str) -> Option<String> {
         .filter(|word| !word.is_empty())
         .collect::<Vec<_>>()
         .join("_");
-    ident.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_').then_some(ident)
+    ident
+        .starts_with(|c: char| c.is_ascii_alphabetic() || c == '_')
+        .then_some(ident)
 }
 
 /// The identifier kuna nests an **anonymous namespace** under, matching the
@@ -557,8 +567,7 @@ const ANONYMOUS_NAMESPACE: &str = "anonymous_namespace";
 /// The two spellings a demangler renders an anonymous namespace with: Itanium
 /// (`_GLOBAL__N_…`, gcc/clang/MinGW) parenthesizes it, MSVC (`?A0x…@`)
 /// backtick-quotes it.
-const ANONYMOUS_NAMESPACE_SPELLINGS: [&str; 2] =
-    ["(anonymous namespace)", "`anonymous namespace'"];
+const ANONYMOUS_NAMESPACE_SPELLINGS: [&str; 2] = ["(anonymous namespace)", "`anonymous namespace'"];
 
 /// Rewrite every anonymous-namespace spelling in a demangled name to the
 /// [`ANONYMOUS_NAMESPACE`] identifier.
@@ -600,8 +609,9 @@ fn name_anonymous_namespaces(name: &str) -> String {
 /// function's identity as `push_back` — but they are made of the same
 /// characters [`strip_bracket_groups`] removes, so they need the exemption
 /// below.
-const BRACKET_OPERATORS: &[&str] =
-    &["<=>", "<<=", ">>=", "->*", "()", "[]", "<<", ">>", "<=", ">=", "->", "<", ">"];
+const BRACKET_OPERATORS: &[&str] = &[
+    "<=>", "<<=", ">>=", "->*", "()", "[]", "<<", ">>", "<=", ">=", "->", "<", ">",
+];
 
 /// Whether `out` ends with the head of a C++ operator name, so a bracket run
 /// starting here spells the operator rather than opening a group. The three
@@ -610,11 +620,16 @@ const BRACKET_OPERATORS: &[&str] =
 /// merely ends in "operator" (`my_operator`) is not treated as one.
 fn ends_with_operator_head(out: &str) -> bool {
     let tail = out.trim_end();
-    ["operator new", "operator delete", "operator"].iter().any(|head| {
-        tail.strip_suffix(head).is_some_and(|before| {
-            before.chars().next_back().is_none_or(|c| !c.is_alphanumeric() && c != '_')
+    ["operator new", "operator delete", "operator"]
+        .iter()
+        .any(|head| {
+            tail.strip_suffix(head).is_some_and(|before| {
+                before
+                    .chars()
+                    .next_back()
+                    .is_none_or(|c| !c.is_alphanumeric() && c != '_')
+            })
         })
-    })
 }
 
 /// Remove every balanced bracketed group — `<...>` (template args), `(...)`
@@ -642,8 +657,10 @@ fn strip_bracket_groups(s: &str) -> String {
         if depth == 0 && ends_with_operator_head(&out) {
             if let Some(spelling) = BRACKET_OPERATORS.iter().find(|sp| s[i..].starts_with(**sp)) {
                 let rest = &s[i + spelling.len()..];
-                let opens_template =
-                    rest.chars().next().is_some_and(|c| c.is_alphanumeric() || c == '_');
+                let opens_template = rest
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_alphanumeric() || c == '_');
                 if !opens_template {
                     out.push_str(spelling);
                     i += spelling.len();
@@ -681,7 +698,8 @@ fn strip_bracket_groups(s: &str) -> String {
 fn strip_legacy_rust_hash(name: &str) -> String {
     if let Some(last) = name.rfind("::") {
         let tail = &name[last + 2..];
-        let is_legacy_hash = tail.strip_prefix('h')
+        let is_legacy_hash = tail
+            .strip_prefix('h')
             .is_some_and(crate::sourcelang::is_legacy_rust_hash_digits);
         if is_legacy_hash {
             return name[..last].to_string();
@@ -795,12 +813,24 @@ mod tests {
     #[test]
     fn normalize_rust_name_resolves_generics_and_qualifiers() {
         for (input, want) in [
-            ("core::ptr::drop_in_place<Vec<u8>>", "core::ptr::drop_in_place"),
-            ("<aes::autodetect::Aes256 as crypto_common::KeyInit>::new", "aes::autodetect::Aes256::new"),
+            (
+                "core::ptr::drop_in_place<Vec<u8>>",
+                "core::ptr::drop_in_place",
+            ),
+            (
+                "<aes::autodetect::Aes256 as crypto_common::KeyInit>::new",
+                "aes::autodetect::Aes256::new",
+            ),
             ("<impl core::fmt::Debug for u8>::fmt", "u8::fmt"),
             ("alloc::vec::Vec<T,A>::resize", "alloc::vec::Vec::resize"),
-            ("core::ptr::drop_in_place<core::result::Result<(),std::io::error::Error>>", "core::ptr::drop_in_place"),
-            ("<cbc::decrypt::Decryptor<C> as crypto_common::InnerIvInit>::inner_iv_init", "cbc::decrypt::Decryptor::inner_iv_init"),
+            (
+                "core::ptr::drop_in_place<core::result::Result<(),std::io::error::Error>>",
+                "core::ptr::drop_in_place",
+            ),
+            (
+                "<cbc::decrypt::Decryptor<C> as crypto_common::InnerIvInit>::inner_iv_init",
+                "cbc::decrypt::Decryptor::inner_iv_init",
+            ),
             ("plain::name", "plain::name"),
             // A name that resolves to nothing in the middle must not leave an
             // empty component behind.
@@ -816,14 +846,29 @@ mod tests {
     fn rtti_class_name_msvc_typeinfo() {
         // The RTTI0 `.?A<kind><name>@@` type-info forms recover their bare class
         // name (the Ghidra RttiUtil recipe), kind-agnostic (V class / U struct).
-        assert_eq!(demangle_rtti_class_name(".?AVShape@@").as_deref(), Some("Shape"));
-        assert_eq!(demangle_rtti_class_name(".?AUBox@@").as_deref(), Some("Box"));
+        assert_eq!(
+            demangle_rtti_class_name(".?AVShape@@").as_deref(),
+            Some("Shape")
+        );
+        assert_eq!(
+            demangle_rtti_class_name(".?AUBox@@").as_deref(),
+            Some("Box")
+        );
         // A namespaced class keeps its `::` qualification (the scope splitter nests it).
-        assert_eq!(demangle_rtti_class_name(".?AVInner@ns@@").as_deref(), Some("ns::Inner"));
+        assert_eq!(
+            demangle_rtti_class_name(".?AVInner@ns@@").as_deref(),
+            Some("ns::Inner")
+        );
         // A templated class is reduced to the bare name (the name-only contract).
-        assert_eq!(demangle_rtti_class_name(".?AV?$Vec@H@@").as_deref(), Some("Vec"));
+        assert_eq!(
+            demangle_rtti_class_name(".?AV?$Vec@H@@").as_deref(),
+            Some("Vec")
+        );
         // The leading `.` is optional (some readers strip it before calling).
-        assert_eq!(demangle_rtti_class_name("?AVShape@@").as_deref(), Some("Shape"));
+        assert_eq!(
+            demangle_rtti_class_name("?AVShape@@").as_deref(),
+            Some("Shape")
+        );
         // Non-type-info strings are rejected (no panic, no junk name).
         assert_eq!(demangle_rtti_class_name("Shape"), None);
         assert_eq!(demangle_rtti_class_name(".?AB"), None);
@@ -835,9 +880,18 @@ mod tests {
     #[test]
     fn typeinfo_name_itanium() {
         assert_eq!(demangle_typeinfo_name("5Shape").as_deref(), Some("Shape"));
-        assert_eq!(demangle_typeinfo_name("N7leveldb3EnvE").as_deref(), Some("leveldb::Env"));
-        assert_eq!(demangle_typeinfo_name("3VecIiE").as_deref(), Some("Vec<int>"));
-        assert_eq!(demangle_typeinfo_name("3VecIdE").as_deref(), Some("Vec<double>"));
+        assert_eq!(
+            demangle_typeinfo_name("N7leveldb3EnvE").as_deref(),
+            Some("leveldb::Env")
+        );
+        assert_eq!(
+            demangle_typeinfo_name("3VecIiE").as_deref(),
+            Some("Vec<int>")
+        );
+        assert_eq!(
+            demangle_typeinfo_name("3VecIdE").as_deref(),
+            Some("Vec<double>")
+        );
         // ABI §2.9.1: a leading `*` marks a TU-local type; it is not part of the name.
         assert_eq!(
             demangle_typeinfo_name("*N12_GLOBAL__N_16HiddenE").as_deref(),
@@ -895,7 +949,10 @@ mod tests {
         assert_eq!(n, "mycrate::example");
         // legacy rust `_ZN..` mangling, hash dropped by `{:#}`.
         let legacy = "_ZN3std2io5stdio6_print17h0123456789abcdefE";
-        assert_eq!(demangle_name(legacy), Some("std::io::stdio::_print".to_string()));
+        assert_eq!(
+            demangle_name(legacy),
+            Some("std::io::stdio::_print".to_string())
+        );
     }
 
     #[test]
@@ -927,7 +984,9 @@ mod tests {
             Some("leveldb::anonymous_namespace::HandleDumpCommand".to_string())
         );
         assert_eq!(
-            demangle_name("_ZNKSt13__facet_shims12_GLOBAL__N_112collate_shimIcE10do_compareEPKcS4_S4_S4_"),
+            demangle_name(
+                "_ZNKSt13__facet_shims12_GLOBAL__N_112collate_shimIcE10do_compareEPKcS4_S4_S4_"
+            ),
             Some("std::__facet_shims::anonymous_namespace::collate_shim::do_compare".to_string())
         );
         // At the top level the group was the FIRST component, so the reduction
@@ -1007,7 +1066,10 @@ mod tests {
         );
         // A name that already spells the identifier round-trips unchanged, so a
         // second pass over a rewritten name is a no-op.
-        assert_eq!(name_anonymous_namespaces("anonymous_namespace::f"), "anonymous_namespace::f");
+        assert_eq!(
+            name_anonymous_namespaces("anonymous_namespace::f"),
+            "anonymous_namespace::f"
+        );
         assert_eq!(
             name_anonymous_namespaces("(anonymous namespace)::f"),
             "anonymous_namespace::f"
@@ -1043,8 +1105,14 @@ mod tests {
         for (raw, name) in [
             ("_ZN4demo17hABCDEF0123456789E", "demo::hABCDEF0123456789"),
             ("_ZN5mixed17hAbCdE0123456789fE", "mixed::hAbCdE0123456789f"),
-            ("_ZN6member17hABCDEF012345678917h0123456789abcdefE", "member::hABCDEF0123456789"),
-            ("_ZN4llvm17hABCDEF0123456789E.llvm.9D1C9369", "llvm::hABCDEF0123456789"),
+            (
+                "_ZN6member17hABCDEF012345678917h0123456789abcdefE",
+                "member::hABCDEF0123456789",
+            ),
+            (
+                "_ZN4llvm17hABCDEF0123456789E.llvm.9D1C9369",
+                "llvm::hABCDEF0123456789",
+            ),
             ("_ZN5lower6actual17h0123456789abcdefE", "lower::actual"),
         ] {
             assert_eq!(demangle_raw(raw).as_deref(), Some(name), "{raw}");
@@ -1090,7 +1158,10 @@ mod tests {
     fn msvc_member_function_name_only() {
         // `?foo@Bar@@QEAAXXZ` = `public: void __cdecl Bar::foo(void)`.
         // The headline before -> after: raw mangled -> `Bar::foo` (name-only).
-        assert_eq!(demangle_name("?foo@Bar@@QEAAXXZ"), Some("Bar::foo".to_string()));
+        assert_eq!(
+            demangle_name("?foo@Bar@@QEAAXXZ"),
+            Some("Bar::foo".to_string())
+        );
     }
 
     #[test]
@@ -1106,7 +1177,10 @@ mod tests {
     fn msvc_free_function() {
         // `?freefunc@@YAXH@Z` = `void __cdecl freefunc(int)` — a non-namespaced
         // free function reduces to the bare name (no junk `::` scope).
-        assert_eq!(demangle_name("?freefunc@@YAXH@Z"), Some("freefunc".to_string()));
+        assert_eq!(
+            demangle_name("?freefunc@@YAXH@Z"),
+            Some("freefunc".to_string())
+        );
         assert_eq!(
             demangle_raw("?freefunc@@YAXH@Z"),
             Some("void __cdecl freefunc(int)".to_string())
@@ -1128,9 +1202,15 @@ mod tests {
         let n = demangle_name("?baz@A@B@C@@QEAAHHH@Z").expect("nested MSVC demangles");
         assert_eq!(n, "C::B::A::baz");
         assert!(!n.contains('('), "no signature leakage: {n}");
-        assert!(!n.contains('@'), "no raw `@` leakage into the scope name: {n}");
+        assert!(
+            !n.contains('@'),
+            "no raw `@` leakage into the scope name: {n}"
+        );
         // A constructor `??0Bar@@QEAA@XZ` = `Bar::Bar(void)`.
-        assert_eq!(demangle_name("??0Bar@@QEAA@XZ"), Some("Bar::Bar".to_string()));
+        assert_eq!(
+            demangle_name("??0Bar@@QEAA@XZ"),
+            Some("Bar::Bar".to_string())
+        );
     }
 
     #[test]
@@ -1147,7 +1227,10 @@ mod tests {
             demangle_name(
                 "?<lambda_invoker_cdecl>@<lambda_1>@?4??getDefaultCtr@?$QMetaTypeForType@VQString@@@QtPrivate@@SAP6AXPEBVQMetaTypeInterface@4@PEAX@ZXZ@SA@01@Z"
             ),
-            Some("QtPrivate::QMetaTypeForType::getDefaultCtr::lambda_1::lambda_invoker_cdecl".to_string())
+            Some(
+                "QtPrivate::QMetaTypeForType::getDefaultCtr::lambda_1::lambda_invoker_cdecl"
+                    .to_string()
+            )
         );
         assert_eq!(
             demangle_name("??BQColor@@QEBA?AVQVariant@@XZ"),
@@ -1162,9 +1245,15 @@ mod tests {
     fn msvc_constructs_msvc_demangler_rejects() {
         for (raw, name) in [
             // a deduced `auto` return type
-            ("??$_Max_vectorized@$$CBH@std@@YA?A_PQEBH0@Z", "std::_Max_vectorized"),
+            (
+                "??$_Max_vectorized@$$CBH@std@@YA?A_PQEBH0@Z",
+                "std::_Max_vectorized",
+            ),
             // operator<=>
-            ("??__M@YA?AUstrong_ordering@std@@AEBVQString@@0@Z", "operator<=>"),
+            (
+                "??__M@YA?AUstrong_ordering@std@@AEBVQString@@0@Z",
+                "operator<=>",
+            ),
             // the address of a variable as a template argument
             (
                 "??$staticMetaObject@$1?staticMetaObject@QFile@@2UQMetaObject@@B@QMetaObject@@SAPEBU0@XZ",
@@ -1190,7 +1279,9 @@ mod tests {
                 "QDtlsBasePrivate::vector_deleting_destructor_vtordisp_4_0",
             ),
         ] {
-            assert!(msvc_demangler::demangle(raw, msvc_demangler::DemangleFlags::NAME_ONLY).is_err());
+            assert!(
+                msvc_demangler::demangle(raw, msvc_demangler::DemangleFlags::NAME_ONLY).is_err()
+            );
             assert_eq!(demangle_name(raw).as_deref(), Some(name), "{raw}");
         }
     }
@@ -1217,10 +1308,7 @@ mod tests {
     #[test]
     fn strip_bracket_groups_handles_nested_and_unbalanced() {
         assert_eq!(strip_bracket_groups("foo<int>::bar(int)"), "foo::bar");
-        assert_eq!(
-            strip_bracket_groups("a::b<c::d<e> >::f"),
-            "a::b::f"
-        );
+        assert_eq!(strip_bracket_groups("a::b<c::d<e> >::f"), "a::b::f");
         // tolerate an unbalanced trailing bracket (defensive)
         assert_eq!(strip_bracket_groups("foo::bar<"), "foo::bar");
     }
@@ -1233,7 +1321,10 @@ mod tests {
     fn strip_bracket_groups_keeps_operator_spellings() {
         for (input, want) in [
             ("MapClass::operator[](Cell &)", "MapClass::operator[]"),
-            ("Random2Class::operator()(int, int)", "Random2Class::operator()"),
+            (
+                "Random2Class::operator()(int, int)",
+                "Random2Class::operator()",
+            ),
             ("Foo::operator<<(int)", "Foo::operator<<"),
             ("Foo::operator<(Foo const&)", "Foo::operator<"),
             ("Foo::operator>=(Foo const&)", "Foo::operator>="),
@@ -1259,7 +1350,10 @@ mod tests {
     fn demangle_name_keeps_operator_spellings() {
         for (raw, want) in [
             // MSVC (`cl.exe`)
-            ("??AMapClass@@QBEAAVCellClass@@ABVCell@@@Z", "MapClass::operator[]"),
+            (
+                "??AMapClass@@QBEAAVCellClass@@ABVCell@@@Z",
+                "MapClass::operator[]",
+            ),
             ("??RRandom2Class@@QAEHHH@Z", "Random2Class::operator()"),
             ("??6Foo@@QAEAAV0@H@Z", "Foo::operator<<"),
             ("??MFoo@@QBE_NABV0@@Z", "Foo::operator<"),

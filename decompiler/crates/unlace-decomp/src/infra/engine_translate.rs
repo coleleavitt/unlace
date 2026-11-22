@@ -34,9 +34,7 @@ use unlace_sleigh::loadimage::LoadImage;
 use unlace_sleigh::sleigh::Sleigh;
 use unlace_sleigh::translate::{PcodeEmit, Translate};
 
-use crate::pcodeinject::{
-    InjectContext, CALLFIXUP_TYPE, CALLMECHANISM_TYPE, CALLOTHERFIXUP_TYPE,
-};
+use crate::pcodeinject::{CALLFIXUP_TYPE, CALLMECHANISM_TYPE, CALLOTHERFIXUP_TYPE, InjectContext};
 
 /// The seam between [`Architecture`](crate::architecture::Architecture) and
 /// its disassembly engine (see the module docs).

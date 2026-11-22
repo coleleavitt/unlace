@@ -30,10 +30,10 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
-use unlace_base::space::{spacetype, AddrSpace, AddrSpaceManager};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, spacetype};
 use unlace_base::types::{int4, uint4};
 
-use unlace_decomp::dtype::{type_class, type_metatype, Datatype, TypeFactory};
+use unlace_decomp::dtype::{Datatype, TypeFactory, type_class, type_metatype};
 use unlace_decomp::fspec::{
     FuncProto, ParamActive, ParamEntry, ParamListType, ParameterPieces, ProtoModel,
     PrototypePieces, ScoreProtoModel,
@@ -178,7 +178,12 @@ impl TypeFactory for VoidTypeFactory {
     ) -> KunaResult<Rc<Datatype>> {
         unreached!()
     }
-    fn get_type_pointer(&self, _s: int4, _pt: Rc<Datatype>, _ws: uint4) -> KunaResult<Rc<Datatype>> {
+    fn get_type_pointer(
+        &self,
+        _s: int4,
+        _pt: Rc<Datatype>,
+        _ws: uint4,
+    ) -> KunaResult<Rc<Datatype>> {
         unreached!()
     }
     fn get_type_pointer_named(
@@ -426,7 +431,11 @@ fn do_score_hole_at_slot0_costs_16_w6s4() {
     score2.add_parameter(&model, &addr(&reg, 0x20), 4); // slot 1 first
     score2.add_parameter(&model, &addr(&reg, 0x10), 4); // slot 0 second
     score2.do_score();
-    assert_eq!(score2.get_score(), 0, "doScore sorts by slot before scoring");
+    assert_eq!(
+        score2.get_score(),
+        0,
+        "doScore sorts by slot before scoring"
+    );
 }
 
 /// `doScore` duplication branch (fspec.cc:2770): two trials that map to the SAME
@@ -445,7 +454,11 @@ fn do_score_duplication_and_mismatch_penalties_w6s4() {
     score.add_parameter(&model, &addr(&reg, 0x10), 4);
     score.do_score();
     assert_eq!(score.get_num_mismatch(), 0);
-    assert_eq!(score.get_score(), 20, "slot duplication costs mismatchpenalty");
+    assert_eq!(
+        score.get_score(),
+        20,
+        "slot duplication costs mismatchpenalty"
+    );
 
     // A trial at an address that is NOT a possible parameter (0x100) is a
     // mismatch: not added to `entry`, counted in `mismatch` -> 20 * 1.
@@ -485,7 +498,10 @@ fn set_return_bytes_consumed_is_monotone_decreasing_w6s4() {
     assert!(fp.set_return_bytes_consumed(4), "smaller -> update");
     assert_eq!(fp.get_return_bytes_consumed(), 4);
 
-    assert!(!fp.set_return_bytes_consumed(0), "0 still a no-op after set");
+    assert!(
+        !fp.set_return_bytes_consumed(0),
+        "0 still a no-op after set"
+    );
     assert_eq!(fp.get_return_bytes_consumed(), 4);
 }
 

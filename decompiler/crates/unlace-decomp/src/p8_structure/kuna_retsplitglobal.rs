@@ -104,7 +104,10 @@ impl OptionRetSplitGlobal {
     pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
-        Ok((val, format!("Global-writing shared-epilogue split refusal turned {prop}")))
+        Ok((
+            val,
+            format!("Global-writing shared-epilogue split refusal turned {prop}"),
+        ))
     }
 }
 
@@ -137,7 +140,12 @@ pub const MAX_CLONED_GLOBAL_STORES: usize = 8;
 /// bare epilogue by how many globals the PROGRAM has. They are recognised two
 /// ways, either sufficient: the `return_copy` flag `guardReturns` sets, and the
 /// fact that input and output name the same storage.
-pub fn is_global_store(is_copy: bool, out_is_persist: bool, is_return_copy: bool, input_is_same_storage: bool) -> bool {
+pub fn is_global_store(
+    is_copy: bool,
+    out_is_persist: bool,
+    is_return_copy: bool,
+    input_is_same_storage: bool,
+) -> bool {
     is_copy && out_is_persist && !is_return_copy && !input_is_same_storage
 }
 

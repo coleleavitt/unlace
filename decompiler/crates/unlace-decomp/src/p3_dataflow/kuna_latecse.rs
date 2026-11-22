@@ -24,11 +24,20 @@ use crate::funcdata::Funcdata;
 /// such use into its own field or element access, which one shared temporary
 /// would hide.
 fn feeds_address(data: &Funcdata, op: OpId) -> bool {
-    let Some(out) = data.obank().get(op).and_then(|o| o.get_out()).and_then(|v| data.vbank().get(v)) else { return false };
+    let Some(out) = data
+        .obank()
+        .get(op)
+        .and_then(|o| o.get_out())
+        .and_then(|v| data.vbank().get(v))
+    else {
+        return false;
+    };
     out.descend_iter().any(|d| {
         data.obank().get(d).is_some_and(|u| {
-            matches!(u.code(), unlace_num::opcodes::OpCode::CPUI_LOAD | unlace_num::opcodes::OpCode::CPUI_STORE)
-                && u.get_in(1) == o_out(data, op)
+            matches!(
+                u.code(),
+                unlace_num::opcodes::OpCode::CPUI_LOAD | unlace_num::opcodes::OpCode::CPUI_STORE
+            ) && u.get_in(1) == o_out(data, op)
         })
     })
 }
@@ -42,11 +51,17 @@ pub(crate) fn latecse_apply(data: &mut Funcdata) -> i32 {
     let shared: Vec<VarnodeId> = data
         .vbank()
         .iter_def()
-        .filter(|&vn| data.vbank().get(vn).is_some_and(|v| v.descend_iter().nth(1).is_some()))
+        .filter(|&vn| {
+            data.vbank()
+                .get(vn)
+                .is_some_and(|v| v.descend_iter().nth(1).is_some())
+        })
         .collect();
     let mut count = 0;
     for vn in shared {
-        let Some(v) = data.vbank().get(vn) else { continue };
+        let Some(v) = data.vbank().get(vn) else {
+            continue;
+        };
         let mut list: Vec<(unlace_base::types::uintm, OpId)> = v
             .descend_iter()
             .filter_map(|op| {
@@ -80,7 +95,9 @@ pub struct ActionLateCse {
 
 impl ActionLateCse {
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionLateCse { base: ActionBase::new(crate::action::ruleflags::rule_onceperfunc, "latecse", g) })
+        Box::new(ActionLateCse {
+            base: ActionBase::new(crate::action::ruleflags::rule_onceperfunc, "latecse", g),
+        })
     }
 }
 
@@ -92,9 +109,11 @@ impl Action for ActionLateCse {
         &mut self.base
     }
     fn clone_filtered(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Action>> {
-        grouplist
-            .contains(self.get_group())
-            .then(|| Box::new(ActionLateCse { base: self.base.clone() }) as Box<dyn Action>)
+        grouplist.contains(self.get_group()).then(|| {
+            Box::new(ActionLateCse {
+                base: self.base.clone(),
+            }) as Box<dyn Action>
+        })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data.get_arch().late_cse {

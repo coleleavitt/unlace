@@ -31,7 +31,7 @@ use unlace_num::opcodes::OpCode;
 use crate::cast::{CastStrategy, CastStrategyC};
 use crate::context::{OpId, VarnodeId};
 use crate::coreaction_casts::FuncdataCastContext;
-use crate::dtype::{type_metatype, Datatype, TypeFactory};
+use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
 
 const DEPTH: u32 = 8;
@@ -41,11 +41,19 @@ pub(crate) type CInt = (bool, int4);
 
 /// The unsigned type input `slot` of `op` must be cast to because the
 /// expression there is a signed `int` or `long` in C, or `None`.
-pub(crate) fn cast(data: &mut Funcdata, strat: &CastStrategyC, op: OpId, slot: int4) -> Option<Rc<Datatype>> {
+pub(crate) fn cast(
+    data: &mut Funcdata,
+    strat: &CastStrategyC,
+    op: OpId,
+    slot: int4,
+) -> Option<Rc<Datatype>> {
     let o = data.obank().get(op)?;
     let binary = match o.code() {
         OpCode::CPUI_INT_ZEXT | OpCode::CPUI_INT_RIGHT if slot == 0 => false,
-        OpCode::CPUI_INT_LESS | OpCode::CPUI_INT_LESSEQUAL | OpCode::CPUI_INT_DIV | OpCode::CPUI_INT_REM => true,
+        OpCode::CPUI_INT_LESS
+        | OpCode::CPUI_INT_LESSEQUAL
+        | OpCode::CPUI_INT_DIV
+        | OpCode::CPUI_INT_REM => true,
         _ => return None,
     };
     let vn = o.get_in(slot)?;
@@ -59,14 +67,18 @@ pub(crate) fn cast(data: &mut Funcdata, strat: &CastStrategyC, op: OpId, slot: i
         return None;
     }
     let ir = data.vn_type_read_facing(vn, op);
-    if !matches!(ir.get_metatype(), type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN) {
+    if !matches!(
+        ir.get_metatype(),
+        type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN
+    ) {
         return None;
     }
     if c_int(data, strat, vn, op)? != (false, size) {
         return None;
     }
     if let Some(other) = other {
-        if c_int(data, strat, other, op).is_some_and(|(unsigned, width)| unsigned && width >= size) {
+        if c_int(data, strat, other, op).is_some_and(|(unsigned, width)| unsigned && width >= size)
+        {
             return None;
         }
     }
@@ -79,7 +91,10 @@ pub(crate) fn cast(data: &mut Funcdata, strat: &CastStrategyC, op: OpId, slot: i
             return None;
         }
     }
-    data.get_arch().types_rc()?.get_base(size, type_metatype::TYPE_UINT).ok()
+    data.get_arch()
+        .types_rc()?
+        .get_base(size, type_metatype::TYPE_UINT)
+        .ok()
 }
 
 /// A constant operand of the operation that computes the implied `vn` whose
@@ -104,23 +119,39 @@ fn suffixable_literal(data: &Funcdata, vn: VarnodeId) -> Option<VarnodeId> {
         return None;
     }
     (0..d.num_input()).filter_map(|i| d.get_in(i)).find(|&c| {
-        data.vbank().get(c).is_some_and(|cv| cv.is_constant() && !cv.is_annotation()) && {
-            let t = data.vn_type_read_facing(c, def);
-            matches!(t.get_metatype(), type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN)
-                && !t.is_char_print()
-                && !t.is_enum_type()
-                && data.vn_high_display_format(c) == 0
-        }
+        data.vbank()
+            .get(c)
+            .is_some_and(|cv| cv.is_constant() && !cv.is_annotation())
+            && {
+                let t = data.vn_type_read_facing(c, def);
+                matches!(
+                    t.get_metatype(),
+                    type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN
+                ) && !t.is_char_print()
+                    && !t.is_enum_type()
+                    && data.vn_high_display_format(c) == 0
+            }
     })
 }
 
 /// The promoted C type of `vn` as printed where `reader` reads it,
 /// `(unsigned, bytes)`, or `None` when the text does not settle it.
-pub(crate) fn c_int(data: &mut Funcdata, strat: &CastStrategyC, vn: VarnodeId, reader: OpId) -> Option<CInt> {
+pub(crate) fn c_int(
+    data: &mut Funcdata,
+    strat: &CastStrategyC,
+    vn: VarnodeId,
+    reader: OpId,
+) -> Option<CInt> {
     c_int_at(data, strat, vn, reader, DEPTH)
 }
 
-fn c_int_at(data: &mut Funcdata, strat: &CastStrategyC, vn: VarnodeId, reader: OpId, depth: u32) -> Option<CInt> {
+fn c_int_at(
+    data: &mut Funcdata,
+    strat: &CastStrategyC,
+    vn: VarnodeId,
+    reader: OpId,
+    depth: u32,
+) -> Option<CInt> {
     let v = data.vbank().get(vn)?;
     if v.is_annotation() || depth == 0 {
         return None;
@@ -162,7 +193,11 @@ fn c_int_at(data: &mut Funcdata, strat: &CastStrategyC, vn: VarnodeId, reader: O
         }
         _ if d.is_bool_output() => Some((false, 4)),
         _ if info.inherits_sign() => {
-            let n = if info.inherits_sign_first_param_only() { 1 } else { ins.len() };
+            let n = if info.inherits_sign_first_param_only() {
+                1
+            } else {
+                ins.len()
+            };
             let mut acc: Option<CInt> = None;
             for &i in &ins[..n.min(ins.len())] {
                 let (unsigned, width) = c_int_at(data, strat, i, def, depth - 1)?;
@@ -187,12 +222,15 @@ fn declared(t: &Datatype) -> Option<CInt> {
     let size = t.get_size();
     match t.get_metatype() {
         type_metatype::TYPE_BOOL => Some((false, 4)),
-        _ if size < 4 && size > 0 => {
-            matches!(t.get_metatype(), type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN)
-                .then_some((false, 4))
-        }
+        _ if size < 4 && size > 0 => matches!(
+            t.get_metatype(),
+            type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN
+        )
+        .then_some((false, 4)),
         type_metatype::TYPE_INT if size == 4 || size == 8 => Some((false, size)),
-        type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN if size == 4 || size == 8 => Some((true, size)),
+        type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN if size == 4 || size == 8 => {
+            Some((true, size))
+        }
         _ => None,
     }
 }
@@ -211,7 +249,9 @@ fn literal(data: &Funcdata, vn: VarnodeId, reader: OpId) -> Option<CInt> {
     let magnitude = match t.get_metatype() {
         type_metatype::TYPE_BOOL => return Some((false, 4)),
         _ if t.is_char_print() => return Some((false, 4)),
-        type_metatype::TYPE_INT if signbit_negative(off, size) => unlace_base::address::uintb_negate(off, size),
+        type_metatype::TYPE_INT if signbit_negative(off, size) => {
+            unlace_base::address::uintb_negate(off, size)
+        }
         type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN => off,
         _ => return None,
     };

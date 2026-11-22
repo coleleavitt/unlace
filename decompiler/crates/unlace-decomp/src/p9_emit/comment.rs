@@ -29,9 +29,7 @@ use std::collections::BTreeMap;
 
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
-use unlace_base::marshal::{
-    Decoder, ElementId, Encoder, IdRegistry, ATTRIB_CONTENT, ATTRIB_TYPE,
-};
+use unlace_base::marshal::{ATTRIB_CONTENT, ATTRIB_TYPE, Decoder, ElementId, Encoder, IdRegistry};
 use unlace_base::types::{int4, uint4};
 
 // ---------------------------------------------------------------------------
@@ -107,7 +105,14 @@ pub struct Comment {
 
 impl Comment {
     pub fn new(tp: uint4, fad: Address, ad: Address, uq: int4, txt: &[u8]) -> Comment {
-        Comment { type_: tp, uniq: uq, funcaddr: fad, addr: ad, text: txt.to_vec(), emitted: false }
+        Comment {
+            type_: tp,
+            uniq: uq,
+            funcaddr: fad,
+            addr: ad,
+            text: txt.to_vec(),
+            emitted: false,
+        }
     }
 
     /// C++ `Comment(void)`, for use with decode: all fields are overwritten by
@@ -262,7 +267,11 @@ pub struct CommentKey {
 
 impl CommentKey {
     fn of(comm: &Comment) -> CommentKey {
-        CommentKey { funcaddr: comm.funcaddr.clone(), addr: comm.addr.clone(), uniq: comm.uniq }
+        CommentKey {
+            funcaddr: comm.funcaddr.clone(),
+            addr: comm.addr.clone(),
+            uniq: comm.uniq,
+        }
     }
 }
 
@@ -329,7 +338,9 @@ pub struct CommentDatabaseInternal {
 
 impl CommentDatabaseInternal {
     pub fn new() -> CommentDatabaseInternal {
-        CommentDatabaseInternal { commentset: BTreeMap::new() }
+        CommentDatabaseInternal {
+            commentset: BTreeMap::new(),
+        }
     }
 
     /// The half-open key range covering every comment of function \b fad.
@@ -446,7 +457,12 @@ impl CommentDatabase for CommentDatabaseInternal {
         while decoder.peek_element()? != 0 {
             let mut com = Comment::empty();
             com.decode(decoder)?;
-            self.add_comment(com.get_type(), com.get_func_addr(), com.get_addr(), com.get_text());
+            self.add_comment(
+                com.get_type(),
+                com.get_func_addr(),
+                com.get_addr(),
+                com.get_text(),
+            );
         }
         decoder.close_element(elem_id)?;
         Ok(())
@@ -487,7 +503,11 @@ impl Subsort {
     /// A fresh key (the C++ struct is left uninitialized; callers always set
     /// the fields they consult before use).
     fn new() -> Subsort {
-        Subsort { index: 0, order: 0, pos: 0 }
+        Subsort {
+            index: 0,
+            order: 0,
+            pos: 0,
+        }
     }
 
     /// Initialize a key for a header comment (C++ `setHeader`).
@@ -741,7 +761,11 @@ impl CommentSorter {
                 self.opstop = self.stop;
             }
             Some(landmark) => {
-                let subsort = Subsort { index: landmark.index, order: landmark.order, pos: 0xffffffff };
+                let subsort = Subsort {
+                    index: landmark.index,
+                    order: landmark.order,
+                    pos: 0xffffffff,
+                };
                 self.opstop = self.upper_bound(&subsort);
             }
         }
@@ -750,7 +774,11 @@ impl CommentSorter {
     /// Find iterators that bound everything in the basic block
     /// (C++ `CommentSorter::setupBlockList`).
     pub fn setup_block_list(&mut self, block_index: int4) {
-        let mut subsort = Subsort { index: block_index, order: 0, pos: 0 };
+        let mut subsort = Subsort {
+            index: block_index,
+            order: 0,
+            pos: 0,
+        };
         self.start = self.lower_bound(&subsort);
         subsort.order = 0xffffffff;
         subsort.pos = 0xffffffff;
@@ -760,7 +788,11 @@ impl CommentSorter {
     /// Header comments are grouped together; set up the walk iterators
     /// (C++ `CommentSorter::setupHeader`).
     pub fn setup_header(&mut self, header_type: uint4) {
-        let mut subsort = Subsort { index: -1, order: header_type, pos: 0 };
+        let mut subsort = Subsort {
+            index: -1,
+            order: header_type,
+            pos: 0,
+        };
         self.start = self.lower_bound(&subsort);
         subsort.pos = 0xffffffff;
         self.opstop = self.upper_bound(&subsort);
@@ -779,11 +811,15 @@ impl CommentSorter {
     /// Records the returned key so [`mark_last_emitted`](CommentSorter::mark_last_emitted)
     /// can flip its `emitted` flag (the C++ `emitLineComment` `setEmitted(true)`).
     pub fn get_next(&mut self) -> &Comment {
-        let key = self.start.expect("CommentSorter::get_next past end (C++ UB on ++start)");
+        let key = self
+            .start
+            .expect("CommentSorter::get_next past end (C++ UB on ++start)");
         self.start = self.successor(&key);
         self.last_returned = Some(key);
         // Resolve the comment at the original `start` key.
-        self.commmap.get(&key).expect("CommentSorter::get_next: dangling start key")
+        self.commmap
+            .get(&key)
+            .expect("CommentSorter::get_next: dangling start key")
     }
 
     /// Mark the comment most recently returned by [`get_next`](CommentSorter::get_next)
@@ -807,13 +843,19 @@ impl CommentSorter {
     /// First key `> subsort` (C++ `map::upper_bound`), or `None` past the end.
     fn upper_bound(&self, subsort: &Subsort) -> Option<Subsort> {
         use std::ops::Bound::{Excluded, Unbounded};
-        self.commmap.range((Excluded(*subsort), Unbounded)).next().map(|(k, _)| *k)
+        self.commmap
+            .range((Excluded(*subsort), Unbounded))
+            .next()
+            .map(|(k, _)| *k)
     }
 
     /// Key strictly after `key` (the C++ `++iter`).
     fn successor(&self, key: &Subsort) -> Option<Subsort> {
         use std::ops::Bound::{Excluded, Unbounded};
-        self.commmap.range((Excluded(*key), Unbounded)).next().map(|(k, _)| *k)
+        self.commmap
+            .range((Excluded(*key), Unbounded))
+            .next()
+            .map(|(k, _)| *k)
     }
 }
 

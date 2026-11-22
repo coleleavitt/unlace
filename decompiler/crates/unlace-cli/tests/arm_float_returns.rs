@@ -608,8 +608,14 @@ fn a_later_call_keeps_the_argument_computed_in_the_same_register() {
             option,
         ]);
         assert_eq!(rc, 0, "{err}");
-        assert!(code.contains("float twocallsf(float a0)"), "{option}: {code}");
-        assert!(code.contains("return scalef(a0 * 3.0f) + 1.0f;"), "{option}: {code}");
+        assert!(
+            code.contains("float twocallsf(float a0)"),
+            "{option}: {code}"
+        );
+        assert!(
+            code.contains("return scalef(a0 * 3.0f) + 1.0f;"),
+            "{option}: {code}"
+        );
         if option == "on" {
             assert!(code.contains("double twocalls(double a0)"), "{code}");
             assert!(code.contains("  scale(a0);\n"), "{code}");
@@ -647,7 +653,10 @@ fn an_int_return_beats_a_double_left_in_d0_by_a_call() {
             assert!(code.contains("double w2(void)"), "{code}");
             assert!(code.contains("int bump(double a0,int a1)"), "{code}");
             assert!(code.contains("  half(a0);\n  return a1 + 1;"), "{code}");
-            assert!(code.contains("double second(double a0,double a1)"), "{code}");
+            assert!(
+                code.contains("double second(double a0,double a1)"),
+                "{code}"
+            );
         } else {
             assert!(code.contains("int bump(int a0)"), "{code}");
             assert!(code.contains("return a0 + 1;"), "{code}");

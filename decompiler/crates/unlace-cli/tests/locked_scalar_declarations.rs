@@ -33,8 +33,8 @@ fn pe64_detached_binding_keeps_locked_float() {
 
 fn check_target(target: &str, weaker: bool, detached: bool) {
     use unlace_console::ifacedecomp::{
-        execute, register_console_commands, register_decomp_commands, IfaceDecompData,
-        DECOMPILE_MODULE,
+        DECOMPILE_MODULE, IfaceDecompData, execute, register_console_commands,
+        register_decomp_commands,
     };
     use unlace_console::ifaceterm::IfaceTerm;
     use unlace_console::kuna_console::register_kuna_commands;
@@ -72,7 +72,10 @@ __declspec(dllexport) unsigned int choose_word(unsigned int first,unsigned int s
         .find(|e| e.name() == b"choose_word")
         .unwrap()
         .address();
-    let script=format!("load file {}\noption stackviews on\noption realtypes on\nmap function 0x{entry:x} choose_word\nmap prototype 0x{entry:x} unsigned int __cdecl choose_word(unsigned int first,unsigned int second,int flag)\nload function 0x{entry:x}\ndecompile\nretype v1 float\ndecompile\n",binary.display());
+    let script = format!(
+        "load file {}\noption stackviews on\noption realtypes on\nmap function 0x{entry:x} choose_word\nmap prototype 0x{entry:x} unsigned int __cdecl choose_word(unsigned int first,unsigned int second,int flag)\nload function 0x{entry:x}\ndecompile\nretype v1 float\ndecompile\n",
+        binary.display()
+    );
     let mut status = IfaceTerm::into_status("", script.as_bytes());
     register_decomp_commands(&mut status);
     register_kuna_commands(&mut status);
@@ -83,10 +86,12 @@ __declspec(dllexport) unsigned int choose_word(unsigned int first,unsigned int s
         .as_any_mut()
         .downcast_mut::<IfaceDecompData>()
         .unwrap()
-        .spec_roots = vec![common::repo_root()
-        .join("specs")
-        .to_string_lossy()
-        .into_owned()];
+        .spec_roots = vec![
+        common::repo_root()
+            .join("specs")
+            .to_string_lossy()
+            .into_owned(),
+    ];
     while !status.is_stream_finished() && !status.done {
         execute(&mut status);
         assert!(!status.is_in_error(), "{}", status.optr);
@@ -115,12 +120,13 @@ __declspec(dllexport) unsigned int choose_word(unsigned int first,unsigned int s
         .unwrap()
         .kuna_link_symbol()
         .expect("mapped Symbol");
-    assert!(fd
-        .get_scope_local()
-        .unwrap()
-        .database()
-        .symbol(symbol)
-        .is_type_locked());
+    assert!(
+        fd.get_scope_local()
+            .unwrap()
+            .database()
+            .symbol(symbol)
+            .is_type_locked()
+    );
     if weaker {
         // Model a merged high whose stack representative kept UNKNOWN4 while
         // its explicitly locked local Symbol still states float. No operations
@@ -157,11 +163,11 @@ __declspec(dllexport) unsigned int choose_word(unsigned int first,unsigned int s
         }
     }
     if detached {
+        use std::collections::HashMap;
         use unlace_base::address::Address;
         use unlace_decomp::context::VarnodeId;
         use unlace_decomp::cover::Cover;
         use unlace_decomp::variable::{CompareNameView, HighContext, VarnodeView, VarnodeViewLoc};
-        use std::collections::HashMap;
         struct Locations(HashMap<VarnodeId, Address>);
         impl HighContext for Locations {
             fn vn_loc_view(&self, vn: VarnodeId) -> VarnodeViewLoc {
@@ -238,12 +244,13 @@ __declspec(dllexport) unsigned int choose_word(unsigned int first,unsigned int s
         for (vn, h, g) in updates {
             fd.vbank_mut().get_mut(vn).unwrap().set_high(h, g);
         }
-        assert!(fd
-            .high_bank()
-            .get(replacement)
-            .unwrap()
-            .kuna_link_symbol()
-            .is_none());
+        assert!(
+            fd.high_bank()
+                .get(replacement)
+                .unwrap()
+                .kuna_link_symbol()
+                .is_none()
+        );
     }
     let arch = data.conf.as_mut().unwrap().arch_mut();
     arch.realtypes = true;
@@ -301,14 +308,19 @@ int main(void) {
 fn dwarf_function_pointer_local_keeps_its_declaration() {
     let source = common::scratch_file("locked-function-pointer", "c");
     let object = source.with_extension("o");
-    let helpers = "static int add(int a,int b){return a+b;}\nstatic int sub(int a,int b){return a-b;}\n";
+    let helpers =
+        "static int add(int a,int b){return a+b;}\nstatic int sub(int a,int b){return a-b;}\n";
     std::fs::write(
         &source,
         format!("typedef int (*binop)(int,int);\n{helpers}int apply(int k,int a,int b){{binop f=add;if(k&1)f=sub;if(k&2)f=(binop)0;return f?f(a,b):-1;}}\n"),
     )
     .unwrap();
     if process::optional_output(
-        Command::new("gcc").args(["-g", "-O0", "-fno-pic", "-c"]).arg(&source).arg("-o").arg(&object),
+        Command::new("gcc")
+            .args(["-g", "-O0", "-fno-pic", "-c"])
+            .arg(&source)
+            .arg("-o")
+            .arg(&object),
     )
     .is_none()
     {
@@ -316,7 +328,10 @@ fn dwarf_function_pointer_local_keeps_its_declaration() {
     }
     let (body, err, status) = common::run_kuna(&["decompile", object.to_str().unwrap(), "apply"]);
     assert_eq!(status, 0, "{err}");
-    assert!(body.contains("int (*f)(int,int);"), "function-pointer type was lost:\n{body}");
+    assert!(
+        body.contains("int (*f)(int,int);"),
+        "function-pointer type was lost:\n{body}"
+    );
     let generated = common::scratch_file("locked-function-pointer-generated", "c");
     std::fs::write(
         &generated,
@@ -324,7 +339,13 @@ fn dwarf_function_pointer_local_keeps_its_declaration() {
     )
     .unwrap();
     let executable = source.with_extension("bin");
-    process::required_output(Command::new("gcc").args(["-O0", "-Werror=implicit-function-declaration"]).arg(&generated).arg("-o").arg(&executable));
+    process::required_output(
+        Command::new("gcc")
+            .args(["-O0", "-Werror=implicit-function-declaration"])
+            .arg(&generated)
+            .arg("-o")
+            .arg(&executable),
+    );
     process::required_output(&mut Command::new(&executable));
     for path in [source, object, generated, executable] {
         let _ = std::fs::remove_file(path);

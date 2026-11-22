@@ -1494,11 +1494,18 @@ pub fn cache_pair_ordered(little: bool) -> (Vec<u8>, Vec<u8>) {
     let mut second = first.clone();
     let word = |at: usize| {
         let bytes = first[at..at + 4].try_into().unwrap();
-        (if little { u32::from_le_bytes(bytes) } else { u32::from_be_bytes(bytes) }) as usize
+        (if little {
+            u32::from_le_bytes(bytes)
+        } else {
+            u32::from_be_bytes(bytes)
+        }) as usize
     };
     let headers = word(32);
-    let count = if little { u16::from_le_bytes(first[48..50].try_into().unwrap()) }
-        else { u16::from_be_bytes(first[48..50].try_into().unwrap()) } as usize;
+    let count = if little {
+        u16::from_le_bytes(first[48..50].try_into().unwrap())
+    } else {
+        u16::from_be_bytes(first[48..50].try_into().unwrap())
+    } as usize;
     let section = (1..count)
         .map(|i| headers + i * 40)
         .find(|&s| word(s + 4) == 4)
@@ -1565,11 +1572,7 @@ pub fn reversed_save(little: bool, overlap: bool) -> Fixture {
         0x83c10008, 0x80010014, 0x38210010, 0x7c0803a6, 0x38600007, 0x4e800020,
     ]);
     let offset = if overlap {
-        if little {
-            5
-        } else {
-            11
-        }
+        if little { 5 } else { 11 }
     } else {
         12
     };

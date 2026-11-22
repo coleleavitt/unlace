@@ -39,7 +39,10 @@
 /// address. `None` keeps the table whole.
 pub fn own_rows(entry: u64, rows: &[u64], owner: impl Fn(u64) -> Option<u64>) -> Option<usize> {
     let own = |row: u64| owner(row) == Some(entry);
-    let cut = rows.iter().position(|&row| !own(row)).filter(|&cut| cut > 0 && rows[cut] > entry)?;
+    let cut = rows
+        .iter()
+        .position(|&row| !own(row))
+        .filter(|&cut| cut > 0 && rows[cut] > entry)?;
     let mut others = rows[cut..].iter().map(|&row| owner(row));
     let first = others.next()?;
     let mut spread = false;

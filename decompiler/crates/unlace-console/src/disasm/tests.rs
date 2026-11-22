@@ -109,12 +109,18 @@ fn a_recovery_row_spans_to_the_next_grid_boundary() {
 #[test]
 fn a_byte_row_spells_every_byte_it_covers() {
     assert_eq!(bad_byte_operand(&[0xb8]), "0xb8");
-    assert_eq!(bad_byte_operand(&[0xb8, 0xfe, 0xff, 0xff]), "0xb8,0xfe,0xff,0xff");
+    assert_eq!(
+        bad_byte_operand(&[0xb8, 0xfe, 0xff, 0xff]),
+        "0xb8,0xfe,0xff,0xff"
+    );
 }
 
 #[test]
 fn bytes_render_as_contiguous_lowercase_hex() {
-    assert_eq!(row(0, &[0x48, 0x89, 0xe5], "MOV", "RBP,RSP").hex(), "4889e5");
+    assert_eq!(
+        row(0, &[0x48, 0x89, 0xe5], "MOV", "RBP,RSP").hex(),
+        "4889e5"
+    );
 }
 
 /// The image bound is the end of the run holding the start, and adjacent or
@@ -126,7 +132,10 @@ fn the_image_bound_is_the_end_of_the_run_holding_the_address() {
     let data = section_flags::DATA;
     // The witness's own layout: R E [0x8048000,0x80d1904), a hole, then RW.
     let keygenme = [(0x8048000, 0x89904, code), (0x80d2f50, 0x7a9540, data)];
-    assert_eq!(mapped_run(&keygenme, 0x80d18b0), Some((0x80d1904, Some(0x80d2f50))));
+    assert_eq!(
+        mapped_run(&keygenme, 0x80d18b0),
+        Some((0x80d1904, Some(0x80d2f50)))
+    );
     assert_eq!(mapped_run(&keygenme, 0x80d2f50), Some((0x887c490, None)));
     // Inside the hole there is no run at all -- the direct query's answer.
     assert_eq!(mapped_run(&keygenme, 0x80d190b), None);

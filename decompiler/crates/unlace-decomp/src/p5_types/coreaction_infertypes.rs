@@ -42,14 +42,14 @@
 
 use std::rc::Rc;
 
-use unlace_base::address::{calc_mask, Address};
+use unlace_base::address::{Address, calc_mask};
 use unlace_base::space::AddrSpace;
 use unlace_base::types::{int4, int8, uintb};
 use unlace_num::opcodes::OpCode;
 
-use crate::dtype::{type_metatype, Datatype, TypeFactory};
-use crate::funcdata::Funcdata;
 use crate::context::{OpId, VarnodeId};
+use crate::dtype::{Datatype, TypeFactory, type_metatype};
+use crate::funcdata::Funcdata;
 use crate::typeop::type_op_info;
 
 /// Resolve `op->outputTypeLocal()` / `op->inputTypeLocal(slot)` faithfully via the
@@ -84,10 +84,15 @@ pub(crate) fn output_type_local(data: &Funcdata, op: OpId) -> Rc<Datatype> {
             .and_then(|v| data.vbank().get(v))
             .map(|v| v.get_offset())
             .unwrap_or(0);
-        let integer_width = arch.x87_integer_userops.iter()
+        let integer_width = arch
+            .x87_integer_userops
+            .iter()
             .find_map(|&(id, width)| (u64::from(id) == in0_off).then_some(width));
         if integer_width == Some(out_size) {
-            if let Some(Ok(ty)) = arch.types().map(|types| types.get_base(out_size, type_metatype::TYPE_INT)) {
+            if let Some(Ok(ty)) = arch
+                .types()
+                .map(|types| types.get_base(out_size, type_metatype::TYPE_INT))
+            {
                 return ty;
             }
         }
@@ -99,14 +104,18 @@ pub(crate) fn output_type_local(data: &Funcdata, op: OpId) -> Rc<Datatype> {
         // (kuna strlenscan) `DatatypeUserOp::getOutputLocal` for the `strlen`
         // builtin: the length is an unsigned integer of the output's width.
         if in0_off == crate::userop::BUILTIN_STRLEN as u64 {
-            if let Some(Ok(t)) = arch.types().map(|t| t.get_base(out_size, type_metatype::TYPE_UINT)) {
+            if let Some(Ok(t)) = arch
+                .types()
+                .map(|t| t.get_base(out_size, type_metatype::TYPE_UINT))
+            {
                 return t;
             }
         }
         // (kuna swiftcall) a throwing call's error is an object reference.
         if in0_off == crate::userop::BUILTIN_SWIFT_ERROR as u64 {
             if let Some(Ok(t)) = arch.types().map(|t| {
-                t.get_type_void().and_then(|v| t.get_type_pointer(out_size, v, 1))
+                t.get_type_void()
+                    .and_then(|v| t.get_type_pointer(out_size, v, 1))
             }) {
                 return t;
             }
@@ -114,8 +123,15 @@ pub(crate) fn output_type_local(data: &Funcdata, op: OpId) -> Rc<Datatype> {
         // (kuna alloca) `void *alloca(size_t)`.
         if in0_off == crate::userop::BUILTIN_ALLOCA as u64 {
             if let Some(tlst) = arch.types() {
-                let ws = arch.manage().get_default_data_space().map(|s| s.get_word_size()).unwrap_or(1);
-                if let Ok(ptr) = tlst.get_type_void().and_then(|v| tlst.get_type_pointer(out_size, v, ws)) {
+                let ws = arch
+                    .manage()
+                    .get_default_data_space()
+                    .map(|s| s.get_word_size())
+                    .unwrap_or(1);
+                if let Ok(ptr) = tlst
+                    .get_type_void()
+                    .and_then(|v| tlst.get_type_pointer(out_size, v, ws))
+                {
                     return ptr;
                 }
             }
@@ -126,17 +142,27 @@ pub(crate) fn output_type_local(data: &Funcdata, op: OpId) -> Rc<Datatype> {
         }
         // (kuna javatry) the try dispatch and the exceptional-edge test are
         // `bool`; the caught exception has its catch clause's class type.
-        if in0_off == crate::userop::BUILTIN_JAVA_TRY as u64 || in0_off == crate::userop::BUILTIN_JAVA_THROWS as u64 {
-            if let Some(Ok(t)) = arch.types().map(|t| t.get_base(out_size, type_metatype::TYPE_BOOL)) {
+        if in0_off == crate::userop::BUILTIN_JAVA_TRY as u64
+            || in0_off == crate::userop::BUILTIN_JAVA_THROWS as u64
+        {
+            if let Some(Ok(t)) = arch
+                .types()
+                .map(|t| t.get_base(out_size, type_metatype::TYPE_BOOL))
+            {
                 return t;
             }
         }
         if in0_off == crate::userop::BUILTIN_JAVA_CAUGHT as u64 {
-            let handler = o.get_in(1).and_then(|v| data.vbank().get(v)).map(|v| v.get_offset());
+            let handler = o
+                .get_in(1)
+                .and_then(|v| data.vbank().get(v))
+                .map(|v| v.get_offset());
             let caught = handler.and_then(|h| {
                 let table = crate::kuna_javatry::CatchTable::new(data)?;
                 let model = arch.dex.as_ref()?;
-                model.java_type(&table.caught_descriptor(h), arch.types()?).ok()
+                model
+                    .java_type(&table.caught_descriptor(h), arch.types()?)
+                    .ok()
             });
             if let Some(t) = caught {
                 return t;
@@ -144,28 +170,52 @@ pub(crate) fn output_type_local(data: &Funcdata, op: OpId) -> Rc<Datatype> {
         }
         // (kuna `bitidioms`, `helperroles`) `abs`/`labs` return a signed
         // integer, `strcpy` its `char *` destination.
-        if in0_off == crate::userop::BUILTIN_ABS as u64 || in0_off == crate::userop::BUILTIN_LABS as u64 {
-            if let Some(Ok(t)) = arch.types().map(|t| t.get_base(out_size, type_metatype::TYPE_INT)) {
+        if in0_off == crate::userop::BUILTIN_ABS as u64
+            || in0_off == crate::userop::BUILTIN_LABS as u64
+        {
+            if let Some(Ok(t)) = arch
+                .types()
+                .map(|t| t.get_base(out_size, type_metatype::TYPE_INT))
+            {
                 return t;
             }
         }
         // (kuna `vaarg`) an SSE-class `va_arg` reads a `double`.
-        if in0_off == crate::userop::BUILTIN_VAARG as u64 && out_size == 8 && o.get_in(2).and_then(|v| data.vbank().get(v)).is_some_and(|v| v.is_constant() && v.get_offset() == 1) {
-            if let Some(Ok(t)) = arch.types().map(|t| t.get_base(8, type_metatype::TYPE_FLOAT)) {
+        if in0_off == crate::userop::BUILTIN_VAARG as u64
+            && out_size == 8
+            && o.get_in(2)
+                .and_then(|v| data.vbank().get(v))
+                .is_some_and(|v| v.is_constant() && v.get_offset() == 1)
+        {
+            if let Some(Ok(t)) = arch
+                .types()
+                .map(|t| t.get_base(8, type_metatype::TYPE_FLOAT))
+            {
                 return t;
             }
         }
         if in0_off == crate::userop::BUILTIN_STRCPY as u64 {
             if let Some(tlst) = arch.types() {
-                let ws = data.get_arch().manage().get_default_data_space().map(|s| s.get_word_size()).unwrap_or(1);
-                if let Ok(ptr) = tlst.get_type_char(1).and_then(|c| tlst.get_type_pointer(out_size, c, ws)) {
+                let ws = data
+                    .get_arch()
+                    .manage()
+                    .get_default_data_space()
+                    .map(|s| s.get_word_size())
+                    .unwrap_or(1);
+                if let Ok(ptr) = tlst
+                    .get_type_char(1)
+                    .and_then(|c| tlst.get_type_pointer(out_size, c, ws))
+                {
                     return ptr;
                 }
             }
         }
         // (kuna itaniumeh) the exceptional-edge test is a `bool`.
         if in0_off == crate::userop::BUILTIN_EH_UNWINDING as u64 {
-            if let Some(Ok(t)) = arch.types().map(|t| t.get_base(out_size, type_metatype::TYPE_BOOL)) {
+            if let Some(Ok(t)) = arch
+                .types()
+                .map(|t| t.get_base(out_size, type_metatype::TYPE_BOOL))
+            {
                 return t;
             }
         }
@@ -174,11 +224,18 @@ pub(crate) fn output_type_local(data: &Funcdata, op: OpId) -> Rc<Datatype> {
     // or a boolean for an `instanceof` test.
     if o.code() == OpCode::CPUI_CPOOLREF {
         let refs: Vec<u64> = (1..o.num_input())
-            .filter_map(|i| o.get_in(i).and_then(|v| data.vbank().get(v)).map(|v| v.get_offset()))
+            .filter_map(|i| {
+                o.get_in(i)
+                    .and_then(|v| data.vbank().get(v))
+                    .map(|v| v.get_offset())
+            })
             .collect();
         if let Some(rec) = arch.cpool_record(&refs) {
             if rec.get_tag() == crate::cpool::cpool_tag::INSTANCE_OF {
-                if let Some(Ok(ty)) = arch.types().map(|t| t.get_base(1, type_metatype::TYPE_BOOL)) {
+                if let Some(Ok(ty)) = arch
+                    .types()
+                    .map(|t| t.get_base(1, type_metatype::TYPE_BOOL))
+                {
                     return ty;
                 }
             } else if let Some(ty) = rec.get_type() {
@@ -207,7 +264,10 @@ pub(crate) fn output_type_local(data: &Funcdata, op: OpId) -> Rc<Datatype> {
 }
 
 /// The Intel vector type `vn` has when a vector user-op wrote it.
-pub(crate) fn vector_result_type(data: &Funcdata, vn: crate::context::VarnodeId) -> Option<Rc<Datatype>> {
+pub(crate) fn vector_result_type(
+    data: &Funcdata,
+    vn: crate::context::VarnodeId,
+) -> Option<Rc<Datatype>> {
     let mut vn = vn;
     for _ in 0..8 {
         let v = data.vbank().get(vn)?;
@@ -225,9 +285,16 @@ pub(crate) fn vector_result_type(data: &Funcdata, vn: crate::context::VarnodeId)
 }
 
 /// The Intel vector type of a `size`-byte operand of the vector user-op `id`.
-fn vector_userop_type(arch: &crate::context::ArchHandle, id: u64, size: int4) -> Option<Rc<Datatype>> {
+fn vector_userop_type(
+    arch: &crate::context::ArchHandle,
+    id: u64,
+    size: int4,
+) -> Option<Rc<Datatype>> {
     let id = unlace_base::types::uint4::try_from(id).ok()?;
-    let at = arch.vector_userops.binary_search_by_key(&id, |(i, _)| *i).ok()?;
+    let at = arch
+        .vector_userops
+        .binary_search_by_key(&id, |(i, _)| *i)
+        .ok()?;
     let kind = arch.vector_userops[at].1;
     crate::kuna_avxintrin::vector_type(arch.types()?, size, kind)
 }
@@ -267,7 +334,11 @@ fn input_type_local_with(data: &Funcdata, op: OpId, slot: int4, recovered: bool)
 
     // (kuna vectorabi) a vector user-op's vector operands are Intel vector types.
     if opcode == OpCode::CPUI_CALLOTHER && slot > 0 {
-        let id = o.get_in(0).and_then(|v| data.vbank().get(v)).map(|v| v.get_offset()).unwrap_or(0);
+        let id = o
+            .get_in(0)
+            .and_then(|v| data.vbank().get(v))
+            .map(|v| v.get_offset())
+            .unwrap_or(0);
         if let Some(t) = vector_userop_type(&arch, id, in_size) {
             return t;
         }
@@ -289,12 +360,22 @@ fn input_type_local_with(data: &Funcdata, op: OpId, slot: int4, recovered: bool)
     // its one argument is a `char *`.
     if opcode == OpCode::CPUI_CALLOTHER
         && slot == 1
-        && o.get_in(0).and_then(|v| data.vbank().get(v)).map(|v| v.get_offset())
+        && o.get_in(0)
+            .and_then(|v| data.vbank().get(v))
+            .map(|v| v.get_offset())
             == Some(crate::userop::BUILTIN_STRLEN as u64)
     {
         if let Some(tlst) = arch.types() {
-            let ws = data.get_arch().manage().get_default_data_space().map(|s| s.get_word_size()).unwrap_or(1);
-            if let Ok(ptr) = tlst.get_type_char(1).and_then(|c| tlst.get_type_pointer(in_size, c, ws)) {
+            let ws = data
+                .get_arch()
+                .manage()
+                .get_default_data_space()
+                .map(|s| s.get_word_size())
+                .unwrap_or(1);
+            if let Ok(ptr) = tlst
+                .get_type_char(1)
+                .and_then(|c| tlst.get_type_pointer(in_size, c, ws))
+            {
                 return ptr;
             }
         }
@@ -304,11 +385,16 @@ fn input_type_local_with(data: &Funcdata, op: OpId, slot: int4, recovered: bool)
     if opcode == OpCode::CPUI_CALLOTHER
         && slot == 1
         && in_size == 8
-        && o.get_in(0).and_then(|v| data.vbank().get(v)).map(|v| v.get_offset())
+        && o.get_in(0)
+            .and_then(|v| data.vbank().get(v))
+            .map(|v| v.get_offset())
             == Some(crate::userop::BUILTIN_VA_START as u64)
     {
         if let Some(tlst) = arch.types() {
-            if let Ok(ptr) = tlst.get_type_struct("__va_list_tag").and_then(|t| tlst.get_type_pointer(8, t, 1)) {
+            if let Ok(ptr) = tlst
+                .get_type_struct("__va_list_tag")
+                .and_then(|t| tlst.get_type_pointer(8, t, 1))
+            {
                 if ptr.get_ptr_to().is_some_and(|t| t.get_size() == 24) {
                     return ptr;
                 }
@@ -319,27 +405,42 @@ fn input_type_local_with(data: &Funcdata, op: OpId, slot: int4, recovered: bool)
     // (kuna `bitidioms`, `helperroles`) `abs`/`labs` take a signed integer,
     // `strcpy` two `char *`.
     if opcode == OpCode::CPUI_CALLOTHER && slot >= 1 {
-        let id = o.get_in(0).and_then(|v| data.vbank().get(v)).map(|v| v.get_offset());
+        let id = o
+            .get_in(0)
+            .and_then(|v| data.vbank().get(v))
+            .map(|v| v.get_offset());
         if let Some(tlst) = arch.types() {
-            if (id == Some(crate::userop::BUILTIN_ABS as u64) || id == Some(crate::userop::BUILTIN_LABS as u64)) && slot == 1 {
+            if (id == Some(crate::userop::BUILTIN_ABS as u64)
+                || id == Some(crate::userop::BUILTIN_LABS as u64))
+                && slot == 1
+            {
                 if let Ok(t) = tlst.get_base(in_size, type_metatype::TYPE_INT) {
                     return t;
                 }
             }
             if id == Some(crate::userop::BUILTIN_STRCPY as u64) && slot <= 2 {
-                let ws = data.get_arch().manage().get_default_data_space().map(|s| s.get_word_size()).unwrap_or(1);
-                if let Ok(ptr) = tlst.get_type_char(1).and_then(|c| tlst.get_type_pointer(in_size, c, ws)) {
+                let ws = data
+                    .get_arch()
+                    .manage()
+                    .get_default_data_space()
+                    .map(|s| s.get_word_size())
+                    .unwrap_or(1);
+                if let Ok(ptr) = tlst
+                    .get_type_char(1)
+                    .and_then(|c| tlst.get_type_pointer(in_size, c, ws))
+                {
                     return ptr;
                 }
             }
         }
     }
 
-
     // (kuna kernelbug) `__WARN(file,line)`: the file is a `char *`, the line an `int`.
     if opcode == OpCode::CPUI_CALLOTHER
         && slot > 0
-        && o.get_in(0).and_then(|v| data.vbank().get(v)).map(|v| v.get_offset())
+        && o.get_in(0)
+            .and_then(|v| data.vbank().get(v))
+            .map(|v| v.get_offset())
             == Some(crate::userop::BUILTIN_KERNEL_WARN as u64)
     {
         if let Some(tlst) = arch.types() {
@@ -348,8 +449,16 @@ fn input_type_local_with(data: &Funcdata, op: OpId, slot: int4, recovered: bool)
                     return t;
                 }
             }
-            let ws = data.get_arch().manage().get_default_data_space().map(|s| s.get_word_size()).unwrap_or(1);
-            if let Ok(ptr) = tlst.get_type_char(1).and_then(|c| tlst.get_type_pointer(in_size, c, ws)) {
+            let ws = data
+                .get_arch()
+                .manage()
+                .get_default_data_space()
+                .map(|s| s.get_word_size())
+                .unwrap_or(1);
+            if let Ok(ptr) = tlst
+                .get_type_char(1)
+                .and_then(|c| tlst.get_type_pointer(in_size, c, ws))
+            {
                 return ptr;
             }
         }
@@ -367,9 +476,9 @@ fn input_type_local_with(data: &Funcdata, op: OpId, slot: int4, recovered: bool)
             return ct;
         }
         if let Some(tlst) = arch.types() {
-            let code = tlst.get_type_code().unwrap_or_else(|_| {
-                Rc::new(Datatype::new(0, type_metatype::TYPE_CODE))
-            });
+            let code = tlst
+                .get_type_code()
+                .unwrap_or_else(|_| Rc::new(Datatype::new(0, type_metatype::TYPE_CODE)));
             let spc = o.get_addr().get_space().cloned();
             let wordsize = spc.as_ref().map(|s| s.get_word_size()).unwrap_or(1);
             if let Ok(ptr) = tlst.get_type_pointer(in_size, code, wordsize) {
@@ -446,8 +555,12 @@ fn call_input_type_local(
     let fc = fc?;
     // param = fc->getParam(slot - 1)
     let proto = fc.proto();
-    let arg_size =
-        data.obank().get(op).and_then(|o| o.get_in(slot)).and_then(|v| data.vbank().get(v)).map(|v| v.get_size())?;
+    let arg_size = data
+        .obank()
+        .get(op)
+        .and_then(|o| o.get_in(slot))
+        .and_then(|v| data.vbank().get(v))
+        .map(|v| v.get_size())?;
     if let Some(param) = proto.get_param(slot - 1) {
         if param.is_type_locked() {
             let ct = param.get_type()?;
@@ -505,7 +618,10 @@ fn call_output_type_local(data: &Funcdata, op: OpId, opcode: OpCode) -> Option<R
     // output Varnode the lock pinned (same size guard as the apply).
     if let Some(o) = data.obank().get(op) {
         if let Some(ct) = data.get_override().find_output_typelock(o.get_addr()) {
-            let out_size = o.get_out().and_then(|v| data.vbank().get(v)).map(|v| v.get_size());
+            let out_size = o
+                .get_out()
+                .and_then(|v| data.vbank().get(v))
+                .map(|v| v.get_size());
             if out_size == Some(ct.get_size()) {
                 return Some(Rc::clone(ct));
             }
@@ -547,7 +663,12 @@ fn call_output_type_local(data: &Funcdata, op: OpId, opcode: OpCode) -> Option<R
     }
     let proto = fc.proto();
     if !proto.is_output_locked() {
-        let size = data.obank().get(op)?.get_out().and_then(|v| data.vbank().get(v)).map(|v| v.get_size())?;
+        let size = data
+            .obank()
+            .get(op)?
+            .get_out()
+            .and_then(|v| data.vbank().get(v))
+            .map(|v| v.get_size())?;
         return crate::p4_calls::kuna_passthrough::tail_return_type(data, op, size)
             .or_else(|| crate::p4_calls::kuna_slotargs::declared_result_type(data, op, fc, size))
             .or_else(|| crate::p4_calls::kuna_callrettype::stated_return_type(data, op, fc))
@@ -602,7 +723,8 @@ fn get_local_type(data: &Funcdata, vn: VarnodeId) -> (Rc<Datatype>, bool) {
     }
     // C++ throws on a null local type; a live Varnode always has a def or a
     // descendant, but guard with a size-correct UNKNOWN to avoid a panic.
-    let ct = ct.unwrap_or_else(|| Rc::new(Datatype::new(v.get_size(), type_metatype::TYPE_UNKNOWN)));
+    let ct =
+        ct.unwrap_or_else(|| Rc::new(Datatype::new(v.get_size(), type_metatype::TYPE_UNKNOWN)));
     (ct, blockup)
 }
 
@@ -668,13 +790,29 @@ fn build_localtypes(data: &mut Funcdata) {
         };
         // (kuna `elfmain`) An executable's own `main` gives the runtime arguments
         // its body reads their runtime types, unlocked. See `kuna_elfmaindecl`.
-        let ct = if from_seed { ct } else { crate::kuna_elfmaindecl::input_type(data, vn).unwrap_or(ct) };
+        let ct = if from_seed {
+            ct
+        } else {
+            crate::kuna_elfmaindecl::input_type(data, vn).unwrap_or(ct)
+        };
         // (kuna `swiftcall`) A hinted input takes its hinted type, unlocked.
-        let ct = if from_seed { ct } else { crate::kuna_inputhints::input_type(data, vn).unwrap_or(ct) };
+        let ct = if from_seed {
+            ct
+        } else {
+            crate::kuna_inputhints::input_type(data, vn).unwrap_or(ct)
+        };
         // (kuna `regnarrow`) A narrowed register value nothing else types is unsigned.
-        let ct = if from_seed { ct } else { crate::kuna_regnarrow::unsigned_vote(data, vn, &ct).unwrap_or(ct) };
+        let ct = if from_seed {
+            ct
+        } else {
+            crate::kuna_regnarrow::unsigned_vote(data, vn, &ct).unwrap_or(ct)
+        };
         // (kuna `narrowargs callers`) A parameter its callers narrow takes their extension's type.
-        let ct = if from_seed { ct } else { crate::kuna_callerargs::input_vote(data, vn, &ct).unwrap_or(ct) };
+        let ct = if from_seed {
+            ct
+        } else {
+            crate::kuna_callerargs::input_vote(data, vn, &ct).unwrap_or(ct)
+        };
         // (kuna `ptrfromuse`) A function input whose only memory role is to be a
         // LOAD/STORE base has no pointer candidate in the fold above, because
         // `TypeOpIntAdd` votes `int<N>` for it and refuses to carry the pointer
@@ -758,7 +896,10 @@ fn build_localtypes(data: &mut Funcdata) {
         } else {
             crate::kuna_zextreturn::unsigned_return_vote(data, vn, &ct).unwrap_or(ct)
         };
-        let v = data.vbank_mut().get_mut(vn).expect("build_localtypes: stale vn");
+        let v = data
+            .vbank_mut()
+            .get_mut(vn)
+            .expect("build_localtypes: stale vn");
         if needs_block {
             v.set_stop_up_propagation();
         }
@@ -838,7 +979,11 @@ fn propagate_type_edge(data: &mut Funcdata, op: OpId, inslot: int4, outslot: int
         Some(v) => v,
         None => return false,
     };
-    let mut alttype = match data.vbank().get(invn).and_then(|v| v.get_temp_type().cloned()) {
+    let mut alttype = match data
+        .vbank()
+        .get(invn)
+        .and_then(|v| v.get_temp_type().cloned())
+    {
         Some(t) => t,
         None => return false,
     };
@@ -915,7 +1060,11 @@ fn propagate_type_edge(data: &mut Funcdata, op: OpId, inslot: int4, outslot: int
         newtype
     };
 
-    let cur = match data.vbank().get(outvn).and_then(|v| v.get_temp_type().cloned()) {
+    let cur = match data
+        .vbank()
+        .get(outvn)
+        .and_then(|v| v.get_temp_type().cloned())
+    {
         Some(t) => t,
         None => return false,
     };
@@ -957,7 +1106,8 @@ fn spacebase_pointer(data: &Funcdata, alt_size: int4) -> Option<Rc<Datatype>> {
     let tlst = arch.types()?;
     let spc = Rc::clone(arch.manage().get_default_data_space()?);
     let base = tlst.get_base(1, type_metatype::TYPE_UNKNOWN).ok()?;
-    tlst.get_type_pointer(alt_size, base, spc.get_word_size()).ok()
+    tlst.get_type_pointer(alt_size, base, spc.get_word_size())
+        .ok()
 }
 
 /// C++ `getSpaceFromConst(op->getIn(0))`: the LOAD/STORE/SEGMENT space operand is
@@ -985,7 +1135,8 @@ fn propagate_to_pointer(
     let meta = dt.get_metatype();
     let dt = if meta == type_metatype::TYPE_PTR {
         // Make sure that at least we return a pointer to something the size of -pt-
-        tlst.get_base(dt.get_size(), type_metatype::TYPE_UNKNOWN).ok()?
+        tlst.get_base(dt.get_size(), type_metatype::TYPE_UNKNOWN)
+            .ok()?
     } else if meta == type_metatype::TYPE_PARTIALSTRUCT {
         dt.get_component_for_ptr()?
     } else {
@@ -1071,7 +1222,11 @@ fn piece_pointer_sizes(data: &Funcdata) -> (int4, int4) {
         None => return (0, 0),
     };
     let far = tlst.get_size_of_alt_pointer();
-    let near = if far != 0 { tlst.get_size_of_pointer() } else { 0 };
+    let near = if far != 0 {
+        tlst.get_size_of_pointer()
+    } else {
+        0
+    };
     (near, far)
 }
 
@@ -1107,7 +1262,11 @@ fn propagate_type(
     outslot: int4,
 ) -> Option<Rc<Datatype>> {
     let code = data.obank().get(op)?.code();
-    let invn_is_spacebase = data.vbank().get(invn).map(|v| v.is_spacebase()).unwrap_or(false);
+    let invn_is_spacebase = data
+        .vbank()
+        .get(invn)
+        .map(|v| v.is_spacebase())
+        .unwrap_or(false);
     match code {
         // TypeOpCopy / TypeOpMulti / TypeOpIndirect: input <-> output, spacebase
         // produces a code pointer (typeop.cc:412, 1953, 2007).
@@ -1122,8 +1281,11 @@ fn propagate_type(
             }
         }
         OpCode::CPUI_INDIRECT => {
-            let is_creation =
-                data.obank().get(op).map(|o| o.is_indirect_creation()).unwrap_or(false);
+            let is_creation = data
+                .obank()
+                .get(op)
+                .map(|o| o.is_indirect_creation())
+                .unwrap_or(false);
             if is_creation {
                 return None;
             }
@@ -1170,12 +1332,26 @@ fn propagate_type(
         OpCode::CPUI_INT_ADD => propagate_int_add(data, alttype, op, outvn, inslot, outslot),
         // TypeOpLoad / TypeOpStore: propagate the pointed-to type through the
         // pointer's `*T` <-> the loaded/stored `T` (typeop.cc:488, 559).
-        OpCode::CPUI_LOAD => {
-            propagate_load_store(data, alttype, op, invn_is_spacebase, outvn, inslot, outslot, true)
-        }
-        OpCode::CPUI_STORE => {
-            propagate_load_store(data, alttype, op, invn_is_spacebase, outvn, inslot, outslot, false)
-        }
+        OpCode::CPUI_LOAD => propagate_load_store(
+            data,
+            alttype,
+            op,
+            invn_is_spacebase,
+            outvn,
+            inslot,
+            outslot,
+            true,
+        ),
+        OpCode::CPUI_STORE => propagate_load_store(
+            data,
+            alttype,
+            op,
+            invn_is_spacebase,
+            outvn,
+            inslot,
+            outslot,
+            false,
+        ),
         // TypeOpIntXor / TypeOpIntAnd: propagate enums + float sign-manipulation
         // (typeop.cc:1424, 1457).
         OpCode::CPUI_INT_XOR | OpCode::CPUI_INT_AND => {
@@ -1206,9 +1382,7 @@ fn propagate_type(
         }
         // TypeOpPiece / TypeOpSubpiece: composite/truncation arms (typeop.cc:2076,
         // 2163).
-        OpCode::CPUI_PIECE => {
-            propagate_piece(data, alttype, op, invn, outvn, inslot, outslot)
-        }
+        OpCode::CPUI_PIECE => propagate_piece(data, alttype, op, invn, outvn, inslot, outslot),
         OpCode::CPUI_SUBPIECE => {
             propagate_subpiece(data, alttype, op, invn, outvn, inslot, outslot)
         }
@@ -1352,8 +1526,11 @@ fn propagate_load_store(
 /// The evidence walk starts at the base, not at the function's op bank, so its
 /// answer does not depend on how many unrelated ops the function holds.
 fn float_pointee_admits(data: &Funcdata, op: OpId, value_size: int4) -> bool {
-    let Some(pointer) = data.obank().get(op).and_then(|o| o.get_in(1)) else { return false };
-    let Some((base, _dynamic, _stride)) = crate::kuna_structsynth::peel_base_stride(data, pointer) else {
+    let Some(pointer) = data.obank().get(op).and_then(|o| o.get_in(1)) else {
+        return false;
+    };
+    let Some((base, _dynamic, _stride)) = crate::kuna_structsynth::peel_base_stride(data, pointer)
+    else {
         return false;
     };
     crate::kuna_structsynth::every_access_through(data, base, value_size)
@@ -1378,11 +1555,7 @@ fn propagate_piece(
             if in_size == near_ptr && out_size == far_ptr {
                 return arch.types()?.resize_pointer(alttype, far_ptr).ok();
             }
-        } else if inslot == -1
-            && outslot == 1
-            && in_size == far_ptr
-            && out_size == near_ptr
-        {
+        } else if inslot == -1 && outslot == 1 && in_size == far_ptr && out_size == near_ptr {
             return arch.types()?.resize_pointer(alttype, near_ptr).ok();
         }
         return None;
@@ -1404,23 +1577,19 @@ fn propagate_piece(
 }
 
 /// C++ `TypeOpPiece::computeByteOffsetForComposite` (typeop.cc:2106).
-fn compute_byte_offset_for_composite_piece(
-    data: &Funcdata,
-    op: OpId,
-    slot: int4,
-) -> Option<int4> {
+fn compute_byte_offset_for_composite_piece(data: &Funcdata, op: OpId, slot: int4) -> Option<int4> {
     let o = data.obank().get(op)?;
     let in0 = o.get_in(0)?;
     let in1 = o.get_in(1)?;
-    let big_endian = data.vbank().get(in0).map(|v| v.get_space().is_big_endian()).unwrap_or(false);
+    let big_endian = data
+        .vbank()
+        .get(in0)
+        .map(|v| v.get_space().is_big_endian())
+        .unwrap_or(false);
     let in0_size = data.vbank().get(in0).map(|v| v.get_size())?;
     let in1_size = data.vbank().get(in1).map(|v| v.get_size())?;
     let byte_off = if big_endian {
-        if slot == 0 {
-            0
-        } else {
-            in0_size
-        }
+        if slot == 0 { 0 } else { in0_size }
     } else if slot == 0 {
         in1_size
     } else {
@@ -1490,10 +1659,22 @@ fn compute_byte_offset_for_composite_subpiece(data: &Funcdata, op: OpId) -> Opti
     let in0 = o.get_in(0)?;
     let in1 = o.get_in(1)?;
     let out_size = data.vbank().get(out).map(|v| v.get_size())?;
-    let lsb = data.vbank().get(in1).map(|v| v.get_offset() as int4).unwrap_or(0);
+    let lsb = data
+        .vbank()
+        .get(in1)
+        .map(|v| v.get_offset() as int4)
+        .unwrap_or(0);
     let in0_size = data.vbank().get(in0).map(|v| v.get_size())?;
-    let big_endian = data.vbank().get(in0).map(|v| v.get_space().is_big_endian()).unwrap_or(false);
-    let byte_off = if big_endian { in0_size - out_size - lsb } else { lsb };
+    let big_endian = data
+        .vbank()
+        .get(in0)
+        .map(|v| v.get_space().is_big_endian())
+        .unwrap_or(false);
+    let byte_off = if big_endian {
+        in0_size - out_size - lsb
+    } else {
+        lsb
+    };
     Some(byte_off)
 }
 
@@ -1517,7 +1698,11 @@ fn propagate_across_compare(
     // are likely different types, and the other side can type from the structure
     // pointer); hand back a bare pointer instead.  The non-relptr / non-struct path
     // is the identity propagation.
-    let outvn_const = data.vbank().get(outvn).map(|v| v.is_constant()).unwrap_or(false);
+    let outvn_const = data
+        .vbank()
+        .get(outvn)
+        .map(|v| v.is_constant())
+        .unwrap_or(false);
     if alttype.is_pointer_rel() && !outvn_const {
         let parent_is_struct = alttype
             .get_rel_parent()
@@ -1564,7 +1749,11 @@ fn propagate_int_add(
     } else if inslot != -1 && outslot != -1 {
         return None; // Must propagate input <-> output for pointers
     }
-    let outvn_const = data.vbank().get(outvn).map(|v| v.is_constant()).unwrap_or(false);
+    let outvn_const = data
+        .vbank()
+        .get(outvn)
+        .map(|v| v.is_constant())
+        .unwrap_or(false);
     if outvn_const && alttype.get_metatype() != type_metatype::TYPE_PTR {
         Some(alttype)
     } else if inslot == -1 {
@@ -1596,7 +1785,11 @@ fn propagate_add_pointer(data: &Funcdata, op: OpId, slot: int4, sz: int4) -> (in
             .and_then(|v| data.vbank().get(v))
             .map(|v| (v.get_offset(), v.get_size(), v.is_constant()))
             .unwrap_or((0, 0, false));
-        let mult = o.get_in(2).and_then(|v| data.vbank().get(v)).map(|v| v.get_offset()).unwrap_or(0);
+        let mult = o
+            .get_in(2)
+            .and_then(|v| data.vbank().get(v))
+            .map(|v| v.get_offset())
+            .unwrap_or(0);
         if is_const {
             let off = (const_off.wrapping_mul(mult)) & calc_mask(const_size);
             return if off == 0 { (0, 0) } else { (1, off) };
@@ -1612,7 +1805,11 @@ fn propagate_add_pointer(data: &Funcdata, op: OpId, slot: int4, sz: int4) -> (in
         if slot != 0 {
             return (2, 0);
         }
-        let off = o.get_in(1).and_then(|v| data.vbank().get(v)).map(|v| v.get_offset()).unwrap_or(0);
+        let off = o
+            .get_in(1)
+            .and_then(|v| data.vbank().get(v))
+            .map(|v| v.get_offset())
+            .unwrap_or(0);
         return if off == 0 { (0, 0) } else { (1, off) };
     }
     if code == OpCode::CPUI_INT_ADD {
@@ -1720,15 +1917,19 @@ fn propagate_add_in2_out(
                 let sbptrto = cur.get_ptr_to()?;
                 let cur_size = cur.get_size();
                 let cur_ws = cur.get_word_size().unwrap_or(1);
-                match data.spacebase_get_sub_type(&sbptrto, type_offset)
-                { Some((subtype, residual)) => {
-                    type_offset = residual;
-                    // The spacebase is never an array/struct container itself, so
-                    // `par`/`parOff` stay unset; `!isArray -> getTypePointerStripArray`.
-                    pointer = tlst.get_type_pointer_strip_array(cur_size, subtype, cur_ws).ok();
-                } _ => {
-                    pointer = None;
-                }}
+                match data.spacebase_get_sub_type(&sbptrto, type_offset) {
+                    Some((subtype, residual)) => {
+                        type_offset = residual;
+                        // The spacebase is never an array/struct container itself, so
+                        // `par`/`parOff` stay unset; `!isArray -> getTypePointerStripArray`.
+                        pointer = tlst
+                            .get_type_pointer_strip_array(cur_size, subtype, cur_ws)
+                            .ok();
+                    }
+                    _ => {
+                        pointer = None;
+                    }
+                }
                 if pointer.is_none() || type_offset == 0 {
                     break;
                 }
@@ -1812,14 +2013,28 @@ fn propagate_one_type(data: &mut Funcdata, root: VarnodeId) {
     // the Varnode has descendants start at the first; else start at the def with
     // inslot=-1.
     fn make_state(data: &Funcdata, vn: VarnodeId) -> PState {
-        let descend: Vec<OpId> =
-            data.vbank().get(vn).map(|v| v.descend_iter().collect()).unwrap_or_default();
-        let mut st = PState { vn, descend, d_idx: 0, op: None, slot: 0, inslot: -1 };
+        let descend: Vec<OpId> = data
+            .vbank()
+            .get(vn)
+            .map(|v| v.descend_iter().collect())
+            .unwrap_or_default();
+        let mut st = PState {
+            vn,
+            descend,
+            d_idx: 0,
+            op: None,
+            slot: 0,
+            inslot: -1,
+        };
         if !st.descend.is_empty() {
             let op = st.descend[0];
             st.d_idx = 1;
             st.op = Some(op);
-            let has_out = data.obank().get(op).map(|o| o.get_out().is_some()).unwrap_or(false);
+            let has_out = data
+                .obank()
+                .get(op)
+                .map(|o| o.get_out().is_some())
+                .unwrap_or(false);
             st.slot = if has_out { -1 } else { 0 };
             st.inslot = data.obank().get(op).map(|o| o.get_slot(vn)).unwrap_or(0);
         } else {
@@ -1838,7 +2053,11 @@ fn propagate_one_type(data: &mut Funcdata, root: VarnodeId) {
     // PropagationState::step() (coreaction.cc:5395) — verbatim.
     fn step(st: &mut PState, data: &Funcdata) {
         st.slot += 1;
-        let numin = st.op.and_then(|o| data.obank().get(o)).map(|o| o.num_input()).unwrap_or(0);
+        let numin = st
+            .op
+            .and_then(|o| data.obank().get(o))
+            .map(|o| o.num_input())
+            .unwrap_or(0);
         if st.slot < numin {
             return;
         }
@@ -1846,7 +2065,11 @@ fn propagate_one_type(data: &mut Funcdata, root: VarnodeId) {
             let op = st.descend[st.d_idx];
             st.d_idx += 1;
             st.op = Some(op);
-            let has_out = data.obank().get(op).map(|o| o.get_out().is_some()).unwrap_or(false);
+            let has_out = data
+                .obank()
+                .get(op)
+                .map(|o| o.get_out().is_some())
+                .unwrap_or(false);
             st.slot = if has_out { -1 } else { 0 };
             st.inslot = data.obank().get(op).map(|o| o.get_slot(st.vn)).unwrap_or(0);
             return;
@@ -1914,8 +2137,7 @@ fn joins_only_output(data: &Funcdata, op: OpId, inslot: int4) -> bool {
         return false;
     };
     matches!(o.code(), OpCode::CPUI_MULTIEQUAL | OpCode::CPUI_INDIRECT)
-        && o
-            .get_in(inslot)
+        && o.get_in(inslot)
             .and_then(|vn| data.vbank().get(vn))
             .and_then(|v| v.get_temp_type())
             .is_some_and(|t| !t.needs_resolution())
@@ -1931,7 +2153,11 @@ fn joins_only_output(data: &Funcdata, op: OpId, inslot: int4) -> bool {
 fn propagate_ref(data: &mut Funcdata, vn: VarnodeId, addr: &Address) {
     // ct = vn->getTempType(); must be a pointer to a concrete (non-spacebase,
     // non-unknown) type.
-    let ct = match data.vbank().get(vn).and_then(|v| v.get_temp_type().cloned()) {
+    let ct = match data
+        .vbank()
+        .get(vn)
+        .and_then(|v| v.get_temp_type().cloned())
+    {
         Some(t) => t,
         None => return,
     };
@@ -2011,7 +2237,10 @@ fn propagate_ref(data: &mut Funcdata, vn: VarnodeId, addr: &Address) {
             // getExactPiece(ct, curoff, cursize).
             // cast: `curoff` (uintb) is the byte offset within `ct`, bounded by the
             // guard above (`curoff + cursize <= ct->getSize()`), so it fits int4.
-            lastct = typegrp.get_exact_piece(Rc::clone(&ct), curoff as int4, cursize).ok().flatten();
+            lastct = typegrp
+                .get_exact_piece(Rc::clone(&ct), curoff as int4, cursize)
+                .ok()
+                .flatten();
         }
         let lct = match &lastct {
             Some(c) => Rc::clone(c),
@@ -2019,7 +2248,11 @@ fn propagate_ref(data: &mut Funcdata, vn: VarnodeId, addr: &Address) {
         };
         // A negative typeOrder here means the new type is more
         // specific; adopt it and re-propagate.
-        let cur_temp = match data.vbank().get(curvn).and_then(|v| v.get_temp_type().cloned()) {
+        let cur_temp = match data
+            .vbank()
+            .get(curvn)
+            .and_then(|v| v.get_temp_type().cloned())
+        {
             Some(t) => t,
             None => continue,
         };
@@ -2071,7 +2304,9 @@ fn propagate_spacebase_ref(data: &mut Funcdata, spcvn: VarnodeId) {
             OpCode::CPUI_COPY => {
                 // vn = op->getIn(0); addr = sbtype->getAddress(0, vn->getSize(), op->getAddr())
                 let in0 = data.obank().get(op).and_then(|o| o.get_in(0));
-                let sz = in0.and_then(|v| data.vbank().get(v).map(|x| x.get_size())).unwrap_or(0);
+                let sz = in0
+                    .and_then(|v| data.vbank().get(v).map(|x| x.get_size()))
+                    .unwrap_or(0);
                 if let (Some(addr), Some(outvn)) = (
                     sbtype.spacebase_get_address(0, sz, &op_addr, manager),
                     data.obank().get(op).and_then(|o| o.get_out()),
@@ -2137,7 +2372,10 @@ fn canonical_return_op(data: &Funcdata) -> Option<OpId> {
                 Some(v) => v,
                 None => continue,
             };
-            let ct = data.vbank().get(vn).and_then(|v| v.get_temp_type().cloned());
+            let ct = data
+                .vbank()
+                .get(vn)
+                .and_then(|v| v.get_temp_type().cloned());
             let ct = match ct {
                 Some(t) => t,
                 None => continue,
@@ -2213,7 +2451,10 @@ fn propagate_across_returns(data: &mut Funcdata) {
             if is_bool && v.get_nz_mask() > 1 {
                 continue;
             }
-            if v.get_temp_type().map(|t| Rc::ptr_eq(t, &ct)).unwrap_or(false) {
+            if v.get_temp_type()
+                .map(|t| Rc::ptr_eq(t, &ct))
+                .unwrap_or(false)
+            {
                 continue;
             }
         }
@@ -2273,7 +2514,9 @@ fn propagate_all(data: &mut Funcdata) {
     // Flow the recovered pointer type (e.g. a `mystruct *` call argument) from the
     // spacebase-relative ADD/PTRSUB/PTRADD outputs into the stack-frame slice they
     // address, so a stack struct/array carries its member type.
-    let spcid = data.get_scope_local().map(|sl| std::rc::Rc::clone(sl.get_space_id()));
+    let spcid = data
+        .get_scope_local()
+        .map(|sl| std::rc::Rc::clone(sl.get_space_id()));
     if let Some(spcid) = spcid {
         if let Some(spcvn) = data.find_spacebase_input(&spcid) {
             propagate_spacebase_ref(data, spcvn);
@@ -2336,7 +2579,10 @@ mod propagate_type_tests {
         assert_eq!(out.get_metatype(), type_metatype::TYPE_PTR);
         assert_eq!(out.get_size(), 8);
         let pointee = out.get_ptr_to().unwrap();
-        assert!(Rc::ptr_eq(&pointee, &int4t), "points at the original value type");
+        assert!(
+            Rc::ptr_eq(&pointee, &int4t),
+            "points at the original value type"
+        );
     }
 
     #[test]
@@ -2417,7 +2663,10 @@ mod propagate_type_tests {
             type_metatype::TYPE_UINT,
             "TypeEnum ctor overrides metatype to TYPE_UINT for a partial enum"
         );
-        assert!(out.has_stripped(), "TypePartialEnum sets has_stripped (type.cc:2687)");
+        assert!(
+            out.has_stripped(),
+            "TypePartialEnum sets has_stripped (type.cc:2687)"
+        );
         assert_eq!(out.get_size(), 1, "partial covers the dereferenced size");
     }
 
@@ -2524,8 +2773,7 @@ mod propagate_type_tests {
         let f = factory();
         let int4t = f.get_base(4, type_metatype::TYPE_INT).unwrap();
         let st = f.get_type_struct("s").unwrap();
-        let fields =
-            vec![crate::dtype::TypeField::new(0, 0, "a", Rc::clone(&int4t))];
+        let fields = vec![crate::dtype::TypeField::new(0, 0, "a", Rc::clone(&int4t))];
         let st = f.assign_raw_fields_struct(&st, fields, Vec::new()).unwrap();
         let ptr = f.get_type_pointer(8, Rc::clone(&st), 1).unwrap();
 
@@ -2551,7 +2799,10 @@ mod propagate_type_tests {
                 break;
             }
         }
-        assert!(iters >= 2, "must take the multi-iteration path (struct then scalar)");
+        assert!(
+            iters >= 2,
+            "must take the multi-iteration path (struct then scalar)"
+        );
         // After the fix: parent is the struct pointer from iter1, retained across
         // the scalar tail iteration (which returned par=None) — matching C++.
         let parent = parent.expect("struct container retained across scalar tail");
@@ -2560,7 +2811,10 @@ mod propagate_type_tests {
             Rc::ptr_eq(&parent.get_ptr_to().unwrap(), &st),
             "retained parent is the pointer to the containing struct"
         );
-        assert_eq!(parent_off, 2, "parentOff is the byte offset into the struct");
+        assert_eq!(
+            parent_off, 2,
+            "parentOff is the byte offset into the struct"
+        );
 
         // The container, fed to getTypePointerRel, yields a struct-relative pointer
         // preserving the container — exactly the C++ wrap on this edge.  C++
@@ -2652,7 +2906,10 @@ mod propagate_type_tests {
         }
         assert!(iters >= 2, "struct descent then scalar-element tail");
         assert!(saw_struct_parent, "iter1 produced the struct container");
-        assert!(saw_scalar_tail_none, "scalar tail iteration returned par=None");
+        assert!(
+            saw_scalar_tail_none,
+            "scalar tail iteration returned par=None"
+        );
         let parent = parent.expect("struct container retained across the scalar tail");
         // The retained container is the STRUCT (the array was stripped, so it
         // never became a `par`); the fix kept it across the par=None tail.
@@ -2660,7 +2917,10 @@ mod propagate_type_tests {
             Rc::ptr_eq(&parent.get_ptr_to().unwrap(), &st),
             "retained parent is the struct, kept across the scalar tail (F1 fix)"
         );
-        assert_eq!(parent_off, 4, "parentOff is the byte offset into the struct");
+        assert_eq!(
+            parent_off, 4,
+            "parentOff is the byte offset into the struct"
+        );
     }
 
     /// F1-fix negative: a pointer into a pure SCALAR (no struct/array anywhere

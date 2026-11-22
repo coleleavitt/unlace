@@ -39,14 +39,17 @@
 use std::path::PathBuf;
 
 use unlace_base::address::Address;
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram, EntrySelector};
+use unlace_console::engine::{ConsoleProgram, EntrySelector, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixtures() -> PathBuf {
@@ -119,13 +122,25 @@ fn pe_linked_exe_decompiles_with_named_imports() {
     let desc = prog.description().to_string();
     assert!(desc.contains("x86"), "PE: expected x86 spec, got {desc:?}");
     // The defined `main` and the imported `puts` resolve as functions.
-    assert!(prog.lookup_symbol("main").is_some(), "PE: `main` not resolved by the loader");
-    assert!(prog.lookup_symbol("puts").is_some(), "PE: `puts` not resolved by the loader");
+    assert!(
+        prog.lookup_symbol("main").is_some(),
+        "PE: `main` not resolved by the loader"
+    );
+    assert!(
+        prog.lookup_symbol("puts").is_some(),
+        "PE: `puts` not resolved by the loader"
+    );
 
     let out = decompile_func(prog, "load function main");
 
-    assert!(out.contains("puts("), "PE: expected a `puts(` call, got:\n{out}");
-    assert!(out.contains("printf("), "PE: expected a `printf(` call, got:\n{out}");
+    assert!(
+        out.contains("puts("),
+        "PE: expected a `puts(` call, got:\n{out}"
+    );
+    assert!(
+        out.contains("printf("),
+        "PE: expected a `printf(` call, got:\n{out}"
+    );
     // The library calls are not unnamed stubs.
     assert!(
         !out.contains("sub_140007240"),
@@ -166,20 +181,27 @@ fn pe_stripped_exe_names_puts_via_iat_thunk() {
 #[test]
 fn pe_batch_targets_exclude_iat_data_slots() {
     let mut prog = boot("pe_imports_stripped.exe");
-    prog.commit_pending_analysis().expect("PE analysis commit must succeed");
+    prog.commit_pending_analysis()
+        .expect("PE analysis commit must succeed");
 
     let canonical = prog.function_entries_canonical();
     assert!(
-        canonical.iter().any(|entry| entry.addr.get_offset() == PUTS_IAT_VMA),
+        canonical
+            .iter()
+            .any(|entry| entry.addr.get_offset() == PUTS_IAT_VMA),
         "PE: canonical inventory must retain the puts IAT slot"
     );
     let executable = prog.function_entries_executable();
     assert!(
-        executable.iter().any(|entry| entry.addr.get_offset() == PUTS_THUNK_VMA),
+        executable
+            .iter()
+            .any(|entry| entry.addr.get_offset() == PUTS_THUNK_VMA),
         "PE: executable inventory must retain the puts thunk"
     );
     assert!(
-        !executable.iter().any(|entry| entry.addr.get_offset() == PUTS_IAT_VMA),
+        !executable
+            .iter()
+            .any(|entry| entry.addr.get_offset() == PUTS_IAT_VMA),
         "PE: executable inventory must exclude the puts IAT slot"
     );
     assert!(
@@ -194,11 +216,14 @@ fn pe_batch_targets_exclude_iat_data_slots() {
 #[test]
 fn pe_data_iat_slot_is_not_a_body_target() {
     let mut prog = boot("pe_imports.exe");
-    prog.commit_pending_analysis().expect("PE analysis commit must succeed");
+    prog.commit_pending_analysis()
+        .expect("PE analysis commit must succeed");
 
     let slot = EntrySelector::Numeric(GETLASTERROR_IAT_VMA);
     assert_eq!(
-        prog.resolve_entry(&slot).expect("the slot stays resolvable").name,
+        prog.resolve_entry(&slot)
+            .expect("the slot stays resolvable")
+            .name,
         "GetLastError"
     );
     assert_eq!(
@@ -238,12 +263,19 @@ const IATINCODE_SLOTS: [u64; 3] = [0x401000, 0x401004, 0x401008];
 #[test]
 fn pe_batch_excludes_iat_slots_inside_a_code_section() {
     let mut prog = boot("pe_iatincode_i386.exe");
-    prog.commit_pending_analysis().expect("PE analysis commit must succeed");
+    prog.commit_pending_analysis()
+        .expect("PE analysis commit must succeed");
 
-    let canonical: Vec<u64> =
-        prog.function_entries_canonical().iter().map(|e| e.addr.get_offset()).collect();
-    let executable: Vec<u64> =
-        prog.function_entries_executable().iter().map(|e| e.addr.get_offset()).collect();
+    let canonical: Vec<u64> = prog
+        .function_entries_canonical()
+        .iter()
+        .map(|e| e.addr.get_offset())
+        .collect();
+    let executable: Vec<u64> = prog
+        .function_entries_executable()
+        .iter()
+        .map(|e| e.addr.get_offset())
+        .collect();
 
     assert!(
         executable.contains(&IATINCODE_ENTRY_VMA),
@@ -291,10 +323,14 @@ fn pe_batch_excludes_iat_slots_inside_a_code_section() {
 #[test]
 fn pe_iat_slots_in_code_still_name_their_calls() {
     let mut prog = boot("pe_iatincode_i386.exe");
-    prog.commit_pending_analysis().expect("PE analysis commit must succeed");
+    prog.commit_pending_analysis()
+        .expect("PE analysis commit must succeed");
     let out = decompile_func(prog, &format!("load addr {IATINCODE_ENTRY_VMA:#x}"));
     for name in ["VirtualAlloc(", "GetModuleHandleA("] {
-        assert!(out.contains(name), "PE: the entry's call must render {name}, got:\n{out}");
+        assert!(
+            out.contains(name),
+            "PE: the entry's call must render {name}, got:\n{out}"
+        );
     }
 }
 
@@ -303,7 +339,8 @@ fn pe_iat_slots_in_code_still_name_their_calls() {
 #[test]
 fn pe_declared_entry_outranks_the_import_slot_test() {
     let mut prog = boot("pe_iatincode_i386.exe");
-    prog.commit_pending_analysis().expect("PE analysis commit must succeed");
+    prog.commit_pending_analysis()
+        .expect("PE analysis commit must succeed");
     let space = prog
         .arch()
         .manage()
@@ -312,14 +349,18 @@ fn pe_declared_entry_outranks_the_import_slot_test() {
         .expect("a default code space");
     prog.declare_function(Address::new(space, IATINCODE_SLOTS[0]), Some("declared"), 4)
         .expect("the declaration is accepted");
-    let executable: Vec<u64> =
-        prog.function_entries_executable().iter().map(|e| e.addr.get_offset()).collect();
+    let executable: Vec<u64> = prog
+        .function_entries_executable()
+        .iter()
+        .map(|e| e.addr.get_offset())
+        .collect();
     assert!(
         executable.contains(&IATINCODE_SLOTS[0]),
         "PE: a declared entry must survive the slot test, got {executable:x?}"
     );
     assert!(
-        prog.resolve_body_entry(&EntrySelector::Numeric(IATINCODE_SLOTS[0])).is_ok(),
+        prog.resolve_body_entry(&EntrySelector::Numeric(IATINCODE_SLOTS[0]))
+            .is_ok(),
         "an explicit function declaration must make the slot a body target"
     );
 }

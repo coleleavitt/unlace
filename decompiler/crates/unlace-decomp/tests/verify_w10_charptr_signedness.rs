@@ -33,16 +33,16 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::{int4, uint4};
 use unlace_num::opcodes::OpCode;
 
+use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
 use unlace_decomp::coreaction_infertypes::propagate_type_pub;
-use unlace_decomp::dtype::{type_metatype, Datatype, TypeFactory, TypeFactoryImpl};
+use unlace_decomp::dtype::{Datatype, TypeFactory, TypeFactoryImpl, type_metatype};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::op::pcodeop_flags;
-use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
 
 // ---------------------------------------------------------------------------
 // harness (mirrors verify_w5x_helpers_completion.rs)
@@ -51,7 +51,8 @@ use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -86,7 +87,8 @@ fn unk(size: int4) -> Rc<Datatype> {
 fn mk_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode, flags: uint4) -> OpId {
     let ram = ram_space(fd);
     let op = fd.new_op(inputs, Address::new(ram, off));
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, flags, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, flags, format!("{opc:?}")));
     op
 }
 
@@ -94,14 +96,22 @@ fn mk_input(fd: &mut Funcdata, off: u64) -> VarnodeId {
     let ram = ram_space(fd);
     let vn = fd.vbank_mut().create(1, Address::new(ram, off), unk(1));
     fd.vbank_mut()
-        .set_input(vn, &mut |_: &mut unlace_decomp::varnode::VarnodeBank, _, _| Ok(()))
+        .set_input(vn, &mut |_: &mut unlace_decomp::varnode::VarnodeBank,
+                             _,
+                             _| Ok(()))
         .unwrap()
 }
 
 /// Build a 2-input boolean compare with both inputs and an output varnode.
 /// Returns (op, in0, in1).
 fn mk_compare(fd: &mut Funcdata, opc: OpCode) -> (OpId, VarnodeId, VarnodeId) {
-    let op = mk_op(fd, 2, 0x100, opc, pcodeop_flags::binary | pcodeop_flags::booloutput);
+    let op = mk_op(
+        fd,
+        2,
+        0x100,
+        opc,
+        pcodeop_flags::binary | pcodeop_flags::booloutput,
+    );
     let a = mk_input(fd, 0x10);
     let b = mk_input(fd, 0x20);
     fd.op_set_input(op, a, 0).unwrap();
@@ -124,7 +134,8 @@ fn factory() -> TypeFactoryImpl {
     // (architecture.rs:1162: `set_core_type("char", 1, TYPE_INT, true)`), then
     // populate the core caches (`cache_core_types` fills `charcache`) so
     // `get_type_char(1)` yields a faithful `TypeChar` (TYPE_INT, size 1).
-    f.set_core_type("char", 1, type_metatype::TYPE_INT, true).expect("register char");
+    f.set_core_type("char", 1, type_metatype::TYPE_INT, true)
+        .expect("register char");
     f.cache_core_types().expect("cache core types");
     f
 }
@@ -148,11 +159,18 @@ fn w10_charptr_slesss_propagates_a_signed_char() {
     let f = factory();
     let (op, a, b) = mk_compare(&mut fd, OpCode::CPUI_INT_SLESS);
     let chr = make_char(&f);
-    assert_eq!(chr.get_metatype(), type_metatype::TYPE_INT, "a char must be TYPE_INT");
+    assert_eq!(
+        chr.get_metatype(),
+        type_metatype::TYPE_INT,
+        "a char must be TYPE_INT"
+    );
     // Propagate FROM input slot 0 (a) TO input slot 1 (b).
     let out = propagate_type_pub(&mut fd, Rc::clone(&chr), op, a, b, 0, 1);
     let out = out.expect("a signed char propagates across INT_SLESS");
-    assert!(Rc::ptr_eq(&out, &chr), "the SLESS arm returns the incoming type unchanged");
+    assert!(
+        Rc::ptr_eq(&out, &chr),
+        "the SLESS arm returns the incoming type unchanged"
+    );
 }
 
 /// A `uint1` (TYPE_UINT) read by an INT_SLESS does NOT propagate — "Only
@@ -166,7 +184,10 @@ fn w10_charptr_sless_declines_an_unsigned_byte() {
     let u1 = f.get_base(1, type_metatype::TYPE_UINT).expect("uint1");
     assert_eq!(u1.get_metatype(), type_metatype::TYPE_UINT);
     let out = propagate_type_pub(&mut fd, u1, op, a, b, 0, 1);
-    assert!(out.is_none(), "a uint1 must NOT propagate across a signed compare");
+    assert!(
+        out.is_none(),
+        "a uint1 must NOT propagate across a signed compare"
+    );
 }
 
 /// A pointer (`char *`, TYPE_PTR) read by an INT_SLESS does NOT propagate — the
@@ -181,7 +202,10 @@ fn w10_charptr_sless_declines_a_pointer() {
     let cptr = f.get_type_pointer(8, chr, 1).expect("char *");
     assert_eq!(cptr.get_metatype(), type_metatype::TYPE_PTR);
     let out = propagate_type_pub(&mut fd, cptr, op, a, b, 0, 1);
-    assert!(out.is_none(), "a pointer must NOT propagate across a signed compare");
+    assert!(
+        out.is_none(),
+        "a pointer must NOT propagate across a signed compare"
+    );
 }
 
 /// INT_SLESSEQUAL shares the identical override — a char propagates, a uint1

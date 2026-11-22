@@ -1,10 +1,10 @@
 //! Storage transfers preserve bits; FLOAT_* conversion operations change values.
 
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use unlace_num::opcodes::OpCode;
 use std::rc::Rc;
+use unlace_num::opcodes::OpCode;
 
 pub(crate) struct Transfer {
     pub input: VarnodeId,
@@ -40,26 +40,41 @@ pub(crate) fn storage_transfer(
     let src = fd.vbank().get(input)?;
     let dst = fd.vbank().get(out)?;
     let partial = |ty: &Datatype| {
-        matches!(ty.get_metatype(), type_metatype::TYPE_PARTIALSTRUCT | type_metatype::TYPE_PARTIALUNION)
+        matches!(
+            ty.get_metatype(),
+            type_metatype::TYPE_PARTIALSTRUCT | type_metatype::TYPE_PARTIALUNION
+        )
     };
     let aggregate = |id: VarnodeId| {
         fd.vbank()
             .get(id)
             .and_then(|v| fd.high_bank().get(v.get_high()?))
             .and_then(|h| h.kuna_symbol_type().map(|ty| ty.get_metatype()))
-            .is_some_and(|meta| matches!(meta, type_metatype::TYPE_STRUCT | type_metatype::TYPE_UNION))
+            .is_some_and(|meta| {
+                matches!(meta, type_metatype::TYPE_STRUCT | type_metatype::TYPE_UNION)
+            })
     };
     let copy = operation.code() == OpCode::CPUI_COPY;
     let global = |id: VarnodeId| {
-        let value = fd.vbank().get(id).filter(|v| copy && v.is_persist() && !v.is_implied())?;
+        let value = fd
+            .vbank()
+            .get(id)
+            .filter(|v| copy && v.is_persist() && !v.is_implied())?;
         let usepoint = unlace_base::address::Address::new_invalid();
-        let (_, offset, ty) = fd.get_arch().name_for_global_varnode(value.get_addr(), value.get_size(), &usepoint)?;
+        let (_, offset, ty) =
+            fd.get_arch()
+                .name_for_global_varnode(value.get_addr(), value.get_size(), &usepoint)?;
         ty.filter(|ty| {
             offset == 0
                 && ty.get_size() == value.get_size()
-                && !matches!(ty.get_metatype(), type_metatype::TYPE_STRUCT | type_metatype::TYPE_UNION
-                    | type_metatype::TYPE_ARRAY | type_metatype::TYPE_PARTIALSTRUCT
-                    | type_metatype::TYPE_PARTIALUNION)
+                && !matches!(
+                    ty.get_metatype(),
+                    type_metatype::TYPE_STRUCT
+                        | type_metatype::TYPE_UNION
+                        | type_metatype::TYPE_ARRAY
+                        | type_metatype::TYPE_PARTIALSTRUCT
+                        | type_metatype::TYPE_PARTIALUNION
+                )
         })
     };
     let undefined = |id: VarnodeId, own: &Datatype| {
@@ -67,7 +82,12 @@ pub(crate) fn storage_transfer(
             && !aggregate(id)
             && crate::printc::declared_variable_type(fd, id).is_some_and(|ty| partial(&ty));
         declared
-            .then(|| fd.get_arch().types()?.get_base(own.get_size(), type_metatype::TYPE_UNKNOWN).ok())
+            .then(|| {
+                fd.get_arch()
+                    .types()?
+                    .get_base(own.get_size(), type_metatype::TYPE_UNKNOWN)
+                    .ok()
+            })
             .flatten()
     };
     let size = src.get_size();
@@ -81,10 +101,15 @@ pub(crate) fn storage_transfer(
             .or_else(|| declared_member_type(fd, input))
             .filter(|ty| !partial(ty))
             .filter(|ty| {
-                !matches!(src.get_type_read_facing(op).get_metatype(),
-                    type_metatype::TYPE_PTR | type_metatype::TYPE_FLOAT)
-                    || !matches!(ty.get_metatype(), type_metatype::TYPE_UNKNOWN
-                        | type_metatype::TYPE_PARTIALSTRUCT | type_metatype::TYPE_PARTIALUNION)
+                !matches!(
+                    src.get_type_read_facing(op).get_metatype(),
+                    type_metatype::TYPE_PTR | type_metatype::TYPE_FLOAT
+                ) || !matches!(
+                    ty.get_metatype(),
+                    type_metatype::TYPE_UNKNOWN
+                        | type_metatype::TYPE_PARTIALSTRUCT
+                        | type_metatype::TYPE_PARTIALUNION
+                )
             })
             .or_else(|| global(input))
             .or_else(|| undefined(input, src.get_type()))
@@ -97,8 +122,12 @@ pub(crate) fn storage_transfer(
             .filter(|ty| !partial(ty))
             .filter(|ty| {
                 dst.get_type_def_facing().get_metatype() != type_metatype::TYPE_FLOAT
-                    || !matches!(ty.get_metatype(), type_metatype::TYPE_UNKNOWN
-                        | type_metatype::TYPE_PARTIALSTRUCT | type_metatype::TYPE_PARTIALUNION)
+                    || !matches!(
+                        ty.get_metatype(),
+                        type_metatype::TYPE_UNKNOWN
+                            | type_metatype::TYPE_PARTIALSTRUCT
+                            | type_metatype::TYPE_PARTIALUNION
+                    )
             })
             .or_else(|| global(out))
             .or_else(|| undefined(out, dst.get_type()))
@@ -118,9 +147,10 @@ pub(crate) fn storage_transfer(
     let pointer = |ty: &Datatype| {
         ty.get_metatype() == type_metatype::TYPE_PTR
             && ty.get_word_size() == Some(1)
-            && fd.get_arch().types().is_some_and(|types| {
-                ty.get_size() == types.get_size_of_pointer()
-            })
+            && fd
+                .get_arch()
+                .types()
+                .is_some_and(|types| ty.get_size() == types.get_size_of_pointer())
     };
     let source_pointer = pointer(&from_ty);
     let to_float = to == type_metatype::TYPE_FLOAT && (integer(from) || source_pointer);
@@ -137,10 +167,7 @@ pub(crate) fn storage_transfer(
 }
 
 /// A low-end integer truncation reads a merged float variable's storage bits.
-pub(crate) fn truncated_float_storage(
-    fd: &Funcdata,
-    op: OpId,
-) -> Option<(Transfer, Rc<Datatype>)> {
+pub(crate) fn truncated_float_storage(fd: &Funcdata, op: OpId) -> Option<(Transfer, Rc<Datatype>)> {
     let operation = fd.obank().get(op)?;
     if operation.code() != OpCode::CPUI_SUBPIECE {
         return None;
@@ -182,13 +209,16 @@ pub(crate) fn truncated_float_storage(
         return None;
     }
     let target = types.get_base(size, type_metatype::TYPE_UINT).ok()?;
-    Some((Transfer {
-        input,
-        target,
-        size,
-        to_float: false,
-        source_pointer: false,
-    }, result_type))
+    Some((
+        Transfer {
+            input,
+            target,
+            size,
+            to_float: false,
+            source_pointer: false,
+        },
+        result_type,
+    ))
 }
 
 /// Whether a same-width `CAST` of `input` to a float prints as a reinterpretation
@@ -240,16 +270,15 @@ pub(crate) fn word_result(fd: &Funcdata, op: OpId) -> Option<Rc<Datatype>> {
     let declared = crate::printc::declared_variable_type(fd, out)?;
     (matches!(size, 4 | 8)
         && declared.get_size() == size
-        && matches!(declared.get_metatype(), type_metatype::TYPE_INT | type_metatype::TYPE_UINT))
-        .then_some(declared)
+        && matches!(
+            declared.get_metatype(),
+            type_metatype::TYPE_INT | type_metatype::TYPE_UINT
+        ))
+    .then_some(declared)
 }
 
 /// Explicit word storage keeps its bits when a native float op consumes it.
-pub(crate) fn stack_float_input(
-    fd: &Funcdata,
-    op: OpId,
-    input: VarnodeId,
-) -> Option<Transfer> {
+pub(crate) fn stack_float_input(fd: &Funcdata, op: OpId, input: VarnodeId) -> Option<Transfer> {
     if !fd.get_arch().stack_views {
         return None;
     }
@@ -257,28 +286,33 @@ pub(crate) fn stack_float_input(
     let float_return = code == OpCode::CPUI_RETURN
         && fd.get_func_proto().get_output_type().is_some_and(|ty| {
             ty.get_metatype() == type_metatype::TYPE_FLOAT
-                && fd.vbank().get(input).is_some_and(|vn| vn.get_size() == ty.get_size())
+                && fd
+                    .vbank()
+                    .get(input)
+                    .is_some_and(|vn| vn.get_size() == ty.get_size())
         });
-    if !float_return && !matches!(
-        code,
-        OpCode::CPUI_FLOAT_ABS
-            | OpCode::CPUI_FLOAT_ADD
-            | OpCode::CPUI_FLOAT_CEIL
-            | OpCode::CPUI_FLOAT_DIV
-            | OpCode::CPUI_FLOAT_EQUAL
-            | OpCode::CPUI_FLOAT_FLOAT2FLOAT
-            | OpCode::CPUI_FLOAT_FLOOR
-            | OpCode::CPUI_FLOAT_LESS
-            | OpCode::CPUI_FLOAT_LESSEQUAL
-            | OpCode::CPUI_FLOAT_MULT
-            | OpCode::CPUI_FLOAT_NAN
-            | OpCode::CPUI_FLOAT_NEG
-            | OpCode::CPUI_FLOAT_NOTEQUAL
-            | OpCode::CPUI_FLOAT_ROUND
-            | OpCode::CPUI_FLOAT_SQRT
-            | OpCode::CPUI_FLOAT_SUB
-            | OpCode::CPUI_FLOAT_TRUNC
-    ) {
+    if !float_return
+        && !matches!(
+            code,
+            OpCode::CPUI_FLOAT_ABS
+                | OpCode::CPUI_FLOAT_ADD
+                | OpCode::CPUI_FLOAT_CEIL
+                | OpCode::CPUI_FLOAT_DIV
+                | OpCode::CPUI_FLOAT_EQUAL
+                | OpCode::CPUI_FLOAT_FLOAT2FLOAT
+                | OpCode::CPUI_FLOAT_FLOOR
+                | OpCode::CPUI_FLOAT_LESS
+                | OpCode::CPUI_FLOAT_LESSEQUAL
+                | OpCode::CPUI_FLOAT_MULT
+                | OpCode::CPUI_FLOAT_NAN
+                | OpCode::CPUI_FLOAT_NEG
+                | OpCode::CPUI_FLOAT_NOTEQUAL
+                | OpCode::CPUI_FLOAT_ROUND
+                | OpCode::CPUI_FLOAT_SQRT
+                | OpCode::CPUI_FLOAT_SUB
+                | OpCode::CPUI_FLOAT_TRUNC
+        )
+    {
         return None;
     }
     let value = fd.vbank().get(input)?;
@@ -324,7 +358,10 @@ fn untyped_call_value(fd: &Funcdata, vn: VarnodeId, depth: usize) -> bool {
     if v.get_type().get_metatype() != type_metatype::TYPE_UNKNOWN {
         return false;
     }
-    let Some((id, op)) = v.get_def().and_then(|id| fd.obank().get(id).map(|op| (id, op))) else {
+    let Some((id, op)) = v
+        .get_def()
+        .and_then(|id| fd.obank().get(id).map(|op| (id, op)))
+    else {
         return false;
     };
     match op.code() {
@@ -342,57 +379,84 @@ fn untyped_call_value(fd: &Funcdata, vn: VarnodeId, depth: usize) -> bool {
 /// the storage and width the call's result is read from: a callee that returns
 /// in `rax` says nothing of the `xmm0` its caller reads.
 fn states_a_return(fd: &Funcdata, op: OpId) -> bool {
-    let Some(fc) = fd.get_call_specs_index(op).map(|i| fd.get_call_specs(i)) else { return false };
+    let Some(fc) = fd.get_call_specs_index(op).map(|i| fd.get_call_specs(i)) else {
+        return false;
+    };
     let proto = fc.proto();
     if proto.is_output_locked() {
-        return proto.get_output_type().is_some_and(|t| t.get_metatype() != type_metatype::TYPE_VOID);
+        return proto
+            .get_output_type()
+            .is_some_and(|t| t.get_metatype() != type_metatype::TYPE_VOID);
     }
-    let Some(out) = read_storage(fd, op) else { return false };
-    let read_as = |addr: &unlace_base::address::Address, size: i32| out.get_addr() == addr && out.get_size() == size;
+    let Some(out) = read_storage(fd, op) else {
+        return false;
+    };
+    let read_as = |addr: &unlace_base::address::Address, size: i32| {
+        out.get_addr() == addr && out.get_size() == size
+    };
     let entry = fc.get_entry_address();
-    entry.get_space().map(|s| (s.get_index(), entry.get_offset())).is_some_and(|k| {
-        fd.kuna_callret_stated(k).is_some_and(|s| read_as(&s.addr, s.size))
-            || (fd.kuna_callee_returns(k) == Some(crate::kuna_voidret::Returns::Other)
-                && fd.kuna_callee_return_storage(k).is_some_and(|(a, n)| read_as(a, *n)))
-    })
+    entry
+        .get_space()
+        .map(|s| (s.get_index(), entry.get_offset()))
+        .is_some_and(|k| {
+            fd.kuna_callret_stated(k)
+                .is_some_and(|s| read_as(&s.addr, s.size))
+                || (fd.kuna_callee_returns(k) == Some(crate::kuna_voidret::Returns::Other)
+                    && fd
+                        .kuna_callee_return_storage(k)
+                        .is_some_and(|(a, n)| read_as(a, *n)))
+        })
 }
 
 /// The Varnode the call `op`'s result is read from: its output, or, where the
 /// cast pass gave the call a temporary, the storage the temporary is cast into.
 fn read_storage(fd: &Funcdata, op: OpId) -> Option<&crate::varnode::Varnode> {
     let out = fd.vbank().get(fd.obank().get(op)?.get_out()?)?;
-    let temporary = out.get_addr().get_space().is_some_and(|s| s.get_type() == unlace_base::space::spacetype::IPTR_INTERNAL);
+    let temporary = out
+        .get_addr()
+        .get_space()
+        .is_some_and(|s| s.get_type() == unlace_base::space::spacetype::IPTR_INTERNAL);
     if !temporary {
         return Some(out);
     }
     let mut readers = out.descend_iter();
-    let cast = fd.obank().get(readers.next()?).filter(|o| o.code() == OpCode::CPUI_CAST)?;
+    let cast = fd
+        .obank()
+        .get(readers.next()?)
+        .filter(|o| o.code() == OpCode::CPUI_CAST)?;
     if readers.next().is_some() {
         return None;
     }
     fd.vbank().get(cast.get_out()?)
 }
 
-pub(crate) fn declared_member_type(
-    fd: &Funcdata,
-    id: VarnodeId,
-) -> Option<Rc<Datatype>> {
+pub(crate) fn declared_member_type(fd: &Funcdata, id: VarnodeId) -> Option<Rc<Datatype>> {
     let value = fd.vbank().get(id)?;
     if value.is_persist() && !value.is_implied() {
         let usepoint = unlace_base::address::Address::new_invalid();
-        if let Some((_, offset, Some(ty))) = fd.get_arch().name_for_global_varnode(
-            value.get_addr(), value.get_size(), &usepoint,
-        ) {
+        if let Some((_, offset, Some(ty))) =
+            fd.get_arch()
+                .name_for_global_varnode(value.get_addr(), value.get_size(), &usepoint)
+        {
             if ty.get_metatype() == type_metatype::TYPE_ARRAY {
                 let types = fd.get_arch().types()?;
                 return crate::kuna_stackviews::scalar_piece(
-                    types, ty, offset.max(0), value.get_size(),
-                ).or_else(|| {
+                    types,
+                    ty,
+                    offset.max(0),
+                    value.get_size(),
+                )
+                .or_else(|| {
                     crate::kuna_partialaccess::readable(value.get_type(), value.get_size())
                         .then(|| Rc::clone(value.get_type()))
-                }).or_else(|| {
+                })
+                .or_else(|| {
                     matches!(value.get_size(), 4 | 8)
-                        .then(|| types.get_base(value.get_size(), type_metatype::TYPE_UNKNOWN).ok())
+                        .then(|| {
+                            types
+                                .get_base(value.get_size(), type_metatype::TYPE_UNKNOWN)
+                                .ok()
+                        })
                         .flatten()
                 });
             }
@@ -440,10 +504,18 @@ pub(crate) fn array_float_conversion(fd: &Funcdata, op: OpId) -> Option<Rc<Datat
         return None;
     }
     let (_, _, Some(ty)) = fd.get_arch().name_for_global_varnode(
-        value.get_addr(), value.get_size(), &unlace_base::address::Address::new_invalid(),
-    )? else { return None };
+        value.get_addr(),
+        value.get_size(),
+        &unlace_base::address::Address::new_invalid(),
+    )?
+    else {
+        return None;
+    };
     if ty.get_metatype() != type_metatype::TYPE_ARRAY {
         return None;
     }
-    fd.get_arch().types()?.get_base(value.get_size(), type_metatype::TYPE_FLOAT).ok()
+    fd.get_arch()
+        .types()?
+        .get_base(value.get_size(), type_metatype::TYPE_FLOAT)
+        .ok()
 }

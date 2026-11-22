@@ -23,10 +23,8 @@ use std::ops::Bound;
 use std::rc::Rc;
 
 use crate::error::{KunaError, KunaResult};
-use crate::marshal::{
-    AttributeId, Decoder, ElementId, Encoder, ATTRIB_NAME, ATTRIB_SPACE,
-};
-use crate::space::{spacetype, AddrSpace, AddrSpaceManager};
+use crate::marshal::{ATTRIB_NAME, ATTRIB_SPACE, AttributeId, Decoder, ElementId, Encoder};
+use crate::space::{AddrSpace, AddrSpaceManager, spacetype};
 use crate::types::Wrap;
 
 pub const ATTRIB_FIRST: AttributeId = AttributeId::new("first", 27);
@@ -98,7 +96,10 @@ impl Default for Address {
     /// C++ `Address(void)`: a deliberately invalid address.  (The C++
     /// leaves `offset` uninitialized; it is zeroed here.)
     fn default() -> Self {
-        Address { base: AddrSpacePtr::Null, offset: 0 }
+        Address {
+            base: AddrSpacePtr::Null,
+            offset: 0,
+        }
     }
 }
 
@@ -107,7 +108,10 @@ impl Address {
     /// \param id is the space containing the address
     /// \param off is the offset of the address
     pub fn new(id: Rc<AddrSpace>, off: u64) -> Address {
-        Address { base: AddrSpacePtr::Spc(id), offset: off }
+        Address {
+            base: AddrSpacePtr::Spc(id),
+            offset: off,
+        }
     }
 
     /// A copyable ordering key: (sentinel rank, space index, byte offset).
@@ -135,9 +139,15 @@ impl Address {
     /// \param ex is either \e m_minimal or \e m_maximal
     pub fn new_extreme(ex: mach_extreme) -> Address {
         if ex == mach_extreme::m_minimal {
-            Address { base: AddrSpacePtr::Null, offset: 0 }
+            Address {
+                base: AddrSpacePtr::Null,
+                offset: 0,
+            }
         } else {
-            Address { base: AddrSpacePtr::Max, offset: u64::MAX }
+            Address {
+                base: AddrSpacePtr::Max,
+                offset: u64::MAX,
+            }
         }
     }
 
@@ -304,7 +314,8 @@ impl Address {
     /// \e join space can be considered overlapped with its constituent
     /// pieces.
     pub fn overlap_join(&self, skip: i32, op: &Address, size: i32) -> KunaResult<i32> {
-        op.space().overlap_join(op.get_offset(), size, self.space(), self.offset, skip)
+        op.space()
+            .overlap_join(op.get_offset(), size, self.space(), self.offset, skip)
     }
 
     /// Does \e this form a contiguous range with \e loaddr.
@@ -451,8 +462,7 @@ fn decode_varnode_attributes(
                 .register_lookup()
                 .cloned()
                 .ok_or_else(crate::space::no_register_lookup_err)?;
-            let point =
-                lookup.get_register(&String::from_utf8_lossy(&decoder.read_string()?))?;
+            let point = lookup.get_register(&String::from_utf8_lossy(&decoder.read_string()?))?;
             space = point.space.clone();
             offset = point.offset;
             size = point.size;
@@ -523,7 +533,10 @@ impl core::ops::Add<i64> for &Address {
     type Output = Address;
     fn add(self, off: i64) -> Address {
         let base = self.space();
-        Address::new(Rc::clone(base), base.wrap_offset(self.offset.wadd(off as u64)))
+        Address::new(
+            Rc::clone(base),
+            base.wrap_offset(self.offset.wadd(off as u64)),
+        )
     }
 }
 
@@ -532,7 +545,10 @@ impl core::ops::Sub<i64> for &Address {
     type Output = Address;
     fn sub(self, off: i64) -> Address {
         let base = self.space();
-        Address::new(Rc::clone(base), base.wrap_offset(self.offset.wsub(off as u64)))
+        Address::new(
+            Rc::clone(base),
+            base.wrap_offset(self.offset.wsub(off as u64)),
+        )
     }
 }
 
@@ -567,13 +583,25 @@ impl SeqNum {
     /// Create a sequence number with a specific \e time field
     pub fn new(a: Address, b: u32) -> SeqNum {
         // (C++ leaves `order` uninitialized here; zeroed)
-        SeqNum { pc: a, uniq: b, order: 0 }
+        SeqNum {
+            pc: a,
+            uniq: b,
+            order: 0,
+        }
     }
 
     /// Create an extremal sequence number
     pub fn new_extreme(ex: mach_extreme) -> SeqNum {
-        let uniq = if ex == mach_extreme::m_minimal { 0 } else { u32::MAX };
-        SeqNum { pc: Address::new_extreme(ex), uniq, order: 0 }
+        let uniq = if ex == mach_extreme::m_minimal {
+            0
+        } else {
+            u32::MAX
+        };
+        SeqNum {
+            pc: Address::new_extreme(ex),
+            uniq,
+            order: 0,
+        }
     }
 
     /// Get the address portion of a sequence number
@@ -694,7 +722,11 @@ impl Range {
     /// \param f is the offset of the first byte in the range
     /// \param l is the offset of the last byte in the range
     pub fn new(s: Rc<AddrSpace>, f: u64, l: u64) -> Range {
-        Range { spc: s, first: f, last: l }
+        Range {
+            spc: s,
+            first: f,
+            last: l,
+        }
     }
 
     /// Construct range out of basic properties
@@ -725,7 +757,7 @@ impl Range {
                 return Err(KunaError::lowlevel(format!(
                     "Undefined space: {}",
                     properties.space_name
-                )))
+                )));
             }
         };
         // (The C++ has a second, unreachable null check here — "No address
@@ -826,7 +858,9 @@ impl Range {
     pub fn decode(decoder: &mut dyn Decoder) -> KunaResult<Range> {
         let elem_id = decoder.open_element()?;
         if elem_id != ELEM_RANGE && elem_id != ELEM_REGISTER {
-            return Err(KunaError::decoder("Expecting <range> or <register> element"));
+            return Err(KunaError::decoder(
+                "Expecting <range> or <register> element",
+            ));
         }
         let range = Self::decode_from_attributes(decoder)?;
         decoder.close_element(elem_id)?;
@@ -876,7 +910,9 @@ impl Range {
         let spc = match spc {
             Some(spc) => spc,
             None => {
-                return Err(KunaError::lowlevel("No address space indicated in range tag"))
+                return Err(KunaError::lowlevel(
+                    "No address space indicated in range tag",
+                ));
             }
         };
         if !seen_last {
@@ -945,7 +981,9 @@ impl RangeProperties {
     pub fn decode(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
         let elem_id = decoder.open_element()?;
         if elem_id != ELEM_RANGE && elem_id != ELEM_REGISTER {
-            return Err(KunaError::decoder("Expecting <range> or <register> element"));
+            return Err(KunaError::decoder(
+                "Expecting <range> or <register> element",
+            ));
         }
         loop {
             let attrib_id = decoder.get_next_attribute_id()?;
@@ -1061,14 +1099,20 @@ impl RangeList {
         // we must have iter1.first > first; set iter1 to first range with
         // range.last >= first — it is either the upper bound or the one
         // before
-        if let Some(prev) = self.tree.range((Bound::Unbounded, Bound::Included(&probe1))).next_back()
+        if let Some(prev) = self
+            .tree
+            .range((Bound::Unbounded, Bound::Included(&probe1)))
+            .next_back()
         {
             // C++ pointer comparison `(*iter1).spc != spc`
             if Rc::ptr_eq(&prev.spc, spc) && prev.last >= first {
                 result.push(prev.clone());
             }
         }
-        for r in self.tree.range((Bound::Excluded(&probe1), Bound::Unbounded)) {
+        for r in self
+            .tree
+            .range((Bound::Excluded(&probe1), Bound::Unbounded))
+        {
             if *r > probe2 {
                 break; // reached iter2
             }
@@ -1098,11 +1142,17 @@ impl RangeList {
         if self.tree.is_empty() {
             return false;
         }
-        let spc = addr.get_space().expect("in_range on sentinel address (C++ UB)");
+        let spc = addr
+            .get_space()
+            .expect("in_range on sentinel address (C++ UB)");
         let probe = Range::new(Rc::clone(spc), addr.get_offset(), addr.get_offset());
         // iter = first range with its first > addr, then step back to the
         // last range with range.first <= addr
-        match self.tree.range((Bound::Unbounded, Bound::Included(&probe))).next_back() {
+        match self
+            .tree
+            .range((Bound::Unbounded, Bound::Included(&probe)))
+            .next_back()
+        {
             None => false,
             Some(r) => {
                 if !Rc::ptr_eq(&r.spc, spc) {
@@ -1123,7 +1173,11 @@ impl RangeList {
         }
         let probe = Range::new(Rc::clone(spaceid), offset, offset);
         // iter = first range with its first > offset, stepped back
-        match self.tree.range((Bound::Unbounded, Bound::Included(&probe))).next_back() {
+        match self
+            .tree
+            .range((Bound::Unbounded, Bound::Included(&probe)))
+            .next_back()
+        {
             None => None,
             Some(r) => {
                 if !Rc::ptr_eq(&r.spc, spaceid) {
@@ -1150,20 +1204,28 @@ impl RangeList {
         if self.tree.is_empty() {
             return 0;
         }
-        let spc = addr.get_space().expect("longest_fit on sentinel address (C++ UB)");
+        let spc = addr
+            .get_space()
+            .expect("longest_fit on sentinel address (C++ UB)");
         let mut offset = addr.get_offset();
         let probe = Range::new(Rc::clone(spc), offset, offset);
         // iter = first range with its first > addr, stepped back
-        let first_range =
-            match self.tree.range((Bound::Unbounded, Bound::Included(&probe))).next_back() {
-                None => return 0,
-                Some(r) => r,
-            };
+        let first_range = match self
+            .tree
+            .range((Bound::Unbounded, Bound::Included(&probe)))
+            .next_back()
+        {
+            None => return 0,
+            Some(r) => r,
+        };
         let mut sizeres: u64 = 0;
         if first_range.last < offset {
             return sizeres;
         }
-        for r in self.tree.range((Bound::Included(first_range), Bound::Unbounded)) {
+        for r in self
+            .tree
+            .range((Bound::Included(first_range), Bound::Unbounded))
+        {
             if !Rc::ptr_eq(&r.spc, spc) {
                 break;
             }
@@ -1200,18 +1262,30 @@ impl RangeList {
         let probe = Range::new(Rc::clone(spaceid), midway, midway);
         // First element greater than -range- (should be MOST negative),
         // stepped back one
-        if let Some(r) = self.tree.range((Bound::Unbounded, Bound::Included(&probe))).next_back()
-            && Rc::ptr_eq(&r.spc, spaceid) {
-                return Some(r);
-            }
+        if let Some(r) = self
+            .tree
+            .range((Bound::Unbounded, Bound::Included(&probe)))
+            .next_back()
+            && Rc::ptr_eq(&r.spc, spaceid)
+        {
+            return Some(r);
+        }
 
         // If there were no "positive" ranges, search for biggest negative
         // range
-        let probe = Range::new(Rc::clone(spaceid), spaceid.get_highest(), spaceid.get_highest());
-        if let Some(r) = self.tree.range((Bound::Unbounded, Bound::Included(&probe))).next_back()
-            && Rc::ptr_eq(&r.spc, spaceid) {
-                return Some(r);
-            }
+        let probe = Range::new(
+            Rc::clone(spaceid),
+            spaceid.get_highest(),
+            spaceid.get_highest(),
+        );
+        if let Some(r) = self
+            .tree
+            .range((Bound::Unbounded, Bound::Included(&probe)))
+            .next_back()
+            && Rc::ptr_eq(&r.spc, spaceid)
+        {
+            return Some(r);
+        }
         None
     }
 
@@ -1338,13 +1412,25 @@ impl BitRange {
     /// \return -1, 0, or 1 to establish ordering the two ranges
     pub fn compare(&self, op2: &BitRange) -> i32 {
         if self.byte_offset != op2.byte_offset {
-            return if self.byte_offset < op2.byte_offset { -1 } else { 1 };
+            return if self.byte_offset < op2.byte_offset {
+                -1
+            } else {
+                1
+            };
         }
         if self.byte_size != op2.byte_size {
-            return if self.byte_size < op2.byte_size { -1 } else { 1 };
+            return if self.byte_size < op2.byte_size {
+                -1
+            } else {
+                1
+            };
         }
         if self.least_sig_bit != op2.least_sig_bit {
-            return if self.least_sig_bit < op2.least_sig_bit { -1 } else { 1 };
+            return if self.least_sig_bit < op2.least_sig_bit {
+                -1
+            } else {
+                1
+            };
         }
         if self.num_bits != op2.num_bits {
             return if self.num_bits < op2.num_bits { -1 } else { 1 };
@@ -1706,8 +1792,16 @@ pub fn uintb_negate(in_: u64, size: i32) -> u64 {
 pub fn sign_extend_sized(in_: u64, sizein: i32, sizeout: i32) -> u64 {
     // mixed comparisons: int4 vs sizeof(uintb) (size_t) — negative sizes
     // convert huge and clamp to 8
-    let sizein = if (sizein as i64 as u64) < 8 { sizein } else { 8 };
-    let sizeout = if (sizeout as i64 as u64) < 8 { sizeout } else { 8 };
+    let sizein = if (sizein as i64 as u64) < 8 {
+        sizein
+    } else {
+        8
+    };
+    let sizeout = if (sizeout as i64 as u64) < 8 {
+        sizeout
+    } else {
+        8
+    };
     let mut sval = in_ as i64;
     // out-of-range/negative C++ shift counts resolve with x86 masking,
     // matching the wrapping shifts (ADR 0003)
@@ -1850,7 +1944,17 @@ mod tests {
     }
 
     fn small_space(name: &str, index: i32) -> Rc<AddrSpace> {
-        Rc::new(AddrSpace::new(spacetype::IPTR_PROCESSOR, name, false, 2, 1, index, 0, 0, 0))
+        Rc::new(AddrSpace::new(
+            spacetype::IPTR_PROCESSOR,
+            name,
+            false,
+            2,
+            1,
+            index,
+            0,
+            0,
+            0,
+        ))
     }
 
     /// `sort_key` must order exactly as [`Address::cmp`] does: every consumer
@@ -1863,7 +1967,12 @@ mod tests {
             Address::new_extreme(mach_extreme::m_maximal),
             Address::default(),
         ];
-        for spc in [ram(), Rc::new(ConstantSpace::new()), small_space("a", 1), small_space("b", 7)] {
+        for spc in [
+            ram(),
+            Rc::new(ConstantSpace::new()),
+            small_space("a", 1),
+            small_space("b", 7),
+        ] {
             for off in [0u64, 1, 0x1000, 0xffff_ffff, u64::MAX] {
                 addrs.push(Address::new(Rc::clone(&spc), off));
             }
@@ -2012,8 +2121,14 @@ mod tests {
         assert!(list.get_range(&other, 0x15).is_some());
         assert_eq!(list.num_ranges(), 3);
         // first/last respect space index order (io has higher index)
-        assert!(Rc::ptr_eq(list.get_first_range().unwrap().get_space(), &ram));
-        assert!(Rc::ptr_eq(list.get_last_range().unwrap().get_space(), &other));
+        assert!(Rc::ptr_eq(
+            list.get_first_range().unwrap().get_space(),
+            &ram
+        ));
+        assert!(Rc::ptr_eq(
+            list.get_last_range().unwrap().get_space(),
+            &other
+        ));
     }
 
     #[test]

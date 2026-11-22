@@ -1,8 +1,8 @@
 //! Explicit return storage suppresses model-generated hidden return arguments.
 use crate::dtype::TypeFactory;
 use crate::fspec::PrototypePieces;
-use unlace_base::error::KunaResult;
 use std::borrow::Cow;
+use unlace_base::error::KunaResult;
 
 pub(crate) fn input_assignment<'a>(
     pieces: &'a PrototypePieces,

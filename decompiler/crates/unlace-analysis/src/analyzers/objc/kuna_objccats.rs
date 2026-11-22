@@ -53,8 +53,13 @@ pub fn categories(img: &MachoImage, file: &object::File) -> Vec<Category> {
     let mut out = Vec::new();
     for section in [SEC_CATLIST, SEC_NLCATLIST] {
         for slot in section_slots(file, section, ps) {
-            let Some(cat) = img.rebase_ptr(slot) else { continue };
-            let Some(name) = img.rebase_ptr(cat.wrapping_add(category_t::NAME)).and_then(|p| img.read_cstr(p)) else {
+            let Some(cat) = img.rebase_ptr(slot) else {
+                continue;
+            };
+            let Some(name) = img
+                .rebase_ptr(cat.wrapping_add(category_t::NAME))
+                .and_then(|p| img.read_cstr(p))
+            else {
                 continue;
             };
             if name.is_empty() {
@@ -74,7 +79,8 @@ pub fn categories(img: &MachoImage, file: &object::File) -> Vec<Category> {
                 class,
                 instance_methods: img.rebase_ptr(cat.wrapping_add(category_t::INSTANCE_METHODS)),
                 class_methods: img.rebase_ptr(cat.wrapping_add(category_t::CLASS_METHODS)),
-                instance_properties: img.rebase_ptr(cat.wrapping_add(category_t::INSTANCE_PROPERTIES)),
+                instance_properties: img
+                    .rebase_ptr(cat.wrapping_add(category_t::INSTANCE_PROPERTIES)),
                 class_properties: img.rebase_ptr(cat.wrapping_add(category_t::CLASS_PROPERTIES)),
             });
         }
@@ -99,7 +105,10 @@ mod tests {
     #[test]
     fn a_category_label_shows_the_class_as_its_method_labels_do() {
         assert_eq!(label_for(Some("Base"), "Extra"), "Base(Extra)");
-        assert_eq!(label_for(Some("_TtC6Sample3Foo"), "Extra"), "Sample.Foo(Extra)");
+        assert_eq!(
+            label_for(Some("_TtC6Sample3Foo"), "Extra"),
+            "Sample.Foo(Extra)"
+        );
         assert_eq!(label_for(None, "Extra"), "(Extra)");
     }
 
@@ -107,25 +116,36 @@ mod tests {
     /// an imported (bind) class, each with one instance and one class method.
     #[test]
     fn walks_macho_objc_cats_fixture() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/macho_objc_meta_arm64");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/macho_objc_meta_arm64"
+        );
         let bytes = std::fs::read(path).expect("read fixture");
         let file = object::File::parse(bytes.as_slice()).expect("parse Mach-O");
         let fixups = resolve_chained_fixups(&file, &bytes);
-        let img = MachoImage::with_fixups(&file, fixups).with_binds(resolve_dyld_info_binds(&file, &bytes));
+        let img = MachoImage::with_fixups(&file, fixups)
+            .with_binds(resolve_dyld_info_binds(&file, &bytes));
         let cats = categories(&img, &file);
         let labels: Vec<&str> = cats.iter().map(|c| c.label.as_str()).collect();
         assert_eq!(labels, ["Base(Extra)", "Remote(Extra)"]);
-        assert!(cats.iter().all(|c| c.instance_methods.is_some() && c.class_methods.is_some()));
+        assert!(
+            cats.iter()
+                .all(|c| c.instance_methods.is_some() && c.class_methods.is_some())
+        );
     }
 
     /// A `__objc_catlist` header claiming far more bytes than the file holds is
     /// walked only over the bytes present, not once per claimed slot.
     #[test]
     fn oversized_catlist_header_is_bounded_by_file_data() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/macho_objc_meta_arm64");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/macho_objc_meta_arm64"
+        );
         let bytes = std::fs::read(path).expect("read fixture");
         for size in [0x0800_0000_0000_0000u64, u64::MAX] {
-            let patched = super::super::kuna_objcrefs::with_section_size(bytes.clone(), SEC_CATLIST, size);
+            let patched =
+                super::super::kuna_objcrefs::with_section_size(bytes.clone(), SEC_CATLIST, size);
             let file = object::File::parse(patched.as_slice()).expect("parse Mach-O");
             let img = MachoImage::with_fixups(&file, resolve_chained_fixups(&file, &patched));
             assert!(categories(&img, &file).len() <= 2, "size {size:#x}");

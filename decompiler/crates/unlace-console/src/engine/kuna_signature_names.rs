@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::collections::{btree_map::Entry, BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashSet, btree_map::Entry};
 
 use unlace_analysis::pass::{AnalysisOutput, SymKind};
 use unlace_decomp::kuna_symbolnamebound::bound_scope_path;

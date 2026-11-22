@@ -8,9 +8,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
+use object::Object;
 use unlace_base::space::AddrSpace;
 use unlace_sleigh::translate::Translate;
-use object::Object;
 
 use crate::listing::Listing;
 

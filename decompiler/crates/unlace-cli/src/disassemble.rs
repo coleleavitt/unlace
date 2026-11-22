@@ -95,22 +95,21 @@ mod provenance;
 pub(crate) mod raw_pcode;
 
 use unlace_console::disasm::{
-    self, hex, mapped_run_end, read_upto, CodeWalk, Row, Skip, Window, DERIVED_INSTRUCTION_CAP,
+    self, CodeWalk, DERIVED_INSTRUCTION_CAP, Row, Skip, Window, hex, mapped_run_end, read_upto,
 };
 use unlace_console::engine::ConsoleProgram;
 use unlace_sleigh::loadimage::section_flags;
 
 use crate::args::take_value as take;
 use crate::decompile::looks_like_addr;
-use crate::decompile_all::{load_program, mode_options_for_binary, Args, DriverDefaults};
-use crate::jsonfmt::{dumps_indent2, Json};
+use crate::decompile_all::{Args, DriverDefaults, load_program, mode_options_for_binary};
+use crate::jsonfmt::{Json, dumps_indent2};
 
 /// How much to list from an address that lies inside no known function extent:
 /// an unmapped-by-the-inventory blob, a decrypted payload dumped to a file, a
 /// region the decompiler refused. Enough to see what is there, small enough to
 /// read; `--count`/`--bytes`/an explicit range override it.
 const DEFAULT_WINDOW_BYTES: u64 = 64;
-
 
 /// The same safety stop for a byte listing nobody sized, in hexdump rows.
 const DERIVED_ROW_CAP: usize = DERIVED_INSTRUCTION_CAP;
@@ -119,13 +118,11 @@ const DERIVED_ROW_CAP: usize = DERIVED_INSTRUCTION_CAP;
 /// already calibrated to.
 const HEXDUMP_ROW_BYTES: usize = 16;
 
-
 /// How many skipped branch targets [`skipped_note`] spells out before it counts
 /// the rest. Three is the whole crop on the witness (a 70-instruction listing of
 /// `EB 01` jump-over-junk idioms), so a note that names six is a note that names
 /// them all on anything but a listing already beyond reading.
 const SKIPPED_NOTE_ADDRS: usize = 6;
-
 
 /// What to render at the target.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -197,7 +194,12 @@ struct Region {
 impl Region {
     /// The walker's view of this region ([`unlace_console::disasm::walk`]).
     fn window(&self) -> Window {
-        Window { start: self.start, end: self.end, derived: self.derived, mapped_end: self.mapped_end }
+        Window {
+            start: self.start,
+            end: self.end,
+            derived: self.derived,
+            mapped_end: self.mapped_end,
+        }
     }
 
     /// Where the walk actually stops: the tighter of the caller's own stop and
@@ -209,11 +211,10 @@ impl Region {
     /// Could the caller's own request have run past the end of mapped memory?
     /// True for an unbounded `--count` walk, which has no byte stop at all.
     fn reaches_past_image(&self) -> bool {
-        self.mapped_end.is_some_and(|mapped| self.end.is_none_or(|end| end > mapped))
+        self.mapped_end
+            .is_some_and(|mapped| self.end.is_none_or(|end| end > mapped))
     }
 }
-
-
 
 /// One hexdump row: up to [`HEXDUMP_ROW_BYTES`] bytes of the image.
 struct DataRow {
@@ -231,18 +232,27 @@ impl DataRow {
     /// The same bytes space-separated (`xxd -g1`), for the human column, where a
     /// 32-character run of hex is unreadable.
     fn grouped(&self) -> String {
-        self.bytes.iter().map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(" ")
+        self.bytes
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 
     /// The printable-ASCII gutter; every other byte is a `.`, `xxd`-style.
     fn ascii(&self) -> String {
         self.bytes
             .iter()
-            .map(|&b| if (0x20..0x7f).contains(&b) { b as char } else { '.' })
+            .map(|&b| {
+                if (0x20..0x7f).contains(&b) {
+                    b as char
+                } else {
+                    '.'
+                }
+            })
             .collect()
     }
 }
-
 
 /// What the command produced: the document for stdout, plus the notes that
 /// belong on stderr. A note never enters the document, so `--json` stays
@@ -306,7 +316,8 @@ fn load_target(
     want: ViewRequest,
     bounded: bool,
 ) -> Result<(ConsoleProgram, Region), String> {
-    let options = mode_options_for_binary(args.mode.as_deref(), &args.binary, args.options.clone())?;
+    let options =
+        mode_options_for_binary(args.mode.as_deref(), &args.binary, args.options.clone())?;
     if bounded {
         let load = load_args(args, windowed_options(&options, &args.options));
         let prog = load_program(&load, DriverDefaults::Inventory)?;
@@ -355,8 +366,13 @@ fn listing_for(args: &DisArgs, prog: &ConsoleProgram, region: Region) -> Result<
     let (view, mut notes) = choose_view(prog, &region, args.view.unwrap_or(ViewRequest::Auto));
     let text = match view {
         View::Code => {
-            let CodeWalk { rows, truncated, folded, skipped, anchored } =
-                disasm::walk(prog, &region.window(), args.count, args.follow);
+            let CodeWalk {
+                rows,
+                truncated,
+                folded,
+                skipped,
+                anchored,
+            } = disasm::walk(prog, &region.window(), args.count, args.follow);
             if folded > 0 {
                 notes.push(pool_note(folded));
             }
@@ -367,8 +383,13 @@ fn listing_for(args: &DisArgs, prog: &ConsoleProgram, region: Region) -> Result<
             if !overlapping.is_empty() {
                 notes.push(overlap_note(&overlapping));
             }
-            let reasons =
-                [Skip::Straight, Skip::Unreached, Skip::Undecodable, Skip::PastWindow, Skip::PastBudget];
+            let reasons = [
+                Skip::Straight,
+                Skip::Unreached,
+                Skip::Undecodable,
+                Skip::PastWindow,
+                Skip::PastBudget,
+            ];
             for why in reasons {
                 let addrs: Vec<u64> = skipped.iter().filter(|s| s.1 == why).map(|s| s.0).collect();
                 if !addrs.is_empty() {
@@ -382,30 +403,54 @@ fn listing_for(args: &DisArgs, prog: &ConsoleProgram, region: Region) -> Result<
             notes.extend(flow_end_note(prog, &region));
             if args.json {
                 let doc_notes = crate::funcdecl::json_notes(prog, &notes);
-                format!("{}\n", dumps_indent2(&result_json(args, &region, &rows, truncated, &doc_notes)))
+                format!(
+                    "{}\n",
+                    dumps_indent2(&result_json(args, &region, &rows, truncated, &doc_notes))
+                )
             } else {
                 render_text(&region, &rows, truncated)
             }
         }
         View::Data => {
             let (rows, truncated) = walk_data(prog, &region, args.count);
-            let end = rows.last().map_or(region.start, |r| r.addr + r.bytes.len() as u64);
+            let end = rows
+                .last()
+                .map_or(region.start, |r| r.addr + r.bytes.len() as u64);
             if cut_short_by_image(&region, args.count, rows.len(), end) {
                 notes.push(image_bound_note(prog, &region));
             }
-            let pref = unlace_analysis::loader::macho_fat::slice_pref(args.slice.as_deref(), args.target.as_deref());
+            let pref = unlace_analysis::loader::macho_fat::slice_pref(
+                args.slice.as_deref(),
+                args.target.as_deref(),
+            );
             let (image, repairs) = crate::image::image_bytes_and_repairs(&args.binary, pref)
-                .map_or((None, Vec::new()), |(bytes, repairs)| (Some(bytes), repairs));
-            let file = image.as_deref().and_then(|b| unlace_analysis::loadimage_object::parse_object(b).ok());
+                .map_or((None, Vec::new()), |(bytes, repairs)| {
+                    (Some(bytes), repairs)
+                });
+            let file = image
+                .as_deref()
+                .and_then(|b| unlace_analysis::loadimage_object::parse_object(b).ok());
             let view = image.as_deref().zip(file.as_ref());
             let fixups = fixups::overlapping(view, prog, region.start, end);
             notes.extend(fixups.note());
-            let slice = if view.is_some() { crate::image::slice_offset(&args.binary, pref) } else { 0 };
+            let slice = if view.is_some() {
+                crate::image::slice_offset(&args.binary, pref)
+            } else {
+                0
+            };
             let provenance = provenance::of(view, slice, &repairs, prog, region.start, end);
             notes.extend(provenance.notes());
             if args.json {
                 let doc_notes = crate::funcdecl::json_notes(prog, &notes);
-                let doc = data_result_json(args, &region, &rows, truncated, &doc_notes, &fixups, &provenance);
+                let doc = data_result_json(
+                    args,
+                    &region,
+                    &rows,
+                    truncated,
+                    &doc_notes,
+                    &fixups,
+                    &provenance,
+                );
                 format!("{}\n", dumps_indent2(&doc))
             } else {
                 render_data_text(&region, &rows, truncated)
@@ -489,8 +534,6 @@ fn windowed_answer_is_final(region: &Region, section: Option<u32>, want: ViewReq
             || decide_view(want, false, section) == decide_view(want, true, section))
 }
 
-
-
 // --- which view ---------------------------------------------------------------
 
 /// (kuna) The loader `section_flags` bits of the section containing `vma`.
@@ -552,16 +595,6 @@ fn decide_view(want: ViewRequest, from_entry: bool, section: Option<u32>) -> Vie
 
 // --- the walk ----------------------------------------------------------------
 
-
-
-
-
-
-
-
-
-
-
 /// Read the region's bytes forward from `region.start` into hexdump rows, until
 /// the region's end, the row budget, the derived-length cap, or memory that will
 /// not read.
@@ -569,7 +602,11 @@ fn decide_view(want: ViewRequest, from_entry: bool, section: Option<u32>) -> Vie
 /// A short read ends the listing rather than zero-filling it: the point of this
 /// view is that every byte it shows is a byte the image really holds.
 fn walk_data(prog: &ConsoleProgram, region: &Region, count: Option<usize>) -> (Vec<DataRow>, bool) {
-    let cap = if region.derived { Some(DERIVED_ROW_CAP) } else { None };
+    let cap = if region.derived {
+        Some(DERIVED_ROW_CAP)
+    } else {
+        None
+    };
     let stop = region.stop();
     let mut rows: Vec<DataRow> = Vec::new();
     let mut truncated = false;
@@ -594,7 +631,10 @@ fn walk_data(prog: &ConsoleProgram, region: &Region, count: Option<usize>) -> (V
         if got == 0 {
             break;
         }
-        rows.push(DataRow { addr, bytes: raw[..got].to_vec() });
+        rows.push(DataRow {
+            addr,
+            bytes: raw[..got].to_vec(),
+        });
         addr = addr.saturating_add(got as u64);
         if got < want {
             break;
@@ -602,7 +642,6 @@ fn walk_data(prog: &ConsoleProgram, region: &Region, count: Option<usize>) -> (V
     }
     (rows, truncated)
 }
-
 
 // --- target resolution -------------------------------------------------------
 
@@ -626,7 +665,9 @@ fn resolve_region(prog: &ConsoleProgram, args: &DisArgs) -> Result<Region, Strin
     if let Some((lo, hi)) = split_range(spec) {
         let (start, end) = (parse_addr(lo)?, parse_addr(hi)?);
         if end <= start {
-            return Err(format!("empty range {spec:?}: the end must be above the start"));
+            return Err(format!(
+                "empty range {spec:?}: the end must be above the start"
+            ));
         }
         // Both bound the walk, so the tighter one wins — the same "first limit
         // reached" rule `--count` follows.
@@ -657,9 +698,15 @@ fn resolve_region(prog: &ConsoleProgram, args: &DisArgs) -> Result<Region, Strin
         (e.addr.get_offset(), Some(e.name), true)
     } else if let Some(a) = prog.lookup_symbol(spec) {
         let addr = a.get_offset();
-        (addr, name_at(prog, addr).or_else(|| Some(spec.to_string())), false)
-    } else if let Some((n, addr, _)) =
-        prog.global_data_symbols().into_iter().find(|(n, _, _)| n == spec)
+        (
+            addr,
+            name_at(prog, addr).or_else(|| Some(spec.to_string())),
+            false,
+        )
+    } else if let Some((n, addr, _)) = prog
+        .global_data_symbols()
+        .into_iter()
+        .find(|(n, _, _)| n == spec)
     {
         (addr, Some(n), false)
     } else if let Some(addr) = prog.lookup_data_alias(spec) {
@@ -683,12 +730,21 @@ fn resolve_region(prog: &ConsoleProgram, args: &DisArgs) -> Result<Region, Strin
             from_entry,
             mapped_end: None,
         },
-        (None, Some(_)) => {
-            Region { start, end: None, name, derived: false, from_entry, mapped_end: None }
-        }
+        (None, Some(_)) => Region {
+            start,
+            end: None,
+            name,
+            derived: false,
+            from_entry,
+            mapped_end: None,
+        },
         (None, None) => {
             let extent = prog.function_extent_at(start);
-            let span = if extent > 0 { extent } else { DEFAULT_WINDOW_BYTES };
+            let span = if extent > 0 {
+                extent
+            } else {
+                DEFAULT_WINDOW_BYTES
+            };
             Region {
                 start,
                 end: Some(start.saturating_add(span)),
@@ -707,7 +763,10 @@ fn resolve_region(prog: &ConsoleProgram, args: &DisArgs) -> Result<Region, Strin
 /// hold ([`mapped_run_end`]).
 fn bound_to_image(prog: &ConsoleProgram, region: Region) -> Region {
     let mapped_end = mapped_run_end(prog, region.start).map(|(end, _)| end);
-    Region { mapped_end, ..region }
+    Region {
+        mapped_end,
+        ..region
+    }
 }
 
 /// Did the walk stop at the end of mapped memory with the caller's own request
@@ -751,7 +810,10 @@ fn flow_end_note(prog: &ConsoleProgram, region: &Region) -> Option<String> {
     let (end, stop) = (region.start + extent, region.start + clip);
     let subject = match prog.entries_containing(&[region.start]).pop().flatten() {
         Some(owner) => format!("0x{:x} is in {}, which", region.start, owner.name),
-        None => region.name.clone().unwrap_or_else(|| format!("0x{:x}", region.start)),
+        None => region
+            .name
+            .clone()
+            .unwrap_or_else(|| format!("0x{:x}", region.start)),
     };
     Some(format!(
         "{subject} ends at 0x{end:x}, after the last instruction its flow reaches; its flow reaches \
@@ -766,8 +828,7 @@ fn flow_end_note(prog: &ConsoleProgram, region: &Region) -> Option<String> {
 /// `0x`-prefixed left half, so a symbol that happens to contain a dash stays a
 /// symbol and reaches the lookup below.
 fn split_range(spec: &str) -> Option<(&str, &str)> {
-    let both_parse =
-        |lo: &str, hi: &str| parse_addr(lo).is_ok() && parse_addr(hi).is_ok();
+    let both_parse = |lo: &str, hi: &str| parse_addr(lo).is_ok() && parse_addr(hi).is_ok();
     if let Some((lo, hi)) = spec.split_once("..") {
         return both_parse(lo, hi).then_some((lo, hi));
     }
@@ -777,7 +838,10 @@ fn split_range(spec: &str) -> Option<(&str, &str)> {
 
 fn parse_addr(token: &str) -> Result<u64, String> {
     let t = token.trim();
-    let body = t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")).unwrap_or(t);
+    let body = t
+        .strip_prefix("0x")
+        .or_else(|| t.strip_prefix("0X"))
+        .unwrap_or(t);
     u64::from_str_radix(body, 16).map_err(|_| format!("invalid address {token:?}"))
 }
 
@@ -844,7 +908,9 @@ fn data_result_json(
     fixups: &fixups::Fixups,
     provenance: &provenance::Provenance,
 ) -> Json {
-    let end = rows.last().map_or(region.start, |r| r.addr + r.bytes.len() as u64);
+    let end = rows
+        .last()
+        .map_or(region.start, |r| r.addr + r.bytes.len() as u64);
     let mut hex = String::new();
     for r in rows {
         hex.push_str(&r.hex());
@@ -887,22 +953,37 @@ fn envelope(
         ("kind".into(), Json::Str(kind.to_string())),
         ("target".into(), target_json(region)),
         ("start".into(), Json::Number(region.start.to_string())),
-        ("start_hex".into(), Json::Str(format!("0x{:x}", region.start))),
+        (
+            "start_hex".into(),
+            Json::Str(format!("0x{:x}", region.start)),
+        ),
         ("end".into(), Json::Number(end.to_string())),
         ("end_hex".into(), Json::Str(format!("0x{end:x}"))),
         ("count".into(), Json::Number(count.to_string())),
-        ("bytes".into(), Json::Number((end - region.start).to_string())),
+        (
+            "bytes".into(),
+            Json::Number((end - region.start).to_string()),
+        ),
         ("truncated".into(), Json::Bool(truncated)),
-        ("notes".into(), Json::Array(notes.iter().cloned().map(Json::Str).collect())),
+        (
+            "notes".into(),
+            Json::Array(notes.iter().cloned().map(Json::Str).collect()),
+        ),
     ]
 }
 
 /// What the program calls the start: its `name` (or null) and its address.
 fn target_json(region: &Region) -> Json {
     Json::Object(vec![
-        ("name".into(), region.name.clone().map(Json::Str).unwrap_or(Json::Null)),
+        (
+            "name".into(),
+            region.name.clone().map(Json::Str).unwrap_or(Json::Null),
+        ),
         ("address".into(), Json::Number(region.start.to_string())),
-        ("address_hex".into(), Json::Str(format!("0x{:x}", region.start))),
+        (
+            "address_hex".into(),
+            Json::Str(format!("0x{:x}", region.start)),
+        ),
     ])
 }
 
@@ -916,7 +997,11 @@ fn render_text(region: &Region, rows: &[Row], truncated: bool) -> String {
     let end = listed_end(region, rows);
     let mut out = String::new();
     let label = label(region);
-    let plural = if rows.len() == 1 { "instruction" } else { "instructions" };
+    let plural = if rows.len() == 1 {
+        "instruction"
+    } else {
+        "instructions"
+    };
     let _ = writeln!(
         out,
         "# {} {plural} at {label} (0x{:x}..0x{end:x}, {} bytes){}",
@@ -933,12 +1018,21 @@ fn render_text(region: &Region, rows: &[Row], truncated: bool) -> String {
     while i < rows.len() {
         let r = &rows[i];
         if let Some((n, align)) = alignment_run(rows, i) {
-            let line = format!("{:<13} {:<22}align {align}", format!("0x{:x}", r.addr), r.hex());
+            let line = format!(
+                "{:<13} {:<22}align {align}",
+                format!("0x{:x}", r.addr),
+                r.hex()
+            );
             let _ = writeln!(out, "{}", line.trim_end());
             i += n;
             continue;
         }
-        let line = format!("{:<13} {:<22}{}", format!("0x{:x}", r.addr), r.hex(), r.text());
+        let line = format!(
+            "{:<13} {:<22}{}",
+            format!("0x{:x}", r.addr),
+            r.hex(),
+            r.text()
+        );
         let _ = writeln!(out, "{}", line.trim_end());
         i += 1;
     }
@@ -953,19 +1047,27 @@ fn render_text(region: &Region, rows: &[Row], truncated: bool) -> String {
 fn alignment_run(rows: &[Row], at: usize) -> Option<(usize, u64)> {
     let prev = rows.get(at.checked_sub(1)?)?;
     let m = prev.mnemonic.to_ascii_lowercase();
-    let terminal = ["ret", "jmp", "hlt", "ud2", "b", "br", "bx", "eret"].iter().any(|t| m == *t || m.starts_with(&format!("{t}.")))
+    let terminal = ["ret", "jmp", "hlt", "ud2", "b", "br", "bx", "eret"]
+        .iter()
+        .any(|t| m == *t || m.starts_with(&format!("{t}.")))
         || m.starts_with("ret");
     if !terminal {
         return None;
     }
     let padding = |r: &Row| {
         let m = r.mnemonic.to_ascii_lowercase();
-        m.starts_with("nop") || m == "int3" || m == "xchg" && r.bytes == [0x66, 0x90] || r.bytes.iter().all(|&b| b == 0)
+        m.starts_with("nop")
+            || m == "int3"
+            || m == "xchg" && r.bytes == [0x66, 0x90]
+            || r.bytes.iter().all(|&b| b == 0)
     };
     let n = rows[at..].iter().take_while(|r| padding(r)).count();
     let next = rows.get(at + n)?;
     let len = next.addr - rows[at].addr;
-    let align = (2..=4).rev().map(|k| 1u64 << k).find(|a| next.addr % a == 0 && len < *a && len > 0)?;
+    let align = (2..=4)
+        .rev()
+        .map(|k| 1u64 << k)
+        .find(|a| next.addr % a == 0 && len < *a && len > 0)?;
     (n > 0).then_some((n, align))
 }
 
@@ -975,16 +1077,26 @@ fn alignment_run(rows: &[Row], at: usize) -> Option<(usize, u64)> {
 /// not readable; `--json` carries the contiguous spelling for the machine.
 fn render_data_text(region: &Region, rows: &[DataRow], truncated: bool) -> String {
     use std::fmt::Write as _;
-    let end = rows.last().map_or(region.start, |r| r.addr + r.bytes.len() as u64);
+    let end = rows
+        .last()
+        .map_or(region.start, |r| r.addr + r.bytes.len() as u64);
     let mut out = String::new();
-    let plural = if end - region.start == 1 { "byte" } else { "bytes" };
+    let plural = if end - region.start == 1 {
+        "byte"
+    } else {
+        "bytes"
+    };
     let _ = writeln!(
         out,
         "# {} {plural} at {} (0x{:x}..0x{end:x}){}",
         end - region.start,
         label(region),
         region.start,
-        if truncated { " [truncated: --bytes N or a 0xstart-0xend range reads more]" } else { "" }
+        if truncated {
+            " [truncated: --bytes N or a 0xstart-0xend range reads more]"
+        } else {
+            ""
+        }
     );
     for r in rows {
         let _ = writeln!(
@@ -1012,7 +1124,14 @@ pub(crate) fn function_listing(prog: &ConsoleProgram, start: u64, end: u64) -> O
     }
     let region = bound_to_image(
         prog,
-        Region { start, end: Some(end), name: None, derived: false, from_entry: true, mapped_end: None },
+        Region {
+            start,
+            end: Some(end),
+            name: None,
+            derived: false,
+            from_entry: true,
+            mapped_end: None,
+        },
     );
     let CodeWalk { rows, .. } = disasm::walk(prog, &region.window(), None, false);
     if rows.is_empty() {
@@ -1053,8 +1172,11 @@ fn listed_end(region: &Region, rows: &[Row]) -> u64 {
 
 /// Up to [`SKIPPED_NOTE_ADDRS`] addresses spelled out, the rest counted.
 fn spelled(addrs: &[u64]) -> String {
-    let shown: Vec<String> =
-        addrs.iter().take(SKIPPED_NOTE_ADDRS).map(|a| format!("0x{a:x}")).collect();
+    let shown: Vec<String> = addrs
+        .iter()
+        .take(SKIPPED_NOTE_ADDRS)
+        .map(|a| format!("0x{a:x}"))
+        .collect();
     match addrs.len() - shown.len() {
         0 => shown.join(", "),
         n => format!("{} and {n} more", shown.join(", ")),
@@ -1105,13 +1227,18 @@ fn skipped_note(skipped: &[u64], why: Skip, region: &Region, count: Option<usize
              straddling that end is listed whole, but --follow decodes only from addresses inside \
              the window -- widen --bytes or the range to include {subject}",
             region.stop().unwrap_or(region.start),
-            if skipped.len() == 1 { "it is" } else { "they are" },
+            if skipped.len() == 1 {
+                "it is"
+            } else {
+                "they are"
+            },
         ),
         Skip::PastBudget => {
             let (budget, fix) = match count {
-                Some(n) => {
-                    (format!("the --count {n} budget"), format!("raise --count to include {subject}"))
-                }
+                Some(n) => (
+                    format!("the --count {n} budget"),
+                    format!("raise --count to include {subject}"),
+                ),
                 None => (
                     format!("the {DERIVED_INSTRUCTION_CAP}-instruction cap"),
                     "--count N, --bytes N or a 0xstart-0xend range lists more".to_string(),
@@ -1222,9 +1349,12 @@ pub(crate) fn parse_args_for(argv: &[String], command: &str) -> Result<DisArgs, 
         return Err(format!("unexpected argument {:?}", positional[2]));
     }
     let mut it = positional.into_iter();
-    let binary = it.next().ok_or_else(|| format!("{command} requires <binary>"))?;
-    let spec =
-        it.next().ok_or_else(|| format!("{command} requires <name|0xaddr|0xstart-0xend>"))?;
+    let binary = it
+        .next()
+        .ok_or_else(|| format!("{command} requires <binary>"))?;
+    let spec = it
+        .next()
+        .ok_or_else(|| format!("{command} requires <name|0xaddr|0xstart-0xend>"))?;
     Ok(DisArgs {
         binary,
         spec,
@@ -1347,10 +1477,15 @@ mod tests {
         assert!(three.contains("3 addresses"), "{three}");
         assert!(three.contains("0x43d092, 0x43d0ae, 0x43d0c1"), "{three}");
 
-        let many: Vec<u64> = (0..SKIPPED_NOTE_ADDRS as u64 + 3).map(|i| 0x1000 + i).collect();
+        let many: Vec<u64> = (0..SKIPPED_NOTE_ADDRS as u64 + 3)
+            .map(|i| 0x1000 + i)
+            .collect();
         let crop = note(&many, Skip::Straight);
         assert!(crop.contains("and 3 more"), "{crop}");
-        assert!(!crop.contains("0x1006"), "the seventh must not be spelled out: {crop}");
+        assert!(
+            !crop.contains("0x1006"),
+            "the seventh must not be spelled out: {crop}"
+        );
 
         let unreached = note(&[0x43d092], Skip::Unreached);
         assert!(unreached.contains("on its own"), "{unreached}");
@@ -1367,7 +1502,10 @@ mod tests {
         assert!(past_cap.contains(&cap), "{past_cap}");
         for followed in [unreached, undecodable, past_window, past_count, past_cap] {
             assert!(followed.contains("0x43d0"), "{followed}");
-            assert!(!followed.contains("re-run with --follow"), "already on: {followed}");
+            assert!(
+                !followed.contains("re-run with --follow"),
+                "already on: {followed}"
+            );
             assert!(!followed.contains("ran across"), "{followed}");
         }
     }
@@ -1397,12 +1535,25 @@ mod tests {
 
     #[test]
     fn a_data_row_spells_its_bytes_three_ways() {
-        let r = DataRow { addr: 0x1000, bytes: (0u8..16).collect() };
+        let r = DataRow {
+            addr: 0x1000,
+            bytes: (0u8..16).collect(),
+        };
         assert_eq!(r.hex(), "000102030405060708090a0b0c0d0e0f");
-        assert_eq!(r.grouped(), "00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f");
+        assert_eq!(
+            r.grouped(),
+            "00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f"
+        );
         assert_eq!(r.ascii(), "................");
-        let text = DataRow { addr: 0, bytes: b"kuna \x7f\"\\".to_vec() };
-        assert_eq!(text.ascii(), "kuna .\"\\", "0x7f is not printable; 0x20 and quotes are");
+        let text = DataRow {
+            addr: 0,
+            bytes: b"kuna \x7f\"\\".to_vec(),
+        };
+        assert_eq!(
+            text.ascii(),
+            "kuna .\"\\",
+            "0x7f is not printable; 0x20 and quotes are"
+        );
     }
 
     #[test]
@@ -1411,11 +1562,16 @@ mod tests {
         assert_eq!(parse_view("code"), Ok(ViewRequest::Code));
         assert_eq!(parse_view("data"), Ok(ViewRequest::Data));
         assert!(parse_view("hex").is_err());
-        let argv: Vec<String> =
-            ["a.out", "0x1000", "--addr", "--as", "data"].iter().map(|s| s.to_string()).collect();
+        let argv: Vec<String> = ["a.out", "0x1000", "--addr", "--as", "data"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
         assert_eq!(parse_args(&argv).unwrap().view, Some(ViewRequest::Data));
         // Unspecified stays unspecified, so each entry point can default it.
-        assert_eq!(parse_args(&["a.out".into(), "main".into()]).unwrap().view, None);
+        assert_eq!(
+            parse_args(&["a.out".into(), "main".into()]).unwrap().view,
+            None
+        );
         assert!(
             parse_args(&["a.out".into(), "main".into(), "--as".into(), "asm".into()]).is_err(),
             "an unknown view is a usage error"
@@ -1444,15 +1600,20 @@ mod tests {
 
     #[test]
     fn the_target_and_the_binary_are_the_only_positionals() {
-        let argv: Vec<String> =
-            ["a.out", "main", "--json", "--count", "4"].iter().map(|s| s.to_string()).collect();
+        let argv: Vec<String> = ["a.out", "main", "--json", "--count", "4"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
         let args = parse_args(&argv).expect("a well-formed command line");
         assert_eq!(args.binary, "a.out");
         assert_eq!(args.spec, "main");
         assert_eq!(args.count, Some(4));
         assert!(args.json && !args.by_address);
 
-        assert!(parse_args(&["a.out".into()]).is_err(), "a missing target is a usage error");
+        assert!(
+            parse_args(&["a.out".into()]).is_err(),
+            "a missing target is a usage error"
+        );
         assert!(
             parse_args(&["a.out".into(), "main".into(), "extra".into()]).is_err(),
             "a third positional is a usage error"
@@ -1473,14 +1634,20 @@ mod tests {
             from_entry: true,
             mapped_end: None,
         };
-        let rows = vec![row(0x1000, &[0x55], "PUSH", "RBP"), row(0x1001, &[0x48, 0x89, 0xe5], "MOV", "RBP,RSP")];
+        let rows = vec![
+            row(0x1000, &[0x55], "PUSH", "RBP"),
+            row(0x1001, &[0x48, 0x89, 0xe5], "MOV", "RBP,RSP"),
+        ];
         let text = render_text(&region, &rows, false);
         let mut lines = text.lines();
         assert_eq!(
             lines.next().unwrap(),
             "# 2 instructions at main @ 0x1000 (0x1000..0x1004, 4 bytes)"
         );
-        assert_eq!(lines.next().unwrap(), "0x1000        55                    PUSH RBP");
+        assert_eq!(
+            lines.next().unwrap(),
+            "0x1000        55                    PUSH RBP"
+        );
         assert!(render_text(&region, &rows, true).contains("[truncated:"));
     }
 
@@ -1494,7 +1661,10 @@ mod tests {
             from_entry: false,
             mapped_end: None,
         };
-        let rows = vec![DataRow { addr: 0x400915, bytes: b"Username: \0\x01\x02\x03\x04\x05".to_vec() }];
+        let rows = vec![DataRow {
+            addr: 0x400915,
+            bytes: b"Username: \0\x01\x02\x03\x04\x05".to_vec(),
+        }];
         let text = render_data_text(&region, &rows, false);
         let mut lines = text.lines();
         assert_eq!(
@@ -1604,24 +1774,50 @@ mod tests {
 
         // The note is for a walk the image cut short: it stopped on the bound
         // with the caller's count unmet.
-        assert!(cut_short_by_image(&region(None, Some(0x1040)), Some(30), 9, 0x1040));
+        assert!(cut_short_by_image(
+            &region(None, Some(0x1040)),
+            Some(30),
+            9,
+            0x1040
+        ));
         // Stopped short of the bound -- something else ended it.
-        assert!(!cut_short_by_image(&region(None, Some(0x1040)), Some(30), 9, 0x1030));
+        assert!(!cut_short_by_image(
+            &region(None, Some(0x1040)),
+            Some(30),
+            9,
+            0x1030
+        ));
         // The count was met exactly on the bound: the ask ended it, not the image.
-        assert!(!cut_short_by_image(&region(None, Some(0x1040)), Some(9), 9, 0x1040));
+        assert!(!cut_short_by_image(
+            &region(None, Some(0x1040)),
+            Some(9),
+            9,
+            0x1040
+        ));
         // The caller asked for exactly the mapped bytes and got them.
-        assert!(!cut_short_by_image(&region(Some(0x1040), Some(0x1040)), None, 4, 0x1040));
+        assert!(!cut_short_by_image(
+            &region(Some(0x1040), Some(0x1040)),
+            None,
+            4,
+            0x1040
+        ));
     }
 
     #[test]
     fn the_windowed_load_turns_the_discovery_walk_off_unless_the_caller_named_it() {
-        let preset: Vec<(String, String)> =
-            vec![("listing".into(), "off".into()), ("fast_funcdisc".into(), "on".into())];
+        let preset: Vec<(String, String)> = vec![
+            ("listing".into(), "off".into()),
+            ("fast_funcdisc".into(), "on".into()),
+        ];
 
         let suppressed = windowed_options(&preset, &[]);
         for name in WINDOW_SUPPRESSED {
             assert_eq!(
-                suppressed.iter().filter(|(o, _)| o == name).next_back().map(|(_, v)| v.as_str()),
+                suppressed
+                    .iter()
+                    .filter(|(o, _)| o == name)
+                    .next_back()
+                    .map(|(_, v)| v.as_str()),
                 Some("off"),
                 "{name} must end the list off"
             );
@@ -1633,11 +1829,17 @@ mod tests {
         merged.extend(named.clone());
         let kept = windowed_options(&merged, &named);
         assert_eq!(
-            kept.iter().filter(|(o, _)| o == "fast_funcdisc").next_back().map(|(_, v)| v.as_str()),
+            kept.iter()
+                .filter(|(o, _)| o == "fast_funcdisc")
+                .next_back()
+                .map(|(_, v)| v.as_str()),
             Some("on")
         );
         assert_eq!(
-            kept.iter().filter(|(o, _)| o == "listing").next_back().map(|(_, v)| v.as_str()),
+            kept.iter()
+                .filter(|(o, _)| o == "listing")
+                .next_back()
+                .map(|(_, v)| v.as_str()),
             Some("off")
         );
     }

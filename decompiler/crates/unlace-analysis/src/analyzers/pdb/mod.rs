@@ -133,7 +133,11 @@ impl AnalysisPass for PdbPass {
             });
             // The label-gated rename (the FID precedent): overwrite the engine's own
             // sub_*/FUN_* placeholder with the PDB name, never a real symbol.
-            out.fid_names.push(FidMatch { addr: f.vma, name: f.name, by_signature: false });
+            out.fid_names.push(FidMatch {
+                addr: f.vma,
+                name: f.name,
+                by_signature: false,
+            });
         }
 
         out
@@ -176,7 +180,8 @@ pub(crate) fn open_fingerprint_matched(
                 info.age,
                 guid.to_uppercase(),
                 cv.age(),
-                cv.guid_string().unwrap_or_else(|| "<none, NB10 record>".to_string()),
+                cv.guid_string()
+                    .unwrap_or_else(|| "<none, NB10 record>".to_string()),
             ),
         );
     }

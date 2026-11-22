@@ -19,7 +19,10 @@ fn local_and_defined_global_entries_are_constant() {
 /// A global entry holding anything but its symbol's value stays variable.
 #[test]
 fn a_slot_that_does_not_hold_its_symbols_value_is_skipped() {
-    let path = format!("{}/tests/fixtures/mipsgot_gcc_be.so", env!("CARGO_MANIFEST_DIR"));
+    let path = format!(
+        "{}/tests/fixtures/mipsgot_gcc_be.so",
+        env!("CARGO_MANIFEST_DIR")
+    );
     let mut bytes = std::fs::read(&path).expect("fixture");
     let file = object::File::parse(&*bytes).expect("parses");
     let got = file.section_by_name(".got").expect(".got");
@@ -27,7 +30,10 @@ fn a_slot_that_does_not_hold_its_symbols_value_is_skipped() {
     drop(file);
     bytes[at..at + 4].copy_from_slice(&0x1234u32.to_be_bytes());
     let file = object::File::parse(&*bytes).expect("parses");
-    assert_eq!(const_ranges(&file), vec![(0x10428, 0x1043b), (0x10440, 0x10443)]);
+    assert_eq!(
+        const_ranges(&file),
+        vec![(0x10428, 0x1043b), (0x10440, 0x10443)]
+    );
 }
 
 /// Off MIPS, and for a relocatable object, nothing is reported.
@@ -41,7 +47,10 @@ fn other_images_report_nothing() {
 /// that section, and the walk ends at the section's end instead of counting on.
 #[test]
 fn a_local_count_past_the_got_section_stops_at_its_end() {
-    let path = format!("{}/tests/fixtures/mipsgot_gcc_be.so", env!("CARGO_MANIFEST_DIR"));
+    let path = format!(
+        "{}/tests/fixtures/mipsgot_gcc_be.so",
+        env!("CARGO_MANIFEST_DIR")
+    );
     let mut bytes = std::fs::read(&path).expect("fixture");
     let file = object::File::parse(&*bytes).expect("parses");
     let dynamic = file.section_by_name(".dynamic").expect(".dynamic");
@@ -57,5 +66,8 @@ fn a_local_count_past_the_got_section_stops_at_its_end() {
     let file = object::File::parse(&*bytes).expect("parses");
     let ranges = const_ranges(&file);
     assert!(!ranges.is_empty());
-    assert!(ranges.iter().all(|&(lo, hi)| got_lo <= lo && hi <= got_hi), "{ranges:x?}");
+    assert!(
+        ranges.iter().all(|&(lo, hi)| got_lo <= lo && hi <= got_hi),
+        "{ranges:x?}"
+    );
 }

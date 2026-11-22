@@ -68,7 +68,7 @@
 use std::collections::HashSet;
 use std::rc::Rc;
 
-use unlace_base::address::{calc_mask, sign_extend, Address};
+use unlace_base::address::{Address, calc_mask, sign_extend};
 use unlace_base::error::KunaResult;
 use unlace_base::marshal::ElementId;
 use unlace_base::space::AddrSpace;
@@ -76,10 +76,10 @@ use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{BlockId, OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype, TypeFactory};
+use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::p0_knowledge::options::on_or_off;
-use crate::varmap::{MapState, RangeHint, RangeType, COPY_CONSTANT};
+use crate::varmap::{COPY_CONSTANT, MapState, RangeHint, RangeType};
 
 /// Marshaling element `<endptrbound>` (kuna 4000+ range; 4168 was the previous
 /// high-water mark).
@@ -254,7 +254,9 @@ fn relabels(fd: &Funcdata, vn: VarnodeId) -> Vec<VarnodeId> {
             continue;
         }
         out.push(v);
-        let Some(var) = fd.vbank().get(v) else { continue };
+        let Some(var) = fd.vbank().get(v) else {
+            continue;
+        };
         for d in var.descend_iter() {
             let Some(o) = fd.obank().get(d) else { continue };
             if is_plumbing(o.code()) && o.get_in(0) == Some(v) {
@@ -270,14 +272,23 @@ fn relabels(fd: &Funcdata, vn: VarnodeId) -> Vec<VarnodeId> {
 /// The pointer phis some dereference reads through, in first-use order.
 fn candidate_phis(fd: &Funcdata) -> Vec<OpId> {
     let mut phis = Vec::new();
-    let accesses = fd.obank().iter_code(OpCode::CPUI_LOAD).chain(fd.obank().iter_code(OpCode::CPUI_STORE));
+    let accesses = fd
+        .obank()
+        .iter_code(OpCode::CPUI_LOAD)
+        .chain(fd.obank().iter_code(OpCode::CPUI_STORE));
     for op in accesses {
-        let Some(o) = fd.obank().get(op) else { continue };
+        let Some(o) = fd.obank().get(op) else {
+            continue;
+        };
         if o.is_dead() {
             continue;
         }
-        let Some((ptr, _)) = o.get_in(1).and_then(|p| phi_offset(fd, p)) else { continue };
-        let Some(phi) = fd.vbank().get(ptr).and_then(|v| v.get_def()) else { continue };
+        let Some((ptr, _)) = o.get_in(1).and_then(|p| phi_offset(fd, p)) else {
+            continue;
+        };
+        let Some(phi) = fd.vbank().get(ptr).and_then(|v| v.get_def()) else {
+            continue;
+        };
         if !phis.contains(&phi) {
             phis.push(phi);
         }
@@ -338,9 +349,21 @@ fn walk_loop(fd: &Funcdata, phi: OpId, sp: VarnodeId) -> Option<WalkLoop> {
         }
     }
     let (start, step) = (start?, step?);
-    let stepped = if carried.len() == 1 { Some(carried[0]) } else { None };
+    let stepped = if carried.len() == 1 {
+        Some(carried[0])
+    } else {
+        None
+    };
     let body = natural_loop(fd, head, &latches);
-    Some(WalkLoop { phi, ptr, start, step, stepped, latches, body })
+    Some(WalkLoop {
+        phi,
+        ptr,
+        start,
+        step,
+        stepped,
+        latches,
+        body,
+    })
 }
 
 /// Every dereference reachable from the walking pointer, or `None` when a use
@@ -364,12 +387,22 @@ fn pointer_derefs(fd: &Funcdata, sp: VarnodeId, lp: &WalkLoop) -> Option<Vec<Der
             let code = o.code();
             match code {
                 OpCode::CPUI_LOAD | OpCode::CPUI_STORE => {
-                    if o.get_in(1) != Some(v) || (code == OpCode::CPUI_STORE && o.get_in(2) == Some(v)) {
+                    if o.get_in(1) != Some(v)
+                        || (code == OpCode::CPUI_STORE && o.get_in(2) == Some(v))
+                    {
                         return None;
                     }
-                    let accessed = if code == OpCode::CPUI_LOAD { o.get_out() } else { o.get_in(2) };
+                    let accessed = if code == OpCode::CPUI_LOAD {
+                        o.get_out()
+                    } else {
+                        o.get_in(2)
+                    };
                     let width = fd.vbank().get(accessed?)?.get_size() as i64;
-                    derefs.push(Deref { op: d, off: off?, width });
+                    derefs.push(Deref {
+                        op: d,
+                        off: off?,
+                        width,
+                    });
                 }
                 OpCode::CPUI_MULTIEQUAL if d == lp.phi => {}
                 OpCode::CPUI_INT_EQUAL
@@ -394,15 +427,23 @@ fn pointer_derefs(fd: &Funcdata, sp: VarnodeId, lp: &WalkLoop) -> Option<Vec<Der
                     if fd.vbank().get(out)?.get_size() < ptr_size {
                         continue;
                     }
-                    let other = if o.get_in(0) == Some(v) { o.get_in(1) } else { o.get_in(0) };
+                    let other = if o.get_in(0) == Some(v) {
+                        o.get_in(1)
+                    } else {
+                        o.get_in(0)
+                    };
                     if code == OpCode::CPUI_INT_SUB
-                        && other.is_some_and(|y| y != v && stack_offset(fd, y, sp, WALK_DEPTH).is_some())
+                        && other.is_some_and(|y| {
+                            y != v && stack_offset(fd, y, sp, WALK_DEPTH).is_some()
+                        })
                     {
                         continue;
                     }
                     let next = match code {
                         OpCode::CPUI_CAST | OpCode::CPUI_COPY => off,
-                        _ => off.zip(constant_step(fd, d)).and_then(|(a, (_, c))| a.checked_add(c)),
+                        _ => off
+                            .zip(constant_step(fd, d))
+                            .and_then(|(a, (_, c))| a.checked_add(c)),
                     };
                     work.push((out, next));
                 }
@@ -423,7 +464,9 @@ fn exit_branch(fd: &Funcdata, lp: &WalkLoop, cmp: OpId, exit_when: bool) -> Opti
             continue;
         }
         seen.push(v);
-        let Some(var) = fd.vbank().get(v) else { continue };
+        let Some(var) = fd.vbank().get(v) else {
+            continue;
+        };
         for d in var.descend_iter() {
             let Some(o) = fd.obank().get(d) else { continue };
             match o.code() {
@@ -436,7 +479,9 @@ fn exit_branch(fd: &Funcdata, lp: &WalkLoop, cmp: OpId, exit_when: bool) -> Opti
                         continue;
                     }
                     let exit = if when != o.is_boolean_flip() { 1 } else { 0 };
-                    if lp.body.contains(&fb.get_out(exit)) || !lp.body.contains(&fb.get_out(1 - exit)) {
+                    if lp.body.contains(&fb.get_out(exit))
+                        || !lp.body.contains(&fb.get_out(1 - exit))
+                    {
                         continue;
                     }
                     if lp.latches.iter().all(|l| graph.dominates(b, Some(*l))) {
@@ -464,8 +509,12 @@ fn controlling_bounds(
     let tests_ptr = strip(fd, t) == lp.ptr;
     let Some(var) = fd.vbank().get(t) else { return };
     for cmp in var.descend_iter() {
-        let Some(o) = fd.obank().get(cmp) else { continue };
-        let (Some(a), Some(b)) = (o.get_in(0), o.get_in(1)) else { continue };
+        let Some(o) = fd.obank().get(cmp) else {
+            continue;
+        };
+        let (Some(a), Some(b)) = (o.get_in(0), o.get_in(1)) else {
+            continue;
+        };
         if a == b {
             continue;
         }
@@ -476,16 +525,31 @@ fn controlling_bounds(
             OpCode::CPUI_INT_LESSEQUAL if b == t => (0, true),
             _ => continue,
         };
-        let Some(bound) = o.get_in(bound_slot) else { continue };
-        let Some(end) = stack_offset(fd, bound, sp, WALK_DEPTH) else { continue };
-        let Some(branch) = exit_branch(fd, lp, cmp, exit_when) else { continue };
+        let Some(bound) = o.get_in(bound_slot) else {
+            continue;
+        };
+        let Some(end) = stack_offset(fd, bound, sp, WALK_DEPTH) else {
+            continue;
+        };
+        let Some(branch) = exit_branch(fd, lp, cmp, exit_when) else {
+            continue;
+        };
         let guarded = !tests_ptr
             || derefs.iter().all(|r| {
-                fd.obank().get(r.op).and_then(|ro| ro.get_parent()).is_some_and(|rb| {
-                    rb != branch && lp.body.contains(&rb) && graph.dominates(branch, Some(rb))
-                })
+                fd.obank()
+                    .get(r.op)
+                    .and_then(|ro| ro.get_parent())
+                    .is_some_and(|rb| {
+                        rb != branch && lp.body.contains(&rb) && graph.dominates(branch, Some(rb))
+                    })
             });
-        let walk = PointerWalk { cmp, slot: bound_slot, start: lp.start, end, step: lp.step };
+        let walk = PointerWalk {
+            cmp,
+            slot: bound_slot,
+            start: lp.start,
+            end,
+            step: lp.step,
+        };
         if !out.iter().any(|(w, _)| *w == walk) {
             out.push((walk, guarded));
         }
@@ -507,10 +571,16 @@ pub fn gather_walks(fd: &Funcdata, space: &Rc<AddrSpace>) -> Vec<PointerWalk> {
 pub fn find_pointer_walks(fd: &Funcdata, sp: VarnodeId) -> Vec<PointerWalk> {
     let mut walks: Vec<PointerWalk> = Vec::new();
     for phi in candidate_phis(fd) {
-        let Some(lp) = walk_loop(fd, phi, sp) else { continue };
-        let Some(derefs) = pointer_derefs(fd, sp, &lp) else { continue };
+        let Some(lp) = walk_loop(fd, phi, sp) else {
+            continue;
+        };
+        let Some(derefs) = pointer_derefs(fd, sp, &lp) else {
+            continue;
+        };
         if !derefs.iter().any(|r| r.off == 0 && r.width == lp.step)
-            || derefs.iter().any(|r| r.off < 0 || r.off + r.width > lp.step)
+            || derefs
+                .iter()
+                .any(|r| r.off < 0 || r.off + r.width > lp.step)
         {
             continue;
         }
@@ -523,7 +593,9 @@ pub fn find_pointer_walks(fd: &Funcdata, sp: VarnodeId) -> Vec<PointerWalk> {
                 controlling_bounds(fd, sp, &lp, t, &derefs, &mut found);
             }
         }
-        let Some(&(first, _)) = found.first() else { continue };
+        let Some(&(first, _)) = found.first() else {
+            continue;
+        };
         let span = first.end.wrapping_sub(first.start);
         if found.iter().any(|(w, _)| w.end != first.end)
             || !found.iter().any(|(_, guarded)| *guarded)
@@ -544,7 +616,9 @@ pub fn find_pointer_walks(fd: &Funcdata, sp: VarnodeId) -> Vec<PointerWalk> {
 
 fn overlaps(h: &RangeHint, w: &PointerWalk) -> bool {
     let size = if h.range_type == RangeType::Open && h.highind >= 0 {
-        (h.highind as i64 + 1).wrapping_mul(h.type_.get_align_size() as i64).max(h.size as i64)
+        (h.highind as i64 + 1)
+            .wrapping_mul(h.type_.get_align_size() as i64)
+            .max(h.size as i64)
     } else {
         h.size as i64
     };
@@ -598,7 +672,10 @@ fn element_type(hints: &[RangeHint], w: &PointerWalk) -> Option<Rc<Datatype>> {
         ) {
             continue;
         }
-        if elem.as_ref().is_none_or(|e| h.type_.type_order(e).is_ok_and(|o| o < 0)) {
+        if elem
+            .as_ref()
+            .is_none_or(|e| h.type_.type_order(e).is_ok_and(|o| o < 0))
+        {
             elem = Some(Rc::clone(&h.type_));
         }
     }
@@ -621,7 +698,8 @@ pub fn coalesce_hints(
     ordered.sort_by_key(|w| (w.start, std::cmp::Reverse(w.end)));
     for w in ordered.iter().copied() {
         let crossed = ordered.iter().any(|o| {
-            let nested = (o.start <= w.start && w.end <= o.end) || (w.start <= o.start && o.end <= w.end);
+            let nested =
+                (o.start <= w.start && w.end <= o.end) || (w.start <= o.start && o.end <= w.end);
             o.start < w.end && w.start < o.end && !nested
         });
         if crossed {
@@ -645,26 +723,39 @@ pub fn coalesce_hints(
         };
         hints.retain(|h| h.sstart < w.start || h.sstart >= w.end);
         let last = ((w.end - w.start) / w.step - 1) as int4;
-        hints.push(RangeHint::new(start, w.step as int4, w.start, elem, 0, RangeType::Open, last));
+        hints.push(RangeHint::new(
+            start,
+            w.step as int4,
+            w.start,
+            elem,
+            0,
+            RangeType::Open,
+            last,
+        ));
     }
 }
 
 fn array_covers(fd: &Funcdata, w: &PointerWalk) -> bool {
-    let Some(lm) = fd.get_scope_local() else { return false };
+    let Some(lm) = fd.get_scope_local() else {
+        return false;
+    };
     let space = Rc::clone(lm.get_space_id());
     let addr = Address::new(Rc::clone(&space), space.wrap_offset(w.start as uintb));
     let size = (w.end - w.start) as int4;
-    lm.query_container(&addr, size, &Address::new_invalid()).is_some_and(|e| {
-        e.addr.get_offset() == addr.get_offset()
-            && e.size == size
-            && e.sym_type.get_metatype() == type_metatype::TYPE_ARRAY
-            && e.sym_type.get_size() == size
-    })
+    lm.query_container(&addr, size, &Address::new_invalid())
+        .is_some_and(|e| {
+            e.addr.get_offset() == addr.get_offset()
+                && e.size == size
+                && e.sym_type.get_metatype() == type_metatype::TYPE_ARRAY
+                && e.sym_type.get_size() == size
+        })
 }
 
 /// Does every use of `def`'s output end at `cmp`, through plumbing and phis?
 fn feeds_only(fd: &Funcdata, def: OpId, cmp: OpId) -> bool {
-    let Some(out) = fd.obank().get(def).and_then(|o| o.get_out()) else { return false };
+    let Some(out) = fd.obank().get(def).and_then(|o| o.get_out()) else {
+        return false;
+    };
     let mut seen = Vec::new();
     let mut work = vec![out];
     while let Some(v) = work.pop() {
@@ -672,12 +763,16 @@ fn feeds_only(fd: &Funcdata, def: OpId, cmp: OpId) -> bool {
             continue;
         }
         seen.push(v);
-        let Some(var) = fd.vbank().get(v) else { return false };
+        let Some(var) = fd.vbank().get(v) else {
+            return false;
+        };
         for d in var.descend_iter() {
             if d == cmp {
                 continue;
             }
-            let Some(o) = fd.obank().get(d) else { return false };
+            let Some(o) = fd.obank().get(d) else {
+                return false;
+            };
             let passes = o.code() == OpCode::CPUI_MULTIEQUAL
                 || (is_plumbing(o.code()) && o.get_in(0) == Some(v));
             match (passes, o.get_out()) {
@@ -695,11 +790,17 @@ pub fn rebase_bounds(fd: &mut Funcdata, space: &Rc<AddrSpace>, walks: &[PointerW
     if walks.is_empty() || !fd.has_type_recovery_started() {
         return 0;
     }
-    let Some(sp) = fd.find_spacebase_input(space) else { return 0 };
+    let Some(sp) = fd.find_spacebase_input(space) else {
+        return 0;
+    };
     let mut count = 0;
     for w in walks {
-        let Some(bound) = input(fd, w.cmp, w.slot) else { continue };
-        let Some(def) = address_def(fd, bound, &mut PHI_BUDGET.clone()) else { continue };
+        let Some(bound) = input(fd, w.cmp, w.slot) else {
+            continue;
+        };
+        let Some(def) = address_def(fd, bound, &mut PHI_BUDGET.clone()) else {
+            continue;
+        };
         let raw = matches!(
             fd.obank().get(def).map(|o| o.code()),
             Some(OpCode::CPUI_INT_ADD | OpCode::CPUI_PTRSUB)
@@ -714,19 +815,26 @@ pub fn rebase_bounds(fd: &mut Funcdata, space: &Rc<AddrSpace>, walks: &[PointerW
         let span_c = fd.new_constant(size, ((w.end - w.start) as uintb) & mask);
         if feeds_only(fd, def, w.cmp) {
             let base = fd.new_op_before(def, OpCode::CPUI_PTRSUB, sp, start_c, None);
-            let Some(base_out) = fd.obank().get(base).and_then(|o| o.get_out()) else { continue };
+            let Some(base_out) = fd.obank().get(base).and_then(|o| o.get_out()) else {
+                continue;
+            };
             if let Some(o) = fd.obank_mut().get_mut(def) {
                 o.clear_stop_type_propagation();
             }
             fd.op_set_opcode_code(def, OpCode::CPUI_INT_ADD);
-            if fd.op_set_input(def, base_out, 0).is_ok() && fd.op_set_input(def, span_c, 1).is_ok() {
+            if fd.op_set_input(def, base_out, 0).is_ok() && fd.op_set_input(def, span_c, 1).is_ok()
+            {
                 count += 1;
             }
         } else {
             let base = fd.new_op_before(w.cmp, OpCode::CPUI_PTRSUB, sp, start_c, None);
-            let Some(base_out) = fd.obank().get(base).and_then(|o| o.get_out()) else { continue };
+            let Some(base_out) = fd.obank().get(base).and_then(|o| o.get_out()) else {
+                continue;
+            };
             let add = fd.new_op_before(w.cmp, OpCode::CPUI_INT_ADD, base_out, span_c, None);
-            let Some(add_out) = fd.obank().get(add).and_then(|o| o.get_out()) else { continue };
+            let Some(add_out) = fd.obank().get(add).and_then(|o| o.get_out()) else {
+                continue;
+            };
             if fd.op_set_input(w.cmp, add_out, w.slot).is_ok() {
                 count += 1;
             }

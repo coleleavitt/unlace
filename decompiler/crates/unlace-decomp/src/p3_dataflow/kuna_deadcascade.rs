@@ -63,7 +63,11 @@ fn behind(
         return;
     };
     for k in 0..o.num_input() {
-        let Some(def) = o.get_in(k).and_then(|v| data.vbank().get(v)).and_then(|v| v.get_def()) else {
+        let Some(def) = o
+            .get_in(k)
+            .and_then(|v| data.vbank().get(v))
+            .and_then(|v| v.get_def())
+        else {
             continue;
         };
         let Some(d) = data.obank().get(def) else {

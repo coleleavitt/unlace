@@ -25,8 +25,10 @@ use unlace_num::opcodes::OpCode;
 use unlace_sleigh::translate::Translate;
 
 use super::kuna_poolref::PoolImage;
-use super::kuna_switchtable::{preserved_registers, register_targets, Reach, TableRead, DEFAULT_MAX_ENTRIES};
-use super::xrefs::{decode, FullCapture};
+use super::kuna_switchtable::{
+    DEFAULT_MAX_ENTRIES, Reach, TableRead, preserved_registers, register_targets,
+};
+use super::xrefs::{FullCapture, decode};
 use super::{Listing, RefKind};
 
 /// What the scan found.
@@ -58,7 +60,11 @@ pub(super) fn is_call_table(cases: &[u64], unchecked: bool, foreign: impl Fn(u64
 /// `cases` before the first target `inside` says is already code inside a
 /// function, or nothing when fewer than two remain. An ARM word with the low
 /// bit set is a Thumb pointer and is not taken.
-pub(super) fn call_table_run(mut cases: Vec<u64>, arm: bool, inside: impl Fn(u64) -> bool) -> Vec<u64> {
+pub(super) fn call_table_run(
+    mut cases: Vec<u64>,
+    arm: bool,
+    inside: impl Fn(u64) -> bool,
+) -> Vec<u64> {
     if let Some(at) = cases.iter().position(|&t| inside(t)) {
         cases.truncate(at);
     }
@@ -70,22 +76,43 @@ pub(super) fn call_table_run(mut cases: Vec<u64>, arm: bool, inside: impl Fn(u64
 }
 
 /// Read every computed jump and call's table in the Listing.
-pub fn scan(file: &object::File, listing: &Listing, arch: &Architecture, translate: &dyn Translate) -> CallTables {
+pub fn scan(
+    file: &object::File,
+    listing: &Listing,
+    arch: &Architecture,
+    translate: &dyn Translate,
+) -> CallTables {
     let mut out = CallTables::default();
-    let Some(pool) = PoolImage::new(file) else { return out };
-    let Some(code_space) = arch.manage().get_default_code_space().map(Rc::clone) else { return out };
+    let Some(pool) = PoolImage::new(file) else {
+        return out;
+    };
+    let Some(code_space) = arch.manage().get_default_code_space().map(Rc::clone) else {
+        return out;
+    };
     let data_space = arch.manage().get_default_data_space().map(Rc::clone);
     let decoded: HashSet<u64> = listing.instructions().map(|(&a, _)| a).collect();
     let preserved = preserved_registers(arch);
     let named_set = std::cell::OnceCell::new();
-    let named = |at: u64| named_set.get_or_init(|| pool.code_named(file)).contains(&at);
+    let named = |at: u64| {
+        named_set
+            .get_or_init(|| pool.code_named(file))
+            .contains(&at)
+    };
     let exec = listing.exec_ranges().to_vec();
     let entries: BTreeSet<u64> = listing.functions().map(|(&e, _)| e).collect();
     let tables = super::kuna_switchextent::FunctionTables::new(&pool);
     let next_table = |from: u64, table: u64| {
         let lo = entries.range(..=from).next_back().copied()?;
         let hi = entries.range(from + 1..).next().copied();
-        tables.next_after(translate, &code_space, data_space.as_ref(), &exec, lo, hi, table)
+        tables.next_after(
+            translate,
+            &code_space,
+            data_space.as_ref(),
+            &exec,
+            lo,
+            hi,
+            table,
+        )
     };
     let reach = Reach {
         max_entries: match arch.max_jumptable_size {
@@ -103,7 +130,8 @@ pub fn scan(file: &object::File, listing: &Listing, arch: &Architecture, transla
     // An indexed call can only add an entry where a read-only word points at
     // code the walk did not decode; without one the calls are not read at all.
     let undecoded = |word: u64| {
-        exec.iter().any(|&(lo, hi)| word >= lo && word < hi) && listing.instruction_at(word).is_none()
+        exec.iter().any(|&(lo, hi)| word >= lo && word < hi)
+            && listing.instruction_at(word).is_none()
     };
     let read_calls = pool.words().any(undecoded);
     let mut cap = FullCapture::default();
@@ -123,11 +151,22 @@ pub fn scan(file: &object::File, listing: &Listing, arch: &Architecture, transla
         else {
             continue;
         };
-        let read = register_targets(translate, &code_space, data_space.as_ref(), &|a| decoded.contains(&a), vma, target, &pool, &exec, &reach);
+        let read = register_targets(
+            translate,
+            &code_space,
+            data_space.as_ref(),
+            &|a| decoded.contains(&a),
+            vma,
+            target,
+            &pool,
+            &exec,
+            &reach,
+        );
         let owner = listing.function_containing(vma).map(|f| f.entry);
         reads.push((insn.flow.is_call, owner, read));
     }
-    let unchecked = |call: bool, read: &TableRead| read.unbounded || (call && read.stated.is_none());
+    let unchecked =
+        |call: bool, read: &TableRead| read.unbounded || (call && read.stated.is_none());
     let known = &entries;
     let foreign = |owner: Option<u64>| move |t: u64| known.contains(&t) && Some(t) != owner;
     for (call, owner, read) in &reads {
@@ -137,7 +176,8 @@ pub fn scan(file: &object::File, listing: &Listing, arch: &Architecture, transla
     }
     for (call, owner, read) in reads {
         if unchecked(call, &read) {
-            let inside = |t: u64| cases.contains(&t) || (decoded.contains(&t) && !entries.contains(&t));
+            let inside =
+                |t: u64| cases.contains(&t) || (decoded.contains(&t) && !entries.contains(&t));
             let run = call_table_run(read.cases, arm, inside);
             if call || is_call_table(&run, true, foreign(owner)) {
                 calls.extend(run);
@@ -146,7 +186,11 @@ pub fn scan(file: &object::File, listing: &Listing, arch: &Architecture, transla
             calls.extend(read.cases);
         }
     }
-    out.entries = calls.iter().copied().filter(|t| !entries.contains(t)).collect();
+    out.entries = calls
+        .iter()
+        .copied()
+        .filter(|t| !entries.contains(t))
+        .collect();
     out.case_entries = listing
         .functions()
         .filter(|(e, f)| !f.from_symbol && cases.contains(e) && !calls.contains(e))

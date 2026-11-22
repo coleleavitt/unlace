@@ -49,13 +49,13 @@
 use std::fmt::Write as _;
 use std::path::PathBuf;
 
+use object::{Object, ObjectSection};
 use unlace_analysis::neolite::{self, NeoliteError};
 use unlace_analysis::pklite::{self, PkliteError};
 use unlace_analysis::upx::lzma;
 use unlace_analysis::upx::{self, UpxError};
-use object::{Object, ObjectSection};
 
-use crate::jsonfmt::{dumps_indent2, Json};
+use crate::jsonfmt::{Json, dumps_indent2};
 
 #[path = "unpack/dyld.rs"]
 mod dyld;
@@ -108,13 +108,19 @@ pub fn run(argv: &[String]) -> i32 {
         return run_raw(&args, raw);
     }
 
-    if unlace_analysis::loader::kuna_dyldcache::is_dyld_cache_file(std::path::Path::new(&args.binary)) {
+    if unlace_analysis::loader::kuna_dyldcache::is_dyld_cache_file(std::path::Path::new(
+        &args.binary,
+    )) {
         return dyld::run(&args.binary, args.output.as_deref(), args.list, args.json);
     }
     if args.list
-        && !std::fs::read(&args.binary).is_ok_and(|b| unlace_analysis::loader::firmware::uefifv::has_volume(&b))
+        && !std::fs::read(&args.binary)
+            .is_ok_and(|b| unlace_analysis::loader::firmware::uefifv::has_volume(&b))
     {
-        eprintln!("error: --list applies to a dyld shared cache or a UEFI firmware image; {} is neither", args.binary);
+        eprintln!(
+            "error: --list applies to a dyld shared cache or a UEFI firmware image; {} is neither",
+            args.binary
+        );
         return 2;
     }
 
@@ -169,7 +175,12 @@ pub fn run(argv: &[String]) -> i32 {
     let text = if args.json {
         format!(
             "{}\n",
-            dumps_indent2(&result_json(&args.binary, &out_path, &unpacked, image.len()))
+            dumps_indent2(&result_json(
+                &args.binary,
+                &out_path,
+                &unpacked,
+                image.len()
+            ))
         )
     } else {
         render_text(&args.binary, &out_path, &unpacked, image.len())
@@ -208,7 +219,12 @@ fn run_neolite(args: &Args, image: &[u8]) -> i32 {
     let text = if args.json {
         format!(
             "{}\n",
-            dumps_indent2(&neolite_json(&args.binary, &out_path, &unpacked, image.len()))
+            dumps_indent2(&neolite_json(
+                &args.binary,
+                &out_path,
+                &unpacked,
+                image.len()
+            ))
         )
     } else {
         render_neolite(&args.binary, &out_path, &unpacked, image.len())
@@ -246,7 +262,12 @@ fn run_pklite(args: &Args, image: &[u8], result: Result<pklite::Unpacked, Pklite
     let text = if args.json {
         format!(
             "{}\n",
-            dumps_indent2(&pklite_json(&args.binary, &out_path, &unpacked, image.len()))
+            dumps_indent2(&pklite_json(
+                &args.binary,
+                &out_path,
+                &unpacked,
+                image.len()
+            ))
         )
     } else {
         render_pklite(&args.binary, &out_path, &unpacked, image.len())
@@ -265,8 +286,15 @@ fn pklite_header(u: &pklite::Unpacked) -> (&'static str, Option<usize>) {
 fn render_pklite(binary: &str, out_path: &str, u: &pklite::Unpacked, packed_size: usize) -> String {
     let mut s = String::new();
     let _ = writeln!(s, "unpacked {binary} -> {out_path}");
-    let detected = u.detected_version.as_deref().unwrap_or("version not determined");
-    let _ = writeln!(s, "  packer:      PKLITE {detected} (header says {})", u.reported_version);
+    let detected = u
+        .detected_version
+        .as_deref()
+        .unwrap_or("version not determined");
+    let _ = writeln!(
+        s,
+        "  packer:      PKLITE {detected} (header says {})",
+        u.reported_version
+    );
     let mut mode = vec![if u.large { "large" } else { "small" }];
     match u.extra {
         pklite::Extra::None => {}
@@ -289,7 +317,11 @@ fn render_pklite(binary: &str, out_path: &str, u: &pklite::Unpacked, packed_size
     if u.container == pklite::Container::Com {
         let _ = writeln!(s, "  container:   COM");
     } else {
-        let _ = writeln!(s, "  load module: {} bytes, {} relocations", u.load_module, u.relocations);
+        let _ = writeln!(
+            s,
+            "  load module: {} bytes, {} relocations",
+            u.load_module, u.relocations
+        );
         let _ = match pklite_header(u) {
             (_, Some(at)) => writeln!(s, "  header:      original (PKLITE's copy at {at:#x})"),
             (name, None) => writeln!(s, "  header:      {name} from the footer"),
@@ -324,10 +356,23 @@ fn pklite_json(binary: &str, out_path: &str, u: &pklite::Unpacked, packed_size: 
         ("packer".into(), Json::Str("pklite".into())),
         (
             "container".into(),
-            Json::Str(if u.container == pklite::Container::Com { "com" } else { "exe" }.into()),
+            Json::Str(
+                if u.container == pklite::Container::Com {
+                    "com"
+                } else {
+                    "exe"
+                }
+                .into(),
+            ),
         ),
-        ("reported_version".into(), Json::Str(u.reported_version.clone())),
-        ("detected_version".into(), opt_str(u.detected_version.clone())),
+        (
+            "reported_version".into(),
+            Json::Str(u.reported_version.clone()),
+        ),
+        (
+            "detected_version".into(),
+            opt_str(u.detected_version.clone()),
+        ),
         ("large".into(), Json::Bool(u.large)),
         (
             "extra".into(),
@@ -343,14 +388,29 @@ fn pklite_json(binary: &str, out_path: &str, u: &pklite::Unpacked, packed_size: 
         ("v120".into(), Json::Bool(u.v120)),
         ("scrambled".into(), Json::Bool(u.scrambled)),
         ("compressed_offset".into(), num(u.compressed_offset as u64)),
-        ("compressed_offset_hex".into(), Json::Str(format!("{:#x}", u.compressed_offset))),
-        ("compressed_size".into(), num((u.compressed_end - u.compressed_offset) as u64)),
+        (
+            "compressed_offset_hex".into(),
+            Json::Str(format!("{:#x}", u.compressed_offset)),
+        ),
+        (
+            "compressed_size".into(),
+            num((u.compressed_end - u.compressed_offset) as u64),
+        ),
         ("load_module_size".into(), num(u.load_module as u64)),
         ("relocations".into(), num(u.relocations as u64)),
         ("header".into(), Json::Str(header.into())),
-        ("header_copy_offset".into(), copy_at.map_or(Json::Null, |at| num(at as u64))),
-        ("entry".into(), Json::Str(format!("{:04x}:{:04x}", u.cs, u.ip))),
-        ("stack".into(), Json::Str(format!("{:04x}:{:04x}", u.ss, u.sp))),
+        (
+            "header_copy_offset".into(),
+            copy_at.map_or(Json::Null, |at| num(at as u64)),
+        ),
+        (
+            "entry".into(),
+            Json::Str(format!("{:04x}:{:04x}", u.cs, u.ip)),
+        ),
+        (
+            "stack".into(),
+            Json::Str(format!("{:04x}:{:04x}", u.ss, u.sp)),
+        ),
         ("min_alloc".into(), num(u64::from(u.min_alloc))),
         ("max_alloc".into(), num(u64::from(u.max_alloc))),
         ("overlay_size".into(), num(u.overlay as u64)),
@@ -381,7 +441,10 @@ fn render_neolite(
             let _ = writeln!(s, "  imports       {rva:#x} (recovered)");
         }
         None => {
-            let _ = writeln!(s, "  imports       not found -- the stub's own table is kept");
+            let _ = writeln!(
+                s,
+                "  imports       not found -- the stub's own table is kept"
+            );
         }
     }
     let _ = writeln!(
@@ -407,12 +470,7 @@ fn render_neolite(
     s
 }
 
-fn neolite_json(
-    binary: &str,
-    out_path: &str,
-    u: &neolite::Unpacked,
-    packed_size: usize,
-) -> Json {
+fn neolite_json(binary: &str, out_path: &str, u: &neolite::Unpacked, packed_size: usize) -> Json {
     let sections: Vec<Json> = u
         .sections
         .iter()
@@ -434,7 +492,10 @@ fn neolite_json(
         ("entry".into(), num(u64::from(u.entry))),
         ("entry_hex".into(), Json::Str(format!("{:#x}", u.entry))),
         ("stub_entry".into(), num(u64::from(u.stub_entry))),
-        ("stub_entry_hex".into(), Json::Str(format!("{:#x}", u.stub_entry))),
+        (
+            "stub_entry_hex".into(),
+            Json::Str(format!("{:#x}", u.stub_entry)),
+        ),
         (
             "import_directory".into(),
             match u.imports {
@@ -590,7 +651,9 @@ fn map_range<'a>(image: &'a [u8], raw: &RawLzma) -> Result<(usize, usize, &'a st
         )
     })?;
     for section in file.sections() {
-        let Some((file_off, file_len)) = section.file_range() else { continue };
+        let Some((file_off, file_len)) = section.file_range() else {
+            continue;
+        };
         let addr = section.address();
         let span = section.size().max(file_len);
         if span == 0 || raw.start < addr || raw.start - addr >= span {
@@ -621,7 +684,11 @@ fn render_raw(r: &RawReport<'_>) -> String {
     let mut s = String::new();
     let _ = writeln!(s, "unpacked {} -> {}", r.binary, r.out_path);
     let _ = writeln!(s, "  codec:       raw LZMA1 (analyst-supplied range)");
-    let _ = writeln!(s, "  range:       {:#x}:{:#x} ({})", r.raw.start, r.raw.end, r.kind);
+    let _ = writeln!(
+        s,
+        "  range:       {:#x}:{:#x} ({})",
+        r.raw.start, r.raw.end, r.kind
+    );
     let _ = writeln!(s, "  file bytes:  {:#x}..{:#x}", r.from, r.to);
     let _ = writeln!(s, "  properties:  lc={lc} lp={lp} pb={pb}");
     let _ = writeln!(
@@ -644,11 +711,20 @@ fn raw_json(r: &RawReport<'_>) -> Json {
         ("codec".into(), Json::Str("lzma1".into())),
         ("range_kind".into(), Json::Str(r.kind.into())),
         ("range_start".into(), num(r.raw.start)),
-        ("range_start_hex".into(), Json::Str(format!("{:#x}", r.raw.start))),
+        (
+            "range_start_hex".into(),
+            Json::Str(format!("{:#x}", r.raw.start)),
+        ),
         ("range_end".into(), num(r.raw.end)),
-        ("range_end_hex".into(), Json::Str(format!("{:#x}", r.raw.end))),
+        (
+            "range_end_hex".into(),
+            Json::Str(format!("{:#x}", r.raw.end)),
+        ),
         ("file_offset".into(), num(r.from as u64)),
-        ("file_offset_hex".into(), Json::Str(format!("{:#x}", r.from))),
+        (
+            "file_offset_hex".into(),
+            Json::Str(format!("{:#x}", r.from)),
+        ),
         ("lc".into(), num(u64::from(lc))),
         ("lp".into(), num(u64::from(lp))),
         ("pb".into(), num(u64::from(pb))),
@@ -699,7 +775,10 @@ fn result_json(binary: &str, out_path: &str, u: &upx::Unpacked, packed_size: usi
                 ("u_len".into(), num(u64::from(b.u_len))),
                 ("c_len".into(), num(u64::from(b.c_len))),
                 ("method".into(), num(u64::from(b.method))),
-                ("method_name".into(), Json::Str(upx::method_name(b.method).into())),
+                (
+                    "method_name".into(),
+                    Json::Str(upx::method_name(b.method).into()),
+                ),
                 ("filter".into(), num(u64::from(b.filter))),
                 ("filter_hex".into(), Json::Str(format!("{:#04x}", b.filter))),
                 ("stored".into(), Json::Bool(b.stored)),
@@ -717,8 +796,14 @@ fn result_json(binary: &str, out_path: &str, u: &upx::Unpacked, packed_size: usi
         ("method_name".into(), Json::Str(info.method_name().into())),
         ("level".into(), num(u64::from(info.level))),
         ("filter".into(), num(u64::from(info.filter))),
-        ("filter_hex".into(), Json::Str(format!("{:#04x}", info.filter))),
-        ("pack_header_offset".into(), num(info.pack_header_offset as u64)),
+        (
+            "filter_hex".into(),
+            Json::Str(format!("{:#04x}", info.filter)),
+        ),
+        (
+            "pack_header_offset".into(),
+            num(info.pack_header_offset as u64),
+        ),
         (
             "pack_header_offset_hex".into(),
             Json::Str(format!("{:#x}", info.pack_header_offset)),
@@ -752,30 +837,33 @@ fn parse_args(argv: &[String]) -> Result<Option<Args>, String> {
             "--list" => list = true,
             "--raw-lzma" => {
                 i += 1;
-                let spec = argv.get(i).ok_or_else(|| {
-                    "--raw-lzma requires START:END (or START+LENGTH)".to_string()
-                })?;
+                let spec = argv
+                    .get(i)
+                    .ok_or_else(|| "--raw-lzma requires START:END (or START+LENGTH)".to_string())?;
                 range = Some(parse_range(spec)?);
             }
             "--raw-offsets" => offsets = true,
             "--lzma-props" => {
                 i += 1;
-                let spec = argv
-                    .get(i)
-                    .ok_or_else(|| "--lzma-props requires pb,lp,lc or a two-byte prefix".to_string())?;
+                let spec = argv.get(i).ok_or_else(|| {
+                    "--lzma-props requires pb,lp,lc or a two-byte prefix".to_string()
+                })?;
                 props = Some(parse_props(spec)?);
             }
             "--raw-max-size" => {
                 i += 1;
-                let spec =
-                    argv.get(i).ok_or_else(|| "--raw-max-size requires a byte count".to_string())?;
+                let spec = argv
+                    .get(i)
+                    .ok_or_else(|| "--raw-max-size requires a byte count".to_string())?;
                 max = usize::try_from(parse_size(spec)?)
                     .map_err(|_| format!("--raw-max-size {spec:?} does not fit in memory"))?;
             }
             "-o" | "--output" => {
                 i += 1;
                 output = Some(
-                    argv.get(i).cloned().ok_or_else(|| "-o requires a path".to_string())?,
+                    argv.get(i)
+                        .cloned()
+                        .ok_or_else(|| "-o requires a path".to_string())?,
                 );
             }
             "-h" | "--help" => return Ok(None),
@@ -796,7 +884,10 @@ fn parse_args(argv: &[String]) -> Result<Option<Args>, String> {
     // spelled the properties but forgot the range wants to be told so, not to
     // get a silent PackHeader search.
     if range.is_none() {
-        for (flag, set) in [("--raw-offsets", offsets), ("--lzma-props", props.is_some())] {
+        for (flag, set) in [
+            ("--raw-offsets", offsets),
+            ("--lzma-props", props.is_some()),
+        ] {
             if set {
                 return Err(format!("{flag} only applies with --raw-lzma START:END"));
             }
@@ -805,8 +896,20 @@ fn parse_args(argv: &[String]) -> Result<Option<Args>, String> {
             return Err("--raw-max-size only applies with --raw-lzma START:END".to_string());
         }
     }
-    let raw = range.map(|(start, end)| RawLzma { start, end, offsets, props, max });
-    Ok(Some(Args { binary, output, json, list, raw }))
+    let raw = range.map(|(start, end)| RawLzma {
+        start,
+        end,
+        offsets,
+        props,
+        max,
+    });
+    Ok(Some(Args {
+        binary,
+        output,
+        json,
+        list,
+        raw,
+    }))
 }
 
 /// `START:END` (end exclusive) or `START+LENGTH`. Endpoints are hexadecimal by
@@ -829,7 +932,10 @@ fn parse_range(spec: &str) -> Result<(u64, u64), String> {
 
 fn parse_vma(token: &str) -> Result<u64, String> {
     let t = token.trim();
-    let body = t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")).unwrap_or(t);
+    let body = t
+        .strip_prefix("0x")
+        .or_else(|| t.strip_prefix("0X"))
+        .unwrap_or(t);
     u64::from_str_radix(body, 16).map_err(|_| format!("invalid address {token:?}"))
 }
 
@@ -848,7 +954,10 @@ fn parse_size(token: &str) -> Result<u64, String> {
 fn parse_props(spec: &str) -> Result<(u8, u8, u8), String> {
     let t = spec.trim();
     if !t.contains(',') {
-        let body = t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")).unwrap_or(t);
+        let body = t
+            .strip_prefix("0x")
+            .or_else(|| t.strip_prefix("0X"))
+            .unwrap_or(t);
         let pair = u16::from_str_radix(body, 16)
             .map_err(|_| format!("invalid LZMA properties {spec:?}"))?;
         let (hi, lo) = ((pair >> 8) as u8, pair as u8);
@@ -860,14 +969,18 @@ fn parse_props(spec: &str) -> Result<(u8, u8, u8), String> {
     }
     let mut v = [0u8; 3];
     for (slot, (name, tok)) in v.iter_mut().zip(["pb", "lp", "lc"].into_iter().zip(f)) {
-        *slot = tok.parse::<u8>().map_err(|_| format!("invalid {name} {tok:?}"))?;
+        *slot = tok
+            .parse::<u8>()
+            .map_err(|_| format!("invalid {name} {tok:?}"))?;
     }
     let (pb, lp, lc) = (v[0], v[1], v[2]);
     // The prefix bytes are 3 / 4 / 4 bits wide, so anything wider is a typo the
     // synthesized header would silently truncate. LZMA1's own tighter limits
     // (lc <= 8, lc + lp <= 8) are the decoder's to enforce, and it does.
     if pb > 7 || lp > 15 || lc > 15 {
-        return Err(format!("LZMA properties pb={pb} lp={lp} lc={lc} do not fit the prefix bytes"));
+        return Err(format!(
+            "LZMA properties pb={pb} lp={lp} lc={lc} do not fit the prefix bytes"
+        ));
     }
     Ok((lc, lp, pb))
 }
@@ -888,7 +1001,9 @@ fn usage() {
     eprintln!("                         take it as pb,lp,lc (or as those two bytes, in hex).");
     eprintln!("  --raw-offsets          the range endpoints are file offsets, not addresses.");
     eprintln!("  --raw-max-size N       cap a length-less decode at N bytes (default 512 MiB).");
-    eprintln!("  --json                 emit {{binary,output,packer,..}} describing what was unpacked.");
+    eprintln!(
+        "  --json                 emit {{binary,output,packer,..}} describing what was unpacked."
+    );
 }
 
 /// A UEFI firmware image: write every PE32/TE module of every volume to
@@ -897,26 +1012,41 @@ fn usage() {
 fn run_firmware_volume(args: &Args, image: &[u8]) -> i32 {
     use unlace_analysis::loader::firmware::uefifv;
     let walk = uefifv::walk(image);
-    let dir = PathBuf::from(args.output.clone().unwrap_or_else(|| format!("{}.modules", args.binary)));
+    let dir = PathBuf::from(
+        args.output
+            .clone()
+            .unwrap_or_else(|| format!("{}.modules", args.binary)),
+    );
     if !args.list
-        && let Err(e) = std::fs::create_dir_all(&dir) {
-            eprintln!("error: could not create {}: {e}", dir.display());
-            return 1;
-        }
+        && let Err(e) = std::fs::create_dir_all(&dir)
+    {
+        eprintln!("error: could not create {}: {e}", dir.display());
+        return 1;
+    }
     let mut used = std::collections::BTreeMap::<String, usize>::new();
     let mut rows = Vec::new();
     for m in &walk.modules {
         let stem = m.name.clone().unwrap_or_else(|| m.guid.clone());
-        let stem: String = stem.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).collect();
+        let stem: String = stem
+            .chars()
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                    c
+                } else {
+                    '_'
+                }
+            })
+            .collect();
         let n = used.entry(stem.clone()).or_default();
         *n += 1;
         let stem = if *n == 1 { stem } else { format!("{stem}_{n}") };
         let file = format!("{stem}.{}", if m.te { "te" } else { "efi" });
         if !args.list
-            && let Err(e) = std::fs::write(dir.join(&file), &m.image) {
-                eprintln!("error: could not write {file}: {e}");
-                return 1;
-            }
+            && let Err(e) = std::fs::write(dir.join(&file), &m.image)
+        {
+            eprintln!("error: could not write {file}: {e}");
+            return 1;
+        }
         rows.push((file, m));
     }
     if args.json {
@@ -927,24 +1057,45 @@ fn run_firmware_volume(args: &Args, image: &[u8]) -> i32 {
                     ("file".into(), Json::Str(file.clone())),
                     ("guid".into(), Json::Str(m.guid.clone())),
                     ("name".into(), m.name.clone().map_or(Json::Null, Json::Str)),
-                    ("type".into(), Json::Str(uefifv::file_type_name(m.file_type).into())),
+                    (
+                        "type".into(),
+                        Json::Str(uefifv::file_type_name(m.file_type).into()),
+                    ),
                     ("te".into(), Json::Bool(m.te)),
                     ("size".into(), Json::Number(m.image.len().to_string())),
                 ])
             })
             .collect();
-        let undecoded: Vec<Json> = walk.undecoded.iter().map(|u| Json::Str(u.clone())).collect();
+        let undecoded: Vec<Json> = walk
+            .undecoded
+            .iter()
+            .map(|u| Json::Str(u.clone()))
+            .collect();
         let out = Json::Object(vec![
             ("volumes".into(), Json::Number(walk.volumes.to_string())),
             ("modules".into(), Json::Array(items)),
             ("undecoded".into(), Json::Array(undecoded)),
-            ("directory".into(), if args.list { Json::Null } else { Json::Str(dir.display().to_string()) }),
+            (
+                "directory".into(),
+                if args.list {
+                    Json::Null
+                } else {
+                    Json::Str(dir.display().to_string())
+                },
+            ),
         ]);
         println!("{}", dumps_indent2(&out));
     } else {
         let mut text = String::new();
         for (file, m) in &rows {
-            let _ = writeln!(text, "{:<22} {} {:>8}  {}", uefifv::file_type_name(m.file_type), m.guid, m.image.len(), file);
+            let _ = writeln!(
+                text,
+                "{:<22} {} {:>8}  {}",
+                uefifv::file_type_name(m.file_type),
+                m.guid,
+                m.image.len(),
+                file
+            );
         }
         for u in &walk.undecoded {
             let _ = writeln!(text, "undecoded: {u}");
@@ -954,7 +1105,11 @@ fn run_firmware_volume(args: &Args, image: &[u8]) -> i32 {
             "{} modules in {} volumes{}",
             rows.len(),
             walk.volumes,
-            if args.list { String::new() } else { format!(", written to {}", dir.display()) }
+            if args.list {
+                String::new()
+            } else {
+                format!(", written to {}", dir.display())
+            }
         );
         print!("{text}");
     }

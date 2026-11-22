@@ -11,10 +11,12 @@
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
-use unlace_analysis::listing::xrefs::{self, XrefIndex, XrefKind};
 use unlace_analysis::listing::Listing;
+use unlace_analysis::listing::xrefs::{self, XrefIndex, XrefKind};
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 /// `pool_skip`: the `add r0,pc,r2` after `bxne r3`, and its string.
@@ -30,7 +32,10 @@ const PREDICATED_JUMPS: [u64; 3] = [0x1009c, 0x100b2, 0x100c4];
 const UNGUARDED: u64 = 0x100d8;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture() -> PathBuf {
@@ -45,11 +50,15 @@ fn index() -> &'static XrefIndex {
         let spec_roots = vec![repo_root().join("specs").to_str().unwrap().to_string()];
         let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
             .expect("bootstrap fixture with built processor specs");
-        prog.commit_pending_analysis().expect("analysis commit succeeds");
+        prog.commit_pending_analysis()
+            .expect("analysis commit succeeds");
         let bytes = std::fs::read(&bin).expect("fixture readable");
         let file = object::File::parse(&*bytes).expect("fixture parses");
-        let seeds: Vec<u64> =
-            prog.function_entries_canonical().iter().map(|e| e.addr.get_offset()).collect();
+        let seeds: Vec<u64> = prog
+            .function_entries_canonical()
+            .iter()
+            .map(|e| e.addr.get_offset())
+            .collect();
         xrefs::build(&file, prog.arch(), prog.arch().translate(), &seeds)
     })
 }
@@ -59,7 +68,10 @@ fn spec_roots() -> Vec<String> {
 }
 
 fn from(idx: &XrefIndex, at: u64) -> Vec<(u64, XrefKind)> {
-    idx.refs_from_instruction(at).iter().map(|r| (r.to, r.kind)).collect()
+    idx.refs_from_instruction(at)
+        .iter()
+        .map(|r| (r.to, r.kind))
+        .collect()
 }
 
 /// A pool word loaded before a predicated computed jump reaches the `add`
@@ -69,7 +81,10 @@ fn a_pool_word_survives_the_skip_of_a_predicated_computed_jump() {
     let idx = index();
     for (add, string) in [(POOL_SKIP_ADD, POOL_MSG), (POOL_SKIP_T_ADD, POOL_MSG_T)] {
         let rows = from(idx, add);
-        assert!(rows.contains(&(string, XrefKind::Data)), "{add:#x}: {rows:?}");
+        assert!(
+            rows.contains(&(string, XrefKind::Data)),
+            "{add:#x}: {rows:?}"
+        );
     }
 }
 
@@ -81,7 +96,11 @@ fn a_pool_word_survives_the_skip_of_a_predicated_computed_jump() {
 fn an_unguarded_a32_table_at_an_entry_reads_no_case() {
     let idx = index();
     assert_eq!(from(idx, UNGUARDED), vec![(UNGUARDED, XrefKind::Data)]);
-    assert!(idx.switch_tables().iter().all(|t| t.dispatch != UNGUARDED), "{:?}", idx.switch_tables());
+    assert!(
+        idx.switch_tables().iter().all(|t| t.dispatch != UNGUARDED),
+        "{:?}",
+        idx.switch_tables()
+    );
 }
 
 /// The Listing records a predicated computed jump as `classify` does, with its
@@ -94,16 +113,28 @@ fn the_listing_keeps_a_predicated_computed_jump_skip_as_a_flow() {
         .expect("bootstrap fixture with built processor specs");
     let bytes = std::fs::read(&bin).expect("fixture readable");
     let file = object::File::parse(&*bytes).expect("fixture parses");
-    let image = unlace_analysis::loadimage_object::ObjectLoadImage::from_bytes(bin.to_str().unwrap(), &bytes)
-        .expect("open throwaway loadimage");
-    let seeds: Vec<u64> =
-        prog.function_entries_canonical().iter().map(|e| e.addr.get_offset()).collect();
+    let image = unlace_analysis::loadimage_object::ObjectLoadImage::from_bytes(
+        bin.to_str().unwrap(),
+        &bytes,
+    )
+    .expect("open throwaway loadimage");
+    let seeds: Vec<u64> = prog
+        .function_entries_canonical()
+        .iter()
+        .map(|e| e.addr.get_offset())
+        .collect();
     let arch = prog.arch();
     let listing = Listing::build(&file, &image, arch, arch.translate(), &seeds);
     for at in PREDICATED_JUMPS {
-        let insn = listing.instruction_at(at).unwrap_or_else(|| panic!("{at:#x} decoded"));
+        let insn = listing
+            .instruction_at(at)
+            .unwrap_or_else(|| panic!("{at:#x} decoded"));
         let skip = at + u64::from(insn.len);
-        assert_eq!((insn.flows.to_vec(), insn.fall_through), (vec![skip], None), "{at:#x}");
+        assert_eq!(
+            (insn.flows.to_vec(), insn.fall_through),
+            (vec![skip], None),
+            "{at:#x}"
+        );
     }
 }
 
@@ -112,10 +143,18 @@ fn decompile_bail_caller(options: &[(&str, &str)]) -> String {
     let mut prog = bootstrap_from_object(fixture().to_str().unwrap(), "", &spec_roots())
         .expect("bootstrap fixture with built processor specs");
     for &(name, value) in options {
-        prog.arch_mut().set_kuna_option(name, value).expect("option applies");
+        prog.arch_mut()
+            .set_kuna_option(name, value)
+            .expect("option applies");
     }
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
-    let cmds: Vec<String> = ["load function bail_caller".into(), "decompile".into(), "print C".into()].to_vec();
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
+    let cmds: Vec<String> = [
+        "load function bail_caller".into(),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .to_vec();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);

@@ -27,16 +27,16 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
-use unlace_decomp::dtype::{type_metatype, Datatype};
-use unlace_decomp::funcdata::Funcdata;
-use unlace_decomp::ruleaction_6::{RuleDivOpt, RulePtrsubUndo, RuleSubNormal};
 use unlace_decomp::action::Rule;
 use unlace_decomp::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
+use unlace_decomp::dtype::{Datatype, type_metatype};
+use unlace_decomp::funcdata::Funcdata;
+use unlace_decomp::ruleaction_6::{RuleDivOpt, RulePtrsubUndo, RuleSubNormal};
 use unlace_decomp::varnode::{DefOpInfo, VarnodeBank};
 
 // -----------------------------------------------------------------------------
@@ -46,7 +46,8 @@ use unlace_decomp::varnode::{DefOpInfo, VarnodeBank};
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -91,7 +92,8 @@ fn mk_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
     let r = ram(fd);
     let op = fd.new_op(inputs, Address::new(r, off));
     fd.obank_mut().mark_alive(op);
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
     op
 }
 
@@ -103,7 +105,10 @@ fn give_output(fd: &mut Funcdata, op: OpId, off: u64, size: int4) -> VarnodeId {
     let r = ram(fd);
     let vn = fd.new_varnode(size, &Address::new(r, off), Some(unk(size)));
     let seq = fd.obank().get(op).unwrap().get_seq_num().clone();
-    let info = DefOpInfo { id: op, seqnum: seq };
+    let info = DefOpInfo {
+        id: op,
+        seqnum: seq,
+    };
     let vn = fd.vbank_mut().set_def(vn, info, &mut no_replace()).unwrap();
     fd.obank_mut().get_mut(op).unwrap().set_output(Some(vn));
     vn
@@ -151,12 +156,28 @@ fn w5s3r6_calc_divisor_off_by_one_adjustment_branch() {
 /// non-magic multiplier that fails the final `tmp <= maxx` check.
 #[test]
 fn w5s3r6_calc_divisor_rejections_return_zero() {
-    assert_eq!(RuleDivOpt::calc_divisor(35, &[1, 0], 32), 0, "y == 1 is wrong form");
-    assert_eq!(RuleDivOpt::calc_divisor(128, &[0x2aaaaaad, 0], 32), 0, "n > 127");
-    assert_eq!(RuleDivOpt::calc_divisor(35, &[0x2aaaaaad, 0], 65), 0, "xsize > 64");
+    assert_eq!(
+        RuleDivOpt::calc_divisor(35, &[1, 0], 32),
+        0,
+        "y == 1 is wrong form"
+    );
+    assert_eq!(
+        RuleDivOpt::calc_divisor(128, &[0x2aaaaaad, 0], 32),
+        0,
+        "n > 127"
+    );
+    assert_eq!(
+        RuleDivOpt::calc_divisor(35, &[0x2aaaaaad, 0], 65),
+        0,
+        "xsize > 64"
+    );
     // A multiplier that is NOT a valid reciprocal encoding for any small divisor
     // at this shift: the maxx feasibility check fails -> 0.
-    assert_eq!(RuleDivOpt::calc_divisor(8, &[3, 0], 32), 0, "non-magic multiplier rejected");
+    assert_eq!(
+        RuleDivOpt::calc_divisor(8, &[3, 0], 32),
+        0,
+        "non-magic multiplier rejected"
+    );
 }
 
 // =============================================================================
@@ -223,7 +244,10 @@ fn w5s3r6_get_extra_offset_wide_output_stays_positive() {
     let _addout = give_output(&mut fd, add, 0x30, 8); // 8-byte output
 
     let (extra, _m) = RulePtrsubUndo::get_extra_offset(&fd, ptrsub);
-    assert_eq!(extra, 0x8000_0000i64, "below the 63-bit sign position -> positive");
+    assert_eq!(
+        extra, 0x8000_0000i64,
+        "below the 63-bit sign position -> positive"
+    );
 }
 
 // =============================================================================
@@ -344,7 +368,11 @@ fn w5s3r6_sub_normal_boundary_equal_collapses_not_extension() {
     let _o = give_output(&mut fd, sub, 0x30, 4);
 
     assert_eq!(rule.apply_op(sub, &mut fd), 1, "n folds to 0 -> commit");
-    assert_eq!(fd.obank().get(sub).unwrap().get_in(0), Some(a), "op now reads a directly");
+    assert_eq!(
+        fd.obank().get(sub).unwrap().get_in(0),
+        Some(a),
+        "op now reads a directly"
+    );
     let new_c = fd.obank().get(sub).unwrap().get_in(1).unwrap();
     assert!(fd.vbank().get(new_c).unwrap().is_constant());
     assert_eq!(
@@ -381,7 +409,8 @@ fn w5s3r6_sub_normal_shrink_k_then_commits() {
     let mk_blop = |fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode| -> OpId {
         let r = ram(fd);
         let op = fd.new_op(inputs, Address::new(r, off));
-        fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
+        fd.obank_mut()
+            .change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
         fd.op_insert(op, bl, None);
         op
     };
@@ -411,8 +440,19 @@ fn w5s3r6_sub_normal_shrink_k_then_commits() {
     // Its input 0 is the new SUBPIECE reading `a` directly with c = 4.
     let newsub = fd.obank().get(sub).unwrap().get_in(0).unwrap();
     let newsub_def = fd.vbank().get(newsub).unwrap().get_def().unwrap();
-    assert_eq!(fd.obank().get(newsub_def).unwrap().code(), OpCode::CPUI_SUBPIECE);
-    assert_eq!(fd.obank().get(newsub_def).unwrap().get_in(0), Some(a), "new SUB reads a");
+    assert_eq!(
+        fd.obank().get(newsub_def).unwrap().code(),
+        OpCode::CPUI_SUBPIECE
+    );
+    assert_eq!(
+        fd.obank().get(newsub_def).unwrap().get_in(0),
+        Some(a),
+        "new SUB reads a"
+    );
     let new_c = fd.obank().get(newsub_def).unwrap().get_in(1).unwrap();
-    assert_eq!(fd.vbank().get(new_c).unwrap().get_offset(), 4, "c becomes c+k = 3+1 = 4");
+    assert_eq!(
+        fd.vbank().get(new_c).unwrap().get_offset(),
+        4,
+        "c becomes c+k = 3+1 = 4"
+    );
 }

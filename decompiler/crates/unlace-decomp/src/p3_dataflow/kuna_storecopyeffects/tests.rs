@@ -2,11 +2,11 @@ use super::*;
 use crate::action::Rule;
 use crate::context::ArchContext;
 use crate::p3_dataflow::ruleaction_4::RuleStoreVarnode;
-use unlace_base::address::{calc_mask, Address};
-use unlace_base::space::{
-    addrspace_flags, AddrSpace, AddrSpaceManager, ConstantSpace, IopSpace, UniqueSpace,
-};
 use std::rc::Rc;
+use unlace_base::address::{Address, calc_mask};
+use unlace_base::space::{
+    AddrSpace, AddrSpaceManager, ConstantSpace, IopSpace, UniqueSpace, addrspace_flags,
+};
 
 fn function(big: bool) -> Funcdata {
     let mut manager = AddrSpaceManager::new();
@@ -115,7 +115,11 @@ fn store_conversion_preserves_every_overlapping_byte_in_both_endiannesses() {
                         | (((written_value >> source_shift) & 0xff) << target_shift);
                 }
             }
-            assert_eq!(value(&data, result), expected, "big={big}, write=({write_off:x},{write_size}), effect=({effect_off:x},{effect_size})");
+            assert_eq!(
+                value(&data, result),
+                expected,
+                "big={big}, write=({write_off:x},{write_size}), effect=({effect_off:x},{effect_size})"
+            );
             if let Some(marker) = data.obank().get(effect) {
                 if !marker.is_dead() {
                     assert_ne!(marker.code(), OpCode::CPUI_INDIRECT);

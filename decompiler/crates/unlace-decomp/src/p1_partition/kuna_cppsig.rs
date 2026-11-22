@@ -67,7 +67,10 @@ pub fn parse_cppsig_mode(p1: &str) -> KunaResult<(CppSigMode, String)> {
         "inferred" => CppSigMode::Inferred,
         _ => return Err(KunaError::parse("Must specify off, proven or inferred")),
     };
-    Ok((mode, format!("Demangled C++ signature application set to {p1}")))
+    Ok((
+        mode,
+        format!("Demangled C++ signature application set to {p1}"),
+    ))
 }
 
 #[cfg(test)]
@@ -78,7 +81,10 @@ mod tests {
     fn parses_the_three_values_and_rejects_the_rest() {
         assert_eq!(parse_cppsig_mode("off").unwrap().0, CppSigMode::Off);
         assert_eq!(parse_cppsig_mode("proven").unwrap().0, CppSigMode::Proven);
-        assert_eq!(parse_cppsig_mode("inferred").unwrap().0, CppSigMode::Inferred);
+        assert_eq!(
+            parse_cppsig_mode("inferred").unwrap().0,
+            CppSigMode::Inferred
+        );
         // `on` is deliberately NOT an alias: the caller must say which tier.
         assert!(parse_cppsig_mode("on").is_err());
         assert!(parse_cppsig_mode("").is_err());

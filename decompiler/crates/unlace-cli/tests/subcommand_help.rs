@@ -21,12 +21,22 @@ fn subcommands() -> Vec<String> {
     assert_eq!(out.status.code(), Some(0), "{}", help_text(&out));
     assert!(out.stdout.is_empty(), "{}", help_text(&out));
     let text = String::from_utf8(out.stderr).expect("UTF-8 help");
-    let names: Vec<String> = text.lines().next().expect("usage line")
-        .strip_prefix("usage: unlace <").expect("command list prefix")
-        .strip_suffix("> ...").expect("command list suffix")
-        .split('|').map(str::to_owned).collect();
+    let names: Vec<String> = text
+        .lines()
+        .next()
+        .expect("usage line")
+        .strip_prefix("usage: unlace <")
+        .expect("command list prefix")
+        .strip_suffix("> ...")
+        .expect("command list suffix")
+        .split('|')
+        .map(str::to_owned)
+        .collect();
     for (index, name) in names.iter().enumerate() {
-        assert!(!name.is_empty() && !names[..index].contains(name), "invalid command list: {names:?}");
+        assert!(
+            !name.is_empty() && !names[..index].contains(name),
+            "invalid command list: {names:?}"
+        );
     }
     names
 }
@@ -62,9 +72,16 @@ fn every_subcommand_answers_help() {
 fn each_block_names_its_own_subcommand() {
     for sub in subcommands() {
         // `read` shares `disassemble`'s parser and prints the shared block.
-        let expect = if sub == "read" { "usage: unlace disassemble|read" } else { &format!("usage: unlace {sub}") };
+        let expect = if sub == "read" {
+            "usage: unlace disassemble|read"
+        } else {
+            &format!("usage: unlace {sub}")
+        };
         let text = help_text(&run(&[&sub, "--help"]));
-        assert!(text.starts_with(expect), "`unlace {sub} --help` opened with:\n{text}");
+        assert!(
+            text.starts_with(expect),
+            "`unlace {sub} --help` opened with:\n{text}"
+        );
     }
 }
 
@@ -80,7 +97,11 @@ fn help_needs_no_binary_and_no_specs() {
             .env_remove("KUNA_DECOMP_DBG")
             .output()
             .expect("failed to spawn the kuna binary");
-        assert_eq!(out.status.code(), Some(0), "`unlace {sub} --help` needed an environment");
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "`unlace {sub} --help` needed an environment"
+        );
     }
 }
 
@@ -89,15 +110,43 @@ fn help_needs_no_binary_and_no_specs() {
 #[test]
 fn the_repaired_blocks_document_their_flags() {
     let expected: &[(&str, &[&str])] = &[
-        ("decompile", &["--addr", "--json", "--option", "--kassert", "--define-function", "--assert", "--mode", "--language"]),
-        ("test", &["--all", "--unittests", "--datatests", "--baseline", "--save-baseline", "--name"]),
-        ("catalog", &["--json", "--markdown", "--check", "--option", "--tier"]),
+        (
+            "decompile",
+            &[
+                "--addr",
+                "--json",
+                "--option",
+                "--kassert",
+                "--define-function",
+                "--assert",
+                "--mode",
+                "--language",
+            ],
+        ),
+        (
+            "test",
+            &[
+                "--all",
+                "--unittests",
+                "--datatests",
+                "--baseline",
+                "--save-baseline",
+                "--name",
+            ],
+        ),
+        (
+            "catalog",
+            &["--json", "--markdown", "--check", "--option", "--tier"],
+        ),
         ("specs", &["-a", "--diff"]),
     ];
     for (sub, flags) in expected {
         let text = help_text(&run(&[sub, "--help"]));
         for flag in *flags {
-            assert!(text.contains(flag), "`unlace {sub} --help` never mentions {flag}:\n{text}");
+            assert!(
+                text.contains(flag),
+                "`unlace {sub} --help` never mentions {flag}:\n{text}"
+            );
         }
     }
 }
@@ -135,9 +184,14 @@ fn every_json_surface_names_its_root_in_help() {
         let root = stated
             .iter()
             .find(|(name, _)| *name == sub)
-            .unwrap_or_else(|| panic!("`unlace {sub}` takes --json but this table has no root for it"))
+            .unwrap_or_else(|| {
+                panic!("`unlace {sub}` takes --json but this table has no root for it")
+            })
             .1;
-        assert!(text.contains(root), "`unlace {sub} --help` never states its --json root {root}:\n{text}");
+        assert!(
+            text.contains(root),
+            "`unlace {sub} --help` never states its --json root {root}:\n{text}"
+        );
     }
     for argv in [
         &["catalog", "--json"][..],
@@ -150,7 +204,11 @@ fn every_json_surface_names_its_root_in_help() {
         let stdout = String::from_utf8_lossy(&out.stdout);
         let emitted = stdout.trim_start().chars().next();
         let root = stated.iter().find(|(name, _)| *name == argv[0]).unwrap().1;
-        assert_eq!(emitted, root.chars().next(), "{argv:?} emits a different root than its help states");
+        assert_eq!(
+            emitted,
+            root.chars().next(),
+            "{argv:?} emits a different root than its help states"
+        );
     }
 }
 
@@ -167,11 +225,24 @@ fn catalog_tier_filters_the_json_as_it_filters_the_table() {
     let mut kept = 0;
     for tier in ["transform", "analysis", "core"] {
         let some = rows(&["catalog", "--json", "--tier", tier]);
-        assert!(!some.is_empty() && some.iter().all(|r| r["tier"] == tier), "{tier}: {some:?}");
+        assert!(
+            !some.is_empty() && some.iter().all(|r| r["tier"] == tier),
+            "{tier}: {some:?}"
+        );
         kept += some.len();
     }
     assert_eq!(kept, all.len(), "the three tiers partition the catalog");
-    assert!(rows(&["catalog", "--json", "--option", "jumptablemax", "--tier", "core"]).is_empty());
+    assert!(
+        rows(&[
+            "catalog",
+            "--json",
+            "--option",
+            "jumptablemax",
+            "--tier",
+            "core"
+        ])
+        .is_empty()
+    );
 }
 
 /// Adding the help arm must not have swallowed a real usage error: an unknown
@@ -180,7 +251,11 @@ fn catalog_tier_filters_the_json_as_it_filters_the_table() {
 fn an_unknown_option_is_still_a_usage_error() {
     for sub in ["decompile", "test", "catalog"] {
         let out = run(&[sub, "--no-such-flag"]);
-        assert_eq!(out.status.code(), Some(2), "`unlace {sub} --no-such-flag` should be exit 2");
+        assert_eq!(
+            out.status.code(),
+            Some(2),
+            "`unlace {sub} --no-such-flag` should be exit 2"
+        );
         assert!(
             String::from_utf8_lossy(&out.stderr).contains("unknown option"),
             "`unlace {sub} --no-such-flag` lost its diagnostic"
@@ -207,8 +282,14 @@ fn top_level_aliases_and_usage_errors_keep_their_statuses_and_streams() {
     let out = run(&[unknown]);
     assert_eq!(out.status.code(), Some(2));
     assert!(out.stdout.is_empty());
-    assert_eq!(out.stderr, format!("unlace: unknown subcommand {unknown:?}\n{}",
-        String::from_utf8(help.stderr).unwrap()).into_bytes());
+    assert_eq!(
+        out.stderr,
+        format!(
+            "unlace: unknown subcommand {unknown:?}\n{}",
+            String::from_utf8(help.stderr).unwrap()
+        )
+        .into_bytes()
+    );
 
     let version = run(&["--version"]);
     assert_eq!(version.status.code(), Some(0));
@@ -226,7 +307,10 @@ fn top_level_aliases_and_usage_errors_keep_their_statuses_and_streams() {
 fn specs_diff_explains_independent_gates_without_running_a_compiler() {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["specs", "--diff"])
-        .env("KUNA_SLACOMP", concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"))
+        .env(
+            "KUNA_SLACOMP",
+            concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"),
+        )
         .output()
         .expect("spawn kuna");
     assert_eq!(out.status.code(), Some(0), "{}", help_text(&out));

@@ -37,21 +37,44 @@ fn optimized_reference_parameters_round_trip_without_changing_value_arguments() 
 #[test]
 fn c_values_pointers_and_cpp_references_keep_their_existing_signatures() {
     for (compiler, extension, source, functions) in [
-        ("gcc", "c", "float scalar(float value) { return value; }\nfloat pointee(float *value) { return *value; }",
-         &[("scalar", "float scalar(float value)"), ("pointee", "float pointee(float *value)")][..]),
-        ("g++", "cpp", "extern \"C\" float reference(float &value) { return value; }",
-         &[("reference", "float reference(float *value)")][..]),
+        (
+            "gcc",
+            "c",
+            "float scalar(float value) { return value; }\nfloat pointee(float *value) { return *value; }",
+            &[
+                ("scalar", "float scalar(float value)"),
+                ("pointee", "float pointee(float *value)"),
+            ][..],
+        ),
+        (
+            "g++",
+            "cpp",
+            "extern \"C\" float reference(float &value) { return value; }",
+            &[("reference", "float reference(float *value)")][..],
+        ),
     ] {
-        if process::optional_output(Command::new(compiler).arg("--version")).is_none() { continue; }
+        if process::optional_output(Command::new(compiler).arg("--version")).is_none() {
+            continue;
+        }
         let path = common::scratch_file("dwarf-reference-control", extension);
         let object = path.with_extension("so");
         std::fs::write(&path, source).unwrap();
         for level in ["-O0", "-O2"] {
-            let output = Command::new(compiler).args(["-g", "-shared", "-fPIC", level])
-                .arg(&path).arg("-o").arg(&object).output().unwrap();
-            assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+            let output = Command::new(compiler)
+                .args(["-g", "-shared", "-fPIC", level])
+                .arg(&path)
+                .arg("-o")
+                .arg(&object)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
             for &(function, signature) in functions {
-                let (body, err, status) = common::run_kuna(&["decompile", object.to_str().unwrap(), function]);
+                let (body, err, status) =
+                    common::run_kuna(&["decompile", object.to_str().unwrap(), function]);
                 assert_eq!(status, 0, "{err}");
                 assert!(body.starts_with(signature), "{compiler} {level}: {body}");
             }

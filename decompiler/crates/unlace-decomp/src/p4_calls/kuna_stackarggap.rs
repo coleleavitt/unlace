@@ -163,7 +163,9 @@ pub fn ends_argument_list(
 /// needs, kept here so `force_inactive_chain` reads the same rule this module
 /// documents.
 pub fn address_is_spacebase(addr: &unlace_base::address::Address) -> bool {
-    addr.get_space().map(|s| s.get_type() == spacetype::IPTR_SPACEBASE).unwrap_or(false)
+    addr.get_space()
+        .map(|s| s.get_type() == spacetype::IPTR_SPACEBASE)
+        .unwrap_or(false)
 }
 
 #[cfg(test)]

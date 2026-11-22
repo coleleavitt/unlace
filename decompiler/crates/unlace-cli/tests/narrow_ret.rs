@@ -24,7 +24,8 @@ const WANT: &str = "3693803628968453501\n";
 
 fn decompile(fixture: &str, option: &str) -> String {
     let bin = common::fixture(fixture);
-    let (stdout, stderr, code) = common::run_kuna(&["decompile-all", &bin, "--option", "narrowret", option]);
+    let (stdout, stderr, code) =
+        common::run_kuna(&["decompile-all", &bin, "--option", "narrowret", option]);
     assert_eq!(code, 0, "unlace decompile-all {fixture} failed: {stderr}");
     stdout
 }
@@ -51,7 +52,11 @@ fn a_call_result_takes_the_width_its_callee_returns() {
     let off = decompile("narrowret_thumb_O2.o", "off");
     for (text, byte, flag) in [
         (&on, "unsigned char v1; // r0 | r5", "bool v1; // r0 | r6"),
-        (&off, "unsigned int v1; // r0 | r5", "unsigned int v1; // r0 | r6"),
+        (
+            &off,
+            "unsigned int v1; // r0 | r5",
+            "unsigned int v1; // r0 | r6",
+        ),
     ] {
         assert!(text.contains(byte), "{text}");
         assert!(text.contains(flag), "{text}");
@@ -63,13 +68,22 @@ fn a_call_result_takes_the_width_its_callee_returns() {
             "{text}"
         );
         assert!(text.contains("int keeps_sign("), "{text}");
-        assert!(text.contains("unsigned char pick(unsigned int a0,unsigned int a1)"), "{text}");
-        assert!(text.contains("unsigned int either_half(unsigned int a0)"), "{text}");
+        assert!(
+            text.contains("unsigned char pick(unsigned int a0,unsigned int a1)"),
+            "{text}"
+        );
+        assert!(
+            text.contains("unsigned int either_half(unsigned int a0)"),
+            "{text}"
+        );
         assert!(!text.contains("(bool)"), "{text}");
     }
     for option in ["on", "off"] {
         let text = decompile("narrowret_gcc_O2_x86_64.o", option);
-        assert!(text.contains("unsigned long returns_word(int a0)"), "{text}");
+        assert!(
+            text.contains("unsigned long returns_word(int a0)"),
+            "{text}"
+        );
     }
 }
 
@@ -80,7 +94,10 @@ fn a_narrowed_call_result_round_trips_through_the_printed_c() {
         .into_iter()
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
-    assert!(!compilers.is_empty(), "the narrowret round trip requires a C compiler");
+    assert!(
+        !compilers.is_empty(),
+        "the narrowret round trip requires a C compiler"
+    );
     for fixture in ["narrowret_thumb_O2.o", "narrowret_gcc_O2_x86_64.o"] {
         for option in ["on", "off"] {
             let printed = printed_c(&decompile(fixture, option));

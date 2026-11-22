@@ -1,7 +1,7 @@
 use crate::common;
 use object::{
-    write, Architecture, BinaryFormat, Endianness, RelocationFlags, SymbolFlags, SymbolKind,
-    SymbolScope,
+    Architecture, BinaryFormat, Endianness, RelocationFlags, SymbolFlags, SymbolKind, SymbolScope,
+    write,
 };
 
 #[test]
@@ -88,7 +88,9 @@ fn common_globals_are_declared_in_recompilable_project_headers() {
     ] {
         let object = dir.join(format!("{target}.o"));
         let built = Command::new("clang")
-            .args(["-target", target, "-fcommon", "-fno-pic", "-fno-pie", "-O1", "-c"])
+            .args([
+                "-target", target, "-fcommon", "-fno-pic", "-fno-pie", "-O1", "-c",
+            ])
             .arg(&source)
             .arg("-o")
             .arg(&object)

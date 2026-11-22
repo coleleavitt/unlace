@@ -12,7 +12,11 @@ impl Names {
     pub(crate) fn new(names: impl IntoIterator<Item = String>, enabled: bool) -> Self {
         Self {
             enabled,
-            reserved: if enabled { names.into_iter().collect() } else { HashSet::new() },
+            reserved: if enabled {
+                names.into_iter().collect()
+            } else {
+                HashSet::new()
+            },
             assigned: HashMap::new(),
         }
     }

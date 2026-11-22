@@ -22,7 +22,7 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::space::{AddrSpace, ConstantSpace};
 use unlace_decomp::dtype::{
-    metatype2string, string2metatype, sub_metatype, type_metatype, Datatype, DatatypeKind,
+    Datatype, DatatypeKind, metatype2string, string2metatype, sub_metatype, type_metatype,
 };
 
 fn const_space() -> Rc<AddrSpace> {
@@ -142,7 +142,10 @@ fn w5_dtype_string2metatype_boundary_and_fallthrough() {
     assert!(string2metatype("ptrz").is_err());
     assert!(string2metatype("partbogus").is_err());
     // 's' has two distinct matches (struct/spacebase) via separate ifs in C++.
-    assert_eq!(string2metatype("struct").unwrap(), type_metatype::TYPE_STRUCT);
+    assert_eq!(
+        string2metatype("struct").unwrap(),
+        type_metatype::TYPE_STRUCT
+    );
     assert_eq!(
         string2metatype("spacebase").unwrap(),
         type_metatype::TYPE_SPACEBASE
@@ -208,8 +211,18 @@ fn w5r2_find_compatible_resolve_override_partition() {
     let int_t = Rc::new(Datatype::new(4, type_metatype::TYPE_INT));
 
     // Base default -1 for non-overriders.
-    assert_eq!(Datatype::new(4, type_metatype::TYPE_INT).find_compatible_resolve(&int_t).unwrap(), -1);
-    assert_eq!(Datatype::new(0, type_metatype::TYPE_VOID).find_compatible_resolve(&int_t).unwrap(), -1);
+    assert_eq!(
+        Datatype::new(4, type_metatype::TYPE_INT)
+            .find_compatible_resolve(&int_t)
+            .unwrap(),
+        -1
+    );
+    assert_eq!(
+        Datatype::new(0, type_metatype::TYPE_VOID)
+            .find_compatible_resolve(&int_t)
+            .unwrap(),
+        -1
+    );
     let mut code = Datatype::new_with_align(1, 1, type_metatype::TYPE_CODE);
     code.kind = DatatypeKind::Code { proto: None };
     assert_eq!(code.find_compatible_resolve(&int_t).unwrap(), -1);
@@ -258,7 +271,10 @@ fn w5r2_find_compatible_resolve_override_partition() {
     // (same Rc allocation), and int has no needsResolution, so `arrayof == ct`
     // -> 0.
     let mut a = Datatype::new_with_align(8, -1, type_metatype::TYPE_ARRAY);
-    a.kind = DatatypeKind::Array { arrayof: Rc::clone(&int_t), arraysize: 2 };
+    a.kind = DatatypeKind::Array {
+        arrayof: Rc::clone(&int_t),
+        arraysize: 2,
+    };
     assert_eq!(a.find_compatible_resolve(&int_t).unwrap(), 0);
     // An array over a *different* element returns -1 (not the same pointer).
     let other = Rc::new(Datatype::new(4, type_metatype::TYPE_INT));
@@ -274,11 +290,16 @@ fn w5r2_get_sub_type_union_enum_are_base_not_stub() {
     let mut u = Datatype::new_with_align(8, -1, type_metatype::TYPE_UNION);
     u.kind = DatatypeKind::Union { field: vec![] };
     let (sub, newoff) = u.get_sub_type(5).unwrap();
-    assert!(sub.is_none(), "TypeUnion::getSubType is base (null) — type.hh:619 commented out");
+    assert!(
+        sub.is_none(),
+        "TypeUnion::getSubType is base (null) — type.hh:619 commented out"
+    );
     assert_eq!(newoff, 5, "base getSubType passes offset through unchanged");
 
     let mut e = Datatype::new_with_align(4, -1, type_metatype::TYPE_ENUM_INT);
-    e.kind = DatatypeKind::Enum { namemap: std::collections::BTreeMap::new() };
+    e.kind = DatatypeKind::Enum {
+        namemap: std::collections::BTreeMap::new(),
+    };
     let (sub, newoff) = e.get_sub_type(3).unwrap();
     assert!(sub.is_none());
     assert_eq!(newoff, 3);
@@ -317,8 +338,16 @@ fn w5r2_pointer_rel_inherits_pointer_depend_and_ptrsub_stubs() {
         parent: Rc::clone(&parent),
         offset: 4,
     };
-    assert_eq!(pr.num_depend(), 1, "PointerRel inherits TypePointer::numDepend()==1");
-    assert_eq!(pr.get_depend(0).unwrap().get_size(), 4, "inherited getDepend(0)==ptrto");
+    assert_eq!(
+        pr.num_depend(),
+        1,
+        "PointerRel inherits TypePointer::numDepend()==1"
+    );
+    assert_eq!(
+        pr.get_depend(0).unwrap().get_size(),
+        4,
+        "inherited getDepend(0)==ptrto"
+    );
     assert_eq!(pr.get_ptr_to().unwrap().get_size(), 4);
     assert_eq!(pr.get_byte_offset(), Some(4));
     assert_eq!(pr.get_rel_parent().unwrap().get_size(), 16);
@@ -329,7 +358,11 @@ fn w5r2_pointer_rel_inherits_pointer_depend_and_ptrsub_stubs() {
     // STRUCT/UNION), so the relptr points `offset` (4) into the parent (size 16).
     let (into, off) = pr.get_ptr_into().unwrap().unwrap();
     assert_eq!(off, 4, "non-composite ptrto: off = offset");
-    assert_eq!(into.get_size(), 16, "non-composite ptrto: returns the parent");
+    assert_eq!(
+        into.get_size(),
+        16,
+        "non-composite ptrto: returns the parent"
+    );
     assert!(Rc::ptr_eq(&into, &parent));
     // A relptr whose ptrto IS a STRUCT points directly at the composite (off = 0).
     let struct_to = Rc::new(Datatype::new(16, type_metatype::TYPE_STRUCT));
@@ -343,7 +376,10 @@ fn w5r2_pointer_rel_inherits_pointer_depend_and_ptrsub_stubs() {
     };
     let (into_s, off_s) = pr_struct.get_ptr_into().unwrap().unwrap();
     assert_eq!(off_s, 0, "STRUCT ptrto: off = 0");
-    assert!(Rc::ptr_eq(&into_s, &struct_to), "STRUCT ptrto: returns ptrto");
+    assert!(
+        Rc::ptr_eq(&into_s, &struct_to),
+        "STRUCT ptrto: returns ptrto"
+    );
 }
 
 /// LOSS-050 RESTORED (w6-s5-type-1). The base C++ `resolveInFlow`/`findResolve`
@@ -358,12 +394,16 @@ fn w5r2_resolve_in_flow_base_is_stubbed_loss_f2() {
     // OpId is a slotmap key newtype; its default (null) key is a valid opaque handle
     // (the identity path never reads it).
     let op = unlace_decomp::context::OpId::default();
-    let resolved = int_t.resolve_in_flow(op, 0).expect("base resolveInFlow returns `this`");
+    let resolved = int_t
+        .resolve_in_flow(op, 0)
+        .expect("base resolveInFlow returns `this`");
     assert!(
         Rc::ptr_eq(&resolved, &int_t),
         "base resolveInFlow returns the receiver unchanged (C++ `return this`)"
     );
-    let found = int_t.find_resolve(op, -1).expect("base findResolve returns `this`");
+    let found = int_t
+        .find_resolve(op, -1)
+        .expect("base findResolve returns `this`");
     assert!(
         Rc::ptr_eq(&found, &int_t),
         "base findResolve returns the receiver unchanged (C++ `return this`)"

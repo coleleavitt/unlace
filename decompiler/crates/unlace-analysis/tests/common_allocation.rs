@@ -1,8 +1,8 @@
-use unlace_analysis::loader::reloc_object::layout_relocatable;
 use object::{
-    write, Architecture, BinaryFormat, Endianness, Object, ObjectSymbol, RelocationEncoding,
-    RelocationFlags, RelocationKind, SymbolFlags, SymbolKind, SymbolScope,
+    Architecture, BinaryFormat, Endianness, Object, ObjectSymbol, RelocationEncoding,
+    RelocationFlags, RelocationKind, SymbolFlags, SymbolKind, SymbolScope, write,
 };
+use unlace_analysis::loader::reloc_object::layout_relocatable;
 
 #[test]
 fn common_sizes_alignment_and_repeated_references_hold_across_architectures() {
@@ -102,7 +102,12 @@ fn common_sizes_alignment_and_repeated_references_hold_across_architectures() {
         let address = |name: &str| {
             let symbol = file
                 .symbols()
-                .find(|s| s.name().ok().is_some_and(|n| n == name || (format == BinaryFormat::Coff && n.strip_prefix('_') == Some(name))))
+                .find(|s| {
+                    s.name().ok().is_some_and(|n| {
+                        n == name
+                            || (format == BinaryFormat::Coff && n.strip_prefix('_') == Some(name))
+                    })
+                })
                 .unwrap();
             layout.extern_addr[&symbol.index()]
         };
@@ -127,7 +132,8 @@ fn common_sizes_alignment_and_repeated_references_hold_across_architectures() {
         assert_eq!(common_start, buffer);
         assert_eq!(common_end, state + 32);
         let image =
-            unlace_analysis::loadimage_object::ObjectLoadImage::from_bytes("common", &bytes).unwrap();
+            unlace_analysis::loadimage_object::ObjectLoadImage::from_bytes("common", &bytes)
+                .unwrap();
         let ranges = image.data_object_ranges();
         assert!(
             ranges
@@ -195,10 +201,26 @@ fn weak_and_common_object(
         })
     };
     let undefined = write::SymbolSection::Undefined;
-    let callee = add(&mut object, "callee".into(), 0, 0, undefined, SymbolKind::Text, false);
+    let callee = add(
+        &mut object,
+        "callee".into(),
+        0,
+        0,
+        undefined,
+        SymbolKind::Text,
+        false,
+    );
     let mut relocations = vec![(data, 0, callee)];
     for index in 0..weak + unused {
-        let symbol = add(&mut object, format!("optional{index}"), 0, 0, undefined, SymbolKind::Text, true);
+        let symbol = add(
+            &mut object,
+            format!("optional{index}"),
+            0,
+            0,
+            undefined,
+            SymbolKind::Text,
+            true,
+        );
         if index < weak {
             relocations.push((rodata, index * width, symbol));
         }
@@ -220,7 +242,12 @@ fn weak_and_common_object(
         object
             .add_relocation(
                 section,
-                write::Relocation { offset: offset as u64, symbol, addend: 0, flags: pointer },
+                write::Relocation {
+                    offset: offset as u64,
+                    symbol,
+                    addend: 0,
+                    flags: pointer,
+                },
             )
             .unwrap();
     }
@@ -247,14 +274,20 @@ fn weak_import_slots_stay_clear_of_extern_slots_and_common_storage() {
             let fmt = unlace_analysis::loader::format::detect(&file).unwrap();
             let layout = layout_relocatable(&file, fmt.as_ref());
             let case = format!("{architecture:?} {endian:?} {weak}+{unused} weak, {common} common");
-            assert!(layout.diagnostics.is_empty(), "{case}: {:?}", layout.diagnostics.report_lines());
+            assert!(
+                layout.diagnostics.is_empty(),
+                "{case}: {:?}",
+                layout.diagnostics.report_lines()
+            );
             let mut externs = Vec::new();
             let mut commons = Vec::new();
             let (mut undefined, mut weak_undefined) = (0u64, 0u64);
             for symbol in file.symbols() {
                 undefined += u64::from(symbol.is_undefined());
                 weak_undefined += u64::from(symbol.is_undefined() && symbol.is_weak());
-                let Some(&address) = layout.extern_addr.get(&symbol.index()) else { continue };
+                let Some(&address) = layout.extern_addr.get(&symbol.index()) else {
+                    continue;
+                };
                 if symbol.is_common() {
                     commons.push((address, address + symbol.size()));
                 } else {
@@ -263,14 +296,38 @@ fn weak_import_slots_stay_clear_of_extern_slots_and_common_storage() {
             }
             assert_eq!(externs.len(), weak + 1, "{case}");
             assert_eq!(commons.len(), common, "{case}");
-            assert_eq!(layout.import_slots.len(), if slotted { weak } else { 0 }, "{case}");
-            assert!(layout.import_slots.iter().all(|&(lo, hi)| hi - lo == width as u64), "{case}");
+            assert_eq!(
+                layout.import_slots.len(),
+                if slotted { weak } else { 0 },
+                "{case}"
+            );
+            assert!(
+                layout
+                    .import_slots
+                    .iter()
+                    .all(|&(lo, hi)| hi - lo == width as u64),
+                "{case}"
+            );
             let base = externs.iter().map(|range| range.0).min().unwrap();
-            let reserved = if slotted { weak_undefined * width as u64 } else { 0 };
+            let reserved = if slotted {
+                weak_undefined * width as u64
+            } else {
+                0
+            };
             let first_common = commons.iter().map(|range| range.0).min().unwrap();
-            assert_eq!(first_common, (base + 16 * undefined + reserved + 3) & !3, "{case}");
+            assert_eq!(
+                first_common,
+                (base + 16 * undefined + reserved + 3) & !3,
+                "{case}"
+            );
             assert_eq!(layout.common_range.unwrap().0, first_common, "{case}");
-            assert!(layout.import_slots.iter().all(|&(_, hi)| hi <= first_common), "{case}");
+            assert!(
+                layout
+                    .import_slots
+                    .iter()
+                    .all(|&(_, hi)| hi <= first_common),
+                "{case}"
+            );
             let mut ranges: Vec<_> = externs
                 .iter()
                 .chain(&commons)
@@ -278,14 +335,31 @@ fn weak_import_slots_stay_clear_of_extern_slots_and_common_storage() {
                 .copied()
                 .collect();
             ranges.sort_unstable();
-            assert!(ranges.windows(2).all(|pair| pair[0].1 <= pair[1].0), "{case}: {ranges:x?}");
+            assert!(
+                ranges.windows(2).all(|pair| pair[0].1 <= pair[1].0),
+                "{case}: {ranges:x?}"
+            );
             let slots: Vec<_> = layout.import_slots.iter().map(|&(lo, _)| lo).collect();
             for &(slot, entry) in &layout.function_address_aliases {
                 assert!(slots.contains(&slot), "{case}");
                 assert!(externs.contains(&(entry, entry + 16)), "{case}");
-                assert_eq!(layout.funcsyms.iter().filter(|(address, _)| *address == entry).count(), 1, "{case}");
+                assert_eq!(
+                    layout
+                        .funcsyms
+                        .iter()
+                        .filter(|(address, _)| *address == entry)
+                        .count(),
+                    1,
+                    "{case}"
+                );
             }
-            assert!(!layout.funcsyms.iter().any(|(address, _)| slots.contains(address)), "{case}");
+            assert!(
+                !layout
+                    .funcsyms
+                    .iter()
+                    .any(|(address, _)| slots.contains(address)),
+                "{case}"
+            );
         }
     }
 }
@@ -299,7 +373,10 @@ fn an_unrepresentable_weak_relocation_offset_is_skipped() {
         (Architecture::Mips64, Endianness::Big, 8),
         (Architecture::Mips, Endianness::Big, 4),
     ] {
-        for section in [write::StandardSection::ReadOnlyData, write::StandardSection::Text] {
+        for section in [
+            write::StandardSection::ReadOnlyData,
+            write::StandardSection::Text,
+        ] {
             for offset in [u64::MAX - 0xff, u64::MAX, u64::MAX - width as u64 + 1] {
                 let mut object = write::Object::new(BinaryFormat::Elf, architecture, endian);
                 let rodata = object.section_id(write::StandardSection::ReadOnlyData);
@@ -325,7 +402,15 @@ fn an_unrepresentable_weak_relocation_offset_is_skipped() {
                 };
                 for (section, offset) in [(rodata, 0), (target, offset)] {
                     object
-                        .add_relocation(section, write::Relocation { offset, symbol, addend: 0, flags })
+                        .add_relocation(
+                            section,
+                            write::Relocation {
+                                offset,
+                                symbol,
+                                addend: 0,
+                                flags,
+                            },
+                        )
                         .unwrap();
                 }
                 let bytes = object.write().unwrap();
@@ -334,8 +419,17 @@ fn an_unrepresentable_weak_relocation_offset_is_skipped() {
                 let layout = layout_relocatable(&file, fmt.as_ref());
                 let case = format!("{architecture:?} {section:?} {offset:#x}");
                 assert_eq!(layout.import_slots.len(), 1, "{case}");
-                let rodata_vma = layout.section_info.iter().find(|s| s.name == ".rodata").unwrap().vma;
-                let fields: Vec<_> = layout.nullable_relocations.iter().map(|r| r.field).collect();
+                let rodata_vma = layout
+                    .section_info
+                    .iter()
+                    .find(|s| s.name == ".rodata")
+                    .unwrap()
+                    .vma;
+                let fields: Vec<_> = layout
+                    .nullable_relocations
+                    .iter()
+                    .map(|r| r.field)
+                    .collect();
                 assert_eq!(fields, [rodata_vma], "{case}");
             }
         }

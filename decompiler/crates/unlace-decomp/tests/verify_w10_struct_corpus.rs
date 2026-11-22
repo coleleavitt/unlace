@@ -25,8 +25,8 @@ use unlace_base::space::AddrSpaceManager;
 use unlace_base::xml::{DocumentStorage, Element};
 
 use unlace_decomp::decompile_drive::{decompile_func, print_c};
-use unlace_decomp::options::{register_option_elements, OptionDatabase};
-use unlace_decomp::sleigh_arch::{register_sleigh_arch_ids, LanguageDatabase};
+use unlace_decomp::options::{OptionDatabase, register_option_elements};
+use unlace_decomp::sleigh_arch::{LanguageDatabase, register_sleigh_arch_ids};
 use unlace_decomp::xml_arch::{XmlArchitecture, XmlArchitectureCapability};
 
 use unlace_sleigh::loadimage::LoadImage;
@@ -34,11 +34,16 @@ use unlace_sleigh::loadimage_xml::register_loadimage_xml_ids;
 use unlace_sleigh::translate::register_translate_ids;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn attr(el: &Element, name: &str) -> Option<String> {
-    el.get_attribute_value(name).ok().map(|b| String::from_utf8_lossy(b).into_owned())
+    el.get_attribute_value(name)
+        .ok()
+        .map(|b| String::from_utf8_lossy(b).into_owned())
 }
 
 fn find_named(el: &Rc<Element>, name: &str, out: &mut Vec<Rc<Element>>) {
@@ -155,7 +160,13 @@ fn parse_datatest(path: &std::path::Path) -> Result<DataTest, String> {
         })
         .collect();
 
-    Ok(DataTest { binaryimage, arch_id, symbols, options, matches })
+    Ok(DataTest {
+        binaryimage,
+        arch_id,
+        symbols,
+        options,
+        matches,
+    })
 }
 
 struct DummyImg;
@@ -187,11 +198,13 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
 
     let capability = XmlArchitectureCapability::new();
     let mut arch = capability.build_architecture("datatest", "");
-    arch.build_loader(Rc::clone(&dt.binaryimage)).map_err(|e| format!("build_loader: {e}"))?;
+    arch.build_loader(Rc::clone(&dt.binaryimage))
+        .map_err(|e| format!("build_loader: {e}"))?;
 
     let mut db = LanguageDatabase::new();
     db.scan_for_sleigh_directories(root.join("specs").to_str().unwrap());
-    db.get_descriptions(&registry).map_err(|e| format!("collect ldefs: {e}"))?;
+    db.get_descriptions(&registry)
+        .map_err(|e| format!("collect ldefs: {e}"))?;
 
     arch.sleigh_mut().set_archid(&dt.arch_id);
     arch.sleigh_mut()
@@ -201,7 +214,10 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
         return Err("language index unresolved".to_string());
     }
 
-    let specs = arch.sleigh().build_spec_file(&db).map_err(|e| format!("build_spec_file: {e}"))?;
+    let specs = arch
+        .sleigh()
+        .build_spec_file(&db)
+        .map_err(|e| format!("build_spec_file: {e}"))?;
     let resolved_sla = specs.slafile.ok_or("build_spec_file resolved no .sla")?;
     let sla = std::fs::read(&resolved_sla).map_err(|e| format!("read sla: {e}"))?;
     arch.sleigh_mut()
@@ -229,7 +245,9 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
         .base_mut()
         .unwrap()
         .translate_mut()
-        .as_sleigh_mut().expect("standalone Sleigh engine").install_register_lookup()
+        .as_sleigh_mut()
+        .expect("standalone Sleigh engine")
+        .install_register_lookup()
         .map_err(|e| format!("install_register_lookup: {e}"))?;
 
     arch.sleigh_mut()
@@ -239,9 +257,13 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
         .map_err(|e| format!("init_post_engine: {e}"))?;
 
     let manager_ptr: *const AddrSpaceManager = arch.sleigh().base().unwrap().manage();
-    arch.open_image(unsafe { &*manager_ptr }, &registry).map_err(|e| format!("open_image: {e}"))?;
+    arch.open_image(unsafe { &*manager_ptr }, &registry)
+        .map_err(|e| format!("open_image: {e}"))?;
     let img = arch.take_loader().ok_or("loader vanished after open")?;
-    arch.sleigh_mut().base_mut().unwrap().set_loader(Box::new(img));
+    arch.sleigh_mut()
+        .base_mut()
+        .unwrap()
+        .set_loader(Box::new(img));
     Ok(arch)
 }
 
@@ -432,8 +454,11 @@ fn verify_w10_refinement_divopt_lifts_64bit_not_16bit_garbage() {
     // The oracle for divopt is straight-line: there must be NO loop keyword.
     // (The round-1 `do {{ }} while` was a wrong-direction artifact of the
     // garbage lift; it must be gone.)
-    let loops = count_matches(r"\bwhile *\(| while *\( *true *\)|\bfor *\(|\bdo \{", &rendered)
-        .unwrap_or(0);
+    let loops = count_matches(
+        r"\bwhile *\(| while *\( *true *\)|\bfor *\(|\bdo \{",
+        &rendered,
+    )
+    .unwrap_or(0);
     assert_eq!(
         loops, 0,
         "divopt's oracle is loop-free (straight-line division); a loop keyword here \
@@ -462,8 +487,11 @@ fn verify_w10_loop_emitter_renders_real_loop_on_oracle_loop_fn() {
         "forloop1 must render its function:\n{rendered}"
     );
     // A real C loop keyword from the structurer collapse: `while (`/`for (`/`do {`.
-    let loop_kw =
-        count_matches(r"\bwhile *\(|\bwhile\( *true *\)|\bfor *\(|\bdo \{", &rendered).unwrap_or(0);
+    let loop_kw = count_matches(
+        r"\bwhile *\(|\bwhile\( *true *\)|\bfor *\(|\bdo \{",
+        &rendered,
+    )
+    .unwrap_or(0);
     assert!(
         loop_kw >= 1,
         "forloop1's oracle is a `for` loop; the structurer + emitter must render a \
@@ -588,8 +616,7 @@ fn verify_w10_r2_divopt_stores_through_rdi_straightline() {
     );
     // And NO loop keyword — the oracle for divopt is entirely loop-free, so any
     // loop here is the Round-1 wrong-direction structuring artifact.
-    let loops =
-        count_matches(r"\bwhile *\(|\bfor *\(|\bdo \{", &rendered).unwrap_or(0);
+    let loops = count_matches(r"\bwhile *\(|\bfor *\(|\bdo \{", &rendered).unwrap_or(0);
     assert_eq!(
         loops, 0,
         "divopt is loop-free in the oracle; a loop keyword is a wrong-direction \
@@ -758,9 +785,11 @@ fn verify_w10_pspec_context_loopcomment_lifts_64bit_and_structures() {
          `// rsp` storage comment); got none (the pspec <context_data> paints were \
          not applied):\n{rendered}"
     );
-    let realmode =
-        count_matches(r"\bBX \+ SI\b|CALLOTHER\(0,DS|CALLOTHER\(0,SS|\b0xfffe\b", &rendered)
-            .unwrap_or(0);
+    let realmode = count_matches(
+        r"\bBX \+ SI\b|CALLOTHER\(0,DS|CALLOTHER\(0,SS|\b0xfffe\b",
+        &rendered,
+    )
+    .unwrap_or(0);
     assert_eq!(
         realmode, 0,
         "loopcomment must NOT lift as 16-bit real mode (BX+SI / segment CALLOTHER \
@@ -820,9 +849,11 @@ fn verify_w10_pspec_context_forloop_varused_lifts_64bit_and_structures() {
          widening cast); got none (the pspec <context_data> paints were not \
          applied):\n{rendered}"
     );
-    let realmode =
-        count_matches(r"\bBX \+ SI\b|CALLOTHER\(0,DS|CALLOTHER\(0,SS|\b0xfffe\b", &rendered)
-            .unwrap_or(0);
+    let realmode = count_matches(
+        r"\bBX \+ SI\b|CALLOTHER\(0,DS|CALLOTHER\(0,SS|\b0xfffe\b",
+        &rendered,
+    )
+    .unwrap_or(0);
     assert_eq!(
         realmode, 0,
         "forloop_varused must NOT lift as 16-bit real mode; found {realmode}:\n{rendered}"
@@ -1184,7 +1215,10 @@ fn verify_w10_hvnaming_vn_indices_are_gapless_and_unique_from_v1() {
         "readstruct must declare at least one `vN` local:\n{rendered}"
     );
     // No v0.
-    assert!(!decl_idx.contains(&0), "the angr counter starts at v1, never v0:\n{rendered}");
+    assert!(
+        !decl_idx.contains(&0),
+        "the angr counter starts at v1, never v0:\n{rendered}"
+    );
     let mut sorted = decl_idx.clone();
     sorted.sort_unstable();
     sorted.dedup();
@@ -1243,7 +1277,10 @@ fn regex_lite_capture_vn_decl(line: &str) -> Option<u32> {
     if toks.len() < 2 {
         return None;
     }
-    if matches!(toks[0], "return" | "if" | "while" | "for" | "do" | "else" | "goto" | "switch") {
+    if matches!(
+        toks[0],
+        "return" | "if" | "while" | "for" | "do" | "else" | "goto" | "switch"
+    ) {
         return None;
     }
     // The NAME token is `vN` — but an ARRAY decl renders the dimension as a

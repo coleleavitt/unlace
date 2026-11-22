@@ -36,7 +36,10 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn specs_root() -> PathBuf {
@@ -109,7 +112,10 @@ fn modulo2_register_input_recovers_as_param_not_void() {
     }
     // The recovered parameter `a0` is referenced, and NO raw input-register
     // read survives (the input is bound to the param, not read as RCX/ECX).
-    assert!(rust.contains("a0"), "recovered param `a0` absent; got:\n{rust}");
+    assert!(
+        rust.contains("a0"),
+        "recovered param `a0` absent; got:\n{rust}"
+    );
     assert!(
         !rust.contains("RCX") && !rust.contains("ECX"),
         "body still reads the raw input register instead of the param; got:\n{rust}"
@@ -171,10 +177,21 @@ fn mixfloatint_multislot_group_recovers_full_arity() {
         .lines()
         .find(|l| l.contains("dldlll("))
         .unwrap_or_else(|| panic!("no dldlll signature in:\n{rust}"));
-    let inside = sig.split_once('(').and_then(|(_, r)| r.rsplit_once(')')).map(|(a, _)| a).unwrap_or("");
-    assert_ne!(inside.trim(), "void", "dldlll still has the empty (void) param list: {sig}");
+    let inside = sig
+        .split_once('(')
+        .and_then(|(_, r)| r.rsplit_once(')'))
+        .map(|(a, _)| a)
+        .unwrap_or("");
+    assert_ne!(
+        inside.trim(),
+        "void",
+        "dldlll still has the empty (void) param list: {sig}"
+    );
     let arity = inside.split(',').count();
-    assert_eq!(arity, 6, "dldlll recovered {arity} params, expected 6: {sig}");
+    assert_eq!(
+        arity, 6,
+        "dldlll recovered {arity} params, expected 6: {sig}"
+    );
 
     // Inside the `dldlll` body itself, every input slot is now referenced by its
     // recovered parameter name (`a1..a5`), not by a raw register read.  (A
@@ -205,10 +222,16 @@ fn mixfloatint_multislot_group_recovers_full_arity() {
 
     if let Some(cpp) = dump_body(&cpp_oracle_bin(), "mixfloatint") {
         let csig = cpp.lines().find(|l| l.contains("dldlll(")).unwrap_or("");
-        let cinside =
-            csig.split_once('(').and_then(|(_, r)| r.rsplit_once(')')).map(|(a, _)| a).unwrap_or("");
+        let cinside = csig
+            .split_once('(')
+            .and_then(|(_, r)| r.rsplit_once(')'))
+            .map(|(a, _)| a)
+            .unwrap_or("");
         let carity = cinside.split(',').count();
-        assert_eq!(carity, arity, "oracle dldlll arity {carity} != Rust {arity}: {csig}");
+        assert_eq!(
+            carity, arity,
+            "oracle dldlll arity {carity} != Rust {arity}: {csig}"
+        );
     }
 }
 

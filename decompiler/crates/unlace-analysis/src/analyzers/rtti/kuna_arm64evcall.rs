@@ -38,7 +38,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use object::read::{Object, ObjectSection, ObjectSymbol};
 
-use crate::loader::format::macho::{resolve_chained_fixups, AuthContext, ChainedFixups};
+use crate::loader::format::macho::{AuthContext, ChainedFixups, resolve_chained_fixups};
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
 /// The arm64e virtual-call pass (gate id `arm64evcall`).
@@ -55,7 +55,10 @@ impl AnalysisPass for Arm64eVcallPass {
     }
 
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
-        AnalysisOutput { vcall_sites: resolve(ctx.file, ctx.bytes), ..AnalysisOutput::default() }
+        AnalysisOutput {
+            vcall_sites: resolve(ctx.file, ctx.bytes),
+            ..AnalysisOutput::default()
+        }
     }
 }
 
@@ -101,7 +104,9 @@ impl SignedImage {
                 readonly_ranges.push(range);
             }
         }
-        let slots = fixups.auth_slots().map(|(va, ctx)| (va, (ctx, fixups.resolved_ptr(va))));
+        let slots = fixups
+            .auth_slots()
+            .map(|(va, ctx)| (va, (ctx, fixups.resolved_ptr(va))));
         SignedImage::new(slots, vtable_ranges, readonly_ranges)
     }
 
@@ -113,11 +118,18 @@ impl SignedImage {
         mut readonly_ranges: Vec<(u64, u64)>,
     ) -> SignedImage {
         let slots = slots
-            .filter(|(_, (ctx, _))| ctx.key == KEY_IA || (ctx.key == KEY_DA && ctx.diversity == SWIFT_DESCRIPTION_DIVERSITY))
+            .filter(|(_, (ctx, _))| {
+                ctx.key == KEY_IA
+                    || (ctx.key == KEY_DA && ctx.diversity == SWIFT_DESCRIPTION_DIVERSITY)
+            })
             .collect();
         vtable_ranges.sort_unstable();
         readonly_ranges.sort_unstable();
-        SignedImage { slots, vtable_ranges, readonly_ranges }
+        SignedImage {
+            slots,
+            vtable_ranges,
+            readonly_ranges,
+        }
     }
 
     /// The one target a fixed slot at `addr` holds, when it is read-only and
@@ -151,7 +163,9 @@ const MAX_WALK: usize = 24;
 /// Every resolved virtual call site of an arm64e Mach-O `file`. Empty for any
 /// other image.
 pub fn resolve(file: &object::File, bytes: &[u8]) -> Vec<VcallSite> {
-    if file.format() != object::BinaryFormat::MachO || file.architecture() != object::Architecture::Aarch64 {
+    if file.format() != object::BinaryFormat::MachO
+        || file.architecture() != object::Architecture::Aarch64
+    {
         return Vec::new();
     }
     let fixups = resolve_chained_fixups(file, bytes);
@@ -169,13 +183,23 @@ pub fn resolve_signed(file: &object::File, signed: &SignedImage) -> Vec<VcallSit
         let Ok(data) = section.data() else { continue };
         for (site, register, slot) in call_sites(section.address(), data) {
             let targets = match slot {
-                Slot::Relative { word, diversity } => index.methods.get(&(word, diversity)).cloned(),
-                Slot::Fixed { addr, diversity, addr_div } => {
-                    signed.fixed_target(addr, diversity, addr_div).map(|t| vec![t])
+                Slot::Relative { word, diversity } => {
+                    index.methods.get(&(word, diversity)).cloned()
                 }
+                Slot::Fixed {
+                    addr,
+                    diversity,
+                    addr_div,
+                } => signed
+                    .fixed_target(addr, diversity, addr_div)
+                    .map(|t| vec![t]),
             };
             if let Some(targets) = targets {
-                out.push(VcallSite { site, register, targets });
+                out.push(VcallSite {
+                    site,
+                    register,
+                    targets,
+                });
             }
         }
     }
@@ -204,14 +228,21 @@ impl Index {
             swift.push((lo, hi));
             for (&va, &(ctx, target)) in signed.slots.range(point..hi) {
                 if let (true, Some(target)) = (ctx.key == KEY_IA && ctx.addr_div, target) {
-                    methods.entry((((va - point) / 8) as u32, ctx.diversity)).or_default().push(target);
+                    methods
+                        .entry((((va - point) / 8) as u32, ctx.diversity))
+                        .or_default()
+                        .push(target);
                 }
             }
         }
         swift.sort_unstable();
         let traps: Vec<u64> = file
             .symbols()
-            .filter(|s| s.name().is_ok_and(|n| n.contains("cxa_pure_virtual") || n.contains("cxa_deleted_virtual")))
+            .filter(|s| {
+                s.name().is_ok_and(|n| {
+                    n.contains("cxa_pure_virtual") || n.contains("cxa_deleted_virtual")
+                })
+            })
             .map(|s| s.address())
             .collect();
         let mut previous: Option<u64> = None;
@@ -228,8 +259,13 @@ impl Index {
                 run_start = va;
             }
             previous = Some(va);
-            let Some(target) = target.filter(|t| !traps.contains(t)) else { continue };
-            methods.entry((((va - run_start) / 8) as u32, ctx.diversity)).or_default().push(target);
+            let Some(target) = target.filter(|t| !traps.contains(t)) else {
+                continue;
+            };
+            methods
+                .entry((((va - run_start) / 8) as u32, ctx.diversity))
+                .or_default()
+                .push(target);
         }
         let methods = methods
             .into_iter()
@@ -254,8 +290,12 @@ fn swift_metadata(file: &object::File, signed: &SignedImage) -> Vec<(u64, u64, u
         if ctx.key != KEY_DA || !ctx.addr_div || ctx.diversity != SWIFT_DESCRIPTION_DIVERSITY {
             continue;
         }
-        let Some(point) = va.checked_sub(SWIFT_DESCRIPTION_OFFSET) else { continue };
-        let Some(bounds) = read_bytes(file, point + 0x38, 8) else { continue };
+        let Some(point) = va.checked_sub(SWIFT_DESCRIPTION_OFFSET) else {
+            continue;
+        };
+        let Some(bounds) = read_bytes(file, point + 0x38, 8) else {
+            continue;
+        };
         let size = u32::from_le_bytes(bounds[..4].try_into().unwrap()) as u64;
         let address_point = u32::from_le_bytes(bounds[4..].try_into().unwrap()) as u64;
         if size > SWIFT_MAX_METADATA || address_point > size || address_point > point {
@@ -279,11 +319,13 @@ fn is_code(s: &object::Section) -> bool {
         object::SectionFlags::MachO { flags } => flags,
         _ => 0,
     };
-    s.kind() == object::SectionKind::Text || flags & (S_ATTR_SOME_INSTRUCTIONS | S_ATTR_PURE_INSTRUCTIONS) != 0
+    s.kind() == object::SectionKind::Text
+        || flags & (S_ATTR_SOME_INSTRUCTIONS | S_ATTR_PURE_INSTRUCTIONS) != 0
 }
 
 fn read_bytes<'a>(file: &'a object::File, va: u64, len: u64) -> Option<&'a [u8]> {
-    file.sections().find_map(|s| s.data_range(va, len).ok().flatten())
+    file.sections()
+        .find_map(|s| s.data_range(va, len).ok().flatten())
 }
 
 fn in_ranges(ranges: &[(u64, u64)], va: u64) -> bool {
@@ -298,20 +340,30 @@ pub enum Slot {
     /// whose authenticated pointer the call site loaded.
     Relative { word: u32, diversity: u16 },
     /// A slot at a fixed address.
-    Fixed { addr: u64, diversity: u16, addr_div: bool },
+    Fixed {
+        addr: u64,
+        diversity: u16,
+        addr_div: bool,
+    },
 }
 
 /// Every `blraa`/`braa Xn, Xm` in `code` (mapped at `base`) whose modifier the
 /// backward walk traces to a slot, as `(site, n, slot)`.
 pub fn call_sites(base: u64, code: &[u8]) -> Vec<(u64, u8, Slot)> {
-    let words: Vec<u32> = code.chunks_exact(4).map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]])).collect();
+    let words: Vec<u32> = code
+        .chunks_exact(4)
+        .map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))
+        .collect();
     let mut out = Vec::new();
     for (i, &w) in words.iter().enumerate() {
         if w & 0xFFDF_FC00 != 0xD71F_0800 {
             continue;
         }
         let lo = i.saturating_sub(MAX_WALK);
-        let window = Window { words: &words[lo..i], base: base + 4 * lo as u64 };
+        let window = Window {
+            words: &words[lo..i],
+            base: base + 4 * lo as u64,
+        };
         let rn = ((w >> 5) & 31) as u8;
         if let Some(slot) = window.trace(rn, (w & 31) as u8) {
             out.push((base + 4 * i as u64, rn, slot));
@@ -349,7 +401,11 @@ impl Window<'_> {
             }
             let offset = ((load >> 10) & 0xFFF) as u64 * 8;
             let addr = self.page_base(at, ((load >> 5) & 31) as u8, offset)?;
-            return Some(Slot::Fixed { addr, diversity, addr_div: false });
+            return Some(Slot::Fixed {
+                addr,
+                diversity,
+                addr_div: false,
+            });
         }
         None
     }
@@ -378,14 +434,24 @@ impl Window<'_> {
                 let rm = ((w >> 16) & 31) as u8;
                 offset += self.constant(j, rm)? as i64;
                 tracked = rn;
-            } else if w & 0xFFFF_F800 == 0xDAC1_1800 || w & 0xFFFF_FBE0 == 0xDAC1_3BE0 || w & 0xFF20_0400 == 0xF820_0400 {
+            } else if w & 0xFFFF_F800 == 0xDAC1_1800
+                || w & 0xFFFF_FBE0 == 0xDAC1_3BE0
+                || w & 0xFF20_0400 == 0xF820_0400
+            {
                 if offset < 0 || offset % 8 != 0 {
                     return None;
                 }
-                return Some(Slot::Relative { word: u32::try_from(offset / 8).ok()?, diversity });
+                return Some(Slot::Relative {
+                    word: u32::try_from(offset / 8).ok()?,
+                    diversity,
+                });
             } else if w & 0x9F00_0000 == 0x9000_0000 {
                 let addr = adrp_page(w, self.base + 4 * j as u64).checked_add_signed(offset)?;
-                return Some(Slot::Fixed { addr, diversity, addr_div: true });
+                return Some(Slot::Fixed {
+                    addr,
+                    diversity,
+                    addr_div: true,
+                });
             } else {
                 return None;
             }
@@ -401,7 +467,10 @@ impl Window<'_> {
         let w = self.words[j];
         let skips_trap = w & 0xFF00_0010 == 0x5400_0000
             && (w >> 5) & 0x7FFFF == 2
-            && self.words.get(j + 1).is_some_and(|&next| next & 0xFFE0_001F == 0xD420_0000);
+            && self
+                .words
+                .get(j + 1)
+                .is_some_and(|&next| next & 0xFFE0_001F == 0xD420_0000);
         is_branch(w) && !skips_trap
     }
 
@@ -515,7 +584,17 @@ mod tests {
             0xf2e88891, // movk  x17, #0x4444, lsl #48
             0xd73f0911, // blraa x8, x17
         ];
-        assert_eq!(call_sites(0x1000, &bytes(&code)), vec![(0x1020, 8, Slot::Relative { word: 2, diversity: 0x4444 })]);
+        assert_eq!(
+            call_sites(0x1000, &bytes(&code)),
+            vec![(
+                0x1020,
+                8,
+                Slot::Relative {
+                    word: 2,
+                    diversity: 0x4444
+                }
+            )]
+        );
     }
 
     /// The kernel's far-slot shape: the slot offset does not fit a pre-index
@@ -532,7 +611,17 @@ mod tests {
             0xf2f73191, // movk  x17, #0xb98c, lsl #48
             0xd73f0911, // blraa x8, x17
         ];
-        assert_eq!(call_sites(0, &bytes(&code)), vec![(0x1c, 8, Slot::Relative { word: 35, diversity: 0xb98c })]);
+        assert_eq!(
+            call_sites(0, &bytes(&code)),
+            vec![(
+                0x1c,
+                8,
+                Slot::Relative {
+                    word: 35,
+                    diversity: 0xb98c
+                }
+            )]
+        );
     }
 
     /// A slot at a fixed address: `adrp` + `add` blended into the
@@ -549,7 +638,15 @@ mod tests {
         ];
         assert_eq!(
             call_sites(0x1000, &bytes(&blended)),
-            vec![(0x1014, 9, Slot::Fixed { addr: 0x25c0, diversity: 0xf60a, addr_div: true })]
+            vec![(
+                0x1014,
+                9,
+                Slot::Fixed {
+                    addr: 0x25c0,
+                    diversity: 0xf60a,
+                    addr_div: true
+                }
+            )]
         );
         let constant = [
             0xb0000008, // adrp  x8, 0x2000 (from 0x1000)
@@ -559,7 +656,15 @@ mod tests {
         ];
         assert_eq!(
             call_sites(0x1000, &bytes(&constant)),
-            vec![(0x100c, 9, Slot::Fixed { addr: 0x25c0, diversity: 0x7070, addr_div: false })]
+            vec![(
+                0x100c,
+                9,
+                Slot::Fixed {
+                    addr: 0x25c0,
+                    diversity: 0x7070,
+                    addr_div: false
+                }
+            )]
         );
     }
 
@@ -584,7 +689,17 @@ mod tests {
             0xf2f3f851, // movk  x17, #0x9fc2, lsl #48
             0xd73f0931, // blraa x9, x17
         ];
-        assert_eq!(call_sites(0, &bytes(&code)), vec![(0x38, 9, Slot::Relative { word: 70, diversity: 0x9fc2 })]);
+        assert_eq!(
+            call_sites(0, &bytes(&code)),
+            vec![(
+                0x38,
+                9,
+                Slot::Relative {
+                    word: 70,
+                    diversity: 0x9fc2
+                }
+            )]
+        );
         let mut other_branch = code;
         other_branch[7] = 0x54000060; // b.eq #12
         assert!(call_sites(0, &bytes(&other_branch)).is_empty());
@@ -594,7 +709,9 @@ mod tests {
     /// or one set by anything but a `movz`, resolves nothing.
     #[test]
     fn a_branch_or_an_unknown_modifier_stops_the_walk() {
-        let with_branch = [0xdac11a30, 0xf8410e08, 0x14000001, 0xaa1003f1, 0xf2e88891, 0xd73f0911];
+        let with_branch = [
+            0xdac11a30, 0xf8410e08, 0x14000001, 0xaa1003f1, 0xf2e88891, 0xd73f0911,
+        ];
         assert!(call_sites(0, &bytes(&with_branch)).is_empty());
         let no_disc = [0xdac11a30, 0xf8410e08, 0xaa1003f1, 0xd73f0911];
         assert!(call_sites(0, &bytes(&no_disc)).is_empty());
@@ -627,8 +744,16 @@ mod tests {
         assert_eq!(
             fixture("macho_arm64e_vcall"),
             vec![
-                VcallSite { site: 0x10000035c, register: 8, targets: vec![0x100000328, 0x100000338] },
-                VcallSite { site: 0x10000037c, register: 8, targets: vec![0x100000330] },
+                VcallSite {
+                    site: 0x10000035c,
+                    register: 8,
+                    targets: vec![0x100000328, 0x100000338]
+                },
+                VcallSite {
+                    site: 0x10000037c,
+                    register: 8,
+                    targets: vec![0x100000330]
+                },
             ]
         );
     }
@@ -641,11 +766,31 @@ mod tests {
         assert_eq!(
             fixture("macho_arm64e_vcall_shapes"),
             vec![
-                VcallSite { site: 0x100000480, register: 8, targets: vec![0x100000410] },
-                VcallSite { site: 0x1000004a0, register: 8, targets: vec![0x100000428] },
-                VcallSite { site: 0x1000004c4, register: 8, targets: vec![0x100000430] },
-                VcallSite { site: 0x1000004e4, register: 9, targets: vec![0x100000440] },
-                VcallSite { site: 0x10000050c, register: 9, targets: vec![0x100000450] },
+                VcallSite {
+                    site: 0x100000480,
+                    register: 8,
+                    targets: vec![0x100000410]
+                },
+                VcallSite {
+                    site: 0x1000004a0,
+                    register: 8,
+                    targets: vec![0x100000428]
+                },
+                VcallSite {
+                    site: 0x1000004c4,
+                    register: 8,
+                    targets: vec![0x100000430]
+                },
+                VcallSite {
+                    site: 0x1000004e4,
+                    register: 9,
+                    targets: vec![0x100000440]
+                },
+                VcallSite {
+                    site: 0x10000050c,
+                    register: 9,
+                    targets: vec![0x100000450]
+                },
             ]
         );
     }

@@ -26,7 +26,9 @@ pub fn persist(arch: &mut Architecture, fd: &Funcdata) -> usize {
     if !arch.mapglobalsyms || (fd.new_globals().is_empty() && fd.global_covers().is_empty()) {
         return 0;
     }
-    let Some(global) = arch.symboltab.get_global_scope() else { return 0 };
+    let Some(global) = arch.symboltab.get_global_scope() else {
+        return 0;
+    };
     let style = arch.kuna_name_style();
     let mut added = 0;
     for (addr, size, name) in fd.global_covers() {
@@ -34,8 +36,18 @@ pub fn persist(arch: &mut Architecture, fd: &Funcdata) -> usize {
             .symboltab
             .find_container_matching(global, addr, *size, &Address::new_invalid(), |_| true)
             .is_some();
-        let Ok(ct) = arch.types().get_base(*size, crate::dtype::type_metatype::TYPE_UNKNOWN) else { continue };
-        if !held && arch.symboltab.add_symbol_mapped(global, name, ct, addr, &Address::new_invalid()).is_ok() {
+        let Ok(ct) = arch
+            .types()
+            .get_base(*size, crate::dtype::type_metatype::TYPE_UNKNOWN)
+        else {
+            continue;
+        };
+        if !held
+            && arch
+                .symboltab
+                .add_symbol_mapped(global, name, ct, addr, &Address::new_invalid())
+                .is_ok()
+        {
             added += 1;
         }
     }
@@ -51,7 +63,13 @@ pub fn persist(arch: &mut Architecture, fd: &Funcdata) -> usize {
         let name = crate::printc::kuna_global_data_name(style, addr.get_offset());
         if arch
             .symboltab
-            .add_symbol_mapped(global, &name, std::rc::Rc::clone(ct), addr, &Address::new_invalid())
+            .add_symbol_mapped(
+                global,
+                &name,
+                std::rc::Rc::clone(ct),
+                addr,
+                &Address::new_invalid(),
+            )
             .is_ok()
         {
             added += 1;

@@ -6,7 +6,7 @@ use object::{CompressionFormat, Object, ObjectSection, ObjectSymbol};
 
 use super::super::{DieSnap, Reader};
 use super::{
-    capture_sections, hidden_context, Deferred, Extra, Facts, NameChars, TextSymbols, UnitExtras,
+    Deferred, Extra, Facts, NameChars, TextSymbols, UnitExtras, capture_sections, hidden_context,
 };
 use crate::pass::AnalysisCtx;
 
@@ -54,8 +54,10 @@ pub(crate) fn capture_compressed(ctx: &AnalysisCtx<'_>) -> Option<Facts> {
     let section = ctx
         .file
         .section_by_name(gimli::SectionId::DebugInfo.name())?;
-    if !matches!(section.compressed_data().ok()?.format, CompressionFormat::Zlib | CompressionFormat::None)
-        || ctx.file.symbol_table().is_none()
+    if !matches!(
+        section.compressed_data().ok()?.format,
+        CompressionFormat::Zlib | CompressionFormat::None
+    ) || ctx.file.symbol_table().is_none()
         || crate::sourcelang::detect_compiler_elf(ctx.file) != crate::sourcelang::Compiler::Go
     {
         return None;

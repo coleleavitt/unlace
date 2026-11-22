@@ -28,9 +28,9 @@ use unlace_num::opcodes::OpCode;
 
 use unlace_base::types::int4;
 
+use crate::action::{ActionGroupList, Rule};
 use crate::context::OpId;
 use crate::funcdata::Funcdata;
-use crate::action::{ActionGroupList, Rule};
 
 /// The three-valued `gobool` gate (the `gomorestack` pattern).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -80,10 +80,15 @@ pub fn parse_gobool_mode(value: &str) -> Result<(GoBoolMode, String), String> {
         "auto" | "" => GoBoolMode::Auto,
         "always" | "on" | "1" | "true" => GoBoolMode::Always,
         other => {
-            return Err(format!("unknown gobool value {other:?} (expected off, auto or always)"))
+            return Err(format!(
+                "unknown gobool value {other:?} (expected off, auto or always)"
+            ));
         }
     };
-    Ok((mode, format!("Go boolean-return narrowing set to {}", mode.as_str())))
+    Ok((
+        mode,
+        format!("Go boolean-return narrowing set to {}", mode.as_str()),
+    ))
 }
 
 /// Is `code` an opcode whose output is a genuine boolean (0/1) byte?
@@ -124,7 +129,10 @@ pub struct RuleGoBoolReturn {
 impl RuleGoBoolReturn {
     /// Construct in group `g`; `enabled` forces the rule on (unit tests).
     pub fn with_group(enabled: bool, g: impl Into<String>) -> RuleGoBoolReturn {
-        RuleGoBoolReturn { enabled, group: g.into() }
+        RuleGoBoolReturn {
+            enabled,
+            group: g.into(),
+        }
     }
 }
 
@@ -146,7 +154,10 @@ impl Rule for RuleGoBoolReturn {
         if !grouplist.contains(&self.group) {
             return None;
         }
-        Some(Box::new(RuleGoBoolReturn { enabled: self.enabled, group: self.group.clone() }))
+        Some(Box::new(RuleGoBoolReturn {
+            enabled: self.enabled,
+            group: self.group.clone(),
+        }))
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
@@ -154,34 +165,46 @@ impl Rule for RuleGoBoolReturn {
             return 0;
         }
         // RETURN carries the value in slot 1 (slot 0 is the return address).
-        let Some(o) = data.obank().get(op) else { return 0 };
+        let Some(o) = data.obank().get(op) else {
+            return 0;
+        };
         if o.num_input() < 2 {
             return 0;
         }
         let Some(ret_vn) = o.get_in(1) else { return 0 };
-        let Some(rv) = data.vbank().get(ret_vn) else { return 0 };
+        let Some(rv) = data.vbank().get(ret_vn) else {
+            return 0;
+        };
         if rv.get_size() != 8 || !rv.is_written() {
             return 0;
         }
         let Some(piece) = rv.get_def() else { return 0 };
-        let Some(p) = data.obank().get(piece) else { return 0 };
+        let Some(p) = data.obank().get(piece) else {
+            return 0;
+        };
         if p.code() != OpCode::CPUI_PIECE {
             return 0;
         }
         // PIECE(most-significant, least-significant): a 7-byte stale high half
         // over a 1-byte boolean low half.
-        let (Some(hi), Some(lo)) = (p.get_in(0), p.get_in(1)) else { return 0 };
+        let (Some(hi), Some(lo)) = (p.get_in(0), p.get_in(1)) else {
+            return 0;
+        };
         if data.vbank().get(hi).map(|v| v.get_size()) != Some(7)
             || data.vbank().get(lo).map(|v| v.get_size()) != Some(1)
         {
             return 0;
         }
-        let Some(lv) = data.vbank().get(lo) else { return 0 };
+        let Some(lv) = data.vbank().get(lo) else {
+            return 0;
+        };
         if !lv.is_written() {
             return 0;
         }
         let Some(ld) = lv.get_def() else { return 0 };
-        let Some(ldo) = data.obank().get(ld) else { return 0 };
+        let Some(ldo) = data.obank().get(ld) else {
+            return 0;
+        };
         if !produces_boolean(ldo.code()) {
             return 0;
         }
@@ -193,7 +216,9 @@ impl Rule for RuleGoBoolReturn {
         if data.op_set_input(zext, lo, 0).is_err() {
             return 0;
         }
-        let Ok(out) = data.new_unique_out(8, zext) else { return 0 };
+        let Ok(out) = data.new_unique_out(8, zext) else {
+            return 0;
+        };
         data.op_insert_before(zext, op);
         if data.op_set_input(op, out, 1).is_err() {
             return 0;

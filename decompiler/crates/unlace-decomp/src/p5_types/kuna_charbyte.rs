@@ -66,7 +66,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
@@ -107,7 +107,8 @@ pub fn zext_is_only_unsigned_vote(data: &Funcdata, vn: VarnodeId) -> bool {
             zext = true;
             continue;
         }
-        let vote = crate::p5_types::coreaction_infertypes::input_type_local(data, r, o.get_slot(vn));
+        let vote =
+            crate::p5_types::coreaction_infertypes::input_type_local(data, r, o.get_slot(vn));
         if vote.get_metatype() == type_metatype::TYPE_UINT {
             return false;
         }
@@ -154,7 +155,11 @@ pub fn read_without_cast(data: &Funcdata, vn: VarnodeId) -> bool {
                 _ => false,
             };
             if let Some(w) = o.get_out().filter(|_| through) {
-                let one_byte = data.vbank().get(w).map(|x| x.get_size() == 1).unwrap_or(false);
+                let one_byte = data
+                    .vbank()
+                    .get(w)
+                    .map(|x| x.get_size() == 1)
+                    .unwrap_or(false);
                 if one_byte && !seen.contains(&w) && seen.len() < 64 {
                     seen.push(w);
                     work.push(w);
@@ -168,7 +173,11 @@ pub fn read_without_cast(data: &Funcdata, vn: VarnodeId) -> bool {
 /// Follow `vn` back through COPYs.
 fn strip_copies(data: &Funcdata, mut vn: VarnodeId) -> VarnodeId {
     for _ in 0..8 {
-        let def = data.vbank().get(vn).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d));
+        let def = data
+            .vbank()
+            .get(vn)
+            .and_then(|v| v.get_def())
+            .and_then(|d| data.obank().get(d));
         match def {
             Some(o) if o.code() == OpCode::CPUI_COPY => match o.get_in(0) {
                 Some(i) => vn = i,
@@ -197,13 +206,23 @@ fn same_address(data: &Funcdata, a: VarnodeId, b: VarnodeId, depth: u32) -> bool
     if va.is_constant() || vb.is_constant() {
         return va.is_constant() && vb.is_constant() && va.get_offset() == vb.get_offset();
     }
-    let (oa, ob) = match (va.get_def().and_then(|d| data.obank().get(d)), vb.get_def().and_then(|d| data.obank().get(d))) {
+    let (oa, ob) = match (
+        va.get_def().and_then(|d| data.obank().get(d)),
+        vb.get_def().and_then(|d| data.obank().get(d)),
+    ) {
         (Some(x), Some(y)) => (x, y),
         _ => return false,
     };
     depth > 0
         && oa.code() == ob.code()
-        && !matches!(oa.code(), OpCode::CPUI_LOAD | OpCode::CPUI_MULTIEQUAL | OpCode::CPUI_INDIRECT | OpCode::CPUI_CALL | OpCode::CPUI_CALLIND)
+        && !matches!(
+            oa.code(),
+            OpCode::CPUI_LOAD
+                | OpCode::CPUI_MULTIEQUAL
+                | OpCode::CPUI_INDIRECT
+                | OpCode::CPUI_CALL
+                | OpCode::CPUI_CALLIND
+        )
         && oa.num_input() == ob.num_input()
         && (0..oa.num_input()).all(|i| match (oa.get_in(i), ob.get_in(i)) {
             (Some(x), Some(y)) => same_address(data, x, y, depth - 1),
@@ -215,7 +234,12 @@ fn same_address(data: &Funcdata, a: VarnodeId, b: VarnodeId, depth: u32) -> bool
 /// stored back through the address it was loaded from (`*p = c + 1`),
 /// directly or through copies and joins?
 pub fn is_counter(data: &Funcdata, vn: VarnodeId) -> bool {
-    let from = match data.vbank().get(vn).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d)) {
+    let from = match data
+        .vbank()
+        .get(vn)
+        .and_then(|v| v.get_def())
+        .and_then(|d| data.obank().get(d))
+    {
         Some(o) if o.code() == OpCode::CPUI_LOAD => match o.get_in(1) {
             Some(a) => a,
             None => return false,
@@ -236,18 +260,27 @@ pub fn is_counter(data: &Funcdata, vn: VarnodeId) -> bool {
             };
             let next = match o.code() {
                 OpCode::CPUI_STORE if summed && o.get_slot(cur) == 2 => {
-                    if o.get_in(1).map(|to| same_address(data, to, from, 3)).unwrap_or(false) {
+                    if o.get_in(1)
+                        .map(|to| same_address(data, to, from, 3))
+                        .unwrap_or(false)
+                    {
                         return true;
                     }
                     None
                 }
                 OpCode::CPUI_COPY | OpCode::CPUI_MULTIEQUAL => o.get_out().map(|w| (w, summed)),
                 OpCode::CPUI_INDIRECT if o.get_slot(cur) == 0 => o.get_out().map(|w| (w, summed)),
-                OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB if !summed => o.get_out().map(|w| (w, true)),
+                OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB if !summed => {
+                    o.get_out().map(|w| (w, true))
+                }
                 _ => None,
             };
             if let Some((w, s)) = next {
-                let one_byte = data.vbank().get(w).map(|x| x.get_size() == 1).unwrap_or(false);
+                let one_byte = data
+                    .vbank()
+                    .get(w)
+                    .map(|x| x.get_size() == 1)
+                    .unwrap_or(false);
                 if one_byte && !seen.contains(&w) && seen.len() < 64 {
                     seen.push(w);
                     work.push((w, s));
@@ -319,8 +352,12 @@ pub fn note_edge(
     if !recording || data.obank().get(op).map(|o| o.code()) != Some(OpCode::CPUI_LOAD) {
         return;
     }
-    let byte_is_uint1 =
-        data.vbank().get(byte).and_then(|v| v.get_temp_type()).map(|t| is_uint1(t)).unwrap_or(false);
+    let byte_is_uint1 = data
+        .vbank()
+        .get(byte)
+        .and_then(|v| v.get_temp_type())
+        .map(|t| is_uint1(t))
+        .unwrap_or(false);
     if byte_is_uint1 && is_candidate(data, byte) {
         NOTED.with(|n| {
             if let Some(v) = n.borrow_mut().as_mut() {
@@ -346,7 +383,9 @@ pub fn seed_char(data: &mut Funcdata, bytes: &[VarnodeId]) {
     };
     for &vn in bytes {
         let (addr, size) = match data.vbank().get(vn) {
-            Some(v) if !v.is_type_lock() && v.get_temp_type().map(|t| is_uint1(t)).unwrap_or(false) => {
+            Some(v)
+                if !v.is_type_lock() && v.get_temp_type().map(|t| is_uint1(t)).unwrap_or(false) =>
+            {
                 (v.get_addr().clone(), v.get_size())
             }
             _ => continue,
@@ -372,14 +411,21 @@ pub type Snapshot = Vec<(VarnodeId, Rc<Datatype>)>;
 pub fn snapshot(data: &Funcdata) -> Snapshot {
     data.vbank()
         .iter_loc()
-        .filter_map(|vn| data.vbank().get(vn).and_then(|v| v.get_temp_type()).map(|t| (vn, Rc::clone(t))))
+        .filter_map(|vn| {
+            data.vbank()
+                .get(vn)
+                .and_then(|v| v.get_temp_type())
+                .map(|t| (vn, Rc::clone(t)))
+        })
         .collect()
 }
 
 /// Is `now` the type `up` with `uint1` read as `char`, through any depth of
 /// pointers and arrays?
 pub fn same_but_char(up: &Datatype, now: &Datatype) -> bool {
-    if std::ptr::eq(up, now) || (up.get_metatype() == now.get_metatype() && up.type_order(now).ok() == Some(0)) {
+    if std::ptr::eq(up, now)
+        || (up.get_metatype() == now.get_metatype() && up.type_order(now).ok() == Some(0))
+    {
         return true;
     }
     if is_uint1(up) && is_char(now) {
@@ -402,7 +448,11 @@ pub fn same_but_char(up: &Datatype, now: &Datatype) -> bool {
 /// byte prints as a cast of its own load (`(char)v2[1]`,
 /// `*(char *)((long)v2 + 1)`), which is what the rule exists to remove.
 pub fn loaded_through_other(data: &Funcdata, vn: VarnodeId) -> bool {
-    let def = data.vbank().get(vn).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d));
+    let def = data
+        .vbank()
+        .get(vn)
+        .and_then(|v| v.get_def())
+        .and_then(|d| data.obank().get(d));
     match def {
         Some(o) if o.code() == OpCode::CPUI_LOAD => !o
             .get_in(1)
@@ -425,7 +475,10 @@ pub fn splits_pointer(data: &Funcdata, vn: VarnodeId) -> bool {
             .unwrap_or(false)
     };
     let web = |o: &crate::op::PcodeOp, slot: int4| match o.code() {
-        OpCode::CPUI_COPY | OpCode::CPUI_MULTIEQUAL | OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB => true,
+        OpCode::CPUI_COPY
+        | OpCode::CPUI_MULTIEQUAL
+        | OpCode::CPUI_INT_ADD
+        | OpCode::CPUI_INT_SUB => true,
         OpCode::CPUI_INDIRECT | OpCode::CPUI_PTRADD | OpCode::CPUI_PTRSUB => slot == 0,
         _ => false,
     };
@@ -441,7 +494,11 @@ pub fn splits_pointer(data: &Funcdata, vn: VarnodeId) -> bool {
         }
     }
     if let Some(o) = v.get_def().and_then(|d| data.obank().get(d)) {
-        let n = if matches!(o.code(), OpCode::CPUI_MULTIEQUAL) { o.num_input() } else { 1 };
+        let n = if matches!(o.code(), OpCode::CPUI_MULTIEQUAL) {
+            o.num_input()
+        } else {
+            1
+        };
         if (0..n).any(|i| web(o, i) && stayed(o.get_in(i))) {
             return true;
         }
@@ -466,7 +523,9 @@ pub fn keep_or_restore(data: &mut Funcdata, upstream: Snapshot) -> bool {
             return true;
         }
         if is_uint1(up) && is_char(now) {
-            return read_without_cast(data, *vn) || is_counter(data, *vn) || loaded_through_other(data, *vn);
+            return read_without_cast(data, *vn)
+                || is_counter(data, *vn)
+                || loaded_through_other(data, *vn);
         }
         points_to(up, is_uint1) && points_to(now, is_char) && splits_pointer(data, *vn)
     });

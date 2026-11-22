@@ -208,11 +208,14 @@ mod tests {
         let sections = vec![
             (0x1000, 0x100, section_flags::CODE),
             (0x2000, 0x100, section_flags::DATA),
-            (0x3000, 0, section_flags::CODE),          // zero length
-            (u64::MAX, 0x10, section_flags::CODE),     // wraps
+            (0x3000, 0, section_flags::CODE),      // zero length
+            (u64::MAX, 0x10, section_flags::CODE), // wraps
             (0x0500, 0x080, section_flags::CODE | section_flags::READONLY),
         ];
-        assert_eq!(code_spans(&sections), vec![(0x500, 0x580), (0x1000, 0x1100)]);
+        assert_eq!(
+            code_spans(&sections),
+            vec![(0x500, 0x580), (0x1000, 0x1100)]
+        );
     }
 
     #[test]
@@ -230,7 +233,11 @@ mod tests {
         // executable. Only the executable one can contain a body.
         let segments = vec![
             (0x0000, 0x810, section_flags::DATA | section_flags::READONLY),
-            (0x1000, 0x12d5, section_flags::CODE | section_flags::READONLY),
+            (
+                0x1000,
+                0x12d5,
+                section_flags::CODE | section_flags::READONLY,
+            ),
             (0x3000, 0xd20, section_flags::DATA | section_flags::READONLY),
             (0x7d78, 0x2a8, section_flags::DATA),
         ];

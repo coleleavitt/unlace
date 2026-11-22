@@ -25,38 +25,98 @@ fn obj(n: u32) -> DeclIdentity {
 fn dedup_suppresses_only_repeats() {
     let mut d = DeclDedup::new();
     let sig = |t: &str, n: &str, off: u64| -> DeclSignature {
-        (t.to_string(), String::new(), n.to_string(), None, Some(("stack".to_string(), off)))
+        (
+            t.to_string(),
+            String::new(),
+            n.to_string(),
+            None,
+            Some(("stack".to_string(), off)),
+        )
     };
     // First occurrence: emit (not a duplicate).
-    assert_eq!(d.earlier(obj(0), sig("int4", "option_index", 0x3c), HighVariableId(99)), None);
+    assert_eq!(
+        d.earlier(
+            obj(0),
+            sig("int4", "option_index", 0x3c),
+            HighVariableId(99)
+        ),
+        None
+    );
     // Identical signature: suppress.
-    assert!(d.earlier(obj(0), sig("int4", "option_index", 0x3c), HighVariableId(99)).is_some());
-    assert!(d.earlier(obj(0), sig("int4", "option_index", 0x3c), HighVariableId(99)).is_some());
+    assert!(
+        d.earlier(
+            obj(0),
+            sig("int4", "option_index", 0x3c),
+            HighVariableId(99)
+        )
+        .is_some()
+    );
+    assert!(
+        d.earlier(
+            obj(0),
+            sig("int4", "option_index", 0x3c),
+            HighVariableId(99)
+        )
+        .is_some()
+    );
 }
 
 #[test]
 fn dedup_keeps_distinct_signatures() {
     let mut d = DeclDedup::new();
     let sig = |t: &str, n: &str, off: u64| -> DeclSignature {
-        (t.to_string(), String::new(), n.to_string(), None, Some(("stack".to_string(), off)))
+        (
+            t.to_string(),
+            String::new(),
+            n.to_string(),
+            None,
+            Some(("stack".to_string(), off)),
+        )
     };
     // Same name + type, DIFFERENT storage slot -> distinct -> both emit.
-    assert_eq!(d.earlier(obj(0), sig("int4", "v1", 0x10), HighVariableId(99)), None);
-    assert_eq!(d.earlier(obj(0), sig("int4", "v1", 0x20), HighVariableId(99)), None);
+    assert_eq!(
+        d.earlier(obj(0), sig("int4", "v1", 0x10), HighVariableId(99)),
+        None
+    );
+    assert_eq!(
+        d.earlier(obj(0), sig("int4", "v1", 0x20), HighVariableId(99)),
+        None
+    );
     // Same name + slot, DIFFERENT type -> distinct -> both emit.
-    assert_eq!(d.earlier(obj(0), sig("char *", "v2", 0x30), HighVariableId(99)), None);
-    assert_eq!(d.earlier(obj(0), sig("int8", "v2", 0x30), HighVariableId(99)), None);
+    assert_eq!(
+        d.earlier(obj(0), sig("char *", "v2", 0x30), HighVariableId(99)),
+        None
+    );
+    assert_eq!(
+        d.earlier(obj(0), sig("int8", "v2", 0x30), HighVariableId(99)),
+        None
+    );
 }
 
 #[test]
 fn dedup_handles_array_adornment() {
     let mut d = DeclDedup::new();
-    let s1: DeclSignature =
-        ("int2".into(), String::new(), "arr".into(), Some(("int2".into(), 32)), None);
-    let s2: DeclSignature =
-        ("int2".into(), String::new(), "arr".into(), Some(("int2".into(), 32)), None);
-    let s3: DeclSignature =
-        ("int2".into(), String::new(), "arr".into(), Some(("int2".into(), 16)), None);
+    let s1: DeclSignature = (
+        "int2".into(),
+        String::new(),
+        "arr".into(),
+        Some(("int2".into(), 32)),
+        None,
+    );
+    let s2: DeclSignature = (
+        "int2".into(),
+        String::new(),
+        "arr".into(),
+        Some(("int2".into(), 32)),
+        None,
+    );
+    let s3: DeclSignature = (
+        "int2".into(),
+        String::new(),
+        "arr".into(),
+        Some(("int2".into(), 16)),
+        None,
+    );
     assert_eq!(d.earlier(obj(0), s1, HighVariableId(99)), None);
     assert!(d.earlier(obj(0), s2, HighVariableId(99)).is_some()); // identical array -> suppress
     assert_eq!(d.earlier(obj(0), s3, HighVariableId(99)), None); // different count -> keep
@@ -66,10 +126,19 @@ fn dedup_handles_array_adornment() {
 fn dedup_keeps_distinct_declarator_suffixes() {
     let mut d = DeclDedup::new();
     let sig = |back: &str| -> DeclSignature {
-        ("char (*".into(), back.into(), "p".into(), None, Some(("rax".into(), 0)))
+        (
+            "char (*".into(),
+            back.into(),
+            "p".into(),
+            None,
+            Some(("rax".into(), 0)),
+        )
     };
     assert_eq!(d.earlier(obj(0), sig(")[16]"), HighVariableId(99)), None);
-    assert!(d.earlier(obj(0), sig(")[16]"), HighVariableId(99)).is_some());
+    assert!(
+        d.earlier(obj(0), sig(")[16]"), HighVariableId(99))
+            .is_some()
+    );
     assert_eq!(d.earlier(obj(0), sig(")[8]"), HighVariableId(99)), None);
 }
 
@@ -81,7 +150,10 @@ fn dedup_keeps_identical_lines_of_distinct_objects() {
     assert_eq!(d.earlier(obj(2), sig(), HighVariableId(99)), None);
     let slot = DeclIdentity::Symbol(SymbolId::default());
     assert_eq!(d.earlier(slot, sig(), HighVariableId(3)), None);
-    assert_eq!(d.earlier(slot, sig(), HighVariableId(4)), Some(HighVariableId(3)));
+    assert_eq!(
+        d.earlier(slot, sig(), HighVariableId(4)),
+        Some(HighVariableId(3))
+    );
 }
 
 #[test]
@@ -142,9 +214,14 @@ fn ghidra_style_prefixes_are_preserved_when_suffixing() {
 fn default_allocator_accepts_unreserved_and_generated_base_names() {
     let mut names = DeclNameUniquifier::default();
     for (base, expected) in [
-        ("x", "x"), ("x", "x_1"), ("x_1", "x_1_1"),
-        ("", ""), ("", "_1"), ("_1", "_1_1"),
-        ("α", "α"), ("α", "α_1"),
+        ("x", "x"),
+        ("x", "x_1"),
+        ("x_1", "x_1_1"),
+        ("", ""),
+        ("", "_1"),
+        ("_1", "_1_1"),
+        ("α", "α"),
+        ("α", "α_1"),
     ] {
         assert_eq!(names.unique(base), expected);
     }
@@ -154,7 +231,9 @@ fn default_allocator_accepts_unreserved_and_generated_base_names() {
 fn allocation_matches_a_first_free_name_reference() {
     use std::collections::BTreeSet;
 
-    let pool = ["", "x", "x_1", "x_2", "x_1_1", "tmp", "tmp_9", "α", "α_1", "_1"];
+    let pool = [
+        "", "x", "x_1", "x_2", "x_1_1", "tmp", "tmp_9", "α", "α_1", "_1",
+    ];
     let mut random = 1u64;
     let mut choose = || {
         random = random.wrapping_mul(6364136223846793005).wrapping_add(1);
@@ -185,18 +264,36 @@ fn allocation_matches_a_first_free_name_reference() {
 #[test]
 fn identifiers_taken_outside_the_function_match_reserving_them_up_front() {
     let cases: [(&[&str], &[&str], &[&str]); 4] = [
-        (&["value", "value", "callee", "callee"], &[], &["value_1", "callee_1"]),
-        (&["value", "value", "debug_name", "debug_name"], &["value"], &["debug_name"]),
-        (&["word", "word", "word_1", "word"], &["a0"], &["word", "word_2"]),
+        (
+            &["value", "value", "callee", "callee"],
+            &[],
+            &["value_1", "callee_1"],
+        ),
+        (
+            &["value", "value", "debug_name", "debug_name"],
+            &["value"],
+            &["debug_name"],
+        ),
+        (
+            &["word", "word", "word_1", "word"],
+            &["a0"],
+            &["word", "word_2"],
+        ),
         (&["v2", "v2", "v2", "v2_1"], &[], &["v2_1", "v2_3", "v2_4"]),
     ];
     for (locals, occupied, globals) in cases {
-        let mut reserved =
-            DeclNameUniquifier::new(locals.iter().copied(), occupied.iter().chain(globals).copied());
+        let mut reserved = DeclNameUniquifier::new(
+            locals.iter().copied(),
+            occupied.iter().chain(globals).copied(),
+        );
         let mut queried = DeclNameUniquifier::new(locals.iter().copied(), occupied.iter().copied());
         let taken = |name: &str| globals.contains(&name);
         for &name in locals {
-            assert_eq!(queried.unique_with(name, &taken), reserved.unique(name), "{locals:?} {globals:?}");
+            assert_eq!(
+                queried.unique_with(name, &taken),
+                reserved.unique(name),
+                "{locals:?} {globals:?}"
+            );
         }
     }
 }

@@ -4,8 +4,8 @@ use std::path::PathBuf;
 
 use unlace_base::{address::Address, xml::DocumentStorage};
 use unlace_console::engine::{
-    bootstrap_from_file, bootstrap_from_object, bootstrap_from_root, ConsoleProgram,
-    EntryLookupError, EntryProvenance, EntrySelector,
+    ConsoleProgram, EntryLookupError, EntryProvenance, EntrySelector, bootstrap_from_file,
+    bootstrap_from_object, bootstrap_from_root,
 };
 
 fn repo_root() -> PathBuf {
@@ -29,7 +29,9 @@ fn boot_fixture(name: &str) -> ConsoleProgram {
 /// the inventory a selector sees is the one every front-end sees.
 fn boot_committed(name: &str) -> ConsoleProgram {
     let mut program = boot_fixture(name);
-    program.commit_pending_analysis().expect("analysis commit succeeds");
+    program
+        .commit_pending_analysis()
+        .expect("analysis commit succeeds");
     program
 }
 
@@ -312,7 +314,9 @@ fn a_generated_placeholder_name_resolves_to_the_address_it_spells() {
     assert_eq!(by_name.addr.get_offset(), by_addr.addr.get_offset());
     assert_eq!(by_name.name, "sub_1170");
     assert_eq!(
-        program.find_entry_by_name("sub_1170").map(|e| e.addr.get_offset()),
+        program
+            .find_entry_by_name("sub_1170")
+            .map(|e| e.addr.get_offset()),
         Some(0x1170),
         "the yes/no lookup answers the same name the same way"
     );
@@ -338,7 +342,9 @@ fn a_placeholder_resolves_in_every_naming_style() {
             .unwrap_or_else(|error| panic!("{name}: {error}"));
         assert_eq!(entry.addr.get_offset(), 0x1170, "{name}");
         assert_eq!(
-            program.find_entry_by_name(name).map(|e| e.addr.get_offset()),
+            program
+                .find_entry_by_name(name)
+                .map(|e| e.addr.get_offset()),
             Some(0x1170),
             "{name}: the yes/no lookup answers the same name the same way"
         );
@@ -357,7 +363,10 @@ fn a_default_style_name_survives_a_namestyle_flip() {
     program.arch_mut().name_style_angr = false;
     assert_eq!(
         program.arch().name_function(
-            &program.resolve_entry(&EntrySelector::Numeric(0x1170)).unwrap().addr
+            &program
+                .resolve_entry(&EntrySelector::Numeric(0x1170))
+                .unwrap()
+                .addr
         ),
         "func_0x00001170",
         "the flip must actually change what this build mints, or the test is vacuous"
@@ -377,7 +386,13 @@ fn a_placeholder_name_is_not_read_as_an_address_unless_this_build_would_mint_it(
     let program = boot_fixture("tailcallframe_x86_64");
     // `func_00001170` misses on its `0x`: the upstream style prints
     // `func_0x00001170`, and `FUN_` is the only style without the prefix.
-    for miss in ["sub_deadbeef", "FUN_1170", "func_00001170", "handler_1170", "sub_"] {
+    for miss in [
+        "sub_deadbeef",
+        "FUN_1170",
+        "func_00001170",
+        "handler_1170",
+        "sub_",
+    ] {
         let error = program
             .resolve_entry(&EntrySelector::Name(miss.into()))
             .expect_err("not a name this program mints at a mapped address");
@@ -413,9 +428,7 @@ fn a_macho_import_name_resolves_to_its_stub_without_losing_the_slot() {
         .collect();
     assert_eq!(rows, vec![0x1000005cc, 0x100003000], "both rows survive");
     assert!(
-        !program.any_executable_entry(&[program
-            .find_entry_at(0x100003000)
-            .expect("the slot row")]),
+        !program.any_executable_entry(&[program.find_entry_at(0x100003000).expect("the slot row")]),
         "the slot is what makes the veneer the lone executable candidate"
     );
 }
@@ -430,7 +443,10 @@ fn same_named_code_definitions_are_still_ambiguous() {
     let error = program
         .resolve_entry(&EntrySelector::Name("duplicate_local".into()))
         .expect_err("two .text definitions are both executable");
-    assert!(matches!(error, EntryLookupError::Ambiguous { .. }), "{error}");
+    assert!(
+        matches!(error, EntryLookupError::Ambiguous { .. }),
+        "{error}"
+    );
 }
 
 /// (kuna, issue #666) Mach-O stores a C identifier with a leading `_`, so the
@@ -447,7 +463,10 @@ fn a_macho_c_name_resolves_through_the_platform_underscore() {
             .resolve_entry(&EntrySelector::Name(bare.into()))
             .unwrap_or_else(|error| panic!("the C spelling must select {decorated}: {error}"));
         assert_eq!(asked.addr.get_offset(), carried.addr.get_offset());
-        assert_eq!(asked.name, decorated, "the entry keeps the name the image gave it");
+        assert_eq!(
+            asked.name, decorated,
+            "the entry keeps the name the image gave it"
+        );
     }
 }
 
@@ -465,9 +484,14 @@ fn an_elf_name_is_never_read_through_an_underscore() {
     let error = program
         .resolve_entry(&EntrySelector::Name("start".into()))
         .expect_err("ELF carries _start, not start");
-    assert!(matches!(error, EntryLookupError::NotFound { .. }), "{error}");
     assert!(
-        error.to_string().contains(r#"did you mean "_start" (0x400580)?"#),
+        matches!(error, EntryLookupError::NotFound { .. }),
+        "{error}"
+    );
+    assert!(
+        error
+            .to_string()
+            .contains(r#"did you mean "_start" (0x400580)?"#),
         "the miss must name the spelling the image does carry; got {error}"
     );
 }
@@ -480,10 +504,18 @@ fn a_name_miss_reports_what_the_image_does_carry() {
     let error = program
         .resolve_entry(&EntrySelector::Name("zork".into()))
         .expect_err("no function is spelled zork");
-    let EntryLookupError::NotFound { suggestion, named_entries, .. } = &error else {
+    let EntryLookupError::NotFound {
+        suggestion,
+        named_entries,
+        ..
+    } = &error
+    else {
         panic!("expected a name miss, got {error}");
     };
-    assert!(suggestion.is_none(), "nothing in fauxware is spelled like zork");
+    assert!(
+        suggestion.is_none(),
+        "nothing in fauxware is spelled like zork"
+    );
     assert!(*named_entries > 0, "fauxware is not stripped");
     assert!(
         error.to_string().contains("none spelled that way"),
@@ -499,10 +531,18 @@ fn a_stripped_image_reports_no_names_at_all() {
     let error = program
         .resolve_entry(&EntrySelector::Name("zork".into()))
         .expect_err("a stripped image answers no name");
-    let EntryLookupError::NotFound { suggestion, named_entries, .. } = &error else {
+    let EntryLookupError::NotFound {
+        suggestion,
+        named_entries,
+        ..
+    } = &error
+    else {
         panic!("expected a name miss, got {error}");
     };
-    assert_eq!(*named_entries, 0, "every entry here is an engine placeholder");
+    assert_eq!(
+        *named_entries, 0,
+        "every entry here is an engine placeholder"
+    );
     assert!(suggestion.is_none());
     assert_eq!(error.to_string(), r#"no function matches "zork""#);
 }

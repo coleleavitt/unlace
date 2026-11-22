@@ -1,10 +1,10 @@
+use std::path::{Path, PathBuf};
 use unlace_base::address::Address;
 use unlace_console::engine::bootstrap_from_object;
 use unlace_decomp::action::ActionContext;
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::kuna_rustprobestack::ActionRustProbestack;
 use unlace_num::opcodes::OpCode;
-use std::path::{Path, PathBuf};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")

@@ -15,7 +15,7 @@
 use std::rc::Rc;
 
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_num::opcodes::OpCode;
 use unlace_sleigh::pcodeparse::{PcodeSnippet, SnippetLanguage, SnippetSymbol};
@@ -51,11 +51,7 @@ impl TestLang {
             .iter()
             .map(|(n, o, s)| (n.as_bytes().to_vec(), *o, *s))
             .collect();
-        TestLang {
-            manager,
-            ram,
-            regs,
-        }
+        TestLang { manager, ram, regs }
     }
 }
 
@@ -237,7 +233,11 @@ fn verify_w2pp_additive_left_associative() {
     assert_eq!((op0_in0, op0_in1), (0x14, 0x60), "op0 = r2 - r0");
     // op1's last input is r1 (the outer right operand), confirming left nesting.
     let op1_in1 = ops[1].get_in(1);
-    assert_eq!(op1_in1.get_offset().get_real(), 0x10, "op1 right operand = r1");
+    assert_eq!(
+        op1_in1.get_offset().get_real(),
+        0x10,
+        "op1 right operand = r1"
+    );
 }
 
 // ===========================================================================
@@ -252,10 +252,20 @@ fn verify_w2pp_additive_left_associative() {
 //   oracle: "008" -> 0, "0008" -> 0, "09" -> 0
 #[test]
 fn verify_w2pp_r2_multi_leading_zero_then_bad_octal() {
-    for (src, want) in [("r1 = 008;", 0u64), ("r1 = 0008;", 0u64), ("r1 = 09;", 0u64)] {
+    for (src, want) in [
+        ("r1 = 008;", 0u64),
+        ("r1 = 0008;", 0u64),
+        ("r1 = 09;", 0u64),
+    ] {
         let (ok, err, ops) = compile(&lang(), src);
-        assert!(ok, "C++ accepts {src:?} as a partial octal INTEGER; got {err:?}");
-        assert_eq!(err, "", "{src:?} must produce no error (stream does not fail)");
+        assert!(
+            ok,
+            "C++ accepts {src:?} as a partial octal INTEGER; got {err:?}"
+        );
+        assert_eq!(
+            err, "",
+            "{src:?} must produce no error (stream does not fail)"
+        );
         assert_eq!(ops.len(), 1, "{src:?} -> single COPY");
         assert_eq!(
             first_in_const(&ops, 0),
@@ -271,8 +281,8 @@ fn verify_w2pp_r2_multi_leading_zero_then_bad_octal() {
 #[test]
 fn verify_w2pp_r2_octal_multidigit_prefix() {
     let cases = [
-        ("r1 = 0178;", 15u64),    // 0,1,7 valid octal, stop at 8 => 017 == 15
-        ("r1 = 0789012;", 7u64),  // 0,7 valid, stop at 8 => 07 == 7
+        ("r1 = 0178;", 15u64),   // 0,1,7 valid octal, stop at 8 => 017 == 15
+        ("r1 = 0789012;", 7u64), // 0,7 valid, stop at 8 => 07 == 7
     ];
     for (src, want) in cases {
         let (ok, err, ops) = compile(&lang(), src);

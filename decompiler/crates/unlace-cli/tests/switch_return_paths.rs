@@ -98,14 +98,31 @@ fn switch_return_paths_preserve_native_writes() {
         for region in ["off", "on"] {
             for duplicate in ["off", "on"] {
                 let (stdout, stderr, rc) = common::run_kuna(&[
-                    "decompile-all", elf.to_str().unwrap(), "--functions", "toggle_dispatch",
-                    "--mode", "reliable", "--assert-strict", "--json",
-                    "--sleighpath", specs.to_str().unwrap(),
-                    "--assert", "typedef struct ToggleFlags { bool first; bool second; bool last; unsigned char post; };",
-                    "--assert", &bounds, "--assert", prototype,
-                    "--option", "regionstructure", region,
-                    "--option", "returndup", duplicate,
-                    "--option", "switchreturn", "off",
+                    "decompile-all",
+                    elf.to_str().unwrap(),
+                    "--functions",
+                    "toggle_dispatch",
+                    "--mode",
+                    "reliable",
+                    "--assert-strict",
+                    "--json",
+                    "--sleighpath",
+                    specs.to_str().unwrap(),
+                    "--assert",
+                    "typedef struct ToggleFlags { bool first; bool second; bool last; unsigned char post; };",
+                    "--assert",
+                    &bounds,
+                    "--assert",
+                    prototype,
+                    "--option",
+                    "regionstructure",
+                    region,
+                    "--option",
+                    "returndup",
+                    duplicate,
+                    "--option",
+                    "switchreturn",
+                    "off",
                 ]);
                 assert_eq!(rc, 0, "{name}: {stderr}");
                 let doc: serde_json::Value = serde_json::from_str(&stdout).unwrap();
@@ -176,7 +193,11 @@ int main(void) {{
                                 .arg(&exe),
                         );
                         let out = Command::new(&exe).output().unwrap();
-                        assert!(out.status.success(), "{name}, region={region}, returndup={duplicate}, {cc} {level}: {}\n{printed}\n{stderr}", String::from_utf8_lossy(&out.stderr));
+                        assert!(
+                            out.status.success(),
+                            "{name}, region={region}, returndup={duplicate}, {cc} {level}: {}\n{printed}\n{stderr}",
+                            String::from_utf8_lossy(&out.stderr)
+                        );
                     }
                 }
             }

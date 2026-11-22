@@ -41,7 +41,9 @@ fn run_alone(dir: &Path, args: &[&str]) -> Output {
             .spawn()
             .expect("run the relocated kuna")
     };
-    child.wait_with_output().expect("wait for the relocated kuna")
+    child
+        .wait_with_output()
+        .expect("wait for the relocated kuna")
 }
 
 #[test]
@@ -51,7 +53,11 @@ fn a_lone_kuna_decompiles_with_its_built_in_console() {
     let entries = std::fs::read_dir(&dir).unwrap().count();
     let _ = std::fs::remove_dir_all(&dir);
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert!(stdout.contains("main("), "{stdout}");
     assert_eq!(entries, 1, "decompile left files beside kuna");
 }
@@ -71,9 +77,16 @@ fn a_lone_kuna_compiles_a_slaspec_with_its_built_in_compiler() {
     );
     let compiled = std::fs::read(&out_sla);
     let _ = std::fs::remove_dir_all(&dir);
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let shipped = std::fs::read(languages.join("toy_be.sla")).expect("make specs built toy_be.sla");
-    assert!(compiled.expect("unlace specs wrote no .sla") == shipped, "the built-in compiler's .sla differs");
+    assert!(
+        compiled.expect("unlace specs wrote no .sla") == shipped,
+        "the built-in compiler's .sla differs"
+    );
 }
 
 #[test]
@@ -86,7 +99,8 @@ fn the_hidden_console_subcommand_is_decomp_dbg() {
         .expect("run kuna decomp_dbg");
     assert_eq!(out.status.code(), Some(1));
     assert!(
-        String::from_utf8_lossy(&out.stderr).contains("Could not discover root of Ghidra installation"),
+        String::from_utf8_lossy(&out.stderr)
+            .contains("Could not discover root of Ghidra installation"),
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );

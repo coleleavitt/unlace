@@ -4,7 +4,9 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace};
+use unlace_base::space::{
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
+};
 use unlace_num::opcodes::OpCode;
 
 use crate::context::ArchContext;
@@ -18,7 +20,8 @@ const PC: u64 = 0x0;
 fn build_fd() -> Funcdata {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     for (index, name) in [(2, "ram"), (3, "register")] {
         m.insert_space(Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
@@ -35,11 +38,22 @@ fn build_fd() -> Funcdata {
     }
     let glb = Rc::new(ArchContext::new(m));
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
-    Funcdata::new("func", "func", glb, Address::new(ram, 0x1000), 0x1000_0000, 0x40).unwrap()
+    Funcdata::new(
+        "func",
+        "func",
+        glb,
+        Address::new(ram, 0x1000),
+        0x1000_0000,
+        0x40,
+    )
+    .unwrap()
 }
 
 fn addr(fd: &Funcdata, space: &str, off: u64) -> Address {
-    Address::new(Rc::clone(fd.get_arch().manage().get_space_by_name(space).unwrap()), off)
+    Address::new(
+        Rc::clone(fd.get_arch().manage().get_space_by_name(space).unwrap()),
+        off,
+    )
 }
 
 /// `pc = CALLOTHER(#userop, operands..)` at 0x1000.
@@ -92,8 +106,18 @@ fn inputs(fd: &Funcdata, op: OpId) -> Vec<(u64, int4)> {
 #[test]
 fn site_lookup_is_by_exact_address() {
     let sites = vec![
-        KernelBugSite { addr: 0x400035, warning: true, file: Some(0x4010a0), line: Some(9) },
-        KernelBugSite { addr: 0x40004a, warning: false, file: Some(0x4010a0), line: Some(11) },
+        KernelBugSite {
+            addr: 0x400035,
+            warning: true,
+            file: Some(0x4010a0),
+            line: Some(9),
+        },
+        KernelBugSite {
+            addr: 0x40004a,
+            warning: false,
+            file: Some(0x4010a0),
+            line: Some(11),
+        },
     ];
     assert_eq!(site_at(&sites, 0x40004a).map(|s| s.warning), Some(false));
     assert_eq!(site_at(&sites, 0x400035).map(|s| s.line), Some(Some(9)));
@@ -104,8 +128,14 @@ fn site_lookup_is_by_exact_address() {
 fn an_x86_ud2_names_its_producer() {
     let mut fd = build_fd();
     let (producer, branch) = ud2(&mut fd);
-    assert_eq!(site_producer(&fd, branch, Some(INVALID_USEROP), None), Some(producer));
-    assert_eq!(site_producer(&fd, branch, Some(INVALID_USEROP + 1), None), None);
+    assert_eq!(
+        site_producer(&fd, branch, Some(INVALID_USEROP), None),
+        Some(producer)
+    );
+    assert_eq!(
+        site_producer(&fd, branch, Some(INVALID_USEROP + 1), None),
+        None
+    );
     assert_eq!(site_producer(&fd, branch, None, Some(BRK_USEROP)), None);
 }
 
@@ -113,26 +143,45 @@ fn an_x86_ud2_names_its_producer() {
 fn only_the_kernel_brk_immediate_names_its_producer() {
     let mut fd = build_fd();
     let (producer, branch) = brk(&mut fd, LINUX_BUG_BRK_IMM);
-    assert_eq!(site_producer(&fd, branch, None, Some(BRK_USEROP)), Some(producer));
+    assert_eq!(
+        site_producer(&fd, branch, None, Some(BRK_USEROP)),
+        Some(producer)
+    );
     let mut fd = build_fd();
     let (_, branch) = brk(&mut fd, 0x1);
-    assert_eq!(site_producer(&fd, branch, Some(INVALID_USEROP), Some(BRK_USEROP)), None);
+    assert_eq!(
+        site_producer(&fd, branch, Some(INVALID_USEROP), Some(BRK_USEROP)),
+        None
+    );
 }
 
 #[test]
 fn a_warn_site_becomes_warn_with_file_and_line() {
     let mut fd = build_fd();
     let (producer, branch) = ud2(&mut fd);
-    let site = KernelBugSite { addr: 0x1000, warning: true, file: Some(0x2000), line: Some(42) };
+    let site = KernelBugSite {
+        addr: 0x1000,
+        warning: true,
+        file: Some(0x2000),
+        line: Some(42),
+    };
     rewrite(&mut fd, branch, producer, &site).unwrap();
-    assert_eq!(inputs(&fd, producer), vec![(BUILTIN_KERNEL_WARN as u64, 4), (0x2000, 8), (42, 4)]);
+    assert_eq!(
+        inputs(&fd, producer),
+        vec![(BUILTIN_KERNEL_WARN as u64, 4), (0x2000, 8), (42, 4)]
+    );
 }
 
 #[test]
 fn a_bare_table_prints_warn_without_arguments() {
     let mut fd = build_fd();
     let (producer, branch) = ud2(&mut fd);
-    let site = KernelBugSite { addr: 0x1000, warning: true, file: None, line: None };
+    let site = KernelBugSite {
+        addr: 0x1000,
+        warning: true,
+        file: None,
+        line: None,
+    };
     rewrite(&mut fd, branch, producer, &site).unwrap();
     assert_eq!(inputs(&fd, producer), vec![(BUILTIN_KERNEL_WARN as u64, 4)]);
 }
@@ -141,7 +190,12 @@ fn a_bare_table_prints_warn_without_arguments() {
 fn a_bug_site_becomes_bug_and_a_brk_sheds_its_operands() {
     let mut fd = build_fd();
     let (producer, branch) = brk(&mut fd, LINUX_BUG_BRK_IMM);
-    let site = KernelBugSite { addr: 0x1000, warning: false, file: Some(0x2000), line: Some(7) };
+    let site = KernelBugSite {
+        addr: 0x1000,
+        warning: false,
+        file: Some(0x2000),
+        line: Some(7),
+    };
     rewrite(&mut fd, branch, producer, &site).unwrap();
     assert_eq!(inputs(&fd, producer), vec![(BUILTIN_KERNEL_BUG as u64, 4)]);
 }

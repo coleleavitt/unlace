@@ -54,7 +54,7 @@ use unlace_num::opcodes::OpCode;
 use crate::action::{ActionGroupList, Rule, RuleSpec};
 use crate::constseq::{ArraySequence, StringSequence, WriteNode};
 use crate::context::{BlockId, OpId, VarnodeId};
-use crate::dtype::{type_metatype, TypeFactory};
+use crate::dtype::{TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
 
 /// One COPY of the block-copy run: its byte offset from the start of the string
@@ -82,12 +82,18 @@ pub struct RuleRodataStringCopy {
 impl RuleRodataStringCopy {
     /// Construct with the resolved gate.  Default group `"analysis"`.
     pub fn new(enabled: bool) -> RuleRodataStringCopy {
-        RuleRodataStringCopy { enabled, group: String::from("analysis") }
+        RuleRodataStringCopy {
+            enabled,
+            group: String::from("analysis"),
+        }
     }
 
     /// Construct with an explicit group.
     pub fn with_group(enabled: bool, group: impl Into<String>) -> RuleRodataStringCopy {
-        RuleRodataStringCopy { enabled, group: group.into() }
+        RuleRodataStringCopy {
+            enabled,
+            group: group.into(),
+        }
     }
 }
 
@@ -148,7 +154,9 @@ fn try_recover(root: OpId, data: &mut Funcdata) -> Option<StringSequence> {
     }
 
     // --- the covering string symbol the string-literal analysis planted ---
-    let container = data.get_arch().query_container_global(&src_addr, src_size, &op_addr)?;
+    let container = data
+        .get_arch()
+        .query_container_global(&src_addr, src_size, &op_addr)?;
     let sym_type = container.symbol_type.clone()?;
     if sym_type.get_metatype() != type_metatype::TYPE_ARRAY || sym_type.is_opaque_string() {
         return None;
@@ -272,7 +280,10 @@ fn collect_slices(
     foreign: &mut Vec<u32>,
 ) -> Option<Vec<Slice>> {
     let scan_end = dst_start + i64::from(str_len);
-    let ids: Vec<VarnodeId> = data.vbank().iter_loc_addr_range(dst_start, &scan_end).collect();
+    let ids: Vec<VarnodeId> = data
+        .vbank()
+        .iter_loc_addr_range(dst_start, &scan_end)
+        .collect();
     let mut out: Vec<Slice> = Vec::new();
     for vn in ids {
         let v = data.vbank().get(vn)?;
@@ -303,7 +314,12 @@ fn collect_slices(
             foreign.push(order);
             continue;
         }
-        out.push(Slice { off: off as int4, size, op: def, order });
+        out.push(Slice {
+            off: off as int4,
+            size,
+            op: def,
+            order,
+        });
     }
     Some(out)
 }
@@ -365,9 +381,16 @@ impl RodataStringForm {
 pub fn parse_rodata_string_form(p1: &str) -> KunaResult<(RodataStringForm, String)> {
     let val = crate::options::on_or_off(p1)
         .map_err(|_: KunaError| KunaError::parse("Must specify toggle value, on/off"))?;
-    let form = if val { RodataStringForm::On } else { RodataStringForm::Off };
+    let form = if val {
+        RodataStringForm::On
+    } else {
+        RodataStringForm::Off
+    };
     let prop = if val { "on" } else { "off" };
-    Ok((form, format!("Read-only string block-copy recovery turned {prop}")))
+    Ok((
+        form,
+        format!("Read-only string block-copy recovery turned {prop}"),
+    ))
 }
 
 /// Per-file registration rows (one rule).  Shipped default:

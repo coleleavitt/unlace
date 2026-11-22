@@ -2,9 +2,9 @@
 
 use crate::context::HighVariableId;
 use crate::funcdata::Funcdata;
+use std::collections::BTreeSet;
 use unlace_base::address::Address;
 use unlace_num::opcodes::OpCode;
-use std::collections::BTreeSet;
 
 const MAX_GUARD_SCAN_BLOCKS: usize = 256;
 const MAX_GUARD_SCAN_OPS: usize = 8192;

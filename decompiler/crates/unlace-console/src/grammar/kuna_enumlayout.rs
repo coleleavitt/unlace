@@ -19,7 +19,7 @@ use std::rc::Rc;
 
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::types::{int4, uintb};
-use unlace_decomp::dtype::{type_metatype, Datatype};
+use unlace_decomp::dtype::{Datatype, type_metatype};
 
 use super::{CParse, Enumerator};
 
@@ -57,7 +57,11 @@ impl CParse<'_> {
         values: &[uintb],
     ) -> Option<(int4, type_metatype)> {
         if let Some(tp) = underlying {
-            let meta = if is_signed(tp) { type_metatype::TYPE_ENUM_INT } else { type_metatype::TYPE_ENUM_UINT };
+            let meta = if is_signed(tp) {
+                type_metatype::TYPE_ENUM_INT
+            } else {
+                type_metatype::TYPE_ENUM_UINT
+            };
             return Some((tp.get_size(), meta));
         }
         let int = self.factory.get_size_of_int();
@@ -65,12 +69,21 @@ impl CParse<'_> {
             return None;
         }
         let signed = values.iter().any(|&v| (v as i64) < 0);
-        let size = [int, self.factory.get_size_of_long(), self.factory.get_size_of_long_long(), 8]
-            .into_iter()
-            .filter(|&s| s >= int && s <= 8)
-            .find(|&s| values.iter().all(|&v| fits(v, s, signed)))
-            .unwrap_or(8);
-        let meta = if signed { type_metatype::TYPE_ENUM_INT } else { type_metatype::TYPE_ENUM_UINT };
+        let size = [
+            int,
+            self.factory.get_size_of_long(),
+            self.factory.get_size_of_long_long(),
+            8,
+        ]
+        .into_iter()
+        .filter(|&s| s >= int && s <= 8)
+        .find(|&s| values.iter().all(|&v| fits(v, s, signed)))
+        .unwrap_or(8);
+        let meta = if signed {
+            type_metatype::TYPE_ENUM_INT
+        } else {
+            type_metatype::TYPE_ENUM_UINT
+        };
         Some((size, meta))
     }
 }
@@ -106,7 +119,11 @@ pub(super) fn enumerator_out_of_range<'e>(
             fits(v, tp.get_size(), is_signed(tp))
         }
     };
-    vecenum.iter().zip(values).find(|&(_, &v)| !in_range(v)).map(|(e, _)| e.enumconstant.as_str())
+    vecenum
+        .iter()
+        .zip(values)
+        .find(|&(_, &v)| !in_range(v))
+        .map(|(e, _)| e.enumconstant.as_str())
 }
 
 /// C's constants for `vecenum`: an enumerator with no `=` is one past the one
@@ -126,7 +143,11 @@ pub(super) fn enum_constants(vecenum: &[Enumerator]) -> Vec<uintb> {
 /// The `(name, constant)` pairs an enum of `size` bytes can name: C allows two
 /// enumerators one constant, but a value names one constant, so the first
 /// enumerator of a value keeps it and a later alias is dropped.
-pub(super) fn named_constants(vecenum: &[Enumerator], values: &[uintb], size: int4) -> (Vec<String>, Vec<uintb>) {
+pub(super) fn named_constants(
+    vecenum: &[Enumerator],
+    values: &[uintb],
+    size: int4,
+) -> (Vec<String>, Vec<uintb>) {
     let mask = unlace_base::address::calc_mask(size);
     let mut seen = std::collections::BTreeSet::new();
     vecenum

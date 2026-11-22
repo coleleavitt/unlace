@@ -672,11 +672,10 @@ fn indexed_wide_stores_feed_both_tail_words_and_narrow_prefix_reads() {
     // at rbp-96+i*8. Read the last two words, weighted 3:1. Additional
     // reads either select a narrower layout or overlap the first wide cell.
     let mut tail = vec![
-        0x55, 0x48, 0x89, 0xe5, 0x48, 0x83, 0xec, 0x60, 0x31, 0xc9,
-        0x89, 0xf8, 0x01, 0xc8, 0x48, 0xc1, 0xe0, 0x20, 0x8d, 0x51,
-        0x01, 0x31, 0xfa, 0x48, 0x09, 0xd0, 0x48, 0x89, 0x44, 0xcd,
-        0xa0, 0xff, 0xc1, 0x83, 0xf9, 0x05, 0x7e, 0xe4, 0x8b, 0x45,
-        0xc8, 0x6b, 0xc0, 0x03, 0x03, 0x45, 0xcc,
+        0x55, 0x48, 0x89, 0xe5, 0x48, 0x83, 0xec, 0x60, 0x31, 0xc9, 0x89, 0xf8, 0x01, 0xc8, 0x48,
+        0xc1, 0xe0, 0x20, 0x8d, 0x51, 0x01, 0x31, 0xfa, 0x48, 0x09, 0xd0, 0x48, 0x89, 0x44, 0xcd,
+        0xa0, 0xff, 0xc1, 0x83, 0xf9, 0x05, 0x7e, 0xe4, 0x8b, 0x45, 0xc8, 0x6b, 0xc0, 0x03, 0x03,
+        0x45, 0xcc,
     ];
     let mut prefix = tail.clone();
     let mut inner = tail.clone();
@@ -694,11 +693,18 @@ fn indexed_wide_stores_feed_both_tail_words_and_narrow_prefix_reads() {
             ("word_prefix_tail", prefix.as_slice()),
             ("word_inner_tail", inner.as_slice()),
             ("word_wide_predicate", wide_predicate.as_slice()),
-        ].into_iter(),
+        ]
+        .into_iter(),
     );
     let mut printed = String::new();
-    for name in ["word_tail", "word_prefix_tail", "word_inner_tail", "word_wide_predicate"] {
-        let prototype = format!("prototype binary_{name} unsigned int binary_{name}(unsigned int seed)");
+    for name in [
+        "word_tail",
+        "word_prefix_tail",
+        "word_inner_tail",
+        "word_wide_predicate",
+    ] {
+        let prototype =
+            format!("prototype binary_{name} unsigned int binary_{name}(unsigned int seed)");
         let text = decompile(&input, name, &["--assert", &prototype, "--assert-strict"]);
         printed.push_str(&text.replace(&format!("binary_{name}("), &format!("printed_{name}(")));
     }
@@ -757,8 +763,13 @@ int main(void) {{
             process::required_output(
                 Command::new(compiler)
                     .args([
-                        "-std=c11", "-fno-strict-aliasing", "-fwrapv", level,
-                        "-Werror=uninitialized", "-fsanitize=undefined", "-fno-sanitize-recover=all",
+                        "-std=c11",
+                        "-fno-strict-aliasing",
+                        "-fwrapv",
+                        level,
+                        "-Werror=uninitialized",
+                        "-fsanitize=undefined",
+                        "-fno-sanitize-recover=all",
                     ])
                     .arg(&source)
                     .arg(&input)
@@ -782,7 +793,10 @@ fn zeroing_loops_preserve_later_partial_record_fields() {
         .into_iter()
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
-    assert!(!compilers.is_empty(), "a C compiler is required for semantic validation");
+    assert!(
+        !compilers.is_empty(),
+        "a C compiler is required for semantic validation"
+    );
     let input = common::scratch_file("zero-loop-fields", "o");
     process::required_output(
         Command::new(compilers[0])
@@ -879,8 +893,13 @@ int main(void) {{
             process::required_output(
                 Command::new(compiler)
                     .args([
-                        "-std=c11", "-fno-strict-aliasing", "-fwrapv", level,
-                        "-Werror=uninitialized", "-fsanitize=undefined", "-fno-sanitize-recover=all",
+                        "-std=c11",
+                        "-fno-strict-aliasing",
+                        "-fwrapv",
+                        level,
+                        "-Werror=uninitialized",
+                        "-fsanitize=undefined",
+                        "-fno-sanitize-recover=all",
                     ])
                     .arg(&source)
                     .arg(&input)

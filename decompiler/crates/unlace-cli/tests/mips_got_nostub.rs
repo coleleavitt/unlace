@@ -6,7 +6,10 @@ use crate::common;
 fn stubless_import_slots_are_not_null() {
     for (image, extra) in [
         ("mipsgot_nostub_el.so", &[][..]),
-        ("mipsgot_nostub_n64el.so", &["--target", "MIPS:LE:64:default"][..]),
+        (
+            "mipsgot_nostub_n64el.so",
+            &["--target", "MIPS:LE:64:default"][..],
+        ),
     ] {
         let path = common::fixture(image);
         let mut args = vec!["decompile", path.as_str(), "user"];

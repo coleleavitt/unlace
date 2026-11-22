@@ -1,11 +1,11 @@
 //! Undefined untyped call targets receive known library prototypes.
 use crate::common;
-use unlace_console::engine::{bootstrap_from_object, EntrySelector};
-use unlace_console::project::decompile_targets;
 use object::{
-    write, Architecture, BinaryFormat, Endianness, RelocationFlags, SymbolFlags, SymbolKind,
-    SymbolScope,
+    Architecture, BinaryFormat, Endianness, RelocationFlags, SymbolFlags, SymbolKind, SymbolScope,
+    write,
 };
+use unlace_console::engine::{EntrySelector, bootstrap_from_object};
+use unlace_console::project::decompile_targets;
 
 struct Scratch(std::path::PathBuf);
 impl Drop for Scratch {

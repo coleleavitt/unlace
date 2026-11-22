@@ -5,9 +5,9 @@ use super::{
     model::RawOp,
     xrefs::{FullCapture, FullOp},
 };
+use std::rc::Rc;
 use unlace_base::{address::Address, error::KunaResult, space::AddrSpace};
 use unlace_sleigh::translate::{AssemblyEmit, PcodeEmit, Translate};
-use std::rc::Rc;
 
 #[derive(PartialEq, Eq)]
 pub(crate) struct ReusableDecode {
@@ -18,7 +18,10 @@ pub(crate) struct ReusableDecode {
 impl ReusableDecode {
     /// A certificate of `context` alone, for decodes that are never replayed.
     pub(crate) fn context_only(context: Vec<u32>) -> Self {
-        ReusableDecode { context, ops: Vec::new() }
+        ReusableDecode {
+            context,
+            ops: Vec::new(),
+        }
     }
 
     pub(crate) fn context(&self) -> &[u32] {
@@ -74,7 +77,11 @@ pub(crate) fn capture(
     Ok(context.map(|context| {
         Rc::new(ReusableDecode {
             context,
-            ops: if keep_ops { full.ops().to_vec() } else { Vec::new() },
+            ops: if keep_ops {
+                full.ops().to_vec()
+            } else {
+                Vec::new()
+            },
         })
     }))
 }

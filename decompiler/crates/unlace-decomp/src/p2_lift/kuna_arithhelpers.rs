@@ -119,7 +119,12 @@ fn x86_fixups() -> Vec<Fixup> {
         cdecl("shl64", &["__ashldi3"], shift_args, "a << n"),
         cdecl("lshr64", &["__lshrdi3"], shift_args, "a >> n"),
         cdecl("ashr64", &["__ashrdi3"], shift_args, "a s>> n"),
-        cdecl("neg64", &["__negdi2"], "ESP = ESP + 4; a:8 = *:8 ESP;", "-a"),
+        cdecl(
+            "neg64",
+            &["__negdi2"],
+            "ESP = ESP + 4; a:8 = *:8 ESP;",
+            "-a",
+        ),
         divmod4("udivmod64", &["__udivmoddi4"], "/", "%"),
         divmod4("sdivmod64", &["__divmoddi4"], "s/", "s%"),
         stdcall("msvc_udiv64", &["__aulldiv"], "a / b"),
@@ -136,8 +141,11 @@ fn x86_fixups() -> Vec<Fixup> {
 }
 
 fn arm_fixups(big_endian: bool) -> Vec<Fixup> {
-    let (lo, hi, blo, bhi) =
-        if big_endian { ("r1", "r0", "r3", "r2") } else { ("r0", "r1", "r2", "r3") };
+    let (lo, hi, blo, bhi) = if big_endian {
+        ("r1", "r0", "r3", "r2")
+    } else {
+        ("r0", "r1", "r2", "r3")
+    };
     let a = format!("a:8 = (zext({hi}) << 32) | zext({lo});");
     let b = format!("b:8 = (zext({bhi}) << 32) | zext({blo});");
     let ret = format!("{lo} = r:4; {hi} = r(4);");
@@ -178,7 +186,11 @@ fn arm_fixups(big_endian: bool) -> Vec<Fixup> {
         shift("shl64", &["__aeabi_llsl", "__ashldi3"], "<<"),
         shift("lshr64", &["__aeabi_llsr", "__lshrdi3"], ">>"),
         shift("ashr64", &["__aeabi_lasr", "__ashrdi3"], "s>>"),
-        Fixup { name: "neg64", targets: &["__negdi2"], body: format!("{a} r:8 = -a; {ret}") },
+        Fixup {
+            name: "neg64",
+            targets: &["__negdi2"],
+            body: format!("{a} r:8 = -a; {ret}"),
+        },
         word_divmod("udivmod32", &["__aeabi_uidivmod"], "/", "%"),
         word_divmod("sdivmod32", &["__aeabi_idivmod"], "s/", "s%"),
         word("udiv32", &["__aeabi_uidiv", "__udivsi3"], "r0 / r1"),

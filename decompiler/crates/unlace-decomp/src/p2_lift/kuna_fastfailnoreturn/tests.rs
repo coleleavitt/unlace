@@ -5,13 +5,13 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{ArchContext, OpId, TypeOp};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::op::pcodeop_flags;
 
@@ -20,7 +20,8 @@ use super::*;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -57,15 +58,23 @@ fn make_op(fd: &mut Funcdata, opc: OpCode, pc_off: u64, ninputs: int4, start: bo
     let op = fd.obank_mut().create_at(ninputs, pc);
     fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, "op"));
     if start {
-        fd.obank_mut().get_mut(op).unwrap().set_flag(pcodeop_flags::startmark);
+        fd.obank_mut()
+            .get_mut(op)
+            .unwrap()
+            .set_flag(pcodeop_flags::startmark);
     }
     op
 }
 
 fn set_const_input(fd: &mut Funcdata, op: OpId, slot: int4, value: uintb, size: int4) {
     let cspace = space(fd, "const");
-    let vn = fd.vbank_mut().create(size, Address::new(cspace, value), unk_type(size));
-    fd.obank_mut().get_mut(op).unwrap().set_input(Some(vn), slot);
+    let vn = fd
+        .vbank_mut()
+        .create(size, Address::new(cspace, value), unk_type(size));
+    fd.obank_mut()
+        .get_mut(op)
+        .unwrap()
+        .set_input(Some(vn), slot);
 }
 
 /// A unique-space Varnode at `off`, size 8 — the `intloc` the `swi` writes and
@@ -73,7 +82,8 @@ fn set_const_input(fd: &mut Funcdata, op: OpId, slot: int4, value: uintb, size: 
 /// is the pre-SSA shape).
 fn unique_vn(fd: &mut Funcdata, off: u64) -> crate::context::VarnodeId {
     let uspace = space(fd, "unique");
-    fd.vbank_mut().create(8, Address::new(uspace, off), unk_type(8))
+    fd.vbank_mut()
+        .create(8, Address::new(uspace, off), unk_type(8))
 }
 
 /// The canonical `INT imm8` idiom in one instruction:
@@ -85,11 +95,17 @@ fn build_int_idiom(fd: &mut Funcdata, swi_id: uintb, vector: uintb) -> OpId {
     set_const_input(fd, callother, 0, swi_id, 4);
     set_const_input(fd, callother, 1, vector, 1);
     let out = unique_vn(fd, 0x9bd00);
-    fd.obank_mut().get_mut(callother).unwrap().set_output(Some(out));
+    fd.obank_mut()
+        .get_mut(callother)
+        .unwrap()
+        .set_output(Some(out));
 
     let callind = make_op(fd, OpCode::CPUI_CALLIND, 0x1000, 1, false);
     let target = unique_vn(fd, 0x9bd00);
-    fd.obank_mut().get_mut(callind).unwrap().set_input(Some(target), 0);
+    fd.obank_mut()
+        .get_mut(callind)
+        .unwrap()
+        .set_input(Some(target), 0);
     callind
 }
 
@@ -121,7 +137,10 @@ fn other_vectors_do_not_fire() {
     for vector in [0x80, 0x03, 0x01, 0x2d, 0x00] {
         let mut fd = build_fd();
         let callind = build_int_idiom(&mut fd, 3, vector);
-        assert!(!is_fastfail_callind(&fd, callind, resolver), "vector {vector:#x}");
+        assert!(
+            !is_fastfail_callind(&fd, callind, resolver),
+            "vector {vector:#x}"
+        );
     }
 }
 
@@ -143,10 +162,16 @@ fn wide_vector_constant_does_not_fire() {
     set_const_input(&mut fd, callother, 0, 3, 4);
     set_const_input(&mut fd, callother, 1, 0x29, 4);
     let out = unique_vn(&mut fd, 0x9bd00);
-    fd.obank_mut().get_mut(callother).unwrap().set_output(Some(out));
+    fd.obank_mut()
+        .get_mut(callother)
+        .unwrap()
+        .set_output(Some(out));
     let callind = make_op(&mut fd, OpCode::CPUI_CALLIND, 0x1000, 1, false);
     let target = unique_vn(&mut fd, 0x9bd00);
-    fd.obank_mut().get_mut(callind).unwrap().set_input(Some(target), 0);
+    fd.obank_mut()
+        .get_mut(callind)
+        .unwrap()
+        .set_input(Some(target), 0);
     assert!(!is_fastfail_callind(&fd, callind, resolver));
 }
 
@@ -159,10 +184,16 @@ fn callind_reading_other_storage_does_not_fire() {
     set_const_input(&mut fd, callother, 0, 3, 4);
     set_const_input(&mut fd, callother, 1, 0x29, 1);
     let out = unique_vn(&mut fd, 0x9bd00);
-    fd.obank_mut().get_mut(callother).unwrap().set_output(Some(out));
+    fd.obank_mut()
+        .get_mut(callother)
+        .unwrap()
+        .set_output(Some(out));
     let callind = make_op(&mut fd, OpCode::CPUI_CALLIND, 0x1000, 1, false);
     let elsewhere = unique_vn(&mut fd, 0x1234);
-    fd.obank_mut().get_mut(callind).unwrap().set_input(Some(elsewhere), 0);
+    fd.obank_mut()
+        .get_mut(callind)
+        .unwrap()
+        .set_input(Some(elsewhere), 0);
     assert!(!is_fastfail_callind(&fd, callind, resolver));
 }
 
@@ -189,7 +220,10 @@ fn walk_stops_at_instruction_start() {
     let _copy = make_op(&mut fd, OpCode::CPUI_COPY, 0x1000, 1, true);
     let callind = make_op(&mut fd, OpCode::CPUI_CALLIND, 0x1000, 1, false);
     let target = unique_vn(&mut fd, 0x9bd00);
-    fd.obank_mut().get_mut(callind).unwrap().set_input(Some(target), 0);
+    fd.obank_mut()
+        .get_mut(callind)
+        .unwrap()
+        .set_input(Some(target), 0);
     assert!(!is_fastfail_callind(&fd, callind, resolver));
 }
 
@@ -198,7 +232,10 @@ fn lone_callind_does_not_fire() {
     let mut fd = build_fd();
     let callind = make_op(&mut fd, OpCode::CPUI_CALLIND, 0x1000, 1, true);
     let target = unique_vn(&mut fd, 0x9bd00);
-    fd.obank_mut().get_mut(callind).unwrap().set_input(Some(target), 0);
+    fd.obank_mut()
+        .get_mut(callind)
+        .unwrap()
+        .set_input(Some(target), 0);
     assert!(!is_fastfail_callind(&fd, callind, resolver));
 }
 
@@ -226,12 +263,22 @@ fn a_non_temporary_call_target_is_declined() {
     let callother = make_op(&mut fd, OpCode::CPUI_CALLOTHER, 0x1000, 2, true);
     set_const_input(&mut fd, callother, 0, 3, 4);
     set_const_input(&mut fd, callother, 1, FASTFAIL_VECTOR, 1);
-    let out = fd.vbank_mut().create(8, Address::new(Rc::clone(&ram), 0x2000), unk_type(8));
-    fd.obank_mut().get_mut(callother).unwrap().set_output(Some(out));
+    let out = fd
+        .vbank_mut()
+        .create(8, Address::new(Rc::clone(&ram), 0x2000), unk_type(8));
+    fd.obank_mut()
+        .get_mut(callother)
+        .unwrap()
+        .set_output(Some(out));
 
     let callind = make_op(&mut fd, OpCode::CPUI_CALLIND, 0x1000, 1, false);
-    let target = fd.vbank_mut().create(8, Address::new(ram, 0x2000), unk_type(8));
-    fd.obank_mut().get_mut(callind).unwrap().set_input(Some(target), 0);
+    let target = fd
+        .vbank_mut()
+        .create(8, Address::new(ram, 0x2000), unk_type(8));
+    fd.obank_mut()
+        .get_mut(callind)
+        .unwrap()
+        .set_input(Some(target), 0);
     assert!(!is_fastfail_callind(&fd, callind, resolver));
     assert_eq!(swi_vector_of_callind(&fd, callind, resolver), None);
 }

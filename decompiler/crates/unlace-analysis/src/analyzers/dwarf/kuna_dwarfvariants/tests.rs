@@ -46,7 +46,10 @@ struct Tree {
 
 impl Tree {
     fn new() -> Self {
-        Tree { dies: BTreeMap::new(), next: 1 }
+        Tree {
+            dies: BTreeMap::new(),
+            next: 1,
+        }
     }
 
     fn add(&mut self, parent: Option<usize>, mut d: DieSnap) -> usize {
@@ -184,8 +187,14 @@ fn reads_niche_default_variant() {
     let raw = read_variant_part(&t.dies[&e], &t.dies).expect("niche Option must read");
     assert_eq!(raw.variants.len(), 2);
     assert_eq!(raw.variants[0].discr, Some(0));
-    assert_eq!(raw.variants[1].discr, None, "the default variant keeps its absence");
-    assert_eq!(raw.variants[1].fields[0].1, 0, "the payload starts where the tag does");
+    assert_eq!(
+        raw.variants[1].discr, None,
+        "the default variant keeps its absence"
+    );
+    assert_eq!(
+        raw.variants[1].fields[0].1, 0,
+        "the payload starts where the tag does"
+    );
 }
 
 /// An ordinary C aggregate has no `DW_TAG_variant_part`, so both entry points
@@ -362,7 +371,10 @@ fn discriminant_location_follows_the_member_rule() {
         let d = t.dies.get_mut(&tag).unwrap();
         d.data_member_location = None;
         d.member_location_unknown = unknown;
-        assert_eq!(read_variant_part(&t.dies[&e], &t.dies).map(|raw| raw.tag_offset), expected);
+        assert_eq!(
+            read_variant_part(&t.dies[&e], &t.dies).map(|raw| raw.tag_offset),
+            expected
+        );
     }
 }
 
@@ -387,7 +399,11 @@ fn payload_members_follow_the_member_rule() {
     t.variant(vp, Some(0), "A", a);
     t.variant(vp, Some(1), "B", b);
     let raw = read_variant_part(&t.dies[&e], &t.dies).expect("the placeable members still read");
-    let fields: Vec<_> = raw.variants[0].fields.iter().map(|f| (f.0.as_str(), f.1)).collect();
+    let fields: Vec<_> = raw.variants[0]
+        .fields
+        .iter()
+        .map(|f| (f.0.as_str(), f.1))
+        .collect();
     assert_eq!(fields, vec![("__0", 4)]);
 }
 
@@ -449,7 +465,10 @@ fn result_overlays_so_neither_variant_is_named() {
         vec!["field_0x4", "field_0x4"],
         "two variants at one offset name neither: {uf:?}"
     );
-    assert!(uf.iter().all(|x| x.1 == 0), "a union facet is an overlay at 0: {uf:?}");
+    assert!(
+        uf.iter().all(|x| x.1 == 0),
+        "a union facet is an overlay at 0: {uf:?}"
+    );
 
     // The facet's own field is re-based off the payload offset: DWARF put `__0`
     // at enum offset 4, the overlay starts at 4, so inside the facet it is 0.
@@ -464,7 +483,10 @@ fn result_overlays_so_neither_variant_is_named() {
     // prints the FACET TYPE's name, so suppressing only the member name would
     // still leak the variant.
     for n in ["Result<u32, u32>::Ok", "Result<u32, u32>::Err"] {
-        assert!(types.find_by_name(n).unwrap().is_none(), "{n} must not exist");
+        assert!(
+            types.find_by_name(n).unwrap().is_none(),
+            "{n} must not exist"
+        );
     }
     // The source names are not lost -- they are on the side table.
     let l = types.kuna_variant_layout("Result<u32, u32>").unwrap();
@@ -482,7 +504,9 @@ fn records_the_layout_side_table() {
     let e = result_u32(&mut t);
     intern(&types, &t, e).unwrap();
 
-    let l = types.kuna_variant_layout("Result<u32, u32>").expect("layout recorded");
+    let l = types
+        .kuna_variant_layout("Result<u32, u32>")
+        .expect("layout recorded");
     assert_eq!(l.size, 8);
     assert_eq!((l.tag_offset, l.tag_size), (0, 4));
     assert_eq!(l.payload_offset, 4);
@@ -492,7 +516,10 @@ fn records_the_layout_side_table() {
     assert_eq!(l.facet_for_discr(1).unwrap().name, "Err");
     assert!(l.facet_for_discr(2).is_none(), "no default variant here");
     // Field offsets in the table are ABSOLUTE within the enum, not re-based.
-    assert_eq!(l.facet_named("Err").unwrap().fields, vec![("__0".to_string(), 4)]);
+    assert_eq!(
+        l.facet_named("Err").unwrap().fields,
+        vec![("__0".to_string(), 4)]
+    );
     assert_eq!(types.kuna_variant_layouts().len(), 1);
 }
 
@@ -528,9 +555,18 @@ fn builds_option_with_a_fieldless_variant() {
     let none = l.facet_named("None").unwrap();
     assert_eq!(none.discr, Some(0));
     assert!(none.fields.is_empty());
-    assert!(none.payload_type.is_empty(), "no union member was minted for it");
-    assert_eq!(l.facet_named("Some").unwrap().fields, vec![("__0".to_string(), 4)]);
-    assert_eq!(l.facet_named("Some").unwrap().payload_type, "Option<u32>::Some");
+    assert!(
+        none.payload_type.is_empty(),
+        "no union member was minted for it"
+    );
+    assert_eq!(
+        l.facet_named("Some").unwrap().fields,
+        vec![("__0".to_string(), 4)]
+    );
+    assert_eq!(
+        l.facet_named("Some").unwrap().payload_type,
+        "Option<u32>::Some"
+    );
 }
 
 /// A niche-encoded `Option<&u32>`: the discriminant IS the payload's first word,
@@ -599,7 +635,10 @@ fn builds_three_variants() {
     let built = intern(&types, &t, e).expect("Three must build");
     let payload = built.get_field(1).unwrap().field_type.clone();
     assert_eq!(
-        fields(&payload).iter().map(|x| x.0.as_str()).collect::<Vec<_>>(),
+        fields(&payload)
+            .iter()
+            .map(|x| x.0.as_str())
+            .collect::<Vec<_>>(),
         vec!["A", "B"],
         "the fieldless `C` overlays nothing; it is on the side table instead"
     );
@@ -638,7 +677,10 @@ fn builds_multi_field_variant() {
     let built = intern(&types, &t, e).expect("Multi must build");
     let payload = built.get_field(1).unwrap().field_type.clone();
     assert_eq!(
-        fields(&payload).iter().map(|x| x.0.as_str()).collect::<Vec<_>>(),
+        fields(&payload)
+            .iter()
+            .map(|x| x.0.as_str())
+            .collect::<Vec<_>>(),
         vec!["field_0x4", "field_0x8"],
         "P and Q share offset 8, so neither is named"
     );
@@ -725,7 +767,11 @@ fn same_named_different_sized_variants_both_survive() {
     let a = intern(&types, &t, ea).expect("first Opt must build");
     let b = intern(&types, &t, eb).expect("second Opt must build");
     assert_eq!(a.get_name(), "Opt");
-    assert_eq!(b.get_name(), "Opt_16", "the second steps to a size-suffixed name");
+    assert_eq!(
+        b.get_name(),
+        "Opt_16",
+        "the second steps to a size-suffixed name"
+    );
     assert_eq!(a.get_size(), 8);
     assert_eq!(b.get_size(), 16);
 
@@ -743,8 +789,14 @@ fn same_named_different_sized_variants_both_survive() {
 
     let la = types.kuna_variant_layout("Opt").unwrap();
     let lb = types.kuna_variant_layout("Opt_16").unwrap();
-    assert_eq!(la.facet_named("Some").unwrap().fields, vec![("__0".to_string(), 4)]);
-    assert_eq!(lb.facet_named("Some").unwrap().fields, vec![("__0".to_string(), 8)]);
+    assert_eq!(
+        la.facet_named("Some").unwrap().fields,
+        vec![("__0".to_string(), 4)]
+    );
+    assert_eq!(
+        lb.facet_named("Some").unwrap().fields,
+        vec![("__0".to_string(), 8)]
+    );
 }
 
 /// A variant part where NO variant has any field is a C-like enum wearing the
@@ -839,7 +891,10 @@ fn refuses_when_every_facet_field_is_unbuildable() {
     assert_eq!(built.get_size(), 8, "sealed at DW_AT_byte_size, not 0");
     assert!(fields(&built).is_empty());
     assert!(!built.is_incomplete());
-    assert!(types.kuna_variant_layout("AllVoid").is_none(), "no layout is claimed");
+    assert!(
+        types.kuna_variant_layout("AllVoid").is_none(),
+        "no layout is claimed"
+    );
 }
 
 /// The same seal for a member that would run PAST the enum's byte size: the
@@ -894,7 +949,10 @@ fn builds_five_variants() {
     let built = intern(&types, &t, e).expect("Five must build");
     let payload = built.get_field(1).unwrap().field_type.clone();
     assert_eq!(
-        fields(&payload).iter().map(|x| x.0.as_str()).collect::<Vec<_>>(),
+        fields(&payload)
+            .iter()
+            .map(|x| x.0.as_str())
+            .collect::<Vec<_>>(),
         vec!["A", "field_0x8", "field_0x8"],
         "the two fieldless variants overlay nothing; B and C collide at 8"
     );
@@ -951,8 +1009,22 @@ fn a_generic_enum_at_two_instantiations_keeps_both() {
     assert_eq!((a.get_name(), a.get_size()), ("Option<u32>", 8));
     assert_eq!((b.get_name(), b.get_size()), ("Option<u64>", 16));
 
-    let fa = a.get_field(1).unwrap().field_type.get_field(0).unwrap().field_type.clone();
-    let fb = b.get_field(1).unwrap().field_type.get_field(0).unwrap().field_type.clone();
+    let fa = a
+        .get_field(1)
+        .unwrap()
+        .field_type
+        .get_field(0)
+        .unwrap()
+        .field_type
+        .clone();
+    let fb = b
+        .get_field(1)
+        .unwrap()
+        .field_type
+        .get_field(0)
+        .unwrap()
+        .field_type
+        .clone();
     assert_eq!(fa.get_name(), "Option<u32>::Some");
     assert_eq!(fb.get_name(), "Option<u64>::Some");
     assert_eq!(fields(&fa), vec![("__0".to_string(), 0, 4)]);
@@ -982,7 +1054,11 @@ fn builds_niche_option_box() {
     assert_eq!(fields(&built), vec![("Some".to_string(), 0, 8)]);
     let l = types.kuna_variant_layout("Option<Box<u64>>").unwrap();
     assert!(l.niche);
-    assert_eq!(l.facet_named("Some").unwrap().discr, None, "Some is the default variant");
+    assert_eq!(
+        l.facet_named("Some").unwrap().discr,
+        None,
+        "Some is the default variant"
+    );
     assert_eq!(l.facet_for_discr(0).unwrap().name, "None");
     assert_eq!(l.facet_for_discr(0x4000).unwrap().name, "Some");
 }
@@ -1037,7 +1113,10 @@ fn refuses_a_plain_gcc_struct() {
     t.member(s, "x", u32t, 0);
     t.member(s, "y", u32t, 4);
     assert!(intern(&types, &t, s).is_none());
-    assert!(types.find_by_name("point").unwrap().is_none(), "nothing was interned");
+    assert!(
+        types.find_by_name("point").unwrap().is_none(),
+        "nothing was interned"
+    );
     assert!(types.kuna_variant_layouts().is_empty());
 }
 
@@ -1069,7 +1148,10 @@ fn seals_when_the_overlay_union_name_is_exhausted() {
     let built = intern(&types, &t, e).expect("the sealed shell is the answer");
     assert_eq!(built.get_name(), "Result<u32, u32>");
     assert_eq!(built.get_size(), 8, "sealed at DW_AT_byte_size, not 0");
-    assert!(!built.is_incomplete(), "a zero-size incomplete type is the defect");
+    assert!(
+        !built.is_incomplete(),
+        "a zero-size incomplete type is the defect"
+    );
     assert!(fields(&built).is_empty());
     assert!(
         types.kuna_variant_layout("Result<u32, u32>").is_none(),
@@ -1099,9 +1181,19 @@ fn option_keeps_its_only_payload_variant_name() {
 
     let built = intern(&types, &t, e).expect("Option must build");
     let payload = built.get_field(1).unwrap().field_type.clone();
-    assert_eq!(fields(&payload).iter().map(|x| x.0.as_str()).collect::<Vec<_>>(), vec!["Some"]);
+    assert_eq!(
+        fields(&payload)
+            .iter()
+            .map(|x| x.0.as_str())
+            .collect::<Vec<_>>(),
+        vec!["Some"]
+    );
     let somet = payload.get_field(0).unwrap().field_type.clone();
-    assert_eq!(somet.get_name(), "Option<u32>::Some", "the facet TYPE keeps it too");
+    assert_eq!(
+        somet.get_name(),
+        "Option<u32>::Some",
+        "the facet TYPE keeps it too"
+    );
     let l = types.kuna_variant_layout("Option<u32>").unwrap();
     assert_eq!(l.facet_named("Some").unwrap().label, "Some");
     assert!(l.names_any_variant());
@@ -1131,13 +1223,20 @@ fn tree_style_overlay_names_no_variant_but_keeps_the_uncontested_field() {
     let built = intern(&types, &t, e).expect("Tree must build");
     let payload = built.get_field(1).unwrap().field_type.clone();
     assert_eq!(
-        fields(&payload).iter().map(|x| x.0.as_str()).collect::<Vec<_>>(),
+        fields(&payload)
+            .iter()
+            .map(|x| x.0.as_str())
+            .collect::<Vec<_>>(),
         vec!["field_0x8", "field_0x8"]
     );
     let leaft = payload.get_field(0).unwrap().field_type.clone();
     let nodet = payload.get_field(1).unwrap().field_type.clone();
     assert_eq!(leaft.get_name(), "Tree::field_0x8");
-    assert_eq!(nodet.get_name(), "Tree::field_0x8_1", "different shapes stay apart");
+    assert_eq!(
+        nodet.get_name(),
+        "Tree::field_0x8_1",
+        "different shapes stay apart"
+    );
     assert_eq!(fields(&leaft), vec![("__0".to_string(), 0, 8)]);
     assert_eq!(
         fields(&nodet),
@@ -1145,11 +1244,18 @@ fn tree_style_overlay_names_no_variant_but_keeps_the_uncontested_field() {
         "`__1` at offset 16 is Node's alone, so it keeps its name"
     );
     for n in ["Tree::Leaf", "Tree::Node"] {
-        assert!(types.find_by_name(n).unwrap().is_none(), "{n} must not exist");
+        assert!(
+            types.find_by_name(n).unwrap().is_none(),
+            "{n} must not exist"
+        );
     }
     let l = types.kuna_variant_layout("Tree").unwrap();
     assert!(!l.names_any_variant());
-    assert_eq!(l.facet_for_discr(1).unwrap().name, "Node", "the source name survives here");
+    assert_eq!(
+        l.facet_for_discr(1).unwrap().name,
+        "Node",
+        "the source name survives here"
+    );
 }
 
 /// The DEFAULT (niche) variant is not a special case for the rule: with two
@@ -1178,7 +1284,11 @@ fn default_variant_is_suppressed_when_it_overlays_another() {
         fields(&payload)
     );
     let l = types.kuna_variant_layout("Either").unwrap();
-    assert_eq!(l.facet_for_discr(0xdead).unwrap().name, "Ptr", "still the default on the table");
+    assert_eq!(
+        l.facet_for_discr(0xdead).unwrap().name,
+        "Ptr",
+        "still the default on the table"
+    );
     assert!(!l.names_any_variant());
 }
 
@@ -1203,7 +1313,10 @@ fn disjoint_payload_variants_keep_both_names() {
     let built = intern(&types, &t, e).expect("Split must build");
     let payload = built.get_field(1).unwrap().field_type.clone();
     assert_eq!(
-        fields(&payload).iter().map(|x| x.0.as_str()).collect::<Vec<_>>(),
+        fields(&payload)
+            .iter()
+            .map(|x| x.0.as_str())
+            .collect::<Vec<_>>(),
         vec!["A", "B"]
     );
     let l = types.kuna_variant_layout("Split").unwrap();
@@ -1266,7 +1379,10 @@ fn seals_when_every_suppressed_facet_name_is_taken() {
     let built = intern(&types, &t, e).expect("the sealed shell is the answer");
     assert_eq!(built.get_name(), "Result<u32, u32>");
     assert_eq!(built.get_size(), 8, "sealed at DW_AT_byte_size, not 0");
-    assert!(!built.is_incomplete(), "a zero-size incomplete type is the defect");
+    assert!(
+        !built.is_incomplete(),
+        "a zero-size incomplete type is the defect"
+    );
     assert!(fields(&built).is_empty());
     assert!(
         types.kuna_variant_layout("Result<u32, u32>").is_none(),

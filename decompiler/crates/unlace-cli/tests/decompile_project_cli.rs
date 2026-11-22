@@ -14,7 +14,10 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture(name: &str) -> String {
@@ -91,13 +94,20 @@ fn selected_project_refuses_an_executable_section_iat_slot() {
         &specs(),
     ]);
     assert!(!ok, "an IAT slot unexpectedly exported: {stdout}");
-    assert!(stdout.trim().is_empty(), "an IAT project summary escaped: {stdout}");
+    assert!(
+        stdout.trim().is_empty(),
+        "an IAT project summary escaped: {stdout}"
+    );
     assert_eq!(
         stderr,
         "error: selector \"0x401000\" identifies import VirtualAlloc at 0x401000; \
          the IAT slot contains a loader-written pointer, not a function body\n"
     );
-    assert!(!dir.exists(), "refusal left a project folder at {}", dir.display());
+    assert!(
+        !dir.exists(),
+        "refusal left a project folder at {}",
+        dir.display()
+    );
 }
 
 /// The four artifact paths for a `<file_name>` project export.
@@ -118,8 +128,14 @@ fn project_folder_written_for_fauxware() {
         assert!(f.exists(), "missing artifact {}", f.display());
     }
     let c_text = std::fs::read_to_string(&c).unwrap();
-    assert!(c_text.contains("#include \"fauxware.h\""), ".c missing header include:\n{c_text}");
-    assert!(c_text.contains("// Function: main"), ".c missing main function header:\n{c_text}");
+    assert!(
+        c_text.contains("#include \"fauxware.h\""),
+        ".c missing header include:\n{c_text}"
+    );
+    assert!(
+        c_text.contains("// Function: main"),
+        ".c missing main function header:\n{c_text}"
+    );
 
     let h_text = std::fs::read_to_string(&h).unwrap();
     assert!(
@@ -132,12 +148,24 @@ fn project_folder_written_for_fauxware() {
         .lines()
         .find(|l| l.contains("main(") && !l.contains("//"))
         .unwrap_or_else(|| panic!(".h missing a main( prototype:\n{h_text}"));
-    assert!(main_proto.trim_end().ends_with(';'), "main prototype must end in `;`: {main_proto:?}");
+    assert!(
+        main_proto.trim_end().ends_with(';'),
+        "main prototype must end in `;`: {main_proto:?}"
+    );
 
     let readme_text = std::fs::read_to_string(&readme).unwrap();
-    assert!(readme_text.contains("x86:LE:64"), "README missing arch id:\n{readme_text}");
-    assert!(readme_text.contains("Entry point"), "README missing entry point:\n{readme_text}");
-    assert!(readme_text.contains("## Sections"), "README missing sections table:\n{readme_text}");
+    assert!(
+        readme_text.contains("x86:LE:64"),
+        "README missing arch id:\n{readme_text}"
+    );
+    assert!(
+        readme_text.contains("Entry point"),
+        "README missing entry point:\n{readme_text}"
+    );
+    assert!(
+        readme_text.contains("## Sections"),
+        "README missing sections table:\n{readme_text}"
+    );
 }
 
 /// The README's entry-point row was `object`'s raw `entry()`, which on a Mach-O
@@ -213,7 +241,10 @@ fn asm_labels_match_c_function_names() {
             checked += 1;
         }
     }
-    assert!(checked > 1, "expected several functions cross-checked, got {checked}");
+    assert!(
+        checked > 1,
+        "expected several functions cross-checked, got {checked}"
+    );
 }
 
 #[test]
@@ -228,7 +259,9 @@ fn asm_has_stack_comment_for_main() {
     assert!(found, "no main: label in asm:\n{asm_text}");
     let header: Vec<&str> = lines.take_while(|l| l.starts_with(';')).collect();
     assert!(
-        header.iter().any(|l| l.starts_with("; stack:") || l.starts_with("; arg:")),
+        header
+            .iter()
+            .any(|l| l.starts_with("; stack:") || l.starts_with("; arg:")),
         "main: has no stack/arg comment block:\n{}",
         header.join("\n")
     );
@@ -261,7 +294,10 @@ fn dat_labels_cross_referenced() {
         }
         i = he.max(hs);
     }
-    assert!(!tokens.is_empty(), "fauxware .c should reference some dat_<hex> data:\n{c_text}");
+    assert!(
+        !tokens.is_empty(),
+        "fauxware .c should reference some dat_<hex> data:\n{c_text}"
+    );
 
     // Label policy (documented in decompile_project.rs): a bare `dat_<hex>`
     // gets its own `dat_<hex>:` label line; when a NAMED global covers the
@@ -270,7 +306,10 @@ fn dat_labels_cross_referenced() {
     for t in &tokens {
         let has_label = asm_text.lines().any(|l| l.starts_with(&format!("{t}:")))
             || asm_text.contains(&format!("= {t}"));
-        assert!(has_label, "dat token {t:?} from the .c has no label/alias in the .asm");
+        assert!(
+            has_label,
+            "dat token {t:?} from the .c has no label/alias in the .asm"
+        );
     }
 }
 
@@ -347,7 +386,8 @@ fn header_syntax_checks_when_a_type_shares_a_name_with_a_function() {
             "libctypes {arm}: the `stat` prototype should be suppressed, not declared:\n{text}"
         );
         assert!(
-            text.contains("conflicts with a data or type declaration */") && !text.contains("#error"),
+            text.contains("conflicts with a data or type declaration */")
+                && !text.contains("#error"),
             "libctypes {arm}: the collision is reported in a comment, not a hard error:\n{text}"
         );
         let stub = dir.join("hcheck.c");
@@ -412,9 +452,18 @@ fn fast_project_discovers_real_function_bodies() {
     }
     let c = std::fs::read_to_string(dir.join("pdb_prog.exe.c")).unwrap();
     assert!(c.contains("@ 0x140001010"), "entry function missing:\n{c}");
-    assert!(c.contains("@ 0x140001000"), "direct-call target missing:\n{c}");
-    assert!(c.contains("return a1 * 7 + a0 * 3;"), "discovered function has no real body:\n{c}");
-    assert!(stdout.contains("functions: 2 ok, 0 failed"), "unexpected project summary: {stdout}");
+    assert!(
+        c.contains("@ 0x140001000"),
+        "direct-call target missing:\n{c}"
+    );
+    assert!(
+        c.contains("return a1 * 7 + a0 * 3;"),
+        "discovered function has no real body:\n{c}"
+    );
+    assert!(
+        stdout.contains("functions: 2 ok, 0 failed"),
+        "unexpected project summary: {stdout}"
+    );
 
     let control = out_dir("fast_bodies_off");
     let (_stdout, stderr, ok) = run_kuna(&[
@@ -459,7 +508,10 @@ fn fast_project_discovers_indirect_pointer_target() {
         panic!("fast pointer project failed: {stderr}");
     }
     let c = std::fs::read_to_string(dir.join("aif_gap_x86_64.c")).unwrap();
-    assert!(c.contains("@ 0x13ae"), "pointer-only function missing:\n{c}");
+    assert!(
+        c.contains("@ 0x13ae"),
+        "pointer-only function missing:\n{c}"
+    );
     assert!(
         c.contains("return (a0 + 0x40) * 2 + 9;"),
         "pointer-only function has no real body:\n{c}"
@@ -542,9 +594,18 @@ fn fast_selected_project_does_not_expand_to_callees() {
         panic!("fast selected project failed: {stderr}");
     }
     let c = std::fs::read_to_string(dir.join("pdb_prog.exe.c")).unwrap();
-    assert!(c.contains("@ 0x140001010"), "selected function missing:\n{c}");
-    assert!(!c.contains("@ 0x140001000"), "selector expanded to an unrequested callee:\n{c}");
-    assert!(stdout.contains("functions: 1 ok, 0 failed"), "unexpected project summary: {stdout}");
+    assert!(
+        c.contains("@ 0x140001010"),
+        "selected function missing:\n{c}"
+    );
+    assert!(
+        !c.contains("@ 0x140001000"),
+        "selector expanded to an unrequested callee:\n{c}"
+    );
+    assert!(
+        stdout.contains("functions: 1 ok, 0 failed"),
+        "unexpected project summary: {stdout}"
+    );
 }
 
 /// A named global whose declared datatype is larger than the load image's
@@ -605,9 +666,22 @@ fn a_binary_with_a_string_over_the_load_window_still_exports() {
         .skip(1)
         .take_while(|l| l.starts_with("  "))
         .collect();
-    assert_eq!(rows.len(), 38, "604 bytes, 16 to a row:\n{}", rows.join("\n"));
-    assert!(rows[0].contains("KEYDEF is F[.C]"), "first row: {:?}", rows[0]);
-    assert!(rows[37].starts_with("  00016850: 20 73 75 66 66 69 78 65 73"), "last row: {:?}", rows[37]);
+    assert_eq!(
+        rows.len(),
+        38,
+        "604 bytes, 16 to a row:\n{}",
+        rows.join("\n")
+    );
+    assert!(
+        rows[0].contains("KEYDEF is F[.C]"),
+        "first row: {:?}",
+        rows[0]
+    );
+    assert!(
+        rows[37].starts_with("  00016850: 20 73 75 66 66 69 78 65 73"),
+        "last row: {:?}",
+        rows[37]
+    );
 }
 
 /// Every artifact, not just the `.c`.  The `.h` is the one that could plausibly
@@ -645,8 +719,10 @@ fn jobs_project_artifacts_are_byte_identical_to_serial() {
         "dwarfstructs_x86_64.asm",
         "README.md",
     ];
-    let want: Vec<Vec<u8>> =
-        names.iter().map(|n| std::fs::read(serial.join(n)).expect(n)).collect();
+    let want: Vec<Vec<u8>> = names
+        .iter()
+        .map(|n| std::fs::read(serial.join(n)).expect(n))
+        .collect();
     // The .h really does carry recovered aggregates, or this proves nothing.
     let header = String::from_utf8_lossy(&want[1]).into_owned();
     assert!(
@@ -710,10 +786,19 @@ fn jobs_project_names_synthesized_structs_as_the_serial_export_does() {
         "structsynth_teb_pe_x86_64.exe",
     ] {
         let bin = fixture(fixture_name);
-        let stem = std::path::Path::new(fixture_name).file_name().unwrap().to_str().unwrap();
+        let stem = std::path::Path::new(fixture_name)
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap();
         let export = |tag: &str, extra: &[&str], env: &[(&str, &str)]| -> (PathBuf, String, bool) {
             let dir = out_dir(&format!("structsynth_{stem}_{tag}"));
-            let mut args = vec!["decompile-project", bin.as_str(), "-o", dir.to_str().unwrap()];
+            let mut args = vec![
+                "decompile-project",
+                bin.as_str(),
+                "-o",
+                dir.to_str().unwrap(),
+            ];
             args.extend_from_slice(&["--max-fn-seconds", "0", "--option", "protoorder", "off"]);
             args.extend_from_slice(extra);
             let sp = specs();
@@ -723,7 +808,11 @@ fn jobs_project_names_synthesized_structs_as_the_serial_export_does() {
                 .envs(env.iter().copied())
                 .output()
                 .expect("failed to spawn the kuna binary");
-            (dir, String::from_utf8_lossy(&out.stderr).into_owned(), out.status.success())
+            (
+                dir,
+                String::from_utf8_lossy(&out.stderr).into_owned(),
+                out.status.success(),
+            )
         };
         let (serial, stderr, ok) = export("serial", &[], &[]);
         if !ok {
@@ -735,13 +824,20 @@ fn jobs_project_names_synthesized_structs_as_the_serial_export_does() {
             .chain(std::iter::once("README.md".to_string()))
             .collect();
         let header = std::fs::read_to_string(serial.join(&names[1])).unwrap();
-        assert!(header.contains("struct struct_0 {"), "{stem} stopped synthesizing:\n{header}");
+        assert!(
+            header.contains("struct struct_0 {"),
+            "{stem} stopped synthesizing:\n{header}"
+        );
         let mut dirs = vec![serial.clone()];
         for (tag, extra, env) in [
             ("again", &[][..], &[][..]),
             ("j2", &["--jobs", "2", "--jobs-chunk", "1"][..], &[][..]),
             ("j4", &["--jobs", "4"][..], &[][..]),
-            ("force", &["--jobs", "3", "--jobs-chunk", "1"][..], &[("KUNA_JOBS_FAULT", "synth:force")][..]),
+            (
+                "force",
+                &["--jobs", "3", "--jobs-chunk", "1"][..],
+                &[("KUNA_JOBS_FAULT", "synth:force")][..],
+            ),
         ] {
             let (dir, stderr, ok) = export(tag, extra, env);
             assert!(ok, "{stem} {tag} project export failed: {stderr}");
@@ -749,7 +845,10 @@ fn jobs_project_names_synthesized_structs_as_the_serial_export_does() {
             for name in &names {
                 let got = std::fs::read(dir.join(name)).expect(name);
                 let want = std::fs::read(serial.join(name)).expect(name);
-                assert!(got == want, "{stem} {tag} differs from the serial export in {name}");
+                assert!(
+                    got == want,
+                    "{stem} {tag} differs from the serial export in {name}"
+                );
             }
             dirs.push(dir);
         }
@@ -769,35 +868,71 @@ fn jobs_project_serial_path_keeps_the_types_of_the_other_functions() {
     let sp = specs();
     let export = |tag: &str, extra: &[&str], env: &[(&str, &str)]| -> (PathBuf, String, bool) {
         let dir = out_dir(&format!("structsynth_teb_{tag}"));
-        let mut args = vec!["decompile-project", bin.as_str(), "-o", dir.to_str().unwrap()];
+        let mut args = vec![
+            "decompile-project",
+            bin.as_str(),
+            "-o",
+            dir.to_str().unwrap(),
+        ];
         // (kuna `protoorder`) The serial run a pool replays is the one without
         // the callee-first order; both arms name it.
-        args.extend_from_slice(
-            &["--max-fn-seconds", "0", "--option", "protoorder", "off", "--sleighpath", sp.as_str()],
-        );
+        args.extend_from_slice(&[
+            "--max-fn-seconds",
+            "0",
+            "--option",
+            "protoorder",
+            "off",
+            "--sleighpath",
+            sp.as_str(),
+        ]);
         args.extend_from_slice(extra);
         let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(&args)
             .envs(env.iter().copied())
             .output()
             .expect("failed to spawn the kuna binary");
-        (dir, String::from_utf8_lossy(&out.stderr).into_owned(), out.status.success())
+        (
+            dir,
+            String::from_utf8_lossy(&out.stderr).into_owned(),
+            out.status.success(),
+        )
     };
     let (serial, stderr, ok) = export("serial", &[], &[]);
     if !ok {
         panic!("serial project export failed: {stderr}");
     }
-    let (sharded, stderr, ok) =
-        export("fallback", &["--jobs", "4", "--jobs-chunk", "1"], &[("KUNA_JOBS_FAULT", "synth:serial")]);
+    let (sharded, stderr, ok) = export(
+        "fallback",
+        &["--jobs", "4", "--jobs-chunk", "1"],
+        &[("KUNA_JOBS_FAULT", "synth:serial")],
+    );
     assert!(ok, "sharded export failed: {stderr}");
-    assert!(stderr.contains("decompiled again in order by one worker process"), "{stderr}");
+    assert!(
+        stderr.contains("decompiled again in order by one worker process"),
+        "{stderr}"
+    );
     let c = "structsynth_teb_pe_x86_64.exe.c";
-    assert_eq!(std::fs::read(sharded.join(c)).unwrap(), std::fs::read(serial.join(c)).unwrap());
+    assert_eq!(
+        std::fs::read(sharded.join(c)).unwrap(),
+        std::fs::read(serial.join(c)).unwrap()
+    );
     let body = std::fs::read_to_string(serial.join(c)).unwrap();
-    assert!(body.contains("TEB *teb;"), "the fixture stopped reading the TEB:\n{body}");
+    assert!(
+        body.contains("TEB *teb;"),
+        "the fixture stopped reading the TEB:\n{body}"
+    );
     let header = std::fs::read_to_string(sharded.join("structsynth_teb_pe_x86_64.exe.h")).unwrap();
-    for wanted in ["struct TEB {", "struct PEB {", "struct struct_0 {", "struct struct_4 {"] {
-        assert_eq!(header.matches(wanted).count(), 1, "{wanted:?} in:\n{header}");
+    for wanted in [
+        "struct TEB {",
+        "struct PEB {",
+        "struct struct_0 {",
+        "struct struct_4 {",
+    ] {
+        assert_eq!(
+            header.matches(wanted).count(),
+            1,
+            "{wanted:?} in:\n{header}"
+        );
     }
     for dir in [serial, sharded] {
         let _ = std::fs::remove_dir_all(dir);
@@ -835,7 +970,10 @@ fn project_exit_distinguishes_all_failed_from_partial_success() {
         }
         let (stdout, stderr, ok) = run_kuna(&args);
         assert!(!ok, "the all-failed {mode} project exited zero: {stdout}");
-        assert!(stdout.contains("functions: 0 ok, 1 failed"), "summary was lost: {stdout}");
+        assert!(
+            stdout.contains("functions: 0 ok, 1 failed"),
+            "summary was lost: {stdout}"
+        );
         assert!(
             stderr.contains("decompilation produced zero function bodies")
                 && stderr.contains("per-function error record"),
@@ -843,7 +981,11 @@ fn project_exit_distinguishes_all_failed_from_partial_success() {
         );
         let (c, h, asm, readme) = artifacts(&failed_dir, "fauxware");
         for path in [&c, &h, &asm, &readme] {
-            assert!(path.is_file(), "{mode} project did not finish {}", path.display());
+            assert!(
+                path.is_file(),
+                "{mode} project did not finish {}",
+                path.display()
+            );
         }
         assert!(
             std::fs::read_to_string(&c)
@@ -863,7 +1005,10 @@ fn project_exit_distinguishes_all_failed_from_partial_success() {
             "a completed all-failed export left a stale streaming marker"
         );
         if stream {
-            assert!(failed_dir.join("index.jsonl").is_file(), "stream index was not completed");
+            assert!(
+                failed_dir.join("index.jsonl").is_file(),
+                "stream index was not completed"
+            );
         }
 
         let mixed_dir = out_dir(&format!("partial_{mode}"));
@@ -889,7 +1034,10 @@ fn project_exit_distinguishes_all_failed_from_partial_success() {
         }
         let (stdout, stderr, ok) = run_kuna(&args);
         assert!(ok, "a partial-success {mode} project failed: {stderr}");
-        assert!(stdout.contains("functions: 1 ok, 1 failed"), "bad mixed summary: {stdout}");
+        assert!(
+            stdout.contains("functions: 1 ok, 1 failed"),
+            "bad mixed summary: {stdout}"
+        );
         let c = std::fs::read_to_string(mixed_dir.join("fauxware.c")).unwrap();
         assert!(
             c.contains("Flow exceeded maximum allowable instructions")
@@ -934,7 +1082,11 @@ fn stream_project(fixture_name: &str, tag: &str, extra: &[&str]) -> PathBuf {
 fn json_field<'a>(line: &'a str, key: &str) -> &'a str {
     let fields: std::collections::BTreeMap<String, &serde_json::value::RawValue> =
         serde_json::from_str(line).expect("valid project JSON");
-    fields.get(key).copied().unwrap_or_else(|| panic!("missing {key}: {line}")).get()
+    fields
+        .get(key)
+        .copied()
+        .unwrap_or_else(|| panic!("missing {key}: {line}"))
+        .get()
 }
 
 /// The `// Function:` blocks of a `.c`, as a sorted multiset.
@@ -968,15 +1120,26 @@ fn assert_stream_matches_serial(
     file_name: &str,
     exact_types: bool,
 ) {
-    assert!(!stream.join(".streaming").exists(), ".streaming outlived a successful export");
+    assert!(
+        !stream.join(".streaming").exists(),
+        ".streaming outlived a successful export"
+    );
 
     let c = std::fs::read_to_string(stream.join(format!("{file_name}.c"))).unwrap();
     let plain_c = std::fs::read_to_string(serial.join(format!("{file_name}.c"))).unwrap();
-    assert_eq!(c_blocks(&c), c_blocks(&plain_c), "the streamed .c is not the same function set");
+    assert_eq!(
+        c_blocks(&c),
+        c_blocks(&plain_c),
+        "the streamed .c is not the same function set"
+    );
 
     let index = std::fs::read_to_string(stream.join("index.jsonl")).unwrap();
     let lines: Vec<&str> = index.lines().collect();
-    assert_eq!(lines.len(), c_blocks(&c).len(), "one index line per function");
+    assert_eq!(
+        lines.len(),
+        c_blocks(&c).len(),
+        "one index line per function"
+    );
     for line in &lines {
         let offset: usize = json_field(line, "c_offset").parse().unwrap();
         let len: usize = json_field(line, "c_len").parse().unwrap();
@@ -989,47 +1152,63 @@ fn assert_stream_matches_serial(
         );
     }
 
-    let (types, protos) = header_halves(
-        &std::fs::read_to_string(stream.join(format!("{file_name}.h"))).unwrap(),
+    let (types, protos) =
+        header_halves(&std::fs::read_to_string(stream.join(format!("{file_name}.h"))).unwrap());
+    let (plain_types, plain_protos) =
+        header_halves(&std::fs::read_to_string(serial.join(format!("{file_name}.h"))).unwrap());
+    assert_eq!(
+        protos, plain_protos,
+        "the streamed .h declares a different prototype set"
     );
-    let (plain_types, plain_protos) = header_halves(
-        &std::fs::read_to_string(serial.join(format!("{file_name}.h"))).unwrap(),
-    );
-    assert_eq!(protos, plain_protos, "the streamed .h declares a different prototype set");
     if exact_types {
-        assert_eq!(types, plain_types, "the serial streamed .h type block moved");
+        assert_eq!(
+            types, plain_types,
+            "the serial streamed .h type block moved"
+        );
     } else {
         let mut got: Vec<&str> = types.lines().collect();
         let mut want: Vec<&str> = plain_types.lines().collect();
         got.sort_unstable();
         want.sort_unstable();
-        assert_eq!(got, want, "the sharded streamed .h type block is not the serial one's union");
+        assert_eq!(
+            got, want,
+            "the sharded streamed .h type block is not the serial one's union"
+        );
     }
 
     let asm = std::fs::read_to_string(stream.join(format!("{file_name}.asm"))).unwrap();
     let plain_asm = std::fs::read_to_string(serial.join(format!("{file_name}.asm"))).unwrap();
-    let (sweep, tails) = asm.split_once("\n; --- variables ---\n").expect("no variables section");
-    let (plain_sweep, plain_tail) =
-        plain_asm.split_once("\n; --- data ---\n").expect("no data tail");
+    let (sweep, tails) = asm
+        .split_once("\n; --- variables ---\n")
+        .expect("no variables section");
+    let (plain_sweep, plain_tail) = plain_asm
+        .split_once("\n; --- data ---\n")
+        .expect("no data tail");
     let stripped: String = plain_sweep
         .lines()
         .filter(|l| !l.starts_with("; arg:") && !l.starts_with("; stack:"))
         .map(|l| format!("{l}\n"))
         .collect();
     assert_eq!(
-        sweep,
-        stripped,
+        sweep, stripped,
         "the streamed sweep is not the non-stream disassembly minus its variable comments"
     );
-    let (vars, tail) = tails.split_once("\n; --- data ---\n").expect("no data tail");
+    let (vars, tail) = tails
+        .split_once("\n; --- data ---\n")
+        .expect("no data tail");
     assert_eq!(tail, plain_tail, "the streamed data tail moved");
-    let moved: Vec<&str> =
-        vars.lines().filter(|l| l.starts_with("; arg:") || l.starts_with("; stack:")).collect();
+    let moved: Vec<&str> = vars
+        .lines()
+        .filter(|l| l.starts_with("; arg:") || l.starts_with("; stack:"))
+        .collect();
     let removed: Vec<&str> = plain_sweep
         .lines()
         .filter(|l| l.starts_with("; arg:") || l.starts_with("; stack:"))
         .collect();
-    assert_eq!(moved, removed, "the variables section is not what the labels lost");
+    assert_eq!(
+        moved, removed,
+        "the variables section is not what the labels lost"
+    );
 }
 
 /// The streamed export writes the same export, in a different order, and says
@@ -1051,13 +1230,19 @@ fn streamed_artifacts_match_the_non_stream_export() {
     assert!(ok, "the reference project export failed: {stderr}");
     // The fixture really does carry recovered aggregates, or the type-block
     // comparison proves nothing.
-    let header =
-        std::fs::read_to_string(serial.join("dwarfstructs_x86_64.h")).unwrap();
-    assert!(header.contains("struct Nest {"), "the fixture stopped exercising the type block");
+    let header = std::fs::read_to_string(serial.join("dwarfstructs_x86_64.h")).unwrap();
+    assert!(
+        header.contains("struct Nest {"),
+        "the fixture stopped exercising the type block"
+    );
 
     assert_stream_matches_serial(&stream, &serial, "dwarfstructs_x86_64", true);
 
-    let pooled = stream_project("dwarfstructs_x86_64", "stream_j3", &["--jobs", "3", "--jobs-chunk", "1"]);
+    let pooled = stream_project(
+        "dwarfstructs_x86_64",
+        "stream_j3",
+        &["--jobs", "3", "--jobs-chunk", "1"],
+    );
     assert_stream_matches_serial(&pooled, &serial, "dwarfstructs_x86_64", false);
 
     for dir in [stream, serial, pooled] {
@@ -1100,13 +1285,22 @@ fn assert_final_index(dir: &std::path::Path, file_name: &str) -> String {
         assert_eq!(json_field(line, "seq"), seq.to_string(), "{line}");
         let offset: usize = json_field(line, "c_offset").parse().unwrap();
         let len: usize = json_field(line, "c_len").parse().unwrap();
-        assert_eq!(offset, end, "the index skips or overlaps a .c block: {line}");
+        assert_eq!(
+            offset, end,
+            "the index skips or overlaps a .c block: {line}"
+        );
         end = offset + len;
         let name: String = serde_json::from_str(json_field(line, "name")).unwrap();
         let addr: String = serde_json::from_str(json_field(line, "addr")).unwrap();
-        assert!(c[offset..end].starts_with(&format!("// Function: {name} @ {addr}")), "{line}");
+        assert!(
+            c[offset..end].starts_with(&format!("// Function: {name} @ {addr}")),
+            "{line}"
+        );
         let value = u64::from_str_radix(addr.trim_start_matches("0x"), 16).unwrap();
-        assert!(last_addr.is_none_or(|last| last <= value), "the index is not address-ordered");
+        assert!(
+            last_addr.is_none_or(|last| last <= value),
+            "the index is not address-ordered"
+        );
         last_addr = Some(value);
     }
     assert_eq!(end, c.len(), "the index does not cover the whole .c");
@@ -1144,8 +1338,16 @@ fn a_progress_export_is_the_non_stream_export_plus_its_index() {
     ];
     let mut indexes = Vec::new();
     for dir in &runs {
-        assert!(!dir.join(".streaming").exists(), ".streaming outlived a successful export");
-        for artifact in [format!("{name}.c"), format!("{name}.h"), format!("{name}.asm"), "README.md".into()] {
+        assert!(
+            !dir.join(".streaming").exists(),
+            ".streaming outlived a successful export"
+        );
+        for artifact in [
+            format!("{name}.c"),
+            format!("{name}.h"),
+            format!("{name}.asm"),
+            "README.md".into(),
+        ] {
             assert_eq!(
                 std::fs::read(dir.join(&artifact)).unwrap(),
                 std::fs::read(plain.join(&artifact)).unwrap(),
@@ -1155,7 +1357,10 @@ fn a_progress_export_is_the_non_stream_export_plus_its_index() {
         }
         indexes.push(assert_final_index(dir, name));
     }
-    assert!(indexes.windows(2).all(|w| w[0] == w[1]), "index.jsonl depends on the job count");
+    assert!(
+        indexes.windows(2).all(|w| w[0] == w[1]),
+        "index.jsonl depends on the job count"
+    );
     for dir in runs.iter().chain([&plain]) {
         let _ = std::fs::remove_dir_all(dir);
     }
@@ -1175,7 +1380,12 @@ fn a_progress_export_reports_progress_before_it_writes_the_export() {
     let total = index.lines().count();
     let smallest = index
         .lines()
-        .min_by_key(|l| (json_field(l, "size").parse::<u64>().unwrap(), std::cmp::Reverse(json_field(l, "seq").parse::<usize>().unwrap())))
+        .min_by_key(|l| {
+            (
+                json_field(l, "size").parse::<u64>().unwrap(),
+                std::cmp::Reverse(json_field(l, "seq").parse::<usize>().unwrap()),
+            )
+        })
         .map(|l| serde_json::from_str::<String>(json_field(l, "addr")).unwrap())
         .unwrap();
 
@@ -1222,13 +1432,29 @@ fn a_progress_export_reports_progress_before_it_writes_the_export() {
     let (status, feed, c_exists, readme) =
         seen.unwrap_or_else(|| panic!("never saw the export mid-run: {stderr}"));
 
-    assert_eq!(json_field(&status, "functions_total"), total.to_string(), "{status}");
+    assert_eq!(
+        json_field(&status, "functions_total"),
+        total.to_string(),
+        "{status}"
+    );
     assert_eq!(json_field(&status, "c_bytes"), "0", "{status}");
-    assert!(!c_exists, "the previous export's .c survived into a running export");
-    assert!(readme.contains("**This export is still streaming**"), "{readme}");
+    assert!(
+        !c_exists,
+        "the previous export's .c survived into a running export"
+    );
+    assert!(
+        readme.contains("**This export is still streaming**"),
+        "{readme}"
+    );
     assert!(readme.contains("do not exist yet"), "{readme}");
-    let complete: Vec<&str> = feed.split_inclusive('\n').filter(|l| l.ends_with('\n')).collect();
-    assert!(!complete.is_empty(), "functions_done moved before the feed did: {status}");
+    let complete: Vec<&str> = feed
+        .split_inclusive('\n')
+        .filter(|l| l.ends_with('\n'))
+        .collect();
+    assert!(
+        !complete.is_empty(),
+        "functions_done moved before the feed did: {status}"
+    );
     for line in &complete {
         assert_eq!(json_field(line, "c_offset"), "null", "{line}");
         assert_eq!(json_field(line, "c_len"), "null", "{line}");
@@ -1241,7 +1467,11 @@ fn a_progress_export_reports_progress_before_it_writes_the_export() {
         .lines()
         .find(|l| json_field(l, "addr") == format!("\"{smallest}\""))
         .unwrap();
-    assert_ne!(json_field(stalled, "error"), "null", "the stalled function has a body: {stalled}");
+    assert_ne!(
+        json_field(stalled, "error"),
+        "null",
+        "the stalled function has a body: {stalled}"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -1249,9 +1479,16 @@ fn a_progress_export_reports_progress_before_it_writes_the_export() {
 /// streamed one: decompile-ordered, with the streamed README.
 #[test]
 fn stream_wins_over_progress() {
-    let dir = stream_project("dwarfstructs_x86_64", "stream_and_progress", &["--progress"]);
+    let dir = stream_project(
+        "dwarfstructs_x86_64",
+        "stream_and_progress",
+        &["--progress"],
+    );
     let readme = std::fs::read_to_string(dir.join("README.md")).unwrap();
-    assert!(readme.contains("Generated by `unlace decompile-project --stream`."), "{readme}");
+    assert!(
+        readme.contains("Generated by `unlace decompile-project --stream`."),
+        "{readme}"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -1273,7 +1510,10 @@ fn streamed_project_can_select_nested_dialog_callbacks() {
         );
     }
     assert_eq!(
-        std::fs::read_to_string(dir.join("index.jsonl")).unwrap().lines().count(),
+        std::fs::read_to_string(dir.join("index.jsonl"))
+            .unwrap()
+            .lines()
+            .count(),
         2,
         "selected callbacks must produce exactly two stream records"
     );
@@ -1296,7 +1536,10 @@ fn streamed_blocks_follow_the_entry_point_not_the_address_order() {
             .position(|n| n == name)
             .unwrap_or_else(|| panic!("{name} missing from the streamed order: {order:?}"))
     };
-    assert_eq!(order[0], "_start", "the image entry point is written first: {order:?}");
+    assert_eq!(
+        order[0], "_start",
+        "the image entry point is written first: {order:?}"
+    );
     // `_init` and `sub_400500` are the two lowest addresses in the binary and
     // the entry point reaches neither, so address order would put them first.
     for reached in ["main", "authenticate", "accepted", "rejected"] {
@@ -1319,7 +1562,9 @@ fn run_kuna_env_with_timeout(
     cap: std::time::Duration,
 ) -> Option<(String, String, bool)> {
     process::output_with_timeout(
-        Command::new(env!("CARGO_BIN_EXE_unlace")).args(args).envs(env.iter().copied()),
+        Command::new(env!("CARGO_BIN_EXE_unlace"))
+            .args(args)
+            .envs(env.iter().copied()),
         cap,
         std::time::Duration::from_millis(100),
     )
@@ -1363,13 +1608,21 @@ fn streamed_worker_panic_loses_only_the_function_that_panicked() {
         std::time::Duration::from_secs(240),
     )
     .expect("a panicking worker wedged the streamed export");
-    assert!(ok, "one panicking function must not fail the export:\n{stderr}");
+    assert!(
+        ok,
+        "one panicking function must not fail the export:\n{stderr}"
+    );
 
     let index = |d: &std::path::Path| -> Vec<(String, String)> {
         let text = std::fs::read_to_string(d.join("index.jsonl")).unwrap();
         let mut rows: Vec<(String, String)> = text
             .lines()
-            .map(|l| (json_field(l, "addr").to_string(), json_field(l, "error").to_string()))
+            .map(|l| {
+                (
+                    json_field(l, "addr").to_string(),
+                    json_field(l, "error").to_string(),
+                )
+            })
             .collect();
         rows.sort();
         rows
@@ -1377,7 +1630,10 @@ fn streamed_worker_panic_loses_only_the_function_that_panicked() {
     let want = index(&reference);
     let got = index(&dir);
     assert_eq!(got.len(), want.len(), "one index line per target");
-    assert!(want.iter().all(|(_, e)| e == "null"), "the reference export lost functions");
+    assert!(
+        want.iter().all(|(_, e)| e == "null"),
+        "the reference export lost functions"
+    );
     for ((addr, error), (want_addr, _)) in got.iter().zip(&want) {
         assert_eq!(addr, want_addr, "the streamed function set moved");
         let expected = if addr == "\"0x400540\"" {
@@ -1397,7 +1653,9 @@ fn streamed_worker_panic_loses_only_the_function_that_panicked() {
     };
     assert_eq!(bodies(&dir), bodies(&reference), "a bystander's body moved");
     assert_eq!(
-        stderr.matches("KUNA_JOBS_FAULT: injected panic at 0x400540").count(),
+        stderr
+            .matches("KUNA_JOBS_FAULT: injected panic at 0x400540")
+            .count(),
         2,
         "the function that panicked runs once in its chunk and once alone:\n{stderr}"
     );
@@ -1406,7 +1664,10 @@ fn streamed_worker_panic_loses_only_the_function_that_panicked() {
             && l.contains("left unfinished by a failed worker process were re-run")),
         "the streamed run must say what it recovered:\n{stderr}"
     );
-    assert!(stderr.contains("1 of them failed again when re-run on their own."), "{stderr}");
+    assert!(
+        stderr.contains("1 of them failed again when re-run on their own."),
+        "{stderr}"
+    );
     for d in [reference, dir] {
         let _ = std::fs::remove_dir_all(d);
     }
@@ -1457,15 +1718,27 @@ fn a_streamed_seed_runs_in_a_worker_and_costs_only_its_own_record() {
         let text = std::fs::read_to_string(d.join("index.jsonl")).unwrap();
         let mut rows: Vec<(String, String)> = text
             .lines()
-            .map(|l| (json_field(l, "addr").to_string(), json_field(l, "error").to_string()))
+            .map(|l| {
+                (
+                    json_field(l, "addr").to_string(),
+                    json_field(l, "error").to_string(),
+                )
+            })
             .collect();
         rows.sort();
         rows
     };
     let want = index(&reference);
     let got = index(&dir);
-    assert!(want.iter().all(|(_, e)| e == "null"), "the reference export lost functions");
-    assert_eq!(got.len(), want.len(), "one index line per target, seed loss included");
+    assert!(
+        want.iter().all(|(_, e)| e == "null"),
+        "the reference export lost functions"
+    );
+    assert_eq!(
+        got.len(),
+        want.len(),
+        "one index line per target, seed loss included"
+    );
     for ((addr, error), (want_addr, _)) in got.iter().zip(&want) {
         assert_eq!(addr, want_addr, "the streamed function set moved");
         let expected = if addr == &format!("\"{ENTRY}\"") {
@@ -1479,7 +1752,10 @@ fn a_streamed_seed_runs_in_a_worker_and_costs_only_its_own_record() {
     // The rest of the export is untouched: only the seed's own block is gone.
     let bodies = |d: &std::path::Path| -> Vec<String> {
         let c = std::fs::read_to_string(d.join("fauxware.c")).unwrap();
-        c_blocks(&c).into_iter().filter(|b| !b.starts_with("// Function: _start @")).collect()
+        c_blocks(&c)
+            .into_iter()
+            .filter(|b| !b.starts_with("// Function: _start @"))
+            .collect()
     };
     assert_eq!(bodies(&dir), bodies(&reference), "a bystander's body moved");
     for d in [reference, dir] {
@@ -1510,14 +1786,26 @@ fn streamed_selected_project_does_not_expand_to_callees() {
         panic!("streamed selected project failed: {stderr}");
     }
     let c = std::fs::read_to_string(dir.join("pdb_prog.exe.c")).unwrap();
-    assert!(c.contains("@ 0x140001010"), "selected function missing:\n{c}");
-    assert!(!c.contains("@ 0x140001000"), "selector expanded to an unrequested callee:\n{c}");
+    assert!(
+        c.contains("@ 0x140001010"),
+        "selected function missing:\n{c}"
+    );
+    assert!(
+        !c.contains("@ 0x140001000"),
+        "selector expanded to an unrequested callee:\n{c}"
+    );
     assert_eq!(
-        std::fs::read_to_string(dir.join("index.jsonl")).unwrap().lines().count(),
+        std::fs::read_to_string(dir.join("index.jsonl"))
+            .unwrap()
+            .lines()
+            .count(),
         1,
         "one target, one index line"
     );
-    assert!(stdout.contains("functions: 1 ok, 0 failed"), "unexpected project summary: {stdout}");
+    assert!(
+        stdout.contains("functions: 1 ok, 0 failed"),
+        "unexpected project summary: {stdout}"
+    );
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -1543,12 +1831,18 @@ fn stream_refuses_an_assertion_and_is_not_a_whole_binary_flag() {
         stderr.contains("--assert and --stream are exclusive"),
         "unexpected refusal: {stderr}"
     );
-    assert!(!dir.exists(), "a refused run must not create the output folder");
+    assert!(
+        !dir.exists(),
+        "a refused run must not create the output folder"
+    );
 
     for cmd in ["decompile-all", "decompile-graph"] {
         let (_, stderr, ok) = run_kuna(&[cmd, &bin, "--stream", "--sleighpath", &specs()]);
         assert!(!ok, "{cmd} must not accept --stream");
-        assert!(stderr.contains("unknown option --stream"), "{cmd}: {stderr}");
+        assert!(
+            stderr.contains("unknown option --stream"),
+            "{cmd}: {stderr}"
+        );
     }
 }
 
@@ -1559,8 +1853,10 @@ fn stream_refuses_an_assertion_and_is_not_a_whole_binary_flag() {
 fn a_failed_load_reports_itself_and_spares_a_previous_export() {
     let dir = project("fauxware", "stream_failed");
     let (c, h, asm, readme) = artifacts(&dir, "fauxware");
-    let before: Vec<Vec<u8>> =
-        [&c, &h, &asm, &readme].iter().map(|f| std::fs::read(f).unwrap()).collect();
+    let before: Vec<Vec<u8>> = [&c, &h, &asm, &readme]
+        .iter()
+        .map(|f| std::fs::read(f).unwrap())
+        .collect();
 
     // NAMED after the fixture and outside the folder, so a run that did truncate
     // its artifacts would truncate exactly the ones this test hashes.
@@ -1580,12 +1876,23 @@ fn a_failed_load_reports_itself_and_spares_a_previous_export() {
     assert!(!ok, "a load failure must exit nonzero: {stderr}");
 
     let status = std::fs::read_to_string(dir.join(".streaming")).unwrap();
-    assert!(status.contains("\"phase\":\"failed\""), "no failed phase: {status}");
+    assert!(
+        status.contains("\"phase\":\"failed\""),
+        "no failed phase: {status}"
+    );
     assert!(status.contains("\"schema\":1"), "no schema: {status}");
-    assert!(!status.contains("\"error\":null"), "a failed run must say why: {status}");
-    let after: Vec<Vec<u8>> =
-        [&c, &h, &asm, &readme].iter().map(|f| std::fs::read(f).unwrap()).collect();
-    assert_eq!(before, after, "a failed load overwrote a previous export's artifacts");
+    assert!(
+        !status.contains("\"error\":null"),
+        "a failed run must say why: {status}"
+    );
+    let after: Vec<Vec<u8>> = [&c, &h, &asm, &readme]
+        .iter()
+        .map(|f| std::fs::read(f).unwrap())
+        .collect();
+    assert_eq!(
+        before, after,
+        "a failed load overwrote a previous export's artifacts"
+    );
     for dir in [dir, junk_dir] {
         let _ = std::fs::remove_dir_all(dir);
     }
@@ -1612,9 +1919,18 @@ fn a_failed_load_into_an_empty_folder_leaves_a_failed_readme() {
     ]);
     assert!(!ok, "a load failure must exit nonzero: {stderr}");
     let readme = std::fs::read_to_string(dir.join("README.md")).unwrap();
-    assert!(readme.contains("| Phase | failed |"), "the README must report the failure: {readme}");
-    assert!(!readme.contains("still streaming"), "a failed export is not streaming: {readme}");
-    assert!(!dir.join("notabinary.c").exists(), "a failed load must write no .c");
+    assert!(
+        readme.contains("| Phase | failed |"),
+        "the README must report the failure: {readme}"
+    );
+    assert!(
+        !readme.contains("still streaming"),
+        "a failed export is not streaming: {readme}"
+    );
+    assert!(
+        !dir.join("notabinary.c").exists(),
+        "a failed load must write no .c"
+    );
     for dir in [dir, junk_dir] {
         let _ = std::fs::remove_dir_all(dir);
     }
@@ -1641,8 +1957,14 @@ fn a_missing_binary_creates_no_folder() {
         args.extend(extra);
         let (_, stderr, ok) = run_kuna(&args);
         assert!(!ok, "a missing binary must fail: {stderr}");
-        assert!(stderr.contains("binary not found"), "unexpected error: {stderr}");
-        assert!(!dir.exists(), "a missing binary must not create a folder: {stderr}");
+        assert!(
+            stderr.contains("binary not found"),
+            "unexpected error: {stderr}"
+        );
+        assert!(
+            !dir.exists(),
+            "a missing binary must not create a folder: {stderr}"
+        );
         assert!(
             !PathBuf::from("nope.bin.kuna").exists(),
             "a missing binary must not create a folder in the cwd"
@@ -1665,12 +1987,19 @@ fn a_missing_binary_creates_no_folder() {
         .output()
         .expect("failed to spawn the kuna binary");
     let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
-    assert_eq!(out.status.code(), Some(2), "the parser refuses it as a usage error: {stderr}");
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "the parser refuses it as a usage error: {stderr}"
+    );
     assert!(
         stderr.contains("cannot read input binary metadata for mode auto"),
         "unexpected error: {stderr}"
     );
-    assert!(!dir.exists(), "a missing binary must not create a folder: {stderr}");
+    assert!(
+        !dir.exists(),
+        "a missing binary must not create a folder: {stderr}"
+    );
 }
 
 /// The writer owns every artifact a reader polls, so when it cannot write one
@@ -1743,14 +2072,20 @@ fn a_dead_writer_stops_a_run_at_jobs(jobs: &str) {
     let out = child.wait_with_output().unwrap();
     let stopped_after = injected.elapsed();
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(!out.status.success(), "a dead writer must fail the run at --jobs {jobs}: {stderr}");
+    assert!(
+        !out.status.success(),
+        "a dead writer must fail the run at --jobs {jobs}: {stderr}"
+    );
     assert!(
         stderr.contains("mcount_x86_64.h") && stderr.contains("Is a directory"),
         "the run must report the writer's own error, not a sentinel: {stderr}"
     );
 
     let status = std::fs::read_to_string(dir.join(".streaming")).unwrap();
-    assert!(status.contains("\"phase\":\"failed\""), "no failed phase: {status}");
+    assert!(
+        status.contains("\"phase\":\"failed\""),
+        "no failed phase: {status}"
+    );
     assert!(
         status.contains("mcount_x86_64.h") && status.contains("Is a directory"),
         ".streaming must carry the real path and errno: {status}"
@@ -1872,7 +2207,8 @@ fn a_sectionless_image_never_reports_a_sweeping_asm_at_jobs_1() {
             !status.contains("\"asm\":\"sweeping\""),
             "there is no CODE section to sweep: {status}"
         );
-        if status.contains("\"phase\":\"decompiling\"") || status.contains("\"phase\":\"finalizing\"")
+        if status.contains("\"phase\":\"decompiling\"")
+            || status.contains("\"phase\":\"finalizing\"")
         {
             assert!(
                 status.contains("\"asm\":\"complete\""),
@@ -1880,22 +2216,35 @@ fn a_sectionless_image_never_reports_a_sweeping_asm_at_jobs_1() {
             );
         }
     }
-    assert!(!dir.join(".streaming").exists(), ".streaming outlived a successful export");
+    assert!(
+        !dir.join(".streaming").exists(),
+        ".streaming outlived a successful export"
+    );
     let asm = std::fs::read_to_string(dir.join("fauxware.asm")).unwrap();
-    let (sweep, tails) =
-        asm.split_once("\n; --- variables ---\n").expect("the .asm is missing its variables tail");
-    assert!(tails.contains("\n; --- data ---\n"), "the .asm is missing its data tail: {tails}");
+    let (sweep, tails) = asm
+        .split_once("\n; --- variables ---\n")
+        .expect("the .asm is missing its variables tail");
+    assert!(
+        tails.contains("\n; --- data ---\n"),
+        "the .asm is missing its data tail: {tails}"
+    );
     // The premise: this image publishes no CODE section, so the sweep between
     // the two header lines and the tails is empty — every line of it is a
     // comment, where a swept .asm carries labels and instructions.
-    let swept: Vec<&str> =
-        sweep.lines().filter(|l| !l.is_empty() && !l.starts_with("; ")).collect();
+    let swept: Vec<&str> = sweep
+        .lines()
+        .filter(|l| !l.is_empty() && !l.starts_with("; "))
+        .collect();
     assert!(
         swept.is_empty(),
         "a sectionless image has nothing to sweep, but the .asm disassembled {swept:?}"
     );
     assert!(
-        std::fs::read_to_string(dir.join("index.jsonl")).unwrap().lines().count() > 0,
+        std::fs::read_to_string(dir.join("index.jsonl"))
+            .unwrap()
+            .lines()
+            .count()
+            > 0,
         "the export decompiled nothing"
     );
     for dir in [dir, junk_dir] {
@@ -1910,7 +2259,9 @@ fn synthesized_structs(text: &str) -> std::collections::BTreeMap<String, String>
     while let Some(at) = rest.find("\nstruct struct_") {
         let body = &rest[at + 1..];
         let Some(open) = body.find(" {\n") else { break };
-        let Some(close) = body.find("\n};") else { break };
+        let Some(close) = body.find("\n};") else {
+            break;
+        };
         if close > open {
             out.entry(body["struct ".len()..open].to_string())
                 .or_insert_with(|| body[open + 3..close].to_string());
@@ -1934,23 +2285,43 @@ fn a_struct_name_means_the_same_record_in_the_export_and_in_decompile_all() {
     let bin = fixture("protoorder_floatpointee_x86_64");
     for arm in [&[][..], &["--option", "protoorder", "off"][..]] {
         let dir = out_dir("struct_names");
-        let base = ["decompile-project", &bin, "-o", dir.to_str().unwrap(), "--sleighpath", &specs()];
+        let base = [
+            "decompile-project",
+            &bin,
+            "-o",
+            dir.to_str().unwrap(),
+            "--sleighpath",
+            &specs(),
+        ];
         let (_out, stderr, ok) = run_kuna(&[&base[..], arm].concat());
         if !ok {
             panic!("unlace decompile-project failed: {stderr}");
         }
-        let header =
-            std::fs::read_to_string(dir.join("protoorder_floatpointee_x86_64.h")).unwrap();
-        let all = ["decompile-all", &bin, "--sleighpath", &specs(), "--option", "structdefs", "on"];
+        let header = std::fs::read_to_string(dir.join("protoorder_floatpointee_x86_64.h")).unwrap();
+        let all = [
+            "decompile-all",
+            &bin,
+            "--sleighpath",
+            &specs(),
+            "--option",
+            "structdefs",
+            "on",
+        ];
         let (text, stderr, ok) = run_kuna(&[&all[..], arm].concat());
         assert!(ok, "unlace decompile-all failed: {stderr}");
         let (exported, decompiled) = (synthesized_structs(&header), synthesized_structs(&text));
-        assert!(decompiled.len() >= 3, "the fixture stopped synthesizing: {decompiled:?}");
+        assert!(
+            decompiled.len() >= 3,
+            "the fixture stopped synthesizing: {decompiled:?}"
+        );
         for (name, body) in &decompiled {
             let Some(theirs) = exported.get(name) else {
                 panic!("{name} is decompiled but not exported (arm {arm:?})");
             };
-            assert_eq!(theirs, body, "{name} is a different record in the export (arm {arm:?})");
+            assert_eq!(
+                theirs, body,
+                "{name} is a different record in the export (arm {arm:?})"
+            );
         }
         let _ = std::fs::remove_dir_all(dir);
     }

@@ -26,8 +26,8 @@ use std::collections::{BTreeSet, HashMap};
 use std::rc::Rc;
 
 use super::extract::{ImageLayout, Nlist};
-use crate::loader::format::macho::exports::{parse_export_trie, ExportTarget};
-use super::{u32_at, u64_at, DyldCache};
+use super::{DyldCache, u32_at, u64_at};
+use crate::loader::format::macho::exports::{ExportTarget, parse_export_trie};
 
 /// The `LC_NOTE` `data_owner` of the cross-image reference table.
 pub const NOTE_OWNER: &[u8; 16] = b"kuna.dyld.xrefs\0";
@@ -89,7 +89,11 @@ pub fn decode(blob: &[u8]) -> Vec<Xref> {
             let name = names.get(u32_at(e, 12) as usize..)?;
             let name = &name[..name.iter().position(|&b| b == 0)?];
             allowance = allowance.checked_sub(name.len())?;
-            Some(Xref { addr: u64_at(e, 0), kind, name: name.to_vec() })
+            Some(Xref {
+                addr: u64_at(e, 0),
+                kind,
+                name: name.to_vec(),
+            })
         })
         .collect()
 }
@@ -115,14 +119,23 @@ pub fn read_note(bytes: &[u8]) -> Vec<Xref> {
             break;
         };
         let (cmd, size) = (u32_at(c, 0), u32_at(c, 4) as usize);
-        if cmd == super::extract::LC_NOTE && size >= 40 && cmds.get(at + 8..at + 24) == Some(NOTE_OWNER) {
+        if cmd == super::extract::LC_NOTE
+            && size >= 40
+            && cmds.get(at + 8..at + 24) == Some(NOTE_OWNER)
+        {
             let Some(note) = cmds.get(at..at + 40) else {
                 break;
             };
-            let (Ok(off), Ok(len)) = (usize::try_from(u64_at(note, 24)), usize::try_from(u64_at(note, 32))) else {
+            let (Ok(off), Ok(len)) = (
+                usize::try_from(u64_at(note, 24)),
+                usize::try_from(u64_at(note, 32)),
+            ) else {
                 break;
             };
-            return bytes.get(off..off.saturating_add(len)).map(decode).unwrap_or_default();
+            return bytes
+                .get(off..off.saturating_add(len))
+                .map(decode)
+                .unwrap_or_default();
         }
         if size < 8 {
             break;
@@ -170,10 +183,16 @@ pub(super) fn collect<'v>(
                         }
                     }
                 }
-            } else if (sec.sectname == "__got" || sec.sectname == "__auth_got") && sec.section_type() == 0 {
+            } else if (sec.sectname == "__got" || sec.sectname == "__auth_got")
+                && sec.section_type() == 0
+            {
                 let ptr = layout.width.ptr();
                 for (i, p) in bytes.chunks_exact(ptr).enumerate() {
-                    let value = if ptr == 8 { u64_at(p, 0) } else { u64::from(u32_at(p, 0)) };
+                    let value = if ptr == 8 {
+                        u64_at(p, 0)
+                    } else {
+                        u64::from(u32_at(p, 0))
+                    };
                     if value != 0 && !layout.holds(value) {
                         slots.push((sec.addr + (i * ptr) as u64, value));
                     }
@@ -191,12 +210,20 @@ pub(super) fn collect<'v>(
     let mut out = Vec::new();
     for target in targets {
         if let Some(name) = names.call_target(target) {
-            out.push(Xref { addr: target, kind: XrefKind::Call, name });
+            out.push(Xref {
+                addr: target,
+                kind: XrefKind::Call,
+                name,
+            });
         }
     }
     for (addr, value) in slots {
         if let Some(name) = names.imported_as(value).or_else(|| names.at(value)) {
-            out.push(Xref { addr, kind: XrefKind::Slot, name });
+            out.push(Xref {
+                addr,
+                kind: XrefKind::Slot,
+                name,
+            });
         }
     }
     out
@@ -231,7 +258,10 @@ fn follow_stub(cache: &DyldCache, addr: u64) -> Option<u64> {
         } else if w & 0xFFC0_0000 == 0xB940_0000 {
             let slot = regs[rn]?.wrapping_add((((w >> 10) & 0xFFF) as u64) * 4);
             regs[rd] = Some(u64::from(u32_at(&cache.read_slid(slot, 4).ok()?, 0)));
-        } else if w & 0xFFFF_FC1F == 0xD61F_0000 || w & 0xFFFF_F800 == 0xD71F_0800 || w & 0xFFFF_F81F == 0xD61F_081F {
+        } else if w & 0xFFFF_FC1F == 0xD61F_0000
+            || w & 0xFFFF_F800 == 0xD71F_0800
+            || w & 0xFFFF_F81F == 0xD61F_081F
+        {
             return regs[rn];
         } else {
             return None;
@@ -295,7 +325,12 @@ impl<'a> Names<'a> {
             })
             .collect();
         ranges.sort_unstable();
-        let by_path = cache.images().iter().enumerate().map(|(i, image)| (image.path.as_str(), i)).collect();
+        let by_path = cache
+            .images()
+            .iter()
+            .enumerate()
+            .map(|(i, image)| (image.path.as_str(), i))
+            .collect();
         Names {
             cache,
             ranges,
@@ -323,9 +358,13 @@ impl<'a> Names<'a> {
             let Some((_, dep)) = ordinal.checked_sub(1).and_then(|o| deps.get(o)) else {
                 continue;
             };
-            let Some(&dep) = self.by_path.get(dep.as_str()) else { continue };
+            let Some(&dep) = self.by_path.get(dep.as_str()) else {
+                continue;
+            };
             let mut visited = std::collections::HashSet::new();
-            let Some(target) = self.export_target(dep, &String::from_utf8_lossy(&sym.name), 0, &mut visited) else {
+            let Some(target) =
+                self.export_target(dep, &String::from_utf8_lossy(&sym.name), 0, &mut visited)
+            else {
                 continue;
             };
             imports
@@ -362,7 +401,10 @@ impl<'a> Names<'a> {
         match trie.get(name) {
             Some(ExportTarget::Offset(offset)) => Some(layout.address.wrapping_add(*offset)),
             Some(ExportTarget::Absolute(_)) => None,
-            Some(ExportTarget::Reexport { ordinal, name: other }) => {
+            Some(ExportTarget::Reexport {
+                ordinal,
+                name: other,
+            }) => {
                 let deps = deps();
                 let (_, dep) = deps.get(usize::try_from(*ordinal).ok()?.checked_sub(1)?)?;
                 let dep = *self.by_path.get(dep.as_str())?;
@@ -383,7 +425,12 @@ impl<'a> Names<'a> {
             .entry(index)
             .or_insert_with(|| {
                 let bytes = self.cache.image_export_trie(index).unwrap_or_default();
-                Rc::new(parse_export_trie(&bytes).into_iter().map(|e| (e.name, e.target)).collect())
+                Rc::new(
+                    parse_export_trie(&bytes)
+                        .into_iter()
+                        .map(|e| (e.name, e.target))
+                        .collect(),
+                )
             })
             .clone()
     }
@@ -395,13 +442,20 @@ impl<'a> Names<'a> {
     }
 
     fn image_at(&self, addr: u64) -> Option<usize> {
-        let i = self.ranges.partition_point(|r| r.0 <= addr).checked_sub(1)?;
+        let i = self
+            .ranges
+            .partition_point(|r| r.0 <= addr)
+            .checked_sub(1)?;
         let (lo, hi, image) = self.ranges[i];
         (addr >= lo && addr < hi).then_some(image)
     }
 
     fn image(&self, index: usize) -> Rc<ImageNames> {
-        self.images.borrow_mut().entry(index).or_insert_with(|| Rc::new(self.load(index))).clone()
+        self.images
+            .borrow_mut()
+            .entry(index)
+            .or_insert_with(|| Rc::new(self.load(index)))
+            .clone()
     }
 
     /// Image `index`'s names: locals first, so an export of the same address
@@ -410,16 +464,28 @@ impl<'a> Names<'a> {
         let locals = self.cache.local_symbols(index).unwrap_or_default();
         let symbols = self.cache.image_symbols(index).unwrap_or_default();
         let mut by_addr = HashMap::new();
-        for sym in locals.iter().chain(symbols.iter().filter(|s| !s.is_external())) {
+        for sym in locals
+            .iter()
+            .chain(symbols.iter().filter(|s| !s.is_external()))
+        {
             if sym.names_address() {
-                by_addr.entry(sym.n_value).or_insert_with(|| sym.name.clone());
+                by_addr
+                    .entry(sym.n_value)
+                    .or_insert_with(|| sym.name.clone());
             }
         }
-        for sym in symbols.iter().filter(|s| s.is_external() && s.names_address()) {
+        for sym in symbols
+            .iter()
+            .filter(|s| s.is_external() && s.names_address())
+        {
             by_addr.insert(sym.n_value, sym.name.clone());
         }
         let indirect = self.cache.image_indirect_symbols(index).unwrap_or_default();
-        ImageNames { by_addr, symbols, indirect }
+        ImageNames {
+            by_addr,
+            symbols,
+            indirect,
+        }
     }
 
     /// The image holding `addr`, with `addr`. For an address no image holds,
@@ -446,10 +512,15 @@ impl<'a> Names<'a> {
     /// import a stub at `addr` is for, else whatever the stub jumps to.
     fn call_target(&self, mut addr: u64) -> Option<Vec<u8>> {
         for _ in 0..MAX_STUB_HOPS {
-            if let Some(name) = self.imported_as(addr).or_else(|| self.at(addr)).or_else(|| self.stub_import(addr)) {
+            if let Some(name) = self
+                .imported_as(addr)
+                .or_else(|| self.at(addr))
+                .or_else(|| self.stub_import(addr))
+            {
                 return Some(name);
             }
-            self.stub_work.set(self.stub_work.get().checked_sub(STUB_HOP_COST)?);
+            self.stub_work
+                .set(self.stub_work.get().checked_sub(STUB_HOP_COST)?);
             addr = follow_stub(self.cache, addr)?;
         }
         None
@@ -461,13 +532,17 @@ impl<'a> Names<'a> {
         const S_SYMBOL_STUBS: u32 = 0x8;
         let index = self.image_at(addr)?;
         let layout = self.cache.image_layout(index).ok()?;
-        let cost = layout.segments.iter().map(|s| s.sections.len() as u64 + 1).sum::<u64>();
-        self.stub_work.set(self.stub_work.get().checked_sub(cost)?);
-        let sec = layout
+        let cost = layout
             .segments
             .iter()
-            .flat_map(|s| &s.sections)
-            .find(|s| s.section_type() == S_SYMBOL_STUBS && addr >= s.addr && addr < s.addr.saturating_add(s.size))?;
+            .map(|s| s.sections.len() as u64 + 1)
+            .sum::<u64>();
+        self.stub_work.set(self.stub_work.get().checked_sub(cost)?);
+        let sec = layout.segments.iter().flat_map(|s| &s.sections).find(|s| {
+            s.section_type() == S_SYMBOL_STUBS
+                && addr >= s.addr
+                && addr < s.addr.saturating_add(s.size)
+        })?;
         let stride = sec.reserved2 as u64;
         if stride == 0 || (addr - sec.addr) % stride != 0 {
             return None;
@@ -490,8 +565,16 @@ mod tests {
     #[test]
     fn note_round_trips() {
         let xrefs = vec![
-            Xref { addr: 0x1_8c99_b570, kind: XrefKind::Call, name: b"___stack_chk_fail".to_vec() },
-            Xref { addr: 0x1_dc07_f118, kind: XrefKind::Slot, name: b"_objc_debug_isa_class_mask".to_vec() },
+            Xref {
+                addr: 0x1_8c99_b570,
+                kind: XrefKind::Call,
+                name: b"___stack_chk_fail".to_vec(),
+            },
+            Xref {
+                addr: 0x1_dc07_f118,
+                kind: XrefKind::Slot,
+                name: b"_objc_debug_isa_class_mask".to_vec(),
+            },
         ];
         assert_eq!(decode(&encode(&xrefs)), xrefs);
         assert!(decode(&[1, 0]).is_empty());

@@ -5,14 +5,14 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
-use crate::dtype::{type_metatype, Datatype};
-use crate::funcdata::Funcdata;
 use crate::context::{ArchContext, OpId, TypeOp};
+use crate::dtype::{Datatype, type_metatype};
+use crate::funcdata::Funcdata;
 
 use super::*;
 
@@ -20,7 +20,8 @@ use super::*;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -104,7 +105,10 @@ fn without_a_branch_override_tailcalljump_claims_first() {
         ),
         Some("tailcalljump")
     );
-    assert!(!frame_consulted.get(), "tailcallframe was consulted after tailcalljump claimed");
+    assert!(
+        !frame_consulted.get(),
+        "tailcallframe was consulted after tailcalljump claimed"
+    );
 }
 
 #[test]
@@ -150,8 +154,14 @@ fn conditional_tail_requires_a_bound_and_another_known_entry() {
         None,
     );
     let mut unbounded = Funcdata::new(
-        "unbounded", "unbounded", Rc::clone(fd.get_arch()), fd.get_address().clone(), 0x1000_0000, 0,
-    ).unwrap();
+        "unbounded",
+        "unbounded",
+        Rc::clone(fd.get_arch()),
+        fd.get_address().clone(),
+        0x1000_0000,
+        0,
+    )
+    .unwrap();
     let op = build_branch_op(&mut unbounded, OpCode::CPUI_CBRANCH, 0x18d0);
     assert!(!kuna_is_tail_call_branch(&unbounded, op, true, true, false));
 }
@@ -176,17 +186,35 @@ fn indirect_branch_with_a_sole_foreign_destination_is_a_tail_call() {
     let op = build_branch_op(&mut fd, OpCode::CPUI_BRANCHIND, 0x18d0);
     let yes = || true;
     let no = || false;
-    assert!(kuna_is_tail_call_table(&fd, op, true, true, false, false, yes), "locked");
-    assert!(kuna_is_tail_call_table(&fd, op, true, true, false, true, no), "out of extent");
+    assert!(
+        kuna_is_tail_call_table(&fd, op, true, true, false, false, yes),
+        "locked"
+    );
+    assert!(
+        kuna_is_tail_call_table(&fd, op, true, true, false, true, no),
+        "out of extent"
+    );
     assert!(
         !kuna_is_tail_call_table(&fd, op, true, true, false, false, no),
         "no prototype, inside the extent"
     );
-    assert!(!kuna_is_tail_call_table(&fd, op, false, true, false, true, yes), "gate off");
-    assert!(!kuna_is_tail_call_table(&fd, op, true, false, false, true, yes), "not a function");
-    assert!(!kuna_is_tail_call_table(&fd, op, true, true, true, true, yes), "its own entry");
+    assert!(
+        !kuna_is_tail_call_table(&fd, op, false, true, false, true, yes),
+        "gate off"
+    );
+    assert!(
+        !kuna_is_tail_call_table(&fd, op, true, false, false, true, yes),
+        "not a function"
+    );
+    assert!(
+        !kuna_is_tail_call_table(&fd, op, true, true, true, true, yes),
+        "its own entry"
+    );
     let direct = build_branch_op(&mut fd, OpCode::CPUI_BRANCH, 0x18d0);
-    assert!(!kuna_is_tail_call_table(&fd, direct, true, true, false, true, yes), "direct jump");
+    assert!(
+        !kuna_is_tail_call_table(&fd, direct, true, true, false, true, yes),
+        "direct jump"
+    );
     let asked = std::cell::Cell::new(false);
     kuna_is_tail_call_table(&fd, op, false, true, false, false, || {
         asked.set(true);
@@ -202,13 +230,21 @@ fn parked_pieces_state_the_call_unless_they_only_map_the_return() {
     let void = Rc::new(Datatype::new(0, type_metatype::TYPE_VOID));
     let stated = |returns_nothing| Some(StatedCallee { returns_nothing });
     assert_eq!(stated_by_pieces(None), None);
-    let int_f = PrototypePieces { outtype: Some(int.clone()), ..Default::default() };
+    let int_f = PrototypePieces {
+        outtype: Some(int.clone()),
+        ..Default::default()
+    };
     assert_eq!(stated_by_pieces(Some(&int_f)), stated(false), "int f(void)");
-    let void_f =
-        PrototypePieces { outtype: Some(void), intypes: vec![int.clone()], ..Default::default() };
+    let void_f = PrototypePieces {
+        outtype: Some(void),
+        intypes: vec![int.clone()],
+        ..Default::default()
+    };
     assert_eq!(stated_by_pieces(Some(&void_f)), stated(true), "void f(int)");
-    let return_only =
-        PrototypePieces { output_storage: Some(ParameterPieces::default()), ..Default::default() };
+    let return_only = PrototypePieces {
+        output_storage: Some(ParameterPieces::default()),
+        ..Default::default()
+    };
     assert_eq!(stated_by_pieces(Some(&return_only)), None, "map return");
 }
 
@@ -216,11 +252,27 @@ fn parked_pieces_state_the_call_unless_they_only_map_the_return() {
 fn pieces_without_a_return_type_leave_the_return_unknown() {
     use crate::fspec::PrototypePieces;
     let int = Rc::new(Datatype::new(4, type_metatype::TYPE_INT));
-    let demangled = PrototypePieces { intypes: vec![int.clone(), int], ..Default::default() };
-    let unknown = Some(StatedCallee { returns_nothing: false });
-    assert_eq!(stated_by_pieces(Some(&demangled)), unknown, "g(int,int) from _Z1gii");
-    assert_eq!(stated_by_pieces(Some(&PrototypePieces::default())), unknown, "g() from _Z1gv");
-    assert!(!output_stated_by_pieces(Some(&demangled)), "a demangled veneer states no output");
+    let demangled = PrototypePieces {
+        intypes: vec![int.clone(), int],
+        ..Default::default()
+    };
+    let unknown = Some(StatedCallee {
+        returns_nothing: false,
+    });
+    assert_eq!(
+        stated_by_pieces(Some(&demangled)),
+        unknown,
+        "g(int,int) from _Z1gii"
+    );
+    assert_eq!(
+        stated_by_pieces(Some(&PrototypePieces::default())),
+        unknown,
+        "g() from _Z1gv"
+    );
+    assert!(
+        !output_stated_by_pieces(Some(&demangled)),
+        "a demangled veneer states no output"
+    );
     assert!(!output_stated_by_pieces(None));
     assert!(
         !tail_call_states_the_body(stated_by_pieces(Some(&demangled)), false),
@@ -232,10 +284,15 @@ fn pieces_without_a_return_type_leave_the_return_unknown() {
 fn a_function_states_its_output_only_with_a_return_type_or_storage() {
     use crate::fspec::{ParameterPieces, PrototypePieces};
     let void = Rc::new(Datatype::new(0, type_metatype::TYPE_VOID));
-    let void_f = PrototypePieces { outtype: Some(void), ..Default::default() };
+    let void_f = PrototypePieces {
+        outtype: Some(void),
+        ..Default::default()
+    };
     assert!(output_stated_by_pieces(Some(&void_f)), "void f(void)");
-    let return_only =
-        PrototypePieces { output_storage: Some(ParameterPieces::default()), ..Default::default() };
+    let return_only = PrototypePieces {
+        output_storage: Some(ParameterPieces::default()),
+        ..Default::default()
+    };
     assert!(output_stated_by_pieces(Some(&return_only)), "map return");
 }
 
@@ -243,14 +300,27 @@ fn a_function_states_its_output_only_with_a_return_type_or_storage() {
 fn a_tail_call_returning_a_value_needs_the_callers_output_stated() {
     let stated = |returns_nothing| Some(StatedCallee { returns_nothing });
     assert!(tail_call_states_the_body(stated(false), true));
-    assert!(!tail_call_states_the_body(stated(false), false), "would print void");
-    assert!(tail_call_states_the_body(stated(true), false), "returns nothing");
-    assert!(!tail_call_states_the_body(None, true), "no callee prototype");
+    assert!(
+        !tail_call_states_the_body(stated(false), false),
+        "would print void"
+    );
+    assert!(
+        tail_call_states_the_body(stated(true), false),
+        "returns nothing"
+    );
+    assert!(
+        !tail_call_states_the_body(None, true),
+        "no callee prototype"
+    );
 }
 
 #[test]
 fn tailcalljump_values_split_direct_from_computed_jumps() {
-    let gates = |v| tail_call_mode(v).map(|(jumps, tables, _)| (jumps, tables)).unwrap();
+    let gates = |v| {
+        tail_call_mode(v)
+            .map(|(jumps, tables, _)| (jumps, tables))
+            .unwrap()
+    };
     assert_eq!(gates("on"), (true, true));
     assert_eq!(gates("direct"), (true, false));
     assert_eq!(gates("off"), (false, false));
@@ -262,10 +332,17 @@ fn a_table_has_a_sole_destination_only_when_every_entry_agrees() {
     let fd = build_fd();
     let at = |off| Address::new(proc_space(&fd), off);
     assert_eq!(kuna_sole_destination(false, [at(0x18d0)]), Some(at(0x18d0)));
-    assert_eq!(kuna_sole_destination(false, [at(0x18d0), at(0x18d0)]), Some(at(0x18d0)));
+    assert_eq!(
+        kuna_sole_destination(false, [at(0x18d0), at(0x18d0)]),
+        Some(at(0x18d0))
+    );
     assert_eq!(kuna_sole_destination(false, [at(0x18d0), at(0x18e0)]), None);
     assert_eq!(kuna_sole_destination(false, []), None);
-    assert_eq!(kuna_sole_destination(true, [at(0x18d0)]), None, "an override stays a table");
+    assert_eq!(
+        kuna_sole_destination(true, [at(0x18d0)]),
+        None,
+        "an override stays a table"
+    );
 }
 
 #[test]

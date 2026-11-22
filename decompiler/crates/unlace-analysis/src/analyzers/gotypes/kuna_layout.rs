@@ -14,7 +14,11 @@ pub(super) struct GoImage<'a> {
 
 impl<'a> GoImage<'a> {
     pub fn new(file: &'a object::File<'a>) -> Self {
-        Self { bytes: ImageBytes::new(file), word_size: if file.is_64() { 8 } else { 4 }, u16_names: false }
+        Self {
+            bytes: ImageBytes::new(file),
+            word_size: if file.is_64() { 8 } else { 4 },
+            u16_names: false,
+        }
     }
 
     pub fn read(&self, vma: u64, len: usize) -> Option<&'a [u8]> {
@@ -40,6 +44,10 @@ impl<'a> GoImage<'a> {
 
     #[cfg(test)]
     pub fn from_spans(spans: Vec<(u64, &'a [u8])>) -> Self {
-        Self { bytes: ImageBytes::from_spans(spans), word_size: 8, u16_names: false }
+        Self {
+            bytes: ImageBytes::from_spans(spans),
+            word_size: 8,
+            u16_names: false,
+        }
     }
 }

@@ -1,15 +1,17 @@
 use super::*;
-use crate::{context::ArchContext, context::TypeOp, dtype::type_metatype as Meta, dtype::Datatype};
+use crate::{context::ArchContext, context::TypeOp, dtype::Datatype, dtype::type_metatype as Meta};
+use std::rc::Rc;
 use unlace_base::{
     address::Address,
-    space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace},
+    space::{AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype},
 };
-use std::rc::Rc;
 
 fn fixture() -> (Funcdata, OpId) {
     let mut manager = AddrSpaceManager::new();
     manager.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    manager.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    manager
+        .insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     let ram = Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -40,7 +42,12 @@ fn fixture() -> (Funcdata, OpId) {
 }
 
 fn input(fd: &mut Funcdata, width: i32, offset: u64) -> VarnodeId {
-    let ram = fd.get_arch().manage().get_space_by_name("ram").unwrap().clone();
+    let ram = fd
+        .get_arch()
+        .manage()
+        .get_space_by_name("ram")
+        .unwrap()
+        .clone();
     let vn = fd.vbank_mut().create(
         width,
         Address::new(ram, offset),
@@ -49,7 +56,13 @@ fn input(fd: &mut Funcdata, width: i32, offset: u64) -> VarnodeId {
     fd.vbank_mut().set_input(vn, &mut |_, _, _| Ok(())).unwrap()
 }
 
-fn build(fd: &mut Funcdata, anchor: OpId, code: OpCode, width: i32, inputs: &[VarnodeId]) -> VarnodeId {
+fn build(
+    fd: &mut Funcdata,
+    anchor: OpId,
+    code: OpCode,
+    width: i32,
+    inputs: &[VarnodeId],
+) -> VarnodeId {
     let addr = fd.obank().get(anchor).unwrap().get_addr().clone();
     let op = fd.new_op(inputs.len() as i32, addr);
     fd.op_set_all_input(op, inputs).unwrap();
@@ -60,7 +73,12 @@ fn build(fd: &mut Funcdata, anchor: OpId, code: OpCode, width: i32, inputs: &[Va
 }
 
 fn load(fd: &mut Funcdata, anchor: OpId, width: i32, addr: VarnodeId) -> VarnodeId {
-    let ram = fd.get_arch().manage().get_space_by_name("ram").unwrap().get_index() as u64;
+    let ram = fd
+        .get_arch()
+        .manage()
+        .get_space_by_name("ram")
+        .unwrap()
+        .get_index() as u64;
     let space = fd.new_constant(8, ram);
     build(fd, anchor, CPUI_LOAD, width, &[space, addr])
 }

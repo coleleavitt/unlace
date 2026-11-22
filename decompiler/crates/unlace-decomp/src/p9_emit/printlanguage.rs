@@ -330,13 +330,27 @@ impl Atom {
     /// Construct a token with no associated data-flow annotations
     /// (C++ `Atom(nm,t,hl)`, printlanguage.hh:225-226).
     pub fn syntax(name: impl Into<String>, tag: TagType, hl: SyntaxHighlight) -> Atom {
-        Atom { name: name.into(), tag, highlight: hl, op: None, data: AtomData::None, offset: 0 }
+        Atom {
+            name: name.into(),
+            tag,
+            highlight: hl,
+            op: None,
+            data: AtomData::None,
+            offset: 0,
+        }
     }
 
     /// Construct a token for a data-type name (C++ `Atom(nm,t,hl,c)`,
     /// printlanguage.hh:229-230).
     pub fn typed(name: impl Into<String>, tag: TagType, hl: SyntaxHighlight, ct: usize) -> Atom {
-        Atom { name: name.into(), tag, highlight: hl, op: None, data: AtomData::Ct(ct), offset: 0 }
+        Atom {
+            name: name.into(),
+            tag,
+            highlight: hl,
+            op: None,
+            data: AtomData::Ct(ct),
+            offset: 0,
+        }
     }
 
     /// Construct a token for a field name (C++ `Atom(nm,t,hl,c,off,o)`,
@@ -421,9 +435,19 @@ impl Atom {
         vn: IrKey,
         int_value: uintb,
     ) -> Atom {
-        let data =
-            if tag == TagType::CaseToken { AtomData::IntValue(int_value) } else { AtomData::Vn(vn) };
-        Atom { name: name.into(), tag, highlight: hl, op: Some(op), data, offset: 0 }
+        let data = if tag == TagType::CaseToken {
+            AtomData::IntValue(int_value)
+        } else {
+            AtomData::Vn(vn)
+        };
+        Atom {
+            name: name.into(),
+            tag,
+            highlight: hl,
+            op: Some(op),
+            data,
+            offset: 0,
+        }
     }
 }
 
@@ -647,7 +671,9 @@ impl PrintContext {
         } else if nm.starts_with("best") {
             0
         } else {
-            return Err(KunaError::lowlevel(format!("Unknown integer format option: {nm}")));
+            return Err(KunaError::lowlevel(format!(
+                "Unknown integer format option: {nm}"
+            )));
         };
         // Turn off any pre-existing force, then set the new one.
         self.mods &= !(modifiers::FORCE_HEX | modifiers::FORCE_DEC);
@@ -728,8 +754,7 @@ pub fn parentheses(top: &ReversePolish, op2: &OpToken, prev_token: Option<&OpTok
             {
                 return true;
             }
-            if op2.token_type == TokenType::UnaryPrefix
-                || op2.token_type == TokenType::Presurround
+            if op2.token_type == TokenType::UnaryPrefix || op2.token_type == TokenType::Presurround
             {
                 return false;
             }
@@ -762,8 +787,7 @@ pub fn parentheses(top: &ReversePolish, op2: &OpToken, prev_token: Option<&OpTok
             if top_token.precedence < op2.precedence {
                 return false;
             }
-            if op2.token_type == TokenType::UnaryPrefix
-                || op2.token_type == TokenType::Presurround
+            if op2.token_type == TokenType::UnaryPrefix || op2.token_type == TokenType::Presurround
             {
                 return false;
             }
@@ -951,11 +975,7 @@ pub fn most_natural_base(val: uintb) -> int4 {
         }
     }
 
-    if countdec > counthex {
-        10
-    } else {
-        16
-    }
+    if countdec > counthex { 10 } else { 16 }
 }
 
 /// C++ `PrintLanguage::formatBinary` (printlanguage.cc:800-825).

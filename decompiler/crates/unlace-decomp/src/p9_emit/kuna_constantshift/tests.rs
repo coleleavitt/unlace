@@ -2,7 +2,7 @@ use super::*;
 use crate::context::ArchContext;
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
-use unlace_base::space::{spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, spacetype};
 use unlace_sleigh::globalcontext::ContextInternal;
 use unlace_sleigh::loadimage::LoadImage;
 use unlace_sleigh::sleigh::Sleigh;
@@ -184,9 +184,17 @@ fn only_the_all_value_plans_a_64_bit_shift() {
     let count = fd.new_constant(4, 31);
     let (shift, _) = operation(&mut fd, OpCode::CPUI_INT_LEFT, &[input, count], 8);
     let as_signed = |_| Rc::new(Datatype::new(8, type_metatype::TYPE_INT));
-    for (mode, planned) in [(ConstShiftMode::Off, false), (ConstShiftMode::On, false), (ConstShiftMode::All, true)] {
+    for (mode, planned) in [
+        (ConstShiftMode::Off, false),
+        (ConstShiftMode::On, false),
+        (ConstShiftMode::All, true),
+    ] {
         arch.arm_constant_shift = mode;
-        assert_eq!(plan_fixed64_lsl(&fd, &arch, shift, as_signed).is_some(), planned, "{mode:?}");
+        assert_eq!(
+            plan_fixed64_lsl(&fd, &arch, shift, as_signed).is_some(),
+            planned,
+            "{mode:?}"
+        );
     }
 }
 
@@ -194,8 +202,17 @@ fn only_the_all_value_plans_a_64_bit_shift() {
 #[test]
 fn option_values_keep_the_two_valued_spellings() {
     use crate::p9_emit::kuna_armconstantshift::{ConstShiftMode, OptionArmConstShift};
-    for (value, mode) in [("off", ConstShiftMode::Off), ("on", ConstShiftMode::On), ("", ConstShiftMode::On), ("all", ConstShiftMode::All)] {
-        assert_eq!(OptionArmConstShift.apply(value).unwrap().0, mode, "{value:?}");
+    for (value, mode) in [
+        ("off", ConstShiftMode::Off),
+        ("on", ConstShiftMode::On),
+        ("", ConstShiftMode::On),
+        ("all", ConstShiftMode::All),
+    ] {
+        assert_eq!(
+            OptionArmConstShift.apply(value).unwrap().0,
+            mode,
+            "{value:?}"
+        );
     }
     assert!(OptionArmConstShift.apply("yes").is_err());
 }

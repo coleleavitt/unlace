@@ -24,7 +24,7 @@ use unlace_base::space::AddrSpace;
 use unlace_base::types::Wrap;
 use unlace_num::opcodes::OpCode;
 
-use crate::semantics::{ConstTpl, ConstType, ConstructTpl, OpTpl, VField, VarnodeTpl, LABELBUILD};
+use crate::semantics::{ConstTpl, ConstType, ConstructTpl, LABELBUILD, OpTpl, VField, VarnodeTpl};
 use crate::slghsymbol::{SleighSymbol, UserOpSymbol};
 
 // ---------------------------------------------------------------------------
@@ -1337,7 +1337,7 @@ pub trait PcodeCompile {
 #[cfg(test)]
 mod tests {
     use unlace_base::space::{
-        addrspace_flags, spacetype, AddrSpaceManager, ConstantSpace, UniqueSpace,
+        AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
     };
 
     use super::*;

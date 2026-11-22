@@ -21,12 +21,15 @@ use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// The vendored static `-pg` fixture (shared with the unlace-analysis callfixup
@@ -41,7 +44,10 @@ fn mcount_call_is_dissolved_by_the_applied_fixup() {
     let specs = root.join("specs");
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
 
-    let bin = mcount_fixture().to_str().expect("UTF-8 fixture path").to_string();
+    let bin = mcount_fixture()
+        .to_str()
+        .expect("UTF-8 fixture path")
+        .to_string();
 
     let prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
@@ -72,7 +78,10 @@ fn mcount_call_is_dissolved_by_the_applied_fixup() {
     let out = status.optr.clone();
 
     // A real decompilation of `main`.
-    assert!(out.contains("main"), "expected a decompiled body for `main`, got:\n{out}");
+    assert!(
+        out.contains("main"),
+        "expected a decompiled body for `main`, got:\n{out}"
+    );
     assert!(
         out.contains('{') && out.contains('}'),
         "expected a C function body for `main`, got:\n{out}"

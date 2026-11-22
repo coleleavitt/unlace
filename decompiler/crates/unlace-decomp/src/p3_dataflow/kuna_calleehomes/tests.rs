@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::space::{spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
@@ -12,8 +12,8 @@ use crate::funcdata::Funcdata;
 use crate::p6_variables::funcdata_spacebase::spacebase_tests::{build_fd, make_sp_in, reg_addr};
 
 use super::{
-    caller_home_cell, caller_home_unobserved, frame_value_overlaps, is_home_slot,
-    verified_home_gap, MAX_CALLER_SCAN_OPS,
+    MAX_CALLER_SCAN_OPS, caller_home_cell, caller_home_unobserved, frame_value_overlaps,
+    is_home_slot, verified_home_gap,
 };
 
 const HOME: i64 = -40;

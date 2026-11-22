@@ -3,8 +3,9 @@
 use crate::common;
 use std::process::Command;
 
-const FUNCTIONS: [&str; 12] =
-    ["udiv", "sdiv", "umod", "smod", "shl", "shr", "sar", "mul", "uidiv", "idiv", "imod", "both"];
+const FUNCTIONS: [&str; 12] = [
+    "udiv", "sdiv", "umod", "smod", "shl", "shr", "sar", "mul", "uidiv", "idiv", "imod", "both",
+];
 
 fn emitted(fixture: &str, option: &str) -> String {
     let (output, error, status) = common::run_kuna(&[
@@ -33,10 +34,22 @@ fn emitted(fixture: &str, option: &str) -> String {
 
 fn round_trip(fixture: &str) {
     let body = emitted(fixture, "on");
-    for helper in ["__udivdi3", "__divdi3", "__moddi3", "__divmoddi4", "__aeabi_"] {
-        assert!(!body.contains(helper), "{helper} survives in {fixture}:\n{body}");
+    for helper in [
+        "__udivdi3",
+        "__divdi3",
+        "__moddi3",
+        "__divmoddi4",
+        "__aeabi_",
+    ] {
+        assert!(
+            !body.contains(helper),
+            "{helper} survives in {fixture}:\n{body}"
+        );
     }
-    assert!(emitted(fixture, "off").contains("__"), "off keeps the helper calls");
+    assert!(
+        emitted(fixture, "off").contains("__"),
+        "off keeps the helper calls"
+    );
     let source = std::fs::read_to_string(common::fixture("arithhelpers.c")).unwrap();
     let mut reference = source.clone();
     for f in FUNCTIONS {
@@ -84,7 +97,11 @@ int main(void) {{
                 .arg(&executable)
                 .output()
                 .unwrap();
-            assert!(built.status.success(), "{}\n{body}", String::from_utf8_lossy(&built.stderr));
+            assert!(
+                built.status.success(),
+                "{}\n{body}",
+                String::from_utf8_lossy(&built.stderr)
+            );
             let status = Command::new(&executable).status().unwrap();
             assert!(status.success(), "{fixture} {cc} {opt}: {status}\n{body}");
             checked += 1;

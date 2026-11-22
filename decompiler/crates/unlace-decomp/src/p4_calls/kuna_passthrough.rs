@@ -164,7 +164,10 @@ impl OptionPassThrough {
     pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
-        Ok((val, format!("Forwarded-register parameter recovery turned {prop}")))
+        Ok((
+            val,
+            format!("Forwarded-register parameter recovery turned {prop}"),
+        ))
     }
 }
 
@@ -204,7 +207,12 @@ pub struct PassThroughClaim {
 /// register the callee's body is not seen taking, a register the calling
 /// function's own prototype could not take as a parameter, and any call of a
 /// variadic function.
-pub fn stated_width(data: &Funcdata, fc: &FuncCallSpecs, addr: &Address, size: int4) -> Option<int4> {
+pub fn stated_width(
+    data: &Funcdata,
+    fc: &FuncCallSpecs,
+    addr: &Address,
+    size: int4,
+) -> Option<int4> {
     if !data.get_arch().pass_through || size <= 0 || data.kuna_passthrough_variadic() {
         return None;
     }
@@ -212,7 +220,11 @@ pub fn stated_width(data: &Funcdata, fc: &FuncCallSpecs, addr: &Address, size: i
         return None;
     }
     let op = fc.get_op();
-    let is_call = data.obank().get(op).map(|o| !o.is_dead() && o.code() == OpCode::CPUI_CALL).unwrap_or(false);
+    let is_call = data
+        .obank()
+        .get(op)
+        .map(|o| !o.is_dead() && o.code() == OpCode::CPUI_CALL)
+        .unwrap_or(false);
     if !is_call || !is_register(addr) || data.kuna_passthrough_vararg_calls().contains(&op) {
         return None;
     }
@@ -221,12 +233,22 @@ pub fn stated_width(data: &Funcdata, fc: &FuncCallSpecs, addr: &Address, size: i
         if !general_purpose(data.get_func_proto(), addr, size) || !self_takes(data, addr, size) {
             return None;
         }
-        let seen = data.kuna_entry_reads().and_then(|r| r.width(addr)).unwrap_or(size).min(size);
-        let width = match data.kuna_callee_entry_dead(entry).filter(|f| f.is_complete()) {
+        let seen = data
+            .kuna_entry_reads()
+            .and_then(|r| r.width(addr))
+            .unwrap_or(size)
+            .min(size);
+        let width = match data
+            .kuna_callee_entry_dead(entry)
+            .filter(|f| f.is_complete())
+        {
             Some(f) => f.live_input_width(addr, size).map_or(seen, |w| w.min(seen)),
             None => seen,
         };
-        return data.get_func_proto().possible_input_param(addr, width).then_some(width);
+        return data
+            .get_func_proto()
+            .possible_input_param(addr, width)
+            .then_some(width);
     }
     let stated = data.kuna_protoorder_types(entry)?;
     if stated.vararg_tail.iter().any(|a| a == addr) {
@@ -243,20 +265,32 @@ pub fn stated_width(data: &Funcdata, fc: &FuncCallSpecs, addr: &Address, size: i
     let size = size.min(stated_size);
     let float = stated_type.get_metatype() == crate::dtype::type_metatype::TYPE_FLOAT;
     if !general_purpose(fc.proto(), addr, size) && !float {
-        let facts = data.kuna_callee_entry_through(entry).or_else(|| data.kuna_callee_entry_dead(entry))?;
+        let facts = data
+            .kuna_callee_entry_through(entry)
+            .or_else(|| data.kuna_callee_entry_dead(entry))?;
         if !stated.arity_sound || !facts.proves_input(addr, size) {
             return None;
         }
         let width = facts.live_input_width(addr, size).unwrap_or(size);
-        return data.get_func_proto().possible_input_param(addr, width).then_some(width);
+        return data
+            .get_func_proto()
+            .possible_input_param(addr, width)
+            .then_some(width);
     }
-    let takes = |a: &Address, s: int4, strict: bool| crate::kuna_entryreads::callee_takes(data, entry, a, s, strict);
+    let takes = |a: &Address, s: int4, strict: bool| {
+        crate::kuna_entryreads::callee_takes(data, entry, a, s, strict)
+    };
     let read = if stated.callers_vote {
         true
     } else if stated.arity_sound {
         takes(addr, size, false)
     } else {
-        takes(addr, size, true) && stated.inputs.iter().filter(|(a, _, _)| is_register(a)).all(|(a, s, _)| takes(a, *s, true))
+        takes(addr, size, true)
+            && stated
+                .inputs
+                .iter()
+                .filter(|(a, _, _)| is_register(a))
+                .all(|(a, s, _)| takes(a, *s, true))
     };
     if !read {
         return None;
@@ -265,12 +299,18 @@ pub fn stated_width(data: &Funcdata, fc: &FuncCallSpecs, addr: &Address, size: i
         .kuna_callee_entry_through(entry)
         .or_else(|| data.kuna_callee_entry_dead(entry))
         .filter(|f| f.is_complete());
-    let seen = stated.reads.iter().find(|(a, _)| a == addr).map_or(size, |(_, w)| (*w).min(size));
+    let seen = stated
+        .reads
+        .iter()
+        .find(|(a, _)| a == addr)
+        .map_or(size, |(_, w)| (*w).min(size));
     let width = match &facts {
         Some(f) => f.live_input_width(addr, size).map_or(seen, |w| w.min(seen)),
         None => seen,
     };
-    data.get_func_proto().possible_input_param(addr, width).then_some(width)
+    data.get_func_proto()
+        .possible_input_param(addr, width)
+        .then_some(width)
 }
 
 /// Is `[addr, addr+size)` in a general-purpose input register of `proto`'s
@@ -281,7 +321,8 @@ pub fn stated_width(data: &Funcdata, fc: &FuncCallSpecs, addr: &Address, size: i
 fn general_purpose(proto: &crate::fspec::FuncProto, addr: &Address, size: int4) -> bool {
     proto.has_model()
         && proto.model().input().get_entry().iter().any(|e| {
-            e.get_type() == crate::dtype::type_class::TYPECLASS_GENERAL && e.justified_contain(addr, size) >= 0
+            e.get_type() == crate::dtype::type_class::TYPECLASS_GENERAL
+                && e.justified_contain(addr, size) >= 0
         })
 }
 
@@ -289,9 +330,17 @@ fn general_purpose(proto: &crate::fspec::FuncProto, addr: &Address, size: int4) 
 /// decode reads it, or it hands it to a declared parameter; without a complete
 /// decode, its first heritage saw it read ([`crate::kuna_entryreads`]).
 fn self_takes(data: &Funcdata, addr: &Address, size: int4) -> bool {
-    let Some(own) = data.kuna_entry_reads() else { return false };
-    match data.kuna_callee_entry_dead(data.get_address()).filter(|f| f.is_complete()) {
-        Some(f) => f.reads_low_byte(addr, size, false, true) || crate::kuna_entryreads::overlaps(&own.declared, addr, size),
+    let Some(own) = data.kuna_entry_reads() else {
+        return false;
+    };
+    match data
+        .kuna_callee_entry_dead(data.get_address())
+        .filter(|f| f.is_complete())
+    {
+        Some(f) => {
+            f.reads_low_byte(addr, size, false, true)
+                || crate::kuna_entryreads::overlaps(&own.declared, addr, size)
+        }
         None => own.takes(addr, size),
     }
 }
@@ -308,7 +357,9 @@ fn stated_registers(data: &Funcdata, entry: &Address) -> Option<Vec<Address>> {
         }
         let mut out = Vec::new();
         for e in proto.model().input().get_entry() {
-            if e.get_type() != crate::dtype::type_class::TYPECLASS_GENERAL || e.get_space().get_type() != spacetype::IPTR_PROCESSOR {
+            if e.get_type() != crate::dtype::type_class::TYPECLASS_GENERAL
+                || e.get_space().get_type() != spacetype::IPTR_PROCESSOR
+            {
                 continue;
             }
             let a = Address::new(std::rc::Rc::clone(e.get_space()), e.get_base());
@@ -319,7 +370,13 @@ fn stated_registers(data: &Funcdata, entry: &Address) -> Option<Vec<Address>> {
         }
         return Some(out);
     }
-    Some(data.kuna_protoorder_types(entry)?.inputs.iter().map(|(a, _, _)| a.clone()).collect())
+    Some(
+        data.kuna_protoorder_types(entry)?
+            .inputs
+            .iter()
+            .map(|(a, _, _)| a.clone())
+            .collect(),
+    )
 }
 
 /// Does `[addr, addr+size)` hold nothing a call takes but something it gives
@@ -355,8 +412,13 @@ pub(crate) fn set_up_as_variadic(data: &Funcdata, idx: int4) -> bool {
     // something the call is about to take.
     let mut read_at: Option<Address> = None;
     while let Some(op) = cur {
-        let Some(o) = data.obank().get(op) else { return false };
-        if matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_CALLOTHER) {
+        let Some(o) = data.obank().get(op) else {
+            return false;
+        };
+        if matches!(
+            o.code(),
+            OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_CALLOTHER
+        ) {
             return false;
         }
         if is_injected_noop(data, op) {
@@ -364,7 +426,10 @@ pub(crate) fn set_up_as_variadic(data: &Funcdata, idx: int4) -> bool {
             continue;
         }
         let reads_it = (0..o.num_input()).filter_map(|i| o.get_in(i)).any(|v| {
-            data.vbank().get(v).map(|v| return_only(proto, v.get_addr(), v.get_size())).unwrap_or(false)
+            data.vbank()
+                .get(v)
+                .map(|v| return_only(proto, v.get_addr(), v.get_size()))
+                .unwrap_or(false)
         });
         if reads_it {
             match &read_at {
@@ -417,8 +482,13 @@ fn vararg_count_read(data: &Funcdata, stores: bool) -> bool {
     let mut written: Vec<(u64, int4)> = Vec::new();
     let mut cur = data.bb_op_head(data.bblocks_get_block(0));
     while let Some(op) = cur {
-        let Some(o) = data.obank().get(op) else { return false };
-        if matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_CALLOTHER) {
+        let Some(o) = data.obank().get(op) else {
+            return false;
+        };
+        if matches!(
+            o.code(),
+            OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_CALLOTHER
+        ) {
             return false;
         }
         if is_injected_noop(data, op) {
@@ -429,12 +499,17 @@ fn vararg_count_read(data: &Funcdata, stores: bool) -> bool {
             if !stores && i == 2 && o.code() == OpCode::CPUI_STORE {
                 continue;
             }
-            let Some(v) = o.get_in(i).and_then(|v| data.vbank().get(v)) else { continue };
+            let Some(v) = o.get_in(i).and_then(|v| data.vbank().get(v)) else {
+                continue;
+            };
             if !return_only(proto, v.get_addr(), v.get_size()) {
                 continue;
             }
             let (off, end) = (v.get_offset(), v.get_offset() + v.get_size() as u64);
-            if !written.iter().any(|&(w, ws)| w <= off && end <= w + ws as u64) {
+            if !written
+                .iter()
+                .any(|&(w, ws)| w <= off && end <= w + ws as u64)
+            {
                 return true;
             }
         }
@@ -502,7 +577,9 @@ fn register_touch(
 /// `pop {...,pc}` as `r0 = r0` (MIPS: `v0 = v0` at `jr ra`), marked incidental
 /// so parameter recovery walks through it; it moves nothing.
 pub(crate) fn is_injected_noop(data: &Funcdata, op: OpId) -> bool {
-    let Some(o) = data.obank().get(op) else { return false };
+    let Some(o) = data.obank().get(op) else {
+        return false;
+    };
     if o.code() != OpCode::CPUI_COPY || !o.is_incidental_copy() {
         return false;
     }
@@ -520,7 +597,10 @@ pub(crate) fn is_injected_noop(data: &Funcdata, op: OpId) -> bool {
 fn first_calls(data: &Funcdata) -> Vec<OpId> {
     let n = data.bblocks_get_size();
     let is_call = |op: OpId| {
-        data.obank().get(op).map(|o| matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND)).unwrap_or(false)
+        data.obank()
+            .get(op)
+            .map(|o| matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND))
+            .unwrap_or(false)
     };
     let first_call_in = |i: int4| {
         let mut cur = data.bb_op_head(data.bblocks_get_block(i));
@@ -539,7 +619,8 @@ fn first_calls(data: &Funcdata) -> Vec<OpId> {
         let mut changed = false;
         for i in 0..n {
             let b = data.bblocks_ref().block(data.bblocks_get_block(i));
-            let entered_after = (0..b.size_in()).any(|k| after_call.get(index_of(b.get_in(k)) as usize) == Some(&true));
+            let entered_after = (0..b.size_in())
+                .any(|k| after_call.get(index_of(b.get_in(k)) as usize) == Some(&true));
             let out = entered_after || calls[i as usize].is_some();
             if out && !after_call[i as usize] {
                 after_call[i as usize] = true;
@@ -633,7 +714,10 @@ fn claim_untouched_registers_mode(data: &mut Funcdata, pass: ClaimPass) {
         None
     } else {
         stated_tail_return(data).map(|(pieces, producers, beside_own)| {
-            let pieces = pieces.into_iter().map(|(a, s)| (touched(data, &a, s), a, s)).collect();
+            let pieces = pieces
+                .into_iter()
+                .map(|(a, s)| (touched(data, &a, s), a, s))
+                .collect();
             (pieces, producers, beside_own)
         })
     };
@@ -651,7 +735,9 @@ fn claim_untouched_registers_mode(data: &mut Funcdata, pass: ClaimPass) {
         data.kuna_passthrough_claims().to_vec()
     };
     for idx in 0..data.num_calls() {
-        if !data.get_call_specs(idx).is_input_active() || !first.contains(&data.get_call_specs(idx).get_op()) {
+        if !data.get_call_specs(idx).is_input_active()
+            || !first.contains(&data.get_call_specs(idx).get_op())
+        {
             continue;
         }
         let entry = data.get_call_specs(idx).get_entry_address().clone();
@@ -661,11 +747,19 @@ fn claim_untouched_registers_mode(data: &mut Funcdata, pass: ClaimPass) {
         };
         let op = data.get_call_specs(idx).get_op();
         for (pos, (addr, stated_size)) in stated.iter().cloned().enumerate() {
-            let Some(size) = stated_width(data, data.get_call_specs(idx), &addr, stated_size) else { continue };
+            let Some(size) = stated_width(data, data.get_call_specs(idx), &addr, stated_size)
+            else {
+                continue;
+            };
             if !no_hole_before(data, &stated, pos, &claims) {
                 continue;
             }
-            if data.get_call_specs(idx).active_input().which_trial(&addr, stated_size) >= 0 {
+            if data
+                .get_call_specs(idx)
+                .active_input()
+                .which_trial(&addr, stated_size)
+                >= 0
+            {
                 continue;
             }
             if after_go_stack_guard {
@@ -710,16 +804,14 @@ fn claim_untouched_registers_mode(data: &mut Funcdata, pass: ClaimPass) {
             ai.get_trial_mut(t).set_slot(nin);
             match claims.iter_mut().find(|c| c.addr == addr && c.size == size) {
                 Some(c) => c.arg_owners.push(op),
-                None => {
-                    claims.push(PassThroughClaim {
-                        addr,
-                        size,
-                        arg_owners: vec![op],
-                        ret_owners: Vec::new(),
-                        body_touches: false,
-                        beside_own: false,
-                    })
-                }
+                None => claims.push(PassThroughClaim {
+                    addr,
+                    size,
+                    arg_owners: vec![op],
+                    ret_owners: Vec::new(),
+                    body_touches: false,
+                    beside_own: false,
+                }),
             }
         }
     }
@@ -758,11 +850,18 @@ fn own_input_varnode(data: &Funcdata, addr: &Address, size: int4) -> Option<Varn
 ///
 /// The evidence is one-sided, as everywhere this walk is read: a body the walk
 /// cannot settle keeps the claim.
-fn no_hole_before(data: &Funcdata, stated: &[(Address, int4)], pos: usize, claims: &[PassThroughClaim]) -> bool {
+fn no_hole_before(
+    data: &Funcdata,
+    stated: &[(Address, int4)],
+    pos: usize,
+    claims: &[PassThroughClaim],
+) -> bool {
     if pos == 0 {
         return true;
     }
-    let Some(facts) = data.kuna_callee_entry_dead(data.get_address()) else { return true };
+    let Some(facts) = data.kuna_callee_entry_dead(data.get_address()) else {
+        return true;
+    };
     stated[..pos]
         .iter()
         .all(|(a, sz)| overlaps_claim(claims, a, *sz) || !facts.proves_dead(a, *sz))
@@ -830,7 +929,12 @@ fn stated_tail_return(data: &Funcdata) -> Option<(Vec<(Address, int4)>, Vec<OpId
     let rets: Vec<OpId> = data
         .obank()
         .iter_code(OpCode::CPUI_RETURN)
-        .filter(|&r| data.obank().get(r).map(|o| !o.is_dead() && o.get_halt_type() == 0).unwrap_or(false))
+        .filter(|&r| {
+            data.obank()
+                .get(r)
+                .map(|o| !o.is_dead() && o.get_halt_type() == 0)
+                .unwrap_or(false)
+        })
         .collect();
     if rets.is_empty() {
         return None;
@@ -841,7 +945,11 @@ fn stated_tail_return(data: &Funcdata) -> Option<(Vec<(Address, int4)>, Vec<OpId
     let mut own: Vec<OpId> = Vec::new();
     let mut widths: Vec<(int4, bool)> = Vec::new();
     let narrow_tails = data.get_arch().narrow_ret
-        && !data.get_arch().manage().get_default_code_space().is_some_and(|c| c.is_big_endian());
+        && !data
+            .get_arch()
+            .manage()
+            .get_default_code_space()
+            .is_some_and(|c| c.is_big_endian());
     let beside_own = data.get_arch().mixed_tail_ret;
     for &r in &rets {
         let Some(call) = producing_call(data, r) else {
@@ -856,7 +964,10 @@ fn stated_tail_return(data: &Funcdata) -> Option<(Vec<(Address, int4)>, Vec<OpId
         if fc.proto().is_output_locked() || !fc.is_output_active() {
             return None;
         }
-        let (addr, size, _) = data.kuna_protoorder_types(fc.get_entry_address())?.output.clone()?;
+        let (addr, size, _) = data
+            .kuna_protoorder_types(fc.get_entry_address())?
+            .output
+            .clone()?;
         let zero_extended = narrow_tails
             && fc.get_entry_address().get_space().is_some_and(|sp| {
                 data.kuna_narrowret((sp.get_index(), fc.get_entry_address().get_offset()))
@@ -874,7 +985,10 @@ fn stated_tail_return(data: &Funcdata) -> Option<(Vec<(Address, int4)>, Vec<OpId
         paths.push((call, r));
     }
     let (addr, size) = storage?;
-    if widths.iter().any(|&(w, zext)| w < size && !(zext && size >= 4)) {
+    if widths
+        .iter()
+        .any(|&(w, zext)| w < size && !(zext && size >= 4))
+    {
         return None;
     }
     let pieces = register_pieces(data, &addr, size)?;
@@ -884,13 +998,20 @@ fn stated_tail_return(data: &Funcdata) -> Option<(Vec<(Address, int4)>, Vec<OpId
         proto.characterize_as_output(a, *s) != crate::fspec::Containment::NoContainment
             && (mixed || !touched_by(data, a, *s, true) || return_only(proto, a, *s))
     };
-    if !pieces.iter().all(free) || paths.iter().any(|&(call, ret)| touched_after(data, call, ret, &pieces)) {
+    if !pieces.iter().all(free)
+        || paths
+            .iter()
+            .any(|&(call, ret)| touched_after(data, call, ret, &pieces))
+    {
         return None;
     }
     if mixed {
         let argument = pieces.iter().any(|(a, s)| !return_only(proto, a, *s));
-        if (argument && crate::p4_calls::kuna_mixedtailret::feeds_tail_call(data, &producers, &pieces))
-            || !own.iter().all(|&r| crate::p4_calls::kuna_mixedtailret::returns_decided_value(data, r, &pieces, &paths))
+        if (argument
+            && crate::p4_calls::kuna_mixedtailret::feeds_tail_call(data, &producers, &pieces))
+            || !own.iter().all(|&r| {
+                crate::p4_calls::kuna_mixedtailret::returns_decided_value(data, r, &pieces, &paths)
+            })
         {
             return None;
         }
@@ -904,23 +1025,33 @@ fn stated_tail_return(data: &Funcdata) -> Option<(Vec<(Address, int4)>, Vec<OpId
 fn touched_after(data: &Funcdata, call: OpId, ret: OpId, pieces: &[(Address, int4)]) -> bool {
     let hits = |v: Option<VarnodeId>| {
         v.and_then(|v| data.vbank().get(v)).is_some_and(|v| {
-            let (voff, vend) = (v.get_offset(), v.get_offset().wrapping_add(v.get_size().max(0) as u64));
+            let (voff, vend) = (
+                v.get_offset(),
+                v.get_offset().wrapping_add(v.get_size().max(0) as u64),
+            );
             pieces.iter().any(|(a, s)| {
-                a.get_space().is_some_and(|sp| sp.get_index() == v.get_space().get_index())
+                a.get_space()
+                    .is_some_and(|sp| sp.get_index() == v.get_space().get_index())
                     && a.get_offset() < vend
                     && voff < a.get_offset().wrapping_add((*s).max(0) as u64)
             })
         })
     };
-    let Some(mut bl) = data.obank().get(ret).and_then(|o| o.get_parent()) else { return true };
+    let Some(mut bl) = data.obank().get(ret).and_then(|o| o.get_parent()) else {
+        return true;
+    };
     let mut cur = data.op_previous_op(ret);
     for _ in 0..RETURN_WALK_BLOCKS {
         while let Some(op) = cur {
             if op == call {
                 return false;
             }
-            let Some(o) = data.obank().get(op) else { return true };
-            if !is_injected_noop(data, op) && (hits(o.get_out()) || (0..o.num_input()).any(|i| hits(o.get_in(i)))) {
+            let Some(o) = data.obank().get(op) else {
+                return true;
+            };
+            if !is_injected_noop(data, op)
+                && (hits(o.get_out()) || (0..o.num_input()).any(|i| hits(o.get_in(i))))
+            {
                 return true;
             }
             cur = data.op_previous_op(op);
@@ -949,9 +1080,14 @@ fn register_pieces(data: &Funcdata, addr: &Address, size: int4) -> Option<Vec<(A
     }
     let pieces: Vec<(Address, int4)> = (0..rec.num_pieces())
         .map(|i| rec.get_piece(i))
-        .filter_map(|p| p.space.clone().map(|sp| (Address::new(sp, p.offset), p.size as int4)))
+        .filter_map(|p| {
+            p.space
+                .clone()
+                .map(|sp| (Address::new(sp, p.offset), p.size as int4))
+        })
         .collect();
-    (pieces.len() == rec.num_pieces() as usize && pieces.iter().all(|(a, _)| is_register(a))).then_some(pieces)
+    (pieces.len() == rec.num_pieces() as usize && pieces.iter().all(|(a, _)| is_register(a)))
+        .then_some(pieces)
 }
 
 /// Give every live RETURN a read of each return register its tail calls
@@ -971,9 +1107,17 @@ fn claim_tail_return(
     let rets: Vec<OpId> = data
         .obank()
         .iter_code(OpCode::CPUI_RETURN)
-        .filter(|&r| data.obank().get(r).map(|o| !o.is_dead() && o.get_halt_type() == 0).unwrap_or(false))
+        .filter(|&r| {
+            data.obank()
+                .get(r)
+                .map(|o| !o.is_dead() && o.get_halt_type() == 0)
+                .unwrap_or(false)
+        })
         .collect();
-    let nins: Vec<int4> = rets.iter().filter_map(|&r| data.obank().get(r).map(|o| o.num_input())).collect();
+    let nins: Vec<int4> = rets
+        .iter()
+        .filter_map(|&r| data.obank().get(r).map(|o| o.num_input()))
+        .collect();
     if nins.len() != rets.len() || nins.iter().any(|&n| n != nins[0]) {
         return;
     }
@@ -1019,19 +1163,30 @@ pub fn returns_tail_result(data: &Funcdata, vn: VarnodeId, addr: &Address, size:
     if !data.get_arch().pass_through {
         return false;
     }
-    let Some(v) = data.vbank().get(vn) else { return false };
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
     if v.get_addr() != addr || v.get_size() != size {
         return false;
     }
     let mut def = v.get_def();
     while let Some(d) = def.filter(|&d| is_injected_noop(data, d) || is_low_piece(data, d)) {
-        def = data.obank().get(d).and_then(|o| o.get_in(0)).and_then(|i| data.vbank().get(i)).and_then(|i| i.get_def());
+        def = data
+            .obank()
+            .get(d)
+            .and_then(|o| o.get_in(0))
+            .and_then(|i| data.vbank().get(i))
+            .and_then(|i| i.get_def());
     }
-    let Some(def) = def.and_then(|d| data.obank().get(d)) else { return false };
+    let Some(def) = def.and_then(|d| data.obank().get(d)) else {
+        return false;
+    };
     if !def.is_indirect_creation() {
         return false;
     }
-    let Some(iop) = def.get_in(1).and_then(|i| data.vbank().get(i)) else { return false };
+    let Some(iop) = def.get_in(1).and_then(|i| data.vbank().get(i)) else {
+        return false;
+    };
     let call = OpId::from(slotmap::KeyData::from_ffi(iop.get_offset()));
     data.kuna_passthrough_claims()
         .iter()
@@ -1042,15 +1197,21 @@ pub fn returns_tail_result(data: &Funcdata, vn: VarnodeId, addr: &Address, size:
 /// `eax` heritage reads out of the whole `rax` a call writes once the function
 /// also writes `rax` itself before the call?
 fn is_low_piece(data: &Funcdata, op: OpId) -> bool {
-    let Some(o) = data.obank().get(op) else { return false };
+    let Some(o) = data.obank().get(op) else {
+        return false;
+    };
     o.code() == OpCode::CPUI_SUBPIECE
-        && o.get_in(1).and_then(|c| data.vbank().get(c)).is_some_and(|c| c.is_constant() && c.get_offset() == 0)
+        && o.get_in(1)
+            .and_then(|c| data.vbank().get(c))
+            .is_some_and(|c| c.is_constant() && c.get_offset() == 0)
 }
 
 /// Is `[addr, addr+size)` a register of a tail call's result this pass claimed
 /// as the function's return value?
 fn is_tail_return_piece(data: &Funcdata, addr: &Address, size: int4) -> bool {
-    data.kuna_passthrough_claims().iter().any(|c| c.addr == *addr && c.size == size && !c.ret_owners.is_empty())
+    data.kuna_passthrough_claims()
+        .iter()
+        .any(|c| c.addr == *addr && c.size == size && !c.ret_owners.is_empty())
 }
 
 /// Take a claimed return value whole or not at all, and only when the function
@@ -1072,9 +1233,16 @@ pub fn keep_tail_return_whole(data: &Funcdata, active: &mut crate::fspec::ParamA
         return;
     }
     let claimed: Vec<int4> = (0..active.get_num_trials())
-        .filter(|&i| is_tail_return_piece(data, active.get_trial(i).get_address(), active.get_trial(i).get_size()))
+        .filter(|&i| {
+            is_tail_return_piece(
+                data,
+                active.get_trial(i).get_address(),
+                active.get_trial(i).get_size(),
+            )
+        })
         .collect();
-    let own = !crate::p4_calls::kuna_mixedtailret::claimed_beside_own(data) && returns_own_value(data, active, &claimed);
+    let own = !crate::p4_calls::kuna_mixedtailret::claimed_beside_own(data)
+        && returns_own_value(data, active, &claimed);
     if claimed.iter().any(|&i| !active.get_trial(i).is_active()) || own {
         for i in claimed {
             active.get_trial_mut(i).mark_inactive();
@@ -1096,13 +1264,29 @@ pub fn keep_tail_return_whole(data: &Funcdata, active: &mut crate::fspec::ParamA
 /// value; and a value that is zero at every RETURN ([`is_zero`]), which is also
 /// what `-fzero-call-used-regs` leaves in every call-used register the function
 /// does not return in (openssh's `call f; ...; pxor %xmm0,%xmm0; ret`).
-fn returns_own_value(data: &Funcdata, active: &crate::fspec::ParamActive, claimed: &[int4]) -> bool {
+fn returns_own_value(
+    data: &Funcdata,
+    active: &crate::fspec::ParamActive,
+    claimed: &[int4],
+) -> bool {
     let proto = data.get_func_proto();
-    let Some(out) = proto.has_model().then(|| proto.model().output_list()).flatten() else { return false };
-    let class = |t: &crate::fspec::ParamTrial| {
-        out.get_entry().iter().find(|e| e.intersects(t.get_address(), t.get_size())).map(|e| e.get_type())
+    let Some(out) = proto
+        .has_model()
+        .then(|| proto.model().output_list())
+        .flatten()
+    else {
+        return false;
     };
-    let theirs: Vec<_> = claimed.iter().filter_map(|&i| class(active.get_trial(i))).collect();
+    let class = |t: &crate::fspec::ParamTrial| {
+        out.get_entry()
+            .iter()
+            .find(|e| e.intersects(t.get_address(), t.get_size()))
+            .map(|e| e.get_type())
+    };
+    let theirs: Vec<_> = claimed
+        .iter()
+        .filter_map(|&i| class(active.get_trial(i)))
+        .collect();
     if theirs.is_empty() {
         return false;
     }
@@ -1117,17 +1301,30 @@ fn returns_own_value(data: &Funcdata, active: &crate::fspec::ParamActive, claime
     let rets: Vec<OpId> = data
         .obank()
         .iter_code(OpCode::CPUI_RETURN)
-        .filter(|&r| data.obank().get(r).map(|o| !o.is_dead() && o.get_halt_type() == 0).unwrap_or(false))
-        .collect();
-    let used: Vec<&crate::fspec::ParamTrial> =
-        (0..own.get_num_trials()).map(|i| own.get_trial(i)).filter(|t| t.is_used()).collect();
-    let nonzero = used.iter().any(|t| {
-        rets.iter().any(|&r| match data.obank().get(r).and_then(|o| o.get_in(t.get_slot())) {
-            Some(vn) => !is_zero(data, vn, ZERO_DEPTH),
-            None => false,
+        .filter(|&r| {
+            data.obank()
+                .get(r)
+                .map(|o| !o.is_dead() && o.get_halt_type() == 0)
+                .unwrap_or(false)
         })
+        .collect();
+    let used: Vec<&crate::fspec::ParamTrial> = (0..own.get_num_trials())
+        .map(|i| own.get_trial(i))
+        .filter(|t| t.is_used())
+        .collect();
+    let nonzero = used.iter().any(|t| {
+        rets.iter().any(
+            |&r| match data.obank().get(r).and_then(|o| o.get_in(t.get_slot())) {
+                Some(vn) => !is_zero(data, vn, ZERO_DEPTH),
+                None => false,
+            },
+        )
     });
-    nonzero && used.iter().filter_map(|t| class(t)).any(|c| theirs.iter().any(|&k| k != c))
+    nonzero
+        && used
+            .iter()
+            .filter_map(|t| class(t))
+            .any(|c| theirs.iter().any(|&k| k != c))
 }
 
 /// How many defining ops [`is_zero`] follows.
@@ -1137,11 +1334,19 @@ const ZERO_DEPTH: u32 = 8;
 /// `x - x`, or a copy, extension, truncation, concatenation or conversion of
 /// zeros?
 fn is_zero(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
-    let Some(v) = data.vbank().get(vn) else { return false };
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
     if v.is_constant() {
         return v.get_offset() == 0;
     }
-    let Some(o) = v.get_def().filter(|_| depth > 0).and_then(|d| data.obank().get(d)) else { return false };
+    let Some(o) = v
+        .get_def()
+        .filter(|_| depth > 0)
+        .and_then(|d| data.obank().get(d))
+    else {
+        return false;
+    };
     let zero = |k: int4| o.get_in(k).is_some_and(|i| is_zero(data, i, depth - 1));
     match o.code() {
         OpCode::CPUI_COPY
@@ -1151,7 +1356,9 @@ fn is_zero(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
         | OpCode::CPUI_FLOAT_INT2FLOAT
         | OpCode::CPUI_FLOAT_FLOAT2FLOAT => zero(0),
         OpCode::CPUI_PIECE | OpCode::CPUI_INT_OR => zero(0) && zero(1),
-        OpCode::CPUI_INT_XOR | OpCode::CPUI_INT_SUB => o.get_in(0) == o.get_in(1) || (zero(0) && zero(1)),
+        OpCode::CPUI_INT_XOR | OpCode::CPUI_INT_SUB => {
+            o.get_in(0) == o.get_in(1) || (zero(0) && zero(1))
+        }
         OpCode::CPUI_INT_AND | OpCode::CPUI_INT_MULT => zero(0) || zero(1),
         _ => false,
     }
@@ -1159,15 +1366,28 @@ fn is_zero(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
 
 /// The type a tail call this pass claimed hands back: the callee's own
 /// recovered return type, offered as the CALL output's local type.
-pub fn tail_return_type(data: &Funcdata, op: OpId, size: int4) -> Option<std::rc::Rc<crate::dtype::Datatype>> {
+pub fn tail_return_type(
+    data: &Funcdata,
+    op: OpId,
+    size: int4,
+) -> Option<std::rc::Rc<crate::dtype::Datatype>> {
     if !data.get_arch().pass_through {
         return None;
     }
-    if !data.kuna_passthrough_claims().iter().any(|c| c.ret_owners.contains(&op)) {
+    if !data
+        .kuna_passthrough_claims()
+        .iter()
+        .any(|c| c.ret_owners.contains(&op))
+    {
         return None;
     }
-    let fc = (0..data.num_calls()).map(|i| data.get_call_specs(i)).find(|fc| fc.get_op() == op)?;
-    let (_, osize, ct) = data.kuna_protoorder_types(fc.get_entry_address())?.output.as_ref()?;
+    let fc = (0..data.num_calls())
+        .map(|i| data.get_call_specs(i))
+        .find(|fc| fc.get_op() == op)?;
+    let (_, osize, ct) = data
+        .kuna_protoorder_types(fc.get_entry_address())?
+        .output
+        .as_ref()?;
     (*osize == size && ct.get_size() == size).then(|| std::rc::Rc::clone(ct))
 }
 
@@ -1189,7 +1409,9 @@ pub fn suppresses_return_trial(data: &Funcdata, addr: &Address, size: int4) -> b
 
 /// Does `[addr, addr+size)` share a byte with any claimed range?
 fn overlaps_claim(claims: &[PassThroughClaim], addr: &Address, size: int4) -> bool {
-    let Some(sp) = addr.get_space() else { return false };
+    let Some(sp) = addr.get_space() else {
+        return false;
+    };
     let off = addr.get_offset();
     let end = off.wrapping_add(size.max(0) as u64);
     claims.iter().any(|c| {
@@ -1256,13 +1478,20 @@ pub fn capture(fc: &mut FuncCallSpecs, data: &Funcdata) -> Option<PendingPassThr
         if claimed_range(data, &addr, size) {
             retire.push(i);
         }
-        let Some(vn) = data.obank().get(op).and_then(|o| o.get_in(t.get_slot())) else { continue };
+        let Some(vn) = data.obank().get(op).and_then(|o| o.get_in(t.get_slot())) else {
+            continue;
+        };
         let own_input = data
             .vbank()
             .get(vn)
-            .map(|v| v.is_input() && !v.is_written() && *v.get_addr() == addr && v.get_size() == size)
+            .map(|v| {
+                v.is_input() && !v.is_written() && *v.get_addr() == addr && v.get_size() == size
+            })
             .unwrap_or(false);
-        if !own_input && !crate::kuna_armfloatargs::is_forwarded_input(data, vn, &addr, size) && !reassembled(data, vn, &addr, size) {
+        if !own_input
+            && !crate::kuna_armfloatargs::is_forwarded_input(data, vn, &addr, size)
+            && !reassembled(data, vn, &addr, size)
+        {
             continue;
         }
         if let Some(width) = stated_width(data, fc, &addr, size) {
@@ -1281,7 +1510,8 @@ pub fn capture(fc: &mut FuncCallSpecs, data: &Funcdata) -> Option<PendingPassThr
 /// returned by a tail call that also takes the incoming `x0`)?
 fn reassembled(data: &Funcdata, vn: VarnodeId, addr: &Address, size: int4) -> bool {
     data.vbank().get(vn).is_some_and(|v| v.is_written())
-        && crate::kuna_armfloatargs::incoming_storage(data, vn).is_some_and(|(a, s)| a == *addr && s == size)
+        && crate::kuna_armfloatargs::incoming_storage(data, vn)
+            .is_some_and(|(a, s)| a == *addr && s == size)
 }
 
 /// Extend each captured call's final argument list with the forwarded registers
@@ -1299,10 +1529,15 @@ pub fn extend_pending(data: &mut Funcdata, pending: &[PendingPassThrough]) -> in
 
 /// [`extend_pending`] for one call.
 fn extend_one(data: &mut Funcdata, p: &PendingPassThrough) -> bool {
-    let Some(idx) = data.get_call_specs_index(p.op) else { return false };
+    let Some(idx) = data.get_call_specs_index(p.op) else {
+        return false;
+    };
     let (entry, current) = {
         let fc = data.get_call_specs(idx);
-        (fc.get_entry_address().clone(), fc.final_input_storage().to_vec())
+        (
+            fc.get_entry_address().clone(),
+            fc.final_input_storage().to_vec(),
+        )
     };
     let nin = match data.obank().get(p.op) {
         Some(o) if !o.is_dead() && o.code() == OpCode::CPUI_CALL => o.num_input(),
@@ -1311,15 +1546,21 @@ fn extend_one(data: &mut Funcdata, p: &PendingPassThrough) -> bool {
     if nin != current.len() as int4 + 1 || current.iter().any(|(a, _)| !is_register(a)) {
         return false;
     }
-    let Some(stated) = stated_registers(data, &entry) else { return false };
+    let Some(stated) = stated_registers(data, &entry) else {
+        return false;
+    };
     let have: Vec<Address> = current.iter().map(|(a, _)| a.clone()).collect();
     let offered: Vec<Address> = p.candidates.iter().map(|(a, _, _)| a.clone()).collect();
-    let added: Vec<(Address, int4, VarnodeId)> =
-        extension(&have, &stated, &offered).into_iter().map(|k| p.candidates[k].clone()).collect();
+    let added: Vec<(Address, int4, VarnodeId)> = extension(&have, &stated, &offered)
+        .into_iter()
+        .map(|k| p.candidates[k].clone())
+        .collect();
     if added.is_empty() {
         return false;
     }
-    let mut newparam: Vec<VarnodeId> = (0..nin).filter_map(|i| data.obank().get(p.op).and_then(|o| o.get_in(i))).collect();
+    let mut newparam: Vec<VarnodeId> = (0..nin)
+        .filter_map(|i| data.obank().get(p.op).and_then(|o| o.get_in(i)))
+        .collect();
     if newparam.len() != nin as usize {
         return false;
     }
@@ -1351,7 +1592,8 @@ fn extend_one(data: &mut Funcdata, p: &PendingPassThrough) -> bool {
     if data.op_set_all_input(p.op, &newparam).is_err() {
         return false;
     }
-    data.get_call_specs_mut(idx).set_final_input_storage(storage);
+    data.get_call_specs_mut(idx)
+        .set_final_input_storage(storage);
     true
 }
 
@@ -1365,15 +1607,35 @@ pub fn extension(have: &[Address], stated: &[Address], offered: &[Address]) -> V
     if have.len() >= stated.len() || have.iter().zip(stated).any(|(a, s)| a != s) {
         return Vec::new();
     }
-    stated[have.len()..].iter().map_while(|s| offered.iter().position(|a| a == s)).collect()
+    stated[have.len()..]
+        .iter()
+        .map_while(|s| offered.iter().position(|a| a == s))
+        .collect()
 }
 
 /// The low `width` bytes of `vn`, as a `SUBPIECE` inserted before `op`: what
 /// `buildInputFromTrials` does for a trial narrower than its Varnode.
-pub(crate) fn truncate_before(data: &mut Funcdata, vn: VarnodeId, width: int4, op: OpId) -> Option<VarnodeId> {
-    let (vaddr, vsize) = data.vbank().get(vn).map(|v| (v.get_addr().clone(), v.get_size()))?;
-    let big_endian = data.get_arch().manage().get_default_code_space().map(|s| s.is_big_endian()).unwrap_or(false);
-    let outaddr = if big_endian { &vaddr + ((vsize - width) as i64) } else { vaddr };
+pub(crate) fn truncate_before(
+    data: &mut Funcdata,
+    vn: VarnodeId,
+    width: int4,
+    op: OpId,
+) -> Option<VarnodeId> {
+    let (vaddr, vsize) = data
+        .vbank()
+        .get(vn)
+        .map(|v| (v.get_addr().clone(), v.get_size()))?;
+    let big_endian = data
+        .get_arch()
+        .manage()
+        .get_default_code_space()
+        .map(|s| s.is_big_endian())
+        .unwrap_or(false);
+    let outaddr = if big_endian {
+        &vaddr + ((vsize - width) as i64)
+    } else {
+        vaddr
+    };
     let opaddr = data.obank().get(op)?.get_addr().clone();
     let newop = data.new_op(2, opaddr);
     let out = data.new_varnode_out(width, &outaddr, newop).ok()?;

@@ -29,9 +29,9 @@ pub(crate) mod report;
 
 use archive::records_for_archive;
 
-use unlace_analysis::loadimage_object::ObjectLoadImage;
 use unlace_analysis::fid::build::build_records;
 use unlace_analysis::fid::db::{FidDb, FidRecord};
+use unlace_analysis::loadimage_object::ObjectLoadImage;
 use unlace_console::engine::bootstrap_from_object;
 
 use crate::args::take_value;
@@ -172,7 +172,11 @@ fn dedup_records(all: &mut Vec<FidRecord>) {
 
 /// Build the FID records for one input path: a `.a` archive (each member
 /// bootstrapped separately) or a single object/linked image.
-fn records_for_input(input: &str, spec_roots: &[String], lang: &str) -> Result<Vec<FidRecord>, String> {
+fn records_for_input(
+    input: &str,
+    spec_roots: &[String],
+    lang: &str,
+) -> Result<Vec<FidRecord>, String> {
     let bytes = std::fs::read(input).map_err(|e| format!("cannot read: {e}"))?;
     if is_archive(&bytes) {
         records_for_archive(input, &bytes, spec_roots, lang)
@@ -211,15 +215,17 @@ fn records_for_object_path(
         .map_err(|e| ObjectRefusal::Load(format!("bootstrap failed: {e}")))?;
     let arch = prog.arch();
     unlace_analysis::fid::kuna_fidapply::applies(lang, arch).map_err(|reason| {
-        ObjectRefusal::Language(format!("--lang {lang} does not describe this object: {reason}"))
+        ObjectRefusal::Language(format!(
+            "--lang {lang} does not describe this object: {reason}"
+        ))
     })?;
 
     // Re-read the bytes and open a fresh `ObjectLoadImage` for the generator (the
     // same throwaway-loader pattern `commit_pending_analysis` uses for the
     // deferred Listing build — its `image` arg is only used to satisfy the
     // contract; the decode reads through `arch.translate()`).
-    let bytes = std::fs::read(path)
-        .map_err(|e| ObjectRefusal::Load(format!("cannot re-read: {e}")))?;
+    let bytes =
+        std::fs::read(path).map_err(|e| ObjectRefusal::Load(format!("cannot re-read: {e}")))?;
     let image = ObjectLoadImage::from_bytes(path, &bytes)
         .map_err(|e| ObjectRefusal::Load(format!("loadimage failed: {e}")))?;
 
@@ -227,7 +233,9 @@ fn records_for_object_path(
         &bytes,
         &image,
         arch,
-        arch.translate().as_sleigh().expect("fid build: standalone Sleigh engine"),
+        arch.translate()
+            .as_sleigh()
+            .expect("fid build: standalone Sleigh engine"),
     ))
 }
 
@@ -241,9 +249,10 @@ fn is_archive(bytes: &[u8]) -> bool {
 fn spec_roots() -> Vec<String> {
     let mut roots: Vec<String> = Vec::new();
     if let Ok(home) = std::env::var("SLEIGHHOME")
-        && !home.is_empty() {
-            roots.push(home);
-        }
+        && !home.is_empty()
+    {
+        roots.push(home);
+    }
     let specs = paths::specs_dir().to_string_lossy().into_owned();
     if !roots.contains(&specs) {
         roots.push(specs);
@@ -253,7 +262,12 @@ fn spec_roots() -> Vec<String> {
 
 /// Parse the `build` flags: positional inputs + `-o`/`--lang`/`--cspec`.
 fn parse_build_args(argv: &[String]) -> Result<BuildArgs, String> {
-    let mut a = BuildArgs { inputs: Vec::new(), out: None, lang: None, cspec: None };
+    let mut a = BuildArgs {
+        inputs: Vec::new(),
+        out: None,
+        lang: None,
+        cspec: None,
+    };
     let mut i = 0;
     while i < argv.len() {
         let tok = argv[i].as_str();

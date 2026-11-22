@@ -81,8 +81,8 @@
 //!   clamped floor (`MIN_RUN_FLOOR`); the spirit (a longer run is more credible)
 //!   is preserved by the configurable `min_run` knob.
 
-use object::read::{Object, ObjectSection};
 use object::SectionKind;
+use object::read::{Object, ObjectSection};
 
 use std::collections::BTreeMap;
 use std::rc::Rc;
@@ -90,7 +90,9 @@ use std::rc::Rc;
 use unlace_base::types::int4;
 use unlace_decomp::dtype::TypeFactory;
 
-use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, DataObjectFact, Phase, TypedDataFact};
+use crate::pass::{
+    AnalysisCtx, AnalysisOutput, AnalysisPass, DataObjectFact, Phase, TypedDataFact,
+};
 
 // --- Upstream constants (AddressTable.java / AddressTableAnalyzer.java) --------
 
@@ -172,7 +174,9 @@ fn exec_ranges(file: &object::File) -> Vec<ExecRange> {
 /// `true` if `addr` lands in any executable section of `file` — the public form
 /// of [`exec_ranges`] for the tests' per-element assertion.
 pub fn in_exec_section(file: &object::File, addr: u64) -> bool {
-    exec_ranges(file).iter().any(|&(s, e)| addr >= s && addr < e)
+    exec_ranges(file)
+        .iter()
+        .any(|&(s, e)| addr >= s && addr < e)
 }
 
 /// Build the sorted list of relocated slot addresses (`isValidRelocationAddress`
@@ -256,7 +260,13 @@ fn is_searchable_section<'a>(sec: &impl object::read::ObjectSection<'a>) -> bool
 fn is_import_slot_section(name: &str) -> bool {
     matches!(
         name,
-        ".got" | ".got.plt" | ".idata" | "__got" | "__auth_got" | "__la_symbol_ptr" | "__nl_symbol_ptr"
+        ".got"
+            | ".got.plt"
+            | ".idata"
+            | "__got"
+            | "__auth_got"
+            | "__la_symbol_ptr"
+            | "__nl_symbol_ptr"
     )
 }
 
@@ -317,7 +327,9 @@ fn scan_section(
         let mut cur = off;
         while cur + ptr_size <= n {
             let slot_vma_cur = sec_vma + cur as u64;
-            let Some(v) = read_ptr(data, cur, ptr_size, little) else { break };
+            let Some(v) = read_ptr(data, cur, ptr_size, little) else {
+                break;
+            };
             // getEntry rejects: 0, small ints (< minAddressOffset / MINIMUM_SAFE_ADDRESS),
             // and targets not inside executable memory.
             if v == 0 || v < min_addr || v < MINIMUM_SAFE_ADDRESS || !in_exec(v) {
@@ -336,7 +348,12 @@ fn scan_section(
             cur += ptr_size;
         }
         if elements.len() >= min_run {
-            tables.push(AddrTable { addr: slot_vma, len: elements.len(), elements, read_only: false });
+            tables.push(AddrTable {
+                addr: slot_vma,
+                len: elements.len(),
+                elements,
+                read_only: false,
+            });
             // Advance past the accepted table (non-overlapping, like getEntry).
             off = cur;
         } else {
@@ -369,9 +386,10 @@ pub fn scan_address_tables(file: &object::File, min_run: usize, ptr_size: usize)
     // wrongly reject every real table (this is the `switchtab_x86_64` case). Mirror
     // `AddressTable.isValidRelocationAddress`, which is only consulted for objects
     // whose memory is relocatable.
-    let use_reloc_guard =
-        matches!(file.kind(), object::ObjectKind::Relocatable | object::ObjectKind::Dynamic)
-            && !relocs.is_empty();
+    let use_reloc_guard = matches!(
+        file.kind(),
+        object::ObjectKind::Relocatable | object::ObjectKind::Dynamic
+    ) && !relocs.is_empty();
 
     let mut out = Vec::new();
     for sec in file.sections() {
@@ -384,7 +402,9 @@ pub fn scan_address_tables(file: &object::File, min_run: usize, ptr_size: usize)
         };
         let read_only = matches!(
             sec.kind(),
-            SectionKind::ReadOnlyData | SectionKind::ReadOnlyDataWithRel | SectionKind::ReadOnlyString
+            SectionKind::ReadOnlyData
+                | SectionKind::ReadOnlyDataWithRel
+                | SectionKind::ReadOnlyString
         );
         out.extend(
             scan_section(
@@ -408,11 +428,7 @@ pub fn scan_address_tables(file: &object::File, min_run: usize, ptr_size: usize)
 /// Choose the pointer width for `file`: 8 for ELFCLASS64, else 4. Faithful to
 /// `AddressTable.getByteLength` reading the program's default pointer size.
 pub(crate) fn ptr_width(file: &object::File) -> usize {
-    if file.is_64() {
-        8
-    } else {
-        4
-    }
+    if file.is_64() { 8 } else { 4 }
 }
 
 /// Turn the discovered tables into [`AnalysisOutput`] facts, each under the name
@@ -438,22 +454,35 @@ fn emit_facts(
 ) -> AnalysisOutput {
     let mut out = AnalysisOutput::default();
     let slot = types.and_then(|types| {
-        types.get_type_pointer(ptr_size as int4, types.get_type_code().ok()?, 1).ok()
+        types
+            .get_type_pointer(ptr_size as int4, types.get_type_code().ok()?, 1)
+            .ok()
     });
     for t in tables {
         let size = (t.len * ptr_size) as u64;
-        let name = names.get(&t.addr).cloned().unwrap_or_else(|| format!("AddrTable{:08x}", t.addr));
+        let name = names
+            .get(&t.addr)
+            .cloned()
+            .unwrap_or_else(|| format!("AddrTable{:08x}", t.addr));
         if t.read_only {
             out.readonly.push((t.addr, t.addr + size));
             continue;
         }
         if let (Some(types), Some(slot)) = (types, &slot) {
             if let Ok(type_) = types.get_type_array(t.len as int4, Rc::clone(slot)) {
-                out.typed_data.push(TypedDataFact { addr: t.addr, name, type_ });
+                out.typed_data.push(TypedDataFact {
+                    addr: t.addr,
+                    name,
+                    type_,
+                });
                 continue;
             }
         }
-        out.data_objects.push(DataObjectFact { addr: t.addr, name, size: size as u32 });
+        out.data_objects.push(DataObjectFact {
+            addr: t.addr,
+            name,
+            size: size as u32,
+        });
     }
     out
 }
@@ -481,7 +510,9 @@ pub struct AddrTablePass {
 
 impl Default for AddrTablePass {
     fn default() -> Self {
-        AddrTablePass { min_run: MIN_RUN_FLOOR }
+        AddrTablePass {
+            min_run: MIN_RUN_FLOOR,
+        }
     }
 }
 
@@ -501,7 +532,12 @@ impl AnalysisPass for AddrTablePass {
         // neutral `file.kind()`.
         let ptr_size = ptr_width(ctx.file);
         let tables = scan_address_tables(ctx.file, self.min_run, ptr_size);
-        emit_facts(&tables, ptr_size, Some(ctx.arch.types()), &data_symbol_names(ctx.file))
+        emit_facts(
+            &tables,
+            ptr_size,
+            Some(ctx.arch.types()),
+            &data_symbol_names(ctx.file),
+        )
     }
 }
 
@@ -539,9 +575,17 @@ mod tests {
             .iter()
             .find(|t| t.addr == EXPECTED_TABLE_VMA)
             .unwrap_or_else(|| panic!("no table at {EXPECTED_TABLE_VMA:#x}; found: {tables:?}"));
-        assert!(hit.len >= 8, "table at {EXPECTED_TABLE_VMA:#x} has {} slots, want >= 8", hit.len);
+        assert!(
+            hit.len >= 8,
+            "table at {EXPECTED_TABLE_VMA:#x} has {} slots, want >= 8",
+            hit.len
+        );
         // The first 8 decoded targets are the known case bodies, in order.
-        assert_eq!(&hit.elements[..8], &EXPECTED_ELEMENTS, "table elements differ");
+        assert_eq!(
+            &hit.elements[..8],
+            &EXPECTED_ELEMENTS,
+            "table elements differ"
+        );
     }
 
     #[test]
@@ -552,7 +596,10 @@ mod tests {
         assert!(!tables.is_empty(), "expected at least one table");
         for t in &tables {
             for &e in &t.elements {
-                assert!(in_exec_section(&file, e), "element {e:#x} not in an exec section");
+                assert!(
+                    in_exec_section(&file, e),
+                    "element {e:#x} not in an exec section"
+                );
             }
         }
     }
@@ -574,13 +621,27 @@ mod tests {
         let out = emit_facts(&tables, 8, Some(&types), &BTreeMap::new());
         assert!(out.data_objects.is_empty() && out.typed_data.is_empty());
         assert!(out.entries.is_empty() && out.symbols.is_empty());
-        assert!(out.readonly.iter().any(|&(a, e)| a == EXPECTED_TABLE_VMA && e >= a + 64));
+        assert!(
+            out.readonly
+                .iter()
+                .any(|&(a, e)| a == EXPECTED_TABLE_VMA && e >= a + 64)
+        );
 
-        let writable: Vec<AddrTable> = tables.iter().map(|t| AddrTable { read_only: false, ..t.clone() }).collect();
+        let writable: Vec<AddrTable> = tables
+            .iter()
+            .map(|t| AddrTable {
+                read_only: false,
+                ..t.clone()
+            })
+            .collect();
         let names = BTreeMap::from([(EXPECTED_TABLE_VMA, "jump_targets".to_string())]);
         let out = emit_facts(&writable, 8, Some(&types), &names);
         assert!(out.readonly.is_empty(), "a writable table is not read-only");
-        let typed = out.typed_data.iter().find(|d| d.name == "jump_targets").expect("the image's own name wins");
+        let typed = out
+            .typed_data
+            .iter()
+            .find(|d| d.name == "jump_targets")
+            .expect("the image's own name wins");
         assert!(typed.type_.get_size() >= 64);
     }
 
@@ -597,7 +658,9 @@ mod tests {
         // No table may start inside the .rodata string region the strings test
         // pins (0x4008d0..0x400930), which is plain text, not pointers.
         assert!(
-            !tables.iter().any(|t| (0x4008d0..0x400930).contains(&t.addr)),
+            !tables
+                .iter()
+                .any(|t| (0x4008d0..0x400930).contains(&t.addr)),
             "spurious table over fauxware string data: {tables:?}"
         );
     }
@@ -626,7 +689,10 @@ mod tests {
         let pe_file = object::File::parse(pe.as_slice()).expect("parse pe");
         assert_eq!(pe_file.format(), object::BinaryFormat::Pe);
         let pe_exec = exec_ranges(&pe_file);
-        assert!(!pe_exec.is_empty(), "PE .text must be found as an exec range");
+        assert!(
+            !pe_exec.is_empty(),
+            "PE .text must be found as an exec range"
+        );
         // The scan runs to completion over the PE (the old gate returned early).
         let _ = scan_address_tables(&pe_file, 2, ptr_width(&pe_file));
 
@@ -634,7 +700,10 @@ mod tests {
         let mo_file = object::File::parse(mo.as_slice()).expect("parse macho");
         assert_eq!(mo_file.format(), object::BinaryFormat::MachO);
         let mo_exec = exec_ranges(&mo_file);
-        assert!(!mo_exec.is_empty(), "Mach-O __text must be found as an exec range");
+        assert!(
+            !mo_exec.is_empty(),
+            "Mach-O __text must be found as an exec range"
+        );
         let _ = scan_address_tables(&mo_file, 2, ptr_width(&mo_file));
     }
 

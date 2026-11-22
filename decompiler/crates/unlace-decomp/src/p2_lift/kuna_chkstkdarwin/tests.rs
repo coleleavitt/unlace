@@ -11,7 +11,14 @@ fn both_probe_spellings_match() {
 
 #[test]
 fn other_probes_and_prefixes_do_not_match() {
-    for name in ["__chkstk", "_chkstk_darwin", "chkstk_darwin", "__chkstk_darwin_probe", "___chkstk_darwin2", ""] {
+    for name in [
+        "__chkstk",
+        "_chkstk_darwin",
+        "chkstk_darwin",
+        "__chkstk_darwin_probe",
+        "___chkstk_darwin2",
+        "",
+    ] {
         assert!(!is_probe(name), "{name} must not match");
     }
 }

@@ -1146,7 +1146,12 @@ fn partial_writes_control_flow_and_unknown_memory_effects_match_native() {
         } else {
             &[]
         };
-        native_code(function, arguments, expected, decompile_options(function, true, options));
+        native_code(
+            function,
+            arguments,
+            expected,
+            decompile_options(function, true, options),
+        );
     }
     common::process::required_output(&mut Command::new(common::fixture("lifetimes_stack_x86_64")));
 }
@@ -1342,26 +1347,30 @@ void write_word(uint4 *p) { uint4 bits=0x40400000; __builtin_memcpy(p,&bits,4); 
 "#;
     for (function, datatype, name, cases, control) in [
         (
-            "xor_view", "FloatStorage { float value; };", "protected_float",
+            "xor_view",
+            "FloatStorage { float value; };",
+            "protected_float",
             vec![
-                ("0x3f800000u,5,0x3fc00000u",0),
-                ("0xbf800000u,-5,0xbfc00000u",0),
-                ("0x3fc00000u,5,0x3f800000u",0),
-                ("0x40400000u,10,0x40000000u",0),
-                ("0xc0400000u,-10,0xc0000000u",0),
-                ("0u,0,0x400000u",0),
-                ("0x80000000u,0,0x80400000u",0),
+                ("0x3f800000u,5,0x3fc00000u", 0),
+                ("0xbf800000u,-5,0xbfc00000u", 0),
+                ("0x3fc00000u,5,0x3f800000u", 0),
+                ("0x40400000u,10,0x40000000u", 0),
+                ("0xc0400000u,-10,0xc0000000u", 0),
+                ("0u,0,0x400000u", 0),
+                ("0x80000000u,0,0x80400000u", 0),
             ],
             "int4 check_bits(uint4 bits,int4 want,uint4 word) { float4 initial; \
              __builtin_memcpy(&initial,&bits,4); return xor_view(initial)!=want || observed_word!=word; }",
         ),
         (
-            "double_bits", "DoubleStorage { double value; };", "protected_double",
+            "double_bits",
+            "DoubleStorage { double value; };",
+            "protected_double",
             vec![
-                ("0x3ff0000000000000ULL,5,0x3ff8000000000000ULL",0),
-                ("0xbff0000000000000ULL,-5,0xbff8000000000000ULL",0),
-                ("0ULL,0,0x8000000000000ULL",0),
-                ("0x8000000000000000ULL,0,0x8008000000000000ULL",0),
+                ("0x3ff0000000000000ULL,5,0x3ff8000000000000ULL", 0),
+                ("0xbff0000000000000ULL,-5,0xbff8000000000000ULL", 0),
+                ("0ULL,0,0x8000000000000ULL", 0),
+                ("0x8000000000000000ULL,0,0x8008000000000000ULL", 0),
             ],
             "int4 check_bits(uint8 bits,int4 want,uint8 word) { float8 initial; \
              __builtin_memcpy(&initial,&bits,8); return double_bits(initial)!=want || observed_quad!=word; }",
@@ -1370,10 +1379,10 @@ void write_word(uint4 *p) { uint4 bits=0x40400000; __builtin_memcpy(p,&bits,4); 
         let declaration = format!("typedef struct {datatype}");
         let ty = datatype.split_whitespace().next().unwrap();
         let directive = format!("type {function}::v2 struct {ty} {name}");
-        let code = decompile_surface(function,true,&[],&[&declaration,&directive],true);
-        assert!(code.contains(&format!("{ty} {name};")),"{code}");
+        let code = decompile_surface(function, true, &[], &[&declaration, &directive], true);
+        assert!(code.contains(&format!("{ty} {name};")), "{code}");
         let helpers = format!("{helpers}\n{control}");
-        execute_with_context("check_bits",&cases,context,&code,&helpers);
+        execute_with_context("check_bits", &cases, context, &code, &helpers);
     }
     for (function, expected, word, call) in [
         ("constant_bits", 5, "0x3fc00000", "constant_bits()"),
@@ -1381,7 +1390,9 @@ void write_word(uint4 *p) { uint4 bits=0x40400000; __builtin_memcpy(p,&bits,4); 
     ] {
         let code = decompile_surface(function, true, &[], &[], true);
         assert!(!code.contains(".bytes._"), "{code}");
-        let control = format!("{helpers}\nint4 check_bits(void) {{ return {call}!={expected} || observed_word!={word}; }}");
+        let control = format!(
+            "{helpers}\nint4 check_bits(void) {{ return {call}!={expected} || observed_word!={word}; }}"
+        );
         execute_with_context("check_bits", &[("", 0)], context, &code, &control);
     }
 }

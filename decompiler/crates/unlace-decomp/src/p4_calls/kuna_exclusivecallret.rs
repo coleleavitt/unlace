@@ -25,7 +25,7 @@ use unlace_num::opcodes::OpCode;
 
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::p4_calls::kuna_exclusivearguse::{def_block, reaches, MAX_VISIT};
+use crate::p4_calls::kuna_exclusivearguse::{MAX_VISIT, def_block, reaches};
 
 /// Whether the trial matched at `opmatch` has the narrow scalar shape the rule
 /// covers. Independent of the use being scored, so it is computed once per walk.
@@ -33,7 +33,10 @@ pub(crate) fn applies(data: &Funcdata, opmatch: OpId, trial: &crate::fspec::Para
     if trial.get_size() != 4
         || !data.get_func_proto().has_model()
         || !data.obank().get(opmatch).is_some_and(|o| {
-            matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_RETURN)
+            matches!(
+                o.code(),
+                OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_RETURN
+            )
         })
     {
         return false;
@@ -117,7 +120,9 @@ mod tests {
     use std::rc::Rc;
 
     use unlace_base::address::Address;
-    use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace};
+    use unlace_base::space::{
+        AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
+    };
 
     use super::*;
     use crate::context::ArchContext;
@@ -125,7 +130,8 @@ mod tests {
     fn build_fd() -> Funcdata {
         let mut m = AddrSpaceManager::new();
         m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+            .unwrap();
         m.insert_space(Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
             "ram",

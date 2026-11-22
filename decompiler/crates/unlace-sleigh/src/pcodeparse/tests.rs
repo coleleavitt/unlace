@@ -7,7 +7,7 @@
 use std::rc::Rc;
 
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 
 use super::*;
@@ -234,7 +234,11 @@ fn lexer_idents_table_has_upstream_sort_violation() {
             violations.push((i, w[0].nm, w[1].nm));
         }
     }
-    assert_eq!(violations.len(), 1, "expected exactly the upstream violation");
+    assert_eq!(
+        violations.len(),
+        1,
+        "expected exactly the upstream violation"
+    );
     let (_, a, b) = violations[0];
     assert_eq!(a, b"||");
     assert_eq!(b, b"abs");
@@ -277,7 +281,10 @@ fn lexer_parse_number_radices() {
 fn accept_self_copy_nop() {
     let lang = basic_lang();
     let ops = compile_ok(&lang, "v0 = v0;");
-    assert_eq!(ops, vec!["CPUI_COPY (spc:ram,0x5c,0x4) = (spc:ram,0x5c,0x4)"]);
+    assert_eq!(
+        ops,
+        vec!["CPUI_COPY (spc:ram,0x5c,0x4) = (spc:ram,0x5c,0x4)"]
+    );
 }
 
 // 2. [Sparc] SparcV9_64:  add-assign (here r1 = r2 + r1).
@@ -434,7 +441,10 @@ fn accept_sized_temp_decl() {
 fn accept_reg_copy() {
     let lang = basic_lang();
     let ops = compile_ok(&lang, "R7 = SP;");
-    assert_eq!(ops, vec!["CPUI_COPY (spc:ram,0x44,0x4) = (spc:ram,0x40,0x4)"]);
+    assert_eq!(
+        ops,
+        vec!["CPUI_COPY (spc:ram,0x44,0x4) = (spc:ram,0x40,0x4)"]
+    );
 }
 
 // 14. [Hexagon] hexagon prologue: typed-space load.
@@ -575,7 +585,11 @@ fn accept_unknown_string_is_temp_declaration() {
     // the bit-range lhs form below.)
     let lang = basic_lang();
     let mut snip = PcodeSnippet::new(&lang);
-    assert!(snip.parse_stream(b"nope = r1;"), "{}", snip.get_error_message());
+    assert!(
+        snip.parse_stream(b"nope = r1;"),
+        "{}",
+        snip.get_error_message()
+    );
 }
 
 #[test]
@@ -664,9 +678,15 @@ fn get_varnode_tpl_flow_symbols() {
     let lang = basic_lang();
     let cspace = lang.get_constant_space();
     let cases = [
-        (SnippetSymbol::Start(b"inst_start".to_vec()), ConstType::JStart),
+        (
+            SnippetSymbol::Start(b"inst_start".to_vec()),
+            ConstType::JStart,
+        ),
         (SnippetSymbol::End(b"inst_next".to_vec()), ConstType::JNext),
-        (SnippetSymbol::Next2(b"inst_next2".to_vec()), ConstType::JNext2),
+        (
+            SnippetSymbol::Next2(b"inst_next2".to_vec()),
+            ConstType::JNext2,
+        ),
         (
             SnippetSymbol::FlowDest(b"inst_dest".to_vec()),
             ConstType::JFlowdest,
@@ -712,14 +732,16 @@ fn clear_resets_for_reuse() {
     assert!(snip.parse_stream(b"r2 = r1;"));
 }
 
-
 #[test]
 fn spot_check_chained_arith_and_float_ops() {
     let lang = basic_lang();
     // x86win: ESP = ESP + 4 - EAX;  (left-assoc + then -)
     let (ok, err, ops) = compile_collect(&lang, "ESP = ESP + 4 - EAX;");
     assert!(ok || !err.is_empty());
-    let opcodes: Vec<&str> = ops.iter().map(|s| s.split_whitespace().next().unwrap()).collect();
+    let opcodes: Vec<&str> = ops
+        .iter()
+        .map(|s| s.split_whitespace().next().unwrap())
+        .collect();
     assert_eq!(opcodes, vec!["CPUI_INT_ADD", "CPUI_INT_SUB"]);
 
     // float compare and float arithmetic lexing (f<, f+).
@@ -761,8 +783,14 @@ fn clear_discards_non_space_locals_but_keeps_temporary_base() {
     let mut snip = PcodeSnippet::new(&lang);
     snip.set_unique_base(0x400);
     snip.add_operand(b"arg", 3);
-    assert!(matches!(snip.classify_identifier(b"inst_dest"), Token::JumpSym(_)));
-    assert!(matches!(snip.classify_identifier(b"inst_ref"), Token::JumpSym(_)));
+    assert!(matches!(
+        snip.classify_identifier(b"inst_dest"),
+        Token::JumpSym(_)
+    ));
+    assert!(matches!(
+        snip.classify_identifier(b"inst_ref"),
+        Token::JumpSym(_)
+    ));
     assert!(snip.parse_stream(b"local new:4; new = r1;"));
     let base = snip.get_unique_base();
     assert!(base >= 0x400);
@@ -777,6 +805,9 @@ fn clear_discards_non_space_locals_but_keeps_temporary_base() {
     for name in [b"inst_dest".as_slice(), b"inst_ref", b"arg", b"new"] {
         assert!(matches!(snip.classify_identifier(name), Token::Str(value) if value == name));
     }
-    assert!(matches!(snip.classify_identifier(b"ram"), Token::SpaceSym(_)));
+    assert!(matches!(
+        snip.classify_identifier(b"ram"),
+        Token::SpaceSym(_)
+    ));
     assert!(snip.parse_stream(b"r2 = r1;"));
 }

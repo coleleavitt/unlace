@@ -84,8 +84,8 @@ use unlace_num::opcodes::OpCode;
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
 use crate::context::OpId;
-use unlace_base::error::{KunaError, KunaResult};
 use crate::funcdata::Funcdata;
+use unlace_base::error::{KunaError, KunaResult};
 
 /// Marshaling element `<x64syscall>` (kuna). ElementIds live in the 4000+ range;
 /// 4160 was the previous max.
@@ -157,7 +157,7 @@ impl OptionX64Syscall {
             other => {
                 return Err(KunaError::parse(format!(
                     "Unknown x64syscall value: {other} (expected off|on|abi)"
-                )))
+                )));
             }
         };
         Ok((mode, format!("x86-64 syscall effect model set to {p1}")))
@@ -224,8 +224,12 @@ fn block_sets_up(data: &Funcdata, from: OpId, reg: &Address) -> bool {
     };
     let mut cur = from;
     for _ in 0..SETUP_WALK_LIMIT {
-        let Some(prev) = data.op_previous_op(cur) else { return false };
-        let Some(op) = data.obank().get(prev) else { return false };
+        let Some(prev) = data.op_previous_op(cur) else {
+            return false;
+        };
+        let Some(op) = data.obank().get(prev) else {
+            return false;
+        };
         if op.get_parent() != Some(block) {
             return false;
         }
@@ -261,7 +265,9 @@ fn block_sets_up(data: &Funcdata, from: OpId, reg: &Address) -> bool {
 /// spec specialized with its own `<callotherfixup>` is dropped — the spec's model
 /// wins.
 fn is_bare_syscall(data: &Funcdata, op: OpId) -> bool {
-    let Some(oth) = data.obank().get(op) else { return false };
+    let Some(oth) = data.obank().get(op) else {
+        return false;
+    };
     if oth.code() != OpCode::CPUI_CALLOTHER || oth.num_input() != 1 || oth.get_out().is_some() {
         return false;
     }
@@ -269,7 +275,9 @@ fn is_bare_syscall(data: &Funcdata, op: OpId) -> bool {
 }
 
 fn is_syscall(data: &Funcdata, op: OpId) -> bool {
-    let Some(oth) = data.obank().get(op) else { return false };
+    let Some(oth) = data.obank().get(op) else {
+        return false;
+    };
     if oth.code() != OpCode::CPUI_CALLOTHER {
         return false;
     }
@@ -376,7 +384,9 @@ fn rewrite(
         data.op_insert_input(op, vn, (i + 1) as int4)?;
     }
     data.new_varnode_out(REGISTER_SIZE, &abi.num, op)?;
-    data.obank_mut().get_mut(op).expect("rewritten syscall")
+    data.obank_mut()
+        .get_mut(op)
+        .expect("rewritten syscall")
         .set_additional_flag(crate::op::pcodeop_addlflags::kuna_x64syscall);
     Ok(true)
 }
@@ -391,11 +401,7 @@ impl ActionX64Syscall {
     /// Construct the action in the given group.
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
         Box::new(ActionX64Syscall {
-            base: ActionBase::new(
-                crate::action::ruleflags::rule_onceperfunc,
-                "x64syscall",
-                g,
-            ),
+            base: ActionBase::new(crate::action::ruleflags::rule_onceperfunc, "x64syscall", g),
         })
     }
 }
@@ -411,7 +417,9 @@ impl Action for ActionX64Syscall {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionX64Syscall { base: self.base.clone() }))
+        Some(Box::new(ActionX64Syscall {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         let mode = data.get_arch().x64_syscall;
@@ -428,18 +436,16 @@ impl Action for ActionX64Syscall {
         if found.is_empty() {
             return 0;
         }
-        let Some(abi) = resolve_abi(data) else { return 0 };
+        let Some(abi) = resolve_abi(data) else {
+            return 0;
+        };
         let mut changed = 0;
         for op in found {
             if rewrite(data, op, &abi, mode).unwrap_or(false) {
                 changed += 1;
             }
         }
-        if changed != 0 {
-            1
-        } else {
-            0
-        }
+        if changed != 0 { 1 } else { 0 }
     }
 }
 

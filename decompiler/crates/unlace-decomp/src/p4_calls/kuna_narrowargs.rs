@@ -15,7 +15,7 @@
 //! callers' dead-code pass treats as consumed, so a value forwarded to it is
 //! narrowed in the caller too.
 
-use unlace_base::address::{calc_mask, Address};
+use unlace_base::address::{Address, calc_mask};
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
@@ -31,7 +31,9 @@ fn narrow_width(consume: uintb, size: int4) -> Option<int4> {
     if consume == 0 {
         return None;
     }
-    let w = [1, 2, 4].into_iter().find(|&w| consume & !calc_mask(w) == 0)?;
+    let w = [1, 2, 4]
+        .into_iter()
+        .find(|&w| consume & !calc_mask(w) == 0)?;
     (w < size && (consume >> (8 * w - 1)) & 1 == 1).then_some(w)
 }
 
@@ -43,7 +45,11 @@ fn low_part(data: &Funcdata, addr: &Address, size: int4, w: int4) -> Option<Addr
     if !proto.has_model() {
         return None;
     }
-    let part = if addr.get_space()?.is_big_endian() { addr + (size - w) as i64 } else { addr.clone() };
+    let part = if addr.get_space()?.is_big_endian() {
+        addr + (size - w) as i64
+    } else {
+        addr.clone()
+    };
     proto
         .model()
         .input()
@@ -68,15 +74,22 @@ fn low_part(data: &Funcdata, addr: &Address, size: int4, w: int4) -> Option<Addr
 /// bitwise operations whose low bits depend only on its low bits
 /// (`(a0 ^ 0x8000) << 0x10`), up to a mask that is itself no wider than `w`.
 fn narrowable(data: &Funcdata, vn: VarnodeId, w: int4) -> bool {
-    let Some(v) = data.vbank().get(vn) else { return false };
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
     if !v.is_input() || v.is_type_lock() || v.is_addr_tied() || v.is_persist() {
         return false;
     }
-    if v.get_addr().get_space().is_none_or(|s| s.get_type() != unlace_base::space::spacetype::IPTR_PROCESSOR) {
+    if v.get_addr()
+        .get_space()
+        .is_none_or(|s| s.get_type() != unlace_base::space::spacetype::IPTR_PROCESSOR)
+    {
         return false;
     }
     let constant = |data: &Funcdata, vn: Option<VarnodeId>| {
-        vn.and_then(|vn| data.vbank().get(vn)).filter(|c| c.is_constant()).map(|c| c.get_offset())
+        vn.and_then(|vn| data.vbank().get(vn))
+            .filter(|c| c.is_constant())
+            .map(|c| c.get_offset())
     };
     let mut family = vec![vn];
     let mut i = 0;
@@ -86,10 +99,16 @@ fn narrowable(data: &Funcdata, vn: VarnodeId, w: int4) -> bool {
         }
         let id = family[i];
         i += 1;
-        let Some(cur) = data.vbank().get(id) else { return false };
+        let Some(cur) = data.vbank().get(id) else {
+            return false;
+        };
         for op in cur.descend_iter() {
-            let Some(o) = data.obank().get(op) else { return false };
-            let slot = (0..o.num_input()).find(|&k| o.get_in(k) == Some(id)).unwrap_or(0);
+            let Some(o) = data.obank().get(op) else {
+                return false;
+            };
+            let slot = (0..o.num_input())
+                .find(|&k| o.get_in(k) == Some(id))
+                .unwrap_or(0);
             let other = o.get_in(1 - slot.min(1));
             let follow = match o.code() {
                 OpCode::CPUI_PIECE | OpCode::CPUI_INT_LEFT => return false,
@@ -135,11 +154,15 @@ fn narrowable(data: &Funcdata, vn: VarnodeId, w: int4) -> bool {
 
 /// Is `vn` the amount of a shift?
 fn shifts_by(data: &Funcdata, vn: Option<VarnodeId>) -> bool {
-    let Some(v) = vn.and_then(|vn| data.vbank().get(vn)) else { return false };
+    let Some(v) = vn.and_then(|vn| data.vbank().get(vn)) else {
+        return false;
+    };
     v.descend_iter().any(|op| {
         data.obank().get(op).is_some_and(|o| {
-            matches!(o.code(), OpCode::CPUI_INT_LEFT | OpCode::CPUI_INT_RIGHT | OpCode::CPUI_INT_SRIGHT)
-                && o.get_in(1) == vn
+            matches!(
+                o.code(),
+                OpCode::CPUI_INT_LEFT | OpCode::CPUI_INT_RIGHT | OpCode::CPUI_INT_SRIGHT
+            ) && o.get_in(1) == vn
         })
     })
 }
@@ -147,25 +170,38 @@ fn shifts_by(data: &Funcdata, vn: Option<VarnodeId>) -> bool {
 /// Replace every register input whose consumed bits fit a narrower low part by
 /// that part, zero-extended at the entry. Returns how many were replaced.
 pub fn narrow_inputs(data: &mut Funcdata) -> int4 {
-    if !data.get_arch().narrow_args || data.get_func_proto().is_input_locked() || data.bblocks_get_size() == 0 {
+    if !data.get_arch().narrow_args
+        || data.get_func_proto().is_input_locked()
+        || data.bblocks_get_size() == 0
+    {
         return 0;
     }
     let stated = crate::kuna_callerargs::narrow_stated(data);
-    let inputs: Vec<VarnodeId> = data.vbank().iter_def_flag(crate::varnode::varnode_flags::input).collect();
+    let inputs: Vec<VarnodeId> = data
+        .vbank()
+        .iter_def_flag(crate::varnode::varnode_flags::input)
+        .collect();
     let mut count = 0;
     for vn in inputs {
-        let Some((addr, size, consume)) = data.vbank().get(vn).map(|v| (v.get_addr().clone(), v.get_size(), v.get_consume()))
+        let Some((addr, size, consume)) = data
+            .vbank()
+            .get(vn)
+            .map(|v| (v.get_addr().clone(), v.get_size(), v.get_consume()))
         else {
             continue;
         };
-        let Some(w) = narrow_width(consume, size) else { continue };
+        let Some(w) = narrow_width(consume, size) else {
+            continue;
+        };
         if !narrowable(data, vn, w) {
             continue;
         }
         if !data.get_func_proto().possible_input_param(&addr, size) {
             continue;
         }
-        let Some(part) = low_part(data, &addr, size, w) else { continue };
+        let Some(part) = low_part(data, &addr, size, w) else {
+            continue;
+        };
         if replace(data, vn, &addr, size, &part, w, OpCode::CPUI_INT_ZEXT).is_ok() {
             if trace() {
                 eprintln!(
@@ -185,8 +221,16 @@ pub fn narrow_inputs(data: &mut Funcdata) -> int4 {
 /// register by `ext` at the entry, when the model passes an integer argument
 /// there; whether it was.
 pub(crate) fn narrow_input_to(data: &mut Funcdata, vn: VarnodeId, w: int4, ext: OpCode) -> bool {
-    let Some((addr, size)) = data.vbank().get(vn).map(|v| (v.get_addr().clone(), v.get_size())) else { return false };
-    let Some(part) = low_part(data, &addr, size, w) else { return false };
+    let Some((addr, size)) = data
+        .vbank()
+        .get(vn)
+        .map(|v| (v.get_addr().clone(), v.get_size()))
+    else {
+        return false;
+    };
+    let Some(part) = low_part(data, &addr, size, w) else {
+        return false;
+    };
     replace(data, vn, &addr, size, &part, w, ext).is_ok()
 }
 
@@ -194,15 +238,17 @@ pub(crate) fn narrow_input_to(data: &mut Funcdata, vn: VarnodeId, w: int4, ext: 
 fn overlaps_another_input(data: &Funcdata, vn: VarnodeId, addr: &Address, size: int4) -> bool {
     let space = addr.get_space().map(|s| s.get_index());
     let (lo, hi) = (addr.get_offset(), addr.get_offset() + size as u64);
-    data.vbank().iter_def_flag(crate::varnode::varnode_flags::input).any(|other| {
-        other != vn
-            && data.vbank().get(other).is_some_and(|o| {
-                let a = o.get_addr();
-                a.get_space().map(|s| s.get_index()) == space
-                    && a.get_offset() < hi
-                    && lo < a.get_offset() + o.get_size() as u64
-            })
-    })
+    data.vbank()
+        .iter_def_flag(crate::varnode::varnode_flags::input)
+        .any(|other| {
+            other != vn
+                && data.vbank().get(other).is_some_and(|o| {
+                    let a = o.get_addr();
+                    a.get_space().map(|s| s.get_index()) == space
+                        && a.get_offset() < hi
+                        && lo < a.get_offset() + o.get_size() as u64
+                })
+        })
 }
 
 /// Replace input `vn` by its low `w` bytes at `part`, extended by `ext` at the
@@ -219,7 +265,9 @@ fn replace(
     ext: OpCode,
 ) -> unlace_base::error::KunaResult<()> {
     if overlaps_another_input(data, vn, addr, size) {
-        return Err(unlace_base::error::KunaError::lowlevel("narrowargs: overlapping input varnodes".to_string()));
+        return Err(unlace_base::error::KunaError::lowlevel(
+            "narrowargs: overlapping input varnodes".to_string(),
+        ));
     }
     let topbl = data.bblocks_get_block(0);
     let start = data.bblocks_block_start(topbl);
@@ -254,7 +302,9 @@ pub fn stated_bytes_consumed(data: &Funcdata, fc: &FuncCallSpecs, slot: usize) -
     if !data.get_arch().narrow_args {
         return 0;
     }
-    let Some(stated) = data.kuna_protoorder_types(fc.get_entry_address()) else { return 0 };
+    let Some(stated) = data.kuna_protoorder_types(fc.get_entry_address()) else {
+        return 0;
+    };
     let inputs = data.obank().get(fc.get_op()).map(|o| o.num_input());
     if inputs != Some(fc.final_input_storage().len() as int4 + 1) {
         return 0;
@@ -267,8 +317,14 @@ pub fn stated_bytes_consumed(data: &Funcdata, fc: &FuncCallSpecs, slot: usize) -
     if psize >= asize || ct.get_metatype() == crate::dtype::type_metatype::TYPE_FLOAT {
         return 0;
     }
-    let Some(space) = aaddr.get_space() else { return 0 };
-    let low = if space.is_big_endian() { aaddr + (asize - psize) as i64 } else { aaddr.clone() };
+    let Some(space) = aaddr.get_space() else {
+        return 0;
+    };
+    let low = if space.is_big_endian() {
+        aaddr + (asize - psize) as i64
+    } else {
+        aaddr.clone()
+    };
     if paddr != &low {
         return 0;
     }
@@ -276,11 +332,7 @@ pub fn stated_bytes_consumed(data: &Funcdata, fc: &FuncCallSpecs, slot: usize) -
         && fc.proto().model().input().get_entry().iter().any(|e| {
             e.get_type() == type_class::TYPECLASS_GENERAL && e.justified_contain(aaddr, *asize) == 0
         });
-    if general {
-        *psize
-    } else {
-        0
-    }
+    if general { *psize } else { 0 }
 }
 
 /// Is the decision trace on (`KUNA_NARROWARGS_TRACE=1`)?

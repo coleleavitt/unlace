@@ -24,19 +24,19 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use unlace_decomp::action::Rule;
-use unlace_decomp::dtype::{type_metatype, Datatype};
+use unlace_decomp::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
+use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::op::pcodeop_flags;
 use unlace_decomp::ruleaction_2::{
     RuleBooleanUndistribute, RuleDoubleShift, RuleFloatRange, RuleShiftCompare, RuleZextEliminate,
 };
-use unlace_decomp::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
 use unlace_decomp::varnode::DefOpInfo;
 
 // -----------------------------------------------------------------------------
@@ -46,7 +46,8 @@ use unlace_decomp::varnode::DefOpInfo;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -119,10 +120,14 @@ fn mk_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
 
 fn mk_reg(fd: &mut Funcdata, off: u64, size: int4) -> VarnodeId {
     let ram = ram_space(fd);
-    let vn = fd.vbank_mut().create(size, Address::new(ram, off), dt(size));
+    let vn = fd
+        .vbank_mut()
+        .create(size, Address::new(ram, off), dt(size));
     let mut no_replace =
         |_b: &mut unlace_decomp::varnode::VarnodeBank, _a: VarnodeId, _c: VarnodeId| Ok(());
-    fd.vbank_mut().set_input(vn, &mut no_replace).expect("mk_reg set_input")
+    fd.vbank_mut()
+        .set_input(vn, &mut no_replace)
+        .expect("mk_reg set_input")
 }
 
 fn mk_const(fd: &mut Funcdata, size: int4, val: u64) -> VarnodeId {
@@ -139,16 +144,30 @@ fn mk_written(
 ) -> (VarnodeId, OpId) {
     let defop = mk_op(fd, ins.len() as int4, off, opc);
     for (i, &vn) in ins.iter().enumerate() {
-        fd.op_set_input(defop, vn, i as int4).expect("mk_written set input");
+        fd.op_set_input(defop, vn, i as int4)
+            .expect("mk_written set input");
     }
     let ram = ram_space(fd);
-    let outvn = fd.new_varnode(out_size, &Address::new(ram, off + 0x800), Some(dt(out_size)));
+    let outvn = fd.new_varnode(
+        out_size,
+        &Address::new(ram, off + 0x800),
+        Some(dt(out_size)),
+    );
     let seq = fd.obank().get(defop).unwrap().get_seq_num().clone();
-    let info = DefOpInfo { id: defop, seqnum: seq };
+    let info = DefOpInfo {
+        id: defop,
+        seqnum: seq,
+    };
     let mut no_replace =
         |_b: &mut unlace_decomp::varnode::VarnodeBank, _a: VarnodeId, _c: VarnodeId| Ok(());
-    let outvn = fd.vbank_mut().set_def(outvn, info, &mut no_replace).expect("mk_written set_def");
-    fd.obank_mut().get_mut(defop).unwrap().set_output(Some(outvn));
+    let outvn = fd
+        .vbank_mut()
+        .set_def(outvn, info, &mut no_replace)
+        .expect("mk_written set_def");
+    fd.obank_mut()
+        .get_mut(defop)
+        .unwrap()
+        .set_output(Some(outvn));
     fd.op_insert(defop, bl, None);
     (outvn, defop)
 }

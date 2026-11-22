@@ -65,10 +65,16 @@ fn check_case(target: &str, width: usize, direct: bool) {
     let read = address(b"read_word");
     let mix = address(b"mix_words");
     let scalar = if width == 4 { "float" } else { "double" };
-    let contracts=[format!("function 0x{read:x}=read_word"),format!("function 0x{mix:x}=mix_words"),
-        format!("typedef struct Packet {{unsigned int tag;unsigned char payload[{width}];void *context;}} Packet;"),
+    let contracts = [
+        format!("function 0x{read:x}=read_word"),
+        format!("function 0x{mix:x}=mix_words"),
+        format!(
+            "typedef struct Packet {{unsigned int tag;unsigned char payload[{width}];void *context;}} Packet;"
+        ),
         format!("prototype 0x{read:x} unsigned int __cdecl read_word(Packet *packet)"),
-        format!("prototype 0x{mix:x} unsigned int __cdecl mix_words({scalar} *values)"),"type mix_words::v2 Packet".to_owned()];
+        format!("prototype 0x{mix:x} unsigned int __cdecl mix_words({scalar} *values)"),
+        "type mix_words::v2 Packet".to_owned(),
+    ];
     let project = root.join("project");
     let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command
@@ -167,13 +173,16 @@ int main(void) {{
 // Preserve the fresh fixture's storage and pointer, then render that state.
 fn direct_load_body(binary: &std::path::Path, read: u64, mix: u64) -> String {
     use unlace_console::ifacedecomp::{
-        execute, register_console_commands, register_decomp_commands, IfaceDecompData,
-        DECOMPILE_MODULE,
+        DECOMPILE_MODULE, IfaceDecompData, execute, register_console_commands,
+        register_decomp_commands,
     };
     use unlace_console::ifaceterm::IfaceTerm;
     use unlace_console::kuna_console::register_kuna_commands;
     use unlace_num::opcodes::OpCode;
-    let script=format!("load file {}\noption stackviews on\nparse line typedef struct Packet {{unsigned int tag;unsigned char payload[4];void *context;}} Packet;\nmap function 0x{read:x} read_word\nmap function 0x{mix:x} mix_words\nmap prototype 0x{read:x} unsigned int __cdecl read_word(Packet *packet)\nmap prototype 0x{mix:x} unsigned int __cdecl mix_words(float *values)\nload function 0x{mix:x}\ndecompile\nretype v2 Packet\ndecompile\n",binary.display());
+    let script = format!(
+        "load file {}\noption stackviews on\nparse line typedef struct Packet {{unsigned int tag;unsigned char payload[4];void *context;}} Packet;\nmap function 0x{read:x} read_word\nmap function 0x{mix:x} mix_words\nmap prototype 0x{read:x} unsigned int __cdecl read_word(Packet *packet)\nmap prototype 0x{mix:x} unsigned int __cdecl mix_words(float *values)\nload function 0x{mix:x}\ndecompile\nretype v2 Packet\ndecompile\n",
+        binary.display()
+    );
     let mut status = IfaceTerm::into_status("", script.as_bytes());
     register_decomp_commands(&mut status);
     register_kuna_commands(&mut status);
@@ -184,10 +193,12 @@ fn direct_load_body(binary: &std::path::Path, read: u64, mix: u64) -> String {
         .as_any_mut()
         .downcast_mut::<IfaceDecompData>()
         .unwrap();
-    data.spec_roots = vec![common::repo_root()
-        .join("specs")
-        .to_string_lossy()
-        .into_owned()];
+    data.spec_roots = vec![
+        common::repo_root()
+            .join("specs")
+            .to_string_lossy()
+            .into_owned(),
+    ];
     while !status.is_stream_finished() && !status.done {
         execute(&mut status);
         assert!(!status.is_in_error(), "{}", status.optr);

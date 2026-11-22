@@ -74,9 +74,9 @@ use unlace_base::error::KunaResult;
 use unlace_base::types::{int4, uintb};
 
 use crate::block::BlockGraph;
+use crate::context::BlockId;
 use crate::funcdata::Funcdata;
 use crate::options::on_or_off;
-use crate::context::BlockId;
 
 use unlace_base::marshal::ElementId;
 
@@ -121,7 +121,10 @@ impl OptionRegionStructure {
     pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
-        Ok((val, format!("Region-based (Phoenix/SAILR) structurer turned {prop}")))
+        Ok((
+            val,
+            format!("Region-based (Phoenix/SAILR) structurer turned {prop}"),
+        ))
     }
 }
 
@@ -156,7 +159,9 @@ pub fn run_region_structurer(
     // uses for tie-breaking.  A failure to identify regions is non-fatal: the
     // structurer still runs on the sblocks topology (honest-partial).
     let mut ri = crate::p7_regions::kuna_regionid::KunaRegionIdentifier::new();
-    let _ = ri.build_from_block_graph(data).and_then(|()| ri.compute().map(|_| ()));
+    let _ = ri
+        .build_from_block_graph(data)
+        .and_then(|()| ri.compute().map(|_| ()));
 
     // ---- 1b. Precompute the switch/jump-table maps over bblocks (Inc 4) -------
     // The switch-case schema (`match_acyclic_switch_cases`) needs the same two maps
@@ -214,7 +219,11 @@ pub fn run_region_structurer(
     // switch-case successors a structural natural-loop walk on the sblocks graph
     // misses) and exit frontier, so the refinement virtualizes exactly the
     // secondary exits.  Empty (and skipped) when refinement is off.
-    let cyclic_loops = if loop_refine { ri.cyclic_loops() } else { Vec::new() };
+    let cyclic_loops = if loop_refine {
+        ri.cyclic_loops()
+    } else {
+        Vec::new()
+    };
 
     // The `cyclic_loops` are keyed by basic-block start ADDRESS, but the structuring
     // graph's `BlockCopy` leaves carry only the bblocks `BlockId` they copy (their
@@ -244,7 +253,11 @@ pub fn run_region_structurer(
         .with_loop_refine(loop_refine, cyclic_loops, bb_addr)
         .with_edge_order(edge_order);
     let ok = st.structure(deadline)?;
-    let flips = if ok { st.take_pending_flips() } else { Vec::new() };
+    let flips = if ok {
+        st.take_pending_flips()
+    } else {
+        Vec::new()
+    };
     if std::env::var_os("KUNA_RS_DEBUG").is_some() {
         eprintln!("[rs] structure -> ok={ok} flips={}", flips.len());
     }
@@ -371,7 +384,8 @@ struct RegionStructurer<'a> {
     /// by `refine_loop_edges` to pick the loop body / single normal exit grounded
     /// in the region identifier's analysis rather than the narrower structural
     /// natural-loop walk.
-    cyclic_loops: std::collections::BTreeMap<uintb, crate::p7_regions::kuna_regionid::KunaCyclicLoop>,
+    cyclic_loops:
+        std::collections::BTreeMap<uintb, crate::p7_regions::kuna_regionid::KunaCyclicLoop>,
     /// bblocks `BlockBasic` id → start offset, so a live `sblocks` component's
     /// front-leaf `BlockCopy` (whose `copy` is a bblocks id) resolves to its
     /// address — the key the `cyclic_loops` body/exit sets use.  Populated only
@@ -438,8 +452,7 @@ impl<'a> RegionStructurer<'a> {
         bb_addr: std::collections::BTreeMap<BlockId, uintb>,
     ) -> Self {
         self.loop_refine = loop_refine;
-        self.cyclic_loops =
-            cyclic_loops.into_iter().map(|l| (l.head_addr, l)).collect();
+        self.cyclic_loops = cyclic_loops.into_iter().map(|l| (l.head_addr, l)).collect();
         self.bb_addr = bb_addr;
         self
     }
@@ -468,10 +481,7 @@ impl<'a> RegionStructurer<'a> {
     /// Attach the precomputed `BlockBasic::isComplex` set (Inc 5 short-circuit
     /// schema), keyed by bblocks `BlockBasic` id.  Mirrors
     /// [`CollapseStructure::with_complex_blocks`](crate::blockaction::CollapseStructure).
-    fn with_complex_blocks(
-        mut self,
-        complex_blocks: std::collections::BTreeSet<BlockId>,
-    ) -> Self {
+    fn with_complex_blocks(mut self, complex_blocks: std::collections::BTreeSet<BlockId>) -> Self {
         self.complex_blocks = complex_blocks;
         self
     }
@@ -618,7 +628,11 @@ impl<'a> RegionStructurer<'a> {
             let e = parity.entry(b).or_insert(false);
             *e = !*e;
         }
-        parity.into_iter().filter(|&(_, v)| v).map(|(b, _)| b).collect()
+        parity
+            .into_iter()
+            .filter(|&(_, v)| v)
+            .map(|(b, _)| b)
+            .collect()
     }
 
     /// Port of `CollapseStructure::negate_condition_rec` (the data-flow + topology
@@ -695,7 +709,10 @@ impl<'a> RegionStructurer<'a> {
             return false;
         };
         self.pending_inf_loops.contains(&a)
-            || self.pending_body_addrs.values().any(|body| body.contains(&a))
+            || self
+                .pending_body_addrs
+                .values()
+                .any(|body| body.contains(&a))
             || (0..self.size()).any(|i| {
                 let c = self.component(i);
                 c != bl && self.component_addr(c) == Some(a)
@@ -746,7 +763,10 @@ impl<'a> RegionStructurer<'a> {
             }
             if self.has_stranded_component() {
                 if std::env::var_os("KUNA_RS_DEBUG").is_some() {
-                    eprintln!("[rs] STRANDED: {} components remain (round {rounds})", self.size());
+                    eprintln!(
+                        "[rs] STRANDED: {} components remain (round {rounds})",
+                        self.size()
+                    );
                 }
                 return Ok(false);
             }
@@ -1392,7 +1412,12 @@ impl<'a> RegionStructurer<'a> {
         );
         self.switch_case_edges = switch_case_edges;
         if std::env::var_os("KUNA_RS_DEBUG").is_some() {
-            eprintln!("[rs]   SWITCH FOLDED #{} ({} cases, exit={})", self.graph.block(bl).get_index(), cases.len()-1, exitblock.is_some());
+            eprintln!(
+                "[rs]   SWITCH FOLDED #{} ({} cases, exit={})",
+                self.graph.block(bl).get_index(),
+                cases.len() - 1,
+                exitblock.is_some()
+            );
         }
         // new_block_switch can fail if the exit-leaf is not a BlockCopy (should not
         // happen for a real switch head, but keep it honest-partial: report no
@@ -1502,7 +1527,11 @@ impl<'a> RegionStructurer<'a> {
                         "[rs] RI loop head=0x{:x} body={} exits=[{}]",
                         head,
                         l.body.len(),
-                        l.exits.iter().map(|a| format!("0x{a:x}")).collect::<Vec<_>>().join(",")
+                        l.exits
+                            .iter()
+                            .map(|a| format!("0x{a:x}"))
+                            .collect::<Vec<_>>()
+                            .join(",")
                     );
                 }
             }
@@ -1561,7 +1590,10 @@ impl<'a> RegionStructurer<'a> {
             for &head in ordered.iter() {
                 if self.try_fold_switch_loop(head)? {
                     if dbg {
-                        eprintln!("[rs]   switch-loop refined head#{}", self.graph.block(head).get_index());
+                        eprintln!(
+                            "[rs]   switch-loop refined head#{}",
+                            self.graph.block(head).get_index()
+                        );
                     }
                     return Ok(true);
                 }
@@ -1605,7 +1637,10 @@ impl<'a> RegionStructurer<'a> {
                 match self.refine_loop_edges(head)? {
                     LoopRefineOutcome::Progressed => {
                         if dbg {
-                            eprintln!("[rs]   refined loop head#{}", self.graph.block(head).get_index());
+                            eprintln!(
+                                "[rs]   refined loop head#{}",
+                                self.graph.block(head).get_index()
+                            );
                         }
                         return Ok(true);
                     }
@@ -1682,7 +1717,6 @@ impl<'a> RegionStructurer<'a> {
         }
         heads
     }
-
 
     /// Compute the natural-loop body of `head`: starting from each latch (a
     /// back-edge source into `head`), walk predecessors that are dominated by
@@ -1910,11 +1944,23 @@ impl<'a> RegionStructurer<'a> {
         let dbg = std::env::var_os("KUNA_RS_DEBUG").is_some();
         let hb = self.graph.block(head);
         if hb.size_out() != 2 || hb.is_switch_out() {
-            if dbg { eprintln!("[rs]   sw-loop head#{} bail: sizeout={} switchout={}", self.graph.block(head).get_index(), hb.size_out(), hb.is_switch_out()); }
+            if dbg {
+                eprintln!(
+                    "[rs]   sw-loop head#{} bail: sizeout={} switchout={}",
+                    self.graph.block(head).get_index(),
+                    hb.size_out(),
+                    hb.is_switch_out()
+                );
+            }
             return Ok(false);
         }
         if hb.is_goto_out(0) || hb.is_goto_out(1) {
-            if dbg { eprintln!("[rs]   sw-loop head#{} bail: goto out", self.graph.block(head).get_index()); }
+            if dbg {
+                eprintln!(
+                    "[rs]   sw-loop head#{} bail: goto out",
+                    self.graph.block(head).get_index()
+                );
+            }
             return Ok(false);
         }
 
@@ -1931,7 +1977,12 @@ impl<'a> RegionStructurer<'a> {
 
         // Single-entry only: an irreducible (multi-entry) head can't fold this way.
         if self.head_extra_entries(head, &in_body) > 0 {
-            if dbg { eprintln!("[rs]   sw-loop head#{} bail: multi-entry", self.graph.block(head).get_index()); }
+            if dbg {
+                eprintln!(
+                    "[rs]   sw-loop head#{} bail: multi-entry",
+                    self.graph.block(head).get_index()
+                );
+            }
             return Ok(false);
         }
 
@@ -1957,11 +2008,23 @@ impl<'a> RegionStructurer<'a> {
         let switch_bl = match switch_bl {
             Some(s) => s,
             None => {
-                if dbg { eprintln!("[rs]   sw-loop head#{} bail: no switch->head in body (bodylen={})", self.graph.block(head).get_index(), in_body.len()); }
+                if dbg {
+                    eprintln!(
+                        "[rs]   sw-loop head#{} bail: no switch->head in body (bodylen={})",
+                        self.graph.block(head).get_index(),
+                        in_body.len()
+                    );
+                }
                 return Ok(false);
             }
         };
-        if dbg { eprintln!("[rs]   sw-loop head#{} HAS switch->head, bodylen={}", self.graph.block(head).get_index(), in_body.len()); }
+        if dbg {
+            eprintln!(
+                "[rs]   sw-loop head#{} HAS switch->head, bodylen={}",
+                self.graph.block(head).get_index(),
+                in_body.len()
+            );
+        }
 
         // Identify the head's loop-EXIT out-edge: the decision out whose target is
         // NOT in the structural body (it leaves the loop) and is not a back-edge.
@@ -1977,7 +2040,12 @@ impl<'a> RegionStructurer<'a> {
             let is_back = self.graph.block(head).is_back_edge_out(e);
             if !in_body_dst && !is_back {
                 if exit_edge.is_some() {
-                    if dbg { eprintln!("[rs]   sw-loop head#{} bail: two head exits", self.graph.block(head).get_index()); }
+                    if dbg {
+                        eprintln!(
+                            "[rs]   sw-loop head#{} bail: two head exits",
+                            self.graph.block(head).get_index()
+                        );
+                    }
                     return Ok(false); // two exits off the head — not this shape
                 }
                 exit_edge = Some(e);
@@ -1986,7 +2054,12 @@ impl<'a> RegionStructurer<'a> {
         let exit_edge = match exit_edge {
             Some(e) => e,
             None => {
-                if dbg { eprintln!("[rs]   sw-loop head#{} bail: no clean head exit edge", self.graph.block(head).get_index()); }
+                if dbg {
+                    eprintln!(
+                        "[rs]   sw-loop head#{} bail: no clean head exit edge",
+                        self.graph.block(head).get_index()
+                    );
+                }
                 return Ok(false);
             }
         };
@@ -2044,14 +2117,20 @@ impl<'a> RegionStructurer<'a> {
             // No break edges to virtualize — the switch's only non-continue exit is
             // already the head.  Leave it to `try_switch_cases` + `try_fold_loop`;
             // making no change here avoids spinning.
-            if dbg { eprintln!("[rs]   sw-loop head#{} no break edges (switch already single-exit=head)", self.graph.block(head).get_index()); }
+            if dbg {
+                eprintln!(
+                    "[rs]   sw-loop head#{} no break edges (switch already single-exit=head)",
+                    self.graph.block(head).get_index()
+                );
+            }
             return Ok(false);
         }
 
         if dbg {
             eprintln!(
                 "[rs]   sw-loop head#{} VIRTUALIZING {} break edges (switch#{}) @0x{:x}",
-                self.graph.block(head).get_index(), boundary_edges.len(),
+                self.graph.block(head).get_index(),
+                boundary_edges.len(),
                 self.graph.block(switch_bl).get_index(),
                 head_addr.unwrap_or(0),
             );
@@ -2071,7 +2150,8 @@ impl<'a> RegionStructurer<'a> {
         // address set lets `match_pending_inf_loop` re-resolve and absorb the body.
         if let Some(a) = head_addr {
             self.pending_inf_loops.insert(a);
-            self.pending_body_addrs.insert(a, self.body_addr_set(&in_body));
+            self.pending_body_addrs
+                .insert(a, self.body_addr_set(&in_body));
         }
         Ok(true)
     }
@@ -2115,8 +2195,7 @@ impl<'a> RegionStructurer<'a> {
         };
         // Collect the live body members (in component order, head first).
         let mut members: Vec<BlockId> = vec![head];
-        let mut member_set: std::collections::BTreeSet<BlockId> =
-            std::collections::BTreeSet::new();
+        let mut member_set: std::collections::BTreeSet<BlockId> = std::collections::BTreeSet::new();
         member_set.insert(head);
         let n = self.size();
         for i in 0..n {
@@ -2147,7 +2226,13 @@ impl<'a> RegionStructurer<'a> {
             for j in 0..mb.size_in() {
                 let p = mb.get_in(j);
                 if !member_set.contains(&p) && !mb.is_goto_in(j) {
-                    if dbg { eprintln!("[rs]   absorb bail: member#{} has external in from #{} (multi-entry)", self.graph.block(m).get_index(), self.graph.block(p).get_index()); }
+                    if dbg {
+                        eprintln!(
+                            "[rs]   absorb bail: member#{} has external in from #{} (multi-entry)",
+                            self.graph.block(m).get_index(),
+                            self.graph.block(p).get_index()
+                        );
+                    }
                     return Ok(false);
                 }
             }
@@ -2171,7 +2256,13 @@ impl<'a> RegionStructurer<'a> {
             }
         }
         if exits > 1 {
-            if dbg { eprintln!("[rs]   absorb bail: {} live exits (members={})", exits, members.len()); }
+            if dbg {
+                eprintln!(
+                    "[rs]   absorb bail: {} live exits (members={})",
+                    exits,
+                    members.len()
+                );
+            }
             return Ok(false);
         }
 
@@ -2179,11 +2270,21 @@ impl<'a> RegionStructurer<'a> {
         // switch head — its cases must have folded).
         for &m in members.iter() {
             if self.graph.block(m).is_switch_out() {
-                if dbg { eprintln!("[rs]   absorb bail: member#{} still a live switch", self.graph.block(m).get_index()); }
+                if dbg {
+                    eprintln!(
+                        "[rs]   absorb bail: member#{} still a live switch",
+                        self.graph.block(m).get_index()
+                    );
+                }
                 return Ok(false);
             }
         }
-        if dbg { eprintln!("[rs]   absorb OK: wrapping {} members as inf-loop", members.len()); }
+        if dbg {
+            eprintln!(
+                "[rs]   absorb OK: wrapping {} members as inf-loop",
+                members.len()
+            );
+        }
 
         // Mark the interior continue gotos (goto→head) as `continue;` before wrapping.
         if let Some(a) = head_addr {
@@ -2263,7 +2364,7 @@ impl<'a> RegionStructurer<'a> {
     /// in `kuna_loopbreak_recovery`), which is what this does — turning the getopt
     /// switch's `goto loop-head` cases into `continue;`.
     fn mark_continue_gotos(&mut self, bl: BlockId, head_addr: uintb) {
-        use crate::block::{block_flags, BlockKind, BlockType};
+        use crate::block::{BlockKind, BlockType, block_flags};
         // Walk the component subtree; a Goto/If/MultiGoto whose target's front-leaf
         // address is the loop head becomes a continue.
         let mut stack = vec![bl];
@@ -2344,28 +2445,30 @@ impl<'a> RegionStructurer<'a> {
         // sees).  A live component is "in the body" when its front-leaf address is
         // in the RI body set.
         let dbg = std::env::var_os("KUNA_RS_DEBUG").is_some();
-        let (in_body, exit_addrs): (std::collections::BTreeSet<BlockId>, Option<std::collections::BTreeSet<uintb>>) =
-            match &ri_loop {
-                Some(l) => {
-                    let mut s = std::collections::BTreeSet::new();
-                    let n = self.size();
-                    for i in 0..n {
-                        let comp = self.component(i);
-                        if let Some(a) = self.component_addr(comp) {
-                            if l.body.contains(&a) {
-                                s.insert(comp);
-                            }
+        let (in_body, exit_addrs): (
+            std::collections::BTreeSet<BlockId>,
+            Option<std::collections::BTreeSet<uintb>>,
+        ) = match &ri_loop {
+            Some(l) => {
+                let mut s = std::collections::BTreeSet::new();
+                let n = self.size();
+                for i in 0..n {
+                    let comp = self.component(i);
+                    if let Some(a) = self.component_addr(comp) {
+                        if l.body.contains(&a) {
+                            s.insert(comp);
                         }
                     }
-                    // `head` must be in the body set (it carries the head address).
-                    s.insert(head);
-                    (s, Some(l.exits.clone()))
                 }
-                None => {
-                    let body = self.natural_loop_body(head);
-                    (body.into_iter().collect(), None)
-                }
-            };
+                // `head` must be in the body set (it carries the head address).
+                s.insert(head);
+                (s, Some(l.exits.clone()))
+            }
+            None => {
+                let body = self.natural_loop_body(head);
+                (body.into_iter().collect(), None)
+            }
+        };
 
         // (1) Latch edges: back-edges into `head` from a body component.
         let mut latch_edges: Vec<(BlockId, int4)> = Vec::new();
@@ -2408,7 +2511,8 @@ impl<'a> RegionStructurer<'a> {
                     if !in_body.contains(&p) {
                         let pb = self.graph.block(p);
                         for e in 0..pb.size_out() {
-                            if pb.get_out(e) == bl && !pb.is_goto_out(e) && !pb.is_back_edge_out(e) {
+                            if pb.get_out(e) == bl && !pb.is_goto_out(e) && !pb.is_back_edge_out(e)
+                            {
                                 mid_entry_edges.push((p, e));
                             }
                         }
@@ -2582,10 +2686,14 @@ impl<'a> RegionStructurer<'a> {
             match best {
                 None => best = Some((src, e, dst)),
                 Some((bs, _, bd)) => {
-                    let (si, di) =
-                        (self.graph.block(src).get_index(), self.graph.block(dst).get_index());
-                    let (bsi, bdi) =
-                        (self.graph.block(bs).get_index(), self.graph.block(bd).get_index());
+                    let (si, di) = (
+                        self.graph.block(src).get_index(),
+                        self.graph.block(dst).get_index(),
+                    );
+                    let (bsi, bdi) = (
+                        self.graph.block(bs).get_index(),
+                        self.graph.block(bd).get_index(),
+                    );
                     if (si, di) < (bsi, bdi) {
                         best = Some((src, e, dst));
                     }
@@ -2647,11 +2755,7 @@ impl<'a> RegionStructurer<'a> {
             }
         }
         // One preheader entry is normal; more than one is multi-entry/irreducible.
-        if entries > 1 {
-            entries - 1
-        } else {
-            0
-        }
+        if entries > 1 { entries - 1 } else { 0 }
     }
 
     /// The loop head's *extra* (abnormal) entry edges to virtualize, KEEPING the
@@ -2782,8 +2886,7 @@ impl<'a> RegionStructurer<'a> {
         // protected set is the union of the structural natural-loop bodies of all
         // live switch-bodied loop heads.  Off-loop and acyclic code is unaffected,
         // so this is parity-safe (the protected set is empty without such a loop).
-        let mut protected: std::collections::BTreeSet<BlockId> =
-            std::collections::BTreeSet::new();
+        let mut protected: std::collections::BTreeSet<BlockId> = std::collections::BTreeSet::new();
         if self.loop_refine {
             for &h in self.collect_loop_heads().iter() {
                 if self.is_switch_bodied_loop_head(h) {
@@ -2865,10 +2968,7 @@ impl<'a> RegionStructurer<'a> {
     ///     here, exactly as angr drops `other_edges`).
     /// Virtualize from `crossing` if non-empty, else `secondary`.  Within the chosen
     /// bucket, order by the SAILR heuristic and return the first edge.
-    fn order_virtualizable_edges_sailr<'e>(
-        &self,
-        candidates: &'e [Edge],
-    ) -> KunaResult<&'e Edge> {
+    fn order_virtualizable_edges_sailr<'e>(&self, candidates: &'e [Edge]) -> KunaResult<&'e Edge> {
         // Build the snapshot region graph over the live components (angr's
         // `full_graph`): nodes = components, edges = every component out-edge
         // (structured, back, and already-virtualized goto edges alike — the
@@ -2922,7 +3022,10 @@ impl<'a> RegionStructurer<'a> {
         &self,
         pool: &crate::p7_regions::kuna_regiongraph::KunaNodePool,
         graph: &crate::p7_regions::kuna_regiongraph::KunaRegionGraph,
-        id_of: &std::collections::BTreeMap<BlockId, crate::p7_regions::kuna_regiongraph::KunaNodeId>,
+        id_of: &std::collections::BTreeMap<
+            BlockId,
+            crate::p7_regions::kuna_regiongraph::KunaNodeId,
+        >,
         edges: &[&'e Edge],
     ) -> &'e Edge {
         if edges.len() == 1 {
@@ -2936,14 +3039,15 @@ impl<'a> RegionStructurer<'a> {
         // H1: minimum sibling count = in_degree(dst) - 1 over the snapshot graph.
         // angr drops edges whose dst has no siblings (sibling_cnt == 0) from the H1
         // map; if every edge has zero siblings the map is empty and H1 is skipped.
-        let sib = |e: &Edge| -> int4 {
-            graph.size_in(id_of[&e.dst]).unwrap_or(0) - 1
-        };
+        let sib = |e: &Edge| -> int4 { graph.size_in(id_of[&e.dst]).unwrap_or(0) - 1 };
         let with_sib: Vec<&Edge> = best.iter().copied().filter(|e| sib(e) > 0).collect();
         if !with_sib.is_empty() {
             let min_sib = with_sib.iter().map(|e| sib(e)).min().unwrap();
-            let h1: Vec<&Edge> =
-                with_sib.iter().copied().filter(|e| sib(e) == min_sib).collect();
+            let h1: Vec<&Edge> = with_sib
+                .iter()
+                .copied()
+                .filter(|e| sib(e) == min_sib)
+                .collect();
             if h1.len() == 1 {
                 return h1[0];
             }
@@ -2952,9 +3056,7 @@ impl<'a> RegionStructurer<'a> {
 
         // H2: post-dominator count (capped).  Bounded exactly as angr:
         // `len(edges) <= postdom_max_edges && len(graph) <= postdom_max_graph_size`.
-        if best.len() as int4 <= POSTDOM_MAX_EDGES
-            && graph.num_nodes() <= POSTDOM_MAX_GRAPH_SIZE
-        {
+        if best.len() as int4 <= POSTDOM_MAX_EDGES && graph.num_nodes() <= POSTDOM_MAX_GRAPH_SIZE {
             if let Some(h2) = self.sailr_h2_postdom(pool, graph, id_of, &best) {
                 if h2.len() == 1 {
                     return h2[0];
@@ -2964,8 +3066,11 @@ impl<'a> RegionStructurer<'a> {
         }
 
         // H3: prefer an edge whose destination is a simple return (a graph sink).
-        let h3: Vec<&Edge> =
-            best.iter().copied().filter(|e| self.is_simple_return(e.dst)).collect();
+        let h3: Vec<&Edge> = best
+            .iter()
+            .copied()
+            .filter(|e| self.is_simple_return(e.dst))
+            .collect();
         if h3.len() == 1 {
             return h3[0];
         }
@@ -3015,10 +3120,13 @@ impl<'a> RegionStructurer<'a> {
         &self,
         pool: &crate::p7_regions::kuna_regiongraph::KunaNodePool,
         graph: &crate::p7_regions::kuna_regiongraph::KunaRegionGraph,
-        id_of: &std::collections::BTreeMap<BlockId, crate::p7_regions::kuna_regiongraph::KunaNodeId>,
+        id_of: &std::collections::BTreeMap<
+            BlockId,
+            crate::p7_regions::kuna_regiongraph::KunaNodeId,
+        >,
         edges: &[&'e Edge],
     ) -> Option<Vec<&'e Edge>> {
-        use crate::p7_regions::kuna_regiongraph::{kuna_immediate_dominators, KunaRegionGraph};
+        use crate::p7_regions::kuna_regiongraph::{KunaRegionGraph, kuna_immediate_dominators};
         // The reversed-graph synthetic tail (post-dom root): connect every original
         // sink (out_degree == 0) to it, then add edges dst->src for every original
         // edge, so forward idoms over this graph == post-dominators of the original.
@@ -3085,8 +3193,11 @@ impl<'a> RegionStructurer<'a> {
             }
             counts.push((cnt, e));
         }
-        let winners: Vec<&Edge> =
-            counts.into_iter().filter(|(c, _)| *c == max_count).map(|(_, e)| e).collect();
+        let winners: Vec<&Edge> = counts
+            .into_iter()
+            .filter(|(c, _)| *c == max_count)
+            .map(|(_, e)| e)
+            .collect();
         if winners.is_empty() {
             None
         } else {
@@ -3105,15 +3216,20 @@ impl<'a> RegionStructurer<'a> {
         // H1: minimum sibling count.
         let sibling_count = |e: &Edge| -> int4 { self.graph.block(e.dst).size_in() - 1 };
         let min_siblings = edges.iter().map(sibling_count).min().unwrap_or(0);
-        let mut best: Vec<&Edge> =
-            edges.iter().filter(|e| sibling_count(e) == min_siblings).collect();
+        let mut best: Vec<&Edge> = edges
+            .iter()
+            .filter(|e| sibling_count(e) == min_siblings)
+            .collect();
         if best.len() == 1 {
             return best[0];
         }
 
         // H3: prefer an edge to a simple return block.
-        let returns: Vec<&Edge> =
-            best.iter().copied().filter(|e| self.is_simple_return(e.dst)).collect();
+        let returns: Vec<&Edge> = best
+            .iter()
+            .copied()
+            .filter(|e| self.is_simple_return(e.dst))
+            .collect();
         if returns.len() == 1 {
             return returns[0];
         }
@@ -3169,8 +3285,7 @@ impl<'a> RegionStructurer<'a> {
         use crate::p7_regions::kuna_regiongraph::{KunaNodePool, KunaRegionGraph, NodeKind};
         let mut pool = KunaNodePool::new();
         let mut graph = KunaRegionGraph::new();
-        let mut id_of: std::collections::BTreeMap<BlockId, _> =
-            std::collections::BTreeMap::new();
+        let mut id_of: std::collections::BTreeMap<BlockId, _> = std::collections::BTreeMap::new();
         let n = self.size();
         // Allocate a node per live component.
         for i in 0..n {
@@ -3215,7 +3330,10 @@ impl<'a> RegionStructurer<'a> {
         &self,
         pool: &crate::p7_regions::kuna_regiongraph::KunaNodePool,
         graph: &crate::p7_regions::kuna_regiongraph::KunaRegionGraph,
-        id_of: &std::collections::BTreeMap<BlockId, crate::p7_regions::kuna_regiongraph::KunaNodeId>,
+        id_of: &std::collections::BTreeMap<
+            BlockId,
+            crate::p7_regions::kuna_regiongraph::KunaNodeId,
+        >,
     ) -> std::collections::BTreeMap<BlockId, int4> {
         use crate::p7_regions::kuna_regiongraph::kuna_dfs_postorder_deterministic;
         // The head is the unique zero-in-degree node (built by build_component_graph);
@@ -3232,8 +3350,7 @@ impl<'a> RegionStructurer<'a> {
                 break;
             }
         }
-        let mut seq: std::collections::BTreeMap<BlockId, int4> =
-            std::collections::BTreeMap::new();
+        let mut seq: std::collections::BTreeMap<BlockId, int4> = std::collections::BTreeMap::new();
         let head = match head {
             Some(h) => h,
             None => return seq, // no acyclic source; node_seq stays empty (all 0)
@@ -3319,13 +3436,20 @@ mod tests {
         (g, root, b)
     }
 
-    fn switch_graph(n: usize, edges: &[(usize, usize)], back: &[usize]) -> (BlockGraph, BlockId, Vec<BlockId>) {
+    fn switch_graph(
+        n: usize,
+        edges: &[(usize, usize)],
+        back: &[usize],
+    ) -> (BlockGraph, BlockId, Vec<BlockId>) {
         let (mut g, root, b) = graph(n, edges);
         for &block in &b[2..] {
             let original = g.arena.insert(FlowBlock::new_kind(BlockKind::Graph));
-            *g.block_mut(block).kind_mut() = BlockKind::Copy { copy: Some(original) };
+            *g.block_mut(block).kind_mut() = BlockKind::Copy {
+                copy: Some(original),
+            };
         }
-        g.block_mut(b[2]).set_flag(crate::block::block_flags::f_switch_out);
+        g.block_mut(b[2])
+            .set_flag(crate::block::block_flags::f_switch_out);
         let flags = crate::block::edge_flags::f_back_edge | crate::block::edge_flags::f_loop_edge;
         for &block in back {
             g.set_out_edge_flag(b[block], 0, flags);
@@ -3339,8 +3463,11 @@ mod tests {
             _ => unreachable!(),
         };
         let head = copy(g, b[2]);
-        let maps = (3..b.len()).map(|i| ((head, copy(g, b[i])), (i as int4 - 3, false))).collect();
-        let mut st = RegionStructurer::new(g, root).with_switch_maps([(head, 0)].into_iter().collect(), maps);
+        let maps = (3..b.len())
+            .map(|i| ((head, copy(g, b[i])), (i as int4 - 3, false)))
+            .collect();
+        let mut st = RegionStructurer::new(g, root)
+            .with_switch_maps([(head, 0)].into_iter().collect(), maps);
         assert!(st.graph.block(b[3]).is_back_edge_out(0));
         if !st.try_switch_cases(b[2]).unwrap() {
             return None;
@@ -3354,10 +3481,14 @@ mod tests {
     fn switch_case_backedges_keep_their_actual_loop_header() {
         for returns_to_switch in [true, false] {
             let destination = if returns_to_switch { 2 } else { 1 };
-            let (mut g, root, b) = switch_graph(5, &[(0, 1), (1, 2), (2, 3), (2, 4), (3, destination)], &[3]);
+            let (mut g, root, b) =
+                switch_graph(5, &[(0, 1), (1, 2), (2, 3), (2, 4), (3, destination)], &[3]);
             let sw = fold_switch(&mut g, root, &b).unwrap();
             assert_eq!(g.block(sw).size_out(), 1, "{returns_to_switch}");
-            assert_eq!(g.block(sw).get_out(0), if returns_to_switch { sw } else { b[1] });
+            assert_eq!(
+                g.block(sw).get_out(0),
+                if returns_to_switch { sw } else { b[1] }
+            );
         }
     }
 
@@ -3370,7 +3501,9 @@ mod tests {
         let enclosing = [(0, 1), (1, 2), (1, 5), (2, 3), (2, 4), (2, 5), (3, 1)];
         let (mut g, root, b) = switch_graph(6, &enclosing, &[3]);
         let sw = fold_switch(&mut g, root, &b).unwrap();
-        let outs: Vec<_> = (0..g.block(sw).size_out()).map(|i| g.block(sw).get_out(i)).collect();
+        let outs: Vec<_> = (0..g.block(sw).size_out())
+            .map(|i| g.block(sw).get_out(i))
+            .collect();
         assert!(outs.contains(&b[1]) && outs.contains(&b[5]), "{outs:?}");
     }
 
@@ -3379,18 +3512,31 @@ mod tests {
         let edges = [(0, 1), (1, 2), (2, 3), (2, 4), (2, 5), (3, 2), (4, 1)];
         let (mut g, root, b) = switch_graph(6, &edges, &[3, 4]);
         assert!(fold_switch(&mut g, root, &b).is_none());
-        assert_eq!((g.block(b[3]).get_out(0), g.block(b[4]).get_out(0)), (b[2], b[1]));
+        assert_eq!(
+            (g.block(b[3]).get_out(0), g.block(b[4]).get_out(0)),
+            (b[2], b[1])
+        );
     }
 
     #[test]
     fn a_direct_switch_self_edge_folds_only_without_an_outer_continue() {
         for outer in [false, true] {
-            let edges = [(0, 1), (1, 2), (2, 2), (2, 3), (2, 4), (3, if outer { 1 } else { 2 })];
+            let edges = [
+                (0, 1),
+                (1, 2),
+                (2, 2),
+                (2, 3),
+                (2, 4),
+                (3, if outer { 1 } else { 2 }),
+            ];
             let (mut g, root, b) = switch_graph(5, &edges, &[2, 3]);
             let sw = fold_switch(&mut g, root, &b);
             if outer {
                 assert!(sw.is_none());
-                assert_eq!((g.block(b[2]).get_out(0), g.block(b[3]).get_out(0)), (b[2], b[1]));
+                assert_eq!(
+                    (g.block(b[2]).get_out(0), g.block(b[3]).get_out(0)),
+                    (b[2], b[1])
+                );
             } else {
                 let sw = sw.unwrap();
                 assert_eq!((g.block(sw).size_out(), g.block(sw).get_out(0)), (1, sw));
@@ -3445,7 +3591,8 @@ mod tests {
         );
         assert!(st.has_stranded_component());
         st.pending_inf_loops.insert(0x2000);
-        st.pending_body_addrs.insert(0x2000, [0x1000].into_iter().collect());
+        st.pending_body_addrs
+            .insert(0x2000, [0x1000].into_iter().collect());
         assert!(!st.has_stranded_component());
     }
 }

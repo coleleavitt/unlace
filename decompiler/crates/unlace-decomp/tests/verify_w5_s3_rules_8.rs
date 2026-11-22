@@ -28,19 +28,17 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace,
-    UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace, addrspace_flags,
+    spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use unlace_decomp::action::Rule;
-use unlace_decomp::dtype::{type_metatype, Datatype};
-use unlace_decomp::funcdata::Funcdata;
-use unlace_decomp::ruleaction_8::{
-    RuleLzcountShiftBool, RuleOrCompare, RuleThreeWayCompare,
-};
 use unlace_decomp::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
+use unlace_decomp::dtype::{Datatype, type_metatype};
+use unlace_decomp::funcdata::Funcdata;
+use unlace_decomp::ruleaction_8::{RuleLzcountShiftBool, RuleOrCompare, RuleThreeWayCompare};
 use unlace_decomp::varnode::{DefOpInfo, VarnodeBank};
 
 // --- fixtures (public-API mirror of the inline `tests` module) --------------
@@ -48,7 +46,8 @@ use unlace_decomp::varnode::{DefOpInfo, VarnodeBank};
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(IopSpace::new(2))).unwrap();
     m.insert_space(Rc::new(FspecSpace::new(3))).unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
@@ -126,7 +125,10 @@ fn set_output(fd: &mut Funcdata, op: OpId, off: u64, ct: Rc<Datatype>) -> Varnod
     let size = ct.get_size();
     let vn = fd.new_varnode(size, &Address::new(r, off), Some(ct));
     let seq = fd.obank().get(op).unwrap().get_seq_num().clone();
-    let info = DefOpInfo { id: op, seqnum: seq };
+    let info = DefOpInfo {
+        id: op,
+        seqnum: seq,
+    };
     let vn = fd.vbank_mut().set_def(vn, info, &mut no_replace()).unwrap();
     fd.obank_mut().get_mut(op).unwrap().set_output(Some(vn));
     vn
@@ -134,7 +136,10 @@ fn set_output(fd: &mut Funcdata, op: OpId, off: u64, ct: Rc<Datatype>) -> Varnod
 
 fn wire(fd: &mut Funcdata, vn: VarnodeId, op: OpId, slot: int4) {
     fd.vbank_mut().add_descend(vn, op).unwrap();
-    fd.obank_mut().get_mut(op).unwrap().set_input(Some(vn), slot);
+    fd.obank_mut()
+        .get_mut(op)
+        .unwrap()
+        .set_input(Some(vn), slot);
 }
 
 fn code(fd: &Funcdata, op: OpId) -> OpCode {
@@ -217,8 +222,16 @@ fn w5s3r8_threeway_form1_eq_zero_collapses_to_int_equal() {
     assert_eq!(r, 1, "Form-1 threeway==0 must collapse");
     // Case 14 => INT_EQUAL, inputs (avn=b, bvn=a)  [avn=lessop.getIn(1)=b]
     assert_eq!(code(&fd, op), OpCode::CPUI_INT_EQUAL, "collapses to a==b");
-    assert_eq!(in_of(&fd, op, 0), Some(b), "avn (lessop.getIn(1)) on slot 0");
-    assert_eq!(in_of(&fd, op, 1), Some(a), "bvn (lessop.getIn(0)) on slot 1");
+    assert_eq!(
+        in_of(&fd, op, 0),
+        Some(b),
+        "avn (lessop.getIn(1)) on slot 0"
+    );
+    assert_eq!(
+        in_of(&fd, op, 1),
+        Some(a),
+        "bvn (lessop.getIn(0)) on slot 1"
+    );
     // Sanity: the lessop fed the encoding (it is the `<` op, not the `<=`).
     assert_eq!(code(&fd, less_op), OpCode::CPUI_INT_LESS);
 }
@@ -369,7 +382,11 @@ fn w5s3r8_lzcount_non_power_of_two_size_blocks_without_mutation() {
     wire(&mut fd, four, shr, 1);
     let _ = set_output(&mut fd, shr, 0x80, unk(3));
 
-    assert_eq!(RuleLzcountShiftBool.apply_op(lz, &mut fd), 0, "size 3 -> popcount(24)!=1 blocks");
+    assert_eq!(
+        RuleLzcountShiftBool.apply_op(lz, &mut fd),
+        0,
+        "size 3 -> popcount(24)!=1 blocks"
+    );
     // The shift reader is untouched.
     assert_eq!(code(&fd, shr), OpCode::CPUI_INT_RIGHT);
 }
@@ -394,18 +411,37 @@ fn w5s3r8_lzcount_power_of_two_completes_int_equal_rewrite() {
     wire(&mut fd, five, shr, 1);
     let _ = set_output(&mut fd, shr, 0x80, unk(4));
 
-    assert_eq!(RuleLzcountShiftBool.apply_op(lz, &mut fd), 1, "transform completes since w4x");
-    assert_eq!(code(&fd, shr), OpCode::CPUI_INT_ZEXT, "size-4 output -> INT_ZEXT (not COPY)");
+    assert_eq!(
+        RuleLzcountShiftBool.apply_op(lz, &mut fd),
+        1,
+        "transform completes since w4x"
+    );
+    assert_eq!(
+        code(&fd, shr),
+        OpCode::CPUI_INT_ZEXT,
+        "size-4 output -> INT_ZEXT (not COPY)"
+    );
     let shr_rec = fd.obank().get(shr).expect("shift survives as zext");
-    assert_eq!(shr_rec.num_input(), 1, "constant shift-amount input removed");
+    assert_eq!(
+        shr_rec.num_input(),
+        1,
+        "constant shift-amount input removed"
+    );
     let bool_in = shr_rec.get_in(0).expect("zext input");
     let bool_rec = fd.vbank().get(bool_in).expect("unique bool varnode");
     assert_eq!(bool_rec.get_size(), 1);
     let eq = bool_rec.get_def().expect("defined by the fresh INT_EQUAL");
     let eq_rec = fd.obank().get(eq).expect("eq op");
     assert_eq!(eq_rec.code(), OpCode::CPUI_INT_EQUAL);
-    assert_eq!(eq_rec.get_in(0), Some(x), "compares the original lzcount operand");
-    let z = fd.vbank().get(eq_rec.get_in(1).expect("zero")).expect("const");
+    assert_eq!(
+        eq_rec.get_in(0),
+        Some(x),
+        "compares the original lzcount operand"
+    );
+    let z = fd
+        .vbank()
+        .get(eq_rec.get_in(1).expect("zero"))
+        .expect("const");
     assert!(z.is_constant() && z.get_offset() == 0 && z.get_size() == 4);
 }
 
@@ -436,7 +472,11 @@ fn w5s3r8_orcompare_completes_and_links_v_w_descendants() {
     assert_eq!(fd.vbank().get(v).unwrap().num_descend(), 1);
     assert_eq!(fd.vbank().get(w).unwrap().num_descend(), 1);
 
-    assert_eq!(RuleOrCompare.apply_op(orop, &mut fd), 1, "rewrite completes since w4x");
+    assert_eq!(
+        RuleOrCompare.apply_op(orop, &mut fd),
+        1,
+        "rewrite completes since w4x"
+    );
     // The OR op itself is untouched; its READER became BOOL_AND.
     assert_eq!(code(&fd, orop), OpCode::CPUI_INT_OR);
     assert_eq!(code(&fd, eq), OpCode::CPUI_BOOL_AND);
@@ -445,7 +485,12 @@ fn w5s3r8_orcompare_completes_and_links_v_w_descendants() {
     // INT_EQUAL (with a unique bool output feeding the BOOL_AND), not an orphan.
     for (base, slot) in [(v, 0i32), (w, 1i32)] {
         assert_eq!(fd.vbank().get(base).unwrap().num_descend(), 2);
-        let and_in = fd.obank().get(eq).unwrap().get_in(slot).expect("bool_and input");
+        let and_in = fd
+            .obank()
+            .get(eq)
+            .unwrap()
+            .get_in(slot)
+            .expect("bool_and input");
         let and_in_rec = fd.vbank().get(and_in).expect("unique bool");
         assert_eq!(and_in_rec.get_size(), 1);
         let def = and_in_rec.get_def().expect("defined");

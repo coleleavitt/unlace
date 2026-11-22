@@ -41,7 +41,9 @@ impl<'a> FrameModes<'a> {
     pub fn record(&mut self, root: u64, at: u64, len: u32, mode: Option<u32>) {
         let Some(mode) = mode else { return };
         let end = at.saturating_add(u64::from(len));
-        if let Some(decoded) = &mut self.decoded { decoded.insert(at, (end, mode)); }
+        if let Some(decoded) = &mut self.decoded {
+            decoded.insert(at, (end, mode));
+        }
         if !self.roots.contains(&root) {
             return;
         }
@@ -67,7 +69,12 @@ impl<'a> FrameModes<'a> {
                     continue;
                 }
             }
-            paints.push(crate::pass::ContextPaint { addr, end: Some(end), var: "TMode", value });
+            paints.push(crate::pass::ContextPaint {
+                addr,
+                end: Some(end),
+                var: "TMode",
+                value,
+            });
         }
         paints
     }

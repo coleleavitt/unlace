@@ -25,16 +25,26 @@ use crate::funcdata::Funcdata;
 /// 32- or 64-byte register from a 16- or 32-byte value. Returns the zero-fill op
 /// inserted after it.
 pub fn split(data: &mut Funcdata, op: OpId, insn: &[OpId]) -> KunaResult<Option<OpId>> {
-    let Some(o) = data.obank().get(op) else { return Ok(None) };
+    let Some(o) = data.obank().get(op) else {
+        return Ok(None);
+    };
     if o.code() != OpCode::CPUI_INT_ZEXT {
         return Ok(None);
     }
-    let (Some(out), Some(input)) = (o.get_out(), o.get_in(0)) else { return Ok(None) };
-    let (Some(ov), Some(iv)) = (data.vbank().get(out), data.vbank().get(input)) else { return Ok(None) };
+    let (Some(out), Some(input)) = (o.get_out(), o.get_in(0)) else {
+        return Ok(None);
+    };
+    let (Some(ov), Some(iv)) = (data.vbank().get(out), data.vbank().get(input)) else {
+        return Ok(None);
+    };
     let (out_size, in_size) = (ov.get_size(), iv.get_size());
     let reg = ov.get_addr().clone();
     let is_register = reg.get_space().is_some_and(|s| s.get_name() == "register");
-    if !is_register || !matches!(out_size, 32 | 64) || !matches!(in_size, 16 | 32) || in_size >= out_size {
+    if !is_register
+        || !matches!(out_size, 32 | 64)
+        || !matches!(in_size, 16 | 32)
+        || in_size >= out_size
+    {
         return Ok(None);
     }
     let low = reg.clone();
@@ -43,16 +53,29 @@ pub fn split(data: &mut Funcdata, op: OpId, insn: &[OpId]) -> KunaResult<Option<
     // At flow time a temporary's readers are not linked to its writer yet, so
     // the producer is the op of this instruction that writes the same storage.
     let in_addr = iv.get_addr().clone();
-    let is_unique = in_addr.get_space().is_some_and(|s| s.get_name() == "unique");
+    let is_unique = in_addr
+        .get_space()
+        .is_some_and(|s| s.get_name() == "unique");
     let writes = |o: OpId| {
-        data.obank().get(o).and_then(|x| x.get_out()).and_then(|v| data.vbank().get(v)).is_some_and(|v| v.get_addr() == &in_addr)
+        data.obank()
+            .get(o)
+            .and_then(|x| x.get_out())
+            .and_then(|v| data.vbank().get(v))
+            .is_some_and(|v| v.get_addr() == &in_addr)
     };
     let reads = |o: OpId| {
         data.obank().get(o).is_some_and(|x| {
-            (0..x.num_input()).any(|k| x.get_in(k).and_then(|v| data.vbank().get(v)).is_some_and(|v| v.get_addr() == &in_addr))
+            (0..x.num_input()).any(|k| {
+                x.get_in(k)
+                    .and_then(|v| data.vbank().get(v))
+                    .is_some_and(|v| v.get_addr() == &in_addr)
+            })
         })
     };
-    let producer = if is_unique && insn.iter().filter(|&&o| writes(o)).count() == 1 && insn.iter().filter(|&&o| reads(o)).count() == 1 {
+    let producer = if is_unique
+        && insn.iter().filter(|&&o| writes(o)).count() == 1
+        && insn.iter().filter(|&&o| reads(o)).count() == 1
+    {
         insn.iter().copied().find(|&o| writes(o))
     } else {
         None
@@ -77,9 +100,20 @@ pub fn split(data: &mut Funcdata, op: OpId, insn: &[OpId]) -> KunaResult<Option<
 /// at the next YMM/ZMM boundary (so an XMM write leaves the YMM and ZMM upper
 /// halves as separate storage). With `reuse`, `op` itself becomes the first
 /// piece; otherwise the pieces follow it. Returns the last op.
-fn zero_fill(data: &mut Funcdata, op: OpId, reuse: bool, reg: &Address, from: int4, to: int4) -> KunaResult<OpId> {
+fn zero_fill(
+    data: &mut Funcdata,
+    op: OpId,
+    reuse: bool,
+    reg: &Address,
+    from: int4,
+    to: int4,
+) -> KunaResult<OpId> {
     let space = reg.get_space().expect("register space").clone();
-    let pc = data.obank().get(op).map(|o| o.get_addr().clone()).expect("zero fill: op");
+    let pc = data
+        .obank()
+        .get(op)
+        .map(|o| o.get_addr().clone())
+        .expect("zero fill: op");
     let mut pieces = Vec::new();
     let mut at = from;
     while at < to {

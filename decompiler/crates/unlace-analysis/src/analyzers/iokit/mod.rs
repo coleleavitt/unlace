@@ -35,7 +35,9 @@ use object::{Architecture, SectionFlags, SectionKind};
 
 use crate::loader::format::macho::resolve_chained_fixups;
 use crate::objc::sections::MachoImage;
-use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, DataObjectFact, FidMatch, Phase, SymFact, SymKind};
+use crate::pass::{
+    AnalysisCtx, AnalysisOutput, AnalysisPass, DataObjectFact, FidMatch, Phase, SymFact, SymKind,
+};
 use a64::Event;
 
 const MH_KEXT_BUNDLE: u32 = 0xb;
@@ -76,8 +78,13 @@ impl AnalysisPass for IokitClassesPass {
 
 /// A kext (`MH_KEXT_BUNDLE`) or an XNU kernel (it has a `__KLD` segment).
 fn is_xnu_image(file: &object::File, bytes: &[u8]) -> bool {
-    let filetype = bytes.get(12..16).map(|b| u32::from_le_bytes(b.try_into().unwrap()));
-    filetype == Some(MH_KEXT_BUNDLE) || file.sections().any(|s| s.segment_name().ok().flatten() == Some("__KLD"))
+    let filetype = bytes
+        .get(12..16)
+        .map(|b| u32::from_le_bytes(b.try_into().unwrap()));
+    filetype == Some(MH_KEXT_BUNDLE)
+        || file
+            .sections()
+            .any(|s| s.segment_name().ok().flatten() == Some("__KLD"))
 }
 
 fn macho_flags(sec: &object::Section) -> u32 {
@@ -130,17 +137,28 @@ fn in_ranges(ranges: &[(u64, u64)], va: u64) -> bool {
 }
 
 fn init_functions(file: &object::File, img: &MachoImage) -> Vec<u64> {
-    let base = file.sections().find(|s| s.segment_name().ok().flatten() == Some("__TEXT")).map(|s| s.address());
+    let base = file
+        .sections()
+        .find(|s| s.segment_name().ok().flatten() == Some("__TEXT"))
+        .map(|s| s.address());
     let mut out = Vec::new();
     for sec in file.sections() {
         let (addr, size) = (sec.address(), sec.size());
         match macho_flags(&sec) & 0xff {
             S_MOD_INIT_FUNC_POINTERS => {
-                out.extend((0..size / 8).filter_map(|k| img.read_ptr(addr + 8 * k)).filter(|&p| p != 0));
+                out.extend(
+                    (0..size / 8)
+                        .filter_map(|k| img.read_ptr(addr + 8 * k))
+                        .filter(|&p| p != 0),
+                );
             }
             S_INIT_FUNC_OFFSETS => {
                 let Some(base) = base else { continue };
-                out.extend((0..size / 4).filter_map(|k| img.read_u32(addr + 4 * k)).map(|o| base + o as u64));
+                out.extend(
+                    (0..size / 4)
+                        .filter_map(|k| img.read_u32(addr + 4 * k))
+                        .map(|o| base + o as u64),
+                );
             }
             _ => {}
         }
@@ -152,7 +170,9 @@ fn init_functions(file: &object::File, img: &MachoImage) -> Vec<u64> {
 fn class_name(img: &MachoImage, va: u64) -> Option<String> {
     let s = img.read_cstr(va)?;
     let ok = (2..=0x60).contains(&s.len())
-        && s.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && s.chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
         && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
     ok.then_some(s)
 }
@@ -178,9 +198,16 @@ pub fn recover(file: &object::File, img: &MachoImage) -> Recovered {
 }
 
 fn recover_with(file: &object::File, img: &MachoImage, names: HashMap<u64, String>) -> Recovered {
-    let mut rec = Recovered { names, own_code: code_ranges(file), ..Recovered::default() };
+    let mut rec = Recovered {
+        names,
+        own_code: code_ranges(file),
+        ..Recovered::default()
+    };
     let inits = init_functions(file, img);
-    let traces: Vec<Vec<Event>> = inits.iter().map(|&f| a64::trace(img, f, INIT_BUDGET, None)).collect();
+    let traces: Vec<Vec<Event>> = inits
+        .iter()
+        .map(|&f| a64::trace(img, f, INIT_BUDGET, None))
+        .collect();
 
     let mut votes: BTreeMap<u64, usize> = BTreeMap::new();
     for ev in traces.iter().flatten() {
@@ -192,21 +219,31 @@ fn recover_with(file: &object::File, img: &MachoImage, names: HashMap<u64, Strin
             }
         }
     }
-    let Some((&ctor, _)) = votes.iter().max_by_key(|&(&t, &n)| (n, std::cmp::Reverse(t))) else {
+    let Some((&ctor, _)) = votes
+        .iter()
+        .max_by_key(|&(&t, &n)| (n, std::cmp::Reverse(t)))
+    else {
         return rec;
     };
     rec.ctor = Some(ctor);
-    let traces: Vec<Vec<Event>> = inits.iter().map(|&f| a64::trace(img, f, INIT_BUDGET, Some(ctor))).collect();
+    let traces: Vec<Vec<Event>> = inits
+        .iter()
+        .map(|&f| a64::trace(img, f, INIT_BUDGET, Some(ctor)))
+        .collect();
 
     let mut seen = std::collections::HashSet::new();
     for events in &traces {
         for (i, ev) in events.iter().enumerate() {
             let Event::Call(c) = ev else { continue };
-            let (Some(meta), Some(name_ptr), Some(size)) = (c.args[0], c.args[1], c.args[3]) else { continue };
+            let (Some(meta), Some(name_ptr), Some(size)) = (c.args[0], c.args[1], c.args[3]) else {
+                continue;
+            };
             if c.target != ctor || !seen.insert(meta) {
                 continue;
             }
-            let Some(name) = class_name(img, name_ptr) else { continue };
+            let Some(name) = class_name(img, name_ptr) else {
+                continue;
+            };
             let meta_vtable = events[i + 1..]
                 .iter()
                 .take_while(|e| !matches!(e, Event::Call(n) if n.target == ctor))
@@ -230,7 +267,11 @@ fn recover_with(file: &object::File, img: &MachoImage, names: HashMap<u64, Strin
 
 impl Recovered {
     fn class_by_meta(&self) -> HashMap<u64, usize> {
-        self.classes.iter().enumerate().map(|(i, c)| (c.meta, i)).collect()
+        self.classes
+            .iter()
+            .enumerate()
+            .map(|(i, c)| (c.meta, i))
+            .collect()
     }
 
     fn find_vtables(&mut self, file: &object::File, img: &MachoImage) {
@@ -248,7 +289,10 @@ impl Recovered {
             if sec.kind() == SectionKind::Text || macho_flags(&sec) & 0xff != 0 || sec.size() < 24 {
                 continue;
             }
-            if !matches!(sec.kind(), SectionKind::Data | SectionKind::ReadOnlyData | SectionKind::Unknown) {
+            if !matches!(
+                sec.kind(),
+                SectionKind::Data | SectionKind::ReadOnlyData | SectionKind::Unknown
+            ) {
                 continue;
             }
             let (lo, hi) = (sec.address(), sec.address() + sec.size());
@@ -268,7 +312,9 @@ impl Recovered {
                     continue;
                 }
                 let owner = slots.iter().take(GET_META_CLASS_SLOTS).find_map(|&f| {
-                    let meta = *returned.entry(f).or_insert_with(|| a64::returned_constant(img, f, GET_META_CLASS_LIMIT));
+                    let meta = *returned
+                        .entry(f)
+                        .or_insert_with(|| a64::returned_constant(img, f, GET_META_CLASS_LIMIT));
                     meta.and_then(|m| by_meta.get(&m).map(|&i| (i, f)))
                 });
                 if let Some((i, getter)) = owner {
@@ -293,7 +339,9 @@ impl Recovered {
         }
         let alloc_slot = self.meta_alloc_slot();
         for c in &self.classes {
-            let Some(slots) = c.meta_vtable.and_then(|v| self.meta_vtables.get(&v)) else { continue };
+            let Some(slots) = c.meta_vtable.and_then(|v| self.meta_vtables.get(&v)) else {
+                continue;
+            };
             for (j, &f) in slots.iter().enumerate() {
                 if j < 2 {
                     propose(f, format!("{}::MetaClass::~MetaClass", c.name));
@@ -320,7 +368,10 @@ impl Recovered {
     /// `i` and its superclasses that are classes of this image, nearest first.
     fn ancestors(&self, i: usize, by_meta: &HashMap<u64, usize>) -> Vec<usize> {
         let mut chain = vec![i];
-        while let Some(&p) = self.classes[*chain.last().unwrap()].super_meta.and_then(|s| by_meta.get(&s)) {
+        while let Some(&p) = self.classes[*chain.last().unwrap()]
+            .super_meta
+            .and_then(|s| by_meta.get(&s))
+        {
             if chain.contains(&p) {
                 break;
             }
@@ -343,17 +394,25 @@ impl Recovered {
                 users.entry(f).or_default().push((i, j));
             }
         }
-        let chains: Vec<Vec<usize>> = (0..self.classes.len()).map(|i| self.ancestors(i, &by_meta)).collect();
+        let chains: Vec<Vec<usize>> = (0..self.classes.len())
+            .map(|i| self.ancestors(i, &by_meta))
+            .collect();
         let mut out = Vec::new();
         for (f, uses) in users {
-            if self.names.contains_key(&f) || !in_ranges(&self.own_code, f) || self.getters.contains_key(&f) {
+            if self.names.contains_key(&f)
+                || !in_ranges(&self.own_code, f)
+                || self.getters.contains_key(&f)
+            {
                 continue;
             }
             let j = uses[0].1;
             if uses.iter().any(|&(_, k)| k != j) {
                 continue;
             }
-            let Some(&owner) = chains[uses[0].0].iter().find(|a| uses.iter().all(|&(i, _)| chains[i].contains(a))) else {
+            let Some(&owner) = chains[uses[0].0]
+                .iter()
+                .find(|a| uses.iter().all(|&(i, _)| chains[i].contains(a)))
+            else {
                 continue;
             };
             let class = &self.classes[owner].name;
@@ -363,7 +422,10 @@ impl Recovered {
                 let method = chains[owner].iter().find_map(|&a| {
                     let g = *self.classes[a].vtable.as_ref()?.1.get(j)?;
                     let n = self.names.get(&g)?;
-                    n.rsplit("::").next().filter(|m| !m.starts_with('~')).map(str::to_string)
+                    n.rsplit("::")
+                        .next()
+                        .filter(|m| !m.starts_with('~'))
+                        .map(str::to_string)
                 });
                 match method {
                     Some(m) => format!("{class}::{m}"),
@@ -381,7 +443,11 @@ impl Recovered {
         let longest = self.meta_vtables.values().map(Vec::len).max()?;
         (2..longest)
             .map(|j| {
-                let mut fs: Vec<u64> = self.meta_vtables.values().filter_map(|v| v.get(j).copied()).collect();
+                let mut fs: Vec<u64> = self
+                    .meta_vtables
+                    .values()
+                    .filter_map(|v| v.get(j).copied())
+                    .collect();
                 fs.sort_unstable();
                 fs.dedup();
                 (fs.len(), std::cmp::Reverse(j))
@@ -396,7 +462,12 @@ impl Recovered {
     fn meta_size(&self) -> u32 {
         let mut metas: Vec<u64> = self.classes.iter().map(|c| c.meta).collect();
         metas.sort_unstable();
-        metas.windows(2).map(|w| w[1] - w[0]).filter(|&d| d > 0).min().map_or(8, |d| d.min(0x100) as u32)
+        metas
+            .windows(2)
+            .map(|w| w[1] - w[0])
+            .filter(|&d| d > 0)
+            .min()
+            .map_or(8, |d| d.min(0x100) as u32)
     }
 
     /// Every name this image's symbols or the recovery give an address.
@@ -406,7 +477,8 @@ impl Recovered {
             out.entry(addr).or_insert(name);
         }
         for c in &self.classes {
-            out.entry(c.meta).or_insert_with(|| format!("{}::gMetaClass", c.name));
+            out.entry(c.meta)
+                .or_insert_with(|| format!("{}::gMetaClass", c.name));
         }
         out
     }
@@ -421,10 +493,18 @@ impl Recovered {
         for c in &self.classes {
             data(c.meta, format!("{}::gMetaClass", c.name), meta_size);
             if let Some((slot0, slots)) = &c.vtable {
-                data(slot0 - 16, format!("vtable for {}", c.name), 16 + 8 * slots.len() as u32);
+                data(
+                    slot0 - 16,
+                    format!("vtable for {}", c.name),
+                    16 + 8 * slots.len() as u32,
+                );
             }
             if let Some(slots) = c.meta_vtable.and_then(|v| self.meta_vtables.get(&v)) {
-                data(c.meta_vtable.unwrap() - 16, format!("vtable for {}::MetaClass", c.name), 16 + 8 * slots.len() as u32);
+                data(
+                    c.meta_vtable.unwrap() - 16,
+                    format!("vtable for {}::MetaClass", c.name),
+                    16 + 8 * slots.len() as u32,
+                );
             }
         }
         let names = self.function_names();
@@ -439,8 +519,18 @@ impl Recovered {
         entries.sort_unstable();
         entries.dedup();
         out.entries.extend(entries);
-        out.symbols.extend(names.iter().map(|(&addr, name)| SymFact { addr, name: name.clone(), kind: SymKind::Function }));
-        out.fid_names.extend(names.into_iter().map(|(addr, name)| FidMatch { addr, name, by_signature: false }));
+        out.symbols
+            .extend(names.iter().map(|(&addr, name)| SymFact {
+                addr,
+                name: name.clone(),
+                kind: SymKind::Function,
+            }));
+        out.fid_names
+            .extend(names.into_iter().map(|(addr, name)| FidMatch {
+                addr,
+                name,
+                by_signature: false,
+            }));
     }
 }
 
@@ -456,11 +546,17 @@ struct Code {
 impl Code {
     fn new(file: &object::File) -> Self {
         let own = code_ranges(file);
-        let mut mapped: Vec<(u64, u64)> =
-            file.sections().map(|s| (s.address(), s.address().saturating_add(s.size()))).collect();
+        let mut mapped: Vec<(u64, u64)> = file
+            .sections()
+            .map(|s| (s.address(), s.address().saturating_add(s.size())))
+            .collect();
         mapped.sort_unstable();
         let region = own.first().map(|&(lo, _)| lo >> 32);
-        Code { own, mapped, region }
+        Code {
+            own,
+            mapped,
+            region,
+        }
     }
 
     fn own(&self, p: u64) -> bool {

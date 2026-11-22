@@ -30,8 +30,12 @@ fn wide_literals_round_trip_beside_int_tables() {
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
     for fixture in ["widestr32_gcc_O2_x86_64", "widestr32_clang_O2_x86_64"] {
-        let (printed, stderr, code) =
-            common::run_kuna(&["decompile-all", &common::fixture(fixture), "--functions", FUNCS]);
+        let (printed, stderr, code) = common::run_kuna(&[
+            "decompile-all",
+            &common::fixture(fixture),
+            "--functions",
+            FUNCS,
+        ]);
         assert_eq!(code, 0, "{fixture}: {stderr}");
         for want in [
             "hashw(L\"hellow\")",
@@ -43,7 +47,10 @@ fn wide_literals_round_trip_beside_int_tables() {
             "sum(codes,",
             "sum(weeks,",
         ] {
-            assert!(printed.contains(want), "{fixture}: missing `{want}`:\n{printed}");
+            assert!(
+                printed.contains(want),
+                "{fixture}: missing `{want}`:\n{printed}"
+            );
         }
         let src = common::scratch_file(fixture, "c");
         let exe = common::scratch_file(fixture, "exe");
@@ -81,8 +88,15 @@ fn wide_literals_round_trip_beside_int_tables() {
 #[test]
 fn option_off_prints_the_address() {
     let fixture = common::fixture("widestr32_gcc_O2_x86_64");
-    let (printed, stderr, code) =
-        common::run_kuna(&["decompile-all", &fixture, "--functions", "wide", "--option", "widestrings32", "off"]);
+    let (printed, stderr, code) = common::run_kuna(&[
+        "decompile-all",
+        &fixture,
+        "--functions",
+        "wide",
+        "--option",
+        "widestrings32",
+        "off",
+    ]);
     assert_eq!(code, 0, "{stderr}");
     assert!(printed.contains("hashw(0x402004)"), "{printed}");
     assert!(!printed.contains("L\"hellow\""), "{printed}");
@@ -104,18 +118,32 @@ fn other_builds_and_targets_spell_the_literals() {
         "widestr32_arm32_O2.o",
         "widestr32_mips32_be_O2",
     ] {
-        let (printed, stderr, code) = common::run_kuna(&["decompile-all", &common::fixture(fixture)]);
+        let (printed, stderr, code) =
+            common::run_kuna(&["decompile-all", &common::fixture(fixture)]);
         assert_eq!(code, 0, "{fixture}: {stderr}");
         let wants: &[&str] = if fixture == "widestr32_mips32_be_O2" {
             &["(L\"first-msg\")"]
         } else {
-            &["(L\"hellow\")", "(L\"char32-text\")", "L\"(NULL)\"", "(L\"xbind\")", "(L\"bind\")", "(L\"first-msg\")"]
+            &[
+                "(L\"hellow\")",
+                "(L\"char32-text\")",
+                "L\"(NULL)\"",
+                "(L\"xbind\")",
+                "(L\"bind\")",
+                "(L\"first-msg\")",
+            ]
         };
         for want in wants {
-            assert!(printed.contains(want), "{fixture}: missing `{want}`:\n{printed}");
+            assert!(
+                printed.contains(want),
+                "{fixture}: missing `{want}`:\n{printed}"
+            );
         }
         for text in ["L\"4544", "L\"helpz", "L\"alpha", "L\"bravo", "L\"qhellow"] {
-            assert!(!printed.contains(text), "{fixture}: a table prints as `{text}`:\n{printed}");
+            assert!(
+                !printed.contains(text),
+                "{fixture}: a table prints as `{text}`:\n{printed}"
+            );
         }
     }
 }
@@ -153,7 +181,10 @@ fn tables_past_their_zero_never_print_as_text() {
             assert_eq!(code, 0, "{fixture} {extra:?}: {stderr}");
             let wide = printed.matches("L\"").count();
             let control = printed.matches("(L\"control\")").count();
-            assert!(control == 1 && wide == control, "{fixture} {extra:?}: a table prints as text:\n{printed}");
+            assert!(
+                control == 1 && wide == control,
+                "{fixture} {extra:?}: a table prints as text:\n{printed}"
+            );
         }
     }
 }

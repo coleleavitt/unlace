@@ -4,14 +4,14 @@
 //! [`FormatEncode`] buffers a packed element stream and compresses it on flush.
 //! XML callers use the same IDs through [`register_sla_ids`].
 
+use std::io::Write;
+use std::rc::Rc;
 use unlace_base::compression::{CompressBuffer, Decompress};
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::marshal::{
     AttributeId, Decoder, ElementId, IdRegistry, PackedDecode, PackedEncode,
 };
 use unlace_base::space::AddrSpaceManager;
-use std::io::Write;
-use std::rc::Rc;
 
 /// C++ `sla::FORMAT_SCOPE` — grouping scope for SLA format elements/attributes.
 pub const FORMAT_SCOPE: i32 = 1;
@@ -81,7 +81,12 @@ impl<W: Write> FormatEncode<W> {
     /// Initialize an encoder at a specific compression level (C++ writes the
     /// header to the backing stream in the constructor).
     pub fn new(out: W, level: i32) -> FormatEncode<W> {
-        FormatEncode { buffer: Vec::new(), out, level, header_written: false }
+        FormatEncode {
+            buffer: Vec::new(),
+            out,
+            level,
+            header_written: false,
+        }
     }
 
     /// Borrow the accumulating packed buffer as a [`PackedEncode`] for the
@@ -120,7 +125,9 @@ pub struct FormatDecode<'a> {
 impl<'a> FormatDecode<'a> {
     /// C++ `FormatDecode::FormatDecode(const AddrSpaceManager *)`.
     pub fn new(spc_manager: &'a AddrSpaceManager) -> FormatDecode<'a> {
-        FormatDecode { inner: PackedDecode::new(spc_manager) }
+        FormatDecode {
+            inner: PackedDecode::new(spc_manager),
+        }
     }
 
     /// C++ `FormatDecode::ingestStream(istream &)`: verify the header,
@@ -222,7 +229,8 @@ impl Decoder for FormatDecode<'_> {
         expect: &[u8],
         expectval: i64,
     ) -> KunaResult<i64> {
-        self.inner.read_signed_integer_expect_string(expect, expectval)
+        self.inner
+            .read_signed_integer_expect_string(expect, expectval)
     }
     fn read_signed_integer_expect_string_id(
         &mut self,
@@ -230,7 +238,8 @@ impl Decoder for FormatDecode<'_> {
         expect: &[u8],
         expectval: i64,
     ) -> KunaResult<i64> {
-        self.inner.read_signed_integer_expect_string_id(attrib_id, expect, expectval)
+        self.inner
+            .read_signed_integer_expect_string_id(attrib_id, expect, expectval)
     }
     fn read_unsigned_integer(&mut self) -> KunaResult<u64> {
         self.inner.read_unsigned_integer()
@@ -258,7 +267,7 @@ impl Decoder for FormatDecode<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use unlace_base::marshal::{Encoder, ATTRIB_CONTENT, ELEM_DATA};
+    use unlace_base::marshal::{ATTRIB_CONTENT, ELEM_DATA, Encoder};
 
     fn compressed(payload: &[u8]) -> Vec<u8> {
         let mut bytes = Vec::new();
@@ -295,15 +304,26 @@ mod tests {
         let bytes = compressed(&[0x41, 0x81]);
         for end in 0..bytes.len() {
             let mut dec = FormatDecode::new(&manager);
-            assert!(dec.ingest_stream(&bytes[..end]).is_err(), "truncation at {end}");
+            assert!(
+                dec.ingest_stream(&bytes[..end]).is_err(),
+                "truncation at {end}"
+            );
         }
         let mut corrupt = bytes.clone();
         *corrupt.last_mut().unwrap() ^= 1;
         assert!(FormatDecode::new(&manager).ingest_stream(&corrupt).is_err());
         let mut wrong_header = bytes;
         wrong_header[3] = 0;
-        assert!(FormatDecode::new(&manager).ingest_stream(&wrong_header).is_err());
-        assert!(FormatDecode::new(&manager).ingest_stream(&compressed(&[])).is_err());
+        assert!(
+            FormatDecode::new(&manager)
+                .ingest_stream(&wrong_header)
+                .is_err()
+        );
+        assert!(
+            FormatDecode::new(&manager)
+                .ingest_stream(&compressed(&[]))
+                .is_err()
+        );
     }
 
     #[test]

@@ -74,7 +74,9 @@ pub fn parse_export_trie(trie: &[u8]) -> Vec<TrieExport> {
             break;
         }
         let mut p = node;
-        let Some(terminal) = uleb(trie, &mut p) else { continue };
+        let Some(terminal) = uleb(trie, &mut p) else {
+            continue;
+        };
         let children = p.saturating_add(terminal as usize);
         if terminal > 0 {
             if let Some(export) = terminal_info(trie, p, &prefix) {
@@ -85,9 +87,16 @@ pub fn parse_export_trie(trie: &[u8]) -> Vec<TrieExport> {
         let Some(&count) = trie.get(p) else { continue };
         p += 1;
         for _ in 0..count {
-            let Some(edge) = cstr(trie, &mut p) else { break };
-            let Some(child) = uleb(trie, &mut p) else { break };
-            if prefix.len() + edge.len() > MAX_NAME || child as usize >= trie.len() || !seen.insert(child as usize) {
+            let Some(edge) = cstr(trie, &mut p) else {
+                break;
+            };
+            let Some(child) = uleb(trie, &mut p) else {
+                break;
+            };
+            if prefix.len() + edge.len() > MAX_NAME
+                || child as usize >= trie.len()
+                || !seen.insert(child as usize)
+            {
                 continue;
             }
             let mut name = prefix.clone();
@@ -116,7 +125,11 @@ fn terminal_info(trie: &[u8], mut p: usize, name: &[u8]) -> Option<TrieExport> {
             ExportTarget::Offset(address)
         }
     };
-    Some(TrieExport { name: String::from_utf8_lossy(name).into_owned(), flags, target })
+    Some(TrieExport {
+        name: String::from_utf8_lossy(name).into_owned(),
+        flags,
+        target,
+    })
 }
 
 #[cfg(test)]
@@ -156,11 +169,20 @@ mod tests {
         let mut exports = parse_export_trie(&sample());
         exports.sort_by(|a, b| a.name.cmp(&b.name));
         assert_eq!(
-            exports.iter().map(|e| (e.name.as_str(), e.target.clone())).collect::<Vec<_>>(),
+            exports
+                .iter()
+                .map(|e| (e.name.as_str(), e.target.clone()))
+                .collect::<Vec<_>>(),
             [
                 ("_a", ExportTarget::Absolute(0x40)),
                 ("_f", ExportTarget::Offset(0x100)),
-                ("_re", ExportTarget::Reexport { ordinal: 2, name: Some("_impl".into()) }),
+                (
+                    "_re",
+                    ExportTarget::Reexport {
+                        ordinal: 2,
+                        name: Some("_impl".into())
+                    }
+                ),
             ]
         );
     }

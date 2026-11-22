@@ -7,18 +7,21 @@
 
 use std::rc::Rc;
 
-use unlace_base::marshal::{Decoder, IdRegistry, XmlDecode, XmlEncode};
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace};
 use unlace_base::address::Address;
+use unlace_base::marshal::{Decoder, IdRegistry, XmlDecode, XmlEncode};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, ConstantSpace, addrspace_flags, spacetype};
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::globalcontext::{
-    register_globalcontext_ids, ContextCache, ContextDatabase, ContextInternal, TrackedContext,
+    ContextCache, ContextDatabase, ContextInternal, TrackedContext, register_globalcontext_ids,
 };
 
 fn test_manager() -> AddrSpaceManager {
     let mut manager = AddrSpaceManager::new();
     manager.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    for (i, (name, bigend)) in [("ram", false), ("reg", false), ("breg", true)].iter().enumerate() {
+    for (i, (name, bigend)) in [("ram", false), ("reg", false), ("breg", true)]
+        .iter()
+        .enumerate()
+    {
         let spc = AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
             name,
@@ -190,16 +193,32 @@ fn verify_w2ctx_tracked_value_wrapped_endoff_containment() {
     // mem.offset + mem.size - 1 == u64::MAX + 2 - 1 wraps to 0:
     //   tendoff(u64::MAX) < endoff(0) is FALSE, so containment passes.
     // little endian: res >>= 8*(MAX - (MAX-7)) = 56 -> 0x11, & 0xffff
-    let mem = VarnodeData { space: Some(space(&manager, "reg")), offset: u64::MAX, size: 2 };
+    let mem = VarnodeData {
+        space: Some(space(&manager, "reg")),
+        offset: u64::MAX,
+        size: 2,
+    };
     assert_eq!(db.get_tracked_value(&mem, &point), 0x11);
     // big endian: endoff(0) != tendoff(MAX) -> res >>= 8*(tendoff-mem.offset)
     //   = 0 -> untouched, & 0xffff
-    let mem = VarnodeData { space: Some(space(&manager, "breg")), offset: u64::MAX, size: 2 };
+    let mem = VarnodeData {
+        space: Some(space(&manager, "breg")),
+        offset: u64::MAX,
+        size: 2,
+    };
     assert_eq!(db.get_tracked_value(&mem, &point), 0x7788);
     // non-wrapping sanity pins on the same registers
-    let mem = VarnodeData { space: Some(space(&manager, "reg")), offset: u64::MAX, size: 1 };
+    let mem = VarnodeData {
+        space: Some(space(&manager, "reg")),
+        offset: u64::MAX,
+        size: 1,
+    };
     assert_eq!(db.get_tracked_value(&mem, &point), 0x11);
-    let mem = VarnodeData { space: Some(space(&manager, "breg")), offset: u64::MAX, size: 1 };
+    let mem = VarnodeData {
+        space: Some(space(&manager, "breg")),
+        offset: u64::MAX,
+        size: 1,
+    };
     assert_eq!(db.get_tracked_value(&mem, &point), 0x88);
 }
 
@@ -232,7 +251,10 @@ fn verify_w2ctx_encode_variable_order_unsigned_byte_lex() {
     let pz = pos(b"name=\"z\"");
     let pe = pos("name=\"\u{e9}\"".as_bytes());
     assert!(pa < pz, "A(0x41) must precede z(0x7a): {pa} vs {pz}");
-    assert!(pz < pe, "z(0x7a) must precede \\xc3\\xa9 (unsigned order): {pz} vs {pe}");
+    assert!(
+        pz < pe,
+        "z(0x7a) must precede \\xc3\\xa9 (unsigned order): {pz} vs {pe}"
+    );
 }
 
 /// LOSS canary: the port's ContextCache re-fetches the blob on a cache hit

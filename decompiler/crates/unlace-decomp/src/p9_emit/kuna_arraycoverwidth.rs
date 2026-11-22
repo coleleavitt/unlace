@@ -18,7 +18,7 @@
 
 use unlace_base::marshal::ElementId;
 
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use unlace_base::types::int4;
 
 /// Marshaling element `<arraycoverwidth>` (kuna 4000+ range; 4144 = the previous

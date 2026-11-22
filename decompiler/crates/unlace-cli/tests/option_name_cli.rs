@@ -91,7 +91,13 @@ fn a_near_miss_suggests_the_catalogued_spelling() {
 #[test]
 fn a_catalogued_name_still_gets_past_the_parser() {
     for surface in SURFACES {
-        for name in ["loweredswitch", "listing", "readonly", "setlanguage", "goabi"] {
+        for name in [
+            "loweredswitch",
+            "listing",
+            "readonly",
+            "setlanguage",
+            "goabi",
+        ] {
             let out = run(&with_option(surface, name));
             let err = stderr_of(&out);
             assert!(
@@ -117,5 +123,9 @@ fn a_bad_name_is_answered_without_specs() {
         .output()
         .expect("failed to spawn the kuna binary");
     assert_eq!(out.status.code(), Some(2), "{}", stderr_of(&out));
-    assert!(stderr_of(&out).contains("zzzznotanoption"), "{}", stderr_of(&out));
+    assert!(
+        stderr_of(&out).contains("zzzznotanoption"),
+        "{}",
+        stderr_of(&out)
+    );
 }

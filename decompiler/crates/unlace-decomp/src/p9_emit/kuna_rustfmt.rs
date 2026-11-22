@@ -39,8 +39,11 @@ pub fn parse_rustfmt_mode(value: &str) -> Result<(RustFmtMode, String), String> 
         other => {
             return Err(format!(
                 "unknown rustfmt value {other:?} (expected off, on or all)"
-            ))
+            ));
         }
     };
-    Ok((mode, format!("Rust formatting-macro recovery set to {}", mode.as_str())))
+    Ok((
+        mode,
+        format!("Rust formatting-macro recovery set to {}", mode.as_str()),
+    ))
 }

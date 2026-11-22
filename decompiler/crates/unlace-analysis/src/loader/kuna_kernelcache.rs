@@ -74,16 +74,29 @@ pub fn peel(bytes: Vec<u8>, choice: &KernelcacheChoice) -> Result<Peeled, String
 /// [`peel`] for the bytes of the file at `path`: the collections a System or
 /// Auxiliary collection links are looked up per the `kernelcache-boot` option
 /// in force.
-pub fn peel_file(path: &std::path::Path, bytes: Vec<u8>, choice: &KernelcacheChoice) -> Result<Peeled, String> {
+pub fn peel_file(
+    path: &std::path::Path,
+    bytes: Vec<u8>,
+    choice: &KernelcacheChoice,
+) -> Result<Peeled, String> {
     let boot = unlace_decomp::kuna_kernelcacheboot::KernelcacheBoot::in_force();
     peel_linked(bytes, choice, &LinkSearch::new(path, boot))
 }
 
 /// [`peel`], resolving pointers into linked collections against the files
 /// `search` finds.
-pub fn peel_linked(bytes: Vec<u8>, choice: &KernelcacheChoice, search: &LinkSearch) -> Result<Peeled, String> {
+pub fn peel_linked(
+    bytes: Vec<u8>,
+    choice: &KernelcacheChoice,
+    search: &LinkSearch,
+) -> Result<Peeled, String> {
     if *choice == KernelcacheChoice::Off {
-        return Ok(Peeled { bytes, note: None, signed: None, fileset: None });
+        return Ok(Peeled {
+            bytes,
+            note: None,
+            signed: None,
+            fileset: None,
+        });
     }
     let mut notes = Vec::new();
     let bytes = if is_container(&bytes) {
@@ -103,7 +116,12 @@ pub fn peel_linked(bytes: Vec<u8>, choice: &KernelcacheChoice, search: &LinkSear
         (image, None, None)
     };
     let note = (!notes.is_empty()).then(|| notes.join("; "));
-    Ok(Peeled { bytes, note, signed, fileset: map })
+    Ok(Peeled {
+        bytes,
+        note,
+        signed,
+        fileset: map,
+    })
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -118,7 +136,9 @@ fn der_magic(bytes: &[u8]) -> Option<DerMagic> {
     }
     let window = &bytes[..bytes.len().min(16)];
     let has = |magic: &[u8; 4]| {
-        window.windows(6).any(|w| w[..2] == [TAG_IA5STRING, 4] && w[2..] == magic[..])
+        window
+            .windows(6)
+            .any(|w| w[..2] == [TAG_IA5STRING, 4] && w[2..] == magic[..])
     };
     if has(b"IMG4") {
         Some(DerMagic::Img4)
@@ -152,7 +172,11 @@ fn unwrap_payload(bytes: &[u8]) -> Result<(Vec<u8>, String), String> {
             }
             let note = format!(
                 "unwrapped {} payload '{}' ({codec}, {} -> {} bytes)",
-                if magic == DerMagic::Img4 { "IMG4" } else { "IM4P" },
+                if magic == DerMagic::Img4 {
+                    "IMG4"
+                } else {
+                    "IM4P"
+                },
                 im4p.kind,
                 im4p.data.len(),
                 payload.len()
@@ -161,13 +185,21 @@ fn unwrap_payload(bytes: &[u8]) -> Result<(Vec<u8>, String), String> {
         }
         None => {
             let (payload, codec) = decompress(bytes, 0, decode_limit(bytes.len(), None))?;
-            let note = format!("decoded {codec} payload ({} -> {} bytes)", bytes.len(), payload.len());
+            let note = format!(
+                "decoded {codec} payload ({} -> {} bytes)",
+                bytes.len(),
+                payload.len()
+            );
             Ok((payload, note))
         }
     }
 }
 
-fn decompress(data: &[u8], size_hint: usize, limit: usize) -> Result<(Vec<u8>, &'static str), String> {
+fn decompress(
+    data: &[u8],
+    size_hint: usize,
+    limit: usize,
+) -> Result<(Vec<u8>, &'static str), String> {
     if lzss::is_complzss(data) {
         return Ok((lzss::decode(data, limit)?, "complzss"));
     }
@@ -225,14 +257,21 @@ impl<'a> Im4p<'a> {
                         return Err("IM4P decoded size does not fit 64 bits".into());
                     }
                     let size = size.iter().fold(0u64, |acc, &b| (acc << 8) | b as u64);
-                    decoded_size =
-                        Some(usize::try_from(size).map_err(|_| "IM4P decoded size does not fit this platform")?);
+                    decoded_size = Some(
+                        usize::try_from(size)
+                            .map_err(|_| "IM4P decoded size does not fit this platform")?,
+                    );
                 }
                 _ => {}
             }
         }
         let data = data.ok_or("IM4P has no payload")?;
-        Ok(Self { kind, data, encrypted, decoded_size })
+        Ok(Self {
+            kind,
+            data,
+            encrypted,
+            decoded_size,
+        })
     }
 }
 
@@ -263,7 +302,9 @@ impl<'a> Der<'a> {
     /// and reported by their first byte.
     fn next(&mut self) -> Result<Option<(u8, &'a [u8])>, String> {
         const TRUNC: &str = "truncated DER value in IMG4/IM4P";
-        let Some(&tag) = self.buf.get(self.pos) else { return Ok(None) };
+        let Some(&tag) = self.buf.get(self.pos) else {
+            return Ok(None);
+        };
         let mut p = self.pos + 1;
         if tag & 0x1f == 0x1f {
             while self.buf.get(p).ok_or(TRUNC)? & 0x80 != 0 {
@@ -293,7 +334,9 @@ impl<'a> Der<'a> {
     fn expect(&mut self, tag: u8, what: &str) -> Result<&'a [u8], String> {
         match self.next()? {
             Some((found, value)) if found == tag => Ok(value),
-            Some((found, _)) => Err(format!("IMG4/IM4P {what}: expected DER tag {tag:#04x}, found {found:#04x}")),
+            Some((found, _)) => Err(format!(
+                "IMG4/IM4P {what}: expected DER tag {tag:#04x}, found {found:#04x}"
+            )),
             None => Err(format!("IMG4/IM4P {what}: missing")),
         }
     }

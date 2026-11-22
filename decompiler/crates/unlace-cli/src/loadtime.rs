@@ -9,7 +9,9 @@ use std::ffi::OsString;
 use std::process::Command;
 
 use unlace_decomp::{
-    kuna_calltargettype, kuna_dyldcache, kuna_exporttrie, kuna_debuglink, kuna_ifuncfpret, kuna_kernelcache, kuna_libctypes, kuna_ppcapu, kuna_goabi, kuna_objcivars, kuna_objcsdk, kuna_sourcelang, kuna_symbolnamechars, kuna_macho_arm64e,
+    kuna_calltargettype, kuna_debuglink, kuna_dyldcache, kuna_exporttrie, kuna_goabi,
+    kuna_ifuncfpret, kuna_kernelcache, kuna_libctypes, kuna_macho_arm64e, kuna_objcivars,
+    kuna_objcsdk, kuna_ppcapu, kuna_sourcelang, kuna_symbolnamechars,
 };
 
 #[derive(Clone, Copy)]
@@ -32,11 +34,17 @@ fn binding(name: &str) -> Option<(&'static str, Encoding)> {
         "ppcapu" => (kuna_ppcapu::PPCAPU_ENV, DefaultOff),
         "debuglink" => (kuna_debuglink::DEBUGLINK_ENV, DefaultOn),
         "kernelcache" => (kuna_kernelcache::KERNELCACHE_ENV, Kernelcache),
-        "kernelcache-boot" => (unlace_decomp::kuna_kernelcacheboot::KERNELCACHE_BOOT_ENV, Trimmed),
+        "kernelcache-boot" => (
+            unlace_decomp::kuna_kernelcacheboot::KERNELCACHE_BOOT_ENV,
+            Trimmed,
+        ),
         "goabi" => (kuna_goabi::GOABI_ENV, DefaultOn),
         "symbolnamechars" => (kuna_symbolnamechars::SYMBOLNAMECHARS_ENV, SymbolNameChars),
         "libctypes" => (kuna_libctypes::LIBCTYPES_ENV, LibcTypes),
-        "dwarfscopes" => (unlace_analysis::dwarf::kuna_dwarfscopes::DWARFSCOPES_ENV, DefaultOn),
+        "dwarfscopes" => (
+            unlace_analysis::dwarf::kuna_dwarfscopes::DWARFSCOPES_ENV,
+            DefaultOn,
+        ),
         "calltargettype" => (kuna_calltargettype::CALLTARGETTYPE_ENV, DefaultOn),
         "macho-arm64e" => (kuna_macho_arm64e::MACHO_ARM64E_ENV, DefaultOn),
         "sourcelang" => (kuna_sourcelang::SOURCELANG_ENV, SourceLang),
@@ -69,9 +77,10 @@ impl Encoding {
                 .as_str()
                 .into(),
             Self::Trimmed => value.trim().into(),
-            Self::Kernelcache => {
-                kuna_kernelcache::KernelcacheChoice::parse(value).unwrap_or_default().as_str().into()
-            }
+            Self::Kernelcache => kuna_kernelcache::KernelcacheChoice::parse(value)
+                .unwrap_or_default()
+                .as_str()
+                .into(),
             Self::LibcTypes => {
                 if off {
                     "off".into()
@@ -139,7 +148,10 @@ pub(crate) fn last_option_value<'a>(
 }
 
 pub(crate) fn explicit_output_language(options: &[(String, String)]) -> Option<&str> {
-    options.iter().rev().find(|(name, _)| matches!(name.as_str(), "setlanguage" | "outlang"))
+    options
+        .iter()
+        .rev()
+        .find(|(name, _)| matches!(name.as_str(), "setlanguage" | "outlang"))
         .map(|(_, value)| value.as_str())
 }
 
@@ -170,7 +182,14 @@ fn settings(
     let objc = last_option_value(options, "objc").unwrap_or("on");
     values.insert(
         unlace_analysis::passes::LOAD_OBJC_ENV,
-        Some(if matches!(objc.trim(), "off" | "0" | "false") { "off" } else { "on" }.into()),
+        Some(
+            if matches!(objc.trim(), "off" | "0" | "false") {
+                "off"
+            } else {
+                "on"
+            }
+            .into(),
+        ),
     );
     let strings = if functions_inventory {
         "off"
@@ -179,12 +198,14 @@ fn settings(
     };
     values.insert(
         unlace_analysis::passes::LOAD_STRINGS_ENV,
-        Some(if matches!(strings.trim(), "off" | "0" | "false") {
-            "off"
-        } else {
-            "on"
-        }
-        .into()),
+        Some(
+            if matches!(strings.trim(), "off" | "0" | "false") {
+                "off"
+            } else {
+                "on"
+            }
+            .into(),
+        ),
     );
     values
 }
@@ -272,10 +293,20 @@ mod tests {
     #[test]
     fn loader_value_vocabularies_are_preserved() {
         for (name, cases) in [
-            ("ppc32picimports", vec![("off", Some("off")), ("on", Some("on")),
-                (" ABI ", Some("abi")), (" TRUE ", Some("on")), ("1", Some("on")),
-                ("", Some("on")), ("0", Some("off")), ("yes", Some("off")),
-                ("invalid", Some("off"))]),
+            (
+                "ppc32picimports",
+                vec![
+                    ("off", Some("off")),
+                    ("on", Some("on")),
+                    (" ABI ", Some("abi")),
+                    (" TRUE ", Some("on")),
+                    ("1", Some("on")),
+                    ("", Some("on")),
+                    ("0", Some("off")),
+                    ("yes", Some("off")),
+                    ("invalid", Some("off")),
+                ],
+            ),
             (
                 "objcivars",
                 vec![
@@ -341,8 +372,21 @@ mod tests {
     #[test]
     fn image_selection_takes_the_last_entry_and_image_options_only() {
         let argv: Vec<String> = [
-            "bin", "--option", "kernelcache", "A", "--option", "dyldimage", " libfoo.dylib ",
-            "--option", "objc", "off", "--option", "kernelcache", "PMGR", "--option", "kernelcache",
+            "bin",
+            "--option",
+            "kernelcache",
+            "A",
+            "--option",
+            "dyldimage",
+            " libfoo.dylib ",
+            "--option",
+            "objc",
+            "off",
+            "--option",
+            "kernelcache",
+            "PMGR",
+            "--option",
+            "kernelcache",
         ]
         .map(String::from)
         .to_vec();
@@ -386,8 +430,7 @@ mod tests {
         );
         assert_eq!(settings(&[], Some("  "), 1, false).len(), 2);
         assert_eq!(
-            settings(&[], None, 4, false)
-                [unlace_analysis::listing::kuna_pdecode::DECODE_JOBS_ENV],
+            settings(&[], None, 4, false)[unlace_analysis::listing::kuna_pdecode::DECODE_JOBS_ENV],
             Some("4".into())
         );
     }

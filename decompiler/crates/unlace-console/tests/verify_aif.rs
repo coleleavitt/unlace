@@ -57,11 +57,16 @@ use std::path::PathBuf;
 
 use unlace_analysis::listing::{Listing, ListingDetail};
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture() -> PathBuf {
@@ -96,18 +101,27 @@ fn bootstrap(mode: Mode) -> unlace_console::engine::ConsoleProgram {
     // commit). Set the flags on the live arch BEFORE committing so the deferred
     // Listing build + AIF gap-walk see them on.
     if let Mode::On = mode {
-        prog.arch_mut().set_kuna_option("listing", "on").expect("listing flips on");
-        prog.arch_mut().set_kuna_option("aif", "on").expect("aif flips on");
+        prog.arch_mut()
+            .set_kuna_option("listing", "on")
+            .expect("listing flips on");
+        prog.arch_mut()
+            .set_kuna_option("aif", "on")
+            .expect("aif flips on");
     }
     // `read symbols`: build the Listing (deferred) and run the consumers, gated.
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
 /// Decompile `func` in the already-bootstrapped program and return the captured C.
 fn decompile(prog: unlace_console::engine::ConsoleProgram, func: &str) -> String {
-    let cmds: Vec<String> =
-        [format!("load function {func}"), "decompile".into(), "print C".into()].to_vec();
+    let cmds: Vec<String> = [
+        format!("load function {func}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .to_vec();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -203,16 +217,8 @@ fn a_text_free_listing_fingerprints_exactly_like_a_text_carrying_one() {
         std::rc::Rc::clone(arch.manage().get_default_code_space().expect("code space"));
 
     let run = |detail: ListingDetail| {
-        let listing = Listing::build_with_meta(
-            &file,
-            &image,
-            arch,
-            translate,
-            &seeds,
-            &seeds,
-            &[],
-            detail,
-        );
+        let listing =
+            Listing::build_with_meta(&file, &image, arch, translate, &seeds, &seeds, &[], detail);
         let count = listing.function_count();
         let insns = listing.num_instructions();
         let exec = listing.exec_ranges().to_vec();
@@ -230,10 +236,15 @@ fn a_text_free_listing_fingerprints_exactly_like_a_text_carrying_one() {
     };
 
     let (with_text, texted_insns, texted_entries) = run(ListingDetail::FULL);
-    let (without_text, textless_insns, textless_entries) =
-        run(ListingDetail { assembly: false, refs: true });
+    let (without_text, textless_insns, textless_entries) = run(ListingDetail {
+        assembly: false,
+        refs: true,
+    });
 
-    assert_eq!(with_text, without_text, "the walk itself must not depend on text capture");
+    assert_eq!(
+        with_text, without_text,
+        "the walk itself must not depend on text capture"
+    );
     assert_eq!(
         texted_insns, textless_insns,
         "the instruction partition must not depend on text capture: \

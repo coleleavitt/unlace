@@ -41,9 +41,21 @@ fn exact_cookie_literal_return_rewrite_keeps_call_and_line_slots() {
         "\n  v7 = 1;\n  security_check_cookie(cookie); // return-dupe\n  return v7;\n".to_string();
     let mut markup = MarkupProvenance {
         associations: vec![
-            MarkupAssociation { line_number: 1, opref: Some(5), varref: Some(70) },
-            MarkupAssociation { line_number: 2, opref: Some(7), varref: None },
-            MarkupAssociation { line_number: 3, opref: Some(9), varref: Some(70) },
+            MarkupAssociation {
+                line_number: 1,
+                opref: Some(5),
+                varref: Some(70),
+            },
+            MarkupAssociation {
+                line_number: 2,
+                opref: Some(7),
+                varref: None,
+            },
+            MarkupAssociation {
+                line_number: 3,
+                opref: Some(9),
+                varref: Some(70),
+            },
         ],
     };
     let after = rewrite_cookie_literal_returns(before, &cookie_calls(7), &mut markup);
@@ -59,7 +71,10 @@ fn exact_cookie_literal_return_rewrite_keeps_call_and_line_slots() {
     assert_eq!(
         provenance.line_mappings,
         vec![
-            super::LineMapping { line_number: 2, addresses: vec![0x401004] },
+            super::LineMapping {
+                line_number: 2,
+                addresses: vec![0x401004]
+            },
             super::LineMapping {
                 line_number: 3,
                 addresses: vec![0x401000, 0x401008],
@@ -67,7 +82,10 @@ fn exact_cookie_literal_return_rewrite_keeps_call_and_line_slots() {
         ]
     );
     assert_eq!(provenance.variable_uses[&70].line_numbers, vec![3]);
-    assert_eq!(provenance.variable_uses[&70].addresses, vec![0x401000, 0x401008]);
+    assert_eq!(
+        provenance.variable_uses[&70].addresses,
+        vec![0x401000, 0x401008]
+    );
 }
 
 #[test]
@@ -83,8 +101,16 @@ fn exact_cookie_literal_return_rewrite_binds_the_marked_call_occurrence() {
     .to_string();
     let mut markup = MarkupProvenance {
         associations: vec![
-            MarkupAssociation { line_number: 2, opref: Some(8), varref: None },
-            MarkupAssociation { line_number: 5, opref: Some(7), varref: None },
+            MarkupAssociation {
+                line_number: 2,
+                opref: Some(8),
+                varref: None,
+            },
+            MarkupAssociation {
+                line_number: 5,
+                opref: Some(7),
+                varref: None,
+            },
         ],
     };
     let after = rewrite_cookie_literal_returns(before, &cookie_calls(7), &mut markup);
@@ -146,8 +172,8 @@ fn panic_message_recovers_string_payload() {
 /// payload built by the standard library).
 #[test]
 fn panic_message_recovers_unwrap_payload() {
-    let payload = std::panic::catch_unwind(|| Option::<u32>::None.unwrap())
-        .expect_err("the closure panics");
+    let payload =
+        std::panic::catch_unwind(|| Option::<u32>::None.unwrap()).expect_err("the closure panics");
     assert!(
         panic_message(payload).contains("called `Option::unwrap()` on a `None` value"),
         "unwrap panics must round-trip their standard-library message"
@@ -204,8 +230,14 @@ fn provenance_merges_sorted_line_and_variable_evidence() {
     assert_eq!(
         provenance.line_mappings,
         vec![
-            super::LineMapping { line_number: 2, addresses: vec![0x401004] },
-            super::LineMapping { line_number: 3, addresses: vec![0x401008] },
+            super::LineMapping {
+                line_number: 2,
+                addresses: vec![0x401004]
+            },
+            super::LineMapping {
+                line_number: 3,
+                addresses: vec![0x401008]
+            },
         ]
     );
     assert_eq!(provenance.variable_uses[&10].line_numbers, vec![2]);
@@ -219,13 +251,21 @@ fn provenance_merges_sorted_line_and_variable_evidence() {
 /// first reported line 2; the provenance must follow the trimmed text.
 #[test]
 fn markup_lines_follow_the_trimmed_text() {
-    let association = |line_number| MarkupAssociation { line_number, opref: Some(1), varref: None };
-    let mut markup = MarkupProvenance { associations: vec![association(2), association(4)] };
+    let association = |line_number| MarkupAssociation {
+        line_number,
+        opref: Some(1),
+        varref: None,
+    };
+    let mut markup = MarkupProvenance {
+        associations: vec![association(2), association(4)],
+    };
     align_markup_to_trimmed(&mut markup, "\n\n#[allow]\nfn f()\n{\n}");
     let lines: Vec<usize> = markup.associations.iter().map(|a| a.line_number).collect();
     assert_eq!(lines, vec![1, 3]);
 
-    let mut single = MarkupProvenance { associations: vec![association(1), association(3)] };
+    let mut single = MarkupProvenance {
+        associations: vec![association(1), association(3)],
+    };
     align_markup_to_trimmed(&mut single, "\nint f(void)\n{\n}");
     let lines: Vec<usize> = single.associations.iter().map(|a| a.line_number).collect();
     assert_eq!(lines, vec![1, 3]);
@@ -245,7 +285,10 @@ fn budget_site_is_the_first_probe_to_see_the_expiry() {
         super::note_budget_site(|| "action jumptable".to_string());
     }
     super::note_budget_site(|| "heritage".to_string());
-    assert_eq!(budget_site().as_deref(), Some("jump-table basic model at 0x401026"));
+    assert_eq!(
+        budget_site().as_deref(),
+        Some("jump-table basic model at 0x401026")
+    );
 }
 
 #[test]
@@ -273,10 +316,9 @@ fn each_drive_starts_with_no_budget_site_and_restores_the_outer_one() {
 }
 
 fn fresh_merge() -> crate::merge::Merge {
-    crate::merge::Merge::new(crate::variable::HighIntersectTest::new(crate::cover::PcodeOpSet::new(
-        Box::new(Vec::new),
-        Box::new(|_, _| true),
-    )))
+    crate::merge::Merge::new(crate::variable::HighIntersectTest::new(
+        crate::cover::PcodeOpSet::new(Box::new(Vec::new), Box::new(|_, _| true)),
+    ))
 }
 
 #[test]
@@ -284,8 +326,14 @@ fn variable_merging_stops_once_a_probe_sees_the_budget_spent() {
     let mut merge = fresh_merge();
     let _drive = super::DeadlineScope::enter(Some(std::time::Instant::now()));
     let stride = (0..1000).take_while(|_| merge.budget().is_ok()).count() + 1;
-    assert!(stride > 1 && stride <= 256, "first probe to ask the clock: {stride}");
-    assert!((0..10).all(|_| merge.budget().is_err()), "every step after it fails");
+    assert!(
+        stride > 1 && stride <= 256,
+        "first probe to ask the clock: {stride}"
+    );
+    assert!(
+        (0..10).all(|_| merge.budget().is_err()),
+        "every step after it fails"
+    );
     assert_eq!(budget_site().as_deref(), Some("variable merging"));
     merge.clear();
     let _unbudgeted = super::DeadlineScope::enter(None);
@@ -294,13 +342,19 @@ fn variable_merging_stops_once_a_probe_sees_the_budget_spent() {
 
 #[test]
 fn a_jump_table_value_walk_stops_once_a_probe_sees_the_budget_spent() {
-    use crate::jumptable::{JumpValues, JumpValuesRange, JumpValuesRangeDefault, JumpValuesSetters};
+    use crate::jumptable::{
+        JumpValues, JumpValuesRange, JumpValuesRangeDefault, JumpValuesSetters,
+    };
     use crate::rangeutil::CircleRange;
-    let walks: [fn() -> Box<dyn JumpValues>; 2] =
-        [|| Box::new(JumpValuesRange::new()), || Box::new(JumpValuesRangeDefault::new())];
+    let walks: [fn() -> Box<dyn JumpValues>; 2] = [
+        || Box::new(JumpValuesRange::new()),
+        || Box::new(JumpValuesRangeDefault::new()),
+    ];
     for walk in walks {
         let mut values = walk();
-        values.as_setters_mut().set_range(CircleRange::new(0, 1000, 4, 1));
+        values
+            .as_setters_mut()
+            .set_range(CircleRange::new(0, 1000, 4, 1));
         {
             let _unbudgeted = super::DeadlineScope::enter(None);
             assert!(values.initialize_for_reading());
@@ -312,7 +366,10 @@ fn a_jump_table_value_walk_stops_once_a_probe_sees_the_budget_spent() {
         let stride = (0..1000).take_while(|_| values.next().is_ok()).count() + 1;
         assert!(stride <= 256, "first step to ask the clock: {stride}");
         assert!(values.next().is_err(), "every step after it fails");
-        assert_eq!(budget_site().as_deref(), Some("jump-table value walk at 0x401026"));
+        assert_eq!(
+            budget_site().as_deref(),
+            Some("jump-table value walk at 0x401026")
+        );
     }
 }
 
@@ -325,11 +382,17 @@ fn a_budget_probe_stays_spent_for_its_drive_and_names_no_site() {
     let _drive = super::DeadlineScope::enter(Some(std::time::Instant::now()));
     let stride = (0..1000).take_while(|_| !super::budget_probe()).count() + 1;
     assert!(stride <= 256, "first probe to ask the clock: {stride}");
-    assert!((0..10).all(|_| super::budget_probe()), "every probe after it answers spent");
+    assert!(
+        (0..10).all(|_| super::budget_probe()),
+        "every probe after it answers spent"
+    );
     assert_eq!(budget_site(), None);
     {
         let _inner = super::DeadlineScope::enter(None);
-        assert!((0..1000).all(|_| !super::budget_probe()), "a new drive starts unspent");
+        assert!(
+            (0..1000).all(|_| !super::budget_probe()),
+            "a new drive starts unspent"
+        );
     }
     assert!(super::budget_probe(), "the outer drive is still spent");
 }

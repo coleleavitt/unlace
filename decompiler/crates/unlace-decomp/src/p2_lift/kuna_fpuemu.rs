@@ -77,9 +77,16 @@ pub fn parse_fpuemu_mode(value: &str) -> Result<(FpuEmuMode, String), String> {
         "off" | "0" | "false" => FpuEmuMode::Off,
         "auto" | "" => FpuEmuMode::Auto,
         "on" | "1" | "true" => FpuEmuMode::On,
-        other => return Err(format!("unknown fpuemu value {other:?} (expected off, auto or on)")),
+        other => {
+            return Err(format!(
+                "unknown fpuemu value {other:?} (expected off, auto or on)"
+            ));
+        }
     };
-    Ok((mode, format!("8087-emulator decode set to {}", mode.as_str())))
+    Ok((
+        mode,
+        format!("8087-emulator decode set to {}", mode.as_str()),
+    ))
 }
 
 /// The length of the emulator instruction at `at`, or `None` when the bytes

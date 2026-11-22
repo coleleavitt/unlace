@@ -16,7 +16,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use super::*;
-use crate::dtype::{flags, type_metatype, DatatypeKind, TypeFactoryImpl};
+use crate::dtype::{DatatypeKind, TypeFactoryImpl, flags, type_metatype};
 
 // -- Data-type builders -----------------------------------------------------
 //
@@ -79,14 +79,22 @@ fn enum_t(size: int4, meta: type_metatype) -> Rc<Datatype> {
 /// A struct data-type (`struct {…}`) — TYPE_STRUCT, size from its fields.
 fn struct_t(size: int4) -> Rc<Datatype> {
     let mut t = Datatype::new(size, type_metatype::TYPE_STRUCT);
-    t.kind = DatatypeKind::Struct { field: Vec::new(), bitfield: Vec::new() };
+    t.kind = DatatypeKind::Struct {
+        field: Vec::new(),
+        bitfield: Vec::new(),
+    };
     Rc::new(t)
 }
 
 /// `types->getTypePointer(8, ptrto, wordsize)` — an 8-byte pointer.
 fn ptr_to(ptrto: Rc<Datatype>, wordsize: uint4) -> Rc<Datatype> {
     let mut t = Datatype::new_with_align(8, -1, type_metatype::TYPE_PTR);
-    t.kind = DatatypeKind::Pointer { ptrto, spaceid: None, truncate: None, wordsize };
+    t.kind = DatatypeKind::Pointer {
+        ptrto,
+        spaceid: None,
+        truncate: None,
+        wordsize,
+    };
     Rc::new(t)
 }
 
@@ -137,9 +145,15 @@ fn unknown_scalar_storage_requires_a_pointer_conversion() {
     let strategy = strategy_c();
     let destination = unknown_t(8);
     let pointer = ptr_to(void_t(), 1);
-    let cast = strategy.cast_standard(&destination, &pointer, false, true).unwrap();
+    let cast = strategy
+        .cast_standard(&destination, &pointer, false, true)
+        .unwrap();
     assert!(Rc::ptr_eq(&cast, &destination));
-    assert!(strategy.cast_standard(&destination, &pointer, false, false).is_none());
+    assert!(
+        strategy
+            .cast_standard(&destination, &pointer, false, false)
+            .is_none()
+    );
     assert!(!copy_cast_printed(&strategy, &destination, &uint_t(8)));
     assert!(!copy_cast_printed(
         &strategy,
@@ -184,11 +198,23 @@ fn cast_pointer() {
 
     // uint4* vs int4*: descend into ptrto (care_uint_int becomes true);
     // UINT vs INT with care -> cast.
-    assert!(copy_cast_printed(&s, &ptr_to(uint_t(4), 1), &ptr_to(int_t(4), 1)));
+    assert!(copy_cast_printed(
+        &s,
+        &ptr_to(uint_t(4), 1),
+        &ptr_to(int_t(4), 1)
+    ));
     // void* vs float4*: descend; reqbase VOID -> no cast.
-    assert!(!copy_cast_printed(&s, &ptr_to(void_t(), 1), &ptr_to(float_t(4), 1)));
+    assert!(!copy_cast_printed(
+        &s,
+        &ptr_to(void_t(), 1),
+        &ptr_to(float_t(4), 1)
+    ));
     // int2* vs void*: descend; curbase VOID -> no cast.
-    assert!(!copy_cast_printed(&s, &ptr_to(int_t(2), 1), &ptr_to(void_t(), 1)));
+    assert!(!copy_cast_printed(
+        &s,
+        &ptr_to(int_t(2), 1),
+        &ptr_to(void_t(), 1)
+    ));
 
     // pointer-to-typedef (myint4) vs int4*: descend into the pointers, then strip
     // the typedef on the req side -> shared int4 -> ptr-eq -> no cast.
@@ -208,17 +234,37 @@ fn cast_pointer() {
 
     // structone* vs structtwo*: descend; two distinct structs same size ->
     // default arm -> cast.
-    assert!(copy_cast_printed(&s, &ptr_to(struct_t(8), 1), &ptr_to(struct_t(8), 1)));
+    assert!(copy_cast_printed(
+        &s,
+        &ptr_to(struct_t(8), 1),
+        &ptr_to(struct_t(8), 1)
+    ));
 
     // xunknown4* vs int4*: descend; reqbase UNKNOWN -> no cast.
-    assert!(!copy_cast_printed(&s, &ptr_to(unknown_t(4), 1), &ptr_to(int_t(4), 1)));
+    assert!(!copy_cast_printed(
+        &s,
+        &ptr_to(unknown_t(4), 1),
+        &ptr_to(int_t(4), 1)
+    ));
     // uint4* vs xunknown4*: descend; UINT with care, curbase UNKNOWN + isptr ->
     // no cast.
-    assert!(!copy_cast_printed(&s, &ptr_to(uint_t(4), 1), &ptr_to(unknown_t(4), 1)));
+    assert!(!copy_cast_printed(
+        &s,
+        &ptr_to(uint_t(4), 1),
+        &ptr_to(unknown_t(4), 1)
+    ));
     // char* vs int1*: descend; both TYPE_INT (char is INT) size1 -> no cast.
-    assert!(!copy_cast_printed(&s, &ptr_to(char_t(), 1), &ptr_to(int_t(1), 1)));
+    assert!(!copy_cast_printed(
+        &s,
+        &ptr_to(char_t(), 1),
+        &ptr_to(int_t(1), 1)
+    ));
     // uint1* vs char*: descend; req UINT1, cur INT(char), care -> default -> cast.
-    assert!(copy_cast_printed(&s, &ptr_to(uint_t(1), 1), &ptr_to(char_t(), 1)));
+    assert!(copy_cast_printed(
+        &s,
+        &ptr_to(uint_t(1), 1),
+        &ptr_to(char_t(), 1)
+    ));
 
     // int4* vs named-pointer(myptrint4 -> int4): a named pointer is still a real
     // TypePointer to the same int4 (`getTypePointer(8, int4, 1, "myptrint4")`),
@@ -244,7 +290,11 @@ fn cast_enum() {
     assert!(!copy_cast_printed(&s, &int_t(8), &enum1));
     // uint8* vs enumone*: descend (care becomes true); req UINT8, cur UINT(enum)
     // -> UINT no-cast arm -> no cast.
-    assert!(!copy_cast_printed(&s, &ptr_to(uint_t(8), 1), &ptr_to(Rc::clone(&enum1), 1)));
+    assert!(!copy_cast_printed(
+        &s,
+        &ptr_to(uint_t(8), 1),
+        &ptr_to(Rc::clone(&enum1), 1)
+    ));
     // enumone vs uint8: req UINT(enum), cur UINT8, !care -> UINT in UINT's
     // no-cast set -> no cast.
     assert!(!copy_cast_printed(&s, &enum1, &uint_t(8)));
@@ -274,11 +324,17 @@ fn cast_compare_signedness() {
     // unsigned requirement.  We assert the castStandard building block: a UINT
     // requirement against an INT current with !care_uint_int does NOT cast,
     // confirming the cast must originate in getInputCast's promotion forcing.
-    assert!(s.cast_standard(&uint_t(4), &int_t(4), false, false).is_none());
+    assert!(
+        s.cast_standard(&uint_t(4), &int_t(4), false, false)
+            .is_none()
+    );
 
     // INT_SLESS wants signed operands.  castStandard(INT, UINT, false, false):
     // !care_uint_int -> UINT in INT no-cast set -> no cast at the lattice level.
-    assert!(s.cast_standard(&int_t(4), &uint_t(4), false, false).is_none());
+    assert!(
+        s.cast_standard(&int_t(4), &uint_t(4), false, false)
+            .is_none()
+    );
 
     // INT_EQUAL uint8 vs int4*: same size 8?  int4* is size 8, uint8 size 8.
     // reqtype = lower typeOrder; castStandard(uint8, int4*, false, false): req
@@ -287,15 +343,24 @@ fn cast_compare_signedness() {
     // which slot getInputCast queries.  At the lattice level:
     //   castStandard(int4*, uint8, false, false): req PTR, cur UINT8 same size,
     //   PTR default arm -> cast.
-    assert!(s.cast_standard(&ptr_to(int_t(4), 1), &uint_t(8), false, false).is_some());
+    assert!(
+        s.cast_standard(&ptr_to(int_t(4), 1), &uint_t(8), false, false)
+            .is_some()
+    );
     //   castStandard(uint8, int4*, false, false): req UINT, !care_ptr_uint & PTR
     //   -> no cast.
-    assert!(s.cast_standard(&uint_t(8), &ptr_to(int_t(4), 1), false, false).is_none());
+    assert!(
+        s.cast_standard(&uint_t(8), &ptr_to(int_t(4), 1), false, false)
+            .is_none()
+    );
 
     // INT_EQUAL int4 vs float4: different metatype same size -> reqtype lower
     // typeOrder is float; castStandard(int4, float4, false, false): req INT, cur
     // FLOAT not in no-cast set -> default -> cast.
-    assert!(s.cast_standard(&int_t(4), &float_t(4), false, false).is_some());
+    assert!(
+        s.cast_standard(&int_t(4), &float_t(4), false, false)
+            .is_some()
+    );
 }
 
 // -- cast_integertoken (testtypes.cc:204-213) -------------------------------
@@ -307,9 +372,21 @@ fn cast_compare_signedness() {
 fn cast_integertoken() {
     let s = strategy_c();
     // INT_LEFT, int8, 10 -> long (msb of 10 < 32 bits) -> true
-    assert!(long_printed(&s, OpCode::CPUI_INT_LEFT, type_metatype::TYPE_INT, 8, 10));
+    assert!(long_printed(
+        &s,
+        OpCode::CPUI_INT_LEFT,
+        type_metatype::TYPE_INT,
+        8,
+        10
+    ));
     // INT_LEFT, int8, 0x100000000 -> bit 32 >= 32 -> naturally long -> false
-    assert!(!long_printed(&s, OpCode::CPUI_INT_LEFT, type_metatype::TYPE_INT, 8, 0x100000000));
+    assert!(!long_printed(
+        &s,
+        OpCode::CPUI_INT_LEFT,
+        type_metatype::TYPE_INT,
+        8,
+        0x100000000
+    ));
     // INT_SRIGHT, int8, -3 -> negative INT: negate -> 3, msb < 31 -> true
     assert!(long_printed(
         &s,
@@ -400,7 +477,10 @@ fn int_promotion_no_promotion_for_full_size() {
     let mut ctx = MockCtx::new();
     // size >= promoteSize(4) -> NO_PROMOTION regardless of contents.
     let v = ctx.add_var(4, int_t(4));
-    assert_eq!(s.int_promotion_type(&ctx, v), IntPromotionCode::NO_PROMOTION);
+    assert_eq!(
+        s.int_promotion_type(&ctx, v),
+        IntPromotionCode::NO_PROMOTION
+    );
 }
 
 #[test]
@@ -410,7 +490,10 @@ fn int_promotion_explicit_small_is_no_promotion() {
     let v = ctx.add_var(2, int_t(2));
     ctx.set_explicit(v, true);
     // explicit small non-constant -> NO_PROMOTION
-    assert_eq!(s.int_promotion_type(&ctx, v), IntPromotionCode::NO_PROMOTION);
+    assert_eq!(
+        s.int_promotion_type(&ctx, v),
+        IntPromotionCode::NO_PROMOTION
+    );
 }
 
 #[test]
@@ -437,10 +520,14 @@ fn local_extension_constant_high_bit_zero_is_either() {
 fn java_cast_standard_pointers_never_cast() {
     let s = strategy_java();
     // Any pointer involved -> no cast (object refs use explicit cast ops).
-    assert!(s
-        .cast_standard(&ptr_to(int_t(4), 1), &ptr_to(uint_t(4), 1), true, true)
-        .is_none());
-    assert!(s.cast_standard(&int_t(4), &ptr_to(int_t(4), 1), true, true).is_none());
+    assert!(
+        s.cast_standard(&ptr_to(int_t(4), 1), &ptr_to(uint_t(4), 1), true, true)
+            .is_none()
+    );
+    assert!(
+        s.cast_standard(&int_t(4), &ptr_to(int_t(4), 1), true, true)
+            .is_none()
+    );
     // Size change -> always cast.
     assert!(s.cast_standard(&int_t(4), &int_t(2), false, true).is_some());
 }

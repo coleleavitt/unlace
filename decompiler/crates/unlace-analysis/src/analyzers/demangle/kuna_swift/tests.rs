@@ -630,7 +630,11 @@ fn word_substitution_identifier_length_is_capped() {
 #[test]
 fn deep_bound_generic_nesting_is_refused() {
     assert_eq!(
-        demangle_swift_full(&format!("$s1a{}y{}GN", "1bV".repeat(20_000), "Si_".repeat(20_000))),
+        demangle_swift_full(&format!(
+            "$s1a{}y{}GN",
+            "1bV".repeat(20_000),
+            "Si_".repeat(20_000)
+        )),
         None
     );
     assert_eq!(
@@ -655,7 +659,10 @@ fn reference_printer_edge_cases() {
             "_T03foo3barC3basyAA3zimCAE_tFTo",
             "@objc foo.bar.bas(zim: foo.zim) -> ()",
         ),
-        ("_$sTA.123", "partial apply forwarder with unmangled suffix \".123\""),
+        (
+            "_$sTA.123",
+            "partial apply forwarder with unmangled suffix \".123\"",
+        ),
         (
             "$s4main3fooyyFTA.123",
             "partial apply forwarder for main.foo() -> () with unmangled suffix \".123\"",
@@ -728,7 +735,10 @@ fn reference_printer_edge_cases() {
             "$sBAIeNghHgIL_BAytIeNghHgILr_TR",
             "reabstraction thunk helper from @escaping @caller_isolated @callee_guaranteed @Sendable @async (@guaranteed Builtin.ImplicitActor) -> () to @escaping @caller_isolated @callee_guaranteed @Sendable @async (@guaranteed Builtin.ImplicitActor) -> (@out ())",
         ),
-        ("_TtGCC6Sample5Outer5Inner_Si_", "Sample.Outer.Inner<Swift.Int>"),
+        (
+            "_TtGCC6Sample5Outer5Inner_Si_",
+            "Sample.Outer.Inner<Swift.Int>",
+        ),
         (
             "_TtGCC6Sample5Outer5InnerSi_Si_",
             "Sample.Outer<Swift.Int>.Inner<Swift.Int>",

@@ -12,7 +12,7 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use unlace_analysis::flirt::kuna_flirtpat::{patterns_from_object, write_pat, FuncPattern, Target};
+use unlace_analysis::flirt::kuna_flirtpat::{FuncPattern, Target, patterns_from_object, write_pat};
 use unlace_analysis::flirt::kuna_flirtsig::build_sig;
 
 use crate::args::take_value;
@@ -85,31 +85,53 @@ fn make(argv: &[String]) -> Result<(), (i32, String)> {
         i += 1;
     }
     let out = out.ok_or_else(|| usage("-o <out.pat> is required".into()))?;
-    let first = inputs.first().ok_or_else(|| usage("at least one input object or archive is required".into()))?;
+    let first = inputs
+        .first()
+        .ok_or_else(|| usage("at least one input object or archive is required".into()))?;
     let libname = libname.unwrap_or_else(|| {
-        Path::new(first).file_stem().map_or_else(String::new, |s| s.to_string_lossy().into_owned())
+        Path::new(first)
+            .file_stem()
+            .map_or_else(String::new, |s| s.to_string_lossy().into_owned())
     });
 
     let mut lib = Library::default();
     for input in &inputs {
         let before = lib.patterns.len();
         add_input(&mut lib, input).map_err(|e| (1, format!("{input}: {e}")))?;
-        eprintln!("unlace flirt make: {input}: {} pattern(s)", lib.patterns.len() - before);
+        eprintln!(
+            "unlace flirt make: {input}: {} pattern(s)",
+            lib.patterns.len() - before
+        );
     }
     lib.patterns.sort();
     lib.patterns.dedup();
     if lib.short > 0 {
-        eprintln!("unlace flirt make: {} function(s) with too few fixed bytes left out", lib.short);
+        eprintln!(
+            "unlace flirt make: {} function(s) with too few fixed bytes left out",
+            lib.short
+        );
     }
     let target = lib.target.filter(|_| !lib.patterns.is_empty());
-    let target = target.ok_or_else(|| (1, "the inputs define no function with a global name".to_string()))?;
-    std::fs::write(&out, write_pat(&lib.patterns)).map_err(|e| (1, format!("cannot write {out}: {e}")))?;
-    eprintln!("unlace flirt make: wrote {out} ({} pattern(s))", lib.patterns.len());
+    let target = target.ok_or_else(|| {
+        (
+            1,
+            "the inputs define no function with a global name".to_string(),
+        )
+    })?;
+    std::fs::write(&out, write_pat(&lib.patterns))
+        .map_err(|e| (1, format!("cannot write {out}: {e}")))?;
+    eprintln!(
+        "unlace flirt make: wrote {out} ({} pattern(s))",
+        lib.patterns.len()
+    );
 
     let Some(sig) = sig else { return Ok(()) };
     let built = build_sig(&lib.patterns, &lib.data_names, target, &libname).map_err(|e| (1, e))?;
     for c in &built.collisions {
-        eprintln!("unlace flirt make: collision: {} are not told apart; left out of {sig}", c.names.join(", "));
+        eprintln!(
+            "unlace flirt make: collision: {} are not told apart; left out of {sig}",
+            c.names.join(", ")
+        );
     }
     std::fs::write(&sig, &built.bytes).map_err(|e| (1, format!("cannot write {sig}: {e}")))?;
     eprintln!(
@@ -128,12 +150,16 @@ fn add_input(lib: &mut Library, input: &str) -> Result<(), String> {
     if !bytes.starts_with(b"!<arch>\n") {
         return add_object(lib, &bytes);
     }
-    let archive = object::read::archive::ArchiveFile::parse(&*bytes).map_err(|e| format!("not a valid archive: {e}"))?;
+    let archive = object::read::archive::ArchiveFile::parse(&*bytes)
+        .map_err(|e| format!("not a valid archive: {e}"))?;
     for member in archive.members() {
         let member = member.map_err(|e| format!("archive member error: {e}"))?;
-        let data = member.data(&*bytes).map_err(|e| format!("archive member data error: {e}"))?;
+        let data = member
+            .data(&*bytes)
+            .map_err(|e| format!("archive member data error: {e}"))?;
         if object::File::parse(data).is_ok() {
-            add_object(lib, data).map_err(|e| format!("{}: {e}", String::from_utf8_lossy(member.name())))?;
+            add_object(lib, data)
+                .map_err(|e| format!("{}: {e}", String::from_utf8_lossy(member.name())))?;
         }
     }
     Ok(())
@@ -143,7 +169,10 @@ fn add_object(lib: &mut Library, data: &[u8]) -> Result<(), String> {
     let mut object = patterns_from_object(data)?;
     match lib.target {
         Some(target) if target != object.target => {
-            return Err(format!("a {:?} object among {:?} objects", object.target, target));
+            return Err(format!(
+                "a {:?} object among {:?} objects",
+                object.target, target
+            ));
         }
         _ => lib.target = Some(object.target),
     }

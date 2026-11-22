@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_console::decompile_step::{decompile_one, DecompileSeed};
+use unlace_console::decompile_step::{DecompileSeed, decompile_one};
 use unlace_console::engine::bootstrap_from_object;
 
 const CALLER: u64 = 0x140001000;
@@ -26,10 +26,17 @@ fn repo_root() -> PathBuf {
 
 fn decompile() -> String {
     let root = repo_root();
-    let specs = vec![root.join("specs").to_str().expect("UTF-8 specs path").to_string()];
-    let binary = root.join("decompiler/crates/unlace-analysis/tests/fixtures/libcsigs_pe_x86_64.exe");
-    let mut program = bootstrap_from_object(binary.to_str().expect("UTF-8 fixture path"), "", &specs)
-        .expect("bootstrap fixture with built processor specs");
+    let specs = vec![
+        root.join("specs")
+            .to_str()
+            .expect("UTF-8 specs path")
+            .to_string(),
+    ];
+    let binary =
+        root.join("decompiler/crates/unlace-analysis/tests/fixtures/libcsigs_pe_x86_64.exe");
+    let mut program =
+        bootstrap_from_object(binary.to_str().expect("UTF-8 fixture path"), "", &specs)
+            .expect("bootstrap fixture with built processor specs");
     program
         .commit_pending_analysis()
         .expect("analysis commit succeeds");
@@ -51,10 +58,7 @@ fn decompile() -> String {
         &[],
     );
     let function = step.result.expect("the PE caller decompiles");
-    unlace_decomp::decompile_drive::print_c(
-        program.arch_mut(),
-        &function,
-    )
+    unlace_decomp::decompile_drive::print_c(program.arch_mut(), &function)
 }
 
 #[test]

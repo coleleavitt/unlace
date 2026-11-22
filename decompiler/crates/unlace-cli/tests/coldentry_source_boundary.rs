@@ -62,11 +62,8 @@ fn fixture(source: &str, frame: bool) -> Option<Fixture> {
 }
 
 fn entries(fixture: &Fixture) -> Vec<u64> {
-    let (stdout, stderr, rc) = common::run_kuna(&[
-        "functions",
-        fixture.binary.to_str().unwrap(),
-        "--json",
-    ]);
+    let (stdout, stderr, rc) =
+        common::run_kuna(&["functions", fixture.binary.to_str().unwrap(), "--json"]);
     assert_eq!(rc, 0, "{stderr}\n{stdout}");
     let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     let entries: Vec<_> = parsed["functions"]
@@ -102,7 +99,13 @@ fn branch_bytes_inside_an_immediate_do_not_create_a_cold_entry() {
 
 #[test]
 fn real_rel32_branches_still_discover_cold_entries_with_or_without_source_fdes() {
-    for encoding in ["0xe9", "0x0f,0x84", "0x2e,0xe9", "0x2e,0x0f,0x84", "0x0f,0x01,0xe8,0xe9"] {
+    for encoding in [
+        "0xe9",
+        "0x0f,0x84",
+        "0x2e,0xe9",
+        "0x2e,0x0f,0x84",
+        "0x0f,0x01,0xe8,0xe9",
+    ] {
         for frame in [true, false] {
             let source = format!("test %edi,%edi\n.byte {encoding}\n.long .Lsecond - (. + 4)\nret");
             let Some(fixture) = fixture(&source, frame) else {

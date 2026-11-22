@@ -6,14 +6,14 @@
 //! bookkeeping. Remaining architecture-dependent limitations are documented at
 //! their call sites.
 
-use unlace_base::address::{calc_mask, leastsigbit_set, sign_extend_sized, Address};
-use unlace_base::types::{int4, uintb, Wrap};
-use unlace_num::opcodes::OpCode;
 use std::rc::Rc;
+use unlace_base::address::{Address, calc_mask, leastsigbit_set, sign_extend_sized};
+use unlace_base::types::{Wrap, int4, uintb};
+use unlace_num::opcodes::OpCode;
 
 use crate::action::{ActionGroupList, Rule, RuleSpec};
-use crate::funcdata::Funcdata;
 use crate::context::{OpId, VarnodeId};
+use crate::funcdata::Funcdata;
 
 // =============================================================================
 // Local opcode helper
@@ -36,12 +36,20 @@ fn set_opcode(data: &mut Funcdata, op: OpId, opc: OpCode) {
 
 /// `op->getIn(slot)` (panics on a null operand, as the C++ deref would be UB).
 fn in_vn(data: &Funcdata, op: OpId, slot: int4) -> VarnodeId {
-    data.obank().get(op).expect("in_vn: stale op").get_in(slot).expect("in_vn: null operand")
+    data.obank()
+        .get(op)
+        .expect("in_vn: stale op")
+        .get_in(slot)
+        .expect("in_vn: null operand")
 }
 
 /// `op->getOut()` (panics if `op` has no output).
 fn out_vn(data: &Funcdata, op: OpId) -> VarnodeId {
-    data.obank().get(op).expect("out_vn: stale op").get_out().expect("out_vn: no output")
+    data.obank()
+        .get(op)
+        .expect("out_vn: stale op")
+        .get_out()
+        .expect("out_vn: no output")
 }
 
 /// `op->code()`.
@@ -51,12 +59,19 @@ fn code(data: &Funcdata, op: OpId) -> OpCode {
 
 /// `vn->isWritten()`.
 fn is_written(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).expect("is_written: stale vn").is_written()
+    data.vbank()
+        .get(vn)
+        .expect("is_written: stale vn")
+        .is_written()
 }
 
 /// `vn->getDef()` (the C++ `getDef()` is only ever called on a written Varnode).
 fn def_of(data: &Funcdata, vn: VarnodeId) -> OpId {
-    data.vbank().get(vn).expect("def_of: stale vn").get_def().expect("def_of: not written")
+    data.vbank()
+        .get(vn)
+        .expect("def_of: stale vn")
+        .get_def()
+        .expect("def_of: not written")
 }
 
 /// `vn->isFree()`.
@@ -66,12 +81,18 @@ fn is_free(data: &Funcdata, vn: VarnodeId) -> bool {
 
 /// `vn->isConstant()`.
 fn is_constant(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).expect("is_constant: stale vn").is_constant()
+    data.vbank()
+        .get(vn)
+        .expect("is_constant: stale vn")
+        .is_constant()
 }
 
 /// `vn->getOffset()`.
 fn offset_of(data: &Funcdata, vn: VarnodeId) -> uintb {
-    data.vbank().get(vn).expect("offset_of: stale vn").get_offset()
+    data.vbank()
+        .get(vn)
+        .expect("offset_of: stale vn")
+        .get_offset()
 }
 
 /// `vn->getSize()`.
@@ -81,12 +102,19 @@ fn size_of(data: &Funcdata, vn: VarnodeId) -> int4 {
 
 /// `vn->getNZMask()`.
 fn nzmask_of(data: &Funcdata, vn: VarnodeId) -> uintb {
-    data.vbank().get(vn).expect("nzmask_of: stale vn").get_nz_mask()
+    data.vbank()
+        .get(vn)
+        .expect("nzmask_of: stale vn")
+        .get_nz_mask()
 }
 
 /// `op->getAddr()`.
 fn addr_of(data: &Funcdata, op: OpId) -> Address {
-    data.obank().get(op).expect("addr_of: stale op").get_addr().clone()
+    data.obank()
+        .get(op)
+        .expect("addr_of: stale op")
+        .get_addr()
+        .clone()
 }
 
 // =============================================================================
@@ -206,7 +234,10 @@ impl RuleLoadVarnode {
     ///
     /// Returns `Some((space, offoff))` if the LOAD/STORE `op` reads off a
     /// spacebase+constant (or a literal constant offset), else `None`.
-    pub fn check_spacebase(data: &Funcdata, op: OpId) -> Option<(Rc<unlace_base::space::AddrSpace>, uintb)> {
+    pub fn check_spacebase(
+        data: &Funcdata,
+        op: OpId,
+    ) -> Option<(Rc<unlace_base::space::AddrSpace>, uintb)> {
         let offvn = in_vn(data, op, 1);
         let space_const = in_vn(data, op, 0);
         let loadspace = space_from_const(data, space_const)?;
@@ -273,19 +304,34 @@ impl Rule for RuleLoadVarnode {
             None => return 0,
         };
         let size = size_of(data, out_vn(data, op));
-        let offoff = unlace_base::space::AddrSpace::address_to_byte(offoff, baseoff.get_word_size());
+        let offoff =
+            unlace_base::space::AddrSpace::address_to_byte(offoff, baseoff.get_word_size());
         // A read-only relocated pointer is the weak binding plus its addend,
         // not the synthetic display address stored in its pre-link bytes.
-        let nullable = data.get_arch().nullable_relocations.get(&offoff)
-            .filter(|_| data.get_address().get_space().is_some_and(|s| s.get_index() == baseoff.get_index()))
-            .and_then(|records| records.iter().find(|r| r.pointer_size == size
-                && matches!(r.operand, crate::kuna_nullable_reloc::Operand::DataPointer))).cloned();
+        let nullable = data
+            .get_arch()
+            .nullable_relocations
+            .get(&offoff)
+            .filter(|_| {
+                data.get_address()
+                    .get_space()
+                    .is_some_and(|s| s.get_index() == baseoff.get_index())
+            })
+            .and_then(|records| {
+                records.iter().find(|r| {
+                    r.pointer_size == size
+                        && matches!(r.operand, crate::kuna_nullable_reloc::Operand::DataPointer)
+                })
+            })
+            .cloned();
         let offset = nullable.as_ref().map_or(offoff, |r| r.slot);
         let newvn = data.new_varnode_space_off(size, Rc::clone(&baseoff), offset);
-        data.op_set_input(op, newvn, 0).expect("RuleLoadVarnode: opSetInput");
+        data.op_set_input(op, newvn, 0)
+            .expect("RuleLoadVarnode: opSetInput");
         if let Some(record) = nullable.filter(|r| r.addend != 0) {
             let addend = data.new_constant(size, record.addend as u64);
-            data.op_set_input(op, addend, 1).expect("weak pointer addend");
+            data.op_set_input(op, addend, 1)
+                .expect("weak pointer addend");
             set_opcode(data, op, OpCode::CPUI_INT_ADD);
         } else {
             data.op_remove_input(op, 1);
@@ -365,15 +411,21 @@ impl Rule for RuleStoreVarnode {
             None => return 0,
         };
         let size = size_of(data, in_vn(data, op, 2));
-        let offoff = unlace_base::space::AddrSpace::address_to_byte(offoff, baseoff.get_word_size());
+        let offoff =
+            unlace_base::space::AddrSpace::address_to_byte(offoff, baseoff.get_word_size());
         let addr = Address::new(Rc::clone(&baseoff), offoff);
         if !super::kuna_storecopyeffects::can_materialize(data, op, &addr, size) {
             return 0;
         }
         crate::kuna_stackparamviews::record_store(data, &addr, size);
         crate::kuna_localstackviews::record_store(data, op, &addr, size);
-        let outvn = data.new_varnode_out_unlaned(size, &addr, op).expect("newVarnodeOut");
-        data.vbank_mut().get_mut(outvn).expect("RuleStoreVarnode: stale out").set_stack_store();
+        let outvn = data
+            .new_varnode_out_unlaned(size, &addr, op)
+            .expect("newVarnodeOut");
+        data.vbank_mut()
+            .get_mut(outvn)
+            .expect("RuleStoreVarnode: stale out")
+            .set_stack_store();
         data.op_remove_input(op, 1);
         data.op_remove_input(op, 0);
         set_opcode(data, op, OpCode::CPUI_COPY);
@@ -381,7 +433,11 @@ impl Rule for RuleStoreVarnode {
         // <internal_storage> register (e.g. MIPS gp) as unmapped; converting it to a
         // COPY here unmaps the destination stack slot so it does not propagate as a
         // local alias across calls.
-        let store_unmapped = data.obank().get(op).map(|o| o.is_store_unmapped()).unwrap_or(false);
+        let store_unmapped = data
+            .obank()
+            .get(op)
+            .map(|o| o.is_store_unmapped())
+            .unwrap_or(false);
         if store_unmapped {
             data.scope_local_mark_not_mapped(&baseoff, offoff, size, false);
         }
@@ -443,7 +499,8 @@ impl Rule for RuleSubExtComm {
         let outsize = size_of(data, outvn);
         let invn_size = size_of(data, invn);
         if outsize + subcut <= invn_size {
-            data.op_set_input(op, invn, 0).expect("RuleSubExtComm: opSetInput");
+            data.op_set_input(op, invn, 0)
+                .expect("RuleSubExtComm: opSetInput");
             if invn_size == outsize {
                 data.op_remove_input(op, 1);
                 set_opcode(data, op, OpCode::CPUI_COPY);
@@ -460,11 +517,15 @@ impl Rule for RuleSubExtComm {
             let opaddr = addr_of(data, op);
             let newop = data.new_op(2, opaddr);
             set_opcode(data, newop, OpCode::CPUI_SUBPIECE);
-            newvn = data.new_unique_out_unlaned(invn_size - subcut, newop).expect("newUniqueOut");
+            newvn = data
+                .new_unique_out_unlaned(invn_size - subcut, newop)
+                .expect("newUniqueOut");
             let csize = size_of(data, in_vn(data, op, 1));
             let cvn = data.new_constant(csize, subcut as uintb);
-            data.op_set_input(newop, cvn, 1).expect("RuleSubExtComm: opSetInput");
-            data.op_set_input(newop, invn, 0).expect("RuleSubExtComm: opSetInput");
+            data.op_set_input(newop, cvn, 1)
+                .expect("RuleSubExtComm: opSetInput");
+            data.op_set_input(newop, invn, 0)
+                .expect("RuleSubExtComm: opSetInput");
             data.op_insert_before(newop, op);
         } else {
             newvn = invn;
@@ -472,7 +533,8 @@ impl Rule for RuleSubExtComm {
 
         data.op_remove_input(op, 1);
         set_opcode(data, op, extcode);
-        data.op_set_input(op, newvn, 0).expect("RuleSubExtComm: opSetInput");
+        data.op_set_input(op, newvn, 0)
+            .expect("RuleSubExtComm: opSetInput");
         1
     }
 }
@@ -499,12 +561,18 @@ impl RuleSubCommute {
     pub fn shorten_extension(data: &mut Funcdata, ext_op: OpId, max_size: int4) -> VarnodeId {
         let orig_out = out_vn(data, ext_op);
         let orig_size = size_of(data, orig_out);
-        let mut addr = data.vbank().get(orig_out).expect("shorten_extension: stale out").get_addr().clone();
+        let mut addr = data
+            .vbank()
+            .get(orig_out)
+            .expect("shorten_extension: stale out")
+            .get_addr()
+            .clone();
         if addr.is_big_endian() {
             addr = &addr + ((orig_size - max_size) as i64);
         }
         data.op_unset_output(ext_op);
-        data.new_varnode_out_unlaned(max_size, &addr, ext_op).expect("newVarnodeOut")
+        data.new_varnode_out_unlaned(max_size, &addr, ext_op)
+            .expect("newVarnodeOut")
     }
 
     /// \brief Eliminate input extensions on the given binary PcodeOp (C++
@@ -558,10 +626,15 @@ impl RuleSubCommute {
         }
         data.op_unset_output(longform);
         // Truncated longform output.
-        let outvn = data.new_unique_out_unlaned(max_size, longform).expect("newUniqueOut");
-        data.op_set_input(longform, ext0_in, 0).expect("cancel_extensions: opSetInput");
-        data.op_set_input(longform, ext1_in, 1).expect("cancel_extensions: opSetInput");
-        data.op_set_input(sub_op, outvn, 0).expect("cancel_extensions: opSetInput");
+        let outvn = data
+            .new_unique_out_unlaned(max_size, longform)
+            .expect("newUniqueOut");
+        data.op_set_input(longform, ext0_in, 0)
+            .expect("cancel_extensions: opSetInput");
+        data.op_set_input(longform, ext1_in, 1)
+            .expect("cancel_extensions: opSetInput");
+        data.op_set_input(sub_op, outvn, 0)
+            .expect("cancel_extensions: opSetInput");
         true
     }
 }
@@ -647,7 +720,8 @@ impl Rule for RuleSubCommute {
                     let zext1_in = in_vn(data, zext1, 0);
                     if size_of(data, zext1_in) > outsize || size_of(data, zext0_in) > outsize {
                         // Special case: PARTIAL commute of the SUBPIECE
-                        if RuleSubCommute::cancel_extensions(data, longform, op, zext0_in, zext1_in) {
+                        if RuleSubCommute::cancel_extensions(data, longform, op, zext0_in, zext1_in)
+                        {
                             return 1; // Leave SUBPIECE intact
                         }
                         return 0;
@@ -686,7 +760,8 @@ impl Rule for RuleSubCommute {
                     let sext1_in = in_vn(data, sext1, 0);
                     if size_of(data, sext1_in) > outsize || size_of(data, sext0_in) > outsize {
                         // Special case: PARTIAL commute of the SUBPIECE
-                        if RuleSubCommute::cancel_extensions(data, longform, op, sext0_in, sext1_in) {
+                        if RuleSubCommute::cancel_extensions(data, longform, op, sext0_in, sext1_in)
+                        {
                             return 1; // Leave SUBPIECE intact
                         }
                         return 0;
@@ -709,7 +784,12 @@ impl Rule for RuleSubCommute {
                 }
                 // Deconflict RulePtrArith
                 let lin0 = in_vn(data, longform, 0);
-                if data.vbank().get(lin0).expect("RuleSubCommute: stale lin0").is_spacebase() {
+                if data
+                    .vbank()
+                    .get(lin0)
+                    .expect("RuleSubCommute: stale lin0")
+                    .is_spacebase()
+                {
                     return 0;
                 }
             }
@@ -751,7 +831,11 @@ impl Rule for RuleSubCommute {
             return 1;
         }
 
-        let numinput = data.obank().get(longform).expect("RuleSubCommute: stale longform").num_input();
+        let numinput = data
+            .obank()
+            .get(longform)
+            .expect("RuleSubCommute: stale longform")
+            .num_input();
         let mut last_in: Option<VarnodeId> = None;
         let mut new_vn: Option<VarnodeId> = None;
         for i in 0..numinput {
@@ -768,13 +852,18 @@ impl Rule for RuleSubCommute {
                         let opaddr = addr_of(data, op);
                         let newsub = data.new_op(2, opaddr); // Commuted SUBPIECE op
                         set_opcode(data, newsub, OpCode::CPUI_SUBPIECE);
-                        let nv = data.new_unique_out_unlaned(outsize, newsub).expect("newUniqueOut");
+                        let nv = data
+                            .new_unique_out_unlaned(outsize, newsub)
+                            .expect("newUniqueOut");
                         new_vn = Some(nv);
-                        data.op_set_input(longform, nv, i).expect("RuleSubCommute: opSetInput");
+                        data.op_set_input(longform, nv, i)
+                            .expect("RuleSubCommute: opSetInput");
                         // vn may be free, set as input after setting newVn
-                        data.op_set_input(newsub, vn, 0).expect("RuleSubCommute: opSetInput");
+                        data.op_set_input(newsub, vn, 0)
+                            .expect("RuleSubCommute: opSetInput");
                         let cvn = data.new_constant(4, offset as uintb);
-                        data.op_set_input(newsub, cvn, 1).expect("RuleSubCommute: opSetInput");
+                        data.op_set_input(newsub, cvn, 1)
+                            .expect("RuleSubCommute: opSetInput");
                         data.op_insert_before(newsub, longform);
                     }
                 }
@@ -883,15 +972,21 @@ impl Rule for RuleConcatCommute {
             let opaddr = addr_of(data, op);
             let newconcat = data.new_op(2, opaddr);
             set_opcode(data, newconcat, OpCode::CPUI_PIECE);
-            let newvn = data.new_unique_out_unlaned(outsz, newconcat).expect("newUniqueOut");
-            data.op_set_input(newconcat, hi, 0).expect("RuleConcatCommute: opSetInput");
-            data.op_set_input(newconcat, lo, 1).expect("RuleConcatCommute: opSetInput");
+            let newvn = data
+                .new_unique_out_unlaned(outsz, newconcat)
+                .expect("newUniqueOut");
+            data.op_set_input(newconcat, hi, 0)
+                .expect("RuleConcatCommute: opSetInput");
+            data.op_set_input(newconcat, lo, 1)
+                .expect("RuleConcatCommute: opSetInput");
             data.op_insert_before(newconcat, op);
             set_opcode(data, op, opc);
-            data.op_set_input(op, newvn, 0).expect("RuleConcatCommute: opSetInput");
+            data.op_set_input(op, newvn, 0)
+                .expect("RuleConcatCommute: opSetInput");
             let newvn_size = size_of(data, newvn);
             let cvn = data.new_constant(newvn_size, val);
-            data.op_set_input(op, cvn, 1).expect("RuleConcatCommute: opSetInput");
+            data.op_set_input(op, cvn, 1)
+                .expect("RuleConcatCommute: opSetInput");
             return 1;
         }
         0
@@ -952,14 +1047,19 @@ impl Rule for RuleConcatZext {
         let opaddr = addr_of(data, op);
         let newconcat = data.new_op(2, opaddr);
         set_opcode(data, newconcat, OpCode::CPUI_PIECE);
-        let newvn = data.new_unique_out_unlaned(size_of(data, hi) + size_of(data, lo), newconcat).expect("newUniqueOut");
-        data.op_set_input(newconcat, hi, 0).expect("RuleConcatZext: opSetInput");
-        data.op_set_input(newconcat, lo, 1).expect("RuleConcatZext: opSetInput");
+        let newvn = data
+            .new_unique_out_unlaned(size_of(data, hi) + size_of(data, lo), newconcat)
+            .expect("newUniqueOut");
+        data.op_set_input(newconcat, hi, 0)
+            .expect("RuleConcatZext: opSetInput");
+        data.op_set_input(newconcat, lo, 1)
+            .expect("RuleConcatZext: opSetInput");
         data.op_insert_before(newconcat, op);
 
         // Change original op into a ZEXT
         data.op_remove_input(op, 1);
-        data.op_set_input(op, newvn, 0).expect("RuleConcatZext: opSetInput");
+        data.op_set_input(op, newvn, 0)
+            .expect("RuleConcatZext: opSetInput");
         set_opcode(data, op, OpCode::CPUI_INT_ZEXT);
         1
     }
@@ -982,8 +1082,16 @@ impl RuleZextCommute {
     /// when the output language promotes a sub-`int` `V` to a 4-byte `int` first.
     fn count_limit(data: &Funcdata, size: int4) -> uintb {
         let arch = data.get_arch();
-        let int_size = arch.types().map(|t| t.get_size_of_int()).filter(|&s| s > 0).unwrap_or(4);
-        let width = if arch.int_promotion && int_size == 4 { size.max(4) } else { size };
+        let int_size = arch
+            .types()
+            .map(|t| t.get_size_of_int())
+            .filter(|&s| s > 0)
+            .unwrap_or(4);
+        let width = if arch.int_promotion && int_size == 4 {
+            size.max(4)
+        } else {
+            size
+        };
         width as uintb * 8
     }
 }
@@ -1023,8 +1131,15 @@ impl Rule for RuleZextCommute {
         if !is_constant(data, savn) && is_free(data, savn) {
             return 0;
         }
-        let amount = data.vbank().get(savn).expect("RuleZextCommute: shift amount");
-        let maximum = if amount.is_constant() { amount.get_offset() } else { amount.get_nz_mask() };
+        let amount = data
+            .vbank()
+            .get(savn)
+            .expect("RuleZextCommute: shift amount");
+        let maximum = if amount.is_constant() {
+            amount.get_offset()
+        } else {
+            amount.get_nz_mask()
+        };
         if maximum >= Self::count_limit(data, size_of(data, zextin)) {
             return 0;
         }
@@ -1032,12 +1147,17 @@ impl Rule for RuleZextCommute {
         let opaddr = addr_of(data, op);
         let newop = data.new_op(2, opaddr);
         set_opcode(data, newop, OpCode::CPUI_INT_RIGHT);
-        let newout = data.new_unique_out_unlaned(size_of(data, zextin), newop).expect("newUniqueOut");
+        let newout = data
+            .new_unique_out_unlaned(size_of(data, zextin), newop)
+            .expect("newUniqueOut");
         data.op_remove_input(op, 1);
-        data.op_set_input(op, newout, 0).expect("RuleZextCommute: opSetInput");
+        data.op_set_input(op, newout, 0)
+            .expect("RuleZextCommute: opSetInput");
         set_opcode(data, op, OpCode::CPUI_INT_ZEXT);
-        data.op_set_input(newop, zextin, 0).expect("RuleZextCommute: opSetInput");
-        data.op_set_input(newop, savn, 1).expect("RuleZextCommute: opSetInput");
+        data.op_set_input(newop, zextin, 0)
+            .expect("RuleZextCommute: opSetInput");
+        data.op_set_input(newop, savn, 1)
+            .expect("RuleZextCommute: opSetInput");
         data.op_insert_before(newop, op);
         1
     }
@@ -1091,7 +1211,8 @@ impl Rule for RuleZextShiftZext {
             if data.lone_descend(invn) != Some(op) {
                 return 0;
             }
-            data.op_set_input(op, vn, 0).expect("RuleZextShiftZext: opSetInput");
+            data.op_set_input(op, vn, 0)
+                .expect("RuleZextShiftZext: opSetInput");
             return 1;
         }
         if code(data, shiftop) != OpCode::CPUI_INT_LEFT {
@@ -1121,12 +1242,17 @@ impl Rule for RuleZextShiftZext {
         let opaddr = addr_of(data, op);
         let newop = data.new_op(1, opaddr);
         set_opcode(data, newop, OpCode::CPUI_INT_ZEXT);
-        let outvn = data.new_unique_out_unlaned(size_of(data, out_vn(data, op)), newop).expect("newUniqueOut");
-        data.op_set_input(newop, rootvn, 0).expect("RuleZextShiftZext: opSetInput");
+        let outvn = data
+            .new_unique_out_unlaned(size_of(data, out_vn(data, op)), newop)
+            .expect("newUniqueOut");
+        data.op_set_input(newop, rootvn, 0)
+            .expect("RuleZextShiftZext: opSetInput");
         set_opcode(data, op, OpCode::CPUI_INT_LEFT);
-        data.op_set_input(op, outvn, 0).expect("RuleZextShiftZext: opSetInput");
+        data.op_set_input(op, outvn, 0)
+            .expect("RuleZextShiftZext: opSetInput");
         let cvn = data.new_constant(4, sa);
-        data.op_insert_input(op, cvn, 1).expect("RuleZextShiftZext: opInsertInput");
+        data.op_insert_input(op, cvn, 1)
+            .expect("RuleZextShiftZext: opInsertInput");
         data.op_insert_before(newop, op);
         1
     }
@@ -1155,7 +1281,11 @@ impl Default for RuleShiftAnd {
 impl Rule for RuleShiftAnd {
     fn get_op_list(&self) -> Vec<OpCode> {
         // C++ pushes INT_RIGHT, INT_LEFT, INT_MULT in this order.
-        vec![OpCode::CPUI_INT_RIGHT, OpCode::CPUI_INT_LEFT, OpCode::CPUI_INT_MULT]
+        vec![
+            OpCode::CPUI_INT_RIGHT,
+            OpCode::CPUI_INT_LEFT,
+            OpCode::CPUI_INT_MULT,
+        ]
     }
 
     fn clone_rule(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Rule>> {
@@ -1225,7 +1355,8 @@ impl Rule for RuleShiftAnd {
             return 0;
         }
         // Bypass the INT_AND
-        data.op_set_input(op, invn, 0).expect("RuleShiftAnd: opSetInput");
+        data.op_set_input(op, invn, 0)
+            .expect("RuleShiftAnd: opSetInput");
         1
     }
 }
@@ -1278,13 +1409,18 @@ impl Rule for RuleConcatZero {
         let highvn = in_vn(data, op, 0);
         let opaddr = addr_of(data, op);
         let newop = data.new_op(1, opaddr);
-        let outvn = data.new_unique_out_unlaned(size_of(data, out_vn(data, op)), newop).expect("newUniqueOut");
+        let outvn = data
+            .new_unique_out_unlaned(size_of(data, out_vn(data, op)), newop)
+            .expect("newUniqueOut");
         set_opcode(data, newop, OpCode::CPUI_INT_ZEXT);
         set_opcode(data, op, OpCode::CPUI_INT_LEFT);
-        data.op_set_input(op, outvn, 0).expect("RuleConcatZero: opSetInput");
+        data.op_set_input(op, outvn, 0)
+            .expect("RuleConcatZero: opSetInput");
         let cvn = data.new_constant(4, sa as uintb);
-        data.op_set_input(op, cvn, 1).expect("RuleConcatZero: opSetInput");
-        data.op_set_input(newop, highvn, 0).expect("RuleConcatZero: opSetInput");
+        data.op_set_input(op, cvn, 1)
+            .expect("RuleConcatZero: opSetInput");
+        data.op_set_input(newop, highvn, 0)
+            .expect("RuleConcatZero: opSetInput");
         data.op_insert_before(newop, op);
         1
     }
@@ -1365,14 +1501,20 @@ impl Rule for RuleConcatLeftShift {
         let opaddr = addr_of(data, op);
         let newop = data.new_op(2, opaddr);
         set_opcode(data, newop, OpCode::CPUI_PIECE);
-        let newout = data.new_unique_out_unlaned(size_of(data, vn1) + size_of(data, b), newop).expect("newUniqueOut");
-        data.op_set_input(newop, vn1, 0).expect("RuleConcatLeftShift: opSetInput");
-        data.op_set_input(newop, b, 1).expect("RuleConcatLeftShift: opSetInput");
+        let newout = data
+            .new_unique_out_unlaned(size_of(data, vn1) + size_of(data, b), newop)
+            .expect("newUniqueOut");
+        data.op_set_input(newop, vn1, 0)
+            .expect("RuleConcatLeftShift: opSetInput");
+        data.op_set_input(newop, b, 1)
+            .expect("RuleConcatLeftShift: opSetInput");
         data.op_insert_before(newop, op);
-        data.op_set_input(op, newout, 0).expect("RuleConcatLeftShift: opSetInput");
+        data.op_set_input(op, newout, 0)
+            .expect("RuleConcatLeftShift: opSetInput");
         let csize = size_of(data, out_vn(data, op)) - size_of(data, newout);
         let cvn = data.new_constant(csize, 0);
-        data.op_set_input(op, cvn, 1).expect("RuleConcatLeftShift: opSetInput");
+        data.op_set_input(op, cvn, 1)
+            .expect("RuleConcatLeftShift: opSetInput");
         1
     }
 }
@@ -1442,19 +1584,23 @@ impl Rule for RuleSubZext {
                 let constvn = in_vn(data, subop, 1);
                 let csize = size_of(data, constvn);
                 let right_val = offset_of(data, constvn) * 8;
-                data.op_set_input(op, newvn, 0).expect("RuleSubZext: opSetInput");
+                data.op_set_input(op, newvn, 0)
+                    .expect("RuleSubZext: opSetInput");
                 set_opcode(data, subop, OpCode::CPUI_INT_RIGHT); // truncation -> shift
                 let rc = data.new_constant(csize, right_val);
-                data.op_set_input(subop, rc, 1).expect("RuleSubZext: opSetInput");
+                data.op_set_input(subop, rc, 1)
+                    .expect("RuleSubZext: opSetInput");
                 data.op_move_output(subop, newvn).expect("opSetOutput");
             } else {
-                data.op_set_input(op, basevn, 0).expect("RuleSubZext: opSetInput");
+                data.op_set_input(op, basevn, 0)
+                    .expect("RuleSubZext: opSetInput");
             }
             let val = calc_mask(size_of(data, subvn));
             let basesize = size_of(data, basevn);
             let constvn = data.new_constant(basesize, val);
             set_opcode(data, op, OpCode::CPUI_INT_AND);
-            data.op_insert_input(op, constvn, 1).expect("RuleSubZext: opInsertInput");
+            data.op_insert_input(op, constvn, 1)
+                .expect("RuleSubZext: opInsertInput");
             return 1;
         } else if code(data, subop) == OpCode::CPUI_INT_RIGHT {
             let shiftop = subop;
@@ -1494,15 +1640,19 @@ impl Rule for RuleSubZext {
             let sa = sa + offset_of(data, in_vn(data, subop, 1)) * 8;
             let basesize = size_of(data, basevn);
             let newvn = data.new_unique(basesize, None);
-            data.op_set_input(op, newvn, 0).expect("RuleSubZext: opSetInput");
-            data.op_set_input(shiftop, basevn, 0).expect("RuleSubZext: opSetInput"); // full value
+            data.op_set_input(op, newvn, 0)
+                .expect("RuleSubZext: opSetInput");
+            data.op_set_input(shiftop, basevn, 0)
+                .expect("RuleSubZext: opSetInput"); // full value
             let shift_in1_size = size_of(data, in_vn(data, shiftop, 1));
             let sc = data.new_constant(shift_in1_size, sa); // by the combined amount
-            data.op_set_input(shiftop, sc, 1).expect("RuleSubZext: opSetInput");
+            data.op_set_input(shiftop, sc, 1)
+                .expect("RuleSubZext: opSetInput");
             data.op_move_output(shiftop, newvn).expect("opSetOutput");
             let constvn = data.new_constant(basesize, val);
             set_opcode(data, op, OpCode::CPUI_INT_AND); // Turn the ZEXT into an AND
-            data.op_insert_input(op, constvn, 1).expect("RuleSubZext: opInsertInput");
+            data.op_insert_input(op, constvn, 1)
+                .expect("RuleSubZext: opInsertInput");
             return 1;
         }
         0
@@ -1565,7 +1715,8 @@ impl Rule for RuleSubCancel {
             if offset == 0 && is_constant(data, cvn) && offset_of(data, cvn) == calc_mask(outsize) {
                 let thruvn = in_vn(data, extop, 0);
                 if !is_free(data, thruvn) {
-                    data.op_set_input(op, thruvn, 0).expect("RuleSubCancel: opSetInput");
+                    data.op_set_input(op, thruvn, 0)
+                        .expect("RuleSubCancel: opSetInput");
                     return 1;
                 }
             }
@@ -1606,7 +1757,8 @@ impl Rule for RuleSubCancel {
         }
 
         set_opcode(data, op, opc); // SUBPIECE <- EXT replaced with one op
-        data.op_set_input(op, thruvn, 0).expect("RuleSubCancel: opSetInput");
+        data.op_set_input(op, thruvn, 0)
+            .expect("RuleSubCancel: opSetInput");
 
         if opc != OpCode::CPUI_SUBPIECE {
             data.op_remove_input(op, 1); // ZEXT, SEXT, or COPY has only 1 input
@@ -1676,10 +1828,12 @@ impl Rule for RuleShiftSub {
         if c < 0 || c + outsize > insize {
             return 0;
         }
-        data.op_set_input(op, vn, 0).expect("RuleShiftSub: opSetInput");
+        data.op_set_input(op, vn, 0)
+            .expect("RuleShiftSub: opSetInput");
         let csize = size_of(data, in_vn(data, op, 1));
         let cvn = data.new_constant(csize, c as uintb);
-        data.op_set_input(op, cvn, 1).expect("RuleShiftSub: opSetInput");
+        data.op_set_input(op, cvn, 1)
+            .expect("RuleShiftSub: opSetInput");
         1
     }
 }
@@ -1752,14 +1906,17 @@ impl Rule for RuleHumptyDumpty {
         // Pieced together whole thing
         if pos2 == 0 && (size1 + size2 == size_of(data, root)) {
             data.op_remove_input(op, 1);
-            data.op_set_input(op, root, 0).expect("RuleHumptyDumpty: opSetInput");
+            data.op_set_input(op, root, 0)
+                .expect("RuleHumptyDumpty: opSetInput");
             set_opcode(data, op, OpCode::CPUI_COPY);
         } else {
             // Pieced together a larger part of the whole
-            data.op_set_input(op, root, 0).expect("RuleHumptyDumpty: opSetInput");
+            data.op_set_input(op, root, 0)
+                .expect("RuleHumptyDumpty: opSetInput");
             let csize = size_of(data, in_vn(data, sub2, 1));
             let cvn = data.new_constant(csize, pos2);
-            data.op_set_input(op, cvn, 1).expect("RuleHumptyDumpty: opSetInput");
+            data.op_set_input(op, cvn, 1)
+                .expect("RuleHumptyDumpty: opSetInput");
             set_opcode(data, op, OpCode::CPUI_SUBPIECE);
         }
         1
@@ -1836,12 +1993,15 @@ impl Rule for RuleDumptyHump {
             // Eliminate SUB and CONCAT altogether
             set_opcode(data, op, OpCode::CPUI_COPY);
             data.op_remove_input(op, 1);
-            data.op_set_input(op, vn, 0).expect("RuleDumptyHump: opSetInput"); // Skip over CONCAT
+            data.op_set_input(op, vn, 0)
+                .expect("RuleDumptyHump: opSetInput"); // Skip over CONCAT
         } else {
             // Eliminate CONCAT and adjust SUB
-            data.op_set_input(op, vn, 0).expect("RuleDumptyHump: opSetInput"); // Skip over CONCAT
+            data.op_set_input(op, vn, 0)
+                .expect("RuleDumptyHump: opSetInput"); // Skip over CONCAT
             let cvn = data.new_constant(4, offset as uintb);
-            data.op_set_input(op, cvn, 1).expect("RuleDumptyHump: opSetInput");
+            data.op_set_input(op, cvn, 1)
+                .expect("RuleDumptyHump: opSetInput");
         }
         1
     }
@@ -1925,20 +2085,33 @@ impl Rule for RuleHumptyOr {
                 // All bits of a between the two sides. Convert to COPY
                 set_opcode(data, op, OpCode::CPUI_COPY);
                 data.op_remove_input(op, 1);
-                data.op_set_input(op, a, 0).expect("RuleHumptyOr: opSetInput");
+                data.op_set_input(op, a, 0)
+                    .expect("RuleHumptyOr: opSetInput");
             } else {
                 // Some bits, not all. Convert to an AND
                 set_opcode(data, op, OpCode::CPUI_INT_AND);
-                data.op_set_input(op, a, 0).expect("RuleHumptyOr: opSetInput");
+                data.op_set_input(op, a, 0)
+                    .expect("RuleHumptyOr: opSetInput");
                 let asize = size_of(data, a);
                 let newconst = data.new_constant(asize, totalbits);
-                data.op_set_input(op, newconst, 1).expect("RuleHumptyOr: opSetInput");
+                data.op_set_input(op, newconst, 1)
+                    .expect("RuleHumptyOr: opSetInput");
             }
         } else {
-            if !data.vbank().get(b).expect("RuleHumptyOr: stale b").is_heritage_known() {
+            if !data
+                .vbank()
+                .get(b)
+                .expect("RuleHumptyOr: stale b")
+                .is_heritage_known()
+            {
                 return 0;
             }
-            if !data.vbank().get(c).expect("RuleHumptyOr: stale c").is_heritage_known() {
+            if !data
+                .vbank()
+                .get(c)
+                .expect("RuleHumptyOr: stale c")
+                .is_heritage_known()
+            {
                 return 0;
             }
             let a_mask = nzmask_of(data, a);
@@ -1952,12 +2125,18 @@ impl Rule for RuleHumptyOr {
             let opaddr = addr_of(data, op);
             let new_or_op = data.new_op(2, opaddr);
             set_opcode(data, new_or_op, OpCode::CPUI_INT_OR);
-            let or_vn = data.new_unique_out_unlaned(size_of(data, a), new_or_op).expect("newUniqueOut");
-            data.op_set_input(new_or_op, b, 0).expect("RuleHumptyOr: opSetInput");
-            data.op_set_input(new_or_op, c, 1).expect("RuleHumptyOr: opSetInput");
+            let or_vn = data
+                .new_unique_out_unlaned(size_of(data, a), new_or_op)
+                .expect("newUniqueOut");
+            data.op_set_input(new_or_op, b, 0)
+                .expect("RuleHumptyOr: opSetInput");
+            data.op_set_input(new_or_op, c, 1)
+                .expect("RuleHumptyOr: opSetInput");
             data.op_insert_before(new_or_op, op);
-            data.op_set_input(op, a, 0).expect("RuleHumptyOr: opSetInput");
-            data.op_set_input(op, or_vn, 1).expect("RuleHumptyOr: opSetInput");
+            data.op_set_input(op, a, 0)
+                .expect("RuleHumptyOr: opSetInput");
+            data.op_set_input(op, or_vn, 1)
+                .expect("RuleHumptyOr: opSetInput");
             set_opcode(data, op, OpCode::CPUI_INT_AND);
         }
         1
@@ -2002,21 +2181,32 @@ impl Rule for RuleSwitchSingle {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        let bb = match data.obank().get(op).expect("RuleSwitchSingle: stale op").get_parent() {
+        let bb = match data
+            .obank()
+            .get(op)
+            .expect("RuleSwitchSingle: stale op")
+            .get_parent()
+        {
             Some(b) => b,
             None => return 0,
         };
         if data.bblocks_ref().block(bb).size_out() != 1 {
             return 0;
         }
-        let Some(jt_idx) = data.find_jump_table_index(op) else { return 0 };
+        let Some(jt_idx) = data.find_jump_table_index(op) else {
+            return 0;
+        };
         let jt = data.get_jump_table(jt_idx as int4);
         let num = jt.num_entries();
         if num == 0 || !jt.is_labelled() {
             return 0;
         }
         let addr = jt.get_address_by_index(0);
-        let constant_input = data.vbank().get(in_vn(data, op, 0)).expect("RuleSwitchSingle: stale input").is_constant();
+        let constant_input = data
+            .vbank()
+            .get(in_vn(data, op, 0))
+            .expect("RuleSwitchSingle: stale input")
+            .is_constant();
         if num == 1 && !constant_input {
             return 0;
         }
@@ -2031,7 +2221,8 @@ impl Rule for RuleSwitchSingle {
         }
         set_opcode(data, op, OpCode::CPUI_BRANCH);
         let coderef = data.new_code_ref(&addr);
-        data.op_set_input(op, coderef, 0).expect("RuleSwitchSingle: opSetInput");
+        data.op_set_input(op, coderef, 0)
+            .expect("RuleSwitchSingle: opSetInput");
         data.remove_jump_table(jt_idx);
         data.sblocks_clear();
         1
@@ -2073,10 +2264,18 @@ impl Rule for RuleCondNegate {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if !data.obank().get(op).expect("RuleCondNegate: stale op").is_boolean_flip() {
+        if !data
+            .obank()
+            .get(op)
+            .expect("RuleCondNegate: stale op")
+            .is_boolean_flip()
+        {
             return 0;
         }
-        if data.op_normalize_flip(op).expect("RuleCondNegate: opNormalizeFlip") {
+        if data
+            .op_normalize_flip(op)
+            .expect("RuleCondNegate: opNormalizeFlip")
+        {
             return 1;
         }
 
@@ -2085,8 +2284,10 @@ impl Rule for RuleCondNegate {
         let newop = data.new_op(1, opaddr);
         set_opcode(data, newop, OpCode::CPUI_BOOL_NEGATE);
         let outvn = data.new_unique_out_unlaned(1, newop).expect("newUniqueOut"); // Flipped version of varnode
-        data.op_set_input(newop, vn, 0).expect("RuleCondNegate: opSetInput");
-        data.op_set_input(op, outvn, 1).expect("RuleCondNegate: opSetInput");
+        data.op_set_input(newop, vn, 0)
+            .expect("RuleCondNegate: opSetInput");
+        data.op_set_input(op, outvn, 1)
+            .expect("RuleCondNegate: opSetInput");
         data.op_insert_before(newop, op);
         // Flip meaning of condition
         //   NOTE: fallthru block is still same status (the flag toggle clears the
@@ -2108,25 +2309,82 @@ pub fn specs() -> Vec<RuleSpec> {
     vec![
         // RuleLoadVarnode / RuleStoreVarnode register under "stackvars"
         // (coreaction.cc:5939-5940, actprop2), not "analysis".
-        RuleSpec { group: "stackvars", ctor: || Box::new(RuleLoadVarnode::new()) },
-        RuleSpec { group: "stackvars", ctor: || Box::new(RuleStoreVarnode::new()) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleSubExtComm::new()) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleSubCommute::new()) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleConcatCommute::new()) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleConcatZext::new()) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleZextCommute::new()) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleZextShiftZext::new()) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleShiftAnd::new()) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleConcatZero::new()) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleConcatLeftShift::new()) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleSubZext::new()) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleSubCancel::new()) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleShiftSub::new()) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleHumptyDumpty::new()) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleDumptyHump::new()) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleHumptyOr::new()) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleSwitchSingle::new()) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleCondNegate::new()) },
+        RuleSpec {
+            group: "stackvars",
+            ctor: || Box::new(RuleLoadVarnode::new()),
+        },
+        RuleSpec {
+            group: "stackvars",
+            ctor: || Box::new(RuleStoreVarnode::new()),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleSubExtComm::new()),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleSubCommute::new()),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleConcatCommute::new()),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleConcatZext::new()),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleZextCommute::new()),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleZextShiftZext::new()),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleShiftAnd::new()),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleConcatZero::new()),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleConcatLeftShift::new()),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleSubZext::new()),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleSubCancel::new()),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleShiftSub::new()),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleHumptyDumpty::new()),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleDumptyHump::new()),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleHumptyOr::new()),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleSwitchSingle::new()),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleCondNegate::new()),
+        },
     ]
 }
 

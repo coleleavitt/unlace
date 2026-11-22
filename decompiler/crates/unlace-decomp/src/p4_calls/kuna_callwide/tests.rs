@@ -2,7 +2,7 @@ use super::*;
 
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_num::opcodes::OpCode;
 use unlace_sleigh::globalcontext::ContextInternal;
@@ -93,7 +93,7 @@ fn export_call() -> (Funcdata, Rc<Ledger>, FuncCallSpecs) {
 }
 
 fn export_call_layout(layout: u8) -> (Funcdata, Rc<Ledger>, FuncCallSpecs) {
-    use crate::dtype::{type_metatype, Datatype};
+    use crate::dtype::{Datatype, type_metatype};
     use crate::fspec::{ParamEntry, ParameterPieces};
 
     let (mut fd, previous) = data_and_proof();
@@ -225,7 +225,7 @@ fn project_declaration_copies_the_actual_unlocked_word_contract() {
 
 #[test]
 fn project_declaration_refuses_unproved_or_mismatched_call_contracts() {
-    use crate::dtype::{type_metatype, Datatype};
+    use crate::dtype::{Datatype, type_metatype};
     use crate::fspec::ParameterPieces;
 
     for mutation in 0..12 {
@@ -298,7 +298,7 @@ fn project_declaration_refuses_unproved_or_mismatched_call_contracts() {
 
 #[test]
 fn project_declaration_uses_final_operands_when_recovery_leaves_an_empty_proto() {
-    use crate::dtype::{type_metatype, Datatype};
+    use crate::dtype::{Datatype, type_metatype};
 
     for kind in [
         None,
@@ -340,7 +340,7 @@ fn project_declaration_uses_final_operands_when_recovery_leaves_an_empty_proto()
 
 #[test]
 fn project_declaration_requires_the_actual_wide_output_type() {
-    use crate::dtype::{type_metatype, Datatype};
+    use crate::dtype::{Datatype, type_metatype};
 
     for kind in [
         type_metatype::TYPE_UINT,

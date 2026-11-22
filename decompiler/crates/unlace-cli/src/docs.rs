@@ -144,8 +144,10 @@ pub fn run(argv: &[String]) -> i32 {
 /// rather than on an error.
 pub fn lookup(name: &str) -> Option<&'static Doc> {
     let lowered = name.to_ascii_lowercase();
-    let trimmed =
-        lowered.trim_start_matches("./").trim_start_matches("docs/").trim_end_matches(".md");
+    let trimmed = lowered
+        .trim_start_matches("./")
+        .trim_start_matches("docs/")
+        .trim_end_matches(".md");
     DOCS.iter().find(|d| {
         d.topic == trimmed
             || d.topic.trim_end_matches('s') == trimmed.trim_end_matches('s')
@@ -161,7 +163,13 @@ pub fn render_list() -> String {
     let width = DOCS.iter().map(|d| d.topic.len()).max().unwrap_or(0);
     let mut out = String::new();
     for d in DOCS {
-        let _ = writeln!(out, "{:width$}  {:>8}  {}", d.topic, human_size(d.body.len()), d.summary);
+        let _ = writeln!(
+            out,
+            "{:width$}  {:>8}  {}",
+            d.topic,
+            human_size(d.body.len()),
+            d.summary
+        );
     }
     out
 }
@@ -225,7 +233,11 @@ mod tests {
         assert!(DOCS.len() >= 5);
         for d in DOCS {
             assert!(!d.body.is_empty(), "{} embedded empty", d.topic);
-            assert!(d.body.starts_with('#'), "{} is not the markdown file", d.topic);
+            assert!(
+                d.body.starts_with('#'),
+                "{} is not the markdown file",
+                d.topic
+            );
         }
     }
 
@@ -241,7 +253,13 @@ mod tests {
 
     #[test]
     fn lookup_forgives_the_shapes_agents_type() {
-        for name in ["options", "option", "OPTIONS", "options.md", "docs/options.md"] {
+        for name in [
+            "options",
+            "option",
+            "OPTIONS",
+            "options.md",
+            "docs/options.md",
+        ] {
             assert_eq!(lookup(name).unwrap().topic, "options", "{name}");
         }
         assert_eq!(lookup("commands").unwrap().topic, "cli");
@@ -252,7 +270,11 @@ mod tests {
     fn all_carries_every_body_verbatim() {
         let all = render_all();
         for d in DOCS {
-            assert!(all.contains(d.body.trim_end_matches('\n')), "{} missing", d.topic);
+            assert!(
+                all.contains(d.body.trim_end_matches('\n')),
+                "{} missing",
+                d.topic
+            );
         }
     }
 }

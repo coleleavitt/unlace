@@ -72,25 +72,25 @@
 
 use std::rc::Rc;
 
-use object::read::Object;
 use object::ObjectSymbol;
+use object::read::Object;
 
 use unlace_base::types::int4;
-use unlace_decomp::dtype::{type_metatype, Datatype, TypeFactory, TypeField};
+use unlace_decomp::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
 use unlace_decomp::kuna_gotypes::GOTYPES_MAX_TYPELINKS;
 use unlace_decomp::kuna_langfacet::LangFacet;
 
+use crate::loader::gobuildinfo::{buildinfo_blob, go_version};
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 use crate::pclntab::locate_header;
 use kuna_layout::GoImage;
-use crate::loader::gobuildinfo::{buildinfo_blob, go_version};
 
-mod kuna_structorder;
-mod kuna_layout;
 mod kuna_fieldtypes;
 mod kuna_itabs;
-mod kuna_typeglobals;
+mod kuna_layout;
 pub mod kuna_pointermethods;
+mod kuna_structorder;
+mod kuna_typeglobals;
 use kuna_fieldtypes::field_type;
 
 /// Go `kind` byte values (`internal/abi.Kind`), masked by [`KIND_MASK`].
@@ -222,7 +222,13 @@ fn read_type(img: &GoImage, types: u64, etypes: u64, off: u32) -> Option<GoType>
     if tflag & TFLAG_EXTRA_STAR != 0 {
         name = name.strip_prefix('*').unwrap_or(&name).to_string();
     }
-    Some(GoType { vma, size, kind, tflag, name })
+    Some(GoType {
+        vma,
+        size,
+        kind,
+        tflag,
+        name,
+    })
 }
 
 /// `true` if the three words at `vma` parse as a plausible Go slice header
@@ -249,7 +255,9 @@ fn locate_type_meta(img: &GoImage, anchor: u64) -> Option<TypeMeta> {
             Some(v) => v,
             None => break,
         };
-        let Some(b) = word(img, anchor + (i + 1) * img.word_size) else { break };
+        let Some(b) = word(img, anchor + (i + 1) * img.word_size) else {
+            break;
+        };
         if a != 0 && a < b && b - a < 0x1000_0000 && mapped(img, a) && mapped(img, b - 1) {
             pairs.push((i, a, b));
         }
@@ -257,7 +265,9 @@ fn locate_type_meta(img: &GoImage, anchor: u64) -> Option<TypeMeta> {
     for &(i, types, etypes) in &pairs {
         // The typelinks slice follows (types, etypes) within the window.
         for j in (i + 2)..MODULEDATA_WINDOW_WORDS {
-            let Some((tl_ptr, tl_len)) = plausible_slice(img, anchor + j * img.word_size, 1_000_000) else {
+            let Some((tl_ptr, tl_len)) =
+                plausible_slice(img, anchor + j * img.word_size, 1_000_000)
+            else {
                 continue;
             };
             // Validate: sampled entries are int32 offsets into the blob whose
@@ -268,7 +278,9 @@ fn locate_type_meta(img: &GoImage, anchor: u64) -> Option<TypeMeta> {
             let mut tried = 0usize;
             for k in (0..n).step_by(step).take(16) {
                 tried += 1;
-                let Some(entb) = img.read(tl_ptr + (k as u64) * 4, 4) else { break };
+                let Some(entb) = img.read(tl_ptr + (k as u64) * 4, 4) else {
+                    break;
+                };
                 let off = i32::from_le_bytes(entb.try_into().unwrap());
                 if off >= 0 && read_type(img, types, etypes, off as u32).is_some() {
                     ok += 1;
@@ -278,13 +290,19 @@ fn locate_type_meta(img: &GoImage, anchor: u64) -> Option<TypeMeta> {
                 let n = n.min(GOTYPES_MAX_TYPELINKS);
                 let mut offsets = Vec::with_capacity(n);
                 for k in 0..n {
-                    let Some(entb) = img.read(tl_ptr + (k as u64) * 4, 4) else { break };
+                    let Some(entb) = img.read(tl_ptr + (k as u64) * 4, 4) else {
+                        break;
+                    };
                     let off = i32::from_le_bytes(entb.try_into().unwrap());
                     if off >= 0 {
                         offsets.push(off as u32);
                     }
                 }
-                return Some(TypeMeta { types, etypes, offsets });
+                return Some(TypeMeta {
+                    types,
+                    etypes,
+                    offsets,
+                });
             }
         }
     }
@@ -319,14 +337,16 @@ fn descriptor_stride(img: &GoImage, t: &GoType) -> Option<u64> {
             }
             (type_base + width, (inc + outc) * width)
         }
-        KIND_INTERFACE => {
-            (type_base + 4 * width, slice_len(t.vma + type_base + width)? * 8)
-        }
+        KIND_INTERFACE => (
+            type_base + 4 * width,
+            slice_len(t.vma + type_base + width)? * 8,
+        ),
         KIND_MAP => (type_base + 11 * width, 0),
         KIND_POINTER | KIND_SLICE => (type_base + width, 0),
-        KIND_STRUCT => {
-            (type_base + 4 * width, slice_len(t.vma + type_base + width)? * 3 * width)
-        }
+        KIND_STRUCT => (
+            type_base + 4 * width,
+            slice_len(t.vma + type_base + width)? * 3 * width,
+        ),
         _ => (type_base, 0),
     };
     let uncommon = if t.tflag & TFLAG_UNCOMMON != 0 {
@@ -354,10 +374,18 @@ fn descriptor_stride(img: &GoImage, t: &GoType) -> Option<u64> {
 fn locate_type_meta_descriptors(img: &GoImage, anchor: u64) -> Option<TypeMeta> {
     let width = img.word_size;
     for i in 0..MODULEDATA_WINDOW_WORDS {
-        let Some(types) = word(img, anchor + i * width) else { break };
-        let Some(typedesclen) = word(img, anchor + (i + 1) * width) else { break };
-        let Some(etypes) = word(img, anchor + (i + 2) * width) else { break };
-        let Some(end) = types.checked_add(typedesclen) else { continue };
+        let Some(types) = word(img, anchor + i * width) else {
+            break;
+        };
+        let Some(typedesclen) = word(img, anchor + (i + 1) * width) else {
+            break;
+        };
+        let Some(etypes) = word(img, anchor + (i + 2) * width) else {
+            break;
+        };
+        let Some(end) = types.checked_add(typedesclen) else {
+            continue;
+        };
         if types == 0
             || typedesclen == 0
             || typedesclen >= 0x1000_0000
@@ -372,23 +400,37 @@ fn locate_type_meta_descriptors(img: &GoImage, anchor: u64) -> Option<TypeMeta> 
         let mut td = types + width;
         let mut offsets: Vec<u32> = Vec::new();
         while td < end && offsets.len() < GOTYPES_MAX_TYPELINKS {
-            let Some(aligned) = td.checked_add(width - 1) else { break };
+            let Some(aligned) = td.checked_add(width - 1) else {
+                break;
+            };
             td = aligned & !(width - 1);
             if td >= end {
                 break;
             }
             let off = (td - types) as u32;
-            let Some(t) = read_type(img, types, end, off) else { break };
-            let Some(stride) = descriptor_stride(img, &t) else { break };
-            let Some(next) = td.checked_add(stride) else { break };
-            if next > end { break; }
+            let Some(t) = read_type(img, types, end, off) else {
+                break;
+            };
+            let Some(stride) = descriptor_stride(img, &t) else {
+                break;
+            };
+            let Some(next) = td.checked_add(stride) else {
+                break;
+            };
+            if next > end {
+                break;
+            }
             offsets.push(off);
             td = next;
         }
         // Accept only a walk that looks like the real region: several records
         // and no early divergence (reached the end or the cap).
         if offsets.len() >= 8 && (td >= end || offsets.len() == GOTYPES_MAX_TYPELINKS) {
-            return Some(TypeMeta { types, etypes, offsets });
+            return Some(TypeMeta {
+                types,
+                etypes,
+                offsets,
+            });
         }
     }
     None
@@ -404,8 +446,15 @@ fn locate_moduledata(file: &object::File, img: &GoImage, header_vma: u64) -> Opt
             name,
             // go1.26+ linkers emit firstmoduledata into its own `.go.module`
             // section; older releases keep it in the data family.
-            ".go.module" | "go.module" | "__go_module"
-                | ".noptrdata" | ".data" | ".data.rel.ro" | "__noptrdata" | "__data" | "__DATA"
+            ".go.module"
+                | "go.module"
+                | "__go_module"
+                | ".noptrdata"
+                | ".data"
+                | ".data.rel.ro"
+                | "__noptrdata"
+                | "__data"
+                | "__DATA"
         ) {
             continue;
         }
@@ -415,7 +464,9 @@ fn locate_moduledata(file: &object::File, img: &GoImage, header_vma: u64) -> Opt
         let words = data.len() / width;
         for w in 0..words {
             let anchor = base + (w as u64) * img.word_size;
-            let Some(v) = img.decode_word(&data[w * width..(w + 1) * width]) else { continue };
+            let Some(v) = img.decode_word(&data[w * width..(w + 1) * width]) else {
+                continue;
+            };
             if v != header_vma {
                 continue;
             }
@@ -450,16 +501,35 @@ fn intern_header_shells(tf: &dyn TypeFactory, width: int4) {
         let v = tf.get_type_void().expect("void");
         tf.get_type_pointer(width, v, 1).expect("ptr")
     };
-    let u8w = |tf: &dyn TypeFactory, w: int4| tf.get_base(w, type_metatype::TYPE_UINT).expect("uint");
+    let u8w =
+        |tf: &dyn TypeFactory, w: int4| tf.get_base(w, type_metatype::TYPE_UINT).expect("uint");
     let rows: [(&str, Vec<(&str, Rc<Datatype>)>, LangFacet); 4] = [
-        ("go.string", vec![("data", ptr(tf)), ("len", u8w(tf, width))], LangFacet::GoString),
+        (
+            "go.string",
+            vec![("data", ptr(tf)), ("len", u8w(tf, width))],
+            LangFacet::GoString,
+        ),
         (
             "go.slice",
-            vec![("data", ptr(tf)), ("len", u8w(tf, width)), ("cap", u8w(tf, width))],
-            LangFacet::GoSlice { elem: format!("undefined{width}") },
+            vec![
+                ("data", ptr(tf)),
+                ("len", u8w(tf, width)),
+                ("cap", u8w(tf, width)),
+            ],
+            LangFacet::GoSlice {
+                elem: format!("undefined{width}"),
+            },
         ),
-        ("go.iface", vec![("tab", ptr(tf)), ("data", ptr(tf))], LangFacet::GoIface { eface: false }),
-        ("go.eface", vec![("type", ptr(tf)), ("data", ptr(tf))], LangFacet::GoIface { eface: true }),
+        (
+            "go.iface",
+            vec![("tab", ptr(tf)), ("data", ptr(tf))],
+            LangFacet::GoIface { eface: false },
+        ),
+        (
+            "go.eface",
+            vec![("type", ptr(tf)), ("data", ptr(tf))],
+            LangFacet::GoIface { eface: true },
+        ),
     ];
     for (name, fields, facet) in rows {
         let Ok(ct) = shell(tf, name) else { continue };
@@ -508,7 +578,9 @@ fn intern_named_structs(
     // Pass 1: declare every named struct so cross-references resolve by name.
     let mut structs: Vec<GoType> = Vec::new();
     for &off in &meta.offsets {
-        let Some(t) = read_type(img, meta.types, meta.etypes, off) else { continue };
+        let Some(t) = read_type(img, meta.types, meta.etypes, off) else {
+            continue;
+        };
         walked += 1;
         // Typelinks hold the types interface conversion reaches, which for a
         // struct is usually its POINTER form (`*main.Point`); the named struct
@@ -517,8 +589,14 @@ fn intern_named_structs(
         let mut candidates: Vec<GoType> = Vec::new();
         if t.kind == KIND_POINTER {
             if let Some(elem) = word(img, t.vma + img.type_base()) {
-                if elem >= meta.types && elem.checked_add(img.type_base()).is_some_and(|end| end <= meta.etypes) {
-                    if let Some(p) = read_type(img, meta.types, meta.etypes, (elem - meta.types) as u32) {
+                if elem >= meta.types
+                    && elem
+                        .checked_add(img.type_base())
+                        .is_some_and(|end| end <= meta.etypes)
+                {
+                    if let Some(p) =
+                        read_type(img, meta.types, meta.etypes, (elem - meta.types) as u32)
+                    {
                         candidates.push(p);
                     }
                 }
@@ -548,8 +626,7 @@ fn intern_named_structs(
         let mut by_name: std::collections::BTreeMap<&str, std::collections::BTreeSet<String>> =
             std::collections::BTreeMap::new();
         for t in &structs {
-            let fp = struct_layout_fingerprint(img, t)
-                .unwrap_or_else(|| format!("?{:x}", t.vma));
+            let fp = struct_layout_fingerprint(img, t).unwrap_or_else(|| format!("?{:x}", t.vma));
             by_name.entry(t.name.as_str()).or_default().insert(fp);
         }
         for (name, fps) in &by_name {
@@ -574,8 +651,8 @@ fn intern_named_structs(
             continue;
         }
         // The fields slice follows the base type and package-path pointer.
-        let Some((f_ptr, f_len)) = plausible_slice(img, t.vma + img.type_base() + img.word_size, 4096)
-            .or_else(|| {
+        let Some((f_ptr, f_len)) =
+            plausible_slice(img, t.vma + img.type_base() + img.word_size, 4096).or_else(|| {
                 // A zero-field struct has len == cap == 0; plausible_slice
                 // rejects len 0, so probe that case explicitly.
                 let len = word(img, t.vma + img.type_base() + 2 * img.word_size)?;
@@ -589,9 +666,11 @@ fn intern_named_structs(
         let mut good = true;
         for i in 0..f_len {
             let fv = f_ptr + i * 3 * img.word_size;
-            let (Some(name_ptr), Some(typ_ptr), Some(offset)) =
-                (word(img, fv), word(img, fv + img.word_size), word(img, fv + 2 * img.word_size))
-            else {
+            let (Some(name_ptr), Some(typ_ptr), Some(offset)) = (
+                word(img, fv),
+                word(img, fv + img.word_size),
+                word(img, fv + 2 * img.word_size),
+            ) else {
                 good = false;
                 break;
             };
@@ -645,7 +724,14 @@ fn intern_named_structs(
             continue;
         }
         if tf
-            .set_fields_struct_raw(&ct, fields, Vec::new(), t.size as int4, img.word_size as int4, 0)
+            .set_fields_struct_raw(
+                &ct,
+                fields,
+                Vec::new(),
+                t.size as int4,
+                img.word_size as int4,
+                0,
+            )
             .is_ok()
         {
             interned += 1;
@@ -701,7 +787,8 @@ impl AnalysisPass for GoTypesPass {
             return AnalysisOutput::default();
         }
         let mut img = GoImage::new(ctx.file);
-        let version = buildinfo_blob(ctx.file).and_then(|b| go_version(b, |vma, len| img.bytes.read(vma, len)));
+        let version = buildinfo_blob(ctx.file)
+            .and_then(|b| go_version(b, |vma, len| img.bytes.read(vma, len)));
         let modern_32_bit = !ctx.file.is_64() && version == Some((1, 27));
         if !ctx.file.is_64() && !modern_32_bit && !matches!(version, Some((1, 18..=26))) {
             return AnalysisOutput::default();
@@ -736,10 +823,15 @@ impl AnalysisPass for GoTypesPass {
             .map(|s| s.address())
             .collect();
         let itabs = kuna_itabs::collect(&img, &meta, anchor, &occupied);
-        let go_pointer_methods = kuna_pointermethods::collect(
-            ctx.file, &img, &meta, header_vma, anchor, version,
-        ).unwrap_or_default();
-        AnalysisOutput { go_type_globals: globals, go_itabs: itabs, go_pointer_methods, ..Default::default() }
+        let go_pointer_methods =
+            kuna_pointermethods::collect(ctx.file, &img, &meta, header_vma, anchor, version)
+                .unwrap_or_default();
+        AnalysisOutput {
+            go_type_globals: globals,
+            go_itabs: itabs,
+            go_pointer_methods,
+            ..Default::default()
+        }
     }
 }
 

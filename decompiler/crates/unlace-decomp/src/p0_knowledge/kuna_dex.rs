@@ -28,12 +28,14 @@ use unlace_base::space::AddrSpace;
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
-use crate::cpool::{cpool_tag, CPoolRecord};
-use crate::dtype::{type_metatype, Datatype, TypeFactory};
+use crate::cpool::{CPoolRecord, cpool_tag};
+use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::fspec::PrototypePieces;
 use crate::kuna_callmechanisms::Operation;
 
-pub use format::{java_type_name, simple_class_name, CatchHandler, DexFile, EncodedMethod, TryItem};
+pub use format::{
+    CatchHandler, DexFile, EncodedMethod, TryItem, java_type_name, simple_class_name,
+};
 
 /// Register-space offset of `iv0`, the first designated input register.
 pub const INPUT_REGISTER_START: u64 = 0x100;
@@ -67,7 +69,9 @@ pub struct DexModel {
 
 impl std::fmt::Debug for DexModel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("DexModel").field("methods", &self.entries.len()).finish()
+        f.debug_struct("DexModel")
+            .field("methods", &self.entries.len())
+            .finish()
     }
 }
 
@@ -118,11 +122,14 @@ impl DexModel {
 
     /// Does the file's mapping hold `addr`?
     pub fn contains(&self, addr: u64) -> bool {
-        addr.checked_sub(self.base).is_some_and(|off| off < self.file.bytes().len() as u64)
+        addr.checked_sub(self.base)
+            .is_some_and(|off| off < self.file.bytes().len() as u64)
     }
 
     fn string(&self, idx: u32) -> String {
-        self.file.string(idx).unwrap_or_else(|| format!("string_{idx:x}"))
+        self.file
+            .string(idx)
+            .unwrap_or_else(|| format!("string_{idx:x}"))
     }
 
     /// `(class descriptor, name, prototype descriptor)` of method `method_idx`.
@@ -135,11 +142,17 @@ impl DexModel {
         }
         desc.push(')');
         desc.push_str(&self.descriptor(proto.return_type_idx));
-        Some((self.descriptor(id.class_idx), self.string(id.name_idx), desc))
+        Some((
+            self.descriptor(id.class_idx),
+            self.string(id.name_idx),
+            desc,
+        ))
     }
 
     fn descriptor(&self, type_idx: u32) -> String {
-        self.file.type_descriptor(type_idx).unwrap_or_else(|| "V".to_string())
+        self.file
+            .type_descriptor(type_idx)
+            .unwrap_or_else(|| "V".to_string())
     }
 
     fn class_scope(&self, class_idx: u32) -> String {
@@ -152,10 +165,16 @@ impl DexModel {
         for class in &self.file.classes {
             for method in &class.methods {
                 let Some(code) = method.code else { continue };
-                let Some(id) = self.file.method_id(method.method_idx) else { continue };
+                let Some(id) = self.file.method_id(method.method_idx) else {
+                    continue;
+                };
                 out.push(DexFunction {
                     addr: self.base + u64::from(code.insns_off),
-                    name: format!("{}::{}", self.class_scope(id.class_idx), self.string(id.name_idx)),
+                    name: format!(
+                        "{}::{}",
+                        self.class_scope(id.class_idx),
+                        self.string(id.name_idx)
+                    ),
                     method_idx: method.method_idx,
                     is_static: method.is_static(),
                 });
@@ -189,7 +208,11 @@ impl DexModel {
             to += 4;
         }
         for param in proto.parameters {
-            let size = if format::is_wide(&self.descriptor(param)) { 8 } else { 4 };
+            let size = if format::is_wide(&self.descriptor(param)) {
+                8
+            } else {
+                4
+            };
             copies.push((from, to, size));
             from += u64::from(size);
             to += u64::from(size);
@@ -201,7 +224,11 @@ impl DexModel {
     /// (`None` for `java.lang.Object`).
     pub fn method_class(&self, addr: u64) -> Option<(u32, Option<u32>)> {
         let id = self.file.method_id(self.entries.get(&addr)?.method_idx)?;
-        let class = self.file.classes.iter().find(|c| c.class_idx == id.class_idx)?;
+        let class = self
+            .file
+            .classes
+            .iter()
+            .find(|c| c.class_idx == id.class_idx)?;
         let superclass = (class.superclass_idx != format::NO_INDEX).then_some(class.superclass_idx);
         Some((id.class_idx, superclass))
     }
@@ -218,15 +245,23 @@ impl DexModel {
 
     /// The `try_item`s of the method whose code starts at `addr`.
     pub fn try_blocks(&self, addr: u64) -> Vec<TryBlock> {
-        let Some(code) = self.entries.get(&addr).and_then(|m| m.code) else { return Vec::new() };
-        let Ok(tries) = self.file.tries(&code) else { return Vec::new() };
+        let Some(code) = self.entries.get(&addr).and_then(|m| m.code) else {
+            return Vec::new();
+        };
+        let Ok(tries) = self.file.tries(&code) else {
+            return Vec::new();
+        };
         let unit = |u: u32| addr + 2 * u64::from(u);
         tries
             .iter()
             .map(|t| TryBlock {
                 start: unit(t.start),
                 end: unit(t.start + u32::from(t.count)),
-                handlers: t.handlers.iter().map(|h| (h.type_idx, unit(h.addr))).collect(),
+                handlers: t
+                    .handlers
+                    .iter()
+                    .map(|h| (h.type_idx, unit(h.addr)))
+                    .collect(),
             })
             .collect()
     }
@@ -303,9 +338,15 @@ impl DexModel {
                 let class = types.get_type_struct(&simple_class_name(descriptor))?;
                 types.get_type_pointer(4, class, 1)?
             }
-            _ => return Err(KunaError::lowlevel(format!("bad DEX type descriptor: {descriptor}"))),
+            _ => {
+                return Err(KunaError::lowlevel(format!(
+                    "bad DEX type descriptor: {descriptor}"
+                )));
+            }
         };
-        self.types.borrow_mut().insert(descriptor.to_string(), Rc::clone(&built));
+        self.types
+            .borrow_mut()
+            .insert(descriptor.to_string(), Rc::clone(&built));
         Ok(built)
     }
 
@@ -328,20 +369,29 @@ impl DexModel {
             .file
             .proto_id(id.proto_idx)
             .ok_or_else(|| KunaError::lowlevel("DEX proto index out of range"))?;
-        let mut pieces = PrototypePieces { first_var_arg_slot: -1, ..Default::default() };
+        let mut pieces = PrototypePieces {
+            first_var_arg_slot: -1,
+            ..Default::default()
+        };
         pieces.name = self.string(id.name_idx);
         pieces.outtype = Some(self.java_type(&self.descriptor(proto.return_type_idx), types)?);
         if !is_static {
             if call_site {
-                pieces.intypes.push(types.get_base(4, type_metatype::TYPE_UNKNOWN)?);
+                pieces
+                    .intypes
+                    .push(types.get_base(4, type_metatype::TYPE_UNKNOWN)?);
                 pieces.innames.push("ref".to_string());
             } else {
-                pieces.intypes.push(self.java_type(&self.descriptor(id.class_idx), types)?);
+                pieces
+                    .intypes
+                    .push(self.java_type(&self.descriptor(id.class_idx), types)?);
                 pieces.innames.push("this".to_string());
             }
         }
         for param in proto.parameters {
-            pieces.intypes.push(self.java_type(&self.descriptor(param), types)?);
+            pieces
+                .intypes
+                .push(self.java_type(&self.descriptor(param), types)?);
             pieces.innames.push(String::new());
         }
         Ok((pieces, if is_static { "__stdcall" } else { "__thiscall" }))
@@ -355,20 +405,37 @@ impl DexModel {
         if let Some(found) = self.records.borrow().get(&(index, tag)) {
             return found.clone();
         }
-        let built = self.build_record(index, tag, types).ok().flatten().map(Rc::new);
-        self.records.borrow_mut().insert((index, tag), built.clone());
+        let built = self
+            .build_record(index, tag, types)
+            .ok()
+            .flatten()
+            .map(Rc::new);
+        self.records
+            .borrow_mut()
+            .insert((index, tag), built.clone());
         built
     }
 
-    fn build_record(&self, index: u64, tag: u64, types: &dyn TypeFactory) -> KunaResult<Option<CPoolRecord>> {
-        let index32 = u32::try_from(index).map_err(|_| KunaError::lowlevel("DEX index out of range"))?;
+    fn build_record(
+        &self,
+        index: u64,
+        tag: u64,
+        types: &dyn TypeFactory,
+    ) -> KunaResult<Option<CPoolRecord>> {
+        let index32 =
+            u32::try_from(index).map_err(|_| KunaError::lowlevel("DEX index out of range"))?;
         let record = match tag {
             tag::METHOD | tag::STATIC_METHOD => {
                 let is_static = tag == tag::STATIC_METHOD;
-                let Some(id) = self.file.method_id(index32) else { return Ok(None) };
+                let Some(id) = self.file.method_id(index32) else {
+                    return Ok(None);
+                };
                 let mut token = self.string(id.name_idx);
                 if is_static {
-                    token = format!("{}.{token}", simple_class_name(&self.descriptor(id.class_idx)));
+                    token = format!(
+                        "{}.{token}",
+                        simple_class_name(&self.descriptor(id.class_idx))
+                    );
                 }
                 let (pieces, model) = self.method_prototype(index32, is_static, true, types)?;
                 let code = types.get_type_code_proto_named(&pieces, model)?;
@@ -376,23 +443,38 @@ impl DexModel {
                 CPoolRecord::from_parts(cpool_tag::POINTER_METHOD, token.into_bytes(), ptr, None)
             }
             tag::FIELD | tag::STATIC_FIELD => {
-                let Some(id) = self.file.field_id(index32) else { return Ok(None) };
+                let Some(id) = self.file.field_id(index32) else {
+                    return Ok(None);
+                };
                 let mut token = self.string(id.name_idx);
                 if tag == tag::STATIC_FIELD {
-                    token = format!("{}.{token}", simple_class_name(&self.descriptor(id.class_idx)));
+                    token = format!(
+                        "{}.{token}",
+                        simple_class_name(&self.descriptor(id.class_idx))
+                    );
                 }
                 let field = self.java_type(&self.descriptor(id.type_idx), types)?;
                 let ptr = types.get_type_pointer(4, field, 1)?;
                 CPoolRecord::from_parts(cpool_tag::POINTER_FIELD, token.into_bytes(), ptr, None)
             }
             tag::STRING => {
-                let Some(text) = self.file.string(index32) else { return Ok(None) };
+                let Some(text) = self.file.string(index32) else {
+                    return Ok(None);
+                };
                 let ty = self.java_type("Ljava/lang/String;", types)?;
-                CPoolRecord::from_parts(cpool_tag::STRING_LITERAL, Vec::new(), ty, Some(text.into_bytes()))
+                CPoolRecord::from_parts(
+                    cpool_tag::STRING_LITERAL,
+                    Vec::new(),
+                    ty,
+                    Some(text.into_bytes()),
+                )
             }
             tag::CLASSREF | tag::INSTANCEOF => {
                 let (ty, token) = if index32 >= self.file.num_types() as u32 {
-                    (types.get_base(4, type_metatype::TYPE_UNKNOWN)?, "<none>".to_string())
+                    (
+                        types.get_base(4, type_metatype::TYPE_UNKNOWN)?,
+                        "<none>".to_string(),
+                    )
                 } else {
                     let descriptor = self.descriptor(index32);
                     let token = if descriptor.starts_with('L') {
@@ -403,9 +485,19 @@ impl DexModel {
                     (self.java_type(&descriptor, types)?, token)
                 };
                 if tag == tag::INSTANCEOF {
-                    CPoolRecord::from_parts(cpool_tag::INSTANCE_OF, b"instanceof".to_vec(), ty, None)
+                    CPoolRecord::from_parts(
+                        cpool_tag::INSTANCE_OF,
+                        b"instanceof".to_vec(),
+                        ty,
+                        None,
+                    )
                 } else {
-                    CPoolRecord::from_parts(cpool_tag::CLASS_REFERENCE, token.into_bytes(), ty, None)
+                    CPoolRecord::from_parts(
+                        cpool_tag::CLASS_REFERENCE,
+                        token.into_bytes(),
+                        ty,
+                        None,
+                    )
                 }
             }
             tag::ARRAYLENGTH => CPoolRecord::from_parts(
@@ -433,7 +525,11 @@ fn copy_operations(
     register: &Rc<AddrSpace>,
     copies: &[(u64, u64, u32)],
 ) -> Vec<Operation> {
-    let storage = |offset, size| VarnodeData { space: Some(Rc::clone(register)), offset, size };
+    let storage = |offset, size| VarnodeData {
+        space: Some(Rc::clone(register)),
+        offset,
+        size,
+    };
     copies
         .iter()
         .map(|&(from, to, size)| Operation {
@@ -448,12 +544,19 @@ fn copy_operations(
 /// Insert the `uponentry` copies at the start of the function (the dynamic
 /// payload `ActionConstbase` injects upstream).
 pub fn apply_entry(data: &mut crate::funcdata::Funcdata) -> KunaResult<()> {
-    if data.get_arch().dex.is_none() || data.kuna_call_mechanisms.dex_entry || data.bblocks_get_size() == 0 {
+    if data.get_arch().dex.is_none()
+        || data.kuna_call_mechanisms.dex_entry
+        || data.bblocks_get_size() == 0
+    {
         return Ok(());
     }
     let arch = data.get_arch().clone();
-    let Some(model) = arch.dex.as_ref() else { return Ok(()) };
-    let Some(copies) = model.entry_copies(data.get_address().get_offset()) else { return Ok(()) };
+    let Some(model) = arch.dex.as_ref() else {
+        return Ok(());
+    };
+    let Some(copies) = model.entry_copies(data.get_address().get_offset()) else {
+        return Ok(());
+    };
     let register = arch
         .manage
         .get_space_by_name("register")

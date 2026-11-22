@@ -76,7 +76,10 @@ pub fn set_dyldimage(value: &str) -> String {
 pub fn set_dyldcrossrefs(value: &str) -> KunaResult<String> {
     crate::options::on_or_off(value).map(|on| {
         set_dyldcrossrefs_env(on);
-        format!("dyld shared cache cross-image reference naming turned {}", if on { "on" } else { "off" })
+        format!(
+            "dyld shared cache cross-image reference naming turned {}",
+            if on { "on" } else { "off" }
+        )
     })
 }
 
@@ -87,10 +90,16 @@ mod tests {
     #[test]
     fn crossrefs_default_on_and_off_tokens() {
         for off in ["off", "0", "false"] {
-            assert!(!crate::options::parse_env_toggle(off, true), "`{off}` disables");
+            assert!(
+                !crate::options::parse_env_toggle(off, true),
+                "`{off}` disables"
+            );
         }
         for on in ["on", "1", "true", "", "anything"] {
-            assert!(crate::options::parse_env_toggle(on, true), "`{on}` keeps it on");
+            assert!(
+                crate::options::parse_env_toggle(on, true),
+                "`{on}` keeps it on"
+            );
         }
     }
 

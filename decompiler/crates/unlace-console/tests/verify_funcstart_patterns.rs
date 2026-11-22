@@ -22,12 +22,15 @@ use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// The vendored stripped x86-64 fixture (built `gcc -O2
@@ -67,7 +70,8 @@ fn bootstrap(mode: Mode) -> unlace_console::engine::ConsoleProgram {
             .set_kuna_option("funcstart_patterns", "on")
             .expect("funcstart_patterns flips on");
     }
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
@@ -94,8 +98,10 @@ fn full_patterns_discover_extra_function_when_enabled() {
     );
 
     // And it is a real, decompilable function under its discovered name (no --addr).
-    let cmds: Vec<String> =
-        ["load function sub_401130", "decompile", "print C"].iter().map(|s| s.to_string()).collect();
+    let cmds: Vec<String> = ["load function sub_401130", "decompile", "print C"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);

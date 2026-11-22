@@ -109,7 +109,10 @@ const IMAGES: &[(&str, &[(&str, &str)])] = &[
         &[
             ("v1 = (unsigned int)a0;", "v1 = a0;"),
             ("v3 = (int)a0;", "v3 = a0;"),
-            ("v2 = (short)((a0 & 0x7f8) >> 3);", "v2 = (a0 & 0x7f8) >> 3;"),
+            (
+                "v2 = (short)((a0 & 0x7f8) >> 3);",
+                "v2 = (a0 & 0x7f8) >> 3;",
+            ),
             ("*a1 = (char)a0;", "*a1 = a0;"),
             ("return (int)x;", "return x;"),
         ],
@@ -139,7 +142,9 @@ const IMAGES: &[(&str, &[(&str, &str)])] = &[
 
 /// The printed function `name`, from its header comment to the next.
 fn function<'a>(text: &'a str, name: &str) -> &'a str {
-    let start = text.find(&format!("// Function: {name} @")).unwrap_or_else(|| panic!("no {name}:\n{text}"));
+    let start = text
+        .find(&format!("// Function: {name} @"))
+        .unwrap_or_else(|| panic!("no {name}:\n{text}"));
     let rest = &text[start + 1..];
     &text[start..start + 1 + rest.find("// Function:").unwrap_or(rest.len())]
 }
@@ -159,37 +164,77 @@ fn a_narrowing_into_a_destination_of_its_type_round_trips_through_the_printed_c(
         .into_iter()
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
-    assert!(!compilers.is_empty(), "the round trip requires a C compiler");
+    assert!(
+        !compilers.is_empty(),
+        "the round trip requires a C compiler"
+    );
     let reference = reference();
     let funcs = FUNCS.join(",");
     for &(image, lines) in IMAGES {
         let path = common::fixture(image);
         for opt in ["off", "on"] {
-            let mut args = vec!["decompile-all", path.as_str(), "--functions", funcs.as_str()];
+            let mut args = vec![
+                "decompile-all",
+                path.as_str(),
+                "--functions",
+                funcs.as_str(),
+            ];
             for p in PROTOTYPES {
                 args.extend_from_slice(&["--assert", p]);
             }
-            args.extend_from_slice(&["--option", "castnarrow", opt, "--option", "bitidioms", "off", "--option", "typevote", "off"]);
+            args.extend_from_slice(&[
+                "--option",
+                "castnarrow",
+                opt,
+                "--option",
+                "bitidioms",
+                "off",
+                "--option",
+                "typevote",
+                "off",
+            ]);
             let (text, err, rc) = common::run_kuna(&args);
             assert_eq!(rc, 0, "{image} castnarrow {opt}: {err}");
             for &(off, on) in lines {
-                let (want, gone) = if opt == "on" { (on, Some(off)) } else { (off, None) };
-                assert!(text.contains(want), "{image} castnarrow {opt} does not print `{want}`:\n{text}");
+                let (want, gone) = if opt == "on" {
+                    (on, Some(off))
+                } else {
+                    (off, None)
+                };
+                assert!(
+                    text.contains(want),
+                    "{image} castnarrow {opt} does not print `{want}`:\n{text}"
+                );
                 if let Some(gone) = gone {
-                    assert!(!text.contains(gone), "{image} castnarrow on still prints `{gone}`:\n{text}");
+                    assert!(
+                        !text.contains(gone),
+                        "{image} castnarrow on still prints `{gone}`:\n{text}"
+                    );
                 }
             }
             for (name, kept) in [("keep_store", "*a1 = (int)a0;"), ("keep_arith", "(int)a0")] {
-                assert!(function(&text, name).contains(kept), "{image} castnarrow {opt} lost `{kept}`:\n{text}");
+                assert!(
+                    function(&text, name).contains(kept),
+                    "{image} castnarrow {opt} lost `{kept}`:\n{text}"
+                );
             }
             let program = format!("{PRELUDE}{reference}\n{text}\n{MAIN}");
             for cc in &compilers {
                 for level in ["-O0", "-O2"] {
-                    let src = common::scratch_file(&format!("castnarrow-{image}-{opt}-{cc}{level}"), "c");
+                    let src =
+                        common::scratch_file(&format!("castnarrow-{image}-{opt}-{cc}{level}"), "c");
                     let exe = src.with_extension("exe");
                     std::fs::write(&src, &program).unwrap();
                     let out = Command::new(cc)
-                        .args(["-std=gnu11", "-w", "-fwrapv", level, "-o", exe.to_str().unwrap(), src.to_str().unwrap()])
+                        .args([
+                            "-std=gnu11",
+                            "-w",
+                            "-fwrapv",
+                            level,
+                            "-o",
+                            exe.to_str().unwrap(),
+                            src.to_str().unwrap(),
+                        ])
                         .args(common::CC_GCC15_DEMOTE)
                         .output()
                         .expect("spawn the C compiler");

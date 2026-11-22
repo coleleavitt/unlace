@@ -61,7 +61,7 @@ use unlace_base::space::AddrSpaceManager;
 use unlace_base::xml::{DocumentStorage, Element};
 
 use unlace_decomp::decompile_drive::{decompile_func, print_c};
-use unlace_decomp::sleigh_arch::{register_sleigh_arch_ids, LanguageDatabase};
+use unlace_decomp::sleigh_arch::{LanguageDatabase, register_sleigh_arch_ids};
 use unlace_decomp::xml_arch::{XmlArchitecture, XmlArchitectureCapability};
 
 use unlace_sleigh::loadimage::LoadImage;
@@ -69,7 +69,10 @@ use unlace_sleigh::loadimage_xml::register_loadimage_xml_ids;
 use unlace_sleigh::translate::register_translate_ids;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 struct SymbolFn {
@@ -103,11 +106,15 @@ fn find_named(el: &Rc<Element>, name: &str, out: &mut Vec<Rc<Element>>) {
 }
 
 fn attr(el: &Element, name: &str) -> Option<String> {
-    el.get_attribute_value(name).ok().map(|b| String::from_utf8_lossy(b).into_owned())
+    el.get_attribute_value(name)
+        .ok()
+        .map(|b| String::from_utf8_lossy(b).into_owned())
 }
 
 fn parse_datatest(stem: &str) -> Result<DataTest, String> {
-    let path = repo_root().join("tests/datatests").join(format!("{stem}.xml"));
+    let path = repo_root()
+        .join("tests/datatests")
+        .join(format!("{stem}.xml"));
     let xml = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
     let mut store = DocumentStorage::new();
     let root = store
@@ -131,7 +138,11 @@ fn parse_datatest(stem: &str) -> Result<DataTest, String> {
             })
         })
         .collect();
-    Ok(DataTest { binaryimage, arch_id, symbols })
+    Ok(DataTest {
+        binaryimage,
+        arch_id,
+        symbols,
+    })
 }
 
 struct DummyImg;
@@ -161,10 +172,12 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
     let registry = build_registry();
     let capability = XmlArchitectureCapability::new();
     let mut arch = capability.build_architecture("datatest", "");
-    arch.build_loader(Rc::clone(&dt.binaryimage)).map_err(|e| format!("build_loader: {e}"))?;
+    arch.build_loader(Rc::clone(&dt.binaryimage))
+        .map_err(|e| format!("build_loader: {e}"))?;
     let mut db = LanguageDatabase::new();
     db.scan_for_sleigh_directories(root.join("specs").to_str().unwrap());
-    db.get_descriptions(&registry).map_err(|e| format!("collect ldefs: {e}"))?;
+    db.get_descriptions(&registry)
+        .map_err(|e| format!("collect ldefs: {e}"))?;
     arch.sleigh_mut().set_archid(&dt.arch_id);
     arch.sleigh_mut()
         .resolve_architecture(&db, &dt.arch_id)
@@ -172,7 +185,10 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
     if arch.sleigh().language_index() < 0 {
         return Err("language index unresolved".to_string());
     }
-    let specs = arch.sleigh().build_spec_file(&db).map_err(|e| format!("build_spec_file: {e}"))?;
+    let specs = arch
+        .sleigh()
+        .build_spec_file(&db)
+        .map_err(|e| format!("build_spec_file: {e}"))?;
     let resolved_sla = specs.slafile.ok_or("build_spec_file resolved no .sla")?;
     let sla = std::fs::read(&resolved_sla).map_err(|e| format!("read sla: {e}"))?;
     arch.sleigh_mut()
@@ -196,7 +212,9 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
         .base_mut()
         .unwrap()
         .translate_mut()
-        .as_sleigh_mut().expect("standalone Sleigh engine").install_register_lookup()
+        .as_sleigh_mut()
+        .expect("standalone Sleigh engine")
+        .install_register_lookup()
         .map_err(|e| format!("install_register_lookup: {e}"))?;
     arch.sleigh_mut()
         .base_mut()
@@ -208,7 +226,10 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
     arch.open_image(unsafe { &*manager_ptr }, &registry)
         .map_err(|e| format!("open_image: {e}"))?;
     let img = arch.take_loader().ok_or("loader vanished after open")?;
-    arch.sleigh_mut().base_mut().unwrap().set_loader(Box::new(img));
+    arch.sleigh_mut()
+        .base_mut()
+        .unwrap()
+        .set_loader(Box::new(img));
     Ok(arch)
 }
 
@@ -220,7 +241,10 @@ fn render_one(stem: &str, which: usize) -> Result<String, String> {
     let space_name = sym.space.clone();
     let off = sym.offset;
     let name = sym.name.clone();
-    let arch = xarch.sleigh_mut().base_mut().ok_or("no Architecture base")?;
+    let arch = xarch
+        .sleigh_mut()
+        .base_mut()
+        .ok_or("no Architecture base")?;
     let space = arch
         .manage()
         .get_space_by_name(&space_name)
@@ -316,7 +340,10 @@ fn w10_implied_trim_copy_inlined_on_condconst_conn() {
         !rust.contains("v1 = v2;"),
         "the return-register trim COPY `v1 = v2;` must collapse, got:\n{rust}"
     );
-    assert!(rust.contains("return v1;"), "must `return v1;`, got:\n{rust}");
+    assert!(
+        rust.contains("return v1;"),
+        "must `return v1;`, got:\n{rust}"
+    );
     // The recovered source value is a stack local (the window-reset is on by
     // default), carrying the real expression — exactly the C++ `v1 // stack`
     // direction, NOT a leftover register round-trip.
@@ -428,7 +455,7 @@ fn w10_implied_multiwrite_return_stays_explicit_not_overinlined() {
 fn w10_implied_boolless_acc_unregressed_byte_parity() {
     // The committed C++ B5 oracle (same constant as print_b5_boolless.rs).
     const CPP_B5_ORACLE: &str =
-    // (Header gap adjusted for the kuna DIV-34 brace-placement default.)
+        // (Header gap adjusted for the kuna DIV-34 brace-placement default.)
         "\nuint1 boolless(void)\n{\n  uint1 v1; // acc\n  \n  v1 = dat_52;\n  if (dat_52 <= 10) {\n    v1 = 1;\n  }\n  return v1;\n}\n";
 
     let rust = match render_one("boolless", 0) {
@@ -442,15 +469,22 @@ fn w10_implied_boolless_acc_unregressed_byte_parity() {
     eprintln!("=== boolless ===\n{rust}");
 
     // The multi-write ACC stays explicit (assigned + returned by name).
-    assert!(rust.contains("v1 = dat_52;"), "boolless v1 must stay explicit, got:\n{rust}");
-    assert!(rust.contains("return v1;"), "boolless must `return v1;`, got:\n{rust}");
+    assert!(
+        rust.contains("v1 = dat_52;"),
+        "boolless v1 must stay explicit, got:\n{rust}"
+    );
+    assert!(
+        rust.contains("return v1;"),
+        "boolless must `return v1;`, got:\n{rust}"
+    );
     assert!(
         !rust.contains("return dat_52;"),
         "OVER-INLINE: boolless's multi-write ACC was inlined to `return dat_52;`, got:\n{rust}"
     );
     // Full byte parity — boolless must not have moved at all under this item.
     assert_eq!(
-        normalize_sources(&rust), normalize_sources(CPP_B5_ORACLE),
+        normalize_sources(&rust),
+        normalize_sources(CPP_B5_ORACLE),
         "boolless byte parity regressed under w10-implied-vars (source diagnostics normalized):\n--- rust ---\n{rust}\n--- oracle ---\n{CPP_B5_ORACLE}"
     );
 }
@@ -480,8 +514,14 @@ fn w10_implied_inlining_is_data_driven_no_boolless_leak() {
         }
         Err(e) => panic!("condconst_conn render: {e}"),
     };
-    assert!(!rust.contains("dat_52"), "boolless's `dat_52` leaked into condconst:\n{rust}");
-    assert!(!has_source(&rust, "acc"), "boolless's `// acc` leaked into condconst:\n{rust}");
+    assert!(
+        !rust.contains("dat_52"),
+        "boolless's `dat_52` leaked into condconst:\n{rust}"
+    );
+    assert!(
+        !has_source(&rust, "acc"),
+        "boolless's `// acc` leaked into condconst:\n{rust}"
+    );
     // PRE-MERGE GUARD (as above): before rport/w10-implied-vars lands the trim
     // self-copy is still present; skip the inlining-presence assertion so the
     // MAIN tree stays green until merge.  The no-leak assertions above ALWAYS run

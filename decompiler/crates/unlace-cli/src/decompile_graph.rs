@@ -32,17 +32,17 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use object::{Object, ObjectSegment};
 use unlace_console::classify::Classifier;
 use unlace_console::engine::{ConsoleProgram, EntryProvenance, FunctionEntry};
-use unlace_console::project::{decompile_targets_with, DecompileOptions, FuncResult};
-use object::{Object, ObjectSegment};
+use unlace_console::project::{DecompileOptions, FuncResult, decompile_targets_with};
 
-use crate::decompile_all::{
-    decompile_targets_pooled, load_program, parse_args, resolve_targets_allow_bodyless,
-    synth_base, Args, DriverDefaults,
-};
 use crate::callgraph::CallGraph;
-use crate::jsonfmt::{dumps_indent2, Json};
+use crate::decompile_all::{
+    Args, DriverDefaults, decompile_targets_pooled, load_program, parse_args,
+    resolve_targets_allow_bodyless, synth_base,
+};
+use crate::jsonfmt::{Json, dumps_indent2};
 
 /// The document shape. Bumped whenever a field is added, removed or changes
 /// meaning, so a consumer can refuse a document it does not understand.
@@ -130,7 +130,11 @@ fn export(args: &Args, label: &str) -> Result<String, String> {
     let binary_path = std::fs::canonicalize(&args.binary)
         .map_err(|_| format!("binary not found: {}", args.binary))?;
     crate::decompile_all::warn_protoorder_inert(&args.options, "decompile-graph");
-    let image = if args.raw_image { None } else { Some(crate::image::image_bytes(&args.binary, args.slice_pref())?) };
+    let image = if args.raw_image {
+        None
+    } else {
+        Some(crate::image::image_bytes(&args.binary, args.slice_pref())?)
+    };
     let load_started = std::time::Instant::now();
     let mut prog = load_program(args, DriverDefaults::Decompile)?;
     let bytes = match image {
@@ -155,8 +159,11 @@ fn export(args: &Args, label: &str) -> Result<String, String> {
     let mut entries = prog.function_entries_canonical();
     // What a row IS never depends on what this run was asked to decompile, so
     // the executable set comes from the policy, not from the results.
-    let executable: BTreeSet<u64> =
-        prog.function_entries_executable().iter().map(|e| e.addr.get_offset()).collect();
+    let executable: BTreeSet<u64> = prog
+        .function_entries_executable()
+        .iter()
+        .map(|e| e.addr.get_offset())
+        .collect();
     let mut targets = resolve_targets_allow_bodyless(&prog, args)?;
     targets.retain(|entry| {
         let selected = executable.contains(&entry.addr.get_offset());
@@ -185,7 +192,8 @@ fn export(args: &Args, label: &str) -> Result<String, String> {
             // (kuna `protoorder`) This surface never takes the callee-first
             // order, serially either (`warn_protoorder_inert`), so the serial
             // run these names come from is the plain one.
-            /* serial_callee_first= */ false,
+            /* serial_callee_first= */
+            false,
             crate::decompile_all::worker_arm_frames(&prog),
             None,
         )?
@@ -207,20 +215,27 @@ fn export(args: &Args, label: &str) -> Result<String, String> {
             );
         }
     }
-    let by_address: BTreeMap<u64, &FuncResult> =
-        results.iter().map(|result| (result.byte_address, result)).collect();
+    let by_address: BTreeMap<u64, &FuncResult> = results
+        .iter()
+        .map(|result| (result.byte_address, result))
+        .collect();
 
     let graph = CallGraph::build_from(&prog, &file);
     // PE already inventories both halves of an import. ELF names its PLT veneer
     // but not the GOT slot, so materialize the missing half from the very same
     // decoded relation that supplies `forwardsTo` and the jump edge.
-    let mut known_entries: BTreeSet<u64> =
-        entries.iter().map(|entry| entry.addr.get_offset()).collect();
+    let mut known_entries: BTreeSet<u64> = entries
+        .iter()
+        .map(|entry| entry.addr.get_offset())
+        .collect();
     for (veneer, slot) in graph.forwarding_veneers() {
         if known_entries.contains(&slot) {
             continue;
         }
-        let Some(source) = entries.iter().find(|entry| entry.addr.get_offset() == veneer).cloned()
+        let Some(source) = entries
+            .iter()
+            .find(|entry| entry.addr.get_offset() == veneer)
+            .cloned()
         else {
             continue;
         };
@@ -239,13 +254,18 @@ fn export(args: &Args, label: &str) -> Result<String, String> {
         });
     }
     entries.sort_by_key(|entry| entry.addr.get_offset());
-    let classifier =
-        Classifier::from_object(&prog, Some(&file), entries.iter().map(|e| e.addr.get_offset()));
+    let classifier = Classifier::from_object(
+        &prog,
+        Some(&file),
+        entries.iter().map(|e| e.addr.get_offset()),
+    );
     let known: BTreeSet<u64> = entries.iter().map(|e| e.addr.get_offset()).collect();
 
     // Metadata resolves ELFv1 descriptors and Mach-O entry offsets; the inventory
     // accounts for ARM's Thumb mode bit.
-    let image_entry: Option<u64> = prog.image_metadata().and_then(|image| image.entry)
+    let image_entry: Option<u64> = prog
+        .image_metadata()
+        .and_then(|image| image.entry)
         .map(|vma| prog.find_entry_at(vma).map_or(vma, |e| e.addr.get_offset()));
 
     let functions = Json::Array(
@@ -278,12 +298,22 @@ fn export(args: &Args, label: &str) -> Result<String, String> {
                 (
                     "name".into(),
                     Json::Str(
-                        binary_path.file_name().unwrap_or_default().to_string_lossy().into_owned(),
+                        binary_path
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .into_owned(),
                     ),
                 ),
                 ("label".into(), Json::Str(label.to_string())),
-                ("sourcePath".into(), Json::Str(binary_path.to_string_lossy().into_owned())),
-                ("analysisImageBase".into(), analysis_image_base(&file).map_or(Json::Null, number)),
+                (
+                    "sourcePath".into(),
+                    Json::Str(binary_path.to_string_lossy().into_owned()),
+                ),
+                (
+                    "analysisImageBase".into(),
+                    analysis_image_base(&file).map_or(Json::Null, number),
+                ),
                 ("functionCount".into(), number(entries.len() as u64)),
                 ("edgeCount".into(), number(edge_count as u64)),
             ]),
@@ -324,9 +354,11 @@ fn function_json(
         ("parameters".into(), parameters(result)),
         (
             "signature".into(),
-            result.and_then(|r| r.proto.as_ref()).map_or(Json::Null, |value| {
-                Json::Str(value.trim().trim_end_matches(';').to_string())
-            }),
+            result
+                .and_then(|r| r.proto.as_ref())
+                .map_or(Json::Null, |value| {
+                    Json::Str(value.trim().trim_end_matches(';').to_string())
+                }),
         ),
         (
             "assembly".into(),
@@ -340,16 +372,28 @@ fn function_json(
                 None => Json::Null,
             },
         ),
-        ("codeC".into(), code.map_or(Json::Null, |value| Json::Str(value.clone()))),
+        (
+            "codeC".into(),
+            code.map_or(Json::Null, |value| Json::Str(value.clone())),
+        ),
         (
             "error".into(),
             result
                 .and_then(|r| r.error.as_ref())
                 .map_or(Json::Null, |value| Json::Str(value.clone())),
         ),
-        ("hasIndirectCalls".into(), Json::Bool(graph.has_indirect_calls(address))),
-        ("forwardsTo".into(), forwards_to(prog, graph, address).map_or(Json::Null, number)),
-        ("isEntryPoint".into(), Json::Bool(image_entry == Some(address))),
+        (
+            "hasIndirectCalls".into(),
+            Json::Bool(graph.has_indirect_calls(address)),
+        ),
+        (
+            "forwardsTo".into(),
+            forwards_to(prog, graph, address).map_or(Json::Null, number),
+        ),
+        (
+            "isEntryPoint".into(),
+            Json::Bool(image_entry == Some(address)),
+        ),
     ])
 }
 
@@ -475,7 +519,10 @@ fn analysis_image_base(file: &object::File) -> Option<u64> {
     if pe_base != 0 {
         return Some(pe_base);
     }
-    file.segments().filter(|segment| segment.size() != 0).map(|segment| segment.address()).min()
+    file.segments()
+        .filter(|segment| segment.size() != 0)
+        .map(|segment| segment.address())
+        .min()
 }
 
 fn usage() {

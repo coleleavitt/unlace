@@ -28,19 +28,19 @@
 
 use std::rc::Rc;
 
-use unlace_base::address::{calc_mask, uintb_negate, Address};
+use unlace_base::address::{Address, calc_mask, uintb_negate};
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 
-use unlace_decomp::dtype::{type_metatype, Datatype};
+use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
+use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::op::pcodeop_flags;
 use unlace_decomp::ruleaction_5::{
     RuleBoolNegate, RuleEqual2Constant, RuleEqual2Zero, RuleSLess2Zero,
 };
-use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
 use unlace_decomp::varnode::DefOpInfo;
 use unlace_num::opcodes::OpCode;
 
@@ -51,7 +51,8 @@ use unlace_decomp::action::Rule;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -107,7 +108,8 @@ fn opcode_flags(opc: OpCode) -> u32 {
 fn mk_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
     let ram = ram_space(fd);
     let op = fd.new_op(inputs, Address::new(ram, off));
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, opcode_flags(opc), format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, opcode_flags(opc), format!("{opc:?}")));
     op
 }
 
@@ -119,7 +121,9 @@ fn mk_vn(fd: &mut Funcdata, off: u64, s: int4) -> VarnodeId {
 fn mk_input(fd: &mut Funcdata, off: u64, s: int4) -> VarnodeId {
     let ram = ram_space(fd);
     let vn = fd.vbank_mut().create(s, Address::new(ram, off), dt(s));
-    fd.vbank_mut().set_input(vn, &mut |_b, _a, _c| Ok(())).expect("set_input")
+    fd.vbank_mut()
+        .set_input(vn, &mut |_b, _a, _c| Ok(()))
+        .expect("set_input")
 }
 
 fn mk_const(fd: &mut Funcdata, val: u64, s: int4) -> VarnodeId {
@@ -130,7 +134,9 @@ fn set_def(fd: &mut Funcdata, vn: VarnodeId, op: OpId) {
     let seqnum = fd.obank().get(op).unwrap().get_seq_num().clone();
     fd.obank_mut().get_mut(op).unwrap().set_output(Some(vn));
     let info = DefOpInfo { id: op, seqnum };
-    fd.vbank_mut().set_def(vn, info, &mut |_b, _a, _c| Ok(())).expect("set_def");
+    fd.vbank_mut()
+        .set_def(vn, info, &mut |_b, _a, _c| Ok(()))
+        .expect("set_def");
 }
 
 fn code_of(fd: &Funcdata, op: OpId) -> OpCode {

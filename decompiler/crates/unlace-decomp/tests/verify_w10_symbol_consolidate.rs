@@ -30,9 +30,9 @@ use std::rc::Rc;
 
 use unlace_base::address::{Address, RangeList};
 use unlace_base::partmap::PartMap;
-use unlace_base::space::{spacetype, AddrSpace};
-use unlace_decomp::dtype::{type_metatype, Datatype};
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_decomp::context::{GlobalEntry, GlobalQuery};
+use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::varnode::varnode_flags;
 
 fn ram_space(index: i32) -> Rc<AddrSpace> {
@@ -166,7 +166,8 @@ fn tf2_non_typelocked_symbol_forces_no_type() {
     let up = Address::new_invalid();
 
     assert!(
-        gq.sized_type_geometry(&addr(&ram, 0x301014), 4, &up).is_none(),
+        gq.sized_type_geometry(&addr(&ram, 0x301014), 4, &up)
+            .is_none(),
         "a non-type-locked Symbol does not force its type"
     );
 }

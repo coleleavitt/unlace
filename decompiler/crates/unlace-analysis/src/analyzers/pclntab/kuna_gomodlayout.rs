@@ -40,11 +40,41 @@ const MINPC: u64 = 20;
 const TEXT: u64 = 22;
 
 const LAYOUTS: [Layout; 5] = [
-    Layout { since_minor: 26, types: 37, typelinks: 45, itablinks: 48, hasmain: 67 },
-    Layout { since_minor: 21, types: 37, typelinks: 44, itablinks: 47, hasmain: 66 },
-    Layout { since_minor: 20, types: 37, typelinks: 44, itablinks: 47, hasmain: 63 },
-    Layout { since_minor: 18, types: 35, typelinks: 42, itablinks: 45, hasmain: 61 },
-    Layout { since_minor: 16, types: 35, typelinks: 40, itablinks: 43, hasmain: 59 },
+    Layout {
+        since_minor: 26,
+        types: 37,
+        typelinks: 45,
+        itablinks: 48,
+        hasmain: 67,
+    },
+    Layout {
+        since_minor: 21,
+        types: 37,
+        typelinks: 44,
+        itablinks: 47,
+        hasmain: 66,
+    },
+    Layout {
+        since_minor: 20,
+        types: 37,
+        typelinks: 44,
+        itablinks: 47,
+        hasmain: 63,
+    },
+    Layout {
+        since_minor: 18,
+        types: 35,
+        typelinks: 42,
+        itablinks: 45,
+        hasmain: 61,
+    },
+    Layout {
+        since_minor: 16,
+        types: 35,
+        typelinks: 40,
+        itablinks: 43,
+        hasmain: 59,
+    },
 ];
 
 /// The fields of one module's `moduledata` that analysis reads.
@@ -75,12 +105,25 @@ pub(crate) fn locate(
     word: &dyn Fn(&ImageBytes, u64) -> Option<u64>,
 ) -> Option<Moduledata> {
     let rows: Vec<&Layout> = match minor {
-        Some(m) if m >= 16 => LAYOUTS.iter().filter(|l| l.since_minor <= m).take(1).collect(),
+        Some(m) if m >= 16 => LAYOUTS
+            .iter()
+            .filter(|l| l.since_minor <= m)
+            .take(1)
+            .collect(),
         Some(_) => return None,
         None => LAYOUTS.iter().collect(),
     };
-    for name in [".go.module", "__go_module", ".noptrdata", ".data", "__noptrdata", "__data"] {
-        let Some(sec) = file.section_by_name(name) else { continue };
+    for name in [
+        ".go.module",
+        "__go_module",
+        ".noptrdata",
+        ".data",
+        "__noptrdata",
+        "__data",
+    ] {
+        let Some(sec) = file.section_by_name(name) else {
+            continue;
+        };
         let base = sec.address();
         let size = sec.size();
         let mut at = base.next_multiple_of(ptr_size);
@@ -111,7 +154,12 @@ fn read(
     let (minpc, maxpc, text, etext) = (w(MINPC)?, w(MINPC + 1)?, w(TEXT)?, w(TEXT + 1)?);
     let (types, etypes) = (w(l.types)?, w(l.types + 1)?);
     let hasmain = img.read(at + l.hasmain * ps, 1)?[0];
-    let sane = text != 0 && text <= minpc && minpc < maxpc && maxpc <= etext && types < etypes && hasmain <= 1;
+    let sane = text != 0
+        && text <= minpc
+        && minpc < maxpc
+        && maxpc <= etext
+        && types < etypes
+        && hasmain <= 1;
     if !sane {
         return None;
     }
@@ -144,8 +192,17 @@ mod tests {
 
     #[test]
     fn rows_are_newest_first_and_pick_by_release() {
-        assert!(LAYOUTS.windows(2).all(|w| w[0].since_minor > w[1].since_minor));
-        let pick = |m: u16| LAYOUTS.iter().find(|l| l.since_minor <= m).map(|l| l.since_minor);
+        assert!(
+            LAYOUTS
+                .windows(2)
+                .all(|w| w[0].since_minor > w[1].since_minor)
+        );
+        let pick = |m: u16| {
+            LAYOUTS
+                .iter()
+                .find(|l| l.since_minor <= m)
+                .map(|l| l.since_minor)
+        };
         assert_eq!(pick(17), Some(16));
         assert_eq!(pick(19), Some(18));
         assert_eq!(pick(25), Some(21));
@@ -176,14 +233,27 @@ mod tests {
         ];
         let rec = image(&words, 1, row);
         let blob = vec![0u8; 0x100];
-        let img = ImageBytes { sections: vec![(0x1000, &rec[..]), (0x2000, &blob[..])] };
-        let word = |img: &ImageBytes, va: u64| img.read(va, 8).map(|b| u64::from_le_bytes(b.try_into().unwrap()));
+        let img = ImageBytes {
+            sections: vec![(0x1000, &rec[..]), (0x2000, &blob[..])],
+        };
+        let word = |img: &ImageBytes, va: u64| {
+            img.read(va, 8)
+                .map(|b| u64::from_le_bytes(b.try_into().unwrap()))
+        };
         let md = read(&img, 0x1000, row, 8, &word).expect("valid go1.21 record");
-        assert_eq!((md.minor, md.ftab_len, md.text, md.types), (21, 5, 0x401000, 0x5000));
+        assert_eq!(
+            (md.minor, md.ftab_len, md.text, md.types),
+            (21, 5, 0x401000, 0x5000)
+        );
         assert_eq!((md.typelinks, md.itablinks), ((0x2000, 2), (0x2000, 1)));
         // The go1.20 row reads the same bytes one word short of hasmain.
         let bad = image(&words, 7, row);
-        let img = ImageBytes { sections: vec![(0x1000, &bad[..]), (0x2000, &blob[..])] };
-        assert!(read(&img, 0x1000, row, 8, &word).is_none(), "hasmain must be 0 or 1");
+        let img = ImageBytes {
+            sections: vec![(0x1000, &bad[..]), (0x2000, &blob[..])],
+        };
+        assert!(
+            read(&img, 0x1000, row, 8, &word).is_none(),
+            "hasmain must be 0 or 1"
+        );
     }
 }

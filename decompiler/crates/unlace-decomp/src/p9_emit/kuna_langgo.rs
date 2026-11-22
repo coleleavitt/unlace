@@ -3,7 +3,7 @@
 use std::borrow::Cow;
 use std::rc::Rc;
 
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::kuna_lang::*;
 use crate::kuna_langtypes::{SpellCtx, TypeSpeller};
 use crate::printc::tokens;
@@ -270,7 +270,9 @@ impl GoSpeller {
         if depth > 16 {
             return "unsafe.Pointer".into();
         }
-        if let Some(storage) = super::kuna_gopairreturns::storage_type(cx, ty) { return storage; }
+        if let Some(storage) = super::kuna_gopairreturns::storage_type(cx, ty) {
+            return storage;
+        }
         match ty.get_metatype() {
             type_metatype::TYPE_PTR | type_metatype::TYPE_PTRREL => match ty.get_ptr_to() {
                 Some(inner) if inner.get_metatype() == type_metatype::TYPE_VOID => {
@@ -317,8 +319,10 @@ impl GoSpeller {
                     .filter(|t| t.get_metatype() != type_metatype::TYPE_VOID)
                 {
                     result.push(' ');
-                    result.push_str(&super::kuna_gopairreturns::result_type(cx, output)
-                        .unwrap_or_else(|| self.expression(cx, output, depth + 1)));
+                    result.push_str(
+                        &super::kuna_gopairreturns::result_type(cx, output)
+                            .unwrap_or_else(|| self.expression(cx, output, depth + 1)),
+                    );
                 }
                 result
             }
@@ -329,7 +333,10 @@ impl GoSpeller {
                     if ty.get_name().is_empty() {
                         self.anonymous(ty)
                     } else {
-                        path(crate::kuna_gopackage::local_type_name(cx.go_package.as_deref(), ty.get_display_name()))
+                        path(crate::kuna_gopackage::local_type_name(
+                            cx.go_package.as_deref(),
+                            ty.get_display_name(),
+                        ))
                     }
                 }),
         }
@@ -394,7 +401,7 @@ use crate::architecture::Architecture;
 use crate::context::BlockId;
 use crate::funcdata::Funcdata;
 use crate::prettyprint::{BraceStyle, Emit, MarkupRef, SyntaxHighlight};
-use crate::printc::{declarator_parts, PrintC};
+use crate::printc::{PrintC, declarator_parts};
 use crate::printlanguage::modifiers;
 
 impl PrintC {
@@ -416,10 +423,16 @@ impl PrintC {
         self.emit.print("func ", SyntaxHighlight::KeywordColor);
         let proto = fd.get_func_proto();
         let mut first = 0;
-        if arch.analysis_godwarfsig && fd.kuna_go_receiver.as_ref().is_some_and(|receiver| {
-            receiver.symbol == display && receiver.matches(arch, proto)
-                && arch.symboltab.go_pointer_receiver(fd.get_address()).is_some()
-        }) {
+        if arch.analysis_godwarfsig
+            && fd.kuna_go_receiver.as_ref().is_some_and(|receiver| {
+                receiver.symbol == display
+                    && receiver.matches(arch, proto)
+                    && arch
+                        .symboltab
+                        .go_pointer_receiver(fd.get_address())
+                        .is_some()
+            })
+        {
             if let Some(receiver) = proto.get_param(0) {
                 let paren = self.emit.open_paren("(", 0);
                 self.emit_go_parameter(arch, receiver, 0, markup);
@@ -466,8 +479,11 @@ impl PrintC {
     }
 
     fn emit_go_parameter(
-        &mut self, arch: &Architecture, param: &dyn crate::fspec::ProtoParameter,
-        index: i32, markup: &MarkupRef,
+        &mut self,
+        arch: &Architecture,
+        param: &dyn crate::fspec::ProtoParameter,
+        index: i32,
+        markup: &MarkupRef,
     ) {
         let name = if param.get_name().is_empty() {
             crate::database::kuna_materialized_param_name(arch.name_style_angr, index, "")
@@ -475,9 +491,11 @@ impl PrintC {
             param.get_name().to_string()
         };
         self.remember_go_parameter(index, &name);
-        self.emit.tag_variable(&identifier(&name), SyntaxHighlight::VarColor, markup);
+        self.emit
+            .tag_variable(&identifier(&name), SyntaxHighlight::VarColor, markup);
         self.emit.print(" ", SyntaxHighlight::NoColor);
-        let ty = param.get_type()
+        let ty = param
+            .get_type()
             .map(|ty| declarator_parts(ty, self.rt_ctx.clone()).0)
             .unwrap_or("any".into());
         self.emit.tag_type(&ty, SyntaxHighlight::TypeColor, markup);
@@ -694,7 +712,8 @@ impl PrintC {
                         self.recurse();
                     } else {
                         let text = if signed {
-                            unlace_base::address::sign_extend(value as i64, size * 8 - 1).to_string()
+                            unlace_base::address::sign_extend(value as i64, size * 8 - 1)
+                                .to_string()
                         } else {
                             value.to_string()
                         };
@@ -828,7 +847,9 @@ impl PrintC {
         pointer: &Rc<Datatype>,
         op: OpId,
     ) -> bool {
-        let Some(character) = pointer.get_ptr_to() else { return false };
+        let Some(character) = pointer.get_ptr_to() else {
+            return false;
+        };
         if character.get_size() != 1 || !literal.ends_with('"') {
             return false;
         }
@@ -903,7 +924,8 @@ impl PrintC {
     ) -> Rc<Datatype> {
         let value = fd.vbank().get(vn).unwrap();
         if !value.is_implied() && !value.is_constant() {
-            if let Some(ty) = value.get_high()
+            if let Some(ty) = value
+                .get_high()
                 .and_then(|high| self.declared_local(high))
                 .and_then(|local| local.ty.as_ref())
                 .filter(|ty| ty.get_size() == value.get_size())
@@ -1081,13 +1103,18 @@ impl PrintC {
         op: OpId,
         target: &Rc<Datatype>,
     ) -> bool {
-        let Some(input) = fd.obank().get(op)
+        let Some(input) = fd
+            .obank()
+            .get(op)
             .filter(|operation| operation.code() == unlace_num::opcodes::OpCode::CPUI_COPY)
             .and_then(|operation| operation.get_in(0))
         else {
             return false;
         };
-        if !fd.vbank().get(input).is_some_and(|value| value.is_constant())
+        if !fd
+            .vbank()
+            .get(input)
+            .is_some_and(|value| value.is_constant())
             || !integer_type(target)
             || !integer_type(&self.go_value_type(fd, arch, input, op))
         {
@@ -1114,8 +1141,8 @@ impl PrintC {
             return;
         }
         let source = self.go_value_type(fd, arch, value, op);
-        if let Some(raw) = integer_constant(fd, value)
-            .filter(|_| integer_type(&source) && integer_type(target))
+        if let Some(raw) =
+            integer_constant(fd, value).filter(|_| integer_type(&source) && integer_type(target))
         {
             let bits = (target.get_size() * 8) as u32;
             let raw = raw & unlace_base::address::calc_mask(target.get_size());

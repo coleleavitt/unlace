@@ -34,7 +34,7 @@ use std::rc::Rc;
 
 use unlace_base::types::int4;
 
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::kuna_langtypes::{SpellCtx, TypeSpeller};
 
 /// The rust-language type speller.
@@ -146,7 +146,10 @@ pub(crate) fn sanitize_path(name: &str) -> String {
 /// The full path is not lost: the prototype emitter prints it in a comment
 /// directly above the function.
 pub(crate) fn path_tail(name: &str) -> String {
-    let tail = name.rsplit("::").find(|c| !c.trim().is_empty()).unwrap_or(name);
+    let tail = name
+        .rsplit("::")
+        .find(|c| !c.trim().is_empty())
+        .unwrap_or(name);
     sanitize(tail)
 }
 
@@ -167,7 +170,23 @@ pub(crate) fn path_tail(name: &str) -> String {
 pub(crate) fn type_path(name: &str) -> String {
     let keep = |c: char| {
         c.is_ascii_alphanumeric()
-            || matches!(c, '_' | '<' | '>' | ',' | ':' | '&' | '[' | ']' | ';' | '*' | '(' | ')' | '\'' | '+' | ' ')
+            || matches!(
+                c,
+                '_' | '<'
+                    | '>'
+                    | ','
+                    | ':'
+                    | '&'
+                    | '['
+                    | ']'
+                    | ';'
+                    | '*'
+                    | '('
+                    | ')'
+                    | '\''
+                    | '+'
+                    | ' '
+            )
     };
     let (mut out, mut angle, mut square, mut round) = (String::new(), 0i32, 0i32, 0i32);
     let mut it = name.chars().peekable();
@@ -208,7 +227,13 @@ pub(crate) fn type_path(name: &str) -> String {
 pub(crate) fn sanitize(name: &str) -> String {
     let mut out: String = name
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
     if out.chars().next().is_some_and(|c| c.is_ascii_digit()) {
         out.insert(0, '_');
@@ -227,7 +252,9 @@ impl TypeSpeller for RustSpeller {
         let name: Option<&'static str> = match dt.get_metatype() {
             // A recovered text byte is a byte, not a Rust `char`; a declared
             // `signed char` is not the target's text type and keeps its sign.
-            type_metatype::TYPE_INT if dt.is_char_print() && dt.is_core_type() => int_name(size, false),
+            type_metatype::TYPE_INT if dt.is_char_print() && dt.is_core_type() => {
+                int_name(size, false)
+            }
             type_metatype::TYPE_INT => int_name(size, true),
             type_metatype::TYPE_UINT => int_name(size, false),
             type_metatype::TYPE_FLOAT => float_name(size),
@@ -241,7 +268,7 @@ impl TypeSpeller for RustSpeller {
                 return Some(match int_name(size, false) {
                     Some(n) => Cow::Borrowed(n),
                     None => Cow::Owned(byte_array(size)),
-                })
+                });
             }
             _ => None,
         };

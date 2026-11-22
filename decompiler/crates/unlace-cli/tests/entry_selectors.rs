@@ -208,7 +208,10 @@ fn an_ambiguous_name_is_answered_in_the_default_mode_too() {
     assert!(stderr.contains("ambiguous"), "{stderr}");
     assert!(stderr.contains(".text.selector_a+0x0"), "{stderr}");
     assert!(stderr.contains(".text.selector_b+0x0"), "{stderr}");
-    assert!(!stderr.contains("[decomp]>"), "transcript dumped instead: {stderr}");
+    assert!(
+        !stderr.contains("[decomp]>"),
+        "transcript dumped instead: {stderr}"
+    );
 }
 
 /// `xrefs` resolves names through the same model: an ambiguous one must be

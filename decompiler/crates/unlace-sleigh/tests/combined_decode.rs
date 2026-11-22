@@ -1,5 +1,6 @@
 //! Paired decode must preserve text, p-code and context while avoiding a second
 //! image read for instructions that have no context commits or delay slots.
+use std::{cell::Cell, path::PathBuf, rc::Rc};
 use unlace_base::{
     address::Address,
     error::{KunaError, KunaResult},
@@ -11,7 +12,6 @@ use unlace_sleigh::{
     sleigh::Sleigh,
     translate::{AssemblyEmit, PcodeEmit, Translate},
 };
-use std::{cell::Cell, path::PathBuf, rc::Rc};
 
 const BASE: u64 = 0x1000;
 struct Bytes {
@@ -225,9 +225,11 @@ fn decode_scope_keeps_thumb_it_state_local_and_rolls_back_failed_decodes() {
             engine
                 .one_instruction(&mut Ops::default(), &addr(&engine, 0))
                 .unwrap();
-            assert!(engine
-                .one_instruction(&mut Ops::default(), &addr(&engine, 1))
-                .is_err());
+            assert!(
+                engine
+                    .one_instruction(&mut Ops::default(), &addr(&engine, 1))
+                    .is_err()
+            );
         }
         assert_eq!(snapshot(), before);
     }
@@ -268,9 +270,11 @@ fn failed_lift_does_not_emit_assembly_or_redecode() {
         fail: true,
     }));
     let mut text = Text::default();
-    assert!(engine
-        .one_instruction_with_assembly(&mut Ops::default(), &mut text, &addr(&engine, 0))
-        .is_err());
+    assert!(
+        engine
+            .one_instruction_with_assembly(&mut Ops::default(), &mut text, &addr(&engine, 0))
+            .is_err()
+    );
     assert_eq!(text, Text::default());
     assert_eq!(reads.get(), 1);
 }
@@ -429,9 +433,9 @@ fn reuse_keys_track_effective_context_read_overrides() {
     let decode = || {
         let mut text = Text::default();
         let mut key = None;
-        let len = engine.one_instruction_reusable(
-            &mut Ops::default(), &mut text, &at, &mut key,
-        ).unwrap();
+        let len = engine
+            .one_instruction_reusable(&mut Ops::default(), &mut text, &at, &mut key)
+            .unwrap();
         (len, text.0.unwrap().0, key.unwrap())
     };
     let (len, mnemonic, arm_key) = decode();

@@ -5,9 +5,9 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_console::decompile_step::{decompile_one, DecompileSeed};
-use unlace_console::engine::{bootstrap_from_object, EntrySelector};
-use unlace_console::grammar::{parse_protopieces, DataOrg};
+use unlace_console::decompile_step::{DecompileSeed, decompile_one};
+use unlace_console::engine::{EntrySelector, bootstrap_from_object};
+use unlace_console::grammar::{DataOrg, parse_protopieces};
 use unlace_decomp::dtype::type_metatype;
 
 fn repo_root() -> PathBuf {

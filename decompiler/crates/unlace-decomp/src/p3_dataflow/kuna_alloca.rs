@@ -35,11 +35,17 @@ const MAX_SLACK: u64 = 0x40;
 
 fn def(data: &Funcdata, vn: VarnodeId) -> Option<(OpCode, Vec<VarnodeId>)> {
     let o = data.obank().get(data.vbank().get(vn)?.get_def()?)?;
-    Some((o.code(), (0..o.num_input()).filter_map(|i| o.get_in(i)).collect()))
+    Some((
+        o.code(),
+        (0..o.num_input()).filter_map(|i| o.get_in(i)).collect(),
+    ))
 }
 
 fn constant(data: &Funcdata, vn: VarnodeId) -> Option<u64> {
-    data.vbank().get(vn).filter(|v| v.is_constant()).map(|v| v.get_offset())
+    data.vbank()
+        .get(vn)
+        .filter(|v| v.is_constant())
+        .map(|v| v.get_offset())
 }
 
 fn signed(data: &Funcdata, vn: VarnodeId) -> Option<i64> {
@@ -49,7 +55,9 @@ fn signed(data: &Funcdata, vn: VarnodeId) -> Option<i64> {
 
 /// `offset` read as a signed `size`-byte value; `None` past 8 bytes.
 fn sign_extend(offset: u64, size: int4) -> Option<i64> {
-    let bits = 64u32.checked_sub(8 * u32::try_from(size).ok()?).filter(|&b| b < 64)?;
+    let bits = 64u32
+        .checked_sub(8 * u32::try_from(size).ok()?)
+        .filter(|&b| b < 64)?;
     Some(((offset << bits) as i64) >> bits)
 }
 
@@ -58,12 +66,18 @@ fn sign_extend(offset: u64, size: int4) -> Option<i64> {
 fn stack_pointer(data: &Funcdata, vn: VarnodeId) -> bool {
     let mut vn = vn;
     for _ in 0..16 {
-        let Some(v) = data.vbank().get(vn) else { return false };
+        let Some(v) = data.vbank().get(vn) else {
+            return false;
+        };
         if (v.is_spacebase() && v.is_input()) || is_alloca(data, vn) {
             return true;
         }
         match def(data, vn) {
-            Some((OpCode::CPUI_INT_ADD, ins)) if ins.len() == 2 && constant(data, ins[1]).is_some() => vn = ins[0],
+            Some((OpCode::CPUI_INT_ADD, ins))
+                if ins.len() == 2 && constant(data, ins[1]).is_some() =>
+            {
+                vn = ins[0]
+            }
             Some((OpCode::CPUI_COPY, ins)) if ins.len() == 1 => vn = ins[0],
             _ => return false,
         }
@@ -75,7 +89,9 @@ fn stack_pointer(data: &Funcdata, vn: VarnodeId) -> bool {
 fn negated(data: &Funcdata, vn: VarnodeId) -> Option<VarnodeId> {
     match def(data, vn)? {
         (OpCode::CPUI_INT_2COMP, ins) if ins.len() == 1 => Some(ins[0]),
-        (OpCode::CPUI_INT_MULT, ins) if ins.len() == 2 && signed(data, ins[1]) == Some(-1) => Some(ins[0]),
+        (OpCode::CPUI_INT_MULT, ins) if ins.len() == 2 && signed(data, ins[1]) == Some(-1) => {
+            Some(ins[0])
+        }
         _ => None,
     }
 }
@@ -98,7 +114,9 @@ fn remainder_mask(m: i64) -> bool {
         return false;
     }
     let low = m & -m;
-    (4..=64).contains(&low) && m.checked_add(low).is_some_and(|s| s >= 4096 && (s as u64).is_power_of_two())
+    (4..=64).contains(&low)
+        && m.checked_add(low)
+            .is_some_and(|s| s >= 4096 && (s as u64).is_power_of_two())
 }
 
 /// `(n + c) & -4096`: the page part a stack-clash probe loop allocates.
@@ -111,8 +129,14 @@ fn strip_extension(data: &Funcdata, vn: VarnodeId) -> VarnodeId {
     let mut vn = vn;
     for _ in 0..3 {
         match def(data, vn) {
-            Some((OpCode::CPUI_INT_ZEXT | OpCode::CPUI_INT_SEXT, ins)) if ins.len() == 1 => vn = ins[0],
-            Some((OpCode::CPUI_SUBPIECE, ins)) if ins.len() == 2 && constant(data, ins[1]) == Some(0) => vn = ins[0],
+            Some((OpCode::CPUI_INT_ZEXT | OpCode::CPUI_INT_SEXT, ins)) if ins.len() == 1 => {
+                vn = ins[0]
+            }
+            Some((OpCode::CPUI_SUBPIECE, ins))
+                if ins.len() == 2 && constant(data, ins[1]) == Some(0) =>
+            {
+                vn = ins[0]
+            }
             _ => break,
         }
     }
@@ -125,29 +149,42 @@ fn strip_extension(data: &Funcdata, vn: VarnodeId) -> VarnodeId {
 fn unrounded(data: &Funcdata, vn: VarnodeId) -> Option<VarnodeId> {
     let vn = strip_extension(data, vn);
     let sum = match def(data, vn)? {
-        (OpCode::CPUI_INT_AND, ins) if ins.len() == 2 && signed(data, ins[1]).is_some_and(|m| align_mask(m) || remainder_mask(m)) => ins[0],
+        (OpCode::CPUI_INT_AND, ins)
+            if ins.len() == 2
+                && signed(data, ins[1]).is_some_and(|m| align_mask(m) || remainder_mask(m)) =>
+        {
+            ins[0]
+        }
         (OpCode::CPUI_INT_LEFT, ins) if ins.len() == 2 => {
             let k = constant(data, ins[1])?;
             match def(data, ins[0])? {
-                (OpCode::CPUI_INT_RIGHT, r) if r.len() == 2 && constant(data, r[1]) == Some(k) => r[0],
+                (OpCode::CPUI_INT_RIGHT, r) if r.len() == 2 && constant(data, r[1]) == Some(k) => {
+                    r[0]
+                }
                 _ => return None,
             }
         }
         _ => return None,
     };
     match def(data, strip_extension(data, sum))? {
-        (OpCode::CPUI_INT_ADD, ins) if ins.len() == 2 && constant(data, ins[1]).is_some_and(|c| c >= 3 && c < MAX_SLACK) => Some(ins[0]),
+        (OpCode::CPUI_INT_ADD, ins)
+            if ins.len() == 2
+                && constant(data, ins[1]).is_some_and(|c| c >= 3 && c < MAX_SLACK) =>
+        {
+            Some(ins[0])
+        }
         _ => None,
     }
 }
 
 fn is_alloca(data: &Funcdata, vn: VarnodeId) -> bool {
     match def(data, vn) {
-        Some((OpCode::CPUI_CALLOTHER, ins)) => ins.first().and_then(|&i| constant(data, i)) == Some(BUILTIN_ALLOCA as u64),
+        Some((OpCode::CPUI_CALLOTHER, ins)) => {
+            ins.first().and_then(|&i| constant(data, i)) == Some(BUILTIN_ALLOCA as u64)
+        }
         _ => false,
     }
 }
-
 
 /// Turn `sp = sp - reg` into `sp = alloca(reg)` in the raw p-code, before
 /// heritage, so the allocation is one definition of the stack pointer that
@@ -159,20 +196,40 @@ pub fn rewrite_raw(data: &mut Funcdata) {
     if !data.get_arch().alloca_calls {
         return;
     }
-    let Some(base) = data.get_arch().manage().get_stack_space().and_then(|s| s.get_spacebase(0).ok()) else { return };
-    let Some(space) = base.space.as_ref() else { return };
+    let Some(base) = data
+        .get_arch()
+        .manage()
+        .get_stack_space()
+        .and_then(|s| s.get_spacebase(0).ok())
+    else {
+        return;
+    };
+    let Some(space) = base.space.as_ref() else {
+        return;
+    };
     let sp = (space.get_index(), base.offset, base.size as int4);
     let key = |data: &Funcdata, vn: VarnodeId| {
-        data.vbank().get(vn).and_then(|v| Some((v.get_addr().get_space()?.get_index(), v.get_offset(), v.get_size())))
+        data.vbank().get(vn).and_then(|v| {
+            Some((
+                v.get_addr().get_space()?.get_index(),
+                v.get_offset(),
+                v.get_size(),
+            ))
+        })
     };
     let mut rewrites = Vec::new();
     for i in 0..data.bblocks_get_size() {
         let block = data.bblocks_get_block(i);
-        let mut last: std::collections::HashMap<(int4, u64, int4), OpId> = std::collections::HashMap::new();
-        let mut rounded: std::collections::HashSet<(int4, u64, int4)> = std::collections::HashSet::new();
-        let mut constants: std::collections::HashSet<(int4, u64, int4)> = std::collections::HashSet::new();
+        let mut last: std::collections::HashMap<(int4, u64, int4), OpId> =
+            std::collections::HashMap::new();
+        let mut rounded: std::collections::HashSet<(int4, u64, int4)> =
+            std::collections::HashSet::new();
+        let mut constants: std::collections::HashSet<(int4, u64, int4)> =
+            std::collections::HashSet::new();
         for id in data.bb_ops(block) {
-            let Some(op) = data.obank().get(id) else { continue };
+            let Some(op) = data.obank().get(id) else {
+                continue;
+            };
             let out = op.get_out().and_then(|o| key(data, o));
             let sub_into = |sub: OpId| -> Option<OpId> {
                 let s = data.obank().get(sub)?;
@@ -192,7 +249,11 @@ pub fn rewrite_raw(data: &mut Funcdata) {
             if out == Some(sp) {
                 let target = match op.code() {
                     OpCode::CPUI_INT_SUB => sub_into(id),
-                    OpCode::CPUI_COPY => op.get_in(0).and_then(|v| key(data, v)).and_then(|k| last.get(&k).copied()).and_then(sub_into),
+                    OpCode::CPUI_COPY => op
+                        .get_in(0)
+                        .and_then(|v| key(data, v))
+                        .and_then(|k| last.get(&k).copied())
+                        .and_then(sub_into),
                     _ => None,
                 };
                 rewrites.extend(target);
@@ -200,9 +261,15 @@ pub fn rewrite_raw(data: &mut Funcdata) {
             if let Some(k) = out {
                 last.insert(k, id);
                 let mask = op.get_in(1).and_then(|c| signed(data, c));
-                let carried = || op.get_in(0).and_then(|v| key(data, v)).is_some_and(|k| rounded.contains(&k));
+                let carried = || {
+                    op.get_in(0)
+                        .and_then(|v| key(data, v))
+                        .is_some_and(|k| rounded.contains(&k))
+                };
                 let is_rounded = match op.code() {
-                    OpCode::CPUI_INT_AND => mask.is_some_and(|m| align_mask(m) || remainder_mask(m)),
+                    OpCode::CPUI_INT_AND => {
+                        mask.is_some_and(|m| align_mask(m) || remainder_mask(m))
+                    }
                     OpCode::CPUI_INT_LEFT => mask.is_some_and(|k| (2..=6).contains(&k)),
                     OpCode::CPUI_COPY | OpCode::CPUI_INT_ZEXT => carried(),
                     _ => false,
@@ -214,12 +281,16 @@ pub fn rewrite_raw(data: &mut Funcdata) {
                 }
                 let known = |slot: int4| {
                     op.get_in(slot).is_some_and(|v| {
-                        data.vbank().get(v).is_some_and(|x| x.is_constant()) || key(data, v).is_some_and(|k| constants.contains(&k))
+                        data.vbank().get(v).is_some_and(|x| x.is_constant())
+                            || key(data, v).is_some_and(|k| constants.contains(&k))
                     })
                 };
                 let is_constant = match op.code() {
                     OpCode::CPUI_COPY | OpCode::CPUI_INT_ZEXT => known(0),
-                    OpCode::CPUI_INT_AND | OpCode::CPUI_INT_LEFT | OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_OR => known(0) && known(1),
+                    OpCode::CPUI_INT_AND
+                    | OpCode::CPUI_INT_LEFT
+                    | OpCode::CPUI_INT_ADD
+                    | OpCode::CPUI_INT_OR => known(0) && known(1),
                     _ => false,
                 };
                 if is_constant {
@@ -231,7 +302,9 @@ pub fn rewrite_raw(data: &mut Funcdata) {
         }
     }
     for op in rewrites {
-        let Some(amount) = data.obank().get(op).and_then(|o| o.get_in(1)) else { continue };
+        let Some(amount) = data.obank().get(op).and_then(|o| o.get_in(1)) else {
+            continue;
+        };
         let id = data.new_constant(4, BUILTIN_ALLOCA as uintb);
         if data.op_set_all_input(op, &[id, amount]).is_ok() {
             data.op_set_opcode(op, crate::typeop::type_op_for(OpCode::CPUI_CALLOTHER));
@@ -245,51 +318,78 @@ pub struct RuleAlloca {
 
 impl RuleAlloca {
     pub fn new(group: &str) -> RuleAlloca {
-        RuleAlloca { group: group.to_string() }
+        RuleAlloca {
+            group: group.to_string(),
+        }
     }
 }
 
 impl Rule for RuleAlloca {
     fn get_op_list(&self) -> Vec<OpCode> {
-        vec![OpCode::CPUI_INT_ADD, OpCode::CPUI_INT_AND, OpCode::CPUI_CALLOTHER]
+        vec![
+            OpCode::CPUI_INT_ADD,
+            OpCode::CPUI_INT_AND,
+            OpCode::CPUI_CALLOTHER,
+        ]
     }
 
     fn clone_rule(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Rule>> {
-        grouplist.contains(&self.group).then(|| Box::new(RuleAlloca::new(&self.group)) as Box<dyn Rule>)
+        grouplist
+            .contains(&self.group)
+            .then(|| Box::new(RuleAlloca::new(&self.group)) as Box<dyn Rule>)
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         if !data.get_arch().alloca_calls {
             return 0;
         }
-        let Some(o) = data.obank().get(op) else { return 0 };
-        let (Some(a), Some(b)) = (o.get_in(0), o.get_in(1)) else { return 0 };
+        let Some(o) = data.obank().get(op) else {
+            return 0;
+        };
+        let (Some(a), Some(b)) = (o.get_in(0), o.get_in(1)) else {
+            return 0;
+        };
         if o.code() == OpCode::CPUI_CALLOTHER {
             // `alloca((n + 15) & -16)` from the raw rewrite: the size as written.
             if constant(data, a) != Some(BUILTIN_ALLOCA as u64) {
                 return 0;
             }
-            let Some(size) = unrounded(data, b) else { return 0 };
+            let Some(size) = unrounded(data, b) else {
+                return 0;
+            };
             return i32::from(data.op_set_input(op, size, 1).is_ok());
         }
         if o.code() == OpCode::CPUI_INT_AND {
             // `(alloca(n) + 15) & -16`: the buffer alloca returns is aligned.
-            let aligned = signed(data, b).is_some_and(|m| m < 0 && m.unsigned_abs().is_power_of_two())
+            let aligned = signed(data, b)
+                .is_some_and(|m| m < 0 && m.unsigned_abs().is_power_of_two())
                 && matches!(def(data, a), Some((OpCode::CPUI_INT_ADD, ins)) if ins.len() == 2 && is_alloca(data, ins[0]) && constant(data, ins[1]).is_some_and(|c| c < MAX_SLACK));
             if !aligned {
                 return 0;
             }
-            let Some((_, ins)) = def(data, a) else { return 0 };
+            let Some((_, ins)) = def(data, a) else {
+                return 0;
+            };
             if data.op_set_all_input(op, &[ins[0]]).is_err() {
                 return 0;
             }
             data.op_set_opcode(op, crate::typeop::type_op_for(OpCode::CPUI_COPY));
             return 1;
         }
-        let (sp, neg) = if stack_pointer(data, a) { (a, b) } else if stack_pointer(data, b) { (b, a) } else { return 0 };
+        let (sp, neg) = if stack_pointer(data, a) {
+            (a, b)
+        } else if stack_pointer(data, b) {
+            (b, a)
+        } else {
+            return 0;
+        };
         let _ = sp;
-        let Some(amount) = negated(data, neg) else { return 0 };
-        let Some(size) = unrounded(data, amount) else { return 0 };
+        let Some(amount) = negated(data, neg) else {
+            return 0;
+        };
+        let Some(size) = unrounded(data, amount) else {
+            return 0;
+        };
         // `p = n > k ? alloca(n) : buf`: the frame array is laid out from the
         // stack arithmetic the merge sees, so that shape keeps it.
         let Some(out) = o.get_out() else { return 0 };
@@ -297,7 +397,9 @@ impl Rule for RuleAlloca {
             v.descend_iter().any(|d| {
                 data.obank().get(d).is_some_and(|m| {
                     m.code() == OpCode::CPUI_MULTIEQUAL
-                        && (0..m.num_input()).filter_map(|i| m.get_in(i)).any(|i| i != out && stack_derived(data, i, 8))
+                        && (0..m.num_input())
+                            .filter_map(|i| m.get_in(i))
+                            .any(|i| i != out && stack_derived(data, i, 8))
                 })
             })
         });
@@ -315,7 +417,9 @@ impl Rule for RuleAlloca {
 
 /// Is `vn` an address into the stack or into an `alloca` buffer?
 fn stack_derived(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
-    let Some(v) = data.vbank().get(vn) else { return false };
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
     if v.is_spacebase() && v.is_input() {
         return true;
     }
@@ -323,10 +427,12 @@ fn stack_derived(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
         return false;
     }
     match def(data, vn) {
-        Some((OpCode::CPUI_INT_ADD | OpCode::CPUI_PTRADD | OpCode::CPUI_PTRSUB, ins)) => {
-            ins.iter().any(|&i| constant(data, i).is_none() && stack_derived(data, i, depth - 1))
-        }
-        Some((OpCode::CPUI_COPY | OpCode::CPUI_CAST, ins)) => ins.first().is_some_and(|&i| stack_derived(data, i, depth - 1)),
+        Some((OpCode::CPUI_INT_ADD | OpCode::CPUI_PTRADD | OpCode::CPUI_PTRSUB, ins)) => ins
+            .iter()
+            .any(|&i| constant(data, i).is_none() && stack_derived(data, i, depth - 1)),
+        Some((OpCode::CPUI_COPY | OpCode::CPUI_CAST, ins)) => ins
+            .first()
+            .is_some_and(|&i| stack_derived(data, i, depth - 1)),
         Some((OpCode::CPUI_CALLOTHER, _)) => is_alloca(data, vn),
         _ => false,
     }
@@ -339,9 +445,15 @@ fn same_address(data: &Funcdata, a: VarnodeId, b: VarnodeId) -> bool {
         return true;
     }
     match (def(data, a), def(data, b)) {
-        (Some((oa, ia)), Some((ob, ib))) if oa == ob && ia.len() == ib.len() => ia.iter().zip(&ib).all(|(&x, &y)| {
-            x == y || (constant(data, x).is_some() && constant(data, x) == constant(data, y) && data.vbank().get(x).map(|v| v.get_size()) == data.vbank().get(y).map(|v| v.get_size()))
-        }),
+        (Some((oa, ia)), Some((ob, ib))) if oa == ob && ia.len() == ib.len() => {
+            ia.iter().zip(&ib).all(|(&x, &y)| {
+                x == y
+                    || (constant(data, x).is_some()
+                        && constant(data, x) == constant(data, y)
+                        && data.vbank().get(x).map(|v| v.get_size())
+                            == data.vbank().get(y).map(|v| v.get_size()))
+            })
+        }
         _ => false,
     }
 }
@@ -352,7 +464,9 @@ fn is_limit(data: &Funcdata, vn: VarnodeId) -> bool {
     if is_alloca(data, vn) {
         return true;
     }
-    let Some((OpCode::CPUI_INT_ADD, ins)) = def(data, vn) else { return false };
+    let Some((OpCode::CPUI_INT_ADD, ins)) = def(data, vn) else {
+        return false;
+    };
     if ins.len() != 2 || !stack_pointer(data, ins[0]) {
         return false;
     }
@@ -378,22 +492,32 @@ fn compared(data: &Funcdata, cbranch: OpId) -> Option<(VarnodeId, VarnodeId)> {
 
 /// Does `block` end in a CBRANCH that compares against `limit`?
 fn tests_limit(data: &Funcdata, block: crate::context::BlockId, limit: VarnodeId) -> bool {
-    let Some(&last) = data.bb_ops(block).last() else { return false };
-    data.obank().get(last).is_some_and(|o| o.code() == OpCode::CPUI_CBRANCH)
+    let Some(&last) = data.bb_ops(block).last() else {
+        return false;
+    };
+    data.obank()
+        .get(last)
+        .is_some_and(|o| o.code() == OpCode::CPUI_CBRANCH)
         && compared(data, last).is_some_and(|(a, b)| a == limit || b == limit)
 }
 
 /// The probe of a stack-clash allocation: a store back of the word just loaded
 /// from the same stack address (`or qword [rsp+k],0`).
 fn is_probe(data: &Funcdata, store: OpId) -> bool {
-    let Some(o) = data.obank().get(store) else { return false };
-    let (Some(addr), Some(value)) = (o.get_in(1), o.get_in(2)) else { return false };
+    let Some(o) = data.obank().get(store) else {
+        return false;
+    };
+    let (Some(addr), Some(value)) = (o.get_in(1), o.get_in(2)) else {
+        return false;
+    };
     let loaded = match def(data, value) {
         Some((OpCode::CPUI_LOAD, ins)) => ins.get(1).copied(),
-        Some((OpCode::CPUI_INT_OR, ins)) if ins.len() == 2 && constant(data, ins[1]) == Some(0) => match def(data, ins[0]) {
-            Some((OpCode::CPUI_LOAD, l)) => l.get(1).copied(),
-            _ => None,
-        },
+        Some((OpCode::CPUI_INT_OR, ins)) if ins.len() == 2 && constant(data, ins[1]) == Some(0) => {
+            match def(data, ins[0]) {
+                Some((OpCode::CPUI_LOAD, l)) => l.get(1).copied(),
+                _ => None,
+            }
+        }
         _ => None,
     };
     loaded.is_some_and(|l| same_address(data, l, addr)) && stack_derived(data, addr, 8)
@@ -415,7 +539,9 @@ pub struct RuleAllocaProbe {
 
 impl RuleAllocaProbe {
     pub fn new(group: &str) -> RuleAllocaProbe {
-        RuleAllocaProbe { group: group.to_string() }
+        RuleAllocaProbe {
+            group: group.to_string(),
+        }
     }
 }
 
@@ -425,14 +551,18 @@ impl Rule for RuleAllocaProbe {
     }
 
     fn clone_rule(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Rule>> {
-        grouplist.contains(&self.group).then(|| Box::new(RuleAllocaProbe::new(&self.group)) as Box<dyn Rule>)
+        grouplist
+            .contains(&self.group)
+            .then(|| Box::new(RuleAllocaProbe::new(&self.group)) as Box<dyn Rule>)
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         if !data.get_arch().alloca_calls {
             return 0;
         }
-        let Some(o) = data.obank().get(op) else { return 0 };
+        let Some(o) = data.obank().get(op) else {
+            return 0;
+        };
         if o.code() == OpCode::CPUI_STORE {
             if !is_probe(data, op) {
                 return 0;
@@ -440,7 +570,9 @@ impl Rule for RuleAllocaProbe {
             data.op_destroy(op);
             return 1;
         }
-        let Some((a, b)) = compared(data, op) else { return 0 };
+        let Some((a, b)) = compared(data, op) else {
+            return 0;
+        };
         let limit = if is_limit(data, a) && stack_pointer(data, b) {
             a
         } else if is_limit(data, b) && stack_pointer(data, a) {
@@ -449,13 +581,18 @@ impl Rule for RuleAllocaProbe {
             return 0;
         };
         let flip = o.is_boolean_flip();
-        let Some(block) = o.get_parent() else { return 0 };
+        let Some(block) = o.get_parent() else {
+            return 0;
+        };
         let bb = data.bblocks_ref().block(block);
         if bb.size_out() != 2 {
             return 0;
         }
         let (false_out, true_out) = (bb.get_false_out(), bb.get_true_out());
-        let (loop_side, skip) = match (tests_limit(data, false_out, limit), tests_limit(data, true_out, limit)) {
+        let (loop_side, skip) = match (
+            tests_limit(data, false_out, limit),
+            tests_limit(data, true_out, limit),
+        ) {
             (true, false) => (false_out, true_out),
             (false, true) => (true_out, false_out),
             _ => return 0,

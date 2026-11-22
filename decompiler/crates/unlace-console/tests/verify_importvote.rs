@@ -8,18 +8,31 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn decompile(func: &str, on: bool) -> String {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap();
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap();
     let bin = root.join("decompiler/crates/unlace-analysis/tests/fixtures/importvote_x86_64.so");
     let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.arch_mut().set_kuna_option("importvote", if on { "on" } else { "off" }).expect("importvote flips");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
-    let cmds: Vec<String> = [format!("load function {func}"), "decompile".into(), "print C".into()].to_vec();
+    prog.arch_mut()
+        .set_kuna_option("importvote", if on { "on" } else { "off" })
+        .expect("importvote flips");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
+    let cmds: Vec<String> = [
+        format!("load function {func}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .to_vec();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -44,6 +57,12 @@ fn forwarder_drops_the_passed_through_argument_with_the_option_off() {
 #[test]
 fn forwarder_passes_what_the_other_call_site_passes() {
     let on = decompile("g", true);
-    assert!(on.contains(",a2); // tail-call"), "the forwarded edx is the third argument, got:\n{on}");
-    assert!(on.contains("return ext3("), "h reads ext3's result, so g returns it, got:\n{on}");
+    assert!(
+        on.contains(",a2); // tail-call"),
+        "the forwarded edx is the third argument, got:\n{on}"
+    );
+    assert!(
+        on.contains("return ext3("),
+        "h reads ext3's result, so g returns it, got:\n{on}"
+    );
 }

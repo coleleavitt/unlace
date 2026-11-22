@@ -1,6 +1,6 @@
 use super::*;
 use crate::context::ArchContext;
-use unlace_base::space::{spacetype, AddrSpace, ConstantSpace, UniqueSpace};
+use unlace_base::space::{AddrSpace, ConstantSpace, UniqueSpace, spacetype};
 
 fn function() -> (Funcdata, Address) {
     let mut manager = AddrSpaceManager::new();
@@ -302,6 +302,12 @@ fn only_a_value_computed_to_be_returned_retires_a_call_leftover() {
     assert!(computed_result(&data, computed));
     assert!(!computed_result(&data, left));
     let store = data.new_constant(4, 0x3000);
-    output(&mut data, OpCode::CPUI_INT_ADD, &[computed, store], 4, &addr);
+    output(
+        &mut data,
+        OpCode::CPUI_INT_ADD,
+        &[computed, store],
+        4,
+        &addr,
+    );
     assert!(!computed_result(&data, computed));
 }

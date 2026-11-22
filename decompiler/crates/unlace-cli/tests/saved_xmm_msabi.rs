@@ -275,9 +275,9 @@ fn saved_xmm_spills_are_not_emitted_as_live_locals() {
             if let Some(offset) = variable["stack_offset"].as_i64() {
                 let size = variable["size"].as_i64().unwrap_or(1).max(1);
                 assert!(
-                !overlaps_saved_lane(offset, size),
-                "saved Win64 XMM lanes became emitted storage at {offset:#x} size {size}: {code}"
-            );
+                    !overlaps_saved_lane(offset, size),
+                    "saved Win64 XMM lanes became emitted storage at {offset:#x} size {size}: {code}"
+                );
             }
         }
         for offset in stack_offsets_in_comments(code) {
@@ -311,7 +311,9 @@ fn saved_xmm_spills_are_not_emitted_as_live_locals() {
             let offsets = stack_offsets_in_comments(code);
             for start in [-0x48, -0x38, -0x28, -0x18] {
                 assert!(
-                    offsets.iter().any(|offset| (start..start + 16).contains(offset)),
+                    offsets
+                        .iter()
+                        .any(|offset| (start..start + 16).contains(offset)),
                     "observing homes or exposing frame addresses must retain every saved XMM register ({define}, {start:#x}): {code}"
                 );
             }

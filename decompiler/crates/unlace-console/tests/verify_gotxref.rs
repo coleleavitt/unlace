@@ -39,7 +39,10 @@ const FORMS_REARM_NEXT: u64 = 0x100fc;
 const DISPLACEMENTS: [(u64, u64); 3] = [(0x100d4, 0x110e4), (0x100dc, 0x120f4), (0x100f8, 0x110dc)];
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn index() -> XrefIndex {
@@ -48,17 +51,24 @@ fn index() -> XrefIndex {
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
     let bytes = std::fs::read(&bin).expect("fixture readable");
     let file = object::File::parse(&*bytes).expect("fixture parses");
-    let seeds: Vec<u64> =
-        prog.function_entries_canonical().iter().map(|e| e.addr.get_offset()).collect();
+    let seeds: Vec<u64> = prog
+        .function_entries_canonical()
+        .iter()
+        .map(|e| e.addr.get_offset())
+        .collect();
     xrefs::build(&file, prog.arch(), prog.arch().translate(), &seeds)
 }
 
 fn to(idx: &XrefIndex, target: u64) -> Vec<(u64, XrefKind)> {
-    idx.refs_to(target).iter().map(|r| (r.from, r.kind)).collect()
+    idx.refs_to(target)
+        .iter()
+        .map(|r| (r.from, r.kind))
+        .collect()
 }
 
 /// The callbacks are reached only through GOT slots the linker filled with no
@@ -70,7 +80,11 @@ fn a_callback_read_through_the_got_is_referenced_from_the_slot_load() {
     assert_eq!(to(&idx, ON_REARM), vec![(READS_REARM, XrefKind::Data)]);
     assert_eq!(to(&idx, EXPIRE_SLOT), vec![(READS_EXPIRE, XrefKind::Read)]);
     assert_eq!(to(&idx, REARM_SLOT), vec![(READS_REARM, XrefKind::Read)]);
-    assert!(to(&idx, GOT).contains(&(MAKES_BASE, XrefKind::Data)), "{:?}", to(&idx, GOT));
+    assert!(
+        to(&idx, GOT).contains(&(MAKES_BASE, XrefKind::Data)),
+        "{:?}",
+        to(&idx, GOT)
+    );
     assert_eq!(idx.function_containing(READS_REARM), Some(ARM_TIMERS));
 }
 
@@ -80,7 +94,10 @@ fn a_callback_read_through_the_got_is_referenced_from_the_slot_load() {
 fn a_string_formed_from_a_mapped_looking_displacement_is_referenced() {
     let idx = index();
     assert_eq!(to(&idx, ARMING), vec![(FORMS_ARMING, XrefKind::Data)]);
-    assert_eq!(to(&idx, REARM_NEXT), vec![(FORMS_REARM_NEXT, XrefKind::Data)]);
+    assert_eq!(
+        to(&idx, REARM_NEXT),
+        vec![(FORMS_REARM_NEXT, XrefKind::Data)]
+    );
 }
 
 /// A data object read through the GOT is referenced the same way: `_start`
@@ -96,9 +113,15 @@ fn a_data_object_read_through_the_got_is_referenced() {
 fn a_composed_displacement_is_not_filed_as_a_pointer() {
     let idx = index();
     for (load, word) in DISPLACEMENTS {
-        assert!(idx.refs_to(word).is_empty(), "{word:#x}: {:?}", idx.refs_to(word));
         assert!(
-            idx.refs_from_instruction(load).iter().all(|r| r.kind != XrefKind::Data),
+            idx.refs_to(word).is_empty(),
+            "{word:#x}: {:?}",
+            idx.refs_to(word)
+        );
+        assert!(
+            idx.refs_from_instruction(load)
+                .iter()
+                .all(|r| r.kind != XrefKind::Data),
             "{load:#x}: {:?}",
             idx.refs_from_instruction(load)
         );

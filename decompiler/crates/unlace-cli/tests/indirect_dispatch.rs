@@ -40,7 +40,14 @@ fn decompile(
 /// 32-bit ADDIU wraps before its sign extension; defined C for that word
 /// arithmetic is emission's concern, so those compile with `-fwrapv`.
 #[cfg(all(target_os = "linux", target_pointer_width = "64"))]
-fn replay_passes(code: &str, steps: usize, wide: bool, join: bool, return_shift: u64, cap: u64) -> bool {
+fn replay_passes(
+    code: &str,
+    steps: usize,
+    wide: bool,
+    join: bool,
+    return_shift: u64,
+    cap: u64,
+) -> bool {
     let source = common::scratch_file("indirect-dispatch", "c");
     let driver = source.with_extension("driver.c");
     let executable = source.with_extension("exe");
@@ -80,7 +87,9 @@ fn replay_passes(code: &str, steps: usize, wide: bool, join: bool, return_shift:
         format!("{name}(x,&a[1]);")
     };
     let returned = if wide {
-        format!(" || result!=(((uint64_t)(int64_t)(int32_t)(x+1u)<<{return_shift})|((uint32_t)(x+1u)^0x12345678u))")
+        format!(
+            " || result!=(((uint64_t)(int64_t)(int32_t)(x+1u)<<{return_shift})|((uint32_t)(x+1u)^0x12345678u))"
+        )
     } else {
         String::new()
     };
@@ -103,7 +112,13 @@ fn replay_passes(code: &str, steps: usize, wide: bool, join: bool, return_shift:
         if wide {
             compile.arg("-fwrapv");
         }
-        let built = compile.arg(&source).arg(&driver).arg("-o").arg(&executable).output().unwrap();
+        let built = compile
+            .arg(&source)
+            .arg(&driver)
+            .arg("-o")
+            .arg(&executable)
+            .output()
+            .unwrap();
         if !built.status.success() {
             passed = false;
             break;
@@ -145,7 +160,10 @@ fn reentered_dispatches_preserve_each_effect_and_the_callers_return() {
         let return_shift = fixture["return_shift"].as_u64().unwrap();
         let steps = fixture["steps"].as_u64().unwrap() as usize;
         let code = decompile(&image, abi, base, wide, None);
-        assert!(replay_passes(&code, steps, wide, join, return_shift, 10), "{name}\n{code}");
+        assert!(
+            replay_passes(&code, steps, wide, join, return_shift, 10),
+            "{name}\n{code}"
+        );
         if steps > 1 {
             let upstream = decompile(&image, abi, base, wide, Some(("constselectjump", "off")));
             assert!(
@@ -164,7 +182,10 @@ fn reentered_dispatches_preserve_each_effect_and_the_callers_return() {
         }
         if name.ends_with("r31-2.bin") {
             let legacy = decompile(&image, abi, base, wide, Some(("regionstructure", "off")));
-            assert!(replay_passes(&legacy, steps, wide, join, return_shift, 10), "{name}\n{legacy}");
+            assert!(
+                replay_passes(&legacy, steps, wide, join, return_shift, 10),
+                "{name}\n{legacy}"
+            );
         }
     }
 }
@@ -180,34 +201,87 @@ fn dispatcher_return_updates_survive_narrowing_and_foreign_register_copies() {
         serde_json::from_slice(&std::fs::read(root.join("provenance.json")).unwrap()).unwrap();
     for fixture in manifest["fixtures"].as_array().unwrap() {
         let narrow = fixture["kind"] == "narrow";
-        let prototype = if narrow { "unsigned int bounce(void)" }
-            else { "unsigned int bounce(unsigned int value)" };
-        let target = if fixture["abi"] == "n32" { "MIPS:BE:64:octeon-32addr:default" }
-            else { "MIPS:BE:64:octeon:default" };
+        let prototype = if narrow {
+            "unsigned int bounce(void)"
+        } else {
+            "unsigned int bounce(unsigned int value)"
+        };
+        let target = if fixture["abi"] == "n32" {
+            "MIPS:BE:64:octeon-32addr:default"
+        } else {
+            "MIPS:BE:64:octeon:default"
+        };
         let (code, stderr, rc) = common::run_kuna(&[
-            "decompile", root.join(fixture["binary"].as_str().unwrap()).to_str().unwrap(),
-            "0x400000", "--raw-image", "--base", "0x400000", "--target", target,
-            "--assert-strict", "--assert", &format!("prototype 0x400000 {prototype}"),
+            "decompile",
+            root.join(fixture["binary"].as_str().unwrap())
+                .to_str()
+                .unwrap(),
+            "0x400000",
+            "--raw-image",
+            "--base",
+            "0x400000",
+            "--target",
+            target,
+            "--assert-strict",
+            "--assert",
+            &format!("prototype 0x400000 {prototype}"),
         ]);
         assert_eq!(rc, 0, "{stderr}");
         let declaration = code.split_once('{').unwrap().0.trim();
-        let name = declaration.split_once('(').unwrap().0.split_whitespace().last().unwrap();
+        let name = declaration
+            .split_once('(')
+            .unwrap()
+            .0
+            .split_whitespace()
+            .last()
+            .unwrap();
         let source = common::scratch_file("dispatch-value", "c");
         let driver = source.with_extension("driver.c");
         let executable = source.with_extension("exe");
-        std::fs::write(&source, format!("#include <stdbool.h>\n#include <stdint.h>\n{code}")).unwrap();
-        let invocation = if narrow { format!("{name}()!=3u") } else { format!("{name}(x)!=x+7u") };
+        std::fs::write(
+            &source,
+            format!("#include <stdbool.h>\n#include <stdint.h>\n{code}"),
+        )
+        .unwrap();
+        let invocation = if narrow {
+            format!("{name}()!=3u")
+        } else {
+            format!("{name}(x)!=x+7u")
+        };
         std::fs::write(&driver, format!("#include <stdint.h>\n{declaration};\nint main(void){{for(uint32_t i=0;i<10000;i++){{uint32_t x=i*2654435761u;(void)x;if({invocation})return 1;}}return 0;}}\n")).unwrap();
         for opt in ["-O0", "-O2"] {
-            common::process::required_output(Command::new("cc")
-                .args(["-std=c11", opt, "-Wall", "-Wextra", "-Werror", "-Wuninitialized",
-                    "-fno-lto", "-fsanitize=undefined", "-fno-sanitize-recover=undefined"])
-                .arg(&source).arg(&driver).arg("-o").arg(&executable));
-            let result = common::process::output_with_timeout(&mut Command::new(&executable),
-                std::time::Duration::from_secs(5), std::time::Duration::from_millis(10))
-                .expect("dispatcher must return");
-            assert!(result.status.success(), "{code}\n{}", String::from_utf8_lossy(&result.stderr));
+            common::process::required_output(
+                Command::new("cc")
+                    .args([
+                        "-std=c11",
+                        opt,
+                        "-Wall",
+                        "-Wextra",
+                        "-Werror",
+                        "-Wuninitialized",
+                        "-fno-lto",
+                        "-fsanitize=undefined",
+                        "-fno-sanitize-recover=undefined",
+                    ])
+                    .arg(&source)
+                    .arg(&driver)
+                    .arg("-o")
+                    .arg(&executable),
+            );
+            let result = common::process::output_with_timeout(
+                &mut Command::new(&executable),
+                std::time::Duration::from_secs(5),
+                std::time::Duration::from_millis(10),
+            )
+            .expect("dispatcher must return");
+            assert!(
+                result.status.success(),
+                "{code}\n{}",
+                String::from_utf8_lossy(&result.stderr)
+            );
         }
-        for path in [source, driver, executable] { std::fs::remove_file(path).unwrap(); }
+        for path in [source, driver, executable] {
+            std::fs::remove_file(path).unwrap();
+        }
     }
 }

@@ -26,11 +26,16 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture() -> PathBuf {
@@ -46,10 +51,16 @@ fn decompile(func: &str) -> String {
     let bin = fixture().to_str().expect("UTF-8 fixture path").to_string();
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.arch_mut().set_kuna_option("libcnames", "off").expect("libcnames flips");
+    prog.arch_mut()
+        .set_kuna_option("libcnames", "off")
+        .expect("libcnames flips");
 
-    let cmds: Vec<String> =
-        [format!("load function {func}"), "decompile".into(), "print C".into()].to_vec();
+    let cmds: Vec<String> = [
+        format!("load function {func}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .to_vec();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -132,7 +143,9 @@ fn no_undeclared_local_variable_in_make_dir_clone() {
         redeclared.is_empty(),
         "emitted a RE-DECLARED local variable (invalid C): {:?}\n\
          declaration block={:?}\n--- C ---\n{}",
-        redeclared, decl_list, c
+        redeclared,
+        decl_list,
+        c
     );
 
     let declared: std::collections::BTreeSet<String> = decl_list.into_iter().collect();
@@ -144,7 +157,9 @@ fn no_undeclared_local_variable_in_make_dir_clone() {
         undeclared.is_empty(),
         "emitted an UNDECLARED local variable (invalid C): {:?}\n\
          declared={:?}\n--- C ---\n{}",
-        undeclared, declared, c
+        undeclared,
+        declared,
+        c
     );
     // Sanity: the reduction really does still materialise several merged `vN`
     // locals, i.e. the fixture is exercising the merge/decl path it was built for.

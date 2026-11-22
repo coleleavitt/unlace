@@ -1,10 +1,10 @@
 //! Authored ELF/signature data is read statically; only Kuna is executed.
 
 use crate::common;
+use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use unlace_console::engine::Bootstrap;
 use unlace_decomp::kuna_loadoptions::LoadOptions;
-use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
 
 const COMMENT: &[u8] = b"rustc version 1.89.0-nightly (bf64d66bd 2025-05-21)\0";
 const TINY: &str = "49444153474e0600000000000000000000000000000000000000000000000000000007000001000000746573746c6962010400554889e50004bc1628006d7966756e6300";
@@ -734,10 +734,12 @@ fn application_consumes_one_observation_and_console_rejects_effective_overlays()
         });
         let committed = program.commit_pending_analysis();
         if overlay {
-            assert!(committed
-                .unwrap_err()
-                .explain()
-                .contains("unmodified object image"));
+            assert!(
+                committed
+                    .unwrap_err()
+                    .explain()
+                    .contains("unmodified object image")
+            );
             assert!(program.lookup_symbol(RECOVERED).is_none());
         } else {
             committed.unwrap();
@@ -928,10 +930,12 @@ fn installed_corpus_check_validates_the_default_and_explicit_paths() {
     std::fs::write(&bad, changed.to_string()).unwrap();
     let invalid = check(Some(&bad), 1);
     assert_eq!(invalid["status"], "invalid");
-    assert!(invalid["reason"]
-        .as_str()
-        .unwrap()
-        .contains("SHA-256 mismatch"));
+    assert!(
+        invalid["reason"]
+            .as_str()
+            .unwrap()
+            .contains("SHA-256 mismatch")
+    );
     changed["signatures"].as_array_mut().unwrap().pop();
     std::fs::write(&installed, changed.to_string()).unwrap();
     let partial = check(None, 1);

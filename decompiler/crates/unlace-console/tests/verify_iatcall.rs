@@ -30,23 +30,31 @@ const CALL_SITES: [(u64, u64); 2] = [(0x140001000, 0x140001004), (0x140001040, 0
 const DIRECT_CALL: (u64, u64) = (0x14000104f, 0x140001010);
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Bootstrap the fixture and build the index `unlace xrefs` answers out of.
 fn index() -> XrefIndex {
-    let bin =
-        repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(FIXTURE);
+    let bin = repo_root()
+        .join("decompiler/crates/unlace-analysis/tests/fixtures")
+        .join(FIXTURE);
     let specs = repo_root().join("specs");
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
     let bytes = std::fs::read(&bin).expect("fixture readable");
     let file = object::File::parse(&*bytes).expect("fixture parses");
-    let seeds: Vec<u64> =
-        prog.function_entries_canonical().iter().map(|e| e.addr.get_offset()).collect();
+    let seeds: Vec<u64> = prog
+        .function_entries_canonical()
+        .iter()
+        .map(|e| e.addr.get_offset())
+        .collect();
     xrefs::build(&file, prog.arch(), prog.arch().translate(), &seeds)
 }
 
@@ -56,8 +64,7 @@ fn index() -> XrefIndex {
 #[test]
 fn a_call_through_an_iat_slot_is_a_call_edge_to_the_import() {
     let idx = index();
-    let refs: Vec<(u64, XrefKind)> =
-        idx.refs_to(SLOT).iter().map(|r| (r.from, r.kind)).collect();
+    let refs: Vec<(u64, XrefKind)> = idx.refs_to(SLOT).iter().map(|r| (r.from, r.kind)).collect();
     for (func, site) in CALL_SITES {
         assert!(
             refs.contains(&(site, XrefKind::Call)),
@@ -77,12 +84,18 @@ fn a_call_through_an_iat_slot_is_a_call_edge_to_the_import() {
 fn both_ends_of_the_import_answer_with_two_call_sites() {
     let idx = index();
     for target in [SLOT, VENEER] {
-        let mut rows: Vec<(u64, XrefKind)> =
-            idx.refs_to_unified(target).iter().map(|r| (r.from, r.kind)).collect();
+        let mut rows: Vec<(u64, XrefKind)> = idx
+            .refs_to_unified(target)
+            .iter()
+            .map(|r| (r.from, r.kind))
+            .collect();
         rows.sort_unstable();
         assert_eq!(
             rows,
-            CALL_SITES.iter().map(|&(_, site)| (site, XrefKind::Call)).collect::<Vec<_>>(),
+            CALL_SITES
+                .iter()
+                .map(|&(_, site)| (site, XrefKind::Call))
+                .collect::<Vec<_>>(),
             "--to {target:#x}"
         );
     }
@@ -94,12 +107,18 @@ fn both_ends_of_the_import_answer_with_two_call_sites() {
 #[test]
 fn the_forwarding_veneer_is_a_jump_and_the_direct_call_stays_a_call() {
     let idx = index();
-    let jump: Vec<(u64, XrefKind)> =
-        idx.refs_from_instruction(VENEER).iter().map(|r| (r.to, r.kind)).collect();
+    let jump: Vec<(u64, XrefKind)> = idx
+        .refs_from_instruction(VENEER)
+        .iter()
+        .map(|r| (r.to, r.kind))
+        .collect();
     assert_eq!(jump, vec![(SLOT, XrefKind::Jump)]);
 
     let (site, callee) = DIRECT_CALL;
-    let direct: Vec<(u64, XrefKind)> =
-        idx.refs_from_instruction(site).iter().map(|r| (r.to, r.kind)).collect();
+    let direct: Vec<(u64, XrefKind)> = idx
+        .refs_from_instruction(site)
+        .iter()
+        .map(|r| (r.to, r.kind))
+        .collect();
     assert_eq!(direct, vec![(callee, XrefKind::Call)]);
 }

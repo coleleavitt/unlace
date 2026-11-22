@@ -22,13 +22,13 @@ use std::rc::Rc;
 
 use unlace_base::address::{Address, SeqNum};
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 
-use unlace_decomp::dtype::{type_metatype, Datatype};
 use unlace_decomp::context::{OpId, VarnodeId};
-use unlace_decomp::varnode::{varnode_flags, DefOpInfo, VarnodeBank};
+use unlace_decomp::dtype::{Datatype, type_metatype};
+use unlace_decomp::varnode::{DefOpInfo, VarnodeBank, varnode_flags};
 
 fn dt(size: int4) -> Rc<Datatype> {
     Rc::new(Datatype::new(size, type_metatype::TYPE_UNKNOWN))
@@ -38,7 +38,8 @@ fn dt(size: int4) -> Rc<Datatype> {
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -72,9 +73,11 @@ fn space(m: &AddrSpaceManager, idx: i32) -> Rc<AddrSpace> {
     Rc::clone(m.get_space(idx).unwrap())
 }
 
-fn no_replace() -> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> unlace_base::error::KunaResult<()>
-{
-    |_: &mut VarnodeBank, _: VarnodeId, _: VarnodeId| -> unlace_base::error::KunaResult<()> { Ok(()) }
+fn no_replace()
+-> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> unlace_base::error::KunaResult<()> {
+    |_: &mut VarnodeBank, _: VarnodeId, _: VarnodeId| -> unlace_base::error::KunaResult<()> {
+        Ok(())
+    }
 }
 
 /// Fabricate a distinct OpId + a SeqNum at (pc, uniq).
@@ -85,7 +88,10 @@ fn def_info(idc: &mut u32, pc: Address, uniq: u32) -> DefOpInfo {
     }
     let id = sm.insert(());
     *idc += 1;
-    DefOpInfo { id, seqnum: SeqNum::new(pc, uniq) }
+    DefOpInfo {
+        id,
+        seqnum: SeqNum::new(pc, uniq),
+    }
 }
 
 /// def-tree order is dominated by the def SeqNum, NOT the storage address.
@@ -105,18 +111,34 @@ fn def_tree_is_seqnum_dominated_not_address() {
     let mut idc = 0u32;
     // A: higher address, earlier seqnum (uniq 1)
     let a = bank
-        .set_def(fa, def_info(&mut idc, Address::new(space(&m, 2), 0x10), 1), &mut no_replace())
+        .set_def(
+            fa,
+            def_info(&mut idc, Address::new(space(&m, 2), 0x10), 1),
+            &mut no_replace(),
+        )
         .unwrap();
     // B: lower address, later seqnum (uniq 9)
     let b = bank
-        .set_def(fb, def_info(&mut idc, Address::new(space(&m, 2), 0x10), 9), &mut no_replace())
+        .set_def(
+            fb,
+            def_info(&mut idc, Address::new(space(&m, 2), 0x10), 9),
+            &mut no_replace(),
+        )
         .unwrap();
 
     let loc_order: Vec<VarnodeId> = bank.iter_loc().collect();
-    assert_eq!(loc_order, vec![b, a], "loc tree orders by address: lo(B) before hi(A)");
+    assert_eq!(
+        loc_order,
+        vec![b, a],
+        "loc tree orders by address: lo(B) before hi(A)"
+    );
 
     let def_order: Vec<VarnodeId> = bank.iter_def().collect();
-    assert_eq!(def_order, vec![a, b], "def tree orders by seqnum: uniq1(A) before uniq9(B)");
+    assert_eq!(
+        def_order,
+        vec![a, b],
+        "def tree orders by seqnum: uniq1(A) before uniq9(B)"
+    );
 
     // And the written-class def iterator agrees.
     let wr: Vec<VarnodeId> = bank.iter_def_flag(varnode_flags::written).collect();
@@ -137,13 +159,21 @@ fn flag_class_wrap_free_sorts_last() {
     let wf = bank.create(4, addr.clone(), dt(4));
     let mut idc = 0u32;
     let written = bank
-        .set_def(wf, def_info(&mut idc, Address::new(space(&m, 2), 0x10), 2), &mut no_replace())
+        .set_def(
+            wf,
+            def_info(&mut idc, Address::new(space(&m, 2), 0x10), 2),
+            &mut no_replace(),
+        )
         .unwrap();
     let inf = bank.create(4, addr.clone(), dt(4));
     let input = bank.set_input(inf, &mut no_replace()).unwrap();
 
     let order: Vec<VarnodeId> = bank.iter_loc().collect();
-    assert_eq!(order, vec![input, written, free], "input < written < free (wrap)");
+    assert_eq!(
+        order,
+        vec![input, written, free],
+        "input < written < free (wrap)"
+    );
 }
 
 /// `find_covered_input` exercising the ADDRESS-WRAP branch: a 1-byte space has
@@ -169,7 +199,11 @@ fn find_covered_input_address_wrap_branch() {
 
     // size-1 query at 0xFF: end = 0xFF + 1 - 1 = 0xFF == highest -> wrap branch
     let found = bank.find_covered_input(1, &top_addr).unwrap();
-    assert_eq!(found, Some(top), "covered input at the wrap boundary is found");
+    assert_eq!(
+        found,
+        Some(top),
+        "covered input at the wrap boundary is found"
+    );
 
     // sanity: a query that does NOT touch the boundary still works (non-wrap)
     let found_lo = bank.find_covered_input(1, &lo_addr).unwrap();
@@ -194,7 +228,11 @@ fn create_unique_accumulates_and_clear_resets() {
     assert_eq!(bank.num_varnodes(), 0);
     assert_eq!(bank.get_create_index(), 0, "create_index resets on clear");
     let u2 = bank.create_unique(2, dt(2));
-    assert_eq!(bank.get(u2).unwrap().get_offset(), base as u64, "uniqid resets to base on clear");
+    assert_eq!(
+        bank.get(u2).unwrap().get_offset(),
+        base as u64,
+        "uniqid resets to base on clear"
+    );
     assert_eq!(bank.get(u2).unwrap().get_create_index(), 0);
 }
 
@@ -212,13 +250,25 @@ fn xref_writtens_distinct_by_seqnum_but_equal_inputs_unify() {
     let f2 = bank.create(4, addr.clone(), dt(4));
     let mut idc = 0u32;
     let w1 = bank
-        .set_def(f1, def_info(&mut idc, Address::new(space(&m, 2), 0x10), 1), &mut no_replace())
+        .set_def(
+            f1,
+            def_info(&mut idc, Address::new(space(&m, 2), 0x10), 1),
+            &mut no_replace(),
+        )
         .unwrap();
     let w2 = bank
-        .set_def(f2, def_info(&mut idc, Address::new(space(&m, 2), 0x10), 2), &mut no_replace())
+        .set_def(
+            f2,
+            def_info(&mut idc, Address::new(space(&m, 2), 0x10), 2),
+            &mut no_replace(),
+        )
         .unwrap();
     assert_ne!(w1, w2);
-    assert_eq!(bank.num_varnodes(), 2, "writtens with distinct seqnum are distinct entries");
+    assert_eq!(
+        bank.num_varnodes(),
+        2,
+        "writtens with distinct seqnum are distinct entries"
+    );
 
     // two inputs, same (addr,size) -> the second unifies onto the first and the
     // replace callback fires once with (old=second, new=first).
@@ -226,14 +276,20 @@ fn xref_writtens_distinct_by_seqnum_but_equal_inputs_unify() {
     let i1 = bank.set_input(g1, &mut no_replace()).unwrap();
     let g2 = bank.create(2, Address::new(space(&m, 2), 0x6000), dt(2));
     let mut seen: Vec<(VarnodeId, VarnodeId)> = Vec::new();
-    let mut rec = |_: &mut VarnodeBank, old: VarnodeId, new: VarnodeId| -> unlace_base::error::KunaResult<()> {
+    let mut rec = |_: &mut VarnodeBank,
+                   old: VarnodeId,
+                   new: VarnodeId|
+     -> unlace_base::error::KunaResult<()> {
         seen.push((old, new));
         Ok(())
     };
     let i2 = bank.set_input(g2, &mut rec).unwrap();
     assert_eq!(i2, i1, "equal inputs unify");
     assert_eq!(seen, vec![(g2, i1)]);
-    assert!(bank.get(g2).is_none(), "the unified-away varnode is removed from the arena");
+    assert!(
+        bank.get(g2).is_none(),
+        "the unified-away varnode is removed from the arena"
+    );
 }
 
 /// descend list is order-preserving push_back and erase-by-value mid-list,
@@ -248,7 +304,11 @@ fn descend_push_back_and_boundary_erase() {
     let free = bank.create(4, Address::new(space(&m, 2), 0x7000), dt(4));
     let mut idc = 0u32;
     let v = bank
-        .set_def(free, def_info(&mut idc, Address::new(space(&m, 2), 0x10), 1), &mut no_replace())
+        .set_def(
+            free,
+            def_info(&mut idc, Address::new(space(&m, 2), 0x10), 1),
+            &mut no_replace(),
+        )
         .unwrap();
 
     let mut sm: slotmap::SlotMap<OpId, ()> = slotmap::SlotMap::with_key();
@@ -263,8 +323,14 @@ fn descend_push_back_and_boundary_erase() {
 
     // erase first
     bank.erase_descend(v, o0);
-    assert_eq!(bank.get(v).unwrap().descend_iter().collect::<Vec<_>>(), vec![o1, o2]);
+    assert_eq!(
+        bank.get(v).unwrap().descend_iter().collect::<Vec<_>>(),
+        vec![o1, o2]
+    );
     // erase last
     bank.erase_descend(v, o2);
-    assert_eq!(bank.get(v).unwrap().descend_iter().collect::<Vec<_>>(), vec![o1]);
+    assert_eq!(
+        bank.get(v).unwrap().descend_iter().collect::<Vec<_>>(),
+        vec![o1]
+    );
 }

@@ -20,8 +20,8 @@ use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{ActionGroupList, Rule, RuleSpec};
-use crate::funcdata::Funcdata;
 use crate::context::{OpId, TypeOp, VarnodeId};
+use crate::funcdata::Funcdata;
 
 // ===========================================================================
 // GH-1276: (b << k) s< 0   ->   b != 0
@@ -37,11 +37,15 @@ pub struct RuleBoolSignLess {
 impl RuleBoolSignLess {
     /// Default group `"analysis"`.
     pub fn new() -> RuleBoolSignLess {
-        RuleBoolSignLess { group: String::from("analysis") }
+        RuleBoolSignLess {
+            group: String::from("analysis"),
+        }
     }
     /// Construct with an explicit group.
     pub fn with_group(group: impl Into<String>) -> RuleBoolSignLess {
-        RuleBoolSignLess { group: group.into() }
+        RuleBoolSignLess {
+            group: group.into(),
+        }
     }
 }
 
@@ -55,7 +59,9 @@ impl Rule for RuleBoolSignLess {
         if !grouplist.contains(&self.group) {
             return None;
         }
-        Some(Box::new(RuleBoolSignLess { group: self.group.clone() }))
+        Some(Box::new(RuleBoolSignLess {
+            group: self.group.clone(),
+        }))
     }
 
     /// C++ `RuleBoolSignLess::applyOp` (`kuna_flagcompare.cc:23`) — transcribed.
@@ -113,7 +119,10 @@ impl Rule for RuleBoolSignLess {
 
         // Rewrite `(b << sa) s< 0`  =>  `b != 0`.
         // STUB(W6): glb->inst[CPUI_INT_NOTEQUAL] property flags.
-        data.op_set_opcode(op, TypeOp::new(OpCode::CPUI_INT_NOTEQUAL, 0, "INT_NOTEQUAL"));
+        data.op_set_opcode(
+            op,
+            TypeOp::new(OpCode::CPUI_INT_NOTEQUAL, 0, "INT_NOTEQUAL"),
+        );
         data.op_set_input(op, boolvn, 0)
             .expect("RuleBoolSignLess: opSetInput boolvn (internal invariant)");
         let z = data.new_constant(vn_size(data, boolvn), 0);
@@ -137,11 +146,15 @@ pub struct RuleSborrowGe {
 impl RuleSborrowGe {
     /// Default group `"analysis"`.
     pub fn new() -> RuleSborrowGe {
-        RuleSborrowGe { group: String::from("analysis") }
+        RuleSborrowGe {
+            group: String::from("analysis"),
+        }
     }
     /// Construct with an explicit group.
     pub fn with_group(group: impl Into<String>) -> RuleSborrowGe {
-        RuleSborrowGe { group: group.into() }
+        RuleSborrowGe {
+            group: group.into(),
+        }
     }
 }
 
@@ -155,7 +168,9 @@ impl Rule for RuleSborrowGe {
         if !grouplist.contains(&self.group) {
             return None;
         }
-        Some(Box::new(RuleSborrowGe { group: self.group.clone() }))
+        Some(Box::new(RuleSborrowGe {
+            group: self.group.clone(),
+        }))
     }
 
     /// C++ `RuleSborrowGe::applyOp` (`kuna_flagcompare.cc:242`) — transcribed.
@@ -180,7 +195,10 @@ impl Rule for RuleSborrowGe {
 
         // Rewrite the whole boolean tree to INT_SLESSEQUAL(K, V)  (K <= V).
         // STUB(W6): glb->inst[CPUI_INT_SLESSEQUAL] property flags.
-        data.op_set_opcode(op, TypeOp::new(OpCode::CPUI_INT_SLESSEQUAL, 0, "INT_SLESSEQUAL"));
+        data.op_set_opcode(
+            op,
+            TypeOp::new(OpCode::CPUI_INT_SLESSEQUAL, 0, "INT_SLESSEQUAL"),
+        );
         let kvn = data.new_constant(sz, kval);
         data.op_set_input(op, kvn, 0)
             .expect("RuleSborrowGe: opSetInput const (internal invariant)");
@@ -224,7 +242,11 @@ fn strip_bool_neg(data: &Funcdata, vn: VarnodeId) -> Option<VarnodeId> {
 /// Recognize the `V s>= K` flag idiom rooted at `{x, y}` where one is
 /// `INT_SBORROW(V,K)` and the other the sign of `(V-K)` (C++ `matchSborrowGe`).
 /// Returns `(vbase, kval, sz)`.  Order-independent.
-fn match_sborrow_ge(data: &Funcdata, x: VarnodeId, y: VarnodeId) -> Option<(VarnodeId, uintb, int4)> {
+fn match_sborrow_ge(
+    data: &Funcdata,
+    x: VarnodeId,
+    y: VarnodeId,
+) -> Option<(VarnodeId, uintb, int4)> {
     // Identify which is the SBORROW.
     let mut sb: Option<VarnodeId> = None;
     let mut sn: Option<VarnodeId> = None;
@@ -360,7 +382,8 @@ fn extract_or_of_ands(data: &Funcdata, orop: OpId) -> Option<(VarnodeId, Varnode
     }
     let and_a = vn_def(data, ia).expect("ia written");
     let and_b = vn_def(data, ib).expect("ib written");
-    if op_code(data, and_a) != OpCode::CPUI_BOOL_AND || op_code(data, and_b) != OpCode::CPUI_BOOL_AND
+    if op_code(data, and_a) != OpCode::CPUI_BOOL_AND
+        || op_code(data, and_b) != OpCode::CPUI_BOOL_AND
     {
         return None;
     }
@@ -408,10 +431,16 @@ fn op_code(data: &Funcdata, op: OpId) -> OpCode {
     data.obank().get(op).expect("op_code: stale op").code()
 }
 fn vn_is_constant(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).map(|v| v.is_constant()).unwrap_or(false)
+    data.vbank()
+        .get(vn)
+        .map(|v| v.is_constant())
+        .unwrap_or(false)
 }
 fn vn_is_written(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).map(|v| v.is_written()).unwrap_or(false)
+    data.vbank()
+        .get(vn)
+        .map(|v| v.is_written())
+        .unwrap_or(false)
 }
 fn vn_def(data: &Funcdata, vn: VarnodeId) -> Option<OpId> {
     data.vbank().get(vn).and_then(|v| v.get_def())

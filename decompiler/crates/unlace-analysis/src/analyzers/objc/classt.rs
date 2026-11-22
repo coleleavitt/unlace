@@ -107,7 +107,10 @@ pub fn superclass_name(img: &MachoImage, addr: u64) -> Option<String> {
     let slot = addr.wrapping_add(class_t::SUPERCLASS);
     match img.rebase_ptr(slot) {
         Some(sup) => class_name(img, read_class_t(img, sup)?.ro),
-        None => img.bind_name(slot).and_then(|n| n.strip_prefix("_OBJC_CLASS_$_")).map(str::to_string),
+        None => img
+            .bind_name(slot)
+            .and_then(|n| n.strip_prefix("_OBJC_CLASS_$_"))
+            .map(str::to_string),
     }
 }
 
@@ -133,11 +136,7 @@ pub fn class_name(img: &MachoImage, ro: u64) -> Option<String> {
 /// `Some(0)` when the class defines no methods.
 pub fn base_methods(img: &MachoImage, ro: u64) -> Option<u64> {
     let p = img.read_ptr(ro.wrapping_add(class_ro_t::BASE_METHODS))?;
-    if p == 0 || p & 1 != 0 {
-        None
-    } else {
-        Some(p)
-    }
+    if p == 0 || p & 1 != 0 { None } else { Some(p) }
 }
 
 /// Every `method_list_t` of `class_ro_t.baseMethods`: the one list it points
@@ -146,7 +145,9 @@ pub fn base_methods(img: &MachoImage, ro: u64) -> Option<u64> {
 /// then `count` eight-byte entries whose `>> 16` is the list's offset from
 /// the entry itself (the low 16 bits are the image index).
 pub fn method_lists(img: &MachoImage, ro: u64) -> Vec<u64> {
-    let Some(p) = img.read_ptr(ro.wrapping_add(class_ro_t::BASE_METHODS)) else { return Vec::new() };
+    let Some(p) = img.read_ptr(ro.wrapping_add(class_ro_t::BASE_METHODS)) else {
+        return Vec::new();
+    };
     if p == 0 {
         return Vec::new();
     }
@@ -154,7 +155,8 @@ pub fn method_lists(img: &MachoImage, ro: u64) -> Vec<u64> {
         return vec![p];
     }
     let header = p & !1;
-    let (Some(ent), Some(count)) = (img.read_u32(header), img.read_u32(header.wrapping_add(4))) else {
+    let (Some(ent), Some(count)) = (img.read_u32(header), img.read_u32(header.wrapping_add(4)))
+    else {
         return Vec::new();
     };
     if ent & 0xffff != 8 {
@@ -171,7 +173,8 @@ pub fn method_lists(img: &MachoImage, ro: u64) -> Vec<u64> {
 
 /// The `baseProperties` (`property_list_t*`) at `class_ro_t.baseProperties`.
 pub fn base_properties(img: &MachoImage, ro: u64) -> Option<u64> {
-    img.read_ptr(ro.wrapping_add(class_ro_t::BASE_PROPERTIES)).filter(|&p| p != 0)
+    img.read_ptr(ro.wrapping_add(class_ro_t::BASE_PROPERTIES))
+        .filter(|&p| p != 0)
 }
 
 /// The metaclass `class_ro_t` reached through `class_t.isa.data`: its
@@ -189,11 +192,7 @@ pub fn metaclass_ro(img: &MachoImage, isa: u64) -> Option<u64> {
 /// declares no instance variables (the common case for the root-class fixture).
 pub fn base_ivars(img: &MachoImage, ro: u64) -> Option<u64> {
     let p = img.read_ptr(ro.wrapping_add(class_ro_t::IVARS))?;
-    if p == 0 {
-        None
-    } else {
-        Some(p)
-    }
+    if p == 0 { None } else { Some(p) }
 }
 
 /// One resolved instance variable: its offset-slot VMA, name, and type encoding.
@@ -219,8 +218,12 @@ pub struct Ivar {
 /// list. The count is capped so a corrupt header can never spin.
 pub fn walk_ivar_list(img: &MachoImage, list_va: u64) -> Vec<Ivar> {
     let mut out = Vec::new();
-    let Some(ent) = img.read_u32(list_va + ivar_list_t::ENTSIZE) else { return out };
-    let Some(count) = img.read_u32(list_va + ivar_list_t::COUNT) else { return out };
+    let Some(ent) = img.read_u32(list_va + ivar_list_t::ENTSIZE) else {
+        return out;
+    };
+    let Some(count) = img.read_u32(list_va + ivar_list_t::COUNT) else {
+        return out;
+    };
     let entsize = (ent & 0xffff) as u64;
     if entsize == 0 {
         return out;
@@ -237,8 +240,12 @@ pub fn walk_ivar_list(img: &MachoImage, list_va: u64) -> Vec<Ivar> {
         let Some(offset_va) = img.read_ptr(rec.wrapping_add(ivar_t::OFFSET_PTR)) else {
             continue;
         };
-        let Some(name_ptr) = img.read_ptr(rec.wrapping_add(ivar_t::NAME)) else { continue };
-        let Some(name) = img.read_cstr(name_ptr) else { continue };
+        let Some(name_ptr) = img.read_ptr(rec.wrapping_add(ivar_t::NAME)) else {
+            continue;
+        };
+        let Some(name) = img.read_cstr(name_ptr) else {
+            continue;
+        };
         let types = img
             .read_ptr(rec.wrapping_add(ivar_t::TYPE))
             .filter(|&p| p != 0)
@@ -246,9 +253,17 @@ pub fn walk_ivar_list(img: &MachoImage, list_va: u64) -> Vec<Ivar> {
         if offset_va == 0 || name.is_empty() {
             continue;
         }
-        let Some(offset) = img.read_u32(offset_va) else { continue };
+        let Some(offset) = img.read_u32(offset_va) else {
+            continue;
+        };
         let size = img.read_u32(rec.wrapping_add(ivar_t::SIZE)).unwrap_or(0);
-        out.push(Ivar { offset_va, name, types, offset, size });
+        out.push(Ivar {
+            offset_va,
+            name,
+            types,
+            offset,
+            size,
+        });
     }
     out
 }

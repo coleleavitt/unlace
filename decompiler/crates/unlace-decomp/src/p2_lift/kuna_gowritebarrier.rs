@@ -105,10 +105,13 @@ pub fn parse_gowritebarrier_mode(value: &str) -> Result<(GoWriteBarrierMode, Str
         other => {
             return Err(format!(
                 "unknown gowritebarrier value {other:?} (expected off, auto or always)"
-            ))
+            ));
         }
     };
-    Ok((mode, format!("Go write-barrier folding set to {}", mode.as_str())))
+    Ok((
+        mode,
+        format!("Go write-barrier folding set to {}", mode.as_str()),
+    ))
 }
 
 /// Is `name` a Go GC write-barrier thunk?
@@ -151,7 +154,9 @@ pub struct ActionGoWriteBarrier {
 impl ActionGoWriteBarrier {
     /// Construct the action in the given group.
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionGoWriteBarrier { base: ActionBase::new(0, "gowritebarrier", g) })
+        Box::new(ActionGoWriteBarrier {
+            base: ActionBase::new(0, "gowritebarrier", g),
+        })
     }
 }
 
@@ -166,7 +171,9 @@ impl Action for ActionGoWriteBarrier {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionGoWriteBarrier { base: self.base.clone() }))
+        Some(Box::new(ActionGoWriteBarrier {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !live(data) {

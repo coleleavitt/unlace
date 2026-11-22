@@ -20,9 +20,7 @@ pub(crate) fn coalesce(
         }
         let start = pos - last as usize;
         let end = pos + current as usize;
-        if matches!((last, current), (1, 3) | (3, 1))
-            && !straddles_input(start, pos, end)
-        {
+        if matches!((last, current), (1, 3) | (3, 1)) && !straddles_input(start, pos, end) {
             refine[start] = 4;
             last = 4;
             pos += current as usize;

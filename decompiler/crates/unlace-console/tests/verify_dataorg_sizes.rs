@@ -20,7 +20,10 @@ use std::path::PathBuf;
 use unlace_console::engine::bootstrap_from_object;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// The decoded scalar widths, in declaration order:
@@ -32,7 +35,9 @@ fn widths_of(fixture: &str) -> Widths {
     let root = repo_root();
     let specs = root.join("specs");
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
-    let path = root.join("decompiler/crates/unlace-analysis/tests/fixtures").join(fixture);
+    let path = root
+        .join("decompiler/crates/unlace-analysis/tests/fixtures")
+        .join(fixture);
     let prog = bootstrap_from_object(path.to_str().expect("UTF-8 fixture path"), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     let t = prog.arch().types();
@@ -74,7 +79,11 @@ fn i386_elf_is_ilp32_so_eight_bytes_is_long_long() {
 #[test]
 fn aarch64_is_lp64() {
     let w = widths_of("fmt_aarch64");
-    assert_eq!((w.0, w.1, w.2, w.3, w.4, w.5), (1, 2, 4, 8, 8, 8), "aarch64 integer widths");
+    assert_eq!(
+        (w.0, w.1, w.2, w.3, w.4, w.5),
+        (1, 2, 4, 8, 8, 8),
+        "aarch64 integer widths"
+    );
     assert_eq!((w.6, w.7), (4, 8), "aarch64 float/double");
 }
 
@@ -82,16 +91,29 @@ fn aarch64_is_lp64() {
 #[test]
 fn arm32_is_ilp32() {
     let w = widths_of("fmt_arm");
-    assert_eq!((w.0, w.1, w.2, w.3, w.4, w.5), (1, 2, 4, 4, 8, 4), "arm integer widths");
+    assert_eq!(
+        (w.0, w.1, w.2, w.3, w.4, w.5),
+        (1, 2, 4, 4, 8, 4),
+        "arm integer widths"
+    );
 }
 
 /// MIPS o32 and 32-bit PowerPC System V are ILP32 too. Their cspecs used to
 /// leave `long_size` out, and the `setup_sizes` fallback for that is 8 bytes.
 #[test]
 fn mips32_and_ppc32_are_ilp32() {
-    for fixture in ["mips_gp_le32", "bejoin_mips32_be.o", "bejoin_ppc32_be.o", "bejoin_ppc32_le.o"] {
+    for fixture in [
+        "mips_gp_le32",
+        "bejoin_mips32_be.o",
+        "bejoin_ppc32_be.o",
+        "bejoin_ppc32_le.o",
+    ] {
         let w = widths_of(fixture);
-        assert_eq!((w.0, w.1, w.2, w.3, w.4, w.5), (1, 2, 4, 4, 8, 4), "{fixture} integer widths");
+        assert_eq!(
+            (w.0, w.1, w.2, w.3, w.4, w.5),
+            (1, 2, 4, 4, 8, 4),
+            "{fixture} integer widths"
+        );
     }
 }
 
@@ -101,15 +123,32 @@ fn mips32_and_ppc32_are_ilp32() {
 /// `setup_sizes` fallback fires, whichever fixture exercises it.
 #[test]
 fn long_double_never_decodes_to_zero() {
-    for fixture in
-        ["fmt_x86_64", "i386_pie_nl", "fmt_arm", "fmt_aarch64", "fmt_riscv64", "mips_gp_le32"]
-    {
+    for fixture in [
+        "fmt_x86_64",
+        "i386_pie_nl",
+        "fmt_arm",
+        "fmt_aarch64",
+        "fmt_riscv64",
+        "mips_gp_le32",
+    ] {
         let w = widths_of(fixture);
-        assert!(w.8 >= w.7, "{fixture}: long double ({}) must be at least double ({})", w.8, w.7);
-        for (name, v) in
-            [("char", w.0), ("short", w.1), ("int", w.2), ("long", w.3), ("long long", w.4),
-             ("pointer", w.5), ("float", w.6), ("double", w.7), ("long double", w.8)]
-        {
+        assert!(
+            w.8 >= w.7,
+            "{fixture}: long double ({}) must be at least double ({})",
+            w.8,
+            w.7
+        );
+        for (name, v) in [
+            ("char", w.0),
+            ("short", w.1),
+            ("int", w.2),
+            ("long", w.3),
+            ("long long", w.4),
+            ("pointer", w.5),
+            ("float", w.6),
+            ("double", w.7),
+            ("long double", w.8),
+        ] {
             assert!(v > 0, "{fixture}: {name} width decoded as {v}");
         }
     }

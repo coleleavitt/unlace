@@ -110,9 +110,14 @@ impl MemoryOps {
             .filter(|&op| fd.obank().get(op).is_some_and(|o| !o.is_dead()))
             .collect();
         let manage = fd.get_arch().manage();
-        for (code, out) in [(OpCode::CPUI_LOAD, &mut self.loads), (OpCode::CPUI_STORE, &mut self.stores)] {
+        for (code, out) in [
+            (OpCode::CPUI_LOAD, &mut self.loads),
+            (OpCode::CPUI_STORE, &mut self.stores),
+        ] {
             for op in fd.obank().iter_code(code) {
-                let Some(o) = fd.obank().get(op) else { continue };
+                let Some(o) = fd.obank().get(op) else {
+                    continue;
+                };
                 if o.is_dead() || o.uses_spacebase_ptr() {
                     continue;
                 }
@@ -141,7 +146,11 @@ pub(crate) fn applies(fd: &Funcdata, fl: u32, addr: &Address) -> bool {
         && (fl & (varnode_flags::volatil | varnode_flags::readonly)) == 0
         && addr.get_space().is_some_and(|s| {
             s.get_type() == spacetype::IPTR_PROCESSOR
-                && fd.get_arch().manage().get_default_data_space().is_some_and(|d| d.get_index() == s.get_index())
+                && fd
+                    .get_arch()
+                    .manage()
+                    .get_default_data_space()
+                    .is_some_and(|d| d.get_index() == s.get_index())
         })
 }
 
@@ -163,11 +172,18 @@ pub(crate) fn stale_calls(
         push(fd, op, KILL, &mut events);
     }
     for &op in calls {
-        push(fd, op, if keep.contains(&op) { KILL } else { CALL }, &mut events);
+        push(
+            fd,
+            op,
+            if keep.contains(&op) { KILL } else { CALL },
+            &mut events,
+        );
     }
     events.sort_unstable_by_key(|&(bl, order, kind, _)| (bl, order, kind));
     let bblocks = fd.bblocks_ref();
-    let Some(root) = bblocks.root else { return Vec::new() };
+    let Some(root) = bblocks.root else {
+        return Vec::new();
+    };
     let rootb = bblocks.block(root);
     let index = |b: BlockId| bblocks.block(b).get_index() as usize;
     let mut last: Vec<Option<(u8, OpId)>> = vec![None; n];
@@ -183,7 +199,9 @@ pub(crate) fn stale_calls(
     let mut stale = Vec::new();
     for &bl in joins {
         let block = bblocks.block(bl);
-        let mut work: Vec<usize> = (0..block.size_in()).map(|k| index(block.get_in(k))).collect();
+        let mut work: Vec<usize> = (0..block.size_in())
+            .map(|k| index(block.get_in(k)))
+            .collect();
         while let Some(at) = work.pop() {
             if seen[at] {
                 continue;
@@ -221,12 +239,19 @@ pub(crate) fn stale_inputs(
         push(fd, op, KILL, &mut events);
     }
     for &op in calls {
-        push(fd, op, if keep.contains(&op) { DEF } else { CALL }, &mut events);
+        push(
+            fd,
+            op,
+            if keep.contains(&op) { DEF } else { CALL },
+            &mut events,
+        );
     }
     events.sort_unstable_by_key(|&(bl, order, kind, _)| (bl, order, kind));
     let bblocks = fd.bblocks_ref();
     let mut stale = FxHashSet::default();
-    let Some(root) = bblocks.root else { return stale };
+    let Some(root) = bblocks.root else {
+        return stale;
+    };
     let rootb = bblocks.block(root);
     let index = |b: BlockId| bblocks.block(b).get_index() as usize;
     let mut join = vec![false; n];
@@ -311,8 +336,9 @@ pub(crate) fn keep(
     partial: &[OpId],
 ) -> (FxHashSet<OpId>, FxHashSet<OpId>) {
     memory.collect(fd, space);
-    let mut events: Vec<Event> =
-        Vec::with_capacity(calls.len() + read.len() + memory.loads.len() + memory.stores.len() + memory.returns.len());
+    let mut events: Vec<Event> = Vec::with_capacity(
+        calls.len() + read.len() + memory.loads.len() + memory.stores.len() + memory.returns.len(),
+    );
     for &vn in read {
         if let Some(v) = fd.vbank().get(vn) {
             for op in v.descend_iter() {
@@ -341,37 +367,58 @@ pub(crate) fn keep(
     events.sort_unstable_by_key(|&(bl, order, kind, _)| (bl, order, kind));
     let n = num_blocks(fd);
     let mut read_kept = FxHashSet::default();
-    solve(fd, n, &events, true, |kind, _| match kind {
-        USE | UDEF | LOAD | DEF | RET => Step::Gen,
-        KILL => Step::Kill,
-        CALL => Step::ObserveKill,
-        _ => Step::Skip,
-    }, |op, live| {
-        if live {
-            read_kept.insert(op);
-        }
-    });
+    solve(
+        fd,
+        n,
+        &events,
+        true,
+        |kind, _| match kind {
+            USE | UDEF | LOAD | DEF | RET => Step::Gen,
+            KILL => Step::Kill,
+            CALL => Step::ObserveKill,
+            _ => Step::Skip,
+        },
+        |op, live| {
+            if live {
+                read_kept.insert(op);
+            }
+        },
+    );
     let mut keep = read_kept.clone();
-    solve(fd, n, &events, false, |kind, _| match kind {
-        KILL | DEF | UDEF => Step::Gen,
-        CALL => Step::ObserveKill,
-        _ => Step::Skip,
-    }, |op, reach| {
-        if reach {
-            keep.insert(op);
-        }
-    });
-    solve(fd, n, &events, false, |kind, _| match kind {
-        USE | UDEF | LOAD => Step::Gen,
-        KILL => Step::Kill,
-        CALL => Step::ObserveKill,
-        _ => Step::Skip,
-    }, |op, reach| {
-        if reach {
-            keep.insert(op);
-            read_kept.insert(op);
-        }
-    });
+    solve(
+        fd,
+        n,
+        &events,
+        false,
+        |kind, _| match kind {
+            KILL | DEF | UDEF => Step::Gen,
+            CALL => Step::ObserveKill,
+            _ => Step::Skip,
+        },
+        |op, reach| {
+            if reach {
+                keep.insert(op);
+            }
+        },
+    );
+    solve(
+        fd,
+        n,
+        &events,
+        false,
+        |kind, _| match kind {
+            USE | UDEF | LOAD => Step::Gen,
+            KILL => Step::Kill,
+            CALL => Step::ObserveKill,
+            _ => Step::Skip,
+        },
+        |op, reach| {
+            if reach {
+                keep.insert(op);
+                read_kept.insert(op);
+            }
+        },
+    );
     ground(fd, n, &events, &mut keep);
     (keep, read_kept)
 }
@@ -425,7 +472,8 @@ fn ground(fd: &Funcdata, n: usize, events: &[Event], keep: &mut FxHashSet<OpId>)
     while let Some(bl) = work.pop() {
         queued[bl] = false;
         let block = bblocks.block(id(bl));
-        let mut open = block.size_out() == 0 || (0..block.size_out()).any(|k| entry[index(block.get_out(k))]);
+        let mut open =
+            block.size_out() == 0 || (0..block.size_out()).any(|k| entry[index(block.get_out(k))]);
         let (lo, hi) = span[bl];
         for &(_, _, kind, op) in events[lo..hi].iter().rev() {
             match kind {
@@ -471,8 +519,15 @@ pub(crate) fn guarded(fd: &Funcdata, op: OpId, addr: &Address, size: int4) -> bo
 /// Varnode reaching past the range (`partial`, a pass that grows it) is never
 /// cleared: refining or revisiting the range rebuilds its value from the
 /// skipped calls' stale inputs.
-pub(crate) fn crosses_skipped(fd: &Funcdata, vn: VarnodeId, pruned: &[(int4, u64, int4)], partial: bool) -> bool {
-    let Some(v) = fd.vbank().get(vn) else { return false };
+pub(crate) fn crosses_skipped(
+    fd: &Funcdata,
+    vn: VarnodeId,
+    pruned: &[(int4, u64, int4)],
+    partial: bool,
+) -> bool {
+    let Some(v) = fd.vbank().get(vn) else {
+        return false;
+    };
     let (space, lo) = (v.get_space(), v.get_offset());
     let hi = lo.saturating_add(v.get_size() as u64);
     pruned.iter().any(|&(index, offset, size)| {
@@ -482,7 +537,9 @@ pub(crate) fn crosses_skipped(fd: &Funcdata, vn: VarnodeId, pruned: &[(int4, u64
             && (partial || {
                 let addr = Address::new(std::rc::Rc::clone(&space), offset);
                 if v.is_written() {
-                    v.get_size() < size && v.get_def().is_some_and(|op| !walk(fd, op, &addr, size, true))
+                    v.get_size() < size
+                        && v.get_def()
+                            .is_some_and(|op| !walk(fd, op, &addr, size, true))
                 } else {
                     v.descend_iter().any(|op| !guarded(fd, op, &addr, size))
                 }
@@ -496,14 +553,24 @@ fn walk(fd: &Funcdata, op: OpId, addr: &Address, size: int4, back: bool) -> bool
     };
     let defines = |o: &crate::op::PcodeOp| {
         o.code() != OpCode::CPUI_MULTIEQUAL
-            && o.get_out().and_then(|w| fd.vbank().get(w)).is_some_and(|w| w.get_addr() == addr && w.get_size() == size)
+            && o.get_out()
+                .and_then(|w| fd.vbank().get(w))
+                .is_some_and(|w| w.get_addr() == addr && w.get_size() == size)
     };
-    let step = |o: &crate::op::PcodeOp| if back { o.basic_neighbours().0 } else { o.basic_neighbours().1 };
+    let step = |o: &crate::op::PcodeOp| {
+        if back {
+            o.basic_neighbours().0
+        } else {
+            o.basic_neighbours().1
+        }
+    };
     let mut seen: FxHashSet<BlockId> = FxHashSet::default();
     let mut work = vec![(start, fd.obank().get(op).and_then(step))];
     'paths: while let Some((bl, mut cur)) = work.pop() {
         while let Some(at) = cur {
-            let Some(o) = fd.obank().get(at) else { return false };
+            let Some(o) = fd.obank().get(at) else {
+                return false;
+            };
             if defines(o) {
                 continue 'paths;
             }
@@ -526,11 +593,26 @@ fn walk(fd: &Funcdata, op: OpId, addr: &Address, size: int4, back: bool) -> bool
             cur = step(o);
         }
         let block = fd.bblocks_ref().block(bl);
-        let count = if back { block.size_in() } else { block.size_out() };
+        let count = if back {
+            block.size_in()
+        } else {
+            block.size_out()
+        };
         for k in 0..count {
-            let next = if back { block.get_in(k) } else { block.get_out(k) };
+            let next = if back {
+                block.get_in(k)
+            } else {
+                block.get_out(k)
+            };
             if seen.insert(next) {
-                work.push((next, if back { fd.bb_op_tail(next) } else { fd.bb_op_head(next) }));
+                work.push((
+                    next,
+                    if back {
+                        fd.bb_op_tail(next)
+                    } else {
+                        fd.bb_op_head(next)
+                    },
+                ));
             }
         }
     }
@@ -540,14 +622,21 @@ fn walk(fd: &Funcdata, op: OpId, addr: &Address, size: int4, back: bool) -> bool
 fn push(fd: &Funcdata, op: OpId, kind: u8, events: &mut Vec<Event>) {
     if let Some(o) = fd.obank().get(op) {
         if let Some(bl) = o.get_parent() {
-            events.push((fd.bblocks_ref().block(bl).get_index() as usize, o.get_seq_num().get_order(), kind, op));
+            events.push((
+                fd.bblocks_ref().block(bl).get_index() as usize,
+                o.get_seq_num().get_order(),
+                kind,
+                op,
+            ));
         }
     }
 }
 
 fn num_blocks(fd: &Funcdata) -> usize {
     let bblocks = fd.bblocks_ref();
-    bblocks.root.map_or(0, |r| bblocks.block(r).get_size() as usize)
+    bblocks
+        .root
+        .map_or(0, |r| bblocks.block(r).get_size() as usize)
 }
 
 /// What one access does to the walk: start or stop the range being tracked,
@@ -579,7 +668,11 @@ fn solve(
     for block in events.chunk_by(|a, b| a.0 == b.0) {
         let bl = block[0].0;
         let first = |e: &&Event| !matches!(class(e.2, e.3), Step::Skip);
-        let step = if back { block.iter().find(first) } else { block.iter().rev().find(first) };
+        let step = if back {
+            block.iter().find(first)
+        } else {
+            block.iter().rev().find(first)
+        };
         match step.map(|e| class(e.2, e.3)) {
             Some(Step::Gen) => {
                 entry[bl] = true;
@@ -594,9 +687,17 @@ fn solve(
     let Some(root) = bblocks.root else { return };
     while let Some(bl) = work.pop() {
         let block = bblocks.block(bblocks.block(root).get_block(bl as i32));
-        let count = if back { block.size_in() } else { block.size_out() };
+        let count = if back {
+            block.size_in()
+        } else {
+            block.size_out()
+        };
         for k in 0..count {
-            let next = if back { block.get_in(k) } else { block.get_out(k) };
+            let next = if back {
+                block.get_in(k)
+            } else {
+                block.get_out(k)
+            };
             let next = bblocks.block(next).get_index() as usize;
             exit[next] = true;
             if transparent[next] && !entry[next] {

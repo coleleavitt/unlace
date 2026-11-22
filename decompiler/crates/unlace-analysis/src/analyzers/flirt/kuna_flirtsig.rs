@@ -24,7 +24,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use object::{Architecture, BinaryFormat};
 
-use super::kuna_flirtpat::{FuncPattern, Target, PATTERN_LEN};
+use super::kuna_flirtpat::{FuncPattern, PATTERN_LEN, Target};
 
 /// The format version written.
 pub const SIG_VERSION: u8 = 10;
@@ -60,17 +60,30 @@ pub fn build_sig(
     target: Target,
     library: &str,
 ) -> Result<BuiltSig, String> {
-    let processor = processor_id(target.architecture)
-        .ok_or_else(|| format!("no signature processor id for {:?} objects", target.architecture))?;
+    let processor = processor_id(target.architecture).ok_or_else(|| {
+        format!(
+            "no signature processor id for {:?} objects",
+            target.architecture
+        )
+    })?;
     let unique: BTreeSet<&FuncPattern> = patterns.iter().filter(|p| writable(p)).collect();
     let mut groups: BTreeMap<(Head, usize, u16), Vec<&FuncPattern>> = BTreeMap::new();
     for p in unique {
-        groups.entry((p.head(), p.crc_bytes().len(), p.crc())).or_default().push(p);
+        groups
+            .entry((p.head(), p.crc_bytes().len(), p.crc()))
+            .or_default()
+            .push(p);
     }
     let mut leaves: BTreeMap<Head, Vec<Resolved<'_>>> = BTreeMap::new();
     let mut collisions = Vec::new();
     for ((head, ..), group) in groups {
-        resolve(group, Vec::new(), data_names, leaves.entry(head).or_default(), &mut collisions);
+        resolve(
+            group,
+            Vec::new(),
+            data_names,
+            leaves.entry(head).or_default(),
+            &mut collisions,
+        );
     }
     leaves.retain(|_, leaf| !leaf.is_empty());
     let modules: usize = leaves.values().map(Vec::len).sum();
@@ -80,7 +93,13 @@ pub fn build_sig(
 
     let library: Vec<u8> = library
         .chars()
-        .map(|c| if c.is_ascii() && !c.is_ascii_control() { c as u8 } else { b'?' })
+        .map(|c| {
+            if c.is_ascii() && !c.is_ascii_control() {
+                c as u8
+            } else {
+                b'?'
+            }
+        })
         .take(usize::from(u8::MAX))
         .collect();
     let mut out = b"IDASGN".to_vec();
@@ -93,19 +112,30 @@ pub fn build_sig(
     out.extend([0; 2 + 12]);
     out.push(library.len() as u8);
     out.extend([0; 2]);
-    out.extend(u32::try_from(modules).map_err(|_| "too many modules")?.to_le_bytes());
+    out.extend(
+        u32::try_from(modules)
+            .map_err(|_| "too many modules")?
+            .to_le_bytes(),
+    );
     out.extend((PATTERN_LEN as u16).to_le_bytes());
     out.extend([0; 2]);
     out.extend(library);
     let leaves: Vec<Leaf<'_>> = leaves.into_iter().collect();
     write_node(&mut out, &leaves, 0);
-    Ok(BuiltSig { bytes: out, modules, collisions })
+    Ok(BuiltSig {
+        bytes: out,
+        modules,
+        collisions,
+    })
 }
 
 /// Whether the version 10 encoding can hold the pattern's names: a name ends
 /// at the first byte below 0x20.
 fn writable(p: &FuncPattern) -> bool {
-    !p.publics.is_empty() && p.publics.iter().all(|n| !n.is_empty() && n.bytes().all(|b| b >= 0x20))
+    !p.publics.is_empty()
+        && p.publics
+            .iter()
+            .all(|n| !n.is_empty() && n.bytes().all(|b| b >= 0x20))
 }
 
 fn resolve<'a>(
@@ -115,11 +145,18 @@ fn resolve<'a>(
     out: &mut Vec<Resolved<'a>>,
     collisions: &mut Vec<Collision>,
 ) {
-    if group.iter().all(|p| p.bytes == group[0].bytes && p.publics[0] == group[0].publics[0]) {
+    if group
+        .iter()
+        .all(|p| p.bytes == group[0].bytes && p.publics[0] == group[0].publics[0])
+    {
         group.truncate(1);
     }
     if let [pattern] = group[..] {
-        out.push(Resolved { pattern, tails, reference: None });
+        out.push(Resolved {
+            pattern,
+            tails,
+            reference: None,
+        });
         return;
     }
     if let (Some(i), true) = (differing_tail(&group), tails.len() < usize::from(u8::MAX)) {
@@ -136,7 +173,10 @@ fn resolve<'a>(
     }
     let usable = |name: &str| !data_names.contains(name) && name.len() < 0x8000;
     let at = |p: &'a FuncPattern, offset: u32| {
-        p.refs.iter().find(|(o, n)| *o == offset && usable(n)).map(|(_, n)| n.as_str())
+        p.refs
+            .iter()
+            .find(|(o, n)| *o == offset && usable(n))
+            .map(|(_, n)| n.as_str())
     };
     let by_reference = group[0].refs.iter().map(|(o, _)| *o).find(|&o| {
         let names: Vec<Option<&str>> = group.iter().map(|p| at(p, o)).collect();
@@ -144,11 +184,18 @@ fn resolve<'a>(
     });
     let mut parts: BTreeMap<Option<&str>, Vec<&'a FuncPattern>> = BTreeMap::new();
     for p in group {
-        parts.entry(by_reference.and_then(|o| at(p, o))).or_default().push(p);
+        parts
+            .entry(by_reference.and_then(|o| at(p, o)))
+            .or_default()
+            .push(p);
     }
     for (name, part) in parts {
         if let ([pattern], Some(name), Some(offset)) = (&part[..], name, by_reference) {
-            out.push(Resolved { pattern, tails: tails.clone(), reference: Some((offset, name)) });
+            out.push(Resolved {
+                pattern,
+                tails: tails.clone(),
+                reference: Some((offset, name)),
+            });
             continue;
         }
         let mut names: Vec<String> = part.iter().map(|p| p.publics[0].clone()).collect();
@@ -179,17 +226,24 @@ fn write_node(out: &mut Vec<u8>, leaves: &[Leaf<'_>], depth: usize) {
     let mut children: Vec<&[Leaf<'_>]> = Vec::new();
     let mut rest = leaves;
     while let Some((first, _)) = rest.first() {
-        let n = rest.iter().take_while(|(h, _)| h[depth] == first[depth]).count();
+        let n = rest
+            .iter()
+            .take_while(|(h, _)| h[depth] == first[depth])
+            .count();
         children.push(&rest[..n]);
         rest = &rest[n..];
     }
     var15(out, children.len() as u16);
     for child in children {
         let (first, last) = (&child[0].0, &child[child.len() - 1].0);
-        let len = (depth..PATTERN_LEN).take_while(|&i| first[i] == last[i]).count();
+        let len = (depth..PATTERN_LEN)
+            .take_while(|&i| first[i] == last[i])
+            .count();
         let run = &first[depth..depth + len];
         var15(out, len as u16);
-        let mask = run.iter().fold(0u32, |m, b| m << 1 | u32::from(b.is_none()));
+        let mask = run
+            .iter()
+            .fold(0u32, |m, b| m << 1 | u32::from(b.is_none()));
         if len < 0x10 {
             var15(out, mask as u16);
         } else {
@@ -205,7 +259,10 @@ fn write_node(out: &mut Vec<u8>, leaves: &[Leaf<'_>], depth: usize) {
 fn write_leaf(out: &mut Vec<u8>, modules: &[Resolved<'_>]) {
     let mut by_crc: BTreeMap<(u8, u16), Vec<&Resolved<'_>>> = BTreeMap::new();
     for m in modules {
-        by_crc.entry((m.pattern.crc_bytes().len() as u8, m.pattern.crc())).or_default().push(m);
+        by_crc
+            .entry((m.pattern.crc_bytes().len() as u8, m.pattern.crc()))
+            .or_default()
+            .push(m);
     }
     let groups = by_crc.len();
     for (g, ((crc_len, crc), modules)) in by_crc.into_iter().enumerate() {
@@ -213,7 +270,11 @@ fn write_leaf(out: &mut Vec<u8>, modules: &[Resolved<'_>]) {
         out.extend(crc.to_be_bytes());
         for (i, m) in modules.iter().enumerate() {
             let last = i + 1 == modules.len();
-            write_module(out, m, u8::from(!last) << 3 | u8::from(last && g + 1 < groups) << 4);
+            write_module(
+                out,
+                m,
+                u8::from(!last) << 3 | u8::from(last && g + 1 < groups) << 4,
+            );
         }
     }
 }
@@ -302,8 +363,11 @@ mod tests {
     use super::*;
     use flirt_sig::{Endian, Matcher, Signature};
 
-    const TARGET: Target =
-        Target { architecture: Architecture::X86_64, format: BinaryFormat::Elf, little_endian: true };
+    const TARGET: Target = Target {
+        architecture: Architecture::X86_64,
+        format: BinaryFormat::Elf,
+        little_endian: true,
+    };
 
     /// A 48-byte function: `seed` in its leading bytes, a relocated field at
     /// 4..8, and `last` as its final byte.
@@ -313,7 +377,11 @@ mod tests {
         bytes[40..44].fill(None);
         bytes[47] = Some(last);
         let refs = reference.map(|r| (40, r.to_string())).into_iter().collect();
-        FuncPattern { bytes, publics: vec![name.to_string()], refs }
+        FuncPattern {
+            bytes,
+            publics: vec![name.to_string()],
+            refs,
+        }
     }
 
     fn concrete(p: &FuncPattern) -> Vec<u8> {
@@ -337,34 +405,83 @@ mod tests {
         ];
         let data: BTreeSet<String> = ["table".to_string()].into();
         let built = build_sig(&patterns, &data, TARGET, "round trip").unwrap();
-        assert_eq!(built.collisions, [Collision { names: vec!["same_a".into(), "same_b".into()] }]);
+        assert_eq!(
+            built.collisions,
+            [Collision {
+                names: vec!["same_a".into(), "same_b".into()]
+            }]
+        );
         assert_eq!(built.modules, 6);
 
         let sig = Signature::parse(&built.bytes).expect("the reader accepts the written file");
-        assert_eq!((sig.header.version, sig.header.pattern_len), (SIG_VERSION, 32));
-        assert_eq!((sig.header.library_name.as_str(), sig.header.module_count), ("round trip", Some(6)));
-        assert!(crate::flirt::applies_to(&built.bytes, Some(18)) && !crate::flirt::applies_to(&built.bytes, Some(11)));
+        assert_eq!(
+            (sig.header.version, sig.header.pattern_len),
+            (SIG_VERSION, 32)
+        );
+        assert_eq!(
+            (sig.header.library_name.as_str(), sig.header.module_count),
+            ("round trip", Some(6))
+        );
+        assert!(
+            crate::flirt::applies_to(&built.bytes, Some(18))
+                && !crate::flirt::applies_to(&built.bytes, Some(11))
+        );
         let module = |name: &str| {
-            sig.modules.iter().find(|m| m.publics[0].name == name.as_bytes()).unwrap_or_else(|| panic!("{name}"))
+            sig.modules
+                .iter()
+                .find(|m| m.publics[0].name == name.as_bytes())
+                .unwrap_or_else(|| panic!("{name}"))
         };
-        let names: Vec<&[u8]> = module("plain").publics.iter().map(|p| p.name.as_slice()).collect();
+        let names: Vec<&[u8]> = module("plain")
+            .publics
+            .iter()
+            .map(|p| p.name.as_slice())
+            .collect();
         assert_eq!(names, [&b"plain"[..], b"plain_alias"]);
         assert_eq!(*module("plain").pattern, aliased.head());
-        assert_eq!((module("plain").length, module("plain").crc_len, module("plain").crc), (48, 8, aliased.crc()));
+        assert_eq!(
+            (
+                module("plain").length,
+                module("plain").crc_len,
+                module("plain").crc
+            ),
+            (48, 8, aliased.crc())
+        );
         for (name, value) in [("tail_a", 0xa1), ("tail_b", 0xb2)] {
-            let tails: Vec<(u32, u8)> = module(name).tail_bytes.iter().map(|t| (t.offset, t.value)).collect();
+            let tails: Vec<(u32, u8)> = module(name)
+                .tail_bytes
+                .iter()
+                .map(|t| (t.offset, t.value))
+                .collect();
             assert_eq!(tails, [(7, value)], "{name}");
             assert!(module(name).reference.is_none());
         }
         for (name, callee) in [("ref_a", "callee_a"), ("ref_b", "callee_b")] {
-            let r = module(name).reference.as_ref().expect("a reference tells the pair apart");
-            assert_eq!((r.offset, r.name.as_slice()), (40, callee.as_bytes()), "{name}");
+            let r = module(name)
+                .reference
+                .as_ref()
+                .expect("a reference tells the pair apart");
+            assert_eq!(
+                (r.offset, r.name.as_slice()),
+                (40, callee.as_bytes()),
+                "{name}"
+            );
         }
-        assert_eq!(sig.modules.iter().filter(|m| m.publics[0].name == b"twice").count(), 1);
+        assert_eq!(
+            sig.modules
+                .iter()
+                .filter(|m| m.publics[0].name == b"twice")
+                .count(),
+            1
+        );
 
         let matcher = Matcher::new(&sig, Endian::Little);
         for p in &patterns[..5] {
-            let found: Vec<&[u8]> = matcher.match_at(&concrete(p)).iter().map(|m| m.publics[0].name.as_slice()).collect();
+            let found: Vec<&[u8]> = matcher
+                .match_at(&concrete(p))
+                .iter()
+                .map(|m| m.publics[0].name.as_slice())
+                .collect();
             let mut want = vec![p.publics[0].as_bytes()];
             if p.publics[0].starts_with("ref_") {
                 want = vec![&b"ref_a"[..], b"ref_b"];
@@ -385,12 +502,22 @@ mod tests {
         let sig = Signature::parse(&built.bytes).unwrap();
         let matcher = Matcher::new(&sig, Endian::Little);
         let names = |code: &[u8]| -> Vec<Vec<u8>> {
-            crate::flirt::modules_at(&matcher, code, 32).iter().map(|m| m.publics[0].name.clone()).collect()
+            crate::flirt::modules_at(&matcher, code, 32)
+                .iter()
+                .map(|m| m.publics[0].name.clone())
+                .collect()
         };
         let code = concrete(&patterns[0]);
-        assert!(matcher.match_at(&code).is_empty(), "the trie alone needs 32 bytes");
+        assert!(
+            matcher.match_at(&code).is_empty(),
+            "the trie alone needs 32 bytes"
+        );
         assert_eq!(names(&code), [b"fits".to_vec()]);
-        assert_eq!(names(&concrete(&patterns[1])[..16]), [b"fits".to_vec()], "`longer` runs past the section");
+        assert_eq!(
+            names(&concrete(&patterns[1])[..16]),
+            [b"fits".to_vec()],
+            "`longer` runs past the section"
+        );
         assert!(names(&[]).is_empty());
     }
 
@@ -398,7 +525,10 @@ mod tests {
     fn nothing_to_write_and_an_unknown_processor_are_errors() {
         let twins = [func("one", 1, 0, None), func("two", 1, 0, None)];
         assert!(build_sig(&twins, &BTreeSet::new(), TARGET, "x").is_err());
-        let avr = Target { architecture: Architecture::Avr, ..TARGET };
+        let avr = Target {
+            architecture: Architecture::Avr,
+            ..TARGET
+        };
         assert!(build_sig(&twins[..1], &BTreeSet::new(), avr, "x").is_err());
     }
 }

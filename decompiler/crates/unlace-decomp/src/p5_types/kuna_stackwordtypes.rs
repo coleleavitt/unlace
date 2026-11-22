@@ -6,7 +6,7 @@ use unlace_base::address::Address;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 
 pub(crate) fn backing_store(

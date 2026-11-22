@@ -45,7 +45,9 @@ impl Landing {
 }
 
 fn any_in(sorted: &[u64], lo: u64, hi: u64) -> bool {
-    sorted.get(sorted.partition_point(|&a| a < lo)).is_some_and(|&a| a < hi)
+    sorted
+        .get(sorted.partition_point(|&a| a < lo))
+        .is_some_and(|&a| a < hi)
 }
 
 /// The image's big-endian bytes, read through `read` a page at a time (a
@@ -80,7 +82,9 @@ impl Mem<'_> {
     }
 
     fn word(&mut self, a: u64, n: u64) -> Option<u64> {
-        (0..n).try_fold(0u64, |v, i| Some(v << 8 | u64::from(self.byte(a.wrapping_add(i))?)))
+        (0..n).try_fold(0u64, |v, i| {
+            Some(v << 8 | u64::from(self.byte(a.wrapping_add(i))?))
+        })
     }
 
     fn uleb(&mut self, p: &mut u64) -> Option<u64> {
@@ -105,7 +109,11 @@ impl Mem<'_> {
             v |= i64::from(b & 0x7f) << shift;
             shift += 7;
             if b & 0x80 == 0 {
-                return Some(if shift < 64 && b & 0x40 != 0 { v | -1i64 << shift } else { v });
+                return Some(if shift < 64 && b & 0x40 != 0 {
+                    v | -1i64 << shift
+                } else {
+                    v
+                });
             }
             if shift >= 64 {
                 return None;
@@ -127,7 +135,11 @@ impl Mem<'_> {
         };
         let v = self.word(*p, n)?;
         *p += n;
-        Some(if signed { ((v << (64 - 8 * n)) as i64 >> (64 - 8 * n)) as u64 } else { v })
+        Some(if signed {
+            ((v << (64 - 8 * n)) as i64 >> (64 - 8 * n)) as u64
+        } else {
+            v
+        })
     }
 
     /// A `DW_EH_PE` pointer at `p` (absolute or PC-relative): its raw value
@@ -214,7 +226,11 @@ fn lsda(mem: &mut Mem, at: u64, func: u64, in_code: &dyn Fn(u64) -> bool) -> Opt
     let mut p = at;
     let lp_enc = mem.byte(p)?;
     p += 1;
-    let base = if lp_enc == OMIT { func } else { mem.pointer(lp_enc, &mut p)?.1 };
+    let base = if lp_enc == OMIT {
+        func
+    } else {
+        mem.pointer(lp_enc, &mut p)?.1
+    };
     let tt_enc = mem.byte(p)?;
     p += 1;
     if tt_enc != OMIT {
@@ -250,27 +266,51 @@ fn lsda(mem: &mut Mem, at: u64, func: u64, in_code: &dyn Fn(u64) -> bool) -> Opt
 }
 
 /// Read `.eh_frame` at `[start, end)`: `false` when its records do not parse.
-fn eh_frame(mem: &mut Mem, start: u64, end: u64, in_code: &dyn Fn(u64) -> bool, out: &mut Landing, found: &mut bool) -> bool {
+fn eh_frame(
+    mem: &mut Mem,
+    start: u64,
+    end: u64,
+    in_code: &dyn Fn(u64) -> bool,
+    out: &mut Landing,
+    found: &mut bool,
+) -> bool {
     let mut cies: BTreeMap<u64, Option<Cie>> = BTreeMap::new();
     let mut o = start;
     while o + 4 <= end {
-        let Some(len) = mem.word(o, 4) else { return false };
+        let Some(len) = mem.word(o, 4) else {
+            return false;
+        };
         if len == 0 {
             o += 4;
             continue;
         }
-        let Some(next) = o.checked_add(4 + len).filter(|&n| n <= end && len >= 4 && len != 0xffff_ffff) else { return false };
-        let Some(id) = mem.word(o + 4, 4) else { return false };
+        let Some(next) = o
+            .checked_add(4 + len)
+            .filter(|&n| n <= end && len >= 4 && len != 0xffff_ffff)
+        else {
+            return false;
+        };
+        let Some(id) = mem.word(o + 4, 4) else {
+            return false;
+        };
         if id != 0 {
-            let Some(at) = (o + 4).checked_sub(id) else { return false };
-            let Some(c) = *cies.entry(at).or_insert_with(|| cie(mem, at)) else { return false };
+            let Some(at) = (o + 4).checked_sub(id) else {
+                return false;
+            };
+            let Some(c) = *cies.entry(at).or_insert_with(|| cie(mem, at)) else {
+                return false;
+            };
             if let Some(lenc) = c.lsda {
                 let mut p = o + 8;
-                let Some((_, func)) = mem.pointer(c.fde, &mut p) else { return false };
+                let Some((_, func)) = mem.pointer(c.fde, &mut p) else {
+                    return false;
+                };
                 if mem.value(c.fde, &mut p).is_none() || mem.uleb(&mut p).is_none() {
                     return false;
                 }
-                let Some((raw, at)) = mem.pointer(lenc, &mut p) else { return false };
+                let Some((raw, at)) = mem.pointer(lenc, &mut p) else {
+                    return false;
+                };
                 if raw != 0 {
                     *found = true;
                     if !in_code(func) {
@@ -295,10 +335,19 @@ fn prel31(at: u64, w: u64) -> u64 {
 }
 
 /// Read `.ARM.exidx` at `[start, end)`: `false` when its entries do not parse.
-fn exidx(mem: &mut Mem, start: u64, end: u64, in_code: &dyn Fn(u64) -> bool, out: &mut Landing, found: &mut bool) -> bool {
+fn exidx(
+    mem: &mut Mem,
+    start: u64,
+    end: u64,
+    in_code: &dyn Fn(u64) -> bool,
+    out: &mut Landing,
+    found: &mut bool,
+) -> bool {
     let mut e = start;
     while e + 8 <= end {
-        let (Some(w0), Some(w1)) = (mem.word(e, 4), mem.word(e + 4, 4)) else { return false };
+        let (Some(w0), Some(w1)) = (mem.word(e, 4), mem.word(e + 4, 4)) else {
+            return false;
+        };
         if w0 & 0x8000_0000 != 0 {
             return false;
         }
@@ -314,7 +363,9 @@ fn exidx(mem: &mut Mem, start: u64, end: u64, in_code: &dyn Fn(u64) -> bool, out
             continue;
         }
         let x = prel31(e - 4, w1);
-        let Some(h) = mem.word(x, 4) else { return false };
+        let Some(h) = mem.word(x, 4) else {
+            return false;
+        };
         if h & 0x8000_0000 != 0 {
             let compact = match (h >> 24) & 0x7f {
                 0 => mem.word(x + 4, 4) == Some(0),
@@ -330,7 +381,9 @@ fn exidx(mem: &mut Mem, start: u64, end: u64, in_code: &dyn Fn(u64) -> bool, out
         if !in_code(func) {
             return false;
         }
-        let Some(w) = mem.word(x + 4, 4) else { return false };
+        let Some(w) = mem.word(x + 4, 4) else {
+            return false;
+        };
         match lsda(mem, x + 4 * (2 + ((w >> 24) & 0xff)), func, in_code) {
             Some(pads) => out.pads.extend(pads),
             None => out.unknown.push(func),
@@ -362,7 +415,12 @@ pub(super) fn read(
         return out;
     };
     let size = sections.iter().fold(0u64, |n, s| n.saturating_add(s.2));
-    let mut mem = Mem { read, pages: BTreeMap::new(), budget: size.saturating_mul(8).saturating_add(1 << 20), over: false };
+    let mut mem = Mem {
+        read,
+        pages: BTreeMap::new(),
+        budget: size.saturating_mul(8).saturating_add(1 << 20),
+        over: false,
+    };
     let mut found = false;
     let mut ok = true;
     for (name, start, size) in sections {
@@ -376,8 +434,12 @@ pub(super) fn read(
     let present = found
         || named
         || sjlj
-        || sections.iter().any(|(n, _, _)| n.starts_with(".gcc_except_table") || n.starts_with(".ARM.extab"));
-    let tables = sections.iter().any(|(n, _, _)| n == ".eh_frame" || n.starts_with(".ARM.exidx"));
+        || sections
+            .iter()
+            .any(|(n, _, _)| n.starts_with(".gcc_except_table") || n.starts_with(".ARM.extab"));
+    let tables = sections
+        .iter()
+        .any(|(n, _, _)| n == ".eh_frame" || n.starts_with(".ARM.exidx"));
     out.blind = present && (!ok || mem.over || sjlj || !tables);
     out.pads.sort_unstable();
     out.pads.dedup();

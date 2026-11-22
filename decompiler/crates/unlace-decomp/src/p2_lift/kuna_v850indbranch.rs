@@ -34,8 +34,8 @@
 
 use unlace_base::space::spacetype;
 
-use crate::funcdata::Funcdata;
 use crate::context::OpId;
+use crate::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
 
 /// (kuna) Toggle V850 "jmp [reg]" CALLIND -> BRANCHIND reclassification

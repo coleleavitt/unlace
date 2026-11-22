@@ -43,13 +43,13 @@
 //! from upstream's 8), the wire path keeps 8.
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
-use unlace_base::types::{int4, uint4, uint8, uintb, uintm, Wrap};
 use unlace_base::crc32::crc_update;
+use unlace_base::error::KunaResult;
+use unlace_base::types::{Wrap, int4, uint4, uint8, uintb, uintm};
 use unlace_num::opcodes::OpCode;
 
-use crate::funcdata::Funcdata;
 use crate::context::{OpId, VarnodeId};
+use crate::funcdata::Funcdata;
 
 /// Table for how to hash opcodes; lumps certain operators (e.g. ADD SUB PTRADD
 /// PTRSUB) into one hash.  Zero indicates the operator should be skipped
@@ -190,8 +190,16 @@ impl ToOpEdge {
     /// sequence-number address, then the order, then the Varnode slot.
     /// `data` resolves both ops' [`SeqNum`]s.
     fn less_than(&self, op2: &ToOpEdge, data: &Funcdata) -> bool {
-        let seq1 = data.obank().get(self.op).expect("ToOpEdge::operator<: op").get_seq_num();
-        let seq2 = data.obank().get(op2.op).expect("ToOpEdge::operator<: op2").get_seq_num();
+        let seq1 = data
+            .obank()
+            .get(self.op)
+            .expect("ToOpEdge::operator<: op")
+            .get_seq_num();
+        let seq2 = data
+            .obank()
+            .get(op2.op)
+            .expect("ToOpEdge::operator<: op2")
+            .get_seq_num();
         let addr1: &Address = seq1.get_addr();
         let addr2: &Address = seq2.get_addr();
         if addr1 != addr2 {
@@ -319,7 +327,11 @@ impl DynamicHash {
                 None => continue,
                 Some(o) => o,
             };
-            let slot = data.obank().get(op).expect("buildVnDown: final op").get_slot(tmpvn);
+            let slot = data
+                .obank()
+                .get(op)
+                .expect("buildVnDown: final op")
+                .get_slot(tmpvn);
             self.opedge.push(ToOpEdge::new(op, slot));
         }
         if self.opedge.len() - insize > 1 {
@@ -366,11 +378,19 @@ impl DynamicHash {
     fn gather_unmarked_vn(&mut self, data: &mut Funcdata) {
         for i in 0..self.vnedge.len() {
             let vn = self.vnedge[i];
-            if data.vbank().get(vn).expect("gatherUnmarkedVn: vn").is_mark() {
+            if data
+                .vbank()
+                .get(vn)
+                .expect("gatherUnmarkedVn: vn")
+                .is_mark()
+            {
                 continue;
             }
             self.markvn.push(vn);
-            data.vbank_mut().get_mut(vn).expect("gatherUnmarkedVn: vn mut").set_mark();
+            data.vbank_mut()
+                .get_mut(vn)
+                .expect("gatherUnmarkedVn: vn mut")
+                .set_mark();
         }
         self.vnedge.clear();
     }
@@ -381,11 +401,19 @@ impl DynamicHash {
         while (self.opedgeproc as usize) < self.opedge.len() {
             let op = self.opedge[self.opedgeproc as usize].get_op();
             self.opedgeproc = self.opedgeproc.wadd(1);
-            if data.obank().get(op).expect("gatherUnmarkedOp: op").is_mark() {
+            if data
+                .obank()
+                .get(op)
+                .expect("gatherUnmarkedOp: op")
+                .is_mark()
+            {
                 continue;
             }
             self.markop.push(op);
-            data.obank_mut().get_mut(op).expect("gatherUnmarkedOp: op mut").set_mark();
+            data.obank_mut()
+                .get_mut(op)
+                .expect("gatherUnmarkedOp: op mut")
+                .set_mark();
         }
     }
 
@@ -548,11 +576,17 @@ impl DynamicHash {
         // Clear our marks
         for i in 0..self.markvn.len() {
             let vn = self.markvn[i];
-            data.vbank_mut().get_mut(vn).expect("pieceTogether: clear vn").clear_mark();
+            data.vbank_mut()
+                .get_mut(vn)
+                .expect("pieceTogether: clear vn")
+                .clear_mark();
         }
         for i in 0..self.markop.len() {
             let op = self.markop[i];
-            data.obank_mut().get_mut(op).expect("pieceTogether: clear op").clear_mark();
+            data.obank_mut()
+                .get_mut(op)
+                .expect("pieceTogether: clear op")
+                .clear_mark();
         }
 
         if self.opedge.is_empty() {
@@ -610,7 +644,11 @@ impl DynamicHash {
         hash <<= 4;
         hash |= method as uint8; // 4-bits
         hash <<= 7;
-        let opcode = data.obank().get(op).expect("pieceTogether: final op").code();
+        let opcode = data
+            .obank()
+            .get(op)
+            .expect("pieceTogether: final op")
+            .code();
         hash |= transcode(opcode) as uint8; // 7-bits
         hash <<= 5;
         hash |= (slot & 0x1f) as uint8; // 5-bits
@@ -618,8 +656,13 @@ impl DynamicHash {
         hash <<= 32;
         hash |= reg as uint8; // 32-bits for the neighborhood hash
         self.hash = hash;
-        self.addrresult =
-            data.obank().get(op).expect("pieceTogether: addr op").get_seq_num().get_addr().clone();
+        self.addrresult = data
+            .obank()
+            .get(op)
+            .expect("pieceTogether: addr op")
+            .get_seq_num()
+            .get_addr()
+            .clone();
     }
 
     /// Convert given PcodeOp to a non-skip op by following data-flow
@@ -644,11 +687,20 @@ impl DynamicHash {
                     None => return (None, slot), // Indicate the end of the data-flow path
                     Some(next) => {
                         op = next;
-                        slot = data.obank().get(op).expect("moveOffSkip: next").get_slot(vn);
+                        slot = data
+                            .obank()
+                            .get(op)
+                            .expect("moveOffSkip: next")
+                            .get_slot(vn);
                     }
                 }
             } else {
-                let vn = data.obank().get(op).expect("moveOffSkip: op").get_in(0).expect("moveOffSkip: getIn(0)");
+                let vn = data
+                    .obank()
+                    .get(op)
+                    .expect("moveOffSkip: op")
+                    .get_in(0)
+                    .expect("moveOffSkip: getIn(0)");
                 let v = data.vbank().get(vn).expect("moveOffSkip: vn");
                 if !v.is_written() {
                     return (Some(op), slot); // Indicate the end of the data-flow path
@@ -733,7 +785,13 @@ impl DynamicHash {
 
     /// Select unique hash for given PcodeOp and slot (C++ `uniqueHash(const
     /// PcodeOp *,int4,Funcdata *)`, `dynamic.cc:491`).
-    pub fn unique_hash_op(&mut self, op: OpId, slot: int4, maxduplicates: uint4, data: &mut Funcdata) {
+    pub fn unique_hash_op(
+        &mut self,
+        op: OpId,
+        slot: int4,
+        maxduplicates: uint4,
+        data: &mut Funcdata,
+    ) {
         let mut champion: Vec<OpId> = Vec::new();
         let mut tmphash: uint8 = 0;
         let mut tmpaddr: Address = Address::default();
@@ -748,7 +806,12 @@ impl DynamicHash {
             }
             Some(o) => o,
         };
-        let op_addr = data.obank().get(op).expect("uniqueHashOp: op").get_addr().clone();
+        let op_addr = data
+            .obank()
+            .get(op)
+            .expect("uniqueHashOp: op")
+            .get_addr()
+            .clone();
         let mut oplist: Vec<OpId> = Vec::new();
         Self::gather_ops_at_address(&mut oplist, data, &op_addr);
         let mut method: uint4 = 4;
@@ -771,7 +834,13 @@ impl DynamicHash {
             oplist.clear();
             let mut oplist2: Vec<OpId> = Vec::new();
             for tmpop in oplist.iter().copied() {
-                if slot >= data.obank().get(tmpop).expect("uniqueHashOp: tmpop").num_input() {
+                if slot
+                    >= data
+                        .obank()
+                        .get(tmpop)
+                        .expect("uniqueHashOp: tmpop")
+                        .num_input()
+                {
                     continue;
                 }
                 self.clear();
@@ -833,7 +902,12 @@ impl DynamicHash {
     /// hashes are recomputed at Varnodes linked to `addr`, and the Varnode that
     /// matches (hash and position) is returned.  If the collision count does not
     /// match, returns `None` even if the position looks valid.
-    pub fn find_varnode(&mut self, data: &mut Funcdata, addr: &Address, h: uint8) -> Option<VarnodeId> {
+    pub fn find_varnode(
+        &mut self,
+        data: &mut Funcdata,
+        addr: &Address,
+        h: uint8,
+    ) -> Option<VarnodeId> {
         let method = Self::get_method_from_hash(h);
         let total = Self::get_total_from_hash(h);
         let pos = Self::get_position_from_hash(h);
@@ -898,12 +972,18 @@ impl DynamicHash {
         let mut res_list: Vec<VarnodeId> = Vec::new();
         for vn in varlist.iter().copied() {
             if !data.vbank().get(vn).expect("dedup: vn").is_mark() {
-                data.vbank_mut().get_mut(vn).expect("dedup: vn mut").set_mark();
+                data.vbank_mut()
+                    .get_mut(vn)
+                    .expect("dedup: vn mut")
+                    .set_mark();
                 res_list.push(vn);
             }
         }
         for vn in res_list.iter().copied() {
-            data.vbank_mut().get_mut(vn).expect("dedup: clear").clear_mark();
+            data.vbank_mut()
+                .get_mut(vn)
+                .expect("dedup: clear")
+                .clear_mark();
         }
         std::mem::swap(varlist, &mut res_list);
     }
@@ -938,7 +1018,8 @@ impl DynamicHash {
                     if isnotattached {
                         // If original varnode was not attached to (this) op
                         if let Some(ld) = data.lone_descend(vn) {
-                            if transcode(data.obank().get(ld).expect("gatherFirst: ld").code()) == 0 {
+                            if transcode(data.obank().get(ld).expect("gatherFirst: ld").code()) == 0
+                            {
                                 // Check for skipped op
                                 match data.obank().get(ld).expect("gatherFirst: ld out").get_out() {
                                     None => continue,
@@ -950,11 +1031,21 @@ impl DynamicHash {
                     varlist.push(vn);
                 }
             } else if slot < data.obank().get(op).expect("gatherFirst: op").num_input() {
-                let mut vn = data.obank().get(op).expect("gatherFirst: op").get_in(slot).expect("gatherFirst: getIn");
+                let mut vn = data
+                    .obank()
+                    .get(op)
+                    .expect("gatherFirst: op")
+                    .get_in(slot)
+                    .expect("gatherFirst: getIn");
                 if isnotattached {
                     if let Some(def) = data.vbank().get(vn).expect("gatherFirst: vn").get_def() {
                         if transcode(data.obank().get(def).expect("gatherFirst: def").code()) == 0 {
-                            vn = data.obank().get(def).expect("gatherFirst: def in").get_in(0).expect("gatherFirst: def getIn(0)");
+                            vn = data
+                                .obank()
+                                .get(def)
+                                .expect("gatherFirst: def in")
+                                .get_in(0)
+                                .expect("gatherFirst: def getIn(0)");
                         }
                     }
                 }

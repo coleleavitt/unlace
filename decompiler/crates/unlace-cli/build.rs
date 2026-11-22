@@ -28,7 +28,10 @@ fn collect(root: &Path, dir: &Path, out: &mut Vec<(String, PathBuf)>) {
         .unwrap_or_else(|e| panic!("embed-specs: cannot read {}: {e}", dir.display()));
     for entry in entries {
         let path = entry.expect("embed-specs: directory entry").path();
-        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default();
         if name.starts_with('.') {
             continue;
         }
@@ -36,12 +39,20 @@ fn collect(root: &Path, dir: &Path, out: &mut Vec<(String, PathBuf)>) {
             collect(root, &path, out);
             continue;
         }
-        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or_default();
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or_default();
         if !path.is_file() || SKIPPED_EXTENSIONS.contains(&ext) {
             continue;
         }
-        let rel = path.strip_prefix(root).expect("embed-specs: path under the root");
-        let rel = rel.iter().map(|c| c.to_str().expect("embed-specs: UTF-8 path")).collect::<Vec<_>>();
+        let rel = path
+            .strip_prefix(root)
+            .expect("embed-specs: path under the root");
+        let rel = rel
+            .iter()
+            .map(|c| c.to_str().expect("embed-specs: UTF-8 path"))
+            .collect::<Vec<_>>();
         out.push((rel.join("/"), path));
     }
 }

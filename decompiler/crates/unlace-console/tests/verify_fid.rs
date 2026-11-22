@@ -33,8 +33,10 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use unlace_base::address::Address;
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 /// The pinned VMA of `kuna_crc32` in the stripped `prog` (recorded in the fixture
@@ -42,7 +44,10 @@ use unlace_console::ifaceterm::ConsoleCommands;
 const KUNA_CRC32_VMA: u64 = 0x4017c0;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture_dir() -> PathBuf {
@@ -108,9 +113,18 @@ fn run(mode: Mode) -> Run {
                 use unlace_analysis::fid::db::FidDb;
                 let original = FidDb::load(&std::fs::read(&db).unwrap()).unwrap();
                 let mut records: Vec<_> = original.records().into_iter().cloned().collect();
-                records.iter_mut().find(|r| r.name == "kuna_crc32").unwrap().specific_hash = 0x7488df19ec1bc03b;
-                db = std::env::temp_dir().join(format!("kuna-fid-strict-{}.fid", std::process::id()));
-                std::fs::write(&db, FidDb::from_records("x86:LE:64:default", "gcc", records).serialize()).unwrap();
+                records
+                    .iter_mut()
+                    .find(|r| r.name == "kuna_crc32")
+                    .unwrap()
+                    .specific_hash = 0x7488df19ec1bc03b;
+                db = std::env::temp_dir()
+                    .join(format!("kuna-fid-strict-{}.fid", std::process::id()));
+                std::fs::write(
+                    &db,
+                    FidDb::from_records("x86:LE:64:default", "gcc", records).serialize(),
+                )
+                .unwrap();
                 temp_db = Some(db.clone());
             }
             // FIXME: Audit that the environment access only happens in single-threaded code.
@@ -136,12 +150,21 @@ fn run(mode: Mode) -> Run {
     // commit). Set the flags on the live arch BEFORE committing so the deferred
     // Listing build + FID consumer run see them on.
     if !matches!(mode, Mode::Off) {
-        prog.arch_mut().set_kuna_option("listing", "on").expect("listing flips on");
-        let setting = if matches!(mode, Mode::Strict | Mode::StrictMatched) { "strict" } else { "on" };
-        prog.arch_mut().set_kuna_option("fid", setting).expect("fid flips on");
+        prog.arch_mut()
+            .set_kuna_option("listing", "on")
+            .expect("listing flips on");
+        let setting = if matches!(mode, Mode::Strict | Mode::StrictMatched) {
+            "strict"
+        } else {
+            "on"
+        };
+        prog.arch_mut()
+            .set_kuna_option("fid", setting)
+            .expect("fid flips on");
     }
     // `read symbols`: build the Listing (deferred) + run the FID consumer, gated.
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
     // The rename ground truth: the symbol-table name at the VMA after the commit.
     let name = name_at_crc32(&prog);
@@ -172,8 +195,14 @@ fn run(mode: Mode) -> Run {
         execute(&mut status);
     }
     let dur = t0.elapsed();
-    if let Some(path) = temp_db { let _ = std::fs::remove_file(path); }
-    Run { name, body: status.optr.clone(), dur }
+    if let Some(path) = temp_db {
+        let _ = std::fs::remove_file(path);
+    }
+    Run {
+        name,
+        body: status.optr.clone(),
+        dur,
+    }
 }
 
 /// THE PAYOFF: the function at `0x4017c0` in the STRIPPED `prog` is a generic
@@ -224,7 +253,10 @@ fn fid_reidentifies_stripped_crc32_by_fingerprint() {
         on.body
     );
 
-    assert!(is_placeholder(&strict.name), "strict must decline the known specific-hash mismatch");
+    assert!(
+        is_placeholder(&strict.name),
+        "strict must decline the known specific-hash mismatch"
+    );
     assert!(!strict.body.contains("kuna_crc32"));
     assert_eq!(strict_matched.name, "kuna_crc32");
 
@@ -240,9 +272,19 @@ fn fid_reidentifies_stripped_crc32_by_fingerprint() {
 #[test]
 fn fid_off_is_the_today_baseline() {
     let off = run(Mode::Off);
-    assert!(is_placeholder(&off.name), "default name must be a placeholder, got `{}`", off.name);
-    assert_ne!(off.name, "kuna_crc32", "default must not re-identify the stripped function");
-    assert!(!off.body.trim().is_empty(), "expected a non-empty body for the crc32 function");
+    assert!(
+        is_placeholder(&off.name),
+        "default name must be a placeholder, got `{}`",
+        off.name
+    );
+    assert_ne!(
+        off.name, "kuna_crc32",
+        "default must not re-identify the stripped function"
+    );
+    assert!(
+        !off.body.trim().is_empty(),
+        "expected a non-empty body for the crc32 function"
+    );
 }
 
 /// Is `name` an engine-generated placeholder (`sub_*`/`func_*`/`FUN_*`/`LAB_*`)?

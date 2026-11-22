@@ -59,7 +59,7 @@ use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::OpId;
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 
 /// The allocator whose descriptor argument states its result type.
@@ -89,7 +89,9 @@ pub fn contribute(data: &mut Funcdata) {
     let mut sites: Vec<(Address, Rc<Datatype>)> = Vec::new();
     for i in 0..data.num_calls() {
         let fc = data.get_call_specs(i);
-        let Some(slot) = descriptor_slot(fc.get_name()) else { continue };
+        let Some(slot) = descriptor_slot(fc.get_name()) else {
+            continue;
+        };
         let op = fc.get_op();
         if let Some(site) = resolve_site(data, op, slot) {
             sites.push(site);

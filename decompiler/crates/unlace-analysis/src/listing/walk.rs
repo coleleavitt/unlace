@@ -22,10 +22,12 @@ use unlace_base::space::AddrSpace;
 use unlace_decomp::architecture::Architecture;
 use unlace_sleigh::translate::Translate;
 
-use super::context::ContextPainter;
-use super::model::{DiscoveredFunction, FlowKind, FlowType, Insn, InsnLite, Mnemonic, Reference, RefKind};
 use super::ListingDetail;
+use super::context::ContextPainter;
 use super::kuna_insnstore::InstructionStore;
+use super::model::{
+    DiscoveredFunction, FlowKind, FlowType, Insn, InsnLite, Mnemonic, RefKind, Reference,
+};
 
 /// The accumulating maps the walk fills. Lifted into [`super::Listing`] by
 /// [`super::Listing::build`].
@@ -116,7 +118,10 @@ pub(super) struct RefCollector {
 
 impl RefCollector {
     pub(super) fn new(want: bool) -> RefCollector {
-        RefCollector { want, edges: Vec::new() }
+        RefCollector {
+            want,
+            edges: Vec::new(),
+        }
     }
 
     pub(super) fn into_edges(self) -> Vec<Reference> {
@@ -129,7 +134,12 @@ impl RefSink for RefCollector {
         if !self.want {
             return;
         }
-        let r = Reference { from, to, kind, op_index: None };
+        let r = Reference {
+            from,
+            to,
+            kind,
+            op_index: None,
+        };
         self.edges.push(r);
     }
 }
@@ -291,13 +301,17 @@ where
     }
 
     // An undecodable or zero-length decode stops this path (mark gap).
-    let Some((decoded, mut c)) = super::kuna_decodememo::decode(ctx, vma, &mut |text| insns.intern_mnemonic(text))
+    let Some((decoded, mut c)) =
+        super::kuna_decodememo::decode(ctx, vma, &mut |text| insns.intern_mnemonic(text))
     else {
         return false;
     };
     if ctx.tail_transfers.get(&vma) == Some(&vma.wrapping_add(u64::from(decoded.len))) {
         c.flow = FlowType {
-            kind: FlowKind::ComputedJump, is_jump: true, is_computed: true, is_indirect: true,
+            kind: FlowKind::ComputedJump,
+            is_jump: true,
+            is_computed: true,
+            is_indirect: true,
             ..Default::default()
         };
         c.fall_through = None;
@@ -355,10 +369,7 @@ where
             // the claim decides (where there is a reference model at all);
             // only the function claim is withheld.
             if !ctx.local_entries.contains_key(&t)
-                && super::kuna_unmappedentry::admits_call_entry(
-                    ctx.exec_ranges,
-                    t,
-                )
+                && super::kuna_unmappedentry::admits_call_entry(ctx.exec_ranges, t)
             {
                 funcs.claim(t);
                 out.func(t);
@@ -376,29 +387,57 @@ where
     }
     // (kuna) `thumbswitch`: the case bodies of a Thumb `tbb`/`tbh` are this
     // function's own successors. See [`super::kuna_thumbswitch`].
-    if let Some(tables) = ctx.tables.filter(|_| c.flow.is_computed && c.flow.is_jump && c.flows.is_empty()) {
+    if let Some(tables) = ctx
+        .tables
+        .filter(|_| c.flow.is_computed && c.flow.is_jump && c.flows.is_empty())
+    {
         let decoded = |at: u64| insns.decoded(at);
-        for target in tables.targets(ctx.translate, ctx.code_space, ctx.exec_ranges, &decoded, vma).0 {
+        for target in tables
+            .targets(
+                ctx.translate,
+                ctx.code_space,
+                ctx.exec_ranges,
+                &decoded,
+                vma,
+            )
+            .0
+        {
             out.insn(target);
             refs.file(vma, target, RefKind::Code);
         }
     }
     let skip = c.predicated_skip(vma, decoded.len);
     if let Some(tables) = ctx.a32_tables.filter(|_| {
-        c.flow.is_computed && c.flow.is_jump && !c.flow.is_call && c.flows.iter().all(|&t| Some(t) == skip)
+        c.flow.is_computed
+            && c.flow.is_jump
+            && !c.flow.is_call
+            && c.flows.iter().all(|&t| Some(t) == skip)
     }) {
         let decoded = |at: u64| insns.decoded(at);
-        for target in tables.targets(ctx.translate, ctx.code_space, ctx.exec_ranges, &decoded, vma).cases {
+        for target in tables
+            .targets(
+                ctx.translate,
+                ctx.code_space,
+                ctx.exec_ranges,
+                &decoded,
+                vma,
+            )
+            .cases
+        {
             out.insn(target);
             refs.file(vma, target, RefKind::Code);
         }
     }
     // The case bodies of an AArch64 compact table are this function's own
     // successors. See [`super::kuna_a64switch`].
-    if let Some(tables) = ctx.a64_tables.filter(|_| {
-        c.flow.is_computed && c.flow.is_jump && !c.flow.is_call && c.flows.is_empty()
-    }) {
-        for target in tables.targets(ctx.translate, ctx.code_space, ctx.exec_ranges, vma).cases {
+    if let Some(tables) = ctx
+        .a64_tables
+        .filter(|_| c.flow.is_computed && c.flow.is_jump && !c.flow.is_call && c.flows.is_empty())
+    {
+        for target in tables
+            .targets(ctx.translate, ctx.code_space, ctx.exec_ranges, vma)
+            .cases
+        {
             out.insn(target);
             refs.file(vma, target, RefKind::Code);
         }
@@ -492,17 +531,29 @@ pub(super) fn walk(
 
     let policy = WalkPolicy::from_arch(arch, want_stack_callbacks);
     let ctx = StepCtx {
-        translate, code_space, exec_ranges, local_entries, tail_transfers, policy, detail, tables,
-        a32_tables, a64_tables, memo,
+        translate,
+        code_space,
+        exec_ranges,
+        local_entries,
+        tail_transfers,
+        policy,
+        detail,
+        tables,
+        a32_tables,
+        a64_tables,
+        memo,
     };
 
-    let st = walk_plain(&ctx, arch, seeds, seed_funcs, painter, plan, frames, arm_walk, resumed);
+    let st = walk_plain(
+        &ctx, arch, seeds, seed_funcs, painter, plan, frames, arm_walk, resumed,
+    );
     let mut st = match x86_tables {
         Some(tables) => super::kuna_x86listingswitch::reconcile(tables, &ctx, st),
         None => st,
     };
     if let Some(mode) = flow_mode {
-        st.mode_runs.extend(super::kuna_flowmode::disagreeing_runs(&ctx, arch, mode));
+        st.mode_runs
+            .extend(super::kuna_flowmode::disagreeing_runs(&ctx, arch, mode));
     }
     st
 }
@@ -515,7 +566,10 @@ pub(super) fn extend_x86(
     edges: &BTreeMap<u64, Vec<u64>>,
     mut within_budget: impl FnMut(&WalkState) -> bool,
 ) -> bool {
-    let mut refs = RefCollector { want: ctx.detail.refs, edges: std::mem::take(&mut state.refs) };
+    let mut refs = RefCollector {
+        want: ctx.detail.refs,
+        edges: std::mem::take(&mut state.refs),
+    };
     let mut callbacks = CallbackEvidence::default();
     for (&target, &source) in &state.stack_callback_refs {
         callbacks.file(source, target);
@@ -530,9 +584,22 @@ pub(super) fn extend_x86(
     let mut called = Vec::new();
     let mut checked_at = state.insns.len();
     loop {
-        let Some(at) = pending.pop().or_else(|| called.pop()) else { break };
-        let mut work = Worklists { insns: pending, funcs: &mut called };
-        step(ctx, at, &mut state.insns, &mut state.funcs, &mut refs, &mut callbacks, &mut work);
+        let Some(at) = pending.pop().or_else(|| called.pop()) else {
+            break;
+        };
+        let mut work = Worklists {
+            insns: pending,
+            funcs: &mut called,
+        };
+        step(
+            ctx,
+            at,
+            &mut state.insns,
+            &mut state.funcs,
+            &mut refs,
+            &mut callbacks,
+            &mut work,
+        );
         pending = work.insns;
         if state.insns.len().saturating_sub(checked_at) >= 256 {
             if !within_budget(state) {
@@ -559,7 +626,16 @@ fn walk_plain(
     arm_walk: Option<&super::kuna_armwalkmode::ArmWalkMode>,
     resumed: Option<WalkState>,
 ) -> WalkState {
-    let StepCtx { translate, code_space, exec_ranges, local_entries, tail_transfers, policy, detail, .. } = *ctx;
+    let StepCtx {
+        translate,
+        code_space,
+        exec_ranges,
+        local_entries,
+        tail_transfers,
+        policy,
+        detail,
+        ..
+    } = *ctx;
     if plan.lanes() > 1 && frames.is_none() && arm_walk.is_none() && resumed.is_none() {
         let inputs = super::kuna_pdecode::ParallelInputs {
             arch,
@@ -588,7 +664,9 @@ fn walk_plain(
         }
     }
 
-    walk_serial(ctx, seeds, seed_funcs, detail, arch, frames, arm_walk, resumed)
+    walk_serial(
+        ctx, seeds, seed_funcs, detail, arch, frames, arm_walk, resumed,
+    )
 }
 
 /// The serial walk: the two-level worklist over [`step`], and the only walk that
@@ -606,7 +684,11 @@ fn walk_serial(
     resumed: Option<WalkState>,
 ) -> WalkState {
     let mut walk_context = super::kuna_walkcontext::WalkContext::new(
-        frames.is_some(), ctx.translate, arch, ctx.code_space, ctx.exec_ranges,
+        frames.is_some(),
+        ctx.translate,
+        arch,
+        ctx.code_space,
+        ctx.exec_ranges,
     );
     let established = frames.as_ref().and_then(|frames| frames.established());
     let mut refs = RefCollector::new(detail.refs);
@@ -638,13 +720,28 @@ fn walk_serial(
     // Pre-populate the function model with the seed metadata so a seeded entry
     // keeps its name/from_symbol even if a later CALL also targets it.
     for &entry in seeds {
-        let df = seed_funcs.get(&entry).cloned().unwrap_or_else(|| discovered(entry));
+        let df = seed_funcs
+            .get(&entry)
+            .cloned()
+            .unwrap_or_else(|| discovered(entry));
         funcs.entry(entry).or_insert(df);
     }
 
     if let Some(mode) = arm_walk.filter(|_| walk_context.is_none()) {
-        let mut state = WalkSinks { insns: &mut insns, funcs: &mut funcs, refs: &mut refs, callbacks: &mut callbacks };
-        walk_carried(ctx, arch, mode, &mut func_worklist, &mut visited_funcs, &mut state);
+        let mut state = WalkSinks {
+            insns: &mut insns,
+            funcs: &mut funcs,
+            refs: &mut refs,
+            callbacks: &mut callbacks,
+        };
+        walk_carried(
+            ctx,
+            arch,
+            mode,
+            &mut func_worklist,
+            &mut visited_funcs,
+            &mut state,
+        );
     }
 
     while let Some(entry) = func_worklist.pop() {
@@ -653,37 +750,82 @@ fn walk_serial(
         }
 
         if walk_context.is_none() {
-            let mut work = Worklists { insns: vec![entry], funcs: &mut func_worklist };
+            let mut work = Worklists {
+                insns: vec![entry],
+                funcs: &mut func_worklist,
+            };
             while let Some(vma) = work.insns.pop() {
-                step(ctx, vma, &mut insns, &mut funcs, &mut refs, &mut callbacks, &mut work);
+                step(
+                    ctx,
+                    vma,
+                    &mut insns,
+                    &mut funcs,
+                    &mut refs,
+                    &mut callbacks,
+                    &mut work,
+                );
             }
             continue;
         }
 
         // Per-function instruction worklist.
-        let entry_mode = walk_context.as_ref().and_then(|context| context.entry(entry));
+        let entry_mode = walk_context
+            .as_ref()
+            .and_then(|context| context.entry(entry));
         let mut pending = vec![(entry, entry_mode)];
         let mut successors = Vec::new();
         while let Some((vma, mode)) = pending.pop() {
-            if insns.contains_key(&vma) { continue; }
-            let selection = super::kuna_walkcontext::InstructionMode::select(arch, ctx.translate, ctx.code_space, vma, mode);
-            let mut work = Worklists { insns: std::mem::take(&mut successors), funcs: &mut func_worklist };
-            if step(ctx, vma, &mut insns, &mut funcs, &mut refs, &mut callbacks, &mut work) {
+            if insns.contains_key(&vma) {
+                continue;
+            }
+            let selection = super::kuna_walkcontext::InstructionMode::select(
+                arch,
+                ctx.translate,
+                ctx.code_space,
+                vma,
+                mode,
+            );
+            let mut work = Worklists {
+                insns: std::mem::take(&mut successors),
+                funcs: &mut func_worklist,
+            };
+            if step(
+                ctx,
+                vma,
+                &mut insns,
+                &mut funcs,
+                &mut refs,
+                &mut callbacks,
+                &mut work,
+            ) {
                 let insn = insns.get(&vma).unwrap();
-                let commits = if walk_context.is_some() { ctx.last_context_commits() }
-                    else { Vec::new() };
-                if let Some(selection) = &selection { selection.accept(insn.len); }
-                if let Some(frames) = &mut frames { frames.record(entry, vma, insn.len, mode); }
+                let commits = if walk_context.is_some() {
+                    ctx.last_context_commits()
+                } else {
+                    Vec::new()
+                };
+                if let Some(selection) = &selection {
+                    selection.accept(insn.len);
+                }
+                if let Some(frames) = &mut frames {
+                    frames.record(entry, vma, insn.len, mode);
+                }
                 if insn.flow.is_call {
                     for &target in &insn.flows {
-                        let target_mode = walk_context.as_ref()
+                        let target_mode = walk_context
+                            .as_ref()
                             .and_then(|context| context.successor(target, mode, &commits));
-                        if let Some(context) = &mut walk_context { context.called(target, target_mode); }
-                        if let Some(frames) = &mut frames { frames.called(target, target_mode); }
+                        if let Some(context) = &mut walk_context {
+                            context.called(target, target_mode);
+                        }
+                        if let Some(frames) = &mut frames {
+                            frames.called(target, target_mode);
+                        }
                     }
                 }
                 for next in work.insns.drain(..) {
-                    let next_mode = walk_context.as_ref()
+                    let next_mode = walk_context
+                        .as_ref()
                         .and_then(|context| context.successor(next, mode, &commits));
                     pending.push((next, next_mode));
                 }
@@ -723,7 +865,13 @@ fn walk_carried(
     let mut modes = mode.begin();
     let mut resumed = Vec::new();
     loop {
-        walk_items(ctx, &mut modes, std::mem::take(&mut resumed), func_worklist, sinks);
+        walk_items(
+            ctx,
+            &mut modes,
+            std::mem::take(&mut resumed),
+            func_worklist,
+            sinks,
+        );
         while let Some(entry) = func_worklist.pop() {
             if visited_funcs.insert(entry) {
                 let start = vec![(entry, modes.entry(entry))];
@@ -752,9 +900,23 @@ fn walk_items(
     let mut reads = modes.read_override(ctx.translate);
     while let Some((vma, mode)) = pending.pop() {
         reads.set(mode);
-        let mut work = Worklists { insns: std::mem::take(&mut successors), funcs: func_worklist };
-        let mut store = LastRecord { store: sinks.insns, last: None };
-        step(ctx, vma, &mut store, sinks.funcs, sinks.refs, sinks.callbacks, &mut work);
+        let mut work = Worklists {
+            insns: std::mem::take(&mut successors),
+            funcs: func_worklist,
+        };
+        let mut store = LastRecord {
+            store: sinks.insns,
+            last: None,
+        };
+        step(
+            ctx,
+            vma,
+            &mut store,
+            sinks.funcs,
+            sinks.refs,
+            sinks.callbacks,
+            &mut work,
+        );
         match (store.last, mode) {
             (Some(last), Some(mode)) => {
                 let commits = if last.target.is_some() {
@@ -808,7 +970,11 @@ impl InsnSink for LastRecord<'_> {
     }
 
     fn record(&mut self, insn: InsnLite) {
-        self.last = Some(Filed { len: insn.len, flow: insn.flow, target: insn.flows.first().copied() });
+        self.last = Some(Filed {
+            len: insn.len,
+            flow: insn.flow,
+            target: insn.flows.first().copied(),
+        });
         self.store.record(insn);
     }
 }

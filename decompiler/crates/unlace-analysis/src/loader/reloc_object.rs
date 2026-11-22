@@ -343,7 +343,12 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
         .unwrap_or(alloc.len());
     for (i, sec) in alloc.iter().enumerate() {
         if mips && i == small {
-            let g = kuna_mipsreloc::Gp::new(align_up(cursor, 16), if file.is_64() { 8 } else { 4 }, got_entries, little_endian);
+            let g = kuna_mipsreloc::Gp::new(
+                align_up(cursor, 16),
+                if file.is_64() { 8 } else { 4 },
+                got_entries,
+                little_endian,
+            );
             cursor = align_up(cursor, 16).wrapping_add(g.size());
             gp = Some(g);
         }
@@ -383,14 +388,25 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
         cursor = vma.wrapping_add(size);
     }
     if mips && gp.is_none() {
-        let g = kuna_mipsreloc::Gp::new(align_up(cursor, 16), if file.is_64() { 8 } else { 4 }, got_entries, little_endian);
+        let g = kuna_mipsreloc::Gp::new(
+            align_up(cursor, 16),
+            if file.is_64() { 8 } else { 4 },
+            got_entries,
+            little_endian,
+        );
         cursor = align_up(cursor, 16).wrapping_add(g.size());
         gp = Some(g);
     }
     let got_base = gp.as_ref().map(|g| g.base());
-    let input_gp = if mips { kuna_mipsreloc::input_gp(file) } else { Ok(0) };
+    let input_gp = if mips {
+        kuna_mipsreloc::input_gp(file)
+    } else {
+        Ok(0)
+    };
     let weak = |target: RelocationTarget| match target {
-        RelocationTarget::Symbol(idx) => file.symbol_by_index(idx).is_ok_and(|s| s.is_undefined() && s.is_weak()),
+        RelocationTarget::Symbol(idx) => file
+            .symbol_by_index(idx)
+            .is_ok_and(|s| s.is_undefined() && s.is_weak()),
         _ => false,
     };
 
@@ -405,7 +421,8 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
         .filter_map(|l| file.section_by_index(l.index).ok())
         .flat_map(|sec| sec.relocations().collect::<Vec<_>>())
         .filter(|(_, reloc)| {
-            reloc_apply::classify(architecture, reloc).is_ok_and(|spec| spec.is_some_and(|s| s.via_got()))
+            reloc_apply::classify(architecture, reloc)
+                .is_ok_and(|spec| spec.is_some_and(|s| s.via_got()))
         })
         .count() as u64;
     let synth_got_base = align_up(cursor, 16);
@@ -422,7 +439,9 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
     let mut extern_order: Vec<(SymbolIndex, u64)> = Vec::new();
     let mut common_allocator = super::kuna_commonalloc::CommonAllocator::new(
         extern_cursor,
-        file.symbols().filter(|symbol| symbol.section() == SymbolSection::Undefined).count(),
+        file.symbols()
+            .filter(|symbol| symbol.section() == SymbolSection::Undefined)
+            .count(),
         file.is_64(),
     );
     let weak_limit = common_allocator
@@ -452,7 +471,10 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
         .then(|| file.section_by_name(".opd"))
         .flatten()
         .filter(|section| vma_of.contains_key(&section.index()));
-    let opd_entries = opd.as_ref().map(|s| descriptor_entries(file, s, &vma_of)).unwrap_or_default();
+    let opd_entries = opd
+        .as_ref()
+        .map(|s| descriptor_entries(file, s, &vma_of))
+        .unwrap_or_default();
     let opd_index = opd.as_ref().map(|s| s.index());
 
     // --- Pass 2: apply relocations, patching each laid-out section's bytes.
@@ -476,7 +498,11 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
                 if let RelocationTarget::Symbol(idx) = target {
                     if let Some(special) = kuna_mipsreloc::special_symbol(file, idx, gp_value) {
                         let address = special.unwrap_or(0);
-                        return Some(kuna_mipsreloc::Target { address, local, gp_disp: special.is_none() });
+                        return Some(kuna_mipsreloc::Target {
+                            address,
+                            local,
+                            gp_disp: special.is_none(),
+                        });
                     }
                 }
                 let address = match target {
@@ -497,10 +523,16 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
                     RelocationTarget::Absolute => 0,
                     _ => return None,
                 };
-                Some(kuna_mipsreloc::Target { address, local, gp_disp: false })
+                Some(kuna_mipsreloc::Target {
+                    address,
+                    local,
+                    gp_disp: false,
+                })
             };
             for (_, reloc) in &relocs {
-                if let (Some(r_type), RelocationTarget::Symbol(idx)) = (kuna_mipsreloc::r_type_of(reloc), reloc.target()) {
+                if let (Some(r_type), RelocationTarget::Symbol(idx)) =
+                    (kuna_mipsreloc::r_type_of(reloc), reloc.target())
+                {
                     if kuna_mipsreloc::targets_code(r_type) {
                         code_externs.insert(idx);
                     }
@@ -518,7 +550,13 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
             );
             for (record, reason) in applied.failures {
                 let (offset, reloc) = &relocs[record];
-                diagnostics.record(architecture, kuna_mipsreloc::r_type_of(reloc), reason, sec_vma, *offset);
+                diagnostics.record(
+                    architecture,
+                    kuna_mipsreloc::r_type_of(reloc),
+                    reason,
+                    sec_vma,
+                    *offset,
+                );
             }
             for callee in applied.callees {
                 if let RelocationTarget::Symbol(idx) = callee {
@@ -527,8 +565,10 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
             }
             continue;
         }
-        if matches!(architecture, Architecture::Sparc | Architecture::Sparc32Plus)
-            && sec.kind() == SectionKind::Text
+        if matches!(
+            architecture,
+            Architecture::Sparc | Architecture::Sparc32Plus
+        ) && sec.kind() == SectionKind::Text
         {
             code_externs.extend(super::kuna_sparc_relcode::code_targets(
                 &laid[li].data,
@@ -594,7 +634,11 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
                     RelocationTarget::Section(index) if index == opd => Some(0),
                     _ => None,
                 }
-                .and_then(|at| opd_entries.get(&at.wrapping_add(reloc.addend() as u64)).copied())
+                .and_then(|at| {
+                    opd_entries
+                        .get(&at.wrapping_add(reloc.addend() as u64))
+                        .copied()
+                })
                 .map(|entry| entry.wrapping_sub(reloc.addend() as u64)),
                 _ => None,
             };
@@ -687,7 +731,10 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
             ) {
                 diagnostics.record(architecture, r_type, reason, sec_vma, offset);
             } else if spec.is_riscv_pcrel_hi() {
-                riscv_hi.insert(place, reloc_apply::riscv_pcrel_hi_value(&reloc, symbol, place));
+                riscv_hi.insert(
+                    place,
+                    reloc_apply::riscv_pcrel_hi_value(&reloc, symbol, place),
+                );
             }
         }
     }
@@ -714,8 +761,13 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
         // An ELFv1 function symbol names its descriptor; the function is the
         // code the descriptor points at.
         let (vma, sec_idx, offset) = if Some(sec_idx) == opd_index {
-            let Some(&entry) = opd_entries.get(&sym.address()) else { continue };
-            let Some(code) = laid.iter().find(|l| l.vma <= entry && entry < l.vma + l.size) else {
+            let Some(&entry) = opd_entries.get(&sym.address()) else {
+                continue;
+            };
+            let Some(code) = laid
+                .iter()
+                .find(|l| l.vma <= entry && entry < l.vma + l.size)
+            else {
                 continue;
             };
             opd_descriptors.push((base.wrapping_add(sym.address()), entry));
@@ -753,8 +805,10 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
     let mut import_slots = Vec::new();
     let mut function_address_aliases = Vec::new();
     let weak_storage_start = extern_cursor;
-    let mut nullable_slots: HashMap<_, _> = gp.as_ref()
-        .map(|g| g.imports().collect()).unwrap_or_default();
+    let mut nullable_slots: HashMap<_, _> = gp
+        .as_ref()
+        .map(|g| g.imports().collect())
+        .unwrap_or_default();
     let mut function_slots: Vec<(SymbolIndex, u64)> = Vec::new();
     if let Some(g) = &gp {
         for (idx, slot) in g.imports() {
@@ -763,13 +817,21 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
         }
     }
     let (nullable_relocations, allocated) = super::kuna_nullable_reloc::references(
-        file, &vma_of, &extern_of, &mut nullable_slots, &mut extern_cursor, weak_limit);
+        file,
+        &vma_of,
+        &extern_of,
+        &mut nullable_slots,
+        &mut extern_cursor,
+        weak_limit,
+    );
     for (idx, slot) in allocated {
         import_slots.push((slot, slot + if file.is_64() { 8 } else { 4 }));
         function_slots.push((idx, slot));
     }
     for (idx, slot) in function_slots {
-        let Ok(sym) = file.symbol_by_index(idx) else { continue };
+        let Ok(sym) = file.symbol_by_index(idx) else {
+            continue;
+        };
         if !code_externs.contains(&idx) && sym.kind() != SymbolKind::Text {
             continue;
         }
@@ -826,7 +888,11 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
     let synth_got_range = (!synth_got_order.is_empty()).then(|| {
         let mut data = Vec::with_capacity(synth_got_order.len() * pointer as usize);
         for target in &synth_got_order {
-            let bytes = if little_endian { target.to_le_bytes() } else { target.to_be_bytes() };
+            let bytes = if little_endian {
+                target.to_le_bytes()
+            } else {
+                target.to_be_bytes()
+            };
             if little_endian {
                 data.extend_from_slice(&bytes[..pointer as usize]);
             } else {
@@ -838,19 +904,31 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
             index: SectionIndex(0),
             vma: synth_got_base,
             size,
-            flags: unlace_sleigh::loadimage::section_flags::DATA | unlace_sleigh::loadimage::section_flags::READONLY,
+            flags: unlace_sleigh::loadimage::section_flags::DATA
+                | unlace_sleigh::loadimage::section_flags::READONLY,
             data,
         });
         (synth_got_base, synth_got_base + size)
     });
     let mut segments: Vec<(u64, Vec<u8>)> = laid.iter().map(|l| (l.vma, l.data.clone())).collect();
-    let mut sections: Vec<(u64, u64, u32)> = laid.iter().map(|l| (l.vma, l.size, l.flags)).collect();
+    let mut sections: Vec<(u64, u64, u32)> =
+        laid.iter().map(|l| (l.vma, l.size, l.flags)).collect();
     if extern_cursor > weak_storage_start {
-        segments.push((weak_storage_start, vec![0; (extern_cursor - weak_storage_start) as usize]));
-        sections.push((weak_storage_start, extern_cursor - weak_storage_start,
-            fmt.section_bits(".kuna.weak", SectionKind::Data, object::SectionFlags::Elf {
-                sh_flags: u64::from(object::elf::SHF_ALLOC | object::elf::SHF_WRITE),
-            })));
+        segments.push((
+            weak_storage_start,
+            vec![0; (extern_cursor - weak_storage_start) as usize],
+        ));
+        sections.push((
+            weak_storage_start,
+            extern_cursor - weak_storage_start,
+            fmt.section_bits(
+                ".kuna.weak",
+                SectionKind::Data,
+                object::SectionFlags::Elf {
+                    sh_flags: u64::from(object::elf::SHF_ALLOC | object::elf::SHF_WRITE),
+                },
+            ),
+        ));
     }
     let got_range = match (&gp, got_base) {
         (Some(g), Some(base)) if g.size() != 0 => {
@@ -861,7 +939,9 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
                 fmt.section_bits(
                     ".got",
                     SectionKind::Data,
-                    object::SectionFlags::Elf { sh_flags: u64::from(object::elf::SHF_ALLOC | object::elf::SHF_WRITE) },
+                    object::SectionFlags::Elf {
+                        sh_flags: u64::from(object::elf::SHF_ALLOC | object::elf::SHF_WRITE),
+                    },
                 ),
             ));
             segments.sort_by_key(|s| s.0);
@@ -987,15 +1067,25 @@ fn descriptor_entries(
 ) -> HashMap<u64, u64> {
     let mut out = HashMap::new();
     for (offset, reloc) in opd.relocations() {
-        if reloc.flags() != (RelocationFlags::Elf { r_type: object::elf::R_PPC64_ADDR64 }) {
+        if reloc.flags()
+            != (RelocationFlags::Elf {
+                r_type: object::elf::R_PPC64_ADDR64,
+            })
+        {
             continue;
         }
         let base = match reloc.target() {
             RelocationTarget::Section(index) => vma_of.get(&index).copied(),
-            RelocationTarget::Symbol(index) => file.symbol_by_index(index).ok().and_then(|sym| match sym.section() {
-                SymbolSection::Section(sec) => vma_of.get(&sec).map(|v| v.wrapping_add(sym.address())),
-                _ => None,
-            }),
+            RelocationTarget::Symbol(index) => {
+                file.symbol_by_index(index)
+                    .ok()
+                    .and_then(|sym| match sym.section() {
+                        SymbolSection::Section(sec) => {
+                            vma_of.get(&sec).map(|v| v.wrapping_add(sym.address()))
+                        }
+                        _ => None,
+                    })
+            }
             _ => None,
         };
         if let Some(base) = base {
@@ -1448,13 +1538,7 @@ mod tests {
             0,
             SymbolKind::Unknown,
         );
-        add_elf_relocation(
-            &mut object,
-            text,
-            0,
-            external,
-            object::elf::R_ARM_JUMP24,
-        );
+        add_elf_relocation(&mut object, text, 0, external, object::elf::R_ARM_JUMP24);
 
         let bytes = object.write().expect("write synthetic ARM ET_REL");
         let file = object::File::parse(&*bytes).expect("parse synthetic ARM ET_REL");
@@ -1593,10 +1677,12 @@ mod tests {
         assert!(layout.diagnostics.is_empty(), "{:?}", layout.diagnostics);
         let code = &layout.segments[0].1;
         assert_eq!(le32(&code[..4]), 0x9400_0004);
-        assert!(layout
-            .funcsyms
-            .iter()
-            .any(|(_, name)| name == b"external_status"));
+        assert!(
+            layout
+                .funcsyms
+                .iter()
+                .any(|(_, name)| name == b"external_status")
+        );
         assert_eq!(le32(&code[12..16]) & 0x003f_fc00, 0x0000_8000);
     }
 
@@ -1667,10 +1753,12 @@ mod tests {
         );
         assert_eq!(&code[14..16], &[0x00, 0x00]);
         assert_eq!(&code[18..20], &[0x80, 0x02]);
-        assert!(layout
-            .funcsyms
-            .iter()
-            .any(|(_, name)| name == b".external_status"));
+        assert!(
+            layout
+                .funcsyms
+                .iter()
+                .any(|(_, name)| name == b".external_status")
+        );
     }
 
     /// A scaled low-12 relocation encodes bits 11:scale of the *page offset*.
@@ -1724,7 +1812,10 @@ mod tests {
             .expect("synthetic .data")
             .index();
         let datum_vma = layout.section_vma[&data_index] + 0x18;
-        assert!(datum_vma & 0xf000 != 0, "datum must sit past a page boundary");
+        assert!(
+            datum_vma & 0xf000 != 0,
+            "datum must sit past a page boundary"
+        );
 
         let text_vma = layout.segments[0].0;
         let code = &layout.segments[0].1;
@@ -1761,7 +1852,13 @@ mod tests {
             0,
             SymbolKind::Unknown,
         );
-        add_elf_relocation(&mut object, text, 0, external, object::elf::R_AARCH64_JUMP26);
+        add_elf_relocation(
+            &mut object,
+            text,
+            0,
+            external,
+            object::elf::R_AARCH64_JUMP26,
+        );
 
         let bytes = object.write().expect("write synthetic AArch64 ET_REL");
         let file = object::File::parse(&*bytes).expect("parse synthetic AArch64 ET_REL");
@@ -1776,7 +1873,9 @@ mod tests {
         let code = &layout.segments[0].1;
         let displacement = ((le32(&code[..4]) & 0x03ff_ffff) as i32) << 6 >> 4;
         assert_eq!(
-            layout.segments[0].0.wrapping_add_signed(displacement.into()),
+            layout.segments[0]
+                .0
+                .wrapping_add_signed(displacement.into()),
             slot,
             "the patched branch must reach the named slot"
         );
@@ -1951,14 +2050,18 @@ mod tests {
         let file = object::File::parse(&*bytes).expect("parse synthetic PPC64 ET_REL");
         let layout = layout_relocatable(&file, &ElfFormat);
         assert!(layout.diagnostics.is_empty(), "{:?}", layout.diagnostics);
-        assert!(layout
-            .funcsyms
-            .iter()
-            .any(|(_, name)| name == b"branch_target"));
-        assert!(layout
-            .funcsyms
-            .iter()
-            .any(|(_, name)| name == b"call_target"));
+        assert!(
+            layout
+                .funcsyms
+                .iter()
+                .any(|(_, name)| name == b"branch_target")
+        );
+        assert!(
+            layout
+                .funcsyms
+                .iter()
+                .any(|(_, name)| name == b"call_target")
+        );
     }
 
     #[test]
@@ -1980,11 +2083,13 @@ mod tests {
         let file = object::File::parse(&*bytes).expect("parse out-of-bounds relocation");
         let layout = layout_relocatable(&file, &ElfFormat);
         assert_eq!(layout.diagnostics.total(), 1);
-        assert!(layout
-            .diagnostics
-            .report_lines()
-            .iter()
-            .any(|line| { line.contains(RelocationFailure::PastSectionEnd.label()) }));
+        assert!(
+            layout
+                .diagnostics
+                .report_lines()
+                .iter()
+                .any(|line| { line.contains(RelocationFailure::PastSectionEnd.label()) })
+        );
         assert_eq!(layout.segments[0].1, 0xe12f_ff1eu32.to_le_bytes());
     }
 
@@ -2064,9 +2169,11 @@ mod tests {
         for (r_type, line) in lines.iter().skip(1).enumerate() {
             assert!(line.contains(&format!("({r_type})")), "{lines:?}");
         }
-        assert!(!lines
-            .iter()
-            .any(|line| line.contains("(8)") || line.contains("(9)")));
+        assert!(
+            !lines
+                .iter()
+                .any(|line| line.contains("(8)") || line.contains("(9)"))
+        );
     }
 
     fn word_at(layout: &RelocLayout, address: u64, width: usize) -> u64 {
@@ -2076,7 +2183,9 @@ mod tests {
             .find(|(vma, data)| *vma <= address && address < vma + data.len() as u64)
             .expect("address in a laid-out segment");
         let at = (address - base) as usize;
-        data[at..at + width].iter().fold(0, |acc, b| (acc << 8) | u64::from(*b))
+        data[at..at + width]
+            .iter()
+            .fold(0, |acc, b| (acc << 8) | u64::from(*b))
     }
 
     fn half(layout: &RelocLayout, insn: u64) -> i64 {
@@ -2111,11 +2220,41 @@ mod tests {
         object.append_section_data(text, &code, 4);
         object.append_section_data(data, &[0; 16], 4);
         object.append_section_data(sdata, &[0; 8], 4);
-        let gp_disp = add_symbol(&mut object, b"_gp_disp", write::SymbolSection::Undefined, 0, SymbolKind::Unknown);
-        let ext = add_symbol(&mut object, b"ext", write::SymbolSection::Undefined, 0, SymbolKind::Unknown);
-        let local_f = add_symbol(&mut object, b"local_f", write::SymbolSection::Section(text), 0x2c, SymbolKind::Text);
-        let datum = add_symbol(&mut object, b"datum", write::SymbolSection::Section(data), 8, SymbolKind::Data);
-        let small = add_symbol(&mut object, b"small", write::SymbolSection::Section(sdata), 4, SymbolKind::Data);
+        let gp_disp = add_symbol(
+            &mut object,
+            b"_gp_disp",
+            write::SymbolSection::Undefined,
+            0,
+            SymbolKind::Unknown,
+        );
+        let ext = add_symbol(
+            &mut object,
+            b"ext",
+            write::SymbolSection::Undefined,
+            0,
+            SymbolKind::Unknown,
+        );
+        let local_f = add_symbol(
+            &mut object,
+            b"local_f",
+            write::SymbolSection::Section(text),
+            0x2c,
+            SymbolKind::Text,
+        );
+        let datum = add_symbol(
+            &mut object,
+            b"datum",
+            write::SymbolSection::Section(data),
+            8,
+            SymbolKind::Data,
+        );
+        let small = add_symbol(
+            &mut object,
+            b"small",
+            write::SymbolSection::Section(sdata),
+            4,
+            SymbolKind::Data,
+        );
         add_elf_relocation(&mut object, text, 0, gp_disp, object::elf::R_MIPS_HI16);
         add_elf_relocation(&mut object, text, 4, gp_disp, object::elf::R_MIPS_LO16);
         add_elf_relocation(&mut object, text, 12, ext, object::elf::R_MIPS_CALL16);
@@ -2128,21 +2267,49 @@ mod tests {
         let bytes = object.write().expect("write synthetic MIPS ET_REL");
         let file = object::File::parse(&*bytes).expect("parse synthetic MIPS ET_REL");
         let layout = layout_relocatable(&file, &ElfFormat);
-        assert!(layout.diagnostics.is_empty(), "{:?}", layout.diagnostics.report_lines());
-        let vma = |name: &str| layout.section_info.iter().find(|s| s.name == name).unwrap().vma;
+        assert!(
+            layout.diagnostics.is_empty(),
+            "{:?}",
+            layout.diagnostics.report_lines()
+        );
+        let vma = |name: &str| {
+            layout
+                .section_info
+                .iter()
+                .find(|s| s.name == name)
+                .unwrap()
+                .vma
+        };
         let (text, data, sdata) = (vma(".text"), vma(".data"), vma(".sdata"));
         let (got, got_end) = layout.got_range.expect("a GOT");
         let gp = got + 0x7ff0;
-        assert!(got > data && sdata >= got_end, "the GOT sits before the small data");
+        assert!(
+            got > data && sdata >= got_end,
+            "the GOT sits before the small data"
+        );
 
-        let rebuilt = ((word_at(&layout, text, 4) as i64 & 0xffff) << 16) + half(&layout, text + 4) + text as i64;
+        let rebuilt = ((word_at(&layout, text, 4) as i64 & 0xffff) << 16)
+            + half(&layout, text + 4)
+            + text as i64;
         assert_eq!(rebuilt as u64, gp, "the prologue rebuilds _gp from t9");
         let slot = (gp as i64 + half(&layout, text + 12)) as u64;
         assert!(got <= slot && slot < got_end);
-        let ext_at = layout.funcsyms.iter().find(|(_, n)| n == b"ext").expect("ext is a function").0;
+        let ext_at = layout
+            .funcsyms
+            .iter()
+            .find(|(_, n)| n == b"ext")
+            .expect("ext is a function")
+            .0;
         assert_eq!(word_at(&layout, slot, 4), ext_at, "ext's GOT entry");
-        assert_eq!(word_at(&layout, text + 16, 4), 0x0320_f809, "JALR is a hint");
-        assert_eq!(word_at(&layout, text + 24, 4), 0x0c00_0000 | ((text + 0x2c) >> 2));
+        assert_eq!(
+            word_at(&layout, text + 16, 4),
+            0x0320_f809,
+            "JALR is a hint"
+        );
+        assert_eq!(
+            word_at(&layout, text + 24, 4),
+            0x0c00_0000 | ((text + 0x2c) >> 2)
+        );
         let hi = (word_at(&layout, text + 32, 4) as i64 & 0xffff) << 16;
         assert_eq!((hi + half(&layout, text + 36)) as u64, data + 8 + 4);
         assert_eq!((gp as i64 + half(&layout, text + 40)) as u64, sdata + 4);
@@ -2153,7 +2320,8 @@ mod tests {
     /// address halves.
     #[test]
     fn ppc32_object_calls_and_address_halves_apply() {
-        let mut object = write::Object::new(BinaryFormat::Elf, Architecture::PowerPc, Endianness::Big);
+        let mut object =
+            write::Object::new(BinaryFormat::Elf, Architecture::PowerPc, Endianness::Big);
         let text = object.section_id(write::StandardSection::Text);
         let data = object.section_id(write::StandardSection::Data);
         let words: [u32; 5] = [
@@ -2166,9 +2334,27 @@ mod tests {
         let code: Vec<u8> = words.iter().flat_map(|w| w.to_be_bytes()).collect();
         object.append_section_data(text, &code, 4);
         object.append_section_data(data, &[0; 0x9000], 4);
-        let local_f = add_symbol(&mut object, b"local_f", write::SymbolSection::Section(text), 16, SymbolKind::Text);
-        let ext = add_symbol(&mut object, b"ext", write::SymbolSection::Undefined, 0, SymbolKind::Unknown);
-        let datum = add_symbol(&mut object, b"datum", write::SymbolSection::Section(data), 0x8ff0, SymbolKind::Data);
+        let local_f = add_symbol(
+            &mut object,
+            b"local_f",
+            write::SymbolSection::Section(text),
+            16,
+            SymbolKind::Text,
+        );
+        let ext = add_symbol(
+            &mut object,
+            b"ext",
+            write::SymbolSection::Undefined,
+            0,
+            SymbolKind::Unknown,
+        );
+        let datum = add_symbol(
+            &mut object,
+            b"datum",
+            write::SymbolSection::Section(data),
+            0x8ff0,
+            SymbolKind::Data,
+        );
         add_elf_relocation(&mut object, text, 0, local_f, object::elf::R_PPC_REL24);
         object
             .add_relocation(
@@ -2177,7 +2363,9 @@ mod tests {
                     offset: 4,
                     symbol: ext,
                     addend: 0x8000,
-                    flags: RelocationFlags::Elf { r_type: object::elf::R_PPC_PLTREL24 },
+                    flags: RelocationFlags::Elf {
+                        r_type: object::elf::R_PPC_PLTREL24,
+                    },
                 },
             )
             .unwrap();
@@ -2187,12 +2375,31 @@ mod tests {
         let bytes = object.write().expect("write synthetic PPC32 ET_REL");
         let file = object::File::parse(&*bytes).expect("parse synthetic PPC32 ET_REL");
         let layout = layout_relocatable(&file, &ElfFormat);
-        assert!(layout.diagnostics.is_empty(), "{:?}", layout.diagnostics.report_lines());
-        let vma = |name: &str| layout.section_info.iter().find(|s| s.name == name).unwrap().vma;
+        assert!(
+            layout.diagnostics.is_empty(),
+            "{:?}",
+            layout.diagnostics.report_lines()
+        );
+        let vma = |name: &str| {
+            layout
+                .section_info
+                .iter()
+                .find(|s| s.name == name)
+                .unwrap()
+                .vma
+        };
         let (text, data) = (vma(".text"), vma(".data"));
         assert_eq!(word_at(&layout, text, 4), 0x4800_0011);
-        let ext_at = layout.funcsyms.iter().find(|(_, n)| n == b"ext").expect("ext is a function").0;
-        assert_eq!(word_at(&layout, text + 4, 4), 0x4800_0001 | (ext_at - (text + 4)));
+        let ext_at = layout
+            .funcsyms
+            .iter()
+            .find(|(_, n)| n == b"ext")
+            .expect("ext is a function")
+            .0;
+        assert_eq!(
+            word_at(&layout, text + 4, 4),
+            0x4800_0001 | (ext_at - (text + 4))
+        );
         let hi = (word_at(&layout, text + 8, 4) as i64 & 0xffff) << 16;
         assert_eq!((hi + half(&layout, text + 12)) as u64, data + 0x8ff0);
         assert!(layout.got_range.is_none());
@@ -2203,7 +2410,8 @@ mod tests {
     /// call to the descriptor's symbol branches there.
     #[test]
     fn ppc64_elfv1_descriptors_name_and_receive_calls_at_their_code() {
-        let mut object = write::Object::new(BinaryFormat::Elf, Architecture::PowerPc64, Endianness::Big);
+        let mut object =
+            write::Object::new(BinaryFormat::Elf, Architecture::PowerPc64, Endianness::Big);
         let text = object.section_id(write::StandardSection::Text);
         let opd = object.add_section(Vec::new(), b".opd".to_vec(), SectionKind::Data);
         let toc = object.add_section(Vec::new(), b".toc".to_vec(), SectionKind::Data);
@@ -2214,8 +2422,20 @@ mod tests {
         let opd_sym = object.section_symbol(opd);
         object.append_section_data(toc, &[0; 8], 8);
         let text_sym = object.section_symbol(text);
-        let f = add_symbol(&mut object, b"f", write::SymbolSection::Section(opd), 0, SymbolKind::Text);
-        let g = add_symbol(&mut object, b"g", write::SymbolSection::Section(opd), 24, SymbolKind::Text);
+        let f = add_symbol(
+            &mut object,
+            b"f",
+            write::SymbolSection::Section(opd),
+            0,
+            SymbolKind::Text,
+        );
+        let g = add_symbol(
+            &mut object,
+            b"g",
+            write::SymbolSection::Section(opd),
+            24,
+            SymbolKind::Text,
+        );
         let _ = f;
         add_elf_relocation(&mut object, text, 0, g, object::elf::R_PPC64_REL24);
         // A call to a static function: `.opd` plus its descriptor's offset.
@@ -2226,7 +2446,9 @@ mod tests {
                     offset: 4,
                     symbol: opd_sym,
                     addend: 24,
-                    flags: RelocationFlags::Elf { r_type: object::elf::R_PPC64_REL24 },
+                    flags: RelocationFlags::Elf {
+                        r_type: object::elf::R_PPC64_REL24,
+                    },
                 },
             )
             .unwrap();
@@ -2238,7 +2460,9 @@ mod tests {
                         offset,
                         symbol: text_sym,
                         addend,
-                        flags: RelocationFlags::Elf { r_type: object::elf::R_PPC64_ADDR64 },
+                        flags: RelocationFlags::Elf {
+                            r_type: object::elf::R_PPC64_ADDR64,
+                        },
                     },
                 )
                 .unwrap();
@@ -2247,14 +2471,33 @@ mod tests {
         let bytes = object.write().expect("write synthetic PPC64 ELFv1 ET_REL");
         let file = object::File::parse(&*bytes).expect("parse synthetic PPC64 ELFv1 ET_REL");
         let layout = layout_relocatable(&file, &ElfFormat);
-        assert!(layout.diagnostics.is_empty(), "{:?}", layout.diagnostics.report_lines());
-        let vma = |name: &str| layout.section_info.iter().find(|s| s.name == name).unwrap().vma;
+        assert!(
+            layout.diagnostics.is_empty(),
+            "{:?}",
+            layout.diagnostics.report_lines()
+        );
+        let vma = |name: &str| {
+            layout
+                .section_info
+                .iter()
+                .find(|s| s.name == name)
+                .unwrap()
+                .vma
+        };
         let (text, opd) = (vma(".text"), vma(".opd"));
         let at = |name: &[u8]| layout.funcsyms.iter().find(|(_, n)| n == name).map(|f| f.0);
         assert_eq!(at(b"f"), Some(text));
         assert_eq!(at(b"g"), Some(text + 12));
-        assert_eq!(word_at(&layout, text, 4), 0x4800_000d, "bl g reaches g's code");
-        assert_eq!(word_at(&layout, text + 4, 4), 0x4800_0009, "bl .opd+24 reaches g's code");
+        assert_eq!(
+            word_at(&layout, text, 4),
+            0x4800_000d,
+            "bl g reaches g's code"
+        );
+        assert_eq!(
+            word_at(&layout, text + 4, 4),
+            0x4800_0009,
+            "bl .opd+24 reaches g's code"
+        );
         let descriptors: Vec<(u64, u64)> = layout.opd.iter().map(|d| (d.0, d.1)).collect();
         assert_eq!(descriptors, vec![(opd, text), (opd + 24, text + 12)]);
         assert!(layout.opd.iter().all(|d| d.2 == Some(vma(".toc") + 0x8000)));
@@ -2265,7 +2508,8 @@ mod tests {
     /// base is the descriptor's TOC.
     #[test]
     fn ppc64_object_without_a_toc_section_still_has_a_toc() {
-        let mut object = write::Object::new(BinaryFormat::Elf, Architecture::PowerPc64, Endianness::Big);
+        let mut object =
+            write::Object::new(BinaryFormat::Elf, Architecture::PowerPc64, Endianness::Big);
         let text = object.section_id(write::StandardSection::Text);
         let data = object.section_id(write::StandardSection::Data);
         let opd = object.add_section(Vec::new(), b".opd".to_vec(), SectionKind::Data);
@@ -2275,33 +2519,73 @@ mod tests {
         object.append_section_data(data, &[0; 0x100], 8);
         object.append_section_data(opd, &[0; 24], 8);
         let text_sym = object.section_symbol(text);
-        let datum = add_symbol(&mut object, b"datum", write::SymbolSection::Section(data), 0x40, SymbolKind::Data);
-        add_symbol(&mut object, b"f", write::SymbolSection::Section(opd), 0, SymbolKind::Text);
+        let datum = add_symbol(
+            &mut object,
+            b"datum",
+            write::SymbolSection::Section(data),
+            0x40,
+            SymbolKind::Data,
+        );
+        add_symbol(
+            &mut object,
+            b"f",
+            write::SymbolSection::Section(opd),
+            0,
+            SymbolKind::Text,
+        );
         for (section, offset, symbol, r_type, addend) in [
             (text, 2u64, datum, object::elf::R_PPC64_TOC16_HA, 0i64),
             (text, 6, datum, object::elf::R_PPC64_TOC16_LO, 0),
             (opd, 0, text_sym, object::elf::R_PPC64_ADDR64, 0),
         ] {
             object
-                .add_relocation(section, write::Relocation { offset, symbol, addend, flags: RelocationFlags::Elf { r_type } })
+                .add_relocation(
+                    section,
+                    write::Relocation {
+                        offset,
+                        symbol,
+                        addend,
+                        flags: RelocationFlags::Elf { r_type },
+                    },
+                )
                 .unwrap();
         }
         let toc_word = write::Relocation {
             offset: 8,
             symbol: object.section_symbol(opd),
             addend: 0,
-            flags: RelocationFlags::Elf { r_type: object::elf::R_PPC64_TOC },
+            flags: RelocationFlags::Elf {
+                r_type: object::elf::R_PPC64_TOC,
+            },
         };
         object.add_relocation(opd, toc_word).unwrap();
 
-        let bytes = object.write().expect("write synthetic PPC64 ET_REL without .toc");
+        let bytes = object
+            .write()
+            .expect("write synthetic PPC64 ET_REL without .toc");
         let file = object::File::parse(&*bytes).expect("parse synthetic PPC64 ET_REL without .toc");
         let layout = layout_relocatable(&file, &ElfFormat);
-        assert!(layout.diagnostics.is_empty(), "{:?}", layout.diagnostics.report_lines());
-        let vma = |name: &str| layout.section_info.iter().find(|s| s.name == name).unwrap().vma;
-        let toc = layout.opd.first().and_then(|d| d.2).expect("the descriptor's TOC");
+        assert!(
+            layout.diagnostics.is_empty(),
+            "{:?}",
+            layout.diagnostics.report_lines()
+        );
+        let vma = |name: &str| {
+            layout
+                .section_info
+                .iter()
+                .find(|s| s.name == name)
+                .unwrap()
+                .vma
+        };
+        let toc = layout
+            .opd
+            .first()
+            .and_then(|d| d.2)
+            .expect("the descriptor's TOC");
         assert_eq!(word_at(&layout, vma(".opd") + 8, 8), toc);
-        let reached = toc as i64 + (half(&layout, vma(".text")) << 16) + half(&layout, vma(".text") + 4);
+        let reached =
+            toc as i64 + (half(&layout, vma(".text")) << 16) + half(&layout, vma(".text") + 4);
         assert_eq!(reached as u64, vma(".data") + 0x40);
     }
 }

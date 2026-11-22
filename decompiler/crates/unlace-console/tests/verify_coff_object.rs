@@ -45,14 +45,17 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixtures() -> PathBuf {
@@ -106,7 +109,10 @@ fn coff_object_decompiles_named_function() {
 
     // Loads with the Windows x86-64 spec (COFF objects are MSVC-flavored).
     let desc = prog.description().to_string();
-    assert!(desc.contains("x86"), "COFF: expected x86 spec, got {desc:?}");
+    assert!(
+        desc.contains("x86"),
+        "COFF: expected x86 spec, got {desc:?}"
+    );
 
     // The COFF symbol table's defined functions register as funcsyms — including
     // `compute`, which sits at `.text`+0 (the relocatable-object-at-VMA-0 case the

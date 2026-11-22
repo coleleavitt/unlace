@@ -74,7 +74,10 @@ impl ChunkModel {
 
     /// Number of tail chunks (chunks that do not hold their function's entry).
     pub fn tail_count(&self) -> usize {
-        self.chunks.values().map(|c| c.len().saturating_sub(1)).sum()
+        self.chunks
+            .values()
+            .map(|c| c.len().saturating_sub(1))
+            .sum()
     }
 }
 
@@ -87,7 +90,9 @@ fn closure(listing: &Listing, entries: &BTreeSet<u64>, entry: u64) -> BTreeSet<u
         if seen.len() >= MAX_BODY_INSNS || (vma != entry && entries.contains(&vma)) {
             continue;
         }
-        let Some(i) = listing.instruction_at(vma) else { continue };
+        let Some(i) = listing.instruction_at(vma) else {
+            continue;
+        };
         if !seen.insert(vma) {
             continue;
         }
@@ -103,9 +108,15 @@ fn closure(listing: &Listing, entries: &BTreeSet<u64>, entry: u64) -> BTreeSet<u
 fn runs(listing: &Listing, entry: u64, body: &BTreeSet<u64>) -> Vec<(u64, u64)> {
     let mut out: Vec<(u64, u64)> = Vec::new();
     for &a in body {
-        let end = a + listing.instruction_at(a).map_or(1, |i| u64::from(i.len.max(1)));
+        let end = a + listing
+            .instruction_at(a)
+            .map_or(1, |i| u64::from(i.len.max(1)));
         match out.last_mut() {
-            Some(last) if a >= last.1 && a - last.1 <= MAX_PAD_GAP && !decoded_between(listing, last.1, a) => {
+            Some(last)
+                if a >= last.1
+                    && a - last.1 <= MAX_PAD_GAP
+                    && !decoded_between(listing, last.1, a) =>
+            {
                 last.1 = last.1.max(end);
             }
             _ => out.push((a, end)),
@@ -138,7 +149,10 @@ mod tests {
             flow: FlowType {
                 kind,
                 is_call: kind == FlowKind::Call,
-                is_jump: matches!(kind, FlowKind::UnconditionalBranch | FlowKind::ConditionalBranch),
+                is_jump: matches!(
+                    kind,
+                    FlowKind::UnconditionalBranch | FlowKind::ConditionalBranch
+                ),
                 is_terminal: kind == FlowKind::Return,
                 is_conditional: kind == FlowKind::ConditionalBranch,
                 has_fallthrough: !terminal,

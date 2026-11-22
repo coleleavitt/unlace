@@ -30,7 +30,7 @@
 //! only ever used to *decline* a label clear, so it can only keep a label the
 //! printer would otherwise drop.
 
-use crate::block::{block_flags, BlockGraph, BlockKind};
+use crate::block::{BlockGraph, BlockKind, block_flags};
 use crate::context::BlockId;
 use crate::funcdata::Funcdata;
 
@@ -42,7 +42,10 @@ use crate::funcdata::Funcdata;
 /// whose edge is a real goto, and every `BlockMultiGoto` virtual edge.  Targets
 /// are recorded as given (the block the carrier names), matching how the passes
 /// address the flag they clear.
-pub(crate) fn referenced_goto_targets(graph: &BlockGraph, root: BlockId) -> std::collections::BTreeSet<BlockId> {
+pub(crate) fn referenced_goto_targets(
+    graph: &BlockGraph,
+    root: BlockId,
+) -> std::collections::BTreeSet<BlockId> {
     let mut set = std::collections::BTreeSet::new();
     let mut stack = vec![root];
     while let Some(id) = stack.pop() {
@@ -102,9 +105,16 @@ pub(crate) fn release_converted_labels(data: &mut Funcdata, converted: &[BlockId
     let clears: Vec<BlockId> = converted
         .iter()
         .copied()
-        .filter(|&t| graph.get_front_leaf(t).map(|l| !still.contains(&l)).unwrap_or(false))
+        .filter(|&t| {
+            graph
+                .get_front_leaf(t)
+                .map(|l| !still.contains(&l))
+                .unwrap_or(false)
+        })
         .collect();
     for t in clears {
-        data.sblocks_mut().block_mut(t).clear_flag(block_flags::f_unstructured_targ);
+        data.sblocks_mut()
+            .block_mut(t)
+            .clear_flag(block_flags::f_unstructured_targ);
     }
 }

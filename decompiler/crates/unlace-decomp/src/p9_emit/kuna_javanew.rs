@@ -40,13 +40,20 @@ fn record_of(fd: &Funcdata, cpool: OpId) -> Option<std::rc::Rc<crate::cpool::CPo
         return None;
     }
     let refs: Vec<u64> = (1..o.num_input())
-        .filter_map(|i| o.get_in(i).and_then(|v| fd.vbank().get(v)).map(|v| v.get_offset()))
+        .filter_map(|i| {
+            o.get_in(i)
+                .and_then(|v| fd.vbank().get(v))
+                .map(|v| v.get_offset())
+        })
         .collect();
     fd.get_arch().cpool_record(&refs)
 }
 
 fn def_of(fd: &Funcdata, vn: VarnodeId) -> Option<OpId> {
-    fd.vbank().get(vn).filter(|v| v.is_written()).and_then(|v| v.get_def())
+    fd.vbank()
+        .get(vn)
+        .filter(|v| v.is_written())
+        .and_then(|v| v.get_def())
 }
 
 /// Every `<init>` CALLIND that initializes an object allocated by a NEW earlier
@@ -55,12 +62,18 @@ pub fn pairs(fd: &Funcdata) -> HashMap<OpId, NewInit> {
     let mut out = HashMap::new();
     for i in 0..fd.num_calls() {
         let call = fd.get_call_specs(i).get_op();
-        let Some(c) = fd.obank().get(call) else { continue };
+        let Some(c) = fd.obank().get(call) else {
+            continue;
+        };
         if c.code() != OpCode::CPUI_CALLIND || c.num_input() < 2 {
             continue;
         }
-        let Some(target) = c.get_in(0).and_then(|vn| def_of(fd, vn)) else { continue };
-        let Some(rec) = record_of(fd, target) else { continue };
+        let Some(target) = c.get_in(0).and_then(|vn| def_of(fd, vn)) else {
+            continue;
+        };
+        let Some(rec) = record_of(fd, target) else {
+            continue;
+        };
         if rec.get_tag() != cpool_tag::POINTER_METHOD || rec.get_token() != b"<init>" {
             continue;
         }
@@ -68,12 +81,20 @@ pub fn pairs(fd: &Funcdata) -> HashMap<OpId, NewInit> {
         if fd.obank().get(target).and_then(|t| t.get_in(0)) != Some(object) {
             continue;
         }
-        let Some(new_op) = def_of(fd, object) else { continue };
-        let Some(n) = fd.obank().get(new_op) else { continue };
+        let Some(new_op) = def_of(fd, object) else {
+            continue;
+        };
+        let Some(n) = fd.obank().get(new_op) else {
+            continue;
+        };
         if n.code() != OpCode::CPUI_NEW || n.num_input() != 1 || n.get_parent() != c.get_parent() {
             continue;
         }
-        let Some(class) = n.get_in(0).and_then(|vn| def_of(fd, vn)).and_then(|d| record_of(fd, d)) else {
+        let Some(class) = n
+            .get_in(0)
+            .and_then(|vn| def_of(fd, vn))
+            .and_then(|d| record_of(fd, d))
+        else {
             continue;
         };
         if class.get_tag() != cpool_tag::CLASS_REFERENCE {
@@ -97,7 +118,14 @@ pub fn pairs(fd: &Funcdata) -> HashMap<OpId, NewInit> {
         }
         if reached {
             let class = String::from_utf8_lossy(class.get_token()).into_owned();
-            out.insert(call, NewInit { new_op, object, class });
+            out.insert(
+                call,
+                NewInit {
+                    new_op,
+                    object,
+                    class,
+                },
+            );
         }
     }
     out
@@ -119,23 +147,40 @@ pub enum CtorCall {
 pub fn ctor_calls(fd: &Funcdata) -> HashMap<OpId, CtorCall> {
     let mut out = HashMap::new();
     let arch = fd.get_arch();
-    let Some(model) = arch.dex.as_ref() else { return out };
-    let Some((class, superclass)) = model.method_class(fd.get_address().get_offset()) else { return out };
+    let Some(model) = arch.dex.as_ref() else {
+        return out;
+    };
+    let Some((class, superclass)) = model.method_class(fd.get_address().get_offset()) else {
+        return out;
+    };
     for i in 0..fd.num_calls() {
         let call = fd.get_call_specs(i).get_op();
-        let Some(c) = fd.obank().get(call) else { continue };
+        let Some(c) = fd.obank().get(call) else {
+            continue;
+        };
         if c.code() != OpCode::CPUI_CALLIND || c.num_input() < 2 {
             continue;
         }
-        let Some(target) = c.get_in(0).and_then(|vn| def_of(fd, vn)) else { continue };
-        let Some(rec) = record_of(fd, target) else { continue };
+        let Some(target) = c.get_in(0).and_then(|vn| def_of(fd, vn)) else {
+            continue;
+        };
+        let Some(rec) = record_of(fd, target) else {
+            continue;
+        };
         if rec.get_tag() != cpool_tag::POINTER_METHOD || rec.get_token() != b"<init>" {
             continue;
         }
-        let Some(t) = fd.obank().get(target) else { continue };
-        let Some(object) = c.get_in(1).filter(|&o| t.get_in(0) == Some(o)) else { continue };
+        let Some(t) = fd.obank().get(target) else {
+            continue;
+        };
+        let Some(object) = c.get_in(1).filter(|&o| t.get_in(0) == Some(o)) else {
+            continue;
+        };
         let mut source = object;
-        while let Some(copy) = def_of(fd, source).and_then(|d| fd.obank().get(d)).filter(|d| d.code() == OpCode::CPUI_COPY) {
+        while let Some(copy) = def_of(fd, source)
+            .and_then(|d| fd.obank().get(d))
+            .filter(|d| d.code() == OpCode::CPUI_COPY)
+        {
             let Some(from) = copy.get_in(0) else { break };
             source = from;
         }
@@ -145,12 +190,24 @@ pub fn ctor_calls(fd: &Funcdata) -> HashMap<OpId, CtorCall> {
         if !is_this {
             continue;
         }
-        let Some(index) = t.get_in(1).and_then(|v| fd.vbank().get(v)).map(|v| v.get_offset()) else { continue };
-        let Some(owner) = u32::try_from(index).ok().and_then(|i| model.method_owner(i)) else { continue };
+        let Some(index) = t
+            .get_in(1)
+            .and_then(|v| fd.vbank().get(v))
+            .map(|v| v.get_offset())
+        else {
+            continue;
+        };
+        let Some(owner) = u32::try_from(index)
+            .ok()
+            .and_then(|i| model.method_owner(i))
+        else {
+            continue;
+        };
         let kind = if owner == class {
             CtorCall::This
         } else if c.num_input() == 2
-            && superclass.and_then(|s| model.type_descriptor(s)).as_deref() == Some("Ljava/lang/Object;")
+            && superclass.and_then(|s| model.type_descriptor(s)).as_deref()
+                == Some("Ljava/lang/Object;")
         {
             CtorCall::Implicit
         } else {

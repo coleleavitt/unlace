@@ -6,7 +6,10 @@ use serde_json::Value;
 const IMAGES: [(&str, &[&str]); 3] = [
     ("mipsstubs_noreturn_el.so", &[]),
     ("mipsstubs_noreturn_eb.so", &[]),
-    ("mipsstubs_noreturn_n64el.so", &["--target", "MIPS:LE:64:default"]),
+    (
+        "mipsstubs_noreturn_n64el.so",
+        &["--target", "MIPS:LE:64:default"],
+    ),
 ];
 
 const RETURNING: [(&str, &str); 4] = [
@@ -27,7 +30,10 @@ fn code<'a>(doc: &'a Value, name: &str) -> &'a str {
 }
 
 fn no_return_calls(code: &str) -> Vec<&str> {
-    code.lines().filter(|line| line.contains("no-return")).map(str::trim).collect()
+    code.lines()
+        .filter(|line| line.contains("no-return"))
+        .map(str::trim)
+        .collect()
 }
 
 #[test]

@@ -56,18 +56,18 @@ use unlace_sleigh::sleigh::Sleigh;
 use unlace_sleigh::translate::UniqueLayout;
 
 use crate::action::ActionDatabase;
-use crate::engine_translate::EngineTranslate;
+use crate::context::{ArchContext, ArchHandle};
 use crate::database::Database;
-use crate::dtype::{type_metatype, TypeFactory, TypeFactoryImpl};
+use crate::dtype::{TypeFactory, TypeFactoryImpl, type_metatype};
+use crate::engine_translate::EngineTranslate;
 use crate::flow::flow_flags;
 use crate::fspec::ProtoModel;
 use crate::funcdata::Funcdata;
 use crate::inject_sleigh::PcodeInjectLibrarySleigh;
 use crate::options::{
-    split_datatype, ArchOptionContext, BraceCategory, NamespaceStrategy, OptionDatabase,
+    ArchOptionContext, BraceCategory, NamespaceStrategy, OptionDatabase, split_datatype,
 };
 use crate::printc::PrintC;
-use crate::context::{ArchHandle, ArchContext};
 use crate::userop::UserOpManage;
 
 // ---------------------------------------------------------------------------
@@ -77,13 +77,21 @@ use crate::userop::UserOpManage;
 // ---------------------------------------------------------------------------
 
 /// First direct child element named `nm`, or `None`.
-fn find_child(el: &Rc<unlace_base::xml::Element>, nm: &str) -> Option<Rc<unlace_base::xml::Element>> {
-    el.get_children().iter().find(|c| c.get_name() == nm).map(Rc::clone)
+fn find_child(
+    el: &Rc<unlace_base::xml::Element>,
+    nm: &str,
+) -> Option<Rc<unlace_base::xml::Element>> {
+    el.get_children()
+        .iter()
+        .find(|c| c.get_name() == nm)
+        .map(Rc::clone)
 }
 
 /// String value of attribute `nm` on `el`, or `None` if absent.
 fn attr_str(el: &Rc<unlace_base::xml::Element>, nm: &str) -> Option<String> {
-    el.get_attribute_value(nm).ok().map(|b| String::from_utf8_lossy(b).into_owned())
+    el.get_attribute_value(nm)
+        .ok()
+        .map(|b| String::from_utf8_lossy(b).into_owned())
 }
 
 /// Value of a boolean spec attribute (C++ `Decoder::readBool`, which accepts
@@ -272,14 +280,18 @@ pub struct Architecture {
 
     /// MIPS ELF t9 register and its entry probe: the seed value where the loader
     /// recognizes PIC setup. Probed only for an entry no seed already covers.
-    pub loader_mips_t9: Option<(unlace_num::pcoderaw::VarnodeData, Rc<dyn Fn(&Address) -> Option<u64>>)>,
+    pub loader_mips_t9: Option<(
+        unlace_num::pcoderaw::VarnodeData,
+        Rc<dyn Fn(&Address) -> Option<u64>>,
+    )>,
 
     /// Loader-proven tail transfers: a call whose callee returns to this
     /// function's caller, decoded as a call followed by a return.
     pub loader_transfer_sites: Rc<std::collections::BTreeSet<Address>>,
     /// MIPS GOT import entries identified by the loader, never ordinary definitions.
     pub loader_mips_imports: Rc<std::collections::BTreeSet<Address>>,
-    pub nullable_relocations: Rc<std::collections::BTreeMap<u64, Vec<crate::kuna_nullable_reloc::NullableRelocation>>>,
+    pub nullable_relocations:
+        Rc<std::collections::BTreeMap<u64, Vec<crate::kuna_nullable_reloc::NullableRelocation>>>,
     pub nullable_literal_values: Rc<std::collections::BTreeSet<u64>>,
 
     // --- Configuration data (architecture.hh:170-208) ---------------------
@@ -449,7 +461,8 @@ pub struct Architecture {
     /// (kuna `lanefuse all`) Also fuse legacy-SSE integer and two-lane double runs.
     pub lane_fuse_all: bool,
     /// (kuna `vectorabi`) The widened models, built once per default model.
-    pub vector_models: std::cell::RefCell<Vec<(Rc<crate::fspec::ProtoModel>, Rc<crate::fspec::ProtoModel>)>>,
+    pub vector_models:
+        std::cell::RefCell<Vec<(Rc<crate::fspec::ProtoModel>, Rc<crate::fspec::ProtoModel>)>>,
     /// (kuna `vectorabi`) The vector user-ops and their element kinds, built once.
     pub vector_userop_kinds: std::cell::OnceCell<Rc<Vec<(unlace_base::types::uint4, u8)>>>,
     /// (kuna `itaniumeh`) The image's Itanium call-site table, installed by the
@@ -571,7 +584,8 @@ pub struct Architecture {
     pub tls_layout: Option<std::rc::Rc<crate::p5_types::kuna_tlsnames::TlsLayout>>,
     /// (kuna `dwarfscopes`) Register-held DWARF locals by function entry:
     /// name, type, register storage, and the PC the register holds it from.
-    pub dwarf_reg_locals: std::collections::BTreeMap<u64, Vec<(String, Rc<crate::dtype::Datatype>, Address, u64)>>,
+    pub dwarf_reg_locals:
+        std::collections::BTreeMap<u64, Vec<(String, Rc<crate::dtype::Datatype>, Address, u64)>>,
     /// (kuna `structsynth`) Over which bases a structure may be synthesized from
     /// constant-offset dereferences: `off` (the default) or `param` (function
     /// parameters).  See [`kuna_structsynth`](crate::kuna_structsynth).
@@ -807,11 +821,14 @@ pub struct Architecture {
     /// Primitive Display callback types from full Rust object-symbol identities.
     pub rust_display_formatters: std::collections::BTreeMap<u64, &'static str>,
     /// Integer callback types and traits from full Rust object-symbol identities.
-    pub rust_integer_formatters: std::collections::BTreeMap<u64, crate::kuna_rustfmtflags::Formatter>,
+    pub rust_integer_formatters:
+        std::collections::BTreeMap<u64, crate::kuna_rustfmtflags::Formatter>,
     pub rust_str_display_formatters: std::collections::BTreeSet<u64>,
-    pub rust_string_writer_methods: std::collections::BTreeMap<u64, crate::kuna_rustfmtwrite::WriterMethod>,
+    pub rust_string_writer_methods:
+        std::collections::BTreeMap<u64, crate::kuna_rustfmtwrite::WriterMethod>,
     pub rust_fmt_write_relro: Option<(u64, u64)>,
-    pub rust_io_writer_profiles: std::collections::BTreeMap<u64, crate::kuna_rustfmtio::WriterProfile>,
+    pub rust_io_writer_profiles:
+        std::collections::BTreeMap<u64, crate::kuna_rustfmtio::WriterProfile>,
     /// (kuna) The per-run `option sourcelang` override (`None` = auto).  Kept
     /// apart from the fact so `option sourcelang auto` restores the detected
     /// verdict and the catalog `current` reports the option, not the image.
@@ -972,7 +989,13 @@ pub struct Architecture {
     /// (kuna) The default models `armfloatreturn` has widened, with the model
     /// each was built from and whether it skips back-fill holes, so every
     /// function reuses one instead of rebuilding it.
-    pub arm_widened_models: std::cell::RefCell<Vec<(Rc<crate::fspec::ProtoModel>, bool, Rc<crate::fspec::ProtoModel>)>>,
+    pub arm_widened_models: std::cell::RefCell<
+        Vec<(
+            Rc<crate::fspec::ProtoModel>,
+            bool,
+            Rc<crate::fspec::ProtoModel>,
+        )>,
+    >,
     /// (kuna `armfloatreturn`) Library prototypes declaring a `float` or `double`
     /// that an ARM image's load held back, by name or by entry address, until a
     /// decompile shows whether the option applies. See
@@ -1562,7 +1585,8 @@ pub struct Architecture {
     /// call instruction)` a decompile printed a direct call to it from: a callee
     /// some decompile reaches from a site the call graph does not attribute to
     /// that caller states nothing.
-    pub kuna_custom_reg_calls: std::collections::HashMap<uintb, std::collections::BTreeSet<(uintb, uintb)>>,
+    pub kuna_custom_reg_calls:
+        std::collections::HashMap<uintb, std::collections::BTreeSet<(uintb, uintb)>>,
     /// (kuna) Each x86-32 callee's stack effect read off its own code; see
     /// [`crate::kuna_calleepurge`].
     pub kuna_callee_purge: RefCell<crate::kuna_calleepurge::Cache>,
@@ -1961,7 +1985,8 @@ pub struct Architecture {
     /// (kuna `--assert callee`) Caller-stated destinations of indirect calls:
     /// function entry -> call site -> callee entry
     /// ([`crate::p2_lift::kuna_calleeoverride`]).
-    pub kuna_callee_overrides: std::collections::BTreeMap<Address, std::collections::BTreeMap<Address, Address>>,
+    pub kuna_callee_overrides:
+        std::collections::BTreeMap<Address, std::collections::BTreeMap<Address, Address>>,
     /// (kuna `formatstring`) Which variadic arguments the target passes exactly
     /// as named ones, which bounds what a closed printf/scanf override may
     /// declare. A FACT, written once at `load file` from the image's container;
@@ -2193,7 +2218,8 @@ pub struct Architecture {
     /// declared, by function entry: `(slot, name, storage + type)`, the
     /// shape of a console `map param`. The decompile drive seeds a
     /// function's own decompile with them ahead of the console's.
-    pub loader_param_locks: std::collections::BTreeMap<Address, Vec<(int4, String, crate::fspec::ParameterPieces)>>,
+    pub loader_param_locks:
+        std::collections::BTreeMap<Address, Vec<(int4, String, crate::fspec::ParameterPieces)>>,
     /// (kuna) Gate the Mach-O `__cfstring` constant-string recovery pass
     /// (`cfstrings`); default **on** (renders CFString constants as
     /// `CFSTR("...")` typed `CFStringRef`). Mach-O-only pass.
@@ -2224,12 +2250,12 @@ pub struct Architecture {
     /// without declaring its signature, by entry `(space index, offset)`.
     /// The function's own parameters, and those of every direct call to it,
     /// are recovered under it ([`crate::context::ArchContext::bound_proto_models`]).
-    pub loader_proto_models:
-        Rc<std::collections::BTreeMap<(int4, uintb), Rc<ProtoModel>>>,
+    pub loader_proto_models: Rc<std::collections::BTreeMap<(int4, uintb), Rc<ProtoModel>>>,
     /// (kuna) Names and types for the inputs a function's own analysis
     /// recovers, by function entry, applied without locking them
     /// ([`crate::kuna_inputhints`]).
-    pub loader_input_hints: std::collections::BTreeMap<Address, Rc<Vec<crate::kuna_inputhints::InputHint>>>,
+    pub loader_input_hints:
+        std::collections::BTreeMap<Address, Rc<Vec<crate::kuna_inputhints::InputHint>>>,
     /// (kuna `swiftcall`) The Swift registers and the throwing model
     /// ([`crate::kuna_swiftcall`]).
     pub loader_swift_abi: Option<Rc<crate::kuna_swiftcall::SwiftAbi>>,
@@ -2299,8 +2325,7 @@ pub struct Architecture {
     /// (driven through the ArchContext during `RuleStringStore`/`RuleStringCopy`) must
     /// `registerInternalStringData` into the very map the printer later reads back
     /// via `getStringData` on this real `Architecture`.
-    pub string_manager:
-        Rc<std::cell::RefCell<crate::stringmanage::StringManagerUnicode>>,
+    pub string_manager: Rc<std::cell::RefCell<crate::stringmanage::StringManagerUnicode>>,
     /// P-code injection manager (C++ `pcodeinjectlib`).  SLEIGH-backed.
     pub pcodeinjectlib: PcodeInjectLibrarySleigh,
     call_mechanisms: Rc<crate::kuna_callmechanisms::Mechanisms>,
@@ -2518,7 +2543,10 @@ impl Architecture {
     /// (kuna) The scanned `.ldefs` facts for language `id`, `None` when no
     /// scanned `.ldefs` defines it.
     pub fn language_family(&self, id: &str) -> Option<&crate::kuna_langfamily::LanguageFamily> {
-        self.language_families.iter().find(|(known, _)| known == id).map(|(_, family)| family)
+        self.language_families
+            .iter()
+            .find(|(known, _)| known == id)
+            .map(|(_, family)| family)
     }
 
     /// (kuna) Whether the bootstrap recorded any `.ldefs` languages.
@@ -2697,7 +2725,7 @@ impl Architecture {
             protoorder: crate::kuna_protoorder::ProtoOrderMode::Off, // (kuna) option protoorder; reset_defaults sets the shipped default
             callbacktype: crate::kuna_callbacktype::CallbackTypeMode::Off, // (kuna) option callbacktype
             calleevote: crate::kuna_calleevote::CalleeVoteMode::Off, // (kuna) option calleevote
-            caller_ptr: false, // (kuna) option callerptr
+            caller_ptr: false,                                       // (kuna) option callerptr
             callee_reginputs: true, // (kuna) option calleereginputs; default on, inert off x86-32 Windows
             callee_reginputs_custom: false, // (kuna) option calleereginputs `custom`; reset_defaults sets the shipped default
             return_branch: false, // (kuna) option returnbranch; reset_defaults sets the shipped default
@@ -2713,8 +2741,8 @@ impl Architecture {
             segment_defs: Vec::new(),
             syscall_regs: crate::kuna_syscallregs::SyscallRegsMode::Off, // (kuna) option syscallregs; reset_defaults sets the shipped default
             image_os_userland: false, // (kuna) a load-time fact; set by the console's `load file`
-            image_linux_elf: false, // (kuna) a load-time fact; set by the console's `load file`
-            image_apple: false, // (kuna) a load-time fact; set by the console's `load file`
+            image_linux_elf: false,   // (kuna) a load-time fact; set by the console's `load file`
+            image_apple: false,       // (kuna) a load-time fact; set by the console's `load file`
 
             tls_layout: None,
             dwarf_reg_locals: std::collections::BTreeMap::new(),
@@ -2728,7 +2756,7 @@ impl Architecture {
             chkstk_darwin: false, // (kuna) option chkstkdarwin; reset_defaults sets the shipped default
 
             arith_helpers: false, // (kuna) option arithhelpers; reset_defaults sets the shipped default
-            objc_arc: false, // (kuna) option objcarc; reset_defaults sets the shipped default
+            objc_arc: false,      // (kuna) option objcarc; reset_defaults sets the shipped default
             objc_rettype: false, // (kuna) option objcrettype; reset_defaults sets the shipped default
             objc_resolve: false, // (kuna) option objcresolve; reset_defaults sets the shipped default
             kuna_objc_classes: Rc::new(Default::default()),
@@ -2747,7 +2775,7 @@ impl Architecture {
             msvc_str_append: false, // (kuna) option msvcstrappend; reset_defaults sets the shipped default
             switch_selector_guard: false, // (kuna) option switchselector; reset_defaults sets the shipped default
             lowered_switch_linear: false, // (kuna) option loweredswitch linear|all
-            lowered_switch_tree: false, // (kuna) option loweredswitch tree|all
+            lowered_switch_tree: false,   // (kuna) option loweredswitch tree|all
             sparc_struct_return: false,
 
             mba: false,
@@ -2773,7 +2801,7 @@ impl Architecture {
             call_wide: false,
             kuna_mips_pairs: None,
             kuna_mips_pairs_painted: false,
-            rust_abi: 0,        // (kuna) option rustabi; reset_defaults sets the shipped default
+            rust_abi: 0, // (kuna) option rustabi; reset_defaults sets the shipped default
             rustc_stable_version: None,
             rustc_pieces_layout: false,
             rust_fmt_pieces_relro: None,
@@ -2851,18 +2879,18 @@ impl Architecture {
             call_array_extent: false,
             stack_struct: false,
             array_extent: 0, // (kuna) option arrayextent; reset_defaults sets the shipped default
-            array_size: 0, // (kuna) option arraysize; reset_defaults sets the shipped default
+            array_size: 0,   // (kuna) option arraysize; reset_defaults sets the shipped default
             devectorize_reduction: false, // (kuna) option devectorize (opt-in default-off)
             strlen_scan: false, // (kuna) option strlenscan; reset_defaults sets the shipped default
 
             dirty_pool: false, // (kuna) option dirtypool; reset_defaults sets the shipped default
-            late_cse: false, // (kuna) option latecse; reset_defaults sets the shipped default
-            goto_sink: false, // (kuna) option gotosink; reset_defaults sets the shipped default
-            cmp_merge: false, // (kuna) option cmpmerge; reset_defaults sets the shipped default
-            impl_weight: 0, // (kuna) option implweight; reset_defaults sets the shipped default
+            late_cse: false,   // (kuna) option latecse; reset_defaults sets the shipped default
+            goto_sink: false,  // (kuna) option gotosink; reset_defaults sets the shipped default
+            cmp_merge: false,  // (kuna) option cmpmerge; reset_defaults sets the shipped default
+            impl_weight: 0,    // (kuna) option implweight; reset_defaults sets the shipped default
             range_fold: false, // (kuna) option rangefold; reset_defaults sets the shipped default
             pow2_select: false, // (kuna) option pow2select; reset_defaults sets the shipped default
-            copy_run: false, // (kuna) option copyrun; reset_defaults sets the shipped default
+            copy_run: false,   // (kuna) option copyrun; reset_defaults sets the shipped default
             rep_string: false, // (kuna) option repstring; reset_defaults sets the shipped default
             region_structure: true,
             guard_arm: false,
@@ -2908,7 +2936,7 @@ impl Architecture {
             goto_next: false, // (kuna) option gotonext; reset_defaults sets the shipped default
             import_data: false,
             cast_implied: false, // (kuna) option castimplied; reset_defaults sets the shipped default
-            cast_sign: false, // (kuna) option castsign; reset_defaults sets the shipped default
+            cast_sign: false,    // (kuna) option castsign; reset_defaults sets the shipped default
             cast_ternary: false, // (kuna) option castternary; reset_defaults sets the shipped default
             call_ret_type: false, // (kuna) option callrettype; reset_defaults sets the shipped default
             cast_widen: crate::kuna_castwiden::CastWidenMode::Off, // (kuna) option castwiden; reset_defaults sets the shipped default
@@ -2918,7 +2946,7 @@ impl Architecture {
             acle_intrinsics: false, // (kuna) option acleintrinsics; reset_defaults sets the shipped default
             cortexmpriv_inject: None, // (kuna) set by init_userops_and_fixups when the language declares the user-op
             present_lessequal: false,
-            kuna_fn_budget: None,   // (kuna) decompile-all watchdog: no budget by default
+            kuna_fn_budget: None, // (kuna) decompile-all watchdog: no budget by default
             kuna_fn_deadline: None, // (kuna) set per drive from kuna_fn_budget
             kuna_callee_write_cache: std::collections::HashMap::new(),
             kuna_callee_purge_cache: std::collections::HashMap::new(),
@@ -3000,7 +3028,7 @@ impl Architecture {
             analysis_ppc32picimports: Default::default(),
             ppc32_pic_imports: Default::default(),
             analysis_ifuncfpret: true, // (kuna) option ifuncfpret, default on (x86-64 IRELATIVE slots only)
-            analysis_ppcapu: false, // (kuna) option ppcapu, default off (opt-in)
+            analysis_ppcapu: false,    // (kuna) option ppcapu, default off (opt-in)
 
             analysis_debuglink: true,
             analysis_goabi: false, // (kuna) option goabi; reset_defaults sets the shipped default (auto)
@@ -3377,8 +3405,9 @@ impl Architecture {
         self.nan_ignore_all = false;
         self.nan_ignore_compare = true; // Ignore NaN ops associated with FP comparisons by default
         self.alias_block_level = 2; // Block structs and arrays by default
-        self.split_datatype_config =
-            split_datatype::OPTION_STRUCT | split_datatype::OPTION_ARRAY | split_datatype::OPTION_POINTER;
+        self.split_datatype_config = split_datatype::OPTION_STRUCT
+            | split_datatype::OPTION_ARRAY
+            | split_datatype::OPTION_POINTER;
         self.max_jumptable_size = 1024;
 
         // (kuna) Analysis-pass gates — default-on (matching Ghidra's default-on
@@ -3546,7 +3575,6 @@ impl Architecture {
         self.analysis_pdb = true; // (kuna) DIV-129 default-on: a PE whose CodeView record names a .pdb that is actually beside it decompiles with its real function names; the GUID/age fingerprint gate keeps a wrong or stale .pdb from ever being applied. PE-only, and the XML datatest path never runs an analysis pass (0/675)
         self.macho_arm64e = true; // arm64e Apple-Silicon spec selection (arm64e Mach-O only)
     }
-
 
     /// Apply a named, concrete decompiler *mode* preset (`reliable` |
     /// `aggressive` | `fast`): a batch of `(option, value)` overrides fanned out
@@ -3758,7 +3786,9 @@ impl Architecture {
     pub fn is_global_read_only(&self, addr: &Address, size: int4) -> bool {
         let usepoint = Address::new_invalid();
         if let Some(remote) = &self.remote_scope {
-            let props = remote.query_snapshot(addr).query_properties(addr, size, &usepoint);
+            let props = remote
+                .query_snapshot(addr)
+                .query_properties(addr, size, &usepoint);
             return (props & crate::varnode::varnode_flags::readonly) != 0;
         }
         match self.symboltab.get_global_scope() {
@@ -3858,11 +3888,7 @@ impl Architecture {
 
     /// (kuna `dexmodel`) The DEX models the engine may consult.
     pub fn dex_models(&self) -> &[Rc<crate::kuna_dex::DexModel>] {
-        if self.dex_model {
-            &self.dex
-        } else {
-            &[]
-        }
+        if self.dex_model { &self.dex } else { &[] }
     }
 
     /// Park a source-declared prototype on the named global FunctionSymbol (C++
@@ -3917,13 +3943,21 @@ impl Architecture {
     }
 
     /// The by-name twin of [`Self::merge_function_prototype_pieces_at`].
-    pub fn merge_function_prototype_pieces(&mut self, name: &str, pieces: crate::fspec::PrototypePieces) {
+    pub fn merge_function_prototype_pieces(
+        &mut self,
+        name: &str,
+        pieces: crate::fspec::PrototypePieces,
+    ) {
         if let Ok(sid) = self.query_global_function(name) {
             self.merge_function_proto_pieces(sid, pieces);
         }
     }
 
-    fn merge_function_proto_pieces(&mut self, sid: crate::database::SymbolId, pieces: crate::fspec::PrototypePieces) {
+    fn merge_function_proto_pieces(
+        &mut self,
+        sid: crate::database::SymbolId,
+        pieces: crate::fspec::PrototypePieces,
+    ) {
         let merged = match self.symboltab.function_proto_pieces_of(sid) {
             Some(old) if self.analysis_protomerge => crate::kuna_protomerge::merge(old, pieces),
             _ => pieces,
@@ -3940,7 +3974,8 @@ impl Architecture {
     ) {
         if let Some((sid, _)) = self.symboltab.find_function_across_scopes(addr) {
             let string_input = string_input.filter(|formal| &formal.entry == addr);
-            self.symboltab.set_function_proto_with_go_string(sid, pieces, string_input);
+            self.symboltab
+                .set_function_proto_with_go_string(sid, pieces, string_input);
         }
     }
 
@@ -3987,7 +4022,10 @@ impl Architecture {
         ctx.call_mechanism_reload_only =
             self.call_mechanism_mode == crate::kuna_callmechanisms::CallMechanismMode::Auto;
         ctx.dex = entry.and_then(|addr| {
-            self.dex_models().iter().find(|model| model.contains(addr.get_offset())).cloned()
+            self.dex_models()
+                .iter()
+                .find(|model| model.contains(addr.get_offset()))
+                .cloned()
         }); // dexmodel
         ctx.java_try = self.java_try && ctx.dex.is_some(); // javatry
         if self.jump_assist {
@@ -4043,7 +4081,10 @@ impl Architecture {
             if ctx.arm_float_return {
                 let backfill = ctx.arm_float_args;
                 let mut built = self.arm_widened_models.borrow_mut();
-                if let Some((_, _, widened)) = built.iter().find(|(from, b, _)| Rc::ptr_eq(from, model) && *b == backfill) {
+                if let Some((_, _, widened)) = built
+                    .iter()
+                    .find(|(from, b, _)| Rc::ptr_eq(from, model) && *b == backfill)
+                {
                     return widened.clone();
                 }
                 let widened = crate::kuna_armfloatreturn::model(model, ctx.manage(), backfill);
@@ -4056,7 +4097,10 @@ impl Architecture {
         // An explicit `option protoeval <model>` outranks the spec's own
         // `<eval_current_prototype>` nomination (see `crate::kuna_evalcurrentproto`).
         // With neither, the handle's own accessor falls back to `defaultfp`.
-        ctx.evalfp_current = self.evalfp_current.clone().or_else(|| self.evalfp_current_spec.clone());
+        ctx.evalfp_current = self
+            .evalfp_current
+            .clone()
+            .or_else(|| self.evalfp_current_spec.clone());
         // Carry the cspec's return-address storage (C++ `glb->defaultReturnAddr`)
         // so the per-function `Funcdata::testForReturnAddress` can detect a
         // BRANCHIND that is really a tail return through the return-address
@@ -4073,7 +4117,11 @@ impl Architecture {
         let ids = |names: &[&[u8]]| -> Vec<unlace_base::types::uint4> {
             names
                 .iter()
-                .filter_map(|nm| self.userops.get_op_by_name(nm).map(|u| u.get_index() as unlace_base::types::uint4))
+                .filter_map(|nm| {
+                    self.userops
+                        .get_op_by_name(nm)
+                        .map(|u| u.get_index() as unlace_base::types::uint4)
+                })
                 .collect()
         };
         ctx.x87_empty_storage = crate::p4_calls::kuna_x87emptyreturn::storage(self);
@@ -4099,7 +4147,9 @@ impl Architecture {
         ctx.swift_str = self.swift_str;
         ctx.go_morestack = self.go_morestack;
         ctx.rust_probestack = self.rust_probestack;
-        ctx.chkstk_darwin = self.chkstk_darwin && self.image_apple && crate::kuna_chkstkdarwin::applies_to(&self.archid);
+        ctx.chkstk_darwin = self.chkstk_darwin
+            && self.image_apple
+            && crate::kuna_chkstkdarwin::applies_to(&self.archid);
         ctx.type_vote = self.type_vote;
         ctx.go_bool = self.go_bool;
         ctx.go_write_barrier = self.go_write_barrier;
@@ -4107,7 +4157,10 @@ impl Architecture {
         ctx.outlined_inline = self.outlined_inline;
         ctx.ptrauth_trap_userop = self
             .ptrauth_trap
-            .then(|| self.userops.get_op_by_name(crate::kuna_ptrauthtrap::BREAKPOINT_USEROP))
+            .then(|| {
+                self.userops
+                    .get_op_by_name(crate::kuna_ptrauthtrap::BREAKPOINT_USEROP)
+            })
             .flatten()
             .map(|u| u.get_index() as unlace_base::types::uint4);
         ctx.arm64e = self.archid.starts_with("AARCH64:LE:64:AppleSilicon:");
@@ -4147,7 +4200,11 @@ impl Architecture {
         // ArchContext carries no userop table).
         ctx.simd_shuffle_userops = crate::p3_dataflow::kuna_simdlane::SHUFFLE_USEROP_NAMES
             .iter()
-            .filter_map(|nm| self.userops.get_op_by_name(nm).map(|u| u.get_index() as unlace_base::types::uint4))
+            .filter_map(|nm| {
+                self.userops
+                    .get_op_by_name(nm)
+                    .map(|u| u.get_index() as unlace_base::types::uint4)
+            })
             .collect();
         ctx.x87_float_to_int_userops = crate::kuna_x87truncate::USEROP_NAMES
             .iter()
@@ -4159,12 +4216,18 @@ impl Architecture {
             .iter()
             .zip([2, 4, 8])
             .filter_map(|(name, width)| {
-                self.userops.get_op_by_name(name).map(|u| (u.get_index() as unlace_base::types::uint4, width))
+                self.userops
+                    .get_op_by_name(name)
+                    .map(|u| (u.get_index() as unlace_base::types::uint4, width))
             })
             .collect();
         ctx.float_rounding_userops = crate::kuna_roundingops::USEROP_NAMES
             .iter()
-            .filter_map(|nm| self.userops.get_op_by_name(nm).map(|u| u.get_index() as unlace_base::types::uint4))
+            .filter_map(|nm| {
+                self.userops
+                    .get_op_by_name(nm)
+                    .map(|u| u.get_index() as unlace_base::types::uint4)
+            })
             .collect();
         ctx.return_branch = self.return_branch; // returnbranch
         ctx.recover_array_stride = self.recover_array_stride; // GH-8724 arraystride
@@ -4172,11 +4235,13 @@ impl Architecture {
         ctx.rodata_string = self.rodata_string; // (kuna) rodatastring
         ctx.ptrdepthcap = self.ptrdepthcap; // (kuna) ptrdepthcap
         ctx.call_target_type = self.call_target_type && self.ctypes; // (kuna) calltargettype: only C's own spelling needs it
-        ctx.call_target_c = ctx.call_target_type && self.print.out_lang() == crate::kuna_lang::OutLang::C; // (kuna) calltargettype
+        ctx.call_target_c =
+            ctx.call_target_type && self.print.out_lang() == crate::kuna_lang::OutLang::C; // (kuna) calltargettype
         ctx.java_casts = self.print.out_lang() == crate::kuna_lang::OutLang::Java;
         if self.float_globals {
             ctx.float_globals = self.kuna_float_globals.clone(); // (kuna) floatglobals
-            ctx.float_globals_pending = self.kuna_float_globals.is_none() && self.kuna_float_scan.is_some();
+            ctx.float_globals_pending =
+                self.kuna_float_globals.is_none() && self.kuna_float_scan.is_some();
         }
         ctx.bool_byte = self.bool_byte; // (kuna) boolbyte
         ctx.unknown_byte_is_char =
@@ -4241,10 +4306,11 @@ impl Architecture {
         ctx.region_structure = self.region_structure; // regionstructure
         ctx.guard_arm = self.guard_arm; // guardarm
         ctx.loop_continue = self.loop_continue;
-        ctx.do_while_continue =
-            self.print.out_lang().profile().forms.do_while != crate::kuna_lang::DoWhileForm::RustLoopBreakIf;
+        ctx.do_while_continue = self.print.out_lang().profile().forms.do_while
+            != crate::kuna_lang::DoWhileForm::RustLoopBreakIf;
         ctx.goto_next = self.goto_next; // gotonext
-        ctx.post_increment = self.post_increment && self.print.out_lang() == crate::kuna_lang::OutLang::C;
+        ctx.post_increment =
+            self.post_increment && self.print.out_lang() == crate::kuna_lang::OutLang::C;
         ctx.loop_cond_hoist = self.loop_cond_hoist; // loopcondhoist
         ctx.region_loop_refine = self.region_loop_refine; // regionlooprefine
         ctx.region_edge_order = self.region_edge_order; // regionedgeorder
@@ -4253,8 +4319,11 @@ impl Architecture {
         ctx.linux_syscall = self.linux_syscall.fires(self.image_linux_elf); // (kuna) linuxsyscall
         ctx.msvc_str_append = self.msvc_str_append; // msvcstrappend
         ctx.octeon_effects = self.octeon_effects; // octeoneffects
-        ctx.octeon_memory_userops =
-            crate::kuna_octeoneffects::userop_ids(&self.userops, self.octeon_effects, &self.octeon_upstream_inject);
+        ctx.octeon_memory_userops = crate::kuna_octeoneffects::userop_ids(
+            &self.userops,
+            self.octeon_effects,
+            &self.octeon_upstream_inject,
+        );
         ctx.x64_syscall = self.x64_syscall; // (kuna) x64syscall
         ctx.x64_syscall_memory_target = self.archid == "x86:LE:64:default:gcc";
         ctx.syscall_regs = self.syscall_regs.fires(self.image_os_userland); // (kuna) syscallregs
@@ -4400,14 +4469,18 @@ impl Architecture {
         ctx.vector_userops = if self.vector_abi && self.archid.starts_with("x86:LE:64") {
             Rc::clone(self.vector_userop_kinds.get_or_init(|| {
                 let sleigh = self.userops.named_ops().filter_map(|(i, nm)| {
-                    let (intr, _) = crate::kuna_avxintrin::intrinsic(std::str::from_utf8(nm).ok()?, 32)?;
+                    let (intr, _) =
+                        crate::kuna_avxintrin::intrinsic(std::str::from_utf8(nm).ok()?, 32)?;
                     Some((i, crate::kuna_avxintrin::element_kind(&intr)))
                 });
                 let fused = crate::kuna_lanefuse::builtins()
                     .into_iter()
-                    .chain(crate::kuna_lanefuse::mask_builtins(self.userops.named_ops()))
+                    .chain(crate::kuna_lanefuse::mask_builtins(
+                        self.userops.named_ops(),
+                    ))
                     .filter_map(|(i, nm)| {
-                        let (intr, _) = crate::kuna_avxintrin::intrinsic(&nm, 32).or_else(|| Some((nm.clone(), vec![])))?;
+                        let (intr, _) = crate::kuna_avxintrin::intrinsic(&nm, 32)
+                            .or_else(|| Some((nm.clone(), vec![])))?;
                         Some((i, crate::kuna_avxintrin::element_kind(&intr)))
                     });
                 let mut all: Vec<(unlace_base::types::uint4, u8)> = sleigh.chain(fused).collect();
@@ -4490,8 +4563,9 @@ impl Architecture {
         // populated by `set track`) so `ActionConstbase` can query it for the
         // function entry address through the detached per-function skeleton.
         ctx.tracked_sets = self.with_context_db(|db| db.clone_trackbase());
-        let loader_seeds = |entry: &Address| self.loader_entry_tracks.contains_key(entry)
-            || self.loader_mips_t9.is_some();
+        let loader_seeds = |entry: &Address| {
+            self.loader_entry_tracks.contains_key(entry) || self.loader_mips_t9.is_some()
+        };
         if let Some(entry) = entry.filter(|&entry| loader_seeds(entry)) {
             let mut track = ctx.tracked_sets.get_value(entry).clone();
             let before = track.len();
@@ -4503,7 +4577,10 @@ impl Architecture {
             if let Some((loc, probe)) = self.loader_mips_t9.as_ref() {
                 if !track.iter().any(|value| value.loc == *loc) {
                     if let Some(val) = probe(entry) {
-                        track.push(unlace_sleigh::globalcontext::TrackedContext { loc: loc.clone(), val });
+                        track.push(unlace_sleigh::globalcontext::TrackedContext {
+                            loc: loc.clone(),
+                            val,
+                        });
                     }
                 }
             }
@@ -4530,7 +4607,10 @@ impl Architecture {
         let mut slot = self.symbol_snapshots.borrow_mut();
         let generation = self.symboltab.kuna_generation();
         if slot.generation != Some(generation) {
-            *slot = SymbolSnapshots { generation: Some(generation), ..SymbolSnapshots::default() };
+            *slot = SymbolSnapshots {
+                generation: Some(generation),
+                ..SymbolSnapshots::default()
+            };
         }
         (
             Rc::clone(
@@ -4673,10 +4753,12 @@ impl Architecture {
         // false.
         let register_name = attr_str(&sp, "register").unwrap_or_default();
         // C++ `stackGrowth = decoder.readString() == "negative"`.
-        let stack_growth =
-            attr_str(&sp, "growth").map(|g| g == "negative").unwrap_or(true);
-        let isreversejustify =
-            attr_str(&sp, "reversejustify").map(|s| s == "true").unwrap_or(false);
+        let stack_growth = attr_str(&sp, "growth")
+            .map(|g| g == "negative")
+            .unwrap_or(true);
+        let isreversejustify = attr_str(&sp, "reversejustify")
+            .map(|s| s == "true")
+            .unwrap_or(false);
         let space_name = attr_str(&sp, "space");
 
         // C++: `if (basespace == 0) throw "missing space attribute"`.
@@ -4783,13 +4865,17 @@ impl Architecture {
                 self.with_context_db(|db| db.get_tracked_value(mem, at))
             }));
         }
-        self.manage().resolve_constant(spc, val, sz, point, full_encoding)
+        self.manage()
+            .resolve_constant(spc, val, sz, point, full_encoding)
     }
 
     /// (kuna `segmentize`) The live segment definition for the space with index
     /// `i`, or `None` when the option is off or the space has none.
     fn segment_def(&self, i: int4) -> Option<&Rc<crate::kuna_segmentize::SegmentDef>> {
-        usize::try_from(i).ok().and_then(|i| self.segment_defs.get(i)).and_then(|s| s.as_ref())
+        usize::try_from(i)
+            .ok()
+            .and_then(|i| self.segment_defs.get(i))
+            .and_then(|s| s.as_ref())
     }
 
     /// Compile each registered `<segmentop>` into a [`SegmentDef`] and apply
@@ -4801,9 +4887,13 @@ impl Architecture {
     fn initialize_segments(&mut self) -> KunaResult<()> {
         let mut defs: Vec<Option<Rc<crate::kuna_segmentize::SegmentDef>>> = Vec::new();
         for i in 0..self.userops.num_segment_ops() {
-            let Some(op) = self.userops.get_segment_op(i) else { continue };
+            let Some(op) = self.userops.get_segment_op(i) else {
+                continue;
+            };
             let Some(seg) = op.as_segment() else { continue };
-            let Some(tpl) = self.pcodeinjectlib.get_tpl(seg.inject_id) else { continue };
+            let Some(tpl) = self.pcodeinjectlib.get_tpl(seg.inject_id) else {
+                continue;
+            };
             let payload = self.pcodeinjectlib.get_payload(seg.inject_id);
             let def = crate::kuna_segmentize::SegmentDef::build(
                 seg,
@@ -4833,7 +4923,12 @@ impl Architecture {
             return;
         }
         for spc in self.infer_ptr_spaces.clone() {
-            let Some(seg) = self.segment_def(spc.get_index()).filter(|s| s.has_resolve()) else { continue };
+            let Some(seg) = self
+                .segment_def(spc.get_index())
+                .filter(|s| s.has_resolve())
+            else {
+                continue;
+            };
             self.manage().mark_near_pointers(&spc, seg.innerinsize);
         }
         let data_seg = self
@@ -4844,7 +4939,8 @@ impl Architecture {
             .cloned();
         if let Some(seg) = data_seg {
             self.types.set_size_of_pointer(seg.innerinsize);
-            self.types.set_size_of_alt_pointer(seg.innerinsize + seg.baseinsize);
+            self.types
+                .set_size_of_alt_pointer(seg.innerinsize + seg.baseinsize);
         }
     }
 
@@ -4968,7 +5064,8 @@ impl Architecture {
     /// no-register golang target (x86-32 reaches `g` through TLS) and every
     /// other image are untouched.
     fn kuna_install_goreg(&mut self) -> KunaResult<()> {
-        let Some(reg) = crate::kuna_goreg::goroutine_register(&self.archid, self.go_version()) else {
+        let Some(reg) = crate::kuna_goreg::goroutine_register(&self.archid, self.go_version())
+        else {
             return Ok(());
         };
         let scope = match self.symboltab.get_global_scope() {
@@ -4976,17 +5073,21 @@ impl Architecture {
             None => return Ok(()),
         };
         let point = self.get_register_varnode(reg.as_bytes())?;
-        let Some(spc) = point.space.clone() else { return Ok(()) };
+        let Some(spc) = point.space.clone() else {
+            return Ok(());
+        };
         let first = point.offset;
         let last = first.wrapping_sub(1).wrapping_add(u64::from(point.size));
         self.infer_ptr_spaces.push(Rc::clone(&spc));
-        self.symboltab.add_range(scope, Rc::clone(&spc), first, last);
-        let gptr =
-            crate::kuna_goreg::g_pointer_type(self.types(), self.go_layout())?;
+        self.symboltab
+            .add_range(scope, Rc::clone(&spc), first, last);
+        let gptr = crate::kuna_goreg::g_pointer_type(self.types(), self.go_layout())?;
         let addr = Address::new(spc, first);
         let (sid, _eref) =
-            self.symboltab.add_symbol_mapped(scope, "g", gptr, &addr, &Address::new_invalid())?;
-        self.symboltab.set_attribute(sid, crate::kuna_goreg::g_symbol_flags());
+            self.symboltab
+                .add_symbol_mapped(scope, "g", gptr, &addr, &Address::new_invalid())?;
+        self.symboltab
+            .set_attribute(sid, crate::kuna_goreg::g_symbol_flags());
         Ok(())
     }
 
@@ -5133,7 +5234,9 @@ impl Architecture {
             .unwrap_or(0);
         let resolve = |nm: &[u8]| self.translate.probe_register_varnode(nm).is_some();
         if !crate::kuna_msvcftol::language_is_x86_32(resolve, code_addr_size)
-            || self.proto_models.contains_key(crate::kuna_x87intrinsic::MODEL_NAME)
+            || self
+                .proto_models
+                .contains_key(crate::kuna_x87intrinsic::MODEL_NAME)
         {
             return;
         }
@@ -5169,8 +5272,14 @@ impl Architecture {
             return Ok(());
         }
         let code_space = self.manage().get_default_code_space();
-        let code_addr_size = code_space.as_ref().map(|s| s.get_addr_size() as int4).unwrap_or(0);
-        let big_endian = code_space.as_ref().map(|s| s.is_big_endian()).unwrap_or(false);
+        let code_addr_size = code_space
+            .as_ref()
+            .map(|s| s.get_addr_size() as int4)
+            .unwrap_or(0);
+        let big_endian = code_space
+            .as_ref()
+            .map(|s| s.is_big_endian())
+            .unwrap_or(false);
         let resolve = |nm: &[u8]| self.translate.probe_register_varnode(nm).is_some();
         let ftol = crate::kuna_msvcftol::language_is_x86_32(resolve, code_addr_size);
         let helpers = crate::kuna_arithhelpers::helper_abi(resolve, code_addr_size, big_endian);
@@ -5332,8 +5441,12 @@ impl Architecture {
             None => Ok(()),
         };
         if parse_res.is_ok() {
-            self.call_mechanisms = Rc::new(crate::kuna_callmechanisms::Mechanisms::from_library(&lib));
-            self.jump_assists = Rc::new(crate::kuna_jumpassist::JumpAssists::from_library(&self.userops, &lib));
+            self.call_mechanisms =
+                Rc::new(crate::kuna_callmechanisms::Mechanisms::from_library(&lib));
+            self.jump_assists = Rc::new(crate::kuna_jumpassist::JumpAssists::from_library(
+                &self.userops,
+                &lib,
+            ));
         }
         self.pcodeinjectlib = lib;
         parse_res
@@ -5366,8 +5479,12 @@ impl Architecture {
                 None => return Ok(()),
             }
         };
-        let segops: Vec<Rc<unlace_base::xml::Element>> =
-            spec.get_children().iter().filter(|c| c.get_name() == "segmentop").cloned().collect();
+        let segops: Vec<Rc<unlace_base::xml::Element>> = spec
+            .get_children()
+            .iter()
+            .filter(|c| c.get_name() == "segmentop")
+            .cloned()
+            .collect();
         if segops.is_empty() {
             return Ok(());
         }
@@ -5393,9 +5510,13 @@ impl Architecture {
     /// `setISAMode` fixups.
     fn register_cortexmpriv_fixup(&mut self) -> KunaResult<()> {
         use crate::kuna_cortexmpriv as fixup;
-        if let Some(injectid) =
-            self.register_manual_fixup(fixup::USEROP_NAME, fixup::OUTPUT_NAME, &[], fixup::SNIPPET, false)?
-        {
+        if let Some(injectid) = self.register_manual_fixup(
+            fixup::USEROP_NAME,
+            fixup::OUTPUT_NAME,
+            &[],
+            fixup::SNIPPET,
+            false,
+        )? {
             self.cortexmpriv_inject = Some(injectid);
         }
         Ok(())
@@ -5410,7 +5531,9 @@ impl Architecture {
         self.octeon_upstream_inject.clear();
         for fixup in crate::kuna_octeoneffects::UPSTREAM {
             let inputs: Vec<Vec<u8>> = fixup.inputs.iter().map(|input| input.to_vec()).collect();
-            if let Some(injectid) = self.register_manual_fixup(fixup.name, fixup.output, &inputs, fixup.body, true)? {
+            if let Some(injectid) =
+                self.register_manual_fixup(fixup.name, fixup.output, &inputs, fixup.body, true)?
+            {
                 self.octeon_upstream_inject.push(injectid);
             }
         }
@@ -5433,14 +5556,19 @@ impl Architecture {
         named: bool,
     ) -> KunaResult<Option<int4>> {
         if self.translate.as_sleigh().is_none()
-            || !self.userops.get_op_by_name(name).is_some_and(|op| op.is_unspecialized())
+            || !self
+                .userops
+                .get_op_by_name(name)
+                .is_some_and(|op| op.is_unspecialized())
         {
             return Ok(None);
         }
         let injectid = if named {
-            self.pcodeinjectlib.manual_call_other_fixup_named(name, output, inputs, body)?
+            self.pcodeinjectlib
+                .manual_call_other_fixup_named(name, output, inputs, body)?
         } else {
-            self.pcodeinjectlib.manual_call_other_fixup(name, output, inputs, body)?
+            self.pcodeinjectlib
+                .manual_call_other_fixup(name, output, inputs, body)?
         };
         let mut userops = std::mem::take(&mut self.userops);
         let res = userops.manual_call_other_fixup(name, injectid);
@@ -5458,12 +5586,12 @@ impl Architecture {
     /// front-loaded here).
     fn register_string_builtins(&mut self) -> KunaResult<()> {
         use crate::userop::{
-            BUILTIN_KERNEL_BUG, BUILTIN_KERNEL_WARN, BUILTIN_MEMCMP, BUILTIN_MEMCPY, BUILTIN_MEMSET,
-            BUILTIN_MEMSET16, BUILTIN_MEMSET32, BUILTIN_MEMSET64,
-            BUILTIN_STRINGDATA, BUILTIN_STRLEN, BUILTIN_STRNCPY, BUILTIN_SYSCALL_ERROR,
-            BUILTIN_VOLATILE_READ, BUILTIN_VOLATILE_WRITE, BUILTIN_WCSNCPY,
-            BUILTIN_BSWAP, BUILTIN_ROTL, BUILTIN_ALLOCA, BUILTIN_VA_START, BUILTIN_ABS,
-            BUILTIN_LABS, BUILTIN_BITREV, BUILTIN_CTZ, BUILTIN_STRCPY, BUILTIN_VAARG,
+            BUILTIN_ABS, BUILTIN_ALLOCA, BUILTIN_BITREV, BUILTIN_BSWAP, BUILTIN_CTZ,
+            BUILTIN_KERNEL_BUG, BUILTIN_KERNEL_WARN, BUILTIN_LABS, BUILTIN_MEMCMP, BUILTIN_MEMCPY,
+            BUILTIN_MEMSET, BUILTIN_MEMSET16, BUILTIN_MEMSET32, BUILTIN_MEMSET64, BUILTIN_ROTL,
+            BUILTIN_STRCPY, BUILTIN_STRINGDATA, BUILTIN_STRLEN, BUILTIN_STRNCPY,
+            BUILTIN_SYSCALL_ERROR, BUILTIN_VA_START, BUILTIN_VAARG, BUILTIN_VOLATILE_READ,
+            BUILTIN_VOLATILE_WRITE, BUILTIN_WCSNCPY,
         };
         // Split the &mut userops borrow from the &self type-factory read by
         // building a small adapter over the (already-populated) factory.
@@ -5499,9 +5627,13 @@ impl Architecture {
             for (id, name) in crate::kuna_lanefuse::builtins() {
                 userops.register_named_builtin(id, &name);
             }
-            let named: Vec<(unlace_base::types::uint4, Vec<u8>)> =
-                userops.named_ops().map(|(i, nm)| (i, nm.to_vec())).collect();
-            for (id, name) in crate::kuna_lanefuse::mask_builtins(named.iter().map(|(i, nm)| (*i, nm.as_slice()))) {
+            let named: Vec<(unlace_base::types::uint4, Vec<u8>)> = userops
+                .named_ops()
+                .map(|(i, nm)| (i, nm.to_vec()))
+                .collect();
+            for (id, name) in
+                crate::kuna_lanefuse::mask_builtins(named.iter().map(|(i, nm)| (*i, nm.as_slice())))
+            {
                 userops.register_named_builtin(id, &name);
             }
             // (kuna itaniumeh, swiftcall) the exceptional-edge test, the pad values
@@ -5537,7 +5669,12 @@ impl Architecture {
             userops.register_builtin(BUILTIN_KERNEL_WARN, &adapter)?;
             // (kuna repstring) the fills and the compare a repeated string
             // instruction prints as.
-            for id in [BUILTIN_MEMSET16, BUILTIN_MEMSET32, BUILTIN_MEMSET64, BUILTIN_MEMCMP] {
+            for id in [
+                BUILTIN_MEMSET16,
+                BUILTIN_MEMSET32,
+                BUILTIN_MEMSET64,
+                BUILTIN_MEMCMP,
+            ] {
                 userops.register_builtin(id, &adapter)?;
             }
             Ok(())
@@ -5673,7 +5810,8 @@ impl Architecture {
     pub fn with_print<R>(&mut self, render: impl FnOnce(&mut PrintC, &Architecture) -> R) -> R {
         let mut print = std::mem::take(&mut self.print);
         let mods = print.context.mods();
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| render(&mut print, self)));
+        let result =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| render(&mut print, self)));
         if result.is_err() {
             print.clear();
             print.context.set_mods(mods);
@@ -5729,7 +5867,9 @@ impl Architecture {
         let mut f = Some(f);
         let mut result: Option<R> = None;
         self.translate.with_context_db_dyn(&mut |db| {
-            result = Some((f.take().expect("with_context_db_mut: closure runs once"))(db));
+            result = Some((f.take().expect("with_context_db_mut: closure runs once"))(
+                db,
+            ));
         });
         result.expect("with_context_db_mut: closure ran")
     }
@@ -5749,10 +5889,7 @@ impl Architecture {
 
     /// Resolve a register by name to its storage (C++
     /// `glb->translate->getRegister(name)`); used by `set track`.
-    pub fn get_register_varnode(
-        &self,
-        nm: &[u8],
-    ) -> KunaResult<unlace_num::pcoderaw::VarnodeData> {
+    pub fn get_register_varnode(&self, nm: &[u8]) -> KunaResult<unlace_num::pcoderaw::VarnodeData> {
         self.translate.get_register_varnode(nm)
     }
 
@@ -5812,7 +5949,11 @@ impl Architecture {
     /// Record the calling convention `name` was declared under (see
     /// [`Self::declared_proto_models`]).
     pub fn set_function_prototype_model(&mut self, name: &str, model: Rc<ProtoModel>) {
-        if !self.declared_proto_models.get(name).is_some_and(|old| Rc::ptr_eq(old, &model)) {
+        if !self
+            .declared_proto_models
+            .get(name)
+            .is_some_and(|old| Rc::ptr_eq(old, &model))
+        {
             self.kuna_callwide.clear();
         }
         self.declared_proto_models.insert(name.to_string(), model);
@@ -5827,27 +5968,39 @@ impl Architecture {
     /// (see [`Self::declared_proto_models_at`]).
     pub fn set_function_prototype_model_at(&mut self, addr: &Address, model: Rc<ProtoModel>) {
         if let Some(space) = addr.get_space() {
-            if !self.declared_proto_models_at.get(&(space.get_index(), addr.get_offset()))
+            if !self
+                .declared_proto_models_at
+                .get(&(space.get_index(), addr.get_offset()))
                 .is_some_and(|old| Rc::ptr_eq(old, &model))
             {
                 self.kuna_callwide.clear();
             }
-            self.declared_proto_models_at.insert((space.get_index(), addr.get_offset()), model);
+            self.declared_proto_models_at
+                .insert((space.get_index(), addr.get_offset()), model);
         }
     }
 
     /// Register a prototype model under its name (C++ `protoModels[name] =`).
     pub fn register_model(&mut self, model: Rc<ProtoModel>) {
-        if !self.proto_models.get(model.get_name()).is_some_and(|old| Rc::ptr_eq(old, &model)) {
+        if !self
+            .proto_models
+            .get(model.get_name())
+            .is_some_and(|old| Rc::ptr_eq(old, &model))
+        {
             self.kuna_callwide.clear();
         }
-        self.proto_models.insert(model.get_name().to_string(), model);
+        self.proto_models
+            .insert(model.get_name().to_string(), model);
     }
 
     /// Set the default prototype model (C++ `Architecture::setDefaultModel`,
     /// architecture.cc:222).
     pub fn set_default_model_rc(&mut self, model: Rc<ProtoModel>) {
-        if !self.defaultfp.as_ref().is_some_and(|old| Rc::ptr_eq(old, &model)) {
+        if !self
+            .defaultfp
+            .as_ref()
+            .is_some_and(|old| Rc::ptr_eq(old, &model))
+        {
             self.kuna_callwide.clear();
         }
         self.defaultfp = Some(model);
@@ -5856,7 +6009,8 @@ impl Architecture {
     /// Share `defaultfp` and the named models into the type factory, which the
     /// C++ factory reads live through `glb`; re-run after either changes.
     fn share_proto_models(&self) {
-        self.types.set_proto_models(self.defaultfp.clone(), self.proto_models.clone());
+        self.types
+            .set_proto_models(self.defaultfp.clone(), self.proto_models.clone());
     }
 
     // -----------------------------------------------------------------------
@@ -5938,8 +6092,11 @@ impl Architecture {
         };
         let mut store = DocumentStorage::new();
         let root = store.parse_document(&xml)?.get_root().clone();
-        let Some(dorg) =
-            root.get_children().iter().find(|c| c.get_name() == "data_organization").cloned()
+        let Some(dorg) = root
+            .get_children()
+            .iter()
+            .find(|c| c.get_name() == "data_organization")
+            .cloned()
         else {
             return Ok(());
         };
@@ -6013,12 +6170,13 @@ impl Architecture {
                     // `<entry size=N alignment=M/>` child contributes a pair; the
                     // map drives `getAlignment(size)` and so the over-aligned
                     // primitive layout (e.g. x86-64 gcc float10 align=16).
-                    let read_attr = |el: &Rc<unlace_base::xml::Element>, attr: &str| -> Option<int4> {
-                        el.get_attribute_value(attr)
-                            .ok()
-                            .and_then(|b| std::str::from_utf8(b).ok())
-                            .and_then(|s| s.trim().parse::<int4>().ok())
-                    };
+                    let read_attr =
+                        |el: &Rc<unlace_base::xml::Element>, attr: &str| -> Option<int4> {
+                            el.get_attribute_value(attr)
+                                .ok()
+                                .and_then(|b| std::str::from_utf8(b).ok())
+                                .and_then(|s| s.trim().parse::<int4>().ok())
+                        };
                     let mut pairs: Vec<(int4, int4)> = Vec::new();
                     for entry in child.get_children().iter() {
                         if entry.get_name() != "entry" {
@@ -6056,8 +6214,7 @@ impl Architecture {
             .get_default_data_space()
             .map(|s| s.get_addr_size() as int4)
             .unwrap_or(default_size);
-        let stack_pointer_size =
-            manage.get_stack_space().map(|s| s.get_addr_size() as int4);
+        let stack_pointer_size = manage.get_stack_space().map(|s| s.get_addr_size() as int4);
         // C++ `TypeFactory` reads `getArch()->getDefaultDataSpace()->isBigEndian()`
         // for bitfield layout (TypeBitField ctor, type.cc:873; struct parse,
         // grammar.cc:2626) and pointer truncation (TypePointer::calcTruncate,
@@ -6077,7 +6234,8 @@ impl Architecture {
         if self.types.alignment_map_is_empty() {
             self.types.set_default_alignment_map();
         }
-        self.types.setup_sizes(stack_pointer_size, default_data_addr_size, default_size);
+        self.types
+            .setup_sizes(stack_pointer_size, default_data_addr_size, default_size);
     }
 
     /// Seed a single default prototype model when the cspec proto decode is not
@@ -6190,7 +6348,9 @@ impl Architecture {
     /// The pspec `<default_symbols>` label at exactly `addr`, if any.
     pub fn pspec_symbol_at(&self, addr: &Address) -> Option<&str> {
         let spc = addr.get_space()?;
-        self.pspec_symbols.get(&(spc.get_index(), addr.get_offset())).map(String::as_str)
+        self.pspec_symbols
+            .get(&(spc.get_index(), addr.get_offset()))
+            .map(String::as_str)
     }
 
     /// Apply the processor-spec `<context_data>` paints to the engine's context
@@ -6320,8 +6480,10 @@ impl Architecture {
         context_data: &Rc<unlace_base::xml::Element>,
     ) -> KunaResult<()> {
         use unlace_base::address::Range;
-        use unlace_base::marshal::{Decoder, IdRegistry, XmlDecode, ATTRIB_NAME, ATTRIB_VAL};
-        use unlace_sleigh::globalcontext::{register_globalcontext_ids, TrackedContext, TrackedSet};
+        use unlace_base::marshal::{ATTRIB_NAME, ATTRIB_VAL, Decoder, IdRegistry, XmlDecode};
+        use unlace_sleigh::globalcontext::{
+            TrackedContext, TrackedSet, register_globalcontext_ids,
+        };
         let manager = self.translate.manager_rc();
         let mut registry = IdRegistry::with_base_ids();
         register_globalcontext_ids(&mut registry);
@@ -6379,10 +6541,7 @@ impl Architecture {
     /// outputop="write_volatile" inputop="read_volatile">`.  This method ports the
     /// range-painting half: for each `<range>` child,
     /// `symboltab->setPropertyRange(Varnode::volatil, range)`.
-    fn decode_volatile(
-        &mut self,
-        volatile_el: &Rc<unlace_base::xml::Element>,
-    ) -> KunaResult<()> {
+    fn decode_volatile(&mut self, volatile_el: &Rc<unlace_base::xml::Element>) -> KunaResult<()> {
         use crate::varnode::varnode_flags;
         use unlace_base::address::{Range, RangeProperties};
         use unlace_base::marshal::{IdRegistry, XmlDecode};
@@ -6456,9 +6615,11 @@ impl Architecture {
             }
             let name = match attr_str(child, "name") {
                 Some(n) if !n.is_empty() => n,
-                _ => return Err(KunaError::lowlevel(
-                    "Missing name attribute in <symbol> element",
-                )),
+                _ => {
+                    return Err(KunaError::lowlevel(
+                        "Missing name attribute in <symbol> element",
+                    ));
+                }
             };
             let addr_str = attr_str(child, "address").unwrap_or_default();
             let addr = if addr_str == "next" && last_size != -1 {
@@ -6476,20 +6637,28 @@ impl Architecture {
                 .and_then(|s| s.parse::<int4>().ok())
                 .unwrap_or(0);
             if size == 0 {
-                size = addr.get_space().map(|s| s.get_word_size() as int4).unwrap_or(1);
+                size = addr
+                    .get_space()
+                    .map(|s| s.get_word_size() as int4)
+                    .unwrap_or(1);
             }
             // Optional <symbol volatile="true|false"> re-paints the volatil property.
             if let Some(volstr) = attr_str(child, "volatile") {
                 let volatile_state = matches!(volstr.as_str(), "true" | "1" | "yes");
                 if let Some(spc) = addr.get_space() {
-                    let range =
-                        Range::new(Rc::clone(spc), addr.get_offset(), addr.get_offset() + (size as u64 - 1));
+                    let range = Range::new(
+                        Rc::clone(spc),
+                        addr.get_offset(),
+                        addr.get_offset() + (size as u64 - 1),
+                    );
                     let a1 = range.get_first_addr();
                     let a2 = range.get_last_addr_open(self.manage());
                     if volatile_state {
-                        self.symboltab.set_property_range(varnode_flags::volatil, &a1, &a2);
+                        self.symboltab
+                            .set_property_range(varnode_flags::volatil, &a1, &a2);
                     } else {
-                        self.symboltab.clear_property_range(varnode_flags::volatil, &a1, &a2);
+                        self.symboltab
+                            .clear_property_range(varnode_flags::volatil, &a1, &a2);
                     }
                 }
             }
@@ -6497,9 +6666,13 @@ impl Architecture {
             self.symboltab
                 .add_symbol_mapped(scope, &name, ct, &addr, &usepoint)?;
             if let Some(spc) = addr.get_space() {
-                let code = self.manage().get_default_code_space().map(|c| c.get_index());
+                let code = self
+                    .manage()
+                    .get_default_code_space()
+                    .map(|c| c.get_index());
                 if code != Some(spc.get_index()) {
-                    self.pspec_symbols.insert((spc.get_index(), addr.get_offset()), name.clone());
+                    self.pspec_symbols
+                        .insert((spc.get_index(), addr.get_offset()), name.clone());
                 }
             }
             last_addr = addr;
@@ -6563,7 +6736,8 @@ impl Architecture {
             if mask == 0 {
                 continue;
             }
-            self.lanerecords.push(LanedRegister::with_mask(i as int4, mask));
+            self.lanerecords
+                .push(LanedRegister::with_mask(i as int4, mask));
         }
         Ok(())
     }
@@ -6589,10 +6763,12 @@ impl Architecture {
                 "varnode" | "addr" => {
                     let spname = attr_str(child, "space")?;
                     let space = self.manage().get_space_by_name(&spname)?.clone();
-                    let offset =
-                        attr_str(child, "offset").and_then(|s| parse_int(&s)).unwrap_or(0);
-                    let size =
-                        attr_str(child, "size").and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+                    let offset = attr_str(child, "offset")
+                        .and_then(|s| parse_int(&s))
+                        .unwrap_or(0);
+                    let size = attr_str(child, "size")
+                        .and_then(|s| s.parse::<u32>().ok())
+                        .unwrap_or(0);
                     return Some(unlace_num::pcoderaw::VarnodeData {
                         space: Some(space),
                         offset,
@@ -6650,15 +6826,21 @@ impl Architecture {
         &self,
         root: &Rc<unlace_base::xml::Element>,
     ) -> Vec<crate::p5_types::prefersplit::PreferSplitRecord> {
-        let Some(split) = find_child(root, "prefersplit") else { return Vec::new() };
+        let Some(split) = find_child(root, "prefersplit") else {
+            return Vec::new();
+        };
         let style = attr_str(&split, "style").unwrap_or_default();
         let mut out = Vec::new();
         for child in split.get_children().iter() {
             if child.get_name() != "register" {
                 continue;
             }
-            let Some(name) = attr_str(child, "name") else { continue };
-            let Ok(storage) = self.translate.get_register_varnode(name.as_bytes()) else { continue };
+            let Some(name) = attr_str(child, "name") else {
+                continue;
+            };
+            let Ok(storage) = self.translate.get_register_varnode(name.as_bytes()) else {
+                continue;
+            };
             let splitoffset = match style.as_str() {
                 "inhalf" => storage.size as int4 / 2,
                 "in1234" => 4,
@@ -6668,7 +6850,10 @@ impl Architecture {
             if splitoffset <= 0 || splitoffset >= storage.size as int4 {
                 continue;
             }
-            out.push(crate::p5_types::prefersplit::PreferSplitRecord { storage, splitoffset });
+            out.push(crate::p5_types::prefersplit::PreferSplitRecord {
+                storage,
+                splitoffset,
+            });
         }
         out
     }
@@ -6683,12 +6868,21 @@ impl Architecture {
     /// registers stay unaffected. Decoded through the same path as the spec's own
     /// models, so it carries identical storage/effect fidelity. `None` on a spec
     /// whose `__stdcall` cannot be found/parsed.
-    pub fn kuna_build_reginput_model(&self, name: &str, regs: &[&str], thisptr: bool) -> Option<ProtoModel> {
+    pub fn kuna_build_reginput_model(
+        &self,
+        name: &str,
+        regs: &[&str],
+        thisptr: bool,
+    ) -> Option<ProtoModel> {
         let pentry = |r: &str| {
             format!("<pentry minsize=\"1\" maxsize=\"4\"><register name=\"{r}\"/></pentry>")
         };
         let inputs: String = regs.iter().map(|r| pentry(r)).collect();
-        let this_attr = if thisptr { " thisbeforeretpointer=\"true\"" } else { "" };
+        let this_attr = if thisptr {
+            " thisbeforeretpointer=\"true\""
+        } else {
+            ""
+        };
         // A register taken as an input is removed from the default `<unaffected>`
         // set: the callee consumes its incoming value, so the caller cannot treat
         // it as preserved for the argument-recovery to score.
@@ -6718,7 +6912,10 @@ impl Architecture {
         );
         let root = {
             let mut store = unlace_base::xml::DocumentStorage::new();
-            store.parse_document(xml.as_bytes()).map(|d| d.get_root().clone()).ok()?
+            store
+                .parse_document(xml.as_bytes())
+                .map(|d| d.get_root().clone())
+                .ok()?
         };
         let proto = find_child(&root, "prototype")?;
         self.decode_proto_model(&proto, &root).ok()
@@ -6774,7 +6971,8 @@ impl Architecture {
             model.set_constructor(decode_bool_attr(&v));
         }
         model.set_name(&name);
-        let (entry_inject, return_inject) = crate::kuna_callmechanisms::compiled_ids(&self.pcodeinjectlib, &name);
+        let (entry_inject, return_inject) =
+            crate::kuna_callmechanisms::compiled_ids(&self.pcodeinjectlib, &name);
         model.set_inject_ids(entry_inject, return_inject);
         let strategy = attr_str(proto, "strategy").unwrap_or_default();
         model.build_param_list(&strategy)?;
@@ -6801,7 +6999,8 @@ impl Architecture {
                     }
                 }
                 "localrange" => {
-                    let ranges = localrange.get_or_insert_with(unlace_base::address::RangeList::new);
+                    let ranges =
+                        localrange.get_or_insert_with(unlace_base::address::RangeList::new);
                     for (spc, first, last) in self.decode_proto_ranges(child)? {
                         ranges.insert_range(spc, first, last);
                     }
@@ -6814,15 +7013,27 @@ impl Architecture {
                 "output" => self.decode_pentry_list(child, &mut model, false)?,
                 // else if (subId == ELEM_UNAFFECTED) { ... effectlist.back().decode(unaffected) }
                 "unaffected" => {
-                    self.decode_effect_block(child, &mut model, crate::fspec::effect_type::UNAFFECTED)?;
+                    self.decode_effect_block(
+                        child,
+                        &mut model,
+                        crate::fspec::effect_type::UNAFFECTED,
+                    )?;
                 }
                 // else if (subId == ELEM_KILLEDBYCALL) { ... decode(killedbycall) }
                 "killedbycall" => {
-                    self.decode_effect_block(child, &mut model, crate::fspec::effect_type::KILLEDBYCALL)?;
+                    self.decode_effect_block(
+                        child,
+                        &mut model,
+                        crate::fspec::effect_type::KILLEDBYCALL,
+                    )?;
                 }
                 // else if (subId == ELEM_RETURNADDRESS) { ... decode(return_address); sawretaddr=true }
                 "returnaddress" => {
-                    self.decode_effect_block(child, &mut model, crate::fspec::effect_type::RETURN_ADDRESS)?;
+                    self.decode_effect_block(
+                        child,
+                        &mut model,
+                        crate::fspec::effect_type::RETURN_ADDRESS,
+                    )?;
                     saw_retaddr = true;
                 }
                 // else if (subId == ELEM_INTERNAL_STORAGE) { while peekElement: internalstorage.back().decode() }
@@ -6879,12 +7090,20 @@ impl Architecture {
         let manager = self.translate.manager_rc();
         let registry = IdRegistry::with_base_ids();
         let mut out = Vec::new();
-        for child in block.get_children().iter().filter(|c| c.get_name() == "range") {
+        for child in block
+            .get_children()
+            .iter()
+            .filter(|c| c.get_name() == "range")
+        {
             let mut decoder = XmlDecode::new_with_root(&manager, &registry, child, 0);
             let mut props = RangeProperties::new();
             props.decode(&mut decoder)?;
             let range = Range::from_properties(&props, self.manage())?;
-            out.push((Rc::clone(range.get_space()), range.get_first(), range.get_last()));
+            out.push((
+                Rc::clone(range.get_space()),
+                range.get_first(),
+                range.get_last(),
+            ));
         }
         Ok(out)
     }
@@ -6923,9 +7142,9 @@ impl Architecture {
                 "prototype" => self.decode_proto_model(child, root).ok(),
                 "resolveprototype" => self.decode_resolve_proto(child, &byname).ok(),
                 "modelalias" => match (attr_str(child, "name"), attr_str(child, "parent")) {
-                    (Some(nm), Some(parent)) => {
-                        byname.get(&parent).and_then(|p| create_model_alias(&nm, p).ok())
-                    }
+                    (Some(nm), Some(parent)) => byname
+                        .get(&parent)
+                        .and_then(|p| create_model_alias(&nm, p).ok()),
                     _ => None,
                 },
                 _ => continue,
@@ -6942,9 +7161,12 @@ impl Architecture {
         }
         // (kuna `swiftcall`) Swift's two models, derived from the default one
         // on a language Swift targets when the spec declares neither.
-        let default_el = find_child(root, "default_proto").and_then(|dp| find_child(&dp, "prototype"));
+        let default_el =
+            find_child(root, "default_proto").and_then(|dp| find_child(&dp, "prototype"));
         let regs = crate::kuna_swiftcall::swift_registers(|name| {
-            self.translate.probe_register_varnode(name.as_bytes()).map(|v| v.size as int4)
+            self.translate
+                .probe_register_varnode(name.as_bytes())
+                .map(|v| v.size as int4)
         });
         if let (Some(el), Some((self_reg, error_reg, async_reg))) = (default_el, regs) {
             for (name, throws, is_async) in crate::kuna_swiftcall::MODELS {
@@ -7037,12 +7259,17 @@ impl Architecture {
                         .get_space_by_name(&spname)
                         .ok_or_else(|| KunaError::lowlevel("<varnode> effect unknown space"))?
                         .clone();
-                    let offset =
-                        attr_str(child, "offset").and_then(|s| parse_int(&s)).unwrap_or(0);
+                    let offset = attr_str(child, "offset")
+                        .and_then(|s| parse_int(&s))
+                        .unwrap_or(0);
                     let size = attr_str(child, "size")
                         .and_then(|s| s.parse::<u32>().ok())
                         .unwrap_or(0);
-                    unlace_num::pcoderaw::VarnodeData { space: Some(space), offset, size }
+                    unlace_num::pcoderaw::VarnodeData {
+                        space: Some(space),
+                        offset,
+                        size,
+                    }
                 }
                 _ => continue,
             };
@@ -7068,19 +7295,27 @@ impl Architecture {
                     self.translate.get_register_varnode(nm.as_bytes())?
                 }
                 "varnode" | "addr" => {
-                    let spname = attr_str(child, "space")
-                        .ok_or_else(|| KunaError::lowlevel("<varnode> internal_storage has no space"))?;
+                    let spname = attr_str(child, "space").ok_or_else(|| {
+                        KunaError::lowlevel("<varnode> internal_storage has no space")
+                    })?;
                     let space = self
                         .manage()
                         .get_space_by_name(&spname)
-                        .ok_or_else(|| KunaError::lowlevel("<varnode> internal_storage unknown space"))?
+                        .ok_or_else(|| {
+                            KunaError::lowlevel("<varnode> internal_storage unknown space")
+                        })?
                         .clone();
-                    let offset =
-                        attr_str(child, "offset").and_then(|s| parse_int(&s)).unwrap_or(0);
+                    let offset = attr_str(child, "offset")
+                        .and_then(|s| parse_int(&s))
+                        .unwrap_or(0);
                     let size = attr_str(child, "size")
                         .and_then(|s| s.parse::<u32>().ok())
                         .unwrap_or(0);
-                    unlace_num::pcoderaw::VarnodeData { space: Some(space), offset, size }
+                    unlace_num::pcoderaw::VarnodeData {
+                        space: Some(space),
+                        offset,
+                        size,
+                    }
                 }
                 _ => continue,
             };
@@ -7116,7 +7351,8 @@ impl Architecture {
                 // C++ fspec.cc:1482-1484: a bare <pentry> is parsed at the current
                 // numgroup with grouped == false.
                 "pentry" => {
-                    let entry = self.decode_pentry(child, numgroup, normalstack, false, &pentries)?;
+                    let entry =
+                        self.decode_pentry(child, numgroup, normalstack, false, &pentries)?;
                     // C++ parsePentry tail (fspec.cc:1251): numgroup advances past
                     // the entry's highest group (1 past for an exclusion entry).
                     let maxgroup = entry.get_all_groups().last().copied().unwrap_or(numgroup) + 1;
@@ -7142,7 +7378,8 @@ impl Architecture {
                         }
                         let entry =
                             self.decode_pentry(gchild, basegroup, normalstack, true, &pentries)?;
-                        if entry.get_space().get_type() == unlace_base::space::spacetype::IPTR_JOIN {
+                        if entry.get_space().get_type() == unlace_base::space::spacetype::IPTR_JOIN
+                        {
                             return Err(KunaError::lowlevel(
                                 "<pentry> in the join space not allowed in <group> tag",
                             ));
@@ -7156,7 +7393,10 @@ impl Architecture {
                         pentries.push(entry);
                         // orderWithinGroup(previous1, cur) and (previous2, cur).
                         if let Some(p1) = prev1 {
-                            crate::fspec::ParamEntry::order_within_group(&pentries[p1], &pentries[cur])?;
+                            crate::fspec::ParamEntry::order_within_group(
+                                &pentries[p1],
+                                &pentries[cur],
+                            )?;
                             if let Some(p2) = prev2 {
                                 crate::fspec::ParamEntry::order_within_group(
                                     &pentries[p2],
@@ -7179,7 +7419,11 @@ impl Architecture {
         // `<rule>` subtrees are then decoded against the live resource via an
         // `XmlDecode` rooted on each `<rule>` element (the modelrules ids are
         // registered on a fresh registry).
-        let plist = if is_input { model.input_mut() } else { model.output_mut() };
+        let plist = if is_input {
+            model.input_mut()
+        } else {
+            model.output_mut()
+        };
         for e in pentries {
             plist.push_entry(e);
         }
@@ -7236,17 +7480,25 @@ impl Architecture {
         let mut type_ = type_class::TYPECLASS_GENERAL;
         let mut flags: uint4 = 0;
         if let Some(v) = attr_str(pentry, "minsize") {
-            minsize = v.parse().map_err(|_| KunaError::lowlevel("bad <pentry> minsize"))?;
+            minsize = v
+                .parse()
+                .map_err(|_| KunaError::lowlevel("bad <pentry> minsize"))?;
         }
         if let Some(v) = attr_str(pentry, "maxsize") {
-            size = v.parse().map_err(|_| KunaError::lowlevel("bad <pentry> maxsize"))?;
+            size = v
+                .parse()
+                .map_err(|_| KunaError::lowlevel("bad <pentry> maxsize"))?;
         }
         // size="..." (old) and align="..." (new) both set alignment.
         if let Some(v) = attr_str(pentry, "size") {
-            alignment = v.parse().map_err(|_| KunaError::lowlevel("bad <pentry> size"))?;
+            alignment = v
+                .parse()
+                .map_err(|_| KunaError::lowlevel("bad <pentry> size"))?;
         }
         if let Some(v) = attr_str(pentry, "align") {
-            alignment = v.parse().map_err(|_| KunaError::lowlevel("bad <pentry> align"))?;
+            alignment = v
+                .parse()
+                .map_err(|_| KunaError::lowlevel("bad <pentry> align"))?;
         }
         if let Some(v) = attr_str(pentry, "storage").or_else(|| attr_str(pentry, "metatype")) {
             type_ = string2typeclass(&v)?;
@@ -7269,16 +7521,25 @@ impl Architecture {
         }
         // Storage address: <register name=".."/> or <addr space=".." offset=".."/>.
         let (space, mut addressbase, register) = self.decode_pentry_storage(pentry)?;
-        let extension = crate::p4_calls::kuna_registerslots::decode(
-            pentry, register, size, alignment, flags,
-        )?;
+        let extension =
+            crate::p4_calls::kuna_registerslots::decode(pentry, register, size, alignment, flags)?;
         if let Some(extension) = &extension {
             addressbase = extension.input.offset;
         }
         flags |= crate::p4_calls::kuna_stackparamalign::decode(pentry, &space, alignment, size)?;
         let mut entry = crate::fspec::ParamEntry::seed(
-            group, type_, space, addressbase, size, minsize, alignment, flags, normalstack,
-            grouped, prev, self.manage(),
+            group,
+            type_,
+            space,
+            addressbase,
+            size,
+            minsize,
+            alignment,
+            flags,
+            normalstack,
+            grouped,
+            prev,
+            self.manage(),
         )?;
         entry.register_extension = extension;
         Ok(entry)
@@ -7288,7 +7549,11 @@ impl Architecture {
     fn decode_pentry_storage(
         &self,
         pentry: &Rc<unlace_base::xml::Element>,
-    ) -> KunaResult<(Rc<unlace_base::space::AddrSpace>, uintb, Option<unlace_num::pcoderaw::VarnodeData>)> {
+    ) -> KunaResult<(
+        Rc<unlace_base::space::AddrSpace>,
+        uintb,
+        Option<unlace_num::pcoderaw::VarnodeData>,
+    )> {
         for child in pentry.get_children().iter() {
             match child.get_name() {
                 "register" => {
@@ -7329,7 +7594,9 @@ impl Architecture {
                 _ => {}
             }
         }
-        Err(KunaError::lowlevel("<pentry> has no <register>/<addr> storage"))
+        Err(KunaError::lowlevel(
+            "<pentry> has no <register>/<addr> storage",
+        ))
     }
 
     /// Resolve a `<addr space="join" piece1=".." piece2=".."/>` element to the
@@ -7389,13 +7656,17 @@ impl Architecture {
                 None => {
                     // Register-name piece: C++ `getTrans()->getRegister(attrVal)`.
                     let vd = self.translate.get_register_varnode(attr_val.as_bytes())?;
-                    VarnodeStorage { space: vd.space, offset: vd.offset, size: vd.size }
+                    VarnodeStorage {
+                        space: vd.space,
+                        offset: vd.offset,
+                        size: vd.size,
+                    }
                 }
                 Some(offpos) => {
                     let rest = &attr_val[offpos + 1..];
-                    let szrel = rest
-                        .find(':')
-                        .ok_or_else(|| KunaError::lowlevel("join address piece attribute is malformed"))?;
+                    let szrel = rest.find(':').ok_or_else(|| {
+                        KunaError::lowlevel("join address piece attribute is malformed")
+                    })?;
                     let szpos = offpos + 1 + szrel;
                     let spcname = &attr_val[..offpos];
                     let space = self.manage().get_space_by_name(spcname).cloned();
@@ -7407,7 +7678,11 @@ impl Architecture {
                     } else {
                         size64 as u32 // cast: checked above (uintb -> uint4)
                     };
-                    VarnodeStorage { space, offset, size }
+                    VarnodeStorage {
+                        space,
+                        offset,
+                        size,
+                    }
                 }
             };
             _sizesum = _sizesum.wrapping_add(vdat.size);
@@ -7426,7 +7701,10 @@ impl Architecture {
     pub fn build_action(&mut self) {
         let stackspace = self.manage().get_stack_space().cloned();
         let stackspace_index = stackspace.as_ref().map(|s| s.get_index());
-        let truncated = self.manage().get_default_data_space().is_some_and(|s| s.is_truncated());
+        let truncated = self
+            .manage()
+            .get_default_data_space()
+            .is_some_and(|s| s.is_truncated());
         crate::universalaction::install_universal(
             &mut self.allacts,
             stackspace,
@@ -7535,7 +7813,9 @@ impl Architecture {
         // 8-byte defaults so `getFloatFormat(4)`/`getFloatFormat(8)` resolve.
         // Without this the `PrintC::push_float` path (a `float8` constant literal)
         // has no FloatFormat and renders `FLOAT_UNKNOWN` instead of `1.123…`.
-        self.translate.translate_base_mut().set_default_float_formats();
+        self.translate
+            .translate_base_mut()
+            .set_default_float_formats();
         // C++ `Architecture::restoreFromSpec` runs `parseCompilerConfig`
         // (architecture.cc:647) after `parseProcessorConfig`; the cspec
         // `<stackpointer>` element (parseCompilerConfig -> ELEM_STACKPOINTER ->
@@ -7574,7 +7854,10 @@ impl Architecture {
         // together by parseInject — the MIPS `setISAMode` fixup that makes the
         // dead ISA-mode-switch CALLOTHER injectable.
         crate::kuna_callmechanisms::register(
-            self.cspec_xml.as_deref().map(std::str::from_utf8).transpose()
+            self.cspec_xml
+                .as_deref()
+                .map(std::str::from_utf8)
+                .transpose()
                 .map_err(|_| KunaError::lowlevel("Compiler specification is not UTF-8"))?,
             self.translate.manager_rc().as_ref(),
             &mut self.pcodeinjectlib,
@@ -7754,14 +8037,20 @@ impl ArchOptionContext for Architecture {
                 self.share_proto_models();
                 Ok(())
             }
-            None => Err(KunaError::lowlevel(format!("Unknown prototype model :{name}"))),
+            None => Err(KunaError::lowlevel(format!(
+                "Unknown prototype model :{name}"
+            ))),
         }
     }
     fn set_eval_current_model(&mut self, name: &str) -> KunaResult<()> {
         // C++ `glb->evalfp_current = getModel(p1)`.
         match self.proto_models.get(name).cloned() {
             Some(model) => {
-                if !self.evalfp_current.as_ref().is_some_and(|old| Rc::ptr_eq(old, &model)) {
+                if !self
+                    .evalfp_current
+                    .as_ref()
+                    .is_some_and(|old| Rc::ptr_eq(old, &model))
+                {
                     self.kuna_callwide.clear();
                 }
                 self.evalfp_current = Some(model);
@@ -7910,7 +8199,11 @@ impl ArchOptionContext for Architecture {
 impl crate::pcodeinject::InjectArchitecture for Architecture {
     fn get_default_code_space(&self) -> Rc<AddrSpace> {
         // C++ `glb->getDefaultCodeSpace()`.
-        Rc::clone(self.manage().get_default_code_space().expect("no default code space"))
+        Rc::clone(
+            self.manage()
+                .get_default_code_space()
+                .expect("no default code space"),
+        )
     }
     fn get_unique_space(&self) -> Rc<AddrSpace> {
         // C++ `glb->getUniqueSpace()`.
@@ -7951,8 +8244,16 @@ impl crate::userop::UseropArchitecture for Architecture {
         let size_input = core.size_input();
         // get_size() is a uint4 (the InjectParameter size); narrow to int4 the
         // same way the C++ reads `getInput(k).getSize()` into an int4.
-        let in0 = if size_input > 0 { core.get_input(0).get_size() as int4 } else { 0 };
-        let in1 = if size_input > 1 { core.get_input(1).get_size() as int4 } else { 0 };
+        let in0 = if size_input > 0 {
+            core.get_input(0).get_size() as int4
+        } else {
+            0
+        };
+        let in1 = if size_input > 1 {
+            core.get_input(1).get_size() as int4
+        } else {
+            0
+        };
         Ok((size_output, size_input, in0, in1))
     }
 }
@@ -8021,7 +8322,9 @@ impl crate::userop::UseropTypeArchitecture for BuiltinTypeArch {
             .expect("builtin: getTypePointer")
     }
     fn get_base_int(&self, size: int4) -> Rc<crate::dtype::Datatype> {
-        self.types.get_base(size, type_metatype::TYPE_INT).expect("builtin: getBase(INT)")
+        self.types
+            .get_base(size, type_metatype::TYPE_INT)
+            .expect("builtin: getBase(INT)")
     }
     fn get_type_char(&self) -> Rc<crate::dtype::Datatype> {
         self.types
@@ -8034,7 +8337,9 @@ impl crate::userop::UseropTypeArchitecture for BuiltinTypeArch {
             .expect("builtin: getTypeChar(wchar)")
     }
     fn get_type_bool(&self) -> Rc<crate::dtype::Datatype> {
-        self.types.get_base(1, type_metatype::TYPE_BOOL).expect("builtin: getBase(BOOL)")
+        self.types
+            .get_base(1, type_metatype::TYPE_BOOL)
+            .expect("builtin: getBase(BOOL)")
     }
     fn get_va_list_pointer(&self) -> Option<Rc<crate::dtype::Datatype>> {
         use crate::dtype::{TypeFactory, TypeField};
@@ -8043,20 +8348,27 @@ impl crate::userop::UseropTypeArchitecture for BuiltinTypeArch {
         }
         let tag = self.types.get_type_struct("__va_list_tag").ok()?;
         let uint = self.types.get_base(4, type_metatype::TYPE_UINT).ok()?;
-        let void_ptr = self.types.get_type_pointer(8, self.types.get_type_void().ok()?, 1).ok()?;
-        let field = |ident: int4, offset: int4, name: &str, ty: &Rc<crate::dtype::Datatype>| TypeField {
-            ident,
-            offset,
-            name: name.to_string(),
-            field_type: Rc::clone(ty),
-        };
+        let void_ptr = self
+            .types
+            .get_type_pointer(8, self.types.get_type_void().ok()?, 1)
+            .ok()?;
+        let field =
+            |ident: int4, offset: int4, name: &str, ty: &Rc<crate::dtype::Datatype>| TypeField {
+                ident,
+                offset,
+                name: name.to_string(),
+                field_type: Rc::clone(ty),
+            };
         let fields = vec![
             field(0, 0, "gp_offset", &uint),
             field(1, 4, "fp_offset", &uint),
             field(2, 8, "overflow_arg_area", &void_ptr),
             field(3, 16, "reg_save_area", &void_ptr),
         ];
-        let tag = self.types.set_fields_struct_raw(&tag, fields, Vec::new(), 24, 8, 0).ok()?;
+        let tag = self
+            .types
+            .set_fields_struct_raw(&tag, fields, Vec::new(), 24, 8, 0)
+            .ok()?;
         self.types.get_type_pointer(8, tag, 1).ok()
     }
 }

@@ -31,14 +31,16 @@ use std::path::PathBuf;
 use unlace_console::engine::bootstrap_from_object;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// The vendored stripped C++ try/catch fixture (shared with the unlace-analysis
 /// LSDA unit tests).
 fn eh_lsda() -> String {
-    let p = repo_root()
-        .join("decompiler/crates/unlace-analysis/tests/fixtures/eh_lsda_x86_64");
+    let p = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/eh_lsda_x86_64");
     p.to_str().expect("UTF-8 fixture path").to_string()
 }
 
@@ -57,7 +59,8 @@ fn bootstrap_with_eh_frame_full(on: bool) -> unlace_console::engine::ConsoleProg
     }
     // Analysis facts commit at `read symbols` (gated by the per-pass flags), not
     // eagerly at bootstrap — trigger that commit after the option is applied.
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 

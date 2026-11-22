@@ -8,10 +8,10 @@
 //! result as `summary.runtime`; every other binary subcommand prints the
 //! actionable entries as one `note:` line each on stderr (see `docs/cli.md`).
 
-use unlace_analysis::analyzers::sourcelang::{effective_compiler_bytes, Compiler};
 use object::{Object, ObjectSection};
 use regex::bytes::Regex;
 use std::sync::OnceLock;
+use unlace_analysis::analyzers::sourcelang::{Compiler, effective_compiler_bytes};
 
 use crate::jsonfmt::Json;
 
@@ -103,11 +103,18 @@ fn pe_view(b: &[u8]) -> Option<PeView> {
         .map_while(|i| b.get(table + i * 40..table + i * 40 + 8))
         .map(|n| n.iter().copied().take_while(|&c| c != 0).collect())
         .collect();
-    let export_rva = (ndirs > 0).then(|| u32_at(b, dirs_at)).flatten().filter(|&rva| rva != 0);
+    let export_rva = (ndirs > 0)
+        .then(|| u32_at(b, dirs_at))
+        .flatten()
+        .filter(|&rva| rva != 0);
     let debug_header_export = export_rva
         .and_then(|rva| pe_exports(b, table, nsections, rva, b"DotNetRuntimeDebugHeader"))
         .unwrap_or(false);
-    Some(PeView { section_names, clr, debug_header_export })
+    Some(PeView {
+        section_names,
+        clr,
+        debug_header_export,
+    })
 }
 
 /// The file offset of `rva` under the section table at `table`.
@@ -122,7 +129,13 @@ fn pe_offset(b: &[u8], table: usize, nsections: usize, rva: u32) -> Option<usize
 
 /// Whether the export directory at `export_rva` names `name`. The name pointer
 /// table of a PE is sorted, so this is a binary search over it.
-fn pe_exports(b: &[u8], table: usize, nsections: usize, export_rva: u32, name: &[u8]) -> Option<bool> {
+fn pe_exports(
+    b: &[u8],
+    table: usize,
+    nsections: usize,
+    export_rva: u32,
+    name: &[u8],
+) -> Option<bool> {
     let offset = |rva: u32| pe_offset(b, table, nsections, rva);
     let dir = offset(export_rva)?;
     let names = offset(u32_at(b, dir.checked_add(32)?)?)?;
@@ -149,7 +162,9 @@ fn pe_exports(b: &[u8], table: usize, nsections: usize, export_rva: u32, name: &
 /// is rejected by the version range and the library name.
 fn pyinstaller_version(b: &[u8], at: usize) -> Option<String> {
     let field = |i: usize| -> Option<u32> {
-        Some(u32::from_be_bytes(b.get(at + 8 + i * 4..at + 12 + i * 4)?.try_into().ok()?))
+        Some(u32::from_be_bytes(
+            b.get(at + 8 + i * 4..at + 12 + i * 4)?.try_into().ok()?,
+        ))
     };
     let pyvers = field(3)?;
     let (major, minor) = match pyvers {
@@ -158,7 +173,9 @@ fn pyinstaller_version(b: &[u8], at: usize) -> Option<String> {
         _ => return None,
     };
     let libname = b.get(at + 24..(at + 88).min(b.len())).unwrap_or(&[]);
-    let names_python = libname.windows(6).any(|w| w.eq_ignore_ascii_case(b"python"));
+    let names_python = libname
+        .windows(6)
+        .any(|w| w.eq_ignore_ascii_case(b"python"));
     (names_python || b.len() == at + 24).then(|| format!("{major}.{minor}"))
 }
 
@@ -199,7 +216,13 @@ fn nativeaot_version(b: &[u8], pe: Option<&PeView>) -> Option<Option<String>> {
 }
 
 fn hint(id: &'static str, version: Option<String>, text: String, actionable: bool) -> RuntimeHint {
-    RuntimeHint { id, version, hint: text, actionable, crates: None }
+    RuntimeHint {
+        id,
+        version,
+        hint: text,
+        actionable,
+        crates: None,
+    }
 }
 
 /// Recognize the runtimes and packers `bytes` carries. `toolchain` adds the Go
@@ -271,15 +294,34 @@ pub fn detect(bytes: &[u8], toolchain: bool) -> Vec<RuntimeHint> {
         ));
     }
     let upx_sections = pe.as_ref().is_some_and(|p| {
-        p.section_names.iter().any(|n| n.as_slice() == b"UPX0" || n.as_slice() == b"UPX1")
+        p.section_names
+            .iter()
+            .any(|n| n.as_slice() == b"UPX0" || n.as_slice() == b"UPX1")
     });
-    let upx_magic = bytes[..bytes.len().min(0x1000)].windows(4).any(|w| w == b"UPX!");
+    let upx_magic = bytes[..bytes.len().min(0x1000)]
+        .windows(4)
+        .any(|w| w == b"UPX!");
     if upx_sections || upx_magic || unlace_analysis::upx::detect(bytes).is_some() {
-        out.push(hint("upx", None, "UPX packed: run 'unlace unpack'".into(), true));
+        out.push(hint(
+            "upx",
+            None,
+            "UPX packed: run 'unlace unpack'".into(),
+            true,
+        ));
     } else if pe.is_some() && unlace_analysis::neolite::detect(bytes) {
-        out.push(hint("neolite", None, "NEOLite packed: run 'unlace unpack'".into(), true));
+        out.push(hint(
+            "neolite",
+            None,
+            "NEOLite packed: run 'unlace unpack'".into(),
+            true,
+        ));
     } else if unlace_analysis::pklite::detect(bytes) {
-        out.push(hint("pklite", None, "PKLITE packed: run 'unlace unpack'".into(), true));
+        out.push(hint(
+            "pklite",
+            None,
+            "PKLITE packed: run 'unlace unpack'".into(),
+            true,
+        ));
     }
     if windows_only(Marker::TwinBasic) {
         out.push(hint(
@@ -314,8 +356,12 @@ pub fn detect(bytes: &[u8], toolchain: bool) -> Vec<RuntimeHint> {
                     .as_deref()
                     .map(|v| format!("Rust binary (rustc {v})"))
                     .unwrap_or_else(|| "Rust binary".into());
-                let mut row =
-                    hint("rust", version, format!("{label}: output defaults to --language rust"), false);
+                let mut row = hint(
+                    "rust",
+                    version,
+                    format!("{label}: output defaults to --language rust"),
+                    false,
+                );
                 row.crates = Some(unlace_analysis::sourcelang::registry_crates(bytes));
                 out.push(row);
             }
@@ -333,7 +379,10 @@ pub fn to_json(hints: &[RuntimeHint]) -> Json {
             .map(|h| {
                 let mut row = vec![
                     ("id".into(), Json::Str(h.id.into())),
-                    ("version".into(), h.version.clone().map(Json::Str).unwrap_or(Json::Null)),
+                    (
+                        "version".into(),
+                        h.version.clone().map(Json::Str).unwrap_or(Json::Null),
+                    ),
                     ("hint".into(), Json::Str(h.hint.clone())),
                     ("actionable".into(), Json::Bool(h.actionable)),
                 ];
@@ -383,7 +432,10 @@ const NOTED_SUBCOMMANDS: &[&str] = &[
 pub fn note_for_invocation(sub: &str, rest: &[String]) {
     if !NOTED_SUBCOMMANDS.contains(&sub)
         || rest.iter().any(|a| {
-            matches!(a.as_str(), "-h" | "--help" | "--summary" | "--jobs-worker" | "--raw-image")
+            matches!(
+                a.as_str(),
+                "-h" | "--help" | "--summary" | "--jobs-worker" | "--raw-image"
+            )
         })
     {
         return;
@@ -412,7 +464,11 @@ mod tests {
         b[coff + 16..coff + 18].copy_from_slice(&opt_size.to_le_bytes());
         let opt = coff + 20;
         b[opt..opt + 2].copy_from_slice(&opt_magic.to_le_bytes());
-        let (ndirs_at, dirs_at) = if opt_magic == 0x20b { (opt + 108, opt + 112) } else { (opt + 92, opt + 96) };
+        let (ndirs_at, dirs_at) = if opt_magic == 0x20b {
+            (opt + 108, opt + 112)
+        } else {
+            (opt + 92, opt + 96)
+        };
         b[ndirs_at..ndirs_at + 4].copy_from_slice(&16u32.to_le_bytes());
         if clr {
             b[dirs_at + 112..dirs_at + 116].copy_from_slice(&0x2008u32.to_le_bytes());
@@ -463,8 +519,9 @@ mod tests {
     }
 
     fn elf(sections: &[(&[u8], &[u8])]) -> Vec<u8> {
-        use object::{write, Architecture, BinaryFormat, Endianness, SectionKind};
-        let mut obj = write::Object::new(BinaryFormat::Elf, Architecture::X86_64, Endianness::Little);
+        use object::{Architecture, BinaryFormat, Endianness, SectionKind, write};
+        let mut obj =
+            write::Object::new(BinaryFormat::Elf, Architecture::X86_64, Endianness::Little);
         for (name, data) in sections {
             let id = obj.add_section(Vec::new(), name.to_vec(), SectionKind::Data);
             obj.append_section_data(id, data, 1);
@@ -491,7 +548,8 @@ mod tests {
 
     #[test]
     fn nativeaot_version_comes_from_the_comment_section() {
-        let managed: &[(&[u8], &[u8])] = &[(b"__managedcode", b"\xc3"), (b".dotnet_eh_table", b"\0")];
+        let managed: &[(&[u8], &[u8])] =
+            &[(b"__managedcode", b"\xc3"), (b".dotnet_eh_table", b"\0")];
         let decoy: (&[u8], &[u8]) = (b".rodata", b"built with ilc 1.2.3\0");
         let image = elf(&[managed[0], decoy, managed[1], (b".comment", ILC_COMMENT)]);
         assert_eq!(detect(&image, false)[0].version.as_deref(), Some("10.0.2"));
@@ -506,7 +564,10 @@ mod tests {
     fn nativeaot_markers_spelled_out_in_data_are_not_section_names() {
         let image = elf(&[
             (b".text", b"\xc3"),
-            (b".rodata", b"__managedcode\0.dotnet_eh_table\0.NET: ilc 1.2.3\0"),
+            (
+                b".rodata",
+                b"__managedcode\0.dotnet_eh_table\0.NET: ilc 1.2.3\0",
+            ),
             (b".comment", ILC_COMMENT),
         ]);
         assert!(detect(&image, false).is_empty());
@@ -557,16 +618,28 @@ mod tests {
 
     #[test]
     fn nativeaot_windows_pe_is_named_by_its_debug_header_export() {
-        let names: &[&[u8]] = &[b"AppEntry", b"DotNetRuntimeDebugHeader", b"add", b"shutdown"];
+        let names: &[&[u8]] = &[
+            b"AppEntry",
+            b"DotNetRuntimeDebugHeader",
+            b"add",
+            b"shutdown",
+        ];
         for count in 2..=names.len() {
             let hints = detect(&pe_exporting(&names[..count]), false);
             assert_eq!(ids(&hints), ["nativeaot"]);
             assert_eq!(hints[0].version, None);
             assert!(hints[0].hint.starts_with("NativeAOT image:"));
         }
-        assert_eq!(ids(&detect(&pe_exporting(&names[1..2]), false)), ["nativeaot"]);
+        assert_eq!(
+            ids(&detect(&pe_exporting(&names[1..2]), false)),
+            ["nativeaot"]
+        );
 
-        let near: &[&[u8]] = &[b"DotNetRuntimeDebugHeade", b"DotNetRuntimeDebugHeaderV2", b"add"];
+        let near: &[&[u8]] = &[
+            b"DotNetRuntimeDebugHeade",
+            b"DotNetRuntimeDebugHeaderV2",
+            b"add",
+        ];
         assert!(detect(&pe_exporting(near), false).is_empty());
         assert!(detect(&pe_exporting(&[]), false).is_empty());
         let spelled_out = pe(0x20b, false, &[b".text"], b"\0DotNetRuntimeDebugHeader\0");
@@ -582,7 +655,12 @@ mod tests {
         let only_managed = elf(&[(b"__managedcode", b"\xc3"), (b".comment", ILC_COMMENT)]);
         assert!(detect(&only_managed, false).is_empty());
 
-        let pe_image = pe(0x20b, false, &[b".text"], b"__managedcode\0.dotnet_eh_table\0");
+        let pe_image = pe(
+            0x20b,
+            false,
+            &[b".text"],
+            b"__managedcode\0.dotnet_eh_table\0",
+        );
         assert!(detect(&pe_image, false).is_empty());
     }
 
@@ -593,7 +671,10 @@ mod tests {
         let hints = detect(&image, false);
         assert_eq!(ids(&hints), ["pyinstaller"]);
         assert_eq!(hints[0].version.as_deref(), Some("3.13"));
-        assert_eq!(hints[0].hint, "PyInstaller bundle (Python 3.13): extract with pyinstxtractor-ng");
+        assert_eq!(
+            hints[0].hint,
+            "PyInstaller bundle (Python 3.13): extract with pyinstxtractor-ng"
+        );
 
         let mut elf = b"\x7fELF".to_vec();
         elf.resize(0x200, 0);
@@ -613,7 +694,10 @@ mod tests {
 
     #[test]
     fn upx_sections_or_magic_mark_a_packed_image() {
-        assert_eq!(ids(&detect(&pe(0x10b, false, &[b"UPX0", b"UPX1"], &[]), false)), ["upx"]);
+        assert_eq!(
+            ids(&detect(&pe(0x10b, false, &[b"UPX0", b"UPX1"], &[]), false)),
+            ["upx"]
+        );
         let mut elf = b"\x7fELF".to_vec();
         elf.resize(0xe8, 0);
         elf.extend_from_slice(b"UPX!");
@@ -650,6 +734,8 @@ mod tests {
     fn json_rows_carry_id_version_and_hint() {
         let rows = to_json(&[hint("pyinstaller", Some("3.12".into()), "x".into(), true)]);
         let text = crate::jsonfmt::dumps_compact(&rows);
-        assert!(text.contains("\"id\"") && text.contains("\"3.12\"") && text.contains("\"actionable\""));
+        assert!(
+            text.contains("\"id\"") && text.contains("\"3.12\"") && text.contains("\"actionable\"")
+        );
     }
 }

@@ -23,10 +23,10 @@ use std::rc::Rc;
 
 use unlace_base::address::calc_mask;
 use unlace_base::error::KunaError;
-use unlace_base::types::{int4, uintb, Wrap};
+use unlace_base::types::{Wrap, int4, uintb};
 use unlace_decomp::rangeutil::CircleRange;
 use unlace_num::float::FloatFormat;
-use unlace_num::opbehavior::{register_instructions, FloatFormatProvider, OpBehavior};
+use unlace_num::opbehavior::{FloatFormatProvider, OpBehavior, register_instructions};
 use unlace_num::opcodes::OpCode;
 
 // ---------------------------------------------------------------------------
@@ -56,7 +56,9 @@ fn behavior_table() -> Vec<Option<Rc<dyn OpBehavior>>> {
 
 /// Look up the behavior for `opcode` (C++ `glb->inst[opcode]->getBehavior()`).
 fn behavior_for(inst: &[Option<Rc<dyn OpBehavior>>], opcode: OpCode) -> &dyn OpBehavior {
-    inst[opcode as usize].as_deref().expect("behavior registered")
+    inst[opcode as usize]
+        .as_deref()
+        .expect("behavior registered")
 }
 
 // ---------------------------------------------------------------------------
@@ -72,7 +74,11 @@ struct CircleRangeTest {
 impl CircleRangeTest {
     /// C++ `CircleRangeTest(int4 b)`.
     fn with_bytes(b: int4) -> CircleRangeTest {
-        CircleRangeTest { elements: Vec::new(), mask: calc_mask(b), bytes: b }
+        CircleRangeTest {
+            elements: Vec::new(),
+            mask: calc_mask(b),
+            bytes: b,
+        }
     }
 
     /// C++ `CircleRangeTest(const CircleRange &range)`.
@@ -99,7 +105,11 @@ impl CircleRangeTest {
             }
             b / 8
         };
-        CircleRangeTest { elements, mask, bytes }
+        CircleRangeTest {
+            elements,
+            mask,
+            bytes,
+        }
     }
 
     /// C++ `set_intersect`.
@@ -155,7 +165,12 @@ impl CircleRangeTest {
     }
 
     /// C++ `pullbackUnary`.
-    fn pullback_unary(&mut self, inst: &[Option<Rc<dyn OpBehavior>>], opcode: OpCode, insize: int4) {
+    fn pullback_unary(
+        &mut self,
+        inst: &[Option<Rc<dyn OpBehavior>>],
+        opcode: OpCode,
+        insize: int4,
+    ) {
         let behave = behavior_for(inst, opcode);
         let mut res: Vec<uintb> = Vec::new();
         for &el in self.elements.iter() {
@@ -226,7 +241,12 @@ impl CircleRangeTest {
     }
 
     /// C++ `getStartStopStep`.
-    fn get_start_stop_step(&mut self, start: &mut uintb, stop: &mut uintb, step: &mut int4) -> bool {
+    fn get_start_stop_step(
+        &mut self,
+        start: &mut uintb,
+        stop: &mut uintb,
+        step: &mut int4,
+    ) -> bool {
         if self.elements.is_empty() {
             *start = 0;
             *stop = 0;
@@ -603,27 +623,62 @@ fn circlerange_pullbacknegate1() {
 
 #[test]
 fn circlerange_pullbacknegate2() {
-    assert!(test_pullback_unary(0xf0, 0x10, 1, 1, OpCode::CPUI_INT_NEGATE, 1));
+    assert!(test_pullback_unary(
+        0xf0,
+        0x10,
+        1,
+        1,
+        OpCode::CPUI_INT_NEGATE,
+        1
+    ));
 }
 
 #[test]
 fn circlerange_pullbacknegate3() {
-    assert!(test_pullback_unary(0x10, 0x30, 4, 4, OpCode::CPUI_INT_NEGATE, 4));
+    assert!(test_pullback_unary(
+        0x10,
+        0x30,
+        4,
+        4,
+        OpCode::CPUI_INT_NEGATE,
+        4
+    ));
 }
 
 #[test]
 fn circlerange_pullbacknegate4() {
-    assert!(test_pullback_unary(0xfff0, 0x0, 4, 2, OpCode::CPUI_INT_NEGATE, 2));
+    assert!(test_pullback_unary(
+        0xfff0,
+        0x0,
+        4,
+        2,
+        OpCode::CPUI_INT_NEGATE,
+        2
+    ));
 }
 
 #[test]
 fn circlerange_pullbacknegate5() {
-    assert!(test_pullback_unary(0xd1, 0x11, 4, 1, OpCode::CPUI_INT_NEGATE, 1));
+    assert!(test_pullback_unary(
+        0xd1,
+        0x11,
+        4,
+        1,
+        OpCode::CPUI_INT_NEGATE,
+        1
+    ));
 }
 
 #[test]
 fn circlerange_pullbacknegate6() {
-    assert!(test_pullback_unary(0, 0x30, 4, 1, OpCode::CPUI_INT_NEGATE, 1));
+    assert!(test_pullback_unary(
+        0,
+        0x30,
+        4,
+        1,
+        OpCode::CPUI_INT_NEGATE,
+        1
+    ));
 }
 
 #[test]
@@ -633,27 +688,62 @@ fn circlerange_pullbackminus1() {
 
 #[test]
 fn circlerange_pullbackminus2() {
-    assert!(test_pullback_unary(0xf0, 0x10, 1, 1, OpCode::CPUI_INT_2COMP, 1));
+    assert!(test_pullback_unary(
+        0xf0,
+        0x10,
+        1,
+        1,
+        OpCode::CPUI_INT_2COMP,
+        1
+    ));
 }
 
 #[test]
 fn circlerange_pullbackminus3() {
-    assert!(test_pullback_unary(0x10, 0x30, 4, 4, OpCode::CPUI_INT_2COMP, 4));
+    assert!(test_pullback_unary(
+        0x10,
+        0x30,
+        4,
+        4,
+        OpCode::CPUI_INT_2COMP,
+        4
+    ));
 }
 
 #[test]
 fn circlerange_pullbackminus4() {
-    assert!(test_pullback_unary(0xfff0, 0x0, 4, 2, OpCode::CPUI_INT_2COMP, 2));
+    assert!(test_pullback_unary(
+        0xfff0,
+        0x0,
+        4,
+        2,
+        OpCode::CPUI_INT_2COMP,
+        2
+    ));
 }
 
 #[test]
 fn circlerange_pullbackminus5() {
-    assert!(test_pullback_unary(0xd1, 0x11, 4, 1, OpCode::CPUI_INT_2COMP, 1));
+    assert!(test_pullback_unary(
+        0xd1,
+        0x11,
+        4,
+        1,
+        OpCode::CPUI_INT_2COMP,
+        1
+    ));
 }
 
 #[test]
 fn circlerange_pullbackminus6() {
-    assert!(test_pullback_unary(0, 0x30, 4, 1, OpCode::CPUI_INT_2COMP, 1));
+    assert!(test_pullback_unary(
+        0,
+        0x30,
+        4,
+        1,
+        OpCode::CPUI_INT_2COMP,
+        1
+    ));
 }
 
 #[test]
@@ -663,22 +753,50 @@ fn circlerange_pullbackzext1() {
 
 #[test]
 fn circlerange_pullbackzext2() {
-    assert!(test_pullback_unary(0xfff0, 0xff10, 1, 2, OpCode::CPUI_INT_ZEXT, 1));
+    assert!(test_pullback_unary(
+        0xfff0,
+        0xff10,
+        1,
+        2,
+        OpCode::CPUI_INT_ZEXT,
+        1
+    ));
 }
 
 #[test]
 fn circlerange_pullbackzext3() {
-    assert!(test_pullback_unary(0x10, 0x30, 4, 4, OpCode::CPUI_INT_ZEXT, 1));
+    assert!(test_pullback_unary(
+        0x10,
+        0x30,
+        4,
+        4,
+        OpCode::CPUI_INT_ZEXT,
+        1
+    ));
 }
 
 #[test]
 fn circlerange_pullbackzext4() {
-    assert!(test_pullback_unary(0xfff0, 0x0, 4, 2, OpCode::CPUI_INT_ZEXT, 1));
+    assert!(test_pullback_unary(
+        0xfff0,
+        0x0,
+        4,
+        2,
+        OpCode::CPUI_INT_ZEXT,
+        1
+    ));
 }
 
 #[test]
 fn circlerange_pullbackzext5() {
-    assert!(test_pullback_unary(0xffd1, 0x11, 4, 2, OpCode::CPUI_INT_ZEXT, 1));
+    assert!(test_pullback_unary(
+        0xffd1,
+        0x11,
+        4,
+        2,
+        OpCode::CPUI_INT_ZEXT,
+        1
+    ));
 }
 
 #[test]
@@ -693,22 +811,50 @@ fn circlerange_pullbacksext1() {
 
 #[test]
 fn circlerange_pullbacksext2() {
-    assert!(test_pullback_unary(0xfff0, 0x10, 1, 2, OpCode::CPUI_INT_SEXT, 1));
+    assert!(test_pullback_unary(
+        0xfff0,
+        0x10,
+        1,
+        2,
+        OpCode::CPUI_INT_SEXT,
+        1
+    ));
 }
 
 #[test]
 fn circlerange_pullbacksext3() {
-    assert!(test_pullback_unary(0x10, 0x30, 4, 4, OpCode::CPUI_INT_SEXT, 2));
+    assert!(test_pullback_unary(
+        0x10,
+        0x30,
+        4,
+        4,
+        OpCode::CPUI_INT_SEXT,
+        2
+    ));
 }
 
 #[test]
 fn circlerange_pullbacksext4() {
-    assert!(test_pullback_unary(0xfff0, 0x0, 4, 2, OpCode::CPUI_INT_SEXT, 1));
+    assert!(test_pullback_unary(
+        0xfff0,
+        0x0,
+        4,
+        2,
+        OpCode::CPUI_INT_SEXT,
+        1
+    ));
 }
 
 #[test]
 fn circlerange_pullbacksext5() {
-    assert!(test_pullback_unary(0xffd1, 0x11, 4, 2, OpCode::CPUI_INT_SEXT, 1));
+    assert!(test_pullback_unary(
+        0xffd1,
+        0x11,
+        4,
+        2,
+        OpCode::CPUI_INT_SEXT,
+        1
+    ));
 }
 
 #[test]
@@ -718,62 +864,158 @@ fn circlerange_pullbacksext6() {
 
 #[test]
 fn circlerange_pullbackadd1() {
-    assert!(test_pullback_binary(1, 20, 1, 4, OpCode::CPUI_INT_ADD, 0, 0xfffffffd));
+    assert!(test_pullback_binary(
+        1,
+        20,
+        1,
+        4,
+        OpCode::CPUI_INT_ADD,
+        0,
+        0xfffffffd
+    ));
 }
 
 #[test]
 fn circlerange_pullbackadd2() {
-    assert!(test_pullback_binary(0xf0, 0x10, 1, 1, OpCode::CPUI_INT_ADD, 0, 0xfffffffd));
+    assert!(test_pullback_binary(
+        0xf0,
+        0x10,
+        1,
+        1,
+        OpCode::CPUI_INT_ADD,
+        0,
+        0xfffffffd
+    ));
 }
 
 #[test]
 fn circlerange_pullbackadd3() {
-    assert!(test_pullback_binary(0x10, 0x30, 4, 4, OpCode::CPUI_INT_ADD, 0, 0xfffffffd));
+    assert!(test_pullback_binary(
+        0x10,
+        0x30,
+        4,
+        4,
+        OpCode::CPUI_INT_ADD,
+        0,
+        0xfffffffd
+    ));
 }
 
 #[test]
 fn circlerange_pullbackadd4() {
-    assert!(test_pullback_binary(0xfff0, 0x0, 4, 2, OpCode::CPUI_INT_ADD, 0, 0xfffffffd));
+    assert!(test_pullback_binary(
+        0xfff0,
+        0x0,
+        4,
+        2,
+        OpCode::CPUI_INT_ADD,
+        0,
+        0xfffffffd
+    ));
 }
 
 #[test]
 fn circlerange_pullbackadd5() {
-    assert!(test_pullback_binary(0xd1, 0x11, 4, 1, OpCode::CPUI_INT_ADD, 0, 0xfffffffd));
+    assert!(test_pullback_binary(
+        0xd1,
+        0x11,
+        4,
+        1,
+        OpCode::CPUI_INT_ADD,
+        0,
+        0xfffffffd
+    ));
 }
 
 #[test]
 fn circlerange_pullbackadd6() {
-    assert!(test_pullback_binary(0, 0x30, 4, 1, OpCode::CPUI_INT_ADD, 0, 0xfffffffd));
+    assert!(test_pullback_binary(
+        0,
+        0x30,
+        4,
+        1,
+        OpCode::CPUI_INT_ADD,
+        0,
+        0xfffffffd
+    ));
 }
 
 #[test]
 fn circlerange_pullbacksub1() {
-    assert!(test_pullback_binary(1, 20, 1, 4, OpCode::CPUI_INT_SUB, 0, 0xfffffffd));
+    assert!(test_pullback_binary(
+        1,
+        20,
+        1,
+        4,
+        OpCode::CPUI_INT_SUB,
+        0,
+        0xfffffffd
+    ));
 }
 
 #[test]
 fn circlerange_pullbacksub2() {
-    assert!(test_pullback_binary(0xf0, 0x10, 1, 1, OpCode::CPUI_INT_SUB, 0, 0xfffffffd));
+    assert!(test_pullback_binary(
+        0xf0,
+        0x10,
+        1,
+        1,
+        OpCode::CPUI_INT_SUB,
+        0,
+        0xfffffffd
+    ));
 }
 
 #[test]
 fn circlerange_pullbacksub3() {
-    assert!(test_pullback_binary(0x10, 0x30, 4, 4, OpCode::CPUI_INT_SUB, 0, 0xfffffffd));
+    assert!(test_pullback_binary(
+        0x10,
+        0x30,
+        4,
+        4,
+        OpCode::CPUI_INT_SUB,
+        0,
+        0xfffffffd
+    ));
 }
 
 #[test]
 fn circlerange_pullbacksub4() {
-    assert!(test_pullback_binary(0xfff0, 0x0, 4, 2, OpCode::CPUI_INT_SUB, 0, 0xfffffffd));
+    assert!(test_pullback_binary(
+        0xfff0,
+        0x0,
+        4,
+        2,
+        OpCode::CPUI_INT_SUB,
+        0,
+        0xfffffffd
+    ));
 }
 
 #[test]
 fn circlerange_pullbacksub5() {
-    assert!(test_pullback_binary(0xd1, 0x11, 4, 1, OpCode::CPUI_INT_SUB, 0, 0xfffffffd));
+    assert!(test_pullback_binary(
+        0xd1,
+        0x11,
+        4,
+        1,
+        OpCode::CPUI_INT_SUB,
+        0,
+        0xfffffffd
+    ));
 }
 
 #[test]
 fn circlerange_pullbacksub6() {
-    assert!(test_pullback_binary(0, 0x30, 4, 1, OpCode::CPUI_INT_SUB, 0, 0xfffffffd));
+    assert!(test_pullback_binary(
+        0,
+        0x30,
+        4,
+        1,
+        OpCode::CPUI_INT_SUB,
+        0,
+        0xfffffffd
+    ));
 }
 
 #[test]
@@ -977,22 +1219,50 @@ fn circlerange_pushnegate1() {
 
 #[test]
 fn circlerange_pushnegate2() {
-    assert!(test_push_unary(0xf0, 0x10, 1, 1, OpCode::CPUI_INT_NEGATE, 1));
+    assert!(test_push_unary(
+        0xf0,
+        0x10,
+        1,
+        1,
+        OpCode::CPUI_INT_NEGATE,
+        1
+    ));
 }
 
 #[test]
 fn circlerange_pushnegate3() {
-    assert!(test_push_unary(0x10, 0x30, 4, 4, OpCode::CPUI_INT_NEGATE, 4));
+    assert!(test_push_unary(
+        0x10,
+        0x30,
+        4,
+        4,
+        OpCode::CPUI_INT_NEGATE,
+        4
+    ));
 }
 
 #[test]
 fn circlerange_pushnegate4() {
-    assert!(test_push_unary(0xfff0, 0x0, 4, 2, OpCode::CPUI_INT_NEGATE, 2));
+    assert!(test_push_unary(
+        0xfff0,
+        0x0,
+        4,
+        2,
+        OpCode::CPUI_INT_NEGATE,
+        2
+    ));
 }
 
 #[test]
 fn circlerange_pushnegate5() {
-    assert!(test_push_unary(0xd1, 0x11, 4, 1, OpCode::CPUI_INT_NEGATE, 1));
+    assert!(test_push_unary(
+        0xd1,
+        0x11,
+        4,
+        1,
+        OpCode::CPUI_INT_NEGATE,
+        1
+    ));
 }
 
 #[test]
@@ -1017,7 +1287,14 @@ fn circlerange_pushminus3() {
 
 #[test]
 fn circlerange_pushminus4() {
-    assert!(test_push_unary(0xfff0, 0x0, 4, 2, OpCode::CPUI_INT_2COMP, 2));
+    assert!(test_push_unary(
+        0xfff0,
+        0x0,
+        4,
+        2,
+        OpCode::CPUI_INT_2COMP,
+        2
+    ));
 }
 
 #[test]
@@ -1037,7 +1314,14 @@ fn circlerange_pushzext1() {
 
 #[test]
 fn circlerange_pushzext2() {
-    assert!(test_push_unary(0xfff0, 0xff10, 1, 2, OpCode::CPUI_INT_ZEXT, 4));
+    assert!(test_push_unary(
+        0xfff0,
+        0xff10,
+        1,
+        2,
+        OpCode::CPUI_INT_ZEXT,
+        4
+    ));
 }
 
 #[test]
@@ -1052,7 +1336,14 @@ fn circlerange_pushzext4() {
 
 #[test]
 fn circlerange_pushzext5() {
-    assert!(test_push_unary(0xffd1, 0xfff1, 4, 2, OpCode::CPUI_INT_ZEXT, 4));
+    assert!(test_push_unary(
+        0xffd1,
+        0xfff1,
+        4,
+        2,
+        OpCode::CPUI_INT_ZEXT,
+        4
+    ));
 }
 
 #[test]
@@ -1072,7 +1363,14 @@ fn circlerange_pushsext1() {
 
 #[test]
 fn circlerange_pushsext2() {
-    assert!(test_push_unary(0xfff0, 0xff10, 1, 2, OpCode::CPUI_INT_SEXT, 4));
+    assert!(test_push_unary(
+        0xfff0,
+        0xff10,
+        1,
+        2,
+        OpCode::CPUI_INT_SEXT,
+        4
+    ));
 }
 
 #[test]
@@ -1087,7 +1385,14 @@ fn circlerange_pushsext4() {
 
 #[test]
 fn circlerange_pushsext5() {
-    assert!(test_push_unary(0xffd1, 0xfff1, 4, 2, OpCode::CPUI_INT_SEXT, 4));
+    assert!(test_push_unary(
+        0xffd1,
+        0xfff1,
+        4,
+        2,
+        OpCode::CPUI_INT_SEXT,
+        4
+    ));
 }
 
 #[test]
@@ -1102,85 +1407,255 @@ fn circlerange_pushsext7() {
 
 #[test]
 fn circlerange_pushadd1() {
-    assert!(test_push_binary(10, 15, 1, 30, 35, 1, 1, OpCode::CPUI_INT_ADD, 1));
+    assert!(test_push_binary(
+        10,
+        15,
+        1,
+        30,
+        35,
+        1,
+        1,
+        OpCode::CPUI_INT_ADD,
+        1
+    ));
 }
 
 #[test]
 fn circlerange_pushadd2() {
-    assert!(test_push_binary(1, 10, 1, 0xfffffffe, 5, 1, 4, OpCode::CPUI_INT_ADD, 4));
+    assert!(test_push_binary(
+        1,
+        10,
+        1,
+        0xfffffffe,
+        5,
+        1,
+        4,
+        OpCode::CPUI_INT_ADD,
+        4
+    ));
 }
 
 #[test]
 fn circlerange_pushadd3() {
-    assert!(test_push_binary(0, 20, 4, 0xfff0, 6, 2, 2, OpCode::CPUI_INT_ADD, 2));
+    assert!(test_push_binary(
+        0,
+        20,
+        4,
+        0xfff0,
+        6,
+        2,
+        2,
+        OpCode::CPUI_INT_ADD,
+        2
+    ));
 }
 
 #[test]
 fn circlerange_pushadd4() {
-    assert!(test_push_binary(1, 250, 1, 20, 30, 1, 1, OpCode::CPUI_INT_ADD, 1));
+    assert!(test_push_binary(
+        1,
+        250,
+        1,
+        20,
+        30,
+        1,
+        1,
+        OpCode::CPUI_INT_ADD,
+        1
+    ));
 }
 
 #[test]
 fn circlerange_pushmult1() {
-    assert!(test_push_binary(0x1000, 0x1010, 1, 2, 3, 1, 4, OpCode::CPUI_INT_MULT, 4));
+    assert!(test_push_binary(
+        0x1000,
+        0x1010,
+        1,
+        2,
+        3,
+        1,
+        4,
+        OpCode::CPUI_INT_MULT,
+        4
+    ));
 }
 
 #[test]
 fn circlerange_pushmult2() {
-    assert!(test_push_binary(0xfffc, 8, 2, 4, 5, 1, 2, OpCode::CPUI_INT_MULT, 2));
+    assert!(test_push_binary(
+        0xfffc,
+        8,
+        2,
+        4,
+        5,
+        1,
+        2,
+        OpCode::CPUI_INT_MULT,
+        2
+    ));
 }
 
 #[test]
 fn circlerange_pushmult3() {
-    assert!(test_push_binary(5, 133, 1, 2, 3, 1, 1, OpCode::CPUI_INT_MULT, 1));
+    assert!(test_push_binary(
+        5,
+        133,
+        1,
+        2,
+        3,
+        1,
+        1,
+        OpCode::CPUI_INT_MULT,
+        1
+    ));
 }
 
 #[test]
 fn circlerange_pushleft1() {
-    assert!(test_push_binary(1, 5, 1, 1, 2, 1, 4, OpCode::CPUI_INT_LEFT, 4));
+    assert!(test_push_binary(
+        1,
+        5,
+        1,
+        1,
+        2,
+        1,
+        4,
+        OpCode::CPUI_INT_LEFT,
+        4
+    ));
 }
 
 #[test]
 fn circlerange_pushleft2() {
-    assert!(test_push_binary(8, 72, 4, 2, 3, 1, 1, OpCode::CPUI_INT_LEFT, 1));
+    assert!(test_push_binary(
+        8,
+        72,
+        4,
+        2,
+        3,
+        1,
+        1,
+        OpCode::CPUI_INT_LEFT,
+        1
+    ));
 }
 
 #[test]
 fn circlerange_pushsubpiece1() {
-    assert!(test_push_binary(0xfffe, 0x10005, 1, 0, 1, 1, 4, OpCode::CPUI_SUBPIECE, 1));
+    assert!(test_push_binary(
+        0xfffe,
+        0x10005,
+        1,
+        0,
+        1,
+        1,
+        4,
+        OpCode::CPUI_SUBPIECE,
+        1
+    ));
 }
 
 #[test]
 fn circlerange_pushsubpiece2() {
-    assert!(test_push_binary(0xfffe, 0x10005, 1, 1, 2, 1, 4, OpCode::CPUI_SUBPIECE, 1));
+    assert!(test_push_binary(
+        0xfffe,
+        0x10005,
+        1,
+        1,
+        2,
+        1,
+        4,
+        OpCode::CPUI_SUBPIECE,
+        1
+    ));
 }
 
 #[test]
 fn circlerange_pushsubpiece3() {
-    assert!(test_push_binary(0x10f0, 0x1200, 1, 0, 1, 1, 4, OpCode::CPUI_SUBPIECE, 1));
+    assert!(test_push_binary(
+        0x10f0,
+        0x1200,
+        1,
+        0,
+        1,
+        1,
+        4,
+        OpCode::CPUI_SUBPIECE,
+        1
+    ));
 }
 
 #[test]
 fn circlerange_pushright1() {
-    assert!(test_push_binary(0x30a6, 0x30c0, 2, 4, 5, 1, 2, OpCode::CPUI_INT_RIGHT, 2));
+    assert!(test_push_binary(
+        0x30a6,
+        0x30c0,
+        2,
+        4,
+        5,
+        1,
+        2,
+        OpCode::CPUI_INT_RIGHT,
+        2
+    ));
 }
 
 #[test]
 fn circlerange_pushright2() {
-    assert!(test_push_binary(0xfe00, 0xffc0, 0x20, 9, 10, 1, 2, OpCode::CPUI_INT_RIGHT, 2));
+    assert!(test_push_binary(
+        0xfe00,
+        0xffc0,
+        0x20,
+        9,
+        10,
+        1,
+        2,
+        OpCode::CPUI_INT_RIGHT,
+        2
+    ));
 }
 
 #[test]
 fn circlerange_pushright3() {
-    assert!(test_push_binary(7, 10, 1, 4, 5, 1, 4, OpCode::CPUI_INT_RIGHT, 4));
+    assert!(test_push_binary(
+        7,
+        10,
+        1,
+        4,
+        5,
+        1,
+        4,
+        OpCode::CPUI_INT_RIGHT,
+        4
+    ));
 }
 
 #[test]
 fn circlerange_pushsright1() {
-    assert!(test_push_binary(0x3000, 0x3064, 4, 3, 4, 1, 2, OpCode::CPUI_INT_SRIGHT, 2));
+    assert!(test_push_binary(
+        0x3000,
+        0x3064,
+        4,
+        3,
+        4,
+        1,
+        2,
+        OpCode::CPUI_INT_SRIGHT,
+        2
+    ));
 }
 
 #[test]
 fn circlerange_pushsright2() {
-    assert!(test_push_binary(0xfff0, 0x24, 4, 3, 4, 1, 2, OpCode::CPUI_INT_SRIGHT, 2));
+    assert!(test_push_binary(
+        0xfff0,
+        0x24,
+        4,
+        3,
+        4,
+        1,
+        2,
+        OpCode::CPUI_INT_SRIGHT,
+        2
+    ));
 }

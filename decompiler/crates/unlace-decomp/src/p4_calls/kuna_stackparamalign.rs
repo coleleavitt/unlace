@@ -2,7 +2,7 @@
 use super::fspec::param_entry_flags::IGNORE_TYPE_ALIGN;
 use unlace_base::{
     error::{KunaError, KunaResult},
-    space::{spacetype, AddrSpace},
+    space::{AddrSpace, spacetype},
     xml::Element,
 };
 

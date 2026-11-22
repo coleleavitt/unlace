@@ -32,23 +32,24 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::{int4, uint4};
 use unlace_num::opcodes::OpCode;
 
-use unlace_decomp::dtype::{type_metatype, Datatype};
+use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
+use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::inject_sleigh::PcodeInjectLibrarySleigh;
 use unlace_decomp::op::pcodeop_flags;
-use unlace_decomp::overrides::{flow_type, Override};
+use unlace_decomp::overrides::{Override, flow_type};
 use unlace_decomp::pcodeinject::{CALLFIXUP_TYPE, CALLOTHERFIXUP_TYPE};
-use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -82,7 +83,9 @@ fn dt(size: int4) -> Rc<Datatype> {
 
 fn opcode_flags(opc: OpCode) -> uint4 {
     match opc {
-        OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH | OpCode::CPUI_BRANCHIND => pcodeop_flags::branch,
+        OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH | OpCode::CPUI_BRANCHIND => {
+            pcodeop_flags::branch
+        }
         OpCode::CPUI_RETURN => pcodeop_flags::returns,
         _ => 0,
     }
@@ -91,7 +94,8 @@ fn opcode_flags(opc: OpCode) -> uint4 {
 fn mk_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
     let ram = ram_space(fd);
     let op = fd.new_op(inputs, Address::new(ram, off));
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, opcode_flags(opc), format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, opcode_flags(opc), format!("{opc:?}")));
     op
 }
 
@@ -153,7 +157,8 @@ fn w10_override_flow_return_on_call_is_complex_error() {
     fd.op_set_input(call, tgt, 0).unwrap();
     let err = fd.override_flow(&addr, flow_type::RETURN).unwrap_err();
     assert!(
-        err.explain().contains("Do not currently support complex overrides"),
+        err.explain()
+            .contains("Do not currently support complex overrides"),
         "got: {}",
         err.explain()
     );
@@ -176,7 +181,8 @@ fn w10_override_flow_call_on_cbranch_is_cbranch_error() {
     // CALL override on a CBRANCH: the CALL arm explicitly rejects CBRANCH.
     let err = fd.override_flow(&addr, flow_type::CALL).unwrap_err();
     assert!(
-        err.explain().contains("Do not currently support CBRANCH overrides"),
+        err.explain()
+            .contains("Do not currently support CBRANCH overrides"),
         "got: {}",
         err.explain()
     );
@@ -203,8 +209,11 @@ fn w10_override_flow_call_return_branchind_becomes_callind_plus_return() {
     // BRANCHIND was rewritten to CALLIND (the CALL/CALL_RETURN arm).
     assert_eq!(code_of(&fd, bi), OpCode::CPUI_CALLIND);
     // Exactly one new op was inserted, and it is a RETURN.
-    let new_ops: Vec<OpId> =
-        fd.obank().iter_dead().filter(|o| !before.contains(o)).collect();
+    let new_ops: Vec<OpId> = fd
+        .obank()
+        .iter_dead()
+        .filter(|o| !before.contains(o))
+        .collect();
     assert_eq!(new_ops.len(), 1, "exactly one RETURN op inserted");
     assert_eq!(code_of(&fd, new_ops[0]), OpCode::CPUI_RETURN);
 }
@@ -218,7 +227,10 @@ fn w10_override_flow_call_return_branchind_becomes_callind_plus_return() {
 fn w10_string_to_type_exhaustive_and_unknown_is_none() {
     assert_eq!(Override::string_to_type(b"branch"), flow_type::BRANCH);
     assert_eq!(Override::string_to_type(b"call"), flow_type::CALL);
-    assert_eq!(Override::string_to_type(b"callreturn"), flow_type::CALL_RETURN);
+    assert_eq!(
+        Override::string_to_type(b"callreturn"),
+        flow_type::CALL_RETURN
+    );
     assert_eq!(Override::string_to_type(b"return"), flow_type::RETURN);
     // Anything else is NONE (the C++ default-return). Includes case mismatch,
     // empty, near-misses, and a function-name-shaped token (no special-casing).
@@ -242,7 +254,12 @@ fn w10_string_to_type_exhaustive_and_unknown_is_none() {
     // NONE is 0 and the four real types are the distinct 1..=4 the C++ enum fixes.
     assert_eq!(flow_type::NONE, 0);
     let mut seen = std::collections::BTreeSet::new();
-    for t in [flow_type::BRANCH, flow_type::CALL, flow_type::CALL_RETURN, flow_type::RETURN] {
+    for t in [
+        flow_type::BRANCH,
+        flow_type::CALL,
+        flow_type::CALL_RETURN,
+        flow_type::RETURN,
+    ] {
         assert!((1..=4).contains(&t));
         assert!(seen.insert(t), "flow types must be distinct");
     }
@@ -286,9 +303,13 @@ fn w10_funcdata_override_reseed_visible_through_getoverride() {
     let addr = Address::new(ram, 0x10007d);
     assert!(!fd.get_override().has_flow_override());
     // Mirror the build_and_follow_flow_with_override re-seed.
-    fd.get_override_mut().insert_flow_override(addr.clone(), flow_type::CALL_RETURN);
+    fd.get_override_mut()
+        .insert_flow_override(addr.clone(), flow_type::CALL_RETURN);
     assert!(fd.get_override().has_flow_override());
-    assert_eq!(fd.get_override().get_flow_override(&addr), flow_type::CALL_RETURN);
+    assert_eq!(
+        fd.get_override().get_flow_override(&addr),
+        flow_type::CALL_RETURN
+    );
 }
 
 // -----------------------------------------------------------------------------
@@ -306,23 +327,47 @@ fn w10_callfixup_getpayloadid_is_name_keyed_no_special_casing() {
     let mut lib = PcodeInjectLibrarySleigh::new(0);
     // Before registration, the name is unknown -> -1 (the IfcFixupApply
     // "Unknown fixup" path).
-    assert_eq!(lib.base.get_payload_id(CALLFIXUP_TYPE, b"guard_dispatch_icall"), -1);
+    assert_eq!(
+        lib.base
+            .get_payload_id(CALLFIXUP_TYPE, b"guard_dispatch_icall"),
+        -1
+    );
     // Register two DISTINCT call-fixup names (the ids are the allocate_inject
     // indices the real decode path hands in).
-    lib.base.register_call_fixup(b"guard_dispatch_icall", 0).unwrap();
+    lib.base
+        .register_call_fixup(b"guard_dispatch_icall", 0)
+        .unwrap();
     lib.base.register_call_fixup(b"alloca_probe", 1).unwrap();
     // Each name resolves to ITS OWN id — the lookup keys on the name, not a fixed
     // slot or a hardcoded function string.
-    assert_eq!(lib.base.get_payload_id(CALLFIXUP_TYPE, b"guard_dispatch_icall"), 0);
+    assert_eq!(
+        lib.base
+            .get_payload_id(CALLFIXUP_TYPE, b"guard_dispatch_icall"),
+        0
+    );
     assert_eq!(lib.base.get_payload_id(CALLFIXUP_TYPE, b"alloca_probe"), 1);
     // A name that was never registered is still -1 (not silently the last id).
-    assert_eq!(lib.base.get_payload_id(CALLFIXUP_TYPE, b"never_registered"), -1);
+    assert_eq!(
+        lib.base.get_payload_id(CALLFIXUP_TYPE, b"never_registered"),
+        -1
+    );
     // The same name under the CALLOTHERFIXUP namespace is -1: namespaces are
     // separate maps (pcodeinject.cc:289-308), no cross-leak.
-    assert_eq!(lib.base.get_payload_id(CALLOTHERFIXUP_TYPE, b"guard_dispatch_icall"), -1);
+    assert_eq!(
+        lib.base
+            .get_payload_id(CALLOTHERFIXUP_TYPE, b"guard_dispatch_icall"),
+        -1
+    );
     // The round-trip name read back from the id matches (getCallFixupName).
-    assert_eq!(lib.base.get_call_fixup_name(0), b"guard_dispatch_icall".to_vec());
+    assert_eq!(
+        lib.base.get_call_fixup_name(0),
+        b"guard_dispatch_icall".to_vec()
+    );
     // Re-registering the SAME name is a hard error (C++ would assert a duplicate);
     // the recovery never silently overwrites a fixup name -> id mapping.
-    assert!(lib.base.register_call_fixup(b"guard_dispatch_icall", 2).is_err());
+    assert!(
+        lib.base
+            .register_call_fixup(b"guard_dispatch_icall", 2)
+            .is_err()
+    );
 }

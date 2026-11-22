@@ -1,7 +1,7 @@
 mod common;
 
 use std::io::Write;
-use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::process::Command;
 use std::time::{Duration, Instant};
 
@@ -69,12 +69,14 @@ fn captures_both_pipes_without_deadlock() {
 #[test]
 fn timeout_stops_a_nonterminating_child() {
     let start = Instant::now();
-    assert!(process::output_with_timeout(
-        &mut child("wait"),
-        Duration::from_millis(100),
-        Duration::from_millis(10),
-    )
-    .is_none());
+    assert!(
+        process::output_with_timeout(
+            &mut child("wait"),
+            Duration::from_millis(100),
+            Duration::from_millis(10),
+        )
+        .is_none()
+    );
     assert!(start.elapsed() < Duration::from_secs(30));
 }
 
@@ -85,10 +87,12 @@ fn missing_tools_are_optional_but_failed_tools_are_not() {
     assert!(process::optional_output(&mut Command::new(absent)).is_none());
     let output = process::optional_output(&mut child("pipes")).unwrap();
     assert_eq!(output.stderr, vec![b'y'; PIPE_BYTES]);
-    assert!(catch_unwind(AssertUnwindSafe(|| {
-        process::optional_output(&mut child("fail"));
-    }))
-    .is_err());
+    assert!(
+        catch_unwind(AssertUnwindSafe(|| {
+            process::optional_output(&mut child("fail"));
+        }))
+        .is_err()
+    );
 }
 
 #[cfg(unix)]
@@ -96,10 +100,12 @@ fn missing_tools_are_optional_but_failed_tools_are_not() {
 fn an_unusable_tool_is_not_missing() {
     let path = common::scratch_file("nonexecutable-tool", "bin");
     std::fs::write(&path, b"not executable").unwrap();
-    assert!(catch_unwind(AssertUnwindSafe(|| {
-        process::optional_output(&mut Command::new(&path));
-    }))
-    .is_err());
+    assert!(
+        catch_unwind(AssertUnwindSafe(|| {
+            process::optional_output(&mut Command::new(&path));
+        }))
+        .is_err()
+    );
     std::fs::remove_file(path).unwrap();
 }
 
@@ -109,12 +115,16 @@ fn required_commands_must_exist_and_succeed() {
     assert_eq!(output.stderr, vec![b'y'; PIPE_BYTES]);
     let absent = common::scratch_file("required-absent-tool", "exe");
     assert!(!absent.exists());
-    assert!(catch_unwind(AssertUnwindSafe(|| {
-        process::required_output(&mut Command::new(absent));
-    }))
-    .is_err());
-    assert!(catch_unwind(AssertUnwindSafe(|| {
-        process::required_output(&mut child("fail"));
-    }))
-    .is_err());
+    assert!(
+        catch_unwind(AssertUnwindSafe(|| {
+            process::required_output(&mut Command::new(absent));
+        }))
+        .is_err()
+    );
+    assert!(
+        catch_unwind(AssertUnwindSafe(|| {
+            process::required_output(&mut child("fail"));
+        }))
+        .is_err()
+    );
 }

@@ -192,9 +192,7 @@ fn last_act_is_terminal_call(listing: &Listing, entry: u64, terminal: &BTreeSet<
         // (a) A call whose static callee is already terminal AND which itself has
         // no valid fall-through (the call is a terminal flow of this function).
         for &callee in &insn.flows {
-            if terminal.contains(&callee)
-                && call_site_has_no_fallthrough(listing, vma, callee)
-            {
+            if terminal.contains(&callee) && call_site_has_no_fallthrough(listing, vma, callee) {
                 has_terminal_call = true;
             }
         }

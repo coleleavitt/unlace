@@ -1,7 +1,7 @@
 //! (kuna `blobs`) The image containers: each walk returns the file's exact
 //! length when `d` starts with a whole, well-formed file.
 
-use super::{be32, crc32, le16, le32, Work};
+use super::{Work, be32, crc32, le16, le32};
 
 const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
 
@@ -100,7 +100,13 @@ pub(super) fn gif(d: &[u8], work: &mut Work) -> Option<usize> {
     if !(d.starts_with(b"GIF87a") || d.starts_with(b"GIF89a")) {
         return None;
     }
-    let table = |flags: u8| if flags & 0x80 != 0 { 3usize << ((flags & 7) + 1) } else { 0 };
+    let table = |flags: u8| {
+        if flags & 0x80 != 0 {
+            3usize << ((flags & 7) + 1)
+        } else {
+            0
+        }
+    };
     let mut p = 13 + table(*d.get(10)?);
     let mut images = 0usize;
     loop {
@@ -144,7 +150,13 @@ pub(super) fn bmp(d: &[u8]) -> Option<usize> {
     let pixels = le32(d, 10)? as usize;
     let dib = le32(d, 14)? as usize;
     let (width, height, planes, bpp, compression) = match dib {
-        12 => (le16(d, 18)? as u64, le16(d, 20)? as u64, le16(d, 22)?, le16(d, 24)?, 0),
+        12 => (
+            le16(d, 18)? as u64,
+            le16(d, 20)? as u64,
+            le16(d, 22)?,
+            le16(d, 24)?,
+            0,
+        ),
         40 | 52 | 56 | 64 | 108 | 124 => (
             u64::from(le32(d, 18)?),
             u64::from((le32(d, 22)? as i32).unsigned_abs()),
@@ -188,11 +200,19 @@ pub(super) fn ico(d: &[u8], work: &mut Work) -> Option<usize> {
     let mut end = 6 + 16 * count;
     let mut images: Vec<(usize, usize, usize, usize)> = Vec::new();
     for entry in d.get(6..end)?.chunks_exact(16) {
-        if entry[3] != 0 || le16(entry, 4)? > 1 || !matches!(le16(entry, 6)?, 0 | 1 | 4 | 8 | 16 | 24 | 32) {
+        if entry[3] != 0
+            || le16(entry, 4)? > 1
+            || !matches!(le16(entry, 6)?, 0 | 1 | 4 | 8 | 16 | 24 | 32)
+        {
             return None;
         }
         let side = |b: u8| if b == 0 { 256usize } else { b as usize };
-        images.push((le32(entry, 12)? as usize, le32(entry, 8)? as usize, side(entry[0]), side(entry[1])));
+        images.push((
+            le32(entry, 12)? as usize,
+            le32(entry, 8)? as usize,
+            side(entry[0]),
+            side(entry[1]),
+        ));
     }
     images.sort_unstable();
     for (offset, size, width, height) in images {

@@ -23,7 +23,10 @@ fn both(function: &str, directives: &[&str], extra: &[&str]) -> [(String, String
 
 /// [`both`] for a command line that starts with `head`.
 fn surfaces(head: &[&str], directives: &[&str], extra: &[&str]) -> [(String, String, i32); 2] {
-    let sleigh = common::repo_root().join("specs").to_string_lossy().into_owned();
+    let sleigh = common::repo_root()
+        .join("specs")
+        .to_string_lossy()
+        .into_owned();
     let mut args = head.to_vec();
     args.extend(["--sleighpath", sleigh.as_str()]);
     for directive in directives {
@@ -34,13 +37,21 @@ fn surfaces(head: &[&str], directives: &[&str], extra: &[&str]) -> [(String, Str
     args.push("--json");
     let (doc, _, code) = common::run_kuna(&args);
     let parsed: serde_json::Value = serde_json::from_str(&doc).expect("valid decompile JSON");
-    let c = parsed.pointer("/functions/0/code").and_then(serde_json::Value::as_str).unwrap_or_default().to_string();
+    let c = parsed
+        .pointer("/functions/0/code")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+        .to_string();
     [text, (c, doc, code)]
 }
 
 #[test]
 fn octal_prints_the_mask_and_the_mode() {
-    for (c, report, code) in both("is_rwx", &["format is_rwx::0x1460 oct", "format 0x1468 oct"], &[]) {
+    for (c, report, code) in both(
+        "is_rwx",
+        &["format is_rwx::0x1460 oct", "format 0x1468 oct"],
+        &[],
+    ) {
         assert!(c.contains("return (a0 & 0777) == 0755;"), "{c}\n{report}");
         assert!(!report.contains("rejected"), "{report}");
         assert_eq!(code, 0);
@@ -76,21 +87,41 @@ fn an_address_that_reads_no_constant_is_rejected() {
 fn raw_image(entry: &str, directives: &[&str]) -> [(String, String, i32); 2] {
     const BYTES: &str = "31c083ff070f94c0c30f1f800000000048b9410000000100000031c04839cf0f94c0c3";
     let binary = common::scratch_file("assert-format-raw", "bin");
-    let bytes: Vec<u8> = (0..BYTES.len()).step_by(2).map(|i| u8::from_str_radix(&BYTES[i..i + 2], 16).unwrap()).collect();
+    let bytes: Vec<u8> = (0..BYTES.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&BYTES[i..i + 2], 16).unwrap())
+        .collect();
     std::fs::write(&binary, bytes).unwrap();
     let binary = binary.to_string_lossy().into_owned();
-    let head = ["decompile", binary.as_str(), entry, "--raw-image", "--base", "0x1590", "--target", "x86:LE:64:default:gcc"];
+    let head = [
+        "decompile",
+        binary.as_str(),
+        entry,
+        "--raw-image",
+        "--base",
+        "0x1590",
+        "--target",
+        "x86:LE:64:default:gcc",
+    ];
     surfaces(&head, directives, &[])
 }
 
 #[test]
 fn a_constant_printed_as_an_enum_name_is_rejected() {
-    let enumerated = ["function 0x1590=is_blue", "typedef enum color {RED=1,GREEN=2,BLUE=7};", "prototype is_blue int is_blue(color c)"];
+    let enumerated = [
+        "function 0x1590=is_blue",
+        "typedef enum color {RED=1,GREEN=2,BLUE=7};",
+        "prototype is_blue int is_blue(color c)",
+    ];
     let mut directives = enumerated.to_vec();
     directives.push("format 0x1592 dec");
     for (c, report, _) in raw_image("0x1590", &directives) {
         assert!(c.contains("return c == BLUE;"), "{c}\n{report}");
-        assert!(report.contains("the constant read at 0x1592 prints as a name of color, not as a number"), "{report}");
+        assert!(
+            report
+                .contains("the constant read at 0x1592 prints as a name of color, not as a number"),
+            "{report}"
+        );
     }
 }
 
@@ -101,7 +132,10 @@ fn a_character_literal_does_not_take_a_wider_value() {
     directives.push("format 0x15ac char");
     for (c, report, _) in raw_image("0x15a0", &directives) {
         assert!(c.contains("x == 0x100000041"), "{c}\n{report}");
-        assert!(report.contains("a character literal cannot hold 0x100000041"), "{report}");
+        assert!(
+            report.contains("a character literal cannot hold 0x100000041"),
+            "{report}"
+        );
     }
     directives.pop();
     directives.push("format 0x15ac dec");
@@ -114,20 +148,34 @@ fn a_character_literal_does_not_take_a_wider_value() {
 fn a_value_picks_one_of_several_constants() {
     for (c, report, _) in both("scale", &["format 0x1480 oct"], &[]) {
         assert!(c.contains("return a0 * 8 + 7;"), "{c}");
-        assert!(report.contains("reads several constants (0x7, 0x8); name one by its value"), "{report}");
+        assert!(
+            report.contains("reads several constants (0x7, 0x8); name one by its value"),
+            "{report}"
+        );
     }
-    for (c, report, _) in both("scale", &["format 0x1480 oct 7", "format 0x1480 hex 0x8"], &[]) {
+    for (c, report, _) in both(
+        "scale",
+        &["format 0x1480 oct 7", "format 0x1480 hex 0x8"],
+        &[],
+    ) {
         assert!(c.contains("return a0 * 0x8 + 07;"), "{c}\n{report}");
     }
     for (_, report, _) in both("scale", &["format 0x1480 oct 9"], &[]) {
-        assert!(report.contains("no constant read at 0x1480 holds that value (it reads 0x7, 0x8)"), "{report}");
+        assert!(
+            report.contains("no constant read at 0x1480 holds that value (it reads 0x7, 0x8)"),
+            "{report}"
+        );
     }
 }
 
 #[test]
 fn a_file_of_directives_formats_and_isolates() {
     let path = common::scratch_file("assert-format-isolate", "kuna");
-    std::fs::write(&path, "# the multiplier, in octal\nformat reuse::0x14a6 oct\nisolate reuse::v1 # two variables\n").unwrap();
+    std::fs::write(
+        &path,
+        "# the multiplier, in octal\nformat reuse::0x14a6 oct\nisolate reuse::v1 # two variables\n",
+    )
+    .unwrap();
     let file = format!("@{}", path.display());
     for (c, report, _) in both("reuse", &[file.as_str()], &[]) {
         assert!(c.contains("v2 = v1 * 03 + 1;"), "{c}\n{report}");
@@ -140,7 +188,10 @@ fn an_isolated_local_is_not_merged_with_its_successor() {
         assert!(c.contains("v1 = v1 * 3 + 1;"), "{c}");
     }
     for (c, report, _) in both("reuse", &["isolate v1"], &[]) {
-        assert!(c.contains("v2 = v1 * 3 + 1;") && c.contains("k(v2);"), "{c}\n{report}");
+        assert!(
+            c.contains("v2 = v1 * 3 + 1;") && c.contains("k(v2);"),
+            "{c}\n{report}"
+        );
         assert!(!report.contains("rejected"), "{report}");
     }
     for (c, report, _) in both("reuse", &["name v1 first", "isolate first"], &[]) {
@@ -154,7 +205,10 @@ fn an_isolated_parameter_is_not_reused_for_a_later_value() {
         assert!(c.contains("a0 *= 3;"), "{c}");
     }
     for (c, report, _) in both("triple", &["isolate a0"], &[]) {
-        assert!(c.contains("v2 = a0 * 3;") && c.contains("return v2;"), "{c}\n{report}");
+        assert!(
+            c.contains("v2 = a0 * 3;") && c.contains("return v2;"),
+            "{c}\n{report}"
+        );
     }
 }
 
@@ -163,7 +217,11 @@ fn a_name_no_local_has_and_another_function_are_rejected() {
     for (_, report, _) in both("reuse", &["isolate v9"], &[]) {
         assert!(report.contains("No symbol named: v9"), "{report}");
     }
-    for (_, report, _) in both("reuse", &["isolate triple::a0", "format is_rwx::0x1460 oct"], &[]) {
+    for (_, report, _) in both(
+        "reuse",
+        &["isolate triple::a0", "format is_rwx::0x1460 oct"],
+        &[],
+    ) {
         assert_eq!(report.matches("rejected").count(), 2, "{report}");
     }
 }

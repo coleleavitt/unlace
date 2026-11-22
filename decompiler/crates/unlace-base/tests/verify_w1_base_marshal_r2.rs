@@ -39,10 +39,10 @@ use std::rc::Rc;
 
 use unlace_base::error::KunaError;
 use unlace_base::marshal::{
-    Decoder, Encoder, IdRegistry, PackedDecode, PackedEncode, XmlDecode, XmlEncode, ATTRIB_UNKNOWN,
-    ATTRIB_VAL, ELEM_DATA,
+    ATTRIB_UNKNOWN, ATTRIB_VAL, Decoder, ELEM_DATA, Encoder, IdRegistry, PackedDecode,
+    PackedEncode, XmlDecode, XmlEncode,
 };
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, addrspace_flags, spacetype};
 
 fn test_manager() -> AddrSpaceManager {
     let mut manager = AddrSpaceManager::new();
@@ -99,10 +99,17 @@ fn verify_marshal_indexed_attr_negative_overflow_boundary_r2() {
         "negative overflow of an unsigned destination stores UINT_MAX (not min)"
     );
     assert!(
-        matches!(indexed_attr_id("val-0").unwrap_err(), KunaError::Lowlevel { .. }),
+        matches!(
+            indexed_attr_id("val-0").unwrap_err(),
+            KunaError::Lowlevel { .. }
+        ),
         "negated zero is still zero -> Bad indexed attribute"
     );
-    assert_eq!(indexed_attr_id("val007").unwrap(), 30, "leading zeros are decimal: 7 -> 24+6");
+    assert_eq!(
+        indexed_attr_id("val007").unwrap(),
+        30,
+        "leading zeros are decimal: 7 -> 24+6"
+    );
 }
 
 /// Partial extraction: digits stop at the first non-digit; a '-' AFTER
@@ -110,10 +117,21 @@ fn verify_marshal_indexed_attr_negative_overflow_boundary_r2() {
 /// extraction (val 0 -> throw).  All oracle-pinned.
 #[test]
 fn verify_marshal_indexed_attr_suffix_stops_at_first_nondigit_r2() {
-    assert_eq!(indexed_attr_id("val1-2").unwrap(), 24, "extracts 1, stops at '-'");
-    assert_eq!(indexed_attr_id("val12.7").unwrap(), 35, "extracts 12, stops at '.'");
+    assert_eq!(
+        indexed_attr_id("val1-2").unwrap(),
+        24,
+        "extracts 1, stops at '-'"
+    );
+    assert_eq!(
+        indexed_attr_id("val12.7").unwrap(),
+        35,
+        "extracts 12, stops at '.'"
+    );
     assert!(
-        matches!(indexed_attr_id("val.5").unwrap_err(), KunaError::Lowlevel { .. }),
+        matches!(
+            indexed_attr_id("val.5").unwrap_err(),
+            KunaError::Lowlevel { .. }
+        ),
         "no digits before '.': failed extraction stores 0 -> throw"
     );
 }
@@ -143,13 +161,22 @@ fn verify_marshal_xml_write_string_indexed_index_wrap_bytes_r2() {
     let mut dec = XmlDecode::new(&manager, &registry);
     dec.ingest_stream(&buf).unwrap();
     dec.open_element_id(&ELEM_DATA).unwrap();
-    assert_eq!(dec.get_next_attribute_id().unwrap(), ATTRIB_UNKNOWN.get_id());
+    assert_eq!(
+        dec.get_next_attribute_id().unwrap(),
+        ATTRIB_UNKNOWN.get_id()
+    );
     assert!(matches!(
         dec.get_indexed_attribute_id(&ATTRIB_VAL).unwrap_err(),
         KunaError::Lowlevel { .. }
     ));
-    assert_eq!(dec.get_next_attribute_id().unwrap(), ATTRIB_UNKNOWN.get_id());
-    assert_eq!(dec.get_indexed_attribute_id(&ATTRIB_VAL).unwrap(), ATTRIB_VAL.get_id());
+    assert_eq!(
+        dec.get_next_attribute_id().unwrap(),
+        ATTRIB_UNKNOWN.get_id()
+    );
+    assert_eq!(
+        dec.get_indexed_attribute_id(&ATTRIB_VAL).unwrap(),
+        ATTRIB_VAL.get_id()
+    );
 }
 
 /// PackedEncode::writeStringIndexed id wrap: ATTRIB_VAL (24) + u32::MAX is
@@ -167,11 +194,19 @@ fn verify_marshal_packed_write_string_indexed_id_wrap_r2() {
         enc.write_string_indexed(&ATTRIB_VAL, 2, b"yo");
         enc.close_element(&ELEM_DATA);
     }
-    assert_eq!(buf[1], 0xc0 | 23, "wrapped attribute header: ATTRIBUTE | (24 + MAX mod 2^32)");
+    assert_eq!(
+        buf[1],
+        0xc0 | 23,
+        "wrapped attribute header: ATTRIBUTE | (24 + MAX mod 2^32)"
+    );
     let mut dec = PackedDecode::new(&manager);
     dec.ingest_stream(&buf).unwrap();
     let el = dec.open_element_id(&ELEM_DATA).unwrap();
-    assert_eq!(dec.get_next_attribute_id().unwrap(), 23, "24 + u32::MAX wraps to 23");
+    assert_eq!(
+        dec.get_next_attribute_id().unwrap(),
+        23,
+        "24 + u32::MAX wraps to 23"
+    );
     assert_eq!(dec.read_string().unwrap(), b"hi");
     assert_eq!(dec.get_next_attribute_id().unwrap(), 26, "24 + 2, no wrap");
     assert_eq!(dec.read_string().unwrap(), b"yo");

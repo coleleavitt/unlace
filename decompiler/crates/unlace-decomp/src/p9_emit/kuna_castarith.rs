@@ -49,7 +49,7 @@ use unlace_num::opcodes::OpCode;
 
 use crate::cast::{CastStrategy, CastStrategyC};
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype, TypeFactory};
+use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
 
 /// Why an `INT_ADD` keeps its integer form.
@@ -223,9 +223,7 @@ fn declared_as(data: &Funcdata, vn: VarnodeId, op: OpId, ptype: &Rc<Datatype>) -
     if !Rc::ptr_eq(&data.vn_type_read_facing(vn, op), ptype) {
         return false;
     }
-    let Some(decl) =
-        crate::printc::declared_variable_type(data, vn)
-    else {
+    let Some(decl) = crate::printc::declared_variable_type(data, vn) else {
         return false;
     };
     let elem = |t: &Rc<Datatype>| t.get_ptr_to().map(strip_typedefs);
@@ -841,9 +839,9 @@ fn subscripts_another(data: &Funcdata, out: VarnodeId) -> bool {
 fn extension_saved(data: &Funcdata, index: VarnodeId) -> i32 {
     let ext = data.vbank().get(index).is_some_and(|v| {
         !v.is_explicit()
-            && v.get_def().and_then(|d| data.obank().get(d)).is_some_and(|d| {
-                matches!(d.code(), OpCode::CPUI_INT_SEXT | OpCode::CPUI_INT_ZEXT)
-            })
+            && v.get_def()
+                .and_then(|d| data.obank().get(d))
+                .is_some_and(|d| matches!(d.code(), OpCode::CPUI_INT_SEXT | OpCode::CPUI_INT_ZEXT))
     });
     i32::from(ext)
 }
@@ -903,7 +901,11 @@ fn sum_saved(
     };
     if explicit {
         let decl = data.vn_high_type_def_facing(out);
-        return i32::from(strat.cast_standard(&decl, target_ptr, false, true).is_none());
+        return i32::from(
+            strat
+                .cast_standard(&decl, target_ptr, false, true)
+                .is_none(),
+        );
     }
     if readers.is_empty() {
         return 0;
@@ -1123,7 +1125,9 @@ pub(crate) fn rewrite_index(data: &mut Funcdata, strat: &CastStrategyC, op: OpId
 /// input when that is already the `long` it wants (none), and otherwise casts
 /// the cast (two).
 fn operand_saved(data: &mut Funcdata, vn: VarnodeId, op: OpId, long: &Rc<Datatype>) -> i32 {
-    let Some(v) = data.vbank().get(vn) else { return 0 };
+    let Some(v) = data.vbank().get(vn) else {
+        return 0;
+    };
     let cast_in = v
         .get_def()
         .and_then(|d| data.obank().get(d))
@@ -1134,7 +1138,11 @@ fn operand_saved(data: &mut Funcdata, vn: VarnodeId, op: OpId, long: &Rc<Datatyp
     };
     if data.lone_descend(vn) == Some(op) {
         0
-    } else if data.vbank().get(src).is_some_and(|s| Rc::ptr_eq(s.get_type(), long)) {
+    } else if data
+        .vbank()
+        .get(src)
+        .is_some_and(|s| Rc::ptr_eq(s.get_type(), long))
+    {
         -1
     } else {
         1
@@ -1165,7 +1173,11 @@ pub(crate) fn pointer_difference(data: &mut Funcdata, op: OpId) -> Result<Rc<Dat
     let mut pointee: Option<Rc<Datatype>> = None;
     let mut width = 0;
     for vn in [a, b] {
-        if data.vbank().get(vn).is_none_or(|v| v.is_constant() || v.is_annotation()) {
+        if data
+            .vbank()
+            .get(vn)
+            .is_none_or(|v| v.is_constant() || v.is_annotation())
+        {
             return Err(Leave::DiffNotPointers);
         }
         let t = data.vn_high_type_read_facing(vn, op);
@@ -1173,7 +1185,10 @@ pub(crate) fn pointer_difference(data: &mut Funcdata, op: OpId) -> Result<Rc<Dat
             return Err(Leave::DiffNotPointers);
         }
         width = t.get_size();
-        let p = t.get_ptr_to().map(strip_typedefs).ok_or(Leave::DiffPointee)?;
+        let p = t
+            .get_ptr_to()
+            .map(strip_typedefs)
+            .ok_or(Leave::DiffPointee)?;
         let byte = matches!(
             p.get_metatype(),
             type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN

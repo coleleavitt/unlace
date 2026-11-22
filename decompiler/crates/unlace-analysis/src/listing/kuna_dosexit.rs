@@ -84,7 +84,11 @@ fn exit_sites(
     code_space: &Rc<AddrSpace>,
     listing: &Listing,
 ) -> Vec<u64> {
-    let Some(swi) = arch.userops.get_op_by_name(b"swi").map(|op| op.get_index() as u64) else {
+    let Some(swi) = arch
+        .userops
+        .get_op_by_name(b"swi")
+        .map(|op| op.get_index() as u64)
+    else {
         return Vec::new();
     };
     let Ok(ah) = translate.get_register_data("AH") else {
@@ -102,8 +106,8 @@ fn exit_sites(
         let exits = match interrupt_vector(&ops, swi) {
             Some(0x20 | 0x27) => true,
             Some(0x21) => {
-                let entered =
-                    entered.get_or_insert_with(|| entered_addresses(arch, translate, code_space, listing));
+                let entered = entered
+                    .get_or_insert_with(|| entered_addresses(arch, translate, code_space, listing));
                 matches!(
                     ah_at(translate, code_space, listing, entered, &ah, vma),
                     Some(0x00 | 0x31 | 0x4c)
@@ -132,12 +136,19 @@ fn entered_addresses(
     for (_, insn) in listing.instructions() {
         entered.extend(insn.flows.iter().copied());
     }
-    let Some(segment) = arch.userops.get_op_by_name(b"segment").map(|op| op.get_index() as u64) else {
+    let Some(segment) = arch
+        .userops
+        .get_op_by_name(b"segment")
+        .map(|op| op.get_index() as u64)
+    else {
         return entered;
     };
     let (Some(lo), Some(hi)) = (
         listing.instructions().next().map(|(&vma, _)| vma),
-        listing.instructions_in_range(0, None).next_back().map(|(&vma, _)| vma),
+        listing
+            .instructions_in_range(0, None)
+            .next_back()
+            .map(|(&vma, _)| vma),
     ) else {
         return entered;
     };
@@ -145,13 +156,23 @@ fn entered_addresses(
         if !insn.flow.is_computed || !insn.flows.is_empty() {
             continue;
         }
-        let Some(offset) = decode(translate, code_space, vma).and_then(|ops| table_offset(&ops, segment))
+        let Some(offset) =
+            decode(translate, code_space, vma).and_then(|ops| table_offset(&ops, segment))
         else {
             continue;
         };
         let at = Address::new(Rc::clone(code_space), vma);
-        let cs = arch.with_context_db(|db| db.get_variable_value(b"realCS", &at)).unwrap_or(0);
-        entered.extend(table_targets(arch, code_space, u64::from(cs) << 4, offset, lo, hi));
+        let cs = arch
+            .with_context_db(|db| db.get_variable_value(b"realCS", &at))
+            .unwrap_or(0);
+        entered.extend(table_targets(
+            arch,
+            code_space,
+            u64::from(cs) << 4,
+            offset,
+            lo,
+            hi,
+        ));
     }
     entered
 }
@@ -163,7 +184,9 @@ const MAX_TABLE: u64 = 256;
 /// target from: the constant in the offset operand of the `segment` op its
 /// `LOAD` addresses through (`jmp cs:[bx+table]`).
 fn table_offset(ops: &[Op], segment: u64) -> Option<u64> {
-    let load = ops.iter().find(|op| op.opcode == OpCode::CPUI_LOAD && op.ins.len() == 2)?;
+    let load = ops
+        .iter()
+        .find(|op| op.opcode == OpCode::CPUI_LOAD && op.ins.len() == 2)?;
     let at = ops.iter().position(|op| {
         op.opcode == OpCode::CPUI_CALLOTHER
             && op.ins.len() == 3
@@ -178,7 +201,10 @@ fn table_offset(ops: &[Op], segment: u64) -> Option<u64> {
     if !is_unique(offset) {
         return None;
     }
-    let def = ops[..at].iter().rev().find(|op| op.out.as_ref().is_some_and(|out| same(out, offset)))?;
+    let def = ops[..at]
+        .iter()
+        .rev()
+        .find(|op| op.out.as_ref().is_some_and(|out| same(out, offset)))?;
     match def.opcode {
         OpCode::CPUI_COPY => def.ins.first().filter(|v| is_const(v)).map(|v| v.offset),
         OpCode::CPUI_INT_ADD => def.ins.iter().find(|v| is_const(v)).map(|v| v.offset),
@@ -203,7 +229,10 @@ fn table_targets(
     let mut targets = Vec::new();
     for i in 0..MAX_TABLE {
         let mut word = [0u8; 2];
-        let at = Address::new(Rc::clone(code_space), base + (offset.wrapping_add(2 * i) & 0xffff));
+        let at = Address::new(
+            Rc::clone(code_space),
+            base + (offset.wrapping_add(2 * i) & 0xffff),
+        );
         if loader.load_fill(&mut word, &at).is_err() {
             break;
         }
@@ -293,7 +322,9 @@ fn ah_write(ops: &[Op], ah: &VarnodeData) -> Write {
             continue;
         }
         result = match value {
-            Some(value) if out.offset <= ah.offset => Write::Const((value >> (8 * (ah.offset - out.offset))) & 0xff),
+            Some(value) if out.offset <= ah.offset => {
+                Write::Const((value >> (8 * (ah.offset - out.offset))) & 0xff)
+            }
             _ => Write::Unknown,
         };
     }
@@ -308,7 +339,10 @@ fn evaluate(op: &Op, temps: &[(VarnodeData, u64)]) -> Option<u64> {
         if is_const(v) {
             return Some(v.offset);
         }
-        temps.iter().find(|(t, _)| same(t, v)).map(|(_, value)| *value)
+        temps
+            .iter()
+            .find(|(t, _)| same(t, v))
+            .map(|(_, value)| *value)
     };
     match op.opcode {
         OpCode::CPUI_COPY | OpCode::CPUI_INT_ZEXT => input(0),
@@ -322,11 +356,15 @@ fn evaluate(op: &Op, temps: &[(VarnodeData, u64)]) -> Option<u64> {
 }
 
 pub(super) fn is_const(v: &VarnodeData) -> bool {
-    v.space.as_ref().is_some_and(|s| s.get_type() == unlace_base::space::spacetype::IPTR_CONSTANT)
+    v.space
+        .as_ref()
+        .is_some_and(|s| s.get_type() == unlace_base::space::spacetype::IPTR_CONSTANT)
 }
 
 pub(super) fn is_unique(v: &VarnodeData) -> bool {
-    v.space.as_ref().is_some_and(|s| s.get_type() == unlace_base::space::spacetype::IPTR_INTERNAL)
+    v.space
+        .as_ref()
+        .is_some_and(|s| s.get_type() == unlace_base::space::spacetype::IPTR_INTERNAL)
 }
 
 fn same_space(a: &VarnodeData, b: &VarnodeData) -> bool {
@@ -359,12 +397,26 @@ struct Capture {
 }
 
 impl PcodeEmit for Capture {
-    fn dump(&mut self, _addr: &Address, opc: OpCode, outvar: Option<&VarnodeData>, vars: &[VarnodeData]) {
-        self.ops.push(Op { opcode: opc, out: outvar.cloned(), ins: vars.to_vec() });
+    fn dump(
+        &mut self,
+        _addr: &Address,
+        opc: OpCode,
+        outvar: Option<&VarnodeData>,
+        vars: &[VarnodeData],
+    ) {
+        self.ops.push(Op {
+            opcode: opc,
+            out: outvar.cloned(),
+            ins: vars.to_vec(),
+        });
     }
 }
 
-pub(super) fn decode(translate: &dyn Translate, code_space: &Rc<AddrSpace>, vma: u64) -> Option<Vec<Op>> {
+pub(super) fn decode(
+    translate: &dyn Translate,
+    code_space: &Rc<AddrSpace>,
+    vma: u64,
+) -> Option<Vec<Op>> {
     let addr = Address::new(Rc::clone(code_space), vma);
     let mut cap = Capture::default();
     let decoded = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {

@@ -45,7 +45,10 @@ const COMPOSES_SECOND: u64 = 0x43c;
 const NO_PC: u64 = 0x448;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Bootstrap the fixture and build the index `unlace xrefs` / `unlace strings` answer out of.
@@ -55,12 +58,16 @@ fn index() -> XrefIndex {
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
     let bytes = std::fs::read(&bin).expect("fixture readable");
     let file = object::File::parse(&*bytes).expect("fixture parses");
-    let seeds: Vec<u64> =
-        prog.function_entries_canonical().iter().map(|e| e.addr.get_offset()).collect();
+    let seeds: Vec<u64> = prog
+        .function_entries_canonical()
+        .iter()
+        .map(|e| e.addr.get_offset())
+        .collect();
     xrefs::build(&file, prog.arch(), prog.arch().translate(), &seeds)
 }
 
@@ -70,8 +77,11 @@ fn index() -> XrefIndex {
 #[test]
 fn a_pool_displacement_composed_with_the_pc_references_the_literal() {
     let idx = index();
-    let refs: Vec<(u64, XrefKind)> =
-        idx.refs_to(PROMPT).iter().map(|r| (r.from, r.kind)).collect();
+    let refs: Vec<(u64, XrefKind)> = idx
+        .refs_to(PROMPT)
+        .iter()
+        .map(|r| (r.from, r.kind))
+        .collect();
     assert_eq!(
         refs,
         vec![(COMPOSES_PROMPT, XrefKind::Data)],
@@ -90,8 +100,11 @@ fn a_pool_displacement_composed_with_the_pc_references_the_literal() {
 #[test]
 fn the_add_may_be_scheduled_away_from_its_load() {
     let idx = index();
-    let refs: Vec<(u64, XrefKind)> =
-        idx.refs_to(SECOND).iter().map(|r| (r.from, r.kind)).collect();
+    let refs: Vec<(u64, XrefKind)> = idx
+        .refs_to(SECOND)
+        .iter()
+        .map(|r| (r.from, r.kind))
+        .collect();
     assert_eq!(refs, vec![(COMPOSES_SECOND, XrefKind::Data)]);
     assert_eq!(idx.function_containing(COMPOSES_SECOND), Some(SCHEDULED));
 }
@@ -108,7 +121,9 @@ fn arithmetic_that_never_reads_the_pc_composes_nothing() {
         idx.refs_to(NUMBER)
     );
     assert!(
-        idx.refs_from_instruction(NO_PC).iter().all(|r| r.kind != XrefKind::Data),
+        idx.refs_from_instruction(NO_PC)
+            .iter()
+            .all(|r| r.kind != XrefKind::Data),
         "got {:?}",
         idx.refs_from_instruction(NO_PC)
     );

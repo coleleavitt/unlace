@@ -80,8 +80,8 @@ use unlace_num::opcodes::OpCode;
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::p6_variables::kuna_calleepop::{
-    at_address, caller_cleans_up, caller_raise, child_at, const_signed, decompose,
-    is_argument_push, is_imported, MAX_ARG_BYTES, RETURN_ADDRESS_ONLY,
+    MAX_ARG_BYTES, RETURN_ADDRESS_ONLY, at_address, caller_cleans_up, caller_raise, child_at,
+    const_signed, decompose, is_argument_push, is_imported,
 };
 
 /// The settled pop of each earlier call, by the stack-pointer Varnode its
@@ -161,7 +161,11 @@ fn push_run(
     let mut off = delta + step;
     let mut crossed: Option<OpId> = None;
     while bytes < MAX_ARG_BYTES {
-        let slot = if off == 0 { Some(base) } else { child_at(data, spacebase, base, off) };
+        let slot = if off == 0 {
+            Some(base)
+        } else {
+            child_at(data, spacebase, base, off)
+        };
         if let Some(v) = slot {
             let before = crossed.is_none_or(|at| pushed_before(data, v, at));
             if before && is_argument_push(data, v) {
@@ -170,7 +174,11 @@ fn push_run(
                 continue;
             }
             if is_stored(data, v) {
-                return Some(Run { bytes, at_save: before, folded });
+                return Some(Run {
+                    bytes,
+                    at_save: before,
+                    folded,
+                });
             }
         }
         if crossed.is_some() {
@@ -185,7 +193,11 @@ fn push_run(
             None => break,
         }
     }
-    Some(Run { bytes, at_save: false, folded })
+    Some(Run {
+        bytes,
+        at_save: false,
+        folded,
+    })
 }
 
 /// Re-express the slot `base + off` in the frame of the earlier call whose
@@ -219,12 +231,20 @@ fn cross(
 /// Is some STORE through `slot` ahead of `at` on every path to it: earlier in
 /// the same block, or in a block that dominates `at`'s?
 fn pushed_before(data: &Funcdata, slot: VarnodeId, at: OpId) -> bool {
-    let Some(ref_op) = data.obank().get(at) else { return false };
-    let Some(ref_block) = ref_op.get_parent() else { return false };
+    let Some(ref_op) = data.obank().get(at) else {
+        return false;
+    };
+    let Some(ref_block) = ref_op.get_parent() else {
+        return false;
+    };
     let ref_order = ref_op.get_seq_num().get_order();
-    let Some(v) = data.vbank().get(slot) else { return false };
+    let Some(v) = data.vbank().get(slot) else {
+        return false;
+    };
     v.descend_iter().any(|op| {
-        let Some(o) = data.obank().get(op) else { return false };
+        let Some(o) = data.obank().get(op) else {
+            return false;
+        };
         if o.code() != OpCode::CPUI_STORE || o.get_in(1) != Some(slot) {
             return false;
         }
@@ -256,14 +276,21 @@ fn continues(data: &Funcdata, spacebase: &Address, call_out: VarnodeId) -> bool 
 /// `pop reg` and may then call, so neither a pop nor a return-address store
 /// counts.
 fn pushes_above(data: &Funcdata, spacebase: &Address, call_out: VarnodeId) -> bool {
-    let Some(from) = data.vbank().get(call_out).and_then(|v| v.get_def()) else { return false };
+    let Some(from) = data.vbank().get(call_out).and_then(|v| v.get_def()) else {
+        return false;
+    };
     let refs = offsets_from(data, spacebase, call_out);
-    let Some(top) =
-        refs.iter().filter(|(c, v)| *c > 0 && is_pushed(data, *v, from)).map(|(c, _)| *c).min()
+    let Some(top) = refs
+        .iter()
+        .filter(|(c, v)| *c > 0 && is_pushed(data, *v, from))
+        .map(|(c, _)| *c)
+        .min()
     else {
         return false;
     };
-    !refs.iter().any(|(c, v)| (0..=top).contains(c) && is_popped(data, *v))
+    !refs
+        .iter()
+        .any(|(c, v)| (0..=top).contains(c) && is_popped(data, *v))
 }
 
 /// Does the caller's cleanup after the NEXT call reach above this call's
@@ -271,21 +298,30 @@ fn pushes_above(data: &Funcdata, spacebase: &Address, call_out: VarnodeId) -> bo
 /// call g; add esp,8`), so this callee may have popped nothing. The next call
 /// is taken to pop nothing itself, which only lowers the reach.
 fn deferred_cleanup(data: &Funcdata, spacebase: &Address, call_out: VarnodeId) -> bool {
-    offsets_from(data, spacebase, call_out).into_iter().filter(|(d, _)| *d <= 0).any(|(d, sp)| {
-        let Some(v) = data.vbank().get(sp) else { return false };
-        v.descend_iter().any(|op| {
-            let Some(o) = data.obank().get(op) else { return false };
-            if o.code() != OpCode::CPUI_INDIRECT
-                || o.get_in(0) != Some(sp)
-                || !is_call_effect(data, o.get_in(1))
-            {
+    offsets_from(data, spacebase, call_out)
+        .into_iter()
+        .filter(|(d, _)| *d <= 0)
+        .any(|(d, sp)| {
+            let Some(v) = data.vbank().get(sp) else {
                 return false;
-            }
-            let Some(next_out) = o.get_out() else { return false };
-            let reach = d + RETURN_ADDRESS_ONLY + caller_raise(data, spacebase, next_out);
-            reach > 0
+            };
+            v.descend_iter().any(|op| {
+                let Some(o) = data.obank().get(op) else {
+                    return false;
+                };
+                if o.code() != OpCode::CPUI_INDIRECT
+                    || o.get_in(0) != Some(sp)
+                    || !is_call_effect(data, o.get_in(1))
+                {
+                    return false;
+                }
+                let Some(next_out) = o.get_out() else {
+                    return false;
+                };
+                let reach = d + RETURN_ADDRESS_ONLY + caller_raise(data, spacebase, next_out);
+                reach > 0
+            })
         })
-    })
 }
 
 /// `call_out` and every stack-pointer reference defined as `call_out + #c`, with
@@ -296,13 +332,21 @@ fn offsets_from(
     call_out: VarnodeId,
 ) -> Vec<(int4, VarnodeId)> {
     let mut refs = vec![(0, call_out)];
-    let Some(v) = data.vbank().get(call_out) else { return refs };
+    let Some(v) = data.vbank().get(call_out) else {
+        return refs;
+    };
     for op in v.descend_iter() {
-        let Some(o) = data.obank().get(op) else { continue };
+        let Some(o) = data.obank().get(op) else {
+            continue;
+        };
         if o.code() != OpCode::CPUI_INT_ADD || !at_address(data, o.get_out(), spacebase) {
             continue;
         }
-        let other = if o.get_in(0) == Some(call_out) { o.get_in(1) } else { o.get_in(0) };
+        let other = if o.get_in(0) == Some(call_out) {
+            o.get_in(1)
+        } else {
+            o.get_in(0)
+        };
         if let (Some(c), Some(out)) = (const_signed(data, other), o.get_out()) {
             refs.push((c, out));
         }
@@ -320,7 +364,9 @@ fn is_call_effect(data: &Funcdata, vn: Option<VarnodeId>) -> bool {
 /// Is something other than a call's return address stored through this slot,
 /// in the block of `from` (the call's INDIRECT) and ahead of the next call?
 fn is_pushed(data: &Funcdata, slot: VarnodeId, from: OpId) -> bool {
-    let Some(v) = data.vbank().get(slot) else { return false };
+    let Some(v) = data.vbank().get(slot) else {
+        return false;
+    };
     v.descend_iter().any(|op| {
         data.obank().get(op).is_some_and(|o| {
             o.code() == OpCode::CPUI_STORE
@@ -334,7 +380,9 @@ fn is_pushed(data: &Funcdata, slot: VarnodeId, from: OpId) -> bool {
 /// Is `op` reached from `from` within its block, past `from`'s own call but no
 /// other?
 fn before_next_call(data: &Funcdata, from: OpId, op: OpId) -> bool {
-    let Some(at) = data.obank().get(from).map(|o| o.get_addr().clone()) else { return false };
+    let Some(at) = data.obank().get(from).map(|o| o.get_addr().clone()) else {
+        return false;
+    };
     let mut cur = from;
     loop {
         let Some(next) = data.obank().get(cur).and_then(|o| o.basic_neighbours().1) else {
@@ -343,7 +391,9 @@ fn before_next_call(data: &Funcdata, from: OpId, op: OpId) -> bool {
         if next == op {
             return true;
         }
-        let Some(o) = data.obank().get(next) else { return false };
+        let Some(o) = data.obank().get(next) else {
+            return false;
+        };
         if o.is_call() && o.get_addr() != &at {
             return false;
         }
@@ -353,13 +403,17 @@ fn before_next_call(data: &Funcdata, from: OpId, op: OpId) -> bool {
 
 /// Is `store` part of a call instruction, i.e. the return-address push?
 fn stores_return_address(data: &Funcdata, store: OpId) -> bool {
-    let Some(at) = data.obank().get(store).map(|o| o.get_addr().clone()) else { return false };
+    let Some(at) = data.obank().get(store).map(|o| o.get_addr().clone()) else {
+        return false;
+    };
     let mut cur = store;
     for _ in 0..64 {
         let Some(next) = data.obank().get(cur).and_then(|o| o.basic_neighbours().1) else {
             return false;
         };
-        let Some(o) = data.obank().get(next) else { return false };
+        let Some(o) = data.obank().get(next) else {
+            return false;
+        };
         if o.get_addr() != &at {
             return false;
         }
@@ -373,16 +427,23 @@ fn stores_return_address(data: &Funcdata, store: OpId) -> bool {
 
 /// Is this stack slot loaded whole into a register, as `pop reg` does?
 fn is_popped(data: &Funcdata, slot: VarnodeId) -> bool {
-    let Some(v) = data.vbank().get(slot) else { return false };
+    let Some(v) = data.vbank().get(slot) else {
+        return false;
+    };
     let size = v.get_size();
     v.descend_iter().any(|op| {
-        let Some(o) = data.obank().get(op) else { return false };
+        let Some(o) = data.obank().get(op) else {
+            return false;
+        };
         o.code() == OpCode::CPUI_LOAD
             && o.get_in(1) == Some(slot)
-            && o.get_out().and_then(|out| data.vbank().get(out)).is_some_and(|out| {
-                out.get_size() == size
-                    && out.get_space().get_type() == unlace_base::space::spacetype::IPTR_PROCESSOR
-            })
+            && o.get_out()
+                .and_then(|out| data.vbank().get(out))
+                .is_some_and(|out| {
+                    out.get_size() == size
+                        && out.get_space().get_type()
+                            == unlace_base::space::spacetype::IPTR_PROCESSOR
+                })
     })
 }
 

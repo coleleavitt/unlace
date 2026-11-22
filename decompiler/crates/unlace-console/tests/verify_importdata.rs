@@ -18,9 +18,9 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_decomp::decompile_drive::build_and_follow_flow;
@@ -32,7 +32,10 @@ const MAIN_VMA: u64 = 0x100000448;
 const READ_THRICE_VMA: u64 = 0x100000510;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixtures() -> PathBuf {
@@ -40,8 +43,12 @@ fn fixtures() -> PathBuf {
 }
 
 fn name_at(prog: &ConsoleProgram, vma: u64) -> String {
-    let code_space =
-        prog.arch().manage().get_default_code_space().expect("a default code space").clone();
+    let code_space = prog
+        .arch()
+        .manage()
+        .get_default_code_space()
+        .expect("a default code space")
+        .clone();
     let addr = Address::new(Rc::clone(&code_space), vma);
     match prog.arch().symboltab.find_function_across_scopes(&addr) {
         Some((sid, _)) => prog.arch().symboltab.symbol(sid).get_name().to_string(),
@@ -66,11 +73,16 @@ fn run_at(fixture: &str, vma: u64, on: bool) -> String {
     prog.arch_mut()
         .set_kuna_option("importdata", if on { "on" } else { "off" })
         .expect("importdata flips");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
     let name = name_at(&prog, vma);
-    let code_space =
-        prog.arch().manage().get_default_code_space().expect("a default code space").clone();
+    let code_space = prog
+        .arch()
+        .manage()
+        .get_default_code_space()
+        .expect("a default code space")
+        .clone();
     let addr = Address::new(Rc::clone(&code_space), vma);
     let fd = {
         let arch = prog.arch_mut();
@@ -105,11 +117,20 @@ fn import_slot_data_read_renders_the_import_only_when_on() {
     eprintln!("---- importdata ON (default) ----\n{on}");
 
     for slot in ["*dat_100004000", "*dat_100004008"] {
-        assert!(off.contains(slot), "importdata off must read through the slot {slot}:\n{off}");
-        assert!(!on.contains(slot), "importdata on must not leave the slot dereference {slot}:\n{on}");
+        assert!(
+            off.contains(slot),
+            "importdata off must read through the slot {slot}:\n{off}"
+        );
+        assert!(
+            !on.contains(slot),
+            "importdata on must not leave the slot dereference {slot}:\n{on}"
+        );
     }
     for import in ["imported_counter", "imported_name"] {
-        assert!(on.contains(import), "importdata on must render the import {import}:\n{on}");
+        assert!(
+            on.contains(import),
+            "importdata on must render the import {import}:\n{on}"
+        );
     }
     assert!(
         !off.contains("v1 = imported_counter;"),
@@ -124,7 +145,18 @@ fn import_slot_data_read_renders_the_import_only_when_on() {
 fn reads_through_a_local_slot_pointer_keep_the_local() {
     let on = run_at("macho_gotdata_local", READ_THRICE_VMA, true);
     eprintln!("---- importdata ON ----\n{on}");
-    assert!(on.contains("v1 = dat_100004000;"), "the slot pointer is held in v1:\n{on}");
-    assert_eq!(on.matches("sink(*v1);").count(), 2, "both reads through v1 keep the local:\n{on}");
-    assert_eq!(on.matches("sink(imported_counter);").count(), 1, "the direct slot read names the import:\n{on}");
+    assert!(
+        on.contains("v1 = dat_100004000;"),
+        "the slot pointer is held in v1:\n{on}"
+    );
+    assert_eq!(
+        on.matches("sink(*v1);").count(),
+        2,
+        "both reads through v1 keep the local:\n{on}"
+    );
+    assert_eq!(
+        on.matches("sink(imported_counter);").count(),
+        1,
+        "the direct slot read names the import:\n{on}"
+    );
 }

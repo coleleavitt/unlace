@@ -21,14 +21,17 @@
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// `true` if a runnable `go` toolchain is on PATH.
@@ -94,14 +97,25 @@ fn decompile_function(bin: &str, name: &str, option: Option<&str>) -> String {
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
     let mut prog: ConsoleProgram = bootstrap_from_object(bin, "", &spec_roots)
         .expect("bootstrap go fixture with built processor specs");
-    prog.arch_mut().set_kuna_option("gobounds", "off").expect("retain the check while testing its no-return fact");
+    prog.arch_mut()
+        .set_kuna_option("gobounds", "off")
+        .expect("retain the check while testing its no-return fact");
     if let Some(v) = option {
-        prog.arch_mut().set_kuna_option("noreturn_known", v).expect("noreturn_known option applies");
+        prog.arch_mut()
+            .set_kuna_option("noreturn_known", v)
+            .expect("noreturn_known option applies");
         // The unwind-extent bound stops the same fall-through on its own.
-        prog.arch_mut().set_kuna_option("fdeflowbound", v).expect("fdeflowbound option applies");
+        prog.arch_mut()
+            .set_kuna_option("fdeflowbound", v)
+            .expect("fdeflowbound option applies");
     }
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
-    let cmds = vec![format!("load function {name}"), "decompile".into(), "print C".into()];
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
+    let cmds = vec![
+        format!("load function {name}"),
+        "decompile".into(),
+        "print C".into(),
+    ];
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -135,7 +149,10 @@ fn stripped_go_panicshift_truncates_flow_under_the_default() {
     let bin = out_bin.to_str().expect("utf8 path");
 
     let on = decompile_function(bin, "main.sh", None);
-    assert!(on.contains("panicshift"), "the shift guard's panic call renders; transcript:\n{on}");
+    assert!(
+        on.contains("panicshift"),
+        "the shift guard's panic call renders; transcript:\n{on}"
+    );
     assert!(
         !on.contains("int3-pad"),
         "under the default the panic call is terminal - no fall-through into the \
@@ -143,7 +160,10 @@ fn stripped_go_panicshift_truncates_flow_under_the_default() {
     );
 
     let off = decompile_function(bin, "main.sh", Some("off"));
-    assert!(off.contains("panicshift"), "the call itself is untouched by the option; transcript:\n{off}");
+    assert!(
+        off.contains("panicshift"),
+        "the call itself is untouched by the option; transcript:\n{off}"
+    );
     assert!(
         off.contains("int3-pad"),
         "with noreturn_known off the fall-through bug is back (flow runs into the INT3 \
@@ -151,12 +171,12 @@ fn stripped_go_panicshift_truncates_flow_under_the_default() {
     );
 
     let helper = decompile_function(bin, "runtime.panicshift", None);
-    let check = helper.lines().position(|line| {
-        line.contains("runtime.panicCheck1(") && !line.contains("// no-return")
-    });
-    let panic = helper.lines().position(|line| {
-        line.contains("runtime.gopanic(") && line.contains("// no-return")
-    });
+    let check = helper
+        .lines()
+        .position(|line| line.contains("runtime.panicCheck1(") && !line.contains("// no-return"));
+    let panic = helper
+        .lines()
+        .position(|line| line.contains("runtime.gopanic(") && line.contains("// no-return"));
     assert!(
         matches!((check, panic), (Some(check), Some(panic)) if check < panic),
         "panicCheck1 may return to the terminal gopanic call; transcript:\n{helper}"

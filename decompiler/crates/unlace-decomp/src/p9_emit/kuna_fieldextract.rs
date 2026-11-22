@@ -1,7 +1,7 @@
 //! Preserve integer SUBPIECE width and bit position when projecting an implied struct field.
 
 use crate::context::OpId;
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use std::rc::Rc;
 

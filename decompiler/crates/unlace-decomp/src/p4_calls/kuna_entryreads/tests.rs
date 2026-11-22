@@ -5,11 +5,21 @@
 
 use super::*;
 
-use unlace_base::space::{spacetype, AddrSpace};
 use std::rc::Rc;
+use unlace_base::space::{AddrSpace, spacetype};
 
 fn reg_space() -> Rc<AddrSpace> {
-    Rc::new(AddrSpace::new(spacetype::IPTR_PROCESSOR, "register", false, 8, 1, 3, 0, 0, 0))
+    Rc::new(AddrSpace::new(
+        spacetype::IPTR_PROCESSOR,
+        "register",
+        false,
+        8,
+        1,
+        3,
+        0,
+        0,
+        0,
+    ))
 }
 
 fn at(sp: &Rc<AddrSpace>, off: u64) -> Address {
@@ -30,7 +40,11 @@ fn overlaps_is_byte_range_intersection() {
 #[test]
 fn takes_and_width_cover_reads_and_declared_passes() {
     let r = reg_space();
-    let e = EntryReads { read: vec![(at(&r, 0x38), 8)], declared: vec![(at(&r, 0x30), 4)], forwarded: Vec::new() };
+    let e = EntryReads {
+        read: vec![(at(&r, 0x38), 8)],
+        declared: vec![(at(&r, 0x30), 4)],
+        forwarded: Vec::new(),
+    };
     assert!(e.takes(&at(&r, 0x38), 8));
     assert!(e.takes(&at(&r, 0x30), 8));
     assert!(!e.takes(&at(&r, 0x10), 8));
@@ -45,9 +59,15 @@ fn reads_through_adds_only_what_a_callee_takes() {
     let e = EntryReads {
         read: vec![(at(&r, 0x38), 8)],
         declared: vec![(at(&r, 0x30), 4)],
-        forwarded: vec![(at(&r, 0x10), 8, callee.clone()), (at(&r, 0x08), 8, other.clone())],
+        forwarded: vec![
+            (at(&r, 0x10), 8, callee.clone()),
+            (at(&r, 0x08), 8, other.clone()),
+        ],
     };
-    let finals = vec![(at(&r, 0x80), 8, callee.clone()), (at(&r, 0x10), 8, callee.clone())];
+    let finals = vec![
+        (at(&r, 0x80), 8, callee.clone()),
+        (at(&r, 0x10), 8, callee.clone()),
+    ];
     let takes = |c: &Address, a: &Address, _: int4| *c == callee && a.get_offset() != 0x08;
     let (all, passes) = reads_through(&e, &finals, takes);
     let offs = |v: &[(Address, int4)]| v.iter().map(|(a, _)| a.get_offset()).collect::<Vec<_>>();

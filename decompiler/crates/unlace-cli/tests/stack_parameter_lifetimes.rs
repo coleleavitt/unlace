@@ -134,9 +134,11 @@ fn shared_parameter_views_preserve_input_bytes_stores_and_escaped_addresses() {
         );
         let after = query_for(VIEW_FIXTURE, function, true, &[]);
         let objects = after["stack_objects"].as_array().unwrap();
-        assert!(objects
-            .iter()
-            .all(|object| object["stack_offset"] == 8 && object["size"] == 8));
+        assert!(
+            objects
+                .iter()
+                .all(|object| object["stack_offset"] == 8 && object["size"] == 8)
+        );
         assert_eq!(objects[0]["defined"], function == "param_pair");
         execute_views(function, after["code"].as_str().unwrap(), expected);
     }
@@ -260,9 +262,11 @@ fn parameter_backing_preserves_equal_width_multiple_and_interior_values() {
         if function == "param_scalar_escaped" {
             execute_variant(function, before["code"].as_str().unwrap());
         } else {
-            assert!(before["stack_objects"]
-                .as_array()
-                .is_none_or(|objects| objects.is_empty()));
+            assert!(
+                before["stack_objects"]
+                    .as_array()
+                    .is_none_or(|objects| objects.is_empty())
+            );
         }
         let after = query_for(VARIANT_FIXTURE, function, true, &[]);
         let objects = after["stack_objects"].as_array().unwrap();
@@ -317,11 +321,31 @@ fn parameter_backing_preserves_logical_names_types_and_replay_order() {
 fn formal_names_and_types_survive_shared_storage_replay() {
     for (function, old_name, new_name, datatype) in [
         ("param_multiple", "a", "unused_source", "int"),
-        ("param_scalar_escaped", "prepare_only", "source_flag", "bool"),
-        ("param_equal_float", "prepared_value", "source_value", "double"),
+        (
+            "param_scalar_escaped",
+            "prepare_only",
+            "source_flag",
+            "bool",
+        ),
+        (
+            "param_equal_float",
+            "prepared_value",
+            "source_value",
+            "double",
+        ),
         ("param_multiple", "prepare_only", "source_flag", "bool"),
-        ("param_multiple_interior", "carried_value", "source_value", "unsigned long long"),
-        ("param_word_partial", "incoming_word", "source_bits", "unsigned long long"),
+        (
+            "param_multiple_interior",
+            "carried_value",
+            "source_value",
+            "unsigned long long",
+        ),
+        (
+            "param_word_partial",
+            "incoming_word",
+            "source_bits",
+            "unsigned long long",
+        ),
     ] {
         let baseline = query_for(VARIANT_FIXTURE, function, true, &[]);
         let object = baseline["stack_objects"][0]["id"].as_str().unwrap();
@@ -354,25 +378,44 @@ fn formal_names_and_types_survive_shared_storage_replay() {
 fn inferred_register_parameter_rename_keeps_the_argument() {
     let fixture = common::fixture("lifetimes_stack_x86_64");
     let (document, stderr, _) = common::run_kuna(&[
-        "decompile", &fixture, "converted_view", "--json", "--mode", "reliable",
-        "--option", "protoorder", "off", "--option", "structdefs", "on",
-        "--option", "stackviews", "on", "--assert-strict",
-        "--assert", "prototype read_float int read_float(const float *value)",
-        "--assert", "prototype read_integer int read_integer(const int *value)",
-        "--assert", "name converted_view::a0 source_value",
+        "decompile",
+        &fixture,
+        "converted_view",
+        "--json",
+        "--mode",
+        "reliable",
+        "--option",
+        "protoorder",
+        "off",
+        "--option",
+        "structdefs",
+        "on",
+        "--option",
+        "stackviews",
+        "on",
+        "--assert-strict",
+        "--assert",
+        "prototype read_float int read_float(const float *value)",
+        "--assert",
+        "prototype read_integer int read_integer(const int *value)",
+        "--assert",
+        "name converted_view::a0 source_value",
     ]);
     let parsed: Value = serde_json::from_str(&document).unwrap_or_else(|e| panic!("{e}: {stderr}"));
     let code = parsed["functions"][0]["code"].as_str().unwrap();
     assert!(code.contains("converted_view(int4 source_value)"), "{code}");
-    execute_source("inferred-parameter-replay", &format!(
-        "#include <stdint.h>\ntypedef int32_t int4; typedef uint32_t uint4;\n\
+    execute_source(
+        "inferred-parameter-replay",
+        &format!(
+            "#include <stdint.h>\ntypedef int32_t int4; typedef uint32_t uint4;\n\
          typedef uint16_t uint2; typedef uint8_t uint1; typedef float float4;\n\
          int4 read_float(const float *); int4 read_integer(const int4 *);\n\
          {code}\n\
          __attribute__((noinline)) int4 read_float(const float *p) {{ return (int4)*p; }}\n\
          __attribute__((noinline)) int4 read_integer(const int4 *p) {{ return *p; }}\n\
          int main(void) {{ return converted_view(7)!=16 || converted_view(-7)!=2; }}\n"
-    ));
+        ),
+    );
 }
 
 #[test]
@@ -382,7 +425,10 @@ fn incoming_parameter_names_swap_without_changing_storage() {
     for directives in [vec![first.clone(), second.clone()], vec![second, first]] {
         let after = query_for(VARIANT_FIXTURE, "param_multiple", true, &directives);
         let code = after["code"].as_str().unwrap();
-        assert!(code.contains("bool carried_value,int8 prepare_only)"), "{code}");
+        assert!(
+            code.contains("bool carried_value,int8 prepare_only)"),
+            "{code}"
+        );
         execute_variant("param_multiple", code);
     }
 }
@@ -597,7 +643,9 @@ fn wider_stores_keep_their_width_in_narrow_parameter_slots() {
                                 "prototype reuse int reuse(void *context,{params},{datatype} flag)"
                             ),
                             "--assert",
-                            &format!("prototype observe int observe(void *context,const {key_type} *key)"),
+                            &format!(
+                                "prototype observe int observe(void *context,const {key_type} *key)"
+                            ),
                             "--assert",
                             "prototype capture void capture(void *context,unsigned int *key)",
                             "--sleighpath",
@@ -697,19 +745,37 @@ fn check_conditional_parameter_escape(stackviews: bool) {
             .arg("decompile")
             .arg(&image)
             .args([
-                function, "--mode", "reliable", "--json", "--assert-strict",
-                "--option", "stackviews", if stackviews { "on" } else { "off" },
-                "--option", "stackalias", "off",
-                "--option", "structdefs", "on", "--sleighpath",
+                function,
+                "--mode",
+                "reliable",
+                "--json",
+                "--assert-strict",
+                "--option",
+                "stackviews",
+                if stackviews { "on" } else { "off" },
+                "--option",
+                "stackalias",
+                "off",
+                "--option",
+                "structdefs",
+                "on",
+                "--sleighpath",
             ])
             .arg(common::repo_root().join("specs"));
         for assertion in assertions {
             command.args(["--assert", assertion]);
         }
         let output = common::process::output_with_timeout(
-            &mut command, Duration::from_secs(15), Duration::from_millis(25),
-        ).expect("bounded conditional parameter escape decompilation");
-        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+            &mut command,
+            Duration::from_secs(15),
+            Duration::from_millis(25),
+        )
+        .expect("bounded conditional parameter escape decompilation");
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
         let document: Value = serde_json::from_slice(&output.stdout).unwrap();
         let result = &document["functions"][0];
         assert!(result["error"].is_null(), "{result}");
@@ -720,8 +786,10 @@ fn check_conditional_parameter_escape(stackviews: bool) {
         assert!(!code.contains("union stack_views_"), "{code}");
         return;
     }
-    execute_source("conditional-parameter-escape", &format!(
-        "#include <stdint.h>\n\
+    execute_source(
+        "conditional-parameter-escape",
+        &format!(
+            "#include <stdint.h>\n\
          typedef uint8_t uint1; typedef uint16_t uint2; typedef uint32_t uint4;\n\
          typedef uint64_t uint8; typedef int32_t int4; typedef uint8_t undefined1;\n\
          uint8 global_word=UINT64_C(0x8877665544332211), *escaped;\n\
@@ -735,5 +803,6 @@ fn check_conditional_parameter_escape(stackviews: bool) {
                   unknown_parameter_escape(1,&global_word,0,0,0,0,42)!=0 ||\n\
                   unknown_parameter_escape(0,&global_word,0,0,0,0,42)!=expected;\n\
          }}\n"
-    ));
+        ),
+    );
 }

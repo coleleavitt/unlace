@@ -15,19 +15,22 @@ use unlace_base::address::Address;
 use unlace_base::types::int4;
 
 use crate::context::HighVariableId;
-use crate::database::{symbol_category, EntryRef};
+use crate::database::{EntryRef, symbol_category};
 use crate::funcdata::Funcdata;
 
 /// The storage and width of each isolated Symbol of `fd` that is a parameter
 /// or holds its storage for the whole function, with the ones `fd` was itself given.
 pub fn carried(fd: &Funcdata) -> BTreeSet<(Address, int4)> {
     let mut out = fd.kuna_prior_names().isolated.clone();
-    let Some(lm) = fd.get_scope_local().filter(|lm| lm.has_isolated_symbols()) else { return out };
+    let Some(lm) = fd.get_scope_local().filter(|lm| lm.has_isolated_symbols()) else {
+        return out;
+    };
     for (sym, addr, size, _) in lm.named_symbol_storage() {
         let symbol = lm.database().symbol(sym);
-            let whole = lm.symbol_category(sym) == symbol_category::FUNCTION_PARAMETER
+        let whole = lm.symbol_category(sym) == symbol_category::FUNCTION_PARAMETER
             || symbol.mapentry.iter().any(|&entry| {
-                matches!(entry, EntryRef::Mapped { .. }) && lm.database().entry(lm.scope_id(), entry).uselimit.empty()
+                matches!(entry, EntryRef::Mapped { .. })
+                    && lm.database().entry(lm.scope_id(), entry).uselimit.empty()
             });
         if symbol.is_isolated() && whole {
             out.insert((addr, size));
@@ -43,8 +46,13 @@ pub fn holds(fd: &Funcdata, high: HighVariableId) -> bool {
     if isolated.is_empty() {
         return false;
     }
-    let Some(h) = fd.high_bank().get(high) else { return false };
-    (0..h.num_instances()).filter_map(|i| fd.vbank().get(h.get_instance(i))).any(|v| {
-        (v.is_input() || v.is_addr_tied()) && isolated.contains(&(v.get_addr().clone(), v.get_size()))
-    })
+    let Some(h) = fd.high_bank().get(high) else {
+        return false;
+    };
+    (0..h.num_instances())
+        .filter_map(|i| fd.vbank().get(h.get_instance(i)))
+        .any(|v| {
+            (v.is_input() || v.is_addr_tied())
+                && isolated.contains(&(v.get_addr().clone(), v.get_size()))
+        })
 }

@@ -21,7 +21,10 @@ fn fixture() -> String {
 }
 
 fn run_kuna(args: &[&str]) -> (String, String, i32) {
-    let out = Command::new(env!("CARGO_BIN_EXE_unlace")).args(args).output().expect("spawn kuna");
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
+        .args(args)
+        .output()
+        .expect("spawn kuna");
     (
         String::from_utf8_lossy(&out.stdout).into_owned(),
         String::from_utf8_lossy(&out.stderr).into_owned(),
@@ -56,15 +59,39 @@ fn every_whole_file_is_listed_with_its_length_and_the_truncated_one_is_not() {
 fn each_row_names_the_function_that_references_it() {
     let (out, err, code) = run_kuna(&["blobs", &fixture()]);
     assert_eq!(code, 0, "{err}");
-    let owners: Vec<(String, String)> = rows(&out).into_iter().map(|r| (r[1].clone(), r[5].clone())).collect();
-    let want = [("png", "get_logo"), ("gif", "get_icon"), ("jpeg", "get_photo"), ("zip", "get_archive"), ("gzip", "get_packed")];
-    assert_eq!(owners.iter().map(|(k, f)| (k.as_str(), f.as_str())).collect::<Vec<_>>(), want, "{out}");
+    let owners: Vec<(String, String)> = rows(&out)
+        .into_iter()
+        .map(|r| (r[1].clone(), r[5].clone()))
+        .collect();
+    let want = [
+        ("png", "get_logo"),
+        ("gif", "get_icon"),
+        ("jpeg", "get_photo"),
+        ("zip", "get_archive"),
+        ("gzip", "get_packed"),
+    ];
+    assert_eq!(
+        owners
+            .iter()
+            .map(|(k, f)| (k.as_str(), f.as_str()))
+            .collect::<Vec<_>>(),
+        want,
+        "{out}"
+    );
 }
 
 #[test]
 fn extract_writes_each_file_byte_for_byte() {
     let dir = std::env::temp_dir().join(format!("kuna-blobs-{}", std::process::id()));
-    let (out, err, code) = run_kuna(&["blobs", &fixture(), "--no-xrefs", "--kind", "png,gzip", "--extract", dir.to_str().unwrap()]);
+    let (out, err, code) = run_kuna(&[
+        "blobs",
+        &fixture(),
+        "--no-xrefs",
+        "--kind",
+        "png,gzip",
+        "--extract",
+        dir.to_str().unwrap(),
+    ]);
     assert_eq!(code, 0, "{err}");
     let image = std::fs::read(fixture()).unwrap();
     let png = std::fs::read(dir.join("png_3c0.png")).unwrap();
@@ -73,15 +100,29 @@ fn extract_writes_each_file_byte_for_byte() {
     assert_eq!(gzip, &image[0x6c0..0x6c0 + 86]);
     assert!(png.ends_with(b"IEND\xae\x42\x60\x82"));
     assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 2, "{out}");
-    assert!(rows(&out).iter().all(|r| r[6].ends_with(".png") || r[6].ends_with(".gz")), "{out}");
+    assert!(
+        rows(&out)
+            .iter()
+            .all(|r| r[6].ends_with(".png") || r[6].ends_with(".gz")),
+        "{out}"
+    );
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
 #[test]
 fn the_json_document_and_the_filters() {
-    let (out, err, code) = run_kuna(&["blobs", &fixture(), "--json", "--no-xrefs", "--kind", "zip"]);
+    let (out, err, code) =
+        run_kuna(&["blobs", &fixture(), "--json", "--no-xrefs", "--kind", "zip"]);
     assert_eq!(code, 0, "{err}");
-    for key in ["\"scanned\": \"sections\"", "\"count\": 1", "\"kind\": \"zip\"", "\"length\": 297", "\"address_hex\": \"0x590\"", "\"file\": null", "\"xrefs\": false"] {
+    for key in [
+        "\"scanned\": \"sections\"",
+        "\"count\": 1",
+        "\"kind\": \"zip\"",
+        "\"length\": 297",
+        "\"address_hex\": \"0x590\"",
+        "\"file\": null",
+        "\"xrefs\": false",
+    ] {
         assert!(out.contains(key), "missing {key}:\n{out}");
     }
     let (out, _, code) = run_kuna(&["blobs", &fixture(), "--no-xrefs", "--section", "text"]);
@@ -101,8 +142,18 @@ fn the_json_document_and_the_filters() {
 fn decompile_returns_each_file_by_name_unless_the_option_is_off() {
     let (out, err, code) = run_kuna(&["decompile", &fixture(), "get_logo"]);
     assert_eq!(code, 0, "{err}");
-    assert!(out.contains("unsigned char * get_logo(") && out.contains("return png_3c0;"), "{out}");
-    let (out, err, code) = run_kuna(&["decompile", &fixture(), "get_logo", "--option", "blobs", "off"]);
+    assert!(
+        out.contains("unsigned char * get_logo(") && out.contains("return png_3c0;"),
+        "{out}"
+    );
+    let (out, err, code) = run_kuna(&[
+        "decompile",
+        &fixture(),
+        "get_logo",
+        "--option",
+        "blobs",
+        "off",
+    ]);
     assert_eq!(code, 0, "{err}");
     assert!(out.contains("return 0x3c0;"), "{out}");
     let (out, err, code) = run_kuna(&["decompile", &fixture(), "get_broken"]);

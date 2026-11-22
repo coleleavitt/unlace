@@ -1,11 +1,11 @@
 use super::*;
 use crate::context::ArchContext;
 use crate::dtype::Datatype;
+use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
-use std::rc::Rc;
 
 fn function(big: bool) -> Funcdata {
     let mut manager = AddrSpaceManager::new();

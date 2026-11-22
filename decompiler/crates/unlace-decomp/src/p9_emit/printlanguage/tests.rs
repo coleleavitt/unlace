@@ -62,7 +62,14 @@ static ADD: OpToken = OpToken {
 };
 
 fn rpn(tok: &'static OpToken, visited: int4) -> ReversePolish {
-    ReversePolish { tok, visited, paren: false, op: None, id: 0, id2: 0 }
+    ReversePolish {
+        tok,
+        visited,
+        paren: false,
+        op: None,
+        id: 0,
+        id2: 0,
+    }
 }
 
 #[test]
@@ -284,7 +291,10 @@ fn reset_defaults_internal_values() {
     let ctx = PrintContext::new();
     assert_eq!(ctx.mods(), 0);
     assert_eq!(ctx.line_comment_indent(), 20);
-    assert_eq!(ctx.namespace_strategy(), NamespaceStrategy::MinimalNamespaces);
+    assert_eq!(
+        ctx.namespace_strategy(),
+        NamespaceStrategy::MinimalNamespaces
+    );
     assert_eq!(
         ctx.header_comment(),
         comment_type::HEADER | comment_type::WARNINGHEADER

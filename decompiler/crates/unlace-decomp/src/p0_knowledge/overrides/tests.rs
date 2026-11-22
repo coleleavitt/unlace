@@ -12,8 +12,8 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
-use unlace_base::marshal::{Decoder, Encoder, IdRegistry, XmlDecode, XmlEncode, ATTRIB_TYPE};
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace};
+use unlace_base::marshal::{ATTRIB_TYPE, Decoder, Encoder, IdRegistry, XmlDecode, XmlEncode};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, ConstantSpace, addrspace_flags, spacetype};
 
 use super::*;
 
@@ -72,7 +72,10 @@ struct TestProto {
 
 impl TestProto {
     fn new(tag: &str) -> Box<TestProto> {
-        Box::new(TestProto { tag: tag.to_string(), overridden: RefCell::new(false) })
+        Box::new(TestProto {
+            tag: tag.to_string(),
+            overridden: RefCell::new(false),
+        })
     }
 }
 
@@ -100,7 +103,10 @@ impl FuncProtoOverride for TestProto {
 fn flow_type_string_table() {
     assert_eq!(Override::type_to_string(flow_type::BRANCH), "branch");
     assert_eq!(Override::type_to_string(flow_type::CALL), "call");
-    assert_eq!(Override::type_to_string(flow_type::CALL_RETURN), "callreturn");
+    assert_eq!(
+        Override::type_to_string(flow_type::CALL_RETURN),
+        "callreturn"
+    );
     assert_eq!(Override::type_to_string(flow_type::RETURN), "return");
     assert_eq!(Override::type_to_string(flow_type::NONE), "none");
     // Out-of-range falls to "none" (the C++ trailing `return "none"`).
@@ -108,7 +114,10 @@ fn flow_type_string_table() {
 
     assert_eq!(Override::string_to_type(b"branch"), flow_type::BRANCH);
     assert_eq!(Override::string_to_type(b"call"), flow_type::CALL);
-    assert_eq!(Override::string_to_type(b"callreturn"), flow_type::CALL_RETURN);
+    assert_eq!(
+        Override::string_to_type(b"callreturn"),
+        flow_type::CALL_RETURN
+    );
     assert_eq!(Override::string_to_type(b"return"), flow_type::RETURN);
     assert_eq!(Override::string_to_type(b"bogus"), flow_type::NONE);
 }
@@ -147,8 +156,10 @@ fn force_goto_insert_and_iter_in_address_order() {
     let mut ov = Override::new();
     ov.insert_force_goto(ram(&m, 0x80), ram(&m, 0x200));
     ov.insert_force_goto(ram(&m, 0x40), ram(&m, 0x100));
-    let pairs: Vec<_> =
-        ov.force_gotos().map(|(t, d)| (t.get_offset(), d.get_offset())).collect();
+    let pairs: Vec<_> = ov
+        .force_gotos()
+        .map(|(t, d)| (t.get_offset(), d.get_offset()))
+        .collect();
     // BTreeMap by Address: ascending offset.
     assert_eq!(pairs, vec![(0x40, 0x100), (0x80, 0x200)]);
 }
@@ -161,7 +172,12 @@ fn indirect_override_insert_and_query() {
     assert!(ov.find_indirect_override(&ram(&m, 0x40)).is_none());
 
     ov.insert_indirect_override(ram(&m, 0x40), ram(&m, 0x500));
-    assert_eq!(ov.find_indirect_override(&ram(&m, 0x40)).unwrap().get_offset(), 0x500);
+    assert_eq!(
+        ov.find_indirect_override(&ram(&m, 0x40))
+            .unwrap()
+            .get_offset(),
+        0x500
+    );
     assert!(ov.find_indirect_override(&ram(&m, 0x41)).is_none());
 }
 
@@ -267,7 +283,9 @@ fn proto_override_insert_marks_and_merges() {
     ov.insert_proto_override(ram(&m, 0x40), TestProto::new("first"));
     {
         let mut s = String::new();
-        ov.find_proto_override(&ram(&m, 0x40)).unwrap().print_raw(&mut s);
+        ov.find_proto_override(&ram(&m, 0x40))
+            .unwrap()
+            .print_raw(&mut s);
         assert_eq!(s, "proto(first)");
     }
 
@@ -276,7 +294,9 @@ fn proto_override_insert_marks_and_merges() {
     ov.insert_proto_override(ram(&m, 0x40), TestProto::new("second"));
     {
         let mut s = String::new();
-        ov.find_proto_override(&ram(&m, 0x40)).unwrap().print_raw(&mut s);
+        ov.find_proto_override(&ram(&m, 0x40))
+            .unwrap()
+            .print_raw(&mut s);
         assert_eq!(s, "proto(second)");
     }
 }
@@ -334,20 +354,33 @@ fn override_encode_decode_roundtrip() {
     dec.ingest_stream(&buf).unwrap();
     let mut ov2 = Override::new();
     // No protooverride present, so the proto decoder is never invoked.
-    ov2.decode(&mut dec, &mut |_d| panic!("no protooverride in this document"))
-        .unwrap();
+    ov2.decode(&mut dec, &mut |_d| {
+        panic!("no protooverride in this document")
+    })
+    .unwrap();
 
     // force goto survived
-    let fg: Vec<_> = ov2.force_gotos().map(|(t, d)| (t.get_offset(), d.get_offset())).collect();
+    let fg: Vec<_> = ov2
+        .force_gotos()
+        .map(|(t, d)| (t.get_offset(), d.get_offset()))
+        .collect();
     assert_eq!(fg, vec![(0x40, 0x100)]);
     // indirect survived
-    assert_eq!(ov2.find_indirect_override(&ram(&m, 0x80)).unwrap().get_offset(), 0x500);
+    assert_eq!(
+        ov2.find_indirect_override(&ram(&m, 0x80))
+            .unwrap()
+            .get_offset(),
+        0x500
+    );
     // deadcode delay survived (index 1, delay 9)
     assert_eq!(ov2.deadcode_delays().collect::<Vec<_>>(), vec![(1, 9)]);
     // multistage survived
     assert!(ov2.query_multistage_jumptable(&ram(&m, 0xC0)));
     // flow survived
-    assert_eq!(ov2.get_flow_override(&ram(&m, 0x140)), flow_type::CALL_RETURN);
+    assert_eq!(
+        ov2.get_flow_override(&ram(&m, 0x140)),
+        flow_type::CALL_RETURN
+    );
 }
 
 #[test]
@@ -383,7 +416,8 @@ fn override_decode_bad_flow_errors() {
     // A flow type that resolves to NONE is the C++ `throw LowlevelError("Bad flowoverride tag")`.
     let m = manager();
     let reg = registry();
-    let xml = br#"<override><flow type="bogus"><addr space="ram" offset="0x40"/></flow></override>"#;
+    let xml =
+        br#"<override><flow type="bogus"><addr space="ram" offset="0x40"/></flow></override>"#;
     let mut dec = XmlDecode::new(&m, &reg);
     dec.ingest_stream(xml).unwrap();
     let mut ov = Override::new();

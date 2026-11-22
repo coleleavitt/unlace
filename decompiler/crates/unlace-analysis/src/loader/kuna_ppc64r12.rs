@@ -36,12 +36,18 @@ fn scan_global_entries(file: &object::File) -> AnalysisOutput {
         if sym.kind() != SymbolKind::Text || sym.is_undefined() || sym.address() == 0 {
             continue;
         }
-        let SymbolFlags::Elf { st_other, .. } = sym.flags() else { continue };
+        let SymbolFlags::Elf { st_other, .. } = sym.flags() else {
+            continue;
+        };
         // Bits 5-7 of st_other: 2..=6 name a local entry 4..64 bytes in.
         if !matches!((st_other >> 5) & 7, 2..=6) {
             continue;
         }
-        out.entry_tracks.push(TrackedRegFact { func_addr: sym.address(), reg: R12, value: sym.address() });
+        out.entry_tracks.push(TrackedRegFact {
+            func_addr: sym.address(),
+            reg: R12,
+            value: sym.address(),
+        });
     }
     out
 }

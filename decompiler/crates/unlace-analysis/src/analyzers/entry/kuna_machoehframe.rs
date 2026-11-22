@@ -8,7 +8,7 @@
 //! entry discovery; this pass is the Mach-O arm of the same walk
 //! ([`super::scan_eh_frame_starts`]).
 
-use crate::loader::format::{detect, FormatKind};
+use crate::loader::format::{FormatKind, detect};
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
 /// Emit each `__eh_frame` FDE start of a Mach-O as a discovered entry. The
@@ -41,7 +41,9 @@ pub fn macho_eh_frame_starts(file: &object::File) -> Vec<u64> {
     let funcsyms = super::existing_function_addrs_for_file(file);
     let mut out: Vec<u64> = super::scan_eh_frame_starts_sized(file, ptr_size)
         .into_iter()
-        .filter(|&vma| super::in_executable_section(&execs, vma) && funcsyms.binary_search(&vma).is_err())
+        .filter(|&vma| {
+            super::in_executable_section(&execs, vma) && funcsyms.binary_search(&vma).is_err()
+        })
         .collect();
     out.sort_unstable();
     out.dedup();
@@ -53,14 +55,21 @@ mod tests {
     use super::*;
 
     fn fixture(name: &str) -> Vec<u8> {
-        std::fs::read(format!("{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"))).unwrap()
+        std::fs::read(format!(
+            "{}/tests/fixtures/{name}",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap()
     }
 
     #[test]
     fn stripped_image_keeps_its_fde_starts() {
         let bytes = fixture("macho_ehframe_only_arm64");
         let file = object::File::parse(bytes.as_slice()).unwrap();
-        assert_eq!(macho_eh_frame_starts(&file), [0x1_0000_0330, 0x1_0000_0378, 0x1_0000_03c0]);
+        assert_eq!(
+            macho_eh_frame_starts(&file),
+            [0x1_0000_0330, 0x1_0000_0378, 0x1_0000_03c0]
+        );
     }
 
     #[test]

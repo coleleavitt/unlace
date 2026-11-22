@@ -282,7 +282,10 @@ impl RawBinaryArchitecture {
         }
         // init(store);  -- STUB(W6/W8)
         let rest = next.map(Rc::clone);
-        Ok(RawRestore { to_register: registered, rest })
+        Ok(RawRestore {
+            to_register: registered,
+            rest,
+        })
     }
 }
 

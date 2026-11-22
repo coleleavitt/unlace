@@ -16,7 +16,10 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// A checked-in non-PIE x86-64 ELF whose entry point is a two-entry (irreducible)
@@ -50,28 +53,45 @@ const MARKER: &str = "panic!(\"kuna: unstructured goto to ";
 /// and points at the two ways out.
 #[test]
 fn the_text_surface_reports_the_marker_on_stderr() {
-    let (stdout, stderr, code) = run_kuna(&["decompile", &fixture(), "irreducible", "--language", "rust"]);
+    let (stdout, stderr, code) =
+        run_kuna(&["decompile", &fixture(), "irreducible", "--language", "rust"]);
     assert!(stdout.contains(MARKER), "expected the marker in:\n{stdout}");
     assert!(
         stderr.contains("note: 1 unstructured goto in irreducible"),
         "expected the fidelity note, got:\n{stderr}"
     );
-    assert!(stderr.contains("--language c"), "the note names the C escape hatch:\n{stderr}");
+    assert!(
+        stderr.contains("--language c"),
+        "the note names the C escape hatch:\n{stderr}"
+    );
     // The deliberate half: a lossy render is a warning, not a failed run.
-    assert_eq!(code, Some(0), "the verdict does not move; stderr was:\n{stderr}");
+    assert_eq!(
+        code,
+        Some(0),
+        "the verdict does not move; stderr was:\n{stderr}"
+    );
 }
 
 /// The in-process surface: the same note, plus the machine-readable count that a
 /// `decompile-all` consumer filters on. `error` stays `null` on purpose.
 #[test]
 fn the_json_surface_counts_the_marker_per_function() {
-    let (stdout, stderr, code) =
-        run_kuna(&["decompile", &fixture(), "irreducible", "--language", "rust", "--json"]);
+    let (stdout, stderr, code) = run_kuna(&[
+        "decompile",
+        &fixture(),
+        "irreducible",
+        "--language",
+        "rust",
+        "--json",
+    ]);
     assert!(
         stdout.contains("\"unstructured_gotos\": 1"),
         "expected the per-function count in:\n{stdout}"
     );
-    assert!(stdout.contains("\"error\": null"), "a lossy render is not a failed run:\n{stdout}");
+    assert!(
+        stdout.contains("\"error\": null"),
+        "a lossy render is not a failed run:\n{stdout}"
+    );
     assert!(
         stderr.contains("note: 1 unstructured goto in irreducible"),
         "expected the fidelity note, got:\n{stderr}"
@@ -85,7 +105,10 @@ fn the_json_surface_counts_the_marker_per_function() {
 fn decompile_all_carries_the_count_on_every_record() {
     let (stdout, stderr, code) =
         run_kuna(&["decompile-all", &fixture(), "--language", "rust", "--json"]);
-    assert!(stdout.contains("\"unstructured_gotos\": 1"), "expected one lossy record in:\n{stdout}");
+    assert!(
+        stdout.contains("\"unstructured_gotos\": 1"),
+        "expected one lossy record in:\n{stdout}"
+    );
     assert!(
         stderr.contains("unstructured goto"),
         "a whole-binary run says it too, got:\n{stderr}"
@@ -98,11 +121,20 @@ fn decompile_all_carries_the_count_on_every_record() {
 #[test]
 fn c_output_reports_nothing_and_counts_zero() {
     let (stdout, stderr, code) = run_kuna(&["decompile", &fixture(), "irreducible"]);
-    assert!(stdout.contains("goto label_"), "C spells the jump for real:\n{stdout}");
-    assert!(!stderr.contains("unstructured goto"), "C has nothing to report:\n{stderr}");
+    assert!(
+        stdout.contains("goto label_"),
+        "C spells the jump for real:\n{stdout}"
+    );
+    assert!(
+        !stderr.contains("unstructured goto"),
+        "C has nothing to report:\n{stderr}"
+    );
     assert_eq!(code, Some(0));
 
     let (stdout, stderr, code) = run_kuna(&["decompile", &fixture(), "irreducible", "--json"]);
-    assert!(stdout.contains("\"unstructured_gotos\": 0"), "expected a zero count in:\n{stdout}");
+    assert!(
+        stdout.contains("\"unstructured_gotos\": 0"),
+        "expected a zero count in:\n{stdout}"
+    );
     assert_eq!(code, Some(0), "{stderr}");
 }

@@ -30,17 +30,17 @@
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use unlace_base::address::Address;
-use unlace_decomp::dtype::{type_metatype, Datatype};
-use unlace_decomp::fspec::{parameter_pieces_flags, ParameterPieces, PrototypePieces};
 use object::read::{Object, ObjectSection};
+use unlace_base::address::Address;
+use unlace_decomp::dtype::{Datatype, type_metatype};
+use unlace_decomp::fspec::{ParameterPieces, PrototypePieces, parameter_pieces_flags};
 
 use super::classt;
+use super::encoding::{self, TypeCtx};
 use super::sanitize_selector;
 use super::sections::MachoImage;
-use super::encoding::{self, TypeCtx};
-use unlace_decomp::architecture::Architecture;
 use crate::pass::{AnalysisOutput, DataObjectFact, FidMatch, SymFact, SymKind};
+use unlace_decomp::architecture::Architecture;
 
 const SEC_SELREFS: &str = "__objc_selrefs";
 const SEC_CLASSREFS: &str = "__objc_classrefs";
@@ -79,7 +79,10 @@ pub struct Selectors {
 
 impl Selectors {
     pub fn with_sdk(sdk: HashMap<String, Option<String>>) -> Selectors {
-        Selectors { sdk, ..Selectors::default() }
+        Selectors {
+            sdk,
+            ..Selectors::default()
+        }
     }
 
     /// Record one declaration's selector and type encoding. Two spellings
@@ -94,7 +97,8 @@ impl Selectors {
         };
         match self.encodings.get(selector) {
             None => {
-                self.encodings.insert(selector.to_string(), Some(new.to_string()));
+                self.encodings
+                    .insert(selector.to_string(), Some(new.to_string()));
             }
             Some(None) => {}
             Some(Some(have)) => {
@@ -102,7 +106,8 @@ impl Selectors {
                     self.encodings.insert(selector.to_string(), None);
                 } else if new.contains('"') && !self.class_conflicts.contains(selector) {
                     if !have.contains('"') {
-                        self.encodings.insert(selector.to_string(), Some(new.to_string()));
+                        self.encodings
+                            .insert(selector.to_string(), Some(new.to_string()));
                     } else if classes(have) != classes(new) {
                         let erased = erase_classes(have);
                         self.encodings.insert(selector.to_string(), Some(erased));
@@ -116,14 +121,17 @@ impl Selectors {
     /// Record a property's spelling of `selector` for its own `class`.
     pub fn record_for_class(&mut self, class: &str, selector: &str, types: &str) {
         self.record(selector, Some(types));
-        self.by_class.insert((class.to_string(), selector.to_string()), types.to_string());
+        self.by_class
+            .insert((class.to_string(), selector.to_string()), types.to_string());
     }
 
     /// The spelling `class`'s own property gives `selector`, what its IMP is
     /// typed with; `None` when the class has no such property, whose IMP then
     /// keeps its method encoding rather than another class's spelling.
     pub fn encoding_for_class(&self, class: &str, selector: &str) -> Option<&str> {
-        self.by_class.get(&(class.to_string(), selector.to_string())).map(String::as_str)
+        self.by_class
+            .get(&(class.to_string(), selector.to_string()))
+            .map(String::as_str)
     }
 
     /// The one encoding known for `selector`: the image's own declarations
@@ -166,8 +174,12 @@ pub(super) fn emit(
     let ps = img.ptr_size();
 
     for va in section_slots(file, SEC_SELREFS, ps) {
-        let Some(sel_va) = img.rebase_ptr(va) else { continue };
-        let Some(sel) = img.read_cstr(sel_va).filter(|s| !s.is_empty()) else { continue };
+        let Some(sel_va) = img.rebase_ptr(va) else {
+            continue;
+        };
+        let Some(sel) = img.read_cstr(sel_va).filter(|s| !s.is_empty()) else {
+            continue;
+        };
         selectors.name(out, sel_va, &sel);
         selectors.slots.insert(va, sel.clone());
         out.data_objects.push(DataObjectFact {
@@ -188,7 +200,10 @@ pub(super) fn emit(
                     push_slot(&mut const_slots, va, ps);
                     name
                 }
-                None => match img.bind_name(va).and_then(|n| n.strip_prefix(CLASS_SYMBOL_PREFIX)) {
+                None => match img
+                    .bind_name(va)
+                    .and_then(|n| n.strip_prefix(CLASS_SYMBOL_PREFIX))
+                {
                     Some(name) => name.to_string(),
                     None => continue,
                 },
@@ -204,32 +219,58 @@ pub(super) fn emit(
     for va in section_slots(file, SEC_PROTOREFS, ps) {
         let name = match img.rebase_ptr(va) {
             Some(proto_va) => {
-                let Some(name) = super::kuna_objcprotos::protocol_name(img, proto_va) else { continue };
+                let Some(name) = super::kuna_objcprotos::protocol_name(img, proto_va) else {
+                    continue;
+                };
                 push_slot(&mut const_slots, va, ps);
                 name
             }
-            None => match img.bind_name(va).and_then(|n| n.strip_prefix(PROTOCOL_SYMBOL_PREFIX)) {
+            None => match img
+                .bind_name(va)
+                .and_then(|n| n.strip_prefix(PROTOCOL_SYMBOL_PREFIX))
+            {
                 Some(name) => name.to_string(),
                 None => continue,
             },
         };
-        out.data_objects.push(DataObjectFact { addr: va, name: format!("protoRef_{name}"), size: ps as u32 });
+        out.data_objects.push(DataObjectFact {
+            addr: va,
+            name: format!("protoRef_{name}"),
+            size: ps as u32,
+        });
     }
 
     for sec in super::sections::sections_named(file, SEC_STUBS) {
         if let Ok(data) = sec.data() {
             for (stub_va, selref_va) in stubs(file.architecture(), sec.address(), data) {
-                let Some(sel_va) = img.rebase_ptr(selref_va) else { continue };
-                let Some(sel) = img.read_cstr(sel_va).filter(|s| !s.is_empty()) else { continue };
+                let Some(sel_va) = img.rebase_ptr(selref_va) else {
+                    continue;
+                };
+                let Some(sel) = img.read_cstr(sel_va).filter(|s| !s.is_empty()) else {
+                    continue;
+                };
                 selectors.name(out, sel_va, &sel);
                 let name = format!("objc_msgSend${sel}");
-                out.symbols.push(SymFact { addr: stub_va, name: name.clone(), kind: SymKind::Function });
-                if let Some(enc) = selectors.encoding(&sel).filter(|e| img.charge(e.len() as u64)) {
-                    if let Some(pieces) = stub_prototype(&name, enc, file.architecture(), arch, tctx) {
+                out.symbols.push(SymFact {
+                    addr: stub_va,
+                    name: name.clone(),
+                    kind: SymKind::Function,
+                });
+                if let Some(enc) = selectors
+                    .encoding(&sel)
+                    .filter(|e| img.charge(e.len() as u64))
+                {
+                    if let Some(pieces) =
+                        stub_prototype(&name, enc, file.architecture(), arch, tctx)
+                    {
                         out.prototypes_at.push((stub_va, pieces));
                     }
                 }
-                out.fid_names.push(FidMatch { addr: stub_va, name, by_signature: false });
+                out.fid_names.push(FidMatch {
+                    addr: stub_va,
+                    name,
+                    by_signature: false,
+                });
             }
         }
     }
@@ -342,7 +383,10 @@ fn stub_prototype(
         ),
         object::Architecture::X86_64 => (
             &["RDI", "RDX", "RCX", "R8", "R9"],
-            &["XMM0_Qa", "XMM1_Qa", "XMM2_Qa", "XMM3_Qa", "XMM4_Qa", "XMM5_Qa", "XMM6_Qa", "XMM7_Qa"],
+            &[
+                "XMM0_Qa", "XMM1_Qa", "XMM2_Qa", "XMM3_Qa", "XMM4_Qa", "XMM5_Qa", "XMM6_Qa",
+                "XMM7_Qa",
+            ],
         ),
         _ => return None,
     };
@@ -396,19 +440,30 @@ fn stub_prototype(
         if i == 1 {
             continue;
         }
-        let pname = if i == 0 { "self".to_string() } else { format!("arg{}", i - 1) };
+        let pname = if i == 0 {
+            "self".to_string()
+        } else {
+            format!("arg{}", i - 1)
+        };
         if raw.starts_with('{') {
             let members = encoding::struct_members(raw)?;
-            let names = encoding::struct_name(raw).map(encoding::member_names).unwrap_or(&[]);
+            let names = encoding::struct_name(raw)
+                .map(encoding::member_names)
+                .unwrap_or(&[]);
             match struct_passing(machine, &members) {
                 StructPass::Spread => {
                     for (k, c) in members.iter().enumerate() {
                         let ty = encoding::decode_ivar_type(c, tctx)?;
-                        let member = names.get(k).map(|n| n.to_string()).unwrap_or_else(|| k.to_string());
+                        let member = names
+                            .get(k)
+                            .map(|n| n.to_string())
+                            .unwrap_or_else(|| k.to_string());
                         push(&mut pieces, ty, format!("{pname}_{member}"))?;
                     }
                 }
-                StructPass::ByReference => push(&mut pieces, encoding::decode_ivar_type("^v", tctx)?, pname)?,
+                StructPass::ByReference => {
+                    push(&mut pieces, encoding::decode_ivar_type("^v", tctx)?, pname)?
+                }
                 StructPass::Unmodelled => return None,
             }
             continue;
@@ -436,7 +491,11 @@ enum StructPass {
 fn struct_passing(machine: object::Architecture, members: &[String]) -> StructPass {
     let all_doubles = members.iter().all(|c| c == "d");
     let all_words = members.iter().all(|c| c == "q" || c == "Q");
-    let max_doubles = if machine == object::Architecture::X86_64 { 2 } else { 4 };
+    let max_doubles = if machine == object::Architecture::X86_64 {
+        2
+    } else {
+        4
+    };
     if (all_doubles && members.len() <= max_doubles) || (all_words && members.len() <= 2) {
         StructPass::Spread
     } else if machine == object::Architecture::Aarch64 && all_doubles {
@@ -476,7 +535,10 @@ pub fn stubs(arch: object::Architecture, base: u64, data: &[u8]) -> Vec<(u64, u6
 /// arm64: `adrp x1, page` then `ldr x1, [x1, #off]`.
 fn stubs_arm64(base: u64, data: &[u8]) -> Vec<(u64, u64)> {
     let mut out = Vec::new();
-    let words: Vec<u32> = data.chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
+    let words: Vec<u32> = data
+        .chunks_exact(4)
+        .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+        .collect();
     for i in 0..words.len().saturating_sub(1) {
         let (adrp, ldr) = (words[i], words[i + 1]);
         if adrp & 0x9F00_001F != 0x9000_0001 || ldr & 0xFFC0_03FF != 0xF940_0021 {
@@ -520,8 +582,22 @@ mod tests {
     #[test]
     fn arm64_stub_pairs_resolve_their_selref_slot() {
         let words: [u32; 16] = [
-            0x9000_0041, 0xF941_0821, 0x9000_0030, 0xF940_0210, 0xD61F_0200, 0xD420_0020, 0xD420_0020, 0xD420_0020,
-            0x9000_0041, 0xF941_0C21, 0x9000_0030, 0xF940_0210, 0xD61F_0200, 0xD420_0020, 0xD420_0020, 0xD420_0020,
+            0x9000_0041,
+            0xF941_0821,
+            0x9000_0030,
+            0xF940_0210,
+            0xD61F_0200,
+            0xD420_0020,
+            0xD420_0020,
+            0xD420_0020,
+            0x9000_0041,
+            0xF941_0C21,
+            0x9000_0030,
+            0xF940_0210,
+            0xD61F_0200,
+            0xD420_0020,
+            0xD420_0020,
+            0xD420_0020,
         ];
         let data: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
         assert_eq!(
@@ -532,8 +608,12 @@ mod tests {
 
     #[test]
     fn x86_64_stub_pairs_resolve_their_selref_slot() {
-        let mut data = vec![0x48, 0x8b, 0x35, 0x10, 0x00, 0x00, 0x00, 0xff, 0x25, 0, 0, 0, 0, 0xcc, 0xcc, 0xcc];
-        data.extend_from_slice(&[0x48, 0x8b, 0x35, 0xf0, 0xff, 0xff, 0xff, 0xe9, 0, 0, 0, 0, 0xcc, 0xcc, 0xcc, 0xcc]);
+        let mut data = vec![
+            0x48, 0x8b, 0x35, 0x10, 0x00, 0x00, 0x00, 0xff, 0x25, 0, 0, 0, 0, 0xcc, 0xcc, 0xcc,
+        ];
+        data.extend_from_slice(&[
+            0x48, 0x8b, 0x35, 0xf0, 0xff, 0xff, 0xff, 0xe9, 0, 0, 0, 0, 0xcc, 0xcc, 0xcc, 0xcc,
+        ]);
         assert_eq!(
             stubs(object::Architecture::X86_64, 0x1000, &data),
             vec![(0x1000, 0x1017), (0x1010, 0x1007)]
@@ -546,13 +626,24 @@ mod tests {
     #[test]
     fn walks_macho_objc_refs_fixture() {
         use crate::loader::format::macho::resolve_chained_fixups;
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/macho_objc_refs_arm64");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/macho_objc_refs_arm64"
+        );
         let bytes = std::fs::read(path).expect("read fixture");
         let file = object::File::parse(bytes.as_slice()).expect("parse Mach-O");
         let img = MachoImage::with_fixups(&file, resolve_chained_fixups(&file, &bytes));
 
-        assert_eq!(img.rebase_ptr(0x1000081f0), Some(0x100008050), "superref → class_t Derived");
-        assert_eq!(img.rebase_ptr(0x100008230), None, "a bind slot has no pointer");
+        assert_eq!(
+            img.rebase_ptr(0x1000081f0),
+            Some(0x100008050),
+            "superref → class_t Derived"
+        );
+        assert_eq!(
+            img.rebase_ptr(0x100008230),
+            None,
+            "a bind slot has no pointer"
+        );
         assert_eq!(img.bind_name(0x100008230), Some("_OBJC_CLASS_$_Remote"));
 
         let sec = file.section_by_name(SEC_STUBS).expect("__objc_stubs");
@@ -566,14 +657,21 @@ mod tests {
         for va in section_slots(&file, SEC_SELREFS, 8) {
             push_slot(&mut slots, va, 8);
         }
-        assert_eq!(slots, vec![(0x1000081f8, 0x100008228)], "six adjacent selref slots merge");
+        assert_eq!(
+            slots,
+            vec![(0x1000081f8, 0x100008228)],
+            "six adjacent selref slots merge"
+        );
     }
 
     /// On a bind-only chained image the packed bind word is not a pointer.
     #[test]
     fn bind_only_chained_image_has_no_rebase_pointer() {
         use crate::loader::format::macho::resolve_chained_fixups;
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/macho_bind_only_arm64");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/macho_bind_only_arm64"
+        );
         let bytes = std::fs::read(path).expect("read fixture");
         let file = object::File::parse(bytes.as_slice()).expect("parse Mach-O");
         let img = MachoImage::with_fixups(&file, resolve_chained_fixups(&file, &bytes));
@@ -586,12 +684,18 @@ mod tests {
     /// yields no slots instead of one allocation per claimed slot.
     #[test]
     fn oversized_ref_section_header_is_bounded_by_file_data() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/macho_objc_refs_arm64");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/macho_objc_refs_arm64"
+        );
         let bytes = std::fs::read(path).expect("read fixture");
         for size in [0x0800_0000_0000_0000u64, 1 << 30, u64::MAX] {
             let patched = with_section_size(bytes.clone(), SEC_SELREFS, size);
             let file = object::File::parse(patched.as_slice()).expect("parse Mach-O");
-            assert!(section_slots(&file, SEC_SELREFS, 8).len() <= 6, "size {size:#x}");
+            assert!(
+                section_slots(&file, SEC_SELREFS, 8).len() <= 6,
+                "size {size:#x}"
+            );
         }
         let file = object::File::parse(bytes.as_slice()).expect("parse Mach-O");
         assert_eq!(section_slots(&file, SEC_SELREFS, 8).len(), 6);
@@ -609,24 +713,56 @@ mod tests {
         let transform = codes("d", 6);
         let range = codes("Q", 2);
         assert!(matches!(struct_passing(Aarch64, &rect), StructPass::Spread));
-        assert!(matches!(struct_passing(Aarch64, &transform), StructPass::ByReference));
-        assert!(matches!(struct_passing(Aarch64, &range), StructPass::Spread));
-        assert!(matches!(struct_passing(Aarch64, &codes("f", 2)), StructPass::Unmodelled));
-        assert!(matches!(struct_passing(X86_64, &rect), StructPass::Unmodelled));
-        assert!(matches!(struct_passing(X86_64, &transform), StructPass::Unmodelled));
+        assert!(matches!(
+            struct_passing(Aarch64, &transform),
+            StructPass::ByReference
+        ));
+        assert!(matches!(
+            struct_passing(Aarch64, &range),
+            StructPass::Spread
+        ));
+        assert!(matches!(
+            struct_passing(Aarch64, &codes("f", 2)),
+            StructPass::Unmodelled
+        ));
+        assert!(matches!(
+            struct_passing(X86_64, &rect),
+            StructPass::Unmodelled
+        ));
+        assert!(matches!(
+            struct_passing(X86_64, &transform),
+            StructPass::Unmodelled
+        ));
         assert!(matches!(struct_passing(X86_64, &size), StructPass::Spread));
         assert!(matches!(struct_passing(X86_64, &range), StructPass::Spread));
-        assert!(matches!(struct_passing(X86_64, &codes("q", 3)), StructPass::Unmodelled));
+        assert!(matches!(
+            struct_passing(X86_64, &codes("q", 3)),
+            StructPass::Unmodelled
+        ));
     }
 
     /// A stub section mapped at the top of the address space wraps instead of
     /// overflowing.
     #[test]
     fn stub_scan_wraps_at_the_top_of_the_address_space() {
-        let arm: Vec<u8> = [0x9000_0041u32, 0xF941_0821].iter().flat_map(|w| w.to_le_bytes()).collect();
-        assert_eq!(stubs(object::Architecture::Aarch64, u64::MAX - 3, &[[0u8; 4].as_slice(), &arm].concat()).len(), 1);
+        let arm: Vec<u8> = [0x9000_0041u32, 0xF941_0821]
+            .iter()
+            .flat_map(|w| w.to_le_bytes())
+            .collect();
+        assert_eq!(
+            stubs(
+                object::Architecture::Aarch64,
+                u64::MAX - 3,
+                &[[0u8; 4].as_slice(), &arm].concat()
+            )
+            .len(),
+            1
+        );
         let x86 = [0, 0x48, 0x8b, 0x35, 0x10, 0x00, 0x00, 0x00, 0xff, 0x25];
-        assert_eq!(stubs(object::Architecture::X86_64, u64::MAX, &x86), vec![(0, 0x17)]);
+        assert_eq!(
+            stubs(object::Architecture::X86_64, u64::MAX, &x86),
+            vec![(0, 0x17)]
+        );
     }
 
     #[test]
@@ -659,18 +795,42 @@ mod tests {
         sel.record("inner", Some("@\"Base\"@:"));
         assert_eq!(sel.encoding("inner"), Some("@\"Base\"@:"));
         sel.record("inner", Some("@16@0:8"));
-        assert_eq!(sel.encoding("inner"), Some("@\"Base\"@:"), "a plain spelling does not replace a classed one");
+        assert_eq!(
+            sel.encoding("inner"),
+            Some("@\"Base\"@:"),
+            "a plain spelling does not replace a classed one"
+        );
         sel.record("inner", Some("q16@0:8"));
-        assert_eq!(sel.encoding("inner"), None, "a different shape drops the selector");
+        assert_eq!(
+            sel.encoding("inner"),
+            None,
+            "a different shape drops the selector"
+        );
 
         let mut sel = Selectors::default();
         sel.record_for_class("A", "view", "@\"UIView\"@:");
         sel.record_for_class("B", "view", "@\"NSView\"@:");
-        assert_eq!(sel.encoding_for_class("B", "view"), Some("@\"NSView\"@:"), "each class keeps its own class");
-        assert_eq!(sel.encoding_for_class("C", "view"), None, "a class with no property takes no other class's spelling");
+        assert_eq!(
+            sel.encoding_for_class("B", "view"),
+            Some("@\"NSView\"@:"),
+            "each class keeps its own class"
+        );
+        assert_eq!(
+            sel.encoding_for_class("C", "view"),
+            None,
+            "a class with no property takes no other class's spelling"
+        );
         assert_eq!(sel.encoding_for_class("A", "view"), Some("@\"UIView\"@:"));
-        assert_eq!(sel.encoding("view"), Some("@@:"), "two classes named: a stub takes neither");
+        assert_eq!(
+            sel.encoding("view"),
+            Some("@@:"),
+            "two classes named: a stub takes neither"
+        );
         sel.record("view", Some("@\"UIView\"16@0:8"));
-        assert_eq!(sel.encoding("view"), Some("@@:"), "a later classed spelling does not bring a class back");
+        assert_eq!(
+            sel.encoding("view"),
+            Some("@@:"),
+            "a later classed spelling does not bring a class back"
+        );
     }
 }

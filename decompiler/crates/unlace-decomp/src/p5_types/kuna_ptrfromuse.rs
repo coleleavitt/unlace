@@ -40,16 +40,14 @@
 use std::collections::{HashSet, VecDeque};
 use std::rc::Rc;
 
-
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::types::{int4, uintb};
 
-use crate::dtype::{type_metatype, Datatype};
+use crate::context::{OpId, VarnodeId};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
-use crate::context::{OpId, VarnodeId};
-
 
 /// How many def-use hops the walk follows before giving up.  RecStruct's
 /// access-chain walk uses the same bound.
@@ -90,10 +88,13 @@ impl OptionPtrFromUse {
             other => {
                 return Err(KunaError::parse(format!(
                     "Unknown ptrfromuse value: {other} (expected off|byte|void)"
-                )))
+                )));
             }
         };
-        Ok((mode, format!("Use-derived parameter pointer typing set to {p1}")))
+        Ok((
+            mode,
+            format!("Use-derived parameter pointer typing set to {p1}"),
+        ))
     }
 }
 
@@ -133,7 +134,10 @@ pub fn pointer_from_use(
     // from recognising the canary, so the check is emitted instead of stripped.
     // Ask the prototype model whether this storage could carry a parameter.
     let vn_addr = v.get_addr().clone();
-    if !data.get_func_proto().possible_input_param(&vn_addr, ptrsize) {
+    if !data
+        .get_func_proto()
+        .possible_input_param(&vn_addr, ptrsize)
+    {
         return None;
     }
     let arch = Rc::clone(data.get_arch());
@@ -239,8 +243,11 @@ fn classify_use(data: &Funcdata, op: OpId, vn: VarnodeId) -> Use {
                 Some(v) => v,
                 None => return Use::Neutral,
             };
-            let other_const =
-                data.vbank().get(other_vn).map(|v| v.is_constant()).unwrap_or(false);
+            let other_const = data
+                .vbank()
+                .get(other_vn)
+                .map(|v| v.is_constant())
+                .unwrap_or(false);
             if !other_const {
                 return Use::Neutral;
             }
@@ -284,11 +291,7 @@ fn classify_use(data: &Funcdata, op: OpId, vn: VarnodeId) -> Use {
                 .and_then(|v| data.vbank().get(v))
                 .map(|v| v.is_constant() && v.get_offset() != 0)
                 .unwrap_or(false);
-            if bad {
-                Use::Refuse
-            } else {
-                Use::Neutral
-            }
+            if bad { Use::Refuse } else { Use::Neutral }
         }
         // A callee whose prototype is locked has already said what this argument is;
         // a committed non-pointer there outranks use evidence.

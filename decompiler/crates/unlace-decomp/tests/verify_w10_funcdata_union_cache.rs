@@ -23,21 +23,22 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace,
-    UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace, addrspace_flags,
+    spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
-use unlace_decomp::dtype::{type_metatype, Datatype, DatatypeKind, TypeFactoryImpl, TypeField};
-use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
+use unlace_decomp::dtype::{Datatype, DatatypeKind, TypeFactoryImpl, TypeField, type_metatype};
+use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::unionresolve::ResolvedUnion;
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(IopSpace::new(2))).unwrap();
     m.insert_space(Rc::new(FspecSpace::new(3))).unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
@@ -116,7 +117,10 @@ fn w10_union_get_field_size_match_and_mismatch() {
 
     // setUnionField stores a field-0 resolution (resolve dt is int4, size 4).
     let res = resolve_field(&u, 0);
-    assert!(fd.set_union_field(&u, op, 0, res), "first set is unlocked -> true");
+    assert!(
+        fd.set_union_field(&u, op, 0, res),
+        "first set is unlocked -> true"
+    );
 
     // getUnionField with the size-4 union -> hit (size matches).
     assert!(
@@ -155,7 +159,10 @@ fn w10_union_set_respects_lock() {
     // Store a LOCKED field-0 resolution.
     let mut locked = resolve_field(&u, 0);
     locked.set_lock(true);
-    assert!(fd.set_union_field(&u, op, 0, locked), "first set returns true");
+    assert!(
+        fd.set_union_field(&u, op, 0, locked),
+        "first set returns true"
+    );
 
     // A second set to a DIFFERENT field cannot update a locked entry
     // (update() returns false; setUnionField returns !isLocked() == false).
@@ -189,9 +196,18 @@ fn w10_union_set_multiequal_copies_to_duplicate_slots() {
     let same: VarnodeId = fd.new_varnode(4, &Address::new(Rc::clone(&r), 0x100), None);
     let other: VarnodeId = fd.new_varnode(4, &Address::new(r, 0x200), None);
     // Wire slot0=same, slot1=other, slot2=same.
-    fd.obank_mut().get_mut(phi).unwrap().set_input(Some(same), 0);
-    fd.obank_mut().get_mut(phi).unwrap().set_input(Some(other), 1);
-    fd.obank_mut().get_mut(phi).unwrap().set_input(Some(same), 2);
+    fd.obank_mut()
+        .get_mut(phi)
+        .unwrap()
+        .set_input(Some(same), 0);
+    fd.obank_mut()
+        .get_mut(phi)
+        .unwrap()
+        .set_input(Some(other), 1);
+    fd.obank_mut()
+        .get_mut(phi)
+        .unwrap()
+        .set_input(Some(same), 2);
 
     // setUnionField on slot 0 must also populate slot 2 (same Varnode) but NOT
     // slot 1 (funcdata.cc:993-1001).
@@ -231,14 +247,20 @@ fn w10_union_inherit_field_copies_and_returns_fieldnum() {
     let got = fd.inherit_union_field(&u, new_op, 0, old_op, 0);
     assert_eq!(got, 1, "inheritUnionField returns the old field number");
     assert_eq!(
-        fd.get_union_resolution(&u, new_op, 0).unwrap().get_field_num(),
+        fd.get_union_resolution(&u, new_op, 0)
+            .unwrap()
+            .get_field_num(),
         1,
         "new edge carries the inherited field"
     );
 
     // Inheriting from an UNSEEDED old edge returns -1 (funcdata.cc:1087-1088).
     let virgin = new_op_code(&mut fd, 1, OpCode::CPUI_COPY, "COPY");
-    assert_eq!(fd.inherit_union_field(&u, new_op, 0, virgin, 0), -1, "absent edge -> -1");
+    assert_eq!(
+        fd.inherit_union_field(&u, new_op, 0, virgin, 0),
+        -1,
+        "absent edge -> -1"
+    );
 }
 
 // ===========================================================================

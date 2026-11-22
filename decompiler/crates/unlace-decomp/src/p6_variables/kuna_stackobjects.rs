@@ -198,11 +198,17 @@ impl Origins<'_> {
             if SourcePoint::op(self.fd, id)? != source {
                 break;
             }
-            if op.get_out().and_then(|id| self.fd.vbank().get(id)).is_some_and(|out| {
-                out.is_stack_store()
-                    && out.get_space().get_index() == self.space.get_index()
-                    && self.contains(out.get_offset(), out.get_size(), byte).is_some()
-            }) {
+            if op
+                .get_out()
+                .and_then(|id| self.fd.vbank().get(id))
+                .is_some_and(|out| {
+                    out.is_stack_store()
+                        && out.get_space().get_index() == self.space.get_index()
+                        && self
+                            .contains(out.get_offset(), out.get_size(), byte)
+                            .is_some()
+                })
+            {
                 return Some(source);
             }
             if self.effect(id, byte)? {
@@ -239,7 +245,9 @@ impl Origins<'_> {
                 && v.get_space().get_index() == self.space.get_index()
                 && !op.is_marker()
             {
-                let address = self.space.wrap_offset(v.get_offset().wrapping_add(u64::from(byte)));
+                let address = self
+                    .space
+                    .wrap_offset(v.get_offset().wrapping_add(u64::from(byte)));
                 if let Some(write) = self.native_write_before(id, address) {
                     result.insert(ByteSource::Write(write));
                     continue;
@@ -360,13 +368,19 @@ pub fn recover(fd: &mut Funcdata) {
             if address.first != address.last || !address.terms.is_empty() {
                 continue;
             }
-            if !fd.get_arch().stack_views && crate::kuna_stackparamviews::backing_for_address(
-                fd,
-                &Address::new(Rc::clone(&space), space.wrap_offset(address.first as u64)),
-                ty.get_size(),
-            ).is_none() && !crate::kuna_localstackviews::mapped_range(
-                fd, space.wrap_offset(address.first as u64), ty.get_size(),
-            ) {
+            if !fd.get_arch().stack_views
+                && crate::kuna_stackparamviews::backing_for_address(
+                    fd,
+                    &Address::new(Rc::clone(&space), space.wrap_offset(address.first as u64)),
+                    ty.get_size(),
+                )
+                .is_none()
+                && !crate::kuna_localstackviews::mapped_range(
+                    fd,
+                    space.wrap_offset(address.first as u64),
+                    ty.get_size(),
+                )
+            {
                 continue;
             }
             total += ty.get_size() as usize;

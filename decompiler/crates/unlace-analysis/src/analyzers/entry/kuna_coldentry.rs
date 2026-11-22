@@ -54,10 +54,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
+use object::read::Object;
 use unlace_base::address::Address;
 use unlace_base::space::AddrSpace;
 use unlace_sleigh::translate::Translate;
-use object::read::Object;
 
 use crate::listing::classify::classify;
 use crate::listing::decode::decode_one;
@@ -106,7 +106,11 @@ impl AnalysisPass for ColdEntryPass {
         starts.dedup();
         AnalysisOutput {
             fde_interior_entries: cold_entries(
-                ctx.arch.translate(), code_space, &bodies, &execs, &starts,
+                ctx.arch.translate(),
+                code_space,
+                &bodies,
+                &execs,
+                &starts,
             ),
             ..AnalysisOutput::default()
         }
@@ -129,7 +133,9 @@ pub fn cold_entries(
     let mut by_body: BTreeMap<(u64, u64), BTreeMap<u64, Vec<u64>>> = BTreeMap::new();
     for (sec_vma, _, data) in execs {
         for (src, target) in rel32_branches(*sec_vma, data) {
-            let Some(body) = containing_body(bodies, target) else { continue };
+            let Some(body) = containing_body(bodies, target) else {
+                continue;
+            };
             if body.0 == target
                 || (body.0 <= src && src < body.1)
                 || body.1 - body.0 > MAX_BODY
@@ -137,27 +143,38 @@ pub fn cold_entries(
             {
                 continue;
             }
-            by_body.entry(body).or_default().entry(target).or_default().push(src);
+            by_body
+                .entry(body)
+                .or_default()
+                .entry(target)
+                .or_default()
+                .push(src);
         }
     }
     by_body.retain(|&(start, _), targets| {
-        let Some(&last) = targets.keys().next_back() else { return false };
+        let Some(&last) = targets.keys().next_back() else {
+            return false;
+        };
         let entered = after_terminator(translate, code_space, start, last);
         targets.retain(|target, _| entered.contains(target));
         !targets.is_empty()
     });
-    let candidates = by_body.values()
-        .flat_map(|targets| targets.values().flatten().copied()).collect();
+    let candidates = by_body
+        .values()
+        .flat_map(|targets| targets.values().flatten().copied())
+        .collect();
     let sources = source_instructions(translate, code_space, starts, execs, &candidates);
     let mut out = Vec::new();
     for ((start, end), targets) in by_body {
         out.extend(targets.into_iter().filter_map(|(target, srcs)| {
-            srcs.iter().any(|src| {
-                sources.get(src).is_some_and(|&source| {
-                    !(start <= source && source < end)
-                        && branches_to(translate, code_space, source, target)
+            srcs.iter()
+                .any(|src| {
+                    sources.get(src).is_some_and(|&source| {
+                        !(start <= source && source < end)
+                            && branches_to(translate, code_space, source, target)
+                    })
                 })
-            }).then_some(target)
+                .then_some(target)
         }));
     }
     out
@@ -180,9 +197,15 @@ fn source_instructions(
     let mut failed = false;
     for &source in candidates {
         let index = starts.partition_point(|&start| start <= source);
-        let Some(&start) = index.checked_sub(1).and_then(|i| starts.get(i)) else { continue };
-        let Some(&(lo, hi, _)) = execs.iter().find(|&&(lo, hi, _)| lo <= source && source < hi)
-        else { continue };
+        let Some(&start) = index.checked_sub(1).and_then(|i| starts.get(i)) else {
+            continue;
+        };
+        let Some(&(lo, hi, _)) = execs
+            .iter()
+            .find(|&&(lo, hi, _)| lo <= source && source < hi)
+        else {
+            continue;
+        };
         if start < lo {
             continue;
         }
@@ -231,7 +254,9 @@ pub(super) fn rel32_branches(vma: u64, data: &[u8]) -> impl Iterator<Item = (u64
 /// of the no-fall-through encodings the decode then confirms: `ud2`, `ret`,
 /// `ret imm16`, `hlt`, `jmp rel8` or `jmp rel32`?
 fn ends_without_fallthrough(vma: u64, data: &[u8], target: u64) -> bool {
-    let Some(at) = target.checked_sub(vma).map(|o| o as usize) else { return false };
+    let Some(at) = target.checked_sub(vma).map(|o| o as usize) else {
+        return false;
+    };
     let back = |n: usize| at.checked_sub(n).and_then(|i| data.get(i)).copied();
     matches!(back(1), Some(0xC3 | 0xF4))
         || (back(2) == Some(0x0F) && back(1) == Some(0x0B))
@@ -258,7 +283,9 @@ fn after_terminator(
     let mut out = BTreeSet::new();
     let mut pc = start;
     while pc < last {
-        let Ok(d) = decode_one(translate, pc, code_space, false, false) else { break };
+        let Ok(d) = decode_one(translate, pc, code_space, false, false) else {
+            break;
+        };
         if d.len == 0 {
             break;
         }
@@ -272,8 +299,15 @@ fn after_terminator(
 }
 
 /// Does the instruction at `src` decode as a branch whose target is `target`?
-fn branches_to(translate: &dyn Translate, code_space: &Rc<AddrSpace>, src: u64, target: u64) -> bool {
-    let Ok(d) = decode_one(translate, src, code_space, false, false) else { return false };
+fn branches_to(
+    translate: &dyn Translate,
+    code_space: &Rc<AddrSpace>,
+    src: u64,
+    target: u64,
+) -> bool {
+    let Ok(d) = decode_one(translate, src, code_space, false, false) else {
+        return false;
+    };
     let c = classify(&d.ops, src, d.len);
     c.flow.is_jump && !c.flow.is_call && c.flows.contains(&target)
 }
@@ -284,7 +318,9 @@ mod tests {
 
     #[test]
     fn rel32_patterns() {
-        let data = [0x90, 0xE9, 0x10, 0, 0, 0, 0x0F, 0x84, 0xF0, 0xFF, 0xFF, 0xFF];
+        let data = [
+            0x90, 0xE9, 0x10, 0, 0, 0, 0x0F, 0x84, 0xF0, 0xFF, 0xFF, 0xFF,
+        ];
         let got: Vec<_> = rel32_branches(0x1000, &data).collect();
         assert!(got.contains(&(0x1001, 0x1016)));
         assert!(got.contains(&(0x1006, 0x1006 + 6 - 0x10)));

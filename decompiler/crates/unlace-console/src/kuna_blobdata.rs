@@ -41,7 +41,9 @@ pub(crate) fn commit(
     num_spaces: i32,
 ) -> KunaResult<()> {
     for blob in blobs {
-        let Ok(len) = i32::try_from(blob.len) else { continue };
+        let Ok(len) = i32::try_from(blob.len) else {
+            continue;
+        };
         let addr = Address::new(Rc::clone(code_space), blob.addr);
         Rc::make_mut(&mut prog.arch_mut().blob_entries).insert(blob.addr);
         let occupied = {
@@ -49,7 +51,10 @@ pub(crate) fn commit(
             arch.is_lazy_entry(blob.addr)
                 || arch.symboltab.get_global_scope().is_some_and(|global| {
                     arch.symboltab.find_function(global, &addr).is_some()
-                        || arch.symboltab.find_container(global, &addr, 1, &Address::new_invalid()).is_some()
+                        || arch
+                            .symboltab
+                            .find_container(global, &addr, 1, &Address::new_invalid())
+                            .is_some()
                 })
         };
         if occupied {
@@ -60,9 +65,18 @@ pub(crate) fn commit(
         let name = format!("{}_{:x}", blob.kind.as_str(), blob.addr);
         let name = names.name(&name, blob.addr);
         let arch = prog.arch_mut();
-        let (scope, base) = arch.symboltab.find_create_scope_from_symbol_name(&name, "::", None, num_spaces)?;
-        let (sid, _) = arch.symboltab.add_symbol_mapped(scope, &base, array, &addr, &Address::new_invalid())?;
-        arch.symboltab.set_attribute(sid, varnode_flags::typelock | varnode_flags::namelock);
+        let (scope, base) = arch
+            .symboltab
+            .find_create_scope_from_symbol_name(&name, "::", None, num_spaces)?;
+        let (sid, _) = arch.symboltab.add_symbol_mapped(
+            scope,
+            &base,
+            array,
+            &addr,
+            &Address::new_invalid(),
+        )?;
+        arch.symboltab
+            .set_attribute(sid, varnode_flags::typelock | varnode_flags::namelock);
     }
     Ok(())
 }

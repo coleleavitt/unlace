@@ -1,4 +1,5 @@
 //! x87 integer conversions preserve width, extended precision, and control-word input.
+use std::{path::PathBuf, rc::Rc};
 use unlace_base::{address::Address, error::KunaResult};
 use unlace_num::{opcodes::OpCode, pcoderaw::VarnodeData};
 use unlace_sleigh::{
@@ -7,7 +8,6 @@ use unlace_sleigh::{
     sleigh::Sleigh,
     translate::{PcodeEmit, Translate},
 };
-use std::{path::PathBuf, rc::Rc};
 
 struct Bytes(Vec<u8>);
 impl LoadImage for Bytes {
@@ -80,14 +80,16 @@ fn fist_conversions_retain_control_word_and_pop_only_when_requested() {
                 .collect();
             if bytes[1] == 0x08 {
                 assert!(conversions.is_empty());
-                assert!(ops
-                    .0
-                    .iter()
-                    .any(|(op, _, _)| *op == OpCode::CPUI_FLOAT_TRUNC));
-                assert!(!ops
-                    .0
-                    .iter()
-                    .any(|(op, _, _)| *op == OpCode::CPUI_FLOAT_ROUND));
+                assert!(
+                    ops.0
+                        .iter()
+                        .any(|(op, _, _)| *op == OpCode::CPUI_FLOAT_TRUNC)
+                );
+                assert!(
+                    !ops.0
+                        .iter()
+                        .any(|(op, _, _)| *op == OpCode::CPUI_FLOAT_ROUND)
+                );
                 continue;
             }
             assert_eq!(conversions.len(), 1);

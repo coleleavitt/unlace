@@ -191,7 +191,7 @@ use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{HighVariableId, OpId, VarnodeId};
-use crate::dtype::{sub_metatype, type_metatype, Datatype, TypeFactory};
+use crate::dtype::{Datatype, TypeFactory, sub_metatype, type_metatype};
 use crate::funcdata::Funcdata;
 
 /// The narrowest declaration this pass will re-sign, in bytes.
@@ -256,7 +256,7 @@ impl OptionSignedness {
             _ => {
                 return Err(KunaError::parse(
                     "signedness must be \"upstream\", \"auto\", \"prefer-signed\" or \"prefer-unsigned\"",
-                ))
+                ));
             }
         };
         Ok((
@@ -373,19 +373,33 @@ impl SignPlan {
         if self.applied.is_empty() {
             return false;
         }
-        let Some(o) = fd.obank().get(op) else { return false };
+        let Some(o) = fd.obank().get(op) else {
+            return false;
+        };
         if o.code() != OpCode::CPUI_CAST {
             return false;
         }
-        let Some(invn) = o.get_in(0) else { return false };
-        let Some(outvn) = o.get_out() else { return false };
-        let Some(inv) = fd.vbank().get(invn) else { return false };
+        let Some(invn) = o.get_in(0) else {
+            return false;
+        };
+        let Some(outvn) = o.get_out() else {
+            return false;
+        };
+        let Some(inv) = fd.vbank().get(invn) else {
+            return false;
+        };
         if !inv.is_explicit() {
             return false;
         }
-        let Some(high) = inv.get_high() else { return false };
-        let Some(declared) = self.applied.get(&high) else { return false };
-        let Some(outv) = fd.vbank().get(outvn) else { return false };
+        let Some(high) = inv.get_high() else {
+            return false;
+        };
+        let Some(declared) = self.applied.get(&high) else {
+            return false;
+        };
+        let Some(outv) = fd.vbank().get(outvn) else {
+            return false;
+        };
         let target = outv.get_type_def_facing();
         target.get_size() == declared.get_size()
             && target.get_metatype() == declared.get_metatype()
@@ -505,34 +519,16 @@ fn classify_reader(opc: OpCode, slot: int4) -> ReaderClass {
         // `+ - * & | ^ ~` and the value-moving ops: at or above the promotion
         // width two's complement makes these bit-identical either way, and the
         // printed result inherits the operand's C type.
-        CPUI_INT_ADD
-        | CPUI_INT_SUB
-        | CPUI_INT_MULT
-        | CPUI_INT_AND
-        | CPUI_INT_OR
-        | CPUI_INT_XOR
-        | CPUI_INT_NEGATE
-        | CPUI_INT_2COMP
-        | CPUI_COPY
-        | CPUI_MULTIEQUAL
-        | CPUI_INDIRECT => Carries,
+        CPUI_INT_ADD | CPUI_INT_SUB | CPUI_INT_MULT | CPUI_INT_AND | CPUI_INT_OR | CPUI_INT_XOR
+        | CPUI_INT_NEGATE | CPUI_INT_2COMP | CPUI_COPY | CPUI_MULTIEQUAL | CPUI_INDIRECT => Carries,
         // `==` `!=` compare bits at the promotion width this pass guarantees
         // (a narrower declaration is never re-signed, see `plan`); a truncation, a
         // concatenation and the bit-count intrinsics print their own type; a
         // condition, a call argument, a return value and a stored value all
         // convert at a fixed width.
-        CPUI_INT_EQUAL
-        | CPUI_INT_NOTEQUAL
-        | CPUI_SUBPIECE
-        | CPUI_PIECE
-        | CPUI_POPCOUNT
-        | CPUI_LZCOUNT
-        | CPUI_CBRANCH
-        | CPUI_RETURN
-        | CPUI_BOOL_NEGATE
-        | CPUI_BOOL_AND
-        | CPUI_BOOL_OR
-        | CPUI_BOOL_XOR => Opaque,
+        CPUI_INT_EQUAL | CPUI_INT_NOTEQUAL | CPUI_SUBPIECE | CPUI_PIECE | CPUI_POPCOUNT
+        | CPUI_LZCOUNT | CPUI_CBRANCH | CPUI_RETURN | CPUI_BOOL_NEGATE | CPUI_BOOL_AND
+        | CPUI_BOOL_OR | CPUI_BOOL_XOR => Opaque,
         // A call argument converts to the parameter's type at a fixed width; the
         // call target itself is not a value this pass understands.
         CPUI_CALL | CPUI_CALLIND | CPUI_CALLOTHER => {
@@ -605,8 +601,15 @@ fn evidence_for(fd: &Funcdata, high: HighVariableId, castsign: bool) -> (Evidenc
     (verdict, cs)
 }
 
-fn evidence_walk(fd: &Funcdata, high: HighVariableId, castsign: bool, cs: &mut CastsignWalk) -> Evidence {
-    let Some(h) = fd.high_bank().get(high) else { return Evidence::Veto };
+fn evidence_walk(
+    fd: &Funcdata,
+    high: HighVariableId,
+    castsign: bool,
+    cs: &mut CastsignWalk,
+) -> Evidence {
+    let Some(h) = fd.high_bank().get(high) else {
+        return Evidence::Veto;
+    };
     let mut verdict = Evidence::None;
     let mut seen: HashSet<VarnodeId> = HashSet::new();
     let mut work: Vec<VarnodeId> = Vec::new();
@@ -619,7 +622,12 @@ fn evidence_walk(fd: &Funcdata, high: HighVariableId, castsign: bool, cs: &mut C
             work.push(vn);
         }
         // A type-locked member is a user/DWARF decision; never re-sign it.
-        if fd.vbank().get(vn).map(|v| v.is_type_lock()).unwrap_or(false) {
+        if fd
+            .vbank()
+            .get(vn)
+            .map(|v| v.is_type_lock())
+            .unwrap_or(false)
+        {
             return Evidence::Veto;
         }
     }
@@ -643,7 +651,9 @@ fn evidence_walk(fd: &Funcdata, high: HighVariableId, castsign: bool, cs: &mut C
             None => continue,
         };
         for op in descend {
-            let Some(o) = fd.obank().get(op) else { continue };
+            let Some(o) = fd.obank().get(op) else {
+                continue;
+            };
             let opc = o.code();
             if opc == OpCode::CPUI_CAST {
                 // A cast re-establishes the type, so the walk stops here - but a
@@ -670,7 +680,10 @@ fn evidence_walk(fd: &Funcdata, high: HighVariableId, castsign: bool, cs: &mut C
                     cs.widened = true;
                     continue;
                 }
-                if castsign && cast_ev != Evidence::Veto && fd.vbank().get(vn).is_some_and(|v| v.is_explicit()) {
+                if castsign
+                    && cast_ev != Evidence::Veto
+                    && fd.vbank().get(vn).is_some_and(|v| v.is_explicit())
+                {
                     cs.casts.push(op);
                 }
                 verdict = verdict.join(cast_ev);
@@ -763,10 +776,16 @@ pub fn plan(
     if !policy.is_active() {
         return out;
     }
-    let names = if castsign { crate::kuna_castsign::name_counts(fd) } else { HashMap::new() };
+    let names = if castsign {
+        crate::kuna_castsign::name_counts(fd)
+    } else {
+        HashMap::new()
+    };
     let highs: Vec<HighVariableId> = fd.high_bank().iter().map(|(id, _)| id).collect();
     for high in highs {
-        let Some(h) = fd.high_bank().get(high) else { continue };
+        let Some(h) = fd.high_bank().get(high) else {
+            continue;
+        };
         if h.kuna_name().is_none() {
             continue;
         }
@@ -790,12 +809,18 @@ pub fn plan(
         // also takes a body local one of whose members is an input (a slot or
         // register read before any write): the printer declares only body locals,
         // and `SignPlan::retain_sole_named` drops every high it does not declare.
-        let is_param = (0..h.num_instances())
-            .any(|i| fd.vbank().get(h.get_instance(i)).map(|v| v.is_input()).unwrap_or(false));
+        let is_param = (0..h.num_instances()).any(|i| {
+            fd.vbank()
+                .get(h.get_instance(i))
+                .map(|v| v.is_input())
+                .unwrap_or(false)
+        });
         if is_param && !castsign {
             continue;
         }
-        let Some(cur) = decl_type_of(high) else { continue };
+        let Some(cur) = decl_type_of(high) else {
+            continue;
+        };
         if !is_plain_integer(&cur) {
             continue;
         }
@@ -816,7 +841,13 @@ pub fn plan(
             continue;
         }
         if frame_local
-            && !crate::kuna_castsign::whole_slot_local(fd, high, cur.get_size(), &names, is_plain_integer)
+            && !crate::kuna_castsign::whole_slot_local(
+                fd,
+                high,
+                cur.get_size(),
+                &names,
+                is_plain_integer,
+            )
         {
             continue;
         }

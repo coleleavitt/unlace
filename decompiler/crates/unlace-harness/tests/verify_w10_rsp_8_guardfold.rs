@@ -36,7 +36,10 @@ use unlace_harness::testfunction::run_test_files_with_specs;
 static DUMP_ENV_LOCK: Mutex<()> = Mutex::new(());
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn x86_64_sla() -> PathBuf {
@@ -54,7 +57,9 @@ fn run_one(stem: &str) -> Option<String> {
         eprintln!("SKIP: x86-64.sla not built (run `make specs`)");
         return None;
     }
-    let path = repo_root().join("tests/datatests").join(format!("{stem}.xml"));
+    let path = repo_root()
+        .join("tests/datatests")
+        .join(format!("{stem}.xml"));
     let path = path.to_str().expect("utf8 path").to_string();
     let specs = specs_dir_string();
     let files = vec![path];
@@ -78,7 +83,10 @@ fn run_one(stem: &str) -> Option<String> {
 
 /// Extract just the rendered `print C` body from the KUNA_DUMP envelope.
 fn dump_body(out: &str) -> String {
-    match (out.find("===KUNA_DUMP_BEGIN"), out.find("===KUNA_DUMP_MID===")) {
+    match (
+        out.find("===KUNA_DUMP_BEGIN"),
+        out.find("===KUNA_DUMP_MID==="),
+    ) {
         (Some(b), Some(m)) => out[b..m].to_string(),
         _ => out.to_string(),
     }
@@ -88,7 +96,9 @@ fn dump_body(out: &str) -> String {
 /// `Switch Indirect #8` (`default:`) passes — switchind reaches 16/16.
 #[test]
 fn guardfold_switchind_default_folds_in_16_of_16() {
-    let Some(out) = run_one("switchind") else { return };
+    let Some(out) = run_one("switchind") else {
+        return;
+    };
     for i in 1..=16 {
         let name = format!("Switch Indirect #{i}");
         assert!(
@@ -103,7 +113,10 @@ fn guardfold_switchind_default_folds_in_16_of_16() {
     }
     let body = dump_body(&out);
     // The folded `default:` arm replaces the `casefuncdefault();` epilogue.
-    assert!(body.contains("default:"), "switchind missing the folded `default:`:\n{body}");
+    assert!(
+        body.contains("default:"),
+        "switchind missing the folded `default:`:\n{body}"
+    );
 }
 
 /// (2) switchmulti UNPERTURBED: the fold takes the `pushBranch` arm here; the
@@ -113,7 +126,9 @@ fn guardfold_switchind_default_folds_in_16_of_16() {
 /// in as an 8th labeled `case 0xbad1abe1...`, breaking #1.
 #[test]
 fn guardfold_switchmulti_first_assertion_unperturbed() {
-    let Some(out) = run_one("switchmulti") else { return };
+    let Some(out) = run_one("switchmulti") else {
+        return;
+    };
     assert!(
         out.contains("Success -- Switch Multi #1\n"),
         "Switch Multi #1 regressed — the guard-fold pulled in an extra labeled \
@@ -130,7 +145,10 @@ fn guardfold_switchmulti_first_assertion_unperturbed() {
         "switchmulti must render exactly 7 labeled `case` lines (default folds \
          separately as `default:`), got {case_lines}:\n{body}"
     );
-    assert!(body.contains("default:"), "switchmulti missing the folded `default:`:\n{body}");
+    assert!(
+        body.contains("default:"),
+        "switchmulti missing the folded `default:`:\n{body}"
+    );
 }
 
 /// (3) NO `if (1)` constant-guard residue: after the fold sets the guard CBRANCH

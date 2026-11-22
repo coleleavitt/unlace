@@ -51,10 +51,10 @@ use unlace_sleigh::translate::Translate;
 
 use super::kuna_poolref::PoolImage;
 use super::kuna_switchtable::{
-    fold, invalidate, is_constant, key_of, keys_overlap, value_of, Key, Val, DEFAULT_MAX_ENTRIES,
-    MAX_TRACKED, MIN_ENTRIES,
+    DEFAULT_MAX_ENTRIES, Key, MAX_TRACKED, MIN_ENTRIES, Val, fold, invalidate, is_constant, key_of,
+    keys_overlap, value_of,
 };
-use super::xrefs::{decode, in_range, FullCapture, FullOp};
+use super::xrefs::{FullCapture, FullOp, decode, in_range};
 
 /// How far back from a `tbb`/`tbh` its range check may sit: the conditional
 /// branch and the `cmp`, with room for one instruction scheduled between them.
@@ -81,8 +81,16 @@ impl<'a> HalfwordTables<'a> {
         {
             return None;
         }
-        let max_entries = if max_entries == 0 { DEFAULT_MAX_ENTRIES } else { max_entries };
-        Some(HalfwordTables { pool: PoolImage::new(file)?, data_space, max_entries })
+        let max_entries = if max_entries == 0 {
+            DEFAULT_MAX_ENTRIES
+        } else {
+            max_entries
+        };
+        Some(HalfwordTables {
+            pool: PoolImage::new(file)?,
+            data_space,
+            max_entries,
+        })
     }
 
     /// The case bodies of the computed jump at `from` when it is a PC-relative
@@ -107,22 +115,46 @@ impl<'a> HalfwordTables<'a> {
         let mut index: Option<Key> = None;
         for op in cap.ops() {
             if op.opcode == OpCode::CPUI_BRANCHIND {
-                let Some(Val::Relative { table, width, signed: false, shift: 1, base }) =
-                    op.ins.first().and_then(|vn| value_of(vn, &vals, data))
+                let Some(Val::Relative {
+                    table,
+                    width,
+                    signed: false,
+                    shift: 1,
+                    base,
+                }) = op.ins.first().and_then(|vn| value_of(vn, &vals, data))
                 else {
                     return (Vec::new(), None);
                 };
-                let Some(index) = index.filter(|_| table == base) else { return (Vec::new(), None) };
-                let Some(cases) = guard_cases(translate, code_space, data, decoded, from, index, None).ok()
-                    .filter(|&n| n >= MIN_ENTRIES)
+                let Some(index) = index.filter(|_| table == base) else {
+                    return (Vec::new(), None);
+                };
+                let Some(cases) =
+                    guard_cases(translate, code_space, data, decoded, from, index, None)
+                        .ok()
+                        .filter(|&n| n >= MIN_ENTRIES)
                 else {
                     return (Vec::new(), None);
                 };
-                let read = offset_targets(table, width, cases, self.max_entries, from, &self.pool, exec);
-                return if read.is_empty() { (read, None) } else { (read, Some(cases)) };
+                let read = offset_targets(
+                    table,
+                    width,
+                    cases,
+                    self.max_entries,
+                    from,
+                    &self.pool,
+                    exec,
+                );
+                return if read.is_empty() {
+                    (read, None)
+                } else {
+                    (read, Some(cases))
+                };
             }
             if index.is_none()
-                && matches!(op.opcode, OpCode::CPUI_COPY | OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_MULT)
+                && matches!(
+                    op.opcode,
+                    OpCode::CPUI_COPY | OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_MULT
+                )
             {
                 index = op
                     .ins
@@ -169,10 +201,18 @@ pub(super) fn guard_cases(
     let mut cur = from;
     let mut inclusive: Option<bool> = None;
     if let Some(dispatch) = predicated {
-        inclusive = Some(range_branch(dispatch, from, from, translate, data).flatten().ok_or(None)?);
+        inclusive = Some(
+            range_branch(dispatch, from, from, translate, data)
+                .flatten()
+                .ok_or(None)?,
+        );
     }
     for _ in 0..MAX_GUARD_INSNS {
-        let Some(prev) = [2, 4].iter().filter_map(|&d| cur.checked_sub(d)).find(|&at| decoded(at)) else {
+        let Some(prev) = [2, 4]
+            .iter()
+            .filter_map(|&d| cur.checked_sub(d))
+            .find(|&at| decoded(at))
+        else {
             return Err(Some(cur));
         };
         let len = decode(translate, prev, code_space, &mut cap).ok_or(None)?;
@@ -181,19 +221,38 @@ pub(super) fn guard_cases(
         }
         let ops = cap.ops();
         if ops.iter().any(|op| {
-            op.out.as_ref().and_then(|o| key_of(o, data)).is_some_and(|k| keys_overlap(k, index))
-                || matches!(op.opcode, OpCode::CPUI_BRANCH | OpCode::CPUI_BRANCHIND
-                    | OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_RETURN)
+            op.out
+                .as_ref()
+                .and_then(|o| key_of(o, data))
+                .is_some_and(|k| keys_overlap(k, index))
+                || matches!(
+                    op.opcode,
+                    OpCode::CPUI_BRANCH
+                        | OpCode::CPUI_BRANCHIND
+                        | OpCode::CPUI_CALL
+                        | OpCode::CPUI_CALLIND
+                        | OpCode::CPUI_RETURN
+                )
         }) {
             return Err(None);
         }
         if let Some(inclusive) = inclusive {
-            let carry = ops.iter().rev().find(|op| {
-                op.out.as_ref().is_some_and(|out| flag_name(out, translate) == "CY")
-            }).and_then(|op| {
-                let source = if op.opcode == OpCode::CPUI_COPY { op.ins.first() } else { op.out.as_ref() };
-                source.and_then(|vn| key_of(vn, data))
-            });
+            let carry = ops
+                .iter()
+                .rev()
+                .find(|op| {
+                    op.out
+                        .as_ref()
+                        .is_some_and(|out| flag_name(out, translate) == "CY")
+                })
+                .and_then(|op| {
+                    let source = if op.opcode == OpCode::CPUI_COPY {
+                        op.ins.first()
+                    } else {
+                        op.out.as_ref()
+                    };
+                    source.and_then(|vn| key_of(vn, data))
+                });
             let bound = ops.iter().find_map(|op| {
                 let (n, reg) = (op.ins.first()?, op.ins.get(1)?);
                 (op.opcode == OpCode::CPUI_INT_LESSEQUAL
@@ -201,14 +260,19 @@ pub(super) fn guard_cases(
                     && key_of(reg, data) == Some(index)
                     && carry.is_some()
                     && op.out.as_ref().and_then(|out| key_of(out, data)) == carry)
-                .then_some(n.offset)
+                    .then_some(n.offset)
             });
             if let Some(n) = bound {
-                return usize::try_from(n).ok().and_then(|n| n.checked_add(usize::from(inclusive))).ok_or(None);
+                return usize::try_from(n)
+                    .ok()
+                    .and_then(|n| n.checked_add(usize::from(inclusive)))
+                    .ok_or(None);
             }
             if ops.iter().any(|op| {
                 op.opcode == OpCode::CPUI_CBRANCH
-                    || op.out.as_ref().is_some_and(|out| matches!(flag_name(out, translate).as_str(), "CY" | "ZR"))
+                    || op.out.as_ref().is_some_and(|out| {
+                        matches!(flag_name(out, translate).as_str(), "CY" | "ZR")
+                    })
             }) {
                 return Err(None);
             }
@@ -233,11 +297,17 @@ fn range_branch(
     translate: &dyn Translate,
     data: Option<&Rc<AddrSpace>>,
 ) -> Option<Option<bool>> {
-    let mut branches = ops.iter().enumerate().filter(|(_, op)| op.opcode == OpCode::CPUI_CBRANCH);
+    let mut branches = ops
+        .iter()
+        .enumerate()
+        .filter(|(_, op)| op.opcode == OpCode::CPUI_CBRANCH);
     let (at, branch) = branches.next()?;
     let range = || {
         let target = branch.ins.first()?;
-        if branches.clone().next().is_some() || is_constant(target) || (cur..=from).contains(&target.offset) {
+        if branches.clone().next().is_some()
+            || is_constant(target)
+            || (cur..=from).contains(&target.offset)
+        {
             return None;
         }
         match guard_mask(branch.ins.get(1)?, &ops[..at], translate, data)? {
@@ -253,19 +323,33 @@ fn flag_name(vn: &VarnodeData, translate: &dyn Translate) -> String {
     if vn.size != 1 || !matches!(key_of(vn, None), Some(Key::Reg(..))) {
         return String::new();
     }
-    vn.space.as_ref().map_or_else(String::new, |space| translate.get_register_name(space, vn.offset, 1))
+    vn.space.as_ref().map_or_else(String::new, |space| {
+        translate.get_register_name(space, vn.offset, 1)
+    })
 }
 
 /// The condition for an index below, equal to, or above the unsigned bound.
-fn guard_mask(vn: &VarnodeData, ops: &[FullOp], translate: &dyn Translate, data: Option<&Rc<AddrSpace>>) -> Option<u8> {
+fn guard_mask(
+    vn: &VarnodeData,
+    ops: &[FullOp],
+    translate: &dyn Translate,
+    data: Option<&Rc<AddrSpace>>,
+) -> Option<u8> {
     if vn.size != 1 {
         return None;
     }
     if is_constant(vn) {
-        return match vn.offset { 0 => Some(0), 1 => Some(0b111), _ => None };
+        return match vn.offset {
+            0 => Some(0),
+            1 => Some(0b111),
+            _ => None,
+        };
     }
     let key = key_of(vn, data)?;
-    if let Some(at) = ops.iter().rposition(|op| op.out.as_ref().and_then(|out| key_of(out, data)) == Some(key)) {
+    if let Some(at) = ops
+        .iter()
+        .rposition(|op| op.out.as_ref().and_then(|out| key_of(out, data)) == Some(key))
+    {
         let op = &ops[at];
         let a = guard_mask(op.ins.first()?, &ops[..at], translate, data)?;
         let b = || guard_mask(op.ins.get(1)?, &ops[..at], translate, data);
@@ -302,12 +386,17 @@ fn offset_targets(
         return Vec::new();
     };
     let step = u64::from(width);
-    let Some(end) = (cases as u64).checked_mul(step).and_then(|n| table.checked_add(n)) else {
+    let Some(end) = (cases as u64)
+        .checked_mul(step)
+        .and_then(|n| table.checked_add(n))
+    else {
         return Vec::new();
     };
     let mut out = Vec::with_capacity(cases.min(limit));
     for at in (table..end).step_by(step as usize).take(limit) {
-        let Some(entry) = pool.uword_at(at, width) else { return Vec::new() };
+        let Some(entry) = pool.uword_at(at, width) else {
+            return Vec::new();
+        };
         let target = table.wrapping_add(entry * 2);
         if target < end || !in_range(&[section], target) {
             return Vec::new();
@@ -340,7 +429,10 @@ mod tests {
     #[test]
     fn a_halfword_table_reads_little_endian_pairs() {
         let exec = [(0x1000, 0x3000)];
-        assert_eq!(offset_targets(0x1004, 2, 2, 2, 0x1000, &image(), &exec), vec![0x1a08, 0x2616]);
+        assert_eq!(
+            offset_targets(0x1004, 2, 2, 2, 0x1000, &image(), &exec),
+            vec![0x1a08, 0x2616]
+        );
     }
 
     /// A case outside the dispatcher's own executable range is not a case.
@@ -362,7 +454,10 @@ mod tests {
     /// still checked against the end of the whole table.
     #[test]
     fn a_ceiling_reads_the_first_entries() {
-        assert_eq!(offset_targets(0x1004, 1, 4, 2, 0x1000, &image(), &EXEC), vec![0x1008, 0x100e]);
+        assert_eq!(
+            offset_targets(0x1004, 1, 4, 2, 0x1000, &image(), &EXEC),
+            vec![0x1008, 0x100e]
+        );
         let bytes = [0x01, 0x05, 0x09, 0x0b];
         let pool = PoolImage::from_ranges(vec![(0x1004, 0x1008, &bytes[..])], 4, true).unwrap();
         assert!(offset_targets(0x1004, 1, 4, 2, 0x1000, &pool, &EXEC).is_empty());
@@ -370,6 +465,8 @@ mod tests {
 
     #[test]
     fn a_table_past_the_read_only_image_reads_nothing() {
-        assert!(offset_targets(0x1004, 1, 12, 12, 0x1000, &image(), &[(0x1000, 0x2000)]).is_empty());
+        assert!(
+            offset_targets(0x1004, 1, 12, 12, 0x1000, &image(), &[(0x1000, 0x2000)]).is_empty()
+        );
     }
 }

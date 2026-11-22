@@ -10,7 +10,9 @@
 use crate::common;
 use common::process;
 use object::write::{Object, Symbol, SymbolSection};
-use object::{Architecture, BinaryFormat, Endianness, SectionKind, SymbolFlags, SymbolKind, SymbolScope};
+use object::{
+    Architecture, BinaryFormat, Endianness, SectionKind, SymbolFlags, SymbolKind, SymbolScope,
+};
 use std::process::Command;
 
 /// The images' source; each image names its functions without the `s_`.
@@ -68,8 +70,14 @@ const ARGS: &[(&str, &str)] = &[
     ("arg", "(unsigned long)v"),
     ("eqv", "(unsigned long)v, (int)(((unsigned long)v ^ 9) * 3)"),
     ("ar", "(unsigned long)v, v"),
-    ("eqw", "(unsigned long)v, (int)(((unsigned long)v ^ 13) * 0x100000003UL)"),
-    ("eqz", "(unsigned long)v, (unsigned long)(unsigned)((((unsigned long)v ^ 15) * 3) + 1)"),
+    (
+        "eqw",
+        "(unsigned long)v, (int)(((unsigned long)v ^ 13) * 0x100000003UL)",
+    ),
+    (
+        "eqz",
+        "(unsigned long)v, (unsigned long)(unsigned)((((unsigned long)v ^ 15) * 3) + 1)",
+    ),
 ];
 
 struct Image {
@@ -82,8 +90,8 @@ struct Image {
 }
 
 const ALL: &[&str] = &[
-    "z32m", "zn", "lb", "cz", "ci", "cp", "cru", "cs", "cb", "lq", "cq", "cw", "z6", "z7", "z8", "rsh", "lsh", "arg", "eqv",
-    "ar", "eqw", "eqz",
+    "z32m", "zn", "lb", "cz", "ci", "cp", "cru", "cs", "cb", "lq", "cq", "cw", "z6", "z7", "z8",
+    "rsh", "lsh", "arg", "eqv", "ar", "eqw", "eqz",
 ];
 
 /// gcc -O2 and clang -O0 for x86-64, clang -O2 and -O0 for AArch64. AArch64
@@ -252,8 +260,8 @@ const IMAGES: &[Image] = &[
             ("eqz", 0x26c, 0x30),
         ],
         checked: &[
-            "z32m", "zn", "lb", "cz", "ci", "cp", "cs", "lq", "cq", "cw", "z6", "z7", "z8", "rsh", "lsh", "arg", "eqv",
-            "ar", "eqw", "eqz",
+            "z32m", "zn", "lb", "cz", "ci", "cp", "cs", "lq", "cq", "cw", "z6", "z7", "z8", "rsh",
+            "lsh", "arg", "eqv", "ar", "eqw", "eqz",
         ],
     },
     Image {
@@ -321,15 +329,18 @@ const IMAGES: &[Image] = &[
             ("eqz", 0x490, 0x44),
         ],
         checked: &[
-            "z32m", "zn", "lb", "cz", "ci", "cp", "cs", "lq", "cq", "cw", "z6", "z7", "z8", "rsh", "lsh", "arg", "eqv",
-            "ar", "eqw", "eqz",
+            "z32m", "zn", "lb", "cz", "ci", "cp", "cs", "lq", "cq", "cw", "z6", "z7", "z8", "rsh",
+            "lsh", "arg", "eqv", "ar", "eqw", "eqz",
         ],
     },
 ];
 
 fn bytes(hex: &str) -> Vec<u8> {
     let hex: String = hex.chars().filter(|c| c.is_ascii_hexdigit()).collect();
-    (0..hex.len()).step_by(2).map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap()).collect()
+    (0..hex.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
+        .collect()
 }
 
 /// A relocatable object holding the image's `.text` and its function symbols.
@@ -355,15 +366,25 @@ fn object(image: &Image) -> Vec<u8> {
 fn decompile_all(image: &Image) -> String {
     let path = common::scratch_file(&format!("zextreturn-{}", image.name), "o");
     std::fs::write(&path, object(image)).unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_unlace")).args(["decompile-all", path.to_str().unwrap()]).output().unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
+        .args(["decompile-all", path.to_str().unwrap()])
+        .output()
+        .unwrap();
     let text = String::from_utf8(output.stdout).unwrap();
-    assert!(output.status.success(), "{}: {text}\n{}", image.name, String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}: {text}\n{}",
+        image.name,
+        String::from_utf8_lossy(&output.stderr)
+    );
     text
 }
 
 /// The printed function `name`, from its header comment to the next.
 fn function<'a>(text: &'a str, name: &str) -> &'a str {
-    let start = text.find(&format!("// Function: {name} @")).unwrap_or_else(|| panic!("no {name}:\n{text}"));
+    let start = text
+        .find(&format!("// Function: {name} @"))
+        .unwrap_or_else(|| panic!("no {name}:\n{text}"));
     let rest = &text[start + 1..];
     &text[start..start + 1 + rest.find("// Function:").unwrap_or(rest.len())]
 }
@@ -372,7 +393,11 @@ fn function<'a>(text: &'a str, name: &str) -> &'a str {
 /// against its source over a range of inputs, at -O0 and -O2 with each host
 /// compiler.
 fn round_trip(image: &Image, text: &str) -> Result<(), String> {
-    let printed: String = image.functions.iter().map(|(n, _, _)| function(text, n)).collect();
+    let printed: String = image
+        .functions
+        .iter()
+        .map(|(n, _, _)| function(text, n))
+        .collect();
     let checks: String = ARGS
         .iter()
         .filter(|(n, _)| image.checked.contains(n))
@@ -391,23 +416,40 @@ fn round_trip(image: &Image, text: &str) -> Result<(), String> {
         .into_iter()
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
-    assert!(!compilers.is_empty(), "the round trip requires a C compiler");
+    assert!(
+        !compilers.is_empty(),
+        "the round trip requires a C compiler"
+    );
     for cc in compilers {
         for level in ["-O0", "-O2"] {
             let src = common::scratch_file(&format!("zextreturn-{}-{cc}{level}", image.name), "c");
             let exe = src.with_extension("exe");
             std::fs::write(&src, &program).unwrap();
             let out = Command::new(cc)
-                .args(["-std=gnu11", "-w", "-fwrapv", level, "-o", exe.to_str().unwrap(), src.to_str().unwrap()])
+                .args([
+                    "-std=gnu11",
+                    "-w",
+                    "-fwrapv",
+                    level,
+                    "-o",
+                    exe.to_str().unwrap(),
+                    src.to_str().unwrap(),
+                ])
                 .args(common::CC_GCC15_DEMOTE)
                 .output()
                 .expect("spawn the C compiler");
             if !out.status.success() {
-                return Err(format!("{cc} {level} rejects the printed C:\n{}", String::from_utf8_lossy(&out.stderr)));
+                return Err(format!(
+                    "{cc} {level} rejects the printed C:\n{}",
+                    String::from_utf8_lossy(&out.stderr)
+                ));
             }
             let run = Command::new(&exe).output().expect("run the round trip");
             if !run.status.success() {
-                return Err(format!("{cc} {level}:\n{}", String::from_utf8_lossy(&run.stdout)));
+                return Err(format!(
+                    "{cc} {level}:\n{}",
+                    String::from_utf8_lossy(&run.stdout)
+                ));
             }
         }
     }
@@ -440,11 +482,19 @@ fn a_caller_that_computes_with_the_whole_register_keeps_the_zero_extension() {
         let text = decompile_all(image);
         round_trip(image, &text).unwrap_or_else(|e| panic!("{}: {e}\n{text}", image.name));
         for (name, ret) in widened {
-            assert!(function(&text, name).contains(ret), "{}: {name} is not `{ret}`:\n{text}", image.name);
+            assert!(
+                function(&text, name).contains(ret),
+                "{}: {name} is not `{ret}`:\n{text}",
+                image.name
+            );
         }
         for name in ["ru", "si"] {
             let header = function(&text, name).lines().nth(1).unwrap_or_default();
-            assert!(header.starts_with("int "), "{}: {name} widened: {header}\n{text}", image.name);
+            assert!(
+                header.starts_with("int "),
+                "{}: {name} widened: {header}\n{text}",
+                image.name
+            );
         }
     }
 }

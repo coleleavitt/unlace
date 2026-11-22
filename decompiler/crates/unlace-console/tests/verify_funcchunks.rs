@@ -3,8 +3,8 @@
 
 use std::path::PathBuf;
 
-use unlace_analysis::listing::kuna_funcchunks::ChunkModel;
 use unlace_analysis::listing::Listing;
+use unlace_analysis::listing::kuna_funcchunks::ChunkModel;
 use unlace_console::engine::bootstrap_from_object;
 
 const F: u64 = 0x401019;
@@ -13,7 +13,10 @@ const H: u64 = 0x401030;
 const SHARED: u64 = 0x401036;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn listing_of(bin: &str, extra_seeds: &[u64]) -> Listing {
@@ -35,17 +38,30 @@ fn listing_of(bin: &str, extra_seeds: &[u64]) -> Listing {
 
 #[test]
 fn shared_tail_belongs_to_both_jumpers_and_not_to_the_clip_neighbour() {
-    let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/funcchunks_x86_64");
+    let bin =
+        repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/funcchunks_x86_64");
     let listing = listing_of(bin.to_str().unwrap(), &[]);
     let model = ChunkModel::build(&listing);
 
-    assert_eq!(model.chunks(F).unwrap(), &[(F, F + 11), (SHARED, SHARED + 6)]);
-    assert_eq!(model.chunks(G).unwrap(), &[(G, G + 12), (SHARED, SHARED + 6)]);
+    assert_eq!(
+        model.chunks(F).unwrap(),
+        &[(F, F + 11), (SHARED, SHARED + 6)]
+    );
+    assert_eq!(
+        model.chunks(G).unwrap(),
+        &[(G, G + 12), (SHARED, SHARED + 6)]
+    );
     assert_eq!(model.chunks(H).unwrap(), &[(H, H + 6)]);
     assert_eq!(model.owners(SHARED), vec![F, G]);
 
-    let clip_h: Vec<u64> = listing.instructions_in_range(H, None).map(|(&a, _)| a).collect();
-    assert!(clip_h.contains(&SHARED), "the clip hands the shared tail to h");
+    let clip_h: Vec<u64> = listing
+        .instructions_in_range(H, None)
+        .map(|(&a, _)| a)
+        .collect();
+    assert!(
+        clip_h.contains(&SHARED),
+        "the clip hands the shared tail to h"
+    );
 }
 
 /// The inventory `size` is the chunk body under `funcchunks`: `h` is its own two
@@ -54,9 +70,11 @@ fn shared_tail_belongs_to_both_jumpers_and_not_to_the_clip_neighbour() {
 #[test]
 fn inventory_size_is_the_chunk_body() {
     let spec_roots = vec![repo_root().join("specs").to_str().unwrap().to_string()];
-    let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/funcchunks_x86_64");
+    let bin =
+        repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/funcchunks_x86_64");
     let sizes = |on: bool| {
-        let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots).expect("bootstrap");
+        let mut prog =
+            bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots).expect("bootstrap");
         prog.arch_mut().set_kuna_option("listing", "on").unwrap();
         if on {
             prog.arch_mut().set_kuna_option("funcchunks", "on").unwrap();
@@ -80,7 +98,9 @@ fn inventory_size_is_the_chunk_body() {
 #[test]
 #[ignore]
 fn funcchunks_stats() {
-    let Ok(list) = std::env::var("KUNA_FUNCCHUNKS_BINS") else { return };
+    let Ok(list) = std::env::var("KUNA_FUNCCHUNKS_BINS") else {
+        return;
+    };
     for bin in list.split(':').filter(|s| !s.is_empty()) {
         let bytes = std::fs::read(bin).expect("read binary");
         let file = object::File::parse(&*bytes).expect("parse object");
@@ -104,7 +124,10 @@ fn funcchunks_stats() {
                 }
             }
             let next = listing.next_function_after(e).map(|f| f.entry);
-            let clip: Vec<u64> = listing.instructions_in_range(e, next).map(|(&a, _)| a).collect();
+            let clip: Vec<u64> = listing
+                .instructions_in_range(e, next)
+                .map(|(&a, _)| a)
+                .collect();
             let mut body: Vec<u64> = chunks
                 .iter()
                 .flat_map(|&(s, end)| listing.instructions_in_range(s, Some(end)).map(|(&a, _)| a))

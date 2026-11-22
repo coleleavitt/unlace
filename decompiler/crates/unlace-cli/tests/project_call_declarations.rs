@@ -302,7 +302,11 @@ fn selected_callees_and_array_returns_keep_the_header_valid() {
         .arg(&binary)
         .output()
         .unwrap();
-    assert!(built.status.success(), "{}", String::from_utf8_lossy(&built.stderr));
+    assert!(
+        built.status.success(),
+        "{}",
+        String::from_utf8_lossy(&built.stderr)
+    );
     let stem = binary.file_name().unwrap().to_str().unwrap();
     for selection in ["record", "record,invert"] {
         let directory = source.with_extension(format!("project-{}", selection.len()));
@@ -323,6 +327,10 @@ fn selected_callees_and_array_returns_keep_the_header_valid() {
             .arg(&header_path)
             .output()
             .unwrap();
-        assert!(checked.status.success(), "{header}\n{}", String::from_utf8_lossy(&checked.stderr));
+        assert!(
+            checked.status.success(),
+            "{header}\n{}",
+            String::from_utf8_lossy(&checked.stderr)
+        );
     }
 }

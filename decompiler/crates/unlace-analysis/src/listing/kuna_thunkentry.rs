@@ -190,7 +190,10 @@ impl crate::pass::AnalysisPass for IncrementalLinkPass {
     }
 
     fn run(&self, ctx: &crate::pass::AnalysisCtx) -> crate::pass::AnalysisOutput {
-        crate::pass::AnalysisOutput { entries: incremental_link_roots(ctx.file), ..Default::default() }
+        crate::pass::AnalysisOutput {
+            entries: incremental_link_roots(ctx.file),
+            ..Default::default()
+        }
     }
 }
 
@@ -207,7 +210,10 @@ const MIN_TABLE_RUN: usize = 16;
 pub fn incremental_link_roots(file: &object::File) -> Vec<u64> {
     use object::read::Object;
     if file.format() != object::BinaryFormat::Pe
-        || !matches!(file.architecture(), object::Architecture::I386 | object::Architecture::X86_64)
+        || !matches!(
+            file.architecture(),
+            object::Architecture::I386 | object::Architecture::X86_64
+        )
     {
         return Vec::new();
     }
@@ -265,7 +271,9 @@ fn table_runs(code: &[u8], base: u64, executable: impl Fn(u64) -> bool) -> Vec<(
         let distinct = run.iter().map(|&(_, t)| t).collect::<BTreeSet<u64>>().len();
         if padded
             && 2 * distinct >= count
-            && run.iter().all(|&(_, t)| executable(t) && !(lo..hi).contains(&t))
+            && run
+                .iter()
+                .all(|&(_, t)| executable(t) && !(lo..hi).contains(&t))
         {
             pairs.extend(run);
         }

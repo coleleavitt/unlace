@@ -27,16 +27,16 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
+use unlace_decomp::context::{ArchContext, BlockId, TypeOp, VarnodeId};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::kuna_loweredswitch::{
     ActionLowerSwitchDetect, KunaLoweredSwitchStore, OptionLowerSwitch,
 };
-use unlace_decomp::context::{ArchContext, BlockId, TypeOp, VarnodeId};
 
 // -----------------------------------------------------------------------------
 // Harness (mirrors kuna_loweredswitch/tests.rs)
@@ -45,7 +45,8 @@ use unlace_decomp::context::{ArchContext, BlockId, TypeOp, VarnodeId};
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -188,14 +189,26 @@ fn v1_var_count_tie_is_deterministic_first_created_wins() {
     build_cascade_on(&mut fd, v2, 0x6000, 0x7000);
 
     let mut act = ActionLowerSwitchDetect::new(true, "base");
-    assert_eq!(act.detect(&mut fd), 1, "exactly one cascade recovered on a var tie");
+    assert_eq!(
+        act.detect(&mut fd),
+        1,
+        "exactly one cascade recovered on a var tie"
+    );
     let recs = act.store().borrow().records(&fd).to_vec();
     assert_eq!(recs.len(), 1);
     // Deterministic resolution: the earlier-created varnode (v1) wins the
     // strict-`>` `bestCount` pick, so its cascade (head CBRANCH at 0x1001,
     // var storage 0x4000) is recorded — NOT v2's (0x6001 / 0x4010).
-    assert_eq!(off(&recs[0].branch_addr), 0x1001, "v1's head, not v2's (0x6001)");
-    assert_eq!(off(&recs[0].var_addr), 0x4000, "v1's storage, not v2's (0x4010)");
+    assert_eq!(
+        off(&recs[0].branch_addr),
+        0x1001,
+        "v1's head, not v2's (0x6001)"
+    );
+    assert_eq!(
+        off(&recs[0].var_addr),
+        0x4000,
+        "v1's storage, not v2's (0x4010)"
+    );
     // Sanity: the recovered cases are the cascade shape {0,2,3}.
     assert_eq!(recs[0].case_vals, vec![0u64, 2u64, 3u64]);
 }
@@ -205,20 +218,29 @@ fn v1_var_count_tie_is_deterministic_first_created_wins() {
 #[test]
 fn v1b_var_count_tie_goes_to_the_first_created_not_the_lower_slot() {
     let mut fd = build_fd();
-    let freed: Vec<VarnodeId> = (0..3).map(|i| fd.new_varnode(4, &ram_addr(&fd, 0x4800 + i), None)).collect();
+    let freed: Vec<VarnodeId> = (0..3)
+        .map(|i| fd.new_varnode(4, &ram_addr(&fd, 0x4800 + i), None))
+        .collect();
     let v_first = switch_var_at(&mut fd, 0x0F00, 0x4000);
     for vn in freed {
         fd.delete_varnode(vn).unwrap();
     }
     let v_later = switch_var_at(&mut fd, 0x0F10, 0x4010);
-    assert!(v_later < v_first, "the later variable sits in the lower slot");
+    assert!(
+        v_later < v_first,
+        "the later variable sits in the lower slot"
+    );
     build_cascade_on(&mut fd, v_later, 0x1000, 0x2000);
     build_cascade_on(&mut fd, v_first, 0x6000, 0x7000);
 
     let mut act = ActionLowerSwitchDetect::new(true, "base");
     assert_eq!(act.detect(&mut fd), 1);
     let recs = act.store().borrow().records(&fd).to_vec();
-    assert_eq!(off(&recs[0].var_addr), 0x4000, "the first-created variable's cascade");
+    assert_eq!(
+        off(&recs[0].var_addr),
+        0x4000,
+        "the first-created variable's cascade"
+    );
     assert_eq!(off(&recs[0].branch_addr), 0x6001);
 }
 
@@ -260,7 +282,11 @@ fn v1c_var_count_tie_falls_through_to_the_next_created_cascade() {
     let mut act = ActionLowerSwitchDetect::new(true, "base");
     assert_eq!(act.detect(&mut fd), 1);
     let recs = act.store().borrow().records(&fd).to_vec();
-    assert_eq!(off(&recs[0].var_addr), 0x4010, "the recoverable cascade of the later variable");
+    assert_eq!(
+        off(&recs[0].var_addr),
+        0x4010,
+        "the recoverable cascade of the later variable"
+    );
     assert_eq!(off(&recs[0].branch_addr), 0x6001);
     assert_eq!(recs[0].case_vals, vec![0u64, 2u64, 3u64]);
 }
@@ -304,7 +330,11 @@ fn build_n_case_cascade(fd: &mut Funcdata, v: VarnodeId, ncases: u64) {
             i as u64,
         );
         // out 0 = false = cont (next eq, or DEFAULT for the last)
-        let cont = if i + 1 < ncases as usize { eqs[i + 1] } else { default };
+        let cont = if i + 1 < ncases as usize {
+            eqs[i + 1]
+        } else {
+            default
+        };
         fd.bblocks_mut().add_edge(eqs[i], cont);
         // out 1 = true = match = CASE_i
         fd.bblocks_mut().add_edge(eqs[i], cases[i]);
@@ -318,7 +348,11 @@ fn v2_cap_boundary_16_accepted_17_rejected() {
     let v16 = switch_var_at(&mut fd16, 0x0F00, 0x4000);
     build_n_case_cascade(&mut fd16, v16, 16);
     let mut act16 = ActionLowerSwitchDetect::new(true, "base");
-    assert_eq!(act16.detect(&mut fd16), 1, "16 cases is at the cap, accepted");
+    assert_eq!(
+        act16.detect(&mut fd16),
+        1,
+        "16 cases is at the cap, accepted"
+    );
     assert_eq!(act16.store().borrow().records(&fd16)[0].case_vals.len(), 16);
 
     // 17 cases: rejected by the `> 16` fail-safe cap.
@@ -326,7 +360,11 @@ fn v2_cap_boundary_16_accepted_17_rejected() {
     let v17 = switch_var_at(&mut fd17, 0x0F00, 0x4000);
     build_n_case_cascade(&mut fd17, v17, 17);
     let mut act17 = ActionLowerSwitchDetect::new(true, "base");
-    assert_eq!(act17.detect(&mut fd17), 0, "17 cases exceeds the cap, rejected");
+    assert_eq!(
+        act17.detect(&mut fd17),
+        0,
+        "17 cases exceeds the cap, rejected"
+    );
     assert!(!act17.store().borrow().has_record(&fd17));
 }
 
@@ -371,7 +409,11 @@ fn v3_duplicate_case_value_bails() {
     fd.bblocks_mut().add_edge(b3, case_c); // true = match
 
     let mut act = ActionLowerSwitchDetect::new(true, "base");
-    assert_eq!(act.detect(&mut fd), 0, "duplicate case value 5 must bail recoverCascade");
+    assert_eq!(
+        act.detect(&mut fd),
+        0,
+        "duplicate case value 5 must bail recoverCascade"
+    );
     assert!(!act.store().borrow().has_record(&fd));
 }
 
@@ -421,10 +463,18 @@ fn v4_notequal_match_is_the_not_taken_edge() {
     let rec = &recs[0];
     // 3 distinct cases {0,2 -> A ; 1 -> B}; default = the common range sink.
     assert_eq!(rec.case_vals, vec![0u64, 1u64, 2u64]);
-    assert_eq!(off(&rec.case_targets[0]), 0x2000, "V==0 -> A (the false/not-taken edge)");
+    assert_eq!(
+        off(&rec.case_targets[0]),
+        0x2000,
+        "V==0 -> A (the false/not-taken edge)"
+    );
     assert_eq!(off(&rec.case_targets[1]), 0x2100, "V==1 -> B");
     assert_eq!(off(&rec.case_targets[2]), 0x2000, "V==2 -> A");
-    assert_eq!(off(&rec.default_target), 0x3000, "default is the range-false sink");
+    assert_eq!(
+        off(&rec.default_target),
+        0x3000,
+        "default is the range-false sink"
+    );
 }
 
 // -----------------------------------------------------------------------------
@@ -438,11 +488,20 @@ fn v5_option_and_store_surface() {
     // Option parse: on/off/empty/bad — the C++ onOrOff contract.
     let (on, msg_on) = OptionLowerSwitch.apply("on").unwrap();
     assert!(on.enabled());
-    assert_eq!(msg_on, "Lowered comparison-cascade switch recovery turned on");
+    assert_eq!(
+        msg_on,
+        "Lowered comparison-cascade switch recovery turned on"
+    );
     let (off_v, msg_off) = OptionLowerSwitch.apply("off").unwrap();
     assert!(!off_v.enabled());
-    assert_eq!(msg_off, "Lowered comparison-cascade switch recovery turned off");
-    assert!(OptionLowerSwitch.apply("").unwrap().0.enabled(), "empty => on (onOrOff)");
+    assert_eq!(
+        msg_off,
+        "Lowered comparison-cascade switch recovery turned off"
+    );
+    assert!(
+        OptionLowerSwitch.apply("").unwrap().0.enabled(),
+        "empty => on (onOrOff)"
+    );
     assert!(OptionLowerSwitch.apply("nonsense").is_err());
 
     // Empty store: no record for a fresh function.

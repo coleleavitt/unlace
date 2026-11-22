@@ -24,11 +24,16 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// The vendored fauxware fixture (shared with the unlace-analysis tier tests). Its
@@ -41,9 +46,13 @@ fn fauxware() -> PathBuf {
 /// Run `load function <name>` → `decompile` → `print C` against a pre-bootstrapped
 /// program and return the captured C output.
 fn decompile_c(prog: unlace_console::engine::ConsoleProgram, func: &str) -> String {
-    let cmds: Vec<String> = [format!("load function {func}"), "decompile".into(), "print C".into()]
-        .into_iter()
-        .collect();
+    let cmds: Vec<String> = [
+        format!("load function {func}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .into_iter()
+    .collect();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -72,7 +81,8 @@ fn planted_string_symbol_and_literal_coexist() {
     // (kuna) Analysis facts now commit at `read symbols` (gated by `--option`),
     // not eagerly at bootstrap — trigger the commit (what `IfcReadSymbols` does)
     // so the planted string symbol is visible to the direct symbol-table query.
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
     // The StringLiteralPass + commit seam planted the typelocked `char[N]` data
     // symbol `s_400915` at the "Username: " address — the Ghidra StringsAnalyzer
@@ -92,7 +102,10 @@ fn planted_string_symbol_and_literal_coexist() {
     // Decompile `main`: despite the planted symbol, the `puts` arguments render as
     // the readonly-char-array LITERALS via the printer's coexistence route.
     let out = decompile_c(prog, "main");
-    assert!(out.contains("main"), "expected a decompiled body for `main`, got:\n{out}");
+    assert!(
+        out.contains("main"),
+        "expected a decompiled body for `main`, got:\n{out}"
+    );
     assert!(
         out.contains(r#"puts("Username: ")"#),
         "expected the literal `puts(\"Username: \")` (printer readonly-char-array \

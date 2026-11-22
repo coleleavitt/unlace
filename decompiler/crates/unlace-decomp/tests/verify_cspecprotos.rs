@@ -19,7 +19,7 @@ use unlace_base::marshal::IdRegistry;
 use unlace_base::xml::{DocumentStorage, Element};
 
 use unlace_decomp::architecture::Architecture;
-use unlace_decomp::sleigh_arch::{register_sleigh_arch_ids, LanguageDatabase};
+use unlace_decomp::sleigh_arch::{LanguageDatabase, register_sleigh_arch_ids};
 use unlace_decomp::xml_arch::{XmlArchitecture, XmlArchitectureCapability};
 
 use unlace_base::address::Address;
@@ -28,7 +28,10 @@ use unlace_sleigh::loadimage_xml::register_loadimage_xml_ids;
 use unlace_sleigh::translate::register_translate_ids;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 struct DummyImg;
@@ -71,15 +74,20 @@ fn bootstrap(arch_id: &str) -> Result<XmlArchitecture, String> {
 
     let capability = XmlArchitectureCapability::new();
     let mut arch = capability.build_architecture("cspecprotos", "");
-    arch.build_loader(binaryimage).map_err(|e| format!("build_loader: {e}"))?;
+    arch.build_loader(binaryimage)
+        .map_err(|e| format!("build_loader: {e}"))?;
     let mut db = LanguageDatabase::new();
     db.scan_for_sleigh_directories(root.join("specs").to_str().unwrap());
-    db.get_descriptions(&registry).map_err(|e| format!("collect ldefs: {e}"))?;
+    db.get_descriptions(&registry)
+        .map_err(|e| format!("collect ldefs: {e}"))?;
     arch.sleigh_mut().set_archid(arch_id);
     arch.sleigh_mut()
         .resolve_architecture(&db, arch_id)
         .map_err(|e| format!("resolve_architecture: {e}"))?;
-    let specs = arch.sleigh().build_spec_file(&db).map_err(|e| format!("build_spec_file: {e}"))?;
+    let specs = arch
+        .sleigh()
+        .build_spec_file(&db)
+        .map_err(|e| format!("build_spec_file: {e}"))?;
     let resolved_sla = specs.slafile.ok_or("build_spec_file resolved no .sla")?;
     let sla = std::fs::read(&resolved_sla).map_err(|e| format!("read sla: {e}"))?;
     arch.sleigh_mut()
@@ -87,7 +95,10 @@ fn bootstrap(arch_id: &str) -> Result<XmlArchitecture, String> {
         .map_err(|e| format!("build_translator: {e}"))?;
     let cspec = std::fs::read(&specs.compilerfile)
         .map_err(|e| format!("read cspec {}: {e}", specs.compilerfile))?;
-    arch.sleigh_mut().base_mut().ok_or("no Architecture base")?.set_cspec_xml(cspec);
+    arch.sleigh_mut()
+        .base_mut()
+        .ok_or("no Architecture base")?
+        .set_cspec_xml(cspec);
     arch.sleigh_mut()
         .base_mut()
         .ok_or("no Architecture base")?
@@ -115,10 +126,16 @@ fn x86win_registers_every_named_model() {
     );
     assert_eq!(arch.default_fp().unwrap().get_name(), "__stdcall");
     for nm in ["__stdcall", "__cdecl", "__fastcall", "__thiscall"] {
-        assert!(arch.has_model(nm), "x86win cspec model {nm} is not registered");
+        assert!(
+            arch.has_model(nm),
+            "x86win cspec model {nm} is not registered"
+        );
     }
     let thiscall = arch.get_model("__thiscall").unwrap();
-    assert!(thiscall.has_this_pointer(), "__thiscall must set hasThisPointer");
+    assert!(
+        thiscall.has_this_pointer(),
+        "__thiscall must set hasThisPointer"
+    );
     assert!(!arch.get_model("__stdcall").unwrap().has_this_pointer());
     // The merged <resolveprototype> folds its three constituents in.
     let merged = arch
@@ -134,7 +151,10 @@ fn x86win_registers_every_named_model() {
 fn x86win_thiscall_passes_the_first_parameter_in_ecx() {
     let x = bootstrap("x86:LE:32:default:windows").expect("bootstrap x86win");
     let arch = arch_of(&x);
-    let ecx = arch.translate().get_register_varnode(b"ECX").expect("ECX register");
+    let ecx = arch
+        .translate()
+        .get_register_varnode(b"ECX")
+        .expect("ECX register");
     let thiscall = arch.get_model("__thiscall").unwrap();
     let addr = Address::new(Rc::clone(ecx.space.as_ref().unwrap()), ecx.offset);
     assert!(
@@ -156,14 +176,20 @@ fn x86_64_win_registers_thiscall_and_the_model_aliases() {
     let arch = arch_of(&x);
     assert_eq!(arch.default_fp().unwrap().get_name(), "__fastcall");
     for nm in ["__fastcall", "__thiscall", "__cdecl", "__stdcall"] {
-        assert!(arch.has_model(nm), "x86-64-win cspec model {nm} is not registered");
+        assert!(
+            arch.has_model(nm),
+            "x86-64-win cspec model {nm} is not registered"
+        );
     }
     assert!(arch.get_model("__thiscall").unwrap().has_this_pointer());
     // <modelalias name="__cdecl" parent="__fastcall"/>: a compatible named copy.
     let alias = arch.get_model("__cdecl").unwrap();
     let parent = arch.get_model("__fastcall").unwrap();
     assert_eq!(alias.get_name(), "__cdecl");
-    assert!(alias.is_compatible(parent), "a <modelalias> must stay compatible with its parent");
+    assert!(
+        alias.is_compatible(parent),
+        "a <modelalias> must stay compatible with its parent"
+    );
 }
 
 /// The ELF specs register their own named models, and the 32-bit gcc spec has a
@@ -173,8 +199,18 @@ fn elf_specs_register_their_named_models() {
     let x = bootstrap("x86:LE:32:default:gcc").expect("bootstrap x86gcc");
     let arch = arch_of(&x);
     assert_eq!(arch.default_fp().unwrap().get_name(), "__cdecl");
-    for nm in ["__cdecl", "__thiscall", "__regparm1", "__regparm2", "__regparm3", "syscall"] {
-        assert!(arch.has_model(nm), "x86gcc cspec model {nm} is not registered");
+    for nm in [
+        "__cdecl",
+        "__thiscall",
+        "__regparm1",
+        "__regparm2",
+        "__regparm3",
+        "syscall",
+    ] {
+        assert!(
+            arch.has_model(nm),
+            "x86gcc cspec model {nm} is not registered"
+        );
     }
     assert!(arch.get_model("__thiscall").unwrap().has_this_pointer());
     assert!(arch.get_model("__cdecl/__regparm").unwrap().is_merged());
@@ -183,7 +219,10 @@ fn elf_specs_register_their_named_models() {
     let arch = arch_of(&x);
     assert_eq!(arch.default_fp().unwrap().get_name(), "__stdcall");
     for nm in ["__stdcall", "MSABI", "syscall", "processEntry"] {
-        assert!(arch.has_model(nm), "x86-64-gcc cspec model {nm} is not registered");
+        assert!(
+            arch.has_model(nm),
+            "x86-64-gcc cspec model {nm} is not registered"
+        );
     }
 }
 
@@ -198,7 +237,10 @@ fn every_language_has_a_thiscall_model() {
         let m = arch
             .get_model("__thiscall")
             .unwrap_or_else(|| panic!("{id} has no __thiscall model"));
-        assert!(m.has_this_pointer(), "{id}: the cloned __thiscall must set hasThisPointer");
+        assert!(
+            m.has_this_pointer(),
+            "{id}: the cloned __thiscall must set hasThisPointer"
+        );
         // Cloned off the default, so it is a compatible named copy of it.
         assert!(m.is_compatible(arch.default_fp().unwrap()));
     }
@@ -215,7 +257,10 @@ fn the_default_model_is_untouched_by_the_named_models() {
     assert!(Rc::ptr_eq(defaultfp, arch.get_model("__stdcall").unwrap()));
     // The x86win <default_proto> is `extrapop="unknown"` with an ESP/EBP/...
     // <unaffected> block; those are what proto recovery reads.
-    assert_eq!(defaultfp.get_extra_pop(), unlace_decomp::fspec::EXTRAPOP_UNKNOWN);
+    assert_eq!(
+        defaultfp.get_extra_pop(),
+        unlace_decomp::fspec::EXTRAPOP_UNKNOWN
+    );
     assert!(!defaultfp.effect_list().is_empty());
     assert!(!defaultfp.has_this_pointer());
 }

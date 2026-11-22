@@ -29,24 +29,25 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use unlace_decomp::action::{Action, ActionContext};
-use unlace_decomp::dtype::{type_metatype, Datatype};
+use unlace_decomp::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
+use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::dynamic::DynamicHash;
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::kuna_stackguard::{ActionStripStackGuard, StackGuardOption};
-use unlace_decomp::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
 
 // --- fd builder (mirrors the in-crate test harness) ---------------------------
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -81,7 +82,8 @@ fn unk(size: int4) -> Rc<Datatype> {
 fn mk_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
     let r = ram(fd);
     let op = fd.new_op(inputs, Address::new(r, off));
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
     op
 }
 
@@ -95,7 +97,14 @@ fn mk_block(fd: &mut Funcdata) -> BlockId {
     fd.bblocks_mut().new_block_basic(root)
 }
 
-fn copy(fd: &mut Funcdata, bl: BlockId, off: u64, a: VarnodeId, out_off: u64, size: int4) -> VarnodeId {
+fn copy(
+    fd: &mut Funcdata,
+    bl: BlockId,
+    off: u64,
+    a: VarnodeId,
+    out_off: u64,
+    size: int4,
+) -> VarnodeId {
     let op = mk_op(fd, 1, off, OpCode::CPUI_COPY);
     fd.op_set_input(op, a, 0).unwrap();
     let out = mk_vn(fd, out_off, size);
@@ -137,7 +146,10 @@ fn t1_output_attached_root_encodes_slot_minus_one() {
         "output-attached root decodes to slot -1 (0x1f field)"
     );
     // And it's a directly-attached op, so the not-attached bit is clear.
-    assert!(!DynamicHash::get_is_not_attached(h), "root directly attached => not-attached bit clear");
+    assert!(
+        !DynamicHash::get_is_not_attached(h),
+        "root directly attached => not-attached bit clear"
+    );
 }
 
 // =============================================================================
@@ -216,7 +228,11 @@ fn t3_root_read_in_two_slots_hashes_deterministically() {
     dh3.calc_hash(a, 2, &mut fd);
     let mut dh4 = DynamicHash::new();
     dh4.calc_hash(a, 2, &mut fd);
-    assert_eq!(dh3.get_hash(), dh4.get_hash(), "method-2 over a two-slot read is stable");
+    assert_eq!(
+        dh3.get_hash(),
+        dh4.get_hash(),
+        "method-2 over a two-slot read is stable"
+    );
 }
 
 // =============================================================================
@@ -261,7 +277,10 @@ fn t4_input_cast_is_invisible_to_op_hash() {
     dhb.calc_hash_op(negb, 0, 5, &mut fdb);
     let hb = DynamicHash::get_comparable(dhb.get_hash());
 
-    assert_eq!(ha, hb, "an interposed CAST on the input is invisible to the neighborhood hash");
+    assert_eq!(
+        ha, hb,
+        "an interposed CAST on the input is invisible to the neighborhood hash"
+    );
 }
 
 // =============================================================================
@@ -340,8 +359,16 @@ fn t5_stackguard_action_gate_off_inert_on_strips() {
     let mut off = ActionStripStackGuard::new(false, "stackptrflow");
     let mut ctx = ActionContext::default();
     assert_eq!(off.apply(&mut fd, &mut ctx), 0, "gate off => inert");
-    assert_eq!(fd.bblocks_get_size(), before, "gate off leaves the CFG untouched");
-    assert_eq!(fd.bblocks_ref().block(h).size_out(), 2, "gate off keeps both edges");
+    assert_eq!(
+        fd.bblocks_get_size(),
+        before,
+        "gate off leaves the CFG untouched"
+    );
+    assert_eq!(
+        fd.bblocks_ref().block(h).size_out(),
+        2,
+        "gate off keeps both edges"
+    );
 
     // Gate ON over a *real* canary epilogue: the detection runs and the strip is
     // applied — `removeBranch` severs the corrupted-canary edge (dropping the
@@ -350,7 +377,11 @@ fn t5_stackguard_action_gate_off_inert_on_strips() {
     // `removeUnreachableBlocks` in the real pipeline; this hand-built fixture has
     // no dominator tree, so that collection is a no-op here.)
     let mut on = ActionStripStackGuard::new(true, "stackptrflow");
-    assert_eq!(on.apply(&mut fd, &mut ctx), 1, "gate on strips the canary => change");
+    assert_eq!(
+        on.apply(&mut fd, &mut ctx),
+        1,
+        "gate on strips the canary => change"
+    );
     assert_eq!(
         fd.bblocks_ref().block(h).size_out(),
         1,

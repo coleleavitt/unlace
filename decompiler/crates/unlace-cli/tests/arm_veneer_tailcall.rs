@@ -253,15 +253,22 @@ fn demangled_veneers() -> String {
 }
 
 fn function_text<'a>(all: &'a str, name: &str) -> &'a str {
-    let start = all.find(&format!("// Function: {name} @")).unwrap_or_else(|| panic!("{all}"));
+    let start = all
+        .find(&format!("// Function: {name} @"))
+        .unwrap_or_else(|| panic!("{all}"));
     let rest = &all[start..];
-    rest[1..].find("// Function: ").map_or(rest, |end| &rest[..end + 1])
+    rest[1..]
+        .find("// Function: ")
+        .map_or(rest, |end| &rest[..end + 1])
 }
 
 #[test]
 fn veneer_to_a_demangled_callee_keeps_the_body_its_unknown_return_needs() {
     let all = demangled_veneers();
-    assert!(function_text(&all, "g2").contains("int g2(int a0,int a1)"), "{all}");
+    assert!(
+        function_text(&all, "g2").contains("int g2(int a0,int a1)"),
+        "{all}"
+    );
     for veneer in ["ven", "ven_c"] {
         let c = function_text(&all, veneer);
         assert!(c.contains(&format!("int {veneer}(int a0,int a1)")), "{c}");

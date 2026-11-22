@@ -151,7 +151,9 @@ use crate::funcdata::Funcdata;
 /// question has to be put to the model (`possible_input_param` falls through to
 /// it when no locked params exist), exactly as input recovery itself does.
 pub fn is_input_parameter(data: &Funcdata, vn: VarnodeId) -> bool {
-    let Some(v) = data.vbank().get(vn) else { return false };
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
     if v.get_def().is_some() || !v.is_input() {
         return false;
     }
@@ -168,9 +170,15 @@ const MOVE_BUDGET: u32 = 64;
 
 /// Does the instruction at `pc` write the stack pointer?
 pub(crate) fn writes_stack_pointer(data: &Funcdata, pc: &Address) -> bool {
-    let Some(stackspc) = data.get_arch().manage().get_stack_space().cloned() else { return false };
-    let Ok(sp) = stackspc.get_spacebase(0) else { return false };
-    let Some(spspace) = sp.space.as_ref() else { return false };
+    let Some(stackspc) = data.get_arch().manage().get_stack_space().cloned() else {
+        return false;
+    };
+    let Ok(sp) = stackspc.get_spacebase(0) else {
+        return false;
+    };
+    let Some(spspace) = sp.space.as_ref() else {
+        return false;
+    };
     data.obank().iter_at(pc).any(|(_, op)| {
         data.obank()
             .get(op)
@@ -178,7 +186,8 @@ pub(crate) fn writes_stack_pointer(data: &Funcdata, pc: &Address) -> bool {
             .and_then(|out| data.vbank().get(out))
             .is_some_and(|v| {
                 let a = v.get_addr();
-                a.get_space().is_some_and(|s| s.get_index() == spspace.get_index())
+                a.get_space()
+                    .is_some_and(|s| s.get_index() == spspace.get_index())
                     && a.get_offset() < sp.offset + sp.size as u64
                     && sp.offset < a.get_offset() + v.get_size() as u64
             })
@@ -189,7 +198,11 @@ pub(crate) fn writes_stack_pointer(data: &Funcdata, pc: &Address) -> bool {
 /// PowerPC's `mr` is `or rA,rS,rS`, and MIPS, SPARC and RISC-V spell a move as
 /// an `or` or `add` with zero.
 fn move_source(data: &Funcdata, op: &crate::op::PcodeOp) -> Option<VarnodeId> {
-    let zero = |v: VarnodeId| data.vbank().get(v).is_some_and(|x| x.is_constant() && x.get_offset() == 0);
+    let zero = |v: VarnodeId| {
+        data.vbank()
+            .get(v)
+            .is_some_and(|x| x.is_constant() && x.get_offset() == 0)
+    };
     match op.code() {
         OpCode::CPUI_COPY => op.get_in(0),
         OpCode::CPUI_INT_OR if op.num_input() == 2 && op.get_in(0) == op.get_in(1) => op.get_in(0),
@@ -211,16 +224,26 @@ fn move_source(data: &Funcdata, op: &crate::op::PcodeOp) -> Option<VarnodeId> {
 /// as `svc`, or a call -- run after `from` and before `to`?
 pub(crate) fn call_between(data: &Funcdata, from: OpId, to: OpId) -> bool {
     let parent = |op: OpId| data.obank().get(op).and_then(|o| o.get_parent());
-    let (Some(fb), Some(tb)) = (parent(from), parent(to)) else { return false };
+    let (Some(fb), Some(tb)) = (parent(from), parent(to)) else {
+        return false;
+    };
     let graph = data.bblocks_ref();
     let reach = |start: BlockId, forward: bool| {
         let mut seen: std::collections::HashSet<BlockId> = std::collections::HashSet::new();
         let mut work = vec![start];
         while let Some(b) = work.pop() {
             let blk = graph.block(b);
-            let n = if forward { blk.size_out() } else { blk.size_in() };
+            let n = if forward {
+                blk.size_out()
+            } else {
+                blk.size_in()
+            };
             for i in 0..n {
-                let next = if forward { blk.get_out(i) } else { blk.get_in(i) };
+                let next = if forward {
+                    blk.get_out(i)
+                } else {
+                    blk.get_in(i)
+                };
                 if seen.insert(next) {
                     work.push(next);
                 }
@@ -229,22 +252,39 @@ pub(crate) fn call_between(data: &Funcdata, from: OpId, to: OpId) -> bool {
         seen
     };
     let is_call = |op: &OpId| {
-        data.obank()
-            .get(*op)
-            .is_some_and(|o| matches!(o.code(), OpCode::CPUI_CALLOTHER | OpCode::CPUI_CALL | OpCode::CPUI_CALLIND))
+        data.obank().get(*op).is_some_and(|o| {
+            matches!(
+                o.code(),
+                OpCode::CPUI_CALLOTHER | OpCode::CPUI_CALL | OpCode::CPUI_CALLIND
+            )
+        })
     };
     let after = reach(fb, true);
     let before = reach(tb, false);
-    let to_at = data.bb_ops(tb).iter().position(|&o| o == to).unwrap_or(usize::MAX);
+    let to_at = data
+        .bb_ops(tb)
+        .iter()
+        .position(|&o| o == to)
+        .unwrap_or(usize::MAX);
     let reaches_to = |b: BlockId, at: usize| (b == tb && at < to_at) || before.contains(&b);
     let from_ops = data.bb_ops(fb);
-    let from_at = from_ops.iter().position(|&o| o == from).unwrap_or(usize::MAX);
-    if from_ops.iter().enumerate().any(|(i, op)| i > from_at && is_call(op) && reaches_to(fb, i)) {
+    let from_at = from_ops
+        .iter()
+        .position(|&o| o == from)
+        .unwrap_or(usize::MAX);
+    if from_ops
+        .iter()
+        .enumerate()
+        .any(|(i, op)| i > from_at && is_call(op) && reaches_to(fb, i))
+    {
         return true;
     }
-    after
-        .iter()
-        .any(|&b| data.bb_ops(b).iter().enumerate().any(|(i, op)| is_call(op) && reaches_to(b, i)))
+    after.iter().any(|&b| {
+        data.bb_ops(b)
+            .iter()
+            .enumerate()
+            .any(|(i, op)| is_call(op) && reaches_to(b, i))
+    })
 }
 
 /// Is `vn`, read by the RETURN `ret` as the half stored at `addr`/`size`, the
@@ -258,7 +298,9 @@ pub(crate) fn call_between(data: &Funcdata, from: OpId, to: OpId) -> bool {
 /// incidental copy (Xtensa's register-window swap around a `call8`) is walked
 /// through without counting as a move.
 pub fn moved_back(data: &Funcdata, vn: VarnodeId, addr: &Address, size: int4, ret: OpId) -> bool {
-    let Some(space) = addr.get_space().map(|s| s.get_index()) else { return false };
+    let Some(space) = addr.get_space().map(|s| s.get_index()) else {
+        return false;
+    };
     let mut seen: std::collections::HashSet<(VarnodeId, bool)> = std::collections::HashSet::new();
     let mut work: Vec<(VarnodeId, bool)> = vec![(vn, false)];
     let mut budget = MOVE_BUDGET;
@@ -270,29 +312,47 @@ pub fn moved_back(data: &Funcdata, vn: VarnodeId, addr: &Address, size: int4, re
             return false;
         }
         budget -= 1;
-        let Some(v) = data.vbank().get(cur) else { continue };
+        let Some(v) = data.vbank().get(cur) else {
+            continue;
+        };
         let Some(def) = v.get_def() else {
             if left && v.is_input() && v.get_addr() == addr && v.get_size() == size {
                 return true;
             }
             continue;
         };
-        let Some(op) = data.obank().get(def) else { continue };
+        let Some(op) = data.obank().get(def) else {
+            continue;
+        };
         match op.code() {
-            OpCode::CPUI_INDIRECT if !op.is_indirect_creation() => work.extend(op.get_in(0).map(|i| (i, left))),
-            OpCode::CPUI_MULTIEQUAL => work.extend((0..op.num_input()).filter_map(|i| op.get_in(i)).map(|i| (i, left))),
+            OpCode::CPUI_INDIRECT if !op.is_indirect_creation() => {
+                work.extend(op.get_in(0).map(|i| (i, left)))
+            }
+            OpCode::CPUI_MULTIEQUAL => work.extend(
+                (0..op.num_input())
+                    .filter_map(|i| op.get_in(i))
+                    .map(|i| (i, left)),
+            ),
             _ => {
-                let Some(src) = move_source(data, op) else { continue };
+                let Some(src) = move_source(data, op) else {
+                    continue;
+                };
                 if op.is_incidental_copy() {
                     work.push((src, left));
                     continue;
                 }
-                let Some(s) = data.vbank().get(src) else { continue };
-                let (sa, same) = (s.get_addr(), s.get_addr() == v.get_addr() && s.get_size() == v.get_size());
+                let Some(s) = data.vbank().get(src) else {
+                    continue;
+                };
+                let (sa, same) = (
+                    s.get_addr(),
+                    s.get_addr() == v.get_addr() && s.get_size() == v.get_size(),
+                );
                 if !same && writes_stack_pointer(data, op.get_addr()) {
                     continue;
                 }
-                let elsewhere = sa.get_space().is_some_and(|sp| sp.get_index() == space) && sa != addr;
+                let elsewhere =
+                    sa.get_space().is_some_and(|sp| sp.get_index() == space) && sa != addr;
                 if elsewhere && !left && call_between(data, def, ret) {
                     continue;
                 }
@@ -331,7 +391,11 @@ pub fn note_moved_back_returns(
                 .and_then(|o| o.get_in(t.get_slot()))
                 .is_some_and(|vn| moved_back(data, vn, t.get_address(), t.get_size(), ret))
         });
-        if moved && !found.iter().any(|(a, s)| a == t.get_address() && *s == t.get_size()) {
+        if moved
+            && !found
+                .iter()
+                .any(|(a, s)| a == t.get_address() && *s == t.get_size())
+        {
             found.push((t.get_address().clone(), t.get_size()));
         }
     }
@@ -341,7 +405,9 @@ pub fn note_moved_back_returns(
 /// Was the return register at `addr`/`size` recorded by
 /// [`note_moved_back_returns`]?
 pub fn is_moved_back(data: &Funcdata, addr: &Address, size: int4) -> bool {
-    data.kuna_moved_back_returns().iter().any(|(a, s)| a == addr && *s == size)
+    data.kuna_moved_back_returns()
+        .iter()
+        .any(|(a, s)| a == addr && *s == size)
 }
 
 #[cfg(test)]

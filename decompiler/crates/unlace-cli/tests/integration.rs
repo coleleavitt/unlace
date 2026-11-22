@@ -1,11 +1,11 @@
 // Shared integration-test executable. Process-sensitive tests stay separate.
+mod common;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
 #[path = "return_branch_cli.rs"]
 mod return_branch_cli;
 #[path = "riscv_zcmp.rs"]
 mod riscv_zcmp;
-mod common;
 #[path = "rust_signature_summary.rs"]
 mod rust_signature_summary;
 #[path = "sparc_prologue_start.rs"]
@@ -71,12 +71,12 @@ mod relocated_table_c;
 #[path = "conditional_register_lifetimes.rs"]
 mod conditional_register_lifetimes;
 
-#[path = "conditional_stack_bytes.rs"]
-mod conditional_stack_bytes;
 #[path = "arm_conditional_switch.rs"]
 mod arm_conditional_switch;
 #[path = "arm_constant_shift.rs"]
 mod arm_constant_shift;
+#[path = "conditional_stack_bytes.rs"]
+mod conditional_stack_bytes;
 #[path = "wide_shift_emission.rs"]
 mod wide_shift_emission;
 #[path = "wrap_add_emission.rs"]
@@ -97,10 +97,10 @@ mod narrow_ret;
 #[path = "prefersplit_scope.rs"]
 mod prefersplit_scope;
 
-#[path = "arm_frame_retain.rs"]
-mod arm_frame_retain;
 #[path = "arm_frame_pool.rs"]
 mod arm_frame_pool;
+#[path = "arm_frame_retain.rs"]
+mod arm_frame_retain;
 #[path = "arm_frame_switch.rs"]
 mod arm_frame_switch;
 
@@ -169,10 +169,10 @@ mod caller_stack_cli;
 
 #[path = "castnarrow_round_trip.rs"]
 mod castnarrow_round_trip;
-#[path = "strlenscan_round_trip.rs"]
-mod strlenscan_round_trip;
 #[path = "repstring_round_trip.rs"]
 mod repstring_round_trip;
+#[path = "strlenscan_round_trip.rs"]
+mod strlenscan_round_trip;
 
 #[path = "coff_strings.rs"]
 mod coff_strings;
@@ -182,10 +182,10 @@ mod coldentry_source_boundary;
 
 #[path = "compact_switch_cli.rs"]
 mod compact_switch_cli;
-#[path = "switch_self_loop_cli.rs"]
-mod switch_self_loop_cli;
 #[path = "indirect_dispatch.rs"]
 mod indirect_dispatch;
+#[path = "switch_self_loop_cli.rs"]
+mod switch_self_loop_cli;
 
 #[path = "contiguous_byte_frame.rs"]
 mod contiguous_byte_frame;
@@ -646,10 +646,10 @@ mod call_outparam_snapshot;
 
 #[path = "global_load_call_order.rs"]
 mod global_load_call_order;
-#[path = "integer_float_rounding.rs"]
-mod integer_float_rounding;
 #[path = "guarded_local_read.rs"]
 mod guarded_local_read;
+#[path = "integer_float_rounding.rs"]
+mod integer_float_rounding;
 
 #[path = "indirect_value_arguments.rs"]
 mod indirect_value_arguments;
@@ -663,10 +663,10 @@ mod multireg_call_inputs;
 #[path = "mips_got_nostub.rs"]
 mod mips_got_nostub;
 
-#[path = "narrow_register_inputs.rs"]
-mod narrow_register_inputs;
 #[path = "float_field_slices.rs"]
 mod float_field_slices;
+#[path = "narrow_register_inputs.rs"]
+mod narrow_register_inputs;
 
 #[path = "float_storage_truncation.rs"]
 mod float_storage_truncation;
@@ -700,10 +700,10 @@ mod x87_empty_return;
 #[path = "windows_stack_argument_alignment.rs"]
 mod windows_stack_argument_alignment;
 
-#[path = "imported_data_identifiers.rs"]
-mod imported_data_identifiers;
 #[path = "dwarf_linkage_calls.rs"]
 mod dwarf_linkage_calls;
+#[path = "imported_data_identifiers.rs"]
+mod imported_data_identifiers;
 #[path = "project_named_globals.rs"]
 mod project_named_globals;
 #[path = "x87_register_payload.rs"]
@@ -712,14 +712,14 @@ mod x87_register_payload;
 #[path = "x87_free_operands.rs"]
 mod x87_free_operands;
 
-#[path = "prototype_call_mechanisms.rs"]
-mod prototype_call_mechanisms;
 #[path = "ppc64_global_entry_toc.rs"]
 mod ppc64_global_entry_toc;
-#[path = "qualified_storage_addresses.rs"]
-mod qualified_storage_addresses;
+#[path = "prototype_call_mechanisms.rs"]
+mod prototype_call_mechanisms;
 #[path = "qualified_import_storage.rs"]
 mod qualified_import_storage;
+#[path = "qualified_storage_addresses.rs"]
+mod qualified_storage_addresses;
 
 #[path = "readonly_leaf_stack.rs"]
 mod readonly_leaf_stack;
@@ -864,14 +864,14 @@ mod joined_callback_return;
 #[path = "integer_field_extract.rs"]
 mod integer_field_extract;
 
-#[path = "go_store_value.rs"]
-mod go_store_value;
+#[path = "call_table_cli.rs"]
+mod call_table_cli;
 #[path = "go_pointer_arithmetic.rs"]
 mod go_pointer_arithmetic;
 #[path = "go_stack_abi.rs"]
 mod go_stack_abi;
-#[path = "call_table_cli.rs"]
-mod call_table_cli;
+#[path = "go_store_value.rs"]
+mod go_store_value;
 
 #[path = "rust_integer_conversions.rs"]
 mod rust_integer_conversions;

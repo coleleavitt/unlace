@@ -129,7 +129,11 @@ fn partial_global_writes_reach_aliasing_loads_before_whole_writes() {
                         String::from_utf8_lossy(&build.stderr)
                     );
                     let actual = process::required_output(&mut Command::new(&rebuilt)).stdout;
-                    assert_eq!(String::from_utf8_lossy(&actual), String::from_utf8_lossy(&expected), "{cc} {opt} printed C built by {out_cc} {out_opt} changes return values or memory:\n{printed}");
+                    assert_eq!(
+                        String::from_utf8_lossy(&actual),
+                        String::from_utf8_lossy(&expected),
+                        "{cc} {opt} printed C built by {out_cc} {out_opt} changes return values or memory:\n{printed}"
+                    );
                 }
             }
         }

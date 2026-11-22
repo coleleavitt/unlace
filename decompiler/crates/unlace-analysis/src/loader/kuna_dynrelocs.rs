@@ -103,12 +103,16 @@ pub(crate) fn reloc_triple(arch: object::Architecture) -> Option<(u32, u32, u32)
             elf::R_AARCH64_GLOB_DAT,
             elf::R_AARCH64_JUMP_SLOT,
         )),
-        object::Architecture::I386 => {
-            Some((elf::R_386_RELATIVE, elf::R_386_GLOB_DAT, elf::R_386_JMP_SLOT))
-        }
-        object::Architecture::Arm => {
-            Some((elf::R_ARM_RELATIVE, elf::R_ARM_GLOB_DAT, elf::R_ARM_JUMP_SLOT))
-        }
+        object::Architecture::I386 => Some((
+            elf::R_386_RELATIVE,
+            elf::R_386_GLOB_DAT,
+            elf::R_386_JMP_SLOT,
+        )),
+        object::Architecture::Arm => Some((
+            elf::R_ARM_RELATIVE,
+            elf::R_ARM_GLOB_DAT,
+            elf::R_ARM_JUMP_SLOT,
+        )),
         _ => None,
     }
 }
@@ -131,11 +135,19 @@ pub(crate) fn dyn_types(arch: object::Architecture) -> Option<DynTypes> {
     let (relative, glob_dat, jump_slot) = match reloc_triple(arch) {
         Some((r, g, j)) => (r, Some(g), j),
         None => match arch {
-            object::Architecture::PowerPc64 => (elf::R_PPC64_RELATIVE, Some(elf::R_PPC64_GLOB_DAT), elf::R_PPC64_JMP_SLOT),
+            object::Architecture::PowerPc64 => (
+                elf::R_PPC64_RELATIVE,
+                Some(elf::R_PPC64_GLOB_DAT),
+                elf::R_PPC64_JMP_SLOT,
+            ),
             object::Architecture::Riscv64 | object::Architecture::Riscv32 => {
                 (elf::R_RISCV_RELATIVE, None, elf::R_RISCV_JUMP_SLOT)
             }
-            object::Architecture::S390x => (elf::R_390_RELATIVE, Some(elf::R_390_GLOB_DAT), elf::R_390_JMP_SLOT),
+            object::Architecture::S390x => (
+                elf::R_390_RELATIVE,
+                Some(elf::R_390_GLOB_DAT),
+                elf::R_390_JMP_SLOT,
+            ),
             _ => return None,
         },
     };
@@ -150,7 +162,13 @@ pub(crate) fn dyn_types(arch: object::Architecture) -> Option<DynTypes> {
         object::Architecture::S390x => (elf::R_390_64, elf::R_390_IRELATIVE),
         _ => return None,
     };
-    Some(DynTypes { relative, glob_dat, jump_slot, abs: Some(abs), irelative: Some(irelative) })
+    Some(DynTypes {
+        relative,
+        glob_dat,
+        jump_slot,
+        abs: Some(abs),
+        irelative: Some(irelative),
+    })
 }
 
 /// ELF `p_type` of the RELRO program header (`PT_GNU_RELRO`).
@@ -168,21 +186,37 @@ pub(crate) fn relro_range(bytes: &[u8]) -> Option<(u64, u64)> {
     let le = bytes[5] == 1;
     let u16at = |o: usize| -> Option<u16> {
         let b: [u8; 2] = bytes.get(o..o + 2)?.try_into().ok()?;
-        Some(if le { u16::from_le_bytes(b) } else { u16::from_be_bytes(b) })
+        Some(if le {
+            u16::from_le_bytes(b)
+        } else {
+            u16::from_be_bytes(b)
+        })
     };
     let u32at = |o: usize| -> Option<u32> {
         let b: [u8; 4] = bytes.get(o..o + 4)?.try_into().ok()?;
-        Some(if le { u32::from_le_bytes(b) } else { u32::from_be_bytes(b) })
+        Some(if le {
+            u32::from_le_bytes(b)
+        } else {
+            u32::from_be_bytes(b)
+        })
     };
     let u64at = |o: usize| -> Option<u64> {
         let b: [u8; 8] = bytes.get(o..o + 8)?.try_into().ok()?;
-        Some(if le { u64::from_le_bytes(b) } else { u64::from_be_bytes(b) })
+        Some(if le {
+            u64::from_le_bytes(b)
+        } else {
+            u64::from_be_bytes(b)
+        })
     };
 
     let (phoff, phentsize, phnum) = if is64 {
         (u64at(0x20)?, u16at(0x36)? as usize, u16at(0x38)? as usize)
     } else {
-        (u32at(0x1c)? as u64, u16at(0x2a)? as usize, u16at(0x2c)? as usize)
+        (
+            u32at(0x1c)? as u64,
+            u16at(0x2a)? as usize,
+            u16at(0x2c)? as usize,
+        )
     };
     let min = if is64 { 56 } else { 32 };
     if phentsize < min {
@@ -193,8 +227,11 @@ pub(crate) fn relro_range(bytes: &[u8]) -> Option<(u64, u64)> {
         if u32at(ph)? != PT_GNU_RELRO {
             continue;
         }
-        let (vaddr, memsz) =
-            if is64 { (u64at(ph + 0x10)?, u64at(ph + 0x28)?) } else { (u32at(ph + 8)? as u64, u32at(ph + 20)? as u64) };
+        let (vaddr, memsz) = if is64 {
+            (u64at(ph + 0x10)?, u64at(ph + 0x28)?)
+        } else {
+            (u32at(ph + 8)? as u64, u32at(ph + 20)? as u64)
+        };
         if memsz == 0 {
             return None;
         }
@@ -262,7 +299,11 @@ pub fn resolve(file: &object::File, bytes: &[u8]) -> DynRelocs {
     let width: usize = if file.is_64() { 8 } else { 4 };
     let le = file.is_little_endian();
     let relro = relro_range(bytes);
-    let mask = if width == 8 { u64::MAX } else { u32::MAX as u64 };
+    let mask = if width == 8 {
+        u64::MAX
+    } else {
+        u32::MAX as u64
+    };
 
     // The run-time loader's view first: `PT_DYNAMIC`'s tables, which also hold
     // the RELR and Android packed encodings and survive a stripped section
@@ -274,7 +315,11 @@ pub fn resolve(file: &object::File, bytes: &[u8]) -> DynRelocs {
                 entries
                     .into_iter()
                     .map(|e| {
-                        let r_type = if e.r_type == dtable::RELR_RELATIVE { types.relative } else { e.r_type };
+                        let r_type = if e.r_type == dtable::RELR_RELATIVE {
+                            types.relative
+                        } else {
+                            e.r_type
+                        };
                         let sym = symtab
                             .filter(|_| e.sym != 0)
                             .and_then(|table| view.symbol(table, e.sym))
@@ -289,13 +334,16 @@ pub fn resolve(file: &object::File, bytes: &[u8]) -> DynRelocs {
                 let Some(relocs) = file.dynamic_relocations() else {
                     return out;
                 };
-                let mut dynsyms: std::collections::HashMap<usize, (u64, bool)> = std::collections::HashMap::new();
+                let mut dynsyms: std::collections::HashMap<usize, (u64, bool)> =
+                    std::collections::HashMap::new();
                 for s in file.dynamic_symbols() {
                     dynsyms.insert(s.index().0, (s.address(), s.is_undefined()));
                 }
                 relocs
                     .filter_map(|(offset, reloc)| {
-                        let RelocationFlags::Elf { r_type } = reloc.flags() else { return None };
+                        let RelocationFlags::Elf { r_type } = reloc.flags() else {
+                            return None;
+                        };
                         let sym = match reloc.target() {
                             RelocationTarget::Symbol(idx) => dynsyms.get(&idx.0).copied(),
                             _ => None,
@@ -330,7 +378,8 @@ pub fn resolve(file: &object::File, bytes: &[u8]) -> DynRelocs {
         } else if Some(r_type) == types.irelative {
             // The slot receives whatever the resolver returns; the resolver itself
             // is a function the image never names.
-            out.ifunc_resolvers.push(load_bias.wrapping_add(addend) & mask);
+            out.ifunc_resolvers
+                .push(load_bias.wrapping_add(addend) & mask);
             continue;
         } else if Some(r_type) == types.glob_dat || r_type == types.jump_slot {
             // An undefined symbol is an import: the value lives in another
@@ -347,7 +396,11 @@ pub fn resolve(file: &object::File, bytes: &[u8]) -> DynRelocs {
         };
 
         let value = value & mask;
-        out.writes.push(DynRelocWrite { vma: offset, value, width: width as u8 });
+        out.writes.push(DynRelocWrite {
+            vma: offset,
+            value,
+            width: width as u8,
+        });
 
         if let Some((lo, hi)) = relro {
             let last = offset.wrapping_add(width as u64 - 1);
@@ -397,7 +450,9 @@ impl ElfTable {
     /// against a synthetic layout, and the tables here name a different address
     /// space).
     fn new(file: &object::File) -> Option<ElfTable> {
-        if file.format() != object::BinaryFormat::Elf || file.kind() == object::ObjectKind::Relocatable {
+        if file.format() != object::BinaryFormat::Elf
+            || file.kind() == object::ObjectKind::Relocatable
+        {
             return None;
         }
         file.dynamic_relocations()?;
@@ -413,7 +468,11 @@ impl ElfTable {
             triple,
             width,
             le: file.is_little_endian(),
-            mask: if width == 8 { u64::MAX } else { u32::MAX as u64 },
+            mask: if width == 8 {
+                u64::MAX
+            } else {
+                u32::MAX as u64
+            },
             dynsyms,
         })
     }
@@ -426,7 +485,12 @@ impl ElfTable {
             RelocationTarget::Symbol(idx) => Some(idx),
             _ => None,
         };
-        let other = ElfFixup { kind: FixupKind::Relocation, symbol, addend: None, value: None };
+        let other = ElfFixup {
+            kind: FixupKind::Relocation,
+            symbol,
+            addend: None,
+            value: None,
+        };
         let (RelocationFlags::Elf { r_type }, Some((r_relative, r_glob_dat, r_jump_slot))) =
             (reloc.flags(), self.triple)
         else {
@@ -443,7 +507,12 @@ impl ElfTable {
         };
         if r_type == r_relative {
             let value = addend.map(|a| load_bias.wrapping_add(a) & self.mask);
-            return ElfFixup { kind: FixupKind::Rebase, symbol: None, addend: None, value };
+            return ElfFixup {
+                kind: FixupKind::Rebase,
+                symbol: None,
+                addend: None,
+                value,
+            };
         }
         if dyn_types(file.architecture()).and_then(|t| t.abs) == Some(r_type) {
             // The word-sized absolute relocation against a defined symbol, which
@@ -452,14 +521,23 @@ impl ElfTable {
                 (Some(&(addr, false)), Some(a)) => Some(addr.wrapping_add(a) & self.mask),
                 _ => None,
             };
-            return ElfFixup { kind: FixupKind::Relocation, symbol, addend: addend.map(|a| a as i64), value };
+            return ElfFixup {
+                kind: FixupKind::Relocation,
+                symbol,
+                addend: addend.map(|a| a as i64),
+                value,
+            };
         }
         if r_type != r_glob_dat && r_type != r_jump_slot {
             return other;
         }
         // A `REL`-style GLOB_DAT/JUMP_SLOT ignores the in-place word (the ABI is
         // `S`, not `S + A`); only a RELA addend counts.
-        let a = if reloc.has_implicit_addend() { addend.map(|_| 0) } else { addend };
+        let a = if reloc.has_implicit_addend() {
+            addend.map(|_| 0)
+        } else {
+            addend
+        };
         // An undefined symbol is an import: the value lives in another image.
         // Nothing to write, and the PLT/import naming already covers the call —
         // the slot stays exactly as the linker left it.
@@ -467,7 +545,12 @@ impl ElfTable {
             (Some(&(addr, false)), Some(a)) => Some(addr.wrapping_add(a) & self.mask),
             _ => None,
         };
-        ElfFixup { kind: FixupKind::Bind, symbol, addend: a.map(|a| a as i64), value }
+        ElfFixup {
+            kind: FixupKind::Bind,
+            symbol,
+            addend: a.map(|a| a as i64),
+            value,
+        }
     }
 }
 
@@ -552,7 +635,8 @@ pub fn fixup_sites(file: &object::File, bytes: &[u8]) -> FixupSites {
             vma,
             width,
             kind: FixupKind::Bind,
-            symbol: Some(String::from_utf8_lossy(&bind.name).into_owned()).filter(|n| !n.is_empty()),
+            symbol:
+                Some(String::from_utf8_lossy(&bind.name).into_owned()).filter(|n| !n.is_empty()),
             addend: Some(bind.addend),
             target: None,
         }));
@@ -568,7 +652,11 @@ pub fn fixup_sites(file: &object::File, bytes: &[u8]) -> FixupSites {
         let symbols = file.dynamic_symbol_table();
         let name = |idx: object::SymbolIndex| {
             let symbol = symbols.as_ref()?.symbol_by_index(idx).ok()?;
-            symbol.name().ok().filter(|n| !n.is_empty()).map(str::to_owned)
+            symbol
+                .name()
+                .ok()
+                .filter(|n| !n.is_empty())
+                .map(str::to_owned)
         };
         for (offset, reloc) in file.dynamic_relocations().into_iter().flatten() {
             let fixup = table.classify(file, offset, &reloc);
@@ -595,7 +683,11 @@ pub fn fixup_sites(file: &object::File, bytes: &[u8]) -> FixupSites {
         Coverage::None
     };
     sites.sort_by_key(|site| site.vma);
-    FixupSites { coverage, reason, sites }
+    FixupSites {
+        coverage,
+        reason,
+        sites,
+    }
 }
 
 /// The `(d_tag, d_val)` entries of a linked ELF's `PT_DYNAMIC` segment, empty
@@ -608,7 +700,9 @@ pub(crate) fn dynamic_entries(file: &object::File) -> Vec<(i64, u64)> {
     }
 }
 
-fn elf_dynamic_entries<'data, Elf, R>(elf: &object::read::elf::ElfFile<'data, Elf, R>) -> Vec<(i64, u64)>
+fn elf_dynamic_entries<'data, Elf, R>(
+    elf: &object::read::elf::ElfFile<'data, Elf, R>,
+) -> Vec<(i64, u64)>
 where
     Elf: object::read::elf::FileHeader,
     R: object::ReadRef<'data>,
@@ -618,7 +712,12 @@ where
     elf.elf_program_headers()
         .iter()
         .find_map(|ph| ph.dynamic(endian, elf.data()).ok().flatten())
-        .map(|entries| entries.iter().map(|d| (d.tag(endian), d.val(endian))).collect())
+        .map(|entries| {
+            entries
+                .iter()
+                .map(|d| (d.tag(endian), d.val(endian)))
+                .collect()
+        })
         .unwrap_or_default()
 }
 
@@ -646,9 +745,9 @@ where
     R: object::ReadRef<'data>,
 {
     use object::elf::{
-        DT_ANDROID_REL, DT_ANDROID_RELA, DT_ANDROID_RELASZ, DT_ANDROID_RELR, DT_ANDROID_RELRSZ, DT_ANDROID_RELSZ,
-        DT_JMPREL, DT_PLTRELSZ, DT_REL, DT_RELA, DT_RELASZ, DT_RELR, DT_RELRSZ, DT_RELSZ, SHF_ALLOC,
-        SHT_ANDROID_RELR, SHT_DYNSYM, SHT_REL, SHT_RELA, SHT_RELR,
+        DT_ANDROID_REL, DT_ANDROID_RELA, DT_ANDROID_RELASZ, DT_ANDROID_RELR, DT_ANDROID_RELRSZ,
+        DT_ANDROID_RELSZ, DT_JMPREL, DT_PLTRELSZ, DT_REL, DT_RELA, DT_RELASZ, DT_RELR, DT_RELRSZ,
+        DT_RELSZ, SHF_ALLOC, SHT_ANDROID_RELR, SHT_DYNSYM, SHT_REL, SHT_RELA, SHT_RELR,
     };
     use object::read::elf::SectionHeader;
     let entries = elf_dynamic_entries(elf);
@@ -657,7 +756,10 @@ where
     }
     let endian = elf.endian();
     let sections = elf.elf_section_table();
-    let dynsym = sections.iter().position(|s| s.sh_type(endian) == SHT_DYNSYM).unwrap_or(0);
+    let dynsym = sections
+        .iter()
+        .position(|s| s.sh_type(endian) == SHT_DYNSYM)
+        .unwrap_or(0);
     let mut out = Vec::new();
     let mut spans: Vec<(u64, u64)> = Vec::new();
     for (index, section) in sections.iter().enumerate() {
@@ -689,7 +791,10 @@ where
             .section_name(endian, section)
             .ok()
             .filter(|n| !n.is_empty())
-            .map_or_else(|| "a relocation section".to_string(), |n| String::from_utf8_lossy(n).into_owned());
+            .map_or_else(
+                || "a relocation section".to_string(),
+                |n| String::from_utf8_lossy(n).into_owned(),
+            );
         out.push(format!("{name} (section {index}): {why}"));
     }
     spans.sort_unstable();
@@ -713,14 +818,18 @@ where
         ("DT_ANDROID_REL", DT_ANDROID_REL, DT_ANDROID_RELSZ, true),
     ];
     for (name, at, size, packed) in tables {
-        let (Some(start), Some(size)) = (value(at), value(size)) else { continue };
+        let (Some(start), Some(size)) = (value(at), value(size)) else {
+            continue;
+        };
         if size == 0 {
             continue;
         }
         if packed {
             out.push(format!("the {name} table at 0x{start:x} ({size} bytes) is Android-packed, which kuna does not decode"));
         } else if !covered(start, start.saturating_add(size)) {
-            out.push(format!("the {name} table at 0x{start:x} ({size} bytes) is in no relocation section"));
+            out.push(format!(
+                "the {name} table at 0x{start:x} ({size} bytes) is in no relocation section"
+            ));
         }
     }
     out
@@ -768,15 +877,20 @@ where
     Elf: object::read::elf::FileHeader,
     R: object::ReadRef<'data>,
 {
-    use object::read::elf::SectionHeader;
     use object::Endian;
+    use object::read::elf::SectionHeader;
     let endian = elf.endian();
     let mut entries = Vec::new();
     for section in elf.elf_section_table().iter() {
-        if !matches!(section.sh_type(endian), object::elf::SHT_RELR | object::elf::SHT_ANDROID_RELR) {
+        if !matches!(
+            section.sh_type(endian),
+            object::elf::SHT_RELR | object::elf::SHT_ANDROID_RELR
+        ) {
             continue;
         }
-        let Ok(data) = section.data(endian, elf.data()) else { continue };
+        let Ok(data) = section.data(endian, elf.data()) else {
+            continue;
+        };
         entries.extend(data.chunks_exact(width).map(|word| {
             let mut raw = [0u8; 8];
             if endian.is_little_endian() {
@@ -790,7 +904,8 @@ where
     }
     let words = usize::try_from(elf.data().len().unwrap_or(0) / width as u64).unwrap_or(usize::MAX);
     let (slots, overflow) = relr_decode(&entries, width as u64, words);
-    let unread = overflow.then(|| format!("the SHT_RELR entries name more than the file's {words} words"));
+    let unread =
+        overflow.then(|| format!("the SHT_RELR entries name more than the file's {words} words"));
     (slots, unread)
 }
 

@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use unlace_console::engine::{Bootstrap, ConsoleProgram};
-use unlace_console::project::{decompile_entry, DecompileOptions};
+use unlace_console::project::{DecompileOptions, decompile_entry};
 use unlace_decomp::kuna_memoryspecs::{MemorySpecs, SpecRoot};
 
 const FUNCS: [&str; 3] = ["authenticate", "accepted", "main"];
@@ -67,7 +67,9 @@ fn embedded() -> &'static [(String, Vec<u8>)] {
 }
 
 fn bootstrap(roots: &[SpecRoot]) -> ConsoleProgram {
-    let mut prog = Bootstrap::new(roots).object(&fixture()).expect("bootstrap fauxware");
+    let mut prog = Bootstrap::new(roots)
+        .object(&fixture())
+        .expect("bootstrap fauxware");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");
     prog
@@ -100,7 +102,12 @@ fn memory_specs_decompile_as_the_specs_directory_does() {
 
 #[test]
 fn memory_specs_never_fall_back_to_the_filesystem() {
-    let memory = MemorySpecs::from_files(embedded().iter().filter(|(rel, _)| rel != X86_64_SLA).cloned());
+    let memory = MemorySpecs::from_files(
+        embedded()
+            .iter()
+            .filter(|(rel, _)| rel != X86_64_SLA)
+            .cloned(),
+    );
     let err = match Bootstrap::new(&[memory]).object(&fixture()) {
         Ok(_) => panic!("bootstrapped without {X86_64_SLA}"),
         Err(err) => err.to_string(),
@@ -116,7 +123,11 @@ fn a_memory_root_mixes_with_path_roots() {
     let entry = prog
         .find_entry_by_name("authenticate")
         .expect("function in fixture");
-    assert!(decompile_entry(&mut prog, entry, &DecompileOptions::default()).code.is_some());
+    assert!(
+        decompile_entry(&mut prog, entry, &DecompileOptions::default())
+            .code
+            .is_some()
+    );
 }
 
 #[test]
@@ -124,11 +135,22 @@ fn one_languages_files_alone_are_a_root() {
     let languages = "Ghidra/Processors/x86/data/languages";
     let file = |name: &str| -> (String, Vec<u8>) {
         let rel = format!("{languages}/{name}");
-        let bytes = embedded().iter().find(|(p, _)| *p == rel).expect(&rel).1.clone();
+        let bytes = embedded()
+            .iter()
+            .find(|(p, _)| *p == rel)
+            .expect(&rel)
+            .1
+            .clone();
         (name.to_string(), bytes)
     };
     let flat = MemorySpecs::from_files(
-        ["x86.ldefs", "x86-64.sla", "x86-64.pspec", "x86-64-gcc.cspec"].map(file),
+        [
+            "x86.ldefs",
+            "x86-64.sla",
+            "x86-64.pspec",
+            "x86-64-gcc.cspec",
+        ]
+        .map(file),
     );
     let from_flat = decompile_all(&mut bootstrap(&[flat.into()]));
     let from_disk = decompile_all(&mut bootstrap(&[specs_dir().into()]));

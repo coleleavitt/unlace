@@ -2,19 +2,44 @@
 //! adjacency and listing format. The shared kuna snapshot includes later
 //! kuna-specific additions and is not an independent C++ oracle.
 
-use unlace_decomp::universalaction::{universal_sched, ActionListFilter, UNPORTED_ALLOWLIST};
+use unlace_decomp::universalaction::{ActionListFilter, UNPORTED_ALLOWLIST, universal_sched};
 
 /// The C++ `decompile` group members (verbatim from
 /// `universalaction_listing.rs` — the filtered decompile-root view).
 const DECOMPILE_GROUPS: &[&str] = &[
-    "base", "protorecovery", "protorecovery_a", "deindirect", "localrecovery",
-    "deadcode", "typerecovery", "stackptrflow",
-    "blockrecovery", "stackvars", "deadcontrolflow", "switchnorm",
-    "cleanup", "splitcopy", "splitpointer", "merge", "dynamic", "casts", "analysis",
-    "canonicalcompare", "presentcompare",
-    "fixateglobals", "fixateproto", "constsequence", "bitfields",
-    "segment", "returnsplit", "nodejoin", "doubleload", "doubleprecis",
-    "unreachable", "subvar", "floatprecision",
+    "base",
+    "protorecovery",
+    "protorecovery_a",
+    "deindirect",
+    "localrecovery",
+    "deadcode",
+    "typerecovery",
+    "stackptrflow",
+    "blockrecovery",
+    "stackvars",
+    "deadcontrolflow",
+    "switchnorm",
+    "cleanup",
+    "splitcopy",
+    "splitpointer",
+    "merge",
+    "dynamic",
+    "casts",
+    "analysis",
+    "canonicalcompare",
+    "presentcompare",
+    "fixateglobals",
+    "fixateproto",
+    "constsequence",
+    "bitfields",
+    "segment",
+    "returnsplit",
+    "nodejoin",
+    "doubleload",
+    "doubleprecis",
+    "unreachable",
+    "subvar",
+    "floatprecision",
     "conditionalexe",
 ];
 
@@ -47,10 +72,7 @@ fn pos_of(lines: &[&str], name: &str) -> usize {
 fn assert_immediately_after(name_a: &str, name_b: &str) {
     let dump = rust_dump();
     // Filter to named lines only; blanks are group/pool structure, not passes.
-    let named: Vec<&str> = dump
-        .lines()
-        .filter(|l| last_token(l).is_some())
-        .collect();
+    let named: Vec<&str> = dump.lines().filter(|l| last_token(l).is_some()).collect();
     let ia = pos_of(&named, name_a);
     let ib = pos_of(&named, name_b);
     assert_eq!(
@@ -74,9 +96,13 @@ fn w8x_allowlist_is_empty() {
     // staying a runtime check on the actual data.
     let n = UNPORTED_ALLOWLIST.len();
     assert_eq!(
-        n, 0,
+        n,
+        0,
         "UNPORTED_ALLOWLIST must be empty after w8x wiring, still has {n}: {:?}",
-        UNPORTED_ALLOWLIST.iter().map(|e| e.name).collect::<Vec<_>>()
+        UNPORTED_ALLOWLIST
+            .iter()
+            .map(|e| e.name)
+            .collect::<Vec<_>>()
     );
 }
 
@@ -100,13 +126,23 @@ fn w8x_all_ten_formerly_allowlisted_passes_are_present() {
     // Require these in both sources, so deleting them from the snapshot cannot
     // conceal a missing registration.
     const WIRED: &[&str] = &[
-        "splitflow", "subfloat_convert", "stackprobeloop", "lowerswitchinstall",
-        "dumptyhumplate", "splitcopy", "splitload", "splitstore", "stringcopy",
+        "splitflow",
+        "subfloat_convert",
+        "stackprobeloop",
+        "lowerswitchinstall",
+        "dumptyhumplate",
+        "splitcopy",
+        "splitload",
+        "splitstore",
+        "stringcopy",
         "stringstore",
     ];
     let dump = rust_dump();
     let named_dump: Vec<&str> = dump.lines().filter(|l| last_token(l).is_some()).collect();
-    let named_snapshot: Vec<&str> = SNAPSHOT.lines().filter(|l| last_token(l).is_some()).collect();
+    let named_snapshot: Vec<&str> = SNAPSHOT
+        .lines()
+        .filter(|l| last_token(l).is_some())
+        .collect();
     for name in WIRED {
         assert!(
             named_dump.iter().any(|l| last_token(l) == Some(name)),
@@ -180,7 +216,11 @@ fn w8x_dump_index_is_zero_padded_width4() {
         "first dump line must start with the zero-padded index 0000, got {first:?}"
     );
     assert!(
-        SNAPSHOT.lines().next().map(|l| l.starts_with("0000")).unwrap_or(false),
+        SNAPSHOT
+            .lines()
+            .next()
+            .map(|l| l.starts_with("0000"))
+            .unwrap_or(false),
         "snapshot first line is not zero-padded width-4"
     );
 }

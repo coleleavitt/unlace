@@ -5,13 +5,13 @@ use std::fmt;
 use std::rc::Rc;
 
 use unlace_decomp::architecture::Architecture;
-use unlace_decomp::dtype::{type_metatype, Datatype, TypeField};
+use unlace_decomp::dtype::{Datatype, TypeField, type_metatype};
 use unlace_decomp::fspec::{ParameterPieces, PrototypePieces};
 use unlace_decomp::kuna_gostringinput::GoStringInput;
 use unlace_decomp::kuna_langfacet::LangFacet;
-use unlace_decomp::kuna_symbolnamechars::{sanitize_symbol_name, NameChars};
+use unlace_decomp::kuna_symbolnamechars::{NameChars, sanitize_symbol_name};
 
-use super::{build_datatype, kuna_dwarfbyref, DieSnap, Reader, TypeWalk};
+use super::{DieSnap, Reader, TypeWalk, build_datatype, kuna_dwarfbyref};
 use object::{Object, ObjectSection};
 
 mod kuna_arm64;
@@ -20,12 +20,25 @@ mod kuna_pointerreceiver;
 pub(super) use kuna_arm64::capture_compressed as capture_arm64_compressed;
 
 const INTEGER_REGISTERS: &[(u16, &str)] = &[
-    (0, "RAX"), (3, "RBX"), (2, "RCX"), (5, "RDI"), (4, "RSI"),
-    (8, "R8"), (9, "R9"), (10, "R10"), (11, "R11"),
+    (0, "RAX"),
+    (3, "RBX"),
+    (2, "RCX"),
+    (5, "RDI"),
+    (4, "RSI"),
+    (8, "R8"),
+    (9, "R9"),
+    (10, "R10"),
+    (11, "R11"),
 ];
 const FLOAT_REGISTERS: &[(u16, &str)] = &[
-    (17, "XMM0_Qa"), (18, "XMM1_Qa"), (19, "XMM2_Qa"), (20, "XMM3_Qa"),
-    (21, "XMM4_Qa"), (22, "XMM5_Qa"), (23, "XMM6_Qa"), (24, "XMM7_Qa"),
+    (17, "XMM0_Qa"),
+    (18, "XMM1_Qa"),
+    (19, "XMM2_Qa"),
+    (20, "XMM3_Qa"),
+    (21, "XMM4_Qa"),
+    (22, "XMM5_Qa"),
+    (23, "XMM6_Qa"),
+    (24, "XMM7_Qa"),
 ];
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -68,7 +81,10 @@ pub(super) struct UnitExtras {
 
 impl UnitExtras {
     pub(super) fn metadata_only() -> Self {
-        Self { metadata_only: true, ..Self::default() }
+        Self {
+            metadata_only: true,
+            ..Self::default()
+        }
     }
 
     pub(super) fn enabled(&self) -> bool {
@@ -84,21 +100,31 @@ impl UnitExtras {
     ) {
         if entry.depth() == 0 {
             self.base = unit.header.debug_info_offset().map(|offset| offset.0);
-            self.go = unit.encoding().address_size == 8 && self.base.is_some()
-                && matches!(entry.attr_value(gimli::DW_AT_language),
-                    Some(gimli::AttributeValue::Language(gimli::DW_LANG_Go)));
-            self.regabi = entry.attr_value(gimli::DW_AT_producer)
+            self.go = unit.encoding().address_size == 8
+                && self.base.is_some()
+                && matches!(
+                    entry.attr_value(gimli::DW_AT_language),
+                    Some(gimli::AttributeValue::Language(gimli::DW_LANG_Go))
+                );
+            self.regabi = entry
+                .attr_value(gimli::DW_AT_producer)
                 .and_then(|value| dwarf.attr_string(unit, value).ok())
                 .and_then(|value| std::str::from_utf8(value.slice()).ok().map(str::to_owned))
-                .is_some_and(|producer| producer.starts_with("Go cmd/compile ")
-                    && producer.split_whitespace().any(|word| word == "regabi"));
+                .is_some_and(|producer| {
+                    producer.starts_with("Go cmd/compile ")
+                        && producer.split_whitespace().any(|word| word == "regabi")
+                });
         }
         if self.enabled() {
             self.capture_entry(dwarf, unit, entry, function_entry);
         }
     }
 
-    fn reference(&self, entry: &gimli::DebuggingInformationEntry<Reader<'_>>, attribute: gimli::DwAt) -> Option<usize> {
+    fn reference(
+        &self,
+        entry: &gimli::DebuggingInformationEntry<Reader<'_>>,
+        attribute: gimli::DwAt,
+    ) -> Option<usize> {
         match entry.attr_value(attribute) {
             Some(gimli::AttributeValue::UnitRef(offset)) => self.base?.checked_add(offset.0),
             Some(gimli::AttributeValue::DebugInfoRef(offset)) => Some(offset.0),
@@ -125,7 +151,11 @@ impl UnitExtras {
         function_entry: Option<u64>,
     ) -> Extra {
         let kind = (!self.metadata_only || kuna_arm64::type_tag(entry.tag()))
-            .then(|| entry.attr_value(gimli::DwAt(0x2900)).and_then(|value| value.udata_value()))
+            .then(|| {
+                entry
+                    .attr_value(gimli::DwAt(0x2900))
+                    .and_then(|value| value.udata_value())
+            })
             .flatten();
         if !self.metadata_only && kind == Some(18) {
             if let Some(element) = self.reference(entry, gimli::DwAt(0x2902)) {
@@ -133,16 +163,21 @@ impl UnitExtras {
             }
         }
         let location = if entry.tag() == gimli::DW_TAG_formal_parameter {
-            entry.attr_value(gimli::DW_AT_location)
+            entry
+                .attr_value(gimli::DW_AT_location)
                 .map(|location| {
-                    if let Some(expression) = kuna_dwarfbyref::location_at_entry(dwarf, unit, &location, function_entry) {
+                    if let Some(expression) =
+                        kuna_dwarfbyref::location_at_entry(dwarf, unit, &location, function_entry)
+                    {
                         simple_location(expression, unit.encoding())
                     } else if self.metadata_only {
                         Location::Unsupported
                     } else {
-                        empty_entry_location(dwarf, unit, &location, function_entry).unwrap_or_default()
+                        empty_entry_location(dwarf, unit, &location, function_entry)
+                            .unwrap_or_default()
                     }
-                }).unwrap_or_default()
+                })
+                .unwrap_or_default()
         } else {
             Location::Unsupported
         };
@@ -156,44 +191,67 @@ impl UnitExtras {
             },
             kind,
             runtime_type: (!self.metadata_only)
-                .then(|| entry.attr_value(gimli::DwAt(0x2904))
-                    .and_then(|value| dwarf.attr_address(unit, value).ok().flatten())
-                    .and_then(|value| u32::try_from(value).ok()).filter(|&value| value != 0))
+                .then(|| {
+                    entry
+                        .attr_value(gimli::DwAt(0x2904))
+                        .and_then(|value| dwarf.attr_address(unit, value).ok().flatten())
+                        .and_then(|value| u32::try_from(value).ok())
+                        .filter(|&value| value != 0)
+                })
                 .flatten(),
             location,
             regabi: self.regabi,
             trampoline: entry.attr_value(gimli::DW_AT_trampoline).is_some(),
             closure: entry.attr_value(gimli::DwAt(0x2907)).is_some(),
-            invalid: [gimli::DW_AT_type, gimli::DW_AT_abstract_origin].iter()
-                .any(|attribute| entry.attr_value(*attribute).is_some() && reference(*attribute).is_none())
+            invalid: [gimli::DW_AT_type, gimli::DW_AT_abstract_origin]
+                .iter()
+                .any(|attribute| {
+                    entry.attr_value(*attribute).is_some() && reference(*attribute).is_none()
+                })
                 || entry.attr_value(gimli::DW_AT_specification).is_some(),
-            code_size: (entry.tag() == gimli::DW_TAG_subprogram).then(|| {
-                let low = dwarf.attr_address(unit, entry.attr_value(gimli::DW_AT_low_pc)?).ok()??;
-                let high = entry.attr_value(gimli::DW_AT_high_pc)?;
-                match dwarf.attr_address(unit, high.clone()).ok()? {
-                    Some(address) => address.checked_sub(low),
-                    None => high.udata_value(),
-                }
-            }).flatten(),
+            code_size: (entry.tag() == gimli::DW_TAG_subprogram)
+                .then(|| {
+                    let low = dwarf
+                        .attr_address(unit, entry.attr_value(gimli::DW_AT_low_pc)?)
+                        .ok()??;
+                    let high = entry.attr_value(gimli::DW_AT_high_pc)?;
+                    match dwarf.attr_address(unit, high.clone()).ok()? {
+                        Some(address) => address.checked_sub(low),
+                        None => high.udata_value(),
+                    }
+                })
+                .flatten(),
         }
     }
 }
 
-fn simple_location(expression: gimli::Expression<Reader<'_>>, encoding: gimli::Encoding) -> Location {
+fn simple_location(
+    expression: gimli::Expression<Reader<'_>>,
+    encoding: gimli::Encoding,
+) -> Location {
     let mut operations = expression.operations(encoding);
     match (operations.next(), operations.next()) {
         (Ok(None), Ok(None)) => Location::Unavailable,
-        (Ok(Some(gimli::Operation::Register { register })), Ok(None)) => Location::Register(register.0),
-        (Ok(Some(gimli::Operation::Register { register: first })),
-            Ok(Some(gimli::Operation::Piece { size_in_bits: 64, bit_offset: None }))) => {
-            match (operations.next(), operations.next(), operations.next()) {
-                (Ok(Some(gimli::Operation::Register { register: second })),
-                    Ok(Some(gimli::Operation::Piece { size_in_bits: 64, bit_offset: None })), Ok(None)) => {
-                    Location::RegisterPair([first.0, second.0])
-                }
-                _ => Location::Unsupported,
-            }
+        (Ok(Some(gimli::Operation::Register { register })), Ok(None)) => {
+            Location::Register(register.0)
         }
+        (
+            Ok(Some(gimli::Operation::Register { register: first })),
+            Ok(Some(gimli::Operation::Piece {
+                size_in_bits: 64,
+                bit_offset: None,
+            })),
+        ) => match (operations.next(), operations.next(), operations.next()) {
+            (
+                Ok(Some(gimli::Operation::Register { register: second })),
+                Ok(Some(gimli::Operation::Piece {
+                    size_in_bits: 64,
+                    bit_offset: None,
+                })),
+                Ok(None),
+            ) => Location::RegisterPair([first.0, second.0]),
+            _ => Location::Unsupported,
+        },
         _ => Location::Unsupported,
     }
 }
@@ -205,7 +263,9 @@ fn empty_entry_location(
     location: &gimli::AttributeValue<Reader<'_>>,
     entry: Option<u64>,
 ) -> Option<Location> {
-    if unit.encoding().version != 5 { return None; }
+    if unit.encoding().version != 5 {
+        return None;
+    }
     let entry = entry?;
     let mut locations = dwarf.attr_locations(unit, location.clone()).ok()??;
     let base = match locations.next_raw().ok()?? {
@@ -213,11 +273,20 @@ fn empty_entry_location(
         gimli::RawLocListEntry::BaseAddressx { addr } => dwarf.address(unit, addr).ok()?,
         _ => return None,
     };
-    if base != entry { return None; }
-    let gimli::RawLocListEntry::OffsetPair { begin: 0, end: 0, data } = locations.next_raw().ok()?? else {
+    if base != entry {
+        return None;
+    }
+    let gimli::RawLocListEntry::OffsetPair {
+        begin: 0,
+        end: 0,
+        data,
+    } = locations.next_raw().ok()??
+    else {
         return None;
     };
-    if locations.next_raw().ok()?.is_some() { return None; }
+    if locations.next_raw().ok()?.is_some() {
+        return None;
+    }
     match simple_location(data, unit.encoding()) {
         Location::Register(register) => Some(Location::EmptyEntryRegister(register)),
         _ => None,
@@ -238,7 +307,9 @@ type TextSymbols = BTreeMap<u64, Option<(String, u64)>>;
 impl Default for Facts {
     fn default() -> Self {
         Self {
-            dies: BTreeMap::new(), extras: BTreeMap::new(), channel_elements: BTreeMap::new(),
+            dies: BTreeMap::new(),
+            extras: BTreeMap::new(),
+            channel_elements: BTreeMap::new(),
             names: NameChars::Off,
             compressed: None,
         }
@@ -255,7 +326,9 @@ pub struct Materialized {
 
 impl fmt::Debug for Facts {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("GoDwarfFacts").field("entries", &self.dies.len()).finish()
+        f.debug_struct("GoDwarfFacts")
+            .field("entries", &self.dies.len())
+            .finish()
     }
 }
 
@@ -270,15 +343,25 @@ impl Facts {
         }
         let Some(base) = extra.base else { return };
         for (offset, mut die) in dies {
-            let Some(absolute) = base.checked_add(offset) else { continue };
-            let Some(attributes) = extra.entries.get(&offset) else { continue };
+            let Some(absolute) = base.checked_add(offset) else {
+                continue;
+            };
+            let Some(attributes) = extra.entries.get(&offset) else {
+                continue;
+            };
             die.type_ref = attributes.type_ref;
             die.origin_ref = attributes.origin_ref;
             die.origin_is_spec = false;
             die.parent = die.parent.and_then(|parent| base.checked_add(parent));
             die.discr_ref = die.discr_ref.and_then(|value| base.checked_add(value));
-            let Some(children) = die.children.iter().map(|child| base.checked_add(*child))
-                .collect::<Option<Vec<_>>>() else { continue };
+            let Some(children) = die
+                .children
+                .iter()
+                .map(|child| base.checked_add(*child))
+                .collect::<Option<Vec<_>>>()
+            else {
+                continue;
+            };
             die.children = children;
             if let Some(element) = extra.channel_elements.get(&offset) {
                 self.channel_elements.insert(absolute, *element);
@@ -292,14 +375,23 @@ impl Facts {
         self.dies.is_empty()
     }
 
-    pub fn materialize(&self, arch: &Architecture,
+    pub fn materialize(
+        &self,
+        arch: &Architecture,
         methods: &BTreeMap<u64, crate::gotypes::kuna_pointermethods::LinkedMethod>,
     ) -> Vec<Materialized> {
         let compressed = self.compressed.as_deref();
         let entries = compressed.and_then(|stored| stored.arm64_entries.as_ref());
-        let target = if entries.is_some() { "AARCH64:LE:64:" } else { "x86:LE:64:" };
-        if !arch.archid.starts_with(target) || arch.data_org().0 != 8
-            || !arch.default_fp().is_some_and(|model| model.get_name() == "abi-internal")
+        let target = if entries.is_some() {
+            "AARCH64:LE:64:"
+        } else {
+            "x86:LE:64:"
+        };
+        if !arch.archid.starts_with(target)
+            || arch.data_org().0 != 8
+            || !arch
+                .default_fp()
+                .is_some_and(|model| model.get_name() == "abi-internal")
         {
             return Vec::new();
         }
@@ -309,127 +401,235 @@ impl Facts {
             } else {
                 compressed.decode(self.names)
             };
-            return facts.map(|facts| facts.materialize_decoded(arch, methods, entries)).unwrap_or_default();
+            return facts
+                .map(|facts| facts.materialize_decoded(arch, methods, entries))
+                .unwrap_or_default();
         }
         self.materialize_decoded(arch, methods, None)
     }
 
-    fn materialize_decoded(&self, arch: &Architecture,
+    fn materialize_decoded(
+        &self,
+        arch: &Architecture,
         methods: &BTreeMap<u64, crate::gotypes::kuna_pointermethods::LinkedMethod>,
         arm64_entries: Option<&TextSymbols>,
     ) -> Vec<Materialized> {
         let mut repeated = BTreeSet::new();
         let mut entries = BTreeSet::new();
-        for die in self.dies.values().filter(|die| die.tag == gimli::DW_TAG_subprogram && !die.declaration) {
+        for die in self
+            .dies
+            .values()
+            .filter(|die| die.tag == gimli::DW_TAG_subprogram && !die.declaration)
+        {
             if let Some(entry) = die.low_pc {
-                if !entries.insert(entry) { repeated.insert(entry); }
+                if !entries.insert(entry) {
+                    repeated.insert(entry);
+                }
             }
         }
-        self.dies.iter().filter_map(|(offset, die)| {
-            if die.tag != gimli::DW_TAG_subprogram || die.declaration {
-                return None;
-            }
-            let entry = die.low_pc?;
-            let unique = !repeated.contains(&entry);
-            let (pieces, status_site, pointer_receiver, string_input) = if let Some(entries) = arm64_entries {
-                let (name, size) = entries.get(&entry)?.as_ref()?;
-                (self.arm64_scalar_prototype(*offset, arch, unique, name, *size)?, None, None, None)
-            } else {
-                self.prototype(*offset, arch, unique, methods.get(&entry))?
-            };
-            Some(Materialized { entry, pieces, status_site, pointer_receiver, string_input })
-        }).collect()
+        self.dies
+            .iter()
+            .filter_map(|(offset, die)| {
+                if die.tag != gimli::DW_TAG_subprogram || die.declaration {
+                    return None;
+                }
+                let entry = die.low_pc?;
+                let unique = !repeated.contains(&entry);
+                let (pieces, status_site, pointer_receiver, string_input) =
+                    if let Some(entries) = arm64_entries {
+                        let (name, size) = entries.get(&entry)?.as_ref()?;
+                        (
+                            self.arm64_scalar_prototype(*offset, arch, unique, name, *size)?,
+                            None,
+                            None,
+                            None,
+                        )
+                    } else {
+                        self.prototype(*offset, arch, unique, methods.get(&entry))?
+                    };
+                Some(Materialized {
+                    entry,
+                    pieces,
+                    status_site,
+                    pointer_receiver,
+                    string_input,
+                })
+            })
+            .collect()
     }
 
-    fn arm64_scalar_prototype(&self, offset: usize, arch: &Architecture, unique: bool, name: &str, size: u64)
-        -> Option<PrototypePieces>
-    {
+    fn arm64_scalar_prototype(
+        &self,
+        offset: usize,
+        arch: &Architecture,
+        unique: bool,
+        name: &str,
+        size: u64,
+    ) -> Option<PrototypePieces> {
         let sub = self.dies.get(&offset)?;
         let extra = self.extras.get(&offset)?;
-        if !unique || !extra.regabi || extra.trampoline || extra.closure || extra.invalid
-            || sub.type_ref.is_some() || sub.origin_ref.is_some() || sub.name != name
-            || extra.code_size != Some(size) || name.is_empty() || hidden_context(name)
+        if !unique
+            || !extra.regabi
+            || extra.trampoline
+            || extra.closure
+            || extra.invalid
+            || sub.type_ref.is_some()
+            || sub.origin_ref.is_some()
+            || sub.name != name
+            || extra.code_size != Some(size)
+            || name.is_empty()
+            || hidden_context(name)
         {
             return None;
         }
         let mut formals = Vec::new();
         for key in &sub.children {
             let die = self.dies.get(key)?;
-            if die.tag == gimli::DW_TAG_unspecified_parameters { return None; }
-            if die.tag != gimli::DW_TAG_formal_parameter { continue; }
+            if die.tag == gimli::DW_TAG_unspecified_parameters {
+                return None;
+            }
+            if die.tag != gimli::DW_TAG_formal_parameter {
+                continue;
+            }
             let attr = self.extras.get(key)?;
-            if !attr.regabi || attr.invalid || attr.closure || die.origin_ref.is_some() { return None; }
+            if !attr.regabi || attr.invalid || attr.closure || die.origin_ref.is_some() {
+                return None;
+            }
             formals.push((die, attr.location, attr.result?));
         }
-        let [(input, Location::Register(0), false), (output, location, true)] = formals.as_slice() else { return None; };
-        if !matches!(location, Location::Register(0) | Location::Unavailable) { return None; }
+        let [
+            (input, Location::Register(0), false),
+            (output, location, true),
+        ] = formals.as_slice()
+        else {
+            return None;
+        };
+        if !matches!(location, Location::Register(0) | Location::Unavailable) {
+            return None;
+        }
         let (input_ref, output_ref) = (input.type_ref?, output.type_ref?);
         self.arm64_type_shape(input_ref, output_ref)?;
         let types = arch.types();
         let mut walk = TypeWalk::new();
         let input_type = build_datatype(Some(input_ref), &self.dies, types, 1, &mut walk, false)?;
         let output_type = build_datatype(Some(output_ref), &self.dies, types, 1, &mut walk, false)?;
-        if !self.built_matches(input_ref, &input_type, 64) || !self.built_matches(output_ref, &output_type, 64) { return None; }
+        if !self.built_matches(input_ref, &input_type, 64)
+            || !self.built_matches(output_ref, &output_type, 64)
+        {
+            return None;
+        }
         let pieces = PrototypePieces {
             name: sanitize_symbol_name(name, self.names).into_owned(),
-            outtype: Some(Rc::clone(&output_type)), intypes: vec![Rc::clone(&input_type)],
-            innames: vec![sanitize_symbol_name(&input.name, self.names).into_owned()], first_var_arg_slot: -1,
-            output_storage: None, input_storage: Vec::new(), kuna_library_names: None,
+            outtype: Some(Rc::clone(&output_type)),
+            intypes: vec![Rc::clone(&input_type)],
+            innames: vec![sanitize_symbol_name(&input.name, self.names).into_owned()],
+            first_var_arg_slot: -1,
+            output_storage: None,
+            input_storage: Vec::new(),
+            kuna_library_names: None,
         };
         let mut assigned = Vec::new();
-        arch.default_fp()?.assign_parameter_storage(&pieces, &mut assigned, false, types, arch.manage()).ok()?;
-        let [output, input] = assigned.as_slice() else { return None; };
-        (storage_matches(arch, output, "x0", &output_type) && storage_matches(arch, input, "x0", &input_type))
-            .then_some(pieces)
+        arch.default_fp()?
+            .assign_parameter_storage(&pieces, &mut assigned, false, types, arch.manage())
+            .ok()?;
+        let [output, input] = assigned.as_slice() else {
+            return None;
+        };
+        (storage_matches(arch, output, "x0", &output_type)
+            && storage_matches(arch, input, "x0", &input_type))
+        .then_some(pieces)
     }
 
     fn arm64_type_shape(&self, input_ref: usize, output_ref: usize) -> Option<()> {
         let pointer = self.dies.get(&input_ref)?;
-        if pointer.tag != gimli::DW_TAG_pointer_type { return None; }
+        if pointer.tag != gimli::DW_TAG_pointer_type {
+            return None;
+        }
         let pointee = self.scalar(pointer.type_ref?, &mut BTreeSet::new(), &mut 256)?;
         let input_scalar = self.scalar(input_ref, &mut BTreeSet::new(), &mut 256)?;
         let output_scalar = self.scalar(output_ref, &mut BTreeSet::new(), &mut 256)?;
-        if pointee.meta != type_metatype::TYPE_INT || pointee.size != 4 || input_scalar.meta != type_metatype::TYPE_PTR
-            || output_scalar.meta != type_metatype::TYPE_INT || !matches!(output_scalar.size, 4 | 8)
+        if pointee.meta != type_metatype::TYPE_INT
+            || pointee.size != 4
+            || input_scalar.meta != type_metatype::TYPE_PTR
+            || output_scalar.meta != type_metatype::TYPE_INT
+            || !matches!(output_scalar.size, 4 | 8)
         {
             return None;
         }
         Some(())
     }
 
-    fn prototype(&self, offset: usize, arch: &Architecture, unique: bool,
+    fn prototype(
+        &self,
+        offset: usize,
+        arch: &Architecture,
+        unique: bool,
         method: Option<&crate::gotypes::kuna_pointermethods::LinkedMethod>,
-    ) -> Option<(PrototypePieces, Option<u64>, Option<unlace_decomp::kuna_gopointermethod::Receiver>, Option<GoStringInput>)>
-    {
+    ) -> Option<(
+        PrototypePieces,
+        Option<u64>,
+        Option<unlace_decomp::kuna_gopointermethod::Receiver>,
+        Option<GoStringInput>,
+    )> {
         let sub = self.dies.get(&offset)?;
         let extra = self.extras.get(&offset)?;
-        if !extra.regabi || extra.trampoline || extra.closure || extra.invalid || sub.type_ref.is_some() {
+        if !extra.regabi
+            || extra.trampoline
+            || extra.closure
+            || extra.invalid
+            || sub.type_ref.is_some()
+        {
             return None;
         }
         let origin = match sub.origin_ref {
             Some(offset) => {
                 let attributes = self.extras.get(&offset)?;
-                if !attributes.regabi || attributes.trampoline || attributes.closure || attributes.invalid {
+                if !attributes.regabi
+                    || attributes.trampoline
+                    || attributes.closure
+                    || attributes.invalid
+                {
                     return None;
                 }
                 Some(self.dies.get(&offset)?)
             }
             None => None,
         };
-        if origin.is_some_and(|origin| origin.tag != gimli::DW_TAG_subprogram
-            || origin.low_pc.is_some() || origin.origin_ref.is_some() || origin.type_ref.is_some()
-            || origin.children.iter().any(|child| self.dies.get(child)
-                .is_some_and(|die| die.tag == gimli::DW_TAG_unspecified_parameters)))
-        {
+        if origin.is_some_and(|origin| {
+            origin.tag != gimli::DW_TAG_subprogram
+                || origin.low_pc.is_some()
+                || origin.origin_ref.is_some()
+                || origin.type_ref.is_some()
+                || origin.children.iter().any(|child| {
+                    self.dies
+                        .get(child)
+                        .is_some_and(|die| die.tag == gimli::DW_TAG_unspecified_parameters)
+                })
+        }) {
             return None;
         }
-        let name = if sub.name.is_empty() { &origin?.name } else { &sub.name };
+        let name = if sub.name.is_empty() {
+            &origin?.name
+        } else {
+            &sub.name
+        };
         if name.is_empty() || hidden_context(name) {
             return None;
         }
-        let inherited = origin.map(|origin| origin.children.iter().copied().filter(|offset| {
-            self.dies.get(offset).is_some_and(|die| die.tag == gimli::DW_TAG_formal_parameter)
-        }).collect::<Vec<_>>()).unwrap_or_default();
+        let inherited = origin
+            .map(|origin| {
+                origin
+                    .children
+                    .iter()
+                    .copied()
+                    .filter(|offset| {
+                        self.dies
+                            .get(offset)
+                            .is_some_and(|die| die.tag == gimli::DW_TAG_formal_parameter)
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
         let mut seen = Vec::new();
         let mut parameters = Vec::new();
         for child in &sub.children {
@@ -447,12 +647,17 @@ impl Facts {
             let (source, result) = if let Some(parent) = die.origin_ref {
                 let source = self.dies.get(&parent)?;
                 let inherited_attributes = self.extras.get(&parent)?;
-                if inherited_attributes.invalid || inherited_attributes.closure
-                    || source.tag != gimli::DW_TAG_formal_parameter || source.origin_ref.is_some()
-                    || source.parent != sub.origin_ref || !inherited.contains(&parent)
+                if inherited_attributes.invalid
+                    || inherited_attributes.closure
+                    || source.tag != gimli::DW_TAG_formal_parameter
+                    || source.origin_ref.is_some()
+                    || source.parent != sub.origin_ref
+                    || !inherited.contains(&parent)
                     || (!die.name.is_empty() && die.name != source.name)
                     || die.type_ref.is_some_and(|ty| Some(ty) != source.type_ref)
-                    || attributes.result.is_some_and(|result| Some(result) != inherited_attributes.result)
+                    || attributes
+                        .result
+                        .is_some_and(|result| Some(result) != inherited_attributes.result)
                 {
                     return None;
                 }
@@ -471,18 +676,34 @@ impl Facts {
             return None;
         }
         if unique {
-            if let Some((pieces, site)) = self.channel_status(arch, sub.low_pc?, name, &parameters) {
+            if let Some((pieces, site)) = self.channel_status(arch, sub.low_pc?, name, &parameters)
+            {
                 return Some((pieces, Some(site), None, None));
             }
         }
-        let receiver = method.filter(|_| unique && origin.is_none())
+        let receiver = method
+            .filter(|_| unique && origin.is_none())
             .and_then(|method| self.pointer_receiver(sub, &parameters, method));
-        if parameters.iter().any(|(_, location, _)| matches!(location, Location::EmptyEntryRegister(_))) {
-            if extra.code_size != Some(1) { return None; }
-            let address = unlace_base::address::Address::new(arch.manage().get_default_code_space()?.clone(), sub.low_pc?);
+        if parameters
+            .iter()
+            .any(|(_, location, _)| matches!(location, Location::EmptyEntryRegister(_)))
+        {
+            if extra.code_size != Some(1) {
+                return None;
+            }
+            let address = unlace_base::address::Address::new(
+                arch.manage().get_default_code_space()?.clone(),
+                sub.low_pc?,
+            );
             let mut opcode = [0u8];
-            arch.translate().loader_rc().borrow_mut().load_fill(&mut opcode, &address).ok()?;
-            if opcode != [0xc3] { return None; }
+            arch.translate()
+                .loader_rc()
+                .borrow_mut()
+                .load_fill(&mut opcode, &address)
+                .ok()?;
+            if opcode != [0xc3] {
+                return None;
+            }
         }
         let mut expected = Vec::new();
         let mut inputs = Vec::new();
@@ -495,21 +716,31 @@ impl Facts {
         let mut string_formal = None;
         for (parameter, location, result) in parameters {
             if let Location::RegisterPair(registers) = location {
-                if result || string_inputs == 2 || !unique || output_count != 0
-                    || parameter.name.is_empty() || parameter.name == "_"
+                if result
+                    || string_inputs == 2
+                    || !unique
+                    || output_count != 0
+                    || parameter.name.is_empty()
+                    || parameter.name == "_"
                 {
                     return None;
                 }
                 let [first, second] = INTEGER_REGISTERS.get(integers..integers + 2)? else {
                     return None;
                 };
-                if registers != [first.0, second.0] { return None; }
+                if registers != [first.0, second.0] {
+                    return None;
+                }
                 let fields = self.string_input_fields(parameter.type_ref?)?;
                 let source = sanitize_symbol_name(&parameter.name, self.names);
                 if string_inputs == 0 {
                     string_formal = Some((inputs.len(), source.to_string()));
                 }
-                for ((offset, register), suffix) in fields.into_iter().zip([first.1, second.1]).zip(["data", "len"]) {
+                for ((offset, register), suffix) in fields
+                    .into_iter()
+                    .zip([first.1, second.1])
+                    .zip(["data", "len"])
+                {
                     inputs.push((offset, self.scalar(offset, &mut BTreeSet::new(), &mut 256)?));
                     names.push(format!("{source}_{suffix}"));
                     expected.push(register);
@@ -524,26 +755,46 @@ impl Facts {
                 location => location,
             };
             let type_ref = parameter.type_ref?;
-            if result && output_count == 1 && unique
+            if result
+                && output_count == 1
+                && unique
                 && self.int_error_results(outputs[0]?.0, type_ref)
             {
-                if location != Location::Unavailable { return None; }
+                if location != Location::Unavailable {
+                    return None;
+                }
                 int_error = true;
                 output_count = 2;
                 continue;
             }
             let scalar = self.scalar(type_ref, &mut BTreeSet::new(), &mut 256)?;
-            let registers = if scalar.float { FLOAT_REGISTERS } else { INTEGER_REGISTERS };
+            let registers = if scalar.float {
+                FLOAT_REGISTERS
+            } else {
+                INTEGER_REGISTERS
+            };
             if result {
                 let index = output_count;
-                if index > 0 && (!unique || index != 1) { return None; }
+                if index > 0 && (!unique || index != 1) {
+                    return None;
+                }
                 let &(dwarf_register, register) = registers.get(index)?;
-                if location != Location::Unavailable && location != Location::Register(dwarf_register) { return None; }
+                if location != Location::Unavailable
+                    && location != Location::Register(dwarf_register)
+                {
+                    return None;
+                }
                 outputs[index] = Some((parameter.type_ref?, scalar, register));
                 output_count += 1;
             } else {
-                if output_count != 0 { return None; }
-                let index = if scalar.float { &mut floats } else { &mut integers };
+                if output_count != 0 {
+                    return None;
+                }
+                let index = if scalar.float {
+                    &mut floats
+                } else {
+                    &mut integers
+                };
                 let &(dwarf_register, register) = registers.get(*index)?;
                 *index += 1;
                 if !matches!(location, Location::Unavailable)
@@ -562,8 +813,14 @@ impl Facts {
                 return None;
             }
         }
-        if output_count == 2 && outputs.iter().flatten().any(|(_, scalar, _)| scalar.size != 8
-            || !matches!(scalar.meta, type_metatype::TYPE_INT | type_metatype::TYPE_UINT))
+        if output_count == 2
+            && outputs.iter().flatten().any(|(_, scalar, _)| {
+                scalar.size != 8
+                    || !matches!(
+                        scalar.meta,
+                        type_metatype::TYPE_INT | type_metatype::TYPE_UINT
+                    )
+            })
         {
             return None;
         }
@@ -571,10 +828,14 @@ impl Facts {
         let mut walk = TypeWalk::new();
         let mut materialize = |offset, scalar: Scalar| {
             let ty = build_datatype(Some(offset), &self.dies, types, 1, &mut walk, false)?;
-            (ty.get_size() == scalar.size && ty.get_metatype() == scalar.meta
-                && self.built_matches(offset, &ty, 64)).then_some(ty)
+            (ty.get_size() == scalar.size
+                && ty.get_metatype() == scalar.meta
+                && self.built_matches(offset, &ty, 64))
+            .then_some(ty)
         };
-        let intypes = inputs.into_iter().map(|(offset, scalar)| materialize(offset, scalar))
+        let intypes = inputs
+            .into_iter()
+            .map(|(offset, scalar)| materialize(offset, scalar))
             .collect::<Option<Vec<_>>>()?;
         let mut outtypes = [None, None];
         for (slot, output) in outtypes.iter_mut().zip(outputs) {
@@ -583,55 +844,88 @@ impl Facts {
             }
         }
         let error_pointer = if int_error {
-            Some(types.get_type_pointer(8, types.get_type_void().ok()?, 1).ok()?)
+            Some(
+                types
+                    .get_type_pointer(8, types.get_type_void().ok()?, 1)
+                    .ok()?,
+            )
         } else {
             None
         };
         let outtype = if let Some(pointer) = &error_pointer {
             let mut storage = Datatype::new_with_align(24, 8, type_metatype::TYPE_STRUCT);
-            storage.set_struct_fields(kuna_goerror::fields(outtypes[0].as_ref()?, pointer), Vec::new(), 24, 8);
+            storage.set_struct_fields(
+                kuna_goerror::fields(outtypes[0].as_ref()?, pointer),
+                Vec::new(),
+                24,
+                8,
+            );
             Rc::new(storage)
-        } else { match &outtypes {
-            [None, None] => types.get_type_void().ok()?,
-            [Some(single), None] => Rc::clone(single),
-            [Some(first), Some(second)] => {
-                let mut storage = Datatype::new_with_align(16, 8, type_metatype::TYPE_STRUCT);
-                storage.set_struct_fields(pair_fields(first, second), Vec::new(), 16, 8);
-                Rc::new(storage)
+        } else {
+            match &outtypes {
+                [None, None] => types.get_type_void().ok()?,
+                [Some(single), None] => Rc::clone(single),
+                [Some(first), Some(second)] => {
+                    let mut storage = Datatype::new_with_align(16, 8, type_metatype::TYPE_STRUCT);
+                    storage.set_struct_fields(pair_fields(first, second), Vec::new(), 16, 8);
+                    Rc::new(storage)
+                }
+                _ => return None,
             }
-            _ => return None,
-        }};
+        };
         let mut pieces = PrototypePieces {
             name: sanitize_symbol_name(name, self.names).into_owned(),
-            outtype: Some(outtype), intypes, innames: names, first_var_arg_slot: -1,
-            output_storage: None, input_storage: Vec::new(), kuna_library_names: None,
+            outtype: Some(outtype),
+            intypes,
+            innames: names,
+            first_var_arg_slot: -1,
+            output_storage: None,
+            input_storage: Vec::new(),
+            kuna_library_names: None,
         };
         let mut assigned = Vec::new();
-        arch.default_fp()?.assign_parameter_storage(&pieces, &mut assigned, false, types, arch.manage()).ok()?;
-        if assigned.len() != expected.len() + 1 { return None; }
+        arch.default_fp()?
+            .assign_parameter_storage(&pieces, &mut assigned, false, types, arch.manage())
+            .ok()?;
+        if assigned.len() != expected.len() + 1 {
+            return None;
+        }
         for ((slot, register), ty) in assigned.iter().skip(1).zip(expected).zip(&pieces.intypes) {
-            if !storage_matches(arch, slot, register, ty) { return None; }
+            if !storage_matches(arch, slot, register, ty) {
+                return None;
+            }
         }
         if !int_error {
             if let [Some((_, _, register)), None] = &outputs {
-                if !storage_matches(arch, &assigned[0], register, pieces.outtype.as_ref()?) { return None; }
+                if !storage_matches(arch, &assigned[0], register, pieces.outtype.as_ref()?) {
+                    return None;
+                }
             }
         }
         if let Some(pointer) = &error_pointer {
-            if !kuna_goerror::storage_matches(arch, &assigned[0]) { return None; }
+            if !kuna_goerror::storage_matches(arch, &assigned[0]) {
+                return None;
+            }
             let name = "__kuna_go_int_error_result";
             let facet = LangFacet::GoIntErrorResults;
             let outtype = match types.find_by_name(name).ok()? {
                 Some(existing) => {
                     if types.kuna_lang_facet(name).as_ref() != Some(&facet)
-                        || facet.go_int_error_fields(&existing).is_none() { return None; }
+                        || facet.go_int_error_fields(&existing).is_none()
+                    {
+                        return None;
+                    }
                     existing
                 }
                 None => {
-                    if types.kuna_lang_facet(name).is_some() { return None; }
+                    if types.kuna_lang_facet(name).is_some() {
+                        return None;
+                    }
                     let shell = types.get_type_struct(name).ok()?;
                     let fields = kuna_goerror::fields(outtypes[0].as_ref()?, pointer);
-                    let result = types.set_fields_struct_raw(&shell, fields, Vec::new(), 24, 8, 0).ok()?;
+                    let result = types
+                        .set_fields_struct_raw(&shell, fields, Vec::new(), 24, 8, 0)
+                        .ok()?;
                     facet.go_int_error_fields(&result)?;
                     types.kuna_register_lang_facet(name, facet).ok()?;
                     result
@@ -642,19 +936,35 @@ impl Facts {
         if let [Some(first), Some(second)] = &outtypes {
             let signed = [first, second].map(|ty| ty.get_metatype() == type_metatype::TYPE_INT);
             let facet = LangFacet::GoPairResults { signed };
-            if !pair_storage_matches(arch, &assigned[0], &facet) { return None; }
+            if !pair_storage_matches(arch, &assigned[0], &facet) {
+                return None;
+            }
             let [a, b] = signed.map(|signed| if signed { "i64" } else { "u64" });
             let name = format!("__kuna_go_pair_{a}_{b}");
             let outtype = match types.find_by_name(&name).ok()? {
                 Some(existing) => {
                     if types.kuna_lang_facet(&name).as_ref() != Some(&facet)
-                        || facet.go_pair_fields(&existing).is_none() { return None; }
+                        || facet.go_pair_fields(&existing).is_none()
+                    {
+                        return None;
+                    }
                     existing
                 }
                 None => {
-                    if types.kuna_lang_facet(&name).is_some() { return None; }
+                    if types.kuna_lang_facet(&name).is_some() {
+                        return None;
+                    }
                     let shell = types.get_type_struct(&name).ok()?;
-                    let result = types.set_fields_struct_raw(&shell, pair_fields(first, second), Vec::new(), 16, 8, 0).ok()?;
+                    let result = types
+                        .set_fields_struct_raw(
+                            &shell,
+                            pair_fields(first, second),
+                            Vec::new(),
+                            16,
+                            8,
+                            0,
+                        )
+                        .ok()?;
                     facet.go_pair_fields(&result)?;
                     types.kuna_register_lang_facet(&name, facet).ok()?;
                     result
@@ -662,18 +972,24 @@ impl Facts {
             };
             pieces.outtype = Some(outtype);
         }
-        let string_input = string_formal.filter(|_| string_inputs == 1).and_then(|(slot, name)| {
-            let entry = unlace_base::address::Address::new(
-                arch.manage().get_default_code_space()?.clone(), sub.low_pc?,
-            );
-            let storage = [assigned.get(slot + 1)?.addr.clone(), assigned.get(slot + 2)?.addr.clone()];
-            Some(GoStringInput {
-                entry,
-                name,
-                first_slot: i32::try_from(slot).ok()?,
-                storage,
-            })
-        });
+        let string_input = string_formal
+            .filter(|_| string_inputs == 1)
+            .and_then(|(slot, name)| {
+                let entry = unlace_base::address::Address::new(
+                    arch.manage().get_default_code_space()?.clone(),
+                    sub.low_pc?,
+                );
+                let storage = [
+                    assigned.get(slot + 1)?.addr.clone(),
+                    assigned.get(slot + 2)?.addr.clone(),
+                ];
+                Some(GoStringInput {
+                    entry,
+                    name,
+                    first_slot: i32::try_from(slot).ok()?,
+                    storage,
+                })
+            });
         Some((pieces, None, receiver, string_input))
     }
 
@@ -684,31 +1000,45 @@ impl Facts {
         name: &str,
         parameters: &[(&DieSnap, Location, bool)],
     ) -> Option<(PrototypePieces, u64)> {
-        let [(input, Location::Register(0), false), (output, result_location, true)] = parameters
-            else { return None; };
-        if !matches!(result_location, Location::Unavailable | Location::Register(0)) {
+        let [
+            (input, Location::Register(0), false),
+            (output, result_location, true),
+        ] = parameters
+        else {
+            return None;
+        };
+        if !matches!(
+            result_location,
+            Location::Unavailable | Location::Register(0)
+        ) {
             return None;
         }
         let channel_offset = input.type_ref?;
         let channel = self.dies.get(&channel_offset)?;
-        if channel.tag != gimli::DW_TAG_typedef || channel.name != "<-chan int"
-            || channel.declaration || !matches!(channel.byte_size, None | Some(8))
+        if channel.tag != gimli::DW_TAG_typedef
+            || channel.name != "<-chan int"
+            || channel.declaration
+            || !matches!(channel.byte_size, None | Some(8))
             || self.extras.get(&channel_offset)?.invalid
         {
             return None;
         }
         let backing_offset = channel.type_ref?;
         let backing = self.dies.get(&backing_offset)?;
-        if backing.tag != gimli::DW_TAG_pointer_type || backing.name != "*hchan<int>"
-            || backing.declaration || !matches!(backing.byte_size, None | Some(8))
+        if backing.tag != gimli::DW_TAG_pointer_type
+            || backing.name != "*hchan<int>"
+            || backing.declaration
+            || !matches!(backing.byte_size, None | Some(8))
             || self.extras.get(&backing_offset)?.invalid
         {
             return None;
         }
         let record_offset = backing.type_ref?;
         let record = self.dies.get(&record_offset)?;
-        if record.tag != gimli::DW_TAG_structure_type || record.name != "hchan<int>"
-            || record.declaration || record.byte_size.is_none_or(|size| size < 8)
+        if record.tag != gimli::DW_TAG_structure_type
+            || record.name != "hchan<int>"
+            || record.declaration
+            || record.byte_size.is_none_or(|size| size < 8)
             || self.extras.get(&record_offset)?.invalid
         {
             return None;
@@ -720,14 +1050,18 @@ impl Facts {
         }
         let element = self.scalar(element_offset, &mut BTreeSet::new(), &mut 256)?;
         let result = self.scalar(output.type_ref?, &mut BTreeSet::new(), &mut 256)?;
-        if element.size != 8 || element.meta != type_metatype::TYPE_INT
-            || result.size != 1 || result.meta != type_metatype::TYPE_BOOL
+        if element.size != 8
+            || element.meta != type_metatype::TYPE_INT
+            || result.size != 1
+            || result.meta != type_metatype::TYPE_BOOL
         {
             return None;
         }
         let site = unlace_decomp::kuna_gochanrecv::status_site(arch, entry)?;
         let types = arch.types();
-        let handle = types.get_type_pointer(8, types.get_type_void().ok()?, 1).ok()?;
+        let handle = types
+            .get_type_pointer(8, types.get_type_void().ok()?, 1)
+            .ok()?;
         let status = types.get_base(1, type_metatype::TYPE_BOOL).ok()?;
         let pieces = PrototypePieces {
             name: sanitize_symbol_name(name, self.names).into_owned(),
@@ -738,29 +1072,50 @@ impl Facts {
             ..PrototypePieces::default()
         };
         let mut assigned = Vec::new();
-        arch.default_fp()?.assign_parameter_storage(&pieces, &mut assigned, false, types, arch.manage()).ok()?;
-        let [out, input] = assigned.as_slice() else { return None; };
-        if !storage_matches(arch, out, "AL", &status) || !storage_matches(arch, input, "RAX", &handle) {
+        arch.default_fp()?
+            .assign_parameter_storage(&pieces, &mut assigned, false, types, arch.manage())
+            .ok()?;
+        let [out, input] = assigned.as_slice() else {
+            return None;
+        };
+        if !storage_matches(arch, out, "AL", &status)
+            || !storage_matches(arch, input, "RAX", &handle)
+        {
             return None;
         }
         Some((pieces, site))
     }
 
-    fn scalar(&self, offset: usize, visited: &mut BTreeSet<usize>, budget: &mut usize) -> Option<Scalar> {
-        if *budget == 0 || visited.len() >= 64 || !visited.insert(offset) { return None; }
+    fn scalar(
+        &self,
+        offset: usize,
+        visited: &mut BTreeSet<usize>,
+        budget: &mut usize,
+    ) -> Option<Scalar> {
+        if *budget == 0 || visited.len() >= 64 || !visited.insert(offset) {
+            return None;
+        }
         *budget -= 1;
         let die = self.dies.get(&offset)?;
         let extra = self.extras.get(&offset)?;
-        if extra.invalid { return None; }
+        if extra.invalid {
+            return None;
+        }
         let kind = extra.kind;
         let size = i32::try_from(die.byte_size.unwrap_or(
-            if die.tag == gimli::DW_TAG_pointer_type { 8 } else { 0 }
-        )).ok()?;
+            if die.tag == gimli::DW_TAG_pointer_type {
+                8
+            } else {
+                0
+            },
+        ))
+        .ok()?;
         let meta = match die.tag {
             gimli::DW_TAG_typedef | gimli::DW_TAG_const_type | gimli::DW_TAG_volatile_type => {
                 let scalar = self.scalar(die.type_ref?, visited, budget)?;
                 return (kind.is_none_or(|kind| kind_matches(kind, scalar.meta, scalar.size))
-                    && die.byte_size.is_none_or(|size| size == scalar.size as u64)).then_some(scalar);
+                    && die.byte_size.is_none_or(|size| size == scalar.size as u64))
+                .then_some(scalar);
             }
             gimli::DW_TAG_base_type => match die.encoding? {
                 gimli::DW_ATE_signed if matches!(size, 1 | 2 | 4 | 8) => type_metatype::TYPE_INT,
@@ -776,7 +1131,8 @@ impl Facts {
                             self.record_pointee(pointee, visited, budget)?;
                         }
                     }
-                    None if kind == Some(26) || (kind.is_none() && die.name == "unsafe.Pointer") => {}
+                    None if kind == Some(26)
+                        || (kind.is_none() && die.name == "unsafe.Pointer") => {}
                     None => return None,
                 }
                 type_metatype::TYPE_PTR
@@ -784,23 +1140,40 @@ impl Facts {
             _ => return None,
         };
         if let Some(kind) = kind {
-            if !kind_matches(kind, meta, size) { return None; }
+            if !kind_matches(kind, meta, size) {
+                return None;
+            }
         }
-        Some(Scalar { size, meta, float: meta == type_metatype::TYPE_FLOAT })
+        Some(Scalar {
+            size,
+            meta,
+            float: meta == type_metatype::TYPE_FLOAT,
+        })
     }
 
-    fn record_pointee(&self, offset: usize, visited: &mut BTreeSet<usize>, budget: &mut usize) -> Option<()> {
-        if *budget == 0 || visited.len() >= 64 || !visited.insert(offset) { return None; }
+    fn record_pointee(
+        &self,
+        offset: usize,
+        visited: &mut BTreeSet<usize>,
+        budget: &mut usize,
+    ) -> Option<()> {
+        if *budget == 0 || visited.len() >= 64 || !visited.insert(offset) {
+            return None;
+        }
         *budget -= 1;
         let die = self.dies.get(&offset)?;
         let extra = self.extras.get(&offset)?;
-        if extra.invalid || !matches!(extra.kind, None | Some(25)) { return None; }
+        if extra.invalid || !matches!(extra.kind, None | Some(25)) {
+            return None;
+        }
         if die.tag == gimli::DW_TAG_typedef {
             return self.record_pointee(die.type_ref?, visited, budget);
         }
         let size = die.byte_size?;
-        if die.tag != gimli::DW_TAG_structure_type || die.name.is_empty()
-            || size == 0 || size > i32::MAX as u64
+        if die.tag != gimli::DW_TAG_structure_type
+            || die.name.is_empty()
+            || size == 0
+            || size > i32::MAX as u64
             || !matches!(self.extras.get(&offset)?.kind, None | Some(25))
         {
             return None;
@@ -808,44 +1181,68 @@ impl Facts {
         let mut end = 0;
         for child in &die.children {
             let member = self.dies.get(child)?;
-            if member.tag != gimli::DW_TAG_member || member.name.is_empty()
-                || member.bit_size.is_some() || member.bit_offset.is_some()
+            if member.tag != gimli::DW_TAG_member
+                || member.name.is_empty()
+                || member.bit_size.is_some()
+                || member.bit_offset.is_some()
                 || member.data_bit_offset.is_some()
             {
                 return None;
             }
             let field = self.scalar(member.type_ref?, &mut visited.clone(), budget)?;
             let begin = u64::try_from(member.data_member_location?).ok()?;
-            if begin < end { return None; }
+            if begin < end {
+                return None;
+            }
             end = begin.checked_add(field.size as u64)?;
-            if end > size { return None; }
+            if end > size {
+                return None;
+            }
         }
         (!die.children.is_empty()).then_some(())
     }
 
     fn built_matches(&self, offset: usize, ty: &Datatype, depth: usize) -> bool {
-        if depth == 0 { return false; }
-        let Some(die) = self.dies.get(&offset) else { return false };
+        if depth == 0 {
+            return false;
+        }
+        let Some(die) = self.dies.get(&offset) else {
+            return false;
+        };
         match die.tag {
-            gimli::DW_TAG_typedef | gimli::DW_TAG_const_type | gimli::DW_TAG_volatile_type => {
-                die.type_ref.is_some_and(|next| self.built_matches(next, ty, depth - 1))
+            gimli::DW_TAG_typedef | gimli::DW_TAG_const_type | gimli::DW_TAG_volatile_type => die
+                .type_ref
+                .is_some_and(|next| self.built_matches(next, ty, depth - 1)),
+            gimli::DW_TAG_pointer_type => {
+                ty.get_metatype() == type_metatype::TYPE_PTR
+                    && ty.get_size() == 8
+                    && ty.get_ptr_to().is_some_and(|inner| match die.type_ref {
+                        Some(next) => self.built_matches(next, &inner, depth - 1),
+                        None => inner.get_metatype() == type_metatype::TYPE_VOID,
+                    })
             }
-            gimli::DW_TAG_pointer_type => ty.get_metatype() == type_metatype::TYPE_PTR
-                && ty.get_size() == 8 && ty.get_ptr_to().is_some_and(|inner| match die.type_ref {
-                    Some(next) => self.built_matches(next, &inner, depth - 1),
-                    None => inner.get_metatype() == type_metatype::TYPE_VOID,
+            gimli::DW_TAG_structure_type => {
+                ty.get_metatype() == type_metatype::TYPE_STRUCT
+                    && die.byte_size == Some(ty.get_size() as u64)
+                    && ty.get_field(die.children.len() as i32).is_none()
+                    && die.children.iter().enumerate().all(|(index, child)| {
+                        let Some(member) = self.dies.get(child) else {
+                            return false;
+                        };
+                        let Some(field) = ty.get_field(index as i32) else {
+                            return false;
+                        };
+                        member.data_member_location == Some(i64::from(field.offset))
+                            && member.type_ref.is_some_and(|next| {
+                                self.built_matches(next, &field.field_type, depth - 1)
+                            })
+                    })
+            }
+            gimli::DW_TAG_base_type => self
+                .scalar(offset, &mut BTreeSet::new(), &mut 256)
+                .is_some_and(|scalar| {
+                    scalar.meta == ty.get_metatype() && scalar.size == ty.get_size()
                 }),
-            gimli::DW_TAG_structure_type => ty.get_metatype() == type_metatype::TYPE_STRUCT
-                && die.byte_size == Some(ty.get_size() as u64)
-                && ty.get_field(die.children.len() as i32).is_none()
-                && die.children.iter().enumerate().all(|(index, child)| {
-                    let Some(member) = self.dies.get(child) else { return false };
-                    let Some(field) = ty.get_field(index as i32) else { return false };
-                    member.data_member_location == Some(i64::from(field.offset))
-                        && member.type_ref.is_some_and(|next| self.built_matches(next, &field.field_type, depth - 1))
-                }),
-            gimli::DW_TAG_base_type => self.scalar(offset, &mut BTreeSet::new(), &mut 256)
-                .is_some_and(|scalar| scalar.meta == ty.get_metatype() && scalar.size == ty.get_size()),
             _ => false,
         }
     }
@@ -873,21 +1270,32 @@ impl Deferred {
             if stored.format == object::CompressionFormat::None {
                 return Ok(stored.bytes.clone());
             }
-            if stored.size > DEBUG_LIMIT { return Err(()); }
+            if stored.size > DEBUG_LIMIT {
+                return Err(());
+            }
             decode_zlib(&stored.bytes, stored.size).ok_or(())
-        }).ok()
+        })
+        .ok()
     }
 
     fn decode(&self, names: NameChars) -> Option<Facts> {
         let sections = self.load()?;
-        let dwarf = sections.borrow(|bytes| gimli::EndianSlice::new(bytes, gimli::RunTimeEndian::Little));
-        let mut facts = Facts { names, ..Facts::default() };
+        let dwarf =
+            sections.borrow(|bytes| gimli::EndianSlice::new(bytes, gimli::RunTimeEndian::Little));
+        let mut facts = Facts {
+            names,
+            ..Facts::default()
+        };
         let mut units = dwarf.units();
         while let Some(header) = units.next().ok()? {
             let unit = dwarf.unit(header).ok()?;
             let mut extra = UnitExtras::default();
-            let dies = super::snapshot_unit_with_go(&dwarf, &unit,
-                kuna_dwarfbyref::ArgumentAbi::default(), Some(&mut extra));
+            let dies = super::snapshot_unit_with_go(
+                &dwarf,
+                &unit,
+                kuna_dwarfbyref::ArgumentAbi::default(),
+                Some(&mut extra),
+            );
             facts.append_unit(dies, extra);
         }
         Some(facts)
@@ -898,45 +1306,77 @@ fn decode_zlib(data: &[u8], size: usize) -> Option<Vec<u8>> {
     let mut decoder = flate2::Decompress::new(true);
     let mut bytes = Vec::new();
     bytes.try_reserve_exact(size.checked_add(1)?).ok()?;
-    let status = decoder.decompress_vec(data, &mut bytes, flate2::FlushDecompress::Finish).ok()?;
-    (status == flate2::Status::StreamEnd && bytes.len() == size
-        && decoder.total_in() == data.len() as u64).then_some(bytes)
+    let status = decoder
+        .decompress_vec(data, &mut bytes, flate2::FlushDecompress::Finish)
+        .ok()?;
+    (status == flate2::Status::StreamEnd
+        && bytes.len() == size
+        && decoder.total_in() == data.len() as u64)
+        .then_some(bytes)
 }
 
 pub(super) fn capture_compressed(ctx: &crate::pass::AnalysisCtx<'_>) -> Option<Facts> {
     if !ctx.file.is_little_endian() || ctx.file.architecture() != object::Architecture::X86_64 {
         return None;
     }
-    let section = ctx.file.section_by_name(gimli::SectionId::DebugInfo.name())
+    let section = ctx
+        .file
+        .section_by_name(gimli::SectionId::DebugInfo.name())
         .or_else(|| ctx.file.section_by_name(".zdebug_info"))?;
     if section.compressed_data().ok()?.format != object::CompressionFormat::Zlib
-        || crate::sourcelang::detect_compiler(ctx.file, ctx.bytes) != crate::sourcelang::Compiler::Go
+        || crate::sourcelang::detect_compiler(ctx.file, ctx.bytes)
+            != crate::sourcelang::Compiler::Go
     {
         return None;
     }
-    Some(Facts { compressed: Some(Box::new(capture_sections(ctx.file, true)?)), ..Facts::default() })
+    Some(Facts {
+        compressed: Some(Box::new(capture_sections(ctx.file, true)?)),
+        ..Facts::default()
+    })
 }
 
 fn capture_sections(file: &object::File<'_>, gnu_names: bool) -> Option<Deferred> {
-    let section = |id: gimli::SectionId| file.section_by_name(id.name()).or_else(|| {
-        if !gnu_names { return None; }
-        file.section_by_name(&id.name().replacen(".debug_", ".zdebug_", 1))
-    });
+    let section = |id: gimli::SectionId| {
+        file.section_by_name(id.name()).or_else(|| {
+            if !gnu_names {
+                return None;
+            }
+            file.section_by_name(&id.name().replacen(".debug_", ".zdebug_", 1))
+        })
+    };
     let mut captured = Vec::new();
     let mut total = 0usize;
     gimli::DwarfSections::load(|id| -> Result<(), ()> {
-        let Some(section) = section(id) else { return Ok(()) };
+        let Some(section) = section(id) else {
+            return Ok(());
+        };
         let data = section.compressed_data().map_err(|_| ())?;
-        if !matches!(data.format, object::CompressionFormat::None | object::CompressionFormat::Zlib) {
+        if !matches!(
+            data.format,
+            object::CompressionFormat::None | object::CompressionFormat::Zlib
+        ) {
             return Err(());
         }
         let size = usize::try_from(data.uncompressed_size).map_err(|_| ())?;
         total = total.checked_add(size.max(data.data.len())).ok_or(())?;
-        if total > DEBUG_LIMIT { return Err(()); }
-        captured.push((id, StoredSection { format: data.format, bytes: data.data.to_vec(), size }));
+        if total > DEBUG_LIMIT {
+            return Err(());
+        }
+        captured.push((
+            id,
+            StoredSection {
+                format: data.format,
+                bytes: data.data.to_vec(),
+                size,
+            },
+        ));
         Ok(())
-    }).ok()?;
-    Some(Deferred { sections: captured, arm64_entries: None })
+    })
+    .ok()?;
+    Some(Deferred {
+        sections: captured,
+        arm64_entries: None,
+    })
 }
 
 #[derive(Clone, Copy)]
@@ -965,42 +1405,82 @@ fn kind_matches(kind: u64, meta: type_metatype, size: i32) -> bool {
     expected == (meta, size)
 }
 
-fn storage_matches(arch: &Architecture, slot: &ParameterPieces, register: &str, ty: &Rc<Datatype>) -> bool {
-    let Ok(expected) = arch.get_register_varnode(register.as_bytes()) else { return false };
-    slot.flags == 0 && slot.type_.as_ref().is_some_and(|actual| actual.get_size() == ty.get_size())
+fn storage_matches(
+    arch: &Architecture,
+    slot: &ParameterPieces,
+    register: &str,
+    ty: &Rc<Datatype>,
+) -> bool {
+    let Ok(expected) = arch.get_register_varnode(register.as_bytes()) else {
+        return false;
+    };
+    slot.flags == 0
+        && slot
+            .type_
+            .as_ref()
+            .is_some_and(|actual| actual.get_size() == ty.get_size())
         && slot.addr.get_offset() == expected.offset
-        && slot.addr.get_space().zip(expected.space.as_ref())
+        && slot
+            .addr
+            .get_space()
+            .zip(expected.space.as_ref())
             .is_some_and(|(space, expected)| space.get_index() == expected.get_index())
 }
 
 fn pair_fields(first: &Rc<Datatype>, second: &Rc<Datatype>) -> Vec<TypeField> {
-    vec![TypeField::new(0, 0, "result0", Rc::clone(first)), TypeField::new(8, 8, "result1", Rc::clone(second))]
+    vec![
+        TypeField::new(0, 0, "result0", Rc::clone(first)),
+        TypeField::new(8, 8, "result1", Rc::clone(second)),
+    ]
 }
 
 fn pair_storage_matches(arch: &Architecture, slot: &ParameterPieces, facet: &LangFacet) -> bool {
-    if slot.flags != 0 || slot.type_.as_ref().is_none_or(|ty| facet.go_pair_fields(ty).is_none())
-        || !slot.addr.get_space().is_some_and(|space| space.get_type() == unlace_base::space::spacetype::IPTR_JOIN)
+    if slot.flags != 0
+        || slot
+            .type_
+            .as_ref()
+            .is_none_or(|ty| facet.go_pair_fields(ty).is_none())
+        || !slot
+            .addr
+            .get_space()
+            .is_some_and(|space| space.get_type() == unlace_base::space::spacetype::IPTR_JOIN)
     {
         return false;
     }
-    let Ok(join) = arch.manage().find_join(slot.addr.get_offset()) else { return false };
-    if join.num_pieces() != 2 || join.get_unified().size != 16 { return false; }
+    let Ok(join) = arch.manage().find_join(slot.addr.get_offset()) else {
+        return false;
+    };
+    if join.num_pieces() != 2 || join.get_unified().size != 16 {
+        return false;
+    }
     ["RBX", "RAX"].iter().enumerate().all(|(index, name)| {
-        let Ok(expected) = arch.get_register_varnode(name.as_bytes()) else { return false };
+        let Ok(expected) = arch.get_register_varnode(name.as_bytes()) else {
+            return false;
+        };
         let piece = join.get_piece(index as i32);
-        piece.size == 8 && expected.size == 8 && piece.offset == expected.offset
-            && piece.space.as_ref().zip(expected.space.as_ref())
+        piece.size == 8
+            && expected.size == 8
+            && piece.offset == expected.offset
+            && piece
+                .space
+                .as_ref()
+                .zip(expected.space.as_ref())
                 .is_some_and(|(space, expected)| space.get_index() == expected.get_index())
     })
 }
 
 fn hidden_context(name: &str) -> bool {
-    name.ends_with("-fm") || name.ends_with(".abi0")
-        || [".func", ".gowrap", ".deferwrap", "-range"].iter().any(|marker| {
-            name.rsplit_once(marker).is_some_and(|(_, tail)| tail.split('.').all(|part| {
-                !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit())
-            }))
-        })
+    name.ends_with("-fm")
+        || name.ends_with(".abi0")
+        || [".func", ".gowrap", ".deferwrap", "-range"]
+            .iter()
+            .any(|marker| {
+                name.rsplit_once(marker).is_some_and(|(_, tail)| {
+                    tail.split('.').all(|part| {
+                        !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit())
+                    })
+                })
+            })
 }
 
 #[cfg(test)]
@@ -1010,7 +1490,13 @@ mod tests {
 
     fn insert(facts: &mut Facts, offset: usize, die: DieSnap, kind: Option<u64>) {
         facts.dies.insert(offset, die);
-        facts.extras.insert(offset, Extra { kind, ..Extra::default() });
+        facts.extras.insert(
+            offset,
+            Extra {
+                kind,
+                ..Extra::default()
+            },
+        );
     }
     fn scalar_facts() -> Facts {
         let mut facts = Facts::default();
@@ -1021,7 +1507,9 @@ mod tests {
         facts
     }
     fn accepts(facts: &Facts, offset: usize) -> bool {
-        facts.scalar(offset, &mut BTreeSet::new(), &mut 256).is_some()
+        facts
+            .scalar(offset, &mut BTreeSet::new(), &mut 256)
+            .is_some()
     }
 
     #[test]
@@ -1044,7 +1532,10 @@ mod tests {
         facts.dies.get_mut(&3).unwrap().type_ref = Some(9999);
         assert!(!accepts(&facts, 3), "missing target");
         facts.dies.get_mut(&3).unwrap().type_ref = None;
-        assert!(!accepts(&facts, 3), "untyped pointer without unsafe.Pointer evidence");
+        assert!(
+            !accepts(&facts, 3),
+            "untyped pointer without unsafe.Pointer evidence"
+        );
         facts.dies.get_mut(&3).unwrap().name = "unsafe.Pointer".into();
         facts.extras.get_mut(&3).unwrap().kind = None;
         assert!(accepts(&facts, 3));
@@ -1086,11 +1577,20 @@ mod tests {
     }
 
     fn compressed(bytes: &[u8]) -> Deferred {
-        let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+        let mut encoder =
+            flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
         encoder.write_all(bytes).unwrap();
-        Deferred { sections: vec![(gimli::SectionId::DebugInfo, StoredSection {
-            bytes: encoder.finish().unwrap(), size: bytes.len(), format: object::CompressionFormat::Zlib,
-        })], arm64_entries: None }
+        Deferred {
+            sections: vec![(
+                gimli::SectionId::DebugInfo,
+                StoredSection {
+                    bytes: encoder.finish().unwrap(),
+                    size: bytes.len(),
+                    format: object::CompressionFormat::Zlib,
+                },
+            )],
+            arm64_entries: None,
+        }
     }
 
     #[test]
@@ -1124,7 +1624,12 @@ mod tests {
         let captured = capture_sections(&file, true).unwrap();
         let facts = captured.decode(NameChars::Off).unwrap();
         assert!(facts.dies.values().any(|die| die.name == "main.fromWord"));
-        let offset = file.section_by_name(".debug_info").unwrap().file_range().unwrap().0 as usize;
+        let offset = file
+            .section_by_name(".debug_info")
+            .unwrap()
+            .file_range()
+            .unwrap()
+            .0 as usize;
         bytes[offset + 8..offset + 16].copy_from_slice(&(DEBUG_LIMIT as u64 + 1).to_le_bytes());
         let oversized = object::File::parse(bytes.as_slice()).unwrap();
         assert!(capture_sections(&oversized, true).is_none());
@@ -1132,10 +1637,24 @@ mod tests {
 
     #[test]
     fn hidden_context_suffixes_do_not_match_ordinary_names() {
-        for name in ["main.f.func1", "main.f.func1.2", "main.f.gowrap2", "main.f.deferwrap1", "main.f-range1", "main.f-fm", "main.f.abi0"] {
+        for name in [
+            "main.f.func1",
+            "main.f.func1.2",
+            "main.f.gowrap2",
+            "main.f.deferwrap1",
+            "main.f-range1",
+            "main.f-fm",
+            "main.f.abi0",
+        ] {
             assert!(hidden_context(name), "{name}");
         }
-        for name in ["main.function", "main.func1x", "main.f-range", "main.f.func1.", "main.Func1"] {
+        for name in [
+            "main.function",
+            "main.func1x",
+            "main.f-range",
+            "main.f.func1.",
+            "main.Func1",
+        ] {
             assert!(!hidden_context(name), "{name}");
         }
     }

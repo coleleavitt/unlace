@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::Datatype;
-use crate::dtype::{type_metatype, TypeFactory};
+use crate::dtype::{TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::kuna_stackobjects::{ByteSource, SourcePoint};
 use crate::unionresolve::{ResolveEdge, ResolvedUnion};
@@ -190,7 +190,9 @@ pub(crate) fn validate(fd: &Funcdata) -> Result<(), String> {
             ));
         }
         for use_ in &assertion.uses {
-            let calls: Vec<_> = fd.obank().iter_alive()
+            let calls: Vec<_> = fd
+                .obank()
+                .iter_alive()
                 .filter(|&op| SourcePoint::op(fd, op) == Some(use_.point))
                 .filter(|&op| crate::kuna_stackviews::declared_view(fd, op, use_.slot).is_some())
                 .collect();
@@ -292,18 +294,15 @@ fn bind_use(
     {
         return None;
     }
-    let info = crate::kuna_stackparamviews::backing_for_address(
-        fd,
-        &assertion.address,
-        assertion.size,
-    )
-    .or_else(|| {
-        fd.get_scope_local()?.query_container_for_link_width(
-            &assertion.address,
-            assertion.size,
-            &Address::new_invalid(),
-        )
-    })?;
+    let info =
+        crate::kuna_stackparamviews::backing_for_address(fd, &assertion.address, assertion.size)
+            .or_else(|| {
+                fd.get_scope_local()?.query_container_for_link_width(
+                    &assertion.address,
+                    assertion.size,
+                    &Address::new_invalid(),
+                )
+            })?;
     let backing = info.sym_type.as_ref()?.clone();
     let ty = assertion.datatype.as_ref().unwrap_or(&use_.datatype);
     let name = assertion.view_name(ty);
@@ -316,9 +315,8 @@ fn bind_use(
         let alias = if let Some(alias) = aliases.get(&key) {
             *alias
         } else {
-            let alias = crate::kuna_stackobjectalias::create(
-                fd, assertion, use_, &info, width, factory,
-            )?;
+            let alias =
+                crate::kuna_stackobjectalias::create(fd, assertion, use_, &info, width, factory)?;
             aliases.insert(key, alias);
             alias
         };
@@ -392,7 +390,9 @@ pub(crate) fn prepare_casts(fd: &mut Funcdata, factory: &dyn TypeFactory) {
             {
                 continue;
             }
-            let calls: Vec<_> = fd.obank().iter_alive()
+            let calls: Vec<_> = fd
+                .obank()
+                .iter_alive()
                 .filter(|&op| crate::kuna_stackobjects::SourcePoint::op(fd, op) == Some(use_.point))
                 .filter(|&op| crate::kuna_stackviews::declared_view(fd, op, use_.slot).is_some())
                 .collect();

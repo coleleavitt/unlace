@@ -26,7 +26,10 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn specs_root() -> PathBuf {
@@ -53,7 +56,10 @@ fn rust_oracle() -> Option<PathBuf> {
         return pb.exists().then_some(pb);
     }
     for profile in ["release", "debug"] {
-        let pb = repo_root().join("decompiler/target").join(profile).join("decomp_test_dbg");
+        let pb = repo_root()
+            .join("decompiler/target")
+            .join(profile)
+            .join("decomp_test_dbg");
         if pb.exists() {
             return Some(pb);
         }
@@ -129,8 +135,14 @@ fn w10_eob_condconst_conn_empty_blocks_spliced_out() {
         "the empty then-clause `if (x != 0) {{ }}` must be spliced out, got:\n{body}"
     );
     // The function must still produce the store and return (no over-deletion).
-    assert!(body.contains("v1 = 0x14;"), "the 0x14 store must survive the splice:\n{body}");
-    assert!(body.contains("return v1;"), "the return must survive the splice:\n{body}");
+    assert!(
+        body.contains("v1 = 0x14;"),
+        "the 0x14 store must survive the splice:\n{body}"
+    );
+    assert!(
+        body.contains("return v1;"),
+        "the return must survive the splice:\n{body}"
+    );
 }
 
 /// TEST B — with the empty blocks gone, `ruleBlockOr` forms the `&&` and the body
@@ -156,7 +168,8 @@ fn w10_eob_condconst_conn_forms_andand_byte_identical() {
 {\n  int4 v1; // stack - 0xc\n  \n  v1 = x;\n  \
 if ((x == 0) && (y != 10)) {\n    v1 = 0x14;\n  }\n  return v1;\n}";
     assert_eq!(
-        normalize_sources(&body), normalize_sources(CPP),
+        normalize_sources(&body),
+        normalize_sources(CPP),
         "condconst_conn must byte-match the C++ && oracle (source diagnostics normalized):\n--- rust ---\n{body}\n--- cpp ---\n{CPP}"
     );
     // Belt-and-suspenders on the load-bearing `&&` token (the BlockCondition).
@@ -186,5 +199,8 @@ fn w10_eob_boolless_not_perturbed_byte_identical() {
         "the empty-block splice / ruleBlockOr must not perturb boolless (source diagnostics normalized):\n--- rust ---\n{block}\n--- cpp ---\n{CPP}"
     );
     // boolless's single `if` must NOT become a spurious `&&` condition.
-    assert!(!block.contains("&&"), "boolless must not grow a spurious && condition:\n{block}");
+    assert!(
+        !block.contains("&&"),
+        "boolless must not grow a spurious && condition:\n{block}"
+    );
 }

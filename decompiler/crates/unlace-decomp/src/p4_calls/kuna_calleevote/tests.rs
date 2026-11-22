@@ -4,9 +4,9 @@
 
 use super::*;
 
-use unlace_base::space::{spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, spacetype};
 
-use crate::dtype::{flags, sub_metatype, DatatypeKind};
+use crate::dtype::{DatatypeKind, flags, sub_metatype};
 
 thread_local! {
     static REG: Rc<AddrSpace> =
@@ -24,7 +24,12 @@ fn at(space: &Rc<AddrSpace>, off: uintb) -> Address {
 fn ptr_to(ptrto: Rc<Datatype>) -> Rc<Datatype> {
     let mut p = Datatype::new(8, type_metatype::TYPE_PTR);
     p.submeta = sub_metatype::SUB_PTR;
-    p.kind = DatatypeKind::Pointer { ptrto, spaceid: None, truncate: None, wordsize: 1 };
+    p.kind = DatatypeKind::Pointer {
+        ptrto,
+        spaceid: None,
+        truncate: None,
+        wordsize: 1,
+    };
     Rc::new(p)
 }
 
@@ -63,7 +68,10 @@ fn headless(name: &str) -> Rc<Datatype> {
         name: format!("field_0x{offset:x}"),
         field_type: long8(),
     };
-    t.kind = DatatypeKind::Struct { field: vec![field(8), field(0x10)], bitfield: Vec::new() };
+    t.kind = DatatypeKind::Struct {
+        field: vec![field(8), field(0x10)],
+        bitfield: Vec::new(),
+    };
     Rc::new(t)
 }
 
@@ -115,7 +123,15 @@ fn long8() -> Rc<Datatype> {
 }
 
 fn typed(space: &Rc<AddrSpace>, off: uintb, ct: &Rc<Datatype>) -> Typed {
-    Typed { addr: at(space, off), size: 8, ct: Rc::clone(ct), frame: false, null: false, proven: false, by_class: false }
+    Typed {
+        addr: at(space, off),
+        size: 8,
+        ct: Rc::clone(ct),
+        frame: false,
+        null: false,
+        proven: false,
+        by_class: false,
+    }
 }
 
 const CALLEE: (int4, uintb) = (1, 0x5c70);
@@ -125,24 +141,45 @@ const CALLEE: (int4, uintb) = (1, 0x5c70);
 fn ledger(passed: &[(uintb, Rc<Datatype>)]) -> Ledger {
     let r = reg();
     let mut l = Ledger::default();
-    l.own.insert(CALLEE, vec![typed(&r, 0x38, &ptr_to(voidt()))]);
+    l.own
+        .insert(CALLEE, vec![typed(&r, 0x38, &ptr_to(voidt()))]);
     let sites = passed
         .iter()
-        .map(|(caller, ct)| CallSite { caller: *caller, at: caller + 5, args: vec![Some(typed(&r, 0x38, ct))] })
+        .map(|(caller, ct)| CallSite {
+            caller: *caller,
+            at: caller + 5,
+            args: vec![Some(typed(&r, 0x38, ct))],
+        })
         .collect();
     l.sites.insert(CALLEE, sites);
     l
 }
 
 fn all_calls(l: &Ledger) -> impl Fn((int4, uintb)) -> Option<Vec<uintb>> + '_ {
-    move |k| Some(l.sites.get(&k).map(|s| s.iter().map(|c| c.at).collect()).unwrap_or_default())
+    move |k| {
+        Some(
+            l.sites
+                .get(&k)
+                .map(|s| s.iter().map(|c| c.at).collect())
+                .unwrap_or_default(),
+        )
+    }
 }
 
 #[test]
 fn option_parses_the_three_values() {
-    assert_eq!(OptionCalleeVote.apply("off").unwrap().0, CalleeVoteMode::Off);
-    assert_eq!(OptionCalleeVote.apply("types").unwrap().0, CalleeVoteMode::Types);
-    assert_eq!(OptionCalleeVote.apply("fields").unwrap().0, CalleeVoteMode::Fields);
+    assert_eq!(
+        OptionCalleeVote.apply("off").unwrap().0,
+        CalleeVoteMode::Off
+    );
+    assert_eq!(
+        OptionCalleeVote.apply("types").unwrap().0,
+        CalleeVoteMode::Types
+    );
+    assert_eq!(
+        OptionCalleeVote.apply("fields").unwrap().0,
+        CalleeVoteMode::Fields
+    );
     assert!(OptionCalleeVote.apply("on").is_err());
     assert!(!CalleeVoteMode::Off.is_on() && CalleeVoteMode::Types.is_on());
     assert!(CalleeVoteMode::Fields.fields() && !CalleeVoteMode::Types.fields());
@@ -186,13 +223,19 @@ fn every_caller_passing_one_record_states_it() {
 
 #[test]
 fn callers_that_disagree_state_nothing() {
-    let l = ledger(&[(0x6600, ptr_to(record("struct_2"))), (0x6800, ptr_to(record("struct_3")))]);
+    let l = ledger(&[
+        (0x6600, ptr_to(record("struct_2"))),
+        (0x6800, ptr_to(record("struct_3"))),
+    ]);
     assert!(decide_ledger(&l, 8, &all_calls(&l)).is_empty());
 }
 
 #[test]
 fn one_caller_passing_void_states_nothing() {
-    let l = ledger(&[(0x6600, ptr_to(record("struct_2"))), (0x6800, ptr_to(voidt()))]);
+    let l = ledger(&[
+        (0x6600, ptr_to(record("struct_2"))),
+        (0x6800, ptr_to(voidt())),
+    ]);
     assert!(decide_ledger(&l, 8, &all_calls(&l)).is_empty());
 }
 
@@ -229,7 +272,11 @@ fn a_different_storage_states_nothing() {
     let mut l = ledger(&[]);
     l.sites.insert(
         CALLEE,
-        vec![CallSite { caller: 0x6600, at: 0x6605, args: vec![Some(typed(&r, 0x30, &ptr_to(record("struct_2"))))] }],
+        vec![CallSite {
+            caller: 0x6600,
+            at: 0x6605,
+            args: vec![Some(typed(&r, 0x30, &ptr_to(record("struct_2"))))],
+        }],
     );
     assert!(decide_ledger(&l, 8, &all_calls(&l)).is_empty());
 }
@@ -238,7 +285,8 @@ fn a_different_storage_states_nothing() {
 fn a_committed_parameter_is_never_voted_on() {
     let mut l = ledger(&[(0x6600, ptr_to(record("struct_2")))]);
     let r = reg();
-    l.own.insert(CALLEE, vec![typed(&r, 0x38, &ptr_to(char1()))]);
+    l.own
+        .insert(CALLEE, vec![typed(&r, 0x38, &ptr_to(char1()))]);
     assert!(decide_ledger(&l, 8, &all_calls(&l)).is_empty());
 }
 
@@ -278,10 +326,22 @@ fn a_declined_function_keeps_the_statement_its_kept_body_used() {
     l.keep(CALLEE);
     // A later round decides something else about it, and the budget is gone.
     let second = ptr_to(record("struct_9"));
-    l.stated.insert(CALLEE, Rc::new(CallerTypes { inputs: vec![typed(&reg(), 0x38, &second)], pointers_only: false }));
+    l.stated.insert(
+        CALLEE,
+        Rc::new(CallerTypes {
+            inputs: vec![typed(&reg(), 0x38, &second)],
+            pointers_only: false,
+        }),
+    );
     l.decline(CALLEE);
-    let kept = l.stated.get(&CALLEE).expect("the statement its body was printed with");
-    assert!(Rc::ptr_eq(&kept.at(&at(&reg(), 0x38), 8).expect("stated").ct, &first));
+    let kept = l
+        .stated
+        .get(&CALLEE)
+        .expect("the statement its body was printed with");
+    assert!(Rc::ptr_eq(
+        &kept.at(&at(&reg(), 0x38), 8).expect("stated").ct,
+        &first
+    ));
     assert!(decide_ledger(&l, 8, &all_calls(&l)).is_empty());
 }
 
@@ -317,7 +377,10 @@ fn a_callers_record_replaces_the_callees_lone_record() {
     l.own.insert(CALLEE, vec![typed(&r, 0x38, &mine)]);
     let got = decide_ledger(&l, 8, &all_calls(&l));
     assert_eq!(got.len(), 1);
-    assert!(Rc::ptr_eq(&got[0].1.at(&at(&r, 0x38), 8).expect("stated").ct, &theirs));
+    assert!(Rc::ptr_eq(
+        &got[0].1.at(&at(&r, 0x38), 8).expect("stated").ct,
+        &theirs
+    ));
 }
 
 #[test]
@@ -345,12 +408,21 @@ fn only_the_input_naming_a_superseded_record_is_forgotten() {
     let mut l = Ledger::default();
     l.stated.insert(
         CALLEE,
-        Rc::new(CallerTypes { inputs: vec![typed(&r, 0x38, &rec), typed(&r, 0x30, &text)], pointers_only: false }),
+        Rc::new(CallerTypes {
+            inputs: vec![typed(&r, 0x38, &rec), typed(&r, 0x30, &text)],
+            pointers_only: false,
+        }),
     );
     l.forget_naming(&["struct_2".to_string()]);
-    let kept = l.stated.get(&CALLEE).expect("the character pointer is still stated");
+    let kept = l
+        .stated
+        .get(&CALLEE)
+        .expect("the character pointer is still stated");
     assert!(kept.at(&at(&r, 0x38), 8).is_none());
-    assert!(Rc::ptr_eq(&kept.at(&at(&r, 0x30), 8).expect("stated").ct, &text));
+    assert!(Rc::ptr_eq(
+        &kept.at(&at(&r, 0x30), 8).expect("stated").ct,
+        &text
+    ));
 }
 
 /// A `char **` one caller passes as the address of its own frame object marks
@@ -390,7 +462,14 @@ fn a_callers_argument_vector_replaces_a_headless_record_only_under_the_rule() {
     assert!(decide_ledger_under(&l, 8, false, &all_calls(&l)).is_empty());
     let got = decide_ledger_under(&l, 8, true, &all_calls(&l));
     assert_eq!(got.len(), 1);
-    assert!(Rc::ptr_eq(&got[0].1.at(&at(&r, 0x38), 8).expect("stated for rsi's slot").ct, &argv));
+    assert!(Rc::ptr_eq(
+        &got[0]
+            .1
+            .at(&at(&r, 0x38), 8)
+            .expect("stated for rsi's slot")
+            .ct,
+        &argv
+    ));
 
     let rec = ptr_to(record("struct_2"));
     assert!(!uncommitted_under(&rec, 8, true));
@@ -407,7 +486,10 @@ fn a_callers_synthesized_record_does_not_replace_a_headless_record() {
     let mut l = ledger(&[(0x6600, Rc::clone(&theirs))]);
     let r = reg();
     assert_eq!(decide_ledger_under(&l, 8, true, &all_calls(&l)).len(), 1);
-    l.own.insert(CALLEE, vec![typed(&r, 0x38, &ptr_to(headless("struct_19")))]);
+    l.own.insert(
+        CALLEE,
+        vec![typed(&r, 0x38, &ptr_to(headless("struct_19")))],
+    );
     assert!(decide_ledger_under(&l, 8, true, &all_calls(&l)).is_empty());
 }
 
@@ -421,7 +503,11 @@ fn every_caller_passing_an_unsigned_char_pointer_states_it() {
     let l = ledger(&[(0x6600, Rc::clone(&p)), (0x6800, ptr_to(uchar()))]);
     let got = decide_ledger(&l, 8, &all_calls(&l));
     assert_eq!(got.len(), 1);
-    let ct = &got[0].1.at(&at(&reg(), 0x38), 8).expect("stated for rdi").ct;
+    let ct = &got[0]
+        .1
+        .at(&at(&reg(), 0x38), 8)
+        .expect("stated for rdi")
+        .ct;
     assert!(same_type(ct, &p));
 }
 
@@ -430,16 +516,30 @@ fn every_caller_passing_an_unsigned_char_pointer_states_it() {
 /// `char **` and an `unsigned char **` likewise.
 #[test]
 fn callers_differing_only_in_the_sign_of_a_character_agree_on_char() {
-    for (first, second) in [(ptr_to(plain_char()), ptr_to(uchar())), (ptr_to(uchar()), ptr_to(plain_char()))] {
+    for (first, second) in [
+        (ptr_to(plain_char()), ptr_to(uchar())),
+        (ptr_to(uchar()), ptr_to(plain_char())),
+    ] {
         let l = ledger(&[(0x6600, first), (0x6800, second), (0x6a00, ptr_to(schar()))]);
         let got = decide_ledger(&l, 8, &all_calls(&l));
         assert_eq!(got.len(), 1);
-        let ct = &got[0].1.at(&at(&reg(), 0x38), 8).expect("stated for rdi").ct;
+        let ct = &got[0]
+            .1
+            .at(&at(&reg(), 0x38), 8)
+            .expect("stated for rdi")
+            .ct;
         assert!(same_type(ct, &ptr_to(plain_char())));
     }
-    let l = ledger(&[(0x6600, ptr_to(ptr_to(uchar()))), (0x6800, ptr_to(ptr_to(plain_char())))]);
+    let l = ledger(&[
+        (0x6600, ptr_to(ptr_to(uchar()))),
+        (0x6800, ptr_to(ptr_to(plain_char()))),
+    ]);
     let got = decide_ledger(&l, 8, &all_calls(&l));
-    let ct = &got[0].1.at(&at(&reg(), 0x38), 8).expect("stated for rdi").ct;
+    let ct = &got[0]
+        .1
+        .at(&at(&reg(), 0x38), 8)
+        .expect("stated for rdi")
+        .ct;
     assert!(same_type(ct, &ptr_to(ptr_to(plain_char()))));
 }
 
@@ -449,16 +549,26 @@ fn callers_differing_only_in_the_sign_of_a_character_agree_on_char() {
 fn callers_mixing_signed_and_unsigned_characters_state_nothing() {
     let l = ledger(&[(0x6600, ptr_to(uchar())), (0x6800, ptr_to(schar()))]);
     assert!(decide_ledger(&l, 8, &all_calls(&l)).is_empty());
-    let l = ledger(&[(0x6600, ptr_to(plain_char())), (0x6800, ptr_to(ptr_to(uchar())))]);
+    let l = ledger(&[
+        (0x6600, ptr_to(plain_char())),
+        (0x6800, ptr_to(ptr_to(uchar()))),
+    ]);
     assert!(decide_ledger(&l, 8, &all_calls(&l)).is_empty());
-    let l = ledger(&[(0x6600, ptr_to(uchar())), (0x6800, ptr_to(record("struct_2")))]);
+    let l = ledger(&[
+        (0x6600, ptr_to(uchar())),
+        (0x6800, ptr_to(record("struct_2"))),
+    ]);
     assert!(decide_ledger(&l, 8, &all_calls(&l)).is_empty());
 }
 
 /// (`callerptr`) One call's argument: a type, and whether it is a null or a
 /// value the caller holds as an address for a reason of its own.
 fn arg(ct: Rc<Datatype>, null: bool, proven: bool) -> Typed {
-    Typed { null, proven, ..typed(&reg(), 0x38, &ct) }
+    Typed {
+        null,
+        proven,
+        ..typed(&reg(), 0x38, &ct)
+    }
 }
 
 /// (`callerptr`) A ledger whose callee recovered an integer in `rdi`, called
@@ -470,7 +580,11 @@ fn integer_ledger(passed: Vec<Typed>) -> Ledger {
     let sites = passed
         .into_iter()
         .enumerate()
-        .map(|(i, a)| CallSite { caller: 0x6600 + 0x200 * i as uintb, at: 0x6605 + 0x200 * i as uintb, args: vec![Some(a)] })
+        .map(|(i, a)| CallSite {
+            caller: 0x6600 + 0x200 * i as uintb,
+            at: 0x6605 + 0x200 * i as uintb,
+            args: vec![Some(a)],
+        })
         .collect();
     l.sites.insert(CALLEE, sites);
     l
@@ -478,7 +592,9 @@ fn integer_ledger(passed: Vec<Typed>) -> Ledger {
 
 fn caller_pointer_vote(l: &Ledger) -> Option<Typed> {
     let got = decide_ledger_with(l, 8, false, Some(&ptr_to(voidt())), &all_calls(l));
-    got.into_iter().next().and_then(|(_, stated)| stated.at(&at(&reg(), 0x38), 8).cloned())
+    got.into_iter()
+        .next()
+        .and_then(|(_, stated)| stated.at(&at(&reg(), 0x38), 8).cloned())
 }
 
 #[test]
@@ -491,19 +607,28 @@ fn callers_passing_two_different_records_state_void_pointer() {
     assert!(same_type(&t.ct, &ptr_to(voidt())) && t.by_class);
     let got = decide_ledger_with(&l, 8, false, Some(&ptr_to(voidt())), &all_calls(&l));
     assert!(got[0].1.pointers_only);
-    assert!(decide_ledger(&l, 8, &all_calls(&l)).is_empty(), "calleevote alone states nothing");
+    assert!(
+        decide_ledger(&l, 8, &all_calls(&l)).is_empty(),
+        "calleevote alone states nothing"
+    );
 }
 
 #[test]
 fn a_null_beside_one_committed_pointer_states_that_pointer() {
-    let l = integer_ledger(vec![arg(ptr_to(plain_char()), false, true), arg(long8(), true, false)]);
+    let l = integer_ledger(vec![
+        arg(ptr_to(plain_char()), false, true),
+        arg(long8(), true, false),
+    ]);
     let t = caller_pointer_vote(&l).expect("a pointer is stated");
     assert!(same_type(&t.ct, &ptr_to(plain_char())));
 }
 
 #[test]
 fn agreeing_on_a_pointer_at_nothing_in_particular_states_void_pointer() {
-    let l = integer_ledger(vec![arg(ptr_to(long8()), false, true), arg(ptr_to(long8()), false, true)]);
+    let l = integer_ledger(vec![
+        arg(ptr_to(long8()), false, true),
+        arg(ptr_to(long8()), false, true),
+    ]);
     let t = caller_pointer_vote(&l).expect("a pointer is stated");
     assert!(same_type(&t.ct, &ptr_to(voidt())));
 }
@@ -511,8 +636,14 @@ fn agreeing_on_a_pointer_at_nothing_in_particular_states_void_pointer() {
 #[test]
 fn an_unproven_pointer_an_integer_or_only_nulls_state_nothing() {
     for passed in [
-        vec![arg(ptr_to(record("struct_2")), false, true), arg(ptr_to(record("struct_3")), false, false)],
-        vec![arg(ptr_to(record("struct_2")), false, true), arg(long8(), false, false)],
+        vec![
+            arg(ptr_to(record("struct_2")), false, true),
+            arg(ptr_to(record("struct_3")), false, false),
+        ],
+        vec![
+            arg(ptr_to(record("struct_2")), false, true),
+            arg(long8(), false, false),
+        ],
         vec![arg(long8(), true, false), arg(long8(), true, false)],
     ] {
         assert!(caller_pointer_vote(&integer_ledger(passed)).is_none());
@@ -525,7 +656,8 @@ fn a_parameter_that_is_already_a_pointer_takes_no_pointer_class_vote() {
         arg(ptr_to(record("struct_2")), false, true),
         arg(ptr_to(record("struct_3")), false, true),
     ]);
-    l.own.insert(CALLEE, vec![typed(&reg(), 0x38, &ptr_to(voidt()))]);
+    l.own
+        .insert(CALLEE, vec![typed(&reg(), 0x38, &ptr_to(voidt()))]);
     assert!(caller_pointer_vote(&l).is_none());
 }
 
@@ -537,19 +669,34 @@ fn a_committed_vote_repeating_the_own_type_beside_a_pointer_vote_is_pointers_onl
     let r = reg();
     let text = ptr_to(lone("struct_9"));
     let mut l = Ledger::default();
-    l.own.insert(CALLEE, vec![typed(&r, 0x38, &text), typed(&r, 0x30, &long8())]);
+    l.own.insert(
+        CALLEE,
+        vec![typed(&r, 0x38, &text), typed(&r, 0x30, &long8())],
+    );
     let site = |caller: uintb, rec: &str| CallSite {
         caller,
         at: caller + 5,
         args: vec![
-            Some(Typed { proven: true, ..typed(&r, 0x38, &text) }),
-            Some(Typed { proven: true, ..typed(&r, 0x30, &ptr_to(record(rec))) }),
+            Some(Typed {
+                proven: true,
+                ..typed(&r, 0x38, &text)
+            }),
+            Some(Typed {
+                proven: true,
+                ..typed(&r, 0x30, &ptr_to(record(rec)))
+            }),
         ],
     };
-    l.sites.insert(CALLEE, vec![site(0x6600, "struct_2"), site(0x6800, "struct_3")]);
+    l.sites.insert(
+        CALLEE,
+        vec![site(0x6600, "struct_2"), site(0x6800, "struct_3")],
+    );
     let got = decide_ledger_with(&l, 8, false, Some(&ptr_to(voidt())), &all_calls(&l));
     assert_eq!(got.len(), 1);
-    assert!(got[0].1.at(&at(&r, 0x38), 8).is_some_and(|t| !t.by_class), "the repeated record is stated");
+    assert!(
+        got[0].1.at(&at(&r, 0x38), 8).is_some_and(|t| !t.by_class),
+        "the repeated record is stated"
+    );
     assert!(got[0].1.pointers_only);
     let pointer = got[0].1.at(&at(&r, 0x30), 8).expect("stated for rsi");
     assert!(pointer.by_class && same_type(&pointer.ct, &ptr_to(voidt())));

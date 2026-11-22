@@ -23,16 +23,14 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 
+use unlace_decomp::context::ArchContext;
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::kuna_assert::{AssertLog, KunaAssertion};
+use unlace_decomp::kuna_phases::{KunaPhase, KunaSettable, KunaStrength, emit_settable_json};
 use unlace_decomp::kuna_restartlog::{KunaRestartReason, RestartLog};
-use unlace_decomp::kuna_phases::{
-    emit_settable_json, KunaPhase, KunaStrength, KunaSettable,
-};
-use unlace_decomp::context::ArchContext;
 
 // A bare settable used to drive the JSON emitter with hand-built `values`.
 fn settable_with_values(values: &'static str, shipped: &'static str) -> KunaSettable {
@@ -142,7 +140,11 @@ fn w4_kuna_p0_pack_from_code_boundaries_and_byte_safety() {
     assert_eq!(KunaPhase::from_code("s9"), Some(KunaPhase::P9));
 
     // Range boundaries: '0' and ':' bracket '1'..='9'.
-    assert_eq!(KunaPhase::from_code("S0"), None, "S0 below range (legacy alias has no 0)");
+    assert_eq!(
+        KunaPhase::from_code("S0"),
+        None,
+        "S0 below range (legacy alias has no 0)"
+    );
     assert_eq!(KunaPhase::from_code("S:"), None, "S: above '9'");
     assert_eq!(KunaPhase::from_code("P:"), None, "P: above '9'");
     // Only P/p and the legacy S/s prefixes pair with a digit.
@@ -157,7 +159,11 @@ fn w4_kuna_p0_pack_from_code_boundaries_and_byte_safety() {
     // Multibyte: "é" is exactly 2 bytes in UTF-8 but len()==2; the C++ would
     // read two bytes and fail every comparison. Rust must not panic on
     // `as_bytes()[0/1]` and must return None.
-    assert_eq!(KunaPhase::from_code("é"), None, "2-byte multibyte must not panic");
+    assert_eq!(
+        KunaPhase::from_code("é"),
+        None,
+        "2-byte multibyte must not panic"
+    );
     // A single non-ascii char (1 codepoint, 2 bytes) -> len 2 -> compared as bytes.
     assert_eq!(KunaPhase::from_code("S\u{0080}"), None);
 }
@@ -184,10 +190,19 @@ fn w4_kuna_p0_pack_restartlog_cap_is_exactly_32_per_function() {
 
     let out_a = log.render(&fd_a);
     assert!(out_a.contains("\n  31: "), "index 31 must be retained");
-    assert!(!out_a.contains("\n  32: "), "index 32 must be dropped at the cap");
+    assert!(
+        !out_a.contains("\n  32: "),
+        "index 32 must be dropped at the cap"
+    );
     // The dropped record's detail (a32) must not appear; the kept boundary (a31) must.
-    assert!(out_a.contains("[a31]"), "the 32nd kept record's detail present");
-    assert!(!out_a.contains("[a32]"), "the dropped record's detail absent");
+    assert!(
+        out_a.contains("[a31]"),
+        "the 32nd kept record's detail present"
+    );
+    assert!(
+        !out_a.contains("[a32]"),
+        "the dropped record's detail absent"
+    );
 
     let out_b = log.render(&fd_b);
     assert!(
@@ -214,10 +229,17 @@ fn w4_kuna_p0_pack_restartlog_keys_do_not_collide_interleaved() {
     let out_lo = log.render(&fd_lo);
     let out_hi = log.render(&fd_hi);
     // lo has exactly one event at index 0; hi has two at 0,1 in insertion order.
-    assert!(out_lo.contains("  0: deadcode-delay bump (S3 dead-definition gate, edge 3)  [lo-0]\n"));
-    assert!(!out_lo.contains("  1: "), "lo bucket must hold only its own event");
+    assert!(
+        out_lo.contains("  0: deadcode-delay bump (S3 dead-definition gate, edge 3)  [lo-0]\n")
+    );
+    assert!(
+        !out_lo.contains("  1: "),
+        "lo bucket must hold only its own event"
+    );
     assert!(out_hi.contains("  0: multistage jump-table hint (S2 switch model, edge 2)  [hi-0]\n"));
-    assert!(out_hi.contains("  1: prototype discovered late at indirect call (S4, edge 5)  [hi-1]\n"));
+    assert!(
+        out_hi.contains("  1: prototype discovered late at indirect call (S4, edge 5)  [hi-1]\n")
+    );
 }
 
 /// HUNT(exception->Result / conditional rendering): `IfcKunaAssert::listAssertions`
@@ -240,7 +262,10 @@ fn w4_kuna_p0_pack_assertlog_hint_via_hard_annotation_gate() {
     let mut log = AssertLog::new();
     log.push(mk(KunaStrength::Hint, KunaStrength::Hard));
     let out = log.render_list();
-    assert!(out.contains("strength=HINT (applied via HARD mechanism)  rewind->P3"), "got: {out}");
+    assert!(
+        out.contains("strength=HINT (applied via HARD mechanism)  rewind->P3"),
+        "got: {out}"
+    );
 
     // HARD requested, HARD applied -> NO annotation, label HARD.
     let mut log = AssertLog::new();
@@ -268,7 +293,8 @@ fn w4_kuna_p0_pack_assertlog_hint_via_hard_annotation_gate() {
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",

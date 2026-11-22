@@ -44,7 +44,7 @@ use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::VarnodeId;
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::varnode::varnode_flags;
 
@@ -78,12 +78,19 @@ impl Plan {
             })
             .collect();
         let all = candidates.clone();
-        candidates.retain(|&v| !data.vbank().get(v).is_some_and(|n| n.get_size() == 8 && half_of_a_wider_register(data, n, &all)));
+        candidates.retain(|&v| {
+            !data
+                .vbank()
+                .get(v)
+                .is_some_and(|n| n.get_size() == 8 && half_of_a_wider_register(data, n, &all))
+        });
         if candidates.is_empty() {
             return Plan::default();
         }
-        let mut walks: Vec<(VarnodeId, Walk)> =
-            candidates.iter().filter_map(|&c| walk(data, c, &candidates).map(|w| (c, w))).collect();
+        let mut walks: Vec<(VarnodeId, Walk)> = candidates
+            .iter()
+            .filter_map(|&c| walk(data, c, &candidates).map(|w| (c, w)))
+            .collect();
         loop {
             let accepted: Vec<VarnodeId> = walks.iter().map(|(c, _)| *c).collect();
             let mut floats = accepted.clone();
@@ -111,14 +118,25 @@ impl Plan {
 
     /// The float the plan gives `vn`, where the fold says no more than an
     /// integer or raw bytes.
-    pub(crate) fn vote(&self, data: &Funcdata, vn: VarnodeId, ct: &Rc<Datatype>) -> Option<Rc<Datatype>> {
+    pub(crate) fn vote(
+        &self,
+        data: &Funcdata,
+        vn: VarnodeId,
+        ct: &Rc<Datatype>,
+    ) -> Option<Rc<Datatype>> {
         if self.floats.binary_search(&vn).is_err()
-            || !matches!(ct.get_metatype(), type_metatype::TYPE_UNKNOWN | type_metatype::TYPE_INT | type_metatype::TYPE_UINT)
+            || !matches!(
+                ct.get_metatype(),
+                type_metatype::TYPE_UNKNOWN | type_metatype::TYPE_INT | type_metatype::TYPE_UINT
+            )
         {
             return None;
         }
         let size = data.vbank().get(vn)?.get_size();
-        data.get_arch().types()?.get_base(size, type_metatype::TYPE_FLOAT).ok()
+        data.get_arch()
+            .types()?
+            .get_base(size, type_metatype::TYPE_FLOAT)
+            .ok()
     }
 }
 
@@ -130,7 +148,10 @@ impl Plan {
 /// is what the call left in the register, which `voidret` does not count
 /// against the float (`kuna_voidret.rs (elsewhere_than_return)`): betaflight's
 /// `bl fabsf; vcmpe.f32 s0, s15; .. pop {r4, pc}` returns the `r0` the call left.
-pub(crate) fn held_bits_token(data: &mut Funcdata, op: crate::context::OpId) -> Option<Rc<Datatype>> {
+pub(crate) fn held_bits_token(
+    data: &mut Funcdata,
+    op: crate::context::OpId,
+) -> Option<Rc<Datatype>> {
     let (outvn, float) = {
         let fc = data.get_call_specs(data.get_call_specs_index(op)?);
         if fc.proto().is_output_locked() {
@@ -144,13 +165,17 @@ pub(crate) fn held_bits_token(data: &mut Funcdata, op: crate::context::OpId) -> 
         let stated = data.kuna_callret_stated(key)?;
         let outvn = data.obank().get(op)?.get_out()?;
         let out = data.vbank().get(outvn)?;
-        let float = stated.ct.get_metatype() == type_metatype::TYPE_FLOAT && stated.ct.get_size() == stated.size;
+        let float = stated.ct.get_metatype() == type_metatype::TYPE_FLOAT
+            && stated.ct.get_size() == stated.size;
         let elsewhere = out.get_addr() != &stated.addr && out.get_size() == stated.size;
         (float && elsewhere).then_some(())?;
         (outvn, Rc::clone(&stated.ct))
     };
     let held = data.high_get_type(outvn)?;
-    let integer = matches!(held.get_metatype(), type_metatype::TYPE_INT | type_metatype::TYPE_UINT);
+    let integer = matches!(
+        held.get_metatype(),
+        type_metatype::TYPE_INT | type_metatype::TYPE_UINT
+    );
     (integer && held.get_size() == float.get_size()).then_some(float)
 }
 
@@ -174,7 +199,10 @@ fn walk(data: &Funcdata, input: VarnodeId, candidates: &[VarnodeId]) -> Option<W
             return None;
         }
         let node = data.vbank().get(v)?;
-        if (node.is_type_lock() && !crate::kuna_armfloatreturn::float_locked_return(data, v)) || node.is_persist() || in_data_space(data, node) {
+        if (node.is_type_lock() && !crate::kuna_armfloatreturn::float_locked_return(data, v))
+            || node.is_persist()
+            || in_data_space(data, node)
+        {
             return None;
         }
         for r in node.descend_iter() {
@@ -186,14 +214,23 @@ fn walk(data: &Funcdata, input: VarnodeId, candidates: &[VarnodeId]) -> Option<W
             let next = match o.code() {
                 OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_INDIRECT => Some(raw),
                 OpCode::CPUI_MULTIEQUAL => {
-                    let inputs: Vec<VarnodeId> = (0..o.num_input()).filter_map(|k| o.get_in(k)).filter(|&i| i != v).collect();
-                    if !inputs.iter().all(|&i| seen.contains(&i) || bits_of(data, i, candidates, true)) {
+                    let inputs: Vec<VarnodeId> = (0..o.num_input())
+                        .filter_map(|k| o.get_in(k))
+                        .filter(|&i| i != v)
+                        .collect();
+                    if !inputs
+                        .iter()
+                        .all(|&i| seen.contains(&i) || bits_of(data, i, candidates, true))
+                    {
                         return None;
                     }
                     Some(raw && inputs.iter().all(|i| seen.contains(i)))
                 }
                 OpCode::CPUI_INT_AND | OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR => {
-                    if !(0..2).filter_map(other).all(|i| bits_of(data, i, candidates, false)) {
+                    if !(0..2)
+                        .filter_map(other)
+                        .all(|i| bits_of(data, i, candidates, false))
+                    {
                         return None;
                     }
                     bits = true;
@@ -211,7 +248,9 @@ fn walk(data: &Funcdata, input: VarnodeId, candidates: &[VarnodeId]) -> Option<W
                     Some(false)
                 }
                 OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB => {
-                    if o.get_in(0) != Some(v) && o.code() == OpCode::CPUI_INT_SUB || !flips_the_sign(data, o) {
+                    if o.get_in(0) != Some(v) && o.code() == OpCode::CPUI_INT_SUB
+                        || !flips_the_sign(data, o)
+                    {
                         return None;
                     }
                     bits = true;
@@ -219,28 +258,47 @@ fn walk(data: &Funcdata, input: VarnodeId, candidates: &[VarnodeId]) -> Option<W
                 }
                 OpCode::CPUI_SUBPIECE => (o.get_in(0) == Some(v)).then_some(false),
                 OpCode::CPUI_PIECE => {
-                    if !(0..2).filter_map(other).all(|i| bits_of(data, i, candidates, false)) {
+                    if !(0..2)
+                        .filter_map(other)
+                        .all(|i| bits_of(data, i, candidates, false))
+                    {
                         return None;
                     }
                     Some(false)
                 }
                 OpCode::CPUI_INT_EQUAL | OpCode::CPUI_INT_NOTEQUAL => {
-                    if !(0..2).filter_map(other).next().is_some_and(|c| compares_as_a_float(data, c)) {
+                    if !(0..2)
+                        .filter_map(other)
+                        .next()
+                        .is_some_and(|c| compares_as_a_float(data, c))
+                    {
                         return None;
                     }
                     bits = true;
                     None
                 }
-                OpCode::CPUI_INT_LESS | OpCode::CPUI_INT_LESSEQUAL | OpCode::CPUI_INT_SLESS | OpCode::CPUI_INT_SLESSEQUAL => {
-                    if !(0..2).filter_map(other).all(|i| bits_of(data, i, candidates, false)) {
+                OpCode::CPUI_INT_LESS
+                | OpCode::CPUI_INT_LESSEQUAL
+                | OpCode::CPUI_INT_SLESS
+                | OpCode::CPUI_INT_SLESSEQUAL => {
+                    if !(0..2)
+                        .filter_map(other)
+                        .all(|i| bits_of(data, i, candidates, false))
+                    {
                         return None;
                     }
                     bits = true;
                     None
                 }
                 OpCode::CPUI_RETURN => {
-                    if crate::kuna_floatreg::float_class(data, data.get_func_proto().model().output_list(), node) {
-                        if node.get_size() != size || !crate::kuna_floatreg::returned_in_a_float_register(data, v, node) {
+                    if crate::kuna_floatreg::float_class(
+                        data,
+                        data.get_func_proto().model().output_list(),
+                        node,
+                    ) {
+                        if node.get_size() != size
+                            || !crate::kuna_floatreg::returned_in_a_float_register(data, v, node)
+                        {
                             return None;
                         }
                         returned.push(v);
@@ -254,7 +312,10 @@ fn walk(data: &Funcdata, input: VarnodeId, candidates: &[VarnodeId]) -> Option<W
                         && o.get_in(0) != Some(v)
                         && (1..o.num_input())
                             .filter(|&s| o.get_in(s) == Some(v))
-                            .all(|s| crate::kuna_protoorder::float_read_width(data, r, s) == Some(node.get_size()));
+                            .all(|s| {
+                                crate::kuna_protoorder::float_read_width(data, r, s)
+                                    == Some(node.get_size())
+                            });
                     if !float_argument {
                         return None;
                     }
@@ -291,7 +352,10 @@ struct Shape {
 impl Shape {
     fn note(&mut self, data: &Funcdata, o: &crate::op::PcodeOp) {
         let constant = |k: int4| {
-            o.get_in(k).and_then(|c| data.vbank().get(c)).filter(|c| c.is_constant() && c.get_size() == 8).map(|c| c.get_offset() as u64)
+            o.get_in(k)
+                .and_then(|c| data.vbank().get(c))
+                .filter(|c| c.is_constant() && c.get_size() == 8)
+                .map(|c| c.get_offset() as u64)
         };
         match o.code() {
             OpCode::CPUI_INT_AND
@@ -309,8 +373,15 @@ impl Shape {
                 }
             }
             OpCode::CPUI_INT_RIGHT | OpCode::CPUI_INT_SRIGHT => {
-                let by = o.get_in(1).and_then(|c| data.vbank().get(c)).filter(|c| c.is_constant()).map(|c| c.get_offset());
-                let wide = o.get_in(0).and_then(|i| data.vbank().get(i)).is_some_and(|i| i.get_size() == 8);
+                let by = o
+                    .get_in(1)
+                    .and_then(|c| data.vbank().get(c))
+                    .filter(|c| c.is_constant())
+                    .map(|c| c.get_offset());
+                let wide = o
+                    .get_in(0)
+                    .and_then(|i| data.vbank().get(i))
+                    .is_some_and(|i| i.get_size() == 8);
                 self.double |= wide && by == Some(52);
             }
             _ => {}
@@ -339,7 +410,9 @@ const DOUBLE_FIELDS: [u64; 7] = [
 /// denormal to zero where the FPU flushes them, and `0.1`, the shortest
 /// spelling of `0.1f`, is another double, while the binary compares bits.
 pub(crate) fn compares_as_a_float(data: &Funcdata, c: VarnodeId) -> bool {
-    let Some(node) = data.vbank().get(c).filter(|n| n.is_constant()) else { return false };
+    let Some(node) = data.vbank().get(c).filter(|n| n.is_constant()) else {
+        return false;
+    };
     let bits = node.get_offset() as u64;
     let (exponent, mantissa) = match node.get_size() {
         4 => ((bits >> 23) & 0xff, bits & 0x7f_ffff),
@@ -353,26 +426,42 @@ pub(crate) fn compares_as_a_float(data: &Funcdata, c: VarnodeId) -> bool {
     if exponent == top {
         return true;
     }
-    let Some(format) = data.get_arch().get_float_format(node.get_size()) else { return false };
+    let Some(format) = data.get_arch().get_float_format(node.get_size()) else {
+        return false;
+    };
     let (value, _) = format.get_host_float(bits);
-    [false, true].into_iter().all(|sci| format.print_decimal(value, sci).parse::<f64>() == Ok(value))
+    [false, true]
+        .into_iter()
+        .all(|sci| format.print_decimal(value, sci).parse::<f64>() == Ok(value))
 }
 
 /// Is the 8-byte input `node` half of a 16-byte register another input of the
 /// function reads apart from the `candidates`: the low word of an `_Float128`
 /// in `xmm0` beside `XMM0_Qb`, or `d0` beside the rest of `q0`?
-fn half_of_a_wider_register(data: &Funcdata, node: &crate::varnode::Varnode, candidates: &[VarnodeId]) -> bool {
-    let Some(space) = node.get_addr().get_space() else { return false };
-    let Some(lookup) = data.get_arch().manage().register_lookup() else { return false };
+fn half_of_a_wider_register(
+    data: &Funcdata,
+    node: &crate::varnode::Varnode,
+    candidates: &[VarnodeId],
+) -> bool {
+    let Some(space) = node.get_addr().get_space() else {
+        return false;
+    };
+    let Some(lookup) = data.get_arch().manage().register_lookup() else {
+        return false;
+    };
     let off = node.get_offset();
-    let Some(base) = [off, off.wrapping_sub(8)].into_iter().find(|&b| !lookup.get_exact_register_name(space, b, 16).is_empty())
+    let Some(base) = [off, off.wrapping_sub(8)]
+        .into_iter()
+        .find(|&b| !lookup.get_exact_register_name(space, b, 16).is_empty())
     else {
         return false;
     };
     data.vbank().iter_def_flag(varnode_flags::input).any(|w| {
         !candidates.contains(&w)
             && data.vbank().get(w).is_some_and(|n| {
-                n.get_addr().get_space().is_some_and(|s| Rc::ptr_eq(s, space))
+                n.get_addr()
+                    .get_space()
+                    .is_some_and(|s| Rc::ptr_eq(s, space))
                     && n.get_offset() < base + 16
                     && base < n.get_offset() + n.get_size() as u64
             })
@@ -382,7 +471,11 @@ fn half_of_a_wider_register(data: &Funcdata, node: &crate::varnode::Varnode, can
 /// The values a RETURN hands back beside `vn`, when every one is built by bit
 /// ops from the inputs `accepted` and constants, or is a constant a float
 /// literal spells, at `vn`'s width; `None` otherwise.
-fn returned_beside_ok(data: &Funcdata, vn: VarnodeId, accepted: &[VarnodeId]) -> Option<Vec<VarnodeId>> {
+fn returned_beside_ok(
+    data: &Funcdata,
+    vn: VarnodeId,
+    accepted: &[VarnodeId],
+) -> Option<Vec<VarnodeId>> {
     let node = data.vbank().get(vn)?;
     if !crate::kuna_floatreg::returned_in_a_float_register(data, vn, node) {
         return None;
@@ -394,8 +487,13 @@ fn returned_beside_ok(data: &Funcdata, vn: VarnodeId, accepted: &[VarnodeId]) ->
         .all(|&w| {
             data.vbank().get(w).is_some_and(|n| {
                 n.get_size() == size
-                    && (!n.is_type_lock() || crate::kuna_armfloatreturn::float_locked_return(data, w))
-                    && if n.is_constant() { crate::kuna_floatreg::spells(data, w) } else { bits_of(data, w, accepted, true) }
+                    && (!n.is_type_lock()
+                        || crate::kuna_armfloatreturn::float_locked_return(data, w))
+                    && if n.is_constant() {
+                        crate::kuna_floatreg::spells(data, w)
+                    } else {
+                        bits_of(data, w, accepted, true)
+                    }
             })
         })
         .then_some(beside)
@@ -416,7 +514,9 @@ fn bits_of(data: &Funcdata, vn: VarnodeId, inputs: &[VarnodeId], value: bool) ->
         if seen.len() >= LIMIT {
             return false;
         }
-        let Some(node) = data.vbank().get(v) else { return false };
+        let Some(node) = data.vbank().get(v) else {
+            return false;
+        };
         if node.is_constant() {
             if value && !crate::kuna_floatreg::spells(data, v) {
                 return false;
@@ -426,19 +526,36 @@ fn bits_of(data: &Funcdata, vn: VarnodeId, inputs: &[VarnodeId], value: bool) ->
         if inputs.contains(&v) {
             continue;
         }
-        let Some(o) = node.get_def().and_then(|d| data.obank().get(d)) else { return false };
+        let Some(o) = node.get_def().and_then(|d| data.obank().get(d)) else {
+            return false;
+        };
         let (operands, value): (Vec<VarnodeId>, bool) = match o.code() {
             OpCode::CPUI_COPY | OpCode::CPUI_CAST => (o.get_in(0).into_iter().collect(), value),
-            OpCode::CPUI_INDIRECT if !o.is_indirect_creation() => (o.get_in(0).into_iter().collect(), value),
-            OpCode::CPUI_MULTIEQUAL => ((0..o.num_input()).filter_map(|k| o.get_in(k)).collect(), value),
-            OpCode::CPUI_SUBPIECE | OpCode::CPUI_INT_NEGATE => (o.get_in(0).into_iter().collect(), false),
-            OpCode::CPUI_INT_AND | OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR | OpCode::CPUI_PIECE => {
-                ((0..o.num_input()).filter_map(|k| o.get_in(k)).collect(), false)
+            OpCode::CPUI_INDIRECT if !o.is_indirect_creation() => {
+                (o.get_in(0).into_iter().collect(), value)
             }
-            OpCode::CPUI_INT_LEFT | OpCode::CPUI_INT_RIGHT | OpCode::CPUI_INT_SRIGHT if is_constant(data, o.get_in(1)) => {
+            OpCode::CPUI_MULTIEQUAL => (
+                (0..o.num_input()).filter_map(|k| o.get_in(k)).collect(),
+                value,
+            ),
+            OpCode::CPUI_SUBPIECE | OpCode::CPUI_INT_NEGATE => {
                 (o.get_in(0).into_iter().collect(), false)
             }
-            OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB if flips_the_sign(data, o) => (o.get_in(0).into_iter().collect(), false),
+            OpCode::CPUI_INT_AND
+            | OpCode::CPUI_INT_OR
+            | OpCode::CPUI_INT_XOR
+            | OpCode::CPUI_PIECE => (
+                (0..o.num_input()).filter_map(|k| o.get_in(k)).collect(),
+                false,
+            ),
+            OpCode::CPUI_INT_LEFT | OpCode::CPUI_INT_RIGHT | OpCode::CPUI_INT_SRIGHT
+                if is_constant(data, o.get_in(1)) =>
+            {
+                (o.get_in(0).into_iter().collect(), false)
+            }
+            OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB if flips_the_sign(data, o) => {
+                (o.get_in(0).into_iter().collect(), false)
+            }
             _ => return false,
         };
         work.extend(operands.into_iter().map(|w| (w, value)));
@@ -449,16 +566,27 @@ fn bits_of(data: &Funcdata, vn: VarnodeId, inputs: &[VarnodeId], value: bool) ->
 /// Is the INT_ADD or INT_SUB `o` its first input plus or minus the sign bit of
 /// its width, which flips that bit and no other?
 fn flips_the_sign(data: &Funcdata, o: &crate::op::PcodeOp) -> bool {
-    let Some(c) = o.get_in(1).and_then(|c| data.vbank().get(c)).filter(|c| c.is_constant()) else { return false };
+    let Some(c) = o
+        .get_in(1)
+        .and_then(|c| data.vbank().get(c))
+        .filter(|c| c.is_constant())
+    else {
+        return false;
+    };
     let bits = 8 * c.get_size() as u32;
     bits <= 64 && c.get_offset() as u64 == 1u64 << (bits - 1)
 }
 
 fn is_constant(data: &Funcdata, vn: Option<VarnodeId>) -> bool {
-    vn.and_then(|v| data.vbank().get(v)).is_some_and(|n| n.is_constant())
+    vn.and_then(|v| data.vbank().get(v))
+        .is_some_and(|n| n.is_constant())
 }
 
 fn in_data_space(data: &Funcdata, node: &crate::varnode::Varnode) -> bool {
     let data_space = data.get_arch().manage().get_default_data_space();
-    data_space.is_some_and(|d| node.get_addr().get_space().is_some_and(|s| Rc::ptr_eq(s, d)))
+    data_space.is_some_and(|d| {
+        node.get_addr()
+            .get_space()
+            .is_some_and(|s| Rc::ptr_eq(s, d))
+    })
 }

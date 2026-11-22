@@ -23,11 +23,11 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 
-use unlace_decomp::dtype::{type_metatype, Datatype};
+use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::variable::HighVariableBank;
 use unlace_decomp::varnode::VarnodeBank;
 
@@ -38,7 +38,8 @@ fn dt(size: int4) -> Rc<Datatype> {
 fn manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -66,7 +67,11 @@ fn build_struct_group(
     m: &AddrSpaceManager,
     root_size: int4,
     pieces: &[(int4, int4)],
-) -> (HighVariableBank, unlace_decomp::context::HighVariableId, Vec<unlace_decomp::context::HighVariableId>) {
+) -> (
+    HighVariableBank,
+    unlace_decomp::context::HighVariableId,
+    Vec<unlace_decomp::context::HighVariableId>,
+) {
     let mut vbank = VarnodeBank::new(m, 0).unwrap();
     let mut hb = HighVariableBank::new();
 
@@ -95,10 +100,15 @@ fn at1_whole_symbol_root_pieces_offset_equals_group_offset() {
     let (mut hb, root, pieces) = build_struct_group(&m, 8, &[(0, 4), (4, 4)]);
 
     // Root maps the whole symbol: symboloffset stays -1 (the HighVariable default).
-    assert_eq!(hb.group_symbol_offset(root), 0, "fresh group has no symbol offset yet");
+    assert_eq!(
+        hb.group_symbol_offset(root),
+        0,
+        "fresh group has no symbol offset yet"
+    );
 
     // establishGroupSymbolOffset: off = clamp(-1,>=0) - rootPieceOffset(0) = 0.
-    hb.establish_group_symbol_offset(root).expect("whole-symbol root must establish cleanly");
+    hb.establish_group_symbol_offset(root)
+        .expect("whole-symbol root must establish cleanly");
     assert_eq!(hb.group_symbol_offset(root), 0);
 
     // Each piece's in-symbol byte offset = piece.getOffset() + group.getSymbolOffset().
@@ -108,7 +118,10 @@ fn at1_whole_symbol_root_pieces_offset_equals_group_offset() {
         let in_symbol_off = group_off + hb.group_symbol_offset(root);
         let expected = [0, 4][i];
         assert_eq!(group_off, expected, "piece {i} group offset");
-        assert_eq!(in_symbol_off, expected, "piece {i} in-symbol offset (field key)");
+        assert_eq!(
+            in_symbol_off, expected,
+            "piece {i} in-symbol offset (field key)"
+        );
     }
     // The two pieces and the root share ONE group (the isSameGroup precondition).
     assert!(hb.is_same_group(root, pieces[0]));
@@ -127,14 +140,19 @@ fn at2_nonzero_root_symbol_offset_shifts_all_field_keys() {
     // Root is a partial cover of a larger symbol at byte 2.
     hb.get_mut(root).unwrap().set_symbol_offset(2);
     // off = clamp(2,>=0) - rootPieceOffset(0) = 2.
-    hb.establish_group_symbol_offset(root).expect("non-negative root offset establishes");
+    hb.establish_group_symbol_offset(root)
+        .expect("non-negative root offset establishes");
     assert_eq!(hb.group_symbol_offset(root), 2);
 
     for (i, &ph) in pieces.iter().enumerate() {
         let pid = hb.high_piece_id(ph).unwrap();
         let in_symbol_off = hb.piece_offset(pid) + hb.group_symbol_offset(root);
         // Every field key is shifted up by the root's symbol offset (2).
-        assert_eq!(in_symbol_off, [2, 4, 6, 8][i], "piece {i} shifted field key");
+        assert_eq!(
+            in_symbol_off,
+            [2, 4, 6, 8][i],
+            "piece {i} shifted field key"
+        );
     }
 }
 
@@ -183,7 +201,10 @@ fn at4_groupless_high_is_noop() {
     let vn = vbank.create(4, ram(&m, 0x400), dt(4));
     let lone = hb.new_high(vn);
 
-    assert!(hb.high_piece_id(lone).is_none(), "ungrouped high has no piece");
+    assert!(
+        hb.high_piece_id(lone).is_none(),
+        "ungrouped high has no piece"
+    );
     assert_eq!(hb.group_symbol_offset(lone), 0);
     // No panic, returns Ok.
     assert!(hb.establish_group_symbol_offset(lone).is_ok());
@@ -221,8 +242,8 @@ fn at4_groupless_high_is_noop() {
 #[test]
 fn at5_findroot_tiebreak_must_replace_on_compareorder_nonzero_not_only_negative() {
     use unlace_base::address::Address;
-    use unlace_decomp::funcdata::Funcdata;
     use unlace_decomp::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
+    use unlace_decomp::funcdata::Funcdata;
     use unlace_num::opcodes::OpCode;
 
     fn build_fd() -> Funcdata {
@@ -232,7 +253,10 @@ fn at5_findroot_tiebreak_must_replace_on_compareorder_nonzero_not_only_negative(
         Funcdata::new("func", "func", glb, entry, 0x10000000, 0x40).unwrap()
     }
     fn ram_addr(fd: &Funcdata, off: u64) -> Address {
-        Address::new(Rc::clone(fd.get_arch().manage().get_space_by_name("ram").unwrap()), off)
+        Address::new(
+            Rc::clone(fd.get_arch().manage().get_space_by_name("ram").unwrap()),
+            off,
+        )
     }
 
     let mut fd = build_fd();
@@ -272,7 +296,10 @@ fn at5_findroot_tiebreak_must_replace_on_compareorder_nonzero_not_only_negative(
     // AND lower seq-num order; `piece_late` SECOND -> later on both.
     let (_early, out_early) = piece_at(&mut fd, 0x101, 0x300);
     let (_late, out_late) = piece_at(&mut fd, 0x102, 0x304);
-    assert_ne!(out_early, out_late, "the two PIECE outputs must be distinct varnodes");
+    assert_ne!(
+        out_early, out_late,
+        "the two PIECE outputs must be distinct varnodes"
+    );
 
     let root = fd.piece_find_root(leaf);
 

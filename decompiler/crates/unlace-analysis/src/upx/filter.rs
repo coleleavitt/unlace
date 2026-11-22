@@ -79,7 +79,10 @@ pub fn unfilter_at(
 /// Whether [`unfilter`] can reverse this id -- lets a caller refuse a whole
 /// image before writing any of it.
 pub fn is_supported(id: u8) -> bool {
-    matches!(id, 0x00 | 0x11..=0x16 | 0x24 | 0x25 | 0x26 | 0x36 | 0x46 | 0x49 | 0x50 | 0x51 | 0x52)
+    matches!(
+        id,
+        0x00 | 0x11..=0x16 | 0x24 | 0x25 | 0x26 | 0x36 | 0x46 | 0x49 | 0x50 | 0x51 | 0x52
+    )
 }
 
 /// Which opcodes a `cto` filter treats as a rewritten branch. `0x36`/`0x46`
@@ -156,7 +159,11 @@ fn ct32(buf: &mut [u8], addvalue: u32, cond: X86Cond, bswap: bool) {
         if cond.matches(buf, b, 0) {
             let a = b + 1;
             let w = [buf[a], buf[a + 1], buf[a + 2], buf[a + 3]];
-            let v = if bswap { u32::from_be_bytes(w) } else { u32::from_le_bytes(w) };
+            let v = if bswap {
+                u32::from_be_bytes(w)
+            } else {
+                u32::from_le_bytes(w)
+            };
             let v = v.wrapping_sub(a as u32).wrapping_sub(addvalue);
             buf[a..a + 4].copy_from_slice(&v.to_le_bytes());
             b += 4;
@@ -260,7 +267,11 @@ mod tests {
         let (ic, rel, addvalue) = (3u32, 0x0011_2233u32, 0x1000u32);
         let mut buf = vec![0x90u8; 16];
         buf[3] = 0xe8;
-        buf[4..8].copy_from_slice(&rel.wrapping_add(ic + 1).wrapping_add(addvalue).to_be_bytes());
+        buf[4..8].copy_from_slice(
+            &rel.wrapping_add(ic + 1)
+                .wrapping_add(addvalue)
+                .to_be_bytes(),
+        );
         unfilter_at(0x49, 0x00, addvalue, &mut buf).unwrap();
         assert_eq!(u32::from_le_bytes([buf[4], buf[5], buf[6], buf[7]]), rel);
     }
@@ -276,7 +287,11 @@ mod tests {
             for (at, rel) in calls {
                 buf[at] = 0xe8;
                 let abs = rel.wrapping_add(at as u32 + 1).wrapping_add(0x400);
-                let w = if bswap { abs.to_be_bytes() } else { abs.to_le_bytes() };
+                let w = if bswap {
+                    abs.to_be_bytes()
+                } else {
+                    abs.to_le_bytes()
+                };
                 buf[at + 1..at + 5].copy_from_slice(&w);
             }
             unfilter_at(id, 0, 0x400, &mut buf).unwrap();

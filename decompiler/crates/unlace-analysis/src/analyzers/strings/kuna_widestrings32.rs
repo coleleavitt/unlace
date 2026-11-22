@@ -73,7 +73,7 @@
 use object::read::{Object, ObjectSection, ObjectSymbol};
 use object::{BinaryFormat, ObjectKind, SectionKind, SymbolKind};
 
-use crate::operand_refs::{held_pointers, relative_string_table, DataObjects};
+use crate::operand_refs::{DataObjects, held_pointers, relative_string_table};
 use crate::pass::StringFact;
 
 use super::is_string_char;
@@ -107,14 +107,23 @@ impl Run32 {
 /// Every run of at least `min_units` 4-byte code units in `data` (mapped at
 /// `vma`) whose values are [`is_string_char`] characters, read in the given byte
 /// order on 4-aligned addresses and closed by a zero unit.
-pub(crate) fn scan_utf32_runs(data: &[u8], vma: u64, little_endian: bool, min_units: usize) -> Vec<Run32> {
+pub(crate) fn scan_utf32_runs(
+    data: &[u8],
+    vma: u64,
+    little_endian: bool,
+    min_units: usize,
+) -> Vec<Run32> {
     let mut out = Vec::new();
     let mut start: Option<usize> = None;
     let mut seen: u128 = 0;
     let mut i = ((4 - vma % 4) % 4) as usize;
     while i + 4 <= data.len() {
         let raw = [data[i], data[i + 1], data[i + 2], data[i + 3]];
-        let unit = if little_endian { u32::from_le_bytes(raw) } else { u32::from_be_bytes(raw) };
+        let unit = if little_endian {
+            u32::from_le_bytes(raw)
+        } else {
+            u32::from_be_bytes(raw)
+        };
         if unit < 0x80 && is_string_char(unit as u8) {
             if start.is_none() {
                 start = Some(i);
@@ -124,7 +133,11 @@ pub(crate) fn scan_utf32_runs(data: &[u8], vma: u64, little_endian: bool, min_un
         } else if let Some(s) = start.take() {
             let units = (i - s) / 4;
             if unit == 0 && units >= min_units {
-                out.push(Run32 { addr: vma + s as u64, units, distinct: seen.count_ones() as usize });
+                out.push(Run32 {
+                    addr: vma + s as u64,
+                    units,
+                    distinct: seen.count_ones() as usize,
+                });
             }
         }
         i += 4;
@@ -149,7 +162,11 @@ fn readonly_data(file: &object::File, sec: &object::Section) -> Option<bool> {
                 && elf_entsize(file, sec.index()) == Some(4);
             data.then_some(strings4)
         }
-        _ => matches!(sec.kind(), SectionKind::ReadOnlyData | SectionKind::ReadOnlyString).then_some(false),
+        _ => matches!(
+            sec.kind(),
+            SectionKind::ReadOnlyData | SectionKind::ReadOnlyString
+        )
+        .then_some(false),
     }
 }
 
@@ -157,10 +174,18 @@ fn readonly_data(file: &object::File, sec: &object::Section) -> Option<bool> {
 fn elf_entsize(file: &object::File, index: object::SectionIndex) -> Option<u64> {
     use object::read::elf::SectionHeader;
     match file {
-        object::File::Elf32(f) => {
-            Some(u64::from(f.section_by_index(index).ok()?.elf_section_header().sh_entsize(f.endian())))
-        }
-        object::File::Elf64(f) => Some(f.section_by_index(index).ok()?.elf_section_header().sh_entsize(f.endian())),
+        object::File::Elf32(f) => Some(u64::from(
+            f.section_by_index(index)
+                .ok()?
+                .elf_section_header()
+                .sh_entsize(f.endian()),
+        )),
+        object::File::Elf64(f) => Some(
+            f.section_by_index(index)
+                .ok()?
+                .elf_section_header()
+                .sh_entsize(f.endian()),
+        ),
         _ => None,
     }
 }
@@ -170,7 +195,11 @@ fn elf_entsize(file: &object::File, index: object::SectionIndex) -> Option<u64> 
 /// `targets` (sorted) are the read-only addresses the scalar scan found operands
 /// pointing at and `tables` (sorted) the ones it saw code index as arrays; both
 /// are empty when it did not run.
-pub fn wide_string32_facts(file: &object::File, targets: &[u64], tables: &[u64]) -> Vec<StringFact> {
+pub fn wide_string32_facts(
+    file: &object::File,
+    targets: &[u64],
+    tables: &[u64],
+) -> Vec<StringFact> {
     if matches!(file.format(), BinaryFormat::Pe | BinaryFormat::Coff) {
         return Vec::new();
     }
@@ -178,7 +207,9 @@ pub fn wide_string32_facts(file: &object::File, targets: &[u64], tables: &[u64])
     let relocatable = file.kind() == ObjectKind::Relocatable;
     let mut runs: Vec<(Run32, bool, &[u8], u64)> = Vec::new();
     for sec in file.sections() {
-        let Some(strings4) = readonly_data(file, &sec).filter(|_| !relocatable || sec.address() != 0) else {
+        let Some(strings4) =
+            readonly_data(file, &sec).filter(|_| !relocatable || sec.address() != 0)
+        else {
             continue;
         };
         let Ok(data) = sec.data() else {
@@ -186,14 +217,22 @@ pub fn wide_string32_facts(file: &object::File, targets: &[u64], tables: &[u64])
         };
         let min_units = if strings4 { 1 } else { MIN_UNITS };
         let vma = sec.address();
-        runs.extend(scan_utf32_runs(data, vma, little_endian, min_units).into_iter().map(|r| (r, strings4, data, vma)));
+        runs.extend(
+            scan_utf32_runs(data, vma, little_endian, min_units)
+                .into_iter()
+                .map(|r| (r, strings4, data, vma)),
+        );
     }
     if runs.is_empty() {
         return Vec::new();
     }
     let follows: Vec<Option<Option<Follower>>> = runs
         .iter()
-        .map(|(r, strings4, data, vma)| (!strings4).then(|| follower(r, data, *vma, little_endian)).flatten())
+        .map(|(r, strings4, data, vma)| {
+            (!strings4)
+                .then(|| follower(r, data, *vma, little_endian))
+                .flatten()
+        })
         .collect();
     let mut unpointed: Vec<u64> = runs
         .iter()
@@ -205,7 +244,11 @@ pub fn wide_string32_facts(file: &object::File, targets: &[u64], tables: &[u64])
         .collect();
     unpointed.sort_unstable();
     unpointed.dedup();
-    let mut held = if unpointed.is_empty() { Vec::new() } else { held_pointers(file, &unpointed, false) };
+    let mut held = if unpointed.is_empty() {
+        Vec::new()
+    } else {
+        held_pointers(file, &unpointed, false)
+    };
     if !unpointed.is_empty() && file.format() == BinaryFormat::Elf {
         held.extend(
             targets
@@ -220,40 +263,58 @@ pub fn wide_string32_facts(file: &object::File, targets: &[u64], tables: &[u64])
         .symbols()
         .chain(file.dynamic_symbols())
         .filter(|s| s.kind() == SymbolKind::Data && !s.is_undefined() && s.size() != 0)
-        .map(|s| (s.name().is_ok_and(|n| n.starts_with(".L")), (s.address(), s.size())))
+        .map(|s| {
+            (
+                s.name().is_ok_and(|n| n.starts_with(".L")),
+                (s.address(), s.size()),
+            )
+        })
         .partition(|&(label, _)| label);
     let objects = DataObjects::from_spans(objects.into_iter().map(|(_, span)| span).collect());
     let labels = DataObjects::from_spans(labels.into_iter().map(|(_, span)| span).collect());
     let (reach, label_reach) = (objects.reach(), labels.reach());
-    let declared = |a: u64| tables.binary_search(&a).is_ok() || objects.starts_at(a) || labels.starts_at(a);
+    let declared =
+        |a: u64| tables.binary_search(&a).is_ok() || objects.starts_at(a) || labels.starts_at(a);
     let next_object = |f: Follower| declared(f.addr) || (f.string && pointed(f.addr));
-    let literal = |r: Run32, next: Option<Option<Follower>>, data: &[u8], vma: u64| -> Option<Run32> {
-        if !next?.is_none_or(next_object) {
-            return None;
-        }
-        let terminator = r.addr + 4 * r.units as u64;
-        if tables.get(tables.partition_point(|&t| t < r.addr)).is_some_and(|&t| t <= terminator) {
-            return None;
-        }
-        if pointed(r.addr) {
-            return Some(r);
-        }
-        let at = *targets.get(targets.partition_point(|&t| t <= r.addr))?;
-        if at >= terminator || (at - r.addr) % 4 != 0 {
-            return None;
-        }
-        let from = usize::try_from(at - vma).ok()?;
-        let to = usize::try_from(terminator + 4 - vma).ok()?;
-        let tail = scan_utf32_runs(data.get(from..to)?, at, little_endian, MIN_UNITS);
-        tail.into_iter().next().filter(|t| t.addr == at)
-    };
+    let literal =
+        |r: Run32, next: Option<Option<Follower>>, data: &[u8], vma: u64| -> Option<Run32> {
+            if !next?.is_none_or(next_object) {
+                return None;
+            }
+            let terminator = r.addr + 4 * r.units as u64;
+            if tables
+                .get(tables.partition_point(|&t| t < r.addr))
+                .is_some_and(|&t| t <= terminator)
+            {
+                return None;
+            }
+            if pointed(r.addr) {
+                return Some(r);
+            }
+            let at = *targets.get(targets.partition_point(|&t| t <= r.addr))?;
+            if at >= terminator || (at - r.addr) % 4 != 0 {
+                return None;
+            }
+            let from = usize::try_from(at - vma).ok()?;
+            let to = usize::try_from(terminator + 4 - vma).ok()?;
+            let tail = scan_utf32_runs(data.get(from..to)?, at, little_endian, MIN_UNITS);
+            tail.into_iter().next().filter(|t| t.addr == at)
+        };
     runs.into_iter()
         .zip(follows)
         .filter_map(|((r, strings4, data, vma), next)| {
-            let r = if strings4 { r } else { literal(r, next, data, vma).filter(|r| r.distinct >= 3)? };
+            let r = if strings4 {
+                r
+            } else {
+                literal(r, next, data, vma).filter(|r| r.distinct >= 3)?
+            };
             let len = u64::from(r.len());
-            (!objects.overlaps(&reach, r.addr, len) && !labels.overlaps_other(&label_reach, r.addr, len))
-                .then_some(StringFact { addr: r.addr, len: r.len() })
+            (!objects.overlaps(&reach, r.addr, len)
+                && !labels.overlaps_other(&label_reach, r.addr, len))
+            .then_some(StringFact {
+                addr: r.addr,
+                len: r.len(),
+            })
         })
         .collect()
 }
@@ -286,11 +347,19 @@ fn follower(r: &Run32, data: &[u8], vma: u64, little_endian: bool) -> Option<Opt
     let next = r.addr + u64::from(r.len());
     let mut at = next;
     loop {
-        let Some(unit) = usize::try_from(at - vma).ok().and_then(|off| data.get(off..off + 4)) else {
+        let Some(unit) = usize::try_from(at - vma)
+            .ok()
+            .and_then(|off| data.get(off..off + 4))
+        else {
             return Some(None);
         };
         let raw = [unit[0], unit[1], unit[2], unit[3]];
-        if (if little_endian { u32::from_le_bytes(raw) } else { u32::from_be_bytes(raw) }) != 0 {
+        if (if little_endian {
+            u32::from_le_bytes(raw)
+        } else {
+            u32::from_be_bytes(raw)
+        }) != 0
+        {
             break;
         }
         at += 4;
@@ -305,10 +374,15 @@ fn follower(r: &Run32, data: &[u8], vma: u64, little_endian: bool) -> Option<Opt
     let off = usize::try_from(at - vma).ok()?;
     let unit = |k: usize| {
         let raw: [u8; 4] = data.get(off + 4 * k..off + 4 * k + 4)?.try_into().ok()?;
-        Some(if little_endian { u32::from_le_bytes(raw) } else { u32::from_be_bytes(raw) })
+        Some(if little_endian {
+            u32::from_le_bytes(raw)
+        } else {
+            u32::from_be_bytes(raw)
+        })
     };
     let ascii = |u: u32| u < 0x80 && is_string_char(u as u8);
-    let wide_char = |u: u32| ascii(u) || ((0xa0..CODE_POINTS).contains(&u) && !(0xd800..0xe000).contains(&u));
+    let wide_char =
+        |u: u32| ascii(u) || ((0xa0..CODE_POINTS).contains(&u) && !(0xd800..0xe000).contains(&u));
     let mut k = 0;
     let mut printable = false;
     while let Some(u) = unit(k).filter(|&u| wide_char(u)) {
@@ -332,7 +406,11 @@ mod tests {
         let mut d = Vec::new();
         for ch in s.chars().chain(std::iter::once('\0')) {
             let u = ch as u32;
-            d.extend_from_slice(&if little_endian { u.to_le_bytes() } else { u.to_be_bytes() });
+            d.extend_from_slice(&if little_endian {
+                u.to_le_bytes()
+            } else {
+                u.to_be_bytes()
+            });
         }
         d
     }
@@ -342,7 +420,14 @@ mod tests {
         for le in [true, false] {
             let data = wide("hellow", le);
             let runs = scan_utf32_runs(&data, 0x2004, le, MIN_UNITS);
-            assert_eq!(runs, vec![Run32 { addr: 0x2004, units: 6, distinct: 5 }]);
+            assert_eq!(
+                runs,
+                vec![Run32 {
+                    addr: 0x2004,
+                    units: 6,
+                    distinct: 5
+                }]
+            );
             assert_eq!(runs[0].len(), 28);
             assert!(scan_utf32_runs(&data, 0x2004, !le, MIN_UNITS).is_empty());
         }
@@ -351,7 +436,10 @@ mod tests {
     #[test]
     fn short_unterminated_and_misaligned_runs_are_not_runs() {
         assert!(scan_utf32_runs(&wide("abcd", true), 0x1000, true, MIN_UNITS).is_empty());
-        assert_eq!(scan_utf32_runs(&wide("abcd", true), 0x1000, true, 1).len(), 1);
+        assert_eq!(
+            scan_utf32_runs(&wide("abcd", true), 0x1000, true, 1).len(),
+            1
+        );
         let mut open = wide("hellow", true);
         open.truncate(24);
         open.extend_from_slice(&1000u32.to_le_bytes());
@@ -366,7 +454,14 @@ mod tests {
     fn narrow_and_utf16_text_is_never_a_utf32_run() {
         let narrow = b"NtQueryInformationProcess\0\0\0\0\0\0\0";
         assert!(scan_utf32_runs(narrow, 0x2000, true, MIN_UNITS).is_empty());
-        assert_eq!(scan_utf32_runs(narrow, 0x2000, true, 1), vec![Run32 { addr: 0x2018, units: 1, distinct: 1 }]);
+        assert_eq!(
+            scan_utf32_runs(narrow, 0x2000, true, 1),
+            vec![Run32 {
+                addr: 0x2018,
+                units: 1,
+                distinct: 1
+            }]
+        );
         let mut utf16 = Vec::new();
         for ch in "ntdll.dll\0".bytes() {
             utf16.extend_from_slice(&[ch, 0]);
@@ -380,8 +475,10 @@ mod tests {
         let raw = object::File::parse(bytes.as_slice()).expect("parse widestr32 fixture");
         let view = crate::loader::kuna_relocrebase::rebased_view(&raw, &bytes);
         let (file, _) = crate::loader::kuna_relocrebase::select(raw, &bytes, &view);
-        let mut facts: Vec<(u64, u32)> =
-            wide_string32_facts(&file, targets, tables).iter().map(|f| (f.addr, f.len)).collect();
+        let mut facts: Vec<(u64, u32)> = wide_string32_facts(&file, targets, tables)
+            .iter()
+            .map(|f| (f.addr, f.len))
+            .collect();
         facts.sort_unstable();
         facts
     }
@@ -400,14 +497,30 @@ mod tests {
     fn gcc_builds_plant_what_points_at_a_literal() {
         let held = vec![(0x402088, 40), (0x4020b0, 44)];
         assert_eq!(fixture_facts("widestr32_gcc_O2_x86_64", &[], &[]), held);
-        let targets = [0x402004, 0x402020, 0x40203c, 0x402040, 0x402058, 0x402088, 0x4020e0, 0x402100, 0x402160, 0x402180];
+        let targets = [
+            0x402004, 0x402020, 0x40203c, 0x402040, 0x402058, 0x402088, 0x4020e0, 0x402100,
+            0x402160, 0x402180,
+        ];
         let tables = [0x4020e0, 0x402100];
-        let literals = vec![(0x402004, 28), (0x402020, 28), (0x40203c, 24), (0x402058, 48), (0x402088, 40), (0x4020b0, 44)];
-        assert_eq!(fixture_facts("widestr32_gcc_O2_x86_64", &targets, &tables), literals);
+        let literals = vec![
+            (0x402004, 28),
+            (0x402020, 28),
+            (0x40203c, 24),
+            (0x402058, 48),
+            (0x402088, 40),
+            (0x4020b0, 44),
+        ];
+        assert_eq!(
+            fixture_facts("widestr32_gcc_O2_x86_64", &targets, &tables),
+            literals
+        );
         let mut stripped = literals.clone();
         stripped.push((0x402180, 24));
         for tables in [&tables[..], &[]] {
-            assert_eq!(fixture_facts("widestr32_gcc_O2_stripped_x86_64", &targets, tables), stripped);
+            assert_eq!(
+                fixture_facts("widestr32_gcc_O2_stripped_x86_64", &targets, tables),
+                stripped
+            );
         }
     }
 
@@ -422,12 +535,18 @@ mod tests {
         assert!(fixture_facts("widestr32_clang_O2_x86_64", &[], &[]).is_empty());
         let targets = [0x20a0, 0x20bc, 0x20d8, 0x2108, 0x2124, 0x2128, 0x213c];
         let literals = vec![(0x20bc, 28), (0x20d8, 48), (0x2108, 28), (0x2124, 24)];
-        assert_eq!(fixture_facts("widestr32_clang_O2_x86_64", &targets, &[0x2060, 0x20a0]), literals);
+        assert_eq!(
+            fixture_facts("widestr32_clang_O2_x86_64", &targets, &[0x2060, 0x20a0]),
+            literals
+        );
         let mut explained = targets.to_vec();
         explained.insert(0, 0x2050);
         let mut first = literals.clone();
         first.extend([(0x213c, 40), (0x2164, 44)]);
-        assert_eq!(fixture_facts("widestr32_clang_O2_x86_64", &explained, &[0x2060, 0x20a0]), first);
+        assert_eq!(
+            fixture_facts("widestr32_clang_O2_x86_64", &explained, &[0x2060, 0x20a0]),
+            first
+        );
     }
 
     /// `widestr32_tables_gcc_O2_stripped`: int tables of character codes that
@@ -443,7 +562,11 @@ mod tests {
         assert!(fixture_facts(name, &[0x2008], &[]).is_empty());
         assert_eq!(fixture_facts(name, &[0x2008, 0x2028], &[]), [(0x2008, 32)]);
         assert!(fixture_facts(name, &[0x2100, 0x2118], &[]).is_empty());
-        assert!(fixture_facts(name, &[], &[]).iter().all(|&(addr, _)| addr != 0x2040));
+        assert!(
+            fixture_facts(name, &[], &[])
+                .iter()
+                .all(|&(addr, _)| addr != 0x2040)
+        );
         assert!(fixture_facts(name, &[0x200c, 0x2028], &[0x2008]).is_empty());
         assert_eq!(fixture_facts(name, &[0x200c, 0x2028], &[]), [(0x200c, 28)]);
     }
@@ -455,7 +578,13 @@ mod tests {
         let run = scan_utf32_runs(&d, 0x1000, true, MIN_UNITS)[0];
         assert_eq!(follower(&run, &d, 0x1000, true), Some(None));
         d.extend(wide("fg", true));
-        assert_eq!(follower(&run, &d, 0x1000, true), Some(Some(Follower { addr: 0x1020, string: true })));
+        assert_eq!(
+            follower(&run, &d, 0x1000, true),
+            Some(Some(Follower {
+                addr: 0x1020,
+                string: true
+            }))
+        );
         assert_eq!(follower(&run, &d, 0x1004, true), None);
         let mut named = wide("abcde", true);
         named.extend_from_slice(&7u32.to_le_bytes());
@@ -463,21 +592,51 @@ mod tests {
         assert_eq!(follower(&run, &named, 0x1000, true), None);
         let mut next = wide("abcde", true);
         next.extend(wide("xy", true));
-        assert_eq!(follower(&run, &next, 0x1000, true), Some(Some(Follower { addr: 0x1018, string: true })));
+        assert_eq!(
+            follower(&run, &next, 0x1000, true),
+            Some(Some(Follower {
+                addr: 0x1018,
+                string: true
+            }))
+        );
         next.truncate(next.len() - 4);
         assert_eq!(follower(&run, &next, 0x1000, true), None);
         let mut other = wide("abcde", true);
         other.extend_from_slice(b"%ld %u\n\0");
-        assert_eq!(follower(&run, &other, 0x1000, true), Some(Some(Follower { addr: 0x1018, string: true })));
+        assert_eq!(
+            follower(&run, &other, 0x1000, true),
+            Some(Some(Follower {
+                addr: 0x1018,
+                string: true
+            }))
+        );
         let mut pointer = wide("abcde", true);
         pointer.extend_from_slice(&0x40_2039u64.to_le_bytes());
-        assert_eq!(follower(&run, &pointer, 0x1000, true), Some(Some(Follower { addr: 0x1018, string: false })));
+        assert_eq!(
+            follower(&run, &pointer, 0x1000, true),
+            Some(Some(Follower {
+                addr: 0x1018,
+                string: false
+            }))
+        );
         let mut field = wide("abcde", true);
         field.extend_from_slice(&(-5i32).to_le_bytes());
-        assert_eq!(follower(&run, &field, 0x1000, true), Some(Some(Follower { addr: 0x1018, string: false })));
+        assert_eq!(
+            follower(&run, &field, 0x1000, true),
+            Some(Some(Follower {
+                addr: 0x1018,
+                string: false
+            }))
+        );
         let mut cafe = wide("abcde", true);
         cafe.extend(wide("caf\u{e9}", true));
-        assert_eq!(follower(&run, &cafe, 0x1000, true), Some(Some(Follower { addr: 0x1018, string: true })));
+        assert_eq!(
+            follower(&run, &cafe, 0x1000, true),
+            Some(Some(Follower {
+                addr: 0x1018,
+                string: true
+            }))
+        );
         let mut long = wide("abcde", true);
         long.extend_from_slice(&[0; 68]);
         long.extend_from_slice(&7u32.to_le_bytes());
@@ -491,7 +650,10 @@ mod tests {
     #[test]
     fn a_four_byte_string_section_backs_its_runs() {
         for name in ["widestr32_aarch64_O2.o", "widestr32_arm32_O2.o"] {
-            let lens: Vec<u32> = fixture_facts(name, &[], &[]).iter().map(|&(_, len)| len).collect();
+            let lens: Vec<u32> = fixture_facts(name, &[], &[])
+                .iter()
+                .map(|&(_, len)| len)
+                .collect();
             assert_eq!(lens, [28, 48, 28, 24, 20, 40, 44], "{name}");
         }
     }
@@ -500,7 +662,10 @@ mod tests {
     /// pairs, which no operand names, so only the two `msgs` holds are planted.
     #[test]
     fn a_big_endian_image_reads_its_units_in_its_byte_order() {
-        assert_eq!(fixture_facts("widestr32_mips32_be_O2", &[], &[]), [(0x400520, 40), (0x400548, 44)]);
+        assert_eq!(
+            fixture_facts("widestr32_mips32_be_O2", &[], &[]),
+            [(0x400520, 40), (0x400548, 44)]
+        );
     }
 
     #[test]
@@ -510,8 +675,18 @@ mod tests {
 
     #[test]
     fn distinct_characters_are_counted() {
-        let weeks: Vec<u8> = [52u32, 53, 52, 52, 52, 53, 0].iter().flat_map(|u| u.to_le_bytes()).collect();
+        let weeks: Vec<u8> = [52u32, 53, 52, 52, 52, 53, 0]
+            .iter()
+            .flat_map(|u| u.to_le_bytes())
+            .collect();
         let runs = scan_utf32_runs(&weeks, 0x3000, true, MIN_UNITS);
-        assert_eq!(runs, vec![Run32 { addr: 0x3000, units: 6, distinct: 2 }]);
+        assert_eq!(
+            runs,
+            vec![Run32 {
+                addr: 0x3000,
+                units: 6,
+                distinct: 2
+            }]
+        );
     }
 }

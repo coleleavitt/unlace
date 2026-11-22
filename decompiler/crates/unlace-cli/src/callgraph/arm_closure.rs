@@ -21,7 +21,11 @@ const PACKED_RELOCATION_TAGS: [u32; 2] = [0x6000_000f, 0x6000_0011];
 pub(crate) fn packs_relocations(dynamic: &[u8], little: bool) -> bool {
     let (entries, _) = dynamic.as_chunks::<8>();
     entries.iter().any(|e| {
-        let tag = if little { u32::from_le_bytes([e[0], e[1], e[2], e[3]]) } else { u32::from_be_bytes([e[0], e[1], e[2], e[3]]) };
+        let tag = if little {
+            u32::from_le_bytes([e[0], e[1], e[2], e[3]])
+        } else {
+            u32::from_be_bytes([e[0], e[1], e[2], e[3]])
+        };
         PACKED_RELOCATION_TAGS.contains(&tag)
     })
 }
@@ -30,7 +34,9 @@ pub(crate) fn packs_relocations(dynamic: &[u8], little: bool) -> bool {
 /// with no `.dynamic` section to check, or one with Android packed relocations.
 pub(crate) fn relocations_readable(file: &object::File) -> bool {
     match file.section_by_name(".dynamic") {
-        Some(dynamic) => dynamic.data().is_ok_and(|d| !packs_relocations(d, file.is_little_endian())),
+        Some(dynamic) => dynamic
+            .data()
+            .is_ok_and(|d| !packs_relocations(d, file.is_little_endian())),
         None => file.kind() != object::ObjectKind::Dynamic,
     }
 }
@@ -57,15 +63,27 @@ pub(crate) struct ArmScan {
 ///   idiom, Thumb and A32), the literal plus that `pc` landing on it;
 /// - a direct `bl`/`blx`/`b.w` (Thumb-2) or `bl`/`b` (A32) to it.
 pub(crate) fn scan(file: &object::File, entries: &[u64]) -> ArmScan {
-    #[expect(clippy::disallowed_types, reason = "Membership only; the BTreeSet orders the results.")]
+    #[expect(
+        clippy::disallowed_types,
+        reason = "Membership only; the BTreeSet orders the results."
+    )]
     let mut wanted: std::collections::HashMap<u64, u64> = std::collections::HashMap::new();
     for &e in entries {
         wanted.insert(e, e);
         wanted.insert(e | 1, e);
     }
-    let mut out = ArmScan { open: BTreeSet::new(), branches: BTreeMap::new() };
+    let mut out = ArmScan {
+        open: BTreeSet::new(),
+        branches: BTreeMap::new(),
+    };
     let little = file.is_little_endian();
-    let half = |b: &[u8]| if little { u16::from_le_bytes([b[0], b[1]]) } else { u16::from_be_bytes([b[0], b[1]]) };
+    let half = |b: &[u8]| {
+        if little {
+            u16::from_le_bytes([b[0], b[1]])
+        } else {
+            u16::from_be_bytes([b[0], b[1]])
+        }
+    };
     let word = |b: &[u8]| {
         if little {
             u32::from_le_bytes([b[0], b[1], b[2], b[3]])
@@ -74,7 +92,10 @@ pub(crate) fn scan(file: &object::File, entries: &[u64]) -> ArmScan {
         }
     };
     #[expect(clippy::disallowed_types, reason = "Membership only.")]
-    let (mut movw, mut movt) = (std::collections::HashSet::new(), std::collections::HashSet::new());
+    let (mut movw, mut movt) = (
+        std::collections::HashSet::new(),
+        std::collections::HashSet::new(),
+    );
     let mut loaded: Vec<(u64, Vec<u8>)> = Vec::new();
     for section in file.sections() {
         if !super::image_loads(&section) {
@@ -107,47 +128,81 @@ pub(crate) fn scan(file: &object::File, entries: &[u64]) -> ArmScan {
             let (h1, h2) = (u32::from(half(&data[i..])), u32::from(half(&data[i + 2..])));
             let thumb_pc = (a + 4) & !3;
             if matches!(h1 & 0xfbf0, 0xf240 | 0xf2c0) && h2 & 0x8000 == 0 {
-                let imm = ((h1 & 0xf) << 12) | (((h1 >> 10) & 1) << 11) | (((h2 >> 12) & 7) << 8) | (h2 & 0xff);
-                if h1 & 0xfbf0 == 0xf240 { movw.insert(imm) } else { movt.insert(imm) };
+                let imm = ((h1 & 0xf) << 12)
+                    | (((h1 >> 10) & 1) << 11)
+                    | (((h2 >> 12) & 7) << 8)
+                    | (h2 & 0xff);
+                if h1 & 0xfbf0 == 0xf240 {
+                    movw.insert(imm)
+                } else {
+                    movt.insert(imm)
+                };
             }
             let mut built: Vec<u64> = Vec::new();
             if h1 & 0xf800 == 0xa000 {
                 built.push(thumb_pc + u64::from(h1 & 0xff) * 4);
             }
             if matches!(h1 & 0xfbff, 0xf20f | 0xf2af) && h2 & 0x8000 == 0 {
-                let imm = u64::from((((h1 >> 10) & 1) << 11) | (((h2 >> 12) & 7) << 8) | (h2 & 0xff));
-                built.push(if h1 & 0xfbff == 0xf20f { thumb_pc + imm } else { thumb_pc.wrapping_sub(imm) });
+                let imm =
+                    u64::from((((h1 >> 10) & 1) << 11) | (((h2 >> 12) & 7) << 8) | (h2 & 0xff));
+                built.push(if h1 & 0xfbff == 0xf20f {
+                    thumb_pc + imm
+                } else {
+                    thumb_pc.wrapping_sub(imm)
+                });
             }
             if h1 & 0xf800 == 0x4800
-                && let Some(v) = read(thumb_pc + u64::from(h1 & 0xff) * 4) {
-                    pc_literal.push((a, (h1 >> 8) & 7, v));
-                }
+                && let Some(v) = read(thumb_pc + u64::from(h1 & 0xff) * 4)
+            {
+                pc_literal.push((a, (h1 >> 8) & 7, v));
+            }
             if matches!(h1, 0xf8df | 0xf85f) {
                 let off = u64::from(h2 & 0xfff);
-                let lit = if h1 == 0xf8df { thumb_pc + off } else { thumb_pc.wrapping_sub(off) };
+                let lit = if h1 == 0xf8df {
+                    thumb_pc + off
+                } else {
+                    thumb_pc.wrapping_sub(off)
+                };
                 if let Some(v) = read(lit) {
                     pc_literal.push((a, h2 >> 12, v));
                 }
             }
             if h1 & 0xff78 == 0x4478 {
                 let rd = (h1 & 7) | ((h1 >> 4) & 8);
-                if let Some(&(_, _, v)) = pc_literal.iter().rev().find(|&&(at, r, _)| r == rd && a - at <= 64) {
+                if let Some(&(_, _, v)) = pc_literal
+                    .iter()
+                    .rev()
+                    .find(|&&(at, r, _)| r == rd && a - at <= 64)
+                {
                     built.push(u64::from(v).wrapping_add(a + 4) & 0xffff_ffff);
                 }
             }
             let mut branch: Vec<u64> = Vec::new();
-            let rel = |imm: u32, bits: u32| ((a + 4) as i64 + ((imm << (32 - bits)) as i32 >> (32 - bits)) as i64) as u64;
+            let rel = |imm: u32, bits: u32| {
+                ((a + 4) as i64 + ((imm << (32 - bits)) as i32 >> (32 - bits)) as i64) as u64
+            };
             if h1 & 0xf800 == 0xf000 && h2 & 0xd000 >= 0x9000 {
                 let s = (h1 >> 10) & 1;
                 let (j1, j2) = ((h2 >> 13) & 1, (h2 >> 11) & 1);
                 let (i1, i2) = (1 ^ (j1 ^ s), 1 ^ (j2 ^ s));
-                let imm = (s << 24) | (i1 << 23) | (i2 << 22) | ((h1 & 0x3ff) << 12) | ((h2 & 0x7ff) << 1);
+                let imm = (s << 24)
+                    | (i1 << 23)
+                    | (i2 << 22)
+                    | ((h1 & 0x3ff) << 12)
+                    | ((h2 & 0x7ff) << 1);
                 let target = rel(imm, 25);
-                branch.push(if h2 & 0x1000 == 0 { target & !3 } else { target });
+                branch.push(if h2 & 0x1000 == 0 {
+                    target & !3
+                } else {
+                    target
+                });
             }
             if h1 & 0xf800 == 0xf000 && h2 & 0xd000 == 0x8000 && (h1 >> 6) & 0xe != 0xe {
                 let (s, j1, j2) = ((h1 >> 10) & 1, (h2 >> 13) & 1, (h2 >> 11) & 1);
-                branch.push(rel((s << 20) | (j2 << 19) | (j1 << 18) | ((h1 & 0x3f) << 12) | ((h2 & 0x7ff) << 1), 21));
+                branch.push(rel(
+                    (s << 20) | (j2 << 19) | (j1 << 18) | ((h1 & 0x3f) << 12) | ((h2 & 0x7ff) << 1),
+                    21,
+                ));
             }
             if h1 & 0xf800 == 0xe000 {
                 branch.push(rel((h1 & 0x7ff) << 1, 12));
@@ -163,28 +218,48 @@ pub(crate) fn scan(file: &object::File, entries: &[u64]) -> ArmScan {
                 let arm_pc = a + 8;
                 if matches!(w & 0x0ff0_0000, 0x0300_0000 | 0x0340_0000) {
                     let imm = ((w >> 4) & 0xf000) | (w & 0xfff);
-                    if w & 0x0ff0_0000 == 0x0300_0000 { movw.insert(imm) } else { movt.insert(imm) };
+                    if w & 0x0ff0_0000 == 0x0300_0000 {
+                        movw.insert(imm)
+                    } else {
+                        movt.insert(imm)
+                    };
                 }
                 if matches!(w & 0x0fff_0000, 0x028f_0000 | 0x024f_0000) {
                     let imm = (w & 0xff).rotate_right(2 * ((w >> 8) & 0xf));
-                    built.push(if w & 0x0fff_0000 == 0x028f_0000 { arm_pc + u64::from(imm) } else { arm_pc.wrapping_sub(u64::from(imm)) });
+                    built.push(if w & 0x0fff_0000 == 0x028f_0000 {
+                        arm_pc + u64::from(imm)
+                    } else {
+                        arm_pc.wrapping_sub(u64::from(imm))
+                    });
                 }
                 if w & 0x0f7f_0000 == 0x051f_0000 {
                     let off = u64::from(w & 0xfff);
-                    let lit = if w & 0x0080_0000 != 0 { arm_pc + off } else { arm_pc.wrapping_sub(off) };
+                    let lit = if w & 0x0080_0000 != 0 {
+                        arm_pc + off
+                    } else {
+                        arm_pc.wrapping_sub(off)
+                    };
                     if let Some(v) = read(lit) {
                         pc_literal.push((a, (w >> 12) & 0xf, v));
                     }
                 }
                 if w & 0x0fff_0ff0 == 0x008f_0000 {
                     let rm = w & 0xf;
-                    if let Some(&(_, _, v)) = pc_literal.iter().rev().find(|&&(at, r, _)| r == rm && a - at <= 64) {
+                    if let Some(&(_, _, v)) = pc_literal
+                        .iter()
+                        .rev()
+                        .find(|&&(at, r, _)| r == rm && a - at <= 64)
+                    {
                         built.push(u64::from(v).wrapping_add(arm_pc) & 0xffff_ffff);
                     }
                 }
                 if w & 0x0e00_0000 == 0x0a00_0000 {
                     let off = (((w & 0x00ff_ffff) << 8) as i32 >> 6) as i64;
-                    let h = if w >> 28 == 0xf { u64::from((w >> 24) & 1) << 1 } else { 0 };
+                    let h = if w >> 28 == 0xf {
+                        u64::from((w >> 24) & 1) << 1
+                    } else {
+                        0
+                    };
                     branch.push((((arm_pc as i64) + off) as u64) + h);
                 }
             }
@@ -221,9 +296,10 @@ pub(crate) fn scan(file: &object::File, entries: &[u64]) -> ArmScan {
     if let Some(relocs) = file.dynamic_relocations() {
         for (_, r) in relocs {
             let base = match r.target() {
-                object::RelocationTarget::Symbol(i) => {
-                    file.dynamic_symbol_table().and_then(|t| t.symbol_by_index(i).ok()).map(|s| s.address())
-                }
+                object::RelocationTarget::Symbol(i) => file
+                    .dynamic_symbol_table()
+                    .and_then(|t| t.symbol_by_index(i).ok())
+                    .map(|s| s.address()),
                 object::RelocationTarget::Absolute => Some(0),
                 _ => None,
             };
@@ -244,17 +320,25 @@ mod tests {
     use super::packs_relocations;
 
     fn dynamic(tags: &[u32]) -> Vec<u8> {
-        tags.iter().flat_map(|t| t.to_le_bytes().into_iter().chain(0u32.to_le_bytes())).collect()
+        tags.iter()
+            .flat_map(|t| t.to_le_bytes().into_iter().chain(0u32.to_le_bytes()))
+            .collect()
     }
 
     #[test]
     fn android_packed_relocations_are_unreadable() {
-        assert!(packs_relocations(&dynamic(&[0x6000_0011, 0x6000_0012, 0x17, 0]), true));
+        assert!(packs_relocations(
+            &dynamic(&[0x6000_0011, 0x6000_0012, 0x17, 0]),
+            true
+        ));
         assert!(packs_relocations(&dynamic(&[0x6000_000f, 0]), true));
     }
 
     #[test]
     fn rel_rela_and_relr_tables_are_readable() {
-        assert!(!packs_relocations(&dynamic(&[0x11, 0x12, 0x13, 0x7, 0x8, 0x9, 0x24, 0x23, 0x25, 0]), true));
+        assert!(!packs_relocations(
+            &dynamic(&[0x11, 0x12, 0x13, 0x7, 0x8, 0x9, 0x24, 0x23, 0x25, 0]),
+            true
+        ));
     }
 }

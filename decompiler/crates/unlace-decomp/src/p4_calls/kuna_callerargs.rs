@@ -27,12 +27,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
-use unlace_base::address::{calc_mask, Address};
+use unlace_base::address::{Address, calc_mask};
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::context::VarnodeId;
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::infra::architecture::Architecture;
 
@@ -103,8 +103,16 @@ pub struct Ledger {
 /// The register-wide integer parameters of a function's first decompile, or
 /// `None` when nothing may be stated about them (a declared, variadic or
 /// locked prototype, or a parameter that is not a plain value).
-fn own_params(arch: &Architecture, entry: &Address, fd: &Funcdata) -> Option<Vec<(Address, int4, bool)>> {
-    if arch.symboltab.function_proto_pieces_across_scopes(entry).is_some() {
+fn own_params(
+    arch: &Architecture,
+    entry: &Address,
+    fd: &Funcdata,
+) -> Option<Vec<(Address, int4, bool)>> {
+    if arch
+        .symboltab
+        .function_proto_pieces_across_scopes(entry)
+        .is_some()
+    {
         return None;
     }
     let proto = fd.get_func_proto();
@@ -114,7 +122,11 @@ fn own_params(arch: &Architecture, entry: &Address, fd: &Funcdata) -> Option<Vec
     let mut out = Vec::new();
     for i in 0..proto.num_params() {
         let p = proto.get_param(i)?;
-        if p.is_hidden_return() || p.is_indirect_storage() || p.is_this_pointer() || p.is_type_locked() {
+        if p.is_hidden_return()
+            || p.is_indirect_storage()
+            || p.is_this_pointer()
+            || p.is_type_locked()
+        {
             return None;
         }
         let integer = p.get_type().is_some_and(|t| {
@@ -131,7 +143,12 @@ fn own_params(arch: &Architecture, entry: &Address, fd: &Funcdata) -> Option<Vec
 /// The width of which `vn` is the sign extension: a constant that is one, a
 /// sign extension, a zero extension of a byte (it fits a signed halfword), or
 /// a copy or merge of such values.
-fn signed_width(data: &Funcdata, vn: VarnodeId, depth: u32, seen: &mut BTreeSet<VarnodeId>) -> Option<int4> {
+fn signed_width(
+    data: &Funcdata,
+    vn: VarnodeId,
+    depth: u32,
+    seen: &mut BTreeSet<VarnodeId>,
+) -> Option<int4> {
     if !seen.insert(vn) {
         return Some(0);
     }
@@ -142,13 +159,17 @@ fn signed_width(data: &Funcdata, vn: VarnodeId, depth: u32, seen: &mut BTreeSet<
     let size = v.get_size();
     if v.is_constant() {
         let c = v.get_offset() & calc_mask(size);
-        return [1, 2]
-            .into_iter()
-            .find(|&w| w < size && unlace_base::address::sign_extend_sized(c & calc_mask(w), w, size) == c);
+        return [1, 2].into_iter().find(|&w| {
+            w < size && unlace_base::address::sign_extend_sized(c & calc_mask(w), w, size) == c
+        });
     }
     let o = data.obank().get(v.get_def()?)?;
     match o.code() {
-        OpCode::CPUI_INT_SEXT => data.vbank().get(o.get_in(0)?).map(|x| x.get_size()).filter(|&w| w <= 2),
+        OpCode::CPUI_INT_SEXT => data
+            .vbank()
+            .get(o.get_in(0)?)
+            .map(|x| x.get_size())
+            .filter(|&w| w <= 2),
         OpCode::CPUI_INT_ZEXT => (data.vbank().get(o.get_in(0)?)?.get_size() == 1).then_some(2),
         OpCode::CPUI_COPY | OpCode::CPUI_MULTIEQUAL => {
             let mut w = 0;
@@ -165,28 +186,45 @@ fn signed_width(data: &Funcdata, vn: VarnodeId, depth: u32, seen: &mut BTreeSet<
 /// computed, rather than a load, a call's result or its own input that
 /// arrives narrow? Returns (zero extension, sign extension).
 fn caller_extends(data: &Funcdata, vn: VarnodeId) -> (bool, bool) {
-    let Some(o) = data.vbank().get(vn).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d)) else {
+    let Some(o) = data
+        .vbank()
+        .get(vn)
+        .and_then(|v| v.get_def())
+        .and_then(|d| data.obank().get(d))
+    else {
         return (false, false);
     };
     let source = |k: int4| o.get_in(k).and_then(|x| data.vbank().get(x));
     match o.code() {
         OpCode::CPUI_INT_AND => {
-            let mask = source(1).filter(|c| c.is_constant()).map(|c| c.get_offset());
+            let mask = source(1)
+                .filter(|c| c.is_constant())
+                .map(|c| c.get_offset());
             (matches!(mask, Some(0xff | 0xffff)), false)
         }
         OpCode::CPUI_INT_ZEXT | OpCode::CPUI_INT_SEXT => {
-            let Some(x) = source(0) else { return (false, false) };
+            let Some(x) = source(0) else {
+                return (false, false);
+            };
             if x.get_size() > 2 || x.is_constant() || x.is_input() {
                 return (false, false);
             }
             let fetched = x
                 .get_def()
                 .and_then(|d| data.obank().get(d))
-                .is_some_and(|d| matches!(d.code(), OpCode::CPUI_LOAD | OpCode::CPUI_CALL | OpCode::CPUI_CALLIND));
+                .is_some_and(|d| {
+                    matches!(
+                        d.code(),
+                        OpCode::CPUI_LOAD | OpCode::CPUI_CALL | OpCode::CPUI_CALLIND
+                    )
+                });
             if fetched {
                 return (false, false);
             }
-            (o.code() == OpCode::CPUI_INT_ZEXT, o.code() == OpCode::CPUI_INT_SEXT)
+            (
+                o.code() == OpCode::CPUI_INT_ZEXT,
+                o.code() == OpCode::CPUI_INT_SEXT,
+            )
         }
         _ => (false, false),
     }
@@ -207,10 +245,26 @@ fn argument(data: &Funcdata, vn: VarnodeId, addr: Address, zext_trimmed: bool) -
     }
     let nz = v.get_nz_mask() & calc_mask(w);
     let fits = |m: uintb| nz & !m == 0;
-    let mut unsigned = if fits(0xff) { 1 } else if fits(0xffff) { 2 } else { 0 };
-    let mut signed = if fits(0x7f) { 1 } else if fits(0x7fff) { 2 } else { 0 };
+    let mut unsigned = if fits(0xff) {
+        1
+    } else if fits(0xffff) {
+        2
+    } else {
+        0
+    };
+    let mut signed = if fits(0x7f) {
+        1
+    } else if fits(0x7fff) {
+        2
+    } else {
+        0
+    };
     if w < REGISTER {
-        unsigned = if unsigned > 0 { unsigned.min(w) } else { w.min(2) };
+        unsigned = if unsigned > 0 {
+            unsigned.min(w)
+        } else {
+            w.min(2)
+        };
     } else {
         let sext = signed_width(data, vn, 0, &mut BTreeSet::new()).unwrap_or(0);
         if sext > 0 {
@@ -218,7 +272,16 @@ fn argument(data: &Funcdata, vn: VarnodeId, addr: Address, zext_trimmed: bool) -
         }
     }
     let (zext, sext) = caller_extends(data, vn);
-    Some(Arg { addr, size: REGISTER, unsigned, signed, zext, sext, truth: nz <= 1, constant: v.is_constant() })
+    Some(Arg {
+        addr,
+        size: REGISTER,
+        unsigned,
+        signed,
+        zext,
+        sext,
+        truth: nz <= 1,
+        constant: v.is_constant(),
+    })
 }
 
 /// Record a finished decompile of the function at `entry`: what each direct
@@ -229,7 +292,11 @@ pub fn record(arch: &mut Architecture, entry: &Address, fd: &Funcdata) {
         return;
     }
     let me = entry.get_offset();
-    let own = if arch.kuna_callerargs.own.contains_key(&me) { None } else { own_params(arch, entry, fd) };
+    let own = if arch.kuna_callerargs.own.contains_key(&me) {
+        None
+    } else {
+        own_params(arch, entry, fd)
+    };
     let mut calls: Vec<(uintb, Site)> = Vec::new();
     for i in 0..fd.num_calls() {
         let fc = fd.get_call_specs(i);
@@ -237,7 +304,9 @@ pub fn record(arch: &mut Architecture, entry: &Address, fd: &Funcdata) {
         if callee.is_invalid() {
             continue;
         }
-        let Some(o) = fd.obank().get(fc.get_op()) else { continue };
+        let Some(o) = fd.obank().get(fc.get_op()) else {
+            continue;
+        };
         if o.code() != OpCode::CPUI_CALL {
             continue;
         }
@@ -245,14 +314,22 @@ pub fn record(arch: &mut Architecture, entry: &Address, fd: &Funcdata) {
         let n = o.num_input();
         let mut args = Vec::new();
         for s in 1..n {
-            let (Some(vn), Some((addr, _))) = (o.get_in(s), storage.get((s - 1) as usize).cloned()) else {
+            let (Some(vn), Some((addr, _))) = (o.get_in(s), storage.get((s - 1) as usize).cloned())
+            else {
                 args.push(None);
                 continue;
             };
             let w = fd.vbank().get(vn).map(|v| v.get_size()).unwrap_or(0);
             args.push(argument(fd, vn, addr, fc.is_zext_trimmed_input(s, w, n)));
         }
-        calls.push((callee.get_offset(), Site { caller: me, at: o.get_addr().get_offset(), args }));
+        calls.push((
+            callee.get_offset(),
+            Site {
+                caller: me,
+                at: o.get_addr().get_offset(),
+                args,
+            },
+        ));
     }
     let taken = taken_entries(&arch.kuna_callerargs.expected, fd);
     let ledger = &mut arch.kuna_callerargs;
@@ -281,20 +358,31 @@ fn taken_entries(expected: &BTreeMap<uintb, Vec<uintb>>, fd: &Funcdata) -> Vec<u
     let mut out = Vec::new();
     for i in 0..fd.num_calls() {
         let fc = fd.get_call_specs(i);
-        let indirect = fd.obank().get(fc.get_op()).is_some_and(|o| o.code() != OpCode::CPUI_CALL);
+        let indirect = fd
+            .obank()
+            .get(fc.get_op())
+            .is_some_and(|o| o.code() != OpCode::CPUI_CALL);
         let e = fc.get_entry_address();
         if indirect && !e.is_invalid() && expected.contains_key(&e.get_offset()) {
             out.push(e.get_offset());
         }
     }
     for op in fd.obank().iter_alive() {
-        let Some(o) = fd.obank().get(op) else { continue };
+        let Some(o) = fd.obank().get(op) else {
+            continue;
+        };
         let at = o.get_addr().get_offset();
         if at != me && expected.contains_key(&at) {
             out.push(at);
         }
         for k in 0..o.num_input() {
-            let Some(c) = o.get_in(k).and_then(|x| fd.vbank().get(x)).filter(|c| c.is_constant()) else { continue };
+            let Some(c) = o
+                .get_in(k)
+                .and_then(|x| fd.vbank().get(x))
+                .filter(|c| c.is_constant())
+            else {
+                continue;
+            };
             let v = c.get_offset();
             for e in [v, v & !1] {
                 if expected.contains_key(&e) {
@@ -334,7 +422,9 @@ pub fn decide(arch: &mut Architecture) -> Vec<uintb> {
     let ledger = &arch.kuna_callerargs;
     let mut decided: Vec<(uintb, Vec<NarrowParam>)> = Vec::new();
     for (&entry, expected) in &ledger.expected {
-        let (Some(own), Some(sites)) = (ledger.own.get(&entry), ledger.sites.get(&entry)) else { continue };
+        let (Some(own), Some(sites)) = (ledger.own.get(&entry), ledger.sites.get(&entry)) else {
+            continue;
+        };
         let at: BTreeSet<uintb> = sites.iter().map(|s| s.at).collect();
         let listed: BTreeSet<uintb> = expected.iter().copied().collect();
         if expected.is_empty()
@@ -346,15 +436,30 @@ pub fn decide(arch: &mut Architecture) -> Vec<uintb> {
         }
         let mut stated = Vec::new();
         for (i, (addr, size, integer)) in own.iter().enumerate() {
-            if !integer || *size != 4 || addr.get_space().is_none_or(|s| s.get_type() != unlace_base::space::spacetype::IPTR_PROCESSOR) {
+            if !integer
+                || *size != 4
+                || addr
+                    .get_space()
+                    .is_none_or(|s| s.get_type() != unlace_base::space::spacetype::IPTR_PROCESSOR)
+            {
                 continue;
             }
             let args: Option<Vec<&Arg>> = sites
                 .iter()
-                .map(|s| s.args.get(i).and_then(|a| a.as_ref()).filter(|a| &a.addr == addr && a.size == *size))
+                .map(|s| {
+                    s.args
+                        .get(i)
+                        .and_then(|a| a.as_ref())
+                        .filter(|a| &a.addr == addr && a.size == *size)
+                })
                 .collect();
             if let Some((width, ext)) = args.and_then(|a| agree(&a)) {
-                stated.push(NarrowParam { addr: addr.clone(), size: *size, width, ext });
+                stated.push(NarrowParam {
+                    addr: addr.clone(),
+                    size: *size,
+                    width,
+                    ext,
+                });
             }
         }
         if stated.is_empty() || ledger.stated.contains_key(&entry) {
@@ -366,7 +471,13 @@ pub fn decide(arch: &mut Architecture) -> Vec<uintb> {
     for (k, s) in decided {
         if trace() {
             for p in &s {
-                eprintln!("[callerargs] 0x{k:x} {:x}:{} -> {} {:?}", p.addr.get_offset(), p.size, p.width, p.ext);
+                eprintln!(
+                    "[callerargs] 0x{k:x} {:x}:{} -> {} {:?}",
+                    p.addr.get_offset(),
+                    p.size,
+                    p.width,
+                    p.ext
+                );
             }
         }
         arch.kuna_callerargs.stated.insert(k, Rc::new(s));
@@ -379,7 +490,11 @@ pub fn seed(arch: &Architecture, data: &mut Funcdata) {
     if !arch.narrow_args_callers {
         return;
     }
-    if let Some(s) = arch.kuna_callerargs.stated.get(&data.get_address().get_offset()) {
+    if let Some(s) = arch
+        .kuna_callerargs
+        .stated
+        .get(&data.get_address().get_offset())
+    {
         data.kuna_set_callerargs(Some(Rc::clone(s)));
     }
 }
@@ -387,20 +502,35 @@ pub fn seed(arch: &Architecture, data: &mut Funcdata) {
 /// Replace every stated register input by its low part, extended at the
 /// entry as the callers extended it. Returns how many were replaced.
 pub fn narrow_stated(data: &mut Funcdata) -> int4 {
-    let Some(stated) = data.kuna_callerargs().cloned() else { return 0 };
+    let Some(stated) = data.kuna_callerargs().cloned() else {
+        return 0;
+    };
     let mut count = 0;
     for p in stated.iter() {
-        let vn = data.vbank().iter_def_flag(crate::varnode::varnode_flags::input).find(|&vn| {
-            data.vbank().get(vn).is_some_and(|v| v.get_size() == p.size && v.get_addr() == &p.addr)
-        });
+        let vn = data
+            .vbank()
+            .iter_def_flag(crate::varnode::varnode_flags::input)
+            .find(|&vn| {
+                data.vbank()
+                    .get(vn)
+                    .is_some_and(|v| v.get_size() == p.size && v.get_addr() == &p.addr)
+            });
         let Some(vn) = vn else { continue };
-        if data.vbank().get(vn).is_none_or(|v| v.is_type_lock() || v.is_addr_tied() || v.is_persist()) {
+        if data
+            .vbank()
+            .get(vn)
+            .is_none_or(|v| v.is_type_lock() || v.is_addr_tied() || v.is_persist())
+        {
             continue;
         }
         if !data.get_func_proto().possible_input_param(&p.addr, p.size) {
             continue;
         }
-        let ext = if p.ext == Ext::Signed { OpCode::CPUI_INT_SEXT } else { OpCode::CPUI_INT_ZEXT };
+        let ext = if p.ext == Ext::Signed {
+            OpCode::CPUI_INT_SEXT
+        } else {
+            OpCode::CPUI_INT_ZEXT
+        };
         if crate::kuna_narrowargs::narrow_input_to(data, vn, p.width, ext) {
             count += 1;
         }
@@ -418,11 +548,16 @@ pub fn input_vote(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> Option<Rc<Da
     }
     if !matches!(
         ct.get_metatype(),
-        type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN | type_metatype::TYPE_BOOL
+        type_metatype::TYPE_INT
+            | type_metatype::TYPE_UINT
+            | type_metatype::TYPE_UNKNOWN
+            | type_metatype::TYPE_BOOL
     ) {
         return None;
     }
-    let p = stated.iter().find(|p| p.width == v.get_size() && v.get_addr().get_offset() == p.addr.get_offset())?;
+    let p = stated
+        .iter()
+        .find(|p| p.width == v.get_size() && v.get_addr().get_offset() == p.addr.get_offset())?;
     let meta = match p.ext {
         Ext::Unsigned => type_metatype::TYPE_UINT,
         Ext::Signed => type_metatype::TYPE_INT,

@@ -116,8 +116,16 @@ int main(void) {
 #[test]
 fn logical_integer_views_preserve_escaped_storage_and_call_effects() {
     let samples = [
-        ("effect", "0x1100", "9de3bf80db064000db27bff89007bff8400003bc0100000090100018400004790100000095a0002097a000219ba01a4adb27bff8d007bff8912a2010913a2010400003f001000000db0640009ba3492ddb27bff89007bff8400003aa01000000d007bff8400004270100000081c7e00881e80000"),
-        ("clobber", "0x1200", "9de3bf80db064000db27bff89007bff84000037c0100000090100018400004390100000095a0002097a000219ba01a4adb27bff89007bff84000047201000000d007bff8912a2010913a2010400003ad01000000db0640009ba3492ddb27bff89007bff84000036701000000d007bff8400003e40100000081c7e00881e80000"),
+        (
+            "effect",
+            "0x1100",
+            "9de3bf80db064000db27bff89007bff8400003bc0100000090100018400004790100000095a0002097a000219ba01a4adb27bff8d007bff8912a2010913a2010400003f001000000db0640009ba3492ddb27bff89007bff8400003aa01000000d007bff8400004270100000081c7e00881e80000",
+        ),
+        (
+            "clobber",
+            "0x1200",
+            "9de3bf80db064000db27bff89007bff84000037c0100000090100018400004390100000095a0002097a000219ba01a4adb27bff89007bff84000047201000000d007bff8912a2010913a2010400003ad01000000db0640009ba3492ddb27bff89007bff84000036701000000d007bff8400003e40100000081c7e00881e80000",
+        ),
     ];
     let mut image = vec![0; 384];
     for (_, address, hex) in samples {
@@ -127,7 +135,9 @@ fn logical_integer_views_preserve_escaped_storage_and_call_effects() {
     }
     let path = common::scratch_file("logical-integer-views", "bin");
     std::fs::write(&path, image).unwrap();
-    let mut source = String::from("#include <stdint.h>\n#include <string.h>\nvoid touch(float *);\nvoid sink_word(short);\nvoid sink_float(float);\ndouble sample(double *);\nvoid alter(float *);\n");
+    let mut source = String::from(
+        "#include <stdint.h>\n#include <string.h>\nvoid touch(float *);\nvoid sink_word(short);\nvoid sink_float(float);\ndouble sample(double *);\nvoid alter(float *);\n",
+    );
     let mut calls = Vec::new();
     for (kind, address, _) in samples {
         for policy in ["off", "on"] {
@@ -264,8 +274,14 @@ int main(void) {
 #[test]
 fn mixed_phi_slot_orders_preserve_bits_before_alias_clobber() {
     let bodies = [
-        ("0x1300", "9de3bf80db064000db27bff89007bff84000033c0100000080a6a0001280000601000000d51e00009ba01a4a1080000301000000db064000db27bff8f007bff8400004700100000081c7e00881e80000"),
-        ("0x1400", "9de3bf80db064000db27bff89007bff8400002fc0100000080a6a0000280000501000000db0640001080000401000000d51e00009ba01a4adb27bff8f007bff8400004300100000081c7e00881e80000"),
+        (
+            "0x1300",
+            "9de3bf80db064000db27bff89007bff84000033c0100000080a6a0001280000601000000d51e00009ba01a4a1080000301000000db064000db27bff8f007bff8400004700100000081c7e00881e80000",
+        ),
+        (
+            "0x1400",
+            "9de3bf80db064000db27bff89007bff8400002fc0100000080a6a0000280000501000000db0640001080000401000000d51e00009ba01a4adb27bff8f007bff8400004300100000081c7e00881e80000",
+        ),
     ];
     let mut image = vec![0; 336];
     for (address, hex) in bodies {
@@ -409,7 +425,11 @@ fn an_integer_register_argument_reads_the_logical_integer() {
         ])
         .output()
         .unwrap();
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     let code = json["functions"][0]["code"].as_str().unwrap();
     let call = code.lines().find(|line| line.contains("sinki(")).unwrap();

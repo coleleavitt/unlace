@@ -32,7 +32,9 @@ pub struct InputHint {
 }
 
 fn hint_at<'a>(data: &'a Funcdata, addr: &Address, size: int4) -> Option<&'a InputHint> {
-    data.kuna_input_hints()?.iter().find(|h| &h.addr == addr && h.size == size)
+    data.kuna_input_hints()?
+        .iter()
+        .find(|h| &h.addr == addr && h.size == size)
 }
 
 /// The hinted type of the function input `vn`.
@@ -47,7 +49,9 @@ pub fn input_type(data: &Funcdata, vn: VarnodeId) -> Option<Rc<Datatype>> {
 /// Does the function input `vn` carry its hinted type? Propagation and
 /// record synthesis leave it as it is.
 pub fn took_hint_type(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
-    let Some(v) = data.vbank().get(vn) else { return false };
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
     v.is_input()
         && hint_at(data, v.get_addr(), v.get_size())
             .and_then(|h| h.ct.as_ref())

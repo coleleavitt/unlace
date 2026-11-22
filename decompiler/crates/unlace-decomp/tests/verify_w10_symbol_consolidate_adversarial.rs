@@ -28,7 +28,7 @@ use std::rc::Rc;
 
 use unlace_base::address::{Address, RangeList};
 use unlace_base::partmap::PartMap;
-use unlace_base::space::{spacetype, AddrSpace, ConstantSpace};
+use unlace_base::space::{AddrSpace, ConstantSpace, spacetype};
 use unlace_decomp::context::{GlobalEntry, GlobalQuery};
 
 fn ram_space(index: i32) -> Rc<AddrSpace> {
@@ -127,7 +127,10 @@ fn av1_smallest_containing_symbol_name_wins() {
     let (name8, _off8, _t8) = gq
         .name_for_varnode(&addr(&ram, 0x301014), 8, &up)
         .expect("8-byte query must name the only 8-byte container");
-    assert_eq!(name8, "widepair", "only the 8-byte entry contains all 8 bytes");
+    assert_eq!(
+        name8, "widepair",
+        "only the 8-byte entry contains all 8 bytes"
+    );
 }
 
 // ===========================================================================
@@ -248,7 +251,8 @@ fn av5_inuse_usepoint_gate() {
         PartMap::new(0u32),
     );
     assert!(
-        tied.name_for_varnode(&addr(&ram, 0x600), 4, &Address::new_invalid()).is_some(),
+        tied.name_for_varnode(&addr(&ram, 0x600), 4, &Address::new_invalid())
+            .is_some(),
         "an address-tied global is named regardless of usepoint",
     );
 
@@ -261,12 +265,14 @@ fn av5_inuse_usepoint_gate() {
     let gq = GlobalQuery::new(vec![limited], RangeList::new(), PartMap::new(0u32));
     // Invalid usepoint → not inUse → None.
     assert!(
-        gq.name_for_varnode(&addr(&ram, 0x700), 4, &Address::new_invalid()).is_none(),
+        gq.name_for_varnode(&addr(&ram, 0x700), 4, &Address::new_invalid())
+            .is_none(),
         "a use-limited entry is NOT named at an invalid usepoint",
     );
     // In-range usepoint → named.
     assert!(
-        gq.name_for_varnode(&addr(&ram, 0x700), 4, &addr(&code, 0x800)).is_some(),
+        gq.name_for_varnode(&addr(&ram, 0x700), 4, &addr(&code, 0x800))
+            .is_some(),
         "a use-limited entry IS named when the usepoint is in range",
     );
 }

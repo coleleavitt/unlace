@@ -26,14 +26,19 @@
 use std::path::PathBuf;
 
 use unlace_analysis::loader::reloc_object::RELOC_BASE;
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture(name: &str) -> PathBuf {
-    repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(name)
+    repo_root()
+        .join("decompiler/crates/unlace-analysis/tests/fixtures")
+        .join(name)
 }
 
 /// Bootstrap a fixture and run the analysis commit (`read symbols`).
@@ -62,7 +67,12 @@ fn inventory(prog: &ConsoleProgram) -> Vec<(u64, String)> {
 /// reach or an extern stub above the sections — never a pre-link offset.
 #[test]
 fn inventory_agrees_with_the_loaded_image() {
-    for name in ["ptx.o", "coff_obj.obj", "coff_comdat_i386.obj", "arm_thumb_le32.o"] {
+    for name in [
+        "ptx.o",
+        "coff_obj.obj",
+        "coff_comdat_i386.obj",
+        "arm_thumb_le32.o",
+    ] {
         let prog = boot(name);
         let inv = inventory(&prog);
         assert!(!inv.is_empty(), "{name}: empty inventory");

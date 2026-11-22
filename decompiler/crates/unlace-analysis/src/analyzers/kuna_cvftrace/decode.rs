@@ -127,7 +127,9 @@ pub fn decode(data: &[u8]) -> Trace {
 fn is_routine_name(name: &str) -> bool {
     let mut chars = name.chars();
     name.len() <= 127
-        && chars.next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_' || c == '$')
+        && chars
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic() || c == '_' || c == '$')
         && chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$')
 }
 

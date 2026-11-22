@@ -5,14 +5,14 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
-use crate::dtype::{type_metatype, Datatype};
-use crate::funcdata::Funcdata;
 use crate::context::{ArchContext, OpId, TypeOp};
+use crate::dtype::{Datatype, type_metatype};
+use crate::funcdata::Funcdata;
 
 use super::*;
 
@@ -20,7 +20,8 @@ use super::*;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -54,12 +55,7 @@ fn proc_space(fd: &Funcdata) -> Rc<AddrSpace> {
 
 /// Build an op of `opc` with input-0 set to a varnode in `space` at `off`
 /// (size 4).  Returns the op id.
-fn build_op_with_input(
-    fd: &mut Funcdata,
-    opc: OpCode,
-    space: Rc<AddrSpace>,
-    off: u64,
-) -> OpId {
+fn build_op_with_input(fd: &mut Funcdata, opc: OpCode, space: Rc<AddrSpace>, off: u64) -> OpId {
     let pc = Address::new(proc_space(fd), 0x1000);
     let op = fd.obank_mut().create_at(1, pc);
     fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, "op"));

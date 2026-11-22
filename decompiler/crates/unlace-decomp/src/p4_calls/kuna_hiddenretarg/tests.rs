@@ -53,8 +53,16 @@ fn a_transfer_needs_x8_written_first() {
     assert!(!ret().with_opaque_cut(Vec::new()).never_takes(&x8(), 8));
     assert!(ret().with_opaque_cut(x8_bytes()).never_takes(&x8(), 8));
     let target = Address::new(x8().get_space().unwrap().clone(), 0x1000);
-    assert!(!ret().with_named_cut(target.clone(), Vec::new()).never_takes(&x8(), 8));
-    assert!(ret().with_named_cut(target, x8_bytes()).never_takes(&x8(), 8));
+    assert!(
+        !ret()
+            .with_named_cut(target.clone(), Vec::new())
+            .never_takes(&x8(), 8)
+    );
+    assert!(
+        ret()
+            .with_named_cut(target, x8_bytes())
+            .never_takes(&x8(), 8)
+    );
 }
 
 #[test]
@@ -88,12 +96,23 @@ fn a_system_call_with_x8_unwritten_takes_it() {
 fn a_blended_modifier_is_not_an_address() {
     let unknown = (0, 0);
     let constant = |c: u64| (u64::MAX, c);
-    let blend = |d: u64| or_bits(and_bits(unknown, constant(0xffff_ffff_ffff)), constant(d << 48));
+    let blend = |d: u64| {
+        or_bits(
+            and_bits(unknown, constant(0xffff_ffff_ffff)),
+            constant(d << 48),
+        )
+    };
     assert!(mixed_address_sign(blend(0xaea0)));
     assert!(mixed_address_sign(constant(0xaea0_fff0_0a64_e488)));
     assert!(!mixed_address_sign(blend(0xae00)), "a tagged user address");
-    assert!(!mixed_address_sign(blend(0xaeff)), "a tagged kernel address");
+    assert!(
+        !mixed_address_sign(blend(0xaeff)),
+        "a tagged kernel address"
+    );
     assert!(!mixed_address_sign(constant(0xffff_fff0_0a64_e488)));
     assert!(!mixed_address_sign(unknown));
-    assert!(!mixed_address_sign(or_bits(unknown, constant(0xaea0 << 48))), "bits the OR left open");
+    assert!(
+        !mixed_address_sign(or_bits(unknown, constant(0xaea0 << 48))),
+        "bits the OR left open"
+    );
 }

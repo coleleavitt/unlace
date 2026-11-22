@@ -21,7 +21,11 @@ fn ntbs<'a>(data: &'a [u8], at: &mut usize, end: usize) -> Option<&'a str> {
 
 fn u32_at(data: &[u8], at: usize, little: bool) -> Option<usize> {
     let raw: [u8; 4] = data.get(at..at + 4)?.try_into().ok()?;
-    let value = if little { u32::from_le_bytes(raw) } else { u32::from_be_bytes(raw) };
+    let value = if little {
+        u32::from_le_bytes(raw)
+    } else {
+        u32::from_be_bytes(raw)
+    };
     usize::try_from(value).ok()
 }
 
@@ -50,14 +54,24 @@ fn arch_attribute(blob: &[u8], little: bool) -> Result<Option<String>, &'static 
     }
     let mut at = 1;
     while at < blob.len() {
-        let length = u32_at(blob, at, little).filter(|n| *n >= 4).ok_or(MALFORMED)?;
-        let section_end = at.checked_add(length).filter(|e| *e <= blob.len()).ok_or(MALFORMED)?;
+        let length = u32_at(blob, at, little)
+            .filter(|n| *n >= 4)
+            .ok_or(MALFORMED)?;
+        let section_end = at
+            .checked_add(length)
+            .filter(|e| *e <= blob.len())
+            .ok_or(MALFORMED)?;
         let mut cursor = at + 4;
         let vendor = ntbs(blob, &mut cursor, section_end).ok_or(MALFORMED)?;
         while vendor == "riscv" && cursor < section_end {
             let tag = blob[cursor];
-            let size = u32_at(blob, cursor + 1, little).filter(|n| *n >= 5).ok_or(MALFORMED)?;
-            let sub_end = cursor.checked_add(size).filter(|e| *e <= section_end).ok_or(MALFORMED)?;
+            let size = u32_at(blob, cursor + 1, little)
+                .filter(|n| *n >= 5)
+                .ok_or(MALFORMED)?;
+            let sub_end = cursor
+                .checked_add(size)
+                .filter(|e| *e <= section_end)
+                .ok_or(MALFORMED)?;
             if tag == TAG_FILE {
                 if let Some(arch) = file_arch(blob, cursor + 5, sub_end).ok_or(MALFORMED)? {
                     return Ok(Some(arch.to_ascii_lowercase()));
@@ -129,8 +143,15 @@ fn extensions(arch: &str) -> Vec<String> {
     for (index, part) in arch.split('_').enumerate() {
         let part = strip_version(part);
         if index == 0 {
-            let base = part.strip_prefix("rv32").or_else(|| part.strip_prefix("rv64")).unwrap_or(part);
-            names.extend(base.chars().filter(|c| c.is_ascii_alphabetic() && *c != 'p').map(String::from));
+            let base = part
+                .strip_prefix("rv32")
+                .or_else(|| part.strip_prefix("rv64"))
+                .unwrap_or(part);
+            names.extend(
+                base.chars()
+                    .filter(|c| c.is_ascii_alphabetic() && *c != 'p')
+                    .map(String::from),
+            );
         } else if !part.is_empty() {
             names.push(part.to_string());
         }
@@ -143,11 +164,16 @@ fn extensions(arch: &str) -> Vec<String> {
 /// Zcd has no language and requires an explicit target.
 pub fn language_id(file: &object::File<'_>) -> Result<Option<String>, &'static str> {
     if file.format() != BinaryFormat::Elf
-        || !matches!(file.architecture(), Architecture::Riscv32 | Architecture::Riscv64)
+        || !matches!(
+            file.architecture(),
+            Architecture::Riscv32 | Architecture::Riscv64
+        )
     {
         return Ok(None);
     }
-    let Ok(Some(arch)) = arch_string(file) else { return Ok(None) };
+    let Ok(Some(arch)) = arch_string(file) else {
+        return Ok(None);
+    };
     let names = extensions(&arch);
     let has = |name: &str| names.iter().any(|n| n == name);
     if !has("zcmp") && !has("zcmt") {
@@ -162,7 +188,10 @@ pub fn language_id(file: &object::File<'_>) -> Result<Option<String>, &'static s
 }
 
 pub fn language_ids() -> Vec<String> {
-    vec!["RISCV:LE:32:Zcmp:gcc".to_string(), "RISCV:LE:64:Zcmp:gcc".to_string()]
+    vec![
+        "RISCV:LE:32:Zcmp:gcc".to_string(),
+        "RISCV:LE:64:Zcmp:gcc".to_string(),
+    ]
 }
 
 #[cfg(test)]
@@ -188,7 +217,11 @@ mod tests {
     }
 
     fn elf(elf64: bool, sections: &[(&[u8], Vec<u8>)]) -> Vec<u8> {
-        let arch = if elf64 { Architecture::Riscv64 } else { Architecture::Riscv32 };
+        let arch = if elf64 {
+            Architecture::Riscv64
+        } else {
+            Architecture::Riscv32
+        };
         let mut object = Writer::new(BinaryFormat::Elf, arch, Endianness::Little);
         for (name, bytes) in sections {
             let section = object.add_section(Vec::new(), name.to_vec(), SectionKind::Other);
@@ -215,8 +248,15 @@ mod tests {
 
     #[test]
     fn zcmp_and_zcmt_select_the_zcmp_language_per_class() {
-        for (elf64, id) in [(false, "RISCV:LE:32:Zcmp:gcc"), (true, "RISCV:LE:64:Zcmp:gcc")] {
-            for arch in ["rv32i2p1_m2p0_c2p0_zca1p0_zcmp1p0", "rv32imac_zcmt1p0", "RV32IMAC_ZCA_ZCMP_ZCMT"] {
+        for (elf64, id) in [
+            (false, "RISCV:LE:32:Zcmp:gcc"),
+            (true, "RISCV:LE:64:Zcmp:gcc"),
+        ] {
+            for arch in [
+                "rv32i2p1_m2p0_c2p0_zca1p0_zcmp1p0",
+                "rv32imac_zcmt1p0",
+                "RV32IMAC_ZCA_ZCMP_ZCMT",
+            ] {
                 let bytes = elf(elf64, &[(b".riscv.attributes", attributes(arch))]);
                 assert_eq!(select(&bytes), Ok(Some(id.to_string())), "{arch}");
             }
@@ -225,7 +265,11 @@ mod tests {
 
     #[test]
     fn plain_and_absent_declarations_keep_the_default() {
-        for arch in ["rv32i2p1_m2p0_a2p1_f2p2_d2p2_c2p0", "rv64gc", "rv32imac_zca1p0_zcb1p0"] {
+        for arch in [
+            "rv32i2p1_m2p0_a2p1_f2p2_d2p2_c2p0",
+            "rv64gc",
+            "rv32imac_zca1p0_zcb1p0",
+        ] {
             let bytes = elf(false, &[(b".riscv.attributes", attributes(arch))]);
             assert_eq!(select(&bytes), Ok(None), "{arch}");
         }
@@ -247,14 +291,20 @@ mod tests {
         let good = attributes("rv32imac_zcmp");
         let mut other = good.clone();
         other[0] = b'B';
-        let mut blobs: Vec<Vec<u8>> = [0, 5, 12, 20, good.len() - 1].iter().map(|cut| good[..*cut].to_vec()).collect();
+        let mut blobs: Vec<Vec<u8>> = [0, 5, 12, 20, good.len() - 1]
+            .iter()
+            .map(|cut| good[..*cut].to_vec())
+            .collect();
         blobs.push(other);
         for blob in blobs {
             let bytes = elf(false, &[(b".riscv.attributes", blob)]);
             assert_eq!(parse(&bytes), Err(MALFORMED));
             assert_eq!(select(&bytes), Ok(None));
         }
-        let two = [(b".riscv.attributes".as_slice(), good.clone()), (b".riscv.attributes".as_slice(), attributes("rv32imac"))];
+        let two = [
+            (b".riscv.attributes".as_slice(), good.clone()),
+            (b".riscv.attributes".as_slice(), attributes("rv32imac")),
+        ];
         let bytes = elf(false, &two);
         assert!(parse(&bytes).is_err());
         assert_eq!(select(&bytes), Ok(None));

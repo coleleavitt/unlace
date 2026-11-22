@@ -13,7 +13,7 @@ use unlace_base::space::AddrSpaceManager;
 
 use unlace_sleigh::globalcontext::ContextInternal;
 use unlace_sleigh::loadimage::LoadImage;
-use unlace_sleigh::slaformat::{is_sla_format, FormatDecode};
+use unlace_sleigh::slaformat::{FormatDecode, is_sla_format};
 use unlace_sleigh::sleigh::Sleigh;
 
 use unlace_slacomp::encode::encode_to_sla_bytes;

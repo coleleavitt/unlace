@@ -101,7 +101,11 @@ impl FuncDecl {
 pub(crate) fn parse_flag(value: &str) -> Result<Vec<FuncDecl>, String> {
     Ok(unlace_console::assertsyntax::parse_function_flag(value)?
         .into_iter()
-        .map(|spec| FuncDecl { start: spec.start, end: spec.end, name: spec.name })
+        .map(|spec| FuncDecl {
+            start: spec.start,
+            end: spec.end,
+            name: spec.name,
+        })
         .collect())
 }
 
@@ -126,9 +130,9 @@ pub(crate) fn apply(
         let size = match decl.end {
             None => 0,
             Some(end) => {
-                let end = prog.input_code_offset(end).map_err(|e| {
-                    format!("--define-function {:#x}: {}", decl.start, e.explain())
-                })?;
+                let end = prog
+                    .input_code_offset(end)
+                    .map_err(|e| format!("--define-function {:#x}: {}", decl.start, e.explain()))?;
                 let size = end.checked_sub(start).filter(|size| *size > 0).ok_or_else(|| {
                     format!(
                         "--define-function {:#x}: end must be above start after target address conversion",
@@ -145,9 +149,7 @@ pub(crate) fn apply(
         };
         let addr = unlace_base::address::Address::new(std::rc::Rc::clone(&space), start);
         prog.declare_function(addr, decl.name.as_deref(), size)
-            .map_err(|e| {
-                format!("--define-function {:#x}: {}", decl.start, e.explain())
-            })?;
+            .map_err(|e| format!("--define-function {:#x}: {}", decl.start, e.explain()))?;
     }
     Ok(())
 }
@@ -163,7 +165,10 @@ pub(crate) fn warn_unmapped(prog: &ConsoleProgram, binary: &str) {
 /// [`warn_unmapped`]'s sentences ahead of a listing's own `notes`, for the
 /// `--json` document of a surface that prints those `notes` itself.
 pub(crate) fn json_notes(prog: &ConsoleProgram, notes: &[String]) -> Vec<String> {
-    prog.declaration_notes().into_iter().chain(notes.iter().cloned()).collect()
+    prog.declaration_notes()
+        .into_iter()
+        .chain(notes.iter().cloned())
+        .collect()
 }
 
 /// What a run's declarations add to its JSON: a `declared` marker on each
@@ -203,7 +208,10 @@ impl Declared {
     /// The document's `notes` field, when there is a note.
     pub(crate) fn notes_field(&self) -> Option<(String, Json)> {
         (!self.notes.is_empty()).then(|| {
-            ("notes".into(), Json::Array(self.notes.iter().cloned().map(Json::Str).collect()))
+            (
+                "notes".into(),
+                Json::Array(self.notes.iter().cloned().map(Json::Str).collect()),
+            )
         })
     }
 
@@ -226,33 +234,62 @@ mod tests {
     use super::*;
 
     fn one(spec: &str) -> FuncDecl {
-        parse_flag(spec).expect("parses").pop().expect("one declaration")
+        parse_flag(spec)
+            .expect("parses")
+            .pop()
+            .expect("one declaration")
     }
 
     #[test]
     fn parses_start_end_and_name() {
         assert_eq!(
             one("0x1400-0x1480=decrypt"),
-            FuncDecl { start: 0x1400, end: Some(0x1480), name: Some("decrypt".into()) }
+            FuncDecl {
+                start: 0x1400,
+                end: Some(0x1480),
+                name: Some("decrypt".into())
+            }
         );
     }
 
     #[test]
     fn end_and_name_are_each_optional() {
-        assert_eq!(one("0x1400"), FuncDecl { start: 0x1400, end: None, name: None });
+        assert_eq!(
+            one("0x1400"),
+            FuncDecl {
+                start: 0x1400,
+                end: None,
+                name: None
+            }
+        );
         assert_eq!(
             one("0x1400-0x1480"),
-            FuncDecl { start: 0x1400, end: Some(0x1480), name: None }
+            FuncDecl {
+                start: 0x1400,
+                end: Some(0x1480),
+                name: None
+            }
         );
         assert_eq!(
             one("0x1400=decrypt"),
-            FuncDecl { start: 0x1400, end: None, name: Some("decrypt".into()) }
+            FuncDecl {
+                start: 0x1400,
+                end: None,
+                name: Some("decrypt".into())
+            }
         );
     }
 
     #[test]
     fn a_bare_hex_address_needs_no_prefix() {
-        assert_eq!(one("1400-1480"), FuncDecl { start: 0x1400, end: Some(0x1480), name: None });
+        assert_eq!(
+            one("1400-1480"),
+            FuncDecl {
+                start: 0x1400,
+                end: Some(0x1480),
+                name: None
+            }
+        );
     }
 
     #[test]
@@ -283,11 +320,17 @@ mod tests {
             one("0x1400-0x1480=decrypt").console_line(),
             "function bounds 0x1400 0x1480 as decrypt"
         );
-        assert_eq!(one("0x1400-0x1480").console_line(), "function bounds 0x1400 0x1480");
+        assert_eq!(
+            one("0x1400-0x1480").console_line(),
+            "function bounds 0x1400 0x1480"
+        );
         assert_eq!(one("0x1400").console_line(), "function bounds 0x1400");
         // A name with no extent: `as` keys the name, so it cannot be read as the
         // end address.
-        assert_eq!(one("0x1400=decrypt").console_line(), "function bounds 0x1400 as decrypt");
+        assert_eq!(
+            one("0x1400=decrypt").console_line(),
+            "function bounds 0x1400 as decrypt"
+        );
     }
 
     #[test]
@@ -295,8 +338,11 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("kuna-funcdecl-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("scratch dir");
         let path = dir.join("bounds.txt");
-        std::fs::write(&path, "# worked out by hand\n0x1400-0x1480=decrypt\n\n0x1480-0x1500\n")
-            .expect("write");
+        std::fs::write(
+            &path,
+            "# worked out by hand\n0x1400-0x1480=decrypt\n\n0x1480-0x1500\n",
+        )
+        .expect("write");
         let decls = parse_flag(&format!("@{}", path.display())).expect("parses");
         assert_eq!(decls.len(), 2);
         assert_eq!(decls[0].name.as_deref(), Some("decrypt"));

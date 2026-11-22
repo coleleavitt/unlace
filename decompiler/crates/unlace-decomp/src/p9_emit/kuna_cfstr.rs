@@ -32,7 +32,9 @@ pub fn declare_types(
     ws: uint4,
 ) -> KunaResult<Option<Rc<Datatype>>> {
     let ps = types.get_size_of_pointer();
-    let existing = types.find_by_name(REF)?.filter(|t| t.get_metatype() == TYPE_PTR);
+    let existing = types
+        .find_by_name(REF)?
+        .filter(|t| t.get_metatype() == TYPE_PTR);
     let mut record = match existing.as_ref().and_then(|p| p.get_ptr_to()) {
         Some(to) if to.get_metatype() == TYPE_STRUCT => to,
         _ => match types.find_by_name(TAG)? {
@@ -81,19 +83,30 @@ mod tests {
         f.set_default_alignment_map();
         f.set_max_basetype_size(8);
         f.set_size_of_pointer(8);
-        let record = declare_types(&f, 32, 1).unwrap().expect("a fresh factory declares it");
+        let record = declare_types(&f, 32, 1)
+            .unwrap()
+            .expect("a fresh factory declares it");
         assert_eq!((record.get_name(), record.get_size()), ("__CFString", 32));
         let ptr = f.get_type_pointer(8, Rc::clone(&record), 1).unwrap();
         assert_eq!(ptr.get_name(), "CFStringRef");
-        let other = f.get_type_pointer(8, f.get_base(4, TYPE_INT).unwrap(), 1).unwrap();
+        let other = f
+            .get_type_pointer(8, f.get_base(4, TYPE_INT).unwrap(), 1)
+            .unwrap();
         assert_eq!(other.get_name(), "");
-        assert!(declare_types(&f, 32, 1).unwrap().is_some_and(|r| Rc::ptr_eq(&r, &record)));
+        assert!(
+            declare_types(&f, 32, 1)
+                .unwrap()
+                .is_some_and(|r| Rc::ptr_eq(&r, &record))
+        );
         assert!(declare_types(&f, 16, 1).unwrap().is_none());
     }
 
     #[test]
     fn wraps_and_annotates() {
         assert_eq!(wrap("\"hi\"", 0x100004008, false), "CFSTR(\"hi\")");
-        assert_eq!(wrap("\"hi\"", 0x100004008, true), "CFSTR(\"hi\") /* cfstring@0x100004008 */");
+        assert_eq!(
+            wrap("\"hi\"", 0x100004008, true),
+            "CFSTR(\"hi\") /* cfstring@0x100004008 */"
+        );
     }
 }

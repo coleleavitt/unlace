@@ -21,7 +21,8 @@ pub(crate) fn merge_type_definitions(blocks: &[String], tag: &str) -> String {
         .iter()
         .map(|items| items.iter().map(|(_, text)| text.as_ref()).collect())
         .collect();
-    if let Some(k) = (0..blocks.len()).find(|&k| sets.iter().all(|other| other.is_subset(&sets[k]))) {
+    if let Some(k) = (0..blocks.len()).find(|&k| sets.iter().all(|other| other.is_subset(&sets[k])))
+    {
         return blocks[k].clone();
     }
     let mut seen = sets.into_iter().next().unwrap_or_default();

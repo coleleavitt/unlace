@@ -4,9 +4,9 @@ use std::rc::Rc;
 
 use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::printc::{display_format, op_key, tokens, vn_key, PrintC};
+use crate::printc::{PrintC, display_format, op_key, tokens, vn_key};
 use crate::printlanguage::{Atom, SyntaxHighlight, TagType};
 use unlace_num::opcodes::OpCode;
 

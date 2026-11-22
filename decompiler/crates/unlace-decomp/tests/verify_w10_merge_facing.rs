@@ -36,7 +36,7 @@ use unlace_base::xml::{DocumentStorage, Element};
 
 use unlace_decomp::decompile_drive::decompile_func;
 use unlace_decomp::options::register_option_elements;
-use unlace_decomp::sleigh_arch::{register_sleigh_arch_ids, LanguageDatabase};
+use unlace_decomp::sleigh_arch::{LanguageDatabase, register_sleigh_arch_ids};
 use unlace_decomp::xml_arch::{XmlArchitecture, XmlArchitectureCapability};
 
 use unlace_sleigh::loadimage::LoadImage;
@@ -44,11 +44,16 @@ use unlace_sleigh::loadimage_xml::register_loadimage_xml_ids;
 use unlace_sleigh::translate::register_translate_ids;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn attr(el: &Element, name: &str) -> Option<String> {
-    el.get_attribute_value(name).ok().map(|b| String::from_utf8_lossy(b).into_owned())
+    el.get_attribute_value(name)
+        .ok()
+        .map(|b| String::from_utf8_lossy(b).into_owned())
 }
 
 fn find_named(el: &Rc<Element>, name: &str, out: &mut Vec<Rc<Element>>) {
@@ -115,7 +120,11 @@ fn parse_datatest(path: &std::path::Path) -> Result<DataTest, String> {
         })
         .collect();
 
-    Ok(DataTest { binaryimage, arch_id, symbols })
+    Ok(DataTest {
+        binaryimage,
+        arch_id,
+        symbols,
+    })
 }
 
 struct DummyImg;
@@ -147,11 +156,13 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
 
     let capability = XmlArchitectureCapability::new();
     let mut arch = capability.build_architecture("datatest", "");
-    arch.build_loader(Rc::clone(&dt.binaryimage)).map_err(|e| format!("build_loader: {e}"))?;
+    arch.build_loader(Rc::clone(&dt.binaryimage))
+        .map_err(|e| format!("build_loader: {e}"))?;
 
     let mut db = LanguageDatabase::new();
     db.scan_for_sleigh_directories(root.join("specs").to_str().unwrap());
-    db.get_descriptions(&registry).map_err(|e| format!("collect ldefs: {e}"))?;
+    db.get_descriptions(&registry)
+        .map_err(|e| format!("collect ldefs: {e}"))?;
 
     arch.sleigh_mut().set_archid(&dt.arch_id);
     arch.sleigh_mut()
@@ -161,7 +172,10 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
         return Err("language index unresolved".to_string());
     }
 
-    let specs = arch.sleigh().build_spec_file(&db).map_err(|e| format!("build_spec_file: {e}"))?;
+    let specs = arch
+        .sleigh()
+        .build_spec_file(&db)
+        .map_err(|e| format!("build_spec_file: {e}"))?;
     let resolved_sla = specs.slafile.ok_or("build_spec_file resolved no .sla")?;
     let sla = std::fs::read(&resolved_sla).map_err(|e| format!("read sla: {e}"))?;
     arch.sleigh_mut()
@@ -183,7 +197,9 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
         .base_mut()
         .unwrap()
         .translate_mut()
-        .as_sleigh_mut().expect("standalone Sleigh engine").install_register_lookup()
+        .as_sleigh_mut()
+        .expect("standalone Sleigh engine")
+        .install_register_lookup()
         .map_err(|e| format!("install_register_lookup: {e}"))?;
 
     arch.sleigh_mut()
@@ -193,9 +209,13 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
         .map_err(|e| format!("init_post_engine: {e}"))?;
 
     let manager_ptr: *const AddrSpaceManager = arch.sleigh().base().unwrap().manage();
-    arch.open_image(unsafe { &*manager_ptr }, &registry).map_err(|e| format!("open_image: {e}"))?;
+    arch.open_image(unsafe { &*manager_ptr }, &registry)
+        .map_err(|e| format!("open_image: {e}"))?;
     let img = arch.take_loader().ok_or("loader vanished after open")?;
-    arch.sleigh_mut().base_mut().unwrap().set_loader(Box::new(img));
+    arch.sleigh_mut()
+        .base_mut()
+        .unwrap()
+        .set_loader(Box::new(img));
     Ok(arch)
 }
 
@@ -208,8 +228,11 @@ fn check_facing_invariants(file: &str) -> Result<usize, String> {
     let mut xarch = bootstrap(&dt)?;
 
     let mut edges_checked = 0usize;
-    let symbols: Vec<(String, String, u64)> =
-        dt.symbols.iter().map(|s| (s.name.clone(), s.space.clone(), s.offset)).collect();
+    let symbols: Vec<(String, String, u64)> = dt
+        .symbols
+        .iter()
+        .map(|s| (s.name.clone(), s.space.clone(), s.offset))
+        .collect();
 
     for (name, space_name, offset) in symbols {
         let base = xarch.sleigh_mut().base_mut().ok_or("no base")?;
@@ -308,18 +331,22 @@ fn check_facing_invariants(file: &str) -> Result<usize, String> {
 /// type.  Proves the facing graph is threaded AND the default is exact.
 #[test]
 fn w10_facing_graph_threaded_boolless() {
-    let n = check_facing_invariants("boolless.xml")
-        .expect("boolless facing invariants");
-    assert!(n > 0, "boolless must have at least one merged written-varnode facing edge");
+    let n = check_facing_invariants("boolless.xml").expect("boolless facing invariants");
+    assert!(
+        n > 0,
+        "boolless must have at least one merged written-varnode facing edge"
+    );
     eprintln!("boolless: {n} facing edges verified (all no-resolution default)");
 }
 
 /// condconst is the other byte-identical family member — same facing default.
 #[test]
 fn w10_facing_graph_threaded_condconst() {
-    let n = check_facing_invariants("condconst.xml")
-        .expect("condconst facing invariants");
-    assert!(n > 0, "condconst must have at least one merged written-varnode facing edge");
+    let n = check_facing_invariants("condconst.xml").expect("condconst facing invariants");
+    assert!(
+        n > 0,
+        "condconst must have at least one merged written-varnode facing edge"
+    );
     eprintln!("condconst: {n} facing edges verified (all no-resolution default)");
 }
 
@@ -330,8 +357,10 @@ fn w10_facing_graph_threaded_condconst() {
 /// `find_resolve_facing` pointer/struct dispatch on the no-resolution path.
 #[test]
 fn w10_facing_graph_threaded_piecestruct() {
-    let n = check_facing_invariants("piecestruct.xml")
-        .expect("piecestruct facing invariants");
-    assert!(n > 0, "piecestruct must have merged written-varnode facing edges");
+    let n = check_facing_invariants("piecestruct.xml").expect("piecestruct facing invariants");
+    assert!(
+        n > 0,
+        "piecestruct must have merged written-varnode facing edges"
+    );
     eprintln!("piecestruct: {n} facing edges verified");
 }

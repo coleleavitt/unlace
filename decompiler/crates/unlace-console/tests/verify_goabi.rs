@@ -15,14 +15,17 @@
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// `true` if a runnable `go` toolchain is on PATH.
@@ -88,7 +91,8 @@ fn decompile_pair(bin: &str) -> String {
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
     let mut prog: ConsoleProgram = bootstrap_from_object(bin, "", &spec_roots)
         .expect("bootstrap go fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     let cmds: Vec<String> = ["load function main.pair", "decompile", "print C"]
         .iter()
         .map(|s| s.to_string())

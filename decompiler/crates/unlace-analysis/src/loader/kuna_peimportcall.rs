@@ -114,7 +114,9 @@ fn scan_win32_noreturn(file: &object::File, bytes: &[u8]) -> Vec<NoReturnFact> {
     }
 
     for p in crate::loader::format::resolve_imports(file, bytes) {
-        let Ok(n) = String::from_utf8(p.name) else { continue };
+        let Ok(n) = String::from_utf8(p.name) else {
+            continue;
+        };
         emit(&mut out, p.addr, n);
     }
     out
@@ -149,9 +151,17 @@ mod tests {
     #[test]
     fn win32_list_omits_returning_apis() {
         let (exact, wildcard) = parse_list(PE_WIN32_NORETURN_LIST);
-        for nope in ["CreateThread", "GetTickCount", "HeapFree", "GetProcessHeap", "TerminateProcess"]
-        {
-            assert!(!name_matches(nope, &exact, &wildcard), "{nope} must not be no-return");
+        for nope in [
+            "CreateThread",
+            "GetTickCount",
+            "HeapFree",
+            "GetProcessHeap",
+            "TerminateProcess",
+        ] {
+            assert!(
+                !name_matches(nope, &exact, &wildcard),
+                "{nope} must not be no-return"
+            );
         }
     }
 }

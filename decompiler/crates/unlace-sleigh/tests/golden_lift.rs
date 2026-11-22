@@ -24,17 +24,20 @@ use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::marshal::IdRegistry;
 use unlace_base::space::spacetype;
 use unlace_base::xml::{DocumentStorage, Element};
-use unlace_num::opcodes::{get_opname, OpCode};
+use unlace_num::opcodes::{OpCode, get_opname};
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::globalcontext::ContextInternal;
 use unlace_sleigh::loadimage::LoadImage;
-use unlace_sleigh::loadimage_xml::{register_loadimage_xml_ids, LoadImageXml};
+use unlace_sleigh::loadimage_xml::{LoadImageXml, register_loadimage_xml_ids};
 use unlace_sleigh::sleigh::Sleigh;
 use unlace_sleigh::translate::{AssemblyEmit, PcodeEmit};
 
 /// Repository root (the test reads corpus XML + built `.sla` files from it).
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// goldenOpName: the canonical enum names (kuna_goldengen.cc's ZPULL/SPULL
@@ -77,7 +80,9 @@ impl LiftEmit<'_> {
     fn render_varnode(&self, vn: &VarnodeData, spaceid_const: bool) -> String {
         let spc = vn.space.as_ref().expect("varnode has a space");
         if spaceid_const && spc.get_type() == spacetype::IPTR_CONSTANT {
-            let pointed = vn.get_space_from_const(self.manager).expect("spaceid resolves");
+            let pointed = vn
+                .get_space_from_const(self.manager)
+                .expect("spaceid resolves");
             format!("({},{},{})", spc.get_name(), pointed.get_name(), vn.size)
         } else {
             format!("({},0x{:x},{})", spc.get_name(), vn.offset, vn.size)
@@ -166,7 +171,13 @@ fn parse_fixture(text: &str) -> Fixture {
             in_body = false;
         }
     }
-    Fixture { corpus, sla_rel, lift_points, context, expected }
+    Fixture {
+        corpus,
+        sla_rel,
+        lift_points,
+        context,
+        expected,
+    }
 }
 
 fn parse_u64(s: &str) -> u64 {
@@ -199,7 +210,11 @@ fn fixture_engine(fix: &Fixture) -> Sleigh {
     let root = repo_root();
     let xml = std::fs::read(root.join(&fix.corpus)).expect("read corpus xml");
     let mut store = DocumentStorage::new();
-    let doc_root = store.parse_document(&xml).expect("parse corpus xml").get_root().clone();
+    let doc_root = store
+        .parse_document(&xml)
+        .expect("parse corpus xml")
+        .get_root()
+        .clone();
     let bi = find_binaryimage(&doc_root).expect("corpus has a binaryimage");
 
     let sla = std::fs::read(root.join("specs").join(&fix.sla_rel)).expect("read .sla");
@@ -210,7 +225,9 @@ fn fixture_engine(fix: &Fixture) -> Sleigh {
     let mut img = LoadImageXml::new(&fix.corpus, bi).expect("LoadImageXml::new");
     let ctx = Box::new(ContextInternal::new());
     let mut sleigh = Sleigh::new(Box::new(DummyImg), ctx);
-    sleigh.initialize_from_sla(&sla).expect("initialize from sla");
+    sleigh
+        .initialize_from_sla(&sla)
+        .expect("initialize from sla");
 
     // Apply the recorded context (registered by initialize via build_xrefs;
     // set the per-fixture default values).
@@ -223,7 +240,8 @@ fn fixture_engine(fix: &Fixture) -> Sleigh {
     // decode; ContextInternal::setVariableDefault writes the default blob,
     // which getContext returns for unset addresses.
 
-    img.open(sleigh.base().manager(), &registry).expect("open corpus image");
+    img.open(sleigh.base().manager(), &registry)
+        .expect("open corpus image");
     sleigh.set_loader(Box::new(img));
 
     sleigh
@@ -234,14 +252,20 @@ fn run_fixture(fix: &Fixture) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for (space, off) in &fix.lift_points {
         let spc = Rc::clone(
-            sleigh.base().manager().get_space_by_name(space).expect("lift-point space"),
+            sleigh
+                .base()
+                .manager()
+                .get_space_by_name(space)
+                .expect("lift-point space"),
         );
         let mut addr = Address::new(spc, *off);
         for _ in 0..80 {
             // Resolve the manager pointer for the emitter (no host pointers).
-            let manager_ptr: *const unlace_base::space::AddrSpaceManager =
-                sleigh.base().manager();
-            let mut emit = LiftEmit { buf: Vec::new(), manager: unsafe { &*manager_ptr } };
+            let manager_ptr: *const unlace_base::space::AddrSpaceManager = sleigh.base().manager();
+            let mut emit = LiftEmit {
+                buf: Vec::new(),
+                manager: unsafe { &*manager_ptr },
+            };
             match sleigh.one_instruction(&mut emit, &addr) {
                 Ok(len) => {
                     out.push(format!("insn {}:0x{:x} {}", space, addr.get_offset(), len));
@@ -292,7 +316,11 @@ macro_rules! fixture_test {
                 eprintln!("--- fixture {} diverges at body line {} ---", $file, idx);
                 for i in ctx_lo..(idx + 4).min(got.len().max(fix.expected.len())) {
                     let g = got.get(i).map(String::as_str).unwrap_or("<missing>");
-                    let e = fix.expected.get(i).map(String::as_str).unwrap_or("<missing>");
+                    let e = fix
+                        .expected
+                        .get(i)
+                        .map(String::as_str)
+                        .unwrap_or("<missing>");
                     let mark = if g == e { " " } else { ">" };
                     eprintln!("{mark} [{i}] got : {g}");
                     eprintln!("{mark} [{i}] want: {e}");
@@ -325,7 +353,6 @@ fixture_test!(golden_lift_promotecompare, "promotecompare.txt");
 fixture_test!(golden_lift_readvolatile, "readvolatile.txt");
 fixture_test!(golden_lift_skipnext2, "skipnext2.txt");
 
-
 #[derive(Default, Debug, PartialEq, Eq)]
 struct Assembly(Option<(String, String)>);
 impl AssemblyEmit for Assembly {
@@ -341,7 +368,9 @@ fn combined_decode_matches_sequential_decode_across_all_lift_languages() {
     let mut instructions = 0;
     for entry in std::fs::read_dir(directory).unwrap() {
         let path = entry.unwrap().path();
-        if path.extension().and_then(|x| x.to_str()) != Some("txt") { continue; }
+        if path.extension().and_then(|x| x.to_str()) != Some("txt") {
+            continue;
+        }
         let fix = parse_fixture(&std::fs::read_to_string(&path).unwrap());
         let old = fixture_engine(&fix);
         let new = fixture_engine(&fix);
@@ -349,21 +378,51 @@ fn combined_decode_matches_sequential_decode_across_all_lift_languages() {
         for (space, off) in &fix.lift_points {
             let mut offset = *off;
             for _ in 0..80 {
-                let a = Address::new(Rc::clone(old.base().manager().get_space_by_name(space).unwrap()), offset);
-                let b = Address::new(Rc::clone(new.base().manager().get_space_by_name(space).unwrap()), offset);
-                let mut old_ops = LiftEmit { buf: Vec::new(), manager: old.base().manager() };
-                let mut new_ops = LiftEmit { buf: Vec::new(), manager: new.base().manager() };
-                let mut old_text = Assembly::default(); let mut new_text = Assembly::default();
-                let old_len = old.one_instruction(&mut old_ops, &a).map_err(|e| format!("{e:?}"));
-                if old_len.is_ok() { let _ = old.print_assembly(&mut old_text, &a); }
-                let new_len = new.one_instruction_with_assembly(&mut new_ops, &mut new_text, &b)
+                let a = Address::new(
+                    Rc::clone(old.base().manager().get_space_by_name(space).unwrap()),
+                    offset,
+                );
+                let b = Address::new(
+                    Rc::clone(new.base().manager().get_space_by_name(space).unwrap()),
+                    offset,
+                );
+                let mut old_ops = LiftEmit {
+                    buf: Vec::new(),
+                    manager: old.base().manager(),
+                };
+                let mut new_ops = LiftEmit {
+                    buf: Vec::new(),
+                    manager: new.base().manager(),
+                };
+                let mut old_text = Assembly::default();
+                let mut new_text = Assembly::default();
+                let old_len = old
+                    .one_instruction(&mut old_ops, &a)
+                    .map_err(|e| format!("{e:?}"));
+                if old_len.is_ok() {
+                    let _ = old.print_assembly(&mut old_text, &a);
+                }
+                let new_len = new
+                    .one_instruction_with_assembly(&mut new_ops, &mut new_text, &b)
                     .map_err(|e| format!("{e:?}"));
                 assert_eq!(new_len, old_len, "{} at {offset:#x}", fix.sla_rel);
-                assert_eq!(new_ops.buf, old_ops.buf, "p-code: {} at {offset:#x}", fix.sla_rel);
-                assert_eq!(new_text, old_text, "assembly: {} at {offset:#x}", fix.sla_rel);
+                assert_eq!(
+                    new_ops.buf, old_ops.buf,
+                    "p-code: {} at {offset:#x}",
+                    fix.sla_rel
+                );
+                assert_eq!(
+                    new_text, old_text,
+                    "assembly: {} at {offset:#x}",
+                    fix.sla_rel
+                );
                 let old_context = old.with_context_db_mut(|db| db.get_context(&a).to_vec());
                 let new_context = new.with_context_db_mut(|db| db.get_context(&b).to_vec());
-                assert_eq!(new_context, old_context, "context: {} at {offset:#x}", fix.sla_rel);
+                assert_eq!(
+                    new_context, old_context,
+                    "context: {} at {offset:#x}",
+                    fix.sla_rel
+                );
                 let Ok(length) = old_len else { break };
                 instructions += 1;
                 offset = offset.wrapping_add(length as u64);
@@ -371,5 +430,8 @@ fn combined_decode_matches_sequential_decode_across_all_lift_languages() {
         }
     }
     assert_eq!(fixtures, 16);
-    assert!(instructions >= 1000, "only {instructions} instructions compared");
+    assert!(
+        instructions >= 1000,
+        "only {instructions} instructions compared"
+    );
 }

@@ -78,11 +78,11 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::space::{spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
-use super::{decode, overlaps, Entry, Insn, Key};
+use super::{Entry, Insn, Key, decode, overlaps};
 use crate::architecture::Architecture;
 
 /// How many call sites of one function are read.
@@ -197,11 +197,19 @@ impl Isa {
         let little = matches!(self, Isa::Arm { little: true });
         let word = |i: usize| -> Option<u32> {
             let b: [u8; 4] = bytes.get(i..i + 4)?.try_into().ok()?;
-            Some(if little { u32::from_le_bytes(b) } else { u32::from_be_bytes(b) })
+            Some(if little {
+                u32::from_le_bytes(b)
+            } else {
+                u32::from_be_bytes(b)
+            })
         };
         let half = |i: usize| -> Option<u16> {
             let b: [u8; 2] = bytes.get(i..i + 2)?.try_into().ok()?;
-            Some(if little { u16::from_le_bytes(b) } else { u16::from_be_bytes(b) })
+            Some(if little {
+                u16::from_le_bytes(b)
+            } else {
+                u16::from_be_bytes(b)
+            })
         };
         let first = (base.wrapping_neg() & 3) as usize;
         let mut i = first;
@@ -287,7 +295,11 @@ pub(super) fn t32(site: u64, h1: u16, h2: u16) -> Option<u64> {
     let s = ((h1 >> 10) & 1) as u64;
     let (j1, j2) = (((h2 >> 13) & 1) as u64, ((h2 >> 11) & 1) as u64);
     let (i1, i2) = (!(j1 ^ s) & 1, !(j2 ^ s) & 1);
-    let imm = (s << 24) | (i1 << 23) | (i2 << 22) | (((h1 & 0x3ff) as u64) << 12) | (((h2 & 0x7ff) as u64) << 1);
+    let imm = (s << 24)
+        | (i1 << 23)
+        | (i2 << 22)
+        | (((h1 & 0x3ff) as u64) << 12)
+        | (((h2 & 0x7ff) as u64) << 1);
     let pc = site + 4;
     let pc = if blx { pc & !3 } else { pc };
     Some((pc as i64 + sext(imm, 25)) as u64 & M32)
@@ -337,7 +349,12 @@ fn mips_gp(entry: u64, words: &[u32]) -> Option<(u32, Vec<u32>)> {
         if mips_control(w) {
             break;
         }
-        let (op, rs, rt, rd) = (w >> 26, ((w >> 21) & 0x1f) as usize, ((w >> 16) & 0x1f) as usize, ((w >> 11) & 0x1f) as usize);
+        let (op, rs, rt, rd) = (
+            w >> 26,
+            ((w >> 21) & 0x1f) as usize,
+            ((w >> 16) & 0x1f) as usize,
+            ((w >> 11) & 0x1f) as usize,
+        );
         let (imm, simm) = (w & 0xffff, w as u16 as i16 as i32 as u32);
         let both = |f: fn(u32, u32) -> u32| regs[rs].zip(regs[rt]).map(|(a, b)| f(a, b));
         let (dst, val) = match (op, w & 0x3f) {
@@ -365,7 +382,9 @@ fn mips_gp(entry: u64, words: &[u32]) -> Option<(u32, Vec<u32>)> {
         }
     }
     let gp = gp.or(sum)?;
-    let bases = (1..32u32).filter(|&r| r != 25 && regs[r as usize] == Some(gp)).collect();
+    let bases = (1..32u32)
+        .filter(|&r| r != 25 && regs[r as usize] == Some(gp))
+        .collect();
     Some((gp, bases))
 }
 
@@ -377,12 +396,24 @@ fn mips_gp(entry: u64, words: &[u32]) -> Option<(u32, Vec<u32>)> {
 /// register changed reaches a call.
 fn mips_base_holds(words: &[u32], skip: usize, base: u32) -> bool {
     let reload = 0x8c00_0000 | (29 << 21) | (base << 16);
-    let saved: BTreeSet<u32> = words.iter().filter(|&&w| w & 0xffff_0000 == (reload | 0x2000_0000)).map(|&w| w & 0xffff).collect();
+    let saved: BTreeSet<u32> = words
+        .iter()
+        .filter(|&&w| w & 0xffff_0000 == (reload | 0x2000_0000))
+        .map(|&w| w & 0xffff)
+        .collect();
     let returns = |i: usize| {
-        words.iter().skip(i + 1).take(16).find(|&&x| mips_control(x)) == Some(&0x03e0_0008)
+        words
+            .iter()
+            .skip(i + 1)
+            .take(16)
+            .find(|&&x| mips_control(x))
+            == Some(&0x03e0_0008)
     };
     words.iter().enumerate().skip(skip).all(|(i, &w)| {
-        !mips_writes(w, base) || (w & 0xffff_0000 == reload && saved.contains(&(w & 0xffff)) && (base == 28 || returns(i)))
+        !mips_writes(w, base)
+            || (w & 0xffff_0000 == reload
+                && saved.contains(&(w & 0xffff))
+                && (base == 28 || returns(i)))
     })
 }
 
@@ -394,13 +425,28 @@ fn mips_base_holds(words: &[u32], skip: usize, base: u32) -> bool {
 /// registers involved, between the load and the call. The entry is read at
 /// the GOT pointer plus the load's offset through `word`. Each is added to
 /// `calls` as `(target, site)` and to `pic` with the load's address.
-fn mips_pic_calls(entry: u64, words: &[u32], word: &mut impl FnMut(u64) -> Option<u32>, calls: &mut Vec<(u64, u64)>, pic: &mut BTreeMap<u64, u64>) {
+fn mips_pic_calls(
+    entry: u64,
+    words: &[u32],
+    word: &mut impl FnMut(u64) -> Option<u32>,
+    calls: &mut Vec<(u64, u64)>,
+    pic: &mut BTreeMap<u64, u64>,
+) {
     if !words.contains(&JALR_T9) {
         return;
     }
-    let Some((gp, bases)) = mips_gp(entry, words) else { return };
-    let skip = words.iter().take(16).position(|&w| mips_control(w)).unwrap_or(16.min(words.len()));
-    let bases: Vec<u32> = bases.into_iter().filter(|&b| mips_base_holds(words, skip, b)).collect();
+    let Some((gp, bases)) = mips_gp(entry, words) else {
+        return;
+    };
+    let skip = words
+        .iter()
+        .take(16)
+        .position(|&w| mips_control(w))
+        .unwrap_or(16.min(words.len()));
+    let bases: Vec<u32> = bases
+        .into_iter()
+        .filter(|&b| mips_base_holds(words, skip, b))
+        .collect();
     for (i, _) in words.iter().enumerate().filter(|&(_, &w)| w == JALR_T9) {
         let (mut want, mut add, mut found) = (25u32, None, None);
         for j in (i.saturating_sub(8)..i).rev() {
@@ -424,7 +470,9 @@ fn mips_pic_calls(entry: u64, words: &[u32], word: &mut impl FnMut(u64) -> Optio
         }
         let add = add.unwrap_or(0);
         let Some((j, slot)) = found else { continue };
-        let Some(target) = word(u64::from(slot)) else { continue };
+        let Some(target) = word(u64::from(slot)) else {
+            continue;
+        };
         let site = entry + 4 * i as u64;
         calls.push((u64::from(target.wrapping_add(add)), site));
         pic.insert(site, entry + 4 * j as u64);
@@ -438,23 +486,43 @@ fn mips_pic_calls(entry: u64, words: &[u32], word: &mut impl FnMut(u64) -> Optio
 /// overwrite it, so the pair writes the register and reads nothing of it
 /// (gcc's copy of an unaligned word: `lwl $3,0($2); lwr $3,3($2)`).
 fn mips_whole_load(arch: &Architecture, index: &Index, at: u64, insn: &Insn, lo: &Key) -> bool {
-    if !insn.ops.iter().any(|(_, out, _)| out.as_ref().and_then(key).is_some_and(|o| o == *lo)) {
+    if !insn
+        .ops
+        .iter()
+        .any(|(_, out, _)| out.as_ref().and_then(key).is_some_and(|o| o == *lo))
+    {
         return false;
     }
     let loader = arch.translate().loader_rc();
     let mut buf = [0u8; 20];
-    if loader.borrow_mut().load_fill(&mut buf, &index.at(at)).is_err() {
+    if loader
+        .borrow_mut()
+        .load_fill(&mut buf, &index.at(at))
+        .is_err()
+    {
         return false;
     }
-    let w: Vec<u32> = buf.chunks_exact(4).map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]])).collect();
-    let (op, base, rt, off) = (w[0] >> 26, (w[0] >> 21) & 0x1f, (w[0] >> 16) & 0x1f, i32::from(w[0] as u16 as i16));
+    let w: Vec<u32> = buf
+        .chunks_exact(4)
+        .map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]))
+        .collect();
+    let (op, base, rt, off) = (
+        w[0] >> 26,
+        (w[0] >> 21) & 0x1f,
+        (w[0] >> 16) & 0x1f,
+        i32::from(w[0] as u16 as i16),
+    );
     let (other, delta) = match op {
         0x22 => (0x26, 3),
         0x26 => (0x22, -3),
         _ => return false,
     };
     for &x in &w[1..] {
-        if x >> 26 == other && (x >> 21) & 0x1f == base && (x >> 16) & 0x1f == rt && i32::from(x as u16 as i16) == off + delta {
+        if x >> 26 == other
+            && (x >> 21) & 0x1f == base
+            && (x >> 16) & 0x1f == rt
+            && i32::from(x as u16 as i16) == off + delta
+        {
             return true;
         }
         if mips_control(x) || mips_writes(x, base) || (mips_writes(x, rt) && x >> 26 != op) {
@@ -538,7 +606,11 @@ impl Index {
         if ranges.is_empty() {
             return None;
         }
-        let mask = if matches!(isa, Isa::Arm { .. }) { !1u64 } else { !0u64 };
+        let mask = if matches!(isa, Isa::Arm { .. }) {
+            !1u64
+        } else {
+            !0u64
+        };
         let loader = arch.translate().loader_rc();
         let mut starts = Vec::new();
         let mut cold = Vec::new();
@@ -551,7 +623,11 @@ impl Index {
             while l.get_next_symbol(&mut rec) {
                 named |= EH_NAMES.contains(&rec.name.as_slice());
                 sjlj |= rec.name.starts_with(b"_Unwind_SjLj_");
-                if rec.address.get_space().is_some_and(|s| Rc::ptr_eq(s, &code)) {
+                if rec
+                    .address
+                    .get_space()
+                    .is_some_and(|s| Rc::ptr_eq(s, &code))
+                {
                     if isa != Isa::Mips && PAIR_ARG_ROUTINES.contains(&rec.name.as_slice()) {
                         pair_args.push(rec.address.get_offset() & mask);
                     }
@@ -586,7 +662,10 @@ impl Index {
                 let (_, hi) = range_of(s)?;
                 let next = starts.get(i + 1).copied().unwrap_or(u64::MAX);
                 let end = next.min(hi.saturating_add(1));
-                Some((s, sizes.get(&s).map_or(end, |&n| end.min(s.saturating_add(n)))))
+                Some((
+                    s,
+                    sizes.get(&s).map_or(end, |&n| end.min(s.saturating_add(n))),
+                ))
             })
             .collect();
         let mut calls = Vec::new();
@@ -596,7 +675,11 @@ impl Index {
                 let limit = ((hi - at) as usize).saturating_add(1).min(CHUNK);
                 let mut buf = vec![0u8; limit + 4];
                 let read = (limit + 4).min(((hi - at) as usize).saturating_add(1));
-                if loader.borrow_mut().load_fill(&mut buf[..read], &Address::new(Rc::clone(&code), at)).is_err() {
+                if loader
+                    .borrow_mut()
+                    .load_fill(&mut buf[..read], &Address::new(Rc::clone(&code), at))
+                    .is_err()
+                {
                     break;
                 }
                 buf.truncate(read);
@@ -611,35 +694,72 @@ impl Index {
         if isa == Isa::Mips {
             let mut word = |a: u64| -> Option<u32> {
                 let mut b = [0u8; 4];
-                loader.borrow_mut().load_fill(&mut b, &Address::new(Rc::clone(&code), a)).ok()?;
+                loader
+                    .borrow_mut()
+                    .load_fill(&mut b, &Address::new(Rc::clone(&code), a))
+                    .ok()?;
                 Some(u32::from_be_bytes(b))
             };
             for &(start, end) in &funcs {
                 let n = (end.saturating_sub(start) / 4).min(MAX_SCAN_INSNS as u64) as usize;
                 let mut buf = vec![0u8; 4 * n];
-                if loader.borrow_mut().load_fill(&mut buf, &Address::new(Rc::clone(&code), start)).is_err() {
+                if loader
+                    .borrow_mut()
+                    .load_fill(&mut buf, &Address::new(Rc::clone(&code), start))
+                    .is_err()
+                {
                     continue;
                 }
-                let words: Vec<u32> = buf.chunks_exact(4).map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]])).collect();
+                let words: Vec<u32> = buf
+                    .chunks_exact(4)
+                    .map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]))
+                    .collect();
                 mips_pic_calls(start, &words, &mut word, &mut calls, &mut pic);
             }
         }
-        let mut entries: Vec<u64> = calls.iter().filter(|c| c.0 != c.1 && range_of(c.0).is_some()).map(|c| c.0).collect();
+        let mut entries: Vec<u64> = calls
+            .iter()
+            .filter(|c| c.0 != c.1 && range_of(c.0).is_some())
+            .map(|c| c.0)
+            .collect();
         entries.sort_unstable();
         entries.dedup();
         calls.retain(|(t, _)| funcs.binary_search_by_key(t, |f| f.0).is_ok());
         calls.sort_unstable();
         calls.dedup();
-        let eh = landing::read(arch.eh_sections.as_deref().map(Vec::as_slice), named, sjlj, &|a| range_of(a).is_some(), &mut |a, buf| {
-            loader.borrow_mut().load_fill(buf, &Address::new(Rc::clone(&code), a)).is_ok()
-        });
+        let eh = landing::read(
+            arch.eh_sections.as_deref().map(Vec::as_slice),
+            named,
+            sjlj,
+            &|a| range_of(a).is_some(),
+            &mut |a, buf| {
+                loader
+                    .borrow_mut()
+                    .load_fill(buf, &Address::new(Rc::clone(&code), a))
+                    .is_ok()
+            },
+        );
         let sites: BTreeSet<u64> = calls.iter().map(|c| c.1).collect();
         pic.retain(|site, _| sites.contains(site));
-        Some(Index { code, windows: isa == Isa::Sparc, mips: isa == Isa::Mips, funcs, calls, pic, entries, cold, eh, pair_args })
+        Some(Index {
+            code,
+            windows: isa == Isa::Sparc,
+            mips: isa == Isa::Mips,
+            funcs,
+            calls,
+            pic,
+            entries,
+            cold,
+            eh,
+            pair_args,
+        })
     }
 
     fn start(&self, entry: u64) -> Option<(u64, u64)> {
-        self.funcs.binary_search_by_key(&entry, |f| f.0).ok().map(|i| self.funcs[i])
+        self.funcs
+            .binary_search_by_key(&entry, |f| f.0)
+            .ok()
+            .map(|i| self.funcs[i])
     }
 
     fn containing(&self, at: u64) -> Option<(u64, u64)> {
@@ -655,7 +775,10 @@ impl Index {
 
     fn sites(&self, target: u64) -> impl Iterator<Item = u64> + '_ {
         let lo = self.calls.partition_point(|c| c.0 < target);
-        self.calls[lo..].iter().take_while(move |c| c.0 == target).map(|c| c.1)
+        self.calls[lo..]
+            .iter()
+            .take_while(move |c| c.0 == target)
+            .map(|c| c.1)
     }
 
     /// Does a direct call target `at`?
@@ -666,7 +789,8 @@ impl Index {
     /// Is `v` the address of a routine that takes the two return registers as
     /// one 64-bit argument ([`PAIR_ARG_ROUTINES`])?
     fn takes_pair(&self, v: &VarnodeData) -> bool {
-        self.target(v).is_some_and(|t| self.pair_args.binary_search(&t).is_ok())
+        self.target(v)
+            .is_some_and(|t| self.pair_args.binary_search(&t).is_ok())
     }
 
     fn at(&self, off: u64) -> Address {
@@ -709,7 +833,9 @@ impl Cache {
         if self.index.is_none() {
             self.index = Some(Index::build(arch));
         }
-        let Some(Some(index)) = &self.index else { return false };
+        let Some(Some(index)) = &self.index else {
+            return false;
+        };
         if index.code.get_index() != key.0 || index.start(key.1).is_none() {
             return false;
         }
@@ -722,8 +848,15 @@ impl Cache {
         }
         let layouts = &mut self.layouts;
         let read = index.sites(key.1).take(MAX_SITES).any(|site| {
-            let Some(caller) = index.containing(site) else { return false };
-            let Some(layout) = layouts.entry(caller.0).or_insert_with(|| layout_of(arch, index, caller)) else { return false };
+            let Some(caller) = index.containing(site) else {
+                return false;
+            };
+            let Some(layout) = layouts
+                .entry(caller.0)
+                .or_insert_with(|| layout_of(arch, index, caller))
+            else {
+                return false;
+            };
             site_use(arch, index, hi, key.1, site, caller, layout) == Use::Read
         });
         self.first_reads.insert(key.1, read);
@@ -735,11 +868,18 @@ impl Cache {
     /// and the callers whose RETURN hands the pair back (it is proven when one
     /// of them is). Nothing for a function no symbol starts, that never ends
     /// or never writes the register.
-    pub(super) fn evidence(&mut self, arch: &Architecture, lo: Key, key: Entry) -> (bool, Vec<Entry>) {
+    pub(super) fn evidence(
+        &mut self,
+        arch: &Architecture,
+        lo: Key,
+        key: Entry,
+    ) -> (bool, Vec<Entry>) {
         if self.index.is_none() {
             self.index = Some(Index::build(arch));
         }
-        let Some(Some(index)) = &self.index else { return (false, Vec::new()) };
+        let Some(Some(index)) = &self.index else {
+            return (false, Vec::new());
+        };
         if index.code.get_index() != key.0 || index.start(key.1).is_none() {
             return (false, Vec::new());
         }
@@ -768,19 +908,35 @@ impl Cache {
         if !clobbers {
             return (false, Vec::new());
         }
-        (facts.read, facts.returned.iter().map(|&c| (key.0, c)).collect())
+        (
+            facts.read,
+            facts.returned.iter().map(|&c| (key.0, c)).collect(),
+        )
     }
 }
 
 /// Read every call site of `callee` ([`site_use`]).
-fn facts(arch: &Architecture, index: &Index, lo: Key, callee: u64, layouts: &mut BTreeMap<u64, Option<Layout>>) -> Facts {
+fn facts(
+    arch: &Architecture,
+    index: &Index,
+    lo: Key,
+    callee: u64,
+    layouts: &mut BTreeMap<u64, Option<Layout>>,
+) -> Facts {
     let mut out = Facts::default();
     if crate::p4_calls::kuna_calleenoreturn::is_no_return(arch, &index.at(callee)) {
         return out;
     }
     for site in index.sites(callee).take(MAX_SITES) {
-        let Some(caller) = index.containing(site) else { continue };
-        let Some(layout) = layouts.entry(caller.0).or_insert_with(|| layout_of(arch, index, caller)) else { continue };
+        let Some(caller) = index.containing(site) else {
+            continue;
+        };
+        let Some(layout) = layouts
+            .entry(caller.0)
+            .or_insert_with(|| layout_of(arch, index, caller))
+        else {
+            continue;
+        };
         match site_use(arch, index, lo, callee, site, caller, layout) {
             Use::Read => {
                 out.read = true;
@@ -797,11 +953,15 @@ fn facts(arch: &Architecture, index: &Index, lo: Key, callee: u64, layouts: &mut
 }
 
 fn is_reg(v: &VarnodeData) -> bool {
-    v.space.as_ref().is_some_and(|s| s.get_type() == spacetype::IPTR_PROCESSOR)
+    v.space
+        .as_ref()
+        .is_some_and(|s| s.get_type() == spacetype::IPTR_PROCESSOR)
 }
 
 fn is_const(v: &VarnodeData) -> bool {
-    v.space.as_ref().is_some_and(|s| s.get_type() == spacetype::IPTR_CONSTANT)
+    v.space
+        .as_ref()
+        .is_some_and(|s| s.get_type() == spacetype::IPTR_CONSTANT)
 }
 
 fn key(v: &VarnodeData) -> Option<Key> {
@@ -827,7 +987,12 @@ fn window(insn: &Insn, size: u32) -> bool {
 
 /// Does `insn` store two or more registers, or a register pair?
 fn stores_many(insn: &Insn, size: u32) -> bool {
-    let stored = || insn.ops.iter().filter(|(opc, _, _)| *opc == OpCode::CPUI_STORE).filter_map(|(_, _, ins)| ins.get(2));
+    let stored = || {
+        insn.ops
+            .iter()
+            .filter(|(opc, _, _)| *opc == OpCode::CPUI_STORE)
+            .filter_map(|(_, _, ins)| ins.get(2))
+    };
     stored().any(|v| is_reg(v) && v.size > size) || stored().filter(|v| is_reg(v)).count() >= 2
 }
 
@@ -836,22 +1001,46 @@ fn stores_many(insn: &Insn, size: u32) -> bool {
 /// or more registers or of a register pair is not, past a branch: gcc merges
 /// two stores into SPARC's `std %o0` or ARM's `stm` at a join where the
 /// second word is dead on the path from the call.
-fn reads(insn: &Insn, opc: OpCode, out: &Option<VarnodeData>, ins: &[VarnodeData], lo: &Key, branched: bool) -> bool {
+fn reads(
+    insn: &Insn,
+    opc: OpCode,
+    out: &Option<VarnodeData>,
+    ins: &[VarnodeData],
+    lo: &Key,
+    branched: bool,
+) -> bool {
     if matches!(
         opc,
-        OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_RETURN | OpCode::CPUI_BRANCH | OpCode::CPUI_BRANCHIND
+        OpCode::CPUI_CALL
+            | OpCode::CPUI_CALLIND
+            | OpCode::CPUI_RETURN
+            | OpCode::CPUI_BRANCH
+            | OpCode::CPUI_BRANCHIND
     ) {
         return false;
     }
-    if opc == OpCode::CPUI_COPY && out.as_ref().is_some_and(is_reg) && ins.first().is_some_and(is_reg) && window(insn, lo.2) {
+    if opc == OpCode::CPUI_COPY
+        && out.as_ref().is_some_and(is_reg)
+        && ins.first().is_some_and(is_reg)
+        && window(insn, lo.2)
+    {
         return false;
     }
-    if matches!(opc, OpCode::CPUI_INT_XOR | OpCode::CPUI_INT_SUB) && ins.len() == 2 && ins[0] == ins[1] {
+    if matches!(opc, OpCode::CPUI_INT_XOR | OpCode::CPUI_INT_SUB)
+        && ins.len() == 2
+        && ins[0] == ins[1]
+    {
         return false;
     }
     let merged = opc == OpCode::CPUI_STORE && branched && stores_many(insn, lo.2);
-    let ins = if opc == OpCode::CPUI_CBRANCH { &ins[1..] } else { ins };
-    ins.iter().enumerate().any(|(i, v)| !(is_const(v) || (merged && i == 2)) && key(v).is_some_and(|k| overlaps(&k, lo)))
+    let ins = if opc == OpCode::CPUI_CBRANCH {
+        &ins[1..]
+    } else {
+        ins
+    };
+    ins.iter().enumerate().any(|(i, v)| {
+        !(is_const(v) || (merged && i == 2)) && key(v).is_some_and(|k| overlaps(&k, lo))
+    })
 }
 
 /// The bytes `k` covers.
@@ -877,16 +1066,29 @@ enum Taint {
 fn depends(insn: &Insn, lo: &Key) -> bool {
     let mut vals: BTreeMap<Key, Taint> = BTreeMap::from([(*lo, Taint::Lin(1))]);
     let mut dirty: BTreeSet<(i32, u64)> = (0..u64::from(lo.2)).map(|i| (lo.0, lo.1 + i)).collect();
-    let get = |v: &VarnodeData, vals: &BTreeMap<Key, Taint>, dirty: &BTreeSet<(i32, u64)>| -> Taint {
-        let Some(k) = key(v).filter(|_| !is_const(v)) else { return Taint::Clean };
-        match vals.get(&k) {
-            Some(&t) => t,
-            None if bytes(k).any(|b| dirty.contains(&b)) => Taint::Dirty,
-            None => Taint::Clean,
+    let get =
+        |v: &VarnodeData, vals: &BTreeMap<Key, Taint>, dirty: &BTreeSet<(i32, u64)>| -> Taint {
+            let Some(k) = key(v).filter(|_| !is_const(v)) else {
+                return Taint::Clean;
+            };
+            match vals.get(&k) {
+                Some(&t) => t,
+                None if bytes(k).any(|b| dirty.contains(&b)) => Taint::Dirty,
+                None => Taint::Clean,
+            }
+        };
+    let temp = |v: &VarnodeData| {
+        v.space
+            .as_ref()
+            .is_some_and(|s| s.get_type() == spacetype::IPTR_INTERNAL)
+    };
+    let mask = |c: i64, size: u32| {
+        if size >= 8 {
+            c
+        } else {
+            c & ((1i64 << (8 * size)) - 1)
         }
     };
-    let temp = |v: &VarnodeData| v.space.as_ref().is_some_and(|s| s.get_type() == spacetype::IPTR_INTERNAL);
-    let mask = |c: i64, size: u32| if size >= 8 { c } else { c & ((1i64 << (8 * size)) - 1) };
     for (opc, out, ins) in &insn.ops {
         let t: Vec<Taint> = ins.iter().map(|v| get(v, &vals, &dirty)).collect();
         let any = t.iter().any(|&x| x != Taint::Clean);
@@ -898,7 +1100,12 @@ fn depends(insn: &Insn, lo: &Key) -> bool {
         };
         let size = out.as_ref().map_or(0, |o| o.size);
         let r = match opc {
-            OpCode::CPUI_STORE | OpCode::CPUI_LOAD | OpCode::CPUI_CBRANCH | OpCode::CPUI_BRANCHIND | OpCode::CPUI_CALLIND | OpCode::CPUI_RETURN
+            OpCode::CPUI_STORE
+            | OpCode::CPUI_LOAD
+            | OpCode::CPUI_CBRANCH
+            | OpCode::CPUI_BRANCHIND
+            | OpCode::CPUI_CALLIND
+            | OpCode::CPUI_RETURN
                 if any =>
             {
                 return true;
@@ -921,7 +1128,14 @@ fn depends(insn: &Insn, lo: &Key) -> bool {
             OpCode::CPUI_COPY => t[0],
             OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB => match (lin(t[0]), lin(t[1])) {
                 (Some(a), Some(b)) => {
-                    let c = mask(if *opc == OpCode::CPUI_INT_ADD { a.wrapping_add(b) } else { a.wrapping_sub(b) }, size);
+                    let c = mask(
+                        if *opc == OpCode::CPUI_INT_ADD {
+                            a.wrapping_add(b)
+                        } else {
+                            a.wrapping_sub(b)
+                        },
+                        size,
+                    );
                     if c == 0 { Taint::Clean } else { Taint::Lin(c) }
                 }
                 _ => Taint::Dirty,
@@ -963,8 +1177,15 @@ fn literal(v: &VarnodeData, known: &BTreeMap<Key, u64>) -> Option<u64> {
 }
 
 /// Record what op `opc` writes into `known` when its inputs are literals.
-fn track(opc: OpCode, out: &Option<VarnodeData>, ins: &[VarnodeData], known: &mut BTreeMap<Key, u64>) {
-    let Some(k) = out.as_ref().and_then(key) else { return };
+fn track(
+    opc: OpCode,
+    out: &Option<VarnodeData>,
+    ins: &[VarnodeData],
+    known: &mut BTreeMap<Key, u64>,
+) {
+    let Some(k) = out.as_ref().and_then(key) else {
+        return;
+    };
     let a = ins.first().and_then(|v| literal(v, known));
     let b = ins.get(1).and_then(|v| literal(v, known));
     let v = match (opc, a, b) {
@@ -989,7 +1210,12 @@ fn track(opc: OpCode, out: &Option<VarnodeData>, ins: &[VarnodeData], known: &mu
 fn tracked(arch: &Architecture, index: &Index, entry: u64) -> BTreeMap<Key, u64> {
     arch.with_context_db(|db| db.get_tracked_set(&index.at(entry)).clone())
         .iter()
-        .filter_map(|t| Some(((t.loc.space.as_ref()?.get_index(), t.loc.offset, t.loc.size), t.val)))
+        .filter_map(|t| {
+            Some((
+                (t.loc.space.as_ref()?.get_index(), t.loc.offset, t.loc.size),
+                t.val,
+            ))
+        })
         .collect()
 }
 
@@ -997,7 +1223,12 @@ fn tracked(arch: &Architecture, index: &Index, entry: u64) -> BTreeMap<Key, u64>
 /// literals `known` holds at its start: each operation some path reaches, the
 /// code addresses a reached branch may go to, and whether a path falls off
 /// the end. `stops` ends a path at a call.
-fn reached(insn: &Insn, known: &BTreeMap<Key, u64>, index: &Index, stops: &dyn Fn(u64) -> bool) -> (Vec<usize>, Vec<u64>, bool) {
+fn reached(
+    insn: &Insn,
+    known: &BTreeMap<Key, u64>,
+    index: &Index,
+    stops: &dyn Fn(u64) -> bool,
+) -> (Vec<usize>, Vec<u64>, bool) {
     let n = insn.ops.len();
     let mut seen = vec![false; n];
     let (mut ops, mut targets, mut falls) = (Vec::new(), Vec::new(), false);
@@ -1016,7 +1247,11 @@ fn reached(insn: &Insn, known: &BTreeMap<Key, u64>, index: &Index, stops: &dyn F
             let (opc, out, ins) = &insn.ops[op];
             match opc {
                 OpCode::CPUI_RETURN | OpCode::CPUI_BRANCHIND => break,
-                OpCode::CPUI_CALL if ins.first().and_then(|v| index.target(v)).is_some_and(stops) => break,
+                OpCode::CPUI_CALL
+                    if ins.first().and_then(|v| index.target(v)).is_some_and(stops) =>
+                {
+                    break;
+                }
                 OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH => {
                     let taken = if *opc == OpCode::CPUI_CBRANCH {
                         ins.get(1).and_then(|c| literal(c, &known)).map(|c| c != 0)
@@ -1182,7 +1417,9 @@ fn cond_of(v: &VarnodeData, deriv: &BTreeMap<Key, Cond>) -> Cond {
     if is_const(v) {
         return Cond::Lit(v.offset);
     }
-    let Some(k) = key(v) else { return Cond::Unknown };
+    let Some(k) = key(v) else {
+        return Cond::Unknown;
+    };
     if let Some(c) = deriv.get(&k) {
         return c.clone();
     }
@@ -1195,7 +1432,13 @@ fn cond_of(v: &VarnodeData, deriv: &BTreeMap<Key, Cond>) -> Cond {
 
 /// Record in `deriv` the condition op `opc` writes into a temporary, and in
 /// `facts` that a register it writes no longer holds what the path learned.
-fn derive(opc: OpCode, out: &Option<VarnodeData>, ins: &[VarnodeData], deriv: &mut BTreeMap<Key, Cond>, facts: &mut PathFacts) {
+fn derive(
+    opc: OpCode,
+    out: &Option<VarnodeData>,
+    ins: &[VarnodeData],
+    deriv: &mut BTreeMap<Key, Cond>,
+    facts: &mut PathFacts,
+) {
     let Some(o) = out.as_ref() else { return };
     let Some(k) = key(o) else { return };
     let arg = |i: usize| ins.get(i).map_or(Cond::Unknown, |v| cond_of(v, deriv));
@@ -1205,7 +1448,9 @@ fn derive(opc: OpCode, out: &Option<VarnodeData>, ins: &[VarnodeData], deriv: &m
         OpCode::CPUI_BOOL_AND => Cond::And(Box::new(arg(0)), Box::new(arg(1))),
         OpCode::CPUI_BOOL_OR => Cond::Or(Box::new(arg(0)), Box::new(arg(1))),
         OpCode::CPUI_INT_EQUAL => Cond::Eq(Box::new(arg(0)), Box::new(arg(1))),
-        OpCode::CPUI_INT_NOTEQUAL => Cond::Not(Box::new(Cond::Eq(Box::new(arg(0)), Box::new(arg(1))))),
+        OpCode::CPUI_INT_NOTEQUAL => {
+            Cond::Not(Box::new(Cond::Eq(Box::new(arg(0)), Box::new(arg(1)))))
+        }
         _ => Cond::Unknown,
     };
     if is_reg(o) {
@@ -1229,7 +1474,9 @@ fn derive(opc: OpCode, out: &Option<VarnodeData>, ins: &[VarnodeData], deriv: &m
 /// target, so what it reads holds on that path only (gcc fills one with the
 /// target's `std %o0`, whose `%o1` is dead on the path that falls through).
 fn delay_slot(arch: &Architecture, index: &Index, at: u64, insn: &Insn) -> Option<Insn> {
-    let conditional = insn.ops.iter().any(|(opc, _, ins)| *opc == OpCode::CPUI_CBRANCH && ins.first().is_some_and(|d| !is_const(d)));
+    let conditional = insn.ops.iter().any(|(opc, _, ins)| {
+        *opc == OpCode::CPUI_CBRANCH && ins.first().is_some_and(|d| !is_const(d))
+    });
     if !conditional || insn.len <= 4 {
         return None;
     }
@@ -1248,15 +1495,27 @@ fn delay_slot(arch: &Architecture, index: &Index, at: u64, insn: &Insn) -> Optio
 /// reaches a word the caller loads as data, or one after which a branch tests
 /// a flag nothing set since the call: the call need not return there. A path
 /// that branches to a direct call's target is a tail call and ends there.
-fn site_use(arch: &Architecture, index: &Index, lo: Key, callee: u64, site: u64, caller: (u64, u64), layout: &Layout) -> Use {
-    let Some(insn) = decode(arch, &index.at(site)) else { return Use::Dead };
+fn site_use(
+    arch: &Architecture,
+    index: &Index,
+    lo: Key,
+    callee: u64,
+    site: u64,
+    caller: (u64, u64),
+    layout: &Layout,
+) -> Use {
+    let Some(insn) = decode(arch, &index.at(site)) else {
+        return Use::Dead;
+    };
     let pic = index.pic.get(&site).copied();
     if pic.is_some_and(|load| layout.joins.range(load + 1..=site).next().is_some()) {
         return Use::Dead;
     }
     let Some(k) = insn.ops.iter().position(|(opc, _, ins)| match pic {
         Some(_) => *opc == OpCode::CPUI_CALLIND,
-        None => *opc == OpCode::CPUI_CALL && ins.first().and_then(|v| index.target(v)) == Some(callee),
+        None => {
+            *opc == OpCode::CPUI_CALL && ins.first().and_then(|v| index.target(v)) == Some(callee)
+        }
     }) else {
         return Use::Dead;
     };
@@ -1277,9 +1536,20 @@ fn site_use(arch: &Architecture, index: &Index, lo: Key, callee: u64, site: u64,
     let mut seen: BTreeSet<(u64, bool, PathFacts)> = BTreeSet::new();
     let mut insns: BTreeMap<u64, Option<Rc<Insn>>> = BTreeMap::new();
     let mut result = Use::Dead;
-    let mut visit = |t: u64, f: PathFacts, branched: bool, seen: &mut BTreeSet<(u64, bool, PathFacts)>, todo: &mut Vec<Item>| {
-        if t > caller.0 && t < caller.1 && seen.len() < MAX_SITE_INSNS && seen.insert((t, branched, f.clone())) {
-            if let Some(i) = insns.entry(t).or_insert_with(|| decode(arch, &index.at(t)).map(Rc::new)) {
+    let mut visit = |t: u64,
+                     f: PathFacts,
+                     branched: bool,
+                     seen: &mut BTreeSet<(u64, bool, PathFacts)>,
+                     todo: &mut Vec<Item>| {
+        if t > caller.0
+            && t < caller.1
+            && seen.len() < MAX_SITE_INSNS
+            && seen.insert((t, branched, f.clone()))
+        {
+            if let Some(i) = insns
+                .entry(t)
+                .or_insert_with(|| decode(arch, &index.at(t)).map(Rc::new))
+            {
                 todo.push((t, Rc::clone(i), 0, f, BTreeMap::new(), branched));
             }
         }
@@ -1287,7 +1557,10 @@ fn site_use(arch: &Architecture, index: &Index, lo: Key, callee: u64, site: u64,
     while let Some((at, insn, mut op, mut facts, mut deriv, branched)) = todo.pop() {
         if at != site && op == 0 {
             let end = at + insn.len.max(1);
-            if layout.data.range(at..end).next().is_some() || index.eh.pad_in(at, end) || (!branched && layout.joins.contains(&at)) {
+            if layout.data.range(at..end).next().is_some()
+                || index.eh.pad_in(at, end)
+                || (!branched && layout.joins.contains(&at))
+            {
                 return Use::Dead;
             }
             if index.entry(at) {
@@ -1299,21 +1572,35 @@ fn site_use(arch: &Architecture, index: &Index, lo: Key, callee: u64, site: u64,
         }
         let mut fall = true;
         let mut forked = branched;
-        let counts = |i: &Insn| i.ops.iter().filter(|(opc, out, ins)| reads(i, *opc, out, ins, &lo, branched)).count();
+        let counts = |i: &Insn| {
+            i.ops
+                .iter()
+                .filter(|(opc, out, ins)| reads(i, *opc, out, ins, &lo, branched))
+                .count()
+        };
         let slot = delay_slot(arch, index, at, &insn).map_or(0, |d| counts(&d));
-        let genuine = (slot == 0 || counts(&insn) > slot) && !(index.mips && mips_whole_load(arch, index, at, &insn, &lo));
+        let genuine = (slot == 0 || counts(&insn) > slot)
+            && !(index.mips && mips_whole_load(arch, index, at, &insn, &lo));
         let mut dep = None;
         while op < insn.ops.len() {
             let (opc, out, ins) = &insn.ops[op];
             op += 1;
-            if genuine && reads(&insn, *opc, out, ins, &lo, branched) && (at == site || *dep.get_or_insert_with(|| depends(&insn, &lo))) {
+            if genuine
+                && reads(&insn, *opc, out, ins, &lo, branched)
+                && (at == site || *dep.get_or_insert_with(|| depends(&insn, &lo)))
+            {
                 return Use::Read;
             }
-            if matches!(opc, OpCode::CPUI_CALL | OpCode::CPUI_BRANCH) && ins.first().is_some_and(|v| index.takes_pair(v)) {
+            if matches!(opc, OpCode::CPUI_CALL | OpCode::CPUI_BRANCH)
+                && ins.first().is_some_and(|v| index.takes_pair(v))
+            {
                 return Use::Read;
             }
             if matches!(opc, OpCode::CPUI_CALL | OpCode::CPUI_CALLIND)
-                || out.as_ref().and_then(key).is_some_and(|o| overlaps(&o, &lo))
+                || out
+                    .as_ref()
+                    .and_then(key)
+                    .is_some_and(|o| overlaps(&o, &lo))
             {
                 fall = false;
                 break;
@@ -1356,7 +1643,14 @@ fn site_use(arch: &Architecture, index: &Index, lo: Key, callee: u64, site: u64,
                         if taken == Some(true) {
                             op = to as usize;
                         } else {
-                            todo.push((at, Rc::clone(&insn), to as usize, there, deriv.clone(), branched));
+                            todo.push((
+                                at,
+                                Rc::clone(&insn),
+                                to as usize,
+                                there,
+                                deriv.clone(),
+                                branched,
+                            ));
                         }
                         continue;
                     }
@@ -1381,13 +1675,23 @@ fn site_use(arch: &Architecture, index: &Index, lo: Key, callee: u64, site: u64,
 }
 
 /// Scan the function at `entry` once per image (see [`Scan`]).
-fn scan<'a>(arch: &Architecture, index: &Index, lo: Key, entry: u64, cache: &'a mut BTreeMap<u64, Scan>) -> &'a Scan {
-    cache.entry(entry).or_insert_with(|| scan_function(arch, index, lo, entry))
+fn scan<'a>(
+    arch: &Architecture,
+    index: &Index,
+    lo: Key,
+    entry: u64,
+    cache: &'a mut BTreeMap<u64, Scan>,
+) -> &'a Scan {
+    cache
+        .entry(entry)
+        .or_insert_with(|| scan_function(arch, index, lo, entry))
 }
 
 fn scan_function(arch: &Architecture, index: &Index, lo: Key, entry: u64) -> Scan {
     let mut out = Scan::default();
-    let Some((start, end)) = index.start(entry) else { return out };
+    let Some((start, end)) = index.start(entry) else {
+        return out;
+    };
     let base = tracked(arch, index, start);
     let noreturn = |t: u64| crate::p4_calls::kuna_calleenoreturn::is_no_return(arch, &index.at(t));
     let mut todo = vec![start];
@@ -1399,17 +1703,26 @@ fn scan_function(arch: &Architecture, index: &Index, lo: Key, entry: u64) -> Sca
         if seen.len() >= MAX_SCAN_INSNS || !seen.insert(at) {
             continue;
         }
-        let Some(insn) = decode(arch, &index.at(at)) else { continue };
+        let Some(insn) = decode(arch, &index.at(at)) else {
+            continue;
+        };
         let win = window(&insn, lo.2);
         out.windowed |= win;
         if at == start {
-            out.saves = insn.ops.iter().any(|(opc, _, ins)| *opc == OpCode::CPUI_STORE && ins.get(2).and_then(key).is_some_and(|k| overlaps(&k, &lo)));
+            out.saves = insn.ops.iter().any(|(opc, _, ins)| {
+                *opc == OpCode::CPUI_STORE
+                    && ins.get(2).and_then(key).is_some_and(|k| overlaps(&k, &lo))
+            });
         }
         let (ops, targets, falls) = reached(&insn, &base, index, &noreturn);
         for i in ops {
             let (opc, o, ins) = &insn.ops[i];
             if let Some(k) = o.as_ref().and_then(key) {
-                if win && *opc == OpCode::CPUI_COPY && ins.first().is_some_and(is_reg) && o.as_ref().is_some_and(is_reg) {
+                if win
+                    && *opc == OpCode::CPUI_COPY
+                    && ins.first().is_some_and(is_reg)
+                    && o.as_ref().is_some_and(is_reg)
+                {
                     if overlaps(&k, &lo) {
                         restored.extend(ins.first().and_then(key));
                     }
@@ -1448,7 +1761,14 @@ fn scan_function(arch: &Architecture, index: &Index, lo: Key, entry: u64) -> Sca
             break;
         }
     }
-    out.writes = if out.windowed { in_window || written.iter().any(|k| restored.iter().any(|r| overlaps(k, r))) } else { direct };
+    out.writes = if out.windowed {
+        in_window
+            || written
+                .iter()
+                .any(|k| restored.iter().any(|r| overlaps(k, r)))
+    } else {
+        direct
+    };
     out.calls.sort_unstable();
     out.calls.dedup();
     out
@@ -1474,7 +1794,8 @@ struct Layout {
 /// long to walk.
 fn layout_of(arch: &Architecture, index: &Index, func: (u64, u64)) -> Option<Layout> {
     let (start, end) = func;
-    if index.cold.binary_search(&start).is_ok() || index.eh.blind || index.eh.unknown_in(start, end) {
+    if index.cold.binary_search(&start).is_ok() || index.eh.blind || index.eh.unknown_in(start, end)
+    {
         return None;
     }
     let base = tracked(arch, index, start);
@@ -1489,17 +1810,23 @@ fn layout_of(arch: &Architecture, index: &Index, func: (u64, u64)) -> Option<Lay
         if seen.len() > MAX_SCAN_INSNS {
             return None;
         }
-        let Some(insn) = decode(arch, &index.at(at)) else { continue };
+        let Some(insn) = decode(arch, &index.at(at)) else {
+            continue;
+        };
         let (ops, targets, falls) = reached(&insn, &base, index, &noreturn);
         if ops.iter().any(|&i| insn.ops[i].0 == OpCode::CPUI_BRANCHIND) {
             return None;
         }
         for &i in &ops {
             let (opc, _, ins) = &insn.ops[i];
-            let skip = usize::from(matches!(opc, OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH | OpCode::CPUI_CALL));
+            let skip = usize::from(matches!(
+                opc,
+                OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH | OpCode::CPUI_CALL
+            ));
             for v in ins.iter().skip(skip) {
                 if let Some(a) = index.target(v).filter(|&a| a >= start && a < end) {
-                    out.data.extend(a..a.saturating_add(u64::from(v.size)).min(end));
+                    out.data
+                        .extend(a..a.saturating_add(u64::from(v.size)).min(end));
                 }
             }
         }
@@ -1523,7 +1850,13 @@ fn layout_of(arch: &Architecture, index: &Index, func: (u64, u64)) -> Option<Lay
 /// it: itself, by an indirect or unknown call, or through a direct callee or
 /// a function it branches into that does? A function with a register window
 /// only by itself, and none that saves the register on entry.
-fn clobbers(arch: &Architecture, index: &Index, lo: Key, entry: u64, cache: &mut BTreeMap<u64, Scan>) -> bool {
+fn clobbers(
+    arch: &Architecture,
+    index: &Index,
+    lo: Key,
+    entry: u64,
+    cache: &mut BTreeMap<u64, Scan>,
+) -> bool {
     let mut queue = VecDeque::from([entry]);
     let mut seen: BTreeSet<u64> = BTreeSet::from([entry]);
     while let Some(f) = queue.pop_front() {

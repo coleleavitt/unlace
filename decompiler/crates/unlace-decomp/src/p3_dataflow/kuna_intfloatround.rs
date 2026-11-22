@@ -9,7 +9,9 @@ use unlace_base::types::{int4, uintb};
 /// Significant bits of a `size`-byte float. The 80-bit extended format SLEIGH
 /// gives x87 and 68k registers has no FloatFormat entry but carries 64.
 fn float_precision(arch: &ArchContext, size: int4) -> Option<int4> {
-    arch.get_float_format(size).map(|f| f.get_precision()).or((size == 10).then_some(64))
+    arch.get_float_format(size)
+        .map(|f| f.get_precision())
+        .or((size == 10).then_some(64))
 }
 
 /// Can a binary format with `precision` significant bits hold every value a
@@ -20,7 +22,8 @@ fn int_converts_exactly(precision: int4, size: int4, constant: Option<uintb>) ->
             let shift = 64 - size as u32 * 8;
             let magnitude = (((raw << shift) as i64) >> shift).unsigned_abs();
             magnitude == 0
-                || 64 - (magnitude >> magnitude.trailing_zeros()).leading_zeros() <= precision as u32
+                || 64 - (magnitude >> magnitude.trailing_zeros()).leading_zeros()
+                    <= precision as u32
         }
         _ => precision >= size * 8 - 1,
     }
@@ -31,16 +34,24 @@ fn int_converts_exactly(precision: int4, size: int4, constant: Option<uintb>) ->
 /// float the binary rounds through?
 pub(crate) fn combines(arch: &ArchContext, int_size: int4, mid_size: int4, out_size: int4) -> bool {
     mid_size == out_size
-        || float_precision(arch, mid_size).is_some_and(|bits| int_converts_exactly(bits, int_size, None))
+        || float_precision(arch, mid_size)
+            .is_some_and(|bits| int_converts_exactly(bits, int_size, None))
 }
 
 /// May `SubfloatFlow` re-issue an INT2FLOAT of an `int_size`-byte value (or
 /// `constant`) at its narrower `precision` instead of `original_size`? The
 /// replacement is never wider than the original, so its own exactness is
 /// the whole condition.
-pub(crate) fn lowers(arch: &ArchContext, int_size: int4, constant: Option<uintb>, original_size: int4, precision: int4) -> bool {
+pub(crate) fn lowers(
+    arch: &ArchContext,
+    int_size: int4,
+    constant: Option<uintb>,
+    original_size: int4,
+    precision: int4,
+) -> bool {
     original_size == precision
-        || float_precision(arch, precision).is_some_and(|bits| int_converts_exactly(bits, int_size, constant))
+        || float_precision(arch, precision)
+            .is_some_and(|bits| int_converts_exactly(bits, int_size, constant))
 }
 
 #[cfg(test)]

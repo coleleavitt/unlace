@@ -45,14 +45,12 @@ use unlace_decomp::architecture::Architecture;
 use unlace_sleigh::sleigh::{OpObject as SleighOpObject, Sleigh};
 use unlace_sleigh::translate::Translate;
 
+use crate::fid::db::{FLAG_HAS_TERMINATOR, FidRecord};
+use crate::fid::hash::{FidHasher, InsnFingerprint, OpObject, OperandFingerprint, RelocationQuery};
+use crate::fid::skipper::{InstructionSkipper, X86InstructionSkipper};
 use crate::listing::classify::classify;
 use crate::listing::decode::decode_one;
 use crate::loadimage_object::ObjectLoadImage;
-use crate::fid::db::{FidRecord, FLAG_HAS_TERMINATOR};
-use crate::fid::hash::{
-    FidHasher, InsnFingerprint, OpObject, OperandFingerprint, RelocationQuery,
-};
-use crate::fid::skipper::{InstructionSkipper, X86InstructionSkipper};
 
 /// One decoded instruction in a function's extent (the linear-decode result the
 /// fingerprint is assembled from).
@@ -98,8 +96,15 @@ pub fn build_records(
     // the raw `object::File` symbol address is section-relative.
     let mut funcs = image.func_symbols();
     let arm32 = arch.archid.starts_with("ARM:") && arch.archid.contains(":32:");
-    let sizes: std::collections::BTreeMap<u64, u64> = image.func_symbol_sizes().into_iter().collect();
-    funcs.sort_by_key(|(a, _)| if arm32 { (*a & !1, a & 1 == 0) } else { (*a, false) });
+    let sizes: std::collections::BTreeMap<u64, u64> =
+        image.func_symbol_sizes().into_iter().collect();
+    funcs.sort_by_key(|(a, _)| {
+        if arm32 {
+            (*a & !1, a & 1 == 0)
+        } else {
+            (*a, false)
+        }
+    });
     funcs.dedup_by_key(|(a, _)| if arm32 { *a & !1 } else { *a });
 
     // The relocation oracle for the 4-way scalar rule: a relocation overlapping
@@ -113,7 +118,11 @@ pub fn build_records(
 
     let dbg = std::env::var("KUNA_FID_DEBUG").is_ok();
     if dbg {
-        eprintln!("[fid] funcs={} archid={} is_x86={is_x86}", funcs.len(), arch.archid);
+        eprintln!(
+            "[fid] funcs={} archid={} is_x86={is_x86}",
+            funcs.len(),
+            arch.archid
+        );
     }
 
     let mut records: Vec<FidRecord> = Vec::new();
@@ -126,23 +135,33 @@ pub fn build_records(
         // The exclusive upper bound: the nearer of the next function entry and
         // the symbol end. `None` ⇒ decode until a terminal / error.
         let address = if arm32 { *entry & !1 } else { *entry };
-        let next = funcs.get(idx + 1).map(|(a, _)| if arm32 { *a & !1 } else { *a });
+        let next = funcs
+            .get(idx + 1)
+            .map(|(a, _)| if arm32 { *a & !1 } else { *a });
         let symbol_end = sizes.get(entry).and_then(|size| address.checked_add(*size));
         let end = match (next, symbol_end) {
             (Some(a), Some(b)) => Some(a.min(b)),
             (a, b) => a.or(b),
         };
-        let Some(_scope) = translate.context_scope() else { continue };
+        let Some(_scope) = translate.context_scope() else {
+            continue;
+        };
         if arm32 && entry & 1 != 0 {
             let addr = Address::new(Rc::clone(&code_space), address);
-            if arch.with_context_db_mut(|db| db.set_variable(b"TMode", &addr, 1)).is_err() {
+            if arch
+                .with_context_db_mut(|db| db.set_variable(b"TMode", &addr, 1))
+                .is_err()
+            {
                 continue;
             }
         }
         let extent = decode_extent(translate, address, end, &code_space);
         if extent.len() < 4 {
             if dbg {
-                eprintln!("[fid] {name} @ {entry:#x}: extent {} < 4, skip", extent.len());
+                eprintln!(
+                    "[fid] {name} @ {entry:#x}: extent {} < 4, skip",
+                    extent.len()
+                );
             }
             continue;
         }
@@ -249,12 +268,20 @@ fn decode_extent(
             break; // an undecodable byte ends the clip
         };
         let len = dec.len.max(1); // never advance by 0 (avoid an infinite loop)
-        if next.is_some_and(|end| vma.checked_add(u64::from(len)).is_none_or(|end_insn| end_insn > end)) {
+        if next.is_some_and(|end| {
+            vma.checked_add(u64::from(len))
+                .is_none_or(|end_insn| end_insn > end)
+        }) {
             break;
         }
         let cls = classify(&dec.ops, vma, dec.len);
         let is_terminal = cls.flow.is_terminal;
-        out.push(ExtentInsn { addr: vma, len, is_call: cls.flow.is_call, is_terminal });
+        out.push(ExtentInsn {
+            addr: vma,
+            len,
+            is_call: cls.flow.is_call,
+            is_terminal,
+        });
 
         // When there is no `next` bound, a terminal (return / unconditional
         // branch out) ends the contiguous body.
@@ -303,9 +330,15 @@ pub(crate) fn fingerprint_from_mask(
 /// Re-tag the SLEIGH op-object to the hasher's mirror enum (identical shape).
 fn map_op_object(o: SleighOpObject) -> OpObject {
     match o {
-        SleighOpObject::Scalar { signed, whole_operand, is_address } => {
-            OpObject::Scalar { signed, whole_operand, is_address }
-        }
+        SleighOpObject::Scalar {
+            signed,
+            whole_operand,
+            is_address,
+        } => OpObject::Scalar {
+            signed,
+            whole_operand,
+            is_address,
+        },
         SleighOpObject::Register { offset } => OpObject::Register { offset },
         SleighOpObject::Address => OpObject::Address,
     }
@@ -329,8 +362,8 @@ struct ObjectRelocations {
 
 impl ObjectRelocations {
     fn from_object(file: &object::File) -> Self {
-        use object::read::{Object, ObjectSection};
         use object::SectionIndex;
+        use object::read::{Object, ObjectSection};
         use std::collections::HashMap;
 
         const SHF_ALLOC: u64 = 0x2;
@@ -375,7 +408,9 @@ impl ObjectRelocations {
 impl RelocationQuery for ObjectRelocations {
     fn has_relocation_in(&self, min_addr: u64, max_addr: u64) -> bool {
         // Any stored range overlapping the inclusive query range [min, max].
-        self.ranges.iter().any(|&(s, e)| s <= max_addr && min_addr <= e)
+        self.ranges
+            .iter()
+            .any(|&(s, e)| s <= max_addr && min_addr <= e)
     }
 }
 

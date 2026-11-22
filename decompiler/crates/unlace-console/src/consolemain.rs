@@ -23,8 +23,7 @@ use std::io::{Read, Write};
 use std::process::ExitCode;
 
 use crate::ifacedecomp::{
-    execute, register_console_commands, register_decomp_commands, IfaceDecompData,
-    DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_console_commands, register_decomp_commands,
 };
 use crate::ifaceterm::IfaceTerm;
 use crate::interface::IfaceStatus;
@@ -157,11 +156,7 @@ fn run_console(status: &mut IfaceStatus) -> u8 {
     // Final drain (any trailing output / "Aborting process").
     drain_stdout(status, &mut stdout);
     let _ = stdout.flush();
-    if status.is_in_error() {
-        1
-    } else {
-        0
-    }
+    if status.is_in_error() { 1 } else { 0 }
 }
 
 /// Drain the accumulated command output (`optr`) to real stdout.
@@ -202,7 +197,10 @@ fn sync_redirect_file(status: &IfaceStatus, reported: &mut Option<String>) {
         .write(true)
         .truncate(true)
         .open(&file.filename)
-        .and_then(|mut fh| fh.write_all(file.contents.as_bytes()).and_then(|_| fh.flush()));
+        .and_then(|mut fh| {
+            fh.write_all(file.contents.as_bytes())
+                .and_then(|_| fh.flush())
+        });
     match outcome {
         Ok(()) => *reported = None,
         // Reported once per target: this runs after EVERY command, so a bad

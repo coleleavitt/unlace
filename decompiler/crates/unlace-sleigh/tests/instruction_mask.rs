@@ -24,7 +24,10 @@ use unlace_sleigh::sleigh::{OpObject, Sleigh};
 use unlace_sleigh::translate::{AssemblyEmit, Translate};
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// A trivial in-memory load image: bytes at a fixed VMA, zero elsewhere.
@@ -138,15 +141,18 @@ const VMA: u64 = 0x401000;
 /// Build a `Sleigh` over `x86-64.sla` loaded with `code` at `VMA`.
 fn build_x86_64(code: &[u8]) -> Sleigh {
     let root = repo_root();
-    let sla = std::fs::read(
-        root.join("specs/Ghidra/Processors/x86/data/languages/x86-64.sla"),
-    )
-    .expect("read x86-64.sla (run: slacomp x86-64.slaspec)");
+    let sla = std::fs::read(root.join("specs/Ghidra/Processors/x86/data/languages/x86-64.sla"))
+        .expect("read x86-64.sla (run: slacomp x86-64.slaspec)");
 
     let ctx = Box::new(ContextInternal::new());
-    let img = MemImg { vma: VMA, bytes: code.to_vec() };
+    let img = MemImg {
+        vma: VMA,
+        bytes: code.to_vec(),
+    };
     let mut sleigh = Sleigh::new(Box::new(img), ctx);
-    sleigh.initialize_from_sla(&sla).expect("initialize from sla");
+    sleigh
+        .initialize_from_sla(&sla)
+        .expect("initialize from sla");
     for (name, val) in X86_64_CONTEXT {
         sleigh.set_context_default(name, *val);
     }
@@ -155,7 +161,11 @@ fn build_x86_64(code: &[u8]) -> Sleigh {
 
 fn code_addr(sleigh: &Sleigh, off: u64) -> Address {
     let spc = Rc::clone(
-        sleigh.base().manager().get_default_code_space().expect("default code space"),
+        sleigh
+            .base()
+            .manager()
+            .get_default_code_space()
+            .expect("default code space"),
     );
     Address::new(spc, off)
 }
@@ -165,14 +175,23 @@ fn add_imm32_masks_operand_pins_opcode() {
     // add eax, 0x12345678 == 05 78 56 34 12
     let code = [0x05, 0x78, 0x56, 0x34, 0x12];
     let sleigh = build_x86_64(&code);
-    let m = sleigh.instruction_mask(&code_addr(&sleigh, VMA)).expect("instruction_mask");
+    let m = sleigh
+        .instruction_mask(&code_addr(&sleigh, VMA))
+        .expect("instruction_mask");
 
-    eprintln!("add imm32: len={} bytes={:02x?} fixed={:02x?}", m.length, m.bytes, m.fixed_mask);
+    eprintln!(
+        "add imm32: len={} bytes={:02x?} fixed={:02x?}",
+        m.length, m.bytes, m.fixed_mask
+    );
     assert_eq!(m.length, 5, "add eax,imm32 is 5 bytes");
     assert_eq!(m.bytes, code);
     // Opcode byte 0 is pinned; the imm32 bytes 1..5 are operand (zeroed).
     assert_eq!(m.fixed_mask[0], 0xff, "opcode byte must be fully pinned");
-    assert_eq!(&m.fixed_mask[1..5], &[0, 0, 0, 0], "imm32 operand bytes must be zeroed");
+    assert_eq!(
+        &m.fixed_mask[1..5],
+        &[0, 0, 0, 0],
+        "imm32 operand bytes must be zeroed"
+    );
 
     // The immediate operand classifies a Scalar carrying the real value.
     let scalars: Vec<&OpObject> = m
@@ -182,7 +201,13 @@ fn add_imm32_masks_operand_pins_opcode() {
         .filter(|o| matches!(o, OpObject::Scalar { .. }))
         .collect();
     assert!(
-        scalars.iter().any(|o| matches!(o, OpObject::Scalar { signed: 0x12345678, .. })),
+        scalars.iter().any(|o| matches!(
+            o,
+            OpObject::Scalar {
+                signed: 0x12345678,
+                ..
+            }
+        )),
         "expected a Scalar operand == 0x12345678, got {:?}",
         m.operands
     );
@@ -193,23 +218,41 @@ fn mov_imm32_masks_operand_pins_opcode() {
     // mov ecx, 0x11223344 == b9 44 33 22 11
     let code = [0xb9, 0x44, 0x33, 0x22, 0x11];
     let sleigh = build_x86_64(&code);
-    let m = sleigh.instruction_mask(&code_addr(&sleigh, VMA)).expect("instruction_mask");
+    let m = sleigh
+        .instruction_mask(&code_addr(&sleigh, VMA))
+        .expect("instruction_mask");
 
-    eprintln!("mov imm32: len={} bytes={:02x?} fixed={:02x?}", m.length, m.bytes, m.fixed_mask);
+    eprintln!(
+        "mov imm32: len={} bytes={:02x?} fixed={:02x?}",
+        m.length, m.bytes, m.fixed_mask
+    );
     assert_eq!(m.length, 5, "mov ecx,imm32 is 5 bytes");
     // The `mov r32,imm32` opcode is `b8+rd`: the high 5 bits are the pinned
     // opcode, the low 3 bits are the destination-register SELECTOR (an operand).
     // So byte 0's mask is 0xf8 — pins the opcode, leaves the register-selector
     // bits free.  This is the accessor correctly distinguishing the embedded
     // register operand from the opcode within a single byte.
-    assert_eq!(m.fixed_mask[0], 0xf8, "opcode (high 5 bits) pinned, reg selector (low 3) free");
-    assert_eq!(&m.fixed_mask[1..5], &[0, 0, 0, 0], "imm32 operand bytes must be zeroed");
+    assert_eq!(
+        m.fixed_mask[0], 0xf8,
+        "opcode (high 5 bits) pinned, reg selector (low 3) free"
+    );
+    assert_eq!(
+        &m.fixed_mask[1..5],
+        &[0, 0, 0, 0],
+        "imm32 operand bytes must be zeroed"
+    );
 
     assert!(
         m.operands
             .iter()
             .flat_map(|o| o.objects.iter())
-            .any(|o| matches!(o, OpObject::Scalar { signed: 0x11223344, .. })),
+            .any(|o| matches!(
+                o,
+                OpObject::Scalar {
+                    signed: 0x11223344,
+                    ..
+                }
+            )),
         "expected a Scalar operand == 0x11223344, got {:?}",
         m.operands
     );
@@ -220,14 +263,22 @@ fn add_reg_reg_classifies_register() {
     // add eax, ecx == 01 c8  (opcode 01, modrm 0xc8 = mod=11 reg=001 rm=000)
     let code = [0x01, 0xc8];
     let sleigh = build_x86_64(&code);
-    let m = sleigh.instruction_mask(&code_addr(&sleigh, VMA)).expect("instruction_mask");
+    let m = sleigh
+        .instruction_mask(&code_addr(&sleigh, VMA))
+        .expect("instruction_mask");
 
-    eprintln!("add reg,reg: len={} bytes={:02x?} fixed={:02x?}", m.length, m.bytes, m.fixed_mask);
+    eprintln!(
+        "add reg,reg: len={} bytes={:02x?} fixed={:02x?}",
+        m.length, m.bytes, m.fixed_mask
+    );
     assert_eq!(m.length, 2, "add eax,ecx is 2 bytes");
     assert_eq!(m.fixed_mask[0], 0xff, "opcode byte 0 must be pinned");
     // The modrm byte has the mod bits pinned (0b11xxxxxx) but reg/rm selectors
     // are operand bits — so it must NOT be fully pinned.
-    assert_ne!(m.fixed_mask[1], 0xff, "modrm reg/rm selector bits must be operand bits");
+    assert_ne!(
+        m.fixed_mask[1], 0xff,
+        "modrm reg/rm selector bits must be operand bits"
+    );
     assert_ne!(m.fixed_mask[1], 0x00, "modrm mod bits must be pinned");
 
     // Both operands resolve to registers.
@@ -268,20 +319,39 @@ fn rex_add_r64_r64_masks_modrm_pins_opcode_and_rexw() {
         .instruction_mask(&code_addr(&sleigh, VMA))
         .expect("instruction_mask must succeed on a REX-prefixed x86-64 insn");
 
-    eprintln!("REX add rsi,rdi: len={} bytes={:02x?} fixed={:02x?}", m.length, m.bytes, m.fixed_mask);
+    eprintln!(
+        "REX add rsi,rdi: len={} bytes={:02x?} fixed={:02x?}",
+        m.length, m.bytes, m.fixed_mask
+    );
     assert_eq!(m.length, 3, "add rsi,rdi (REX.W) is 3 bytes");
     assert_eq!(m.bytes, code);
     // REX byte: the prefix marker + REX.W (high 5 bits) are PINNED; the low 3
     // bits (REX.R/X/B register-extension selectors) are operand bits — so the
     // byte is partially pinned, never fully fixed and never fully free.
-    assert_ne!(m.fixed_mask[0], 0x00, "REX prefix marker / REX.W must be pinned");
-    assert_ne!(m.fixed_mask[0], 0xff, "REX.R/X/B register-extension bits are operand bits");
-    assert_eq!(m.fixed_mask[0] & 0x08, 0x08, "REX.W bit (0x08) must be pinned");
+    assert_ne!(
+        m.fixed_mask[0], 0x00,
+        "REX prefix marker / REX.W must be pinned"
+    );
+    assert_ne!(
+        m.fixed_mask[0], 0xff,
+        "REX.R/X/B register-extension bits are operand bits"
+    );
+    assert_eq!(
+        m.fixed_mask[0] & 0x08,
+        0x08,
+        "REX.W bit (0x08) must be pinned"
+    );
     // Opcode byte fully pinned.
-    assert_eq!(m.fixed_mask[1], 0xff, "the ADD opcode (01) must be fully pinned");
+    assert_eq!(
+        m.fixed_mask[1], 0xff,
+        "the ADD opcode (01) must be fully pinned"
+    );
     // modrm: mod bits (top 2) pinned, reg/rm register selectors are operand.
     assert_ne!(m.fixed_mask[2], 0x00, "modrm mod bits must be pinned");
-    assert_ne!(m.fixed_mask[2], 0xff, "modrm reg/rm selector bits must be operand bits");
+    assert_ne!(
+        m.fixed_mask[2], 0xff,
+        "modrm reg/rm selector bits must be operand bits"
+    );
 
     // Both register-direct operands classify as registers.
     let regs: Vec<&OpObject> = m
@@ -290,7 +360,11 @@ fn rex_add_r64_r64_masks_modrm_pins_opcode_and_rexw() {
         .flat_map(|o| o.objects.iter())
         .filter(|o| matches!(o, OpObject::Register { .. }))
         .collect();
-    assert!(!regs.is_empty(), "expected Register operands for add r64,r64; got {:?}", m.operands);
+    assert!(
+        !regs.is_empty(),
+        "expected Register operands for add r64,r64; got {:?}",
+        m.operands
+    );
 }
 
 #[test]
@@ -305,12 +379,18 @@ fn rex_mov_r64_imm64_zeroes_imm64() {
         .instruction_mask(&code_addr(&sleigh, VMA))
         .expect("instruction_mask must succeed on REX mov r64,imm64");
 
-    eprintln!("REX mov rax,imm64: len={} bytes={:02x?} fixed={:02x?}", m.length, m.bytes, m.fixed_mask);
+    eprintln!(
+        "REX mov rax,imm64: len={} bytes={:02x?} fixed={:02x?}",
+        m.length, m.bytes, m.fixed_mask
+    );
     assert_eq!(m.length, 10, "mov r64,imm64 (REX.W) is 10 bytes");
     // REX.W pinned, opcode high bits pinned, register selector (low 3 of b8+rd)
     // free; the imm64 (bytes 2..10) is the operand and must be fully zeroed.
     assert_eq!(m.fixed_mask[0] & 0x08, 0x08, "REX.W (0x08) must be pinned");
-    assert_ne!(m.fixed_mask[1], 0x00, "the b8+rd opcode bits must be pinned");
+    assert_ne!(
+        m.fixed_mask[1], 0x00,
+        "the b8+rd opcode bits must be pinned"
+    );
     assert_eq!(
         &m.fixed_mask[2..10],
         &[0, 0, 0, 0, 0, 0, 0, 0],
@@ -323,7 +403,13 @@ fn rex_mov_r64_imm64_zeroes_imm64() {
         m.operands
             .iter()
             .flat_map(|o| o.objects.iter())
-            .any(|o| matches!(o, OpObject::Scalar { signed: -8613303245920329199, .. })),
+            .any(|o| matches!(
+                o,
+                OpObject::Scalar {
+                    signed: -8613303245920329199,
+                    ..
+                }
+            )),
         "expected a Scalar operand == 0x8877665544332211, got {:?}",
         m.operands
     );
@@ -338,11 +424,20 @@ fn rex_mov_r64_r64_classifies_both_registers() {
         .instruction_mask(&code_addr(&sleigh, VMA))
         .expect("instruction_mask must succeed on REX mov r64,r64");
 
-    eprintln!("REX mov rsi,rdi: len={} bytes={:02x?} fixed={:02x?}", m.length, m.bytes, m.fixed_mask);
+    eprintln!(
+        "REX mov rsi,rdi: len={} bytes={:02x?} fixed={:02x?}",
+        m.length, m.bytes, m.fixed_mask
+    );
     assert_eq!(m.length, 3, "mov rsi,rdi (REX.W) is 3 bytes");
     assert_eq!(m.fixed_mask[0] & 0x08, 0x08, "REX.W (0x08) must be pinned");
-    assert_eq!(m.fixed_mask[1], 0xff, "the MOV opcode (89) must be fully pinned");
-    assert_ne!(m.fixed_mask[2], 0xff, "modrm reg/rm selectors are operand bits");
+    assert_eq!(
+        m.fixed_mask[1], 0xff,
+        "the MOV opcode (89) must be fully pinned"
+    );
+    assert_ne!(
+        m.fixed_mask[2], 0xff,
+        "modrm reg/rm selectors are operand bits"
+    );
 
     // A register-to-register form: both operands classify as registers.
     let regs: Vec<&OpObject> = m
@@ -368,9 +463,14 @@ fn mov_mem_disp32_masks_displacement() {
     // is used to demonstrate the displacement masking.
     let code = [0x8b, 0x83, 0x78, 0x56, 0x34, 0x12];
     let sleigh = build_x86_64(&code);
-    let m = sleigh.instruction_mask(&code_addr(&sleigh, VMA)).expect("instruction_mask");
+    let m = sleigh
+        .instruction_mask(&code_addr(&sleigh, VMA))
+        .expect("instruction_mask");
 
-    eprintln!("mov mem+disp32: len={} bytes={:02x?} fixed={:02x?}", m.length, m.bytes, m.fixed_mask);
+    eprintln!(
+        "mov mem+disp32: len={} bytes={:02x?} fixed={:02x?}",
+        m.length, m.bytes, m.fixed_mask
+    );
     assert_eq!(m.length, 6, "mov eax,[rbx+disp32] is 6 bytes");
     // Opcode (8b) is pinned; the modrm byte has its mod/reg-encoding bits pinned
     // (0xc0) with the base-register selector free; the disp32 bytes 2..6 are the
@@ -388,7 +488,13 @@ fn mov_mem_disp32_masks_displacement() {
         m.operands
             .iter()
             .flat_map(|o| o.objects.iter())
-            .any(|o| matches!(o, OpObject::Scalar { signed: 0x12345678, .. })),
+            .any(|o| matches!(
+                o,
+                OpObject::Scalar {
+                    signed: 0x12345678,
+                    ..
+                }
+            )),
         "expected a Scalar operand == 0x12345678 (the disp32), got {:?}",
         m.operands
     );
@@ -430,9 +536,11 @@ fn assembly_into_matches_legacy_and_clears_reused_buffers() {
     sleigh.set_loader(Box::new(MissingImg));
     mnemonic.push_str(" stale");
     body.push_str(" stale");
-    assert!(sleigh
-        .print_assembly_into(&first, &mut mnemonic, &mut body)
-        .is_err());
+    assert!(
+        sleigh
+            .print_assembly_into(&first, &mut mnemonic, &mut body)
+            .is_err()
+    );
     assert!(mnemonic.is_empty());
     assert!(body.is_empty());
 }
@@ -449,7 +557,9 @@ fn assembly_emitter_can_disassemble_again_without_changing_outer_text() {
     impl AssemblyEmit for NestedEmit<'_> {
         fn dump(&mut self, _addr: &Address, mnemonic: &str, body: &str) {
             self.before = (mnemonic.to_owned(), body.to_owned());
-            self.sleigh.print_assembly(&mut self.nested, &self.next).unwrap();
+            self.sleigh
+                .print_assembly(&mut self.nested, &self.next)
+                .unwrap();
             self.after = (mnemonic.to_owned(), body.to_owned());
         }
     }
@@ -460,8 +570,12 @@ fn assembly_emitter_can_disassemble_again_without_changing_outer_text() {
     let next = code_addr(&sleigh, VMA + 3);
     let mut want_first = (String::new(), String::new());
     let mut want_next = (String::new(), String::new());
-    sleigh.print_assembly_into(&first, &mut want_first.0, &mut want_first.1).unwrap();
-    sleigh.print_assembly_into(&next, &mut want_next.0, &mut want_next.1).unwrap();
+    sleigh
+        .print_assembly_into(&first, &mut want_first.0, &mut want_first.1)
+        .unwrap();
+    sleigh
+        .print_assembly_into(&next, &mut want_next.0, &mut want_next.1)
+        .unwrap();
     let mut emit = NestedEmit {
         sleigh: &sleigh,
         next,

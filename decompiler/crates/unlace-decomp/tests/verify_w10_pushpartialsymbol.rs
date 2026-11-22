@@ -39,7 +39,10 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn specs_root() -> PathBuf {
@@ -65,7 +68,10 @@ fn rust_harness() -> PathBuf {
         return PathBuf::from(p);
     }
     let profile = std::env::var("KUNA_RUST_PROFILE").unwrap_or_else(|_| "release".to_string());
-    repo_root().join("decompiler/target").join(profile).join("decomp_test_dbg")
+    repo_root()
+        .join("decompiler/target")
+        .join(profile)
+        .join("decomp_test_dbg")
 }
 
 /// The committed C++ oracle binary.  Honors `KUNA_DECOMP_TEST`, else the
@@ -222,7 +228,10 @@ fn a1_testvalue_union_member_render_byte_matches_cpp_oracle() {
             "the C++ oracle's union-member line `{line}` is not byte-reproduced in Rust:\n{rust_fn}"
         );
     }
-    assert!(cpp_union.len() >= 2, "oracle must have >=2 union lines (myptr+mydouble)");
+    assert!(
+        cpp_union.len() >= 2,
+        "oracle must have >=2 union lines (myptr+mydouble)"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -285,7 +294,10 @@ fn a3_member_names_are_type_driven_no_cross_function_leak() {
     let testvalue = extract_function(&rust, "testvalue").expect("testvalue in dump");
     // printglob renders ITS baseunion's `intfield`; testvalue renders ITS
     // myunion's `myptr`/`mydouble`.  Each from its own type's field table.
-    assert!(printglob.contains("glob.intfield"), "printglob renders its own field:\n{printglob}");
+    assert!(
+        printglob.contains("glob.intfield"),
+        "printglob renders its own field:\n{printglob}"
+    );
     assert!(
         testvalue.contains("val.myptr") || testvalue.contains("val.mydouble"),
         "testvalue renders its own union field:\n{testvalue}"

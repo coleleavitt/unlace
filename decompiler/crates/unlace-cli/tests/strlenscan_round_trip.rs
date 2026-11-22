@@ -98,22 +98,51 @@ int main(void) {
 const IMAGES: &[(&str, &[&str], bool, bool)] = &[
     (
         "strlenscan_gcc9_O1_x86_64",
-        &["name_len", "has_suffix", "dup_text", "last_char", "weighted_len", "len_then_clear", "len_then_wipe",
-          "len_then_free", "add_slash", "len_join"],
+        &[
+            "name_len",
+            "has_suffix",
+            "dup_text",
+            "last_char",
+            "weighted_len",
+            "len_then_clear",
+            "len_then_wipe",
+            "len_then_free",
+            "add_slash",
+            "len_join",
+        ],
         true,
         true,
     ),
     (
         "strlenscan_gcc9_Os_x86_64",
-        &["name_len", "has_suffix", "dup_text", "last_char", "weighted_len", "len_then_clear", "len_then_wipe",
-          "len_then_free", "len_join"],
+        &[
+            "name_len",
+            "has_suffix",
+            "dup_text",
+            "last_char",
+            "weighted_len",
+            "len_then_clear",
+            "len_then_wipe",
+            "len_then_free",
+            "len_join",
+        ],
         true,
         false,
     ),
     (
         "strlenscan_gcc9_O1_i386",
-        &["name_len", "has_suffix", "dup_text", "last_char", "weighted_len", "len_then_clear", "len_then_wipe",
-          "len_then_free", "add_slash", "len_join"],
+        &[
+            "name_len",
+            "has_suffix",
+            "dup_text",
+            "last_char",
+            "weighted_len",
+            "len_then_clear",
+            "len_then_wipe",
+            "len_then_free",
+            "add_slash",
+            "len_join",
+        ],
         false,
         false,
     ),
@@ -121,7 +150,9 @@ const IMAGES: &[(&str, &[&str], bool, bool)] = &[
 
 /// The printed function `name`, from its header comment to the next.
 fn function<'a>(text: &'a str, name: &str) -> &'a str {
-    let start = text.find(&format!("// Function: {name} @")).unwrap_or_else(|| panic!("no {name}:\n{text}"));
+    let start = text
+        .find(&format!("// Function: {name} @"))
+        .unwrap_or_else(|| panic!("no {name}:\n{text}"));
     let rest = &text[start + 1..];
     &text[start..start + 1 + rest.find("// Function:").unwrap_or(rest.len())]
 }
@@ -142,34 +173,61 @@ fn an_inline_string_length_round_trips_through_the_printed_strlen() {
         .into_iter()
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
-    assert!(!compilers.is_empty(), "the round trip requires a C compiler");
+    assert!(
+        !compilers.is_empty(),
+        "the round trip requires a C compiler"
+    );
     let reference = reference();
     let funcs = FUNCS.join(",");
     for &(image, lengths, compile, dup) in IMAGES {
         let path = common::fixture(image);
         for opt in ["off", "on"] {
-            let args = ["decompile-all", path.as_str(), "--functions", funcs.as_str(), "--option", "strlenscan", opt];
+            let args = [
+                "decompile-all",
+                path.as_str(),
+                "--functions",
+                funcs.as_str(),
+                "--option",
+                "strlenscan",
+                opt,
+            ];
             let (text, err, rc) = common::run_kuna(&args);
             assert_eq!(rc, 0, "{image} strlenscan {opt}: {err}");
             for name in lengths {
                 let body = function(&text, name);
                 if opt == "on" {
-                    assert!(body.contains("strlen(") && !body.contains("do {"), "{image} {name} is no strlen:\n{body}");
+                    assert!(
+                        body.contains("strlen(") && !body.contains("do {"),
+                        "{image} {name} is no strlen:\n{body}"
+                    );
                 } else {
-                    assert!(!body.contains("strlen(") && body.contains("do {"), "{image} {name} lost its scan loop:\n{body}");
+                    assert!(
+                        !body.contains("strlen(") && body.contains("do {"),
+                        "{image} {name} lost its scan loop:\n{body}"
+                    );
                 }
             }
             for name in AFTER {
                 let body = function(&text, name);
-                assert!(!body.contains("return strlen("), "{image} {name} takes its length late:\n{body}");
+                assert!(
+                    !body.contains("return strlen("),
+                    "{image} {name} takes its length late:\n{body}"
+                );
             }
             if opt == "on" && lengths.contains(&"add_slash") {
                 let body = function(&text, "add_slash");
-                assert_eq!(body.matches("strlen(").count(), 1, "{image} add_slash takes its length twice:\n{body}");
+                assert_eq!(
+                    body.matches("strlen(").count(),
+                    1,
+                    "{image} add_slash takes its length twice:\n{body}"
+                );
             }
             for name in SCANS {
                 let body = function(&text, name);
-                assert!(!body.contains("strlen(") && body.contains("do {"), "{image} {name} lost its scan loop:\n{body}");
+                assert!(
+                    !body.contains("strlen(") && body.contains("do {"),
+                    "{image} {name} lost its scan loop:\n{body}"
+                );
             }
             if !compile {
                 continue;
@@ -178,11 +236,20 @@ fn an_inline_string_length_round_trips_through_the_printed_strlen() {
             let program = format!("{PRELUDE}{check_dup}{reference}\n{text}\n{MAIN}");
             for cc in &compilers {
                 for level in ["-O0", "-O2"] {
-                    let src = common::scratch_file(&format!("strlenscan-{image}-{opt}-{cc}{level}"), "c");
+                    let src =
+                        common::scratch_file(&format!("strlenscan-{image}-{opt}-{cc}{level}"), "c");
                     let exe = src.with_extension("exe");
                     std::fs::write(&src, &program).unwrap();
                     let out = Command::new(cc)
-                        .args(["-std=gnu11", "-w", "-fwrapv", level, "-o", exe.to_str().unwrap(), src.to_str().unwrap()])
+                        .args([
+                            "-std=gnu11",
+                            "-w",
+                            "-fwrapv",
+                            level,
+                            "-o",
+                            exe.to_str().unwrap(),
+                            src.to_str().unwrap(),
+                        ])
                         .args(common::CC_GCC15_DEMOTE)
                         .output()
                         .expect("spawn the C compiler");

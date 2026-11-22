@@ -10,14 +10,19 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use unlace_base::address::Address;
-use unlace_decomp::varnode::varnode_flags;
-use unlace_console::engine::{bootstrap_from_object_with_isa, ConsoleProgram};
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object_with_isa};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_console::project::decompile_targets;
+use unlace_decomp::varnode::varnode_flags;
 
 fn specs() -> Vec<String> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap();
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap();
     vec![root.join("specs").to_str().unwrap().to_string()]
 }
 
@@ -61,7 +66,12 @@ fn long_dispatch_elf(rows: u32) -> Vec<u8> {
     for target in [0x102bu32, 0x1031, 0x1037] {
         body.extend(target.to_le_bytes());
     }
-    body.extend((0..rows).map(|row| [0u8, 1, 2, 2, 1, 2, 0, 2].get(row as usize).copied().unwrap_or(2)));
+    body.extend((0..rows).map(|row| {
+        [0u8, 1, 2, 2, 1, 2, 0, 2]
+            .get(row as usize)
+            .copied()
+            .unwrap_or(2)
+    }));
     elf_image(body)
 }
 
@@ -76,9 +86,15 @@ fn elf_image(body: Vec<u8>) -> Vec<u8> {
         image[at..at + 4].copy_from_slice(&value.to_le_bytes());
     }
     let size = (0x1000 + body.len()) as u64;
-    for (at, value) in
-        [(24, 0x401000u64), (32, 64), (80, 0x400000), (88, 0x400000), (96, size), (104, size), (112, 0x1000)]
-    {
+    for (at, value) in [
+        (24, 0x401000u64),
+        (32, 64),
+        (80, 0x400000),
+        (88, 0x400000),
+        (96, size),
+        (104, size),
+        (112, 0x1000),
+    ] {
         image[at..at + 8].copy_from_slice(&value.to_le_bytes());
     }
     image.extend(body);
@@ -141,7 +157,10 @@ fn a_long_table_walk_stops_at_the_budget() {
     let entry = program.find_entry_at(0x401000).expect("entry point");
     let at = |offset: u64| Address::new(entry.addr.get_space().unwrap().clone(), offset);
     let (first, last_open) = (at(0x401040), at(0x40104c + u64::from(ROWS)));
-    program.arch_mut().symboltab.set_property_range(varnode_flags::readonly, &first, &last_open);
+    program
+        .arch_mut()
+        .symboltab
+        .set_property_range(varnode_flags::readonly, &first, &last_open);
     let mut result = decompile_targets(&mut program, vec![entry], true, false, false);
     std::fs::remove_file(path).unwrap();
     let r = result.remove(0);
@@ -158,7 +177,10 @@ fn console(budget: Option<Duration>, cmds: &[&str]) -> String {
     register_decomp_commands(&mut status);
     let (program, path) = program(budget);
     let data = status.get_data_mut(DECOMPILE_MODULE).unwrap();
-    data.as_any_mut().downcast_mut::<IfaceDecompData>().unwrap().conf = Some(program);
+    data.as_any_mut()
+        .downcast_mut::<IfaceDecompData>()
+        .unwrap()
+        .conf = Some(program);
     for _ in cmds {
         execute(&mut status);
     }
@@ -190,7 +212,10 @@ fn console_print(left: Option<Duration>, before: &[&str]) -> String {
     register_decomp_commands(&mut status);
     let (program, path) = program(None);
     let data = status.get_data_mut(DECOMPILE_MODULE).unwrap();
-    data.as_any_mut().downcast_mut::<IfaceDecompData>().unwrap().conf = Some(program);
+    data.as_any_mut()
+        .downcast_mut::<IfaceDecompData>()
+        .unwrap()
+        .conf = Some(program);
     for _ in before {
         execute(&mut status);
     }
@@ -207,11 +232,16 @@ fn console_print(left: Option<Duration>, before: &[&str]) -> String {
 /// it fails while it is printed, naming that, instead of printing past it.
 #[test]
 fn rendering_stops_at_what_the_drive_left_of_the_budget() {
-    let plenty = console_print(Some(Duration::from_secs(3600)), &["load addr 0x401000", "decompile"]);
+    let plenty = console_print(
+        Some(Duration::from_secs(3600)),
+        &["load addr 0x401000", "decompile"],
+    );
     assert_eq!(plenty.matches("switch(").count(), 2, "{plenty}");
     let spent = console_print(Some(Duration::ZERO), &["load addr 0x401000", "decompile"]);
     assert!(
-        spent.contains("Execution error: per-function decompile budget exceeded (0 s) in rendering C"),
+        spent.contains(
+            "Execution error: per-function decompile budget exceeded (0 s) in rendering C"
+        ),
         "{spent}"
     );
     assert!(!spent.contains("switch("), "{spent}");
@@ -223,9 +253,16 @@ fn the_drive_hands_rendering_what_is_left_of_the_budget() {
     let budget = Duration::from_secs(3600);
     let (mut program, path) = program(Some(budget));
     let entry = program.find_entry_at(0x401000).expect("entry point");
-    let fd = unlace_decomp::decompile_drive::decompile_func(program.arch_mut(), &entry.name, entry.addr.clone(), 0)
-        .expect("decompile under a generous budget");
+    let fd = unlace_decomp::decompile_drive::decompile_func(
+        program.arch_mut(),
+        &entry.name,
+        entry.addr.clone(),
+        0,
+    )
+    .expect("decompile under a generous budget");
     std::fs::remove_file(path).unwrap();
-    let left = fd.render_budget().expect("a budgeted drive leaves a render budget");
+    let left = fd
+        .render_budget()
+        .expect("a budgeted drive leaves a render budget");
     assert!(left <= budget && left > budget / 2, "{left:?}");
 }

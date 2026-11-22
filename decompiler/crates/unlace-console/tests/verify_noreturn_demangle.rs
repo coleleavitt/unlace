@@ -23,12 +23,15 @@ use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// The vendored C++ no-return fixture (shared with the unlace-analysis
@@ -44,14 +47,21 @@ fn decompile_function(func: &str) -> String {
     let specs = root.join("specs");
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
 
-    let bin = cpp_noreturn_fixture().to_str().expect("UTF-8 fixture path").to_string();
+    let bin = cpp_noreturn_fixture()
+        .to_str()
+        .expect("UTF-8 fixture path")
+        .to_string();
 
     let prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
 
-    let cmds: Vec<String> = [format!("load function {func}"), "decompile".into(), "print C".into()]
-        .into_iter()
-        .collect();
+    let cmds: Vec<String> = [
+        format!("load function {func}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .into_iter()
+    .collect();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);

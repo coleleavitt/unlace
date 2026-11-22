@@ -48,8 +48,8 @@ use unlace_base::types::{int4, uintm};
 
 use std::borrow::Cow;
 
-use crate::cover::Cover;
 use crate::context::{HighVariableId, OpId, VarnodeId};
+use crate::cover::Cover;
 use crate::variable::{HighContext, HighIntersectTest};
 
 use unlace_num::opcodes::OpCode;
@@ -145,8 +145,12 @@ pub trait MergeContext: HighContext {
     fn fpu_trunc_views_enabled(&self) -> bool {
         false
     }
-    fn fpu_trunc_view_highs(&self, _a: HighVariableId, _b: HighVariableId) -> bool { false }
-    fn fpu_trunc_root_high(&self, _high: HighVariableId) -> bool { false }
+    fn fpu_trunc_view_highs(&self, _a: HighVariableId, _b: HighVariableId) -> bool {
+        false
+    }
+    fn fpu_trunc_root_high(&self, _high: HighVariableId) -> bool {
+        false
+    }
     fn op_is_fpu_trunc_view(&self, _op: OpId) -> bool {
         false
     }
@@ -224,7 +228,12 @@ pub trait MergeContext: HighContext {
     /// `high->updateCover()`.
     fn bank_update_cover(&mut self, high: HighVariableId);
     /// `vn2->getHigh()->groupWith(off, vn1->getHigh())`.
-    fn bank_group_with(&mut self, high2: HighVariableId, off: int4, high1: HighVariableId) -> KunaResult<()>;
+    fn bank_group_with(
+        &mut self,
+        high2: HighVariableId,
+        off: int4,
+        high1: HighVariableId,
+    ) -> KunaResult<()>;
     /// `high->setMark()`.
     fn bank_set_mark(&mut self, high: HighVariableId);
     /// `high->clearMark()`.
@@ -457,14 +466,22 @@ pub trait MergeContext: HighContext {
     fn trim_op_output(&mut self, op: OpId) -> KunaResult<()>;
     /// `Merge::trimOpInput` prelude: the `(inVn, pc, isMultiequal)` it computes
     /// before allocating the trim COPY.
-    fn trim_op_input_prep(&self, op: OpId, slot: int4) -> (VarnodeId, unlace_base::address::Address, bool);
+    fn trim_op_input_prep(
+        &self,
+        op: OpId,
+        slot: int4,
+    ) -> (VarnodeId, unlace_base::address::Address, bool);
     /// `Merge::snipReads` insert point; guarded stack-read divergence lives in
     /// `kuna_guardedreadtrim.rs`.
     fn snip_reads_insert_point(
         &self,
         vn: VarnodeId,
         reads: &[OpId],
-    ) -> (crate::context::BlockId, unlace_base::address::Address, Option<OpId>);
+    ) -> (
+        crate::context::BlockId,
+        unlace_base::address::Address,
+        Option<OpId>,
+    );
     /// `Merge::mergeIndirect` union-field inherit for the snipped INDIRECT.
     fn indirect_inherit_union(&mut self, outvn: VarnodeId, newop: OpId, indop: OpId);
     /// `PcodeOpNode::compareByHigh` sort over the collected inputs.
@@ -490,7 +507,13 @@ pub trait MergeContext: HighContext {
     /// `symbol->setMergeProblems()`.
     fn symbol_set_merge_problems(&mut self, symbol: u64);
     /// `data.warningHeader(...)` for the multi-entry merge failure.
-    fn symbol_merge_warning(&mut self, symbol: u64, merge_count: int4, skip_count: int4, conflict_count: int4);
+    fn symbol_merge_warning(
+        &mut self,
+        symbol: u64,
+        merge_count: int4,
+        skip_count: int4,
+        conflict_count: int4,
+    );
     /// Revision of the call/store membership and basic-block positions.
     fn affecting_ops_revision(&self) -> u64 {
         0
@@ -789,11 +812,7 @@ impl Merge {
 ///
 /// Returns `true` if `a` should be ordered before `b`.  Driven through the bank +
 /// context to reach instance covers/addresses across the arena boundary.
-pub fn compare_high_by_block(
-    ctx: &dyn MergeContext,
-    a: HighVariableId,
-    b: HighVariableId,
-) -> bool {
+pub fn compare_high_by_block(ctx: &dyn MergeContext, a: HighVariableId, b: HighVariableId) -> bool {
     let cover_a = ctx.high_get_cover(a);
     let cover_b = ctx.high_get_cover(b);
     let result = cover_a.compare_to(&cover_b);
@@ -844,8 +863,12 @@ pub fn redundant_in_order<C: MergeContext + ?Sized>(
 /// C++ `Merge::compareCopyByInVarnode` (`merge.cc:1045-1057`): group COPYs by
 /// input `getCreateIndex()`, then defining block index, then `SeqNum::order`.
 pub fn compare_copy_by_in_varnode(ctx: &dyn MergeContext, op1: OpId, op2: OpId) -> bool {
-    let in_vn1 = ctx.op_in(op1, 0).expect("compareCopyByInVarnode: op1 no in0");
-    let in_vn2 = ctx.op_in(op2, 0).expect("compareCopyByInVarnode: op2 no in0");
+    let in_vn1 = ctx
+        .op_in(op1, 0)
+        .expect("compareCopyByInVarnode: op1 no in0");
+    let in_vn2 = ctx
+        .op_in(op2, 0)
+        .expect("compareCopyByInVarnode: op2 no in0");
     if in_vn1 != in_vn2 {
         return ctx.vn_create_index(in_vn1) < ctx.vn_create_index(in_vn2);
     }
@@ -989,7 +1012,8 @@ impl MergeIntersect {
                 let inter = ctx.piece_intersection(a_piece, i);
                 let off = ctx.piece_offset(inter) - base_off;
                 let inter_high = ctx.piece_high(inter);
-                if Self::test_block_intersection(ctx, cache, inter_high, blk, &b_cover, off, &blist) {
+                if Self::test_block_intersection(ctx, cache, inter_high, blk, &b_cover, off, &blist)
+                {
                     return true;
                 }
             }
@@ -1021,7 +1045,9 @@ impl MergeIntersect {
                             continue;
                         }
                         let inter_high = ctx.piece_high(inter);
-                        if Self::test_block_intersection(ctx, cache, inter_high, blk, &b_cover, off, &blist) {
+                        if Self::test_block_intersection(
+                            ctx, cache, inter_high, blk, &b_cover, off, &blist,
+                        ) {
                             return true;
                         }
                     }
@@ -1213,7 +1239,9 @@ impl Merge {
                 && crate::decompile_drive::deadline_passed_in("variable merging");
         }
         if self.spent {
-            return Err(KunaError::lowlevel("variable merging stopped at the function's budget"));
+            return Err(KunaError::lowlevel(
+                "variable merging stopped at the function's budget",
+            ));
         }
         Ok(())
     }
@@ -1288,7 +1316,13 @@ impl Merge {
         }
         self.budget()?;
         if MergeIntersect::intersection(ctx, &mut self.test_cache, high1, high2)
-            || crate::p6_variables::kuna_tiedphitrim::intersects(&self.tied_phis, ctx, &mut self.test_cache, high1, high2)
+            || crate::p6_variables::kuna_tiedphitrim::intersects(
+                &self.tied_phis,
+                ctx,
+                &mut self.test_cache,
+                high1,
+                high2,
+            )
         {
             return Ok(false);
         }
@@ -1309,7 +1343,11 @@ impl Merge {
     /// properties, so it is neither matched nor stacked: upstream tests it
     /// against the whole stack and every later variable against it, which is
     /// quadratic in a group of thousands of same-typed globals.
-    pub fn merge_linear(&mut self, ctx: &mut dyn MergeContext, highvec: &mut [HighVariableId]) -> KunaResult<()> {
+    pub fn merge_linear(
+        &mut self,
+        ctx: &mut dyn MergeContext,
+        highvec: &mut [HighVariableId],
+    ) -> KunaResult<()> {
         if highvec.len() <= 1 {
             return Ok(());
         }
@@ -1391,10 +1429,19 @@ impl Merge {
         tmplist: &mut Vec<HighVariableId>,
     ) -> Result<(), Option<MergeConflict>> {
         if !ctx.high_has_cover(high) {
-            return Err(Some(MergeConflict { earlier: None, high }));
+            return Err(Some(MergeConflict {
+                earlier: None,
+                high,
+            }));
         }
         if tmplist.contains(&high) {
-            if crate::p6_variables::kuna_tiedphitrim::intersects(&self.tied_phis, ctx, &mut self.test_cache, high, high) {
+            if crate::p6_variables::kuna_tiedphitrim::intersects(
+                &self.tied_phis,
+                ctx,
+                &mut self.test_cache,
+                high,
+                high,
+            ) {
                 return Err(None);
             }
             return Ok(());
@@ -1402,9 +1449,18 @@ impl Merge {
         let others: Vec<HighVariableId> = tmplist.clone();
         for a in others {
             if MergeIntersect::intersection(ctx, &mut self.test_cache, a, high) {
-                return Err(Some(MergeConflict { earlier: Some(a), high }));
+                return Err(Some(MergeConflict {
+                    earlier: Some(a),
+                    high,
+                }));
             }
-            if crate::p6_variables::kuna_tiedphitrim::intersects(&self.tied_phis, ctx, &mut self.test_cache, a, high) {
+            if crate::p6_variables::kuna_tiedphitrim::intersects(
+                &self.tied_phis,
+                ctx,
+                &mut self.test_cache,
+                a,
+                high,
+            ) {
                 return Err(None);
             }
         }
@@ -1438,7 +1494,12 @@ impl Merge {
 
     /// Test if inflating `a`'s Cover to include `high`'s would intersect (C++
     /// `Merge::inflateTest`, `merge.cc:1616-1647`).  Returns `true` on intersection.
-    pub fn inflate_test(&mut self, ctx: &mut dyn MergeContext, a: VarnodeId, high: HighVariableId) -> bool {
+    pub fn inflate_test(
+        &mut self,
+        ctx: &mut dyn MergeContext,
+        a: VarnodeId,
+        high: HighVariableId,
+    ) -> bool {
         let ahigh = match ctx.vn_high(a) {
             None => return false,
             Some(h) => h,
@@ -1536,7 +1597,11 @@ impl Merge {
     /// C++ `[startiter,enditer)`).  Highs are gathered (deduped by `setMark`),
     /// grouped by exact type identity preserving discovery order, and each group is
     /// merged with [`merge_linear`](Self::merge_linear).
-    pub fn merge_by_datatype(&mut self, ctx: &mut dyn MergeContext, range: &[VarnodeId]) -> KunaResult<()> {
+    pub fn merge_by_datatype(
+        &mut self,
+        ctx: &mut dyn MergeContext,
+        range: &[VarnodeId],
+    ) -> KunaResult<()> {
         // Gather all highs, deduped by mark.
         let mut highlist: Vec<HighVariableId> = Vec::new();
         for &vn in range {
@@ -1562,11 +1627,13 @@ impl Merge {
         let gathered = highlist.clone();
 
         // Group by exact type (Rc identity) preserving order; each group -> mergeLinear.
-        let mut remaining: std::collections::VecDeque<HighVariableId> = highlist.into_iter().collect();
+        let mut remaining: std::collections::VecDeque<HighVariableId> =
+            highlist.into_iter().collect();
         while let Some(first) = remaining.pop_front() {
             let ct = ctx.high_get_type(first);
             let mut highvec = vec![first];
-            let mut rest: std::collections::VecDeque<HighVariableId> = std::collections::VecDeque::new();
+            let mut rest: std::collections::VecDeque<HighVariableId> =
+                std::collections::VecDeque::new();
             while let Some(h) = remaining.pop_front() {
                 let t = ctx.high_get_type(h);
                 if std::rc::Rc::ptr_eq(&ct, &t) {
@@ -1604,7 +1671,10 @@ impl Merge {
             for i in 0..ni {
                 let vn2 = ctx.op_in(op, i);
                 if !std::rc::Rc::ptr_eq(&ct, &ctx.op_input_type_local(op, i))
-                    && vn2.and_then(|vn2| ctx.vn_high(vn2)).and_then(|h| ctx.kuna_same_prior_variable(high_out, h)) != Some(true)
+                    && vn2
+                        .and_then(|vn2| ctx.vn_high(vn2))
+                        .and_then(|h| ctx.kuna_same_prior_variable(high_out, h))
+                        != Some(true)
                 {
                     continue; // Only merge if types should be the same
                 }
@@ -1702,7 +1772,9 @@ impl Merge {
             }
         } else {
             for (node_vn, type_offset) in &pieces {
-                let node_high = ctx.vn_high(*node_vn).expect("groupPartialRoot: node no high");
+                let node_high = ctx
+                    .vn_high(*node_vn)
+                    .expect("groupPartialRoot: node no high");
                 ctx.bank_group_with(node_high, *type_offset - base_offset, high)?;
             }
         }
@@ -1717,7 +1789,11 @@ impl Merge {
     /// earlier inputs are tested by distinct high, in first-input order: a
     /// repeated high answers as its first test did.
     fn merge_op(&mut self, ctx: &mut dyn MergeContext, op: OpId) -> KunaResult<()> {
-        let max = if ctx.op_code(op) == OpCode::CPUI_INDIRECT { 1 } else { ctx.op_num_input(op) };
+        let max = if ctx.op_code(op) == OpCode::CPUI_INDIRECT {
+            1
+        } else {
+            ctx.op_num_input(op)
+        };
         let out_vn = ctx.op_out(op).expect("mergeOp: op has no output");
         let high_out = ctx.vn_high(out_vn).expect("mergeOp: out no high");
 
@@ -1736,7 +1812,9 @@ impl Merge {
                     }
                 }
             }
-            let ihigh = ctx.vn_high(ctx.op_in(op, i).expect("mergeOp: null input")).expect("mergeOp: in no high");
+            let ihigh = ctx
+                .vn_high(ctx.op_in(op, i).expect("mergeOp: null input"))
+                .expect("mergeOp: in no high");
             if !earlier.contains(&ihigh) {
                 earlier.push(ihigh);
             }
@@ -1769,7 +1847,8 @@ impl Merge {
             for slot in slots {
                 self.trim_op_input(ctx, op, slot)?;
             }
-            self.tied_phis.push((ctx.op_out(op).expect("mergeOp: op has no output"), storage));
+            self.tied_phis
+                .push((ctx.op_out(op).expect("mergeOp: op has no output"), storage));
         }
 
         // Try to merge everything for real now.
@@ -1820,15 +1899,23 @@ impl Merge {
         ctx.op_insert_before(newop, indop);
         let new_in_h = ctx.vn_high(ctx.op_in(indop, 0).unwrap()).unwrap();
         let out_h = ctx.vn_high(outvn).unwrap();
-        if !Self::merge_test_required(ctx, out_h, new_in_h) || !self.merge(ctx, new_in_h, out_h, false)? {
-            return Err(KunaError::lowlevel("Unable to merge address forced indirect"));
+        if !Self::merge_test_required(ctx, out_h, new_in_h)
+            || !self.merge(ctx, new_in_h, out_h, false)?
+        {
+            return Err(KunaError::lowlevel(
+                "Unable to merge address forced indirect",
+            ));
         }
         Ok(())
     }
 
     /// Snip output instances of an INDIRECT that are also inputs to its underlying
     /// op (C++ `Merge::snipOutputInterference`, `merge.cc:811-839`).
-    fn snip_output_interference(&mut self, ctx: &mut dyn MergeContext, indop: OpId) -> KunaResult<bool> {
+    fn snip_output_interference(
+        &mut self,
+        ctx: &mut dyn MergeContext,
+        indop: OpId,
+    ) -> KunaResult<bool> {
         let op = ctx.indirect_effect_op(indop); // getOpFromConst(getIn(1)->getAddr())
         let out_high = ctx.vn_high(ctx.op_out(indop).unwrap()).unwrap();
         let mut correctable = self.collect_inputs(ctx, out_high, op);
@@ -1842,7 +1929,9 @@ impl Merge {
         for node in correctable {
             let insertop = node.op;
             let slot = node.slot;
-            let vn = ctx.op_in(insertop, slot).expect("snipOutputInterference: null in");
+            let vn = ctx
+                .op_in(insertop, slot)
+                .expect("snipOutputInterference: null in");
             let vn_high = ctx.vn_high(vn);
             if vn_high != cur_high {
                 let insaddr = ctx.op_addr(insertop);
@@ -1851,7 +1940,11 @@ impl Merge {
                 cur_high = vn_high;
                 snip_out = ctx.op_out(snipop);
             }
-            ctx.op_set_input(insertop, snip_out.expect("snipOutputInterference: no snip out"), slot)?;
+            ctx.op_set_input(
+                insertop,
+                snip_out.expect("snipOutputInterference: no snip out"),
+                slot,
+            )?;
         }
         Ok(true)
     }
@@ -1918,7 +2011,12 @@ impl Merge {
 
     /// Trim input `slot` of `op` so its Cover is tiny (C++ `Merge::trimOpInput`,
     /// `merge.cc:692-712`).
-    fn trim_op_input(&mut self, ctx: &mut dyn MergeContext, op: OpId, slot: int4) -> KunaResult<()> {
+    fn trim_op_input(
+        &mut self,
+        ctx: &mut dyn MergeContext,
+        op: OpId,
+        slot: int4,
+    ) -> KunaResult<()> {
         let (in_vn, pc, is_multiequal) = ctx.trim_op_input_prep(op, slot);
         let copy_op = self.allocate_copy_trim(ctx, in_vn, pc, op)?;
         let copy_out = ctx.op_out(copy_op).expect("trimOpInput: copy no out");
@@ -1977,7 +2075,11 @@ impl Merge {
     /// Force the merge of a range of same-size/same-address Varnodes (C++
     /// `Merge::mergeRangeMust`, `merge.cc:301-317`).  Intersections must already be
     /// snipped; an error is returned if a forced merge intersects.
-    fn merge_range_must(&mut self, ctx: &mut dyn MergeContext, range: &[VarnodeId]) -> KunaResult<()> {
+    fn merge_range_must(
+        &mut self,
+        ctx: &mut dyn MergeContext,
+        range: &[VarnodeId],
+    ) -> KunaResult<()> {
         if range.is_empty() {
             return Ok(());
         }
@@ -2008,7 +2110,10 @@ impl Merge {
             }
             isectlist.push(vn);
         }
-        let mut blocksort: Vec<BlockVarnode> = isectlist.iter().map(|&vn| BlockVarnode::new(vn, ctx)).collect();
+        let mut blocksort: Vec<BlockVarnode> = isectlist
+            .iter()
+            .map(|&vn| BlockVarnode::new(vn, ctx))
+            .collect();
         // stable_sort by BlockVarnode::operator< (block index)
         blocksort.sort_by(|a, b| {
             if a.less(b) {
@@ -2135,7 +2240,12 @@ impl Merge {
 
     /// Snip a set of reads of `vn` by routing them through a fresh COPY (C++
     /// `Merge::snipReads`, `merge.cc:443-480`).
-    fn snip_reads(&mut self, ctx: &mut dyn MergeContext, vn: VarnodeId, markedop: &[OpId]) -> KunaResult<()> {
+    fn snip_reads(
+        &mut self,
+        ctx: &mut dyn MergeContext,
+        vn: VarnodeId,
+        markedop: &[OpId],
+    ) -> KunaResult<()> {
         if markedop.is_empty() {
             return Ok(());
         }
@@ -2157,7 +2267,11 @@ impl Merge {
 
     /// Find instances of `high` defined by a COPY from outside `high` (C++
     /// `Merge::findSingleCopy`, `merge.cc:1021-1036`).
-    fn find_single_copy(ctx: &dyn MergeContext, high: HighVariableId, singlelist: &mut Vec<VarnodeId>) {
+    fn find_single_copy(
+        ctx: &dyn MergeContext,
+        high: HighVariableId,
+        singlelist: &mut Vec<VarnodeId>,
+    ) {
         let n = ctx.high_num_instances(high);
         for i in 0..n {
             let vn = ctx.high_get_instance(high, i);
@@ -2178,7 +2292,11 @@ impl Merge {
 
     /// Hide shadow Varnodes by consolidating COPY chains (C++ `Merge::hideShadows`,
     /// `merge.cc:1070-1100`).  Returns `true` if data-flow changed.
-    pub fn hide_shadows(&mut self, ctx: &mut dyn MergeContext, high: HighVariableId) -> KunaResult<bool> {
+    pub fn hide_shadows(
+        &mut self,
+        ctx: &mut dyn MergeContext,
+        high: HighVariableId,
+    ) -> KunaResult<bool> {
         let mut sl = Vec::new();
         Self::find_single_copy(ctx, high, &mut sl);
         let mut singlelist: Vec<Option<VarnodeId>> = sl.into_iter().map(Some).collect();
@@ -2340,7 +2458,11 @@ impl Merge {
 
     /// Replace COPYs into `high` with a single dominant COPY (C++
     /// `Merge::processHighDominantCopy`, `merge.cc:1316-1337`).
-    fn process_high_dominant_copy(&mut self, ctx: &mut dyn MergeContext, high: HighVariableId) -> KunaResult<()> {
+    fn process_high_dominant_copy(
+        &mut self,
+        ctx: &mut dyn MergeContext,
+        high: HighVariableId,
+    ) -> KunaResult<()> {
         let mut copy_ins: Vec<OpId> = Vec::new();
         Self::find_all_into_copies(ctx, high, &mut copy_ins, true);
         if copy_ins.len() < 2 {
@@ -2461,7 +2583,9 @@ impl Merge {
                         Some(p) => ctx.piece_group(p) == g1 && ctx.piece_offset(p) == o1 + offset,
                         None => ctx.vn_is_padding_piece(vn, v1, offset),
                     };
-                    if !matches(v2, p2, off2) || !matches(v3, p3, off3) { continue; }
+                    if !matches(v2, p2, off2) || !matches(v3, p3, off3) {
+                        continue;
+                    }
                     ctx.op_mark_non_printing(op);
                     if ctx.vn_is_implied(v2) {
                         ctx.vn_clear_implied_set_explicit(v2);
@@ -2594,12 +2718,12 @@ fn single_contain_varnode_def(cover: &Cover, ctx: &dyn MergeContext, vn: Varnode
 mod tests {
     use super::*;
     use crate::cover::{CoverBlock, CoverPoint, PcodeOpSet};
-    use crate::dtype::{type_metatype, Datatype};
+    use crate::dtype::{Datatype, type_metatype};
     use crate::variable::{CompareNameView, VarnodeView, VarnodeViewLoc};
-    use unlace_base::address::Address;
     use slotmap::{Key, KeyData};
     use std::collections::BTreeMap;
     use std::rc::Rc;
+    use unlace_base::address::Address;
 
     fn vid(n: u64) -> VarnodeId {
         VarnodeId::from(KeyData::from_ffi(n))
@@ -2621,7 +2745,10 @@ mod tests {
     }
 
     fn op_point(uindex: uintm) -> CoverPoint {
-        CoverPoint::Op { uindex, multiequal: false }
+        CoverPoint::Op {
+            uindex,
+            multiequal: false,
+        }
     }
 
     /// A one-block cover [begin..stop] on block `blk` (an instance's coverage).
@@ -2646,11 +2773,17 @@ mod tests {
         fn write_into(&mut self, c: &mut Cover) {
             // Seed the block via add_def_point at the begin point, then extend to
             // the stop via merge of a second def cover on the same block.
-            c.add_def_point(Some((self.blk, self.cb.get_start().unwrap_or(CoverPoint::Begin))), false);
+            c.add_def_point(
+                Some((self.blk, self.cb.get_start().unwrap_or(CoverPoint::Begin))),
+                false,
+            );
             // Manually union the explicit block geometry so contain/intersect see
             // exactly [start,stop].
             let mut whole = Cover::new();
-            whole.add_def_point(Some((self.blk, self.cb.get_stop().unwrap_or(CoverPoint::End))), false);
+            whole.add_def_point(
+                Some((self.blk, self.cb.get_stop().unwrap_or(CoverPoint::End))),
+                false,
+            );
             c.merge(&whole);
         }
     }
@@ -2777,7 +2910,10 @@ mod tests {
             self.hs(h).type_lock
         }
         fn high_get_type(&mut self, h: HighVariableId) -> Rc<Datatype> {
-            self.hs(h).type_.clone().unwrap_or_else(|| dt(1, type_metatype::TYPE_UNKNOWN))
+            self.hs(h)
+                .type_
+                .clone()
+                .unwrap_or_else(|| dt(1, type_metatype::TYPE_UNKNOWN))
         }
         fn high_is_addr_tied(&mut self, h: HighVariableId) -> bool {
             self.hs(h).addr_tied
@@ -2832,7 +2968,10 @@ mod tests {
             None
         }
         fn high_piece(&self, h: HighVariableId) -> Option<MergePieceId> {
-            self.pieces.iter().find(|(_, (ph, _))| *ph == h).map(|(&p, _)| MergePieceId(p))
+            self.pieces
+                .iter()
+                .find(|(_, (ph, _))| *ph == h)
+                .map(|(&p, _)| MergePieceId(p))
         }
         fn piece_offset(&self, _p: MergePieceId) -> int4 {
             0
@@ -2871,7 +3010,12 @@ mod tests {
         fn bank_update_cover(&mut self, h: HighVariableId) {
             self.hs_mut(h).cover_dirty = false;
         }
-        fn bank_group_with(&mut self, _h2: HighVariableId, _off: int4, _h1: HighVariableId) -> KunaResult<()> {
+        fn bank_group_with(
+            &mut self,
+            _h2: HighVariableId,
+            _off: int4,
+            _h1: HighVariableId,
+        ) -> KunaResult<()> {
             Ok(())
         }
         fn bank_set_mark(&mut self, h: HighVariableId) {
@@ -2970,7 +3114,10 @@ mod tests {
             0
         }
         fn vn_cover_ref(&self, vn: VarnodeId) -> Cow<'_, Cover> {
-            self.vn_cover.get(&vkey(vn)).map(Cow::Borrowed).unwrap_or_default()
+            self.vn_cover
+                .get(&vkey(vn))
+                .map(Cow::Borrowed)
+                .unwrap_or_default()
         }
         fn vn_create_index(&self, vn: VarnodeId) -> u64 {
             self.vn_create.get(&vkey(vn)).copied().unwrap_or(0)
@@ -3020,7 +3167,10 @@ mod tests {
             self.op_parent_idx.get(&okey(op)).copied().unwrap_or(0)
         }
         fn op_addr(&self, op: OpId) -> Address {
-            self.op_addr.get(&okey(op)).cloned().unwrap_or_else(Address::new_invalid)
+            self.op_addr
+                .get(&okey(op))
+                .cloned()
+                .unwrap_or_else(Address::new_invalid)
         }
         fn op_order(&self, op: OpId) -> uintm {
             self.op_order.get(&okey(op)).copied().unwrap_or(0)
@@ -3075,7 +3225,11 @@ mod tests {
         fn block_ops(&self, _bl: crate::context::BlockId) -> Vec<OpId> {
             Vec::new()
         }
-        fn block_dominates(&self, _dom: crate::context::BlockId, _sub: crate::context::BlockId) -> bool {
+        fn block_dominates(
+            &self,
+            _dom: crate::context::BlockId,
+            _sub: crate::context::BlockId,
+        ) -> bool {
             false
         }
         fn block_in(&self, bl: crate::context::BlockId, _slot: int4) -> crate::context::BlockId {
@@ -3093,7 +3247,12 @@ mod tests {
         fn copy_pair_range(&self, _dom_op: OpId, _sub_op: OpId) -> Cover {
             Cover::new()
         }
-        fn copy_trim_op(&mut self, _in_vn: VarnodeId, _addr: Address, _trim_op: OpId) -> KunaResult<OpId> {
+        fn copy_trim_op(
+            &mut self,
+            _in_vn: VarnodeId,
+            _addr: Address,
+            _trim_op: OpId,
+        ) -> KunaResult<OpId> {
             panic!("mock: copy_trim_op not under test")
         }
         fn trim_op_output(&mut self, _op: OpId) -> KunaResult<()> {
@@ -3102,12 +3261,22 @@ mod tests {
         fn trim_op_input_prep(&self, _op: OpId, _slot: int4) -> (VarnodeId, Address, bool) {
             panic!("mock: trim_op_input_prep not under test")
         }
-        fn snip_reads_insert_point(&self, _vn: VarnodeId, _reads: &[OpId]) -> (crate::context::BlockId, Address, Option<OpId>) {
+        fn snip_reads_insert_point(
+            &self,
+            _vn: VarnodeId,
+            _reads: &[OpId],
+        ) -> (crate::context::BlockId, Address, Option<OpId>) {
             panic!("mock: snip_reads_insert_point not under test")
         }
         fn indirect_inherit_union(&mut self, _outvn: VarnodeId, _newop: OpId, _indop: OpId) {}
         fn sort_op_nodes_by_high(&self, _nodes: &mut Vec<crate::expression::PcodeOpNode>) {}
-        fn build_dominant_copy(&mut self, _high: HighVariableId, _copy: &[OpId], _pos: int4, _size: int4) -> KunaResult<()> {
+        fn build_dominant_copy(
+            &mut self,
+            _high: HighVariableId,
+            _copy: &[OpId],
+            _pos: int4,
+            _size: int4,
+        ) -> KunaResult<()> {
             panic!("mock: build_dominant_copy not under test")
         }
         fn addr_tied_ranges(&self) -> Vec<AddrTiedRange> {
@@ -3143,7 +3312,10 @@ mod tests {
     #[test]
     fn block_varnode_find_front_binary_search() {
         // Sorted list of (index) blocks: 0,2,2,5,5,5,9
-        let mk = |idx: int4| BlockVarnode { index: idx, vn: vid(1) };
+        let mk = |idx: int4| BlockVarnode {
+            index: idx,
+            vn: vid(1),
+        };
         let list = vec![mk(0), mk(2), mk(2), mk(5), mk(5), mk(5), mk(9)];
         assert_eq!(BlockVarnode::find_front(0, &list), 0);
         assert_eq!(BlockVarnode::find_front(2, &list), 1); // first of the 2s
@@ -3241,9 +3413,15 @@ mod tests {
         let ba = compare_copy_by_in_varnode(&m, oid(2), oid(1));
         // Antisymmetry: never both true (that would be a non-total order — the
         // exact corruption the hunt list warns about for BTree/sort misbehavior).
-        assert!(!(ab && ba), "comparator must be antisymmetric on colliding create-index");
+        assert!(
+            !(ab && ba),
+            "comparator must be antisymmetric on colliding create-index"
+        );
         // Matches C++ `5 < 5` -> false in both directions for distinct inputs.
-        assert!(!ab && !ba, "distinct inputs with equal createIndex compare as equal (C++ `<`)");
+        assert!(
+            !ab && !ba,
+            "distinct inputs with equal createIndex compare as equal (C++ `<`)"
+        );
     }
 
     /// ADVERSARIAL (w10-dominant-copy): the same-source grouping in
@@ -3262,7 +3440,10 @@ mod tests {
         // group regardless of create-index equality.
         let a = vid(100);
         let b = vid(200);
-        assert_ne!(a, b, "distinct input Varnodes must remain distinct group keys");
+        assert_ne!(
+            a, b,
+            "distinct input Varnodes must remain distinct group keys"
+        );
         // And the comparator does not collapse them to a single create-index group
         // beyond the primary key (covered by the antisymmetry test above); the
         // `sz`-walk in processHighDominantCopy compares `op_in(.,0)` ids, so the
@@ -3411,10 +3592,8 @@ mod tests {
         let mut s = HighState::default();
         s.cover_dirty = false;
         add_high(&mut m, 1, s);
-        let mut cache = HighIntersectTest::new(PcodeOpSet::new(
-            Box::new(Vec::new),
-            Box::new(|_, _| true),
-        ));
+        let mut cache =
+            HighIntersectTest::new(PcodeOpSet::new(Box::new(Vec::new), Box::new(|_, _| true)));
         // not dirty -> returns true (was not originally dirty)
         assert!(MergeIntersect::update_high(&mut m, &mut cache, hid(1)));
         // mark dirty -> returns false and clears the dirty flag
@@ -3434,11 +3613,14 @@ mod tests {
         b.instances = vec![vid(2)];
         add_high(&mut m, 1, a);
         add_high(&mut m, 2, b);
-        let mut cache = HighIntersectTest::new(PcodeOpSet::new(
-            Box::new(Vec::new),
-            Box::new(|_, _| true),
+        let mut cache =
+            HighIntersectTest::new(PcodeOpSet::new(Box::new(Vec::new), Box::new(|_, _| true)));
+        assert!(!MergeIntersect::intersection(
+            &mut m,
+            &mut cache,
+            hid(1),
+            hid(2)
         ));
-        assert!(!MergeIntersect::intersection(&mut m, &mut cache, hid(1), hid(2)));
         // The result is cached symmetrically.
         assert_eq!(cache.cached(hid(1), hid(2)), Some(false));
         assert_eq!(cache.cached(hid(2), hid(1)), Some(false));
@@ -3485,14 +3667,23 @@ mod tests {
         m.pieces.insert(11, (hid(4), vec![10]));
         m.pieces.insert(12, (hid(1), vec![13]));
         m.pieces.insert(13, (hid(5), vec![12]));
-        let cover = MergeConflict { earlier: Some(hid(1)), high: hid(2) };
+        let cover = MergeConflict {
+            earlier: Some(hid(1)),
+            high: hid(2),
+        };
         for read in [1, 2, 4, 5] {
             assert!(!cover.outlives_trim(&m, hid(read)), "trimming high {read}");
         }
         for unread in [3, 6] {
-            assert!(cover.outlives_trim(&m, hid(unread)), "trimming high {unread}");
+            assert!(
+                cover.outlives_trim(&m, hid(unread)),
+                "trimming high {unread}"
+            );
         }
-        let no_cover = MergeConflict { earlier: None, high: hid(2) };
+        let no_cover = MergeConflict {
+            earlier: None,
+            high: hid(2),
+        };
         assert!(!no_cover.outlives_trim(&m, hid(2)));
         assert!(!no_cover.outlives_trim(&m, hid(4)));
         assert!(no_cover.outlives_trim(&m, hid(1)));
@@ -3501,7 +3692,8 @@ mod tests {
 
     #[test]
     fn indexing_a_high_by_block_gives_every_test_the_scan_answer() {
-        let fresh = || HighIntersectTest::new(PcodeOpSet::new(Box::new(Vec::new), Box::new(|_, _| true)));
+        let fresh =
+            || HighIntersectTest::new(PcodeOpSet::new(Box::new(Vec::new), Box::new(|_, _| true)));
         let mut answers = [0usize; 2];
         for seed in 1..=400u64 {
             for shadow in [false, true] {
@@ -3525,11 +3717,14 @@ mod tests {
     fn merge_intersect_same_high_never_intersects() {
         let mut m = Mock::new();
         add_high(&mut m, 1, HighState::default());
-        let mut cache = HighIntersectTest::new(PcodeOpSet::new(
-            Box::new(Vec::new),
-            Box::new(|_, _| true),
+        let mut cache =
+            HighIntersectTest::new(PcodeOpSet::new(Box::new(Vec::new), Box::new(|_, _| true)));
+        assert!(!MergeIntersect::intersection(
+            &mut m,
+            &mut cache,
+            hid(1),
+            hid(1)
         ));
-        assert!(!MergeIntersect::intersection(&mut m, &mut cache, hid(1), hid(1)));
     }
 
     // --- Merge::merge backout on intersection (merge.cc:1565-1575) ---------
@@ -3586,7 +3781,8 @@ mod tests {
             s.cover = cover_block(n as int4 - 1, 0, 5);
             s.instances = vec![vid(n as u64)];
             add_high(&mut m, n, s);
-            m.vn_addr.insert(vkey(vid(n as u64)), Address::new_invalid());
+            m.vn_addr
+                .insert(vkey(vid(n as u64)), Address::new_invalid());
         }
         let mut merge = Merge::new(HighIntersectTest::new(PcodeOpSet::new(
             Box::new(Vec::new),
@@ -3617,7 +3813,8 @@ mod tests {
             s.instances = vec![vid(n as u64)];
             s.persist = n != 7 && n != 200;
             add_high(&mut m, n, s);
-            m.vn_addr.insert(vkey(vid(n as u64)), Address::new_invalid());
+            m.vn_addr
+                .insert(vkey(vid(n as u64)), Address::new_invalid());
         }
         let mut merge = Merge::new(HighIntersectTest::new(PcodeOpSet::new(
             Box::new(Vec::new),
@@ -3626,7 +3823,11 @@ mod tests {
         let mut highvec: Vec<HighVariableId> = (1..=globals + 2).map(hid).collect();
         merge.merge_linear(&mut m, &mut highvec).unwrap();
         assert_eq!(m.merged, vec![(hid(7), hid(200), true)]);
-        assert!(m.persist_reads <= 2 * u64::from(globals + 2) + 4, "{} reads", m.persist_reads);
+        assert!(
+            m.persist_reads <= 2 * u64::from(globals + 2) + 4,
+            "{} reads",
+            m.persist_reads
+        );
     }
 
     // --- Merge::clear resets the cache + trim/partial lists ----------------
@@ -3645,5 +3846,4 @@ mod tests {
         assert!(merge.proto_partial.is_empty());
         assert_eq!(merge.test_cache.cached(hid(1), hid(2)), None);
     }
-
 }

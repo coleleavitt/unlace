@@ -167,9 +167,11 @@ mod tests {
 
     fn rsds_recording(path: &str) -> CodeViewInfo {
         match rsds() {
-            CodeViewInfo::Rsds { guid, age, .. } => {
-                CodeViewInfo::Rsds { guid, age, pdb_path: path.to_string() }
-            }
+            CodeViewInfo::Rsds { guid, age, .. } => CodeViewInfo::Rsds {
+                guid,
+                age,
+                pdb_path: path.to_string(),
+            },
             other => other,
         }
     }
@@ -178,30 +180,54 @@ mod tests {
     fn matching_guid_and_age_passes() {
         let cv = rsds();
         // The canonical render (uppercase) and a lowercased variant both match.
-        assert!(fingerprint_ok(&cv, "61AC3963-FF48-9024-4C4C-44205044422E", 1));
-        assert!(fingerprint_ok(&cv, "61ac3963-ff48-9024-4c4c-44205044422e", 1));
+        assert!(fingerprint_ok(
+            &cv,
+            "61AC3963-FF48-9024-4C4C-44205044422E",
+            1
+        ));
+        assert!(fingerprint_ok(
+            &cv,
+            "61ac3963-ff48-9024-4c4c-44205044422e",
+            1
+        ));
     }
 
     #[test]
     fn mismatched_guid_fails() {
         let cv = rsds();
         // A different GUID (one nibble off) is rejected — the stale-PDB guard.
-        assert!(!fingerprint_ok(&cv, "00000000-FF48-9024-4C4C-44205044422E", 1));
+        assert!(!fingerprint_ok(
+            &cv,
+            "00000000-FF48-9024-4C4C-44205044422E",
+            1
+        ));
     }
 
     #[test]
     fn mismatched_age_fails() {
         let cv = rsds();
         // Right GUID, wrong age (a rebuilt PDB) is rejected.
-        assert!(!fingerprint_ok(&cv, "61AC3963-FF48-9024-4C4C-44205044422E", 2));
+        assert!(!fingerprint_ok(
+            &cv,
+            "61AC3963-FF48-9024-4C4C-44205044422E",
+            2
+        ));
     }
 
     #[test]
     fn nb10_record_has_no_guid_to_match() {
         // An NB10 record carries a u32 signature, not a GUID — the GUID-keyed gate
         // cannot match it, so it is rejected (the pass targets RSDS).
-        let cv = CodeViewInfo::Nb10 { signature: 0xDEAD_BEEF, age: 1, pdb_path: "x.pdb".into() };
-        assert!(!fingerprint_ok(&cv, "61AC3963-FF48-9024-4C4C-44205044422E", 1));
+        let cv = CodeViewInfo::Nb10 {
+            signature: 0xDEAD_BEEF,
+            age: 1,
+            pdb_path: "x.pdb".into(),
+        };
+        assert!(!fingerprint_ok(
+            &cv,
+            "61AC3963-FF48-9024-4C4C-44205044422E",
+            1
+        ));
     }
 
     #[test]
@@ -225,7 +251,10 @@ mod tests {
     fn recorded_name_keeps_only_the_basename() {
         // A Windows build path is reduced to its filename, `\` and `/` alike.
         assert_eq!(recorded_pdb_name(r"C:\src\obj\prog.pdb"), Some("prog.pdb"));
-        assert_eq!(recorded_pdb_name("/home/u/build/prog.pdb"), Some("prog.pdb"));
+        assert_eq!(
+            recorded_pdb_name("/home/u/build/prog.pdb"),
+            Some("prog.pdb")
+        );
         assert_eq!(recorded_pdb_name("prog.pdb"), Some("prog.pdb"));
         // Case is preserved but the extension check is case-insensitive.
         assert_eq!(recorded_pdb_name(r"D:\Out\Prog.PDB"), Some("Prog.PDB"));

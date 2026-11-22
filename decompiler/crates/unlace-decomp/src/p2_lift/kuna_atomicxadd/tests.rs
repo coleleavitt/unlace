@@ -1,11 +1,11 @@
 use super::*;
 use crate::context::{ArchContext, TypeOp};
 use crate::kuna_sourcelang::SourceLang;
+use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
-use std::rc::Rc;
 
 fn function(lang: SourceLang) -> Funcdata {
     let mut manage = AddrSpaceManager::new();

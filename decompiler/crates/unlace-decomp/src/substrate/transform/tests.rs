@@ -20,11 +20,11 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, IopSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, IopSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 
-use crate::dtype::{type_metatype, Datatype};
 use crate::context::{ArchContext, VarnodeId};
+use crate::dtype::{Datatype, type_metatype};
 
 // --- test harness -------------------------------------------------------------
 
@@ -35,7 +35,8 @@ fn build_manager() -> AddrSpaceManager {
 fn build_manager_endian(big_endian: bool) -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(IopSpace::new(2))).unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
@@ -151,7 +152,7 @@ fn lane_description_subset_partial_fails() {
 #[test]
 fn lane_description_restriction() {
     let d = LaneDescription::uniform(8, 2); // positions 0,2,4,6
-                                            // Subset: numLanes=4, skip=0; truncate bytePos=2 size=4 → lanes 1..3.
+    // Subset: numLanes=4, skip=0; truncate bytePos=2 size=4 → lanes 1..3.
     let res = d.restriction(4, 0, 2, 4);
     assert_eq!(res, Some((2, 1))); // (resNumLanes, resSkipLanes)
 
@@ -274,7 +275,10 @@ fn new_split_uniform_lanes_keys_on_create_index() {
         assert_eq!(tm.var(r).get_val(), (i as u64) * 16);
     }
     let last = TVarRef::Piece { key: ci, idx: 3 };
-    assert_eq!(tm.var(last).get_flags() & tvar_flags::split_terminator, tvar_flags::split_terminator);
+    assert_eq!(
+        tm.var(last).get_flags() & tvar_flags::split_terminator,
+        tvar_flags::split_terminator
+    );
     let mid = TVarRef::Piece { key: ci, idx: 1 };
     assert_eq!(tm.var(mid).get_flags() & tvar_flags::split_terminator, 0);
 }
@@ -304,7 +308,7 @@ fn new_split_subset_rebases_positions() {
     let ci = fd.vbank().get(vn).unwrap().get_create_index() as int4;
     let mut tm = TransformManager::new();
     let desc = LaneDescription::uniform(8, 2); // positions 0,2,4,6
-                                               // subset: 2 lanes starting at lane 1 (position 2) → base bit pos 16.
+    // subset: 2 lanes starting at lane 1 (position 2) → base bit pos 16.
     tm.new_split_subset(&fd, vn, &desc, 2, 1);
     // lane 0: position(1)*8 - 16 = 0
     let l0 = TVarRef::Piece { key: ci, idx: 0 };
@@ -432,7 +436,7 @@ fn preexisting_guard_logic() {
     let mut tm = TransformManager::new();
     let piece = tm.new_piece(&fd, vn, 16, 0); // a piece-type var
     let uniq = tm.new_unique(4); // a normal_temp var
-                                 // slot 0 → always true.
+    // slot 0 → always true.
     assert!(tm.preexisting_guard(0, piece));
     assert!(tm.preexisting_guard(0, uniq));
     // slot != 0 with a piece → false (op was/will be visited on slot 0).
@@ -460,7 +464,8 @@ fn apply_materializes_newvarnodes_in_creation_order() {
     let c = tm.new_unique(8);
 
     let before = fd.vbank().get_create_index();
-    tm.apply(&mut fd).expect("pure-varnode apply should succeed (no seams reached)");
+    tm.apply(&mut fd)
+        .expect("pure-varnode apply should succeed (no seams reached)");
 
     // Each placeholder now has a materialized replacement with a create-index in
     // factory-call order (a < b < c).
@@ -472,7 +477,10 @@ fn apply_materializes_newvarnodes_in_creation_order() {
     let cic = fd.vbank().get(vc).unwrap().get_create_index();
     assert!(cia < cib, "newVarnodes visited a before b");
     assert!(cib < cic, "newVarnodes visited b before c");
-    assert!(cia >= before, "new IR allocated after the pre-apply counter");
+    assert!(
+        cia >= before,
+        "new IR allocated after the pre-apply counter"
+    );
 }
 
 #[test]
@@ -488,7 +496,8 @@ fn apply_visits_piece_map_before_newvarnodes() {
     tm.new_split(&fd, cvn, &desc); // two constant lanes in pieceMap
     let trailing = tm.new_unique(4); // a newVarnodes entry
 
-    tm.apply(&mut fd).expect("constant-split + unique apply should succeed");
+    tm.apply(&mut fd)
+        .expect("constant-split + unique apply should succeed");
 
     let lane0 = TVarRef::Piece { key: ci, idx: 0 };
     let lane1 = TVarRef::Piece { key: ci, idx: 1 };
@@ -501,7 +510,10 @@ fn apply_visits_piece_map_before_newvarnodes() {
     // pieceMap lane order is least→most significant.
     assert!(ci0 < ci1, "lane 0 materialized before lane 1");
     // pieceMap visited before newVarnodes.
-    assert!(ci1 < cit, "pieceMap entries materialized before the newVarnodes list");
+    assert!(
+        ci1 < cit,
+        "pieceMap entries materialized before the newVarnodes list"
+    );
 }
 
 #[test]
@@ -541,7 +553,8 @@ fn apply_preexisting_op_sets_opcode_and_reshapes_inputs() {
     let in_const = mk_const(&mut fd, 7, 4);
     let rin = tm.get_preexisting_varnode(&fd, in_const);
     tm.op_set_input(rop, rin, 0);
-    tm.apply(&mut fd).expect("op_preexisting materialization runs to completion");
+    tm.apply(&mut fd)
+        .expect("op_preexisting materialization runs to completion");
 
     // The placeholder's replacement IS the original op, now a COPY with 1 input.
     assert_eq!(tm.op(rop).get_replacement(), Some(real_op));
@@ -569,9 +582,21 @@ fn apply_rejects_a_free_temp_with_two_readers_before_mutating() {
     tm.op_set_input(rop_b, shared, 0);
 
     let err = tm.apply(&mut fd).expect_err("two readers of a free temp");
-    assert!(err.explain().contains("multiple descendants"), "{}", err.explain());
-    assert_eq!(fd.vbank().get_create_index(), before, "no Varnode materialized");
-    assert_eq!(fd.obank().get(op_a).unwrap().get_in(0), Some(original), "op_a untouched");
+    assert!(
+        err.explain().contains("multiple descendants"),
+        "{}",
+        err.explain()
+    );
+    assert_eq!(
+        fd.vbank().get_create_index(),
+        before,
+        "no Varnode materialized"
+    );
+    assert_eq!(
+        fd.obank().get(op_a).unwrap().get_in(0),
+        Some(original),
+        "op_a untouched"
+    );
     assert!(tm.var(shared).get_replacement().is_none());
 }
 
@@ -628,12 +653,16 @@ fn apply_piece_materializes_varnode_and_transfers_consume() {
     let mut fd = build_fd();
     let vn = mk_vn(&mut fd, 0x100, 8);
     // Give the source a non-trivial consume mask so the transfer is observable.
-    fd.vbank_mut().get_mut(vn).unwrap().set_consume(0xffff_ffff_ffff_ffff);
+    fd.vbank_mut()
+        .get_mut(vn)
+        .unwrap()
+        .set_consume(0xffff_ffff_ffff_ffff);
     let ci = fd.vbank().get(vn).unwrap().get_create_index() as int4;
     let mut tm = TransformManager::new();
     let desc = LaneDescription::uniform(8, 2); // four real (non-constant) 2-byte lanes
     tm.new_split(&fd, vn, &desc);
-    tm.apply(&mut fd).expect("piece materialization runs to completion");
+    tm.apply(&mut fd)
+        .expect("piece materialization runs to completion");
 
     // Lane 0 is the least-significant 2 bytes: a real ram Varnode at offset 0x100.
     let lane0 = TVarRef::Piece { key: ci, idx: 0 };
@@ -641,20 +670,38 @@ fn apply_piece_materializes_varnode_and_transfers_consume() {
     let rv = fd.vbank().get(v0).unwrap();
     assert!(!rv.is_constant());
     assert_eq!(rv.get_size(), 2, "lane is the 2-byte lane size");
-    assert_eq!(rv.get_offset(), 0x100, "little-endian lane 0 at the base offset");
+    assert_eq!(
+        rv.get_offset(),
+        0x100,
+        "little-endian lane 0 at the base offset"
+    );
     // transferVarnodeProperties copies the (masked) consume bits.
-    assert_eq!(rv.get_consume(), 0xffff, "consume transferred & masked to the 2-byte lane");
+    assert_eq!(
+        rv.get_consume(),
+        0xffff,
+        "consume transferred & masked to the 2-byte lane"
+    );
 }
 
 #[test]
 fn split_lanes_keep_consumed_bits_in_both_byte_orders() {
     for big_endian in [false, true] {
-        for mask in [0x0000_0000_ffff_ffff, 0xffff_ffff_0000_0000, 0x0123_4567_89ab_cdef] {
+        for mask in [
+            0x0000_0000_ffff_ffff,
+            0xffff_ffff_0000_0000,
+            0x0123_4567_89ab_cdef,
+        ] {
             let arch = Rc::new(ArchContext::new(build_manager_endian(big_endian)));
             let ram = Rc::clone(arch.manage().get_space_by_name("ram").unwrap());
             let mut fd = Funcdata::new(
-                "lanes", "lanes", arch, Address::new(ram, 0x1000), 0x10000000, 0x40,
-            ).unwrap();
+                "lanes",
+                "lanes",
+                arch,
+                Address::new(ram, 0x1000),
+                0x10000000,
+                0x40,
+            )
+            .unwrap();
             let vn = mk_vn(&mut fd, 0x100, 8);
             fd.vbank_mut().get_mut(vn).unwrap().set_consume(mask);
             let key = fd.vbank().get(vn).unwrap().get_create_index() as int4;
@@ -662,7 +709,10 @@ fn split_lanes_keep_consumed_bits_in_both_byte_orders() {
             tm.new_split(&fd, vn, &LaneDescription::uniform(8, 4));
             tm.apply(&mut fd).unwrap();
             for idx in 0..2 {
-                let replacement = tm.var(TVarRef::Piece { key, idx }).get_replacement().unwrap();
+                let replacement = tm
+                    .var(TVarRef::Piece { key, idx })
+                    .get_replacement()
+                    .unwrap();
                 let lane = fd.vbank().get(replacement).unwrap();
                 let storage_offset = if big_endian { (1 - idx) * 4 } else { idx * 4 };
                 assert_eq!(lane.get_offset(), 0x100 + storage_offset as u64);
@@ -682,7 +732,8 @@ fn apply_constant_iop_round_trips_through_get_op_from_const() {
     let iop_vn = fd.new_varnode_iop(real_op);
     let mut tm = TransformManager::new();
     let r = tm.new_iop(&fd, iop_vn);
-    tm.apply(&mut fd).expect("constant_iop materialization runs to completion");
+    tm.apply(&mut fd)
+        .expect("constant_iop materialization runs to completion");
 
     // The materialized replacement is an iop varnode that decodes back to real_op.
     let mat = tm.var(r).get_replacement().expect("iop materialized");

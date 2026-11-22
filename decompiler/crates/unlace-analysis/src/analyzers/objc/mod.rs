@@ -53,12 +53,12 @@
 
 pub mod classt;
 pub mod encoding;
-pub mod kuna_objccats;
+mod kuna_objcblocks;
 mod kuna_objccache;
+pub mod kuna_objccats;
 pub mod kuna_objcdirect;
 pub mod kuna_objcivars;
 mod kuna_objcruntime;
-mod kuna_objcblocks;
 mod kuna_swiftclassnames;
 use kuna_swiftclassnames::display_class_name;
 pub mod kuna_objcprops;
@@ -74,8 +74,8 @@ use std::rc::Rc;
 use object::read::Object;
 
 use crate::pass::{
-    AnalysisCtx, AnalysisOutput, AnalysisPass, ConstGate, ConstRange, DataObjectFact, FidMatch, Phase,
-    SymFact, SymKind,
+    AnalysisCtx, AnalysisOutput, AnalysisPass, ConstGate, ConstRange, DataObjectFact, FidMatch,
+    Phase, SymFact, SymKind,
 };
 use encoding::TypeCtx;
 use sections::MachoImage;
@@ -114,7 +114,9 @@ impl AnalysisPass for ObjcMetadataPass {
         } else {
             crate::loader::format::macho::resolve_dyld_info_binds(ctx.file, ctx.bytes)
         };
-        let mut img = MachoImage::with_fixups(ctx.file, fixups).with_binds(binds).with_method_symbols(ctx.file);
+        let mut img = MachoImage::with_fixups(ctx.file, fixups)
+            .with_binds(binds)
+            .with_method_symbols(ctx.file);
         if let Some(cache) = ctx.image_path.and_then(kuna_objccache::CacheReader::open) {
             let base = cache.selector_base();
             img = img.with_cache(Rc::new(move |va, n| cache.read(va, n)), base);
@@ -125,11 +127,16 @@ impl AnalysisPass for ObjcMetadataPass {
         let (ptr_size, word_size) = ctx.arch.data_org();
         let tctx = TypeCtx::new(ctx.arch.types(), ptr_size, word_size);
         let sdk = match unlace_decomp::kuna_objcsdk::sdk_path() {
-            Some(root) => kuna_objcsdk::signatures(&root, &kuna_objcsdk::linked_frameworks(ctx.file, ctx.bytes)),
+            Some(root) => kuna_objcsdk::signatures(
+                &root,
+                &kuna_objcsdk::linked_frameworks(ctx.file, ctx.bytes),
+            ),
             None => HashMap::new(),
         };
         let mut selectors = kuna_objcrefs::Selectors::with_sdk(sdk);
-        out.prototypes_at.extend(kuna_objcruntime::prototypes(ctx.file, ctx.bytes, ctx.arch, &tctx));
+        out.prototypes_at.extend(kuna_objcruntime::prototypes(
+            ctx.file, ctx.bytes, ctx.arch, &tctx,
+        ));
 
         // Walk `__objc_classlist`: an array of `class_t*` (stride = ptr size). The
         // classes are read first so every instance layout is known before any
@@ -138,9 +145,15 @@ impl AnalysisPass for ObjcMetadataPass {
         for (cl_addr, cl_data) in img.classlists(ctx.file) {
             let ps = img.ptr_size() as usize;
             for (i, _) in cl_data.chunks_exact(ps).enumerate() {
-                let Some(class_ptr) = img.read_ptr(cl_addr.wrapping_add((i * ps) as u64)) else { continue };
-                let Some(class) = classt::read_class_t(&img, class_ptr) else { continue };
-                let Some(name) = classt::class_name(&img, class.ro) else { continue };
+                let Some(class_ptr) = img.read_ptr(cl_addr.wrapping_add((i * ps) as u64)) else {
+                    continue;
+                };
+                let Some(class) = classt::read_class_t(&img, class_ptr) else {
+                    continue;
+                };
+                let Some(name) = classt::class_name(&img, class.ro) else {
+                    continue;
+                };
                 classes.push((class, name));
             }
         }
@@ -153,13 +166,19 @@ impl AnalysisPass for ObjcMetadataPass {
         // nothing. The record is declared here (the typed `self`, the `@"…"`
         // pointers) and completed there. Otherwise the ivar list builds it.
         let swifttypes = ctx.arch.analysis_swifttypes
-            && ctx.file.section_by_name(super::swift::descriptors::MACHO_SECTIONS.fieldmd).is_some()
-            && crate::sourcelang::effective_compiler(ctx.file, ctx.bytes) == crate::sourcelang::Compiler::Swift;
+            && ctx
+                .file
+                .section_by_name(super::swift::descriptors::MACHO_SECTIONS.fieldmd)
+                .is_some()
+            && crate::sourcelang::effective_compiler(ctx.file, ctx.bytes)
+                == crate::sourcelang::Compiler::Swift;
         let layouts: HashMap<String, kuna_objcivars::Layout> = classes
             .iter()
             .filter(|_| objcivars)
             .filter(|(_, name)| !(swifttypes && kuna_swiftclassnames::is_swift_runtime_name(name)))
-            .filter_map(|(class, name)| kuna_objcivars::layout(&img, class, name).map(|l| (name.clone(), l)))
+            .filter_map(|(class, name)| {
+                kuna_objcivars::layout(&img, class, name).map(|l| (name.clone(), l))
+            })
             .collect();
         let structs = kuna_objcivars::Structs::build(&tctx, &layouts);
         let categories = kuna_objccats::categories(&img, ctx.file);
@@ -184,12 +203,18 @@ impl AnalysisPass for ObjcMetadataPass {
             }
         }
         for cat in &categories {
-            for list in [cat.instance_methods, cat.class_methods].into_iter().flatten() {
+            for list in [cat.instance_methods, cat.class_methods]
+                .into_iter()
+                .flatten()
+            {
                 for m in methods::walk_method_list(&img, list, architecture) {
                     selectors.record(&m.selector, m.types.as_deref());
                 }
             }
-            for list in [cat.instance_properties, cat.class_properties].into_iter().flatten() {
+            for list in [cat.instance_properties, cat.class_properties]
+                .into_iter()
+                .flatten()
+            {
                 for (sel, enc) in kuna_objcprops::declarations(&img, list) {
                     match &cat.class {
                         Some(class) => selectors.record_for_class(class, &sel, &enc),
@@ -224,26 +249,84 @@ impl AnalysisPass for ObjcMetadataPass {
             });
             let self_type = objcivars.then(|| structs.self_type(&tctx, name)).flatten();
             for list in classt::method_lists(&img, class.ro) {
-                self.emit_methods(&img, &tctx, architecture, name, '-', list, self_type.as_ref(), &mut selectors, &mut out);
+                self.emit_methods(
+                    &img,
+                    &tctx,
+                    architecture,
+                    name,
+                    '-',
+                    list,
+                    self_type.as_ref(),
+                    &mut selectors,
+                    &mut out,
+                );
             }
-            for list in classt::metaclass_ro(&img, class.isa).map(|ro| classt::method_lists(&img, ro)).unwrap_or_default() {
-                self.emit_methods(&img, &tctx, architecture, name, '+', list, None, &mut selectors, &mut out);
+            for list in classt::metaclass_ro(&img, class.isa)
+                .map(|ro| classt::method_lists(&img, ro))
+                .unwrap_or_default()
+            {
+                self.emit_methods(
+                    &img,
+                    &tctx,
+                    architecture,
+                    name,
+                    '+',
+                    list,
+                    None,
+                    &mut selectors,
+                    &mut out,
+                );
             }
             if let Some(ivar_list) = classt::base_ivars(&img, class.ro) {
-                emit_ivars(&classt::walk_ivar_list(&img, ivar_list), name, objcivars, &mut out);
+                emit_ivars(
+                    &classt::walk_ivar_list(&img, ivar_list),
+                    name,
+                    objcivars,
+                    &mut out,
+                );
             }
         }
 
         for cat in &categories {
-            let self_type = cat.class.as_deref().filter(|_| objcivars).and_then(|c| structs.self_type(&tctx, c));
+            let self_type = cat
+                .class
+                .as_deref()
+                .filter(|_| objcivars)
+                .and_then(|c| structs.self_type(&tctx, c));
             if let Some(list) = cat.instance_methods {
-                self.emit_methods(&img, &tctx, architecture, &cat.label, '-', list, self_type.as_ref(), &mut selectors, &mut out);
+                self.emit_methods(
+                    &img,
+                    &tctx,
+                    architecture,
+                    &cat.label,
+                    '-',
+                    list,
+                    self_type.as_ref(),
+                    &mut selectors,
+                    &mut out,
+                );
             }
             if let Some(list) = cat.class_methods {
-                self.emit_methods(&img, &tctx, architecture, &cat.label, '+', list, None, &mut selectors, &mut out);
+                self.emit_methods(
+                    &img,
+                    &tctx,
+                    architecture,
+                    &cat.label,
+                    '+',
+                    list,
+                    None,
+                    &mut selectors,
+                    &mut out,
+                );
             }
         }
-        kuna_objcdirect::emit(&img, architecture, &tctx, objcivars.then_some(&structs), &mut out);
+        kuna_objcdirect::emit(
+            &img,
+            architecture,
+            &tctx,
+            objcivars.then_some(&structs),
+            &mut out,
+        );
         for proto in &protocols {
             out.symbols.push(SymFact {
                 addr: proto.addr,
@@ -260,24 +343,41 @@ impl AnalysisPass for ObjcMetadataPass {
         kuna_objcblocks::emit(&img, ctx.file, &tctx, &mut out);
         {
             use object::ObjectSymbol;
-            let mut creators: Vec<(u64, String)> = out.fid_names.iter().map(|f| (f.addr, f.name.clone())).collect();
-            creators.extend(ctx.file.symbols().filter(|s| s.kind() == object::SymbolKind::Text && s.address() != 0).filter_map(|s| {
-                Some((s.address(), s.name().ok()?.trim_start_matches('_').to_string()))
-            }));
+            let mut creators: Vec<(u64, String)> = out
+                .fid_names
+                .iter()
+                .map(|f| (f.addr, f.name.clone()))
+                .collect();
+            creators.extend(
+                ctx.file
+                    .symbols()
+                    .filter(|s| s.kind() == object::SymbolKind::Text && s.address() != 0)
+                    .filter_map(|s| {
+                        Some((
+                            s.address(),
+                            s.name().ok()?.trim_start_matches('_').to_string(),
+                        ))
+                    }),
+            );
             kuna_objcblocks::stack_blocks(&img, ctx.file, ctx.bytes, &tctx, &creators, &mut out);
         }
         if let Some(table) = out.objc_classes.as_mut() {
-            table.selector_at.extend(selectors.strings.iter().map(|(va, s)| (*va, s.clone())));
-            table.selref_at.extend(selectors.slots.iter().map(|(va, s)| (*va, s.clone())));
+            table
+                .selector_at
+                .extend(selectors.strings.iter().map(|(va, s)| (*va, s.clone())));
+            table
+                .selref_at
+                .extend(selectors.slots.iter().map(|(va, s)| (*va, s.clone())));
         }
 
         // A chained slot holds its packed fixup word until `dynrelocs` unpacks it
         // at load.
-        out.const_ranges.extend(refs.into_iter().map(|(first, last_open)| ConstRange {
-            first,
-            last_open,
-            gate: ConstGate::ObjcRefs,
-        }));
+        out.const_ranges
+            .extend(refs.into_iter().map(|(first, last_open)| ConstRange {
+                first,
+                last_open,
+                gate: ConstGate::ObjcRefs,
+            }));
         out
     }
 }
@@ -332,10 +432,19 @@ impl ObjcMetadataPass {
             // The label-gated rename (the FID precedent): overwrite the engine's
             // own sub_*/FUN_* placeholder with the ObjC method name, never a real
             // symbol.
-            out.fid_names.push(FidMatch { addr: m.imp, name: label.clone(), by_signature: false });
+            out.fid_names.push(FidMatch {
+                addr: m.imp,
+                name: label.clone(),
+                by_signature: false,
+            });
             if let Some(table) = out.objc_classes.as_mut() {
                 let shown_owner = display_class_name(owner);
-                table.classes.entry(shown_owner).or_default().methods.insert((kind == '+', m.selector.clone()), (label.clone(), m.imp));
+                table
+                    .classes
+                    .entry(shown_owner)
+                    .or_default()
+                    .methods
+                    .insert((kind == '+', m.selector.clone()), (label.clone(), m.imp));
             }
 
             // The typed prototype from the ObjC type encoding (PR-O2): `i20@0:8i16`
@@ -347,7 +456,10 @@ impl ObjcMetadataPass {
             // The spelling the class's own property gives the selector, else the
             // method's own: another class's property of the same selector says
             // nothing about this class's return type.
-            let enc = selectors.encoding_for_class(owner, &m.selector).map(str::to_string).or_else(|| m.types.clone());
+            let enc = selectors
+                .encoding_for_class(owner, &m.selector)
+                .map(str::to_string)
+                .or_else(|| m.types.clone());
             if let Some(enc) = enc.as_deref() {
                 if let Some(pieces) = encoding::decode_method(&label, enc, tctx, None) {
                     out.prototypes.push(pieces);
@@ -377,8 +489,14 @@ fn emit_ivars(ivars: &[classt::Ivar], class: &str, objcivars: bool, out: &mut An
             name: format!("{}::{}", display_class_name(class), iv.name),
             size: 4,
         });
-        let Some(last_open) = iv.offset_va.checked_add(4).filter(|_| objcivars) else { continue };
-        out.const_ranges.push(ConstRange { first: iv.offset_va, last_open, gate: ConstGate::ObjcIvars });
+        let Some(last_open) = iv.offset_va.checked_add(4).filter(|_| objcivars) else {
+            continue;
+        };
+        out.const_ranges.push(ConstRange {
+            first: iv.offset_va,
+            last_open,
+            gate: ConstGate::ObjcIvars,
+        });
     }
 }
 
@@ -399,7 +517,13 @@ mod tests {
     /// name but is not reported constant: its range would wrap.
     #[test]
     fn ivar_offset_variable_at_the_top_of_the_address_space_is_not_folded() {
-        let ivar = classt::Ivar { offset_va: u64::MAX - 1, name: "x".into(), types: None, offset: 8, size: 4 };
+        let ivar = classt::Ivar {
+            offset_va: u64::MAX - 1,
+            name: "x".into(),
+            types: None,
+            offset: 8,
+            size: 4,
+        };
         let mut out = AnalysisOutput::default();
         emit_ivars(&[ivar], "C", true, &mut out);
         assert_eq!(out.data_objects.len(), 1);
@@ -413,12 +537,17 @@ mod tests {
         assert_eq!(p.phase(), Phase::P1);
     }
 
-
     #[test]
     fn swift_runtime_class_names_demangle_for_labels() {
         assert_eq!(display_class_name("Greeter"), "Greeter");
-        assert_eq!(display_class_name("_TtC6Sample24MainScreenViewController"), "Sample.MainScreenViewController");
-        assert_eq!(display_class_name("_TtCC6Sample5Outer5Inner"), "Sample.Outer.Inner");
+        assert_eq!(
+            display_class_name("_TtC6Sample24MainScreenViewController"),
+            "Sample.MainScreenViewController"
+        );
+        assert_eq!(
+            display_class_name("_TtCC6Sample5Outer5Inner"),
+            "Sample.Outer.Inner"
+        );
         assert_eq!(display_class_name("_TtC1"), "_TtC1");
     }
 
@@ -439,17 +568,28 @@ mod tests {
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/macho_objc");
         let bytes = std::fs::read(path).expect("read macho_objc fixture");
         let file = object::File::parse(bytes.as_slice()).expect("parse Mach-O");
-        assert_eq!(file.format(), object::BinaryFormat::MachO, "fixture must be a Mach-O");
+        assert_eq!(
+            file.format(),
+            object::BinaryFormat::MachO,
+            "fixture must be a Mach-O"
+        );
 
         let img = MachoImage::new(&file);
-        let (cl_addr, cl_data) = img.classlists(&file).into_iter().next().expect("__objc_classlist present");
+        let (cl_addr, cl_data) = img
+            .classlists(&file)
+            .into_iter()
+            .next()
+            .expect("__objc_classlist present");
         let ps = img.ptr_size() as usize;
         assert_eq!(ps, 8, "the fixture is a 64-bit Mach-O");
 
         // First (only) class: class_t -> class_ro_t -> name "Greeter".
         let class_ptr = img.read_ptr(cl_addr).expect("class_t pointer");
         let class = classt::read_class_t(&img, class_ptr).expect("class_t reads");
-        assert_eq!(classt::class_name(&img, class.ro).as_deref(), Some("Greeter"));
+        assert_eq!(
+            classt::class_name(&img, class.ro).as_deref(),
+            Some("Greeter")
+        );
 
         // Instance method list: the single `-(int)greet:` method.
         let list = classt::base_methods(&img, class.ro).expect("baseMethods present");
@@ -462,7 +602,10 @@ mod tests {
 
         // The metaclass has no `+` methods.
         let meta_ro = classt::metaclass_ro(&img, class.isa).expect("metaclass ro");
-        assert!(classt::base_methods(&img, meta_ro).is_none(), "no class (+) methods");
+        assert!(
+            classt::base_methods(&img, meta_ro).is_none(),
+            "no class (+) methods"
+        );
 
         // The classlist holds exactly one class_t* entry (8 bytes).
         assert_eq!(cl_data.len(), ps, "one class in the classlist");
@@ -479,7 +622,11 @@ mod tests {
         assert_eq!(file.architecture(), object::Architecture::X86_64);
 
         let img = MachoImage::new(&file);
-        let (cl_addr, _) = img.classlists(&file).into_iter().next().expect("__objc_classlist present");
+        let (cl_addr, _) = img
+            .classlists(&file)
+            .into_iter()
+            .next()
+            .expect("__objc_classlist present");
         let class_ptr = img.read_ptr(cl_addr).expect("class_t pointer");
         let class = classt::read_class_t(&img, class_ptr).expect("class_t reads");
         let list = classt::base_methods(&img, class.ro).expect("baseMethods present");
@@ -510,17 +657,27 @@ mod tests {
         use crate::loader::format::macho::resolve_chained_fixups;
         use object::read::Object;
 
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/macho_objc_arm64");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/macho_objc_arm64"
+        );
         let bytes = std::fs::read(path).expect("read macho_objc_arm64 fixture");
         let file = object::File::parse(bytes.as_slice()).expect("parse Mach-O");
         assert_eq!(file.format(), object::BinaryFormat::MachO);
-        assert_eq!(file.architecture(), object::Architecture::Aarch64, "arm64 fixture");
+        assert_eq!(
+            file.architecture(),
+            object::Architecture::Aarch64,
+            "arm64 fixture"
+        );
 
         // (1) The chained-fixup resolver: a real LC_DYLD_CHAINED_FIXUPS binary
         // yields a NON-empty overlay, and the classlist/class_t slots resolve to
         // the real class_t VMAs.
         let fixups = resolve_chained_fixups(&file, &bytes);
-        assert!(!fixups.is_empty(), "the fixture carries real chained fixups");
+        assert!(
+            !fixups.is_empty(),
+            "the fixture carries real chained fixups"
+        );
         assert_eq!(
             fixups.resolved_ptr(0x100004000),
             Some(0x100008000),
@@ -534,12 +691,19 @@ mod tests {
 
         // (2) The arm64 walk THROUGH the resolved overlay recovers the method name.
         let img = MachoImage::with_fixups(&file, fixups);
-        let (cl_addr, _cl_data) = img.classlists(&file).into_iter().next().expect("__objc_classlist present");
+        let (cl_addr, _cl_data) = img
+            .classlists(&file)
+            .into_iter()
+            .next()
+            .expect("__objc_classlist present");
         let class_ptr = img.read_ptr(cl_addr).expect("class_t pointer (resolved)");
         assert_eq!(class_ptr, 0x100008000, "the resolved class_t VMA");
 
         let class = classt::read_class_t(&img, class_ptr).expect("class_t reads");
-        assert_eq!(classt::class_name(&img, class.ro).as_deref(), Some("Greeter"));
+        assert_eq!(
+            classt::class_name(&img, class.ro).as_deref(),
+            Some("Greeter")
+        );
 
         let list = classt::base_methods(&img, class.ro).expect("baseMethods present");
         let methods = methods::walk_method_list(&img, list, file.architecture());

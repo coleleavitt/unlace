@@ -30,7 +30,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use unlace_decomp::dtype::{flags, type_metatype, Datatype, DatatypeKind};
+use unlace_decomp::dtype::{Datatype, DatatypeKind, flags, type_metatype};
 
 fn repo_root() -> PathBuf {
     // CARGO_MANIFEST_DIR = decompiler/crates/unlace-decomp ; repo root is 3 up.
@@ -56,21 +56,43 @@ fn read_test_file(stem: &str) -> String {
 fn cpp_test_names(stem: &str) -> Vec<String> {
     let names: &[&str] = match stem {
         "testfuncproto" => &[
-            "funcproto_register", "funcproto_smallregister", "funcproto_stackalign",
-            "funcproto_pointeroverflow", "funcproto_stackoverflow", "funcproto_floatreg",
-            "funcproto_floattogeneric", "funcproto_grouped", "funcproto_join", "funcproto_nojoin",
-            "funcproto_hiddenreturn", "funcproto_mixedmeta", "funcproto_recoverbasic",
-            "funcproto_recoversmallreg", "funcproto_recoverstack", "funcproto_recoverunrefregister",
-            "funcproto_recoverunrefstack", "funcproto_recovergroups", "funcproto_recoverholes",
-            "funcproto_recoverfloat", "funcproto_recovermixedmeta",
+            "funcproto_register",
+            "funcproto_smallregister",
+            "funcproto_stackalign",
+            "funcproto_pointeroverflow",
+            "funcproto_stackoverflow",
+            "funcproto_floatreg",
+            "funcproto_floattogeneric",
+            "funcproto_grouped",
+            "funcproto_join",
+            "funcproto_nojoin",
+            "funcproto_hiddenreturn",
+            "funcproto_mixedmeta",
+            "funcproto_recoverbasic",
+            "funcproto_recoversmallreg",
+            "funcproto_recoverstack",
+            "funcproto_recoverunrefregister",
+            "funcproto_recoverunrefstack",
+            "funcproto_recovergroups",
+            "funcproto_recoverholes",
+            "funcproto_recoverfloat",
+            "funcproto_recovermixedmeta",
         ],
         "testparamstore" => &[
-            "paramstore_x64", "paramstore_ppc64be_stdcall", "paramstore_mips32be_stdcall",
+            "paramstore_x64",
+            "paramstore_ppc64be_stdcall",
+            "paramstore_mips32be_stdcall",
             "paramstore_aarch64_cdecl",
         ],
         "testtypes" => &[
-            "cast_basic", "cast_pointer", "cast_enum", "cast_compare", "type_ordering",
-            "cast_integertoken", "enum_matching", "enum_matching2",
+            "cast_basic",
+            "cast_pointer",
+            "cast_enum",
+            "cast_compare",
+            "type_ordering",
+            "cast_integertoken",
+            "enum_matching",
+            "enum_matching2",
         ],
         other => panic!("no frozen TEST-name list for {other}"),
     };
@@ -116,12 +138,15 @@ fn rust_test_names(stem: &str) -> Vec<String> {
 #[test]
 fn w7_m1_closure_name_parity_in_scope_suites() {
     let suites = ["testfuncproto", "testparamstore", "testtypes"];
-    let expected_counts = [(("testfuncproto"), 21usize), ("testparamstore", 4), ("testtypes", 8)];
+    let expected_counts = [
+        (("testfuncproto"), 21usize),
+        ("testparamstore", 4),
+        ("testtypes", 8),
+    ];
 
     for stem in suites {
         let cpp = cpp_test_names(stem);
-        let rust: std::collections::BTreeSet<String> =
-            rust_test_names(stem).into_iter().collect();
+        let rust: std::collections::BTreeSet<String> = rust_test_names(stem).into_iter().collect();
         assert!(
             !cpp.is_empty(),
             "{stem}.cc yielded zero TEST() names (parser regression?)"
@@ -199,8 +224,16 @@ fn w7_m1_closure_ignore_counts_match_triage() {
             .filter(|l| l.trim_start().starts_with("#[ignore"))
             .count()
     };
-    assert_eq!(count_ignores("testfuncproto"), 21, "testfuncproto ignore count");
-    assert_eq!(count_ignores("testparamstore"), 4, "testparamstore ignore count");
+    assert_eq!(
+        count_ignores("testfuncproto"),
+        21,
+        "testfuncproto ignore count"
+    );
+    assert_eq!(
+        count_ignores("testparamstore"),
+        4,
+        "testparamstore ignore count"
+    );
     assert_eq!(count_ignores("testtypes"), 6, "testtypes ignore count");
 }
 
@@ -230,7 +263,13 @@ fn make_enum(size: i32, entries: &[(u64, &str)]) -> Rc<Datatype> {
 fn w7_m1_closure_enum3_extra_boundary_inputs() {
     let enum3 = make_enum(
         8,
-        &[(0, "ZERO"), (1, "ONE"), (2, "TWO"), (4, "FOUR"), (8, "EIGHT")],
+        &[
+            (0, "ZERO"),
+            (1, "ONE"),
+            (2, "TWO"),
+            (4, "FOUR"),
+            (8, "EIGHT"),
+        ],
     );
 
     // 3 = 2 | 1  -> ["TWO","ONE"] (greedy MSB-first), not complement.
@@ -249,7 +288,11 @@ fn w7_m1_closure_enum3_extra_boundary_inputs() {
 
     // 13 = 8|4|1 -> ["EIGHT","FOUR","ONE"].
     let r = enum3.get_matches(13).unwrap();
-    assert_eq!(r.match_name, vec!["EIGHT", "FOUR", "ONE"], "13 == EIGHT|FOUR|ONE");
+    assert_eq!(
+        r.match_name,
+        vec!["EIGHT", "FOUR", "ONE"],
+        "13 == EIGHT|FOUR|ONE"
+    );
     assert!(!r.complement);
 
     // Complement path with size 8: ~8 = 0xfffffffffffffff7 is the original
@@ -299,7 +342,11 @@ fn w7_m1_closure_enum4_extra_boundary_inputs() {
     // re-pinned here as the oracle for the predecessor walk landing on the
     // largest key).
     let r = enum4.get_matches(11).unwrap();
-    assert_eq!(r.match_name, vec!["ELEVEN"], "11 is the exact member ELEVEN");
+    assert_eq!(
+        r.match_name,
+        vec!["ELEVEN"],
+        "11 is the exact member ELEVEN"
+    );
     assert!(!r.complement);
 
     // 16 = 0x10 has no representation (no member, and complement ~0x10 over
@@ -318,11 +365,23 @@ fn w7_m1_closure_enum4_extra_boundary_inputs() {
 fn w7_m1_closure_enum_match_is_insertion_order_independent() {
     let ascending = make_enum(
         8,
-        &[(0, "ZERO"), (1, "ONE"), (2, "TWO"), (4, "FOUR"), (8, "EIGHT")],
+        &[
+            (0, "ZERO"),
+            (1, "ONE"),
+            (2, "TWO"),
+            (4, "FOUR"),
+            (8, "EIGHT"),
+        ],
     );
     let scrambled = make_enum(
         8,
-        &[(8, "EIGHT"), (0, "ZERO"), (4, "FOUR"), (1, "ONE"), (2, "TWO")],
+        &[
+            (8, "EIGHT"),
+            (0, "ZERO"),
+            (4, "FOUR"),
+            (1, "ONE"),
+            (2, "TWO"),
+        ],
     );
     for val in [0u64, 1, 2, 3, 5, 6, 7, 8, 13, 15, 0xfffffffffffffff7, 0x10] {
         let a = ascending.get_matches(val).unwrap();

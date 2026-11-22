@@ -35,7 +35,7 @@ use std::collections::BTreeMap;
 
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
-use unlace_base::marshal::{Decoder, Encoder, ElementId, ATTRIB_NAME};
+use unlace_base::marshal::{ATTRIB_NAME, Decoder, ElementId, Encoder};
 use unlace_base::types::{int4, uint4};
 
 use crate::block::ELEM_EDGE;
@@ -398,11 +398,7 @@ impl CallGraph {
     ///
     /// STUB(W4): takes the `Funcdata`-shaped seam plus the [`FuncId`] token to
     /// store in `fd` (the C++ stores the `Funcdata *` itself).
-    pub fn add_node_func(
-        &mut self,
-        f: &dyn CallGraphFunc,
-        fid: FuncId,
-    ) -> KunaResult<NodeIndex> {
+    pub fn add_node_func(&mut self, f: &dyn CallGraphFunc, fid: FuncId) -> KunaResult<NodeIndex> {
         let addr = f.get_address().clone();
         let idx = self.node_slot(&addr);
         if let Some(existing) = self.nodes[idx].fd {
@@ -847,7 +843,7 @@ mod tests {
 
     use unlace_base::marshal::{IdRegistry, XmlDecode, XmlEncode};
     use unlace_base::space::{
-        addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+        AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
     };
 
     /// Build a minimal manager with const/unique/ram spaces (the same shape the
@@ -855,7 +851,8 @@ mod tests {
     fn build_manager() -> AddrSpaceManager {
         let mut m = AddrSpaceManager::new();
         m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+            .unwrap();
         m.insert_space(Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
             "ram",

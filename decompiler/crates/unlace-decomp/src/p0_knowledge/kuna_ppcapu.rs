@@ -13,7 +13,8 @@ pub const PPCAPU_ENV: &str = "KUNA_PPCAPU";
 
 /// Whether APU-based PowerPC language selection is enabled for this process.
 pub fn ppcapu_enabled() -> bool {
-    crate::kuna_loadoptions::scoped(|o| o.ppcapu).unwrap_or_else(crate::kuna_loadoptions::env::ppcapu)
+    crate::kuna_loadoptions::scoped(|o| o.ppcapu)
+        .unwrap_or_else(crate::kuna_loadoptions::env::ppcapu)
 }
 
 /// Bridge a `set_kuna_option("ppcapu", val)` toggle to [`PPCAPU_ENV`] so a later

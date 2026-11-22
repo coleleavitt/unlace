@@ -17,7 +17,7 @@
 //! a goto-`BlockIf` and a bare-goto switch arm, each of type `f_goto_goto`, and
 //! the edges of a `BlockMultiGoto`, which always keep their labels.
 
-use crate::block::{block_flags, BlockGraph, BlockKind, BlockType};
+use crate::block::{BlockGraph, BlockKind, BlockType, block_flags};
 use crate::context::BlockId;
 use std::collections::BTreeSet;
 
@@ -92,18 +92,26 @@ pub(crate) fn goto_rewrites(graph: &BlockGraph, root: BlockId, breaks: bool) -> 
         }
         let goto = match blk.get_type() {
             BlockType::Goto => blk.get_goto_target().map(|t| (t, blk.get_goto_type())),
-            _ => blk.get_if_goto_target().map(|t| (t, blk.get_if_goto_type())),
+            _ => blk
+                .get_if_goto_target()
+                .map(|t| (t, blk.get_if_goto_type())),
         };
         if let Some((target, gototype)) = goto {
             let t = leaf(target);
             let next = match blk.get_type() {
-                BlockType::Goto => blk.get_parent().and_then(|par| graph.next_printed_flow_after(par, id)),
+                BlockType::Goto => blk
+                    .get_parent()
+                    .and_then(|par| graph.next_printed_flow_after(par, id)),
                 _ => None,
             };
             if t.is_some() && next == t {
                 out.silent.insert(id);
                 released.extend(t);
-            } else if breaks && t.is_some() && gototype == block_flags::f_goto_goto && break_target(graph, id) == t {
+            } else if breaks
+                && t.is_some()
+                && gototype == block_flags::f_goto_goto
+                && break_target(graph, id) == t
+            {
                 out.breaks.insert(id);
                 released.extend(t);
             } else if gototype == block_flags::f_goto_goto {
@@ -112,14 +120,22 @@ pub(crate) fn goto_rewrites(graph: &BlockGraph, root: BlockId, breaks: bool) -> 
         }
         // A switch's own `BlockMultiGoto` lists the case edges handled below.
         if let BlockKind::MultiGoto { gotoedges, .. } = blk.kind() {
-            if blk.get_parent().is_none_or(|p| graph.block(p).get_type() != BlockType::Switch) {
+            if blk
+                .get_parent()
+                .is_none_or(|p| graph.block(p).get_type() != BlockType::Switch)
+            {
                 kept.extend(gotoedges.iter().filter_map(|&t| leaf(t)));
             }
         }
         let cases = blk.switch_caseblocks();
         if cases.iter().any(|c| c.gototype == block_flags::f_goto_goto) {
-            let after = blk.get_parent().and_then(|par| graph.next_printed_flow_after(par, id));
-            for case in cases.iter().filter(|c| c.gototype == block_flags::f_goto_goto) {
+            let after = blk
+                .get_parent()
+                .and_then(|par| graph.next_printed_flow_after(par, id));
+            for case in cases
+                .iter()
+                .filter(|c| c.gototype == block_flags::f_goto_goto)
+            {
                 let t = leaf(case.block);
                 if breaks && t.is_some() && after == t {
                     out.case_breaks.insert((id, case.block));

@@ -20,11 +20,23 @@ fn elem_id_is_in_the_kuna_range() {
 
 #[test]
 fn slug_table_covers_the_known_warnings() {
-    assert_eq!(warning_slug("WARNING: Subroutine does not return"), "no-return");
+    assert_eq!(
+        warning_slug("WARNING: Subroutine does not return"),
+        "no-return"
+    );
     assert_eq!(warning_slug("WARNING: Does not return"), "no-return");
-    assert_eq!(warning_slug("WARNING: Treating indirect jump as call"), "jump-as-call");
-    assert_eq!(warning_slug("WARNING: Treating indirect jump as return"), "jump-as-return");
-    assert_eq!(warning_slug("WARNING: Could not inline here"), "inline-failed");
+    assert_eq!(
+        warning_slug("WARNING: Treating indirect jump as call"),
+        "jump-as-call"
+    );
+    assert_eq!(
+        warning_slug("WARNING: Treating indirect jump as return"),
+        "jump-as-return"
+    );
+    assert_eq!(
+        warning_slug("WARNING: Could not inline here"),
+        "inline-failed"
+    );
     assert_eq!(
         warning_slug("WARNING: Read-only address (ram,0x100) is written"),
         "writes-rodata"
@@ -57,10 +69,15 @@ fn slug_table_covers_the_known_warnings() {
         "early-return"
     );
     assert_eq!(
-        warning_slug("WARNING: returndup: duplicated 2 shared bare-epilogue return(s) for early-return recovery in f"),
+        warning_slug(
+            "WARNING: returndup: duplicated 2 shared bare-epilogue return(s) for early-return recovery in f"
+        ),
         "return-dupe x2"
     );
-    assert_eq!(warning_slug("WARNING: Inlined function: add50"), "inlined: add50");
+    assert_eq!(
+        warning_slug("WARNING: Inlined function: add50"),
+        "inlined: add50"
+    );
     // The jumptable prefix survives as a marker; unknown text keeps full info.
     assert_eq!(
         warning_slug("WARNING (jumptable): Treating indirect jump as call"),

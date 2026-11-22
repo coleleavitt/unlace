@@ -29,14 +29,17 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture() -> PathBuf {
@@ -58,9 +61,12 @@ fn bootstrap_aggressive() -> ConsoleProgram {
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     for opt in ["listing", "fast_funcdisc", "funcstart_patterns"] {
-        prog.arch_mut().set_kuna_option(opt, "on").expect("the discovery gate flips on");
+        prog.arch_mut()
+            .set_kuna_option(opt, "on")
+            .expect("the discovery gate flips on");
     }
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
@@ -108,7 +114,11 @@ fn load_addr_header_uses_the_known_symbol_name() {
     let prog = bootstrap_aggressive();
     let out = run_console(
         prog,
-        &[&format!("load addr 0x{TERMINATE_STUB:x}"), "decompile", "print C"],
+        &[
+            &format!("load addr 0x{TERMINATE_STUB:x}"),
+            "decompile",
+            "print C",
+        ],
     );
 
     assert!(
@@ -140,7 +150,11 @@ fn discovery_still_names_genuinely_unknown_entries() {
 
     let out = run_console(
         prog,
-        &[&format!("load addr 0x{TERMINATE_STUB:x} my_hand_name"), "decompile", "print C"],
+        &[
+            &format!("load addr 0x{TERMINATE_STUB:x} my_hand_name"),
+            "decompile",
+            "print C",
+        ],
     );
     assert!(
         out.contains("my_hand_name("),

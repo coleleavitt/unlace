@@ -20,7 +20,7 @@
 //!   KUNA_XML_VERIFY_DUMP=/tmp/corpus cargo test -p unlace-base \
 //!       --test integration -- --ignored verify_w1_base_xml::dump_corpus
 
-use unlace_base::xml::{xml_escape, xml_parse, xml_tree, Attributes, ContentHandler, Element};
+use unlace_base::xml::{Attributes, ContentHandler, Element, xml_escape, xml_parse, xml_tree};
 
 // ---------------------------------------------------------------------------
 // Trace machinery (must match the C++ harness format exactly)
@@ -71,7 +71,8 @@ impl ContentHandler for RecHandler {
         self.lines.push(l);
     }
     fn end_element(&mut self, _namespace_uri: &str, local_name: &str, _qualified_name: &str) {
-        self.lines.push(format!("endElement {}", esc(local_name.as_bytes())));
+        self.lines
+            .push(format!("endElement {}", esc(local_name.as_bytes())));
     }
     fn characters(&mut self, text: &[u8], start: i32, length: i32) {
         let piece = &text[start as usize..(start + length) as usize];
@@ -79,7 +80,8 @@ impl ContentHandler for RecHandler {
     }
     fn ignorable_whitespace(&mut self, text: &[u8], start: i32, length: i32) {
         let piece = &text[start as usize..(start + length) as usize];
-        self.lines.push(format!("ignorableWhitespace {}", esc(piece)));
+        self.lines
+            .push(format!("ignorableWhitespace {}", esc(piece)));
     }
     fn set_version(&mut self, version: &[u8]) {
         self.lines.push(format!("setVersion {}", esc(version)));
@@ -90,7 +92,8 @@ impl ContentHandler for RecHandler {
     fn processing_instruction(&mut self, _target: &str, _data: &str) {}
     fn skipped_entity(&mut self, _name: &str) {}
     fn set_error(&mut self, errmsg: &str) {
-        self.lines.push(format!("setError {}", esc(errmsg.as_bytes())));
+        self.lines
+            .push(format!("setError {}", esc(errmsg.as_bytes())));
     }
 }
 
@@ -479,10 +482,7 @@ fn corpus() -> Vec<Vec<u8>> {
 // Oracle file handling
 // ---------------------------------------------------------------------------
 
-const ORACLE_PATH: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/tests/data/w1_xml_oracle.out"
-);
+const ORACLE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/w1_xml_oracle.out");
 
 struct Oracle {
     escape_line: String,
@@ -491,10 +491,13 @@ struct Oracle {
 }
 
 fn load_oracle() -> Oracle {
-    let text = std::fs::read_to_string(ORACLE_PATH)
-        .unwrap_or_else(|e| panic!("read {ORACLE_PATH}: {e}"));
+    let text =
+        std::fs::read_to_string(ORACLE_PATH).unwrap_or_else(|e| panic!("read {ORACLE_PATH}: {e}"));
     let mut lines = text.lines();
-    let escape_line = lines.next().expect("oracle: missing ESCAPE line").to_string();
+    let escape_line = lines
+        .next()
+        .expect("oracle: missing ESCAPE line")
+        .to_string();
     assert!(escape_line.starts_with("ESCAPE "), "oracle: bad first line");
     let mut cases = Vec::new();
     let mut cur: Option<Vec<String>> = None;

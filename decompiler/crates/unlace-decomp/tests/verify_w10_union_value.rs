@@ -34,7 +34,7 @@ use std::rc::Rc;
 
 use unlace_base::types::int4;
 use unlace_decomp::dtype::{
-    flags, type_metatype, Datatype, DatatypeKind, TypeFactory, TypeFactoryImpl, TypeField,
+    Datatype, DatatypeKind, TypeFactory, TypeFactoryImpl, TypeField, flags, type_metatype,
 };
 
 fn factory() -> TypeFactoryImpl {
@@ -83,7 +83,10 @@ fn w10_union_value_compat_resolve_reads_ct_relative_ptrto_not_stripped() {
     assert!(relptr.is_pointer_rel(), "constructed a PointerRel");
     // get_ptr_to() must yield the relative ptrto (i4), NOT the stripped pointer.
     let rel_ptrto = relptr.get_ptr_to().unwrap();
-    assert!(Rc::ptr_eq(&rel_ptrto, &i4), "PointerRel get_ptr_to is the field type i4");
+    assert!(
+        Rc::ptr_eq(&rel_ptrto, &i4),
+        "PointerRel get_ptr_to is the field type i4"
+    );
 
     // Receiver: a plain pointer-to-int. ct: the ptr-rel-to-int.
     // C++ TypePointer::findCompatibleResolve(ct): ct is TYPE_PTR ->
@@ -95,7 +98,10 @@ fn w10_union_value_compat_resolve_reads_ct_relative_ptrto_not_stripped() {
     // identical (both read the literal int4 ptrto).
     let plain_int_ct = f.get_type_pointer(8, Rc::clone(&i4), 1).unwrap();
     let want = pint.find_compatible_resolve(&plain_int_ct).unwrap();
-    assert_eq!(got, want, "PointerRel ct must resolve via its relative ptrto, like a plain pointer");
+    assert_eq!(
+        got, want,
+        "PointerRel ct must resolve via its relative ptrto, like a plain pointer"
+    );
 }
 
 /// at2: the STRIPPED-vs-PTRTO mutation, made OBSERVABLE with a concrete index.
@@ -119,9 +125,14 @@ fn w10_union_value_compat_resolve_ptrto_is_relative_field_not_stripped() {
     // A NON-resolution union `{ int4 m0@0; }`: TypeUnion::findCompatibleResolve
     // takes the identity arm (`field[i].type == ct && offset==0` -> index i).
     let mut u = Datatype::new(4, TYPE_UNION);
-    u.kind = DatatypeKind::Union { field: vec![TypeField::new(0, 0, "m0", Rc::clone(&i4))] };
+    u.kind = DatatypeKind::Union {
+        field: vec![TypeField::new(0, 0, "m0", Rc::clone(&i4))],
+    };
     let single_union = Rc::new(u);
-    assert!(!single_union.needs_resolution(), "this union must NOT need resolution for the identity arm");
+    assert!(
+        !single_union.needs_resolution(),
+        "this union must NOT need resolution for the identity arm"
+    );
 
     // RECEIVER = pointer-to-(single-int)-union.  Its Pointer arm recurses:
     // union.findCompatibleResolve(((TypePointer*)ct)->ptrto).
@@ -131,22 +142,33 @@ fn w10_union_value_compat_resolve_ptrto_is_relative_field_not_stripped() {
     let parent_u = make_union("valU2", &[(0, Rc::clone(&i4))]);
     let pu_parent = f.get_type_pointer(8, Rc::clone(&parent_u), 1).unwrap();
     // ptr-rel whose RELATIVE ptrto is the SAME `i4` Rc as the union field.
-    let relptr_to_int = f.get_type_pointer_rel(Rc::clone(&pu_parent), Rc::clone(&i4), 0).unwrap();
+    let relptr_to_int = f
+        .get_type_pointer_rel(Rc::clone(&pu_parent), Rc::clone(&i4), 0)
+        .unwrap();
     // sanity: the stripped plain pointer is a DISTINCT Rc from the int field type.
     if let Some(st) = relptr_to_int.get_stripped() {
-        assert!(!Rc::ptr_eq(&st, &i4), "stripped is a plain pointer, distinct from the int field type");
+        assert!(
+            !Rc::ptr_eq(&st, &i4),
+            "stripped is a plain pointer, distinct from the int field type"
+        );
     }
 
     // ct = the relptr.  C++ reads ((TypePointer*)ct)->ptrto == i4 (the relative
     // ptrto), recurses union.findCompatibleResolve(i4) -> identity match -> 0.
     // A `stripped`-via read would pass a plain pointer (!= i4) -> -1.
     let via_relptr = pu_recv.find_compatible_resolve(&relptr_to_int).unwrap();
-    assert_eq!(via_relptr, 0, "PointerRel ct resolves via its relative ptrto (union field index 0), not stripped (-1)");
+    assert_eq!(
+        via_relptr, 0,
+        "PointerRel ct resolves via its relative ptrto (union field index 0), not stripped (-1)"
+    );
 
     // Reference: a plain ptr-to-int ct (same i4) yields the identical 0.
     let plain_int_ct = f.get_type_pointer(8, Rc::clone(&i4), 1).unwrap();
     let via_plain = pu_recv.find_compatible_resolve(&plain_int_ct).unwrap();
-    assert_eq!(via_plain, via_relptr, "plain Pointer and PointerRel cts resolve identically via ptrto");
+    assert_eq!(
+        via_plain, via_relptr,
+        "plain Pointer and PointerRel cts resolve identically via ptrto"
+    );
 }
 
 /// at3: a `PointerRel` RECEIVER recurses on its own relative ptrto, byte-
@@ -230,8 +252,14 @@ fn w10_union_value_compat_resolve_cross_kind_symmetry() {
     let plain_rel = plain.find_compatible_resolve(&relptr).unwrap();
     let rel_plain = relptr.find_compatible_resolve(&plain).unwrap();
     let rel_rel = relptr.find_compatible_resolve(&relptr).unwrap();
-    assert_eq!(plain_plain, plain_rel, "plain-recv: Pointer ct == PointerRel ct");
-    assert_eq!(plain_plain, rel_plain, "PointerRel-recv: Pointer ct == plain-recv");
+    assert_eq!(
+        plain_plain, plain_rel,
+        "plain-recv: Pointer ct == PointerRel ct"
+    );
+    assert_eq!(
+        plain_plain, rel_plain,
+        "PointerRel-recv: Pointer ct == plain-recv"
+    );
     assert_eq!(plain_plain, rel_rel, "both PointerRel == both plain");
 }
 
@@ -256,7 +284,9 @@ fn w10_union_value_union_carries_needs_resolution_flag() {
     assert_eq!(pu.get_ptr_to().unwrap().get_metatype(), TYPE_UNION);
     // The PointerRel-to-union likewise: ptrto metatype is UNION (so the new arm
     // reaches the same union gate as a plain pointer).
-    let relptr = f.get_type_pointer_rel(Rc::clone(&pu), Rc::clone(&u), 0).unwrap();
+    let relptr = f
+        .get_type_pointer_rel(Rc::clone(&pu), Rc::clone(&u), 0)
+        .unwrap();
     assert!(matches!(relptr.kind, DatatypeKind::PointerRel { .. }));
     assert_eq!(relptr.get_ptr_to().unwrap().get_metatype(), TYPE_UNION);
 }

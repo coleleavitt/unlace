@@ -87,7 +87,10 @@ int main(void) {
         "quiet32,quiet64,quiet_sse32,quiet_merge",
     ]);
     assert_eq!(rc, 0, "{stderr}\n{default}");
-    assert!(!default.contains("volatile"), "the default nanignore compare drops quieting\n{default}");
+    assert!(
+        !default.contains("volatile"),
+        "the default nanignore compare drops quieting\n{default}"
+    );
     for policy in ["none"] {
         let (printed, stderr, rc) = common::run_kuna(&[
             "decompile-all",

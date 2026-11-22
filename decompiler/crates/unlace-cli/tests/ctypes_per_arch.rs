@@ -16,7 +16,10 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture(name: &str) -> String {
@@ -35,8 +38,24 @@ fn specs() -> String {
 /// Every Ghidra core-type name that can reach the emitted C. `ctypes on` must
 /// leave none of them behind; that is the whole contract.
 const GHIDRA_TYPE_NAMES: &[&str] = &[
-    "uint1", "uint2", "uint4", "uint8", "int1", "int2", "int4", "int8", "float4", "float8",
-    "float10", "float16", "xunknown1", "xunknown2", "xunknown4", "xunknown8", "wchar2", "wchar4",
+    "uint1",
+    "uint2",
+    "uint4",
+    "uint8",
+    "int1",
+    "int2",
+    "int4",
+    "int8",
+    "float4",
+    "float8",
+    "float10",
+    "float16",
+    "xunknown1",
+    "xunknown2",
+    "xunknown4",
+    "xunknown8",
+    "wchar2",
+    "wchar4",
 ];
 
 /// Run `unlace decompile-all <fixture> --option ctypes <on|off>`.
@@ -44,7 +63,15 @@ fn decompile_all(fixture_name: &str, ctypes: &str) -> String {
     let sp = specs();
     let bin = fixture(fixture_name);
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
-        .args(["decompile-all", &bin, "--sleighpath", &sp, "--option", "ctypes", ctypes])
+        .args([
+            "decompile-all",
+            &bin,
+            "--sleighpath",
+            &sp,
+            "--option",
+            "ctypes",
+            ctypes,
+        ])
         .output()
         .expect("failed to spawn the kuna binary");
     let stderr = String::from_utf8_lossy(&out.stderr);
@@ -63,7 +90,8 @@ fn word_count(hay: &str, needle: &str) -> usize {
     while let Some(i) = hay[from..].find(needle) {
         let s = from + i;
         let e = s + needle.len();
-        let before_ok = s == 0 || !(bytes[s - 1] as char).is_ascii_alphanumeric() && bytes[s - 1] != b'_';
+        let before_ok =
+            s == 0 || !(bytes[s - 1] as char).is_ascii_alphanumeric() && bytes[s - 1] != b'_';
         let after_ok =
             e == bytes.len() || !(bytes[e] as char).is_ascii_alphanumeric() && bytes[e] != b'_';
         if before_ok && after_ok {
@@ -125,8 +153,14 @@ fn eight_byte_integers_spell_per_data_model() {
 #[test]
 fn off_keeps_the_ghidra_vocabulary() {
     let off = decompile_all("i386_pie_nl", "off");
-    assert!(word_count(&off, "int4") > 0, "ctypes off must keep the core-type names");
-    assert!(word_count(&off, "int8") > 0, "ctypes off must keep the 8-byte core-type names");
+    assert!(
+        word_count(&off, "int4") > 0,
+        "ctypes off must keep the core-type names"
+    );
+    assert!(
+        word_count(&off, "int8") > 0,
+        "ctypes off must keep the 8-byte core-type names"
+    );
 }
 
 /// The spelling must be *consistent*, not merely valid: the defect this feature
@@ -152,13 +186,20 @@ fn decompile_all_with(path: &str, args: &[&str]) -> String {
     let mut argv = vec!["decompile-all", path, "--sleighpath", sp.as_str()];
     argv.extend_from_slice(args);
     let (stdout, stderr, code) = common::run_kuna(&argv);
-    assert_eq!(code, 0, "unlace decompile-all {args:?} failed on {path}: {stderr}");
+    assert_eq!(
+        code, 0,
+        "unlace decompile-all {args:?} failed on {path}: {stderr}"
+    );
     stdout
 }
 
 fn assert_spelled_as_c(c: &str, what: &str) {
     for ghidra in GHIDRA_TYPE_NAMES {
-        assert_eq!(word_count(c, ghidra), 0, "{what}: `{ghidra}` survived into the emitted C:\n{c}");
+        assert_eq!(
+            word_count(c, ghidra),
+            0,
+            "{what}: `{ghidra}` survived into the emitted C:\n{c}"
+        );
     }
     assert!(
         c.contains("((long *)a0)[4]"),
@@ -173,7 +214,10 @@ fn assert_spelled_as_c(c: &str, what: &str) {
 #[test]
 fn fast_and_every_auto_size_spell_core_types_as_c() {
     let bin = fixture("elemindex_x86_64");
-    assert_spelled_as_c(&decompile_all_with(&bin, &["--mode", "fast"]), "--mode fast");
+    assert_spelled_as_c(
+        &decompile_all_with(&bin, &["--mode", "fast"]),
+        "--mode fast",
+    );
     assert_spelled_as_c(&decompile_all_with(&bin, &[]), "auto (aggressive)");
     for (size, tier) in [
         (unlace_decomp::modes::AUTO_RELIABLE_MIN_BYTES, "reliable"),

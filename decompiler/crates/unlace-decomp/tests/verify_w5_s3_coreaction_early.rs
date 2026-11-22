@@ -24,24 +24,25 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 
 use unlace_num::opcodes::OpCode;
 
 use unlace_decomp::action::ActionContext;
+use unlace_decomp::context::{ArchContext, BlockId, TypeOp};
 use unlace_decomp::coreaction_early::{
     ActionDeterminedBranch, ActionRedundBranch, ActionStartCleanUp, ActionStartTypes,
 };
 use unlace_decomp::funcdata::Funcdata;
-use unlace_decomp::context::{ArchContext, BlockId, TypeOp};
 
 // ---- fixtures (mirroring the in-module ones) ------------------------------
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -95,7 +96,11 @@ fn redundbranch_does_not_splice_into_entry_point() {
     let res = act.apply(&mut fd, &mut ctx);
     assert_eq!(res, 0);
     // The `!isEntryPoint()` guard suppresses the splice -> no change, no removal.
-    assert_eq!(act.base().count, 0, "splice into an entry point is forbidden");
+    assert_eq!(
+        act.base().count,
+        0,
+        "splice into an entry point is forbidden"
+    );
     assert_eq!(fd.bblocks_get_size(), size_before, "no block removed");
 }
 
@@ -172,9 +177,13 @@ fn redundbranch_scan_reset_collapses_full_chain_in_one_pass() {
     let removed = size_before - fd.bblocks_get_size();
     // Each successful splice removes exactly one block and bumps count by one;
     // the scan-reset guarantees a multi-link chain collapses in one apply call.
-    assert!(removed >= 2, "scan-reset must collapse more than one link per call");
+    assert!(
+        removed >= 2,
+        "scan-reset must collapse more than one link per call"
+    );
     assert_eq!(
-        act.base().count, removed,
+        act.base().count,
+        removed,
         "every removed block corresponds to exactly one counted splice"
     );
 }
@@ -244,10 +253,26 @@ fn determinedbranch_skips_nonconstant_and_walks_mixed_graph() {
     assert_eq!(res, 0);
     // The two constant-condition branches fold (removeBranch is now wired); the
     // non-constant block is *skipped* (no panic on getOffset of a non-constant).
-    assert_eq!(act.base().count, 2, "both constant CBRANCHes fold; non-constant skipped");
-    assert_eq!(fd.bblocks_ref().block(const0).size_out(), 1, "const0 collapsed to BRANCH");
-    assert_eq!(fd.bblocks_ref().block(const1).size_out(), 1, "const1 collapsed to BRANCH");
-    assert_eq!(fd.bblocks_ref().block(nonconst).size_out(), 2, "non-constant untouched");
+    assert_eq!(
+        act.base().count,
+        2,
+        "both constant CBRANCHes fold; non-constant skipped"
+    );
+    assert_eq!(
+        fd.bblocks_ref().block(const0).size_out(),
+        1,
+        "const0 collapsed to BRANCH"
+    );
+    assert_eq!(
+        fd.bblocks_ref().block(const1).size_out(),
+        1,
+        "const1 collapsed to BRANCH"
+    );
+    assert_eq!(
+        fd.bblocks_ref().block(nonconst).size_out(),
+        2,
+        "non-constant untouched"
+    );
 }
 
 // ===========================================================================
@@ -269,7 +294,10 @@ fn starttypes_apply_counts_exactly_once_across_repeats() {
         let res = act.apply(&mut fd, &mut ctx);
         assert_eq!(res, 0);
     }
-    assert!(fd.has_type_recovery_started(), "flag latches after first apply");
+    assert!(
+        fd.has_type_recovery_started(),
+        "flag latches after first apply"
+    );
     assert_eq!(
         act.base().count,
         1,

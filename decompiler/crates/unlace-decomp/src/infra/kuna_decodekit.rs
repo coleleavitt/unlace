@@ -23,7 +23,7 @@ use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::space::AddrSpace;
 use unlace_sleigh::globalcontext::ContextInternal;
-use unlace_sleigh::kuna_ctxsnapshot::{restore_context, ContextValueSnapshot};
+use unlace_sleigh::kuna_ctxsnapshot::{ContextValueSnapshot, restore_context};
 use unlace_sleigh::kuna_sharedbytes::{SharedBytesImage, UnmappedTripwire};
 use unlace_sleigh::loadimage::{ImageBytes, LoadImage};
 use unlace_sleigh::sleigh::Sleigh;

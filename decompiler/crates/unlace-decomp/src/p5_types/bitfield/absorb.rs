@@ -28,15 +28,15 @@
 //! pair of arenas reached through the banks; each helper threads `data` and the
 //! op/varnode ids explicitly, exactly mirroring the C++ pointer walk.
 
+use std::rc::Rc;
 use unlace_base::address::calc_mask;
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
-use std::rc::Rc;
 
-use super::expression::{get_pull_field, InsertExpression};
+use super::expression::{InsertExpression, get_pull_field};
+use crate::context::{OpId, VarnodeId};
 use crate::dtype::type_metatype;
 use crate::funcdata::Funcdata;
-use crate::context::{OpId, VarnodeId};
 
 /// `sizeof(uintb)*8` — the C++ `uintb` is `uint8`, i.e. 64 bits.
 const UINTB_BITS: int4 = 64;
@@ -62,7 +62,10 @@ fn op_code(data: &Funcdata, op: OpId) -> Option<OpCode> {
 
 /// `vn->isConstant()`.
 fn vn_is_constant(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).map(|v| v.is_constant()).unwrap_or(false)
+    data.vbank()
+        .get(vn)
+        .map(|v| v.is_constant())
+        .unwrap_or(false)
 }
 
 /// `vn->getOffset()`.
@@ -77,12 +80,18 @@ fn vn_size(data: &Funcdata, vn: VarnodeId) -> int4 {
 
 /// `vn->constantMatch(val)`.
 fn vn_constant_match(data: &Funcdata, vn: VarnodeId, val: uintb) -> bool {
-    data.vbank().get(vn).map(|v| v.constant_match(val)).unwrap_or(false)
+    data.vbank()
+        .get(vn)
+        .map(|v| v.constant_match(val))
+        .unwrap_or(false)
 }
 
 /// `vn->isWritten()`.
 fn vn_is_written(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).map(|v| v.is_written()).unwrap_or(false)
+    data.vbank()
+        .get(vn)
+        .map(|v| v.is_written())
+        .unwrap_or(false)
 }
 
 /// `vn->getDef()`.
@@ -239,7 +248,12 @@ fn pull_absorb_left(data: &mut Funcdata, left_op: OpId, pull_op: OpId) -> int4 {
 
 /// `RulePullAbsorb::absorbLeftRight` (bitfield.cc:1857-1887):
 /// `(field << #c) >> #d  =>  field >> (#d-#c)`.
-fn pull_absorb_left_right(data: &mut Funcdata, right_op: OpId, left_op: OpId, pull_op: OpId) -> int4 {
+fn pull_absorb_left_right(
+    data: &mut Funcdata,
+    right_op: OpId,
+    left_op: OpId,
+    pull_op: OpId,
+) -> int4 {
     let leftcvn = match op_in(data, left_op, 1) {
         Some(v) => v,
         None => return 0,
@@ -671,7 +685,12 @@ fn pull_absorb_comp_zero(data: &mut Funcdata, comp_op: OpId, pull_op: OpId) -> i
     if data.lone_descend(vn) != Some(comp_op) {
         return 0;
     }
-    if data.vbank().get(vn).map(|v| v.is_addr_tied()).unwrap_or(false) {
+    if data
+        .vbank()
+        .get(vn)
+        .map(|v| v.is_addr_tied())
+        .unwrap_or(false)
+    {
         return 0;
     }
     if op_code(data, pull_op) == Some(OpCode::CPUI_SPULL) {
@@ -781,8 +800,12 @@ fn pull_move_is_order_safe(data: &Funcdata, pull: OpId, read: OpId) -> bool {
     if super::pull::printed_load(data, pull).is_none() {
         return true;
     }
-    let Some(operation) = data.obank().get(pull) else { return false };
-    let Some(reader) = data.obank().get(read) else { return false };
+    let Some(operation) = data.obank().get(pull) else {
+        return false;
+    };
+    let Some(reader) = data.obank().get(read) else {
+        return false;
+    };
     if operation.get_parent() != reader.get_parent() {
         return false;
     }
@@ -791,11 +814,20 @@ fn pull_move_is_order_safe(data: &Funcdata, pull: OpId, read: OpId) -> bool {
         if op == read {
             return true;
         }
-        let Some(operation) = data.obank().get(op) else { return false };
-        if matches!(operation.code(), OpCode::CPUI_STORE | OpCode::CPUI_CALL
-            | OpCode::CPUI_CALLIND | OpCode::CPUI_CALLOTHER | OpCode::CPUI_NEW)
-            || operation.get_out().and_then(|v| data.vbank().get(v))
-                .is_some_and(|v| v.is_persist() || v.is_stack_store())
+        let Some(operation) = data.obank().get(op) else {
+            return false;
+        };
+        if matches!(
+            operation.code(),
+            OpCode::CPUI_STORE
+                | OpCode::CPUI_CALL
+                | OpCode::CPUI_CALLIND
+                | OpCode::CPUI_CALLOTHER
+                | OpCode::CPUI_NEW
+        ) || operation
+            .get_out()
+            .and_then(|v| data.vbank().get(v))
+            .is_some_and(|v| v.is_persist() || v.is_stack_store())
         {
             return false;
         }

@@ -38,35 +38,34 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaError;
 use unlace_base::address::{ATTRIB_FIRST, ATTRIB_LAST, ELEM_RANGELIST};
+use unlace_base::error::KunaError;
 use unlace_base::marshal::{
-    Decoder, ElementId, Encoder, PackedDecode, PackedEncode, ATTRIB_ID, ATTRIB_INDEX,
-    ATTRIB_METATYPE, ATTRIB_MODEL, ATTRIB_NAME, ATTRIB_NAMELOCK, ATTRIB_OFFSET, ATTRIB_READONLY,
-    ATTRIB_SIZE, ATTRIB_TYPE, ATTRIB_TYPELOCK, ATTRIB_VAL, ELEM_SYMBOL, ELEM_VOID,
+    ATTRIB_ID, ATTRIB_INDEX, ATTRIB_METATYPE, ATTRIB_MODEL, ATTRIB_NAME, ATTRIB_NAMELOCK,
+    ATTRIB_OFFSET, ATTRIB_READONLY, ATTRIB_SIZE, ATTRIB_TYPE, ATTRIB_TYPELOCK, ATTRIB_VAL, Decoder,
+    ELEM_SYMBOL, ELEM_VOID, ElementId, Encoder, PackedDecode, PackedEncode,
 };
-use unlace_base::space::{spacetype, AddrSpaceManager, RegisterLookup};
+use unlace_base::space::{AddrSpaceManager, RegisterLookup, spacetype};
 use unlace_num::opcodes::{OpCode, OpcodeEncoder};
-use unlace_num::pcoderaw::{VarnodeData, ELEM_SPACEID};
-use unlace_sleigh::translate::{PcodeEmit, Translate, ATTRIB_CODE, ELEM_OP};
+use unlace_num::pcoderaw::{ELEM_SPACEID, VarnodeData};
+use unlace_sleigh::translate::{ATTRIB_CODE, ELEM_OP, PcodeEmit, Translate};
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_decomp::comment::ELEM_COMMENTDB;
 use unlace_decomp::decompile_drive::print_c;
-use unlace_decomp::dtype::{type_metatype, Datatype, DatatypeKind, ELEM_TYPEREF};
+use unlace_decomp::dtype::{Datatype, DatatypeKind, ELEM_TYPEREF, type_metatype};
 use unlace_decomp::fspec::PrototypePieces;
 use unlace_decomp::funcdata_encode::ELEM_FUNCTION;
 use unlace_decomp::inject_sleigh::SleighInjectEngine;
-use unlace_decomp::options::{OptionDatabase, KUNA_OPTION_NAMES};
+use unlace_decomp::options::{KUNA_OPTION_NAMES, OptionDatabase};
 use unlace_decomp::pcodeinject::{
-    InjectContext, CALLFIXUP_TYPE, CALLOTHERFIXUP_TYPE, ELEM_CONTEXT,
+    CALLFIXUP_TYPE, CALLOTHERFIXUP_TYPE, ELEM_CONTEXT, InjectContext,
 };
 use unlace_decomp::prettyprint::ids::{ELEM_FIELD, ELEM_TYPE};
 use unlace_decomp::remote_provider::{
     ATTRIB_CAT, ATTRIB_DOTDOTDOT, ATTRIB_EXTRAPOP, ATTRIB_LOCK, ATTRIB_MAIN, ATTRIB_NORETURN,
     ATTRIB_VOIDLOCK, ELEM_EXTERNREFSYMBOL, ELEM_HASH, ELEM_HOLE, ELEM_LOCALDB, ELEM_MAPSYM,
-    ELEM_PARENT,
-    ELEM_PROTOTYPE, ELEM_RETURNSYM, ELEM_SCOPE, ELEM_SYMBOLLIST,
+    ELEM_PARENT, ELEM_PROTOTYPE, ELEM_RETURNSYM, ELEM_SCOPE, ELEM_SYMBOLLIST,
 };
 use unlace_ghidra::ids::{
     ATTRIB_MAXSIZE, ELEM_COMMAND_GETBYTES, ELEM_COMMAND_GETCALLFIXUP,
@@ -80,7 +79,7 @@ use unlace_ghidra::ids::{
 use unlace_ghidra::protocol::{nibble_expand, string_data_size_header};
 use unlace_sleigh::globalcontext::ELEM_TRACKED_POINTSET;
 
-use super::{resp_bytes, resp_empty, resp_exception, resp_string, AnswerSource, QUERY_COMMAND_IDS};
+use super::{AnswerSource, QUERY_COMMAND_IDS, resp_bytes, resp_empty, resp_exception, resp_string};
 
 /// `<inst>` — the getPcode response root (ELEM_INST, unlace-decomp
 /// pcodeinject.rs; the numeric id is the wire contract).
@@ -361,8 +360,8 @@ impl SimOracle {
                     // LOAD/STORE input 0 is the encoded space-id constant; the
                     // wire form is `<spaceid name=…>` (PcodeOpRaw::decode maps
                     // it back to the constant-space index form).
-                    let is_spaceid = slot == 0
-                        && matches!(opc, OpCode::CPUI_LOAD | OpCode::CPUI_STORE);
+                    let is_spaceid =
+                        slot == 0 && matches!(opc, OpCode::CPUI_LOAD | OpCode::CPUI_STORE);
                     if is_spaceid {
                         let spc = v
                             .get_space_from_const(&self.manager)
@@ -444,7 +443,10 @@ impl SimOracle {
             Rc::clone(arch.manage().get_default_code_space().expect("code space")),
         );
         let mut emit = RecordEmit::default();
-        if engine.emit_payload(payload, tpl, &mut ctx, &mut emit).is_err() {
+        if engine
+            .emit_payload(payload, tpl, &mut ctx, &mut emit)
+            .is_err()
+        {
             return resp_empty();
         }
         resp_string(&self.inst_doc(&baseaddr, len, &emit))
@@ -526,7 +528,14 @@ impl SimOracle {
                 .function_is_no_return_across_scopes(&addr);
             let pieces = self.callee_pieces.get(&offset).cloned();
             let scope = self.namespace_id(&addr);
-            return resp_string(&self.function_doc(&addr, &name, noreturn, pieces.as_ref(), 1, scope));
+            return resp_string(&self.function_doc(
+                &addr,
+                &name,
+                noreturn,
+                pieces.as_ref(),
+                1,
+                scope,
+            ));
         }
         if let Some((start, (name, size))) = self
             .data_symbols
@@ -568,8 +577,11 @@ impl SimOracle {
     /// its `::`-qualified name; every enclosing namespace gets an id too, so
     /// getNamespacePath can answer for any of them.
     fn namespace_id(&mut self, addr: &Address) -> u64 {
-        let Some(qualified) =
-            self.prog.arch().symboltab.function_display_name_across_scopes(addr)
+        let Some(qualified) = self
+            .prog
+            .arch()
+            .symboltab
+            .function_display_name_across_scopes(addr)
         else {
             return 0;
         };
@@ -612,7 +624,10 @@ impl SimOracle {
                     .unwrap_or(0);
                 e.open_element(&unlace_base::marshal::ELEM_VAL);
                 e.write_unsigned_integer(&ATTRIB_ID, level);
-                e.write_string(&unlace_base::marshal::ATTRIB_CONTENT, path[depth - 1].as_bytes());
+                e.write_string(
+                    &unlace_base::marshal::ATTRIB_CONTENT,
+                    path[depth - 1].as_bytes(),
+                );
                 e.close_element(&unlace_base::marshal::ELEM_VAL);
             }
             e.close_element(&ELEM_PARENT);
@@ -678,7 +693,10 @@ impl SimOracle {
             if pieces.is_some() || !locals.is_empty() {
                 self.encode_localdb(&mut e, entry.get_offset(), name, pieces, locals);
             }
-            let inject = self.call_fixup_overrides.get(&entry.get_offset()).map(String::as_str);
+            let inject = self
+                .call_fixup_overrides
+                .get(&entry.get_offset())
+                .map(String::as_str);
             if let Some(p) = pieces {
                 self.encode_prototype(&mut e, entry.get_offset(), p, inject);
             } else if let Some(fixup) = inject {
@@ -686,7 +704,9 @@ impl SimOracle {
             }
             e.close_element(&ELEM_FUNCTION);
             // The mapping SymbolEntry: <addr size/> + empty <rangelist/>.
-            entry.encode_sized(&mut e, map_size).expect("mapping addr encodes");
+            entry
+                .encode_sized(&mut e, map_size)
+                .expect("mapping addr encodes");
             e.open_element(&ELEM_RANGELIST);
             e.close_element(&ELEM_RANGELIST);
             e.close_element(&ELEM_MAPSYM);
@@ -887,7 +907,10 @@ impl SimOracle {
         e.open_element(&ELEM_RETURNSYM);
         e.write_bool(&ATTRIB_TYPELOCK, true);
         if self.custom_return_address_overrides.contains(&entry) {
-            let storage = self.return_register.as_ref().expect("x86-64 return register");
+            let storage = self
+                .return_register
+                .as_ref()
+                .expect("x86-64 return register");
             let size = pieces.outtype.as_ref().map(|ct| ct.get_size()).unwrap_or(1);
             Address::new(
                 Rc::clone(storage.space.as_ref().expect("return register space")),
@@ -974,7 +997,9 @@ impl SimOracle {
             e.write_signed_integer(&ATTRIB_CAT, -1);
             self.encode_wire_type(&mut e, &array);
             e.close_element(&ELEM_SYMBOL);
-            start.encode_sized(&mut e, len as i32).expect("string addr encodes");
+            start
+                .encode_sized(&mut e, len as i32)
+                .expect("string addr encodes");
             e.open_element(&ELEM_RANGELIST);
             e.close_element(&ELEM_RANGELIST);
             e.close_element(&ELEM_MAPSYM);
@@ -1021,7 +1046,10 @@ impl SimOracle {
                 e.close_element(&ELEM_VOID);
             }
             TYPE_PTR => {
-                if let DatatypeKind::Pointer { ptrto, wordsize, .. } = &dt.kind {
+                if let DatatypeKind::Pointer {
+                    ptrto, wordsize, ..
+                } = &dt.kind
+                {
                     e.open_element(&ELEM_TYPE);
                     e.write_string(&ATTRIB_NAME, b"");
                     e.write_string(&ATTRIB_METATYPE, b"ptr");
@@ -1082,17 +1110,10 @@ impl SimOracle {
     /// encode the full definition — the sim half of the
     /// `TypeFactoryGhidra::findById` miss path.
     fn answer_data_type(&mut self, dec: &mut PackedDecode) -> Vec<u8> {
-        let name =
-            String::from_utf8_lossy(&dec.read_string_id(&ATTRIB_NAME).expect("type name"))
-                .into_owned();
+        let name = String::from_utf8_lossy(&dec.read_string_id(&ATTRIB_NAME).expect("type name"))
+            .into_owned();
         let _id = dec.read_signed_integer_id(&ATTRIB_ID).unwrap_or(0);
-        let found = self
-            .prog
-            .arch()
-            .types()
-            .find_by_name(&name)
-            .ok()
-            .flatten();
+        let found = self.prog.arch().types().find_by_name(&name).ok().flatten();
         match found {
             Some(dt) => {
                 let mut doc = Vec::new();
@@ -1282,12 +1303,9 @@ impl AnswerSource for SimOracle {
             // DecompileCallback shape (always written, possibly empty).
             let addr = Address::decode(&mut dec).expect("getTrackedRegisters <addr>");
             let mut set = unlace_sleigh::globalcontext::TrackedSet::new();
-            self.prog
-                .arch()
-                .translate()
-                .with_context_db_dyn(&mut |db| {
-                    set = db.get_tracked_set(&addr).clone();
-                });
+            self.prog.arch().translate().with_context_db_dyn(&mut |db| {
+                set = db.get_tracked_set(&addr).clone();
+            });
             for over in &self.tracked_overrides {
                 match set.iter_mut().find(|t| t.loc == over.loc) {
                     Some(t) => t.val = over.val,

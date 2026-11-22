@@ -93,7 +93,11 @@ impl<'a> PcForm<'a> {
     /// The recogniser for `file`, or `None` when nothing it could find would
     /// change an answer: the image maps nothing below the floor, or its ISA
     /// keeps the PC visible in the p-code.
-    pub(super) fn new(file: &object::File, code: Option<&'a PoolImage<'a>>, mapped: &[(u64, u64)]) -> Option<Self> {
+    pub(super) fn new(
+        file: &object::File,
+        code: Option<&'a PoolImage<'a>>,
+        mapped: &[(u64, u64)],
+    ) -> Option<Self> {
         if mapped.first().is_none_or(|&(lo, _)| lo >= FLOOR) {
             return None;
         }
@@ -109,8 +113,16 @@ impl<'a> PcForm<'a> {
     /// The values the `len`-byte instruction at `vma` computes from its own
     /// address, if it is one of the PC-relative forms.
     pub(super) fn formed(&self, vma: u64, len: u32) -> Formed {
-        let le16 = |at: u64| self.code.bytes_at(at, 2).map(|b| u16::from_le_bytes([b[0], b[1]]));
-        let le32 = |at: u64| self.code.bytes_at(at, 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
+        let le16 = |at: u64| {
+            self.code
+                .bytes_at(at, 2)
+                .map(|b| u16::from_le_bytes([b[0], b[1]]))
+        };
+        let le32 = |at: u64| {
+            self.code
+                .bytes_at(at, 4)
+                .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+        };
         match (self.isa, len) {
             (Isa::Aarch64, 4) => Formed([le32(vma).and_then(|w| aarch64(vma, w)), None]),
             (Isa::X86_64, 6..) => {
@@ -121,7 +133,9 @@ impl<'a> PcForm<'a> {
             (Isa::Arm, 2) => Formed([le16(vma).and_then(|h| thumb16(vma, h)), None]),
             (Isa::Arm, 4) => {
                 let a32 = le32(vma).and_then(|w| a32(vma, w));
-                let t32 = le16(vma).zip(le16(vma + 2)).and_then(|(h1, h2)| thumb32(vma, h1, h2));
+                let t32 = le16(vma)
+                    .zip(le16(vma + 2))
+                    .and_then(|(h1, h2)| thumb32(vma, h1, h2));
                 Formed([a32, t32])
             }
             _ => Formed::default(),

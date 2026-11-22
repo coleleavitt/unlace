@@ -31,29 +31,48 @@ use crate::merge::MergeContext;
 /// of its own HighVariable.  When the `LOAD`'s address is a constant, only a
 /// global whose bytes overlap the loaded ones counts.  A write to the
 /// HighVariable `except` does not count.
-pub fn crosses_global_write(data: &mut Funcdata, vn: VarnodeId, except: Option<HighVariableId>) -> bool {
+pub fn crosses_global_write(
+    data: &mut Funcdata,
+    vn: VarnodeId,
+    except: Option<HighVariableId>,
+) -> bool {
     if data.get_arch().index_alias_guard != LEVEL_GLOBAL {
         return false;
     }
     let Some(v) = data.vbank().get(vn) else {
         return false;
     };
-    let Some(load) = v.get_def().and_then(|d| crate::bitfield::pull::printed_load(data, d))
-        .and_then(|d| data.obank().get(d)) else {
+    let Some(load) = v
+        .get_def()
+        .and_then(|d| crate::bitfield::pull::printed_load(data, d))
+        .and_then(|d| data.obank().get(d))
+    else {
         return false;
     };
     let Some(cover) = v.cover() else {
         return false;
     };
-    let Some(index) = load.get_in(0).and_then(|s| data.vbank().get(s)).map(|s| s.get_offset()) else {
+    let Some(index) = load
+        .get_in(0)
+        .and_then(|s| data.vbank().get(s))
+        .map(|s| s.get_offset())
+    else {
         return false;
     };
     let window = load
         .get_in(1)
         .and_then(|p| data.vbank().get(p))
         .filter(|p| p.is_constant())
-        .map(|p| (p.get_offset(), p.get_offset().wrapping_add(load.get_out()
-            .and_then(|v| data.vbank().get(v)).map_or(1, |v| v.get_size()) as u64)));
+        .map(|p| {
+            (
+                p.get_offset(),
+                p.get_offset().wrapping_add(
+                    load.get_out()
+                        .and_then(|v| data.vbank().get(v))
+                        .map_or(1, |v| v.get_size()) as u64,
+                ),
+            )
+        });
     let mut writes: Vec<(VarnodeId, Option<HighVariableId>)> = Vec::new();
     for (blk, cb) in cover.iter() {
         if blk < 0 || blk >= data.bblocks_get_size() {
@@ -73,13 +92,19 @@ pub fn crosses_global_write(data: &mut Funcdata, vn: VarnodeId, except: Option<H
         let Some(w) = data.vbank().get(w) else {
             return false;
         };
-        if !w.is_persist() || w.get_space().get_index() as u64 != index || !data.global_store_guarded(w) {
+        if !w.is_persist()
+            || w.get_space().get_index() as u64 != index
+            || !data.global_store_guarded(w)
+        {
             return false;
         }
         let Some((lo, hi)) = window else {
             return true;
         };
-        let (wlo, whi) = (w.get_offset(), w.get_offset().wrapping_add(w.get_size() as u64));
+        let (wlo, whi) = (
+            w.get_offset(),
+            w.get_offset().wrapping_add(w.get_size() as u64),
+        );
         wlo < hi && lo < whi
     };
     writes.into_iter().any(|(w, high)| {
@@ -140,8 +165,16 @@ pub fn keeps_apart(ctx: &mut dyn MergeContext, vn1: VarnodeId, vn2: VarnodeId) -
     };
     let loads: Vec<VarnodeId> = (0..ctx.high_num_instances(value))
         .map(|i| ctx.high_get_instance(value, i))
-        .filter(|&v| ctx.vn_def(v).is_some_and(|d| matches!(ctx.op_code(d),
-            OpCode::CPUI_LOAD | OpCode::CPUI_ZPULL | OpCode::CPUI_SPULL)))
+        .filter(|&v| {
+            ctx.vn_def(v).is_some_and(|d| {
+                matches!(
+                    ctx.op_code(d),
+                    OpCode::CPUI_LOAD | OpCode::CPUI_ZPULL | OpCode::CPUI_SPULL
+                )
+            })
+        })
         .collect();
-    loads.into_iter().any(|v| ctx.vn_load_crosses_global_write(v, global))
+    loads
+        .into_iter()
+        .any(|v| ctx.vn_load_crosses_global_write(v, global))
 }

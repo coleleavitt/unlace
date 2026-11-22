@@ -93,7 +93,9 @@ const IMAGES: &[Image] = &[
                e78000fc0505a26041018280411106e497000000e780c0fba26041018280411106e497000000e7\
                8040fba26041018280411106e497000000e78020fa02150191a260410182800605828005058280\
                8280931515002e958280",
-        starts: &[0x0, 0xa, 0x1a, 0x24, 0x2e, 0x46, 0x5a, 0x6c, 0x7e, 0x94, 0x98, 0x9c, 0x9e],
+        starts: &[
+            0x0, 0xa, 0x1a, 0x24, 0x2e, 0x46, 0x5a, 0x6c, 0x7e, 0x94, 0x98, 0x9c, 0x9e,
+        ],
         source: WIDE,
         protos: WIDE_PROTOS,
     },
@@ -106,7 +108,9 @@ const IMAGES: &[Image] = &[
                00004c63c0ff026120c029ff9fff576120c0286340c0022000004c63c0ff026120c029ff97ff57\
                6120c0286340c0022000004c63c0ff026120c029ff7fff578400df006120c0286340c002200000\
                4c840441002000004c8404c0022000004c2000004c8c04410084b010002000004c",
-        starts: &[0x0, 0xc, 0x1c, 0x2c, 0x3c, 0x5c, 0x78, 0x90, 0xa8, 0xc4, 0xcc, 0xd4, 0xd8],
+        starts: &[
+            0x0, 0xc, 0x1c, 0x2c, 0x3c, 0x5c, 0x78, 0x90, 0xa8, 0xc4, 0xcc, 0xd4, 0xd8,
+        ],
         source: WIDE,
         protos: WIDE_PROTOS,
     },
@@ -121,7 +125,9 @@ const IMAGES: &[Image] = &[
                031000bd67f0ffbd670800bfff1240000c00000000001002000800bfdf0800e0031000bd67f0ff\
                bd670800bfff1240000c0000000003f8427c0800bfdf0800e0031000bd670800e0037810040008\
                00e003010082640800e00325108000780804000800e0032d102400",
-        starts: &[0x0, 0x10, 0x38, 0x48, 0x58, 0x80, 0xa8, 0xc8, 0xe8, 0x108, 0x110, 0x118, 0x120],
+        starts: &[
+            0x0, 0x10, 0x38, 0x48, 0x58, 0x80, 0xa8, 0xc8, 0xe8, 0x108, 0x110, 0x118, 0x120,
+        ],
         source: WIDE,
         protos: WIDE_PROTOS,
     },
@@ -163,7 +169,10 @@ const IMAGES: &[Image] = &[
 
 fn bytes(hex: &str) -> Vec<u8> {
     let hex: String = hex.chars().filter(|c| c.is_ascii_hexdigit()).collect();
-    (0..hex.len()).step_by(2).map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap()).collect()
+    (0..hex.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
+        .collect()
 }
 
 fn name(proto: &str) -> &str {
@@ -174,25 +183,56 @@ fn decompile(image: &Image, mode: &str) -> String {
     let path = common::scratch_file(&format!("narrowext-{}", image.name), "bin");
     std::fs::write(&path, bytes(image.code)).unwrap();
     let base = format!("{BASE:#x}");
-    let mut args: Vec<String> = ["decompile-all", path.to_str().unwrap(), "--raw-image", "--target", image.target]
-        .into_iter()
-        .map(String::from)
-        .collect();
-    args.extend(["--base".into(), base, "--assert-strict".into(), "--option".into(), "narrowext".into(), mode.into()]);
+    let mut args: Vec<String> = [
+        "decompile-all",
+        path.to_str().unwrap(),
+        "--raw-image",
+        "--target",
+        image.target,
+    ]
+    .into_iter()
+    .map(String::from)
+    .collect();
+    args.extend([
+        "--base".into(),
+        base,
+        "--assert-strict".into(),
+        "--option".into(),
+        "narrowext".into(),
+        mode.into(),
+    ]);
     for (proto, start) in image.protos.iter().zip(image.starts) {
         let at = format!("{:#x}", BASE + start);
-        args.extend(["--entry".into(), at.clone(), "--define-function".into(), format!("{at}={}", name(proto))]);
-        args.extend(["--assert".into(), format!("prototype {} {proto}", name(proto))]);
+        args.extend([
+            "--entry".into(),
+            at.clone(),
+            "--define-function".into(),
+            format!("{at}={}", name(proto)),
+        ]);
+        args.extend([
+            "--assert".into(),
+            format!("prototype {} {proto}", name(proto)),
+        ]);
     }
-    let output = Command::new(env!("CARGO_BIN_EXE_unlace")).args(&args).output().unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
+        .args(&args)
+        .output()
+        .unwrap();
     let text = String::from_utf8(output.stdout).unwrap();
-    assert!(output.status.success(), "{}: {text}\n{}", image.name, String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}: {text}\n{}",
+        image.name,
+        String::from_utf8_lossy(&output.stderr)
+    );
     text
 }
 
 /// The printed function `name`, from its header comment to the next.
 fn function<'a>(text: &'a str, name: &str) -> &'a str {
-    let start = text.find(&format!("// Function: {name} @")).unwrap_or_else(|| panic!("no {name}:\n{text}"));
+    let start = text
+        .find(&format!("// Function: {name} @"))
+        .unwrap_or_else(|| panic!("no {name}:\n{text}"));
     let rest = &text[start + 1..];
     &text[start..start + 1 + rest.find("// Function:").unwrap_or(rest.len())]
 }
@@ -206,7 +246,12 @@ fn argument(proto: &str) -> String {
 
 /// Compiles the printed callees and `checked` with the source, and runs each
 /// of `checked` against its source over a range of inputs.
-fn round_trip(image: &Image, text: &str, checked: &[&str], compilers: &[&str]) -> Result<(), String> {
+fn round_trip(
+    image: &Image,
+    text: &str,
+    checked: &[&str],
+    compilers: &[&str],
+) -> Result<(), String> {
     let mut printed = String::new();
     let mut checks = String::new();
     for proto in image.protos {
@@ -242,16 +287,30 @@ fn compile_and_run(stem: &str, program: &str, compilers: &[&str]) -> Result<(), 
             let exe = src.with_extension("exe");
             std::fs::write(&src, program).unwrap();
             let out = Command::new(cc)
-                .args(["-std=gnu11", "-w", "-fwrapv", level, "-o", exe.to_str().unwrap(), src.to_str().unwrap()])
+                .args([
+                    "-std=gnu11",
+                    "-w",
+                    "-fwrapv",
+                    level,
+                    "-o",
+                    exe.to_str().unwrap(),
+                    src.to_str().unwrap(),
+                ])
                 .args(common::CC_GCC15_DEMOTE)
                 .output()
                 .expect("spawn the C compiler");
             if !out.status.success() {
-                return Err(format!("{cc} {level} rejects the printed C:\n{}", String::from_utf8_lossy(&out.stderr)));
+                return Err(format!(
+                    "{cc} {level} rejects the printed C:\n{}",
+                    String::from_utf8_lossy(&out.stderr)
+                ));
             }
             let run = Command::new(&exe).output().expect("run the round trip");
             if !run.status.success() {
-                return Err(format!("{cc} {level}:\n{}", String::from_utf8_lossy(&run.stdout)));
+                return Err(format!(
+                    "{cc} {level}:\n{}",
+                    String::from_utf8_lossy(&run.stdout)
+                ));
             }
         }
     }
@@ -263,7 +322,10 @@ fn host_compilers() -> Vec<&'static str> {
         .into_iter()
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
-    assert!(!compilers.is_empty(), "the round trip requires a C compiler");
+    assert!(
+        !compilers.is_empty(),
+        "the round trip requires a C compiler"
+    );
     compilers
 }
 
@@ -273,12 +335,20 @@ fn a_narrow_argument_or_return_round_trips_through_the_printed_c() {
     let all: Vec<&str> = RETURNS.iter().chain(ARGUMENTS).copied().collect();
     for image in IMAGES {
         let present = |set: &[&'static str]| -> Vec<&'static str> {
-            set.iter().copied().filter(|n| image.protos.iter().any(|p| name(p) == *n)).collect()
+            set.iter()
+                .copied()
+                .filter(|n| image.protos.iter().any(|p| name(p) == *n))
+                .collect()
         };
         let documented_returns = matches!(image.name, "rv64" | "la64" | "rv32");
-        let default = if documented_returns { present(&all) } else { present(ARGUMENTS) };
+        let default = if documented_returns {
+            present(&all)
+        } else {
+            present(ARGUMENTS)
+        };
         let text = decompile(image, "abi");
-        round_trip(image, &text, &default, &compilers).unwrap_or_else(|e| panic!("{}: {e}\n{text}", image.name));
+        round_trip(image, &text, &default, &compilers)
+            .unwrap_or_else(|e| panic!("{}: {e}\n{text}", image.name));
         let text = decompile(image, "compiler");
         round_trip(image, &text, &present(&all), &compilers)
             .unwrap_or_else(|e| panic!("{} under compiler: {e}\n{text}", image.name));
@@ -327,7 +397,10 @@ const SIGNED_CALLEES: &[&str] = &["r16", "re2", "rn"];
 fn a_char16_t_or_short_enum_extends_by_the_sign_of_its_source_type() {
     let compilers = host_compilers();
     for (fixture, checked) in [
-        ("narrowext_rv64.o", SIGNED_CHECKS.iter().map(|c| c.0).collect::<Vec<_>>()),
+        (
+            "narrowext_rv64.o",
+            SIGNED_CHECKS.iter().map(|c| c.0).collect::<Vec<_>>(),
+        ),
         ("narrowext_rv64_nodebug.o", vec!["widen16", "hi_sur"]),
     ] {
         let path = common::fixture(fixture);
@@ -353,7 +426,8 @@ fn a_char16_t_or_short_enum_extends_by_the_sign_of_its_source_type() {
              int main(void) {{\n  int bad = 0;\n  for (unsigned i = 0; i < sizeof V / sizeof V[0]; i++) {{\n\
              int v = V[i];\n{checks}  }}\n  return bad != 0;\n}}\n"
         );
-        compile_and_run(fixture, &program, &compilers).unwrap_or_else(|e| panic!("{fixture}: {e}\n{text}"));
+        compile_and_run(fixture, &program, &compilers)
+            .unwrap_or_else(|e| panic!("{fixture}: {e}\n{text}"));
     }
 }
 
@@ -370,8 +444,12 @@ unsigned long s_cru(unsigned x) { return s_ru(x); }
 "#;
 
 /// Each checked function with the argument it takes; `ru` is only a callee.
-const ZEXT_ARGS: &[(&str, &str)] =
-    &[("z32m", "(unsigned long)v"), ("zu", "(unsigned)v"), ("cz", "(unsigned long)v"), ("cru", "(unsigned)v")];
+const ZEXT_ARGS: &[(&str, &str)] = &[
+    ("z32m", "(unsigned long)v"),
+    ("zu", "(unsigned)v"),
+    ("cz", "(unsigned long)v"),
+    ("cru", "(unsigned)v"),
+];
 const ZEXT_CALLEES: &[&str] = &["z32m", "zu", "ru"];
 
 struct ZextImage {
@@ -390,7 +468,13 @@ const ZEXT_IMAGES: &[ZextImage] = &[
                00102326a4fe0365c4fee260426405618280011106ec22e800102326a4fe8325c4fe1b9515002d9d\
                e260426405618280011106ec22e800102334a4fe033584fe97000000e78080f90505e26042640561\
                8280011106ec22e800102326a4fe0325c4fe97000000e78000fb02150191e260426405618280",
-        functions: &[("z32m", 0x0), ("zu", 0x22), ("ru", 0x3a), ("cz", 0x58), ("cru", 0x7a)],
+        functions: &[
+            ("z32m", 0x0),
+            ("zu", 0x22),
+            ("ru", 0x3a),
+            ("cz", 0x58),
+            ("cru", 0x7a),
+        ],
         checked: &["z32m", "zu", "cz", "cru"],
     },
     ZextImage {
@@ -398,7 +482,13 @@ const ZEXT_IMAGES: &[ZextImage] = &[
         target: "RISCV:LE:64:RV64GC:gcc",
         code: "9b1515002d9d0215019182800215019182809b1515002d9d8280411106e497000000e78020fe0505\
                a26041018280411106e497000000e78000fe02150191a26041018280",
-        functions: &[("z32m", 0x0), ("zu", 0xc), ("ru", 0x12), ("cz", 0x1a), ("cru", 0x2e)],
+        functions: &[
+            ("z32m", 0x0),
+            ("zu", 0xc),
+            ("ru", 0x12),
+            ("cz", 0x1a),
+            ("cru", 0x2e),
+        ],
         checked: &["z32m", "zu"],
     },
     ZextImage {
@@ -407,7 +497,13 @@ const ZEXT_IMAGES: &[ZextImage] = &[
         code: "84102c008400df002000004c8400df002000004c841004002000004c63c0ff026120c029ffdfff57\
                8404c0026120c0286340c0022000004c63c0ff026120c029ffd7ff578400df006120c0286340c002\
                2000004c",
-        functions: &[("z32m", 0x0), ("zu", 0xc), ("ru", 0x14), ("cz", 0x1c), ("cru", 0x38)],
+        functions: &[
+            ("z32m", 0x0),
+            ("zu", 0xc),
+            ("ru", 0x14),
+            ("cz", 0x1c),
+            ("cru", 0x38),
+        ],
         checked: &["z32m", "zu", "cz", "cru"],
     },
 ];
@@ -415,18 +511,43 @@ const ZEXT_IMAGES: &[ZextImage] = &[
 fn decompile_unprototyped(image: &ZextImage, mode: &str) -> String {
     let path = common::scratch_file(&format!("zextword-{}", image.name), "bin");
     std::fs::write(&path, bytes(image.code)).unwrap();
-    let mut args: Vec<String> = ["decompile-all", path.to_str().unwrap(), "--raw-image", "--target", image.target]
-        .into_iter()
-        .map(String::from)
-        .collect();
-    args.extend(["--base".into(), format!("{BASE:#x}"), "--option".into(), "narrowext".into(), mode.into()]);
+    let mut args: Vec<String> = [
+        "decompile-all",
+        path.to_str().unwrap(),
+        "--raw-image",
+        "--target",
+        image.target,
+    ]
+    .into_iter()
+    .map(String::from)
+    .collect();
+    args.extend([
+        "--base".into(),
+        format!("{BASE:#x}"),
+        "--option".into(),
+        "narrowext".into(),
+        mode.into(),
+    ]);
     for (name, start) in image.functions {
         let at = format!("{:#x}", BASE + start);
-        args.extend(["--entry".into(), at.clone(), "--define-function".into(), format!("{at}={name}")]);
+        args.extend([
+            "--entry".into(),
+            at.clone(),
+            "--define-function".into(),
+            format!("{at}={name}"),
+        ]);
     }
-    let output = Command::new(env!("CARGO_BIN_EXE_unlace")).args(&args).output().unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
+        .args(&args)
+        .output()
+        .unwrap();
     let text = String::from_utf8(output.stdout).unwrap();
-    assert!(output.status.success(), "{}: {text}\n{}", image.name, String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}: {text}\n{}",
+        image.name,
+        String::from_utf8_lossy(&output.stderr)
+    );
     text
 }
 
@@ -462,7 +583,8 @@ fn a_zero_extended_word_return_round_trips_through_the_printed_c() {
     let compilers = host_compilers();
     for image in ZEXT_IMAGES {
         let text = decompile_unprototyped(image, "abi");
-        zext_round_trip(image, &text, &compilers).unwrap_or_else(|e| panic!("{}: {e}\n{text}", image.name));
+        zext_round_trip(image, &text, &compilers)
+            .unwrap_or_else(|e| panic!("{}: {e}\n{text}", image.name));
         let text = decompile_unprototyped(image, "off");
         assert!(
             zext_round_trip(image, &text, &compilers).is_err(),
@@ -491,8 +613,12 @@ int s_seq(signed char c) { return c == -56; }
 "#;
 
 /// Each round-tripped function of `charsign.c` and the parameter type it takes.
-const CHARSIGN_FORMATS: &[(&str, &str)] =
-    &[("fmt", "unsigned char"), ("fmts", "signed char"), ("fmt8", "u8"), ("fmtc", "char")];
+const CHARSIGN_FORMATS: &[(&str, &str)] = &[
+    ("fmt", "unsigned char"),
+    ("fmts", "signed char"),
+    ("fmt8", "u8"),
+    ("fmtc", "char"),
+];
 const CHARSIGN_VALUES: &[(&str, &str)] = &[
     ("is_hi", "unsigned char"),
     ("wid", "unsigned char"),
@@ -506,7 +632,12 @@ const CHARSIGN_VALUES: &[(&str, &str)] = &[
 
 /// Compiles the printed `checked` functions of `charsign.c` beside its source
 /// and runs each against its source over a range of inputs.
-fn charsign_round_trip(stem: &str, text: &str, checked: &[&str], compilers: &[&str]) -> Result<(), String> {
+fn charsign_round_trip(
+    stem: &str,
+    text: &str,
+    checked: &[&str],
+    compilers: &[&str],
+) -> Result<(), String> {
     let mut printed = String::new();
     let mut checks = String::new();
     for (n, ty) in CHARSIGN_FORMATS.iter().filter(|c| checked.contains(&c.0)) {
@@ -545,7 +676,11 @@ fn charsign_round_trip(stem: &str, text: &str, checked: &[&str], compilers: &[&s
 fn a_dwarf_char_parameter_keeps_its_declared_sign() {
     let compilers = host_compilers();
     let formats: Vec<&str> = CHARSIGN_FORMATS.iter().map(|c| c.0).collect();
-    let all: Vec<&str> = formats.iter().copied().chain(CHARSIGN_VALUES.iter().map(|c| c.0)).collect();
+    let all: Vec<&str> = formats
+        .iter()
+        .copied()
+        .chain(CHARSIGN_VALUES.iter().map(|c| c.0))
+        .collect();
     let widened = ["wid", "wids", "wus", "wss", "wb"];
     let run = |fixture: &str, extra: &[&str]| {
         let path = common::fixture(fixture);
@@ -557,24 +692,48 @@ fn a_dwarf_char_parameter_keeps_its_declared_sign() {
     };
 
     let gcc = run("charsign_x86_64_gcc_O2", &[]);
-    charsign_round_trip("charsign-gcc", &gcc, &all, &compilers).unwrap_or_else(|e| panic!("gcc -O2: {e}\n{gcc}"));
-    assert!(function(&gcc, "seq").contains("c == -0x38"), "a signed char byte above 0x7f is a number:\n{gcc}");
-    let rust = run("charsign_x86_64_gcc_O2", &["--language", "rust", "--functions", "wid,wids"]);
-    for want in ["fn wid(mut c: u8) -> i64", "fn wids(mut c: i8) -> i64", "c as i64"] {
+    charsign_round_trip("charsign-gcc", &gcc, &all, &compilers)
+        .unwrap_or_else(|e| panic!("gcc -O2: {e}\n{gcc}"));
+    assert!(
+        function(&gcc, "seq").contains("c == -0x38"),
+        "a signed char byte above 0x7f is a number:\n{gcc}"
+    );
+    let rust = run(
+        "charsign_x86_64_gcc_O2",
+        &["--language", "rust", "--functions", "wid,wids"],
+    );
+    for want in [
+        "fn wid(mut c: u8) -> i64",
+        "fn wids(mut c: i8) -> i64",
+        "c as i64",
+    ] {
         assert!(rust.contains(want), "Rust output has no `{want}`:\n{rust}");
     }
 
     let clang = run("charsign_x86_64_clang_O2", &[]);
     let all: Vec<&str> = all.into_iter().filter(|n| *n != "getc1").collect();
-    let by_default: Vec<&str> = all.iter().copied().filter(|n| !widened.contains(n)).collect();
+    let by_default: Vec<&str> = all
+        .iter()
+        .copied()
+        .filter(|n| !widened.contains(n))
+        .collect();
     charsign_round_trip("charsign-clang", &clang, &by_default, &compilers)
         .unwrap_or_else(|e| panic!("clang -O2: {e}\n{clang}"));
-    let compiler = run("charsign_x86_64_clang_O2", &["--option", "narrowext", "compiler"]);
+    let compiler = run(
+        "charsign_x86_64_clang_O2",
+        &["--option", "narrowext", "compiler"],
+    );
     charsign_round_trip("charsign-clang-compiler", &compiler, &all, &compilers)
         .unwrap_or_else(|e| panic!("clang -O2 under compiler: {e}\n{compiler}"));
-    let off = run("charsign_x86_64_clang_O2", &["--option", "narrowext", "off"]);
+    let off = run(
+        "charsign_x86_64_clang_O2",
+        &["--option", "narrowext", "off"],
+    );
     for n in widened {
-        assert!(function(&off, n).contains("CONCAT"), "{n} under off:\n{off}");
+        assert!(
+            function(&off, n).contains("CONCAT"),
+            "{n} under off:\n{off}"
+        );
     }
 
     let arm = run("charsign_aarch64_O2.o", &[]);

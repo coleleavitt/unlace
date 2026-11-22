@@ -56,7 +56,10 @@ impl AnalysisPass for GoNoReturnPass {
         let (exact, wildcard) = parse_list(crate::sourcelang::golang_noreturn_list());
         // The same table walk and executable-range admission as `gopclntab`:
         // a corrupt table cannot mark a no-return over data it never names.
-        let exec = ctx.image.expect("load-time analysis image").executable_ranges();
+        let exec = ctx
+            .image
+            .expect("load-time analysis image")
+            .executable_ranges();
         let (funcs, _text_end) = recover_go_table(ctx.file);
         let mut seen = std::collections::HashSet::new();
         for f in funcs {
@@ -64,7 +67,10 @@ impl AnalysisPass for GoNoReturnPass {
                 continue;
             }
             if name_matches(&f.name, &exact, &wildcard) && seen.insert(f.addr) {
-                out.noreturn.push(NoReturnFact { addr: f.addr, name: f.name });
+                out.noreturn.push(NoReturnFact {
+                    addr: f.addr,
+                    name: f.name,
+                });
             }
         }
         out
@@ -101,7 +107,10 @@ mod tests {
             "runtime.mallocgc",
             "fmt.Println",
         ] {
-            assert!(!name_matches(name, &exact, &wildcard), "{name} must not match");
+            assert!(
+                !name_matches(name, &exact, &wildcard),
+                "{name} must not match"
+            );
         }
     }
 }

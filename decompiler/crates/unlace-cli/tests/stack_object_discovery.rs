@@ -220,10 +220,12 @@ fn discovered_selectors_replay_asserted_names() {
 fn worker_transport_preserves_discovered_object_metadata() {
     let serial = worker_query("1", true, false);
     let pooled = worker_query("2", true, false);
-    assert!(!function(&serial, "main")["stack_objects"]
-        .as_array()
-        .unwrap()
-        .is_empty());
+    assert!(
+        !function(&serial, "main")["stack_objects"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
     for name in ["main", "take_nest"] {
         assert_eq!(
             function(&serial, name)["stack_objects"],
@@ -262,10 +264,12 @@ fn discovered_objects_bind_names_through_existing_dwarf_layouts() {
             assert_eq!(object["uses"], original["uses"]);
             assert_eq!(object["stack_offset"], original["stack_offset"]);
             assert_eq!(object["size"], original["size"]);
-            assert!(row["code"]
-                .as_str()
-                .unwrap()
-                .contains(&format!("{name}_view")));
+            assert!(
+                row["code"]
+                    .as_str()
+                    .unwrap()
+                    .contains(&format!("{name}_view"))
+            );
         }
         assert!(row["code"].as_str().unwrap().contains("Big24 b;"));
     }

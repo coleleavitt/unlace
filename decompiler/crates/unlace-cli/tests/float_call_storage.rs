@@ -62,8 +62,8 @@ fn check(target: &str, word: bool, double: bool, arith: bool) {
         "unsigned int"
     };
     use unlace_console::ifacedecomp::{
-        execute, register_console_commands, register_decomp_commands, IfaceDecompData,
-        DECOMPILE_MODULE,
+        DECOMPILE_MODULE, IfaceDecompData, execute, register_console_commands,
+        register_decomp_commands,
     };
     use unlace_console::ifaceterm::IfaceTerm;
     use unlace_console::kuna_console::register_kuna_commands;
@@ -93,7 +93,15 @@ API float choose_value(float first,float second){float value=adjust_value(first)
     let addr = |name: &[u8]| exports.iter().find(|e| e.name() == name).unwrap().address();
     let choose = addr(b"choose_value");
     let adjust = addr(b"adjust_value");
-    let script=format!("load file {}\noption stackviews on\noption realtypes on\noption ctypes on\nmap function 0x{choose:x} choose_value\nmap prototype 0x{choose:x} float __cdecl choose_value(float first,float second)\nmap function 0x{adjust:x} adjust_value\nmap prototype 0x{adjust:x} float __cdecl adjust_value(float value)\nload function 0x{choose:x}\ndecompile\n{}",binary.display(),if word{format!("retype v1 {storage}\ndecompile\n")}else{String::new()});
+    let script = format!(
+        "load file {}\noption stackviews on\noption realtypes on\noption ctypes on\nmap function 0x{choose:x} choose_value\nmap prototype 0x{choose:x} float __cdecl choose_value(float first,float second)\nmap function 0x{adjust:x} adjust_value\nmap prototype 0x{adjust:x} float __cdecl adjust_value(float value)\nload function 0x{choose:x}\ndecompile\n{}",
+        binary.display(),
+        if word {
+            format!("retype v1 {storage}\ndecompile\n")
+        } else {
+            String::new()
+        }
+    );
     let script = script.replace("float ", &format!("{scalar} "));
     let mut status = IfaceTerm::into_status("", script.as_bytes());
     register_decomp_commands(&mut status);
@@ -105,10 +113,12 @@ API float choose_value(float first,float second){float value=adjust_value(first)
         .as_any_mut()
         .downcast_mut::<IfaceDecompData>()
         .unwrap()
-        .spec_roots = vec![common::repo_root()
-        .join("specs")
-        .to_string_lossy()
-        .into_owned()];
+        .spec_roots = vec![
+        common::repo_root()
+            .join("specs")
+            .to_string_lossy()
+            .into_owned(),
+    ];
     while !status.is_stream_finished() && !status.done {
         execute(&mut status);
         assert!(!status.is_in_error(), "{}", status.optr);
@@ -151,7 +161,10 @@ if(choose_value(a,b)!=expected)return 1;
 }return 0;}
 "#
         .replace("float", scalar)
-        .replace("CHOSEN", &chosen.replace("value", "expected").replace("second", "b")),
+        .replace(
+            "CHOSEN",
+            &chosen.replace("value", "expected").replace("second", "b"),
+        ),
     )
     .unwrap();
     for opt in ["-O0", "-O2"] {

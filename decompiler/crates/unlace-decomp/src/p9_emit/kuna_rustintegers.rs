@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::printc::PrintC;
 use crate::printlanguage::{OpToken, ReversePolish, TokenType};
@@ -37,24 +37,43 @@ fn shape(ty: &Datatype) -> Option<(i32, bool)> {
     Some((ty.get_size(), signed))
 }
 
-pub(crate) fn needs_integer_context(fd: &Funcdata, value: VarnodeId, op: OpId, depth: u8) -> Option<bool> {
-    if depth == 0 { return None; }
+pub(crate) fn needs_integer_context(
+    fd: &Funcdata,
+    value: VarnodeId,
+    op: OpId,
+    depth: u8,
+) -> Option<bool> {
+    if depth == 0 {
+        return None;
+    }
     let node = fd.vbank().get(value)?;
     if node.is_constant() {
         let ty = fd.vn_type_read_facing(value, op);
         return Some(shape(&ty).is_some() && !ty.is_char_print());
     }
-    if !node.is_implied() { return Some(false); }
-    let Some(def) = node.get_def() else { return Some(false); };
+    if !node.is_implied() {
+        return Some(false);
+    }
+    let Some(def) = node.get_def() else {
+        return Some(false);
+    };
     let operation = fd.obank().get(def)?;
     match operation.code() {
-        OpCode::CPUI_INT_LEFT | OpCode::CPUI_INT_RIGHT | OpCode::CPUI_INT_SRIGHT
-        | OpCode::CPUI_INT_NEGATE | OpCode::CPUI_INT_2COMP =>
-            needs_integer_context(fd, operation.get_in(0)?, def, depth - 1),
-        OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB | OpCode::CPUI_INT_MULT
-        | OpCode::CPUI_INT_AND | OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR
-        | OpCode::CPUI_INT_DIV | OpCode::CPUI_INT_SDIV
-        | OpCode::CPUI_INT_REM | OpCode::CPUI_INT_SREM => {
+        OpCode::CPUI_INT_LEFT
+        | OpCode::CPUI_INT_RIGHT
+        | OpCode::CPUI_INT_SRIGHT
+        | OpCode::CPUI_INT_NEGATE
+        | OpCode::CPUI_INT_2COMP => needs_integer_context(fd, operation.get_in(0)?, def, depth - 1),
+        OpCode::CPUI_INT_ADD
+        | OpCode::CPUI_INT_SUB
+        | OpCode::CPUI_INT_MULT
+        | OpCode::CPUI_INT_AND
+        | OpCode::CPUI_INT_OR
+        | OpCode::CPUI_INT_XOR
+        | OpCode::CPUI_INT_DIV
+        | OpCode::CPUI_INT_SDIV
+        | OpCode::CPUI_INT_REM
+        | OpCode::CPUI_INT_SREM => {
             let left = needs_integer_context(fd, operation.get_in(0)?, def, depth - 1)?;
             let right = needs_integer_context(fd, operation.get_in(1)?, def, depth - 1)?;
             Some(left && right)
@@ -79,7 +98,8 @@ impl PrintC {
         if node.is_implied() || node.is_constant() {
             return None;
         }
-        if let Some(ty) = node.get_high()
+        if let Some(ty) = node
+            .get_high()
             .and_then(|high| self.declared_local(high))
             .and_then(|local| local.ty.as_ref())
             .filter(|ty| ty.get_size() == node.get_size())
@@ -130,30 +150,57 @@ impl PrintC {
         target: &Rc<Datatype>,
         explicit_cast: bool,
     ) -> bool {
-        let Some(target_shape) = shape(target) else { return false; };
-        let Some(node) = fd.vbank().get(value) else { return false; };
-        if node.get_size() != target_shape.0 { return false; }
+        let Some(target_shape) = shape(target) else {
+            return false;
+        };
+        let Some(node) = fd.vbank().get(value) else {
+            return false;
+        };
+        if node.get_size() != target_shape.0 {
+            return false;
+        }
         let source = self.rust_integer_value_type(fd, arch, value, op);
-        let Some(source_shape) = shape(&source) else { return false; };
-        if source_shape.0 != target_shape.0 { return false; }
+        let Some(source_shape) = shape(&source) else {
+            return false;
+        };
+        if source_shape.0 != target_shape.0 {
+            return false;
+        }
         let context = if node.is_implied() {
-            let Some(context) = needs_integer_context(fd, value, op, 8) else { return false; };
+            let Some(context) = needs_integer_context(fd, value, op, 8) else {
+                return false;
+            };
             context
-        } else { false };
-        if source_shape == target_shape && !(explicit_cast && context) { return false; }
+        } else {
+            false
+        };
+        if source_shape == target_shape && !(explicit_cast && context) {
+            return false;
+        }
         self.push_cast_open(target, op);
         if context {
-            self.push_op(&crate::printc::tokens::FUNCTION_CALL, Some(crate::printc::op_key(op)));
+            self.push_op(
+                &crate::printc::tokens::FUNCTION_CALL,
+                Some(crate::printc::op_key(op)),
+            );
             self.push_atom(&crate::printlanguage::Atom::with_op(
-                format!("::core::convert::identity::<{}{}>", if source_shape.1 { "i" } else { "u" }, source_shape.0 * 8),
+                format!(
+                    "::core::convert::identity::<{}{}>",
+                    if source_shape.1 { "i" } else { "u" },
+                    source_shape.0 * 8
+                ),
                 crate::printlanguage::TagType::OpToken,
                 crate::printlanguage::SyntaxHighlight::no_color,
                 crate::printc::op_key(op),
             ));
         }
-        if node.is_constant() { self.push_cast_open(&source, op); }
+        if node.is_constant() {
+            self.push_cast_open(&source, op);
+        }
         self.push_vn_ir(fd, arch, value, op);
-        if node.is_constant() { self.push_cast_close(&source); }
+        if node.is_constant() {
+            self.push_cast_close(&source);
+        }
         self.push_cast_close(target);
         true
     }
@@ -165,21 +212,31 @@ impl PrintC {
         op: OpId,
     ) -> Option<IntegerPlan> {
         let operation = fd.obank().get(op)?;
-        if !matches!(operation.code(), OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB
-            | OpCode::CPUI_INT_MULT | OpCode::CPUI_INT_AND | OpCode::CPUI_INT_OR
-            | OpCode::CPUI_INT_XOR) || operation.num_input() != 2
+        if !matches!(
+            operation.code(),
+            OpCode::CPUI_INT_ADD
+                | OpCode::CPUI_INT_SUB
+                | OpCode::CPUI_INT_MULT
+                | OpCode::CPUI_INT_AND
+                | OpCode::CPUI_INT_OR
+                | OpCode::CPUI_INT_XOR
+        ) || operation.num_input() != 2
         {
             return None;
         }
         let out = operation.get_out()?;
         let target = self.rust_integer_output_type(fd, arch, out);
         let target_shape = shape(&target)?;
-        if fd.vbank().get(out)?.get_size() != target_shape.0 { return None; }
+        if fd.vbank().get(out)?.get_size() != target_shape.0 {
+            return None;
+        }
         let inputs = [operation.get_in(0)?, operation.get_in(1)?];
         let mut needed = false;
         for input in inputs {
             let source_shape = shape(&self.rust_integer_value_type(fd, arch, input, op))?;
-            if source_shape.0 != target_shape.0 || fd.vbank().get(input)?.get_size() != target_shape.0 {
+            if source_shape.0 != target_shape.0
+                || fd.vbank().get(input)?.get_size() != target_shape.0
+            {
                 return None;
             }
             needed |= source_shape != target_shape;
@@ -194,7 +251,9 @@ impl PrintC {
         token: &'static OpToken,
         op: OpId,
     ) -> bool {
-        let Some(plan) = self.rust_integer_binary_plan(fd, arch, op) else { return false; };
+        let Some(plan) = self.rust_integer_binary_plan(fd, arch, op) else {
+            return false;
+        };
         self.push_op(token, Some(crate::printc::op_key(op)));
         for input in plan.inputs {
             if !self.push_rust_integer_as(fd, arch, input, op, &plan.target) {

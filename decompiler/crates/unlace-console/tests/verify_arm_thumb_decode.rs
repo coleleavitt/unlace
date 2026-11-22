@@ -24,11 +24,16 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// The vendored LINKED ARM Thumb fixture (built in the kuna-dev container;
@@ -86,7 +91,9 @@ fn arm_thumb_compute_decodes_in_thumb_mode() {
     // ODD address (`entry|1`) — the Thumb convention — so `lookup_symbol`
     // returns the odd entry, and `load function compute` resolves there. The
     // decode still lands on the even bytes (LSB masked) with `TMode=1` painted.
-    let compute_addr = prog.lookup_symbol("compute").expect("`compute` not resolved by the loader");
+    let compute_addr = prog
+        .lookup_symbol("compute")
+        .expect("`compute` not resolved by the loader");
     assert_eq!(
         compute_addr.get_offset(),
         COMPUTE_ODD_LOADER_ENTRY,
@@ -106,7 +113,10 @@ fn arm_thumb_compute_decodes_in_thumb_mode() {
         out.contains("* 3 + 7"),
         "expected the Thumb-decoded `x*3 + 7` arithmetic in `compute`, got:\n{out}"
     );
-    assert!(out.contains("return"), "expected a `return` of the computed value, got:\n{out}");
+    assert!(
+        out.contains("return"),
+        "expected a `return` of the computed value, got:\n{out}"
+    );
 
     // --- Proof 2: the Thumb-FUNC re-home makes the CALL resolve by name. ------
     // Re-bootstrap (the drive above consumed `prog`), load `_start`, and confirm
@@ -133,9 +143,13 @@ fn arm_thumb_compute_decodes_in_thumb_mode() {
 /// program and return the captured console output. Mirrors the
 /// `verify_w11_elf_plt_names` drive harness.
 fn drive(prog: unlace_console::engine::ConsoleProgram, func: &str) -> String {
-    let cmds: Vec<String> = [format!("load function {func}"), "decompile".into(), "print C".into()]
-        .into_iter()
-        .collect();
+    let cmds: Vec<String> = [
+        format!("load function {func}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .into_iter()
+    .collect();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);

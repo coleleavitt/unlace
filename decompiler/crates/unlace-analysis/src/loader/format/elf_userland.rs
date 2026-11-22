@@ -274,8 +274,11 @@ impl<'a> Elf<'a> {
             if self.u32(ph) != Some(PT_NOTE) {
                 continue;
             }
-            let (offset, filesz, align) =
-                (self.word(ph, 8, 4), self.word(ph, 32, 16), self.word(ph, 48, 28));
+            let (offset, filesz, align) = (
+                self.word(ph, 8, 4),
+                self.word(ph, 32, 16),
+                self.word(ph, 48, 28),
+            );
             if let (Some(offset), Some(filesz)) = (offset, filesz) {
                 if let Some(owner) = self.note_owner(offset, filesz, align.unwrap_or(4)) {
                     return Some(owner);
@@ -287,8 +290,11 @@ impl<'a> Elf<'a> {
             if self.u32(sh.saturating_add(4)) != Some(SHT_NOTE) {
                 continue;
             }
-            let (offset, size, align) =
-                (self.word(sh, 24, 16), self.word(sh, 32, 20), self.word(sh, 48, 32));
+            let (offset, size, align) = (
+                self.word(sh, 24, 16),
+                self.word(sh, 32, 20),
+                self.word(sh, 48, 32),
+            );
             if let (Some(offset), Some(size)) = (offset, size) {
                 if let Some(owner) = self.note_owner(offset, size, align.unwrap_or(4)) {
                     return Some(owner);

@@ -60,7 +60,12 @@ use crate::funcdata::Funcdata;
 /// write Varnode about to be replaced and the partition cells that will carry
 /// its storage.  Returns whether the mark was propagated.
 pub fn keep_store_mark(fd: &mut Funcdata, vn: VarnodeId, pieces: &[VarnodeId]) -> bool {
-    if !fd.vbank().get(vn).map(|v| v.is_stack_store()).unwrap_or(false) {
+    if !fd
+        .vbank()
+        .get(vn)
+        .map(|v| v.is_stack_store())
+        .unwrap_or(false)
+    {
         return false;
     }
     for &piece in pieces {

@@ -9,7 +9,10 @@
 //! source. Destination-side merges can be sound, but this pass does not
 //! distinguish those cases. See `docs/features/indirectonly/counterexample.md`.
 
-#[expect(clippy::disallowed_types, reason = "Membership only; the Vec worklist determines traversal order.")]
+#[expect(
+    clippy::disallowed_types,
+    reason = "Membership only; the Vec worklist determines traversal order."
+)]
 use std::collections::HashSet;
 
 use unlace_base::error::KunaResult;
@@ -28,7 +31,10 @@ use crate::varnode::varnode_flags;
 /// INDIRECT op.
 pub fn check_indirect_use(data: &Funcdata, vn: VarnodeId) -> bool {
     let mut vlist: Vec<VarnodeId> = vec![vn];
-    #[expect(clippy::disallowed_types, reason = "Only insert is used; set iteration cannot affect output.")]
+    #[expect(
+        clippy::disallowed_types,
+        reason = "Only insert is used; set iteration cannot affect output."
+    )]
     let mut mark: HashSet<VarnodeId> = HashSet::new();
     mark.insert(vn);
 
@@ -37,7 +43,9 @@ pub fn check_indirect_use(data: &Funcdata, vn: VarnodeId) -> bool {
     while i < vlist.len() && result {
         let cur = vlist[i];
         i += 1;
-        let Some(v) = data.vbank().get(cur) else { continue };
+        let Some(v) = data.vbank().get(cur) else {
+            continue;
+        };
         for op in v.descend_iter() {
             let (opc, indirect_store, outvn) = match data.obank().get(op) {
                 Some(o) => (o.code(), o.is_indirect_store(), o.get_out()),
@@ -77,7 +85,11 @@ pub fn mark_indirect_only(data: &mut Funcdata) -> u32 {
     let mut hits: Vec<VarnodeId> = Vec::new();
     for vn in inputs {
         // Only check illegal inputs.
-        let illegal = data.vbank().get(vn).map(|v| v.is_illegal_input()).unwrap_or(false);
+        let illegal = data
+            .vbank()
+            .get(vn)
+            .map(|v| v.is_illegal_input())
+            .unwrap_or(false);
         if !illegal {
             continue;
         }
@@ -106,7 +118,10 @@ impl OptionIndirectOnly {
     pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
-        Ok((val, format!("Marking of indirect-only inputs turned {prop}")))
+        Ok((
+            val,
+            format!("Marking of indirect-only inputs turned {prop}"),
+        ))
     }
 }
 

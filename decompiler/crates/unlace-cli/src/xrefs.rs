@@ -42,11 +42,10 @@
 //! it, or an ELF symbol declares a function there), so an empty answer about
 //! code there is an answer, and one about bytes nobody decoded says so.
 
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_analysis::listing::kuna_unflaggedcode::{
-    declared_data, declared_function, named_at, placement, Placement, UnflaggedSection,
+    Placement, UnflaggedSection, declared_data, declared_function, named_at, placement,
 };
 use unlace_analysis::listing::xrefs::{Xref, XrefIndex, XrefKind};
 use unlace_analysis::loader::kuna_dataptrs::Coverage as PointerCoverage;
@@ -54,9 +53,9 @@ use unlace_analysis::loader::kuna_kernelcache::FilesetMap;
 use unlace_console::engine::{ConsoleProgram, EntryLookupError, EntrySelector};
 
 use crate::args::take_value as take;
-use crate::decompile_all::{load_program, mode_options_for_binary, Args, DriverDefaults};
+use crate::decompile_all::{Args, DriverDefaults, load_program, mode_options_for_binary};
 use crate::function_info::{default_function_name, function_json};
-use crate::jsonfmt::{dumps_indent2, Json};
+use crate::jsonfmt::{Json, dumps_indent2};
 
 /// Which way the query runs.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -117,11 +116,15 @@ struct EntryNames {
 impl EntryNames {
     fn at(&self, address: u64) -> Option<(u64, &str)> {
         let address = if self.arm { address & !1 } else { address };
-        self.entries.get(&address).map(|name| (address, name.as_str()))
+        self.entries
+            .get(&address)
+            .map(|name| (address, name.as_str()))
     }
 
     fn in_unflagged(&self, address: u64) -> bool {
-        self.unflagged.iter().any(|&(lo, hi)| address >= lo && address < hi)
+        self.unflagged
+            .iter()
+            .any(|&(lo, hi)| address >= lo && address < hi)
     }
 }
 
@@ -174,9 +177,14 @@ impl Resolution {
     fn settle(self, index: &XrefIndex) -> Result<TargetSpec, String> {
         match self {
             Resolution::Settled(spec) => Ok(spec),
-            Resolution::Contested { name, candidates, error } => {
-                let class =
-                    candidates.first().map_or_else(Default::default, |&c| index.alias_class(c));
+            Resolution::Contested {
+                name,
+                candidates,
+                error,
+            } => {
+                let class = candidates
+                    .first()
+                    .map_or_else(Default::default, |&c| index.alias_class(c));
                 if !candidates.iter().all(|c| class.contains(c)) {
                     return Err(error);
                 }
@@ -197,7 +205,11 @@ impl Resolution {
 fn canonical_member(index: &XrefIndex, candidates: &[u64]) -> u64 {
     let mut sorted = candidates.to_vec();
     sorted.sort_unstable();
-    sorted.iter().copied().find(|c| index.veneer_slot(*c).is_some()).unwrap_or(sorted[0])
+    sorted
+        .iter()
+        .copied()
+        .find(|c| index.veneer_slot(*c).is_some())
+        .unwrap_or(sorted[0])
 }
 
 /// `unlace xrefs` entry point.
@@ -263,7 +275,10 @@ fn query(args: &XrefArgs) -> Result<String, String> {
         .map_err(|_| format!("binary not found: {}", args.binary))?;
     let (bytes, fileset) = args.raw.image_and_fileset(
         &args.binary,
-        unlace_analysis::loader::macho_fat::slice_pref(args.slice.as_deref(), args.target.as_deref()),
+        unlace_analysis::loader::macho_fat::slice_pref(
+            args.slice.as_deref(),
+            args.target.as_deref(),
+        ),
         args.target.as_deref(),
     )?;
     if unlace_analysis::loadimage_dex::is_dex_image(&bytes) {
@@ -276,7 +291,10 @@ fn query(args: &XrefArgs) -> Result<String, String> {
     let entries = prog.function_entries_canonical();
     let unflagged = unlace_analysis::listing::kuna_unflaggedcode::unflagged_sections(&file);
     let names = EntryNames {
-        entries: entries.iter().map(|entry| (entry.addr.get_offset(), entry.name.clone())).collect(),
+        entries: entries
+            .iter()
+            .map(|entry| (entry.addr.get_offset(), entry.name.clone()))
+            .collect(),
         arm: prog.description().starts_with("ARM"),
         unflagged: unflagged.iter().map(|s| (s.start, s.end)).collect(),
     };
@@ -295,7 +313,9 @@ fn query(args: &XrefArgs) -> Result<String, String> {
     let resolution = target_address(&prog, &args.spec)?;
     let source = unflagged_source(&file, &unflagged, args.direction, &resolution);
     let declared: Vec<u64> = match &resolution {
-        Resolution::Settled(spec) if !source.is_empty() && declared_function(&file, spec.addr).is_some() => {
+        Resolution::Settled(spec)
+            if !source.is_empty() && declared_function(&file, spec.addr).is_some() =>
+        {
             vec![spec.addr]
         }
         _ => Vec::new(),
@@ -319,8 +339,16 @@ fn query(args: &XrefArgs) -> Result<String, String> {
     // decompiled and their retargets added.
     let objc_rows = objc_resolved_edges(&mut prog, &index, &entries, &target, args.direction);
     let unwalked = unwalked_code(&file, &index, &unflagged);
-    let mut coverage =
-        coverage_of(&prog, &file, &index, &names, &target, args.direction, unwalked, fileset.as_ref());
+    let mut coverage = coverage_of(
+        &prog,
+        &file,
+        &index,
+        &names,
+        &target,
+        args.direction,
+        unwalked,
+        fileset.as_ref(),
+    );
     coverage.notes.extend(proof_note);
     for note in &coverage.notes {
         eprintln!("note: {note}");
@@ -345,24 +373,44 @@ fn query(args: &XrefArgs) -> Result<String, String> {
         .collect();
     for r in &objc_rows {
         let wanted = args.instructions && (args.kinds.is_empty() || args.kinds.contains(&r.kind));
-        if wanted && !rows.iter().any(|x| (x.from, x.to, x.kind) == (r.from, r.to, r.kind)) {
+        if wanted
+            && !rows
+                .iter()
+                .any(|x| (x.from, x.to, x.kind) == (r.from, r.to, r.kind))
+        {
             rows.push(r);
         }
     }
     let data = unlace_analysis::loader::kuna_dataptrs::data_pointers(&file, &bytes);
     let operands = matches!(
         object::Object::architecture(&file),
-        object::Architecture::I386 | object::Architecture::X86_64 | object::Architecture::X86_64_X32
+        object::Architecture::I386
+            | object::Architecture::X86_64
+            | object::Architecture::X86_64_X32
     );
     let pointers = if args.pointers {
-        data_rows(&prog, &index, &names, &target, args.direction, &data.pointers, operands)
+        data_rows(
+            &prog,
+            &index,
+            &names,
+            &target,
+            args.direction,
+            &data.pointers,
+            operands,
+        )
     } else {
         Vec::new()
     };
-    let data = DataRefs { coverage: data.coverage, reason: data.reason, rows: pointers };
+    let data = DataRefs {
+        coverage: data.coverage,
+        reason: data.reason,
+        rows: pointers,
+    };
 
     Ok(if args.json {
-        let doc = result_json(args, &prog, &index, &names, &target, &rows, &data, &coverage);
+        let doc = result_json(
+            args, &prog, &index, &names, &target, &rows, &data, &coverage,
+        );
         format!("{}\n", dumps_indent2(&doc))
     } else {
         render_text(args, &prog, &index, &names, &target, &rows, &data)
@@ -391,14 +439,25 @@ fn add_scoped_calls(
         return None;
     }
     let selected: Vec<_> = match args.direction {
-        Direction::To if target.class.iter().any(|a| arch.ppc32_pic_imports.contains_key(a)) => {
+        Direction::To
+            if target
+                .class
+                .iter()
+                .any(|a| arch.ppc32_pic_imports.contains_key(a)) =>
+        {
             entries.iter().collect()
         }
         Direction::To => Vec::new(),
         Direction::From => {
-            let own: Vec<_> =
-                entries.iter().filter(|e| e.addr.get_offset() == target.addr).collect();
-            if own.is_empty() { entries.iter().collect() } else { own }
+            let own: Vec<_> = entries
+                .iter()
+                .filter(|e| e.addr.get_offset() == target.addr)
+                .collect();
+            if own.is_empty() {
+                entries.iter().collect()
+            } else {
+                own
+            }
         }
     };
     if selected.is_empty() {
@@ -467,7 +526,9 @@ fn unflagged_source(
     direction: Direction,
     resolution: &Resolution,
 ) -> Vec<(u64, u64)> {
-    let Resolution::Settled(spec) = resolution else { return Vec::new() };
+    let Resolution::Settled(spec) = resolution else {
+        return Vec::new();
+    };
     if direction != Direction::From {
         return Vec::new();
     }
@@ -476,7 +537,10 @@ fn unflagged_source(
         .filter(|s| spec.addr >= s.start && spec.addr < s.end)
         .map(|s| (s.start, s.end))
         .collect();
-    if ranges.is_empty() || declared_data(file, spec.addr).is_some() || named_at(file, spec.addr).is_none() {
+    if ranges.is_empty()
+        || declared_data(file, spec.addr).is_some()
+        || named_at(file, spec.addr).is_none()
+    {
         return Vec::new();
     }
     ranges
@@ -507,7 +571,12 @@ fn coverage_of(
             notes.extend(unwalked_note(prog, index, names, &unwalked));
         }
     }
-    Coverage { decoded, placement, unwalked, notes }
+    Coverage {
+        decoded,
+        placement,
+        unwalked,
+        notes,
+    }
 }
 
 /// The note for an address of a kernel collection the loaded entry does not
@@ -522,7 +591,9 @@ fn fileset_note(map: &FilesetMap, addr: u64, direction: Direction) -> Option<Str
     }
     let consequence = match direction {
         Direction::To => format!("only references made from {loaded} are listed"),
-        Direction::From => "nothing was decoded there, so no instruction references are listed".to_string(),
+        Direction::From => {
+            "nothing was decoded there, so no instruction references are listed".to_string()
+        }
     };
     Some(match owner {
         Some(other) => format!(
@@ -540,14 +611,21 @@ fn fileset_note(map: &FilesetMap, addr: u64, direction: Direction) -> Option<Str
 /// transfers control to, whose own references no answer of this walk contains,
 /// and which `--from` it decodes. An unnamed target is left out, as `--from`
 /// leaves it undecoded ([`unflagged_source`]).
-fn unwalked_code(file: &object::File, index: &XrefIndex, unflagged: &[UnflaggedSection]) -> Vec<(u64, String)> {
+fn unwalked_code(
+    file: &object::File,
+    index: &XrefIndex,
+    unflagged: &[UnflaggedSection],
+) -> Vec<(u64, String)> {
     if unflagged.is_empty() {
         return Vec::new();
     }
     index
         .undecoded_flow_targets()
         .filter_map(|at| {
-            unflagged.iter().find(|s| at >= s.start && at < s.end).map(|s| (at, s.name.clone()))
+            unflagged
+                .iter()
+                .find(|s| at >= s.start && at < s.end)
+                .map(|s| (at, s.name.clone()))
         })
         .filter(|&(at, _)| named_at(file, at).is_some())
         .collect()
@@ -566,7 +644,9 @@ fn source_note(
     let at = format!("0x{addr:x}");
     let evidence = || match (declared_function(file, addr), named_at(file, addr)) {
         (Some(name), _) => format!("the symbol table declares the function {name} there"),
-        (None, Some(name)) => format!("a decoded direct call or branch targets the symbol {name} there"),
+        (None, Some(name)) => {
+            format!("a decoded direct call or branch targets the symbol {name} there")
+        }
         (None, None) => "a decoded direct call or branch targets it".to_string(),
     };
     Some(match (placement, decoded) {
@@ -613,11 +693,23 @@ fn source_note(
             "{at} does not start an instruction the walk decodes (it does not decode, or lies \
              inside another instruction): no instruction references are listed"
         ),
-        (Placement::Data { section, executable: true }, _) => format!(
+        (
+            Placement::Data {
+                section,
+                executable: true,
+            },
+            _,
+        ) => format!(
             "{at} is in {section}, whose section type holds only data: it was not decoded as code, \
              so no instruction references are listed"
         ),
-        (Placement::Data { section, executable: false }, _) => format!(
+        (
+            Placement::Data {
+                section,
+                executable: false,
+            },
+            _,
+        ) => format!(
             "{at} is in {section}, which the image does not map executable: there is no code there, \
              so no instruction references are listed (data_refs lists the pointers the image's \
              relocations store in it)"
@@ -665,11 +757,19 @@ fn unwalked_note(
     })
 }
 
-fn coverage_json(prog: &ConsoleProgram, index: &XrefIndex, names: &EntryNames, c: &Coverage) -> Json {
+fn coverage_json(
+    prog: &ConsoleProgram,
+    index: &XrefIndex,
+    names: &EntryNames,
+    c: &Coverage,
+) -> Json {
     let (section, code, executable) = match &c.placement {
         Placement::Code { section } => (section.clone(), Some(true), Some(true)),
         Placement::Unflagged(s) => (Some(s.name.clone()), Some(false), Some(true)),
-        Placement::Data { section, executable } => (Some(section.clone()), Some(false), Some(*executable)),
+        Placement::Data {
+            section,
+            executable,
+        } => (Some(section.clone()), Some(false), Some(*executable)),
         Placement::NoSection => (None, Some(false), None),
         Placement::Unknown => (None, None, None),
     };
@@ -685,7 +785,8 @@ fn coverage_json(prog: &ConsoleProgram, index: &XrefIndex, names: &EntryNames, c
                 c.unwalked
                     .iter()
                     .map(|(at, section)| {
-                        let name = name_at(prog, index, names, *at).unwrap_or_else(|| format!("0x{at:x}"));
+                        let name =
+                            name_at(prog, index, names, *at).unwrap_or_else(|| format!("0x{at:x}"));
                         Json::Object(vec![
                             ("name".into(), Json::Str(name)),
                             ("address".into(), Json::Number(at.to_string())),
@@ -696,7 +797,10 @@ fn coverage_json(prog: &ConsoleProgram, index: &XrefIndex, names: &EntryNames, c
                     .collect(),
             ),
         ),
-        ("notes".into(), Json::Array(c.notes.iter().cloned().map(Json::Str).collect())),
+        (
+            "notes".into(),
+            Json::Array(c.notes.iter().cloned().map(Json::Str).collect()),
+        ),
     ])
 }
 
@@ -714,7 +818,9 @@ impl DataRefs {
     /// The metadata each row came from: the source of a complete or partial
     /// list.
     fn source(&self) -> &'static str {
-        self.coverage.source().map_or(self.coverage.as_str(), |source| source.as_str())
+        self.coverage
+            .source()
+            .map_or(self.coverage.as_str(), |source| source.as_str())
     }
 }
 
@@ -749,12 +855,19 @@ fn data_rows(
 ) -> Vec<DataRef> {
     let in_code = |vma: u64| {
         prog.sections().iter().any(|&(lo, size, flags)| {
-            flags & unlace_sleigh::loadimage::section_flags::CODE != 0 && vma >= lo && vma - lo < size
+            flags & unlace_sleigh::loadimage::section_flags::CODE != 0
+                && vma >= lo
+                && vma - lo < size
         })
     };
     let selected: Vec<_> = match direction {
-        Direction::To => pointers.iter().filter(|p| target.class.contains(&p.target)).collect(),
-        Direction::From if in_code(target.addr) || index.is_function_entry(target.addr) => Vec::new(),
+        Direction::To => pointers
+            .iter()
+            .filter(|p| target.class.contains(&p.target))
+            .collect(),
+        Direction::From if in_code(target.addr) || index.is_function_entry(target.addr) => {
+            Vec::new()
+        }
         Direction::From => {
             let extent = prog
                 .global_data_symbols()
@@ -768,14 +881,30 @@ fn data_rows(
                 .collect()
         }
     };
-    let code_space = prog.arch().manage().get_default_code_space().cloned().filter(|_| operands);
+    let code_space = prog
+        .arch()
+        .manage()
+        .get_default_code_space()
+        .cloned()
+        .filter(|_| operands);
     let operand = |p: &unlace_analysis::loader::kuna_dataptrs::DataPointer| {
-        let Some(space) = code_space.as_ref() else { return false };
+        let Some(space) = code_space.as_ref() else {
+            return false;
+        };
         let end = p.slot.saturating_add(u64::from(p.width));
         (p.slot.saturating_sub(15)..p.slot).any(|at| {
-            index.refs_from_instruction(at).iter().any(|r| r.to == p.target)
-                && unlace_analysis::listing::decode::decode_one(prog.arch().translate(), at, space, false, false)
-                    .is_ok_and(|insn| at.saturating_add(u64::from(insn.len)) >= end)
+            index
+                .refs_from_instruction(at)
+                .iter()
+                .any(|r| r.to == p.target)
+                && unlace_analysis::listing::decode::decode_one(
+                    prog.arch().translate(),
+                    at,
+                    space,
+                    false,
+                    false,
+                )
+                .is_ok_and(|insn| at.saturating_add(u64::from(insn.len)) >= end)
         })
     };
     let selected: Vec<_> = selected.into_iter().filter(|p| !operand(p)).collect();
@@ -788,7 +917,11 @@ fn data_rows(
             .filter(|(_, vma, size)| slot >= *vma && slot - vma < (*size).max(1) as u64)
             .max_by_key(|(_, vma, _)| *vma)
             .map(|(name, vma, _)| {
-                if *vma == slot { name.clone() } else { format!("{name}+0x{:x}", slot - vma) }
+                if *vma == slot {
+                    name.clone()
+                } else {
+                    format!("{name}+0x{:x}", slot - vma)
+                }
             })
             .or_else(|| name_at(prog, index, names, slot))
     };
@@ -822,9 +955,13 @@ fn data_rows(
 fn target_address(prog: &ConsoleProgram, spec: &str) -> Result<Resolution, String> {
     let spec = spec.trim();
     if let Some(body) = spec.strip_prefix("0x").or_else(|| spec.strip_prefix("0X")) {
-        let addr = u64::from_str_radix(body, 16)
-            .map_err(|_| format!("invalid address {spec:?}"))?;
-        return Ok(Resolution::Settled(TargetSpec { addr, name: None, fallback: None }));
+        let addr =
+            u64::from_str_radix(body, 16).map_err(|_| format!("invalid address {spec:?}"))?;
+        return Ok(Resolution::Settled(TargetSpec {
+            addr,
+            name: None,
+            fallback: None,
+        }));
     }
     match prog.resolve_entry(&EntrySelector::Name(spec.to_string())) {
         Ok(entry) => {
@@ -832,7 +969,7 @@ fn target_address(prog: &ConsoleProgram, spec: &str) -> Result<Resolution, Strin
                 addr: entry.addr.get_offset(),
                 name: Some(entry.name),
                 fallback: None,
-            }))
+            }));
         }
         Err(error) => {
             if let EntryLookupError::Ambiguous { candidates, .. } = &error {
@@ -856,19 +993,42 @@ fn target_address(prog: &ConsoleProgram, spec: &str) -> Result<Resolution, Strin
         .into_iter()
         .find(|(name, _, _)| name == spec)
     {
-        return Ok(Resolution::Settled(TargetSpec { addr, name: Some(name), fallback: None }));
+        return Ok(Resolution::Settled(TargetSpec {
+            addr,
+            name: Some(name),
+            fallback: None,
+        }));
     }
     if let Some(addr) = prog.lookup_data_alias(spec) {
-        return Ok(Resolution::Settled(TargetSpec { addr, name: Some(spec.to_string()), fallback: None }));
+        return Ok(Resolution::Settled(TargetSpec {
+            addr,
+            name: Some(spec.to_string()),
+            fallback: None,
+        }));
     }
     if prog.arch().analysis_ppc32picimports.scoped()
-        && let Some(slot) = prog.arch().ppc32_pic_imports.values().find(|s| s.name == spec) {
-            return Ok(Resolution::Settled(TargetSpec { addr: slot.address, name: Some(spec.to_string()), fallback: None }));
-        }
-    if let Ok(addr) = u64::from_str_radix(spec, 16) {
-        return Ok(Resolution::Settled(TargetSpec { addr, name: None, fallback: None }));
+        && let Some(slot) = prog
+            .arch()
+            .ppc32_pic_imports
+            .values()
+            .find(|s| s.name == spec)
+    {
+        return Ok(Resolution::Settled(TargetSpec {
+            addr: slot.address,
+            name: Some(spec.to_string()),
+            fallback: None,
+        }));
     }
-    Err(format!("no symbol named {spec:?} (and it is not an address)"))
+    if let Ok(addr) = u64::from_str_radix(spec, 16) {
+        return Ok(Resolution::Settled(TargetSpec {
+            addr,
+            name: None,
+            fallback: None,
+        }));
+    }
+    Err(format!(
+        "no symbol named {spec:?} (and it is not an address)"
+    ))
 }
 
 /// Attach the display name to an address the spec already resolved: whatever the
@@ -886,23 +1046,44 @@ fn resolve_target(
     names: &EntryNames,
     spec: TargetSpec,
 ) -> Target {
-    let TargetSpec { addr, name, fallback } = spec;
+    let TargetSpec {
+        addr,
+        name,
+        fallback,
+    } = spec;
     let by_name = name.is_some() || fallback.is_some();
-    let mut class =
-        if by_name { index.export_alias_class(file, addr) } else { index.alias_class(addr) };
-    let name = name.or_else(|| name_at(prog, index, names, addr)).or(fallback);
+    let mut class = if by_name {
+        index.export_alias_class(file, addr)
+    } else {
+        index.alias_class(addr)
+    };
+    let name = name
+        .or_else(|| name_at(prog, index, names, addr))
+        .or(fallback);
     if by_name && prog.arch().analysis_ppc32picimports.scoped() {
-        class.extend(prog.arch().ppc32_pic_imports.values()
-            .filter(|s| Some(&s.name) == name.as_ref()).map(|s| s.address));
+        class.extend(
+            prog.arch()
+                .ppc32_pic_imports
+                .values()
+                .filter(|s| Some(&s.name) == name.as_ref())
+                .map(|s| s.address),
+        );
     }
-    Target { addr, name, class, by_name }
+    Target {
+        addr,
+        name,
+        class,
+        by_name,
+    }
 }
 
 /// Say on stderr when the name the target was selected by also names a function
 /// outside the answered class, so a count that leaves that function's callers
 /// out is not mistaken for the whole story.
 fn warn_other_entries(index: &XrefIndex, names: &EntryNames, target: &Target) {
-    let Some(name) = target.name.as_deref().filter(|_| target.by_name) else { return };
+    let Some(name) = target.name.as_deref().filter(|_| target.by_name) else {
+        return;
+    };
     let others: Vec<String> = names
         .entries
         .iter()
@@ -924,7 +1105,12 @@ fn warn_other_entries(index: &XrefIndex, names: &EntryNames, target: &Target) {
 /// symbol comes before the placeholder: the image's own name for code linked
 /// there (`_middle` in `__TEXT,__const`) is the better one. `None` when nothing
 /// names it.
-fn name_at(prog: &ConsoleProgram, index: &XrefIndex, names: &EntryNames, vma: u64) -> Option<String> {
+fn name_at(
+    prog: &ConsoleProgram,
+    index: &XrefIndex,
+    names: &EntryNames,
+    vma: u64,
+) -> Option<String> {
     let data_symbol = || {
         prog.global_data_symbols()
             .into_iter()
@@ -932,17 +1118,30 @@ fn name_at(prog: &ConsoleProgram, index: &XrefIndex, names: &EntryNames, vma: u6
             .map(|(name, _, _)| name)
     };
     let unflagged = names.in_unflagged(vma);
-    names.at(vma)
+    names
+        .at(vma)
         .map(|(_, name)| name.to_string())
         .or_else(|| prog.function_named_at(vma))
-        .or_else(|| prog.arch().analysis_ppc32picimports.scoped().then(||
-            prog.arch().ppc32_pic_imports.get(&vma).map(|s| s.name.clone())).flatten())
+        .or_else(|| {
+            prog.arch()
+                .analysis_ppc32picimports
+                .scoped()
+                .then(|| {
+                    prog.arch()
+                        .ppc32_pic_imports
+                        .get(&vma)
+                        .map(|s| s.name.clone())
+                })
+                .flatten()
+        })
         .or_else(|| unflagged.then(data_symbol).flatten())
         // The walk discovers functions the engine's inventory does not carry (it
         // follows the call graph out of its seeds), and a row that names one must
         // still name it rather than answer `null`.
         .or_else(|| {
-            index.is_function_entry(vma).then(|| default_function_name(prog, vma))
+            index
+                .is_function_entry(vma)
+                .then(|| default_function_name(prog, vma))
         })
         .or_else(|| (!unflagged).then(data_symbol).flatten())
 }
@@ -950,29 +1149,52 @@ fn name_at(prog: &ConsoleProgram, index: &XrefIndex, names: &EntryNames, vma: u6
 /// The function `vma` lies in, as `(entry, name)`: the walk's own attribution
 /// first (it knows which entry's descent reached the instruction), then the
 /// engine's inventory for an address the walk never decoded.
-fn owning_function(prog: &ConsoleProgram, index: &XrefIndex, names: &EntryNames, vma: u64) -> Option<(u64, String)> {
-    let entry = index.function_containing(vma).or_else(|| names.at(vma).map(|(address, _)| address))?;
+fn owning_function(
+    prog: &ConsoleProgram,
+    index: &XrefIndex,
+    names: &EntryNames,
+    vma: u64,
+) -> Option<(u64, String)> {
+    let entry = index
+        .function_containing(vma)
+        .or_else(|| names.at(vma).map(|(address, _)| address))?;
     Some((entry, function_name(prog, index, names, entry)))
 }
 
 /// A scoped edge belongs to the entry that proved it, not the nearest symbol.
 /// An incoming query has no unique owner when multiple entries prove the edge.
 fn source_function(
-    prog: &ConsoleProgram, index: &XrefIndex, names: &EntryNames,
-    edge: &Xref, context: Option<u64>,
+    prog: &ConsoleProgram,
+    index: &XrefIndex,
+    names: &EntryNames,
+    edge: &Xref,
+    context: Option<u64>,
 ) -> Option<(u64, String)> {
     if edge.kind == XrefKind::Call
-        && let Some(callers) = index.scoped_callers(edge.from, edge.to) {
-            let entry = context.filter(|entry| callers.contains(entry))
-                .or_else(|| if callers.len() == 1 { callers.first().copied() } else { None })?;
-            return Some((entry, function_name(prog, index, names, entry)));
-        }
+        && let Some(callers) = index.scoped_callers(edge.from, edge.to)
+    {
+        let entry = context
+            .filter(|entry| callers.contains(entry))
+            .or_else(|| {
+                if callers.len() == 1 {
+                    callers.first().copied()
+                } else {
+                    None
+                }
+            })?;
+        return Some((entry, function_name(prog, index, names, entry)));
+    }
     owning_function(prog, index, names, edge.from)
 }
 
 /// The display name for a function entry, falling back to the engine's own
 /// placeholder (`sub_<addr>`) so a row is never nameless.
-fn function_name(prog: &ConsoleProgram, index: &XrefIndex, names: &EntryNames, entry: u64) -> String {
+fn function_name(
+    prog: &ConsoleProgram,
+    index: &XrefIndex,
+    names: &EntryNames,
+    entry: u64,
+) -> String {
     name_at(prog, index, names, entry).unwrap_or_else(|| default_function_name(prog, entry))
 }
 
@@ -1015,7 +1237,10 @@ fn result_json(
                     ("address_hex".into(), Json::Str(format!("0x{other:x}"))),
                     ("kind".into(), Json::Str(r.kind.as_str().to_string())),
                     ("from_address".into(), Json::Number(r.from.to_string())),
-                    ("from_address_hex".into(), Json::Str(format!("0x{:x}", r.from))),
+                    (
+                        "from_address_hex".into(),
+                        Json::Str(format!("0x{:x}", r.from)),
+                    ),
                     ("to_address".into(), Json::Number(r.to.to_string())),
                     ("to_address_hex".into(), Json::Str(format!("0x{:x}", r.to))),
                     (
@@ -1041,7 +1266,10 @@ fn result_json(
                     target.name.clone().map(Json::Str).unwrap_or(Json::Null),
                 ),
                 ("address".into(), Json::Number(target.addr.to_string())),
-                ("address_hex".into(), Json::Str(format!("0x{:x}", target.addr))),
+                (
+                    "address_hex".into(),
+                    Json::Str(format!("0x{:x}", target.addr)),
+                ),
                 (
                     "aliases".into(),
                     Json::Array(
@@ -1049,7 +1277,8 @@ fn result_json(
                             .into_iter()
                             .map(|a| {
                                 function_json(
-                                    &name_at(prog, index, names, a).unwrap_or_else(|| format!("0x{a:x}")),
+                                    &name_at(prog, index, names, a)
+                                        .unwrap_or_else(|| format!("0x{a:x}")),
                                     a,
                                 )
                             })
@@ -1058,13 +1287,28 @@ fn result_json(
                 ),
             ]),
         ),
-        ("direction".into(), Json::Str(args.direction.as_str().to_string())),
+        (
+            "direction".into(),
+            Json::Str(args.direction.as_str().to_string()),
+        ),
         ("count".into(), Json::Number(rows.len().to_string())),
-        ("coverage".into(), coverage_json(prog, index, names, coverage)),
+        (
+            "coverage".into(),
+            coverage_json(prog, index, names, coverage),
+        ),
         ("xrefs".into(), xrefs),
-        ("data_refs_coverage".into(), Json::Str(data.coverage.as_str().to_string())),
-        ("data_refs_reason".into(), data.reason.clone().map_or(Json::Null, Json::Str)),
-        ("data_refs_count".into(), Json::Number(data.rows.len().to_string())),
+        (
+            "data_refs_coverage".into(),
+            Json::Str(data.coverage.as_str().to_string()),
+        ),
+        (
+            "data_refs_reason".into(),
+            data.reason.clone().map_or(Json::Null, Json::Str),
+        ),
+        (
+            "data_refs_count".into(),
+            Json::Number(data.rows.len().to_string()),
+        ),
         ("data_refs".into(), data_refs_json(data)),
     ])
 }
@@ -1081,10 +1325,16 @@ fn data_refs_json(data: &DataRefs) -> Json {
                 Json::Object(vec![
                     ("kind".into(), Json::Str("pointer".into())),
                     ("from_address".into(), Json::Number(r.slot.to_string())),
-                    ("from_address_hex".into(), Json::Str(format!("0x{:x}", r.slot))),
+                    (
+                        "from_address_hex".into(),
+                        Json::Str(format!("0x{:x}", r.slot)),
+                    ),
                     ("from_name".into(), name(&r.slot_name)),
                     ("to_address".into(), Json::Number(r.target.to_string())),
-                    ("to_address_hex".into(), Json::Str(format!("0x{:x}", r.target))),
+                    (
+                        "to_address_hex".into(),
+                        Json::Str(format!("0x{:x}", r.target)),
+                    ),
                     ("to_name".into(), name(&r.target_name)),
                     ("width".into(), Json::Number(r.width.to_string())),
                     ("source".into(), Json::Str(data.source().to_string())),
@@ -1113,7 +1363,11 @@ fn render_text(
         Some(name) => format!("{name} @ 0x{:x}", target.addr),
         None => format!("0x{:x}", target.addr),
     };
-    let plural = if rows.len() == 1 { "reference" } else { "references" };
+    let plural = if rows.len() == 1 {
+        "reference"
+    } else {
+        "references"
+    };
     let _ = writeln!(
         out,
         "# {} {plural} {} {label}",
@@ -1125,7 +1379,10 @@ fn render_text(
     let import = index.alias_class(target.addr);
     for a in aliases(target) {
         let (what, how) = if import.contains(&a) {
-            ("import", "a forwarding veneer and the pointer slot it jumps through")
+            (
+                "import",
+                "a forwarding veneer and the pointer slot it jumps through",
+            )
         } else if index.veneer_slot(a).is_some() {
             ("export", "its own PLT stub")
         } else {
@@ -1162,7 +1419,11 @@ fn render_text(
             }
         }
     }
-    let plural = if data.rows.len() == 1 { "pointer" } else { "pointers" };
+    let plural = if data.rows.len() == 1 {
+        "pointer"
+    } else {
+        "pointers"
+    };
     let direction = args.direction.as_str();
     let reason = data.reason.as_deref().unwrap_or("-");
     match data.coverage {
@@ -1175,7 +1436,10 @@ fn render_text(
             );
         }
         PointerCoverage::Unsupported if args.pointers => {
-            let _ = writeln!(out, "# data-held pointers {direction} {label} not listed (unsupported: {reason})");
+            let _ = writeln!(
+                out,
+                "# data-held pointers {direction} {label} not listed (unsupported: {reason})"
+            );
         }
         _ if !data.rows.is_empty() => {
             let _ = writeln!(
@@ -1211,7 +1475,12 @@ fn render_text(
 /// pointer slot a forwarding veneer jumps through, the veneers that jump through
 /// a slot, or an export's own PLT stub and its slot. Empty for almost everything.
 fn aliases(target: &Target) -> Vec<u64> {
-    target.class.iter().copied().filter(|&a| a != target.addr).collect()
+    target
+        .class
+        .iter()
+        .copied()
+        .filter(|&a| a != target.addr)
+        .collect()
 }
 
 /// The function a row's source belongs to, shared by the JSON and text
@@ -1256,31 +1525,52 @@ fn dex_query(args: &XrefArgs, bytes: Vec<u8>) -> Result<String, String> {
     }
     let spec = args.spec.trim();
     let target = match spec.strip_prefix("0x").or_else(|| spec.strip_prefix("0X")) {
-        Some(hex) => u64::from_str_radix(hex, 16).map_err(|_| format!("invalid address {spec:?}"))?,
+        Some(hex) => {
+            u64::from_str_radix(hex, 16).map_err(|_| format!("invalid address {spec:?}"))?
+        }
         None => {
-            let found: Vec<u64> = names.iter().filter(|(_, n)| n.as_str() == spec).map(|(&a, _)| a).collect();
+            let found: Vec<u64> = names
+                .iter()
+                .filter(|(_, n)| n.as_str() == spec)
+                .map(|(&a, _)| a)
+                .collect();
             match found.as_slice() {
                 [one] => *one,
                 [] => return Err(format!("no method named {spec:?}")),
-                _ => return Err(format!("{spec:?} names {} methods; give an address", found.len())),
+                _ => {
+                    return Err(format!(
+                        "{spec:?} names {} methods; give an address",
+                        found.len()
+                    ));
+                }
             }
         }
     };
-    let entry_of = |site: u64| names.range(..=site).next_back().map(|(&a, n)| (a, n.clone()));
+    let entry_of = |site: u64| {
+        names
+            .range(..=site)
+            .next_back()
+            .map(|(&a, n)| (a, n.clone()))
+    };
     let calls = links::calls(&models);
     let rows: Vec<&links::DexCall> = calls
         .iter()
         .filter(|_| args.kinds.is_empty() || args.kinds.contains(&XrefKind::Call))
         .filter(|c| match args.direction {
             Direction::To => c.callee == Some(target),
-            Direction::From => c.caller == target || (!names.contains_key(&target) && c.site == target),
+            Direction::From => {
+                c.caller == target || (!names.contains_key(&target) && c.site == target)
+            }
         })
         .collect();
     let target_name = names.get(&target).cloned();
     if args.json {
         let function = |addr: Option<u64>, name: &str| match addr {
             Some(a) => function_json(name, a),
-            None => Json::Object(vec![("name".into(), Json::Str(name.to_string())), ("address".into(), Json::Null)]),
+            None => Json::Object(vec![
+                ("name".into(), Json::Str(name.to_string())),
+                ("address".into(), Json::Null),
+            ]),
         };
         let xrefs = rows
             .iter()
@@ -1311,13 +1601,19 @@ fn dex_query(args: &XrefArgs, bytes: Vec<u8>) -> Result<String, String> {
             (
                 "target".into(),
                 Json::Object(vec![
-                    ("name".into(), target_name.clone().map_or(Json::Null, Json::Str)),
+                    (
+                        "name".into(),
+                        target_name.clone().map_or(Json::Null, Json::Str),
+                    ),
                     ("address".into(), Json::Number(target.to_string())),
                     ("address_hex".into(), Json::Str(format!("0x{target:x}"))),
                     ("aliases".into(), Json::Array(Vec::new())),
                 ]),
             ),
-            ("direction".into(), Json::Str(args.direction.as_str().to_string())),
+            (
+                "direction".into(),
+                Json::Str(args.direction.as_str().to_string()),
+            ),
             ("count".into(), Json::Number(rows.len().to_string())),
             ("xrefs".into(), Json::Array(xrefs)),
         ]);
@@ -1329,21 +1625,38 @@ fn dex_query(args: &XrefArgs, bytes: Vec<u8>) -> Result<String, String> {
         Some(name) => format!("{name} @ 0x{target:x}"),
         None => format!("0x{target:x}"),
     };
-    let plural = if rows.len() == 1 { "reference" } else { "references" };
-    let _ = writeln!(out, "# {} {plural} {} {label}", rows.len(), args.direction.as_str());
+    let plural = if rows.len() == 1 {
+        "reference"
+    } else {
+        "references"
+    };
+    let _ = writeln!(
+        out,
+        "# {} {plural} {} {label}",
+        rows.len(),
+        args.direction.as_str()
+    );
     for c in rows {
         match args.direction {
             Direction::To => {
                 let site = match entry_of(c.site) {
-                    Some((entry, name)) if entry < c.site => format!("{name}+0x{:x}", c.site - entry),
+                    Some((entry, name)) if entry < c.site => {
+                        format!("{name}+0x{:x}", c.site - entry)
+                    }
                     Some((_, name)) => name,
                     None => format!("0x{:x}", c.site),
                 };
                 let _ = writeln!(out, "0x{:x}\tcall\t{site}\t{}", c.site, c.instruction);
             }
             Direction::From => {
-                let to = c.callee.map_or_else(|| "-".to_string(), |a| format!("0x{a:x}"));
-                let _ = writeln!(out, "{to}\tcall\t{}\t@0x{:x}\t{}", c.callee_name, c.site, c.instruction);
+                let to = c
+                    .callee
+                    .map_or_else(|| "-".to_string(), |a| format!("0x{a:x}"));
+                let _ = writeln!(
+                    out,
+                    "{to}\tcall\t{}\t@0x{:x}\t{}",
+                    c.callee_name, c.site, c.instruction
+                );
             }
         }
     }
@@ -1376,7 +1689,11 @@ fn parse_args(argv: &[String]) -> Result<XrefArgs, String> {
         match a {
             "--json" => json = true,
             "--to" | "--from" => {
-                let dir = if a == "--to" { Direction::To } else { Direction::From };
+                let dir = if a == "--to" {
+                    Direction::To
+                } else {
+                    Direction::From
+                };
                 let v = take(argv, &mut i, a)?;
                 if spec.is_some() {
                     return Err("--to and --from are mutually exclusive".into());
@@ -1449,7 +1766,9 @@ fn parse_kind(k: &str) -> Result<XrefKind, String> {
         "read" => Ok(XrefKind::Read),
         "write" => Ok(XrefKind::Write),
         "vcall" => Ok(XrefKind::VirtualCall),
-        other => Err(format!("unknown --kind {other:?} (call, jump, data, read, write, vcall, pointer)")),
+        other => Err(format!(
+            "unknown --kind {other:?} (call, jump, data, read, write, vcall, pointer)"
+        )),
     }
 }
 
@@ -1517,9 +1836,15 @@ fn objc_resolved_edges(
             // The stub's callers first (each sends exactly this selector), then
             // every `objc_msgSend` caller, which may send it.
             let mut sources: Vec<u64> = Vec::new();
-            for name in [format!("objc_msgSend${selector}"), "objc_msgSend".to_string()] {
+            for name in [
+                format!("objc_msgSend${selector}"),
+                "objc_msgSend".to_string(),
+            ] {
                 let mut found = BTreeSet::new();
-                for entry in entries.iter().filter(|e| e.name == name || e.aliases.contains(&name)) {
+                for entry in entries
+                    .iter()
+                    .filter(|e| e.name == name || e.aliases.contains(&name))
+                {
                     for x in index.refs_to_class(&BTreeSet::from([entry.addr.get_offset()])) {
                         if let Some(f) = index.function_containing(x.from) {
                             found.insert(f);
@@ -1532,9 +1857,15 @@ fn objc_resolved_edges(
             sources
         }
     };
-    let opts = unlace_console::project::DecompileOptions { no_vars: true, single_target: true, ..Default::default() };
+    let opts = unlace_console::project::DecompileOptions {
+        no_vars: true,
+        single_target: true,
+        ..Default::default()
+    };
     for &entry in candidates.iter().take(512) {
-        let Some(fe) = entries.iter().find(|e| e.addr.get_offset() == entry) else { continue };
+        let Some(fe) = entries.iter().find(|e| e.addr.get_offset() == entry) else {
+            continue;
+        };
         let _ = unlace_console::project::decompile_entry(prog, fe.clone(), &opts);
     }
     let retargets = &prog.arch().kuna_objc_retargets;
@@ -1544,7 +1875,12 @@ fn objc_resolved_edges(
             Direction::From => index.function_containing(**site) == Some(target.addr),
             Direction::To => **imp == target.addr,
         })
-        .map(|(&site, &imp)| Xref { from: site, to: imp, kind: XrefKind::Call, instruction: "objc_msgSend (resolved)".into() })
+        .map(|(&site, &imp)| Xref {
+            from: site,
+            to: imp,
+            kind: XrefKind::Call,
+            instruction: "objc_msgSend (resolved)".into(),
+        })
         .collect();
     out.sort_by_key(|r| (r.from, r.to));
     out
@@ -1552,6 +1888,10 @@ fn objc_resolved_edges(
 
 /// `-[Foo bar:]` / `+[Foo(Cat) bar:]` → `bar:`.
 fn objc_selector_of_label(label: &str) -> Option<&str> {
-    let body = label.strip_prefix('-').or_else(|| label.strip_prefix('+'))?.strip_prefix('[')?.strip_suffix(']')?;
+    let body = label
+        .strip_prefix('-')
+        .or_else(|| label.strip_prefix('+'))?
+        .strip_prefix('[')?
+        .strip_suffix(']')?;
     body.split_once(' ').map(|(_, sel)| sel)
 }

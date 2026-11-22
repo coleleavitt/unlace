@@ -20,9 +20,9 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_file, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_file};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_console::interface::IfaceStatus;
@@ -30,7 +30,10 @@ use unlace_console::interface::IfaceStatus;
 use unlace_decomp::database::symbol_category;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Bootstrap a datatest into a [`ConsoleProgram`].
@@ -38,8 +41,12 @@ fn boot(stem: &str) -> ConsoleProgram {
     let root = repo_root();
     let xml = root.join(format!("tests/datatests/{stem}.xml"));
     let specs = root.join("specs");
-    bootstrap_from_file(xml.to_str().unwrap(), "", &[specs.to_str().unwrap().to_string()])
-        .expect("bootstrap fixture with built processor specs")
+    bootstrap_from_file(
+        xml.to_str().unwrap(),
+        "",
+        &[specs.to_str().unwrap().to_string()],
+    )
+    .expect("bootstrap fixture with built processor specs")
 }
 
 /// Drive `commands` through a console wired like the datatest runner, with
@@ -51,7 +58,9 @@ fn drive(program: ConsoleProgram, commands: &[&str]) -> (IfaceStatus, String) {
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
     {
-        let data = status.get_data_mut(DECOMPILE_MODULE).expect("decompile module data");
+        let data = status
+            .get_data_mut(DECOMPILE_MODULE)
+            .expect("decompile module data");
         let dcp = data
             .as_any_mut()
             .downcast_mut::<IfaceDecompData>()
@@ -116,7 +125,9 @@ fn map_unionfacet_creates_real_union_facet_symbol() {
     let dcp = data.as_any_mut().downcast_mut::<IfaceDecompData>().unwrap();
     let fd = dcp.fd.as_ref().expect("partial1 must be loaded by `lo fu`");
     let sl = fd.get_scope_local().expect("function has a local scope");
-    let ids = sl.database().find_by_name(sl.scope_id(), "unionfacet2_1006ee");
+    let ids = sl
+        .database()
+        .find_by_name(sl.scope_id(), "unionfacet2_1006ee");
     assert_eq!(
         ids.len(),
         1,
@@ -137,8 +148,7 @@ fn map_unionfacet_unknown_union_name_errors() {
     // `findByName("nosuchunion")` returns null -> the C++ throws
     // "Bad union data-type: nosuchunion".  The command must report an error and
     // create nothing.
-    let out =
-        run_partialunion(&["map unionfacet nosuchunion 0 r0x1006ee 1"]);
+    let out = run_partialunion(&["map unionfacet nosuchunion 0 r0x1006ee 1"]);
     assert!(
         out.contains("Bad union data-type"),
         "unknown union name must yield the 'Bad union data-type' error; got: {out:?}",
@@ -195,7 +205,10 @@ fn map_commands_require_a_loaded_function() {
     let prog = boot("partialunion");
     let (_status, out) = drive(
         prog,
-        &["map unionfacet structunion 0 r0x1006ee 1", "map hash r0x1006a7 1 int4 x"],
+        &[
+            "map unionfacet structunion 0 r0x1006ee 1",
+            "map hash r0x1006a7 1 int4 x",
+        ],
     );
     assert!(
         out.matches("No function loaded").count() >= 1,

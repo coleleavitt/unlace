@@ -1,14 +1,14 @@
 //! Receiver layouts and owned error words at verified Stdout formatting calls.
 
+use std::path::PathBuf;
 use unlace_console::engine::bootstrap_from_object;
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::kuna_rustfmt::RustFmtMode;
-use std::path::PathBuf;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
@@ -138,7 +138,8 @@ fn producer_language_and_current_image_evidence_are_required() {
                     0 => arch.rustc_stable_version = None,
                     1 => arch.rustc_stable_version = Some((1, 93, 0)),
                     2 => {
-                        arch.source_lang_forced = Some(unlace_decomp::kuna_sourcelang::SourceLang::C)
+                        arch.source_lang_forced =
+                            Some(unlace_decomp::kuna_sourcelang::SourceLang::C)
                     }
                     3 => arch.rust_io_writer_profiles.clear(),
                     4 => {

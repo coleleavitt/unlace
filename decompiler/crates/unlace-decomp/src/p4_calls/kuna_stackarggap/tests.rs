@@ -17,11 +17,31 @@ use crate::fspec::{ParamEntry, ParamListKind, ParamListStandard};
 use super::*;
 
 fn reg_space() -> Rc<AddrSpace> {
-    Rc::new(AddrSpace::new(spacetype::IPTR_PROCESSOR, "register", false, 4, 1, 3, 0, 0, 0))
+    Rc::new(AddrSpace::new(
+        spacetype::IPTR_PROCESSOR,
+        "register",
+        false,
+        4,
+        1,
+        3,
+        0,
+        0,
+        0,
+    ))
 }
 
 fn stack_space() -> Rc<AddrSpace> {
-    Rc::new(AddrSpace::new(spacetype::IPTR_SPACEBASE, "stack", false, 4, 1, 4, 0, 0, 0))
+    Rc::new(AddrSpace::new(
+        spacetype::IPTR_SPACEBASE,
+        "stack",
+        false,
+        4,
+        1,
+        4,
+        0,
+        0,
+        0,
+    ))
 }
 
 fn addr(spc: &Rc<AddrSpace>, off: u64) -> Address {
@@ -76,7 +96,12 @@ fn stack_res(
 }
 
 /// Four register groups (0..3) then one stack resource, as Win64 has.
-fn win64_like_model() -> (ParamListStandard, Rc<AddrSpace>, Rc<AddrSpace>, AddrSpaceManager) {
+fn win64_like_model() -> (
+    ParamListStandard,
+    Rc<AddrSpace>,
+    Rc<AddrSpace>,
+    AddrSpaceManager,
+) {
     let mgr = AddrSpaceManager::new();
     let reg = reg_space();
     let stk = stack_space();
@@ -182,9 +207,10 @@ fn ends_argument_list_fires_at_the_unreferenced_register() {
     // fillin_map's own build_trial_map is what synthesizes the unref filler, so
     // score first and then re-ask the predicate about the R9 slot.
     model.fillin_map(&mut on, &mgr).expect("on");
-    let idx = (0..on.get_num_trials()).find(|&i| on.get_trial(i).is_unref()).expect("an unref filler");
+    let idx = (0..on.get_num_trials())
+        .find(|&i| on.get_trial(i).is_unref())
+        .expect("an unref filler");
     assert!(ends_argument_list(&on, idx, on.get_num_trials(), |j| {
         address_is_spacebase(on.get_trial(j).get_address())
     }));
 }
-

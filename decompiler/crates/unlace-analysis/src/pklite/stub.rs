@@ -8,8 +8,8 @@
 //! data's paragraph and whose instruction choices give the compression mode.
 //! Patterns use `?` as a wildcard byte.
 
-use super::decode::Extra;
 use super::PkliteError;
+use super::decode::Extra;
 
 /// How many bytes at the entry point the walk can look at.
 pub(super) const EP_LEN: usize = 1000;
@@ -219,7 +219,7 @@ pub(super) fn analyze(
             return Err(unsupported(format!(
                 "the entry code opens like PKLITE (class {class}) but continues like no known \
                  version"
-            )))
+            )));
         }
     };
     if !data_before_decoder && position2 == 0 {
@@ -237,7 +237,7 @@ pub(super) fn analyze(
                 op => {
                     return Err(unsupported(format!(
                         "the descrambler combines words with opcode {op:#04x}, neither XOR nor ADD"
-                    )))
+                    )));
                 }
             };
             let count = (u16_at(ep, d.count) - 1).max(0);
@@ -253,7 +253,9 @@ pub(super) fn analyze(
     let (mut copier_byte17, mut copier_byte23) = (0, 0);
     if !data_before_decoder {
         if copier_pos == 0 || copier_pos + 200 > EP_LEN as i64 {
-            return Err(unsupported("the copier is outside the stub's first 1000 bytes".into()));
+            return Err(unsupported(
+                "the copier is outside the stub's first 1000 bytes".into(),
+            ));
         }
         copier_byte17 = ep[(copier_pos + 17) as usize];
         copier_byte23 = ep[(copier_pos + 23) as usize];
@@ -269,7 +271,9 @@ pub(super) fn analyze(
     }
 
     if decompr_pos == 0 || decompr_pos + 200 > EP_LEN as i64 {
-        return Err(unsupported("no decompressor where the copier hands over".into()));
+        return Err(unsupported(
+            "no decompressor where the copier hands over".into(),
+        ));
     }
     let pos = decompr_pos;
     let decompr_byte9 = ep[(pos + 9) as usize];
@@ -279,31 +283,62 @@ pub(super) fn analyze(
     } else if matches(ep, pos, b"\xfd\x8c\xdb\x53\x81\xc3") {
         let n = u16_at(ep, pos + 6) * 16;
         (Decompressor::V115, host.entry + ip_to_eprel(n))
-    } else if matches(ep, pos, b"\xfd\x5f\xc7\x85????\x4f\x4f\xbe??\x03\xf2\x8b\xca\xd1\xe9\xf3") {
-        (Decompressor::V120Small, host.entry + 2 + ip_to_eprel(u16_at(ep, pos + 11)))
-    } else if matches(ep, pos, b"\xfd\x5f\x4f\x4f\xbe??\x03\xf2\x8b\xca\xd1\xe9\xf3") {
-        (Decompressor::V120SmallOld, host.entry + 2 + ip_to_eprel(u16_at(ep, pos + 5)))
+    } else if matches(
+        ep,
+        pos,
+        b"\xfd\x5f\xc7\x85????\x4f\x4f\xbe??\x03\xf2\x8b\xca\xd1\xe9\xf3",
+    ) {
+        (
+            Decompressor::V120Small,
+            host.entry + 2 + ip_to_eprel(u16_at(ep, pos + 11)),
+        )
+    } else if matches(
+        ep,
+        pos,
+        b"\xfd\x5f\x4f\x4f\xbe??\x03\xf2\x8b\xca\xd1\xe9\xf3",
+    ) {
+        (
+            Decompressor::V120SmallOld,
+            host.entry + 2 + ip_to_eprel(u16_at(ep, pos + 5)),
+        )
     } else if matches(ep, pos, b"\xfc\x8c\xc8\x2e\x2b\x06??\x8e\xd8\xbf") {
         (Decompressor::Beta, host.start_of_code)
     } else {
-        return Err(unsupported("the decompressor matches no known PKLITE decompressor".into()));
+        return Err(unsupported(
+            "the decompressor matches no known PKLITE decompressor".into(),
+        ));
     };
     if cmpr_data_pos == 0 {
-        return Err(unsupported("the decompressor names no compressed data".into()));
+        return Err(unsupported(
+            "the decompressor names no compressed data".into(),
+        ));
     }
 
     let (approx_end, cmpr_data_area_end) = if data_before_decoder {
         (patch.unwrap_or(host.end_of_code) - host.entry, host.entry)
     } else {
-        (cmpr_data_pos - host.entry, patch.unwrap_or(host.end_of_code))
+        (
+            cmpr_data_pos - host.entry,
+            patch.unwrap_or(host.end_of_code),
+        )
     };
 
-    let extra = if search(ep, pos, approx_end, b"\xad\x95\xb2\x10\x72\x08\xa4\xd1\xed\x4a\x74")
-        .is_some()
+    let extra = if search(
+        ep,
+        pos,
+        approx_end,
+        b"\xad\x95\xb2\x10\x72\x08\xa4\xd1\xed\x4a\x74",
+    )
+    .is_some()
     {
         Extra::None
     } else {
-        match search(ep, pos, approx_end, b"\xad\x95\xb2\x10\x72\x0b\xac??\xaa\xd1\xed\x4a\x74") {
+        match search(
+            ep,
+            pos,
+            approx_end,
+            b"\xad\x95\xb2\x10\x72\x0b\xac??\xaa\xd1\xed\x4a\x74",
+        ) {
             Some(f) if ep[f as usize + 7] == 0x32 && ep[f as usize + 8] == 0xc2 => Extra::BitCount,
             Some(f) if ep[f as usize + 7] == 0xf6 && ep[f as usize + 8] == 0xd0 => {
                 Extra::Complement
@@ -312,44 +347,48 @@ pub(super) fn analyze(
                 return Err(unsupported(
                     "the literal-copy loop matches neither normal nor extra (-e) compression"
                         .into(),
-                ))
+                ));
             }
         }
     };
 
-    let (large, v120) =
-        if matches!(decompressor, Decompressor::V120Small | Decompressor::V120SmallOld) {
-            (false, true)
-        } else if let Some(f) = search(
-            ep,
-            approx_end - 60,
-            approx_end,
-            b"\x01\x02\x00\x00\x03\x04\x05\x06\x00\x00\x00\x00\x00\x00\x00\x00\x07\x08\x09\x0a\x0b",
-        )
-        .filter(|&f| f > 0)
-        {
-            match ep[f as usize - 1] {
-                0x09 => (false, false),
-                0x18 => (true, false),
-                b => {
-                    return Err(unsupported(format!(
+    let (large, v120) = if matches!(
+        decompressor,
+        Decompressor::V120Small | Decompressor::V120SmallOld
+    ) {
+        (false, true)
+    } else if let Some(f) = search(
+        ep,
+        approx_end - 60,
+        approx_end,
+        b"\x01\x02\x00\x00\x03\x04\x05\x06\x00\x00\x00\x00\x00\x00\x00\x00\x07\x08\x09\x0a\x0b",
+    )
+    .filter(|&f| f > 0)
+    {
+        match ep[f as usize - 1] {
+            0x09 => (false, false),
+            0x18 => (true, false),
+            b => {
+                return Err(unsupported(format!(
                     "the length table is prefixed {b:#04x}, neither small (0x09) nor large (0x18)"
-                )))
-                }
+                )));
             }
-        } else if extra != Extra::None
-            && search(
-                ep,
-                approx_end - 50,
-                approx_end,
-                b"\x33\xc0\x8b\xd8\x8b\xc8\x8b\xd0\x8b\xe8\x8b\xf0\x8b",
-            )
-            .is_some()
-        {
-            (true, true)
-        } else {
-            return Err(unsupported("no length table to tell small from large compression".into()));
-        };
+        }
+    } else if extra != Extra::None
+        && search(
+            ep,
+            approx_end - 50,
+            approx_end,
+            b"\x33\xc0\x8b\xd8\x8b\xc8\x8b\xd0\x8b\xe8\x8b\xf0\x8b",
+        )
+        .is_some()
+    {
+        (true, true)
+    } else {
+        return Err(unsupported(
+            "no length table to tell small from large compression".into(),
+        ));
+    };
 
     let offset_xor = if v120 {
         search(ep, pos + 200, approx_end, b"\xac\x34?\x8a").map_or(0, |f| ep[f as usize + 2])
@@ -439,14 +478,16 @@ fn descrambler(ep: &[u8], pos: i64) -> Option<Descrambler> {
         24,
         27,
     );
-    FORMS.iter().chain(std::iter::once(&IBM)).find(|(p, ..)| matches(ep, pos, p)).map(
-        |&(_, count, endpos, jmp, op)| Descrambler {
+    FORMS
+        .iter()
+        .chain(std::iter::once(&IBM))
+        .find(|(p, ..)| matches(ep, pos, p))
+        .map(|&(_, count, endpos, jmp, op)| Descrambler {
             count: pos + count,
             endpos: pos + endpos,
             jmp: pos + jmp,
             op: pos + op,
-        },
-    )
+        })
 }
 
 /// Undo the descrambler: each word of the region is combined with the
@@ -459,17 +500,29 @@ fn descramble(
     key: i64,
 ) -> Result<(), PkliteError> {
     if last + 2 > EP_LEN as i64 {
-        return Err(PkliteError::Corrupt("the scrambled region runs past the stub".into()));
+        return Err(PkliteError::Corrupt(
+            "the scrambled region runs past the stub".into(),
+        ));
     }
     let start = last + 2 - count * 2;
     if start < 0 {
-        return Err(PkliteError::Corrupt("the scrambled region starts before the stub".into()));
+        return Err(PkliteError::Corrupt(
+            "the scrambled region starts before the stub".into(),
+        ));
     }
     let mut this = u16_at(ep, start) as u16;
     let mut pos = start;
     while pos <= last {
-        let next = if pos == last { key as u16 } else { u16_at(ep, pos + 2) as u16 };
-        let plain = if method == 2 { this.wrapping_add(next) } else { this ^ next };
+        let next = if pos == last {
+            key as u16
+        } else {
+            u16_at(ep, pos + 2) as u16
+        };
+        let plain = if method == 2 {
+            this.wrapping_add(next)
+        } else {
+            this ^ next
+        };
         ep[pos as usize..pos as usize + 2].copy_from_slice(&plain.to_le_bytes());
         this = next;
         pos += 2;
@@ -490,7 +543,9 @@ fn copier_field(ep: &[u8], pos: i64) -> Option<i64> {
         (b"\xb9??\x33\xff\x56\xbe??\xfc\xf2\xa5\xca", 7),
         (b"\xb9??\x2b\xff\x57\xbe??\xfc\xf3\xa5\xcb", 7),
     ];
-    FORMS.iter().find_map(|(p, off)| search(ep, pos, end, p).map(|f| f + off))
+    FORMS
+        .iter()
+        .find_map(|(p, off)| search(ep, pos, end, p).map(|f| f + off))
 }
 
 /// Which PKLITE release wrote the stub, as far as the stub and the version word
@@ -530,7 +585,12 @@ pub(super) fn detect_version(a: &Analysis, reported: u16) -> Option<String> {
                 return;
             }
             if !self.set {
-                *self = V { set: true, special: false, min: lo, max: hi };
+                *self = V {
+                    set: true,
+                    special: false,
+                    min: lo,
+                    max: hi,
+                };
             }
             self.min = self.min.max(lo);
             self.max = self.max.min(hi);

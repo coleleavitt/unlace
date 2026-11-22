@@ -5,13 +5,23 @@
 
 use super::*;
 
-use unlace_base::space::{spacetype, AddrSpace};
 use std::rc::Rc;
+use unlace_base::space::{AddrSpace, spacetype};
 
 const REG: int4 = 3;
 
 fn reg_space() -> Rc<AddrSpace> {
-    Rc::new(AddrSpace::new(spacetype::IPTR_PROCESSOR, "register", false, 8, 1, REG, 0, 0, 0))
+    Rc::new(AddrSpace::new(
+        spacetype::IPTR_PROCESSOR,
+        "register",
+        false,
+        8,
+        1,
+        REG,
+        0,
+        0,
+        0,
+    ))
 }
 
 fn loc(sp: &Rc<AddrSpace>, off: u64) -> (Address, int4) {
@@ -35,7 +45,13 @@ fn a_register_the_callee_reads_is_an_argument() {
     let reg = reg_space();
     let live = body(&[0x38], true);
     let (a, s) = loc(&reg, 0x38);
-    assert!(reads_as_argument(&live, &a, s, Some(&loc(&reg, 0x88)), true));
+    assert!(reads_as_argument(
+        &live,
+        &a,
+        s,
+        Some(&loc(&reg, 0x88)),
+        true
+    ));
 }
 
 /// `g(void)`: nothing read, nothing reinstated.
@@ -44,7 +60,13 @@ fn a_register_the_callee_never_reads_is_not() {
     let reg = reg_space();
     let live = body(&[], true);
     let (a, s) = loc(&reg, 0x38);
-    assert!(!reads_as_argument(&live, &a, s, Some(&loc(&reg, 0x88)), true));
+    assert!(!reads_as_argument(
+        &live,
+        &a,
+        s,
+        Some(&loc(&reg, 0x88)),
+        true
+    ));
 }
 
 /// A variadic register-save prologue reads every argument register through the
@@ -54,7 +76,13 @@ fn a_callee_that_reads_the_last_register_of_the_class_declines() {
     let reg = reg_space();
     let live = body(&[0x30, 0x10, 0x8, 0x80, 0x88], true);
     let (a, s) = loc(&reg, 0x30);
-    assert!(!reads_as_argument(&live, &a, s, Some(&loc(&reg, 0x88)), true));
+    assert!(!reads_as_argument(
+        &live,
+        &a,
+        s,
+        Some(&loc(&reg, 0x88)),
+        true
+    ));
 }
 
 /// A walk that did not cover the body proves no read.
@@ -63,7 +91,13 @@ fn an_incomplete_walk_declines() {
     let reg = reg_space();
     let live = body(&[0x38], false);
     let (a, s) = loc(&reg, 0x38);
-    assert!(!reads_as_argument(&live, &a, s, Some(&loc(&reg, 0x88)), true));
+    assert!(!reads_as_argument(
+        &live,
+        &a,
+        s,
+        Some(&loc(&reg, 0x88)),
+        true
+    ));
 }
 
 /// No register entry of the trial's class in the model: no bound, no claim.
@@ -82,12 +116,26 @@ fn vid(n: u64) -> VarnodeId {
 
 /// Model entry `i` of a class, with a trial whose value the caller wrote.
 fn slot(reg: &Rc<AddrSpace>, i: int4, reads: bool) -> Option<Slot> {
-    Some(Slot { index: i, addr: loc(reg, 0x8 * i as u64).0, size: 8, width: 8, vn: Some(vid(i as u64)), reads })
+    Some(Slot {
+        index: i,
+        addr: loc(reg, 0x8 * i as u64).0,
+        size: 8,
+        width: 8,
+        vn: Some(vid(i as u64)),
+        reads,
+    })
 }
 
 /// Model entry `i` with a trial that holds nothing the caller wrote.
 fn empty(reg: &Rc<AddrSpace>, i: int4) -> Option<Slot> {
-    Some(Slot { index: i, addr: loc(reg, 0x8 * i as u64).0, size: 8, width: 8, vn: None, reads: false })
+    Some(Slot {
+        index: i,
+        addr: loc(reg, 0x8 * i as u64).0,
+        size: 8,
+        width: 8,
+        vn: None,
+        reads: false,
+    })
 }
 
 fn picked(row: &[Option<Slot>], used: &[int4]) -> Vec<int4> {
@@ -108,7 +156,12 @@ fn an_empty_list_gains_the_register_the_callee_reads() {
 #[test]
 fn the_extension_stops_at_the_last_register_read() {
     let reg = reg_space();
-    let row = vec![slot(&reg, 0, false), slot(&reg, 1, true), slot(&reg, 2, true), slot(&reg, 3, false)];
+    let row = vec![
+        slot(&reg, 0, false),
+        slot(&reg, 1, true),
+        slot(&reg, 2, true),
+        slot(&reg, 3, false),
+    ];
     assert_eq!(picked(&row, &[]), vec![0, 1, 2]);
     assert_eq!(picked(&row, &[0]), vec![1, 2]);
 }
@@ -118,7 +171,12 @@ fn the_extension_stops_at_the_last_register_read() {
 #[test]
 fn a_partial_list_gains_the_next_register() {
     let reg = reg_space();
-    let row = vec![slot(&reg, 0, false), slot(&reg, 1, false), slot(&reg, 2, false), slot(&reg, 3, true)];
+    let row = vec![
+        slot(&reg, 0, false),
+        slot(&reg, 1, false),
+        slot(&reg, 2, false),
+        slot(&reg, 3, true),
+    ];
     assert_eq!(picked(&row, &[0, 1, 2]), vec![3]);
 }
 
@@ -145,8 +203,12 @@ fn a_hole_with_no_value_ends_the_run() {
 #[test]
 fn more_than_two_holes_end_the_run() {
     let reg = reg_space();
-    let row =
-        vec![slot(&reg, 0, false), slot(&reg, 1, false), slot(&reg, 2, false), slot(&reg, 3, true)];
+    let row = vec![
+        slot(&reg, 0, false),
+        slot(&reg, 1, false),
+        slot(&reg, 2, false),
+        slot(&reg, 3, true),
+    ];
     assert!(picked(&row, &[]).is_empty());
     assert_eq!(picked(&row, &[0]), vec![1, 2, 3]);
 }
@@ -155,7 +217,11 @@ fn more_than_two_holes_end_the_run() {
 #[test]
 fn a_list_with_a_gap_is_left_alone() {
     let reg = reg_space();
-    let row = vec![slot(&reg, 0, true), slot(&reg, 1, false), slot(&reg, 2, true)];
+    let row = vec![
+        slot(&reg, 0, true),
+        slot(&reg, 1, false),
+        slot(&reg, 2, true),
+    ];
     assert!(picked(&row, &[1]).is_empty());
 }
 
@@ -168,7 +234,13 @@ fn a_wide_read_past_a_low_byte_write_is_not_an_argument() {
     let live = body(&[0x8], true).with_written_byte(0x8);
     let (a, s) = loc(&reg, 0x8);
     assert!(live.proves_input(&a, s));
-    assert!(!reads_as_argument(&live, &a, s, Some(&loc(&reg, 0x88)), true));
+    assert!(!reads_as_argument(
+        &live,
+        &a,
+        s,
+        Some(&loc(&reg, 0x88)),
+        true
+    ));
 }
 
 /// A body the walk could not decode all of (an ARM function decoded as Thumb
@@ -178,7 +250,13 @@ fn a_walk_that_met_bad_instruction_data_declines() {
     let reg = reg_space();
     let live = body(&[0x38], true).with_undecodable();
     let (a, s) = loc(&reg, 0x38);
-    assert!(!reads_as_argument(&live, &a, s, Some(&loc(&reg, 0x88)), true));
+    assert!(!reads_as_argument(
+        &live,
+        &a,
+        s,
+        Some(&loc(&reg, 0x88)),
+        true
+    ));
 }
 
 /// gcc AArch64 bounds a variadic callee's register save to the `va_arg` it can
@@ -189,8 +267,20 @@ fn a_register_only_stored_counts_only_where_variadic_calls_are_marked() {
     let reg = reg_space();
     let live = body(&[0x38], true).with_stored_byte(0x38);
     let (a, s) = loc(&reg, 0x38);
-    assert!(reads_as_argument(&live, &a, s, Some(&loc(&reg, 0x88)), true));
-    assert!(!reads_as_argument(&live, &a, s, Some(&loc(&reg, 0x88)), false));
+    assert!(reads_as_argument(
+        &live,
+        &a,
+        s,
+        Some(&loc(&reg, 0x88)),
+        true
+    ));
+    assert!(!reads_as_argument(
+        &live,
+        &a,
+        s,
+        Some(&loc(&reg, 0x88)),
+        false
+    ));
 }
 
 /// gcc pads an odd number of stack arguments with a push of a register it never
@@ -202,7 +292,19 @@ fn a_register_only_pushed_for_the_next_call_does_not_count() {
     let reg = reg_space();
     let live = body(&[0x10], true).with_padded_byte(0x10);
     let (a, s) = loc(&reg, 0x10);
-    assert!(!reads_as_argument(&live, &a, s, Some(&loc(&reg, 0x88)), true));
+    assert!(!reads_as_argument(
+        &live,
+        &a,
+        s,
+        Some(&loc(&reg, 0x88)),
+        true
+    ));
     let read = body(&[0x10], true);
-    assert!(reads_as_argument(&read, &a, s, Some(&loc(&reg, 0x88)), true));
+    assert!(reads_as_argument(
+        &read,
+        &a,
+        s,
+        Some(&loc(&reg, 0x88)),
+        true
+    ));
 }

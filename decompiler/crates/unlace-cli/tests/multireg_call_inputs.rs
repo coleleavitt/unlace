@@ -9,7 +9,8 @@ fn unlocked_sparc_math_wrappers_preserve_entry_values() {
         eprintln!("skipping SPARC compiler control: Clang unavailable");
         return;
     }
-    let compilers: Vec<_> = ["gcc", "clang"].into_iter()
+    let compilers: Vec<_> = ["gcc", "clang"]
+        .into_iter()
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
     let dir = common::scratch_file("multireg-call-inputs", "dir");
@@ -17,24 +18,47 @@ fn unlocked_sparc_math_wrappers_preserve_entry_values() {
     let source = dir.join("wrappers.c");
     let object = dir.join("wrappers.o");
     let operations = ["acos", "asin", "cos", "exp", "sin", "sqrt", "tan"];
-    let mut wrappers = String::from("double number(void *context,int index); void push(void *context,double value);\n");
+    let mut wrappers = String::from(
+        "double number(void *context,int index); void push(void *context,double value);\n",
+    );
     for op in operations {
         wrappers.push_str(&format!("double {op}(double); int wrap_{op}(void *context) {{ push(context,{op}(number(context,1))); return 1; }}\n"));
     }
     std::fs::write(&source, wrappers).unwrap();
-    process::required_output(Command::new("clang").args([
-        "--target=sparc-linux-gnu", "-O2", "-fintegrated-as", "-fno-builtin", "-c",
-    ]).arg(&source).arg("-o").arg(&object));
+    process::required_output(
+        Command::new("clang")
+            .args([
+                "--target=sparc-linux-gnu",
+                "-O2",
+                "-fintegrated-as",
+                "-fno-builtin",
+                "-c",
+            ])
+            .arg(&source)
+            .arg("-o")
+            .arg(&object),
+    );
     for overlap in ["off", "in", "full"] {
-        let mut args = vec!["decompile-all".to_owned(), object.to_str().unwrap().to_owned(),
-            "--json".to_owned(), "--assert-strict".to_owned(),
-            "--option".to_owned(), "calloverlap".to_owned(), overlap.to_owned()];
-        for prototype in ["prototype number double number(void *context,int index)",
-            "prototype push void push(void *context,double value)"] {
+        let mut args = vec![
+            "decompile-all".to_owned(),
+            object.to_str().unwrap().to_owned(),
+            "--json".to_owned(),
+            "--assert-strict".to_owned(),
+            "--option".to_owned(),
+            "calloverlap".to_owned(),
+            overlap.to_owned(),
+        ];
+        for prototype in [
+            "prototype number double number(void *context,int index)",
+            "prototype push void push(void *context,double value)",
+        ] {
             args.extend(["--assert".to_owned(), prototype.to_owned()]);
         }
         for op in operations {
-            args.extend(["--assert".to_owned(), format!("prototype {op} double {op}(double value)")]);
+            args.extend([
+                "--assert".to_owned(),
+                format!("prototype {op} double {op}(double value)"),
+            ]);
         }
         let borrowed: Vec<_> = args.iter().map(String::as_str).collect();
         let (out, err, rc) = common::run_kuna(&borrowed);
@@ -42,7 +66,9 @@ fn unlocked_sparc_math_wrappers_preserve_entry_values() {
         let json: serde_json::Value = serde_json::from_str(&out).unwrap();
         let functions = json["functions"].as_array().unwrap();
         assert_eq!(functions.len(), 7);
-        let mut printed = String::from("#include <math.h>\n#include <stdint.h>\nstatic void *expected=(void*)(uintptr_t)0x12345;\nstatic double supplied,observed; static int errors,calls;\ndouble number(void *context,int index) { if(context!=expected||index!=1) ++errors; ++calls; return supplied; }\nvoid push(void *context,double value) { if(context!=expected) ++errors; observed=value; ++calls; }\n");
+        let mut printed = String::from(
+            "#include <math.h>\n#include <stdint.h>\nstatic void *expected=(void*)(uintptr_t)0x12345;\nstatic double supplied,observed; static int errors,calls;\ndouble number(void *context,int index) { if(context!=expected||index!=1) ++errors; ++calls; return supplied; }\nvoid push(void *context,double value) { if(context!=expected) ++errors; observed=value; ++calls; }\n",
+        );
         for function in functions {
             assert!(function["error"].is_null(), "{function}");
             let code = function["code"].as_str().unwrap();
@@ -60,8 +86,13 @@ fn unlocked_sparc_math_wrappers_preserve_entry_values() {
         for cc in &compilers {
             for optimization in ["-O0", "-O2"] {
                 let binary = dir.join(format!("{overlap}-{cc}-{optimization}"));
-                process::required_output(Command::new(cc).args([optimization, "-Werror"])
-                    .arg(&recovered).args(["-lm", "-o"]).arg(&binary));
+                process::required_output(
+                    Command::new(cc)
+                        .args([optimization, "-Werror"])
+                        .arg(&recovered)
+                        .args(["-lm", "-o"])
+                        .arg(&binary),
+                );
                 process::required_output(&mut Command::new(&binary));
             }
         }

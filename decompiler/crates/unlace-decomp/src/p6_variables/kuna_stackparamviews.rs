@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use crate::context::{HighVariableId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype, TypeFactory};
+use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::kuna_stackobjects::{ByteSource, SourcePoint, StackObject};
 use unlace_base::address::Address;
@@ -172,7 +172,8 @@ pub(crate) fn can_map_backing(fd: &Funcdata, start: u64, size: i32) -> bool {
     scope.in_scope(&address, size)
         && !parameter_types(fd, start, size).is_empty()
         && scope
-            .database().find_overlap_matching(scope.scope_id(), &address, size, |symbol| {
+            .database()
+            .find_overlap_matching(scope.scope_id(), &address, size, |symbol| {
                 symbol.get_category() != crate::database::symbol_category::FUNCTION_PARAMETER
             })
             .is_none()
@@ -356,9 +357,11 @@ pub(crate) fn needs_backing(fd: &Funcdata, start: u64, size: i32) -> bool {
                     };
                     if address.first != address.last
                         || !address.terms.is_empty()
-                        || fd.get_arch().manage().get_stack_space().is_none_or(|space| {
-                            space.wrap_offset(address.first as u64) != start
-                        })
+                        || fd
+                            .get_arch()
+                            .manage()
+                            .get_stack_space()
+                            .is_none_or(|space| space.wrap_offset(address.first as u64) != start)
                         || crate::kuna_stackviews::declared_view(fd, id, slot)
                             .is_none_or(|ty| ty.get_size() != size)
                     {
@@ -470,13 +473,17 @@ fn closed_reuse(fd: &Funcdata, object: &StackObject) -> bool {
                     }
                 }
             }
-            OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_INDIRECT | OpCode::CPUI_MULTIEQUAL => {
+            OpCode::CPUI_COPY
+            | OpCode::CPUI_CAST
+            | OpCode::CPUI_INDIRECT
+            | OpCode::CPUI_MULTIEQUAL => {
                 if op
                     .get_out()
                     .and_then(|out| fd.vbank().get(out))
                     .is_some_and(|v| v.is_persist() || v.is_stack_store())
                     && (0..op.num_input()).any(|slot| {
-                        op.get_in(slot).is_some_and(|input| aliases(fd, input, object))
+                        op.get_in(slot)
+                            .is_some_and(|input| aliases(fd, input, object))
                     })
                 {
                     return false;
@@ -674,7 +681,9 @@ pub(crate) fn prepare_casts(fd: &mut Funcdata) {
         let mut backings = BTreeMap::new();
         if let Some(space) = fd.get_arch().manage().get_stack_space() {
             for id in fd.vbank().loc_space_ids(space) {
-                let Some(value) = fd.vbank().get(id) else { continue };
+                let Some(value) = fd.vbank().get(id) else {
+                    continue;
+                };
                 if let Some(info) = backing_for_address(fd, value.get_addr(), value.get_size()) {
                     backings.entry(info.entry_addr.get_offset()).or_insert(info);
                 }

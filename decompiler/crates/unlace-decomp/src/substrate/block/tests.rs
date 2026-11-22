@@ -10,7 +10,7 @@ use std::rc::Rc;
 
 use unlace_base::address::{Address, RangeList};
 use unlace_base::marshal::{Decoder, PackedDecode, PackedEncode};
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, ConstantSpace, addrspace_flags, spacetype};
 use unlace_base::types::{int4, uint4};
 
 use super::*;
@@ -266,11 +266,21 @@ fn dominates_memo_answers_as_dominates() {
     // is the number of blocks.
     let mut seed: u64 = 0x9e37_79b9_7f4a_7c15;
     let mut next = |m: usize| {
-        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        seed = seed
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         (seed >> 33) as usize % m
     };
     let (mut kept, mut gave_up) = (false, false);
-    for (n, extra) in [(2usize, 2usize), (5, 5), (9, 9), (17, 17), (40, 40), (64, 0), (90, 6)] {
+    for (n, extra) in [
+        (2usize, 2usize),
+        (5, 5),
+        (9, 9),
+        (17, 17),
+        (40, 40),
+        (64, 0),
+        (90, 6),
+    ] {
         let (mut g, root, b) = build_graph(n);
         g.set_start_block(root, b[0]);
         for i in 0..n - 1 {
@@ -349,11 +359,15 @@ fn dom_tree_and_depth_diamond() {
     // immediately dominated by entry).
     let child = g.build_dom_tree(root);
     let entry_idx = g.arena[b[0]].get_index() as usize;
-    let mut kids: Vec<int4> =
-        child[entry_idx].iter().map(|&c| g.arena[c].get_index()).collect();
+    let mut kids: Vec<int4> = child[entry_idx]
+        .iter()
+        .map(|&c| g.arena[c].get_index())
+        .collect();
     kids.sort_unstable();
-    let mut expect: Vec<int4> =
-        [b[1], b[2], b[3]].iter().map(|&c| g.arena[c].get_index()).collect();
+    let mut expect: Vec<int4> = [b[1], b[2], b[3]]
+        .iter()
+        .map(|&c| g.arena[c].get_index())
+        .collect();
     expect.sort_unstable();
     assert_eq!(kids, expect);
 
@@ -566,7 +580,10 @@ fn w10_build_copy_from_remaps_edges_cross_arena() {
             "every seeded block is a BlockCopy"
         );
         let copied = dst.block(d).get_copy().expect("BlockCopy.copy set");
-        assert_eq!(copied, s[k], "dst order mirrors source list order, copy=src id");
+        assert_eq!(
+            copied, s[k],
+            "dst order mirrors source list order, copy=src id"
+        );
         assert_eq!(dst.block(d).get_index(), k as int4, "index copied verbatim");
         src_to_dst.insert(s[k], d);
     }
@@ -631,7 +648,11 @@ fn w10_build_copy_from_empty_source() {
     dst.root = Some(droot);
 
     dst.build_copy_from(droot, &src, sroot);
-    assert_eq!(dst.block(droot).get_list().len(), 0, "empty source -> empty dst");
+    assert_eq!(
+        dst.block(droot).get_list().len(),
+        0,
+        "empty source -> empty dst"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -657,7 +678,10 @@ fn build_ifelse_in_list() -> (BlockGraph, BlockId, BlockId, BlockId, BlockId) {
     g.root = Some(parent);
 
     // The 3-component BlockIf, parented under the list.
-    let if_id = g.arena.insert(FlowBlock::new_kind(BlockKind::If { gototype: 0, gototarget: None }));
+    let if_id = g.arena.insert(FlowBlock::new_kind(BlockKind::If {
+        gototype: 0,
+        gototarget: None,
+    }));
     g.arena[if_id].parent = Some(parent);
     g.arena[parent].list.push(if_id);
 
@@ -674,20 +698,35 @@ fn build_ifelse_in_list() -> (BlockGraph, BlockId, BlockId, BlockId, BlockId) {
 #[test]
 fn flatten_ifelse_drops_else_and_splices_sibling() {
     let (mut g, parent, if_id, else_clause, tail) = build_ifelse_in_list();
-    assert_eq!(g.block(if_id).get_size(), 3, "starts as a 3-component if/else");
+    assert_eq!(
+        g.block(if_id).get_size(),
+        3,
+        "starts as a 3-component if/else"
+    );
     assert_eq!(g.block(parent).get_size(), 2, "parent holds [if, tail]");
 
     let ok = g.kuna_flatten_ifelse(if_id);
-    assert!(ok, "flatten should succeed for a 3-comp if/else under a list");
+    assert!(
+        ok,
+        "flatten should succeed for a 3-comp if/else under a list"
+    );
 
     // The `if` is now a 2-component if/then (cond + true-clause).
     assert_eq!(g.block(if_id).get_size(), 2, "if demoted to if/then");
     assert_eq!(g.block(if_id).get_type(), BlockType::If);
 
     // The else-clause is now the `if`'s immediate successor in the parent.
-    assert_eq!(g.block(parent).get_size(), 3, "parent now holds [if, else, tail]");
+    assert_eq!(
+        g.block(parent).get_size(),
+        3,
+        "parent now holds [if, else, tail]"
+    );
     assert_eq!(g.block(parent).get_block(0), if_id);
-    assert_eq!(g.block(parent).get_block(1), else_clause, "else spliced right after if");
+    assert_eq!(
+        g.block(parent).get_block(1),
+        else_clause,
+        "else spliced right after if"
+    );
     assert_eq!(g.block(parent).get_block(2), tail);
     assert_eq!(
         g.block(else_clause).get_parent(),
@@ -702,13 +741,19 @@ fn flatten_ifelse_refuses_two_component_if() {
     let mut g = BlockGraph::new();
     let parent = g.arena.insert(FlowBlock::new_kind(BlockKind::Ls));
     g.root = Some(parent);
-    let if_id = g.arena.insert(FlowBlock::new_kind(BlockKind::If { gototype: 0, gototarget: None }));
+    let if_id = g.arena.insert(FlowBlock::new_kind(BlockKind::If {
+        gototype: 0,
+        gototarget: None,
+    }));
     g.arena[if_id].parent = Some(parent);
     g.arena[parent].list.push(if_id);
     let _cond = push_leaf(&mut g, if_id);
     let _tc = push_leaf(&mut g, if_id);
 
-    assert!(!g.kuna_flatten_ifelse(if_id), "2-component if is not flattenable");
+    assert!(
+        !g.kuna_flatten_ifelse(if_id),
+        "2-component if is not flattenable"
+    );
     assert_eq!(g.block(if_id).get_size(), 2, "unchanged");
 }
 
@@ -717,16 +762,25 @@ fn flatten_ifelse_refuses_non_list_parent() {
     // A BlockIf whose parent is itself a BlockIf (a clause, not a list) cannot
     // host a spliced sibling, so the splice is refused (honest-partial).
     let mut g = BlockGraph::new();
-    let outer = g.arena.insert(FlowBlock::new_kind(BlockKind::If { gototype: 0, gototarget: None }));
+    let outer = g.arena.insert(FlowBlock::new_kind(BlockKind::If {
+        gototype: 0,
+        gototarget: None,
+    }));
     g.root = Some(outer);
-    let inner = g.arena.insert(FlowBlock::new_kind(BlockKind::If { gototype: 0, gototarget: None }));
+    let inner = g.arena.insert(FlowBlock::new_kind(BlockKind::If {
+        gototype: 0,
+        gototarget: None,
+    }));
     g.arena[inner].parent = Some(outer);
     g.arena[outer].list.push(inner);
     let _c = push_leaf(&mut g, inner);
     let _t = push_leaf(&mut g, inner);
     let _e = push_leaf(&mut g, inner);
 
-    assert!(!g.kuna_flatten_ifelse(inner), "non-list parent cannot host the sibling");
+    assert!(
+        !g.kuna_flatten_ifelse(inner),
+        "non-list parent cannot host the sibling"
+    );
     assert_eq!(g.block(inner).get_size(), 3, "unchanged");
 }
 
@@ -769,8 +823,14 @@ fn switch_case_goto_is_a_label_reference() {
     g.add_block(root, sw);
 
     let refs = referenced_goto_targets(&g, root);
-    assert!(refs.contains(&target), "an unstructured case arm references its target");
-    assert!(!refs.contains(&structured), "a structured case arm prints its body, not a goto");
+    assert!(
+        refs.contains(&target),
+        "an unstructured case arm references its target"
+    );
+    assert!(
+        !refs.contains(&structured),
+        "a structured case arm prints its body, not a goto"
+    );
 }
 
 /// A `BlockMultiGoto`'s virtual edges are label references too.
@@ -799,17 +859,24 @@ fn goto_to_the_next_block_still_gets_its_label() {
     let root = g.arena.insert(FlowBlock::new_kind(BlockKind::Graph));
     g.root = Some(root);
 
-    let target = g.arena.insert(FlowBlock::new_kind(BlockKind::Copy { copy: None }));
+    let target = g
+        .arena
+        .insert(FlowBlock::new_kind(BlockKind::Copy { copy: None }));
     let gt = g.arena.insert(FlowBlock::new_kind(BlockKind::Goto {
         gototarget: Some(target),
         gototype: block_flags::f_goto_goto,
     }));
     g.add_block(root, gt);
-    let body = g.arena.insert(FlowBlock::new_kind(BlockKind::Copy { copy: None }));
+    let body = g
+        .arena
+        .insert(FlowBlock::new_kind(BlockKind::Copy { copy: None }));
     g.add_block(gt, body);
     g.add_block(root, target);
 
-    assert!(!g.goto_prints(gt), "the goto's target is the next block in flow");
+    assert!(
+        !g.goto_prints(gt),
+        "the goto's target is the next block in flow"
+    );
     g.mark_unstructured(root);
     assert!(
         g.block(target).is_unstructured_target(),
@@ -827,11 +894,16 @@ fn ite_suffix_hoist_leaves_no_branch_on_a_freed_block() {
     let root = g.arena.insert(FlowBlock::new_kind(BlockKind::Ls));
     g.root = Some(root);
     let leaf = |g: &mut BlockGraph, parent: BlockId| {
-        let id = g.arena.insert(FlowBlock::new_kind(BlockKind::Copy { copy: None }));
+        let id = g
+            .arena
+            .insert(FlowBlock::new_kind(BlockKind::Copy { copy: None }));
         g.add_block(parent, id);
         id
     };
-    let ite = g.arena.insert(FlowBlock::new_kind(BlockKind::If { gototype: 0, gototarget: None }));
+    let ite = g.arena.insert(FlowBlock::new_kind(BlockKind::If {
+        gototype: 0,
+        gototarget: None,
+    }));
     g.add_block(root, ite);
     leaf(&mut g, ite);
     let tclause = g.arena.insert(FlowBlock::new_kind(BlockKind::Ls));

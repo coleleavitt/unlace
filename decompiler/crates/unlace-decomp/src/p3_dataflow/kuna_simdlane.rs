@@ -128,12 +128,16 @@ pub struct RuleSimdShuffleLane {
 impl RuleSimdShuffleLane {
     /// Build the rule in the default `analysis` group.
     pub fn new() -> RuleSimdShuffleLane {
-        RuleSimdShuffleLane { group: String::from("analysis") }
+        RuleSimdShuffleLane {
+            group: String::from("analysis"),
+        }
     }
 
     /// Construct with an explicit group string.
     pub fn with_group(group: impl Into<String>) -> RuleSimdShuffleLane {
-        RuleSimdShuffleLane { group: group.into() }
+        RuleSimdShuffleLane {
+            group: group.into(),
+        }
     }
 }
 
@@ -146,7 +150,9 @@ impl Rule for RuleSimdShuffleLane {
         if !grouplist.contains(&self.group) {
             return None;
         }
-        Some(Box::new(RuleSimdShuffleLane { group: self.group.clone() }))
+        Some(Box::new(RuleSimdShuffleLane {
+            group: self.group.clone(),
+        }))
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
@@ -217,14 +223,17 @@ impl Rule for RuleSimdShuffleLane {
             None => {
                 let zero = data.new_constant(1, 0);
                 data.op_set_opcode(op, TypeOp::new(OpCode::CPUI_COPY, 0, "COPY"));
-                data.op_set_input(op, zero, 0).expect("RuleSimdShuffleLane: opSetInput");
+                data.op_set_input(op, zero, 0)
+                    .expect("RuleSimdShuffleLane: opSetInput");
                 data.op_remove_input(op, 1);
             }
             // The output lane IS source lane `j`.
             Some(j) => {
-                data.op_set_input(op, srcvn, 0).expect("RuleSimdShuffleLane: opSetInput");
+                data.op_set_input(op, srcvn, 0)
+                    .expect("RuleSimdShuffleLane: opSetInput");
                 let c = data.new_constant(vn_size(data, offvn), j as uintb);
-                data.op_set_input(op, c, 1).expect("RuleSimdShuffleLane: opSetInput");
+                data.op_set_input(op, c, 1)
+                    .expect("RuleSimdShuffleLane: opSetInput");
             }
         }
         1
@@ -264,11 +273,17 @@ fn op_out_size(data: &Funcdata, op: OpId) -> int4 {
 }
 
 fn vn_is_constant(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).map(|v| v.is_constant()).unwrap_or(false)
+    data.vbank()
+        .get(vn)
+        .map(|v| v.is_constant())
+        .unwrap_or(false)
 }
 
 fn vn_def(data: &Funcdata, vn: VarnodeId) -> Option<OpId> {
-    data.vbank().get(vn).filter(|v| v.is_written()).and_then(|v| v.get_def())
+    data.vbank()
+        .get(vn)
+        .filter(|v| v.is_written())
+        .and_then(|v| v.get_def())
 }
 
 fn vn_offset(data: &Funcdata, vn: VarnodeId) -> uintb {

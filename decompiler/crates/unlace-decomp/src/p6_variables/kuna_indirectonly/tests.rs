@@ -9,8 +9,8 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, SpacebaseSpace,
-    UniqueSpace, VarnodeStorage,
+    AddrSpace, AddrSpaceManager, ConstantSpace, SpacebaseSpace, UniqueSpace, VarnodeStorage,
+    addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
@@ -21,7 +21,7 @@ use crate::op::pcodeop_flags;
 use crate::options::KUNA_OPTION_NAMES;
 use crate::varnode::varnode_flags;
 
-use super::{check_indirect_use, mark_indirect_only, OptionIndirectOnly};
+use super::{OptionIndirectOnly, check_indirect_use, mark_indirect_only};
 
 const SP_OFF: u64 = 0x20;
 
@@ -35,7 +35,9 @@ impl Fx {
     fn new() -> Fx {
         let mut manage = AddrSpaceManager::new();
         manage.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-        manage.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+        manage
+            .insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+            .unwrap();
         let reg = Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
             "register",
@@ -49,22 +51,35 @@ impl Fx {
         ));
         manage.insert_space(Rc::clone(&reg)).unwrap();
         manage
-            .insert_space(Rc::new(SpacebaseSpace::new("stack", 3, 8, &reg, 1, true, false)))
+            .insert_space(Rc::new(SpacebaseSpace::new(
+                "stack", 3, 8, &reg, 1, true, false,
+            )))
             .unwrap();
         let stack = Rc::clone(manage.get_stack_space().unwrap());
-        let sp_data = VarnodeStorage { space: Some(Rc::clone(&reg)), offset: SP_OFF, size: 8 };
-        manage.add_spacebase_pointer(&stack, &sp_data, 8, true).unwrap();
+        let sp_data = VarnodeStorage {
+            space: Some(Rc::clone(&reg)),
+            offset: SP_OFF,
+            size: 8,
+        };
+        manage
+            .add_spacebase_pointer(&stack, &sp_data, 8, true)
+            .unwrap();
         let glb = ArchContext::new(manage);
         let entry = Address::new(Rc::clone(&reg), 0x1000);
-        let mut fd =
-            Funcdata::new("io", "io", Rc::new(glb), entry, 0x1000_0000, 0x40).unwrap();
+        let mut fd = Funcdata::new("io", "io", Rc::new(glb), entry, 0x1000_0000, 0x40).unwrap();
         let root = fd.bblocks_root_pub();
         let bl = fd.bblocks_mut().new_block_basic(root);
         Fx { fd, bl, pc: 0x1000 }
     }
 
     fn reg(&self) -> Rc<AddrSpace> {
-        Rc::clone(self.fd.get_arch().manage().get_space_by_name("register").unwrap())
+        Rc::clone(
+            self.fd
+                .get_arch()
+                .manage()
+                .get_space_by_name("register")
+                .unwrap(),
+        )
     }
 
     fn input(&mut self, off: u64) -> VarnodeId {
@@ -84,7 +99,9 @@ impl Fx {
     ) -> (OpId, Option<VarnodeId>) {
         self.pc += 1;
         let bl = self.bl;
-        let op = self.fd.new_op(ins.len() as int4, Address::new(self.reg(), self.pc));
+        let op = self
+            .fd
+            .new_op(ins.len() as int4, Address::new(self.reg(), self.pc));
         self.fd.op_set_opcode_code(op, code);
         let out = out.map(|size| self.fd.new_unique_out(size, op).unwrap());
         for (slot, vn) in ins.iter().enumerate() {
@@ -97,29 +114,43 @@ impl Fx {
     /// A plain call-effect INDIRECT reading `vn` in slot 0.
     fn indirect(&mut self, vn: VarnodeId) -> VarnodeId {
         let iop = self.konst(0);
-        self.emit(OpCode::CPUI_INDIRECT, &[vn, iop], Some(8)).1.unwrap()
+        self.emit(OpCode::CPUI_INDIRECT, &[vn, iop], Some(8))
+            .1
+            .unwrap()
     }
 
     /// An INDIRECT carrying the `indirect_store` flag (the STORE-caused form).
     fn indirect_store(&mut self, vn: VarnodeId) -> VarnodeId {
         let iop = self.konst(0);
         let (op, out) = self.emit(OpCode::CPUI_INDIRECT, &[vn, iop], Some(8));
-        self.fd.obank_mut().get_mut(op).unwrap().set_flag(pcodeop_flags::indirect_store);
+        self.fd
+            .obank_mut()
+            .get_mut(op)
+            .unwrap()
+            .set_flag(pcodeop_flags::indirect_store);
         out.unwrap()
     }
 
     fn phi(&mut self, a: VarnodeId, b: VarnodeId) -> VarnodeId {
-        self.emit(OpCode::CPUI_MULTIEQUAL, &[a, b], Some(8)).1.unwrap()
+        self.emit(OpCode::CPUI_MULTIEQUAL, &[a, b], Some(8))
+            .1
+            .unwrap()
     }
 
     /// A real arithmetic read — the case that must fail the whole test.
     fn direct_read(&mut self, vn: VarnodeId) -> VarnodeId {
         let k = self.konst(1);
-        self.emit(OpCode::CPUI_INT_ADD, &[vn, k], Some(8)).1.unwrap()
+        self.emit(OpCode::CPUI_INT_ADD, &[vn, k], Some(8))
+            .1
+            .unwrap()
     }
 
     fn is_flagged(&self, vn: VarnodeId) -> bool {
-        self.fd.vbank().get(vn).map(|v| v.is_indirect_only()).unwrap_or(false)
+        self.fd
+            .vbank()
+            .get(vn)
+            .map(|v| v.is_indirect_only())
+            .unwrap_or(false)
     }
 }
 
@@ -208,7 +239,11 @@ fn a_directwrite_input_is_skipped() {
     let mut fx = Fx::new();
     let vn = fx.input(0x100);
     fx.indirect(vn);
-    fx.fd.vbank_mut().get_mut(vn).unwrap().set_flags_pub(varnode_flags::directwrite);
+    fx.fd
+        .vbank_mut()
+        .get_mut(vn)
+        .unwrap()
+        .set_flags_pub(varnode_flags::directwrite);
     assert!(check_indirect_use(&fx.fd, vn));
     assert_eq!(mark_indirect_only(&mut fx.fd), 0);
     assert!(!fx.is_flagged(vn));
@@ -236,8 +271,15 @@ fn a_rejected_walk_preserves_existing_marks_and_all_flags() {
     let merged = fx.phi(input, other);
     fx.indirect(merged);
     fx.direct_read(merged);
-    fx.fd.vbank_mut().get_mut(input).unwrap().set_flags_pub(varnode_flags::mark);
-    let initial: Vec<_> = fx.fd.vbank().iter_loc()
+    fx.fd
+        .vbank_mut()
+        .get_mut(input)
+        .unwrap()
+        .set_flags_pub(varnode_flags::mark);
+    let initial: Vec<_> = fx
+        .fd
+        .vbank()
+        .iter_loc()
         .map(|vn| (vn, fx.fd.vbank().get(vn).unwrap().get_flags()))
         .collect();
     for _ in 0..3 {

@@ -90,10 +90,7 @@ pub(crate) fn guarded_block(data: &Funcdata, vn: VarnodeId, reads: &[OpId]) -> O
             && value.get_offset() <= read.offset + (read.size as u64 - 1)
     };
     if !machine_reads.iter().any(|read| overlaps(&read))
-        || !data
-            .kuna_guarded_reads
-            .reads()
-            .any(|read| overlaps(&read))
+        || !data.kuna_guarded_reads.reads().any(|read| overlaps(&read))
     {
         return None;
     }
@@ -142,12 +139,12 @@ mod tests {
     use super::*;
     use crate::context::{ArchContext, TypeOp};
     use crate::op::pcodeop_flags;
+    use std::rc::Rc;
     use unlace_base::address::Address;
     use unlace_base::space::{
-        addrspace_flags, AddrSpace, AddrSpaceManager, ConstantSpace, IopSpace, SpacebaseSpace,
-        UniqueSpace,
+        AddrSpace, AddrSpaceManager, ConstantSpace, IopSpace, SpacebaseSpace, UniqueSpace,
+        addrspace_flags,
     };
-    use std::rc::Rc;
 
     struct Fixture {
         data: Funcdata,

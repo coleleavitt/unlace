@@ -1,8 +1,8 @@
 //! The Listing and reference walk share mode-aware ARM frame roots.
-use unlace_analysis::listing::xrefs::{self, XrefKind};
-use unlace_console::engine::{bootstrap_from_object_with_isa, ArmIsa};
 use std::path::PathBuf;
 use std::process::Command;
+use unlace_analysis::listing::xrefs::{self, XrefKind};
+use unlace_console::engine::{ArmIsa, bootstrap_from_object_with_isa};
 
 fn bootstrap_frames(
     path: &str,
@@ -24,15 +24,17 @@ fn fixture_variant(tag: &str, isa: &str, endian: &str, options: &[&str]) -> Path
         .join(format!("arm-root-index-{tag}-{}.elf", std::process::id()));
     let generator = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../unlace-analysis/tests/fixtures/arm_xref_roots.py");
-    assert!(Command::new("python3")
-        .arg(generator)
-        .arg(&path)
-        .arg(isa)
-        .arg(endian)
-        .args(options)
-        .status()
-        .expect("generate authored ELF")
-        .success());
+    assert!(
+        Command::new("python3")
+            .arg(generator)
+            .arg(&path)
+            .arg(isa)
+            .arg(endian)
+            .args(options)
+            .status()
+            .expect("generate authored ELF")
+            .success()
+    );
     path
 }
 
@@ -165,10 +167,12 @@ fn be8_frames_use_little_endian_instructions_in_a_big_endian_elf() {
         let index = xrefs::build_measured(&file, prog.arch(), prog.arch().translate(), &[0x1000]);
         let site = if isa == "thumb" { 0x1504 } else { 0x1508 };
         assert_eq!(index.function_containing(site), Some(0x1500));
-        assert!(index
-            .refs_to(0x1100)
-            .iter()
-            .any(|r| r.from == site && r.kind == XrefKind::Call));
+        assert!(
+            index
+                .refs_to(0x1100)
+                .iter()
+                .any(|r| r.from == site && r.kind == XrefKind::Call)
+        );
         std::fs::remove_file(path).unwrap();
     }
 }
@@ -269,9 +273,10 @@ fn distant_body_ownership_agrees_for_direct_indirect_and_branch_queries() {
     assert!(index.has_indirect_calls(0x1500));
     assert!(!index.has_indirect_calls(0x1600));
     let from = index.refs_from_function(0x1500);
-    assert!(from
-        .iter()
-        .any(|r| r.from == 0x1750 && r.to == 0x1100 && r.kind == XrefKind::Call));
+    assert!(
+        from.iter()
+            .any(|r| r.from == 0x1750 && r.to == 0x1100 && r.kind == XrefKind::Call)
+    );
     assert!(!from.iter().any(|r| r.kind == XrefKind::Jump));
     assert!(index.refs_from_function(0x1600).is_empty());
     std::fs::remove_file(path).unwrap();
@@ -303,14 +308,18 @@ fn a_late_discovered_callee_owns_its_previously_decoded_body() {
     assert!(index.has_indirect_calls(0x1750));
     assert!(!index.has_indirect_calls(0x1500));
     assert!(!index.has_indirect_calls(0x1600));
-    assert!(index
-        .refs_from_function(0x1750)
-        .iter()
-        .any(|r| r.from == 0x1750 && r.to == 0x1100 && r.kind == XrefKind::Call));
-    assert!(index
-        .refs_from_function(0x1600)
-        .iter()
-        .any(|r| r.from == 0x1604 && r.to == 0x1750 && r.kind == XrefKind::Call));
+    assert!(
+        index
+            .refs_from_function(0x1750)
+            .iter()
+            .any(|r| r.from == 0x1750 && r.to == 0x1100 && r.kind == XrefKind::Call)
+    );
+    assert!(
+        index
+            .refs_from_function(0x1600)
+            .iter()
+            .any(|r| r.from == 0x1604 && r.to == 0x1750 && r.kind == XrefKind::Call)
+    );
     std::fs::remove_file(path).unwrap();
 }
 
@@ -351,10 +360,12 @@ fn a_predicated_return_keeps_the_nonreturning_path_in_the_same_frame() {
         assert!(!index.is_function_entry(0x140c));
         assert_eq!(index.function_containing(0x1410), Some(0x1400));
         assert_eq!(index.function_instruction_counts(&[0x1400], 100), vec![7]);
-        assert!(index
-            .refs_from_function(0x1400)
-            .iter()
-            .any(|r| r.from == 0x1410 && r.to == 0x1100 && r.kind == XrefKind::Call));
+        assert!(
+            index
+                .refs_from_function(0x1400)
+                .iter()
+                .any(|r| r.from == 0x1410 && r.to == 0x1100 && r.kind == XrefKind::Call)
+        );
         std::fs::remove_file(path).unwrap();
     }
 }
@@ -385,7 +396,10 @@ fn a_call_that_never_returns_ends_the_frame_without_absorbing_the_next_one() {
             .map(|e| e.addr.get_offset())
             .collect();
         for frame in [0x1400, 0x1418, 0x1440, 0x1458] {
-            assert!(entries.contains(&frame), "aif {aif}: missing {frame:#x} in {entries:x?}");
+            assert!(
+                entries.contains(&frame),
+                "aif {aif}: missing {frame:#x} in {entries:x?}"
+            );
         }
         let bytes = std::fs::read(&path).unwrap();
         let file = object::File::parse(&*bytes).unwrap();
@@ -397,7 +411,11 @@ fn a_call_that_never_returns_ends_the_frame_without_absorbing_the_next_one() {
             (0x1458, 0x1460, 0x1110),
         ] {
             assert!(index.is_function_entry(frame), "aif {aif}: {frame:#x}");
-            assert_eq!(index.function_containing(call), Some(frame), "aif {aif}: {call:#x}");
+            assert_eq!(
+                index.function_containing(call),
+                Some(frame),
+                "aif {aif}: {call:#x}"
+            );
             assert!(
                 index
                     .refs_from_function(frame)
@@ -494,10 +512,12 @@ fn a_conditional_return_does_not_hide_an_invalid_successor() {
         prog.arch_mut().set_kuna_option(name, value).unwrap();
     }
     prog.commit_pending_analysis().unwrap();
-    assert!(!prog
-        .function_entries_canonical()
-        .iter()
-        .any(|e| e.addr.get_offset() == 0x1400));
+    assert!(
+        !prog
+            .function_entries_canonical()
+            .iter()
+            .any(|e| e.addr.get_offset() == 0x1400)
+    );
     let file = object::File::parse(&*bytes).unwrap();
     let index = xrefs::build(&file, prog.arch(), prog.arch().translate(), &[0x1000]);
     assert!(!index.is_function_entry(0x1400));
@@ -671,14 +691,18 @@ fn accepted_frames_keep_it_successors_and_real_blx_mode_changes() {
         }
         let file = object::File::parse(&*bytes).unwrap();
         let index = xrefs::build_measured(&file, prog.arch(), prog.arch().translate(), &[0x1000]);
-        assert!(index
-            .refs_from_function(0x1500)
-            .iter()
-            .any(|r| r.from == 0x1508 && r.to == 0x1700 && r.kind == XrefKind::Call));
-        assert!(index
-            .refs_from_function(0x1700)
-            .iter()
-            .any(|r| r.from == 0x1708 && r.to == 0x1740 && r.kind == XrefKind::Call));
+        assert!(
+            index
+                .refs_from_function(0x1500)
+                .iter()
+                .any(|r| r.from == 0x1508 && r.to == 0x1700 && r.kind == XrefKind::Call)
+        );
+        assert!(
+            index
+                .refs_from_function(0x1700)
+                .iter()
+                .any(|r| r.from == 0x1708 && r.to == 0x1740 && r.kind == XrefKind::Call)
+        );
         assert_eq!(
             index.function_instruction_counts(&[0x1500, 0x1700], 100),
             vec![6, 4]
@@ -1006,7 +1030,10 @@ fn provisional_prefix_callees_do_not_leave_inventory_entries_or_bodies() {
                         .map(|entry| entry.addr.get_offset())
                         .collect();
                     for &prefix in prefixes {
-                        assert!(entries.contains(&prefix), "{variant}/{endian}: {entries:x?}");
+                        assert!(
+                            entries.contains(&prefix),
+                            "{variant}/{endian}: {entries:x?}"
+                        );
                         assert!(
                             !entries.contains(&(prefix + 6)),
                             "{variant}/{endian}: {entries:x?}"
@@ -1063,24 +1090,34 @@ fn fingerprint_rendering_retains_live_interworking_and_body_records() {
             }
             let bytes = std::fs::read(&path).unwrap();
             let file = object::File::parse(&*bytes).unwrap();
-            let index = xrefs::build_measured(&file, prog.arch(), prog.arch().translate(), &[0x1000]);
+            let index =
+                xrefs::build_measured(&file, prog.arch(), prog.arch().translate(), &[0x1000]);
             assert_eq!(
                 index.function_instruction_counts(&[0x1500, 0x1600, 0x1700], 100),
                 vec![4, 4, 4]
             );
             assert!(!index.is_function_entry(0x1506));
             assert!(index.refs_from_instruction(0x150a).is_empty());
-            let calls: Vec<_> = index.refs_from_function(0x1700).into_iter()
+            let calls: Vec<_> = index
+                .refs_from_function(0x1700)
+                .into_iter()
                 .filter(|r| r.kind == XrefKind::Call)
                 .map(|r| (r.from, r.to))
                 .collect();
             assert_eq!(calls, vec![(0x1704, 0x1100)]);
-            let space = prog.arch().manage().get_default_code_space().unwrap().clone();
+            let space = prog
+                .arch()
+                .manage()
+                .get_default_code_space()
+                .unwrap()
+                .clone();
             for (at, mode) in [(0x1500, 1), (0x1600, 0), (0x1700, 1)] {
                 assert_eq!(
-                    prog.arch().with_context_db_mut(|db| {
-                        db.get_variable_value(b"TMode", &Address::new(space.clone(), at))
-                    }).unwrap(),
+                    prog.arch()
+                        .with_context_db_mut(|db| {
+                            db.get_variable_value(b"TMode", &Address::new(space.clone(), at))
+                        })
+                        .unwrap(),
                     mode,
                     "{endian}/late={late}: {at:x}"
                 );
@@ -1180,7 +1217,12 @@ fn gap_discovered_interworking_rebuilds_obsolete_frame_bodies() {
                 .filter(|r| r.kind == XrefKind::Call)
                 .map(|r| (r.from, r.to))
                 .collect();
-            assert_eq!(caller, vec![(0x140c, 0x1500)], "{endian}/{patterns}, count={}", index.instruction_count());
+            assert_eq!(
+                caller,
+                vec![(0x140c, 0x1500)],
+                "{endian}/{patterns}, count={}",
+                index.instruction_count()
+            );
             assert_eq!(
                 index.function_instruction_counts(&[0x1500, 0x1400], 100),
                 vec![if endian == "little" { 4 } else { 3 }, 5],
@@ -1426,10 +1468,12 @@ fn an_unfocused_frame_can_invalidate_a_prior_decode_through_an_interior_call() {
             assert!(index.refs_to(0x1700).is_empty(), "{endian}/{aif}");
             assert!(!index.is_function_entry(0x1700), "obsolete callee survived");
             let callee = if endian == "little" { 0x1502 } else { 0x1504 };
-            assert!(index
-                .refs_to(callee)
-                .iter()
-                .any(|r| r.from == 0x1658 && r.kind == XrefKind::Call));
+            assert!(
+                index
+                    .refs_to(callee)
+                    .iter()
+                    .any(|r| r.from == 0x1658 && r.kind == XrefKind::Call)
+            );
             assert_eq!(index.function_containing(callee), Some(callee));
         }
         std::fs::remove_file(path).unwrap();
@@ -1476,10 +1520,12 @@ fn an_extended_prefix_recomputes_the_bodys_pc_relative_references() {
             assert_eq!(index.function_containing(0x1504), Some(0x14fc));
             assert!(!index.is_function_entry(0x1500));
             if recursive {
-                assert!(index
-                    .refs_to(0x14fc)
-                    .iter()
-                    .any(|r| r.from == 0x1508 && r.kind == XrefKind::Call));
+                assert!(
+                    index
+                        .refs_to(0x14fc)
+                        .iter()
+                        .any(|r| r.from == 0x1508 && r.kind == XrefKind::Call)
+                );
             }
             std::fs::remove_file(path).unwrap();
         }
@@ -1610,12 +1656,24 @@ fn repeated_xrefs_preserve_recovered_body_modes() {
     use unlace_base::address::Address;
     let specs = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../specs");
     for (endian, target) in [("little", "ARM:LE:32:v8"), ("big", "ARM:BE:32:v8")] {
-        let path = fixture_variant("repeated-frame-mode", "arm", endian,
-            &["focusmode", "rootmode", "splitframe", "recoveredpublish"]);
+        let path = fixture_variant(
+            "repeated-frame-mode",
+            "arm",
+            endian,
+            &["focusmode", "rootmode", "splitframe", "recoveredpublish"],
+        );
         let mut prog = bootstrap_frames(
-            path.to_str().unwrap(), target, &[specs.to_str().unwrap().into()], None,
-        ).unwrap();
-        for (name, value) in [("listing", "off"), ("funcstart_patterns", "on"), ("aif", "off")] {
+            path.to_str().unwrap(),
+            target,
+            &[specs.to_str().unwrap().into()],
+            None,
+        )
+        .unwrap();
+        for (name, value) in [
+            ("listing", "off"),
+            ("funcstart_patterns", "on"),
+            ("aif", "off"),
+        ] {
             prog.arch_mut().set_kuna_option(name, value).unwrap();
         }
         prog.commit_pending_analysis().unwrap();
@@ -1623,19 +1681,44 @@ fn repeated_xrefs_preserve_recovered_body_modes() {
         let file = object::File::parse(&*bytes).unwrap();
         for iteration in 0..3 {
             let index = xrefs::build_with_focus(
-                &file, prog.arch(), prog.arch().translate(), &[0x1000], &[0x1600],
+                &file,
+                prog.arch(),
+                prog.arch().translate(),
+                &[0x1000],
+                &[0x1600],
             );
             for (root, at, to) in [(0x1600, 0x1750, 0x1100), (0x1680, 0x1684, 0x1300)] {
-                let calls: Vec<_> = index.refs_from_function(root).into_iter()
-                    .filter(|r| r.kind == XrefKind::Call).map(|r| (r.from, r.to)).collect();
+                let calls: Vec<_> = index
+                    .refs_from_function(root)
+                    .into_iter()
+                    .filter(|r| r.kind == XrefKind::Call)
+                    .map(|r| (r.from, r.to))
+                    .collect();
                 assert_eq!(calls, vec![(at, to)], "{endian}/{iteration}: {root:x}");
             }
         }
-        let space = prog.arch().manage().get_default_code_space().unwrap().clone();
-        for (at, mode) in [(0x1600, 0), (0x1750, 0), (0x1753, 0), (0x1680, 1), (0x1686, 1)] {
-            assert_eq!(prog.arch().with_context_db_mut(|db| {
-                db.get_variable_value(b"TMode", &Address::new(space.clone(), at))
-            }).unwrap(), mode, "{endian}: {at:x}");
+        let space = prog
+            .arch()
+            .manage()
+            .get_default_code_space()
+            .unwrap()
+            .clone();
+        for (at, mode) in [
+            (0x1600, 0),
+            (0x1750, 0),
+            (0x1753, 0),
+            (0x1680, 1),
+            (0x1686, 1),
+        ] {
+            assert_eq!(
+                prog.arch()
+                    .with_context_db_mut(|db| {
+                        db.get_variable_value(b"TMode", &Address::new(space.clone(), at))
+                    })
+                    .unwrap(),
+                mode,
+                "{endian}: {at:x}"
+            );
         }
         std::fs::remove_file(path).unwrap();
     }
@@ -1644,33 +1727,64 @@ fn repeated_xrefs_preserve_recovered_body_modes() {
 #[test]
 fn recovered_xref_publication_preserves_later_decompilation() {
     use unlace_base::address::Address;
-    use unlace_console::project::{decompile_entry, DecompileOptions};
+    use unlace_console::project::{DecompileOptions, decompile_entry};
     let specs = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../specs");
     for (endian, target) in [("little", "ARM:LE:32:v8"), ("big", "ARM:BE:32:v8")] {
-        let path = fixture_variant("decompiled-frame-mode", "arm", endian,
-            &["focusmode", "rootmode", "splitframe", "recoveredpublish"]);
+        let path = fixture_variant(
+            "decompiled-frame-mode",
+            "arm",
+            endian,
+            &["focusmode", "rootmode", "splitframe", "recoveredpublish"],
+        );
         for patterns in ["off", "on"] {
             let mut prog = bootstrap_frames(
-                path.to_str().unwrap(), target, &[specs.to_str().unwrap().into()], None,
-            ).unwrap();
-            for (name, value) in [("listing", "off"), ("funcstart_patterns", patterns), ("aif", "off")] {
+                path.to_str().unwrap(),
+                target,
+                &[specs.to_str().unwrap().into()],
+                None,
+            )
+            .unwrap();
+            for (name, value) in [
+                ("listing", "off"),
+                ("funcstart_patterns", patterns),
+                ("aif", "off"),
+            ] {
                 prog.arch_mut().set_kuna_option(name, value).unwrap();
             }
             prog.commit_pending_analysis().unwrap();
             let bytes = std::fs::read(&path).unwrap();
             let file = object::File::parse(&*bytes).unwrap();
             let index = xrefs::build_with_focus(
-                &file, prog.arch(), prog.arch().translate(), &[0x1000], &[0x1600],
+                &file,
+                prog.arch(),
+                prog.arch().translate(),
+                &[0x1000],
+                &[0x1600],
             );
-            assert!(index.refs_from_function(0x1600).iter()
-                .any(|r| r.kind == XrefKind::Call && r.from == 0x1750 && r.to == 0x1100));
-            let space = prog.arch().manage().get_default_code_space().unwrap().clone();
+            assert!(
+                index
+                    .refs_from_function(0x1600)
+                    .iter()
+                    .any(|r| r.kind == XrefKind::Call && r.from == 0x1750 && r.to == 0x1100)
+            );
+            let space = prog
+                .arch()
+                .manage()
+                .get_default_code_space()
+                .unwrap()
+                .clone();
             let entry = prog.resolve_address(&Address::new(space, 0x1600)).unwrap();
             let result = decompile_entry(&mut prog, entry, &DecompileOptions::default());
-            assert!(result.error.is_none(), "{endian}/{patterns}: {:?}", result.error);
+            assert!(
+                result.error.is_none(),
+                "{endian}/{patterns}: {:?}",
+                result.error
+            );
             let code = result.code.unwrap();
-            assert!(code.contains("sub_1100(") && !code.contains("halt_"),
-                "{endian}/{patterns}: {code}");
+            assert!(
+                code.contains("sub_1100(") && !code.contains("halt_"),
+                "{endian}/{patterns}: {code}"
+            );
         }
         std::fs::remove_file(path).unwrap();
     }
@@ -1681,27 +1795,66 @@ fn xref_publication_preserves_established_blocks_and_thumb_callees() {
     use unlace_base::address::Address;
     let specs = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../specs");
     for (endian, target) in [("little", "ARM:LE:32:v8"), ("big", "ARM:BE:32:v8")] {
-        let path = fixture_variant("xref-established-mode", "arm", endian,
-            &["focusmode", "rootmode", "splitframe", "focusblocks", "xrefpublish"]);
+        let path = fixture_variant(
+            "xref-established-mode",
+            "arm",
+            endian,
+            &[
+                "focusmode",
+                "rootmode",
+                "splitframe",
+                "focusblocks",
+                "xrefpublish",
+            ],
+        );
         let mut prog = bootstrap_frames(
-            path.to_str().unwrap(), target, &[specs.to_str().unwrap().into()], None,
-        ).unwrap();
-        for (name, value) in [("listing", "off"), ("funcstart_patterns", "on"), ("aif", "off")] {
+            path.to_str().unwrap(),
+            target,
+            &[specs.to_str().unwrap().into()],
+            None,
+        )
+        .unwrap();
+        for (name, value) in [
+            ("listing", "off"),
+            ("funcstart_patterns", "on"),
+            ("aif", "off"),
+        ] {
             prog.arch_mut().set_kuna_option(name, value).unwrap();
         }
         let bytes = std::fs::read(&path).unwrap();
         let file = object::File::parse(&*bytes).unwrap();
-        let index = xrefs::build_with_focus(
-            &file, prog.arch(), prog.arch().translate(), &[0x1000], &[],
+        let index =
+            xrefs::build_with_focus(&file, prog.arch(), prog.arch().translate(), &[0x1000], &[]);
+        assert!(
+            index
+                .refs_from_function(0x1500)
+                .iter()
+                .any(|r| r.kind == XrefKind::Call && r.from == 0x1750 && r.to == 0x1100)
         );
-        assert!(index.refs_from_function(0x1500).iter()
-            .any(|r| r.kind == XrefKind::Call && r.from == 0x1750 && r.to == 0x1100));
-        let space = prog.arch().manage().get_default_code_space().unwrap().clone();
-        for (at, mode) in [(0x1500, 0), (0x1750, 0), (0x1753, 0), (0x1758, 0),
-            (0x1680, 1), (0x1684, 1), (0x1686, 1)] {
-            assert_eq!(prog.arch().with_context_db_mut(|db| {
-                db.get_variable_value(b"TMode", &Address::new(space.clone(), at))
-            }).unwrap(), mode, "{endian}: {at:x}");
+        let space = prog
+            .arch()
+            .manage()
+            .get_default_code_space()
+            .unwrap()
+            .clone();
+        for (at, mode) in [
+            (0x1500, 0),
+            (0x1750, 0),
+            (0x1753, 0),
+            (0x1758, 0),
+            (0x1680, 1),
+            (0x1684, 1),
+            (0x1686, 1),
+        ] {
+            assert_eq!(
+                prog.arch()
+                    .with_context_db_mut(|db| {
+                        db.get_variable_value(b"TMode", &Address::new(space.clone(), at))
+                    })
+                    .unwrap(),
+                mode,
+                "{endian}: {at:x}"
+            );
         }
         std::fs::remove_file(path).unwrap();
     }
@@ -1714,20 +1867,45 @@ fn inventory_preserves_aif_seed_modes_through_backward_interworking() {
     for (endian, target) in [("little", "ARM:LE:32:v8"), ("big", "ARM:BE:32:v8")] {
         let path = fixture_variant("aif-rebuilt-mode", "arm", endian, &["aifseedmode"]);
         let mut prog = bootstrap_frames(
-            path.to_str().unwrap(), target, &[specs.to_str().unwrap().into()], None,
-        ).unwrap();
+            path.to_str().unwrap(),
+            target,
+            &[specs.to_str().unwrap().into()],
+            None,
+        )
+        .unwrap();
         for name in ["listing", "funcstart_patterns", "aif"] {
             prog.arch_mut().set_kuna_option(name, "on").unwrap();
         }
         prog.commit_pending_analysis().unwrap();
-        assert!(prog.function_entries_canonical().iter()
-            .any(|entry| entry.addr.get_offset() == 0x1500));
-        let space = prog.arch().manage().get_default_code_space().unwrap().clone();
-        for (at, mode) in [(0x1500, 0), (0x1508, 0), (0x1750, 0), (0x1753, 0),
-            (0x1450, 1), (0x1454, 1), (0x1456, 1)] {
-            assert_eq!(prog.arch().with_context_db_mut(|db| {
-                db.get_variable_value(b"TMode", &Address::new(space.clone(), at))
-            }).unwrap(), mode, "{endian}: {at:x}");
+        assert!(
+            prog.function_entries_canonical()
+                .iter()
+                .any(|entry| entry.addr.get_offset() == 0x1500)
+        );
+        let space = prog
+            .arch()
+            .manage()
+            .get_default_code_space()
+            .unwrap()
+            .clone();
+        for (at, mode) in [
+            (0x1500, 0),
+            (0x1508, 0),
+            (0x1750, 0),
+            (0x1753, 0),
+            (0x1450, 1),
+            (0x1454, 1),
+            (0x1456, 1),
+        ] {
+            assert_eq!(
+                prog.arch()
+                    .with_context_db_mut(|db| {
+                        db.get_variable_value(b"TMode", &Address::new(space.clone(), at))
+                    })
+                    .unwrap(),
+                mode,
+                "{endian}: {at:x}"
+            );
         }
         std::fs::remove_file(path).unwrap();
     }
@@ -1738,26 +1916,62 @@ fn frame_publication_restores_gaps_and_preserves_thumb_instruction_spans() {
     use unlace_base::address::Address;
     let specs = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../specs");
     for (endian, target) in [("little", "ARM:LE:32:v8"), ("big", "ARM:BE:32:v8")] {
-        let path = fixture_variant("published-gap-mode", "arm", endian,
-            &["focusmode", "rootmode", "splitframe", "unclaimedmode"]);
+        let path = fixture_variant(
+            "published-gap-mode",
+            "arm",
+            endian,
+            &["focusmode", "rootmode", "splitframe", "unclaimedmode"],
+        );
         for aif in ["off", "on"] {
             let mut prog = bootstrap_frames(
-                path.to_str().unwrap(), target, &[specs.to_str().unwrap().into()], None,
-            ).unwrap();
-            for (name, value) in [("listing", "on"), ("funcstart_patterns", "on"), ("aif", aif)] {
+                path.to_str().unwrap(),
+                target,
+                &[specs.to_str().unwrap().into()],
+                None,
+            )
+            .unwrap();
+            for (name, value) in [
+                ("listing", "on"),
+                ("funcstart_patterns", "on"),
+                ("aif", aif),
+            ] {
                 prog.arch_mut().set_kuna_option(name, value).unwrap();
             }
             prog.commit_pending_analysis().unwrap();
-            let entries: Vec<_> = prog.function_entries_canonical().iter()
-                .map(|entry| entry.addr.get_offset()).collect();
-            assert!(!entries.contains(&0x1750), "the caller must remain undiscovered");
+            let entries: Vec<_> = prog
+                .function_entries_canonical()
+                .iter()
+                .map(|entry| entry.addr.get_offset())
+                .collect();
+            assert!(
+                !entries.contains(&0x1750),
+                "the caller must remain undiscovered"
+            );
             assert!(entries.contains(&0x1680));
-            let space = prog.arch().manage().get_default_code_space().unwrap().clone();
-            for (at, mode) in [(0x1750, 0), (0x1754, 0), (0x17fc, 0),
-                (0x1680, 1), (0x1684, 1), (0x1686, 1), (0x1689, 1)] {
-                assert_eq!(prog.arch().with_context_db_mut(|db| {
-                    db.get_variable_value(b"TMode", &Address::new(space.clone(), at))
-                }).unwrap(), mode, "{endian}/{aif}: {at:x}");
+            let space = prog
+                .arch()
+                .manage()
+                .get_default_code_space()
+                .unwrap()
+                .clone();
+            for (at, mode) in [
+                (0x1750, 0),
+                (0x1754, 0),
+                (0x17fc, 0),
+                (0x1680, 1),
+                (0x1684, 1),
+                (0x1686, 1),
+                (0x1689, 1),
+            ] {
+                assert_eq!(
+                    prog.arch()
+                        .with_context_db_mut(|db| {
+                            db.get_variable_value(b"TMode", &Address::new(space.clone(), at))
+                        })
+                        .unwrap(),
+                    mode,
+                    "{endian}/{aif}: {at:x}"
+                );
             }
         }
         std::fs::remove_file(path).unwrap();
@@ -1768,23 +1982,43 @@ fn frame_publication_restores_gaps_and_preserves_thumb_instruction_spans() {
 fn an_unframed_focus_preserves_its_blocks_and_an_interior_callee_focus() {
     let specs = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../specs");
     for (endian, target) in [("little", "ARM:LE:32:v8"), ("big", "ARM:BE:32:v8")] {
-        let path = fixture_variant("unframed-focused-blocks", "arm", endian,
-            &["focusmode", "rootmode", "splitframe", "focusblocks"]);
+        let path = fixture_variant(
+            "unframed-focused-blocks",
+            "arm",
+            endian,
+            &["focusmode", "rootmode", "splitframe", "focusblocks"],
+        );
         for aif in ["off", "on"] {
             let mut prog = bootstrap_frames(
-                path.to_str().unwrap(), target, &[specs.to_str().unwrap().into()], None,
-            ).unwrap();
-            for (name, value) in [("listing", "off"), ("funcstart_patterns", "on"), ("aif", aif)] {
+                path.to_str().unwrap(),
+                target,
+                &[specs.to_str().unwrap().into()],
+                None,
+            )
+            .unwrap();
+            for (name, value) in [
+                ("listing", "off"),
+                ("funcstart_patterns", "on"),
+                ("aif", aif),
+            ] {
                 prog.arch_mut().set_kuna_option(name, value).unwrap();
             }
             let bytes = std::fs::read(&path).unwrap();
             let file = object::File::parse(&*bytes).unwrap();
             let index = xrefs::build_with_focus(
-                &file, prog.arch(), prog.arch().translate(), &[0x1000], &[0x1500, 0x1684],
+                &file,
+                prog.arch(),
+                prog.arch().translate(),
+                &[0x1000],
+                &[0x1500, 0x1684],
             );
             for (root, at, callee) in [(0x1500, 0x1750, 0x1100), (0x1680, 0x1684, 0x1300)] {
-                let calls: Vec<_> = index.refs_from_function(root).into_iter()
-                    .filter(|r| r.kind == XrefKind::Call).map(|r| (r.from, r.to)).collect();
+                let calls: Vec<_> = index
+                    .refs_from_function(root)
+                    .into_iter()
+                    .filter(|r| r.kind == XrefKind::Call)
+                    .map(|r| (r.from, r.to))
+                    .collect();
                 assert_eq!(calls, vec![(at, callee)], "{endian}/{aif}: {root:x}");
             }
         }
@@ -1799,32 +2033,69 @@ fn inventory_retains_discontiguous_frame_and_intervening_callee_modes() {
     for (endian, target) in [("little", "ARM:LE:32:v8"), ("big", "ARM:BE:32:v8")] {
         for backward in [false, true] {
             let mut flags = vec!["focusmode", "rootmode", "splitframe"];
-            if backward { flags.push("backwardframe"); }
+            if backward {
+                flags.push("backwardframe");
+            }
             let path = fixture_variant("inventory-split-frame-mode", "arm", endian, &flags);
             for aif in ["off", "on"] {
                 let mut prog = bootstrap_frames(
-                    path.to_str().unwrap(), target, &[specs.to_str().unwrap().into()], None,
-                ).unwrap();
-                for (name, value) in [("listing", "on"), ("funcstart_patterns", "on"), ("aif", aif), ("tailcallentry", "off")] {
+                    path.to_str().unwrap(),
+                    target,
+                    &[specs.to_str().unwrap().into()],
+                    None,
+                )
+                .unwrap();
+                for (name, value) in [
+                    ("listing", "on"),
+                    ("funcstart_patterns", "on"),
+                    ("aif", aif),
+                    ("tailcallentry", "off"),
+                ] {
                     prog.arch_mut().set_kuna_option(name, value).unwrap();
                 }
                 prog.commit_pending_analysis().unwrap();
-                let space = prog.arch().manage().get_default_code_space().unwrap().clone();
+                let space = prog
+                    .arch()
+                    .manage()
+                    .get_default_code_space()
+                    .unwrap()
+                    .clone();
                 for (at, mode) in [(0x1600, 0), (0x1750, 0), (0x1680, 1), (0x1684, 1)] {
-                    assert_eq!(prog.arch().with_context_db_mut(|db| {
-                        db.get_variable_value(b"TMode", &Address::new(space.clone(), at))
-                    }).unwrap(), mode, "{endian}/{aif}/backward={backward}: {at:x}");
+                    assert_eq!(
+                        prog.arch()
+                            .with_context_db_mut(|db| {
+                                db.get_variable_value(b"TMode", &Address::new(space.clone(), at))
+                            })
+                            .unwrap(),
+                        mode,
+                        "{endian}/{aif}/backward={backward}: {at:x}"
+                    );
                 }
-                let seeds: Vec<_> = prog.function_entries_canonical().iter()
-                    .map(|entry| entry.addr.get_offset()).collect();
+                let seeds: Vec<_> = prog
+                    .function_entries_canonical()
+                    .iter()
+                    .map(|entry| entry.addr.get_offset())
+                    .collect();
                 let bytes = std::fs::read(&path).unwrap();
                 let file = object::File::parse(&*bytes).unwrap();
-                let index = xrefs::build_measured(&file, prog.arch(), prog.arch().translate(), &seeds);
-                assert_eq!(index.function_instruction_counts(&[0x1600, 0x1680], 100), vec![4, 4]);
+                let index =
+                    xrefs::build_measured(&file, prog.arch(), prog.arch().translate(), &seeds);
+                assert_eq!(
+                    index.function_instruction_counts(&[0x1600, 0x1680], 100),
+                    vec![4, 4]
+                );
                 for (root, at, target) in [(0x1600, 0x1750, 0x1100), (0x1680, 0x1684, 0x1300)] {
-                    let calls: Vec<_> = index.refs_from_function(root).into_iter()
-                        .filter(|r| r.kind == XrefKind::Call).map(|r| (r.from, r.to)).collect();
-                    assert_eq!(calls, vec![(at, target)], "{endian}/{aif}/backward={backward}");
+                    let calls: Vec<_> = index
+                        .refs_from_function(root)
+                        .into_iter()
+                        .filter(|r| r.kind == XrefKind::Call)
+                        .map(|r| (r.from, r.to))
+                        .collect();
+                    assert_eq!(
+                        calls,
+                        vec![(at, target)],
+                        "{endian}/{aif}/backward={backward}"
+                    );
                 }
             }
             std::fs::remove_file(path).unwrap();
@@ -1844,32 +2115,70 @@ fn inventory_admits_frames_with_independent_or_directly_called_modes() {
             let path = fixture_variant("inventory-admission-mode", "arm", endian, variants);
             for aif in ["off", "on"] {
                 let mut prog = bootstrap_frames(
-                    path.to_str().unwrap(), target, &[specs.to_str().unwrap().into()], None,
-                ).unwrap();
-                for (name, value) in [("listing", "on"), ("funcstart_patterns", "on"), ("aif", aif)] {
+                    path.to_str().unwrap(),
+                    target,
+                    &[specs.to_str().unwrap().into()],
+                    None,
+                )
+                .unwrap();
+                for (name, value) in [
+                    ("listing", "on"),
+                    ("funcstart_patterns", "on"),
+                    ("aif", aif),
+                ] {
                     prog.arch_mut().set_kuna_option(name, value).unwrap();
                 }
                 prog.commit_pending_analysis().unwrap();
-                let space = prog.arch().manage().get_default_code_space().unwrap().clone();
-                let mode = prog.arch().with_context_db_mut(|db| {
-                    db.get_variable_value(b"TMode", &Address::new(space.clone(), 0x1500))
-                }).unwrap();
+                let space = prog
+                    .arch()
+                    .manage()
+                    .get_default_code_space()
+                    .unwrap()
+                    .clone();
+                let mode = prog
+                    .arch()
+                    .with_context_db_mut(|db| {
+                        db.get_variable_value(b"TMode", &Address::new(space.clone(), 0x1500))
+                    })
+                    .unwrap();
                 assert_eq!(mode, expected_mode, "{endian}/{aif}/{variants:?}");
-                let seeds: Vec<_> = prog.function_entries_canonical().iter()
-                    .map(|entry| entry.addr.get_offset()).collect();
+                let seeds: Vec<_> = prog
+                    .function_entries_canonical()
+                    .iter()
+                    .map(|entry| entry.addr.get_offset())
+                    .collect();
                 assert!(seeds.contains(&0x1500));
-                assert!(!seeds.contains(&0x1700), "obsolete ARM call must not publish a callee");
+                assert!(
+                    !seeds.contains(&0x1700),
+                    "obsolete ARM call must not publish a callee"
+                );
                 let bytes = std::fs::read(&path).unwrap();
                 let file = object::File::parse(&*bytes).unwrap();
-                let index = xrefs::build_measured(&file, prog.arch(), prog.arch().translate(), &seeds);
-                let calls: Vec<_> = index.refs_from_function(0x1500).into_iter()
-                    .filter(|r| r.kind == XrefKind::Call).map(|r| (r.from, r.to)).collect();
+                let index =
+                    xrefs::build_measured(&file, prog.arch(), prog.arch().translate(), &seeds);
+                let calls: Vec<_> = index
+                    .refs_from_function(0x1500)
+                    .into_iter()
+                    .filter(|r| r.kind == XrefKind::Call)
+                    .map(|r| (r.from, r.to))
+                    .collect();
                 if expected_mode == 0 {
                     assert_eq!(calls, vec![(0x1504, 0x1200)]);
-                    assert!(index.refs_to(0x1300).iter().any(|r| r.from == 0x1384 && r.kind == XrefKind::Call));
+                    assert!(
+                        index
+                            .refs_to(0x1300)
+                            .iter()
+                            .any(|r| r.from == 0x1384 && r.kind == XrefKind::Call)
+                    );
                 } else {
-                    assert!(calls.is_empty(), "direct BLX must supersede the frame's saved ARM mode");
-                    assert_eq!(index.function_instruction_counts(&[0x1500], 100), vec![if endian == "big" { 3 } else { 4 }]);
+                    assert!(
+                        calls.is_empty(),
+                        "direct BLX must supersede the frame's saved ARM mode"
+                    );
+                    assert_eq!(
+                        index.function_instruction_counts(&[0x1500], 100),
+                        vec![if endian == "big" { 3 } else { 4 }]
+                    );
                 }
             }
             std::fs::remove_file(path).unwrap();
@@ -1882,33 +2191,64 @@ fn inventory_publishes_frame_modes_for_seeded_xrefs() {
     use unlace_base::address::Address;
     let specs = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../specs");
     for (endian, target) in [("little", "ARM:LE:32:v8"), ("big", "ARM:BE:32:v8")] {
-        let path = fixture_variant("published-frame-mode", "arm", endian, &["focusmode", "rootmode"]);
+        let path = fixture_variant(
+            "published-frame-mode",
+            "arm",
+            endian,
+            &["focusmode", "rootmode"],
+        );
         for aif in ["off", "on"] {
             for isa in [None, Some(ArmIsa::Arm)] {
                 let mut prog = bootstrap_frames(
-                    path.to_str().unwrap(), target, &[specs.to_str().unwrap().into()], isa,
-                ).unwrap();
-                for (name, value) in [("listing", "on"), ("funcstart_patterns", "on"), ("aif", aif)] {
+                    path.to_str().unwrap(),
+                    target,
+                    &[specs.to_str().unwrap().into()],
+                    isa,
+                )
+                .unwrap();
+                for (name, value) in [
+                    ("listing", "on"),
+                    ("funcstart_patterns", "on"),
+                    ("aif", aif),
+                ] {
                     prog.arch_mut().set_kuna_option(name, value).unwrap();
                 }
                 prog.commit_pending_analysis().unwrap();
-                let space = prog.arch().manage().get_default_code_space().unwrap().clone();
+                let space = prog
+                    .arch()
+                    .manage()
+                    .get_default_code_space()
+                    .unwrap()
+                    .clone();
                 for at in [0x1600, 0x1604, 0x1608] {
-                    let mode = prog.arch().with_context_db_mut(|db| {
-                        db.get_variable_value(b"TMode", &Address::new(space.clone(), at))
-                    }).unwrap();
-                    assert_eq!(mode, 0, "{endian}/{aif}: inventory changed frame mode at {at:x}");
+                    let mode = prog
+                        .arch()
+                        .with_context_db_mut(|db| {
+                            db.get_variable_value(b"TMode", &Address::new(space.clone(), at))
+                        })
+                        .unwrap();
+                    assert_eq!(
+                        mode, 0,
+                        "{endian}/{aif}: inventory changed frame mode at {at:x}"
+                    );
                 }
-                let seeds: Vec<_> = prog.function_entries_canonical().iter()
-                    .map(|entry| entry.addr.get_offset()).collect();
+                let seeds: Vec<_> = prog
+                    .function_entries_canonical()
+                    .iter()
+                    .map(|entry| entry.addr.get_offset())
+                    .collect();
                 assert!(seeds.contains(&0x1600));
                 assert!(seeds.contains(&0x1580));
                 let bytes = std::fs::read(&path).unwrap();
                 let file = object::File::parse(&*bytes).unwrap();
                 let index = xrefs::build(&file, prog.arch(), prog.arch().translate(), &seeds);
                 for (entry, site, callee) in [(0x1600, 0x1604, 0x1200), (0x1580, 0x1584, 0x1300)] {
-                    let calls: Vec<_> = index.refs_from_function(entry).into_iter()
-                        .filter(|r| r.kind == XrefKind::Call).map(|r| (r.from, r.to)).collect();
+                    let calls: Vec<_> = index
+                        .refs_from_function(entry)
+                        .into_iter()
+                        .filter(|r| r.kind == XrefKind::Call)
+                        .map(|r| (r.from, r.to))
+                        .collect();
                     assert_eq!(calls, vec![(site, callee)], "{endian}/{aif}: {entry:x}");
                 }
             }
@@ -1972,10 +2312,12 @@ fn inventory_frame_rebuild_preserves_established_isa_modes() {
                     if patterns == "on" {
                         assert!(entries.contains(&0x1500));
                         assert!(entries.contains(&0x1580));
-                        assert!(index
-                            .refs_to(0x1300)
-                            .iter()
-                            .any(|r| r.from == 0x1584 && r.kind == XrefKind::Call));
+                        assert!(
+                            index
+                                .refs_to(0x1300)
+                                .iter()
+                                .any(|r| r.from == 0x1584 && r.kind == XrefKind::Call)
+                        );
                     }
                 }
             }
@@ -1988,12 +2330,7 @@ fn inventory_frame_rebuild_preserves_established_isa_modes() {
 fn replacement_prefix_roots_retain_original_isa_modes() {
     let specs = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../specs");
     for (endian, target) in [("little", "ARM:LE:32:v8"), ("big", "ARM:BE:32:v8")] {
-        let path = fixture_variant(
-            "replacement-prefix-mode",
-            "arm",
-            endian,
-            &["prefixmode"],
-        );
+        let path = fixture_variant("replacement-prefix-mode", "arm", endian, &["prefixmode"]);
         for focus in [&[0x1200][..], &[0x1600][..]] {
             let mut prog = bootstrap_frames(
                 path.to_str().unwrap(),
@@ -2030,8 +2367,12 @@ fn replacement_prefix_roots_retain_original_isa_modes() {
             for at in [0x1580, 0x1582, 0x1584] {
                 assert_eq!(index.function_containing(at), Some(0x1580));
             }
-            assert!(index.refs_to(0x1580).iter()
-                .any(|r| r.from == 0x1508 && r.kind == XrefKind::Call));
+            assert!(
+                index
+                    .refs_to(0x1580)
+                    .iter()
+                    .any(|r| r.from == 0x1508 && r.kind == XrefKind::Call)
+            );
         }
         std::fs::remove_file(path).unwrap();
     }

@@ -62,8 +62,11 @@ fn decompile_pair(name: &str) -> (String, String) {
 #[test]
 fn arm_and_aarch64_status_helpers_keep_their_return_values() {
     let specs = repo_root().join("specs/Ghidra/Processors");
-    assert!(specs.join("ARM/data/languages/ARM8_le.sla").is_file()
-        && specs.join("AARCH64/data/languages/AARCH64.sla").is_file(), "required processor specs must be available");
+    assert!(
+        specs.join("ARM/data/languages/ARM8_le.sla").is_file()
+            && specs.join("AARCH64/data/languages/AARCH64.sla").is_file(),
+        "required processor specs must be available"
+    );
 
     for name in ["et_rel_status_arm.o", "et_rel_status_aarch64.o"] {
         let (helper, caller) = decompile_pair(name);
@@ -94,9 +97,15 @@ fn arm_and_aarch64_status_helpers_keep_their_return_values() {
 fn a_known_zero_argument_failure_does_not_consume_the_status_return() {
     for name in ["et_rel_status_arm.o", "et_rel_status_aarch64.o"] {
         let (helper, caller) = decompile_pair(name);
-        assert!(!helper.starts_with("void guarded_status"), "{name}: {helper}");
+        assert!(
+            !helper.starts_with("void guarded_status"),
+            "{name}: {helper}"
+        );
         assert!(helper.contains("return "), "{name}: {helper}");
         assert!(helper.contains("__stack_chk_fail();"), "{name}: {helper}");
-        assert!(caller.contains("guarded_status(") && caller.contains("return "), "{name}: {caller}");
+        assert!(
+            caller.contains("guarded_status(") && caller.contains("return "),
+            "{name}: {caller}"
+        );
     }
 }

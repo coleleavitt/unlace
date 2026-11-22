@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use crate::error::{KunaError, KunaResult};
-use crate::space::{spacetype, AddrSpace, AddrSpaceManager};
+use crate::space::{AddrSpace, AddrSpaceManager, spacetype};
 use crate::types::Wrap;
 use crate::xml::{self, Document, Element};
 
@@ -207,9 +207,10 @@ impl IdRegistry {
     /// (C++ `ElementId::find`).
     pub fn find_element(&self, nm: &str, scope: i32) -> u32 {
         if scope == 0
-            && let Some(&id) = self.lookup_element_id.get(nm) {
-                return id;
-            }
+            && let Some(&id) = self.lookup_element_id.get(nm)
+        {
+            return id;
+        }
         ELEM_UNKNOWN.id
     }
 
@@ -424,11 +425,7 @@ pub(crate) fn cxx_parse_unsigned(bytes: &[u8]) -> u64 {
     if overflow {
         return u64::MAX;
     }
-    if neg {
-        val.wrapping_neg()
-    } else {
-        val
-    }
+    if neg { val.wrapping_neg() } else { val }
 }
 
 /// `istringstream >> intb` with `unsetf(ios::dec|ios::hex|ios::oct)`:
@@ -786,7 +783,8 @@ impl<'a> XmlEncode<'a> {
         if num_spaces > XML_ENCODE_MAX_SPACES {
             num_spaces = XML_ENCODE_MAX_SPACES;
         }
-        self.out_stream.extend_from_slice(&XML_ENCODE_SPACES[..num_spaces as usize]);
+        self.out_stream
+            .extend_from_slice(&XML_ENCODE_SPACES[..num_spaces as usize]);
     }
 }
 
@@ -799,7 +797,8 @@ impl Encoder for XmlEncode<'_> {
         }
         self.new_line();
         self.out_stream.push(b'<');
-        self.out_stream.extend_from_slice(elem_id.get_name().as_bytes());
+        self.out_stream
+            .extend_from_slice(elem_id.get_name().as_bytes());
         self.depth += 1;
     }
 
@@ -816,7 +815,8 @@ impl Encoder for XmlEncode<'_> {
             self.tag_status = xml_tag_status::TAG_STOP;
         }
         self.out_stream.extend_from_slice(b"</");
-        self.out_stream.extend_from_slice(elem_id.get_name().as_bytes());
+        self.out_stream
+            .extend_from_slice(elem_id.get_name().as_bytes());
         self.out_stream.push(b'>');
     }
 
@@ -843,7 +843,8 @@ impl Encoder for XmlEncode<'_> {
             if self.tag_status == xml_tag_status::TAG_START {
                 self.out_stream.push(b'>');
             }
-            self.out_stream.extend_from_slice(format!("{val}").as_bytes());
+            self.out_stream
+                .extend_from_slice(format!("{val}").as_bytes());
             self.tag_status = xml_tag_status::TAG_CONTENT;
             return;
         }
@@ -856,7 +857,8 @@ impl Encoder for XmlEncode<'_> {
             if self.tag_status == xml_tag_status::TAG_START {
                 self.out_stream.push(b'>');
             }
-            self.out_stream.extend_from_slice(format!("0x{val:x}").as_bytes());
+            self.out_stream
+                .extend_from_slice(format!("0x{val:x}").as_bytes());
             self.tag_status = xml_tag_status::TAG_CONTENT;
             return;
         }
@@ -878,9 +880,11 @@ impl Encoder for XmlEncode<'_> {
 
     fn write_string_indexed(&mut self, attrib_id: &AttributeId, index: u32, val: &[u8]) {
         self.out_stream.push(b' ');
-        self.out_stream.extend_from_slice(attrib_id.get_name().as_bytes());
+        self.out_stream
+            .extend_from_slice(attrib_id.get_name().as_bytes());
         // C++ `<< dec << index + 1` is uint4 arithmetic: wraps at UINT_MAX
-        self.out_stream.extend_from_slice(format!("{}", index.wadd(1)).as_bytes());
+        self.out_stream
+            .extend_from_slice(format!("{}", index.wadd(1)).as_bytes());
         self.out_stream.extend_from_slice(b"=\"");
         xml::xml_escape(self.out_stream, val);
         self.out_stream.push(b'"');
@@ -896,7 +900,11 @@ impl Encoder for XmlEncode<'_> {
             self.tag_status = xml_tag_status::TAG_CONTENT;
             return;
         }
-        xml::a_v(self.out_stream, attrib_id.get_name(), spc.get_name().as_bytes());
+        xml::a_v(
+            self.out_stream,
+            attrib_id.get_name(),
+            spc.get_name().as_bytes(),
+        );
     }
 }
 
@@ -996,7 +1004,9 @@ impl<'a> XmlDecode<'a> {
                 return Ok(i);
             }
         }
-        Err(KunaError::decoder(format!("Attribute missing: {attrib_name}")))
+        Err(KunaError::decoder(format!(
+            "Attribute missing: {attrib_name}"
+        )))
     }
 }
 
@@ -1021,7 +1031,10 @@ impl Decoder for XmlDecode<'_> {
             }
         } else {
             let cur = self.current_element();
-            let iter = *self.iter_stack.last().expect("XmlDecode: iterator stack empty");
+            let iter = *self
+                .iter_stack
+                .last()
+                .expect("XmlDecode: iterator stack empty");
             if iter == cur.get_children().len() {
                 return Ok(0);
             }
@@ -1034,17 +1047,23 @@ impl Decoder for XmlDecode<'_> {
         let el: Rc<Element>;
         if self.el_stack.is_empty() {
             match self.root_element.take() {
-                None => return Ok(0), // Document already traversed
+                None => return Ok(0),    // Document already traversed
                 Some(root) => el = root, // Only open once
             }
         } else {
             let cur = self.current_element();
-            let iter = *self.iter_stack.last().expect("XmlDecode: iterator stack empty");
+            let iter = *self
+                .iter_stack
+                .last()
+                .expect("XmlDecode: iterator stack empty");
             if iter == cur.get_children().len() {
                 return Ok(0); // Element already fully traversed
             }
             el = Rc::clone(&cur.get_children()[iter]);
-            *self.iter_stack.last_mut().expect("XmlDecode: iterator stack empty") = iter + 1;
+            *self
+                .iter_stack
+                .last_mut()
+                .expect("XmlDecode: iterator stack empty") = iter + 1;
         }
         let id = self.registry.find_element(el.get_name(), self.scope);
         self.el_stack.push(el);
@@ -1061,16 +1080,22 @@ impl Decoder for XmlDecode<'_> {
                     return Err(KunaError::decoder(format!(
                         "Expecting <{}> but reached end of document",
                         elem_id.get_name()
-                    )))
+                    )));
                 }
                 Some(root) => el = root, // Only open document once
             }
         } else {
             let cur = self.current_element();
-            let iter = *self.iter_stack.last().expect("XmlDecode: iterator stack empty");
+            let iter = *self
+                .iter_stack
+                .last()
+                .expect("XmlDecode: iterator stack empty");
             if iter != cur.get_children().len() {
                 el = Rc::clone(&cur.get_children()[iter]);
-                *self.iter_stack.last_mut().expect("XmlDecode: iterator stack empty") = iter + 1;
+                *self
+                    .iter_stack
+                    .last_mut()
+                    .expect("XmlDecode: iterator stack empty") = iter + 1;
             } else {
                 return Err(KunaError::decoder(format!(
                     "Expecting <{}> but no remaining children in current element",
@@ -1156,7 +1181,9 @@ impl Decoder for XmlDecode<'_> {
 
     fn read_bool(&mut self) -> KunaResult<bool> {
         let el = self.current_element();
-        Ok(xml::xml_readbool(el.get_attribute_value_at(self.attribute_index)))
+        Ok(xml::xml_readbool(
+            el.get_attribute_value_at(self.attribute_index),
+        ))
     }
 
     fn read_bool_id(&mut self, attrib_id: &AttributeId) -> KunaResult<bool> {
@@ -1170,7 +1197,9 @@ impl Decoder for XmlDecode<'_> {
 
     fn read_signed_integer(&mut self) -> KunaResult<i64> {
         let el = self.current_element();
-        Ok(cxx_parse_signed(el.get_attribute_value_at(self.attribute_index)))
+        Ok(cxx_parse_signed(
+            el.get_attribute_value_at(self.attribute_index),
+        ))
     }
 
     fn read_signed_integer_id(&mut self, attrib_id: &AttributeId) -> KunaResult<i64> {
@@ -1210,7 +1239,9 @@ impl Decoder for XmlDecode<'_> {
 
     fn read_unsigned_integer(&mut self) -> KunaResult<u64> {
         let el = self.current_element();
-        Ok(cxx_parse_unsigned(el.get_attribute_value_at(self.attribute_index)))
+        Ok(cxx_parse_unsigned(
+            el.get_attribute_value_at(self.attribute_index),
+        ))
     }
 
     fn read_unsigned_integer_id(&mut self, attrib_id: &AttributeId) -> KunaResult<u64> {
@@ -1259,9 +1290,10 @@ impl Decoder for XmlDecode<'_> {
 /// falls through to the same "Unknown address space name" error as in C++.
 fn lookup_space_by_name(manager: &AddrSpaceManager, nm: &[u8]) -> KunaResult<Rc<AddrSpace>> {
     if let Ok(nm_str) = std::str::from_utf8(nm)
-        && let Some(spc) = manager.get_space_by_name(nm_str) {
-            return Ok(Rc::clone(spc));
-        }
+        && let Some(spc) = manager.get_space_by_name(nm_str)
+    {
+        return Ok(Rc::clone(spc));
+    }
     Err(KunaError::decoder(format!(
         "Unknown address space name: {}",
         String::from_utf8_lossy(nm)
@@ -1419,7 +1451,10 @@ impl<'a> PackedDecode<'a> {
     /// *boundaries* move; the ingested bytes, the NUL termination and the byte
     /// at which the stream ends do not, so decoding matches `ingest_stream`.
     pub fn ingest_owned(&mut self, mut data: Vec<u8>) -> KunaResult<()> {
-        let length = data.iter().position(|&byte| byte == 0).unwrap_or(data.len());
+        let length = data
+            .iter()
+            .position(|&byte| byte == 0)
+            .unwrap_or(data.len());
         let remainder = length % Self::BUFFER_SIZE as usize;
         let full_length = length - remainder;
         if full_length == 0 {
@@ -1429,7 +1464,14 @@ impl<'a> PackedDecode<'a> {
         let mut tail = data.split_off(full_length);
         // A tail of exactly zero bytes is the one-byte chunk end_ingest would
         // have pushed for a full last buffer, not a 1024-byte one.
-        tail.resize(if remainder == 0 { 1 } else { Self::BUFFER_SIZE as usize }, 0);
+        tail.resize(
+            if remainder == 0 {
+                1
+            } else {
+                Self::BUFFER_SIZE as usize
+            },
+            0,
+        );
         self.in_stream.push(data);
         self.in_stream.push(tail);
         self.end_ingest(remainder as i32)
@@ -2328,7 +2370,10 @@ mod tests {
             let mut enc = PackedEncode::new(&mut buf2);
             enc.write_bool(&ATTRIB_STORAGE, false);
         }
-        assert_eq!(buf2, vec![0xc0 | 0x20 | (149 >> 7), 0x80 | (149 & 0x7f), 0x10]);
+        assert_eq!(
+            buf2,
+            vec![0xc0 | 0x20 | (149 >> 7), 0x80 | (149 & 0x7f), 0x10]
+        );
     }
 
     #[test]
@@ -2375,8 +2420,14 @@ mod tests {
         let el = dec.open_element_id(&ELEM_DATA).unwrap();
         assert!(dec.read_bool_id(&ATTRIB_ALIGN).unwrap());
         assert_eq!(dec.read_signed_integer_id(&ATTRIB_ID).unwrap(), -0x1234);
-        assert_eq!(dec.read_unsigned_integer_id(&ATTRIB_OFFSET).unwrap(), 0xdeadbeef);
-        assert_eq!(dec.read_string_id(&ATTRIB_VALUE).unwrap(), b"<<&\"bl a h'\\bleh\n\t");
+        assert_eq!(
+            dec.read_unsigned_integer_id(&ATTRIB_OFFSET).unwrap(),
+            0xdeadbeef
+        );
+        assert_eq!(
+            dec.read_string_id(&ATTRIB_VALUE).unwrap(),
+            b"<<&\"bl a h'\\bleh\n\t"
+        );
         let spc = dec.read_space_id(&ATTRIB_SPACE).unwrap();
         assert!(Rc::ptr_eq(&spc, manager.get_space(3).unwrap()));
         dec.close_element(el).unwrap();
@@ -2446,7 +2497,10 @@ mod tests {
             let mut dec = PackedDecode::new(&manager);
             dec.ingest_stream(&buf).unwrap();
             let el = dec.open_element_id(&ELEM_DATA).unwrap();
-            assert_eq!(dec.read_unsigned_integer_id(&ATTRIB_OFFSET).unwrap(), u64::MAX);
+            assert_eq!(
+                dec.read_unsigned_integer_id(&ATTRIB_OFFSET).unwrap(),
+                u64::MAX
+            );
             assert_eq!(dec.read_signed_integer_id(&ATTRIB_ID).unwrap(), i64::MIN);
             dec.close_element(el).unwrap();
             assert_eq!(dec.peek_element().unwrap(), 0);
@@ -2478,11 +2532,20 @@ mod tests {
                 assert_eq!(actual, expected, "padding for length {length}");
                 let el = owned.open_element_id(&ELEM_DATA).unwrap();
                 assert!(owned.read_bool_id(&ATTRIB_STORAGE).unwrap());
-                assert_eq!(owned.read_unsigned_integer_id(&ATTRIB_OFFSET).unwrap(), u64::MAX);
-                assert_eq!(owned.read_string_id(&ATTRIB_NAME).unwrap(), vec![b'x'; length]);
+                assert_eq!(
+                    owned.read_unsigned_integer_id(&ATTRIB_OFFSET).unwrap(),
+                    u64::MAX
+                );
+                assert_eq!(
+                    owned.read_string_id(&ATTRIB_NAME).unwrap(),
+                    vec![b'x'; length]
+                );
                 owned.rewind_attributes();
                 assert_eq!(owned.get_next_attribute_id().unwrap(), ATTRIB_NAME.get_id());
-                assert_eq!(owned.get_next_attribute_id().unwrap(), ATTRIB_OFFSET.get_id());
+                assert_eq!(
+                    owned.get_next_attribute_id().unwrap(),
+                    ATTRIB_OFFSET.get_id()
+                );
                 assert_eq!(owned.read_unsigned_integer().unwrap(), u64::MAX);
                 owned.close_element(el).unwrap();
                 assert_eq!(owned.peek_element().unwrap(), 0);
@@ -2490,7 +2553,10 @@ mod tests {
         }
         for input in [vec![], vec![0, 0x41, 0x81]] {
             let mut dec = PackedDecode::new(&manager);
-            assert_eq!(dec.ingest_owned(input).unwrap_err().to_string(), "Ended ingestion without any input");
+            assert_eq!(
+                dec.ingest_owned(input).unwrap_err().to_string(),
+                "Ended ingestion without any input"
+            );
         }
     }
 
@@ -2523,8 +2589,15 @@ mod tests {
             } else {
                 dec.ingest_stream(&input).unwrap();
             }
-            dec.cur_pos = Position { seq: 0, current: 1022, end: 1024 };
-            assert_eq!(dec.read_unsigned_integer().unwrap_err().to_string(), "Unexpected end of stream");
+            dec.cur_pos = Position {
+                seq: 0,
+                current: 1022,
+                end: 1024,
+            };
+            assert_eq!(
+                dec.read_unsigned_integer().unwrap_err().to_string(),
+                "Unexpected end of stream"
+            );
         }
     }
 
@@ -2536,13 +2609,19 @@ mod tests {
             for start in 16..32 {
                 let mut dec = PackedDecode::new(&manager);
                 dec.in_stream = chunks.clone();
-                dec.cur_pos = Position { seq: 0, current: start, end: 32 };
+                dec.cur_pos = Position {
+                    seq: 0,
+                    current: start,
+                    end: 32,
+                };
                 let mut expected_pos = dec.cur_pos;
                 let mut expected = 0u64;
                 for _ in 0..len {
                     expected = (expected << pf::RAWDATA_BITSPERBYTE)
-                        | u64::from(PackedDecode::get_next_byte(&chunks, &mut expected_pos).unwrap()
-                            & pf::RAWDATA_MASK);
+                        | u64::from(
+                            PackedDecode::get_next_byte(&chunks, &mut expected_pos).unwrap()
+                                & pf::RAWDATA_MASK,
+                        );
                 }
                 assert_eq!(dec.read_integer(len).unwrap(), expected, "{start}, {len}");
                 assert_eq!(dec.cur_pos.seq, expected_pos.seq);
@@ -2552,17 +2631,34 @@ mod tests {
         }
         let mut dec = PackedDecode::new(&manager);
         dec.in_stream = vec![vec![0xff; 4]];
-        dec.cur_pos = Position { seq: 0, current: 0, end: 4 };
-        assert_eq!(dec.read_integer(4).unwrap_err().to_string(), "Unexpected end of stream");
+        dec.cur_pos = Position {
+            seq: 0,
+            current: 0,
+            end: 4,
+        };
+        assert_eq!(
+            dec.read_integer(4).unwrap_err().to_string(),
+            "Unexpected end of stream"
+        );
     }
 
     #[test]
     fn test_marshal_packed_byte_cursor_bounds() {
         let chunks = vec![vec![0x81, 0x82], vec![0x83]];
-        let mut pos = Position { seq: 0, current: 0, end: 2 };
-        assert_eq!(PackedDecode::get_next_byte(&chunks, &mut pos).unwrap(), 0x81);
+        let mut pos = Position {
+            seq: 0,
+            current: 0,
+            end: 2,
+        };
+        assert_eq!(
+            PackedDecode::get_next_byte(&chunks, &mut pos).unwrap(),
+            0x81
+        );
         assert_eq!((pos.seq, pos.current, pos.end), (0, 1, 2));
-        assert_eq!(PackedDecode::get_next_byte(&chunks, &mut pos).unwrap(), 0x82);
+        assert_eq!(
+            PackedDecode::get_next_byte(&chunks, &mut pos).unwrap(),
+            0x82
+        );
         assert_eq!((pos.seq, pos.current, pos.end), (1, 0, 1));
         let err = PackedDecode::get_next_byte(&chunks, &mut pos).unwrap_err();
         assert_eq!(err.to_string(), "Unexpected end of stream");

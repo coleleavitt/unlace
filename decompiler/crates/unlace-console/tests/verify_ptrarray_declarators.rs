@@ -16,13 +16,18 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 const FIXTURE: &str = "ptrarraydecl_x86_64";
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Bootstrap the fixture, decompile `func`, and return the captured C.
@@ -34,19 +39,25 @@ fn decompile(func: &str) -> String {
     let path = root
         .join("decompiler/crates/unlace-analysis/tests/fixtures")
         .join(FIXTURE)
-        .to_str().expect("UTF-8 fixture path")
+        .to_str()
+        .expect("UTF-8 fixture path")
         .to_string();
     let mut prog = bootstrap_from_object(&path, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
 
-    let cmds = vec![format!("load function {func}"), "decompile".to_string(), "print C".to_string()];
+    let cmds = vec![
+        format!("load function {func}"),
+        "decompile".to_string(),
+        "print C".to_string(),
+    ];
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
     {
         let data = status.get_data_mut(DECOMPILE_MODULE).unwrap();
         let dcp = data.as_any_mut().downcast_mut::<IfaceDecompData>().unwrap();
-        prog.commit_pending_analysis().expect("analysis commit succeeds");
+        prog.commit_pending_analysis()
+            .expect("analysis commit succeeds");
         dcp.conf = Some(prog);
     }
     for _ in 0..count {
@@ -61,7 +72,10 @@ fn assert_balanced(code: &str) {
         let text = line.split("//").next().unwrap_or("");
         let open = text.matches('(').count();
         let close = text.matches(')').count();
-        assert_eq!(open, close, "unbalanced declarator on `{line}`; got:\n{code}");
+        assert_eq!(
+            open, close,
+            "unbalanced declarator on `{line}`; got:\n{code}"
+        );
     }
 }
 
@@ -97,7 +111,8 @@ fn pointer_to_array_locals_keep_their_suffix() {
         "an array of pointers to arrays puts its count inside the group; got:\n{code}",
     );
     assert!(
-        code.lines().any(|l| l.trim_start().starts_with("char (*v") && l.contains(")[16];")),
+        code.lines()
+            .any(|l| l.trim_start().starts_with("char (*v") && l.contains(")[16];")),
         "the register local holding `get_row`'s result is a pointer to an array; got:\n{code}",
     );
     assert_balanced(&code);
@@ -113,6 +128,9 @@ fn an_array_of_pointers_local_is_not_grouped() {
         code.contains("char *first [2];"),
         "an array of pointers needs no grouping; got:\n{code}",
     );
-    assert!(!code.contains("(*first"), "the mirror type must not be grouped; got:\n{code}");
+    assert!(
+        !code.contains("(*first"),
+        "the mirror type must not be grouped; got:\n{code}"
+    );
     assert_balanced(&code);
 }

@@ -22,13 +22,13 @@
 
 use std::rc::Rc;
 
-use unlace_base::space::{spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, spacetype};
 use unlace_base::types::int4;
 
-use unlace_decomp::dtype::{type_class, type_metatype, Datatype, TypeFactoryImpl};
+use unlace_decomp::dtype::{Datatype, TypeFactoryImpl, type_class, type_metatype};
 use unlace_decomp::fspec::{
-    parameter_pieces_flags, ParamEntry, ParamListKind, ParamListStandard, ParameterPieces,
-    PrototypePieces,
+    ParamEntry, ParamListKind, ParamListStandard, ParameterPieces, PrototypePieces,
+    parameter_pieces_flags,
 };
 
 /// A manager whose default data space is a `register`-like space of the given
@@ -38,7 +38,8 @@ use unlace_decomp::fspec::{
 fn manager_with_data_space(addr_size: u32) -> (AddrSpaceManager, Rc<AddrSpace>) {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     let reg = Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "register",
@@ -61,7 +62,8 @@ fn manager_with_data_space(addr_size: u32) -> (AddrSpaceManager, Rc<AddrSpace>) 
 fn manager_without_data_space() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m
 }
 
@@ -126,19 +128,38 @@ fn hidden_return_emits_indirect_output_and_trailing_pointer_param() {
     let proto = proto_returning(outtype);
 
     let mut res: Vec<ParameterPieces> = Vec::new();
-    model.assign_map(&proto, &tf, &mut res, &mgr).expect("assignMap must succeed");
+    model
+        .assign_map(&proto, &tf, &mut res, &mgr)
+        .expect("assignMap must succeed");
 
     // C++ pushes exactly two pieces on the hidden-return path.
-    assert_eq!(res.len(), 2, "expected indirect output + hidden pointer param");
+    assert_eq!(
+        res.len(),
+        2,
+        "expected indirect output + hidden pointer param"
+    );
 
     // Piece 0: the output, re-typed to a pointer-to-struct, flagged indirect.
     assert_eq!(res[0].flags, parameter_pieces_flags::INDIRECTSTORAGE);
-    assert_eq!(res[0].type_.as_ref().unwrap().get_metatype(), type_metatype::TYPE_PTR);
-    assert_eq!(res[0].type_.as_ref().unwrap().get_size(), 8, "pointer size = space addr_size");
+    assert_eq!(
+        res[0].type_.as_ref().unwrap().get_metatype(),
+        type_metatype::TYPE_PTR
+    );
+    assert_eq!(
+        res[0].type_.as_ref().unwrap().get_size(),
+        8,
+        "pointer size = space addr_size"
+    );
 
     // Piece 1: the hidden input param carries the pointer, address still invalid.
-    assert_eq!(res[1].type_.as_ref().unwrap().get_metatype(), type_metatype::TYPE_PTR);
-    assert!(res[1].addr.is_invalid(), "hidden param address filled in by input list");
+    assert_eq!(
+        res[1].type_.as_ref().unwrap().get_metatype(),
+        type_metatype::TYPE_PTR
+    );
+    assert!(
+        res[1].addr.is_invalid(),
+        "hidden param address filled in by input list"
+    );
     // No model rules => plain hidden return (not special-register).
     assert_eq!(res[1].flags, 0);
 }
@@ -155,11 +176,20 @@ fn void_return_is_single_unflagged_piece() {
     let proto = proto_returning(voidtype);
 
     let mut res: Vec<ParameterPieces> = Vec::new();
-    model.assign_map(&proto, &tf, &mut res, &mgr).expect("assignMap must succeed");
+    model
+        .assign_map(&proto, &tf, &mut res, &mgr)
+        .expect("assignMap must succeed");
 
-    assert_eq!(res.len(), 1, "void return must not synthesize a hidden param");
+    assert_eq!(
+        res.len(),
+        1,
+        "void return must not synthesize a hidden param"
+    );
     assert_eq!(res[0].flags, 0);
-    assert_eq!(res[0].type_.as_ref().unwrap().get_metatype(), type_metatype::TYPE_VOID);
+    assert_eq!(
+        res[0].type_.as_ref().unwrap().get_metatype(),
+        type_metatype::TYPE_VOID
+    );
     // Void leaves the address invalid (C++: "Leave the address as invalid").
     assert!(res[0].addr.is_invalid());
 }
@@ -178,11 +208,20 @@ fn fitting_return_assigns_directly_with_no_hidden_param() {
     let proto = proto_returning(outtype);
 
     let mut res: Vec<ParameterPieces> = Vec::new();
-    model.assign_map(&proto, &tf, &mut res, &mgr).expect("assignMap must succeed");
+    model
+        .assign_map(&proto, &tf, &mut res, &mgr)
+        .expect("assignMap must succeed");
 
-    assert_eq!(res.len(), 1, "an assignable return must not gain a hidden param");
+    assert_eq!(
+        res.len(),
+        1,
+        "an assignable return must not gain a hidden param"
+    );
     assert_eq!(res[0].flags & parameter_pieces_flags::INDIRECTSTORAGE, 0);
-    assert_eq!(res[0].type_.as_ref().unwrap().get_metatype(), type_metatype::TYPE_INT);
+    assert_eq!(
+        res[0].type_.as_ref().unwrap().get_metatype(),
+        type_metatype::TYPE_INT
+    );
     // It got a concrete address (the output register), not an invalid one.
     assert!(!res[0].addr.is_invalid());
 }
@@ -202,13 +241,22 @@ fn hidden_return_pointer_size_tracks_default_data_space() {
     let proto = proto_returning(outtype);
 
     let mut res: Vec<ParameterPieces> = Vec::new();
-    model.assign_map(&proto, &tf, &mut res, &mgr).expect("assignMap must succeed");
+    model
+        .assign_map(&proto, &tf, &mut res, &mgr)
+        .expect("assignMap must succeed");
 
     assert_eq!(res.len(), 2);
     // Both the indirect output and the hidden param carry a 4-byte pointer.
-    assert_eq!(res[0].type_.as_ref().unwrap().get_size(), 4, "pointer follows 4-byte data space");
+    assert_eq!(
+        res[0].type_.as_ref().unwrap().get_size(),
+        4,
+        "pointer follows 4-byte data space"
+    );
     assert_eq!(res[1].type_.as_ref().unwrap().get_size(), 4);
-    assert_eq!(res[0].type_.as_ref().unwrap().get_metatype(), type_metatype::TYPE_PTR);
+    assert_eq!(
+        res[0].type_.as_ref().unwrap().get_metatype(),
+        type_metatype::TYPE_PTR
+    );
 }
 
 /// Adversarial #5 — error faithfulness, not a silent shortcut.  When the
@@ -320,7 +368,7 @@ fn pointer_unassignable_raises_param_unassigned_not_generic_lowlevel() {
 #[test]
 fn no_data_space_guard_is_not_param_unassigned_so_catch_arm_cannot_swallow_it() {
     use unlace_base::error::KunaError;
-    use unlace_base::space::{spacetype, AddrSpace};
+    use unlace_base::space::{AddrSpace, spacetype};
 
     let mgr = manager_without_data_space();
     let reg = Rc::new(AddrSpace::new(

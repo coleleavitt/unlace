@@ -18,7 +18,7 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 
 use super::*;
@@ -32,7 +32,8 @@ use crate::context::ArchContext;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -191,11 +192,16 @@ fn render_actions_enumerates_full_set() {
 fn clone_filtered_obeys_grouplist() {
     let act = ActionDeadCode::boxed("deadcode");
     let yes = ActionGroupList::from_names(["deadcode", "analysis"]);
-    let cl = act.clone_filtered(&yes).expect("present when grouplist contains group");
+    let cl = act
+        .clone_filtered(&yes)
+        .expect("present when grouplist contains group");
     assert_eq!(cl.get_name(), "deadcode");
     assert_eq!(cl.get_group(), "deadcode");
     let no = ActionGroupList::from_names(["merge"]);
-    assert!(act.clone_filtered(&no).is_none(), "dropped when group absent");
+    assert!(
+        act.clone_filtered(&no).is_none(),
+        "dropped when group absent"
+    );
 }
 
 /// The parameterized actions pass their configuration through `clone_filtered`
@@ -276,11 +282,17 @@ fn stackptrflow_with_stack_runs_and_latches() {
 fn reset_zeroes_per_function_counters() {
     let mut fd = build_fd();
 
-    let mut seg = ActionSegmentize { base: ActionBase::new(0, "segmentize", "g"), localcount: 5 };
+    let mut seg = ActionSegmentize {
+        base: ActionBase::new(0, "segmentize", "g"),
+        localcount: 5,
+    };
     seg.reset(&mut fd);
     assert_eq!(seg.localcount, 0);
 
-    let mut cp = ActionConstantPtr { base: ActionBase::new(0, "constantptr", "g"), localcount: 3 };
+    let mut cp = ActionConstantPtr {
+        base: ActionBase::new(0, "constantptr", "g"),
+        localcount: 3,
+    };
     cp.reset(&mut fd);
     assert_eq!(cp.localcount, 0);
 
@@ -291,7 +303,10 @@ fn reset_zeroes_per_function_counters() {
     rv.reset(&mut fd);
     assert_eq!(rv.numpass, 0);
 
-    let mut it = ActionInferTypes { base: ActionBase::new(0, "infertypes", "g"), localcount: 6 };
+    let mut it = ActionInferTypes {
+        base: ActionBase::new(0, "infertypes", "g"),
+        localcount: 6,
+    };
     it.reset(&mut fd);
     assert_eq!(it.localcount, 0);
 }
@@ -325,7 +340,12 @@ fn all_applies_report_no_change_on_empty_fd() {
     for mut a in render_actions("g") {
         let r = a.apply(&mut fd, &mut ctx);
         assert_eq!(r, 0, "{} apply must return 0", a.get_name());
-        assert_eq!(a.base().count, 0, "{} apply must report no change", a.get_name());
+        assert_eq!(
+            a.base().count,
+            0,
+            "{} apply must report no change",
+            a.get_name()
+        );
     }
 }
 
@@ -380,13 +400,24 @@ fn lane_divide_fails_the_function_when_a_split_fails_part_way() {
     arch.lanerecords = vec![LanedRegister::with_mask(16, 1 << 4)];
     let glb = Rc::new(arch);
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
-    let mut fd = Funcdata::new("func", "func", glb, Address::new(Rc::clone(&ram), 0x1000), 0x10000000, 0x40)
-        .unwrap();
+    let mut fd = Funcdata::new(
+        "func",
+        "func",
+        glb,
+        Address::new(Rc::clone(&ram), 0x1000),
+        0x10000000,
+        0x40,
+    )
+    .unwrap();
     let root = fd.bblocks_ref().root.expect("bblocks root");
     let bl = fd.bblocks_mut().new_block_basic(root);
     let at = |off: u64| Address::new(Rc::clone(&ram), off);
     let input = |fd: &mut Funcdata, size: int4, off: u64| {
-        let vn = fd.vbank_mut().create(size, at(off), Rc::new(Datatype::new(size, type_metatype::TYPE_UNKNOWN)));
+        let vn = fd.vbank_mut().create(
+            size,
+            at(off),
+            Rc::new(Datatype::new(size, type_metatype::TYPE_UNKNOWN)),
+        );
         fd.vbank_mut().set_input(vn, &mut |_, _, _| Ok(())).unwrap()
     };
     let whole = input(&mut fd, 16, 0x100);
@@ -416,7 +447,10 @@ fn lane_divide_fails_the_function_when_a_split_fails_part_way() {
     let mut ctx = ActionContext::new();
     let r = ActionLaneDivide::boxed("g").apply(&mut fd, &mut ctx);
     assert_eq!(r, -1);
-    let error = ctx.error.expect("the failed split fails the function").to_string();
+    let error = ctx
+        .error
+        .expect("the failed split fails the function")
+        .to_string();
     assert!(error.contains("Overlapping input varnodes"), "{error}");
 }
 
@@ -436,13 +470,27 @@ fn lane_divide_counts_a_refused_split_as_a_failed_trace() {
     let glb = Rc::new(arch);
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
     let unique = Rc::clone(glb.manage().get_space_by_name("unique").unwrap());
-    let mut fd = Funcdata::new("func", "func", glb, Address::new(Rc::clone(&ram), 0x1000), 0x10000000, 0x40)
-        .unwrap();
+    let mut fd = Funcdata::new(
+        "func",
+        "func",
+        glb,
+        Address::new(Rc::clone(&ram), 0x1000),
+        0x10000000,
+        0x40,
+    )
+    .unwrap();
     let root = fd.bblocks_ref().root.expect("bblocks root");
     let bl = fd.bblocks_mut().new_block_basic(root);
     let whole_at = Address::new(Rc::clone(&unique), 0x100);
-    let whole = fd.vbank_mut().create(16, whole_at.clone(), Rc::new(Datatype::new(16, type_metatype::TYPE_UNKNOWN)));
-    let whole = fd.vbank_mut().set_input(whole, &mut |_, _, _| Ok(())).unwrap();
+    let whole = fd.vbank_mut().create(
+        16,
+        whole_at.clone(),
+        Rc::new(Datatype::new(16, type_metatype::TYPE_UNKNOWN)),
+    );
+    let whole = fd
+        .vbank_mut()
+        .set_input(whole, &mut |_, _, _| Ok(()))
+        .unwrap();
     let mut subs = Vec::new();
     for _ in 0..2 {
         let sub = fd.new_op(2, Address::new(Rc::clone(&ram), 0x2000));
@@ -462,7 +510,11 @@ fn lane_divide_counts_a_refused_split_as_a_failed_trace() {
     );
     let mut ctx = ActionContext::new();
     let r = ActionLaneDivide::boxed("g").apply(&mut fd, &mut ctx);
-    assert!(ctx.error.is_none(), "{:?}", ctx.error.map(|e| e.to_string()));
+    assert!(
+        ctx.error.is_none(),
+        "{:?}",
+        ctx.error.map(|e| e.to_string())
+    );
     assert_eq!(r, 0, "no split");
     for sub in subs {
         let op = fd.obank().get(sub).expect("SUBPIECE kept");

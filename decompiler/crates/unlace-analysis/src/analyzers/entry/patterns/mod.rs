@@ -286,12 +286,19 @@ impl FuncStartPatterns {
     ///
     /// Returns absolute VMAs (`sec_addr + offset`), sorted/deduped.
     pub fn scan(&self, sec_addr: u64, data: &[u8]) -> Vec<u64> {
-        self.scan_with_mode(sec_addr, data).into_iter().map(|(vma, _)| vma).collect()
+        self.scan_with_mode(sec_addr, data)
+            .into_iter()
+            .map(|(vma, _)| vma)
+            .collect()
     }
 
     /// [`Self::scan`], with the `TMode` value the matching pair sets.
     pub fn scan_with_mode(&self, sec_addr: u64, data: &[u8]) -> Vec<(u64, Option<u32>)> {
-        self.scan_hits(sec_addr, data).into_iter().filter(|h| !h.weak).map(|h| (h.vma, h.mode)).collect()
+        self.scan_hits(sec_addr, data)
+            .into_iter()
+            .filter(|h| !h.weak)
+            .map(|h| (h.vma, h.mode))
+            .collect()
     }
 
     /// Every start in `data`, strong and weak. After a start is accepted the
@@ -319,7 +326,9 @@ impl FuncStartPatterns {
             }
             if hit.is_none() {
                 'pairs: for pp in &self.pairs {
-                    let Some(post) = pp.post.iter().find(|p| p.matches(here)) else { continue };
+                    let Some(post) = pp.post.iter().find(|p| p.matches(here)) else {
+                        continue;
+                    };
                     for pre in &pp.pre {
                         let plen = pre.len();
                         if plen <= off && pre.matches(&data[off - plen..off]) {
@@ -375,7 +384,9 @@ fn parse_patternlist(xml: &str, pairs: &mut Vec<PatternPairs>, bare: &mut Vec<Di
     let mut rest = xml;
     while let Some(open) = rest.find("<patternpairs") {
         let after_open = &rest[open..];
-        let Some(close_rel) = after_open.find("</patternpairs>") else { break };
+        let Some(close_rel) = after_open.find("</patternpairs>") else {
+            break;
+        };
         let block = &after_open[..close_rel];
         parse_patternpairs(block, pairs);
         rest = &after_open[close_rel + "</patternpairs>".len()..];
@@ -394,7 +405,9 @@ fn parse_patternlist(xml: &str, pairs: &mut Vec<PatternPairs>, bare: &mut Vec<Di
             continue;
         }
         let after_open = &rest[open..];
-        let Some(close_rel) = after_open.find("</pattern>") else { break };
+        let Some(close_rel) = after_open.find("</pattern>") else {
+            break;
+        };
         let block = &after_open[..close_rel];
         parse_bare_pattern(block, bare);
         rest = &after_open[close_rel + "</pattern>".len()..];
@@ -413,13 +426,20 @@ fn parse_patternpairs(block: &str, pairs: &mut Vec<PatternPairs>) {
     let mut rest = block;
     while let Some(a) = rest.find("<postpatterns>") {
         let after = &rest[a + "<postpatterns>".len()..];
-        let Some(b) = after.find("</postpatterns>") else { break };
+        let Some(b) = after.find("</postpatterns>") else {
+            break;
+        };
         let post_block = &after[..b];
         let strong = post_has_funcstart(post_block);
         if strong || post_has_possible_funcstart(post_block) {
             let post = collect_data(post_block);
             if !pre.is_empty() && !post.is_empty() {
-                pairs.push(PatternPairs { pre: pre.clone(), post, tmode: tmode_of(post_block), weak: !strong });
+                pairs.push(PatternPairs {
+                    pre: pre.clone(),
+                    post,
+                    tmode: tmode_of(post_block),
+                    weak: !strong,
+                });
             }
         }
         rest = &after[b + "</postpatterns>".len()..];
@@ -429,7 +449,9 @@ fn parse_patternpairs(block: &str, pairs: &mut Vec<PatternPairs>) {
 /// True if a post block's action is an unconditional `<possiblefuncstart/>`
 /// (no `after`/`validcode` attribute, which need a Listing to check).
 fn post_has_possible_funcstart(body: &str) -> bool {
-    let Some(at) = body.find("<possiblefuncstart") else { return false };
+    let Some(at) = body.find("<possiblefuncstart") else {
+        return false;
+    };
     let tag = &body[at..at + body[at..].find('>').unwrap_or(0)];
     !tag.contains("after=") && !tag.contains("validcode")
 }
@@ -448,9 +470,13 @@ fn tmode_of(body: &str) -> Option<u32> {
 /// never matches inside `<possiblefuncstart` (that tag has no `<funcstart`
 /// substring), so a found `<funcstart` is already the strict action.
 fn post_has_funcstart(body: &str) -> bool {
-    let Some(fs) = body.find("<funcstart") else { return false };
+    let Some(fs) = body.find("<funcstart") else {
+        return false;
+    };
     let tag_tail = &body[fs..];
-    let Some(end) = tag_tail.find('>') else { return false };
+    let Some(end) = tag_tail.find('>') else {
+        return false;
+    };
     let tag = &tag_tail[..end];
     if tag.contains("after=")
         || tag.contains("validcode")
@@ -485,7 +511,9 @@ fn collect_data(body: &str) -> Vec<Ditted> {
     let mut rest = body;
     while let Some(a) = rest.find("<data>") {
         let after = &rest[a + "<data>".len()..];
-        let Some(b) = after.find("</data>") else { break };
+        let Some(b) = after.find("</data>") else {
+            break;
+        };
         let text = &after[..b];
         if let Some(d) = Ditted::parse(text) {
             out.push(d);
@@ -501,15 +529,30 @@ fn collect_data(body: &str) -> Vec<Ditted> {
 
 // The vendored upstream pattern XMLs (provenance: docs/UPSTREAM.md GHIDRA_REV).
 // Embedded so the analyzer tier needs no spec-root file handle.
-const X86_64_GCC: (&str, &str) = ("x86-64gcc_patterns.xml", include_str!("x86-64gcc_patterns.xml"));
-const X86_64_WIN: (&str, &str) = ("x86-64win_patterns.xml", include_str!("x86-64win_patterns.xml"));
+const X86_64_GCC: (&str, &str) = (
+    "x86-64gcc_patterns.xml",
+    include_str!("x86-64gcc_patterns.xml"),
+);
+const X86_64_WIN: (&str, &str) = (
+    "x86-64win_patterns.xml",
+    include_str!("x86-64win_patterns.xml"),
+);
 const X86_GCC: (&str, &str) = ("x86gcc_patterns.xml", include_str!("x86gcc_patterns.xml"));
-const X86_GCC_PRE: (&str, &str) = ("x86gcc_prepatterns.xml", include_str!("x86gcc_prepatterns.xml"));
+const X86_GCC_PRE: (&str, &str) = (
+    "x86gcc_prepatterns.xml",
+    include_str!("x86gcc_prepatterns.xml"),
+);
 const X86_WIN: (&str, &str) = ("x86win_patterns.xml", include_str!("x86win_patterns.xml"));
-const AARCH64_LE: (&str, &str) = ("AARCH64_LE_patterns.xml", include_str!("AARCH64_LE_patterns.xml"));
+const AARCH64_LE: (&str, &str) = (
+    "AARCH64_LE_patterns.xml",
+    include_str!("AARCH64_LE_patterns.xml"),
+);
 const ARM_LE: (&str, &str) = ("ARM_LE_patterns.xml", include_str!("ARM_LE_patterns.xml"));
 const ARM_BE: (&str, &str) = ("ARM_BE_patterns.xml", include_str!("ARM_BE_patterns.xml"));
-const RISCV_GC: (&str, &str) = ("riscv_gc_patterns.xml", include_str!("riscv_gc_patterns.xml"));
+const RISCV_GC: (&str, &str) = (
+    "riscv_gc_patterns.xml",
+    include_str!("riscv_gc_patterns.xml"),
+);
 const MIPS_LE: (&str, &str) = ("MIPS_LE_patterns.xml", include_str!("MIPS_LE_patterns.xml"));
 const MIPS_BE: (&str, &str) = ("MIPS_BE_patterns.xml", include_str!("MIPS_BE_patterns.xml"));
 const PPC_LE: (&str, &str) = ("PPC_LE_patterns.xml", include_str!("PPC_LE_patterns.xml"));
@@ -521,7 +564,10 @@ pub const PATTERN_DIR_ENV: &str = "KUNA_PATTERN_DIR";
 
 /// The contents of `name` in the user's pattern directory, when it has one.
 fn user_file(name: &str) -> Option<String> {
-    user_file_in(std::path::Path::new(&std::env::var_os(PATTERN_DIR_ENV)?), name)
+    user_file_in(
+        std::path::Path::new(&std::env::var_os(PATTERN_DIR_ENV)?),
+        name,
+    )
 }
 
 fn user_file_in(dir: &std::path::Path, name: &str) -> Option<String> {
@@ -549,7 +595,12 @@ fn compile(xmls: &[(&str, &'static str)], align: u64) -> FuncStartPatterns {
         pp.post.iter().for_each(|d| accept(d, 0));
     }
     bare.iter().for_each(|d| accept(d, d.mark));
-    FuncStartPatterns { pairs, bare, align, first }
+    FuncStartPatterns {
+        pairs,
+        bare,
+        align,
+        first,
+    }
 }
 
 /// Return the compiled full pattern set for `arch` (little/big-endian aware), or
@@ -573,11 +624,7 @@ pub fn for_arch(
         ($cell:ident, $build:expr_2021) => {{
             static $cell: OnceLock<FuncStartPatterns> = OnceLock::new();
             let set = $cell.get_or_init(|| $build);
-            if set.is_empty() {
-                None
-            } else {
-                Some(set)
-            }
+            if set.is_empty() { None } else { Some(set) }
         }};
     }
     match arch {
@@ -621,9 +668,12 @@ pub fn for_arch(
 /// than the gcc+windows union, and a big-endian ARM image takes the
 /// big-endian ARM patterns.
 pub fn for_object(file: &object::File) -> Option<&'static FuncStartPatterns> {
-    use object::{Architecture as A, BinaryFormat as F};
     use object::read::Object;
-    fn cached(cell: &'static OnceLock<FuncStartPatterns>, build: impl FnOnce() -> FuncStartPatterns) -> Option<&'static FuncStartPatterns> {
+    use object::{Architecture as A, BinaryFormat as F};
+    fn cached(
+        cell: &'static OnceLock<FuncStartPatterns>,
+        build: impl FnOnce() -> FuncStartPatterns,
+    ) -> Option<&'static FuncStartPatterns> {
         Some(cell.get_or_init(build)).filter(|set| !set.is_empty())
     }
     static X8664_GCC: OnceLock<FuncStartPatterns> = OnceLock::new();
@@ -684,14 +734,26 @@ mod tests {
 
     #[test]
     fn aarch64_possiblefuncstart_pairs_are_weak_hits() {
-        let set = for_arch(object::Architecture::Aarch64, true).expect("AArch64 now has a (weak) set");
+        let set =
+            for_arch(object::Architecture::Aarch64, true).expect("AArch64 now has a (weak) set");
         assert!(set.has_weak());
-        let data = [0xc0, 0x03, 0x5f, 0xd6, 0xfd, 0x7b, 0xbf, 0xa9, 0xfd, 0x03, 0x00, 0x91];
+        let data = [
+            0xc0, 0x03, 0x5f, 0xd6, 0xfd, 0x7b, 0xbf, 0xa9, 0xfd, 0x03, 0x00, 0x91,
+        ];
         let hits = set.scan_hits(0x1000, &data);
-        assert_eq!(hits, vec![Hit { vma: 0x1004, mode: None, weak: true }]);
-        assert!(set.scan(0x1000, &data).is_empty(), "a weak hit is not a strong start");
+        assert_eq!(
+            hits,
+            vec![Hit {
+                vma: 0x1004,
+                mode: None,
+                weak: true
+            }]
+        );
+        assert!(
+            set.scan(0x1000, &data).is_empty(),
+            "a weak hit is not a strong start"
+        );
     }
-
 
     #[test]
     fn ditted_hex_and_binary_parse() {
@@ -750,7 +812,10 @@ mod tests {
         // widget prologue at 0x10.
         data[0x10..0x18].copy_from_slice(&[0x53, 0x48, 0x89, 0xfb, 0x48, 0x8d, 0x04, 0x1b]);
         let hits = set.scan(0x1120, &data);
-        assert!(hits.contains(&0x1130), "push rbx after nop should be a start, got {hits:#x?}");
+        assert!(
+            hits.contains(&0x1130),
+            "push rbx after nop should be a start, got {hits:#x?}"
+        );
     }
 
     #[test]
@@ -761,7 +826,10 @@ mod tests {
         let mut data = vec![0xABu8; 0x20];
         data[0x10..0x18].copy_from_slice(&[0x53, 0x48, 0x89, 0xfb, 0x48, 0x8d, 0x04, 0x1b]);
         let hits = set.scan(0x1120, &data);
-        assert!(!hits.contains(&0x1130), "no prepattern → no patternpair hit, got {hits:#x?}");
+        assert!(
+            !hits.contains(&0x1130),
+            "no prepattern → no patternpair hit, got {hits:#x?}"
+        );
     }
 
     #[test]
@@ -803,7 +871,10 @@ mod tests {
             // patternpairs + `*`-marked bare patterns (the x86-64win MSVC shapes).
             (object::Architecture::I386, true),
         ] {
-            assert!(for_arch(a, le).is_some(), "{a:?} should have a <funcstart/> pattern set");
+            assert!(
+                for_arch(a, le).is_some(),
+                "{a:?} should have a <funcstart/> pattern set"
+            );
         }
         // AArch64/PPC carry only `<possiblefuncstart/>` patternpairs: a weak set,
         // taken only where no unwind table or function table describes the bytes.
@@ -813,7 +884,10 @@ mod tests {
             (object::Architecture::PowerPc64, true),
         ] {
             let set = for_arch(a, le).expect("weak set");
-            assert!(set.has_weak(), "{a:?} has <possiblefuncstart/> patternpairs");
+            assert!(
+                set.has_weak(),
+                "{a:?} has <possiblefuncstart/> patternpairs"
+            );
         }
     }
 }

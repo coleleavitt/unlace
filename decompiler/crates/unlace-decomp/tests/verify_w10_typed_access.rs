@@ -21,10 +21,10 @@
 //!
 //! Item id: w10-typed-access.
 
-use unlace_base::types::int4;
-use unlace_decomp::dtype::{type_metatype, Datatype, DatatypeKind, TypeField};
-use unlace_decomp::unionresolve::{score_locked_type, score_truncation};
 use std::rc::Rc;
+use unlace_base::types::int4;
+use unlace_decomp::dtype::{Datatype, DatatypeKind, TypeField, type_metatype};
+use unlace_decomp::unionresolve::{score_locked_type, score_truncation};
 
 // ---- type builders (mirror the in-module test helpers, public API only) ----
 
@@ -54,12 +54,24 @@ fn make_union(size: int4, fields: &[(int4, Rc<Datatype>)]) -> Rc<Datatype> {
 #[test]
 fn w10_typed_access_union_field_size_match_scores_plus10() {
     let int4t = base(4, type_metatype::TYPE_INT);
-    let u = make_union(8, &[(0, base(8, type_metatype::TYPE_FLOAT)), (0, Rc::clone(&int4t))]);
+    let u = make_union(
+        8,
+        &[
+            (0, base(8, type_metatype::TYPE_FLOAT)),
+            (0, Rc::clone(&int4t)),
+        ],
+    );
     // vn_size 4 matches field f1 (offset 0, size 4).  result_base = None so the
     // `+5 if result.getBase()==unionDt` bonus does not apply.
     let (score, ct_out) = score_truncation(&u, 4, 0, None).unwrap();
-    assert_eq!(score, 10, "union with a size/offset-matching field scores +10");
-    assert!(ct_out.is_none(), "union truncation never recurses a member type (cpp:937)");
+    assert_eq!(
+        score, 10,
+        "union with a size/offset-matching field scores +10"
+    );
+    assert!(
+        ct_out.is_none(),
+        "union truncation never recurses a member type (cpp:937)"
+    );
 }
 
 /// UNION branch, NO field matches the truncation size -> -10.  cpp:938.
@@ -68,7 +80,10 @@ fn w10_typed_access_union_no_match_scores_minus10() {
     // Only an 8-byte field; a 4-byte truncation at offset 0 matches nothing.
     let u = make_union(8, &[(0, base(8, type_metatype::TYPE_FLOAT))]);
     let (score, ct_out) = score_truncation(&u, 4, 0, None).unwrap();
-    assert_eq!(score, -10, "union with no size-matching field scores -10 (cpp:938)");
+    assert_eq!(
+        score, -10,
+        "union with no size-matching field scores -10 (cpp:938)"
+    );
     assert!(ct_out.is_none());
 }
 
@@ -94,7 +109,10 @@ fn w10_typed_access_scalar_exact_match_scores_plus10() {
     let int4t = base(4, type_metatype::TYPE_INT);
     let (score, ct_out) = score_truncation(&int4t, 4, 0, None).unwrap();
     assert_eq!(score, 10, "exact scalar size/offset match scores +10");
-    assert!(ct_out.is_some(), "scalar branch returns the (unrecursed) type, not None");
+    assert!(
+        ct_out.is_some(),
+        "scalar branch returns the (unrecursed) type, not None"
+    );
     assert!(Rc::ptr_eq(ct_out.as_ref().unwrap(), &int4t));
 }
 
@@ -105,7 +123,10 @@ fn w10_typed_access_scalar_wider_int_covers_scores_plus1() {
     // 8-byte int, truncate 4 bytes at offset 0: size(8) >= 4+0 -> score 1.
     let int8t = base(8, type_metatype::TYPE_INT);
     let (score, _ct) = score_truncation(&int8t, 4, 0, None).unwrap();
-    assert_eq!(score, 1, "wide INT covering the truncation scores +1 (cpp:956)");
+    assert_eq!(
+        score, 1,
+        "wide INT covering the truncation scores +1 (cpp:956)"
+    );
 }
 
 /// SCALAR branch, a type that cannot be subdivided to reach the truncation
@@ -118,7 +139,10 @@ fn w10_typed_access_scalar_unreachable_scores_minus10() {
     // neither INT/UINT nor ARRAY, getSubType(curOff) returns None -> ct==0.
     let f8 = base(8, type_metatype::TYPE_FLOAT);
     let (score, ct_out) = score_truncation(&f8, 4, 2, None).unwrap();
-    assert_eq!(score, -10, "no sub-type reaches the truncation -> -10 (cpp:973)");
+    assert_eq!(
+        score, -10,
+        "no sub-type reaches the truncation -> -10 (cpp:973)"
+    );
     assert!(ct_out.is_none(), "ct==0 sentinel maps to None");
 }
 

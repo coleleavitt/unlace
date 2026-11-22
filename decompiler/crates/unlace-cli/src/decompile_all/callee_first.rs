@@ -3,13 +3,13 @@
 //! Planning stays in callgraph; this owner applies the plan, collects caller
 //! votes, parks callbacks and converges shared types while retaining target order.
 
+use std::collections::{BTreeMap, BTreeSet};
 use unlace_console::engine::{ConsoleProgram, FunctionEntry};
 use unlace_console::project::FuncResult;
-use std::collections::{BTreeMap, BTreeSet};
 
-use super::result_store::ResultStore;
 use super::Args;
-use crate::callgraph::{callee_first_plan, CallGraph, CallbackRefs};
+use super::result_store::ResultStore;
+use crate::callgraph::{CallGraph, CallbackRefs, callee_first_plan};
 
 /// Execute the callee-first plan using decompile-all's output options.
 /// Results retain target order. A missing call graph falls back to target order
@@ -89,11 +89,16 @@ pub(crate) fn decompile_callee_first(
     }
     prog.arch_mut().kuna_gottailcall = unlace_decomp::kuna_gottailcall::Ledger {
         recording: true,
-        planned: plan.iter().filter_map(|&(i, _)| vote_key(&targets[i])).collect(),
+        planned: plan
+            .iter()
+            .filter_map(|&(i, _)| vote_key(&targets[i]))
+            .collect(),
         ..Default::default()
     };
     let callers = match &graph {
-        Ok(graph) if prog.arch().narrow_args_callers => graph.arm_closed_sites(&args.binary, args.slice_pref()),
+        Ok(graph) if prog.arch().narrow_args_callers => {
+            graph.arm_closed_sites(&args.binary, args.slice_pref())
+        }
         _ => None,
     };
     let callback_refs = match (&graph, &open) {
@@ -105,10 +110,13 @@ pub(crate) fn decompile_callee_first(
     // (kuna `calleereginputs custom`) Each eligible callee's call sites, listed
     // while the graph is alive; decided after the first pass.
     let custom_plan = match &graph {
-        Ok(graph) => super::custom_reg_callers::analyze(prog, graph, &args.binary, args.slice_pref()),
+        Ok(graph) => {
+            super::custom_reg_callers::analyze(prog, graph, &args.binary, args.slice_pref())
+        }
         _ => super::custom_reg_callers::CustomRegPlan::empty(),
     };
-    let previous_settling = std::mem::replace(&mut prog.arch_mut().kuna_settle_caller_reads, graph.is_ok());
+    let previous_settling =
+        std::mem::replace(&mut prog.arch_mut().kuna_settle_caller_reads, graph.is_ok());
     drop(graph);
     crate::kuna_allocrelease::after_analysis();
     {
@@ -147,9 +155,10 @@ pub(crate) fn decompile_callee_first(
     converge_callee_first(prog, &targets, &plan, &base, &mut slots);
     prog.arch_mut().kuna_callbacktype.recording = false;
     if let (Some(refs), Some(open)) = (&callback_refs, &open)
-        && prog.arch().callbacktype.is_on() {
-            callback_park_round(prog, refs, open, &targets, &plan, &base, &mut slots);
-        }
+        && prog.arch().callbacktype.is_on()
+    {
+        callback_park_round(prog, refs, open, &targets, &plan, &base, &mut slots);
+    }
     converge_element_globals_callee_first(prog, &targets, &plan, &base, &mut slots);
     converge_store_types_callee_first(prog, &targets, &plan, &base, &mut slots);
     prog.arch_mut().kuna_settle_caller_reads = previous_settling;
@@ -209,7 +218,11 @@ impl VoidReads {
         for _ in 0..VOID_READ_ROUNDS {
             let mut redo = unlace_decomp::kuna_voidret::due(prog.arch_mut());
             redo.extend(unlace_decomp::kuna_voidret::withdrawals(prog.arch_mut()));
-            redo.extend(unlace_decomp::kuna_voidret::stale_readers(prog.arch(), &self.stamp_of, &self.changed));
+            redo.extend(unlace_decomp::kuna_voidret::stale_readers(
+                prog.arch(),
+                &self.stamp_of,
+                &self.changed,
+            ));
             if redo.is_empty() {
                 redo = unlace_decomp::kuna_gottailcall::due(prog.arch_mut());
             }
@@ -232,13 +245,18 @@ impl VoidReads {
         keys: &BTreeSet<(i32, u64)>,
     ) {
         for &(index, park) in plan {
-            let Some(k) = vote_key(&targets[index]).filter(|k| keys.contains(k)) else { continue };
+            let Some(k) = vote_key(&targets[index]).filter(|k| keys.contains(k)) else {
+                continue;
+            };
             let stated = unlace_decomp::kuna_callrettype::statement(prog.arch(), k);
             let narrow = unlace_decomp::kuna_narrowret::statement(prog.arch(), k);
             let returns = unlace_decomp::kuna_voidret::returns(prog.arch(), k);
             let storage = unlace_decomp::kuna_voidret::return_storage(prog.arch(), k);
             let again = decompile_planned(prog, &targets[index], park, base);
-            if slots.get(index).is_none_or(|first| unlace_console::project::redo_replaces(&first, &again)) {
+            if slots
+                .get(index)
+                .is_none_or(|first| unlace_console::project::redo_replaces(&first, &again))
+            {
                 slots.put(index, again);
             } else {
                 unlace_decomp::kuna_callrettype::restore(prog.arch_mut(), k, stated.clone());
@@ -317,7 +335,8 @@ fn converge_element_globals_callee_first(
                 continue;
             }
             let key = vote_key(&targets[index]);
-            let stated = key.and_then(|k| unlace_decomp::kuna_callrettype::statement(prog.arch(), k));
+            let stated =
+                key.and_then(|k| unlace_decomp::kuna_callrettype::statement(prog.arch(), k));
             let narrow = key.and_then(|k| unlace_decomp::kuna_narrowret::statement(prog.arch(), k));
             let again = decompile_planned(prog, &targets[index], park, base);
             if let Some(k) = key.filter(|&k| narrow_changed(prog, k, narrow.as_deref())) {
@@ -352,9 +371,14 @@ fn caller_args_round(
     let printed = slots.printed();
     let mut budget = printed * CALLER_ARGS_BUDGET_PCT / 100;
     let mut spent = 0usize;
-    #[expect(clippy::disallowed_types, reason = "Membership only; the ordered plan determines redo order.")]
+    #[expect(
+        clippy::disallowed_types,
+        reason = "Membership only; the ordered plan determines redo order."
+    )]
     let changed: std::collections::HashSet<u64> =
-        unlace_decomp::kuna_callerargs::decide(prog.arch_mut()).into_iter().collect();
+        unlace_decomp::kuna_callerargs::decide(prog.arch_mut())
+            .into_iter()
+            .collect();
     let queue: Vec<(usize, (i32, u64))> = plan
         .iter()
         .filter_map(|&(index, _)| {
@@ -367,11 +391,16 @@ fn caller_args_round(
         prog.arch_mut().kuna_callerargs.stated.remove(&key.1);
     }
     for &(index, park) in plan {
-        let Some(key) = vote_key(&targets[index]).filter(|k| admitted.contains(k)) else { continue };
+        let Some(key) = vote_key(&targets[index]).filter(|k| admitted.contains(k)) else {
+            continue;
+        };
         let stated = unlace_decomp::kuna_callrettype::statement(prog.arch(), key);
         let again = decompile_planned(prog, &targets[index], park, base);
         match slots.get(index) {
-            Some(first) if !same_arity(&first, &again) || !unlace_console::project::redo_replaces(&first, &again) => {
+            Some(first)
+                if !same_arity(&first, &again)
+                    || !unlace_console::project::redo_replaces(&first, &again) =>
+            {
                 prog.arch_mut().kuna_callerargs.stated.remove(&key.1);
                 unlace_decomp::kuna_callrettype::restore(prog.arch_mut(), key, stated);
             }
@@ -593,7 +622,10 @@ fn callback_park_round(
             continue;
         }
         let redone = decompile_planned(prog, &targets[i], park, base);
-        if slots.get(i).is_none_or(|first| unlace_console::project::redo_replaces(&first, &redone)) {
+        if slots
+            .get(i)
+            .is_none_or(|first| unlace_console::project::redo_replaces(&first, &redone))
+        {
             slots.put(i, redone);
         }
     }
@@ -609,7 +641,10 @@ fn open_callee_votes(
     targets: &[FunctionEntry],
 ) -> BTreeMap<(i32, u64), Vec<u64>> {
     let mut expected = BTreeMap::new();
-    #[expect(clippy::disallowed_types, reason = "Membership only; the ledger reads closed through contains.")]
+    #[expect(
+        clippy::disallowed_types,
+        reason = "Membership only; the ledger reads closed through contains."
+    )]
     let mut closed = std::collections::HashSet::new();
     for t in targets {
         let Some(key) = vote_key(t) else { continue };
@@ -673,7 +708,10 @@ fn callee_vote_rounds(
         if changed.is_empty() {
             break;
         }
-        #[expect(clippy::disallowed_types, reason = "Membership only; the ordered plan determines redo order.")]
+        #[expect(
+            clippy::disallowed_types,
+            reason = "Membership only; the ordered plan determines redo order."
+        )]
         let changed: std::collections::HashSet<(i32, u64)> = changed.into_iter().collect();
         let queue: Vec<(usize, (i32, u64))> = plan
             .iter()
@@ -728,12 +766,17 @@ fn callee_vote_rounds(
         }
     }
     if unlace_decomp::kuna_calleevote::trace() {
-        eprintln!("[calleevote] redo pass: {redone} decompiles, {spent} lines reprinted of {opening} budgeted");
+        eprintln!(
+            "[calleevote] redo pass: {redone} decompiles, {spent} lines reprinted of {opening} budgeted"
+        );
     }
     prog.arch_mut().kuna_calleevote.recording = false;
 }
 
-#[expect(clippy::disallowed_types, reason = "Admitted membership is unordered; declined charges retain sorted order.")]
+#[expect(
+    clippy::disallowed_types,
+    reason = "Admitted membership is unordered; declined charges retain sorted order."
+)]
 type BudgetAdmission<K> = (std::collections::HashSet<K>, Vec<(usize, K)>);
 
 /// (kuna `calleevote`) Split this round's candidates -- one `(charge, key)` pair
@@ -754,7 +797,10 @@ fn admit_within_budget<K: Ord + std::hash::Hash>(
     spent: &mut usize,
 ) -> BudgetAdmission<K> {
     queue.sort_unstable();
-    #[expect(clippy::disallowed_types, reason = "Membership only; queue sorting determines admission and decline order.")]
+    #[expect(
+        clippy::disallowed_types,
+        reason = "Membership only; queue sorting determines admission and decline order."
+    )]
     let mut admitted = std::collections::HashSet::new();
     let mut declined = Vec::new();
     for (charge, key) in queue {
@@ -795,7 +841,12 @@ fn same_arity(first: &FuncResult, again: &FuncResult) -> bool {
             inner.matches(',').count() + 1
         }
     };
-    let frame = |r: &FuncResult| r.variables.iter().filter(|v| v.kind() != "register" && !v.split_piece).count();
+    let frame = |r: &FuncResult| {
+        r.variables
+            .iter()
+            .filter(|v| v.kind() != "register" && !v.split_piece)
+            .count()
+    };
     frame(first) == frame(again)
         && params(first) == params(again)
         && declared(first) == declared(again)
@@ -834,7 +885,11 @@ fn converge_callee_first(
     let naming: BTreeSet<usize> = plan
         .iter()
         .map(|&(index, _)| index)
-        .filter(|&index| slots.get(index).is_some_and(|r| unlace_console::project::names_any_type(&r, &stale)))
+        .filter(|&index| {
+            slots
+                .get(index)
+                .is_some_and(|r| unlace_console::project::names_any_type(&r, &stale))
+        })
         .collect();
     let queue = naming
         .iter()
@@ -854,7 +909,11 @@ fn converge_callee_first(
         let narrow = key.and_then(|k| unlace_decomp::kuna_narrowret::statement(prog.arch(), k));
         let again = decompile_planned(prog, &targets[index], park, base);
         let kept = key.is_none_or(|k| !narrow_changed(prog, k, narrow.as_deref()));
-        if kept && slots.get(index).is_none_or(|first| unlace_console::project::redo_replaces(&first, &again)) {
+        if kept
+            && slots
+                .get(index)
+                .is_none_or(|first| unlace_console::project::redo_replaces(&first, &again))
+        {
             slots.put(index, again);
         } else if let Some(k) = key {
             unlace_decomp::kuna_callrettype::restore(prog.arch_mut(), k, stated);
@@ -869,8 +928,15 @@ fn converge_callee_first(
 /// to the old statement reads a value the new one does not promise, so such a
 /// redo is not kept. A callback parked at its slot's prototype is the
 /// exception: the slot declares its return.
-fn narrow_changed(prog: &ConsoleProgram, k: (i32, u64), before: Option<&unlace_decomp::kuna_narrowret::NarrowReturn>) -> bool {
-    !unlace_decomp::kuna_narrowret::same_statement(before, unlace_decomp::kuna_narrowret::statement(prog.arch(), k).as_deref())
+fn narrow_changed(
+    prog: &ConsoleProgram,
+    k: (i32, u64),
+    before: Option<&unlace_decomp::kuna_narrowret::NarrowReturn>,
+) -> bool {
+    !unlace_decomp::kuna_narrowret::same_statement(
+        before,
+        unlace_decomp::kuna_narrowret::statement(prog.arch(), k).as_deref(),
+    )
 }
 
 /// Decompile one planned target with its prototype-parking decision.
@@ -968,7 +1034,12 @@ mod calleevote_stored_tests {
     #[test]
     fn the_struct_sweep_declines_long_bodies_past_its_share() {
         let mut budget = (40_000 * STRUCT_SWEEP_BUDGET_PCT / 100).max(STRUCT_SWEEP_MIN_LINES);
-        let queue = vec![(1_500, (1, 0x4000)), (12, (1, 0x1000)), (1_500, (1, 0x3000)), (300, (1, 0x2000))];
+        let queue = vec![
+            (1_500, (1, 0x4000)),
+            (12, (1, 0x1000)),
+            (1_500, (1, 0x3000)),
+            (300, (1, 0x2000)),
+        ];
         let (admitted, declined) = admit_within_budget(queue, &mut budget, &mut 0);
         let mut admitted: Vec<u64> = admitted.into_iter().map(|k| k.1).collect();
         admitted.sort_unstable();

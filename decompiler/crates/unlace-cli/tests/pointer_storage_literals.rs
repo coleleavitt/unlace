@@ -62,7 +62,16 @@ __asm__("pushq %rbp\nmovq %rsp,%rbp\nsubq $16,%rsp\nmovl $5,-16(%rbp)\nmovq %rdi
     } else {
         "s0xffffffffffffffe8"
     };
-    let script=format!("load file \"{}\"\nread symbols\noption ctypes on\noption partialaccess on\noption stackviews on\nparse line typedef struct Record {{unsigned int length;void *pointer;}} Record;\nmap prototype 0x{:x} unsigned int emit(char *payload);\nmap prototype 0x{:x} unsigned int consume(Record *r);\nload addr 0x{:x}\nmap address {} unsigned char frame[{}]\ndecompile\nopenfile write \"{}\"\nprint C\nclosefile\nquit\n",binary.display(),address(b"emit"),address(b"consume"),address(b"emit"),word,size,c.display());
+    let script = format!(
+        "load file \"{}\"\nread symbols\noption ctypes on\noption partialaccess on\noption stackviews on\nparse line typedef struct Record {{unsigned int length;void *pointer;}} Record;\nmap prototype 0x{:x} unsigned int emit(char *payload);\nmap prototype 0x{:x} unsigned int consume(Record *r);\nload addr 0x{:x}\nmap address {} unsigned char frame[{}]\ndecompile\nopenfile write \"{}\"\nprint C\nclosefile\nquit\n",
+        binary.display(),
+        address(b"emit"),
+        address(b"consume"),
+        address(b"emit"),
+        word,
+        size,
+        c.display()
+    );
     let engine = std::env::var_os("KUNA_DECOMP_DBG")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| {

@@ -21,7 +21,7 @@ use unlace_decomp::dtype::{Datatype, TypeFactory};
 use unlace_decomp::fspec::PrototypePieces;
 use unlace_decomp::kuna_formatstring::VarargAbi;
 
-use super::{spec_to_datatype, Spec};
+use super::{Spec, spec_to_datatype};
 
 /// Ghidra `FormatStringAnalyzer.VARIADIC_SUBSTRINGS` (`:42`): a call-site callee
 /// whose name *contains* one of these is a candidate variadic format function.
@@ -119,7 +119,10 @@ pub fn build_override_pieces(
         intypes.push(spec_to_datatype(*spec, types, word_size)?);
     }
     let ptr_size = types.get_size_of_pointer();
-    if !intypes[fixed_param_types.len()..].iter().all(|ty| abi.admits(ty, ptr_size)) {
+    if !intypes[fixed_param_types.len()..]
+        .iter()
+        .all(|ty| abi.admits(ty, ptr_size))
+    {
         return Ok(None);
     }
     // The parameters are deliberately ANONYMOUS, where Ghidra's
@@ -184,33 +187,42 @@ mod tests {
         types.set_max_basetype_size(8);
         types.setup_sizes(Some(8), 8, 4);
         types
-            .set_core_type("char", 1, unlace_decomp::dtype::type_metatype::TYPE_INT, true)
+            .set_core_type(
+                "char",
+                1,
+                unlace_decomp::dtype::type_metatype::TYPE_INT,
+                true,
+            )
             .expect("char core type");
         types.cache_core_types().expect("cache core types");
         let fixed: Vec<Rc<Datatype>> = Vec::new();
-        assert!(build_override_pieces(
-            "printf",
-            None,
-            &fixed,
-            &[Spec::Int, Spec::LongDouble],
-            &types,
-            8,
-            VarargAbi::Named
-        )
-        .unwrap()
-        .is_none());
+        assert!(
+            build_override_pieces(
+                "printf",
+                None,
+                &fixed,
+                &[Spec::Int, Spec::LongDouble],
+                &types,
+                8,
+                VarargAbi::Named
+            )
+            .unwrap()
+            .is_none()
+        );
         // The same format without the `L` is typed.
-        assert!(build_override_pieces(
-            "printf",
-            None,
-            &fixed,
-            &[Spec::Int, Spec::Double],
-            &types,
-            8,
-            VarargAbi::Named
-        )
-        .unwrap()
-        .is_some());
+        assert!(
+            build_override_pieces(
+                "printf",
+                None,
+                &fixed,
+                &[Spec::Int, Spec::Double],
+                &types,
+                8,
+                VarargAbi::Named
+            )
+            .unwrap()
+            .is_some()
+        );
     }
 
     #[test]
@@ -220,7 +232,12 @@ mod tests {
         types.set_max_basetype_size(8);
         types.setup_sizes(Some(4), 4, 4);
         types
-            .set_core_type("char", 1, unlace_decomp::dtype::type_metatype::TYPE_INT, true)
+            .set_core_type(
+                "char",
+                1,
+                unlace_decomp::dtype::type_metatype::TYPE_INT,
+                true,
+            )
             .expect("char core type");
         types.cache_core_types().expect("cache core types");
         let fixed: Vec<Rc<Datatype>> = Vec::new();

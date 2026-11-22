@@ -15,8 +15,15 @@ const MAX_BYTES: usize = 4096;
 const MAX_ARGS: usize = 16;
 
 pub enum Argument {
-    Primitive { pointer: VarnodeId, primitive: &'static str },
-    String { data: VarnodeId, length: VarnodeId, pointer_bridge: bool },
+    Primitive {
+        pointer: VarnodeId,
+        primitive: &'static str,
+    },
+    String {
+        data: VarnodeId,
+        length: VarnodeId,
+        pointer_bridge: bool,
+    },
 }
 
 pub struct Plan {
@@ -26,7 +33,10 @@ pub struct Plan {
 }
 
 pub(crate) enum Writer {
-    String { value: VarnodeId, pointer_bridge: bool },
+    String {
+        value: VarnodeId,
+        pointer_bridge: bool,
+    },
     Io(super::kuna_rustfmtio::Writer),
 }
 
@@ -162,8 +172,13 @@ pub(crate) fn primitive_arguments(
         let pointer = cells[index * 2];
         let address = constant_word(fd, cells[index * 2 + 1])?;
         let Some(formatter) = arch.rust_integer_formatters.get(&address).copied() else {
-            arguments.push(super::kuna_rustfmtstr::recover(fd, arch, id, address, pointer)?);
-            formatters.push(Formatter { primitive: "&str", kind: Trait::Display });
+            arguments.push(super::kuna_rustfmtstr::recover(
+                fd, arch, id, address, pointer,
+            )?);
+            formatters.push(Formatter {
+                primitive: "&str",
+                kind: Trait::Display,
+            });
             continue;
         };
         let primitive = formatter.primitive;
@@ -401,7 +416,8 @@ impl Template {
     ) -> Option<(&'static str, String)> {
         let newline = match self.pieces.last_mut() {
             Some(Piece::Literal(text))
-                if matches!(kind, MacroKind::Print(_) | MacroKind::Write) && text.ends_with('\n') =>
+                if matches!(kind, MacroKind::Print(_) | MacroKind::Write)
+                    && text.ends_with('\n') =>
             {
                 text.pop();
                 true

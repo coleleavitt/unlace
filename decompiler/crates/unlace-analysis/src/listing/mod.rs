@@ -29,49 +29,49 @@
 //! decoded instruction.
 
 pub mod classify;
-mod kuna_compactrefs;
-mod kuna_insnindex;
-mod kuna_insnstore;
 pub mod context;
 pub mod decode;
-pub mod kuna_callbackentry;
-pub mod kuna_calltable;
-pub mod kuna_callerreads;
-pub mod kuna_poolextents;
-pub mod kuna_entrythumbflow;
-pub mod kuna_floatglobals;
-pub mod kuna_funcchunks;
+mod kuna_a32switch;
+mod kuna_a64switch;
 pub mod kuna_accesswidth;
-pub mod kuna_pdecode;
-pub mod kuna_dosexit;
-pub mod kuna_mzsweep;
-pub mod kuna_rawdiscover;
-pub mod kuna_rawextent;
-pub mod kuna_tailcallentry;
-pub mod kuna_thunkentry;
-mod kuna_walkcontext;
-mod kuna_fingerprintcontext;
-mod kuna_flowmode;
 mod kuna_armwalkmode;
-pub(crate) mod kuna_framemode;
+pub mod kuna_callbackentry;
+pub mod kuna_callerreads;
+pub mod kuna_calltable;
+mod kuna_compactrefs;
+pub(crate) mod kuna_decodememo;
 pub(crate) mod kuna_decodereuse;
+pub mod kuna_dosexit;
+pub mod kuna_entrythumbflow;
+mod kuna_fingerprintcontext;
+pub mod kuna_floatglobals;
+mod kuna_flowmode;
+pub(crate) mod kuna_framemode;
+pub mod kuna_funcchunks;
+mod kuna_gotcall;
+mod kuna_insnindex;
+mod kuna_insnstore;
+pub mod kuna_mzsweep;
 mod kuna_pcform;
+pub mod kuna_pdecode;
 mod kuna_picbase;
 mod kuna_picpool;
-mod kuna_poolref;
-mod kuna_gotcall;
-mod kuna_regcarry;
-mod kuna_ppclocalentry;
 mod kuna_pltstub;
-mod kuna_a64switch;
+pub mod kuna_poolextents;
+mod kuna_poolref;
+mod kuna_ppclocalentry;
+pub mod kuna_rawdiscover;
+pub mod kuna_rawextent;
+mod kuna_regcarry;
 mod kuna_switchextent;
 mod kuna_switchtable;
+pub mod kuna_tailcallentry;
 mod kuna_thumbswitch;
-mod kuna_a32switch;
-mod kuna_x86listingswitch;
-pub(crate) mod kuna_decodememo;
-mod kuna_unmappedentry;
+pub mod kuna_thunkentry;
 pub mod kuna_unflaggedcode;
+mod kuna_unmappedentry;
+mod kuna_walkcontext;
+mod kuna_x86listingswitch;
 pub mod model;
 pub mod walk;
 // (kuna) The read-only cross-reference query behind `unlace xrefs` -- a consumer of
@@ -84,10 +84,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Bound;
 use std::rc::Rc;
 
+use object::Object;
 use unlace_base::space::AddrSpace;
 use unlace_decomp::architecture::Architecture;
 use unlace_sleigh::translate::Translate;
-use object::Object;
 
 use crate::loadimage_object::ObjectLoadImage;
 
@@ -119,9 +119,15 @@ pub struct ListingDetail {
 
 impl ListingDetail {
     /// Everything: the partition, the disassembly text and the references.
-    pub const FULL: ListingDetail = ListingDetail { assembly: true, refs: true };
+    pub const FULL: ListingDetail = ListingDetail {
+        assembly: true,
+        refs: true,
+    };
     /// The instruction/function partition alone.
-    pub const PARTITION_ONLY: ListingDetail = ListingDetail { assembly: false, refs: false };
+    pub const PARTITION_ONLY: ListingDetail = ListingDetail {
+        assembly: false,
+        refs: false,
+    };
 }
 
 /// The Listing facade: three sub-models sharing one decode pass (design §2.5).
@@ -186,7 +192,13 @@ impl Listing {
         seeds: &[u64],
     ) -> Listing {
         Self::build_with_meta_without_image(
-            file, arch, translate, seeds, &[], &[], ListingDetail::FULL,
+            file,
+            arch,
+            translate,
+            seeds,
+            &[],
+            &[],
+            ListingDetail::FULL,
         )
     }
 
@@ -259,7 +271,13 @@ impl Listing {
         detail: ListingDetail,
     ) -> Listing {
         Self::build_with_meta_without_image(
-            file, arch, translate, seeds, funcsym_seeds, seed_names, detail,
+            file,
+            arch,
+            translate,
+            seeds,
+            funcsym_seeds,
+            seed_names,
+            detail,
         )
     }
 
@@ -304,7 +322,14 @@ impl Listing {
         plan: &WalkPlan,
     ) -> Listing {
         Self::build_with_meta_planned_without_image(
-            file, arch, translate, seeds, funcsym_seeds, seed_names, detail, plan,
+            file,
+            arch,
+            translate,
+            seeds,
+            funcsym_seeds,
+            seed_names,
+            detail,
+            plan,
         )
     }
 
@@ -319,8 +344,18 @@ impl Listing {
         detail: ListingDetail,
         plan: &WalkPlan,
     ) -> Listing {
-        Self::build_tracking_frames_without_image(file, arch, translate, seeds, funcsym_seeds,
-            seed_names, detail, plan, None, None)
+        Self::build_tracking_frames_without_image(
+            file,
+            arch,
+            translate,
+            seeds,
+            funcsym_seeds,
+            seed_names,
+            detail,
+            plan,
+            None,
+            None,
+        )
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -336,15 +371,36 @@ impl Listing {
         frames: Option<&mut kuna_framemode::FrameModes>,
         memo: Option<&kuna_decodememo::DecodeMemo>,
     ) -> Listing {
-        let sites: std::collections::HashSet<u64> =
-            arch.loader_transfer_sites.iter().map(unlace_base::address::Address::get_offset).collect();
+        let sites: std::collections::HashSet<u64> = arch
+            .loader_transfer_sites
+            .iter()
+            .map(unlace_base::address::Address::get_offset)
+            .collect();
         let mips_transfers = (!sites.is_empty())
             .then(|| crate::loader::kuna_mipsstubs::linkage(file))
             .flatten()
-            .map(|linkage| linkage.transfers.into_iter().filter(|(site, _)| sites.contains(site)).collect())
+            .map(|linkage| {
+                linkage
+                    .transfers
+                    .into_iter()
+                    .filter(|(site, _)| sites.contains(site))
+                    .collect()
+            })
             .unwrap_or_default();
-        Self::build_resuming(file, arch, translate, seeds, funcsym_seeds, seed_names, detail, plan,
-            frames, None, memo, mips_transfers)
+        Self::build_resuming(
+            file,
+            arch,
+            translate,
+            seeds,
+            funcsym_seeds,
+            seed_names,
+            detail,
+            plan,
+            frames,
+            None,
+            memo,
+            mips_transfers,
+        )
     }
 
     /// (kuna `addrtakenentry`) Continue this Listing's walk with `seeds`, the old
@@ -372,19 +428,45 @@ impl Listing {
                 && arch.archid.starts_with("x86:LE:32:"))
         {
             return Self::build_resuming(
-                file, arch, translate, seeds, funcsym_seeds, seed_names, detail, plan,
-                None, None, None, self.mips_transfers,
+                file,
+                arch,
+                translate,
+                seeds,
+                funcsym_seeds,
+                seed_names,
+                detail,
+                plan,
+                None,
+                None,
+                None,
+                self.mips_transfers,
             );
         }
         let prior = walk::WalkState {
             insns: self.insns,
             refs: self.refs.into_edges(),
             funcs: self.funcs,
-            stack_callback_refs: self.stack_callback_refs.into_iter().map(|(s, t)| (t, s)).collect(),
+            stack_callback_refs: self
+                .stack_callback_refs
+                .into_iter()
+                .map(|(s, t)| (t, s))
+                .collect(),
             mode_runs: self.mode_runs,
         };
-        Self::build_resuming(file, arch, translate, seeds, funcsym_seeds, seed_names, detail, plan,
-            None, Some(prior), None, self.mips_transfers)
+        Self::build_resuming(
+            file,
+            arch,
+            translate,
+            seeds,
+            funcsym_seeds,
+            seed_names,
+            detail,
+            plan,
+            None,
+            Some(prior),
+            None,
+            self.mips_transfers,
+        )
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -477,17 +559,28 @@ impl Listing {
         let local_entries = kuna_ppclocalentry::fold_map(file, seeds);
         let tail_transfers: BTreeMap<u64, u64> = mips_transfers.iter().copied().collect();
         let want_stack_callbacks = arch.analysis_fast_funcdisc
-            && matches!(file.architecture(), object::Architecture::I386 | object::Architecture::X86_64);
+            && matches!(
+                file.architecture(),
+                object::Architecture::I386 | object::Architecture::X86_64
+            );
 
         let tables = kuna_thumbswitch::HalfwordTables::new(
             file,
             arch.manage().get_default_data_space().cloned(),
             arch.max_jumptable_size as usize,
         );
-        let a32_pool = kuna_a32switch::applies(file, arch).then(|| kuna_poolref::PoolImage::new(file)).flatten();
-        let a32_tables = a32_pool.as_ref().map(|pool| kuna_a32switch::A32Tables::new(arch, pool));
-        let a64_pool = kuna_a64switch::applies(file).then(|| kuna_poolref::PoolImage::new(file)).flatten();
-        let a64_tables = a64_pool.as_ref().map(|pool| kuna_a64switch::A64Tables::new(arch, pool, seeds));
+        let a32_pool = kuna_a32switch::applies(file, arch)
+            .then(|| kuna_poolref::PoolImage::new(file))
+            .flatten();
+        let a32_tables = a32_pool
+            .as_ref()
+            .map(|pool| kuna_a32switch::A32Tables::new(arch, pool));
+        let a64_pool = kuna_a64switch::applies(file)
+            .then(|| kuna_poolref::PoolImage::new(file))
+            .flatten();
+        let a64_tables = a64_pool
+            .as_ref()
+            .map(|pool| kuna_a64switch::A64Tables::new(arch, pool, seeds));
         let x86_tables = arch
             .analysis_x86listingswitch
             .then(|| kuna_x86listingswitch::X86Tables::new(file, arch))
@@ -750,7 +843,10 @@ impl Listing {
     /// executable image). Used by the AIF gap-walk to scope the "must-decode-here"
     /// interior of a gap (`aif`).
     pub fn next_instruction_start_after(&self, vma: u64) -> Option<u64> {
-        self.insns.range(vma.checked_add(1)?..).next().map(|(&a, _)| a)
+        self.insns
+            .range(vma.checked_add(1)?..)
+            .next()
+            .map(|(&a, _)| a)
     }
 
     /// The executable-range universe `[lo, hi)` the Listing covers (sorted,
@@ -881,7 +977,9 @@ impl Listing {
 
     /// True iff `vma` lands inside any executable range `[lo, hi)`.
     fn in_exec(&self, vma: u64) -> bool {
-        self.exec_ranges.iter().any(|&(lo, hi)| vma >= lo && vma < hi)
+        self.exec_ranges
+            .iter()
+            .any(|&(lo, hi)| vma >= lo && vma < hi)
     }
 
     /// The executable range containing `vma`, else the first range starting at-or
@@ -947,7 +1045,10 @@ impl Listing {
 
     /// The next function strictly after `vma`, by address (ordered query).
     pub fn next_function_after(&self, vma: u64) -> Option<&DiscoveredFunction> {
-        self.funcs.range(vma.checked_add(1)?..).next().map(|(_, f)| f)
+        self.funcs
+            .range(vma.checked_add(1)?..)
+            .next()
+            .map(|(_, f)| f)
     }
 
     /// The number of discovered/seeded functions.
@@ -1036,11 +1137,13 @@ mod tests {
     fn x86_switch_resume_rebuilds_the_ordinary_partition_before_refusing_old_proofs() {
         use unlace_sleigh::{globalcontext::ContextInternal, sleigh::Sleigh};
         let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
-        let path = root.join("decompiler/crates/unlace-analysis/tests/fixtures/x86listingswitch_i386");
+        let path =
+            root.join("decompiler/crates/unlace-analysis/tests/fixtures/x86listingswitch_i386");
         let path = path.to_str().unwrap();
         let bytes = std::fs::read(path).unwrap();
         let file = object::File::parse(&*bytes).unwrap();
-        let sla = std::fs::read(root.join("specs/Ghidra/Processors/x86/data/languages/x86.sla")).unwrap();
+        let sla =
+            std::fs::read(root.join("specs/Ghidra/Processors/x86/data/languages/x86.sla")).unwrap();
         for detail in [ListingDetail::FULL, ListingDetail::PARTITION_ONLY] {
             for disable in [false, true] {
                 let loader = ObjectLoadImage::from_bytes_silent(path, &bytes).unwrap();
@@ -1058,7 +1161,13 @@ mod tests {
                 arch.analysis_x86listingswitch = true;
                 let mut seeds = vec![0x100000, 0x1004f0];
                 let expanded = Listing::build_with_meta_without_image(
-                    &file, &arch, arch.translate(), &seeds, &seeds, &[], detail,
+                    &file,
+                    &arch,
+                    arch.translate(),
+                    &seeds,
+                    &seeds,
+                    &[],
+                    detail,
                 );
                 assert!(expanded.is_instruction_start(0x100440));
                 assert!(expanded.function_at(0x100510).is_some());
@@ -1068,18 +1177,40 @@ mod tests {
                     seeds.push(0x10040d);
                 }
                 let resumed = expanded.resume(
-                    &file, &arch, arch.translate(), &seeds, &seeds, &[], detail, &WalkPlan::serial(),
+                    &file,
+                    &arch,
+                    arch.translate(),
+                    &seeds,
+                    &seeds,
+                    &[],
+                    detail,
+                    &WalkPlan::serial(),
                 );
                 let fresh = Listing::build_with_meta_without_image(
-                    &file, &arch, arch.translate(), &seeds, &seeds, &[], detail,
+                    &file,
+                    &arch,
+                    arch.translate(),
+                    &seeds,
+                    &seeds,
+                    &[],
+                    detail,
                 );
                 for case in [0x100440, 0x100460, 0x1004b0, 0x1004d0] {
                     assert!(!resumed.is_instruction_start(case));
                 }
                 assert!(resumed.function_at(0x100510).is_none());
                 let partition = |listing: &Listing| {
-                    listing.instructions()
-                        .map(|(&at, insn)| (at, insn.len, insn.fall_through, insn.flow, insn.flows.clone()))
+                    listing
+                        .instructions()
+                        .map(|(&at, insn)| {
+                            (
+                                at,
+                                insn.len,
+                                insn.fall_through,
+                                insn.flow,
+                                insn.flows.clone(),
+                            )
+                        })
                         .collect::<Vec<_>>()
                 };
                 assert_eq!(partition(&resumed), partition(&fresh));

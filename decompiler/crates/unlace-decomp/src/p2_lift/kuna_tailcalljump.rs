@@ -63,10 +63,10 @@
 //! is stated, so the return value reaches it.  Otherwise the flow follows the
 //! table as before and the callee's body stays in the veneer.
 
-use crate::funcdata::Funcdata;
 use crate::context::OpId;
 use crate::dtype::type_metatype;
 use crate::fspec::{FuncProto, PrototypePieces};
+use crate::funcdata::Funcdata;
 use crate::jumptable::JumpTable;
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
@@ -174,7 +174,12 @@ pub fn conditional_tail_branches(
     branch: OpId,
     dest: &Address,
 ) -> KunaResult<(OpId, OpId, OpId)> {
-    let site = data.obank().get(branch).expect("conditional tail: stale branch").get_addr().clone();
+    let site = data
+        .obank()
+        .get(branch)
+        .expect("conditional tail: stale branch")
+        .get_addr()
+        .clone();
     let skip = data.new_op(1, site.clone());
     data.op_set_opcode_code(skip, OpCode::CPUI_BRANCH);
     let taken = data.new_op(1, site.clone());
@@ -186,8 +191,17 @@ pub fn conditional_tail_branches(
     data.op_set_opcode_code(call, OpCode::CPUI_BRANCH);
     let target = data.new_code_ref(dest);
     data.op_set_input(call, target, 0)?;
-    let delta = data.obank().get(taken).expect("conditional tail: stale copy").get_time()
-        .wrapping_sub(data.obank().get(branch).expect("conditional tail: stale branch").get_time());
+    let delta = data
+        .obank()
+        .get(taken)
+        .expect("conditional tail: stale copy")
+        .get_time()
+        .wrapping_sub(
+            data.obank()
+                .get(branch)
+                .expect("conditional tail: stale branch")
+                .get_time(),
+        );
     let target = data.new_constant(4, delta as u64);
     data.op_set_input(branch, target, 0)?;
     data.op_dead_insert_after(skip, branch);
@@ -224,7 +238,11 @@ pub fn kuna_sole_destination(
 pub fn tail_call_mode(p1: &str) -> KunaResult<(bool, bool, &'static str)> {
     match p1 {
         "" | "on" => Ok((true, true, "Tail-call jump recovery turned on")),
-        "direct" => Ok((true, false, "Tail-call jump recovery limited to direct jumps")),
+        "direct" => Ok((
+            true,
+            false,
+            "Tail-call jump recovery limited to direct jumps",
+        )),
         "off" => Ok((false, false, "Tail-call jump recovery turned off")),
         other => Err(KunaError::parse(format!(
             "Unknown tailcalljump value: {other} (expected on|direct|off)"
@@ -245,10 +263,12 @@ pub fn kuna_is_tail_call_table(
     dest_outside_extent: bool,
     call_states_the_body: impl FnOnce() -> bool,
 ) -> bool {
-    gate
-        && dest_is_known_function
+    gate && dest_is_known_function
         && !dest_is_self
-        && data.obank().get(op).is_some_and(|o| o.code() == OpCode::CPUI_BRANCHIND)
+        && data
+            .obank()
+            .get(op)
+            .is_some_and(|o| o.code() == OpCode::CPUI_BRANCHIND)
         && (dest_outside_extent || call_states_the_body())
 }
 
@@ -271,8 +291,10 @@ pub fn stated_by_pieces(pieces: Option<&PrototypePieces>) -> Option<StatedCallee
     if p.outtype.is_none() && p.intypes.is_empty() && p.output_storage.is_some() {
         return None;
     }
-    let returns_nothing =
-        p.outtype.as_ref().is_some_and(|t| t.get_metatype() == type_metatype::TYPE_VOID);
+    let returns_nothing = p
+        .outtype
+        .as_ref()
+        .is_some_and(|t| t.get_metatype() == type_metatype::TYPE_VOID);
     Some(StatedCallee { returns_nothing })
 }
 
@@ -282,7 +304,8 @@ pub fn stated_by_pieces(pieces: Option<&PrototypePieces>) -> Option<StatedCallee
 pub fn stated_by_proto(proto: Option<&FuncProto>) -> Option<StatedCallee> {
     let p = proto.filter(|p| p.is_input_locked())?;
     let returns_nothing = p.is_output_locked()
-        && p.get_output_type().is_some_and(|t| t.get_metatype() == type_metatype::TYPE_VOID);
+        && p.get_output_type()
+            .is_some_and(|t| t.get_metatype() == type_metatype::TYPE_VOID);
     Some(StatedCallee { returns_nothing })
 }
 

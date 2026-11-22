@@ -6,7 +6,10 @@ use crate::printc::tokens;
 
 #[test]
 fn rust_resolves_from_its_names() {
-    assert_eq!(OutLang::from_print_name("rust-language"), Some(OutLang::Rust));
+    assert_eq!(
+        OutLang::from_print_name("rust-language"),
+        Some(OutLang::Rust)
+    );
     assert_eq!(OutLang::from_print_name("rust"), Some(OutLang::Rust));
     assert_eq!(OutLang::from_print_name("c-language"), Some(OutLang::C));
     assert_eq!(OutLang::from_print_name("not-a-language"), None);
@@ -23,13 +26,25 @@ fn rust_caps_forbid_the_c_only_constructs() {
     assert!(!c.goto, "Rust has no goto");
     assert!(!c.do_while, "Rust has no do/while");
     assert!(!c.c_for, "Rust has no C-style for header");
-    assert!(!c.ternary, "Rust has no ?: -- if/else is an expression instead");
-    assert!(!c.comma_expression, "no Rust form for condfold's comma operand");
+    assert!(
+        !c.ternary,
+        "Rust has no ?: -- if/else is an expression instead"
+    );
+    assert!(
+        !c.comma_expression,
+        "no Rust form for condfold's comma operand"
+    );
     assert!(!c.arrow_member, "Rust raw pointers need an explicit deref");
-    assert!(!c.integer_promotion, "Rust arithmetic keeps the operand width");
+    assert!(
+        !c.integer_promotion,
+        "Rust arithmetic keeps the operand width"
+    );
     assert!(!c.signed_text_byte, "a text byte spells u8");
     assert!(!c.switch_falls_through, "match arms do not fall through");
-    assert!(!c.switch_default_optional, "match on an integer must be exhaustive");
+    assert!(
+        !c.switch_default_optional,
+        "match on an integer must be exhaustive"
+    );
     assert!(c.labeled_loop_break && c.labeled_block_break);
     assert!(c.switch_multi_label, "A | B => is the multi-label form");
 }
@@ -40,8 +55,14 @@ fn rust_caps_forbid_the_c_only_constructs() {
 #[test]
 fn rust_caps_neutralize_the_default_on_c_renderings() {
     let c = OutLang::Rust.profile().caps;
-    assert!(!c.implicit_bool_conditions, "truthycond DIV-37 would emit `if x` on a u32");
-    assert!(!c.brace_elision, "braceelide DIV-38 would emit a braceless body");
+    assert!(
+        !c.implicit_bool_conditions,
+        "truthycond DIV-37 would emit `if x` on a u32"
+    );
+    assert!(
+        !c.brace_elision,
+        "braceelide DIV-38 would emit a braceless body"
+    );
 }
 
 /// The hazard this record exists to close: a C `switch` captures a bare `break`,
@@ -50,7 +71,12 @@ fn rust_caps_neutralize_the_default_on_c_renderings() {
 /// inside a `match` arm inside a loop would break the *loop*.
 #[test]
 fn rust_match_does_not_capture_break() {
-    assert!(crate::kuna_lang::OutLang::C.profile().caps.switch_captures_break);
+    assert!(
+        crate::kuna_lang::OutLang::C
+            .profile()
+            .caps
+            .switch_captures_break
+    );
     assert!(!OutLang::Rust.profile().caps.switch_captures_break);
 }
 
@@ -65,8 +91,14 @@ fn rust_spells_bitwise_not_as_bang() {
     assert_eq!(map(&tokens::BITWISE_NOT).print1, "!");
     // Same prefix-unary tier, so nothing else in the table shifts.
     // Unary is a tier Rust does not move, so it keeps C's rank.
-    assert_eq!(map(&tokens::BITWISE_NOT).precedence, tokens::BITWISE_NOT.precedence);
-    assert_eq!(map(&tokens::BITWISE_NOT).token_type, tokens::BITWISE_NOT.token_type);
+    assert_eq!(
+        map(&tokens::BITWISE_NOT).precedence,
+        tokens::BITWISE_NOT.precedence
+    );
+    assert_eq!(
+        map(&tokens::BITWISE_NOT).token_type,
+        tokens::BITWISE_NOT.token_type
+    );
 }
 
 /// THE precedence hazard. C ranks `& ^ |` BELOW `== !=`; Rust ranks them ABOVE.
@@ -78,7 +110,11 @@ fn rust_ranks_the_bitwise_operators_above_equality() {
     // Both sides of each comparison are RUST ranks: equality is itself remapped,
     // so comparing against C's number would be comparing two scales.
     let rust_eq = map(&tokens::EQUAL).precedence;
-    for c_tok in [&tokens::BITWISE_AND, &tokens::BITWISE_XOR, &tokens::BITWISE_OR] {
+    for c_tok in [
+        &tokens::BITWISE_AND,
+        &tokens::BITWISE_XOR,
+        &tokens::BITWISE_OR,
+    ] {
         assert!(
             c_tok.precedence < tokens::EQUAL.precedence,
             "C ranks `{}` below equality",
@@ -104,7 +140,10 @@ fn rust_ranks_the_bitwise_operators_above_equality() {
 #[test]
 fn rust_flattens_the_comparison_tier() {
     let map = OutLang::Rust.profile().map_token;
-    assert!(tokens::LESS_THAN.precedence > tokens::EQUAL.precedence, "C ranks them apart");
+    assert!(
+        tokens::LESS_THAN.precedence > tokens::EQUAL.precedence,
+        "C ranks them apart"
+    );
     let rust_eq = map(&tokens::EQUAL).precedence;
     for c_tok in [
         &tokens::LESS_THAN,
@@ -113,7 +152,12 @@ fn rust_flattens_the_comparison_tier() {
         &tokens::GREATER_EQUAL,
         &tokens::NOT_EQUAL,
     ] {
-        assert_eq!(map(c_tok).precedence, rust_eq, "`{}` shares the one tier", c_tok.print1);
+        assert_eq!(
+            map(c_tok).precedence,
+            rust_eq,
+            "`{}` shares the one tier",
+            c_tok.print1
+        );
         assert!(!map(c_tok).associative, "Rust comparisons do not chain");
         assert_eq!(map(c_tok).print1, c_tok.print1);
     }
@@ -139,7 +183,11 @@ fn rust_comparisons_keep_their_negations() {
 #[test]
 fn rust_boolean_xor_is_the_bitwise_operator() {
     let map = OutLang::Rust.profile().map_token;
-    assert_eq!(tokens::BOOLEAN_XOR.print1, "^^", "Ghidra's invented C spelling");
+    assert_eq!(
+        tokens::BOOLEAN_XOR.print1,
+        "^^",
+        "Ghidra's invented C spelling"
+    );
     let r = map(&tokens::BOOLEAN_XOR);
     assert_eq!(r.print1, "^");
     // Rust has one `^`, so logical and bitwise xor rank together.
@@ -197,13 +245,18 @@ fn rust_forms_select_the_rust_shapes() {
 #[test]
 fn the_cast_forces_parens_before_an_angle_bracket() {
     assert!(OutLang::Rust.profile().tok_typecast.paren_before_angle);
-    assert!((OutLang::Rust.profile().map_token)(&crate::printc::tokens::TYPECAST).paren_before_angle);
+    assert!(
+        (OutLang::Rust.profile().map_token)(&crate::printc::tokens::TYPECAST).paren_before_angle
+    );
     assert!(!crate::printc::tokens::TYPECAST.paren_before_angle);
 }
 
 #[test]
 fn rust_spells_null_as_a_raw_pointer() {
-    assert_eq!(OutLang::Rust.profile().null_literal, "core::ptr::null_mut()");
+    assert_eq!(
+        OutLang::Rust.profile().null_literal,
+        "core::ptr::null_mut()"
+    );
     assert_eq!(OutLang::C.profile().null_literal, "NULL");
 }
 
@@ -221,7 +274,10 @@ fn rust_emits_an_allow_attribute() {
 /// diverging half is matching what the comment says.
 #[test]
 fn the_goto_marker_halves_agree() {
-    assert_eq!(UNSTRUCTURED_GOTO_MARKER, format!("panic!(\"{UNSTRUCTURED_GOTO_NOTE}"));
+    assert_eq!(
+        UNSTRUCTURED_GOTO_MARKER,
+        format!("panic!(\"{UNSTRUCTURED_GOTO_NOTE}")
+    );
 }
 
 /// One per goto, not one per half, and never one for C.

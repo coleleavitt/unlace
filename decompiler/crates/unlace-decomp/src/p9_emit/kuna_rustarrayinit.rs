@@ -9,8 +9,10 @@ impl PrintC {
         op: OpId,
     ) -> Option<(String, i32, std::rc::Rc<crate::dtype::Datatype>)> {
         let operation = fd.obank().get(op)?;
-        if operation.code() != OpCode::CPUI_COPY || operation.num_input() != 1
-            || operation.does_special_printing() || self.is_suppressed_statement(fd, op)
+        if operation.code() != OpCode::CPUI_COPY
+            || operation.num_input() != 1
+            || operation.does_special_printing()
+            || self.is_suppressed_statement(fd, op)
         {
             return None;
         }
@@ -20,8 +22,9 @@ impl PrintC {
         }
         let high = output.get_high()?;
         let variable = fd.high_bank().get(high)?;
-        if variable.kuna_global() || variable.kuna_symbol_type()?.get_metatype()
-            != crate::dtype::type_metatype::TYPE_ARRAY
+        if variable.kuna_global()
+            || variable.kuna_symbol_type()?.get_metatype()
+                != crate::dtype::type_metatype::TYPE_ARRAY
         {
             return None;
         }
@@ -32,11 +35,16 @@ impl PrintC {
             return None;
         }
         let element = array.get_array_base()?;
-        if element.get_size() <= 0 || element.get_align_size() != element.get_size()
+        if element.get_size() <= 0
+            || element.get_align_size() != element.get_size()
             || output.get_size() != element.get_size()
             || offset % element.get_size() != 0
-            || !matches!(element.get_metatype(), crate::dtype::type_metatype::TYPE_INT
-                | crate::dtype::type_metatype::TYPE_UINT | crate::dtype::type_metatype::TYPE_UNKNOWN)
+            || !matches!(
+                element.get_metatype(),
+                crate::dtype::type_metatype::TYPE_INT
+                    | crate::dtype::type_metatype::TYPE_UINT
+                    | crate::dtype::type_metatype::TYPE_UNKNOWN
+            )
             || element.is_enum_type()
         {
             return None;
@@ -48,7 +56,8 @@ impl PrintC {
         if !input.is_constant() {
             let source = input.get_high()?;
             let source_high = fd.high_bank().get(source)?;
-            if source_high.kuna_global() || source_high.kuna_ref_symbol().is_some()
+            if source_high.kuna_global()
+                || source_high.kuna_ref_symbol().is_some()
                 || self.emitted_high_name(fd, source)? == name
             {
                 return None;
@@ -58,7 +67,9 @@ impl PrintC {
             for index in 0..source_high.num_instances() {
                 let member = fd.vbank().get(source_high.get_instance(index))?;
                 let address = member.get_addr();
-                if address.get_space().is_some_and(|s| s.get_index() == space.get_index())
+                if address
+                    .get_space()
+                    .is_some_and(|s| s.get_index() == space.get_index())
                     && (address.get_offset().wrapping_sub(base) < array.get_size() as u64
                         || base.wrapping_sub(address.get_offset()) < member.get_size() as u64)
                 {
@@ -93,7 +104,8 @@ impl PrintC {
         for index in 1..count {
             last = fd.bb_op_next(last)?;
             let (next_name, offset, next_array) = self.rust_array_piece(fd, last)?;
-            if next_name != name || !std::rc::Rc::ptr_eq(&array, &next_array)
+            if next_name != name
+                || !std::rc::Rc::ptr_eq(&array, &next_array)
                 || offset != index * element.get_size()
             {
                 return None;
@@ -103,8 +115,11 @@ impl PrintC {
         let markup = self.op_markup(fd, first);
         let statement = self.emit.begin_statement(&markup);
         self.push_atom(&Atom::with_op_vn(
-            name, TagType::VarToken, crate::printlanguage::SyntaxHighlight::var_color,
-            op_key(first), vn_key(output),
+            name,
+            TagType::VarToken,
+            crate::printlanguage::SyntaxHighlight::var_color,
+            op_key(first),
+            vn_key(output),
         ));
         self.emit.print(" = [", SyntaxHighlight::NoColor);
         let mut current = first;
@@ -120,7 +135,8 @@ impl PrintC {
         }
         self.emit.print("]", SyntaxHighlight::NoColor);
         self.emit.end_statement(statement);
-        self.emit.print(self.lang().kw_semicolon, SyntaxHighlight::NoColor);
+        self.emit
+            .print(self.lang().kw_semicolon, SyntaxHighlight::NoColor);
         Some(last)
     }
 }

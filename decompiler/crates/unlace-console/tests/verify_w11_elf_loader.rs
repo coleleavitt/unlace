@@ -14,11 +14,16 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Hand-assemble a little-endian x86-64 ELF64 with one PT_LOAD segment at
@@ -121,10 +126,54 @@ fn build_x86_64_elf(seg_vma: u64, code: &[u8], func_name: &str) -> Vec<u8> {
         b.extend_from_slice(&entsize.to_le_bytes());
     };
     push_shdr(&mut buf, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    push_shdr(&mut buf, off_text, 1, 0x2 | 0x4, seg_vma, seg_off, code.len() as u64, 0, 0, 0);
-    push_shdr(&mut buf, off_shstrtab, 3, 0, 0, shstr_off, shstr.len() as u64, 0, 0, 0);
-    push_shdr(&mut buf, off_symtab, 2, 0, 0, symtab_off, symtab.len() as u64, 4, 1, 24);
-    push_shdr(&mut buf, off_strtab, 3, 0, 0, strtab_off, strtab.len() as u64, 0, 0, 0);
+    push_shdr(
+        &mut buf,
+        off_text,
+        1,
+        0x2 | 0x4,
+        seg_vma,
+        seg_off,
+        code.len() as u64,
+        0,
+        0,
+        0,
+    );
+    push_shdr(
+        &mut buf,
+        off_shstrtab,
+        3,
+        0,
+        0,
+        shstr_off,
+        shstr.len() as u64,
+        0,
+        0,
+        0,
+    );
+    push_shdr(
+        &mut buf,
+        off_symtab,
+        2,
+        0,
+        0,
+        symtab_off,
+        symtab.len() as u64,
+        4,
+        1,
+        24,
+    );
+    push_shdr(
+        &mut buf,
+        off_strtab,
+        3,
+        0,
+        0,
+        strtab_off,
+        strtab.len() as u64,
+        0,
+        0,
+        0,
+    );
     buf
 }
 
@@ -156,7 +205,10 @@ fn real_elf_decompiles_under_engine() {
         prog.description()
     );
     // (1)+(readLoaderSymbols) The FUNC symbol is resolvable.
-    assert!(prog.lookup_symbol("add").is_some(), "ELF symbol `add` not read by the loader");
+    assert!(
+        prog.lookup_symbol("add").is_some(),
+        "ELF symbol `add` not read by the loader"
+    );
 
     // (3)+(4) Drive `load function add` → `decompile` → `print C` and assert a
     // real C body for `add` comes out.
@@ -184,5 +236,8 @@ fn real_elf_decompiles_under_engine() {
         "expected a decompiled `add` function body, got:\n{out}"
     );
     // A real body has a `return` — the function returns a+b.
-    assert!(out.contains("return"), "expected a `return` in the body, got:\n{out}");
+    assert!(
+        out.contains("return"),
+        "expected a `return` in the body, got:\n{out}"
+    );
 }

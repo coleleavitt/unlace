@@ -143,4 +143,3 @@ fn encodings_and_section_filters_use_the_mapped_regions() {
         assert_eq!(row["encoding"], encoding);
     }
 }
-

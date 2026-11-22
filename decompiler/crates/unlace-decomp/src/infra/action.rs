@@ -74,14 +74,14 @@
 
 use std::collections::BTreeMap;
 
+use smallvec::SmallVec;
 use unlace_base::address::SeqNum;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::types::{int4, uint4};
 use unlace_num::opcodes::OpCode;
-use smallvec::SmallVec;
 
-use crate::funcdata::Funcdata;
 use crate::context::OpId;
+use crate::funcdata::Funcdata;
 
 // =============================================================================
 // Flag enums (transcribed from action.hh)
@@ -172,7 +172,9 @@ pub struct ActionGroupList {
 impl ActionGroupList {
     /// An empty grouplist.
     pub fn new() -> ActionGroupList {
-        ActionGroupList { list: BTreeMap::new() }
+        ActionGroupList {
+            list: BTreeMap::new(),
+        }
     }
 
     /// Build a grouplist from an iterator of group names (used by
@@ -297,7 +299,8 @@ impl ActionBase {
             == ruleflags::rule_warnings_on
         {
             self.flags |= ruleflags::rule_warnings_given;
-            sink.messages.push(format!("WARNING: Applied action {}", self.name));
+            sink.messages
+                .push(format!("WARNING: Applied action {}", self.name));
         }
     }
 
@@ -472,7 +475,9 @@ pub trait Action {
     /// state.
     fn perform(&mut self, data: &mut Funcdata, ctx: &mut ActionContext) -> ApplyResult {
         loop {
-            if data.kuna_call_mechanisms.failure.is_some() { return -1; }
+            if data.kuna_call_mechanisms.failure.is_some() {
+                return -1;
+            }
             // --- the status switch with C++ fall-through preserved ---------
             let st = self.base().status;
             if st == statusflags::status_start {
@@ -539,10 +544,9 @@ pub trait Action {
             }
         }
 
-        if (self.base().flags & (ruleflags::rule_onceperfunc | ruleflags::rule_oneactperfunc)) != 0 {
-            if (self.base().count > 0)
-                || ((self.base().flags & ruleflags::rule_onceperfunc) != 0)
-            {
+        if (self.base().flags & (ruleflags::rule_onceperfunc | ruleflags::rule_oneactperfunc)) != 0
+        {
+            if (self.base().count > 0) || ((self.base().flags & ruleflags::rule_onceperfunc) != 0) {
                 self.base_mut().status = statusflags::status_end;
             } else {
                 self.base_mut().status = statusflags::status_start;
@@ -629,7 +633,10 @@ impl ActionContext {
     /// touching the clock.
     #[inline]
     pub fn deadline_expired(&self) -> bool {
-        self.abandon || self.deadline.is_some_and(crate::decompile_drive::budget_spent)
+        self.abandon
+            || self
+                .deadline
+                .is_some_and(crate::decompile_drive::budget_spent)
     }
 
     /// [`deadline_expired`](Self::deadline_expired), naming `site` as where the
@@ -661,7 +668,11 @@ impl ActionGroup {
     /// Construct given properties and a name (C++
     /// `ActionGroup::ActionGroup(uint4,string)` — group is empty).
     pub fn new(f: uint4, nm: impl Into<String>) -> ActionGroup {
-        ActionGroup { base: ActionBase::new(f, nm, ""), list: Vec::new(), state: 0 }
+        ActionGroup {
+            base: ActionBase::new(f, nm, ""),
+            list: Vec::new(),
+            state: 0,
+        }
     }
 
     /// Add an Action to the end of this group's list (C++
@@ -695,7 +706,11 @@ impl Action for ActionGroup {
 
     fn clone_filtered(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Action>> {
         self.clone_children(grouplist).map(|list| {
-            Box::new(ActionGroup { base: self.base.clone(), list, state: 0 }) as Box<dyn Action>
+            Box::new(ActionGroup {
+                base: self.base.clone(),
+                list,
+                state: 0,
+            }) as Box<dyn Action>
         })
     }
 
@@ -860,7 +875,11 @@ impl ActionRestartGroup {
     /// Construct providing the maximum number of restarts (C++
     /// `ActionRestartGroup::ActionRestartGroup(uint4,string,int4)`).
     pub fn new(f: uint4, nm: impl Into<String>, max: int4) -> ActionRestartGroup {
-        ActionRestartGroup { group: ActionGroup::new(f, nm), maxrestarts: max, curstart: 0 }
+        ActionRestartGroup {
+            group: ActionGroup::new(f, nm),
+            maxrestarts: max,
+            curstart: 0,
+        }
     }
 
     /// Add an Action to the underlying group (C++ inherited `addAction`).
@@ -882,7 +901,11 @@ impl Action for ActionRestartGroup {
     fn clone_filtered(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Action>> {
         self.group.clone_children(grouplist).map(|list| {
             Box::new(ActionRestartGroup {
-                group: ActionGroup { base: self.group.base.clone(), list, state: 0 },
+                group: ActionGroup {
+                    base: self.group.base.clone(),
+                    list,
+                    state: 0,
+                },
                 maxrestarts: self.maxrestarts,
                 curstart: 0,
             }) as Box<dyn Action>
@@ -1104,7 +1127,8 @@ impl RuleState {
             == typeflags::warnings_on
         {
             self.flags |= typeflags::warnings_given;
-            sink.messages.push(format!("WARNING: Applied rule {}", self.name));
+            sink.messages
+                .push(format!("WARNING: Applied rule {}", self.name));
         }
     }
 
@@ -1126,9 +1150,11 @@ struct RuleEntry {
 
 impl RuleEntry {
     fn clone_filtered(&self, grouplist: &ActionGroupList) -> Option<RuleEntry> {
-        self.rule
-            .clone_rule(grouplist)
-            .map(|rule| RuleEntry { state: self.state.clone(), rule, applied_at_reset: 0 })
+        self.rule.clone_rule(grouplist).map(|rule| RuleEntry {
+            state: self.state.clone(),
+            rule,
+            applied_at_reset: 0,
+        })
     }
 }
 
@@ -1288,7 +1314,11 @@ impl ActionPool {
         let idx = self.allrules.len();
         let oplist = rule.get_op_list();
         let far = rule.walks_far();
-        self.allrules.push(RuleEntry { state, rule, applied_at_reset: 0 });
+        self.allrules.push(RuleEntry {
+            state,
+            rule,
+            applied_at_reset: 0,
+        });
         for opc in oplist {
             self.perop[opc as usize].push(idx);
             if far {
@@ -1312,7 +1342,10 @@ impl ActionPool {
     /// The per-opcode rule list for `opc`, by name (test/inspection helper).
     pub fn perop_names(&self, opc: OpCode) -> Vec<String> {
         match self.perop.get(opc as usize) {
-            Some(list) => list.iter().map(|&i| self.allrules[i].state.name.clone()).collect(),
+            Some(list) => list
+                .iter()
+                .map(|&i| self.allrules[i].state.name.clone())
+                .collect(),
             None => Vec::new(),
         }
     }
@@ -1352,7 +1385,11 @@ impl ActionPool {
             self.rule_index = 0;
             return 0;
         }
-        let mut opc = data.obank().get(op).expect("process_op: live op vanished").code();
+        let mut opc = data
+            .obank()
+            .get(op)
+            .expect("process_op: live op vanished")
+            .code();
         while self.rule_index < self.perop_len(opc) {
             let rl_idx = self.perop_idx(opc, self.rule_index);
             self.rule_index += 1;
@@ -1381,14 +1418,20 @@ impl ActionPool {
                 self.allrules[rl_idx].state.count_apply += 1;
                 self.base.count += res;
                 // Route the rule warning to the pool's stash.
-                self.allrules[rl_idx].state.issue_warning(&mut self.warnings);
+                self.allrules[rl_idx]
+                    .state
+                    .issue_warning(&mut self.warnings);
                 if self.allrules[rl_idx].state.check_action_break() {
                     return -1;
                 }
                 if data.obank().get(op).map(|o| o.is_dead()).unwrap_or(true) {
                     break;
                 }
-                let newopc = data.obank().get(op).expect("process_op: op vanished").code();
+                let newopc = data
+                    .obank()
+                    .get(op)
+                    .expect("process_op: op vanished")
+                    .code();
                 if opc != newopc {
                     // Set of rules to apply to this op has changed
                     opc = newopc;
@@ -1447,13 +1490,18 @@ impl ActionPool {
         // (see `lookahead`); an insertion or a foreign removal invalidates it.
         let epoch = data.obank().optree_epoch();
         if self.lookahead_epoch != Some(epoch) || self.lookahead_idx >= self.lookahead.len() {
-            data.obank().ops_after_seq(&sq, LOOKAHEAD_RUN, &mut self.lookahead);
+            data.obank()
+                .ops_after_seq(&sq, LOOKAHEAD_RUN, &mut self.lookahead);
             self.lookahead_idx = 0;
             self.lookahead_epoch = Some(epoch);
         }
         self.next_op = self.lookahead.get(self.lookahead_idx).copied();
         self.lookahead_idx += 1;
-        self.op_state = if self.next_op.is_some() { OpCursor::After(sq) } else { OpCursor::Done };
+        self.op_state = if self.next_op.is_some() {
+            OpCursor::After(sq)
+        } else {
+            OpCursor::Done
+        };
     }
 
     /// The op the cursor currently points at (C++ `(*op_state).second`), or
@@ -1545,9 +1593,15 @@ fn touch_neighbourhood(set: &mut std::collections::HashSet<OpId>, data: &Funcdat
     for _ in 0..2 {
         let mut next = Vec::new();
         for cur in frontier {
-            let Some(o) = data.obank().get(cur) else { continue };
+            let Some(o) = data.obank().get(cur) else {
+                continue;
+            };
             for slot in 0..o.num_input() {
-                if let Some(d) = o.get_in(slot).and_then(|v| data.vbank().get(v)).and_then(|v| v.get_def()) {
+                if let Some(d) = o
+                    .get_in(slot)
+                    .and_then(|v| data.vbank().get(v))
+                    .and_then(|v| v.get_def())
+                {
                     if set.insert(d) {
                         next.push(d);
                     }
@@ -1625,13 +1679,21 @@ impl Action for ActionPool {
     /// [`wave_wants`](ActionPool::wave_wants) names.
     fn apply(&mut self, data: &mut Funcdata, ctx: &mut ActionContext) -> ApplyResult {
         if self.base.status != statusflags::status_mid {
-            self.run_passes = if self.base.status == statusflags::status_start { 1 } else { self.run_passes + 1 };
-            let cascade = data.get_arch().dead_cascade.is_some_and(|n| self.run_passes > n);
+            self.run_passes = if self.base.status == statusflags::status_start {
+                1
+            } else {
+                self.run_passes + 1
+            };
+            let cascade = data
+                .get_arch()
+                .dead_cascade
+                .is_some_and(|n| self.run_passes > n);
             data.set_dead_cascade_now(cascade);
             self.op_state = OpCursor::Unstarted;
             self.rule_index = 0;
-            let quiet =
-                self.base.count > 0 && self.pass_removals + self.pass_inputs > 0 && self.pass_others == 0;
+            let quiet = self.base.count > 0
+                && self.pass_removals + self.pass_inputs > 0
+                && self.pass_others == 0;
             let seed = self.wave_seed.take().filter(|_| quiet);
             self.pass_removals = 0;
             self.pass_others = 0;
@@ -1649,16 +1711,30 @@ impl Action for ActionPool {
         // (kuna `dirtypool`) A repeat sweep visits only what the previous sweep's
         // rules touched and the ops created since it began.
         let dirty = data.get_arch().dirty_pool;
-        let filter = if dirty && self.base.status == statusflags::status_repeat { self.focus.take() } else { None };
+        let filter = if dirty && self.base.status == statusflags::status_repeat {
+            self.focus.take()
+        } else {
+            None
+        };
         let newer_than = self.focus_time;
         if dirty && self.base.status != statusflags::status_mid {
-            self.focus_time = data.obank().iter_all().map(|(_, id)| id).filter_map(|id| data.obank().get(id).map(|o| o.get_time())).max().unwrap_or(0);
+            self.focus_time = data
+                .obank()
+                .iter_all()
+                .map(|(_, id)| id)
+                .filter_map(|id| data.obank().get(id).map(|o| o.get_time()))
+                .max()
+                .unwrap_or(0);
             self.touched.clear();
         }
         let mut ops_since_deadline_probe: u32 = 0;
         while let Some(op) = self.current_op(data) {
             if let Some(f) = &filter {
-                let keep = f.contains(&op) || data.obank().get(op).map_or(true, |o| o.get_time() > newer_than || o.is_dead());
+                let keep = f.contains(&op)
+                    || data
+                        .obank()
+                        .get(op)
+                        .map_or(true, |o| o.get_time() > newer_than || o.is_dead());
                 if !keep {
                     self.advance_op_state(data, op);
                     self.rule_index = 0;
@@ -1677,7 +1753,11 @@ impl Action for ActionPool {
                     return 0;
                 }
             }
-            let (offer, far_only) = if self.wave.is_some() { self.wave_wants(data, op) } else { (true, false) };
+            let (offer, far_only) = if self.wave.is_some() {
+                self.wave_wants(data, op)
+            } else {
+                (true, false)
+            };
             if !offer {
                 self.advance_op_state(data, op);
                 continue;
@@ -1849,7 +1929,9 @@ impl ActionDatabase {
 
     /// Mutable access to the current root Action (so a driver can `perform` it).
     pub fn get_current_mut(&mut self) -> Option<&mut (dyn Action + 'static)> {
-        self.actionmap.get_mut(&self.currentactname).map(|b| b.as_mut())
+        self.actionmap
+            .get_mut(&self.currentactname)
+            .map(|b| b.as_mut())
     }
 
     /// Get the name of the current root Action (C++ `getCurrentName`).
@@ -1987,14 +2069,39 @@ pub fn build_default_groups(db: &mut ActionDatabase) {
     db.set_group(
         "decompile",
         [
-            "base", "protorecovery", "protorecovery_a", "deindirect", "localrecovery",
-            "deadcode", "typerecovery", "stackptrflow",
-            "blockrecovery", "stackvars", "deadcontrolflow", "switchnorm",
-            "cleanup", "splitcopy", "splitpointer", "merge", "dynamic", "casts", "analysis",
-            "canonicalcompare", "presentcompare",
-            "fixateglobals", "fixateproto", "constsequence", "bitfields",
-            "segment", "returnsplit", "nodejoin", "doubleload", "doubleprecis",
-            "unreachable", "subvar", "floatprecision",
+            "base",
+            "protorecovery",
+            "protorecovery_a",
+            "deindirect",
+            "localrecovery",
+            "deadcode",
+            "typerecovery",
+            "stackptrflow",
+            "blockrecovery",
+            "stackvars",
+            "deadcontrolflow",
+            "switchnorm",
+            "cleanup",
+            "splitcopy",
+            "splitpointer",
+            "merge",
+            "dynamic",
+            "casts",
+            "analysis",
+            "canonicalcompare",
+            "presentcompare",
+            "fixateglobals",
+            "fixateproto",
+            "constsequence",
+            "bitfields",
+            "segment",
+            "returnsplit",
+            "nodejoin",
+            "doubleload",
+            "doubleprecis",
+            "unreachable",
+            "subvar",
+            "floatprecision",
             "conditionalexe",
         ],
     );
@@ -2002,19 +2109,42 @@ pub fn build_default_groups(db: &mut ActionDatabase) {
     db.set_group(
         "jumptable",
         [
-            "base", "noproto", "localrecovery", "deadcode", "stackptrflow",
-            "stackvars", "analysis", "canonicalcompare", "segment", "subvar",
-            "normalizebranches", "conditionalexe",
+            "base",
+            "noproto",
+            "localrecovery",
+            "deadcode",
+            "stackptrflow",
+            "stackvars",
+            "analysis",
+            "canonicalcompare",
+            "segment",
+            "subvar",
+            "normalizebranches",
+            "conditionalexe",
         ],
     );
 
     db.set_group(
         "normalize",
         [
-            "base", "protorecovery", "protorecovery_b", "deindirect", "localrecovery",
-            "deadcode", "stackptrflow", "normalanalysis",
-            "stackvars", "deadcontrolflow", "analysis", "canonicalcompare", "fixateproto",
-            "nodejoin", "unreachable", "subvar", "floatprecision", "normalizebranches",
+            "base",
+            "protorecovery",
+            "protorecovery_b",
+            "deindirect",
+            "localrecovery",
+            "deadcode",
+            "stackptrflow",
+            "normalanalysis",
+            "stackvars",
+            "deadcontrolflow",
+            "analysis",
+            "canonicalcompare",
+            "fixateproto",
+            "nodejoin",
+            "unreachable",
+            "subvar",
+            "floatprecision",
+            "normalizebranches",
             "conditionalexe",
         ],
     );
@@ -2022,15 +2152,31 @@ pub fn build_default_groups(db: &mut ActionDatabase) {
     db.set_group(
         "paramid",
         [
-            "base", "protorecovery", "protorecovery_b", "deindirect", "localrecovery",
-            "deadcode", "typerecovery", "stackptrflow", "siganalysis",
-            "stackvars", "deadcontrolflow", "analysis", "canonicalcompare", "fixateproto",
-            "unreachable", "subvar", "floatprecision",
+            "base",
+            "protorecovery",
+            "protorecovery_b",
+            "deindirect",
+            "localrecovery",
+            "deadcode",
+            "typerecovery",
+            "stackptrflow",
+            "siganalysis",
+            "stackvars",
+            "deadcontrolflow",
+            "analysis",
+            "canonicalcompare",
+            "fixateproto",
+            "unreachable",
+            "subvar",
+            "floatprecision",
             "conditionalexe",
         ],
     );
 
-    db.set_group("register", ["base", "analysis", "canonicalcompare", "subvar"]);
+    db.set_group(
+        "register",
+        ["base", "analysis", "canonicalcompare", "subvar"],
+    );
 
     db.set_group("firstpass", ["base"]);
     db.is_default_groups = true;

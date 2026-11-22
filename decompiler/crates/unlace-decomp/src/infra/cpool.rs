@@ -33,7 +33,7 @@ use std::rc::Rc;
 
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::marshal::{
-    Decoder, Encoder, ATTRIB_CONSTRUCTOR, ATTRIB_CONTENT, ATTRIB_DESTRUCTOR, ELEM_DATA, ELEM_VALUE,
+    ATTRIB_CONSTRUCTOR, ATTRIB_CONTENT, ATTRIB_DESTRUCTOR, Decoder, ELEM_DATA, ELEM_VALUE, Encoder,
 };
 use unlace_base::types::{int4, int8, uint1, uint4, uintb};
 
@@ -182,7 +182,14 @@ impl CPoolRecord {
         type_: Rc<Datatype>,
         byte_data: Option<Vec<uint1>>,
     ) -> CPoolRecord {
-        CPoolRecord { tag, flags: 0, token, value: 0, type_: Some(type_), byte_data }
+        CPoolRecord {
+            tag,
+            flags: 0,
+            token,
+            value: 0,
+            type_: Some(type_),
+            byte_data,
+        }
     }
 
     /// Get the type of record (C++ `getTag`).
@@ -244,11 +251,7 @@ impl CPoolRecord {
     /// `type_ref` argument (the W6 `Datatype` reference encoder).  The C++
     /// dereferences `type` unconditionally here, so an encode with no type is
     /// an internal-invariant violation.
-    pub fn encode(
-        &self,
-        encoder: &mut dyn Encoder,
-        type_ref: &dyn CPoolTypeRef,
-    ) -> KunaResult<()> {
+    pub fn encode(&self, encoder: &mut dyn Encoder, type_ref: &dyn CPoolTypeRef) -> KunaResult<()> {
         encoder.open_element(&ELEM_CPOOLREC);
         // The tag-string mapping (C++ `cpool.cc:36-51`).
         let tagstr: &[u8] = if self.tag == cpool_tag::POINTER_METHOD {
@@ -392,8 +395,11 @@ impl CPoolRecord {
         if self.flags != 0 {
             let is_constructor = (self.flags & cpool_flag::IS_CONSTRUCTOR) != 0;
             let is_destructor = (self.flags & cpool_flag::IS_DESTRUCTOR) != 0;
-            self.type_ =
-                Some(typegrp.decode_type_with_code_flags(decoder, is_constructor, is_destructor)?);
+            self.type_ = Some(typegrp.decode_type_with_code_flags(
+                decoder,
+                is_constructor,
+                is_destructor,
+            )?);
         } else {
             self.type_ = Some(typegrp.decode_type(decoder)?);
         }
@@ -457,11 +463,7 @@ impl<'a> HexByteTokens<'a> {
             any = true;
             self.pos += 1;
         }
-        if any {
-            val
-        } else {
-            0
-        }
+        if any { val } else { 0 }
     }
 }
 
@@ -660,8 +662,7 @@ impl ConstantPool for ConstantPoolInternal {
         // C++ `cpoolMap.emplace(...)` returns (iterator, inserted); a duplicate
         // reference is an error reporting the existing record's token.
         if let Some(existing) = self.cpool_map.get(&sorter) {
-            let mut msg =
-                String::from("Creating duplicate entry in constant pool: ");
+            let mut msg = String::from("Creating duplicate entry in constant pool: ");
             msg.push_str(&String::from_utf8_lossy(existing.get_token()));
             return Err(KunaError::lowlevel(msg));
         }
@@ -751,9 +752,9 @@ impl CPoolTypeRef for ProviderTypeRef<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dtype::type_metatype;
     use unlace_base::marshal::{IdRegistry, XmlDecode, XmlEncode};
     use unlace_base::space::AddrSpaceManager;
-    use crate::dtype::type_metatype;
 
     /// A trivial type factory/provider access impl for round-trip tests: every
     /// data-type reference encodes as an empty `<void/>` element and decodes

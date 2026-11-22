@@ -18,10 +18,10 @@ use unlace_base::marshal::PackedEncode;
 use unlace_ghidra::ids::ELEM_COMMAND_GETREGISTERNAME;
 use unlace_ghidra::process::GhidraProcess;
 
-use ghidra_sim::oracle::{generate_tspec, repo_root, SimOracle};
+use ghidra_sim::oracle::{SimOracle, generate_tspec, repo_root};
 use ghidra_sim::{
-    cmd_decompile_at, cmd_deregister_program, cmd_register_program, cmd_set_action, trace_session,
-    MockReader, MockState, MockWriter,
+    MockReader, MockState, MockWriter, cmd_decompile_at, cmd_deregister_program,
+    cmd_register_program, cmd_set_action, trace_session,
 };
 
 #[test]

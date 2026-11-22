@@ -64,9 +64,9 @@
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
+use object::{Object, ObjectSymbol, RelocationFlags, RelocationTarget, elf};
 use unlace_base::types::uint4;
 use unlace_decomp::dtype::TypeFactory;
-use object::{elf, Object, ObjectSymbol, RelocationFlags, RelocationTarget};
 
 use super::Layout;
 use crate::pass::TypedDataFact;
@@ -124,8 +124,7 @@ pub(super) fn stream_data_symbols(
     layout: Layout,
 ) -> Vec<TypedDataFact> {
     let mut out = Vec::new();
-    if file.format() != object::BinaryFormat::Elf
-        || file.kind() == object::ObjectKind::Relocatable
+    if file.format() != object::BinaryFormat::Elf || file.kind() == object::ObjectKind::Relocatable
     {
         return out;
     }
@@ -145,7 +144,9 @@ pub(super) fn stream_data_symbols(
     for sym in file.dynamic_symbols() {
         let Ok(raw) = sym.name_bytes() else { continue };
         let stripped = crate::loader::elf_plt::strip_version(raw);
-        let Some(name) = STREAM_NAMES.iter().find(|n| n.as_bytes() == stripped.as_slice())
+        let Some(name) = STREAM_NAMES
+            .iter()
+            .find(|n| n.as_bytes() == stripped.as_slice())
         else {
             continue;
         };
@@ -169,9 +170,15 @@ pub(super) fn stream_data_symbols(
     let taken = minted_names_taken(file);
     let mut claimed: Vec<u64> = Vec::new();
     for (offset, reloc) in relocs {
-        let RelocationFlags::Elf { r_type } = reloc.flags() else { continue };
-        let RelocationTarget::Symbol(idx) = reloc.target() else { continue };
-        let Some(&(name, size, undefined)) = by_index.get(&idx.0) else { continue };
+        let RelocationFlags::Elf { r_type } = reloc.flags() else {
+            continue;
+        };
+        let RelocationTarget::Symbol(idx) = reloc.target() else {
+            continue;
+        };
+        let Some(&(name, size, undefined)) = by_index.get(&idx.0) else {
+            continue;
+        };
         let (sym_name, ct) = if r_type == r_copy && !undefined && size == ptr_width {
             // The copy destination holds what libc's own `stdout` holds.
             (name.to_string(), Rc::clone(&stream_ptr))
@@ -194,7 +201,11 @@ pub(super) fn stream_data_symbols(
             continue;
         }
         claimed.push(offset);
-        out.push(TypedDataFact { addr: offset, name: sym_name, type_: ct });
+        out.push(TypedDataFact {
+            addr: offset,
+            name: sym_name,
+            type_: ct,
+        });
     }
     out
 }

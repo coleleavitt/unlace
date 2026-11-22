@@ -8,17 +8,37 @@
 
 use super::*;
 
-use unlace_base::space::{spacetype, AddrSpace};
 use std::rc::Rc;
+use unlace_base::space::{AddrSpace, spacetype};
 
 const REG: int4 = 3;
 
 fn reg_space() -> Rc<AddrSpace> {
-    Rc::new(AddrSpace::new(spacetype::IPTR_PROCESSOR, "register", false, 8, 1, REG, 0, 0, 0))
+    Rc::new(AddrSpace::new(
+        spacetype::IPTR_PROCESSOR,
+        "register",
+        false,
+        8,
+        1,
+        REG,
+        0,
+        0,
+        0,
+    ))
 }
 
 fn stack_space() -> Rc<AddrSpace> {
-    Rc::new(AddrSpace::new(spacetype::IPTR_SPACEBASE, "stack", false, 8, 1, 4, 0, 0, 0))
+    Rc::new(AddrSpace::new(
+        spacetype::IPTR_SPACEBASE,
+        "stack",
+        false,
+        8,
+        1,
+        4,
+        0,
+        0,
+        0,
+    ))
 }
 
 /// A distinct arena handle; the plan only ever compares and carries these.
@@ -76,7 +96,12 @@ fn body(reads: &[u64], written: &[u64], complete: bool) -> CalleeEntryDead {
 
 /// The four Win64-shaped argument registers, in prototype order.
 fn args(reg: &Rc<AddrSpace>) -> Vec<(Address, int4)> {
-    vec![loc(reg, 0x8), loc(reg, 0x10), loc(reg, 0x80), loc(reg, 0x88)]
+    vec![
+        loc(reg, 0x8),
+        loc(reg, 0x10),
+        loc(reg, 0x80),
+        loc(reg, 0x88),
+    ]
 }
 
 /// The witness shape: the callee reads the first argument register and
@@ -85,7 +110,11 @@ fn args(reg: &Rc<AddrSpace>) -> Vec<(Address, int4)> {
 #[test]
 fn a_read_run_bounded_by_a_dead_register_is_the_argument_list() {
     let reg = reg_space();
-    let trials = vec![trial(&reg, 0x8, 1), trial(&reg, 0x10, 2), trial(&reg, 0x80, 3)];
+    let trials = vec![
+        trial(&reg, 0x8, 1),
+        trial(&reg, 0x10, 2),
+        trial(&reg, 0x80, 3),
+    ];
     let live = body(&[0x8], &[0x10, 0x80], true);
     assert_eq!(plan_from_body(&trials, &args(&reg), &live), Some(vec![0]));
 }
@@ -94,9 +123,16 @@ fn a_read_run_bounded_by_a_dead_register_is_the_argument_list() {
 #[test]
 fn the_run_is_as_long_as_the_reads_are() {
     let reg = reg_space();
-    let trials = vec![trial(&reg, 0x8, 1), trial(&reg, 0x10, 2), trial(&reg, 0x80, 3)];
+    let trials = vec![
+        trial(&reg, 0x8, 1),
+        trial(&reg, 0x10, 2),
+        trial(&reg, 0x80, 3),
+    ];
     let live = body(&[0x8, 0x10], &[0x80], true);
-    assert_eq!(plan_from_body(&trials, &args(&reg), &live), Some(vec![0, 1]));
+    assert_eq!(
+        plan_from_body(&trials, &args(&reg), &live),
+        Some(vec![0, 1])
+    );
 }
 
 /// The variadic register-save prologue: the callee reads EVERY argument
@@ -135,7 +171,11 @@ fn an_empty_run_is_not_an_argument_list() {
 #[test]
 fn a_claimed_register_with_no_varnode_aborts() {
     let reg = reg_space();
-    let trials = vec![trial(&reg, 0x8, 1), barren(&reg, 0x10), trial(&reg, 0x80, 3)];
+    let trials = vec![
+        trial(&reg, 0x8, 1),
+        barren(&reg, 0x10),
+        trial(&reg, 0x80, 3),
+    ];
     let live = body(&[0x8, 0x10], &[0x80], true);
     assert_eq!(plan_from_body(&trials, &args(&reg), &live), None);
 }

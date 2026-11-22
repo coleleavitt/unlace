@@ -83,8 +83,8 @@ pub enum Guard {
 /// [`restores_frame`] are satisfied by an absent model rather than by evidence,
 /// so the precondition is structural and not left to the caller's gate.
 pub fn tail_call_entries(file: &object::File, listing: &Listing, all_arches: bool) -> Vec<u64> {
-    use object::read::Object;
     use object::Architecture as A;
+    use object::read::Object;
     let supported = match file.architecture() {
         A::Arm => true,
         A::Aarch64 | A::X86_64 | A::I386 | A::Riscv64 | A::Riscv32 => all_arches,
@@ -123,19 +123,20 @@ fn branch_targets(listing: &Listing, entries: &[u64]) -> BTreeMap<u64, Vec<u64>>
 }
 
 /// The whole acceptance predicate, returning the [`Guard`] that rejected.
-fn probe(
-    listing: &Listing,
-    entries: &[u64],
-    target: u64,
-    srcs: &[u64],
-) -> Result<(), Guard> {
+fn probe(listing: &Listing, entries: &[u64], target: u64, srcs: &[u64]) -> Result<(), Guard> {
     if !predecessors_are_branches(listing, target) {
         return Err(Guard::ImpurePredecessor);
     }
-    if srcs.iter().any(|&src| in_caller_region(entries, src, target)) {
+    if srcs
+        .iter()
+        .any(|&src| in_caller_region(entries, src, target))
+    {
         return Err(Guard::InCallerRegion);
     }
-    if listing.instruction_at(target).is_some_and(|i| restores_frame(i)) {
+    if listing
+        .instruction_at(target)
+        .is_some_and(|i| restores_frame(i))
+    {
         return Err(Guard::EpilogueStart);
     }
     if !terminates(listing, target) {
@@ -151,8 +152,7 @@ fn predecessors_are_branches(listing: &Listing, target: u64) -> bool {
         r.kind == RefKind::Code
             && listing.instruction_at(r.from).is_some_and(|i| {
                 i.fall_through != Some(target)
-                    && (!i.flows.contains(&target)
-                        || i.flow.kind == FlowKind::UnconditionalBranch)
+                    && (!i.flows.contains(&target) || i.flow.kind == FlowKind::UnconditionalBranch)
             })
     })
 }
@@ -160,7 +160,9 @@ fn predecessors_are_branches(listing: &Listing, target: u64) -> bool {
 /// True iff `target` lies inside the entry-ordered region of the function
 /// containing `src` — the branch crosses no discovered function boundary.
 fn in_caller_region(entries: &[u64], src: u64, target: u64) -> bool {
-    let Some(caller) = region_of(entries, src) else { return true };
+    let Some(caller) = region_of(entries, src) else {
+        return true;
+    };
     target > caller && next_entry(entries, caller).is_none_or(|hi| target < hi)
 }
 
@@ -190,7 +192,9 @@ fn terminates(listing: &Listing, target: u64) -> bool {
         if !seen.insert(vma) || seen.len() >= MAX_REGION_INSNS {
             continue;
         }
-        let Some(i) = listing.instruction_at(vma) else { continue };
+        let Some(i) = listing.instruction_at(vma) else {
+            continue;
+        };
         if matches!(i.flow.kind, FlowKind::Return | FlowKind::ComputedJump) {
             return true;
         }
@@ -245,11 +249,26 @@ mod tests {
     #[test]
     fn containment_is_the_region_crossing() {
         let e = entries();
-        assert!(in_caller_region(&e, 0x110, 0x180), "same region ⇒ not a tail call");
-        assert!(!in_caller_region(&e, 0x110, 0x280), "crosses 0x200 ⇒ tail call");
-        assert!(!in_caller_region(&e, 0x310, 0x180), "backward across entries");
-        assert!(in_caller_region(&e, 0x310, 0x380), "last region has no upper bound");
-        assert!(in_caller_region(&e, 0x010, 0x080), "no containing entry ⇒ reject");
+        assert!(
+            in_caller_region(&e, 0x110, 0x180),
+            "same region ⇒ not a tail call"
+        );
+        assert!(
+            !in_caller_region(&e, 0x110, 0x280),
+            "crosses 0x200 ⇒ tail call"
+        );
+        assert!(
+            !in_caller_region(&e, 0x310, 0x180),
+            "backward across entries"
+        );
+        assert!(
+            in_caller_region(&e, 0x310, 0x380),
+            "last region has no upper bound"
+        );
+        assert!(
+            in_caller_region(&e, 0x010, 0x080),
+            "no containing entry ⇒ reject"
+        );
     }
 
     fn insn(mnemonic: &str, operands: &str) -> Insn {

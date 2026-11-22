@@ -6,9 +6,9 @@ use crate::{
     ruleaction_1::RuleCollectTerms,
     varnode::varnode_flags,
 };
+use smallvec::{SmallVec, smallvec};
 use unlace_base::{address::Address, types::uintb};
 use unlace_num::opcodes::OpCode;
-use smallvec::{smallvec, SmallVec};
 
 /// Defer folding a negative element displacement into an exact mapped base used
 /// as a LOAD/STORE address. Other arithmetic and unmapped constants still fold.
@@ -298,7 +298,7 @@ fn memory_address_root(data: &Funcdata, mut root: OpId) -> Option<(OpId, OpId)> 
         match op.code() {
             OpCode::CPUI_INT_ADD | OpCode::CPUI_COPY | OpCode::CPUI_CAST => root = reader,
             OpCode::CPUI_LOAD | OpCode::CPUI_STORE if op.get_in(1) == Some(output) => {
-                return Some((root, reader))
+                return Some((root, reader));
             }
             _ => return None,
         }
@@ -313,12 +313,12 @@ mod tests {
     use crate::context::{ArchContext, GlobalEntry, GlobalQuery};
     use crate::dtype::{Datatype, TypeFactory, TypeFactoryImpl};
     use crate::ruleaction_3::RuleCollapseConstants;
+    use std::rc::Rc;
     use unlace_base::address::RangeList;
     use unlace_base::partmap::PartMap;
     use unlace_base::space::{
-        addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+        AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
     };
-    use std::rc::Rc;
 
     fn operation(data: &mut Funcdata, code: OpCode, inputs: &[VarnodeId]) -> (OpId, VarnodeId) {
         let op = data.new_op(inputs.len() as i32, data.get_address().clone());

@@ -80,7 +80,9 @@ impl<'d> PointerSlots<'d> {
         let Some(value) = self.read(addr) else {
             return false;
         };
-        self.loaded.iter().any(|&(lo, hi)| value >= lo && value < hi)
+        self.loaded
+            .iter()
+            .any(|&(lo, hi)| value >= lo && value < hi)
     }
 
     fn read(&self, addr: u64) -> Option<u64> {
@@ -108,9 +110,9 @@ fn relocated_slots(file: &object::File<'_>) -> Option<Vec<u64>> {
     let mut slots = match file {
         object::File::Pe32(pe) => pe_relocated(pe),
         object::File::Pe64(pe) => pe_relocated(pe),
-        _ if file.format() == BinaryFormat::Elf && file.kind() == ObjectKind::Dynamic => {
-            file.dynamic_relocations().map(|relocs| relocs.map(|(slot, _)| slot).collect())
-        }
+        _ if file.format() == BinaryFormat::Elf && file.kind() == ObjectKind::Dynamic => file
+            .dynamic_relocations()
+            .map(|relocs| relocs.map(|(slot, _)| slot).collect()),
         _ => None,
     }?;
     slots.sort_unstable();
@@ -120,7 +122,10 @@ fn relocated_slots(file: &object::File<'_>) -> Option<Vec<u64>> {
 
 fn pe_relocated<Pe: ImageNtHeaders>(pe: &PeFile<'_, Pe>) -> Option<Vec<u64>> {
     let sections = pe.section_table();
-    let blocks = pe.data_directories().relocation_blocks(pe.data(), &sections).ok()??;
+    let blocks = pe
+        .data_directories()
+        .relocation_blocks(pe.data(), &sections)
+        .ok()??;
     let base = pe.relative_address_base();
     let slots: Vec<u64> = blocks
         .flatten()

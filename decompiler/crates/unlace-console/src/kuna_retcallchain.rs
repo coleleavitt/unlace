@@ -704,7 +704,7 @@ pub fn kuna_render_sites(sites: &[Address]) -> String {
 mod tests {
     use std::rc::Rc;
 
-    use unlace_base::space::{spacetype, AddrSpace, ConstantSpace, UniqueSpace};
+    use unlace_base::space::{AddrSpace, ConstantSpace, UniqueSpace, spacetype};
 
     use super::*;
 

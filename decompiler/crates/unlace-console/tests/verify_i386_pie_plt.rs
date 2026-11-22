@@ -26,7 +26,9 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 // Load-bearing VMAs, pinned from the linked fixture (objdump/readelf):
@@ -37,7 +39,10 @@ const DCGETTEXT_PLT: &str = "sub_eb0";
 const EXIT_PLT: &str = "sub_fb0";
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// The linked i386-PIE `nl` fixture (vendored under the unlace-analysis fixtures).
@@ -59,7 +64,10 @@ fn i386_pie_plt_calls_named_and_no_spurious_loop() {
 
     // The i386-PIE PLT imports are resolvable as functions (the loader markup
     // the FF A3 decode now feeds), and the local `.symtab` `usage` still resolves.
-    assert!(prog.lookup_symbol("exit").is_some(), "PLT import `exit` not resolved by the loader");
+    assert!(
+        prog.lookup_symbol("exit").is_some(),
+        "PLT import `exit` not resolved by the loader"
+    );
     assert!(
         prog.lookup_symbol("dcgettext").is_some(),
         "PLT import `dcgettext` not resolved by the loader"
@@ -68,7 +76,10 @@ fn i386_pie_plt_calls_named_and_no_spurious_loop() {
         prog.lookup_symbol("fputs_unlocked").is_some(),
         "PLT import `fputs_unlocked` not resolved by the loader"
     );
-    assert!(prog.lookup_symbol("usage").is_some(), "defined `usage` not resolved by the loader");
+    assert!(
+        prog.lookup_symbol("usage").is_some(),
+        "defined `usage` not resolved by the loader"
+    );
 
     // Drive `load function usage` → `decompile` → `print C`.
     let cmds: Vec<String> = ["load function usage", "decompile", "print C"]
@@ -101,6 +112,9 @@ fn i386_pie_plt_calls_named_and_no_spurious_loop() {
     // (b) `exit` marked no-return collapses the spurious fall-through loop: no
     // do{}while(true)/goto/recovery-failure markers remain.
     for bad in ["do {", "while( true )", "while(true)", "goto "] {
-        assert!(!out.contains(bad), "spurious `{bad}` should be gone, got:\n{out}");
+        assert!(
+            !out.contains(bad),
+            "spurious `{bad}` should be gone, got:\n{out}"
+        );
     }
 }

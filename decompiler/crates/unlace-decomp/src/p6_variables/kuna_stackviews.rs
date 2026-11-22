@@ -16,7 +16,7 @@ use unlace_base::types::uintb;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::OpId;
-use crate::dtype::{type_metatype, Datatype, TypeFactory, TypeField};
+use crate::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::p0_knowledge::options::on_or_off;
 use crate::unionresolve::{ResolveEdge, ResolvedUnion};
@@ -319,7 +319,7 @@ fn backing_type(
                         })
                     }) =>
             {
-                return Ok(existing)
+                return Ok(existing);
             }
             Some(_) => variant += 1,
             None => break name,
@@ -341,7 +341,9 @@ fn backing_type(
 /// explicit user-locked layouts and unresolved extents remain unchanged.
 pub fn gather(fd: &mut Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
     let full_views = fd.get_arch().stack_views;
-    let reused = if full_views { Vec::new() } else {
+    let reused = if full_views {
+        Vec::new()
+    } else {
         crate::kuna_stackparamviews::wider_scalar_parameters(fd)
     };
     let local_views = crate::kuna_localstackviews::views(fd);
@@ -473,7 +475,8 @@ pub fn gather(fd: &mut Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
     }
     let mut recovered = Vec::new();
     for (start, size, mut views) in components {
-        let scalar_parameter = reused.iter()
+        let scalar_parameter = reused
+            .iter()
             .any(|&(at, width)| contains(start, size, at, width));
         let local_backing = crate::kuna_localstackviews::backing(fd, start, size);
         if !full_views && !local_backing && (!scalar_parameter || size > 4) {
@@ -500,24 +503,42 @@ pub fn gather(fd: &mut Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
                 });
             }
         }
-        if !full_views && !local_backing && views.iter().any(|view| !matches!(
-            view.datatype.get_metatype(), type_metatype::TYPE_BOOL
-                | type_metatype::TYPE_INT | type_metatype::TYPE_UINT
-        )) {
+        if !full_views
+            && !local_backing
+            && views.iter().any(|view| {
+                !matches!(
+                    view.datatype.get_metatype(),
+                    type_metatype::TYPE_BOOL | type_metatype::TYPE_INT | type_metatype::TYPE_UINT
+                )
+            })
+        {
             continue;
         }
         let parameter = !state.covers(start, size)
-            && (scalar_parameter || views.iter().any(|view| matches!(view.datatype.get_metatype(),
-                type_metatype::TYPE_STRUCT | type_metatype::TYPE_UNION | type_metatype::TYPE_ARRAY
-                | type_metatype::TYPE_PTR | type_metatype::TYPE_FLOAT))
+            && (scalar_parameter
+                || views.iter().any(|view| {
+                    matches!(
+                        view.datatype.get_metatype(),
+                        type_metatype::TYPE_STRUCT
+                            | type_metatype::TYPE_UNION
+                            | type_metatype::TYPE_ARRAY
+                            | type_metatype::TYPE_PTR
+                            | type_metatype::TYPE_FLOAT
+                    )
+                })
                 || crate::kuna_stackparamviews::needs_backing(fd, start, size))
             && crate::kuna_stackparamviews::can_map_backing(fd, start, size);
         if parameter {
-            for (offset, datatype) in crate::kuna_stackparamviews::parameter_types(fd, start, size) {
+            for (offset, datatype) in crate::kuna_stackparamviews::parameter_types(fd, start, size)
+            {
                 insert_view(&mut views, offset, datatype);
             }
         }
-        if views.len() < 2 || views.len() > 32 || size > 65536 || (!state.covers(start, size) && !parameter) {
+        if views.len() < 2
+            || views.len() > 32
+            || size > 65536
+            || (!state.covers(start, size) && !parameter)
+        {
             continue;
         }
         let address = Address::new(Rc::clone(space), start);
@@ -673,7 +694,11 @@ pub fn prepare_casts(fd: &mut Funcdata) {
             continue;
         };
         let Some(info) = fd.get_scope_local().and_then(|scope| {
-            scope.query_container_for_link_width(v.get_addr(), v.get_size(), &Address::new_invalid())
+            scope.query_container_for_link_width(
+                v.get_addr(),
+                v.get_size(),
+                &Address::new_invalid(),
+            )
         }) else {
             continue;
         };
@@ -758,7 +783,12 @@ pub fn access_type(
     let index = resolution?.get_field_num();
     let field = backing.get_field(index)?;
     let offset = offset - field.offset;
-    scalar_piece(fd.get_arch().types()?, Rc::clone(&field.field_type), offset, v.get_size())
+    scalar_piece(
+        fd.get_arch().types()?,
+        Rc::clone(&field.field_type),
+        offset,
+        v.get_size(),
+    )
 }
 
 pub(crate) fn scalar_piece(

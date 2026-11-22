@@ -1,7 +1,7 @@
 //! Match LR-saving prologues in the address's current ARM decode mode.
+use std::rc::Rc;
 use unlace_base::{address::Address, space::AddrSpace};
 use unlace_decomp::architecture::Architecture;
-use std::rc::Rc;
 
 pub(super) fn matches(
     little: bool,

@@ -12,7 +12,7 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 
@@ -21,7 +21,8 @@ use crate::context::ArchContext;
 fn build_fd() -> Funcdata {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -73,9 +74,12 @@ fn a_written_varnode_is_never_the_input_parameter_shape() {
     let src = unwritten(&mut fd, 0x2000, 8);
     let r = ram(&fd);
     let op = fd.new_op(1, Address::new(Rc::clone(&r), 0x2100));
-    fd.obank_mut().change_opcode(op, TypeOp::new(OpCode::CPUI_COPY, 0, "COPY"));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(OpCode::CPUI_COPY, 0, "COPY"));
     fd.op_set_input(op, src, 0).expect("wire input");
-    let out = fd.new_varnode_out(8, &Address::new(r, 0x2100), op).expect("varnode out");
+    let out = fd
+        .new_varnode_out(8, &Address::new(r, 0x2100), op)
+        .expect("varnode out");
     assert!(
         !is_input_parameter(&fd, out),
         "a written Varnode is classified by its defining op, not by this rule",
@@ -123,7 +127,8 @@ fn build_reg_fd() -> Funcdata {
     use unlace_base::space::{SpacebaseSpace, VarnodeStorage};
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     let regspc = Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "register",
@@ -136,17 +141,35 @@ fn build_reg_fd() -> Funcdata {
         1,
     ));
     m.insert_space(Rc::clone(&regspc)).unwrap();
-    m.insert_space(Rc::new(SpacebaseSpace::new("stack", 3, 4, &regspc, 1, true, false))).unwrap();
+    m.insert_space(Rc::new(SpacebaseSpace::new(
+        "stack", 3, 4, &regspc, 1, true, false,
+    )))
+    .unwrap();
     let stackspc = Rc::clone(m.get_stack_space().unwrap());
-    let sp = VarnodeStorage { space: Some(Rc::clone(&regspc)), offset: SP, size: 4 };
+    let sp = VarnodeStorage {
+        space: Some(Rc::clone(&regspc)),
+        offset: SP,
+        size: 4,
+    };
     m.add_spacebase_pointer(&stackspc, &sp, 4, true).unwrap();
     let glb = Rc::new(ArchContext::new(m));
-    let entry = Address::new(Rc::clone(glb.manage().get_space_by_name("register").unwrap()), 0x1000);
+    let entry = Address::new(
+        Rc::clone(glb.manage().get_space_by_name("register").unwrap()),
+        0x1000,
+    );
     Funcdata::new("func", "func", glb, entry, 0x1000_0000, 0x40).unwrap()
 }
 
 fn reg(fd: &Funcdata, off: u64) -> Address {
-    Address::new(Rc::clone(fd.get_arch().manage().get_space_by_name("register").unwrap()), off)
+    Address::new(
+        Rc::clone(
+            fd.get_arch()
+                .manage()
+                .get_space_by_name("register")
+                .unwrap(),
+        ),
+        off,
+    )
 }
 
 fn input(fd: &mut Funcdata, off: u64) -> VarnodeId {
@@ -155,10 +178,17 @@ fn input(fd: &mut Funcdata, off: u64) -> VarnodeId {
 }
 
 /// `<out> = <opc>(inputs)` made by the instruction at `pc`.
-fn def_at(fd: &mut Funcdata, pc: u64, opc: unlace_num::opcodes::OpCode, inputs: &[VarnodeId], out: &Address) -> VarnodeId {
+fn def_at(
+    fd: &mut Funcdata,
+    pc: u64,
+    opc: unlace_num::opcodes::OpCode,
+    inputs: &[VarnodeId],
+    out: &Address,
+) -> VarnodeId {
     use crate::context::TypeOp;
     let op = fd.new_op(inputs.len() as int4, reg(fd, pc));
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
     for (i, &vn) in inputs.iter().enumerate() {
         fd.op_set_input(op, vn, i as int4).unwrap();
     }
@@ -174,14 +204,23 @@ fn sp_write_at(fd: &mut Funcdata, pc: u64) {
     let cur = fd.new_varnode(4, &reg(fd, SP), None);
     let eight = fd.new_constant(4, 8);
     let out = reg(fd, SP);
-    def_at(fd, pc, unlace_num::opcodes::OpCode::CPUI_INT_ADD, &[cur, eight], &out);
+    def_at(
+        fd,
+        pc,
+        unlace_num::opcodes::OpCode::CPUI_INT_ADD,
+        &[cur, eight],
+        &out,
+    );
 }
 
 /// A RETURN outside any block, for the walks that never look for a call.
 fn ret_op(fd: &mut Funcdata) -> OpId {
     use crate::context::TypeOp;
     let op = fd.new_op(1, reg(fd, 0x200));
-    fd.obank_mut().change_opcode(op, TypeOp::new(OpCode::CPUI_RETURN, 0, "RETURN".to_string()));
+    fd.obank_mut().change_opcode(
+        op,
+        TypeOp::new(OpCode::CPUI_RETURN, 0, "RETURN".to_string()),
+    );
     op
 }
 
@@ -195,7 +234,10 @@ fn an_argument_moved_out_to_another_register_and_back_is_moved_back() {
     let held = copy_at(&mut fd, 0x104, r1, &r4a);
     let back = copy_at(&mut fd, 0x114, held, &r1a);
     assert!(moved_back(&fd, back, &r1a, 4, ret));
-    assert!(!moved_back(&fd, back, &reg(&fd, R0), 4, ret), "the input it reaches is r1's, not r0's");
+    assert!(
+        !moved_back(&fd, back, &reg(&fd, R0), 4, ret),
+        "the input it reaches is r1's, not r0's"
+    );
 }
 
 /// The register the RETURN reads untouched, or copied onto itself (ARM's
@@ -250,7 +292,10 @@ fn a_move_staged_through_a_temporary_counts() {
     let ret = ret_op(&mut fd);
     let r1 = input(&mut fd, R1);
     let (r1a, r4a) = (reg(&fd, R1), reg(&fd, R4));
-    let tmp = Address::new(Rc::clone(fd.get_arch().manage().get_space_by_name("unique").unwrap()), 0x100);
+    let tmp = Address::new(
+        Rc::clone(fd.get_arch().manage().get_space_by_name("unique").unwrap()),
+        0x100,
+    );
     let held = copy_at(&mut fd, 0x104, r1, &r4a);
     let staged = copy_at(&mut fd, 0x114, held, &tmp);
     let back = copy_at(&mut fd, 0x114, staged, &r1a);
@@ -272,7 +317,10 @@ fn a_self_or_and_an_add_of_zero_are_moves() {
     assert!(moved_back(&fd, back, &r1a, 4, ret));
     let one = fd.new_constant(4, 1);
     let bumped = def_at(&mut fd, 0x118, OpCode::CPUI_INT_ADD, &[held, one], &r1a);
-    assert!(!moved_back(&fd, bumped, &r1a, 4, ret), "adding one computes a value");
+    assert!(
+        !moved_back(&fd, bumped, &r1a, 4, ret),
+        "adding one computes a value"
+    );
 }
 
 /// The record names a register, at any width but its own nothing.
@@ -296,7 +344,8 @@ fn block(fd: &mut Funcdata) -> BlockId {
 fn op_in(fd: &mut Funcdata, bl: BlockId, pc: u64, opc: OpCode) -> OpId {
     use crate::context::TypeOp;
     let op = fd.new_op(0, reg(fd, pc));
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
     fd.op_insert_end(op, bl);
     op
 }
@@ -322,7 +371,10 @@ fn a_move_back_followed_by_a_callother_is_not_moved_back() {
     place(&mut fd, back, b0);
     op_in(&mut fd, b0, 0x110, OpCode::CPUI_CALLOTHER);
     let ret = op_in(&mut fd, b0, 0x114, OpCode::CPUI_RETURN);
-    assert!(!moved_back(&fd, back, &r1a, 4, ret), "svc after the move back");
+    assert!(
+        !moved_back(&fd, back, &r1a, 4, ret),
+        "svc after the move back"
+    );
 
     let mut fd = build_reg_fd();
     let r1 = input(&mut fd, R1);
@@ -334,7 +386,10 @@ fn a_move_back_followed_by_a_callother_is_not_moved_back() {
     let back = copy_at(&mut fd, 0x10c, held, &r1a);
     place(&mut fd, back, b0);
     let ret = op_in(&mut fd, b0, 0x110, OpCode::CPUI_RETURN);
-    assert!(moved_back(&fd, back, &r1a, 4, ret), "a CALLOTHER before the move back is not its reader");
+    assert!(
+        moved_back(&fd, back, &r1a, 4, ret),
+        "a CALLOTHER before the move back is not its reader"
+    );
 }
 
 /// A call on one path from the move back to the RETURN is enough; one on a
@@ -357,6 +412,10 @@ fn only_a_callother_on_a_path_to_the_return_stops_the_move() {
         place(&mut fd, back, top);
         op_in(&mut fd, side, 0x120, OpCode::CPUI_CALLOTHER);
         let ret = op_in(&mut fd, exit, 0x130, OpCode::CPUI_RETURN);
-        assert_eq!(moved_back(&fd, back, &r1a, 4, ret), !reaches, "reaches = {reaches}");
+        assert_eq!(
+            moved_back(&fd, back, &r1a, 4, ret),
+            !reaches,
+            "reaches = {reaches}"
+        );
     }
 }

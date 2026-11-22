@@ -617,13 +617,15 @@ mod tests {
             .flat_map(|word| word.to_be_bytes())
             .collect(),
         };
-        assert!(closed_image(
-            entry,
-            &[image(&code), root],
-            &[(BASE, 20), (BASE + 20, 44), (entry, 16)],
-            &BTreeSet::from([(BASE + 36, BASE), (entry, BASE + 20)])
-        )
-        .is_none());
+        assert!(
+            closed_image(
+                entry,
+                &[image(&code), root],
+                &[(BASE, 20), (BASE + 20, 44), (entry, 16)],
+                &BTreeSet::from([(BASE + 36, BASE), (entry, BASE + 20)])
+            )
+            .is_none()
+        );
     }
 
     #[test]
@@ -800,12 +802,14 @@ mod tests {
         let mut all = leaf();
         all[0] = mov(30, 4);
         all.extend(caller());
-        assert!(closed_functions(
-            &[image(&all)],
-            &[(BASE, 20), (BASE + 20, 44)],
-            &BTreeSet::from([(BASE + 36, BASE)])
-        )
-        .is_none());
+        assert!(
+            closed_functions(
+                &[image(&all)],
+                &[(BASE, 20), (BASE + 20, 44)],
+                &BTreeSet::from([(BASE + 36, BASE)])
+            )
+            .is_none()
+        );
     }
 
     #[test]
@@ -828,19 +832,23 @@ mod tests {
     #[test]
     fn incomplete_and_nested_delay_bundles_refuse() {
         assert!(closed_functions(&[image(&[JR])], &[(BASE, 4)], &BTreeSet::new()).is_none());
-        assert!(closed_functions(
-            &[image(&[JR, jal(BASE)])],
-            &[(BASE, 8)],
-            &BTreeSet::from([(BASE + 4, BASE)])
-        )
-        .is_none());
+        assert!(
+            closed_functions(
+                &[image(&[JR, jal(BASE)])],
+                &[(BASE, 8)],
+                &BTreeSet::from([(BASE + 4, BASE)])
+            )
+            .is_none()
+        );
         let code = [JR, 0, jal(BASE)];
-        assert!(closed_functions(
-            &[image(&code)],
-            &[(BASE, 8), (BASE + 8, 4)],
-            &BTreeSet::from([(BASE + 8, BASE)])
-        )
-        .is_none());
+        assert!(
+            closed_functions(
+                &[image(&code)],
+                &[(BASE, 8), (BASE + 8, 4)],
+                &BTreeSet::from([(BASE + 8, BASE)])
+            )
+            .is_none()
+        );
     }
 
     #[test]
@@ -870,12 +878,14 @@ mod tests {
             code[4] = jal(target);
             let mut all = leaf();
             all.extend(&code);
-            assert!(closed_functions(
-                &[image(&all)],
-                &[(BASE, 20), (BASE + 20, 44)],
-                &BTreeSet::from([(BASE + 36, target)])
-            )
-            .is_none());
+            assert!(
+                closed_functions(
+                    &[image(&all)],
+                    &[(BASE, 20), (BASE + 20, 44)],
+                    &BTreeSet::from([(BASE + 36, target)])
+                )
+                .is_none()
+            );
         }
     }
 

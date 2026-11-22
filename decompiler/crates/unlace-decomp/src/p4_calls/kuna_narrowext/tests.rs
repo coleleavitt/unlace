@@ -28,9 +28,13 @@ fn only_o32_n32_and_n64_state_the_argument_rule() {
     for variant in ["octeon", "octeonplus", "octeon2", "octeon3"] {
         for suffix in ["", "-32addr"] {
             for model in ["default", "hard"] {
-                assert!(mips_documented(&format!("MIPS:BE:64:{variant}{suffix}:{model}")));
+                assert!(mips_documented(&format!(
+                    "MIPS:BE:64:{variant}{suffix}:{model}"
+                )));
             }
-            assert!(!mips_documented(&format!("MIPS:BE:64:{variant}{suffix}:unknown")));
+            assert!(!mips_documented(&format!(
+                "MIPS:BE:64:{variant}{suffix}:unknown"
+            )));
             assert_eq!(
                 mips_documented(&format!("MIPS:BE:64:{variant}{suffix}:n32")),
                 suffix == "-32addr"

@@ -43,9 +43,9 @@
 use std::path::{Path, PathBuf};
 
 use unlace_base::address::Address;
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
@@ -80,10 +80,7 @@ fn bootstrap_image(
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    for (name, value) in [("listing", "on"), ("aif", "strict")]
-        .iter()
-        .chain(options)
-    {
+    for (name, value) in [("listing", "on"), ("aif", "strict")].iter().chain(options) {
         prog.arch_mut()
             .set_kuna_option(name, value)
             .expect("option applies");
@@ -246,9 +243,10 @@ fn default_keeps_entries_the_owner_does_not_decode() {
 #[test]
 fn default_keeps_entries_after_a_targetless_call() {
     let prog = bootstrap(&[]);
-    for (leaf, entry) in
-        [("indirect_leaf", "sub_140001450"), ("fastfail_leaf", "sub_140001490")]
-    {
+    for (leaf, entry) in [
+        ("indirect_leaf", "sub_140001450"),
+        ("fastfail_leaf", "sub_140001490"),
+    ] {
         assert!(prog.lookup_symbol(leaf).is_some(), "the PDB names {leaf}");
         assert!(
             prog.lookup_symbol(entry).is_some(),
@@ -263,7 +261,10 @@ fn default_keeps_entries_after_a_targetless_call() {
 #[test]
 fn a_public_inside_a_procedure_blocks_its_extent() {
     let prog = bootstrap(&[]);
-    assert!(prog.lookup_symbol("pubinside_leaf").is_some(), "the PDB names pubinside_leaf");
+    assert!(
+        prog.lookup_symbol("pubinside_leaf").is_some(),
+        "the PDB names pubinside_leaf"
+    );
     assert!(
         prog.lookup_symbol("pub_inside").is_some(),
         "the interior public must survive (its procedure's extent is not usable)"

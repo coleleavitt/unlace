@@ -59,16 +59,16 @@ use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::options::OptionDatabase;
 
 use crate::client::GhidraClient;
-use crate::provider::GhidraRemoteFetch;
 use crate::ids::ELEM_DOC;
 use crate::protocol::{
-    pass_java_exception, read_string_stream, read_string_stream_optional, read_to_any_burst,
-    write_burst, write_string_stream, WireError, WireResult, BURST_COMMAND_CLOSE,
-    BURST_COMMAND_OPEN, BURST_MESSAGE_CLOSE, BURST_MESSAGE_OPEN, BURST_RESPONSE_CLOSE,
-    BURST_RESPONSE_OPEN, BURST_STRING_CLOSE, BURST_STRING_OPEN,
+    BURST_COMMAND_CLOSE, BURST_COMMAND_OPEN, BURST_MESSAGE_CLOSE, BURST_MESSAGE_OPEN,
+    BURST_RESPONSE_CLOSE, BURST_RESPONSE_OPEN, BURST_STRING_CLOSE, BURST_STRING_OPEN, WireError,
+    WireResult, pass_java_exception, read_string_stream, read_string_stream_optional,
+    read_to_any_burst, write_burst, write_string_stream,
 };
+use crate::provider::GhidraRemoteFetch;
 use crate::provider::SharedClient;
-use crate::translate::{build_registry, GhidraTranslate};
+use crate::translate::{GhidraTranslate, build_registry};
 
 /// One registered program: the kuna analog of an `ArchitectureGhidra` slot
 /// in the global `archlist` (ghidra_process.cc:76,176-201).
@@ -492,8 +492,7 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
             CommandKind::SetOptions => {
                 let slot = self.bind_session("Expecting arch id start", "Expecting arch id end")?;
                 cmd.slot = Some(slot);
-                cmd.optionslist =
-                    read_string_stream_optional(self.client.borrow_mut().sin_mut())?;
+                cmd.optionslist = read_string_stream_optional(self.client.borrow_mut().sin_mut())?;
                 Ok(())
             }
         }
@@ -655,9 +654,7 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
                     None => {
                         let label = self.client.borrow_mut().get_code_label(&addr);
                         let n = match label {
-                            Ok(l) if !l.is_empty() => {
-                                String::from_utf8_lossy(&l).into_owned()
-                            }
+                            Ok(l) if !l.is_empty() => String::from_utf8_lossy(&l).into_owned(),
                             _ => format!("FUN_{:08x}", addr.get_offset()),
                         };
                         (n.clone(), n, None, Vec::new(), None, Vec::new())
@@ -707,8 +704,7 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
                         // per call; kuna's trackbase persists, hence the
                         // explicit pristine base).
                         if !wire_set.is_empty() || remote.has_pristine_tracked(&addr) {
-                            let session =
-                                self.archlist[slot].as_mut().expect("bound session");
+                            let session = self.archlist[slot].as_mut().expect("bound session");
                             if let Some(arch) = session.architecture.as_mut() {
                                 let manager = arch.translate().manager_rc();
                                 let spc = std::rc::Rc::clone(
@@ -728,8 +724,7 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
                                     // first merge at this address), never over
                                     // the previously-merged set.
                                     let current = db.get_tracked_set(&addr).clone();
-                                    let mut merged =
-                                        remote.pristine_tracked_for(&addr, current);
+                                    let mut merged = remote.pristine_tracked_for(&addr, current);
                                     for w in &wire_set {
                                         match merged.iter_mut().find(|t| t.loc == w.loc) {
                                             Some(t) => t.val = w.val,
@@ -818,9 +813,8 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
                     let mut seed_dynamic: Vec<unlace_decomp::database::DynamicSymbolSpec> =
                         Vec::new();
                     for l in &host_locals {
-                        let typelocked = (l.flags
-                            & unlace_decomp::varnode::varnode_flags::typelock)
-                            != 0;
+                        let typelocked =
+                            (l.flags & unlace_decomp::varnode::varnode_flags::typelock) != 0;
                         // A DYNAMIC (hash) local addresses a VALUE, not a
                         // storage location — the class Java writes for every
                         // `requiresDynamicStorage` variable (unique-space
@@ -999,7 +993,7 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
                         _ => {
                             return Err(WireError::Kuna(KunaError::lowlevel(format!(
                                 "Unknown print action: {printstring}"
-                            ))))
+                            ))));
                         }
                     }
                 }

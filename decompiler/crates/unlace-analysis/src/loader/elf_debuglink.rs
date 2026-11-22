@@ -19,13 +19,18 @@
 
 use std::path::{Path, PathBuf};
 
-use object::read::{Object, ObjectSection, ObjectSymbol};
 use object::SymbolKind;
+use object::read::{Object, ObjectSection, ObjectSymbol};
 
 /// The companion search directories.
 fn debug_dirs() -> Vec<PathBuf> {
     let mut dirs: Vec<PathBuf> = std::env::var("KUNA_DEBUG_DIRS")
-        .map(|v| v.split(':').filter(|d| !d.is_empty()).map(PathBuf::from).collect())
+        .map(|v| {
+            v.split(':')
+                .filter(|d| !d.is_empty())
+                .map(PathBuf::from)
+                .collect()
+        })
         .unwrap_or_default();
     dirs.push(PathBuf::from("/usr/lib/debug"));
     dirs
@@ -42,7 +47,10 @@ pub fn candidates(file: &object::File, image: &Path) -> Vec<(PathBuf, Check)> {
     if let Ok(Some(id)) = file.build_id() {
         if id.len() >= 2 {
             for dir in debug_dirs() {
-                let path = dir.join(".build-id").join(hex(&id[..1])).join(format!("{}.debug", hex(&id[1..])));
+                let path = dir
+                    .join(".build-id")
+                    .join(hex(&id[..1]))
+                    .join(format!("{}.debug", hex(&id[1..])));
                 out.push((path, Check::BuildId(id.to_vec())));
             }
         }
@@ -74,11 +82,19 @@ pub fn find_companion(file: &object::File, image: &Path) -> Option<(PathBuf, Vec
         if path == image {
             continue;
         }
-        let Ok(bytes) = std::fs::read(&path) else { continue };
+        let Ok(bytes) = std::fs::read(&path) else {
+            continue;
+        };
         let ok = match &check {
             Check::BuildId(id) => object::File::parse(&*bytes)
                 .ok()
-                .and_then(|companion| companion.build_id().ok().flatten().map(|other| other == id.as_slice()))
+                .and_then(|companion| {
+                    companion
+                        .build_id()
+                        .ok()
+                        .flatten()
+                        .map(|other| other == id.as_slice())
+                })
                 .unwrap_or(false),
             Check::Crc(crc) => {
                 let mut sum = flate2::Crc::new();
@@ -104,7 +120,9 @@ pub fn minidebuginfo(file: &object::File) -> Option<Vec<u8>> {
 
 /// The defined function symbols of an ELF given as bytes, as `(addr, name)`.
 pub fn function_symbols(bytes: &[u8]) -> Vec<(u64, Vec<u8>)> {
-    let Ok(file) = object::File::parse(bytes) else { return Vec::new() };
+    let Ok(file) = object::File::parse(bytes) else {
+        return Vec::new();
+    };
     file.symbols()
         .filter(|s| s.kind() == SymbolKind::Text && !s.is_undefined() && s.address() != 0)
         .filter_map(|s| {
@@ -117,7 +135,10 @@ pub fn function_symbols(bytes: &[u8]) -> Vec<(u64, Vec<u8>)> {
 /// The function symbols a stripped image's debug companion or MiniDebugInfo
 /// supplies, and where they came from. Empty when the image keeps its own
 /// `.symtab`.
-pub fn companion_symbols(file: &object::File, image: Option<&Path>) -> (Vec<(u64, Vec<u8>)>, Option<String>) {
+pub fn companion_symbols(
+    file: &object::File,
+    image: Option<&Path>,
+) -> (Vec<(u64, Vec<u8>)>, Option<String>) {
     if file.format() != object::BinaryFormat::Elf || file.section_by_name(".symtab").is_some() {
         return (Vec::new(), None);
     }
@@ -137,7 +158,9 @@ pub fn companion_symbols(file: &object::File, image: Option<&Path>) -> (Vec<(u64
 /// offsets: the later segment overwrites bytes the earlier one already placed,
 /// a shape only a hand-made or hostile image has. `(first, second)` vaddrs.
 pub fn overlapping_loads(bytes: &[u8]) -> Vec<(u64, u64)> {
-    let Ok(file) = object::File::parse(bytes) else { return Vec::new() };
+    let Ok(file) = object::File::parse(bytes) else {
+        return Vec::new();
+    };
     if file.format() != object::BinaryFormat::Elf {
         return Vec::new();
     }

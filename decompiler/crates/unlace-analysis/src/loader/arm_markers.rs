@@ -60,10 +60,12 @@
 //!   with the identical mechanism (var `"ISA_MODE"`) given a MIPS16 fixture.
 //!   Both are deferred — see `docs/history/analysis-port-plan.md` (`arch-markers` risks).
 
-use object::read::{Object, ObjectSymbol};
 use object::SymbolKind;
+use object::read::{Object, ObjectSymbol};
 
-use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, ContextPaint, Phase, SymFact, SymKind};
+use crate::pass::{
+    AnalysisCtx, AnalysisOutput, AnalysisPass, ContextPaint, Phase, SymFact, SymKind,
+};
 
 /// The SLEIGH processor-context variable steering ARM/Thumb instruction decode.
 /// Defined by the ARM `.pspec` (`ARMt.pspec` `<context_data>`); `0` = ARM (A32),
@@ -122,12 +124,22 @@ pub(crate) fn scan_arm_markers(file: &object::File) -> AnalysisOutput {
         // `kind()` is not Text; do NOT filter on kind here).
         if is_thumb_marker(name) {
             // ARM_ElfExtension.java:166-175 — setValue(TMode, addr, addr, 1).
-            out.context_paints.push(ContextPaint { addr, end: None, var: TMODE, value: 1 });
+            out.context_paints.push(ContextPaint {
+                addr,
+                end: None,
+                var: TMODE,
+                value: 1,
+            });
             continue;
         }
         if is_arm_marker(name) {
             // ARM_ElfExtension.java:176-185 — setValue(TMode, addr, addr, 0).
-            out.context_paints.push(ContextPaint { addr, end: None, var: TMODE, value: 0 });
+            out.context_paints.push(ContextPaint {
+                addr,
+                end: None,
+                var: TMODE,
+                value: 0,
+            });
             continue;
         }
         // `$d`/`$d.` (data, :189) and `$b` (:186): LOSS — no createUndefinedData
@@ -140,7 +152,12 @@ pub(crate) fn scan_arm_markers(file: &object::File) -> AnalysisOutput {
         // `entry` (moveFunction/setElfSymbolAddress).
         if sym.kind() == SymbolKind::Text && (addr & 1) != 0 {
             let even = addr & !1;
-            out.context_paints.push(ContextPaint { addr: even, end: None, var: TMODE, value: 1 });
+            out.context_paints.push(ContextPaint {
+                addr: even,
+                end: None,
+                var: TMODE,
+                value: 1,
+            });
             // Thumb-FUNC re-home: emit the FunctionSymbol at the EVEN entry so
             // `load function <name>` / a CALL resolves at the address the `TMode`
             // paint uses (the engine decodes at the even address). Ghidra moves the
@@ -185,7 +202,10 @@ mod tests {
     /// The bare ARM Thumb `.o` fixture (ET_REL parses fine; the e2e on a LINKED
     /// exe is a documented follow-up — no ARM linker on the build host).
     fn arm_thumb_o() -> Vec<u8> {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/arm_thumb_le32.o");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/arm_thumb_le32.o"
+        );
         std::fs::read(path).expect("read arm_thumb_le32.o fixture")
     }
 
@@ -223,15 +243,24 @@ mod tests {
         let out = scan_arm_markers(&file);
 
         // Every paint is TMode and on this all-Thumb fixture is value 1.
-        assert!(!out.context_paints.is_empty(), "must emit at least one TMode paint");
+        assert!(
+            !out.context_paints.is_empty(),
+            "must emit at least one TMode paint"
+        );
         for p in &out.context_paints {
             assert_eq!(p.var, TMODE, "only TMode is painted");
             assert_eq!(p.value, 1, "all-Thumb fixture paints TMode=1 everywhere");
-            assert_eq!(p.end, None, "v1 emits point sets (paint-to-next-change-point)");
+            assert_eq!(
+                p.end, None,
+                "v1 emits point sets (paint-to-next-change-point)"
+            );
         }
 
         // (1) The `$t.0` mapping symbol at .text+0x0 → TMode=1.
-        assert!(paints_at(&out, 0x0).contains(&1), "$t.0 must paint TMode=1 at 0x0");
+        assert!(
+            paints_at(&out, 0x0).contains(&1),
+            "$t.0 must paint TMode=1 at 0x0"
+        );
 
         // (2) STT_FUNC LSB convention: thumb_add@0x1 → normalized 0x0, _start@0x15
         // → normalized 0x14, both TMode=1.
@@ -254,9 +283,9 @@ mod tests {
         // SymFact at the NORMALIZED even entry (thumb_add@0x1 -> 0x0, _start@0x15 ->
         // 0x14), so `load function <name>` resolves at the even decode address.
         let homed = |a: u64, n: &str| {
-            out.symbols.iter().any(|s| {
-                s.addr == a && s.name == n && s.kind == SymKind::Function
-            })
+            out.symbols
+                .iter()
+                .any(|s| s.addr == a && s.name == n && s.kind == SymKind::Function)
         };
         assert!(homed(0x0, "thumb_add"), "thumb_add re-homed to even 0x0");
         assert!(homed(0x14, "_start"), "_start re-homed to even 0x14");

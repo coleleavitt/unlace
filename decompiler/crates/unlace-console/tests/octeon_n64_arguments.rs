@@ -3,8 +3,8 @@ use std::{path::PathBuf, rc::Rc};
 
 use unlace_base::xml::DocumentStorage;
 use unlace_console::{
-    engine::{bootstrap_from_object, bootstrap_program, ConsoleProgram, EntrySelector},
-    grammar::{parse_c, DataOrg},
+    engine::{ConsoleProgram, EntrySelector, bootstrap_from_object, bootstrap_program},
+    grammar::{DataOrg, parse_c},
     project::decompile_targets,
 };
 use unlace_decomp::fspec::ParameterPieces;

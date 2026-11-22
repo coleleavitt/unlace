@@ -136,7 +136,9 @@ impl PriorNames {
 /// names, where a stack Symbol is still `v9`); `None` for any other name.
 pub fn default_name_index(name: &str, angr: bool) -> Option<int4> {
     let index = |digits: &str| {
-        let canonical = !digits.is_empty() && !digits.starts_with('0') && digits.bytes().all(|b| b.is_ascii_digit());
+        let canonical = !digits.is_empty()
+            && !digits.starts_with('0')
+            && digits.bytes().all(|b| b.is_ascii_digit());
         if canonical { digits.parse().ok() } else { None }
     };
     if let Some(i) = name.strip_prefix('v').and_then(index) {
@@ -152,7 +154,12 @@ pub fn default_name_index(name: &str, angr: bool) -> Option<int4> {
 /// `addr` with the offset of storage every decompile renumbers dropped.
 fn stable(addr: &Address) -> Address {
     match addr.get_space() {
-        Some(space) if matches!(space.get_type(), IPTR_INTERNAL | IPTR_JOIN | IPTR_IOP | IPTR_FSPEC) => {
+        Some(space)
+            if matches!(
+                space.get_type(),
+                IPTR_INTERNAL | IPTR_JOIN | IPTR_IOP | IPTR_FSPEC
+            ) =>
+        {
             Address::new(std::rc::Rc::clone(space), 0)
         }
         _ => addr.clone(),
@@ -164,52 +171,82 @@ fn keys_of(fd: &Funcdata, vn: VarnodeId) -> Option<Keys> {
     let v = fd.vbank().get(vn).filter(|v| !v.is_constant())?;
     let storage = stable(v.get_addr());
     let place = (storage.clone(), v.get_size(), fd.vn_use_point(vn));
-    Some(match v.get_def().filter(|_| v.is_written()).and_then(|op| fd.obank().get(op)) {
-        Some(op) => {
-            let inputs = (0..op.num_input())
-                .filter_map(|slot| op.get_in(slot).and_then(|input| fd.vbank().get(input)))
-                .fold(0xcbf2_9ce4_8422_2325u64, |hash, input| {
-                    let addr = stable(input.get_addr());
-                    let space = addr.get_space().map_or(u64::MAX, |space| space.get_index() as u64);
-                    [space, addr.get_offset(), input.get_size() as u64]
-                        .into_iter()
-                        .fold(hash, |hash, word| (hash ^ word).wrapping_mul(0x0000_0100_0000_01b3))
-                });
-            let pc = op.get_addr().clone();
-            (
-                (pc.clone(), op.get_time(), storage.clone(), v.get_size()),
-                (pc, Some(op.code()), storage, v.get_size(), inputs),
+    Some(
+        match v
+            .get_def()
+            .filter(|_| v.is_written())
+            .and_then(|op| fd.obank().get(op))
+        {
+            Some(op) => {
+                let inputs = (0..op.num_input())
+                    .filter_map(|slot| op.get_in(slot).and_then(|input| fd.vbank().get(input)))
+                    .fold(0xcbf2_9ce4_8422_2325u64, |hash, input| {
+                        let addr = stable(input.get_addr());
+                        let space = addr
+                            .get_space()
+                            .map_or(u64::MAX, |space| space.get_index() as u64);
+                        [space, addr.get_offset(), input.get_size() as u64]
+                            .into_iter()
+                            .fold(hash, |hash, word| {
+                                (hash ^ word).wrapping_mul(0x0000_0100_0000_01b3)
+                            })
+                    });
+                let pc = op.get_addr().clone();
+                (
+                    (pc.clone(), op.get_time(), storage.clone(), v.get_size()),
+                    (pc, Some(op.code()), storage, v.get_size(), inputs),
+                    place,
+                )
+            }
+            None => (
+                (
+                    Address::new_invalid(),
+                    u32::MAX,
+                    storage.clone(),
+                    v.get_size(),
+                ),
+                (Address::new_invalid(), None, storage, v.get_size(), 0),
                 place,
-            )
-        }
-        None => (
-            (Address::new_invalid(), u32::MAX, storage.clone(), v.get_size()),
-            (Address::new_invalid(), None, storage, v.get_size(), 0),
-            place,
-        ),
-    })
+            ),
+        },
+    )
 }
 
 /// The [`Keys`] of each non-constant instance of `high`.
 fn instances(fd: &Funcdata, high: HighVariableId) -> Vec<Keys> {
-    instances_with_keys(fd, high).into_iter().map(|(_, keys)| keys).collect()
+    instances_with_keys(fd, high)
+        .into_iter()
+        .map(|(_, keys)| keys)
+        .collect()
 }
 
 fn instances_with_keys(fd: &Funcdata, high: HighVariableId) -> Vec<(VarnodeId, Keys)> {
-    let Some(h) = fd.high_bank().get(high) else { return Vec::new() };
-    (0..h.num_instances()).map(|i| h.get_instance(i)).filter_map(|vn| Some((vn, keys_of(fd, vn)?))).collect()
+    let Some(h) = fd.high_bank().get(high) else {
+        return Vec::new();
+    };
+    (0..h.num_instances())
+        .map(|i| h.get_instance(i))
+        .filter_map(|vn| Some((vn, keys_of(fd, vn)?)))
+        .collect()
 }
 
 /// The local an instance belonged to: by its keys ([`prior_name`]), or else
 /// by the type lock [`lock_retyped`] put on it, when the type inference read
 /// changed the operations it comes from.
-fn matched_name<'a>(fd: &Funcdata, prior: &'a PriorNames, vn: VarnodeId, keys: &Keys) -> Option<&'a String> {
+fn matched_name<'a>(
+    fd: &Funcdata,
+    prior: &'a PriorNames,
+    vn: VarnodeId,
+    keys: &Keys,
+) -> Option<&'a String> {
     if let Some(name) = prior_name(prior, keys) {
         return Some(name);
     }
     let v = fd.vbank().get(vn).filter(|v| v.is_type_lock())?;
-    let mut locked =
-        prior.retypes.iter().filter(|(_, retype)| retype.infer && std::rc::Rc::ptr_eq(&retype.ct, v.get_type()));
+    let mut locked = prior
+        .retypes
+        .iter()
+        .filter(|(_, retype)| retype.infer && std::rc::Rc::ptr_eq(&retype.ct, v.get_type()));
     let (name, _) = locked.next()?;
     locked.next().is_none().then_some(name)
 }
@@ -236,7 +273,12 @@ fn tally(fd: &Funcdata, high: HighVariableId) -> BTreeMap<String, (usize, usize)
     for (vn, keys) in instances_with_keys(fd, high) {
         if let Some(name) = matched_name(fd, prior, vn, &keys) {
             let count = counts.entry(name.clone()).or_default();
-            if keys.0 .2.get_space().is_some_and(|space| space.get_type() == IPTR_INTERNAL) {
+            if keys
+                .0
+                .2
+                .get_space()
+                .is_some_and(|space| space.get_type() == IPTR_INTERNAL)
+            {
                 count.1 += 1;
             } else {
                 count.0 += 1;
@@ -270,7 +312,11 @@ pub fn best(fd: &Funcdata, high: HighVariableId) -> Option<int4> {
     }
     let renamed = |i: &int4| prior.vacated.contains_key(i);
     let pick = |keep: &dyn Fn(&int4) -> bool| {
-        counts.iter().filter(|(i, _)| keep(i)).max_by(|a, b| a.1.cmp(b.1).then(b.0.cmp(a.0))).map(|(i, _)| *i)
+        counts
+            .iter()
+            .filter(|(i, _)| keep(i))
+            .max_by(|a, b| a.1.cmp(b.1).then(b.0.cmp(a.0)))
+            .map(|(i, _)| *i)
     };
     pick(&|i| !renamed(i)).or_else(|| pick(&|_| true))
 }
@@ -286,8 +332,12 @@ pub fn renamed_number(fd: &Funcdata, high: HighVariableId) -> Option<int4> {
 
 /// Did no local take the name the rename of number `i` gave?
 pub fn orphaned(fd: &Funcdata, i: int4) -> bool {
-    let Some(name) = fd.kuna_prior_names().vacated.get(&i) else { return false };
-    !fd.high_bank().iter().any(|(_, h)| h.kuna_name() == Some(name.as_str()))
+    let Some(name) = fd.kuna_prior_names().vacated.get(&i) else {
+        return false;
+    };
+    !fd.high_bank()
+        .iter()
+        .any(|(_, h)| h.kuna_name() == Some(name.as_str()))
 }
 
 /// The local each name-only rename names: the one holding most of the renamed
@@ -295,7 +345,10 @@ pub fn orphaned(fd: &Funcdata, i: int4) -> bool {
 /// rename maps no Symbol over the variable, so it cannot change what the
 /// analysis merges or how it types it; the name is attached here, after the
 /// merge, to the whole variable.
-pub fn rename_targets(fd: &Funcdata, tallies: &[(HighVariableId, BTreeMap<String, (usize, usize)>)]) -> BTreeMap<HighVariableId, String> {
+pub fn rename_targets(
+    fd: &Funcdata,
+    tallies: &[(HighVariableId, BTreeMap<String, (usize, usize)>)],
+) -> BTreeMap<HighVariableId, String> {
     let renames = &fd.kuna_prior_names().renames;
     let mut best: BTreeMap<&String, ((usize, usize), HighVariableId)> = BTreeMap::new();
     for (high, counts) in tallies {
@@ -307,7 +360,9 @@ pub fn rename_targets(fd: &Funcdata, tallies: &[(HighVariableId, BTreeMap<String
             }
         }
     }
-    best.into_iter().map(|(from, (_, high))| (high, renames[from].clone())).collect()
+    best.into_iter()
+        .map(|(from, (_, high))| (high, renames[from].clone()))
+        .collect()
 }
 
 /// [`tally`] of every local the naming pass names on its own, when a record
@@ -317,8 +372,12 @@ pub fn tallies(fd: &mut Funcdata) -> Vec<(HighVariableId, BTreeMap<String, (usiz
     if fd.kuna_prior_names().ops.is_empty() {
         return Vec::new();
     }
-    let highs: Vec<HighVariableId> =
-        fd.high_bank().iter().filter(|(_, h)| !h.kuna_global()).map(|(high, _)| high).collect();
+    let highs: Vec<HighVariableId> = fd
+        .high_bank()
+        .iter()
+        .filter(|(_, h)| !h.kuna_global())
+        .map(|(high, _)| high)
+        .collect();
     let mut out = Vec::new();
     for high in highs {
         let piece = fd
@@ -346,7 +405,9 @@ pub fn assign_numbers(
     for (high, counts) in tallies {
         let mut numbers: BTreeMap<int4, (usize, usize)> = BTreeMap::new();
         for (name, count) in counts {
-            if let Some(i) = default_name_index(name, angr).filter(|i| !prior.vacated.contains_key(i)) {
+            if let Some(i) =
+                default_name_index(name, angr).filter(|i| !prior.vacated.contains_key(i))
+            {
                 let total = numbers.entry(i).or_default();
                 total.0 += count.0;
                 total.1 += count.1;
@@ -430,7 +491,10 @@ impl NameState {
 
     /// The name a rename gave the Symbol at `(addr, size)`, if any.
     pub fn symbol_rename(&self, addr: &Address, size: int4) -> Option<&str> {
-        self.prior.symbol_renames.get(&(addr.clone(), size)).map(String::as_str)
+        self.prior
+            .symbol_renames
+            .get(&(addr.clone(), size))
+            .map(String::as_str)
     }
 
     /// Put the number the Symbol at `(addr, size)` had ahead of the others.
@@ -453,8 +517,13 @@ impl NameState {
 
     fn pick_free(&mut self, render: &dyn Fn(int4) -> String, free: &dyn Fn(&str) -> bool) -> int4 {
         let preferred = std::mem::take(&mut self.preferred);
-        let open = |i: int4, state: &NameState| !state.prior.vacated.contains_key(&i) && !state.handed.contains(&i);
-        if let Some(i) = preferred.into_iter().find(|&i| open(i, self) && free(&render(i))) {
+        let open = |i: int4, state: &NameState| {
+            !state.prior.vacated.contains_key(&i) && !state.handed.contains(&i)
+        };
+        if let Some(i) = preferred
+            .into_iter()
+            .find(|&i| open(i, self) && free(&render(i)))
+        {
             return self.hand(i);
         }
         let mut i = self.overflow;
@@ -472,7 +541,9 @@ impl NameState {
 
     /// One past every number this pass handed out.
     pub fn end(&self) -> int4 {
-        self.handed.last().map_or(self.overflow, |&i| self.overflow.max(i + 1))
+        self.handed
+            .last()
+            .map_or(self.overflow, |&i| self.overflow.max(i + 1))
     }
 }
 
@@ -498,7 +569,11 @@ pub fn snapshot(fd: &Funcdata) -> Vec<(String, Keys)> {
             continue;
         }
         if let Some(name) = h.kuna_name() {
-            out.extend(instances(fd, high).into_iter().map(|keys| (name.to_string(), keys)));
+            out.extend(
+                instances(fd, high)
+                    .into_iter()
+                    .map(|keys| (name.to_string(), keys)),
+            );
         }
     }
     out
@@ -530,8 +605,15 @@ pub struct UnitRetype {
 
 /// The unit retype of a `from` variable to `to`, when it keeps the width and
 /// kind ([`retypes_as_unit`]).
-pub fn unit_retype(from: &std::rc::Rc<crate::dtype::Datatype>, to: &std::rc::Rc<crate::dtype::Datatype>) -> Option<UnitRetype> {
-    retypes_as_unit(from, to).then(|| UnitRetype { ct: to.clone(), infer: reaches_inference(to), from: from.clone() })
+pub fn unit_retype(
+    from: &std::rc::Rc<crate::dtype::Datatype>,
+    to: &std::rc::Rc<crate::dtype::Datatype>,
+) -> Option<UnitRetype> {
+    retypes_as_unit(from, to).then(|| UnitRetype {
+        ct: to.clone(),
+        infer: reaches_inference(to),
+        from: from.clone(),
+    })
 }
 
 /// Does retyping a `from` variable to `to` keep its width and kind: integer
@@ -553,7 +635,11 @@ pub fn retypes_as_unit(from: &crate::dtype::Datatype, to: &crate::dtype::Datatyp
 /// unit retype), not as a Symbol: a name-only rename, or a retype that keeps
 /// the printed variable's width and kind.
 pub fn is_carried_as_name(fd: &Funcdata, sym: crate::database::SymbolId) -> bool {
-    is_name_only(fd, sym) || fd.kuna_directive_symbols().iter().any(|d| d.symbol == sym && d.unit_type.is_some())
+    is_name_only(fd, sym)
+        || fd
+            .kuna_directive_symbols()
+            .iter()
+            .any(|d| d.symbol == sym && d.unit_type.is_some())
 }
 
 /// Lock each unit retype that drives inference ([`reaches_inference`]) on
@@ -615,7 +701,9 @@ pub fn same_variable(fd: &Funcdata, a: HighVariableId, b: HighVariableId) -> Opt
 /// The locals `high`'s instances matched, remembered per varnode while the
 /// merge asks: the merge tests a pair of highs many times over.
 fn merged_names(fd: &Funcdata, high: HighVariableId) -> BTreeSet<u32> {
-    let Some(h) = fd.high_bank().get(high) else { return BTreeSet::new() };
+    let Some(h) = fd.high_bank().get(high) else {
+        return BTreeSet::new();
+    };
     let prior = fd.kuna_prior_names();
     let mut memo = prior.merged_names.borrow_mut();
     let MergeMemo { locals, names } = &mut *memo;
@@ -641,17 +729,28 @@ pub fn variable_groups(fd: &Funcdata, highs: &[HighVariableId]) -> Vec<Vec<HighV
     }
     let current: BTreeSet<HighVariableId> = highs
         .iter()
-        .filter_map(|&high| fd.high_bank().get(high).filter(|h| h.num_instances() > 0).map(|h| h.get_instance(0)))
+        .filter_map(|&high| {
+            fd.high_bank()
+                .get(high)
+                .filter(|h| h.num_instances() > 0)
+                .map(|h| h.get_instance(0))
+        })
         .filter_map(|vn| fd.vbank().get(vn).and_then(|v| v.get_high()))
         .collect();
     let mut groups: BTreeMap<u32, Vec<HighVariableId>> = BTreeMap::new();
     for high in current {
         let names = merged_names(fd, high);
         if names.len() == 1 {
-            groups.entry(names.into_iter().next().unwrap()).or_default().push(high);
+            groups
+                .entry(names.into_iter().next().unwrap())
+                .or_default()
+                .push(high);
         }
     }
-    groups.into_values().filter(|group| group.len() > 1).collect()
+    groups
+        .into_values()
+        .filter(|group| group.len() > 1)
+        .collect()
 }
 
 /// Does `vn` carry the type [`lock_retyped`] locked on the retyped variable?
@@ -659,8 +758,13 @@ pub fn variable_groups(fd: &Funcdata, highs: &[HighVariableId]) -> Vec<Vec<HighV
 /// expression around it inline it, which would leave the name it was given
 /// on nothing.
 pub fn holds_retype(fd: &Funcdata, vn: VarnodeId) -> bool {
-    let Some(v) = fd.vbank().get(vn).filter(|v| v.is_type_lock()) else { return false };
-    fd.kuna_prior_names().retypes.values().any(|retype| retype.infer && std::rc::Rc::ptr_eq(&retype.ct, v.get_type()))
+    let Some(v) = fd.vbank().get(vn).filter(|v| v.is_type_lock()) else {
+        return false;
+    };
+    fd.kuna_prior_names()
+        .retypes
+        .values()
+        .any(|retype| retype.infer && std::rc::Rc::ptr_eq(&retype.ct, v.get_type()))
 }
 
 /// Is `vn` a definition [`lock_retyped`] locked: a varnode whose defining
@@ -669,7 +773,9 @@ pub fn holds_retype(fd: &Funcdata, vn: VarnodeId) -> bool {
 /// re-lays can leave the variable's definition a copy, and propagated, it would
 /// leave the variable no instance.
 pub fn is_retyped_definition(fd: &Funcdata, vn: VarnodeId) -> bool {
-    let Some(v) = fd.vbank().get(vn).filter(|v| v.is_type_lock()) else { return false };
+    let Some(v) = fd.vbank().get(vn).filter(|v| v.is_type_lock()) else {
+        return false;
+    };
     if !replays_inference(fd) {
         return false;
     }
@@ -685,7 +791,10 @@ pub fn is_retyped_definition(fd: &Funcdata, vn: VarnodeId) -> bool {
 /// variable was printed with before, which laid out the frame the first time.
 /// `None` when the retypes holding that lock disagree on it or it has no size
 /// either.
-pub fn printed_pointee(fd: &Funcdata, vn: VarnodeId) -> Option<std::rc::Rc<crate::dtype::Datatype>> {
+pub fn printed_pointee(
+    fd: &Funcdata,
+    vn: VarnodeId,
+) -> Option<std::rc::Rc<crate::dtype::Datatype>> {
     let v = fd.vbank().get(vn).filter(|v| v.is_type_lock())?;
     let mut pointees = fd
         .kuna_prior_names()
@@ -694,17 +803,24 @@ pub fn printed_pointee(fd: &Funcdata, vn: VarnodeId) -> Option<std::rc::Rc<crate
         .filter(|retype| retype.infer && std::rc::Rc::ptr_eq(&retype.ct, v.get_type()))
         .map(|retype| {
             let mut pointee = retype.from.get_ptr_to();
-            while let Some(element) = pointee.as_ref().filter(|p| p.get_metatype() == crate::dtype::type_metatype::TYPE_ARRAY) {
+            while let Some(element) = pointee
+                .as_ref()
+                .filter(|p| p.get_metatype() == crate::dtype::type_metatype::TYPE_ARRAY)
+            {
                 pointee = element.get_array_base();
             }
             pointee
         });
     let first = pointees.next()??;
-    (first.get_size() > 0 && pointees.all(|p| p.is_some_and(|p| std::rc::Rc::ptr_eq(&p, &first)))).then_some(first)
+    (first.get_size() > 0 && pointees.all(|p| p.is_some_and(|p| std::rc::Rc::ptr_eq(&p, &first))))
+        .then_some(first)
 }
 
 fn replays_inference(fd: &Funcdata) -> bool {
-    fd.kuna_prior_names().retypes.values().any(|retype| retype.infer)
+    fd.kuna_prior_names()
+        .retypes
+        .values()
+        .any(|retype| retype.infer)
 }
 
 /// Must type inference read a unit retype to `to`: a pointer whose pointee it
@@ -720,7 +836,12 @@ pub fn reaches_inference(to: &crate::dtype::Datatype) -> bool {
 /// enumeration's names, as `bool`, or as characters?
 pub fn prints_literals(ct: &crate::dtype::Datatype) -> bool {
     use crate::dtype::type_metatype::*;
-    ct.is_enum_type() || ct.is_char_print() || matches!(ct.get_metatype(), TYPE_ENUM_INT | TYPE_ENUM_UINT | TYPE_BOOL)
+    ct.is_enum_type()
+        || ct.is_char_print()
+        || matches!(
+            ct.get_metatype(),
+            TYPE_ENUM_INT | TYPE_ENUM_UINT | TYPE_BOOL
+        )
 }
 
 /// The constants of `size` bytes the variable made of `instances` meets
@@ -731,18 +852,26 @@ pub fn prints_literals(ct: &crate::dtype::Datatype) -> bool {
 /// before: C compares an enumeration as an integer.
 pub fn met_constants(fd: &Funcdata, instances: &[VarnodeId], size: int4) -> Vec<VarnodeId> {
     let constant = |vn: Option<VarnodeId>| {
-        vn.filter(|&vn| fd.vbank().get(vn).is_some_and(|v| v.is_constant() && v.get_size() == size))
+        vn.filter(|&vn| {
+            fd.vbank()
+                .get(vn)
+                .is_some_and(|v| v.is_constant() && v.get_size() == size)
+        })
     };
     let mut out = Vec::new();
     for &vn in instances {
-        let Some(v) = fd.vbank().get(vn) else { continue };
+        let Some(v) = fd.vbank().get(vn) else {
+            continue;
+        };
         if let Some(def) = v.get_def().and_then(|op| fd.obank().get(op)) {
             if def.code() == OpCode::CPUI_COPY {
                 out.extend(constant(def.get_in(0)));
             }
         }
         for op in v.descend_iter() {
-            let Some(o) = fd.obank().get(op) else { continue };
+            let Some(o) = fd.obank().get(op) else {
+                continue;
+            };
             if matches!(
                 o.code(),
                 OpCode::CPUI_INT_EQUAL
@@ -770,7 +899,15 @@ pub fn reads_through(ct: &crate::dtype::Datatype) -> bool {
     }
     match ct.get_metatype() {
         TYPE_PTR => ct.get_ptr_to().is_some_and(|to| {
-            matches!(to.get_metatype(), TYPE_STRUCT | TYPE_UNION | TYPE_ARRAY | TYPE_PARTIALSTRUCT | TYPE_PARTIALUNION | TYPE_CODE)
+            matches!(
+                to.get_metatype(),
+                TYPE_STRUCT
+                    | TYPE_UNION
+                    | TYPE_ARRAY
+                    | TYPE_PARTIALSTRUCT
+                    | TYPE_PARTIALUNION
+                    | TYPE_CODE
+            )
         }),
         _ => false,
     }
@@ -807,19 +944,25 @@ pub fn directive_targets(
     let mut best: BTreeMap<&String, ((usize, usize), HighVariableId)> = BTreeMap::new();
     for (high, counts) in tallies {
         for (name, count) in counts {
-            if (prior.renames.contains_key(name) || prior.retypes.contains_key(name)) && fits(name, *high) {
+            if (prior.renames.contains_key(name) || prior.retypes.contains_key(name))
+                && fits(name, *high)
+            {
                 if best.get(name).is_none_or(|(held, _)| *count > *held) {
                     best.insert(name, (*count, *high));
                 }
             }
         }
     }
-    best.into_iter().map(|(name, (_, high))| (name.clone(), high)).collect()
+    best.into_iter()
+        .map(|(name, (_, high))| (name.clone(), high))
+        .collect()
 }
 
 fn width(fd: &Funcdata, high: HighVariableId) -> Option<int4> {
     let h = fd.high_bank().get(high)?;
-    (h.num_instances() > 0).then(|| fd.vbank().get(h.get_instance(0)).map(|v| v.get_size())).flatten()
+    (h.num_instances() > 0)
+        .then(|| fd.vbank().get(h.get_instance(0)).map(|v| v.get_size()))
+        .flatten()
 }
 
 /// Did a `name` directive rename `sym` without stating a type: a Symbol it
@@ -827,9 +970,14 @@ fn width(fd: &Funcdata, high: HighVariableId) -> Option<int4> {
 /// rename is carried as a name, not as a Symbol: a Symbol over one definition
 /// of a merged variable split it, and a type lock retyped it.
 pub fn is_name_only(fd: &Funcdata, sym: crate::database::SymbolId) -> bool {
-    let Some(lm) = fd.get_scope_local() else { return false };
+    let Some(lm) = fd.get_scope_local() else {
+        return false;
+    };
     let symbol = lm.database().symbol(sym);
-    let mapped = symbol.mapentry.iter().any(|entry| !matches!(entry, crate::database::EntryRef::Dynamic(_)));
+    let mapped = symbol
+        .mapentry
+        .iter()
+        .any(|entry| !matches!(entry, crate::database::EntryRef::Dynamic(_)));
     symbol.is_name_locked()
         && !symbol.is_type_locked()
         && symbol.get_category() != crate::database::symbol_category::FUNCTION_PARAMETER
@@ -847,7 +995,10 @@ pub fn carry(fd: &Funcdata) -> PriorNames {
     let prior = fd.kuna_prior_names();
     let isolated = crate::kuna_isolated::carried(fd);
     if prior.is_empty() && fd.kuna_directive_symbols().is_empty() {
-        return PriorNames { isolated, ..Default::default() };
+        return PriorNames {
+            isolated,
+            ..Default::default()
+        };
     }
     let angr = fd.get_arch().name_style_angr;
     let mut next = PriorNames {
@@ -865,7 +1016,12 @@ pub fn carry(fd: &Funcdata) -> PriorNames {
         retypes: prior
             .retypes
             .iter()
-            .map(|(from, retype)| (prior.renames.get(from).unwrap_or(from).clone(), retype.clone()))
+            .map(|(from, retype)| {
+                (
+                    prior.renames.get(from).unwrap_or(from).clone(),
+                    retype.clone(),
+                )
+            })
             .collect(),
         merged_names: Default::default(),
         isolated,
@@ -875,9 +1031,14 @@ pub fn carry(fd: &Funcdata) -> PriorNames {
         record(&mut next.shapes, shape, &name);
         record(&mut next.places, place, &name);
     }
-    let mut renamed: BTreeMap<String, String> =
-        prior.renames.values().map(|name| (name.clone(), name.clone())).collect();
-    let Some(lm) = fd.get_scope_local() else { return next };
+    let mut renamed: BTreeMap<String, String> = prior
+        .renames
+        .values()
+        .map(|name| (name.clone(), name.clone()))
+        .collect();
+    let Some(lm) = fd.get_scope_local() else {
+        return next;
+    };
     let directives = fd.kuna_directive_symbols();
     for (sym, addr, size, name) in lm.named_symbol_storage() {
         let name = match directives.iter().find(|d| d.symbol == sym) {
@@ -898,7 +1059,8 @@ pub fn carry(fd: &Funcdata) -> PriorNames {
         let symbol = lm.database().symbol(directive.symbol);
         match &directive.unit_type {
             Some(retype) => {
-                next.retypes.insert(directive.printed.clone(), retype.clone());
+                next.retypes
+                    .insert(directive.printed.clone(), retype.clone());
             }
             None if directive.retyped => {
                 next.retypes.remove(&directive.printed);
@@ -908,15 +1070,22 @@ pub fn carry(fd: &Funcdata) -> PriorNames {
         if symbol.is_name_undefined() || !symbol.is_name_locked() {
             continue;
         }
-        if let Some(alias) = fd.kuna_library_aliases().iter().find(|a| a.shown && a.number == directive.printed) {
+        if let Some(alias) = fd
+            .kuna_library_aliases()
+            .iter()
+            .find(|a| a.shown && a.number == directive.printed)
+        {
             next.vacated_names.insert(alias.alias.clone());
         }
         if is_carried_as_name(fd, directive.symbol) {
             renamed.insert(directive.printed.clone(), symbol.name.clone());
-            if let Some((_, addr, size, _)) =
-                lm.named_symbol_storage().into_iter().find(|(sym, ..)| *sym == directive.symbol && directive.bound.is_none())
+            if let Some((_, addr, size, _)) = lm
+                .named_symbol_storage()
+                .into_iter()
+                .find(|(sym, ..)| *sym == directive.symbol && directive.bound.is_none())
             {
-                next.symbol_renames.insert((addr, size), symbol.name.clone());
+                next.symbol_renames
+                    .insert((addr, size), symbol.name.clone());
             }
         }
         if !next.given.remove(&directive.printed) {
@@ -971,12 +1140,28 @@ mod tests {
         state.prefer(vec![5]);
         assert_eq!(state.pick(&render, &|_| true), 5);
         state.prefer(vec![7]);
-        assert_eq!(state.pick(&render, &|_| true), 12, "a number a rename took as its name");
+        assert_eq!(
+            state.pick(&render, &|_| true),
+            12,
+            "a number a rename took as its name"
+        );
         state.prefer(vec![5]);
-        assert_eq!(state.pick(&render, &|_| true), 13, "a number another local took");
+        assert_eq!(
+            state.pick(&render, &|_| true),
+            13,
+            "a number another local took"
+        );
         state.prefer(vec![3]);
-        assert_eq!(state.pick(&render, &|name| name != "v14"), 15, "a renamed local's number");
-        assert_eq!(state.pick(&render, &|_| true), 16, "a local the first decompile did not have");
+        assert_eq!(
+            state.pick(&render, &|name| name != "v14"),
+            15,
+            "a renamed local's number"
+        );
+        assert_eq!(
+            state.pick(&render, &|_| true),
+            16,
+            "a local the first decompile did not have"
+        );
         assert_eq!(state.end(), 17);
     }
 

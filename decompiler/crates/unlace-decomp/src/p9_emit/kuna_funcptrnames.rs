@@ -48,7 +48,11 @@ pub(crate) fn proven_scopes(
     if mapped_scope != target_inner {
         return None;
     }
-    Some(ProvenScopes { target_inner, caller, target_ids })
+    Some(ProvenScopes {
+        target_inner,
+        caller,
+        target_ids,
+    })
 }
 
 /// Apply C++ lookup rules after proving the function identity in both views.
@@ -88,7 +92,11 @@ pub fn prefix(
         Some(scopes.caller) != stop && db.is_name_used(scopes.caller, candidate, stop)
     };
     let prefix = crate::kuna_namespaces::scope_prefix(
-        strategy, name, &scopes.target_inner, &use_path, &used,
+        strategy,
+        name,
+        &scopes.target_inner,
+        &use_path,
+        &used,
     );
     if matches!(strategy, NamespaceStrategy::AllNamespaces) {
         let required = crate::kuna_namespaces::scope_prefix(

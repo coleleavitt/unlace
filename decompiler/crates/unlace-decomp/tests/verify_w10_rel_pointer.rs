@@ -22,7 +22,7 @@
 use std::rc::Rc;
 
 use unlace_decomp::dtype::{
-    type_metatype, Datatype, DatatypeKind, TypeFactory, TypeFactoryImpl, TypeField,
+    Datatype, DatatypeKind, TypeFactory, TypeFactoryImpl, TypeField, type_metatype,
 };
 
 fn factory() -> TypeFactoryImpl {
@@ -36,7 +36,10 @@ fn factory() -> TypeFactoryImpl {
 /// interning needed — `getPtrToFromParent` only walks `getSubType` on it).
 fn make_struct(size: i32, fields: Vec<TypeField>) -> Rc<Datatype> {
     let mut s = Datatype::new_with_align(size, 4, type_metatype::TYPE_STRUCT);
-    s.kind = DatatypeKind::Struct { field: fields, bitfield: vec![] };
+    s.kind = DatatypeKind::Struct {
+        field: fields,
+        bitfield: vec![],
+    };
     Rc::new(s)
 }
 
@@ -62,8 +65,15 @@ fn w10rel_get_ptr_to_from_parent_hole_offset_is_unknown1_not_base() {
     // offset 5 lands in the 4..8 hole: getFieldIter finds no field -> getSubType
     // returns null -> getBase(1,TYPE_UNKNOWN), NOT the struct or field `a`.
     let at5 = f.get_ptr_to_from_parent(Rc::clone(&s), 5).unwrap();
-    assert!(Rc::ptr_eq(&at5, &unk1), "hole offset 5 -> unknown1, got {:?}", at5.get_metatype());
-    assert!(!Rc::ptr_eq(&at5, &s), "hole offset must not escape as the original container");
+    assert!(
+        Rc::ptr_eq(&at5, &unk1),
+        "hole offset 5 -> unknown1, got {:?}",
+        at5.get_metatype()
+    );
+    assert!(
+        !Rc::ptr_eq(&at5, &s),
+        "hole offset must not escape as the original container"
+    );
     // offset 0 is the non-positive boundary -> unknown1 (NOT field a).
     let at0 = f.get_ptr_to_from_parent(Rc::clone(&s), 0).unwrap();
     assert!(Rc::ptr_eq(&at0, &unk1), "offset 0 (off<=0 arm) -> unknown1");
@@ -101,11 +111,17 @@ fn w10rel_get_ptr_to_from_parent_nested_struct_drills_to_leaf() {
     // offset 8 hits `nest` exactly -> getSubType yields (inner, curoff=0): the
     // do-while exits on curoff==0, returning the inner struct itself.
     let at8 = f.get_ptr_to_from_parent(Rc::clone(&outer), 8).unwrap();
-    assert!(Rc::ptr_eq(&at8, &inner), "offset 8 resolves to the nested struct");
+    assert!(
+        Rc::ptr_eq(&at8, &inner),
+        "offset 8 resolves to the nested struct"
+    );
     // offset 12 = nest@8 + 4 -> first getSubType yields (inner, curoff=4); the
     // do-while iterates again into inner.getSubType(4) -> (float y, 0).
     let at12 = f.get_ptr_to_from_parent(Rc::clone(&outer), 12).unwrap();
-    assert!(Rc::ptr_eq(&at12, &f4), "offset 12 drills through nest into float y");
+    assert!(
+        Rc::ptr_eq(&at12, &f4),
+        "offset 12 drills through nest into float y"
+    );
     // offset 8 + 2 = 10 lands mid-`x` of inner (curoff=2 into the int): inner's
     // getSubType(2) on an int finds no field -> null -> unknown1.
     let unk1 = f.get_base(1, TYPE_UNKNOWN).unwrap();
@@ -122,7 +138,12 @@ fn w10rel_get_ptr_into_struct_union_and_scalar_arms() {
     use type_metatype::*;
     let parent = make_struct(
         32,
-        vec![TypeField::new(0, 0, "p0", Rc::new(Datatype::new(4, TYPE_INT)))],
+        vec![TypeField::new(
+            0,
+            0,
+            "p0",
+            Rc::new(Datatype::new(4, TYPE_INT)),
+        )],
     );
 
     // helper to build a relptr with a given ptrto and offset.
@@ -143,7 +164,10 @@ fn w10rel_get_ptr_into_struct_union_and_scalar_arms() {
     let pr_s = mk_relptr(Rc::clone(&struct_to), 12);
     let (into, off) = pr_s.get_ptr_into().unwrap().unwrap();
     assert_eq!(off, 0, "STRUCT ptrto: off=0");
-    assert!(Rc::ptr_eq(&into, &struct_to), "STRUCT ptrto: returns ptrto, not parent");
+    assert!(
+        Rc::ptr_eq(&into, &struct_to),
+        "STRUCT ptrto: returns ptrto, not parent"
+    );
 
     // ptrto = UNION -> (ptrto, 0).  This is the arm a STRUCT-only port would miss.
     let mut u = Datatype::new_with_align(8, 4, TYPE_UNION);
@@ -152,14 +176,20 @@ fn w10rel_get_ptr_into_struct_union_and_scalar_arms() {
     let pr_u = mk_relptr(Rc::clone(&union_to), 4);
     let (into_u, off_u) = pr_u.get_ptr_into().unwrap().unwrap();
     assert_eq!(off_u, 0, "UNION ptrto: off=0");
-    assert!(Rc::ptr_eq(&into_u, &union_to), "UNION ptrto: returns ptrto, not parent");
+    assert!(
+        Rc::ptr_eq(&into_u, &union_to),
+        "UNION ptrto: returns ptrto, not parent"
+    );
 
     // ptrto = scalar INT -> (parent, offset).
     let int_to = Rc::new(Datatype::new(4, TYPE_INT));
     let pr_i = mk_relptr(Rc::clone(&int_to), 7);
     let (into_i, off_i) = pr_i.get_ptr_into().unwrap().unwrap();
     assert_eq!(off_i, 7, "scalar ptrto: off=offset");
-    assert!(Rc::ptr_eq(&into_i, &parent), "scalar ptrto: returns parent, not ptrto");
+    assert!(
+        Rc::ptr_eq(&into_i, &parent),
+        "scalar ptrto: returns parent, not ptrto"
+    );
 
     // A plain pointer (non-rel) still returns (ptrto, 0) via the Pointer arm,
     // proving the relptr arm did not capture the ordinary pointer path.

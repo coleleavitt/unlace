@@ -10,8 +10,18 @@ use std::process::Command;
 
 const SOURCE: &str = include_str!("../../unlace-analysis/tests/fixtures/zextreturn.c");
 
-const CALLEES: &[&str] = &["u16_mul", "u8_add", "u8_hi", "u16_inc", "u16_sum", "s16_mul", "s8_add", "h_loop"];
-const CALLERS: &[&str] = &["c_u16_mul", "c_u8_add", "c_u8_hi", "c_u16_inc", "c_u16_sum", "c_s16_mul", "c_s8_add"];
+const CALLEES: &[&str] = &[
+    "u16_mul", "u8_add", "u8_hi", "u16_inc", "u16_sum", "s16_mul", "s8_add", "h_loop",
+];
+const CALLERS: &[&str] = &[
+    "c_u16_mul",
+    "c_u8_add",
+    "c_u8_hi",
+    "c_u16_inc",
+    "c_u16_sum",
+    "c_s16_mul",
+    "c_s8_add",
+];
 
 /// The array `h_loop` sums is static and the program is built without PIE, so
 /// a 32-bit target's pointer arithmetic through `int` keeps its address.
@@ -62,12 +72,18 @@ const IMAGES: &[(&str, &[&str], bool)] = &[
     ("zextreturn_ppc.o", &[], false),
     ("zextreturn_rv32.o", &[], false),
     ("zextreturn_rv64.o", &[], false),
-    ("zextreturn_mipsel.o", &["--option", "narrowext", "compiler"], false),
+    (
+        "zextreturn_mipsel.o",
+        &["--option", "narrowext", "compiler"],
+        false,
+    ),
 ];
 
 /// The printed function `name`, from its header comment to the next.
 fn function<'a>(text: &'a str, name: &str) -> &'a str {
-    let start = text.find(&format!("// Function: {name} @")).unwrap_or_else(|| panic!("no {name}:\n{text}"));
+    let start = text
+        .find(&format!("// Function: {name} @"))
+        .unwrap_or_else(|| panic!("no {name}:\n{text}"));
     let rest = &text[start + 1..];
     &text[start..start + 1 + rest.find("// Function:").unwrap_or(rest.len())]
 }
@@ -87,7 +103,10 @@ fn a_zero_extended_narrow_return_round_trips_through_the_printed_c() {
         .into_iter()
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
-    assert!(!compilers.is_empty(), "the round trip requires a C compiler");
+    assert!(
+        !compilers.is_empty(),
+        "the round trip requires a C compiler"
+    );
     let reference = reference();
     for &(fixture, options, callers) in IMAGES {
         let path = common::fixture(fixture);
@@ -95,17 +114,32 @@ fn a_zero_extended_narrow_return_round_trips_through_the_printed_c() {
         args.extend_from_slice(options);
         let (text, err, rc) = common::run_kuna(&args);
         assert_eq!(rc, 0, "{fixture}: {err}");
-        let names = if callers { [CALLEES, CALLERS].concat() } else { CALLEES.to_vec() };
+        let names = if callers {
+            [CALLEES, CALLERS].concat()
+        } else {
+            CALLEES.to_vec()
+        };
         let printed: String = names.iter().map(|n| function(&text, n)).collect();
         let define = if callers { "#define CALLERS\n" } else { "" };
-        let program = format!("#include <stdio.h>\n#include <stdbool.h>\n{define}{reference}\n{printed}\n{MAIN}");
+        let program = format!(
+            "#include <stdio.h>\n#include <stdbool.h>\n{define}{reference}\n{printed}\n{MAIN}"
+        );
         for cc in &compilers {
             for level in ["-O0", "-O2"] {
                 let src = common::scratch_file(&format!("zextreturn-{fixture}-{cc}{level}"), "c");
                 let exe = src.with_extension("exe");
                 std::fs::write(&src, &program).unwrap();
                 let out = Command::new(cc)
-                    .args(["-std=gnu11", "-w", "-fwrapv", "-no-pie", level, "-o", exe.to_str().unwrap(), src.to_str().unwrap()])
+                    .args([
+                        "-std=gnu11",
+                        "-w",
+                        "-fwrapv",
+                        "-no-pie",
+                        level,
+                        "-o",
+                        exe.to_str().unwrap(),
+                        src.to_str().unwrap(),
+                    ])
                     .args(common::CC_GCC15_DEMOTE)
                     .output()
                     .expect("spawn the C compiler");

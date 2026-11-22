@@ -41,7 +41,10 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn specs_root() -> PathBuf {
@@ -93,7 +96,9 @@ fn dump_print_c(bin: &PathBuf, stem: &str) -> Option<String> {
 /// Extract the body of a named function from a `print C` dump (the lines from the
 /// `<sig> {`-introducing signature line through the matching closing brace).
 fn function_block<'a>(dump: &'a str, name: &str) -> Option<&'a str> {
-    let sig = dump.lines().position(|l| l.contains(name) && l.contains('('))?;
+    let sig = dump
+        .lines()
+        .position(|l| l.contains(name) && l.contains('('))?;
     let bytes = dump.as_bytes();
     // Find the byte offset of that signature line.
     let mut off = 0usize;
@@ -205,7 +210,12 @@ fn at2_generic_struct_arg_split_no_name_keying() {
     );
     // The four DIFFERENTLY-NAMED fields are recovered as separate writes — the
     // recovery walked the struct's own geometry, not a hardcoded `A`/`B` pair.
-    for fw in ["v1.b = replace1;", "v1.a = globshort.a;", "v1.c = globshort.c;", "v1.d = globshort.d;"] {
+    for fw in [
+        "v1.b = replace1;",
+        "v1.a = globshort.a;",
+        "v1.c = globshort.c;",
+        "v1.d = globshort.d;",
+    ] {
         assert!(
             body.contains(fw),
             "missing generic field write `{fw}` (struct geometry not walked generically); \

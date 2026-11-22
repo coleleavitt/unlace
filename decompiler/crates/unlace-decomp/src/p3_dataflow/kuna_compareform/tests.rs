@@ -15,20 +15,21 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace,
-    UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace, addrspace_flags,
+    spacetype,
 };
 use unlace_base::types::{int4, uintb};
 
 use crate::action::ActionContext;
-use crate::dtype::{type_metatype, Datatype};
 use crate::context::{ArchContext, TypeOp, VarnodeId};
+use crate::dtype::{Datatype, type_metatype};
 use crate::varnode::{DefOpInfo, VarnodeBank};
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(IopSpace::new(2))).unwrap();
     m.insert_space(Rc::new(FspecSpace::new(3))).unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
@@ -67,8 +68,8 @@ fn unk(size: int4) -> Rc<Datatype> {
     Rc::new(Datatype::new(size, type_metatype::TYPE_UNKNOWN))
 }
 
-fn no_replace(
-) -> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> unlace_base::error::KunaResult<()> {
+fn no_replace()
+-> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> unlace_base::error::KunaResult<()> {
     |_: &mut VarnodeBank, _: VarnodeId, _: VarnodeId| Ok(())
 }
 
@@ -77,13 +78,17 @@ fn mk_op(fd: &mut Funcdata, off: u64, inputs: int4, opc: OpCode) -> OpId {
     let pc = Address::new(r, off);
     let op = fd.obank_mut().create_at(inputs, pc);
     fd.obank_mut().mark_alive(op);
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
     op
 }
 
 fn set_def(fd: &mut Funcdata, vn: VarnodeId, defop: OpId) -> VarnodeId {
     let seq = fd.obank().get(defop).unwrap().get_seq_num().clone();
-    let info = DefOpInfo { id: defop, seqnum: seq };
+    let info = DefOpInfo {
+        id: defop,
+        seqnum: seq,
+    };
     let vn = fd.vbank_mut().set_def(vn, info, &mut no_replace()).unwrap();
     fd.obank_mut().get_mut(defop).unwrap().set_output(Some(vn));
     vn
@@ -91,7 +96,10 @@ fn set_def(fd: &mut Funcdata, vn: VarnodeId, defop: OpId) -> VarnodeId {
 
 fn wire(fd: &mut Funcdata, vn: VarnodeId, op: OpId, slot: int4) {
     fd.vbank_mut().add_descend(vn, op).unwrap();
-    fd.obank_mut().get_mut(op).unwrap().set_input(Some(vn), slot);
+    fd.obank_mut()
+        .get_mut(op)
+        .unwrap()
+        .set_input(Some(vn), slot);
 }
 
 /// A non-constant value (output of a COPY) used as the variable operand `V`.
@@ -251,7 +259,10 @@ fn shape_changed_declines() {
     wire(&mut fd, v1, op, 1);
     let out = fd.new_unique(1, Some(unk(1)));
     let _ = set_def(&mut fd, out, op);
-    fd.obank_mut().get_mut(op).unwrap().set_canonical_lessequal();
+    fd.obank_mut()
+        .get_mut(op)
+        .unwrap()
+        .set_canonical_lessequal();
 
     // No rewrite (restore_lessequal returns false): count stays 0, op unchanged,
     // and the mark is NOT cleared (the C++ only clears on a successful restore).
@@ -274,7 +285,10 @@ fn unsigned_underflow_guard_declines() {
     wire(&mut fd, zero, op, 1);
     let out = fd.new_unique(1, Some(unk(1)));
     let _ = set_def(&mut fd, out, op);
-    fd.obank_mut().get_mut(op).unwrap().set_canonical_lessequal();
+    fd.obank_mut()
+        .get_mut(op)
+        .unwrap()
+        .set_canonical_lessequal();
 
     assert_eq!(run_action(&mut fd, true), 0);
     assert_eq!(op_code_of(&fd, op), OpCode::CPUI_INT_LESS);
@@ -295,7 +309,10 @@ fn signed_overflow_guard_declines() {
     wire(&mut fd, v, op, 1);
     let out = fd.new_unique(1, Some(unk(1)));
     let _ = set_def(&mut fd, out, op);
-    fd.obank_mut().get_mut(op).unwrap().set_canonical_lessequal();
+    fd.obank_mut()
+        .get_mut(op)
+        .unwrap()
+        .set_canonical_lessequal();
 
     assert_eq!(run_action(&mut fd, true), 0);
     assert_eq!(op_code_of(&fd, op), OpCode::CPUI_INT_SLESS);

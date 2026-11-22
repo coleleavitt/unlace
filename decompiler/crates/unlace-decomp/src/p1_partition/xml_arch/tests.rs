@@ -4,8 +4,8 @@
 
 use super::*;
 use crate::capability::ArchitectureCapability;
-use unlace_base::xml::Element;
 use std::rc::Rc;
+use unlace_base::xml::Element;
 
 /// Build a named element (with no attributes) for the restore-walk tests.
 fn named(name: &str) -> Rc<Element> {
@@ -36,11 +36,20 @@ fn capability_file_match_reads_binaryimage_prefix() {
     let _ = std::fs::create_dir_all(&dir);
 
     let yes = dir.join("yes.xml");
-    std::fs::File::create(&yes).unwrap().write_all(b"   \n  <binaryimage arch=\"x\">").unwrap();
+    std::fs::File::create(&yes)
+        .unwrap()
+        .write_all(b"   \n  <binaryimage arch=\"x\">")
+        .unwrap();
     let no = dir.join("no.xml");
-    std::fs::File::create(&no).unwrap().write_all(b"<decompilertest>").unwrap();
+    std::fs::File::create(&no)
+        .unwrap()
+        .write_all(b"<decompilertest>")
+        .unwrap();
     let short = dir.join("short.xml");
-    std::fs::File::create(&short).unwrap().write_all(b"<b").unwrap();
+    std::fs::File::create(&short)
+        .unwrap()
+        .write_all(b"<b")
+        .unwrap();
 
     let cap = XmlArchitectureCapability::new();
     assert!(cap.is_file_match(yes.to_str().unwrap()));
@@ -128,7 +137,9 @@ fn restore_xml_skips_absent_optional_children() {
 
     // Only a binaryimage (no coretypes/specextensions, no rest).
     let mut arch2 = XmlArchitecture::new("file", "");
-    let res2 = arch2.restore_xml("/i", "t", "0", &[named("binaryimage")]).unwrap();
+    let res2 = arch2
+        .restore_xml("/i", "t", "0", &[named("binaryimage")])
+        .unwrap();
     assert_eq!(res2.to_register.len(), 1);
     assert!(res2.rest.is_none());
 }

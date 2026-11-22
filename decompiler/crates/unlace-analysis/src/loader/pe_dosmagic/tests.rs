@@ -55,7 +55,10 @@ fn pe() -> Vec<u8> {
 #[test]
 fn a_healthy_image_is_returned_verbatim() {
     let bytes = pe();
-    assert!(object::File::parse(bytes.as_slice()).is_ok(), "fixture must parse as-is");
+    assert!(
+        object::File::parse(bytes.as_slice()).is_ok(),
+        "fixture must parse as-is"
+    );
     let (out, note) = tolerate_corrupt_dos_magic(bytes.clone());
     assert_eq!(out, bytes);
     assert!(note.is_none(), "{note:?}");
@@ -66,7 +69,10 @@ fn a_healthy_image_is_returned_verbatim() {
 fn a_trashed_magic_in_front_of_a_pe_signature_is_repaired() {
     let mut bytes = pe();
     bytes[0] = 0x15;
-    assert!(object::File::parse(bytes.as_slice()).is_err(), "the trashed image must not parse");
+    assert!(
+        object::File::parse(bytes.as_slice()).is_err(),
+        "the trashed image must not parse"
+    );
     let (out, note) = tolerate_corrupt_dos_magic(bytes.clone());
     assert_eq!(&out[..2], b"MZ");
     assert_eq!(out[2..], bytes[2..], "only e_magic may change");
@@ -90,9 +96,15 @@ fn a_file_with_no_pe_signature_at_e_lfanew_is_left_alone() {
     let mut wild = pe();
     wild[0] = 0x15;
     wild[0x3c..0x40].copy_from_slice(&u32::MAX.to_le_bytes());
-    assert!(tolerate_corrupt_dos_magic(wild).1.is_none(), "an out-of-file e_lfanew");
+    assert!(
+        tolerate_corrupt_dos_magic(wild).1.is_none(),
+        "an out-of-file e_lfanew"
+    );
 
-    assert!(tolerate_corrupt_dos_magic(vec![0x15; 0x3f]).1.is_none(), "shorter than a DOS header");
+    assert!(
+        tolerate_corrupt_dos_magic(vec![0x15; 0x3f]).1.is_none(),
+        "shorter than a DOS header"
+    );
 }
 
 #[test]

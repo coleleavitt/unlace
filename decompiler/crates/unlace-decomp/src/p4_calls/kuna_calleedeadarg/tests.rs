@@ -24,8 +24,7 @@ fn summary_with_no_terminator_proves_nothing() {
         1,
         1,
     ));
-    let complete_no_cuts =
-        CalleeEntryDead::from_parts(3, Vec::new(), Vec::new(), true);
+    let complete_no_cuts = CalleeEntryDead::from_parts(3, Vec::new(), Vec::new(), true);
     assert!(complete_no_cuts.is_complete());
     assert!(!complete_no_cuts.proves_dead(&Address::new(Rc::clone(&reg), 8), 8));
 
@@ -34,8 +33,7 @@ fn summary_with_no_terminator_proves_nothing() {
     for b in 8u64..16 {
         cut.insert((3, b));
     }
-    let one_cut =
-        CalleeEntryDead::from_parts(3, Vec::new(), vec![cut.into_iter().collect()], true);
+    let one_cut = CalleeEntryDead::from_parts(3, Vec::new(), vec![cut.into_iter().collect()], true);
     assert!(one_cut.proves_dead(&Address::new(reg, 8), 8));
 }
 
@@ -64,18 +62,26 @@ fn an_unaccounted_transfer_keeps_the_register_unproven() {
     let base = || CalleeEntryDead::from_parts(3, Vec::new(), vec![cut.clone()], true);
     let free = |d: &CalleeEntryDead, a: TargetAnswer| {
         let mut once = Some(a);
-        fold_node(d, 3, move |_| once.take().unwrap_or(TargetAnswer::Unaccounted))
-            .transfer_free(&rdx, 8)
+        fold_node(d, 3, move |_| {
+            once.take().unwrap_or(TargetAnswer::Unaccounted)
+        })
+        .transfer_free(&rdx, 8)
     };
 
     // No transfer at all: nothing can leave, so the register is free.
     assert!(free(&base(), TargetAnswer::Unaccounted));
 
     // A tail call through a pointer, reached without writing rdx.
-    assert!(!free(&base().with_opaque_cut(Vec::new()), TargetAnswer::Unaccounted));
+    assert!(!free(
+        &base().with_opaque_cut(Vec::new()),
+        TargetAnswer::Unaccounted
+    ));
 
     // The same transfer, with rdx written on the way to it.
-    assert!(free(&base().with_opaque_cut(rdx_bytes.clone()), TargetAnswer::Unaccounted));
+    assert!(free(
+        &base().with_opaque_cut(rdx_bytes.clone()),
+        TargetAnswer::Unaccounted
+    ));
 
     // A DIRECT call whose target nothing accounts for -- an import with no
     // signature -- is the same hole, and the one the recovered prototype cannot
@@ -129,15 +135,25 @@ fn a_call_forwards_what_its_target_takes() {
         1,
         1,
     ));
-    let (rdi, rsi) = (Address::new(Rc::clone(&reg), 0x38), Address::new(Rc::clone(&reg), 0x30));
+    let (rdi, rsi) = (
+        Address::new(Rc::clone(&reg), 0x38),
+        Address::new(Rc::clone(&reg), 0x30),
+    );
     let target = Address::new(Rc::clone(&reg), 0x1000);
     let narrow = Rc::new(vec![(3, 0x38, 8), (3, 0x30, 8)]);
     let rsi_bytes: Vec<(int4, u64)> = (0x30u64..0x38).map(|b| (3, b)).collect();
     let forwarder = |written: Vec<(int4, u64)>| {
-        CalleeEntryDead::from_parts(3, Vec::new(), vec![written.clone()], true).with_named_cut(target.clone(), written)
+        CalleeEntryDead::from_parts(3, Vec::new(), vec![written.clone()], true)
+            .with_named_cut(target.clone(), written)
     };
-    let through = |d: &CalleeEntryDead, t: Option<Rc<Vec<RegRead>>>| match add_reads_through(d, |_| t.clone()) {
-        Some(reads_live) => CalleeEntryDead { reads_live, ..d.clone() },
+    let through = |d: &CalleeEntryDead, t: Option<Rc<Vec<RegRead>>>| match add_reads_through(
+        d,
+        |_| t.clone(),
+    ) {
+        Some(reads_live) => CalleeEntryDead {
+            reads_live,
+            ..d.clone()
+        },
         None => d.clone(),
     };
 
@@ -163,7 +179,8 @@ fn a_call_forwards_what_its_target_takes() {
 
     // A target that takes nothing, or an indirect call, adds nothing.
     assert!(add_reads_through(&fwd, |_| Some(Rc::new(Vec::new()))).is_none());
-    let opaque = CalleeEntryDead::from_parts(3, Vec::new(), vec![Vec::new()], true).with_opaque_cut(Vec::new());
+    let opaque = CalleeEntryDead::from_parts(3, Vec::new(), vec![Vec::new()], true)
+        .with_opaque_cut(Vec::new());
     assert!(add_reads_through(&opaque, |_| Some(Rc::clone(&narrow))).is_none());
 
     // An incomplete forwarder proves nothing whatever its targets take.
@@ -188,8 +205,14 @@ fn a_target_takes_only_what_it_stated() {
         1,
         1,
     ));
-    let long = Rc::new(crate::dtype::Datatype::new(8, crate::dtype::type_metatype::TYPE_INT));
-    let (rdi, rsi) = (Address::new(Rc::clone(&reg), 0x38), Address::new(Rc::clone(&reg), 0x30));
+    let long = Rc::new(crate::dtype::Datatype::new(
+        8,
+        crate::dtype::type_metatype::TYPE_INT,
+    ));
+    let (rdi, rsi) = (
+        Address::new(Rc::clone(&reg), 0x38),
+        Address::new(Rc::clone(&reg), 0x30),
+    );
     let stated = crate::kuna_protoorder::RecoveredTypes {
         inputs: vec![(rdi.clone(), 8, Rc::clone(&long)), (rsi.clone(), 8, long)],
         arity_sound: true,
@@ -273,9 +296,15 @@ fn a_constant_writing_idiom_is_not_a_live_read() {
     };
     // `and rdx,0` is zero and `or rdx,-1` is all ones, whatever rdx held.
     assert!(is_value_erasing(&with(OpCode::CPUI_INT_AND, konst(0, 8))));
-    assert!(is_value_erasing(&with(OpCode::CPUI_INT_OR, konst(u64::MAX, 8))));
+    assert!(is_value_erasing(&with(
+        OpCode::CPUI_INT_OR,
+        konst(u64::MAX, 8)
+    )));
     // ...but `and rdx,0xff` and `or rdx,1` both keep bits of rdx.
-    assert!(!is_value_erasing(&with(OpCode::CPUI_INT_AND, konst(0xff, 8))));
+    assert!(!is_value_erasing(&with(
+        OpCode::CPUI_INT_AND,
+        konst(0xff, 8)
+    )));
     assert!(!is_value_erasing(&with(OpCode::CPUI_INT_OR, konst(1, 8))));
     // The all-ones mask is per operand width: 0xffffffff fills a 4-byte
     // constant and leaves the top half of an 8-byte one alone.
@@ -284,7 +313,10 @@ fn a_constant_writing_idiom_is_not_a_live_read() {
         out: Some(vd(0x10, 4)),
         ins: vec![vd(0x10, 4), konst(0xffff_ffff, 4)],
     }));
-    assert!(!is_value_erasing(&with(OpCode::CPUI_INT_OR, konst(0xffff_ffff, 8))));
+    assert!(!is_value_erasing(&with(
+        OpCode::CPUI_INT_OR,
+        konst(0xffff_ffff, 8)
+    )));
 }
 
 /// [`CalleeEntryDead::low_read_width`] measures a read from the register's
@@ -337,8 +369,14 @@ fn the_byte_set_matches_a_tree_set_of_the_same_bytes() {
     };
     let check = |set: &ByteSet, tree: &BTreeSet<(int4, u64)>| {
         assert_eq!(set.len(), tree.len());
-        assert_eq!(set.iter().collect::<Vec<_>>(), tree.iter().copied().collect::<Vec<_>>());
-        assert_eq!(set.clone().into_iter().collect::<Vec<_>>(), tree.iter().copied().collect::<Vec<_>>());
+        assert_eq!(
+            set.iter().collect::<Vec<_>>(),
+            tree.iter().copied().collect::<Vec<_>>()
+        );
+        assert_eq!(
+            set.clone().into_iter().collect::<Vec<_>>(),
+            tree.iter().copied().collect::<Vec<_>>()
+        );
     };
     for round in 0..300 {
         let mut a = (ByteSet::new(), BTreeSet::new());
@@ -346,7 +384,11 @@ fn the_byte_set_matches_a_tree_set_of_the_same_bytes() {
         let span = 8 + round % 64;
         for _ in 0..(next(80) + 1) {
             let byte = (next(3) as int4, next(span));
-            let (set, tree) = if next(2) == 0 { (&mut a.0, &mut a.1) } else { (&mut b.0, &mut b.1) };
+            let (set, tree) = if next(2) == 0 {
+                (&mut a.0, &mut a.1)
+            } else {
+                (&mut b.0, &mut b.1)
+            };
             if next(5) == 0 {
                 assert_eq!(set.remove(&byte), tree.remove(&byte));
             } else {
@@ -361,8 +403,14 @@ fn the_byte_set_matches_a_tree_set_of_the_same_bytes() {
         assert_eq!(b.0.is_subset(&a.0), b.1.is_subset(&a.1));
         assert!(a.0.is_subset(&a.0.union(&b.0)));
         check(&a.0.union(&b.0), &a.1.union(&b.1).copied().collect());
-        check(&a.0.difference(&b.0), &a.1.difference(&b.1).copied().collect());
-        check(&a.0.intersection(&b.0), &a.1.intersection(&b.1).copied().collect());
+        check(
+            &a.0.difference(&b.0),
+            &a.1.difference(&b.1).copied().collect(),
+        );
+        check(
+            &a.0.intersection(&b.0),
+            &a.1.intersection(&b.1).copied().collect(),
+        );
         let extended: ByteSet = a.1.iter().copied().chain(b.1.iter().copied()).collect();
         check(&extended, &a.1.union(&b.1).copied().collect());
         let (mut joined, mut moved) = (a.0.clone(), b.0.clone());
@@ -402,13 +450,23 @@ fn a_forward_transfer_reads_its_cuts_as_one_meet() {
         .with_opaque_cut((8..0x10).map(|b| (3, b)).collect());
     let fwd = fold_node(&both, 3, |_| TargetAnswer::Accounted);
     assert!(fwd.transfer_free(&rcx, 8));
-    assert!(!fwd.transfer_free(&rdx, 8), "the second cut left rdx unwritten");
+    assert!(
+        !fwd.transfer_free(&rdx, 8),
+        "the second cut left rdx unwritten"
+    );
     let none = CalleeEntryDead::from_parts(3, Vec::new(), Vec::new(), true);
     assert!(fold_node(&none, 3, |_| TargetAnswer::Accounted).transfer_free(&rdx, 8));
     assert!(!ForwardTransfer::denied(3).transfer_free(&rcx, 8));
-    let through = CalleeEntryDead::from_parts(3, Vec::new(), Vec::new(), true)
-        .with_named_cut(Address::new(Rc::clone(&reg), 0x1000), (0x10..0x18).map(|b| (3, b)).collect());
-    let fwd = fold_node(&through, 3, |_| TargetAnswer::Through(fold_node(&both, 3, |_| TargetAnswer::Accounted)));
+    let through = CalleeEntryDead::from_parts(3, Vec::new(), Vec::new(), true).with_named_cut(
+        Address::new(Rc::clone(&reg), 0x1000),
+        (0x10..0x18).map(|b| (3, b)).collect(),
+    );
+    let fwd = fold_node(&through, 3, |_| {
+        TargetAnswer::Through(fold_node(&both, 3, |_| TargetAnswer::Accounted))
+    });
     assert!(fwd.transfer_free(&rcx, 8));
-    assert!(fwd.transfer_free(&rdx, 8), "the call site wrote rdx before the call");
+    assert!(
+        fwd.transfer_free(&rdx, 8),
+        "the call site wrote rdx before the call"
+    );
 }

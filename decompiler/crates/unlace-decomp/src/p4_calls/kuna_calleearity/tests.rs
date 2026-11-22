@@ -1,8 +1,8 @@
 //! Unit tests for the call-site argument-list reconciliation's promotion plan.
 
 use super::*;
-use unlace_base::space::AddrSpace;
 use std::rc::Rc;
+use unlace_base::space::AddrSpace;
 
 thread_local! {
     /// One shared space per test thread: two separately constructed `AddrSpace`
@@ -53,7 +53,10 @@ fn an_uncoverable_location_abandons_the_whole_rescue() {
     let mut first = live(0x8);
     first.definitely_not_used = true;
     let trials = vec![first, live(0x10)];
-    assert_eq!(plan_promotions(&[(at(0x8), 8), (at(0x10), 8)], &trials), None);
+    assert_eq!(
+        plan_promotions(&[(at(0x8), 8), (at(0x10), 8)], &trials),
+        None
+    );
 
     let mut unref = live(0x8);
     unref.unref = true;

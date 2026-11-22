@@ -2,17 +2,17 @@
 
 use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
+use crate::dtype::Datatype;
 use crate::dtype::type_metatype::{
     TYPE_BOOL, TYPE_INT, TYPE_PTR, TYPE_STRUCT, TYPE_UINT, TYPE_UNKNOWN,
 };
-use crate::dtype::Datatype;
 use crate::funcdata::Funcdata;
-use crate::kuna_rustarrayaddr::{array_place, RAW_ADDRESS};
+use crate::kuna_rustarrayaddr::{RAW_ADDRESS, array_place};
 use crate::kuna_rusttypes::int_name;
 use crate::prettyprint::Emit;
-use crate::printc::{op_key, tokens, PrintC};
-use crate::printlanguage::{modifiers, Atom, SyntaxHighlight, TagType};
-use unlace_base::address::{calc_mask, Address};
+use crate::printc::{PrintC, op_key, tokens};
+use crate::printlanguage::{Atom, SyntaxHighlight, TagType, modifiers};
+use unlace_base::address::{Address, calc_mask};
 use unlace_base::space::spacetype;
 use unlace_num::opcodes::OpCode;
 

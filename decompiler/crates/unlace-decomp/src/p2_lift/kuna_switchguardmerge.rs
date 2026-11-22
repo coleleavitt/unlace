@@ -42,21 +42,54 @@ fn pure_block(data: &Funcdata, b: BlockId) -> bool {
         data.obank().get(o).is_some_and(|p| {
             matches!(
                 p.code(),
-                CPUI_COPY | CPUI_CBRANCH | CPUI_BRANCH | CPUI_INT_ZEXT | CPUI_INT_SEXT | CPUI_SUBPIECE | CPUI_PIECE
-                    | CPUI_INT_ADD | CPUI_INT_SUB | CPUI_INT_AND | CPUI_INT_OR | CPUI_INT_XOR | CPUI_INT_EQUAL
-                    | CPUI_INT_NOTEQUAL | CPUI_INT_LESS | CPUI_INT_LESSEQUAL | CPUI_INT_SLESS | CPUI_INT_SLESSEQUAL
-                    | CPUI_INT_CARRY | CPUI_INT_SCARRY | CPUI_INT_SBORROW | CPUI_BOOL_NEGATE | CPUI_BOOL_AND
-                    | CPUI_BOOL_OR | CPUI_BOOL_XOR | CPUI_INT_2COMP | CPUI_INT_NEGATE | CPUI_CAST
+                CPUI_COPY
+                    | CPUI_CBRANCH
+                    | CPUI_BRANCH
+                    | CPUI_INT_ZEXT
+                    | CPUI_INT_SEXT
+                    | CPUI_SUBPIECE
+                    | CPUI_PIECE
+                    | CPUI_INT_ADD
+                    | CPUI_INT_SUB
+                    | CPUI_INT_AND
+                    | CPUI_INT_OR
+                    | CPUI_INT_XOR
+                    | CPUI_INT_EQUAL
+                    | CPUI_INT_NOTEQUAL
+                    | CPUI_INT_LESS
+                    | CPUI_INT_LESSEQUAL
+                    | CPUI_INT_SLESS
+                    | CPUI_INT_SLESSEQUAL
+                    | CPUI_INT_CARRY
+                    | CPUI_INT_SCARRY
+                    | CPUI_INT_SBORROW
+                    | CPUI_BOOL_NEGATE
+                    | CPUI_BOOL_AND
+                    | CPUI_BOOL_OR
+                    | CPUI_BOOL_XOR
+                    | CPUI_INT_2COMP
+                    | CPUI_INT_NEGATE
+                    | CPUI_CAST
             )
         })
     })
 }
 
 /// The block a CBRANCH block `b` goes to when the switch variable `v` is `x`.
-fn branch_for(data: &Funcdata, b: BlockId, v: VarnodeId, x: u64, all: &[BlockId]) -> Option<BlockId> {
+fn branch_for(
+    data: &Funcdata,
+    b: BlockId,
+    v: VarnodeId,
+    x: u64,
+    all: &[BlockId],
+) -> Option<BlockId> {
     let (t, f) = taken(data, b)?;
     let cond = data.obank().get(data.bb_op_tail(b)?)?.get_in(1)?;
-    Some(if eval(data, cond, &[(v, x)], all, 0)? != 0 { t } else { f })
+    Some(if eval(data, cond, &[(v, x)], all, 0)? != 0 {
+        t
+    } else {
+        f
+    })
 }
 
 /// The constant an equality block `t` compares `v` with.
@@ -68,8 +101,19 @@ fn compared_constant(data: &Funcdata, t: BlockId, v: VarnodeId) -> Option<u64> {
             OpCode::CPUI_BOOL_NEGATE => cond = d.get_in(0)?,
             OpCode::CPUI_INT_EQUAL | OpCode::CPUI_INT_NOTEQUAL => {
                 let (a, b) = (d.get_in(0)?, d.get_in(1)?);
-                let k = |x: VarnodeId| data.vbank().get(x).filter(|n| n.is_constant()).map(|n| n.get_offset());
-                return if a == v { k(b) } else if b == v { k(a) } else { None };
+                let k = |x: VarnodeId| {
+                    data.vbank()
+                        .get(x)
+                        .filter(|n| n.is_constant())
+                        .map(|n| n.get_offset())
+                };
+                return if a == v {
+                    k(b)
+                } else if b == v {
+                    k(a)
+                } else {
+                    None
+                };
             }
             _ => return None,
         }
@@ -86,7 +130,9 @@ fn same_phi_inputs(data: &Funcdata, b: BlockId, x: BlockId, y: BlockId) -> Optio
         return None;
     }
     Some(data.bb_ops(b).into_iter().all(|o| {
-        data.obank().get(o).is_some_and(|op| op.code() != OpCode::CPUI_MULTIEQUAL || op.get_in(i) == op.get_in(j))
+        data.obank()
+            .get(o)
+            .is_some_and(|op| op.code() != OpCode::CPUI_MULTIEQUAL || op.get_in(i) == op.get_in(j))
     }))
 }
 
@@ -109,13 +155,21 @@ fn equality_chain(
     let (mut t, mut from) = (head, from);
     loop {
         let tb = data.bblocks_ref().block(t);
-        let test = tb.size_in() == 1 && tb.get_in(0) == from && tb.size_out() == 2 && pure_block(data, t) && cases.len() < 8;
+        let test = tb.size_in() == 1
+            && tb.get_in(0) == from
+            && tb.size_out() == 2
+            && pure_block(data, t)
+            && cases.len() < 8;
         let Some(c) = test.then(|| compared_constant(data, t, v)).flatten() else {
             return (end.is_none() && !cases.is_empty()).then_some((cases, t));
         };
         let hit = branch_for(data, t, v, c, all)?;
         let miss = branch_for(data, t, v, c.wrapping_add(1), all)?;
-        if hit == miss || avoid.contains(&hit) || cases.iter().any(|&(k, b, _)| k == c || b == hit) || labels.contains(&c) {
+        if hit == miss
+            || avoid.contains(&hit)
+            || cases.iter().any(|&(k, b, _)| k == c || b == hit)
+            || labels.contains(&c)
+        {
             return None;
         }
         let slot = if tb.get_out(0) == hit { 0 } else { 1 };
@@ -151,8 +205,13 @@ fn find_merge(data: &Funcdata, table: i32) -> Option<Merge> {
         return None;
     }
     let d = sb.get_out(def);
-    let labels: Vec<u64> = (0..jt.num_entries()).map(|i| jt.get_label_by_index(i)).filter(|&l| l != NO_LABEL).collect();
-    let all: Vec<BlockId> = (0..data.bblocks_get_size()).map(|i| data.bblocks_get_block(i)).collect();
+    let labels: Vec<u64> = (0..jt.num_entries())
+        .map(|i| jt.get_label_by_index(i))
+        .filter(|&l| l != NO_LABEL)
+        .collect();
+    let all: Vec<BlockId> = (0..data.bblocks_get_size())
+        .map(|i| data.bblocks_get_block(i))
+        .collect();
     // The default itself is the chain (the guard was folded onto it).
     let db = data.bblocks_ref().block(d);
     if db.size_in() == 1 {
@@ -162,10 +221,18 @@ fn find_merge(data: &Funcdata, table: i32) -> Option<Merge> {
             // A last miss that is already a case becomes the default itself.
             let into = sb.get_out_index(miss);
             if into < 0 {
-                return Some(Merge { guard: None, cases, default_into: None });
+                return Some(Merge {
+                    guard: None,
+                    cases,
+                    default_into: None,
+                });
             }
             if same_phi_inputs(data, miss, cases.last()?.1, s)? {
-                return Some(Merge { guard: None, cases, default_into: Some((def, into)) });
+                return Some(Merge {
+                    guard: None,
+                    cases,
+                    default_into: Some((def, into)),
+                });
             }
         }
     }
@@ -214,7 +281,9 @@ fn find_merge(data: &Funcdata, table: i32) -> Option<Merge> {
                 return None;
             }
             for w in seq.windows(2) {
-                if data.bblocks_ref().block(w[0]).size_out() == 2 && branch_for(data, w[0], v, c, &all)? != w[1] {
+                if data.bblocks_ref().block(w[0]).size_out() == 2
+                    && branch_for(data, w[0], v, c, &all)? != w[1]
+                {
                     return None;
                 }
             }
@@ -225,7 +294,11 @@ fn find_merge(data: &Funcdata, table: i32) -> Option<Merge> {
                 return None;
             }
         }
-        return Some(Merge { guard: Some((p, off)), cases, default_into: None });
+        return Some(Merge {
+            guard: Some((p, off)),
+            cases,
+            default_into: None,
+        });
     }
     None
 }
@@ -237,7 +310,9 @@ pub struct ActionSwitchGuardMerge {
 
 impl ActionSwitchGuardMerge {
     pub fn boxed(g: &str) -> Box<dyn Action> {
-        Box::new(ActionSwitchGuardMerge { base: ActionBase::new(0, "switchguardmerge", g) })
+        Box::new(ActionSwitchGuardMerge {
+            base: ActionBase::new(0, "switchguardmerge", g),
+        })
     }
 }
 
@@ -249,32 +324,51 @@ impl Action for ActionSwitchGuardMerge {
         &mut self.base
     }
     fn clone_filtered(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Action>> {
-        grouplist.contains(self.get_group()).then(|| Box::new(ActionSwitchGuardMerge { base: self.base.clone() }) as Box<dyn Action>)
+        grouplist.contains(self.get_group()).then(|| {
+            Box::new(ActionSwitchGuardMerge {
+                base: self.base.clone(),
+            }) as Box<dyn Action>
+        })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data.get_arch().switch_guard_merge {
             return 0;
         }
         for i in 0..data.num_jump_tables() {
-            let Some(m) = find_merge(data, i) else { continue };
-            let Some(s) = data.get_jump_table(i).get_indirect_op().and_then(|o| data.obank().get(o)).and_then(|o| o.get_parent()) else { continue };
+            let Some(m) = find_merge(data, i) else {
+                continue;
+            };
+            let Some(s) = data
+                .get_jump_table(i)
+                .get_indirect_op()
+                .and_then(|o| data.obank().get(o))
+                .and_then(|o| o.get_parent())
+            else {
+                continue;
+            };
             let placeholder = crate::jumptable::JumpTable::new(data.get_address().clone());
             let mut jt = std::mem::replace(data.get_jump_table_mut(i), placeholder);
             let mut ok = true;
             for &(c, t, slot) in &m.cases {
                 let hit = data.bblocks_ref().block(t).get_out(slot);
-                if jt.add_block_to_switch(data, hit, c).is_err() || data.push_branch(t, slot, s).is_err() {
+                if jt.add_block_to_switch(data, hit, c).is_err()
+                    || data.push_branch(t, slot, s).is_err()
+                {
                     ok = false;
                     break;
                 }
             }
             if let (true, Some((from, into))) = (ok, m.default_into) {
                 let to = data.bblocks_ref().block(s).get_out(into);
-                let at = jt.get_index_by_block(data, to, 0).ok().map(|k| jt.get_address_by_index(k));
+                let at = jt
+                    .get_index_by_block(data, to, 0)
+                    .ok()
+                    .map(|k| jt.get_address_by_index(k));
                 match at {
                     Some(at) => {
                         jt.kuna_merge_out_edge(from, into, &at);
-                        ok = data.remove_branch(s, from).is_ok() && data.remove_unreachable_blocks(false, true).is_ok();
+                        ok = data.remove_branch(s, from).is_ok()
+                            && data.remove_unreachable_blocks(false, true).is_ok();
                     }
                     None => ok = false,
                 }
@@ -284,7 +378,9 @@ impl Action for ActionSwitchGuardMerge {
                 return 0;
             }
             if let Some((g, off)) = m.guard {
-                if data.remove_branch(g, off).is_err() || data.remove_unreachable_blocks(false, true).is_err() {
+                if data.remove_branch(g, off).is_err()
+                    || data.remove_unreachable_blocks(false, true).is_err()
+                {
                     return 0;
                 }
             }

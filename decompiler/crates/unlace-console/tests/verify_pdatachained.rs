@@ -23,14 +23,17 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixtures() -> PathBuf {
@@ -46,15 +49,20 @@ fn boot(name: &str) -> ConsoleProgram {
     assert!(path.exists(), "missing fixture {path:?}");
     let mut prog = bootstrap_from_object(path.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
 /// Drive `load function <name>` → `decompile` → `print C` and return the C.
 fn decompile_func(prog: ConsoleProgram, name: &str) -> String {
-    let cmds: Vec<String> = [format!("load function {name}"), "decompile".into(), "print C".into()]
-        .into_iter()
-        .collect();
+    let cmds: Vec<String> = [
+        format!("load function {name}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .into_iter()
+    .collect();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -95,7 +103,10 @@ fn chained_chunk_is_not_an_entry_and_the_primary_decompiles_whole() {
     );
     assert!(!out.contains("while ;"), "expected valid C, got:\n{out}");
     // The chunk's `add eax,7` is inside the recovered body: 0x16 = 1+2+3+4+5+7.
-    assert!(out.contains("0x16"), "expected the chunk's arithmetic in the body, got:\n{out}");
+    assert!(
+        out.contains("0x16"),
+        "expected the chunk's arithmetic in the body, got:\n{out}"
+    );
 }
 
 /// The same defect where the truncated branch is a loop latch: the decompile of
@@ -120,7 +131,10 @@ fn loop_shape_decompiles() {
         "expected the recovered latch condition, got:\n{out}"
     );
     // 0x16 is the chained chunk's arithmetic; the truncated shape never reaches it.
-    assert!(out.contains("0x16"), "expected the chunk's arithmetic in the body, got:\n{out}");
+    assert!(
+        out.contains("0x16"),
+        "expected the chunk's arithmetic in the body, got:\n{out}"
+    );
 }
 
 /// A chunk reached by an ordinary fall-through rather than a branch: the
@@ -129,7 +143,10 @@ fn loop_shape_decompiles() {
 fn plain_fallthrough_shape_keeps_its_second_half() {
     let prog = boot("pe_chainedunwind_plainft_x86_64.exe");
     let out = decompile_func(prog, "sub_140001000");
-    assert!(!out.contains("funcboundflow"), "must not be truncated, got:\n{out}");
+    assert!(
+        !out.contains("funcboundflow"),
+        "must not be truncated, got:\n{out}"
+    );
     // 0x1c = 1+2+3+4+5+6+7, the sum only the whole body computes.
     assert!(out.contains("0x1c"), "expected the whole body, got:\n{out}");
 }
@@ -140,9 +157,15 @@ fn plain_fallthrough_shape_keeps_its_second_half() {
 #[test]
 fn arm64_pdata_stride_discovers_every_record() {
     let prog = boot("pe_pdata_arm64.exe");
-    for name in
-        ["sub_140001000", "sub_140001010", "sub_140001020", "sub_140001030"]
-    {
-        assert!(prog.lookup_symbol(name).is_some(), "{name} missing from the ARM64 inventory");
+    for name in [
+        "sub_140001000",
+        "sub_140001010",
+        "sub_140001020",
+        "sub_140001030",
+    ] {
+        assert!(
+            prog.lookup_symbol(name).is_some(),
+            "{name} missing from the ARM64 inventory"
+        );
     }
 }

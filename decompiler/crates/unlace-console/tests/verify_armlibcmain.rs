@@ -11,30 +11,40 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn bootstrap(fixture: &str) -> ConsoleProgram {
-    let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(fixture);
+    let bin = repo_root()
+        .join("decompiler/crates/unlace-analysis/tests/fixtures")
+        .join(fixture);
     let specs = repo_root().join("specs");
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
 fn decompile(prog: ConsoleProgram, name: &str) -> String {
-    let cmds: Vec<String> = [format!("load function {name}"), "decompile".into(), "print C".into()]
-        .into_iter()
-        .collect();
+    let cmds: Vec<String> = [
+        format!("load function {name}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .into_iter()
+    .collect();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -55,7 +65,10 @@ fn decompile(prog: ConsoleProgram, name: &str) -> String {
 fn both_crt1_shapes_recover_main() {
     for fixture in ["armlibcmain_le32", "armlibcmain_got_le32"] {
         let prog = bootstrap(fixture);
-        assert!(prog.lookup_symbol("main").is_some(), "{fixture}: main must be discovered");
+        assert!(
+            prog.lookup_symbol("main").is_some(),
+            "{fixture}: main must be discovered"
+        );
         let body = decompile(prog, "main");
         assert!(
             body.contains("main("),
@@ -71,4 +84,3 @@ fn both_crt1_shapes_recover_main() {
         }
     }
 }
-

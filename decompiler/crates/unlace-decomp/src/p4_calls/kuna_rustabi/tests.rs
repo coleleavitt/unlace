@@ -13,7 +13,7 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, JoinSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, JoinSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 
@@ -30,7 +30,8 @@ fn build_fd(mode: RustAbiMode) -> Funcdata {
 fn build_fd_lang(mode: RustAbiMode, is_rust: bool) -> Funcdata {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -79,11 +80,13 @@ fn mk_def(
     let r = space(fd, "ram");
     let o = space(fd, out_space);
     let op = fd.new_op(inputs.len() as int4, Address::new(r, 0x2000 + out_off));
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
     for (i, &vn) in inputs.iter().enumerate() {
         let _ = fd.op_set_input(op, vn, i as int4);
     }
-    fd.new_varnode_out(out_size, &Address::new(o, out_off), op).expect("varnode out")
+    fd.new_varnode_out(out_size, &Address::new(o, out_off), op)
+        .expect("varnode out")
 }
 
 // -- the option parse ------------------------------------------------------
@@ -99,15 +102,25 @@ fn the_three_modes_parse_and_round_trip() {
         assert_eq!(mode, want, "`{tok}` parses to {want:?}");
         assert!(msg.contains(tok), "the confirmation names the mode: {msg}");
         assert_eq!(mode.as_str(), tok);
-        assert_eq!(RustAbiMode::from_u8(mode.as_u8()), mode, "wire encoding round-trips");
+        assert_eq!(
+            RustAbiMode::from_u8(mode.as_u8()),
+            mode,
+            "wire encoding round-trips"
+        );
     }
-    assert!(parse_rust_abi_mode("pair").is_err(), "an unknown token is a parse error");
+    assert!(
+        parse_rust_abi_mode("pair").is_err(),
+        "an unknown token is a parse error"
+    );
 }
 
 /// `on` is accepted as a spelling of `auto` so the habitual `option X on` works.
 #[test]
 fn on_is_a_spelling_of_auto() {
-    assert_eq!(parse_rust_abi_mode("on").expect("parses").0, RustAbiMode::Auto);
+    assert_eq!(
+        parse_rust_abi_mode("on").expect("parses").0,
+        RustAbiMode::Auto
+    );
 }
 
 // -- the discriminant shape ------------------------------------------------
@@ -116,7 +129,10 @@ fn on_is_a_spelling_of_auto() {
 fn a_small_constant_is_discriminant_shaped() {
     let mut fd = build_fd(RustAbiMode::Always);
     let k = fd.new_constant(8, 1);
-    assert!(is_discriminant_shaped(&fd, k), "a variant tag is a small constant");
+    assert!(
+        is_discriminant_shaped(&fd, k),
+        "a variant tag is a small constant"
+    );
 }
 
 #[test]
@@ -150,8 +166,14 @@ fn a_wide_nonzero_mask_is_not_discriminant_shaped() {
     let mut fd = build_fd(RustAbiMode::Always);
     let a = unwritten(&mut fd, 0x3000, 8);
     let payload = mk_def(&mut fd, OpCode::CPUI_INT_ADD, &[a, a], "ram", 0x30, 8);
-    fd.vbank_mut().get_mut(payload).expect("payload").set_nz_mask(0xffff_ffff);
-    assert!(!is_discriminant_shaped(&fd, payload), "a 32-bit value is a payload");
+    fd.vbank_mut()
+        .get_mut(payload)
+        .expect("payload")
+        .set_nz_mask(0xffff_ffff);
+    assert!(
+        !is_discriminant_shaped(&fd, payload),
+        "a 32-bit value is a payload"
+    );
 }
 
 // -- the pair classification ----------------------------------------------
@@ -162,8 +184,14 @@ fn a_small_low_half_classifies_as_a_scalar_pair() {
     let tag = fd.new_constant(8, 1);
     let a = unwritten(&mut fd, 0x3000, 8);
     let payload = mk_def(&mut fd, OpCode::CPUI_INT_ADD, &[a, a], "ram", 0x40, 8);
-    fd.vbank_mut().get_mut(payload).expect("payload").set_nz_mask(0xffff_ffff);
-    assert_eq!(classify_return_pair(&fd, payload, tag), ReturnRepr::ScalarPair);
+    fd.vbank_mut()
+        .get_mut(payload)
+        .expect("payload")
+        .set_nz_mask(0xffff_ffff);
+    assert_eq!(
+        classify_return_pair(&fd, payload, tag),
+        ReturnRepr::ScalarPair
+    );
 }
 
 /// A narrow low half is not enough: the payload register has to hold something
@@ -188,7 +216,10 @@ fn two_wide_halves_are_not_a_scalar_pair() {
     let lo = mk_def(&mut fd, OpCode::CPUI_INT_ADD, &[a, a], "ram", 0x50, 8);
     let hi = mk_def(&mut fd, OpCode::CPUI_INT_MULT, &[a, a], "ram", 0x60, 8);
     for v in [lo, hi] {
-        fd.vbank_mut().get_mut(v).expect("half").set_nz_mask(0xffff_ffff);
+        fd.vbank_mut()
+            .get_mut(v)
+            .expect("half")
+            .set_nz_mask(0xffff_ffff);
     }
     assert_eq!(
         classify_return_pair(&fd, hi, lo),
@@ -206,8 +237,18 @@ fn a_bare_piece_in_join_space_holds_the_pair() {
     let tag = fd.new_constant(8, 1);
     let a = unwritten(&mut fd, 0x3000, 8);
     let payload = mk_def(&mut fd, OpCode::CPUI_INT_ADD, &[a, a], "ram", 0x70, 8);
-    fd.vbank_mut().get_mut(payload).expect("payload").set_nz_mask(0xffff_ffff);
-    let whole = mk_def(&mut fd, OpCode::CPUI_PIECE, &[payload, tag], "join", 0x0, 16);
+    fd.vbank_mut()
+        .get_mut(payload)
+        .expect("payload")
+        .set_nz_mask(0xffff_ffff);
+    let whole = mk_def(
+        &mut fd,
+        OpCode::CPUI_PIECE,
+        &[payload, tag],
+        "join",
+        0x0,
+        16,
+    );
     assert!(holds_scalar_pair(&fd, whole));
 }
 
@@ -220,8 +261,18 @@ fn the_pair_is_found_through_the_pools_zero_extension() {
     let tag = fd.new_constant(8, 1);
     let a = unwritten(&mut fd, 0x3000, 4);
     let payload = mk_def(&mut fd, OpCode::CPUI_INT_ADD, &[a, a], "ram", 0x80, 4);
-    fd.vbank_mut().get_mut(payload).expect("payload").set_nz_mask(0xffff_ffff);
-    let narrow = mk_def(&mut fd, OpCode::CPUI_PIECE, &[payload, tag], "unique", 0x100, 12);
+    fd.vbank_mut()
+        .get_mut(payload)
+        .expect("payload")
+        .set_nz_mask(0xffff_ffff);
+    let narrow = mk_def(
+        &mut fd,
+        OpCode::CPUI_PIECE,
+        &[payload, tag],
+        "unique",
+        0x100,
+        12,
+    );
     let whole = mk_def(&mut fd, OpCode::CPUI_INT_ZEXT, &[narrow], "join", 0x0, 16);
     assert!(
         holds_scalar_pair(&fd, whole),
@@ -237,8 +288,18 @@ fn a_concatenation_outside_join_space_is_not_the_recovered_return() {
     let tag = fd.new_constant(8, 1);
     let a = unwritten(&mut fd, 0x3000, 8);
     let payload = mk_def(&mut fd, OpCode::CPUI_INT_ADD, &[a, a], "ram", 0x90, 8);
-    fd.vbank_mut().get_mut(payload).expect("payload").set_nz_mask(0xffff_ffff);
-    let whole = mk_def(&mut fd, OpCode::CPUI_PIECE, &[payload, tag], "unique", 0x200, 16);
+    fd.vbank_mut()
+        .get_mut(payload)
+        .expect("payload")
+        .set_nz_mask(0xffff_ffff);
+    let whole = mk_def(
+        &mut fd,
+        OpCode::CPUI_PIECE,
+        &[payload, tag],
+        "unique",
+        0x200,
+        16,
+    );
     assert!(!holds_scalar_pair(&fd, whole));
 }
 
@@ -250,16 +311,32 @@ fn the_gate_fails_closed_when_the_option_is_off() {
     let tag = fd.new_constant(8, 1);
     let a = unwritten(&mut fd, 0x3000, 8);
     let payload = mk_def(&mut fd, OpCode::CPUI_INT_ADD, &[a, a], "ram", 0xa0, 8);
-    fd.vbank_mut().get_mut(payload).expect("payload").set_nz_mask(0xffff_ffff);
-    let whole = mk_def(&mut fd, OpCode::CPUI_PIECE, &[payload, tag], "join", 0x0, 16);
-    assert!(!holds_scalar_pair(&fd, whole), "`off` must be byte-identical to the pre-fix engine");
+    fd.vbank_mut()
+        .get_mut(payload)
+        .expect("payload")
+        .set_nz_mask(0xffff_ffff);
+    let whole = mk_def(
+        &mut fd,
+        OpCode::CPUI_PIECE,
+        &[payload, tag],
+        "join",
+        0x0,
+        16,
+    );
+    assert!(
+        !holds_scalar_pair(&fd, whole),
+        "`off` must be byte-identical to the pre-fix engine"
+    );
     assert!(!live(&fd));
 }
 
 /// `auto` asks the loader's verdict; a non-Rust image can never reach the rules.
 #[test]
 fn auto_is_inert_when_the_image_is_not_rust() {
-    assert!(live(&build_fd_lang(RustAbiMode::Auto, true)), "a rustc image reaches the rules");
+    assert!(
+        live(&build_fd_lang(RustAbiMode::Auto, true)),
+        "a rustc image reaches the rules"
+    );
     assert!(
         !live(&build_fd_lang(RustAbiMode::Auto, false)),
         "`auto` on a non-Rust image is exactly `off`",
@@ -293,7 +370,8 @@ fn build_call_fd(mode: RustAbiMode) -> Funcdata {
 fn build_call_fd_gates(mode: RustAbiMode, is_rust: bool) -> Funcdata {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -327,7 +405,10 @@ fn build_call_fd_gates(mode: RustAbiMode, is_rust: bool) -> Funcdata {
 struct NamelessRegisters;
 
 impl unlace_base::space::RegisterLookup for NamelessRegisters {
-    fn get_register(&self, _nm: &str) -> unlace_base::error::KunaResult<unlace_base::space::VarnodeStorage> {
+    fn get_register(
+        &self,
+        _nm: &str,
+    ) -> unlace_base::error::KunaResult<unlace_base::space::VarnodeStorage> {
         Err(unlace_base::error::KunaError::lowlevel("no registers"))
     }
     fn get_register_name(&self, _b: &Rc<AddrSpace>, _o: u64, _s: i32) -> String {
@@ -348,15 +429,19 @@ fn build_call_with_pair(fd: &mut Funcdata, hi_read: bool) -> (OpId, VarnodeId, V
     fd.bblocks_mut().set_start_block(root, bl);
 
     let call = fd.new_op(1, Address::new(Rc::clone(&ram), 0x1010));
-    fd.obank_mut()
-        .change_opcode(call, TypeOp::new(OpCode::CPUI_CALL, 0, "CPUI_CALL".to_string()));
+    fd.obank_mut().change_opcode(
+        call,
+        TypeOp::new(OpCode::CPUI_CALL, 0, "CPUI_CALL".to_string()),
+    );
     let target = fd.new_code_ref(&Address::new(Rc::clone(&ram), 0x2000));
     let _ = fd.op_set_input(call, target, 0);
 
     let mk_half = |fd: &mut Funcdata, off: u64| -> VarnodeId {
         let ind = fd.new_op(2, Address::new(Rc::clone(&ram), 0x1010));
-        fd.obank_mut()
-            .change_opcode(ind, TypeOp::new(OpCode::CPUI_INDIRECT, 0, "CPUI_INDIRECT".to_string()));
+        fd.obank_mut().change_opcode(
+            ind,
+            TypeOp::new(OpCode::CPUI_INDIRECT, 0, "CPUI_INDIRECT".to_string()),
+        );
         let c0 = fd.new_constant(8, 0);
         let c1 = fd.new_constant(8, 0);
         let _ = fd.op_set_input(ind, c0, 0);
@@ -365,7 +450,8 @@ fn build_call_with_pair(fd: &mut Funcdata, hi_read: bool) -> (OpId, VarnodeId, V
             .new_varnode_out(8, &Address::new(Rc::clone(&ram), off), ind)
             .expect("half varnode");
         fd.op_insert(ind, bl, None);
-        fd.mark_indirect_creation(ind, false).expect("indirect creation");
+        fd.mark_indirect_creation(ind, false)
+            .expect("indirect creation");
         out
     };
     let lo = mk_half(fd, 0x00);
@@ -373,11 +459,16 @@ fn build_call_with_pair(fd: &mut Funcdata, hi_read: bool) -> (OpId, VarnodeId, V
     fd.op_insert(call, bl, None);
 
     // A read of each half after the call, so both are live values.
-    for (half, off) in [(Some(lo), 0x100u64), (if hi_read { Some(hi) } else { None }, 0x108)] {
+    for (half, off) in [
+        (Some(lo), 0x100u64),
+        (if hi_read { Some(hi) } else { None }, 0x108),
+    ] {
         let Some(h) = half else { continue };
         let use_op = fd.new_op(1, Address::new(Rc::clone(&ram), 0x1020 + off));
-        fd.obank_mut()
-            .change_opcode(use_op, TypeOp::new(OpCode::CPUI_COPY, 0, "CPUI_COPY".to_string()));
+        fd.obank_mut().change_opcode(
+            use_op,
+            TypeOp::new(OpCode::CPUI_COPY, 0, "CPUI_COPY".to_string()),
+        );
         let _ = fd.op_set_input(use_op, h, 0);
         let _ = fd.new_varnode_out(8, &Address::new(Rc::clone(&ram), 0x200 + off), use_op);
         fd.op_insert(use_op, bl, None);
@@ -387,12 +478,32 @@ fn build_call_with_pair(fd: &mut Funcdata, hi_read: bool) -> (OpId, VarnodeId, V
 
 /// A summary that proves the callee wrote nothing at all.
 fn proves_nothing_written() -> CalleeReturnWrites {
-    CalleeReturnWrites { writes: Vec::new(), store_spaces: Vec::new(), complete: true, instructions: 2, call_facts: Vec::new(), return_targets: Vec::new(), through_mode_switch: false, reads_nonreturn_memory: false, writes_stack_outside_return: false }
+    CalleeReturnWrites {
+        writes: Vec::new(),
+        store_spaces: Vec::new(),
+        complete: true,
+        instructions: 2,
+        call_facts: Vec::new(),
+        return_targets: Vec::new(),
+        through_mode_switch: false,
+        reads_nonreturn_memory: false,
+        writes_stack_outside_return: false,
+    }
 }
 
 /// A summary the probe could not complete: it proves nothing.
 fn proves_nothing() -> CalleeReturnWrites {
-    CalleeReturnWrites { writes: Vec::new(), store_spaces: Vec::new(), complete: false, instructions: 2, call_facts: Vec::new(), return_targets: Vec::new(), through_mode_switch: false, reads_nonreturn_memory: false, writes_stack_outside_return: false }
+    CalleeReturnWrites {
+        writes: Vec::new(),
+        store_spaces: Vec::new(),
+        complete: false,
+        instructions: 2,
+        call_facts: Vec::new(),
+        return_targets: Vec::new(),
+        through_mode_switch: false,
+        reads_nonreturn_memory: false,
+        writes_stack_outside_return: false,
+    }
 }
 
 fn callee_entry(fd: &Funcdata) -> Address {
@@ -409,14 +520,29 @@ fn the_call_seam_builds_the_pair_the_model_asked_for() {
         CallPairRepr::ScalarPair,
         "an unprobed callee leaves the model rule and the caller's reads standing",
     );
-    assert!(build_call_output_pair(call, &mut fd, None, &[lo, hi], Some(&entry), (0, 1)));
+    assert!(build_call_output_pair(
+        call,
+        &mut fd,
+        None,
+        &[lo, hi],
+        Some(&entry),
+        (0, 1)
+    ));
 
-    let out = fd.obank().get(call).and_then(|o| o.get_out()).expect("the CALL gained an output");
+    let out = fd
+        .obank()
+        .get(call)
+        .and_then(|o| o.get_out())
+        .expect("the CALL gained an output");
     let outvn = fd.vbank().get(out).expect("output varnode");
     assert!(outvn.get_addr().is_join(), "the pair lands in join space");
     assert_eq!(outvn.get_size(), 16, "both registers are covered");
     for half in [lo, hi] {
-        let def = fd.vbank().get(half).and_then(|v| v.get_def()).expect("half still defined");
+        let def = fd
+            .vbank()
+            .get(half)
+            .and_then(|v| v.get_def())
+            .expect("half still defined");
         assert_eq!(
             fd.obank().get(def).expect("def").code(),
             OpCode::CPUI_SUBPIECE,
@@ -435,20 +561,60 @@ fn a_most_significant_first_pair_joins_the_first_register_high() {
     let mut fd = build_call_fd(RustAbiMode::Always);
     let (call, first, second) = build_call_with_pair(&mut fd, true);
     let entry = callee_entry(&fd);
-    assert!(build_call_output_pair(call, &mut fd, None, &[first, second], Some(&entry), (1, 0)));
+    assert!(build_call_output_pair(
+        call,
+        &mut fd,
+        None,
+        &[first, second],
+        Some(&entry),
+        (1, 0)
+    ));
 
-    let out = fd.obank().get(call).and_then(|o| o.get_out()).expect("the CALL gained an output");
-    let join = fd.vbank().get(out).expect("output varnode").get_addr().clone();
-    let rec = fd.get_arch().manage.find_join(join.get_offset()).expect("a join record");
+    let out = fd
+        .obank()
+        .get(call)
+        .and_then(|o| o.get_out())
+        .expect("the CALL gained an output");
+    let join = fd
+        .vbank()
+        .get(out)
+        .expect("output varnode")
+        .get_addr()
+        .clone();
+    let rec = fd
+        .get_arch()
+        .manage
+        .find_join(join.get_offset())
+        .expect("a join record");
     let first_addr = fd.vbank().get(first).expect("first").get_addr().clone();
-    assert_eq!(rec.get_piece(0).offset, first_addr.get_offset(), "the first register is the high piece");
+    assert_eq!(
+        rec.get_piece(0).offset,
+        first_addr.get_offset(),
+        "the first register is the high piece"
+    );
     let subpiece_offset = |half: VarnodeId| -> u64 {
-        let def = fd.vbank().get(half).and_then(|v| v.get_def()).expect("half defined");
-        let c = fd.obank().get(def).and_then(|o| o.get_in(1)).expect("offset input");
+        let def = fd
+            .vbank()
+            .get(half)
+            .and_then(|v| v.get_def())
+            .expect("half defined");
+        let c = fd
+            .obank()
+            .get(def)
+            .and_then(|o| o.get_in(1))
+            .expect("offset input");
         fd.vbank().get(c).expect("constant").get_offset()
     };
-    assert_eq!(subpiece_offset(first), 8, "the first register holds the high eight bytes");
-    assert_eq!(subpiece_offset(second), 0, "the second register holds the low eight bytes");
+    assert_eq!(
+        subpiece_offset(first),
+        8,
+        "the first register holds the high eight bytes"
+    );
+    assert_eq!(
+        subpiece_offset(second),
+        0,
+        "the second register holds the low eight bytes"
+    );
 }
 
 /// The refutation this seam exists to answer. `one_scalar_callee` is
@@ -470,9 +636,16 @@ fn a_callee_proven_not_to_write_the_payload_is_not_paired() {
         !build_call_output_pair(call, &mut fd, None, &[lo, hi], Some(&entry), (0, 1)),
         "the callee refutes the pair",
     );
-    assert!(fd.obank().get(call).and_then(|o| o.get_out()).is_none(), "the CALL is untouched");
+    assert!(
+        fd.obank().get(call).and_then(|o| o.get_out()).is_none(),
+        "the CALL is untouched"
+    );
     for half in [lo, hi] {
-        let def = fd.vbank().get(half).and_then(|v| v.get_def()).expect("half still defined");
+        let def = fd
+            .vbank()
+            .get(half)
+            .and_then(|v| v.get_def())
+            .expect("half still defined");
         assert!(
             fd.obank().get(def).expect("def").is_indirect_creation(),
             "the INDIRECT creations survive exactly as they did with the option off",
@@ -492,7 +665,14 @@ fn an_incomplete_probe_vetoes_nothing() {
         classify_call_output_pair(&fd, None, &[lo, hi], Some(&entry)),
         CallPairRepr::ScalarPair,
     );
-    assert!(build_call_output_pair(call, &mut fd, None, &[lo, hi], Some(&entry), (0, 1)));
+    assert!(build_call_output_pair(
+        call,
+        &mut fd,
+        None,
+        &[lo, hi],
+        Some(&entry),
+        (0, 1)
+    ));
 }
 
 /// A summary that records the payload register as written is a real `ScalarPair`
@@ -503,14 +683,31 @@ fn a_callee_that_writes_the_payload_still_pairs() {
     let (call, lo, hi) = build_call_with_pair(&mut fd, true);
     let entry = callee_entry(&fd);
     let ram_index = space(&fd, "ram").get_index();
-    let written = CalleeReturnWrites { writes: vec![(ram_index, 0x40, 8)], store_spaces: Vec::new(), complete: true, instructions: 2, call_facts: Vec::new(), return_targets: Vec::new(), through_mode_switch: false, reads_nonreturn_memory: false, writes_stack_outside_return: false };
+    let written = CalleeReturnWrites {
+        writes: vec![(ram_index, 0x40, 8)],
+        store_spaces: Vec::new(),
+        complete: true,
+        instructions: 2,
+        call_facts: Vec::new(),
+        return_targets: Vec::new(),
+        through_mode_switch: false,
+        reads_nonreturn_memory: false,
+        writes_stack_outside_return: false,
+    };
     assert!(!written.proves_untouched(&Address::new(space(&fd, "ram"), 0x40), 8));
     fd.kuna_set_callee_ret_writes(&entry, Rc::new(written));
     assert_eq!(
         classify_call_output_pair(&fd, None, &[lo, hi], Some(&entry)),
         CallPairRepr::ScalarPair,
     );
-    assert!(build_call_output_pair(call, &mut fd, None, &[lo, hi], Some(&entry), (0, 1)));
+    assert!(build_call_output_pair(
+        call,
+        &mut fd,
+        None,
+        &[lo, hi],
+        Some(&entry),
+        (0, 1)
+    ));
 }
 
 /// A write that only *overlaps* the payload half still refutes "untouched".
@@ -518,7 +715,17 @@ fn a_callee_that_writes_the_payload_still_pairs() {
 fn a_partial_write_of_the_payload_register_counts() {
     let mut fd = build_call_fd(RustAbiMode::Always);
     let ram = space(&fd, "ram");
-    let w = CalleeReturnWrites { writes: vec![(ram.get_index(), 0x40, 4)], store_spaces: Vec::new(), complete: true, instructions: 2, call_facts: Vec::new(), return_targets: Vec::new(), through_mode_switch: false, reads_nonreturn_memory: false, writes_stack_outside_return: false };
+    let w = CalleeReturnWrites {
+        writes: vec![(ram.get_index(), 0x40, 4)],
+        store_spaces: Vec::new(),
+        complete: true,
+        instructions: 2,
+        call_facts: Vec::new(),
+        return_targets: Vec::new(),
+        through_mode_switch: false,
+        reads_nonreturn_memory: false,
+        writes_stack_outside_return: false,
+    };
     assert!(
         !w.proves_untouched(&Address::new(Rc::clone(&ram), 0x40), 8),
         "`lea 0x7(%rdi),%edx` writes four bytes of an eight-byte half",
@@ -538,9 +745,26 @@ fn the_call_seam_builds_the_pair_on_callretpair_alone() {
     let mut fd = build_call_fd_gates(RustAbiMode::Off, false);
     let (call, lo, hi) = build_call_with_pair(&mut fd, true);
     let entry = callee_entry(&fd);
-    assert!(build_call_output_pair(call, &mut fd, None, &[lo, hi], Some(&entry), (0, 1)));
-    let out = fd.obank().get(call).and_then(|o| o.get_out()).expect("the CALL gained an output");
-    assert!(fd.vbank().get(out).expect("output varnode").get_addr().is_join());
+    assert!(build_call_output_pair(
+        call,
+        &mut fd,
+        None,
+        &[lo, hi],
+        Some(&entry),
+        (0, 1)
+    ));
+    let out = fd
+        .obank()
+        .get(call)
+        .and_then(|o| o.get_out())
+        .expect("the CALL gained an output");
+    assert!(
+        fd.vbank()
+            .get(out)
+            .expect("output varnode")
+            .get_addr()
+            .is_join()
+    );
 }
 
 /// The callee veto is the same one, so `callretpair` refuses the pair exactly
@@ -551,7 +775,14 @@ fn callretpair_honours_the_callee_veto() {
     let (call, lo, hi) = build_call_with_pair(&mut fd, true);
     let entry = callee_entry(&fd);
     fd.kuna_set_callee_ret_writes(&entry, Rc::new(proves_nothing_written()));
-    assert!(!build_call_output_pair(call, &mut fd, None, &[lo, hi], Some(&entry), (0, 1)));
+    assert!(!build_call_output_pair(
+        call,
+        &mut fd,
+        None,
+        &[lo, hi],
+        Some(&entry),
+        (0, 1)
+    ));
     assert!(fd.obank().get(call).and_then(|o| o.get_out()).is_none());
 }
 
@@ -560,8 +791,18 @@ fn a_payload_half_nothing_reads_is_not_paired() {
     let mut fd = build_call_fd(RustAbiMode::Always);
     let (call, lo, hi) = build_call_with_pair(&mut fd, false);
     let entry = callee_entry(&fd);
-    assert_eq!(classify_call_output_pair(&fd, None, &[lo, hi], Some(&entry)), CallPairRepr::Scalar);
-    assert!(!build_call_output_pair(call, &mut fd, None, &[lo, hi], Some(&entry), (0, 1)));
+    assert_eq!(
+        classify_call_output_pair(&fd, None, &[lo, hi], Some(&entry)),
+        CallPairRepr::Scalar
+    );
+    assert!(!build_call_output_pair(
+        call,
+        &mut fd,
+        None,
+        &[lo, hi],
+        Some(&entry),
+        (0, 1)
+    ));
 }
 
 #[test]
@@ -569,8 +810,18 @@ fn overlapping_halves_are_not_two_halves_of_one_value() {
     let mut fd = build_call_fd(RustAbiMode::Always);
     let (call, lo, _hi) = build_call_with_pair(&mut fd, true);
     let entry = callee_entry(&fd);
-    assert_eq!(classify_call_output_pair(&fd, None, &[lo, lo], Some(&entry)), CallPairRepr::Scalar);
-    assert!(!build_call_output_pair(call, &mut fd, None, &[lo, lo], Some(&entry), (0, 1)));
+    assert_eq!(
+        classify_call_output_pair(&fd, None, &[lo, lo], Some(&entry)),
+        CallPairRepr::Scalar
+    );
+    assert!(!build_call_output_pair(
+        call,
+        &mut fd,
+        None,
+        &[lo, lo],
+        Some(&entry),
+        (0, 1)
+    ));
 }
 
 #[test]
@@ -578,8 +829,18 @@ fn a_single_trial_is_not_a_pair() {
     let mut fd = build_call_fd(RustAbiMode::Always);
     let (call, lo, _hi) = build_call_with_pair(&mut fd, true);
     let entry = callee_entry(&fd);
-    assert_eq!(classify_call_output_pair(&fd, None, &[lo], Some(&entry)), CallPairRepr::Scalar);
-    assert!(!build_call_output_pair(call, &mut fd, None, &[lo], Some(&entry), (0, 1)));
+    assert_eq!(
+        classify_call_output_pair(&fd, None, &[lo], Some(&entry)),
+        CallPairRepr::Scalar
+    );
+    assert!(!build_call_output_pair(
+        call,
+        &mut fd,
+        None,
+        &[lo],
+        Some(&entry),
+        (0, 1)
+    ));
 }
 
 /// A half that is not a register INDIRECT creation is somebody else's Varnode.
@@ -589,8 +850,18 @@ fn a_half_that_is_not_an_indirect_creation_is_not_a_pair() {
     let (call, lo, _hi) = build_call_with_pair(&mut fd, true);
     let plain = unwritten(&mut fd, 0x4000, 8);
     let entry = callee_entry(&fd);
-    assert_eq!(classify_call_output_pair(&fd, None, &[lo, plain], Some(&entry)), CallPairRepr::Scalar);
-    assert!(!build_call_output_pair(call, &mut fd, None, &[lo, plain], Some(&entry), (0, 1)));
+    assert_eq!(
+        classify_call_output_pair(&fd, None, &[lo, plain], Some(&entry)),
+        CallPairRepr::Scalar
+    );
+    assert!(!build_call_output_pair(
+        call,
+        &mut fd,
+        None,
+        &[lo, plain],
+        Some(&entry),
+        (0, 1)
+    ));
 }
 
 /// With no resolved callee there is nothing to probe, so the seam falls back on
@@ -599,7 +870,10 @@ fn a_half_that_is_not_an_indirect_creation_is_not_a_pair() {
 fn an_unresolved_callee_leaves_the_model_rule_standing() {
     let mut fd = build_call_fd(RustAbiMode::Always);
     let (_call, lo, hi) = build_call_with_pair(&mut fd, true);
-    assert_eq!(classify_call_output_pair(&fd, None, &[lo, hi], None), CallPairRepr::ScalarPair);
+    assert_eq!(
+        classify_call_output_pair(&fd, None, &[lo, hi], None),
+        CallPairRepr::ScalarPair
+    );
 }
 
 /// A STORE's address is a runtime value, so a body that stores into a space
@@ -625,12 +899,20 @@ fn a_store_into_the_space_defeats_the_proof() {
 
 #[test]
 fn write_probe_only_stops_at_unconditional_known_terminal_calls() {
-    use unlace_sleigh::translate::PcodeEmit;
     use unlace_num::pcoderaw::VarnodeData;
+    use unlace_sleigh::translate::PcodeEmit;
     let fd = build_fd(RustAbiMode::Always);
     let at = Address::new(space(&fd, "ram"), 0x1000);
-    let target = VarnodeData { space: Some(space(&fd, "ram")), offset: 0x2000, size: 8 };
-    let branch = VarnodeData { space: Some(space(&fd, "const")), offset: 2, size: 8 };
+    let target = VarnodeData {
+        space: Some(space(&fd, "ram")),
+        offset: 0x2000,
+        size: 8,
+    };
+    let branch = VarnodeData {
+        space: Some(space(&fd, "const")),
+        offset: 2,
+        size: 8,
+    };
     for (known, conditional) in [(true, false), (false, false), (true, true)] {
         let mut emit = ProbeEmit::default();
         if conditional {
@@ -638,7 +920,10 @@ fn write_probe_only_stops_at_unconditional_known_terminal_calls() {
         }
         emit.dump(&at, OpCode::CPUI_CALL, None, &[target.clone()]);
         let facts = emit.resolve_calls(&|_| known);
-        assert_eq!(facts, vec![(Address::new(space(&fd, "ram"), 0x2000), known)]);
+        assert_eq!(
+            facts,
+            vec![(Address::new(space(&fd, "ram"), 0x2000), known)]
+        );
         assert_eq!(emit.ends_flow, known && !conditional);
         assert_eq!(emit.unresolved, !known || conditional);
     }
@@ -658,33 +943,70 @@ fn write_probe_reads_through_the_mode_switch_of_a_return() {
     let fd = build_fd(RustAbiMode::Always);
     let ram = space(&fd, "ram");
     let at = Address::new(Rc::clone(&ram), 0x1000);
-    let konst = |v: u64| VarnodeData { space: Some(space(&fd, "const")), offset: v, size: 4 };
-    let pc = VarnodeData { space: Some(Rc::clone(&ram)), offset: 0x80, size: 4 };
-    let lr = VarnodeData { space: Some(Rc::clone(&ram)), offset: 0x78, size: 4 };
-    let tb = VarnodeData { space: Some(Rc::clone(&ram)), offset: 0x60, size: 1 };
+    let konst = |v: u64| VarnodeData {
+        space: Some(space(&fd, "const")),
+        offset: v,
+        size: 4,
+    };
+    let pc = VarnodeData {
+        space: Some(Rc::clone(&ram)),
+        offset: 0x80,
+        size: 4,
+    };
+    let lr = VarnodeData {
+        space: Some(Rc::clone(&ram)),
+        offset: 0x78,
+        size: 4,
+    };
+    let tb = VarnodeData {
+        space: Some(Rc::clone(&ram)),
+        offset: 0x60,
+        size: 1,
+    };
 
-    let mut ret = ProbeEmit { mode_switch: Some(7), ..ProbeEmit::default() };
+    let mut ret = ProbeEmit {
+        mode_switch: Some(7),
+        ..ProbeEmit::default()
+    };
     ret.dump(&at, OpCode::CPUI_CALLOTHER, None, &[konst(7), tb.clone()]);
     ret.dump(&at, OpCode::CPUI_COPY, Some(&pc), &[lr.clone()]);
     ret.dump(&at, OpCode::CPUI_RETURN, None, &[pc.clone()]);
     assert!(!ret.unresolved && ret.ends_flow && ret.mode_switched);
     assert_eq!(ret.return_targets, vec![(ram.get_index(), 0x80, 4)]);
 
-    let mut other = ProbeEmit { mode_switch: Some(7), ..ProbeEmit::default() };
+    let mut other = ProbeEmit {
+        mode_switch: Some(7),
+        ..ProbeEmit::default()
+    };
     other.dump(&at, OpCode::CPUI_CALLOTHER, None, &[konst(8)]);
-    assert!(other.unresolved, "a user op that is not the mode switch still proves nothing");
+    assert!(
+        other.unresolved,
+        "a user op that is not the mode switch still proves nothing"
+    );
 
-    let mut with_output = ProbeEmit { mode_switch: Some(7), ..ProbeEmit::default() };
+    let mut with_output = ProbeEmit {
+        mode_switch: Some(7),
+        ..ProbeEmit::default()
+    };
     with_output.dump(&at, OpCode::CPUI_CALLOTHER, Some(&tb), &[konst(7)]);
-    assert!(with_output.unresolved, "a user op with an output is not the mode switch");
+    assert!(
+        with_output.unresolved,
+        "a user op with an output is not the mode switch"
+    );
 
     let mut unknown = ProbeEmit::default();
     unknown.dump(&at, OpCode::CPUI_CALLOTHER, None, &[konst(7), tb]);
-    assert!(unknown.unresolved, "without a mode-switch user op every CALLOTHER stops the walk");
+    assert!(
+        unknown.unresolved,
+        "without a mode-switch user op every CALLOTHER stops the walk"
+    );
 
     let mut through_lr = ProbeEmit::default();
     through_lr.dump(&at, OpCode::CPUI_RETURN, None, &[lr]);
-    assert!(through_lr.return_targets.is_empty(), "a return through a register it did not write names no pc");
+    assert!(
+        through_lr.return_targets.is_empty(),
+        "a return through a register it did not write names no pc"
+    );
 }
 
 /// A walk that finished only by reading through a mode switch answers for no
@@ -723,34 +1045,66 @@ fn a_mode_switched_walk_does_not_answer_for_argument_registers() {
     assert!(!switched.proves_untouched_for(Some(&model), &argument, 8));
     assert!(switched.proves_untouched_for(Some(&model), &scratch, 8));
     assert!(!switched.proves_untouched_for(None, &scratch, 8));
-    assert!(passes_arguments_in(Some(&model), &Address::new(Rc::clone(&ram), 0x24), 4));
+    assert!(passes_arguments_in(
+        Some(&model),
+        &Address::new(Rc::clone(&ram), 0x24),
+        4
+    ));
     assert!(!passes_arguments_in(Some(&model), &scratch, 8));
 }
 
 #[test]
 fn memory_probe_distinguishes_return_fetches_observers_and_stack_pivots() {
-    use unlace_sleigh::translate::PcodeEmit;
     use unlace_num::pcoderaw::VarnodeData;
+    use unlace_sleigh::translate::PcodeEmit;
     let fd = build_fd(RustAbiMode::Always);
     let ram = space(&fd, "ram");
     let constant = space(&fd, "const");
-    let reg = |offset| VarnodeData { space: Some(Rc::clone(&ram)), offset, size: 4 };
-    let value = |offset| VarnodeData { space: Some(Rc::clone(&constant)), offset, size: 4 };
+    let reg = |offset| VarnodeData {
+        space: Some(Rc::clone(&ram)),
+        offset,
+        size: 4,
+    };
+    let value = |offset| VarnodeData {
+        space: Some(Rc::clone(&constant)),
+        offset,
+        size: 4,
+    };
     let sp = reg(0x100);
     let pc = reg(0x104);
     let ax = reg(0x108);
-    let at = Address::new(Rc::clone(&ram),0x1000);
+    let at = Address::new(Rc::clone(&ram), 0x1000);
     let mut ret = ProbeEmit::default();
-    ret.dump(&at,OpCode::CPUI_LOAD,Some(&pc),&[value(ram.get_index() as u64),sp.clone()]);
-    ret.dump(&at,OpCode::CPUI_INT_ADD,Some(&sp),&[sp.clone(),value(4)]);
-    ret.dump(&at,OpCode::CPUI_RETURN,None,std::slice::from_ref(&pc));
+    ret.dump(
+        &at,
+        OpCode::CPUI_LOAD,
+        Some(&pc),
+        &[value(ram.get_index() as u64), sp.clone()],
+    );
+    ret.dump(
+        &at,
+        OpCode::CPUI_INT_ADD,
+        Some(&sp),
+        &[sp.clone(), value(4)],
+    );
+    ret.dump(&at, OpCode::CPUI_RETURN, None, std::slice::from_ref(&pc));
     assert!(ret.return_only_memory_reads(std::slice::from_ref(&sp)));
     assert!(!ret.changes_stack_outside_return(std::slice::from_ref(&sp)));
     let mut observer = ProbeEmit::default();
-    observer.dump(&at,OpCode::CPUI_LOAD,Some(&ax),&[value(ram.get_index() as u64),sp.clone()]);
-    observer.dump(&at,OpCode::CPUI_RETURN,None,std::slice::from_ref(&pc));
+    observer.dump(
+        &at,
+        OpCode::CPUI_LOAD,
+        Some(&ax),
+        &[value(ram.get_index() as u64), sp.clone()],
+    );
+    observer.dump(&at, OpCode::CPUI_RETURN, None, std::slice::from_ref(&pc));
     assert!(!observer.return_only_memory_reads(std::slice::from_ref(&sp)));
     let mut pivot = ProbeEmit::default();
-    pivot.dump(&at,OpCode::CPUI_INT_ADD,Some(&sp),&[sp.clone(),value(8)]);
+    pivot.dump(
+        &at,
+        OpCode::CPUI_INT_ADD,
+        Some(&sp),
+        &[sp.clone(), value(8)],
+    );
     assert!(pivot.changes_stack_outside_return(std::slice::from_ref(&sp)));
 }

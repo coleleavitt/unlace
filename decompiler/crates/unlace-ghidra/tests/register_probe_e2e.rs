@@ -29,11 +29,11 @@ use unlace_base::marshal::PackedEncode;
 use unlace_decomp::kuna_linuxsyscall::{ARG_REGISTERS, NUM_REGISTER};
 use unlace_ghidra::process::GhidraProcess;
 
-use ghidra_sim::oracle::{generate_tspec, repo_root, SimOracle};
+use ghidra_sim::oracle::{SimOracle, generate_tspec, repo_root};
 use ghidra_sim::{
-    cmd_decompile_at, cmd_deregister_program, cmd_flush_native, cmd_register_program,
-    cmd_set_action, parse_decompile_doc, trace_session, MockReader, MockState, MockWriter,
-    ParsedDoc, SessionTrace,
+    MockReader, MockState, MockWriter, ParsedDoc, SessionTrace, cmd_decompile_at,
+    cmd_deregister_program, cmd_flush_native, cmd_register_program, cmd_set_action,
+    parse_decompile_doc, trace_session,
 };
 
 struct Run {

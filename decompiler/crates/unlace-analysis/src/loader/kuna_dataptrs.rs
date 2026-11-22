@@ -118,13 +118,25 @@ pub struct DataPointers {
 impl DataPointers {
     fn listed(source: Source, pointers: Vec<DataPointer>, unread: Vec<String>) -> DataPointers {
         if unread.is_empty() {
-            return DataPointers { coverage: Coverage::Complete(source), reason: None, pointers };
+            return DataPointers {
+                coverage: Coverage::Complete(source),
+                reason: None,
+                pointers,
+            };
         }
-        DataPointers { coverage: Coverage::Partial(source), reason: Some(unread.join("; ")), pointers }
+        DataPointers {
+            coverage: Coverage::Partial(source),
+            reason: Some(unread.join("; ")),
+            pointers,
+        }
     }
 
     fn empty(coverage: Coverage, reason: impl Into<String>) -> DataPointers {
-        DataPointers { coverage, reason: Some(reason.into()), pointers: Vec::new() }
+        DataPointers {
+            coverage,
+            reason: Some(reason.into()),
+            pointers: Vec::new(),
+        }
     }
 }
 
@@ -146,9 +158,10 @@ pub fn data_pointers(file: &object::File, bytes: &[u8]) -> DataPointers {
             object::File::Pe64(pe) => pe_relocated(file, pe),
             _ => DataPointers::empty(Coverage::Unsupported, "a PE image kuna cannot read as PE"),
         },
-        (format, _) => {
-            DataPointers::empty(Coverage::Unsupported, format!("{format:?} pointer relocations are not read"))
-        }
+        (format, _) => DataPointers::empty(
+            Coverage::Unsupported,
+            format!("{format:?} pointer relocations are not read"),
+        ),
     };
     if listed.coverage.source().is_none() {
         return listed;
@@ -159,7 +172,11 @@ pub fn data_pointers(file: &object::File, bytes: &[u8]) -> DataPointers {
         .map(|sec| (sec.address(), sec.address().saturating_add(sec.size())))
         .collect();
     let pointers = &mut listed.pointers;
-    pointers.retain(|p| mapped.iter().any(|&(lo, hi)| p.target >= lo && p.target < hi));
+    pointers.retain(|p| {
+        mapped
+            .iter()
+            .any(|&(lo, hi)| p.target >= lo && p.target < hi)
+    });
     pointers.sort_unstable_by_key(|p| p.slot);
     pointers.dedup_by_key(|p| p.slot);
     listed
@@ -168,8 +185,14 @@ pub fn data_pointers(file: &object::File, bytes: &[u8]) -> DataPointers {
 /// A relocatable object's relocations name sections, not load addresses, and
 /// are not read here.
 fn relocatable(file: &object::File) -> DataPointers {
-    if file.sections().any(|sec| sec.relocations().next().is_some()) {
-        DataPointers::empty(Coverage::Unsupported, "a relocatable object's relocations are not read")
+    if file
+        .sections()
+        .any(|sec| sec.relocations().next().is_some())
+    {
+        DataPointers::empty(
+            Coverage::Unsupported,
+            "a relocatable object's relocations are not read",
+        )
     } else {
         DataPointers::empty(Coverage::None, "a relocatable object with no relocations")
     }
@@ -209,11 +232,15 @@ where
     let sections = elf.elf_section_table();
     let alloc = |flags: u64| flags & u64::from(object::elf::SHF_ALLOC) != 0;
     sections.iter().any(|sec| {
-        matches!(sec.sh_type(endian), object::elf::SHT_REL | object::elf::SHT_RELA)
-            && !alloc(sec.sh_flags(endian).into())
+        matches!(
+            sec.sh_type(endian),
+            object::elf::SHT_REL | object::elf::SHT_RELA
+        ) && !alloc(sec.sh_flags(endian).into())
             && sections
                 .section(object::SectionIndex(sec.sh_info(endian) as usize))
-                .is_ok_and(|target| sec.sh_info(endian) != 0 && alloc(target.sh_flags(endian).into()))
+                .is_ok_and(|target| {
+                    sec.sh_info(endian) != 0 && alloc(target.sh_flags(endian).into())
+                })
     })
 }
 
@@ -238,17 +265,37 @@ fn macho(file: &object::File, bytes: &[u8]) -> DataPointers {
     let fixups = crate::loader::format::macho::resolve_chained_fixups(file, bytes);
     if fixups.is_chained() {
         let width = fixups.slot_width();
-        let pointers = fixups.rebases().map(|(slot, target)| DataPointer { slot, target, width }).collect();
-        let unread = fixups.damage().map(|why| format!("the chained fixups were not all read: {why}"));
-        return DataPointers::listed(Source::ChainedFixups, pointers, unread.into_iter().collect());
+        let pointers = fixups
+            .rebases()
+            .map(|(slot, target)| DataPointer {
+                slot,
+                target,
+                width,
+            })
+            .collect();
+        let unread = fixups
+            .damage()
+            .map(|why| format!("the chained fixups were not all read: {why}"));
+        return DataPointers::listed(
+            Source::ChainedFixups,
+            pointers,
+            unread.into_iter().collect(),
+        );
     }
     let commands = match FileKind::parse(bytes) {
-        Ok(FileKind::MachO64) => macho_commands::<object::macho::MachHeader64<object::Endianness>>(bytes),
-        Ok(FileKind::MachO32) => macho_commands::<object::macho::MachHeader32<object::Endianness>>(bytes),
+        Ok(FileKind::MachO64) => {
+            macho_commands::<object::macho::MachHeader64<object::Endianness>>(bytes)
+        }
+        Ok(FileKind::MachO32) => {
+            macho_commands::<object::macho::MachHeader32<object::Endianness>>(bytes)
+        }
         _ => None,
     };
     let Some(commands) = commands else {
-        return DataPointers::empty(Coverage::Unsupported, "a Mach-O image whose load commands cannot be read");
+        return DataPointers::empty(
+            Coverage::Unsupported,
+            "a Mach-O image whose load commands cannot be read",
+        );
     };
     if commands.in_cache {
         return DataPointers::empty(
@@ -258,12 +305,15 @@ fn macho(file: &object::File, bytes: &[u8]) -> DataPointers {
         );
     }
     if commands.chained {
-        let why = "the LC_DYLD_CHAINED_FIXUPS data lies outside the file or its segments".to_string();
+        let why =
+            "the LC_DYLD_CHAINED_FIXUPS data lies outside the file or its segments".to_string();
         return DataPointers::listed(Source::ChainedFixups, Vec::new(), vec![why]);
     }
     if let Some((off, size)) = commands.rebase {
         let Some(ops) = off.checked_add(size).and_then(|end| bytes.get(off..end)) else {
-            let why = format!("the rebase opcodes (file offset 0x{off:x}, {size} bytes) lie outside the file");
+            let why = format!(
+                "the rebase opcodes (file offset 0x{off:x}, {size} bytes) lie outside the file"
+            );
             return DataPointers::listed(Source::RebaseOpcodes, Vec::new(), vec![why]);
         };
         let width: u8 = if file.is_64() { 8 } else { 4 };
@@ -275,7 +325,11 @@ fn macho(file: &object::File, bytes: &[u8]) -> DataPointers {
             .filter_map(|slot| {
                 let target = read_word(file, slot, width as usize);
                 missing += usize::from(target.is_none());
-                Some(DataPointer { slot, target: target?, width })
+                Some(DataPointer {
+                    slot,
+                    target: target?,
+                    width,
+                })
             })
             .collect();
         if missing != 0 {
@@ -284,7 +338,10 @@ fn macho(file: &object::File, bytes: &[u8]) -> DataPointers {
         return DataPointers::listed(Source::RebaseOpcodes, pointers, unread);
     }
     if commands.local_relocations != 0 {
-        return DataPointers::empty(Coverage::Unsupported, "a Mach-O image's local relocations (LC_DYSYMTAB) are not read");
+        return DataPointers::empty(
+            Coverage::Unsupported,
+            "a Mach-O image's local relocations (LC_DYSYMTAB) are not read",
+        );
     }
     if commands.dyld_info && commands.slid {
         return DataPointers::listed(Source::RebaseOpcodes, Vec::new(), Vec::new());
@@ -320,7 +377,10 @@ where
     let endian = header.endian().ok()?;
     let mut commands = header.load_commands(endian, bytes, 0).ok()?;
     let slid = header.flags(endian) & object::macho::MH_PIE != 0
-        || matches!(header.filetype(endian), object::macho::MH_DYLIB | object::macho::MH_BUNDLE);
+        || matches!(
+            header.filetype(endian),
+            object::macho::MH_DYLIB | object::macho::MH_BUNDLE
+        );
     let mut out = MachoCommands {
         slid,
         in_cache: header.flags(endian) & object::macho::MH_DYLIB_IN_CACHE != 0,
@@ -348,7 +408,9 @@ where
                     out.rebase = Some((off, size));
                 }
             }
-            Ok(LoadCommandVariant::Dysymtab(dysymtab)) => out.local_relocations = dysymtab.nlocrel.get(endian),
+            Ok(LoadCommandVariant::Dysymtab(dysymtab)) => {
+                out.local_relocations = dysymtab.nlocrel.get(endian)
+            }
             _ => {}
         }
     }
@@ -398,7 +460,11 @@ fn interpret_rebase(ops: &[u8], segments: &[u64], ptr: u64) -> (Vec<u64>, Option
         let imm = byte & 0x0f;
         let mut emit = |count: u64, step: u64, offset: &mut u64, out: &mut Vec<u64>| {
             if count != 0 && base.is_none() {
-                damage.get_or_insert_with(|| format!("the rebase opcodes name segment {segment}, which the image does not have"));
+                damage.get_or_insert_with(|| {
+                    format!(
+                        "the rebase opcodes name segment {segment}, which the image does not have"
+                    )
+                });
             }
             for _ in 0..count.min(LIMIT as u64) {
                 if let Some(seg) = base {
@@ -407,7 +473,8 @@ fn interpret_rebase(ops: &[u8], segments: &[u64], ptr: u64) -> (Vec<u64>, Option
                 *offset = offset.wrapping_add(step);
             }
         };
-        let truncated = format!("the rebase opcodes end inside the operand of the opcode at byte {opcode_at}");
+        let truncated =
+            format!("the rebase opcodes end inside the operand of the opcode at byte {opcode_at}");
         match byte & 0xf0 {
             DONE => break,
             SET_TYPE_IMM => {}
@@ -451,7 +518,9 @@ fn interpret_rebase(ops: &[u8], segments: &[u64], ptr: u64) -> (Vec<u64>, Option
                 emit(count, skip.wrapping_add(ptr), &mut offset, &mut out);
             }
             _ => {
-                damage.get_or_insert(format!("unknown rebase opcode 0x{byte:02x} at byte {opcode_at}"));
+                damage.get_or_insert(format!(
+                    "unknown rebase opcode 0x{byte:02x} at byte {opcode_at}"
+                ));
                 break;
             }
         }
@@ -499,9 +568,10 @@ impl PointerRelocs {
 /// not read: SPARC's are not verified, and a MIPS image relocates its local GOT
 /// entries without any.
 fn pointer_relocs(file: &object::File) -> Result<PointerRelocs, String> {
-    use object::{elf, Architecture as A};
+    use object::{Architecture as A, elf};
     let arch = file.architecture();
-    if let Some((relative, glob_dat, jump_slot)) = crate::loader::kuna_dynrelocs::reloc_triple(arch) {
+    if let Some((relative, glob_dat, jump_slot)) = crate::loader::kuna_dynrelocs::reloc_triple(arch)
+    {
         let absolute = match arch {
             A::X86_64 => elf::R_X86_64_64,
             A::Aarch64 => elf::R_AARCH64_ABS64,
@@ -574,7 +644,11 @@ fn elf(file: &object::File) -> DataPointers {
         Err(why) => return DataPointers::empty(Coverage::Unsupported, why),
     };
     let width: u8 = if file.is_64() { 8 } else { 4 };
-    let mask = if width == 8 { u64::MAX } else { u64::from(u32::MAX) };
+    let mask = if width == 8 {
+        u64::MAX
+    } else {
+        u64::from(u32::MAX)
+    };
     let defined: std::collections::HashMap<usize, (u64, bool)> = file
         .dynamic_symbols()
         .filter(|sym| !sym.is_undefined())
@@ -583,16 +657,26 @@ fn elf(file: &object::File) -> DataPointers {
     let mut pointers = Vec::new();
     let mut missing = 0usize;
     for (slot, reloc) in file.dynamic_relocations().into_iter().flatten() {
-        let RelocationFlags::Elf { r_type } = reloc.flags() else { continue };
+        let RelocationFlags::Elf { r_type } = reloc.flags() else {
+            continue;
+        };
         if r_type != kinds.relative && !kinds.symbolic(r_type) {
             continue;
         }
         let symbol = if r_type == kinds.relative {
             0
         } else {
-            let RelocationTarget::Symbol(index) = reloc.target() else { continue };
-            let Some(&(address, local)) = defined.get(&index.0) else { continue };
-            if local && kinds.local_addend { 0 } else { address }
+            let RelocationTarget::Symbol(index) = reloc.target() else {
+                continue;
+            };
+            let Some(&(address, local)) = defined.get(&index.0) else {
+                continue;
+            };
+            if local && kinds.local_addend {
+                0
+            } else {
+                address
+            }
         };
         let addend = if !reloc.has_implicit_addend() {
             reloc.addend() as u64
@@ -605,19 +689,29 @@ fn elf(file: &object::File) -> DataPointers {
         } else {
             0
         };
-        pointers.push(DataPointer { slot, target: symbol.wrapping_add(addend) & mask, width });
+        pointers.push(DataPointer {
+            slot,
+            target: symbol.wrapping_add(addend) & mask,
+            width,
+        });
     }
     let (relr, relr_unread) = crate::loader::kuna_dynrelocs::elf_relr_slots(file, width as usize);
     for slot in relr {
         match read_word(file, slot, width as usize) {
-            Some(word) => pointers.push(DataPointer { slot, target: word & mask, width }),
+            Some(word) => pointers.push(DataPointer {
+                slot,
+                target: word & mask,
+                width,
+            }),
             None => missing += 1,
         }
     }
     let mut unread = crate::loader::kuna_dynrelocs::unread_tables(file);
     unread.extend(relr_unread);
     if missing != 0 {
-        unread.push(format!("{missing} relocated slots have no file data to read the addend from"));
+        unread.push(format!(
+            "{missing} relocated slots have no file data to read the addend from"
+        ));
     }
     DataPointers::listed(Source::DynamicRelocations, pointers, unread)
 }
@@ -641,12 +735,17 @@ fn pe_relocated<Pe: ImageNtHeaders>(file: &object::File, pe: &PeFile<'_, Pe>) ->
             "a PE without a base-relocation directory loads only at its preferred base",
         );
     };
-    let (rva, size) = (dir.virtual_address.get(object::LittleEndian), dir.size.get(object::LittleEndian));
+    let (rva, size) = (
+        dir.virtual_address.get(object::LittleEndian),
+        dir.size.get(object::LittleEndian),
+    );
     let sections = pe.section_table();
     let directory = match dir.data(pe.data(), &sections) {
         Ok(directory) => directory,
         Err(err) => {
-            let why = format!("the base-relocation directory (RVA 0x{rva:x}, {size} bytes) cannot be read: {err}");
+            let why = format!(
+                "the base-relocation directory (RVA 0x{rva:x}, {size} bytes) cannot be read: {err}"
+            );
             return DataPointers::listed(Source::BaseRelocations, Vec::new(), vec![why]);
         }
     };
@@ -664,7 +763,9 @@ fn pe_relocated<Pe: ImageNtHeaders>(file: &object::File, pe: &PeFile<'_, Pe>) ->
             break;
         }
         if size < 8 || size > data.len() - at {
-            unread.push(format!("the base-relocation block at directory offset 0x{at:x} has size {size}"));
+            unread.push(format!(
+                "the base-relocation block at directory offset 0x{at:x} has size {size}"
+            ));
             break;
         }
         for entry in data[at + 8..at + size].chunks_exact(2) {
@@ -674,16 +775,24 @@ fn pe_relocated<Pe: ImageNtHeaders>(file: &object::File, pe: &PeFile<'_, Pe>) ->
                 IMAGE_REL_BASED_HIGHLOW => 4,
                 _ => continue,
             };
-            let slot = base.wrapping_add(page).wrapping_add(u64::from(entry & 0xfff));
+            let slot = base
+                .wrapping_add(page)
+                .wrapping_add(u64::from(entry & 0xfff));
             match read_word(file, slot, width as usize) {
-                Some(target) => pointers.push(DataPointer { slot, target, width }),
+                Some(target) => pointers.push(DataPointer {
+                    slot,
+                    target,
+                    width,
+                }),
                 None => missing += 1,
             }
         }
         at += size;
     }
     if missing != 0 {
-        unread.push(format!("{missing} base relocations name a slot with no file data"));
+        unread.push(format!(
+            "{missing} base relocations name a slot with no file data"
+        ));
     }
     DataPointers::listed(Source::BaseRelocations, pointers, unread)
 }

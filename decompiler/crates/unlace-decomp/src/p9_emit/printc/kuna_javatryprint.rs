@@ -12,10 +12,10 @@
 
 use unlace_num::opcodes::OpCode;
 
-use super::{modifiers, to_emit_brace, Architecture, Funcdata, OpId, PrintC};
+use super::{Architecture, Funcdata, OpId, PrintC, modifiers, to_emit_brace};
 use crate::block::BlockType;
 use crate::context::BlockId;
-use crate::kuna_javatry::{caught_handler, dispatch_handler, CatchTable};
+use crate::kuna_javatry::{CatchTable, caught_handler, dispatch_handler};
 use crate::prettyprint::{Emit, SyntaxHighlight};
 
 /// Where a part of a `try` statement comes from.
@@ -78,28 +78,41 @@ fn if_dispatch(fd: &Funcdata, blk: BlockId) -> Option<(u64, BlockId)> {
     if block.size_out() != 2 {
         return None;
     }
-    let taken = if fd.obank().get(tail)?.is_fallthru_true() { 0 } else { 1 };
+    let taken = if fd.obank().get(tail)?.is_fallthru_true() {
+        0
+    } else {
+        1
+    };
     Some((handler, block.get_out(taken)))
 }
 
 /// Does `blk` start at the basic block `target`?
 fn starts_at(fd: &Funcdata, blk: BlockId, target: BlockId) -> bool {
     let sb = fd.sblocks_ref();
-    sb.get_front_leaf(blk).and_then(|leaf| sb.block(leaf).get_copy()) == Some(target)
+    sb.get_front_leaf(blk)
+        .and_then(|leaf| sb.block(leaf).get_copy())
+        == Some(target)
 }
 
 /// Does `blk` hold nothing but a dispatch (so a dispatch chained after another
 /// prints no statements of its own)?
 fn pure_dispatch(fd: &Funcdata, blk: BlockId) -> bool {
-    let Some(bb) = basic_of(fd, blk) else { return false };
+    let Some(bb) = basic_of(fd, blk) else {
+        return false;
+    };
     let mut cur = fd.bb_op_head(bb);
     while let Some(op) = cur {
         cur = fd.bb_op_next(op);
-        let Some(o) = fd.obank().get(op) else { continue };
+        let Some(o) = fd.obank().get(op) else {
+            continue;
+        };
         if o.code() == OpCode::CPUI_CBRANCH || o.not_printed() {
             continue;
         }
-        let implied = o.get_out().and_then(|v| fd.vbank().get(v)).is_some_and(|v| v.is_implied());
+        let implied = o
+            .get_out()
+            .and_then(|v| fd.vbank().get(v))
+            .is_some_and(|v| v.is_implied());
         if o.code() == OpCode::CPUI_CALLOTHER && implied {
             continue;
         }
@@ -110,12 +123,19 @@ fn pure_dispatch(fd: &Funcdata, blk: BlockId) -> bool {
 
 /// Does the statement rooted at `op` execute an instruction inside `handler`'s
 /// ranges? The statement holds `op` and the ops whose outputs it inlines.
-pub(super) fn statement_in_range(fd: &Funcdata, table: &CatchTable, handler: u64, op: OpId) -> bool {
+pub(super) fn statement_in_range(
+    fd: &Funcdata,
+    table: &CatchTable,
+    handler: u64,
+    op: OpId,
+) -> bool {
     let mut stack = vec![op];
     let mut seen = 0;
     while let Some(cur) = stack.pop() {
         seen += 1;
-        let Some(o) = fd.obank().get(cur) else { continue };
+        let Some(o) = fd.obank().get(cur) else {
+            continue;
+        };
         if table.covers(handler, o.get_addr().get_offset()) {
             return true;
         }
@@ -123,7 +143,9 @@ pub(super) fn statement_in_range(fd: &Funcdata, table: &CatchTable, handler: u64
             break;
         }
         for i in 0..o.num_input() {
-            let Some(v) = o.get_in(i).and_then(|v| fd.vbank().get(v)) else { continue };
+            let Some(v) = o.get_in(i).and_then(|v| fd.vbank().get(v)) else {
+                continue;
+            };
             if v.is_implied() {
                 if let Some(def) = v.get_def() {
                     stack.push(def);
@@ -137,13 +159,23 @@ pub(super) fn statement_in_range(fd: &Funcdata, table: &CatchTable, handler: u64
 impl PrintC {
     /// The `try` statement the BlockIf `blk` opens, with the enclosing list's
     /// `siblings` after it.
-    pub(super) fn java_try_shape(&self, fd: &Funcdata, blk: BlockId, siblings: &[BlockId]) -> Option<TryShape> {
+    pub(super) fn java_try_shape(
+        &self,
+        fd: &Funcdata,
+        blk: BlockId,
+        siblings: &[BlockId],
+    ) -> Option<TryShape> {
         let table = self.java_catches.as_ref()?;
         let (first, _) = if_dispatch(fd, blk)?;
         let ranges = table.ranges(first);
         let sb = fd.sblocks_ref();
         let cond = sb.block(blk).get_block(0);
-        let mut shape = TryShape { cond, catches: Vec::new(), body: Part::Siblings(0), consumed: 0 };
+        let mut shape = TryShape {
+            cond,
+            catches: Vec::new(),
+            body: Part::Siblings(0),
+            consumed: 0,
+        };
         let mut cur = blk;
         loop {
             let (handler, target) = if_dispatch(fd, cur)?;
@@ -209,7 +241,11 @@ impl PrintC {
 
     /// Does `shape` print from the BlockIf alone, without the list around it?
     pub(super) fn java_try_standalone(shape: &TryShape) -> bool {
-        matches!(shape.body, Part::Block(_)) && shape.catches.iter().all(|c| !matches!(c.1, Part::Siblings(_)))
+        matches!(shape.body, Part::Block(_))
+            && shape
+                .catches
+                .iter()
+                .all(|c| !matches!(c.1, Part::Siblings(_)))
     }
 
     /// The statements a part prints, as list elements (nested lists flattened).
@@ -233,7 +269,13 @@ impl PrintC {
 
     /// Can an instruction of `blk` throw (of a straddling block, only those past
     /// the protected range)?
-    fn part_can_throw(&self, fd: &Funcdata, table: &CatchTable, (blk, filter): Piece, handler: u64) -> bool {
+    fn part_can_throw(
+        &self,
+        fd: &Funcdata,
+        table: &CatchTable,
+        (blk, filter): Piece,
+        handler: u64,
+    ) -> bool {
         let sb = fd.sblocks_ref();
         let mut stack = vec![blk];
         while let Some(b) = stack.pop() {
@@ -241,7 +283,9 @@ impl PrintC {
                 let mut cur = fd.bb_op_head(bb);
                 while let Some(op) = cur {
                     cur = fd.bb_op_next(op);
-                    let Some(addr) = fd.obank().get(op).map(|o| o.get_addr().get_offset()) else { continue };
+                    let Some(addr) = fd.obank().get(op).map(|o| o.get_addr().get_offset()) else {
+                        continue;
+                    };
                     if filter.is_some_and(|inside| table.covers(handler, addr) != inside) {
                         continue;
                     }
@@ -258,11 +302,16 @@ impl PrintC {
 
     /// Does the basic block `blk` hold statements past `handler`'s ranges?
     fn straddles(&self, fd: &Funcdata, table: &CatchTable, blk: BlockId, handler: u64) -> bool {
-        let Some(bb) = basic_of(fd, blk) else { return false };
+        let Some(bb) = basic_of(fd, blk) else {
+            return false;
+        };
         let mut cur = fd.bb_op_head(bb);
         while let Some(op) = cur {
             cur = fd.bb_op_next(op);
-            if !self.is_suppressed_statement(fd, op) && self.java_visible(fd, bb, op) && !statement_in_range(fd, table, handler, op) {
+            if !self.is_suppressed_statement(fd, op)
+                && self.java_visible(fd, bb, op)
+                && !statement_in_range(fd, table, handler, op)
+            {
                 return true;
             }
         }
@@ -272,30 +321,47 @@ impl PrintC {
     /// Does control leave `blk` only by `return` or `throw`?
     fn part_exits(&self, fd: &Funcdata, blk: BlockId) -> bool {
         let sb = fd.sblocks_ref();
-        let Some(bb) = sb.get_exit_leaf(blk).and_then(|l| sb.block(l).get_copy()) else { return false };
-        fd.bb_op_tail(bb).and_then(|op| fd.obank().get(op)).is_some_and(|o| o.code() == OpCode::CPUI_RETURN)
+        let Some(bb) = sb.get_exit_leaf(blk).and_then(|l| sb.block(l).get_copy()) else {
+            return false;
+        };
+        fd.bb_op_tail(bb)
+            .and_then(|op| fd.obank().get(op))
+            .is_some_and(|o| o.code() == OpCode::CPUI_RETURN)
     }
 
     /// Print the `try` statement `shape`; returns how many of `siblings` it
     /// printed.
-    pub(super) fn emit_java_try(&mut self, fd: &Funcdata, arch: &Architecture, shape: TryShape, siblings: &[BlockId]) -> usize {
-        let Some(table) = self.java_catches.clone() else { return 0 };
+    pub(super) fn emit_java_try(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        shape: TryShape,
+        siblings: &[BlockId],
+    ) -> usize {
+        let Some(table) = self.java_catches.clone() else {
+            return 0;
+        };
         let first = shape.catches[0].0;
         // The protected statements and the rest, in units the caller can skip:
         // the body block, or each sibling.
         let units: Vec<Vec<BlockId>> = match shape.body {
-            Part::Block(_) | Part::Empty | Part::Goto(_) => vec![self.part_elements(fd, shape.body, siblings)],
-            Part::Siblings(k) => {
-                (k..siblings.len()).map(|i| self.part_elements(fd, Part::Block(siblings[i]), siblings)).collect()
+            Part::Block(_) | Part::Empty | Part::Goto(_) => {
+                vec![self.part_elements(fd, shape.body, siblings)]
             }
+            Part::Siblings(k) => (k..siblings.len())
+                .map(|i| self.part_elements(fd, Part::Block(siblings[i]), siblings))
+                .collect(),
         };
         let mut inside: Vec<Piece> = Vec::new();
         let mut after: Vec<Piece> = Vec::new();
         // The protected statements run to the last one inside the ranges; a
         // statement between two of them that cannot throw is inside too (D8
         // leaves such instructions out of the ranges).
-        let flat: Vec<(usize, BlockId)> =
-            units.iter().enumerate().flat_map(|(u, list)| list.iter().map(move |&b| (u, b))).collect();
+        let flat: Vec<(usize, BlockId)> = units
+            .iter()
+            .enumerate()
+            .flat_map(|(u, list)| list.iter().map(move |&b| (u, b)))
+            .collect();
         let mut split = 0;
         for (k, &(_, b)) in flat.iter().enumerate() {
             if front_addr(fd, b).is_some_and(|a| table.covers(first, a)) {
@@ -304,9 +370,17 @@ impl PrintC {
                 break;
             }
         }
-        let used_units = flat.get(..split).and_then(|s| s.last()).map_or(0, |&(u, _)| u + 1);
+        let used_units = flat
+            .get(..split)
+            .and_then(|s| s.last())
+            .map_or(0, |&(u, _)| u + 1);
         inside.extend(flat[..split].iter().map(|&(_, b)| (b, None)));
-        after.extend(flat[split..].iter().filter(|&&(u, _)| u < used_units).map(|&(_, b)| (b, None)));
+        after.extend(
+            flat[split..]
+                .iter()
+                .filter(|&&(u, _)| u < used_units)
+                .map(|&(_, b)| (b, None)),
+        );
         if let Some(&(last, _)) = inside.last() {
             if self.straddles(fd, &table, last, first) {
                 inside.last_mut().expect("last").1 = Some(true);
@@ -327,7 +401,10 @@ impl PrintC {
                 Part::Goto(_) => true,
             });
             if !clauses_exit {
-                if after.iter().any(|&p| self.part_can_throw(fd, &table, p, first)) {
+                if after
+                    .iter()
+                    .any(|&p| self.part_can_throw(fd, &table, p, first))
+                {
                     loose_from = Some(inside.len());
                 }
                 if loose_from.is_none() {
@@ -343,12 +420,14 @@ impl PrintC {
         let mut registered_pending = false;
         let mut my_pending_gen = 0u64;
         if self.context.is_set(modifiers::PENDING_BRACE) {
-            self.emit.set_pending_brace(to_emit_brace(self.options.brace_ifelse));
+            self.emit
+                .set_pending_brace(to_emit_brace(self.options.brace_ifelse));
             my_pending_gen = self.emit.pending_reg_gen();
             registered_pending = true;
         }
         self.context.push_mod();
-        self.context.unset_mod(modifiers::NO_BRANCH | modifiers::ONLY_BRANCH | modifiers::PENDING_BRACE);
+        self.context
+            .unset_mod(modifiers::NO_BRANCH | modifiers::ONLY_BRANCH | modifiers::PENDING_BRACE);
 
         self.context.push_mod();
         self.context.set_mod(modifiers::NO_BRANCH);
@@ -357,7 +436,11 @@ impl PrintC {
         self.emit_comment_block_tree(fd, shape.cond);
 
         self.emit.tag_line();
-        let my_pending_indent = if registered_pending { self.emit.pending_fired_indent(my_pending_gen) } else { -1 };
+        let my_pending_indent = if registered_pending {
+            self.emit.pending_fired_indent(my_pending_gen)
+        } else {
+            -1
+        };
         self.emit.print("try", SyntaxHighlight::KeywordColor);
         self.emit_java_try_part(fd, arch, &inside, first, loose_from);
         for &(handler, arm) in &shape.catches {
@@ -366,7 +449,8 @@ impl PrintC {
             self.emit.print("catch", SyntaxHighlight::KeywordColor);
             self.emit.spaces(1, 0);
             self.emit.print("(", SyntaxHighlight::NoColor);
-            self.emit.print(&table.type_text(handler), SyntaxHighlight::TypeColor);
+            self.emit
+                .print(&table.type_text(handler), SyntaxHighlight::TypeColor);
             self.emit.spaces(1, 0);
             self.emit.print(&name, SyntaxHighlight::VarColor);
             self.emit.print(")", SyntaxHighlight::NoColor);
@@ -375,12 +459,17 @@ impl PrintC {
                 self.emit_java_catch_goto(fd, blk);
                 continue;
             }
-            let clause: Vec<Piece> = self.part_elements(fd, arm, siblings).into_iter().map(|b| (b, None)).collect();
+            let clause: Vec<Piece> = self
+                .part_elements(fd, arm, siblings)
+                .into_iter()
+                .map(|b| (b, None))
+                .collect();
             self.emit_java_try_part(fd, arch, &clause, first, None);
         }
         self.context.pop_mod();
         if my_pending_indent >= 0 {
-            self.emit.close_brace_indent(self.lang().kw_close_curly, my_pending_indent);
+            self.emit
+                .close_brace_indent(self.lang().kw_close_curly, my_pending_indent);
         }
         self.context.push_mod();
         self.context.set_mod(modifiers::NO_BRANCH);
@@ -389,7 +478,13 @@ impl PrintC {
         consumed
     }
 
-    fn emit_java_try_piece(&mut self, fd: &Funcdata, arch: &Architecture, (blk, filter): Piece, handler: u64) {
+    fn emit_java_try_piece(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        (blk, filter): Piece,
+        handler: u64,
+    ) {
         let id = self.emit.begin_block(0);
         self.java_push_filter(fd, blk, filter, handler);
         self.emit_block(fd, arch, blk);
@@ -399,9 +494,18 @@ impl PrintC {
 
     /// Filters are keyed by the basic block a straddling `BlockCopy` mirrors,
     /// the block `emit_basic_block_ops` prints.
-    fn java_push_filter(&mut self, fd: &Funcdata, blk: BlockId, filter: Option<bool>, handler: u64) {
+    fn java_push_filter(
+        &mut self,
+        fd: &Funcdata,
+        blk: BlockId,
+        filter: Option<bool>,
+        handler: u64,
+    ) {
         if let (Some(inside), Some(bb)) = (filter, basic_of(fd, blk)) {
-            self.java_block_filters.entry(bb).or_default().push((handler, inside));
+            self.java_block_filters
+                .entry(bb)
+                .or_default()
+                .push((handler, inside));
         }
     }
 
@@ -416,25 +520,41 @@ impl PrintC {
     /// Does `op` in the basic block `bb` pass the ranges a straddling block
     /// prints under?
     pub(super) fn java_visible(&self, fd: &Funcdata, bb: BlockId, op: OpId) -> bool {
-        let (Some(list), Some(table)) = (self.java_block_filters.get(&bb), self.java_catches.as_ref()) else {
+        let (Some(list), Some(table)) =
+            (self.java_block_filters.get(&bb), self.java_catches.as_ref())
+        else {
             return true;
         };
-        list.iter().all(|&(handler, inside)| statement_in_range(fd, table, handler, op) == inside)
+        list.iter()
+            .all(|&(handler, inside)| statement_in_range(fd, table, handler, op) == inside)
     }
 
     /// A braced run of statements.
     /// A braced run of statements. From `loose_from` on, the statements lie
     /// past the protected range but print inside it (an exception they raise
     /// would not reach the catch); a comment says so.
-    fn emit_java_try_part(&mut self, fd: &Funcdata, arch: &Architecture, pieces: &[Piece], handler: u64, loose_from: Option<usize>) {
+    fn emit_java_try_part(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        pieces: &[Piece],
+        handler: u64,
+        loose_from: Option<usize>,
+    ) {
         self.context.push_mod();
         self.context.set_mod(modifiers::NO_BRANCH);
-        let id = self.emit.open_brace_indent(self.lang().kw_open_curly, to_emit_brace(self.options.brace_ifelse));
+        let id = self.emit.open_brace_indent(
+            self.lang().kw_open_curly,
+            to_emit_brace(self.options.brace_ifelse),
+        );
         match loose_from {
             Some(k) => {
                 self.emit_java_piece_run(fd, arch, &pieces[..k], handler);
                 self.emit.tag_line();
-                self.emit.print("// outside the try range from here: an exception below skips the catch", SyntaxHighlight::CommentColor);
+                self.emit.print(
+                    "// outside the try range from here: an exception below skips the catch",
+                    SyntaxHighlight::CommentColor,
+                );
                 self.emit_java_piece_run(fd, arch, &pieces[k..], handler);
             }
             None => self.emit_java_piece_run(fd, arch, pieces, handler),
@@ -444,7 +564,13 @@ impl PrintC {
     }
 
     /// Statements in order, a straddling block printing only its share.
-    fn emit_java_piece_run(&mut self, fd: &Funcdata, arch: &Architecture, pieces: &[Piece], handler: u64) {
+    fn emit_java_piece_run(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        pieces: &[Piece],
+        handler: u64,
+    ) {
         for &(blk, filter) in pieces {
             self.java_push_filter(fd, blk, filter, handler);
         }
@@ -458,10 +584,17 @@ impl PrintC {
     /// A catch clause that is one jump: `{ continue; }`, `{ goto L; }`.
     fn emit_java_catch_goto(&mut self, fd: &Funcdata, blk: BlockId) {
         let sb = fd.sblocks_ref();
-        let Some(target) = sb.block(blk).get_if_goto_target() else { return };
-        let gototype = self.goto_rewrites.gototype(blk, sb.block(blk).get_if_goto_type());
+        let Some(target) = sb.block(blk).get_if_goto_target() else {
+            return;
+        };
+        let gototype = self
+            .goto_rewrites
+            .gototype(blk, sb.block(blk).get_if_goto_type());
         let cond = sb.block(blk).get_block(0);
-        let id = self.emit.open_brace_indent(self.lang().kw_open_curly, to_emit_brace(self.options.brace_ifelse));
+        let id = self.emit.open_brace_indent(
+            self.lang().kw_open_curly,
+            to_emit_brace(self.options.brace_ifelse),
+        );
         self.emit.tag_line();
         self.emit_goto_statement(fd, cond, target, gototype);
         self.emit.close_brace_indent(self.lang().kw_close_curly, id);
@@ -497,4 +630,3 @@ impl PrintC {
         "e".to_string()
     }
 }
-

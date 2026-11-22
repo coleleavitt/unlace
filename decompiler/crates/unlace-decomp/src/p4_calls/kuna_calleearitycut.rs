@@ -82,7 +82,7 @@ use unlace_base::address::Address;
 use unlace_base::marshal::ElementId;
 use unlace_base::types::int4;
 
-use crate::p4_calls::kuna_calleearitybody::{is_register, BodyTrial};
+use crate::p4_calls::kuna_calleearitybody::{BodyTrial, is_register};
 
 /// Marshaling element `<calleearitycut>` (kuna 4000+ range; 4153 = calleeretpreserves).
 pub const ELEM_CALLEEARITYCUT: ElementId = ElementId::new("calleearitycut", 4154);
@@ -94,16 +94,16 @@ pub const ELEM_CALLEEARITYCUT: ElementId = ElementId::new("calleearitycut", 4154
 /// prototype model's own input locations — both exactly as
 /// [`crate::p4_calls::kuna_calleearitybody::plan_from_body`] built them.
 /// [`crate::p4_calls::kuna_calleearityscratch`] widens the quiet test.
-pub fn accepts_cut_run(
-    trials: &[BodyTrial],
-    picked: &[int4],
-    entries: &[(Address, int4)],
-) -> bool {
-    let (Some(&first), Some(&last)) = (picked.first(), picked.last()) else { return false };
+pub fn accepts_cut_run(trials: &[BodyTrial], picked: &[int4], entries: &[(Address, int4)]) -> bool {
+    let (Some(&first), Some(&last)) = (picked.first(), picked.last()) else {
+        return false;
+    };
     if (last - first + 1) as usize != picked.len() {
         return false; // a hole inside the run would move a later argument forward
     }
-    let Some(bound) = trials.get(last as usize + 1) else { return false };
+    let Some(bound) = trials.get(last as usize + 1) else {
+        return false;
+    };
     let quiet = bound.caller_quiet
         || crate::p4_calls::kuna_calleearityscratch::boundary_is_caller_scratch(bound);
     if !is_register(&bound.addr) || !quiet {
@@ -111,7 +111,9 @@ pub fn accepts_cut_run(
     }
     // The boundary must be an argument location the model actually names: a
     // register trial past the model's own list bounds nothing.
-    entries.iter().any(|(a, sz)| a == &bound.addr && *sz == bound.size)
+    entries
+        .iter()
+        .any(|(a, sz)| a == &bound.addr && *sz == bound.size)
 }
 
 #[cfg(test)]

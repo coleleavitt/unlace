@@ -51,7 +51,10 @@ impl OptionBraceElide {
     pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
-        Ok((val, format!("Single-statement if-body brace elision turned {prop}")))
+        Ok((
+            val,
+            format!("Single-statement if-body brace elision turned {prop}"),
+        ))
     }
 }
 

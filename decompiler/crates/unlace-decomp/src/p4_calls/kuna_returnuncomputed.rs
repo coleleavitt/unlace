@@ -110,7 +110,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::space::{spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{OpId, VarnodeId};
@@ -152,7 +152,12 @@ const MAX_NODES: u32 = 4096;
 /// [`crate::p4_calls::kuna_protoorder`]'s `recovered_output`, where `true` states
 /// the callee's return to every caller ahead of it and `false` states nothing at
 /// all, so the unfinished walk has to take the second.
-fn computes_everywhere(data: &Funcdata, vn: VarnodeId, placed_at: Option<&Address>, globals: bool) -> bool {
+fn computes_everywhere(
+    data: &Funcdata,
+    vn: VarnodeId,
+    placed_at: Option<&Address>,
+    globals: bool,
+) -> bool {
     let mut seen: std::collections::HashSet<VarnodeId> = std::collections::HashSet::new();
     let mut work: Vec<VarnodeId> = vec![vn];
     let mut budget = MAX_NODES;
@@ -166,7 +171,9 @@ fn computes_everywhere(data: &Funcdata, vn: VarnodeId, placed_at: Option<&Addres
         if !seen.insert(cur) {
             continue;
         }
-        let Some(v) = data.vbank().get(cur) else { continue };
+        let Some(v) = data.vbank().get(cur) else {
+            continue;
+        };
         if v.is_constant() {
             continue;
         }
@@ -182,7 +189,9 @@ fn computes_everywhere(data: &Funcdata, vn: VarnodeId, placed_at: Option<&Addres
             }
             continue;
         };
-        let Some(op) = data.obank().get(def) else { continue };
+        let Some(op) = data.obank().get(def) else {
+            continue;
+        };
         if op.code() == OpCode::CPUI_INDIRECT && op.is_indirect_creation() {
             return false;
         }
@@ -216,7 +225,9 @@ fn computes_from(data: &Funcdata, vn: VarnodeId, depth: u32, placed_at: Option<&
     if depth >= MAX_DEPTH {
         return true;
     }
-    let Some(v) = data.vbank().get(vn) else { return true };
+    let Some(v) = data.vbank().get(vn) else {
+        return true;
+    };
     // A literal IS a computed return: `return 0;` is a return value.
     if v.is_constant() {
         return true;
@@ -236,7 +247,9 @@ fn computes_from(data: &Funcdata, vn: VarnodeId, depth: u32, placed_at: Option<&
         }
         return crate::kuna_retinputhalf::is_input_parameter(data, vn);
     };
-    let Some(op) = data.obank().get(def) else { return true };
+    let Some(op) = data.obank().get(def) else {
+        return true;
+    };
     // The callee wrote something here; that is a fact about the callee.
     if op.code() == OpCode::CPUI_INDIRECT && op.is_indirect_creation() {
         return false;
@@ -256,7 +269,9 @@ fn computes_from(data: &Funcdata, vn: VarnodeId, depth: u32, placed_at: Option<&
     if inputs.is_empty() {
         return true;
     }
-    inputs.into_iter().any(|i| computes_from(data, i, depth + 1, placed_at))
+    inputs
+        .into_iter()
+        .any(|i| computes_from(data, i, depth + 1, placed_at))
 }
 
 /// Does every live RETURN of `data` hand back a value the function computed?
@@ -282,8 +297,14 @@ pub fn every_return_computes(data: &Funcdata) -> bool {
 /// data, not a register or frame slot the caller left behind.  `callrettype`
 /// asks it this way ([`crate::p4_calls::kuna_callrettype`]).
 pub fn every_return_computes_with(data: &Funcdata, globals: bool) -> bool {
-    for retop in data.obank().iter_code(OpCode::CPUI_RETURN).collect::<Vec<_>>() {
-        let Some(o) = data.obank().get(retop) else { continue };
+    for retop in data
+        .obank()
+        .iter_code(OpCode::CPUI_RETURN)
+        .collect::<Vec<_>>()
+    {
+        let Some(o) = data.obank().get(retop) else {
+            continue;
+        };
         if o.is_dead() || o.get_halt_type() != 0 || o.num_input() < 2 {
             continue;
         }
@@ -298,7 +319,10 @@ pub fn every_return_computes_with(data: &Funcdata, globals: bool) -> bool {
 
 /// The storage locations `vn` occupies, most significant first: the pieces of
 /// a join, or `vn`'s own storage.
-pub(crate) fn storage_pieces(data: &Funcdata, vn: VarnodeId) -> Option<Vec<(Rc<AddrSpace>, u64, i32)>> {
+pub(crate) fn storage_pieces(
+    data: &Funcdata,
+    vn: VarnodeId,
+) -> Option<Vec<(Rc<AddrSpace>, u64, i32)>> {
     let v = data.vbank().get(vn)?;
     let addr = v.get_addr();
     let space = addr.get_space()?;
@@ -322,14 +346,23 @@ fn spans_two_locations(data: &Funcdata, vn: VarnodeId) -> bool {
 /// Where the `width` bytes of `whole` starting `lsb` bytes above its least
 /// significant byte are stored: the return register (or register of a pair) a
 /// half of the returned value sits in. `None` when they straddle two pieces.
-pub(crate) fn slot_storage(data: &Funcdata, whole: VarnodeId, lsb: i32, width: i32) -> Option<Address> {
+pub(crate) fn slot_storage(
+    data: &Funcdata,
+    whole: VarnodeId,
+    lsb: i32,
+    width: i32,
+) -> Option<Address> {
     let mut lsb = lsb;
     for (space, off, size) in storage_pieces(data, whole)?.into_iter().rev() {
         if lsb < size {
             if lsb + width > size {
                 return None;
             }
-            let rel = if space.is_big_endian() { size - lsb - width } else { lsb };
+            let rel = if space.is_big_endian() {
+                size - lsb - width
+            } else {
+                lsb
+            };
             let at = space.wrap_offset(off.wrapping_add(rel as u64));
             return Some(Address::new(space, at));
         }
@@ -350,7 +383,9 @@ fn zero_low_pair(data: &Funcdata, def: OpId) -> Option<(VarnodeId, i32, VarnodeI
     if !sa.is_constant() {
         return None;
     }
-    let ext = data.obank().get(data.vbank().get(op.get_in(0)?)?.get_def()?)?;
+    let ext = data
+        .obank()
+        .get(data.vbank().get(op.get_in(0)?)?.get_def()?)?;
     if ext.code() != OpCode::CPUI_INT_ZEXT {
         return None;
     }
@@ -388,23 +423,33 @@ pub fn strip_uncomputed_return_piece(data: &mut Funcdata) -> bool {
     let mut drops: Vec<(OpId, OpId)> = Vec::new();
     let mut zeros: Vec<(OpId, i32, OpId)> = Vec::new();
     let moved = |data: &Funcdata, vn: VarnodeId, slot: &Address, size: i32| {
-        crate::kuna_retinputhalf::is_moved_back(data, slot, size) && computes_from(data, vn, 0, None)
+        crate::kuna_retinputhalf::is_moved_back(data, slot, size)
+            && computes_from(data, vn, 0, None)
     };
-    for retop in data.obank().iter_code(OpCode::CPUI_RETURN).collect::<Vec<_>>() {
-        let Some(o) = data.obank().get(retop) else { continue };
+    for retop in data
+        .obank()
+        .iter_code(OpCode::CPUI_RETURN)
+        .collect::<Vec<_>>()
+    {
+        let Some(o) = data.obank().get(retop) else {
+            continue;
+        };
         if o.is_dead() || o.get_halt_type() != 0 || o.num_input() < 2 {
             continue;
         }
         let Some(joined) = o.get_in(1) else { continue };
-        let Some(def) = data.vbank().get(joined).and_then(|v| v.get_def()) else { continue };
+        let Some(def) = data.vbank().get(joined).and_then(|v| v.get_def()) else {
+            continue;
+        };
         if let Some((hi, lo_size, whole)) = zero_low_pair(data, def) {
             if !data.kuna_pairs_first_low() || !spans_two_locations(data, whole) {
                 continue;
             }
             let hi_size = data.vbank().get(hi).map_or(0, |v| v.get_size());
-            let (Some(hi_slot), Some(_)) =
-                (slot_storage(data, whole, lo_size, hi_size), slot_storage(data, whole, 0, lo_size))
-            else {
+            let (Some(hi_slot), Some(_)) = (
+                slot_storage(data, whole, lo_size, hi_size),
+                slot_storage(data, whole, 0, lo_size),
+            ) else {
                 continue;
             };
             if !computes_from(data, hi, 0, Some(&hi_slot)) && !moved(data, hi, &hi_slot, hi_size) {
@@ -412,7 +457,9 @@ pub fn strip_uncomputed_return_piece(data: &mut Funcdata) -> bool {
             }
             continue;
         }
-        let Some(piece) = data.obank().get(def) else { continue };
+        let Some(piece) = data.obank().get(def) else {
+            continue;
+        };
         // Only the two-register join return recovery builds; anything else is
         // someone else's op and stays.
         if piece.code() != OpCode::CPUI_PIECE || piece.num_input() != 2 {
@@ -425,10 +472,16 @@ pub fn strip_uncomputed_return_piece(data: &mut Funcdata) -> bool {
         if crate::kuna_bejoin::first_register_holds_high(data, whole) {
             continue;
         }
-        let (hi_addr, hi_size, lo_addr, lo_size) = match (data.vbank().get(hi), data.vbank().get(lo)) {
-            (Some(h), Some(l)) => (h.get_addr().clone(), h.get_size(), l.get_addr().clone(), l.get_size()),
-            _ => continue,
-        };
+        let (hi_addr, hi_size, lo_addr, lo_size) =
+            match (data.vbank().get(hi), data.vbank().get(lo)) {
+                (Some(h), Some(l)) => (
+                    h.get_addr().clone(),
+                    h.get_size(),
+                    l.get_addr().clone(),
+                    l.get_size(),
+                ),
+                _ => continue,
+            };
         let hi_slot = slot_storage(data, whole, lo_size, hi_size).unwrap_or(hi_addr);
         let lo_slot = slot_storage(data, whole, 0, lo_size).unwrap_or(lo_addr);
         let hi_placed = computes_from(data, hi, 0, Some(&hi_slot));
@@ -492,7 +545,13 @@ pub fn strip_uncomputed_return_piece(data: &mut Funcdata) -> bool {
     let mut scratch: Vec<OpId> = Vec::new();
     for (retop, piece) in drops {
         data.op_remove_input(retop, 1);
-        if data.obank().get(piece).and_then(|o| o.get_out()).and_then(|v| data.vbank().get(v)).is_some_and(|v| v.has_no_descend()) {
+        if data
+            .obank()
+            .get(piece)
+            .and_then(|o| o.get_out())
+            .and_then(|v| data.vbank().get(v))
+            .is_some_and(|v| v.has_no_descend())
+        {
             data.op_destroy_recursive(piece, &mut scratch);
         }
     }

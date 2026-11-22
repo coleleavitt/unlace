@@ -33,18 +33,56 @@ fn pure(code: OpCode) -> bool {
     use OpCode::*;
     matches!(
         code,
-        CPUI_COPY | CPUI_INT_ADD | CPUI_INT_SUB | CPUI_INT_AND | CPUI_INT_OR | CPUI_INT_XOR | CPUI_INT_MULT
-            | CPUI_INT_LEFT | CPUI_INT_RIGHT | CPUI_INT_SRIGHT | CPUI_INT_EQUAL | CPUI_INT_NOTEQUAL | CPUI_INT_LESS
-            | CPUI_INT_LESSEQUAL | CPUI_INT_SLESS | CPUI_INT_SLESSEQUAL | CPUI_INT_ZEXT | CPUI_INT_SEXT
-            | CPUI_SUBPIECE | CPUI_INT_2COMP | CPUI_INT_NEGATE | CPUI_BOOL_NEGATE | CPUI_BOOL_AND | CPUI_BOOL_OR
-            | CPUI_BOOL_XOR | CPUI_PTRADD | CPUI_PTRSUB | CPUI_CAST | CPUI_INT_CARRY | CPUI_INT_SCARRY
-            | CPUI_INT_SBORROW | CPUI_POPCOUNT
+        CPUI_COPY
+            | CPUI_INT_ADD
+            | CPUI_INT_SUB
+            | CPUI_INT_AND
+            | CPUI_INT_OR
+            | CPUI_INT_XOR
+            | CPUI_INT_MULT
+            | CPUI_INT_LEFT
+            | CPUI_INT_RIGHT
+            | CPUI_INT_SRIGHT
+            | CPUI_INT_EQUAL
+            | CPUI_INT_NOTEQUAL
+            | CPUI_INT_LESS
+            | CPUI_INT_LESSEQUAL
+            | CPUI_INT_SLESS
+            | CPUI_INT_SLESSEQUAL
+            | CPUI_INT_ZEXT
+            | CPUI_INT_SEXT
+            | CPUI_SUBPIECE
+            | CPUI_INT_2COMP
+            | CPUI_INT_NEGATE
+            | CPUI_BOOL_NEGATE
+            | CPUI_BOOL_AND
+            | CPUI_BOOL_OR
+            | CPUI_BOOL_XOR
+            | CPUI_PTRADD
+            | CPUI_PTRSUB
+            | CPUI_CAST
+            | CPUI_INT_CARRY
+            | CPUI_INT_SCARRY
+            | CPUI_INT_SBORROW
+            | CPUI_POPCOUNT
     )
 }
 
 fn commutative(code: OpCode) -> bool {
     use OpCode::*;
-    matches!(code, CPUI_INT_ADD | CPUI_INT_AND | CPUI_INT_OR | CPUI_INT_XOR | CPUI_INT_MULT | CPUI_INT_EQUAL | CPUI_INT_NOTEQUAL | CPUI_BOOL_AND | CPUI_BOOL_OR | CPUI_BOOL_XOR)
+    matches!(
+        code,
+        CPUI_INT_ADD
+            | CPUI_INT_AND
+            | CPUI_INT_OR
+            | CPUI_INT_XOR
+            | CPUI_INT_MULT
+            | CPUI_INT_EQUAL
+            | CPUI_INT_NOTEQUAL
+            | CPUI_BOOL_AND
+            | CPUI_BOOL_OR
+            | CPUI_BOOL_XOR
+    )
 }
 
 /// A constant, or a COPY chain of one.
@@ -67,7 +105,12 @@ struct Loop {
 }
 
 fn defined_in(data: &Funcdata, v: VarnodeId, set: &BTreeSet<BlockId>) -> bool {
-    data.vbank().get(v).and_then(|n| n.get_def()).and_then(|d| data.obank().get(d)).and_then(|o| o.get_parent()).is_some_and(|b| set.contains(&b))
+    data.vbank()
+        .get(v)
+        .and_then(|n| n.get_def())
+        .and_then(|d| data.obank().get(d))
+        .and_then(|o| o.get_parent())
+        .is_some_and(|b| set.contains(&b))
 }
 
 fn find_loop(data: &Funcdata, header: BlockId) -> Option<Loop> {
@@ -80,7 +123,9 @@ fn find_loop(data: &Funcdata, header: BlockId) -> Option<Loop> {
         if tail == entry {
             continue;
         }
-        let Some((t, f)) = taken(data, tail) else { continue };
+        let Some((t, f)) = taken(data, tail) else {
+            continue;
+        };
         if t != header && f != header {
             continue;
         }
@@ -112,7 +157,8 @@ fn find_loop(data: &Funcdata, header: BlockId) -> Option<Loop> {
         // Only the tail leaves the loop, and only to the exit.
         let leaves = blocks.iter().any(|&b| {
             let bb = data.bblocks_ref().block(b);
-            (0..bb.size_out()).any(|i| !blocks.contains(&bb.get_out(i)) && !(b == tail && bb.get_out(i) == exit))
+            (0..bb.size_out())
+                .any(|i| !blocks.contains(&bb.get_out(i)) && !(b == tail && bb.get_out(i) == exit))
         });
         if leaves {
             continue;
@@ -126,8 +172,16 @@ fn find_loop(data: &Funcdata, header: BlockId) -> Option<Loop> {
             continue;
         };
         let entry_side = if guard == entry { header } else { entry };
-        let Some((gt, gf)) = taken(data, guard) else { continue };
-        let guard_exit = if gt == entry_side { gf } else if gf == entry_side { gt } else { continue };
+        let Some((gt, gf)) = taken(data, guard) else {
+            continue;
+        };
+        let guard_exit = if gt == entry_side {
+            gf
+        } else if gf == entry_side {
+            gt
+        } else {
+            continue;
+        };
         if guard_exit == entry_side || blocks.contains(&guard_exit) {
             continue;
         }
@@ -139,7 +193,16 @@ fn find_loop(data: &Funcdata, header: BlockId) -> Option<Loop> {
             }
             phis.push((op, o.get_in(1 - back as int4)?, o.get_in(back as int4)?));
         }
-        return Some(Loop { guard, entry, header, tail, exit, guard_exit, blocks, phis });
+        return Some(Loop {
+            guard,
+            entry,
+            header,
+            tail,
+            exit,
+            guard_exit,
+            blocks,
+            phis,
+        });
     }
     None
 }
@@ -151,7 +214,11 @@ fn condition(data: &Funcdata, b: BlockId, target: BlockId) -> Option<(VarnodeId,
     let mut cond = data.obank().get(data.bb_op_tail(b)?)?.get_in(1)?;
     let mut sense = t == target;
     for _ in 0..4 {
-        let d = data.vbank().get(cond)?.get_def().and_then(|d| data.obank().get(d));
+        let d = data
+            .vbank()
+            .get(cond)?
+            .get_def()
+            .and_then(|d| data.obank().get(d));
         match d {
             Some(o) if o.code() == OpCode::CPUI_BOOL_NEGATE => {
                 cond = o.get_in(0)?;
@@ -180,7 +247,9 @@ impl Rotation<'_> {
                 return Some(phi);
             }
             let d = data.obank().get(data.vbank().get(v)?.get_def()?)?;
-            if d.code() != OpCode::CPUI_COPY || !d.get_parent().is_some_and(|b| self.l.blocks.contains(&b)) {
+            if d.code() != OpCode::CPUI_COPY
+                || !d.get_parent().is_some_and(|b| self.l.blocks.contains(&b))
+            {
                 return None;
             }
             v = d.get_in(0)?;
@@ -197,8 +266,12 @@ impl Rotation<'_> {
         if depth > 8 {
             return false;
         }
-        let Some(d) = data.vbank().get(v).and_then(|n| n.get_def()) else { return false };
-        let Some(o) = data.obank().get(d) else { return false };
+        let Some(d) = data.vbank().get(v).and_then(|n| n.get_def()) else {
+            return false;
+        };
+        let Some(o) = data.obank().get(d) else {
+            return false;
+        };
         if !pure(o.code()) {
             return false;
         }
@@ -229,21 +302,44 @@ impl Rotation<'_> {
         if depth > 8 {
             return false;
         }
-        let def = |v: VarnodeId| data.vbank().get(v).and_then(|n| n.get_def()).and_then(|d| data.obank().get(d));
-        let (Some(a), Some(b)) = (def(g), def(f)) else { return false };
+        let def = |v: VarnodeId| {
+            data.vbank()
+                .get(v)
+                .and_then(|n| n.get_def())
+                .and_then(|d| data.obank().get(d))
+        };
+        let (Some(a), Some(b)) = (def(g), def(f)) else {
+            return false;
+        };
         if a.code() != b.code() || a.num_input() != b.num_input() || !pure(a.code()) {
             return false;
         }
-        let ins = |o: &crate::op::PcodeOp| (0..o.num_input()).map(|i| o.get_in(i)).collect::<Option<Vec<_>>>();
-        let (Some(ai), Some(bi)) = (ins(a), ins(b)) else { return false };
-        let pairwise = |x: &[VarnodeId], y: &[VarnodeId]| x.iter().zip(y).all(|(&p, &q)| self.same(data, p, q, depth + 1));
-        pairwise(&ai, &bi) || (commutative(a.code()) && ai.len() == 2 && pairwise(&ai, &[bi[1], bi[0]]))
+        let ins = |o: &crate::op::PcodeOp| {
+            (0..o.num_input())
+                .map(|i| o.get_in(i))
+                .collect::<Option<Vec<_>>>()
+        };
+        let (Some(ai), Some(bi)) = (ins(a), ins(b)) else {
+            return false;
+        };
+        let pairwise = |x: &[VarnodeId], y: &[VarnodeId]| {
+            x.iter()
+                .zip(y)
+                .all(|(&p, &q)| self.same(data, p, q, depth + 1))
+        };
+        pairwise(&ai, &bi)
+            || (commutative(a.code()) && ai.len() == 2 && pairwise(&ai, &[bi[1], bi[0]]))
     }
 }
 
 /// `(exit MULTIEQUAL, value read from the new header)` per MULTIEQUAL of the
 /// exit, when each can move.
-fn exit_values(data: &Funcdata, l: &Loop, back: &BTreeMap<VarnodeId, VarnodeId>, entry_of: &BTreeMap<VarnodeId, VarnodeId>) -> Option<Vec<(OpId, VarnodeId)>> {
+fn exit_values(
+    data: &Funcdata,
+    l: &Loop,
+    back: &BTreeMap<VarnodeId, VarnodeId>,
+    entry_of: &BTreeMap<VarnodeId, VarnodeId>,
+) -> Option<Vec<(OpId, VarnodeId)>> {
     let eb = data.bblocks_ref().block(l.exit);
     let (gi, ti) = (eb.get_in_index(l.guard), eb.get_in_index(l.tail));
     if gi < 0 || ti < 0 {
@@ -261,7 +357,8 @@ fn exit_values(data: &Funcdata, l: &Loop, back: &BTreeMap<VarnodeId, VarnodeId>,
             None if !defined_in(data, vt, &l.blocks) => (vt, vt),
             None => return None,
         };
-        let same = vg == at_entry || matches!((constant(data, vg), constant(data, at_entry)), (Some(a), Some(b)) if a == b);
+        let same = vg == at_entry
+            || matches!((constant(data, vg), constant(data, at_entry)), (Some(a), Some(b)) if a == b);
         if !same {
             return None;
         }
@@ -282,10 +379,17 @@ fn twin_return(data: &Funcdata, l: &Loop, rot: &Rotation) -> Option<Vec<(OpId, i
         let ok = bb.size_in() == 1
             && bb.get_in(0) == from
             && data.obank().get(ret)?.code() == OpCode::CPUI_RETURN
-            && copies.iter().all(|&c| data.obank().get(c).is_some_and(|o| o.code() == OpCode::CPUI_COPY));
+            && copies.iter().all(|&c| {
+                data.obank()
+                    .get(c)
+                    .is_some_and(|o| o.code() == OpCode::CPUI_COPY)
+            });
         ok.then(|| (copies.to_vec(), ret))
     };
-    let ((tcopies, rt), (_, rg)) = (only_return(l.exit, l.tail)?, only_return(l.guard_exit, l.guard)?);
+    let ((tcopies, rt), (_, rg)) = (
+        only_return(l.exit, l.tail)?,
+        only_return(l.guard_exit, l.guard)?,
+    );
     let (ot, og) = (data.obank().get(rt)?, data.obank().get(rg)?);
     if ot.num_input() != og.num_input() {
         return None;
@@ -313,14 +417,24 @@ fn twin_return(data: &Funcdata, l: &Loop, rot: &Rotation) -> Option<Vec<(OpId, i
 fn side_effect_free(data: &Funcdata, b: BlockId) -> bool {
     data.bb_ops(b).into_iter().all(|op| {
         data.obank().get(op).is_some_and(|o| {
-            !matches!(o.code(), OpCode::CPUI_STORE | OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_CALLOTHER | OpCode::CPUI_LOAD)
+            !matches!(
+                o.code(),
+                OpCode::CPUI_STORE
+                    | OpCode::CPUI_CALL
+                    | OpCode::CPUI_CALLIND
+                    | OpCode::CPUI_CALLOTHER
+                    | OpCode::CPUI_LOAD
+            )
         })
     })
 }
 
 /// `(i, n, unsigned)` when `v` is `i < n` (`INT_SLESS`/`INT_LESS`), or `k <= n`
 /// with a constant `k`, read as `k - 1 < n`.
-fn below(data: &Funcdata, v: VarnodeId) -> Option<(Result<VarnodeId, (u64, int4)>, VarnodeId, bool)> {
+fn below(
+    data: &Funcdata,
+    v: VarnodeId,
+) -> Option<(Result<VarnodeId, (u64, int4)>, VarnodeId, bool)> {
     let o = data.obank().get(data.vbank().get(v)?.get_def()?)?;
     let (a, b) = (o.get_in(0)?, o.get_in(1)?);
     match o.code() {
@@ -332,7 +446,13 @@ fn below(data: &Funcdata, v: VarnodeId) -> Option<(Result<VarnodeId, (u64, int4)
             let (k, size) = constant(data, a).filter(|&(_, s)| (1..=8).contains(&s))?;
             let signed = o.code() == OpCode::CPUI_INT_SLESSEQUAL;
             let min = if signed { 1u64 << (8 * size - 1) } else { 0 };
-            (k & crate::kuna_strlenscan::mask(size) != min).then(|| (Err((k.wrapping_sub(1) & crate::kuna_strlenscan::mask(size), size)), b, !signed))
+            (k & crate::kuna_strlenscan::mask(size) != min).then(|| {
+                (
+                    Err((k.wrapping_sub(1) & crate::kuna_strlenscan::mask(size), size)),
+                    b,
+                    !signed,
+                )
+            })
         }
         _ => None,
     }
@@ -343,22 +463,42 @@ fn below(data: &Funcdata, v: VarnodeId) -> Option<(Result<VarnodeId, (u64, int4)
 /// on every iteration (`i` runs from `x0` up to `n - 1` without wrapping), so
 /// the tail's condition is replaced by that compare, which is the guard's on
 /// the entry value.
-fn counting(data: &Funcdata, rot: &Rotation, (f, f_sense): (VarnodeId, bool), (g, g_sense): (VarnodeId, bool)) -> Option<(VarnodeId, VarnodeId, bool)> {
+fn counting(
+    data: &Funcdata,
+    rot: &Rotation,
+    (f, f_sense): (VarnodeId, bool),
+    (g, g_sense): (VarnodeId, bool),
+) -> Option<(VarnodeId, VarnodeId, bool)> {
     if !g_sense {
         return None;
     }
-    let Some((x, n, unsigned)) = below(data, g) else { return None };
-    let Some(fo) = data.vbank().get(f).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d)) else { return None };
+    let Some((x, n, unsigned)) = below(data, g) else {
+        return None;
+    };
+    let Some(fo) = data
+        .vbank()
+        .get(f)
+        .and_then(|v| v.get_def())
+        .and_then(|d| data.obank().get(d))
+    else {
+        return None;
+    };
     let continue_if_ne = match (fo.code(), f_sense) {
         (OpCode::CPUI_INT_NOTEQUAL, true) | (OpCode::CPUI_INT_EQUAL, false) => true,
         _ => return None,
     };
-    let (Some(a), Some(b)) = (fo.get_in(0), fo.get_in(1)) else { return None };
+    let (Some(a), Some(b)) = (fo.get_in(0), fo.get_in(1)) else {
+        return None;
+    };
     let step_of = |v: VarnodeId| -> Option<VarnodeId> {
         rot.back.get(&v)?;
         let d = data.obank().get(data.vbank().get(v)?.get_def()?)?;
-        let one = d.get_in(1).and_then(|c| data.vbank().get(c)).is_some_and(|c| c.is_constant() && c.get_offset() == 1);
-        (d.code() == OpCode::CPUI_INT_ADD && one && rot.back.get(&v) == d.get_in(0).as_ref()).then_some(v)
+        let one = d
+            .get_in(1)
+            .and_then(|c| data.vbank().get(c))
+            .is_some_and(|c| c.is_constant() && c.get_offset() == 1);
+        (d.code() == OpCode::CPUI_INT_ADD && one && rot.back.get(&v) == d.get_in(0).as_ref())
+            .then_some(v)
     };
     let (i1, bound) = match (step_of(a), step_of(b)) {
         (Some(i1), None) => (i1, b),
@@ -371,7 +511,8 @@ fn counting(data: &Funcdata, rot: &Rotation, (f, f_sense): (VarnodeId, bool), (g
     let x0 = rot.entry[&i1];
     let starts = match x {
         Ok(xv) => rot.same(data, xv, x0, 0),
-        Err((k, size)) => constant(data, x0).is_some_and(|(c, s)| s == size && c & crate::kuna_strlenscan::mask(size) == k),
+        Err((k, size)) => constant(data, x0)
+            .is_some_and(|(c, s)| s == size && c & crate::kuna_strlenscan::mask(size) == k),
     };
     if !starts {
         return None;
@@ -380,11 +521,25 @@ fn counting(data: &Funcdata, rot: &Rotation, (f, f_sense): (VarnodeId, bool), (g
 }
 
 /// Replace the tail's condition by `i1 < bound` (see [`counting`]).
-fn apply_counting(data: &mut Funcdata, l: &Loop, (i1, bound, unsigned): (VarnodeId, VarnodeId, bool)) -> unlace_base::error::KunaResult<()> {
+fn apply_counting(
+    data: &mut Funcdata,
+    l: &Loop,
+    (i1, bound, unsigned): (VarnodeId, VarnodeId, bool),
+) -> unlace_base::error::KunaResult<()> {
     use unlace_base::error::KunaError;
-    let branch = data.bb_op_tail(l.tail).ok_or_else(|| KunaError::lowlevel("looprotate: branch"))?;
-    let at = data.obank().get(branch).map(|o| o.get_addr().clone()).ok_or_else(|| KunaError::lowlevel("looprotate: branch"))?;
-    let code = if unsigned { OpCode::CPUI_INT_LESS } else { OpCode::CPUI_INT_SLESS };
+    let branch = data
+        .bb_op_tail(l.tail)
+        .ok_or_else(|| KunaError::lowlevel("looprotate: branch"))?;
+    let at = data
+        .obank()
+        .get(branch)
+        .map(|o| o.get_addr().clone())
+        .ok_or_else(|| KunaError::lowlevel("looprotate: branch"))?;
+    let code = if unsigned {
+        OpCode::CPUI_INT_LESS
+    } else {
+        OpCode::CPUI_INT_SLESS
+    };
     let cmp = data.new_op(2, at.clone());
     data.op_set_opcode_code(cmp, code);
     data.op_set_input(cmp, i1, 0)?;
@@ -405,41 +560,81 @@ fn apply_counting(data: &mut Funcdata, l: &Loop, (i1, bound, unsigned): (Varnode
 
 fn rotate(data: &mut Funcdata, header: BlockId) -> unlace_base::error::KunaResult<bool> {
     use unlace_base::error::KunaError;
-    let Some(l) = find_loop(data, header) else { return Ok(false) };
+    let Some(l) = find_loop(data, header) else {
+        return Ok(false);
+    };
     if l.phis.is_empty() || (l.entry != l.guard && !side_effect_free(data, l.entry)) {
         return Ok(false);
     }
-    let back: BTreeMap<VarnodeId, VarnodeId> = l.phis.iter().filter_map(|&(phi, _, b)| Some((b, data.obank().get(phi)?.get_out()?))).collect();
+    let back: BTreeMap<VarnodeId, VarnodeId> = l
+        .phis
+        .iter()
+        .filter_map(|&(phi, _, b)| Some((b, data.obank().get(phi)?.get_out()?)))
+        .collect();
     let entry_of: BTreeMap<VarnodeId, VarnodeId> = l.phis.iter().map(|&(_, e, b)| (b, e)).collect();
-    let rot = Rotation { l: &l, back, entry: entry_of };
-    let Some((f, f_sense)) = condition(data, l.tail, l.header) else { return Ok(false) };
-    let entry_side = if l.guard == l.entry { l.header } else { l.entry };
-    let Some((g, g_sense)) = condition(data, l.guard, entry_side) else { return Ok(false) };
+    let rot = Rotation {
+        l: &l,
+        back,
+        entry: entry_of,
+    };
+    let Some((f, f_sense)) = condition(data, l.tail, l.header) else {
+        return Ok(false);
+    };
+    let entry_side = if l.guard == l.entry {
+        l.header
+    } else {
+        l.entry
+    };
+    let Some((g, g_sense)) = condition(data, l.guard, entry_side) else {
+        return Ok(false);
+    };
     let plan = if f_sense == g_sense && rot.same(data, g, f, 0) {
         None
     } else {
-        let Some(plan) = counting(data, &rot, (f, f_sense), (g, g_sense)) else { return Ok(false) };
+        let Some(plan) = counting(data, &rot, (f, f_sense), (g, g_sense)) else {
+            return Ok(false);
+        };
         Some(plan)
     };
     let mut ops = Vec::new();
-    let tail_cond = data.obank().get(data.bb_op_tail(l.tail).ok_or_else(|| KunaError::lowlevel("looprotate: tail"))?).and_then(|o| o.get_in(1)).ok_or_else(|| KunaError::lowlevel("looprotate: cond"))?;
+    let tail_cond = data
+        .obank()
+        .get(
+            data.bb_op_tail(l.tail)
+                .ok_or_else(|| KunaError::lowlevel("looprotate: tail"))?,
+        )
+        .and_then(|o| o.get_in(1))
+        .ok_or_else(|| KunaError::lowlevel("looprotate: cond"))?;
     if plan.is_none() && !rot.movable(data, tail_cond, &mut ops, 0) {
         return Ok(false);
     }
     let (exits, twin) = if l.guard_exit == l.exit {
-        let Some(exits) = exit_values(data, &l, &rot.back, &rot.entry) else { return Ok(false) };
+        let Some(exits) = exit_values(data, &l, &rot.back, &rot.entry) else {
+            return Ok(false);
+        };
         (exits, None)
     } else {
-        let Some(twin) = twin_return(data, &l, &rot) else { return Ok(false) };
+        let Some(twin) = twin_return(data, &l, &rot) else {
+            return Ok(false);
+        };
         (Vec::new(), Some(twin))
     };
     let back = rot.back.clone();
     let cond = match plan {
         Some(plan) => {
             apply_counting(data, &l, plan)?;
-            let c = data.obank().get(data.bb_op_tail(l.tail).ok_or_else(|| KunaError::lowlevel("looprotate: tail"))?).and_then(|o| o.get_in(1)).ok_or_else(|| KunaError::lowlevel("looprotate: cond"))?;
+            let c = data
+                .obank()
+                .get(
+                    data.bb_op_tail(l.tail)
+                        .ok_or_else(|| KunaError::lowlevel("looprotate: tail"))?,
+                )
+                .and_then(|o| o.get_in(1))
+                .ok_or_else(|| KunaError::lowlevel("looprotate: cond"))?;
             if !rot.movable(data, c, &mut ops, 0) {
-                return Err(KunaError::lowlevel("looprotate: counting compare not movable"));
+                return Err(KunaError::lowlevel(
+                    "looprotate: counting compare not movable",
+                ));
             }
             c
         }
@@ -447,10 +642,21 @@ fn rotate(data: &mut Funcdata, header: BlockId) -> unlace_base::error::KunaResul
     };
 
     // The new header and its edges, in the tail's out-slot order.
-    let tail_op = data.bb_op_tail(l.tail).ok_or_else(|| KunaError::lowlevel("looprotate: tail op"))?;
-    let at = data.obank().get(tail_op).map(|o| o.get_addr().clone()).ok_or_else(|| KunaError::lowlevel("looprotate: addr"))?;
-    let flip = data.obank().get(tail_op).is_some_and(|o| o.is_boolean_flip());
-    let tail_slots: Vec<BlockId> = (0..2).map(|i| data.bblocks_ref().block(l.tail).get_out(i)).collect();
+    let tail_op = data
+        .bb_op_tail(l.tail)
+        .ok_or_else(|| KunaError::lowlevel("looprotate: tail op"))?;
+    let at = data
+        .obank()
+        .get(tail_op)
+        .map(|o| o.get_addr().clone())
+        .ok_or_else(|| KunaError::lowlevel("looprotate: addr"))?;
+    let flip = data
+        .obank()
+        .get(tail_op)
+        .is_some_and(|o| o.is_boolean_flip());
+    let tail_slots: Vec<BlockId> = (0..2)
+        .map(|i| data.bblocks_ref().block(l.tail).get_out(i))
+        .collect();
     let graph = data.bblocks_root_pub();
     let n = data.bblocks_mut().new_block_basic(graph);
     data.set_basic_block_range(n, &at, &at);
@@ -467,7 +673,10 @@ fn rotate(data: &mut Funcdata, header: BlockId) -> unlace_base::error::KunaResul
         }
     }
     // Drop the guard's exit and the tail's exit.
-    let ge = data.bblocks_ref().block(l.guard).get_out_index(l.guard_exit);
+    let ge = data
+        .bblocks_ref()
+        .block(l.guard)
+        .get_out_index(l.guard_exit);
     data.remove_branch(l.guard, ge)?;
     let te = data.bblocks_ref().block(l.tail).get_out_index(l.exit);
     data.remove_branch(l.tail, te)?;
@@ -490,9 +699,15 @@ fn rotate(data: &mut Funcdata, header: BlockId) -> unlace_base::error::KunaResul
     data.op_insert_end(branch, n);
     for op in ops {
         let (code, ins, size) = {
-            let o = data.obank().get(op).ok_or_else(|| KunaError::lowlevel("looprotate: op"))?;
+            let o = data
+                .obank()
+                .get(op)
+                .ok_or_else(|| KunaError::lowlevel("looprotate: op"))?;
             let ins: Vec<VarnodeId> = (0..o.num_input()).filter_map(|i| o.get_in(i)).collect();
-            let size = o.get_out().and_then(|v| data.vbank().get(v)).map_or(1, |v| v.get_size());
+            let size = o
+                .get_out()
+                .and_then(|v| data.vbank().get(v))
+                .map_or(1, |v| v.get_size());
             (o.code(), ins, size)
         };
         let copy = data.new_op(ins.len() as int4, at.clone());
@@ -500,7 +715,12 @@ fn rotate(data: &mut Funcdata, header: BlockId) -> unlace_base::error::KunaResul
         for (i, x) in ins.into_iter().enumerate() {
             let input = match map.get(&x) {
                 Some(&m) => m,
-                None => match data.vbank().get(x).filter(|v| v.is_constant()).map(|v| (v.get_size(), v.get_offset())) {
+                None => match data
+                    .vbank()
+                    .get(x)
+                    .filter(|v| v.is_constant())
+                    .map(|v| (v.get_size(), v.get_offset()))
+                {
                     Some((s, k)) => data.new_constant(s, k as uintb),
                     None => x,
                 },
@@ -509,10 +729,16 @@ fn rotate(data: &mut Funcdata, header: BlockId) -> unlace_base::error::KunaResul
         }
         let out = data.new_unique_out(size, copy)?;
         data.op_insert_before(copy, branch);
-        let orig = data.obank().get(op).and_then(|o| o.get_out()).ok_or_else(|| KunaError::lowlevel("looprotate: out"))?;
+        let orig = data
+            .obank()
+            .get(op)
+            .and_then(|o| o.get_out())
+            .ok_or_else(|| KunaError::lowlevel("looprotate: out"))?;
         map.insert(orig, out);
     }
-    let c = *map.get(&cond).ok_or_else(|| KunaError::lowlevel("looprotate: cond copy"))?;
+    let c = *map
+        .get(&cond)
+        .ok_or_else(|| KunaError::lowlevel("looprotate: cond copy"))?;
     data.op_set_input(branch, c, 1)?;
     if flip {
         if let Some(o) = data.obank_mut().get_mut(branch) {
@@ -533,7 +759,9 @@ pub struct ActionLoopRotate {
 
 impl ActionLoopRotate {
     pub fn boxed(g: &str) -> Box<dyn Action> {
-        Box::new(ActionLoopRotate { base: ActionBase::new(0, "looprotate", g) })
+        Box::new(ActionLoopRotate {
+            base: ActionBase::new(0, "looprotate", g),
+        })
     }
 }
 
@@ -545,13 +773,19 @@ impl Action for ActionLoopRotate {
         &mut self.base
     }
     fn clone_filtered(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Action>> {
-        grouplist.contains(self.get_group()).then(|| Box::new(ActionLoopRotate { base: self.base.clone() }) as Box<dyn Action>)
+        grouplist.contains(self.get_group()).then(|| {
+            Box::new(ActionLoopRotate {
+                base: self.base.clone(),
+            }) as Box<dyn Action>
+        })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data.get_arch().loop_rotate {
             return 0;
         }
-        let heads: Vec<BlockId> = (0..data.bblocks_get_size()).map(|i| data.bblocks_get_block(i)).collect();
+        let heads: Vec<BlockId> = (0..data.bblocks_get_size())
+            .map(|i| data.bblocks_get_block(i))
+            .collect();
         for h in heads {
             match rotate(data, h) {
                 Ok(true) => {

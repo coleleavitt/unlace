@@ -4,12 +4,21 @@ fn targets(bytes: &[u8]) -> Vec<u64> {
     let path = common::scratch_file("thumbswitch-guard", "elf");
     std::fs::write(&path, bytes).unwrap();
     let (stdout, stderr, code) = common::run_kuna(&[
-        "xrefs", path.to_str().unwrap(), "--from", "0x822a", "--json",
+        "xrefs",
+        path.to_str().unwrap(),
+        "--from",
+        "0x822a",
+        "--json",
     ]);
     std::fs::remove_file(path).unwrap();
     assert_eq!(code, 0, "{stderr}");
     let doc: serde_json::Value = serde_json::from_str(&stdout).unwrap();
-    doc["xrefs"].as_array().unwrap().iter().map(|r| r["to_address"].as_u64().unwrap()).collect()
+    doc["xrefs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["to_address"].as_u64().unwrap())
+        .collect()
 }
 
 #[test]

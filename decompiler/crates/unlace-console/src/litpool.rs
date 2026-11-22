@@ -76,8 +76,11 @@ pub(crate) fn pool_words(
     is_pool_slot: &dyn Fn(u64) -> bool,
 ) -> BTreeMap<u64, u64> {
     let labels: BTreeSet<u64> = flow_targets.iter().copied().collect();
-    let starts: BTreeMap<u64, usize> =
-        rows.iter().enumerate().map(|(i, (addr, _))| (*addr, i)).collect();
+    let starts: BTreeMap<u64, usize> = rows
+        .iter()
+        .enumerate()
+        .map(|(i, (addr, _))| (*addr, i))
+        .collect();
     let mut out = BTreeMap::new();
     for &(addr, width) in reads {
         if !width_is_scalar(width) {
@@ -195,7 +198,10 @@ mod tests {
         let outside = pool_words(&rows(), &[(0x200, 4)], &[], (0x100, 0x110), ALWAYS);
         assert!(outside.is_empty());
         let first = pool_words(&rows(), &[(0x100, 4)], &[], (0x100, 0x110), ALWAYS);
-        assert!(first.is_empty(), "the address the caller asked to disassemble stays code");
+        assert!(
+            first.is_empty(),
+            "the address the caller asked to disassemble stays code"
+        );
         let past_end = pool_words(&rows(), &[(0x10c, 8)], &[], (0x100, 0x110), ALWAYS);
         assert!(past_end.is_empty());
     }

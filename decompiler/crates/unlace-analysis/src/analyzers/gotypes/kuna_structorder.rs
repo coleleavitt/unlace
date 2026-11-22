@@ -21,7 +21,7 @@ fn dependencies(img: &GoImage, meta: &TypeMeta, t: &GoType) -> Option<Vec<GoType
     let Some((ptr, len)) = fields else {
         return (word(img, t.vma + img.type_base() + 2 * img.word_size) == Some(0)
             && word(img, t.vma + img.type_base() + 3 * img.word_size) == Some(0))
-            .then(Vec::new);
+        .then(Vec::new);
     };
     let mut result = Vec::new();
     for i in 0..len {
@@ -84,7 +84,9 @@ pub(super) fn complete_order(
             }
             Frame::Leave(t, children) => {
                 if state.get(&t.vma) == Some(&State::Visiting)
-                    && children.iter().all(|child| state.get(child) == Some(&State::Complete))
+                    && children
+                        .iter()
+                        .all(|child| state.get(child) == Some(&State::Complete))
                 {
                     state.insert(t.vma, State::Complete);
                     result.push(t);

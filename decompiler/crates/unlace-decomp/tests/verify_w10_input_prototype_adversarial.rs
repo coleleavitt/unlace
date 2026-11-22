@@ -28,7 +28,10 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn specs_root() -> PathBuf {
@@ -108,7 +111,11 @@ fn namespace_recovers_named_typed_param_matching_oracle() {
         let rust_sig = rust.lines().find(|l| l.contains("assign_vals"));
         let cpp_sig = cpp.lines().find(|l| l.contains("assign_vals"));
         if let (Some(r), Some(c)) = (rust_sig, cpp_sig) {
-            assert_eq!(r.trim(), c.trim(), "recovered signature diverges from oracle");
+            assert_eq!(
+                r.trim(),
+                c.trim(),
+                "recovered signature diverges from oracle"
+            );
         }
     }
 }

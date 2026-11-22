@@ -16,11 +16,11 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 
-use crate::dtype::{type_metatype, Datatype};
 use crate::context::{ArchContext, BlockId};
+use crate::dtype::{Datatype, type_metatype};
 
 // ---------------------------------------------------------------------------
 // Fixtures (mirroring funcdata_op/tests.rs)
@@ -29,7 +29,8 @@ use crate::context::{ArchContext, BlockId};
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -87,7 +88,9 @@ fn mk_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
 fn mk_vn(fd: &mut Funcdata, s: int4, off: u64) -> VarnodeId {
     let ram = ram_space(fd);
     let vn = fd.vbank_mut().create(s, Address::new(ram, off), dt(s));
-    fd.vbank_mut().set_input(vn, &mut |_, _, _| Ok(())).expect("mk_vn: set_input")
+    fd.vbank_mut()
+        .set_input(vn, &mut |_, _, _| Ok(()))
+        .expect("mk_vn: set_input")
 }
 
 /// Build a defined Varnode: a `defop` (with output `out`, size `s`) in block
@@ -136,19 +139,47 @@ fn specs_in_definition_order() {
 
 #[test]
 fn op_lists_match_cpp() {
-    assert_eq!(RuleLoadVarnode::new().get_op_list(), vec![OpCode::CPUI_LOAD]);
-    assert_eq!(RuleStoreVarnode::new().get_op_list(), vec![OpCode::CPUI_STORE]);
-    assert_eq!(RuleSubExtComm::new().get_op_list(), vec![OpCode::CPUI_SUBPIECE]);
+    assert_eq!(
+        RuleLoadVarnode::new().get_op_list(),
+        vec![OpCode::CPUI_LOAD]
+    );
+    assert_eq!(
+        RuleStoreVarnode::new().get_op_list(),
+        vec![OpCode::CPUI_STORE]
+    );
+    assert_eq!(
+        RuleSubExtComm::new().get_op_list(),
+        vec![OpCode::CPUI_SUBPIECE]
+    );
     assert_eq!(
         RuleShiftAnd::new().get_op_list(),
-        vec![OpCode::CPUI_INT_RIGHT, OpCode::CPUI_INT_LEFT, OpCode::CPUI_INT_MULT]
+        vec![
+            OpCode::CPUI_INT_RIGHT,
+            OpCode::CPUI_INT_LEFT,
+            OpCode::CPUI_INT_MULT
+        ]
     );
-    assert_eq!(RuleConcatZext::new().get_op_list(), vec![OpCode::CPUI_PIECE]);
-    assert_eq!(RuleZextCommute::new().get_op_list(), vec![OpCode::CPUI_INT_RIGHT]);
-    assert_eq!(RuleSubZext::new().get_op_list(), vec![OpCode::CPUI_INT_ZEXT]);
+    assert_eq!(
+        RuleConcatZext::new().get_op_list(),
+        vec![OpCode::CPUI_PIECE]
+    );
+    assert_eq!(
+        RuleZextCommute::new().get_op_list(),
+        vec![OpCode::CPUI_INT_RIGHT]
+    );
+    assert_eq!(
+        RuleSubZext::new().get_op_list(),
+        vec![OpCode::CPUI_INT_ZEXT]
+    );
     assert_eq!(RuleHumptyOr::new().get_op_list(), vec![OpCode::CPUI_INT_OR]);
-    assert_eq!(RuleSwitchSingle::new().get_op_list(), vec![OpCode::CPUI_BRANCHIND]);
-    assert_eq!(RuleCondNegate::new().get_op_list(), vec![OpCode::CPUI_CBRANCH]);
+    assert_eq!(
+        RuleSwitchSingle::new().get_op_list(),
+        vec![OpCode::CPUI_BRANCHIND]
+    );
+    assert_eq!(
+        RuleCondNegate::new().get_op_list(),
+        vec![OpCode::CPUI_CBRANCH]
+    );
 }
 
 #[test]
@@ -171,8 +202,14 @@ fn shorten_extension_keeps_high_without_recording_lanes() {
             ctx.lanerecords = vec![crate::transform::LanedRegister::with_mask(4, 2)];
             let ram = Rc::clone(ctx.manage().get_space_by_name("ram").unwrap());
             let mut fd = Funcdata::new(
-                "func", "func", Rc::new(ctx), Address::new(ram, 0x1000), 0x10000000, 0x40,
-            ).unwrap();
+                "func",
+                "func",
+                Rc::new(ctx),
+                Address::new(ram, 0x1000),
+                0x10000000,
+                0x40,
+            )
+            .unwrap();
             let bl = mk_block(&mut fd);
             let input = mk_vn(&mut fd, 2, 0x10);
             let (op, original) = mk_def(&mut fd, bl, OpCode::CPUI_INT_ZEXT, 8, 0x20, &[input]);
@@ -325,14 +362,7 @@ fn build_extension_shift_subpiece(fd: &mut Funcdata, extension: OpCode) -> (OpId
         &[extended, variable_amount],
     );
     let offset = fd.new_constant(4, 0);
-    let (subpiece, _) = mk_def(
-        fd,
-        bl,
-        OpCode::CPUI_SUBPIECE,
-        1,
-        0x38,
-        &[shifted, offset],
-    );
+    let (subpiece, _) = mk_def(fd, bl, OpCode::CPUI_SUBPIECE, 1, 0x38, &[shifted, offset]);
     (subpiece, shift)
 }
 
@@ -1156,11 +1186,24 @@ fn concatzero_preserves_structured_values_for_field_recovery() {
         let value = mk_vn(&mut fd, 12, 0x10);
         let zero = fd.new_constant(4, 0);
         let (op, output) = mk_def(&mut fd, block, OpCode::CPUI_PIECE, 16, 0x30, &[value, zero]);
-        fd.vbank_mut().get_mut(output).unwrap()
+        fd.vbank_mut()
+            .get_mut(output)
+            .unwrap()
             .update_type(Rc::new(Datatype::new(16, metatype)));
-        assert_eq!(RuleConcatZero::new().apply_op(op, &mut fd), i32::from(!kept), "{metatype:?}");
+        assert_eq!(
+            RuleConcatZero::new().apply_op(op, &mut fd),
+            i32::from(!kept),
+            "{metatype:?}"
+        );
         let code = fd.obank().get(op).unwrap().code();
-        assert_eq!(code, if kept { OpCode::CPUI_PIECE } else { OpCode::CPUI_INT_LEFT });
+        assert_eq!(
+            code,
+            if kept {
+                OpCode::CPUI_PIECE
+            } else {
+                OpCode::CPUI_INT_LEFT
+            }
+        );
         if kept {
             assert_eq!(fd.obank().get(op).unwrap().get_in(0), Some(value));
             assert_eq!(fd.obank().get(op).unwrap().get_in(1), Some(zero));
@@ -1174,7 +1217,10 @@ fn every_copy_on_the_chain_to_the_return_resolves_the_whole_container() {
     {
         let mut fd = build_fd();
         let parent = Rc::new(Datatype::new(8, type_metatype::TYPE_STRUCT));
-        let mut store = crate::fspec::ProtoStoreInternal::new(Rc::new(Datatype::new(0, type_metatype::TYPE_VOID)));
+        let mut store = crate::fspec::ProtoStoreInternal::new(Rc::new(Datatype::new(
+            0,
+            type_metatype::TYPE_VOID,
+        )));
         store.set_output(&crate::fspec::ParameterPieces {
             addr: Address::new(ram_space(&fd), 0x80),
             type_: Some(Rc::clone(&parent)),
@@ -1184,7 +1230,10 @@ fn every_copy_on_the_chain_to_the_return_resolves_the_whole_container() {
         fd.get_func_proto_mut().set_output_lock(true);
         let block = mk_block(&mut fd);
         let input = mk_vn(&mut fd, 8, 0x10);
-        fd.vbank_mut().get_mut(input).unwrap().update_type_locked(Rc::clone(&parent), true, true);
+        fd.vbank_mut()
+            .get_mut(input)
+            .unwrap()
+            .update_type_locked(Rc::clone(&parent), true, true);
         let (first, middle) = mk_def(&mut fd, block, OpCode::CPUI_COPY, 8, 0x20, &[input]);
         let (second, last) = mk_def(&mut fd, block, OpCode::CPUI_COPY, 8, 0x30, &[middle]);
         let ret = mk_op(&mut fd, 2, 0x40, OpCode::CPUI_RETURN);
@@ -1193,8 +1242,10 @@ fn every_copy_on_the_chain_to_the_return_resolves_the_whole_container() {
         fd.op_set_input(ret, last, 1).unwrap();
         fd.op_insert(ret, block, None);
         for (op, slot) in [(first, -1), (first, 0), (second, -1), (second, 0), (ret, 1)] {
-            assert!(crate::kuna_aggregatefields::returns_whole_container(&fd, op, slot, &parent),
-                "op={op:?} slot={slot}");
+            assert!(
+                crate::kuna_aggregatefields::returns_whole_container(&fd, op, slot, &parent),
+                "op={op:?} slot={slot}"
+            );
         }
     }
 }
@@ -1225,7 +1276,10 @@ fn zextcommute_pushes_shift_inside() {
     let newin = fd.obank().get(shr).unwrap().get_in(0).unwrap();
     assert_eq!(fd.vbank().get(newin).unwrap().get_size(), 4);
     let newshift = fd.vbank().get(newin).unwrap().get_def().unwrap();
-    assert_eq!(fd.obank().get(newshift).unwrap().code(), OpCode::CPUI_INT_RIGHT);
+    assert_eq!(
+        fd.obank().get(newshift).unwrap().code(),
+        OpCode::CPUI_INT_RIGHT
+    );
     assert_eq!(fd.obank().get(newshift).unwrap().get_in(0), Some(v));
     assert_eq!(fd.obank().get(newshift).unwrap().get_in(1), Some(c));
 }
@@ -1241,7 +1295,8 @@ fn zextcommute_preserves_wide_shifts_unless_the_count_fits() {
                     let mut fd = build_fd_with(|ctx| ctx.int_promotion = promotion);
                     let bl = mk_block(&mut fd);
                     let value = mk_vn(&mut fd, bytes, 0x10);
-                    let (_, extended) = mk_def(&mut fd, bl, OpCode::CPUI_INT_ZEXT, 8, 0x20, &[value]);
+                    let (_, extended) =
+                        mk_def(&mut fd, bl, OpCode::CPUI_INT_ZEXT, 8, 0x20, &[value]);
                     let amount = if constant {
                         fd.new_constant(4, bound)
                     } else {
@@ -1249,7 +1304,14 @@ fn zextcommute_preserves_wide_shifts_unless_the_count_fits() {
                         fd.vbank_mut().get_mut(vn).unwrap().set_nz_mask(bound);
                         vn
                     };
-                    let (shift, _) = mk_def(&mut fd, bl, OpCode::CPUI_INT_RIGHT, 8, 0x30, &[extended, amount]);
+                    let (shift, _) = mk_def(
+                        &mut fd,
+                        bl,
+                        OpCode::CPUI_INT_RIGHT,
+                        8,
+                        0x30,
+                        &[extended, amount],
+                    );
                     let applied = RuleZextCommute::new().apply_op(shift, &mut fd);
                     assert_eq!(
                         applied,
@@ -1313,10 +1375,25 @@ fn subzext_reassigned_output_keeps_cover() {
             let bl = mk_block(&mut fd);
             let basevn = mk_vn(&mut fd, 4, 0x10);
             let offset = fd.new_constant(4, 1);
-            let (_, small) = mk_def(&mut fd, bl, OpCode::CPUI_SUBPIECE, 2, 0x20, &[basevn, offset]);
+            let (_, small) = mk_def(
+                &mut fd,
+                bl,
+                OpCode::CPUI_SUBPIECE,
+                2,
+                0x20,
+                &[basevn, offset],
+            );
             let small = if shifted {
                 let amount = fd.new_constant(4, 1);
-                mk_def(&mut fd, bl, OpCode::CPUI_INT_RIGHT, 2, 0x28, &[small, amount]).1
+                mk_def(
+                    &mut fd,
+                    bl,
+                    OpCode::CPUI_INT_RIGHT,
+                    2,
+                    0x28,
+                    &[small, amount],
+                )
+                .1
             } else {
                 small
             };
@@ -1337,10 +1414,17 @@ fn subzext_reassigned_output_keeps_cover() {
             assert_eq!(shift.code(), OpCode::CPUI_INT_RIGHT);
             assert_eq!(shift.get_out(), Some(output));
             assert_eq!(shift.get_in(0), Some(basevn));
-            assert_eq!(fd.vbank().get(shift.get_in(1).unwrap()).unwrap().get_offset(),
-                       if shifted { 9 } else { 8 });
-            assert_eq!(fd.vbank().get(op.get_in(1).unwrap()).unwrap().get_offset(),
-                       if shifted { 0x7fff } else { 0xffff });
+            assert_eq!(
+                fd.vbank()
+                    .get(shift.get_in(1).unwrap())
+                    .unwrap()
+                    .get_offset(),
+                if shifted { 9 } else { 8 }
+            );
+            assert_eq!(
+                fd.vbank().get(op.get_in(1).unwrap()).unwrap().get_offset(),
+                if shifted { 0x7fff } else { 0xffff }
+            );
         }
     }
 }
@@ -1485,11 +1569,20 @@ fn loadvarnode_promotes_only_proven_disjoint_or_offsets() {
             fd.vbank_mut().get_mut(base).unwrap().set_spacebase();
             let displacement = fd.new_constant(8, offset);
             let (_, address) = mk_def(
-                &mut fd, bl, OpCode::CPUI_INT_ADD, 8, 0x20, &[base, displacement],
+                &mut fd,
+                bl,
+                OpCode::CPUI_INT_ADD,
+                8,
+                0x20,
+                &[base, displacement],
             );
             fd.vbank_mut().get_mut(address).unwrap().set_nz_mask(mask);
             let word = fd.new_constant(8, 4);
-            let inputs = if commuted { [word, address] } else { [address, word] };
+            let inputs = if commuted {
+                [word, address]
+            } else {
+                [address, word]
+            };
             let (_, pointer) = mk_def(&mut fd, bl, OpCode::CPUI_INT_OR, 8, 0x30, &inputs);
             let space = fd.new_constant(8, ram_space(&fd).get_index() as u64);
             let (load, _) = mk_def(&mut fd, bl, OpCode::CPUI_LOAD, 4, 0x40, &[space, pointer]);

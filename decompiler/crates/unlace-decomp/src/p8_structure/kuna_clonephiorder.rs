@@ -25,7 +25,11 @@ use unlace_num::opcodes::OpCode;
 pub(crate) fn order_global_phis(data: &Funcdata, ops: &mut [OpId]) {
     let n = ops
         .iter()
-        .take_while(|&&op| data.obank().get(op).is_some_and(|o| o.code() == OpCode::CPUI_MULTIEQUAL))
+        .take_while(|&&op| {
+            data.obank()
+                .get(op)
+                .is_some_and(|o| o.code() == OpCode::CPUI_MULTIEQUAL)
+        })
         .count();
     let global_addr = |op: OpId| {
         data.obank()

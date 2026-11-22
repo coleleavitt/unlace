@@ -19,8 +19,8 @@
 //! region tree, so they catch merge/ordering/off-by-one regressions without
 //! pinning a fragile exact tree shape.
 
-use unlace_decomp::kuna_regionid::{KunaGraphRegion, KunaRegionIdentifier, KunaRegionVisitor};
 use unlace_decomp::context::BlockId;
+use unlace_decomp::kuna_regionid::{KunaGraphRegion, KunaRegionIdentifier, KunaRegionVisitor};
 
 /// Visitor that records the leaf-block addresses (in walk order) and, for every
 /// cyclic region, its body block addresses (sorted).  Mirrors the in-module
@@ -148,7 +148,11 @@ fn supergraph_chain_collapses_but_walk_expands_all() {
     // The merged chain expands to all five blocks IN EXECUTION ORDER (the
     // k_multi chain preserves order; this is NOT address-sorted by accident
     // because the addresses already ascend, so also assert order explicitly).
-    assert_eq!(col.addrs, vec![1, 2, 3, 4, 5], "chain walked in execution order");
+    assert_eq!(
+        col.addrs,
+        vec![1, 2, 3, 4, 5],
+        "chain walked in execution order"
+    );
 
     // No cyclic regions in an acyclic chain.
     assert_eq!(col.cyclic_bodies.len(), 0);
@@ -223,8 +227,16 @@ fn self_loop_head_slice_hack() {
 
     assert_eq!(col.addrs.len(), 3, "every block visited once");
     assert_eq!(sorted(&col.addrs), vec![1, 2, 3]);
-    assert_eq!(col.cyclic_bodies.len(), 1, "the self loop is one cyclic region");
-    assert_eq!(col.cyclic_bodies[0], vec![2], "self-loop body is exactly {{2}}");
+    assert_eq!(
+        col.cyclic_bodies.len(),
+        1,
+        "the self loop is one cyclic region"
+    );
+    assert_eq!(
+        col.cyclic_bodies[0],
+        vec![2],
+        "self-loop body is exactly {{2}}"
+    );
 }
 
 /// ADVERSARIAL 5 — weakly-connected-component pick honoring the entry address.
@@ -278,7 +290,10 @@ fn connected_component_prefers_entry_over_largest() {
 fn compute_idempotent_and_empty_errors() {
     // Empty graph -> Err.
     let mut empty = KunaRegionIdentifier::new();
-    assert!(empty.compute().is_err(), "empty input graph is an error, not a panic");
+    assert!(
+        empty.compute().is_err(),
+        "empty input graph is an error, not a panic"
+    );
 
     // Idempotent compute on a real graph.
     let mut ri = KunaRegionIdentifier::new();
@@ -287,5 +302,8 @@ fn compute_idempotent_and_empty_errors() {
     ri.add_synthetic_edge(n1, n2);
     let first = ri.compute().unwrap();
     let second = ri.compute().unwrap();
-    assert_eq!(first.0, second.0, "second compute returns the cached top region");
+    assert_eq!(
+        first.0, second.0,
+        "second compute returns the cached top region"
+    );
 }

@@ -91,7 +91,10 @@ impl OptionGuardArm {
     pub fn apply(&self, p1: &str) -> unlace_base::error::KunaResult<(bool, String)> {
         let val = crate::options::on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
-        Ok((val, format!("If-no-exit guard-arm layout tie-break turned {prop}")))
+        Ok((
+            val,
+            format!("If-no-exit guard-arm layout tie-break turned {prop}"),
+        ))
     }
 }
 

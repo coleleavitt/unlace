@@ -26,8 +26,8 @@ use unlace_base::space::AddrSpaceManager;
 use unlace_base::xml::{DocumentStorage, Element};
 
 use unlace_decomp::decompile_drive::{decompile_func, print_c};
-use unlace_decomp::options::{register_option_elements, OptionDatabase};
-use unlace_decomp::sleigh_arch::{register_sleigh_arch_ids, LanguageDatabase};
+use unlace_decomp::options::{OptionDatabase, register_option_elements};
+use unlace_decomp::sleigh_arch::{LanguageDatabase, register_sleigh_arch_ids};
 use unlace_decomp::xml_arch::{XmlArchitecture, XmlArchitectureCapability};
 
 use unlace_sleigh::loadimage::LoadImage;
@@ -35,11 +35,16 @@ use unlace_sleigh::loadimage_xml::register_loadimage_xml_ids;
 use unlace_sleigh::translate::register_translate_ids;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn attr(el: &Element, name: &str) -> Option<String> {
-    el.get_attribute_value(name).ok().map(|b| String::from_utf8_lossy(b).into_owned())
+    el.get_attribute_value(name)
+        .ok()
+        .map(|b| String::from_utf8_lossy(b).into_owned())
 }
 
 fn find_named(el: &Rc<Element>, name: &str, out: &mut Vec<Rc<Element>>) {
@@ -126,7 +131,12 @@ fn parse_datatest(path: &std::path::Path) -> Result<DataTest, String> {
         .filter_map(|c| parse_option_com(&String::from_utf8_lossy(c.get_content())))
         .collect();
 
-    Ok(DataTest { binaryimage, arch_id, symbols, options })
+    Ok(DataTest {
+        binaryimage,
+        arch_id,
+        symbols,
+        options,
+    })
 }
 
 struct DummyImg;
@@ -158,11 +168,13 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
 
     let capability = XmlArchitectureCapability::new();
     let mut arch = capability.build_architecture("datatest", "");
-    arch.build_loader(Rc::clone(&dt.binaryimage)).map_err(|e| format!("build_loader: {e}"))?;
+    arch.build_loader(Rc::clone(&dt.binaryimage))
+        .map_err(|e| format!("build_loader: {e}"))?;
 
     let mut db = LanguageDatabase::new();
     db.scan_for_sleigh_directories(root.join("specs").to_str().unwrap());
-    db.get_descriptions(&registry).map_err(|e| format!("collect ldefs: {e}"))?;
+    db.get_descriptions(&registry)
+        .map_err(|e| format!("collect ldefs: {e}"))?;
 
     arch.sleigh_mut().set_archid(&dt.arch_id);
     arch.sleigh_mut()
@@ -172,7 +184,10 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
         return Err("language index unresolved".to_string());
     }
 
-    let specs = arch.sleigh().build_spec_file(&db).map_err(|e| format!("build_spec_file: {e}"))?;
+    let specs = arch
+        .sleigh()
+        .build_spec_file(&db)
+        .map_err(|e| format!("build_spec_file: {e}"))?;
     let resolved_sla = specs.slafile.ok_or("build_spec_file resolved no .sla")?;
     let sla = std::fs::read(&resolved_sla).map_err(|e| format!("read sla: {e}"))?;
     arch.sleigh_mut()
@@ -194,7 +209,9 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
         .base_mut()
         .unwrap()
         .translate_mut()
-        .as_sleigh_mut().expect("standalone Sleigh engine").install_register_lookup()
+        .as_sleigh_mut()
+        .expect("standalone Sleigh engine")
+        .install_register_lookup()
         .map_err(|e| format!("install_register_lookup: {e}"))?;
 
     arch.sleigh_mut()
@@ -204,9 +221,13 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
         .map_err(|e| format!("init_post_engine: {e}"))?;
 
     let manager_ptr: *const AddrSpaceManager = arch.sleigh().base().unwrap().manage();
-    arch.open_image(unsafe { &*manager_ptr }, &registry).map_err(|e| format!("open_image: {e}"))?;
+    arch.open_image(unsafe { &*manager_ptr }, &registry)
+        .map_err(|e| format!("open_image: {e}"))?;
     let img = arch.take_loader().ok_or("loader vanished after open")?;
-    arch.sleigh_mut().base_mut().unwrap().set_loader(Box::new(img));
+    arch.sleigh_mut()
+        .base_mut()
+        .unwrap()
+        .set_loader(Box::new(img));
     Ok(arch)
 }
 
@@ -257,7 +278,10 @@ fn render_datatest(name: &str) -> String {
 #[test]
 fn w10_jts_switchmulti_renders_structured_switch_with_real_case_labels() {
     let c = render_datatest("switchmulti.xml");
-    assert!(c.contains("switch("), "switchmulti must emit a `switch(...)` header:\n{c}");
+    assert!(
+        c.contains("switch("),
+        "switchmulti must emit a `switch(...)` header:\n{c}"
+    );
     // The 7-entry table (0xa1.. proven in verify_w10_jumptable_emulate) enumerates
     // cases 0..6.  Assert each distinct case label is present (no NO_LABEL).
     for n in 0..=6 {
@@ -279,16 +303,25 @@ fn w10_jts_switchmulti_renders_structured_switch_with_real_case_labels() {
 #[test]
 fn w10_jts_switchind_recovers_distinct_real_labels_no_hardcoding() {
     let c = render_datatest("switchind.xml");
-    assert!(c.contains("switch("), "switchind must emit a `switch(...)`:\n{c}");
+    assert!(
+        c.contains("switch("),
+        "switchind must emit a `switch(...)`:\n{c}"
+    );
     // The recovered labels 0,1,2,3 (single-index cases).
     for n in 0..=3 {
-        assert!(c.contains(&format!("case {n}:")), "switchind missing `case {n}:`:\n{c}");
+        assert!(
+            c.contains(&format!("case {n}:")),
+            "switchind missing `case {n}:`:\n{c}"
+        );
     }
     // The fall-through multi-label case 4/5/10 (the address table maps three
     // indices to one block — `numIndicesByBlock` > 1).
     assert!(c.contains("case 4:"), "switchind missing `case 4:`:\n{c}");
     assert!(c.contains("case 5:"), "switchind missing `case 5:`:\n{c}");
-    assert!(c.contains("case 10:"), "switchind missing the multi-label `case 10:`:\n{c}");
+    assert!(
+        c.contains("case 10:"),
+        "switchind missing the multi-label `case 10:`:\n{c}"
+    );
     assert!(
         !c.contains("0xbad1abe1"),
         "switchind has an un-recovered NO_LABEL case:\n{c}"
@@ -311,7 +344,10 @@ fn w10_jts_rangemeld_collapses_or_compare_unblocking_recovery() {
     let c = render_datatest("switchmulti.xml");
     // The switch only recovers because RangeMeld narrowed the index range; the
     // guard-fold then consumes the `<= 6` comparison into the switch default.
-    assert!(c.contains("switch("), "switch did not recover (guard not collapsed):\n{c}");
+    assert!(
+        c.contains("switch("),
+        "switch did not recover (guard not collapsed):\n{c}"
+    );
     assert!(
         c.contains("default:"),
         "the collapsed-guard out-of-range edge did not fold into `default:`:\n{c}"
@@ -327,11 +363,20 @@ fn w10_jts_recovery_is_data_driven_across_distinct_switches() {
     let ind = render_datatest("switchind.xml");
     let multi = render_datatest("switchmulti.xml");
     // switchind has a `case 10:`; switchmulti does not (its labels are 0..6).
-    assert!(ind.contains("case 10:"), "switchind label set wrong:\n{ind}");
-    assert!(!multi.contains("case 10:"), "switchmulti must not have `case 10:`:\n{multi}");
+    assert!(
+        ind.contains("case 10:"),
+        "switchind label set wrong:\n{ind}"
+    );
+    assert!(
+        !multi.contains("case 10:"),
+        "switchmulti must not have `case 10:`:\n{multi}"
+    );
     // Both render a structured switch through the one recovery path.
     assert!(ind.contains("switch("), "switchind lost its switch:\n{ind}");
-    assert!(multi.contains("switch("), "switchmulti lost its switch:\n{multi}");
+    assert!(
+        multi.contains("switch("),
+        "switchmulti lost its switch:\n{multi}"
+    );
 }
 
 // ===========================================================================
@@ -357,8 +402,14 @@ fn verifier_switchind_multilabel_arm_is_in_oracle_order() {
     let p4 = c.find("case 4:").expect("no `case 4:`");
     let p5 = c.find("case 5:").expect("no `case 5:`");
     let p10 = c.find("case 10:").expect("no `case 10:`");
-    assert!(p4 < p5, "`case 4:` must precede `case 5:` (block2addr order):\n{c}");
-    assert!(p5 < p10, "`case 5:` must precede `case 10:` (block2addr order):\n{c}");
+    assert!(
+        p4 < p5,
+        "`case 4:` must precede `case 5:` (block2addr order):\n{c}"
+    );
+    assert!(
+        p5 < p10,
+        "`case 5:` must precede `case 10:` (block2addr order):\n{c}"
+    );
     // The three labels collapse onto ONE arm: no statement body separates them
     // (the C++ oracle has them on consecutive lines with a shared body).  Assert
     // the span between `case 4:` and `case 10:` carries no call/return body — only
@@ -378,12 +429,21 @@ fn verifier_switchind_multilabel_arm_is_in_oracle_order() {
 #[test]
 fn verifier_switchloop_third_distinct_switch_recovers_real_body() {
     let c = render_datatest("switchloop.xml");
-    assert!(c.contains("switch("), "switchloop must recover a `switch(...)`:\n{c}");
+    assert!(
+        c.contains("switch("),
+        "switchloop must recover a `switch(...)`:\n{c}"
+    );
     // Its own distinct label set (the loop step is `a3 = N`, so the recovered
     // index cases start at 1 — DIFFERENT from switchind's 0-based set).  Genuine
     // recovery for a THIRD distinct switch through the same code path.
-    assert!(c.contains("case 1:"), "switchloop missing recovered `case 1:`:\n{c}");
-    assert!(c.contains("case 2:"), "switchloop missing recovered `case 2:`:\n{c}");
+    assert!(
+        c.contains("case 1:"),
+        "switchloop missing recovered `case 1:`:\n{c}"
+    );
+    assert!(
+        c.contains("case 2:"),
+        "switchloop missing recovered `case 2:`:\n{c}"
+    );
     // The arms carry genuine recovered bodies (not empty stubs): each case
     // mutates the accumulator (`v? = ... + N` / `* N`) — assert at least one real
     // additive/multiplicative case body reached the rendered C.
@@ -392,7 +452,10 @@ fn verifier_switchloop_third_distinct_switch_recovers_real_body() {
         "switchloop case bodies missing the real recovered arithmetic:\n{c}"
     );
     // No NO_LABEL leak.
-    assert!(!c.contains("0xbad1abe1"), "switchloop has an un-recovered NO_LABEL case:\n{c}");
+    assert!(
+        !c.contains("0xbad1abe1"),
+        "switchloop has an un-recovered NO_LABEL case:\n{c}"
+    );
 }
 
 /// VERIFIER: label CARDINALITY parity (in-scope: the case labels, not the
@@ -406,7 +469,10 @@ fn verifier_switchloop_third_distinct_switch_recovers_real_body() {
 fn verifier_switchind_label_set_matches_oracle_cardinality() {
     let c = render_datatest("switchind.xml");
     for n in [0u32, 1, 2, 3, 4, 5, 10] {
-        assert!(c.contains(&format!("case {n}:")), "switchind missing oracle `case {n}:`:\n{c}");
+        assert!(
+            c.contains(&format!("case {n}:")),
+            "switchind missing oracle `case {n}:`:\n{c}"
+        );
     }
     // Labels that are NOT in the recovered table must not appear — guards against
     // a phantom/hardcoded arm.
@@ -445,9 +511,19 @@ fn adv1_no_duplicate_declaration_in_any_function() {
         if t.contains('=') || t.contains("return") {
             break; // reached the statement list
         }
-        let code = t.split("//").next().unwrap_or(t).trim().trim_end_matches(';').trim();
+        let code = t
+            .split("//")
+            .next()
+            .unwrap_or(t)
+            .trim()
+            .trim_end_matches(';')
+            .trim();
         if let Some(name) = code.rsplit([' ', '*', ']']).find(|s| !s.is_empty()) {
-            if name.chars().next().is_some_and(|ch| ch.is_alphabetic() || ch == '_') {
+            if name
+                .chars()
+                .next()
+                .is_some_and(|ch| ch.is_alphabetic() || ch == '_')
+            {
                 names.push(name);
             }
         }

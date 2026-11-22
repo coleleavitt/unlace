@@ -8,14 +8,34 @@ const OFF: crate::kuna_structmerge::StructMergeMode = crate::kuna_structmerge::S
 fn indexed_access_family(scales: &[Option<u64>], copies: u32) -> (Funcdata, VarnodeId) {
     use crate::context::ArchContext;
     use unlace_base::address::Address;
-    use unlace_base::space::{spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace};
+    use unlace_base::space::{AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, spacetype};
 
     let mut manage = AddrSpaceManager::new();
     manage.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    manage.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
-    let ram = Rc::new(AddrSpace::new(spacetype::IPTR_PROCESSOR, "ram", false, 8, 1, 2, 0, 1, 1));
+    manage
+        .insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
+    let ram = Rc::new(AddrSpace::new(
+        spacetype::IPTR_PROCESSOR,
+        "ram",
+        false,
+        8,
+        1,
+        2,
+        0,
+        1,
+        1,
+    ));
     manage.insert_space(Rc::clone(&ram)).unwrap();
-    let mut data = Funcdata::new("f", "f", Rc::new(ArchContext::new(manage)), Address::new(Rc::clone(&ram), 0x1000), 0x10000000, 0).unwrap();
+    let mut data = Funcdata::new(
+        "f",
+        "f",
+        Rc::new(ArchContext::new(manage)),
+        Address::new(Rc::clone(&ram), 0x1000),
+        0x10000000,
+        0,
+    )
+    .unwrap();
     let base = data.new_varnode(8, &Address::new(Rc::clone(&ram), 0x2000), None);
     let base = data.set_input_varnode(base).unwrap();
     let index = data.new_varnode(8, &Address::new(Rc::clone(&ram), 0x3000), None);
@@ -28,7 +48,9 @@ fn indexed_access_family(scales: &[Option<u64>], copies: u32) -> (Funcdata, Varn
         data.op_set_opcode_code(op, OpCode::CPUI_PTRADD);
         data.op_set_input(op, address, 0).unwrap();
         data.op_set_input(op, index, 1).unwrap();
-        let size = scale.map(|size| data.new_constant(8, size)).unwrap_or(index);
+        let size = scale
+            .map(|size| data.new_constant(8, size))
+            .unwrap_or(index);
         data.op_set_input(op, size, 2).unwrap();
         address = data.new_unique_out(8, op).unwrap();
         data.op_insert_end(op, block);
@@ -75,10 +97,22 @@ fn an_unproven_access_cannot_hide_beside_a_proven_access() {
 
 #[test]
 fn option_parses_every_mode_and_rejects_anything_else() {
-    assert_eq!(OptionStructSynth.apply("off").unwrap().0, StructSynthMode::Off);
-    assert_eq!(OptionStructSynth.apply("param").unwrap().0, StructSynthMode::Param);
-    assert_eq!(OptionStructSynth.apply("locals").unwrap().0, StructSynthMode::Locals);
-    assert_eq!(OptionStructSynth.apply("all").unwrap().0, StructSynthMode::All);
+    assert_eq!(
+        OptionStructSynth.apply("off").unwrap().0,
+        StructSynthMode::Off
+    );
+    assert_eq!(
+        OptionStructSynth.apply("param").unwrap().0,
+        StructSynthMode::Param
+    );
+    assert_eq!(
+        OptionStructSynth.apply("locals").unwrap().0,
+        StructSynthMode::Locals
+    );
+    assert_eq!(
+        OptionStructSynth.apply("all").unwrap().0,
+        StructSynthMode::All
+    );
     assert!(OptionStructSynth.apply("on").is_err());
     assert!(OptionStructSynth.apply("global").is_err());
 }
@@ -88,7 +122,11 @@ fn locals_and_all_measure_returned_pointers_and_only_all_also_nests() {
     assert!(StructSynthMode::Locals.fires() && StructSynthMode::Locals.locals());
     assert!(!StructSynthMode::Locals.nests());
     assert!(StructSynthMode::All.locals() && StructSynthMode::All.nests());
-    for m in [StructSynthMode::Off, StructSynthMode::Param, StructSynthMode::Nest] {
+    for m in [
+        StructSynthMode::Off,
+        StructSynthMode::Param,
+        StructSynthMode::Nest,
+    ] {
         assert!(!m.locals(), "{m:?}");
     }
 }
@@ -101,11 +139,19 @@ fn a_stored_constant_reads_as_text_only_when_its_bytes_are_characters() {
     assert_eq!(bytes_text(b"SCHILY.x"), Some(true));
     assert_eq!(bytes_text(b"attr"), Some(true));
     assert_eq!(bytes_text(b"."), Some(true));
-    assert_eq!(bytes_text(b".\0"), Some(true), "a character and its terminator");
+    assert_eq!(
+        bytes_text(b".\0"),
+        Some(true),
+        "a character and its terminator"
+    );
     assert_eq!(bytes_text(&[0; 8]), None);
     assert_eq!(bytes_text(&[1, 0, 0, 0]), Some(false));
     assert_eq!(bytes_text(&[0xff; 4]), Some(false));
-    assert_eq!(bytes_text(b"A\0\0\0\0\0\0\0"), Some(false), "one character in eight bytes is a number");
+    assert_eq!(
+        bytes_text(b"A\0\0\0\0\0\0\0"),
+        Some(false),
+        "one character in eight bytes is a number"
+    );
 }
 
 /// A text store marks the base; any other access, or a store of something
@@ -122,7 +168,10 @@ fn only_a_base_whose_every_access_is_text_is_a_string_buffer() {
     merged.absorb(&buf);
     assert!(merged.text_store && !merged.other_access);
     merged.absorb(&rec);
-    assert!(merged.other_access, "absorb carries the other base's accesses");
+    assert!(
+        merged.other_access,
+        "absorb carries the other base's accesses"
+    );
 }
 
 #[test]
@@ -134,7 +183,10 @@ fn off_does_not_fire_and_param_does() {
 
 #[test]
 fn nest_fires_and_is_the_only_mode_that_nests() {
-    assert_eq!(OptionStructSynth.apply("nest").unwrap().0, StructSynthMode::Nest);
+    assert_eq!(
+        OptionStructSynth.apply("nest").unwrap().0,
+        StructSynthMode::Nest
+    );
     assert!(StructSynthMode::Nest.fires());
     assert!(StructSynthMode::Nest.nests());
     assert!(!StructSynthMode::Param.nests());
@@ -188,14 +240,27 @@ fn absorbed_evidence_is_the_replay_of_every_access() {
     replay.record(8, 2, None);
     replay.record(0x10, 1, None);
 
-    assert_eq!(merged.slots.keys().collect::<Vec<_>>(), replay.slots.keys().collect::<Vec<_>>());
+    assert_eq!(
+        merged.slots.keys().collect::<Vec<_>>(),
+        replay.slots.keys().collect::<Vec<_>>()
+    );
     for (off, slot) in merged.slots.iter() {
         let want = &replay.slots[off];
         assert_eq!(slot.width, want.width, "width at {off:#x}");
-        assert_eq!(slot.committed().is_some(), want.committed().is_some(), "commitment at {off:#x}");
+        assert_eq!(
+            slot.committed().is_some(),
+            want.committed().is_some(),
+            "commitment at {off:#x}"
+        );
     }
-    assert!(merged.slots[&8].committed().is_none(), "a signed and an unsigned load stay contested");
-    assert!(merged.phi_reached, "one loop-carried load declines the whole field");
+    assert!(
+        merged.slots[&8].committed().is_none(),
+        "a signed and an unsigned load stay contested"
+    );
+    assert!(
+        merged.phi_reached,
+        "one loop-carried load declines the whole field"
+    );
 
     // The first access of a width names its type, even when it has none.
     let mut untyped_first = Evidence::default();
@@ -208,7 +273,10 @@ fn absorbed_evidence_is_the_replay_of_every_access() {
     let mut merged_untyped = Evidence::default();
     merged_untyped.absorb(&untyped_first);
     merged_untyped.absorb(&typed);
-    assert_eq!(merged_untyped.slots[&0].ctype.is_some(), replay_untyped.slots[&0].ctype.is_some());
+    assert_eq!(
+        merged_untyped.slots[&0].ctype.is_some(),
+        replay_untyped.slots[&0].ctype.is_some()
+    );
     assert!(!merged.dynamic_offset && !merged.integer_use);
 }
 
@@ -220,7 +288,9 @@ fn absorbed_evidence_is_the_replay_of_every_access() {
 fn a_record_that_points_at_itself_is_minted_around_its_shell() {
     let f = core_factory();
     let long = f.get_base(8, type_metatype::TYPE_INT).unwrap();
-    let ulong_ptr = f.get_type_pointer(8, f.get_base(8, type_metatype::TYPE_UINT).unwrap(), 1).unwrap();
+    let ulong_ptr = f
+        .get_type_pointer(8, f.get_base(8, type_metatype::TYPE_UINT).unwrap(), 1)
+        .unwrap();
     let fields = vec![
         TypeField::new(0, 0, "field_0x0", Rc::clone(&ulong_ptr)),
         TypeField::new(1, 8, "field_0x8", Rc::clone(&ulong_ptr)),
@@ -252,7 +322,12 @@ fn only_a_records_own_shell_resolves_to_the_record() {
     let f = core_factory();
     let long = f.get_base(8, type_metatype::TYPE_INT).unwrap();
     let fields = vec![
-        TypeField::new(0, 0, "field_0x0", f.get_type_pointer(8, Rc::clone(&long), 1).unwrap()),
+        TypeField::new(
+            0,
+            0,
+            "field_0x0",
+            f.get_type_pointer(8, Rc::clone(&long), 1).unwrap(),
+        ),
         TypeField::new(1, 8, "field_0x8", Rc::clone(&long)),
     ];
     let st = ledger::lookup_or_mint(&f, fields, 0x10, &[], &[0], OFF).unwrap();
@@ -262,10 +337,16 @@ fn only_a_records_own_shell_resolves_to_the_record() {
     assert_eq!(resolved.get_size(), 8);
 
     let complete = f.get_type_pointer(8, Rc::clone(&st), 1).unwrap();
-    assert!(resolve_self_pointer(&f, &complete).is_none(), "already the completed record");
+    assert!(
+        resolve_self_pointer(&f, &complete).is_none(),
+        "already the completed record"
+    );
     let orphan = f.get_type_struct("struct_7").unwrap();
     let orphan_ptr = f.get_type_pointer(8, orphan, 1).unwrap();
-    assert!(resolve_self_pointer(&f, &orphan_ptr).is_none(), "a shell with no completed record");
+    assert!(
+        resolve_self_pointer(&f, &orphan_ptr).is_none(),
+        "a shell with no completed record"
+    );
     assert!(resolve_self_pointer(&f, &long).is_none());
 }
 
@@ -395,7 +476,10 @@ fn an_access_inside_a_wider_one_is_pruned_to_a_hole() {
     e.prune();
     assert_eq!(e.slots.keys().copied().collect::<Vec<_>>(), vec![0, 8]);
     // Two surviving 8-byte fields, no filler, and the structure ends at 16.
-    assert_eq!(layout_plan(&e.slots).unwrap(), (vec![(0, 8, false), (8, 8, false)], 16));
+    assert_eq!(
+        layout_plan(&e.slots).unwrap(),
+        (vec![(0, 8, false), (8, 8, false)], 16)
+    );
 }
 
 /// A field whose offset its own alignment does not divide is padded forward by
@@ -408,12 +492,24 @@ fn a_misaligned_offset_is_not_a_field() {
     e.record(0x1c, 8, None);
     e.record(0x28, 8, None);
     e.prune();
-    assert_eq!(e.slots.keys().copied().collect::<Vec<_>>(), vec![0, 0x18, 0x28]);
+    assert_eq!(
+        e.slots.keys().copied().collect::<Vec<_>>(),
+        vec![0, 0x18, 0x28]
+    );
     // The pruned 0x1c access is inside the 0x4..0x18 filler, and the structure
     // ends at the last surviving field rather than at the pruned access.
     assert_eq!(
         layout_plan(&e.slots).unwrap(),
-        (vec![(0, 4, false), (4, 0x14, true), (0x18, 4, false), (0x1c, 0xc, true), (0x28, 8, false)], 0x30)
+        (
+            vec![
+                (0, 4, false),
+                (4, 0x14, true),
+                (0x18, 4, false),
+                (0x1c, 0xc, true),
+                (0x28, 8, false)
+            ],
+            0x30
+        )
     );
 }
 
@@ -475,7 +571,10 @@ fn a_disjoint_aligned_layout_is_left_alone() {
     e.record(0xc, 4, None);
     e.record(0x10, 8, None);
     e.prune();
-    assert_eq!(e.slots.keys().copied().collect::<Vec<_>>(), vec![0, 8, 0xc, 0x10]);
+    assert_eq!(
+        e.slots.keys().copied().collect::<Vec<_>>(),
+        vec![0, 8, 0xc, 0x10]
+    );
 }
 
 /// The plateau flag `structsynth` gates on has to latch on a pass that changed
@@ -484,11 +583,11 @@ fn a_disjoint_aligned_layout_is_left_alone() {
 /// would decline such a function forever.
 #[test]
 fn the_plateau_latches_when_the_first_pass_changes_nothing() {
+    use std::rc::Rc;
     use unlace_base::address::Address;
     use unlace_base::space::{
-        addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+        AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
     };
-    use std::rc::Rc;
 
     use crate::action::ActionContext;
     use crate::context::ArchContext;
@@ -496,7 +595,9 @@ fn the_plateau_latches_when_the_first_pass_changes_nothing() {
 
     let mut manage = AddrSpaceManager::new();
     manage.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    manage.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    manage
+        .insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     manage
         .insert_space(Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
@@ -539,7 +640,10 @@ fn a_pruned_far_access_does_not_carry_the_size() {
     assert_eq!(e.slots.keys().copied().collect::<Vec<_>>(), vec![0, 8]);
     let (plan, size) = layout_plan(&e.slots).unwrap();
     assert_eq!(size, 16);
-    assert!(plan.iter().all(|(_, _, filled)| !filled), "no filler in a dense layout");
+    assert!(
+        plan.iter().all(|(_, _, filled)| !filled),
+        "no filler in a dense layout"
+    );
 }
 
 /// Every byte of the structure belongs to a member, so every offset the printer
@@ -558,7 +662,10 @@ fn a_hole_becomes_a_named_member_at_its_own_offset() {
     let (plan, size) = layout_plan(&e.slots).unwrap();
     assert_eq!(size, 0x38);
     // The 8..0x28 gap -- which `&p->field_0x8` names in the body -- is a member.
-    assert!(plan.contains(&(8, 0x20, true)), "the hole at 8 is a member: {plan:?}");
+    assert!(
+        plan.contains(&(8, 0x20, true)),
+        "the hole at 8 is a member: {plan:?}"
+    );
     // No byte is left over.
     let mut next = 0;
     for (off, width, _) in &plan {
@@ -567,7 +674,6 @@ fn a_hole_becomes_a_named_member_at_its_own_offset() {
     }
     assert_eq!(next, size);
 }
-
 
 /// The structure's size is a multiple of its own alignment, as a C compiler
 /// would make it.  `chibios`'s `chPipeReset` indexes its parameter, and a
@@ -582,7 +688,11 @@ fn the_size_is_rounded_up_to_the_widest_field() {
     e.prune();
     let (plan, size) = layout_plan(&e.slots).unwrap();
     assert_eq!(size, 0x18);
-    assert_eq!(plan.last(), Some(&(0x15, 3, true)), "the tail is filler too: {plan:?}");
+    assert_eq!(
+        plan.last(),
+        Some(&(0x15, 3, true)),
+        "the tail is filler too: {plan:?}"
+    );
 }
 
 /// A field commits to a signedness only when every access of its width does.
@@ -599,26 +709,39 @@ fn accesses_that_disagree_on_sign_leave_the_field_undefined() {
     let ushort = f.get_base(2, type_metatype::TYPE_UINT).unwrap();
     let undef2 = f.get_base(2, type_metatype::TYPE_UNKNOWN).unwrap();
     let int4 = f.get_base(4, type_metatype::TYPE_INT).unwrap();
-    let ptr = f.get_type_pointer(8, f.get_base(1, type_metatype::TYPE_INT).unwrap(), 1).unwrap();
-    let void_ptr = f.get_type_pointer(8, f.get_base(1, type_metatype::TYPE_UNKNOWN).unwrap(), 1).unwrap();
+    let ptr = f
+        .get_type_pointer(8, f.get_base(1, type_metatype::TYPE_INT).unwrap(), 1)
+        .unwrap();
+    let void_ptr = f
+        .get_type_pointer(8, f.get_base(1, type_metatype::TYPE_UNKNOWN).unwrap(), 1)
+        .unwrap();
 
     for (first, second) in [(&short, &undef2), (&undef2, &short), (&short, &ushort)] {
         let mut e = Evidence::default();
         e.record(0x68, 2, Some(Rc::clone(first)));
         e.record(0x68, 2, Some(Rc::clone(second)));
         e.record(0x68, 2, Some(Rc::clone(&short)));
-        assert!(e.slots[&0x68].committed().is_none(), "a contested sign stays contested");
+        assert!(
+            e.slots[&0x68].committed().is_none(),
+            "a contested sign stays contested"
+        );
     }
 
     let mut agree = Evidence::default();
     agree.record(8, 4, Some(Rc::clone(&int4)));
     agree.record(8, 4, Some(Rc::clone(&int4)));
-    assert!(agree.slots[&8].committed().is_some(), "agreeing accesses keep their type");
+    assert!(
+        agree.slots[&8].committed().is_some(),
+        "agreeing accesses keep their type"
+    );
 
     let mut pointers = Evidence::default();
     pointers.record(0, 8, Some(Rc::clone(&ptr)));
     pointers.record(0, 8, Some(Rc::clone(&void_ptr)));
-    assert!(pointers.slots[&0].committed().is_some(), "pointer spellings are not sign evidence");
+    assert!(
+        pointers.slots[&0].committed().is_some(),
+        "pointer spellings are not sign evidence"
+    );
 
     // `find`'s `sub_f620`: a pointer field also read as `long` and `unsigned long`
     // has no sign to get wrong, so it stays a pointer.
@@ -628,13 +751,20 @@ fn accesses_that_disagree_on_sign_leave_the_field_undefined() {
     for t in [&ptr, &long, &ulong] {
         ptr_first.record(8, 8, Some(Rc::clone(t)));
     }
-    assert!(ptr_first.slots[&8].committed().is_some_and(|t| t.get_metatype() == type_metatype::TYPE_PTR));
+    assert!(
+        ptr_first.slots[&8]
+            .committed()
+            .is_some_and(|t| t.get_metatype() == type_metatype::TYPE_PTR)
+    );
 
     let mut widened = Evidence::default();
     widened.record(0x68, 2, Some(Rc::clone(&short)));
     widened.record(0x68, 2, Some(Rc::clone(&undef2)));
     widened.record(0x68, 4, Some(Rc::clone(&int4)));
-    assert!(widened.slots[&0x68].committed().is_some(), "a wider access starts a new contest");
+    assert!(
+        widened.slots[&0x68].committed().is_some(),
+        "a wider access starts a new contest"
+    );
 }
 
 /// A float and a non-float of one width are a union member read two ways, so the
@@ -652,7 +782,9 @@ fn a_float_and_an_integer_of_one_width_make_the_field_raw_bytes() {
     let ulong = f.get_base(8, type_metatype::TYPE_UINT).unwrap();
     let undef8 = f.get_base(8, type_metatype::TYPE_UNKNOWN).unwrap();
     let int4 = f.get_base(4, type_metatype::TYPE_INT).unwrap();
-    let ptr = f.get_type_pointer(8, f.get_base(1, type_metatype::TYPE_INT).unwrap(), 1).unwrap();
+    let ptr = f
+        .get_type_pointer(8, f.get_base(1, type_metatype::TYPE_INT).unwrap(), 1)
+        .unwrap();
 
     for other in [&long, &undef8, &ptr] {
         for (first, second) in [(&double, other), (other, &double)] {
@@ -661,10 +793,18 @@ fn a_float_and_an_integer_of_one_width_make_the_field_raw_bytes() {
             e.record(8, 8, Some(Rc::clone(first)));
             e.record(8, 8, Some(Rc::clone(second)));
             let slot = &e.slots[&8];
-            assert!(slot.reinterpreted() && slot.committed().is_none(), "{} beside {}", first.get_name(), second.get_name());
+            assert!(
+                slot.reinterpreted() && slot.committed().is_none(),
+                "{} beside {}",
+                first.get_name(),
+                second.get_name()
+            );
             let (plan, size) = layout_plan(&e.slots).unwrap();
             assert_eq!(size, 0x10);
-            assert!(plan.contains(&(8, 8, true)), "the union member is filler: {plan:?}");
+            assert!(
+                plan.contains(&(8, 8, true)),
+                "the union member is filler: {plan:?}"
+            );
         }
     }
 
@@ -679,8 +819,14 @@ fn a_float_and_an_integer_of_one_width_make_the_field_raw_bytes() {
     floats.record(8, 8, Some(Rc::clone(&double)));
     floats.record(8, 8, Some(Rc::clone(&double)));
     floats.record(8, 4, Some(Rc::clone(&int4)));
-    assert!(!floats.slots[&8].reinterpreted(), "a narrower access is not this field's evidence");
-    assert!(floats.slots[&8].committed().is_some(), "agreeing float accesses keep their type");
+    assert!(
+        !floats.slots[&8].reinterpreted(),
+        "a narrower access is not this field's evidence"
+    );
+    assert!(
+        floats.slots[&8].committed().is_some(),
+        "agreeing float accesses keep their type"
+    );
 }
 
 /// Bytes a function dereferenced without a typed field of its own are what the
@@ -740,16 +886,20 @@ fn extent_is_where_the_last_access_ends_dropped_or_not() {
 /// one width, declines it as it declines any record.
 #[test]
 fn a_record_read_only_past_its_start_needs_the_headless_rule() {
-    use unlace_base::address::Address;
-    use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace};
     use std::rc::Rc;
+    use unlace_base::address::Address;
+    use unlace_base::space::{
+        AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
+    };
 
     use crate::context::ArchContext;
     use crate::dtype::TypeFactory;
 
     let mut manage = AddrSpaceManager::new();
     manage.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    manage.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    manage
+        .insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     manage
         .insert_space(Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
@@ -765,15 +915,28 @@ fn a_record_read_only_past_its_start_needs_the_headless_rule() {
         .unwrap();
     let glb = Rc::new(ArchContext::new(manage));
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
-    let fd = Funcdata::new("headless", "headless", glb, Address::new(ram, 0x53e7), 0x1000_0000, 0x40).unwrap();
+    let fd = Funcdata::new(
+        "headless",
+        "headless",
+        glb,
+        Address::new(ram, 0x53e7),
+        0x1000_0000,
+        0x40,
+    )
+    .unwrap();
 
     let f = core_factory();
-    let voidp = f.get_type_pointer(8, f.get_type_void().unwrap(), 1).unwrap();
+    let voidp = f
+        .get_type_pointer(8, f.get_type_void().unwrap(), 1)
+        .unwrap();
     let mut e = Evidence::default();
     e.record(0x30, 4, None);
     e.record(0xac, 4, None);
     e.record(0xb9, 1, None);
-    assert!(!accepts_record(&fd, &voidp, &e, true, false), "no access at offset 0");
+    assert!(
+        !accepts_record(&fd, &voidp, &e, true, false),
+        "no access at offset 0"
+    );
     assert!(accepts_record(&fd, &voidp, &e, true, true));
 
     let mut indexed = e.clone();
@@ -784,32 +947,66 @@ fn a_record_read_only_past_its_start_needs_the_headless_rule() {
     for off in [8, 0x10, 0x18] {
         run.record(off, 8, None);
     }
-    assert!(!accepts_record(&fd, &voidp, &run, true, true), "a uniform run is an array");
+    assert!(
+        !accepts_record(&fd, &voidp, &run, true, true),
+        "a uniform run is an array"
+    );
 
     let mut one = Evidence::default();
     one.record(0x3c, 1, None);
-    assert!(!accepts_record(&fd, &voidp, &one, true, true), "one narrow field is no record");
+    assert!(
+        !accepts_record(&fd, &voidp, &one, true, true),
+        "one narrow field is no record"
+    );
 }
 
 #[test]
 fn bases_ask_in_the_order_their_varnodes_were_created() {
     use crate::context::ArchContext;
     use unlace_base::address::Address;
-    use unlace_base::space::{spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace};
+    use unlace_base::space::{AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, spacetype};
 
     let mut manage = AddrSpaceManager::new();
     manage.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    manage.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
-    let ram = Rc::new(AddrSpace::new(spacetype::IPTR_PROCESSOR, "ram", false, 8, 1, 2, 0, 1, 1));
+    manage
+        .insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
+    let ram = Rc::new(AddrSpace::new(
+        spacetype::IPTR_PROCESSOR,
+        "ram",
+        false,
+        8,
+        1,
+        2,
+        0,
+        1,
+        1,
+    ));
     manage.insert_space(Rc::clone(&ram)).unwrap();
-    let mut data = Funcdata::new("f", "f", Rc::new(ArchContext::new(manage)), Address::new(Rc::clone(&ram), 0x1000), 0x10000000, 0).unwrap();
+    let mut data = Funcdata::new(
+        "f",
+        "f",
+        Rc::new(ArchContext::new(manage)),
+        Address::new(Rc::clone(&ram), 0x1000),
+        0x10000000,
+        0,
+    )
+    .unwrap();
     let freed = data.new_varnode(8, &Address::new(Rc::clone(&ram), 0x2000), None);
     let older = data.new_varnode(8, &Address::new(Rc::clone(&ram), 0x2008), None);
     data.delete_varnode(freed).unwrap();
     let newer = data.new_varnode(8, &Address::new(Rc::clone(&ram), 0x2010), None);
-    assert!(newer < older, "the newer Varnode reuses the freed, lower slot");
+    assert!(
+        newer < older,
+        "the newer Varnode reuses the freed, lower slot"
+    );
     let raw: BTreeMap<VarnodeId, Evidence> =
-        [(older, Evidence::default()), (newer, Evidence::default())].into_iter().collect();
-    let order: Vec<VarnodeId> = by_creation(&data, &raw).into_iter().map(|(vn, _)| *vn).collect();
+        [(older, Evidence::default()), (newer, Evidence::default())]
+            .into_iter()
+            .collect();
+    let order: Vec<VarnodeId> = by_creation(&data, &raw)
+        .into_iter()
+        .map(|(vn, _)| *vn)
+        .collect();
     assert_eq!(order, vec![older, newer]);
 }

@@ -44,7 +44,10 @@ use std::path::PathBuf;
 use unlace_harness::testfunction::run_test_files_with_specs;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn x86_64_sla() -> PathBuf {
@@ -63,8 +66,12 @@ const SWITCHHIDE_FAIL_NAMES: &[&str] = &[];
 /// `switchhide.xml` assertions that PASS on the integrated tree: #1 (the 9-case
 /// count) off the jump-table partial-clone qlst re-attach, #2 (`default:`) via the
 /// guard-fold, #3 (`switch(v1.b)`) and #4 (`v1.b = 2;`) off the stack-var naming.
-const SWITCHHIDE_PASS_NAMES: &[&str] =
-    &["Switch Hide #1", "Switch Hide #2", "Switch Hide #3", "Switch Hide #4"];
+const SWITCHHIDE_PASS_NAMES: &[&str] = &[
+    "Switch Hide #1",
+    "Switch Hide #2",
+    "Switch Hide #3",
+    "Switch Hide #4",
+];
 
 #[test]
 fn switchhide_callarg_render_delta_pinned() {

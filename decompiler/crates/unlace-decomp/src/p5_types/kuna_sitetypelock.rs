@@ -69,10 +69,16 @@ pub fn apply_pending(data: &mut Funcdata) -> bool {
     let mut jobs = Vec::new();
     for i in 0..data.num_calls() {
         let op = data.get_call_specs(i).get_op();
-        let Some(o) = data.obank().get(op) else { continue };
-        let Some(ct) = data.get_override().find_output_typelock(o.get_addr()) else { continue };
+        let Some(o) = data.obank().get(op) else {
+            continue;
+        };
+        let Some(ct) = data.get_override().find_output_typelock(o.get_addr()) else {
+            continue;
+        };
         let Some(out) = o.get_out() else { continue };
-        let Some(v) = data.vbank().get(out) else { continue };
+        let Some(v) = data.vbank().get(out) else {
+            continue;
+        };
         if v.is_type_lock() || v.get_size() != ct.get_size() {
             continue;
         }
@@ -104,7 +110,9 @@ pub struct ActionSiteTypeLock {
 impl ActionSiteTypeLock {
     /// Construct the action in the given group.
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionSiteTypeLock { base: ActionBase::new(0, "sitetypelock", g) })
+        Box::new(ActionSiteTypeLock {
+            base: ActionBase::new(0, "sitetypelock", g),
+        })
     }
 }
 
@@ -119,7 +127,9 @@ impl Action for ActionSiteTypeLock {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionSiteTypeLock { base: self.base.clone() }))
+        Some(Box::new(ActionSiteTypeLock {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         crate::kuna_gonewtype::contribute(data);

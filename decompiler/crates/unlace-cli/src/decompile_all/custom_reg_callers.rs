@@ -24,6 +24,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use object::{Object, ObjectSection};
 use unlace_analysis::loader::macho_fat::SlicePref;
 use unlace_base::address::Address;
 use unlace_console::engine::ConsoleProgram;
@@ -31,7 +32,6 @@ use unlace_decomp::kuna_calleereginputs::CUSTOM;
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::translate::PcodeEmit;
-use object::{Object, ObjectSection};
 
 use crate::callgraph::CallGraph;
 use crate::image::image_bytes;
@@ -50,7 +50,10 @@ pub(crate) struct CustomRegPlan {
 
 impl CustomRegPlan {
     pub(crate) fn empty() -> Self {
-        CustomRegPlan { sites: BTreeMap::new(), entries: Vec::new() }
+        CustomRegPlan {
+            sites: BTreeMap::new(),
+            entries: Vec::new(),
+        }
     }
 
     pub(crate) fn is_empty(&self) -> bool {
@@ -85,13 +88,17 @@ impl Decision {
     /// side.
     pub(crate) fn install(&self, prog: &mut ConsoleProgram, kept: &BTreeSet<u64>) {
         use unlace_decomp::kuna_calleereginputs::key_registers;
-        let mut models: BTreeMap<u16, std::rc::Rc<unlace_decomp::fspec::ProtoModel>> = BTreeMap::new();
+        let mut models: BTreeMap<u16, std::rc::Rc<unlace_decomp::fspec::ProtoModel>> =
+            BTreeMap::new();
         let mut map: BTreeMap<u64, u16> = BTreeMap::new();
         for (&callee, &key) in self.keys.iter().filter(|(c, _)| kept.contains(c)) {
             if let std::collections::btree_map::Entry::Vacant(slot) = models.entry(key) {
                 let (regs, thisptr) = key_registers(key);
-                let Some(model) = prog.arch().kuna_build_reginput_model(&format!("__kuna_reg_{key:x}"), &regs, thisptr)
-                else {
+                let Some(model) = prog.arch().kuna_build_reginput_model(
+                    &format!("__kuna_reg_{key:x}"),
+                    &regs,
+                    thisptr,
+                ) else {
                     continue;
                 };
                 slot.insert(std::rc::Rc::new(model));
@@ -107,7 +114,13 @@ impl Decision {
 struct Collect(Vec<(OpCode, Option<VarnodeData>, Vec<VarnodeData>)>);
 
 impl PcodeEmit for Collect {
-    fn dump(&mut self, _at: &Address, opcode: OpCode, out: Option<&VarnodeData>, inputs: &[VarnodeData]) {
+    fn dump(
+        &mut self,
+        _at: &Address,
+        opcode: OpCode,
+        out: Option<&VarnodeData>,
+        inputs: &[VarnodeData],
+    ) {
         self.0.push((opcode, out.cloned(), inputs.to_vec()));
     }
 }
@@ -117,13 +130,22 @@ fn custom_regs(prog: &ConsoleProgram) -> Vec<(u64, u32, u8)> {
     let t = prog.arch().translate();
     CUSTOM
         .iter()
-        .filter_map(|&(name, bit)| t.get_register_data(name).ok().map(|v| (v.offset, v.size, bit)))
+        .filter_map(|&(name, bit)| {
+            t.get_register_data(name)
+                .ok()
+                .map(|v| (v.offset, v.size, bit))
+        })
         .collect()
 }
 
 /// List every eligible callee's direct call sites off the call graph. Decodes
 /// nothing; empty unless the `custom` extension is on for a 32-bit Windows image.
-pub(crate) fn analyze(prog: &ConsoleProgram, graph: &CallGraph, binary: &str, pref: SlicePref) -> CustomRegPlan {
+pub(crate) fn analyze(
+    prog: &ConsoleProgram,
+    graph: &CallGraph,
+    binary: &str,
+    pref: SlicePref,
+) -> CustomRegPlan {
     if !unlace_decomp::kuna_calleereginputs::custom_applies(prog.arch()) {
         return CustomRegPlan::empty();
     }
@@ -151,8 +173,11 @@ pub(crate) fn analyze(prog: &ConsoleProgram, graph: &CallGraph, binary: &str, pr
 /// Join the callee half the first pass recorded with the caller half, decoding
 /// only the callers of callees that read a custom register.
 pub(crate) fn decide(prog: &ConsoleProgram, plan: &CustomRegPlan) -> Decision {
-    use unlace_decomp::kuna_calleereginputs::{ecx_edx_key, KEY_CUSTOM_SHIFT, READS_ECX_EDX};
-    let mut decision = Decision { keys: BTreeMap::new(), callers: BTreeMap::new() };
+    use unlace_decomp::kuna_calleereginputs::{KEY_CUSTOM_SHIFT, READS_ECX_EDX, ecx_edx_key};
+    let mut decision = Decision {
+        keys: BTreeMap::new(),
+        callers: BTreeMap::new(),
+    };
     let (Some(code), Some(space)) = (
         prog.arch().manage().get_default_code_space().cloned(),
         prog.arch().manage().get_space_by_name("register").cloned(),
@@ -173,25 +198,36 @@ pub(crate) fn decide(prog: &ConsoleProgram, plan: &CustomRegPlan) -> Decision {
         let sites = &plan.sites[&entry];
         let printed = prog.arch().kuna_custom_reg_calls.get(&entry);
         if printed.is_some_and(|calls| {
-            calls.iter().any(|&(caller, site)| caller != entry && !sites.contains(&(site, caller)))
+            calls
+                .iter()
+                .any(|&(caller, site)| caller != entry && !sites.contains(&(site, caller)))
         }) {
             continue;
         }
         let addr = Address::new(code.clone(), entry);
-        if unlace_decomp::kuna_calleepurge::moves_stack(prog.arch(), &addr) || ecx_edx_key(prog.arch(), &addr) != 0 {
+        if unlace_decomp::kuna_calleepurge::moves_stack(prog.arch(), &addr)
+            || ecx_edx_key(prog.arch(), &addr) != 0
+        {
             continue;
         }
         let mut callers = BTreeSet::new();
         let all_set = sites.iter().all(|&(site, owner)| {
             callers.insert(owner);
             let masks = scanned.entry(owner).or_insert_with(|| {
-                let extent = plan.entries.binary_search_by_key(&owner, |(e, _)| *e).map_or(0, |i| plan.entries[i].1);
+                let extent = plan
+                    .entries
+                    .binary_search_by_key(&owner, |(e, _)| *e)
+                    .map_or(0, |i| plan.entries[i].1);
                 scan_caller(prog, &code, space.get_index(), &regs, owner, extent)
             });
-            masks.get(&site).is_some_and(|m| m & callee_mask == callee_mask)
+            masks
+                .get(&site)
+                .is_some_and(|m| m & callee_mask == callee_mask)
         });
         if all_set {
-            decision.keys.insert(entry, (callee_mask as u16) << KEY_CUSTOM_SHIFT);
+            decision
+                .keys
+                .insert(entry, (callee_mask as u16) << KEY_CUSTOM_SHIFT);
             decision.callers.insert(entry, callers);
         }
     }
@@ -204,8 +240,12 @@ pub(crate) fn decide(prog: &ConsoleProgram, plan: &CustomRegPlan) -> Decision {
 /// direct calls the graph lists, so their convention is fixed.
 fn address_taken(binary: &str, pref: SlicePref, entries: &BTreeSet<u64>) -> BTreeSet<u64> {
     let mut out = BTreeSet::new();
-    let Ok(bytes) = image_bytes(binary, pref) else { return out };
-    let Ok(file) = unlace_analysis::loadimage_object::parse_object(&bytes) else { return out };
+    let Ok(bytes) = image_bytes(binary, pref) else {
+        return out;
+    };
+    let Ok(file) = unlace_analysis::loadimage_object::parse_object(&bytes) else {
+        return out;
+    };
     let (lo, hi) = match (entries.iter().min(), entries.iter().max()) {
         (Some(&lo), Some(&hi)) => (lo, hi),
         _ => return out,
@@ -262,13 +302,23 @@ fn scan_caller(
                 break 'paths;
             }
             collect.0.clear();
-            let Ok(len) = translate.one_instruction(&mut collect, &Address::new(code.clone(), at)) else { break };
+            let Ok(len) = translate.one_instruction(&mut collect, &Address::new(code.clone(), at))
+            else {
+                break;
+            };
             let len = len.max(1) as u64;
-            let mut insn = Insn { len, writes: 0, call: false };
+            let mut insn = Insn {
+                len,
+                writes: 0,
+                call: false,
+            };
             let mut ends = false;
             let mut falls = true;
             for (opc, outv, ins) in &collect.0 {
-                if let Some(o) = outv.as_ref().filter(|o| o.space.as_ref().is_some_and(|s| s.get_index() == reg_idx)) {
+                if let Some(o) = outv
+                    .as_ref()
+                    .filter(|o| o.space.as_ref().is_some_and(|s| s.get_index() == reg_idx))
+                {
                     for &(off, size, bit) in regs {
                         if o.offset.max(off) < (o.offset + o.size as u64).min(off + size as u64) {
                             insn.writes |= bit;

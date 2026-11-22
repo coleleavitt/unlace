@@ -26,7 +26,7 @@ use std::rc::Rc;
 
 use unlace_base::types::int4;
 
-use unlace_decomp::dtype::{type_metatype, Datatype, TypeFactory};
+use unlace_decomp::dtype::{Datatype, TypeFactory, type_metatype};
 use unlace_decomp::kuna_dwarfvariants::VariantFacet;
 
 /// The discriminant→name map for the synthesized enum: every NAMED facet with
@@ -34,7 +34,11 @@ use unlace_decomp::kuna_dwarfvariants::VariantFacet;
 /// printer looks a constant up under — the `build_enum` rule). First facet at
 /// a value wins; a duplicate is an alias the printer could not disambiguate.
 pub(super) fn tag_namemap(facets: &[VariantFacet], tag_size: int4) -> BTreeMap<u64, String> {
-    let mask: u64 = if tag_size >= 8 { u64::MAX } else { (1u64 << (tag_size * 8)) - 1 };
+    let mask: u64 = if tag_size >= 8 {
+        u64::MAX
+    } else {
+        (1u64 << (tag_size * 8)) - 1
+    };
     let mut nmap = BTreeMap::new();
     for f in facets {
         let Some(v) = f.discr else { continue };
@@ -74,7 +78,9 @@ pub(super) fn synthesized_tag_enum(
     if let Ok(Some(existing)) = types.find_by_name(&name) {
         return (existing.is_enum_type() && existing.get_size() == tag_size).then_some(existing);
     }
-    let ct = types.get_type_enum_sized(&name, tag_size, type_metatype::TYPE_ENUM_UINT).ok()?;
+    let ct = types
+        .get_type_enum_sized(&name, tag_size, type_metatype::TYPE_ENUM_UINT)
+        .ok()?;
     types.set_enum_values(&ct, nmap).ok()
 }
 
@@ -97,8 +103,8 @@ mod tests {
         let facets = [
             facet("Ok", Some(0)),
             facet("Err", Some(1)),
-            facet("None", None),            // default variant: no single value
-            facet("", Some(2)),             // nameless: nothing to print
+            facet("None", None), // default variant: no single value
+            facet("", Some(2)),  // nameless: nothing to print
             facet("Alias", Some(0x1_0000_0001)), // masked to 1 at width 4 -> Err wins
         ];
         let m = tag_namemap(&facets, 4);

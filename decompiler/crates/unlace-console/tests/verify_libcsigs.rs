@@ -15,11 +15,16 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Bootstrap `fauxware`, commit the analysis facts, decompile `func` and return
@@ -31,14 +36,20 @@ fn decompile(func: &str) -> String {
 
     let path = root
         .join("decompiler/crates/unlace-analysis/tests/fixtures/fauxware")
-        .to_str().expect("UTF-8 fixture path")
+        .to_str()
+        .expect("UTF-8 fixture path")
         .to_string();
     let mut prog = bootstrap_from_object(&path, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
-    let cmds: Vec<String> =
-        [format!("load function {func}"), "decompile".into(), "print C".into()].to_vec();
+    let cmds: Vec<String> = [
+        format!("load function {func}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .to_vec();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -74,7 +85,9 @@ fn fd_declaration(code: &str) -> Option<&str> {
         .lines()
         .find_map(|l| l.trim().split_once(" = open(").map(|(lhs, _)| lhs.trim()))?;
     let suffix = format!(" {name};");
-    code.lines().map(str::trim).find(|l| l.split("//").next().unwrap().trim_end().ends_with(&suffix))
+    code.lines()
+        .map(str::trim)
+        .find(|l| l.split("//").next().unwrap().trim_end().ends_with(&suffix))
 }
 
 /// The same call's RETURN type travels too: `open` yields an `int` file
@@ -111,6 +124,4 @@ fn exit_takes_its_int_status_and_stays_no_return() {
         on.contains("void exit(int4 a0)"),
         "the default must give `exit` its int status, got:\n{on}"
     );
-
 }
-

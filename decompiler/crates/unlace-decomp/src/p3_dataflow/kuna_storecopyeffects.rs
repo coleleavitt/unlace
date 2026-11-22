@@ -4,8 +4,8 @@
 
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use unlace_base::address::Address;
 use crate::varnode::varnode_flags;
+use unlace_base::address::Address;
 use unlace_base::space::spacetype;
 use unlace_num::opcodes::OpCode;
 
@@ -13,12 +13,19 @@ use unlace_num::opcodes::OpCode;
 /// Without them its existing readers and exit values still name the old SSA
 /// version, and dead-code removal can discard the new COPY.
 pub(crate) fn can_materialize(data: &Funcdata, store: OpId, addr: &Address, size: i32) -> bool {
-    let Some(space) = addr.get_space() else { return false };
+    let Some(space) = addr.get_space() else {
+        return false;
+    };
     if space.get_type() != spacetype::IPTR_PROCESSOR || data.heritage_pass(addr) < 0 {
         return true;
     }
     let op = data.obank().get(store).expect("storecopyeffects: store");
-    if data.get_arch().query_global_properties(addr, size, op.get_addr()) & varnode_flags::persist == 0 {
+    if data
+        .get_arch()
+        .query_global_properties(addr, size, op.get_addr())
+        & varnode_flags::persist
+        == 0
+    {
         return true;
     }
     let mut covered = u128::from(addr.get_offset());
@@ -32,13 +39,17 @@ pub(crate) fn can_materialize(data: &Funcdata, store: OpId, addr: &Address, size
                 break;
             }
             prev = data.op_previous_op(effect);
-            let Some(iop) = marker.get_in(1).and_then(|id| data.vbank().get(id)) else { continue };
+            let Some(iop) = marker.get_in(1).and_then(|id| data.vbank().get(id)) else {
+                continue;
+            };
             if iop.get_space().get_type() != spacetype::IPTR_IOP
                 || crate::funcdata_varnode::op_iop_decode(iop.get_offset()) != store
             {
                 continue;
             }
-            let Some(out) = marker.get_out().and_then(|id| data.vbank().get(id)) else { continue };
+            let Some(out) = marker.get_out().and_then(|id| data.vbank().get(id)) else {
+                continue;
+            };
             let lo = u128::from(out.get_offset());
             let hi = lo + out.get_size() as u128;
             if out.get_space().get_index() == space.get_index() && lo <= covered && covered < hi {

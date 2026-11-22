@@ -42,16 +42,25 @@ fn widened_scalar_and_simd_arithmetic_matches_native_bits() {
 
     let specs = common::repo_root().join("specs");
     let (printed, stderr, rc) = common::run_kuna(&[
-        "decompile-all", native.to_str().unwrap(),
-        "--functions", "widened_update,packed_update,float_update,widen_roundtrip,widened_product,widened_quotient",
-        "--sleighpath", specs.to_str().unwrap(),
+        "decompile-all",
+        native.to_str().unwrap(),
+        "--functions",
+        "widened_update,packed_update,float_update,widen_roundtrip,widened_product,widened_quotient",
+        "--sleighpath",
+        specs.to_str().unwrap(),
         "--assert-strict",
-        "--assert", "prototype widened_update float widened_update(float accum,float neg_theta,float local_axis)",
-        "--assert", "prototype packed_update void packed_update(float *out,float *accum,float *neg_theta,float *local_axis)",
-        "--assert", "prototype float_update float float_update(float accum,float neg_theta,float local_axis)",
-        "--assert", "prototype widen_roundtrip float widen_roundtrip(float value)",
-        "--assert", "prototype widened_product float widened_product(float a,float b,float c)",
-        "--assert", "prototype widened_quotient float widened_quotient(float a,float b,float c)",
+        "--assert",
+        "prototype widened_update float widened_update(float accum,float neg_theta,float local_axis)",
+        "--assert",
+        "prototype packed_update void packed_update(float *out,float *accum,float *neg_theta,float *local_axis)",
+        "--assert",
+        "prototype float_update float float_update(float accum,float neg_theta,float local_axis)",
+        "--assert",
+        "prototype widen_roundtrip float widen_roundtrip(float value)",
+        "--assert",
+        "prototype widened_product float widened_product(float a,float b,float c)",
+        "--assert",
+        "prototype widened_quotient float widened_quotient(float a,float b,float c)",
     ]);
     assert_eq!(rc, 0, "{stderr}\n{printed}");
     let source = dir.join("printed.c");

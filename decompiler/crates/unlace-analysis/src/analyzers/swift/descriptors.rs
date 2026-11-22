@@ -515,7 +515,8 @@ impl<'a> Reader<'a> {
                         ctx.field_offset_vector = self.img.read_u32(addr.wrapping_add(24))?;
                     }
                     ContextKind::Enum => {
-                        ctx.num_payload_cases = self.img.read_u32(addr.wrapping_add(20))? & 0x00ff_ffff;
+                        ctx.num_payload_cases =
+                            self.img.read_u32(addr.wrapping_add(20))? & 0x00ff_ffff;
                         ctx.num_empty_cases = self.img.read_u32(addr.wrapping_add(24))?;
                     }
                     ContextKind::Class => {

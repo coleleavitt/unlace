@@ -12,7 +12,7 @@ use unlace_base::xml::{DocumentStorage, Element};
 
 use unlace_decomp::decompile_drive::{decompile_func, print_c};
 use unlace_decomp::options::register_option_elements;
-use unlace_decomp::sleigh_arch::{register_sleigh_arch_ids, LanguageDatabase};
+use unlace_decomp::sleigh_arch::{LanguageDatabase, register_sleigh_arch_ids};
 use unlace_decomp::varnode::varnode_flags;
 use unlace_decomp::xml_arch::XmlArchitectureCapability;
 
@@ -179,7 +179,10 @@ fn bounded_byte_map_recovers_only_its_reachable_selector_values() {
 /// ranges past `jumptablemax`, but the map still selects three table rows.
 #[test]
 fn byte_map_longer_than_the_table_limit_recovers_only_its_selector_values() {
-    let code = decompile_dispatch(include_bytes!("fixtures/selector_domain_wide_text.bin"), true);
+    let code = decompile_dispatch(
+        include_bytes!("fixtures/selector_domain_wide_text.bin"),
+        true,
+    );
 
     assert_eq!(
         code.matches("case ").count(),

@@ -139,12 +139,30 @@ fn decompile(path: &PathBuf, addr: u64, mode: &str) -> String {
 }
 
 fn decompile_off(path: &PathBuf, addr: u64) -> String {
-    decompile_with(path, addr, &[&WALK_OFF[..], &["--option", "flowmode", "off"]].concat())
+    decompile_with(
+        path,
+        addr,
+        &[&WALK_OFF[..], &["--option", "flowmode", "off"]].concat(),
+    )
 }
 
 const WALK_OFF: [&str; 3] = ["--option", "armwalkmode", "off"];
-const ON: [&str; 6] = ["--option", "armwalkmode", "off", "--option", "flowmode", "on"];
-const AFTERCALL: [&str; 6] = ["--option", "armwalkmode", "off", "--option", "flowmode", "aftercall"];
+const ON: [&str; 6] = [
+    "--option",
+    "armwalkmode",
+    "off",
+    "--option",
+    "flowmode",
+    "on",
+];
+const AFTERCALL: [&str; 6] = [
+    "--option",
+    "armwalkmode",
+    "off",
+    "--option",
+    "flowmode",
+    "aftercall",
+];
 const VALUES: [&[&str]; 3] = [&[], &ON, &AFTERCALL];
 
 /// The body `decompile-all` printed for `name`.
@@ -191,14 +209,23 @@ fn a_blx_target_mode_does_not_reach_the_arm_callee_of_an_earlier_bl() {
 /// `bl` target and the `blx` commit's Thumb to its own target only.
 #[test]
 fn the_walk_carries_each_callee_mode_by_default() {
-    for (stem, code) in [("walk-blx-bl", blx_then_bl()), ("walk-bl-blx", bl_then_blx())] {
+    for (stem, code) in [
+        ("walk-blx-bl", blx_then_bl()),
+        ("walk-bl-blx", bl_then_blx()),
+    ] {
         let path = stripped(stem, &code);
         for mode in ["reliable", "auto"] {
             assert_helpers(&path, &["--mode", mode]);
         }
         let entry = decompile(&path, 0x10000, "reliable");
-        assert!(entry.contains("sub_10080(") && entry.contains("sub_10040()"), "{entry}");
-        assert!(decompile_off(&path, ARM_HELPER).contains("halt_missing"), "{stem}");
+        assert!(
+            entry.contains("sub_10080(") && entry.contains("sub_10040()"),
+            "{entry}"
+        );
+        assert!(
+            decompile_off(&path, ARM_HELPER).contains("halt_missing"),
+            "{stem}"
+        );
         std::fs::remove_file(path).unwrap();
     }
 }
@@ -299,11 +326,38 @@ fn two_proven_modes_for_one_address_paint_nothing() {
         let off = decompile_with(
             &path,
             addr,
-            &["--mode", "auto", "--option", "armwalkmode", "off", "--option", "flowmode", "off"],
+            &[
+                "--mode",
+                "auto",
+                "--option",
+                "armwalkmode",
+                "off",
+                "--option",
+                "flowmode",
+                "off",
+            ],
         );
         for extra in [
-            &["--mode", "auto", "--option", "armwalkmode", "off", "--option", "flowmode", "on"][..],
-            &["--mode", "auto", "--option", "armwalkmode", "off", "--option", "flowmode", "aftercall"],
+            &[
+                "--mode",
+                "auto",
+                "--option",
+                "armwalkmode",
+                "off",
+                "--option",
+                "flowmode",
+                "on",
+            ][..],
+            &[
+                "--mode",
+                "auto",
+                "--option",
+                "armwalkmode",
+                "off",
+                "--option",
+                "flowmode",
+                "aftercall",
+            ],
         ] {
             assert_eq!(decompile_with(&path, addr, extra), off, "{extra:?}");
         }
@@ -456,10 +510,26 @@ fn arm_exports_are_proven_and_pointer_only_thumb_keeps_its_mode() {
     let lib = path.to_str().unwrap();
     for extra in [&[][..], &AFTERCALL[..]] {
         let arm = run(&["decompile", lib, "arm_export"], extra);
-        assert!(arm.contains("return v1 + v2 + sub_294(a0);"), "{extra:?}: {arm}");
+        assert!(
+            arm.contains("return v1 + v2 + sub_294(a0);"),
+            "{extra:?}: {arm}"
+        );
     }
-    let off = run(&["decompile", lib, "arm_export", "--option", "flowmode", "off"], &WALK_OFF);
-    assert!(off.contains("halt_missing"), "armwalkmode and flowmode off: {off}");
+    let off = run(
+        &[
+            "decompile",
+            lib,
+            "arm_export",
+            "--option",
+            "flowmode",
+            "off",
+        ],
+        &WALK_OFF,
+    );
+    assert!(
+        off.contains("halt_missing"),
+        "armwalkmode and flowmode off: {off}"
+    );
     assert_eq!(run(&["decompile", lib, "arm_export"], &ON), off);
     for (name, pointer_only, ternary) in [
         (
@@ -490,7 +560,10 @@ fn whole_binary_decompile_of_gcc_interworking_objects_has_no_bad_decode() {
         let lib = path.to_str().unwrap();
         let all = kuna(&["decompile-all", lib]);
         assert!(!all.contains("halt_"), "{name}: {all}");
-        assert!(run(&["decompile-all", lib], &WALK_OFF).contains("halt_"), "{name}");
+        assert!(
+            run(&["decompile-all", lib], &WALK_OFF).contains("halt_"),
+            "{name}"
+        );
     }
 }
 
@@ -520,12 +593,26 @@ fn static_thumb_functions_after_an_arm_export_keep_their_mode() {
                 first.contains("a0 = (0xb <= a0) ? a0 + -10 : a0 << 1;"),
                 "{name} {extra:?}: {first}"
             );
-            let second = run(&["decompile", lib, popcount.0, "--addr", "--option", "looprotate", "off"], extra);
+            let second = run(
+                &[
+                    "decompile",
+                    lib,
+                    popcount.0,
+                    "--addr",
+                    "--option",
+                    "looprotate",
+                    "off",
+                ],
+                extra,
+            );
             assert!(second.contains(popcount.1), "{name} {extra:?}: {second}");
             let all = run(&["decompile-all", lib], extra);
             for entry in [ternary, popcount.0] {
                 let header = format!("@ {entry}");
-                assert!(all.contains(&header), "{name} {extra:?}: no {entry} in\n{all}");
+                assert!(
+                    all.contains(&header),
+                    "{name} {extra:?}: no {entry} in\n{all}"
+                );
             }
         }
     }
@@ -564,9 +651,23 @@ fn a_call_that_never_returns_leaves_the_next_function_in_its_own_mode() {
         let path = fixture(name);
         let lib = path.to_str().unwrap();
         for extra in VALUES {
-            let alone = run(&["decompile", lib, addr, "--addr", "--option", "looprotate", "off"], extra);
+            let alone = run(
+                &[
+                    "decompile",
+                    lib,
+                    addr,
+                    "--addr",
+                    "--option",
+                    "looprotate",
+                    "off",
+                ],
+                extra,
+            );
             assert!(alone.contains("v1 += v2 ^ 5;"), "{name} {extra:?}: {alone}");
-            let all = run(&["decompile-all", lib, "--option", "looprotate", "off"], extra);
+            let all = run(
+                &["decompile-all", lib, "--option", "looprotate", "off"],
+                extra,
+            );
             let named = format!("sub_{}", &addr[2..]);
             assert!(
                 body(&all, &named).contains("v1 += v2 ^ 5;"),
@@ -584,9 +685,24 @@ fn a_call_that_never_returns_leaves_the_next_function_in_its_own_mode() {
 fn static_thumb_functions_after_an_unsized_arm_export_keep_their_mode() {
     let path = fixture("arm_unsized_export_le32");
     for extra in VALUES {
-        let all = run(&["decompile-all", path.to_str().unwrap(), "--option", "looprotate", "off"], extra);
-        assert!(body(&all, "sub_410").contains("v1 += v2 ^ 5;"), "{extra:?}: {all}");
-        assert!(body(&all, "sub_430").contains("a0 >>= 1"), "{extra:?}: {all}");
+        let all = run(
+            &[
+                "decompile-all",
+                path.to_str().unwrap(),
+                "--option",
+                "looprotate",
+                "off",
+            ],
+            extra,
+        );
+        assert!(
+            body(&all, "sub_410").contains("v1 += v2 ^ 5;"),
+            "{extra:?}: {all}"
+        );
+        assert!(
+            body(&all, "sub_430").contains("a0 >>= 1"),
+            "{extra:?}: {all}"
+        );
         assert!(!body(&all, "sub_430").contains("halt_"), "{extra:?}: {all}");
     }
 }

@@ -32,13 +32,19 @@ fn common_needs_one_type_for_every_combination() {
 }
 
 fn arm(kept: u8, conv: Option<(u64, u8, u8)>) -> Arm {
-    Arm { kept, conv: conv.map(|(o, t, s)| (op(o), t, s)) }
+    Arm {
+        kept,
+        conv: conv.map(|(o, t, s)| (op(o), t, s)),
+    }
 }
 
 #[test]
 fn a_promoted_byte_arm_against_an_int_arm_drops() {
     // c ? (int)ch : 0
-    assert_eq!(choose(arm(INT, Some((1, INT, INT))), arm(INT, None)), vec![op(1)]);
+    assert_eq!(
+        choose(arm(INT, Some((1, INT, INT))), arm(INT, None)),
+        vec![op(1)]
+    );
 }
 
 #[test]
@@ -52,26 +58,41 @@ fn an_arm_whose_type_the_other_arm_widens_keeps_its_cast() {
 #[test]
 fn a_widening_to_the_other_arms_type_drops() {
     // c ? (long)i : l
-    assert_eq!(choose(arm(LONG, Some((1, LONG, INT))), arm(LONG, None)), vec![op(1)]);
+    assert_eq!(
+        choose(arm(LONG, Some((1, LONG, INT))), arm(LONG, None)),
+        vec![op(1)]
+    );
     // c ? (unsigned long)uc : ul
-    assert_eq!(choose(arm(ULONG, Some((1, ULONG, INT))), arm(ULONG, None)), vec![op(1)]);
+    assert_eq!(
+        choose(arm(ULONG, Some((1, ULONG, INT))), arm(ULONG, None)),
+        vec![op(1)]
+    );
 }
 
 #[test]
 fn an_unknown_operand_must_convert_the_same_under_every_promotion() {
     // c ? (unsigned int)(a & b) : 0xffffffff where a & b may be int or unsigned int
     assert_eq!(
-        choose(arm(UINT, Some((1, UINT, INT | UINT))), arm(UINT | LONG, None)),
+        choose(
+            arm(UINT, Some((1, UINT, INT | UINT))),
+            arm(UINT | LONG, None)
+        ),
         Vec::<OpId>::new()
     );
-    assert_eq!(choose(arm(LONG, Some((1, LONG, INT | UINT))), arm(LONG, None)), vec![op(1)]);
+    assert_eq!(
+        choose(arm(LONG, Some((1, LONG, INT | UINT))), arm(LONG, None)),
+        vec![op(1)]
+    );
 }
 
 #[test]
 fn both_casts_go_only_when_the_bare_pair_keeps_the_type() {
     // c ? (long)i : (long)u -- bare, int and unsigned int meet as unsigned int
     assert_eq!(
-        choose(arm(LONG, Some((1, LONG, INT))), arm(LONG, Some((2, LONG, UINT)))),
+        choose(
+            arm(LONG, Some((1, LONG, INT))),
+            arm(LONG, Some((2, LONG, UINT)))
+        ),
         vec![op(1)]
     );
     // c ? (int)ch : (int)sh
@@ -81,7 +102,10 @@ fn both_casts_go_only_when_the_bare_pair_keeps_the_type() {
     );
     // c ? (unsigned long)uc : (unsigned long)ui
     assert_eq!(
-        choose(arm(ULONG, Some((1, ULONG, INT))), arm(ULONG, Some((2, ULONG, UINT)))),
+        choose(
+            arm(ULONG, Some((1, ULONG, INT))),
+            arm(ULONG, Some((2, ULONG, UINT)))
+        ),
         vec![op(1)]
     );
 }

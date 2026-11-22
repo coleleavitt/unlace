@@ -7,11 +7,11 @@ use std::rc::Rc;
 use unlace_console::assertions::Outcome;
 use unlace_console::disasm::{hex, mapped_run_end, read_upto};
 use unlace_console::engine::ConsoleProgram;
-use unlace_console::inspect::{data_uses, section_rows, SectionRow};
+use unlace_console::inspect::{SectionRow, data_uses, section_rows};
 use unlace_decomp::dtype::Datatype;
 
 use crate::inspect::target_json;
-use crate::json::{arr, assertions_json, Obj};
+use crate::json::{Obj, arr, assertions_json};
 
 /// The most bytes one `data` window spans.
 pub const DATA_MAX: u64 = 16 * 1024;
@@ -33,7 +33,8 @@ struct Item {
 
 impl Item {
     fn end(&self) -> u64 {
-        self.address.saturating_add(u64::try_from(self.ty.get_size()).unwrap_or(0).max(1))
+        self.address
+            .saturating_add(u64::try_from(self.ty.get_size()).unwrap_or(0).max(1))
     }
 }
 
@@ -43,7 +44,10 @@ impl Item {
 fn items(prog: &ConsoleProgram) -> Vec<Item> {
     use unlace_decomp::dtype::type_metatype::TYPE_CODE;
     let arch = prog.arch();
-    let (Some(scope), Some(space)) = (arch.symboltab.get_global_scope(), arch.manage().get_default_data_space()) else {
+    let (Some(scope), Some(space)) = (
+        arch.symboltab.get_global_scope(),
+        arch.manage().get_default_data_space(),
+    ) else {
         return Vec::new();
     };
     let mut out: Vec<Item> = arch
@@ -51,9 +55,17 @@ fn items(prog: &ConsoleProgram) -> Vec<Item> {
         .scope_space_symbol_specs(scope, space.get_index() as usize)
         .into_iter()
         .filter(|(_, ct, _, _)| ct.get_metatype() != TYPE_CODE)
-        .map(|(name, ty, addr, _)| Item { name, address: addr.get_offset(), ty })
+        .map(|(name, ty, addr, _)| Item {
+            name,
+            address: addr.get_offset(),
+            ty,
+        })
         .collect();
-    out.sort_by(|a, b| a.address.cmp(&b.address).then_with(|| b.ty.get_size().cmp(&a.ty.get_size())));
+    out.sort_by(|a, b| {
+        a.address
+            .cmp(&b.address)
+            .then_with(|| b.ty.get_size().cmp(&a.ty.get_size()))
+    });
     out
 }
 
@@ -113,11 +125,15 @@ fn layout_json(prog: &ConsoleProgram, ty: &Rc<Datatype>, depth: usize) -> String
         }
         "array" if depth > 0 => {
             if let (Some(elem), Some(count)) = (base.get_array_base(), base.num_elements()) {
-                o = o.raw("elem", &layout_json(prog, &elem, depth - 1)).num("count", count);
+                o = o
+                    .raw("elem", &layout_json(prog, &elem, depth - 1))
+                    .num("count", count);
             }
         }
         "struct" | "union" if depth > 0 => {
-            let n = usize::try_from(base.num_depend()).unwrap_or(0).min(FIELD_MAX);
+            let n = usize::try_from(base.num_depend())
+                .unwrap_or(0)
+                .min(FIELD_MAX);
             let fields = arr((0..n).filter_map(|i| {
                 let f = base.get_field(i32::try_from(i).ok()?)?;
                 Some(
@@ -137,14 +153,22 @@ fn layout_json(prog: &ConsoleProgram, ty: &Rc<Datatype>, depth: usize) -> String
 
 /// The section holding `addr`: the allocated section table's row, else none.
 fn section_of(sections: &[SectionRow], addr: u64) -> Option<&SectionRow> {
-    sections.iter().find(|s| addr >= s.address && addr - s.address < s.size.max(1))
+    sections
+        .iter()
+        .find(|s| addr >= s.address && addr - s.address < s.size.max(1))
 }
 
 /// The window a `data` request shows: `[addr, addr + len)` when the caller
 /// names a length, else about [`SPAN`] bytes from [`BEFORE`] ahead of the item
 /// holding `addr`, widened to whole items at both ends; never more than
 /// [`DATA_MAX`] bytes, never outside the section (or mapped run) holding `addr`.
-fn window(prog: &ConsoleProgram, sections: &[SectionRow], all: &[Item], addr: u64, len: Option<u64>) -> (u64, u64) {
+fn window(
+    prog: &ConsoleProgram,
+    sections: &[SectionRow],
+    all: &[Item],
+    addr: u64,
+    len: Option<u64>,
+) -> (u64, u64) {
     let (lo, hi) = match section_of(sections, addr) {
         Some(s) => (s.address, s.address.saturating_add(s.size.max(1))),
         None => match mapped_run_end(prog, addr) {
@@ -156,16 +180,27 @@ fn window(prog: &ConsoleProgram, sections: &[SectionRow], all: &[Item], addr: u6
         let start = addr.max(lo);
         return (start, start.saturating_add(len.min(DATA_MAX)).min(hi));
     }
-    let holder = all.iter().filter(|i| i.address <= addr && addr < i.end()).max_by_key(|i| i.address);
+    let holder = all
+        .iter()
+        .filter(|i| i.address <= addr && addr < i.end())
+        .max_by_key(|i| i.address);
     let (first, last) = holder.map_or((addr, addr.saturating_add(1)), |i| (i.address, i.end()));
-    let mut start = if last.saturating_sub(first) > DATA_MAX { addr } else { first }.saturating_sub(BEFORE);
+    let mut start = if last.saturating_sub(first) > DATA_MAX {
+        addr
+    } else {
+        first
+    }
+    .saturating_sub(BEFORE);
     start = (start.max(lo) & !0xf).max(lo);
     if let Some(i) = all.iter().find(|i| i.address < start && start < i.end()) {
         if last.saturating_sub(i.address) <= DATA_MAX {
             start = i.address.max(lo);
         }
     }
-    let mut end = last.max(start.saturating_add(SPAN)).min(start.saturating_add(DATA_MAX)).min(hi);
+    let mut end = last
+        .max(start.saturating_add(SPAN))
+        .min(start.saturating_add(DATA_MAX))
+        .min(hi);
     if let Some(i) = all.iter().find(|i| i.address < end && end < i.end()) {
         if i.end().saturating_sub(start) <= DATA_MAX {
             end = i.end().min(hi);
@@ -177,13 +212,20 @@ fn window(prog: &ConsoleProgram, sections: &[SectionRow], all: &[Item], addr: u6
 /// The NUL-terminated printable text at `addr`, when there is some.
 fn c_string(prog: &ConsoleProgram, addr: u64) -> Option<String> {
     let mut bytes = Vec::new();
-    let end = mapped_run_end(prog, addr).map_or(TEXT_MAX as u64, |(end, _)| end.saturating_sub(addr));
-    let got = read_upto(prog, addr, (TEXT_MAX as u64).min(end) as usize + 1, &mut bytes);
+    let end =
+        mapped_run_end(prog, addr).map_or(TEXT_MAX as u64, |(end, _)| end.saturating_sub(addr));
+    let got = read_upto(
+        prog,
+        addr,
+        (TEXT_MAX as u64).min(end) as usize + 1,
+        &mut bytes,
+    );
     bytes.truncate(got);
     let nul = bytes.iter().position(|&b| b == 0)?;
     let text = &bytes[..nul];
     let printable = |b: &u8| (0x20..0x7f).contains(b) || matches!(b, b'\t' | b'\n' | b'\r');
-    (!text.is_empty() && text.iter().all(printable)).then(|| String::from_utf8_lossy(text).into_owned())
+    (!text.is_empty() && text.iter().all(printable))
+        .then(|| String::from_utf8_lossy(text).into_owned())
 }
 
 /// The `data` document: `{binary, address, start, size, bytes, pointer_size,
@@ -195,14 +237,25 @@ fn c_string(prog: &ConsoleProgram, addr: u64) -> Option<String> {
 /// the window's pointer-aligned words that hold an address inside an allocated
 /// section: the data symbol or function there (`name`, `offset` into it) and
 /// the C string starting there (`text`), when there is one.
-pub fn data_json(binary: &str, prog: &ConsoleProgram, addr: u64, len: Option<u64>, assertions: &[Outcome]) -> String {
+pub fn data_json(
+    binary: &str,
+    prog: &ConsoleProgram,
+    addr: u64,
+    len: Option<u64>,
+    assertions: &[Outcome],
+) -> String {
     let sections = section_rows(prog);
     let all = items(prog);
     let (start, end) = window(prog, &sections, &all, addr, len);
     let mut bytes = Vec::new();
     let run_end = mapped_run_end(prog, start).map_or(end, |(e, _)| e.min(end));
     let got = if prog.vma_bytes_mapped(start) {
-        read_upto(prog, start, run_end.saturating_sub(start) as usize, &mut bytes)
+        read_upto(
+            prog,
+            start,
+            run_end.saturating_sub(start) as usize,
+            &mut bytes,
+        )
     } else {
         0
     };
@@ -213,8 +266,11 @@ pub fn data_json(binary: &str, prog: &ConsoleProgram, addr: u64, len: Option<u64
         .get_default_data_space()
         .map_or(8, |s| u64::from(s.get_addr_size()));
     let big = prog.arch().archid.split(':').nth(1) == Some("BE");
-    let functions: Vec<(u64, String)> =
-        prog.function_entries_canonical().into_iter().map(|e| (e.addr.get_offset(), e.name)).collect();
+    let functions: Vec<(u64, String)> = prog
+        .function_entries_canonical()
+        .into_iter()
+        .map(|e| (e.addr.get_offset(), e.name))
+        .collect();
     let in_window = |i: &&Item| i.address < end.max(start.saturating_add(1)) && i.end() > start;
     let shown: Vec<&Item> = all.iter().filter(in_window).collect();
     let item_rows = arr(shown.iter().map(|i| {
@@ -230,11 +286,16 @@ pub fn data_json(binary: &str, prog: &ConsoleProgram, addr: u64, len: Option<u64
     }));
     let mut targets = Vec::new();
     let held = start.saturating_add(got as u64);
-    let first = start.div_ceil(pointer_size.max(1)).checked_mul(pointer_size);
+    let first = start
+        .div_ceil(pointer_size.max(1))
+        .checked_mul(pointer_size);
     if let (true, Some(first)) = ((1..=8).contains(&pointer_size), first) {
         let width = pointer_size as usize;
         let mut at = first;
-        while at.checked_add(pointer_size).is_some_and(|next| next <= held) {
+        while at
+            .checked_add(pointer_size)
+            .is_some_and(|next| next <= held)
+        {
             let k = (at - start) as usize;
             let word = &bytes[k..k + width];
             let mut value: u64 = 0;
@@ -243,7 +304,10 @@ pub fn data_json(binary: &str, prog: &ConsoleProgram, addr: u64, len: Option<u64
                 value = (value << 8) | u64::from(b);
             }
             if value != 0 && section_of(&sections, value).is_some() {
-                let symbol = all.iter().filter(|i| i.address <= value && value < i.end()).max_by_key(|i| i.address);
+                let symbol = all
+                    .iter()
+                    .filter(|i| i.address <= value && value < i.end())
+                    .max_by_key(|i| i.address);
                 let function = functions.iter().find(|(a, _)| *a == value);
                 let (name, offset) = match (symbol, function) {
                     (_, Some((_, n))) => (Some(n.as_str()), 0),
@@ -310,13 +374,22 @@ pub fn uses_json(
     assertions: &[Outcome],
 ) -> String {
     let end = addr.saturating_add(len);
-    let mut starts: Vec<u64> = items(prog).iter().map(|i| i.address).filter(|&a| a >= addr && a < end).collect();
+    let mut starts: Vec<u64> = items(prog)
+        .iter()
+        .map(|i| i.address)
+        .filter(|&a| a >= addr && a < end)
+        .collect();
     starts.push(addr);
     let uses = data_uses(prog, file, addr, end, &starts);
     let rows = arr(uses.iter().map(|(to, u)| {
         let via = u.via.as_ref().map_or_else(
             || "null".to_string(),
-            |(slot, name)| Obj::new().opt_str("name", name.as_deref()).addr("address", *slot).end(),
+            |(slot, name)| {
+                Obj::new()
+                    .opt_str("name", name.as_deref())
+                    .addr("address", *slot)
+                    .end()
+            },
         );
         Obj::new()
             .addr("to", *to)

@@ -36,7 +36,9 @@ pub fn shed_frame_cookies(data: &mut Funcdata) -> int4 {
     let mut pending = Vec::new();
     for idx in 0..data.num_calls() {
         let fc = data.get_call_specs(idx);
-        let Some(op) = data.obank().get(fc.get_op()).filter(|o| !o.is_dead()) else { continue };
+        let Some(op) = data.obank().get(fc.get_op()).filter(|o| !o.is_dead()) else {
+            continue;
+        };
         if !matches!(op.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND) {
             continue;
         }
@@ -57,7 +59,8 @@ pub fn shed_frame_cookies(data: &mut Funcdata) -> int4 {
                 storage.remove(k);
             }
         }
-        data.get_call_specs_mut(idx).set_final_input_storage(storage);
+        data.get_call_specs_mut(idx)
+            .set_final_input_storage(storage);
     }
     pending.len() as int4
 }
@@ -79,7 +82,9 @@ fn cookie_slot(fc: &FuncCallSpecs, data: &Funcdata, seh: &mut Option<Vec<OpId>>)
         if !on_stack(addr) || end <= read_end || end <= popped || cut.is_some_and(|c| c <= start) {
             continue;
         }
-        let Some(vn) = op.get_in(k as int4 + 1) else { continue };
+        let Some(vn) = op.get_in(k as int4 + 1) else {
+            continue;
+        };
         if holds_cookie(data, vn, seh) {
             cut = Some(start);
         }
@@ -88,7 +93,8 @@ fn cookie_slot(fc: &FuncCallSpecs, data: &Funcdata, seh: &mut Option<Vec<OpId>>)
 }
 
 fn on_stack(addr: &unlace_base::address::Address) -> bool {
-    addr.get_space().is_some_and(|s| s.get_type() == spacetype::IPTR_SPACEBASE)
+    addr.get_space()
+        .is_some_and(|s| s.get_type() == spacetype::IPTR_SPACEBASE)
 }
 
 /// Does the stack value `vn` reaching a call hold the frame cookie on every
@@ -111,24 +117,36 @@ fn cookie(
         return true;
     }
     seen.push(vn);
-    let Some(op) = data.vbank().get(vn).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d)) else {
+    let Some(op) = data
+        .vbank()
+        .get(vn)
+        .and_then(|v| v.get_def())
+        .and_then(|d| data.obank().get(d))
+    else {
         return false;
     };
     let input = |k| op.get_in(k);
-    let in_frame =
-        |v: VarnodeId| data.vbank().get(v).is_some_and(|v| v.get_space().get_type() == spacetype::IPTR_SPACEBASE);
+    let in_frame = |v: VarnodeId| {
+        data.vbank()
+            .get(v)
+            .is_some_and(|v| v.get_space().get_type() == spacetype::IPTR_SPACEBASE)
+    };
     let joins = matches!(op.code(), OpCode::CPUI_INDIRECT | OpCode::CPUI_MULTIEQUAL);
     let shaped = match op.code() {
         _ if depth == 0 => false,
-        OpCode::CPUI_COPY => input(0).is_some_and(|v| !in_frame(v) && cookie(data, v, seen, links, depth - 1)),
+        OpCode::CPUI_COPY => {
+            input(0).is_some_and(|v| !in_frame(v) && cookie(data, v, seen, links, depth - 1))
+        }
         OpCode::CPUI_INDIRECT => input(0).is_some_and(|v| cookie(data, v, seen, links, depth - 1)),
         OpCode::CPUI_MULTIEQUAL => {
             op.num_input() > 0
-                && (0..op.num_input()).all(|k| input(k).is_some_and(|v| cookie(data, v, seen, links, depth - 1)))
+                && (0..op.num_input())
+                    .all(|k| input(k).is_some_and(|v| cookie(data, v, seen, links, depth - 1)))
         }
         OpCode::CPUI_INT_XOR => match (input(0), input(1)) {
             (Some(a), Some(b)) => {
-                (global(data, a, DEPTH) && stack(data, b, DEPTH)) || (global(data, b, DEPTH) && stack(data, a, DEPTH))
+                (global(data, a, DEPTH) && stack(data, b, DEPTH))
+                    || (global(data, b, DEPTH) && stack(data, a, DEPTH))
             }
             _ => false,
         },
@@ -149,30 +167,47 @@ fn before_link(data: &Funcdata, op: &crate::op::PcodeOp, links: &mut Option<Vec<
 
 /// Is `vn` a value read from a fixed address of the default data space?
 fn global(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
-    let Some(v) = data.vbank().get(vn) else { return false };
-    let ram = data.get_arch().manage().get_default_data_space().map(|s| s.get_index());
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
+    let ram = data
+        .get_arch()
+        .manage()
+        .get_default_data_space()
+        .map(|s| s.get_index());
     if !v.is_constant() && Some(v.get_space().get_index()) == ram {
         return true;
     }
-    let Some(op) = v.get_def().and_then(|d| data.obank().get(d)) else { return false };
+    let Some(op) = v.get_def().and_then(|d| data.obank().get(d)) else {
+        return false;
+    };
     match op.code() {
         _ if depth == 0 => false,
         OpCode::CPUI_COPY => op.get_in(0).is_some_and(|i| global(data, i, depth - 1)),
-        OpCode::CPUI_LOAD => {
-            op.get_in(1).and_then(|p| data.vbank().get(p)).is_some_and(|p| p.is_constant())
-        }
+        OpCode::CPUI_LOAD => op
+            .get_in(1)
+            .and_then(|p| data.vbank().get(p))
+            .is_some_and(|p| p.is_constant()),
         _ => false,
     }
 }
 
 /// Is `vn` the stack pointer, or an offset from it?
 fn stack(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
-    let Some(v) = data.vbank().get(vn) else { return false };
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
     if v.is_spacebase() {
         return true;
     }
-    let Some(op) = v.get_def().and_then(|d| data.obank().get(d)) else { return false };
-    let constant = |k| op.get_in(k).and_then(|i| data.vbank().get(i)).is_some_and(|i| i.is_constant());
+    let Some(op) = v.get_def().and_then(|d| data.obank().get(d)) else {
+        return false;
+    };
+    let constant = |k| {
+        op.get_in(k)
+            .and_then(|i| data.vbank().get(i))
+            .is_some_and(|i| i.is_constant())
+    };
     match op.code() {
         _ if depth == 0 => false,
         OpCode::CPUI_COPY => op.get_in(0).is_some_and(|i| stack(data, i, depth - 1)),
@@ -186,18 +221,32 @@ fn stack(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
 /// The stores that link an SEH registration record: a stack address stored to
 /// `fs:[0]`.
 fn seh_links(data: &Funcdata) -> Vec<OpId> {
-    let Some(fs) = data.get_arch().manage().register_lookup().and_then(|l| l.probe_register("FS_OFFSET")) else {
+    let Some(fs) = data
+        .get_arch()
+        .manage()
+        .register_lookup()
+        .and_then(|l| l.probe_register("FS_OFFSET"))
+    else {
         return Vec::new();
     };
-    let Some(space) = fs.space else { return Vec::new() };
+    let Some(space) = fs.space else {
+        return Vec::new();
+    };
     let at_base = |mut vn: VarnodeId| {
         for _ in 0..4 {
-            let Some(v) = data.vbank().get(vn) else { return false };
+            let Some(v) = data.vbank().get(vn) else {
+                return false;
+            };
             if v.get_space().get_index() == space.get_index() && v.get_offset() == fs.offset {
                 return true;
             }
-            let Some(op) = v.get_def().and_then(|d| data.obank().get(d)) else { return false };
-            let zero = op.get_in(1).and_then(|i| data.vbank().get(i)).is_some_and(|i| i.is_constant() && i.get_offset() == 0);
+            let Some(op) = v.get_def().and_then(|d| data.obank().get(d)) else {
+                return false;
+            };
+            let zero = op
+                .get_in(1)
+                .and_then(|i| data.vbank().get(i))
+                .is_some_and(|i| i.is_constant() && i.get_offset() == 0);
             match (op.code(), op.get_in(0)) {
                 (OpCode::CPUI_COPY, Some(i)) => vn = i,
                 (OpCode::CPUI_INT_ADD, Some(i)) if zero => vn = i,
@@ -210,7 +259,9 @@ fn seh_links(data: &Funcdata) -> Vec<OpId> {
         .iter_code(OpCode::CPUI_STORE)
         .filter(|&o| {
             data.obank().get(o).is_some_and(|o| {
-                !o.is_dead() && o.get_in(1).is_some_and(at_base) && o.get_in(2).is_some_and(|v| stack(data, v, DEPTH))
+                !o.is_dead()
+                    && o.get_in(1).is_some_and(at_base)
+                    && o.get_in(2).is_some_and(|v| stack(data, v, DEPTH))
             })
         })
         .collect()

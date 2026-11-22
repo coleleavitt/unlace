@@ -34,11 +34,11 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::rc::Rc;
 
+use object::{Object, ObjectKind, ObjectSymbol, SymbolKind};
 use unlace_base::address::Address;
 use unlace_base::space::AddrSpace;
 use unlace_decomp::architecture::Architecture;
 use unlace_sleigh::translate::{ContextCommitRecord, Translate};
-use object::{Object, ObjectKind, ObjectSymbol, SymbolKind};
 
 use super::context::ContextPainter;
 use super::kuna_insnstore::InstructionStore;

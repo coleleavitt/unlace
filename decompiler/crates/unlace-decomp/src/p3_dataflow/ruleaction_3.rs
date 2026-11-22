@@ -5,18 +5,18 @@
 //! state. Opcode changes use canonical TypeOp metadata, and unique outputs use
 //! the Funcdata factory so high-variable bookkeeping follows the function state.
 
+use smallvec::SmallVec;
 use unlace_base::address::calc_mask;
 use unlace_base::space::spacetype;
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
-use smallvec::SmallVec;
 
 use crate::action::{ActionGroupList, Rule, RuleSpec};
+use crate::context::{OpId, VarnodeId};
 use crate::expression::AddExpression;
 use crate::funcdata::Funcdata;
-use crate::op::pcodeop_flags;
-use crate::context::{OpId, VarnodeId};
 use crate::kuna_fasthash::FxHashMap;
+use crate::op::pcodeop_flags;
 
 // =============================================================================
 // inst-table resolution: OpCode -> TypeOp (canonical typeop.cc table)
@@ -51,27 +51,42 @@ fn op_code(data: &Funcdata, op: OpId) -> OpCode {
 
 /// `op->numInput()`.
 fn op_num_input(data: &Funcdata, op: OpId) -> int4 {
-    data.obank().get(op).expect("op_num_input: stale op").num_input()
+    data.obank()
+        .get(op)
+        .expect("op_num_input: stale op")
+        .num_input()
 }
 
 /// `vn->isConstant()`.
 fn vn_is_constant(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).expect("vn_is_constant: stale vn").is_constant()
+    data.vbank()
+        .get(vn)
+        .expect("vn_is_constant: stale vn")
+        .is_constant()
 }
 
 /// `vn->isWritten()`.
 fn vn_is_written(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).expect("vn_is_written: stale vn").is_written()
+    data.vbank()
+        .get(vn)
+        .expect("vn_is_written: stale vn")
+        .is_written()
 }
 
 /// `vn->isFree()`.
 fn vn_is_free(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).expect("vn_is_free: stale vn").is_free()
+    data.vbank()
+        .get(vn)
+        .expect("vn_is_free: stale vn")
+        .is_free()
 }
 
 /// `vn->getOffset()`.
 fn vn_offset(data: &Funcdata, vn: VarnodeId) -> uintb {
-    data.vbank().get(vn).expect("vn_offset: stale vn").get_offset()
+    data.vbank()
+        .get(vn)
+        .expect("vn_offset: stale vn")
+        .get_offset()
 }
 
 /// `vn->getSize()`.
@@ -87,7 +102,10 @@ fn vn_def(data: &Funcdata, vn: VarnodeId) -> Option<OpId> {
 /// `vn->constantMatch(val)` (C++ `Varnode::constantMatch`, `varnode.cc`):
 /// `isConstant() && getOffset()==val`.
 fn constant_match(data: &Funcdata, vn: VarnodeId, val: uintb) -> bool {
-    data.vbank().get(vn).expect("constant_match: stale vn").constant_match(val)
+    data.vbank()
+        .get(vn)
+        .expect("constant_match: stale vn")
+        .constant_match(val)
 }
 
 /// `vn->isBooleanValue(useAnnotation)` (C++ `Varnode::isBooleanValue`,
@@ -105,32 +123,50 @@ fn vn_is_boolean_value(data: &Funcdata, vn: VarnodeId, use_annotation: bool) -> 
             .expect("vn_is_boolean_value: stale def op")
             .is_calculated_bool();
     }
-    data.vbank().get(vn).expect("vn_is_boolean_value: stale vn").is_boolean_value(use_annotation)
+    data.vbank()
+        .get(vn)
+        .expect("vn_is_boolean_value: stale vn")
+        .is_boolean_value(use_annotation)
 }
 
 /// `vn->getNZMask()`.
 fn vn_nzmask(data: &Funcdata, vn: VarnodeId) -> uintb {
-    data.vbank().get(vn).expect("vn_nzmask: stale vn").get_nz_mask()
+    data.vbank()
+        .get(vn)
+        .expect("vn_nzmask: stale vn")
+        .get_nz_mask()
 }
 
 /// `vn->isHeritageKnown()`.
 fn vn_is_heritage_known(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).expect("vn_is_heritage_known: stale vn").is_heritage_known()
+    data.vbank()
+        .get(vn)
+        .expect("vn_is_heritage_known: stale vn")
+        .is_heritage_known()
 }
 
 /// `vn->isMark()`.
 fn vn_is_mark(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).expect("vn_is_mark: stale vn").is_mark()
+    data.vbank()
+        .get(vn)
+        .expect("vn_is_mark: stale vn")
+        .is_mark()
 }
 
 /// `vn->setMark()`.
 fn vn_set_mark(data: &mut Funcdata, vn: VarnodeId) {
-    data.vbank_mut().get_mut(vn).expect("vn_set_mark: stale vn").set_mark();
+    data.vbank_mut()
+        .get_mut(vn)
+        .expect("vn_set_mark: stale vn")
+        .set_mark();
 }
 
 /// `vn->clearMark()`.
 fn vn_clear_mark(data: &mut Funcdata, vn: VarnodeId) {
-    data.vbank_mut().get_mut(vn).expect("vn_clear_mark: stale vn").clear_mark();
+    data.vbank_mut()
+        .get_mut(vn)
+        .expect("vn_clear_mark: stale vn")
+        .clear_mark();
 }
 
 // =============================================================================
@@ -194,7 +230,13 @@ impl Rule for RuleBooleanDedup {
         // (C++ RuleBooleanDedup::isMatch, ruleaction.cc:2836-2849, now wired to
         // the fully-ported `expression::BooleanMatch::evaluate`).
         let is_match = |data: &Funcdata, left: VarnodeId, right: VarnodeId| -> Option<bool> {
-            let val = crate::expression::BooleanMatch::evaluate(left, right, 1, data.vbank(), data.obank());
+            let val = crate::expression::BooleanMatch::evaluate(
+                left,
+                right,
+                1,
+                data.vbank(),
+                data.obank(),
+            );
             if val == crate::expression::boolean_match::same {
                 Some(false)
             } else if val == crate::expression::boolean_match::complementary {
@@ -204,17 +246,18 @@ impl Rule for RuleBooleanDedup {
             }
         };
 
-        let (isflipped, left_a, right_a, left_o, right_o) = if let Some(f) = is_match(data, ins[0], ins[2]) {
-            (f, ins[0], ins[2], ins[1], ins[3])
-        } else if let Some(f) = is_match(data, ins[0], ins[3]) {
-            (f, ins[0], ins[3], ins[1], ins[2])
-        } else if let Some(f) = is_match(data, ins[1], ins[2]) {
-            (f, ins[1], ins[2], ins[0], ins[3])
-        } else if let Some(f) = is_match(data, ins[1], ins[3]) {
-            (f, ins[1], ins[3], ins[0], ins[2])
-        } else {
-            return 0;
-        };
+        let (isflipped, left_a, right_a, left_o, right_o) =
+            if let Some(f) = is_match(data, ins[0], ins[2]) {
+                (f, ins[0], ins[2], ins[1], ins[3])
+            } else if let Some(f) = is_match(data, ins[0], ins[3]) {
+                (f, ins[0], ins[3], ins[1], ins[2])
+            } else if let Some(f) = is_match(data, ins[1], ins[2]) {
+                (f, ins[1], ins[2], ins[0], ins[3])
+            } else if let Some(f) = is_match(data, ins[1], ins[3]) {
+                (f, ins[1], ins[3], ins[0], ins[2])
+            } else {
+                return 0;
+            };
         let central_opc = op_code(data, op);
         let bc_opc: OpCode;
         let final_opc: OpCode;
@@ -228,7 +271,8 @@ impl Rule for RuleBooleanDedup {
                 set_opcode(data, op, OpCode::CPUI_COPY);
                 data.op_remove_input(op, 1);
                 let zero = data.new_constant(1, 0);
-                data.op_set_input(op, zero, 0).expect("RuleBooleanDedup: opSetInput");
+                data.op_set_input(op, zero, 0)
+                    .expect("RuleBooleanDedup: opSetInput");
                 return 1;
             }
             if central_opc == OpCode::CPUI_BOOL_OR
@@ -239,12 +283,17 @@ impl Rule for RuleBooleanDedup {
                 set_opcode(data, op, OpCode::CPUI_COPY);
                 data.op_remove_input(op, 1);
                 let one = data.new_constant(1, 1);
-                data.op_set_input(op, one, 0).expect("RuleBooleanDedup: opSetInput");
+                data.op_set_input(op, one, 0)
+                    .expect("RuleBooleanDedup: opSetInput");
                 return 1;
             }
             if central_opc == OpCode::CPUI_BOOL_OR && opc0 != opc1 {
                 // (A || B) || (!A && C)
-                final_a = if opc0 == OpCode::CPUI_BOOL_OR { left_a } else { right_a };
+                final_a = if opc0 == OpCode::CPUI_BOOL_OR {
+                    left_a
+                } else {
+                    right_a
+                };
                 final_opc = OpCode::CPUI_BOOL_OR;
                 bc_opc = OpCode::CPUI_BOOL_OR;
             } else {
@@ -263,16 +312,25 @@ impl Rule for RuleBooleanDedup {
         } else {
             return 0;
         }
-        let opaddr = data.obank().get(op).expect("RuleBooleanDedup: stale op").get_addr().clone();
+        let opaddr = data
+            .obank()
+            .get(op)
+            .expect("RuleBooleanDedup: stale op")
+            .get_addr()
+            .clone();
         let bc_op = data.new_op(2, opaddr);
         let tmp = data.new_unique_out_unlaned(1, bc_op).expect("newUniqueOut");
         set_opcode(data, bc_op, bc_opc);
-        data.op_set_input(bc_op, left_o, 0).expect("RuleBooleanDedup: opSetInput");
-        data.op_set_input(bc_op, right_o, 1).expect("RuleBooleanDedup: opSetInput");
+        data.op_set_input(bc_op, left_o, 0)
+            .expect("RuleBooleanDedup: opSetInput");
+        data.op_set_input(bc_op, right_o, 1)
+            .expect("RuleBooleanDedup: opSetInput");
         data.op_insert_before(bc_op, op);
         set_opcode(data, op, final_opc);
-        data.op_set_input(op, final_a, 0).expect("RuleBooleanDedup: opSetInput");
-        data.op_set_input(op, tmp, 1).expect("RuleBooleanDedup: opSetInput");
+        data.op_set_input(op, final_a, 0)
+            .expect("RuleBooleanDedup: opSetInput");
+        data.op_set_input(op, tmp, 1)
+            .expect("RuleBooleanDedup: opSetInput");
         1
     }
 }
@@ -321,7 +379,8 @@ impl Rule for RuleBooleanNegate {
         }
 
         data.op_remove_input(op, 1); // Remove second parameter
-        data.op_set_input(op, subbool, 0).expect("RuleBooleanNegate: opSetInput"); // Keep original boolean parameter
+        data.op_set_input(op, subbool, 0)
+            .expect("RuleBooleanNegate: opSetInput"); // Keep original boolean parameter
         if negate {
             set_opcode(data, op, OpCode::CPUI_BOOL_NEGATE);
         } else {
@@ -390,17 +449,25 @@ impl Rule for RuleBoolZext {
                     return 0;
                 }
                 if vn_offset(data, aoin1) == 1 {
-                    let opaddr = data.obank().get(op).expect("RuleBoolZext: stale op").get_addr().clone();
+                    let opaddr = data
+                        .obank()
+                        .get(op)
+                        .expect("RuleBoolZext: stale op")
+                        .get_addr()
+                        .clone();
                     let newop = data.new_op(1, opaddr);
                     set_opcode(data, newop, OpCode::CPUI_BOOL_NEGATE); // Negate the boolean
                     let vn = data.new_unique_out_unlaned(1, newop).expect("newUniqueOut");
-                    data.op_set_input(newop, bool_vn1, 0).expect("RuleBoolZext: opSetInput");
+                    data.op_set_input(newop, bool_vn1, 0)
+                        .expect("RuleBoolZext: opSetInput");
                     data.op_insert_before(newop, op);
-                    data.op_set_input(op, vn, 0).expect("RuleBoolZext: opSetInput");
+                    data.op_set_input(op, vn, 0)
+                        .expect("RuleBoolZext: opSetInput");
                     data.op_remove_input(actionop, 1); // eliminate the INT_ADD operator
                     set_opcode(data, actionop, OpCode::CPUI_COPY);
                     let opout = op_out(data, op).expect("RuleBoolZext: op out");
-                    data.op_set_input(actionop, opout, 0).expect("RuleBoolZext: opSetInput"); // propagate past the INT_MULT operator
+                    data.op_set_input(actionop, opout, 0)
+                        .expect("RuleBoolZext: opSetInput"); // propagate past the INT_MULT operator
                     return 1;
                 }
                 0
@@ -421,9 +488,11 @@ impl Rule for RuleBoolZext {
                     return 0; // Not comparing with 0 or -1
                 }
 
-                data.op_set_input(actionop, bool_vn1, 0).expect("RuleBoolZext: opSetInput");
+                data.op_set_input(actionop, bool_vn1, 0)
+                    .expect("RuleBoolZext: opSetInput");
                 let newc = data.new_constant(1, val);
-                data.op_set_input(actionop, newc, 1).expect("RuleBoolZext: opSetInput");
+                data.op_set_input(actionop, newc, 1)
+                    .expect("RuleBoolZext: opSetInput");
                 1
             }
             OpCode::CPUI_INT_AND | OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR => {
@@ -473,25 +542,36 @@ impl Rule for RuleBoolZext {
 
                 // Do the boolean calculation on unextended boolean values
                 // and then extend the result
-                let aoaddr =
-                    data.obank().get(actionop).expect("RuleBoolZext: stale actionop").get_addr().clone();
+                let aoaddr = data
+                    .obank()
+                    .get(actionop)
+                    .expect("RuleBoolZext: stale actionop")
+                    .get_addr()
+                    .clone();
                 let newop = data.new_op(2, aoaddr.clone());
                 let newres = data.new_unique_out_unlaned(1, newop).expect("newUniqueOut");
                 set_opcode(data, newop, opc);
-                data.op_set_input(newop, bool_vn1, 0).expect("RuleBoolZext: opSetInput");
-                data.op_set_input(newop, bool_vn2, 1).expect("RuleBoolZext: opSetInput");
+                data.op_set_input(newop, bool_vn1, 0)
+                    .expect("RuleBoolZext: opSetInput");
+                data.op_set_input(newop, bool_vn2, 1)
+                    .expect("RuleBoolZext: opSetInput");
                 data.op_insert_before(newop, actionop);
 
                 let newzext = data.new_op(1, aoaddr);
-                let newzout = data.new_unique_out_unlaned(size, newzext).expect("newUniqueOut");
+                let newzout = data
+                    .new_unique_out_unlaned(size, newzext)
+                    .expect("newUniqueOut");
                 set_opcode(data, newzext, OpCode::CPUI_INT_ZEXT);
-                data.op_set_input(newzext, newres, 0).expect("RuleBoolZext: opSetInput");
+                data.op_set_input(newzext, newres, 0)
+                    .expect("RuleBoolZext: opSetInput");
                 data.op_insert_before(newzext, actionop);
 
                 set_opcode(data, actionop, OpCode::CPUI_INT_MULT);
-                data.op_set_input(actionop, newzout, 0).expect("RuleBoolZext: opSetInput");
+                data.op_set_input(actionop, newzout, 0)
+                    .expect("RuleBoolZext: opSetInput");
                 let coeffc = data.new_constant(size, coeff);
-                data.op_set_input(actionop, coeffc, 1).expect("RuleBoolZext: opSetInput");
+                data.op_set_input(actionop, coeffc, 1)
+                    .expect("RuleBoolZext: opSetInput");
                 1
             }
             _ => 0,
@@ -511,7 +591,11 @@ pub struct RuleLogic2Bool;
 impl Rule for RuleLogic2Bool {
     fn get_op_list(&self) -> Vec<OpCode> {
         // { CPUI_INT_AND, CPUI_INT_OR, CPUI_INT_XOR }
-        vec![OpCode::CPUI_INT_AND, OpCode::CPUI_INT_OR, OpCode::CPUI_INT_XOR]
+        vec![
+            OpCode::CPUI_INT_AND,
+            OpCode::CPUI_INT_OR,
+            OpCode::CPUI_INT_XOR,
+        ]
     }
 
     fn clone_rule(&self, _grouplist: &ActionGroupList) -> Option<Box<dyn Rule>> {
@@ -570,7 +654,12 @@ impl Rule for RuleIndirectCollapse {
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         let in1 = op_in(data, op, 1).expect("RuleIndirectCollapse: null in1");
-        if data.vbank().get(in1).expect("RuleIndirectCollapse: stale in1").get_space().get_type()
+        if data
+            .vbank()
+            .get(in1)
+            .expect("RuleIndirectCollapse: stale in1")
+            .get_space()
+            .get_type()
             != spacetype::IPTR_IOP
         {
             return 0;
@@ -588,8 +677,14 @@ impl Rule for RuleIndirectCollapse {
                 let vn1 = op_out(data, indop).expect("RuleIndirectCollapse: indop COPY out");
                 let vn2 = op_out(data, op).expect("RuleIndirectCollapse: op out");
                 let res = {
-                    let v1 = data.vbank().get(vn1).expect("RuleIndirectCollapse: stale vn1");
-                    let v2 = data.vbank().get(vn2).expect("RuleIndirectCollapse: stale vn2");
+                    let v1 = data
+                        .vbank()
+                        .get(vn1)
+                        .expect("RuleIndirectCollapse: stale vn1");
+                    let v2 = data
+                        .vbank()
+                        .get(vn2)
+                        .expect("RuleIndirectCollapse: stale vn2");
                     v1.characterize_overlap(v2)
                 };
                 if res > 0 {
@@ -597,33 +692,49 @@ impl Rule for RuleIndirectCollapse {
                     if res == 2 {
                         // vn1 and vn2 are the same storage -> Convert INDIRECT to COPY
                         data.op_uninsert(op);
-                        data.op_set_input(op, vn1, 0).expect("RuleIndirectCollapse: opSetInput");
+                        data.op_set_input(op, vn1, 0)
+                            .expect("RuleIndirectCollapse: opSetInput");
                         data.op_remove_input(op, 1);
                         set_opcode(data, op, OpCode::CPUI_COPY);
                         data.op_insert_after(op, indop);
                         return 1;
                     }
                     let contains0 = {
-                        let v1 = data.vbank().get(vn1).expect("RuleIndirectCollapse: stale vn1");
-                        let v2 = data.vbank().get(vn2).expect("RuleIndirectCollapse: stale vn2");
+                        let v1 = data
+                            .vbank()
+                            .get(vn1)
+                            .expect("RuleIndirectCollapse: stale vn1");
+                        let v2 = data
+                            .vbank()
+                            .get(vn2)
+                            .expect("RuleIndirectCollapse: stale vn2");
                         v1.contains(v2) == 0
                     };
                     if contains0 {
                         // Convert INDIRECT to a SUBPIECE
                         let trunc = {
-                            let v1 = data.vbank().get(vn1).expect("RuleIndirectCollapse: stale vn1");
-                            let v2 = data.vbank().get(vn2).expect("RuleIndirectCollapse: stale vn2");
+                            let v1 = data
+                                .vbank()
+                                .get(vn1)
+                                .expect("RuleIndirectCollapse: stale vn1");
+                            let v2 = data
+                                .vbank()
+                                .get(vn2)
+                                .expect("RuleIndirectCollapse: stale vn2");
                             if v1.get_space().is_big_endian() {
-                                (v1.get_offset().wrapping_add(v1.get_size() as uintb))
-                                    .wrapping_sub(v2.get_offset().wrapping_add(v2.get_size() as uintb))
+                                (v1.get_offset().wrapping_add(v1.get_size() as uintb)).wrapping_sub(
+                                    v2.get_offset().wrapping_add(v2.get_size() as uintb),
+                                )
                             } else {
                                 v2.get_offset().wrapping_sub(v1.get_offset())
                             }
                         };
                         data.op_uninsert(op);
-                        data.op_set_input(op, vn1, 0).expect("RuleIndirectCollapse: opSetInput");
+                        data.op_set_input(op, vn1, 0)
+                            .expect("RuleIndirectCollapse: opSetInput");
                         let tc = data.new_constant(4, trunc);
-                        data.op_set_input(op, tc, 1).expect("RuleIndirectCollapse: opSetInput");
+                        data.op_set_input(op, tc, 1)
+                            .expect("RuleIndirectCollapse: opSetInput");
                         set_opcode(data, op, OpCode::CPUI_SUBPIECE);
                         data.op_insert_after(op, indop);
                         return 1;
@@ -639,23 +750,40 @@ impl Rule for RuleIndirectCollapse {
                 .expect("RuleIndirectCollapse: stale op out")
                 .has_no_local_alias()
             {
-                let o = data.obank().get(op).expect("RuleIndirectCollapse: stale op");
+                let o = data
+                    .obank()
+                    .get(op)
+                    .expect("RuleIndirectCollapse: stale op");
                 if o.is_indirect_creation() || o.no_indirect_collapse() {
                     return 0;
                 }
-                let output = data.vbank().get(op_out(data, op).expect("indirect output"))
+                let output = data
+                    .vbank()
+                    .get(op_out(data, op).expect("indirect output"))
                     .expect("live indirect output");
-                if crate::kuna_octeoneffects::keeps_unaliased_guard(data, indop, output.get_addr(), output.get_size()) {
+                if crate::kuna_octeoneffects::keeps_unaliased_guard(
+                    data,
+                    indop,
+                    output.get_addr(),
+                    output.get_size(),
+                ) {
                     return 0;
                 }
                 if data.get_call_specs_index(indop).is_some_and(|index| {
                     crate::kuna_calleeprotostack::declared_pointer_reaches(
-                        data, data.get_call_specs(index), output.get_addr(), output.get_size(),
+                        data,
+                        data.get_call_specs(index),
+                        output.get_addr(),
+                        output.get_size(),
                     )
                 }) {
                     return 0;
                 }
-            } else if data.obank().get(indop).expect("RuleIndirectCollapse: stale indop").uses_spacebase_ptr()
+            } else if data
+                .obank()
+                .get(indop)
+                .expect("RuleIndirectCollapse: stale indop")
+                .uses_spacebase_ptr()
             {
                 if op_code(data, indop) == OpCode::CPUI_STORE {
                     // STUB(W4): const LoadGuard *guard = data.getStoreGuard(indop);
@@ -673,18 +801,26 @@ impl Rule for RuleIndirectCollapse {
 
         let out = op_out(data, op).expect("RuleIndirectCollapse: op out");
         let in0 = op_in(data, op, 0).expect("RuleIndirectCollapse: op in0");
-        if data.obank().get(op).is_some_and(|o| o.get_addlflags() & crate::op::pcodeop_addlflags::kuna_persist_stale != 0) {
+        if data.obank().get(op).is_some_and(|o| {
+            o.get_addlflags() & crate::op::pcodeop_addlflags::kuna_persist_stale != 0
+        }) {
             crate::p3_dataflow::kuna_persistcalls::restart_full(data);
-        } else if data.obank().get(op).is_some_and(|o| o.get_addlflags() & crate::op::pcodeop_addlflags::kuna_persist_guard != 0) {
+        } else if data.obank().get(op).is_some_and(|o| {
+            o.get_addlflags() & crate::op::pcodeop_addlflags::kuna_persist_guard != 0
+        }) {
             let (addr, size) = {
-                let v = data.vbank().get(out).expect("RuleIndirectCollapse: stale op out");
+                let v = data
+                    .vbank()
+                    .get(out)
+                    .expect("RuleIndirectCollapse: stale op out");
                 (v.get_addr().clone(), v.get_size())
             };
             if !crate::p3_dataflow::kuna_persistcalls::guarded(data, op, &addr, size) {
                 crate::p3_dataflow::kuna_persistcalls::restart_full(data);
             }
         }
-        data.total_replace(out, in0).expect("RuleIndirectCollapse: totalReplace");
+        data.total_replace(out, in0)
+            .expect("RuleIndirectCollapse: totalReplace");
         data.op_destroy(op); // Get rid of the INDIRECT
         1
     }
@@ -743,7 +879,13 @@ enum MultiBranch {
     Mismatch,
 }
 
-fn multi_branch(data: &Funcdata, vn: VarnodeId, out: VarnodeId, def: VarnodeId, nofunc: bool) -> MultiBranch {
+fn multi_branch(
+    data: &Funcdata,
+    vn: VarnodeId,
+    out: VarnodeId,
+    def: VarnodeId,
+    nofunc: bool,
+) -> MultiBranch {
     if vn == out || vn_is_mark(data, vn) {
         return MultiBranch::Skip;
     }
@@ -757,7 +899,9 @@ fn multi_branch(data: &Funcdata, vn: VarnodeId, out: VarnodeId, def: VarnodeId, 
         return MultiBranch::Match;
     }
     match vn_def(data, vn) {
-        Some(d) if vn_is_written(data, vn) && op_code(data, d) == OpCode::CPUI_MULTIEQUAL => MultiBranch::Expand(d),
+        Some(d) if vn_is_written(data, vn) && op_code(data, d) == OpCode::CPUI_MULTIEQUAL => {
+            MultiBranch::Expand(d)
+        }
         _ => MultiBranch::Mismatch,
     }
 }
@@ -770,7 +914,14 @@ impl RuleMultiCollapse {
     }
 
     /// Does `op`'s recorded witness still end the walk in failure?
-    fn fails_again(&self, op: OpId, data: &Funcdata, out: VarnodeId, def: VarnodeId, nofunc: bool) -> bool {
+    fn fails_again(
+        &self,
+        op: OpId,
+        data: &Funcdata,
+        out: VarnodeId,
+        def: VarnodeId,
+        nofunc: bool,
+    ) -> bool {
         let Some(path) = self.witness.get(&op) else {
             return false;
         };
@@ -778,7 +929,10 @@ impl RuleMultiCollapse {
             return false;
         }
         for (i, &(from, slot)) in path.iter().enumerate() {
-            if data.obank().get(from).is_none_or(|o| o.code() != OpCode::CPUI_MULTIEQUAL)
+            if data
+                .obank()
+                .get(from)
+                .is_none_or(|o| o.code() != OpCode::CPUI_MULTIEQUAL)
                 || slot >= op_num_input(data, from)
             {
                 return false;
@@ -892,7 +1046,9 @@ impl Rule for RuleMultiCollapse {
                 // MULTIEQUAL and unwritten branches cannot match by functional equal.
                 defcopyr = Some(copyr);
                 nofunc = match vn_def(data, copyr) {
-                    Some(d) if vn_is_written(data, copyr) => op_code(data, d) == OpCode::CPUI_MULTIEQUAL,
+                    Some(d) if vn_is_written(data, copyr) => {
+                        op_code(data, d) == OpCode::CPUI_MULTIEQUAL
+                    }
                     _ => true,
                 };
                 continue;
@@ -927,8 +1083,12 @@ impl Rule for RuleMultiCollapse {
                 let cur_op = vn_def(data, copyr).expect("skiplist varnode must be written");
                 if func_eq {
                     // We have only functional equality.
-                    let parent =
-                        data.obank().get(cur_op).expect("stale op").get_parent().expect("op parent");
+                    let parent = data
+                        .obank()
+                        .get(cur_op)
+                        .expect("stale op")
+                        .get_parent()
+                        .expect("op parent");
                     let earliest = data.block_earliest_use(parent, copyr);
                     let newop = vn_def(data, defcopyr).expect("defcopyr must be written");
                     // Has newop already been copied in this block?
@@ -944,7 +1104,8 @@ impl Rule for RuleMultiCollapse {
                     if let Some(substitute) = substitute {
                         // Already copied: use the copy's output as substitute.
                         let subout = op_out(data, substitute).expect("substitute has no output");
-                        data.total_replace(copyr, subout).expect("RuleMultiCollapse: totalReplace");
+                        data.total_replace(copyr, subout)
+                            .expect("RuleMultiCollapse: totalReplace");
                         data.op_destroy(cur_op);
                     } else {
                         // Otherwise, rewrite cur_op into a copy of newop.
@@ -973,7 +1134,8 @@ impl Rule for RuleMultiCollapse {
                 } else {
                     // We have absolute equality: replace all refs to copyr with
                     // defcopyr and destroy the MULTIEQUAL.
-                    data.total_replace(copyr, defcopyr).expect("RuleMultiCollapse: totalReplace");
+                    data.total_replace(copyr, defcopyr)
+                        .expect("RuleMultiCollapse: totalReplace");
                     data.op_destroy(cur_op);
                 }
             }
@@ -1030,7 +1192,8 @@ impl Rule for RuleSborrow {
         if vn_is_constant(data, bvn) && vn_offset(data, bvn) == 0 {
             set_opcode(data, op, OpCode::CPUI_COPY);
             let z = data.new_constant(1, 0);
-            data.op_set_input(op, z, 0).expect("RuleSborrow: opSetInput");
+            data.op_set_input(op, z, 0)
+                .expect("RuleSborrow: opSetInput");
             data.op_remove_input(op, 1);
             return 1;
         }
@@ -1083,12 +1246,16 @@ impl Rule for RuleSborrow {
             if compc == OpCode::CPUI_INT_NOTEQUAL {
                 // Replace all this with simple less than
                 set_opcode(data, compop, OpCode::CPUI_INT_SLESS);
-                data.op_set_input(compop, avn, 1 - zside).expect("RuleSborrow: opSetInput");
-                data.op_set_input(compop, bvn, zside).expect("RuleSborrow: opSetInput");
+                data.op_set_input(compop, avn, 1 - zside)
+                    .expect("RuleSborrow: opSetInput");
+                data.op_set_input(compop, bvn, zside)
+                    .expect("RuleSborrow: opSetInput");
             } else {
                 set_opcode(data, compop, OpCode::CPUI_INT_SLESSEQUAL);
-                data.op_set_input(compop, avn, zside).expect("RuleSborrow: opSetInput");
-                data.op_set_input(compop, bvn, 1 - zside).expect("RuleSborrow: opSetInput");
+                data.op_set_input(compop, avn, zside)
+                    .expect("RuleSborrow: opSetInput");
+                data.op_set_input(compop, bvn, 1 - zside)
+                    .expect("RuleSborrow: opSetInput");
             }
             return 1;
         }
@@ -1199,12 +1366,16 @@ impl Rule for RuleScarry {
 
             if compc == OpCode::CPUI_INT_NOTEQUAL {
                 set_opcode(data, compop, OpCode::CPUI_INT_SLESS);
-                data.op_set_input(compop, avn, 1 - zside).expect("RuleScarry: opSetInput");
-                data.op_set_input(compop, new_const, zside).expect("RuleScarry: opSetInput");
+                data.op_set_input(compop, avn, 1 - zside)
+                    .expect("RuleScarry: opSetInput");
+                data.op_set_input(compop, new_const, zside)
+                    .expect("RuleScarry: opSetInput");
             } else {
                 set_opcode(data, compop, OpCode::CPUI_INT_SLESSEQUAL);
-                data.op_set_input(compop, avn, zside).expect("RuleScarry: opSetInput");
-                data.op_set_input(compop, new_const, 1 - zside).expect("RuleScarry: opSetInput");
+                data.op_set_input(compop, avn, zside)
+                    .expect("RuleScarry: opSetInput");
+                data.op_set_input(compop, new_const, 1 - zside)
+                    .expect("RuleScarry: opSetInput");
             }
             return 1;
         }
@@ -1223,7 +1394,11 @@ pub struct RuleTrivialShift;
 impl Rule for RuleTrivialShift {
     fn get_op_list(&self) -> Vec<OpCode> {
         // { CPUI_INT_LEFT, CPUI_INT_RIGHT, CPUI_INT_SRIGHT }
-        vec![OpCode::CPUI_INT_LEFT, OpCode::CPUI_INT_RIGHT, OpCode::CPUI_INT_SRIGHT]
+        vec![
+            OpCode::CPUI_INT_LEFT,
+            OpCode::CPUI_INT_RIGHT,
+            OpCode::CPUI_INT_SRIGHT,
+        ]
     }
 
     fn clone_rule(&self, _grouplist: &ActionGroupList) -> Option<Box<dyn Rule>> {
@@ -1249,7 +1424,8 @@ impl Rule for RuleTrivialShift {
                 return 0; // Cant predict signbit
             }
             let replace = data.new_constant(vn_size(data, in0), 0);
-            data.op_set_input(op, replace, 0).expect("RuleTrivialShift: opSetInput");
+            data.op_set_input(op, replace, 0)
+                .expect("RuleTrivialShift: opSetInput");
         }
         data.op_remove_input(op, 1);
         set_opcode(data, op, OpCode::CPUI_COPY);
@@ -1317,16 +1493,27 @@ impl Rule for RuleSignShift {
         if !do_conversion {
             return 0;
         }
-        let opaddr = data.obank().get(op).expect("RuleSignShift: stale op").get_addr().clone();
+        let opaddr = data
+            .obank()
+            .get(op)
+            .expect("RuleSignShift: stale op")
+            .get_addr()
+            .clone();
         let shift_op = data.new_op(2, opaddr);
         set_opcode(data, shift_op, OpCode::CPUI_INT_SRIGHT);
-        let unique_vn = data.new_unique_out_unlaned(vn_size(data, in_vn), shift_op).expect("newUniqueOut");
-        data.op_set_input(op, unique_vn, 0).expect("RuleSignShift: opSetInput");
+        let unique_vn = data
+            .new_unique_out_unlaned(vn_size(data, in_vn), shift_op)
+            .expect("newUniqueOut");
+        data.op_set_input(op, unique_vn, 0)
+            .expect("RuleSignShift: opSetInput");
         let mask = data.new_constant(vn_size(data, in_vn), calc_mask(vn_size(data, in_vn)));
-        data.op_set_input(op, mask, 1).expect("RuleSignShift: opSetInput");
+        data.op_set_input(op, mask, 1)
+            .expect("RuleSignShift: opSetInput");
         set_opcode(data, op, OpCode::CPUI_INT_MULT);
-        data.op_set_input(shift_op, in_vn, 0).expect("RuleSignShift: opSetInput");
-        data.op_set_input(shift_op, const_vn, 1).expect("RuleSignShift: opSetInput");
+        data.op_set_input(shift_op, in_vn, 0)
+            .expect("RuleSignShift: opSetInput");
+        data.op_set_input(shift_op, const_vn, 1)
+            .expect("RuleSignShift: opSetInput");
         data.op_insert_before(shift_op, op);
         1
     }
@@ -1392,7 +1579,10 @@ impl Rule for RuleTestSign {
             let comp_vn = op_in(data, compare_op, 0).expect("RuleTestSign: comp in0");
             let comp_size = vn_size(data, comp_vn);
 
-            let offset = vn_offset(data, op_in(data, compare_op, 1).expect("RuleTestSign: comp in1"));
+            let offset = vn_offset(
+                data,
+                op_in(data, compare_op, 1).expect("RuleTestSign: comp in1"),
+            );
             let mut sgn: int4 = if offset == 0 {
                 1
             } else if offset == calc_mask(comp_size) {
@@ -1406,12 +1596,16 @@ impl Rule for RuleTestSign {
 
             let zero_vn = data.new_constant(vn_size(data, in_vn), 0);
             if sgn == 1 {
-                data.op_set_input(compare_op, in_vn, 1).expect("RuleTestSign: opSetInput");
-                data.op_set_input(compare_op, zero_vn, 0).expect("RuleTestSign: opSetInput");
+                data.op_set_input(compare_op, in_vn, 1)
+                    .expect("RuleTestSign: opSetInput");
+                data.op_set_input(compare_op, zero_vn, 0)
+                    .expect("RuleTestSign: opSetInput");
                 set_opcode(data, compare_op, OpCode::CPUI_INT_SLESSEQUAL);
             } else {
-                data.op_set_input(compare_op, in_vn, 0).expect("RuleTestSign: opSetInput");
-                data.op_set_input(compare_op, zero_vn, 1).expect("RuleTestSign: opSetInput");
+                data.op_set_input(compare_op, in_vn, 0)
+                    .expect("RuleTestSign: opSetInput");
+                data.op_set_input(compare_op, zero_vn, 1)
+                    .expect("RuleTestSign: opSetInput");
                 set_opcode(data, compare_op, OpCode::CPUI_INT_SLESS);
             }
             result_code = 1;
@@ -1540,7 +1734,8 @@ impl Rule for RuleShift2Mult {
             return 0;
         }
         let newconst = data.new_constant(vn_size(data, vn), 1u64 << val);
-        data.op_set_input(op, newconst, 1).expect("RuleShift2Mult: opSetInput");
+        data.op_set_input(op, newconst, 1)
+            .expect("RuleShift2Mult: opSetInput");
         set_opcode(data, op, OpCode::CPUI_INT_MULT);
         1
     }
@@ -1558,7 +1753,11 @@ pub struct RuleShiftPiece;
 impl Rule for RuleShiftPiece {
     fn get_op_list(&self) -> Vec<OpCode> {
         // push_back INT_OR, INT_XOR, INT_ADD (in this order)
-        vec![OpCode::CPUI_INT_OR, OpCode::CPUI_INT_XOR, OpCode::CPUI_INT_ADD]
+        vec![
+            OpCode::CPUI_INT_OR,
+            OpCode::CPUI_INT_XOR,
+            OpCode::CPUI_INT_ADD,
+        ]
     }
 
     fn clone_rule(&self, _grouplist: &ActionGroupList) -> Option<Box<dyn Rule>> {
@@ -1636,7 +1835,11 @@ impl Rule for RuleShiftPiece {
             if op_code(data, subop) != OpCode::CPUI_SUBPIECE {
                 return 0; // SUBPIECE connects high and low parts
             }
-            if vn_offset(data, op_in(data, subop, 1).expect("RuleShiftPiece: subop in1")) != 0 {
+            if vn_offset(
+                data,
+                op_in(data, subop, 1).expect("RuleShiftPiece: subop in1"),
+            ) != 0
+            {
                 return 0; // (must be low part)
             }
             let big_vn = op_out(data, zextloop).expect("RuleShiftPiece: zextloop out");
@@ -1654,7 +1857,8 @@ impl Rule for RuleShiftPiece {
                 return 0;
             }
             set_opcode(data, op, OpCode::CPUI_INT_SEXT); // Original op is sign extension of low part
-            data.op_set_input(op, vn2, 0).expect("RuleShiftPiece: opSetInput");
+            data.op_set_input(op, vn2, 0)
+                .expect("RuleShiftPiece: opSetInput");
             data.op_remove_input(op, 1);
             return 1;
         }
@@ -1667,21 +1871,32 @@ impl Rule for RuleShiftPiece {
         }
         if concatsize == op_out_size * 8 {
             set_opcode(data, op, OpCode::CPUI_PIECE);
-            data.op_set_input(op, vn1, 0).expect("RuleShiftPiece: opSetInput");
-            data.op_set_input(op, vn2, 1).expect("RuleShiftPiece: opSetInput");
+            data.op_set_input(op, vn1, 0)
+                .expect("RuleShiftPiece: opSetInput");
+            data.op_set_input(op, vn2, 1)
+                .expect("RuleShiftPiece: opSetInput");
         } else {
-            let opaddr = data.obank().get(op).expect("RuleShiftPiece: stale op").get_addr().clone();
+            let opaddr = data
+                .obank()
+                .get(op)
+                .expect("RuleShiftPiece: stale op")
+                .get_addr()
+                .clone();
             let newop = data.new_op(2, opaddr);
-            data.new_unique_out_unlaned(concatsize / 8, newop).expect("newUniqueOut");
+            data.new_unique_out_unlaned(concatsize / 8, newop)
+                .expect("newUniqueOut");
             set_opcode(data, newop, OpCode::CPUI_PIECE);
-            data.op_set_input(newop, vn1, 0).expect("RuleShiftPiece: opSetInput");
-            data.op_set_input(newop, vn2, 1).expect("RuleShiftPiece: opSetInput");
+            data.op_set_input(newop, vn1, 0)
+                .expect("RuleShiftPiece: opSetInput");
+            data.op_set_input(newop, vn2, 1)
+                .expect("RuleShiftPiece: opSetInput");
             data.op_insert_before(newop, op);
             let zext_code = op_code(data, zexthiop);
             set_opcode(data, op, zext_code);
             data.op_remove_input(op, 1);
             let newout = op_out(data, newop).expect("RuleShiftPiece: newop out");
-            data.op_set_input(op, newout, 0).expect("RuleShiftPiece: opSetInput");
+            data.op_set_input(op, newout, 0)
+                .expect("RuleShiftPiece: opSetInput");
         }
         1
     }
@@ -1709,7 +1924,10 @@ impl Rule for RuleCollapseConstants {
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         let collapsible = {
-            let o = data.obank().get(op).expect("RuleCollapseConstants: stale op");
+            let o = data
+                .obank()
+                .get(op)
+                .expect("RuleCollapseConstants: stale op");
             crate::op::is_collapsible(o, data.vbank())
         };
         if !collapsible {
@@ -1732,8 +1950,11 @@ impl Rule for RuleCollapseConstants {
                 return 0;
             }
         };
-        let out_size =
-            data.vbank().get(data.obank().get(op).unwrap().get_out().unwrap()).unwrap().get_size();
+        let out_size = data
+            .vbank()
+            .get(data.obank().get(op).unwrap().get_out().unwrap())
+            .unwrap()
+            .get_size();
         let newval = data.get_arch().get_constant(collapsed);
         let vn = data.new_varnode(out_size, &newval, None);
         // collapseConstantSymbol(vn): when a constant input carried a bound
@@ -1747,13 +1968,18 @@ impl Rule for RuleCollapseConstants {
         if marked_input {
             collapse_constant_symbol(op, vn, data);
         }
-        let n = data.obank().get(op).expect("RuleCollapseConstants: stale op").num_input();
+        let n = data
+            .obank()
+            .get(op)
+            .expect("RuleCollapseConstants: stale op")
+            .num_input();
         let mut i = n - 1;
         while i > 0 {
             data.op_remove_input(op, i);
             i -= 1;
         }
-        data.op_set_input(op, vn, 0).expect("RuleCollapseConstants: opSetInput");
+        data.op_set_input(op, vn, 0)
+            .expect("RuleCollapseConstants: opSetInput");
         data.op_set_opcode(op, crate::typeop::type_op_for(OpCode::CPUI_COPY));
         1
     }
@@ -1773,7 +1999,11 @@ fn dc_collapse(op: OpId, data: &Funcdata) -> Option<(u64, bool)> {
     let (eval_type, opc, num_input, in0, in1, out_size) = {
         let o = data.obank().get(op).expect("collapse: stale op");
         let out = o.get_out().expect("collapse: collapsible op has no output");
-        let out_size = data.vbank().get(out).expect("collapse: stale out").get_size();
+        let out_size = data
+            .vbank()
+            .get(out)
+            .expect("collapse: stale out")
+            .get_size();
         let n = o.num_input();
         // get_in panics on an out-of-range slot, so guard slot 1 by num_input
         // (the C++ `getIn(1)` is only reached in the `binary` arm).
@@ -1787,8 +2017,11 @@ fn dc_collapse(op: OpId, data: &Funcdata) -> Option<(u64, bool)> {
         let v = data.vbank().get(in0).expect("collapse: stale in0");
         (v.get_size(), v.get_offset())
     };
-    let mut marked_input =
-        data.vbank().get(in0).and_then(|v| v.kuna_symbol_entry()).is_some();
+    let mut marked_input = data
+        .vbank()
+        .get(in0)
+        .and_then(|v| v.kuna_symbol_entry())
+        .is_some();
     if (eval_type & pcodeop_flags::unary) != 0 {
         match behave.evaluate_unary(out_size, in0_size, in0_off) {
             Ok(v) => Some((v, marked_input)),
@@ -1797,10 +2030,19 @@ fn dc_collapse(op: OpId, data: &Funcdata) -> Option<(u64, bool)> {
     } else if (eval_type & pcodeop_flags::binary) != 0 {
         let in1 = in1?;
         // C++: checked only on the binary path.
-        if data.vbank().get(in1).and_then(|v| v.kuna_symbol_entry()).is_some() {
+        if data
+            .vbank()
+            .get(in1)
+            .and_then(|v| v.kuna_symbol_entry())
+            .is_some()
+        {
             marked_input = true;
         }
-        let in1_off = data.vbank().get(in1).expect("collapse: stale in1").get_offset();
+        let in1_off = data
+            .vbank()
+            .get(in1)
+            .expect("collapse: stale in1")
+            .get_offset();
         match behave.evaluate_binary(out_size, in0_size, in0_off, in1_off) {
             Ok(v) => Some((v, marked_input)),
             Err(_) => None,
@@ -1820,11 +2062,20 @@ fn dc_collapse(op: OpId, data: &Funcdata) -> Option<(u64, bool)> {
 /// C++ switch leave the new constant unmarked.
 fn collapse_constant_symbol(op: OpId, new_const: VarnodeId, data: &mut Funcdata) {
     let (code, in0, in1) = {
-        let o = data.obank().get(op).expect("collapseConstantSymbol: stale op");
-        (o.code(), o.get_in(0), if o.num_input() > 1 { o.get_in(1) } else { None })
+        let o = data
+            .obank()
+            .get(op)
+            .expect("collapseConstantSymbol: stale op");
+        (
+            o.code(),
+            o.get_in(0),
+            if o.num_input() > 1 { o.get_in(1) } else { None },
+        )
     };
     let has_sym = |v: Option<VarnodeId>| -> bool {
-        v.and_then(|x| data.vbank().get(x)).and_then(|x| x.kuna_symbol_entry()).is_some()
+        v.and_then(|x| data.vbank().get(x))
+            .and_then(|x| x.kuna_symbol_entry())
+            .is_some()
     };
     let copy_vn: Option<VarnodeId> = match code {
         OpCode::CPUI_SUBPIECE => {
@@ -1888,7 +2139,12 @@ impl Rule for RuleTransformCpool {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if data.obank().get(op).expect("RuleTransformCpool: stale op").is_cpool_transformed() {
+        if data
+            .obank()
+            .get(op)
+            .expect("RuleTransformCpool: stale op")
+            .is_cpool_transformed()
+        {
             return 0;
         }
         data.obank_mut()
@@ -1897,14 +2153,29 @@ impl Rule for RuleTransformCpool {
             .set_additional_flag(crate::op::pcodeop_addlflags::is_cpool_transformed);
         let refs: Vec<uintb> = (1..op_num_input(data, op))
             .filter_map(|i| op_in(data, op, i))
-            .map(|vn| data.vbank().get(vn).expect("RuleTransformCpool: stale vn").get_offset())
+            .map(|vn| {
+                data.vbank()
+                    .get(vn)
+                    .expect("RuleTransformCpool: stale vn")
+                    .get_offset()
+            })
             .collect();
-        let Some(rec) = data.get_arch().cpool_record(&refs) else { return 1 };
+        let Some(rec) = data.get_arch().cpool_record(&refs) else {
+            return 1;
+        };
         if rec.get_tag() == crate::cpool::cpool_tag::INSTANCE_OF {
             data.op_mark_calculated_bool(op);
         } else if rec.get_tag() == crate::cpool::cpool_tag::PRIMITIVE {
-            let out = data.obank().get(op).and_then(|o| o.get_out()).expect("RuleTransformCpool: no output");
-            let sz = data.vbank().get(out).expect("RuleTransformCpool: stale out").get_size();
+            let out = data
+                .obank()
+                .get(op)
+                .and_then(|o| o.get_out())
+                .expect("RuleTransformCpool: no output");
+            let sz = data
+                .vbank()
+                .get(out)
+                .expect("RuleTransformCpool: stale out")
+                .get_size();
             let cvn = data.new_constant(sz, rec.get_value() & calc_mask(sz));
             if let Some(ty) = rec.get_type() {
                 data.vbank_mut()
@@ -1916,12 +2187,14 @@ impl Rule for RuleTransformCpool {
                 data.op_remove_input(op, op_num_input(data, op) - 1);
             }
             data.op_set_opcode_code(op, OpCode::CPUI_COPY);
-            data.op_set_input(op, cvn, 0).expect("RuleTransformCpool: opSetInput");
+            data.op_set_input(op, cvn, 0)
+                .expect("RuleTransformCpool: opSetInput");
             return 1;
         }
         let tag = data.new_constant(4, uintb::from(rec.get_tag()));
         let slot = op_num_input(data, op);
-        data.op_insert_input(op, tag, slot).expect("RuleTransformCpool: opInsertInput");
+        data.op_insert_input(op, tag, slot)
+            .expect("RuleTransformCpool: opInsertInput");
         1
     }
 }
@@ -1953,9 +2226,14 @@ impl Rule for RulePropagateCopy {
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         let (return_copy, machine_read) = {
             let operation = data.obank().get(op).expect("RulePropagateCopy: stale op");
-            (operation.is_return_copy(), operation.get_addlflags() & crate::op::pcodeop_addlflags::kuna_stack_read != 0)
+            (
+                operation.is_return_copy(),
+                operation.get_addlflags() & crate::op::pcodeop_addlflags::kuna_stack_read != 0,
+            )
         };
-        if machine_read { crate::p3_dataflow::kuna_stackreadscope::record_current_read(data, op); }
+        if machine_read {
+            crate::p3_dataflow::kuna_stackreadscope::record_current_read(data, op);
+        }
         if return_copy {
             return 0;
         }
@@ -1980,7 +2258,8 @@ impl Rule for RulePropagateCopy {
                     && value.get_type().get_metatype() == crate::dtype::type_metatype::TYPE_PTR
                     && data.get_scope_local().is_some_and(|scope| {
                         scope.has_isolated_symbols()
-                            && scope.query_container_for_link(value.get_addr(), &data.vn_use_point(vn))
+                            && scope
+                                .query_container_for_link(value.get_addr(), &data.vn_use_point(vn))
                                 .is_some_and(|entry| entry.is_isolated)
                     })
             }) {
@@ -2009,18 +2288,25 @@ impl Rule for RulePropagateCopy {
             if crate::p3_dataflow::kuna_globalstorekeep::declines(data, op, vn, invn) {
                 continue;
             }
-            let is_marker = data.obank().get(op).expect("RulePropagateCopy: stale op").is_marker();
+            let is_marker = data
+                .obank()
+                .get(op)
+                .expect("RulePropagateCopy: stale op")
+                .is_marker();
             if is_marker && crate::p3_dataflow::kuna_globalfieldstore::keeps_store(data, vn, invn) {
                 continue;
             }
             if !is_marker
                 && (crate::p3_dataflow::kuna_indexaliasguard::keeps_store_before_load(data, op, vn)
-                    || crate::p3_dataflow::kuna_indexaliasguard::keeps_forced_self_copy(data, op, vn))
+                    || crate::p3_dataflow::kuna_indexaliasguard::keeps_forced_self_copy(
+                        data, op, vn,
+                    ))
             {
                 continue;
             }
-            if is_marker && (crate::kuna_localstackviews::publication(data, vn)
-                || crate::kuna_localstackviews::native_store(data, vn))
+            if is_marker
+                && (crate::kuna_localstackviews::publication(data, vn)
+                    || crate::kuna_localstackviews::native_store(data, vn))
             {
                 continue;
             }
@@ -2028,7 +2314,12 @@ impl Rule for RulePropagateCopy {
                 if vn_is_constant(data, invn) {
                     continue; // Don't propagate constants into markers
                 }
-                if data.vbank().get(vn).expect("RulePropagateCopy: stale vn").is_addr_force() {
+                if data
+                    .vbank()
+                    .get(vn)
+                    .expect("RulePropagateCopy: stale vn")
+                    .is_addr_force()
+                {
                     continue; // Don't propagate if we are keeping the COPY anyway
                 }
                 if crate::p3_dataflow::kuna_indexaliasguard::keeps_store_guard_input(data, op, vn) {
@@ -2038,16 +2329,30 @@ impl Rule for RulePropagateCopy {
                 // invn->isAddrTied(), op->getOut()->isAddrTied(), and the two
                 // addresses.  isAddrTied is available; the address comparison is a
                 // straight Address::!=.  We transcribe it faithfully.
-                let invn_addrtied =
-                    data.vbank().get(invn).expect("RulePropagateCopy: stale invn").is_addr_tied();
+                let invn_addrtied = data
+                    .vbank()
+                    .get(invn)
+                    .expect("RulePropagateCopy: stale invn")
+                    .is_addr_tied();
                 let out = op_out(data, op).expect("RulePropagateCopy: marker out");
-                let out_addrtied =
-                    data.vbank().get(out).expect("RulePropagateCopy: stale out").is_addr_tied();
+                let out_addrtied = data
+                    .vbank()
+                    .get(out)
+                    .expect("RulePropagateCopy: stale out")
+                    .is_addr_tied();
                 if invn_addrtied && out_addrtied {
-                    let out_addr =
-                        data.vbank().get(out).expect("RulePropagateCopy: stale out").get_addr().clone();
-                    let invn_addr =
-                        data.vbank().get(invn).expect("RulePropagateCopy: stale invn").get_addr().clone();
+                    let out_addr = data
+                        .vbank()
+                        .get(out)
+                        .expect("RulePropagateCopy: stale out")
+                        .get_addr()
+                        .clone();
+                    let invn_addr = data
+                        .vbank()
+                        .get(invn)
+                        .expect("RulePropagateCopy: stale invn")
+                        .get_addr()
+                        .clone();
                     if out_addr != invn_addr {
                         continue; // We must not allow merging of different addrtieds
                     }
@@ -2071,10 +2376,16 @@ impl Rule for RulePropagateCopy {
                     continue;
                 }
                 if op_code(data, op) == OpCode::CPUI_MULTIEQUAL {
-                    let op_parent =
-                        data.obank().get(op).expect("RulePropagateCopy: stale op").get_parent();
-                    let copy_parent =
-                        data.obank().get(copyop).expect("RulePropagateCopy: stale copyop").get_parent();
+                    let op_parent = data
+                        .obank()
+                        .get(op)
+                        .expect("RulePropagateCopy: stale op")
+                        .get_parent();
+                    let copy_parent = data
+                        .obank()
+                        .get(copyop)
+                        .expect("RulePropagateCopy: stale copyop")
+                        .get_parent();
                     if let (Some(op_parent), Some(copy_parent)) = (op_parent, copy_parent) {
                         let in_blk = data.bblocks_ref().block(op_parent).get_in(i);
                         if copy_parent == in_blk {
@@ -2086,7 +2397,8 @@ impl Rule for RulePropagateCopy {
             crate::p3_dataflow::kuna_stackreadscope::record_propagated_read(data, copyop, invn);
             data.kuna_inherit_storage(invn, vn);
             data.note_wave_input_change(op, vn, invn);
-            data.op_set_input(op, invn, i).expect("RulePropagateCopy: opSetInput"); // propagate just a single copy
+            data.op_set_input(op, invn, i)
+                .expect("RulePropagateCopy: opSetInput"); // propagate just a single copy
             return 1;
         }
         0
@@ -2119,7 +2431,8 @@ impl Rule for Rule2Comp2Mult {
         set_opcode(data, op, OpCode::CPUI_INT_MULT);
         let size = vn_size(data, op_in(data, op, 0).expect("Rule2Comp2Mult: null in0"));
         let negone = data.new_constant(size, calc_mask(size));
-        data.op_insert_input(op, negone, 1).expect("Rule2Comp2Mult: opInsertInput");
+        data.op_insert_input(op, negone, 1)
+            .expect("Rule2Comp2Mult: opInsertInput");
         1
     }
 }
@@ -2160,7 +2473,8 @@ impl Rule for RuleCarryElim {
             // Trivial case
             data.op_remove_input(op, 1); // Go down to 1 input
             let z = data.new_constant(1, 0);
-            data.op_set_input(op, z, 0).expect("RuleCarryElim: opSetInput"); // boolean "false" as input to COPY
+            data.op_set_input(op, z, 0)
+                .expect("RuleCarryElim: opSetInput"); // boolean "false" as input to COPY
             set_opcode(data, op, OpCode::CPUI_COPY);
             return 1;
         }
@@ -2168,9 +2482,11 @@ impl Rule for RuleCarryElim {
         off = off.wrapping_neg() & calc_mask(vn_size(data, vn2));
 
         set_opcode(data, op, OpCode::CPUI_INT_LESSEQUAL);
-        data.op_set_input(op, vn1, 1).expect("RuleCarryElim: opSetInput"); // Move other input to second position
+        data.op_set_input(op, vn1, 1)
+            .expect("RuleCarryElim: opSetInput"); // Move other input to second position
         let newc = data.new_constant(vn_size(data, vn1), off);
-        data.op_set_input(op, newc, 0).expect("RuleCarryElim: opSetInput"); // new constant in first position
+        data.op_set_input(op, newc, 0)
+            .expect("RuleCarryElim: opSetInput"); // new constant in first position
         1
     }
 }
@@ -2199,14 +2515,24 @@ impl Rule for RuleSub2Add {
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         let vn = op_in(data, op, 1).expect("RuleSub2Add: null in1"); // Parameter being subtracted
-        let opaddr = data.obank().get(op).expect("RuleSub2Add: stale op").get_addr().clone();
+        let opaddr = data
+            .obank()
+            .get(op)
+            .expect("RuleSub2Add: stale op")
+            .get_addr()
+            .clone();
         let newop = data.new_op(2, opaddr);
         set_opcode(data, newop, OpCode::CPUI_INT_MULT);
-        let newvn = data.new_unique_out_unlaned(vn_size(data, vn), newop).expect("newUniqueOut");
-        data.op_set_input(op, newvn, 1).expect("RuleSub2Add: opSetInput"); // Replace vn's reference first
-        data.op_set_input(newop, vn, 0).expect("RuleSub2Add: opSetInput");
+        let newvn = data
+            .new_unique_out_unlaned(vn_size(data, vn), newop)
+            .expect("newUniqueOut");
+        data.op_set_input(op, newvn, 1)
+            .expect("RuleSub2Add: opSetInput"); // Replace vn's reference first
+        data.op_set_input(newop, vn, 0)
+            .expect("RuleSub2Add: opSetInput");
         let negone = data.new_constant(vn_size(data, vn), calc_mask(vn_size(data, vn)));
-        data.op_set_input(newop, negone, 1).expect("RuleSub2Add: opSetInput");
+        data.op_set_input(newop, negone, 1)
+            .expect("RuleSub2Add: opSetInput");
         set_opcode(data, op, OpCode::CPUI_INT_ADD);
         data.op_insert_before(newop, op);
         1
@@ -2264,8 +2590,10 @@ impl Rule for RuleXorCollapse {
             if vn_is_free(data, xorvn) {
                 return 0;
             }
-            data.op_set_input(op, xorvn, 1).expect("RuleXorCollapse: opSetInput"); // Move term to other side
-            data.op_set_input(op, xor0, 0).expect("RuleXorCollapse: opSetInput");
+            data.op_set_input(op, xorvn, 1)
+                .expect("RuleXorCollapse: opSetInput"); // Move term to other side
+            data.op_set_input(op, xor0, 0)
+                .expect("RuleXorCollapse: opSetInput");
             return 1;
         }
         let coeff2 = vn_offset(data, xorvn);
@@ -2276,8 +2604,10 @@ impl Rule for RuleXorCollapse {
         // STUB(W6): constvn->copySymbolIfValid(xorvn) -- the symbol-entry copy is
         // the W6 TypeFactory/symbol surface; the constant value (coeff1^coeff2) is
         // ported, the symbol annotation is skipped.  Recorded as a loss.
-        data.op_set_input(op, constvn, 1).expect("RuleXorCollapse: opSetInput");
-        data.op_set_input(op, xor0, 0).expect("RuleXorCollapse: opSetInput");
+        data.op_set_input(op, constvn, 1)
+            .expect("RuleXorCollapse: opSetInput");
+        data.op_set_input(op, xor0, 0)
+            .expect("RuleXorCollapse: opSetInput");
         1
     }
 }
@@ -2322,7 +2652,9 @@ impl Rule for RuleAddMultCollapse {
         if op_code(data, subop) != opc {
             return 0; // Must be same exact operation
         }
-        if opc == OpCode::CPUI_INT_ADD && crate::kuna_globalarrayanchor::preserve_array_base(data, op) {
+        if opc == OpCode::CPUI_INT_ADD
+            && crate::kuna_globalarrayanchor::preserve_array_base(data, op)
+        {
             return 0;
         }
         let mut c1 = op_in(data, subop, 1).expect("RuleAddMultCollapse: subop in1");
@@ -2353,10 +2685,20 @@ impl Rule for RuleAddMultCollapse {
                 }
                 let basevn = op_in(data, baseop, 0).expect("RuleAddMultCollapse: baseop in0");
                 // Only apply if we are adding to a base pointer (input spacebase)
-                if !data.vbank().get(basevn).expect("RuleAddMultCollapse: stale basevn").is_spacebase() {
+                if !data
+                    .vbank()
+                    .get(basevn)
+                    .expect("RuleAddMultCollapse: stale basevn")
+                    .is_spacebase()
+                {
                     continue;
                 }
-                if !data.vbank().get(basevn).expect("RuleAddMultCollapse: stale basevn").is_input() {
+                if !data
+                    .vbank()
+                    .get(basevn)
+                    .expect("RuleAddMultCollapse: stale basevn")
+                    .is_input()
+                {
                     continue; // because this adds a new add operation
                 }
 
@@ -2364,15 +2706,26 @@ impl Rule for RuleAddMultCollapse {
                 let val = eval_binary(opc, c0sz, vn_offset(data, c0), vn_offset(data, c1));
                 let newvn = data.new_constant(c0sz, val);
                 // STUB(W6): copySymbolIfValid(c0 or c1) -- symbol-entry copy skipped.
-                let opaddr = data.obank().get(op).expect("RuleAddMultCollapse: stale op").get_addr().clone();
+                let opaddr = data
+                    .obank()
+                    .get(op)
+                    .expect("RuleAddMultCollapse: stale op")
+                    .get_addr()
+                    .clone();
                 let newop = data.new_op(2, opaddr);
                 set_opcode(data, newop, OpCode::CPUI_INT_ADD);
-                let newout = data.new_unique_out_unlaned(c0sz, newop).expect("newUniqueOut");
-                data.op_set_input(newop, basevn, 0).expect("RuleAddMultCollapse: opSetInput");
-                data.op_set_input(newop, newvn, 1).expect("RuleAddMultCollapse: opSetInput");
+                let newout = data
+                    .new_unique_out_unlaned(c0sz, newop)
+                    .expect("newUniqueOut");
+                data.op_set_input(newop, basevn, 0)
+                    .expect("RuleAddMultCollapse: opSetInput");
+                data.op_set_input(newop, newvn, 1)
+                    .expect("RuleAddMultCollapse: opSetInput");
                 data.op_insert_before(newop, op);
-                data.op_set_input(op, newout, 0).expect("RuleAddMultCollapse: opSetInput");
-                data.op_set_input(op, othervn, 1).expect("RuleAddMultCollapse: opSetInput");
+                data.op_set_input(op, newout, 0)
+                    .expect("RuleAddMultCollapse: opSetInput");
+                data.op_set_input(op, othervn, 1)
+                    .expect("RuleAddMultCollapse: opSetInput");
                 return 1;
             }
             return 0;
@@ -2386,8 +2739,10 @@ impl Rule for RuleAddMultCollapse {
         let val = eval_binary(opc, c0sz, vn_offset(data, c0), vn_offset(data, c1));
         let newvn = data.new_constant(c0sz, val);
         // STUB(W6): copySymbolIfValid(c0 or c1) -- symbol-entry copy skipped.
-        data.op_set_input(op, newvn, 1).expect("RuleAddMultCollapse: opSetInput"); // Replace c0 with c0(+|*)c1
-        data.op_set_input(op, sub2, 0).expect("RuleAddMultCollapse: opSetInput"); // Replace sub with sub2
+        data.op_set_input(op, newvn, 1)
+            .expect("RuleAddMultCollapse: opSetInput"); // Replace c0 with c0(+|*)c1
+        data.op_set_input(op, sub2, 0)
+            .expect("RuleAddMultCollapse: opSetInput"); // Replace sub with sub2
         1
     }
 }
@@ -2425,28 +2780,94 @@ fn eval_binary(opc: OpCode, size: int4, in1: uintb, in2: uintb) -> uintb {
 /// builds a fresh zero-sized rule marker.
 pub fn specs() -> Vec<RuleSpec> {
     vec![
-        RuleSpec { group: "", ctor: || Box::new(RuleBooleanDedup) },
-        RuleSpec { group: "", ctor: || Box::new(RuleBooleanNegate) },
-        RuleSpec { group: "", ctor: || Box::new(RuleBoolZext) },
-        RuleSpec { group: "", ctor: || Box::new(RuleLogic2Bool) },
-        RuleSpec { group: "", ctor: || Box::new(RuleIndirectCollapse) },
-        RuleSpec { group: "", ctor: || Box::new(RuleMultiCollapse::default()) },
-        RuleSpec { group: "", ctor: || Box::new(RuleSborrow) },
-        RuleSpec { group: "", ctor: || Box::new(RuleScarry) },
-        RuleSpec { group: "", ctor: || Box::new(RuleTrivialShift) },
-        RuleSpec { group: "", ctor: || Box::new(RuleSignShift) },
-        RuleSpec { group: "", ctor: || Box::new(RuleTestSign) },
-        RuleSpec { group: "", ctor: || Box::new(RuleIdentityEl) },
-        RuleSpec { group: "", ctor: || Box::new(RuleShift2Mult) },
-        RuleSpec { group: "", ctor: || Box::new(RuleShiftPiece) },
-        RuleSpec { group: "", ctor: || Box::new(RuleCollapseConstants) },
-        RuleSpec { group: "", ctor: || Box::new(RuleTransformCpool) },
-        RuleSpec { group: "", ctor: || Box::new(RulePropagateCopy) },
-        RuleSpec { group: "", ctor: || Box::new(Rule2Comp2Mult) },
-        RuleSpec { group: "", ctor: || Box::new(RuleCarryElim) },
-        RuleSpec { group: "", ctor: || Box::new(RuleSub2Add) },
-        RuleSpec { group: "", ctor: || Box::new(RuleXorCollapse) },
-        RuleSpec { group: "", ctor: || Box::new(RuleAddMultCollapse) },
+        RuleSpec {
+            group: "",
+            ctor: || Box::new(RuleBooleanDedup),
+        },
+        RuleSpec {
+            group: "",
+            ctor: || Box::new(RuleBooleanNegate),
+        },
+        RuleSpec {
+            group: "",
+            ctor: || Box::new(RuleBoolZext),
+        },
+        RuleSpec {
+            group: "",
+            ctor: || Box::new(RuleLogic2Bool),
+        },
+        RuleSpec {
+            group: "",
+            ctor: || Box::new(RuleIndirectCollapse),
+        },
+        RuleSpec {
+            group: "",
+            ctor: || Box::new(RuleMultiCollapse::default()),
+        },
+        RuleSpec {
+            group: "",
+            ctor: || Box::new(RuleSborrow),
+        },
+        RuleSpec {
+            group: "",
+            ctor: || Box::new(RuleScarry),
+        },
+        RuleSpec {
+            group: "",
+            ctor: || Box::new(RuleTrivialShift),
+        },
+        RuleSpec {
+            group: "",
+            ctor: || Box::new(RuleSignShift),
+        },
+        RuleSpec {
+            group: "",
+            ctor: || Box::new(RuleTestSign),
+        },
+        RuleSpec {
+            group: "",
+            ctor: || Box::new(RuleIdentityEl),
+        },
+        RuleSpec {
+            group: "",
+            ctor: || Box::new(RuleShift2Mult),
+        },
+        RuleSpec {
+            group: "",
+            ctor: || Box::new(RuleShiftPiece),
+        },
+        RuleSpec {
+            group: "",
+            ctor: || Box::new(RuleCollapseConstants),
+        },
+        RuleSpec {
+            group: "",
+            ctor: || Box::new(RuleTransformCpool),
+        },
+        RuleSpec {
+            group: "",
+            ctor: || Box::new(RulePropagateCopy),
+        },
+        RuleSpec {
+            group: "",
+            ctor: || Box::new(Rule2Comp2Mult),
+        },
+        RuleSpec {
+            group: "",
+            ctor: || Box::new(RuleCarryElim),
+        },
+        RuleSpec {
+            group: "",
+            ctor: || Box::new(RuleSub2Add),
+        },
+        RuleSpec {
+            group: "",
+            ctor: || Box::new(RuleXorCollapse),
+        },
+        RuleSpec {
+            group: "",
+            ctor: || Box::new(RuleAddMultCollapse),
+        },
     ]
 }
 
@@ -2464,8 +2885,14 @@ mod tests {
     fn opcode_seam_covers_int_equality() {
         use pcodeop_flags::*;
         let expect = binary | booloutput | commutative;
-        assert_eq!(crate::typeop::seam_type_op_for(OpCode::CPUI_INT_EQUAL).get_flags(), expect);
-        assert_eq!(crate::typeop::seam_type_op_for(OpCode::CPUI_INT_NOTEQUAL).get_flags(), expect);
+        assert_eq!(
+            crate::typeop::seam_type_op_for(OpCode::CPUI_INT_EQUAL).get_flags(),
+            expect
+        );
+        assert_eq!(
+            crate::typeop::seam_type_op_for(OpCode::CPUI_INT_NOTEQUAL).get_flags(),
+            expect
+        );
     }
 
     /// Durability: the seam every `set_opcode` in this batch routes through must
@@ -2481,14 +2908,18 @@ mod tests {
             };
             let t = crate::typeop::seam_type_op_for(opc);
             assert_eq!(t.get_opcode(), opc);
-            assert_ne!(t.get_flags(), 0, "{opc:?}: seam produced a property-less TypeOp");
+            assert_ne!(
+                t.get_flags(),
+                0,
+                "{opc:?}: seam produced a property-less TypeOp"
+            );
         }
     }
 
     use unlace_base::address::Address;
     use unlace_base::space::{
-        addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace,
-        IopSpace, UniqueSpace,
+        AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace,
+        addrspace_flags, spacetype,
     };
 
     use crate::context::TypeOp;
@@ -2502,7 +2933,8 @@ mod tests {
     fn build_manager() -> AddrSpaceManager {
         let mut m = AddrSpaceManager::new();
         m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+            .unwrap();
         m.insert_space(Rc::new(IopSpace::new(2))).unwrap();
         m.insert_space(Rc::new(FspecSpace::new(3))).unwrap();
         m.insert_space(Rc::new(AddrSpace::new(
@@ -2584,9 +3016,7 @@ mod tests {
             OpCode::CPUI_BOOL_AND | OpCode::CPUI_BOOL_OR | OpCode::CPUI_BOOL_XOR => {
                 binary | commutative | booloutput
             }
-            OpCode::CPUI_INT_EQUAL | OpCode::CPUI_INT_NOTEQUAL => {
-                binary | booloutput | commutative
-            }
+            OpCode::CPUI_INT_EQUAL | OpCode::CPUI_INT_NOTEQUAL => binary | booloutput | commutative,
             OpCode::CPUI_INT_SLESS | OpCode::CPUI_INT_SLESSEQUAL | OpCode::CPUI_INT_LESSEQUAL => {
                 binary | booloutput
             }
@@ -3308,7 +3738,9 @@ mod tests {
         let (_, loaded) = def_op(&mut fd, OpCode::CPUI_LOAD, &[space, pointer], 4);
         for offset in [0x80, 0x84] {
             let copyop = mk_op(&mut fd, 1, OpCode::CPUI_COPY);
-            let copied = fd.new_varnode_out(4, &Address::new(memory.clone(), offset), copyop).unwrap();
+            let copied = fd
+                .new_varnode_out(4, &Address::new(memory.clone(), offset), copyop)
+                .unwrap();
             wire(&mut fd, copyop, loaded, 0);
             let other = make_input(&mut fd, 0x200 + offset, 4);
             let consumer = mk_op(&mut fd, 2, OpCode::CPUI_INT_ADD);
@@ -3343,7 +3775,7 @@ mod tests {
 
     #[test]
     fn propagate_copy_preserves_partial_global_store_for_markers() {
-        use crate::dtype::{type_metatype, Datatype};
+        use crate::dtype::{Datatype, type_metatype};
         use crate::varnode::varnode_flags;
         for (persistent, meta, marker, expected) in [
             (true, type_metatype::TYPE_PARTIALSTRUCT, true, 0),
@@ -3357,7 +3789,9 @@ mod tests {
             let input = make_input(&mut fd, 0x100, 8);
             let (_, stored) = def_op(&mut fd, OpCode::CPUI_COPY, &[input], 8);
             let v = fd.vbank_mut().get_mut(stored).unwrap();
-            if persistent { v.set_flags_pub(varnode_flags::persist); }
+            if persistent {
+                v.set_flags_pub(varnode_flags::persist);
+            }
             v.update_type_locked(Rc::new(Datatype::new(8, meta)), true, true);
             let consumer = if marker {
                 let iop = fd.new_constant(8, 0);
@@ -3369,34 +3803,56 @@ mod tests {
                 op
             };
             assert_eq!(RulePropagateCopy.apply_op(consumer, &mut fd), expected);
-            assert_eq!(op_in(&fd, consumer, 0), Some(if expected == 0 { stored } else { input }));
+            assert_eq!(
+                op_in(&fd, consumer, 0),
+                Some(if expected == 0 { stored } else { input })
+            );
         }
     }
 
     #[test]
     fn aggregate_load_store_needs_global_alias_ordering() {
-        use crate::dtype::{type_metatype, Datatype};
+        use crate::dtype::{Datatype, type_metatype};
         use crate::varnode::varnode_flags;
-        for (level, expected) in [(crate::kuna_indexaliasguard::LEVEL_OFF, false),
+        for (level, expected) in [
+            (crate::kuna_indexaliasguard::LEVEL_OFF, false),
             (crate::kuna_indexaliasguard::LEVEL_LOAD, false),
             (crate::kuna_indexaliasguard::LEVEL_FULL, false),
-            (crate::kuna_indexaliasguard::LEVEL_GLOBAL, true)] {
+            (crate::kuna_indexaliasguard::LEVEL_GLOBAL, true),
+        ] {
             let manage = build_manager();
             let mut glb = ArchContext::new(manage);
             glb.index_alias_guard = level;
             let glb = Rc::new(glb);
             let memory = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
-            let mut data = Funcdata::new("f", "f", glb, Address::new(memory.clone(),0x1000), 0x10000000, 0x40).unwrap();
-            let load = data.new_op(2, Address::new(memory.clone(),0x1000));
+            let mut data = Funcdata::new(
+                "f",
+                "f",
+                glb,
+                Address::new(memory.clone(), 0x1000),
+                0x10000000,
+                0x40,
+            )
+            .unwrap();
+            let load = data.new_op(2, Address::new(memory.clone(), 0x1000));
             data.op_set_opcode_code(load, OpCode::CPUI_LOAD);
             let source = data.new_unique_out(8, load).unwrap();
-            let copy = data.new_op(1, Address::new(memory.clone(),0x1004));
+            let copy = data.new_op(1, Address::new(memory.clone(), 0x1004));
             data.op_set_opcode_code(copy, OpCode::CPUI_COPY);
-            let output = data.new_varnode_out(8, &Address::new(memory,0x2000), copy).unwrap();
+            let output = data
+                .new_varnode_out(8, &Address::new(memory, 0x2000), copy)
+                .unwrap();
             let v = data.vbank_mut().get_mut(output).unwrap();
             v.set_flags_pub(varnode_flags::persist);
-            v.update_type_locked(Rc::new(Datatype::new(8,type_metatype::TYPE_PARTIALSTRUCT)),true,true);
-            assert_eq!(crate::p3_dataflow::kuna_globalfieldstore::keeps_store(&data,output,source),expected);
+            v.update_type_locked(
+                Rc::new(Datatype::new(8, type_metatype::TYPE_PARTIALSTRUCT)),
+                true,
+                true,
+            );
+            assert_eq!(
+                crate::p3_dataflow::kuna_globalfieldstore::keeps_store(&data, output, source),
+                expected
+            );
         }
     }
 
@@ -3409,9 +3865,15 @@ mod tests {
         // Spot-check the first, a middle, and the last by exercising the ctor
         // and the rule's getOpList (a cheap structural identity).
         let first = (specs[0].ctor)();
-        assert_eq!(first.get_op_list(), vec![OpCode::CPUI_BOOL_AND, OpCode::CPUI_BOOL_OR]);
+        assert_eq!(
+            first.get_op_list(),
+            vec![OpCode::CPUI_BOOL_AND, OpCode::CPUI_BOOL_OR]
+        );
         let last = (specs[21].ctor)();
-        assert_eq!(last.get_op_list(), vec![OpCode::CPUI_INT_ADD, OpCode::CPUI_INT_MULT]);
+        assert_eq!(
+            last.get_op_list(),
+            vec![OpCode::CPUI_INT_ADD, OpCode::CPUI_INT_MULT]
+        );
         // RuleCollapseConstants (index 14) applies to all opcodes (default list).
         let collapse = (specs[14].ctor)();
         assert!(collapse.get_op_list().len() > 2);
@@ -3738,8 +4200,8 @@ mod tests {
 
     // --- W10: Convert #17 equate survives the size-4 fold (DynamicHash re-bind) -
 
-    use crate::database::{symbol_dispflags, SymbolId};
-    use crate::dtype::{type_metatype, Datatype};
+    use crate::database::{SymbolId, symbol_dispflags};
+    use crate::dtype::{Datatype, type_metatype};
     use unlace_base::space::SpacebaseSpace;
     use unlace_base::types::{uint4, uintb};
 
@@ -3752,7 +4214,9 @@ mod tests {
         // A spacebase space literally named "stack" is what `insert_space`
         // recognizes as the stack space (space.rs:2507).
         manage
-            .insert_space(Rc::new(SpacebaseSpace::new("stack", 5, 8, &ram, 0, true, false)))
+            .insert_space(Rc::new(SpacebaseSpace::new(
+                "stack", 5, 8, &ram, 0, true, false,
+            )))
             .unwrap();
         let glb = Rc::new(ArchContext::new(manage));
         let r = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
@@ -3789,8 +4253,14 @@ mod tests {
         // Size-8 source constant carrying the equate binding (the early
         // ActionDynamicMapping `setSymbolEntry` effect).
         let src8 = fd.new_constant(8, 0x61);
-        fd.vbank_mut().get_mut(src8).unwrap().set_kuna_symbol_entry(sym);
-        assert_eq!(fd.vn_high_display_format(src8), symbol_dispflags::FORCE_CHAR);
+        fd.vbank_mut()
+            .get_mut(src8)
+            .unwrap()
+            .set_kuna_symbol_entry(sym);
+        assert_eq!(
+            fd.vn_high_display_format(src8),
+            symbol_dispflags::FORCE_CHAR
+        );
 
         // A SUBPIECE(src8, 0) truncating the HIGH bytes — exactly the op shape
         // `RuleCollapseConstants` collapses, with `markedInput` set because src8
@@ -3806,8 +4276,17 @@ mod tests {
         // The equate re-bound onto the folded size-4 constant AND the forced
         // char format is recovered (would render `L'a'`).
         assert_eq!(fd.vbank().get(folded).unwrap().get_size(), 4);
-        assert!(fd.vbank().get(folded).unwrap().kuna_symbol_entry().is_some());
-        assert_eq!(fd.vn_high_display_format(folded), symbol_dispflags::FORCE_CHAR);
+        assert!(
+            fd.vbank()
+                .get(folded)
+                .unwrap()
+                .kuna_symbol_entry()
+                .is_some()
+        );
+        assert_eq!(
+            fd.vn_high_display_format(folded),
+            symbol_dispflags::FORCE_CHAR
+        );
 
         // Negative control on the opcode selection: a SUBPIECE truncating the LOW
         // bytes (slot-1 offset != 0) must NOT propagate (op.cc:530-532).
@@ -3816,7 +4295,11 @@ mod tests {
         let folded_low = fd.new_constant(4, 0x61);
         collapse_constant_symbol(sublow, folded_low, &mut fd);
         assert!(
-            fd.vbank().get(folded_low).unwrap().kuna_symbol_entry().is_none(),
+            fd.vbank()
+                .get(folded_low)
+                .unwrap()
+                .kuna_symbol_entry()
+                .is_none(),
             "low-byte SUBPIECE truncation must not carry the equate"
         );
     }
@@ -3830,7 +4313,10 @@ mod tests {
         let sym = add_equate(&mut fd, symbol_dispflags::FORCE_HEX, 0x3e8);
 
         let src4 = fd.new_constant(4, 0x3e8);
-        fd.vbank_mut().get_mut(src4).unwrap().set_kuna_symbol_entry(sym);
+        fd.vbank_mut()
+            .get_mut(src4)
+            .unwrap()
+            .set_kuna_symbol_entry(sym);
 
         // INT_ADD(src4, 0): the marked input is slot 0 (collapseConstantSymbol's
         // INT_ADD arm, op.cc:551).  Same-size, value-identical fold (isValueClose
@@ -3841,10 +4327,19 @@ mod tests {
         let folded = fd.new_constant(4, 0x3e8);
         collapse_constant_symbol(addop, folded, &mut fd);
         assert_eq!(vn_offset(&fd, folded), 0x3e8);
-        assert!(fd.vbank().get(folded).unwrap().kuna_symbol_entry().is_some());
+        assert!(
+            fd.vbank()
+                .get(folded)
+                .unwrap()
+                .kuna_symbol_entry()
+                .is_some()
+        );
         // Format faithfully follows the Symbol (hex here, not char) — no
         // hardcoded value/format anywhere in the path.
-        assert_eq!(fd.vn_high_display_format(folded), symbol_dispflags::FORCE_HEX);
+        assert_eq!(
+            fd.vn_high_display_format(folded),
+            symbol_dispflags::FORCE_HEX
+        );
     }
 
     /// Adversarial #3 (no special-casing): the re-bind is purely value-driven by
@@ -3858,7 +4353,10 @@ mod tests {
         let mut fd = build_fd_with_localmap();
         let sym = add_equate(&mut fd, symbol_dispflags::FORCE_CHAR, 0x61);
         let src = fd.new_constant(8, 0x61);
-        fd.vbank_mut().get_mut(src).unwrap().set_kuna_symbol_entry(sym);
+        fd.vbank_mut()
+            .get_mut(src)
+            .unwrap()
+            .set_kuna_symbol_entry(sym);
         // -0x61 in size-4 (two's complement) — close to the equate by negation.
         let neg = fd.new_constant(4, 0x61u64.wrapping_neg() & 0xffff_ffff);
         fd.copy_symbol_if_valid(neg, src);

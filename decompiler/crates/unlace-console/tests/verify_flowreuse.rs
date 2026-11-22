@@ -25,14 +25,17 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Bootstrap the x86-64 `fmt` fixture and run the analysis commit.
@@ -46,11 +49,13 @@ fn load_fixture(name: &str) -> ConsoleProgram {
     let bin = root
         .join("decompiler/crates/unlace-analysis/tests/fixtures")
         .join(name)
-        .to_str().expect("UTF-8 fixture path")
+        .to_str()
+        .expect("UTF-8 fixture path")
         .to_string();
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
@@ -66,7 +71,9 @@ fn drive_on(fixture: &str, cmds: &[&str]) -> (String, u64) {
 fn drive_with(fixture: &str, options: &[(&str, &str)], cmds: &[&str]) -> (String, u64) {
     let mut prog = load_fixture(fixture);
     for (name, value) in options {
-        prog.arch_mut().set_kuna_option(name, value).expect("option flips");
+        prog.arch_mut()
+            .set_kuna_option(name, value)
+            .expect("option flips");
     }
     let cmds: Vec<String> = cmds.iter().map(|s| s.to_string()).collect();
     let count = cmds.len();
@@ -82,7 +89,10 @@ fn drive_with(fixture: &str, options: &[(&str, &str)], cmds: &[&str]) -> (String
     }
     let adopted = {
         let data = status.get_data_mut(DECOMPILE_MODULE).unwrap();
-        data.as_any_mut().downcast_mut::<IfaceDecompData>().unwrap().adopted_flows
+        data.as_any_mut()
+            .downcast_mut::<IfaceDecompData>()
+            .unwrap()
+            .adopted_flows
     };
     // Without a `decomp_dbg`-style `openfile` redirect the bulk `print C` output
     // lands in the same buffer as the command notices, so drop the transcript and
@@ -102,18 +112,25 @@ fn drive_with(fixture: &str, options: &[(&str, &str)], cmds: &[&str]) -> (String
 /// counter itself and not any state the command touched.
 #[test]
 fn adopting_the_loaded_flow_renders_the_same_c_as_rebuilding_it() {
-    let (adopted_c, adopted_n) =
-        drive(&["load function main", "decompile", "print C"]);
-    let (rebuilt_c, rebuilt_n) =
-        drive(&["load function main", "echo x", "decompile", "print C"]);
+    let (adopted_c, adopted_n) = drive(&["load function main", "decompile", "print C"]);
+    let (rebuilt_c, rebuilt_n) = drive(&["load function main", "echo x", "decompile", "print C"]);
 
-    assert_eq!(adopted_n, 1, "the plain load/decompile pair must adopt the loaded IR");
-    assert_eq!(rebuilt_n, 0, "a command in between must fall back to the rebuild");
+    assert_eq!(
+        adopted_n, 1,
+        "the plain load/decompile pair must adopt the loaded IR"
+    );
+    assert_eq!(
+        rebuilt_n, 0,
+        "a command in between must fall back to the rebuild"
+    );
     assert_eq!(
         adopted_c, rebuilt_c,
         "adopting the loaded IR must render byte-identical C"
     );
-    assert!(adopted_c.contains("printf("), "the fixture renders a printf call:\n{adopted_c}");
+    assert!(
+        adopted_c.contains("printf("),
+        "the fixture renders a printf call:\n{adopted_c}"
+    );
 }
 
 /// `load addr` stamps its follow the same way `load function` does.
@@ -139,13 +156,11 @@ fn load_addr_also_adopts() {
 /// `Funcdata` in its place), so it must re-follow.
 #[test]
 fn a_second_decompile_does_not_adopt() {
-    let (_, n) = drive(&[
-        "load function main",
-        "decompile",
-        "decompile",
-        "print C",
-    ]);
-    assert_eq!(n, 1, "the stamp is single-use; a second decompile must rebuild");
+    let (_, n) = drive(&["load function main", "decompile", "decompile", "print C"]);
+    assert_eq!(
+        n, 1,
+        "the stamp is single-use; a second decompile must rebuild"
+    );
 }
 
 /// The SEED guard, isolated from the command-counter guard: a `-g` binary parks
@@ -156,9 +171,14 @@ fn a_second_decompile_does_not_adopt() {
 /// rebuild.  The rendered C is the proof it matters: the DWARF names survive.
 #[test]
 fn dwarf_locals_are_a_flow_time_seed_that_forces_the_rebuild() {
-    let (c, n) =
-        drive_on("dwarfstructs_x86_64", &["load function main", "decompile", "print C"]);
-    assert_eq!(n, 0, "DWARF locals are a flow-time seed; they must force the rebuild");
+    let (c, n) = drive_on(
+        "dwarfstructs_x86_64",
+        &["load function main", "decompile", "print C"],
+    );
+    assert_eq!(
+        n, 0,
+        "DWARF locals are a flow-time seed; they must force the rebuild"
+    );
     assert!(!c.is_empty(), "the DWARF fixture still renders C:\n{c}");
 }
 
@@ -176,7 +196,10 @@ fn formatstring_forces_the_rebuild() {
         &[("formatstring", "on")],
         &["load function main", "decompile", "print C"],
     );
-    assert_eq!(n, 0, "formatstring moves an arch flag around the drive; it must rebuild");
+    assert_eq!(
+        n, 0,
+        "formatstring moves an arch flag around the drive; it must rebuild"
+    );
     assert!(
         c.contains("printf(\"%d %s"),
         "the format string must still resolve with formatstring on:\n{c}"

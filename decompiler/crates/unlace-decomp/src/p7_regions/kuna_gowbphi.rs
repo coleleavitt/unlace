@@ -50,7 +50,10 @@ impl ActionGoWriteBarrierPhi {
     /// `enabled` forces the pass on regardless of the option gate (unit
     /// tests); the scheduled instance passes `false`.
     pub fn new(enabled: bool, g: impl Into<String>) -> ActionGoWriteBarrierPhi {
-        ActionGoWriteBarrierPhi { base: ActionBase::new(0, "gowbphi", g), enabled }
+        ActionGoWriteBarrierPhi {
+            base: ActionBase::new(0, "gowbphi", g),
+            enabled,
+        }
     }
 }
 
@@ -65,7 +68,10 @@ impl Action for ActionGoWriteBarrierPhi {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionGoWriteBarrierPhi { base: self.base.clone(), enabled: self.enabled }))
+        Some(Box::new(ActionGoWriteBarrierPhi {
+            base: self.base.clone(),
+            enabled: self.enabled,
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !self.enabled && !live(data) {
@@ -80,7 +86,8 @@ impl Action for ActionGoWriteBarrierPhi {
         // One edge per apply: the fullloop re-invokes, and every later cut
         // re-matches the whole shape against the already-edited graph.
         let (guard, edge) = m.guard_edges[0];
-        data.remove_branch(guard, edge).expect("ActionGoWriteBarrierPhi: removeBranch");
+        data.remove_branch(guard, edge)
+            .expect("ActionGoWriteBarrierPhi: removeBranch");
         data.remove_unreachable_blocks(false, true)
             .expect("ActionGoWriteBarrierPhi: removeUnreachableBlocks");
         self.base.count += 1;

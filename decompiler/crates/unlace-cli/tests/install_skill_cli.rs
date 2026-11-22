@@ -36,7 +36,9 @@ fn command_in(home: &Path, argv: &[&str]) -> Command {
 }
 
 fn run_in(home: &Path, argv: &[&str]) -> Output {
-    command_in(home, argv).output().expect("failed to spawn the kuna binary")
+    command_in(home, argv)
+        .output()
+        .expect("failed to spawn the kuna binary")
 }
 
 fn stderr(out: &Output) -> String {
@@ -55,7 +57,10 @@ fn installed(skills: &Path) -> PathBuf {
 fn print_is_the_repo_skill_verbatim() {
     let out = run_in(&scratch_home(), &["--print"]);
     assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
-    assert!(stdout(&out) == repo_skill(), "the binary embeds a stale skills/unlace/SKILL.md; rebuild unlace-cli");
+    assert!(
+        stdout(&out) == repo_skill(),
+        "the binary embeds a stale skills/unlace/SKILL.md; rebuild unlace-cli"
+    );
 }
 
 #[test]
@@ -64,10 +69,23 @@ fn detects_only_the_agents_that_are_present() {
     std::fs::create_dir_all(home.join(".claude")).unwrap();
     let out = run_in(&home, &[]);
     assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
-    assert_eq!(std::fs::read_to_string(installed(&home.join(".claude/skills"))).unwrap(), repo_skill());
-    assert!(!home.join(".codex").exists(), "installed for an agent that is not present");
-    assert!(!home.join(".config/opencode").exists(), "installed for an agent that is not present");
-    assert!(stdout(&out).starts_with("installed  claude"), "{}", stdout(&out));
+    assert_eq!(
+        std::fs::read_to_string(installed(&home.join(".claude/skills"))).unwrap(),
+        repo_skill()
+    );
+    assert!(
+        !home.join(".codex").exists(),
+        "installed for an agent that is not present"
+    );
+    assert!(
+        !home.join(".config/opencode").exists(),
+        "installed for an agent that is not present"
+    );
+    assert!(
+        stdout(&out).starts_with("installed  claude"),
+        "{}",
+        stdout(&out)
+    );
 }
 
 #[test]
@@ -94,7 +112,10 @@ fn agent_homes_follow_their_environment_overrides() {
     assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
     assert!(installed(&claude.join("skills")).is_file());
     assert!(installed(&codex.join("skills")).is_file());
-    assert_eq!(std::fs::read_to_string(installed(&opencode.join("skills"))).unwrap(), repo_skill());
+    assert_eq!(
+        std::fs::read_to_string(installed(&opencode.join("skills"))).unwrap(),
+        repo_skill()
+    );
 }
 
 #[test]
@@ -102,7 +123,10 @@ fn opencode_installs_under_the_default_config_directory() {
     let home = scratch_home();
     let out = run_in(&home, &["--agent", "opencode"]);
     assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
-    assert_eq!(std::fs::read_to_string(installed(&home.join(".config/opencode/skills"))).unwrap(), repo_skill());
+    assert_eq!(
+        std::fs::read_to_string(installed(&home.join(".config/opencode/skills"))).unwrap(),
+        repo_skill()
+    );
     assert!(!home.join(".claude").exists());
     assert!(!home.join(".codex").exists());
 }
@@ -113,8 +137,15 @@ fn detects_an_opencode_only_installation() {
     std::fs::create_dir_all(home.join(".config/opencode")).unwrap();
     let out = run_in(&home, &[]);
     assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
-    assert_eq!(std::fs::read_to_string(installed(&home.join(".config/opencode/skills"))).unwrap(), repo_skill());
-    assert!(stdout(&out).starts_with("installed  opencode"), "{}", stdout(&out));
+    assert_eq!(
+        std::fs::read_to_string(installed(&home.join(".config/opencode/skills"))).unwrap(),
+        repo_skill()
+    );
+    assert!(
+        stdout(&out).starts_with("installed  opencode"),
+        "{}",
+        stdout(&out)
+    );
     assert!(!home.join(".claude").exists());
     assert!(!home.join(".codex").exists());
 }
@@ -131,7 +162,10 @@ fn opencode_config_override_takes_precedence_over_xdg() {
         .output()
         .unwrap();
     assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
-    assert_eq!(std::fs::read_to_string(installed(&custom.join("skills"))).unwrap(), repo_skill());
+    assert_eq!(
+        std::fs::read_to_string(installed(&custom.join("skills"))).unwrap(),
+        repo_skill()
+    );
     assert!(!xdg.exists());
     assert!(!home.join(".config").exists());
 }
@@ -146,7 +180,10 @@ fn opencode_uses_xdg_and_falls_back_for_empty_overrides() {
         .output()
         .unwrap();
     assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
-    assert_eq!(std::fs::read_to_string(installed(&xdg.join("opencode/skills"))).unwrap(), repo_skill());
+    assert_eq!(
+        std::fs::read_to_string(installed(&xdg.join("opencode/skills"))).unwrap(),
+        repo_skill()
+    );
     assert!(!home.join(".config").exists());
 
     let out = command_in(&home, &["--agent", "opencode"])
@@ -155,7 +192,10 @@ fn opencode_uses_xdg_and_falls_back_for_empty_overrides() {
         .output()
         .unwrap();
     assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
-    assert_eq!(std::fs::read_to_string(installed(&home.join(".config/opencode/skills"))).unwrap(), repo_skill());
+    assert_eq!(
+        std::fs::read_to_string(installed(&home.join(".config/opencode/skills"))).unwrap(),
+        repo_skill()
+    );
 }
 
 #[test]
@@ -165,7 +205,10 @@ fn project_installs_under_the_working_directory() {
     assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
     assert!(installed(&home.join(".claude/skills")).is_file());
     assert!(installed(&home.join(".agents/skills")).is_file());
-    assert_eq!(std::fs::read_to_string(installed(&home.join(".opencode/skills"))).unwrap(), repo_skill());
+    assert_eq!(
+        std::fs::read_to_string(installed(&home.join(".opencode/skills"))).unwrap(),
+        repo_skill()
+    );
     assert!(!home.join(".config").exists());
 }
 
@@ -178,7 +221,10 @@ fn opencode_project_install_ignores_global_overrides() {
         .output()
         .unwrap();
     assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
-    assert_eq!(std::fs::read_to_string(installed(&home.join(".opencode/skills"))).unwrap(), repo_skill());
+    assert_eq!(
+        std::fs::read_to_string(installed(&home.join(".opencode/skills"))).unwrap(),
+        repo_skill()
+    );
     assert!(!home.join("custom").exists());
     assert!(!home.join("xdg").exists());
     assert!(!home.join(".claude").exists());
@@ -200,12 +246,22 @@ fn a_differing_copy_is_kept_unless_forced() {
     let kept = run_in(&home, &["--dir", dir]);
     assert_eq!(kept.status.code(), Some(1));
     assert!(stderr(&kept).contains("--force"), "{}", stderr(&kept));
-    assert_eq!(std::fs::read_to_string(installed(&skills)).unwrap(), "local edits\n");
+    assert_eq!(
+        std::fs::read_to_string(installed(&skills)).unwrap(),
+        "local edits\n"
+    );
 
     let forced = run_in(&home, &["--dir", dir, "--force"]);
     assert_eq!(forced.status.code(), Some(0), "{}", stderr(&forced));
-    assert!(stdout(&forced).starts_with("updated"), "{}", stdout(&forced));
-    assert_eq!(std::fs::read_to_string(installed(&skills)).unwrap(), repo_skill());
+    assert!(
+        stdout(&forced).starts_with("updated"),
+        "{}",
+        stdout(&forced)
+    );
+    assert_eq!(
+        std::fs::read_to_string(installed(&skills)).unwrap(),
+        repo_skill()
+    );
 }
 
 #[test]
@@ -224,6 +280,13 @@ fn conflicting_flags_are_usage_errors() {
 
 #[test]
 fn top_level_help_points_agents_at_the_skill() {
-    let out = Command::new(env!("CARGO_BIN_EXE_unlace")).arg("--help").output().unwrap();
-    assert!(stderr(&out).contains("LLM agents: run `unlace install-skill`"), "{}", stderr(&out));
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
+        .arg("--help")
+        .output()
+        .unwrap();
+    assert!(
+        stderr(&out).contains("LLM agents: run `unlace install-skill`"),
+        "{}",
+        stderr(&out)
+    );
 }

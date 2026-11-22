@@ -109,7 +109,9 @@ pub fn pick_representative(members: impl Iterator<Item = Option<Member>>) -> Opt
 /// with no Symbol of its own — the register and unique temporaries the naming
 /// pass calls `vN` — takes the merged type.
 pub fn declares_from_high(fd: &Funcdata, high: HighVariableId) -> bool {
-    fd.high_bank().get(high).is_some_and(|h| h.kuna_symbol_type().is_none())
+    fd.high_bank()
+        .get(high)
+        .is_some_and(|h| h.kuna_symbol_type().is_none())
 }
 
 #[cfg(test)]

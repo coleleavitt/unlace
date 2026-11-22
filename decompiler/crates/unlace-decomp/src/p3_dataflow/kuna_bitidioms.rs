@@ -20,7 +20,9 @@ use unlace_num::opcodes::OpCode;
 use crate::action::{ActionGroupList, Rule};
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::userop::{BUILTIN_ABS, BUILTIN_LABS, BUILTIN_BITREV, BUILTIN_BSWAP, BUILTIN_CTZ, BUILTIN_ROTL};
+use crate::userop::{
+    BUILTIN_ABS, BUILTIN_BITREV, BUILTIN_BSWAP, BUILTIN_CTZ, BUILTIN_LABS, BUILTIN_ROTL,
+};
 
 /// `[x op c]` with `c` a constant input in slot 1 (or 0 for a commutative op).
 fn const_operand(data: &Funcdata, op: OpId) -> Option<(VarnodeId, u64)> {
@@ -54,8 +56,12 @@ fn bits_of(data: &Funcdata, vn: VarnodeId, depth: u32, budget: &mut u32) -> Opti
         return source;
     }
     *budget -= 1;
-    let Some(def) = v.get_def() else { return source };
-    let Some(o) = data.obank().get(def) else { return source };
+    let Some(def) = v.get_def() else {
+        return source;
+    };
+    let Some(o) = data.obank().get(def) else {
+        return source;
+    };
     let mut sub = |vn: VarnodeId| bits_of(data, vn, depth - 1, budget);
     match o.code() {
         OpCode::CPUI_INT_AND => {
@@ -74,7 +80,13 @@ fn bits_of(data: &Funcdata, vn: VarnodeId, depth: u32, budget: &mut u32) -> Opti
             let (x, b) = sub(a)?;
             let left = o.code() == OpCode::CPUI_INT_LEFT;
             let out = (0..width)
-                .map(|i| if left { i.checked_sub(k).and_then(|j| b.get(j).copied().flatten()) } else { b.get(i + k).copied().flatten() })
+                .map(|i| {
+                    if left {
+                        i.checked_sub(k).and_then(|j| b.get(j).copied().flatten())
+                    } else {
+                        b.get(i + k).copied().flatten()
+                    }
+                })
                 .collect();
             Some((x, out))
         }
@@ -100,9 +112,17 @@ fn bits_of(data: &Funcdata, vn: VarnodeId, depth: u32, budget: &mut u32) -> Opti
             Some((x, b))
         }
         OpCode::CPUI_SUBPIECE => {
-            let k = 8 * o.get_in(1).and_then(|c| data.vbank().get(c)).map(|c| c.get_offset() as usize)?;
+            let k = 8 * o
+                .get_in(1)
+                .and_then(|c| data.vbank().get(c))
+                .map(|c| c.get_offset() as usize)?;
             let (x, b) = sub(o.get_in(0)?)?;
-            Some((x, (0..width).map(|i| b.get(i + k).copied().flatten()).collect()))
+            Some((
+                x,
+                (0..width)
+                    .map(|i| b.get(i + k).copied().flatten())
+                    .collect(),
+            ))
         }
         _ => source,
     }
@@ -131,7 +151,9 @@ fn reversal_source(data: &Funcdata, vn: VarnodeId, rot: usize) -> Option<(Varnod
     if size > 1 && (0..w).all(|d| at(d) == Some(((size as usize - 1 - d / 8) * 8 + d % 8) as u32)) {
         return Some((x, Reversal::Bytes));
     }
-    (0..w).all(|d| at(d) == Some((w - 1 - d) as u32)).then_some((x, Reversal::Bits))
+    (0..w)
+        .all(|d| at(d) == Some((w - 1 - d) as u32))
+        .then_some((x, Reversal::Bits))
 }
 
 fn reversal_builtin(kind: Reversal) -> uintb {
@@ -142,15 +164,30 @@ fn reversal_builtin(kind: Reversal) -> uintb {
 }
 
 /// `(x, n)` when the two inputs are `x << n` and `x >> (W - n)`.
-fn rotate_source(data: &Funcdata, a: VarnodeId, b: VarnodeId, size: int4) -> Option<(VarnodeId, u64)> {
+fn rotate_source(
+    data: &Funcdata,
+    a: VarnodeId,
+    b: VarnodeId,
+    size: int4,
+) -> Option<(VarnodeId, u64)> {
     let shift = |vn: VarnodeId, code: OpCode| -> Option<(VarnodeId, u64)> {
         let def = data.vbank().get(vn)?.get_def()?;
-        (data.obank().get(def)?.code() == code).then(|| const_operand(data, def)).flatten()
+        (data.obank().get(def)?.code() == code)
+            .then(|| const_operand(data, def))
+            .flatten()
     };
     let width = 8 * size as u64;
     for (l, r) in [(a, b), (b, a)] {
-        if let (Some((x, n)), Some((y, m))) = (shift(l, OpCode::CPUI_INT_LEFT), shift(r, OpCode::CPUI_INT_RIGHT)) {
-            if x == y && n > 0 && n < width && n + m == width && data.vbank().get(x).is_some_and(|v| v.get_size() == size) {
+        if let (Some((x, n)), Some((y, m))) = (
+            shift(l, OpCode::CPUI_INT_LEFT),
+            shift(r, OpCode::CPUI_INT_RIGHT),
+        ) {
+            if x == y
+                && n > 0
+                && n < width
+                && n + m == width
+                && data.vbank().get(x).is_some_and(|v| v.get_size() == size)
+            {
                 return Some((x, n));
             }
         }
@@ -165,17 +202,25 @@ fn rotate_source(data: &Funcdata, a: VarnodeId, b: VarnodeId, size: int4) -> Opt
 /// joined pair), whose bits are read at the rotate's position. A mask not yet
 /// folded to a constant waits for the next pass.
 fn masked_to_one_half(data: &Funcdata, out: VarnodeId, n: u64, size: int4) -> bool {
-    let full = if size >= 8 { u64::MAX } else { (1u64 << (8 * size)) - 1 };
+    let full = if size >= 8 {
+        u64::MAX
+    } else {
+        (1u64 << (8 * size)) - 1
+    };
     let low = (1u64 << n) - 1;
     let high = full & !low;
     let mut reads: Vec<(VarnodeId, u32)> = vec![(out, 0)];
     let mut depth = 0;
     while let Some((vn, at)) = reads.pop() {
         for d in data.descend_snapshot(vn) {
-            let Some(o) = data.obank().get(d) else { continue };
+            let Some(o) = data.obank().get(d) else {
+                continue;
+            };
             match o.code() {
                 OpCode::CPUI_INT_AND => {
-                    let Some((_, m)) = const_operand(data, d) else { return true };
+                    let Some((_, m)) = const_operand(data, d) else {
+                        return true;
+                    };
                     let m = m.checked_shr(at).unwrap_or(0) & full;
                     if m & low == 0 || m & high == 0 {
                         return true;
@@ -184,7 +229,9 @@ fn masked_to_one_half(data: &Funcdata, out: VarnodeId, n: u64, size: int4) -> bo
                 OpCode::CPUI_INT_ZEXT if depth < 2 => reads.extend(o.get_out().map(|w| (w, at))),
                 OpCode::CPUI_PIECE if depth < 2 => {
                     let shift = if o.get_in(0) == Some(vn) {
-                        o.get_in(1).and_then(|l| data.vbank().get(l)).map_or(0, |l| 8 * l.get_size() as u32)
+                        o.get_in(1)
+                            .and_then(|l| data.vbank().get(l))
+                            .map_or(0, |l| 8 * l.get_size() as u32)
                     } else {
                         0
                     };
@@ -201,14 +248,26 @@ fn masked_to_one_half(data: &Funcdata, out: VarnodeId, n: u64, size: int4) -> bo
 /// `LZCOUNT(bitreverse(x))` (AArch64 `rbit` + `clz`, how compilers spell
 /// `__builtin_ctz`) becomes `ctz(x)`.
 fn count_trailing(op: OpId, data: &mut Funcdata) -> int4 {
-    let Some(input) = data.obank().get(op).and_then(|o| o.get_in(0)) else { return 0 };
-    let Some(def) = data.vbank().get(input).and_then(|v| v.get_def()) else { return 0 };
-    let Some(d) = data.obank().get(def) else { return 0 };
+    let Some(input) = data.obank().get(op).and_then(|o| o.get_in(0)) else {
+        return 0;
+    };
+    let Some(def) = data.vbank().get(input).and_then(|v| v.get_def()) else {
+        return 0;
+    };
+    let Some(d) = data.obank().get(def) else {
+        return 0;
+    };
     if d.code() != OpCode::CPUI_CALLOTHER || d.num_input() != 2 {
         return 0;
     }
-    let (Some(id), Some(x)) = (d.get_in(0), d.get_in(1)) else { return 0 };
-    if data.vbank().get(id).is_none_or(|v| !v.is_constant() || v.get_offset() != BUILTIN_BITREV as u64) {
+    let (Some(id), Some(x)) = (d.get_in(0), d.get_in(1)) else {
+        return 0;
+    };
+    if data
+        .vbank()
+        .get(id)
+        .is_none_or(|v| !v.is_constant() || v.get_offset() != BUILTIN_BITREV as u64)
+    {
         return 0;
     }
     let ctz = data.new_constant(4, BUILTIN_CTZ as uintb);
@@ -224,18 +283,29 @@ fn count_trailing(op: OpId, data: &mut Funcdata) -> int4 {
 
 /// Turn `rotl(x, n)` back into `x << n | x >> (W - n)`, for a rotate a mask
 /// found later (past a `PIECE` the AND was pushed onto) shows is a shift.
-fn unrotate(op: OpId, x: VarnodeId, n: u64, size: int4, data: &mut Funcdata) -> unlace_base::error::KunaResult<()> {
-    let at = data.obank().get(op).map(|o| o.get_addr().clone()).ok_or_else(|| unlace_base::error::KunaError::lowlevel("unrotate: stale op"))?;
-    let mut half = |code: OpCode, by: u64, data: &mut Funcdata| -> unlace_base::error::KunaResult<VarnodeId> {
-        let s = data.new_op(2, at.clone());
-        data.op_set_opcode_code(s, code);
-        data.op_set_input(s, x, 0)?;
-        let c = data.new_constant(4, by as uintb);
-        data.op_set_input(s, c, 1)?;
-        let out = data.new_unique_out(size, s)?;
-        data.op_insert_before(s, op);
-        Ok(out)
-    };
+fn unrotate(
+    op: OpId,
+    x: VarnodeId,
+    n: u64,
+    size: int4,
+    data: &mut Funcdata,
+) -> unlace_base::error::KunaResult<()> {
+    let at = data
+        .obank()
+        .get(op)
+        .map(|o| o.get_addr().clone())
+        .ok_or_else(|| unlace_base::error::KunaError::lowlevel("unrotate: stale op"))?;
+    let mut half =
+        |code: OpCode, by: u64, data: &mut Funcdata| -> unlace_base::error::KunaResult<VarnodeId> {
+            let s = data.new_op(2, at.clone());
+            data.op_set_opcode_code(s, code);
+            data.op_set_input(s, x, 0)?;
+            let c = data.new_constant(4, by as uintb);
+            data.op_set_input(s, c, 1)?;
+            let out = data.new_unique_out(size, s)?;
+            data.op_insert_before(s, op);
+            Ok(out)
+        };
     let l = half(OpCode::CPUI_INT_LEFT, n, data)?;
     let r = half(OpCode::CPUI_INT_RIGHT, 8 * size as u64 - n, data)?;
     data.op_set_all_input(op, &[l, r])?;
@@ -250,7 +320,9 @@ pub struct RuleBitIdioms {
 
 impl RuleBitIdioms {
     pub fn new(group: &str) -> RuleBitIdioms {
-        RuleBitIdioms { group: group.to_string() }
+        RuleBitIdioms {
+            group: group.to_string(),
+        }
     }
 }
 
@@ -259,9 +331,18 @@ impl RuleBitIdioms {
     /// (the last stage of AArch64 `rev`, when the rotate was folded before the
     /// stages under it were simplified) becomes `bswap(x)`.
     fn rotate_to_swap(&self, op: OpId, data: &mut Funcdata) -> int4 {
-        let Some(o) = data.obank().get(op) else { return 0 };
-        let (Some(id), Some(v), Some(n)) = (o.get_in(0), o.get_in(1), o.get_in(2)) else { return 0 };
-        let constant = |vn: VarnodeId| data.vbank().get(vn).filter(|v| v.is_constant()).map(|v| v.get_offset());
+        let Some(o) = data.obank().get(op) else {
+            return 0;
+        };
+        let (Some(id), Some(v), Some(n)) = (o.get_in(0), o.get_in(1), o.get_in(2)) else {
+            return 0;
+        };
+        let constant = |vn: VarnodeId| {
+            data.vbank()
+                .get(vn)
+                .filter(|v| v.is_constant())
+                .map(|v| v.get_offset())
+        };
         if constant(id) != Some(BUILTIN_ROTL as u64) {
             return 0;
         }
@@ -272,7 +353,9 @@ impl RuleBitIdioms {
                 return unrotate(op, v, n, size, data).map_or(0, |()| 1);
             }
         }
-        let Some((x, kind)) = reversal_source(data, v, n as usize) else { return 0 };
+        let Some((x, kind)) = reversal_source(data, v, n as usize) else {
+            return 0;
+        };
         let id = data.new_constant(4, reversal_builtin(kind));
         if data.op_set_all_input(op, &[id, x]).is_err() {
             return 0;
@@ -283,26 +366,38 @@ impl RuleBitIdioms {
 
 impl Rule for RuleBitIdioms {
     fn get_op_list(&self) -> Vec<OpCode> {
-        vec![OpCode::CPUI_INT_OR, OpCode::CPUI_CALLOTHER, OpCode::CPUI_LZCOUNT]
+        vec![
+            OpCode::CPUI_INT_OR,
+            OpCode::CPUI_CALLOTHER,
+            OpCode::CPUI_LZCOUNT,
+        ]
     }
 
     fn clone_rule(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Rule>> {
-        grouplist.contains(&self.group).then(|| Box::new(RuleBitIdioms::new(&self.group)) as Box<dyn Rule>)
+        grouplist
+            .contains(&self.group)
+            .then(|| Box::new(RuleBitIdioms::new(&self.group)) as Box<dyn Rule>)
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         if !data.get_arch().bit_idioms {
             return 0;
         }
-        let Some(o) = data.obank().get(op) else { return 0 };
+        let Some(o) = data.obank().get(op) else {
+            return 0;
+        };
         if o.code() == OpCode::CPUI_CALLOTHER {
             return self.rotate_to_swap(op, data);
         }
         if o.code() == OpCode::CPUI_LZCOUNT {
             return count_trailing(op, data);
         }
-        let (Some(a), Some(b), Some(out)) = (o.get_in(0), o.get_in(1), o.get_out()) else { return 0 };
-        let Some(size) = data.vbank().get(out).map(|v| v.get_size()) else { return 0 };
+        let (Some(a), Some(b), Some(out)) = (o.get_in(0), o.get_in(1), o.get_out()) else {
+            return 0;
+        };
+        let Some(size) = data.vbank().get(out).map(|v| v.get_size()) else {
+            return 0;
+        };
         if let Some((x, kind)) = reversal_source(data, out, 0) {
             let id = data.new_constant(4, reversal_builtin(kind));
             if data.op_set_all_input(op, &[id, x]).is_err() {
@@ -311,7 +406,9 @@ impl Rule for RuleBitIdioms {
             data.op_set_opcode(op, crate::typeop::type_op_for(OpCode::CPUI_CALLOTHER));
             return 1;
         }
-        if let Some((x, n)) = rotate_source(data, a, b, size).filter(|&(_, n)| !masked_to_one_half(data, out, n, size)) {
+        if let Some((x, n)) = rotate_source(data, a, b, size)
+            .filter(|&(_, n)| !masked_to_one_half(data, out, n, size))
+        {
             let id = data.new_constant(4, BUILTIN_ROTL as uintb);
             let count = data.new_constant(4, n as uintb);
             if data.op_set_all_input(op, &[id, x, count]).is_err() {
@@ -324,7 +421,6 @@ impl Rule for RuleBitIdioms {
     }
 }
 
-
 /// `x` when `vn` is `-x` (`INT_2COMP(x)` or `INT_MULT(x, -1)`).
 fn negated(data: &Funcdata, vn: VarnodeId) -> Option<VarnodeId> {
     let def = data.vbank().get(vn)?.get_def()?;
@@ -334,7 +430,11 @@ fn negated(data: &Funcdata, vn: VarnodeId) -> Option<VarnodeId> {
         OpCode::CPUI_INT_MULT => {
             let (x, c) = const_operand(data, def)?;
             let size = data.vbank().get(x)?.get_size();
-            let full = if size >= 8 { u64::MAX } else { (1u64 << (8 * size)) - 1 };
+            let full = if size >= 8 {
+                u64::MAX
+            } else {
+                (1u64 << (8 * size)) - 1
+            };
             (c & full == full).then_some(x)
         }
         _ => None,
@@ -343,7 +443,13 @@ fn negated(data: &Funcdata, vn: VarnodeId) -> Option<VarnodeId> {
 
 /// The value of a signed compare of `x`, `-x` and constants at `x = v`, or
 /// `None` when the condition reads anything else.
-fn sign_test(data: &Funcdata, cond: VarnodeId, x: VarnodeId, negx: VarnodeId, v: i64) -> Option<bool> {
+fn sign_test(
+    data: &Funcdata,
+    cond: VarnodeId,
+    x: VarnodeId,
+    negx: VarnodeId,
+    v: i64,
+) -> Option<bool> {
     let def = data.vbank().get(cond)?.get_def()?;
     let o = data.obank().get(def)?;
     let size = data.vbank().get(x)?.get_size();
@@ -354,9 +460,17 @@ fn sign_test(data: &Funcdata, cond: VarnodeId, x: VarnodeId, negx: VarnodeId, v:
         if vn == negx || negated(data, vn) == Some(x) {
             return Some(-v);
         }
-        let c = data.vbank().get(vn).filter(|c| c.is_constant())?.get_offset();
+        let c = data
+            .vbank()
+            .get(vn)
+            .filter(|c| c.is_constant())?
+            .get_offset();
         let bits = 8 * size as u32;
-        Some(if bits >= 64 { c as i64 } else { ((c << (64 - bits)) as i64) >> (64 - bits) })
+        Some(if bits >= 64 {
+            c as i64
+        } else {
+            ((c << (64 - bits)) as i64) >> (64 - bits)
+        })
     };
     match o.code() {
         OpCode::CPUI_BOOL_NEGATE => sign_test(data, o.get_in(0)?, x, negx, v).map(|b| !b),
@@ -375,7 +489,9 @@ pub struct RuleIntAbs {
 
 impl RuleIntAbs {
     pub fn new(group: &str) -> RuleIntAbs {
-        RuleIntAbs { group: group.to_string() }
+        RuleIntAbs {
+            group: group.to_string(),
+        }
     }
 }
 
@@ -385,18 +501,24 @@ impl Rule for RuleIntAbs {
     }
 
     fn clone_rule(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Rule>> {
-        grouplist.contains(&self.group).then(|| Box::new(RuleIntAbs::new(&self.group)) as Box<dyn Rule>)
+        grouplist
+            .contains(&self.group)
+            .then(|| Box::new(RuleIntAbs::new(&self.group)) as Box<dyn Rule>)
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         if !data.get_arch().bit_idioms {
             return 0;
         }
-        let Some(o) = data.obank().get(op) else { return 0 };
+        let Some(o) = data.obank().get(op) else {
+            return 0;
+        };
         if o.num_input() != 2 {
             return 0;
         }
-        let (Some(in0), Some(in1), Some(out), Some(merge)) = (o.get_in(0), o.get_in(1), o.get_out(), o.get_parent()) else {
+        let (Some(in0), Some(in1), Some(out), Some(merge)) =
+            (o.get_in(0), o.get_in(1), o.get_out(), o.get_parent())
+        else {
             return 0;
         };
         let (x, negx) = if negated(data, in1) == Some(in0) {
@@ -419,25 +541,39 @@ impl Rule for RuleIntAbs {
         let preds = [m.get_in(0), m.get_in(1)];
         let head = |p: BlockId| -> BlockId {
             let pb = blocks.block(p);
-            if pb.size_out() == 1 && pb.size_in() == 1 { pb.get_in(0) } else { p }
+            if pb.size_out() == 1 && pb.size_in() == 1 {
+                pb.get_in(0)
+            } else {
+                p
+            }
         };
         let branch = head(preds[0]);
         if head(preds[1]) != branch || blocks.block(branch).size_out() != 2 {
             return 0;
         }
-        let Some(cb) = data.bb_op_tail(branch) else { return 0 };
-        let Some(cbo) = data.obank().get(cb) else { return 0 };
+        let Some(cb) = data.bb_op_tail(branch) else {
+            return 0;
+        };
+        let Some(cbo) = data.obank().get(cb) else {
+            return 0;
+        };
         if cbo.code() != OpCode::CPUI_CBRANCH {
             return 0;
         }
         let Some(cond) = cbo.get_in(1) else { return 0 };
         let flip = cbo.is_boolean_flip();
         let bb = blocks.block(branch);
-        let (taken_true, taken_false) = if flip { (bb.get_false_out(), bb.get_true_out()) } else { (bb.get_true_out(), bb.get_false_out()) };
+        let (taken_true, taken_false) = if flip {
+            (bb.get_false_out(), bb.get_true_out())
+        } else {
+            (bb.get_true_out(), bb.get_false_out())
+        };
         let outcome_of = |slot: usize| -> Option<bool> {
             let p = preds[slot];
             let via = if p == branch {
-                (0..bb.size_out()).map(|j| bb.get_out(j)).find(|&s| s == merge)?
+                (0..bb.size_out())
+                    .map(|j| bb.get_out(j))
+                    .find(|&s| s == merge)?
             } else {
                 p
             };
@@ -449,11 +585,16 @@ impl Rule for RuleIntAbs {
                 None
             }
         };
-        let (Some(o0), Some(o1)) = (outcome_of(0), outcome_of(1)) else { return 0 };
+        let (Some(o0), Some(o1)) = (outcome_of(0), outcome_of(1)) else {
+            return 0;
+        };
         if o0 == o1 {
             return 0;
         }
-        let (Some(neg_case), Some(pos_case)) = (sign_test(data, cond, x, negx, -5), sign_test(data, cond, x, negx, 5)) else {
+        let (Some(neg_case), Some(pos_case)) = (
+            sign_test(data, cond, x, negx, -5),
+            sign_test(data, cond, x, negx, 5),
+        ) else {
             return 0;
         };
         if neg_case == pos_case {
@@ -463,10 +604,11 @@ impl Rule for RuleIntAbs {
         if value_for(neg_case) != negx || value_for(pos_case) != x {
             return 0;
         }
-        let first = data
-            .bb_ops(merge)
-            .into_iter()
-            .find(|&id| data.obank().get(id).is_some_and(|p| p.code() != OpCode::CPUI_MULTIEQUAL));
+        let first = data.bb_ops(merge).into_iter().find(|&id| {
+            data.obank()
+                .get(id)
+                .is_some_and(|p| p.code() != OpCode::CPUI_MULTIEQUAL)
+        });
         let Some(first) = first else { return 0 };
         let addr = data.obank().get(first).map(|p| p.get_addr().clone());
         let Some(addr) = addr else { return 0 };
@@ -481,8 +623,13 @@ impl Rule for RuleIntAbs {
         if data.op_set_input(call, id, 0).is_err() || data.op_set_input(call, x, 1).is_err() {
             return 0;
         }
-        let Ok(res) = data.new_unique_out(size, call) else { return 0 };
-        let int = data.get_arch().types().and_then(|t| t.get_base(size, crate::dtype::type_metatype::TYPE_INT).ok());
+        let Ok(res) = data.new_unique_out(size, call) else {
+            return 0;
+        };
+        let int = data
+            .get_arch()
+            .types()
+            .and_then(|t| t.get_base(size, crate::dtype::type_metatype::TYPE_INT).ok());
         if let (Some(t), Some(n)) = (int, data.vbank_mut().get_mut(res)) {
             n.update_type(t);
         }
@@ -493,7 +640,6 @@ impl Rule for RuleIntAbs {
         1
     }
 }
-
 
 /// What a single-instruction bit-scan loop computes.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -516,7 +662,16 @@ struct BitScan {
 fn scan_samples(width: i32) -> Vec<u64> {
     let bits = 8 * width as u32;
     let mut out: Vec<u64> = (0..bits).map(|b| 1u64 << b).collect();
-    out.extend([3, 6, 0x60, 0x8001, 0xf0f0, 0x1234_5678, 0xffff_ffff, 0x8000_0000_0000_0001]);
+    out.extend([
+        3,
+        6,
+        0x60,
+        0x8001,
+        0xf0f0,
+        0x1234_5678,
+        0xffff_ffff,
+        0x8000_0000_0000_0001,
+    ]);
     let m = crate::kuna_strlenscan::mask(width);
     out.into_iter().map(|v| v & m).filter(|&v| v != 0).collect()
 }
@@ -537,9 +692,16 @@ fn match_bitscan(data: &Funcdata, head: BlockId) -> Option<BitScan> {
     })?;
     let exit = if t == body { f } else { t };
     let region = [head, body];
-    let ops: Vec<OpId> = data.bb_ops(head).into_iter().chain(data.bb_ops(body)).collect();
+    let ops: Vec<OpId> = data
+        .bb_ops(head)
+        .into_iter()
+        .chain(data.bb_ops(body))
+        .collect();
     let at = op(data, *ops.first()?)?.get_addr().clone();
-    if !ops.iter().all(|&o| op(data, o).is_some_and(|p| *p.get_addr() == at)) {
+    if !ops
+        .iter()
+        .all(|&o| op(data, o).is_some_and(|p| *p.get_addr() == at))
+    {
         return None;
     }
     let back = data.bblocks_ref().block(head).get_in_index(body);
@@ -554,7 +716,12 @@ fn match_bitscan(data: &Funcdata, head: BlockId) -> Option<BitScan> {
         return None;
     }
     let in_region = |v: VarnodeId| {
-        data.vbank().get(v).and_then(|n| n.get_def()).and_then(|d| op(data, d)).and_then(|p| p.get_parent()).is_some_and(|b| region.contains(&b))
+        data.vbank()
+            .get(v)
+            .and_then(|n| n.get_def())
+            .and_then(|d| op(data, d))
+            .and_then(|p| p.get_parent())
+            .is_some_and(|b| region.contains(&b))
     };
     let is_const = |v: VarnodeId| crate::kuna_strlenscan::copied_constant(data, v).is_some();
     // The source: the one non-constant value entering the loop.
@@ -573,7 +740,9 @@ fn match_bitscan(data: &Funcdata, head: BlockId) -> Option<BitScan> {
     }
     leaves.sort_unstable();
     leaves.dedup();
-    let [source] = leaves.as_slice() else { return None };
+    let [source] = leaves.as_slice() else {
+        return None;
+    };
     let source = *source;
     let width = size(data, source)?;
     if !matches!(width, 2 | 4 | 8) {
@@ -585,18 +754,32 @@ fn match_bitscan(data: &Funcdata, head: BlockId) -> Option<BitScan> {
     for &x in &samples {
         let mut state: Vec<u64> = phis
             .iter()
-            .map(|p| if p.1 == source { Some(x) } else { crate::kuna_strlenscan::copied_constant(data, p.1) })
+            .map(|p| {
+                if p.1 == source {
+                    Some(x)
+                } else {
+                    crate::kuna_strlenscan::copied_constant(data, p.1)
+                }
+            })
             .collect::<Option<Vec<_>>>()?;
         let mut done = false;
         for _ in 0..=8 * width + 2 {
-            let env: Vec<(VarnodeId, u64)> = phis.iter().map(|p| p.0).zip(state.iter().copied()).chain([(source, x)]).collect();
+            let env: Vec<(VarnodeId, u64)> = phis
+                .iter()
+                .map(|p| p.0)
+                .zip(state.iter().copied())
+                .chain([(source, x)])
+                .collect();
             let c = eval(data, cond, &env, &region, 0)?;
             let to = if c != 0 { t } else { f };
             if to == exit {
                 done = true;
                 break;
             }
-            state = phis.iter().map(|p| eval(data, p.2, &env, &region, 0)).collect::<Option<Vec<_>>>()?;
+            state = phis
+                .iter()
+                .map(|p| eval(data, p.2, &env, &region, 0))
+                .collect::<Option<Vec<_>>>()?;
         }
         if !done {
             return None;
@@ -606,7 +789,10 @@ fn match_bitscan(data: &Funcdata, head: BlockId) -> Option<BitScan> {
         }
     }
     let lowest: Vec<u64> = samples.iter().map(|x| x.trailing_zeros() as u64).collect();
-    let highest: Vec<u64> = samples.iter().map(|x| 63 - x.leading_zeros() as u64).collect();
+    let highest: Vec<u64> = samples
+        .iter()
+        .map(|x| 63 - x.leading_zeros() as u64)
+        .collect();
     let (counter, kind) = phis.iter().zip(&exits).find_map(|(p, e)| {
         if *e == lowest {
             Some((p.0, ScanKind::Trailing))
@@ -618,13 +804,25 @@ fn match_bitscan(data: &Funcdata, head: BlockId) -> Option<BitScan> {
     })?;
     // Nothing but the counter may leave the loop.
     for &o in &ops {
-        let Some(out) = op(data, o)?.get_out() else { continue };
-        let used_outside = data.descend_snapshot(out).into_iter().any(|d| op(data, d).and_then(|p| p.get_parent()).is_some_and(|b| !region.contains(&b)));
+        let Some(out) = op(data, o)?.get_out() else {
+            continue;
+        };
+        let used_outside = data.descend_snapshot(out).into_iter().any(|d| {
+            op(data, d)
+                .and_then(|p| p.get_parent())
+                .is_some_and(|b| !region.contains(&b))
+        });
         if used_outside && out != counter {
             return None;
         }
     }
-    Some(BitScan { head, to_body: data.bblocks_ref().block(head).get_out_index(body), source, counter, kind })
+    Some(BitScan {
+        head,
+        to_body: data.bblocks_ref().block(head).get_out_index(body),
+        source,
+        counter,
+        kind,
+    })
 }
 
 fn rewrite_bitscan(data: &mut Funcdata, s: &BitScan) -> unlace_base::error::KunaResult<()> {
@@ -633,9 +831,17 @@ fn rewrite_bitscan(data: &mut Funcdata, s: &BitScan) -> unlace_base::error::Kuna
     let first = head_ops
         .iter()
         .copied()
-        .find(|&o| data.obank().get(o).is_some_and(|p| p.code() != OpCode::CPUI_MULTIEQUAL))
+        .find(|&o| {
+            data.obank()
+                .get(o)
+                .is_some_and(|p| p.code() != OpCode::CPUI_MULTIEQUAL)
+        })
         .ok_or_else(|| KunaError::lowlevel("bitscan: empty head"))?;
-    let at = data.obank().get(first).map(|p| p.get_addr().clone()).ok_or_else(|| KunaError::lowlevel("bitscan: stale op"))?;
+    let at = data
+        .obank()
+        .get(first)
+        .map(|p| p.get_addr().clone())
+        .ok_or_else(|| KunaError::lowlevel("bitscan: stale op"))?;
     let csize = data.vbank().get(s.counter).map_or(4, |v| v.get_size());
     let width = data.vbank().get(s.source).map_or(4, |v| v.get_size());
     let result = match s.kind {
@@ -667,11 +873,17 @@ fn rewrite_bitscan(data: &mut Funcdata, s: &BitScan) -> unlace_base::error::Kuna
     };
     let region = [s.head, data.bblocks_ref().block(s.head).get_out(s.to_body)];
     for d in data.descend_snapshot(s.counter) {
-        let outside = data.obank().get(d).and_then(|p| p.get_parent()).is_some_and(|b| !region.contains(&b));
+        let outside = data
+            .obank()
+            .get(d)
+            .and_then(|p| p.get_parent())
+            .is_some_and(|b| !region.contains(&b));
         if !outside {
             continue;
         }
-        let slots: Vec<i32> = (0..data.obank().get(d).map_or(0, |p| p.num_input())).filter(|&i| data.obank().get(d).and_then(|p| p.get_in(i)) == Some(s.counter)).collect();
+        let slots: Vec<i32> = (0..data.obank().get(d).map_or(0, |p| p.num_input()))
+            .filter(|&i| data.obank().get(d).and_then(|p| p.get_in(i)) == Some(s.counter))
+            .collect();
         for i in slots {
             data.op_set_input(d, result, i)?;
         }
@@ -689,7 +901,9 @@ pub struct ActionBitScanLoop {
 
 impl ActionBitScanLoop {
     pub fn new(g: impl Into<String>) -> Self {
-        Self { base: crate::action::ActionBase::new(0, "bitscanloop", g) }
+        Self {
+            base: crate::action::ActionBase::new(0, "bitscanloop", g),
+        }
     }
 }
 
@@ -700,18 +914,31 @@ impl crate::action::Action for ActionBitScanLoop {
     fn base_mut(&mut self) -> &mut crate::action::ActionBase {
         &mut self.base
     }
-    fn clone_filtered(&self, grouplist: &ActionGroupList) -> Option<Box<dyn crate::action::Action>> {
-        grouplist
-            .contains(self.get_group())
-            .then(|| Box::new(Self { base: self.base.clone() }) as Box<dyn crate::action::Action>)
+    fn clone_filtered(
+        &self,
+        grouplist: &ActionGroupList,
+    ) -> Option<Box<dyn crate::action::Action>> {
+        grouplist.contains(self.get_group()).then(|| {
+            Box::new(Self {
+                base: self.base.clone(),
+            }) as Box<dyn crate::action::Action>
+        })
     }
-    fn apply(&mut self, data: &mut Funcdata, _ctx: &mut crate::action::ActionContext) -> crate::action::ApplyResult {
+    fn apply(
+        &mut self,
+        data: &mut Funcdata,
+        _ctx: &mut crate::action::ActionContext,
+    ) -> crate::action::ApplyResult {
         if !data.get_arch().bit_idioms {
             return 0;
         }
-        let heads: Vec<BlockId> = (0..data.bblocks_get_size()).map(|i| data.bblocks_get_block(i)).collect();
+        let heads: Vec<BlockId> = (0..data.bblocks_get_size())
+            .map(|i| data.bblocks_get_block(i))
+            .collect();
         for h in heads {
-            let Some(scan) = match_bitscan(data, h) else { continue };
+            let Some(scan) = match_bitscan(data, h) else {
+                continue;
+            };
             if rewrite_bitscan(data, &scan).is_ok() {
                 self.base.count += 1;
                 return 1;

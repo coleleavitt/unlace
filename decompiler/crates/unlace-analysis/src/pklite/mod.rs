@@ -49,7 +49,7 @@ mod stub;
 use std::fmt;
 
 pub use decode::Extra;
-use stub::{i16_at, u16_at, Exe, EP_LEN};
+use stub::{EP_LEN, Exe, i16_at, u16_at};
 
 /// deark's ceiling on a relocation table: one more than an MZ header can count.
 const MAX_RELOCS: usize = 65535;
@@ -145,7 +145,10 @@ fn is_new_exe(image: &[u8]) -> bool {
     };
     let at = u32::from_le_bytes([a, b, c, d]) as usize;
     image.get(at..at.saturating_add(4)) == Some(b"PE\0\0")
-        || matches!(image.get(at..at.saturating_add(2)), Some(b"NE" | b"LE" | b"LX"))
+        || matches!(
+            image.get(at..at.saturating_add(2)),
+            Some(b"NE" | b"LE" | b"LX")
+        )
 }
 
 fn entry_bytes(image: &[u8], at: i64) -> Option<Vec<u8>> {
@@ -284,14 +287,21 @@ fn unpack_exe(image: &[u8]) -> Result<Unpacked, PkliteError> {
         ip: u16_at(image, reloc_end + 6),
     };
 
-    let (hdr, source) =
-        match original_header(image, &host, &a, &footer, &relocs, &dec.bytes, &mut warnings) {
-            Some(found) => found,
-            None => (
-                reconstruct_header(image, &host, &a, &footer, relocs.len(), dec.bytes.len()),
-                HeaderSource::Reconstructed,
-            ),
-        };
+    let (hdr, source) = match original_header(
+        image,
+        &host,
+        &a,
+        &footer,
+        &relocs,
+        &dec.bytes,
+        &mut warnings,
+    ) {
+        Some(found) => found,
+        None => (
+            reconstruct_header(image, &host, &a, &footer, relocs.len(), dec.bytes.len()),
+            HeaderSource::Reconstructed,
+        ),
+    };
     let mut guest = Exe::parse(&hdr);
     if guest.reloc_table_pos < 28 {
         guest.reloc_table_pos = 28;
@@ -319,7 +329,10 @@ fn unpack_exe(image: &[u8]) -> Result<Unpacked, PkliteError> {
     out.extend_from_slice(&dec.bytes);
 
     let mut overlay = 0;
-    if let Some(from) = usize::try_from(host.end_of_code).ok().filter(|_| host.overlay_len > 0) {
+    if let Some(from) = usize::try_from(host.end_of_code)
+        .ok()
+        .filter(|_| host.overlay_len > 0)
+    {
         if beta_size_bug || out.len() as i64 == guest.end_of_code {
             out.extend_from_slice(&image[from..]);
             overlay = image.len() - from;
@@ -469,7 +482,10 @@ fn original_header(
         return bad(warnings, "disagrees with the footer's SS:SP / CS:IP");
     }
     if guest.num_relocs != relocs.len() as i64 {
-        return bad(warnings, "counts a different number of relocations than the table holds");
+        return bad(
+            warnings,
+            "counts a different number of relocations than the table holds",
+        );
     }
     let expected = guest.end_of_code - guest.start_of_code;
     if code.len() as i64 != expected {
@@ -609,7 +625,10 @@ fn unpack_com(image: &[u8]) -> Result<Unpacked, PkliteError> {
     }
     let decompr_pos = if m(position2, b"\x8b\xc4\x2d??\x25\xf0\xff\x8b\xf8\xb9??\xbe") {
         u16_at(&ep, position2 + 14) - 0x100
-    } else if m(position2, b"\x8b\xc4\x2d??\x90\x25\xf0\xff\x8b\xf8\xb9??\x90\xbe") {
+    } else if m(
+        position2,
+        b"\x8b\xc4\x2d??\x90\x25\xf0\xff\x8b\xf8\xb9??\x90\xbe",
+    ) {
         u16_at(&ep, position2 + 16) - 0x100
     } else if m(position2, b"\xfa\xbc\x00\x02\x8e\xd0\xfb") {
         position2 + 24
@@ -624,7 +643,9 @@ fn unpack_com(image: &[u8]) -> Result<Unpacked, PkliteError> {
     } else if m(decompr_pos, b"\xfd\xbe??\x03\xf2\x8b\xfa\x4f\x4f") {
         decompr_pos + 2
     } else {
-        return Err(fail("the decompressor matches no known PKLITE COM decompressor"));
+        return Err(fail(
+            "the decompressor matches no known PKLITE COM decompressor",
+        ));
     };
     let data = u16_at(&ep, key) + 2 - 0x100;
     if data < 1 || data > image.len() as i64 {

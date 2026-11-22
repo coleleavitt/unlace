@@ -51,17 +51,17 @@ pub mod db;
 pub mod extent;
 pub mod hash;
 pub mod kuna_fidapply;
-pub mod skipper;
 mod kuna_fidstrict;
+pub mod skipper;
 
 use std::rc::Rc;
 
 use unlace_base::address::Address;
 
-use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, FidMatch, Phase};
 use crate::fid::db::{FidDatabase, FidRecord};
 use crate::fid::hash::{FidHashQuad, FidHasher, InsnFingerprint, NoRelocations};
 use crate::fid::skipper::{InstructionSkipper, X86InstructionSkipper};
+use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, FidMatch, Phase};
 
 /// The environment variable naming the `.fid` fingerprint database to match
 /// against. A loader-tier env gate: the DB source is
@@ -118,7 +118,11 @@ impl AnalysisPass for FidPass {
             let Some(name) = pick_unique_name(records, &quad) else {
                 continue;
             };
-            let fact = FidMatch { addr: entry, name, by_signature: true };
+            let fact = FidMatch {
+                addr: entry,
+                name,
+                by_signature: true,
+            };
             if ctx.arch.analysis_fid_strict && !kuna_fidstrict::supports_rename(records, &quad) {
                 out.signature_vetoes.push(fact);
             } else {
@@ -148,20 +152,35 @@ pub fn fingerprint_function(
     if extent.len() < hash::SHORT_HASH_CODE_UNIT_LENGTH as usize {
         return Err("too_short");
     }
-    let space = arch.manage().get_default_code_space().ok_or("no_code_space")?;
-    let translate = arch.translate().as_sleigh().ok_or("unsupported_translator")?;
+    let space = arch
+        .manage()
+        .get_default_code_space()
+        .ok_or("no_code_space")?;
+    let translate = arch
+        .translate()
+        .as_sleigh()
+        .ok_or("unsupported_translator")?;
     let mut fps: Vec<InsnFingerprint> = Vec::with_capacity(extent.len());
     for insn in extent {
         let addr = Address::new(Rc::clone(space), insn.addr);
-        let mask = translate.instruction_mask(&addr).map_err(|_| "mask_failed")?;
-        fps.push(build::fingerprint_from_mask(insn.addr, insn.len, insn.flow.is_call, mask));
+        let mask = translate
+            .instruction_mask(&addr)
+            .map_err(|_| "mask_failed")?;
+        fps.push(build::fingerprint_from_mask(
+            insn.addr,
+            insn.len,
+            insn.flow.is_call,
+            mask,
+        ));
     }
     let skippers: Vec<Box<dyn InstructionSkipper>> = if arch.archid.starts_with("x86:") {
         vec![Box::new(X86InstructionSkipper)]
     } else {
         vec![]
     };
-    FidHasher::new(skippers).hash(&fps, &NoRelocations).ok_or("too_short")
+    FidHasher::new(skippers)
+        .hash(&fps, &NoRelocations)
+        .ok_or("too_short")
 }
 
 /// §6.1 — exact full-hash match → a unique name.
@@ -205,13 +224,21 @@ mod tests {
     }
 
     fn quad() -> FidHashQuad {
-        FidHashQuad { code_unit_size: 10, full_hash: 0x1234, specific_addl_size: 0, specific_hash: 0 }
+        FidHashQuad {
+            code_unit_size: 10,
+            full_hash: 0x1234,
+            specific_addl_size: 0,
+            specific_hash: 0,
+        }
     }
 
     #[test]
     fn unique_single_record_yields_its_name() {
         let recs = [rec(0x1234, "kuna_crc32")];
-        assert_eq!(pick_unique_name(&recs, &quad()).as_deref(), Some("kuna_crc32"));
+        assert_eq!(
+            pick_unique_name(&recs, &quad()).as_deref(),
+            Some("kuna_crc32")
+        );
     }
 
     #[test]
@@ -224,7 +251,10 @@ mod tests {
         // Several records that all carry the same name collapse to it (the same
         // function fingerprinted under aliased symbols).
         let recs = [rec(0x1234, "kuna_crc32"), rec(0x1234, "kuna_crc32")];
-        assert_eq!(pick_unique_name(&recs, &quad()).as_deref(), Some("kuna_crc32"));
+        assert_eq!(
+            pick_unique_name(&recs, &quad()).as_deref(),
+            Some("kuna_crc32")
+        );
     }
 
     #[test]

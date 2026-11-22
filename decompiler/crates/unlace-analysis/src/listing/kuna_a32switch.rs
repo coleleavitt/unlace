@@ -35,9 +35,9 @@ use unlace_sleigh::translate::Translate;
 
 use super::kuna_poolref::PoolImage;
 use super::kuna_switchtable::{
-    fold, invalidate, is_constant, key_of, value_of, Key, TableRead, Val, MAX_TRACKED, MIN_ENTRIES,
+    Key, MAX_TRACKED, MIN_ENTRIES, TableRead, Val, fold, invalidate, is_constant, key_of, value_of,
 };
-use super::xrefs::{decode, in_range, FullCapture, FullOp};
+use super::xrefs::{FullCapture, FullOp, decode, in_range};
 
 /// The A32 PC reads 8 bytes past the instruction, which is where both table
 /// forms begin.
@@ -45,7 +45,10 @@ const A32_PC_OFFSET: u64 = 8;
 
 /// Whether A32 tables are read in `file`: `armframes` recovery is on and it is
 /// a linked ARM image.
-pub(crate) fn applies(file: &object::File<'_>, arch: &unlace_decomp::architecture::Architecture) -> bool {
+pub(crate) fn applies(
+    file: &object::File<'_>,
+    arch: &unlace_decomp::architecture::Architecture,
+) -> bool {
     use object::Object;
     arch.analysis_armframes
         && file.architecture() == object::Architecture::Arm
@@ -62,12 +65,19 @@ pub(crate) struct A32Tables<'a> {
 impl<'a> A32Tables<'a> {
     /// The reader over the walk's read-only image `pool`, for an image where
     /// [`applies`] holds.
-    pub(crate) fn new(arch: &unlace_decomp::architecture::Architecture, pool: &'a PoolImage<'a>) -> Self {
+    pub(crate) fn new(
+        arch: &unlace_decomp::architecture::Architecture,
+        pool: &'a PoolImage<'a>,
+    ) -> Self {
         let max_entries = match arch.max_jumptable_size as usize {
             0 => super::kuna_switchtable::DEFAULT_MAX_ENTRIES,
             n => n,
         };
-        A32Tables { pool, data_space: arch.manage().get_default_data_space().cloned(), max_entries }
+        A32Tables {
+            pool,
+            data_space: arch.manage().get_default_data_space().cloned(),
+            max_entries,
+        }
     }
 
     /// The case blocks of the computed jump at `from` when it is a guarded A32
@@ -86,7 +96,9 @@ impl<'a> A32Tables<'a> {
     ) -> TableRead {
         let mut cap = FullCapture::default();
         match decode(translate, from, code_space, &mut cap) {
-            Some(len) => self.decoded_targets(translate, code_space, exec, decoded, from, cap.ops(), len),
+            Some(len) => {
+                self.decoded_targets(translate, code_space, exec, decoded, from, cap.ops(), len)
+            }
             None => TableRead::default(),
         }
     }
@@ -120,43 +132,90 @@ impl<'a> A32Tables<'a> {
             if op.opcode == OpCode::CPUI_BRANCHIND {
                 let shape = op.ins.first().and_then(|vn| value_of(vn, &vals, data));
                 let words = match shape {
-                    Some(Val::Entry { table, width: 4, .. }) if table == base => true,
+                    Some(Val::Entry {
+                        table, width: 4, ..
+                    }) if table == base => true,
                     Some(Val::Indexed(table)) if table == base => false,
                     _ => return TableRead::default(),
                 };
-                let Some(index) = index.filter(|_| scaled) else { return TableRead::default() };
+                let Some(index) = index.filter(|_| scaled) else {
+                    return TableRead::default();
+                };
                 let cases = match super::kuna_thumbswitch::guard_cases(
-                    translate, code_space, data, decoded, from, index, predicated.then_some(ops),
+                    translate,
+                    code_space,
+                    data,
+                    decoded,
+                    from,
+                    index,
+                    predicated.then_some(ops),
                 ) {
                     Ok(n) if n >= MIN_ENTRIES => n,
                     Ok(_) => return TableRead::default(),
-                    Err(gap) => return TableRead { gap, ..TableRead::default() },
+                    Err(gap) => {
+                        return TableRead {
+                            gap,
+                            ..TableRead::default()
+                        };
+                    }
                 };
                 let read = cases.min(self.max_entries);
                 let targets = if words {
-                    let mut words = super::kuna_switchtable::targets(base, from, self.pool, exec, Some(read), read);
-                    words.truncate(words.iter().position(|&t| t & 1 != 0).unwrap_or(words.len()));
-                    if words.len() < MIN_ENTRIES { Vec::new() } else { words }
+                    let mut words = super::kuna_switchtable::targets(
+                        base,
+                        from,
+                        self.pool,
+                        exec,
+                        Some(read),
+                        read,
+                    );
+                    words.truncate(
+                        words
+                            .iter()
+                            .position(|&t| t & 1 != 0)
+                            .unwrap_or(words.len()),
+                    );
+                    if words.len() < MIN_ENTRIES {
+                        Vec::new()
+                    } else {
+                        words
+                    }
                 } else {
                     branch_slots(base, read, from, exec)
                 };
                 if targets.is_empty() {
                     return TableRead::default();
                 }
-                return TableRead { cases: targets, stated: Some(cases), gap: None, unbounded: false };
+                return TableRead {
+                    cases: targets,
+                    stated: Some(cases),
+                    gap: None,
+                    unbounded: false,
+                };
             }
             if index.is_none()
-                && matches!(op.opcode, OpCode::CPUI_INT_LEFT | OpCode::CPUI_INT_MULT | OpCode::CPUI_INT_ADD)
+                && matches!(
+                    op.opcode,
+                    OpCode::CPUI_INT_LEFT | OpCode::CPUI_INT_MULT | OpCode::CPUI_INT_ADD
+                )
             {
                 index = op
                     .ins
                     .iter()
                     .filter(|vn| value_of(vn, &vals, data).is_none())
                     .find_map(|vn| key_of(vn, data).filter(|k| matches!(k, Key::Reg(..))));
-                let by = op.ins.get(1).filter(|vn| is_constant(vn)).map(|vn| vn.offset);
-                scaled = matches!((op.opcode, by), (OpCode::CPUI_INT_LEFT, Some(2)) | (OpCode::CPUI_INT_MULT, Some(4)));
+                let by = op
+                    .ins
+                    .get(1)
+                    .filter(|vn| is_constant(vn))
+                    .map(|vn| vn.offset);
+                scaled = matches!(
+                    (op.opcode, by),
+                    (OpCode::CPUI_INT_LEFT, Some(2)) | (OpCode::CPUI_INT_MULT, Some(4))
+                );
             }
-            let folded = interworking(op, &vals, data).or_else(|| fold(op, &vals, data, &self.pool));
+            let folded =
+                interworking(op, &vals, data).or_else(|| fold(op, &vals, data, &self.pool));
             let Some(out) = &op.out else { continue };
             let key = key_of(out, data);
             invalidate(&mut vals, key);
@@ -206,7 +265,10 @@ mod tests {
 
     #[test]
     fn branch_slots_follow_the_default_branch() {
-        assert_eq!(branch_slots(0x1008, 3, 0x1000, &[(0x1000, 0x1100)]), vec![0x1008, 0x100c, 0x1010]);
+        assert_eq!(
+            branch_slots(0x1008, 3, 0x1000, &[(0x1000, 0x1100)]),
+            vec![0x1008, 0x100c, 0x1010]
+        );
     }
 
     #[test]

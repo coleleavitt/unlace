@@ -50,8 +50,7 @@ pub const BAD_INSTRUCTION_HEADER: &str = "Control flow encountered bad instructi
 
 /// C++ `FlowInfo::processInstruction`'s unimplemented truncation warning
 /// (`flow.cc:455`).
-pub const UNIMPLEMENTED_WARNING: &str =
-    "Unimplemented instruction - Truncating control flow here";
+pub const UNIMPLEMENTED_WARNING: &str = "Unimplemented instruction - Truncating control flow here";
 
 /// C++ `FlowInfo::processInstruction`'s unimplemented header warning
 /// (`flow.cc:458`).

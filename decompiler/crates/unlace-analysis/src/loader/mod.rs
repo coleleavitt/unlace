@@ -31,13 +31,13 @@
 //! defined-function reader lifted out of [`crate::loadimage_object`].
 
 pub mod arm_markers;
-pub(crate) mod kuna_ppcaputarget;
-pub(crate) mod kuna_ppc64elfv2target;
-#[cfg(test)]
-mod powerpc_apu_tests;
 pub(crate) mod kuna_mipstarget;
+pub(crate) mod kuna_ppc64elfv2target;
+pub(crate) mod kuna_ppcaputarget;
 #[cfg(test)]
 mod mips_target_tests;
+#[cfg(test)]
+mod powerpc_apu_tests;
 // (kuna) ELF import markup read out of `PT_DYNAMIC`, for an image whose section
 // table is missing or unusable and whose `.dynsym`/`.rela.*`/`.plt*` are
 // therefore invisible.
@@ -46,12 +46,12 @@ pub mod elf_plt;
 // (kuna `debuglink`) separate debug files and MiniDebugInfo for stripped ELFs.
 pub mod elf_debuglink;
 // (kuna `globalref`) The sections a program's own data objects live in.
-pub mod kuna_globalref;
 pub mod elfv1;
 mod elfv1_imports;
+pub mod kuna_globalref;
 pub mod kuna_ppc32_imports;
-pub mod kuna_ppc64r12;
 mod kuna_ppc32picimports;
+pub mod kuna_ppc64r12;
 pub use kuna_ppc32picimports::{ImportProofMemo, ImportProofScope};
 // (kuna) ELF section-table tolerance: an image whose section headers are
 // unreadable still has program headers describing every loadable byte.
@@ -71,13 +71,13 @@ pub mod reloc_object;
 // relocatable-object layout. Kept separate so bitfield rules are unit-testable.
 mod reloc_apply;
 // (kuna) MIPS relocations, `$gp` and GOT for a relocatable object.
-mod kuna_mipsreloc;
 mod kuna_commonalloc;
+mod kuna_mipsreloc;
 mod kuna_sparc_relcode;
 // (kuna) `relocrebase`: rebase the load-time analysis facts of a relocatable
 // object into the loaded image's address space (GH-289).
-pub mod kuna_relocrebase;
 pub mod kuna_objectview;
+pub mod kuna_relocrebase;
 pub(crate) mod le;
 // (kuna) `dynrelocs`: apply a LINKED image's dynamic relocations (.rela.dyn /
 // .rel.dyn / .rela.plt) so a GOT slot holds the value the run-time loader
@@ -85,8 +85,8 @@ pub(crate) mod le;
 pub mod kuna_dynrelocs;
 // (kuna) `dynrelocs`, the Mach-O arm: unpack a chained-fixup image's rebase
 // slots and report the SG_READ_ONLY (`__DATA_CONST`) ones as constant.
-pub mod kuna_machorelocs;
 pub mod kuna_elfgotimports;
+pub mod kuna_machorelocs;
 // (kuna `dynrelocs`) The MIPS primary-GOT slots the dynamic linker fills with an
 // address the image defines, reported constant.
 pub mod kuna_mipsgot;
@@ -95,18 +95,18 @@ pub mod kuna_mipsgot;
 pub mod kuna_dataptrs;
 // (kuna) `pltlocal`: the PLT stubs the image's own relocations bind to a
 // function it defines.
-pub(crate) mod kuna_pltlocal;
 pub mod kuna_machodataslots;
+pub(crate) mod kuna_pltlocal;
 // (kuna) `msvcfpconst`: recover an MSVC `__real@` floating-point constant COMDAT
 // from its mangled symbol name -- materialise the undefined half's bytes at its
 // synthetic extern slot, and mark both halves foldable.
-pub mod kuna_msvcfpconst;
-pub mod format;
 pub mod firmware;
+pub mod format;
+pub mod kuna_msvcfpconst;
 // (kuna) PE/Mach-O/ELF import-slot call binding (`peimportcall`): `externref` over
 // typed import-pointer slots + upstream's strictly PE-only no-return API names.
-pub mod kuna_peimportcall;
 pub mod kuna_authptrcall;
+pub mod kuna_peimportcall;
 // (kuna) `stubbinds`: a stripped stub is named from the chained bind on its slot.
 pub mod kuna_stubbinds;
 // (kuna) `rexthunk`: an x86-64 `REX FF 25` tail jump is not an import thunk.
@@ -127,12 +127,12 @@ pub mod kuna_machobinds;
 // (kuna) The dyld shared cache: one image rebuilt as a thin Mach-O, its
 // references into other images named (`dyldimage`, `dyldcrossrefs`).
 pub mod kuna_dyldcache;
+pub(crate) mod kuna_mipsabi;
+pub mod kuna_mipsentry;
+pub mod kuna_mipsocteon;
 pub mod macho_stubs;
 pub(crate) mod macho_trie;
 pub mod mips_markers;
-pub mod kuna_mipsentry;
-pub(crate) mod kuna_mipsabi;
-pub mod kuna_mipsocteon;
 // (kuna) RISC-V Zcmp/Zcmt language selection from `Tag_RISCV_arch`.
 pub mod kuna_riscvzc;
 // (kuna) Go toolchain version off the build-info blob (goreg shell layouts).

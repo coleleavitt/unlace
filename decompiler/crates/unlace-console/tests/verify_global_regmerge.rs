@@ -28,13 +28,18 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
-use unlace_console::ifaceterm::ConsoleCommands;
 use regex::Regex;
+use unlace_console::engine::bootstrap_from_object;
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
+use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture() -> PathBuf {
@@ -53,8 +58,12 @@ fn decompile(func: &str) -> String {
     let prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
 
-    let cmds: Vec<String> =
-        [format!("load function {func}"), "decompile".into(), "print C".into()].to_vec();
+    let cmds: Vec<String> = [
+        format!("load function {func}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .to_vec();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -90,10 +99,7 @@ fn fmt_main_has_no_register_or_unique_variable_leaks() {
     let code = decompile("main");
 
     let re = register_leak_re();
-    let leaks: Vec<&str> = code
-        .lines()
-        .filter(|l| re.is_match(l))
-        .collect();
+    let leaks: Vec<&str> = code.lines().filter(|l| re.is_match(l)).collect();
     assert!(
         leaks.is_empty(),
         "fmt/main leaked raw register / Unique<hex> variables (register<->global \
@@ -109,8 +115,7 @@ fn fmt_main_has_no_register_or_unique_variable_leaks() {
     // (DWARF symbol recovery) also applies — accept either a `dat_<addr>` or its
     // recovered symbol name on each side.
     let global = r"(?:dat_[0-9a-fA-F]+|[A-Za-z_]\w*)";
-    let width_div =
-        Regex::new(&format!(r"{global} = \({global} \* 0xbb\) / 200")).unwrap();
+    let width_div = Regex::new(&format!(r"{global} = \({global} \* 0xbb\) / 200")).unwrap();
     assert!(
         width_div.is_match(&code),
         "expected fmt/main's `goal_width = (max_width * 0xbb) / 200` to render both \

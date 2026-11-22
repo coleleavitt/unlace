@@ -94,7 +94,10 @@ mod tests {
     #[test]
     fn w9_con_rulecompile_unify_is_lowlevel_variant_with_stable_message() {
         let err = UnifyState::not_ported::<()>().unwrap_err();
-        assert!(err.is_lowlevel(), "deferred path must mirror throw LowlevelError");
+        assert!(
+            err.is_lowlevel(),
+            "deferred path must mirror throw LowlevelError"
+        );
         // exact, recognizable message — pinned so a future careless edit to
         // the string is caught.
         assert_eq!(

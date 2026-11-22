@@ -29,15 +29,21 @@ pub(crate) fn from_transcript(transcript: &str) -> impl Iterator<Item = &str> {
             line.strip_prefix("[decomp]>").unwrap_or(line).trim()
         })
         .filter(|line| {
-            line.strip_prefix("warning: ")
-                .is_some_and(|rest| rest.starts_with(unlace_analysis::fid::kuna_fidapply::WARNING_PREFIX))
+            line.strip_prefix("warning: ").is_some_and(|rest| {
+                rest.starts_with(unlace_analysis::fid::kuna_fidapply::WARNING_PREFIX)
+            })
         })
 }
 
 /// The `fid_databases` field, absent when no database was configured or FID
 /// did not run.
 pub(crate) fn field(reports: &[FidDbReport]) -> Option<(String, Json)> {
-    (!reports.is_empty()).then(|| ("fid_databases".into(), Json::Array(reports.iter().map(record).collect())))
+    (!reports.is_empty()).then(|| {
+        (
+            "fid_databases".into(),
+            Json::Array(reports.iter().map(record).collect()),
+        )
+    })
 }
 
 /// The `--summary` text form's line for each report.
@@ -53,7 +59,11 @@ fn record(r: &FidDbReport) -> Json {
     Json::Object(vec![
         ("path".into(), Json::Str(r.path.clone())),
         ("status".into(), Json::Str(r.status.as_str().into())),
-        ("records".into(), r.records.map_or(Json::Null, |n| Json::Number(n.to_string()))),
+        (
+            "records".into(),
+            r.records
+                .map_or(Json::Null, |n| Json::Number(n.to_string())),
+        ),
         ("language".into(), text(&r.language)),
         ("compiler_spec".into(), text(&r.compiler_spec)),
         ("reason".into(), text(&r.reason)),

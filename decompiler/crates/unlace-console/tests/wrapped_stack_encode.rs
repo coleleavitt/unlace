@@ -1,13 +1,13 @@
 //! Wrapped locals keep physical data flow while their wire storage stays distinct.
+use std::path::PathBuf;
 use unlace_base::marshal::XmlEncode;
 use unlace_console::assertions::{self, Body, Directive};
 use unlace_console::engine::bootstrap_from_object;
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_decomp::decompile_drive::print_c;
-use std::path::PathBuf;
 
 #[test]
 fn recovered_wrapped_local_does_not_create_a_native_join_varnode_or_change_c_on_encode() {

@@ -27,7 +27,7 @@ use unlace_base::xml::{DocumentStorage, Element};
 use unlace_decomp::block::BlockType;
 use unlace_decomp::decompile_drive::{decompile_func, print_c};
 use unlace_decomp::funcdata::Funcdata;
-use unlace_decomp::sleigh_arch::{register_sleigh_arch_ids, LanguageDatabase};
+use unlace_decomp::sleigh_arch::{LanguageDatabase, register_sleigh_arch_ids};
 use unlace_decomp::xml_arch::{XmlArchitecture, XmlArchitectureCapability};
 
 use unlace_sleigh::loadimage::LoadImage;
@@ -35,11 +35,16 @@ use unlace_sleigh::loadimage_xml::register_loadimage_xml_ids;
 use unlace_sleigh::translate::register_translate_ids;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn attr(el: &Element, name: &str) -> Option<String> {
-    el.get_attribute_value(name).ok().map(|b| String::from_utf8_lossy(b).into_owned())
+    el.get_attribute_value(name)
+        .ok()
+        .map(|b| String::from_utf8_lossy(b).into_owned())
 }
 
 fn find_named(el: &Rc<Element>, name: &str, out: &mut Vec<Rc<Element>>) {
@@ -73,7 +78,9 @@ struct DataTest {
 }
 
 fn parse_datatest(stem: &str) -> Result<DataTest, String> {
-    let path = repo_root().join("tests/datatests").join(format!("{stem}.xml"));
+    let path = repo_root()
+        .join("tests/datatests")
+        .join(format!("{stem}.xml"));
     let xml = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
     let mut store = DocumentStorage::new();
     let root = store
@@ -103,7 +110,11 @@ fn parse_datatest(stem: &str) -> Result<DataTest, String> {
             })
         })
         .collect();
-    Ok(DataTest { binaryimage, arch_id, symbols })
+    Ok(DataTest {
+        binaryimage,
+        arch_id,
+        symbols,
+    })
 }
 
 struct DummyImg;
@@ -133,10 +144,12 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
     let registry = build_registry();
     let capability = XmlArchitectureCapability::new();
     let mut arch = capability.build_architecture("datatest", "");
-    arch.build_loader(Rc::clone(&dt.binaryimage)).map_err(|e| format!("build_loader: {e}"))?;
+    arch.build_loader(Rc::clone(&dt.binaryimage))
+        .map_err(|e| format!("build_loader: {e}"))?;
     let mut db = LanguageDatabase::new();
     db.scan_for_sleigh_directories(root.join("specs").to_str().unwrap());
-    db.get_descriptions(&registry).map_err(|e| format!("collect ldefs: {e}"))?;
+    db.get_descriptions(&registry)
+        .map_err(|e| format!("collect ldefs: {e}"))?;
     arch.sleigh_mut().set_archid(&dt.arch_id);
     arch.sleigh_mut()
         .resolve_architecture(&db, &dt.arch_id)
@@ -144,7 +157,10 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
     if arch.sleigh().language_index() < 0 {
         return Err("language index unresolved".to_string());
     }
-    let specs = arch.sleigh().build_spec_file(&db).map_err(|e| format!("build_spec_file: {e}"))?;
+    let specs = arch
+        .sleigh()
+        .build_spec_file(&db)
+        .map_err(|e| format!("build_spec_file: {e}"))?;
     let resolved_sla = specs.slafile.ok_or("build_spec_file resolved no .sla")?;
     let sla = std::fs::read(&resolved_sla).map_err(|e| format!("read sla: {e}"))?;
     arch.sleigh_mut()
@@ -168,7 +184,10 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
     arch.open_image(unsafe { &*manager_ptr }, &registry)
         .map_err(|e| format!("open_image: {e}"))?;
     let img = arch.take_loader().ok_or("loader vanished after open")?;
-    arch.sleigh_mut().base_mut().unwrap().set_loader(Box::new(img));
+    arch.sleigh_mut()
+        .base_mut()
+        .unwrap()
+        .set_loader(Box::new(img));
     Ok(arch)
 }
 
@@ -260,7 +279,11 @@ fn skippable(e: &str) -> bool {
 /// parents, they are not a flat top-level list).  The opcode is what
 /// `emit_block_condition` maps to `&&` (BOOL_AND) / `||` (BOOL_OR).
 fn condition_opcodes(fd: &Funcdata) -> Vec<unlace_num::opcodes::OpCode> {
-    fn walk(fd: &Funcdata, bl: unlace_decomp::context::BlockId, acc: &mut Vec<unlace_num::opcodes::OpCode>) {
+    fn walk(
+        fd: &Funcdata,
+        bl: unlace_decomp::context::BlockId,
+        acc: &mut Vec<unlace_num::opcodes::OpCode>,
+    ) {
         let block = fd.sblocks_ref().block(bl);
         if block.get_type() == BlockType::Condition {
             if let Some(opc) = block.get_condition_opcode() {
@@ -300,7 +323,14 @@ fn count_condition_blocks(fd: &Funcdata) -> usize {
 // ===========================================================================
 #[test]
 fn at1_emitblockcondition_is_currently_unreached_dead_code() {
-    let stems = ["nan", "ccmp", "orcompare", "boolless", "elseif", "condexesub"];
+    let stems = [
+        "nan",
+        "ccmp",
+        "orcompare",
+        "boolless",
+        "elseif",
+        "condexesub",
+    ];
     let mut any_cond = Vec::new();
     for stem in stems {
         let (_x, fd) = match rust_decompile_first(stem) {
@@ -340,7 +370,14 @@ fn at1_emitblockcondition_is_currently_unreached_dead_code() {
 // ===========================================================================
 #[test]
 fn at2_any_condition_opcode_is_a_boolean_glue() {
-    let stems = ["nan", "ccmp", "orcompare", "boolless", "elseif", "condexesub"];
+    let stems = [
+        "nan",
+        "ccmp",
+        "orcompare",
+        "boolless",
+        "elseif",
+        "condexesub",
+    ];
     for stem in stems {
         let (_x, fd) = match rust_decompile_first(stem) {
             Ok(v) => v,
@@ -427,9 +464,18 @@ fn at3_single_condition_stays_plain_if_no_merge() {
 
     let rust = rust_render("boolless").expect("boolless render");
     eprintln!("=== RUST boolless ===\n{rust}");
-    assert!(rust.contains("if (dat_52 <= 10)"), "boolless must keep its plain `if`:\n{rust}");
-    assert!(!rust.contains("&&"), "boolless must not gain a spurious `&&`:\n{rust}");
-    assert!(!rust.contains("||"), "boolless must not gain a spurious `||`:\n{rust}");
+    assert!(
+        rust.contains("if (dat_52 <= 10)"),
+        "boolless must keep its plain `if`:\n{rust}"
+    );
+    assert!(
+        !rust.contains("&&"),
+        "boolless must not gain a spurious `&&`:\n{rust}"
+    );
+    assert!(
+        !rust.contains("||"),
+        "boolless must not gain a spurious `||`:\n{rust}"
+    );
 }
 
 // ===========================================================================
@@ -462,8 +508,14 @@ fn at4_condition_render_is_engine_driven_per_function() {
     };
 
     // Each function carries ITS OWN tokens; no cross-leak between functions.
-    assert!(!nan.contains("ptr[1] == 0x3c"), "nan must not leak ccmp's clause:\n{nan}");
-    assert!(!ccmp.contains("NAN("), "ccmp must not leak nan's `NAN(` token:\n{ccmp}");
+    assert!(
+        !nan.contains("ptr[1] == 0x3c"),
+        "nan must not leak ccmp's clause:\n{nan}"
+    );
+    assert!(
+        !ccmp.contains("NAN("),
+        "ccmp must not leak nan's `NAN(` token:\n{ccmp}"
+    );
     // nan renders its own `NAN(a0)` token (engine-derived per function, never a
     // printer string keyed on a name).  Earlier this rendered as the un-folded
     // `NAN(..) || NAN(..)` self-BOOL_OR; now that RuleTrivialArith is correctly
@@ -471,7 +523,10 @@ fn at4_condition_render_is_engine_driven_per_function() {
     // `V || V => V` fold collapses it to the single `NAN(a0)` the C++ oracle
     // emits (`read_nan(NAN(a0));`, nan.xml "NaN operations #1").  The anti-leak
     // discrimination is unchanged; the witness token is `NAN(`.
-    assert!(nan.contains("NAN("), "nan must render its own `NAN(` token:\n{nan}");
+    assert!(
+        nan.contains("NAN("),
+        "nan must render its own `NAN(` token:\n{nan}"
+    );
 
     // Anti-special-casing on the new code path: neither function's render is
     // produced by a function-name/address branch in the emitter — the diff
@@ -494,13 +549,27 @@ fn probe_scan_corpus_for_any_condition_node() {
     let mut funcs_with_cond = Vec::new();
     for entry in std::fs::read_dir(&dir).unwrap() {
         let p = entry.unwrap().path();
-        if p.extension().map(|x| x != "xml").unwrap_or(true) { continue; }
+        if p.extension().map(|x| x != "xml").unwrap_or(true) {
+            continue;
+        }
         let stem = p.file_stem().unwrap().to_string_lossy().to_string();
-        let dt = match parse_datatest(&stem) { Ok(d) => d, Err(_) => continue };
-        let mut xarch = match bootstrap(&dt) { Ok(a) => a, Err(_) => continue };
+        let dt = match parse_datatest(&stem) {
+            Ok(d) => d,
+            Err(_) => continue,
+        };
+        let mut xarch = match bootstrap(&dt) {
+            Ok(a) => a,
+            Err(_) => continue,
+        };
         for sym in &dt.symbols {
-            let base = match xarch.sleigh_mut().base_mut() { Some(b)=>b, None=>continue };
-            let space = match base.manage().get_space_by_name(&sym.space) { Some(s)=>Rc::clone(s), None=>continue };
+            let base = match xarch.sleigh_mut().base_mut() {
+                Some(b) => b,
+                None => continue,
+            };
+            let space = match base.manage().get_space_by_name(&sym.space) {
+                Some(s) => Rc::clone(s),
+                None => continue,
+            };
             let entry_addr = Address::new(space, sym.offset);
             base.early_return = false; // (kuna) C++-parity test: opt out of earlyreturn (DIV-23 default-on)
             base.switch_return = false; // (kuna) also opt out of switchreturn (DIV-25 default-on)
@@ -514,6 +583,11 @@ fn probe_scan_corpus_for_any_condition_node() {
         }
     }
     eprintln!("=== scanned {total_funcs} functions ===");
-    eprintln!("=== functions with a BlockCondition node: {} ===", funcs_with_cond.len());
-    for f in &funcs_with_cond { eprintln!("  {f}"); }
+    eprintln!(
+        "=== functions with a BlockCondition node: {} ===",
+        funcs_with_cond.len()
+    );
+    for f in &funcs_with_cond {
+        eprintln!("  {f}");
+    }
 }

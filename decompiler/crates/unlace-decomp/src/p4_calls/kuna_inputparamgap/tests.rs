@@ -8,7 +8,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::space::{spacetype, AddrSpace, AddrSpaceManager};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, spacetype};
 use unlace_base::types::int4;
 
 use crate::dtype::type_class;
@@ -17,18 +17,44 @@ use crate::fspec::{ParamListKind, ParamListStandard};
 use super::*;
 
 fn reg_space() -> Rc<AddrSpace> {
-    Rc::new(AddrSpace::new(spacetype::IPTR_PROCESSOR, "register", false, 4, 1, 3, 0, 0, 0))
+    Rc::new(AddrSpace::new(
+        spacetype::IPTR_PROCESSOR,
+        "register",
+        false,
+        4,
+        1,
+        3,
+        0,
+        0,
+        0,
+    ))
 }
 
 fn stack_space() -> Rc<AddrSpace> {
-    Rc::new(AddrSpace::new(spacetype::IPTR_SPACEBASE, "stack", false, 4, 1, 4, 0, 0, 0))
+    Rc::new(AddrSpace::new(
+        spacetype::IPTR_SPACEBASE,
+        "stack",
+        false,
+        4,
+        1,
+        4,
+        0,
+        0,
+        0,
+    ))
 }
 
 fn addr(spc: &Rc<AddrSpace>, off: u64) -> Address {
     Address::new(Rc::clone(spc), off)
 }
 
-fn excl(grp: int4, space: &Rc<AddrSpace>, base: u64, prev: &[ParamEntry], mgr: &AddrSpaceManager) -> ParamEntry {
+fn excl(
+    grp: int4,
+    space: &Rc<AddrSpace>,
+    base: u64,
+    prev: &[ParamEntry],
+    mgr: &AddrSpaceManager,
+) -> ParamEntry {
     ParamEntry::seed(
         grp,
         type_class::TYPECLASS_GENERAL,
@@ -46,7 +72,12 @@ fn excl(grp: int4, space: &Rc<AddrSpace>, base: u64, prev: &[ParamEntry], mgr: &
     .expect("seed exclusion entry")
 }
 
-fn stack_res(grp: int4, space: &Rc<AddrSpace>, prev: &[ParamEntry], mgr: &AddrSpaceManager) -> ParamEntry {
+fn stack_res(
+    grp: int4,
+    space: &Rc<AddrSpace>,
+    prev: &[ParamEntry],
+    mgr: &AddrSpaceManager,
+) -> ParamEntry {
     ParamEntry::seed(
         grp,
         type_class::TYPECLASS_GENERAL,
@@ -65,7 +96,12 @@ fn stack_res(grp: int4, space: &Rc<AddrSpace>, prev: &[ParamEntry], mgr: &AddrSp
 }
 
 /// Six register groups (0..5) then one stack resource, as SysV x86-64 has.
-fn sysv_like_model() -> (ParamListStandard, Rc<AddrSpace>, Rc<AddrSpace>, AddrSpaceManager) {
+fn sysv_like_model() -> (
+    ParamListStandard,
+    Rc<AddrSpace>,
+    Rc<AddrSpace>,
+    AddrSpaceManager,
+) {
     let mgr = AddrSpaceManager::new();
     let reg = reg_space();
     let stk = stack_space();
@@ -118,7 +154,11 @@ fn two_register_gap_is_tolerated_either_way() {
         let (model, reg, _stk, mgr) = sysv_like_model();
         let mut active = active_regs(&reg, &[0, 3], gap_on);
         model.fillin_map(&mut active, &mgr).expect("fillin_map");
-        assert_eq!(used_groups(&active, &model), vec![0, 1, 2, 3], "gap_on={gap_on}");
+        assert_eq!(
+            used_groups(&active, &model),
+            vec![0, 1, 2, 3],
+            "gap_on={gap_on}"
+        );
     }
 }
 
@@ -149,7 +189,11 @@ fn a_call_sites_trials_are_never_protected() {
     active.register_trial(&addr(&reg, 0x10), 4);
     active.get_trial_mut(0).mark_active();
     assert!(!active.is_own_input_gap());
-    assert!(!trial_is_protected(&active, active.get_trial(0), model.get_entry()));
+    assert!(!trial_is_protected(
+        &active,
+        active.get_trial(0),
+        model.get_entry()
+    ));
     let _ = mgr;
 }
 
@@ -163,6 +207,10 @@ fn an_inactive_trial_is_never_protected() {
     active.set_own_input_gap(true);
     // No mark_active(): the body never reads this register before writing it.
     model.fillin_map(&mut active, &mgr).expect("fillin_map");
-    assert!(!trial_is_protected(&active, active.get_trial(0), model.get_entry()));
+    assert!(!trial_is_protected(
+        &active,
+        active.get_trial(0),
+        model.get_entry()
+    ));
     assert!(used_groups(&active, &model).is_empty());
 }

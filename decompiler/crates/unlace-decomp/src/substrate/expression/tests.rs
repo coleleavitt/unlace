@@ -11,21 +11,21 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
-use crate::dtype::{type_metatype, Datatype};
+use crate::context::{ArchContext, OpId, TypeOp, VarnodeId};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::op::pcodeop_flags;
-use crate::context::{ArchContext, OpId, TypeOp, VarnodeId};
 use crate::varnode::DefOpInfo;
 
 use super::{
-    boolean_match, functional_difference, functional_equality, functional_equality_level,
-    pointer_equality, root_pointer, term_order, AdditiveEdge, BooleanExpressionMatch, BooleanMatch,
-    PcodeOpNode, TermOrder,
+    AdditiveEdge, BooleanExpressionMatch, BooleanMatch, PcodeOpNode, TermOrder, boolean_match,
+    functional_difference, functional_equality, functional_equality_level, pointer_equality,
+    root_pointer, term_order,
 };
 
 // -----------------------------------------------------------------------------
@@ -35,7 +35,8 @@ use super::{
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -75,7 +76,9 @@ fn opcode_flags(opc: OpCode) -> unlace_base::types::uint4 {
     // A pragmatic stand-in for the W6 op-info table: the property bits these tests
     // actually read (`branch`, `returns`, `booloutput`, `commutative`).
     match opc {
-        OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH | OpCode::CPUI_BRANCHIND => pcodeop_flags::branch,
+        OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH | OpCode::CPUI_BRANCHIND => {
+            pcodeop_flags::branch
+        }
         OpCode::CPUI_RETURN => pcodeop_flags::returns,
         // Boolean-output comparison ops (also commutative for EQUAL/NOTEQUAL).
         OpCode::CPUI_INT_EQUAL | OpCode::CPUI_INT_NOTEQUAL => {
@@ -100,7 +103,8 @@ fn opcode_flags(opc: OpCode) -> unlace_base::types::uint4 {
 fn mk_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
     let ram = ram_space(fd);
     let op = fd.new_op(inputs, Address::new(ram, off));
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, opcode_flags(opc), format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, opcode_flags(opc), format!("{opc:?}")));
     op
 }
 
@@ -109,7 +113,8 @@ fn mk_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
 /// only for single-reader / leaf terms; use [`mk_input`] for shared operands.
 fn mk_vn(fd: &mut Funcdata, off: u64, size: int4) -> VarnodeId {
     let ram = ram_space(fd);
-    fd.vbank_mut().create(size, Address::new(ram, off), dt(size))
+    fd.vbank_mut()
+        .create(size, Address::new(ram, off), dt(size))
 }
 
 /// A formal *input* varnode (allowed multiple descendants), for operands read by
@@ -117,7 +122,9 @@ fn mk_vn(fd: &mut Funcdata, off: u64, size: int4) -> VarnodeId {
 /// `xref` collision callback never fires, so a no-op thunk suffices.
 fn mk_input(fd: &mut Funcdata, off: u64, size: int4) -> VarnodeId {
     let ram = ram_space(fd);
-    let vn = fd.vbank_mut().create(size, Address::new(ram, off), dt(size));
+    let vn = fd
+        .vbank_mut()
+        .create(size, Address::new(ram, off), dt(size));
     let mut noop_thunk = |_b: &mut crate::varnode::VarnodeBank,
                           _o: VarnodeId,
                           _n: VarnodeId|
@@ -145,7 +152,10 @@ fn mk_const(fd: &mut Funcdata, val: u64, size: int4) -> VarnodeId {
 fn mk_out(fd: &mut Funcdata, op: OpId, off: u64, size: int4) -> VarnodeId {
     let ram = ram_space(fd);
     let seq = fd.obank().get(op).unwrap().get_seq_num().clone();
-    let def = DefOpInfo { id: op, seqnum: seq };
+    let def = DefOpInfo {
+        id: op,
+        seqnum: seq,
+    };
     let vn = {
         let mut noop_thunk = |_b: &mut crate::varnode::VarnodeBank,
                               _o: VarnodeId,
@@ -163,7 +173,10 @@ fn mk_out(fd: &mut Funcdata, op: OpId, off: u64, size: int4) -> VarnodeId {
 
 /// Wire `reader` to read `vn` in `slot` (op input + descend link).
 fn wire_read(fd: &mut Funcdata, reader: OpId, vn: VarnodeId, slot: int4) {
-    fd.obank_mut().get_mut(reader).unwrap().set_input(Some(vn), slot);
+    fd.obank_mut()
+        .get_mut(reader)
+        .unwrap()
+        .set_input(Some(vn), slot);
     fd.vbank_mut().add_descend(vn, reader).unwrap();
 }
 
@@ -286,7 +299,11 @@ fn termorder_descends_nested_add_chain() {
 
     let mut to = TermOrder::new(root);
     to.collect(&fd);
-    assert_eq!(to.get_size(), 3, "descended the single-use inner add: a, b, c");
+    assert_eq!(
+        to.get_size(),
+        3,
+        "descended the single-use inner add: a, b, c"
+    );
 }
 
 #[test]
@@ -311,7 +328,11 @@ fn termorder_stops_at_multiuse_subexpression() {
 
     let mut to = TermOrder::new(root);
     to.collect(&fd);
-    assert_eq!(to.get_size(), 2, "multi-use subexpression stays a single leaf term");
+    assert_eq!(
+        to.get_size(),
+        2,
+        "multi-use subexpression stays a single leaf term"
+    );
 }
 
 #[test]
@@ -424,11 +445,17 @@ fn functional_equality_marker_op_not_equal() {
     let a = mk_input(&mut fd, 0x100, 4); // shared by both MULTIEQUALs
     let me1 = mk_op(&mut fd, 1, 0x1000, OpCode::CPUI_MULTIEQUAL);
     // give MULTIEQUAL the marker flag (setOpcode would; we set it explicitly).
-    fd.obank_mut().get_mut(me1).unwrap().set_flag(pcodeop_flags::marker);
+    fd.obank_mut()
+        .get_mut(me1)
+        .unwrap()
+        .set_flag(pcodeop_flags::marker);
     let out1 = mk_out(&mut fd, me1, 0x300, 4);
     wire_read(&mut fd, me1, a, 0);
     let me2 = mk_op(&mut fd, 1, 0x1004, OpCode::CPUI_MULTIEQUAL);
-    fd.obank_mut().get_mut(me2).unwrap().set_flag(pcodeop_flags::marker);
+    fd.obank_mut()
+        .get_mut(me2)
+        .unwrap()
+        .set_flag(pcodeop_flags::marker);
     let out2 = mk_out(&mut fd, me2, 0x400, 4);
     wire_read(&mut fd, me2, a, 0);
 
@@ -475,7 +502,13 @@ fn functional_difference_different_opcodes_differ() {
     let neg_out = mk_out(&mut fd, neg, 0x400, 4);
     wire_read(&mut fd, neg, a, 0);
     // Different op codes => true.
-    assert!(functional_difference(cp_out, neg_out, 3, fd.vbank(), fd.obank()));
+    assert!(functional_difference(
+        cp_out,
+        neg_out,
+        3,
+        fd.vbank(),
+        fd.obank()
+    ));
 }
 
 #[test]
@@ -491,7 +524,13 @@ fn functional_difference_depth_exhausted_returns_true() {
     wire_read(&mut fd, cp2, a, 0);
     assert!(functional_difference(out1, out2, 0, fd.vbank(), fd.obank()));
     // With depth 1 it recurses one level: inputs identical (a==a) => not different.
-    assert!(!functional_difference(out1, out2, 1, fd.vbank(), fd.obank()));
+    assert!(!functional_difference(
+        out1,
+        out2,
+        1,
+        fd.vbank(),
+        fd.obank()
+    ));
 }
 
 // =============================================================================
@@ -502,7 +541,10 @@ fn functional_difference_depth_exhausted_returns_true() {
 fn boolean_match_identical_varnode_same() {
     let mut fd = build_fd();
     let v = mk_vn(&mut fd, 0x100, 4);
-    assert_eq!(BooleanMatch::evaluate(v, v, 1, fd.vbank(), fd.obank()), boolean_match::same);
+    assert_eq!(
+        BooleanMatch::evaluate(v, v, 1, fd.vbank(), fd.obank()),
+        boolean_match::same
+    );
 }
 
 #[test]
@@ -557,7 +599,10 @@ fn boolean_match_same_compare_op_same() {
     let o2 = mk_out(&mut fd, l2, 0x400, 1);
     wire_read(&mut fd, l2, a, 0);
     wire_read(&mut fd, l2, b, 1);
-    assert_eq!(BooleanMatch::evaluate(o1, o2, 1, fd.vbank(), fd.obank()), boolean_match::same);
+    assert_eq!(
+        BooleanMatch::evaluate(o1, o2, 1, fd.vbank(), fd.obank()),
+        boolean_match::same
+    );
 }
 
 #[test]
@@ -646,14 +691,20 @@ fn boolean_expression_match_one_cbranch_flipped() {
     wire_read(&mut fd, cb1, tgt1, 0);
     wire_read(&mut fd, cb1, cond, 1);
     let cb2 = mk_op(&mut fd, 2, 0x1008, OpCode::CPUI_CBRANCH);
-    fd.obank_mut().get_mut(cb2).unwrap().set_flag(pcodeop_flags::boolean_flip);
+    fd.obank_mut()
+        .get_mut(cb2)
+        .unwrap()
+        .set_flag(pcodeop_flags::boolean_flip);
     let tgt2 = mk_vn(&mut fd, 0x508, 8);
     wire_read(&mut fd, cb2, tgt2, 0);
     wire_read(&mut fd, cb2, cond, 1);
 
     let mut m = BooleanExpressionMatch::new();
     assert!(m.verify_condition(cb1, cb2, fd.vbank(), fd.obank()));
-    assert!(m.get_flip(), "one CBRANCH boolean-flipped => anti-correlated");
+    assert!(
+        m.get_flip(),
+        "one CBRANCH boolean-flipped => anti-correlated"
+    );
 }
 
 // =============================================================================

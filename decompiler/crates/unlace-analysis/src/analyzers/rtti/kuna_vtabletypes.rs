@@ -16,15 +16,15 @@
 
 use std::collections::{HashMap, HashSet};
 
-use object::read::{Object, ObjectSymbol};
 use object::SymbolKind;
+use object::read::{Object, ObjectSymbol};
 
 use unlace_decomp::kuna_vtabletypes::{VtableClass, VtableSlot};
 
 use crate::demangle::demangle_raw;
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
-use super::kuna_itaniumrtti::{recover, Recovery, TypeInfo};
+use super::kuna_itaniumrtti::{Recovery, TypeInfo, recover};
 
 /// The typed-vtable pass (gate id `vtabletypes`).
 #[derive(Default)]
@@ -40,9 +40,14 @@ impl AnalysisPass for VtableTypesPass {
     }
 
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
-        let Some(rec) = recover(ctx) else { return AnalysisOutput::default() };
+        let Some(rec) = recover(ctx) else {
+            return AnalysisOutput::default();
+        };
         let names = method_names(ctx.file);
-        AnalysisOutput { cpp_vtables: facts(&rec, &names), ..AnalysisOutput::default() }
+        AnalysisOutput {
+            cpp_vtables: facts(&rec, &names),
+            ..AnalysisOutput::default()
+        }
     }
 }
 
@@ -69,7 +74,10 @@ fn facts(rec: &Recovery, names: &HashMap<u64, String>) -> VtableFacts {
     // The sub-vtable each class keeps for the subobject at each displacement.
     let mut subvtables: HashMap<(u64, i64), Vec<&[Option<u64>]>> = HashMap::new();
     for s in &rec.subs {
-        subvtables.entry((s.typeinfo, -s.offset_to_top)).or_default().push(&s.slots);
+        subvtables
+            .entry((s.typeinfo, -s.offset_to_top))
+            .or_default()
+            .push(&s.slots);
     }
     // Every class's (ancestor, displacement) subobjects.
     let mut derived: HashMap<u64, Vec<(u64, i64)>> = HashMap::new();
@@ -90,7 +98,10 @@ fn facts(rec: &Recovery, names: &HashMap<u64, String>) -> VtableFacts {
         if class.is_empty() || leaf_count[&class] > 1 {
             continue;
         }
-        let own = subvtables.get(&(t.addr, 0)).map(Vec::as_slice).unwrap_or(&[]);
+        let own = subvtables
+            .get(&(t.addr, 0))
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
         let mut views: Vec<&[Option<u64>]> = own.to_vec();
         for &(d, disp) in derived.get(&t.addr).map(Vec::as_slice).unwrap_or(&[]) {
             views.extend(subvtables.get(&(d, disp)).into_iter().flatten());
@@ -133,9 +144,16 @@ fn facts(rec: &Recovery, names: &HashMap<u64, String>) -> VtableFacts {
             .filter_map(|&(b, disp)| by_addr.get(&b).map(|bt| (struct_name(&bt.demangled), disp)))
             .filter(|(name, _)| !name.is_empty() && leaf_count.get(name) == Some(&1))
             .collect();
-        classes.push(VtableClass { class, slots, bases });
+        classes.push(VtableClass {
+            class,
+            slots,
+            bases,
+        });
     }
-    VtableFacts { classes, slot_ranges }
+    VtableFacts {
+        classes,
+        slot_ranges,
+    }
 }
 
 /// Every transitive base of `addr` with its displacement in the object.
@@ -178,8 +196,17 @@ fn virtual_bases(addr: u64, by_addr: &HashMap<u64, &TypeInfo>) -> HashSet<u64> {
 /// component with any template arguments dropped (`ns::Vec<int>` is `Vec`).
 fn struct_name(demangled: &str) -> String {
     let inner = top_level_split(demangled).pop().unwrap_or_default();
-    let name = inner.split('<').next().unwrap_or_default().trim().to_string();
-    if is_identifier(&name) { name } else { String::new() }
+    let name = inner
+        .split('<')
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    if is_identifier(&name) {
+        name
+    } else {
+        String::new()
+    }
 }
 
 /// The method name of every function symbol a slot can name, by address.
@@ -258,7 +285,9 @@ fn top_level_split(s: &str) -> Vec<String> {
 }
 
 fn is_identifier(s: &str) -> bool {
-    s.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+    s.chars()
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
         && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
@@ -269,7 +298,10 @@ mod tests {
     #[test]
     fn method_names_come_from_the_mangled_symbol() {
         assert_eq!(method_name("_ZNK6Square4areaEi").as_deref(), Some("area"));
-        assert_eq!(method_name("_ZN6SquareD0Ev").as_deref(), Some("deleting_dtor"));
+        assert_eq!(
+            method_name("_ZN6SquareD0Ev").as_deref(),
+            Some("deleting_dtor")
+        );
         assert_eq!(method_name("_ZN6SquareD1Ev").as_deref(), Some("dtor"));
         assert_eq!(method_name("_ZThn16_N2MI2m2Ei").as_deref(), Some("m2"));
         assert_eq!(method_name("_ZTv0_n24_N2VD2vbEi").as_deref(), Some("vb"));

@@ -38,7 +38,10 @@ fn parse_tail(argv: &[String]) -> Result<Tail, String> {
         match flag {
             "--mode" | "--language" | "--assert" => {
                 i += 1;
-                let value = argv.get(i).cloned().ok_or_else(|| format!("{flag} requires a value"))?;
+                let value = argv
+                    .get(i)
+                    .cloned()
+                    .ok_or_else(|| format!("{flag} requires a value"))?;
                 match flag {
                     "--mode" => tail.mode = Some(value),
                     "--language" => tail.language = Some(value),
@@ -95,7 +98,7 @@ fn main() -> ExitCode {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_tail, Tail};
+    use super::{Tail, parse_tail};
 
     fn argv(tail: &[&str]) -> Vec<String> {
         ["unlace_wasm", "binary", "specs", "decompile"]
@@ -129,7 +132,10 @@ mod tests {
     #[test]
     fn mode_requires_a_value_and_at_most_two_positionals_are_allowed() {
         assert!(parse_tail(&argv(&["--mode"])).is_err());
-        assert_eq!(parse_tail(&argv(&["0x10", "16"])).unwrap(), tail(&["0x10", "16"], None, None));
+        assert_eq!(
+            parse_tail(&argv(&["0x10", "16"])).unwrap(),
+            tail(&["0x10", "16"], None, None)
+        );
         assert!(parse_tail(&argv(&["0x10", "16", "third"])).is_err());
     }
 
@@ -166,8 +172,15 @@ mod tests {
         assert_eq!(parsed.mode.as_deref(), Some("fast"));
         assert_eq!(
             parsed.asserts,
-            vec!["name v1 total".to_string(), "prototype 0x1161 long sum_to(int count)".to_string()]
+            vec![
+                "name v1 total".to_string(),
+                "prototype 0x1161 long sum_to(int count)".to_string()
+            ]
         );
-        assert!(parse_tail(&argv(&["main", "--assert"])).unwrap_err().contains("--assert"));
+        assert!(
+            parse_tail(&argv(&["main", "--assert"]))
+                .unwrap_err()
+                .contains("--assert")
+        );
     }
 }

@@ -10,7 +10,7 @@ use std::rc::Rc;
 
 use unlace_base::marshal::{Decoder, IdRegistry, XmlDecode};
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 
 use unlace_sleigh::pcodeparse::{SnippetLanguage, SnippetSymbol};
@@ -83,7 +83,10 @@ fn decode_callfixup_missing_pcode_errors() {
     dec.ingest_stream(xml).unwrap();
     let mut p = InjectPayloadCallfixup::new(b"src");
     let err = p.decode(&mut dec).unwrap_err();
-    assert!(err.to_string().contains("<callfixup> is missing <pcode> subtag: nope"));
+    assert!(
+        err.to_string()
+            .contains("<callfixup> is missing <pcode> subtag: nope")
+    );
 }
 
 // --- InjectPayloadCallother::decode ---------------------------------------
@@ -121,7 +124,10 @@ fn decode_callotherfixup_without_pcode_errors() {
     dec.ingest_stream(xml).unwrap();
     let mut p = InjectPayloadCallother::new(b"src");
     let err = p.decode(&mut dec).unwrap_err();
-    assert!(err.to_string().contains("<callotherfixup> does not contain a <pcode> tag"));
+    assert!(
+        err.to_string()
+            .contains("<callotherfixup> does not contain a <pcode> tag")
+    );
 }
 
 // --- ExecutablePcodeSleigh::decode ----------------------------------------
@@ -159,9 +165,9 @@ fn decode_executable_rejects_unexpected_element() {
     dec.ingest_stream(xml).unwrap();
     let mut p = ExecutablePcodeSleigh::new(b"src", b"nm");
     let err = p.decode(&mut dec).unwrap_err();
-    assert!(err
-        .to_string()
-        .contains("Expecting <pcode>, <case_pcode>, <addr_pcode>, <default_pcode>, or <size_pcode>"));
+    assert!(err.to_string().contains(
+        "Expecting <pcode>, <case_pcode>, <addr_pcode>, <default_pcode>, or <size_pcode>"
+    ));
 }
 
 // --- PcodeInjectLibrarySleigh allocate/register/decode --------------------
@@ -190,10 +196,15 @@ fn library_decode_inject_registers_in_namespace() {
     let mut dec = XmlDecode::new(&mgr, &reg);
     dec.ingest_stream(xml).unwrap();
     let mut lib = PcodeInjectLibrarySleigh::new(0x1000);
-    let id = lib.decode_inject(b"src", b"", CALLOTHERFIXUP_TYPE, &mut dec).unwrap();
+    let id = lib
+        .decode_inject(b"src", b"", CALLOTHERFIXUP_TYPE, &mut dec)
+        .unwrap();
     assert_eq!(id, 0);
     // registered under the targetop name in the callother namespace.
-    assert_eq!(lib.base.get_payload_id(CALLOTHERFIXUP_TYPE, b"setISAMode"), 0);
+    assert_eq!(
+        lib.base.get_payload_id(CALLOTHERFIXUP_TYPE, b"setISAMode"),
+        0
+    );
     assert_eq!(lib.base.get_call_other_target(0), b"setISAMode");
 }
 
@@ -201,7 +212,12 @@ fn library_decode_inject_registers_in_namespace() {
 fn manual_call_other_fixup_orders_params_in_then_out() {
     let mut lib = PcodeInjectLibrarySleigh::new(0x1000);
     let id = lib
-        .manual_call_other_fixup(b"myop", b"out", &[b"a".to_vec(), b"b".to_vec()], b"out = a + b;")
+        .manual_call_other_fixup(
+            b"myop",
+            b"out",
+            &[b"a".to_vec(), b"b".to_vec()],
+            b"out = a + b;",
+        )
         .unwrap();
     assert_eq!(id, 0);
     let payload = lib.get_payload(id);
@@ -226,18 +242,30 @@ fn manual_call_other_fixup_orders_params_in_then_out() {
 #[test]
 fn named_manual_call_other_fixups_coexist_under_their_target_names() {
     let mut lib = PcodeInjectLibrarySleigh::new(0x1000);
-    let first = lib.manual_call_other_fixup_named(b"first", b"out", &[b"a".to_vec()], b"out = a;").unwrap();
-    let second = lib.manual_call_other_fixup_named(b"second", b"", &[], b"").unwrap();
+    let first = lib
+        .manual_call_other_fixup_named(b"first", b"out", &[b"a".to_vec()], b"out = a;")
+        .unwrap();
+    let second = lib
+        .manual_call_other_fixup_named(b"second", b"", &[], b"")
+        .unwrap();
     assert_eq!(lib.base.get_call_other_target(first), b"first");
     assert_eq!(lib.base.get_call_other_target(second), b"second");
-    assert_eq!(lib.base.get_payload_id(CALLOTHERFIXUP_TYPE, b"second"), second);
-    assert!(lib.manual_call_other_fixup_named(b"second", b"", &[], b"").is_err());
+    assert_eq!(
+        lib.base.get_payload_id(CALLOTHERFIXUP_TYPE, b"second"),
+        second
+    );
+    assert!(
+        lib.manual_call_other_fixup_named(b"second", b"", &[], b"")
+            .is_err()
+    );
 }
 
 #[test]
 fn manual_call_other_fixup_no_output_is_optional() {
     let mut lib = PcodeInjectLibrarySleigh::new(0x1000);
-    let id = lib.manual_call_other_fixup(b"voidop", b"", &[b"a".to_vec()], b"a = a;").unwrap();
+    let id = lib
+        .manual_call_other_fixup(b"voidop", b"", &[b"a".to_vec()], b"a = a;")
+        .unwrap();
     let payload = lib.get_payload(id);
     assert_eq!(payload.core().size_input(), 1);
     // empty outname => no output parameter.
@@ -267,7 +295,9 @@ impl TestLang {
             1,
         ));
         manager.insert_space(Rc::clone(&ram)).unwrap();
-        manager.insert_space(Rc::new(UniqueSpace::new(2, 0, false))).unwrap();
+        manager
+            .insert_space(Rc::new(UniqueSpace::new(2, 0, false)))
+            .unwrap();
         TestLang { manager, ram }
     }
 }
@@ -359,9 +389,9 @@ use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::translate::PcodeEmit;
 
+use crate::context::{ArchContext, TypeOp};
 use crate::funcdata::Funcdata;
 use crate::pcodeinject::InjectContext;
-use crate::context::{ArchContext, TypeOp};
 
 /// A `SnippetLanguage` with a code space `ram`, the const/unique spaces, and a
 /// couple of x86-style registers (EAX/ESP).  Enough to compile the simple real
@@ -387,7 +417,9 @@ impl CodeLang {
             1,
         ));
         manager.insert_space(Rc::clone(&ram)).unwrap();
-        manager.insert_space(Rc::new(UniqueSpace::new(2, 0, false))).unwrap();
+        manager
+            .insert_space(Rc::new(UniqueSpace::new(2, 0, false)))
+            .unwrap();
         CodeLang { manager, ram }
     }
 }
@@ -435,7 +467,13 @@ struct CollectEmitter {
     ops: Vec<(OpCode, bool, usize)>,
 }
 impl PcodeEmit for CollectEmitter {
-    fn dump(&mut self, _addr: &Address, opc: OpCode, outvar: Option<&VarnodeData>, vars: &[VarnodeData]) {
+    fn dump(
+        &mut self,
+        _addr: &Address,
+        opc: OpCode,
+        outvar: Option<&VarnodeData>,
+        vars: &[VarnodeData],
+    ) {
         self.ops.push((opc, outvar.is_some(), vars.len()));
     }
 }
@@ -461,24 +499,36 @@ impl FuncdataEmitter<'_> {
         if Rc::ptr_eq(&space, &self.const_space) {
             self.fd.new_constant(vn.size as i32, vn.offset)
         } else {
-            self.fd.new_varnode(vn.size as i32, &Address::new(space, vn.offset), None)
+            self.fd
+                .new_varnode(vn.size as i32, &Address::new(space, vn.offset), None)
         }
     }
 }
 impl PcodeEmit for FuncdataEmitter<'_> {
-    fn dump(&mut self, addr: &Address, opc: OpCode, outvar: Option<&VarnodeData>, vars: &[VarnodeData]) {
+    fn dump(
+        &mut self,
+        addr: &Address,
+        opc: OpCode,
+        outvar: Option<&VarnodeData>,
+        vars: &[VarnodeData],
+    ) {
         let op = self.fd.new_op(vars.len() as i32, addr.clone());
-        self.fd.op_set_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
+        self.fd
+            .op_set_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
         for (slot, v) in vars.iter().enumerate() {
             let vn = self.resolve(v);
-            self.fd.op_set_input(op, vn, slot as i32).expect("op_set_input builds the input link");
+            self.fd
+                .op_set_input(op, vn, slot as i32)
+                .expect("op_set_input builds the input link");
         }
         if let Some(o) = outvar {
             let vn = self.resolve(o);
             // The `op_set_output` setDef step is now the real `banks_mut`
             // split-borrow path (landed by `w4x-flow-linkage`); it links the
             // output Varnode as the op's def.
-            self.fd.op_set_output(op, vn).expect("op_set_output links the output");
+            self.fd
+                .op_set_output(op, vn)
+                .expect("op_set_output links the output");
             self.outputs_linked += 1;
         }
         self.created += 1;
@@ -490,7 +540,8 @@ impl PcodeEmit for FuncdataEmitter<'_> {
 fn emit_funcdata() -> (Funcdata, Rc<AddrSpace>) {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -519,14 +570,18 @@ fn decode_real_callfixup(name: &str) -> InjectPayloadCallfixup {
     let text = std::fs::read_to_string(&cspec).expect("read x86gcc.cspec");
     // Slice out the <callfixup name="..."> ... </callfixup> block.
     let needle = format!("<callfixup name=\"{name}\">");
-    let start = text.find(&needle).unwrap_or_else(|| panic!("callfixup {name} present"));
-    let end = text[start..].find("</callfixup>").expect("callfixup close") + start + "</callfixup>".len();
+    let start = text
+        .find(&needle)
+        .unwrap_or_else(|| panic!("callfixup {name} present"));
+    let end =
+        text[start..].find("</callfixup>").expect("callfixup close") + start + "</callfixup>".len();
     let block = &text[start..end];
 
     let reg = registry();
     let mgr = manager();
     let mut dec = XmlDecode::new(&mgr, &reg);
-    dec.ingest_stream(block.as_bytes()).expect("ingest callfixup");
+    dec.ingest_stream(block.as_bytes())
+        .expect("ingest callfixup");
     let mut p = InjectPayloadCallfixup::new(b"x86gcc.cspec");
     p.decode(&mut dec).expect("decode callfixup");
     p
@@ -543,7 +598,10 @@ fn real_mcount_callfixup_emits_copy_into_funcdata() {
     let lang = CodeLang::new();
     let (tpl, _new_base) =
         parse_inject(&lang, &p, &p.payload.parsestring, 0x1000).expect("compile mcount snippet");
-    assert!(!tpl.get_opvec().is_empty(), "mcount compiles to at least one op");
+    assert!(
+        !tpl.get_opvec().is_empty(),
+        "mcount compiles to at least one op"
+    );
 
     let engine = SleighInjectEngine::new(
         lang.get_constant_space(),
@@ -560,7 +618,12 @@ fn real_mcount_callfixup_emits_copy_into_funcdata() {
     let n_before = fd.obank().iter_all().count();
     let outputs_linked;
     {
-        let mut emitter = FuncdataEmitter { fd: &mut fd, const_space, created: 0, outputs_linked: 0 };
+        let mut emitter = FuncdataEmitter {
+            fd: &mut fd,
+            const_space,
+            created: 0,
+            outputs_linked: 0,
+        };
         engine
             .emit_payload(&p, &tpl, &mut context, &mut emitter)
             .expect("emit mcount payload");
@@ -573,7 +636,10 @@ fn real_mcount_callfixup_emits_copy_into_funcdata() {
     // The COPY has an output, so output-wiring went through the now-real
     // `op_set_output` setDef path exactly once (the op, its const input, AND the
     // output ARE built).
-    assert_eq!(outputs_linked, 1, "the COPY's output was linked via op_set_output");
+    assert_eq!(
+        outputs_linked, 1,
+        "the COPY's output was linked via op_set_output"
+    );
     // Stronger than the old seam check: the COPY op now actually has its output
     // Varnode linked (the real setDef ran), so the op's output is the 1-byte
     // unique temp and that Varnode is defined by the COPY.
@@ -593,7 +659,11 @@ fn real_mcount_callfixup_emits_copy_into_funcdata() {
     let out = out.expect("the COPY's output Varnode is linked");
     let outvn = fd.vbank().get(out).expect("output varnode live");
     assert_eq!(outvn.get_size(), 1, "output is the 1-byte unique temp");
-    assert_eq!(outvn.get_def(), Some(copy_op), "output is defined by the COPY");
+    assert_eq!(
+        outvn.get_def(),
+        Some(copy_op),
+        "output is defined by the COPY"
+    );
 }
 
 #[test]
@@ -609,9 +679,15 @@ fn real_mcount_callfixup_emit_ops_are_a_copy_of_zero() {
         lang.get_default_code_space(),
     );
     let base = Address::new(lang.get_default_code_space(), 0x2000);
-    let mut context = InjectContext { baseaddr: Some(base.clone()), nextaddr: Some(base), ..Default::default() };
+    let mut context = InjectContext {
+        baseaddr: Some(base.clone()),
+        nextaddr: Some(base),
+        ..Default::default()
+    };
     let mut emitter = CollectEmitter::default();
-    engine.emit_payload(&p, &tpl, &mut context, &mut emitter).unwrap();
+    engine
+        .emit_payload(&p, &tpl, &mut context, &mut emitter)
+        .unwrap();
     assert_eq!(emitter.ops.len(), 1, "one op for `temp:1 = 0`");
     let (opc, has_out, isize) = emitter.ops[0];
     assert_eq!(opc, OpCode::CPUI_COPY);
@@ -634,13 +710,25 @@ fn real_get_pc_thunk_emits_load_and_add() {
         lang.get_default_code_space(),
     );
     let base = Address::new(lang.get_default_code_space(), 0x3000);
-    let mut context = InjectContext { baseaddr: Some(base.clone()), nextaddr: Some(base), ..Default::default() };
+    let mut context = InjectContext {
+        baseaddr: Some(base.clone()),
+        nextaddr: Some(base),
+        ..Default::default()
+    };
     let mut emitter = CollectEmitter::default();
-    engine.emit_payload(&p, &tpl, &mut context, &mut emitter).unwrap();
+    engine
+        .emit_payload(&p, &tpl, &mut context, &mut emitter)
+        .unwrap();
     // The emitted ops contain a LOAD (EAX = *ESP) and an INT_ADD (ESP+4).
     let opcodes: Vec<OpCode> = emitter.ops.iter().map(|o| o.0).collect();
-    assert!(opcodes.contains(&OpCode::CPUI_LOAD), "EAX = *ESP emits a LOAD, got {opcodes:?}");
-    assert!(opcodes.contains(&OpCode::CPUI_INT_ADD), "ESP = ESP+4 emits INT_ADD, got {opcodes:?}");
+    assert!(
+        opcodes.contains(&OpCode::CPUI_LOAD),
+        "EAX = *ESP emits a LOAD, got {opcodes:?}"
+    );
+    assert!(
+        opcodes.contains(&OpCode::CPUI_INT_ADD),
+        "ESP = ESP+4 emits INT_ADD, got {opcodes:?}"
+    );
 }
 
 #[test]
@@ -668,8 +756,14 @@ fn setup_handles_rejects_parameter_count_mismatch() {
     );
     let base = Address::new(lang.get_default_code_space(), 0x4000);
     // Empty context (no input storage) -> mismatch against the 1-input payload.
-    let mut context = InjectContext { baseaddr: Some(base.clone()), nextaddr: Some(base), ..Default::default() };
+    let mut context = InjectContext {
+        baseaddr: Some(base.clone()),
+        nextaddr: Some(base),
+        ..Default::default()
+    };
     let mut emitter = CollectEmitter::default();
-    let err = engine.emit_payload(&p, &tpl, &mut context, &mut emitter).unwrap_err();
+    let err = engine
+        .emit_payload(&p, &tpl, &mut context, &mut emitter)
+        .unwrap_err();
     assert!(format!("{err}").contains("different number of parameters"));
 }

@@ -47,25 +47,33 @@ fn byte_array(fd: &Funcdata, vn: VarnodeId) -> bool {
     fd.vbank().get(vn).is_some_and(|v| {
         let ty = v.get_type();
         ty.get_metatype() == type_metatype::TYPE_ARRAY
-            && ty
-                .get_array_base()
-                .is_some_and(|e| e.get_size() == 1 && e.get_metatype() == type_metatype::TYPE_UNKNOWN)
+            && ty.get_array_base().is_some_and(|e| {
+                e.get_size() == 1 && e.get_metatype() == type_metatype::TYPE_UNKNOWN
+            })
     })
 }
 
 /// False when the definition prints as an array value, which C would convert to
 /// a pointer before assigning it to an integer.
 fn scalar_source(fd: &Funcdata, vn: VarnodeId, high: HighVariableId) -> bool {
-    let Some(def) = fd.vbank().get(vn).and_then(|v| v.get_def()).and_then(|d| fd.obank().get(d)) else {
+    let Some(def) = fd
+        .vbank()
+        .get(vn)
+        .and_then(|v| v.get_def())
+        .and_then(|d| fd.obank().get(d))
+    else {
         return true;
     };
     match def.code() {
         OpCode::CPUI_LOAD => false,
-        OpCode::CPUI_COPY => def.get_in(0).and_then(|i| fd.vbank().get(i)).is_none_or(|i| {
-            i.is_constant()
-                || i.get_high() == Some(high)
-                || i.get_type().get_metatype() != type_metatype::TYPE_ARRAY
-        }),
+        OpCode::CPUI_COPY => def
+            .get_in(0)
+            .and_then(|i| fd.vbank().get(i))
+            .is_none_or(|i| {
+                i.is_constant()
+                    || i.get_high() == Some(high)
+                    || i.get_type().get_metatype() != type_metatype::TYPE_ARRAY
+            }),
         _ => true,
     }
 }

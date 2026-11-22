@@ -13,6 +13,8 @@ fn the_action_keeps_its_group_and_override_when_cloned() {
     let a = ActionStrlenScan::new(true, "returnsplit");
     assert_eq!(a.get_name(), "strlenscan");
     assert!(a.clone_filtered(&ActionGroupList::new()).is_none());
-    let b = a.clone_filtered(&ActionGroupList::from_names(["returnsplit"])).expect("returnsplit is in the list");
+    let b = a
+        .clone_filtered(&ActionGroupList::from_names(["returnsplit"]))
+        .expect("returnsplit is in the list");
     assert_eq!(b.get_name(), "strlenscan");
 }

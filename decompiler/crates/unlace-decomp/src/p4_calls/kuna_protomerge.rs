@@ -13,7 +13,7 @@
 
 use std::rc::Rc;
 
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::fspec::PrototypePieces;
 
 /// How much a type says about a value, higher is more: an undefined says
@@ -43,25 +43,45 @@ fn better(old: &Rc<Datatype>, new: &Rc<Datatype>) -> Rc<Datatype> {
 pub fn merge(old: &PrototypePieces, new: PrototypePieces) -> PrototypePieces {
     let same_shape = old.intypes.len() == new.intypes.len()
         && old.first_var_arg_slot == new.first_var_arg_slot
-        && old.intypes.iter().zip(&new.intypes).all(|(a, b)| a.get_size() == b.get_size())
+        && old
+            .intypes
+            .iter()
+            .zip(&new.intypes)
+            .all(|(a, b)| a.get_size() == b.get_size())
         && old.input_storage.is_empty()
         && new.input_storage.is_empty();
     if !same_shape {
         return new;
     }
-    let intypes = old.intypes.iter().zip(&new.intypes).map(|(a, b)| better(a, b)).collect();
+    let intypes = old
+        .intypes
+        .iter()
+        .zip(&new.intypes)
+        .map(|(a, b)| better(a, b))
+        .collect();
     let innames = new
         .innames
         .iter()
         .enumerate()
-        .map(|(i, n)| if n.is_empty() { old.innames.get(i).cloned().unwrap_or_default() } else { n.clone() })
+        .map(|(i, n)| {
+            if n.is_empty() {
+                old.innames.get(i).cloned().unwrap_or_default()
+            } else {
+                n.clone()
+            }
+        })
         .collect();
     let outtype = match (&old.outtype, &new.outtype) {
         (Some(a), Some(b)) => Some(better(a, b)),
         (Some(a), None) if new.output_storage.is_none() => Some(Rc::clone(a)),
         (_, b) => b.clone(),
     };
-    PrototypePieces { intypes, innames, outtype, ..new }
+    PrototypePieces {
+        intypes,
+        innames,
+        outtype,
+        ..new
+    }
 }
 
 #[cfg(test)]
@@ -87,12 +107,27 @@ mod tests {
 
     #[test]
     fn keeps_the_more_specific_slot_and_fills_names() {
-        let old = pieces(vec![dt(8, type_metatype::TYPE_FLOAT), dt(4, type_metatype::TYPE_INT)], &["x", "n"]);
-        let new = pieces(vec![dt(8, type_metatype::TYPE_UINT), dt(4, type_metatype::TYPE_UNKNOWN)], &["", "count"]);
+        let old = pieces(
+            vec![
+                dt(8, type_metatype::TYPE_FLOAT),
+                dt(4, type_metatype::TYPE_INT),
+            ],
+            &["x", "n"],
+        );
+        let new = pieces(
+            vec![
+                dt(8, type_metatype::TYPE_UINT),
+                dt(4, type_metatype::TYPE_UNKNOWN),
+            ],
+            &["", "count"],
+        );
         // a later pointer is kept over an earlier one of another kind
         let p_old = pieces(vec![dt(8, type_metatype::TYPE_STRUCT)], &[""]);
         let p_new = pieces(vec![dt(8, type_metatype::TYPE_PTR)], &[""]);
-        assert_eq!(merge(&p_old, p_new).intypes[0].get_metatype(), type_metatype::TYPE_PTR);
+        assert_eq!(
+            merge(&p_old, p_new).intypes[0].get_metatype(),
+            type_metatype::TYPE_PTR
+        );
         let m = merge(&old, new);
         assert_eq!(m.intypes[0].get_metatype(), type_metatype::TYPE_FLOAT);
         assert_eq!(m.intypes[1].get_metatype(), type_metatype::TYPE_INT);

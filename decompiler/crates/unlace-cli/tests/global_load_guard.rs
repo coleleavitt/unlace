@@ -7,8 +7,8 @@ use common::process;
 use std::process::Command;
 
 const ALL: [&str; 17] = [
-    "d_loop", "d_branch", "d_short", "d_byte", "d_long", "d_index", "d_two", "d_iter", "d_pre", "d_cond",
-    "d_phi", "d_inc", "d_while", "d_sel", "d_load", "d_twice", "d_mv",
+    "d_loop", "d_branch", "d_short", "d_byte", "d_long", "d_index", "d_two", "d_iter", "d_pre",
+    "d_cond", "d_phi", "d_inc", "d_while", "d_sel", "d_load", "d_twice", "d_mv",
 ];
 
 /// The functions each build's printed C must get right.  gcc -O2's `d_iter`
@@ -19,8 +19,8 @@ const BUILDS: [(&str, &[&str]); 3] = [
     (
         "globalloadguard_gcc_O2_x86_64",
         &[
-            "d_loop", "d_branch", "d_short", "d_byte", "d_long", "d_index", "d_two", "d_pre", "d_cond", "d_phi",
-            "d_inc", "d_while", "d_sel", "d_load", "d_twice", "d_mv",
+            "d_loop", "d_branch", "d_short", "d_byte", "d_long", "d_index", "d_two", "d_pre",
+            "d_cond", "d_phi", "d_inc", "d_while", "d_sel", "d_load", "d_twice", "d_mv",
         ],
     ),
     ("globalloadguard_clang_O2_x86_64", &ALL),
@@ -46,18 +46,31 @@ fn a_store_before_a_pointer_load_is_kept_when_the_global_is_stored_again() {
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
     for (fixture, funcs) in BUILDS {
-        let (printed, stderr, code) =
-            common::run_kuna(&["decompile-all", &common::fixture(fixture), "--functions", &funcs.join(",")]);
+        let (printed, stderr, code) = common::run_kuna(&[
+            "decompile-all",
+            &common::fixture(fixture),
+            "--functions",
+            &funcs.join(","),
+        ]);
         assert_eq!(code, 0, "{fixture}: {stderr}");
-        let keep: Vec<String> =
-            ALL.iter().filter(|f| !funcs.contains(f)).map(|f| format!("-DKEEP_{f}")).collect();
+        let keep: Vec<String> = ALL
+            .iter()
+            .filter(|f| !funcs.contains(f))
+            .map(|f| format!("-DKEEP_{f}"))
+            .collect();
         let src = common::scratch_file(fixture, "c");
         let exe = common::scratch_file(fixture, "exe");
         std::fs::write(&src, format!("{DECLS}{printed}")).unwrap();
         for cc in &compilers {
             for level in ["-O0", "-O2"] {
                 let out = Command::new(cc)
-                    .args(["-std=gnu11", "-w", level, "-fno-strict-aliasing", "-DGLOBALLOADGUARD_HARNESS"])
+                    .args([
+                        "-std=gnu11",
+                        "-w",
+                        level,
+                        "-fno-strict-aliasing",
+                        "-DGLOBALLOADGUARD_HARNESS",
+                    ])
                     .args(common::CC_GCC15_DEMOTE)
                     .args(&keep)
                     .arg("-o")

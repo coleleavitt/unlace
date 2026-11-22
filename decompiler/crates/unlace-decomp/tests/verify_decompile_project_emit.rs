@@ -30,9 +30,9 @@ use unlace_base::xml::{DocumentStorage, Element};
 use unlace_decomp::decompile_drive::{
     decompile_func, print_c, print_c_prototype, print_c_recompile_prelude, print_c_types,
 };
-use unlace_decomp::dtype::{type_metatype, TypeField};
+use unlace_decomp::dtype::{TypeField, type_metatype};
 use unlace_decomp::options::register_option_elements;
-use unlace_decomp::sleigh_arch::{register_sleigh_arch_ids, LanguageDatabase};
+use unlace_decomp::sleigh_arch::{LanguageDatabase, register_sleigh_arch_ids};
 use unlace_decomp::xml_arch::{XmlArchitecture, XmlArchitectureCapability};
 
 use unlace_sleigh::loadimage::LoadImage;
@@ -40,7 +40,10 @@ use unlace_sleigh::loadimage_xml::register_loadimage_xml_ids;
 use unlace_sleigh::translate::register_translate_ids;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 // ===========================================================================
@@ -78,11 +81,15 @@ fn find_named(el: &Rc<Element>, name: &str, out: &mut Vec<Rc<Element>>) {
 }
 
 fn attr(el: &Element, name: &str) -> Option<String> {
-    el.get_attribute_value(name).ok().map(|b| String::from_utf8_lossy(b).into_owned())
+    el.get_attribute_value(name)
+        .ok()
+        .map(|b| String::from_utf8_lossy(b).into_owned())
 }
 
 fn parse_datatest(stem: &str) -> Result<DataTest, String> {
-    let path = repo_root().join("tests/datatests").join(format!("{stem}.xml"));
+    let path = repo_root()
+        .join("tests/datatests")
+        .join(format!("{stem}.xml"));
     let xml = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
     let mut store = DocumentStorage::new();
     let root = store
@@ -109,7 +116,11 @@ fn parse_datatest(stem: &str) -> Result<DataTest, String> {
         })
         .collect();
 
-    Ok(DataTest { binaryimage, arch_id, symbols })
+    Ok(DataTest {
+        binaryimage,
+        arch_id,
+        symbols,
+    })
 }
 
 struct DummyImg;
@@ -142,11 +153,13 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
     let capability = XmlArchitectureCapability::new();
     let mut arch = capability.build_architecture("datatest", "");
 
-    arch.build_loader(Rc::clone(&dt.binaryimage)).map_err(|e| format!("build_loader: {e}"))?;
+    arch.build_loader(Rc::clone(&dt.binaryimage))
+        .map_err(|e| format!("build_loader: {e}"))?;
 
     let mut db = LanguageDatabase::new();
     db.scan_for_sleigh_directories(root.join("specs").to_str().unwrap());
-    db.get_descriptions(&registry).map_err(|e| format!("collect ldefs: {e}"))?;
+    db.get_descriptions(&registry)
+        .map_err(|e| format!("collect ldefs: {e}"))?;
 
     arch.sleigh_mut().set_archid(&dt.arch_id);
     arch.sleigh_mut()
@@ -156,7 +169,10 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
         return Err("language index unresolved".to_string());
     }
 
-    let specs = arch.sleigh().build_spec_file(&db).map_err(|e| format!("build_spec_file: {e}"))?;
+    let specs = arch
+        .sleigh()
+        .build_spec_file(&db)
+        .map_err(|e| format!("build_spec_file: {e}"))?;
     let resolved_sla = specs.slafile.ok_or("build_spec_file resolved no .sla")?;
     let sla = std::fs::read(&resolved_sla).map_err(|e| format!("read sla: {e}"))?;
     arch.sleigh_mut()
@@ -176,7 +192,10 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
     arch.open_image(unsafe { &*manager_ptr }, &registry)
         .map_err(|e| format!("open_image: {e}"))?;
     let img = arch.take_loader().ok_or("loader vanished after open")?;
-    arch.sleigh_mut().base_mut().unwrap().set_loader(Box::new(img));
+    arch.sleigh_mut()
+        .base_mut()
+        .unwrap()
+        .set_loader(Box::new(img));
 
     Ok(arch)
 }
@@ -208,7 +227,9 @@ fn bootstrap_or_skip(stem: &str) -> Option<(DataTest, XmlArchitecture)> {
 fn doc_prototype_matches_print_c_prototype_segment() {
     let mut checked = 0usize;
     for stem in ["boolless", "gp", "ccmp"] {
-        let Some((dt, mut xarch)) = bootstrap_or_skip(stem) else { continue };
+        let Some((dt, mut xarch)) = bootstrap_or_skip(stem) else {
+            continue;
+        };
         let base = xarch.sleigh_mut().base_mut().expect("Architecture base");
         for sym in &dt.symbols {
             let Some(space) = base.manage().get_space_by_name(&sym.space).map(Rc::clone) else {
@@ -217,7 +238,9 @@ fn doc_prototype_matches_print_c_prototype_segment() {
             let entry = Address::new(space, sym.offset);
             // Call targets without loaded bytes legitimately fail to
             // decompile; the contract is asserted on every function that DOES.
-            let Ok(fd) = decompile_func(base, &sym.name, entry, 0) else { continue };
+            let Ok(fd) = decompile_func(base, &sym.name, entry, 0) else {
+                continue;
+            };
 
             let proto = print_c_prototype(base, &fd);
             assert!(
@@ -266,7 +289,9 @@ fn doc_prototype_matches_print_c_prototype_segment() {
 // ===========================================================================
 #[test]
 fn recompile_prelude_and_type_definitions_render() {
-    let Some((_dt, mut xarch)) = bootstrap_or_skip("boolless") else { return };
+    let Some((_dt, mut xarch)) = bootstrap_or_skip("boolless") else {
+        return;
+    };
     let base = xarch.sleigh_mut().base_mut().expect("Architecture base");
 
     // -- The prelude: core scalar typedefs + the fixed undefined family. -----
@@ -284,13 +309,25 @@ fn recompile_prelude_and_type_definitions_render() {
         "typedef struct { unsigned char b[32]; } undefined32;",
         "typedef double float8;",
     ] {
-        assert!(prelude.contains(needle), "prelude is missing {needle:?}:\n{prelude}");
+        assert!(
+            prelude.contains(needle),
+            "prelude is missing {needle:?}:\n{prelude}"
+        );
     }
     // `void`/`char` are real C and must NOT be typedef'd; `bool` only via the
     // include.
-    assert!(!prelude.contains(" void;"), "prelude must not typedef void:\n{prelude}");
-    assert!(!prelude.contains(" char;"), "prelude must not typedef char:\n{prelude}");
-    assert!(!prelude.contains(" bool;"), "prelude must not typedef bool:\n{prelude}");
+    assert!(
+        !prelude.contains(" void;"),
+        "prelude must not typedef void:\n{prelude}"
+    );
+    assert!(
+        !prelude.contains(" char;"),
+        "prelude must not typedef char:\n{prelude}"
+    );
+    assert!(
+        !prelude.contains(" bool;"),
+        "prelude must not typedef bool:\n{prelude}"
+    );
 
     // -- doc_type_definitions over the live factory. --------------------------
     // A fresh factory carries only core types: the block is empty (no
@@ -306,7 +343,9 @@ fn recompile_prelude_and_type_definitions_render() {
     {
         let tf = base.types();
         let s0 = tf.get_type_struct("kunaproj_t").expect("getTypeStruct");
-        let i4 = tf.get_base(4, type_metatype::TYPE_INT).expect("getBase int4");
+        let i4 = tf
+            .get_base(4, type_metatype::TYPE_INT)
+            .expect("getBase int4");
         let p = tf
             .get_type_pointer(8, Rc::clone(&s0), 1)
             .expect("getTypePointer (self-referential)");
@@ -319,14 +358,18 @@ fn recompile_prelude_and_type_definitions_render() {
             vec![],
         )
         .expect("assignRawFields");
-        tf.get_type_struct("kunaproj_opaque").expect("getTypeStruct opaque");
+        tf.get_type_struct("kunaproj_opaque")
+            .expect("getTypeStruct opaque");
     }
     let types = print_c_types(base);
     assert!(
         types.contains("typedef struct kunaproj_t kunaproj_t;"),
         "forward declaration missing:\n{types}"
     );
-    assert!(types.contains("struct kunaproj_t {"), "struct body missing:\n{types}");
+    assert!(
+        types.contains("struct kunaproj_t {"),
+        "struct body missing:\n{types}"
+    );
     assert!(types.contains("value;"), "scalar field missing:\n{types}");
     assert!(
         types.contains("kunaproj_t *next;"),
@@ -343,5 +386,8 @@ fn recompile_prelude_and_type_definitions_render() {
     // The forward-decl block precedes the body (the self-reference guarantee).
     let fwd = types.find("typedef struct kunaproj_t").unwrap();
     let body = types.find("struct kunaproj_t {").unwrap();
-    assert!(fwd < body, "forward declarations must precede bodies:\n{types}");
+    assert!(
+        fwd < body,
+        "forward declarations must precede bodies:\n{types}"
+    );
 }

@@ -26,9 +26,9 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_console::project::decompile_targets;
@@ -37,7 +37,10 @@ use unlace_console::project::decompile_targets;
 const ARCHES: &[&str] = &["x86_64", "aarch64", "arm", "riscv64"];
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Bootstrap `fmt_<arch>`, run the analysis commit (`read symbols`), and apply the
@@ -48,13 +51,17 @@ fn load(arch: &str, formatstring_on: bool) -> ConsoleProgram {
     let bin = root
         .join("decompiler/crates/unlace-analysis/tests/fixtures")
         .join(format!("fmt_{arch}"))
-        .to_str().expect("UTF-8 fixture path")
+        .to_str()
+        .expect("UTF-8 fixture path")
         .to_string();
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     // The untyped varargs are `main`'s body-driven parameters; `elfmain` declares them.
-    prog.arch_mut().set_kuna_option("elfmain", "off").expect("elfmain flips off");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.arch_mut()
+        .set_kuna_option("elfmain", "off")
+        .expect("elfmain flips off");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     if formatstring_on {
         prog.arch_mut()
             .set_kuna_option("formatstring", "on")
@@ -80,9 +87,10 @@ fn whole_binary_main(arch: &str, formatstring_on: bool) -> String {
         false,
     );
     assert_eq!(out.len(), 1, "[{arch}] one target in, one result out");
-    out[0].code.clone().unwrap_or_else(|| {
-        panic!("[{arch}] main failed to decompile: {:?}", out[0].error)
-    })
+    out[0]
+        .code
+        .clone()
+        .unwrap_or_else(|| panic!("[{arch}] main failed to decompile: {:?}", out[0].error))
 }
 
 #[test]
@@ -98,15 +106,22 @@ fn provenance_collection_preserves_the_plain_code_bytes() {
     let result = &out[0];
 
     assert_eq!(result.code.as_deref(), Some(plain.as_str()));
-    assert!(!result.line_mappings.is_empty(), "the control fixture must carry oprefs");
+    assert!(
+        !result.line_mappings.is_empty(),
+        "the control fixture must carry oprefs"
+    );
 }
 
 /// `main` through the CONSOLE command (`load function` / `decompile` / `print C`
 /// — what `unlace decompile` drives in its `decomp_dbg` subprocess).
 fn console_main(arch: &str, formatstring_on: bool) -> String {
     let prog = load(arch, formatstring_on);
-    let cmds: Vec<String> =
-        ["load function main".into(), "decompile".into(), "print C".into()].to_vec();
+    let cmds: Vec<String> = [
+        "load function main".into(),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .to_vec();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -126,7 +141,12 @@ fn console_main(arch: &str, formatstring_on: bool) -> String {
     let text = status
         .optr
         .rsplit_once("Decompilation complete\n")
-        .unwrap_or_else(|| panic!("[{arch}] console decompile did not complete:\n{}", status.optr))
+        .unwrap_or_else(|| {
+            panic!(
+                "[{arch}] console decompile did not complete:\n{}",
+                status.optr
+            )
+        })
         .1
         .to_string();
     text.trim_matches('\n').to_string()
@@ -138,7 +158,10 @@ fn console_main(arch: &str, formatstring_on: bool) -> String {
 fn whole_binary_leaves_varargs_untyped_with_formatstring_off() {
     for arch in ARCHES {
         let c = whole_binary_main(arch, false);
-        assert!(c.contains("printf("), "[{arch}] expected a printf call, got:\n{c}");
+        assert!(
+            c.contains("printf("),
+            "[{arch}] expected a printf call, got:\n{c}"
+        );
         assert!(
             !c.contains("(char *)*a1"),
             "[{arch}] formatstring off must NOT type the %s arg, got:\n{c}"
@@ -153,7 +176,10 @@ fn whole_binary_leaves_varargs_untyped_with_formatstring_off() {
 fn whole_binary_types_varargs_with_formatstring_on() {
     for arch in ARCHES {
         let c = whole_binary_main(arch, true);
-        assert!(c.contains("printf("), "[{arch}] expected a printf call, got:\n{c}");
+        assert!(
+            c.contains("printf("),
+            "[{arch}] expected a printf call, got:\n{c}"
+        );
         assert!(
             c.contains("(char *)*a1"),
             "[{arch}] formatstring on must type the %s arg as `char *` on the \

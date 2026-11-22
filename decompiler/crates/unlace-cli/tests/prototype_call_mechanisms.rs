@@ -401,9 +401,15 @@ fn default_keeps_a_local_in_the_elfv1_toc_slot_of_an_elfv2_frame() {
     // that TOC to a constant, so the store prints as that constant (not
     // `r2save`) and the return reads it back.
     assert!(!kept, "{code}");
-    let toc = code.lines().find_map(|line| line.trim().strip_prefix(&format!("{product} = 0x")))
-        .and_then(|rest| rest.strip_suffix(';')).unwrap_or_else(|| panic!("{code}"));
-    assert!(code.contains(&format!("+ 0x{toc};")) && !code.contains("r2save"), "{code}");
+    let toc = code
+        .lines()
+        .find_map(|line| line.trim().strip_prefix(&format!("{product} = 0x")))
+        .and_then(|rest| rest.strip_suffix(';'))
+        .unwrap_or_else(|| panic!("{code}"));
+    assert!(
+        code.contains(&format!("+ 0x{toc};")) && !code.contains("r2save"),
+        "{code}"
+    );
     for value in [None, Some("auto")] {
         assert_eq!(returned(value).1, off, "{value:?}");
     }

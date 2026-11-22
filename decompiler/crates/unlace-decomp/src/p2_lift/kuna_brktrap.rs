@@ -121,7 +121,11 @@ pub fn brk_immediate(data: &Funcdata, op: OpId, breakpoint: u32) -> Option<uintb
 /// Append `code` to the inputs of the trap's `CALLOTHER`, after its immediate
 /// and return address, so the code the trap handler reads stays live.
 pub fn read_code(data: &mut Funcdata, callother: OpId, code: &VarnodeData) -> KunaResult<()> {
-    let slot = data.obank().get(callother).expect("brktrap: stale callother").num_input();
+    let slot = data
+        .obank()
+        .get(callother)
+        .expect("brktrap: stale callother")
+        .num_input();
     let vn = data.new_varnode(code.size as int4, &code.get_addr(), None);
     data.op_insert_input(callother, vn, slot)
 }
@@ -139,11 +143,17 @@ pub fn brk_site(data: &Funcdata, op: OpId, breakpoint: u32) -> Option<(OpId, uin
     if prev.num_input() != 3 {
         return None;
     }
-    let constant = |slot| prev.get_in(slot).and_then(|v| data.vbank().get(v)).filter(|v| v.is_constant());
+    let constant = |slot| {
+        prev.get_in(slot)
+            .and_then(|v| data.vbank().get(v))
+            .filter(|v| v.is_constant())
+    };
     if constant(0)?.get_offset() != breakpoint as uintb {
         return None;
     }
-    constant(1).filter(|v| v.get_size() == 2).map(|v| (id, v.get_offset()))
+    constant(1)
+        .filter(|v| v.get_size() == 2)
+        .map(|v| (id, v.get_offset()))
 }
 
 /// The CALLOTHER that wrote exactly the storage the dead-list BRANCHIND `op`

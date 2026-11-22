@@ -15,12 +15,17 @@
 
 use std::collections::BTreeMap;
 
-use super::{kuna_dwarflocation, Reader};
+use super::{Reader, kuna_dwarflocation};
 
 pub const DWARFSCOPES_ENV: &str = "KUNA_DWARFSCOPES";
 
 pub fn enabled() -> bool {
-    std::env::var(DWARFSCOPES_ENV).map_or(true, |v| !matches!(v.trim().to_ascii_lowercase().as_str(), "off" | "0" | "false"))
+    std::env::var(DWARFSCOPES_ENV).map_or(true, |v| {
+        !matches!(
+            v.trim().to_ascii_lowercase().as_str(),
+            "off" | "0" | "false"
+        )
+    })
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -66,13 +71,18 @@ pub fn loclist_frame_offset<'a>(
     unit: &gimli::Unit<Reader<'a>>,
     location: &gimli::AttributeValue<Reader<'a>>,
 ) -> Option<i64> {
-    if matches!(location, gimli::AttributeValue::Exprloc(_) | gimli::AttributeValue::Block(_)) {
+    if matches!(
+        location,
+        gimli::AttributeValue::Exprloc(_) | gimli::AttributeValue::Block(_)
+    ) {
         return None;
     }
     let mut list = dwarf.attr_locations(unit, location.clone()).ok()??;
     let mut found = None;
     for _ in 0..4096 {
-        let Some(entry) = list.next().ok()? else { return found };
+        let Some(entry) = list.next().ok()? else {
+            return found;
+        };
         if let Some(off) = kuna_dwarflocation::frame_offset(entry.data.0.slice()) {
             if found.is_some_and(|f| f != off) {
                 return None;
@@ -86,13 +96,23 @@ pub fn loclist_frame_offset<'a>(
 /// The variables and parameters of `sub` in document order: its direct
 /// children, and with `dwarfscopes` on, those of nested lexical blocks and
 /// inlined subroutines.
-pub(super) fn scope_vars<'a>(sub: &'a super::DieSnap, dies: &'a BTreeMap<usize, super::DieSnap>) -> Vec<&'a super::DieSnap> {
+pub(super) fn scope_vars<'a>(
+    sub: &'a super::DieSnap,
+    dies: &'a BTreeMap<usize, super::DieSnap>,
+) -> Vec<&'a super::DieSnap> {
     let scopes = enabled();
     let mut out = Vec::new();
     let mut pending: Vec<usize> = sub.children.iter().rev().copied().collect();
     while let Some(off) = pending.pop() {
-        let Some(child) = dies.get(&off) else { continue };
-        if scopes && matches!(child.tag, gimli::DW_TAG_lexical_block | gimli::DW_TAG_inlined_subroutine) {
+        let Some(child) = dies.get(&off) else {
+            continue;
+        };
+        if scopes
+            && matches!(
+                child.tag,
+                gimli::DW_TAG_lexical_block | gimli::DW_TAG_inlined_subroutine
+            )
+        {
             pending.extend(child.children.iter().rev().copied());
             continue;
         }
@@ -111,7 +131,11 @@ impl LocalNames {
     pub(super) fn unique(&mut self, name: &str) -> String {
         let n = self.seen.entry(name.to_string()).or_insert(0);
         *n += 1;
-        if *n == 1 { name.to_string() } else { format!("{name}_{n}") }
+        if *n == 1 {
+            name.to_string()
+        } else {
+            format!("{name}_{n}")
+        }
     }
 }
 
@@ -136,15 +160,21 @@ pub(super) fn register_location<'a>(
     location: &gimli::AttributeValue<Reader<'a>>,
 ) -> Option<(u16, Option<u64>)> {
     match location {
-        gimli::AttributeValue::Exprloc(e) => return single_register(e.0.slice()).map(|r| (r, None)),
+        gimli::AttributeValue::Exprloc(e) => {
+            return single_register(e.0.slice()).map(|r| (r, None));
+        }
         gimli::AttributeValue::Block(b) => return single_register(b.slice()).map(|r| (r, None)),
         _ => {}
     }
     let mut list = dwarf.attr_locations(unit, location.clone()).ok()??;
     let mut best: Option<(u64, u16, u64)> = None;
     for _ in 0..4096 {
-        let Some(entry) = list.next().ok()? else { break };
-        let Some(reg) = single_register(entry.data.0.slice()) else { continue };
+        let Some(entry) = list.next().ok()? else {
+            break;
+        };
+        let Some(reg) = single_register(entry.data.0.slice()) else {
+            continue;
+        };
         let len = entry.range.end.saturating_sub(entry.range.begin);
         if best.is_none_or(|(l, ..)| len > l) {
             best = Some((len, reg, entry.range.begin));
@@ -192,7 +222,9 @@ pub fn register_name(arch: object::Architecture, reg: u16) -> Option<String> {
             17..=32 => format!("XMM{}", r - 17),
             _ => return None,
         },
-        A::I386 => ["EAX", "ECX", "EDX", "EBX", "ESP", "EBP", "ESI", "EDI"].get(r)?.to_string(),
+        A::I386 => ["EAX", "ECX", "EDX", "EBX", "ESP", "EBP", "ESI", "EDI"]
+            .get(r)?
+            .to_string(),
         A::Aarch64 => match r {
             0..=30 => format!("x{r}"),
             31 => "sp".into(),
@@ -207,8 +239,9 @@ pub fn register_name(arch: object::Architecture, reg: u16) -> Option<String> {
         },
         A::Riscv32 | A::Riscv64 => {
             const X: [&str; 32] = [
-                "zero", "ra", "sp", "gp", "tp", "t0", "t1", "t2", "s0", "s1", "a0", "a1", "a2", "a3", "a4", "a5", "a6",
-                "a7", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11", "t3", "t4", "t5", "t6",
+                "zero", "ra", "sp", "gp", "tp", "t0", "t1", "t2", "s0", "s1", "a0", "a1", "a2",
+                "a3", "a4", "a5", "a6", "a7", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9",
+                "s10", "s11", "t3", "t4", "t5", "t6",
             ];
             match r {
                 0..=31 => X[r].to_string(),
@@ -218,8 +251,9 @@ pub fn register_name(arch: object::Architecture, reg: u16) -> Option<String> {
         }
         A::Mips | A::Mips64 => {
             const X: [&str; 32] = [
-                "zero", "at", "v0", "v1", "a0", "a1", "a2", "a3", "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "s0",
-                "s1", "s2", "s3", "s4", "s5", "s6", "s7", "t8", "t9", "k0", "k1", "gp", "sp", "s8", "ra",
+                "zero", "at", "v0", "v1", "a0", "a1", "a2", "a3", "t0", "t1", "t2", "t3", "t4",
+                "t5", "t6", "t7", "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "t8", "t9", "k0",
+                "k1", "gp", "sp", "s8", "ra",
             ];
             X.get(r)?.to_string()
         }
@@ -245,9 +279,15 @@ pub(super) fn entry_storage(
     if !enabled() || sub.nocall {
         return;
     }
-    let params = sub.children.iter().filter_map(|c| dies.get(c)).filter(|d| d.tag == gimli::DW_TAG_formal_parameter);
+    let params = sub
+        .children
+        .iter()
+        .filter_map(|c| dies.get(c))
+        .filter(|d| d.tag == gimli::DW_TAG_formal_parameter);
     for (index, param) in params.enumerate() {
-        let (Some(reg), Some(ty)) = (param.entry_register, pieces.intypes.get(index)) else { continue };
+        let (Some(reg), Some(ty)) = (param.entry_register, pieces.intypes.get(index)) else {
+            continue;
+        };
         out.push(crate::pass::RegLocalFact {
             func_addr,
             name: pieces.innames.get(index).cloned().unwrap_or_default(),
@@ -268,17 +308,32 @@ mod tests {
         assert_eq!(single_register(&[0x55]), Some(5));
         assert_eq!(single_register(&[0x90, 0x11]), Some(17));
         assert_eq!(single_register(&[0x55, 0x93, 0x08]), None);
-        assert_eq!(piece_frame_offset(&[0x91, 0x60, 0x93, 0x08, 0x91, 0x68, 0x93, 0x08]), Some(-32));
-        assert_eq!(piece_frame_offset(&[0x91, 0x60, 0x93, 0x08, 0x91, 0x70, 0x93, 0x08]), None);
-        assert_eq!(register_name(object::Architecture::X86_64, 3).as_deref(), Some("RBX"));
-        assert_eq!(register_name(object::Architecture::X86_64, 12).as_deref(), Some("R12"));
+        assert_eq!(
+            piece_frame_offset(&[0x91, 0x60, 0x93, 0x08, 0x91, 0x68, 0x93, 0x08]),
+            Some(-32)
+        );
+        assert_eq!(
+            piece_frame_offset(&[0x91, 0x60, 0x93, 0x08, 0x91, 0x70, 0x93, 0x08]),
+            None
+        );
+        assert_eq!(
+            register_name(object::Architecture::X86_64, 3).as_deref(),
+            Some("RBX")
+        );
+        assert_eq!(
+            register_name(object::Architecture::X86_64, 12).as_deref(),
+            Some("R12")
+        );
     }
 
     #[test]
     fn frame_pointer_bases_sit_below_the_cfa() {
         assert_eq!(frame_base_offset(Some(FrameBase::Register(6)), 8), Some(-8));
         assert_eq!(frame_base_offset(Some(FrameBase::Register(5)), 4), Some(-4));
-        assert_eq!(frame_base_offset(Some(FrameBase::Register(29)), 0), Some(-16));
+        assert_eq!(
+            frame_base_offset(Some(FrameBase::Register(29)), 0),
+            Some(-16)
+        );
         assert_eq!(frame_base_offset(Some(FrameBase::Cfa), 8), Some(8));
         assert_eq!(frame_base_offset(Some(FrameBase::Register(7)), 8), None);
     }

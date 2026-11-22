@@ -5,11 +5,11 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, IopSpace,
-    SpacebaseSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, IopSpace, SpacebaseSpace, UniqueSpace,
+    addrspace_flags, spacetype,
 };
 use unlace_decomp::context::ArchContext;
-use unlace_decomp::dtype::{type_metatype, Datatype};
+use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::merge::Merge;
 use unlace_decomp::varnode::varnode_flags;

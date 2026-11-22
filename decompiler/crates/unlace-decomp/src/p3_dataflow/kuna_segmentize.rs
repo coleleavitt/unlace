@@ -33,7 +33,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use unlace_base::address::{calc_mask, Address};
+use unlace_base::address::{Address, calc_mask};
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::space::{AddrSpace, AddrSpaceManager};
 use unlace_base::types::{int4, uintb};
@@ -143,11 +143,7 @@ impl SegmentDef {
 
     /// Get the number of input Varnodes expected (C++ `getNumVariableTerms`).
     pub fn get_num_variable_terms(&self) -> int4 {
-        if self.baseinsize != 0 {
-            2
-        } else {
-            1
-        }
+        if self.baseinsize != 0 { 2 } else { 1 }
     }
 
     /// Whether a constant near pointer can be resolved, i.e. the spec names its
@@ -163,10 +159,14 @@ impl SegmentDef {
         let script = &mut *script;
         script.emulator.reset_memory();
         if input.len() != script.input_list.len() {
-            return Err(KunaError::lowlevel("Wrong number of input parameters to executable snippet"));
+            return Err(KunaError::lowlevel(
+                "Wrong number of input parameters to executable snippet",
+            ));
         }
         let Some(&out) = script.output_list.first() else {
-            return Err(KunaError::lowlevel("No registered outputs to executable snippet"));
+            return Err(KunaError::lowlevel(
+                "No registered outputs to executable snippet",
+            ));
         };
         for (slot, val) in script.input_list.iter().zip(input) {
             script.emulator.set_varnode_value(*slot, *val);
@@ -196,7 +196,8 @@ impl SegmentDef {
                 return Address::new_invalid();
             }
             let base = tracked(&self.constresolve, point);
-            *full_encoding = (base.wrapping_shl(8 * innersz as u32)).wrapping_add(val & calc_mask(innersz));
+            *full_encoding =
+                (base.wrapping_shl(8 * innersz as u32)).wrapping_add(val & calc_mask(innersz));
             (base, val)
         } else {
             *full_encoding = val;
@@ -229,24 +230,42 @@ pub fn table_leaves_image(
     if arch.num_segment_ops() == 0 || !target_through_segment(fd, indop) {
         return false;
     }
-    let Some(loader) = arch.loader.as_ref() else { return false };
-    let Ok(mut loader) = loader.try_borrow_mut() else { return false };
+    let Some(loader) = arch.loader.as_ref() else {
+        return false;
+    };
+    let Ok(mut loader) = loader.try_borrow_mut() else {
+        return false;
+    };
     let mut probe = [0u8; 1];
-    addresstable.iter().any(|addr| loader.load_fill(&mut probe, addr).is_err())
+    addresstable
+        .iter()
+        .any(|addr| loader.load_fill(&mut probe, addr).is_err())
 }
 
 /// Is the indirect branch `indop`'s target, or the table read that feeds it,
 /// computed by a SEGMENTOP?  A bounded walk up the target's definitions.
 fn target_through_segment(fd: &crate::funcdata::Funcdata, indop: crate::context::OpId) -> bool {
     use unlace_num::opcodes::OpCode;
-    let mut work: Vec<crate::context::VarnodeId> = fd.obank().get(indop).and_then(|o| o.get_in(0)).into_iter().collect();
+    let mut work: Vec<crate::context::VarnodeId> = fd
+        .obank()
+        .get(indop)
+        .and_then(|o| o.get_in(0))
+        .into_iter()
+        .collect();
     let mut budget = 64u32;
     while let Some(vn) = work.pop() {
         if budget == 0 {
             return false;
         }
         budget -= 1;
-        let Some(op) = fd.vbank().get(vn).and_then(|v| v.get_def()).and_then(|d| fd.obank().get(d)) else { continue };
+        let Some(op) = fd
+            .vbank()
+            .get(vn)
+            .and_then(|v| v.get_def())
+            .and_then(|d| fd.obank().get(d))
+        else {
+            continue;
+        };
         if op.code() == OpCode::CPUI_SEGMENTOP {
             return true;
         }

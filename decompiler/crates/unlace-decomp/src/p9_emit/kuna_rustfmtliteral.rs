@@ -30,7 +30,11 @@ pub(crate) fn recover(
     Some(render(text, stderr))
 }
 
-pub(crate) fn literal_bytes(fd: &Funcdata, pointer: VarnodeId, descriptor: VarnodeId) -> Option<Vec<u8>> {
+pub(crate) fn literal_bytes(
+    fd: &Funcdata,
+    pointer: VarnodeId,
+    descriptor: VarnodeId,
+) -> Option<Vec<u8>> {
     let ptr = constant_word(fd, pointer)?;
     let tag = constant_word(fd, descriptor)?;
     let len = tag >> 1;

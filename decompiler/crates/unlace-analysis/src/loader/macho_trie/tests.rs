@@ -10,7 +10,10 @@ struct Node {
 fn node(terminal: Vec<u8>, edges: &[(&str, usize)]) -> Node {
     Node {
         terminal,
-        edges: edges.iter().map(|(label, child)| (label.as_bytes().to_vec(), *child)).collect(),
+        edges: edges
+            .iter()
+            .map(|(label, child)| (label.as_bytes().to_vec(), *child))
+            .collect(),
     }
 }
 
@@ -31,7 +34,11 @@ fn uleb_bytes(mut value: u64) -> Vec<u8> {
 /// so every node's size is known before the layout.
 fn padded(value: usize) -> [u8; 3] {
     assert!(value < 1 << 21);
-    [0x80 | (value & 0x7f) as u8, 0x80 | ((value >> 7) & 0x7f) as u8, (value >> 14) as u8]
+    [
+        0x80 | (value & 0x7f) as u8,
+        0x80 | ((value >> 7) & 0x7f) as u8,
+        (value >> 14) as u8,
+    ]
 }
 
 /// Lay `nodes` out in order, node 0 the root.
@@ -40,7 +47,10 @@ fn lay_out(nodes: &[Node]) -> Vec<u8> {
         uleb_bytes(n.terminal.len() as u64).len()
             + n.terminal.len()
             + 1
-            + n.edges.iter().map(|(label, _)| label.len() + 4).sum::<usize>()
+            + n.edges
+                .iter()
+                .map(|(label, _)| label.len() + 4)
+                .sum::<usize>()
     };
     let mut offsets = Vec::new();
     let mut at = 0;
@@ -100,11 +110,20 @@ fn every_export_kind() {
         ),
         node(export(0, &[0x328]), &[]),
         node(export(0, &[0x4000]), &[]),
-        node(export(object::macho::EXPORT_SYMBOL_FLAGS_WEAK_DEFINITION, &[0x340]), &[]),
-        node(export(EXPORT_SYMBOL_FLAGS_KIND_THREAD_LOCAL, &[0x8000]), &[]),
+        node(
+            export(object::macho::EXPORT_SYMBOL_FLAGS_WEAK_DEFINITION, &[0x340]),
+            &[],
+        ),
+        node(
+            export(EXPORT_SYMBOL_FLAGS_KIND_THREAD_LOCAL, &[0x8000]),
+            &[],
+        ),
         node(export(EXPORT_SYMBOL_FLAGS_KIND_ABSOLUTE, &[0x1234]), &[]),
         node(reexport, &[]),
-        node(export(EXPORT_SYMBOL_FLAGS_STUB_AND_RESOLVER, &[0x350, 0x360]), &[]),
+        node(
+            export(EXPORT_SYMBOL_FLAGS_STUB_AND_RESOLVER, &[0x350, 0x360]),
+            &[],
+        ),
     ]);
     assert_eq!(
         names(&trie),
@@ -146,12 +165,18 @@ fn terminal_prefixes_and_unknown_kinds() {
 fn cycles_and_shared_children_end() {
     let trie = lay_out(&[
         node(Vec::new(), &[("_x", 1)]),
-        node(export(0, &[0x10]), &[("loop", 0), ("self", 1), ("y", 2), ("z", 2)]),
+        node(
+            export(0, &[0x10]),
+            &[("loop", 0), ("self", 1), ("y", 2), ("z", 2)],
+        ),
         node(export(0, &[0x20]), &[("back", 1)]),
     ]);
     assert_eq!(
         names(&trie),
-        vec![("_x".into(), ExportKind::Regular, 0x10), ("_xy".into(), ExportKind::Regular, 0x20)]
+        vec![
+            ("_x".into(), ExportKind::Regular, 0x10),
+            ("_xy".into(), ExportKind::Regular, 0x20)
+        ]
     );
 }
 
@@ -172,10 +197,21 @@ fn uleb_overflow_and_truncation() {
 
     let mut root = vec![0xff; 11];
     root.push(0);
-    assert!(walk(&root).is_empty(), "a root whose terminal size overflows has no names");
+    assert!(
+        walk(&root).is_empty(),
+        "a root whose terminal size overflows has no names"
+    );
 
-    let mut bad_value = lay_out(&[node(Vec::new(), &[("_v", 1)]), node(export(0, &[0x10]), &[("w", 2)]), node(export(0, &[0x20]), &[])]);
-    let at = bad_value.windows(2).position(|w| w == [0x00, 0x10]).unwrap() + 1;
+    let mut bad_value = lay_out(&[
+        node(Vec::new(), &[("_v", 1)]),
+        node(export(0, &[0x10]), &[("w", 2)]),
+        node(export(0, &[0x20]), &[]),
+    ]);
+    let at = bad_value
+        .windows(2)
+        .position(|w| w == [0x00, 0x10])
+        .unwrap()
+        + 1;
     bad_value[at] = 0x90;
     assert_eq!(
         names(&bad_value),
@@ -195,7 +231,10 @@ fn offsets_past_the_end() {
     ]);
     let out = trie.windows(5).position(|w| w == b"_out\0").unwrap() + 5;
     trie[out..out + 3].copy_from_slice(&padded(0x1f_ffff));
-    assert_eq!(names(&trie), vec![("_in".into(), ExportKind::Regular, 0x10)]);
+    assert_eq!(
+        names(&trie),
+        vec![("_in".into(), ExportKind::Regular, 0x10)]
+    );
 
     let past = [0x7f, 0x00];
     assert!(walk(&past).is_empty(), "a terminal size past the end");
@@ -205,7 +244,10 @@ fn offsets_past_the_end() {
     label.extend(padded(9));
     label.extend([0x02, 0x00, 0x10, 0x01]);
     label.extend(b"_unterminated");
-    assert_eq!(names(&label), vec![("_ok".into(), ExportKind::Regular, 0x10)]);
+    assert_eq!(
+        names(&label),
+        vec![("_ok".into(), ExportKind::Regular, 0x10)]
+    );
 }
 
 /// A label longer than [`MAX_NAME`] ends its node's edges; an empty one is
@@ -218,7 +260,10 @@ fn long_and_empty_labels() {
         node(export(0, &[0x10]), &[]),
         node(export(0, &[0x20]), &[]),
     ]);
-    assert_eq!(names(&trie), vec![("_short".into(), ExportKind::Regular, 0x10)]);
+    assert_eq!(
+        names(&trie),
+        vec![("_short".into(), ExportKind::Regular, 0x10)]
+    );
 }
 
 /// A chain of terminals, each one byte longer than the last, would hold names
@@ -237,7 +282,11 @@ fn a_chain_cannot_allocate_quadratically() {
     let out = walk(&trie);
     let kept: usize = out.iter().map(|(name, _, _)| name.len()).sum();
     assert!(!out.is_empty() && out.len() < count);
-    assert!(kept <= trie.len() * NAMES_PER_BYTE, "{kept} name bytes from a {}-byte trie", trie.len());
+    assert!(
+        kept <= trie.len() * NAMES_PER_BYTE,
+        "{kept} name bytes from a {}-byte trie",
+        trie.len()
+    );
 }
 
 /// Nodes whose edges all start in one long run without a NUL would make every
@@ -255,7 +304,10 @@ fn overlapping_nodes_cannot_rescan() {
     }
     trie.extend(std::iter::repeat_n(b'A', 1 << 20));
     let entered = walk(&trie).len();
-    assert!(entered > 0 && entered < 255 / 3, "{entered} of 255 nodes entered");
+    assert!(
+        entered > 0 && entered < 255 / 3,
+        "{entered} of 255 nodes entered"
+    );
 }
 
 /// Random byte flips, truncations and garbage never panic and never keep more
@@ -265,8 +317,14 @@ fn mutated_tries_stay_bounded() {
     let seed = lay_out(&[
         node(Vec::new(), &[("_audit_", 1), ("_b", 2)]),
         node(export(0, &[0x328]), &[("f", 2), ("g", 3)]),
-        node(export(EXPORT_SYMBOL_FLAGS_STUB_AND_RESOLVER, &[0x350, 0x360]), &[("h", 3)]),
-        node(export(EXPORT_SYMBOL_FLAGS_KIND_THREAD_LOCAL, &[0x8000]), &[]),
+        node(
+            export(EXPORT_SYMBOL_FLAGS_STUB_AND_RESOLVER, &[0x350, 0x360]),
+            &[("h", 3)],
+        ),
+        node(
+            export(EXPORT_SYMBOL_FLAGS_KIND_THREAD_LOCAL, &[0x8000]),
+            &[],
+        ),
     ]);
     let mut state = 0x2545_f491_4f6c_dd1du64;
     let mut next = move || {

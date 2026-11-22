@@ -1,6 +1,6 @@
 //! Code targets materialized by an adjacent SPARC HI22/LO10 sethi/jmpl pair.
 
-use object::{elf, Relocation, RelocationFlags, RelocationTarget, SymbolIndex};
+use object::{Relocation, RelocationFlags, RelocationTarget, SymbolIndex, elf};
 use std::collections::{HashMap, HashSet};
 
 pub(super) fn code_targets(

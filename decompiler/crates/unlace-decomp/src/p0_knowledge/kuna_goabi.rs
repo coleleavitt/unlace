@@ -61,7 +61,9 @@ pub fn parse_goabi(value: &str) -> Result<bool, String> {
     match value.trim().to_ascii_lowercase().as_str() {
         "auto" | "on" | "1" | "true" | "" => Ok(true),
         "off" | "0" | "false" => Ok(false),
-        other => Err(format!("unknown goabi value {other:?} (expected auto or off)")),
+        other => Err(format!(
+            "unknown goabi value {other:?} (expected auto or off)"
+        )),
     }
 }
 

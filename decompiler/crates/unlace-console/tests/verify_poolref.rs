@@ -39,7 +39,10 @@ const POOL_PROMPT: u64 = 0x10028;
 const READS_NUMBER: u64 = 0x10040;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Bootstrap the fixture and build the index `unlace xrefs` / `unlace strings` answer out of.
@@ -49,12 +52,16 @@ fn index() -> XrefIndex {
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
     let bytes = std::fs::read(&bin).expect("fixture readable");
     let file = object::File::parse(&*bytes).expect("fixture parses");
-    let seeds: Vec<u64> =
-        prog.function_entries_canonical().iter().map(|e| e.addr.get_offset()).collect();
+    let seeds: Vec<u64> = prog
+        .function_entries_canonical()
+        .iter()
+        .map(|e| e.addr.get_offset())
+        .collect();
     xrefs::build(&file, prog.arch(), prog.arch().translate(), &seeds)
 }
 
@@ -63,8 +70,11 @@ fn index() -> XrefIndex {
 #[test]
 fn a_literal_reached_through_a_pool_word_is_referenced_by_the_load() {
     let idx = index();
-    let refs: Vec<(u64, XrefKind)> =
-        idx.refs_to(PROMPT).iter().map(|r| (r.from, r.kind)).collect();
+    let refs: Vec<(u64, XrefKind)> = idx
+        .refs_to(PROMPT)
+        .iter()
+        .map(|r| (r.from, r.kind))
+        .collect();
     assert_eq!(
         refs,
         vec![(USES_PROMPT, XrefKind::Data)],
@@ -84,8 +94,11 @@ fn a_literal_reached_through_a_pool_word_is_referenced_by_the_load() {
 #[test]
 fn the_pool_word_is_still_read_by_the_same_instruction() {
     let idx = index();
-    let refs: Vec<(u64, XrefKind)> =
-        idx.refs_to(POOL_PROMPT).iter().map(|r| (r.from, r.kind)).collect();
+    let refs: Vec<(u64, XrefKind)> = idx
+        .refs_to(POOL_PROMPT)
+        .iter()
+        .map(|r| (r.from, r.kind))
+        .collect();
     assert_eq!(refs, vec![(USES_PROMPT, XrefKind::Read)]);
 }
 

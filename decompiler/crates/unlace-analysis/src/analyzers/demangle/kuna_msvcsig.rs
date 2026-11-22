@@ -54,7 +54,7 @@ use object::read::{Object, ObjectSymbol};
 use object::{Architecture, BinaryFormat};
 
 use unlace_base::types::{int4, uint4};
-use unlace_decomp::dtype::{type_metatype, Datatype, TypeFactory};
+use unlace_decomp::dtype::{Datatype, TypeFactory, type_metatype};
 use unlace_decomp::fspec::PrototypePieces;
 use unlace_decomp::kuna_msvcbyval::{Builder, ByvalDecl};
 
@@ -104,9 +104,9 @@ const CONVENTIONS: &[(&str, Option<Convention>)] = &[
 
 /// The operator spellings that may follow `operator` directly.
 const OPERATORS: &[&str] = &[
-    "=", "==", "!=", "<", ">", "<=", ">=", "<=>", "+", "-", "*", "/", "%", "^", "&", "|", "~",
-    "!", "+=", "-=", "*=", "/=", "%=", "^=", "&=", "|=", "<<", ">>", "<<=", ">>=", "&&", "||",
-    "++", "--", ",", "->*", "->", "()", "[]",
+    "=", "==", "!=", "<", ">", "<=", ">=", "<=>", "+", "-", "*", "/", "%", "^", "&", "|", "~", "!",
+    "+=", "-=", "*=", "/=", "%=", "^=", "&=", "|=", "<<", ">>", "<<=", ">>=", "&&", "||", "++",
+    "--", ",", "->*", "->", "()", "[]",
 ];
 
 /// What the declaration says about the return value.
@@ -432,7 +432,11 @@ enum Shape<'a> {
     Code,
     /// A primitive, or a pointee named by its bare class name, under
     /// `indirection` pointer levels.
-    Named { base: &'a str, primitive: bool, indirection: usize },
+    Named {
+        base: &'a str,
+        primitive: bool,
+        indirection: usize,
+    },
     /// A class, struct, union or enum by value: a width the name does not give.
     UnknownSize,
     Refused,
@@ -455,7 +459,10 @@ fn shape(text: &str) -> Shape<'_> {
     loop {
         let before = rest.len();
         rest = peel_cv(rest);
-        if let Some(r) = rest.strip_suffix("&&").or_else(|| rest.strip_suffix(['*', '&'])) {
+        if let Some(r) = rest
+            .strip_suffix("&&")
+            .or_else(|| rest.strip_suffix(['*', '&']))
+        {
             indirection += 1;
             rest = r;
         }
@@ -465,7 +472,11 @@ fn shape(text: &str) -> Shape<'_> {
     }
     let base = peel_cv(rest);
     if PRIMITIVES.contains(&base) {
-        return Shape::Named { base, primitive: true, indirection };
+        return Shape::Named {
+            base,
+            primitive: true,
+            indirection,
+        };
     }
     if indirection == 0 {
         return Shape::UnknownSize;
@@ -478,7 +489,11 @@ fn shape(text: &str) -> Shape<'_> {
     if !is_identifier(&bare_class_name(bare)) {
         return Shape::Refused;
     }
-    Shape::Named { base: bare, primitive: false, indirection }
+    Shape::Named {
+        base: bare,
+        primitive: false,
+        indirection,
+    }
 }
 
 /// The innermost component of a qualified class name without its template
@@ -497,12 +512,19 @@ fn build_type(
 ) -> Option<Rc<Datatype>> {
     let (mut ty, indirection) = match shape {
         Shape::Code => (types.get_type_code().ok()?, 1),
-        Shape::Named { base, primitive: true, indirection } => {
-            (msvc_primitive(base, types)?, *indirection)
-        }
-        Shape::Named { base, primitive: false, indirection } => {
-            (types.get_type_struct(&bare_class_name(base)).ok()?, *indirection)
-        }
+        Shape::Named {
+            base,
+            primitive: true,
+            indirection,
+        } => (msvc_primitive(base, types)?, *indirection),
+        Shape::Named {
+            base,
+            primitive: false,
+            indirection,
+        } => (
+            types.get_type_struct(&bare_class_name(base)).ok()?,
+            *indirection,
+        ),
         Shape::UnknownSize | Shape::Refused => return None,
     };
     for _ in 0..indirection {
@@ -516,12 +538,16 @@ fn is_function_pointer(t: &str) -> bool {
     if !t.ends_with(')') {
         return false;
     }
-    let Some(args) = matching_open(t) else { return false };
+    let Some(args) = matching_open(t) else {
+        return false;
+    };
     let decl = t[..args].trim_end();
     if !decl.ends_with(')') {
         return false;
     }
-    let Some(open) = matching_open(decl) else { return false };
+    let Some(open) = matching_open(decl) else {
+        return false;
+    };
     let mut inner = decl[open + 1..decl.len() - 1].trim();
     for (word, _) in CONVENTIONS {
         if let Some(r) = inner.strip_prefix(word) {
@@ -533,11 +559,38 @@ fn is_function_pointer(t: &str) -> bool {
 
 /// The primitive spellings the MSVC demangler prints.
 const PRIMITIVES: &[&str] = &[
-    "void", "bool", "char", "signed char", "unsigned char", "wchar_t", "char8_t", "char16_t",
-    "char32_t", "short", "unsigned short", "int", "unsigned int", "long", "unsigned long",
-    "long long", "unsigned long long", "__int8", "unsigned __int8", "__int16", "unsigned __int16",
-    "__int32", "unsigned __int32", "__int64", "unsigned __int64", "int64_t", "uint64_t",
-    "__int128", "unsigned __int128", "float", "double", "long double",
+    "void",
+    "bool",
+    "char",
+    "signed char",
+    "unsigned char",
+    "wchar_t",
+    "char8_t",
+    "char16_t",
+    "char32_t",
+    "short",
+    "unsigned short",
+    "int",
+    "unsigned int",
+    "long",
+    "unsigned long",
+    "long long",
+    "unsigned long long",
+    "__int8",
+    "unsigned __int8",
+    "__int16",
+    "unsigned __int16",
+    "__int32",
+    "unsigned __int32",
+    "__int64",
+    "unsigned __int64",
+    "int64_t",
+    "uint64_t",
+    "__int128",
+    "unsigned __int128",
+    "float",
+    "double",
+    "long double",
 ];
 
 /// A [`PRIMITIVES`] spelling at the width MSVC gives it: `long` is 4 bytes and
@@ -572,10 +625,17 @@ pub(super) fn nontrivial_classes<'a>(names: impl Iterator<Item = &'a str>) -> Ha
         if !special.iter().any(|p| raw.starts_with(p)) {
             continue;
         }
-        let Some(dem) = demangle_raw(raw) else { continue };
+        let Some(dem) = demangle_raw(raw) else {
+            continue;
+        };
         let class = if raw.starts_with("??_7") {
-            dem.find("::`vftable'")
-                .map(|i| dem[..i].trim().trim_start_matches("const ").trim().to_string())
+            dem.find("::`vftable'").map(|i| {
+                dem[..i]
+                    .trim()
+                    .trim_start_matches("const ")
+                    .trim()
+                    .to_string()
+            })
         } else if raw.starts_with("??_") {
             dem.find("::`").map(|i| last_token(dem[..i].trim()))
         } else {
@@ -615,7 +675,11 @@ pub(super) fn build(
     let ret = match &decl.ret {
         Ret::Unstated | Ret::Enum => None,
         Ret::ByValue(cls) => {
-            let hidden = Shape::Named { base: cls, primitive: false, indirection: 1 };
+            let hidden = Shape::Named {
+                base: cls,
+                primitive: false,
+                indirection: 1,
+            };
             if !(decl.this || nontrivial.contains(cls)) || !is_identifier(&bare_class_name(cls)) {
                 return None;
             }
@@ -673,7 +737,11 @@ pub(super) fn build(
         intypes.push(build_type(s, types, ptr, word_size)?);
         innames.push(String::new());
     }
-    let first_var_arg_slot = if open || decl.varargs { intypes.len() as int4 } else { -1 };
+    let first_var_arg_slot = if open || decl.varargs {
+        intypes.len() as int4
+    } else {
+        -1
+    };
     let pieces = PrototypePieces {
         name: decl.qualified.clone(),
         outtype,
@@ -685,7 +753,11 @@ pub(super) fn build(
         kuna_library_names: None,
     };
     let byval = tail.and_then(|tail| byval_decl(&pieces, &tail, types, ptr, word_size));
-    Some(MsvcSig { pieces, model: x86_32.then(|| decl.convention.model()), byval })
+    Some(MsvcSig {
+        pieces,
+        model: x86_32.then(|| decl.convention.model()),
+        byval,
+    })
 }
 
 /// The whole declaration of an open `__cdecl` import: `open`'s parameters, a
@@ -699,7 +771,9 @@ fn byval_decl(
 ) -> Option<ByvalDecl> {
     let mut pieces = open.clone();
     let at = pieces.intypes.len();
-    pieces.intypes.push(types.get_base(4, type_metatype::TYPE_UNKNOWN).ok()?);
+    pieces
+        .intypes
+        .push(types.get_base(4, type_metatype::TYPE_UNKNOWN).ok()?);
     pieces.innames.push(String::new());
     for s in tail {
         pieces.intypes.push(build_type(s, types, ptr, word_size)?);
@@ -788,7 +862,9 @@ pub(super) fn collect(
         .map(|(a, raw)| (*a, raw, false))
         .chain(imports.iter().map(|(a, raw)| (*a, raw, true)));
     for (addr, raw, import) in sources {
-        let Some(decl) = demangle_raw(raw).and_then(|dem| parse(&dem)) else { continue };
+        let Some(decl) = demangle_raw(raw).and_then(|dem| parse(&dem)) else {
+            continue;
+        };
         if x86_32 && decl.ctor && decl.convention == Convention::Thiscall {
             out.msvc_builders.push((addr, Builder::This));
         }
@@ -797,7 +873,10 @@ pub(super) fn collect(
                 out.msvc_byval.push((addr, byval));
             }
             let indirect = matches!(decl.ret, Ret::ByValue(_))
-                && matches!(decl.convention, Convention::Cdecl | Convention::Stdcall | Convention::Thiscall);
+                && matches!(
+                    decl.convention,
+                    Convention::Cdecl | Convention::Stdcall | Convention::Thiscall
+                );
             if x86_32 && indirect {
                 out.msvc_builders.push((addr, Builder::ReturnSlot));
             }

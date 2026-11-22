@@ -21,7 +21,10 @@ pub const STEMS: [(&str, &str); 19] = [
     (UNIMPLEMENTED_WARNING, "unimplemented-instruction"),
     (UNIMPLEMENTED_HEADER, "unimplemented-instruction"),
     (UNIMPLEMENTED_IGNORED_HEADER, "unimplemented-instruction"),
-    ("Too many instructions -- truncating flow here", "instruction-limit"),
+    (
+        "Too many instructions -- truncating flow here",
+        "instruction-limit",
+    ),
     ("Exceeded the ", "instruction-limit"),
     ("Function flow out of bounds", "out-of-bounds"),
     ("Function flows out of bounds", "out-of-bounds"),
@@ -49,7 +52,11 @@ pub struct Warning {
 
 impl Warning {
     pub(crate) fn new(address: Option<u64>, text: &str) -> Self {
-        Self { address, text: text.to_string(), line: 0 }
+        Self {
+            address,
+            text: text.to_string(),
+            line: 0,
+        }
     }
 
     /// The text less its `WARNING: ` marker; a jump-table recovery warning keeps
@@ -57,7 +64,11 @@ impl Warning {
     pub fn message(&self) -> String {
         match self.text.strip_prefix("WARNING (jumptable): ") {
             Some(body) => format!("(jumptable): {body}"),
-            None => self.text.strip_prefix("WARNING: ").unwrap_or(&self.text).to_string(),
+            None => self
+                .text
+                .strip_prefix("WARNING: ")
+                .unwrap_or(&self.text)
+                .to_string(),
         }
     }
 
@@ -66,7 +77,9 @@ impl Warning {
     /// of a kuna warning, else `other`.
     pub fn kind(&self) -> String {
         let body = self.text.strip_prefix("WARNING (jumptable): ");
-        let body = body.or_else(|| self.text.strip_prefix("WARNING: ")).unwrap_or(&self.text);
+        let body = body
+            .or_else(|| self.text.strip_prefix("WARNING: "))
+            .unwrap_or(&self.text);
         if let Some((_, kind)) = STEMS.iter().find(|(stem, _)| body.starts_with(stem)) {
             return kind.to_string();
         }
@@ -85,7 +98,9 @@ impl Warning {
         match body.split_once(": ") {
             Some((tag, _))
                 if tag.starts_with(|c: char| c.is_ascii_lowercase())
-                    && tag.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()) =>
+                    && tag
+                        .bytes()
+                        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()) =>
             {
                 tag.to_string()
             }

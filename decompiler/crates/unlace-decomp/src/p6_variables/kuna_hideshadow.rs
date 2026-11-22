@@ -87,4 +87,3 @@ pub fn hide_shadow_copies(data: &mut Funcdata) -> ApplyResult {
         count
     })
 }
-

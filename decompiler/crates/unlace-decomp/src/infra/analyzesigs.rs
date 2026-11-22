@@ -25,9 +25,7 @@ use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::marshal::Encoder;
 
 use crate::funcdata::Funcdata;
-use crate::signature::{
-    debug_signature, set_settings, GraphSigManager, Hashword,
-};
+use crate::signature::{GraphSigManager, Hashword, debug_signature, set_settings};
 
 /// The capability name registered by `IfaceAnalyzeSigsCapability`
 /// (analyzesigs.cc:27).
@@ -40,11 +38,23 @@ pub const CAPABILITY_NAME: &str = "analyzesigs";
 /// Exposed as data (rather than a `register` call) because the `IfaceStatus`
 /// registry is the W9 surface; a future W9 `registerCommands` walks this list.
 pub const COMMANDS: &[(&str, &str, AnalyzeSigsCommand)] = &[
-    ("signature", "settings", AnalyzeSigsCommand::SignatureSettings),
+    (
+        "signature",
+        "settings",
+        AnalyzeSigsCommand::SignatureSettings,
+    ),
     ("print", "signatures", AnalyzeSigsCommand::PrintSignatures),
     ("save", "signatures", AnalyzeSigsCommand::SaveSignatures),
-    ("saveall", "signatures", AnalyzeSigsCommand::SaveAllSignatures),
-    ("produce", "signatures", AnalyzeSigsCommand::ProduceSignatures),
+    (
+        "saveall",
+        "signatures",
+        AnalyzeSigsCommand::SaveAllSignatures,
+    ),
+    (
+        "produce",
+        "signatures",
+        AnalyzeSigsCommand::ProduceSignatures,
+    ),
 ];
 
 /// Identity of an analyze-signatures console command (the C++
@@ -102,10 +112,7 @@ pub fn signature_settings(mysetting: u32) -> KunaResult<String> {
 /// generic feature prints its bare hash, so the printed text is built from
 /// [`GraphSigManager::get_signature_vector`] (the sorted hash list) — the same
 /// hashes, without the per-feature origin string (STUB(W8)).
-pub fn print_signatures(
-    fd: &Funcdata,
-    maxiter_override: Option<i32>,
-) -> KunaResult<String> {
+pub fn print_signatures(fd: &Funcdata, maxiter_override: Option<i32>) -> KunaResult<String> {
     if !fd.is_proc_complete() {
         return Err(KunaError::lowlevel("Function has not been fully analyzed"));
     }
@@ -164,10 +171,7 @@ pub fn save_signatures(
 /// already-decompiled `&Funcdata` and the parsed `maxiter_override`, generates,
 /// and returns the formatted line (the re-decompilation + file write are the W9
 /// surface).
-pub fn produce_signature_line(
-    fd: &Funcdata,
-    maxiter_override: Option<i32>,
-) -> KunaResult<String> {
+pub fn produce_signature_line(fd: &Funcdata, maxiter_override: Option<i32>) -> KunaResult<String> {
     let mut smanage = GraphSigManager::new()?;
     smanage.initialize_from_stream(maxiter_override);
     smanage.set_current_function(fd)?;
@@ -222,17 +226,18 @@ mod tests {
 
     use unlace_base::address::Address;
     use unlace_base::space::{
-        addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+        AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
     };
 
     use crate::context::{ArchContext, BlockId, TypeOp};
-    use crate::signature::{set_settings, sig_mods, SETTINGS_TEST_LOCK};
+    use crate::signature::{SETTINGS_TEST_LOCK, set_settings, sig_mods};
     use unlace_num::opcodes::OpCode;
 
     fn build_manager() -> AddrSpaceManager {
         let mut m = AddrSpaceManager::new();
         m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+            .unwrap();
         m.insert_space(Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
             "ram",
@@ -281,11 +286,25 @@ mod tests {
         let p = fd.new_varnode(4, &Address::new(Rc::clone(&rs), 0x100), None);
         let p = fd.set_input_varnode(p).unwrap();
         let c = fd.new_constant(4, 5);
-        let add = add_op(&mut fd, bl, OpCode::CPUI_INT_ADD, 2, Address::new(Rc::clone(&rs), 0x1000));
-        let out = fd.new_varnode_out(4, &Address::new(Rc::clone(&rs), 0x200), add).unwrap();
+        let add = add_op(
+            &mut fd,
+            bl,
+            OpCode::CPUI_INT_ADD,
+            2,
+            Address::new(Rc::clone(&rs), 0x1000),
+        );
+        let out = fd
+            .new_varnode_out(4, &Address::new(Rc::clone(&rs), 0x200), add)
+            .unwrap();
         fd.op_set_input(add, p, 0).unwrap();
         fd.op_set_input(add, c, 1).unwrap();
-        let ret = add_op(&mut fd, bl, OpCode::CPUI_RETURN, 2, Address::new(Rc::clone(&rs), 0x1004));
+        let ret = add_op(
+            &mut fd,
+            bl,
+            OpCode::CPUI_RETURN,
+            2,
+            Address::new(Rc::clone(&rs), 0x1004),
+        );
         let iop = fd.new_constant(8, 0);
         fd.op_set_input(ret, iop, 0).unwrap();
         fd.op_set_input(ret, out, 1).unwrap();
@@ -303,7 +322,10 @@ mod tests {
         let msg = signature_settings((sig_mods::SIG_DONOTUSE_CONST << 2) | 1).unwrap();
         assert!(msg.starts_with("Signature settings set to"), "got: {msg}");
         // The setting is now live.
-        assert_eq!(get_settings_for_test(), (sig_mods::SIG_DONOTUSE_CONST << 2) | 1);
+        assert_eq!(
+            get_settings_for_test(),
+            (sig_mods::SIG_DONOTUSE_CONST << 2) | 1
+        );
     }
 
     fn get_settings_for_test() -> u32 {
@@ -346,7 +368,15 @@ mod tests {
     fn commands_table_lists_all_five() {
         assert_eq!(COMMANDS.len(), 5);
         assert_eq!(CAPABILITY_NAME, "analyzesigs");
-        assert!(COMMANDS.iter().any(|(_, _, k)| *k == AnalyzeSigsCommand::SignatureSettings));
-        assert!(COMMANDS.iter().any(|(_, _, k)| *k == AnalyzeSigsCommand::ProduceSignatures));
+        assert!(
+            COMMANDS
+                .iter()
+                .any(|(_, _, k)| *k == AnalyzeSigsCommand::SignatureSettings)
+        );
+        assert!(
+            COMMANDS
+                .iter()
+                .any(|(_, _, k)| *k == AnalyzeSigsCommand::ProduceSignatures)
+        );
     }
 }

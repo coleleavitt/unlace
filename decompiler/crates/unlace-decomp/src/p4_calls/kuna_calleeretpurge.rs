@@ -48,15 +48,27 @@ struct PurgeEmit {
 impl PurgeEmit {
     fn is_sp(&self, v: &VarnodeData) -> bool {
         self.sp.is_some_and(|(idx, off, size)| {
-            v.offset == off && v.size == size && v.space.as_ref().is_some_and(|s| s.get_index() == idx)
+            v.offset == off
+                && v.size == size
+                && v.space.as_ref().is_some_and(|s| s.get_index() == idx)
         })
     }
 }
 
 impl unlace_sleigh::translate::PcodeEmit for PurgeEmit {
-    fn dump(&mut self, _addr: &Address, opc: OpCode, outvar: Option<&VarnodeData>, vars: &[VarnodeData]) {
+    fn dump(
+        &mut self,
+        _addr: &Address,
+        opc: OpCode,
+        outvar: Option<&VarnodeData>,
+        vars: &[VarnodeData],
+    ) {
         if let Some(o) = outvar.filter(|o| self.is_sp(o)) {
-            let constant = vars.get(1).filter(|c| c.space.as_ref().is_some_and(|s| s.get_type() == spacetype::IPTR_CONSTANT));
+            let constant = vars.get(1).filter(|c| {
+                c.space
+                    .as_ref()
+                    .is_some_and(|s| s.get_type() == spacetype::IPTR_CONSTANT)
+            });
             match (opc, vars.first().is_some_and(|v| self.is_sp(v)), constant) {
                 (OpCode::CPUI_INT_ADD, true, Some(c)) => {
                     self.sp_delta += sign_extend(c.offset, o.size);
@@ -73,16 +85,19 @@ impl unlace_sleigh::translate::PcodeEmit for PurgeEmit {
                 self.ends_flow = true;
             }
             OpCode::CPUI_BRANCHIND => self.unresolved = true,
-            OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH => match vars.first().and_then(|v| v.space.as_ref()) {
-                Some(sp) if sp.get_type() == spacetype::IPTR_CONSTANT => {}
-                Some(sp) => {
-                    self.targets.push(Address::new(std::rc::Rc::clone(sp), vars[0].offset));
-                    if opc == OpCode::CPUI_BRANCH {
-                        self.ends_flow = true;
+            OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH => {
+                match vars.first().and_then(|v| v.space.as_ref()) {
+                    Some(sp) if sp.get_type() == spacetype::IPTR_CONSTANT => {}
+                    Some(sp) => {
+                        self.targets
+                            .push(Address::new(std::rc::Rc::clone(sp), vars[0].offset));
+                        if opc == OpCode::CPUI_BRANCH {
+                            self.ends_flow = true;
+                        }
                     }
+                    None => self.unresolved = true,
                 }
-                None => self.unresolved = true,
-            },
+            }
             _ => {}
         }
     }
@@ -98,7 +113,10 @@ fn sign_extend(v: u64, size: u32) -> i64 {
 
 /// The net stack-pointer change of every `RETURN` reachable from `entry`, when
 /// they all agree; `None` when none is reached or two disagree.
-pub fn probe_return_purge<T: unlace_sleigh::translate::Translate + ?Sized>(tr: &T, entry: &Address) -> Option<int4> {
+pub fn probe_return_purge<T: unlace_sleigh::translate::Translate + ?Sized>(
+    tr: &T,
+    entry: &Address,
+) -> Option<int4> {
     if tr.probe_register("RSP").is_some() {
         return None;
     }
@@ -120,7 +138,10 @@ pub fn probe_return_purge<T: unlace_sleigh::translate::Translate + ?Sized>(tr: &
             break;
         }
         budget -= 1;
-        let mut emit = PurgeEmit { sp: Some(sp), ..PurgeEmit::default() };
+        let mut emit = PurgeEmit {
+            sp: Some(sp),
+            ..PurgeEmit::default()
+        };
         let len = match tr.one_instruction(&mut emit, &at) {
             Ok(n) if n > 0 => n,
             _ => continue,
@@ -143,7 +164,9 @@ pub fn probe_return_purge<T: unlace_sleigh::translate::Translate + ?Sized>(tr: &
             todo.push(&at + len as i64);
         }
     }
-    purge.and_then(|p| int4::try_from(p).ok()).filter(|&p| p > 0)
+    purge
+        .and_then(|p| int4::try_from(p).ok())
+        .filter(|&p| p > 0)
 }
 
 /// Record the return purge of every direct callee of `data`, decoding each
@@ -177,11 +200,18 @@ pub fn seed(arch: &mut crate::architecture::Architecture, data: &mut Funcdata) {
 /// pointer on i386, as IDA special-cases them (`pc.so` 0x37670): they are
 /// imports, so there is no body to read the `ret $4` from.
 fn stret_purge(arch: &crate::architecture::Architecture, name: &str) -> Option<int4> {
-    const SENDERS: [&str; 3] = ["objc_msgSend_stret", "objc_msgSendSuper_stret", "objc_msgSendSuper2_stret"];
+    const SENDERS: [&str; 3] = [
+        "objc_msgSend_stret",
+        "objc_msgSendSuper_stret",
+        "objc_msgSendSuper2_stret",
+    ];
     if !arch.get_description().starts_with("x86:LE:32") {
         return None;
     }
-    let bare = name.strip_prefix("__imp_").unwrap_or(name).trim_start_matches('_');
+    let bare = name
+        .strip_prefix("__imp_")
+        .unwrap_or(name)
+        .trim_start_matches('_');
     SENDERS.contains(&bare).then_some(8)
 }
 
@@ -189,5 +219,6 @@ fn stret_purge(arch: &crate::architecture::Architecture, name: &str) -> Option<i
 /// one was recorded, else the prototype's.
 pub fn effective_extra_pop(data: &Funcdata, i: int4) -> int4 {
     let fc = data.get_call_specs(i);
-    data.kuna_callee_purge(fc.get_entry_address()).unwrap_or_else(|| fc.get_extra_pop())
+    data.kuna_callee_purge(fc.get_entry_address())
+        .unwrap_or_else(|| fc.get_extra_pop())
 }

@@ -149,7 +149,9 @@ pub struct PendingReadArg {
 
 /// Is `addr` in the `register` space the callee-body summary answers for?
 fn is_register(addr: &Address) -> bool {
-    addr.get_space().map(|s| s.get_name() == "register").unwrap_or(false)
+    addr.get_space()
+        .map(|s| s.get_name() == "register")
+        .unwrap_or(false)
 }
 
 /// Does the callee summary `live` show `[addr, addr+size)` consumed as an
@@ -163,7 +165,9 @@ pub(crate) fn reads_as_argument(
     last: Option<&(Address, int4)>,
     stores: bool,
 ) -> bool {
-    let Some((last_addr, last_size)) = last else { return false };
+    let Some((last_addr, last_size)) = last else {
+        return false;
+    };
     live.reads_low_byte(addr, size, stores, true) && !live.proves_read(last_addr, *last_size)
 }
 
@@ -202,19 +206,30 @@ pub fn capture(fc: &FuncCallSpecs, data: &Funcdata) -> Option<PendingReadArg> {
     }
     let op = fc.get_op();
     let o = data.obank().get(op)?;
-    if o.is_dead() || o.code() != OpCode::CPUI_CALL || data.kuna_readarg_vararg_calls().contains(&op) {
+    if o.is_dead()
+        || o.code() != OpCode::CPUI_CALL
+        || data.kuna_readarg_vararg_calls().contains(&op)
+    {
         return None;
     }
     let entry = fc.get_entry_address();
     if entry.is_invalid() {
         return None;
     }
-    let live = data.kuna_callee_entry_dead(entry).filter(|f| f.is_complete());
-    let seen = if live.is_none() { crate::kuna_entryreads::callee_reads(data, entry) } else { None };
+    let live = data
+        .kuna_callee_entry_dead(entry)
+        .filter(|f| f.is_complete());
+    let seen = if live.is_none() {
+        crate::kuna_entryreads::callee_reads(data, entry)
+    } else {
+        None
+    };
     let passes = crate::kuna_entryreads::callee_passes(data, entry);
     let stated = |a: &Address| {
         *entry == *data.get_address()
-            || data.kuna_protoorder_types(entry).is_some_and(|s| s.inputs.iter().any(|(x, _, _)| x == a))
+            || data
+                .kuna_protoorder_types(entry)
+                .is_some_and(|s| s.inputs.iter().any(|(x, _, _)| x == a))
     };
     if live.is_none() && seen.is_none() {
         return None;
@@ -225,11 +240,16 @@ pub fn capture(fc: &FuncCallSpecs, data: &Funcdata) -> Option<PendingReadArg> {
         .input()
         .get_entry()
         .iter()
-        .filter(|e| e.get_type() == type_class::TYPECLASS_GENERAL && e.get_space().get_name() == "register")
+        .filter(|e| {
+            e.get_type() == type_class::TYPECLASS_GENERAL && e.get_space().get_name() == "register"
+        })
         .collect();
-    let last = regs
-        .last()
-        .map(|e| (Address::new(std::rc::Rc::clone(e.get_space()), e.get_base()), e.get_size()));
+    let last = regs.last().map(|e| {
+        (
+            Address::new(std::rc::Rc::clone(e.get_space()), e.get_base()),
+            e.get_size(),
+        )
+    });
     let own = data.kuna_callee_entry_dead(data.get_address());
     if let (Some(own), Some((a, s))) = (own, last.as_ref()) {
         if own.proves_read(a, *s) {
@@ -283,11 +303,15 @@ pub fn capture(fc: &FuncCallSpecs, data: &Funcdata) -> Option<PendingReadArg> {
         };
         let width = match (callee_reads, live, &seen) {
             (true, Some(f), _) => f.live_input_width(&addr, size).unwrap_or(size),
-            (true, None, Some(r)) => r.iter().find(|(a, _)| *a == addr).map_or(size, |(_, w)| (*w).min(size)),
+            (true, None, Some(r)) => r
+                .iter()
+                .find(|(a, _)| *a == addr)
+                .map_or(size, |(_, w)| (*w).min(size)),
             _ => size,
         };
-        let refused =
-            !t.is_used() && !t.is_active() && (t.has_ancestor_realistic() || t.has_ancestor_solid());
+        let refused = !t.is_used()
+            && !t.is_active()
+            && (t.has_ancestor_realistic() || t.has_ancestor_solid());
         let as_argument = match (live, &seen) {
             (Some(f), _) => {
                 reads_as_argument(f, &addr, size, last.as_ref(), stores)
@@ -296,18 +320,31 @@ pub fn capture(fc: &FuncCallSpecs, data: &Funcdata) -> Option<PendingReadArg> {
                         && last.as_ref().is_some_and(|(a, s)| !f.proves_read(a, *s)))
             }
             (None, Some(r)) => {
-                callee_reads && last.as_ref().is_some_and(|(a, s)| !crate::kuna_entryreads::overlaps(r, a, *s))
+                callee_reads
+                    && last
+                        .as_ref()
+                        .is_some_and(|(a, s)| !crate::kuna_entryreads::overlaps(r, a, *s))
             }
             _ => false,
         };
         let reads = refused && vn.is_some() && as_argument;
         any |= reads;
-        fresh |= reads && !live.is_some_and(|f| reads_as_argument(f, &addr, size, last.as_ref(), stores));
-        row.push(Some(Slot { index: i, addr, size, width, vn, reads }));
+        fresh |= reads
+            && !live.is_some_and(|f| reads_as_argument(f, &addr, size, last.as_ref(), stores));
+        row.push(Some(Slot {
+            index: i,
+            addr,
+            size,
+            width,
+            vn,
+            reads,
+        }));
     }
     if fresh {
         for s in row.iter_mut().flatten() {
-            if s.vn.is_some_and(|v| crate::p4_calls::kuna_calleedeadarg::is_leftover_call_result(data, v, 0)) {
+            if s.vn.is_some_and(|v| {
+                crate::p4_calls::kuna_calleedeadarg::is_leftover_call_result(data, v, 0)
+            }) {
                 s.vn = None;
                 s.reads = false;
             }
@@ -363,7 +400,9 @@ pub fn extend_pending(data: &mut Funcdata, pending: &[PendingReadArg]) -> int4 {
 
 /// [`extend_pending`] for one call.
 fn extend_one(data: &mut Funcdata, p: &PendingReadArg) -> bool {
-    let Some(idx) = data.get_call_specs_index(p.op) else { return false };
+    let Some(idx) = data.get_call_specs_index(p.op) else {
+        return false;
+    };
     let current = data.get_call_specs(idx).final_input_storage().to_vec();
     let inputs: Vec<VarnodeId> = match data.obank().get(p.op) {
         Some(o) if !o.is_dead() && o.code() == OpCode::CPUI_CALL => {
@@ -376,7 +415,9 @@ fn extend_one(data: &mut Funcdata, p: &PendingReadArg) -> bool {
     }
     let mut have: Vec<(int4, VarnodeId, (Address, int4))> = Vec::new();
     for (k, (a, s)) in current.iter().enumerate() {
-        let Some(&(_, index)) = p.order.iter().find(|(x, _)| x == a) else { return false };
+        let Some(&(_, index)) = p.order.iter().find(|(x, _)| x == a) else {
+            return false;
+        };
         have.push((index, inputs[k + 1], (a.clone(), *s)));
     }
     if have.windows(2).any(|w| w[0].0 >= w[1].0) {
@@ -389,7 +430,9 @@ fn extend_one(data: &mut Funcdata, p: &PendingReadArg) -> bool {
     }
     for s in &added {
         let Some(vn) = s.vn else { return false };
-        let Some(vsize) = data.vbank().get(vn).map(|v| v.get_size()) else { return false };
+        let Some(vsize) = data.vbank().get(vn).map(|v| v.get_size()) else {
+            return false;
+        };
         let arg = if vsize > s.width {
             match crate::p4_calls::kuna_passthrough::truncate_before(data, vn, s.width, p.op) {
                 Some(v) => v,
@@ -398,7 +441,11 @@ fn extend_one(data: &mut Funcdata, p: &PendingReadArg) -> bool {
         } else {
             vn
         };
-        let addr = if s.addr.is_big_endian() { &s.addr + (s.size - s.width) as i64 } else { s.addr.clone() };
+        let addr = if s.addr.is_big_endian() {
+            &s.addr + (s.size - s.width) as i64
+        } else {
+            s.addr.clone()
+        };
         have.push((s.index, arg, (addr, s.width)));
     }
     have.sort_by_key(|h| h.0);
@@ -407,7 +454,8 @@ fn extend_one(data: &mut Funcdata, p: &PendingReadArg) -> bool {
     if data.op_set_all_input(p.op, &newparam).is_err() {
         return false;
     }
-    data.get_call_specs_mut(idx).set_final_input_storage(have.into_iter().map(|h| h.2).collect());
+    data.get_call_specs_mut(idx)
+        .set_final_input_storage(have.into_iter().map(|h| h.2).collect());
     true
 }
 

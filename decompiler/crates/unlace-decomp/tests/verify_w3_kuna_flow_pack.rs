@@ -16,15 +16,15 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
-use unlace_decomp::dtype::{type_metatype, Datatype};
+use unlace_decomp::context::{ArchContext, OpId, TypeOp};
+use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::op::pcodeop_flags;
-use unlace_decomp::context::{ArchContext, OpId, TypeOp};
 
 use unlace_decomp::kuna_inferfuncentry::kuna_is_function_entry;
 use unlace_decomp::kuna_sparcstructret::kuna_sparc_struct_ret_trap_producer;
@@ -33,7 +33,8 @@ use unlace_decomp::kuna_v850indbranch::kuna_is_v850_indirect_jmp;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -242,7 +243,8 @@ fn flowpack_inferfuncentry_cross_space_same_offset_not_equal() {
     // Build two spaces with the same offset value but different identity.
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     let ram = Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -272,7 +274,10 @@ fn flowpack_inferfuncentry_cross_space_same_offset_not_equal() {
     let rampoint = Address::new(Rc::clone(&ram), 0x10_0000);
     let entry_other_space = Address::new(Rc::clone(&rom), 0x10_0000); // same offset, other space
     // Different space -> Address::eq false -> no inference.
-    assert!(!kuna_is_function_entry(Some(&rampoint), Some(&entry_other_space)));
+    assert!(!kuna_is_function_entry(
+        Some(&rampoint),
+        Some(&entry_other_space)
+    ));
     // Same space, same offset -> inference fires.
     let entry_same = Address::new(Rc::clone(&ram), 0x10_0000);
     assert!(kuna_is_function_entry(Some(&rampoint), Some(&entry_same)));

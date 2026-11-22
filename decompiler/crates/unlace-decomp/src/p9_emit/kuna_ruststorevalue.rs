@@ -15,7 +15,10 @@ impl PrintC {
         op: OpId,
         mods: u32,
     ) -> bool {
-        let Some(target) = self.rust_integer_value_type(fd, arch, pointer, op).get_ptr_to() else {
+        let Some(target) = self
+            .rust_integer_value_type(fd, arch, pointer, op)
+            .get_ptr_to()
+        else {
             return false;
         };
         let saved = self.context.mods();

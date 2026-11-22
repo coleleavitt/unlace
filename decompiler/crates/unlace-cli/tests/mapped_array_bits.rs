@@ -27,17 +27,17 @@ __declspec(dllexport) float wrap_float(float value) {
 "#;
 
 fn check_target(target: &str) {
+    use std::collections::HashMap;
     use unlace_base::address::Address;
     use unlace_console::ifacedecomp::{
-        execute, register_console_commands, register_decomp_commands, IfaceDecompData,
-        DECOMPILE_MODULE,
+        DECOMPILE_MODULE, IfaceDecompData, execute, register_console_commands,
+        register_decomp_commands,
     };
     use unlace_console::ifaceterm::IfaceTerm;
     use unlace_console::kuna_console::register_kuna_commands;
     use unlace_decomp::context::VarnodeId;
     use unlace_decomp::cover::Cover;
     use unlace_decomp::variable::{CompareNameView, HighContext, VarnodeView, VarnodeViewLoc};
-    use std::collections::HashMap;
 
     // Inserting a high member only needs the location ordering. Other reads
     // would indicate that this adapter needs a richer snapshot.
@@ -89,7 +89,10 @@ fn check_target(target: &str) {
     };
     let read = address(b"read_packet");
     let wrap = address(b"wrap_float");
-    let script=format!("load file {}\noption stackviews on\noption realtypes on\nparse line typedef struct Packet {{unsigned int tag;unsigned char payload[4];}} Packet;\nmap function 0x{read:x} read_packet\nmap function 0x{wrap:x} wrap_float\nmap prototype 0x{read:x} float __cdecl read_packet(Packet *packet)\nmap prototype 0x{wrap:x} float __cdecl wrap_float(float value)\nload function 0x{wrap:x}\ndecompile\nretype v1 Packet\ndecompile\n",binary.display());
+    let script = format!(
+        "load file {}\noption stackviews on\noption realtypes on\nparse line typedef struct Packet {{unsigned int tag;unsigned char payload[4];}} Packet;\nmap function 0x{read:x} read_packet\nmap function 0x{wrap:x} wrap_float\nmap prototype 0x{read:x} float __cdecl read_packet(Packet *packet)\nmap prototype 0x{wrap:x} float __cdecl wrap_float(float value)\nload function 0x{wrap:x}\ndecompile\nretype v1 Packet\ndecompile\n",
+        binary.display()
+    );
     let mut status = IfaceTerm::into_status("", script.as_bytes());
     register_decomp_commands(&mut status);
     register_kuna_commands(&mut status);
@@ -100,10 +103,12 @@ fn check_target(target: &str) {
         .as_any_mut()
         .downcast_mut::<IfaceDecompData>()
         .unwrap();
-    data.spec_roots = vec![common::repo_root()
-        .join("specs")
-        .to_string_lossy()
-        .into_owned()];
+    data.spec_roots = vec![
+        common::repo_root()
+            .join("specs")
+            .to_string_lossy()
+            .into_owned(),
+    ];
     while !status.is_stream_finished() && !status.done {
         execute(&mut status);
         assert!(!status.is_in_error(), "{}", status.optr);

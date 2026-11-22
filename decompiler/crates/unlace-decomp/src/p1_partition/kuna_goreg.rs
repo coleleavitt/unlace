@@ -41,7 +41,7 @@
 use unlace_base::error::KunaResult;
 use unlace_base::types::{int4, uint4};
 
-use crate::dtype::{type_metatype, TypeFactory, TypeField};
+use crate::dtype::{TypeFactory, TypeField, type_metatype};
 
 /// Environment variable carrying the image's Go toolchain version
 /// (`"<maj>.<min>"`) into the architecture build — set by the console
@@ -66,7 +66,10 @@ pub struct GoLayout {
 impl GoLayout {
     /// The go1.22 register-ABI baseline (also the unknown-version fallback).
     pub fn baseline() -> GoLayout {
-        GoLayout { gobuf_words: 7, syscallbp: false }
+        GoLayout {
+            gobuf_words: 7,
+            syscallbp: false,
+        }
     }
 
     /// The layout a toolchain version implies.
@@ -87,7 +90,11 @@ impl GoLayout {
 /// the golang-cspec architecture `archid`: from go1.17 on amd64 and go1.18 on
 /// arm64. An unknown version counts as a register-ABI release.
 pub fn register_abi(archid: &str, version: Option<(u16, u16)>) -> bool {
-    let first = if archid.starts_with("AARCH64:") { (1, 18) } else { (1, 17) };
+    let first = if archid.starts_with("AARCH64:") {
+        (1, 18)
+    } else {
+        (1, 17)
+    };
     version.is_none_or(|v| v >= first)
 }
 
@@ -107,7 +114,10 @@ pub fn goroutine_register(archid: &str, version: Option<(u16, u16)>) -> Option<&
     // arm64) `g` lived in thread-local storage and the register was ordinary.
     let version = std::env::var(GOVERSION_ENV).ok().and_then(|v| {
         let mut it = v.trim().split('.');
-        Some((it.next()?.parse::<u16>().ok()?, it.next()?.parse::<u16>().ok()?))
+        Some((
+            it.next()?.parse::<u16>().ok()?,
+            it.next()?.parse::<u16>().ok()?,
+        ))
     });
     if archid.starts_with("x86:LE:64:") {
         (version.is_none_or(|v| v >= (1, 17))).then_some("R14")
@@ -155,7 +165,7 @@ const G_FIELDS_HEAD: &[ShellField] = &[
     ("m", 8, true),            // 0x30
 ];
 const G_FIELDS_TAIL: &[ShellField] = &[
-    ("syscallsp", 8, false),   // 0x70 under the baseline layout
+    ("syscallsp", 8, false), // 0x70 under the baseline layout
     ("syscallpc", 8, false),
     // `syscallbp` is inserted here from go1.23 (layout-dependent).
     ("stktopsp", 8, false),
@@ -194,38 +204,38 @@ pub const GSIGSTACK_SIZE: int4 = 0x28;
 /// composite would keep referring to the pre-completion type through the
 /// factory's clone-and-re-key completion. The names are the readability win.
 const M_FIELDS_HEAD: &[ShellField] = &[
-    ("g0", 8, true),     // 0x00  *g, scheduling stack
-    // 0x08 `morebuf` (a gobuf) is pushed apart, like g's `sched`.
+    ("g0", 8, true), // 0x00  *g, scheduling stack
+                     // 0x08 `morebuf` (a gobuf) is pushed apart, like g's `sched`.
 ];
 /// `runtime.m` after `morebuf`: `divmod` ("known to liblink") then the
 /// debugger-visible block. `goSigStack` is pushed apart (its own shell).
 const M_FIELDS_MID: &[ShellField] = &[
-    ("divmod", 4, false),  // 0x40  arm div/mod denominator, known to liblink
-    ("pad_44", 4, false),  // 0x44  alignment (explicit `_ uint32` in go1.22)
-    ("procid", 8, false),  // 0x48
-    ("gsignal", 8, true),  // 0x50  *g
+    ("divmod", 4, false), // 0x40  arm div/mod denominator, known to liblink
+    ("pad_44", 4, false), // 0x44  alignment (explicit `_ uint32` in go1.22)
+    ("procid", 8, false), // 0x48
+    ("gsignal", 8, true), // 0x50  *g
 ];
 /// `runtime.m` tail after `goSigStack`: verified identical through
 /// `profilehz` on go1.22.10 and go1.25.3, linux/amd64 (`sigmask` is the
 /// linux `[2]uint32`; a PE Go binary's `sigset` is empty, shifting everything
 /// from `tls` on — the shell is a linux/darwin-era reading aid).
 const M_FIELDS_TAIL: &[ShellField] = &[
-    ("sigmask", 8, false),      // 0x80
+    ("sigmask", 8, false), // 0x80
     // 0x88 `tls` ([6]uintptr) is pushed apart as an array.
-    ("mstartfn", 8, true),      // 0xb8
-    ("curg", 8, true),          // 0xc0  *g, the running goroutine
-    ("caughtsig", 8, false),    // 0xc8  guintptr (an integer, not a pointer)
-    ("p", 8, false),            // 0xd0  puintptr
-    ("nextp", 8, false),        // 0xd8  puintptr
-    ("oldp", 8, false),         // 0xe0  puintptr
-    ("id", 8, false),           // 0xe8  int64
-    ("mallocing", 4, false),    // 0xf0
-    ("throwing", 4, false),     // 0xf4
+    ("mstartfn", 8, true),        // 0xb8
+    ("curg", 8, true),            // 0xc0  *g, the running goroutine
+    ("caughtsig", 8, false),      // 0xc8  guintptr (an integer, not a pointer)
+    ("p", 8, false),              // 0xd0  puintptr
+    ("nextp", 8, false),          // 0xd8  puintptr
+    ("oldp", 8, false),           // 0xe0  puintptr
+    ("id", 8, false),             // 0xe8  int64
+    ("mallocing", 4, false),      // 0xf0
+    ("throwing", 4, false),       // 0xf4
     ("preemptoff_ptr", 8, false), // 0xf8  string header
     ("preemptoff_len", 8, false), // 0x100
-    ("locks", 4, false),        // 0x108
-    ("dying", 4, false),        // 0x10c
-    ("profilehz", 4, false),    // 0x110
+    ("locks", 4, false),          // 0x108
+    ("dying", 4, false),          // 0x10c
+    ("profilehz", 4, false),      // 0x110
 ];
 /// `morebuf`'s offset inside `runtime.m`.
 pub const M_MOREBUF_OFFSET: int4 = 0x08;
@@ -294,7 +304,12 @@ fn m_pointer_type(
         field_type: gsig,
     });
     let mut mid_tail = Vec::new();
-    let at = push_fields(types, &mut mid_tail, &M_FIELDS_TAIL[..1], at + GSIGSTACK_SIZE)?;
+    let at = push_fields(
+        types,
+        &mut mid_tail,
+        &M_FIELDS_TAIL[..1],
+        at + GSIGSTACK_SIZE,
+    )?;
     for mut f in mid_tail {
         f.ident = mf.len() as int4;
         mf.push(f);
@@ -331,7 +346,11 @@ pub fn g_pointer_type(
 ) -> KunaResult<std::rc::Rc<crate::dtype::Datatype>> {
     let gobuf_shell = types.get_type_struct("runtime.gobuf")?;
     let mut gb = Vec::new();
-    let table = if layout.gobuf_words == 6 { GOBUF_FIELDS_125 } else { GOBUF_FIELDS };
+    let table = if layout.gobuf_words == 6 {
+        GOBUF_FIELDS_125
+    } else {
+        GOBUF_FIELDS
+    };
     let end = push_fields(types, &mut gb, table, 0)?;
     debug_assert_eq!(end, layout.gobuf_size());
     let gobuf =
@@ -354,8 +373,12 @@ pub fn g_pointer_type(
         name: "sched".to_string(),
         field_type: gobuf,
     });
-    let at =
-        push_fields(types, &mut gf, &G_FIELDS_TAIL[..2], G_SCHED_OFFSET + layout.gobuf_size())?;
+    let at = push_fields(
+        types,
+        &mut gf,
+        &G_FIELDS_TAIL[..2],
+        G_SCHED_OFFSET + layout.gobuf_size(),
+    )?;
     let at = if layout.syscallbp {
         push_fields(types, &mut gf, &[G_SYSCALLBP], at)?
     } else {
@@ -380,8 +403,14 @@ mod tests {
 
     #[test]
     fn goroutine_register_is_golang_gated() {
-        assert_eq!(goroutine_register("x86:LE:64:default:golang", None), Some("R14"));
-        assert_eq!(goroutine_register("AARCH64:LE:64:v8A:golang", None), Some("x28"));
+        assert_eq!(
+            goroutine_register("x86:LE:64:default:golang", None),
+            Some("R14")
+        );
+        assert_eq!(
+            goroutine_register("AARCH64:LE:64:v8A:golang", None),
+            Some("x28")
+        );
         // The C cspec, a non-Go image, never names one.
         assert_eq!(goroutine_register("x86:LE:64:default:gcc", None), None);
         // x86-32 Go reaches `g` through TLS: golang cspec, no pinned register.
@@ -478,10 +507,28 @@ mod tests {
         // go1.22: seven-word gobuf, no syscallbp (the baseline).
         assert_eq!(GoLayout::from_version(1, 22), GoLayout::baseline());
         // go1.23/1.24: syscallbp inserted, gobuf still seven words.
-        assert_eq!(GoLayout::from_version(1, 23), GoLayout { gobuf_words: 7, syscallbp: true });
-        assert_eq!(GoLayout::from_version(1, 24), GoLayout { gobuf_words: 7, syscallbp: true });
+        assert_eq!(
+            GoLayout::from_version(1, 23),
+            GoLayout {
+                gobuf_words: 7,
+                syscallbp: true
+            }
+        );
+        assert_eq!(
+            GoLayout::from_version(1, 24),
+            GoLayout {
+                gobuf_words: 7,
+                syscallbp: true
+            }
+        );
         // go1.25: gobuf.ret dropped.
-        assert_eq!(GoLayout::from_version(1, 25), GoLayout { gobuf_words: 6, syscallbp: true });
+        assert_eq!(
+            GoLayout::from_version(1, 25),
+            GoLayout {
+                gobuf_words: 6,
+                syscallbp: true
+            }
+        );
         assert_eq!(GoLayout::from_version(1, 25).gobuf_size(), 0x30);
         // Unknown / future majors stay conservative only in the fields they
         // state; the env fallback is the baseline.

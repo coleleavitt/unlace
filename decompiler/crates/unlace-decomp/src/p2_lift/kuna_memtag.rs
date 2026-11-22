@@ -21,10 +21,15 @@ pub fn paint(arch: &mut Architecture, entry: &Address) {
         return;
     }
     let want = u32::from(arch.acle_intrinsics);
-    if arch.with_context_db(|db| db.get_variable_value(SHOW_MEMTAG, entry).map_or(true, |v| v == want)) {
+    if arch.with_context_db(|db| {
+        db.get_variable_value(SHOW_MEMTAG, entry)
+            .map_or(true, |v| v == want)
+    }) {
         return;
     }
-    let Some(code) = arch.manage().get_default_code_space().cloned() else { return };
+    let Some(code) = arch.manage().get_default_code_space().cloned() else {
+        return;
+    };
     arch.with_context_db_mut(|db| {
         let begin = Address::new(Rc::clone(&code), 0);
         let _ = db.set_variable_default(SHOW_MEMTAG, want);

@@ -1,14 +1,14 @@
 //! Proven string Display arguments and their runtime formatting behavior.
 
+use std::path::PathBuf;
 use unlace_console::engine::bootstrap_from_object;
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::kuna_rustfmt::RustFmtMode;
-use std::path::PathBuf;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
@@ -138,7 +138,8 @@ fn language_layout_and_formatter_facts_bound_string_recovery() {
                     2 => arch.rustc_stable_version = Some((1, 90, 0)),
                     3 => arch.rustc_stable_version = Some((1, 99, 1)),
                     _ => {
-                        arch.source_lang_forced = Some(unlace_decomp::kuna_sourcelang::SourceLang::C)
+                        arch.source_lang_forced =
+                            Some(unlace_decomp::kuna_sourcelang::SourceLang::C)
                     }
                 },
                 |_| {},
@@ -175,7 +176,8 @@ fn complete_object_identity_and_instruction_body_are_required() {
             "changed instruction or target byte {byte}"
         );
     }
-    let target = unlace_decomp::kuna_rustfmtstr::forwarded_target(address, &bytes[offset..]).unwrap();
+    let target =
+        unlace_decomp::kuna_rustfmtstr::forwarded_target(address, &bytes[offset..]).unwrap();
     let target_name = file
         .symbols()
         .find(|s| s.address() == target)
@@ -191,9 +193,11 @@ fn complete_object_identity_and_instruction_body_are_required() {
     let mut other = bytes.clone();
     assert_eq!(&other[target_offset..target_offset + 8], b"_ZN4core");
     other[target_offset + 4..target_offset + 8].copy_from_slice(b"fake");
-    assert!(!unlace_analysis::sourcelang::formatter_metadata(&other)
-        .strings
-        .contains(&address));
+    assert!(
+        !unlace_analysis::sourcelang::formatter_metadata(&other)
+            .strings
+            .contains(&address)
+    );
     let alias = file
         .symbols()
         .find(|s| {
@@ -213,9 +217,11 @@ fn complete_object_identity_and_instruction_body_are_required() {
     let mut other = bytes.clone();
     let value = symtab + alias.index().0 * 24 + 8;
     other[value..value + 8].copy_from_slice(&address.to_le_bytes());
-    assert!(!unlace_analysis::sourcelang::formatter_metadata(&other)
-        .strings
-        .contains(&address));
+    assert!(
+        !unlace_analysis::sourcelang::formatter_metadata(&other)
+            .strings
+            .contains(&address)
+    );
     for mutation in 0..3 {
         let mut other = bytes.clone();
         match mutation {
@@ -223,9 +229,11 @@ fn complete_object_identity_and_instruction_body_are_required() {
             1 => other[16..18].copy_from_slice(&1u16.to_le_bytes()),
             _ => other[5] = 2,
         }
-        assert!(unlace_analysis::sourcelang::formatter_metadata(&other)
-            .strings
-            .is_empty());
+        assert!(
+            unlace_analysis::sourcelang::formatter_metadata(&other)
+                .strings
+                .is_empty()
+        );
     }
 }
 
@@ -292,20 +300,33 @@ fn unchanged_string_macros_reproduce_native_streams_and_panic_payloads() {
         ("str_stderr", "text:&str", string, false),
         ("str_stderr_pair", "value:u32,text:&str", mixed, false),
         ("str_flags", "text:&str", string, false),
-        ("str_pair", "left:&str,right:&str",
-            "let v1=left.as_ptr() as u64;let v4=left.len() as u64;let v2=right.as_ptr() as u64;let v5=right.len() as u64;", false),
+        (
+            "str_pair",
+            "left:&str,right:&str",
+            "let v1=left.as_ptr() as u64;let v4=left.len() as u64;let v2=right.as_ptr() as u64;let v5=right.len() as u64;",
+            false,
+        ),
         ("str_integer", "value:u32,text:&str", mixed, true),
         ("str_result", "text:&str", string, true),
         ("str_panic", "text:&str", string, false),
     ] {
         let body = output(NATIVE, name, true);
-        let lines: Vec<_> = body.lines().filter(|line| line.contains("from_utf8_unchecked")).collect();
+        let lines: Vec<_> = body
+            .lines()
+            .filter(|line| line.contains("from_utf8_unchecked"))
+            .collect();
         assert_eq!(lines.len(), 1, "{name}: {body}");
         let returns = if result { " -> String" } else { "" };
         let before = if result {
             "let mut destination=std::mem::MaybeUninit::<String>::uninit();let a0=destination.as_mut_ptr() as u64;"
-        } else { "" };
-        let after = if result { "destination.assume_init()" } else { "" };
+        } else {
+            ""
+        };
+        let after = if result {
+            "destination.assume_init()"
+        } else {
+            ""
+        };
         source.push_str(&format!("fn {name}({parameters}){returns} {{ unsafe {{ {bindings}{before}\n{}\n{after}\n}} }}\n", lines[0]));
     }
     let original = std::fs::read_to_string(

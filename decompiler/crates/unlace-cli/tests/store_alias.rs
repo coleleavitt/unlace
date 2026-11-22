@@ -44,7 +44,11 @@ fn a_global_is_read_where_the_binary_reads_it_around_a_pointer_store() {
         .collect();
     let all = format!("{FUNCS},{DEAD}");
     for (fixture, funcs, keep) in [
-        ("storealias_gcc_O0_x86_64", FUNCS, Some("-DSTOREALIAS_KEEP_DEAD")),
+        (
+            "storealias_gcc_O0_x86_64",
+            FUNCS,
+            Some("-DSTOREALIAS_KEEP_DEAD"),
+        ),
         ("storealias_gcc_O2_x86_64", all.as_str(), None),
         ("storealias_clang_O2_x86_64", all.as_str(), None),
     ] {
@@ -61,7 +65,13 @@ fn a_global_is_read_where_the_binary_reads_it_around_a_pointer_store() {
         for cc in &compilers {
             for level in ["-O0", "-O2"] {
                 let out = Command::new(cc)
-                    .args(["-std=gnu11", "-w", level, "-fno-strict-aliasing", "-DSTOREALIAS_HARNESS"])
+                    .args([
+                        "-std=gnu11",
+                        "-w",
+                        level,
+                        "-fno-strict-aliasing",
+                        "-DSTOREALIAS_HARNESS",
+                    ])
                     .args(common::CC_GCC15_DEMOTE)
                     .args(keep)
                     .arg("-o")

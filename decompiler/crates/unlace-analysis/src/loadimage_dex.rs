@@ -13,7 +13,7 @@ use unlace_base::address::{Address, RangeList};
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::space::AddrSpace;
 use unlace_decomp::kuna_dex::DexModel;
-use unlace_sleigh::loadimage::{section_flags, LoadImage, LoadImageSection};
+use unlace_sleigh::loadimage::{LoadImage, LoadImageSection, section_flags};
 
 /// The language a DEX file decodes with unless the caller names another.
 pub const DEX_LANGUAGE: &str = "Dalvik:LE:32:DEX_Android12";
@@ -33,7 +33,10 @@ pub const ODEX_LANGUAGE: &str = "Dalvik:LE:32:ODEX_KitKat";
 /// Is `bytes` an optimized DEX (`dey\n` and a three-digit version), which wraps
 /// one DEX file?
 pub fn is_odex(bytes: &[u8]) -> bool {
-    bytes.len() >= 40 && bytes.starts_with(b"dey\n") && bytes[4..7].iter().all(u8::is_ascii_digit) && bytes[7] == 0
+    bytes.len() >= 40
+        && bytes.starts_with(b"dey\n")
+        && bytes[4..7].iter().all(u8::is_ascii_digit)
+        && bytes[7] == 0
 }
 
 /// Is `bytes` a version-027 VDEX (Android 12 and later), which may hold the
@@ -63,7 +66,10 @@ fn oat_data(bytes: &[u8]) -> Option<&[u8]> {
     let start = usize::try_from(sec_off + (symbol.address() - section.address())).ok()?;
     let end = usize::try_from(sec_off + sec_len).ok()?;
     let data = bytes.get(start..end)?;
-    (data.len() >= 8 && data.starts_with(b"oat\n") && data[4..7].iter().all(u8::is_ascii_digit) && data[7] == 0)
+    (data.len() >= 8
+        && data.starts_with(b"oat\n")
+        && data[4..7].iter().all(u8::is_ascii_digit)
+        && data[7] == 0)
         .then_some(data)
 }
 
@@ -82,8 +88,11 @@ fn oat_dex_files(data: &[u8]) -> Vec<Vec<u8>> {
     let mut at = 8;
     while at + 0x70 <= data.len() {
         let here = &data[at..];
-        let sized = le32(here, 0x20).map(|s| s as usize).filter(|&s| s >= 0x70 && s <= here.len());
-        let valid = is_dex(here) && le32(here, 0x24) == Some(0x70) && le32(here, 0x28) == Some(0x1234_5678);
+        let sized = le32(here, 0x20)
+            .map(|s| s as usize)
+            .filter(|&s| s >= 0x70 && s <= here.len());
+        let valid =
+            is_dex(here) && le32(here, 0x24) == Some(0x70) && le32(here, 0x28) == Some(0x1234_5678);
         match sized.filter(|_| valid) {
             Some(size) => {
                 files.push(here[..size].to_vec());
@@ -109,7 +118,12 @@ fn odex_dex_file(bytes: &[u8]) -> KunaResult<Vec<u8>> {
     let offset = le32(bytes, 8).ok_or_else(|| bad_odex("truncated header"))? as usize;
     let length = le32(bytes, 12).ok_or_else(|| bad_odex("truncated header"))? as usize;
     bytes
-        .get(offset..offset.checked_add(length).ok_or_else(|| bad_odex("bad DEX extent"))?)
+        .get(
+            offset
+                ..offset
+                    .checked_add(length)
+                    .ok_or_else(|| bad_odex("bad DEX extent"))?,
+        )
         .map(<[u8]>::to_vec)
         .ok_or_else(|| bad_odex("DEX extent past the end of the file"))
 }
@@ -129,8 +143,10 @@ fn vdex_dex_files(bytes: &[u8]) -> KunaResult<Vec<Vec<u8>>> {
         for k in 0..sections.min(16) {
             let at = 12 + 12 * k;
             if le32(bytes, at).ok_or_else(|| bad("truncated section table"))? == kind {
-                let offset = le32(bytes, at + 4).ok_or_else(|| bad("truncated section table"))? as usize;
-                let size = le32(bytes, at + 8).ok_or_else(|| bad("truncated section table"))? as usize;
+                let offset =
+                    le32(bytes, at + 4).ok_or_else(|| bad("truncated section table"))? as usize;
+                let size =
+                    le32(bytes, at + 8).ok_or_else(|| bad("truncated section table"))? as usize;
                 return Ok(Some((offset, size)));
             }
         }
@@ -140,7 +156,10 @@ fn vdex_dex_files(bytes: &[u8]) -> KunaResult<Vec<Vec<u8>>> {
     let Some((start, size)) = section(1)?.filter(|&(_, size)| size > 0) else {
         return Err(bad("no DEX section: the DEX files are in the APK"));
     };
-    let end = start.checked_add(size).filter(|&e| e <= bytes.len()).ok_or_else(|| bad("DEX section past the end"))?;
+    let end = start
+        .checked_add(size)
+        .filter(|&e| e <= bytes.len())
+        .ok_or_else(|| bad("DEX section past the end"))?;
     let mut files = Vec::with_capacity(count);
     let mut at = start;
     for _ in 0..count {
@@ -180,7 +199,9 @@ pub fn load_dex_models(bytes: Vec<u8>) -> KunaResult<Vec<Rc<DexModel>>> {
         models.push(Rc::new(DexModel::parse(file, base)?));
         base = (base + len).div_ceil(DEX_ALIGN) * DEX_ALIGN;
         if base > u64::from(u32::MAX) {
-            return Err(KunaError::lowlevel("DEX files do not fit in the 32-bit address space"));
+            return Err(KunaError::lowlevel(
+                "DEX files do not fit in the 32-bit address space",
+            ));
         }
     }
     Ok(models)
@@ -195,11 +216,15 @@ struct ZipEntry {
 }
 
 fn le16(bytes: &[u8], at: usize) -> Option<u16> {
-    bytes.get(at..at + 2).map(|b| u16::from_le_bytes([b[0], b[1]]))
+    bytes
+        .get(at..at + 2)
+        .map(|b| u16::from_le_bytes([b[0], b[1]]))
 }
 
 fn le32(bytes: &[u8], at: usize) -> Option<u32> {
-    bytes.get(at..at + 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+    bytes
+        .get(at..at + 4)
+        .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
 }
 
 fn bad_zip(what: &str) -> KunaError {
@@ -230,10 +255,18 @@ fn apk_dex_names(bytes: &[u8]) -> KunaResult<Vec<(u32, ZipEntry)>> {
         if le32(bytes, at) != Some(0x0201_4b50) {
             return Err(bad_zip("bad central directory entry"));
         }
-        let field = |off: usize| le32(bytes, at + off).ok_or_else(|| bad_zip("truncated directory"));
-        let short = |off: usize| le16(bytes, at + off).ok_or_else(|| bad_zip("truncated directory"));
-        let (name_len, extra_len, comment_len) = (short(28)? as usize, short(30)? as usize, short(32)? as usize);
-        let name = bytes.get(at + 46..at + 46 + name_len).ok_or_else(|| bad_zip("truncated name"))?;
+        let field =
+            |off: usize| le32(bytes, at + off).ok_or_else(|| bad_zip("truncated directory"));
+        let short =
+            |off: usize| le16(bytes, at + off).ok_or_else(|| bad_zip("truncated directory"));
+        let (name_len, extra_len, comment_len) = (
+            short(28)? as usize,
+            short(30)? as usize,
+            short(32)? as usize,
+        );
+        let name = bytes
+            .get(at + 46..at + 46 + name_len)
+            .ok_or_else(|| bad_zip("truncated name"))?;
         let entry = ZipEntry {
             name: String::from_utf8_lossy(name).into_owned(),
             method: short(10)?,
@@ -260,10 +293,14 @@ pub fn apk_dex_files(bytes: &[u8]) -> KunaResult<Vec<Vec<u8>>> {
         if le32(bytes, entry.local) != Some(0x0403_4b50) {
             return Err(bad_zip("bad local header"));
         }
-        let name_len = le16(bytes, entry.local + 26).ok_or_else(|| bad_zip("truncated local header"))? as usize;
-        let extra_len = le16(bytes, entry.local + 28).ok_or_else(|| bad_zip("truncated local header"))? as usize;
+        let name_len = le16(bytes, entry.local + 26)
+            .ok_or_else(|| bad_zip("truncated local header"))? as usize;
+        let extra_len = le16(bytes, entry.local + 28)
+            .ok_or_else(|| bad_zip("truncated local header"))? as usize;
         let start = entry.local + 30 + name_len + extra_len;
-        let data = bytes.get(start..start + entry.compressed).ok_or_else(|| bad_zip("truncated entry"))?;
+        let data = bytes
+            .get(start..start + entry.compressed)
+            .ok_or_else(|| bad_zip("truncated entry"))?;
         let file = match entry.method {
             0 => data.to_vec(),
             8 => {
@@ -272,10 +309,18 @@ pub fn apk_dex_files(bytes: &[u8]) -> KunaResult<Vec<Vec<u8>>> {
                     .map_err(|e| bad_zip(&format!("{}: {e}", entry.name)))?;
                 out
             }
-            other => return Err(bad_zip(&format!("{} uses compression method {other}", entry.name))),
+            other => {
+                return Err(bad_zip(&format!(
+                    "{} uses compression method {other}",
+                    entry.name
+                )));
+            }
         };
         if file.len() != entry.size {
-            return Err(bad_zip(&format!("{} inflates to the wrong size", entry.name)));
+            return Err(bad_zip(&format!(
+                "{} inflates to the wrong size",
+                entry.name
+            )));
         }
         files.push(file);
     }
@@ -317,7 +362,9 @@ impl DexLoadImage {
     }
 
     fn mappings(&self) -> impl Iterator<Item = (u64, u64)> + '_ {
-        self.models.iter().map(|m| (m.base, m.file.bytes().len() as u64))
+        self.models
+            .iter()
+            .map(|m| (m.base, m.file.bytes().len() as u64))
     }
 }
 
@@ -332,7 +379,11 @@ impl LoadImage for DexLoadImage {
             (Some(space), Some(own)) => Rc::ptr_eq(space, own),
             _ => false,
         };
-        let model = self.models.iter().find(|m| m.contains(start)).filter(|_| attached);
+        let model = self
+            .models
+            .iter()
+            .find(|m| m.contains(start))
+            .filter(|_| attached);
         let Some(model) = model else {
             return Err(KunaError::data_unavail(format!(
                 "Unable to load {} bytes at {}:0x{start:x}",
@@ -354,7 +405,8 @@ impl LoadImage for DexLoadImage {
 
     fn get_next_section(&self, record: &mut LoadImageSection) -> bool {
         let index = self.section_cursor.get();
-        let (Some(space), Some((base, len))) = (self.space.as_ref(), self.mappings().nth(index)) else {
+        let (Some(space), Some((base, len))) = (self.space.as_ref(), self.mappings().nth(index))
+        else {
             return false;
         };
         record.address = Address::new(Rc::clone(space), base);
@@ -365,7 +417,9 @@ impl LoadImage for DexLoadImage {
     }
 
     fn get_segments(&self) -> Vec<(u64, u64, u32)> {
-        self.mappings().map(|(base, len)| (base, len, section_flags::CODE | section_flags::READONLY)).collect()
+        self.mappings()
+            .map(|(base, len)| (base, len, section_flags::CODE | section_flags::READONLY))
+            .collect()
     }
 
     fn get_readonly(&self, list: &mut RangeList) {
@@ -383,13 +437,16 @@ impl LoadImage for DexLoadImage {
     fn adjust_vma(&mut self, _adjust: i64) {}
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn hello() -> Vec<u8> {
-        include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../tests/stages/fixtures/dex/hello.dex")).to_vec()
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../tests/stages/fixtures/dex/hello.dex"
+        ))
+        .to_vec()
     }
 
     /// A zip of `entries` (`name`, `method`, `data`), with the central directory
@@ -399,7 +456,8 @@ mod tests {
         let mut central = Vec::new();
         for (name, method, data) in entries {
             let stored = if *method == 8 {
-                let mut encoder = flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
+                let mut encoder =
+                    flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
                 std::io::Write::write_all(&mut encoder, data).unwrap();
                 encoder.finish().unwrap()
             } else {
@@ -463,7 +521,11 @@ mod tests {
     }
 
     fn fixture(name: &str) -> Vec<u8> {
-        std::fs::read(format!("{}/../../../tests/stages/fixtures/dex/{name}", env!("CARGO_MANIFEST_DIR"))).unwrap()
+        std::fs::read(format!(
+            "{}/../../../tests/stages/fixtures/dex/{name}",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap()
     }
 
     #[test]
@@ -477,6 +539,8 @@ mod tests {
             assert_eq!(&models[0].file.bytes()[..hello.len()], &hello[..], "{name}");
         }
         assert_eq!(dex_language(&fixture("hello.odex")), ODEX_LANGUAGE);
-        assert!(!is_oat(&std::fs::read("/proc/self/exe").unwrap_or_default()));
+        assert!(!is_oat(
+            &std::fs::read("/proc/self/exe").unwrap_or_default()
+        ));
     }
 }

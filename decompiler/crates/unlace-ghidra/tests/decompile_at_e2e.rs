@@ -43,7 +43,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::marshal::{Decoder, ElementId, Encoder, PackedDecode, PackedEncode, ATTRIB_SIZE};
+use unlace_base::marshal::{ATTRIB_SIZE, Decoder, ElementId, Encoder, PackedDecode, PackedEncode};
 use unlace_base::space::AddrSpaceManager;
 use unlace_num::opcodes::{OpCode, OpcodeEncoder};
 use unlace_sleigh::translate::{ATTRIB_CODE, ELEM_OP};
@@ -53,11 +53,11 @@ use unlace_ghidra::ids::{
     ELEM_COMMAND_GETREGISTER, ELEM_COMMAND_GETREGISTERNAME, ELEM_COMMAND_GETUSEROPNAME,
 };
 use unlace_ghidra::process::GhidraProcess;
-use unlace_ghidra::translate::{build_registry, TspecModel};
+use unlace_ghidra::translate::{TspecModel, build_registry};
 
 use ghidra_sim::{
-    cmd_decompile_at, cmd_register_program, cmd_set_action, parse_decompile_doc, resp_empty,
-    resp_string, AnswerSource, MockReader, MockState, MockWriter,
+    AnswerSource, MockReader, MockState, MockWriter, cmd_decompile_at, cmd_register_program,
+    cmd_set_action, parse_decompile_doc, resp_empty, resp_string,
 };
 
 // The four registerProgram documents — the same tiny valid specs
@@ -125,14 +125,18 @@ impl CannedSource {
             let mut e = PackedEncode::new(&mut doc);
             e.open_element(&elem_inst);
             e.write_signed_integer(&unlace_base::marshal::ATTRIB_OFFSET, 1); // instr length
-            Address::new(Rc::clone(&ram), ENTRY).encode(&mut e).expect("pc addr");
+            Address::new(Rc::clone(&ram), ENTRY)
+                .encode(&mut e)
+                .expect("pc addr");
             // <op>: RETURN, isize=1, void output, one constant input.
             e.open_element(&ELEM_OP);
             e.write_signed_integer(&ATTRIB_SIZE, 1); // isize = one input
             e.write_opcode(&ATTRIB_CODE, OpCode::CPUI_RETURN);
             e.open_element(&unlace_base::marshal::ELEM_VOID);
             e.close_element(&unlace_base::marshal::ELEM_VOID);
-            Address::new(cst, 0).encode_sized(&mut e, 8).expect("const input");
+            Address::new(cst, 0)
+                .encode_sized(&mut e, 8)
+                .expect("const input");
             e.close_element(&ELEM_OP);
             e.close_element(&elem_inst);
         }
@@ -142,11 +146,17 @@ impl CannedSource {
     /// A fixed register storage `<addr space=register offset=0 size=8>` (the
     /// getRegister answer shape AddressXML.encode sends).
     fn register_addr_doc(&self) -> Vec<u8> {
-        let reg = Rc::clone(self.manager.get_space_by_name("register").expect("register"));
+        let reg = Rc::clone(
+            self.manager
+                .get_space_by_name("register")
+                .expect("register"),
+        );
         let mut doc = Vec::new();
         {
             let mut e = PackedEncode::new(&mut doc);
-            Address::new(reg, 0).encode_sized(&mut e, 8).expect("register addr");
+            Address::new(reg, 0)
+                .encode_sized(&mut e, 8)
+                .expect("register addr");
         }
         doc
     }
@@ -214,17 +224,25 @@ fn test_decompile_at_emits_c() {
 
     let shared = Rc::new(RefCell::new(MockState::new(
         commands,
-        CannedSource { manager: Rc::clone(&manager) },
+        CannedSource {
+            manager: Rc::clone(&manager),
+        },
     )));
 
-    let reader = MockReader { shared: Rc::clone(&shared) };
-    let writer = MockWriter { shared: Rc::clone(&shared) };
+    let reader = MockReader {
+        shared: Rc::clone(&shared),
+    };
+    let writer = MockWriter {
+        shared: Rc::clone(&shared),
+    };
 
     let mut process = GhidraProcess::new(reader, writer);
     // Drive the three commands (registerProgram, setAction, decompileAt).
     for cmd in ["registerProgram", "setAction", "decompileAt"] {
         assert_eq!(
-            process.read_command().unwrap_or_else(|e| panic!("{cmd}: {e:?}")),
+            process
+                .read_command()
+                .unwrap_or_else(|e| panic!("{cmd}: {e:?}")),
             0,
             "{cmd} should complete without terminating the loop"
         );
@@ -254,7 +272,10 @@ fn test_decompile_at_emits_c() {
         .last()
         .and_then(|r| r.payload.clone())
         .expect("decompileAt produced a response payload");
-    assert!(!doc.is_empty(), "decompileAt emitted an EMPTY payload (no <doc>)");
+    assert!(
+        !doc.is_empty(),
+        "decompileAt emitted an EMPTY payload (no <doc>)"
+    );
 
     let parsed = parse_decompile_doc(&doc, &manager);
 

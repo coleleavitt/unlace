@@ -4,8 +4,8 @@
 //! remain sorted by the complete address. This keeps sparse address ranges
 //! valid while amortizing tree-node overhead across the instructions in a page.
 
-use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
+use std::collections::btree_map::Entry;
 use std::ops::{Bound, RangeBounds};
 
 const PAGE_SHIFT: u32 = 12;

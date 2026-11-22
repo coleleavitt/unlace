@@ -2,8 +2,8 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, SpacebaseSpace,
-    UniqueSpace, VarnodeStorage,
+    AddrSpace, AddrSpaceManager, ConstantSpace, SpacebaseSpace, UniqueSpace, VarnodeStorage,
+    addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
@@ -13,8 +13,8 @@ use crate::funcdata::Funcdata;
 use crate::p6_variables::funcdata_spacebase::spacebase_tests::{build_fd, make_sp_in, reg_addr};
 
 use super::{
-    eligible_effect_lane, overlaps, proven_unobserved, stack_memory_access, EffectRange,
-    FrameRange, Save,
+    EffectRange, FrameRange, Save, eligible_effect_lane, overlaps, proven_unobserved,
+    stack_memory_access,
 };
 
 const SLOT: u64 = u64::MAX - 7;

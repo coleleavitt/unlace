@@ -14,8 +14,10 @@
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use unlace_console::engine::{bootstrap_from_file, ConsoleProgram};
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_file};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_console::interface::IfaceStatus;
 
@@ -23,7 +25,10 @@ use unlace_decomp::dtype::type_metatype;
 use unlace_decomp::varnode::varnode_flags;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Bootstrap the 8051 `boolless` corpus into a [`ConsoleProgram`].
@@ -31,8 +36,12 @@ fn boot_program() -> ConsoleProgram {
     let root = repo_root();
     let xml = root.join("tests/datatests/boolless.xml");
     let specs = root.join("specs");
-    bootstrap_from_file(xml.to_str().unwrap(), "", &[specs.to_str().unwrap().to_string()])
-        .expect("bootstrap fixture with built processor specs")
+    bootstrap_from_file(
+        xml.to_str().unwrap(),
+        "",
+        &[specs.to_str().unwrap().to_string()],
+    )
+    .expect("bootstrap fixture with built processor specs")
 }
 
 /// Drive `commands` through a console wired exactly like the datatest runner,
@@ -77,11 +86,11 @@ fn dcp_program(status: &mut IfaceStatus) -> &ConsoleProgram {
 #[test]
 fn parse_line_struct_creates_real_type() {
     let prog = boot_program();
-    let (mut status, out) = drive(
-        prog,
-        &["parse line struct mystruct { int4 a; int4 b; };"],
+    let (mut status, out) = drive(prog, &["parse line struct mystruct { int4 a; int4 b; };"]);
+    assert!(
+        !out.contains("error"),
+        "parse line struct emitted an error: {out:?}"
     );
-    assert!(!out.contains("error"), "parse line struct emitted an error: {out:?}");
     let prog = dcp_program(&mut status);
     let ct = prog
         .arch()
@@ -91,14 +100,20 @@ fn parse_line_struct_creates_real_type() {
         .expect("the parsed struct must exist in the factory");
     assert_eq!(ct.get_metatype(), type_metatype::TYPE_STRUCT);
     assert_eq!(ct.get_size(), 8, "two int4 fields => 8 bytes");
-    assert!(!ct.is_incomplete(), "the struct must be completed by assignRawFields");
+    assert!(
+        !ct.is_incomplete(),
+        "the struct must be completed by assignRawFields"
+    );
 }
 
 #[test]
 fn parse_line_typedef_creates_real_type() {
     let prog = boot_program();
     let (mut status, out) = drive(prog, &["parse line typedef int4 myint;"]);
-    assert!(!out.contains("error"), "parse line typedef emitted an error: {out:?}");
+    assert!(
+        !out.contains("error"),
+        "parse line typedef emitted an error: {out:?}"
+    );
     let prog = dcp_program(&mut status);
     let ct = prog
         .arch()
@@ -118,7 +133,10 @@ fn map_function_creates_resolvable_symbol() {
     let prog = boot_program();
     // 8051 CODE space, an entry near the corpus function: a fresh function entry.
     let (mut status, out) = drive(prog, &["map function [CODE,0xa100] myfunc"]);
-    assert!(!out.contains("error"), "map function emitted an error: {out:?}");
+    assert!(
+        !out.contains("error"),
+        "map function emitted an error: {out:?}"
+    );
     let prog = dcp_program(&mut status);
     // The function symbol must now resolve by name (the `load function` path).
     assert!(
@@ -128,7 +146,11 @@ fn map_function_creates_resolvable_symbol() {
     // ...and the symbol-table must hold a function symbol of that name.
     let gscope = prog.arch().symboltab.get_global_scope().unwrap();
     assert!(
-        !prog.arch().symboltab.find_by_name(gscope, "myfunc").is_empty(),
+        !prog
+            .arch()
+            .symboltab
+            .find_by_name(gscope, "myfunc")
+            .is_empty(),
         "the mapped function symbol must be in the global scope"
     );
 }
@@ -137,7 +159,10 @@ fn map_function_creates_resolvable_symbol() {
 fn map_address_creates_a_global_symbol() {
     let prog = boot_program();
     let (mut status, out) = drive(prog, &["map address [CODE,0x100] int4 globvar"]);
-    assert!(!out.contains("error"), "map address emitted an error: {out:?}");
+    assert!(
+        !out.contains("error"),
+        "map address emitted an error: {out:?}"
+    );
     let prog = dcp_program(&mut status);
     let gscope = prog.arch().symboltab.get_global_scope().unwrap();
     let syms = prog.arch().symboltab.find_by_name(gscope, "globvar");
@@ -148,11 +173,18 @@ fn map_address_creates_a_global_symbol() {
 fn map_label_creates_a_global_label() {
     let prog = boot_program();
     let (mut status, out) = drive(prog, &["map label mylabel [CODE,0x200]"]);
-    assert!(!out.contains("error"), "map label emitted an error: {out:?}");
+    assert!(
+        !out.contains("error"),
+        "map label emitted an error: {out:?}"
+    );
     let prog = dcp_program(&mut status);
     let gscope = prog.arch().symboltab.get_global_scope().unwrap();
     assert!(
-        !prog.arch().symboltab.find_by_name(gscope, "mylabel").is_empty(),
+        !prog
+            .arch()
+            .symboltab
+            .find_by_name(gscope, "mylabel")
+            .is_empty(),
         "the mapped label symbol must exist"
     );
 }
@@ -190,7 +222,10 @@ fn set_context_default_paints_the_variable() {
     let prog = bootstrap_from_file(xml.to_str().unwrap(), "", &specs)
         .expect("bootstrap ARM fixture with built processor specs");
     let (mut status, out) = drive(prog, &["set context TMode 1"]);
-    assert!(!out.contains("error") && !out.contains("Execution error"), "set context errored: {out:?}");
+    assert!(
+        !out.contains("error") && !out.contains("Execution error"),
+        "set context errored: {out:?}"
+    );
     let prog = dcp_program(&mut status);
     let val = prog
         .arch()
@@ -205,7 +240,10 @@ fn comment_instr_records_a_comment() {
     // A comment needs a current function; load `boolless` first, then comment it.
     let (mut status, out) = drive(
         prog,
-        &["load function boolless", "comment instruction r0xa000 hello-world"],
+        &[
+            "load function boolless",
+            "comment instruction r0xa000 hello-world",
+        ],
     );
     assert!(!out.contains("Execution error"), "comment errored: {out:?}");
     let prog = dcp_program(&mut status);
@@ -250,10 +288,7 @@ fn printc_body_driver_landed_function_reaches_print_c() {
     let prog = boot_program();
     // Load the corpus function, decompile it, and render `print C` exactly like
     // the datatest runner does (output lands in `optr`, captured by `drive`).
-    let (_status, out) = drive(
-        prog,
-        &["load function boolless", "decompile", "print C"],
-    );
+    let (_status, out) = drive(prog, &["load function boolless", "decompile", "print C"]);
     // The decompile + print must SUCCEED (the function reaches the print step).
     assert!(
         !out.contains("Execution error") && !out.contains("No function selected"),
@@ -311,8 +346,14 @@ fn w10_adv_volatile_range_boundary_is_inclusive() {
     let prog = dcp_program(&mut status);
     let st = &prog.arch().symboltab;
     let v = varnode_flags::volatil;
-    assert!(st.get_property(&ram_addr(prog, "CODE", 0x300)) & v != 0, "first byte volatile");
-    assert!(st.get_property(&ram_addr(prog, "CODE", 0x303)) & v != 0, "LAST in-range byte volatile");
+    assert!(
+        st.get_property(&ram_addr(prog, "CODE", 0x300)) & v != 0,
+        "first byte volatile"
+    );
+    assert!(
+        st.get_property(&ram_addr(prog, "CODE", 0x303)) & v != 0,
+        "LAST in-range byte volatile"
+    );
     assert!(
         st.get_property(&ram_addr(prog, "CODE", 0x304)) & v == 0,
         "byte at off+size must NOT be volatile (no off-by-one over-paint)"
@@ -349,11 +390,18 @@ fn w10_adv_default_codespace_address_form() {
     let prog = boot_program();
     // A leading '0' selects the default code space; the whole token is the offset.
     let (mut status, out) = drive(prog, &["map address 0x140 int4 defvar"]);
-    assert!(!out.contains("error"), "map address (default-codespace form) errored: {out:?}");
+    assert!(
+        !out.contains("error"),
+        "map address (default-codespace form) errored: {out:?}"
+    );
     let prog = dcp_program(&mut status);
     let gscope = prog.arch().symboltab.get_global_scope().unwrap();
     let syms = prog.arch().symboltab.find_by_name(gscope, "defvar");
-    assert_eq!(syms.len(), 1, "the default-codespace global must be a single symbol");
+    assert_eq!(
+        syms.len(),
+        1,
+        "the default-codespace global must be a single symbol"
+    );
     // The resolved address must live in the default code space (not a shortcut space).
     let manage = prog.arch().manage();
     let def = manage.get_default_code_space().expect("default code space");
@@ -463,7 +511,10 @@ fn stackpointer_decode_creates_the_stack_spacebase_space() {
         .expect("the <stackpointer> decode must create the formal stack SpacebaseSpace");
     assert_eq!(stack.get_type(), spacetype::IPTR_SPACEBASE);
     assert_eq!(stack.get_name(), "stack");
-    assert!(stack.is_formal_stack_space(), "named 'stack' => formal stack space");
+    assert!(
+        stack.is_formal_stack_space(),
+        "named 'stack' => formal stack space"
+    );
 
     // (2) The spacebase space claims a shortcut that resolves back to it (so
     //     `parse_machaddr` accepts a spacebase address).  The C++ default
@@ -484,7 +535,11 @@ fn stackpointer_decode_creates_the_stack_spacebase_space() {
 
     // (3) Its base register is attached: numSpacebase()==1, and (8051 SP is a
     //     1-byte INTMEM register) the base loc is non-empty.
-    assert_eq!(stack.num_spacebase(), 1, "the SP base register must be attached");
+    assert_eq!(
+        stack.num_spacebase(),
+        1,
+        "the SP base register must be attached"
+    );
     let base = stack.get_spacebase(0).expect("base register location");
     assert!(base.space.is_some(), "base register has a real space");
     assert_eq!(base.size, 1, "8051 SP is a 1-byte register");
@@ -499,8 +554,14 @@ fn stackpointer_decode_creates_the_stack_spacebase_space() {
 
     // (5) The containing space is the cspec's `space="INTMEM"` (generic resolve,
     //     not ram and not hardcoded).
-    let contain = stack.get_contain().expect("spacebase space has a containing space");
-    assert_eq!(contain.get_name(), "INTMEM", "container is the cspec <stackpointer space>");
+    let contain = stack
+        .get_contain()
+        .expect("spacebase space has a containing space");
+    assert_eq!(
+        contain.get_name(),
+        "INTMEM",
+        "container is the cspec <stackpointer space>"
+    );
 }
 
 /// On x86-64 (`<stackpointer register="RSP" space="ram"/>`) the stack space gets
@@ -518,12 +579,15 @@ fn x86_64_stack_address_now_parses_via_spacebase_space() {
         xml.to_str().unwrap(),
         "",
         &[specs.to_str().unwrap().to_string()],
-    ).expect("bootstrap fixture with built processor specs");
+    )
+    .expect("bootstrap fixture with built processor specs");
 
     // The x86-64 stack space exists, is named "stack", and claims `'s'`.
     {
         let manage = prog.arch().manage();
-        let stack = manage.get_stack_space().expect("x86-64 stack SpacebaseSpace");
+        let stack = manage
+            .get_stack_space()
+            .expect("x86-64 stack SpacebaseSpace");
         assert_eq!(stack.get_type(), spacetype::IPTR_SPACEBASE);
         assert_eq!(
             stack.get_shortcut(),
@@ -531,20 +595,27 @@ fn x86_64_stack_address_now_parses_via_spacebase_space() {
             "x86-64 stack space claims 's' (nothing pre-claims it)"
         );
         // RSP is an 8-byte register; container is ram.
-        assert_eq!(stack.get_addr_size(), 8, "RSP-backed stack is 8-byte addressed");
-        assert!(stack.stack_grows_negative(), "x86-64 stack grows negative (default)");
         assert_eq!(
-            stack.get_contain().map(|c| c.get_name().to_string()).as_deref(),
+            stack.get_addr_size(),
+            8,
+            "RSP-backed stack is 8-byte addressed"
+        );
+        assert!(
+            stack.stack_grows_negative(),
+            "x86-64 stack grows negative (default)"
+        );
+        assert_eq!(
+            stack
+                .get_contain()
+                .map(|c| c.get_name().to_string())
+                .as_deref(),
             Some("ram"),
         );
     }
 
     // The console `map addr s0x… int4 i` command now parses the `s0x…` stack
     // address (previously: "Command parsing error: Bad address: s").
-    let (_status, out) = drive(
-        prog,
-        &["map addr s0xffffffffffffffe4 int4 i"],
-    );
+    let (_status, out) = drive(prog, &["map addr s0xffffffffffffffe4 int4 i"]);
     assert!(
         !out.contains("Bad address"),
         "s0x… stack address must parse now that the spacebase space exists: {out:?}"

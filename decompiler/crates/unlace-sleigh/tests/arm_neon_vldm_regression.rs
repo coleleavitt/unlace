@@ -33,7 +33,10 @@ use unlace_sleigh::sleigh::Sleigh;
 use unlace_sleigh::translate::{AssemblyEmit, PcodeEmit, Translate};
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// In-memory image: the instruction bytes at `base`, zero-filled elsewhere so
@@ -107,25 +110,32 @@ impl LoadImage for DummyImg {
 
 #[test]
 fn arm_thumb_vldmia_upper_neon_regs_does_not_panic() {
-    let sla_path = repo_root()
-        .join("specs/Ghidra/Processors/ARM/data/languages/ARM8_le.sla");
+    let sla_path = repo_root().join("specs/Ghidra/Processors/ARM/data/languages/ARM8_le.sla");
     let sla = std::fs::read(&sla_path).expect("read compiled ARM spec");
 
     let base: u64 = 0x1000;
     // `vldmia r0, {d16-d31}` (d0 ec 20 0b) then `bx lr` / nop padding, matching
     // the shape seen on the firmware; the trailing bytes cover any read-ahead.
-    let bytes = vec![0xd0, 0xec, 0x20, 0x0b, 0x70, 0x47, 0x00, 0xbf, 0, 0, 0, 0, 0, 0, 0, 0];
+    let bytes = vec![
+        0xd0, 0xec, 0x20, 0x0b, 0x70, 0x47, 0x00, 0xbf, 0, 0, 0, 0, 0, 0, 0, 0,
+    ];
 
     let ctx = Box::new(ContextInternal::new());
     let mut sleigh = Sleigh::new(Box::new(DummyImg), ctx);
-    sleigh.initialize_from_sla(&sla).expect("initialize ARM8_le.sla");
+    sleigh
+        .initialize_from_sla(&sla)
+        .expect("initialize ARM8_le.sla");
     // Thumb decode mode (ARM.sinc: `TMode = (0,0)`, 1 => Thumb).
     sleigh.set_context_default("TMode", 1);
 
     sleigh.set_loader(Box::new(MemImg { base, bytes }));
 
     let ram = Rc::clone(
-        sleigh.base().manager().get_space_by_name("ram").expect("ram space"),
+        sleigh
+            .base()
+            .manager()
+            .get_space_by_name("ram")
+            .expect("ram space"),
     );
     let addr = Address::new(ram, base);
 
@@ -139,8 +149,14 @@ fn arm_thumb_vldmia_upper_neon_regs_does_not_panic() {
     let len = sleigh
         .one_instruction(&mut emit, &addr)
         .expect("vldmia {d16-d31} must lift without error");
-    assert_eq!(len, 4, "Thumb-2 vldmia is a 4-byte instruction (got len {len})");
-    assert!(!emit.ops.is_empty(), "the lift must emit at least one p-code op");
+    assert_eq!(
+        len, 4,
+        "Thumb-2 vldmia is a 4-byte instruction (got len {len})"
+    );
+    assert!(
+        !emit.ops.is_empty(),
+        "the lift must emit at least one p-code op"
+    );
     let first_ops = emit.ops;
 
     for (offset, expected_len) in [(4, 2), (6, 2)] {

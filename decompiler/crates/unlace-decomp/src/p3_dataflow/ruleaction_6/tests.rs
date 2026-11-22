@@ -23,14 +23,14 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
-use crate::dtype::{type_metatype, Datatype};
 use crate::context::{ArchContext, OpId, TypeOp, VarnodeId};
-use crate::varnode::{varnode_flags, DefOpInfo, VarnodeBank};
+use crate::dtype::{Datatype, type_metatype};
+use crate::varnode::{DefOpInfo, VarnodeBank, varnode_flags};
 
 // -----------------------------------------------------------------------------
 // fixtures
@@ -39,7 +39,8 @@ use crate::varnode::{varnode_flags, DefOpInfo, VarnodeBank};
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -80,7 +81,8 @@ fn mk_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
     let r = ram(fd);
     let op = fd.new_op(inputs, Address::new(r, off));
     fd.obank_mut().mark_alive(op);
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
     op
 }
 
@@ -101,7 +103,10 @@ fn give_output(fd: &mut Funcdata, op: OpId, off: u64, size: int4) -> VarnodeId {
     let r = ram(fd);
     let vn = fd.new_varnode(size, &Address::new(r, off), Some(unk(size)));
     let seq = fd.obank().get(op).unwrap().get_seq_num().clone();
-    let info = DefOpInfo { id: op, seqnum: seq };
+    let info = DefOpInfo {
+        id: op,
+        seqnum: seq,
+    };
     let vn = fd.vbank_mut().set_def(vn, info, &mut no_replace()).unwrap();
     fd.obank_mut().get_mut(op).unwrap().set_output(Some(vn));
     vn
@@ -325,9 +330,12 @@ fn find_form_rejects_non_shift_non_subpiece_root() {
     assert!(RuleDivOpt::find_form(&fd, add).is_none());
 }
 
-fn div3_double_pattern(xsize: int4, quotient_before: bool, magic: uintb, mask: uintb)
-    -> (Funcdata, OpId)
-{
+fn div3_double_pattern(
+    xsize: int4,
+    quotient_before: bool,
+    magic: uintb,
+    mask: uintb,
+) -> (Funcdata, OpId) {
     let mut fd = build_fd();
     let root = fd.bblocks_ref().root.expect("bblocks root");
     let block = fd.bblocks_mut().new_block_basic(root);
@@ -358,9 +366,13 @@ fn div3_double_pattern(xsize: int4, quotient_before: bool, magic: uintb, mask: u
     set_in(&mut fd, and, mask, 1);
     give_output(&mut fd, and, 0x1240, 8);
 
-    for (op, order) in [(ext, 0), (mult, 1), (sub, 2),
-                         (div, if quotient_before { 3 } else { 4 }),
-                         (and, if quotient_before { 4 } else { 3 })] {
+    for (op, order) in [
+        (ext, 0),
+        (mult, 1),
+        (sub, 2),
+        (div, if quotient_before { 3 } else { 4 }),
+        (and, if quotient_before { 4 } else { 3 }),
+    ] {
         let op = fd.obank_mut().get_mut(op).unwrap();
         op.set_parent(Some(block));
         op.set_order(order);
@@ -483,7 +495,11 @@ fn mult_neg_one_requires_const_minus_one() {
     set_in(&mut fd, m1, x, 0);
     let yvn = mk_vn(&mut fd, 0x14, 4); // non-constant slot 1
     set_in(&mut fd, m1, yvn, 1);
-    assert_eq!(rule.apply_op(m1, &mut fd), 0, "non-constant multiplier: no fire");
+    assert_eq!(
+        rule.apply_op(m1, &mut fd),
+        0,
+        "non-constant multiplier: no fire"
+    );
 
     let m2 = mk_op(&mut fd, 2, 0x104, OpCode::CPUI_INT_MULT);
     set_in(&mut fd, m2, x, 0);
@@ -506,8 +522,16 @@ fn mult_neg_one_minus_one_fires_to_2comp() {
     set_in(&mut fd, m, cm1, 1);
     assert_eq!(rule.apply_op(m, &mut fd), 1, "x * -1 => -x fires");
     assert_eq!(fd.obank().get(m).unwrap().code(), OpCode::CPUI_INT_2COMP);
-    assert_eq!(fd.obank().get(m).unwrap().num_input(), 1, "constant input removed");
-    assert_eq!(fd.obank().get(m).unwrap().get_in(0), Some(x), "operand preserved");
+    assert_eq!(
+        fd.obank().get(m).unwrap().num_input(),
+        1,
+        "constant input removed"
+    );
+    assert_eq!(
+        fd.obank().get(m).unwrap().get_in(0),
+        Some(x),
+        "operand preserved"
+    );
 }
 
 #[test]
@@ -522,7 +546,11 @@ fn positive_div_bails_when_input_may_be_negative() {
     set_in(&mut fd, sdiv, a, 0);
     set_in(&mut fd, sdiv, b, 1);
     let _o = give_output(&mut fd, sdiv, 0x20, 4);
-    assert_eq!(rule.apply_op(sdiv, &mut fd), 0, "sign bit possibly set -> no fire");
+    assert_eq!(
+        rule.apply_op(sdiv, &mut fd),
+        0,
+        "sign bit possibly set -> no fire"
+    );
 }
 
 #[test]
@@ -538,7 +566,11 @@ fn positive_div_positive_inputs_converts_to_unsigned() {
     set_in(&mut fd, sdiv, a, 0);
     set_in(&mut fd, sdiv, b, 1);
     let _o = give_output(&mut fd, sdiv, 0x20, 4);
-    assert_eq!(rule.apply_op(sdiv, &mut fd), 1, "provably positive -> unsigned div");
+    assert_eq!(
+        rule.apply_op(sdiv, &mut fd),
+        1,
+        "provably positive -> unsigned div"
+    );
     assert_eq!(fd.obank().get(sdiv).unwrap().code(), OpCode::CPUI_INT_DIV);
 }
 
@@ -567,7 +599,11 @@ fn two_comp_two_sub_lone_descendant_not_add() {
     let compout = give_output(&mut fd, comp, 0x20, 4);
     let copy = mk_op(&mut fd, 1, 0x104, OpCode::CPUI_COPY);
     set_in(&mut fd, copy, compout, 0);
-    assert_eq!(rule.apply_op(comp, &mut fd), 0, "lone descendant must be INT_ADD");
+    assert_eq!(
+        rule.apply_op(comp, &mut fd),
+        0,
+        "lone descendant must be INT_ADD"
+    );
 }
 
 #[test]
@@ -593,11 +629,23 @@ fn two_comp_two_sub_fires_v_plus_neg_w_to_v_minus_w() {
     // INT_ADD became INT_SUB reading (v, w); 2COMP destroyed (inputs unset).
     assert_eq!(fd.obank().get(add).unwrap().code(), OpCode::CPUI_INT_SUB);
     assert_eq!(fd.obank().get(add).unwrap().get_in(0), Some(v));
-    assert_eq!(fd.obank().get(add).unwrap().get_in(1), Some(w), "subtrahend is w");
+    assert_eq!(
+        fd.obank().get(add).unwrap().get_in(1),
+        Some(w),
+        "subtrahend is w"
+    );
     // opDestroy unsets the 2COMP's input/output (the parent-less synthetic op is
     // not block-removed, but its def/use links are severed).
-    assert_eq!(fd.obank().get(comp).unwrap().get_in(0), None, "2COMP input unset");
-    assert_eq!(fd.obank().get(comp).unwrap().get_out(), None, "2COMP output unset");
+    assert_eq!(
+        fd.obank().get(comp).unwrap().get_in(0),
+        None,
+        "2COMP input unset"
+    );
+    assert_eq!(
+        fd.obank().get(comp).unwrap().get_out(),
+        None,
+        "2COMP output unset"
+    );
 }
 
 #[test]
@@ -628,7 +676,11 @@ fn sub_normal_requires_shift_def() {
     let c = mk_const(&mut fd, 4, 1);
     set_in(&mut fd, sub, c, 1);
     let _o = give_output(&mut fd, sub, 0x20, 4);
-    assert_eq!(rule.apply_op(sub, &mut fd), 0, "shift input must be defined by a right shift");
+    assert_eq!(
+        rule.apply_op(sub, &mut fd),
+        0,
+        "shift input must be defined by a right shift"
+    );
 }
 
 #[test]
@@ -659,7 +711,11 @@ fn sub_normal_unnecessary_shift_collapses_to_subpiece() {
     set_in(&mut fd, sub, c, 1);
     let _o = give_output(&mut fd, sub, 0x30, 4);
 
-    assert_eq!(rule.apply_op(sub, &mut fd), 1, "unnecessary-shift fold commits");
+    assert_eq!(
+        rule.apply_op(sub, &mut fd),
+        1,
+        "unnecessary-shift fold commits"
+    );
     // op now reads a directly, with constant 2 in slot 1.
     assert_eq!(fd.obank().get(sub).unwrap().get_in(0), Some(a));
     let new_c = fd.obank().get(sub).unwrap().get_in(1).unwrap();
@@ -727,7 +783,11 @@ fn extension_push_single_descendant_bails() {
     set_in(&mut fd, ptradd, idx, 1);
     let elt = mk_const(&mut fd, 8, 4);
     set_in(&mut fd, ptradd, elt, 2);
-    assert_eq!(rule.apply_op(zext, &mut fd), 0, "single pointer use -> no duplicate");
+    assert_eq!(
+        rule.apply_op(zext, &mut fd),
+        0,
+        "single pointer use -> no duplicate"
+    );
 }
 
 #[test]
@@ -870,17 +930,38 @@ fn clone_rule_filters_on_group() {
 fn padding_subtrees_keep_temporary_storage() {
     use unlace_base::space::{JoinSpace, VarnodeStorage};
     let mut manager = build_manager();
-    manager.insert_space(Rc::new(JoinSpace::new(3, false))).unwrap();
+    manager
+        .insert_space(Rc::new(JoinSpace::new(3, false)))
+        .unwrap();
     let ram_space = Rc::clone(manager.get_space_by_name("ram").unwrap());
     let constant = Rc::clone(manager.get_constant_space().unwrap());
     let pieces = [
-        VarnodeStorage { space: Some(constant), offset: 0, size: 4 },
-        VarnodeStorage { space: Some(Rc::clone(&ram_space)), offset: 0x40, size: 4 },
+        VarnodeStorage {
+            space: Some(constant),
+            offset: 0,
+            size: 4,
+        },
+        VarnodeStorage {
+            space: Some(Rc::clone(&ram_space)),
+            offset: 0x40,
+            size: 4,
+        },
     ];
-    let join = manager.find_add_join(&pieces, 0).unwrap().get_unified().get_addr();
+    let join = manager
+        .find_add_join(&pieces, 0)
+        .unwrap()
+        .get_unified()
+        .get_addr();
     let glb = Rc::new(ArchContext::new(manager));
-    let mut fd = Funcdata::new("func", "func", glb, Address::new(ram_space.clone(), 0x1000),
-        0x10000000, 0x40).unwrap();
+    let mut fd = Funcdata::new(
+        "func",
+        "func",
+        glb,
+        Address::new(ram_space.clone(), 0x1000),
+        0x10000000,
+        0x40,
+    )
+    .unwrap();
     let field = fd.new_varnode(4, &Address::new(ram_space, 0x40), Some(unk(4)));
     let padding = mk_op(&mut fd, 2, 0x100, OpCode::CPUI_PIECE);
     for slot in 0..2 {
@@ -891,12 +972,32 @@ fn padding_subtrees_keep_temporary_storage() {
     let root = mk_op(&mut fd, 2, 0x104, OpCode::CPUI_PIECE);
     set_in(&mut fd, root, padded, 0);
     set_in(&mut fd, root, field, 1);
-    let whole = fd.new_varnode(8, &join, Some(Rc::new(Datatype::new(8, type_metatype::TYPE_STRUCT))));
+    let whole = fd.new_varnode(
+        8,
+        &join,
+        Some(Rc::new(Datatype::new(8, type_metatype::TYPE_STRUCT))),
+    );
     let seq = fd.obank().get(root).unwrap().get_seq_num().clone();
-    let whole = fd.vbank_mut().set_def(whole, DefOpInfo { id: root, seqnum: seq }, &mut no_replace()).unwrap();
-    fd.obank_mut().get_mut(root).unwrap().set_output(Some(whole));
+    let whole = fd
+        .vbank_mut()
+        .set_def(
+            whole,
+            DefOpInfo {
+                id: root,
+                seqnum: seq,
+            },
+            &mut no_replace(),
+        )
+        .unwrap();
+    fd.obank_mut()
+        .get_mut(root)
+        .unwrap()
+        .set_output(Some(whole));
     assert_eq!(RulePieceStructure::new("test").apply_op(root, &mut fd), 1);
     let padded = fd.obank().get(padding).unwrap().get_out().unwrap();
-    assert!(!fd.vbank().get(padded).unwrap().is_constant(), "padding subtree must not write the constant space");
+    assert!(
+        !fd.vbank().get(padded).unwrap().is_constant(),
+        "padding subtree must not write the constant space"
+    );
     assert_eq!(fd.obank().get(root).unwrap().get_in(0), Some(padded));
 }

@@ -24,19 +24,19 @@
 
 use std::collections::BTreeMap;
 
+use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::marshal::{
-    AttributeId, Decoder, ElementId, IdRegistry, ATTRIB_FORMAT, ATTRIB_NAME, ATTRIB_SPACE,
+    ATTRIB_FORMAT, ATTRIB_NAME, ATTRIB_SPACE, AttributeId, Decoder, ElementId, IdRegistry,
 };
 use unlace_base::space::AddrSpace;
 use unlace_base::types::{int4, uint4};
 use unlace_num::pcoderaw::VarnodeData;
-use std::rc::Rc;
 
 use crate::pcodeinject::{
-    InjectArchitecture, CALLOTHERFIXUP_TYPE, ELEM_CASE_PCODE, ELEM_DEFAULT_PCODE, ELEM_PCODE,
-    ELEM_SIZE_PCODE, EXECUTABLEPCODE_TYPE,
+    CALLOTHERFIXUP_TYPE, ELEM_CASE_PCODE, ELEM_DEFAULT_PCODE, ELEM_PCODE, ELEM_SIZE_PCODE,
+    EXECUTABLEPCODE_TYPE, InjectArchitecture,
 };
 
 // ---------------------------------------------------------------------------
@@ -62,7 +62,12 @@ pub const ELEM_SEGMENTOP: ElementId = ElementId::new("segmentop", 129);
 /// Register every userop marshaling id with an [`IdRegistry`] (the C++ global
 /// static-init side effect; explicit in the port).
 pub fn register_ids(reg: &mut IdRegistry) {
-    for a in [&ATTRIB_FARPOINTER, &ATTRIB_INPUTOP, &ATTRIB_OUTPUTOP, &ATTRIB_USEROP] {
+    for a in [
+        &ATTRIB_FARPOINTER,
+        &ATTRIB_INPUTOP,
+        &ATTRIB_OUTPUTOP,
+        &ATTRIB_USEROP,
+    ] {
         reg.register_attribute(a);
     }
     for e in [&ELEM_CONSTRESOLVE, &ELEM_JUMPASSIST, &ELEM_SEGMENTOP] {
@@ -212,7 +217,12 @@ impl UserOpBase {
     /// Construct from name and index (C++
     /// `UserPcodeOp(const string&,Architecture*,uint4,int4)`); flags start 0.
     pub fn new(nm: &[u8], tp: userop_type, ind: int4) -> UserOpBase {
-        UserOpBase { name: nm.to_vec(), utype: tp, useropindex: ind, flags: 0 }
+        UserOpBase {
+            name: nm.to_vec(),
+            utype: tp,
+            useropindex: ind,
+            flags: 0,
+        }
     }
 }
 
@@ -260,11 +270,7 @@ impl SegmentOp {
     }
     /// Get the number of input Varnodes expected (C++ `getNumVariableTerms`).
     pub fn get_num_variable_terms(&self) -> int4 {
-        if self.baseinsize != 0 {
-            2
-        } else {
-            1
-        }
+        if self.baseinsize != 0 { 2 } else { 1 }
     }
 }
 
@@ -350,35 +356,64 @@ impl UserPcodeOp {
             base: UserOpBase::new(nm, userop_type::injected, ind),
             // C++ `InjectedUserOp(...) { injectid = injid; }` — injid is an
             // int4 stored into a uint4 member; preserve the bit pattern.
-            kind: UserOpKind::Injected { injectid: injid as uint4 },
+            kind: UserOpKind::Injected {
+                injectid: injid as uint4,
+            },
         }
     }
 
     /// C++ `VolatileReadOp(const string&,Architecture*,bool functional)`:
     /// flags = functional ? 0 : no_operator; index = BUILTIN_VOLATILE_READ.
     pub fn new_volatile_read(nm: &[u8], functional: bool) -> UserPcodeOp {
-        let mut base = UserOpBase::new(nm, userop_type::volatile_read, BUILTIN_VOLATILE_READ as int4);
-        base.flags = if functional { 0 } else { userop_flags::NO_OPERATOR };
-        UserPcodeOp { base, kind: UserOpKind::VolatileRead }
+        let mut base = UserOpBase::new(
+            nm,
+            userop_type::volatile_read,
+            BUILTIN_VOLATILE_READ as int4,
+        );
+        base.flags = if functional {
+            0
+        } else {
+            userop_flags::NO_OPERATOR
+        };
+        UserPcodeOp {
+            base,
+            kind: UserOpKind::VolatileRead,
+        }
     }
 
     /// C++ `VolatileWriteOp(const string&,Architecture*,bool functional)`:
     /// flags = functional ? 0 : annotation_assignment; index =
     /// BUILTIN_VOLATILE_WRITE.
     pub fn new_volatile_write(nm: &[u8], functional: bool) -> UserPcodeOp {
-        let mut base =
-            UserOpBase::new(nm, userop_type::volatile_write, BUILTIN_VOLATILE_WRITE as int4);
-        base.flags = if functional { 0 } else { userop_flags::ANNOTATION_ASSIGNMENT };
-        UserPcodeOp { base, kind: UserOpKind::VolatileWrite }
+        let mut base = UserOpBase::new(
+            nm,
+            userop_type::volatile_write,
+            BUILTIN_VOLATILE_WRITE as int4,
+        );
+        base.flags = if functional {
+            0
+        } else {
+            userop_flags::ANNOTATION_ASSIGNMENT
+        };
+        UserPcodeOp {
+            base,
+            kind: UserOpKind::VolatileWrite,
+        }
     }
 
     /// C++ `InternalStringOp(Architecture*)`: name "stringdata", index
     /// BUILTIN_STRINGDATA, flags |= display_string.
     pub fn new_internal_string() -> UserPcodeOp {
-        let mut base =
-            UserOpBase::new(b"stringdata", userop_type::string_data, BUILTIN_STRINGDATA as int4);
+        let mut base = UserOpBase::new(
+            b"stringdata",
+            userop_type::string_data,
+            BUILTIN_STRINGDATA as int4,
+        );
         base.flags |= userop_flags::DISPLAY_STRING;
-        UserPcodeOp { base, kind: UserOpKind::InternalString }
+        UserPcodeOp {
+            base,
+            kind: UserOpKind::InternalString,
+        }
     }
 
     /// C++ `DatatypeUserOp(const string&,Architecture*,int4,Datatype*,...)`:
@@ -396,7 +431,10 @@ impl UserPcodeOp {
         }
         UserPcodeOp {
             base: UserOpBase::new(nm, userop_type::datatype, ind),
-            kind: UserOpKind::Datatype(DatatypeUserOp { out_type: out, in_types }),
+            kind: UserOpKind::Datatype(DatatypeUserOp {
+                out_type: out,
+                in_types,
+            }),
         }
     }
 
@@ -592,7 +630,9 @@ impl UserPcodeOp {
         }
         self.base.name = name;
         self.base.useropindex = base.index; // Get the index from the core userop
-        self.kind = UserOpKind::Injected { injectid: injectid as uint4 };
+        self.kind = UserOpKind::Injected {
+            injectid: injectid as uint4,
+        };
         Ok(())
     }
 
@@ -625,7 +665,8 @@ impl UserPcodeOp {
                 self.base.name = decoder.read_string()?;
             }
         }
-        let spc = spc.ok_or_else(|| KunaError::lowlevel("<segmentop> expecting space attribute"))?;
+        let spc =
+            spc.ok_or_else(|| KunaError::lowlevel("<segmentop> expecting space attribute"))?;
         let otherop = names.get_by_name(&self.base.name).ok_or_else(|| {
             KunaError::lowlevel(format!(
                 "<segmentop> unknown userop {}",
@@ -672,7 +713,9 @@ impl UserPcodeOp {
         }
         decoder.close_element(elem_id)?;
         if inject_id < 0 {
-            return Err(KunaError::lowlevel("Missing <pcode> child in <segmentop> tag"));
+            return Err(KunaError::lowlevel(
+                "Missing <pcode> child in <segmentop> tag",
+            ));
         }
         let (size_output, size_input, in0, in1) = arch.payload_io_sizes(inject_id)?;
         if size_output != 1 {
@@ -951,7 +994,10 @@ impl UserOpManage {
             if let Some(Some(op)) = self.useroplist.get(id as usize) {
                 map.insert(
                     name.clone(),
-                    NameEntry { index: op.get_index(), unspecialized: op.is_unspecialized() },
+                    NameEntry {
+                        index: op.get_index(),
+                        unspecialized: op.is_unspecialized(),
+                    },
                 );
             }
         }
@@ -960,7 +1006,10 @@ impl UserOpManage {
 
     /// Every registered (non-builtin) user-op as `(index, name)`.
     pub fn named_ops(&self) -> impl Iterator<Item = (uint4, &[u8])> + '_ {
-        self.useroplist.iter().enumerate().filter_map(|(i, op)| op.as_ref().map(|op| (i as uint4, op.get_name())))
+        self.useroplist
+            .iter()
+            .enumerate()
+            .filter_map(|(i, op)| op.as_ref().map(|op| (i as uint4, op.get_name())))
     }
 
     /// Number of segment operations supported (C++ `numSegmentOps`).
@@ -1098,20 +1147,40 @@ impl UserOpManage {
                 let c_type = types.get_type_char();
                 let ptr_type = types.get_type_pointer(ptr_size, c_type, word_size);
                 let len_type = types.get_base_int(ptr_size);
-                UserPcodeOp::new_datatype(b"strlen", BUILTIN_STRLEN as int4, Some(len_type), &[Some(ptr_type)])
+                UserPcodeOp::new_datatype(
+                    b"strlen",
+                    BUILTIN_STRLEN as int4,
+                    Some(len_type),
+                    &[Some(ptr_type)],
+                )
             }
-            BUILTIN_EH_UNWINDING => {
-                UserPcodeOp::new_datatype(b"eh_unwinding", BUILTIN_EH_UNWINDING as int4, Some(types.get_type_bool()), &[])
+            BUILTIN_EH_UNWINDING => UserPcodeOp::new_datatype(
+                b"eh_unwinding",
+                BUILTIN_EH_UNWINDING as int4,
+                Some(types.get_type_bool()),
+                &[],
+            ),
+            BUILTIN_EH_EXCEPTION => {
+                UserPcodeOp::new_unspecialized(b"eh_exception", BUILTIN_EH_EXCEPTION as int4)
             }
-            BUILTIN_EH_EXCEPTION => UserPcodeOp::new_unspecialized(b"eh_exception", BUILTIN_EH_EXCEPTION as int4),
-            BUILTIN_EH_SELECTOR => UserPcodeOp::new_unspecialized(b"eh_selector", BUILTIN_EH_SELECTOR as int4),
-            BUILTIN_JAVA_TRY => {
-                UserPcodeOp::new_datatype(b"java_try", BUILTIN_JAVA_TRY as int4, Some(types.get_type_bool()), &[])
+            BUILTIN_EH_SELECTOR => {
+                UserPcodeOp::new_unspecialized(b"eh_selector", BUILTIN_EH_SELECTOR as int4)
             }
-            BUILTIN_JAVA_THROWS => {
-                UserPcodeOp::new_datatype(b"java_throws", BUILTIN_JAVA_THROWS as int4, Some(types.get_type_bool()), &[])
+            BUILTIN_JAVA_TRY => UserPcodeOp::new_datatype(
+                b"java_try",
+                BUILTIN_JAVA_TRY as int4,
+                Some(types.get_type_bool()),
+                &[],
+            ),
+            BUILTIN_JAVA_THROWS => UserPcodeOp::new_datatype(
+                b"java_throws",
+                BUILTIN_JAVA_THROWS as int4,
+                Some(types.get_type_bool()),
+                &[],
+            ),
+            BUILTIN_JAVA_CAUGHT => {
+                UserPcodeOp::new_unspecialized(b"java_caught", BUILTIN_JAVA_CAUGHT as int4)
             }
-            BUILTIN_JAVA_CAUGHT => UserPcodeOp::new_unspecialized(b"java_caught", BUILTIN_JAVA_CAUGHT as int4),
             BUILTIN_BSWAP => UserPcodeOp::new_unspecialized(b"bswap", BUILTIN_BSWAP as int4),
             BUILTIN_SWIFT_ERROR | BUILTIN_SWIFT_THROW => {
                 let ptr_size = types.get_size_of_pointer();
@@ -1130,16 +1199,31 @@ impl UserOpManage {
                 let word_size = types.get_default_data_space_word_size();
                 let ptr_type = types.get_type_pointer(ptr_size, types.get_type_void(), word_size);
                 let size_type = types.get_base_int(ptr_size);
-                UserPcodeOp::new_datatype(b"alloca", BUILTIN_ALLOCA as int4, Some(ptr_type), &[Some(size_type)])
+                UserPcodeOp::new_datatype(
+                    b"alloca",
+                    BUILTIN_ALLOCA as int4,
+                    Some(ptr_type),
+                    &[Some(size_type)],
+                )
             }
             BUILTIN_VA_START => match types.get_va_list_pointer() {
-                Some(ptr) => UserPcodeOp::new_datatype(b"va_start", BUILTIN_VA_START as int4, None, &[Some(ptr)]),
+                Some(ptr) => UserPcodeOp::new_datatype(
+                    b"va_start",
+                    BUILTIN_VA_START as int4,
+                    None,
+                    &[Some(ptr)],
+                ),
                 None => UserPcodeOp::new_unspecialized(b"va_start", BUILTIN_VA_START as int4),
             },
             BUILTIN_ABS | BUILTIN_LABS => {
                 let int_type = types.get_base_int(if i == BUILTIN_ABS { 4 } else { 8 });
                 let name: &[u8] = if i == BUILTIN_ABS { b"abs" } else { b"labs" };
-                UserPcodeOp::new_datatype(name, i as int4, Some(Rc::clone(&int_type)), &[Some(int_type)])
+                UserPcodeOp::new_datatype(
+                    name,
+                    i as int4,
+                    Some(Rc::clone(&int_type)),
+                    &[Some(int_type)],
+                )
             }
             BUILTIN_BITREV => UserPcodeOp::new_unspecialized(b"bitreverse", BUILTIN_BITREV as int4),
             BUILTIN_VAARG => UserPcodeOp::new_unspecialized(b"va_arg", BUILTIN_VAARG as int4),
@@ -1148,7 +1232,12 @@ impl UserOpManage {
                 let word_size = types.get_default_data_space_word_size();
                 let c_type = types.get_type_char();
                 let ptr_type = types.get_type_pointer(ptr_size, c_type, word_size);
-                UserPcodeOp::new_datatype(b"strcpy", BUILTIN_STRCPY as int4, Some(Rc::clone(&ptr_type)), &[Some(Rc::clone(&ptr_type)), Some(ptr_type)])
+                UserPcodeOp::new_datatype(
+                    b"strcpy",
+                    BUILTIN_STRCPY as int4,
+                    Some(Rc::clone(&ptr_type)),
+                    &[Some(Rc::clone(&ptr_type)), Some(ptr_type)],
+                )
             }
             BUILTIN_CTZ => UserPcodeOp::new_unspecialized(b"ctz", BUILTIN_CTZ as int4),
             BUILTIN_MEMSET16 | BUILTIN_MEMSET32 | BUILTIN_MEMSET64 => {
@@ -1162,7 +1251,12 @@ impl UserOpManage {
                 let element = types.get_base_int(width);
                 let ptr_type = types.get_type_pointer(ptr_size, Rc::clone(&element), word_size);
                 let count = types.get_base_int(ptr_size);
-                UserPcodeOp::new_datatype(name, i as int4, None, &[Some(ptr_type), Some(element), Some(count)])
+                UserPcodeOp::new_datatype(
+                    name,
+                    i as int4,
+                    None,
+                    &[Some(ptr_type), Some(element), Some(count)],
+                )
             }
             BUILTIN_MEMCMP => {
                 let ptr_size = types.get_size_of_pointer();
@@ -1176,8 +1270,12 @@ impl UserOpManage {
                     &[Some(Rc::clone(&ptr_type)), Some(ptr_type), Some(count)],
                 )
             }
-            BUILTIN_KERNEL_BUG => UserPcodeOp::new_unspecialized(b"BUG", BUILTIN_KERNEL_BUG as int4),
-            BUILTIN_KERNEL_WARN => UserPcodeOp::new_unspecialized(b"__WARN", BUILTIN_KERNEL_WARN as int4),
+            BUILTIN_KERNEL_BUG => {
+                UserPcodeOp::new_unspecialized(b"BUG", BUILTIN_KERNEL_BUG as int4)
+            }
+            BUILTIN_KERNEL_WARN => {
+                UserPcodeOp::new_unspecialized(b"__WARN", BUILTIN_KERNEL_WARN as int4)
+            }
             _ => return Err(KunaError::lowlevel("Bad built-in userop id")),
         };
         self.builtinmap.insert(i, res);
@@ -1187,7 +1285,9 @@ impl UserOpManage {
     /// (kuna) Register an unspecialized built-in user-op under `name` (the
     /// `lanefuse` intrinsics, whose ids are generated).
     pub fn register_named_builtin(&mut self, i: uint4, name: &str) {
-        self.builtinmap.entry(i).or_insert_with(|| UserPcodeOp::new_unspecialized(name.as_bytes(), i as int4));
+        self.builtinmap
+            .entry(i)
+            .or_insert_with(|| UserPcodeOp::new_unspecialized(name.as_bytes(), i as int4));
     }
 
     /// \brief Insert a new UserPcodeOp description object in the map(s)
@@ -1228,7 +1328,9 @@ impl UserOpManage {
         }
         let name = op.get_name().to_vec();
         // Record segment ops in the per-space table (C++ dynamic_cast path).
-        let segment_space_index = op.as_segment().and_then(|s| s.spc.as_ref().map(|s| s.get_index()));
+        let segment_space_index = op
+            .as_segment()
+            .and_then(|s| s.spc.as_ref().map(|s| s.get_index()));
         self.useroplist[ind as usize] = Some(op); // Index crossref
         self.useropmap.insert(name, ind); // Name crossref
 
@@ -1237,7 +1339,9 @@ impl UserOpManage {
                 self.segmentop.push(None);
             }
             if self.segmentop[index as usize].is_some() {
-                return Err(KunaError::lowlevel("Multiple segmentops defined for same space"));
+                return Err(KunaError::lowlevel(
+                    "Multiple segmentops defined for same space",
+                ));
             }
             self.segmentop[index as usize] = Some(ind);
         }
@@ -1289,10 +1393,14 @@ impl UserOpManage {
             ));
         }
         if self.builtinmap.contains_key(&BUILTIN_VOLATILE_READ) {
-            return Err(KunaError::lowlevel("read_volatile user-op registered more than once"));
+            return Err(KunaError::lowlevel(
+                "read_volatile user-op registered more than once",
+            ));
         }
         if self.builtinmap.contains_key(&BUILTIN_VOLATILE_WRITE) {
-            return Err(KunaError::lowlevel("write_volatile user-op registered more than once"));
+            return Err(KunaError::lowlevel(
+                "write_volatile user-op registered more than once",
+            ));
         }
         let vr_op = UserPcodeOp::new_volatile_read(&read_op_name, functional_display);
         self.builtinmap.insert(BUILTIN_VOLATILE_READ, vr_op);
@@ -1333,11 +1441,7 @@ impl UserOpManage {
     /// STUB(`inject_sleigh.rs`): the actual snippet compile
     /// (`pcodeinjectlib->manualCallOtherFixup`) is the SLEIGH library's; the
     /// caller passes the resulting injectid through.
-    pub fn manual_call_other_fixup(
-        &mut self,
-        useropname: &[u8],
-        injectid: int4,
-    ) -> KunaResult<()> {
+    pub fn manual_call_other_fixup(&mut self, useropname: &[u8], injectid: int4) -> KunaResult<()> {
         let (exists, unspecialized, index) = match self.get_op_by_name(useropname) {
             Some(op) => (true, op.is_unspecialized(), op.get_index()),
             None => (false, false, 0),

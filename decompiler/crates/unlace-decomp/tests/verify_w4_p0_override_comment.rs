@@ -24,12 +24,10 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::marshal::{Decoder, IdRegistry, XmlDecode};
-use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace,
-};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, ConstantSpace, addrspace_flags, spacetype};
 
-use unlace_decomp::comment::{comment_type, CommentDatabase, CommentDatabaseInternal};
-use unlace_decomp::overrides::{flow_type, register_ids, Override};
+use unlace_decomp::comment::{CommentDatabase, CommentDatabaseInternal, comment_type};
+use unlace_decomp::overrides::{Override, flow_type, register_ids};
 
 // ---------------------------------------------------------------------------
 // Fixtures: const(0), ram(1, 8-byte processor), io(2, 8-byte processor).
@@ -106,7 +104,11 @@ fn add_comment_first_element_and_lower_funcaddr_predecessor_keep_uniq_zero() {
 
     let los: Vec<_> = db.comments_for(&lo).collect();
     assert_eq!(los.len(), 1);
-    assert_eq!(los[0].get_uniq(), 0, "first-element insert must keep uniq 0");
+    assert_eq!(
+        los[0].get_uniq(),
+        0,
+        "first-element insert must keep uniq 0"
+    );
 
     // Now a second comment for the LOW funcaddr at a *higher* address than the
     // first low comment.  Its predecessor (the lo@0x1010 comment) has a
@@ -201,7 +203,11 @@ fn clear_type_brackets_one_function_across_space_boundary() {
         .comments_for(&fad)
         .map(|c| c.get_text().to_vec())
         .collect();
-    assert_eq!(remaining, vec![b"hdr".to_vec()], "only non-matching type survives");
+    assert_eq!(
+        remaining,
+        vec![b"hdr".to_vec()],
+        "only non-matching type survives"
+    );
 
     let others: Vec<_> = db
         .comments_for(&other)
@@ -225,8 +231,14 @@ fn comments_for_isolates_functions_in_different_spaces() {
     db.add_comment(comment_type::USER1, &f_io, &io(&m, 0x1010), b"io-fn");
 
     // Same offset but different funcaddr space => disjoint ranges.
-    let ramc: Vec<_> = db.comments_for(&f_ram).map(|c| c.get_text().to_vec()).collect();
-    let ioc: Vec<_> = db.comments_for(&f_io).map(|c| c.get_text().to_vec()).collect();
+    let ramc: Vec<_> = db
+        .comments_for(&f_ram)
+        .map(|c| c.get_text().to_vec())
+        .collect();
+    let ioc: Vec<_> = db
+        .comments_for(&f_io)
+        .map(|c| c.get_text().to_vec())
+        .collect();
     assert_eq!(ramc, vec![b"ram-fn".to_vec()]);
     assert_eq!(ioc, vec![b"io-fn".to_vec()]);
 }
@@ -279,8 +291,13 @@ fn override_decode_deadcode_high_index_grows_vector_and_flow_none_default() {
     let mut dec = XmlDecode::new(&m, &reg);
     dec.ingest_stream(xml).unwrap();
     let mut ov = Override::new();
-    ov.decode(&mut dec, &mut |_d| panic!("no protooverride")).unwrap();
+    ov.decode(&mut dec, &mut |_d| panic!("no protooverride"))
+        .unwrap();
 
     let delays: Vec<_> = ov.deadcode_delays().collect();
-    assert_eq!(delays, vec![(2, 5)], "only the index-2 slot is non-placeholder");
+    assert_eq!(
+        delays,
+        vec![(2, 5)],
+        "only the index-2 slot is non-placeholder"
+    );
 }

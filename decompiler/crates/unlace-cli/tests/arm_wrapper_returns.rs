@@ -331,7 +331,11 @@ fn a_call_then_return_wrapper_hands_back_its_callee_result() {
         // `consumer` reads r0 after the call, so decompile-all's `voidret` redo
         // returns it without passthrough; only an unread result stays void.
         let off = run(kind, false, None);
-        let want = if kind == "unused" { "void wrapper(" } else { "return provider(a0);" };
+        let want = if kind == "unused" {
+            "void wrapper("
+        } else {
+            "return provider(a0);"
+        };
         assert!(function(&off, "wrapper").contains(want), "{kind}: {off}");
     }
     let text = run("direct", true, None);
@@ -382,7 +386,10 @@ fn clobbers_cycles_indirect_calls_and_void_callees_are_not_evidence() {
     }
     // Neither is passthrough's evidence, but `consumer` reads r0 after the call.
     let text = run("indirect", true, None);
-    assert!(function(&text, "wrapper").contains("return (*a3)();"), "{text}");
+    assert!(
+        function(&text, "wrapper").contains("return (*a3)();"),
+        "{text}"
+    );
     let text = run("overwrite", true, None);
     assert!(function(&text, "wrapper").contains("return 7;"), "{text}");
     assert!(
@@ -472,6 +479,9 @@ fn mips_wrappers_hand_back_their_callee_result() {
             "{text}"
         );
         let off = decompile(&mips_image(big), "elf", false, None);
-        assert!(function(&off, "wrapper").contains("return provider("), "{off}");
+        assert!(
+            function(&off, "wrapper").contains("return provider("),
+            "{off}"
+        );
     }
 }

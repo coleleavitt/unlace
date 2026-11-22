@@ -23,7 +23,6 @@
 //! `LC_DYLD_INFO` image already holds its unslid pointers in the file, so the
 //! resolver yields nothing and the image is untouched.
 
-
 use super::format::macho::resolve_chained_fixups;
 use super::kuna_dynrelocs::{DynRelocWrite, DynRelocs};
 
@@ -39,10 +38,16 @@ pub fn resolve(file: &object::File, bytes: &[u8]) -> DynRelocs {
     for (vma, value) in fixups.rebases() {
         out.writes.push(DynRelocWrite { vma, value, width });
         if fixups.in_readonly_segment(vma) {
-            out.const_ranges.push((vma, vma.wrapping_add(width as u64 - 1)));
+            out.const_ranges
+                .push((vma, vma.wrapping_add(width as u64 - 1)));
         }
     }
-    out.writes.extend(fixups.binds().map(|(vma, _)| DynRelocWrite { vma, value: 0, width }));
+    out.writes
+        .extend(fixups.binds().map(|(vma, _)| DynRelocWrite {
+            vma,
+            value: 0,
+            width,
+        }));
     out.writes.sort_unstable_by_key(|w| w.vma);
     out
 }
@@ -52,8 +57,11 @@ mod tests {
     use super::*;
 
     fn fixture(name: &str) -> Vec<u8> {
-        std::fs::read(format!("{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR")))
-            .expect("read fixture")
+        std::fs::read(format!(
+            "{}/tests/fixtures/{name}",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .expect("read fixture")
     }
 
     /// The arm64 chained-fixup fixture: every rebase becomes a write holding the
@@ -64,9 +72,17 @@ mod tests {
         let bytes = fixture("macho_objc_arm64");
         let file = object::File::parse(bytes.as_slice()).expect("parse");
         let r = resolve(&file, &bytes);
-        let classlist = r.writes.iter().find(|w| w.vma == 0x100004000).expect("classlist slot");
+        let classlist = r
+            .writes
+            .iter()
+            .find(|w| w.vma == 0x100004000)
+            .expect("classlist slot");
         assert_eq!((classlist.value, classlist.width), (0x100008000, 8));
-        let isa = r.writes.iter().find(|w| w.vma == 0x100008000).expect("class_t.isa slot");
+        let isa = r
+            .writes
+            .iter()
+            .find(|w| w.vma == 0x100008000)
+            .expect("class_t.isa slot");
         assert_eq!(isa.value, 0x100008028);
         assert!(r.const_ranges.contains(&(0x100004000, 0x100004007)));
         assert!(!r.const_ranges.iter().any(|&(lo, _)| lo == 0x100008000));

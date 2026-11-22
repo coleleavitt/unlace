@@ -10,7 +10,13 @@ use std::process::Command;
 
 const SOURCE: &str = include_str!("../../unlace-analysis/tests/fixtures/rettriangle.c");
 
-const FUNCS: &[&str] = &["celebrate", "finish", "check_name", "guard_first", "two_way"];
+const FUNCS: &[&str] = &[
+    "celebrate",
+    "finish",
+    "check_name",
+    "guard_first",
+    "two_way",
+];
 
 const PRELUDE: &str = "#include <stdio.h>\n#include <string.h>\n#define RETTRIANGLE_NO_MAIN\n";
 
@@ -44,14 +50,22 @@ int main(void) {
 /// Each image and the function whose join it prints as a one-block `if` when
 /// the option is on.
 const IMAGES: &[(&str, &[&str])] = &[
-    ("rettriangle_gcc_O0_x86_64", &["finish", "check_name", "guard_first"]),
+    (
+        "rettriangle_gcc_O0_x86_64",
+        &["finish", "check_name", "guard_first"],
+    ),
     ("rettriangle_gcc_O2_x86_64", &["check_name", "guard_first"]),
-    ("rettriangle_clang_O0_x86_64", &["finish", "check_name", "guard_first"]),
+    (
+        "rettriangle_clang_O0_x86_64",
+        &["finish", "check_name", "guard_first"],
+    ),
 ];
 
 /// The printed function `name`, from its header comment to the next.
 fn function<'a>(text: &'a str, name: &str) -> &'a str {
-    let start = text.find(&format!("// Function: {name} @")).unwrap_or_else(|| panic!("no {name}:\n{text}"));
+    let start = text
+        .find(&format!("// Function: {name} @"))
+        .unwrap_or_else(|| panic!("no {name}:\n{text}"));
     let rest = &text[start + 1..];
     &text[start..start + 1 + rest.find("// Function:").unwrap_or(rest.len())]
 }
@@ -71,32 +85,60 @@ fn a_one_block_if_before_a_constant_return_round_trips_through_the_printed_c() {
         .into_iter()
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
-    assert!(!compilers.is_empty(), "the round trip requires a C compiler");
+    assert!(
+        !compilers.is_empty(),
+        "the round trip requires a C compiler"
+    );
     let reference = reference();
     let funcs = FUNCS.join(",");
     for &(image, triangles) in IMAGES {
         let path = common::fixture(image);
         for opt in ["off", "on"] {
-            let args = ["decompile-all", path.as_str(), "--functions", funcs.as_str(), "--option", "rettriangle", opt];
+            let args = [
+                "decompile-all",
+                path.as_str(),
+                "--functions",
+                funcs.as_str(),
+                "--option",
+                "rettriangle",
+                opt,
+            ];
             let (text, err, rc) = common::run_kuna(&args);
             assert_eq!(rc, 0, "{image} rettriangle {opt}: {err}");
             for name in triangles {
                 let body = function(&text, name);
                 let returns = body.matches("return ").count();
                 if opt == "on" {
-                    assert_eq!(returns, 1, "{image} {name} still splits its return:\n{body}");
+                    assert_eq!(
+                        returns, 1,
+                        "{image} {name} still splits its return:\n{body}"
+                    );
                 } else {
-                    assert_eq!(returns, 2, "{image} {name} lost the split it is compared against:\n{body}");
+                    assert_eq!(
+                        returns, 2,
+                        "{image} {name} lost the split it is compared against:\n{body}"
+                    );
                 }
             }
             let program = format!("{PRELUDE}{reference}\n{text}\n{MAIN}");
             for cc in &compilers {
                 for level in ["-O0", "-O2"] {
-                    let src = common::scratch_file(&format!("rettriangle-{image}-{opt}-{cc}{level}"), "c");
+                    let src = common::scratch_file(
+                        &format!("rettriangle-{image}-{opt}-{cc}{level}"),
+                        "c",
+                    );
                     let exe = src.with_extension("exe");
                     std::fs::write(&src, &program).unwrap();
                     let out = Command::new(cc)
-                        .args(["-std=gnu11", "-w", "-fwrapv", level, "-o", exe.to_str().unwrap(), src.to_str().unwrap()])
+                        .args([
+                            "-std=gnu11",
+                            "-w",
+                            "-fwrapv",
+                            level,
+                            "-o",
+                            exe.to_str().unwrap(),
+                            src.to_str().unwrap(),
+                        ])
                         .args(common::CC_GCC15_DEMOTE)
                         .output()
                         .expect("spawn the C compiler");

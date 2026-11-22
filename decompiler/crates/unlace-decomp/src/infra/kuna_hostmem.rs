@@ -49,9 +49,18 @@ pub fn available() -> Option<Available> {
 /// The machine's free memory or the cgroup headroom, whichever is smaller.
 pub fn tighter(machine: Option<u64>, cgroup: Option<u64>) -> Option<Available> {
     match (machine, cgroup) {
-        (Some(m), Some(c)) if c < m => Some(Available { bytes: c, cgroup: true }),
-        (Some(m), _) => Some(Available { bytes: m, cgroup: false }),
-        (None, c) => c.map(|bytes| Available { bytes, cgroup: true }),
+        (Some(m), Some(c)) if c < m => Some(Available {
+            bytes: c,
+            cgroup: true,
+        }),
+        (Some(m), _) => Some(Available {
+            bytes: m,
+            cgroup: false,
+        }),
+        (None, c) => c.map(|bytes| Available {
+            bytes,
+            cgroup: true,
+        }),
     }
 }
 
@@ -108,17 +117,22 @@ pub fn capped_cgroups() -> Vec<(String, u64)> {
     let Ok(membership) = std::fs::read_to_string("/proc/self/cgroup") else {
         return Vec::new();
     };
-    capped_from(&membership, |dir| std::fs::read_to_string(format!("{root}{dir}/memory.max")).ok())
-        .into_iter()
-        .map(|(dir, max)| (format!("{root}{dir}"), max))
-        .collect()
+    capped_from(&membership, |dir| {
+        std::fs::read_to_string(format!("{root}{dir}/memory.max")).ok()
+    })
+    .into_iter()
+    .map(|(dir, max)| (format!("{root}{dir}"), max))
+    .collect()
 }
 
 /// [`capped_cgroups`] over `/proc/self/cgroup` text, with `read_max`
 /// answering one cgroup directory's `memory.max` (`""` is the root, which has
 /// one only inside a container's cgroup namespace); directories are relative
 /// to the cgroup root.
-pub fn capped_from(membership: &str, read_max: impl Fn(&str) -> Option<String>) -> Vec<(String, u64)> {
+pub fn capped_from(
+    membership: &str,
+    read_max: impl Fn(&str) -> Option<String>,
+) -> Vec<(String, u64)> {
     cgroup_dirs(membership)
         .into_iter()
         .flatten()
@@ -148,7 +162,10 @@ pub fn unreclaimable(current: Option<String>, stat: Option<String>) -> Option<u6
 /// Each cgroup directory from the process's own to the root (`""`), innermost
 /// first; `None` outside a cgroup v2 hierarchy.
 fn cgroup_dirs(membership: &str) -> Option<impl Iterator<Item = &str>> {
-    let leaf = membership.lines().find_map(|l| l.strip_prefix("0::"))?.trim_end_matches('/');
+    let leaf = membership
+        .lines()
+        .find_map(|l| l.strip_prefix("0::"))?
+        .trim_end_matches('/');
     Some(std::iter::successors(Some(leaf), |&dir| {
         (!dir.is_empty()).then(|| &dir[..dir.rfind('/').unwrap_or(0)])
     }))
@@ -176,7 +193,10 @@ mod linux {
     }
 
     pub fn available() -> Option<super::Available> {
-        super::tighter(proc_bytes("/proc/meminfo", "MemAvailable:"), super::cgroup_headroom())
+        super::tighter(
+            proc_bytes("/proc/meminfo", "MemAvailable:"),
+            super::cgroup_headroom(),
+        )
     }
 
     fn proc_bytes(path: &str, key: &str) -> Option<u64> {
@@ -248,7 +268,8 @@ mod win {
     }
 
     pub fn peak() -> Option<u64> {
-        counters().map(|c| super::footprint(c.peak_working_set as u64, c.peak_pagefile_usage as u64))
+        counters()
+            .map(|c| super::footprint(c.peak_working_set as u64, c.peak_pagefile_usage as u64))
     }
 
     pub fn available() -> Option<super::Available> {
@@ -278,7 +299,7 @@ mod win {
 
 #[cfg(target_os = "macos")]
 mod mac {
-    use std::ffi::{c_char, c_int, c_void, CStr};
+    use std::ffi::{CStr, c_char, c_int, c_void};
 
     #[repr(C)]
     struct Rusage {
@@ -303,7 +324,13 @@ mod mac {
         let mut len = std::mem::size_of::<T>();
         // SAFETY: `value` is `len` writable bytes and the name is NUL-terminated.
         let rc = unsafe {
-            sysctlbyname(name.as_ptr(), (&raw mut value).cast(), &mut len, std::ptr::null_mut(), 0)
+            sysctlbyname(
+                name.as_ptr(),
+                (&raw mut value).cast(),
+                &mut len,
+                std::ptr::null_mut(),
+                0,
+            )
         };
         (rc == 0 && len == std::mem::size_of::<T>()).then_some(value)
     }
@@ -315,7 +342,10 @@ mod mac {
     pub fn available() -> Option<super::Available> {
         let memsize = sysctl::<u64>(c"hw.memsize")?;
         let level = sysctl::<u32>(c"kern.memorystatus_level")?;
-        Some(super::Available { bytes: super::level_share(memsize, level), cgroup: false })
+        Some(super::Available {
+            bytes: super::level_share(memsize, level),
+            cgroup: false,
+        })
     }
 
     pub fn peak() -> Option<u64> {
@@ -348,18 +378,37 @@ mod tests {
             };
             Some(v.to_string())
         };
-        assert_eq!(headroom_from(membership, tree), Some(GIB), "the parent slice is the tighter one");
-        let scope_only = |dir: &str, file: &str| tree(dir, file).filter(|_| dir.ends_with(".scope"));
+        assert_eq!(
+            headroom_from(membership, tree),
+            Some(GIB),
+            "the parent slice is the tighter one"
+        );
+        let scope_only =
+            |dir: &str, file: &str| tree(dir, file).filter(|_| dir.ends_with(".scope"));
         assert_eq!(
             headroom_from(membership, scope_only),
             Some(6 * GIB - (3 * GIB - 3 * GIB / 2)),
             "the scope's file LRU is reclaimable, its shmem is not"
         );
-        let no_usage = |dir: &str, file: &str| (file == "memory.max").then(|| tree(dir, file)).flatten();
-        assert_eq!(headroom_from(membership, no_usage), Some(6 * GIB), "no usage files: the cap");
-        assert_eq!(headroom_from(membership, |_, _| Some("max".into())), None, "uncapped");
-        let over = |_: &str, file: &str| Some(if file == "memory.max" { "100" } else { "200" }.into());
-        assert_eq!(headroom_from("0::/\n", over), Some(0), "over its cap: nothing left");
+        let no_usage =
+            |dir: &str, file: &str| (file == "memory.max").then(|| tree(dir, file)).flatten();
+        assert_eq!(
+            headroom_from(membership, no_usage),
+            Some(6 * GIB),
+            "no usage files: the cap"
+        );
+        assert_eq!(
+            headroom_from(membership, |_, _| Some("max".into())),
+            None,
+            "uncapped"
+        );
+        let over =
+            |_: &str, file: &str| Some(if file == "memory.max" { "100" } else { "200" }.into());
+        assert_eq!(
+            headroom_from("0::/\n", over),
+            Some(0),
+            "over its cap: nothing left"
+        );
     }
 
     #[test]
@@ -378,10 +427,17 @@ mod tests {
                 ("/user.slice/wave.slice".to_string(), 6 << 30),
             ]
         );
-        assert!(capped_from("1:memory:/user.slice\n", caps).is_empty(), "cgroup v1");
+        assert!(
+            capped_from("1:memory:/user.slice\n", caps).is_empty(),
+            "cgroup v1"
+        );
         assert!(capped_from(membership, |_| Some("max".into())).is_empty());
         let container = |dir: &str| (dir.is_empty()).then(|| "2147483648".to_string());
-        assert_eq!(capped_from("0::/\n", container), vec![(String::new(), 2 << 30)], "a namespaced container's own cap");
+        assert_eq!(
+            capped_from("0::/\n", container),
+            vec![(String::new(), 2 << 30)],
+            "a namespaced container's own cap"
+        );
         let stat = "anon 9\nfile 7\nactive_file 2\ninactive_file 3\nshmem 2\n".to_string();
         assert_eq!(unreclaimable(Some("100\n".into()), Some(stat)), Some(95));
         assert_eq!(unreclaimable(Some("100".into()), None), Some(100));
@@ -390,10 +446,34 @@ mod tests {
 
     #[test]
     fn the_tighter_bound_wins_and_says_which_it_is() {
-        assert_eq!(tighter(Some(200), Some(6)), Some(Available { bytes: 6, cgroup: true }));
-        assert_eq!(tighter(Some(5), Some(6)), Some(Available { bytes: 5, cgroup: false }));
-        assert_eq!(tighter(Some(5), None), Some(Available { bytes: 5, cgroup: false }));
-        assert_eq!(tighter(None, Some(6)), Some(Available { bytes: 6, cgroup: true }));
+        assert_eq!(
+            tighter(Some(200), Some(6)),
+            Some(Available {
+                bytes: 6,
+                cgroup: true
+            })
+        );
+        assert_eq!(
+            tighter(Some(5), Some(6)),
+            Some(Available {
+                bytes: 5,
+                cgroup: false
+            })
+        );
+        assert_eq!(
+            tighter(Some(5), None),
+            Some(Available {
+                bytes: 5,
+                cgroup: false
+            })
+        );
+        assert_eq!(
+            tighter(None, Some(6)),
+            Some(Available {
+                bytes: 6,
+                cgroup: true
+            })
+        );
         assert_eq!(tighter(None, None), None);
     }
 
@@ -401,7 +481,11 @@ mod tests {
     fn the_windows_and_macos_arithmetic() {
         assert_eq!(footprint(3, 7), 7);
         assert_eq!(footprint(9, 7), 9);
-        assert_eq!(commit_bound(16 << 30, 2 << 30), 2 << 30, "a full commit limit binds");
+        assert_eq!(
+            commit_bound(16 << 30, 2 << 30),
+            2 << 30,
+            "a full commit limit binds"
+        );
         assert_eq!(commit_bound(4 << 30, 40 << 30), 4 << 30);
         assert_eq!(level_share(16 << 30, 25), (16 << 30) / 100 * 25);
         assert_eq!(level_share(16 << 30, 250), (16 << 30) / 100 * 100);

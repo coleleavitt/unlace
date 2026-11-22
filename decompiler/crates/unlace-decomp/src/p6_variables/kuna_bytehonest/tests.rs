@@ -4,7 +4,7 @@
 
 use std::rc::Rc;
 
-use crate::dtype::{type_metatype, Datatype, TypeFactory, TypeFactoryImpl};
+use crate::dtype::{Datatype, TypeFactory, TypeFactoryImpl, type_metatype};
 
 use super::is_uncommitted_byte;
 
@@ -14,13 +14,20 @@ fn factory() -> TypeFactoryImpl {
     let f = TypeFactoryImpl::new();
     f.set_default_alignment_map();
     f.set_max_basetype_size(8);
-    f.set_core_type("undefined", 1, type_metatype::TYPE_UNKNOWN, false).unwrap();
-    f.set_core_type("undefined2", 2, type_metatype::TYPE_UNKNOWN, false).unwrap();
-    f.set_core_type("undefined4", 4, type_metatype::TYPE_UNKNOWN, false).unwrap();
-    f.set_core_type("undefined8", 8, type_metatype::TYPE_UNKNOWN, false).unwrap();
-    f.set_core_type("char", 1, type_metatype::TYPE_INT, true).unwrap();
-    f.set_core_type("bool", 1, type_metatype::TYPE_BOOL, false).unwrap();
-    f.set_core_type("uint1", 1, type_metatype::TYPE_UINT, false).unwrap();
+    f.set_core_type("undefined", 1, type_metatype::TYPE_UNKNOWN, false)
+        .unwrap();
+    f.set_core_type("undefined2", 2, type_metatype::TYPE_UNKNOWN, false)
+        .unwrap();
+    f.set_core_type("undefined4", 4, type_metatype::TYPE_UNKNOWN, false)
+        .unwrap();
+    f.set_core_type("undefined8", 8, type_metatype::TYPE_UNKNOWN, false)
+        .unwrap();
+    f.set_core_type("char", 1, type_metatype::TYPE_INT, true)
+        .unwrap();
+    f.set_core_type("bool", 1, type_metatype::TYPE_BOOL, false)
+        .unwrap();
+    f.set_core_type("uint1", 1, type_metatype::TYPE_UINT, false)
+        .unwrap();
     f.cache_core_types().unwrap();
     f
 }
@@ -42,7 +49,10 @@ fn a_wider_unknown_is_not_touched() {
     // committed C type (`char`).
     let f = factory();
     for size in [2, 4, 8] {
-        assert!(!is_uncommitted_byte(&unknown(&f, size)), "size {size} must be left alone");
+        assert!(
+            !is_uncommitted_byte(&unknown(&f, size)),
+            "size {size} must be left alone"
+        );
     }
 }
 
@@ -56,7 +66,10 @@ fn an_array_of_unknown_is_not_touched() {
     assert!(!is_uncommitted_byte(&arr));
     // Nor the one-element case, whose size IS 1.
     let one = f.get_type_array(1, unknown(&f, 1)).unwrap();
-    assert!(!is_uncommitted_byte(&one), "an array is never the bare byte carrier");
+    assert!(
+        !is_uncommitted_byte(&one),
+        "an array is never the bare byte carrier"
+    );
 }
 
 #[test]
@@ -65,8 +78,12 @@ fn a_committed_byte_is_not_touched() {
     // would destroy information rather than stop asserting it.
     let f = factory();
     assert!(!is_uncommitted_byte(&f.get_type_char(1).unwrap()));
-    assert!(!is_uncommitted_byte(&f.get_base(1, type_metatype::TYPE_BOOL).unwrap()));
-    assert!(!is_uncommitted_byte(&f.get_base(1, type_metatype::TYPE_UINT).unwrap()));
+    assert!(!is_uncommitted_byte(
+        &f.get_base(1, type_metatype::TYPE_BOOL).unwrap()
+    ));
+    assert!(!is_uncommitted_byte(
+        &f.get_base(1, type_metatype::TYPE_UINT).unwrap()
+    ));
 }
 
 #[test]

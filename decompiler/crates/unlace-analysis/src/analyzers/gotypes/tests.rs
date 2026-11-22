@@ -114,7 +114,11 @@ fn go_name_encoding_decodes_and_refuses() {
     let old = [0u8, 0, 3, b'a', b'b', b'c', 0];
     let spans = vec![(0x1000u64, old.to_vec())];
     let mut img = img_of(&spans);
-    assert_eq!(read_go_name(&img, 0x1000), None, "a u16 length is not a varint");
+    assert_eq!(
+        read_go_name(&img, 0x1000),
+        None,
+        "a u16 length is not a varint"
+    );
     img.u16_names = true;
     assert_eq!(read_go_name(&img, 0x1000).as_deref(), Some("abc"));
     // zero length refused; unmapped refused.
@@ -130,13 +134,25 @@ fn type_records_decode_with_kind_and_name() {
     let (spans, _m, types, etypes) = synth();
     let img = img_of(&spans);
     let int_t = read_type(&img, types, etypes, 0).expect("int record");
-    assert_eq!((int_t.kind, int_t.size, int_t.name.as_str()), (KIND_INT, 8, "int"));
+    assert_eq!(
+        (int_t.kind, int_t.size, int_t.name.as_str()),
+        (KIND_INT, 8, "int")
+    );
     let pt = read_type(&img, types, etypes, 0x60).expect("struct record");
-    assert_eq!((pt.kind, pt.size, pt.name.as_str()), (KIND_STRUCT, 16, "main.Point"));
+    assert_eq!(
+        (pt.kind, pt.size, pt.name.as_str()),
+        (KIND_STRUCT, 16, "main.Point")
+    );
     assert!(pt.tflag & TFLAG_NAMED != 0);
     // Out-of-blob and bad-kind offsets refuse.
-    assert!(read_type(&img, types, etypes, 0x3f0).is_none(), "truncated record");
-    assert!(read_type(&img, types, etypes, 0x20).is_none(), "kind 0 at padding");
+    assert!(
+        read_type(&img, types, etypes, 0x3f0).is_none(),
+        "truncated record"
+    );
+    assert!(
+        read_type(&img, types, etypes, 0x20).is_none(),
+        "kind 0 at padding"
+    );
 }
 
 #[test]
@@ -156,7 +172,10 @@ fn moduledata_scan_refuses_a_corrupt_typelinks() {
     spans[1].1[0..4].copy_from_slice(&0x7fff_0000i32.to_le_bytes());
     spans[1].1[4..8].copy_from_slice(&0x7fff_0004i32.to_le_bytes());
     let img = img_of(&spans);
-    assert!(locate_type_meta(&img, anchor).is_none(), "no validating triple");
+    assert!(
+        locate_type_meta(&img, anchor).is_none(),
+        "no validating triple"
+    );
 }
 
 #[test]
@@ -180,7 +199,11 @@ fn struct_offsets_follow_the_toolchain_layout() {
         tf.cache_core_types().unwrap();
         intern_named_structs(&tf, &img, &meta, version);
         let pt = tf.find_by_name("main.Point").unwrap().unwrap();
-        assert_eq!(pt.get_size(), expected_size, "{version:?}, encoded={encoded}");
+        assert_eq!(
+            pt.get_size(),
+            expected_size,
+            "{version:?}, encoded={encoded}"
+        );
         if expected_size != 0 {
             for (i, (name, offset)) in [("X", 0), ("Y", 8)].into_iter().enumerate() {
                 let field = pt.get_field(i as i32).unwrap();
@@ -222,7 +245,11 @@ fn nested_value_fields_complete_even_without_their_own_typelink() {
         intern_named_structs(&tf, &img, &meta, Some((1, 22)));
         let pt = tf.find_by_name("main.Point").unwrap().unwrap();
         if cyclic || bad_extent {
-            assert_eq!(pt.get_size(), 0, "an invalid value dependency keeps the parent opaque");
+            assert_eq!(
+                pt.get_size(),
+                0,
+                "an invalid value dependency keeps the parent opaque"
+            );
         } else {
             let field = pt.get_field(1).expect("the nested value field survives");
             assert_eq!((field.name.as_str(), field.offset), ("Y", 8));
@@ -288,7 +315,9 @@ fn synth_descriptors() -> (Vec<(u64, Vec<u8>)>, u64, u64) {
     blob[0x210] = 0;
     blob[0x211] = 10;
     blob[0x212..0x21c].copy_from_slice(b"main.Point");
-    blob[0x220..0x22d].copy_from_slice(&[0, 11, b'*', b'm', b'a', b'i', b'n', b'.', b'P', b'o', b'i', b'n', b't']);
+    blob[0x220..0x22d].copy_from_slice(&[
+        0, 11, b'*', b'm', b'a', b'i', b'n', b'.', b'P', b'o', b'i', b'n', b't',
+    ]);
     blob[0x230..0x233].copy_from_slice(&[0, 1, b'X']);
     blob[0x238..0x23b].copy_from_slice(&[0, 1, b'Y']);
     // fields array @ +0x300
@@ -322,7 +351,10 @@ fn descriptor_region_walk_enumerates_without_typelinks() {
     let (spans, anchor, types) = synth_descriptors();
     let img = img_of(&spans);
     // The old slice form must NOT claim this image...
-    assert!(locate_type_meta(&img, anchor).is_none(), "no typelinks slice exists");
+    assert!(
+        locate_type_meta(&img, anchor).is_none(),
+        "no typelinks slice exists"
+    );
     // ...and the descriptor walk must: 8 records, main.Point among them.
     let meta = locate_type_meta_descriptors(&img, anchor).expect("descriptor triple + walk");
     assert_eq!(meta.types, types);
@@ -340,7 +372,11 @@ fn descriptor_stride_matches_the_abi_math() {
     let int_t = read_type(&img, types, etypes, 0x08).expect("int");
     assert_eq!(descriptor_stride(&img, &int_t), Some(48), "plain kind");
     let point = read_type(&img, types, etypes, 0x38).expect("struct");
-    assert_eq!(descriptor_stride(&img, &point), Some(80 + 2 * 24), "struct base + fields");
+    assert_eq!(
+        descriptor_stride(&img, &point),
+        Some(80 + 2 * 24),
+        "struct base + fields"
+    );
     let ptr = read_type(&img, types, etypes, 0xb8).expect("ptr");
     assert_eq!(descriptor_stride(&img, &ptr), Some(56), "pointer wrapper");
 }
@@ -398,7 +434,10 @@ fn go127_descriptor_walk_uses_32_bit_wrappers_and_record_boundaries() {
     moduledata[24..28].copy_from_slice(&((at - 4) as u32).to_le_bytes());
     let mut img = GoImage::from_spans(vec![(T, &blob), (M, &moduledata)]);
     img.word_size = 4;
-    assert!(locate_type_meta_descriptors(&img, M).is_none(), "a partial last record");
+    assert!(
+        locate_type_meta_descriptors(&img, M).is_none(),
+        "a partial last record"
+    );
 }
 
 #[test]
@@ -431,14 +470,27 @@ fn pointer_chains_stop_at_cycles_missing_records_and_depth_limit() {
                 let off = index * stride;
                 let size = if index == length { 4u64 } else { width as u64 };
                 bytes[off..off + width].copy_from_slice(&size.to_le_bytes()[..width]);
-                bytes[off + 2 * width + 7] = if index == length { KIND_UINT32 } else { KIND_POINTER };
-                bytes[off + 4 * width + 8..off + 4 * width + 12].copy_from_slice(&(name as i32).to_le_bytes());
-                let next = if index + 1 == length { target.unwrap_or(index + 1) } else { index + 1 };
+                bytes[off + 2 * width + 7] = if index == length {
+                    KIND_UINT32
+                } else {
+                    KIND_POINTER
+                };
+                bytes[off + 4 * width + 8..off + 4 * width + 12]
+                    .copy_from_slice(&(name as i32).to_le_bytes());
+                let next = if index + 1 == length {
+                    target.unwrap_or(index + 1)
+                } else {
+                    index + 1
+                };
                 let ptr = types + (next * stride) as u64;
                 let elem = off + 4 * width + 16;
                 bytes[elem..elem + width].copy_from_slice(&ptr.to_le_bytes()[..width]);
             }
-            let meta = TypeMeta { types, etypes: types + bytes.len() as u64, offsets: vec![] };
+            let meta = TypeMeta {
+                types,
+                etypes: types + bytes.len() as u64,
+                offsets: vec![],
+            };
             let mut image = GoImage::from_spans(vec![(types, &bytes)]);
             image.word_size = width as u64;
             let tf = unlace_decomp::dtype::TypeFactoryImpl::new();
@@ -451,8 +503,14 @@ fn pointer_chains_stop_at_cycles_missing_records_and_depth_limit() {
                 assert_eq!(ty.get_size(), width as i32);
                 ty = ty.get_ptr_to().expect("retains each proven pointer layer");
             }
-            assert_eq!(ty.get_metatype(), leaf, "width {width}, length {length}, target {target:?}");
-            if leaf == type_metatype::TYPE_UINT { assert_eq!(ty.get_size(), 4); }
+            assert_eq!(
+                ty.get_metatype(),
+                leaf,
+                "width {width}, length {length}, target {target:?}"
+            );
+            if leaf == type_metatype::TYPE_UINT {
+                assert_eq!(ty.get_size(), 4);
+            }
         }
     }
 }
@@ -489,7 +547,12 @@ fn forward_struct_pointers_observe_only_valid_completed_layouts() {
         } else {
             assert_eq!(pointee.get_size(), 16);
             assert_eq!(pointee.get_field(0).unwrap().name, "X");
-            let next = pointee.get_field(1).unwrap().field_type.get_ptr_to().unwrap();
+            let next = pointee
+                .get_field(1)
+                .unwrap()
+                .field_type
+                .get_ptr_to()
+                .unwrap();
             assert!(Rc::ptr_eq(&pointee, &next));
         }
     }
@@ -498,13 +561,28 @@ fn forward_struct_pointers_observe_only_valid_completed_layouts() {
 #[test]
 fn global_name_vocabulary_demands_printable_spaceless() {
     assert!(kuna_typeglobals::global_name_ok("main.Point"));
-    assert!(kuna_typeglobals::global_name_ok("*main.Point"), "pointer spelling kept");
-    assert!(kuna_typeglobals::global_name_ok("[]uint8"), "unnamed composite kept");
+    assert!(
+        kuna_typeglobals::global_name_ok("*main.Point"),
+        "pointer spelling kept"
+    );
+    assert!(
+        kuna_typeglobals::global_name_ok("[]uint8"),
+        "unnamed composite kept"
+    );
     assert!(kuna_typeglobals::global_name_ok("map[string]int"));
-    assert!(!kuna_typeglobals::global_name_ok("struct { x int }"), "interior space");
-    assert!(!kuna_typeglobals::global_name_ok("chan int"), "interior space");
+    assert!(
+        !kuna_typeglobals::global_name_ok("struct { x int }"),
+        "interior space"
+    );
+    assert!(
+        !kuna_typeglobals::global_name_ok("chan int"),
+        "interior space"
+    );
     assert!(!kuna_typeglobals::global_name_ok(""), "empty");
-    assert!(!kuna_typeglobals::global_name_ok("a\u{00e9}b"), "non-ASCII byte");
+    assert!(
+        !kuna_typeglobals::global_name_ok("a\u{00e9}b"),
+        "non-ASCII byte"
+    );
 }
 
 #[test]
@@ -689,7 +767,10 @@ fn itab_record_decodes_to_its_two_type_names() {
     let (spans, types, etypes, itab, _inter, _concrete) = synth_itab_blob();
     let img = img_of(&spans);
     let (c, i) = super::kuna_itabs::read_itab(&img, types, etypes, itab).expect("itab decodes");
-    assert_eq!((c.name.as_str(), i.name.as_str()), ("main.Point", "fmt.Stringer"));
+    assert_eq!(
+        (c.name.as_str(), i.name.as_str()),
+        ("main.Point", "fmt.Stringer")
+    );
     assert_eq!(i.kind, KIND_INTERFACE);
     // Inter not an interface descriptor -> refuse (swap the two pointers).
     let mut bad = spans.clone();
@@ -710,8 +791,14 @@ fn itab_size_covers_method_tail_and_placeholder() {
     // Fun[0]==0 placeholder: header only (32).
     let mut ph = spans.clone();
     ph[1].1[24..32].copy_from_slice(&0u64.to_le_bytes());
-    assert_eq!(super::kuna_itabs::itab_size(&img_of(&ph), itab, inter), Some(32));
-    assert_eq!(super::kuna_itabs::interface_method_count(&img, inter), Some(2));
+    assert_eq!(
+        super::kuna_itabs::itab_size(&img_of(&ph), itab, inter),
+        Some(32)
+    );
+    assert_eq!(
+        super::kuna_itabs::interface_method_count(&img, inter),
+        Some(2)
+    );
 }
 
 #[test]
@@ -777,7 +864,11 @@ fn collect_emits_the_linker_itab_symbol() {
     md.extend_from_slice(&1u64.to_le_bytes());
     spans.push((M, md));
     let img = img_of(&spans);
-    let meta = TypeMeta { types, etypes, offsets: vec![] };
+    let meta = TypeMeta {
+        types,
+        etypes,
+        offsets: vec![],
+    };
     let facts = super::kuna_itabs::collect(&img, &meta, M, &std::collections::HashSet::new());
     assert_eq!(facts.len(), 1);
     assert_eq!(facts[0].addr, itab);

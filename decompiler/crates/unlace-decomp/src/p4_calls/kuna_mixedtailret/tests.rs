@@ -4,11 +4,21 @@
 
 use super::*;
 
-use unlace_base::space::{spacetype, AddrSpace};
 use std::rc::Rc;
+use unlace_base::space::{AddrSpace, spacetype};
 
 fn space(name: &str, index: int4) -> Rc<AddrSpace> {
-    Rc::new(AddrSpace::new(spacetype::IPTR_PROCESSOR, name, false, 8, 1, index, 0, 0, 0))
+    Rc::new(AddrSpace::new(
+        spacetype::IPTR_PROCESSOR,
+        name,
+        false,
+        8,
+        1,
+        index,
+        0,
+        0,
+        0,
+    ))
 }
 
 #[test]

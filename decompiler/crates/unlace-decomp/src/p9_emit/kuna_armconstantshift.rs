@@ -2,7 +2,7 @@
 
 use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
 
@@ -43,10 +43,13 @@ impl OptionArmConstShift {
             other => {
                 return Err(unlace_base::error::KunaError::parse(format!(
                     "Unknown armconstshift value: {other} (expected off|on|all)"
-                )))
+                )));
             }
         };
-        Ok((mode, format!("Constant-shift C11 conversion set to {}", mode.as_str())))
+        Ok((
+            mode,
+            format!("Constant-shift C11 conversion set to {}", mode.as_str()),
+        ))
     }
 }
 

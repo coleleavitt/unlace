@@ -41,8 +41,8 @@ use crate::context::HighVariableId;
 use crate::database::SymbolId;
 use crate::funcdata::Funcdata;
 use crate::varmap::ScopeLocal;
-use unlace_base::address::Address;
 use std::collections::BTreeSet;
+use unlace_base::address::Address;
 
 /// Is `sym` a Symbol upstream would render in the signature rather than in the
 /// body (`Symbol::function_parameter`, the category `emitScopeVarDecls` excludes)?
@@ -69,7 +69,9 @@ pub fn references_parameter_symbol(fd: &Funcdata, high: HighVariableId) -> bool 
     let Some(sym) = fd.high_bank().get(high).and_then(|h| h.kuna_ref_symbol()) else {
         return false;
     };
-    fd.get_scope_local().map(|lm| is_parameter_symbol(lm, sym)).unwrap_or(false)
+    fd.get_scope_local()
+        .map(|lm| is_parameter_symbol(lm, sym))
+        .unwrap_or(false)
 }
 
 /// The markup varrefs of every `&symbol` reference bound to the `function_parameter`
@@ -82,8 +84,12 @@ pub fn references_parameter_symbol(fd: &Funcdata, high: HighVariableId) -> bool 
 /// Returns the create indices the markup keys line evidence on.
 pub fn parameter_reference_varrefs(fd: &Funcdata, addr: &Address) -> BTreeSet<u64> {
     let mut varrefs = BTreeSet::new();
-    let Some(lm) = fd.get_scope_local() else { return varrefs };
-    let Some(sym) = parameter_symbol_at(lm, addr) else { return varrefs };
+    let Some(lm) = fd.get_scope_local() else {
+        return varrefs;
+    };
+    let Some(sym) = parameter_symbol_at(lm, addr) else {
+        return varrefs;
+    };
     for (_, high) in fd.high_bank().iter() {
         if high.kuna_ref_symbol() != Some(sym) {
             continue;

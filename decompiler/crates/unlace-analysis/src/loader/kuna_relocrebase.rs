@@ -117,8 +117,11 @@ pub fn rebased_view(file: &object::File, bytes: &[u8]) -> Option<RebasedView> {
     relocate_unlaid_sections(file, &layout, &mut out);
     patch_section_addresses(file, &layout, &mut out)?;
 
-    let mut ranges: Vec<(u64, u64)> =
-        layout.sections.iter().map(|&(vma, size, _)| (vma, vma.wrapping_add(size))).collect();
+    let mut ranges: Vec<(u64, u64)> = layout
+        .sections
+        .iter()
+        .map(|&(vma, size, _)| (vma, vma.wrapping_add(size)))
+        .collect();
     if let Some((lo, hi)) = layout.extern_range {
         ranges.push((lo, hi));
     }
@@ -151,12 +154,21 @@ pub fn select<'a>(
 /// copy, so the analyzer tier decodes exactly the bytes the engine does.
 /// `NOBITS`/uninitialized sections have no file extent and are skipped.
 fn splice_laid_sections(file: &object::File, layout: &RelocLayout, out: &mut [u8]) {
-    let by_vma: HashMap<u64, &Vec<u8>> =
-        layout.segments.iter().map(|(vma, data)| (*vma, data)).collect();
+    let by_vma: HashMap<u64, &Vec<u8>> = layout
+        .segments
+        .iter()
+        .map(|(vma, data)| (*vma, data))
+        .collect();
     for sec in file.sections() {
-        let Some(&vma) = layout.section_vma.get(&sec.index()) else { continue };
-        let Some(data) = by_vma.get(&vma) else { continue };
-        let Some((off, len)) = sec.file_range() else { continue };
+        let Some(&vma) = layout.section_vma.get(&sec.index()) else {
+            continue;
+        };
+        let Some(data) = by_vma.get(&vma) else {
+            continue;
+        };
+        let Some((off, len)) = sec.file_range() else {
+            continue;
+        };
         let off = off as usize;
         let len = (len as usize).min(data.len());
         if off.saturating_add(len) > out.len() {
@@ -175,7 +187,9 @@ fn relocate_unlaid_sections(file: &object::File, layout: &RelocLayout, out: &mut
         if layout.section_vma.contains_key(&sec.index()) {
             continue; // already spliced with the loader's relocated bytes
         }
-        let Some((sec_off, sec_len)) = sec.file_range() else { continue };
+        let Some((sec_off, sec_len)) = sec.file_range() else {
+            continue;
+        };
         for (offset, reloc) in sec.relocations() {
             let nbytes = (reloc.size() / 8) as usize;
             if nbytes != 4 && nbytes != 8 {
@@ -188,7 +202,9 @@ fn relocate_unlaid_sections(file: &object::File, layout: &RelocLayout, out: &mut
             if at + nbytes > out.len() {
                 continue;
             }
-            let Some(s) = resolve_target(file, layout, &reloc) else { continue };
+            let Some(s) = resolve_target(file, layout, &reloc) else {
+                continue;
+            };
             let order = Order::of(file);
             let a = reloc.addend() as i128
                 + if reloc.has_implicit_addend() {
@@ -239,7 +255,9 @@ fn resolve_target(
                 _ => None,
             }
         }
-        RelocationTarget::Section(sidx) => Some(layout.section_vma.get(&sidx).copied().unwrap_or(0)),
+        RelocationTarget::Section(sidx) => {
+            Some(layout.section_vma.get(&sidx).copied().unwrap_or(0))
+        }
         _ => None,
     }
 }
@@ -253,7 +271,9 @@ struct Order {
 
 impl Order {
     fn of(file: &object::File) -> Order {
-        Order { big: !file.is_little_endian() }
+        Order {
+            big: !file.is_little_endian(),
+        }
     }
 
     fn uint(self, field: &[u8]) -> u64 {
@@ -330,14 +350,30 @@ fn patch_elf(file: &object::File, layout: &RelocLayout, out: &mut [u8]) -> Optio
         _ => return None,
     };
     let shape = if is64 {
-        ElfShape { sh_addr: 16, st_value: 8, width: 8 }
+        ElfShape {
+            sh_addr: 16,
+            st_value: 8,
+            width: 8,
+        }
     } else {
-        ElfShape { sh_addr: 12, st_value: 4, width: 4 }
+        ElfShape {
+            sh_addr: 12,
+            st_value: 4,
+            width: 4,
+        }
     };
     let (e_shoff, e_shentsize, e_shnum) = if is64 {
-        (order.read(out, 0x28, 8)?, order.read(out, 0x3a, 2)? as usize, order.read(out, 0x3c, 2)? as usize)
+        (
+            order.read(out, 0x28, 8)?,
+            order.read(out, 0x3a, 2)? as usize,
+            order.read(out, 0x3c, 2)? as usize,
+        )
     } else {
-        (order.read(out, 0x20, 4)?, order.read(out, 0x2e, 2)? as usize, order.read(out, 0x30, 2)? as usize)
+        (
+            order.read(out, 0x20, 4)?,
+            order.read(out, 0x2e, 2)? as usize,
+            order.read(out, 0x30, 2)? as usize,
+        )
     };
     let shoff = usize::try_from(e_shoff).ok()?;
     if e_shentsize < shape.sh_addr + shape.width {
@@ -366,13 +402,20 @@ fn patch_elf(file: &object::File, layout: &RelocLayout, out: &mut [u8]) -> Optio
         return None;
     }
     for sym in file.symbols() {
-        let SymbolSection::Section(sec_idx) = sym.section() else { continue };
-        let Some(&base) = layout.section_vma.get(&sec_idx) else { continue };
+        let SymbolSection::Section(sec_idx) = sym.section() else {
+            continue;
+        };
+        let Some(&base) = layout.section_vma.get(&sec_idx) else {
+            continue;
+        };
         let at = sym_off.checked_add(sym.index().0.checked_mul(sym_entsize)?)? + shape.st_value;
         if at + shape.width > out.len() {
             return None;
         }
-        order.write(out.get_mut(at..at + shape.width)?, base.wrapping_add(sym.address()));
+        order.write(
+            out.get_mut(at..at + shape.width)?,
+            base.wrapping_add(sym.address()),
+        );
     }
     Some(())
 }
@@ -394,9 +437,15 @@ fn elf_symtab_extent(
             continue;
         }
         return if is64 {
-            Some((usize::try_from(order.read(out, h + 24, 8)?).ok()?, usize::try_from(order.read(out, h + 56, 8)?).ok()?))
+            Some((
+                usize::try_from(order.read(out, h + 24, 8)?).ok()?,
+                usize::try_from(order.read(out, h + 56, 8)?).ok()?,
+            ))
         } else {
-            Some((order.read(out, h + 16, 4)? as usize, order.read(out, h + 36, 4)? as usize))
+            Some((
+                order.read(out, h + 16, 4)? as usize,
+                order.read(out, h + 36, 4)? as usize,
+            ))
         };
     }
     // No symbol table at all: nothing to shift, which is not a failure.
@@ -428,7 +477,12 @@ fn patch_coff(layout: &RelocLayout, out: &mut [u8]) -> Option<()> {
             return None;
         }
         let vma = u32::try_from(vma).ok()?;
-        write_uint(out, table + (n - 1) * SECTION_HEADER + VIRTUAL_ADDRESS, 4, vma as u64)?;
+        write_uint(
+            out,
+            table + (n - 1) * SECTION_HEADER + VIRTUAL_ADDRESS,
+            4,
+            vma as u64,
+        )?;
     }
     Some(())
 }
@@ -447,7 +501,8 @@ fn write_uint(b: &mut [u8], at: usize, width: usize, value: u64) -> Option<()> {
 /// is the commit's fallback resolution key, and only loses its address).
 pub fn retain_in_image(out: &mut AnalysisOutput, view: &RebasedView) {
     let keep = |a: u64| view.contains(a);
-    let keep_range = |&(lo, hi): &(u64, u64)| view.contains(lo) && (hi <= lo || view.contains(hi - 1));
+    let keep_range =
+        |&(lo, hi): &(u64, u64)| view.contains(lo) && (hi <= lo || view.contains(hi - 1));
 
     out.symbols.retain(|s| keep(s.addr));
     out.go_chanrecv2 = out.go_chanrecv2.filter(|&addr| keep(addr));
@@ -516,8 +571,13 @@ mod tests {
 
         let text = rebased.section_by_name(".text").expect(".text");
         assert_eq!(text.address(), RELOC_BASE, ".text at the layout base");
-        let startup = rebased.section_by_name(".text.startup").expect(".text.startup");
-        assert!(startup.address() > RELOC_BASE, ".text.startup laid out above .text");
+        let startup = rebased
+            .section_by_name(".text.startup")
+            .expect(".text.startup");
+        assert!(
+            startup.address() > RELOC_BASE,
+            ".text.startup laid out above .text"
+        );
 
         let sym = |name: &str| {
             rebased
@@ -527,7 +587,11 @@ mod tests {
                 .address()
         };
         assert_eq!(sym("to_uchar"), RELOC_BASE, ".text+0 symbol rebased");
-        assert_eq!(sym("main"), startup.address(), ".text.startup+0 symbol rebased");
+        assert_eq!(
+            sym("main"),
+            startup.address(),
+            ".text.startup+0 symbol rebased"
+        );
 
         // The `.eh_frame` FDE oracle used to report the FDE's own section offset
         // (0x20, 0x34, …) because `initial_location` is a PC-relative field the
@@ -535,9 +599,15 @@ mod tests {
         let starts = crate::entry::scan_eh_frame_starts(&rebased);
         assert!(!starts.is_empty(), "ptx.o has FDEs");
         for start in &starts {
-            assert!(view.contains(*start), "FDE start {start:#x} outside the loaded image");
+            assert!(
+                view.contains(*start),
+                "FDE start {start:#x} outside the loaded image"
+            );
         }
-        assert!(starts.contains(&RELOC_BASE), "the .text+0 FDE resolves to the layout base");
+        assert!(
+            starts.contains(&RELOC_BASE),
+            "the .text+0 FDE resolves to the layout base"
+        );
     }
 
     /// A big-endian object's headers, symbols and debug fields are patched in
@@ -553,14 +623,36 @@ mod tests {
             let view = rebased_view(&file, &bytes).unwrap_or_else(|| panic!("{name} is rebased"));
             let rebased = object::File::parse(&*view.bytes).expect("patched image still parses");
             let text = rebased.section_by_name(".text").expect(".text");
-            assert_eq!(text.address(), RELOC_BASE, "{name}: .text at the layout base");
-            let sym = |n: &str| rebased.symbols().find(|s| s.name() == Ok(n)).map(|s| s.address());
+            assert_eq!(
+                text.address(),
+                RELOC_BASE,
+                "{name}: .text at the layout base"
+            );
+            let sym = |n: &str| {
+                rebased
+                    .symbols()
+                    .find(|s| s.name() == Ok(n))
+                    .map(|s| s.address())
+            };
             assert_eq!(sym("scale"), Some(RELOC_BASE), "{name}: scale rebased");
-            assert!(sym("greet").is_some_and(|a| view.contains(a) && a > RELOC_BASE), "{name}: greet rebased");
+            assert!(
+                sym("greet").is_some_and(|a| view.contains(a) && a > RELOC_BASE),
+                "{name}: greet rebased"
+            );
             // DWARF 5 keeps the code addresses in `.debug_addr`, big-endian.
-            let addrs = rebased.section_by_name(".debug_addr").unwrap().data().unwrap();
-            let words: Vec<u32> = addrs[8..].chunks_exact(4).map(|w| u32::from_be_bytes(w.try_into().unwrap())).collect();
-            assert!(words.contains(&(RELOC_BASE as u32)), "{name}: .debug_addr names .text at its load VMA: {words:x?}");
+            let addrs = rebased
+                .section_by_name(".debug_addr")
+                .unwrap()
+                .data()
+                .unwrap();
+            let words: Vec<u32> = addrs[8..]
+                .chunks_exact(4)
+                .map(|w| u32::from_be_bytes(w.try_into().unwrap()))
+                .collect();
+            assert!(
+                words.contains(&(RELOC_BASE as u32)),
+                "{name}: .debug_addr names .text at its load VMA: {words:x?}"
+            );
         }
     }
 
@@ -574,8 +666,16 @@ mod tests {
         let file = object::File::parse(&*bytes).expect("parse");
         let view = rebased_view(&file, &bytes).expect("rebased");
         let rebased = object::File::parse(&*view.bytes).expect("patched image still parses");
-        let sym = |n: &str| rebased.symbols().find(|s| s.name() == Ok(n)).map(|s| s.address());
-        assert_eq!(rebased.section_by_name(".text").map(|s| s.address()), Some(RELOC_BASE));
+        let sym = |n: &str| {
+            rebased
+                .symbols()
+                .find(|s| s.name() == Ok(n))
+                .map(|s| s.address())
+        };
+        assert_eq!(
+            rebased.section_by_name(".text").map(|s| s.address()),
+            Some(RELOC_BASE)
+        );
         assert_eq!(sym("scale"), Some(RELOC_BASE));
         assert_eq!(sym("greet"), Some(RELOC_BASE + 8));
     }
@@ -589,9 +689,17 @@ mod tests {
         let bytes = fixture("ptx.o");
         let file = object::File::parse(&*bytes).expect("parse ptx.o");
         let view = rebased_view(&file, &bytes).expect("synthetically laid out");
-        let raw = file.section_by_name(".debug_info").expect(".debug_info").data().unwrap();
+        let raw = file
+            .section_by_name(".debug_info")
+            .expect(".debug_info")
+            .data()
+            .unwrap();
         let rebased = object::File::parse(&*view.bytes).unwrap();
-        let patched = rebased.section_by_name(".debug_info").unwrap().data().unwrap();
+        let patched = rebased
+            .section_by_name(".debug_info")
+            .unwrap()
+            .data()
+            .unwrap();
         assert_ne!(raw, patched, ".debug_info relocations applied");
     }
 
@@ -629,10 +737,15 @@ mod tests {
     #[test]
     fn linked_image_is_untouched() {
         let _serial = serial();
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../tests/bug-repro/grep");
-        let Ok(bytes) = std::fs::read(&path) else { return };
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../tests/bug-repro/grep");
+        let Ok(bytes) = std::fs::read(&path) else {
+            return;
+        };
         let file = object::File::parse(&*bytes).expect("parse grep");
-        assert!(rebased_view(&file, &bytes).is_none(), "a linked ELF is not rebased");
+        assert!(
+            rebased_view(&file, &bytes).is_none(),
+            "a linked ELF is not rebased"
+        );
     }
 }

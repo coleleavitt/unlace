@@ -1,13 +1,13 @@
 //! String result macros preserve hidden storage, returns and exact contents.
 
+use std::path::PathBuf;
 use unlace_console::engine::bootstrap_from_object;
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::kuna_rustfmt::RustFmtMode;
-use std::path::PathBuf;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
@@ -147,10 +147,12 @@ fn result_recovery_retains_version_and_language_boundaries() {
         decompile(true, "hex_width", true, "c", |_| {}),
         decompile(true, "hex_width", false, "c", |_| {})
     );
-    assert!(decompile(true, "hex_width", true, "rust", |arch| arch
-        .rustc_stable_version =
-        Some((1, 93, 0)))
-    .contains("format!("));
+    assert!(
+        decompile(true, "hex_width", true, "rust", |arch| arch
+            .rustc_stable_version =
+            Some((1, 93, 0)))
+        .contains("format!(")
+    );
 }
 
 fn compile_and_run(source: &str, stem: &str) -> std::process::Output {

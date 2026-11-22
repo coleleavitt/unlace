@@ -40,7 +40,11 @@ struct OverLimit {
 /// the entry whose walk read it only when no extent does: a lower entry's
 /// descent (a gcc `.cold` fragment jumping back into its parent) can reach the
 /// dispatch before its own function is walked.
-pub(crate) fn measure(prog: &ConsoleProgram, graph: &CallGraph, selected: &[FunctionEntry]) -> Limits {
+pub(crate) fn measure(
+    prog: &ConsoleProgram,
+    graph: &CallGraph,
+    selected: &[FunctionEntry],
+) -> Limits {
     let maxinstruction = u64::from(prog.arch().max_instructions);
     let jumptablemax = u64::from(prog.arch().max_jumptable_size);
     let mut switches: BTreeMap<u64, Vec<SwitchTable>> = BTreeMap::new();
@@ -67,7 +71,11 @@ pub(crate) fn measure(prog: &ConsoleProgram, graph: &CallGraph, selected: &[Func
             })
         })
         .collect();
-    Limits { maxinstruction, jumptablemax, over }
+    Limits {
+        maxinstruction,
+        jumptablemax,
+        over,
+    }
 }
 
 pub(crate) fn to_json(limits: &Limits, display_address: &dyn Fn(u64) -> u64) -> Json {
@@ -101,7 +109,10 @@ pub(crate) fn to_json(limits: &Limits, display_address: &dyn Fn(u64) -> u64) -> 
                 ("address".into(), address),
                 ("address_hex".into(), address_hex),
                 ("size".into(), Json::Number(o.entry.size.to_string())),
-                ("instructions".into(), Json::Number(o.instructions.to_string())),
+                (
+                    "instructions".into(),
+                    Json::Number(o.instructions.to_string()),
+                ),
                 (
                     "over_maxinstruction".into(),
                     Json::Bool(o.instructions as u64 > limits.maxinstruction),
@@ -111,8 +122,14 @@ pub(crate) fn to_json(limits: &Limits, display_address: &dyn Fn(u64) -> u64) -> 
         })
         .collect();
     Json::Object(vec![
-        ("maxinstruction".into(), Json::Number(limits.maxinstruction.to_string())),
-        ("jumptablemax".into(), Json::Number(limits.jumptablemax.to_string())),
+        (
+            "maxinstruction".into(),
+            Json::Number(limits.maxinstruction.to_string()),
+        ),
+        (
+            "jumptablemax".into(),
+            Json::Number(limits.jumptablemax.to_string()),
+        ),
         ("over".into(), Json::Array(over)),
     ])
 }
@@ -125,10 +142,16 @@ pub(crate) fn write_text(out: &mut String, limits: &Limits, display_address: &dy
     );
     for o in &limits.over {
         let address = display_address(o.entry.addr.get_offset());
-        let _ = writeln!(out, "  0x{address:x}\t{} instructions\t{}", o.instructions, o.entry.name);
+        let _ = writeln!(
+            out,
+            "  0x{address:x}\t{} instructions\t{}",
+            o.instructions, o.entry.name
+        );
         for sw in &o.switches {
             let at = display_address(sw.dispatch);
-            let cases = sw.cases.map_or_else(|| format!(">={}", sw.read), |n| n.to_string());
+            let cases = sw
+                .cases
+                .map_or_else(|| format!(">={}", sw.read), |n| n.to_string());
             let _ = writeln!(out, "    switch 0x{at:x}\t{cases} cases\t{} read", sw.read);
         }
     }

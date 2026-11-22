@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_num::opcodes::OpCode;
 
@@ -105,7 +105,10 @@ fn terminal_copy_fixture(dependent: bool) -> (Funcdata, BlockId, OpId, OpId) {
         .unwrap();
     fd.op_insert_end(copy, tail);
     let hidden = fd.new_op(1, addr(&rs, 0x1018));
-    fd.op_set_opcode(hidden, unlace_decomp::typeop::type_op_for(OpCode::CPUI_COPY));
+    fd.op_set_opcode(
+        hidden,
+        unlace_decomp::typeop::type_op_for(OpCode::CPUI_COPY),
+    );
     fd.op_set_output(hidden, backedge).unwrap();
     fd.op_set_input(hidden, next, 0).unwrap();
     fd.op_insert_end(hidden, tail);
@@ -115,9 +118,11 @@ fn terminal_copy_fixture(dependent: bool) -> (Funcdata, BlockId, OpId, OpId) {
         .set_flag(pcodeop_flags::nonprinting);
 
     let mut graph = unlace_decomp::block::BlockGraph::new();
-    let sr = graph.arena.insert(unlace_decomp::block::FlowBlock::new_kind(
-        unlace_decomp::block::BlockKind::Graph,
-    ));
+    let sr = graph
+        .arena
+        .insert(unlace_decomp::block::FlowBlock::new_kind(
+            unlace_decomp::block::BlockKind::Graph,
+        ));
     graph.root = Some(sr);
     let copies = graph.build_copy_from(sr, fd.bblocks_ref(), root);
     let hc = copies[&head];

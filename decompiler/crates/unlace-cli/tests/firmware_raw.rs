@@ -8,19 +8,37 @@ fn cortexm_dump_is_configured_from_its_vector_table() {
     let fixture = common::fixture("cortexm3_raw.bin");
     let (out, err, code) = common::run_kuna(&["decompile-all", &fixture]);
     assert_eq!(code, 0, "{err}");
-    assert!(err.contains("Cortex-M vector table: base 0x8000000"), "{err}");
-    assert!(out.contains("// Function: Reset_Handler @ 0x8000174"), "{out}");
+    assert!(
+        err.contains("Cortex-M vector table: base 0x8000000"),
+        "{err}"
+    );
+    assert!(
+        out.contains("// Function: Reset_Handler @ 0x8000174"),
+        "{out}"
+    );
     assert!(out.contains("void SysTick_Handler(void)"));
     assert!(out.contains("// Function: IRQ37_Handler @ 0x8000108"));
-    assert!(out.contains("dat_40011004 = 0x78;"), "a peripheral store survives");
+    assert!(
+        out.contains("dat_40011004 = 0x78;"),
+        "a peripheral store survives"
+    );
 }
 
 #[test]
 fn an_explicit_base_is_kept() {
     let fixture = common::fixture("cortexm3_raw.bin");
     let (_, err, code) = common::run_kuna(&[
-        "functions", &fixture, "--raw-image", "--target", "ARM:LE:32:Cortex", "--base", "0x8000000",
-        "--isa", "thumb", "--entry", "0x8000174",
+        "functions",
+        &fixture,
+        "--raw-image",
+        "--target",
+        "ARM:LE:32:Cortex",
+        "--base",
+        "0x8000000",
+        "--isa",
+        "thumb",
+        "--entry",
+        "0x8000174",
     ]);
     assert_eq!(code, 0, "{err}");
     assert!(!err.contains("Cortex-M vector table"));
@@ -43,7 +61,10 @@ fn a_mediatek_md1img_loads_its_modem_rom_with_debug_names() {
     let img = common::fixture("md1img_mipsel_test.img");
     let (out, err, code) = common::run_kuna(&["decompile-all", &img]);
     assert_eq!(code, 0, "{err}");
-    assert!(err.contains("MediaTek md1img: 68 bytes at 0x90000000, target MIPS:LE:32:default"), "{err}");
+    assert!(
+        err.contains("MediaTek md1img: 68 bytes at 0x90000000, target MIPS:LE:32:default"),
+        "{err}"
+    );
     assert!(out.contains("int scale(int a0)"), "{out}");
     assert!(out.contains("return scale(a0) ^ 0x5a;"), "{out}");
 }
@@ -53,8 +74,16 @@ fn a_bios_image_loads_in_real_mode_at_its_reset_vector() {
     let bin = common::fixture("bios_realmode_test.bin");
     let (out, err, code) = common::run_kuna(&["decompile-all", &bin]);
     assert_eq!(code, 0, "{err}");
-    assert!(err.contains("PC BIOS image: 65536 bytes at 0xf0000, target x86:LE:16:Real Mode, entries [ffff0]"), "{err}");
-    assert!(out.contains("sub_fe000();"), "a near call resolves inside segment F000: {out}");
+    assert!(
+        err.contains(
+            "PC BIOS image: 65536 bytes at 0xf0000, target x86:LE:16:Real Mode, entries [ffff0]"
+        ),
+        "{err}"
+    );
+    assert!(
+        out.contains("sub_fe000();"),
+        "a near call resolves inside segment F000: {out}"
+    );
 }
 
 #[test]

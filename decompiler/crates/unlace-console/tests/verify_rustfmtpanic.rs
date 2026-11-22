@@ -1,14 +1,14 @@
 //! Verified panic messages, primitive arguments, and conservative call boundaries.
 
+use std::path::PathBuf;
 use unlace_console::engine::bootstrap_from_object;
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::kuna_rustfmt::RustFmtMode;
-use std::path::PathBuf;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
@@ -192,15 +192,17 @@ fn language_version_and_formatting_options_bound_recovery() {
         );
     }
     for name in ["panic_literal", "panic_decimal"] {
-        assert!(decompile(
-            true,
-            name,
-            true,
-            "rust",
-            |arch| arch.rustc_stable_version = Some((1, 93, 0)),
-            |_| {}
-        )
-        .contains("panic!("));
+        assert!(
+            decompile(
+                true,
+                name,
+                true,
+                "rust",
+                |arch| arch.rustc_stable_version = Some((1, 93, 0)),
+                |_| {}
+            )
+            .contains("panic!(")
+        );
     }
     let no_identity = |enabled| {
         decompile(
@@ -281,7 +283,9 @@ fn recovered_panics_match_native_payloads() {
     use crate::common;
     use std::collections::BTreeMap;
     use std::process::Command;
-    let mut source = String::from("fn capture(f: impl FnOnce() + std::panic::UnwindSafe) { let p = std::panic::catch_unwind(f).unwrap_err(); let s = p.downcast_ref::<&str>().copied().unwrap_or_else(|| p.downcast_ref::<String>().unwrap().as_str()); println!(\"{s:?}\"); }\n");
+    let mut source = String::from(
+        "fn capture(f: impl FnOnce() + std::panic::UnwindSafe) { let p = std::panic::catch_unwind(f).unwrap_err(); let s = p.downcast_ref::<&str>().copied().unwrap_or_else(|| p.downcast_ref::<String>().unwrap().as_str()); println!(\"{s:?}\"); }\n",
+    );
     for name in ["panic_literal", "panic_empty"] {
         source.push_str(&output(true, name, true));
     }

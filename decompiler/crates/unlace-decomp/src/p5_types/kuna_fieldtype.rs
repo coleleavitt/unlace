@@ -54,7 +54,7 @@ use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::VarnodeId;
-use crate::dtype::{type_metatype, Datatype, TypeField};
+use crate::dtype::{Datatype, TypeField, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::options::on_or_off;
 
@@ -89,14 +89,19 @@ fn pointee_rank(t: &Datatype) -> Option<u8> {
 
 /// Is `a` the same type as `b`, pointer chain included?
 fn same(a: &Datatype, b: &Datatype) -> bool {
-    if a.get_metatype() != b.get_metatype() || a.get_size() != b.get_size() || a.get_name() != b.get_name() {
+    if a.get_metatype() != b.get_metatype()
+        || a.get_size() != b.get_size()
+        || a.get_name() != b.get_name()
+    {
         return false;
     }
     let (mut x, mut y) = (a.get_ptr_to(), b.get_ptr_to());
     for _ in 0..4 {
         match (x, y) {
             (Some(p), Some(q)) => {
-                if p.get_metatype() != q.get_metatype() || p.get_size() != q.get_size() || p.get_name() != q.get_name()
+                if p.get_metatype() != q.get_metatype()
+                    || p.get_size() != q.get_size()
+                    || p.get_name() != q.get_name()
                 {
                     return false;
                 }
@@ -112,25 +117,37 @@ fn same(a: &Datatype, b: &Datatype) -> bool {
 
 /// Is `v` passed to a declared parameter of type `t`?
 fn declared_as(data: &Funcdata, v: VarnodeId, t: &Datatype) -> bool {
-    let Some(node) = data.vbank().get(v) else { return false };
+    let Some(node) = data.vbank().get(v) else {
+        return false;
+    };
     node.descend_iter().any(|r| {
-        let Some(o) = data.obank().get(r) else { return false };
+        let Some(o) = data.obank().get(r) else {
+            return false;
+        };
         if !matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND) {
             return false;
         }
-        let Some(fc) = data.get_call_specs_index(r).map(|i| data.get_call_specs(i)) else { return false };
-        (1..o.num_input()).filter(|&s| o.get_in(s) == Some(v)).any(|s| {
-            fc.proto()
-                .get_param(s - 1)
-                .is_some_and(|p| p.is_type_locked() && p.get_type().is_some_and(|pt| same(&pt, t)))
-        })
+        let Some(fc) = data.get_call_specs_index(r).map(|i| data.get_call_specs(i)) else {
+            return false;
+        };
+        (1..o.num_input())
+            .filter(|&s| o.get_in(s) == Some(v))
+            .any(|s| {
+                fc.proto().get_param(s - 1).is_some_and(|p| {
+                    p.is_type_locked() && p.get_type().is_some_and(|pt| same(&pt, t))
+                })
+            })
     })
 }
 
 /// One field's evidence: its width, the type the first access gave it, and
 /// every access of that width (the access type, and the value it loaded or
 /// stored when known).
-pub type FieldAccesses<'a> = (int4, Option<&'a Rc<Datatype>>, &'a [(Option<Rc<Datatype>>, Option<VarnodeId>)]);
+pub type FieldAccesses<'a> = (
+    int4,
+    Option<&'a Rc<Datatype>>,
+    &'a [(Option<Rc<Datatype>>, Option<VarnodeId>)],
+);
 
 /// The pointer each field of one record is declared as, in the order given, or
 /// `None` for a field the rule leaves alone.
@@ -147,10 +164,18 @@ pub type FieldAccesses<'a> = (int4, Option<&'a Rc<Datatype>>, &'a [(Option<Rc<Da
 /// A field the first access already gave a pointer whose pointee outranks the
 /// chosen one keeps it: `fillbuf` at `-O2` reads its buffer as the `char *` it
 /// walks, and only `memmove`'s `void *` proves it, which is no reason to say less.
-pub fn pointer_fields(data: &Funcdata, base: VarnodeId, fields: &[FieldAccesses<'_>]) -> Vec<Option<Rc<Datatype>>> {
+pub fn pointer_fields(
+    data: &Funcdata,
+    base: VarnodeId,
+    fields: &[FieldAccesses<'_>],
+) -> Vec<Option<Rc<Datatype>>> {
     let settled: Vec<bool> = fields
         .iter()
-        .map(|(_, _, a)| floats(a) || a.iter().any(|(_, v)| v.is_some_and(|v| used_as_number(data, v))))
+        .map(|(_, _, a)| {
+            floats(a)
+                || a.iter()
+                    .any(|(_, v)| v.is_some_and(|v| used_as_number(data, v)))
+        })
         .collect();
     let mut out: Vec<Option<Rc<Datatype>>> = fields
         .iter()
@@ -162,7 +187,9 @@ pub fn pointer_fields(data: &Funcdata, base: VarnodeId, fields: &[FieldAccesses<
             let own: Vec<_> = a
                 .iter()
                 .filter(|(_, v)| {
-                    v.is_some_and(|v| !addresses_the_record(data, v, base) && held_as_pointer(data, v))
+                    v.is_some_and(|v| {
+                        !addresses_the_record(data, v, base) && held_as_pointer(data, v)
+                    })
                 })
                 .cloned()
                 .collect();
@@ -212,7 +239,9 @@ pub fn pointer_fields(data: &Funcdata, base: VarnodeId, fields: &[FieldAccesses<
 /// Is the type the first access gave a field a pointer that says more about
 /// its pointee than `chosen` does?
 fn outranks(first: Option<&Rc<Datatype>>, chosen: &Datatype) -> bool {
-    first.is_some_and(|f| f.get_metatype() == type_metatype::TYPE_PTR && pointee_rank(f) > pointee_rank(chosen))
+    first.is_some_and(|f| {
+        f.get_metatype() == type_metatype::TYPE_PTR && pointee_rank(f) > pointee_rank(chosen)
+    })
 }
 
 /// `v` and the copies and casts of it, up to a few steps: the values that are
@@ -222,9 +251,13 @@ fn copies(data: &Funcdata, v: VarnodeId) -> Vec<VarnodeId> {
     let mut all = vec![v];
     let mut i = 0;
     while i < all.len() && all.len() < 16 {
-        let Some(node) = data.vbank().get(all[i]) else { break };
+        let Some(node) = data.vbank().get(all[i]) else {
+            break;
+        };
         for r in node.descend_iter() {
-            let Some(o) = data.obank().get(r) else { continue };
+            let Some(o) = data.obank().get(r) else {
+                continue;
+            };
             if matches!(o.code(), OpCode::CPUI_COPY | OpCode::CPUI_CAST) {
                 if let Some(out) = o.get_out().filter(|out| !all.contains(out)) {
                     all.push(out);
@@ -239,7 +272,14 @@ fn copies(data: &Funcdata, v: VarnodeId) -> Vec<VarnodeId> {
 /// The value `v` is a copy or cast of, a few steps back.
 fn origin(data: &Funcdata, mut v: VarnodeId) -> VarnodeId {
     for _ in 0..4 {
-        let Some(op) = data.vbank().get(v).and_then(|n| n.get_def()).and_then(|d| data.obank().get(d)) else { break };
+        let Some(op) = data
+            .vbank()
+            .get(v)
+            .and_then(|n| n.get_def())
+            .and_then(|d| data.obank().get(d))
+        else {
+            break;
+        };
         match (op.code(), op.get_in(0)) {
             (OpCode::CPUI_COPY | OpCode::CPUI_CAST, Some(src)) => v = src,
             _ => break,
@@ -258,25 +298,39 @@ fn held_as_pointer(data: &Funcdata, v: VarnodeId) -> bool {
     while i < work.len() && work.len() < 24 {
         let x = work[i];
         i += 1;
-        let Some(node) = data.vbank().get(x) else { continue };
+        let Some(node) = data.vbank().get(x) else {
+            continue;
+        };
         for r in node.descend_iter() {
-            let Some(o) = data.obank().get(r) else { continue };
+            let Some(o) = data.obank().get(r) else {
+                continue;
+            };
             match o.code() {
                 OpCode::CPUI_LOAD | OpCode::CPUI_STORE if o.get_in(1) == Some(x) => return true,
                 OpCode::CPUI_CALLIND if o.get_in(0) == Some(x) => return true,
                 OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => {
-                    let Some(fc) = data.get_call_specs_index(r).map(|i| data.get_call_specs(i)) else { continue };
-                    let declared = (1..o.num_input()).filter(|&s| o.get_in(s) == Some(x)).any(|s| {
-                        fc.proto().get_param(s - 1).is_some_and(|p| {
-                            p.is_type_locked()
-                                && p.get_type().is_some_and(|t| t.get_metatype() == type_metatype::TYPE_PTR)
-                        })
-                    });
+                    let Some(fc) = data.get_call_specs_index(r).map(|i| data.get_call_specs(i))
+                    else {
+                        continue;
+                    };
+                    let declared =
+                        (1..o.num_input())
+                            .filter(|&s| o.get_in(s) == Some(x))
+                            .any(|s| {
+                                fc.proto().get_param(s - 1).is_some_and(|p| {
+                                    p.is_type_locked()
+                                        && p.get_type().is_some_and(|t| {
+                                            t.get_metatype() == type_metatype::TYPE_PTR
+                                        })
+                                })
+                            });
                     if declared {
                         return true;
                     }
                 }
-                OpCode::CPUI_INT_ADD | OpCode::CPUI_PTRADD | OpCode::CPUI_PTRSUB if offsets(data, o, x) => {
+                OpCode::CPUI_INT_ADD | OpCode::CPUI_PTRADD | OpCode::CPUI_PTRSUB
+                    if offsets(data, o, x) =>
+                {
                     for c in o.get_out().map(|out| copies(data, out)).unwrap_or_default() {
                         if !work.contains(&c) {
                             work.push(c);
@@ -288,28 +342,54 @@ fn held_as_pointer(data: &Funcdata, v: VarnodeId) -> bool {
         }
     }
     let src = origin(data, v);
-    let Some(def) = data.vbank().get(src).and_then(|n| n.get_def()) else { return false };
-    let Some(op) = data.obank().get(def) else { return false };
+    let Some(def) = data.vbank().get(src).and_then(|n| n.get_def()) else {
+        return false;
+    };
+    let Some(op) = data.obank().get(def) else {
+        return false;
+    };
     if !matches!(op.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND) {
         return false;
     }
-    let Some(fc) = data.get_call_specs_index(def).map(|i| data.get_call_specs(i)) else { return false };
+    let Some(fc) = data
+        .get_call_specs_index(def)
+        .map(|i| data.get_call_specs(i))
+    else {
+        return false;
+    };
     fc.proto().is_output_locked()
-        && fc.proto().get_output_type().is_some_and(|t| t.get_metatype() == type_metatype::TYPE_PTR)
+        && fc
+            .proto()
+            .get_output_type()
+            .is_some_and(|t| t.get_metatype() == type_metatype::TYPE_PTR)
 }
 
 /// Is `x` the base `op` adds a constant or a scaled index to?
 fn offsets(data: &Funcdata, op: &crate::op::PcodeOp, x: VarnodeId) -> bool {
-    let konst = |w: Option<VarnodeId>| w.and_then(|w| data.vbank().get(w)).is_some_and(|w| w.is_constant());
+    let konst = |w: Option<VarnodeId>| {
+        w.and_then(|w| data.vbank().get(w))
+            .is_some_and(|w| w.is_constant())
+    };
     match op.code() {
         OpCode::CPUI_PTRADD | OpCode::CPUI_PTRSUB => op.get_in(0) == Some(x),
         OpCode::CPUI_INT_ADD => {
-            let other = if op.get_in(0) == Some(x) { op.get_in(1) } else { op.get_in(0) };
+            let other = if op.get_in(0) == Some(x) {
+                op.get_in(1)
+            } else {
+                op.get_in(0)
+            };
             if konst(other) {
                 return true;
             }
-            let Some(def) = other.and_then(|w| data.vbank().get(w)).and_then(|w| w.get_def()) else { return false };
-            let Some(d) = data.obank().get(def) else { return false };
+            let Some(def) = other
+                .and_then(|w| data.vbank().get(w))
+                .and_then(|w| w.get_def())
+            else {
+                return false;
+            };
+            let Some(d) = data.obank().get(def) else {
+                return false;
+            };
             matches!(d.code(), OpCode::CPUI_INT_MULT | OpCode::CPUI_INT_LEFT)
                 && konst(d.get_in(1))
                 && !is_minus_one(data, d.get_in(1))
@@ -348,20 +428,32 @@ fn used_as_number(data: &Funcdata, v: VarnodeId) -> bool {
                 | OpCode::CPUI_FLOAT_INT2FLOAT
         )
     };
-    let multiplies = |o: &crate::op::PcodeOp| o.code() == OpCode::CPUI_INT_MULT && !(0..2).any(|s| is_minus_one(data, o.get_in(s)));
+    let multiplies = |o: &crate::op::PcodeOp| {
+        o.code() == OpCode::CPUI_INT_MULT && !(0..2).any(|s| is_minus_one(data, o.get_in(s)))
+    };
     for x in copies(data, v) {
-        let Some(node) = data.vbank().get(x) else { continue };
+        let Some(node) = data.vbank().get(x) else {
+            continue;
+        };
         for r in node.descend_iter() {
-            let Some(o) = data.obank().get(r) else { continue };
+            let Some(o) = data.obank().get(r) else {
+                continue;
+            };
             if numeric(o.code()) || multiplies(o) {
                 return true;
             }
         }
     }
     let src = origin(data, v);
-    let Some(def) = data.vbank().get(src).and_then(|n| n.get_def()) else { return false };
+    let Some(def) = data.vbank().get(src).and_then(|n| n.get_def()) else {
+        return false;
+    };
     data.obank().get(def).is_some_and(|o| {
-        (numeric(o.code()) && !matches!(o.code(), OpCode::CPUI_INT_SLESS | OpCode::CPUI_INT_SLESSEQUAL))
+        (numeric(o.code())
+            && !matches!(
+                o.code(),
+                OpCode::CPUI_INT_SLESS | OpCode::CPUI_INT_SLESSEQUAL
+            ))
             || multiplies(o)
     })
 }
@@ -376,13 +468,22 @@ fn addresses_the_record(data: &Funcdata, mut v: VarnodeId, base: VarnodeId) -> b
         if v == base {
             return true;
         }
-        let Some(op) = data.vbank().get(v).and_then(|n| n.get_def()).and_then(|d| data.obank().get(d)) else {
+        let Some(op) = data
+            .vbank()
+            .get(v)
+            .and_then(|n| n.get_def())
+            .and_then(|d| data.obank().get(d))
+        else {
             return false;
         };
         let next = match op.code() {
             OpCode::CPUI_COPY | OpCode::CPUI_CAST => op.get_in(0),
             OpCode::CPUI_INT_ADD | OpCode::CPUI_PTRSUB | OpCode::CPUI_PTRADD => {
-                let konst = |s: int4| op.get_in(s).and_then(|x| data.vbank().get(x)).is_some_and(|x| x.is_constant());
+                let konst = |s: int4| {
+                    op.get_in(s)
+                        .and_then(|x| data.vbank().get(x))
+                        .is_some_and(|x| x.is_constant())
+                };
                 if konst(1) && (op.code() != OpCode::CPUI_PTRADD || konst(2)) {
                     op.get_in(0)
                 } else {
@@ -401,22 +502,36 @@ fn addresses_the_record(data: &Funcdata, mut v: VarnodeId, base: VarnodeId) -> b
 
 /// Does some access carry a float?
 fn floats(accesses: &[(Option<Rc<Datatype>>, Option<VarnodeId>)]) -> bool {
-    accesses.iter().any(|(t, _)| t.as_ref().is_some_and(|t| t.get_metatype() == type_metatype::TYPE_FLOAT))
+    accesses.iter().any(|(t, _)| {
+        t.as_ref()
+            .is_some_and(|t| t.get_metatype() == type_metatype::TYPE_FLOAT)
+    })
 }
 
 /// Is a value of `a` compared for equality or unsigned order with a value of `b`?
 fn compared(data: &Funcdata, a: &[VarnodeId], b: &[VarnodeId]) -> bool {
     a.iter().any(|&v| {
-        let Some(node) = data.vbank().get(v) else { return false };
+        let Some(node) = data.vbank().get(v) else {
+            return false;
+        };
         node.descend_iter().any(|r| {
-            let Some(o) = data.obank().get(r) else { return false };
+            let Some(o) = data.obank().get(r) else {
+                return false;
+            };
             if !matches!(
                 o.code(),
-                OpCode::CPUI_INT_EQUAL | OpCode::CPUI_INT_NOTEQUAL | OpCode::CPUI_INT_LESS | OpCode::CPUI_INT_LESSEQUAL
+                OpCode::CPUI_INT_EQUAL
+                    | OpCode::CPUI_INT_NOTEQUAL
+                    | OpCode::CPUI_INT_LESS
+                    | OpCode::CPUI_INT_LESSEQUAL
             ) {
                 return false;
             }
-            let other = if o.get_in(0) == Some(v) { o.get_in(1) } else { o.get_in(0) };
+            let other = if o.get_in(0) == Some(v) {
+                o.get_in(1)
+            } else {
+                o.get_in(0)
+            };
             other.is_some_and(|w| b.contains(&w))
         })
     })
@@ -430,7 +545,9 @@ pub fn pointer_field(
     width: int4,
     accesses: &[(Option<Rc<Datatype>>, Option<VarnodeId>)],
 ) -> Option<Rc<Datatype>> {
-    choose(width, accesses, |t, v| v.is_some_and(|v| declared_as(data, v, t)))
+    choose(width, accesses, |t, v| {
+        v.is_some_and(|v| declared_as(data, v, t))
+    })
 }
 
 /// [`pointer_field`]'s decision, with `declared(t, value)` answering whether the
@@ -496,7 +613,9 @@ fn spell(t: Option<&Datatype>) -> String {
 }
 
 fn uses(data: &Funcdata, v: VarnodeId) -> String {
-    let Some(node) = data.vbank().get(v) else { return String::new() };
+    let Some(node) = data.vbank().get(v) else {
+        return String::new();
+    };
     let tags: Vec<String> = node
         .descend_iter()
         .filter_map(|r| data.obank().get(r).map(|o| (r, o)))
@@ -507,15 +626,28 @@ fn uses(data: &Funcdata, v: VarnodeId) -> String {
                 let fc = data.get_call_specs_index(r).map(|i| data.get_call_specs(i));
                 match (slot, fc) {
                     (Some(s), Some(fc)) => match fc.proto().get_param(s - 1) {
-                        Some(p) => format!("call{}:{}", if p.is_type_locked() { "L" } else { "" }, spell(p.get_type().map(|t| &**t))),
+                        Some(p) => format!(
+                            "call{}:{}",
+                            if p.is_type_locked() { "L" } else { "" },
+                            spell(p.get_type().map(|t| &**t))
+                        ),
                         None => "call:?".into(),
                     },
                     _ => "call".into(),
                 }
             }
             OpCode::CPUI_LOAD | OpCode::CPUI_STORE if o.get_in(1) == Some(v) => {
-                let w = if o.code() == OpCode::CPUI_LOAD { o.get_out() } else { o.get_in(2) };
-                format!("deref{}", w.and_then(|w| data.vbank().get(w)).map(|w| w.get_size()).unwrap_or(0))
+                let w = if o.code() == OpCode::CPUI_LOAD {
+                    o.get_out()
+                } else {
+                    o.get_in(2)
+                };
+                format!(
+                    "deref{}",
+                    w.and_then(|w| data.vbank().get(w))
+                        .map(|w| w.get_size())
+                        .unwrap_or(0)
+                )
             }
             c => format!("{c:?}").trim_start_matches("CPUI_").to_lowercase(),
         })
@@ -527,7 +659,11 @@ fn uses(data: &Funcdata, v: VarnodeId) -> String {
 pub(crate) fn trace(
     data: &Funcdata,
     base: VarnodeId,
-    fields: &[(&TypeField, int4, &[(Option<Rc<Datatype>>, Option<VarnodeId>)])],
+    fields: &[(
+        &TypeField,
+        int4,
+        &[(Option<Rc<Datatype>>, Option<VarnodeId>)],
+    )],
 ) {
     let fa = data.get_address().get_offset();
     for (f, width, accesses) in fields {
@@ -539,7 +675,11 @@ pub(crate) fn trace(
                     Some(v) if held_as_pointer(data, *v) => "+",
                     _ => "",
                 };
-                format!("{mark}{}[{}]", spell(t.as_deref()), v.map(|v| uses(data, v)).unwrap_or_default())
+                format!(
+                    "{mark}{}[{}]",
+                    spell(t.as_deref()),
+                    v.map(|v| uses(data, v)).unwrap_or_default()
+                )
             })
             .collect();
         eprintln!(
@@ -554,12 +694,17 @@ pub(crate) fn trace(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dtype::{flags, sub_metatype, DatatypeKind};
+    use crate::dtype::{DatatypeKind, flags, sub_metatype};
 
     fn ptr_to(ptrto: &Rc<Datatype>) -> Rc<Datatype> {
         let mut p = Datatype::new(8, type_metatype::TYPE_PTR);
         p.submeta = sub_metatype::SUB_PTR;
-        p.kind = DatatypeKind::Pointer { ptrto: Rc::clone(ptrto), spaceid: None, truncate: None, wordsize: 1 };
+        p.kind = DatatypeKind::Pointer {
+            ptrto: Rc::clone(ptrto),
+            spaceid: None,
+            truncate: None,
+            wordsize: 1,
+        };
         Rc::new(p)
     }
 
@@ -602,7 +747,10 @@ mod tests {
         assert!(same(&got, &charp));
         let got = choose(8, &acc(&[&long, &voidp]), no_decl).unwrap();
         assert!(same(&got, &voidp), "a void pointer still beats an integer");
-        assert!(choose(8, &acc(&[&long, &long]), no_decl).is_none(), "no pointer, no decision");
+        assert!(
+            choose(8, &acc(&[&long, &long]), no_decl).is_none(),
+            "no pointer, no decision"
+        );
     }
 
     /// A called field is code; a record or named aggregate outranks a scalar.
@@ -613,10 +761,20 @@ mod tests {
         let undef = named(8, type_metatype::TYPE_UNKNOWN, "undefined8");
         let void = named(0, type_metatype::TYPE_VOID, "void");
         let ulong = named(8, type_metatype::TYPE_UINT, "ulong");
-        let (codep, filep, undefp, voidp) = (ptr_to(&code), ptr_to(&file), ptr_to(&undef), ptr_to(&void));
-        assert!(same(&choose(8, &acc(&[&ulong, &codep]), no_decl).unwrap(), &codep));
-        assert!(same(&choose(8, &acc(&[&ptr_to(&char_t()), &filep]), no_decl).unwrap(), &filep));
-        assert!(same(&choose(8, &acc(&[&voidp, &undefp]), no_decl).unwrap(), &undefp));
+        let (codep, filep, undefp, voidp) =
+            (ptr_to(&code), ptr_to(&file), ptr_to(&undef), ptr_to(&void));
+        assert!(same(
+            &choose(8, &acc(&[&ulong, &codep]), no_decl).unwrap(),
+            &codep
+        ));
+        assert!(same(
+            &choose(8, &acc(&[&ptr_to(&char_t()), &filep]), no_decl).unwrap(),
+            &filep
+        ));
+        assert!(same(
+            &choose(8, &acc(&[&voidp, &undefp]), no_decl).unwrap(),
+            &undefp
+        ));
     }
 
     /// Two different pointers of the same rank are not agreement, unless exactly
@@ -629,7 +787,10 @@ mod tests {
         assert!(choose(8, &a, no_decl).is_none());
         let got = choose(8, &a, |t, _| same(t, &charp)).unwrap();
         assert!(same(&got, &charp));
-        assert!(choose(8, &a, |_, _| true).is_none(), "both declared is still two answers");
+        assert!(
+            choose(8, &a, |_, _| true).is_none(),
+            "both declared is still two answers"
+        );
     }
 
     /// A pointer the first access already carries is kept over a proven one that
@@ -640,10 +801,16 @@ mod tests {
         let file = named(0xd8, type_metatype::TYPE_STRUCT, "FILE");
         let long = named(8, type_metatype::TYPE_INT, "long");
         let (charp, voidp, filep) = (ptr_to(&char_t()), ptr_to(&void), ptr_to(&file));
-        assert!(outranks(Some(&charp), &voidp), "fillbuf -O2: char * is not replaced by memmove's void *");
+        assert!(
+            outranks(Some(&charp), &voidp),
+            "fillbuf -O2: char * is not replaced by memmove's void *"
+        );
         assert!(!outranks(Some(&charp), &filep));
         assert!(!outranks(Some(&charp), &charp));
-        assert!(!outranks(Some(&long), &voidp), "an integer first access is replaced by any proven pointer");
+        assert!(
+            !outranks(Some(&long), &voidp),
+            "an integer first access is replaced by any proven pointer"
+        );
         assert!(!outranks(None, &voidp));
     }
 

@@ -28,12 +28,12 @@
 
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
-use unlace_base::types::{int2, int4, uint4, uint8, uintm, Wrap};
+use unlace_base::types::{Wrap, int2, int4, uint4, uint8, uintm};
 
-use crate::block::{block_flags, BasicData, BlockGraph, BlockKind, FlowBlock};
+use crate::block::{BasicData, BlockGraph, BlockKind, FlowBlock, block_flags};
+use crate::context::{ArchHandle, BlockId, OpId, VarnodeId};
 use crate::fspec::{FuncCallSpecs, FuncProto, ParamActive};
 use crate::op::PcodeOpBank;
-use crate::context::{ArchHandle, BlockId, OpId, VarnodeId};
 use crate::varnode::{DefOpInfo, VarnodeBank};
 
 /// Boolean properties associated with a [`Funcdata`] (C++ anonymous `enum` in
@@ -203,7 +203,8 @@ pub struct Funcdata {
     /// `VarnodeData` the key was built from) alongside the matching record, so
     /// `ActionLaneDivide` can recover the `(addr, sz)` pair to iterate the
     /// Varnodes at that location (the C++ reads them off the `VarnodeData` key).
-    laned_map: std::collections::BTreeMap<LanedKey, (Address, int4, crate::transform::LanedRegister)>,
+    laned_map:
+        std::collections::BTreeMap<LanedKey, (Address, int4, crate::transform::LanedRegister)>,
     /// Number of bytes of binary data in function body (C++ `size`)
     size: int4,
     /// Global configuration data (C++ `glb`).  // STUB(W4)
@@ -250,7 +251,13 @@ pub struct Funcdata {
     /// (kuna `castobject`) Every stack object a `restructure_varnode` pass
     /// re-declared, as `(offset, size, type)`; read by
     /// [`crate::kuna_castobject::reconcile`] once the variables are merged.
-    cast_objects: std::cell::RefCell<Vec<(unlace_base::types::uintb, int4, std::rc::Rc<crate::dtype::Datatype>)>>,
+    cast_objects: std::cell::RefCell<
+        Vec<(
+            unlace_base::types::uintb,
+            int4,
+            std::rc::Rc<crate::dtype::Datatype>,
+        )>,
+    >,
     /// (kuna `stackstruct`) Every frame record a `restructure_varnode` pass laid
     /// out; later passes keep it while no access contradicts its bounds.
     stack_records: std::cell::RefCell<Vec<crate::p6_variables::kuna_stackstruct::StackRecord>>,
@@ -308,12 +315,15 @@ pub struct Funcdata {
     /// Container of Varnode objects for \b this function (C++ `vbank`)
     vbank: VarnodeBank,
     /// Machine homes retained when equivalent values replace their Varnodes.
-    kuna_storage_sources: crate::kuna_fasthash::FxHashMap<VarnodeId, Vec<crate::kuna_varsources::StorageSource>>,
+    kuna_storage_sources:
+        crate::kuna_fasthash::FxHashMap<VarnodeId, Vec<crate::kuna_varsources::StorageSource>>,
     pub(crate) kuna_guarded_reads: crate::p3_dataflow::kuna_stackreadscope::ReadScopes,
     kuna_call_transport: crate::kuna_fasthash::FxHashSet<VarnodeId>,
     kuna_call_transport_projections: crate::kuna_fasthash::FxHashMap<VarnodeId, int4>,
-    kuna_denied_storage_writes: crate::kuna_fasthash::FxHashMap<(int4, u64, int4), Vec<(u64, int4)>>,
-    kuna_meaningful_storage_writes: crate::kuna_fasthash::FxHashMap<(int4, u64, int4), Vec<(u64, int4)>>,
+    kuna_denied_storage_writes:
+        crate::kuna_fasthash::FxHashMap<(int4, u64, int4), Vec<(u64, int4)>>,
+    kuna_meaningful_storage_writes:
+        crate::kuna_fasthash::FxHashMap<(int4, u64, int4), Vec<(u64, int4)>>,
     /// Container of PcodeOp objects for \b this function (C++ `obank`)
     obank: PcodeOpBank,
     /// Unstructured basic blocks (C++ `bblocks`)
@@ -347,7 +357,8 @@ pub struct Funcdata {
     /// vector index (the faithful equivalent — see `newVarnodeCallSpecs`).
     qlst: Vec<FuncCallSpecs>,
     /// Proofs belong to this entry's flow only, and are rebuilt after clear/restart.
-    pub(crate) ppc32_pic_calls: std::collections::BTreeMap<u64, crate::kuna_ppc32piccalls::CallBinding>,
+    pub(crate) ppc32_pic_calls:
+        std::collections::BTreeMap<u64, crate::kuna_ppc32piccalls::CallBinding>,
     /// HighVariable merging engine (C++ `Merge covermerge`, `funcdata.hh:91`).
     ///
     /// The C++ `Funcdata` owns a single `Merge` whose `copyTrims` accumulator
@@ -386,12 +397,14 @@ pub struct Funcdata {
         crate::unionresolve::ResolveEdge,
         crate::unionresolve::ResolvedUnion,
     >,
-    pub(crate) stack_write_views: std::collections::BTreeMap<OpId, crate::kuna_stackviews::StorageView>,
+    pub(crate) stack_write_views:
+        std::collections::BTreeMap<OpId, crate::kuna_stackviews::StorageView>,
     pub(crate) local_stack_views: crate::kuna_localstackviews::LocalStackViews,
     pub(crate) stack_parameter_store_extents: std::collections::BTreeMap<u64, i32>,
     pub(crate) stack_objects: Vec<crate::kuna_stackobjects::StackObject>,
     pub(crate) stack_object_assertions: Vec<crate::kuna_stackobjectasserts::ObjectAssertion>,
-    pub(crate) stack_object_bound_uses: std::collections::BTreeSet<(crate::kuna_stackobjects::SourcePoint, i32)>,
+    pub(crate) stack_object_bound_uses:
+        std::collections::BTreeSet<(crate::kuna_stackobjects::SourcePoint, i32)>,
     pub(crate) stack_alias_holds: Option<std::collections::BTreeSet<VarnodeId>>,
     pub(crate) callee_memory: std::collections::HashMap<
         (int4, unlace_base::types::uintb),
@@ -588,7 +601,8 @@ pub struct Funcdata {
     kuna_narrowret: crate::kuna_narrowret::NarrowReturns,
     /// (kuna `narrowret`) What this function computed with, and read, of each
     /// call output `narrowret` narrowed, before it narrowed it.
-    kuna_narrowret_reads: std::collections::HashMap<crate::context::OpId, crate::kuna_narrowret::ReadBefore>,
+    kuna_narrowret_reads:
+        std::collections::HashMap<crate::context::OpId, crate::kuna_narrowret::ReadBefore>,
     /// (kuna `floatreg`) The statements this caller refused: what its callees
     /// still declare their results to be.
     kuna_callret_withdrawn: crate::kuna_callrettype::StatedReturns,
@@ -614,16 +628,19 @@ pub struct Funcdata {
     /// to, and whether its sign bit may be set.
     kuna_zext_word: Option<(Address, int4, bool)>,
     /// (kuna `voidret`) What each callee's last decompile recovered it returns.
-    kuna_callee_returns: std::collections::BTreeMap<(int4, unlace_base::types::uintb), crate::kuna_voidret::Returns>,
+    kuna_callee_returns:
+        std::collections::BTreeMap<(int4, unlace_base::types::uintb), crate::kuna_voidret::Returns>,
     /// (kuna `floatbits`) The callees whose float return the bits of a
     /// float-register input made one.
     kuna_callee_float_bits: std::collections::BTreeSet<(int4, unlace_base::types::uintb)>,
     /// (kuna `voidret`) Per callee, whether each parameter its last decompile
     /// recovered is a float (`Some(true)`), an integer or pointer (`Some(false)`).
-    kuna_callee_params: std::collections::BTreeMap<(int4, unlace_base::types::uintb), Vec<Option<bool>>>,
+    kuna_callee_params:
+        std::collections::BTreeMap<(int4, unlace_base::types::uintb), Vec<Option<bool>>>,
     /// (kuna `voidret`) Per callee recovered returning a value, the storage its
     /// last decompile returned it in.
-    kuna_callee_return_storage: std::collections::BTreeMap<(int4, unlace_base::types::uintb), (Address, int4)>,
+    kuna_callee_return_storage:
+        std::collections::BTreeMap<(int4, unlace_base::types::uintb), (Address, int4)>,
     /// (kuna `floatreg`) The narrow float registers (ARM `s0`) whose other half
     /// of the pair the function's own code touches.
     kuna_float_pair_halves: std::collections::BTreeSet<(int4, unlace_base::types::uintb)>,
@@ -694,8 +711,9 @@ pub struct Funcdata {
     kuna_elemptr_settled: Option<std::rc::Rc<crate::kuna_elemptr::Signs>>,
     /// (kuna `elemptr`) What this function's last type pass said about each
     /// global and table.
-    kuna_elemptr_verdicts:
-        std::cell::RefCell<std::collections::BTreeMap<crate::kuna_elemptr::Obj, crate::kuna_elemptr::GlobalVerdict>>,
+    kuna_elemptr_verdicts: std::cell::RefCell<
+        std::collections::BTreeMap<crate::kuna_elemptr::Obj, crate::kuna_elemptr::GlobalVerdict>,
+    >,
     /// (kuna `elemptr`) The constant addresses this function's walks typed as an
     /// element pointer.
     kuna_elemptr_constants: std::cell::RefCell<std::collections::BTreeSet<u64>>,
@@ -703,7 +721,8 @@ pub struct Funcdata {
     /// element pointers (`false`), and those a later pass found indexing
     /// another base (`true`), never typed again.  Survives [`Funcdata::clear`],
     /// so the restart that follows a dispute starts without the candidate.
-    kuna_elemptr_inputs: std::cell::RefCell<std::collections::BTreeMap<crate::kuna_elemptr::InputKey, bool>>,
+    kuna_elemptr_inputs:
+        std::cell::RefCell<std::collections::BTreeMap<crate::kuna_elemptr::InputKey, bool>>,
     /// (kuna `elemptr`) A later type pass disputed an earlier one's candidate.
     kuna_elemptr_disputed: std::cell::Cell<bool>,
     /// (kuna `elemptr`) The Varnodes this type pass gave an element pointer.
@@ -713,7 +732,10 @@ pub struct Funcdata {
     kuna_elemptr_no_objects: bool,
     /// (kuna `elemptr`) What each callee decompiled earlier stated about the
     /// parameters and return an element pointer typed.
-    kuna_elemptr_stated: std::collections::HashMap<(int4, unlace_base::types::uintb), std::rc::Rc<crate::kuna_elemptr::Stated>>,
+    kuna_elemptr_stated: std::collections::HashMap<
+        (int4, unlace_base::types::uintb),
+        std::rc::Rc<crate::kuna_elemptr::Stated>,
+    >,
     /// (kuna `retpushedhalf`) Registers this function only ever pushed, gathered
     /// during the flow build while the store and the load still exist and read at
     /// the return-half placement test
@@ -791,7 +813,12 @@ impl Funcdata {
             match glb.manage().get_stack_space() {
                 Some(stackid) => {
                     let num_spaces = glb.manage().num_spaces();
-                    Some(crate::varmap::ScopeLocal::new(id, stackid.clone(), nm, num_spaces)?)
+                    Some(crate::varmap::ScopeLocal::new(
+                        id,
+                        stackid.clone(),
+                        nm,
+                        num_spaces,
+                    )?)
                 }
                 // No stack space in the manager (some hand-built fixtures): the
                 // C++ getStackSpace returns the spacebase space; if absent there
@@ -1003,11 +1030,8 @@ impl Funcdata {
     /// ([`Self::drain_pending_comments`]) and flushed by the decompile drive.
     pub fn warning(&mut self, txt: &str, ad: &Address) {
         let msg = self.warning_prefix() + txt;
-        self.pending_comments.push((
-            crate::architecture::comment_type::warning,
-            ad.clone(),
-            msg,
-        ));
+        self.pending_comments
+            .push((crate::architecture::comment_type::warning, ad.clone(), msg));
     }
 
     /// Buffer an analysis warning comment for the function header (C++
@@ -1016,11 +1040,8 @@ impl Funcdata {
     pub fn warning_header(&mut self, txt: &str) {
         let msg = self.warning_prefix() + txt;
         let entry = self.baseaddr.clone();
-        self.pending_comments.push((
-            crate::architecture::comment_type::warningheader,
-            entry,
-            msg,
-        ));
+        self.pending_comments
+            .push((crate::architecture::comment_type::warningheader, entry, msg));
     }
 
     /// The "WARNING: " / "WARNING (jumptable): " prefix the C++ `warning`/
@@ -1038,9 +1059,7 @@ impl Funcdata {
     /// `(comment_type, placement_address, text)` triples; the function address is
     /// [`Self::get_address`]).  Called by the decompile drive to flush them into
     /// the console `Architecture`'s `commentdb`.
-    pub fn drain_pending_comments(
-        &mut self,
-    ) -> Vec<(unlace_base::types::uint4, Address, String)> {
+    pub fn drain_pending_comments(&mut self) -> Vec<(unlace_base::types::uint4, Address, String)> {
         std::mem::take(&mut self.pending_comments)
     }
 
@@ -1069,9 +1088,7 @@ impl Funcdata {
     /// block that carries an instruction comment into a condition operand: the
     /// printer suppresses `emitCommentGroup` under `comma_separate`, so such a
     /// fold would silently drop the comment.
-    pub fn pending_comments_ref(
-        &self,
-    ) -> &[(unlace_base::types::uint4, Address, String)] {
+    pub fn pending_comments_ref(&self) -> &[(unlace_base::types::uint4, Address, String)] {
         &self.pending_comments
     }
 
@@ -1097,12 +1114,7 @@ impl Funcdata {
     /// `FlowInfo::inlineFlow` drains a nested callee flow's buffered comments and
     /// re-buffers them on the top-level function, since both reach the same
     /// `glb->commentdb` in C++).  The text already carries its "WARNING: " prefix.
-    pub fn push_raw_comment(
-        &mut self,
-        tp: unlace_base::types::uint4,
-        ad: Address,
-        txt: String,
-    ) {
+    pub fn push_raw_comment(&mut self, tp: unlace_base::types::uint4, ad: Address, txt: String) {
         self.pending_comments.push((tp, ad, txt));
     }
 
@@ -1115,7 +1127,13 @@ impl Funcdata {
     pub fn set_kuna_pipeline_failure(&mut self, reason: &str) {
         let flat: String = reason
             .chars()
-            .map(|c| if c == '\n' || c == '\r' || c == '\t' { ' ' } else { c })
+            .map(|c| {
+                if c == '\n' || c == '\r' || c == '\t' {
+                    ' '
+                } else {
+                    c
+                }
+            })
             .collect();
         self.kuna_pipeline_failure = Some(flat.replace("*/", "* /").trim().to_string());
     }
@@ -1134,10 +1152,15 @@ impl Funcdata {
         type_: unlace_base::types::uint4,
         reason: &str,
     ) {
-        if self.kuna_rejected_flow.iter().any(|(a, t, _)| a == &addr && *t == type_) {
+        if self
+            .kuna_rejected_flow
+            .iter()
+            .any(|(a, t, _)| a == &addr && *t == type_)
+        {
             return;
         }
-        self.kuna_rejected_flow.push((addr, type_, reason.to_string()));
+        self.kuna_rejected_flow
+            .push((addr, type_, reason.to_string()));
     }
 
     /// (kuna) The flow overrides this function's flow follow refused.
@@ -1151,7 +1174,8 @@ impl Funcdata {
         if self.kuna_rejected_callee.iter().any(|(s, _, _)| s == &site) {
             return;
         }
-        self.kuna_rejected_callee.push((site, callee, reason.to_string()));
+        self.kuna_rejected_callee
+            .push((site, callee, reason.to_string()));
     }
 
     /// (kuna) The stated indirect-call destinations this function's flow did
@@ -1168,7 +1192,11 @@ impl Funcdata {
     /// (kuna `--assert`) Record that a directive touched `entry.symbol`.  The
     /// first record wins, so the identifier kept is the one the pass printed.
     pub fn kuna_record_directive_symbol(&mut self, entry: DirectiveSymbol) {
-        if self.kuna_directive_symbols.iter().any(|d| d.symbol == entry.symbol) {
+        if self
+            .kuna_directive_symbols
+            .iter()
+            .any(|d| d.symbol == entry.symbol)
+        {
             return;
         }
         self.kuna_directive_symbols.push(entry);
@@ -1181,7 +1209,11 @@ impl Funcdata {
         symbol: crate::database::SymbolId,
         unit_type: Option<crate::kuna_stablenames::UnitRetype>,
     ) {
-        if let Some(entry) = self.kuna_directive_symbols.iter_mut().find(|d| d.symbol == symbol) {
+        if let Some(entry) = self
+            .kuna_directive_symbols
+            .iter_mut()
+            .find(|d| d.symbol == symbol)
+        {
             entry.retyped = true;
             entry.unit_type = unit_type;
         }
@@ -1221,7 +1253,9 @@ impl Funcdata {
 
     /// (kuna `--assert`) The local each replayed rename or retype reached, by
     /// the name the previous decompile printed it under.
-    pub fn kuna_directive_targets(&self) -> &std::collections::BTreeMap<String, crate::context::HighVariableId> {
+    pub fn kuna_directive_targets(
+        &self,
+    ) -> &std::collections::BTreeMap<String, crate::context::HighVariableId> {
         &self.kuna_directive_targets
     }
 
@@ -1232,7 +1266,10 @@ impl Funcdata {
         self.kuna_directive_targets = targets;
     }
 
-    pub fn set_kuna_name_snapshot(&mut self, snapshot: Vec<(String, crate::kuna_stablenames::Keys)>) {
+    pub fn set_kuna_name_snapshot(
+        &mut self,
+        snapshot: Vec<(String, crate::kuna_stablenames::Keys)>,
+    ) {
         self.kuna_name_snapshot = snapshot;
     }
 
@@ -1248,7 +1285,10 @@ impl Funcdata {
         self.kuna_wide.as_ref()
     }
 
-    pub(crate) fn kuna_set_callwide(&mut self, proof: Option<Rc<crate::p4_calls::kuna_callwide::Ledger>>) {
+    pub(crate) fn kuna_set_callwide(
+        &mut self,
+        proof: Option<Rc<crate::p4_calls::kuna_callwide::Ledger>>,
+    ) {
         self.kuna_callwide = proof;
     }
 
@@ -1273,7 +1313,8 @@ impl Funcdata {
         writes: std::rc::Rc<crate::kuna_rustabi::CalleeReturnWrites>,
     ) {
         if let Some(sp) = entry.get_space() {
-            self.kuna_callee_ret_writes.insert((sp.get_index(), entry.get_offset()), writes);
+            self.kuna_callee_ret_writes
+                .insert((sp.get_index(), entry.get_offset()), writes);
         }
     }
 
@@ -1290,14 +1331,17 @@ impl Funcdata {
     /// (kuna `calleeretpurge`) Record the extrapop `entry`'s own returns take.
     pub fn kuna_set_callee_purge(&mut self, entry: &Address, purge: int4) {
         if let Some(sp) = entry.get_space() {
-            self.kuna_callee_purge.insert((sp.get_index(), entry.get_offset()), purge);
+            self.kuna_callee_purge
+                .insert((sp.get_index(), entry.get_offset()), purge);
         }
     }
 
     /// (kuna `calleeretpurge`) The recorded return purge of `entry`, if any.
     pub fn kuna_callee_purge(&self, entry: &Address) -> Option<int4> {
         let sp = entry.get_space()?;
-        self.kuna_callee_purge.get(&(sp.get_index(), entry.get_offset())).copied()
+        self.kuna_callee_purge
+            .get(&(sp.get_index(), entry.get_offset()))
+            .copied()
     }
 
     /// (kuna `rustabi`) The recorded probe of `entry`'s body, if one was taken.
@@ -1306,7 +1350,9 @@ impl Funcdata {
         entry: &Address,
     ) -> Option<&crate::kuna_rustabi::CalleeReturnWrites> {
         let sp = entry.get_space()?;
-        self.kuna_callee_ret_writes.get(&(sp.get_index(), entry.get_offset())).map(|r| r.as_ref())
+        self.kuna_callee_ret_writes
+            .get(&(sp.get_index(), entry.get_offset()))
+            .map(|r| r.as_ref())
     }
 
     /// (kuna `calleedeadarg`) Record what a probe of `entry`'s body proved about
@@ -1317,7 +1363,8 @@ impl Funcdata {
         dead: std::rc::Rc<crate::kuna_calleedeadarg::CalleeEntryDead>,
     ) {
         if let Some(sp) = entry.get_space() {
-            self.kuna_callee_entry_dead.insert((sp.get_index(), entry.get_offset()), dead);
+            self.kuna_callee_entry_dead
+                .insert((sp.get_index(), entry.get_offset()), dead);
         }
     }
 
@@ -1325,13 +1372,17 @@ impl Funcdata {
     /// before writing it.
     pub fn kuna_set_swift_self_unread(&mut self, entry: &Address) {
         if let Some(sp) = entry.get_space() {
-            self.kuna_swift_self_unread.insert((sp.get_index(), entry.get_offset()));
+            self.kuna_swift_self_unread
+                .insert((sp.get_index(), entry.get_offset()));
         }
     }
 
     /// (kuna `swiftcall`) Was `entry`'s body seen not to read `swiftself` first?
     pub fn kuna_swift_self_unread(&self, entry: &Address) -> bool {
-        entry.get_space().is_some_and(|sp| self.kuna_swift_self_unread.contains(&(sp.get_index(), entry.get_offset())))
+        entry.get_space().is_some_and(|sp| {
+            self.kuna_swift_self_unread
+                .contains(&(sp.get_index(), entry.get_offset()))
+        })
     }
 
     /// (kuna `calleedeadarg`) The recorded entry-liveness probe of `entry`'s
@@ -1341,7 +1392,9 @@ impl Funcdata {
         entry: &Address,
     ) -> Option<&crate::kuna_calleedeadarg::CalleeEntryDead> {
         let sp = entry.get_space()?;
-        self.kuna_callee_entry_dead.get(&(sp.get_index(), entry.get_offset())).map(|r| r.as_ref())
+        self.kuna_callee_entry_dead
+            .get(&(sp.get_index(), entry.get_offset()))
+            .map(|r| r.as_ref())
     }
 
     /// (kuna `calleefilledarg`) The same probe, shared, for a `ParamActive` to
@@ -1351,7 +1404,9 @@ impl Funcdata {
         entry: &Address,
     ) -> Option<std::rc::Rc<crate::kuna_calleedeadarg::CalleeEntryDead>> {
         let sp = entry.get_space()?;
-        self.kuna_callee_entry_dead.get(&(sp.get_index(), entry.get_offset())).cloned()
+        self.kuna_callee_entry_dead
+            .get(&(sp.get_index(), entry.get_offset()))
+            .cloned()
     }
 
     /// (kuna `hiddenretarg`) Remember the leaves of a value vetoed from a call.
@@ -1366,7 +1421,10 @@ impl Funcdata {
 
     /// (kuna `armfloatargs`) Record the entry-liveness probe of this function's
     /// own body.
-    pub fn kuna_set_own_entry_dead(&mut self, dead: std::rc::Rc<crate::kuna_calleedeadarg::CalleeEntryDead>) {
+    pub fn kuna_set_own_entry_dead(
+        &mut self,
+        dead: std::rc::Rc<crate::kuna_calleedeadarg::CalleeEntryDead>,
+    ) {
         self.kuna_own_entry_dead = Some(dead);
     }
 
@@ -1384,7 +1442,8 @@ impl Funcdata {
         facts: std::rc::Rc<crate::kuna_calleedeadarg::CalleeEntryDead>,
     ) {
         if let Some(sp) = entry.get_space() {
-            self.kuna_callee_entry_through.insert((sp.get_index(), entry.get_offset()), facts);
+            self.kuna_callee_entry_through
+                .insert((sp.get_index(), entry.get_offset()), facts);
         }
     }
 
@@ -1395,7 +1454,9 @@ impl Funcdata {
         entry: &Address,
     ) -> Option<&crate::kuna_calleedeadarg::CalleeEntryDead> {
         let sp = entry.get_space()?;
-        self.kuna_callee_entry_through.get(&(sp.get_index(), entry.get_offset())).map(|r| r.as_ref())
+        self.kuna_callee_entry_through
+            .get(&(sp.get_index(), entry.get_offset()))
+            .map(|r| r.as_ref())
     }
 
     /// (kuna `argclobber`) Record what a caller's value in a register can reach
@@ -1406,7 +1467,8 @@ impl Funcdata {
         fwd: std::rc::Rc<crate::kuna_calleedeadarg::ForwardTransfer>,
     ) {
         if let Some(sp) = entry.get_space() {
-            self.kuna_callee_forward.insert((sp.get_index(), entry.get_offset()), fwd);
+            self.kuna_callee_forward
+                .insert((sp.get_index(), entry.get_offset()), fwd);
         }
     }
 
@@ -1417,7 +1479,9 @@ impl Funcdata {
         entry: &Address,
     ) -> Option<&crate::kuna_calleedeadarg::ForwardTransfer> {
         let sp = entry.get_space()?;
-        self.kuna_callee_forward.get(&(sp.get_index(), entry.get_offset())).map(|r| r.as_ref())
+        self.kuna_callee_forward
+            .get(&(sp.get_index(), entry.get_offset()))
+            .map(|r| r.as_ref())
     }
 
     /// (kuna callee-contract) Arm or disarm the P4 trial-storage bootstrap for
@@ -1452,7 +1516,8 @@ impl Funcdata {
         stated: std::rc::Rc<crate::kuna_protoorder::RecoveredTypes>,
     ) {
         if let Some(sp) = entry.get_space() {
-            self.kuna_protoorder_types.insert((sp.get_index(), entry.get_offset()), stated);
+            self.kuna_protoorder_types
+                .insert((sp.get_index(), entry.get_offset()), stated);
         }
     }
 
@@ -1475,19 +1540,29 @@ impl Funcdata {
     }
 
     /// (kuna `narrowret`) The narrow value the callee filed under `key` returns.
-    pub fn kuna_narrowret(&self, key: (int4, unlace_base::types::uintb)) -> Option<&crate::kuna_narrowret::NarrowReturn> {
+    pub fn kuna_narrowret(
+        &self,
+        key: (int4, unlace_base::types::uintb),
+    ) -> Option<&crate::kuna_narrowret::NarrowReturn> {
         self.kuna_narrowret.get(&key).map(|r| r.as_ref())
     }
 
     /// (kuna `narrowret`) Note what this function read of the output of the
     /// CALL `op` before `narrowret` narrowed it.
-    pub fn kuna_note_narrowret_read(&mut self, op: crate::context::OpId, before: crate::kuna_narrowret::ReadBefore) {
+    pub fn kuna_note_narrowret_read(
+        &mut self,
+        op: crate::context::OpId,
+        before: crate::kuna_narrowret::ReadBefore,
+    ) {
         self.kuna_narrowret_reads.insert(op, before);
     }
 
     /// (kuna `narrowret`) What this function read of the output of the CALL
     /// `op` before `narrowret` narrowed it, if it did.
-    pub fn kuna_narrowret_read(&self, op: crate::context::OpId) -> Option<&crate::kuna_narrowret::ReadBefore> {
+    pub fn kuna_narrowret_read(
+        &self,
+        op: crate::context::OpId,
+    ) -> Option<&crate::kuna_narrowret::ReadBefore> {
         self.kuna_narrowret_reads.get(&op)
     }
 
@@ -1506,7 +1581,10 @@ impl Funcdata {
         &self,
         key: (int4, unlace_base::types::uintb),
     ) -> Option<&crate::kuna_callrettype::StatedReturn> {
-        self.kuna_callret_types.get(&key).or_else(|| self.kuna_callret_withdrawn.get(&key)).map(|r| r.as_ref())
+        self.kuna_callret_types
+            .get(&key)
+            .or_else(|| self.kuna_callret_withdrawn.get(&key))
+            .map(|r| r.as_ref())
     }
 
     /// (kuna `callrettype`) Record the loader's data ranges.
@@ -1527,13 +1605,19 @@ impl Funcdata {
     /// (kuna `voidret`) Record what each callee's last decompile recovered it returns.
     pub fn kuna_set_callee_returns(
         &mut self,
-        returns: std::collections::BTreeMap<(int4, unlace_base::types::uintb), crate::kuna_voidret::Returns>,
+        returns: std::collections::BTreeMap<
+            (int4, unlace_base::types::uintb),
+            crate::kuna_voidret::Returns,
+        >,
     ) {
         self.kuna_callee_returns = returns;
     }
 
     /// (kuna `voidret`) Note a `void` callee's result this function's return would be.
-    pub fn kuna_note_forced_claim(&mut self, claim: ((int4, unlace_base::types::uintb), (Address, int4))) {
+    pub fn kuna_note_forced_claim(
+        &mut self,
+        claim: ((int4, unlace_base::types::uintb), (Address, int4)),
+    ) {
         if !self.kuna_forced_claims.contains(&claim) {
             self.kuna_forced_claims.push(claim);
         }
@@ -1559,7 +1643,10 @@ impl Funcdata {
     /// (kuna `voidret`) Note the zero-extended word the RETURN pull trims the
     /// return to, and whether its sign bit may be set at any RETURN.
     pub fn kuna_note_zext_word(&mut self, addr: Address, size: int4, sign: bool) {
-        let before = self.kuna_zext_word.as_ref().is_some_and(|(a, s, b)| *a == addr && *s == size && *b);
+        let before = self
+            .kuna_zext_word
+            .as_ref()
+            .is_some_and(|(a, s, b)| *a == addr && *s == size && *b);
         self.kuna_zext_word = Some((addr, size, sign || before));
     }
 
@@ -1571,7 +1658,10 @@ impl Funcdata {
 
     /// (kuna `floatbits`) Seed the callees whose float return the bits of a
     /// float-register input made one.
-    pub fn kuna_set_callee_float_bits(&mut self, callees: std::collections::BTreeSet<(int4, unlace_base::types::uintb)>) {
+    pub fn kuna_set_callee_float_bits(
+        &mut self,
+        callees: std::collections::BTreeSet<(int4, unlace_base::types::uintb)>,
+    ) {
         self.kuna_callee_float_bits = callees;
     }
 
@@ -1582,7 +1672,10 @@ impl Funcdata {
     }
 
     /// (kuna `voidret`) What the callee at `key` was last recovered to return.
-    pub fn kuna_callee_returns(&self, key: (int4, unlace_base::types::uintb)) -> Option<crate::kuna_voidret::Returns> {
+    pub fn kuna_callee_returns(
+        &self,
+        key: (int4, unlace_base::types::uintb),
+    ) -> Option<crate::kuna_voidret::Returns> {
         self.kuna_callee_returns.get(&key).copied()
     }
 
@@ -1595,7 +1688,10 @@ impl Funcdata {
     }
 
     /// (kuna `voidret`) The storage the callee at `key` last returned a value in.
-    pub fn kuna_callee_return_storage(&self, key: (int4, unlace_base::types::uintb)) -> Option<&(Address, int4)> {
+    pub fn kuna_callee_return_storage(
+        &self,
+        key: (int4, unlace_base::types::uintb),
+    ) -> Option<&(Address, int4)> {
         self.kuna_callee_return_storage.get(&key)
     }
 
@@ -1609,8 +1705,14 @@ impl Funcdata {
 
     /// (kuna `voidret`) Is the callee at `key`'s parameter `index`, as its last
     /// decompile recovered it, a float (`Some(true)`) or an integer or pointer?
-    pub fn kuna_callee_param_float(&self, key: (int4, unlace_base::types::uintb), index: usize) -> Option<bool> {
-        self.kuna_callee_params.get(&key).and_then(|p| p.get(index).copied().flatten())
+    pub fn kuna_callee_param_float(
+        &self,
+        key: (int4, unlace_base::types::uintb),
+        index: usize,
+    ) -> Option<bool> {
+        self.kuna_callee_params
+            .get(&key)
+            .and_then(|p| p.get(index).copied().flatten())
     }
 
     /// (kuna `floatreg`) Note a narrow float register whose pair the code touches.
@@ -1622,7 +1724,6 @@ impl Funcdata {
     pub fn kuna_float_pair_half(&self, key: (int4, unlace_base::types::uintb)) -> bool {
         self.kuna_float_pair_halves.contains(&key)
     }
-
 
     /// (kuna `voidret`) Withdraw, or restore, the float-register vote on the return.
     pub fn kuna_set_float_return_withdrawn(&mut self, withdrawn: bool) {
@@ -1735,18 +1836,26 @@ impl Funcdata {
     }
 
     /// (kuna `narrowargs callers`) Record the parameters every caller passes narrow.
-    pub fn kuna_set_callerargs(&mut self, stated: Option<std::rc::Rc<Vec<crate::kuna_callerargs::NarrowParam>>>) {
+    pub fn kuna_set_callerargs(
+        &mut self,
+        stated: Option<std::rc::Rc<Vec<crate::kuna_callerargs::NarrowParam>>>,
+    ) {
         self.kuna_callerargs = stated;
     }
 
     /// (kuna `narrowargs callers`) The parameters every caller passes narrow.
-    pub fn kuna_callerargs(&self) -> Option<&std::rc::Rc<Vec<crate::kuna_callerargs::NarrowParam>>> {
+    pub fn kuna_callerargs(
+        &self,
+    ) -> Option<&std::rc::Rc<Vec<crate::kuna_callerargs::NarrowParam>>> {
         self.kuna_callerargs.as_ref()
     }
 
     /// (kuna `elfmain`) Give this function's inputs the C runtime's `main`
     /// declaration, as far as its own analysis recovers them.
-    pub fn kuna_set_elfmain(&mut self, runtime: Option<std::rc::Rc<crate::kuna_elfmaindecl::Runtime>>) {
+    pub fn kuna_set_elfmain(
+        &mut self,
+        runtime: Option<std::rc::Rc<crate::kuna_elfmaindecl::Runtime>>,
+    ) {
         self.kuna_elfmain = runtime;
     }
 
@@ -1755,7 +1864,10 @@ impl Funcdata {
         self.kuna_elfmain.as_deref()
     }
 
-    pub(crate) fn set_go_string_input(&mut self, formal: Option<crate::kuna_gostringinput::GoStringInput>) {
+    pub(crate) fn set_go_string_input(
+        &mut self,
+        formal: Option<crate::kuna_gostringinput::GoStringInput>,
+    ) {
         self.go_string_input = formal.map(Box::new);
     }
 
@@ -1764,7 +1876,10 @@ impl Funcdata {
     }
 
     /// (kuna `swiftcall`) Seed the input hints. See [`crate::kuna_inputhints`].
-    pub fn kuna_set_input_hints(&mut self, hints: Option<std::rc::Rc<Vec<crate::kuna_inputhints::InputHint>>>) {
+    pub fn kuna_set_input_hints(
+        &mut self,
+        hints: Option<std::rc::Rc<Vec<crate::kuna_inputhints::InputHint>>>,
+    ) {
         self.kuna_input_hints = hints;
     }
 
@@ -1812,7 +1927,9 @@ impl Funcdata {
 
     /// (kuna `elemptr`) Is `obj` one this function must not type?
     pub fn kuna_elemptr_blocked(&self, obj: crate::kuna_elemptr::Obj) -> bool {
-        self.kuna_elemptr_blocked.as_ref().is_some_and(|b| b.contains(&obj))
+        self.kuna_elemptr_blocked
+            .as_ref()
+            .is_some_and(|b| b.contains(&obj))
     }
 
     /// (kuna `elemptr`) Set whether this function may type globals and tables.
@@ -1826,9 +1943,14 @@ impl Funcdata {
     }
 
     /// (kuna `elemptr`) Record what the callee entered at `entry` stated.
-    pub fn kuna_set_elemptr_stated(&mut self, entry: &Address, stated: std::rc::Rc<crate::kuna_elemptr::Stated>) {
+    pub fn kuna_set_elemptr_stated(
+        &mut self,
+        entry: &Address,
+        stated: std::rc::Rc<crate::kuna_elemptr::Stated>,
+    ) {
         if let Some(sp) = entry.get_space() {
-            self.kuna_elemptr_stated.insert((sp.get_index(), entry.get_offset()), stated);
+            self.kuna_elemptr_stated
+                .insert((sp.get_index(), entry.get_offset()), stated);
         }
     }
 
@@ -1838,11 +1960,16 @@ impl Funcdata {
             return None;
         }
         let sp = entry.get_space()?;
-        self.kuna_elemptr_stated.get(&(sp.get_index(), entry.get_offset())).map(|r| r.as_ref())
+        self.kuna_elemptr_stated
+            .get(&(sp.get_index(), entry.get_offset()))
+            .map(|r| r.as_ref())
     }
 
     /// (kuna `elemptr`) What this function's last type pass said about `obj`.
-    pub fn kuna_elemptr_verdict(&self, obj: crate::kuna_elemptr::Obj) -> Option<crate::kuna_elemptr::GlobalVerdict> {
+    pub fn kuna_elemptr_verdict(
+        &self,
+        obj: crate::kuna_elemptr::Obj,
+    ) -> Option<crate::kuna_elemptr::GlobalVerdict> {
         self.kuna_elemptr_verdicts.borrow().get(&obj).cloned()
     }
 
@@ -1865,7 +1992,11 @@ impl Funcdata {
     }
 
     /// (kuna `elemptr`) Fold one walk's verdict about `obj` in.
-    pub fn kuna_elemptr_note(&self, obj: crate::kuna_elemptr::Obj, verdict: crate::kuna_elemptr::GlobalVerdict) {
+    pub fn kuna_elemptr_note(
+        &self,
+        obj: crate::kuna_elemptr::Obj,
+        verdict: crate::kuna_elemptr::GlobalVerdict,
+    ) {
         let mut m = self.kuna_elemptr_verdicts.borrow_mut();
         let merged = match m.remove(&obj) {
             Some(prev) => prev.merge(verdict),
@@ -1893,7 +2024,10 @@ impl Funcdata {
 
     /// (kuna `elemptr`) A pass typed the parameter or call return `key`.
     pub fn kuna_elemptr_note_input(&self, key: crate::kuna_elemptr::InputKey) {
-        self.kuna_elemptr_inputs.borrow_mut().entry(key).or_insert(false);
+        self.kuna_elemptr_inputs
+            .borrow_mut()
+            .entry(key)
+            .or_insert(false);
     }
 
     /// (kuna `elemptr`) A later pass found `key`, typed by an earlier one, to be
@@ -1911,7 +2045,8 @@ impl Funcdata {
     /// (kuna `elemptr`) What this function's walks said about each global.
     pub fn kuna_elemptr_verdicts(
         &self,
-    ) -> std::collections::BTreeMap<crate::kuna_elemptr::Obj, crate::kuna_elemptr::GlobalVerdict> {
+    ) -> std::collections::BTreeMap<crate::kuna_elemptr::Obj, crate::kuna_elemptr::GlobalVerdict>
+    {
         self.kuna_elemptr_verdicts.borrow().clone()
     }
 
@@ -1925,7 +2060,9 @@ impl Funcdata {
             return None;
         }
         let sp = entry.get_space()?;
-        self.kuna_protoorder_types.get(&(sp.get_index(), entry.get_offset())).map(|r| r.as_ref())
+        self.kuna_protoorder_types
+            .get(&(sp.get_index(), entry.get_offset()))
+            .map(|r| r.as_ref())
     }
 
     /// (kuna `passthrough`) Record the register ranges claimed at `ActionFuncLink`.
@@ -1937,7 +2074,9 @@ impl Funcdata {
     }
 
     /// (kuna `passthrough`) The register ranges claimed at `ActionFuncLink`.
-    pub fn kuna_passthrough_claims(&self) -> &[crate::p4_calls::kuna_passthrough::PassThroughClaim] {
+    pub fn kuna_passthrough_claims(
+        &self,
+    ) -> &[crate::p4_calls::kuna_passthrough::PassThroughClaim] {
         &self.kuna_passthrough_claims
     }
 
@@ -1952,7 +2091,10 @@ impl Funcdata {
     }
 
     /// (kuna `msvcbyval`) Record the calls whose by-value slot was sized.
-    pub fn kuna_set_msvc_byval_sites(&mut self, sites: Vec<crate::p4_calls::kuna_msvcbyval::ByvalSite>) {
+    pub fn kuna_set_msvc_byval_sites(
+        &mut self,
+        sites: Vec<crate::p4_calls::kuna_msvcbyval::ByvalSite>,
+    ) {
         self.kuna_msvc_byval_sites = sites;
     }
 
@@ -2106,18 +2248,23 @@ impl Funcdata {
             Some(m) => m,
             None => return Ok(()),
         };
-        let void_type =
-            Rc::new(crate::dtype::Datatype::new(0, crate::dtype::type_metatype::TYPE_VOID));
+        let void_type = Rc::new(crate::dtype::Datatype::new(
+            0,
+            crate::dtype::type_metatype::TYPE_VOID,
+        ));
         // The type factory + manager live on the architecture, shared into `glb`.
         // Clone the `Rc<ArchContext>` (cheap refcount bump) so the factory/manager
         // borrows come from the clone, leaving `self.funcp` freely mutable.
         let glb = self.glb.clone();
         let types = glb.types().ok_or_else(|| {
-            unlace_base::error::KunaError::lowlevel("apply_locked_prototype: no type factory on glb")
+            unlace_base::error::KunaError::lowlevel(
+                "apply_locked_prototype: no type factory on glb",
+            )
         })?;
         let manager = glb.manage();
-        if let Err(e) =
-            self.funcp.seed_locked_from_pieces(pieces, defaultfp, void_type, types, manager)
+        if let Err(e) = self
+            .funcp
+            .seed_locked_from_pieces(pieces, defaultfp, void_type, types, manager)
         {
             // Storage assignment reached an un-ported seam (W4); discard the
             // half-applied prototype and decompile as the unrecovered function.
@@ -2146,8 +2293,10 @@ impl Funcdata {
         if params.is_empty() {
             return;
         }
-        let void_type =
-            Rc::new(crate::dtype::Datatype::new(0, crate::dtype::type_metatype::TYPE_VOID));
+        let void_type = Rc::new(crate::dtype::Datatype::new(
+            0,
+            crate::dtype::type_metatype::TYPE_VOID,
+        ));
         // C++ `getFuncProto().setParam` relies on the store the Funcdata's
         // `setScope` attached at construction; the rebuilt proto may have no store
         // yet, so attach the internal store first (as `IfcMapParam` does).
@@ -2186,8 +2335,11 @@ impl Funcdata {
         // C++ `funcp.getMaxOutputDelay()` reads the model; the C++ FuncProto
         // always has a model by this point (the ctor's setScope/setInternal).
         // Guard the unrecovered (model-less) case so this never panics.
-        let mut maxdelay =
-            if self.funcp.has_model() { self.funcp.get_max_output_delay() } else { 0 };
+        let mut maxdelay = if self.funcp.has_model() {
+            self.funcp.get_max_output_delay()
+        } else {
+            0
+        };
         if maxdelay > 0 {
             maxdelay = 3;
         }
@@ -2250,7 +2402,10 @@ impl Funcdata {
     /// so the index lookup is the faithful equivalent.  Returns the matching
     /// `qlst` index, or `None`.
     pub fn get_call_specs_index(&self, op: OpId) -> Option<int4> {
-        self.qlst.iter().position(|fc| fc.get_op() == op).map(|i| i as int4)
+        self.qlst
+            .iter()
+            .position(|fc| fc.get_op() == op)
+            .map(|i| i as int4)
     }
 
     /// Append a newly-built call specification to the `qlst` (C++
@@ -2377,7 +2532,9 @@ impl Funcdata {
     /// which needs the index to read the out-edge address table).
     pub fn find_jump_table_index(&self, op: OpId) -> Option<usize> {
         let addr = self.obank().get(op)?.get_addr().clone();
-        self.jumpvec.iter().position(|jt| *jt.get_op_address() == addr)
+        self.jumpvec
+            .iter()
+            .position(|jt| *jt.get_op_address() == addr)
     }
 
     /// Perform an entire heritage pass linking Varnode reads to writes (C++
@@ -2402,7 +2559,10 @@ impl Funcdata {
     /// per-address-space loop (`ActionHeritage` passes its
     /// [`ActionContext::deadline`](crate::action::ActionContext); every other
     /// caller passes `None` and is byte-identical to before).
-    pub fn op_heritage_with_deadline(&mut self, deadline: Option<std::time::Instant>) -> KunaResult<()> {
+    pub fn op_heritage_with_deadline(
+        &mut self,
+        deadline: Option<std::time::Instant>,
+    ) -> KunaResult<()> {
         let mut heritage = std::mem::take(&mut self.heritage);
         heritage.build_info_list(self);
         // C++ `Funcdata::startProcessing` runs `localoverride.applyDeadCodeDelay`
@@ -2435,7 +2595,11 @@ impl Funcdata {
     /// [`Heritage::global_store_guarded`](crate::heritage::Heritage::global_store_guarded).
     pub fn global_store_guarded(&self, vn: &crate::varnode::Varnode) -> bool {
         let lo = vn.get_offset();
-        self.heritage.global_store_guarded(vn.get_space().get_index(), lo, lo.wrapping_add(vn.get_size() as u64))
+        self.heritage.global_store_guarded(
+            vn.get_space().get_index(),
+            lo,
+            lo.wrapping_add(vn.get_size() as u64),
+        )
     }
 
     /// Get the heritage pass when the given address was last heritaged, or -1
@@ -2560,7 +2724,11 @@ impl Funcdata {
 
     /// (kuna `framelayout`) The union of every stack-frame slot any pass recovered.
     pub fn frame_slots(&self) -> Vec<(i64, FrameSlot)> {
-        self.frame_slots.borrow().iter().map(|(k, v)| (*k, v.clone())).collect()
+        self.frame_slots
+            .borrow()
+            .iter()
+            .map(|(k, v)| (*k, v.clone()))
+            .collect()
     }
 
     /// (kuna `stackstruct`) The frame records earlier passes laid out.
@@ -2576,7 +2744,14 @@ impl Funcdata {
     }
 
     /// (kuna `castobject`) Remember the stack objects one pass re-declared.
-    pub fn record_cast_objects(&self, objects: Vec<(unlace_base::types::uintb, int4, std::rc::Rc<crate::dtype::Datatype>)>) {
+    pub fn record_cast_objects(
+        &self,
+        objects: Vec<(
+            unlace_base::types::uintb,
+            int4,
+            std::rc::Rc<crate::dtype::Datatype>,
+        )>,
+    ) {
         let mut all = self.cast_objects.borrow_mut();
         for o in objects {
             if !all.iter().any(|(off, size, _)| (*off, *size) == (o.0, o.1)) {
@@ -2703,14 +2878,19 @@ impl Funcdata {
     /// (kuna `deadwaves`) Where the running log ends, for
     /// [`dead_wave_log_since`](Funcdata::dead_wave_log_since).
     pub(crate) fn dead_wave_log_mark(&self) -> (usize, usize) {
-        self.dead_wave_log.as_ref().map_or((0, 0), |log| (log.0.len(), log.1.len()))
+        self.dead_wave_log
+            .as_ref()
+            .map_or((0, 0), |log| (log.0.len(), log.1.len()))
     }
 
     /// (kuna `deadwaves`) The removals logged after `mark`, and the Varnodes
     /// they read.
     pub(crate) fn dead_wave_log_since(&self, mark: (usize, usize)) -> (&[OpId], &[VarnodeId]) {
         match self.dead_wave_log.as_ref() {
-            Some(log) => (log.0.get(mark.0..).unwrap_or(&[]), log.1.get(mark.1..).unwrap_or(&[])),
+            Some(log) => (
+                log.0.get(mark.0..).unwrap_or(&[]),
+                log.1.get(mark.1..).unwrap_or(&[]),
+            ),
             None => (&[], &[]),
         }
     }
@@ -2793,7 +2973,13 @@ impl Funcdata {
     }
 
     /// (kuna `castobject`) Every stack object any pass re-declared.
-    pub fn cast_objects(&self) -> Vec<(unlace_base::types::uintb, int4, std::rc::Rc<crate::dtype::Datatype>)> {
+    pub fn cast_objects(
+        &self,
+    ) -> Vec<(
+        unlace_base::types::uintb,
+        int4,
+        std::rc::Rc<crate::dtype::Datatype>,
+    )> {
         self.cast_objects.borrow().clone()
     }
 
@@ -2818,7 +3004,10 @@ impl Funcdata {
     pub fn mapped_symbol_specs(
         &self,
     ) -> Vec<(String, std::rc::Rc<crate::dtype::Datatype>, Address, uint4)> {
-        self.localmap.as_ref().map(|lm| lm.mapped_symbol_specs()).unwrap_or_default()
+        self.localmap
+            .as_ref()
+            .map(|lm| lm.mapped_symbol_specs())
+            .unwrap_or_default()
     }
 
     /// The usepoint-scoped console Symbol specs in this function's local scope (the
@@ -2830,8 +3019,18 @@ impl Funcdata {
     #[allow(clippy::type_complexity)]
     pub fn usepoint_symbol_specs(
         &self,
-    ) -> Vec<(String, std::rc::Rc<crate::dtype::Datatype>, Address, uint4, Address, bool)> {
-        self.localmap.as_ref().map(|lm| lm.usepoint_symbol_specs()).unwrap_or_default()
+    ) -> Vec<(
+        String,
+        std::rc::Rc<crate::dtype::Datatype>,
+        Address,
+        uint4,
+        Address,
+        bool,
+    )> {
+        self.localmap
+            .as_ref()
+            .map(|lm| lm.usepoint_symbol_specs())
+            .unwrap_or_default()
     }
 
     /// Snapshot the console-added dynamic (`map hash` / `map convert`) symbols of
@@ -2893,15 +3092,21 @@ impl Funcdata {
                             &spec.addr,
                             spec.hash,
                         ) {
-                            lm.set_attribute(sym, varnode_flags::namelock | varnode_flags::typelock);
+                            lm.set_attribute(
+                                sym,
+                                varnode_flags::namelock | varnode_flags::typelock,
+                            );
                         }
                     }
                     continue;
                 }
                 // Preserve which properties were asserted, including name-only locals.
-                if let Ok(sym) =
-                    lm.add_dynamic_symbol(&spec.name, std::rc::Rc::clone(&spec.dtype), &spec.addr, spec.hash)
-                {
+                if let Ok(sym) = lm.add_dynamic_symbol(
+                    &spec.name,
+                    std::rc::Rc::clone(&spec.dtype),
+                    &spec.addr,
+                    spec.hash,
+                ) {
                     let locks = spec.flags & (varnode_flags::namelock | varnode_flags::typelock);
                     lm.set_attribute(sym, locks);
                     if spec.dispflags & crate::database::symbol_dispflags::ISOLATE != 0 {
@@ -2945,20 +3150,33 @@ impl Funcdata {
     /// last write covering the storage at or before `start`, at most 16 bytes
     /// earlier (the defining instruction). A local whose write is not found,
     /// or whose name is already taken, is skipped.
-    pub fn seed_dwarf_register_locals(&mut self, specs: &[(String, std::rc::Rc<crate::dtype::Datatype>, Address, u64)]) {
+    pub fn seed_dwarf_register_locals(
+        &mut self,
+        specs: &[(String, std::rc::Rc<crate::dtype::Datatype>, Address, u64)],
+    ) {
         use crate::varnode::varnode_flags;
-        let starts: std::collections::BTreeSet<u64> =
-            (0..self.bblocks_get_size()).map(|i| self.bblocks_block_start(self.bblocks_get_block(i)).get_offset()).collect();
+        let starts: std::collections::BTreeSet<u64> = (0..self.bblocks_get_size())
+            .map(|i| {
+                self.bblocks_block_start(self.bblocks_get_block(i))
+                    .get_offset()
+            })
+            .collect();
         let mut found = Vec::new();
         for (name, ty, storage, start) in specs {
             let up = if starts.contains(start) {
-                Some(Address::new(std::rc::Rc::clone(self.get_address().get_space().expect("code space")), *start))
+                Some(Address::new(
+                    std::rc::Rc::clone(self.get_address().get_space().expect("code space")),
+                    *start,
+                ))
             } else {
                 let end = storage.get_offset() + ty.get_size() as u64;
                 let mut best: Option<Address> = None;
                 for vn in self.vbank().iter_loc() {
-                    let Some(v) = self.vbank().get(vn) else { continue };
-                    let covers = v.get_addr().get_space().map(|s| s.get_index()) == storage.get_space().map(|s| s.get_index())
+                    let Some(v) = self.vbank().get(vn) else {
+                        continue;
+                    };
+                    let covers = v.get_addr().get_space().map(|s| s.get_index())
+                        == storage.get_space().map(|s| s.get_index())
                         && v.get_addr().get_offset() <= storage.get_offset()
                         && v.get_addr().get_offset() + v.get_size() as u64 >= end;
                     if !v.is_written() || !covers {
@@ -2966,7 +3184,10 @@ impl Funcdata {
                     }
                     let up = self.vn_use_point(vn);
                     let at = up.get_offset();
-                    if at < *start && start - at <= 16 && best.as_ref().is_none_or(|b| at > b.get_offset()) {
+                    if at < *start
+                        && start - at <= 16
+                        && best.as_ref().is_none_or(|b| at > b.get_offset())
+                    {
                         best = Some(up);
                     }
                 }
@@ -2994,10 +3215,15 @@ impl Funcdata {
         }
         let values: Vec<_> = self.vbank().iter_loc().collect();
         for vn in values {
-            let Some(value) = self.vbank().get(vn) else { continue };
+            let Some(value) = self.vbank().get(vn) else {
+                continue;
+            };
             let (addr, size) = (value.get_addr().clone(), value.get_size());
             let usepoint = self.vn_use_point(vn);
-            if seeded.iter().any(|(s, sz, up)| *s == addr && *sz == size && *up == usepoint) {
+            if seeded
+                .iter()
+                .any(|(s, sz, up)| *s == addr && *sz == size && *up == usepoint)
+            {
                 self.set_varnode_properties(vn);
             }
         }
@@ -3013,7 +3239,14 @@ impl Funcdata {
     /// usepoint (an invalid usepoint would make `inUse` false at every read).
     pub fn seed_usepoint_symbols(
         &mut self,
-        specs: &[(String, std::rc::Rc<crate::dtype::Datatype>, Address, uint4, Address, bool)],
+        specs: &[(
+            String,
+            std::rc::Rc<crate::dtype::Datatype>,
+            Address,
+            uint4,
+            Address,
+            bool,
+        )],
     ) {
         use crate::varnode::varnode_flags;
         if let Some(lm) = self.localmap.as_mut() {
@@ -3040,8 +3273,10 @@ impl Funcdata {
                 let value = self.vbank().get(vn).expect("seeded varnode");
                 let usepoint = self.vn_use_point(vn);
                 if specs.iter().any(|(_, ty, addr, _, pc, isolated)| {
-                    *isolated && value.get_addr() == addr
-                        && value.get_size() == ty.get_size() && &usepoint == pc
+                    *isolated
+                        && value.get_addr() == addr
+                        && value.get_size() == ty.get_size()
+                        && &usepoint == pc
                 }) {
                     self.set_varnode_properties(vn);
                 }
@@ -3059,10 +3294,7 @@ impl Funcdata {
     /// `<localdb>` encodes.  (Before Phase 4 the markup wrote a varnode
     /// create index here — a placeholder that can never resolve, which left
     /// rename/retype dead on declaration-line tokens.)
-    pub fn kuna_high_symbol_wire_id(
-        &self,
-        high: crate::context::HighVariableId,
-    ) -> Option<uint8> {
+    pub fn kuna_high_symbol_wire_id(&self, high: crate::context::HighVariableId) -> Option<uint8> {
         // Every branch below returns only an id the `<localdb>` encode ACTUALLY
         // WRITES: `encode_scope`'s defensive per-symbol skips (and the wire
         // symbols' `is_encodable`) would otherwise leave the declaration
@@ -3113,13 +3345,13 @@ impl Funcdata {
         let n = h.num_instances();
         for i in 0..n {
             let vn = h.get_instance(i);
-            let Some(v) = self.vbank.get(vn) else { continue };
+            let Some(v) = self.vbank.get(vn) else {
+                continue;
+            };
             if v.is_free() || !v.is_addr_tied() {
                 continue;
             }
-            if let Some((sid, _, _, _)) =
-                lm.container_symbol_link(v.get_addr(), &invalid)
-            {
+            if let Some((sid, _, _, _)) = lm.container_symbol_link(v.get_addr(), &invalid) {
                 if !lm.symbol_is_encodable(sid) {
                     continue;
                 }
@@ -3209,7 +3441,12 @@ impl Funcdata {
             let Some(high) = self.vbank().get(vn).and_then(|v| v.get_high()) else {
                 continue;
             };
-            if self.vbank().get(vn).map(|v| v.is_annotation()).unwrap_or(true) {
+            if self
+                .vbank()
+                .get(vn)
+                .map(|v| v.is_annotation())
+                .unwrap_or(true)
+            {
                 continue;
             }
             // C++ `!sym->isNameUndefined()` — never paint over a resolved name.
@@ -3249,7 +3486,9 @@ impl Funcdata {
                 }
             }
             let dtype = self.with_high_split(|hb, ctx| {
-                hb.get_mut(high).expect("dyn rec: stale high").get_type(ctx, None)
+                hb.get_mut(high)
+                    .expect("dyn rec: stale high")
+                    .get_type(ctx, None)
             });
             let unique = self
                 .localmap
@@ -3673,7 +3912,11 @@ impl Funcdata {
             (space, address.get_offset())
         };
         let key = |source: &crate::kuna_varsources::StorageSource| {
-            (address_key(&source.address), source.size, source.write_address.as_ref().map(address_key))
+            (
+                address_key(&source.address),
+                source.size,
+                source.write_address.as_ref().map(address_key),
+            )
         };
         let mut seen = (homes.len() >= 64 && sources.size_hint().0 >= 16).then(|| {
             let mut seen = crate::kuna_fasthash::FxHashSet::default();
@@ -3691,9 +3934,9 @@ impl Funcdata {
                 seen.insert(key(&source))
             } else {
                 !homes.iter().any(|home| {
-                home.address == source.address
-                    && home.size == source.size
-                    && home.write_address == source.write_address
+                    home.address == source.address
+                        && home.size == source.size
+                        && home.write_address == source.write_address
                 })
             };
             if new {
@@ -3927,7 +4170,9 @@ impl Funcdata {
     /// The root graph node of `bblocks` (the C++ `bblocks` *is* this graph; its
     /// `list` holds the basic blocks).
     fn bblocks_root(&self) -> BlockId {
-        self.bblocks.root.expect("Funcdata: bblocks root not constructed (internal invariant)")
+        self.bblocks
+            .root
+            .expect("Funcdata: bblocks root not constructed (internal invariant)")
     }
     /// Number of basic blocks (C++ `bblocks.getSize()`).
     pub fn bblocks_get_size(&self) -> int4 {
@@ -3946,7 +4191,9 @@ impl Funcdata {
     }
     /// The root graph node of `sblocks`.
     pub(crate) fn sblocks_root(&self) -> BlockId {
-        self.sblocks.root.expect("Funcdata: sblocks root not constructed (internal invariant)")
+        self.sblocks
+            .root
+            .expect("Funcdata: sblocks root not constructed (internal invariant)")
     }
     /// Number of structured blocks (C++ `sblocks.getSize()`).
     pub fn sblocks_get_size(&self) -> int4 {
@@ -4044,7 +4291,9 @@ impl Funcdata {
     /// Until funcdata_op ports `opSetInput`, the bodies that *call* `xref`
     /// (`setInputVarnode`, `opSetOutput`) live in funcdata_op; this thunk is the
     /// surface they use, declared here so they need no seam edit.
-    pub fn replace_reads_thunk(obank: &mut PcodeOpBank) -> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> KunaResult<()> + '_ {
+    pub fn replace_reads_thunk(
+        obank: &mut PcodeOpBank,
+    ) -> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> KunaResult<()> + '_ {
         move |bank: &mut VarnodeBank, oldvn: VarnodeId, newvn: VarnodeId| -> KunaResult<()> {
             // C++ `VarnodeBank::replace` (varnode.cc:1351).
             // C++ walks oldvn's descend list (one entry per op-read of oldvn) and,
@@ -4087,7 +4336,10 @@ impl Funcdata {
     /// Map an `OpId` to its `(getAddr, getTime)` for `VarnodeBank::find`
     /// (the def-op address/time confirmation, C++ inline in `find`).
     pub fn def_addr_time(&self, op: OpId) -> (Address, uintm) {
-        let o = self.obank.get(op).expect("def_addr_time: stale op (internal invariant)");
+        let o = self
+            .obank
+            .get(op)
+            .expect("def_addr_time: stale op (internal invariant)");
         (o.get_addr().clone(), o.get_time())
     }
 
@@ -4103,7 +4355,12 @@ impl Funcdata {
         let v = self.vbank().get(vn).expect("vn_use_point: stale vn");
         if v.is_written() {
             if let Some(op) = v.get_def() {
-                return self.obank().get(op).expect("vn_use_point: stale def").get_addr().clone();
+                return self
+                    .obank()
+                    .get(op)
+                    .expect("vn_use_point: stale def")
+                    .get_addr()
+                    .clone();
             }
         }
         // fd.getAddress()+-1
@@ -4124,7 +4381,8 @@ impl Funcdata {
     ) -> Option<(crate::database::SymbolId, unlace_base::types::uintb, int4)> {
         let usepoint = self.vn_use_point(vn);
         let addr = self.vbank().get(vn)?.get_addr().clone();
-        self.get_scope_local()?.container_entry_key(&addr, &usepoint)
+        self.get_scope_local()?
+            .container_entry_key(&addr, &usepoint)
     }
 
     /// Seed unmapped Varnodes with symbol flags, isolated local type locks and
@@ -4167,7 +4425,9 @@ impl Funcdata {
             // address-tied — the keystone `RuleStringCopy::applyOp`'s
             // `outvn->isAddrTied()` guard reads.  OR'd with the global half below.
             let mut vflags = self.query_local_properties(&addr, size, &usepoint);
-            vflags |= self.get_arch().query_global_properties(&addr, size, &usepoint);
+            vflags |= self
+                .get_arch()
+                .query_global_properties(&addr, size, &usepoint);
             if vflags != 0 {
                 // typelock is set by `updateType`, never here.  These flags
                 // (`mapped|addrtied|persist`, plus any `readonly`/`volatile`) are
@@ -4176,11 +4436,16 @@ impl Funcdata {
                     v.set_flags_pub(vflags & !varnode_flags::typelock);
                 }
             }
-            let local_type = self.get_scope_local().filter(|lm| lm.has_isolated_symbols())
+            let local_type = self
+                .get_scope_local()
+                .filter(|lm| lm.has_isolated_symbols())
                 .and_then(|lm| {
                     let entry = lm.query_container_for_link(&addr, &usepoint)?;
-                    if !entry.is_isolated { return None; }
-                    self.get_arch().types()
+                    if !entry.is_isolated {
+                        return None;
+                    }
+                    self.get_arch()
+                        .types()
                         .and_then(|types| lm.build_localtype_seed_at(&addr, size, &usepoint, types))
                 });
             if let Some(dt) = local_type {
@@ -4197,8 +4462,9 @@ impl Funcdata {
             // forced display format propagates through the store's COPY to the stored
             // constant (`globaloct = 05555`). Ordinary recovered local types
             // remain the inference/naming wave's seam.
-            if let Some((symtype, off)) =
-                self.get_arch().sized_type_for_global_varnode(&addr, size, &usepoint)
+            if let Some((symtype, off)) = self
+                .get_arch()
+                .sized_type_for_global_varnode(&addr, size, &usepoint)
             {
                 // The exact type piece against the shared TypeFactory; null (no
                 // exact piece) leaves the Varnode untyped, as C++ `getSizedType`
@@ -4248,7 +4514,11 @@ impl Funcdata {
             // Cover sits inside a HighVariable that still reads clean, so
             // `HighIntersectTest::updateHigh` skips the rebuild and the member
             // contributes nothing to the intersection test.
-            let realloced = self.vbank().get(vn).map(|v| v.cover().is_some()).unwrap_or(false);
+            let realloced = self
+                .vbank()
+                .get(vn)
+                .map(|v| v.cover().is_some())
+                .unwrap_or(false);
             if realloced {
                 if let Some(h) = self.vbank().get(vn).and_then(|v| v.get_high()) {
                     self.high_bank_mut().cover_dirty(h);
@@ -4276,7 +4546,9 @@ impl Funcdata {
 
     pub(crate) fn op_is_call_or_store(&self, op: OpId) -> bool {
         self.obank.get(op).is_some_and(|o| {
-            o.is_call() || o.get_opcode().is_some_and(|t| t.get_opcode() == OpCode::CPUI_STORE)
+            o.is_call()
+                || o.get_opcode()
+                    .is_some_and(|t| t.get_opcode() == OpCode::CPUI_STORE)
         })
     }
 
@@ -4337,13 +4609,22 @@ impl Funcdata {
         if self.op_is_call_or_store(op) {
             self.affecting_ops_changed();
         }
-        self.obank.get_mut(op).expect("bb_insert_op: stale op").set_parent(Some(bl));
+        self.obank
+            .get_mut(op)
+            .expect("bb_insert_op: stale op")
+            .set_parent(Some(bl));
 
         // Determine the predecessor `prev` of the insertion point.  Inserting
         // before `before` means `prev = before->basic_prev`; before == None
         // (end) means `prev = tail`.
         let prev: Option<OpId> = match before {
-            Some(b) => self.obank.get(b).expect("bb_insert_op: stale before").basic_neighbours().0,
+            Some(b) => {
+                self.obank
+                    .get(b)
+                    .expect("bb_insert_op: stale before")
+                    .basic_neighbours()
+                    .0
+            }
             None => self.bb_op_tail(bl),
         };
 
@@ -4364,7 +4645,12 @@ impl Funcdata {
         // order of the preceding op.
         let ordbefore: uintm = match prev {
             None => 2,
-            Some(p) => self.obank.get(p).expect("bb_insert_op").get_seq_num().get_order(),
+            Some(p) => self
+                .obank
+                .get(p)
+                .expect("bb_insert_op")
+                .get_seq_num()
+                .get_order(),
         };
         // ordafter: if iter == op.end() => ordbefore + 0x1000000 (clamped to ~0
         // on overflow) else the order of the op we inserted before.
@@ -4372,16 +4658,21 @@ impl Funcdata {
             None => {
                 let gap = (uintm::MAX / self.bb_op_len(bl) as uintm).min(0x1000000);
                 let oa = ordbefore.wadd(gap);
-                if oa <= ordbefore {
-                    uintm::MAX
-                } else {
-                    oa
-                }
+                if oa <= ordbefore { uintm::MAX } else { oa }
             }
-            Some(b) => self.obank.get(b).expect("bb_insert_op").get_seq_num().get_order(),
+            Some(b) => self
+                .obank
+                .get(b)
+                .expect("bb_insert_op")
+                .get_seq_num()
+                .get_order(),
         };
         if ordafter.wsub(ordbefore) <= 1 {
-            let span = if before.is_none() { uintm::MAX / 2 } else { uintm::MAX };
+            let span = if before.is_none() {
+                uintm::MAX / 2
+            } else {
+                uintm::MAX
+            };
             self.bb_set_order_within(bl, span);
         } else {
             let mid = ordbefore.wadd(ordafter.wsub(ordbefore) / 2);
@@ -4392,7 +4683,9 @@ impl Funcdata {
             && self.obank.get(op).expect("bb_insert_op").code()
                 == unlace_num::opcodes::OpCode::CPUI_BRANCHIND
         {
-            self.bblocks.block_mut(bl).set_flag(block_flags::f_switch_out);
+            self.bblocks
+                .block_mut(bl)
+                .set_flag(block_flags::f_switch_out);
         }
     }
 
@@ -4403,7 +4696,10 @@ impl Funcdata {
         if self.op_is_call_or_store(op) {
             self.affecting_ops_changed();
         }
-        self.obank.get_mut(op).expect("bb_remove_op: stale op").set_parent(None);
+        self.obank
+            .get_mut(op)
+            .expect("bb_remove_op: stale op")
+            .set_parent(None);
         let (prev, next) = self.obank.get(op).expect("bb_remove_op").basic_neighbours();
         match prev {
             Some(p) => self.op_set_basic_next(p, next),
@@ -4442,8 +4738,16 @@ impl Funcdata {
         let mut cur = self.bb_op_head(bl);
         while let Some(op) = cur {
             count = count.wadd(step);
-            self.obank.get_mut(op).expect("bb_set_order").set_order(count);
-            cur = self.obank.get(op).expect("bb_set_order").basic_neighbours().1;
+            self.obank
+                .get_mut(op)
+                .expect("bb_set_order")
+                .set_order(count);
+            cur = self
+                .obank
+                .get(op)
+                .expect("bb_set_order")
+                .basic_neighbours()
+                .1;
         }
         let mut cur = self.bb_op_head(bl);
         while let Some(op) = cur {
@@ -4459,7 +4763,10 @@ impl Funcdata {
                 }
             }
             for vn in vns {
-                let marked = self.vbank.get(vn).is_none_or(|v| v.is_cover_dirty_flag() && v.get_high().is_none());
+                let marked = self
+                    .vbank
+                    .get(vn)
+                    .is_none_or(|v| v.is_cover_dirty_flag() && v.get_high().is_none());
                 if !marked {
                     crate::p6_variables::merge::MergeContext::vn_set_cover_dirty(self, vn);
                 }
@@ -4514,12 +4821,20 @@ impl Funcdata {
                 Some(v) => v,
                 None => continue,
             };
-            if self.vbank().get(outvn).map(|v| v.is_addr_tied()).unwrap_or(false) {
+            if self
+                .vbank()
+                .get(outvn)
+                .map(|v| v.is_addr_tied())
+                .unwrap_or(false)
+            {
                 return false;
             }
             // Every use of the output must be inside this same block.
-            let descend: Vec<OpId> =
-                self.vbank().get(outvn).map(|v| v.descend_iter().collect()).unwrap_or_default();
+            let descend: Vec<OpId> = self
+                .vbank()
+                .get(outvn)
+                .map(|v| v.descend_iter().collect())
+                .unwrap_or_default();
             for dop in descend {
                 if self.obank().get(dop).and_then(|d| d.get_parent()) != Some(bl) {
                     return false;
@@ -4531,10 +4846,16 @@ impl Funcdata {
 
     // Thin op-link setters so bb_* helpers don't repeatedly unwrap.
     fn op_set_basic_prev(&mut self, op: OpId, v: Option<OpId>) {
-        self.obank.get_mut(op).expect("op_set_basic_prev: stale op").set_basic_prev(v);
+        self.obank
+            .get_mut(op)
+            .expect("op_set_basic_prev: stale op")
+            .set_basic_prev(v);
     }
     fn op_set_basic_next(&mut self, op: OpId, v: Option<OpId>) {
-        self.obank.get_mut(op).expect("op_set_basic_next: stale op").set_basic_next(v);
+        self.obank
+            .get_mut(op)
+            .expect("op_set_basic_next: stale op")
+            .set_basic_next(v);
     }
 
     // -----------------------------------------------------------------------
@@ -4542,7 +4863,9 @@ impl Funcdata {
     // -----------------------------------------------------------------------
 
     /// The caller-local PPC32 import calls this entry's flow applied.
-    pub fn ppc32_import_calls(&self) -> impl Iterator<Item = &crate::kuna_ppc32piccalls::CallBinding> {
+    pub fn ppc32_import_calls(
+        &self,
+    ) -> impl Iterator<Item = &crate::kuna_ppc32piccalls::CallBinding> {
         self.ppc32_pic_calls.values()
     }
 
@@ -4707,8 +5030,8 @@ pub type DefOp = DefOpInfo;
 use crate::cover::{Cover, CoverContext, CoverPoint};
 use crate::dtype::Datatype;
 use crate::variable::{CompareNameView, HighContext, VarnodeView, VarnodeViewLoc};
-use unlace_num::opcodes::OpCode;
 use std::rc::Rc;
+use unlace_num::opcodes::OpCode;
 
 impl Funcdata {
     /// Convert a constant pointer into a `PTRSUB(spacebase, off)` (+ extra/zext/
@@ -4742,31 +5065,38 @@ impl Funcdata {
         use unlace_base::space::AddrSpace;
 
         let sz = rampoint.get_addr_size();
-        let spaceid = rampoint.get_space().expect("spacebaseConstant: rampoint has no space").clone();
+        let spaceid = rampoint
+            .get_space()
+            .expect("spacebaseConstant: rampoint has no space")
+            .clone();
         let wordsize = spaceid.get_word_size();
 
-        let types =
-            self.get_arch().types_rc().ok_or_else(|| {
-                unlace_base::error::KunaError::lowlevel("spacebaseConstant: no type factory")
-            })?;
+        let types = self.get_arch().types_rc().ok_or_else(|| {
+            unlace_base::error::KunaError::lowlevel("spacebaseConstant: no type factory")
+        })?;
         let invalid = Address::new_invalid();
         let sb_spacebase = types.get_type_spacebase(Rc::clone(&spaceid), &invalid)?;
         let sb_type = types.get_type_pointer(sz, sb_spacebase, wordsize)?;
         // The covering Symbol's declared type.
-        let entrytype = entry
-            .symbol_type
-            .clone()
-            .ok_or_else(|| unlace_base::error::KunaError::lowlevel("spacebaseConstant: entry has no type"))?;
+        let entrytype = entry.symbol_type.clone().ok_or_else(|| {
+            unlace_base::error::KunaError::lowlevel("spacebaseConstant: entry has no type")
+        })?;
         let ptrentrytype =
             types.get_type_pointer_strip_array(sz, Rc::clone(&entrytype), wordsize)?;
 
-        let extra_bytes = rampoint.get_offset().wrapping_sub(entry.entry_addr.get_offset());
+        let extra_bytes = rampoint
+            .get_offset()
+            .wrapping_sub(entry.entry_addr.get_offset());
         let extra = AddrSpace::byte_to_address(extra_bytes, wordsize);
 
         // COPY-replacement bookkeeping (funcdata.cc:370-388).  For the INT_ADD/
         // STORE/CALL/comparison cases isCopy stays false and addOp/extraOp/... are
         // freshly created below.
-        let opc = self.obank().get(op).expect("spacebaseConstant: stale op").code();
+        let opc = self
+            .obank()
+            .get(op)
+            .expect("spacebaseConstant: stale op")
+            .code();
         let mut add_op: Option<OpId> = None;
         let mut extra_op: Option<OpId> = None;
         let mut zext_op: Option<OpId> = None;
@@ -4777,7 +5107,10 @@ impl Funcdata {
                 zext_op = Some(op);
             } else {
                 // PTRSUB/ADD/SUBPIECE all take 2 parameters.
-                self.obank_mut().get_mut(op).expect("spacebaseConstant: stale op").insert_input(1);
+                self.obank_mut()
+                    .get_mut(op)
+                    .expect("spacebaseConstant: stale op")
+                    .insert_input(1);
                 if origsize < sz {
                     sub_op = Some(op);
                 } else if extra != 0 {
@@ -4790,12 +5123,20 @@ impl Funcdata {
 
         let spacebase_vn = self.new_constant(sz, 0);
         {
-            let v = self.vbank_mut().get_mut(spacebase_vn).expect("spacebaseConstant: spacebase vn");
+            let v = self
+                .vbank_mut()
+                .get_mut(spacebase_vn)
+                .expect("spacebaseConstant: spacebase vn");
             v.update_type_locked(sb_type, true, true);
             v.set_flags_pub(varnode_flags::spacebase);
         }
 
-        let op_addr = self.obank().get(op).expect("spacebaseConstant: stale op").get_addr().clone();
+        let op_addr = self
+            .obank()
+            .get(op)
+            .expect("spacebaseConstant: stale op")
+            .get_addr()
+            .clone();
         // addOp: reuse the COPY (if addOp==op) else create a fresh 2-input op.
         let add_op = match add_op {
             None => {
@@ -4810,15 +5151,25 @@ impl Funcdata {
                 existing
             }
         };
-        let mut outvn =
-            self.obank().get(add_op).expect("spacebaseConstant: addOp").get_out().expect("addOp out");
+        let mut outvn = self
+            .obank()
+            .get(add_op)
+            .expect("spacebaseConstant: addOp")
+            .get_out()
+            .expect("addOp out");
 
         // origval - extra, all already in address units.
         let newconstoff = origval.wrapping_sub(extra);
         let newconst = self.new_constant(sz, newconstoff);
-        self.vbank_mut().get_mut(newconst).expect("spacebaseConstant: newconst").set_ptr_check();
+        self.vbank_mut()
+            .get_mut(newconst)
+            .expect("spacebaseConstant: newconst")
+            .set_ptr_check();
         if spaceid.is_truncated() {
-            self.obank_mut().get_mut(add_op).expect("spacebaseConstant: addOp").set_ptr_flow();
+            self.obank_mut()
+                .get_mut(add_op)
+                .expect("spacebaseConstant: addOp")
+                .set_ptr_flow();
         }
         self.op_set_input(add_op, spacebase_vn, 0)?;
         self.op_set_input(add_op, newconst, 1)?;
@@ -4848,10 +5199,18 @@ impl Funcdata {
                 }
             };
             let extconst = self.new_constant(sz, extra);
-            self.vbank_mut().get_mut(extconst).expect("spacebaseConstant: extconst").set_ptr_check();
+            self.vbank_mut()
+                .get_mut(extconst)
+                .expect("spacebaseConstant: extconst")
+                .set_ptr_check();
             self.op_set_input(extra_op, outvn, 0)?;
             self.op_set_input(extra_op, extconst, 1)?;
-            outvn = self.obank().get(extra_op).expect("spacebaseConstant: extraOp").get_out().expect("extraOp out");
+            outvn = self
+                .obank()
+                .get(extra_op)
+                .expect("spacebaseConstant: extraOp")
+                .get_out()
+                .expect("extraOp out");
         }
 
         if sz < origsize {
@@ -4870,7 +5229,12 @@ impl Funcdata {
                 }
             };
             self.op_set_input(zext_op, outvn, 0)?;
-            outvn = self.obank().get(zext_op).expect("spacebaseConstant: zextOp").get_out().expect("zextOp out");
+            outvn = self
+                .obank()
+                .get(zext_op)
+                .expect("spacebaseConstant: zextOp")
+                .get_out()
+                .expect("zextOp out");
         } else if origsize < sz {
             // Truncate the bigger new constant down to the original Varnode size.
             let sub_op = match sub_op {
@@ -4889,7 +5253,12 @@ impl Funcdata {
             self.op_set_input(sub_op, outvn, 0)?;
             let lsb = self.new_constant(4, 0); // Take least significant piece
             self.op_set_input(sub_op, lsb, 1)?;
-            outvn = self.obank().get(sub_op).expect("spacebaseConstant: subOp").get_out().expect("subOp out");
+            outvn = self
+                .obank()
+                .get(sub_op)
+                .expect("spacebaseConstant: subOp")
+                .get_out()
+                .expect("subOp out");
         }
 
         if !is_copy {
@@ -4912,7 +5281,11 @@ impl Funcdata {
     /// [`Varnode::update_type`](crate::varnode::Varnode::update_type) cannot reach
     /// (the high lives in this arena, not on the Varnode).  Returns whether the
     /// Datatype changed.
-    pub fn vn_update_type(&mut self, vn: VarnodeId, ct: std::rc::Rc<crate::dtype::Datatype>) -> bool {
+    pub fn vn_update_type(
+        &mut self,
+        vn: VarnodeId,
+        ct: std::rc::Rc<crate::dtype::Datatype>,
+    ) -> bool {
         let high = self.vbank().get(vn).and_then(|v| v.get_high());
         let changed = self
             .vbank_mut()
@@ -4996,7 +5369,10 @@ impl Funcdata {
     /// Cover stores for a def/ref).
     fn op_cover_point(&self, op: OpId) -> CoverPoint {
         let (uindex, code) = self.op_uindex_code(op);
-        CoverPoint::Op { uindex, multiequal: code == OpCode::CPUI_MULTIEQUAL }
+        CoverPoint::Op {
+            uindex,
+            multiequal: code == OpCode::CPUI_MULTIEQUAL,
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -5084,7 +5460,13 @@ impl Funcdata {
     /// COPY/MULTIEQUAL in the flow path (bounded recursion depth 1).  A constant
     /// `whole` wider than 8 bytes holds zero above bit 63, so a truncation of 8
     /// or more bytes reads 0 (the C++ shift is undefined there).
-    fn find_subpiece_shadow(&self, vn: VarnodeId, least_byte: int4, whole: VarnodeId, recurse: int4) -> bool {
+    fn find_subpiece_shadow(
+        &self,
+        vn: VarnodeId,
+        least_byte: int4,
+        whole: VarnodeId,
+        recurse: int4,
+    ) -> bool {
         let vn = self.skip_copy_chain(vn);
         let v = match self.vbank.get(vn) {
             Some(v) => v,
@@ -5100,7 +5482,10 @@ impl Funcdata {
                 if !wv.get_addr().is_constant() {
                     return false;
                 }
-                let off = wv.get_offset().checked_shr(least_byte as u32 * 8).unwrap_or(0)
+                let off = wv
+                    .get_offset()
+                    .checked_shr(least_byte as u32 * 8)
+                    .unwrap_or(0)
                     & unlace_base::address::calc_mask(v.get_size());
                 return off == v.get_offset();
             }
@@ -5110,7 +5495,11 @@ impl Funcdata {
             Some(d) => d,
             None => return false,
         };
-        let opc = self.obank.get(def).map(|o| o.code()).unwrap_or(OpCode::CPUI_COPY);
+        let opc = self
+            .obank
+            .get(def)
+            .map(|o| o.code())
+            .unwrap_or(OpCode::CPUI_COPY);
         if opc == OpCode::CPUI_SUBPIECE {
             let o = self.obank.get(def).unwrap();
             let tmpvn = match o.get_in(0) {
@@ -5239,7 +5628,12 @@ impl Funcdata {
     /// / `b` contain the other (as a value) via a SUBPIECE or CONCAT chain at the
     /// given relative byte offset.  Used by `Merge::inflateTest` /
     /// `HighIntersectTest::blockIntersection` to allow partial-shadow overlaps.
-    pub(crate) fn varnode_partial_copy_shadow(&self, a: VarnodeId, b: VarnodeId, rel_off: int4) -> bool {
+    pub(crate) fn varnode_partial_copy_shadow(
+        &self,
+        a: VarnodeId,
+        b: VarnodeId,
+        rel_off: int4,
+    ) -> bool {
         let sa = match self.vbank.get(a) {
             Some(v) => v.get_size(),
             None => return false,
@@ -5274,7 +5668,11 @@ impl Funcdata {
             .get(b)
             .map(|v| v.get_space().is_big_endian())
             .unwrap_or(false);
-        let least_byte = if big_endian { (op2_size - vn_size) - rel_off } else { rel_off };
+        let least_byte = if big_endian {
+            (op2_size - vn_size) - rel_off
+        } else {
+            rel_off
+        };
         if self.find_subpiece_shadow(vn, least_byte, op2, 0) {
             return true;
         }
@@ -5298,25 +5696,13 @@ impl Funcdata {
         let (oa, ob) = (va.get_addr().get_offset(), vb.get_addr().get_offset());
         let (za, zb) = (va.get_size() as u64, vb.get_size() as u64);
         if oa == ob {
-            if za == zb {
-                2
-            } else {
-                1
-            }
+            if za == zb { 2 } else { 1 }
         } else if oa < ob {
             let thisright = oa + (za - 1);
-            if thisright < ob {
-                0
-            } else {
-                1
-            }
+            if thisright < ob { 0 } else { 1 }
         } else {
             let opright = ob + (zb - 1);
-            if opright < oa {
-                0
-            } else {
-                1
-            }
+            if opright < oa { 0 } else { 1 }
         }
     }
 
@@ -5333,7 +5719,10 @@ impl Funcdata {
         let copy_op = self.new_op(1, addr);
         self.op_set_opcode(copy_op, crate::typeop::type_op_for(OpCode::CPUI_COPY));
         let (ct, size) = {
-            let v = self.vbank.get(in_vn).expect("build_copy_trim_op: stale in_vn");
+            let v = self
+                .vbank
+                .get(in_vn)
+                .expect("build_copy_trim_op: stale in_vn");
             (Rc::clone(v.get_type()), v.get_size())
         };
         let out_vn = self.new_unique(size, Some(ct));
@@ -5349,7 +5738,12 @@ impl Funcdata {
         // bit from the cover-forced input so the SAME markexplicit arm fires (the
         // post-merge late `ActionDynamicSymbols` then re-attaches the name).  Guarded
         // on the input actually being mapped, so non-dynamic cover trims are unchanged.
-        if self.vbank.get(in_vn).map(|v| v.is_mapped()).unwrap_or(false) {
+        if self
+            .vbank
+            .get(in_vn)
+            .map(|v| v.is_mapped())
+            .unwrap_or(false)
+        {
             if let Some(v) = self.vbank.get_mut(out_vn) {
                 v.set_flags_pub(crate::varnode::varnode_flags::mapped);
             }
@@ -5360,7 +5754,11 @@ impl Funcdata {
     /// C++ `Merge::trimOpOutput` (`merge.cc:656`): bump the op's output forward
     /// through a new COPY so its Cover shrinks to a single point.
     pub(crate) fn do_trim_op_output(&mut self, op: OpId) -> KunaResult<()> {
-        let code = self.obank.get(op).expect("do_trim_op_output: stale op").code();
+        let code = self
+            .obank
+            .get(op)
+            .expect("do_trim_op_output: stale op")
+            .code();
         let afterop = if code == OpCode::CPUI_INDIRECT {
             let addr = self
                 .obank
@@ -5526,7 +5924,9 @@ impl Funcdata {
             range.add_def_point(def, is_input);
         }
         let hit = |bl: int4, cb: &crate::cover::CoverBlock| {
-            writes.get(&bl).is_some_and(|points| points.iter().any(|&p| cb.contain(Some(p))))
+            writes
+                .get(&bl)
+                .is_some_and(|points| points.iter().any(|&p| cb.contain(Some(p))))
         };
         match self.obank.get(sub_op).and_then(|o| o.get_in(0)) {
             Some(sub_in) => range.add_ref_point_until(&ctx, sub_op, sub_in, hit),
@@ -5544,7 +5944,12 @@ impl Funcdata {
         high: crate::context::HighVariableId,
         input: bool,
     ) -> Option<VarnodeId> {
-        let Funcdata { high_bank, vbank, obank, .. } = self;
+        let Funcdata {
+            high_bank,
+            vbank,
+            obank,
+            ..
+        } = self;
         let ctx = HighReadView::new(vbank, obank);
         let h = high_bank.get(high)?;
         if input {
@@ -5566,7 +5971,12 @@ impl Funcdata {
         set_high_log: &mut Vec<(VarnodeId, crate::context::HighVariableId, int2)>,
         mark_set: &std::cell::RefCell<std::collections::BTreeSet<crate::context::HighVariableId>>,
     ) -> KunaResult<()> {
-        let Funcdata { high_bank, vbank, obank, .. } = self;
+        let Funcdata {
+            high_bank,
+            vbank,
+            obank,
+            ..
+        } = self;
         let ctx = HighReadView::new(vbank, obank);
         let mut set_high = |vn: VarnodeId, id: crate::context::HighVariableId, mg: int2| {
             set_high_log.push((vn, id, mg));
@@ -5593,8 +6003,14 @@ impl Funcdata {
 
     /// C++ `Merge::snipReads` insert-point (`merge.cc:454-466`).  Reached by
     /// `snipReads`/`eliminateIntersect` (not on the `mergeMarker` path).
-    pub(crate) fn do_snip_reads_insert_point(&self, vn: VarnodeId) -> (BlockId, Address, Option<OpId>) {
-        let v = self.vbank.get(vn).expect("snip_reads_insert_point: stale vn");
+    pub(crate) fn do_snip_reads_insert_point(
+        &self,
+        vn: VarnodeId,
+    ) -> (BlockId, Address, Option<OpId>) {
+        let v = self
+            .vbank
+            .get(vn)
+            .expect("snip_reads_insert_point: stale vn");
         if v.is_input() {
             // C++ `Merge::snipReads` (merge.cc:454): for an input Varnode the trim
             // COPY is placed at the entry block's START (`bl->getStart()`), not its
@@ -5603,7 +6019,9 @@ impl Funcdata {
             let bl = self.bblocks_get_block(0);
             (bl, self.bblocks_block_start(bl), None)
         } else {
-            let def = v.get_def().expect("snip_reads_insert_point: non-input has no def");
+            let def = v
+                .get_def()
+                .expect("snip_reads_insert_point: non-input has no def");
             let o = self.obank.get(def).expect("snip: stale def");
             let bl = o.get_parent().expect("snip: def no parent");
             let pc = o.get_addr().clone();
@@ -5648,8 +6066,16 @@ impl Funcdata {
         let dom_bl = self.bblocks.find_common_block_set(&block_set);
 
         let mut dom_copy = copy[pos as usize];
-        let root_vn = self.obank.get(dom_copy).and_then(|o| o.get_in(0)).expect("build_dominant_copy: domCopy in0");
-        let mut dom_vn = self.obank.get(dom_copy).and_then(|o| o.get_out()).expect("build_dominant_copy: domCopy out");
+        let root_vn = self
+            .obank
+            .get(dom_copy)
+            .and_then(|o| o.get_in(0))
+            .expect("build_dominant_copy: domCopy in0");
+        let mut dom_vn = self
+            .obank
+            .get(dom_copy)
+            .and_then(|o| o.get_out())
+            .expect("build_dominant_copy: domCopy out");
         let dom_copy_parent = self.obank.get(dom_copy).and_then(|o| o.get_parent());
         let dom_copy_is_new = dom_copy_parent != Some(dom_bl);
         if dom_copy_is_new {
@@ -5659,7 +6085,10 @@ impl Funcdata {
             let new_copy = self.new_op(1, stop_addr);
             self.op_set_opcode(new_copy, crate::typeop::type_op_for(OpCode::CPUI_COPY));
             let (ct, size_root) = {
-                let v = self.vbank.get(root_vn).expect("build_dominant_copy: stale rootVn");
+                let v = self
+                    .vbank
+                    .get(root_vn)
+                    .expect("build_dominant_copy: stale rootVn");
                 (Rc::clone(v.get_type()), v.get_size())
             };
             let new_vn = self.new_unique(size_root, Some(ct));
@@ -5674,9 +6103,17 @@ impl Funcdata {
         // instances whose in0 copyShadows rootVn).
         let mut b_cover = Cover::new();
         {
-            let n = self.high_bank.get(high).map(|h| h.num_instances()).unwrap_or(0);
+            let n = self
+                .high_bank
+                .get(high)
+                .map(|h| h.num_instances())
+                .unwrap_or(0);
             for i in 0..n {
-                let vn = self.high_bank.get(high).expect("build_dominant_copy: stale high").get_instance(i);
+                let vn = self
+                    .high_bank
+                    .get(high)
+                    .expect("build_dominant_copy: stale high")
+                    .get_instance(i);
                 let mut skip = false;
                 if self.vbank.get(vn).map(|v| v.is_written()).unwrap_or(false) {
                     if let Some(op) = self.vbank.get(vn).and_then(|v| v.get_def()) {
@@ -5709,14 +6146,21 @@ impl Funcdata {
             if op == dom_copy {
                 continue; // No intersections from domVn already proven
             }
-            let out_vn = self.obank.get(op).and_then(|o| o.get_out()).expect("build_dominant_copy: copy out");
+            let out_vn = self
+                .obank
+                .get(op)
+                .and_then(|o| o.get_out())
+                .expect("build_dominant_copy: copy out");
             let mut a_cover = Cover::new();
             {
                 let ctx = FuncdataCoverCtx::new(self);
                 let (def, is_input) = ctx.def_point(dom_vn);
                 a_cover.add_def_point(def, is_input);
-                let descend: Vec<OpId> =
-                    self.vbank.get(out_vn).map(|v| v.descend_iter().collect()).unwrap_or_default();
+                let descend: Vec<OpId> = self
+                    .vbank
+                    .get(out_vn)
+                    .map(|v| v.descend_iter().collect())
+                    .unwrap_or_default();
                 a_cover.add_ref_points_for(&ctx, &descend, out_vn);
             }
             if b_cover.intersect(&a_cover) > 1 {
@@ -5743,7 +6187,11 @@ impl Funcdata {
                 // The marked-set was local; nothing to clear.
                 continue;
             }
-            let out_vn = self.obank.get(op).and_then(|o| o.get_out()).expect("build_dominant_copy: copy out");
+            let out_vn = self
+                .obank
+                .get(op)
+                .and_then(|o| o.get_out())
+                .expect("build_dominant_copy: copy out");
             if out_vn != dom_vn {
                 if let Some(out_high) = self.vbank.get(out_vn).and_then(|v| v.get_high()) {
                     self.high_remove_member(out_high, out_vn);
@@ -5775,9 +6223,18 @@ impl Funcdata {
 
     /// `outVn->getHigh()->remove(outVn)` across the bank field split (the high
     /// loses one member; its cover is marked dirty).
-    pub(crate) fn high_remove_member(&mut self, high: crate::context::HighVariableId, vn: VarnodeId) {
+    pub(crate) fn high_remove_member(
+        &mut self,
+        high: crate::context::HighVariableId,
+        vn: VarnodeId,
+    ) {
         let has_symbol_entry = false; // no symbol entries in the merged tree
-        let Funcdata { high_bank, vbank, obank, .. } = self;
+        let Funcdata {
+            high_bank,
+            vbank,
+            obank,
+            ..
+        } = self;
         let ctx = HighReadView::new(vbank, obank);
         high_bank.remove_member(high, vn, has_symbol_entry, &ctx);
     }
@@ -5795,9 +6252,17 @@ impl Funcdata {
         let opset = crate::cover::PcodeOpSet::new(Box::new(Vec::new), Box::new(|_, _| false));
         let mut cache = crate::variable::HighIntersectTest::new(opset);
         let mut set_high_log: Vec<(VarnodeId, crate::context::HighVariableId, int2)> = Vec::new();
-        let mark_set: std::cell::RefCell<std::collections::BTreeSet<crate::context::HighVariableId>> =
-            std::cell::RefCell::new(std::collections::BTreeSet::new());
-        let res = self.bank_merge_with_log(high1, high2, isspeculative, &mut cache, &mut set_high_log, &mark_set);
+        let mark_set: std::cell::RefCell<
+            std::collections::BTreeSet<crate::context::HighVariableId>,
+        > = std::cell::RefCell::new(std::collections::BTreeSet::new());
+        let res = self.bank_merge_with_log(
+            high1,
+            high2,
+            isspeculative,
+            &mut cache,
+            &mut set_high_log,
+            &mark_set,
+        );
         for (vn, id, mg) in set_high_log {
             if let Some(v) = self.vbank_mut().get_mut(vn) {
                 v.set_high(id, mg);
@@ -5818,7 +6283,11 @@ impl Funcdata {
         if !v.is_cover_dirty_flag() {
             return; // not dirty: nothing to do (C++ early-out)
         }
-        let cover0 = if v.has_cover() { v.cover().cloned() } else { None };
+        let cover0 = if v.has_cover() {
+            v.cover().cloned()
+        } else {
+            None
+        };
         if let Some(mut cover) = cover0 {
             {
                 let ctx = FuncdataCoverCtx::new(self);
@@ -5850,13 +6319,21 @@ pub(crate) type BlockTable = std::cell::OnceCell<Vec<Option<BlockId>>>;
 
 impl<'a> FuncdataCoverCtx<'a> {
     pub(crate) fn new(fd: &'a Funcdata) -> Self {
-        FuncdataCoverCtx { fd, own: BlockTable::new(), shared: fd.cover_blocks.as_ref() }
+        FuncdataCoverCtx {
+            fd,
+            own: BlockTable::new(),
+            shared: fd.cover_blocks.as_ref(),
+        }
     }
 
     /// A view keeping its block table in `table`, for a run of Cover walks over
     /// blocks that do not change between them.
     pub(crate) fn sharing(fd: &'a Funcdata, table: &'a BlockTable) -> Self {
-        FuncdataCoverCtx { fd, own: BlockTable::new(), shared: Some(table) }
+        FuncdataCoverCtx {
+            fd,
+            own: BlockTable::new(),
+            shared: Some(table),
+        }
     }
 
     /// Resolve a block *index* to its `BlockId` (the inverse of `getIndex()`):
@@ -5911,7 +6388,11 @@ impl<'a> CoverContext for FuncdataCoverCtx<'a> {
         }
     }
     fn descend(&self, vn: VarnodeId) -> Vec<OpId> {
-        self.fd.vbank.get(vn).map(|v| v.descend_iter().collect()).unwrap_or_default()
+        self.fd
+            .vbank
+            .get(vn)
+            .map(|v| v.descend_iter().collect())
+            .unwrap_or_default()
     }
     fn ref_point(&self, op: OpId, vn: VarnodeId) -> (int4, CoverPoint, bool, Vec<int4>) {
         let o = self.fd.obank.get(op).expect("ref_point: stale op");
@@ -5935,11 +6416,7 @@ impl<'a> CoverContext for FuncdataCoverCtx<'a> {
         let o = self.fd.obank.get(op)?;
         let out = o.get_out()?;
         let ov = self.fd.vbank.get(out)?;
-        if ov.is_implied() {
-            Some(out)
-        } else {
-            None
-        }
+        if ov.is_implied() { Some(out) } else { None }
     }
 }
 
@@ -5956,7 +6433,12 @@ impl Funcdata {
     ) -> R {
         // Field-split borrow: `high_bank` mutable, the rest immutable through a
         // dedicated read view that borrows only vbank/obank.
-        let Funcdata { high_bank, vbank, obank, .. } = self;
+        let Funcdata {
+            high_bank,
+            vbank,
+            obank,
+            ..
+        } = self;
         let ctx = HighReadView { vbank, obank };
         f(high_bank, &ctx)
     }
@@ -6018,7 +6500,10 @@ impl Funcdata {
     /// The HighVariable's name representative Varnode (C++
     /// `HighVariable::getNameRepresentative`), across the bank field-split.
     /// `None` if the high is gone.
-    pub fn high_name_representative(&mut self, id: crate::context::HighVariableId) -> Option<VarnodeId> {
+    pub fn high_name_representative(
+        &mut self,
+        id: crate::context::HighVariableId,
+    ) -> Option<VarnodeId> {
         self.high_bank.get(id)?;
         Some(self.with_high_split(|hb, ctx| hb.get_mut(id).unwrap().get_name_representative(ctx)))
     }
@@ -6070,19 +6555,27 @@ impl Funcdata {
         {
             return Ok(());
         }
-        let (hash, addr) =
-            crate::dynamic::dynamic_unique_hash(vn, maxduplicates, self)?;
+        let (hash, addr) = crate::dynamic::dynamic_unique_hash(vn, maxduplicates, self)?;
         if hash == 0 {
-            return Err(KunaError::lowlevel("Unable to find unique hash for varnode"));
+            return Err(KunaError::lowlevel(
+                "Unable to find unique hash for varnode",
+            ));
         }
         if !is_constant {
             let dtype = self.with_high_split(|bank, ctx| {
-                bank.get_mut(high).expect("dynamic symbol: stale high").get_type(ctx, None)
+                bank.get_mut(high)
+                    .expect("dynamic symbol: stale high")
+                    .get_type(ctx, None)
             });
-            let localmap = self.localmap.as_mut()
+            let localmap = self
+                .localmap
+                .as_mut()
                 .ok_or_else(|| KunaError::lowlevel("build_dynamic_symbol: no local scope"))?;
             let sym = localmap.add_dynamic_symbol("", dtype, &addr, hash)?;
-            let entry = localmap.database().dynamic_entries(localmap.scope_id()).into_iter()
+            let entry = localmap
+                .database()
+                .dynamic_entries(localmap.scope_id())
+                .into_iter()
                 .find(|entry| entry.symbol == sym)
                 .ok_or_else(|| KunaError::lowlevel("build_dynamic_symbol: missing entry"))?;
             crate::kuna_dynamiclocals::bind(self, vn, &entry)?;
@@ -6117,13 +6610,18 @@ impl Funcdata {
         // built, so the render must still see the equate.  The fallback only applies
         // when the bound Symbol is an equate (the render reads its display format).
         if let Some(high) = self.vbank.get(vn).and_then(|v| v.get_high()) {
-            if let Some(sym) = self.high_bank.get(high).and_then(|h| h.kuna_equate_symbol()) {
+            if let Some(sym) = self
+                .high_bank
+                .get(high)
+                .and_then(|h| h.kuna_equate_symbol())
+            {
                 return Some(sym);
             }
         }
         let sym = self.vbank.get(vn)?.kuna_symbol_entry()?;
         let localmap = self.localmap.as_ref()?;
-        if localmap.database().symbol(sym).get_category() == crate::database::symbol_category::EQUATE
+        if localmap.database().symbol(sym).get_category()
+            == crate::database::symbol_category::EQUATE
         {
             Some(sym)
         } else {
@@ -6144,7 +6642,12 @@ impl Funcdata {
     fn vn_high_has_dynamic_binding(&self, vn: VarnodeId) -> bool {
         // C++ `vn->getSymbolEntry() != 0` (funcdata_varnode.cc:1348): the binding
         // lives on the Varnode itself, so it survives heritage rebuilding the High.
-        if self.vbank.get(vn).and_then(|v| v.kuna_symbol_entry()).is_some() {
+        if self
+            .vbank
+            .get(vn)
+            .and_then(|v| v.kuna_symbol_entry())
+            .is_some()
+        {
             return true;
         }
         // Fall back to the HighVariable mirror (set by the late name/equate arms when
@@ -6278,10 +6781,18 @@ impl Funcdata {
             let v = self.vbank.get(vn);
             let written = v.map(|v| v.is_written()).unwrap_or(false);
             let def = v.and_then(|v| v.get_def());
-            if written && def.and_then(|d| self.obank.get(d)).map(|o| o.code()) == Some(OpCode::CPUI_CAST) {
-                newvn = def.and_then(|d| self.obank.get(d)).and_then(|o| o.get_in(0));
+            if written
+                && def.and_then(|d| self.obank.get(d)).map(|o| o.code()) == Some(OpCode::CPUI_CAST)
+            {
+                newvn = def
+                    .and_then(|d| self.obank.get(d))
+                    .and_then(|o| o.get_in(0));
             } else {
-                let mut it = self.vbank.get(vn).map(|v| v.descend_iter().collect::<Vec<_>>()).unwrap_or_default();
+                let mut it = self
+                    .vbank
+                    .get(vn)
+                    .map(|v| v.descend_iter().collect::<Vec<_>>())
+                    .unwrap_or_default();
                 if it.len() == 1 {
                     let castop = it.pop().unwrap();
                     if self.obank.get(castop).map(|o| o.code()) == Some(OpCode::CPUI_CAST) {
@@ -6342,7 +6853,9 @@ impl Funcdata {
             }
             let Some(v) = self.vbank.get(x) else { continue };
             for op in v.descend_iter() {
-                let Some(o) = self.obank.get(op) else { continue };
+                let Some(o) = self.obank.get(op) else {
+                    continue;
+                };
                 match o.code() {
                     OpCode::CPUI_COPY | OpCode::CPUI_INDIRECT => {
                         if o.get_in(0) == Some(x) {
@@ -6370,7 +6883,9 @@ impl Funcdata {
         // ambiguous.
         let mut memo = std::collections::HashMap::new();
         for op in phis {
-            let Some(o) = self.obank.get(op) else { continue };
+            let Some(o) = self.obank.get(op) else {
+                continue;
+            };
             for k in 0..o.num_input() {
                 if let Some(ik) = o.get_in(k) {
                     if !derives_from_banks(&self.vbank, &self.obank, ik, out, &mut memo, 0) {
@@ -6400,7 +6915,11 @@ pub(crate) fn high_has_foreign_member_banks(
         if m == lock_vn {
             continue;
         }
-        if vbank.get(m).map(|mv| mv.get_size() > lock_size).unwrap_or(true) {
+        if vbank
+            .get(m)
+            .map(|mv| mv.get_size() > lock_size)
+            .unwrap_or(true)
+        {
             return true;
         }
         if !derives_from_banks(vbank, obank, m, lock_vn, &mut memo, 0) {
@@ -6543,7 +7062,9 @@ impl<'a> HighContext for HighReadView<'a> {
     }
     fn vn_loc_view(&self, vn: VarnodeId) -> VarnodeViewLoc {
         let v = self.vbank.get(vn).expect("vn_loc_view: stale vn");
-        VarnodeViewLoc { addr: v.get_addr().clone() }
+        VarnodeViewLoc {
+            addr: v.get_addr().clone(),
+        }
     }
 }
 
@@ -6554,19 +7075,20 @@ mod tests {
 
     use unlace_base::address::Address;
     use unlace_base::space::{
-        addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+        AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
     };
     use unlace_num::opcodes::OpCode;
 
-    use crate::dtype::{type_metatype, Datatype};
     use crate::context::{ArchContext, TypeOp};
+    use crate::dtype::{Datatype, type_metatype};
 
     /// Build an AddrSpaceManager with constant/unique/ram spaces, mirroring the
     /// op.rs/block.rs test harness.
     fn build_manager() -> AddrSpaceManager {
         let mut m = AddrSpaceManager::new();
         m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+            .unwrap();
         m.insert_space(Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
             "ram",
@@ -6639,8 +7161,12 @@ mod tests {
         let ram = ram_space(&fd);
         let ct = unk_type();
         // Create a few free varnodes to advance the create index.
-        let _ = fd.vbank.create(4, Address::new(Rc::clone(&ram), 0x40), Rc::clone(&ct));
-        let _ = fd.vbank.create(4, Address::new(Rc::clone(&ram), 0x44), Rc::clone(&ct));
+        let _ = fd
+            .vbank
+            .create(4, Address::new(Rc::clone(&ram), 0x40), Rc::clone(&ct));
+        let _ = fd
+            .vbank
+            .create(4, Address::new(Rc::clone(&ram), 0x44), Rc::clone(&ct));
         let ci = fd.vbank.get_create_index();
         assert_eq!(ci, 2);
         fd.start_clean_up();
@@ -6659,7 +7185,8 @@ mod tests {
             let pc = Address::new(Rc::clone(&ram), 0x1000 + i as u64 * 4);
             let op = fd.obank.create_at(2, pc);
             // Give the op an opcode so code() works (COPY = harmless).
-            fd.obank.change_opcode(op, TypeOp::new(OpCode::CPUI_COPY, 0, "COPY"));
+            fd.obank
+                .change_opcode(op, TypeOp::new(OpCode::CPUI_COPY, 0, "COPY"));
             fd.bb_insert_op(op, bl, None); // append at end
             ops.push(op);
         }
@@ -6691,7 +7218,8 @@ mod tests {
         let ram = ram_space(&fd);
         let pc = Address::new(ram, 0x2000);
         let newop = fd.obank.create_at(1, pc);
-        fd.obank.change_opcode(newop, TypeOp::new(OpCode::CPUI_COPY, 0, "COPY"));
+        fd.obank
+            .change_opcode(newop, TypeOp::new(OpCode::CPUI_COPY, 0, "COPY"));
         fd.bb_insert_op(newop, bl, Some(ops[1]));
         assert_eq!(fd.bb_op_len(bl), 4);
         assert_eq!(fd.bb_ops(bl), vec![ops[0], newop, ops[1], ops[2]]);
@@ -6710,13 +7238,23 @@ mod tests {
             fd.obank.get_mut(ops[0]).unwrap().set_order(left);
             fd.obank.get_mut(ops[1]).unwrap().set_order(right);
             let newop = fd.obank.create_at(1, Address::new(ram_space(&fd), 0x2000));
-            fd.obank.change_opcode(newop, TypeOp::new(OpCode::CPUI_COPY, 0, "COPY"));
+            fd.obank
+                .change_opcode(newop, TypeOp::new(OpCode::CPUI_COPY, 0, "COPY"));
             fd.bb_insert_op(newop, bl, Some(ops[1]));
             let middle = fd.obank.get(newop).unwrap().get_seq_num().get_order();
-            assert!(left < middle && middle < right, "{left} < {middle} < {right}");
+            assert!(
+                left < middle && middle < right,
+                "{left} < {middle} < {right}"
+            );
             assert_eq!(fd.bb_ops(bl), vec![ops[0], newop, ops[1]]);
-            assert_eq!(fd.obank.get(ops[0]).unwrap().get_seq_num().get_order(), left);
-            assert_eq!(fd.obank.get(ops[1]).unwrap().get_seq_num().get_order(), right);
+            assert_eq!(
+                fd.obank.get(ops[0]).unwrap().get_seq_num().get_order(),
+                left
+            );
+            assert_eq!(
+                fd.obank.get(ops[1]).unwrap().get_seq_num().get_order(),
+                right
+            );
         }
     }
 
@@ -6730,27 +7268,40 @@ mod tests {
         loop {
             let a = fd.obank.get(left).unwrap().get_seq_num().get_order();
             let b = fd.obank.get(right).unwrap().get_seq_num().get_order();
-            if b - a <= 3 { break; }
+            if b - a <= 3 {
+                break;
+            }
             let inserted = fd.obank.create_at(1, Address::new(ram_space(&fd), 0x2000));
-            fd.obank.change_opcode(inserted, TypeOp::new(OpCode::CPUI_COPY, 0, "COPY"));
+            fd.obank
+                .change_opcode(inserted, TypeOp::new(OpCode::CPUI_COPY, 0, "COPY"));
             fd.bb_insert_op(inserted, block, Some(right));
             right = inserted;
         }
         for _ in 0..2 {
             let inserted = fd.obank.create_at(1, Address::new(ram_space(&fd), 0x2000));
-            fd.obank.change_opcode(inserted, TypeOp::new(OpCode::CPUI_COPY, 0, "COPY"));
+            fd.obank
+                .change_opcode(inserted, TypeOp::new(OpCode::CPUI_COPY, 0, "COPY"));
             fd.bb_insert_op(inserted, block, Some(right));
         }
         assert_strict_block_order(&fd, block);
-        let covers: Vec<_> = fd.bb_ops(block).iter()
-            .map(|id| fd.op_cover_point_pub(*id).get_uindex()).collect();
+        let covers: Vec<_> = fd
+            .bb_ops(block)
+            .iter()
+            .map(|id| fd.op_cover_point_pub(*id).get_uindex())
+            .collect();
         assert!(covers.windows(2).all(|pair| pair[0] < pair[1]));
     }
 
     fn assert_strict_block_order(fd: &Funcdata, block: BlockId) {
-        let orders: Vec<_> = fd.bb_ops(block).into_iter()
-            .map(|id| fd.obank.get(id).unwrap().get_seq_num().get_order()).collect();
-        assert!(orders.windows(2).all(|pair| pair[0] < pair[1]), "{orders:?}");
+        let orders: Vec<_> = fd
+            .bb_ops(block)
+            .into_iter()
+            .map(|id| fd.obank.get(id).unwrap().get_seq_num().get_order())
+            .collect();
+        assert!(
+            orders.windows(2).all(|pair| pair[0] < pair[1]),
+            "{orders:?}"
+        );
     }
 
     #[test]
@@ -6793,15 +7344,24 @@ mod tests {
                 break;
             }
         }
-        assert_ne!(fd.obank.get(ops[0]).unwrap().get_seq_num().get_order(), previous_order);
+        assert_ne!(
+            fd.obank.get(ops[0]).unwrap().get_seq_num().get_order(),
+            previous_order
+        );
         assert!(fd.vbank.get(value).unwrap().is_cover_dirty_flag());
         assert!(fd.high_bank.get(high).unwrap().is_cover_dirty());
         MergeContext::bank_update_cover(&mut fd, high);
         let rebuilt = fd.vbank.get(value).unwrap().cover().unwrap();
         assert_ne!(format!("{original:?}"), format!("{rebuilt:?}"));
         let cover = rebuilt.get_cover_block(fd.block_index_pub(block));
-        assert_eq!(cover.get_start().unwrap().get_uindex(), fd.op_cover_point_pub(ops[0]).get_uindex());
-        assert_eq!(cover.get_stop().unwrap().get_uindex(), fd.op_cover_point_pub(ops[1]).get_uindex());
+        assert_eq!(
+            cover.get_start().unwrap().get_uindex(),
+            fd.op_cover_point_pub(ops[0]).get_uindex()
+        );
+        assert_eq!(
+            cover.get_stop().unwrap().get_uindex(),
+            fd.op_cover_point_pub(ops[1]).get_uindex()
+        );
     }
 
     #[test]
@@ -6810,8 +7370,11 @@ mod tests {
         let (block, _) = make_block_with_ops(&mut fd, 1);
         let start = fd.affecting_ops_revision();
         for i in 0..200_000u64 {
-            let op = fd.obank.create_at(1, Address::new(ram_space(&fd), 0x2000 + i));
-            fd.obank.change_opcode(op, TypeOp::new(OpCode::CPUI_COPY, 0, "COPY"));
+            let op = fd
+                .obank
+                .create_at(1, Address::new(ram_space(&fd), 0x2000 + i));
+            fd.obank
+                .change_opcode(op, TypeOp::new(OpCode::CPUI_COPY, 0, "COPY"));
             fd.bb_insert_op(op, block, None);
         }
         assert_strict_block_order(&fd, block);
@@ -6827,8 +7390,11 @@ mod tests {
         for i in 0..2000 {
             state = state.wrapping_mul(1664525).wrapping_add(1013904223);
             let at = state as usize % (expected.len() + 1);
-            let inserted = fd.obank.create_at(1, Address::new(ram_space(&fd), 0x2000 + i));
-            fd.obank.change_opcode(inserted, TypeOp::new(OpCode::CPUI_COPY, 0, "COPY"));
+            let inserted = fd
+                .obank
+                .create_at(1, Address::new(ram_space(&fd), 0x2000 + i));
+            fd.obank
+                .change_opcode(inserted, TypeOp::new(OpCode::CPUI_COPY, 0, "COPY"));
             fd.bb_insert_op(inserted, block, expected.get(at).copied());
             expected.insert(at, inserted);
             if i % 128 == 0 {
@@ -6837,7 +7403,10 @@ mod tests {
         }
         assert_eq!(fd.bb_ops(block), expected);
         assert_strict_block_order(&fd, block);
-        let covers: Vec<_> = expected.iter().map(|id| fd.op_cover_point_pub(*id).get_uindex()).collect();
+        let covers: Vec<_> = expected
+            .iter()
+            .map(|id| fd.op_cover_point_pub(*id).get_uindex())
+            .collect();
         assert!(covers.windows(2).all(|pair| pair[0] < pair[1]));
     }
 
@@ -6956,7 +7525,10 @@ mod tests {
         assert_eq!(fd.vn_high_display_format(c), 0);
 
         // isTypeLock() -> "Trying to build dynamic symbol on locked varnode".
-        fd.vbank.get_mut(c).unwrap().set_flags_pub(crate::varnode::varnode_flags::typelock);
+        fd.vbank
+            .get_mut(c)
+            .unwrap()
+            .set_flags_pub(crate::varnode::varnode_flags::typelock);
         let err = fd
             .build_dynamic_symbol(c, 8, unk)
             .expect_err("must reject a type-locked varnode");
@@ -7000,7 +7572,10 @@ mod tests {
         let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
         let entry = Address::new(ram, 0x1000);
         let mut fd = Funcdata::new("func", "func", glb, entry, 0x10000000, 0x40).unwrap();
-        assert!(fd.get_scope_local().is_some(), "fixture must have a local scope");
+        assert!(
+            fd.get_scope_local().is_some(),
+            "fixture must have a local scope"
+        );
         let rs = Rc::clone(fd.get_arch().manage().get_space_by_name("ram").unwrap());
         let root = fd.bblocks_root_pub();
         let bl = fd.bblocks_mut().new_block_basic(root);
@@ -7009,8 +7584,13 @@ mod tests {
         let a = fd.new_varnode(4, &Address::new(Rc::clone(&rs), 0x100), None);
         let a = fd.set_input_varnode(a).unwrap();
         let op = fd.new_op(2, Address::new(Rc::clone(&rs), 0x1000));
-        fd.op_set_opcode(op, crate::context::TypeOp::new(OpCode::CPUI_INT_ADD, 0, "ADD"));
-        let out = fd.new_varnode_out(4, &Address::new(Rc::clone(&rs), 0x200), op).unwrap();
+        fd.op_set_opcode(
+            op,
+            crate::context::TypeOp::new(OpCode::CPUI_INT_ADD, 0, "ADD"),
+        );
+        let out = fd
+            .new_varnode_out(4, &Address::new(Rc::clone(&rs), 0x200), op)
+            .unwrap();
         fd.op_set_input(op, a, 0).unwrap();
         fd.op_set_input(op, a, 1).unwrap();
         fd.op_insert(op, bl, None);
@@ -7019,14 +7599,17 @@ mod tests {
 
         // The hash Java would compute for this variable (same algorithm, same
         // hardcoded budget of 8 — DynamicHash.java:440).
-        let (hash, hash_addr) =
-            crate::dynamic::dynamic_unique_hash(out, 8, &mut fd).expect("hash");
+        let (hash, hash_addr) = crate::dynamic::dynamic_unique_hash(out, 8, &mut fd).expect("hash");
         assert_ne!(hash, 0, "the fixture varnode must hash uniquely");
 
         fd.seed_dynamic_recommendations(&[("user_renamed".to_string(), hash_addr, hash)]);
         fd.kuna_apply_dynamic_recommendations();
 
-        let high = fd.vbank().get(out).and_then(|v| v.get_high()).expect("high");
+        let high = fd
+            .vbank()
+            .get(out)
+            .and_then(|v| v.get_high())
+            .expect("high");
         let h = fd.high_bank().get(high).expect("high present");
         assert_eq!(
             h.kuna_name(),
@@ -7049,25 +7632,42 @@ mod tests {
     fn build_dynamic_local_preserves_inferred_type_and_is_idempotent() {
         let mut manager = build_manager();
         let register = Rc::new(AddrSpace::new(
-            spacetype::IPTR_PROCESSOR, "register", false, 8, 1, 5,
-            addrspace_flags::hasphysical, 1, 1,
+            spacetype::IPTR_PROCESSOR,
+            "register",
+            false,
+            8,
+            1,
+            5,
+            addrspace_flags::hasphysical,
+            1,
+            1,
         ));
         manager.insert_space(Rc::clone(&register)).unwrap();
-        manager.insert_space(Rc::new(unlace_base::space::SpacebaseSpace::new(
-            "stack", 6, 8, &register, 1, true, false,
-        ))).unwrap();
+        manager
+            .insert_space(Rc::new(unlace_base::space::SpacebaseSpace::new(
+                "stack", 6, 8, &register, 1, true, false,
+            )))
+            .unwrap();
         let arch = Rc::new(ArchContext::new(manager));
         let ram = Rc::clone(arch.manage().get_space_by_name("ram").unwrap());
         let mut fd = Funcdata::new(
-            "func", "func", arch, Address::new(Rc::clone(&ram), 0x1000), 0, 0x40,
-        ).unwrap();
+            "func",
+            "func",
+            arch,
+            Address::new(Rc::clone(&ram), 0x1000),
+            0,
+            0x40,
+        )
+        .unwrap();
         let root = fd.bblocks_root_pub();
         let block = fd.bblocks_mut().new_block_basic(root);
         let input = fd.new_varnode(4, &Address::new(Rc::clone(&ram), 0x100), None);
         let input = fd.set_input_varnode(input).unwrap();
         let op = fd.new_op(2, Address::new(Rc::clone(&ram), 0x1000));
         fd.op_set_opcode(op, TypeOp::new(OpCode::CPUI_INT_ADD, 0, "ADD"));
-        let out = fd.new_varnode_out(4, &Address::new(ram, 0x200), op).unwrap();
+        let out = fd
+            .new_varnode_out(4, &Address::new(ram, 0x200), op)
+            .unwrap();
         fd.op_set_input(op, input, 0).unwrap();
         fd.op_set_input(op, input, 1).unwrap();
         fd.op_insert(op, block, None);
@@ -7082,7 +7682,10 @@ mod tests {
         assert!(!fd.vbank().get(out).unwrap().is_type_lock());
         fd.build_dynamic_symbol(out, 8, unk_type()).unwrap();
         assert_eq!(fd.dynamic_symbol_specs().len(), 1);
-        assert_eq!(fd.vbank().get(out).unwrap().kuna_symbol_entry(), Some(symbol));
+        assert_eq!(
+            fd.vbank().get(out).unwrap().kuna_symbol_entry(),
+            Some(symbol)
+        );
     }
 
     /// Adversarial (Convert B2): binding a dynamic SymbolEntry to a Varnode marks
@@ -7186,11 +7789,17 @@ mod tests {
         // First use builds it lazily and reads an empty accumulator.
         let first = fd.with_covermerge(|merge, _data| merge.copy_trims_len());
         assert_eq!(first, 0);
-        assert!(fd.covermerge.is_some(), "covermerge built lazily on first use");
+        assert!(
+            fd.covermerge.is_some(),
+            "covermerge built lazily on first use"
+        );
         // Push a (fake) trim into the persistent engine, then re-enter: the push
         // must still be visible (the engine was moved back, not re-created).
         let fake = OpId::from(slotmap::KeyData::from_ffi(7));
-        fd.covermerge.as_mut().unwrap().push_copy_trim_for_test(fake);
+        fd.covermerge
+            .as_mut()
+            .unwrap()
+            .push_copy_trim_for_test(fake);
         let second = fd.with_covermerge(|merge, _data| merge.copy_trims_len());
         assert_eq!(second, 1, "copyTrims accumulator survives with_covermerge");
         // clear_covermerge empties it (C++ Merge::clear in Funcdata::clear).

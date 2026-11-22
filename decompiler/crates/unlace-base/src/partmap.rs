@@ -42,7 +42,10 @@ impl<K: Ord + Clone, V: Clone + Default> Default for PartMap<K, V> {
 impl<K: Ord + Clone, V: Clone> PartMap<K, V> {
     /// Create an empty partition with the given default value object.
     pub fn new(defaultvalue: V) -> Self {
-        PartMap { database: BTreeMap::new(), defaultvalue }
+        PartMap {
+            database: BTreeMap::new(),
+            defaultvalue,
+        }
     }
 
     /// Return the value at the greatest split point at or before `pnt`,
@@ -57,10 +60,18 @@ impl<K: Ord + Clone, V: Clone> PartMap<K, V> {
     /// Mutable lookup, including the default value before the first split
     /// point. Returns the value directly without cloning a key.
     pub fn get_value_mut(&mut self, pnt: &K) -> &mut V {
-        if self.database.first_key_value().is_none_or(|(first, _)| pnt < first) {
+        if self
+            .database
+            .first_key_value()
+            .is_none_or(|(first, _)| pnt < first)
+        {
             return &mut self.defaultvalue;
         }
-        match self.database.range_mut((Unbounded, Included(pnt))).next_back() {
+        match self
+            .database
+            .range_mut((Unbounded, Included(pnt)))
+            .next_back()
+        {
             Some((_, v)) => v,
             None => &mut self.defaultvalue,
         }
@@ -176,12 +187,18 @@ impl<K: Ord + Clone, V: Clone> PartMap<K, V> {
 
     /// Get first split point at-or-after the given point — a `lower_bound`
     /// (C++ `begin(pnt)`).
-    pub fn iter_from<'a>(&'a self, pnt: &K) -> impl Iterator<Item = (&'a K, &'a V)> + use<'a, K, V> {
+    pub fn iter_from<'a>(
+        &'a self,
+        pnt: &K,
+    ) -> impl Iterator<Item = (&'a K, &'a V)> + use<'a, K, V> {
         self.database.range((Included(pnt), Unbounded))
     }
 
     /// Mutable flavor of [`PartMap::iter_from`].
-    pub fn iter_from_mut<'a>(&'a mut self, pnt: &K) -> impl Iterator<Item = (&'a K, &'a mut V)> + use<'a, K, V> {
+    pub fn iter_from_mut<'a>(
+        &'a mut self,
+        pnt: &K,
+    ) -> impl Iterator<Item = (&'a K, &'a mut V)> + use<'a, K, V> {
         self.database.range_mut((Included(pnt), Unbounded))
     }
 
@@ -280,16 +297,28 @@ mod tests {
         *pm.split(&20) = 2;
         // before the first split point: no lower bound, after = first split
         let (v, before, after, valid) = pm.bounds(&5);
-        assert_eq!((*v, before.copied(), after.copied(), valid), (0, None, Some(10), 1));
+        assert_eq!(
+            (*v, before.copied(), after.copied(), valid),
+            (0, None, Some(10), 1)
+        );
         // fully bounded
         let (v, before, after, valid) = pm.bounds(&15);
-        assert_eq!((*v, before.copied(), after.copied(), valid), (1, Some(10), Some(20), 0));
+        assert_eq!(
+            (*v, before.copied(), after.copied(), valid),
+            (1, Some(10), Some(20), 0)
+        );
         // past the last split point: no upper bound
         let (v, before, after, valid) = pm.bounds(&25);
-        assert_eq!((*v, before.copied(), after.copied(), valid), (2, Some(20), None, 2));
+        assert_eq!(
+            (*v, before.copied(), after.copied(), valid),
+            (2, Some(20), None, 2)
+        );
         // a point sitting exactly on a split belongs to the range it starts
         let (v, before, after, valid) = pm.bounds(&10);
-        assert_eq!((*v, before.copied(), after.copied(), valid), (1, Some(10), Some(20), 0));
+        assert_eq!(
+            (*v, before.copied(), after.copied(), valid),
+            (1, Some(10), Some(20), 0)
+        );
     }
 
     #[test]

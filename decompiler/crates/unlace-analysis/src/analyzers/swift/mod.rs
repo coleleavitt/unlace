@@ -38,14 +38,7 @@ mod tests;
 use std::collections::HashMap;
 
 use descriptors::{
-    Conformance,
-    Context,
-    ContextKind,
-    ELF_SECTIONS,
-    MACHO_SECTIONS,
-    Metadata,
-    Reader,
-    Target,
+    Conformance, Context, ContextKind, ELF_SECTIONS, MACHO_SECTIONS, Metadata, Reader, Target,
     TypeRef,
 };
 use object::read::{Object, ObjectSection, ObjectSymbol, ObjectSymbolTable};
@@ -75,7 +68,11 @@ impl AnalysisPass for SwiftMetadataPass {
         };
         if [names.types, names.protocols, names.conformances]
             .iter()
-            .all(|s| crate::objc::sections::sections_named(ctx.file, s).next().is_none())
+            .all(|s| {
+                crate::objc::sections::sections_named(ctx.file, s)
+                    .next()
+                    .is_none()
+            })
         {
             return out;
         }
@@ -91,7 +88,9 @@ impl AnalysisPass for SwiftMetadataPass {
                 .filter_map(|s| String::from_utf8(s.name).ok().map(|n| (s.addr, n)))
                 .collect();
         if ctx.file.format() == object::BinaryFormat::MachO {
-            for (slot, name) in crate::loader::macho_stubs::resolve_macho_data_import_slots(ctx.file, ctx.bytes) {
+            for (slot, name) in
+                crate::loader::macho_stubs::resolve_macho_data_import_slots(ctx.file, ctx.bytes)
+            {
                 if let Ok(name) = String::from_utf8(name) {
                     imports.entry(slot).or_insert(name);
                 }
@@ -263,7 +262,12 @@ fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
             (Some(x), Some(y)) if x.is_ascii_digit() && y.is_ascii_digit() => {
                 let run = |s: &[u8]| s.iter().take_while(|c| c.is_ascii_digit()).count();
                 let (na, nb) = (run(a), run(b));
-                let value = |s: &[u8]| s.iter().skip_while(|&&c| c == b'0').copied().collect::<Vec<u8>>();
+                let value = |s: &[u8]| {
+                    s.iter()
+                        .skip_while(|&&c| c == b'0')
+                        .copied()
+                        .collect::<Vec<u8>>()
+                };
                 let (va, vb) = (value(&a[..na]), value(&b[..nb]));
                 let ord = va.len().cmp(&vb.len()).then_with(|| va.cmp(&vb));
                 if ord.is_ne() {
@@ -478,7 +482,11 @@ impl Namer<'_> {
             let named = |suffix: &str| path.as_ref().map(|p| format!("{p}.{suffix}"));
             let mut datum = |addr: u64, suffix: &str| {
                 if let Some(name) = named(suffix) {
-                    data.push(SymFact { addr, name, kind: SymKind::Data });
+                    data.push(SymFact {
+                        addr,
+                        name,
+                        kind: SymKind::Data,
+                    });
                 }
             };
             match ctx.kind {
@@ -487,7 +495,13 @@ impl Namer<'_> {
                     datum(ctx.addr, "protocol_descriptor");
                     for (k, (_, default_impl)) in ctx.requirements.iter().enumerate() {
                         if let Some(f) = default_impl {
-                            self.claim(*f, named(&format!("requirement#{k}.default")), &owner, None, false);
+                            self.claim(
+                                *f,
+                                named(&format!("requirement#{k}.default")),
+                                &owner,
+                                None,
+                                false,
+                            );
                         }
                     }
                 }
@@ -502,7 +516,13 @@ impl Namer<'_> {
                     for e in &ctx.vtable {
                         if let Some(f) = e.impl_addr {
                             let getter = e.kind == descriptors::MethodKind::Getter && e.instance;
-                            self.claim(f, named(&format!("vtable#{}.{}", e.index, e.kind.tag())), &owner, None, getter);
+                            self.claim(
+                                f,
+                                named(&format!("vtable#{}.{}", e.index, e.kind.tag())),
+                                &owner,
+                                None,
+                                getter,
+                            );
                         }
                     }
                     for o in &ctx.overrides {
@@ -522,15 +542,22 @@ impl Namer<'_> {
             }
         }
         for c in &self.md.conformances {
-            let TypeRef::Descriptor(t) = c.type_ref else { continue };
+            let TypeRef::Descriptor(t) = c.type_ref else {
+                continue;
+            };
             let owner = match t {
                 Target::Direct(a) => Owner::Local(a),
                 Target::Slot(slot) => Owner::Imported(
-                    self.imports.get(&slot).cloned().unwrap_or_else(|| format!("slot#{slot:x}")),
+                    self.imports
+                        .get(&slot)
+                        .cloned()
+                        .unwrap_or_else(|| format!("slot#{slot:x}")),
                 ),
             };
             let proto = self.target_path(c.protocol, "protocol_descriptor");
-            let cn = self.conformance_parts(c).map(|(ty, proto)| format!("<{ty}:{proto}>"));
+            let cn = self
+                .conformance_parts(c)
+                .map(|(ty, proto)| format!("<{ty}:{proto}>"));
             if cn.as_ref().is_some_and(|cn| !self.spend(cn)) {
                 continue;
             }
@@ -665,7 +692,11 @@ impl Namer<'_> {
                 name: name.clone(),
                 kind: SymKind::Function,
             });
-            out.fid_names.push(FidMatch { addr, name, by_signature: false });
+            out.fid_names.push(FidMatch {
+                addr,
+                name,
+                by_signature: false,
+            });
         }
     }
 

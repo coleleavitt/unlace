@@ -20,7 +20,10 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fauxware() -> String {
@@ -62,12 +65,17 @@ fn listing_rows(stdout: &str) -> Vec<(u64, String)> {
 }
 
 fn listing_names(stdout: &str) -> Vec<String> {
-    listing_rows(stdout).into_iter().map(|(_, name)| name).collect()
+    listing_rows(stdout)
+        .into_iter()
+        .map(|(_, name)| name)
+        .collect()
 }
 
 fn json_field(stdout: &str, pointer: &str) -> Option<u64> {
     let document: serde_json::Value = serde_json::from_str(stdout).expect("valid CLI JSON");
-    document.pointer(pointer).and_then(serde_json::Value::as_u64)
+    document
+        .pointer(pointer)
+        .and_then(serde_json::Value::as_u64)
 }
 
 fn json_sizes(stdout: &str) -> Vec<u64> {
@@ -78,7 +86,10 @@ fn json_sizes(stdout: &str) -> Vec<u64> {
         .expect("function array")
         .iter()
         .map(|function| {
-            function.get("size").and_then(serde_json::Value::as_u64).expect("numeric function size")
+            function
+                .get("size")
+                .and_then(serde_json::Value::as_u64)
+                .expect("numeric function size")
         })
         .collect()
 }
@@ -90,11 +101,18 @@ fn json_sizes(stdout: &str) -> Vec<u64> {
 fn filter_selects_by_name_regex() {
     let (out, err, code) = run_kuna(&["functions", &fauxware(), "--filter", "auth|accept|reject"]);
     assert_eq!(code, 0, "{err}");
-    assert_eq!(listing_names(&out), vec!["authenticate", "accepted", "rejected"]);
+    assert_eq!(
+        listing_names(&out),
+        vec!["authenticate", "accepted", "rejected"]
+    );
 
     let (aliased, _, code) = run_kuna(&["functions", &fauxware(), "--filter", "^sub_400664$"]);
     assert_eq!(code, 0);
-    assert_eq!(listing_names(&aliased), vec!["authenticate"], "an alias selects too");
+    assert_eq!(
+        listing_names(&aliased),
+        vec!["authenticate"],
+        "an alias selects too"
+    );
 
     // A filter that matches nothing is an ANSWER, not a discovery failure: the
     // zero-discovery verdict must stay attached to discovery.
@@ -117,19 +135,35 @@ fn size_bounds_are_inclusive_and_ordered() {
     let (out, err, code) = run_kuna(&["functions", &fauxware(), "--min-size", "100", "--json"]);
     assert_eq!(code, 0, "{err}");
     let sizes = json_sizes(&out);
-    assert!(!sizes.is_empty(), "the fixture must exercise the lower bound");
+    assert!(
+        !sizes.is_empty(),
+        "the fixture must exercise the lower bound"
+    );
     assert!(sizes.iter().all(|&s| s >= 100), "{out}");
     assert!(json_field(&out, "/count").unwrap() < json_field(&out, "/total").unwrap());
 
-    let (bounded, _, code) =
-        run_kuna(&["functions", &fauxware(), "--min-size", "32", "--max-size", "44", "--json"]);
+    let (bounded, _, code) = run_kuna(&[
+        "functions",
+        &fauxware(),
+        "--min-size",
+        "32",
+        "--max-size",
+        "44",
+        "--json",
+    ]);
     assert_eq!(code, 0);
     let sizes = json_sizes(&bounded);
     assert!(!sizes.is_empty(), "the fixture must exercise both bounds");
     assert!(sizes.iter().all(|&s| (32..=44).contains(&s)), "{bounded}");
 
-    let (_, err, code) =
-        run_kuna(&["functions", &fauxware(), "--min-size", "100", "--max-size", "10"]);
+    let (_, err, code) = run_kuna(&[
+        "functions",
+        &fauxware(),
+        "--min-size",
+        "100",
+        "--max-size",
+        "10",
+    ]);
     assert_eq!(code, 2, "{err}");
     assert!(err.contains("greater than --max-size"), "{err}");
 }
@@ -138,14 +172,28 @@ fn size_bounds_are_inclusive_and_ordered() {
 /// AFTER the sort, so "the three biggest functions" is one call.
 #[test]
 fn sort_and_limit_answer_the_three_biggest_question() {
-    let (out, err, code) =
-        run_kuna(&["functions", &fauxware(), "--sort", "size", "--limit", "3", "--json"]);
+    let (out, err, code) = run_kuna(&[
+        "functions",
+        &fauxware(),
+        "--sort",
+        "size",
+        "--limit",
+        "3",
+        "--json",
+    ]);
     assert_eq!(code, 0, "{err}");
     assert_eq!(json_field(&out, "/count"), Some(3));
-    assert_eq!(json_field(&out, "/total"), Some(21), "the count before narrowing");
+    assert_eq!(
+        json_field(&out, "/total"),
+        Some(21),
+        "the count before narrowing"
+    );
     let sizes = json_sizes(&out);
     assert_eq!(sizes.len(), 3, "{out}");
-    assert!(sizes.windows(2).all(|w| w[0] >= w[1]), "largest first: {sizes:?}");
+    assert!(
+        sizes.windows(2).all(|w| w[0] >= w[1]),
+        "largest first: {sizes:?}"
+    );
     assert!(out.contains("\"name\": \"main\""), "{out}");
 
     let (by_name, _, code) = run_kuna(&["functions", &fauxware(), "--sort", "name"]);
@@ -168,8 +216,18 @@ fn reachable_from_walks_the_call_graph() {
     let (out, err, code) = run_kuna(&["functions", &fauxware(), "--reachable-from", "main"]);
     assert_eq!(code, 0, "{err}");
     let reached = listing_names(&out);
-    for want in ["main", "authenticate", "accepted", "rejected", "strcmp", "puts"] {
-        assert!(reached.iter().any(|n| n == want), "{want} missing from {reached:?}");
+    for want in [
+        "main",
+        "authenticate",
+        "accepted",
+        "rejected",
+        "strcmp",
+        "puts",
+    ] {
+        assert!(
+            reached.iter().any(|n| n == want),
+            "{want} missing from {reached:?}"
+        );
     }
     for unwanted in ["_start", "_init", "__libc_csu_init", "frame_dummy"] {
         assert!(
@@ -177,7 +235,10 @@ fn reachable_from_walks_the_call_graph() {
             "{unwanted} is not reachable from main: {reached:?}"
         );
     }
-    assert!(reached.len() < 21, "the query narrowed nothing: {reached:?}");
+    assert!(
+        reached.len() < 21,
+        "the query narrowed nothing: {reached:?}"
+    );
 
     let (from_start, _, code) = run_kuna(&["functions", &fauxware(), "--reachable-from", "_start"]);
     assert_eq!(code, 0);
@@ -235,10 +296,19 @@ fn summary_orients_without_emitting_the_inventory() {
     ] {
         assert!(out.contains(key), "{key} missing from {out}");
     }
-    assert!(out.contains("\"name\": \"_start\""), "the ELF entry point: {out}");
-    assert!(out.contains("\"name\": \"main\""), "main is the largest function: {out}");
+    assert!(
+        out.contains("\"name\": \"_start\""),
+        "the ELF entry point: {out}"
+    );
+    assert!(
+        out.contains("\"name\": \"main\""),
+        "main is the largest function: {out}"
+    );
     assert_eq!(json_field(&out, "/total"), Some(21));
-    assert!(!out.contains("\"code\":"), "a summary never carries pseudocode: {out}");
+    assert!(
+        !out.contains("\"code\":"),
+        "a summary never carries pseudocode: {out}"
+    );
 
     let (full, _, code) = run_kuna(&["functions", &fauxware(), "--json"]);
     assert_eq!(code, 0);
@@ -250,10 +320,20 @@ fn summary_orients_without_emitting_the_inventory() {
     );
 
     // `--limit` sizes the `largest` list.
-    let (capped, _, code) =
-        run_kuna(&["functions", &fauxware(), "--summary", "--json", "--limit", "2"]);
+    let (capped, _, code) = run_kuna(&[
+        "functions",
+        &fauxware(),
+        "--summary",
+        "--json",
+        "--limit",
+        "2",
+    ]);
     assert_eq!(code, 0);
-    assert_eq!(capped.matches("\"address_hex\":").count(), 4, "entry + main + 2 largest: {capped}");
+    assert_eq!(
+        capped.matches("\"address_hex\":").count(),
+        4,
+        "entry + main + 2 largest: {capped}"
+    );
 
     let (text, _, code) = run_kuna(&["functions", &fauxware(), "--summary"]);
     assert_eq!(code, 0);
@@ -295,13 +375,24 @@ fn decompile_all_narrows_the_run_not_the_output() {
     );
     // An UNNARROWED run is untouched, `total` included: the decbench backend and
     // `unlace decompile --json` read that document.
-    assert!(!whole.contains("\"total\":"), "unfiltered documents keep their schema");
+    assert!(
+        !whole.contains("\"total\":"),
+        "unfiltered documents keep their schema"
+    );
 
-    let (filtered, _, code) =
-        run_kuna(&["decompile-all", &fauxware(), "--json", "--filter", "^authenticate$"]);
+    let (filtered, _, code) = run_kuna(&[
+        "decompile-all",
+        &fauxware(),
+        "--json",
+        "--filter",
+        "^authenticate$",
+    ]);
     assert_eq!(code, 0);
     assert_eq!(json_field(&filtered, "/count"), Some(1));
-    assert!(filtered.contains("\"code\":"), "a narrowed run still decompiles: {filtered}");
+    assert!(
+        filtered.contains("\"code\":"),
+        "a narrowed run still decompiles: {filtered}"
+    );
 }
 
 /// An ARM `e_entry` and a symbol `st_value` both carry the Thumb mode bit while
@@ -316,14 +407,24 @@ fn an_arm_thumb_entry_resolves_to_its_even_address() {
         .to_string();
     let (out, err, code) = run_kuna(&["functions", &arm, "--summary", "--json"]);
     assert_eq!(code, 0, "{err}");
-    assert!(out.contains("\"address_hex\": \"0x3dc\""), "the even entry: {out}");
+    assert!(
+        out.contains("\"address_hex\": \"0x3dc\""),
+        "the even entry: {out}"
+    );
     let reachable = json_field(&out, "/summary/reachable_from_entry");
-    assert!(reachable.is_some_and(|n| n > 0), "the entry must reach something: {out}");
+    assert!(
+        reachable.is_some_and(|n| n > 0),
+        "the entry must reach something: {out}"
+    );
 
     let (odd, _, code) = run_kuna(&["functions", &arm, "--reachable-from", "0x3dd"]);
     assert_eq!(code, 0);
     let (even, _, _) = run_kuna(&["functions", &arm, "--reachable-from", "0x3dc"]);
-    assert_eq!(listing_names(&odd), listing_names(&even), "both spellings, one answer");
+    assert_eq!(
+        listing_names(&odd),
+        listing_names(&even),
+        "both spellings, one answer"
+    );
     assert!(!listing_rows(&odd).is_empty(), "{odd}");
 }
 
@@ -340,11 +441,23 @@ fn a_macho_lc_main_entry_is_reported_as_a_vma() {
         .to_string();
     let (out, err, code) = run_kuna(&["functions", &macho, "--summary", "--json"]);
     assert_eq!(code, 0, "{err}");
-    assert!(out.contains("\"address_hex\": \"0x1000005b0\""), "__TEXT.vmaddr + entryoff: {out}");
-    assert!(!out.contains("\"address_hex\": \"0x5b0\""), "the raw entryoff must be gone: {out}");
-    assert!(out.contains("\"name\": \"main\""), "the entry names a function: {out}");
+    assert!(
+        out.contains("\"address_hex\": \"0x1000005b0\""),
+        "__TEXT.vmaddr + entryoff: {out}"
+    );
+    assert!(
+        !out.contains("\"address_hex\": \"0x5b0\""),
+        "the raw entryoff must be gone: {out}"
+    );
+    assert!(
+        out.contains("\"name\": \"main\""),
+        "the entry names a function: {out}"
+    );
     let reachable = json_field(&out, "/summary/reachable_from_entry");
-    assert!(reachable.is_some_and(|n| n > 0), "the entry must reach something: {out}");
+    assert!(
+        reachable.is_some_and(|n| n > 0),
+        "the entry must reach something: {out}"
+    );
 }
 
 /// `--summary` builds a call graph, which re-parses the image outside the engine
@@ -372,7 +485,10 @@ fn a_universal_macho_summarizes_the_slice_the_inventory_loaded() {
         Some(inventory),
         "the summary counts what the inventory found: {out}"
     );
-    assert!(out.contains("\"address_hex\": \"0x1000005b0\""), "the x86-64 slice's _main: {out}");
+    assert!(
+        out.contains("\"address_hex\": \"0x1000005b0\""),
+        "the x86-64 slice's _main: {out}"
+    );
     assert!(
         json_field(&out, "/summary/reachable_from_entry").is_some_and(|n| n > 0),
         "the entry must reach something: {out}"
@@ -380,9 +496,13 @@ fn a_universal_macho_summarizes_the_slice_the_inventory_loaded() {
 
     // `--slice` is live on this path, not merely non-fatal: the arm64 slice
     // states its own `_main` at a different address.
-    let (arm64, err, code) = run_kuna(&["functions", &fat, "--summary", "--json", "--slice", "arm64"]);
+    let (arm64, err, code) =
+        run_kuna(&["functions", &fat, "--summary", "--json", "--slice", "arm64"]);
     assert_eq!(code, 0, "{err}");
-    assert!(arm64.contains("\"address_hex\": \"0x10000056c\""), "the arm64 slice's _main: {arm64}");
+    assert!(
+        arm64.contains("\"address_hex\": \"0x10000056c\""),
+        "the arm64 slice's _main: {arm64}"
+    );
 }
 
 /// The summary's entry came from a raw `std::fs::read`, so an image that only
@@ -394,9 +514,21 @@ fn a_universal_macho_summarizes_the_slice_the_inventory_loaded() {
 #[test]
 fn a_repaired_header_still_reports_the_summary_entry() {
     for (name, entry, warning) in [
-        ("corruptshdr_i386", "0x8048054", "ELF section table unusable"),
-        ("pe_datadircount_i386.exe", "0x401000", "PE NumberOfRvaAndSizes is 1531532893"),
-        ("pe_dosmagic_i386.exe", "0x401000", "PE DOS header e_magic is 0x5a15, not MZ"),
+        (
+            "corruptshdr_i386",
+            "0x8048054",
+            "ELF section table unusable",
+        ),
+        (
+            "pe_datadircount_i386.exe",
+            "0x401000",
+            "PE NumberOfRvaAndSizes is 1531532893",
+        ),
+        (
+            "pe_dosmagic_i386.exe",
+            "0x401000",
+            "PE DOS header e_magic is 0x5a15, not MZ",
+        ),
     ] {
         let image = repo_root()
             .join("decompiler/crates/unlace-analysis/tests/fixtures")
@@ -406,17 +538,26 @@ fn a_repaired_header_still_reports_the_summary_entry() {
             .to_string();
         let (out, err, code) = run_kuna(&["functions", &image, "--summary", "--json"]);
         assert_eq!(code, 0, "{name}: {err}");
-        assert!(out.contains(entry), "{name}: the entry must be reported: {out}");
+        assert!(
+            out.contains(entry),
+            "{name}: the entry must be reported: {out}"
+        );
         assert!(
             json_field(&out, "/summary/reachable_from_entry").is_some_and(|n| n > 0),
             "{name}: and it must reach something: {out}"
         );
-        let warnings = out.split("\"warnings\": [").nth(1).and_then(|w| w.split(']').next());
+        let warnings = out
+            .split("\"warnings\": [")
+            .nth(1)
+            .and_then(|w| w.split(']').next());
         assert!(
             warnings.is_some_and(|w| w.contains(warning)),
             "{name}: the repair must be named in `warnings`: {out}"
         );
-        assert!(err.contains(&format!("[kuna] {warning}")), "{name}: and on stderr: {err}");
+        assert!(
+            err.contains(&format!("[kuna] {warning}")),
+            "{name}: and on stderr: {err}"
+        );
     }
 }
 
@@ -476,13 +617,23 @@ fn an_inventory_of_only_imports_is_still_a_failed_run() {
         .to_string();
     let (out, err, code) = run_kuna(&["functions", &imports_only, "--json"]);
     assert_eq!(code, 1, "{err}");
-    assert_eq!(json_field(&out, "/count"), Some(3), "the import names must survive: {out}");
+    assert_eq!(
+        json_field(&out, "/count"),
+        Some(3),
+        "the import names must survive: {out}"
+    );
     for name in ["GetProcAddress", "GetModuleHandleA", "LoadLibraryA"] {
         assert!(out.contains(name), "{name} must still be listed: {out}");
     }
     assert!(out.contains("no functions discovered"), "{out}");
-    assert!(out.contains("0x402001"), "the diagnosis names the entry: {out}");
-    assert!(err.contains("--define-function"), "and what to do about it: {err}");
+    assert!(
+        out.contains("0x402001"),
+        "the diagnosis names the entry: {out}"
+    );
+    assert!(
+        err.contains("--define-function"),
+        "and what to do about it: {err}"
+    );
 
     // The orientation surface reads the same verdict off the same inventory.
     let (summary, err, code) = run_kuna(&["functions", &imports_only, "--summary", "--json"]);

@@ -20,7 +20,10 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture() -> String {
@@ -45,7 +48,10 @@ fn run_kuna(args: &[&str]) -> String {
     let stderr = String::from_utf8_lossy(&out.stderr);
     let code = out.status.code().unwrap_or(-1);
     assert_eq!(code, 0, "unlace {args:?} failed: {stderr}");
-    String::from_utf8_lossy(&out.stdout).chars().filter(|c| !c.is_whitespace()).collect()
+    String::from_utf8_lossy(&out.stdout)
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect()
 }
 
 const OVER_CAP: &str = r#""switches_over_jumptablemax":[{"address":5368713309,"address_hex":"0x14000105d","cases":4,"read":2}]"#;
@@ -54,12 +60,28 @@ const OVER_CAP: &str = r#""switches_over_jumptablemax":[{"address":5368713309,"a
 fn the_summary_flags_a_switch_over_jumptablemax_and_a_body_over_maxinstruction() {
     let bin = fixture();
     let args = [
-        "functions", &bin, "--summary", "--json", "--option", "jumptablemax", "2", "--option",
-        "maxinstruction", "10",
+        "functions",
+        &bin,
+        "--summary",
+        "--json",
+        "--option",
+        "jumptablemax",
+        "2",
+        "--option",
+        "maxinstruction",
+        "10",
     ];
     let out = run_kuna(&args);
-    assert!(out.contains(r#""limits":{"maxinstruction":10,"jumptablemax":2,"over":[{"name":"sub_140001040""#), "{out}");
-    assert!(out.contains(r#""instructions":11,"over_maxinstruction":true"#), "counting stops at maxinstruction + 1: {out}");
+    assert!(
+        out.contains(
+            r#""limits":{"maxinstruction":10,"jumptablemax":2,"over":[{"name":"sub_140001040""#
+        ),
+        "{out}"
+    );
+    assert!(
+        out.contains(r#""instructions":11,"over_maxinstruction":true"#),
+        "counting stops at maxinstruction + 1: {out}"
+    );
     assert!(out.contains(OVER_CAP), "{out}");
 }
 
@@ -67,7 +89,10 @@ fn the_summary_flags_a_switch_over_jumptablemax_and_a_body_over_maxinstruction()
 fn nothing_is_flagged_under_the_default_budgets() {
     let bin = fixture();
     let out = run_kuna(&["functions", &bin, "--summary", "--json"]);
-    assert!(out.contains(r#""limits":{"maxinstruction":100000,"jumptablemax":1024,"over":[]}"#), "{out}");
+    assert!(
+        out.contains(r#""limits":{"maxinstruction":100000,"jumptablemax":1024,"over":[]}"#),
+        "{out}"
+    );
 }
 
 /// The plain listing never walks the image for `limits`; a selection that
@@ -79,11 +104,25 @@ fn only_a_listing_that_already_walked_the_image_carries_limits() {
     assert!(!plain.contains(r#""limits""#), "{plain}");
 
     let reached = run_kuna(&[
-        "functions", &bin, "--json", "--reachable-from", "sub_140001040", "--option",
-        "jumptablemax", "2",
+        "functions",
+        &bin,
+        "--json",
+        "--reachable-from",
+        "sub_140001040",
+        "--option",
+        "jumptablemax",
+        "2",
     ]);
-    assert!(reached.contains(r#""limits":{"maxinstruction":100000,"jumptablemax":2,"over":[{"name":"sub_140001040""#), "{reached}");
-    assert!(reached.contains(r#""over_maxinstruction":false"#), "{reached}");
+    assert!(
+        reached.contains(
+            r#""limits":{"maxinstruction":100000,"jumptablemax":2,"over":[{"name":"sub_140001040""#
+        ),
+        "{reached}"
+    );
+    assert!(
+        reached.contains(r#""over_maxinstruction":false"#),
+        "{reached}"
+    );
     assert!(reached.contains(OVER_CAP), "{reached}");
 }
 
@@ -95,15 +134,28 @@ fn a_ceiling_at_the_case_count_reads_the_whole_table() {
     let bin = fixture();
     let summary = |cap: &str| {
         run_kuna(&[
-            "functions", &bin, "--summary", "--json", "--option", "jumptablemax", cap, "--option",
-            "maxinstruction", "16",
+            "functions",
+            &bin,
+            "--summary",
+            "--json",
+            "--option",
+            "jumptablemax",
+            cap,
+            "--option",
+            "maxinstruction",
+            "16",
         ])
     };
     let truncated = summary("2");
-    assert!(truncated.contains(r#""instructions":16,"over_maxinstruction":false"#), "{truncated}");
+    assert!(
+        truncated.contains(r#""instructions":16,"over_maxinstruction":false"#),
+        "{truncated}"
+    );
     let whole = summary("4");
     assert!(
-        whole.contains(r#""instructions":17,"over_maxinstruction":true,"switches_over_jumptablemax":[]"#),
+        whole.contains(
+            r#""instructions":17,"over_maxinstruction":true,"switches_over_jumptablemax":[]"#
+        ),
         "{whole}"
     );
 }
@@ -113,8 +165,19 @@ fn a_ceiling_at_the_case_count_reads_the_whole_table() {
 #[test]
 fn a_ceiling_below_a_table_still_reports_the_switch() {
     let bin = fixture();
-    let out = run_kuna(&["functions", &bin, "--summary", "--json", "--option", "jumptablemax", "1"]);
-    assert!(out.contains(r#""address_hex":"0x14000105d","cases":4,"read":0"#), "{out}");
+    let out = run_kuna(&[
+        "functions",
+        &bin,
+        "--summary",
+        "--json",
+        "--option",
+        "jumptablemax",
+        "1",
+    ]);
+    assert!(
+        out.contains(r#""address_hex":"0x14000105d","cases":4,"read":0"#),
+        "{out}"
+    );
 }
 
 /// The gcc `.cold` shape: a fragment below its parent jumps into the middle of
@@ -138,11 +201,30 @@ fn a_function_is_measured_on_its_own_descent_whatever_the_walk_reached_first() {
     std::fs::write(&path, image).unwrap();
     let bin = path.to_str().unwrap();
 
-    let out = run_kuna(&["functions", bin, "--summary", "--json", "--option", "maxinstruction", "44"]);
+    let out = run_kuna(&[
+        "functions",
+        bin,
+        "--summary",
+        "--json",
+        "--option",
+        "maxinstruction",
+        "44",
+    ]);
     assert!(out.contains(r#""over":[{"name":"parent","address":65552,"address_hex":"0x10010","size":45,"instructions":45,"over_maxinstruction":true"#), "{out}");
 
-    let out = run_kuna(&["functions", bin, "--summary", "--json", "--option", "maxinstruction", "42"]);
-    assert!(out.contains(r#""name":"fragment","address":65536,"#), "{out}");
+    let out = run_kuna(&[
+        "functions",
+        bin,
+        "--summary",
+        "--json",
+        "--option",
+        "maxinstruction",
+        "42",
+    ]);
+    assert!(
+        out.contains(r#""name":"fragment","address":65536,"#),
+        "{out}"
+    );
     assert!(out.contains(r#""instructions":43,"over_maxinstruction":true,"switches_over_jumptablemax":[]},{"name":"parent""#), "{out}");
 }
 
@@ -152,7 +234,11 @@ fn jumptablemax_is_catalogued_and_refuses_anything_but_a_positive_count() {
         .args(["catalog", "--json"])
         .output()
         .expect("failed to spawn the kuna binary");
-    assert!(out.status.success(), "catalog failed: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "catalog failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let catalog = String::from_utf8_lossy(&out.stdout);
     assert!(catalog.contains(r#""option": "jumptablemax""#), "{catalog}");
 
@@ -161,6 +247,9 @@ fn jumptablemax_is_catalogued_and_refuses_anything_but_a_positive_count() {
         let out = kuna(&["functions", &bin, "--json", "--option", "jumptablemax", bad]);
         let stderr = String::from_utf8_lossy(&out.stderr);
         assert_ne!(out.status.code(), Some(0), "{bad:?} was accepted");
-        assert!(stderr.contains("Must specify integer maximum"), "{bad:?}: {stderr}");
+        assert!(
+            stderr.contains("Must specify integer maximum"),
+            "{bad:?}: {stderr}"
+        );
     }
 }

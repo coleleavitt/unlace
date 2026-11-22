@@ -136,7 +136,9 @@ fn semantic_oracle_with_parameter(
     let source = common::scratch_file("parameter-emitted", "c");
     let native = common::scratch_file("parameter-native", "exe");
     let rebuilt = common::scratch_file("parameter-rebuilt", "exe");
-    let harness = format!("#include <stdio.h>\nint main(void) {{ {parameter_type} values[] = {{{values}}}; for(unsigned i=0;i<sizeof(values)/sizeof(values[0]);i++) printf(\"%d\\n\",probe(0,values[i])); return 0; }}\n");
+    let harness = format!(
+        "#include <stdio.h>\nint main(void) {{ {parameter_type} values[] = {{{values}}}; for(unsigned i=0;i<sizeof(values)/sizeof(values[0]);i++) printf(\"%d\\n\",probe(0,values[i])); return 0; }}\n"
+    );
     let abi = if msabi { "__attribute__((ms_abi))" } else { "" };
     std::fs::write(
         &driver,
@@ -273,10 +275,12 @@ fn missing_names_still_reject_and_leave_the_parameter_intact() {
         if json {
             let doc: serde_json::Value = serde_json::from_str(&stdout).unwrap();
             assert_eq!(doc["assertions"][1]["status"], "rejected");
-            assert!(doc["functions"][0]["code"]
-                .as_str()
-                .unwrap()
-                .contains("return value + 1;"));
+            assert!(
+                doc["functions"][0]["code"]
+                    .as_str()
+                    .unwrap()
+                    .contains("return value + 1;")
+            );
         } else {
             assert!(stderr.contains("No symbol named: missing"), "{stderr}");
         }
@@ -355,11 +359,20 @@ fn later_narrow_register_lifetime_preserves_the_wider_parameter() {
     let local = register_local(&control, "edx");
     let directive = format!("name {local} cleared_property");
     let renamed = decompile(&image, proto, &[callee, &directive]);
-    assert!(renamed.contains("probe(void *popup,uint8 property)"), "{renamed}");
+    assert!(
+        renamed.contains("probe(void *popup,uint8 property)"),
+        "{renamed}"
+    );
     assert!(renamed.contains("if ((int4)property != 7)"), "{renamed}");
     assert!(renamed.contains("if ((int4)property != 0xb)"), "{renamed}");
-    assert!(renamed.contains("int4 cleared_property; // edx"), "{renamed}");
-    assert!(renamed.contains("sink(popup,cleared_property)"), "{renamed}");
+    assert!(
+        renamed.contains("int4 cleared_property; // edx"),
+        "{renamed}"
+    );
+    assert!(
+        renamed.contains("sink(popup,cleared_property)"),
+        "{renamed}"
+    );
     semantic_oracle_with_parameter(
         &image,
         &[control, renamed],

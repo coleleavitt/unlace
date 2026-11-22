@@ -65,7 +65,12 @@ struct Program<'a> {
 
 impl<'a> Program<'a> {
     fn new(data: &'a Funcdata) -> Program<'a> {
-        Program { data, steps: Vec::new(), inputs: Vec::new(), memo: BTreeMap::new() }
+        Program {
+            data,
+            steps: Vec::new(),
+            inputs: Vec::new(),
+            memo: BTreeMap::new(),
+        }
     }
 
     fn push(&mut self, step: Step) -> Option<usize> {
@@ -78,11 +83,14 @@ impl<'a> Program<'a> {
 
     fn constant(&self, vn: VarnodeId) -> Option<u64> {
         let v = self.data.vbank().get(vn)?;
-        (v.is_constant() && (1..=8).contains(&v.get_size())).then(|| v.get_offset() & calc_mask(v.get_size()))
+        (v.is_constant() && (1..=8).contains(&v.get_size()))
+            .then(|| v.get_offset() & calc_mask(v.get_size()))
     }
 
     fn uniform_constant(&self, vn: VarnodeId) -> bool {
-        let Some(v) = self.data.vbank().get(vn) else { return false };
+        let Some(v) = self.data.vbank().get(vn) else {
+            return false;
+        };
         !v.is_constant() || v.get_offset() == 0 || v.get_offset() == calc_mask(v.get_size())
     }
 
@@ -93,7 +101,8 @@ impl<'a> Program<'a> {
         let bitwise = |uniform: bool| match o.code() {
             OpCode::CPUI_INT_NEGATE => true,
             OpCode::CPUI_INT_AND | OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR => {
-                !uniform || (0..2).all(|slot| o.get_in(slot).is_some_and(|v| self.uniform_constant(v)))
+                !uniform
+                    || (0..2).all(|slot| o.get_in(slot).is_some_and(|v| self.uniform_constant(v)))
             }
             _ => false,
         };
@@ -107,15 +116,18 @@ impl<'a> Program<'a> {
                 | OpCode::CPUI_INT_SUB
                 | OpCode::CPUI_INT_MULT => Some(layer),
                 OpCode::CPUI_INT_LEFT => constant_at(1).then_some(layer),
-                OpCode::CPUI_SUBPIECE => {
-                    o.get_in(1).and_then(|v| self.constant(v)).is_some_and(|offset| offset == 0).then_some(layer)
-                }
+                OpCode::CPUI_SUBPIECE => o
+                    .get_in(1)
+                    .and_then(|v| self.constant(v))
+                    .is_some_and(|offset| offset == 0)
+                    .then_some(layer),
                 _ => bitwise(false).then_some(layer),
             },
             Layer::Linear => match o.code() {
-                OpCode::CPUI_COPY | OpCode::CPUI_INT_2COMP | OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB => {
-                    Some(layer)
-                }
+                OpCode::CPUI_COPY
+                | OpCode::CPUI_INT_2COMP
+                | OpCode::CPUI_INT_ADD
+                | OpCode::CPUI_INT_SUB => Some(layer),
                 OpCode::CPUI_INT_MULT | OpCode::CPUI_INT_LEFT => constant_at(1).then_some(layer),
                 _ => bitwise(true).then_some(Layer::Bitwise),
             },
@@ -125,13 +137,16 @@ impl<'a> Program<'a> {
 
     fn compile(&mut self, vn: VarnodeId, layer: Layer) -> Option<usize> {
         if let Some(value) = self.constant(vn) {
-            return (layer != Layer::Bitwise || self.uniform_constant(vn)).then(|| self.push(Step::Const(value)))?;
+            return (layer != Layer::Bitwise || self.uniform_constant(vn))
+                .then(|| self.push(Step::Const(value)))?;
         }
         let v = self.data.vbank().get(vn)?;
         if v.is_constant() || v.is_free() || !(1..=8).contains(&v.get_size()) {
             return None;
         }
-        let expanded = v.get_def().and_then(|def| Some((def, self.expands(def, layer)?)));
+        let expanded = v
+            .get_def()
+            .and_then(|def| Some((def, self.expands(def, layer)?)));
         let Some((def, layer)) = expanded else {
             let slot = match self.inputs.iter().position(|&input| input == vn) {
                 Some(slot) => slot,
@@ -147,7 +162,11 @@ impl<'a> Program<'a> {
             return Some(index);
         }
         let o = self.data.obank().get(def)?;
-        let (code, first, second) = (o.code(), o.get_in(0)?, (o.num_input() > 1).then(|| o.get_in(1)).flatten());
+        let (code, first, second) = (
+            o.code(),
+            o.get_in(0)?,
+            (o.num_input() > 1).then(|| o.get_in(1)).flatten(),
+        );
         let a = self.compile(first, layer)?;
         let index = match (code, second) {
             (OpCode::CPUI_SUBPIECE, _) => a,
@@ -177,7 +196,10 @@ impl<'a> Program<'a> {
                         OpCode::CPUI_INT_ADD => a.wrapping_add(b),
                         OpCode::CPUI_INT_SUB => a.wrapping_sub(b),
                         OpCode::CPUI_INT_MULT => a.wrapping_mul(b),
-                        OpCode::CPUI_INT_LEFT => u32::try_from(b).ok().and_then(|b| a.checked_shl(b)).unwrap_or(0),
+                        OpCode::CPUI_INT_LEFT => u32::try_from(b)
+                            .ok()
+                            .and_then(|b| a.checked_shl(b))
+                            .unwrap_or(0),
                         OpCode::CPUI_INT_AND => a & b,
                         OpCode::CPUI_INT_OR => a | b,
                         _ => a ^ b,
@@ -205,7 +227,12 @@ fn low_side(program: &mut Program, mut vn: VarnodeId) -> Option<Side> {
     let data = program.data;
     if let Some(value) = program.constant(vn) {
         let slot = program.push(Step::Const(value))?;
-        return Some(Side { slot, mask: u64::MAX, constant: Some(value), zero_only: false });
+        return Some(Side {
+            slot,
+            mask: u64::MAX,
+            constant: Some(value),
+            zero_only: false,
+        });
     }
     loop {
         let o = data.obank().get(data.vbank().get(vn)?.get_def()?)?;
@@ -226,7 +253,12 @@ fn low_side(program: &mut Program, mut vn: VarnodeId) -> Option<Side> {
             return None;
         }
         let slot = program.compile(o.get_in(0)?, Layer::LowBits)?;
-        return Some(Side { slot, mask, constant: None, zero_only: code == OpCode::CPUI_INT_SREM });
+        return Some(Side {
+            slot,
+            mask,
+            constant: None,
+            zero_only: code == OpCode::CPUI_INT_SREM,
+        });
     }
 }
 
@@ -314,7 +346,10 @@ fn prove_linear(data: &Funcdata, in0: VarnodeId, in1: VarnodeId) -> Option<bool>
     let mut slots = Vec::with_capacity(program.steps.len());
     let mut difference = None;
     for corner in 0..1u64 << program.inputs.len() {
-        let values = [0u64.wrapping_sub(corner & 1), 0u64.wrapping_sub(corner >> 1 & 1)];
+        let values = [
+            0u64.wrapping_sub(corner & 1),
+            0u64.wrapping_sub(corner >> 1 & 1),
+        ];
         program.run(&values, &mut slots);
         let delta = slots[left].wrapping_sub(slots[right]) & calc_mask(size);
         if *difference.get_or_insert(delta) != delta {
@@ -329,7 +364,9 @@ fn constant_result(data: &Funcdata, op: OpId) -> Option<bool> {
     let o = data.obank().get(op)?;
     let (code, in0, in1) = (o.code(), o.get_in(0)?, o.get_in(1)?);
     if matches!(code, OpCode::CPUI_INT_EQUAL | OpCode::CPUI_INT_NOTEQUAL) {
-        if let Some(equal) = prove_linear(data, in0, in1).or_else(|| prove_never_equal(data, in0, in1)) {
+        if let Some(equal) =
+            prove_linear(data, in0, in1).or_else(|| prove_never_equal(data, in0, in1))
+        {
             return Some(equal == (code == OpCode::CPUI_INT_EQUAL));
         }
     }
@@ -343,7 +380,9 @@ pub struct RuleOpaquePredicate {
 
 impl RuleOpaquePredicate {
     pub fn new(group: &str) -> RuleOpaquePredicate {
-        RuleOpaquePredicate { group: group.to_string() }
+        RuleOpaquePredicate {
+            group: group.to_string(),
+        }
     }
 }
 
@@ -358,19 +397,29 @@ impl Rule for RuleOpaquePredicate {
     }
 
     fn clone_rule(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Rule>> {
-        grouplist.contains(&self.group).then(|| Box::new(RuleOpaquePredicate::new(&self.group)) as Box<dyn Rule>)
+        grouplist
+            .contains(&self.group)
+            .then(|| Box::new(RuleOpaquePredicate::new(&self.group)) as Box<dyn Rule>)
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         if !data.get_arch().opaque_predicate || data.is_jumptable_recovery_on() {
             return 0;
         }
-        let Some(result) = constant_result(data, op) else { return 0 };
+        let Some(result) = constant_result(data, op) else {
+            return 0;
+        };
         let out = data.obank().get(op).and_then(|o| o.get_out());
-        let Some(size) = out.and_then(|out| data.vbank().get(out)).map(|out| out.get_size()) else { return 0 };
+        let Some(size) = out
+            .and_then(|out| data.vbank().get(out))
+            .map(|out| out.get_size())
+        else {
+            return 0;
+        };
         let constant = data.new_constant(size, u64::from(result));
         data.op_remove_input(op, 1);
-        data.op_set_input(op, constant, 0).expect("RuleOpaquePredicate: opSetInput");
+        data.op_set_input(op, constant, 0)
+            .expect("RuleOpaquePredicate: opSetInput");
         data.op_set_opcode(op, crate::typeop::type_op_for(OpCode::CPUI_COPY));
         1
     }

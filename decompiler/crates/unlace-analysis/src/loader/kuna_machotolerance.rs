@@ -87,7 +87,9 @@ pub fn clamp_out_of_file_ranges(bytes: Vec<u8>) -> (Vec<u8>, Option<String>) {
         }
     }
     let note = if clamped.is_empty() {
-        format!("Mach-O sections extend past the end of the {len}-byte file; clamped to the bytes present")
+        format!(
+            "Mach-O sections extend past the end of the {len}-byte file; clamped to the bytes present"
+        )
     } else {
         format!(
             "Mach-O {} extend past the end of the {len}-byte file; clamped to the bytes present, \
@@ -107,9 +109,12 @@ fn out_of_file_edits(bytes: &[u8]) -> (Vec<(usize, u64, bool)>, Vec<String>) {
     for (cmd, at) in commands(bytes) {
         if cmd == LC_SYMTAB {
             let entry = if is_64(&bytes) { 16 } else { 12 };
-            let (Some(symoff), Some(nsyms), Some(stroff), Some(strsize)) =
-                (u32_at(&bytes, at + 8), u32_at(&bytes, at + 12), u32_at(&bytes, at + 16), u32_at(&bytes, at + 20))
-            else {
+            let (Some(symoff), Some(nsyms), Some(stroff), Some(strsize)) = (
+                u32_at(&bytes, at + 8),
+                u32_at(&bytes, at + 12),
+                u32_at(&bytes, at + 16),
+                u32_at(&bytes, at + 20),
+            ) else {
                 continue;
             };
             let (symoff, stroff) = (u64::from(symoff), u64::from(stroff));
@@ -130,30 +135,52 @@ fn out_of_file_edits(bytes: &[u8]) -> (Vec<(usize, u64, bool)>, Vec<String>) {
             LC_SEGMENT => false,
             _ => continue,
         };
-        let word = |off: usize| if wide { u64_at(&bytes, at + off) } else { u32_at(&bytes, at + off).map(u64::from) };
-        let (fileoff_at, filesize_at, nsects_at, sect0, sect_size) =
-            if wide { (40, 48, 64, 72, 80) } else { (32, 36, 48, 56, 68) };
-        let (Some(fileoff), Some(filesize), Some(nsects)) =
-            (word(fileoff_at), word(filesize_at), u32_at(&bytes, at + nsects_at))
-        else {
+        let word = |off: usize| {
+            if wide {
+                u64_at(&bytes, at + off)
+            } else {
+                u32_at(&bytes, at + off).map(u64::from)
+            }
+        };
+        let (fileoff_at, filesize_at, nsects_at, sect0, sect_size) = if wide {
+            (40, 48, 64, 72, 80)
+        } else {
+            (32, 36, 48, 56, 68)
+        };
+        let (Some(fileoff), Some(filesize), Some(nsects)) = (
+            word(fileoff_at),
+            word(filesize_at),
+            u32_at(&bytes, at + nsects_at),
+        ) else {
             continue;
         };
         if fileoff.saturating_add(filesize) > len {
             edits.push((at + fileoff_at, fileoff.min(len), wide));
             edits.push((at + filesize_at, len.saturating_sub(fileoff), wide));
             let name = &bytes[at + 8..at + 24];
-            let name = String::from_utf8_lossy(&name[..name.iter().position(|&b| b == 0).unwrap_or(16)]).into_owned();
+            let name =
+                String::from_utf8_lossy(&name[..name.iter().position(|&b| b == 0).unwrap_or(16)])
+                    .into_owned();
             clamped.push(format!("segment {name}"));
         }
         for i in 0..nsects as usize {
             let s = at + sect0 + i * sect_size;
             let (size_at, offset_at, flags_at) = if wide { (40, 48, 64) } else { (36, 40, 56) };
-            let size = if wide { u64_at(&bytes, s + size_at) } else { u32_at(&bytes, s + size_at).map(u64::from) };
-            let (Some(size), Some(offset), Some(flags)) = (size, u32_at(&bytes, s + offset_at), u32_at(&bytes, s + flags_at))
-            else {
+            let size = if wide {
+                u64_at(&bytes, s + size_at)
+            } else {
+                u32_at(&bytes, s + size_at).map(u64::from)
+            };
+            let (Some(size), Some(offset), Some(flags)) = (
+                size,
+                u32_at(&bytes, s + offset_at),
+                u32_at(&bytes, s + flags_at),
+            ) else {
                 break;
             };
-            if ZEROFILL_TYPES.contains(&(flags & 0xff)) || u64::from(offset).saturating_add(size) <= len {
+            if ZEROFILL_TYPES.contains(&(flags & 0xff))
+                || u64::from(offset).saturating_add(size) <= len
+            {
                 continue;
             }
             edits.push((s + size_at, len.saturating_sub(u64::from(offset)), wide));
@@ -186,7 +213,11 @@ mod tests {
     use super::*;
 
     fn fixture(name: &str) -> Vec<u8> {
-        std::fs::read(format!("{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"))).unwrap()
+        std::fs::read(format!(
+            "{}/tests/fixtures/{name}",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap()
     }
 
     #[test]
@@ -203,7 +234,10 @@ mod tests {
         bytes.truncate(0x600);
         let (out, note) = clamp_out_of_file_ranges(bytes);
         let note = note.unwrap();
-        assert!(note.contains("segment __TEXT") && note.contains("symbol table"), "{note}");
+        assert!(
+            note.contains("segment __TEXT") && note.contains("symbol table"),
+            "{note}"
+        );
         let file = object::File::parse(out.as_slice()).unwrap();
         for seg in object::Object::segments(&file) {
             object::ObjectSegment::data(&seg).unwrap();
@@ -217,7 +251,10 @@ mod tests {
     fn cryptid_one_is_named_and_zero_is_not() {
         let mut bytes = fixture("macho_unwind_only_arm64");
         assert!(encryption_note(&bytes).is_none());
-        let (_, at) = commands(&bytes).into_iter().find(|c| c.0 == LC_SEGMENT_64).unwrap();
+        let (_, at) = commands(&bytes)
+            .into_iter()
+            .find(|c| c.0 == LC_SEGMENT_64)
+            .unwrap();
         bytes[at..at + 4].copy_from_slice(&LC_ENCRYPTION_INFO_64.to_le_bytes());
         bytes[at + 8..at + 20].copy_from_slice(&[0, 0x40, 0, 0, 0, 0x40, 0, 0, 1, 0, 0, 0]);
         assert!(encryption_note(&bytes).unwrap().contains("cryptid 1"));

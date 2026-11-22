@@ -74,7 +74,9 @@ pub struct ActionCopyRun {
 
 impl ActionCopyRun {
     pub fn new(g: impl Into<String>) -> Self {
-        Self { base: ActionBase::new(0, "copyrun", g) }
+        Self {
+            base: ActionBase::new(0, "copyrun", g),
+        }
     }
 }
 
@@ -86,13 +88,19 @@ impl Action for ActionCopyRun {
         &mut self.base
     }
     fn clone_filtered(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Action>> {
-        grouplist.contains(self.get_group()).then(|| Box::new(Self { base: self.base.clone() }) as Box<dyn Action>)
+        grouplist.contains(self.get_group()).then(|| {
+            Box::new(Self {
+                base: self.base.clone(),
+            }) as Box<dyn Action>
+        })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data.get_arch().copy_run {
             return 0;
         }
-        let blocks: Vec<BlockId> = (0..data.bblocks_get_size()).map(|i| data.bblocks_get_block(i)).collect();
+        let blocks: Vec<BlockId> = (0..data.bblocks_get_size())
+            .map(|i| data.bblocks_get_block(i))
+            .collect();
         let mut changed = 0;
         for block in blocks {
             for run in runs(data, block) {
@@ -140,15 +148,23 @@ fn signed_constant(data: &Funcdata, v: VarnodeId) -> Option<i64> {
     }
     let bits = 8 * n.get_size().min(8) as u32;
     let k = n.get_offset();
-    Some(if bits >= 64 { k as i64 } else { ((k << (64 - bits)) as i64) >> (64 - bits) })
+    Some(if bits >= 64 {
+        k as i64
+    } else {
+        ((k << (64 - bits)) as i64) >> (64 - bits)
+    })
 }
 
 /// `v` as a base pointer plus a constant byte offset.
 fn base_offset(data: &Funcdata, mut v: VarnodeId) -> Option<(VarnodeId, i64)> {
     let mut off = 0i64;
     for _ in 0..BASE_DEPTH {
-        let Some(d) = data.vbank().get(v)?.get_def().and_then(|d| op(data, d)) else { break };
-        let (Some(a), b) = (d.get_in(0), d.get_in(1)) else { break };
+        let Some(d) = data.vbank().get(v)?.get_def().and_then(|d| op(data, d)) else {
+            break;
+        };
+        let (Some(a), b) = (d.get_in(0), d.get_in(1)) else {
+            break;
+        };
         match d.code() {
             CPUI_COPY | CPUI_CAST => v = a,
             CPUI_INT_ADD | CPUI_PTRSUB => match b.and_then(|b| signed_constant(data, b)) {
@@ -159,7 +175,12 @@ fn base_offset(data: &Funcdata, mut v: VarnodeId) -> Option<(VarnodeId, i64)> {
                 None => break,
             },
             CPUI_PTRADD => {
-                let (Some(i), Some(e)) = (b.and_then(|b| signed_constant(data, b)), d.get_in(2).and_then(|e| signed_constant(data, e))) else { break };
+                let (Some(i), Some(e)) = (
+                    b.and_then(|b| signed_constant(data, b)),
+                    d.get_in(2).and_then(|e| signed_constant(data, e)),
+                ) else {
+                    break;
+                };
                 off = off.wrapping_add(i.wrapping_mul(e));
                 v = a;
             }
@@ -197,7 +218,16 @@ fn loaded(data: &Funcdata, mut v: VarnodeId) -> Option<(OpId, Vec<OpId>)> {
 }
 
 fn touches_memory(code: OpCode) -> bool {
-    matches!(code, CPUI_LOAD | CPUI_STORE | CPUI_CALL | CPUI_CALLIND | CPUI_CALLOTHER | CPUI_NEW | CPUI_INDIRECT)
+    matches!(
+        code,
+        CPUI_LOAD
+            | CPUI_STORE
+            | CPUI_CALL
+            | CPUI_CALLIND
+            | CPUI_CALLOTHER
+            | CPUI_NEW
+            | CPUI_INDIRECT
+    )
 }
 
 /// The INDIRECTs heritage hung on `store`.
@@ -207,10 +237,12 @@ fn indirects_on(data: &Funcdata, ops: &[OpId], store: OpId) -> Vec<OpId> {
         .filter(|&o| {
             op(data, o).is_some_and(|p| {
                 p.code() == CPUI_INDIRECT
-                    && p.get_in(1).and_then(|v| data.vbank().get(v)).is_some_and(|v| {
-                        v.get_space().get_type() == unlace_base::space::spacetype::IPTR_IOP
-                            && crate::funcdata_varnode::op_iop_decode(v.get_offset()) == store
-                    })
+                    && p.get_in(1)
+                        .and_then(|v| data.vbank().get(v))
+                        .is_some_and(|v| {
+                            v.get_space().get_type() == unlace_base::space::spacetype::IPTR_IOP
+                                && crate::funcdata_varnode::op_iop_decode(v.get_offset()) == store
+                        })
             })
         })
         .collect()
@@ -221,31 +253,49 @@ fn runs(data: &Funcdata, block: BlockId) -> Vec<Run> {
     let index: BTreeMap<OpId, usize> = ops.iter().enumerate().map(|(i, &o)| (o, i)).collect();
     let mut groups: BTreeMap<(VarnodeId, VarnodeId, i64), Vec<Pair>> = BTreeMap::new();
     for (at, &s) in ops.iter().enumerate() {
-        let Some(st) = op(data, s).filter(|p| p.code() == CPUI_STORE) else { continue };
-        let (Some(sp), Some(dptr), Some(val)) = (st.get_in(0), st.get_in(1), st.get_in(2)) else { continue };
-        let Some((l, copies)) = loaded(data, val) else { continue };
+        let Some(st) = op(data, s).filter(|p| p.code() == CPUI_STORE) else {
+            continue;
+        };
+        let (Some(sp), Some(dptr), Some(val)) = (st.get_in(0), st.get_in(1), st.get_in(2)) else {
+            continue;
+        };
+        let Some((l, copies)) = loaded(data, val) else {
+            continue;
+        };
         let Some(ld) = op(data, l) else { continue };
-        let Some(&first) = index.get(&l) else { continue };
-        let (Some(lsp), Some(sptr)) = (ld.get_in(0), ld.get_in(1)) else { continue };
-        let same_space = data.vbank().get(sp).map(|v| v.get_offset()) == data.vbank().get(lsp).map(|v| v.get_offset());
+        let Some(&first) = index.get(&l) else {
+            continue;
+        };
+        let (Some(lsp), Some(sptr)) = (ld.get_in(0), ld.get_in(1)) else {
+            continue;
+        };
+        let same_space = data.vbank().get(sp).map(|v| v.get_offset())
+            == data.vbank().get(lsp).map(|v| v.get_offset());
         let width = data.vbank().get(val).map_or(0, |v| v.get_size()) as i64;
         if !same_space || width == 0 {
             continue;
         }
-        let (Some((db, doff)), Some((sb, soff))) = (base_offset(data, dptr), base_offset(data, sptr)) else { continue };
+        let (Some((db, doff)), Some((sb, soff))) =
+            (base_offset(data, dptr), base_offset(data, sptr))
+        else {
+            continue;
+        };
         if in_frame(data, db) {
             continue;
         }
-        groups.entry((db, sb, doff.wrapping_sub(soff))).or_default().push(Pair {
-            store: s,
-            load: l,
-            copies,
-            dst_off: doff,
-            src_off: soff,
-            width,
-            at,
-            first,
-        });
+        groups
+            .entry((db, sb, doff.wrapping_sub(soff)))
+            .or_default()
+            .push(Pair {
+                store: s,
+                load: l,
+                copies,
+                dst_off: doff,
+                src_off: soff,
+                width,
+                at,
+                first,
+            });
     }
     let mut out = Vec::new();
     for ((dst, src, _), mut pairs) in groups {
@@ -283,7 +333,14 @@ fn runs(data: &Funcdata, block: BlockId) -> Vec<Run> {
             .iter()
             .all(|o| mine.contains(o) || op(data, *o).is_some_and(|p| !touches_memory(p.code())));
         if clean {
-            out.push(Run { dst, src, dst_lo: lo, src_lo, bytes, pairs });
+            out.push(Run {
+                dst,
+                src,
+                dst_lo: lo,
+                src_lo,
+                bytes,
+                pairs,
+            });
         }
     }
     out
@@ -295,7 +352,9 @@ fn offset(data: &mut Funcdata, base: VarnodeId, off: i64, before: OpId) -> KunaR
         return Ok(base);
     }
     let size = data.vbank().get(base).map_or(8, |v| v.get_size());
-    let at = op(data, before).map(|p| p.get_addr().clone()).unwrap_or_else(unlace_base::address::Address::new_invalid);
+    let at = op(data, before)
+        .map(|p| p.get_addr().clone())
+        .unwrap_or_else(unlace_base::address::Address::new_invalid);
     let add = data.new_op(2, at);
     data.op_set_opcode_code(add, CPUI_INT_ADD);
     data.op_set_input(add, base, 0)?;
@@ -307,10 +366,17 @@ fn offset(data: &mut Funcdata, base: VarnodeId, off: i64, before: OpId) -> KunaR
 }
 
 fn rewrite(data: &mut Funcdata, run: &Run) -> KunaResult<()> {
-    let last = run.pairs.iter().max_by_key(|p| p.at).map(|p| p.store).ok_or_else(|| unlace_base::error::KunaError::lowlevel("copyrun: empty run"))?;
+    let last = run
+        .pairs
+        .iter()
+        .max_by_key(|p| p.at)
+        .map(|p| p.store)
+        .ok_or_else(|| unlace_base::error::KunaError::lowlevel("copyrun: empty run"))?;
     let dst = offset(data, run.dst, run.dst_lo, last)?;
     let src = offset(data, run.src, run.src_lo, last)?;
-    let at = op(data, last).map(|p| p.get_addr().clone()).ok_or_else(|| unlace_base::error::KunaError::lowlevel("copyrun: stale store"))?;
+    let at = op(data, last)
+        .map(|p| p.get_addr().clone())
+        .ok_or_else(|| unlace_base::error::KunaError::lowlevel("copyrun: stale store"))?;
     let call = data.new_op(4, at);
     data.op_set_opcode_code(call, CPUI_CALLOTHER);
     let id = data.new_constant(4, BUILTIN_MEMCPY as uintb);

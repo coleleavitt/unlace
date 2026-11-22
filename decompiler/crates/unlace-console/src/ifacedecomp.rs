@@ -73,7 +73,7 @@
 //! the real call; the surrounding faithful structure does not change.
 
 use crate::engine::{
-    bootstrap_from_file, bootstrap_from_raw, ArmIsa, ConsoleProgram, UNBOUNDED_SIZE,
+    ArmIsa, ConsoleProgram, UNBOUNDED_SIZE, bootstrap_from_file, bootstrap_from_raw,
 };
 use crate::interface::{
     CommandStream, IfaceCommandAction, IfaceData, IfaceError, IfaceResult, IfaceStatus,
@@ -137,16 +137,20 @@ pub struct IfaceDecompData {
     pub pending_prototypes:
         std::collections::BTreeMap<String, unlace_decomp::fspec::PrototypePieces>,
     /// Resolved prototype targets keep their entry identity across IR rebuilds.
-    pub pending_prototype_entries:
-        std::collections::BTreeMap<unlace_base::address::Address, unlace_decomp::fspec::PrototypePieces>,
+    pub pending_prototype_entries: std::collections::BTreeMap<
+        unlace_base::address::Address,
+        unlace_decomp::fspec::PrototypePieces,
+    >,
     /// Flow overrides installed by `override flow <addr> <type>`, keyed by
     /// function name.  C++ keeps these on `dcp->fd->getOverride()` (the Funcdata
     /// is reused); the kuna console rebuilds the IR on `load`/`decompile`, so the
     /// `(address, flow_type)` facts are stashed here and re-seeded onto the fresh
     /// Funcdata's `localoverride` at flow time (the `pending_prototypes`
     /// precedent).
-    pub pending_flow_overrides:
-        std::collections::BTreeMap<String, Vec<(unlace_base::address::Address, unlace_base::types::uint4)>>,
+    pub pending_flow_overrides: std::collections::BTreeMap<
+        String,
+        Vec<(unlace_base::address::Address, unlace_base::types::uint4)>,
+    >,
     /// The `override indirect <callsite> <callee>` commands given, keyed by
     /// function name, as `(call site, callee as typed)`: what a refusal after
     /// the decompile is reported against. The facts themselves are parked on
@@ -162,7 +166,10 @@ pub struct IfaceDecompData {
     /// `Override::applyPrototype` (`fspecs.copy(*proto)`).
     pub pending_proto_overrides: std::collections::BTreeMap<
         String,
-        Vec<(unlace_base::address::Address, unlace_decomp::fspec::PrototypePieces)>,
+        Vec<(
+            unlace_base::address::Address,
+            unlace_decomp::fspec::PrototypePieces,
+        )>,
     >,
     /// Parameter storage locks installed by `map param <i> <addr> <typedecl>`
     /// (`IfcMapParam`), keyed by function name.  C++ writes these straight onto
@@ -173,7 +180,11 @@ pub struct IfaceDecompData {
     /// `typelock|namelock` flags the directive set.
     pub pending_param_maps: std::collections::BTreeMap<
         String,
-        Vec<(unlace_base::types::int4, String, unlace_decomp::fspec::ParameterPieces)>,
+        Vec<(
+            unlace_base::types::int4,
+            String,
+            unlace_decomp::fspec::ParameterPieces,
+        )>,
     >,
     /// Explicit stable local renames and retypes, keyed by the function's entry.
     pub local_edit_names: std::collections::BTreeMap<
@@ -195,7 +206,11 @@ pub struct IfaceDecompData {
     pub adopted_flows: u64,
     /// (kuna) The `rename`/`retype` lines applied since the last `decompile`,
     /// with the Symbol each touched and the type a `retype` gave.
-    pub pending_local_checks: Vec<(String, unlace_decomp::database::SymbolId, Option<std::rc::Rc<unlace_decomp::dtype::Datatype>>)>,
+    pub pending_local_checks: Vec<(
+        String,
+        unlace_decomp::database::SymbolId,
+        Option<std::rc::Rc<unlace_decomp::dtype::Datatype>>,
+    )>,
     /// (kuna) What the last `decompile` must print for those lines, which the
     /// next `print C` checks (`assertions::check_printed`).
     pub printed_checks: Option<(Vec<String>, Vec<crate::assertions::Expected>)>,
@@ -285,7 +300,9 @@ impl IfaceDecompData {
         name: &str,
     ) -> Result<Vec<unlace_decomp::database::SymbolId>, IfaceError> {
         if name.contains("::") {
-            return Err(IfaceError::parse(format!("Bad namespace for symbol: {name}")));
+            return Err(IfaceError::parse(format!(
+                "Bad namespace for symbol: {name}"
+            )));
         }
         match &self.fd {
             Some(fd) => match fd.get_scope_local() {
@@ -302,7 +319,9 @@ impl IfaceDecompData {
     /// namespace and no-function diagnostics [`Self::read_symbol`] gives.
     pub fn local_symbol_fd(&mut self, name: &str) -> Result<&mut Funcdata, IfaceError> {
         if name.contains("::") {
-            return Err(IfaceError::parse(format!("Bad namespace for symbol: {name}")));
+            return Err(IfaceError::parse(format!(
+                "Bad namespace for symbol: {name}"
+            )));
         }
         self.fd.as_mut().ok_or_else(|| {
             IfaceError::execution("global symbol scope lookup not yet wired (no function selected)")
@@ -315,15 +334,21 @@ impl IfaceDecompData {
         if names.renames.is_empty() && names.symbol_renames.is_empty() && names.retypes.is_empty() {
             self.local_edit_names.remove(fd.get_address());
         } else {
-            self.local_edit_names.insert(fd.get_address().clone(), names);
+            self.local_edit_names
+                .insert(fd.get_address().clone(), names);
         }
     }
 
     fn local_names_for_rebuild(&self) -> unlace_decomp::kuna_stablenames::PriorNames {
-        let Some(fd) = self.fd.as_ref() else { return Default::default() };
+        let Some(fd) = self.fd.as_ref() else {
+            return Default::default();
+        };
         let names = unlace_decomp::kuna_stablenames::carry(fd);
         if names.is_empty() {
-            self.local_edit_names.get(fd.get_address()).cloned().unwrap_or(names)
+            self.local_edit_names
+                .get(fd.get_address())
+                .cloned()
+                .unwrap_or(names)
         } else {
             names
         }
@@ -331,7 +356,11 @@ impl IfaceDecompData {
 
     fn select_loaded_function(&mut self, fd: Funcdata) {
         let entry = fd.get_address();
-        if self.fd.as_ref().is_some_and(|current| current.get_address() == entry) {
+        if self
+            .fd
+            .as_ref()
+            .is_some_and(|current| current.get_address() == entry)
+        {
             self.local_edit_names.remove(entry);
         }
         self.fd = Some(fd);
@@ -365,8 +394,12 @@ impl IfaceDecompData {
     /// IR (`print raw`, the `region` commands), which then prints what it did
     /// when the stop followed the flow again at once.
     pub fn follow_stopped_flow(&mut self) {
-        let Some(recipe) = self.stopped_flow.take() else { return };
-        let (Some(prog), Some(shell)) = (self.conf.as_mut(), self.fd.as_ref()) else { return };
+        let Some(recipe) = self.stopped_flow.take() else {
+            return;
+        };
+        let (Some(prog), Some(shell)) = (self.conf.as_mut(), self.fd.as_ref()) else {
+            return;
+        };
         if shell.get_address() != &recipe.entry || !shell.obank().empty() {
             return;
         }
@@ -436,8 +469,8 @@ pub(crate) fn parse_machaddr(
     s: &mut CommandStream,
     ignorecolon: bool,
 ) -> Result<(unlace_base::address::Address, int4), String> {
-    use unlace_base::address::Address;
     use std::rc::Rc;
+    use unlace_base::address::Address;
     let manage = prog.arch().manage();
     let mut size: int4 = -1;
 
@@ -532,7 +565,15 @@ fn parse_input_code_address(
 fn parse_varnode(
     prog: &ConsoleProgram,
     s: &mut CommandStream,
-) -> Result<(unlace_base::address::Address, int4, unlace_base::address::Address, uintm), String> {
+) -> Result<
+    (
+        unlace_base::address::Address,
+        int4,
+        unlace_base::address::Address,
+        uintm,
+    ),
+    String,
+> {
     use unlace_base::address::Address;
     let (loc, size) = parse_machaddr(prog, s, false)?;
     s.skip_ws();
@@ -602,7 +643,9 @@ fn read_varnode(
     use unlace_base::address::SeqNum;
     use unlace_base::space::spacetype;
     let no_uq = uq == !0u32;
-    let space = loc.get_space().ok_or_else(|| "Varnode has no space".to_string())?;
+    let space = loc
+        .get_space()
+        .ok_or_else(|| "Varnode has no space".to_string())?;
     if space.get_type() == spacetype::IPTR_CONSTANT {
         // For a constant the p-code op reading it must be fully specified.
         if pc.is_invalid() || no_uq {
@@ -613,7 +656,12 @@ fn read_varnode(
             let n = fd.obank().get(op).map(|o| o.num_input()).unwrap_or(0);
             for i in 0..n {
                 if let Some(tmpvn) = fd.obank().get(op).and_then(|o| o.get_in(i)) {
-                    if fd.vbank().get(tmpvn).map(|v| v.get_addr() == loc).unwrap_or(false) {
+                    if fd
+                        .vbank()
+                        .get(tmpvn)
+                        .map(|v| v.get_addr() == loc)
+                        .unwrap_or(false)
+                    {
                         return Ok(Some(tmpvn));
                     }
                 }
@@ -627,7 +675,10 @@ fn read_varnode(
     } else {
         // The residual `beginLoc(defsize,loc)`..`endLoc` storage walk
         // (exactly one of pc/uq given) — not on this boundary's bank surface.
-        Err("kuna rust port: readVarnode loc-scan arm needs the beginLoc/endLoc bank iterator".to_string())
+        Err(
+            "kuna rust port: readVarnode loc-scan arm needs the beginLoc/endLoc bank iterator"
+                .to_string(),
+        )
     }
 }
 
@@ -642,7 +693,10 @@ fn parse_hex_u64(s: &mut CommandStream) -> Result<u64, String> {
     if t.is_empty() {
         return Err("Missing hash value".to_string());
     }
-    let digits = t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")).unwrap_or(t);
+    let digits = t
+        .strip_prefix("0x")
+        .or_else(|| t.strip_prefix("0X"))
+        .unwrap_or(t);
     u64::from_str_radix(digits, 16).map_err(|_| "Bad hash value".to_string())
 }
 
@@ -718,7 +772,9 @@ fn mark_property_range(
         .ok_or_else(|| IfaceError::execution("Invalid address space"))?;
     let off = addr.get_offset();
     let addr2 = unlace_base::address::Address::new(space, off.wrapping_add(size as u64));
-    prog.arch_mut().symboltab.set_property_range(flag, &addr, &addr2);
+    prog.arch_mut()
+        .symboltab
+        .set_property_range(flag, &addr, &addr2);
     status.out(&format!("{success}\n"));
     Ok(())
 }
@@ -736,7 +792,10 @@ fn run_parse_c(status: &mut IfaceStatus, content: &str) -> IfaceResult<()> {
         let prog = dcp.conf.as_ref().expect("conf checked non-None above");
         let arch = prog.arch();
         let (addr_size, word_size) = arch.data_org();
-        let org = crate::grammar::DataOrg { addr_size, word_size };
+        let org = crate::grammar::DataOrg {
+            addr_size,
+            word_size,
+        };
         // setPrototype branch: stash the parsed pieces (applied below, against the
         // mutable `dcp`); the symbol existence check mirrors C++ queryFunction.
         let captured: RefCell<Option<(unlace_decomp::fspec::PrototypePieces, String)>> =
@@ -762,17 +821,26 @@ fn run_parse_c(status: &mut IfaceStatus, content: &str) -> IfaceResult<()> {
         Ok(()) => {
             if let Some((mut pieces, model)) = extern_pieces {
                 let dcp = dcp_mut(status)?;
-                let prog = dcp.conf.as_mut()
+                let prog = dcp
+                    .conf
+                    .as_mut()
                     .ok_or_else(|| IfaceError::execution("No load image present"))?;
                 let target = crate::assertions::resolve_proto_target(prog, &pieces.name)
                     .map_err(IfaceError::execution)?;
                 let model = crate::assertions::declared_model(prog, &model);
                 crate::assertions::park_prototype(prog, &target, &mut pieces, model.as_ref());
-                crate::kuna_callwide::target_declaration(prog, &target, &pieces, model,
-                    unlace_decomp::kuna_callwide::DeclarationSource::Parsed);
+                crate::kuna_callwide::target_declaration(
+                    prog,
+                    &target,
+                    &pieces,
+                    model,
+                    unlace_decomp::kuna_callwide::DeclarationSource::Parsed,
+                );
                 crate::kuna_qualifiedstorage::remember(
-                    &mut dcp.pending_prototypes, &mut dcp.pending_prototype_entries,
-                    &target, pieces,
+                    &mut dcp.pending_prototypes,
+                    &mut dcp.pending_prototype_entries,
+                    &target,
+                    pieces,
                 );
             }
 
@@ -828,28 +896,38 @@ fn bind_func_param(
         return Err(IfaceError::parse("Parameter index must not be negative"));
     }
     let dcp = dcp_mut(status)?;
-    let prog = dcp.conf.as_mut()
+    let prog = dcp
+        .conf
+        .as_mut()
         .ok_or_else(|| IfaceError::execution("No load image present"))?;
     let (addr_size, _) = prog.arch().data_org();
-    let filler = prog.arch().types()
+    let filler = prog
+        .arch()
+        .types()
         .get_base(addr_size, unlace_decomp::dtype::type_metatype::TYPE_UNKNOWN)
         .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
-    crate::kuna_qualifiedstorage::update(prog, &mut dcp.pending_prototypes, &mut dcp.pending_prototype_entries, func, |entry| {
-        let slot = index as usize;
-        while entry.intypes.len() <= slot {
-            entry.intypes.push(std::rc::Rc::clone(&filler));
-        }
-        while entry.innames.len() <= slot {
-            entry.innames.push(String::new());
-        }
-        entry.intypes[slot] = piece.type_.clone().ok_or_else(|| {
-            IfaceError::parse("A parameter declaration must name a data-type")
-        })?;
-        entry.innames[slot] = pname.to_string();
-        entry.input_storage.retain(|(i, _)| *i != index);
-        entry.input_storage.push((index, piece));
-        Ok(())
-    })
+    crate::kuna_qualifiedstorage::update(
+        prog,
+        &mut dcp.pending_prototypes,
+        &mut dcp.pending_prototype_entries,
+        func,
+        |entry| {
+            let slot = index as usize;
+            while entry.intypes.len() <= slot {
+                entry.intypes.push(std::rc::Rc::clone(&filler));
+            }
+            while entry.innames.len() <= slot {
+                entry.innames.push(String::new());
+            }
+            entry.intypes[slot] = piece.type_.clone().ok_or_else(|| {
+                IfaceError::parse("A parameter declaration must name a data-type")
+            })?;
+            entry.innames[slot] = pname.to_string();
+            entry.input_storage.retain(|(i, _)| *i != index);
+            entry.input_storage.push((index, piece));
+            Ok(())
+        },
+    )
 }
 
 /// Park the locked return storage + type of `func` on its prototype pieces —
@@ -861,12 +939,20 @@ fn bind_func_return(
     piece: unlace_decomp::fspec::ParameterPieces,
 ) -> IfaceResult<()> {
     let dcp = dcp_mut(status)?;
-    let prog = dcp.conf.as_mut()
+    let prog = dcp
+        .conf
+        .as_mut()
         .ok_or_else(|| IfaceError::execution("No load image present"))?;
-    crate::kuna_qualifiedstorage::update(prog, &mut dcp.pending_prototypes, &mut dcp.pending_prototype_entries, func, |entry| {
-        entry.output_storage = Some(piece);
-        Ok(())
-    })
+    crate::kuna_qualifiedstorage::update(
+        prog,
+        &mut dcp.pending_prototypes,
+        &mut dcp.pending_prototype_entries,
+        func,
+        |entry| {
+            entry.output_storage = Some(piece);
+            Ok(())
+        },
+    )
 }
 
 /// Parse the `<storage> <C typedeclaration>` tail both `map param` and `map
@@ -885,11 +971,21 @@ fn parse_storage_and_type(
     let (addr, _size) = parse_machaddr(prog, s, false).map_err(IfaceError::parse)?;
     s.skip_ws();
     let (addr_size, word_size) = prog.arch().data_org();
-    let org = crate::grammar::DataOrg { addr_size, word_size };
+    let org = crate::grammar::DataOrg {
+        addr_size,
+        word_size,
+    };
     let typetext = s.rest();
     let (ct, name) = crate::grammar::parse_type(&typetext, prog.arch().types(), org)
         .map_err(|e| IfaceError::parse(e.explain().to_string()))?;
-    Ok((ParameterPieces { addr, type_: Some(ct), flags }, name))
+    Ok((
+        ParameterPieces {
+            addr,
+            type_: Some(ct),
+            flags,
+        },
+        name,
+    ))
 }
 
 /// (kuna) Bind a parsed C prototype to `func`, whatever name the declaration
@@ -908,11 +1004,7 @@ fn parse_storage_and_type(
 /// ([`crate::assertions::resolve_proto_target`]); the pieces are parked through
 /// the shared [`crate::assertions::park_prototype`] so both surfaces bind the
 /// same operand to the same function.
-pub(crate) fn bind_prototype(
-    status: &mut IfaceStatus,
-    func: &str,
-    decl: &str,
-) -> IfaceResult<()> {
+pub(crate) fn bind_prototype(status: &mut IfaceStatus, func: &str, decl: &str) -> IfaceResult<()> {
     use std::cell::RefCell;
     let decl = decl.trim();
     let text = if decl.ends_with(';') {
@@ -928,7 +1020,10 @@ pub(crate) fn bind_prototype(
             .ok_or_else(|| IfaceError::execution("No load image present"))?;
         let arch = prog.arch();
         let (addr_size, word_size) = arch.data_org();
-        let org = crate::grammar::DataOrg { addr_size, word_size };
+        let org = crate::grammar::DataOrg {
+            addr_size,
+            word_size,
+        };
         let captured: RefCell<Option<(unlace_decomp::fspec::PrototypePieces, String)>> =
             RefCell::new(None);
         let models: Vec<String> = arch.proto_model_names().map(str::to_string).collect();
@@ -949,12 +1044,23 @@ pub(crate) fn bind_prototype(
         .conf
         .as_mut()
         .ok_or_else(|| IfaceError::execution("No load image present"))?;
-    let target = crate::assertions::resolve_proto_target(prog, func)
-        .map_err(IfaceError::execution)?;
+    let target =
+        crate::assertions::resolve_proto_target(prog, func).map_err(IfaceError::execution)?;
     let model = crate::assertions::declared_model(prog, &model);
     crate::assertions::park_prototype(prog, &target, &mut pieces, model.as_ref());
-    crate::kuna_callwide::target_declaration(prog, &target, &pieces, model, unlace_decomp::kuna_callwide::DeclarationSource::Parsed);
-    crate::kuna_qualifiedstorage::remember(&mut dcp.pending_prototypes, &mut dcp.pending_prototype_entries, &target, pieces);
+    crate::kuna_callwide::target_declaration(
+        prog,
+        &target,
+        &pieces,
+        model,
+        unlace_decomp::kuna_callwide::DeclarationSource::Parsed,
+    );
+    crate::kuna_qualifiedstorage::remember(
+        &mut dcp.pending_prototypes,
+        &mut dcp.pending_prototype_entries,
+        &target,
+        pieces,
+    );
     Ok(())
 }
 
@@ -1007,7 +1113,8 @@ macro_rules! decomp_command {
 decomp_command!(
     /// C++ `IfcComment` (`ifacedecomp.cc:292`): a comment line in a script
     /// (`//`/`#`/`%`) — does nothing.  Carries the shared module-data builder.
-    IfcComment, with_data,
+    IfcComment,
+    with_data,
     fn execute(&self, _status: &mut IfaceStatus, _s: &mut CommandStream) -> IfaceResult<()> {
         // Do nothing
         Ok(())
@@ -1151,7 +1258,9 @@ decomp_command!(
             return Err(IfaceError::execution("No load image present"));
         }
         // C++ reads `adjust` with a user-specified base then loader->adjustVma.
-        Err(engine_unavailable("LoadImage::adjustVma (Architecture::loader)"))
+        Err(engine_unavailable(
+            "LoadImage::adjustVma (Architecture::loader)",
+        ))
     }
 );
 
@@ -1245,7 +1354,9 @@ decomp_command!(
             ));
         }
         if !s.eof() {
-            return Err(IfaceError::parse("Unexpected argument after raw image filename"));
+            return Err(IfaceError::parse(
+                "Unexpected argument after raw image filename",
+            ));
         }
         let base = parse_raw_address(&base_token)?;
         let entries = entries_token
@@ -1268,13 +1379,21 @@ decomp_command!(
         // A language id can contain spaces (`x86:LE:16:Real Mode`), which a
         // console token cannot: `_` stands for a space when the id as written
         // has no specification.
-        let loaded = bootstrap_from_raw(&filename, &target, base, &entries, isa, &spec_roots).or_else(|e| {
-            if target.contains('_') {
-                bootstrap_from_raw(&filename, &target.replace('_', " "), base, &entries, isa, &spec_roots)
-            } else {
-                Err(e)
-            }
-        });
+        let loaded = bootstrap_from_raw(&filename, &target, base, &entries, isa, &spec_roots)
+            .or_else(|e| {
+                if target.contains('_') {
+                    bootstrap_from_raw(
+                        &filename,
+                        &target.replace('_', " "),
+                        base,
+                        &entries,
+                        isa,
+                        &spec_roots,
+                    )
+                } else {
+                    Err(e)
+                }
+            });
         match loaded {
             Ok(prog) => {
                 let desc = prog.description().to_string();
@@ -1300,8 +1419,8 @@ decomp_command!(
         // spelling the symbol table and the listing use, so a name the binary
         // spells past the scope bound both RESOLVES and renders as one name.
         // Idempotent, and a no-op for every real name.
-        let funcname =
-            unlace_decomp::kuna_symbolnamebound::bound_scope_path(&s.read_token(), "::").into_owned();
+        let funcname = unlace_decomp::kuna_symbolnamebound::bound_scope_path(&s.read_token(), "::")
+            .into_owned();
         let command_seq = status.command_seq;
         let dcp = dcp_mut(status)?;
         if dcp.conf.is_none() {
@@ -1310,8 +1429,11 @@ decomp_command!(
         // The kuna path resolves the entry from the binaryimage's own symbol
         // records (the readLoaderSymbols hook), where C++ uses
         // resolveScopeFromSymbolName + queryFunction + followFlow.
-        let mut flow_overrides =
-            dcp.pending_flow_overrides.get(&funcname).cloned().unwrap_or_default();
+        let mut flow_overrides = dcp
+            .pending_flow_overrides
+            .get(&funcname)
+            .cloned()
+            .unwrap_or_default();
         let prog = dcp.conf.as_mut().expect("conf checked non-None above");
         // (kuna) Safety commit: if a session loads a function without an explicit
         // `read symbols`, commit the stashed analysis facts now (default gates;
@@ -1410,7 +1532,9 @@ decomp_command!(
             .zip(prog.arch().manage().get_default_code_space())
             .is_some_and(|(requested, default)| std::rc::Rc::ptr_eq(requested, default));
         let selected = if in_default_space {
-            prog.resolve_body_entry(&crate::engine::EntrySelector::Numeric(requested.get_offset()))
+            prog.resolve_body_entry(&crate::engine::EntrySelector::Numeric(
+                requested.get_offset(),
+            ))
         } else {
             prog.resolve_address(&requested)
         }
@@ -1461,19 +1585,32 @@ decomp_command!(
         // entry by `map function` applies when the command carries none.  The
         // parsed size is the address's own byte width when no `,<size>` was
         // given, so only a size that exceeds it is a real bound.
-        let inline_size =
-            if parsed_size > requested.get_addr_size() { parsed_size } else { UNBOUNDED_SIZE };
-        let declared =
-            if inline_size > 0 { inline_size } else { prog.declared_extent(offset.get_offset()) };
+        let inline_size = if parsed_size > requested.get_addr_size() {
+            parsed_size
+        } else {
+            UNBOUNDED_SIZE
+        };
+        let declared = if inline_size > 0 {
+            inline_size
+        } else {
+            prog.declared_extent(offset.get_offset())
+        };
         if inline_size > 0 {
             prog.declare_extent(offset.get_offset(), inline_size);
-            prog.callwide_unavailable("selected function inline extent is outside the complete inventory preflight");
+            prog.callwide_unavailable(
+                "selected function inline extent is outside the complete inventory preflight",
+            );
         }
         let entry_stamp = offset.clone();
         let name_stamp = name.clone();
-        let fd =
-            build_and_follow_flow_within_budget(prog.arch_mut(), &name, offset, declared, &flow_overrides)
-                .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
+        let fd = build_and_follow_flow_within_budget(
+            prog.arch_mut(),
+            &name,
+            offset,
+            declared,
+            &flow_overrides,
+        )
+        .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
         // (kuna) Same follow stamp as `load function` (see `PristineFlow`).
         dcp.stopped_flow = None;
         dcp.pristine_flow = Some(PristineFlow {
@@ -1519,8 +1656,11 @@ decomp_command!(
         let prog = dcp.conf.as_mut().expect("conf checked non-None above");
         prog.commit_pending_analysis()
             .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
-        let fid_warnings: Vec<String> =
-            prog.fid_databases().iter().filter_map(|report| report.warning()).collect();
+        let fid_warnings: Vec<String> = prog
+            .fid_databases()
+            .iter()
+            .filter_map(|report| report.warning())
+            .collect();
         for warning in fid_warnings {
             status.out(&format!("warning: {warning}\n"));
         }
@@ -1559,7 +1699,10 @@ decomp_command!(
             let (addr, _size) = parse_machaddr(prog, s, false).map_err(IfaceError::parse)?;
             s.skip_ws();
             let (addr_size, word_size) = prog.arch().data_org();
-            let org = crate::grammar::DataOrg { addr_size, word_size };
+            let org = crate::grammar::DataOrg {
+                addr_size,
+                word_size,
+            };
             let typetext = s.rest();
             let (ct, name, volatile) =
                 crate::grammar::parse_type_with_volatile(&typetext, prog.arch().types(), org)
@@ -1574,7 +1717,8 @@ decomp_command!(
                 .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
             scope_local.set_attribute(
                 sym,
-                varnode_flags::namelock | varnode_flags::typelock
+                varnode_flags::namelock
+                    | varnode_flags::typelock
                     | if volatile { varnode_flags::volatil } else { 0 },
             );
             return Ok(());
@@ -1585,7 +1729,10 @@ decomp_command!(
         s.skip_ws();
         // Parse the required type + name (C++ parse_type).
         let (addr_size, word_size) = prog.arch().data_org();
-        let org = crate::grammar::DataOrg { addr_size, word_size };
+        let org = crate::grammar::DataOrg {
+            addr_size,
+            word_size,
+        };
         let typetext = s.rest();
         let (ct, name, volatile) =
             crate::grammar::parse_type_with_volatile(&typetext, prog.arch().types(), org)
@@ -1594,7 +1741,9 @@ decomp_command!(
         // symbol, set the locks, and (for a namespace scope) register its range.
         use unlace_decomp::varnode::varnode_flags;
         let inherit = prog.arch().symboltab.get_property(&addr);
-        let flags = varnode_flags::namelock | varnode_flags::typelock | inherit
+        let flags = varnode_flags::namelock
+            | varnode_flags::typelock
+            | inherit
             | if volatile { varnode_flags::volatil } else { 0 };
         let size = ct.get_size();
         let num_spaces = prog.arch().manage().num_spaces() as int4;
@@ -1611,14 +1760,19 @@ decomp_command!(
         arch.symboltab.set_attribute(sym, flags);
         if volatile && size > 0 {
             let last = &addr + size as i64;
-            arch.symboltab.set_property_range(varnode_flags::volatil, &addr, &last);
+            arch.symboltab
+                .set_property_range(varnode_flags::volatil, &addr, &last);
         }
         // C++ ifacedecomp.cc:573-576: if this is a (global) namespace scope (it has
         // a parent), register the symbol's whole-map address range on that scope so
         // address->symbol resolution descends into the namespace.
         if arch.symboltab.scope_has_parent(scope) {
             let entry = arch.symboltab.entry(scope, eref);
-            let spc = entry.addr.get_space().expect("mapped entry has a space").clone();
+            let spc = entry
+                .addr
+                .get_space()
+                .expect("mapped entry has a space")
+                .clone();
             let first = entry.get_first();
             let last = entry.get_last();
             arch.symboltab.add_range(scope, spc, first, last);
@@ -1649,14 +1803,17 @@ decomp_command!(
         let hash = parse_hex_u64(s).map_err(IfaceError::parse)?;
         s.skip_ws();
         let (addr_size, word_size) = prog.arch().data_org();
-        let org = crate::grammar::DataOrg { addr_size, word_size };
+        let org = crate::grammar::DataOrg {
+            addr_size,
+            word_size,
+        };
         let typetext = s.rest();
         let (ct, name) = crate::grammar::parse_type(&typetext, prog.arch().types(), org)
             .map_err(|e| IfaceError::parse(e.explain().to_string()))?;
         let fd = dcp.fd.as_mut().expect("fd checked Some above");
-        let scope_local = fd.get_scope_local_mut().ok_or_else(|| {
-            IfaceError::execution("Function has no local scope (no stack space)")
-        })?;
+        let scope_local = fd
+            .get_scope_local_mut()
+            .ok_or_else(|| IfaceError::execution("Function has no local scope (no stack space)"))?;
         let sym = scope_local
             .add_dynamic_symbol(&name, ct, &addr, hash)
             .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
@@ -1671,7 +1828,7 @@ decomp_command!(
     /// parameter on the current function's prototype.
     IfcMapParam,
     fn execute(&self, status: &mut IfaceStatus, s: &mut CommandStream) -> IfaceResult<()> {
-        use unlace_decomp::fspec::{parameter_pieces_flags, ParameterPieces};
+        use unlace_decomp::fspec::{ParameterPieces, parameter_pieces_flags};
         // (kuna) `map param <func>::<i> <storage> <decl>` declares a slot of the
         // prototype of the function it NAMES, which need not be the one under
         // decompile.  Without it a caller has no way to say what a CALLEE takes,
@@ -1680,11 +1837,10 @@ decomp_command!(
         // (`docs/re-needs/qualified-parameter-assertions-modify.md`).
         if peek_qualifier(s).is_some() {
             let tok = s.read_token();
-            let (func, index_tok) =
-                split_qualifier(&tok).expect("peek_qualifier saw a qualifier");
-            let index: unlace_base::types::int4 = index_tok.parse().map_err(|_| {
-                IfaceError::parse("Parameter index must be a decimal number")
-            })?;
+            let (func, index_tok) = split_qualifier(&tok).expect("peek_qualifier saw a qualifier");
+            let index: unlace_base::types::int4 = index_tok
+                .parse()
+                .map_err(|_| IfaceError::parse("Parameter index must be a decimal number"))?;
             s.skip_ws();
             let flags = parameter_pieces_flags::TYPELOCK | parameter_pieces_flags::NAMELOCK;
             let (piece, pname) = parse_storage_and_type(status, s, flags)?;
@@ -1705,7 +1861,10 @@ decomp_command!(
         s.skip_ws();
         // C++: piece.type = parse_type(s,name,dcp->conf).
         let (addr_size, word_size) = prog.arch().data_org();
-        let org = crate::grammar::DataOrg { addr_size, word_size };
+        let org = crate::grammar::DataOrg {
+            addr_size,
+            word_size,
+        };
         let typetext = s.rest();
         let (ct, name) = crate::grammar::parse_type(&typetext, prog.arch().types(), org)
             .map_err(|e| IfaceError::parse(e.explain().to_string()))?;
@@ -1736,7 +1895,9 @@ decomp_command!(
             .entry(fname)
             .or_default()
             .push((i, name, piece));
-        prog.callwide_unavailable("selected function parameter storage is outside the full declaration ledger");
+        prog.callwide_unavailable(
+            "selected function parameter storage is outside the full declaration ledger",
+        );
         Ok(())
     }
 );
@@ -1747,7 +1908,7 @@ decomp_command!(
     /// current function's prototype.
     IfcMapReturn,
     fn execute(&self, status: &mut IfaceStatus, s: &mut CommandStream) -> IfaceResult<()> {
-        use unlace_decomp::fspec::{parameter_pieces_flags, ParameterPieces};
+        use unlace_decomp::fspec::{ParameterPieces, parameter_pieces_flags};
         // (kuna) `map return <func>::<storage> <decl>` — the cross-function arm,
         // as for `map param` above.  The storage grammar has no `::` of its own,
         // so the qualifier is unambiguous.
@@ -1776,7 +1937,10 @@ decomp_command!(
         s.skip_ws();
         // C++: piece.type = parse_type(s,name,dcp->conf).
         let (addr_size, word_size) = prog.arch().data_org();
-        let org = crate::grammar::DataOrg { addr_size, word_size };
+        let org = crate::grammar::DataOrg {
+            addr_size,
+            word_size,
+        };
         let typetext = s.rest();
         let (ct, _name) = crate::grammar::parse_type(&typetext, prog.arch().types(), org)
             .map_err(|e| IfaceError::parse(e.explain().to_string()))?;
@@ -1808,14 +1972,20 @@ decomp_command!(
         // model-driven, matching C++ `map return`) carrying the explicit output
         // storage.  Merge into any existing pending proto for this function.
         let previous = dcp.pending_prototypes.get(&fname).cloned();
-        let entry = dcp.pending_prototype_entries.entry(function_entry)
-            .or_insert_with(|| previous.unwrap_or(unlace_decomp::fspec::PrototypePieces {
-                name: fname.clone(),
-                first_var_arg_slot: -1,
-                ..Default::default()
-            }));
+        let entry = dcp
+            .pending_prototype_entries
+            .entry(function_entry)
+            .or_insert_with(|| {
+                previous.unwrap_or(unlace_decomp::fspec::PrototypePieces {
+                    name: fname.clone(),
+                    first_var_arg_slot: -1,
+                    ..Default::default()
+                })
+            });
         entry.output_storage = Some(piece);
-        prog.callwide_unavailable("selected function return storage is outside the full declaration ledger");
+        prog.callwide_unavailable(
+            "selected function return storage is outside the full declaration ledger",
+        );
         Ok(())
     }
 );
@@ -1933,7 +2103,8 @@ decomp_command!(
             .symboltab
             .add_code_label(gscope, &addr, &name, lab_type)
             .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
-        arch.symboltab.set_attribute(sym, varnode_flags::namelock | varnode_flags::typelock);
+        arch.symboltab
+            .set_attribute(sym, varnode_flags::namelock | varnode_flags::typelock);
         Ok(())
     }
 );
@@ -1976,9 +2147,9 @@ decomp_command!(
             .get_base(1, unlace_decomp::dtype::type_metatype::TYPE_UNKNOWN)
             .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
         let fd = dcp.fd.as_mut().expect("fd checked Some above");
-        let scope_local = fd.get_scope_local_mut().ok_or_else(|| {
-            IfaceError::execution("Function has no local scope (no stack space)")
-        })?;
+        let scope_local = fd
+            .get_scope_local_mut()
+            .ok_or_else(|| IfaceError::execution("Function has no local scope (no stack space)"))?;
         scope_local
             .add_equate_symbol("", format, value, &addr, hash, base1)
             .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
@@ -2023,9 +2194,9 @@ decomp_command!(
         // C++ builds the symbol name "unionfacet<n>_<hexoff>".
         let sym_name = format!("unionfacet{}_{:x}", field_num + 1, addr.get_offset());
         let fd = dcp.fd.as_mut().expect("fd checked Some above");
-        let scope_local = fd.get_scope_local_mut().ok_or_else(|| {
-            IfaceError::execution("Function has no local scope (no stack space)")
-        })?;
+        let scope_local = fd
+            .get_scope_local_mut()
+            .ok_or_else(|| IfaceError::execution("Function has no local scope (no stack space)"))?;
         let sym = scope_local
             .add_union_facet_symbol(&sym_name, ct, field_num, &addr, hash)
             .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
@@ -2142,7 +2313,9 @@ decomp_command!(
     IfcDumpbinary,
     fn execute(&self, status: &mut IfaceStatus, _s: &mut CommandStream) -> IfaceResult<()> {
         let _dcp = dcp_mut(status)?;
-        Err(engine_unavailable("parse_machaddr + LoadImage::load (binary dump)"))
+        Err(engine_unavailable(
+            "parse_machaddr + LoadImage::load (binary dump)",
+        ))
     }
 );
 
@@ -2166,11 +2339,39 @@ decomp_command!(
         let mapped_before: Vec<(unlace_base::address::Address, int4)> = dcp_mut(status)?
             .fd
             .as_ref()
-            .map(|fd| fd.mapped_symbol_specs().into_iter().map(|(_, ty, addr, _)| (addr, ty.get_size())).collect())
+            .map(|fd| {
+                fd.mapped_symbol_specs()
+                    .into_iter()
+                    .map(|(_, ty, addr, _)| (addr, ty.get_size()))
+                    .collect()
+            })
             .unwrap_or_default();
-        let (name, has_no_code, proc_started, entry, size, mut mapped_symbols, usepoint_symbols, dynamic_symbols, object_assertions, pending_proto, all_pending_protos, mut prog) = {
+        let (
+            name,
+            has_no_code,
+            proc_started,
+            entry,
+            size,
+            mut mapped_symbols,
+            usepoint_symbols,
+            dynamic_symbols,
+            object_assertions,
+            pending_proto,
+            all_pending_protos,
+            mut prog,
+        ) = {
             let dcp = dcp_mut(status)?;
-            let (name, has_no_code, proc_started, entry, size, mapped_symbols, usepoint_symbols, dynamic_symbols, object_assertions) = match &dcp.fd {
+            let (
+                name,
+                has_no_code,
+                proc_started,
+                entry,
+                size,
+                mapped_symbols,
+                usepoint_symbols,
+                dynamic_symbols,
+                object_assertions,
+            ) = match &dcp.fd {
                 None => return Err(IfaceError::execution("No function selected")),
                 Some(fd) => (
                     fd.get_name().to_string(),
@@ -2194,21 +2395,42 @@ decomp_command!(
             // The `parse line extern <decl>` prototype stashed for this function
             // (C++ Architecture::setPrototype applies it to the queried Funcdata;
             // here the IR is rebuilt on `decompile`, so it is re-applied below).
-            let pending_proto = dcp.pending_prototype_entries.get(&entry)
-                .or_else(|| dcp.pending_prototypes.get(&name)).cloned();
+            let pending_proto = dcp
+                .pending_prototype_entries
+                .get(&entry)
+                .or_else(|| dcp.pending_prototypes.get(&name))
+                .cloned();
             // All parsed prototypes (callees included).  C++ `setPrototype` locks each
             // declared function's `FuncProto` on its (lazily-built) Funcdata; here every
             // declared prototype is re-parked on its global FunctionSymbol below so a
             // caller's `ActionDefaultParams` can `fc->copy(otherfunc->getFuncProto())`.
-            let all_pending_protos: Vec<_> = dcp.pending_prototypes.values().cloned()
+            let all_pending_protos: Vec<_> = dcp
+                .pending_prototypes
+                .values()
+                .cloned()
                 .map(|pieces| (None, pieces))
-                .chain(dcp.pending_prototype_entries.iter().map(|(addr, pieces)| (Some(addr.clone()), pieces.clone())))
+                .chain(
+                    dcp.pending_prototype_entries
+                        .iter()
+                        .map(|(addr, pieces)| (Some(addr.clone()), pieces.clone())),
+                )
                 .collect();
             match dcp.conf.take() {
                 None => return Err(IfaceError::execution("No load image present")),
-                Some(prog) => {
-                    (name, has_no_code, proc_started, entry, size, mapped_symbols, usepoint_symbols, dynamic_symbols, object_assertions, pending_proto, all_pending_protos, prog)
-                }
+                Some(prog) => (
+                    name,
+                    has_no_code,
+                    proc_started,
+                    entry,
+                    size,
+                    mapped_symbols,
+                    usepoint_symbols,
+                    dynamic_symbols,
+                    object_assertions,
+                    pending_proto,
+                    all_pending_protos,
+                    prog,
+                ),
             }
         };
         // (kuna DWARF subtask 3) Append the DWARF stack LOCALS parked on this
@@ -2223,10 +2445,18 @@ decomp_command!(
         // A DWARF local the previous decompile already mapped stays as a
         // directive left it: carried as a Symbol, or as a name and type.
         let dwarf_locals = prog.dwarf_locals_for(entry.get_offset());
-        let reserved_names = dwarf_locals.iter().map(|(name, _, _, _)| name.clone()).collect();
-        let mut mapped_names = mapped_symbols.iter().map(|(name, _, _, _)| name.clone()).collect();
+        let reserved_names = dwarf_locals
+            .iter()
+            .map(|(name, _, _, _)| name.clone())
+            .collect();
+        let mut mapped_names = mapped_symbols
+            .iter()
+            .map(|(name, _, _, _)| name.clone())
+            .collect();
         for (mut name, ty, addr, flags) in dwarf_locals {
-            if mapped_before.iter().any(|(mapped, size)| crate::kuna_dwarfstack::overlaps(&addr, ty.get_size(), mapped, *size)) {
+            if mapped_before.iter().any(|(mapped, size)| {
+                crate::kuna_dwarfstack::overlaps(&addr, ty.get_size(), mapped, *size)
+            }) {
                 continue;
             }
             if ty.get_name().starts_with("dwarf_stack_") {
@@ -2243,8 +2473,12 @@ decomp_command!(
         let all_pending_protos_empty = all_pending_protos.is_empty();
         for (address, pieces) in all_pending_protos {
             match address {
-                Some(addr) => prog.arch_mut().set_function_prototype_pieces_at(&addr, pieces),
-                None => prog.arch_mut().set_function_prototype_pieces(&pieces.name.clone(), pieces),
+                Some(addr) => prog
+                    .arch_mut()
+                    .set_function_prototype_pieces_at(&addr, pieces),
+                None => prog
+                    .arch_mut()
+                    .set_function_prototype_pieces(&pieces.name.clone(), pieces),
             }
         }
         // The `override flow` facts stashed for this function (re-seeded on the
@@ -2272,8 +2506,14 @@ decomp_command!(
         // function (re-seeded on the rebuilt IR, like `pending_proto`).
         let mapped_params = {
             let dcp = dcp_mut(status)?;
-            let original = dcp.pending_param_maps.get(&name).cloned().unwrap_or_default();
-            let carried = dcp.fd.as_ref()
+            let original = dcp
+                .pending_param_maps
+                .get(&name)
+                .cloned()
+                .unwrap_or_default();
+            let carried = dcp
+                .fd
+                .as_ref()
                 .map(|fd| crate::kuna_paramasserts::carried(fd, &original))
                 .unwrap_or(original);
             if !carried.is_empty() {
@@ -2285,10 +2525,23 @@ decomp_command!(
         let (check_lines, expected) = {
             let dcp = dcp_mut(status)?;
             let pending = std::mem::take(&mut dcp.pending_local_checks);
-            let touched: Vec<_> =
-                pending.iter().enumerate().map(|(i, (_, symbol, retype))| (i, *symbol, retype.clone())).collect();
-            let expected = dcp.fd.as_ref().map(|fd| crate::assertions::expected_locals(fd, &touched)).unwrap_or_default();
-            (pending.into_iter().map(|(line, ..)| line).collect::<Vec<_>>(), expected)
+            let touched: Vec<_> = pending
+                .iter()
+                .enumerate()
+                .map(|(i, (_, symbol, retype))| (i, *symbol, retype.clone()))
+                .collect();
+            let expected = dcp
+                .fd
+                .as_ref()
+                .map(|fd| crate::assertions::expected_locals(fd, &touched))
+                .unwrap_or_default();
+            (
+                pending
+                    .into_iter()
+                    .map(|(line, ..)| line)
+                    .collect::<Vec<_>>(),
+                expected,
+            )
         };
         let format_checks = std::mem::take(&mut dcp_mut(status)?.pending_format_checks);
         // The `override prototype` facts stashed for this function (re-seeded on the
@@ -2301,7 +2554,9 @@ decomp_command!(
             .cloned()
             .unwrap_or_default();
         if !flow_overrides.is_empty() || !mapped_params.is_empty() || !proto_overrides.is_empty() {
-            prog.callwide_unavailable("flow or call-site prototype overrides require a new complete image proof");
+            prog.callwide_unavailable(
+                "flow or call-site prototype overrides require a new complete image proof",
+            );
         }
         crate::kuna_callwide::prepare(&mut prog);
         if has_no_code {
@@ -2387,7 +2642,9 @@ decomp_command!(
         // function` used.  Only reached when a decompile fails, i.e. never on a
         // healthy run and never on the parity corpora.
         let adopted_recipe = prefollowed.as_ref().and_then(|_| {
-            dcp_mut(status).ok().and_then(|dcp| dcp.pristine_flow.take())
+            dcp_mut(status)
+                .ok()
+                .and_then(|dcp| dcp.pristine_flow.take())
         });
         dcp_mut(status)?.pristine_flow = None;
         // (DIV-66) Routed through the SHARED step so this console command and the
@@ -2448,15 +2705,20 @@ decomp_command!(
                     dcp.fd = Some(fd);
                     dcp.stopped_flow = Some(recipe);
                 }
-            } else { match build_and_follow_flow_with_override(
-                prog.arch_mut(),
-                &recipe.name,
-                recipe.entry.clone(),
-                recipe.size,
-                &recipe.flow_overrides,
-            ) { Ok(fd) => {
-                dcp_mut(status)?.fd = Some(fd);
-            } _ => {}}}
+            } else {
+                match build_and_follow_flow_with_override(
+                    prog.arch_mut(),
+                    &recipe.name,
+                    recipe.entry.clone(),
+                    recipe.size,
+                    &recipe.flow_overrides,
+                ) {
+                    Ok(fd) => {
+                        dcp_mut(status)?.fd = Some(fd);
+                    }
+                    _ => {}
+                }
+            }
         }
         let dcp = dcp_mut(status)?;
         dcp.conf = Some(prog);
@@ -2477,28 +2739,39 @@ decomp_command!(
                             unlace_decomp::overrides::Override::type_to_string(*type_)
                         )
                     })
-                    .chain(fd.kuna_rejected_callee_overrides().iter().flat_map(|(site, _, reason)| {
-                        dcp.pending_callee_overrides
-                            .get(&name)
-                            .into_iter()
-                            .flatten()
-                            .filter(move |(at, _)| at == site)
-                            .map(move |(at, callee)| {
-                                format!(
-                                    "Rejected override indirect {:#x} {callee}: {reason}\n",
-                                    at.get_offset()
-                                )
+                    .chain(fd.kuna_rejected_callee_overrides().iter().flat_map(
+                        |(site, _, reason)| {
+                            dcp.pending_callee_overrides
+                                .get(&name)
+                                .into_iter()
+                                .flatten()
+                                .filter(move |(at, _)| at == site)
+                                .map(move |(at, callee)| {
+                                    format!(
+                                        "Rejected override indirect {:#x} {callee}: {reason}\n",
+                                        at.get_offset()
+                                    )
+                                })
+                        },
+                    ))
+                    .chain(
+                        format_checks
+                            .iter()
+                            .filter(|(at, format, value)| {
+                                !crate::kuna_constformat::holds(&fd, at, format, *value)
                             })
-                    }))
-                    .chain(format_checks.iter().filter(|(at, format, value)| {
-                        !crate::kuna_constformat::holds(&fd, at, format, *value)
-                    }).map(|(at, format, value)| {
-                        format!(
-                            "Rejected {}: {}\n",
-                            crate::kuna_constformat::console_line(at.get_offset(), format, *value),
-                            crate::kuna_constformat::NOT_REPLAYED
-                        )
-                    }))
+                            .map(|(at, format, value)| {
+                                format!(
+                                    "Rejected {}: {}\n",
+                                    crate::kuna_constformat::console_line(
+                                        at.get_offset(),
+                                        format,
+                                        *value
+                                    ),
+                                    crate::kuna_constformat::NOT_REPLAYED
+                                )
+                            }),
+                    )
                     .collect();
                 dcp.printed_checks = (!expected.is_empty()).then_some((check_lines, expected));
                 dcp.fd = Some(fd);
@@ -2560,7 +2833,9 @@ decomp_command!(
         if dcp.fd.is_none() {
             return Err(IfaceError::execution("No function selected"));
         }
-        Err(engine_unavailable("PrintLanguage::docFunction (flat) (Architecture::print)"))
+        Err(engine_unavailable(
+            "PrintLanguage::docFunction (flat) (Architecture::print)",
+        ))
     }
 );
 
@@ -2572,7 +2847,9 @@ decomp_command!(
         if dcp.conf.is_none() {
             return Err(IfaceError::execution("No load image present"));
         }
-        Err(engine_unavailable("PrintLanguage::docAllGlobals (Architecture::print)"))
+        Err(engine_unavailable(
+            "PrintLanguage::docAllGlobals (Architecture::print)",
+        ))
     }
 );
 
@@ -2606,7 +2883,9 @@ decomp_command!(
         if dcp.fd.is_none() {
             return Err(IfaceError::execution("No function selected"));
         }
-        Err(engine_unavailable("PrintLanguage::docFunction (xml markup) (Architecture::print)"))
+        Err(engine_unavailable(
+            "PrintLanguage::docFunction (xml markup) (Architecture::print)",
+        ))
     }
 );
 
@@ -2638,12 +2917,18 @@ decomp_command!(
             if let Some(err) = spent {
                 return Err(IfaceError::execution(err.explain()));
             }
-            let refusals: Vec<String> = match (dcp.printed_checks.take(), dcp.conf.as_ref(), dcp.fd.as_ref()) {
+            let refusals: Vec<String> = match (
+                dcp.printed_checks.take(),
+                dcp.conf.as_ref(),
+                dcp.fd.as_ref(),
+            ) {
                 (Some((lines, expected)), Some(prog), Some(fd)) => {
                     crate::assertions::check_printed(prog.arch(), fd, &text, &expected)
                         .into_iter()
                         .filter_map(|(i, shown)| match shown {
-                            crate::assertions::Shown::Refused(reason) => Some(format!("Rejected {}: {reason}\n", lines[i])),
+                            crate::assertions::Shown::Refused(reason) => {
+                                Some(format!("Rejected {}: {reason}\n", lines[i]))
+                            }
                             crate::assertions::Shown::AppliedAs(_) => None,
                         })
                         .collect()
@@ -2672,7 +2957,9 @@ decomp_command!(
         if s.eof() {
             return Err(IfaceError::parse("No print language specified"));
         }
-        Err(engine_unavailable("Architecture::setPrintLanguage + docFunction"))
+        Err(engine_unavailable(
+            "Architecture::setPrintLanguage + docFunction",
+        ))
     }
 );
 
@@ -2715,7 +3002,10 @@ decomp_command!(
     fn execute(&self, status: &mut IfaceStatus, _s: &mut CommandStream) -> IfaceResult<()> {
         let text = {
             let dcp = dcp_mut(status)?;
-            let fd = dcp.fd.as_ref().ok_or_else(|| IfaceError::execution("No function selected"))?;
+            let fd = dcp
+                .fd
+                .as_ref()
+                .ok_or_else(|| IfaceError::execution("No function selected"))?;
             unlace_decomp::kuna_stackobjects::describe(fd)
         };
         status.file_out(&text);
@@ -2757,7 +3047,9 @@ decomp_command!(
         if dcp.conf.is_none() {
             return Err(IfaceError::execution("No load image present"));
         }
-        Err(engine_unavailable("Architecture::protoModels (prototype list)"))
+        Err(engine_unavailable(
+            "Architecture::protoModels (prototype list)",
+        ))
     }
 );
 
@@ -2790,7 +3082,8 @@ decomp_command!(
         let prog = dcp.conf.as_mut().expect("conf checked non-None above");
         if s.eof() {
             // No range indicates a default value: context->setVariableDefault.
-            prog.arch().with_context_db_mut(|db| db.set_variable_default(name.as_bytes(), value))
+            prog.arch()
+                .with_context_db_mut(|db| db.set_variable_default(name.as_bytes(), value))
                 .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
             prog.callwide_unavailable("decode context was asserted after object loading");
             return Ok(());
@@ -2805,7 +3098,9 @@ decomp_command!(
             return Err(IfaceError::parse("Bad address range"));
         }
         prog.arch()
-            .with_context_db_mut(|db| db.set_variable_region(name.as_bytes(), &addr1, &addr2, value))
+            .with_context_db_mut(|db| {
+                db.set_variable_region(name.as_bytes(), &addr1, &addr2, value)
+            })
             .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
         prog.callwide_unavailable("decode context was asserted after object loading");
         Ok(())
@@ -2846,7 +3141,9 @@ decomp_command!(
                 let track = db.get_tracked_default();
                 track.push(unlace_sleigh::globalcontext::TrackedContext { loc, val: value });
             });
-            prog.callwide_unavailable("tracked register assertions require a new complete image proof");
+            prog.callwide_unavailable(
+                "tracked register assertions require a new complete image proof",
+            );
             return Ok(());
         }
         let (addr1, _s1) = parse_machaddr(prog, s, false).map_err(IfaceError::parse)?;
@@ -2884,7 +3181,9 @@ decomp_command!(
         if dcp.conf.is_none() {
             return Err(IfaceError::execution("Decompile action not loaded"));
         }
-        Err(engine_unavailable("ActionDatabase::getCurrent()->setBreakPoint(break_action)"))
+        Err(engine_unavailable(
+            "ActionDatabase::getCurrent()->setBreakPoint(break_action)",
+        ))
     }
 );
 
@@ -2901,7 +3200,9 @@ decomp_command!(
         if dcp.conf.is_none() {
             return Err(IfaceError::execution("Decompile action not loaded"));
         }
-        Err(engine_unavailable("ActionDatabase::getCurrent()->setBreakPoint(break_start)"))
+        Err(engine_unavailable(
+            "ActionDatabase::getCurrent()->setBreakPoint(break_start)",
+        ))
     }
 );
 
@@ -2941,7 +3242,9 @@ decomp_command!(
         if dcp.conf.is_none() {
             return Err(IfaceError::execution("No load image present"));
         }
-        Err(engine_unavailable("AddrSpaceManager::getSpace (space listing)"))
+        Err(engine_unavailable(
+            "AddrSpaceManager::getSpace (space listing)",
+        ))
     }
 );
 
@@ -2955,7 +3258,9 @@ decomp_command!(
         if dcp.fd.is_none() {
             return Err(IfaceError::execution("No function selected"));
         }
-        Err(engine_unavailable("Funcdata::findHigh + HighVariable::printInfo"))
+        Err(engine_unavailable(
+            "Funcdata::findHigh + HighVariable::printInfo",
+        ))
     }
 );
 
@@ -2969,7 +3274,9 @@ decomp_command!(
         if dcp.fd.is_none() {
             return Err(IfaceError::execution("No function selected"));
         }
-        Err(engine_unavailable("ParamIDAnalysis::savePretty (paramid.cc)"))
+        Err(engine_unavailable(
+            "ParamIDAnalysis::savePretty (paramid.cc)",
+        ))
     }
 );
 
@@ -3001,11 +3308,13 @@ decomp_command!(
         let (Some(fd), arch) = (dcp.fd.as_mut(), dcp.conf.as_ref().map(|p| p.arch())) else {
             return Err(IfaceError::execution("no function selected"));
         };
-        let symbol = crate::kuna_hightarget::apply_local(fd, &oldname, &newname, None, maxduplicates, arch)
-            .map_err(IfaceError::execution)?;
+        let symbol =
+            crate::kuna_hightarget::apply_local(fd, &oldname, &newname, None, maxduplicates, arch)
+                .map_err(IfaceError::execution)?;
         dcp.remember_local_edit();
         if let Some(symbol) = symbol {
-            dcp.pending_local_checks.push((format!("rename {oldname} {newname}"), symbol, None));
+            dcp.pending_local_checks
+                .push((format!("rename {oldname} {newname}"), symbol, None));
         }
         Ok(())
     }
@@ -3021,7 +3330,9 @@ decomp_command!(
         if name.is_empty() {
             return Err(IfaceError::parse("Missing symbol name"));
         }
-        Err(engine_unavailable("IfaceDecompData::readSymbol + Scope::removeSymbol"))
+        Err(engine_unavailable(
+            "IfaceDecompData::readSymbol + Scope::removeSymbol",
+        ))
     }
 );
 
@@ -3046,7 +3357,10 @@ decomp_command!(
                 .ok_or_else(|| IfaceError::execution("No load image present"))?;
             s.skip_ws();
             let (addr_size, word_size) = prog.arch().data_org();
-            let org = crate::grammar::DataOrg { addr_size, word_size };
+            let org = crate::grammar::DataOrg {
+                addr_size,
+                word_size,
+            };
             let typetext = s.rest();
             let (ct, newname) = crate::grammar::parse_type(&typetext, prog.arch().types(), org)
                 .map_err(|e| IfaceError::parse(e.explain().to_string()))?;
@@ -3058,11 +3372,22 @@ decomp_command!(
         let (Some(fd), arch) = (dcp.fd.as_mut(), dcp.conf.as_ref().map(|p| p.arch())) else {
             return Err(IfaceError::execution("no function selected"));
         };
-        let symbol = crate::kuna_hightarget::apply_local(fd, &name, &newname, Some(ct.clone()), maxduplicates, arch)
-            .map_err(IfaceError::execution)?;
+        let symbol = crate::kuna_hightarget::apply_local(
+            fd,
+            &name,
+            &newname,
+            Some(ct.clone()),
+            maxduplicates,
+            arch,
+        )
+        .map_err(IfaceError::execution)?;
         dcp.remember_local_edit();
         if let Some(symbol) = symbol {
-            dcp.pending_local_checks.push((format!("retype {name} {}", typetext.trim()), symbol, Some(ct)));
+            dcp.pending_local_checks.push((
+                format!("retype {name} {}", typetext.trim()),
+                symbol,
+                Some(ct),
+            ));
         }
         Ok(())
     }
@@ -3098,7 +3423,9 @@ decomp_command!(
     fn execute(&self, status: &mut IfaceStatus, _s: &mut CommandStream) -> IfaceResult<()> {
         let _dcp = dcp_mut(status)?;
         // C++ reads the varnode (which throws "No function selected" if fd==0).
-        Err(engine_unavailable("IfaceDecompData::readVarnode (parse_varnode)"))
+        Err(engine_unavailable(
+            "IfaceDecompData::readVarnode (parse_varnode)",
+        ))
     }
 );
 
@@ -3119,7 +3446,9 @@ decomp_command!(
     IfcVarnodehighCover,
     fn execute(&self, status: &mut IfaceStatus, _s: &mut CommandStream) -> IfaceResult<()> {
         let _dcp = dcp_mut(status)?;
-        Err(engine_unavailable("IfaceDecompData::readVarnode + HighVariable cover"))
+        Err(engine_unavailable(
+            "IfaceDecompData::readVarnode + HighVariable cover",
+        ))
     }
 );
 
@@ -3128,7 +3457,9 @@ decomp_command!(
     IfcVarnodeCover,
     fn execute(&self, status: &mut IfaceStatus, _s: &mut CommandStream) -> IfaceResult<()> {
         let _dcp = dcp_mut(status)?;
-        Err(engine_unavailable("IfaceDecompData::readVarnode + Cover::print"))
+        Err(engine_unavailable(
+            "IfaceDecompData::readVarnode + Cover::print",
+        ))
     }
 );
 
@@ -3151,7 +3482,9 @@ decomp_command!(
     IfcNameVarnode,
     fn execute(&self, status: &mut IfaceStatus, _s: &mut CommandStream) -> IfaceResult<()> {
         let _dcp = dcp_mut(status)?;
-        Err(engine_unavailable("IfaceDecompData::readVarnode + Funcdata::nameRecommend"))
+        Err(engine_unavailable(
+            "IfaceDecompData::readVarnode + Funcdata::nameRecommend",
+        ))
     }
 );
 
@@ -3176,7 +3509,10 @@ decomp_command!(
         s.skip_ws();
         // C++: ct = parse_type(s,name,dcp->conf).
         let (addr_size, word_size) = prog.arch().data_org();
-        let org = crate::grammar::DataOrg { addr_size, word_size };
+        let org = crate::grammar::DataOrg {
+            addr_size,
+            word_size,
+        };
         let typetext = s.rest();
         let (ct, name) = crate::grammar::parse_type(&typetext, prog.arch().types(), org)
             .map_err(|e| IfaceError::parse(e.explain().to_string()))?;
@@ -3190,9 +3526,9 @@ decomp_command!(
         // with no natural sub-scope binds straight to the function-local scope
         // (the C++ fallback arm, which is taken for register storage like %EAX).
         let _ = (size, &pc);
-        let scope_local = fd.get_scope_local_mut().ok_or_else(|| {
-            IfaceError::execution("Function has no local scope (no stack space)")
-        })?;
+        let scope_local = fd
+            .get_scope_local_mut()
+            .ok_or_else(|| IfaceError::execution("Function has no local scope (no stack space)"))?;
         let sym = scope_local
             .add_symbol(&name, ct, &loc, &pc)
             .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
@@ -3279,7 +3615,7 @@ decomp_command!(
             _ => {
                 return Err(IfaceError::execution(format!(
                     "Unrecognized integer format: {format_string}"
-                )))
+                )));
             }
         };
         let scope_local = fd
@@ -3302,7 +3638,10 @@ decomp_command!(
             return Err(IfaceError::execution("No function selected"));
         }
         let dcp = dcp_mut(status)?;
-        let prog = dcp.conf.as_ref().ok_or_else(|| IfaceError::execution("No load image present"))?;
+        let prog = dcp
+            .conf
+            .as_ref()
+            .ok_or_else(|| IfaceError::execution("No load image present"))?;
         let (addr, _size) = parse_input_code_address(prog, s).map_err(IfaceError::parse)?;
         s.skip_ws();
         let format = s.read_token();
@@ -3343,7 +3682,7 @@ decomp_command!(
             _ => {
                 return Err(IfaceError::execution(format!(
                     "Unrecognized integer format: {format_string}"
-                )))
+                )));
             }
         };
         let dcp = dcp_mut(status)?;
@@ -3374,7 +3713,9 @@ decomp_command!(
         if dcp.fd.is_none() {
             return Err(IfaceError::execution("No function selected"));
         }
-        Err(engine_unavailable("parse_machaddr + Override::insertForceGoto"))
+        Err(engine_unavailable(
+            "parse_machaddr + Override::insertForceGoto",
+        ))
     }
 );
 
@@ -3398,7 +3739,10 @@ impl unlace_decomp::overrides::FuncProtoOverride for PiecesProtoOverride {
         // applyPrototype; the pieces carry no such flag, so this is a no-op until
         // the W4 FuncProto-backed override lands.
     }
-    fn encode(&self, _encoder: &mut dyn unlace_base::marshal::Encoder) -> unlace_base::error::KunaResult<()> {
+    fn encode(
+        &self,
+        _encoder: &mut dyn unlace_base::marshal::Encoder,
+    ) -> unlace_base::error::KunaResult<()> {
         // STUB(W4): FuncProto::encode of an override is a debug/save surface absent
         // from the datatest corpus.
         Err(unlace_base::error::KunaError::lowlevel(
@@ -3448,7 +3792,12 @@ decomp_command!(
         // Override; stash the (callpoint, pieces) by function name so the next
         // `decompile` re-seeds it onto the fresh Funcdata (the `flow`/`proto`
         // override precedent).
-        let funcname = dcp.fd.as_ref().expect("fd present").get_display_name().to_string();
+        let funcname = dcp
+            .fd
+            .as_ref()
+            .expect("fd present")
+            .get_display_name()
+            .to_string();
         dcp.pending_proto_overrides
             .entry(funcname)
             .or_default()
@@ -3460,7 +3809,12 @@ decomp_command!(
             .expect("fd present")
             .get_override_mut()
             .insert_proto_override(callpoint, ov);
-        dcp.conf.as_mut().expect("conf present").callwide_unavailable("call-site prototype override requires a new complete image proof");
+        dcp.conf
+            .as_mut()
+            .expect("conf present")
+            .callwide_unavailable(
+                "call-site prototype override requires a new complete image proof",
+            );
         status.out("Successfully added override\n");
         Ok(())
     }
@@ -3474,7 +3828,9 @@ decomp_command!(
         if dcp.fd.is_none() {
             return Err(IfaceError::execution("No function selected"));
         }
-        Err(engine_unavailable("parse_machaddr + Funcdata::installJumpTable + setOverride"))
+        Err(engine_unavailable(
+            "parse_machaddr + Funcdata::installJumpTable + setOverride",
+        ))
     }
 );
 
@@ -3532,9 +3888,15 @@ decomp_command!(
                 .insert_flow_override(site.clone(), type_);
             // Stash by function name so the override survives the IR rebuild on
             // `load function`/`decompile` (the kuna console rebuilds the Funcdata).
-            dcp.pending_flow_overrides.entry(fname.clone()).or_default().push((site, type_));
+            dcp.pending_flow_overrides
+                .entry(fname.clone())
+                .or_default()
+                .push((site, type_));
         }
-        dcp.conf.as_mut().expect("conf present").callwide_unavailable("flow override requires a new complete image proof");
+        dcp.conf
+            .as_mut()
+            .expect("conf present")
+            .callwide_unavailable("flow override requires a new complete image proof");
         status.out("Successfully added override\n");
         if !chained.is_empty() {
             status.out(&format!(
@@ -3569,7 +3931,10 @@ decomp_command!(
         crate::kuna_calleeoverride::plant(prog, &entry, &site, &callee)
             .map_err(IfaceError::execution)?;
         prog.callwide_unavailable("indirect-call override requires a new complete image proof");
-        dcp.pending_callee_overrides.entry(fname).or_default().push((site, callee));
+        dcp.pending_callee_overrides
+            .entry(fname)
+            .or_default()
+            .push((site, callee));
         status.out("Successfully added override\n");
         Ok(())
     }
@@ -3584,7 +3949,10 @@ decomp_command!(
         let dcp = dcp_mut(status)?;
         let name = s.read_token();
         let delay: int4 = s.read_token().parse().unwrap_or(-1);
-        let prog = dcp.conf.as_mut().ok_or_else(|| IfaceError::execution("No image loaded"))?;
+        let prog = dcp
+            .conf
+            .as_mut()
+            .ok_or_else(|| IfaceError::execution("No image loaded"))?;
         let manage = prog.arch().manage();
         let spc = manage
             .get_space_by_name(&name)
@@ -3594,7 +3962,9 @@ decomp_command!(
             return Err(IfaceError::parse("Need delay integer"));
         }
         if dcp.fd.is_some() {
-            return Err(engine_unavailable("per-function deadcode delay across the console IR rebuild"));
+            return Err(engine_unavailable(
+                "per-function deadcode delay across the console IR rebuild",
+            ));
         }
         manage.set_deadcode_delay(&spc, delay);
         status.out("Successfully overrided deadcode delay for all functions\n");
@@ -3628,7 +3998,11 @@ fn parse_global_range(
         .cloned()
         .ok_or_else(|| IfaceError::execution("Invalid address space"))?;
     let first = addr.get_offset();
-    Ok((space, first, first.wrapping_add(size as uintb).wrapping_sub(1)))
+    Ok((
+        space,
+        first,
+        first.wrapping_add(size as uintb).wrapping_sub(1),
+    ))
 }
 
 decomp_command!(
@@ -3650,7 +4024,9 @@ decomp_command!(
             .symboltab
             .get_global_scope()
             .ok_or_else(|| IfaceError::execution("No global scope"))?;
-        prog.arch_mut().symboltab.add_range(scope, space, first, last);
+        prog.arch_mut()
+            .symboltab
+            .add_range(scope, space, first, last);
         Ok(())
     }
 );
@@ -3668,7 +4044,9 @@ decomp_command!(
             .symboltab
             .get_global_scope()
             .ok_or_else(|| IfaceError::execution("No global scope"))?;
-        prog.arch_mut().symboltab.remove_range(scope, space, first, last);
+        prog.arch_mut()
+            .symboltab
+            .remove_range(scope, space, first, last);
         Ok(())
     }
 );
@@ -3681,7 +4059,9 @@ decomp_command!(
         if dcp.conf.is_none() {
             return Err(IfaceError::execution("No load image present"));
         }
-        Err(engine_unavailable("Architecture::globalify (whole-space globals)"))
+        Err(engine_unavailable(
+            "Architecture::globalify (whole-space globals)",
+        ))
     }
 );
 
@@ -3747,7 +4127,9 @@ decomp_command!(
         if name.is_empty() {
             return Err(IfaceError::parse("Need file name to write to"));
         }
-        Err(engine_unavailable("iterateFunctionsAddrOrder + PrintLanguage::docFunction"))
+        Err(engine_unavailable(
+            "iterateFunctionsAddrOrder + PrintLanguage::docFunction",
+        ))
     }
 );
 
@@ -3762,7 +4144,9 @@ decomp_command!(
         if !dcp.cgraph_allocated {
             return Err(IfaceError::execution("Callgraph has not been built"));
         }
-        Err(engine_unavailable("iterateFunctionsLeafOrder (prototype distinguishing)"))
+        Err(engine_unavailable(
+            "iterateFunctionsLeafOrder (prototype distinguishing)",
+        ))
     }
 );
 
@@ -3776,7 +4160,9 @@ decomp_command!(
         if dcp.fd.is_none() {
             return Err(IfaceError::execution("No function selected"));
         }
-        Err(engine_unavailable("IfcPrintInputs::print (function-input report)"))
+        Err(engine_unavailable(
+            "IfcPrintInputs::print (function-input report)",
+        ))
     }
 );
 
@@ -3788,7 +4174,9 @@ decomp_command!(
         if dcp.conf.is_none() {
             return Err(IfaceError::execution("No load image present"));
         }
-        Err(engine_unavailable("iterateFunctionsAddrOrder (inputs report)"))
+        Err(engine_unavailable(
+            "iterateFunctionsAddrOrder (inputs report)",
+        ))
     }
 );
 
@@ -3814,7 +4202,9 @@ decomp_command!(
         if dcp.fd.is_none() {
             return Err(IfaceError::execution("No function selected"));
         }
-        Err(engine_unavailable("FuncProto::setInputLock/setOutputLock (clear)"))
+        Err(engine_unavailable(
+            "FuncProto::setInputLock/setOutputLock (clear)",
+        ))
     }
 );
 
@@ -3866,11 +4256,17 @@ decomp_command!(
         // C++ skips ws then reads char-by-char to EOL as the comment body.
         s.skip_ws();
         let comment = s.rest();
-        let func_addr = dcp.fd.as_ref().expect("fd checked non-None above").get_address().clone();
+        let func_addr = dcp
+            .fd
+            .as_ref()
+            .expect("fd checked non-None above")
+            .get_address()
+            .clone();
         let prog = dcp.conf.as_mut().expect("conf checked non-None above");
         let arch = prog.arch_mut();
         let ctype = arch.print().instruction_comment_flags();
-        arch.commentdb.add_comment(ctype, &func_addr, &addr, &comment);
+        arch.commentdb
+            .add_comment(ctype, &func_addr, &addr, &comment);
         Ok(())
     }
 );
@@ -3889,7 +4285,9 @@ decomp_command!(
             return Err(IfaceError::execution("No function selected"));
         };
         let (alive, created) = (fd.obank().num_alive(), fd.obank().get_uniq_id());
-        status.file_out(&format!("Count - pcode = {alive}\nCount - created = {created}\n"));
+        status.file_out(&format!(
+            "Count - pcode = {alive}\nCount - created = {created}\n"
+        ));
         Ok(())
     }
 );
@@ -3902,7 +4300,9 @@ decomp_command!(
         if dcp.conf.is_none() {
             return Err(IfaceError::execution("Image not loaded"));
         }
-        Err(engine_unavailable("ActionDatabase::getCurrent()->printStatistics"))
+        Err(engine_unavailable(
+            "ActionDatabase::getCurrent()->printStatistics",
+        ))
     }
 );
 
@@ -3914,7 +4314,9 @@ decomp_command!(
         if dcp.conf.is_none() {
             return Err(IfaceError::execution("Image not loaded"));
         }
-        Err(engine_unavailable("ActionDatabase::getCurrent()->resetStats"))
+        Err(engine_unavailable(
+            "ActionDatabase::getCurrent()->resetStats",
+        ))
     }
 );
 
@@ -3928,7 +4330,9 @@ decomp_command!(
         if dcp.conf.is_none() {
             return Err(IfaceError::execution("No load image"));
         }
-        Err(engine_unavailable("IfcDuplicateHash::check (DynamicHash walk)"))
+        Err(engine_unavailable(
+            "IfcDuplicateHash::check (DynamicHash walk)",
+        ))
     }
 );
 
@@ -4013,7 +4417,9 @@ decomp_command!(
     IfcCallOtherFixup,
     fn execute(&self, status: &mut IfaceStatus, _s: &mut CommandStream) -> IfaceResult<()> {
         let _dcp = dcp_mut(status)?;
-        Err(engine_unavailable("PcodeInjectLibrary::manualCallOtherFixup"))
+        Err(engine_unavailable(
+            "PcodeInjectLibrary::manualCallOtherFixup",
+        ))
     }
 );
 
@@ -4042,13 +4448,14 @@ decomp_command!(
         let func_name = s.read_token();
 
         let prog = dcp.conf.as_mut().expect("conf checked non-None above");
-        let injectid = prog
-            .arch()
-            .pcodeinjectlib
-            .base
-            .get_payload_id(unlace_decomp::pcodeinject::CALLFIXUP_TYPE, fixup_name.as_bytes());
+        let injectid = prog.arch().pcodeinjectlib.base.get_payload_id(
+            unlace_decomp::pcodeinject::CALLFIXUP_TYPE,
+            fixup_name.as_bytes(),
+        );
         if injectid < 0 {
-            return Err(IfaceError::execution(format!("Unknown fixup: {fixup_name}")));
+            return Err(IfaceError::execution(format!(
+                "Unknown fixup: {fixup_name}"
+            )));
         }
         // C++ resolveScopeFromSymbolName + queryFunction; "Unknown function name" if
         // no function symbol matches.  query_global_function folds both into the
@@ -4058,7 +4465,9 @@ decomp_command!(
             .query_global_function(&func_name)
             .map_err(|_| IfaceError::execution(format!("Unknown function name: {func_name}")))?;
         // C++ fd->getFuncProto().setInjectId(injectid).
-        prog.arch_mut().symboltab.set_function_inject_id(sid, injectid);
+        prog.arch_mut()
+            .symboltab
+            .set_function_inject_id(sid, injectid);
         prog.callwide_unavailable("explicit callfixup changes the decoded call effects");
         status.out("Successfully applied callfixup\n");
         Ok(())
@@ -4095,8 +4504,8 @@ decomp_command!(
         if s.eof() {
             return Err(IfaceError::parse("Missing bytes"));
         }
-        let data = crate::assertions::parse_hex_bytes(&s.read_token())
-            .map_err(IfaceError::parse)?;
+        let data =
+            crate::assertions::parse_hex_bytes(&s.read_token()).map_err(IfaceError::parse)?;
         let loader_rc = prog.arch().translate().loader_rc();
         {
             let mut loader = loader_rc
@@ -4108,7 +4517,8 @@ decomp_command!(
         }
         prog.note_materialized_bytes(&addr, data.len());
         let mut line = format!("Successfully overlaid {} bytes at ", data.len());
-        addr.print_raw(&mut line).map_err(|e| IfaceError::execution(e.explain().to_string()))?;
+        addr.print_raw(&mut line)
+            .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
         line.push('\n');
         status.out(&line);
         Ok(())
@@ -4121,7 +4531,12 @@ decomp_command!(
     /// C++ `IfcVolatile`: `volatile [space,offset,size]`.
     IfcVolatile,
     fn execute(&self, status: &mut IfaceStatus, s: &mut CommandStream) -> IfaceResult<()> {
-        mark_property_range(status, s, property_flag::volatil, "Successfully marked range as volatile")
+        mark_property_range(
+            status,
+            s,
+            property_flag::volatil,
+            "Successfully marked range as volatile",
+        )
     }
 );
 
@@ -4129,7 +4544,12 @@ decomp_command!(
     /// C++ `IfcReadonly`: `readonly [space,offset,size]`.
     IfcReadonly,
     fn execute(&self, status: &mut IfaceStatus, s: &mut CommandStream) -> IfaceResult<()> {
-        mark_property_range(status, s, property_flag::readonly, "Successfully marked range as readonly")
+        mark_property_range(
+            status,
+            s,
+            property_flag::readonly,
+            "Successfully marked range as readonly",
+        )
     }
 );
 
@@ -4217,9 +4637,7 @@ decomp_command!(
                 .types()
                 .find_by_name(&base_type)
                 .map_err(|e| IfaceError::execution(e.explain().to_string()))?
-                .ok_or_else(|| {
-                    IfaceError::parse(format!("Unknown base data-type: {base_type}"))
-                })?;
+                .ok_or_else(|| IfaceError::parse(format!("Unknown base data-type: {base_type}")))?;
             // spc = conf->getSpaceByName(spaceName); throw if unknown.
             let spc = prog
                 .arch()
@@ -4232,7 +4650,9 @@ decomp_command!(
                 .get_type_pointer_with_space(ptr_to, spc, &type_name)
                 .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
         } else {
-            return Err(IfaceError::parse(format!("Unknown pointer setting: {setting}")));
+            return Err(IfaceError::parse(format!(
+                "Unknown pointer setting: {setting}"
+            )));
         }
         status.out(&format!("Successfully created pointer: {type_name}\n"));
         Ok(())
@@ -4247,7 +4667,9 @@ decomp_command!(
         if dcp.conf.is_none() {
             return Err(IfaceError::execution("No load image present"));
         }
-        Err(engine_unavailable("parse_machaddr + Architecture::splitrecords"))
+        Err(engine_unavailable(
+            "parse_machaddr + Architecture::splitrecords",
+        ))
     }
 );
 
@@ -4261,7 +4683,9 @@ decomp_command!(
         if dcp.conf.is_none() {
             return Err(IfaceError::execution("No load image present"));
         }
-        Err(engine_unavailable("BlockGraph structuring (blockaction.cc)"))
+        Err(engine_unavailable(
+            "BlockGraph structuring (blockaction.cc)",
+        ))
     }
 );
 
@@ -4287,7 +4711,9 @@ decomp_command!(
     IfcLoadTestFile,
     fn execute(&self, status: &mut IfaceStatus, _s: &mut CommandStream) -> IfaceResult<()> {
         let _dcp = dcp_mut(status)?;
-        Err(engine_unavailable("FunctionTestCollection::loadTest (testfunction.cc)"))
+        Err(engine_unavailable(
+            "FunctionTestCollection::loadTest (testfunction.cc)",
+        ))
     }
 );
 
@@ -4331,7 +4757,9 @@ decomp_command!(
         // C++ then checks the action status (status_start -> "Decompilation has
         // not been started", status_end -> "Decompilation is already complete")
         // before perform().
-        Err(engine_unavailable("ActionDatabase::getCurrent()->perform (continue)"))
+        Err(engine_unavailable(
+            "ActionDatabase::getCurrent()->perform (continue)",
+        ))
     }
 );
 
@@ -4419,7 +4847,10 @@ pub fn register_decomp_commands(status: &mut IfaceStatus) {
     status.register_com(Box::new(IfcProduceC), &["produce", "C"]);
     status.register_com(Box::new(IfcProducePrototypes), &["produce", "prototypes"]);
     status.register_com(Box::new(IfcPrintRaw), &["print", "raw"]);
-    status.register_com(Box::new(IfcPrintStackObjects), &["print", "stack", "objects"]);
+    status.register_com(
+        Box::new(IfcPrintStackObjects),
+        &["print", "stack", "objects"],
+    );
     status.register_com(Box::new(IfcPrintInputs), &["print", "inputs"]);
     status.register_com(Box::new(IfcPrintInputsAll), &["print", "inputs", "all"]);
     status.register_com(Box::new(IfcListaction), &["list", "action"]);
@@ -4438,7 +4869,10 @@ pub fn register_decomp_commands(status: &mut IfaceStatus) {
     status.register_com(Box::new(IfcPrintVarnode), &["print", "varnode"]);
     status.register_com(Box::new(IfcPrintCover), &["print", "cover", "high"]);
     status.register_com(Box::new(IfcVarnodeCover), &["print", "cover", "varnode"]);
-    status.register_com(Box::new(IfcVarnodehighCover), &["print", "cover", "varnodehigh"]);
+    status.register_com(
+        Box::new(IfcVarnodehighCover),
+        &["print", "cover", "varnodehigh"],
+    );
     status.register_com(Box::new(IfcPrintExtrapop), &["print", "extrapop"]);
     status.register_com(Box::new(IfcPrintActionstats), &["print", "actionstats"]);
     status.register_com(Box::new(IfcResetActionstats), &["reset", "actionstats"]);
@@ -4454,7 +4888,10 @@ pub fn register_decomp_commands(status: &mut IfaceStatus) {
     status.register_com(Box::new(IfcCommentInstr), &["comment", "instruction"]);
     status.register_com(Box::new(IfcDuplicateHash), &["duplicate", "hash"]);
     status.register_com(Box::new(IfcCallGraphBuild), &["callgraph", "build"]);
-    status.register_com(Box::new(IfcCallGraphBuildQuick), &["callgraph", "build", "quick"]);
+    status.register_com(
+        Box::new(IfcCallGraphBuildQuick),
+        &["callgraph", "build", "quick"],
+    );
     status.register_com(Box::new(IfcCallGraphDump), &["callgraph", "dump"]);
     status.register_com(Box::new(IfcCallGraphLoad), &["callgraph", "load"]);
     status.register_com(Box::new(IfcCallGraphList), &["callgraph", "list"]);
@@ -4469,7 +4906,10 @@ pub fn register_decomp_commands(status: &mut IfaceStatus) {
     status.register_com(Box::new(IfcAnalyzeRange), &["analyze", "range"]);
     status.register_com(Box::new(IfcLoadTestFile), &["load", "test", "file"]);
     status.register_com(Box::new(IfcListTestCommands), &["list", "test", "commands"]);
-    status.register_com(Box::new(IfcExecuteTestCommand), &["execute", "test", "command"]);
+    status.register_com(
+        Box::new(IfcExecuteTestCommand),
+        &["execute", "test", "command"],
+    );
     status.register_com(Box::new(IfcContinue), &["continue"]);
 }
 

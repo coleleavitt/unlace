@@ -26,7 +26,13 @@ const ALIGN: i32 = 1;
 #[test]
 fn canonical_thumb_funcptr_fires() {
     // val lands on the symbol; extra == 1 == the Thumb LSB.
-    assert!(kuna_preserve_thumb_funcptr(ALIGN, 0x1000, 1, 1, &good_facts()));
+    assert!(kuna_preserve_thumb_funcptr(
+        ALIGN,
+        0x1000,
+        1,
+        1,
+        &good_facts()
+    ));
 }
 
 #[test]
@@ -38,7 +44,13 @@ fn no_funcptr_align_returns_false() {
 #[test]
 fn multiplier_gt_one_returns_false() {
     // multiplier > 1 is not the byte-grain PTRADD form.
-    assert!(!kuna_preserve_thumb_funcptr(ALIGN, 0x1000, 1, 2, &good_facts()));
+    assert!(!kuna_preserve_thumb_funcptr(
+        ALIGN,
+        0x1000,
+        1,
+        2,
+        &good_facts()
+    ));
 }
 
 #[test]
@@ -85,14 +97,32 @@ fn subtype_not_code_returns_false() {
 #[test]
 fn extra_zero_or_negative_returns_false() {
     // bextra <= 0: not an alignment-encoding offset.
-    assert!(!kuna_preserve_thumb_funcptr(ALIGN, 0x1000, 0, 1, &good_facts()));
-    assert!(!kuna_preserve_thumb_funcptr(ALIGN, 0x1000, -1, 1, &good_facts()));
+    assert!(!kuna_preserve_thumb_funcptr(
+        ALIGN,
+        0x1000,
+        0,
+        1,
+        &good_facts()
+    ));
+    assert!(!kuna_preserve_thumb_funcptr(
+        ALIGN,
+        0x1000,
+        -1,
+        1,
+        &good_facts()
+    ));
 }
 
 #[test]
 fn extra_at_or_above_align_returns_false() {
     // bextra >= (1 << funcptr_align): with align=1 that bound is 2.
-    assert!(!kuna_preserve_thumb_funcptr(ALIGN, 0x1000, 2, 1, &good_facts()));
+    assert!(!kuna_preserve_thumb_funcptr(
+        ALIGN,
+        0x1000,
+        2,
+        1,
+        &good_facts()
+    ));
     // With align=2 the bound is 4; extra==3 fits (in band), extra==4 does not.
     assert!(kuna_preserve_thumb_funcptr(2, 0x1000, 3, 1, &good_facts()));
     assert!(!kuna_preserve_thumb_funcptr(2, 0x1000, 4, 1, &good_facts()));

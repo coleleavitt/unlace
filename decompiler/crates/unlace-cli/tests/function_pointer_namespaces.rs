@@ -33,11 +33,13 @@ fn capture(strategy: &str) -> serde_json::Value {
     ]));
     let doc: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
     assert_eq!(doc["functions"].as_array().unwrap().len(), 9);
-    assert!(doc["functions"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .all(|f| f["error"].is_null()));
+    assert!(
+        doc["functions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|f| f["error"].is_null())
+    );
     doc
 }
 

@@ -126,8 +126,8 @@ use unlace_base::space::spacetype;
 use unlace_base::types::int4;
 use unlace_num::pcoderaw::VarnodeData;
 
+use crate::fspec::{Containment, FuncCallSpecs, effect_type};
 use crate::funcdata::Funcdata;
-use crate::fspec::{effect_type, Containment, FuncCallSpecs};
 
 /// Marshaling element `<calleeretpreserves>` (kuna 4000+ range; 4152 = the
 /// previous kuna element).
@@ -150,7 +150,8 @@ pub fn callee_preserves_return_storage(
     match characterize_preserved_output(fc, addr, size) {
         Containment::ContainsJustified => callee_never_writes(data, fc, addr, size),
         Containment::NoContainment if undeclared_model_output(fc, addr, size) => {
-            untouched_summary(data, fc, addr, size).is_some_and(|w| returns_elsewhere(data, fc, w, addr, size))
+            untouched_summary(data, fc, addr, size)
+                .is_some_and(|w| returns_elsewhere(data, fc, w, addr, size))
         }
         _ => false,
     }
@@ -260,11 +261,17 @@ fn contained_preserved_output(
         return None;
     }
     let mut output = VarnodeData::default();
-    if fc.proto().get_biggest_contained_output(addr, size, &mut output) {
+    if fc
+        .proto()
+        .get_biggest_contained_output(addr, size, &mut output)
+    {
         return Some(output);
     }
     if !locked_void_uses_model_output(fc)
-        || !fc.proto().model().get_biggest_contained_output(addr, size, &mut output)
+        || !fc
+            .proto()
+            .model()
+            .get_biggest_contained_output(addr, size, &mut output)
     {
         return None;
     }
@@ -308,7 +315,9 @@ pub(crate) fn callee_never_writes(
     addr: &Address,
     size: int4,
 ) -> bool {
-    let Some(w) = untouched_summary(data, fc, addr, size) else { return false };
+    let Some(w) = untouched_summary(data, fc, addr, size) else {
+        return false;
+    };
     if writes_some_return_storage(data, fc, w) {
         return returns_elsewhere(data, fc, w, addr, size);
     }
@@ -336,7 +345,8 @@ fn untouched_summary<'a>(
         return None;
     }
     let w = data.kuna_callee_ret_writes(entry)?;
-    w.proves_untouched_for(crate::kuna_rustabi::call_model(fc.proto()), addr, size).then_some(w)
+    w.proves_untouched_for(crate::kuna_rustabi::call_model(fc.proto()), addr, size)
+        .then_some(w)
 }
 
 /// The value-returning arm: a body that recorded a write to the call's return
@@ -348,8 +358,11 @@ fn returns_elsewhere(
     addr: &Address,
     size: int4,
 ) -> bool {
-    !crate::kuna_rustabi::passes_arguments_in(crate::kuna_rustabi::call_model(fc.proto()), addr, size)
-        && writes_return_register(data, fc, w)
+    !crate::kuna_rustabi::passes_arguments_in(
+        crate::kuna_rustabi::call_model(fc.proto()),
+        addr,
+        size,
+    ) && writes_return_register(data, fc, w)
 }
 
 /// Does the decoded body write, or possibly STORE through, ANY of the call's
@@ -366,26 +379,20 @@ fn writes_some_return_storage(
     w: &crate::kuna_rustabi::CalleeReturnWrites,
 ) -> bool {
     if w.store_spaces().iter().any(|&idx| {
-        fc.proto()
-            .model()
-            .output()
-            .get_entry()
-            .iter()
-            .any(|entry| {
-                if entry.get_space().get_type() == spacetype::IPTR_PROCESSOR
-                    && entry.get_space().get_index() == idx
-                {
-                    return true;
-                }
-                entry.get_join_record().is_some_and(|join| {
-                    (0..join.num_pieces()).any(|i| {
-                        join.get_piece(i).space.as_ref().is_some_and(|space| {
-                            space.get_type() == spacetype::IPTR_PROCESSOR
-                                && space.get_index() == idx
-                        })
+        fc.proto().model().output().get_entry().iter().any(|entry| {
+            if entry.get_space().get_type() == spacetype::IPTR_PROCESSOR
+                && entry.get_space().get_index() == idx
+            {
+                return true;
+            }
+            entry.get_join_record().is_some_and(|join| {
+                (0..join.num_pieces()).any(|i| {
+                    join.get_piece(i).space.as_ref().is_some_and(|space| {
+                        space.get_type() == spacetype::IPTR_PROCESSOR && space.get_index() == idx
                     })
                 })
             })
+        })
     }) {
         return true;
     }
@@ -403,7 +410,9 @@ fn writes_return_register(
 ) -> bool {
     let manage = data.get_arch().manage();
     w.written_ranges().iter().any(|&(idx, off, sz)| {
-        let Some(space) = manage.get_space(idx) else { return false };
+        let Some(space) = manage.get_space(idx) else {
+            return false;
+        };
         let waddr = Address::new(std::rc::Rc::clone(space), off);
         characterize_preserved_output(fc, &waddr, sz) != Containment::NoContainment
     })
@@ -445,7 +454,11 @@ fn body_is_a_body(
     let stack_pointer = manage
         .get_stack_space()
         .and_then(|s| s.get_spacebase(0).ok())
-        .and_then(|p| p.space.clone().map(|sp| (sp.get_index(), p.offset, p.size as u64)));
+        .and_then(|p| {
+            p.space
+                .clone()
+                .map(|sp| (sp.get_index(), p.offset, p.size as u64))
+        });
     w.written_ranges().iter().any(|&(idx, off, sz)| {
         if let Some((sidx, soff, ssz)) = stack_pointer {
             if idx == sidx && off < soff + ssz && soff < off + sz as u64 {
@@ -455,7 +468,9 @@ fn body_is_a_body(
         if w.is_return_target(idx, off, sz) {
             return false;
         }
-        let Some(space) = manage.get_space(idx) else { return false };
+        let Some(space) = manage.get_space(idx) else {
+            return false;
+        };
         let waddr = Address::new(std::rc::Rc::clone(space), off);
         fc.proto().characterize_as_input_param(&waddr, sz) != Containment::NoContainment
             || matches!(

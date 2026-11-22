@@ -143,7 +143,7 @@ pub fn call_prototype(
     call: &FuncCallSpecs,
     name: &str,
 ) -> Result<Option<(FuncProto, ExportPrototype)>, String> {
-    use crate::dtype::{type_metatype, Datatype};
+    use crate::dtype::{Datatype, type_metatype};
     use crate::fspec::ParameterPieces;
 
     if !proven(data, call.get_entry_address()) {
@@ -282,7 +282,7 @@ pub fn call_prototype(
 
 /// C already represents a canonical unknown eight-byte scalar as unsigned.
 fn export_return_integer(ty: &crate::dtype::Datatype) -> Option<bool> {
-    use crate::dtype::{type_metatype, DatatypeKind};
+    use crate::dtype::{DatatypeKind, type_metatype};
     export_integer(ty, 8).or_else(|| {
         (ty.get_size() == 8
             && ty.get_metatype() == type_metatype::TYPE_UNKNOWN
@@ -498,10 +498,7 @@ pub fn publish_mips(
     declarations: &[Declaration],
 ) -> usize {
     arch.kuna_callwide.clear();
-    if !arch.call_wide
-        || !arch.be_join.proves()
-        || arch.archid != "MIPS:BE:32:default:default"
-    {
+    if !arch.call_wide || !arch.be_join.proves() || arch.archid != "MIPS:BE:32:default:default" {
         return 0;
     }
     let Some(completed) = mips::closed_image(entry, regions, functions, observed_calls) else {

@@ -98,11 +98,7 @@ fn casts_for_access_width_keep_the_volatile_pointee() {
     let words = [0xe5901000, 0xe5900000, 0xe0810000, 0xe12fff1e];
     let code = decompile(&words, "volatile void *control");
     assert!(code.contains("ReadTwice(volatile void *control)"), "{code}");
-    assert_eq!(
-        code.matches("(volatile ").count(),
-        3,
-        "{code}"
-    );
+    assert_eq!(code.matches("(volatile ").count(), 3, "{code}");
 }
 
 #[test]

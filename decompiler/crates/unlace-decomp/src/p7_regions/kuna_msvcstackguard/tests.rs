@@ -28,14 +28,14 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, SpacebaseSpace,
-    UniqueSpace, VarnodeStorage,
+    AddrSpace, AddrSpaceManager, ConstantSpace, SpacebaseSpace, UniqueSpace, VarnodeStorage,
+    addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 
 use crate::action::{Action, ActionContext};
 use crate::context::{ArchContext, BlockId, TypeOp};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::fspec::{FuncCallSpecs, ProtoModel};
 
 const SP_OFF: u64 = 0x20;
@@ -44,7 +44,8 @@ const SP_SIZE: int4 = 8;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     let regspc = Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "register",
@@ -69,8 +70,10 @@ fn build_manager() -> AddrSpaceManager {
         1,
     )))
     .unwrap();
-    m.insert_space(Rc::new(SpacebaseSpace::new("stack", 3, 8, &regspc, 1, true, false)))
-        .unwrap();
+    m.insert_space(Rc::new(SpacebaseSpace::new(
+        "stack", 3, 8, &regspc, 1, true, false,
+    )))
+    .unwrap();
     m
 }
 
@@ -78,8 +81,14 @@ fn build_fd_with_option(on: bool) -> Funcdata {
     let manage = build_manager();
     let regspc = Rc::clone(manage.get_space_by_name("register").unwrap());
     let stackspc = Rc::clone(manage.get_stack_space().unwrap());
-    let sp_data = VarnodeStorage { space: Some(regspc), offset: SP_OFF, size: SP_SIZE as u32 };
-    manage.add_spacebase_pointer(&stackspc, &sp_data, SP_SIZE, true).unwrap();
+    let sp_data = VarnodeStorage {
+        space: Some(regspc),
+        offset: SP_OFF,
+        size: SP_SIZE as u32,
+    };
+    manage
+        .add_spacebase_pointer(&stackspc, &sp_data, SP_SIZE, true)
+        .unwrap();
     let mut ctx = ArchContext::new(manage);
     ctx.strip_msvc_stack_guard = on;
     let glb = Rc::new(ctx);
@@ -97,11 +106,22 @@ fn sp(fd: &Funcdata) -> (Rc<AddrSpace>, uintb, int4) {
 }
 
 fn reg(fd: &Funcdata, off: u64) -> Address {
-    Address::new(Rc::clone(fd.get_arch().manage().get_space_by_name("register").unwrap()), off)
+    Address::new(
+        Rc::clone(
+            fd.get_arch()
+                .manage()
+                .get_space_by_name("register")
+                .unwrap(),
+        ),
+        off,
+    )
 }
 
 fn ram_addr(fd: &Funcdata, off: u64) -> Address {
-    Address::new(Rc::clone(fd.get_arch().manage().get_space_by_name("ram").unwrap()), off)
+    Address::new(
+        Rc::clone(fd.get_arch().manage().get_space_by_name("ram").unwrap()),
+        off,
+    )
 }
 
 fn unk(size: int4) -> Rc<Datatype> {
@@ -116,7 +136,8 @@ fn mk_block(fd: &mut Funcdata) -> BlockId {
 fn mk_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
     let a = ram_addr(fd, off);
     let op = fd.new_op(inputs, a);
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
     op
 }
 
@@ -183,7 +204,10 @@ fn entry_stack_pointer_is_offset_zero() {
     let spin = sp_input(&mut fd);
     let sp = sp(&fd);
     let mut budget = MAX_MATCH_STEPS;
-    assert_eq!(stack_pointer_offset(spin, WALK_DEPTH, &fd, &sp, &mut budget), Some(0));
+    assert_eq!(
+        stack_pointer_offset(spin, WALK_DEPTH, &fd, &sp, &mut budget),
+        Some(0)
+    );
 }
 
 #[test]
@@ -195,7 +219,10 @@ fn ptrsub_chain_reports_signed_frame_offset() {
     let frame = frame_ptr(&mut fd, bl, 0x10, spin, (-0x48i64) as u64, 0x100);
     let sp = sp(&fd);
     let mut budget = MAX_MATCH_STEPS;
-    assert_eq!(stack_pointer_offset(frame, WALK_DEPTH, &fd, &sp, &mut budget), Some(-0x48));
+    assert_eq!(
+        stack_pointer_offset(frame, WALK_DEPTH, &fd, &sp, &mut budget),
+        Some(-0x48)
+    );
 }
 
 #[test]
@@ -212,7 +239,10 @@ fn cast_between_the_chain_is_peeled() {
     fd.op_insert_end(op, bl);
     let sp = sp(&fd);
     let mut budget = MAX_MATCH_STEPS;
-    assert_eq!(stack_pointer_offset(out, WALK_DEPTH, &fd, &sp, &mut budget), Some(-0x48));
+    assert_eq!(
+        stack_pointer_offset(out, WALK_DEPTH, &fd, &sp, &mut budget),
+        Some(-0x48)
+    );
 }
 
 #[test]
@@ -222,7 +252,10 @@ fn unrelated_register_is_not_a_stack_pointer() {
     let other = cookie_read(&mut fd, bl, 0x10, 0x100);
     let sp = sp(&fd);
     let mut budget = MAX_MATCH_STEPS;
-    assert_eq!(stack_pointer_offset(other, WALK_DEPTH, &fd, &sp, &mut budget), None);
+    assert_eq!(
+        stack_pointer_offset(other, WALK_DEPTH, &fd, &sp, &mut budget),
+        None
+    );
 }
 
 #[test]
@@ -254,12 +287,7 @@ fn checker_call(fd: &mut Funcdata, args: &[VarnodeId], opc: OpCode) -> (OpId, Bl
     checker_call_at(fd, args, opc, 0x30)
 }
 
-fn checker_call_at(
-    fd: &mut Funcdata,
-    args: &[VarnodeId],
-    opc: OpCode,
-    at: u64,
-) -> (OpId, BlockId) {
+fn checker_call_at(fd: &mut Funcdata, args: &[VarnodeId], opc: OpCode, at: u64) -> (OpId, BlockId) {
     let bl = args
         .first()
         .and_then(|vn| fd.vbank().get(*vn))
@@ -326,7 +354,10 @@ fn a_cookie_carried_across_many_calls_still_matches() {
     let f2 = frame_ptr(&mut fd, bl, 0x90, spin, (-0x48i64) as u64, 0x500);
     let out = binop(&mut fd, bl, 0x94, OpCode::CPUI_INT_XOR, saved, f2, 0x508);
     let mut budget = MAX_MATCH_STEPS;
-    assert_eq!(cookie_cancel(out, &fd, &sp(&fd), &mut budget), Some(vec![init]));
+    assert_eq!(
+        cookie_cancel(out, &fd, &sp(&fd), &mut budget),
+        Some(vec![init])
+    );
 }
 
 fn copy_chain(fd: &mut Funcdata, bl: BlockId, mut value: VarnodeId, count: usize) -> VarnodeId {
@@ -437,7 +468,10 @@ fn a_loop_carried_cookie_phi_uses_its_entry_scramble() {
     let f2 = frame_ptr(&mut fd, bl, 0x20, spin, (-0x48i64) as u64, 0x120);
     let out = binop(&mut fd, bl, 0x24, OpCode::CPUI_INT_XOR, carried, f2, 0x128);
     let mut budget = MAX_MATCH_STEPS;
-    assert_eq!(cookie_cancel(out, &fd, &sp(&fd), &mut budget), Some(vec![init]));
+    assert_eq!(
+        cookie_cancel(out, &fd, &sp(&fd), &mut budget),
+        Some(vec![init])
+    );
 }
 
 enum CycleExternal {
@@ -495,7 +529,8 @@ fn build_multi_phi_cycle_cancel(fd: &mut Funcdata, mode: CycleExternal) -> (Varn
     fd.op_set_input(phi_a_op, saved, 0).unwrap();
     fd.op_set_input(phi_a_op, phi_b, 1).unwrap();
     fd.op_set_input(phi_b_op, carried, 0).unwrap();
-    fd.op_set_input(phi_b_op, cycle_external.unwrap_or(carried), 1).unwrap();
+    fd.op_set_input(phi_b_op, cycle_external.unwrap_or(carried), 1)
+        .unwrap();
     fd.op_set_input(copy_op, phi_a, 0).unwrap();
 
     let f2 = frame_ptr(fd, bl, 0x28, spin, (-0x48i64) as u64, 0x130);
@@ -508,7 +543,10 @@ fn a_cookie_cycle_spanning_multiple_phis_reaches_its_entry_scramble() {
     let mut fd = build_fd();
     let (out, init) = build_multi_phi_cycle_cancel(&mut fd, CycleExternal::Backedge);
     let mut budget = MAX_MATCH_STEPS;
-    assert_eq!(cookie_cancel(out, &fd, &sp(&fd), &mut budget), Some(vec![init]));
+    assert_eq!(
+        cookie_cancel(out, &fd, &sp(&fd), &mut budget),
+        Some(vec![init])
+    );
 }
 
 #[test]
@@ -618,7 +656,14 @@ fn one_xor_is_not_a_cancel() {
 }
 
 /// `phi = MULTIEQUAL(a, b)` placed at the head of `bl`.
-fn phi(fd: &mut Funcdata, bl: BlockId, at: u64, a: VarnodeId, b: VarnodeId, out_reg: u64) -> VarnodeId {
+fn phi(
+    fd: &mut Funcdata,
+    bl: BlockId,
+    at: u64,
+    a: VarnodeId,
+    b: VarnodeId,
+    out_reg: u64,
+) -> VarnodeId {
     let op = mk_op(fd, 2, at, OpCode::CPUI_MULTIEQUAL);
     fd.op_set_input(op, a, 0).unwrap();
     fd.op_set_input(op, b, 1).unwrap();
@@ -680,7 +725,10 @@ fn a_cookie_carried_through_more_than_walk_depth_phis_matches() {
     let f2 = frame_ptr(&mut fd, bl, 0x400, spin, (-0x48i64) as u64, 0x900);
     let out = binop(&mut fd, bl, 0x404, OpCode::CPUI_INT_XOR, carried, f2, 0x908);
     let mut budget = MAX_MATCH_STEPS;
-    assert_eq!(cookie_cancel(out, &fd, &sp(&fd), &mut budget), Some(vec![init]));
+    assert_eq!(
+        cookie_cancel(out, &fd, &sp(&fd), &mut budget),
+        Some(vec![init])
+    );
 }
 
 #[test]
@@ -804,7 +852,10 @@ fn locked_void_checker_is_marked_but_not_removed_when_stripping_is_off() {
 
     fd.set_restart_pending(false);
     assert_eq!(act.apply(&mut fd, &mut ctx), 0);
-    assert!(fd.obank().get(call).is_some(), "preservation does not opt in to deletion");
+    assert!(
+        fd.obank().get(call).is_some(),
+        "preservation does not opt in to deletion"
+    );
     assert_eq!(fd.num_calls(), 1);
 }
 
@@ -826,7 +877,11 @@ fn preserve_only_marks_more_than_the_reflow_limit_in_one_restart() {
 
     assert_eq!(act.apply(&mut fd, &mut ctx), 0);
     assert!(fd.has_restart_pending());
-    assert!(sites.iter().all(|site| fd.get_override().is_msvc_cookie_call(site)));
+    assert!(
+        sites
+            .iter()
+            .all(|site| fd.get_override().is_msvc_cookie_call(site))
+    );
 
     fd.set_restart_pending(false);
     assert_eq!(act.apply(&mut fd, &mut ctx), 0);
@@ -834,4 +889,3 @@ fn preserve_only_marks_more_than_the_reflow_limit_in_one_restart() {
     assert!(calls.iter().all(|call| fd.obank().get(*call).is_some()));
     assert_eq!(fd.num_calls(), 9);
 }
-

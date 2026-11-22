@@ -18,7 +18,6 @@
 
 use std::collections::BTreeSet;
 
-
 use unlace_base::address::Address;
 use unlace_base::marshal::ElementId;
 use unlace_base::space::spacetype;
@@ -113,7 +112,10 @@ impl ValueCheck {
             Observed::Named(n) if name_is_unique(data, &n, size) => Some(n),
             _ => None,
         };
-        ValueCheck { name, ..ValueCheck::default() }
+        ValueCheck {
+            name,
+            ..ValueCheck::default()
+        }
     }
 
     /// Whether the next install reads the recorded storage: after a fallback, and
@@ -157,16 +159,24 @@ pub(crate) fn observe(data: &Funcdata, vn: VarnodeId) -> Observed {
             Some(op) => op,
             None => return Observed::Opaque,
         };
-        let input = match op.get_in(0).and_then(|i| data.vbank().get(i).map(|iv| (i, iv.get_size()))) {
+        let input = match op
+            .get_in(0)
+            .and_then(|i| data.vbank().get(i).map(|iv| (i, iv.get_size())))
+        {
             Some(i) => i,
             None => break,
         };
         let zero = |slot: int4| {
-            op.get_in(slot).and_then(|c| data.vbank().get(c)).is_some_and(|c| c.is_constant() && c.get_offset() == 0)
+            op.get_in(slot)
+                .and_then(|c| data.vbank().get(c))
+                .is_some_and(|c| c.is_constant() && c.get_offset() == 0)
         };
         let next = match op.code() {
             OpCode::CPUI_COPY | OpCode::CPUI_CAST if input.1 == v.get_size() => input.0,
-            OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB | OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR
+            OpCode::CPUI_INT_ADD
+            | OpCode::CPUI_INT_SUB
+            | OpCode::CPUI_INT_OR
+            | OpCode::CPUI_INT_XOR
                 if op.num_input() == 2 && input.1 == v.get_size() && zero(1) =>
             {
                 input.0
@@ -197,7 +207,14 @@ pub(crate) fn observe(data: &Funcdata, vn: VarnodeId) -> Observed {
         None => return Observed::Opaque,
     };
     let space = match v.get_addr().get_space() {
-        Some(s) if matches!(s.get_type(), spacetype::IPTR_PROCESSOR | spacetype::IPTR_SPACEBASE) => s,
+        Some(s)
+            if matches!(
+                s.get_type(),
+                spacetype::IPTR_PROCESSOR | spacetype::IPTR_SPACEBASE
+            ) =>
+        {
+            s
+        }
         _ => return Observed::Opaque,
     };
     if exact < size {
@@ -298,7 +315,12 @@ pub(crate) enum InputVerdict {
     Unknown,
 }
 
-pub(crate) fn classify_input(data: &Funcdata, input: VarnodeId, recorded: &ValueName, size: int4) -> InputVerdict {
+pub(crate) fn classify_input(
+    data: &Funcdata,
+    input: VarnodeId,
+    recorded: &ValueName,
+    size: int4,
+) -> InputVerdict {
     if data.vbank().get(input).map(|v| v.get_size()) != Some(size) {
         return InputVerdict::Unknown;
     }
@@ -316,7 +338,9 @@ fn classify_value(
     seen: &mut BTreeSet<VarnodeId>,
 ) -> Option<InputVerdict> {
     match observe(data, vn) {
-        Observed::Named(n) if same_low_bytes(recorded, &n, size) && name_is_unique(data, &n, size) => {
+        Observed::Named(n)
+            if same_low_bytes(recorded, &n, size) && name_is_unique(data, &n, size) =>
+        {
             Some(InputVerdict::Matches)
         }
         // A different uniquely-defined value, or a folded constant, is a wrong
@@ -333,7 +357,12 @@ fn classify_value(
             if seen.len() > 64 {
                 return Some(InputVerdict::Unknown);
             }
-            let inputs: Vec<VarnodeId> = match data.vbank().get(phi).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d)) {
+            let inputs: Vec<VarnodeId> = match data
+                .vbank()
+                .get(phi)
+                .and_then(|v| v.get_def())
+                .and_then(|d| data.obank().get(d))
+            {
                 Some(op) => (0..op.num_input()).filter_map(|i| op.get_in(i)).collect(),
                 None => return Some(InputVerdict::Unknown),
             };
@@ -342,7 +371,9 @@ fn classify_value(
                 match classify_value(data, i, recorded, size, seen) {
                     Some(InputVerdict::Differs) => return Some(InputVerdict::Differs),
                     Some(InputVerdict::Unknown) => verdict = Some(InputVerdict::Unknown),
-                    Some(InputVerdict::Matches) if verdict.is_none() => verdict = Some(InputVerdict::Matches),
+                    Some(InputVerdict::Matches) if verdict.is_none() => {
+                        verdict = Some(InputVerdict::Matches)
+                    }
                     _ => {}
                 }
             }
@@ -420,7 +451,11 @@ pub(crate) fn head_compare_operand(
                 }
                 Some(ooff == off && osz == sz)
             };
-            let prior = ops[..pos].iter().enumerate().rev().find_map(|(p, &o)| overlap(o).map(|exact| (o, p, exact)));
+            let prior = ops[..pos]
+                .iter()
+                .enumerate()
+                .rev()
+                .find_map(|(p, &o)| overlap(o).map(|exact| (o, p, exact)));
             let candidate = space == home_space && v.get_size() == size;
             if let Some((o, p, _)) = prior {
                 if v.get_size() > size {
@@ -437,16 +472,27 @@ pub(crate) fn head_compare_operand(
                     if v.get_size() != size {
                         return None;
                     }
-                    (Some(HeadOperand::Value(data.obank().get(o)?.get_out()?)), None)
+                    (
+                        Some(HeadOperand::Value(data.obank().get(o)?.get_out()?)),
+                        None,
+                    )
                 }
-                Some((o, p, true)) if flag_op(data.obank().get(o)?.code()) || !candidate || v.get_size() == 1 => {
+                Some((o, p, true))
+                    if flag_op(data.obank().get(o)?.code()) || !candidate || v.get_size() == 1 =>
+                {
                     (None, Some((o, p)))
                 }
                 _ if candidate => {
                     if ops[pos..cbpos].iter().any(|&o| overlap(o).is_some()) {
                         return None;
                     }
-                    (Some(HeadOperand::Storage(Address::new(v.get_addr().get_space()?.clone(), off))), None)
+                    (
+                        Some(HeadOperand::Storage(Address::new(
+                            v.get_addr().get_space()?.clone(),
+                            off,
+                        ))),
+                        None,
+                    )
                 }
                 _ => return None,
             }
@@ -467,7 +513,10 @@ pub(crate) fn head_compare_operand(
             return None;
         }
         let out = data.vbank().get(op.get_out()?)?;
-        let temp = out.get_addr().get_space().map(|s| s.get_type() == spacetype::IPTR_INTERNAL);
+        let temp = out
+            .get_addr()
+            .get_space()
+            .map(|s| s.get_type() == spacetype::IPTR_INTERNAL);
         if temp != Some(true) && out.get_size() != 1 {
             return None;
         }
@@ -481,7 +530,13 @@ pub(crate) fn head_compare_operand(
 /// The input of `op` when `op` zero- or sign-extends it into storage whose low
 /// bytes are the `sz`-byte location at `off` in space `space`, so a compare of
 /// that location compares the extended value.
-fn extended_low_bytes(data: &Funcdata, op: OpId, space: int4, off: uintb, sz: int4) -> Option<VarnodeId> {
+fn extended_low_bytes(
+    data: &Funcdata,
+    op: OpId,
+    space: int4,
+    off: uintb,
+    sz: int4,
+) -> Option<VarnodeId> {
     let o = data.obank().get(op)?;
     if !matches!(o.code(), OpCode::CPUI_INT_ZEXT | OpCode::CPUI_INT_SEXT) {
         return None;
@@ -492,7 +547,11 @@ fn extended_low_bytes(data: &Funcdata, op: OpId, space: int4, off: uintb, sz: in
         return None;
     }
     let (ooff, osz) = (out.get_offset(), out.get_size() as uintb);
-    let low = if out_space.is_big_endian() { ooff.wrapping_add(osz).wrapping_sub(sz as uintb) } else { ooff };
+    let low = if out_space.is_big_endian() {
+        ooff.wrapping_add(osz).wrapping_sub(sz as uintb)
+    } else {
+        ooff
+    };
     if off != low || osz < sz as uintb {
         return None;
     }
@@ -554,21 +613,33 @@ fn slice_op(oc: OpCode) -> bool {
 /// `option loweredswitch off` renders it. An unnamed switch (a phi-defined or
 /// non-unique value) is left alone: it dispatches on the head operand best-effort
 /// and is never withdrawn, exactly the guarantee `loweredswitch` gave before.
-pub(crate) fn verify_installed_switch_values(data: &mut Funcdata, store: &SharedLoweredSwitchStore) {
+pub(crate) fn verify_installed_switch_values(
+    data: &mut Funcdata,
+    store: &SharedLoweredSwitchStore,
+) {
     let pending: Vec<(usize, Address, ValueName, int4)> = store
         .borrow()
         .records(data)
         .iter()
         .enumerate()
         .filter(|(_, r)| r.value.state != ValueState::Verified)
-        .filter_map(|(i, r)| r.value.name.clone().map(|n| (i, r.branch_addr.clone(), n, r.var_size)))
+        .filter_map(|(i, r)| {
+            r.value
+                .name
+                .clone()
+                .map(|n| (i, r.branch_addr.clone(), n, r.var_size))
+        })
         .collect();
     for (idx, branch_addr, name, size) in pending {
         let branchind = (0..data.num_jump_tables())
             .map(|i| data.get_jump_table(i))
             .filter(|jt| jt.kuna_lowered_var().is_some() && *jt.get_op_address() == branch_addr)
             .filter_map(|jt| jt.get_indirect_op())
-            .find(|&op| data.obank().get(op).is_some_and(|o| o.code() == OpCode::CPUI_BRANCHIND));
+            .find(|&op| {
+                data.obank()
+                    .get(op)
+                    .is_some_and(|o| o.code() == OpCode::CPUI_BRANCHIND)
+            });
         let branchind = match branchind {
             Some(op) => op,
             None => continue,

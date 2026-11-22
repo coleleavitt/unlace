@@ -51,7 +51,7 @@ use unlace_base::address::Address;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{HighVariableId, VarnodeId};
-use crate::database::{symbol_category, SymbolId};
+use crate::database::{SymbolId, symbol_category};
 use crate::dtype::type_metatype;
 use crate::funcdata::Funcdata;
 
@@ -67,10 +67,49 @@ pub struct LibraryNames {
 /// Parameter names that say which side of one call a value is on rather than
 /// what it is.
 const ROLE_NAMES: &[&str] = &[
-    "act", "cchCount1", "cchCount2", "cchDest", "cchSrc", "dest", "dst", "e1", "e2", "fdin", "fdout", "from",
-    "fromfd", "hSourceHandle", "hSourceProcessHandle", "hTargetProcessHandle", "haystack", "infd", "lpDestStr",
-    "lpSrcStr", "lpString1", "lpString2", "lpTargetHandle", "needle", "new", "newfd", "newmask", "oact", "old",
-    "oldfd", "oldmask", "oset", "outfd", "pvargDest", "pvargSrc", "s1", "s2", "set", "src", "to", "tofd", "x", "y",
+    "act",
+    "cchCount1",
+    "cchCount2",
+    "cchDest",
+    "cchSrc",
+    "dest",
+    "dst",
+    "e1",
+    "e2",
+    "fdin",
+    "fdout",
+    "from",
+    "fromfd",
+    "hSourceHandle",
+    "hSourceProcessHandle",
+    "hTargetProcessHandle",
+    "haystack",
+    "infd",
+    "lpDestStr",
+    "lpSrcStr",
+    "lpString1",
+    "lpString2",
+    "lpTargetHandle",
+    "needle",
+    "new",
+    "newfd",
+    "newmask",
+    "oact",
+    "old",
+    "oldfd",
+    "oldmask",
+    "oset",
+    "outfd",
+    "pvargDest",
+    "pvargSrc",
+    "s1",
+    "s2",
+    "set",
+    "src",
+    "to",
+    "tofd",
+    "x",
+    "y",
 ];
 
 /// How far evidence follows a value through folded copies and casts.
@@ -101,7 +140,9 @@ fn folded_into(fd: &Funcdata, mut vn: VarnodeId) -> VarnodeId {
         if !v.is_implied() {
             break;
         }
-        let Some(op) = fd.lone_descend(vn).and_then(|op| fd.obank().get(op)) else { break };
+        let Some(op) = fd.lone_descend(vn).and_then(|op| fd.obank().get(op)) else {
+            break;
+        };
         if !matches!(op.code(), OpCode::CPUI_COPY | OpCode::CPUI_CAST) {
             break;
         }
@@ -119,7 +160,9 @@ pub(crate) fn folded_from(fd: &Funcdata, mut vn: VarnodeId) -> VarnodeId {
         if !(v.is_implied() && v.is_written()) {
             break;
         }
-        let Some(op) = v.get_def().and_then(|op| fd.obank().get(op)) else { break };
+        let Some(op) = v.get_def().and_then(|op| fd.obank().get(op)) else {
+            break;
+        };
         if !matches!(op.code(), OpCode::CPUI_COPY | OpCode::CPUI_CAST) {
             break;
         }
@@ -160,7 +203,9 @@ enum Target {
 
 /// Library parameter names that say only that the argument is a pointer
 /// (besides `p` and the `ptr`, `Ptr` and `_p` endings).
-const POINTER_NAMES: &[&str] = &["argp", "pbstr", "penv", "psa", "psz", "pvarg", "pwc", "pwcs", "setp", "tvp"];
+const POINTER_NAMES: &[&str] = &[
+    "argp", "pbstr", "penv", "psa", "psz", "pvarg", "pwc", "pwcs", "setp", "tvp",
+];
 
 fn names_pointer(name: &str) -> bool {
     name == "p"
@@ -182,7 +227,10 @@ fn pointee_name(name: &'static str, pointer: bool) -> Option<&'static str> {
         let tag = rest.bytes().take_while(u8::is_ascii_lowercase).count();
         rest.as_bytes().get(tag).is_some_and(u8::is_ascii_uppercase)
     };
-    if let Some(rest) = ["lp", "p"].into_iter().find_map(|p| name.strip_prefix(p).filter(|rest| hungarian(rest))) {
+    if let Some(rest) = ["lp", "p"]
+        .into_iter()
+        .find_map(|p| name.strip_prefix(p).filter(|rest| hungarian(rest)))
+    {
         return Some(rest);
     }
     (pointer || !names_pointer(name)).then_some(name)
@@ -196,7 +244,9 @@ const FILLERS: &[&str] = &["bzero", "explicit_bzero", "memset"];
 /// (`__memset_chk`) spelling?
 fn fills(callee: &str) -> bool {
     let base = callee.trim_start_matches('_');
-    let base = base.strip_suffix("_chk").map_or(base, |b| b.trim_start_matches('_'));
+    let base = base
+        .strip_suffix("_chk")
+        .map_or(base, |b| b.trim_start_matches('_'));
     FILLERS.binary_search(&base).is_ok()
 }
 
@@ -224,27 +274,45 @@ fn addressed_object(fd: &Funcdata, vn: VarnodeId) -> Option<Addressed> {
     let addr = fd.resolve_spacebase_ref_addr(off)?;
     let lm = fd.get_scope_local()?;
     let db = lm.database();
-    let entry = db.entry(lm.scope_id(), db.find_container(lm.scope_id(), &addr, 1, &Address::default())?);
+    let entry = db.entry(
+        lm.scope_id(),
+        db.find_container(lm.scope_id(), &addr, 1, &Address::default())?,
+    );
     if addr.get_offset() != entry.get_addr().get_offset() || entry.get_offset() != 0 {
         return None;
     }
     let sym = db.symbol(entry.symbol);
-    if !sym.is_name_undefined() || sym.is_name_locked() || sym.category != symbol_category::NO_CATEGORY {
+    if !sym.is_name_undefined()
+        || sym.is_name_locked()
+        || sym.category != symbol_category::NO_CATEGORY
+    {
         return None;
     }
     let ct = sym.dtype.as_ref()?;
-    let composite = matches!(ct.get_metatype(), type_metatype::TYPE_STRUCT | type_metatype::TYPE_UNION);
+    let composite = matches!(
+        ct.get_metatype(),
+        type_metatype::TYPE_STRUCT | type_metatype::TYPE_UNION
+    );
     let field = v.get_type().get_ptr_to().is_some_and(|to| {
-        !matches!(to.get_metatype(), type_metatype::TYPE_VOID | type_metatype::TYPE_UNKNOWN)
-            && to.get_size() < ct.get_size()
+        !matches!(
+            to.get_metatype(),
+            type_metatype::TYPE_VOID | type_metatype::TYPE_UNKNOWN
+        ) && to.get_size() < ct.get_size()
     });
     if composite && field {
         return None;
     }
     let pointer = ct.get_metatype() == type_metatype::TYPE_PTR
-        || ct.get_array_base().is_some_and(|at| at.get_metatype() == type_metatype::TYPE_PTR);
+        || ct
+            .get_array_base()
+            .is_some_and(|at| at.get_metatype() == type_metatype::TYPE_PTR);
     let scalar = !composite && ct.get_metatype() != type_metatype::TYPE_ARRAY;
-    Some(Addressed { sym: entry.symbol, high: fd.vbank().get(off)?.get_high()?, pointer, scalar })
+    Some(Addressed {
+        sym: entry.symbol,
+        high: fd.vbank().get(off)?.get_high()?,
+        pointer,
+        scalar,
+    })
 }
 
 /// Every piece of library evidence in `fd`, by local or stack object, with the
@@ -254,40 +322,66 @@ fn evidence(fd: &mut Funcdata) -> BTreeMap<Target, (HighVariableId, bool, Vec<Ev
     let mut found: BTreeMap<Target, (HighVariableId, bool, Vec<Evidence>)> = BTreeMap::new();
     let shown = fd.get_arch().libc_names;
     let mut note = |target: Target, high: HighVariableId, scalar: bool, e: Evidence| {
-        found.entry(target).or_insert_with(|| (high, scalar, Vec::new())).2.push(e);
+        found
+            .entry(target)
+            .or_insert_with(|| (high, scalar, Vec::new()))
+            .2
+            .push(e);
     };
     for i in 0..fd.num_calls() {
         let fc = fd.get_call_specs(i);
-        let Some(names) = fd.get_arch().callee_library_names(fc.get_entry_address()) else { continue };
+        let Some(names) = fd.get_arch().callee_library_names(fc.get_entry_address()) else {
+            continue;
+        };
         if !fc.proto().is_input_locked() {
             continue;
         }
         let op = fc.get_op();
         let filler = fills(fc.get_name());
-        let sizes: Vec<Option<i32>> =
-            (0..fc.proto().num_params()).map(|j| fc.proto().get_param(j).map(|p| p.get_size())).collect();
-        let Some(o) = fd.obank().get(op) else { continue };
+        let sizes: Vec<Option<i32>> = (0..fc.proto().num_params())
+            .map(|j| fc.proto().get_param(j).map(|p| p.get_size()))
+            .collect();
+        let Some(o) = fd.obank().get(op) else {
+            continue;
+        };
         let at = (o.get_addr().clone(), o.get_time());
         let out = o.get_out();
         let args: Vec<Option<VarnodeId>> = (1..o.num_input()).map(|slot| o.get_in(slot)).collect();
         if let (Some(ret), Some(out)) = (names.ret, out) {
             let vn = folded_into(fd, out);
             if let Some(high) = local_of(fd, vn) {
-                note(Target::Local(high), high, false, (RET, at.clone(), -1, ret, shown));
+                note(
+                    Target::Local(high),
+                    high,
+                    false,
+                    (RET, at.clone(), -1, ret, shown),
+                );
             }
         }
         for (j, name) in names.params.iter().enumerate() {
-            let (Some(Some(arg)), Some(Some(size))) = (args.get(j), sizes.get(j)) else { continue };
+            let (Some(Some(arg)), Some(Some(size))) = (args.get(j), sizes.get(j)) else {
+                continue;
+            };
             if name.is_empty() || fd.vbank().get(*arg).map(|v| v.get_size()) != Some(*size) {
                 continue;
             }
             let kind = if is_role(name) { ROLE } else { ARG };
             let vn = folded_from(fd, *arg);
             if let Some(high) = local_of(fd, vn) {
-                note(Target::Local(high), high, false, (kind, at.clone(), j as i32, name, shown));
+                note(
+                    Target::Local(high),
+                    high,
+                    false,
+                    (kind, at.clone(), j as i32, name, shown),
+                );
             } else if let Some(obj) = addressed_object(fd, vn).filter(|_| !filler) {
                 if let Some(name) = pointee_name(name, obj.pointer) {
-                    note(Target::Object(obj.sym), obj.high, obj.scalar, (kind, at.clone(), j as i32, name, shown));
+                    note(
+                        Target::Object(obj.sym),
+                        obj.high,
+                        obj.scalar,
+                        (kind, at.clone(), j as i32, name, shown),
+                    );
                 }
             }
         }
@@ -296,7 +390,11 @@ fn evidence(fd: &mut Funcdata) -> BTreeMap<Target, (HighVariableId, bool, Vec<Ev
         let mut context: BTreeMap<HighVariableId, Vec<Evidence>> = BTreeMap::new();
         crate::kuna_contextnames::evidence(fd, &mut context);
         for (high, evidence) in context {
-            found.entry(Target::Local(high)).or_insert_with(|| (high, false, Vec::new())).2.extend(evidence);
+            found
+                .entry(Target::Local(high))
+                .or_insert_with(|| (high, false, Vec::new()))
+                .2
+                .extend(evidence);
         }
     }
     found
@@ -308,41 +406,58 @@ fn evidence(fd: &mut Funcdata) -> BTreeMap<Target, (HighVariableId, bool, Vec<Ev
 /// that disagree, nor, on a `scalar` object, argument names that disagree;
 /// `usable` drops a name the printed code cannot hold (a type name, a
 /// keyword).
-fn decide(mut found: Vec<Evidence>, scalar: bool, usable: &dyn Fn(&str) -> bool) -> Option<Evidence> {
+fn decide(
+    mut found: Vec<Evidence>,
+    scalar: bool,
+    usable: &dyn Fn(&str) -> bool,
+) -> Option<Evidence> {
     found.retain(|e| usable(e.3));
-    let agree: &[u8] = if scalar { &[RET, ARG, ROLE] } else { &[RET, ROLE] };
+    let agree: &[u8] = if scalar {
+        &[RET, ARG, ROLE]
+    } else {
+        &[RET, ROLE]
+    };
     for &kind in agree {
         let names: BTreeSet<&str> = found.iter().filter(|e| e.0 == kind).map(|e| e.3).collect();
         if names.len() > 1 {
             found.retain(|e| e.0 != kind);
         }
     }
-    found
-        .into_iter()
-        .min_by(|a, b| b.4.cmp(&a.4).then(a.0.cmp(&b.0)).then_with(|| a.1.cmp(&b.1)).then(a.2.cmp(&b.2)))
+    found.into_iter().min_by(|a, b| {
+        b.4.cmp(&a.4)
+            .then(a.0.cmp(&b.0))
+            .then_with(|| a.1.cmp(&b.1))
+            .then(a.2.cmp(&b.2))
+    })
 }
 
 /// `name` and its numbered spellings, `name`, `name_2`, `name_3`, ...
 fn spelling(name: &str, k: usize) -> String {
-    if k <= 1 { name.to_string() } else { format!("{name}_{k}") }
+    if k <= 1 {
+        name.to_string()
+    } else {
+        format!("{name}_{k}")
+    }
 }
 
 /// Is `candidate` one of `name`'s spellings?
 fn spells(candidate: &str, name: &str) -> bool {
     candidate == name
-        || candidate.strip_prefix(name).and_then(|rest| rest.strip_prefix('_')).is_some_and(|k| {
-            !k.starts_with('0') && k.parse::<usize>().is_ok_and(|k| k >= 2)
-        })
+        || candidate
+            .strip_prefix(name)
+            .and_then(|rest| rest.strip_prefix('_'))
+            .is_some_and(|k| !k.starts_with('0') && k.parse::<usize>().is_ok_and(|k| k >= 2))
 }
 
 /// C and Rust keywords, and the C names a declaration may not shadow.
 const RESERVED: &[&str] = &[
-    "Self", "_Bool", "_Complex", "abstract", "as", "async", "auto", "await", "become", "bool", "box", "break",
-    "case", "char", "const", "continue", "crate", "default", "do", "double", "dyn", "else", "enum", "extern",
-    "false", "final", "float", "fn", "for", "goto", "if", "impl", "in", "inline", "int", "let", "long", "loop",
-    "macro", "main", "match", "mod", "move", "mut", "override", "priv", "pub", "ref", "register", "restrict",
-    "return", "self", "short", "signed", "sizeof", "static", "struct", "super", "switch", "trait", "true", "try",
-    "type", "typedef", "typeof", "union", "unsafe", "unsigned", "unsized", "use", "virtual", "void", "volatile",
+    "Self", "_Bool", "_Complex", "abstract", "as", "async", "auto", "await", "become", "bool",
+    "box", "break", "case", "char", "const", "continue", "crate", "default", "do", "double", "dyn",
+    "else", "enum", "extern", "false", "final", "float", "fn", "for", "goto", "if", "impl", "in",
+    "inline", "int", "let", "long", "loop", "macro", "main", "match", "mod", "move", "mut",
+    "override", "priv", "pub", "ref", "register", "restrict", "return", "self", "short", "signed",
+    "sizeof", "static", "struct", "super", "switch", "trait", "true", "try", "type", "typedef",
+    "typeof", "union", "unsafe", "unsigned", "unsized", "use", "virtual", "void", "volatile",
     "where", "while", "yield",
 ];
 
@@ -350,7 +465,10 @@ const RESERVED: &[&str] = &[
 /// code could mention (`tm`, `FILE`, a DWARF typedef).
 fn usable(fd: &Funcdata, name: &str) -> bool {
     RESERVED.binary_search(&name).is_err()
-        && fd.get_arch().types().is_none_or(|types| !matches!(types.find_by_name(name), Ok(Some(_))))
+        && fd
+            .get_arch()
+            .types()
+            .is_none_or(|types| !matches!(types.find_by_name(name), Ok(Some(_))))
 }
 
 /// A numbered local that may print a library name: the local, the library
@@ -385,18 +503,34 @@ pub struct LibraryAlias {
 /// (a naming record is being taken or replayed).
 pub fn candidates(fd: &mut Funcdata) -> Vec<Candidate> {
     let arch = fd.get_arch();
-    if !arch.libc_names && !arch.context_names && !fd.kuna_record_names() && fd.kuna_prior_names().is_empty() {
+    if !arch.libc_names
+        && !arch.context_names
+        && !fd.kuna_record_names()
+        && fd.kuna_prior_names().is_empty()
+    {
         return Vec::new();
     }
     let found = evidence(fd);
     let mut out: Vec<Candidate> = found
         .into_iter()
         .filter_map(|(target, (high, scalar, found))| {
-            decide(found, scalar, &|name| usable(fd, name))
-                .map(|(_, at, slot, base, shown)| Candidate { target, high, base, at, slot, shown })
+            decide(found, scalar, &|name| usable(fd, name)).map(|(_, at, slot, base, shown)| {
+                Candidate {
+                    target,
+                    high,
+                    base,
+                    at,
+                    slot,
+                    shown,
+                }
+            })
         })
         .collect();
-    out.sort_by(|a, b| a.at.cmp(&b.at).then(a.slot.cmp(&b.slot)).then(a.high.cmp(&b.high)));
+    out.sort_by(|a, b| {
+        a.at.cmp(&b.at)
+            .then(a.slot.cmp(&b.slot))
+            .then(a.high.cmp(&b.high))
+    });
     out
 }
 
@@ -410,8 +544,11 @@ pub fn apply(fd: &mut Funcdata, candidates: &[Candidate]) {
     let angr = fd.get_arch().name_style_angr;
     let prior = fd.kuna_prior_names().clone();
     let replay = !prior.is_empty();
-    let mut taken: BTreeSet<String> =
-        fd.high_bank().iter().filter_map(|(_, h)| h.kuna_name().map(str::to_string)).collect();
+    let mut taken: BTreeSet<String> = fd
+        .high_bank()
+        .iter()
+        .filter_map(|(_, h)| h.kuna_name().map(str::to_string))
+        .collect();
     for i in 0..fd.num_calls() {
         taken.insert(fd.get_call_specs(i).get_name().to_string());
     }
@@ -424,13 +561,19 @@ pub fn apply(fd: &mut Funcdata, candidates: &[Candidate]) {
     let free = |fd: &Funcdata, taken: &BTreeSet<String>, name: &str| {
         !taken.contains(name)
             && usable(fd, name)
-            && fd.get_scope_local().is_none_or(|lm| !lm.local_name_used(name))
+            && fd
+                .get_scope_local()
+                .is_none_or(|lm| !lm.local_name_used(name))
             && globals.as_ref().is_none_or(|g| !g.has_symbol_name(name))
     };
     let mut out: Vec<LibraryAlias> = Vec::new();
     for c in candidates {
         let number = match c.target {
-            Target::Local(high) => fd.high_bank().get(high).and_then(|h| h.kuna_name()).map(str::to_string),
+            Target::Local(high) => fd
+                .high_bank()
+                .get(high)
+                .and_then(|h| h.kuna_name())
+                .map(str::to_string),
             Target::Object(sym) => fd
                 .get_scope_local()
                 .and_then(|lm| lm.database().try_symbol(sym))
@@ -438,7 +581,9 @@ pub fn apply(fd: &mut Funcdata, candidates: &[Candidate]) {
                 .map(|s| s.name.clone()),
         };
         let Some(number) = number else { continue };
-        let Some(index) = crate::kuna_stablenames::default_name_index(&number, angr) else { continue };
+        let Some(index) = crate::kuna_stablenames::default_name_index(&number, angr) else {
+            continue;
+        };
         if out.iter().any(|a| a.number == number) || chosen(fd, &prior, &number) {
             continue;
         }
@@ -447,21 +592,36 @@ pub fn apply(fd: &mut Funcdata, candidates: &[Candidate]) {
             Target::Object(_) => index,
         };
         let alias = match prior.aliases.get(&before) {
-            Some(before) if spells(before, c.base) => Some(before.clone()).filter(|s| free(fd, &taken, s)),
+            Some(before) if spells(before, c.base) => {
+                Some(before.clone()).filter(|s| free(fd, &taken, s))
+            }
             _ => (1..)
                 .map(|k| spelling(c.base, k))
                 .find(|s| free(fd, &taken, s) && !(replay && printed_before.contains(s))),
         };
         let Some(alias) = alias else { continue };
         taken.insert(alias.clone());
-        out.push(LibraryAlias { high: c.high, number, alias, shown: c.shown });
+        out.push(LibraryAlias {
+            high: c.high,
+            number,
+            alias,
+            shown: c.shown,
+        });
     }
     if out.iter().any(|a| a.shown) {
-        let rename: BTreeMap<String, String> =
-            out.iter().filter(|a| a.shown).map(|a| (a.number.clone(), a.alias.clone())).collect();
+        let rename: BTreeMap<String, String> = out
+            .iter()
+            .filter(|a| a.shown)
+            .map(|a| (a.number.clone(), a.alias.clone()))
+            .collect();
         let highs: Vec<HighVariableId> = fd.high_bank().iter().map(|(id, _)| id).collect();
         for high in highs {
-            let alias = fd.high_bank().get(high).and_then(|h| h.kuna_name()).and_then(|n| rename.get(n)).cloned();
+            let alias = fd
+                .high_bank()
+                .get(high)
+                .and_then(|h| h.kuna_name())
+                .and_then(|n| rename.get(n))
+                .cloned();
             if let (Some(alias), Some(h)) = (alias, fd.high_bank_mut().get_mut(high)) {
                 h.set_kuna_name(alias);
             }
@@ -477,7 +637,9 @@ fn chosen(fd: &Funcdata, prior: &crate::kuna_stablenames::PriorNames, name: &str
     prior.renames.values().any(|given| given == name)
         || prior.given.contains(name)
         || fd.get_scope_local().is_some_and(|lm| {
-            lm.query_by_name(name).into_iter().any(|sym| lm.database().symbol(sym).is_name_locked())
+            lm.query_by_name(name)
+                .into_iter()
+                .any(|sym| lm.database().symbol(sym).is_name_locked())
         })
 }
 
@@ -486,13 +648,19 @@ fn chosen(fd: &Funcdata, prior: &crate::kuna_stablenames::PriorNames, name: &str
 /// not the output shows the library name. `None` when no library name is
 /// `name`.
 pub fn number_for(fd: &Funcdata, name: &str) -> Option<String> {
-    fd.kuna_library_aliases().iter().find(|a| a.alias == name).map(|a| a.number.clone())
+    fd.kuna_library_aliases()
+        .iter()
+        .find(|a| a.alias == name)
+        .map(|a| a.number.clone())
 }
 
 /// The number a local printed under its library name answers to; `None` for
 /// every other local.
 pub fn shown_number(fd: &Funcdata, high: HighVariableId) -> Option<&str> {
-    fd.kuna_library_aliases().iter().find(|a| a.high == high && a.shown).map(|a| a.number.as_str())
+    fd.kuna_library_aliases()
+        .iter()
+        .find(|a| a.high == high && a.shown)
+        .map(|a| a.number.as_str())
 }
 
 #[cfg(test)]
@@ -546,7 +714,14 @@ mod tests {
 
     #[test]
     fn a_fill_call_is_known_by_every_spelling() {
-        for callee in ["memset", "_memset", "__memset_chk", "bzero", "explicit_bzero", "__explicit_bzero_chk"] {
+        for callee in [
+            "memset",
+            "_memset",
+            "__memset_chk",
+            "bzero",
+            "explicit_bzero",
+            "__explicit_bzero_chk",
+        ] {
             assert!(fills(callee), "{callee}");
         }
         for callee in ["memcpy", "sigfillset", "fill", "memset_s_x"] {
@@ -563,9 +738,19 @@ mod tests {
     fn a_return_value_outranks_an_argument_and_the_earliest_call_wins() {
         let at = |o: u64| (Address::new_invalid(), o as u32);
         let any = |_: &str| true;
-        let e = decide(vec![(ARG, at(1), 0, "size", true), (RET, at(5), -1, "len", true)], false, &any).unwrap();
+        let e = decide(
+            vec![(ARG, at(1), 0, "size", true), (RET, at(5), -1, "len", true)],
+            false,
+            &any,
+        )
+        .unwrap();
         assert_eq!(e.3, "len");
-        let e = decide(vec![(ARG, at(7), 0, "fd", true), (ARG, at(3), 2, "stream", true)], false, &any).unwrap();
+        let e = decide(
+            vec![(ARG, at(7), 0, "fd", true), (ARG, at(3), 2, "stream", true)],
+            false,
+            &any,
+        )
+        .unwrap();
         assert_eq!(e.3, "stream");
     }
 
@@ -573,13 +758,56 @@ mod tests {
     fn disagreeing_role_names_or_results_name_nothing() {
         let at = |o: u64| (Address::new_invalid(), o as u32);
         let any = |_: &str| true;
-        assert!(decide(vec![(ROLE, at(1), 0, "dest", true), (ROLE, at(2), 1, "src", true)], false, &any).is_none());
-        let e = decide(vec![(ROLE, at(1), 0, "s1", true), (ROLE, at(2), 1, "s2", true), (ARG, at(3), 0, "s", true)], false, &any).unwrap();
+        assert!(
+            decide(
+                vec![
+                    (ROLE, at(1), 0, "dest", true),
+                    (ROLE, at(2), 1, "src", true)
+                ],
+                false,
+                &any
+            )
+            .is_none()
+        );
+        let e = decide(
+            vec![
+                (ROLE, at(1), 0, "s1", true),
+                (ROLE, at(2), 1, "s2", true),
+                (ARG, at(3), 0, "s", true),
+            ],
+            false,
+            &any,
+        )
+        .unwrap();
         assert_eq!(e.3, "s");
-        let e = decide(vec![(ROLE, at(1), 0, "dest", true), (ROLE, at(4), 0, "dest", true)], false, &any).unwrap();
+        let e = decide(
+            vec![
+                (ROLE, at(1), 0, "dest", true),
+                (ROLE, at(4), 0, "dest", true),
+            ],
+            false,
+            &any,
+        )
+        .unwrap();
         assert_eq!(e.3, "dest");
-        assert!(decide(vec![(RET, at(1), -1, "len", true), (RET, at(2), -1, "pid", true)], false, &any).is_none());
-        let e = decide(vec![(RET, at(1), -1, "len", true), (RET, at(2), -1, "pid", true), (ARG, at(3), 0, "n", true)], false, &any).unwrap();
+        assert!(
+            decide(
+                vec![(RET, at(1), -1, "len", true), (RET, at(2), -1, "pid", true)],
+                false,
+                &any
+            )
+            .is_none()
+        );
+        let e = decide(
+            vec![
+                (RET, at(1), -1, "len", true),
+                (RET, at(2), -1, "pid", true),
+                (ARG, at(3), 0, "n", true),
+            ],
+            false,
+            &any,
+        )
+        .unwrap();
         assert_eq!(e.3, "n");
     }
 
@@ -587,12 +815,32 @@ mod tests {
     fn a_scalar_object_two_arguments_name_two_ways_is_not_named_by_them() {
         let at = |o: u64| (Address::new_invalid(), o as u32);
         let any = |_: &str| true;
-        let shared = vec![(ARG, at(1), 1, "buf", true), (ARG, at(2), 4, "optlen", true)];
+        let shared = vec![
+            (ARG, at(1), 1, "buf", true),
+            (ARG, at(2), 4, "optlen", true),
+        ];
         assert_eq!(decide(shared.clone(), false, &any).unwrap().3, "buf");
         assert!(decide(shared, true, &any).is_none());
-        let e = decide(vec![(ARG, at(1), 1, "stat_loc", true), (ARG, at(2), 0, "stat_loc", true)], true, &any).unwrap();
+        let e = decide(
+            vec![
+                (ARG, at(1), 1, "stat_loc", true),
+                (ARG, at(2), 0, "stat_loc", true),
+            ],
+            true,
+            &any,
+        )
+        .unwrap();
         assert_eq!(e.3, "stat_loc");
-        let e = decide(vec![(ARG, at(1), 1, "buf", true), (ARG, at(2), 4, "optlen", true), (ROLE, at(3), 0, "dest", true)], true, &any).unwrap();
+        let e = decide(
+            vec![
+                (ARG, at(1), 1, "buf", true),
+                (ARG, at(2), 4, "optlen", true),
+                (ROLE, at(3), 0, "dest", true),
+            ],
+            true,
+            &any,
+        )
+        .unwrap();
         assert_eq!(e.3, "dest");
     }
 
@@ -600,7 +848,12 @@ mod tests {
     fn an_unusable_name_gives_way_to_the_next_evidence() {
         let at = |o: u64| (Address::new_invalid(), o as u32);
         let not_tm = |name: &str| name != "tm";
-        let e = decide(vec![(RET, at(1), -1, "tm", true), (ARG, at(2), 0, "tp", true)], false, &not_tm).unwrap();
+        let e = decide(
+            vec![(RET, at(1), -1, "tm", true), (ARG, at(2), 0, "tp", true)],
+            false,
+            &not_tm,
+        )
+        .unwrap();
         assert_eq!(e.3, "tp");
         assert!(decide(vec![(RET, at(1), -1, "tm", true)], false, &not_tm).is_none());
     }
@@ -609,9 +862,25 @@ mod tests {
     fn a_loop_counter_outranks_library_evidence_and_printed_evidence_comes_first() {
         let at = |o: u64| (Address::new_invalid(), o as u32);
         let any = |_: &str| true;
-        let e = decide(vec![(ARG, at(1), 2, "nbytes", true), (LOOP, at(5), -1, "i", true)], false, &any).unwrap();
+        let e = decide(
+            vec![
+                (ARG, at(1), 2, "nbytes", true),
+                (LOOP, at(5), -1, "i", true),
+            ],
+            false,
+            &any,
+        )
+        .unwrap();
         assert_eq!(e.3, "i");
-        let e = decide(vec![(RET, at(1), -1, "fd", false), (RESULT, at(9), -1, "result", true)], false, &any).unwrap();
+        let e = decide(
+            vec![
+                (RET, at(1), -1, "fd", false),
+                (RESULT, at(9), -1, "result", true),
+            ],
+            false,
+            &any,
+        )
+        .unwrap();
         assert_eq!(e.3, "result");
     }
 }

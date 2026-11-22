@@ -68,7 +68,7 @@ use unlace_base::types::{int4, intb, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{HighVariableId, OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::p0_knowledge::options::on_or_off;
 use crate::varmap::{MapState, RangeType};
@@ -103,7 +103,12 @@ fn declared_param(fd: &Funcdata, call: OpId, arg: VarnodeId) -> Option<Rc<Dataty
         return None;
     }
     let fc = fd.get_call_specs(fd.get_call_specs_index(call)?);
-    if fc.format_arity().is_some() || fd.get_override().find_proto_override(o.get_addr()).is_some() {
+    if fc.format_arity().is_some()
+        || fd
+            .get_override()
+            .find_proto_override(o.get_addr())
+            .is_some()
+    {
         return None;
     }
     let param = fc.proto().get_param(slot - 1)?;
@@ -145,8 +150,11 @@ struct FrameRef {
 fn frame_refs(fd: &Funcdata, state: &mut MapState) -> Vec<FrameRef> {
     let checker = state.checker_mut();
     let alias: Vec<uintb> = checker.get_alias().to_vec();
-    let bases: Vec<(Option<VarnodeId>, VarnodeId)> =
-        checker.get_add_base().iter().map(|ab| (ab.index, ab.base)).collect();
+    let bases: Vec<(Option<VarnodeId>, VarnodeId)> = checker
+        .get_add_base()
+        .iter()
+        .map(|ab| (ab.index, ab.base))
+        .collect();
     let mut out = Vec::with_capacity(bases.len());
     for (i, (index, base)) in bases.into_iter().enumerate() {
         let Some(&off) = alias.get(i) else { continue };
@@ -175,7 +183,10 @@ fn frame_refs(fd: &Funcdata, state: &mut MapState) -> Vec<FrameRef> {
 
 /// Are `a` and `b` the same plain integer, whatever each is spelled?
 fn same_int(a: &Datatype, b: &Datatype) -> bool {
-    a.get_metatype() == b.get_metatype() && a.get_size() == b.get_size() && !a.is_enum_type() && !b.is_enum_type()
+    a.get_metatype() == b.get_metatype()
+        && a.get_size() == b.get_size()
+        && !a.is_enum_type()
+        && !b.is_enum_type()
 }
 
 /// What one reader of the object's value asks of its signedness.
@@ -198,38 +209,39 @@ fn classify(opc: OpCode, slot: int4) -> Read {
     use OpCode::*;
     use Read::*;
     match opc {
-        CPUI_INT_SLESS | CPUI_INT_SLESSEQUAL | CPUI_INT_SEXT | CPUI_INT_SCARRY | CPUI_INT_SBORROW => {
-            Demands { signed: true, carry: false }
-        }
-        CPUI_INT_LESS | CPUI_INT_LESSEQUAL | CPUI_INT_ZEXT | CPUI_INT_CARRY => {
-            Demands { signed: false, carry: false }
-        }
-        CPUI_INT_SDIV | CPUI_INT_SREM => Demands { signed: true, carry: true },
-        CPUI_INT_DIV | CPUI_INT_REM => Demands { signed: false, carry: true },
-        CPUI_INT_SRIGHT if slot == 0 => Demands { signed: true, carry: true },
-        CPUI_INT_RIGHT if slot == 0 => Demands { signed: false, carry: true },
+        CPUI_INT_SLESS | CPUI_INT_SLESSEQUAL | CPUI_INT_SEXT | CPUI_INT_SCARRY
+        | CPUI_INT_SBORROW => Demands {
+            signed: true,
+            carry: false,
+        },
+        CPUI_INT_LESS | CPUI_INT_LESSEQUAL | CPUI_INT_ZEXT | CPUI_INT_CARRY => Demands {
+            signed: false,
+            carry: false,
+        },
+        CPUI_INT_SDIV | CPUI_INT_SREM => Demands {
+            signed: true,
+            carry: true,
+        },
+        CPUI_INT_DIV | CPUI_INT_REM => Demands {
+            signed: false,
+            carry: true,
+        },
+        CPUI_INT_SRIGHT if slot == 0 => Demands {
+            signed: true,
+            carry: true,
+        },
+        CPUI_INT_RIGHT if slot == 0 => Demands {
+            signed: false,
+            carry: true,
+        },
         CPUI_INT_LEFT if slot == 0 => Overflows,
         CPUI_INT_SRIGHT | CPUI_INT_RIGHT | CPUI_INT_LEFT => Opaque,
         CPUI_INT_ADD | CPUI_INT_SUB | CPUI_INT_MULT | CPUI_INT_2COMP => Overflows,
-        CPUI_INT_AND
-        | CPUI_INT_OR
-        | CPUI_INT_XOR
-        | CPUI_INT_NEGATE
-        | CPUI_COPY
-        | CPUI_MULTIEQUAL
-        | CPUI_INDIRECT => Carries,
-        CPUI_INT_EQUAL
-        | CPUI_INT_NOTEQUAL
-        | CPUI_SUBPIECE
-        | CPUI_PIECE
-        | CPUI_POPCOUNT
-        | CPUI_LZCOUNT
-        | CPUI_CBRANCH
-        | CPUI_RETURN
-        | CPUI_BOOL_NEGATE
-        | CPUI_BOOL_AND
-        | CPUI_BOOL_OR
-        | CPUI_BOOL_XOR => Opaque,
+        CPUI_INT_AND | CPUI_INT_OR | CPUI_INT_XOR | CPUI_INT_NEGATE | CPUI_COPY
+        | CPUI_MULTIEQUAL | CPUI_INDIRECT => Carries,
+        CPUI_INT_EQUAL | CPUI_INT_NOTEQUAL | CPUI_SUBPIECE | CPUI_PIECE | CPUI_POPCOUNT
+        | CPUI_LZCOUNT | CPUI_CBRANCH | CPUI_RETURN | CPUI_BOOL_NEGATE | CPUI_BOOL_AND
+        | CPUI_BOOL_OR | CPUI_BOOL_XOR => Opaque,
         CPUI_CALL | CPUI_CALLIND if slot >= 1 => Opaque,
         CPUI_STORE if slot == 2 => Opaque,
         _ => Veto,
@@ -250,23 +262,39 @@ fn high_piece(fd: &Funcdata, op: OpId) -> bool {
 /// Does a constant whose top bit is set meet the value in `op` (one C would
 /// sign-extend once the value is signed)?
 fn wide_constant(fd: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
-    let Some(o) = fd.obank().get(op) else { return false };
+    let Some(o) = fd.obank().get(op) else {
+        return false;
+    };
     if !matches!(
         o.code(),
-        OpCode::CPUI_INT_EQUAL | OpCode::CPUI_INT_NOTEQUAL | OpCode::CPUI_INT_AND | OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR
+        OpCode::CPUI_INT_EQUAL
+            | OpCode::CPUI_INT_NOTEQUAL
+            | OpCode::CPUI_INT_AND
+            | OpCode::CPUI_INT_OR
+            | OpCode::CPUI_INT_XOR
     ) {
         return false;
     }
-    (0..o.num_input()).filter_map(|i| o.get_in(i)).filter(|&v| v != vn).any(|v| {
-        fd.vbank().get(v).is_some_and(|c| {
-            let bits = c.get_size() * 8;
-            c.is_constant() && (1..=64).contains(&bits) && (c.get_offset() >> (bits - 1)) & 1 == 1
+    (0..o.num_input())
+        .filter_map(|i| o.get_in(i))
+        .filter(|&v| v != vn)
+        .any(|v| {
+            fd.vbank().get(v).is_some_and(|c| {
+                let bits = c.get_size() * 8;
+                c.is_constant()
+                    && (1..=64).contains(&bits)
+                    && (c.get_offset() >> (bits - 1)) & 1 == 1
+            })
         })
-    })
 }
 
 /// The live Varnodes stored at `(off, size)` in `space`.
-fn storage_varnodes(fd: &Funcdata, space: &Rc<AddrSpace>, off: uintb, size: int4) -> Vec<VarnodeId> {
+fn storage_varnodes(
+    fd: &Funcdata,
+    space: &Rc<AddrSpace>,
+    off: uintb,
+    size: int4,
+) -> Vec<VarnodeId> {
     fd.vbank()
         .iter_loc()
         .filter(|&vn| {
@@ -285,10 +313,17 @@ fn storage_varnodes(fd: &Funcdata, space: &Rc<AddrSpace>, off: uintb, size: int4
 /// through the expressions it is printed into, with nothing that makes the
 /// declaration unsafe?  A value stored into another stack slot is that slot's
 /// own variable, read at its own declaration, so the walk stops there.
-fn readers_agree(fd: &Funcdata, start: &[VarnodeId], signed: bool, space: &AddrSpace, off: uintb) -> bool {
+fn readers_agree(
+    fd: &Funcdata,
+    start: &[VarnodeId],
+    signed: bool,
+    space: &AddrSpace,
+    off: uintb,
+) -> bool {
     let other_slot = |vn: VarnodeId| {
         fd.vbank().get(vn).is_some_and(|v| {
-            v.get_addr().get_space().map(|s| s.get_index()) == Some(space.get_index()) && v.get_offset() != off
+            v.get_addr().get_space().map(|s| s.get_index()) == Some(space.get_index())
+                && v.get_offset() != off
         })
     };
     let mut work: Vec<(VarnodeId, u32)> = start.iter().map(|&vn| (vn, 0)).collect();
@@ -297,14 +332,21 @@ fn readers_agree(fd: &Funcdata, start: &[VarnodeId], signed: bool, space: &AddrS
         if !seen.insert(vn) {
             continue;
         }
-        let Some(v) = fd.vbank().get(vn) else { return false };
+        let Some(v) = fd.vbank().get(vn) else {
+            return false;
+        };
         for r in v.descend_iter() {
-            let Some(o) = fd.obank().get(r) else { return false };
+            let Some(o) = fd.obank().get(r) else {
+                return false;
+            };
             if signed && wide_constant(fd, r, vn) {
                 return false;
             }
             let read = if o.code() == OpCode::CPUI_SUBPIECE && high_piece(fd, r) {
-                Read::Demands { signed: false, carry: false }
+                Read::Demands {
+                    signed: false,
+                    carry: false,
+                }
             } else {
                 classify(o.code(), o.get_slot(vn))
             };
@@ -333,7 +375,11 @@ fn readers_agree(fd: &Funcdata, start: &[VarnodeId], signed: bool, space: &AddrS
 /// parameters, whose every access is the whole object, and whose readers all
 /// compute with `T`'s signedness, at `T`.  Returns the objects re-declared, as
 /// `(offset, size, T)`.
-pub fn declare_out_params(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) -> Vec<(uintb, int4, Rc<Datatype>)> {
+pub fn declare_out_params(
+    fd: &Funcdata,
+    state: &mut MapState,
+    space: &Rc<AddrSpace>,
+) -> Vec<(uintb, int4, Rc<Datatype>)> {
     let mut declared = Vec::new();
     let bits = space.get_addr_size() as int4 * 8 - 1;
     let signed_off = |o: uintb| sign_extend(o as intb, bits);
@@ -351,37 +397,56 @@ pub fn declare_out_params(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSp
     let frame_end = state.end_sstart();
     for (off, want) in wants {
         let Some(want) = want else { continue };
-        let Some(signed) = signedness(&want) else { continue };
+        let Some(signed) = signedness(&want) else {
+            continue;
+        };
         let size = want.get_size();
         let start = signed_off(off);
         let end: intb = start + size as intb;
-        if refs.iter().any(|r| r.off != off && signed_off(r.off) > start && signed_off(r.off) < end) {
+        if refs
+            .iter()
+            .any(|r| r.off != off && signed_off(r.off) > start && signed_off(r.off) < end)
+        {
             continue;
         }
         let inside = |s: intb, sz: int4| s < end && start < s + sz as intb;
         let hints = state.hints_mut();
         let mut settled = true;
         let mut open = false;
-        let clean = hints.iter().filter(|h| inside(h.sstart, h.size.max(1))).all(|h| {
-            settled &= same_int(&h.type_, &want);
-            open |= h.range_type == RangeType::Open;
-            h.sstart == start
-                && h.size == size
-                && !h.is_type_lock()
-                && h.range_type != RangeType::Endpoint
-                && (h.range_type != RangeType::Open || h.highind < 0)
-                && same_kind(&h.type_, &want)
-        });
+        let clean = hints
+            .iter()
+            .filter(|h| inside(h.sstart, h.size.max(1)))
+            .all(|h| {
+                settled &= same_int(&h.type_, &want);
+                open |= h.range_type == RangeType::Open;
+                h.sstart == start
+                    && h.size == size
+                    && !h.is_type_lock()
+                    && h.range_type != RangeType::Endpoint
+                    && (h.range_type != RangeType::Open || h.highind < 0)
+                    && same_kind(&h.type_, &want)
+            });
         if !clean || settled {
             continue;
         }
         if open {
-            let next = hints.iter().map(|h| h.sstart).filter(|&s| s >= end).chain(frame_end).min();
+            let next = hints
+                .iter()
+                .map(|h| h.sstart)
+                .filter(|&s| s >= end)
+                .chain(frame_end)
+                .min();
             if next != Some(end) {
                 continue;
             }
         }
-        if !readers_agree(fd, &storage_varnodes(fd, space, off, size), signed, space, off) {
+        if !readers_agree(
+            fd,
+            &storage_varnodes(fd, space, off, size),
+            signed,
+            space,
+            off,
+        ) {
             continue;
         }
         for h in state.hints_mut().iter_mut().filter(|h| h.sstart == start) {
@@ -401,13 +466,19 @@ pub fn declare_out_params(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSp
 /// again, so the cast pass and the declaration agree.
 pub fn reconcile(fd: &mut Funcdata) {
     let objects = fd.cast_objects();
-    let Some(space) = fd.get_scope_local().map(|lm| Rc::clone(lm.get_space_id())) else { return };
+    let Some(space) = fd.get_scope_local().map(|lm| Rc::clone(lm.get_space_id())) else {
+        return;
+    };
     for (off, size, want) in objects {
-        let Some(signed) = signedness(&want) else { continue };
+        let Some(signed) = signedness(&want) else {
+            continue;
+        };
         let slot = storage_varnodes(fd, &space, off, size);
         let mut highs: Vec<(HighVariableId, Rc<Datatype>)> = Vec::new();
         for &vn in &slot {
-            let Some(h) = fd.vbank().get(vn).and_then(|v| v.get_high()) else { continue };
+            let Some(h) = fd.vbank().get(vn).and_then(|v| v.get_high()) else {
+                continue;
+            };
             if highs.iter().any(|(k, _)| *k == h) {
                 continue;
             }
@@ -425,19 +496,28 @@ pub fn reconcile(fd: &mut Funcdata) {
         let members: Vec<VarnodeId> = highs
             .iter()
             .filter_map(|(h, _)| fd.high_bank().get(*h))
-            .flat_map(|h| (0..h.num_instances()).map(|i| h.get_instance(i)).collect::<Vec<_>>())
+            .flat_map(|h| {
+                (0..h.num_instances())
+                    .map(|i| h.get_instance(i))
+                    .collect::<Vec<_>>()
+            })
             .collect();
         if readers_agree(fd, &members, signed, &space, off) {
             continue;
         }
         let mut others = highs.iter().map(|(_, t)| t).filter(|t| !same_int(t, &want));
-        let Some(t) = others.next().cloned() else { continue };
+        let Some(t) = others.next().cloned() else {
+            continue;
+        };
         if others.any(|o| !same_int(o, &t)) {
             continue;
         }
         for vn in slot {
             let high = fd.vbank().get(vn).and_then(|v| v.get_high());
-            let changed = fd.vbank_mut().get_mut(vn).is_some_and(|v| v.update_type(Rc::clone(&t)));
+            let changed = fd
+                .vbank_mut()
+                .get_mut(vn)
+                .is_some_and(|v| v.update_type(Rc::clone(&t)));
             if let (true, Some(h)) = (changed, high) {
                 if let Some(hh) = fd.high_bank_mut().get_mut(h) {
                     hh.type_dirty();
@@ -445,7 +525,9 @@ pub fn reconcile(fd: &mut Funcdata) {
             }
         }
         let addr = unlace_base::address::Address::new(Rc::clone(&space), off);
-        let sym = fd.get_scope_local().and_then(|lm| lm.containing_symbol_for_storage(&addr));
+        let sym = fd
+            .get_scope_local()
+            .and_then(|lm| lm.containing_symbol_for_storage(&addr));
         if let (Some((sym, _)), Some(lm)) = (sym, fd.get_scope_local_mut()) {
             let _ = lm.retype_symbol(sym, t);
         }

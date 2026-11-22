@@ -3,11 +3,11 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace,
-    UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace, addrspace_flags,
+    spacetype,
 };
 use unlace_decomp::context::ArchContext;
-use unlace_decomp::dtype::{type_metatype, TypeFactory, TypeFactoryImpl};
+use unlace_decomp::dtype::{TypeFactory, TypeFactoryImpl, type_metatype};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
 
@@ -70,11 +70,7 @@ fn conversion(
     };
     let input = fd.new_unique(
         input_size,
-        Some(
-            factory
-                .get_base(input_size, input_metatype)
-                .unwrap(),
-        ),
+        Some(factory.get_base(input_size, input_metatype).unwrap()),
     );
     fd.op_set_input(op, input, 0).unwrap();
     let destination_type = match destination {
@@ -128,7 +124,11 @@ fn signed_truncation_and_float_conversion_do_not_gain_casts() {
         ] {
             let (mut fd, op, output) = conversion(size, destination, opcode);
             fd.action_set_casts();
-            assert_eq!(fd.obank().get(op).unwrap().get_out(), Some(output), "{opcode:?} {destination:?} size={size}");
+            assert_eq!(
+                fd.obank().get(op).unwrap().get_out(),
+                Some(output),
+                "{opcode:?} {destination:?} size={size}"
+            );
         }
     }
 }

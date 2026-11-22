@@ -109,7 +109,7 @@ use std::rc::Rc;
 use object::{Object, ObjectSection};
 
 use unlace_base::types::uint4;
-use unlace_decomp::dtype::{type_metatype, Datatype, TypeFactory};
+use unlace_decomp::dtype::{Datatype, TypeFactory, type_metatype};
 use unlace_decomp::fspec::PrototypePieces;
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase, SymFact, SymKind};
@@ -119,8 +119,8 @@ pub use lines::DwarfLinesPass;
 mod callwide;
 pub use callwide::declarations as callwide_declarations;
 
-mod kuna_cppproto;
 mod kuna_cppnames;
+mod kuna_cppproto;
 pub use kuna_cppnames::merge_symbols as merge_cpp_symbols;
 mod kuna_dwarfbounds;
 mod kuna_dwarfbyref;
@@ -205,7 +205,10 @@ fn call_frame_cfa(arch: object::Architecture) -> Option<i64> {
 fn global_type_is_whole(t: &Datatype) -> bool {
     t.get_size() > 0
         && !t.is_incomplete()
-        && !matches!(t.get_metatype(), type_metatype::TYPE_VOID | type_metatype::TYPE_UNKNOWN)
+        && !matches!(
+            t.get_metatype(),
+            type_metatype::TYPE_VOID | type_metatype::TYPE_UNKNOWN
+        )
 }
 
 /// Port of `DWARFAnalyzer`: install DWARF function/global names and typed
@@ -391,7 +394,9 @@ fn snapshot_unit_with_go(
         let entry = match cursor.next_dfs() {
             Ok(Some(entry)) => entry,
             Ok(None) => {
-                if let Some(go) = go.as_mut() { go.complete = true; }
+                if let Some(go) = go.as_mut() {
+                    go.complete = true;
+                }
                 break;
             }
             Err(_) => break,
@@ -426,9 +431,10 @@ fn snapshot_unit_with_go(
         // `DW_AT_specification`, and a concrete out-of-line instance of an inlined
         // function with only `DW_AT_abstract_origin`; both leave the DIE with no
         // `DW_AT_name`/`DW_AT_type` of its own.
-        for (attr, is_spec) in
-            [(gimli::DW_AT_specification, true), (gimli::DW_AT_abstract_origin, false)]
-        {
+        for (attr, is_spec) in [
+            (gimli::DW_AT_specification, true),
+            (gimli::DW_AT_abstract_origin, false),
+        ] {
             if let Some(gimli::AttributeValue::UnitRef(o)) = entry.attr_value(attr) {
                 snap.origin_ref = Some(o.0);
                 snap.origin_is_spec = is_spec;
@@ -488,7 +494,9 @@ fn snapshot_unit_with_go(
             snap.discr_ref = Some(o.0);
         }
         if let Some(v) = entry.attr_value(gimli::DW_AT_discr_value) {
-            snap.discr_value = v.sdata_value().or_else(|| v.udata_value().map(|u| u as i64));
+            snap.discr_value = v
+                .sdata_value()
+                .or_else(|| v.udata_value().map(|u| u as i64));
         }
         if let Some(gimli::AttributeValue::Encoding(e)) = entry.attr_value(gimli::DW_AT_encoding) {
             snap.encoding = Some(e);
@@ -504,13 +512,20 @@ fn snapshot_unit_with_go(
         // fall back to unsigned (`udata_value` covers the `data<N>` forms gimli
         // does not report as `sdata`).
         if let Some(v) = entry.attr_value(gimli::DW_AT_const_value) {
-            snap.const_value = v.sdata_value().or_else(|| v.udata_value().map(|u| u as i64));
+            snap.const_value = v
+                .sdata_value()
+                .or_else(|| v.udata_value().map(|u| u as i64));
         }
-        if matches!(entry.attr_value(gimli::DW_AT_declaration), Some(gimli::AttributeValue::Flag(true)))
-        {
+        if matches!(
+            entry.attr_value(gimli::DW_AT_declaration),
+            Some(gimli::AttributeValue::Flag(true))
+        ) {
             snap.declaration = true;
         }
-        if matches!(entry.attr_value(gimli::DW_AT_prototyped), Some(gimli::AttributeValue::Flag(true))) {
+        if matches!(
+            entry.attr_value(gimli::DW_AT_prototyped),
+            Some(gimli::AttributeValue::Flag(true))
+        ) {
             snap.prototyped = true;
         }
         if let Some(fb) = entry.attr_value(gimli::DW_AT_frame_base) {
@@ -518,7 +533,9 @@ fn snapshot_unit_with_go(
         }
         if matches!(
             entry.attr_value(gimli::DW_AT_calling_convention),
-            Some(gimli::AttributeValue::CallingConvention(gimli::DW_CC_nocall))
+            Some(gimli::AttributeValue::CallingConvention(
+                gimli::DW_CC_nocall
+            ))
         ) {
             snap.nocall = true;
         }
@@ -536,16 +553,21 @@ fn snapshot_unit_with_go(
                     snap.reg_location = kuna_dwarfscopes::register_location(dwarf, unit, &loc);
                 }
                 if snap.tag == gimli::DW_TAG_formal_parameter {
-                    let entry = parent_off.and_then(|parent| map.get(&parent)).and_then(|parent| parent.low_pc);
-                    snap.entry_register = kuna_dwarfbyref::location_at_entry(dwarf, unit, &loc, entry)
-                        .and_then(|e| kuna_dwarfscopes::single_register(e.0.slice()));
+                    let entry = parent_off
+                        .and_then(|parent| map.get(&parent))
+                        .and_then(|parent| parent.low_pc);
+                    snap.entry_register =
+                        kuna_dwarfbyref::location_at_entry(dwarf, unit, &loc, entry)
+                            .and_then(|e| kuna_dwarfscopes::single_register(e.0.slice()));
                 }
             }
             if snap.tag == gimli::DW_TAG_formal_parameter && kuna_dwarfbyref::is_fortran(language) {
                 let entry = parent_off
                     .and_then(|parent| map.get(&parent))
                     .and_then(|parent| parent.low_pc);
-                if let Some(expression) = kuna_dwarfbyref::location_at_entry(dwarf, unit, &loc, entry) {
+                if let Some(expression) =
+                    kuna_dwarfbyref::location_at_entry(dwarf, unit, &loc, entry)
+                {
                     snap.indirect_parameter = kuna_dwarfbyref::indirect_location(
                         &gimli::AttributeValue::Exprloc(expression.clone()),
                     );
@@ -561,7 +583,14 @@ fn snapshot_unit_with_go(
 
         if let Some(go) = go.as_mut() {
             if depth == 0 || go.enabled() {
-                go.capture(dwarf, unit, &entry, parent_off.and_then(|parent| map.get(&parent)).and_then(|parent| parent.low_pc));
+                go.capture(
+                    dwarf,
+                    unit,
+                    &entry,
+                    parent_off
+                        .and_then(|parent| map.get(&parent))
+                        .and_then(|parent| parent.low_pc),
+                );
             }
         }
         map.insert(off, snap);
@@ -622,7 +651,9 @@ fn indexed_addr_location<'a>(
 /// constant member offset. Dynamic and malformed locations stay unknown.
 fn simple_member_location(loc: &gimli::AttributeValue<Reader<'_>>) -> Option<i64> {
     match loc {
-        gimli::AttributeValue::Exprloc(expression) => kuna_dwarflocation::member_offset(expression.0.slice()),
+        gimli::AttributeValue::Exprloc(expression) => {
+            kuna_dwarflocation::member_offset(expression.0.slice())
+        }
         gimli::AttributeValue::Block(block) => kuna_dwarflocation::member_offset(block.slice()),
         gimli::AttributeValue::Sdata(value) => Some(*value),
         _ => loc.udata_value().and_then(|u| i64::try_from(u).ok()),
@@ -638,8 +669,11 @@ fn simple_fbreg_location(loc: &gimli::AttributeValue<Reader<'_>>) -> Option<i64>
         gimli::AttributeValue::Block(block) => block.slice(),
         _ => return None,
     };
-    kuna_dwarflocation::frame_offset(bytes)
-        .or_else(|| kuna_dwarfscopes::enabled().then(|| kuna_dwarfscopes::piece_frame_offset(bytes)).flatten())
+    kuna_dwarflocation::frame_offset(bytes).or_else(|| {
+        kuna_dwarfscopes::enabled()
+            .then(|| kuna_dwarfscopes::piece_frame_offset(bytes))
+            .flatten()
+    })
 }
 
 /// Decode a little-endian SLEB128 (DWARF signed LEB128) from `buf`, returning the
@@ -717,8 +751,11 @@ fn build_datatype_at(
     // loop (the hop count is bounded) and leaves the cycle guard where it belongs,
     // on the pointer/array/struct arms that actually recurse. (kuna `cppproto`
     // introduced it for C++; `typedepth` extends it to the C callers.)
-    let (die, alias) =
-        if cpp || walk.collapse_qualifiers() { strip_qualifiers(die, dies) } else { (die, None) };
+    let (die, alias) = if cpp || walk.collapse_qualifiers() {
+        strip_qualifiers(die, dies)
+    } else {
+        (die, None)
+    };
     let ptr = types.get_size_of_pointer();
     match die.tag {
         gimli::DW_TAG_base_type => {
@@ -785,15 +822,39 @@ fn build_datatype_at(
         // A `DW_TAG_class_type` is a structure with a default access specifier —
         // Ghidra's importer maps both through the same `makeDataTypeForStruct`
         // arm. Without it every `Foo *this` degraded to `void *`.
-        gimli::DW_TAG_structure_type => {
-            intern_aggregate(types, die, dies, alias, "anon_struct", walk, word_size, cpp, false)
-        }
-        gimli::DW_TAG_class_type if cpp => {
-            intern_aggregate(types, die, dies, alias, "anon_class", walk, word_size, cpp, false)
-        }
-        gimli::DW_TAG_union_type => {
-            intern_aggregate(types, die, dies, alias, "anon_union", walk, word_size, cpp, true)
-        }
+        gimli::DW_TAG_structure_type => intern_aggregate(
+            types,
+            die,
+            dies,
+            alias,
+            "anon_struct",
+            walk,
+            word_size,
+            cpp,
+            false,
+        ),
+        gimli::DW_TAG_class_type if cpp => intern_aggregate(
+            types,
+            die,
+            dies,
+            alias,
+            "anon_class",
+            walk,
+            word_size,
+            cpp,
+            false,
+        ),
+        gimli::DW_TAG_union_type => intern_aggregate(
+            types,
+            die,
+            dies,
+            alias,
+            "anon_union",
+            walk,
+            word_size,
+            cpp,
+            true,
+        ),
         gimli::DW_TAG_enumeration_type => {
             let size = die.byte_size.map(|b| b as i32).unwrap_or(4).max(1);
             let signed = enum_signed(die, dies);
@@ -802,7 +863,9 @@ fn build_datatype_at(
                 // enum size: fall back to the plain underlying integer.
                 .or_else(|| types.get_base(size, enum_fallback(size, signed)).ok())
         }
-        gimli::DW_TAG_subroutine_type if unlace_decomp::kuna_calltargettype::dwarf_function_types() => {
+        gimli::DW_TAG_subroutine_type
+            if unlace_decomp::kuna_calltargettype::dwarf_function_types() =>
+        {
             build_subroutine(die, dies, types, word_size, walk, cpp)
         }
         // Any other tag -> give up on this type cleanly.
@@ -983,17 +1046,24 @@ fn build_enum(
     if die.name.is_empty() {
         return None;
     }
-    let mask: u64 = if size >= 8 { u64::MAX } else { (1u64 << (size * 8)) - 1 };
+    let mask: u64 = if size >= 8 {
+        u64::MAX
+    } else {
+        (1u64 << (size * 8)) - 1
+    };
     let mut nmap: std::collections::BTreeMap<u64, String> = std::collections::BTreeMap::new();
     for &coff in &die.children {
-        let Some(child) = dies.get(&coff) else { continue };
+        let Some(child) = dies.get(&coff) else {
+            continue;
+        };
         if child.tag != gimli::DW_TAG_enumerator || child.name.is_empty() {
             continue;
         }
         let Some(v) = child.const_value else { continue };
         // First member at a value wins; a duplicate value is an alias the printer
         // could not disambiguate anyway.
-        nmap.entry((v as u64) & mask).or_insert_with(|| child.name.clone());
+        nmap.entry((v as u64) & mask)
+            .or_insert_with(|| child.name.clone());
     }
     if nmap.is_empty() {
         return None;
@@ -1037,10 +1107,22 @@ fn build_subroutine(
     if !die.prototyped {
         return None;
     }
-    let mut pieces = PrototypePieces { first_var_arg_slot: -1, ..Default::default() };
-    pieces.outtype = Some(build_datatype(die.type_ref, dies, types, word_size, walk, cpp)?);
+    let mut pieces = PrototypePieces {
+        first_var_arg_slot: -1,
+        ..Default::default()
+    };
+    pieces.outtype = Some(build_datatype(
+        die.type_ref,
+        dies,
+        types,
+        word_size,
+        walk,
+        cpp,
+    )?);
     for &coff in &die.children {
-        let Some(child) = dies.get(&coff) else { continue };
+        let Some(child) = dies.get(&coff) else {
+            continue;
+        };
         match child.tag {
             gimli::DW_TAG_formal_parameter => {
                 let ty = build_datatype(child.type_ref, dies, types, word_size, walk, cpp)?;
@@ -1051,7 +1133,9 @@ fn build_subroutine(
                 pieces.innames.push(String::new());
             }
             gimli::DW_TAG_unspecified_parameters if pieces.intypes.is_empty() => return None,
-            gimli::DW_TAG_unspecified_parameters => pieces.first_var_arg_slot = pieces.intypes.len() as i32,
+            gimli::DW_TAG_unspecified_parameters => {
+                pieces.first_var_arg_slot = pieces.intypes.len() as i32
+            }
             _ => {}
         }
     }
@@ -1079,7 +1163,9 @@ fn build_pieces(
     let mut first_var_arg_slot: i32 = -1;
 
     for &coff in &sub.children {
-        let Some(child) = dies.get(&coff) else { continue };
+        let Some(child) = dies.get(&coff) else {
+            continue;
+        };
         match child.tag {
             gimli::DW_TAG_formal_parameter => {
                 let ty = build_datatype(child.type_ref, dies, types, word_size, &mut walk, false)?;
@@ -1163,11 +1249,18 @@ fn collect_fbreg_locals(
     let mut walk = TypeWalk::new();
     let mut names = kuna_dwarfscopes::LocalNames::default();
     for child in kuna_dwarfscopes::scope_vars(sub, dies) {
-        if !matches!(child.tag, gimli::DW_TAG_variable | gimli::DW_TAG_formal_parameter) {
+        if !matches!(
+            child.tag,
+            gimli::DW_TAG_variable | gimli::DW_TAG_formal_parameter
+        ) {
             continue;
         }
         let origin = child.origin_ref.and_then(|o| dies.get(&o));
-        let name = if child.name.is_empty() { origin.map(|o| o.name.clone()).unwrap_or_default() } else { child.name.clone() };
+        let name = if child.name.is_empty() {
+            origin.map(|o| o.name.clone()).unwrap_or_default()
+        } else {
+            child.name.clone()
+        };
         if name.is_empty() {
             continue;
         }
@@ -1182,7 +1275,9 @@ fn collect_fbreg_locals(
                 type_: ty,
                 stack_offset: base.wrapping_add(fbreg),
             }),
-            (None, _, Some((reg, lo))) if child.tag == gimli::DW_TAG_variable && ty.get_size() > 0 => {
+            (None, _, Some((reg, lo)))
+                if child.tag == gimli::DW_TAG_variable && ty.get_size() > 0 =>
+            {
                 regs.push(crate::pass::RegLocalFact {
                     func_addr,
                     name: names.unique(&name),
@@ -1248,7 +1343,10 @@ impl DwarfPass {
                 if let Some((_, bytes)) = companion {
                     if let Ok(file) = object::File::parse(&*bytes) {
                         if dwarf_section_data(&file, gimli::SectionId::DebugInfo).is_some() {
-                            return DwarfPass.run(&AnalysisCtx { file: &file, ..*ctx });
+                            return DwarfPass.run(&AnalysisCtx {
+                                file: &file,
+                                ..*ctx
+                            });
                         }
                     }
                 }
@@ -1280,16 +1378,22 @@ impl DwarfPass {
         // `None` => this target's CFA is not in kuna's table; skip fbreg locals
         // (additive — the names+types from subtasks 1+2 still apply).
         let cfa = call_frame_cfa(ctx.file.architecture());
-        let complex_max =
-            kuna_dwarfcomplex::max_size(ctx.file.format(), ctx.file.architecture(), &ctx.arch.archid);
+        let complex_max = kuna_dwarfcomplex::max_size(
+            ctx.file.format(),
+            ctx.file.architecture(),
+            &ctx.arch.archid,
+        );
 
         let linkage_imports = kuna_dwarflinkage::imports(ctx);
         let linkage_definitions = kuna_dwarflinkage::definitions(ctx, &linkage_imports);
-        let go_target = ctx.file.is_little_endian() && ctx.file.architecture() == object::Architecture::X86_64;
+        let go_target =
+            ctx.file.is_little_endian() && ctx.file.architecture() == object::Architecture::X86_64;
         let mut go_facts = kuna_godwarfsig::Facts::default();
         let mut units = dwarf.units();
         while let Ok(Some(header)) = units.next() {
-            let Ok(unit) = dwarf.unit(header) else { continue };
+            let Ok(unit) = dwarf.unit(header) else {
+                continue;
+            };
             let mut go = kuna_godwarfsig::UnitExtras::default();
             let mut dies = snapshot_unit_with_go(
                 &dwarf,
@@ -1329,16 +1433,38 @@ impl DwarfPass {
                             });
                             // subtask 2: typed signature. A prototype that can't be
                             // fully typed is skipped (never fails the analysis).
-                            if let Some(pieces) =
-                                signatures.then(|| build_pieces(&snap.name, snap, &dies, types, word_size)).flatten()
+                            if let Some(pieces) = signatures
+                                .then(|| build_pieces(&snap.name, snap, &dies, types, word_size))
+                                .flatten()
                             {
-                                kuna_dwarfscopes::entry_storage(snap, low_pc, &dies, &pieces, &mut out.dwarf_param_regs);
-                                kuna_dwarflinkage::append(snap, &dies, &pieces, &linkage_imports, &linkage_definitions, &mut out.prototypes_at);
+                                kuna_dwarfscopes::entry_storage(
+                                    snap,
+                                    low_pc,
+                                    &dies,
+                                    &pieces,
+                                    &mut out.dwarf_param_regs,
+                                );
+                                kuna_dwarflinkage::append(
+                                    snap,
+                                    &dies,
+                                    &pieces,
+                                    &linkage_imports,
+                                    &linkage_definitions,
+                                    &mut out.prototypes_at,
+                                );
                                 out.prototypes.push(pieces);
                                 let params = snap.children.iter().copied().filter(|c| {
-                                    dies.get(c).is_some_and(|d| d.tag == gimli::DW_TAG_formal_parameter)
+                                    dies.get(c)
+                                        .is_some_and(|d| d.tag == gimli::DW_TAG_formal_parameter)
                                 });
-                                note_nocall(snap, low_pc, &snap.name, params, &dies, &mut out.dwarf_nocall);
+                                note_nocall(
+                                    snap,
+                                    low_pc,
+                                    &snap.name,
+                                    params,
+                                    &dies,
+                                    &mut out.dwarf_nocall,
+                                );
                             }
                             // subtask 3: named, typed stack LOCALS. Each direct
                             // `DW_TAG_variable`/`DW_TAG_formal_parameter` child with a
@@ -1349,7 +1475,16 @@ impl DwarfPass {
                             // `DWARFVariable.readLocalVariableStorage` -> stack varnode.
                             // Only when the arch's CFA constant is known.
                             if let Some(cfa) = cfa {
-                                collect_fbreg_locals(low_pc, snap, &dies, types, word_size, cfa, &mut out.locals, &mut out.dwarf_reg_locals);
+                                collect_fbreg_locals(
+                                    low_pc,
+                                    snap,
+                                    &dies,
+                                    types,
+                                    word_size,
+                                    cfa,
+                                    &mut out.locals,
+                                    &mut out.dwarf_reg_locals,
+                                );
                             }
                         }
                         // (kuna `cppproto`) The C++ arm: fuse the definition with the
@@ -1370,11 +1505,26 @@ impl DwarfPass {
                                 kind: SymKind::Function,
                             });
                         }
-                        if let Some(pieces) =
-                            signatures.then(|| kuna_cppproto::build_pieces(&res, &dies, types, word_size)).flatten()
+                        if let Some(pieces) = signatures
+                            .then(|| kuna_cppproto::build_pieces(&res, &dies, types, word_size))
+                            .flatten()
                         {
-                            kuna_dwarflinkage::append(snap, &dies, &pieces, &linkage_imports, &linkage_definitions, &mut out.cpp_dwarf.prototypes);
-                            note_nocall(snap, low_pc, &pieces.name, res.params.iter().copied(), &dies, &mut out.dwarf_nocall);
+                            kuna_dwarflinkage::append(
+                                snap,
+                                &dies,
+                                &pieces,
+                                &linkage_imports,
+                                &linkage_definitions,
+                                &mut out.cpp_dwarf.prototypes,
+                            );
+                            note_nocall(
+                                snap,
+                                low_pc,
+                                &pieces.name,
+                                res.params.iter().copied(),
+                                &dies,
+                                &mut out.dwarf_nocall,
+                            );
                             out.cpp_dwarf.prototypes.push((low_pc, pieces));
                         }
                         if res.chased {
@@ -1413,7 +1563,11 @@ impl DwarfPass {
                                 &mut TypeWalk::new(),
                                 false,
                             );
-                            let size = ty.as_ref().map(|t| t.get_size()).filter(|&s| s >= 1).unwrap_or(1) as u32;
+                            let size = ty
+                                .as_ref()
+                                .map(|t| t.get_size())
+                                .filter(|&s| s >= 1)
+                                .unwrap_or(1) as u32;
                             if let Some(t) = ty.filter(|t| global_type_is_whole(t)) {
                                 out.dwarf_typed_globals.push(crate::pass::TypedDataFact {
                                     addr,
@@ -1438,13 +1592,15 @@ impl DwarfPass {
         }
         let arch = ctx.file.architecture();
         for list in [&mut out.dwarf_reg_locals, &mut out.dwarf_param_regs] {
-            list.retain_mut(|r| match kuna_dwarfscopes::register_name(arch, r.dwarf_reg) {
-                Some(name) => {
-                    r.reg = name;
-                    true
-                }
-                None => false,
-            });
+            list.retain_mut(
+                |r| match kuna_dwarfscopes::register_name(arch, r.dwarf_reg) {
+                    Some(name) => {
+                        r.reg = name;
+                        true
+                    }
+                    None => false,
+                },
+            );
         }
         out
     }
@@ -1466,8 +1622,12 @@ mod tests {
     #[test]
     fn a_bit_offset_reads_negative_in_either_producer_spelling() {
         type Value = gimli::AttributeValue<gimli::EndianSlice<'static, gimli::LittleEndian>>;
-        for (value, expected) in [(Value::Sdata(-6), -6), (Value::Data8(0xffff_ffff_ffff_fffa), -6),
-            (Value::Data1(0x18), 24), (Value::Udata(3), 3)] {
+        for (value, expected) in [
+            (Value::Sdata(-6), -6),
+            (Value::Data8(0xffff_ffff_ffff_fffa), -6),
+            (Value::Data1(0x18), 24),
+            (Value::Udata(3), 3),
+        ] {
             assert_eq!(signed_bit_offset(&value), Some(expected), "{value:?}");
         }
     }
@@ -1476,33 +1636,74 @@ mod tests {
     fn constant_locations_keep_the_dwarf_byte_order_and_member_offsets() {
         for endian in [gimli::RunTimeEndian::Big, gimli::RunTimeEndian::Little] {
             for size in [4, 8] {
-                let expected = if size == 4 { 0x81234567u64 } else { 0x8123456789abcdefu64 };
+                let expected = if size == 4 {
+                    0x81234567u64
+                } else {
+                    0x8123456789abcdefu64
+                };
                 let mut bytes = vec![gimli::DW_OP_addr.0];
                 match (endian, size) {
                     (gimli::RunTimeEndian::Big, 4) => bytes.extend((expected as u32).to_be_bytes()),
-                    (gimli::RunTimeEndian::Little, 4) => bytes.extend((expected as u32).to_le_bytes()),
+                    (gimli::RunTimeEndian::Little, 4) => {
+                        bytes.extend((expected as u32).to_le_bytes())
+                    }
                     (gimli::RunTimeEndian::Big, _) => bytes.extend(expected.to_be_bytes()),
                     _ => bytes.extend(expected.to_le_bytes()),
                 }
                 let data = Reader::new(&bytes, endian);
-                assert_eq!(simple_addr_location(&gimli::AttributeValue::Block(data), size), Some(expected));
-                assert_eq!(simple_addr_location(&gimli::AttributeValue::Exprloc(gimli::Expression(data)), size), Some(expected));
+                assert_eq!(
+                    simple_addr_location(&gimli::AttributeValue::Block(data), size),
+                    Some(expected)
+                );
+                assert_eq!(
+                    simple_addr_location(
+                        &gimli::AttributeValue::Exprloc(gimli::Expression(data)),
+                        size
+                    ),
+                    Some(expected)
+                );
                 let other = if size == 4 { 8 } else { 4 };
-                assert_eq!(simple_addr_location(&gimli::AttributeValue::Block(data), other), None,
-                    "a {size}-byte operand is not a {other}-byte unit's address");
+                assert_eq!(
+                    simple_addr_location(&gimli::AttributeValue::Block(data), other),
+                    None,
+                    "a {size}-byte operand is not a {other}-byte unit's address"
+                );
             }
             let mut trailing = vec![gimli::DW_OP_addr.0, 0, 0, 0x10, 0];
-            trailing.extend([gimli::DW_OP_lit0.0, gimli::DW_OP_plus.0, gimli::DW_OP_lit0.0, gimli::DW_OP_plus.0]);
+            trailing.extend([
+                gimli::DW_OP_lit0.0,
+                gimli::DW_OP_plus.0,
+                gimli::DW_OP_lit0.0,
+                gimli::DW_OP_plus.0,
+            ]);
             let data = Reader::new(&trailing, endian);
-            assert_eq!(simple_addr_location(&gimli::AttributeValue::Block(data), 4), None,
-                "a 32-bit address followed by more operations is not a static address");
+            assert_eq!(
+                simple_addr_location(&gimli::AttributeValue::Block(data), 4),
+                None,
+                "a 32-bit address followed by more operations is not a static address"
+            );
             let data = Reader::new(&[0x23, 0x08], endian);
-            assert_eq!(simple_member_location(&gimli::AttributeValue::Block(data)), Some(8));
-            assert_eq!(simple_member_location(&gimli::AttributeValue::Exprloc(gimli::Expression(data))), Some(8));
+            assert_eq!(
+                simple_member_location(&gimli::AttributeValue::Block(data)),
+                Some(8)
+            );
+            assert_eq!(
+                simple_member_location(&gimli::AttributeValue::Exprloc(gimli::Expression(data))),
+                Some(8)
+            );
         }
-        assert_eq!(simple_member_location(&gimli::AttributeValue::Udata(u64::MAX)), None);
-        assert_eq!(simple_member_location(&gimli::AttributeValue::Data1(128)), Some(128));
-        assert_eq!(simple_member_location(&gimli::AttributeValue::Data8(u64::MAX)), None);
+        assert_eq!(
+            simple_member_location(&gimli::AttributeValue::Udata(u64::MAX)),
+            None
+        );
+        assert_eq!(
+            simple_member_location(&gimli::AttributeValue::Data1(128)),
+            Some(128)
+        );
+        assert_eq!(
+            simple_member_location(&gimli::AttributeValue::Data8(u64::MAX)),
+            None
+        );
     }
 
     /// A configured [`TypeFactory`] for the mapper unit tests (the dtype-test
@@ -1561,7 +1762,10 @@ mod tests {
                 let mut walk = TypeWalk::with_gate(true);
                 let built = build_datatype(Some(off), &dies, &types, 1, &mut walk, cpp);
                 if off == 1 || off == 4 {
-                    assert!(built.is_some(), "a cyclic pointer should still build (off={off})");
+                    assert!(
+                        built.is_some(),
+                        "a cyclic pointer should still build (off={off})"
+                    );
                 }
             }
         }
@@ -1617,7 +1821,11 @@ mod tests {
             let two = one.get_ptr_to().expect("pointer to pointer");
             two.get_size()
         };
-        assert_eq!(inner(&old), 0, "the budget truncates the element type to void");
+        assert_eq!(
+            inner(&old),
+            0,
+            "the budget truncates the element type to void"
+        );
         assert_eq!(inner(&new), 4, "the cycle guard keeps the 4-byte int");
     }
 
@@ -1660,14 +1868,37 @@ mod tests {
             let t = build_datatype(Some(off), &dies, &types, 1, &mut walk, false).expect("builds");
             (t.get_metatype(), t.is_enum_type())
         };
-        assert_eq!(meta(1), (type_metatype::TYPE_UINT, false), "char16_t is unsigned");
-        assert_eq!(meta(10), (type_metatype::TYPE_UINT, false), "an unsigned anonymous enum");
-        assert_eq!(meta(20), (type_metatype::TYPE_INT, true), "a signed clang enum");
-        assert_eq!(meta(30), (type_metatype::TYPE_UINT, false), "no stated sign");
-        assert_eq!(meta(40), (type_metatype::TYPE_UINT, true), "no stated sign, named");
-        assert_eq!(meta(50), (type_metatype::TYPE_INT, false), "a 4-byte enum stays int");
+        assert_eq!(
+            meta(1),
+            (type_metatype::TYPE_UINT, false),
+            "char16_t is unsigned"
+        );
+        assert_eq!(
+            meta(10),
+            (type_metatype::TYPE_UINT, false),
+            "an unsigned anonymous enum"
+        );
+        assert_eq!(
+            meta(20),
+            (type_metatype::TYPE_INT, true),
+            "a signed clang enum"
+        );
+        assert_eq!(
+            meta(30),
+            (type_metatype::TYPE_UINT, false),
+            "no stated sign"
+        );
+        assert_eq!(
+            meta(40),
+            (type_metatype::TYPE_UINT, true),
+            "no stated sign, named"
+        );
+        assert_eq!(
+            meta(50),
+            (type_metatype::TYPE_INT, false),
+            "a 4-byte enum stays int"
+        );
     }
-
 
     /// `signed char` and `unsigned char` are character types of the sign DWARF
     /// states; plain `char` stays the core `char` whatever its encoding (AArch64
@@ -1701,13 +1932,31 @@ mod tests {
         let built = |off: usize| {
             let mut walk = TypeWalk::with_gate(true);
             let t = build_datatype(Some(off), &dies, &types, 1, &mut walk, false).expect("builds");
-            (t.get_metatype(), t.is_char_print(), t.is_core_type(), t.get_name().to_string())
+            (
+                t.get_metatype(),
+                t.is_char_print(),
+                t.is_core_type(),
+                t.get_name().to_string(),
+            )
         };
         let plain = (type_metatype::TYPE_INT, true, true, "char".to_string());
         assert_eq!(built(0), plain, "x86 plain char");
         assert_eq!(built(1), plain, "ARM plain char");
-        assert_eq!(built(2), (type_metatype::TYPE_INT, true, false, "signed char".into()), "signed char");
-        assert_eq!(built(3), (type_metatype::TYPE_UINT, true, false, "unsigned char".into()), "unsigned char");
+        assert_eq!(
+            built(2),
+            (type_metatype::TYPE_INT, true, false, "signed char".into()),
+            "signed char"
+        );
+        assert_eq!(
+            built(3),
+            (
+                type_metatype::TYPE_UINT,
+                true,
+                false,
+                "unsigned char".into()
+            ),
+            "unsigned char"
+        );
         assert_eq!(built(4), plain, "Fortran character");
     }
 
@@ -1754,11 +2003,17 @@ mod tests {
         // dwarf_stripped_x86_64 has FUNC names ONLY in DWARF (.symtab stripped):
         // add_values@0x401136, compute@0x401153, main@0x401198. `printf` is
         // declaration-only (no low_pc) and must NOT appear.
-        let path =
-            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/dwarf_stripped_x86_64");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/dwarf_stripped_x86_64"
+        );
         let defined = defined_subprograms(path);
         let by_name: BTreeMap<_, _> = defined.iter().cloned().collect();
-        assert_eq!(by_name.get("add_values"), Some(&0x401136), "add_values low_pc");
+        assert_eq!(
+            by_name.get("add_values"),
+            Some(&0x401136),
+            "add_values low_pc"
+        );
         assert_eq!(by_name.get("compute"), Some(&0x401153), "compute low_pc");
         assert_eq!(by_name.get("main"), Some(&0x401198), "main low_pc");
         assert!(
@@ -1806,7 +2061,9 @@ mod tests {
                     let pcoff = snap
                         .children
                         .iter()
-                        .find(|c| dies.get(c).map(|d| d.tag) == Some(gimli::DW_TAG_formal_parameter))
+                        .find(|c| {
+                            dies.get(c).map(|d| d.tag) == Some(gimli::DW_TAG_formal_parameter)
+                        })
                         .copied();
                     if let Some(pcoff) = pcoff {
                         let p = &dies[&pcoff];
@@ -1823,7 +2080,10 @@ mod tests {
                 }
             }
         }
-        assert!(found_charptr, "elaborate_debug_symbol's first param should be char *");
+        assert!(
+            found_charptr,
+            "elaborate_debug_symbol's first param should be char *"
+        );
     }
 
     #[test]
@@ -1856,7 +2116,11 @@ mod tests {
         let bytes = std::fs::read(path).unwrap();
         let file = object::File::parse(bytes.as_slice()).unwrap();
         // The fixture is x86-64 ⇒ static CFA = 8 (x86-64.dwarf `<call_frame_cfa>`).
-        assert_eq!(call_frame_cfa(file.architecture()), Some(8), "x86-64 CFA == 8");
+        assert_eq!(
+            call_frame_cfa(file.architecture()),
+            Some(8),
+            "x86-64 CFA == 8"
+        );
         let cfa = 8i64;
 
         let endian = gimli::RunTimeEndian::Little;
@@ -1879,7 +2143,10 @@ mod tests {
                 if snap.tag == gimli::DW_TAG_subprogram && snap.name == "elaborate_debug_symbol" {
                     for &coff in &snap.children {
                         let c = &dies[&coff];
-                        if matches!(c.tag, gimli::DW_TAG_variable | gimli::DW_TAG_formal_parameter) {
+                        if matches!(
+                            c.tag,
+                            gimli::DW_TAG_variable | gimli::DW_TAG_formal_parameter
+                        ) {
                             if let Some(fb) = c.fbreg_location {
                                 found.push((c.name.clone(), fb, cfa.wrapping_add(fb)));
                             }
@@ -1888,12 +2155,22 @@ mod tests {
                 }
             }
         }
-        let by_name: BTreeMap<_, _> =
-            found.iter().map(|(n, fb, off)| (n.clone(), (*fb, *off))).collect();
+        let by_name: BTreeMap<_, _> = found
+            .iter()
+            .map(|(n, fb, off)| (n.clone(), (*fb, *off)))
+            .collect();
         // binary: fbreg -40 -> stack -32; file: -32 -> -24; elf_header: -24 -> -16.
-        assert_eq!(by_name.get("binary"), Some(&(-40, -32)), "binary fbreg/offset");
+        assert_eq!(
+            by_name.get("binary"),
+            Some(&(-40, -32)),
+            "binary fbreg/offset"
+        );
         assert_eq!(by_name.get("file"), Some(&(-32, -24)), "file fbreg/offset");
-        assert_eq!(by_name.get("elf_header"), Some(&(-24, -16)), "elf_header fbreg/offset");
+        assert_eq!(
+            by_name.get("elf_header"),
+            Some(&(-24, -16)),
+            "elf_header fbreg/offset"
+        );
     }
 
     #[test]

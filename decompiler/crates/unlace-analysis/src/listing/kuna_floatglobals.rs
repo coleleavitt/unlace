@@ -30,7 +30,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::space::{spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::kuna_floatglobals::{FloatGlobals, FloatScan};
 use unlace_num::opcodes::OpCode;
@@ -42,7 +42,7 @@ use super::classify::classify;
 use super::kuna_poolref::PoolImage;
 use super::kuna_switchtable;
 use super::model::RawOp;
-use super::xrefs::{decode, in_range, range_union, FullCapture, FullOp};
+use super::xrefs::{FullCapture, FullOp, decode, in_range, range_union};
 
 /// How far past an address the program stores to memory a load or store
 /// through a copy of it may reach: the globals in that window stay undecided.
@@ -70,8 +70,10 @@ pub fn scan(arch: &Architecture, input: &FloatScan) -> FloatGlobals {
         return FloatGlobals::new();
     }
     let manage = arch.manage();
-    let (Some(code), Some(data)) = (manage.get_default_code_space().cloned(), manage.get_default_data_space().cloned())
-    else {
+    let (Some(code), Some(data)) = (
+        manage.get_default_code_space().cloned(),
+        manage.get_default_data_space().cloned(),
+    ) else {
         return FloatGlobals::new();
     };
     let translate: &dyn Translate = arch.translate();
@@ -85,8 +87,12 @@ pub fn scan(arch: &Architecture, input: &FloatScan) -> FloatGlobals {
     }
     let ptr = code.get_addr_size();
     let pool = PoolImage::from_ranges(
-        image.sections.iter().filter(|s| s.flags & (section_flags::READONLY | section_flags::CODE) != 0)
-            .filter_map(|s| s.bytes.as_deref().map(|b| (s.lo, s.lo + b.len() as u64, b))).collect(),
+        image
+            .sections
+            .iter()
+            .filter(|s| s.flags & (section_flags::READONLY | section_flags::CODE) != 0)
+            .filter_map(|s| s.bytes.as_deref().map(|b| (s.lo, s.lo + b.len() as u64, b)))
+            .collect(),
         ptr,
         !translate.is_big_endian(),
     );
@@ -120,7 +126,12 @@ pub fn scan(arch: &Architecture, input: &FloatScan) -> FloatGlobals {
         },
     };
 
-    let entries: BTreeSet<u64> = input.seeds.iter().copied().filter(|&e| in_range(&image.exec, e)).collect();
+    let entries: BTreeSet<u64> = input
+        .seeds
+        .iter()
+        .copied()
+        .filter(|&e| in_range(&image.exec, e))
+        .collect();
     let mut queue: VecDeque<u64> = entries.iter().copied().collect();
     let mut walked: HashSet<u64> = HashSet::new();
     let mut cap = FullCapture::default();
@@ -161,13 +172,16 @@ impl FloatRegisters {
     fn new(translate: &dyn Translate, family: &str) -> FloatRegisters {
         let numbered = |name: &str, prefixes: &[&str]| {
             prefixes.iter().any(|p| {
-                name.strip_prefix(p).is_some_and(|rest| !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit()))
+                name.strip_prefix(p).is_some_and(|rest| {
+                    !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit())
+                })
             })
         };
         let is_float = |name: &str| match family {
             "x86" => {
                 ["XMM", "YMM", "ZMM"].iter().any(|p| {
-                    name.strip_prefix(p).is_some_and(|rest| rest.bytes().next().is_some_and(|b| b.is_ascii_digit()))
+                    name.strip_prefix(p)
+                        .is_some_and(|rest| rest.bytes().next().is_some_and(|b| b.is_ascii_digit()))
                 }) || numbered(name, &["ST"])
             }
             "ARM" => numbered(name, &["s", "d", "q"]),
@@ -188,15 +202,27 @@ impl FloatRegisters {
             if space.is_none() {
                 space = vn.space.clone();
             }
-            if vn.space.as_ref().zip(space.as_ref()).is_some_and(|(a, b)| Rc::ptr_eq(a, b)) {
+            if vn
+                .space
+                .as_ref()
+                .zip(space.as_ref())
+                .is_some_and(|(a, b)| Rc::ptr_eq(a, b))
+            {
                 ranges.push((vn.offset, vn.offset + vn.size as u64));
             }
         }
-        FloatRegisters { space, ranges: range_union(ranges) }
+        FloatRegisters {
+            space,
+            ranges: range_union(ranges),
+        }
     }
 
     fn contains(&self, vn: &VarnodeData) -> bool {
-        let same = vn.space.as_ref().zip(self.space.as_ref()).is_some_and(|(a, b)| Rc::ptr_eq(a, b));
+        let same = vn
+            .space
+            .as_ref()
+            .zip(self.space.as_ref())
+            .is_some_and(|(a, b)| Rc::ptr_eq(a, b));
         same && {
             let n = self.ranges.partition_point(|&(lo, _)| lo <= vn.offset);
             n > 0 && vn.offset + vn.size as u64 <= self.ranges[n - 1].1
@@ -207,9 +233,14 @@ impl FloatRegisters {
 /// The registers a call may change: every storage location the default
 /// convention passes a parameter or returns a value in.
 fn clobbered_registers(arch: &Architecture) -> Vec<(u64, u64)> {
-    let Some(model) = arch.default_fp() else { return Vec::new() };
+    let Some(model) = arch.default_fp() else {
+        return Vec::new();
+    };
     let mut out = Vec::new();
-    for list in [model.input_opt(), model.output_list()].into_iter().flatten() {
+    for list in [model.input_opt(), model.output_list()]
+        .into_iter()
+        .flatten()
+    {
         for e in list.get_entry() {
             if e.get_space().get_type() == spacetype::IPTR_PROCESSOR && e.get_size() > 0 {
                 out.push((e.get_base(), e.get_base() + e.get_size() as u64));
@@ -235,7 +266,12 @@ struct Image {
 }
 
 impl Image {
-    fn new(arch: &Architecture, data: &Rc<AddrSpace>, rows: &[(u64, u64, u32)], big_endian: bool) -> Image {
+    fn new(
+        arch: &Architecture,
+        data: &Rc<AddrSpace>,
+        rows: &[(u64, u64, u32)],
+        big_endian: bool,
+    ) -> Image {
         let loader = arch.translate().loader_rc();
         let mut sections = Vec::new();
         for &(lo, size, flags) in rows {
@@ -246,16 +282,32 @@ impl Image {
                 None
             } else {
                 let mut buf = vec![0u8; size as usize];
-                let read = loader.try_borrow_mut().ok().map(|mut l| l.load_fill(&mut buf, &Address::new(Rc::clone(data), lo)));
+                let read = loader
+                    .try_borrow_mut()
+                    .ok()
+                    .map(|mut l| l.load_fill(&mut buf, &Address::new(Rc::clone(data), lo)));
                 matches!(read, Some(Ok(()))).then_some(buf)
             };
-            sections.push(Section { lo, hi: lo.saturating_add(size), flags, bytes });
+            sections.push(Section {
+                lo,
+                hi: lo.saturating_add(size),
+                flags,
+                bytes,
+            });
         }
         sections.sort_by_key(|s| s.lo);
         let exec = range_union(
-            sections.iter().filter(|s| s.flags & section_flags::CODE != 0).map(|s| (s.lo, s.hi)).collect(),
+            sections
+                .iter()
+                .filter(|s| s.flags & section_flags::CODE != 0)
+                .map(|s| (s.lo, s.hi))
+                .collect(),
         );
-        Image { sections, exec, big_endian }
+        Image {
+            sections,
+            exec,
+            big_endian,
+        }
     }
 
     fn section(&self, at: u64) -> Option<&Section> {
@@ -265,11 +317,13 @@ impl Image {
 
     /// Is `at` an address in data the program maps (not code)?
     fn is_data(&self, at: u64) -> bool {
-        self.section(at).is_some_and(|s| s.flags & section_flags::CODE == 0)
+        self.section(at)
+            .is_some_and(|s| s.flags & section_flags::CODE == 0)
     }
 
     fn is_writable_data(&self, at: u64) -> bool {
-        self.section(at).is_some_and(|s| s.flags & (section_flags::CODE | section_flags::READONLY) == 0)
+        self.section(at)
+            .is_some_and(|s| s.flags & (section_flags::CODE | section_flags::READONLY) == 0)
     }
 
     /// The constant a `size`-byte read of `at` yields: anything read-only, or
@@ -284,7 +338,11 @@ impl Image {
         let raw = bytes.get(off..off + size as usize)?;
         let mut v = 0u64;
         for i in 0..size as usize {
-            let b = if self.big_endian { raw[i] } else { raw[size as usize - 1 - i] };
+            let b = if self.big_endian {
+                raw[i]
+            } else {
+                raw[size as usize - 1 - i]
+            };
             v = (v << 8) | u64::from(b);
         }
         let constant = s.flags & (section_flags::READONLY | section_flags::CODE) != 0;
@@ -332,11 +390,24 @@ struct Body {
 
 impl Body {
     fn new(entry: u64) -> Body {
-        Body { entry, insns: Vec::new(), index: HashMap::new(), decoded: HashSet::new(), open: Vec::new(), callees: Vec::new() }
+        Body {
+            entry,
+            insns: Vec::new(),
+            index: HashMap::new(),
+            decoded: HashSet::new(),
+            open: Vec::new(),
+            callees: Vec::new(),
+        }
     }
 
     /// Decode everything reachable from `start` that is not decoded yet.
-    fn extend(&mut self, ctx: &Ctx<'_>, entries: &BTreeSet<u64>, cap: &mut FullCapture, start: Vec<u64>) {
+    fn extend(
+        &mut self,
+        ctx: &Ctx<'_>,
+        entries: &BTreeSet<u64>,
+        cap: &mut FullCapture,
+        start: Vec<u64>,
+    ) {
         let mut pending = VecDeque::from(start);
         while let Some(vma) = pending.pop_front() {
             if self.index.contains_key(&vma) || self.insns.len() >= MAX_FUNCTION_INSNS {
@@ -345,16 +416,27 @@ impl Body {
             if (vma != self.entry && entries.contains(&vma)) || !in_range(&ctx.image.exec, vma) {
                 continue;
             }
-            let Some(len) = decode(ctx.translate, vma, ctx.code, cap) else { continue };
-            let raw: Vec<RawOp> =
-                cap.ops().iter().map(|op| RawOp { opcode: op.opcode, in0: op.ins.first().cloned() }).collect();
+            let Some(len) = decode(ctx.translate, vma, ctx.code, cap) else {
+                continue;
+            };
+            let raw: Vec<RawOp> = cap
+                .ops()
+                .iter()
+                .map(|op| RawOp {
+                    opcode: op.opcode,
+                    in0: op.ins.first().cloned(),
+                })
+                .collect();
             let c = classify(&raw, vma, len);
             let mut next = Vec::new();
             let mut halts = false;
             if c.flow.is_call {
                 for &t in &c.flows {
                     self.callees.push(t);
-                    halts |= ctx.arch.symboltab.function_is_no_return_across_scopes(&Address::new(Rc::clone(ctx.code), t));
+                    halts |= ctx
+                        .arch
+                        .symboltab
+                        .function_is_no_return_across_scopes(&Address::new(Rc::clone(ctx.code), t));
                 }
             } else {
                 next.extend(c.flows.iter().copied());
@@ -362,7 +444,8 @@ impl Body {
             if let Some(f) = c.fall_through.filter(|_| !halts) {
                 next.push(f);
             }
-            let dispatch = c.flows.is_empty() && c.flow.is_computed && c.flow.is_jump && !c.flow.is_call;
+            let dispatch =
+                c.flows.is_empty() && c.flow.is_computed && c.flow.is_jump && !c.flow.is_call;
             if dispatch {
                 let mut cases = ctx
                     .pool
@@ -384,11 +467,22 @@ impl Body {
             }
             self.decoded.insert(vma);
             self.index.insert(vma, self.insns.len());
-            self.insns.push(Insn { vma, len, ops: cap.ops().to_vec(), is_call: c.flow.is_call, targets: next.clone(), succ: Vec::new() });
+            self.insns.push(Insn {
+                vma,
+                len,
+                ops: cap.ops().to_vec(),
+                is_call: c.flow.is_call,
+                targets: next.clone(),
+                succ: Vec::new(),
+            });
             pending.extend(next);
         }
         for i in 0..self.insns.len() {
-            let mut succ: Vec<usize> = self.insns[i].targets.iter().filter_map(|t| self.index.get(t).copied()).collect();
+            let mut succ: Vec<usize> = self.insns[i]
+                .targets
+                .iter()
+                .filter_map(|t| self.index.get(t).copied())
+                .collect();
             succ.sort_unstable();
             succ.dedup();
             self.insns[i].succ = succ;
@@ -435,7 +529,9 @@ impl Body {
         let open = std::mem::take(&mut self.open);
         for i in open {
             let cases = match &at[i] {
-                Some(_) => emulated_switch(ctx, self.insns[i].vma, &self.insns[i].ops, self, Some(at)),
+                Some(_) => {
+                    emulated_switch(ctx, self.insns[i].vma, &self.insns[i].ops, self, Some(at))
+                }
                 None => Vec::new(),
             };
             if cases.is_empty() {
@@ -470,16 +566,30 @@ fn switch_targets(
 ) -> Vec<u64> {
     for op in ops {
         for vn in &op.ins {
-            let constant = vn.space.as_ref().is_some_and(|s| s.get_type() == spacetype::IPTR_CONSTANT);
+            let constant = vn
+                .space
+                .as_ref()
+                .is_some_and(|s| s.get_type() == spacetype::IPTR_CONSTANT);
             if constant && ctx.image.section(vn.offset).is_some() {
-                let cases = kuna_switchtable::targets(vn.offset, vma, pool, &ctx.image.exec, None, max_entries);
+                let cases = kuna_switchtable::targets(
+                    vn.offset,
+                    vma,
+                    pool,
+                    &ctx.image.exec,
+                    None,
+                    max_entries,
+                );
                 if !cases.is_empty() {
                     return cases;
                 }
             }
         }
     }
-    let Some(branch) = ops.iter().find(|o| o.opcode == OpCode::CPUI_BRANCHIND).and_then(|o| o.ins.first()) else {
+    let Some(branch) = ops
+        .iter()
+        .find(|o| o.opcode == OpCode::CPUI_BRANCHIND)
+        .and_then(|o| o.ins.first())
+    else {
         return Vec::new();
     };
     let read = kuna_switchtable::register_targets(
@@ -512,13 +622,24 @@ fn switch_targets(
 /// what is known where they start, at every index the check admits.  `at` is
 /// the function's solved constants, when there are any yet: a base set up
 /// before a loop that dispatches on every iteration is known only there.
-fn emulated_switch(ctx: &Ctx<'_>, vma: u64, ops: &[FullOp], body: &Body, at: Option<&[Option<State>]>) -> Vec<u64> {
+fn emulated_switch(
+    ctx: &Ctx<'_>,
+    vma: u64,
+    ops: &[FullOp],
+    body: &Body,
+    at: Option<&[Option<State>]>,
+) -> Vec<u64> {
     let mut lead: Vec<&Insn> = Vec::new();
     let mut cur = vma;
     for _ in 0..6 {
         let Some(prev) = (1..=16u64)
             .filter_map(|d| cur.checked_sub(d))
-            .find_map(|a| body.index.get(&a).map(|&i| &body.insns[i]).filter(|p| p.vma + u64::from(p.len) == cur))
+            .find_map(|a| {
+                body.index
+                    .get(&a)
+                    .map(|&i| &body.insns[i])
+                    .filter(|p| p.vma + u64::from(p.len) == cur)
+            })
         else {
             break;
         };
@@ -528,25 +649,46 @@ fn emulated_switch(ctx: &Ctx<'_>, vma: u64, ops: &[FullOp], body: &Body, at: Opt
     let Some((k, reg, limit)) = range_check(ctx, &lead).or_else(|| index_mask(ctx, &lead)) else {
         return Vec::new();
     };
-    let Some(count) = usize::try_from(limit).ok().and_then(|l| l.checked_add(1)).filter(|&c| c <= ctx.max_entries) else {
+    let Some(count) = usize::try_from(limit)
+        .ok()
+        .and_then(|l| l.checked_add(1))
+        .filter(|&c| c <= ctx.max_entries)
+    else {
         return Vec::new();
     };
     let after: Vec<&Insn> = lead[..k].iter().rev().copied().collect();
     let first = after.first().map_or(vma, |i| i.vma);
     let known = match at.and_then(|at| body.index.get(&first).and_then(|&i| at[i].as_ref())) {
         Some(state) => state.clone(),
-        None => lead[k..].iter().rev().fold(State::default(), |state, prev| step(ctx, prev, state, None)),
+        None => lead[k..]
+            .iter()
+            .rev()
+            .fold(State::default(), |state, prev| step(ctx, prev, state, None)),
     };
     let width = after
         .iter()
         .flat_map(|i| i.ops.iter())
         .chain(ops.iter())
         .flat_map(|op| op.ins.iter())
-        .filter(|vn| vn.offset == reg && vn.space.as_ref().is_some_and(|s| s.get_type() == spacetype::IPTR_PROCESSOR && !Rc::ptr_eq(s, ctx.data)))
+        .filter(|vn| {
+            vn.offset == reg
+                && vn.space.as_ref().is_some_and(|s| {
+                    s.get_type() == spacetype::IPTR_PROCESSOR && !Rc::ptr_eq(s, ctx.data)
+                })
+        })
         .map(|vn| vn.size)
         .max();
-    let Some(width) = width else { return Vec::new() };
-    let Some(&section) = ctx.image.exec.iter().find(|&&(lo, hi)| vma >= lo && vma < hi) else { return Vec::new() };
+    let Some(width) = width else {
+        return Vec::new();
+    };
+    let Some(&section) = ctx
+        .image
+        .exec
+        .iter()
+        .find(|&&(lo, hi)| vma >= lo && vma < hi)
+    else {
+        return Vec::new();
+    };
     let mut out = Vec::new();
     for i in 0..count as u64 {
         let mut state = known.clone();
@@ -554,7 +696,9 @@ fn emulated_switch(ctx: &Ctx<'_>, vma: u64, ops: &[FullOp], body: &Body, at: Opt
         for insn in &after {
             state = step(ctx, insn, state, None);
         }
-        let Some(target) = jump_target(ctx, ops, state) else { return Vec::new() };
+        let Some(target) = jump_target(ctx, ops, state) else {
+            return Vec::new();
+        };
         let target = if ctx.thumb_bit { target & !1 } else { target };
         if !in_range(&[section], target) {
             return Vec::new();
@@ -570,16 +714,23 @@ fn emulated_switch(ctx: &Ctx<'_>, vma: u64, ops: &[FullOp], body: &Body, at: Opt
 /// constant that feeds the nearest conditional branch in `lead` (nearest
 /// first), as `(the branch's position in lead, register offset, bound)`.
 fn range_check(ctx: &Ctx<'_>, lead: &[&Insn]) -> Option<(usize, u64, u64)> {
-    let k = lead.iter().position(|i| i.ops.iter().any(|o| o.opcode == OpCode::CPUI_CBRANCH))?;
+    let k = lead
+        .iter()
+        .position(|i| i.ops.iter().any(|o| o.opcode == OpCode::CPUI_CBRANCH))?;
     for prev in lead[k..].iter().take(3) {
         for op in &prev.ops {
             if !matches!(
                 op.opcode,
-                OpCode::CPUI_INT_LESS | OpCode::CPUI_INT_LESSEQUAL | OpCode::CPUI_INT_SLESS | OpCode::CPUI_INT_SLESSEQUAL
+                OpCode::CPUI_INT_LESS
+                    | OpCode::CPUI_INT_LESSEQUAL
+                    | OpCode::CPUI_INT_SLESS
+                    | OpCode::CPUI_INT_SLESSEQUAL
             ) {
                 continue;
             }
-            let (Some(a), Some(b)) = (op.ins.first(), op.ins.get(1)) else { continue };
+            let (Some(a), Some(b)) = (op.ins.first(), op.ins.get(1)) else {
+                continue;
+            };
             let (reg, limit) = if is_constant(b) && !is_constant(a) {
                 (a, b.offset)
             } else if is_constant(a) && !is_constant(b) {
@@ -587,8 +738,9 @@ fn range_check(ctx: &Ctx<'_>, lead: &[&Insn]) -> Option<(usize, u64, u64)> {
             } else {
                 continue;
             };
-            let register =
-                reg.space.as_ref().is_some_and(|s| s.get_type() == spacetype::IPTR_PROCESSOR && !Rc::ptr_eq(s, ctx.data));
+            let register = reg.space.as_ref().is_some_and(|s| {
+                s.get_type() == spacetype::IPTR_PROCESSOR && !Rc::ptr_eq(s, ctx.data)
+            });
             if register && limit > 0 {
                 return Some((k, reg.offset, limit));
             }
@@ -606,19 +758,29 @@ fn index_mask(ctx: &Ctx<'_>, lead: &[&Insn]) -> Option<(usize, u64, u64)> {
             if op.opcode != OpCode::CPUI_INT_AND {
                 continue;
             }
-            let Some(mask) = op.ins.iter().find(|i| is_constant(i)).map(|c| c.offset) else { continue };
-            if mask == 0 || mask.checked_add(1).is_none_or(|m| !m.is_power_of_two() || m as usize > ctx.max_entries) {
+            let Some(mask) = op.ins.iter().find(|i| is_constant(i)).map(|c| c.offset) else {
+                continue;
+            };
+            if mask == 0
+                || mask
+                    .checked_add(1)
+                    .is_none_or(|m| !m.is_power_of_two() || m as usize > ctx.max_entries)
+            {
                 continue;
             }
             let mut value = op.out.clone();
             for later in &insn.ops[j + 1..] {
                 let Some(v) = value.as_ref() else { break };
-                if matches!(later.opcode, OpCode::CPUI_COPY | OpCode::CPUI_INT_ZEXT) && later.ins.first() == Some(v) {
+                if matches!(later.opcode, OpCode::CPUI_COPY | OpCode::CPUI_INT_ZEXT)
+                    && later.ins.first() == Some(v)
+                {
                     value = later.out.clone();
                 }
             }
             let register = value.as_ref().filter(|v| {
-                v.space.as_ref().is_some_and(|s| s.get_type() == spacetype::IPTR_PROCESSOR && !Rc::ptr_eq(s, ctx.data))
+                v.space.as_ref().is_some_and(|s| {
+                    s.get_type() == spacetype::IPTR_PROCESSOR && !Rc::ptr_eq(s, ctx.data)
+                })
             });
             if let Some(v) = register {
                 return Some((k, v.offset, mask));
@@ -650,12 +812,15 @@ fn jump_target(ctx: &Ctx<'_>, ops: &[FullOp], state: State) -> Option<u64> {
             }
             OpCode::CPUI_STORE => None,
             _ => {
-                let ins: Vec<Option<Val>> = op.ins.iter().map(|vn| value(vn, &state, &temps)).collect();
+                let ins: Vec<Option<Val>> =
+                    op.ins.iter().map(|vn| value(vn, &state, &temps)).collect();
                 evaluate(op, &ins)
             }
         };
         let Some(out) = &op.out else { continue };
-        let Some(space) = out.space.as_ref() else { continue };
+        let Some(space) = out.space.as_ref() else {
+            continue;
+        };
         if space.get_type() == spacetype::IPTR_INTERNAL {
             temps.retain(|t| !(t.0 == out.offset && t.1 == out.size));
             temps.push((out.offset, out.size, result));
@@ -674,12 +839,17 @@ fn entry_state(ctx: &Ctx<'_>, entry: u64) -> State {
     if let Some((off, size)) = ctx.sp {
         state.set_reg(off, size, Some(Val::Stack(0)));
     }
-    let mut seed = |loc: &VarnodeData, val: u64| {
-        if loc.space.as_ref().is_some_and(|s| !Rc::ptr_eq(s, ctx.data) && s.get_type() == spacetype::IPTR_PROCESSOR) {
-            state.set_reg(loc.offset, loc.size, Some(Val::Const(val)));
-        }
-    };
-    let tracked = ctx.arch.with_context_db(|db| db.get_tracked_set(&at).clone());
+    let mut seed =
+        |loc: &VarnodeData, val: u64| {
+            if loc.space.as_ref().is_some_and(|s| {
+                !Rc::ptr_eq(s, ctx.data) && s.get_type() == spacetype::IPTR_PROCESSOR
+            }) {
+                state.set_reg(loc.offset, loc.size, Some(Val::Const(val)));
+            }
+        };
+    let tracked = ctx
+        .arch
+        .with_context_db(|db| db.get_tracked_set(&at).clone());
     for t in &tracked {
         seed(&t.loc, t.val);
     }
@@ -718,8 +888,15 @@ impl State {
             if off < o || off + u64::from(size) > o + u64::from(s) {
                 return None;
             }
-            let shift = if big_endian { o + u64::from(s) - (off + u64::from(size)) } else { off - o };
-            Some(Val::Const(mask(c.checked_shr((shift * 8) as u32).unwrap_or(0), size)))
+            let shift = if big_endian {
+                o + u64::from(s) - (off + u64::from(size))
+            } else {
+                off - o
+            };
+            Some(Val::Const(mask(
+                c.checked_shr((shift * 8) as u32).unwrap_or(0),
+                size,
+            )))
         })
     }
 
@@ -727,7 +904,8 @@ impl State {
     /// keep: past [`MAX_TRACKED`] values, or wider than eight bytes.
     fn set_reg(&mut self, off: u64, size: u32, val: Option<Val>) -> Option<u64> {
         let end = off + u64::from(size);
-        self.regs.retain(|&(o, s, _)| o + u64::from(s) <= off || end <= o);
+        self.regs
+            .retain(|&(o, s, _)| o + u64::from(s) <= off || end <= o);
         let v = match val? {
             Val::Const(c) => Val::Const(mask(c, size)),
             stack => stack,
@@ -749,8 +927,15 @@ impl State {
             if off < o || off + i64::from(size) > o + i64::from(s) {
                 return None;
             }
-            let shift = if big_endian { (o + i64::from(s) - (off + i64::from(size))) as u64 } else { (off - o) as u64 };
-            Some(Val::Const(mask(c.checked_shr((shift * 8) as u32).unwrap_or(0), size)))
+            let shift = if big_endian {
+                (o + i64::from(s) - (off + i64::from(size))) as u64
+            } else {
+                (off - o) as u64
+            };
+            Some(Val::Const(mask(
+                c.checked_shr((shift * 8) as u32).unwrap_or(0),
+                size,
+            )))
         })
     }
 
@@ -758,7 +943,8 @@ impl State {
     /// keep, as [`State::set_reg`] does.
     fn set_slot(&mut self, off: i64, size: u32, val: Option<Val>) -> Option<u64> {
         let end = off + i64::from(size);
-        self.slots.retain(|&(o, s, _)| o + i64::from(s) <= off || end <= o);
+        self.slots
+            .retain(|&(o, s, _)| o + i64::from(s) <= off || end <= o);
         let v = val?;
         if self.slots.len() >= MAX_TRACKED || size > 8 {
             return if let Val::Const(c) = v { Some(c) } else { None };
@@ -769,7 +955,11 @@ impl State {
     }
 
     fn kill(&mut self, ranges: &[(u64, u64)]) {
-        self.regs.retain(|&(o, s, _)| !ranges.iter().any(|&(lo, hi)| o < hi && lo < o + u64::from(s)));
+        self.regs.retain(|&(o, s, _)| {
+            !ranges
+                .iter()
+                .any(|&(lo, hi)| o < hi && lo < o + u64::from(s))
+        });
     }
 
     /// Keep only what `other` also knows; `true` when anything was dropped.
@@ -782,7 +972,11 @@ impl State {
 }
 
 fn mask(v: u64, size: u32) -> u64 {
-    if size >= 8 { v } else { v & ((1u64 << (size * 8)) - 1) }
+    if size >= 8 {
+        v
+    } else {
+        v & ((1u64 << (size * 8)) - 1)
+    }
 }
 
 /// Every access and escape the scan has filed.
@@ -806,7 +1000,10 @@ impl Evidence {
         let mut out = FloatGlobals::new();
         for (&at, list) in &self.accesses {
             let width = list[0].0;
-            if !matches!(width, 4 | 8) || !list.iter().all(|&(w, float)| float && w == width) || !image.is_writable_data(at) {
+            if !matches!(width, 4 | 8)
+                || !list.iter().all(|&(w, float)| float && w == width)
+                || !image.is_writable_data(at)
+            {
                 continue;
             }
             let end = at + u64::from(width);
@@ -814,7 +1011,11 @@ impl Evidence {
                 .accesses
                 .range(at.saturating_sub(MAX_ACCESS)..end)
                 .any(|(&b, l)| b != at && l.iter().any(|&(w, _)| b + u64::from(w) > at));
-            let escaped = self.escapes.range(at.saturating_sub(ESCAPE_REACH - 1)..end).next().is_some();
+            let escaped = self
+                .escapes
+                .range(at.saturating_sub(ESCAPE_REACH - 1)..end)
+                .next()
+                .is_some();
             if !overlapped && !escaped {
                 out.insert(at, width);
             }
@@ -825,10 +1026,16 @@ impl Evidence {
 
 /// One instruction's effect on `state`, filing its accesses and escapes into
 /// `evidence` when there is one.
-fn step(ctx: &Ctx<'_>, insn: &Insn, mut state: State, mut evidence: Option<&mut Evidence>) -> State {
+fn step(
+    ctx: &Ctx<'_>,
+    insn: &Insn,
+    mut state: State,
+    mut evidence: Option<&mut Evidence>,
+) -> State {
     let big = ctx.image.big_endian;
     let mut temps: Vec<Temp> = Vec::new();
-    let is_data_space = |vn: &VarnodeData| vn.space.as_ref().is_some_and(|s| Rc::ptr_eq(s, ctx.data));
+    let is_data_space =
+        |vn: &VarnodeData| vn.space.as_ref().is_some_and(|s| Rc::ptr_eq(s, ctx.data));
     let mut conditional = false;
     for (k, op) in insn.ops.iter().enumerate() {
         if op.opcode == OpCode::CPUI_CBRANCH && op.ins.first().is_some_and(is_constant) {
@@ -854,13 +1061,20 @@ fn step(ctx: &Ctx<'_>, insn: &Insn, mut state: State, mut evidence: Option<&mut 
                     let stored = value(v, &state, &temps);
                     match op.ins.get(1).and_then(|p| value(p, &state, &temps)) {
                         Some(Val::Const(a)) => {
-                            if let Some(ev) = evidence.as_deref_mut().filter(|_| ctx.image.is_data(a)) {
+                            if let Some(ev) =
+                                evidence.as_deref_mut().filter(|_| ctx.image.is_data(a))
+                            {
                                 ev.access(a, v.size, from_float(ctx, &insn.ops, k, v, 0));
                             }
                         }
                         Some(Val::Stack(o)) => {
-                            let kept = stored.filter(|&x| !conditional || state.get_slot(o, v.size, big) == Some(x));
-                            if let Some(x) = state.set_slot(o, v.size, kept).filter(|&x| ctx.image.is_data(x)) {
+                            let kept = stored.filter(|&x| {
+                                !conditional || state.get_slot(o, v.size, big) == Some(x)
+                            });
+                            if let Some(x) = state
+                                .set_slot(o, v.size, kept)
+                                .filter(|&x| ctx.image.is_data(x))
+                            {
                                 if let Some(ev) = evidence.as_deref_mut() {
                                     ev.escapes.insert(x);
                                 }
@@ -870,7 +1084,9 @@ fn step(ctx: &Ctx<'_>, insn: &Insn, mut state: State, mut evidence: Option<&mut 
                             let lost = ctx.sp.is_some_and(|(off, size)| {
                                 !matches!(state.get_reg(off, size, big), Some(Val::Stack(_)))
                             });
-                            if let (Some(ev), Some(Val::Const(x))) = (evidence.as_deref_mut(), stored) {
+                            if let (Some(ev), Some(Val::Const(x))) =
+                                (evidence.as_deref_mut(), stored)
+                            {
                                 if lost && v.size == ctx.ptr && ctx.image.is_data(x) {
                                     ev.escapes.insert(x);
                                 }
@@ -882,26 +1098,40 @@ fn step(ctx: &Ctx<'_>, insn: &Insn, mut state: State, mut evidence: Option<&mut 
             }
             _ => {
                 if let Some(ev) = evidence.as_deref_mut() {
-                    for vn in op.ins.iter().filter(|vn| is_data_space(vn) && ctx.image.is_data(vn.offset)) {
+                    for vn in op
+                        .ins
+                        .iter()
+                        .filter(|vn| is_data_space(vn) && ctx.image.is_data(vn.offset))
+                    {
                         ev.access(vn.offset, vn.size, read_is_float(ctx, &insn.ops, k));
                     }
                 }
-                let ins: Vec<Option<Val>> = op.ins.iter().map(|vn| value(vn, &state, &temps)).collect();
+                let ins: Vec<Option<Val>> =
+                    op.ins.iter().map(|vn| value(vn, &state, &temps)).collect();
                 evaluate(op, &ins)
             }
         };
         let Some(out) = &op.out else { continue };
-        let Some(space) = out.space.as_ref() else { continue };
+        let Some(space) = out.space.as_ref() else {
+            continue;
+        };
         if is_data_space(out) {
-            if let Some(ev) = evidence.as_deref_mut().filter(|_| ctx.image.is_data(out.offset)) {
+            if let Some(ev) = evidence
+                .as_deref_mut()
+                .filter(|_| ctx.image.is_data(out.offset))
+            {
                 ev.access(out.offset, out.size, made_float(ctx, &insn.ops, k));
             }
         } else if space.get_type() == spacetype::IPTR_INTERNAL {
             temps.retain(|t| !(t.0 == out.offset && t.1 == out.size));
             temps.push((out.offset, out.size, result));
         } else if space.get_type() == spacetype::IPTR_PROCESSOR && !Rc::ptr_eq(space, ctx.code) {
-            let kept = result.filter(|&x| !conditional || state.get_reg(out.offset, out.size, big) == Some(x));
-            if let Some(x) = state.set_reg(out.offset, out.size, kept).filter(|&x| ctx.image.is_data(x)) {
+            let kept = result
+                .filter(|&x| !conditional || state.get_reg(out.offset, out.size, big) == Some(x));
+            if let Some(x) = state
+                .set_reg(out.offset, out.size, kept)
+                .filter(|&x| ctx.image.is_data(x))
+            {
                 if let Some(ev) = evidence.as_deref_mut() {
                     ev.escapes.insert(x);
                 }
@@ -927,7 +1157,11 @@ fn value(ctx: &Ctx<'_>, vn: &VarnodeData, state: &State, temps: &[Temp]) -> Opti
     let space = vn.space.as_ref()?;
     match space.get_type() {
         spacetype::IPTR_CONSTANT => Some(Val::Const(mask(vn.offset, vn.size))),
-        spacetype::IPTR_INTERNAL => temps.iter().rev().find(|t| t.0 == vn.offset && t.1 == vn.size).and_then(|t| t.2),
+        spacetype::IPTR_INTERNAL => temps
+            .iter()
+            .rev()
+            .find(|t| t.0 == vn.offset && t.1 == vn.size)
+            .and_then(|t| t.2),
         spacetype::IPTR_PROCESSOR if Rc::ptr_eq(space, ctx.data) || Rc::ptr_eq(space, ctx.code) => {
             ctx.image.fold(vn.offset, vn.size, ctx.ptr).map(Val::Const)
         }
@@ -956,8 +1190,12 @@ fn evaluate(op: &FullOp, ins: &[Option<Val>]) -> Option<Val> {
     let stack = match (op.opcode, first, second) {
         (OpCode::CPUI_COPY, Some(Val::Stack(o)), _) => Some(o),
         (OpCode::CPUI_INT_ADD, Some(Val::Stack(o)), Some(Val::Const(c)))
-        | (OpCode::CPUI_INT_ADD, Some(Val::Const(c)), Some(Val::Stack(o))) => Some(o.wrapping_add(signed(c, out))),
-        (OpCode::CPUI_INT_SUB, Some(Val::Stack(o)), Some(Val::Const(c))) => Some(o.wrapping_sub(signed(c, out))),
+        | (OpCode::CPUI_INT_ADD, Some(Val::Const(c)), Some(Val::Stack(o))) => {
+            Some(o.wrapping_add(signed(c, out)))
+        }
+        (OpCode::CPUI_INT_SUB, Some(Val::Stack(o)), Some(Val::Const(c))) => {
+            Some(o.wrapping_sub(signed(c, out)))
+        }
         _ => None,
     };
     if let Some(o) = stack {
@@ -987,7 +1225,9 @@ fn evaluate(op: &FullOp, ins: &[Option<Val>]) -> Option<Val> {
         }
         OpCode::CPUI_INT_NEGATE => !a?,
         OpCode::CPUI_INT_2COMP => a?.wrapping_neg(),
-        OpCode::CPUI_SUBPIECE => a?.checked_shr(u32::try_from(b?).ok()?.checked_mul(8)?).unwrap_or(0),
+        OpCode::CPUI_SUBPIECE => a?
+            .checked_shr(u32::try_from(b?).ok()?.checked_mul(8)?)
+            .unwrap_or(0),
         OpCode::CPUI_PIECE => {
             let low = op.ins.get(1).map_or(0, |v| v.size);
             a?.checked_shl(low * 8).unwrap_or(0) | b?
@@ -1061,18 +1301,27 @@ fn moves_bits(code: OpCode) -> bool {
 fn read_is_float(ctx: &Ctx<'_>, ops: &[FullOp], k: usize) -> bool {
     let op = &ops[k];
     if op.opcode == OpCode::CPUI_LOAD {
-        return op.out.as_ref().is_some_and(|o| goes_float(ctx, ops, k + 1, o, 0));
+        return op
+            .out
+            .as_ref()
+            .is_some_and(|o| goes_float(ctx, ops, k + 1, o, 0));
     }
     if reads_float(op.opcode) {
         return true;
     }
-    moves_bits(op.opcode) && op.out.as_ref().is_some_and(|o| goes_float(ctx, ops, k + 1, o, 0))
+    moves_bits(op.opcode)
+        && op
+            .out
+            .as_ref()
+            .is_some_and(|o| goes_float(ctx, ops, k + 1, o, 0))
 }
 
 /// Does `v`, written just before op `from`, reach only float registers and
 /// float operations?
 fn goes_float(ctx: &Ctx<'_>, ops: &[FullOp], from: usize, v: &VarnodeData, depth: u32) -> bool {
-    let Some(space) = v.space.as_ref() else { return false };
+    let Some(space) = v.space.as_ref() else {
+        return false;
+    };
     if space.get_type() == spacetype::IPTR_PROCESSOR {
         return ctx.floats.contains(v);
     }
@@ -1084,7 +1333,11 @@ fn goes_float(ctx: &Ctx<'_>, ops: &[FullOp], from: usize, v: &VarnodeData, depth
         if op.ins.iter().any(|i| i == v) {
             used = true;
             let ok = reads_float(op.opcode)
-                || (moves_bits(op.opcode) && op.out.as_ref().is_some_and(|o| goes_float(ctx, ops, j + 1, o, depth + 1)));
+                || (moves_bits(op.opcode)
+                    && op
+                        .out
+                        .as_ref()
+                        .is_some_and(|o| goes_float(ctx, ops, j + 1, o, depth + 1)));
             if !ok {
                 return false;
             }
@@ -1101,29 +1354,44 @@ fn made_float(ctx: &Ctx<'_>, ops: &[FullOp], k: usize) -> bool {
     let op = &ops[k];
     makes_float(op.opcode)
         || (moves_bits(op.opcode)
-            && op.ins.iter().filter(|i| !is_constant(i)).all(|i| from_float(ctx, ops, k, i, 0))
+            && op
+                .ins
+                .iter()
+                .filter(|i| !is_constant(i))
+                .all(|i| from_float(ctx, ops, k, i, 0))
             && op.ins.iter().any(|i| !is_constant(i)))
 }
 
 /// Does `v`, read by op `before`, come from a float register or a float
 /// operation?
 fn from_float(ctx: &Ctx<'_>, ops: &[FullOp], before: usize, v: &VarnodeData, depth: u32) -> bool {
-    let Some(space) = v.space.as_ref() else { return false };
+    let Some(space) = v.space.as_ref() else {
+        return false;
+    };
     if space.get_type() == spacetype::IPTR_PROCESSOR {
         return ctx.floats.contains(v);
     }
     if space.get_type() != spacetype::IPTR_INTERNAL || depth > 6 {
         return false;
     }
-    ops[..before].iter().rposition(|o| o.out.as_ref() == Some(v)).is_some_and(|j| {
-        let op = &ops[j];
-        makes_float(op.opcode)
-            || (moves_bits(op.opcode)
-                && op.ins.iter().any(|i| !is_constant(i))
-                && op.ins.iter().filter(|i| !is_constant(i)).all(|i| from_float(ctx, ops, j, i, depth + 1)))
-    })
+    ops[..before]
+        .iter()
+        .rposition(|o| o.out.as_ref() == Some(v))
+        .is_some_and(|j| {
+            let op = &ops[j];
+            makes_float(op.opcode)
+                || (moves_bits(op.opcode)
+                    && op.ins.iter().any(|i| !is_constant(i))
+                    && op
+                        .ins
+                        .iter()
+                        .filter(|i| !is_constant(i))
+                        .all(|i| from_float(ctx, ops, j, i, depth + 1)))
+        })
 }
 
 fn is_constant(vn: &VarnodeData) -> bool {
-    vn.space.as_ref().is_some_and(|s| s.get_type() == spacetype::IPTR_CONSTANT)
+    vn.space
+        .as_ref()
+        .is_some_and(|s| s.get_type() == spacetype::IPTR_CONSTANT)
 }

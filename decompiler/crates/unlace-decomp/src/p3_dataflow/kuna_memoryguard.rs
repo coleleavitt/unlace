@@ -7,7 +7,11 @@
 //! ranges are never guarded, and only an address-tied range is forced, so a
 //! local whose address never escapes still collapses.
 
-use unlace_base::{address::Address, space::spacetype, types::{int4, uint4}};
+use unlace_base::{
+    address::Address,
+    space::spacetype,
+    types::{int4, uint4},
+};
 
 use crate::{
     context::{OpId, VarnodeId},
@@ -62,14 +66,27 @@ pub fn guard_memory(
 
 /// Guard the range `[addr, addr+size)` with heritage properties `flags` across
 /// each of `ops`, pushing every guard output onto `write`.
-fn guard(data: &mut Funcdata, ops: &[OpId], flags: uint4, addr: &Address, size: int4, write: &mut Vec<VarnodeId>) {
+fn guard(
+    data: &mut Funcdata,
+    ops: &[OpId],
+    flags: uint4,
+    addr: &Address,
+    size: int4,
+    write: &mut Vec<VarnodeId>,
+) {
     for &op in ops {
         let guard = data.new_indirect_op(op, addr, size, 0);
         if let Some(input) = data.obank().get(guard).and_then(|o| o.get_in(0)) {
-            data.vbank_mut().get_mut(input).expect("memory guard input").set_active_heritage();
+            data.vbank_mut()
+                .get_mut(input)
+                .expect("memory guard input")
+                .set_active_heritage();
         }
         if let Some(output) = data.obank().get(guard).and_then(|o| o.get_out()) {
-            let v = data.vbank_mut().get_mut(output).expect("memory guard output");
+            let v = data
+                .vbank_mut()
+                .get_mut(output)
+                .expect("memory guard output");
             v.set_active_heritage();
             if flags & varnode_flags::addrtied != 0 {
                 v.set_addr_force();

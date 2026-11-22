@@ -2,9 +2,9 @@
 
 use std::rc::Rc;
 
-use unlace_decomp::dtype::{type_metatype as meta, Datatype, TypeFactory, TypeFactoryImpl};
+use unlace_decomp::dtype::{Datatype, TypeFactory, TypeFactoryImpl, type_metatype as meta};
 
-use super::super::{parse_c, DataOrg};
+use super::super::{DataOrg, parse_c};
 
 /// A factory with `int`/`long` widths as a cspec's `<data_organization>` sets
 /// them and `setup_sizes` fills the rest (the enum default is the address size).
@@ -13,7 +13,8 @@ fn factory(int: i32, long: i32, addr: i32) -> TypeFactoryImpl {
     f.set_default_alignment_map();
     f.set_max_basetype_size(8);
     f.set_core_type("int4", 4, meta::TYPE_INT, false).unwrap();
-    f.set_core_type("float4", 4, meta::TYPE_FLOAT, false).unwrap();
+    f.set_core_type("float4", 4, meta::TYPE_FLOAT, false)
+        .unwrap();
     f.set_core_type("char", 1, meta::TYPE_INT, true).unwrap();
     f.set_core_type("uint1", 1, meta::TYPE_UINT, false).unwrap();
     f.set_core_type("int2", 2, meta::TYPE_INT, false).unwrap();
@@ -34,7 +35,10 @@ fn declare(f: &TypeFactoryImpl, decl: &str) -> Rc<Datatype> {
 }
 
 fn parse(f: &TypeFactoryImpl, decl: &str) -> Result<(), String> {
-    let org = DataOrg { addr_size: 8, word_size: 1 };
+    let org = DataOrg {
+        addr_size: 8,
+        word_size: 1,
+    };
     parse_c(decl, f, org, &[], |_, _| Ok(())).map_err(|e| e.explain().to_string())
 }
 
@@ -53,7 +57,11 @@ fn an_enum_is_as_wide_as_int() {
         assert_eq!(mode.get_size(), int, "int {int} addr {addr}");
         assert!(mode.is_enum_type());
         let packet = declare(&f, "struct Packet { Mode mode; float4 gain; int4 value; };");
-        assert_eq!(packet.get_field(1).unwrap().offset, int.max(4), "int {int} addr {addr}");
+        assert_eq!(
+            packet.get_field(1).unwrap().offset,
+            int.max(4),
+            "int {int} addr {addr}"
+        );
     }
 }
 
@@ -61,10 +69,16 @@ fn an_enum_is_as_wide_as_int() {
 #[test]
 fn a_constant_too_wide_for_int_widens_the_enum() {
     let f = factory(4, 8, 8);
-    assert_eq!(declare(&f, "enum Big { LOW = 1, HIGH = 0x100000000 };").get_size(), 8);
+    assert_eq!(
+        declare(&f, "enum Big { LOW = 1, HIGH = 0x100000000 };").get_size(),
+        8
+    );
     assert_eq!(declare(&f, "enum Top { TOP = 0xffffffff };").get_size(), 4);
     let f = factory(4, 4, 4);
-    assert_eq!(declare(&f, "enum Big { HIGH = 0x100000000 };").get_size(), 8);
+    assert_eq!(
+        declare(&f, "enum Big { HIGH = 0x100000000 };").get_size(),
+        8
+    );
     let f = factory(2, 4, 2);
     assert_eq!(declare(&f, "enum Mid { MID = 0x10000 };").get_size(), 4);
 }
@@ -100,20 +114,35 @@ fn a_negative_constant_makes_the_enum_signed() {
             "enum Lo { LMIN = -2147483648, LMAX = 2147483647 };",
         ] {
             let ct = declare(&f, decl);
-            assert_eq!((ct.get_size(), ct.get_metatype()), (4, meta::TYPE_INT), "{decl} on int {int} addr {addr}");
+            assert_eq!(
+                (ct.get_size(), ct.get_metatype()),
+                (4, meta::TYPE_INT),
+                "{decl} on int {int} addr {addr}"
+            );
         }
         let sign = declare(&f, "enum S2 { M1 = -1, Z0 };");
         assert_eq!(names(&sign, 0xffff_ffff), ["M1"]);
         let rec = declare(&f, "struct Rec { S2 s; char c; int4 v; };");
         assert_eq!(rec.get_field(2).unwrap().offset, 8);
-        for decl in ["enum Below { B = -2147483649 };", "enum Mixed { MN = -1, MX = 0x80000000 };"] {
+        for decl in [
+            "enum Below { B = -2147483649 };",
+            "enum Mixed { MN = -1, MX = 0x80000000 };",
+        ] {
             let ct = declare(&f, decl);
-            assert_eq!((ct.get_size(), ct.get_metatype()), (8, meta::TYPE_INT), "{decl}");
+            assert_eq!(
+                (ct.get_size(), ct.get_metatype()),
+                (8, meta::TYPE_INT),
+                "{decl}"
+            );
         }
     }
     let f = factory(4, 8, 8);
     let hi = declare(&f, "enum Hi { HI = 0x80000000 };");
-    assert_eq!((hi.get_size(), hi.get_metatype()), (4, meta::TYPE_UINT), "unsigned int holds it");
+    assert_eq!(
+        (hi.get_size(), hi.get_metatype()),
+        (4, meta::TYPE_UINT),
+        "unsigned int holds it"
+    );
 }
 
 /// C lets two enumerators share a constant; the first keeps the value and the
@@ -141,7 +170,10 @@ fn a_c23_underlying_type_sets_the_width() {
     let signed = declare(&f, "enum Signed : int2 { N0 };");
     assert_eq!(signed.get_size(), 2);
     assert_eq!(signed.get_metatype(), meta::TYPE_INT);
-    let org = DataOrg { addr_size: 8, word_size: 1 };
+    let org = DataOrg {
+        addr_size: 8,
+        word_size: 1,
+    };
     for bad in ["enum F : float4 { F0 };", "enum G : uint1;"] {
         assert!(parse_c(bad, &f, org, &[], |_, _| Ok(())).is_err(), "{bad}");
     }
@@ -157,9 +189,17 @@ fn a_c23_underlying_type_holds_its_own_range() {
         ("unsigned char", &["0", "255"], &["256", "-1"]),
         ("short", &["-32768", "32767"], &["-32769", "32768"]),
         ("unsigned short", &["0", "65535"], &["65536", "-1"]),
-        ("int", &["-2147483648", "2147483647", "-1"], &["-2147483649", "2147483648"]),
+        (
+            "int",
+            &["-2147483648", "2147483647", "-1"],
+            &["-2147483649", "2147483648"],
+        ),
         ("unsigned int", &["0", "4294967295"], &["4294967296", "-1"]),
-        ("long long", &["-9223372036854775808", "9223372036854775807", "-1"], &[]),
+        (
+            "long long",
+            &["-9223372036854775808", "9223372036854775807", "-1"],
+            &[],
+        ),
         ("unsigned long long", &["0", "9223372036854775807"], &["-1"]),
         ("_Bool", &["0", "1"], &["2", "-1"]),
     ];
@@ -168,13 +208,20 @@ fn a_c23_underlying_type_holds_its_own_range() {
             let decl = format!("enum Ok{n}_{} : {ty} {{ K = {v} }};", v.replace('-', "m"));
             let ct = declare(&f, &decl);
             let signed = !ty.starts_with("unsigned") && *ty != "_Bool";
-            let want = if signed { meta::TYPE_INT } else { meta::TYPE_UINT };
+            let want = if signed {
+                meta::TYPE_INT
+            } else {
+                meta::TYPE_UINT
+            };
             assert_eq!(ct.get_metatype(), want, "{decl}");
         }
         for v in *bad {
             let decl = format!("enum Bad{n}_{} : {ty} {{ K = {v} }};", v.replace('-', "m"));
             let err = parse(&f, &decl).unwrap_err();
-            assert!(err.contains("does not fit the underlying type"), "{decl}: {err}");
+            assert!(
+                err.contains("does not fit the underlying type"),
+                "{decl}: {err}"
+            );
         }
     }
     let flag = declare(&f, "enum Flag : _Bool { OFF, ON };");

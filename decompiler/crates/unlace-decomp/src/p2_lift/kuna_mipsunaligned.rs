@@ -69,7 +69,14 @@ impl Half {
             0x2d => (false, true, false),
             _ => return None,
         };
-        Some(Half { load, double, left, base: (w >> 21) & 0x1f, data: (w >> 16) & 0x1f, offset: w as u16 as i16 as i64 })
+        Some(Half {
+            load,
+            double,
+            left,
+            base: (w >> 21) & 0x1f,
+            data: (w >> 16) & 0x1f,
+            offset: w as u16 as i16 as i64,
+        })
     }
 
     /// Is `other` this half's partner on a target of byte order `big`?
@@ -80,7 +87,11 @@ impl Half {
         if self.base != other.base || self.data != other.data {
             return false;
         }
-        let (left, right) = if self.left { (self, other) } else { (other, self) };
+        let (left, right) = if self.left {
+            (self, other)
+        } else {
+            (other, self)
+        };
         let span = if self.double { 7 } else { 3 };
         if big {
             left.offset + span == right.offset
@@ -105,7 +116,9 @@ enum Control {
 
 fn control(w: u32, at: u64, octeon: bool) -> Control {
     let (op, rs, rt, funct) = (w >> 26, (w >> 21) & 0x1f, (w >> 16) & 0x1f, w & 0x3f);
-    let branch = at.wrapping_add(4).wrapping_add(((w as u16 as i16 as i64) << 2) as u64);
+    let branch = at
+        .wrapping_add(4)
+        .wrapping_add(((w as u16 as i16 as i64) << 2) as u64);
     let jump = (at.wrapping_add(4) & !0x0fff_ffff) | (((w & 0x03ff_ffff) as u64) << 2);
     match op {
         0 => match funct {
@@ -138,7 +151,13 @@ fn control(w: u32, at: u64, octeon: bool) -> Control {
 /// The general registers an instruction may write, as a bit set; every one
 /// for an encoding the scan does not know.
 fn writes(w: u32) -> u32 {
-    let (op, rs, rt, rd, funct) = (w >> 26, (w >> 21) & 0x1f, (w >> 16) & 0x1f, (w >> 11) & 0x1f, w & 0x3f);
+    let (op, rs, rt, rd, funct) = (
+        w >> 26,
+        (w >> 21) & 0x1f,
+        (w >> 16) & 0x1f,
+        (w >> 11) & 0x1f,
+        w & 0x3f,
+    );
     let bits = match op {
         0 => match funct {
             0x08 | 0x0c | 0x0d | 0x0f | 0x11 | 0x13 | 0x18..=0x1f | 0x30..=0x36 => 0,
@@ -193,7 +212,9 @@ fn undisturbed(first: &Half, between: &[u32]) -> bool {
 
 /// The executable words of `arch`'s image, as runs of `(address, words)`.
 fn code_words(arch: &Architecture, big: bool) -> Vec<(u64, Vec<u32>)> {
-    let Some(code) = arch.manage().get_default_code_space().cloned() else { return Vec::new() };
+    let Some(code) = arch.manage().get_default_code_space().cloned() else {
+        return Vec::new();
+    };
     let loader = arch.translate().loader_rc();
     let mut runs = Vec::new();
     for &(lo, hi) in arch.litpool_const.iter() {
@@ -206,8 +227,12 @@ fn code_words(arch: &Architecture, big: bool) -> Vec<(u64, Vec<u32>)> {
         while at.saturating_add(3) <= hi {
             let len = ((hi - at + 1) & !3).min(CHUNK);
             let mut buf = vec![0u8; len as usize];
-            let Ok(mut l) = loader.try_borrow_mut() else { break };
-            if l.load_fill(&mut buf, &Address::new(Rc::clone(&code), at)).is_err() {
+            let Ok(mut l) = loader.try_borrow_mut() else {
+                break;
+            };
+            if l.load_fill(&mut buf, &Address::new(Rc::clone(&code), at))
+                .is_err()
+            {
                 break;
             }
             drop(l);
@@ -235,7 +260,9 @@ fn context_set(arch: &Architecture, name: &[u8], at: &Address) -> bool {
 
 /// The addresses of both halves of every unaligned pair in `arch`'s image.
 fn find_pairs(arch: &Architecture, big: bool, double: bool, octeon: bool) -> Vec<u64> {
-    let Some(code) = arch.manage().get_default_code_space().cloned() else { return Vec::new() };
+    let Some(code) = arch.manage().get_default_code_space().cloned() else {
+        return Vec::new();
+    };
     let runs = code_words(arch, big);
     let entries: Vec<u64> = arch.func_sizes.iter().map(|&(a, _)| a).collect();
     pairs_in(&runs, big, double, octeon, &entries, &|a| {
@@ -274,7 +301,10 @@ fn pairs_in(
         let mut taken = BTreeSet::new();
         for (i, &w) in words.iter().enumerate() {
             let Some(first) = Half::of(w) else { continue };
-            if taken.contains(&i) || (first.double && !double) || (first.load && first.base == first.data) {
+            if taken.contains(&i)
+                || (first.double && !double)
+                || (first.load && first.base == first.data)
+            {
                 continue;
             }
             if i > 0 && control(words[i - 1], at(i - 1), octeon) != Control::None {
@@ -302,7 +332,10 @@ fn pairs_in(
                 }
             }
             let Some(j) = partner else { continue };
-            if taken.contains(&j) || !undisturbed(&first, &words[i + 1..j]) || targets.range(at(i) + 1..=at(j)).next().is_some() {
+            if taken.contains(&j)
+                || !undisturbed(&first, &words[i + 1..j])
+                || targets.range(at(i) + 1..=at(j)).next().is_some()
+            {
                 continue;
             }
             if other_isa(at(i)) {
@@ -360,7 +393,9 @@ pub fn paint(arch: &mut Architecture) {
     if arch.with_context_db(|db| db.get_variable(PAIR_FLAG).is_err()) {
         return;
     }
-    let Some(code) = arch.manage().get_default_code_space().cloned() else { return };
+    let Some(code) = arch.manage().get_default_code_space().cloned() else {
+        return;
+    };
     if arch.kuna_mips_pairs.is_none() {
         let mut parts = arch.archid.split(':').skip(1);
         let big = parts.next() == Some("BE");
@@ -369,7 +404,9 @@ pub fn paint(arch: &mut Architecture) {
         arch.kuna_mips_pairs = Some(Rc::new(find_pairs(arch, big, double, octeon)));
     }
     arch.kuna_mips_pairs_painted = true;
-    let Some(pairs) = arch.kuna_mips_pairs.clone().filter(|p| !p.is_empty()) else { return };
+    let Some(pairs) = arch.kuna_mips_pairs.clone().filter(|p| !p.is_empty()) else {
+        return;
+    };
     arch.with_context_db_mut(|db| {
         for &a in pairs.iter() {
             let begin = Address::new(Rc::clone(&code), a);

@@ -35,10 +35,10 @@ use std::rc::Rc;
 use unlace_base::error::KunaResult;
 use unlace_base::types::int4;
 
-use unlace_base::address::Address;
 use crate::architecture::Architecture;
-use crate::dtype::{flags, type_metatype, Datatype, TypeField};
+use crate::dtype::{Datatype, TypeField, flags, type_metatype};
 use crate::fspec::PrototypePieces;
+use unlace_base::address::Address;
 use unlace_base::space::AddrSpace;
 
 /// One polymorphic class's primary vtable, as the RTTI recovery found it.
@@ -66,7 +66,11 @@ pub struct VtableSlot {
 
 /// Install the vtable and class structures for `classes`; returns how many
 /// classes were typed. A class is typed after the bases it embeds.
-pub fn install(arch: &Architecture, space: &Rc<AddrSpace>, classes: &[VtableClass]) -> KunaResult<usize> {
+pub fn install(
+    arch: &Architecture,
+    space: &Rc<AddrSpace>,
+    classes: &[VtableClass],
+) -> KunaResult<usize> {
     let names: std::collections::HashSet<&str> = classes.iter().map(|c| c.class.as_str()).collect();
     let mut pending: Vec<&VtableClass> = classes.iter().collect();
     let mut typed = 0;
@@ -75,7 +79,13 @@ pub fn install(arch: &Architecture, space: &Rc<AddrSpace>, classes: &[VtableClas
         let mut waiting = Vec::new();
         for c in pending {
             let blocked = c.bases.iter().any(|(b, _)| {
-                names.contains(b.as_str()) && arch.types().find_by_name(b).ok().flatten().is_none_or(|t| t.is_incomplete())
+                names.contains(b.as_str())
+                    && arch
+                        .types()
+                        .find_by_name(b)
+                        .ok()
+                        .flatten()
+                        .is_none_or(|t| t.is_incomplete())
             });
             if blocked && before > 1 {
                 waiting.push(c);
@@ -103,7 +113,11 @@ fn install_class(arch: &Architecture, space: &Rc<AddrSpace>, c: &VtableClass) ->
         return Ok(false);
     }
     let class = match types.find_by_name(&c.class)? {
-        Some(class) if class.is_incomplete() && class.get_metatype() == type_metatype::TYPE_STRUCT => class,
+        Some(class)
+            if class.is_incomplete() && class.get_metatype() == type_metatype::TYPE_STRUCT =>
+        {
+            class
+        }
         Some(_) => return Ok(false),
         None => types.kuna_declare_record(&c.class, false)?,
     };
@@ -116,23 +130,51 @@ fn install_class(arch: &Architecture, space: &Rc<AddrSpace>, c: &VtableClass) ->
             None => types.get_type_code()?,
         };
         let field = types.get_type_pointer(ptr, code, ws)?;
-        fields.push(TypeField::new(i as int4, i as int4 * ptr, slot.name.clone(), field));
+        fields.push(TypeField::new(
+            i as int4,
+            i as int4 * ptr,
+            slot.name.clone(),
+            field,
+        ));
     }
     let size = c.slots.len() as int4 * ptr;
-    let vtbl = types.set_fields_struct_raw(&vtbl, fields, Vec::new(), size, ptr, flags::variable_length)?;
+    let vtbl = types.set_fields_struct_raw(
+        &vtbl,
+        fields,
+        Vec::new(),
+        size,
+        ptr,
+        flags::variable_length,
+    )?;
     let vptr = types.get_type_pointer(ptr, vtbl, ws)?;
     let mut fields = vec![TypeField::new(0, 0, "vptr", vptr)];
     let mut size = ptr;
     for (name, off) in &c.bases {
-        let Some(base) = types.find_by_name(name)?.filter(|b| !b.is_incomplete()) else { continue };
-        let Ok(off) = int4::try_from(*off) else { continue };
+        let Some(base) = types.find_by_name(name)?.filter(|b| !b.is_incomplete()) else {
+            continue;
+        };
+        let Ok(off) = int4::try_from(*off) else {
+            continue;
+        };
         if off < size {
             continue;
         }
         size = off + base.get_size();
-        fields.push(TypeField::new(fields.len() as int4, off, name.clone(), base));
+        fields.push(TypeField::new(
+            fields.len() as int4,
+            off,
+            name.clone(),
+            base,
+        ));
     }
-    types.set_fields_struct_raw(&class, fields, Vec::new(), size, ptr, flags::variable_length)?;
+    types.set_fields_struct_raw(
+        &class,
+        fields,
+        Vec::new(),
+        size,
+        ptr,
+        flags::variable_length,
+    )?;
     Ok(true)
 }
 
@@ -148,8 +190,12 @@ fn agreed_prototype(
     let mut agreed: Option<&PrototypePieces> = None;
     for &t in targets {
         let addr = Address::new(Rc::clone(space), t);
-        let Some((sid, _)) = symbols.find_function_across_scopes(&addr) else { continue };
-        let Some(pieces) = symbols.function_proto_pieces_of(sid) else { continue };
+        let Some((sid, _)) = symbols.find_function_across_scopes(&addr) else {
+            continue;
+        };
+        let Some(pieces) = symbols.function_proto_pieces_of(sid) else {
+            continue;
+        };
         if pieces.intypes.is_empty() {
             return None;
         }
@@ -168,10 +214,16 @@ fn agreed_prototype(
 }
 
 fn same_after_this(a: &PrototypePieces, b: &PrototypePieces) -> bool {
-    let same = |x: &Rc<Datatype>, y: &Rc<Datatype>| Rc::ptr_eq(x, y) || x.compare(y, 10).is_ok_and(|c| c == 0);
+    let same = |x: &Rc<Datatype>, y: &Rc<Datatype>| {
+        Rc::ptr_eq(x, y) || x.compare(y, 10).is_ok_and(|c| c == 0)
+    };
     a.first_var_arg_slot == b.first_var_arg_slot
         && a.intypes.len() == b.intypes.len()
-        && a.intypes.iter().zip(&b.intypes).skip(1).all(|(x, y)| same(x, y))
+        && a.intypes
+            .iter()
+            .zip(&b.intypes)
+            .skip(1)
+            .all(|(x, y)| same(x, y))
         && match (&a.outtype, &b.outtype) {
             (None, None) => true,
             (Some(x), Some(y)) => same(x, y),

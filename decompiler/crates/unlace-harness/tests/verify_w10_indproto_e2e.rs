@@ -47,7 +47,10 @@ use std::path::PathBuf;
 use unlace_harness::testfunction::run_test_files_with_specs;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn x86_64_sla() -> PathBuf {
@@ -154,10 +157,17 @@ fn w10_indproto_real_file_decodes_and_first_assertion_passes() {
     );
     // The file's three assertions must all be *applied* (not skipped): the engine
     // ran them, so each name appears as either Success or FAIL.
-    for n in ["Indirect prototype #1", "Indirect prototype #2", "Indirect prototype #3"] {
+    for n in [
+        "Indirect prototype #1",
+        "Indirect prototype #2",
+        "Indirect prototype #3",
+    ] {
         let applied =
             out.contains(&format!("Success -- {n}")) || out.contains(&format!("FAIL -- {n}"));
-        assert!(applied, "assertion `{n}` was not applied (file skipped?):\n{out}");
+        assert!(
+            applied,
+            "assertion `{n}` was not applied (file skipped?):\n{out}"
+        );
     }
 }
 
@@ -169,8 +179,7 @@ fn w10_indproto_real_file_decodes_and_first_assertion_passes() {
 #[test]
 fn w10_indproto_varargs_nested_fnptr_decodes() {
     let body = "void (*peek)(int4 a, ...); void (*get)(int4 b);";
-    let matches =
-        "<stringmatch name=\"VARARGS nested fnptr #1\" min=\"0\" max=\"0\">getTypeCode</stringmatch>";
+    let matches = "<stringmatch name=\"VARARGS nested fnptr #1\" min=\"0\" max=\"0\">getTypeCode</stringmatch>";
     let doc = build_doc(body, matches);
     let path = write_temp_xml("varargs", &doc);
     let Some(out) = run_file(path.to_str().unwrap()) else {

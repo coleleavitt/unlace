@@ -2,19 +2,44 @@
 //! The fixture includes kuna-specific passes; it is not a raw C++ oracle.
 //! See `fixtures/README.md` for its provenance and update policy.
 
-use unlace_decomp::universalaction::{universal_sched, ActionListFilter, UNPORTED_ALLOWLIST};
+use unlace_decomp::universalaction::{ActionListFilter, UNPORTED_ALLOWLIST, universal_sched};
 
 /// The C++ `decompile` group members (verbatim from
 /// `coreaction.cc` `buildDefaultGroups` / `action.rs::build_default_groups`).
 const DECOMPILE_GROUPS: &[&str] = &[
-    "base", "protorecovery", "protorecovery_a", "deindirect", "localrecovery",
-    "deadcode", "typerecovery", "stackptrflow",
-    "blockrecovery", "stackvars", "deadcontrolflow", "switchnorm",
-    "cleanup", "splitcopy", "splitpointer", "merge", "dynamic", "casts", "analysis",
-    "canonicalcompare", "presentcompare",
-    "fixateglobals", "fixateproto", "constsequence", "bitfields",
-    "segment", "returnsplit", "nodejoin", "doubleload", "doubleprecis",
-    "unreachable", "subvar", "floatprecision",
+    "base",
+    "protorecovery",
+    "protorecovery_a",
+    "deindirect",
+    "localrecovery",
+    "deadcode",
+    "typerecovery",
+    "stackptrflow",
+    "blockrecovery",
+    "stackvars",
+    "deadcontrolflow",
+    "switchnorm",
+    "cleanup",
+    "splitcopy",
+    "splitpointer",
+    "merge",
+    "dynamic",
+    "casts",
+    "analysis",
+    "canonicalcompare",
+    "presentcompare",
+    "fixateglobals",
+    "fixateproto",
+    "constsequence",
+    "bitfields",
+    "segment",
+    "returnsplit",
+    "nodejoin",
+    "doubleload",
+    "doubleprecis",
+    "unreachable",
+    "subvar",
+    "floatprecision",
     "conditionalexe",
 ];
 
@@ -23,7 +48,10 @@ fn decompile_tree_dump_is_byte_equal_to_snapshot() {
     assert!(
         UNPORTED_ALLOWLIST.is_empty(),
         "UNPORTED_ALLOWLIST must be empty (still missing: {:?})",
-        UNPORTED_ALLOWLIST.iter().map(|e| e.name).collect::<Vec<_>>()
+        UNPORTED_ALLOWLIST
+            .iter()
+            .map(|e| e.name)
+            .collect::<Vec<_>>()
     );
 
     let sched = universal_sched(None, None, vec![], false);
@@ -71,5 +99,7 @@ fn decompile_tree_dump_is_byte_equal_to_snapshot() {
     }
 
     let total = rust_dump.lines().filter(|l| !l.is_empty()).count();
-    eprintln!("decompile tree: {total} actions+rules (byte-equal to the kuna snapshot, allowlist empty)");
+    eprintln!(
+        "decompile tree: {total} actions+rules (byte-equal to the kuna snapshot, allowlist empty)"
+    );
 }

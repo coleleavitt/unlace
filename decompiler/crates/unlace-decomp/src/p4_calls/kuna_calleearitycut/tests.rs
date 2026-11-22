@@ -5,8 +5,8 @@
 
 use super::*;
 
-use unlace_base::space::{spacetype, AddrSpace};
 use std::rc::Rc;
+use unlace_base::space::{AddrSpace, spacetype};
 
 use crate::context::VarnodeId;
 use crate::p4_calls::kuna_calleearitybody::plan_from_body;
@@ -15,11 +15,31 @@ use crate::p4_calls::kuna_calleedeadarg::CalleeEntryDead;
 const REG: int4 = 3;
 
 fn reg_space() -> Rc<AddrSpace> {
-    Rc::new(AddrSpace::new(spacetype::IPTR_PROCESSOR, "register", false, 8, 1, REG, 0, 0, 0))
+    Rc::new(AddrSpace::new(
+        spacetype::IPTR_PROCESSOR,
+        "register",
+        false,
+        8,
+        1,
+        REG,
+        0,
+        0,
+        0,
+    ))
 }
 
 fn stack_space() -> Rc<AddrSpace> {
-    Rc::new(AddrSpace::new(spacetype::IPTR_SPACEBASE, "stack", false, 8, 1, 4, 0, 0, 0))
+    Rc::new(AddrSpace::new(
+        spacetype::IPTR_SPACEBASE,
+        "stack",
+        false,
+        8,
+        1,
+        4,
+        0,
+        0,
+        0,
+    ))
 }
 
 fn vid(n: u64) -> VarnodeId {
@@ -73,12 +93,24 @@ fn loc(sp: &Rc<AddrSpace>, off: u64) -> (Address, int4) {
 /// A summary that proves `reads` are inputs and nothing dead anywhere — what a
 /// body whose every path is cut at a nested call answers.
 fn cut_body(reads: &[u64]) -> CalleeEntryDead {
-    CalleeEntryDead::from_parts(REG, reads.iter().map(|r| (REG, *r, 8)).collect(), vec![vec![]], true)
+    CalleeEntryDead::from_parts(
+        REG,
+        reads.iter().map(|r| (REG, *r, 8)).collect(),
+        vec![vec![]],
+        true,
+    )
 }
 
 /// The SysV integer argument registers, in prototype order.
 fn sysv(reg: &Rc<AddrSpace>) -> Vec<(Address, int4)> {
-    vec![loc(reg, 0x38), loc(reg, 0x30), loc(reg, 0x10), loc(reg, 0x8), loc(reg, 0x80), loc(reg, 0x88)]
+    vec![
+        loc(reg, 0x38),
+        loc(reg, 0x30),
+        loc(reg, 0x10),
+        loc(reg, 0x8),
+        loc(reg, 0x80),
+        loc(reg, 0x88),
+    ]
 }
 
 /// The witness's trials: rdi/rsi/rdx passed through, rcx written by the caller,
@@ -102,7 +134,10 @@ fn a_run_that_stops_short_at_an_untouched_register_is_the_argument_list() {
     let reg = reg_space();
     let trials = witness(&reg);
     let live = cut_body(&[0x38, 0x30, 0x10, 0x8]);
-    assert_eq!(plan_from_body(&trials, &sysv(&reg), &live), Some(vec![0, 1, 2, 3]));
+    assert_eq!(
+        plan_from_body(&trials, &sysv(&reg), &live),
+        Some(vec![0, 1, 2, 3])
+    );
 }
 
 /// A run that consumes every argument register has no boundary at all — the
@@ -165,7 +200,11 @@ fn a_boundary_outside_the_model_is_refused() {
 #[test]
 fn a_read_register_outside_the_run_is_still_refused() {
     let reg = reg_space();
-    let trials = vec![trial(&reg, 0x38, 1), barren(&reg, 0x30), trial(&reg, 0x10, 3)];
+    let trials = vec![
+        trial(&reg, 0x38, 1),
+        barren(&reg, 0x30),
+        trial(&reg, 0x10, 3),
+    ];
     let live = cut_body(&[0x38, 0x10]);
     assert_eq!(plan_from_body(&trials, &sysv(&reg), &live), None);
 }

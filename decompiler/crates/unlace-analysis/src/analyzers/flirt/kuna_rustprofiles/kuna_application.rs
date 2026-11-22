@@ -2,7 +2,7 @@
 
 use std::collections::BTreeSet;
 
-use super::{select, Bank, Report, Selection};
+use super::{Bank, Report, Selection, select};
 use crate::pass::FidMatch;
 
 impl Report {
@@ -22,7 +22,10 @@ impl Report {
             );
         }
         let Selection::Unique(profile) = select(&self.candidates) else {
-            return Err(format!("Rust signature application requires a complete unique positive profile; found {:?}", self.selection));
+            return Err(format!(
+                "Rust signature application requires a complete unique positive profile; found {:?}",
+                self.selection
+            ));
         };
         if self.selection != Selection::Unique(profile) {
             return Err("Rust signature selection disagrees with its candidate scores".into());

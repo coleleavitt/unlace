@@ -54,19 +54,27 @@ impl MemorySpecs {
         B: AsRef<[u8]> + Send + Sync + 'static,
     {
         MemorySpecs {
-            files: files.into_iter().map(|(p, b)| (p.into(), Box::new(b) as Bytes)).collect(),
+            files: files
+                .into_iter()
+                .map(|(p, b)| (p.into(), Box::new(b) as Bytes))
+                .collect(),
         }
     }
 
     /// The contents of the file at `rel`, relative to the spec root.
     pub fn get(&self, rel: &str) -> Option<&[u8]> {
-        self.files.iter().find(|(path, _)| path == rel).map(|(_, bytes)| (**bytes).as_ref())
+        self.files
+            .iter()
+            .find(|(path, _)| path == rel)
+            .map(|(_, bytes)| (**bytes).as_ref())
     }
 }
 
 impl fmt::Debug for MemorySpecs {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("MemorySpecs").field("files", &self.files.len()).finish()
+        f.debug_struct("MemorySpecs")
+            .field("files", &self.files.len())
+            .finish()
     }
 }
 
@@ -187,7 +195,12 @@ pub(crate) fn read<'a>(mounts: &'a [MemorySpecs], path: &str) -> io::Result<Cow<
             .iter()
             .find(|(p, _)| p == inner)
             .map(|(_, bytes)| Cow::Borrowed((**bytes).as_ref()))
-            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, format!("{path}: not in the mounted specs"))),
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::NotFound,
+                    format!("{path}: not in the mounted specs"),
+                )
+            }),
         None => std::fs::read(path).map(Cow::Owned),
     }
 }
@@ -216,7 +229,12 @@ pub(crate) fn directory_list(mounts: &[MemorySpecs], res: &mut Vec<String>, dirn
 
 /// [`FileManage::match_list_dir`] for a suffix, without dot files, over either
 /// kind of path.
-pub(crate) fn match_list_dir(mounts: &[MemorySpecs], res: &mut Vec<String>, suffix: &str, dirname: &str) {
+pub(crate) fn match_list_dir(
+    mounts: &[MemorySpecs],
+    res: &mut Vec<String>,
+    suffix: &str,
+    dirname: &str,
+) {
     let Some((files, inner)) = resolve(mounts, dirname) else {
         FileManage::match_list_dir(res, suffix, true, dirname, false);
         return;
@@ -281,10 +299,16 @@ mod tests {
     use super::*;
 
     static TREE: &[(&str, &[u8])] = &[
-        ("Ghidra/Processors/toy/data/languages/toy.ldefs", b"<language_definitions/>"),
+        (
+            "Ghidra/Processors/toy/data/languages/toy.ldefs",
+            b"<language_definitions/>",
+        ),
         ("Ghidra/Processors/toy/data/languages/toy.sla", b"sla"),
         ("Ghidra/Processors/toy/data/languages/.hidden.ldefs", b""),
-        ("Ghidra/Processors/toy/data/languages/old/toy_old.ldefs", b"old"),
+        (
+            "Ghidra/Processors/toy/data/languages/old/toy_old.ldefs",
+            b"old",
+        ),
         ("Ghidra/Processors/toy/data/patterns/p.xml", b"p"),
         ("README.md", b"readme"),
     ];
@@ -299,10 +323,16 @@ mod tests {
         let sla = format!("{root}/Ghidra/Processors/toy/data/languages/toy.sla");
         assert!(exists(&mounts, &sla));
         assert_eq!(&*read(&mounts, &sla).unwrap(), b"sla");
-        assert_eq!(&*read(&mounts, &format!("{root}/README.md")).unwrap(), b"readme");
+        assert_eq!(
+            &*read(&mounts, &format!("{root}/README.md")).unwrap(),
+            b"readme"
+        );
         let missing = read(&mounts, &format!("{root}/nope.sla")).unwrap_err();
         assert_eq!(missing.kind(), io::ErrorKind::NotFound);
-        assert!(!exists(&mounts, &format!("{root}/Ghidra/Processors")), "a directory is not a file");
+        assert!(
+            !exists(&mounts, &format!("{root}/Ghidra/Processors")),
+            "a directory is not a file"
+        );
     }
 
     #[test]
@@ -312,8 +342,14 @@ mod tests {
         let shared: Arc<[u8]> = Arc::from(&b"pspec"[..]);
         let shared = MemorySpecs::from_files([("a/b.pspec", shared)]);
         let mounts = [owned, shared];
-        assert_eq!(&*read(&mounts, &format!("{}/a/b.sla", memory_root(0))).unwrap(), [1, 2, 3]);
-        assert_eq!(&*read(&mounts, &format!("{}/a/b.pspec", memory_root(1))).unwrap(), b"pspec");
+        assert_eq!(
+            &*read(&mounts, &format!("{}/a/b.sla", memory_root(0))).unwrap(),
+            [1, 2, 3]
+        );
+        assert_eq!(
+            &*read(&mounts, &format!("{}/a/b.pspec", memory_root(1))).unwrap(),
+            b"pspec"
+        );
     }
 
     #[test]
@@ -330,9 +366,19 @@ mod tests {
     fn listings_see_only_direct_children() {
         let (mounts, root) = mounted();
         let mut dirs = Vec::new();
-        directory_list(&mounts, &mut dirs, &format!("{root}/Ghidra/Processors/toy/data/"));
+        directory_list(
+            &mounts,
+            &mut dirs,
+            &format!("{root}/Ghidra/Processors/toy/data/"),
+        );
         let languages = format!("{root}/Ghidra/Processors/toy/data/languages");
-        assert_eq!(dirs, [languages.clone(), format!("{root}/Ghidra/Processors/toy/data/patterns")]);
+        assert_eq!(
+            dirs,
+            [
+                languages.clone(),
+                format!("{root}/Ghidra/Processors/toy/data/patterns")
+            ]
+        );
 
         let mut ldefs = Vec::new();
         match_list_dir(&mounts, &mut ldefs, ".ldefs", &languages);
@@ -346,8 +392,17 @@ mod tests {
         scan_directory_recursive(&mounts, &mut ghidra, "Ghidra", &root, 2);
         assert_eq!(ghidra, [format!("{root}/Ghidra")]);
         let mut languages = Vec::new();
-        scan_directory_recursive(&mounts, &mut languages, "languages", &format!("{root}/Ghidra/Processors/toy"), 2);
-        assert_eq!(languages, [format!("{root}/Ghidra/Processors/toy/data/languages")]);
+        scan_directory_recursive(
+            &mounts,
+            &mut languages,
+            "languages",
+            &format!("{root}/Ghidra/Processors/toy"),
+            2,
+        );
+        assert_eq!(
+            languages,
+            [format!("{root}/Ghidra/Processors/toy/data/languages")]
+        );
     }
 
     #[test]
@@ -359,7 +414,10 @@ mod tests {
         paths.add_dir_2_path(&format!("{root}/Ghidra/Processors/toy/data/languages"));
         let mut res = String::new();
         find_file(&mounts, &paths, &mut res, "toy.sla");
-        assert_eq!(res, format!("{root}/Ghidra/Processors/toy/data/languages/toy.sla"));
+        assert_eq!(
+            res,
+            format!("{root}/Ghidra/Processors/toy/data/languages/toy.sla")
+        );
         find_file(&mounts, &paths, &mut res, "absent.sla");
         assert!(res.is_empty());
     }

@@ -10,10 +10,11 @@ use super::*;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::types::int4;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, JoinSpace, UniqueSpace, VarnodeStorage,
+    AddrSpace, AddrSpaceManager, ConstantSpace, JoinSpace, UniqueSpace, VarnodeStorage,
+    addrspace_flags, spacetype,
 };
+use unlace_base::types::int4;
 
 use crate::context::{ArchContext, TypeOp};
 
@@ -24,7 +25,8 @@ fn computes_a_value(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -63,11 +65,13 @@ fn unwritten(fd: &mut Funcdata, off: u64, sz: int4) -> VarnodeId {
 fn mk_def(fd: &mut Funcdata, opc: OpCode, inputs: &[VarnodeId], out_off: u64) -> VarnodeId {
     let r = ram(fd);
     let op = fd.new_op(inputs.len() as int4, Address::new(Rc::clone(&r), out_off));
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
     for (i, &vn) in inputs.iter().enumerate() {
         fd.op_set_input(op, vn, i as int4).expect("wire input");
     }
-    fd.new_varnode_out(8, &Address::new(r, out_off), op).expect("varnode out")
+    fd.new_varnode_out(8, &Address::new(r, out_off), op)
+        .expect("varnode out")
 }
 
 #[test]
@@ -94,9 +98,15 @@ fn an_unwritten_varnode_is_not_a_computed_return_value() {
 fn a_global_read_is_computed_only_in_a_pair_joined_in_the_abis_order() {
     let mut fd = build_fd();
     let global = unwritten(&mut fd, 0x2000, 4);
-    fd.vbank_mut().get_mut(global).unwrap().set_flags_pub(crate::varnode::varnode_flags::persist);
+    fd.vbank_mut()
+        .get_mut(global)
+        .unwrap()
+        .set_flags_pub(crate::varnode::varnode_flags::persist);
     let reg = mk_def(&mut fd, OpCode::CPUI_COPY, &[global], 0x3000);
-    assert!(computes_a_value(&fd, reg, 0), "`mov dx,[g+2]` hands back the program's own data");
+    assert!(
+        computes_a_value(&fd, reg, 0),
+        "`mov dx,[g+2]` hands back the program's own data"
+    );
     fd.kuna_set_pairs_first_low(true);
     assert!(
         !computes_a_value(&fd, reg, 0),
@@ -110,11 +120,17 @@ fn a_copy_chases_through_to_its_source() {
 
     let leftover = unwritten(&mut fd, 0x2000, 8);
     let copied = mk_def(&mut fd, OpCode::CPUI_COPY, &[leftover], 0x2100);
-    assert!(!computes_a_value(&fd, copied, 0), "a copy of leftover is still leftover");
+    assert!(
+        !computes_a_value(&fd, copied, 0),
+        "a copy of leftover is still leftover"
+    );
 
     let k = fd.new_constant(8, 5);
     let copied_k = mk_def(&mut fd, OpCode::CPUI_COPY, &[k], 0x2200);
-    assert!(computes_a_value(&fd, copied_k, 0), "a copy of a literal is a real value");
+    assert!(
+        computes_a_value(&fd, copied_k, 0),
+        "a copy of a literal is a real value"
+    );
 }
 
 #[test]
@@ -239,14 +255,29 @@ fn build_fd_with_blocks() -> (Funcdata, crate::context::BlockId) {
     .unwrap();
     let glb = Rc::new(ArchContext::new(m));
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
-    let mut fd = Funcdata::new("func", "func", glb, Address::new(ram, 0x1000), 0x1000_0000, 0x40).unwrap();
+    let mut fd = Funcdata::new(
+        "func",
+        "func",
+        glb,
+        Address::new(ram, 0x1000),
+        0x1000_0000,
+        0x40,
+    )
+    .unwrap();
     let root = fd.bblocks_ref().root.expect("bblocks root");
     let bl = fd.bblocks_mut().new_block_basic(root);
     (fd, bl)
 }
 
 /// A live `out = <opc>(inputs...)` in `bl`, `out` sized `size` at ram `out_off`.
-fn live_def(fd: &mut Funcdata, bl: crate::context::BlockId, opc: OpCode, inputs: &[VarnodeId], out_off: u64, size: int4) -> VarnodeId {
+fn live_def(
+    fd: &mut Funcdata,
+    bl: crate::context::BlockId,
+    opc: OpCode,
+    inputs: &[VarnodeId],
+    out_off: u64,
+    size: int4,
+) -> VarnodeId {
     let r = ram(fd);
     let op = fd.new_op(inputs.len() as int4, Address::new(Rc::clone(&r), out_off));
     fd.op_set_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
@@ -254,7 +285,8 @@ fn live_def(fd: &mut Funcdata, bl: crate::context::BlockId, opc: OpCode, inputs:
         fd.op_set_input(op, vn, i as int4).expect("wire input");
     }
     fd.op_insert(op, bl, None);
-    fd.new_varnode_out(size, &Address::new(r, out_off), op).expect("varnode out")
+    fd.new_varnode_out(size, &Address::new(r, out_off), op)
+        .expect("varnode out")
 }
 
 /// `return <value>;` as a live RETURN in `bl`.
@@ -274,14 +306,33 @@ fn each_half_of_one_register_sits_in_its_own_bytes() {
     let (mut fd, _) = build_fd_with_blocks();
     let r = ram(&fd);
     let whole = fd.new_varnode(8, &Address::new(Rc::clone(&r), 0x3000), None);
-    assert_eq!(slot_storage(&fd, whole, 0, 4), Some(Address::new(Rc::clone(&r), 0x3000)), "little-endian low half");
-    assert_eq!(slot_storage(&fd, whole, 4, 4), Some(Address::new(Rc::clone(&r), 0x3004)), "little-endian high half");
-    assert!(!spans_two_locations(&fd, whole), "one register is one location");
+    assert_eq!(
+        slot_storage(&fd, whole, 0, 4),
+        Some(Address::new(Rc::clone(&r), 0x3000)),
+        "little-endian low half"
+    );
+    assert_eq!(
+        slot_storage(&fd, whole, 4, 4),
+        Some(Address::new(Rc::clone(&r), 0x3004)),
+        "little-endian high half"
+    );
+    assert!(
+        !spans_two_locations(&fd, whole),
+        "one register is one location"
+    );
 
     let be = Rc::clone(fd.get_arch().manage().get_space_by_name("breg").unwrap());
     let whole_be = fd.new_varnode(8, &Address::new(Rc::clone(&be), 0x100), None);
-    assert_eq!(slot_storage(&fd, whole_be, 0, 4), Some(Address::new(Rc::clone(&be), 0x104)), "big-endian low half");
-    assert_eq!(slot_storage(&fd, whole_be, 4, 4), Some(Address::new(be, 0x100)), "big-endian high half");
+    assert_eq!(
+        slot_storage(&fd, whole_be, 0, 4),
+        Some(Address::new(Rc::clone(&be), 0x104)),
+        "big-endian low half"
+    );
+    assert_eq!(
+        slot_storage(&fd, whole_be, 4, 4),
+        Some(Address::new(be, 0x100)),
+        "big-endian high half"
+    );
 }
 
 #[test]
@@ -297,7 +348,11 @@ fn a_never_written_high_half_of_one_register_is_still_dropped() {
     let whole = live_def(&mut fd, bl, OpCode::CPUI_PIECE, &[leftover, sum], 0x3000, 8);
     let ret = live_return(&mut fd, bl, whole);
     assert!(strip_uncomputed_return_piece(&mut fd));
-    assert_eq!(fd.obank().get(ret).unwrap().get_in(1), Some(sum), "the return narrows to the computed low half");
+    assert_eq!(
+        fd.obank().get(ret).unwrap().get_in(1),
+        Some(sum),
+        "the return narrows to the computed low half"
+    );
 }
 
 #[test]
@@ -312,8 +367,15 @@ fn the_high_half_of_one_register_is_never_returned_alone() {
     let leftover = fd.new_varnode(4, &Address::new(Rc::clone(&r), 0x3000), None);
     let whole = live_def(&mut fd, bl, OpCode::CPUI_PIECE, &[sum, leftover], 0x3000, 8);
     let ret = live_return(&mut fd, bl, whole);
-    assert!(!strip_uncomputed_return_piece(&mut fd), "nothing is dropped from a value built in one register");
-    assert_eq!(fd.obank().get(ret).unwrap().get_in(1), Some(whole), "the return keeps all eight bytes");
+    assert!(
+        !strip_uncomputed_return_piece(&mut fd),
+        "nothing is dropped from a value built in one register"
+    );
+    assert_eq!(
+        fd.obank().get(ret).unwrap().get_in(1),
+        Some(whole),
+        "the return keeps all eight bytes"
+    );
 }
 
 // --- a literal zero low half the rules folded into the pair ------------------
@@ -323,14 +385,41 @@ fn the_high_half_of_one_register_is_never_returned_alone() {
 /// `0x104:0x100`, and `return ZEXT(hi) << 32` at that join.
 fn folded_zero_pair(hi_computed: bool) -> (Funcdata, OpId, VarnodeId) {
     let mut m = build_manager();
-    m.insert_space(Rc::new(AddrSpace::new(spacetype::IPTR_PROCESSOR, "breg", true, 8, 1, 3, 0, 1, 1))).unwrap();
+    m.insert_space(Rc::new(AddrSpace::new(
+        spacetype::IPTR_PROCESSOR,
+        "breg",
+        true,
+        8,
+        1,
+        3,
+        0,
+        1,
+        1,
+    )))
+    .unwrap();
     m.insert_space(Rc::new(JoinSpace::new(4, false))).unwrap();
     let breg = Rc::clone(m.get_space_by_name("breg").unwrap());
-    let piece = |off| VarnodeStorage { space: Some(Rc::clone(&breg)), offset: off, size: 4 };
-    let join = m.find_add_join(&[piece(0x104), piece(0x100)], 0).unwrap().get_unified().get_addr();
+    let piece = |off| VarnodeStorage {
+        space: Some(Rc::clone(&breg)),
+        offset: off,
+        size: 4,
+    };
+    let join = m
+        .find_add_join(&[piece(0x104), piece(0x100)], 0)
+        .unwrap()
+        .get_unified()
+        .get_addr();
     let glb = Rc::new(ArchContext::new(m));
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
-    let mut fd = Funcdata::new("func", "func", glb, Address::new(Rc::clone(&ram), 0x1000), 0x1000_0000, 0x40).unwrap();
+    let mut fd = Funcdata::new(
+        "func",
+        "func",
+        glb,
+        Address::new(Rc::clone(&ram), 0x1000),
+        0x1000_0000,
+        0x40,
+    )
+    .unwrap();
     let root = fd.bblocks_ref().root.expect("bblocks root");
     let bl = fd.bblocks_mut().new_block_basic(root);
     let arg = fd.new_varnode(4, &Address::new(Rc::clone(&breg), 0x104), None);
@@ -357,7 +446,10 @@ fn the_folded_form_of_a_zero_low_half_is_read_as_the_pair() {
     let (fd, _, whole) = folded_zero_pair(false);
     let def = fd.vbank().get(whole).and_then(|v| v.get_def()).unwrap();
     let (hi, lo_size, out) = zero_low_pair(&fd, def).expect("ZEXT(hi) << 32 is PIECE(hi, 0:4)");
-    assert_eq!((fd.vbank().get(hi).unwrap().get_size(), lo_size, out), (4, 4, whole));
+    assert_eq!(
+        (fd.vbank().get(hi).unwrap().get_size(), lo_size, out),
+        (4, 4, whole)
+    );
 }
 
 #[test]
@@ -368,13 +460,19 @@ fn a_leftover_beside_a_folded_zero_is_dropped_from_a_pair_joined_against_the_abi
     let kept = fd.obank().get(ret).unwrap().get_in(1).unwrap();
     assert_ne!(kept, whole);
     let v = fd.vbank().get(kept).unwrap();
-    assert!(v.is_constant() && v.get_offset() == 0 && v.get_size() == 4, "the RETURN returns the 4-byte zero");
+    assert!(
+        v.is_constant() && v.get_offset() == 0 && v.get_size() == 4,
+        "the RETURN returns the 4-byte zero"
+    );
 }
 
 #[test]
 fn a_folded_zero_is_left_alone_where_the_pair_joins_in_the_abis_order() {
     let (mut fd, ret, whole) = folded_zero_pair(false);
-    assert!(!strip_uncomputed_return_piece(&mut fd), "the folded form can be the value");
+    assert!(
+        !strip_uncomputed_return_piece(&mut fd),
+        "the folded form can be the value"
+    );
     assert_eq!(fd.obank().get(ret).unwrap().get_in(1), Some(whole));
 }
 

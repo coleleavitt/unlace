@@ -44,7 +44,7 @@
 //! alone, and a language with no `DF` register at all (every non-x86 target) is a
 //! structural no-op.
 
-use crate::fspec::{effect_type, EffectRecord, ProtoModel};
+use crate::fspec::{EffectRecord, ProtoModel, effect_type};
 
 /// The SLEIGH register name for the x86 direction flag.
 const DIRECTION_FLAG: &[u8] = b"DF";
@@ -63,7 +63,9 @@ where
     let Some(df) = lookup(DIRECTION_FLAG) else {
         return; // not an x86 language
     };
-    let Some(space) = df.space.clone() else { return };
+    let Some(space) = df.space.clone() else {
+        return;
+    };
     let addr = unlace_base::address::Address::new(space, df.offset);
     // The spec already said something about this register: respect it.
     if model.has_effect(&addr, df.size as unlace_base::types::int4) != effect_type::UNKNOWN_EFFECT {

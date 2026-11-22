@@ -38,7 +38,7 @@ use unlace_num::opcodes::OpCode;
 
 use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype, TypeFactory};
+use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::kuna_elemptr::{GlobalVerdict, Obj};
 use crate::options::on_or_off;
@@ -56,7 +56,10 @@ impl OptionGlobalRef {
     pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
-        Ok((val, format!("Constant-address global references turned {prop}")))
+        Ok((
+            val,
+            format!("Constant-address global references turned {prop}"),
+        ))
     }
 }
 
@@ -115,7 +118,9 @@ impl Seen {
         match prev {
             None | Some(Seen::Void(_)) if is_void => Seen::Void(to),
             None | Some(Seen::Void(_)) => Seen::One(to),
-            Some(Seen::One(t)) if is_void || same_type(&t, &to) || unknown_of(&to, &t) => Seen::One(t),
+            Some(Seen::One(t)) if is_void || same_type(&t, &to) || unknown_of(&to, &t) => {
+                Seen::One(t)
+            }
             Some(Seen::One(t)) if unknown_of(&t, &to) => Seen::One(to),
             _ => Seen::Conflict,
         }
@@ -152,18 +157,29 @@ pub fn plan(fd: &Funcdata, arch: &Architecture, on: bool, is_c: bool) -> Plan {
     if !on || !is_c || arch.globalref_ranges.is_empty() {
         return Plan::default();
     }
-    let data_space = arch.manage().get_default_data_space().map(|s| s.get_index());
+    let data_space = arch
+        .manage()
+        .get_default_data_space()
+        .map(|s| s.get_index());
     let mut numeric = HashSet::new();
     let mut direct = Vec::new();
     let mut pointees: BTreeMap<u64, Seen> = BTreeMap::new();
     let mut indexed = HashSet::new();
-    let elem_held = if arch.elem_ptr { fd.kuna_elemptr_verdicts() } else { BTreeMap::new() };
+    let elem_held = if arch.elem_ptr {
+        fd.kuna_elemptr_verdicts()
+    } else {
+        BTreeMap::new()
+    };
     for vn in fd.vbank().iter_loc() {
-        let Some(v) = fd.vbank().get(vn) else { continue };
+        let Some(v) = fd.vbank().get(vn) else {
+            continue;
+        };
         if v.is_constant() {
             let off = v.get_offset();
             for op in v.descend_iter() {
-                let Some(code) = fd.obank().get(op).map(|o| o.code()) else { continue };
+                let Some(code) = fd.obank().get(op).map(|o| o.code()) else {
+                    continue;
+                };
                 let ct = v.get_type_read_facing(op);
                 if ct.get_metatype() != type_metatype::TYPE_PTR {
                     if reads_as_number(code) {
@@ -181,9 +197,14 @@ pub fn plan(fd: &Funcdata, arch: &Architecture, on: bool, is_c: bool) -> Plan {
                 let seen = pointees.remove(&off);
                 pointees.insert(off, Seen::merge(seen, to, arch.elem_ptr));
             }
-        } else if data_space.is_some() && v.get_addr().get_space().map(|s| s.get_index()) == data_space {
+        } else if data_space.is_some()
+            && v.get_addr().get_space().map(|s| s.get_index()) == data_space
+        {
             let unnamed = in_ranges(&arch.globalref_ranges, v.get_offset())
-                && fd.get_arch().query_container_global(v.get_addr(), v.get_size(), &Address::new_invalid()).is_none();
+                && fd
+                    .get_arch()
+                    .query_container_global(v.get_addr(), v.get_size(), &Address::new_invalid())
+                    .is_none();
             // (kuna `elemptr`) A global the rule typed, or whose fold names its
             // pointee and which nothing uses as a number, is used only as that
             // pointer: one of another type (its value before a call, which
@@ -206,7 +227,15 @@ pub fn plan(fd: &Funcdata, arch: &Architecture, on: bool, is_c: bool) -> Plan {
         }
     }
     let trace = std::env::var_os("KUNA_GLOBALREF_TRACE").is_some();
-    Plan { on: true, trace, numeric, direct, pointees, indexed, minted: BTreeMap::new() }
+    Plan {
+        on: true,
+        trace,
+        numeric,
+        direct,
+        pointees,
+        indexed,
+        minted: BTreeMap::new(),
+    }
 }
 
 /// (kuna `elemptr`) Is `vn` the base of the `PTRADD` `op`, indexed by a value
@@ -215,7 +244,9 @@ fn is_indexed_base(fd: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
     fd.obank().get(op).is_some_and(|o| {
         o.code() == OpCode::CPUI_PTRADD
             && o.get_in(0) == Some(vn)
-            && o.get_in(1).and_then(|i| fd.vbank().get(i)).is_some_and(|i| !i.is_constant())
+            && o.get_in(1)
+                .and_then(|i| fd.vbank().get(i))
+                .is_some_and(|i| !i.is_constant())
     })
 }
 
@@ -264,14 +295,20 @@ impl Plan {
         off: uintb,
         ct: &Rc<Datatype>,
     ) -> Result<(), Refusal> {
-        if off == 0 || ct.get_metatype() != type_metatype::TYPE_PTR || ct.get_word_size().unwrap_or(1) != 1 {
+        if off == 0
+            || ct.get_metatype() != type_metatype::TYPE_PTR
+            || ct.get_word_size().unwrap_or(1) != 1
+        {
             return Err(Refusal::NotAPointer);
         }
         if fd.vbank().get(vn).map(|v| v.get_size()) != Some(ct.get_size()) {
             return Err(Refusal::NotAPointer);
         }
         let pointee = ct.get_ptr_to().ok_or(Refusal::NotAPointer)?;
-        if matches!(pointee.get_metatype(), type_metatype::TYPE_CODE | type_metatype::TYPE_SPACEBASE) {
+        if matches!(
+            pointee.get_metatype(),
+            type_metatype::TYPE_CODE | type_metatype::TYPE_SPACEBASE
+        ) {
             return Err(Refusal::Code);
         }
         if !in_ranges(&arch.globalref_ranges, off) {
@@ -280,34 +317,62 @@ impl Plan {
         if self.numeric.contains(&off) {
             return Err(Refusal::Numeric);
         }
-        let object = self.pointees.get(&off).ok_or(Refusal::NotAPointer)?.object().ok_or(Refusal::TwoTypes)?;
-        if matches!(object.get_metatype(), type_metatype::TYPE_CODE | type_metatype::TYPE_SPACEBASE) {
+        let object = self
+            .pointees
+            .get(&off)
+            .ok_or(Refusal::NotAPointer)?
+            .object()
+            .ok_or(Refusal::TwoTypes)?;
+        if matches!(
+            object.get_metatype(),
+            type_metatype::TYPE_CODE | type_metatype::TYPE_SPACEBASE
+        ) {
             return Err(Refusal::Code);
         }
         let unknown = object.get_metatype() == type_metatype::TYPE_VOID;
         if pointee.get_metatype() == type_metatype::TYPE_VOID && !void_reader_converts(fd, op, vn) {
             return Err(Refusal::VoidReader);
         }
-        let space = Rc::clone(arch.manage().get_default_data_space().ok_or(Refusal::OutsideData)?);
+        let space = Rc::clone(
+            arch.manage()
+                .get_default_data_space()
+                .ok_or(Refusal::OutsideData)?,
+        );
         let addr = Address::new(space, off);
         let invalid = Address::new_invalid();
-        if fd.get_arch().query_container_global(&addr, 1, &invalid).is_some() {
+        if fd
+            .get_arch()
+            .query_container_global(&addr, 1, &invalid)
+            .is_some()
+        {
             return Err(Refusal::Symbol);
         }
         let (decl_type, unknown) = if !unknown {
             (object, false)
-        } else { match self.direct_type_at(off) { Some(read) => {
-            (read, false)
-        } _ => {
-            let byte = arch.types_impl().get_base(1, type_metatype::TYPE_UNKNOWN).map_err(|_| Refusal::NotAPointer)?;
-            (byte, true)
-        }}};
+        } else {
+            match self.direct_type_at(off) {
+                Some(read) => (read, false),
+                _ => {
+                    let byte = arch
+                        .types_impl()
+                        .get_base(1, type_metatype::TYPE_UNKNOWN)
+                        .map_err(|_| Refusal::NotAPointer)?;
+                    (byte, true)
+                }
+            }
+        };
         let size = decl_type.get_size().max(1) as u64;
         // (kuna `elemptr`) An indexed address is an array only where the function
         // does not also read or write its first element by name: that name would
         // be the array. It is then the scalar's address, `(&dat_5c000)[i]`.
-        let array = self.indexed.contains(&off) && !unknown && !self.direct.iter().any(|d| overlaps(d, off, size));
-        if let Some(d) = self.direct.iter().find(|d| overlaps(d, off, size) && !same_object(d, off, size, &decl_type)) {
+        let array = self.indexed.contains(&off)
+            && !unknown
+            && !self.direct.iter().any(|d| overlaps(d, off, size));
+        if let Some(d) = self
+            .direct
+            .iter()
+            .find(|d| overlaps(d, off, size) && !same_object(d, off, size, &decl_type))
+        {
             if self.trace {
                 eprintln!(
                     "[globalref-direct] {} 0x{off:x} decl={}:{} direct=0x{:x}:{}:{}",
@@ -321,7 +386,11 @@ impl Plan {
             }
             return Err(Refusal::DirectAccess);
         }
-        self.minted.entry(off).or_insert(Minted { decl_type, unknown, array });
+        self.minted.entry(off).or_insert(Minted {
+            decl_type,
+            unknown,
+            array,
+        });
         Ok(())
     }
 
@@ -336,14 +405,22 @@ impl Plan {
     /// The unnamed program data this function reads or writes directly, by
     /// start and type: the `dat_<addr>` it prints that are not addresses taken.
     pub fn direct_objects(&self) -> impl Iterator<Item = (u64, &Rc<Datatype>, bool)> + '_ {
-        self.direct.iter().filter(|d| d.unnamed).map(|d| (d.start, &d.ty, d.elem))
+        self.direct
+            .iter()
+            .filter(|d| d.unnamed)
+            .map(|d| (d.start, &d.ty, d.elem))
     }
 
     /// (kuna `elemptr`) The type a project header declares the global at `off`
     /// as, when no symbol names it and the rule typed it an element pointer:
     /// the one type this function reads and writes it at.
     pub fn declared_type(&self, off: u64) -> Option<Rc<Datatype>> {
-        if !self.direct.iter().filter(|d| overlaps(d, off, 1)).all(|d| d.unnamed && d.elem) {
+        if !self
+            .direct
+            .iter()
+            .filter(|d| overlaps(d, off, 1))
+            .all(|d| d.unnamed && d.elem)
+        {
             return None;
         }
         self.direct_type_at(off)
@@ -433,7 +510,9 @@ fn same_type(a: &Rc<Datatype>, b: &Rc<Datatype>) -> bool {
 /// Is `ct` a pointer to `void`?
 fn is_void_pointer(ct: &Datatype) -> bool {
     ct.get_metatype() == type_metatype::TYPE_PTR
-        && ct.get_ptr_to().is_some_and(|p| p.get_metatype() == type_metatype::TYPE_VOID)
+        && ct
+            .get_ptr_to()
+            .is_some_and(|p| p.get_metatype() == type_metatype::TYPE_VOID)
 }
 
 /// For a `void *` constant: does the reader convert any object pointer to
@@ -441,12 +520,19 @@ fn is_void_pointer(ct: &Datatype) -> bool {
 /// stored or copied into `void *` storage, and an equality test against another
 /// `void *` do; anything else keeps the cast.
 fn void_reader_converts(fd: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
-    let Some(o) = fd.obank().get(op) else { return false };
+    let Some(o) = fd.obank().get(op) else {
+        return false;
+    };
     let slot = o.get_slot(vn);
-    let ty_of = |v: Option<VarnodeId>| v.and_then(|v| fd.vbank().get(v)).map(|v| Rc::clone(v.get_type()));
+    let ty_of = |v: Option<VarnodeId>| {
+        v.and_then(|v| fd.vbank().get(v))
+            .map(|v| Rc::clone(v.get_type()))
+    };
     match o.code() {
         OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_RETURN => slot >= 1,
-        OpCode::CPUI_CALLOTHER => fd.get_arch().rep_string && crate::kuna_repstring::input_type(fd, op, slot).is_some(),
+        OpCode::CPUI_CALLOTHER => {
+            fd.get_arch().rep_string && crate::kuna_repstring::input_type(fd, op, slot).is_some()
+        }
         OpCode::CPUI_COPY => ty_of(o.get_out()).is_some_and(|t| is_void_pointer(&t)),
         OpCode::CPUI_STORE => {
             slot == 2

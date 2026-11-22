@@ -25,10 +25,10 @@ use unlace_base::marshal::PackedEncode;
 use unlace_ghidra::ids::ELEM_COMMAND_GETCALLOTHERFIXUP;
 use unlace_ghidra::process::GhidraProcess;
 
-use ghidra_sim::oracle::{generate_tspec, repo_root, InjectFault, SimOracle};
+use ghidra_sim::oracle::{InjectFault, SimOracle, generate_tspec, repo_root};
 use ghidra_sim::{
-    cmd_decompile_at, cmd_deregister_program, cmd_register_program, cmd_set_action,
-    parse_decompile_doc, trace_session, MockReader, MockState, MockWriter, SessionTrace,
+    MockReader, MockState, MockWriter, SessionTrace, cmd_decompile_at, cmd_deregister_program,
+    cmd_register_program, cmd_set_action, parse_decompile_doc, trace_session,
 };
 
 const ARM_LANG: &str = "specs/Ghidra/Processors/ARM/data/languages";
@@ -78,7 +78,15 @@ fn run(
     targets: &[&str],
     fault: Option<InjectFault>,
 ) -> Run {
-    run_with_options(binary, lang_dir, pspec_name, cspec_name, targets, fault, &[])
+    run_with_options(
+        binary,
+        lang_dir,
+        pspec_name,
+        cspec_name,
+        targets,
+        fault,
+        &[],
+    )
 }
 
 /// [`run`], with kuna options applied to the session right after registerProgram.
@@ -157,9 +165,7 @@ fn run_with_options(
     let trace = trace_session(&state.from_process);
     let results = (0..targets.len())
         .map(|i| match trace.responses[i + 2].payload.as_deref() {
-            Some(p) if !p.is_empty() => {
-                (p.len(), parse_decompile_doc(p, &oracle.manager).c_text)
-            }
+            Some(p) if !p.is_empty() => (p.len(), parse_decompile_doc(p, &oracle.manager).c_text),
             other => (other.map(|p| p.len()).unwrap_or(0), String::new()),
         })
         .collect();
@@ -177,9 +183,7 @@ fn assert_all_decompiled(r: &Run, targets: &[&str], what: &str) {
         .zip(&r.results)
         .filter(|(_, (size, _))| *size == 0)
         .enumerate()
-        .map(|(i, (name, _))| {
-            format!("{name} ({})", r.trace.responses[i + 2].warnings.trim())
-        })
+        .map(|(i, (name, _))| format!("{name} ({})", r.trace.responses[i + 2].warnings.trim()))
         .collect();
     assert!(
         failed.is_empty(),

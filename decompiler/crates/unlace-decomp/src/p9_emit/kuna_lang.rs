@@ -69,7 +69,10 @@ impl OutLang {
 
     /// Every language kuna can emit, by `option setlanguage` name.
     pub fn names() -> Vec<&'static str> {
-        [OutLang::C, OutLang::Rust, OutLang::Go, OutLang::Java].iter().map(|l| l.print_name()).collect()
+        [OutLang::C, OutLang::Rust, OutLang::Go, OutLang::Java]
+            .iter()
+            .map(|l| l.print_name())
+            .collect()
     }
 
     /// The `option setlanguage` name this language answers to.

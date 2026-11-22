@@ -12,7 +12,7 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_num::opcodes::OpCode;
 
@@ -26,7 +26,8 @@ use crate::context::{ArchContext, TypeOp};
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -60,7 +61,8 @@ fn make_op(fd: &mut Funcdata, off: u64, opc: OpCode) -> OpId {
     let pc = ram_addr(fd, off);
     let id = fd.obank_mut().create_at(0, pc);
     fd.obank_mut().mark_alive(id);
-    fd.obank_mut().change_opcode(id, TypeOp::new(opc, 0, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(id, TypeOp::new(opc, 0, format!("{opc:?}")));
     id
 }
 
@@ -80,7 +82,9 @@ struct LogRule {
 impl Rule for LogRule {
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         let opc = data.obank().get(op).unwrap().code();
-        self.log.borrow_mut().push(format!("{}:{:?}", self.tag, opc));
+        self.log
+            .borrow_mut()
+            .push(format!("{}:{:?}", self.tag, opc));
         0
     }
     fn get_op_list(&self) -> Vec<OpCode> {
@@ -88,7 +92,11 @@ impl Rule for LogRule {
     }
     fn clone_rule(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Rule>> {
         if grouplist.contains(self.group) {
-            Some(Box::new(LogRule { tag: self.tag.clone(), log: self.log.clone(), group: self.group }))
+            Some(Box::new(LogRule {
+                tag: self.tag.clone(),
+                log: self.log.clone(),
+                group: self.group,
+            }))
         } else {
             None
         }
@@ -108,7 +116,8 @@ impl Rule for MorphRule {
         self.log.borrow_mut().push(format!("morph_sees:{opc:?}"));
         if opc == OpCode::CPUI_COPY && !*self.fired.borrow() {
             *self.fired.borrow_mut() = true;
-            data.obank_mut().change_opcode(op, TypeOp::new(OpCode::CPUI_INT_ADD, 0, "INT_ADD"));
+            data.obank_mut()
+                .change_opcode(op, TypeOp::new(OpCode::CPUI_INT_ADD, 0, "INT_ADD"));
             return 1; // changed the opcode -> must return non-zero
         }
         0
@@ -117,7 +126,10 @@ impl Rule for MorphRule {
         vec![OpCode::CPUI_COPY, OpCode::CPUI_INT_ADD]
     }
     fn clone_rule(&self, _g: &ActionGroupList) -> Option<Box<dyn Rule>> {
-        Some(Box::new(MorphRule { log: self.log.clone(), fired: self.fired.clone() }))
+        Some(Box::new(MorphRule {
+            log: self.log.clone(),
+            fired: self.fired.clone(),
+        }))
     }
 }
 
@@ -188,7 +200,9 @@ impl Action for RestartOnceAction {
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         let n = *self.requests_left.borrow();
-        self.log.borrow_mut().push(format!("restart_action(left={n})"));
+        self.log
+            .borrow_mut()
+            .push(format!("restart_action(left={n})"));
         if n > 0 {
             *self.requests_left.borrow_mut() -= 1;
             data.set_restart_pending(true);
@@ -272,7 +286,11 @@ fn perop_registration_is_insertion_order() {
     for tag in ["A", "B", "C"] {
         pool.add_rule(
             RuleState::new("analysis", 0, tag),
-            Box::new(LogRule { tag: tag.to_string(), log: log.clone(), group: "analysis" }),
+            Box::new(LogRule {
+                tag: tag.to_string(),
+                log: log.clone(),
+                group: "analysis",
+            }),
         );
     }
     // Each registered rule lists COPY and INT_ADD; both per-op lists must be in
@@ -295,7 +313,11 @@ fn pool_dispatches_each_op_through_every_rule_in_order() {
     for tag in ["A", "B"] {
         pool.add_rule(
             RuleState::new("analysis", 0, tag),
-            Box::new(LogRule { tag: tag.to_string(), log: log.clone(), group: "analysis" }),
+            Box::new(LogRule {
+                tag: tag.to_string(),
+                log: log.clone(),
+                group: "analysis",
+            }),
         );
     }
     let mut ctx = ActionContext::new();
@@ -304,7 +326,12 @@ fn pool_dispatches_each_op_through_every_rule_in_order() {
     // op1 (COPY): A then B; op2 (INT_ADD): A then B.
     assert_eq!(
         *log.borrow(),
-        vec!["A:CPUI_COPY", "B:CPUI_COPY", "A:CPUI_INT_ADD", "B:CPUI_INT_ADD"]
+        vec![
+            "A:CPUI_COPY",
+            "B:CPUI_COPY",
+            "A:CPUI_INT_ADD",
+            "B:CPUI_INT_ADD"
+        ]
     );
 }
 
@@ -322,11 +349,18 @@ fn opcode_change_rezeros_rule_index() {
     let mut pool = ActionPool::new(0, "pool");
     pool.add_rule(
         RuleState::new("analysis", 0, "morph"),
-        Box::new(MorphRule { log: log.clone(), fired: fired.clone() }),
+        Box::new(MorphRule {
+            log: log.clone(),
+            fired: fired.clone(),
+        }),
     );
     pool.add_rule(
         RuleState::new("analysis", 0, "log"),
-        Box::new(LogRule { tag: "log".into(), log: log.clone(), group: "analysis" }),
+        Box::new(LogRule {
+            tag: "log".into(),
+            log: log.clone(),
+            group: "analysis",
+        }),
     );
 
     let mut ctx = ActionContext::new();
@@ -336,7 +370,11 @@ fn opcode_change_rezeros_rule_index() {
     // 3. log sees INT_ADD.
     assert_eq!(
         *log.borrow(),
-        vec!["morph_sees:CPUI_COPY", "morph_sees:CPUI_INT_ADD", "log:CPUI_INT_ADD"]
+        vec![
+            "morph_sees:CPUI_COPY",
+            "morph_sees:CPUI_INT_ADD",
+            "log:CPUI_INT_ADD"
+        ]
     );
 }
 
@@ -355,7 +393,11 @@ fn dead_op_is_skipped_and_destroyed() {
     let mut pool = ActionPool::new(0, "pool");
     pool.add_rule(
         RuleState::new("analysis", 0, "A"),
-        Box::new(LogRule { tag: "A".into(), log: log.clone(), group: "analysis" }),
+        Box::new(LogRule {
+            tag: "A".into(),
+            log: log.clone(),
+            group: "analysis",
+        }),
     );
     let mut ctx = ActionContext::new();
     assert_eq!(pool.apply(&mut fd, &mut ctx), 0);
@@ -371,9 +413,24 @@ fn group_applies_actions_in_sequence() {
     let log: Log = Rc::new(RefCell::new(Vec::new()));
     let budget = Rc::new(RefCell::new(0));
     let mut group = ActionGroup::new(0, "grp");
-    group.add_action(CountdownAction::boxed("g", "one", budget.clone(), log.clone()));
-    group.add_action(CountdownAction::boxed("g", "two", budget.clone(), log.clone()));
-    group.add_action(CountdownAction::boxed("g", "three", budget.clone(), log.clone()));
+    group.add_action(CountdownAction::boxed(
+        "g",
+        "one",
+        budget.clone(),
+        log.clone(),
+    ));
+    group.add_action(CountdownAction::boxed(
+        "g",
+        "two",
+        budget.clone(),
+        log.clone(),
+    ));
+    group.add_action(CountdownAction::boxed(
+        "g",
+        "three",
+        budget.clone(),
+        log.clone(),
+    ));
 
     let mut ctx = ActionContext::new();
     assert_eq!(group.apply(&mut fd, &mut ctx), 0);
@@ -415,7 +472,12 @@ fn repeatapply_loops_until_no_change() {
     let log: Log = Rc::new(RefCell::new(Vec::new()));
     let budget = Rc::new(RefCell::new(3));
     let mut group = ActionGroup::new(ruleflags::rule_repeatapply, "grp");
-    group.add_action(CountdownAction::boxed("g", "act", budget.clone(), log.clone()));
+    group.add_action(CountdownAction::boxed(
+        "g",
+        "act",
+        budget.clone(),
+        log.clone(),
+    ));
 
     let mut ctx = ActionContext::new();
     let total = group.perform(&mut fd, &mut ctx);
@@ -478,11 +540,12 @@ fn restart_group_honors_maxrestarts() {
     ctx.can_reflow = true;
     assert_eq!(rg.apply(&mut fd, &mut ctx), 0);
     assert_eq!(log.borrow().len(), 3);
-    assert!(ctx
-        .warnings
-        .messages
-        .iter()
-        .any(|m| m.contains("Exceeded maximum restarts")));
+    assert!(
+        ctx.warnings
+            .messages
+            .iter()
+            .any(|m| m.contains("Exceeded maximum restarts"))
+    );
 }
 
 // NOTE: the `is_jumptable_recovery_on()` suppression branch in
@@ -504,23 +567,41 @@ fn build_demo_universal(log: &Log) -> Box<dyn Action> {
     let mut root = ActionRestartGroup::new(ruleflags::rule_onceperfunc, "universal", 1);
 
     // A leaf action in group "alpha".
-    root.add_action(CountdownAction::boxed("alpha", "leaf_alpha", Rc::new(RefCell::new(0)), log.clone()));
+    root.add_action(CountdownAction::boxed(
+        "alpha",
+        "leaf_alpha",
+        Rc::new(RefCell::new(0)),
+        log.clone(),
+    ));
 
     // A pool with a "beta" rule and a "gamma" rule.
     let mut pool = ActionPool::new(ruleflags::rule_repeatapply, "pool");
     pool.add_rule(
         RuleState::new("beta", 0, "rule_beta"),
-        Box::new(LogRule { tag: "rule_beta".into(), log: log.clone(), group: "beta" }),
+        Box::new(LogRule {
+            tag: "rule_beta".into(),
+            log: log.clone(),
+            group: "beta",
+        }),
     );
     pool.add_rule(
         RuleState::new("gamma", 0, "rule_gamma"),
-        Box::new(LogRule { tag: "rule_gamma".into(), log: log.clone(), group: "gamma" }),
+        Box::new(LogRule {
+            tag: "rule_gamma".into(),
+            log: log.clone(),
+            group: "gamma",
+        }),
     );
     root.add_action(Box::new(pool));
 
     // A nested group in "gamma" that itself holds a "beta" leaf.
     let mut inner = ActionGroup::new(0, "inner");
-    inner.add_action(CountdownAction::boxed("beta", "leaf_beta", Rc::new(RefCell::new(0)), log.clone()));
+    inner.add_action(CountdownAction::boxed(
+        "beta",
+        "leaf_beta",
+        Rc::new(RefCell::new(0)),
+        log.clone(),
+    ));
     root.add_action(Box::new(inner));
 
     Box::new(root)
@@ -533,7 +614,9 @@ fn filtered_clone_selects_group_members() {
 
     // Root A: only "alpha" + "beta".
     let gl_a = ActionGroupList::from_names(["alpha", "beta"]);
-    let root_a = universal.clone_filtered(&gl_a).expect("alpha/beta survives");
+    let root_a = universal
+        .clone_filtered(&gl_a)
+        .expect("alpha/beta survives");
     // Root B: only "gamma".
     let gl_b = ActionGroupList::from_names(["gamma"]);
     let root_b = universal.clone_filtered(&gl_b).expect("gamma survives");
@@ -600,7 +683,10 @@ fn database_derives_distinct_roots_from_one_universal() {
     db.set_group("root_ab", ["alpha", "beta"]);
     db.set_group("root_g", ["gamma"]);
 
-    let root_ab = db.derive_fresh("root_ab").unwrap().expect("alpha/beta survives");
+    let root_ab = db
+        .derive_fresh("root_ab")
+        .unwrap()
+        .expect("alpha/beta survives");
     let root_g = db.derive_fresh("root_g").unwrap().expect("gamma survives");
 
     // Run each over a tiny function with a COPY+INT_ADD so the pool rules fire,
@@ -665,13 +751,25 @@ fn set_current_caches_and_exposes_the_root() {
 fn dummy_rule_registers_and_dispatches_only_on_its_opcode() {
     // The documented worked example: DummyConstFold is offered only INT_ADD.
     let mut pool = ActionPool::new(0, "pool");
-    pool.add_rule(RuleState::new("analysis", 0, "DummyConstFold"), Box::new(DummyConstFold));
-    assert_eq!(pool.perop_names(OpCode::CPUI_INT_ADD), vec!["DummyConstFold"]);
+    pool.add_rule(
+        RuleState::new("analysis", 0, "DummyConstFold"),
+        Box::new(DummyConstFold),
+    );
+    assert_eq!(
+        pool.perop_names(OpCode::CPUI_INT_ADD),
+        vec!["DummyConstFold"]
+    );
     assert!(pool.perop_names(OpCode::CPUI_COPY).is_empty());
 
     // It survives an "analysis" grouplist and drops otherwise.
-    assert!(pool.clone_filtered(&ActionGroupList::from_names(["analysis"])).is_some());
-    assert!(pool.clone_filtered(&ActionGroupList::from_names(["other"])).is_none());
+    assert!(
+        pool.clone_filtered(&ActionGroupList::from_names(["analysis"]))
+            .is_some()
+    );
+    assert!(
+        pool.clone_filtered(&ActionGroupList::from_names(["other"]))
+            .is_none()
+    );
 }
 
 #[test]
@@ -689,7 +787,12 @@ fn repeatapply_deadline_bounds_nonconverging_action() {
     // run forever (1<<30 change-reporting passes).
     let budget = Rc::new(RefCell::new(1 << 30));
     let mut group = ActionGroup::new(ruleflags::rule_repeatapply, "grp");
-    group.add_action(CountdownAction::boxed("g", "act", budget.clone(), log.clone()));
+    group.add_action(CountdownAction::boxed(
+        "g",
+        "act",
+        budget.clone(),
+        log.clone(),
+    ));
 
     let mut ctx = ActionContext::new();
     ctx.deadline = Some(std::time::Instant::now()); // already expired
@@ -749,7 +852,9 @@ impl Rule for FarLogRule {
         vec![OpCode::CPUI_INT_XOR]
     }
     fn clone_rule(&self, _g: &ActionGroupList) -> Option<Box<dyn Rule>> {
-        Some(Box::new(FarLogRule { log: self.log.clone() }))
+        Some(Box::new(FarLogRule {
+            log: self.log.clone(),
+        }))
     }
     fn walks_far(&self) -> bool {
         true
@@ -764,7 +869,15 @@ impl Rule for FarLogRule {
 fn run_dead_chain(n: u64) -> (Vec<u64>, usize, usize) {
     let glb = Rc::new(ArchContext::new(build_manager()));
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
-    let mut fd = Funcdata::new("func", "func", glb, Address::new(ram, 0x1000), 0x10000000, 0x40).unwrap();
+    let mut fd = Funcdata::new(
+        "func",
+        "func",
+        glb,
+        Address::new(ram, 0x1000),
+        0x10000000,
+        0x40,
+    )
+    .unwrap();
     let mut prev = fd.new_constant(4, 7);
     for i in 0..n {
         let op = make_op(&mut fd, 0x1000 + 0x10 * i, OpCode::CPUI_COPY);
@@ -777,12 +890,22 @@ fn run_dead_chain(n: u64) -> (Vec<u64>, usize, usize) {
     let log: Log = Rc::new(RefCell::new(Vec::new()));
     let far: Log = Rc::new(RefCell::new(Vec::new()));
     let mut pool = ActionPool::new(ruleflags::rule_repeatapply, "pool");
-    pool.add_rule(RuleState::new("analysis", 0, "earlyremoval"), Box::new(DeadCopyRule));
+    pool.add_rule(
+        RuleState::new("analysis", 0, "earlyremoval"),
+        Box::new(DeadCopyRule),
+    );
     pool.add_rule(
         RuleState::new("analysis", 0, "log"),
-        Box::new(LogRule { tag: "log".into(), log: log.clone(), group: "analysis" }),
+        Box::new(LogRule {
+            tag: "log".into(),
+            log: log.clone(),
+            group: "analysis",
+        }),
     );
-    pool.add_rule(RuleState::new("analysis", 0, "far"), Box::new(FarLogRule { log: far.clone() }));
+    pool.add_rule(
+        RuleState::new("analysis", 0, "far"),
+        Box::new(FarLogRule { log: far.clone() }),
+    );
     let mut ctx = ActionContext::new();
     pool.perform(&mut fd, &mut ctx);
     let alive = fd
@@ -820,7 +943,9 @@ impl Rule for RecordedRemoval {
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         let mark = data.dead_wave_log_mark();
         let res = self.inner.apply_op(op, data);
-        self.removed.borrow_mut().extend_from_slice(data.dead_wave_log_since(mark).0);
+        self.removed
+            .borrow_mut()
+            .extend_from_slice(data.dead_wave_log_since(mark).0);
         res
     }
     fn get_op_list(&self) -> Vec<OpCode> {
@@ -849,12 +974,23 @@ fn run_cascade_chain(n: u64, opc: OpCode, cascade: Option<u32>) -> (Vec<u64>, us
     let glb = Rc::new(arch);
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
     ram.clear_flags(addrspace_flags::does_deadcode);
-    let mut fd = Funcdata::new("func", "func", glb, Address::new(ram, 0x1000), 0x10000000, 0x40).unwrap();
+    let mut fd = Funcdata::new(
+        "func",
+        "func",
+        glb,
+        Address::new(ram, 0x1000),
+        0x10000000,
+        0x40,
+    )
+    .unwrap();
     let mut prev = fd.new_constant(4, 7);
     for i in 0..n {
         let op = make_op(&mut fd, 0x1000 + 0x10 * i, opc);
         if opc == OpCode::CPUI_MULTIEQUAL {
-            fd.obank_mut().get_mut(op).unwrap().set_flag(crate::op::pcodeop_flags::marker);
+            fd.obank_mut()
+                .get_mut(op)
+                .unwrap()
+                .set_flag(crate::op::pcodeop_flags::marker);
         }
         fd.op_set_all_input(op, &[prev, prev]).unwrap();
         let at = ram_addr(&fd, 0x100 + 8 * i);
@@ -873,7 +1009,11 @@ fn run_cascade_chain(n: u64, opc: OpCode, cascade: Option<u32>) -> (Vec<u64>, us
     );
     pool.add_rule(
         RuleState::new("analysis", 0, "log"),
-        Box::new(LogRule { tag: "log".into(), log: log.clone(), group: "analysis" }),
+        Box::new(LogRule {
+            tag: "log".into(),
+            log: log.clone(),
+            group: "analysis",
+        }),
     );
     let mut ctx = ActionContext::new();
     pool.perform(&mut fd, &mut ctx);
@@ -901,7 +1041,10 @@ fn dead_cascade_removes_a_join_chain_in_one_pass_in_the_order_passes_would() {
     let (cascade_alive, cascade_offers, cascade_order) = run_cascade_chain(40, join, Some(0));
     assert_eq!(passes_alive, cascade_alive);
     assert_eq!(passes_alive.len(), 40, "{passes_alive:?}");
-    assert!(passes_alive.iter().all(|off| off % 0x10 == 8), "{passes_alive:?}");
+    assert!(
+        passes_alive.iter().all(|off| off % 0x10 == 8),
+        "{passes_alive:?}"
+    );
     assert_eq!(passes_order, cascade_order);
     assert_eq!(passes_order.len(), 40);
     assert!(passes_offers > 40 * 20, "{passes_offers}");
@@ -909,7 +1052,10 @@ fn dead_cascade_removes_a_join_chain_in_one_pass_in_the_order_passes_would() {
     let (later_alive, later_offers, later_order) = run_cascade_chain(40, join, Some(10));
     assert_eq!(later_alive, passes_alive);
     assert_eq!(later_order, passes_order);
-    assert!(later_offers > 10 * 40 && later_offers < 13 * 40, "{later_offers}");
+    assert!(
+        later_offers > 10 * 40 && later_offers < 13 * 40,
+        "{later_offers}"
+    );
     let (_, xor_offers, xor_order) = run_cascade_chain(40, OpCode::CPUI_INT_XOR, Some(0));
     assert_eq!(xor_order.len(), 40);
     assert!(xor_offers > 40 * 20, "{xor_offers}");
@@ -960,10 +1106,17 @@ impl Rule for OfferLogRule {
         0
     }
     fn get_op_list(&self) -> Vec<OpCode> {
-        vec![OpCode::CPUI_COPY, OpCode::CPUI_INT_ADD, OpCode::CPUI_INT_XOR, OpCode::CPUI_MULTIEQUAL]
+        vec![
+            OpCode::CPUI_COPY,
+            OpCode::CPUI_INT_ADD,
+            OpCode::CPUI_INT_XOR,
+            OpCode::CPUI_MULTIEQUAL,
+        ]
     }
     fn clone_rule(&self, _g: &ActionGroupList) -> Option<Box<dyn Rule>> {
-        Some(Box::new(OfferLogRule { log: self.log.clone() }))
+        Some(Box::new(OfferLogRule {
+            log: self.log.clone(),
+        }))
     }
 }
 
@@ -972,10 +1125,25 @@ impl Rule for OfferLogRule {
 /// [dead-copy, propagate-one, log, far]. Returns
 /// the MULTIEQUAL's inputs and the ops left at the end, how often each opcode
 /// was offered the log rule, and how many ops the far-walking rule was offered.
-fn run_copy_chain(n: u64) -> (Vec<crate::context::VarnodeId>, Vec<u64>, std::collections::BTreeMap<String, usize>, usize) {
+fn run_copy_chain(
+    n: u64,
+) -> (
+    Vec<crate::context::VarnodeId>,
+    Vec<u64>,
+    std::collections::BTreeMap<String, usize>,
+    usize,
+) {
     let glb = Rc::new(ArchContext::new(build_manager()));
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
-    let mut fd = Funcdata::new("func", "func", glb, Address::new(ram, 0x1000), 0x10000000, 0x40).unwrap();
+    let mut fd = Funcdata::new(
+        "func",
+        "func",
+        glb,
+        Address::new(ram, 0x1000),
+        0x10000000,
+        0x40,
+    )
+    .unwrap();
     let seed = make_op(&mut fd, 0x1000, OpCode::CPUI_INT_ADD);
     let c7 = fd.new_constant(4, 7);
     fd.op_set_all_input(seed, &[c7, c7]).unwrap();
@@ -995,10 +1163,22 @@ fn run_copy_chain(n: u64) -> (Vec<crate::context::VarnodeId>, Vec<u64>, std::col
     let log: Log = Rc::new(RefCell::new(Vec::new()));
     let far: Log = Rc::new(RefCell::new(Vec::new()));
     let mut pool = ActionPool::new(ruleflags::rule_repeatapply, "pool");
-    pool.add_rule(RuleState::new("analysis", 0, "earlyremoval"), Box::new(DeadCopyRule));
-    pool.add_rule(RuleState::new("analysis", 0, "propagatecopy"), Box::new(PropOneRule));
-    pool.add_rule(RuleState::new("analysis", 0, "log"), Box::new(OfferLogRule { log: log.clone() }));
-    pool.add_rule(RuleState::new("analysis", 0, "far"), Box::new(FarLogRule { log: far.clone() }));
+    pool.add_rule(
+        RuleState::new("analysis", 0, "earlyremoval"),
+        Box::new(DeadCopyRule),
+    );
+    pool.add_rule(
+        RuleState::new("analysis", 0, "propagatecopy"),
+        Box::new(PropOneRule),
+    );
+    pool.add_rule(
+        RuleState::new("analysis", 0, "log"),
+        Box::new(OfferLogRule { log: log.clone() }),
+    );
+    pool.add_rule(
+        RuleState::new("analysis", 0, "far"),
+        Box::new(FarLogRule { log: far.clone() }),
+    );
     let mut ctx = ActionContext::new();
     pool.perform(&mut fd, &mut ctx);
     let inputs = (0..fd.obank().get(join).unwrap().num_input())
@@ -1040,12 +1220,11 @@ impl Rule for JoinReadRule {
         let Some(out) = data.obank().get(op).and_then(|o| o.get_out()) else {
             return 0;
         };
-        let joined = data
-            .vbank()
-            .get(out)
-            .unwrap()
-            .descend_iter()
-            .any(|r| data.obank().get(r).is_some_and(|o| o.code() == OpCode::CPUI_MULTIEQUAL));
+        let joined = data.vbank().get(out).unwrap().descend_iter().any(|r| {
+            data.obank()
+                .get(r)
+                .is_some_and(|o| o.code() == OpCode::CPUI_MULTIEQUAL)
+        });
         if !joined {
             return 0;
         }
@@ -1066,7 +1245,15 @@ impl Rule for JoinReadRule {
 fn run_join_read() -> OpCode {
     let glb = Rc::new(ArchContext::new(build_manager()));
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
-    let mut fd = Funcdata::new("func", "func", glb, Address::new(ram, 0x1000), 0x10000000, 0x40).unwrap();
+    let mut fd = Funcdata::new(
+        "func",
+        "func",
+        glb,
+        Address::new(ram, 0x1000),
+        0x10000000,
+        0x40,
+    )
+    .unwrap();
     let add = make_op(&mut fd, 0x1000, OpCode::CPUI_INT_ADD);
     let c7 = fd.new_constant(4, 7);
     fd.op_set_all_input(add, &[c7, c7]).unwrap();
@@ -1081,9 +1268,18 @@ fn run_join_read() -> OpCode {
     let xor = make_op(&mut fd, 0x1030, OpCode::CPUI_INT_XOR);
     fd.op_set_all_input(xor, &[w, w]).unwrap();
     let mut pool = ActionPool::new(ruleflags::rule_repeatapply, "pool");
-    pool.add_rule(RuleState::new("analysis", 0, "earlyremoval"), Box::new(DeadCopyRule));
-    pool.add_rule(RuleState::new("analysis", 0, "propagatecopy"), Box::new(PropOneRule));
-    pool.add_rule(RuleState::new("analysis", 0, "joinread"), Box::new(JoinReadRule));
+    pool.add_rule(
+        RuleState::new("analysis", 0, "earlyremoval"),
+        Box::new(DeadCopyRule),
+    );
+    pool.add_rule(
+        RuleState::new("analysis", 0, "propagatecopy"),
+        Box::new(PropOneRule),
+    );
+    pool.add_rule(
+        RuleState::new("analysis", 0, "joinread"),
+        Box::new(JoinReadRule),
+    );
     let mut ctx = ActionContext::new();
     pool.perform(&mut fd, &mut ctx);
     fd.obank().get(add).unwrap().code()

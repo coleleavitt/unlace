@@ -19,11 +19,14 @@ use unlace_num::opcodes::OpCode;
 
 /// Why a format that was applied does not show: the next decompile did not
 /// find the constant again.
-pub const NOT_REPLAYED: &str = "the constant was not found again when the function was decompiled with the format";
+pub const NOT_REPLAYED: &str =
+    "the constant was not found again when the function was decompiled with the format";
 
 /// The console command a request lowers to, which a refusal names.
 pub fn console_line(addr: u64, format: &str, value: Option<u64>) -> String {
-    let value = value.map(|value| format!(" {value:#x}")).unwrap_or_default();
+    let value = value
+        .map(|value| format!(" {value:#x}"))
+        .unwrap_or_default();
     format!("force constant {addr:#x} {format}{value}")
 }
 
@@ -50,7 +53,11 @@ pub fn parse_value(tok: &str) -> Option<u64> {
         Some(hex) => u64::from_str_radix(hex, 16).ok()?,
         None => body.parse::<u64>().ok()?,
     };
-    Some(if negative { magnitude.wrapping_neg() } else { magnitude })
+    Some(if negative {
+        magnitude.wrapping_neg()
+    } else {
+        magnitude
+    })
 }
 
 /// Is input `slot` of an operation with this opcode a number the C prints,
@@ -59,19 +66,25 @@ pub fn parse_value(tok: &str) -> Option<u64> {
 fn prints_as_number(opc: OpCode, slot: i32) -> bool {
     !matches!(
         (opc, slot),
-        (OpCode::CPUI_LOAD | OpCode::CPUI_STORE | OpCode::CPUI_CALLOTHER, 0)
+        (
+            OpCode::CPUI_LOAD | OpCode::CPUI_STORE | OpCode::CPUI_CALLOTHER,
+            0
+        ) | (
+            OpCode::CPUI_BRANCH
+                | OpCode::CPUI_CBRANCH
+                | OpCode::CPUI_BRANCHIND
+                | OpCode::CPUI_CALL
+                | OpCode::CPUI_CALLIND
+                | OpCode::CPUI_RETURN,
+            0,
+        ) | (
+            OpCode::CPUI_SUBPIECE | OpCode::CPUI_PTRSUB | OpCode::CPUI_INDIRECT,
+            1
+        ) | (OpCode::CPUI_PTRADD, 2)
             | (
-                OpCode::CPUI_BRANCH
-                    | OpCode::CPUI_CBRANCH
-                    | OpCode::CPUI_BRANCHIND
-                    | OpCode::CPUI_CALL
-                    | OpCode::CPUI_CALLIND
-                    | OpCode::CPUI_RETURN,
-                0,
+                OpCode::CPUI_CPOOLREF | OpCode::CPUI_SEGMENTOP | OpCode::CPUI_NEW,
+                _
             )
-            | (OpCode::CPUI_SUBPIECE | OpCode::CPUI_PTRSUB | OpCode::CPUI_INDIRECT, 1)
-            | (OpCode::CPUI_PTRADD, 2)
-            | (OpCode::CPUI_CPOOLREF | OpCode::CPUI_SEGMENTOP | OpCode::CPUI_NEW, _)
     )
 }
 
@@ -82,11 +95,17 @@ fn constants_read(fd: &Funcdata, at: &Address) -> (Vec<(VarnodeId, u64)>, Option
     let mut out: Vec<(VarnodeId, u64)> = Vec::new();
     let mut named = None;
     for (_, id) in fd.obank().iter_at(at) {
-        let Some(op) = fd.obank().get(id).filter(|op| !op.is_dead()) else { continue };
+        let Some(op) = fd.obank().get(id).filter(|op| !op.is_dead()) else {
+            continue;
+        };
         let opc = op.code();
         for slot in 0..op.num_input() {
-            let Some(vn) = op.get_in(slot).filter(|_| prints_as_number(opc, slot)) else { continue };
-            let Some(v) = fd.vbank().get(vn).filter(|v| v.is_constant()) else { continue };
+            let Some(vn) = op.get_in(slot).filter(|_| prints_as_number(opc, slot)) else {
+                continue;
+            };
+            let Some(v) = fd.vbank().get(vn).filter(|v| v.is_constant()) else {
+                continue;
+            };
             let integer = matches!(
                 v.get_type().get_metatype(),
                 type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN
@@ -107,7 +126,11 @@ fn constants_read(fd: &Funcdata, at: &Address) -> (Vec<(VarnodeId, u64)>, Option
 
 /// Does a constant of `size` bytes holding `held` answer to the stated `value`?
 fn answers(held: u64, size: i32, value: u64) -> bool {
-    let mask = if size >= 8 { u64::MAX } else { (1u64 << (size.max(1) * 8)) - 1 };
+    let mask = if size >= 8 {
+        u64::MAX
+    } else {
+        (1u64 << (size.max(1) * 8)) - 1
+    };
     held & mask == value & mask && (value & !mask == 0 || value | mask == u64::MAX)
 }
 
@@ -117,21 +140,35 @@ fn selected(fd: &Funcdata, at: &Address, value: Option<u64>) -> Result<Vec<Varno
     let (read, named) = constants_read(fd, at);
     if read.is_empty() {
         return Err(match named {
-            Some(name) => format!("the constant read at {:#x} prints as a name of {name}, not as a number", at.get_offset()),
+            Some(name) => format!(
+                "the constant read at {:#x} prints as a name of {name}, not as a number",
+                at.get_offset()
+            ),
             None => format!("no constant is read at {:#x}", at.get_offset()),
         });
     }
     let size_of = |vn: VarnodeId| fd.vbank().get(vn).map_or(0, |v| v.get_size());
     let chosen: Vec<VarnodeId> = match value {
-        Some(value) => read.iter().filter(|(vn, held)| answers(*held, size_of(*vn), value)).map(|(vn, _)| *vn).collect(),
+        Some(value) => read
+            .iter()
+            .filter(|(vn, held)| answers(*held, size_of(*vn), value))
+            .map(|(vn, _)| *vn)
+            .collect(),
         None => read.iter().map(|(vn, _)| *vn).collect(),
     };
     let mut values: Vec<u64> = read.iter().map(|(_, held)| *held).collect();
     values.sort_unstable();
     values.dedup();
-    let listed = values.iter().map(|v| format!("{v:#x}")).collect::<Vec<_>>().join(", ");
+    let listed = values
+        .iter()
+        .map(|v| format!("{v:#x}"))
+        .collect::<Vec<_>>()
+        .join(", ");
     if chosen.is_empty() {
-        return Err(format!("no constant read at {:#x} holds that value (it reads {listed})", at.get_offset()));
+        return Err(format!(
+            "no constant read at {:#x} holds that value (it reads {listed})",
+            at.get_offset()
+        ));
     }
     if value.is_none() && values.len() > 1 {
         return Err(format!(
@@ -151,22 +188,33 @@ pub fn apply(
     value: Option<u64>,
     maxduplicates: u32,
 ) -> Result<(), String> {
-    let code = format_code(format).ok_or_else(|| format!("Unrecognized integer format: {format}"))?;
+    let code =
+        format_code(format).ok_or_else(|| format!("Unrecognized integer format: {format}"))?;
     let base1 = arch
         .types()
         .get_base(1, type_metatype::TYPE_UNKNOWN)
         .map_err(|e| e.explain().to_string())?;
     let chosen = selected(fd, at, value)?;
     if format == "char" {
-        let mut read = chosen.iter().filter_map(|&vn| fd.vbank().get(vn)).map(|v| (v.get_size(), v.get_offset()));
-        if let Some((_, held)) = read.find(|&(size, held)| size > 4 && held != held as i32 as i64 as u64) {
+        let mut read = chosen
+            .iter()
+            .filter_map(|&vn| fd.vbank().get(vn))
+            .map(|v| (v.get_size(), v.get_offset()));
+        if let Some((_, held)) =
+            read.find(|&(size, held)| size > 4 && held != held as i32 as i64 as u64)
+        {
             return Err(format!("a character literal cannot hold {held:#x}"));
         }
     }
     for vn in chosen {
-        fd.build_dynamic_symbol(vn, maxduplicates, base1.clone()).map_err(|e| e.explain().to_string())?;
-        let sym = fd.vn_high_equate_symbol(vn).ok_or_else(|| "Unable to create symbol".to_string())?;
-        let scope = fd.get_scope_local_mut().ok_or_else(|| "Function has no local scope".to_string())?;
+        fd.build_dynamic_symbol(vn, maxduplicates, base1.clone())
+            .map_err(|e| e.explain().to_string())?;
+        let sym = fd
+            .vn_high_equate_symbol(vn)
+            .ok_or_else(|| "Unable to create symbol".to_string())?;
+        let scope = fd
+            .get_scope_local_mut()
+            .ok_or_else(|| "Function has no local scope".to_string())?;
         scope.set_display_format(sym, code);
         scope.set_attribute(sym, varnode_flags::typelock);
     }
@@ -175,9 +223,14 @@ pub fn apply(
 
 /// Is a constant the request names bound to a Symbol of that format in `fd`?
 pub fn holds(fd: &Funcdata, at: &Address, format: &str, value: Option<u64>) -> bool {
-    let (Some(code), Some(lm)) = (format_code(format), fd.get_scope_local()) else { return false };
+    let (Some(code), Some(lm)) = (format_code(format), fd.get_scope_local()) else {
+        return false;
+    };
     constants_read(fd, at).0.into_iter().any(|(vn, held)| {
-        value.is_none_or(|value| answers(held, fd.vbank().get(vn).map_or(0, |v| v.get_size()), value))
-            && fd.vn_high_equate_symbol(vn).is_some_and(|sym| lm.database().symbol(sym).dispflags & 7 == code)
+        value.is_none_or(|value| {
+            answers(held, fd.vbank().get(vn).map_or(0, |v| v.get_size()), value)
+        }) && fd
+            .vn_high_equate_symbol(vn)
+            .is_some_and(|sym| lm.database().symbol(sym).dispflags & 7 == code)
     })
 }

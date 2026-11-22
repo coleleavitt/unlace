@@ -48,11 +48,14 @@ use unlace_decomp::printc::{display_format, format_integer_token, resolve_intege
 #[test]
 fn forced_format_overrides_natural_base_default() {
     // 255: with no override (NONE) the natural base is hex -> "0xff".
-    let (neg, val, fmt) =
-        resolve_integer_format(255, 4, false, display_format::NONE, false, false);
+    let (neg, val, fmt) = resolve_integer_format(255, 4, false, display_format::NONE, false, false);
     assert!(!neg);
     assert_eq!(val, 255);
-    assert_eq!(fmt, display_format::FORCE_HEX, "255 is hex-natural by default");
+    assert_eq!(
+        fmt,
+        display_format::FORCE_HEX,
+        "255 is hex-natural by default"
+    );
     assert_eq!(
         format_integer_token(false, 255, fmt, 4, false, false, false, ""),
         "0xff"
@@ -71,7 +74,11 @@ fn forced_format_overrides_natural_base_default() {
     // 7: natural default is decimal (val<=10); forcing HEX (code 1) must win.
     let (_, _, fmt_hex) =
         resolve_integer_format(7, 4, false, display_format::FORCE_HEX, false, false);
-    assert_eq!(fmt_hex, display_format::FORCE_HEX, "forced hex must win over val<=10");
+    assert_eq!(
+        fmt_hex,
+        display_format::FORCE_HEX,
+        "forced hex must win over val<=10"
+    );
     assert_eq!(
         format_integer_token(false, 7, fmt_hex, 4, false, false, false, ""),
         "0x7"
@@ -86,8 +93,7 @@ fn forced_format_overrides_natural_base_default() {
 #[test]
 fn forced_format_beats_force_hex_and_force_dec_mods() {
     // Symbol forces DEC while the global force_hex mod is ON: dec must win.
-    let (_, _, fmt) =
-        resolve_integer_format(255, 4, false, display_format::FORCE_DEC, true, false);
+    let (_, _, fmt) = resolve_integer_format(255, 4, false, display_format::FORCE_DEC, true, false);
     assert_eq!(
         fmt,
         display_format::FORCE_DEC,
@@ -106,7 +112,11 @@ fn forced_format_beats_force_hex_and_force_dec_mods() {
     // Control: with NO forced format (NONE), the force_hex mod DOES take effect
     // even on a val<=10 value (proving the override path, not a coincidence).
     let (_, _, fmt3) = resolve_integer_format(7, 4, false, display_format::NONE, true, false);
-    assert_eq!(fmt3, display_format::FORCE_HEX, "force_hex mod applies when unforced");
+    assert_eq!(
+        fmt3,
+        display_format::FORCE_HEX,
+        "force_hex mod applies when unforced"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -124,28 +134,73 @@ fn each_encode_integer_format_renders_its_own_shape() {
     let v: u64 = 65; // 'A', 0x41, 0o101, 0b1000001
     // hex (code 1)
     assert_eq!(
-        format_integer_token(false, v, display_format::FORCE_HEX, 4, false, false, false, ""),
+        format_integer_token(
+            false,
+            v,
+            display_format::FORCE_HEX,
+            4,
+            false,
+            false,
+            false,
+            ""
+        ),
         "0x41"
     );
     // dec (code 2)
     assert_eq!(
-        format_integer_token(false, v, display_format::FORCE_DEC, 4, false, false, false, ""),
+        format_integer_token(
+            false,
+            v,
+            display_format::FORCE_DEC,
+            4,
+            false,
+            false,
+            false,
+            ""
+        ),
         "65"
     );
     // oct (code 3): C++ `t << oct << '0' << val`
     assert_eq!(
-        format_integer_token(false, v, display_format::FORCE_OCT, 4, false, false, false, ""),
+        format_integer_token(
+            false,
+            v,
+            display_format::FORCE_OCT,
+            4,
+            false,
+            false,
+            false,
+            ""
+        ),
         "0101"
     );
     // bin (code 4): C++ `t << "0b"; formatBinary(...)`.  formatBinary pads up to
     // the next byte boundary (mostsigbit 6 <= 7 -> 8 bits), so 65 -> "01000001".
     assert_eq!(
-        format_integer_token(false, v, display_format::FORCE_BIN, 4, false, false, false, ""),
+        format_integer_token(
+            false,
+            v,
+            display_format::FORCE_BIN,
+            4,
+            false,
+            false,
+            false,
+            ""
+        ),
         "0b01000001"
     );
     // char (code 5), size 1, printable -> 'A'
     assert_eq!(
-        format_integer_token(false, v, display_format::FORCE_CHAR, 1, false, false, false, ""),
+        format_integer_token(
+            false,
+            v,
+            display_format::FORCE_CHAR,
+            1,
+            false,
+            false,
+            false,
+            ""
+        ),
         "'A'"
     );
 }

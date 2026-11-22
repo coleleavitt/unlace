@@ -28,13 +28,19 @@ fn run_property(prop: &mut FunctionTestProperty, lines: &[&str]) -> bool {
 #[test]
 fn single_line_min1_max1_exact() {
     let mut p = FunctionTestProperty::from_parts("eq", 1, 1, &[r"return a0 == 3;"]);
-    assert!(run_property(&mut p, &["int foo(void)", "{", "  return a0 == 3;", "}"]));
+    assert!(run_property(
+        &mut p,
+        &["int foo(void)", "{", "  return a0 == 3;", "}"]
+    ));
 }
 
 #[test]
 fn single_line_min1_max1_zero_matches_fails() {
     let mut p = FunctionTestProperty::from_parts("eq", 1, 1, &[r"return a0 == 3;"]);
-    assert!(!run_property(&mut p, &["int foo(void)", "{", "  return 0;", "}"]));
+    assert!(!run_property(
+        &mut p,
+        &["int foo(void)", "{", "  return 0;", "}"]
+    ));
 }
 
 #[test]
@@ -51,10 +57,16 @@ fn min0_max0_must_not_match() {
 fn min_greater_than_one_counts() {
     let mut p = FunctionTestProperty::from_parts("calls", 2, 3, &[r"foo\("]);
     // Exactly 2 matches -> in [2,3] -> pass.
-    assert!(run_property(&mut p, &["x = foo(1);", "y = bar();", "z = foo(2);"]));
+    assert!(run_property(
+        &mut p,
+        &["x = foo(1);", "y = bar();", "z = foo(2);"]
+    ));
     // 4 matches -> above max -> fail.
     let mut p2 = FunctionTestProperty::from_parts("calls", 2, 3, &[r"foo\("]);
-    assert!(!run_property(&mut p2, &["foo(1);", "foo(2);", "foo(3);", "foo(4);"]));
+    assert!(!run_property(
+        &mut p2,
+        &["foo(1);", "foo(2);", "foo(3);", "foo(4);"]
+    ));
     // 1 match -> below min -> fail.
     let mut p3 = FunctionTestProperty::from_parts("calls", 2, 3, &[r"foo\("]);
     assert!(!run_property(&mut p3, &["foo(1);"]));
@@ -83,7 +95,10 @@ fn multiline_consecutive_match() {
 fn multiline_nonconsecutive_does_not_match() {
     let mut p = FunctionTestProperty::from_parts("two", 1, 1, &[r"^if ", r"^  return"]);
     // A line in between breaks the sequence.
-    assert!(!run_property(&mut p, &["if (cond)", "  x = 1;", "  return 1;"]));
+    assert!(!run_property(
+        &mut p,
+        &["if (cond)", "  x = 1;", "  return 1;"]
+    ));
 }
 
 #[test]
@@ -104,11 +119,12 @@ fn multiline_two_full_matches() {
 
 #[test]
 fn multiline_three_lines() {
-    let mut p =
-        FunctionTestProperty::from_parts("abc", 1, 1, &[r"^one$", r"^two$", r"^three$"]);
-    assert!(run_property(&mut p, &["zero", "one", "two", "three", "four"]));
-    let mut p2 =
-        FunctionTestProperty::from_parts("abc", 1, 1, &[r"^one$", r"^two$", r"^three$"]);
+    let mut p = FunctionTestProperty::from_parts("abc", 1, 1, &[r"^one$", r"^two$", r"^three$"]);
+    assert!(run_property(
+        &mut p,
+        &["zero", "one", "two", "three", "four"]
+    ));
+    let mut p2 = FunctionTestProperty::from_parts("abc", 1, 1, &[r"^one$", r"^two$", r"^three$"]);
     // Break before the third line -> no match.
     assert!(!run_property(&mut p2, &["one", "two", "TWO", "three"]));
 }
@@ -119,7 +135,11 @@ fn multiline_three_lines() {
 
 fn parse_stringmatch(xml: &str) -> FunctionTestProperty {
     let mut store = DocumentStorage::new();
-    let root = store.parse_document(xml.as_bytes()).unwrap().get_root().clone();
+    let root = store
+        .parse_document(xml.as_bytes())
+        .unwrap()
+        .get_root()
+        .clone();
     FunctionTestProperty::restore_xml(&root).unwrap()
 }
 
@@ -132,9 +152,12 @@ fn restore_single_line_attrs_and_pattern() {
     assert_eq!(p.minimum_match, 1);
     assert_eq!(p.maximum_match, 1);
     assert_eq!(p.pattern.len(), 1);
-    assert!(run_property(&mut parse_stringmatch(
-        r#"<stringmatch name="x" min="1" max="1">return a0 == 3;</stringmatch>"#,
-    ), &["  return a0 == 3;"]));
+    assert!(run_property(
+        &mut parse_stringmatch(
+            r#"<stringmatch name="x" min="1" max="1">return a0 == 3;</stringmatch>"#,
+        ),
+        &["  return a0 == 3;"]
+    ));
 }
 
 #[test]
@@ -155,13 +178,17 @@ fn restore_strips_leading_whitespace_per_line() {
 #[test]
 fn restore_multiline_pattern_splits_on_newline() {
     // A `\n` in the content makes a multi-line regex (two line-patterns).
-    let xml = "<stringmatch name=\"ml\" min=\"1\" max=\"1\">if \\(cond\\)\n  return 1;</stringmatch>";
+    let xml =
+        "<stringmatch name=\"ml\" min=\"1\" max=\"1\">if \\(cond\\)\n  return 1;</stringmatch>";
     let p = parse_stringmatch(xml);
     assert_eq!(p.pattern.len(), 2);
     let mut q = parse_stringmatch(xml);
     assert!(run_property(&mut q, &["if (cond)", "  return 1;"]));
     let mut r = parse_stringmatch(xml);
-    assert!(!run_property(&mut r, &["if (cond)", "x = 1;", "  return 1;"]));
+    assert!(!run_property(
+        &mut r,
+        &["if (cond)", "x = 1;", "  return 1;"]
+    ));
 }
 
 #[test]
@@ -202,18 +229,27 @@ fn istream_int_parsing() {
 
 /// The repo root (the worktree containing `tests/datatests/`).
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn datatest(name: &str) -> String {
-    repo_root().join("tests/datatests").join(name).to_str().unwrap().to_string()
+    repo_root()
+        .join("tests/datatests")
+        .join(name)
+        .to_str()
+        .unwrap()
+        .to_string()
 }
 
 #[test]
 fn load_real_datatest_parses_script_and_tests() {
     // lzcount.xml: 4 commands, 2 stringmatch assertions, 1 binaryimage.
     let mut c = FunctionTestCollection::new();
-    c.load_test(&datatest("lzcount.xml")).expect("lzcount parses");
+    c.load_test(&datatest("lzcount.xml"))
+        .expect("lzcount parses");
     assert_eq!(c.num_commands(), 4);
     assert_eq!(c.get_command(0), "lo fu cntlzwtest");
     assert_eq!(c.get_command(3), "quit");
@@ -240,7 +276,10 @@ fn end_to_end_real_datatest_error_path_grammar() {
     assert!(out.contains("Total tests applied = 0"), "out:\n{out}");
     assert!(out.contains("Total passing tests = 0"), "out:\n{out}");
     assert!(out.contains("Error: Did not apply tests in"), "out:\n{out}");
-    assert!(out.contains(&format!("Execution failed for {}", datatest("lzcount.xml"))), "out:\n{out}");
+    assert!(
+        out.contains(&format!("Execution failed for {}", datatest("lzcount.xml"))),
+        "out:\n{out}"
+    );
     assert!(out.contains("Failures: "), "out:\n{out}");
     // Zero applied -> zero failed assertions (the file error is tracked in the
     // summary, not the assertion count).
@@ -249,14 +288,25 @@ fn end_to_end_real_datatest_error_path_grammar() {
 
 #[test]
 fn end_to_end_multiple_files_accumulate() {
-    let files =
-        vec![datatest("lzcount.xml"), datatest("boolless.xml"), datatest("skipnext2.xml")];
+    let files = vec![
+        datatest("lzcount.xml"),
+        datatest("boolless.xml"),
+        datatest("skipnext2.xml"),
+    ];
     let mut out = String::new();
     run_test_files(&files, &mut out);
     // Each file enters the error path; the Failures summary lists all three
     // (capped at 10), and the totals footer is present exactly once.
-    assert_eq!(out.matches("Error: Did not apply tests in").count(), 3, "out:\n{out}");
-    assert_eq!(out.matches("Total tests applied =").count(), 1, "out:\n{out}");
+    assert_eq!(
+        out.matches("Error: Did not apply tests in").count(),
+        3,
+        "out:\n{out}"
+    );
+    assert_eq!(
+        out.matches("Total tests applied =").count(),
+        1,
+        "out:\n{out}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -294,9 +344,9 @@ fn end_to_end_success_and_fail_grammar() {
     let xml = synth_xml(
         &["return a0 == 3;", "x = y + z;", "done"],
         &[
-            ("match-eq", 1, 1, "return a0 == 3;"),     // present once -> Success
-            ("no-shift", 0, 0, "&lt;&lt; 7"),          // absent -> Success
-            ("must-be-absent", 0, 0, "x = y"),         // present -> FAIL
+            ("match-eq", 1, 1, "return a0 == 3;"), // present once -> Success
+            ("no-shift", 0, 0, "&lt;&lt; 7"),      // absent -> Success
+            ("must-be-absent", 0, 0, "x = y"),     // present -> FAIL
         ],
     );
     let f = write_tmp("synth_grammar.xml", &xml);
@@ -319,7 +369,10 @@ fn end_to_end_success_and_fail_grammar() {
 fn end_to_end_all_success_no_failures_block() {
     let xml = synth_xml(
         &["int main(void)", "  return 0;", "}"],
-        &[("has-return", 1, 1, "return 0;"), ("has-main", 1, 1, "int main")],
+        &[
+            ("has-return", 1, 1, "return 0;"),
+            ("has-main", 1, 1, "int main"),
+        ],
     );
     let f = write_tmp("synth_allpass.xml", &xml);
     let mut out = String::new();
@@ -363,7 +416,10 @@ fn parse_error_unrecognized_root_tag() {
     let mut out = String::new();
     run_test_files(std::slice::from_ref(&f), &mut out);
     assert!(out.contains(&format!("Error parsing {f}: ")), "out:\n{out}");
-    assert!(out.contains("unrecognized XML tag: wrongtag"), "out:\n{out}");
+    assert!(
+        out.contains("unrecognized XML tag: wrongtag"),
+        "out:\n{out}"
+    );
 }
 
 #[test]
@@ -375,7 +431,10 @@ fn parse_error_missing_script_tag() {
     );
     let mut out = String::new();
     run_test_files(std::slice::from_ref(&f), &mut out);
-    assert!(out.contains("Did not see <script> tag in <decompilertest>"), "out:\n{out}");
+    assert!(
+        out.contains("Did not see <script> tag in <decompilertest>"),
+        "out:\n{out}"
+    );
     assert!(out.contains(&format!("Error parsing {f}: ")), "out:\n{out}");
 }
 
@@ -387,14 +446,20 @@ fn parse_error_unknown_child_tag() {
     );
     let mut out = String::new();
     run_test_files(&[f], &mut out);
-    assert!(out.contains("Unknown tag in <decompilertest>: bogus"), "out:\n{out}");
+    assert!(
+        out.contains("Unknown tag in <decompilertest>: bogus"),
+        "out:\n{out}"
+    );
 }
 
 #[test]
 fn old_form_binaryimage_root_is_unsupported() {
     // A bare <binaryimage> root hits restoreXmlOldForm -> "Old format test not
     // supported" (a parse error).
-    let f = write_tmp("oldform.xml", r#"<binaryimage arch="x86:LE:64:default:gcc"></binaryimage>"#);
+    let f = write_tmp(
+        "oldform.xml",
+        r#"<binaryimage arch="x86:LE:64:default:gcc"></binaryimage>"#,
+    );
     let mut out = String::new();
     run_test_files(&[f], &mut out);
     assert!(out.contains("Old format test not supported"), "out:\n{out}");
@@ -421,7 +486,11 @@ fn failures_summary_caps_at_ten() {
     let mut out = String::new();
     run_test_files(&files, &mut out);
     // Eleven "Error parsing" lines at column 0 (one per file)...
-    assert_eq!(out.matches("Error parsing ").count(), 11 + 10, "out:\n{out}");
+    assert_eq!(
+        out.matches("Error parsing ").count(),
+        11 + 10,
+        "out:\n{out}"
+    );
     // ...but the indented Failures summary repeats only 10 of them (two-space
     // indent).  Count the indented form.
     assert_eq!(out.matches("\n  Error parsing ").count(), 10, "out:\n{out}");
@@ -520,11 +589,17 @@ fn w9_trailing_whitespace_segment_emits_no_empty_regex() {
 fn loss007_escaped_angle_brackets_match_literally() {
     // The two divergent identity-escapes lower to literals (corpus `<` arrives
     // XML-decoded, so we exercise the pure translation directly).
-    assert_eq!(ecmascript_identity_escapes(r"v1 = ptr-\>a;"), "v1 = ptr->a;");
+    assert_eq!(
+        ecmascript_identity_escapes(r"v1 = ptr-\>a;"),
+        "v1 = ptr->a;"
+    );
     assert_eq!(ecmascript_identity_escapes(r"a \< b"), "a < b");
     assert_eq!(ecmascript_identity_escapes(r"ptr-\>a-\>b"), "ptr->a->b");
     // Every OTHER escape is preserved verbatim (identical in both dialects).
-    assert_eq!(ecmascript_identity_escapes(r"x \+ 5\.5 \(z\)"), r"x \+ 5\.5 \(z\)");
+    assert_eq!(
+        ecmascript_identity_escapes(r"x \+ 5\.5 \(z\)"),
+        r"x \+ 5\.5 \(z\)"
+    );
     // An escaped backslash is consumed as a pair, so `\\>` keeps its `\\` plus a
     // literal `>` (it is NOT a `\>` identity-escape).
     assert_eq!(ecmascript_identity_escapes(r"a\\>b"), r"a\\>b");
@@ -535,19 +610,34 @@ fn loss007_escaped_angle_brackets_match_literally() {
         1,
         &[&ecmascript_identity_escapes(r"v1 = ptr-\>a;")],
     );
-    assert!(run_property(&mut p, &["  v1 = ptr->a;"]), "escaped \\> must match a literal >");
+    assert!(
+        run_property(&mut p, &["  v1 = ptr->a;"]),
+        "escaped \\> must match a literal >"
+    );
 }
 
 #[test]
 fn expected_command_error_is_matchable_and_the_next_command_runs() {
     for (script, diagnostic, count) in [
-        ("<com expecterror=\"true\">load function missing</com>", "No image loaded", 1),
-        ("<com>closefile</com><com expecterror=\"true\">closefile</com><com expecterror=\"true\">closefile</com>", "No file open", 2),
+        (
+            "<com expecterror=\"true\">load function missing</com>",
+            "No image loaded",
+            1,
+        ),
+        (
+            "<com>closefile</com><com expecterror=\"true\">closefile</com><com expecterror=\"true\">closefile</com>",
+            "No file open",
+            2,
+        ),
     ] {
-        let xml = synth_xml(&["next-command"], &[
-            ("expected-error", count, count, diagnostic),
-            ("continued", 1, 1, "^next-command$"),
-        ]).replace("<script>", &format!("<script>{script}"));
+        let xml = synth_xml(
+            &["next-command"],
+            &[
+                ("expected-error", count, count, diagnostic),
+                ("continued", 1, 1, "^next-command$"),
+            ],
+        )
+        .replace("<script>", &format!("<script>{script}"));
         let file = write_tmp("expected-error.xml", &xml);
         let mut out = String::new();
         run_test_files(&[file], &mut out);
@@ -557,8 +647,14 @@ fn expected_command_error_is_matchable_and_the_next_command_runs() {
 
 #[test]
 fn expected_command_error_rejects_a_successful_command() {
-    let xml = synth_xml(&["unexpected-success"], &[("unreachable", 1, 1, "unexpected-success")])
-        .replace("<com>echo unexpected-success", "<com expecterror=\"true\">echo unexpected-success");
+    let xml = synth_xml(
+        &["unexpected-success"],
+        &[("unreachable", 1, 1, "unexpected-success")],
+    )
+    .replace(
+        "<com>echo unexpected-success",
+        "<com expecterror=\"true\">echo unexpected-success",
+    );
     let file = write_tmp("expected-error-success.xml", &xml);
     let mut out = String::new();
     run_test_files(&[file], &mut out);

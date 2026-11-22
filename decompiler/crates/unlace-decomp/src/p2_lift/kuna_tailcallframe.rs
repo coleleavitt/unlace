@@ -129,10 +129,18 @@ enum SpEffect {
 }
 
 /// Is `vn` exactly the stack-pointer register location?
-fn is_stack_pointer(data: &Funcdata, vn: Option<crate::context::VarnodeId>, sp: &VarnodeStorage) -> bool {
+fn is_stack_pointer(
+    data: &Funcdata,
+    vn: Option<crate::context::VarnodeId>,
+    sp: &VarnodeStorage,
+) -> bool {
     let Some(id) = vn else { return false };
-    let Some(v) = data.vbank().get(id) else { return false };
-    let Some(spspace) = sp.space.as_ref() else { return false };
+    let Some(v) = data.vbank().get(id) else {
+        return false;
+    };
+    let Some(spspace) = sp.space.as_ref() else {
+        return false;
+    };
     std::rc::Rc::ptr_eq(v.get_space(), spspace)
         && v.get_offset() == sp.offset
         && v.get_size() as u32 == sp.size
@@ -146,7 +154,9 @@ fn const_of(data: &Funcdata, vn: Option<crate::context::VarnodeId>) -> Option<u6
 
 /// The stack-pointer effect of one raw p-code op.
 fn sp_effect(data: &Funcdata, op: OpId, sp: &VarnodeStorage) -> SpEffect {
-    let Some(o) = data.obank().get(op) else { return SpEffect::None };
+    let Some(o) = data.obank().get(op) else {
+        return SpEffect::None;
+    };
     if !is_stack_pointer(data, o.get_out(), sp) {
         return SpEffect::None;
     }
@@ -157,7 +167,9 @@ fn sp_effect(data: &Funcdata, op: OpId, sp: &VarnodeStorage) -> SpEffect {
     if !is_stack_pointer(data, o.get_in(0), sp) {
         return SpEffect::Opaque;
     }
-    let Some(k) = const_of(data, o.get_in(1)) else { return SpEffect::Opaque };
+    let Some(k) = const_of(data, o.get_in(1)) else {
+        return SpEffect::Opaque;
+    };
     // Sign-extend the literal from the operand width before applying it, so a
     // `sub rsp,-8` style encoding accounts as a growth rather than as 2^64-8.
     let width = data
@@ -192,7 +204,9 @@ fn same_space(a: &Address, b: &Address) -> bool {
 
 /// Does this op end the straight-line run (a control-flow transfer)?
 fn is_flow_op(data: &Funcdata, op: OpId) -> bool {
-    let Some(o) = data.obank().get(op) else { return false };
+    let Some(o) = data.obank().get(op) else {
+        return false;
+    };
     matches!(
         o.code(),
         OpCode::CPUI_BRANCH
@@ -221,7 +235,11 @@ struct GroupEffect {
 
 /// Summarize every raw p-code op at instruction address `at`.
 fn group_effect(data: &Funcdata, at: &Address, sp: &VarnodeStorage) -> GroupEffect {
-    let mut eff = GroupEffect { delta: 0, flow: false, opaque: false };
+    let mut eff = GroupEffect {
+        delta: 0,
+        flow: false,
+        opaque: false,
+    };
     for (_, id) in data.obank().iter_at(at) {
         if is_flow_op(data, id) {
             eff.flow = true;
@@ -267,7 +285,9 @@ fn prologue_frame(data: &Funcdata, entry: &Address, sp: &VarnodeStorage) -> Opti
         }
         delta = delta.wrapping_add(eff.delta);
         saved = saved.saturating_add(kuna_stack_saved_bytes(data, &at, sp, eff.delta));
-        let Some((sq, _)) = data.obank().first_after_seq(&SeqNum::new(at.clone(), uintm::MAX))
+        let Some((sq, _)) = data
+            .obank()
+            .first_after_seq(&SeqNum::new(at.clone(), uintm::MAX))
         else {
             break;
         };
@@ -344,7 +364,9 @@ pub fn kuna_is_frame_teardown_tail_call(
         return false;
     }
     let Some(sp) = sp else { return false };
-    let Some(o) = data.obank().get(op) else { return false };
+    let Some(o) = data.obank().get(op) else {
+        return false;
+    };
     if o.code() != OpCode::CPUI_BRANCH {
         return false;
     }
@@ -356,11 +378,15 @@ pub fn kuna_is_frame_teardown_tail_call(
     if data.obank().iter_at(dest).next().is_some() {
         return false;
     }
-    let Some((prologue, saved)) = prologue_frame(data, entry, sp) else { return false };
+    let Some((prologue, saved)) = prologue_frame(data, entry, sp) else {
+        return false;
+    };
     if prologue >= 0 {
         return false;
     }
-    let Some((epilogue, restored)) = epilogue_teardown(data, op, sp) else { return false };
+    let Some((epilogue, restored)) = epilogue_teardown(data, op, sp) else {
+        return false;
+    };
     if epilogue <= 0 || epilogue != -prologue {
         return false;
     }

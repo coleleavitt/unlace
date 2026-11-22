@@ -71,8 +71,8 @@
 //! is not exactly one of the three spellings above is refused, including an x87
 //! Inf/NaN or (pseudo-)denormal encoding, which has no faithful `f64` image.
 
-use object::read::{Object, ObjectSection, ObjectSymbol};
 use object::SymbolSection;
+use object::read::{Object, ObjectSection, ObjectSymbol};
 
 use super::reloc_object::RelocLayout;
 
@@ -114,7 +114,11 @@ fn x87_extended_to_f64(hex: &str) -> Option<f64> {
     let sign = if se & 0x8000 != 0 { -1.0 } else { 1.0 };
     let exponent = (se & 0x7fff) as i32;
     if exponent == 0 {
-        return if mantissa == 0 { Some(0.0 * sign) } else { None };
+        return if mantissa == 0 {
+            Some(0.0 * sign)
+        } else {
+            None
+        };
     }
     if exponent == 0x7fff || mantissa >> 63 == 0 {
         return None;
@@ -155,9 +159,15 @@ pub fn decode(name: &str) -> Option<FpConst> {
             if !narrow.is_finite() || (narrow == 0.0 && v != 0.0) {
                 return None;
             }
-            return Some(FpConst { bytes: narrow.to_le_bytes().to_vec(), size });
+            return Some(FpConst {
+                bytes: narrow.to_le_bytes().to_vec(),
+                size,
+            });
         }
-        return Some(FpConst { bytes: v.to_le_bytes().to_vec(), size });
+        return Some(FpConst {
+            bytes: v.to_le_bytes().to_vec(),
+            size,
+        });
     }
     if !rest.chars().all(|c| c.is_ascii_hexdigit()) {
         return None;
@@ -167,11 +177,17 @@ pub fn decode(name: &str) -> Option<FpConst> {
     match rest.len() {
         16 => {
             let bits = u64::from_str_radix(rest, 16).ok()?;
-            Some(FpConst { bytes: bits.to_le_bytes().to_vec(), size: 8 })
+            Some(FpConst {
+                bytes: bits.to_le_bytes().to_vec(),
+                size: 8,
+            })
         }
         8 => {
             let bits = u32::from_str_radix(rest, 16).ok()?;
-            Some(FpConst { bytes: bits.to_le_bytes().to_vec(), size: 4 })
+            Some(FpConst {
+                bytes: bits.to_le_bytes().to_vec(),
+                size: 4,
+            })
         }
         _ => None,
     }
@@ -207,7 +223,9 @@ pub fn plan(file: &object::File, layout: &RelocLayout) -> FpConstPlan {
             // Undefined: bound to a synthetic extern slot with no bytes behind
             // it. Materialise the value the linker would have supplied.
             SymbolSection::Undefined | SymbolSection::Common => {
-                let Some(&addr) = layout.extern_addr.get(&sym.index()) else { continue };
+                let Some(&addr) = layout.extern_addr.get(&sym.index()) else {
+                    continue;
+                };
                 if !seen.insert(addr) {
                     continue;
                 }
@@ -218,13 +236,19 @@ pub fn plan(file: &object::File, layout: &RelocLayout) -> FpConstPlan {
             // fold is gated. Admit the range only once the bytes confirm the
             // name — a disagreement means one of the two is not what it claims.
             SymbolSection::Section(sec_idx) => {
-                let Some(&base) = layout.section_vma.get(&sec_idx) else { continue };
+                let Some(&base) = layout.section_vma.get(&sec_idx) else {
+                    continue;
+                };
                 let off = sym.address() as usize;
-                let Ok(sec) = file.section_by_index(sec_idx) else { continue };
+                let Ok(sec) = file.section_by_index(sec_idx) else {
+                    continue;
+                };
                 let Ok(data) = sec.data() else { continue };
                 // Checked: `st_value` is attacker-controlled data no header
                 // validates, and a wrapped `off + size` would index backwards.
-                let Some(end) = off.checked_add(c.size) else { continue };
+                let Some(end) = off.checked_add(c.size) else {
+                    continue;
+                };
                 if end > data.len() || data[off..end] != c.bytes[..] {
                     out.warnings.push(format!(
                         "{name}: defined bytes contradict the mangled value (not folded)"
@@ -354,7 +378,10 @@ mod tests {
             assert!(decode(name).is_none(), "{name} must NOT decode");
         }
         // A signed zero is a zero in both encodings, and stays decodable.
-        assert_eq!(value_of(&decode("__real@8@80000000000000000000").unwrap()), 0.0);
+        assert_eq!(
+            value_of(&decode("__real@8@80000000000000000000").unwrap()),
+            0.0
+        );
     }
 
     /// Anything that is not this mangling must be refused rather than guessed --
@@ -373,10 +400,10 @@ mod tests {
             "__real@16@3fff8000000000000000", // no 16-byte float storage
             "__real@08@3fff8000000000000000", // the width is spelled `8`, exactly
             "__xmm@00000000000000000000000000000000",
-            "__real@3ff00000000000",   // 14 digits: neither 8 nor 16
-            "__real@3ff000000000000",  // 15 digits
-            "__real@3f80000",          // 7 digits
-            "__real@3f8000000",        // 9 digits
+            "__real@3ff00000000000",  // 14 digits: neither 8 nor 16
+            "__real@3ff000000000000", // 15 digits
+            "__real@3f80000",         // 7 digits
+            "__real@3f8000000",       // 9 digits
         ] {
             assert!(decode(name).is_none(), "{name} must NOT decode");
         }

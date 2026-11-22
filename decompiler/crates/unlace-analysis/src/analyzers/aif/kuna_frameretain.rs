@@ -12,7 +12,9 @@ use unlace_base::space::AddrSpace;
 use unlace_decomp::architecture::Architecture;
 use unlace_sleigh::translate::Translate;
 
-use super::{kuna_aifbracket::BracketEvidence, kuna_framecache::ArmFrames, GapDecoder, MAX_FOLLOW_INSNS};
+use super::{
+    GapDecoder, MAX_FOLLOW_INSNS, kuna_aifbracket::BracketEvidence, kuna_framecache::ArmFrames,
+};
 use crate::listing::{FlowKind, Listing, RefKind};
 
 /// The frameless inventory: the walk after the Thumb prologue scan (`walked`)
@@ -39,7 +41,11 @@ pub(crate) fn prior_inventory(
     let _scope = translate.context_scope();
     let mut thumb = seeds.to_vec();
     thumb.extend(super::raw_thumb_prologue_seeds(
-        file, listing, translate, Rc::clone(code_space), listing.exec_ranges(),
+        file,
+        listing,
+        translate,
+        Rc::clone(code_space),
+        listing.exec_ranges(),
     ));
     thumb.sort_unstable();
     thumb.dedup();
@@ -50,13 +56,24 @@ pub(crate) fn prior_inventory(
     if arch.analysis_aif.enabled() {
         let pointers = if arch.analysis_ptrentry {
             super::kuna_ptrentry::pointer_entry_seeds(
-                file, base, translate, Rc::clone(code_space), base.exec_ranges(),
+                file,
+                base,
+                translate,
+                Rc::clone(code_space),
+                base.exec_ranges(),
             )
         } else {
             Vec::new()
         };
         let checked = super::kuna_entrychecks::run(
-            base, None, arch, translate, Rc::clone(code_space), pointers, bracket, Some(memo),
+            base,
+            None,
+            arch,
+            translate,
+            Rc::clone(code_space),
+            pointers,
+            bracket,
+            Some(memo),
         );
         entries.extend(checked.entries);
         entries.extend(checked.pool_entries);
@@ -82,7 +99,9 @@ impl Prior {
                 continue;
             }
             roots.insert(root);
-            let orphan = frames.replaced.iter()
+            let orphan = frames
+                .replaced
+                .iter()
                 .all(|(&other, &to)| to != prefix || self.shields(other, to, frames));
             if orphan && !self.entries.contains(&prefix) {
                 roots.remove(&prefix);
@@ -115,7 +134,8 @@ impl Prior {
                     && listing.function_at(entry).is_none()
                     && !contradicted(listing, entry)
                     && !predicated(&mut decoder, listing, entry)
-                    && !(listing.is_undefined(entry) && joins_interior(&mut decoder, listing, entry, &known))
+                    && !(listing.is_undefined(entry)
+                        && joins_interior(&mut decoder, listing, entry, &known))
             })
             .collect()
     }
@@ -131,7 +151,10 @@ fn contradicted(listing: &Listing, entry: u64) -> bool {
     if !listing.is_instruction_start(entry) {
         return true;
     }
-    if listing.instruction_before(entry).is_some_and(|insn| insn.fall_through == Some(entry)) {
+    if listing
+        .instruction_before(entry)
+        .is_some_and(|insn| insn.fall_through == Some(entry))
+    {
         return true;
     }
     listing.refs_to(entry).iter().any(|r| {
@@ -139,7 +162,8 @@ fn contradicted(listing: &Listing, entry: u64) -> bool {
             && listing.instruction_at(r.from).is_some_and(|insn| {
                 insn.fall_through == Some(entry)
                     || insn.flow.kind == FlowKind::ComputedJump
-                    || (insn.flows.contains(&entry) && insn.flow.kind != FlowKind::UnconditionalBranch)
+                    || (insn.flows.contains(&entry)
+                        && insn.flow.kind != FlowKind::UnconditionalBranch)
             })
     })
 }
@@ -149,10 +173,16 @@ fn contradicted(listing: &Listing, entry: u64) -> bool {
 /// entry, so no function starts there; literal-pool words before a frame decode so.
 fn predicated(decoder: &mut GapDecoder, listing: &Listing, entry: u64) -> bool {
     if let Some(insn) = listing.instruction_at(entry) {
-        return !insn.flow.is_call && insn.fall_through.is_some_and(|next| insn.flows.contains(&next));
+        return !insn.flow.is_call
+            && insn
+                .fall_through
+                .is_some_and(|next| insn.flows.contains(&next));
     }
     decoder.probe(entry).is_some_and(|insn| {
-        !insn.is_call && insn.fall_through.is_some_and(|next| insn.flows.contains(&next))
+        !insn.is_call
+            && insn
+                .fall_through
+                .is_some_and(|next| insn.flows.contains(&next))
     })
 }
 
@@ -177,7 +207,9 @@ fn joins_interior(
             }
             continue;
         }
-        let Some(insn) = decoder.probe(at) else { continue };
+        let Some(insn) = decoder.probe(at) else {
+            continue;
+        };
         work.extend(insn.fall_through);
         if !insn.is_call {
             work.extend(insn.flows.iter().copied());

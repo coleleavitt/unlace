@@ -55,14 +55,14 @@
 
 use std::collections::BTreeMap;
 
-use unlace_base::address::{calc_mask, Address};
+use unlace_base::address::{Address, calc_mask};
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::space::spacetype;
-use unlace_base::types::{int4, uint4, uintb, Wrap};
+use unlace_base::types::{Wrap, int4, uint4, uintb};
 use unlace_num::opcodes::OpCode;
 
-use crate::funcdata::Funcdata;
 use crate::context::{OpId, VarnodeId};
+use crate::funcdata::Funcdata;
 
 // =============================================================================
 // TransformVar / TransformOp flag + type enums (transform.hh:31-91)
@@ -169,7 +169,14 @@ pub struct TransformVar {
 impl TransformVar {
     /// Initialize \b this variable from raw data (C++ `TransformVar::initialize`,
     /// transform.hh:203).
-    fn initialize(&mut self, tp: uint4, v: Option<VarnodeId>, bits: int4, bytes: int4, value: uintb) {
+    fn initialize(
+        &mut self,
+        tp: uint4,
+        v: Option<VarnodeId>,
+        bits: int4,
+        bytes: int4,
+        value: uintb,
+    ) {
         self.ty = tp;
         self.vn = v;
         self.val = value;
@@ -314,7 +321,10 @@ impl LanedRegister {
     /// Construct from a whole size and a lane-size bit mask
     /// (C++ `LanedRegister(int4,uint4)`).
     pub fn with_mask(sz: int4, mask: uint4) -> LanedRegister {
-        LanedRegister { whole_size: sz, size_bit_mask: mask }
+        LanedRegister {
+            whole_size: sz,
+            size_bit_mask: mask,
+        }
     }
 
     /// Parse a \e vector_lane_sizes attribute (C++ `LanedRegister::parseSizes`,
@@ -379,7 +389,10 @@ pub struct LanedIterator {
 
 impl LanedIterator {
     fn new(laned_r: &LanedRegister) -> LanedIterator {
-        let mut it = LanedIterator { size: 0, mask: laned_r.size_bit_mask };
+        let mut it = LanedIterator {
+            size: 0,
+            mask: laned_r.size_bit_mask,
+        };
         it.normalize();
         it
     }
@@ -447,7 +460,11 @@ impl LaneDescription {
             lane_position[i as usize] = pos;
             pos += sz;
         }
-        LaneDescription { whole_size, lane_size, lane_position }
+        LaneDescription {
+            whole_size,
+            lane_size,
+            lane_position,
+        }
     }
 
     /// Construct two lanes of arbitrary size (C++
@@ -694,7 +711,9 @@ impl TransformManager {
 
     /// (kuna) The preexisting Varnodes the manager holds pieces for.
     pub fn original_varnodes(&self) -> impl Iterator<Item = VarnodeId> + '_ {
-        self.piece_map.values().filter_map(|vec| vec.first().and_then(|tv| tv.vn))
+        self.piece_map
+            .values()
+            .filter_map(|vec| vec.first().and_then(|tv| tv.vn))
     }
 
     // -- clearVarnodeMarks (transform.cc:356) ---------------------------------
@@ -708,7 +727,10 @@ impl TransformManager {
                 Some(vn) => vn,
                 None => continue,
             };
-            fd.vbank_mut().get_mut(vn).expect("clear_varnode_marks: stale vn").clear_mark();
+            fd.vbank_mut()
+                .get_mut(vn)
+                .expect("clear_varnode_marks: stale vn")
+                .clear_mark();
         }
     }
 
@@ -717,7 +739,10 @@ impl TransformManager {
     /// Make placeholder for preexisting Varnode (C++
     /// `TransformManager::newPreexistingVarnode`, transform.cc:370).
     pub fn new_preexisting_varnode(&mut self, fd: &Funcdata, vn: VarnodeId) -> TVarRef {
-        let v = fd.vbank().get(vn).expect("new_preexisting_varnode: stale vn");
+        let v = fd
+            .vbank()
+            .get(vn)
+            .expect("new_preexisting_varnode: stale vn");
         let create_index = v.get_create_index() as int4;
         let size = v.get_size();
         let mut res = TransformVar::blank();
@@ -725,7 +750,10 @@ impl TransformManager {
         res.initialize(tvar_type::preexisting, Some(vn), size * 8, size, 0);
         res.flags = tvar_flags::split_terminator;
         self.piece_map.insert(create_index, vec![res]);
-        TVarRef::Piece { key: create_index, idx: 0 }
+        TVarRef::Piece {
+            key: create_index,
+            idx: 0,
+        }
     }
 
     // -- newUnique (transform.cc:384) -----------------------------------------
@@ -781,8 +809,11 @@ impl TransformManager {
         bit_size: int4,
         lsb_offset: int4,
     ) -> TVarRef {
-        let create_index =
-            fd.vbank().get(vn).expect("new_piece: stale vn").get_create_index() as int4;
+        let create_index = fd
+            .vbank()
+            .get(vn)
+            .expect("new_piece: stale vn")
+            .get_create_index() as int4;
         let byte_size = (bit_size + 7) / 8;
         let ty = if self.preserve_address(fd, vn, bit_size, lsb_offset) {
             tvar_type::piece
@@ -793,7 +824,10 @@ impl TransformManager {
         res.initialize(ty, Some(vn), bit_size, byte_size, lsb_offset as uintb);
         res.flags = tvar_flags::split_terminator;
         self.piece_map.insert(create_index, vec![res]);
-        TVarRef::Piece { key: create_index, idx: 0 }
+        TVarRef::Piece {
+            key: create_index,
+            idx: 0,
+        }
     }
 
     // -- newSplit (transform.cc:445) ------------------------------------------
@@ -840,7 +874,10 @@ impl TransformManager {
         }
         res[(num - 1) as usize].flags = tvar_flags::split_terminator;
         self.piece_map.insert(create_index, res);
-        TVarRef::Piece { key: create_index, idx: 0 }
+        TVarRef::Piece {
+            key: create_index,
+            idx: 0,
+        }
     }
 
     // -- newSplit (subset) (transform.cc:481) ---------------------------------
@@ -885,7 +922,10 @@ impl TransformManager {
         }
         res[(num_lanes - 1) as usize].flags = tvar_flags::split_terminator;
         self.piece_map.insert(create_index, res);
-        TVarRef::Piece { key: create_index, idx: 0 }
+        TVarRef::Piece {
+            key: create_index,
+            idx: 0,
+        }
     }
 
     // -- newOpReplace (transform.cc:515) --------------------------------------
@@ -931,7 +971,12 @@ impl TransformManager {
 
     /// Create a new placeholder op for an existing PcodeOp (C++
     /// `TransformManager::newPreexistingOp`, transform.cc:562).
-    pub fn new_preexisting_op(&mut self, num_params: int4, opc: OpCode, original_op: OpId) -> TOpRef {
+    pub fn new_preexisting_op(
+        &mut self,
+        num_params: int4,
+        opc: OpCode,
+        original_op: OpId,
+    ) -> TOpRef {
         let rop = TransformOp {
             op: Some(original_op),
             replacement: None,
@@ -950,7 +995,10 @@ impl TransformManager {
     /// Get (or create) placeholder for a preexisting Varnode (C++
     /// `TransformManager::getPreexistingVarnode`, transform.cc:581).
     pub fn get_preexisting_varnode(&mut self, fd: &Funcdata, vn: VarnodeId) -> TVarRef {
-        let v = fd.vbank().get(vn).expect("get_preexisting_varnode: stale vn");
+        let v = fd
+            .vbank()
+            .get(vn)
+            .expect("get_preexisting_varnode: stale vn");
         if v.is_constant() {
             let size = v.get_size();
             let offset = v.get_offset();
@@ -958,7 +1006,10 @@ impl TransformManager {
         }
         let create_index = v.get_create_index() as int4;
         if self.piece_map.contains_key(&create_index) {
-            return TVarRef::Piece { key: create_index, idx: 0 };
+            return TVarRef::Piece {
+                key: create_index,
+                idx: 0,
+            };
         }
         self.new_preexisting_varnode(fd, vn)
     }
@@ -974,8 +1025,11 @@ impl TransformManager {
         bit_size: int4,
         lsb_offset: int4,
     ) -> KunaResult<TVarRef> {
-        let create_index =
-            fd.vbank().get(vn).expect("get_piece: stale vn").get_create_index() as int4;
+        let create_index = fd
+            .vbank()
+            .get(vn)
+            .expect("get_piece: stale vn")
+            .get_create_index() as int4;
         if let Some(vec) = self.piece_map.get(&create_index) {
             let res = &vec[0];
             if res.bit_size != bit_size || res.val != lsb_offset as uintb {
@@ -983,7 +1037,10 @@ impl TransformManager {
                     "Cannot create multiple pieces for one Varnode through getPiece",
                 ));
             }
-            return Ok(TVarRef::Piece { key: create_index, idx: 0 });
+            return Ok(TVarRef::Piece {
+                key: create_index,
+                idx: 0,
+            });
         }
         Ok(self.new_piece(fd, vn, bit_size, lsb_offset))
     }
@@ -999,10 +1056,16 @@ impl TransformManager {
         vn: VarnodeId,
         description: &LaneDescription,
     ) -> TVarRef {
-        let create_index =
-            fd.vbank().get(vn).expect("get_split: stale vn").get_create_index() as int4;
+        let create_index = fd
+            .vbank()
+            .get(vn)
+            .expect("get_split: stale vn")
+            .get_create_index() as int4;
         if self.piece_map.contains_key(&create_index) {
-            return TVarRef::Piece { key: create_index, idx: 0 };
+            return TVarRef::Piece {
+                key: create_index,
+                idx: 0,
+            };
         }
         self.new_split(fd, vn, description)
     }
@@ -1020,10 +1083,16 @@ impl TransformManager {
         num_lanes: int4,
         start_lane: int4,
     ) -> TVarRef {
-        let create_index =
-            fd.vbank().get(vn).expect("get_split_subset: stale vn").get_create_index() as int4;
+        let create_index = fd
+            .vbank()
+            .get(vn)
+            .expect("get_split_subset: stale vn")
+            .get_create_index() as int4;
         if self.piece_map.contains_key(&create_index) {
-            return TVarRef::Piece { key: create_index, idx: 0 };
+            return TVarRef::Piece {
+                key: create_index,
+                idx: 0,
+            };
         }
         self.new_split_subset(fd, vn, description, num_lanes, start_lane)
     }
@@ -1065,11 +1134,19 @@ impl TransformManager {
     /// Set \e indirect \e creation flags for `rop` based on a given INDIRECT (C++
     /// `TransformOp::inheritIndirect`, transform.cc:273).
     pub fn inherit_indirect(&mut self, rop: TOpRef, fd: &Funcdata, ind_op: OpId) {
-        let indop = fd.obank().get(ind_op).expect("inherit_indirect: stale ind op");
+        let indop = fd
+            .obank()
+            .get(ind_op)
+            .expect("inherit_indirect: stale ind op");
         if indop.is_indirect_creation() {
-            let in0 = indop.get_in(0).expect("inherit_indirect: INDIRECT missing in0");
-            let in0_indirect_zero =
-                fd.vbank().get(in0).expect("inherit_indirect: stale in0").is_indirect_zero();
+            let in0 = indop
+                .get_in(0)
+                .expect("inherit_indirect: INDIRECT missing in0");
+            let in0_indirect_zero = fd
+                .vbank()
+                .get(in0)
+                .expect("inherit_indirect: stale in0")
+                .is_indirect_zero();
             if in0_indirect_zero {
                 self.op_mut(rop).special |= top_special::indirect_creation;
             } else {
@@ -1143,8 +1220,9 @@ impl TransformManager {
     /// `TransformManager::specialHandling`, transform.cc:654).
     fn special_handling(&self, fd: &mut Funcdata, rop: TOpRef) -> KunaResult<()> {
         let special = self.new_ops[rop.0].special;
-        let replacement =
-            self.new_ops[rop.0].replacement.expect("special_handling: op not materialized");
+        let replacement = self.new_ops[rop.0]
+            .replacement
+            .expect("special_handling: op not materialized");
         if (special & top_special::indirect_creation) != 0 {
             fd.mark_indirect_creation(replacement, false)?;
         } else if (special & top_special::indirect_creation_possible_out) != 0 {
@@ -1180,19 +1258,29 @@ impl TransformManager {
         let special = self.new_ops[rop.0].special;
         let opc = self.new_ops[rop.0].opc;
         if (special & top_special::op_preexisting) != 0 {
-            let op = self.new_ops[rop.0].op.expect("create_op_replacement: preexisting op is null");
+            let op = self.new_ops[rop.0]
+                .op
+                .expect("create_op_replacement: preexisting op is null");
             self.new_ops[rop.0].replacement = Some(op);
             fd.op_set_opcode_code(op, opc);
             let input_size = self.new_ops[rop.0].input.len() as int4;
             loop {
-                let num_input = fd.obank().get(op).expect("create_op_replacement: stale op").num_input();
+                let num_input = fd
+                    .obank()
+                    .get(op)
+                    .expect("create_op_replacement: stale op")
+                    .num_input();
                 if input_size >= num_input {
                     break;
                 }
                 fd.op_remove_input(op, num_input - 1);
             }
             // Clear any remaining inputs.
-            let num_input = fd.obank().get(op).expect("create_op_replacement: stale op").num_input();
+            let num_input = fd
+                .obank()
+                .get(op)
+                .expect("create_op_replacement: stale op")
+                .num_input();
             for i in 0..num_input {
                 fd.op_unset_input(op, i);
             }
@@ -1200,7 +1288,11 @@ impl TransformManager {
             // form (the slot is filled in placeInputs), so insert the null slot
             // directly on the bank rather than through opSetInput's non-null surface.
             loop {
-                let num_input = fd.obank().get(op).expect("create_op_replacement: stale op").num_input();
+                let num_input = fd
+                    .obank()
+                    .get(op)
+                    .expect("create_op_replacement: stale op")
+                    .num_input();
                 if num_input >= input_size {
                     break;
                 }
@@ -1211,10 +1303,16 @@ impl TransformManager {
             }
             Ok(())
         } else {
-            let op = self.new_ops[rop.0].op.expect("create_op_replacement: op is null");
+            let op = self.new_ops[rop.0]
+                .op
+                .expect("create_op_replacement: op is null");
             let n = self.new_ops[rop.0].input.len() as int4;
-            let addr: Address =
-                fd.obank().get(op).expect("create_op_replacement: stale op").get_addr().clone();
+            let addr: Address = fd
+                .obank()
+                .get(op)
+                .expect("create_op_replacement: stale op")
+                .get_addr()
+                .clone();
             let replacement = fd.new_op(n, addr);
             self.new_ops[rop.0].replacement = Some(replacement);
             fd.op_set_opcode_code(replacement, opc);
@@ -1250,8 +1348,9 @@ impl TransformManager {
         if let Some(follow) = follow {
             if self.new_ops[follow.0].follow.is_none() {
                 let opc = self.new_ops[rop.0].opc;
-                let replacement =
-                    self.new_ops[rop.0].replacement.expect("attempt_insertion: no replacement");
+                let replacement = self.new_ops[rop.0]
+                    .replacement
+                    .expect("attempt_insertion: no replacement");
                 let follow_repl = self.new_ops[follow.0]
                     .replacement
                     .expect("attempt_insertion: follow not materialized");
@@ -1291,14 +1390,21 @@ impl TransformManager {
                 let ty = self.var(r).ty;
                 if ty == tvar_type::piece {
                     let vn = self.var(r).vn.expect("create_varnodes: piece has no vn");
-                    let is_input = fd.vbank().get(vn).expect("create_varnodes: stale vn").is_input();
+                    let is_input = fd
+                        .vbank()
+                        .get(vn)
+                        .expect("create_varnodes: stale vn")
+                        .is_input();
                     if is_input {
                         input_list.push(r);
                         let is_mark = fd.vbank().get(vn).expect("create_varnodes").is_mark();
                         if is_mark {
                             self.var_mut(r).flags |= tvar_flags::input_duplicate;
                         } else {
-                            fd.vbank_mut().get_mut(vn).expect("create_varnodes").set_mark();
+                            fd.vbank_mut()
+                                .get_mut(vn)
+                                .expect("create_varnodes")
+                                .set_mark();
                         }
                     }
                 }
@@ -1323,7 +1429,10 @@ impl TransformManager {
         let ty = self.var(rvn).ty;
         match ty {
             tvar_type::preexisting => {
-                let vn = self.var(rvn).vn.expect("create_var_replacement: preexisting has no vn");
+                let vn = self
+                    .var(rvn)
+                    .vn
+                    .expect("create_var_replacement: preexisting has no vn");
                 self.var_mut(rvn).replacement = Some(vn);
                 Ok(())
             }
@@ -1354,9 +1463,20 @@ impl TransformManager {
                     && self.var(rvn).get_bit_size() == byte_size * 8
                     && self.var(rvn).val % 8 == 0
                 {
-                    let original = self.var(rvn).vn.expect("create_var_replacement: piece temp has no vn");
-                    let replacement = self.var(rvn).replacement.expect("create_var_replacement: temp created");
-                    fd.kuna_inherit_storage_slice(replacement, original, (self.var(rvn).val / 8) as int4, byte_size);
+                    let original = self
+                        .var(rvn)
+                        .vn
+                        .expect("create_var_replacement: piece temp has no vn");
+                    let replacement = self
+                        .var(rvn)
+                        .replacement
+                        .expect("create_var_replacement: temp created");
+                    fd.kuna_inherit_storage_slice(
+                        replacement,
+                        original,
+                        (self.var(rvn).val / 8) as int4,
+                        byte_size,
+                    );
                 }
                 Ok(())
             }
@@ -1367,9 +1487,15 @@ impl TransformManager {
                 }
                 byte_pos >>= 3;
                 let lsb_byte_pos = byte_pos;
-                let vn = self.var(rvn).vn.expect("create_var_replacement: piece has no vn");
+                let vn = self
+                    .var(rvn)
+                    .vn
+                    .expect("create_var_replacement: piece has no vn");
                 let byte_size = self.var(rvn).byte_size;
-                let v = fd.vbank().get(vn).expect("create_var_replacement: stale piece vn");
+                let v = fd
+                    .vbank()
+                    .get(vn)
+                    .expect("create_var_replacement: stale piece vn");
                 if v.get_space().is_big_endian() {
                     byte_pos = v.get_size() - byte_pos - byte_size;
                 }
@@ -1379,9 +1505,7 @@ impl TransformManager {
                 addr.renormalize(byte_size, fd.get_arch().manage())?;
                 let def = self.var(rvn).def;
                 let replacement = match def {
-                    None => {
-                        fd.new_varnode(byte_size, &addr, None)
-                    }
+                    None => fd.new_varnode(byte_size, &addr, None),
                     Some(def_rop) => {
                         let def_repl = self.new_ops[def_rop.0]
                             .replacement
@@ -1411,7 +1535,9 @@ impl TransformManager {
         for i in 0..self.new_ops.len() {
             let special = self.new_ops[i].special;
             if (special & top_special::op_replacement) != 0 {
-                let op = self.new_ops[i].op.expect("remove_old: op_replacement op is null");
+                let op = self.new_ops[i]
+                    .op
+                    .expect("remove_old: op_replacement op is null");
                 if !fd.obank().get(op).expect("remove_old: stale op").is_dead() {
                     fd.op_destroy(op);
                 }
@@ -1432,8 +1558,10 @@ impl TransformManager {
                 let vn = self.var(rvn).vn.expect("transform_input_varnodes: no vn");
                 fd.delete_varnode(vn)?;
             }
-            let repl =
-                self.var(rvn).replacement.expect("transform_input_varnodes: input not materialized");
+            let repl = self
+                .var(rvn)
+                .replacement
+                .expect("transform_input_varnodes: input not materialized");
             let new_repl = fd.set_input_varnode(repl)?;
             self.var_mut(rvn).replacement = Some(new_repl);
         }
@@ -1445,11 +1573,16 @@ impl TransformManager {
     fn place_inputs(&mut self, fd: &mut Funcdata) -> KunaResult<()> {
         for i in 0..self.new_ops.len() {
             let rop = TOpRef(i);
-            let op = self.new_ops[i].replacement.expect("place_inputs: op not materialized");
+            let op = self.new_ops[i]
+                .replacement
+                .expect("place_inputs: op not materialized");
             let n = self.new_ops[i].input.len();
             for slot in 0..n {
                 let rvn = self.new_ops[i].input[slot].expect("place_inputs: input slot is null");
-                let vn = self.var(rvn).replacement.expect("place_inputs: input var not materialized");
+                let vn = self
+                    .var(rvn)
+                    .replacement
+                    .expect("place_inputs: input var not materialized");
                 fd.op_set_input(op, vn, slot as int4)?;
             }
             self.special_handling(fd, rop)?;

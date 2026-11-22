@@ -42,13 +42,13 @@ use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_num::opcodes::OpCode;
 
+use crate::block::{DOMINATES_SHORT_WALK, DominatesMemo};
+use crate::context::{BlockId, HighVariableId, OpId, VarnodeId};
 use crate::cover::{Cover, CoverPoint, PcodeOpSet};
 use crate::dtype::Datatype;
 use crate::expression::PcodeOpNode;
-use crate::block::{DominatesMemo, DOMINATES_SHORT_WALK};
 use crate::funcdata::{BlockTable, Funcdata};
 use crate::merge::{AddrTiedRange, HighGroupInfo, MergeContext, MergePieceId};
-use crate::context::{BlockId, HighVariableId, OpId, VarnodeId};
 use crate::variable::{
     CompareNameView, HighContext, HighIntersectTest, VariablePieceId, VarnodeView, VarnodeViewLoc,
 };
@@ -110,7 +110,10 @@ impl HighContext for Funcdata {
         }
     }
     fn vn_flags(&self, vn: VarnodeId) -> uint4 {
-        self.vbank().get(vn).expect("vn_flags: stale vn").get_flags()
+        self.vbank()
+            .get(vn)
+            .expect("vn_flags: stale vn")
+            .get_flags()
     }
     fn vn_cover(&self, vn: VarnodeId) -> Option<&Cover> {
         self.vbank().get(vn).and_then(|v| v.cover())
@@ -144,7 +147,9 @@ impl HighContext for Funcdata {
     }
     fn vn_loc_view(&self, vn: VarnodeId) -> VarnodeViewLoc {
         let v = self.vbank().get(vn).expect("vn_loc_view: stale vn");
-        VarnodeViewLoc { addr: v.get_addr().clone() }
+        VarnodeViewLoc {
+            addr: v.get_addr().clone(),
+        }
     }
 }
 
@@ -239,13 +244,15 @@ impl Funcdata {
                 if let Some((_sym, entry_addr, _sz, entry_off)) =
                     lm.container_symbol_link(&addr, &invalid)
                 {
-                    let delta =
-                        addr.get_offset().wrapping_sub(entry_addr.get_offset()) as int4;
+                    let delta = addr.get_offset().wrapping_sub(entry_addr.get_offset()) as int4;
                     return Some((entry_addr, delta.wrapping_add(entry_off)));
                 }
             }
             // Then the frozen global scope (`map addr r...`): the covering global Symbol.
-            if let Some(c) = self.get_arch().query_container_global(&addr, size, &invalid) {
+            if let Some(c) = self
+                .get_arch()
+                .query_container_global(&addr, size, &invalid)
+            {
                 let delta = addr.get_offset().wrapping_sub(c.entry_addr.get_offset()) as int4;
                 return Some((c.entry_addr, delta.wrapping_add(c.symbol_offset)));
             }
@@ -259,7 +266,10 @@ impl Funcdata {
     fn kuna_mapped_symbol_id(&self, high: HighVariableId) -> Option<u64> {
         let (entry_addr, _off) = self.kuna_mapped_symbol_entry(high)?;
         let off = entry_addr.get_offset();
-        let space = entry_addr.get_space().map(|s| s.get_index() as u64).unwrap_or(0);
+        let space = entry_addr
+            .get_space()
+            .map(|s| s.get_index() as u64)
+            .unwrap_or(0);
         // Combine space + offset into one id; clear the top bit of the payload then
         // tag the mapped id-space.  Two members of the same Symbol resolve to the same
         // entry_addr -> same id (the C++ `symbolIn == symbolOut`); space differentiates
@@ -289,7 +299,10 @@ impl Funcdata {
         f: impl FnOnce(&mut crate::merge::Merge, &mut Funcdata) -> R,
     ) -> R {
         self.ensure_covermerge();
-        let mut merge = self.covermerge.take().expect("with_covermerge: just ensured");
+        let mut merge = self
+            .covermerge
+            .take()
+            .expect("with_covermerge: just ensured");
         let outer = self.cover_blocks.replace(BlockTable::new());
         let r = f(&mut merge, self);
         self.cover_blocks = outer;
@@ -362,10 +375,20 @@ impl MergeContext for Funcdata {
     }
     fn fpu_trunc_view_highs(&self, a: HighVariableId, b: HighVariableId) -> bool {
         self.kuna_fpu_trunc_views.iter().any(|id| {
-            let Some(op) = self.obank().get(*id) else { return false; };
-            if op.get_addlflags() & crate::op::pcodeop_addlflags::kuna_fpu_view_copy == 0 { return false; }
-            let out = op.get_out().and_then(|vn| self.vbank().get(vn)).and_then(|vn| vn.get_high());
-            let input = op.get_in(0).and_then(|vn| self.vbank().get(vn)).and_then(|vn| vn.get_high());
+            let Some(op) = self.obank().get(*id) else {
+                return false;
+            };
+            if op.get_addlflags() & crate::op::pcodeop_addlflags::kuna_fpu_view_copy == 0 {
+                return false;
+            }
+            let out = op
+                .get_out()
+                .and_then(|vn| self.vbank().get(vn))
+                .and_then(|vn| vn.get_high());
+            let input = op
+                .get_in(0)
+                .and_then(|vn| self.vbank().get(vn))
+                .and_then(|vn| vn.get_high());
             (out == Some(a) && input == Some(b)) || (out == Some(b) && input == Some(a))
         })
     }
@@ -373,7 +396,11 @@ impl MergeContext for Funcdata {
         self.kuna_fpu_trunc_views.iter().any(|id| {
             self.obank().get(*id).is_some_and(|op| {
                 op.get_addlflags() & crate::op::pcodeop_addlflags::kuna_fpu_view_copy != 0
-                    && op.get_in(0).and_then(|vn| self.vbank().get(vn)).and_then(|vn| vn.get_high()) == Some(high)
+                    && op
+                        .get_in(0)
+                        .and_then(|vn| self.vbank().get(vn))
+                        .and_then(|vn| vn.get_high())
+                        == Some(high)
             })
         })
     }
@@ -384,17 +411,27 @@ impl MergeContext for Funcdata {
     }
     // --- HighVariable flag/type reads -------------------------------------
     fn high_is_type_lock(&mut self, high: HighVariableId) -> bool {
-        self.with_high_split(|hb, ctx| hb.get_mut(high).map(|h| h.is_type_lock(ctx, None)).unwrap_or(false))
+        self.with_high_split(|hb, ctx| {
+            hb.get_mut(high)
+                .map(|h| h.is_type_lock(ctx, None))
+                .unwrap_or(false)
+        })
     }
     fn high_get_type(&mut self, high: HighVariableId) -> Rc<Datatype> {
         self.with_high_split(|hb, ctx| {
             hb.get_mut(high)
                 .map(|h| h.get_type(ctx, None))
-                .unwrap_or_else(|| Rc::new(Datatype::new(1, crate::dtype::type_metatype::TYPE_UNKNOWN)))
+                .unwrap_or_else(|| {
+                    Rc::new(Datatype::new(1, crate::dtype::type_metatype::TYPE_UNKNOWN))
+                })
         })
     }
     fn high_is_addr_tied(&mut self, high: HighVariableId) -> bool {
-        self.with_high_split(|hb, ctx| hb.get_mut(high).map(|h| h.is_addr_tied(ctx)).unwrap_or(false))
+        self.with_high_split(|hb, ctx| {
+            hb.get_mut(high)
+                .map(|h| h.is_addr_tied(ctx))
+                .unwrap_or(false)
+        })
     }
     fn stack_copy_moves_write(&self, storage: HighVariableId, value: HighVariableId) -> bool {
         crate::p6_variables::kuna_stackvalueorder::moves_write(self, storage, value)
@@ -406,44 +443,80 @@ impl MergeContext for Funcdata {
         self.with_high_split(|hb, ctx| hb.get_mut(high).map(|h| h.is_persist(ctx)).unwrap_or(false))
     }
     fn high_is_extra_out(&mut self, high: HighVariableId) -> bool {
-        self.with_high_split(|hb, ctx| hb.get_mut(high).map(|h| h.is_extra_out(ctx)).unwrap_or(false))
+        self.with_high_split(|hb, ctx| {
+            hb.get_mut(high)
+                .map(|h| h.is_extra_out(ctx))
+                .unwrap_or(false)
+        })
     }
     fn high_is_proto_partial(&mut self, high: HighVariableId) -> bool {
-        self.with_high_split(|hb, ctx| hb.get_mut(high).map(|h| h.is_proto_partial(ctx)).unwrap_or(false))
+        self.with_high_split(|hb, ctx| {
+            hb.get_mut(high)
+                .map(|h| h.is_proto_partial(ctx))
+                .unwrap_or(false)
+        })
     }
     fn high_is_name_lock(&mut self, high: HighVariableId) -> bool {
-        self.with_high_split(|hb, ctx| hb.get_mut(high).map(|h| h.is_name_lock(ctx)).unwrap_or(false))
+        self.with_high_split(|hb, ctx| {
+            hb.get_mut(high)
+                .map(|h| h.is_name_lock(ctx))
+                .unwrap_or(false)
+        })
     }
     fn high_has_cover(&mut self, high: HighVariableId) -> bool {
         self.with_high_split(|hb, ctx| hb.get_mut(high).map(|h| h.has_cover(ctx)).unwrap_or(false))
     }
     fn high_is_cover_dirty(&self, high: HighVariableId) -> bool {
-        self.high_bank().get(high).map(|h| h.is_cover_dirty()).unwrap_or(false)
+        self.high_bank()
+            .get(high)
+            .map(|h| h.is_cover_dirty())
+            .unwrap_or(false)
     }
     fn high_is_mark(&self, high: HighVariableId) -> bool {
-        self.high_bank().get(high).map(|h| h.is_mark()).unwrap_or(false)
+        self.high_bank()
+            .get(high)
+            .map(|h| h.is_mark())
+            .unwrap_or(false)
     }
     fn high_has_copy_in1(&self, high: HighVariableId) -> bool {
-        self.high_bank().get(high).map(|h| h.has_copy_in1()).unwrap_or(false)
+        self.high_bank()
+            .get(high)
+            .map(|h| h.has_copy_in1())
+            .unwrap_or(false)
     }
     fn high_has_copy_in2(&self, high: HighVariableId) -> bool {
-        self.high_bank().get(high).map(|h| h.has_copy_in2()).unwrap_or(false)
+        self.high_bank()
+            .get(high)
+            .map(|h| h.has_copy_in2())
+            .unwrap_or(false)
     }
     fn high_num_instances(&self, high: HighVariableId) -> int4 {
-        self.high_bank().get(high).map(|h| h.num_instances()).unwrap_or(0)
+        self.high_bank()
+            .get(high)
+            .map(|h| h.num_instances())
+            .unwrap_or(0)
     }
     fn high_get_instance(&self, high: HighVariableId, i: int4) -> VarnodeId {
-        self.high_bank().get(high).expect("high_get_instance: stale high").get_instance(i)
+        self.high_bank()
+            .get(high)
+            .expect("high_get_instance: stale high")
+            .get_instance(i)
     }
     fn high_get_cover(&self, high: HighVariableId) -> Cow<'_, Cover> {
-        self.high_bank().get_cover(high).map(Cow::Borrowed).unwrap_or_default()
+        self.high_bank()
+            .get_cover(high)
+            .map(Cow::Borrowed)
+            .unwrap_or_default()
     }
     fn high_internal_cover(&self, high: HighVariableId) -> Cow<'_, Cover> {
         // C++ `high->internalCover` (merge.cc:1622): the RAW internal cover, NOT
         // `getCover()` (which is the piece's extended cover when the high is
         // grouped).  `inflateTest` deliberately checks intersections only against
         // the cover contributing to the inflate.
-        self.high_bank().internal_cover(high).map(Cow::Borrowed).unwrap_or_default()
+        self.high_bank()
+            .internal_cover(high)
+            .map(Cow::Borrowed)
+            .unwrap_or_default()
     }
     fn bank_update_cover_for(&mut self, high: HighVariableId) {
         self.refresh_high_cover(high);
@@ -470,7 +543,9 @@ impl MergeContext for Funcdata {
         })
     }
     fn high_piece(&self, high: HighVariableId) -> Option<MergePieceId> {
-        self.high_bank().high_piece_id(high).map(|p| MergePieceId(u64::from(p.0)))
+        self.high_bank()
+            .high_piece_id(high)
+            .map(|p| MergePieceId(u64::from(p.0)))
     }
     fn piece_offset(&self, piece: MergePieceId) -> int4 {
         self.high_bank().piece_offset(decode_piece(piece))
@@ -485,7 +560,9 @@ impl MergeContext for Funcdata {
             .unwrap_or(0)
     }
     fn piece_high(&self, piece: MergePieceId) -> HighVariableId {
-        self.high_bank().piece_high(decode_piece(piece)).unwrap_or(HighVariableId(0))
+        self.high_bank()
+            .piece_high(decode_piece(piece))
+            .unwrap_or(HighVariableId(0))
     }
     fn piece_num_intersection(&self, piece: MergePieceId) -> int4 {
         self.high_bank().piece_num_intersection(decode_piece(piece))
@@ -497,7 +574,8 @@ impl MergeContext for Funcdata {
             .unwrap_or(MergePieceId(0))
     }
     fn bank_update_piece_intersections(&mut self, piece: MergePieceId) {
-        self.high_bank_mut().update_piece_intersections(decode_piece(piece));
+        self.high_bank_mut()
+            .update_piece_intersections(decode_piece(piece));
     }
     fn bank_merge_highs(
         &mut self,
@@ -521,7 +599,14 @@ impl MergeContext for Funcdata {
         // `moveIntersectTests` purge (the marks are cleared before this returns).
         let mark_set: std::cell::RefCell<std::collections::BTreeSet<HighVariableId>> =
             std::cell::RefCell::new(std::collections::BTreeSet::new());
-        let res = self.bank_merge_with_log(high1, high2, isspeculative, cache, &mut set_high_log, &mark_set);
+        let res = self.bank_merge_with_log(
+            high1,
+            high2,
+            isspeculative,
+            cache,
+            &mut set_high_log,
+            &mark_set,
+        );
         // Replay the deferred `vn->setHigh` writes now the read view is dropped.
         for (vn, id, mg) in set_high_log {
             if let Some(v) = self.vbank_mut().get_mut(vn) {
@@ -533,7 +618,12 @@ impl MergeContext for Funcdata {
     fn bank_update_cover(&mut self, high: HighVariableId) {
         self.refresh_high_cover(high);
     }
-    fn bank_group_with(&mut self, high2: HighVariableId, off: int4, high1: HighVariableId) -> KunaResult<()> {
+    fn bank_group_with(
+        &mut self,
+        high2: HighVariableId,
+        off: int4,
+        high1: HighVariableId,
+    ) -> KunaResult<()> {
         if crate::kuna_stackparamviews::separates_parameter(self, high1, high2) {
             return Ok(());
         }
@@ -553,7 +643,8 @@ impl MergeContext for Funcdata {
             .and_then(|vn| self.vbank().get(vn))
             .map(|v| v.get_size())
             .unwrap_or(0);
-        self.high_bank_mut().group_with(high2, off, high1, first_size, hi2_first_size)
+        self.high_bank_mut()
+            .group_with(high2, off, high1, first_size, hi2_first_size)
     }
     fn bank_set_mark(&mut self, high: HighVariableId) {
         if let Some(h) = self.high_bank_mut().get_mut(high) {
@@ -605,12 +696,21 @@ impl MergeContext for Funcdata {
         // the covering Symbol directly from the scope snapshot (the local stack scope,
         // then the frozen global scope) — the same covering-entry lookup `linkSymbol`
         // would use.
-        if let Some(lm) = self.get_scope_local().filter(|lm| lm.has_isolated_symbols()) {
+        if let Some(lm) = self
+            .get_scope_local()
+            .filter(|lm| lm.has_isolated_symbols())
+        {
             for i in 0..h.num_instances() {
                 let vn = h.get_instance(i);
-                let Some(v) = self.vbank().get(vn) else { continue };
-                if v.is_free() || v.is_addr_tied() { continue }
-                if let Some((sym, addr, size, _)) = lm.container_symbol_link(v.get_addr(), &self.vn_use_point(vn)) {
+                let Some(v) = self.vbank().get(vn) else {
+                    continue;
+                };
+                if v.is_free() || v.is_addr_tied() {
+                    continue;
+                }
+                if let Some((sym, addr, size, _)) =
+                    lm.container_symbol_link(v.get_addr(), &self.vn_use_point(vn))
+                {
                     if addr == *v.get_addr() && size == v.get_size() {
                         return Some(sym.data().as_ffi() & SYM_ID_LOCAL_MASK);
                     }
@@ -629,7 +729,8 @@ impl MergeContext for Funcdata {
         if h.kuna_dynamic_symbol().is_some() || h.kuna_equate_symbol().is_some() {
             return h.get_symbol_offset();
         }
-        self.kuna_mapped_symbol_offset(high).unwrap_or_else(|| h.get_symbol_offset())
+        self.kuna_mapped_symbol_offset(high)
+            .unwrap_or_else(|| h.get_symbol_offset())
     }
     fn bank_symbol_isolated(&self, high: HighVariableId) -> bool {
         // (kuna L2) C++ `Merge::mergeTestAdjacent` (merge.cc:196-205) bails out
@@ -676,7 +777,11 @@ impl MergeContext for Funcdata {
         if crate::kuna_isolated::holds(self, high) {
             return true;
         }
-        if !self.get_scope_local().map(|lm| lm.has_isolated_symbols()).unwrap_or(false) {
+        if !self
+            .get_scope_local()
+            .map(|lm| lm.has_isolated_symbols())
+            .unwrap_or(false)
+        {
             return false;
         }
         let members: Vec<VarnodeId> = (0..h.num_instances()).map(|i| h.get_instance(i)).collect();
@@ -691,8 +796,12 @@ impl MergeContext for Funcdata {
             let usepoint = self.vn_use_point(vn);
             if let Some(lm) = self.get_scope_local() {
                 if let Some(info) = lm.query_container_for_link(&addr, &usepoint) {
-                    if info.is_isolated && (self.vbank().get(vn).is_some_and(|v| v.is_addr_tied())
-                        || self.vbank().get(vn).is_some_and(|v| info.entry_addr == *v.get_addr() && info.entry_size == v.get_size())) {
+                    if info.is_isolated
+                        && (self.vbank().get(vn).is_some_and(|v| v.is_addr_tied())
+                            || self.vbank().get(vn).is_some_and(|v| {
+                                info.entry_addr == *v.get_addr() && info.entry_size == v.get_size()
+                            }))
+                    {
                         return true;
                     }
                 }
@@ -703,7 +812,11 @@ impl MergeContext for Funcdata {
     }
     fn bank_tied_addr(&self, high: HighVariableId) -> Address {
         match self.high_tied_or_input_varnode(high, false) {
-            Some(vn) => self.vbank().get(vn).map(|v| v.get_addr().clone()).unwrap_or_else(Address::new_invalid),
+            Some(vn) => self
+                .vbank()
+                .get(vn)
+                .map(|v| v.get_addr().clone())
+                .unwrap_or_else(Address::new_invalid),
             None => Address::new_invalid(),
         }
     }
@@ -728,34 +841,64 @@ impl MergeContext for Funcdata {
         self.vbank().get(vn).map(|v| v.is_input()).unwrap_or(false)
     }
     fn vn_is_written(&self, vn: VarnodeId) -> bool {
-        self.vbank().get(vn).map(|v| v.is_written()).unwrap_or(false)
+        self.vbank()
+            .get(vn)
+            .map(|v| v.is_written())
+            .unwrap_or(false)
     }
     fn vn_is_addr_force(&self, vn: VarnodeId) -> bool {
-        self.vbank().get(vn).map(|v| v.is_addr_force()).unwrap_or(false)
+        self.vbank()
+            .get(vn)
+            .map(|v| v.is_addr_force())
+            .unwrap_or(false)
     }
     fn vn_is_implied(&self, vn: VarnodeId) -> bool {
-        self.vbank().get(vn).map(|v| v.is_implied()).unwrap_or(false)
+        self.vbank()
+            .get(vn)
+            .map(|v| v.is_implied())
+            .unwrap_or(false)
     }
     fn vn_is_spacebase(&self, vn: VarnodeId) -> bool {
-        self.vbank().get(vn).map(|v| v.is_spacebase()).unwrap_or(false)
+        self.vbank()
+            .get(vn)
+            .map(|v| v.is_spacebase())
+            .unwrap_or(false)
     }
     fn vn_is_proto_partial(&self, vn: VarnodeId) -> bool {
-        self.vbank().get(vn).map(|v| v.is_proto_partial()).unwrap_or(false)
+        self.vbank()
+            .get(vn)
+            .map(|v| v.is_proto_partial())
+            .unwrap_or(false)
     }
     fn vn_is_annotation(&self, vn: VarnodeId) -> bool {
-        self.vbank().get(vn).map(|v| v.is_annotation()).unwrap_or(false)
+        self.vbank()
+            .get(vn)
+            .map(|v| v.is_annotation())
+            .unwrap_or(false)
     }
     fn vn_is_illegal_input(&self, vn: VarnodeId) -> bool {
-        self.vbank().get(vn).map(|v| v.is_illegal_input()).unwrap_or(false)
+        self.vbank()
+            .get(vn)
+            .map(|v| v.is_illegal_input())
+            .unwrap_or(false)
     }
     fn vn_is_indirect_only(&self, vn: VarnodeId) -> bool {
-        self.vbank().get(vn).map(|v| v.is_indirect_only()).unwrap_or(false)
+        self.vbank()
+            .get(vn)
+            .map(|v| v.is_indirect_only())
+            .unwrap_or(false)
     }
     fn vn_has_no_local_alias(&self, vn: VarnodeId) -> bool {
-        self.vbank().get(vn).map(|v| v.has_no_local_alias()).unwrap_or(false)
+        self.vbank()
+            .get(vn)
+            .map(|v| v.has_no_local_alias())
+            .unwrap_or(false)
     }
     fn vn_has_no_descend(&self, vn: VarnodeId) -> bool {
-        self.vbank().get(vn).map(|v| v.has_no_descend()).unwrap_or(true)
+        self.vbank()
+            .get(vn)
+            .map(|v| v.has_no_descend())
+            .unwrap_or(true)
     }
     fn vn_space_big_endian(&self, vn: VarnodeId) -> bool {
         self.vbank()
@@ -781,16 +924,26 @@ impl MergeContext for Funcdata {
         self.vbank().get(vn).map(|v| v.get_offset()).unwrap_or(0)
     }
     fn vn_constant_value(&self, vn: VarnodeId) -> Option<u64> {
-        self.vbank().get(vn).filter(|v| v.is_constant()).map(|v| v.get_offset())
+        self.vbank()
+            .get(vn)
+            .filter(|v| v.is_constant())
+            .map(|v| v.get_offset())
     }
     fn vn_is_global_load(&self, vn: VarnodeId) -> bool {
         self.vbank().get(vn).is_some_and(|v| v.is_global_load())
     }
     fn vn_cover_ref(&self, vn: VarnodeId) -> Cow<'_, Cover> {
-        self.vbank().get(vn).and_then(|v| v.cover()).map(Cow::Borrowed).unwrap_or_default()
+        self.vbank()
+            .get(vn)
+            .and_then(|v| v.cover())
+            .map(Cow::Borrowed)
+            .unwrap_or_default()
     }
     fn vn_create_index(&self, vn: VarnodeId) -> u64 {
-        self.vbank().get(vn).map(|v| v.get_create_index() as u64).unwrap_or(0)
+        self.vbank()
+            .get(vn)
+            .map(|v| v.get_create_index() as u64)
+            .unwrap_or(0)
     }
     fn vn_symbol_entry_offset(&self, _vn: VarnodeId) -> Option<int4> {
         None
@@ -847,12 +1000,18 @@ impl MergeContext for Funcdata {
         }
     }
     fn vn_descend(&self, vn: VarnodeId) -> Vec<OpId> {
-        self.vbank().get(vn).map(|v| v.descend_iter().collect()).unwrap_or_default()
+        self.vbank()
+            .get(vn)
+            .map(|v| v.descend_iter().collect())
+            .unwrap_or_default()
     }
 
     // --- Op reads ---------------------------------------------------------
     fn op_code(&self, op: OpId) -> OpCode {
-        self.obank().get(op).map(|o| o.code()).unwrap_or(OpCode::CPUI_COPY)
+        self.obank()
+            .get(op)
+            .map(|o| o.code())
+            .unwrap_or(OpCode::CPUI_COPY)
     }
     fn op_out(&self, op: OpId) -> Option<VarnodeId> {
         self.obank().get(op).and_then(|o| o.get_out())
@@ -864,7 +1023,10 @@ impl MergeContext for Funcdata {
         self.obank().get(op).map(|o| o.num_input()).unwrap_or(0)
     }
     fn op_parent(&self, op: OpId) -> BlockId {
-        self.obank().get(op).and_then(|o| o.get_parent()).expect("op_parent: op has no parent")
+        self.obank()
+            .get(op)
+            .and_then(|o| o.get_parent())
+            .expect("op_parent: op has no parent")
     }
     fn op_parent_index(&self, op: OpId) -> int4 {
         match self.obank().get(op).and_then(|o| o.get_parent()) {
@@ -873,10 +1035,16 @@ impl MergeContext for Funcdata {
         }
     }
     fn op_addr(&self, op: OpId) -> Address {
-        self.obank().get(op).map(|o| o.get_addr().clone()).unwrap_or_else(Address::new_invalid)
+        self.obank()
+            .get(op)
+            .map(|o| o.get_addr().clone())
+            .unwrap_or_else(Address::new_invalid)
     }
     fn op_order(&self, op: OpId) -> uintm {
-        self.obank().get(op).map(|o| o.get_seq_num().get_order()).unwrap_or(0)
+        self.obank()
+            .get(op)
+            .map(|o| o.get_seq_num().get_order())
+            .unwrap_or(0)
     }
     fn op_slot(&self, op: OpId, vn: VarnodeId) -> int4 {
         self.obank().get(op).map(|o| o.get_slot(vn)).unwrap_or(-1)
@@ -891,10 +1059,16 @@ impl MergeContext for Funcdata {
         self.obank().get(op).map(|o| o.is_marker()).unwrap_or(false)
     }
     fn op_is_indirect_creation(&self, op: OpId) -> bool {
-        self.obank().get(op).map(|o| o.is_indirect_creation()).unwrap_or(false)
+        self.obank()
+            .get(op)
+            .map(|o| o.is_indirect_creation())
+            .unwrap_or(false)
     }
     fn op_is_partial_root(&self, op: OpId) -> bool {
-        self.obank().get(op).map(|o| o.is_partial_root()).unwrap_or(false)
+        self.obank()
+            .get(op)
+            .map(|o| o.is_partial_root())
+            .unwrap_or(false)
     }
     fn op_previous(&self, op: OpId) -> Option<OpId> {
         self.op_previous_op(op)
@@ -935,7 +1109,11 @@ impl MergeContext for Funcdata {
         Funcdata::op_insert_begin(self, op, bl);
     }
     fn op_insert_end_pred(&mut self, copyop: OpId, op: OpId, slot: int4) {
-        let parent = self.obank().get(op).and_then(|o| o.get_parent()).expect("op_insert_end_pred: no parent");
+        let parent = self
+            .obank()
+            .get(op)
+            .and_then(|o| o.get_parent())
+            .expect("op_insert_end_pred: no parent");
         let pred = self.bblocks_ref().block(parent).get_in(slot);
         Funcdata::op_insert_end(self, copyop, pred);
     }
@@ -979,7 +1157,11 @@ impl MergeContext for Funcdata {
     }
     fn vn_load_crosses_global_write(&mut self, vn: VarnodeId, except: HighVariableId) -> bool {
         let guarded = self.high_bank().get(except).is_some_and(|h| {
-            (0..h.num_instances()).any(|i| self.vbank().get(h.get_instance(i)).is_some_and(|v| v.is_persist() && self.global_store_guarded(v)))
+            (0..h.num_instances()).any(|i| {
+                self.vbank()
+                    .get(h.get_instance(i))
+                    .is_some_and(|v| v.is_persist() && self.global_store_guarded(v))
+            })
         });
         if !guarded {
             return false;
@@ -1016,7 +1198,9 @@ impl MergeContext for Funcdata {
             let dominates = graph
                 .dominates_within(dom_bl, Some(sub_bl), DOMINATES_SHORT_WALK)
                 .unwrap_or_else(|| {
-                    let memo = doms.entry(dom_bl).or_insert_with(|| DominatesMemo::new(dom_bl));
+                    let memo = doms
+                        .entry(dom_bl)
+                        .or_insert_with(|| DominatesMemo::new(dom_bl));
                     graph.dominates_memo(memo, Some(sub_bl))
                 });
             if !dominates {
@@ -1059,10 +1243,20 @@ impl MergeContext for Funcdata {
         };
         (in_vn, pc, is_multiequal)
     }
-    fn snip_reads_insert_point(&self, vn: VarnodeId, reads: &[OpId]) -> (BlockId, Address, Option<OpId>) {
-        if let Some(block) = crate::p6_variables::kuna_guardedreadtrim::guarded_block(self, vn, reads) {
+    fn snip_reads_insert_point(
+        &self,
+        vn: VarnodeId,
+        reads: &[OpId],
+    ) -> (BlockId, Address, Option<OpId>) {
+        if let Some(block) =
+            crate::p6_variables::kuna_guardedreadtrim::guarded_block(self, vn, reads)
+        {
             let pc = self.bblocks_block_start(block);
-            let pc = if pc.is_invalid() { self.do_snip_reads_insert_point(vn).1 } else { pc };
+            let pc = if pc.is_invalid() {
+                self.do_snip_reads_insert_point(vn).1
+            } else {
+                pc
+            };
             return (block, pc, None);
         }
         self.do_snip_reads_insert_point(vn)
@@ -1091,7 +1285,13 @@ impl MergeContext for Funcdata {
                 .unwrap_or(0)
         });
     }
-    fn build_dominant_copy(&mut self, high: HighVariableId, copy: &[OpId], pos: int4, size: int4) -> KunaResult<()> {
+    fn build_dominant_copy(
+        &mut self,
+        high: HighVariableId,
+        copy: &[OpId],
+        pos: int4,
+        size: int4,
+    ) -> KunaResult<()> {
         // C++ `Merge::buildDominantCopy` body (findCommonBlock / totalReplace /
         // opDestroy / high->merge surgery).  Lives on `Funcdata` since the whole
         // body is live-graph IR mutation + cover math off the varnode/op/block
@@ -1195,12 +1395,15 @@ impl MergeContext for Funcdata {
                     continue; // C++ skips free Varnodes (they are not merged)
                 }
                 if v2.is_input()
-                    && crate::kuna_stackparamviews::backing_for_address(self, a2, v2.get_size()).is_some()
+                    && crate::kuna_stackparamviews::backing_for_address(self, a2, v2.get_size())
+                        .is_some()
                 {
                     j += 1;
                     continue;
                 }
-                let end_off = v2.get_offset().wrapping_add((v2.get_size() as uintb).wrapping_sub(1));
+                let end_off = v2
+                    .get_offset()
+                    .wrapping_add((v2.get_size() as uintb).wrapping_sub(1));
                 if end_off > max_off {
                     max_off = end_off;
                 }
@@ -1280,7 +1483,13 @@ impl MergeContext for Funcdata {
             let op = self.get_call_specs(i).get_op();
             let (block_index, point) = self.op_cover_point(op);
             let order = self.op_order(op);
-            op_set.add_op_entry(PcodeOpSetEntry { id: op, block_index, point, order, store: false });
+            op_set.add_op_entry(PcodeOpSetEntry {
+                id: op,
+                block_index,
+                point,
+                order,
+                store: false,
+            });
         }
 
         // store-guard arm: every store-guard whose op is still a live STORE
@@ -1301,7 +1510,13 @@ impl MergeContext for Funcdata {
             }
             let (block_index, point) = self.op_cover_point(op);
             let order = self.op_order(op);
-            op_set.add_op_entry(PcodeOpSetEntry { id: op, block_index, point, order, store: self.stack_store_guard() });
+            op_set.add_op_entry(PcodeOpSetEntry {
+                id: op,
+                block_index,
+                point,
+                order,
+                store: self.stack_store_guard(),
+            });
             guard_ranges.push((
                 op,
                 Rc::clone(&guard.spc),
@@ -1330,14 +1545,21 @@ impl MergeContext for Funcdata {
         }));
     }
     fn vn_is_padding_piece(&self, piece: VarnodeId, whole: VarnodeId, offset: int4) -> bool {
-        let Some(piece) = self.vbank().get(piece) else { return false; };
-        let Some(whole) = self.vbank().get(whole) else { return false; };
+        let Some(piece) = self.vbank().get(piece) else {
+            return false;
+        };
+        let Some(whole) = self.vbank().get(whole) else {
+            return false;
+        };
         if !piece.is_constant() || whole.get_space().get_type() != spacetype::IPTR_JOIN {
             return false;
         }
         let mut address = whole.get_addr() + i64::from(offset);
-        address.renormalize(piece.get_size(), self.get_arch().manage()).is_ok()
-            && address.is_constant() && address.get_offset() == piece.get_offset()
+        address
+            .renormalize(piece.get_size(), self.get_arch().manage())
+            .is_ok()
+            && address.is_constant()
+            && address.get_offset() == piece.get_offset()
     }
     fn gather_pieces(&self, vn: VarnodeId, base_offset: int4) -> Vec<(VarnodeId, int4)> {
         let def = match self.vbank().get(vn).and_then(|v| v.get_def()) {
@@ -1345,7 +1567,15 @@ impl MergeContext for Funcdata {
             None => return Vec::new(),
         };
         let mut stack: Vec<crate::op::PieceNode> = Vec::new();
-        crate::op::gather_pieces(&mut stack, self.obank(), self.vbank(), vn, def, base_offset, base_offset);
+        crate::op::gather_pieces(
+            &mut stack,
+            self.obank(),
+            self.vbank(),
+            vn,
+            def,
+            base_offset,
+            base_offset,
+        );
         // The C++ groupPartialRoot iterates *all* nodes' Varnodes (internal and
         // leaf): each must be proto-partial (throw-out test) and gets grouped with
         // the root at `typeOffset - baseOffset`.  Expose each node's
@@ -1353,9 +1583,12 @@ impl MergeContext for Funcdata {
         stack
             .iter()
             .filter(|node| {
-                !node.is_leaf() || !self.vn_is_padding_piece(
-                    node.get_varnode(self.obank()), vn, node.get_type_offset() - base_offset,
-                )
+                !node.is_leaf()
+                    || !self.vn_is_padding_piece(
+                        node.get_varnode(self.obank()),
+                        vn,
+                        node.get_type_offset() - base_offset,
+                    )
             })
             .map(|n| (n.get_varnode(self.obank()), n.get_type_offset()))
             .collect()

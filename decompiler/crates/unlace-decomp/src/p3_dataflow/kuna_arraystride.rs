@@ -24,8 +24,8 @@ use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{ActionGroupList, Rule, RuleSpec};
-use crate::funcdata::Funcdata;
 use crate::context::{BlockId, OpId, TypeOp, VarnodeId};
+use crate::funcdata::Funcdata;
 
 /// (kuna GH-8724) Re-expose a strided-induction index: rewrite a stride
 /// accumulator phi as `counter * stride` (C++ `RuleArrayStride`).
@@ -39,11 +39,17 @@ pub struct RuleArrayStride {
 impl RuleArrayStride {
     /// Construct with the resolved gate.  Default group `"analysis"`.
     pub fn new(enabled: bool) -> RuleArrayStride {
-        RuleArrayStride { enabled, group: String::from("analysis") }
+        RuleArrayStride {
+            enabled,
+            group: String::from("analysis"),
+        }
     }
     /// Construct with an explicit group.
     pub fn with_group(enabled: bool, group: impl Into<String>) -> RuleArrayStride {
-        RuleArrayStride { enabled, group: group.into() }
+        RuleArrayStride {
+            enabled,
+            group: group.into(),
+        }
     }
 }
 
@@ -57,7 +63,10 @@ impl Rule for RuleArrayStride {
         if !grouplist.contains(&self.group) {
             return None;
         }
-        Some(Box::new(RuleArrayStride { enabled: self.enabled, group: self.group.clone() }))
+        Some(Box::new(RuleArrayStride {
+            enabled: self.enabled,
+            group: self.group.clone(),
+        }))
     }
 
     /// C++ `RuleArrayStride::applyOp` (`kuna_arraystride.cc:88`) — transcribed.
@@ -125,7 +134,8 @@ impl Rule for RuleArrayStride {
         let multop = data.new_op(2, pc);
         // STUB(W6): glb->inst[CPUI_INT_MULT].
         data.op_set_opcode(multop, TypeOp::new(OpCode::CPUI_INT_MULT, 0, "INT_MULT"));
-        let multout = data.new_unique_out(vn_size(data, accout), multop)
+        let multout = data
+            .new_unique_out(vn_size(data, accout), multop)
             .expect("RuleArrayStride: newUniqueOut(mult) (internal invariant)");
         data.op_set_input(multop, cntout, 0)
             .expect("RuleArrayStride: opSetInput multop.0");
@@ -235,7 +245,12 @@ fn kuna_is_induction_phi(
     if zero_idx < 0 || add_idx < 0 || zero_idx == add_idx {
         return None;
     }
-    Some((zero_idx, add_idx, foundstep, foundadd.expect("addIdx set => foundadd")))
+    Some((
+        zero_idx,
+        add_idx,
+        foundstep,
+        foundadd.expect("addIdx set => foundadd"),
+    ))
 }
 
 // --- Local IR read helpers (see kuna_booleanmask for the rationale) ----------
@@ -247,10 +262,16 @@ fn op_code(data: &Funcdata, op: OpId) -> OpCode {
     data.obank().get(op).expect("op_code: stale op").code()
 }
 fn vn_is_constant(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).map(|v| v.is_constant()).unwrap_or(false)
+    data.vbank()
+        .get(vn)
+        .map(|v| v.is_constant())
+        .unwrap_or(false)
 }
 fn vn_is_written(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).map(|v| v.is_written()).unwrap_or(false)
+    data.vbank()
+        .get(vn)
+        .map(|v| v.is_written())
+        .unwrap_or(false)
 }
 fn vn_def(data: &Funcdata, vn: VarnodeId) -> Option<OpId> {
     data.vbank().get(vn).and_then(|v| v.get_def())

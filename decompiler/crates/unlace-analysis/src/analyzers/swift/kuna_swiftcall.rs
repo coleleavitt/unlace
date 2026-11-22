@@ -40,10 +40,7 @@ use std::rc::Rc;
 
 use unlace_decomp::dtype::Datatype;
 use unlace_decomp::kuna_swiftcall::{
-    SWIFTASYNCCALL,
-    SWIFTASYNCCALL_THROWS,
-    SWIFTCALL,
-    SWIFTCALL_THROWS,
+    SWIFTASYNCCALL, SWIFTASYNCCALL_THROWS, SWIFTCALL, SWIFTCALL_THROWS,
 };
 
 use super::descriptors::{ContextKind, Target, TypeRef};
@@ -82,10 +79,10 @@ struct Binding {
 /// (`for`, `default`, `while`) gets a trailing underscore.
 fn c_identifier(label: &str) -> String {
     const C_KEYWORDS: &[&str] = &[
-        "auto", "break", "case", "char", "const", "continue", "default", "do", "double", "else", "enum",
-        "extern", "float", "for", "goto", "if", "inline", "int", "long", "register", "restrict", "return",
-        "short", "signed", "sizeof", "static", "struct", "switch", "typedef", "union", "unsigned", "void",
-        "volatile", "while",
+        "auto", "break", "case", "char", "const", "continue", "default", "do", "double", "else",
+        "enum", "extern", "float", "for", "goto", "if", "inline", "int", "long", "register",
+        "restrict", "return", "short", "signed", "sizeof", "static", "struct", "switch", "typedef",
+        "union", "unsigned", "void", "volatile", "while",
     ];
     if C_KEYWORDS.contains(&label) {
         format!("{label}_")
@@ -234,7 +231,10 @@ impl Binder<'_, '_> {
             };
             let local_rows = c.witnesses.is_empty() && c.flags & (1 << 17) == 0;
             let class_bound = match c.protocol {
-                Target::Direct(p) => md.contexts.get(&p).is_some_and(|p| p.is_class_bound_protocol()),
+                Target::Direct(p) => md
+                    .contexts
+                    .get(&p)
+                    .is_some_and(|p| p.is_class_bound_protocol()),
                 Target::Slot(_) => false,
             };
             if let (true, Some(w), Target::Direct(p)) = (local_rows, c.witness_table, c.protocol) {
@@ -303,7 +303,10 @@ impl Binder<'_, '_> {
                 _ => (entity, false),
             };
             // A free function: no owner, no `self`.
-            if entity.kind == Kind::Function && entity.first().is_some_and(|c| c.kind == Kind::Module) && !partial {
+            if entity.kind == Kind::Function
+                && entity.first().is_some_and(|c| c.kind == Kind::Module)
+                && !partial
+            {
                 self.free.push(*addr);
                 let throws = throws(entity);
                 let model = match (is_async(entity), throws) {
@@ -402,14 +405,31 @@ impl Binder<'_, '_> {
                 // of each type parameter, then the witness table of each
                 // conformance requirement.
                 let meta_ptr = types.metadata_struct().and_then(|t| {
-                    types.tf.get_type_pointer(types.md.ptr_size as i32, t, 1).ok()
+                    types
+                        .tf
+                        .get_type_pointer(types.md.ptr_size as i32, t, 1)
+                        .ok()
                 });
                 let void_ptr = types.tf.get_type_void().ok().and_then(|v| {
-                    types.tf.get_type_pointer(types.md.ptr_size as i32, v, 1).ok()
+                    types
+                        .tf
+                        .get_type_pointer(types.md.ptr_size as i32, v, 1)
+                        .ok()
                 });
                 for (name, is_metadata) in trailing {
-                    let t = if is_metadata { meta_ptr.clone()? } else { void_ptr.clone()? };
-                    out.push((format!("{}_{}", if is_metadata { "metadata" } else { "witness" }, c_identifier(&name)), t));
+                    let t = if is_metadata {
+                        meta_ptr.clone()?
+                    } else {
+                        void_ptr.clone()?
+                    };
+                    out.push((
+                        format!(
+                            "{}_{}",
+                            if is_metadata { "metadata" } else { "witness" },
+                            c_identifier(&name)
+                        ),
+                        t,
+                    ));
                 }
                 (out, ret)
             }
@@ -441,7 +461,10 @@ impl Binder<'_, '_> {
             match eight_byte_words(t) {
                 Some(n) if n <= 4 => {}
                 Some(_) => {
-                    *t = types.tf.get_type_pointer(types.md.ptr_size as i32, Rc::clone(t), 1).ok()?;
+                    *t = types
+                        .tf
+                        .get_type_pointer(types.md.ptr_size as i32, Rc::clone(t), 1)
+                        .ok()?;
                 }
                 None => return None,
             }
@@ -763,7 +786,12 @@ fn throws(entity: &NodeRef) -> bool {
 }
 
 /// Bind the convention to every member the image names, and hint `self`.
-pub fn bind(types: &Types, regs: &Registers, symbols: &[(u64, String)], out: &mut AnalysisOutput) -> Stats {
+pub fn bind(
+    types: &Types,
+    regs: &Registers,
+    symbols: &[(u64, String)],
+    out: &mut AnalysisOutput,
+) -> Stats {
     let class_bound = types
         .md
         .contexts
@@ -786,9 +814,12 @@ pub fn bind(types: &Types, regs: &Registers, symbols: &[(u64, String)], out: &mu
     if !b.bound.is_empty() {
         out.swift_types.regs = Some((regs.self_reg, regs.error_reg, regs.async_reg));
     }
-    let context_t = types
-        .async_context_struct()
-        .and_then(|t| types.tf.get_type_pointer(types.md.ptr_size as i32, t, 1).ok());
+    let context_t = types.async_context_struct().and_then(|t| {
+        types
+            .tf
+            .get_type_pointer(types.md.ptr_size as i32, t, 1)
+            .ok()
+    });
     let declared_addrs: std::collections::BTreeSet<u64> = b.declared.keys().copied().collect();
     for (f, (d, model)) in b.declared {
         if types.namer.owners_disagree(f) {
@@ -866,7 +897,9 @@ mod tests {
 
     fn member_of(symbol: &str) -> Option<(SelfIs, bool)> {
         let tree = demangle_swift_tree(symbol)?;
-        let [entity] = tree.children.as_slice() else { return None };
+        let [entity] = tree.children.as_slice() else {
+            return None;
+        };
         member(entity).map(|(_, is, throws)| (is, throws))
     }
 

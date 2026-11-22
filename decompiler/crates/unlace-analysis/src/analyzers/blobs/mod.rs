@@ -131,12 +131,21 @@ const MAGICS: [(BlobKind, &[u8]); 9] = [
 
 /// Every blob in `data`, sorted by offset and disjoint.
 pub fn scan(data: &[u8]) -> Vec<Blob> {
-    scan_within(data, &mut Work(data.len().saturating_mul(WORK_PER_BYTE).saturating_add(WORK_FLOOR)))
+    scan_within(
+        data,
+        &mut Work(
+            data.len()
+                .saturating_mul(WORK_PER_BYTE)
+                .saturating_add(WORK_FLOOR),
+        ),
+    )
 }
 
 fn scan_within(data: &[u8], work: &mut Work) -> Vec<Blob> {
-    let mut finders: Vec<_> =
-        MAGICS.iter().map(|&(kind, magic)| (kind, memmem::find_iter(data, magic).peekable())).collect();
+    let mut finders: Vec<_> = MAGICS
+        .iter()
+        .map(|&(kind, magic)| (kind, memmem::find_iter(data, magic).peekable()))
+        .collect();
     let mut found: Vec<Blob> = Vec::new();
     let mut covered = 0usize;
     loop {
@@ -195,11 +204,15 @@ pub(crate) fn le16(d: &[u8], at: usize) -> Option<usize> {
 }
 
 pub(crate) fn le32(d: &[u8], at: usize) -> Option<u32> {
-    Some(u32::from_le_bytes(d.get(at..at.checked_add(4)?)?.try_into().ok()?))
+    Some(u32::from_le_bytes(
+        d.get(at..at.checked_add(4)?)?.try_into().ok()?,
+    ))
 }
 
 pub(crate) fn be32(d: &[u8], at: usize) -> Option<u32> {
-    Some(u32::from_be_bytes(d.get(at..at.checked_add(4)?)?.try_into().ok()?))
+    Some(u32::from_be_bytes(
+        d.get(at..at.checked_add(4)?)?.try_into().ok()?,
+    ))
 }
 
 pub(crate) fn crc32(d: &[u8]) -> u32 {
@@ -217,7 +230,10 @@ pub struct Region<'d> {
 }
 
 fn is_mapped(sec: &object::Section) -> bool {
-    if matches!(sec.kind(), SectionKind::UninitializedData | SectionKind::UninitializedTls) {
+    if matches!(
+        sec.kind(),
+        SectionKind::UninitializedData | SectionKind::UninitializedTls
+    ) {
         return false;
     }
     match sec.flags() {
@@ -243,8 +259,16 @@ pub fn mapped_regions<'d>(file: &object::File<'d>) -> (Vec<Region<'d>>, bool) {
         }
         let Ok(data) = sec.data() else { continue };
         if !data.is_empty() {
-            let name = sec.name().ok().filter(|n| !n.is_empty()).map(str::to_string);
-            out.push(Region { name, vma: sec.address(), data });
+            let name = sec
+                .name()
+                .ok()
+                .filter(|n| !n.is_empty())
+                .map(str::to_string);
+            out.push(Region {
+                name,
+                vma: sec.address(),
+                data,
+            });
         }
     }
     if !out.is_empty() {
@@ -253,7 +277,11 @@ pub fn mapped_regions<'d>(file: &object::File<'d>) -> (Vec<Region<'d>>, bool) {
     for seg in file.segments() {
         let Ok(data) = seg.data() else { continue };
         if !data.is_empty() {
-            out.push(Region { name: None, vma: seg.address(), data });
+            out.push(Region {
+                name: None,
+                vma: seg.address(),
+                data,
+            });
         }
     }
     (out, true)
@@ -275,8 +303,14 @@ impl AnalysisPass for BlobPass {
         let mut out = AnalysisOutput::default();
         for region in mapped_regions(ctx.file).0 {
             for blob in scan(region.data) {
-                let Some(addr) = region.vma.checked_add(blob.offset as u64) else { continue };
-                out.blobs.push(BlobFact { addr, len: blob.len as u64, kind: blob.kind });
+                let Some(addr) = region.vma.checked_add(blob.offset as u64) else {
+                    continue;
+                };
+                out.blobs.push(BlobFact {
+                    addr,
+                    len: blob.len as u64,
+                    kind: blob.kind,
+                });
             }
         }
         out

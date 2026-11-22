@@ -1,9 +1,9 @@
 //! Every NOP fall-through remains queryable on x86-64 and AArch64.
 
+use std::path::PathBuf;
 use unlace_analysis::listing::{Listing, RefKind};
 use unlace_analysis::loadimage_object::ObjectLoadImage;
 use unlace_console::{engine::bootstrap_from_object, project::decompile_targets};
-use std::path::PathBuf;
 
 #[test]
 fn fallthrough_references_and_selected_and_whole_program_output() {

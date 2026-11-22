@@ -1,14 +1,14 @@
 //! Verified Go paired results execute with their original source signatures.
 
 use crate::common;
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_decomp::kuna_langfacet::LangFacet;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
@@ -40,7 +40,10 @@ fn bodies_with(program: ConsoleProgram, names: &[&str], extra: &[&str]) -> Vec<S
 }
 
 fn bodies_with_inferred_return(
-    mut program: ConsoleProgram, names: &[&str], extra: &[&str], inferred: bool,
+    mut program: ConsoleProgram,
+    names: &[&str],
+    extra: &[&str],
+    inferred: bool,
 ) -> Vec<String> {
     program.commit_pending_analysis().unwrap();
     let mut commands = vec!["option outlang go".to_string()];
@@ -75,14 +78,24 @@ fn bodies_with_inferred_return(
                 assert!(!status.inerror, "{name}: {}", status.optr);
             }
             if inferred {
-                let data = status.get_data_mut(DECOMPILE_MODULE).unwrap()
-                    .as_any_mut().downcast_mut::<IfaceDecompData>().unwrap();
+                let data = status
+                    .get_data_mut(DECOMPILE_MODULE)
+                    .unwrap()
+                    .as_any_mut()
+                    .downcast_mut::<IfaceDecompData>()
+                    .unwrap();
                 let types = data.conf.as_ref().unwrap().arch().types();
                 let fd = data.fd.as_mut().unwrap();
-                let calls: Vec<_> = fd.obank().iter_all()
+                let calls: Vec<_> = fd
+                    .obank()
+                    .iter_all()
                     .filter_map(|(_, op)| fd.get_call_specs_index(op))
-                    .filter(|&index| fd.get_call_specs(index).proto().get_output_type()
-                        .is_some_and(|ty| ty.get_name() == "RawCarrier"))
+                    .filter(|&index| {
+                        fd.get_call_specs(index)
+                            .proto()
+                            .get_output_type()
+                            .is_some_and(|ty| ty.get_name() == "RawCarrier")
+                    })
                     .collect();
                 assert!(!calls.is_empty());
                 for index in calls {
@@ -145,7 +158,10 @@ fn paired_contracts_follow_godwarfsig_and_exclude_other_result_shapes() {
             pair[1]
         );
         for (name, body) in names[2..].iter().zip(&pair[2..]) {
-            assert!(!body.contains(") ("), "unsupported shape {name} gained a pair: {image}\n{body}");
+            assert!(
+                !body.contains(") ("),
+                "unsupported shape {name} gained a pair: {image}\n{body}"
+            );
         }
     }
     for image in ["compressed", "uncompressed"] {
@@ -209,8 +225,14 @@ fn malformed_or_repeated_dwarf_contracts_preserve_inference() {
     ];
     for image in ["contracts", "contracts-plain"] {
         let binary = fixture(image);
-        for (name, body) in rejected.iter().zip(bodies(program(&binary, true), &rejected)) {
-            assert!(!body.contains(") ("), "{image}: rejected contract {name} gained a pair\n{body}");
+        for (name, body) in rejected
+            .iter()
+            .zip(bodies(program(&binary, true), &rejected))
+        {
+            assert!(
+                !body.contains(") ("),
+                "{image}: rejected contract {name} gained a pair\n{body}"
+            );
         }
         let accepted = bodies(
             program(&binary, true),
@@ -291,12 +313,24 @@ func main() {
         assert_eq!(actual.stdout, expected.stdout, "{image}");
         assert_eq!(actual.stderr, expected.stderr, "{image}");
     }
-    let indirect = bodies_with(program(&fixture("contracts"), true), &["pair", "apply", "indirectFirst", "indirectSecond", "identityPair", "signedUnsigned", "indirectNarrow"], &[
-        "map prototype main.apply struct __kuna_go_pair_i64_i64 apply(struct __kuna_go_pair_i64_i64 (*fn)(int8,int8),int8 r0,int8 r1);",
-        "map prototype main.indirectFirst int8 indirectFirst(struct __kuna_go_pair_i64_i64 (*fn)(int8,int8),int8 r0,int8 r1);",
-        "map prototype main.indirectSecond int8 indirectSecond(struct __kuna_go_pair_i64_i64 (*fn)(int8,int8),int8 r0,int8 r1);",
-        "map prototype main.indirectNarrow int4 indirectNarrow(struct __kuna_go_pair_i64_i64 (*fn)(int8,int8),int8 r0,int8 r1);",
-    ]);
+    let indirect = bodies_with(
+        program(&fixture("contracts"), true),
+        &[
+            "pair",
+            "apply",
+            "indirectFirst",
+            "indirectSecond",
+            "identityPair",
+            "signedUnsigned",
+            "indirectNarrow",
+        ],
+        &[
+            "map prototype main.apply struct __kuna_go_pair_i64_i64 apply(struct __kuna_go_pair_i64_i64 (*fn)(int8,int8),int8 r0,int8 r1);",
+            "map prototype main.indirectFirst int8 indirectFirst(struct __kuna_go_pair_i64_i64 (*fn)(int8,int8),int8 r0,int8 r1);",
+            "map prototype main.indirectSecond int8 indirectSecond(struct __kuna_go_pair_i64_i64 (*fn)(int8,int8),int8 r0,int8 r1);",
+            "map prototype main.indirectNarrow int4 indirectNarrow(struct __kuna_go_pair_i64_i64 (*fn)(int8,int8),int8 r0,int8 r1);",
+        ],
+    );
     assert!(
         indirect[1].contains("fn func(int64, int64) (int64, int64)"),
         "{}",
@@ -330,19 +364,35 @@ fn opaque_call_carrier_is_read_once_into_paired_results() {
         Err(error) => panic!("go: {error}"),
     }
     for (image, inferred) in [
-        ("go1.22.5-pair", false), ("go1.27.3-pair", false),
-        ("go1.22.5-pair", true), ("go1.27.3-pair", true),
+        ("go1.22.5-pair", false),
+        ("go1.27.3-pair", false),
+        ("go1.22.5-pair", true),
+        ("go1.27.3-pair", true),
     ] {
         let program = program(&fixture(image), true);
-        program.arch().types().get_base_named(
-            16, unlace_decomp::dtype::type_metatype::TYPE_UINT, "RawCarrier",
-        ).unwrap();
-        let code = bodies_with_inferred_return(program, &["forward"], &[
-            "map prototype main.pair RawCarrier pair(int8 a,int8 b);",
-        ], inferred);
+        program
+            .arch()
+            .types()
+            .get_base_named(
+                16,
+                unlace_decomp::dtype::type_metatype::TYPE_UINT,
+                "RawCarrier",
+            )
+            .unwrap();
+        let code = bodies_with_inferred_return(
+            program,
+            &["forward"],
+            &["map prototype main.pair RawCarrier pair(int8 a,int8 b);"],
+            inferred,
+        );
         assert!(code[0].contains("func(v [16]byte)"), "{}", code[0]);
         let file = common::scratch_file("gopair-opaque", "go");
-        std::fs::write(&file, format!("package main\nimport(\"encoding/binary\";\"unsafe\")\n{}\n{}", code[0], r#"
+        std::fs::write(
+            &file,
+            format!(
+                "package main\nimport(\"encoding/binary\";\"unsafe\")\n{}\n{}",
+                code[0],
+                r#"
 var calls int
 func pair(a,b int64)(value [16]byte) {
   calls++
@@ -358,7 +408,10 @@ func main() {
     }
   }
 }
-"#)).unwrap();
+"#
+            ),
+        )
+        .unwrap();
         run(Command::new("go").arg("run").arg(file));
     }
 }

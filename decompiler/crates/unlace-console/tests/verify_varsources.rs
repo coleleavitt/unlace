@@ -2,9 +2,9 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_file, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_file};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
@@ -210,7 +210,9 @@ fn outgoing_argument_copies_do_not_add_local_homes() {
 fn durable_call_results_keep_callee_saved_homes() {
     let output = decompile("durable_call_result", &["option namestyle angr"]);
     assert!(
-        local_declarations(&output).iter().any(|line| line.ends_with("v1; // eax | r14d")),
+        local_declarations(&output)
+            .iter()
+            .any(|line| line.ends_with("v1; // eax | r14d")),
         "R14D remains a durable local home even when it only forwards to outgoing ESI copies:\n{output}"
     );
     assert_eq!(
@@ -224,7 +226,9 @@ fn durable_call_results_keep_callee_saved_homes() {
 fn stack_reloads_used_only_as_arguments_do_not_add_register_homes() {
     let output = decompile("stack_outgoing", &["option namestyle angr"]);
     assert!(
-        local_declarations(&output).iter().any(|line| line.ends_with("v1; // stack - 0x9")),
+        local_declarations(&output)
+            .iter()
+            .any(|line| line.ends_with("v1; // stack - 0x9")),
         "the outgoing ESI reload must not add ESI or SIL to the helper-written stack local:\n{output}"
     );
     assert!(
@@ -241,7 +245,9 @@ fn stack_reloads_used_only_as_arguments_do_not_add_register_homes() {
 fn independent_computation_after_argument_setup_keeps_its_register_home() {
     let output = decompile("outgoing_independent_write", &["option namestyle angr"]);
     assert!(
-        local_declarations(&output).iter().any(|line| line.ends_with("v1; // esi | r14d")),
+        local_declarations(&output)
+            .iter()
+            .any(|line| line.ends_with("v1; // esi | r14d")),
         "an earlier argument-only ESI write must not hide a later independent value's ESI home:\n{output}"
     );
     assert!(

@@ -23,9 +23,9 @@ use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
 use super::{BitFieldNodeState, BitFieldTransform, BitRange, FieldRef};
-use crate::dtype::{type_metatype, Datatype};
-use crate::funcdata::Funcdata;
 use crate::context::{OpId, VarnodeId};
+use crate::dtype::{Datatype, type_metatype};
+use crate::funcdata::Funcdata;
 use std::rc::Rc;
 
 /// `sizeof(uintb)` — the C++ `uintb` is `uint8`, i.e. 8 bytes.
@@ -173,9 +173,8 @@ impl BitFieldPullTransform {
         // if (root->isWritten() && root->getDef()->code() == CPUI_LOAD) loadOp = ...
         let rv = data.vbank().get(root)?;
         let load_op = if rv.is_written() {
-            rv.get_def().filter(|&d| {
-                data.obank().get(d).map(|o| o.code()) == Some(OpCode::CPUI_LOAD)
-            })
+            rv.get_def()
+                .filter(|&d| data.obank().get(d).map(|o| o.code()) == Some(OpCode::CPUI_LOAD))
         } else {
             None
         };
@@ -218,7 +217,12 @@ impl BitFieldPullTransform {
             Some(v) => v,
             None => return,
         };
-        if !data.vbank().get(cvn).map(|v| v.is_constant()).unwrap_or(false) {
+        if !data
+            .vbank()
+            .get(cvn)
+            .map(|v| v.is_constant())
+            .unwrap_or(false)
+        {
             return;
         }
         let sa = data.vbank().get(cvn).unwrap().get_offset() as int4;
@@ -230,7 +234,8 @@ impl BitFieldPullTransform {
         let out = o.get_out();
         if state.bits_field.num_bits == new_range.num_bits {
             let new_sign_ext = state.is_sign_extended || new_range.is_most_significant();
-            let mut ns = BitFieldNodeState::with_new_field(state, &new_range, out.unwrap(), new_sign_ext);
+            let mut ns =
+                BitFieldNodeState::with_new_field(state, &new_range, out.unwrap(), new_sign_ext);
             ns.bits_used.shift(sa);
             self.base.work_list.push(ns);
         } else if Self::test_consumed(data, out.unwrap(), &new_range) {
@@ -249,7 +254,12 @@ impl BitFieldPullTransform {
             Some(v) => v,
             None => return,
         };
-        if !data.vbank().get(cvn).map(|v| v.is_constant()).unwrap_or(false) {
+        if !data
+            .vbank()
+            .get(cvn)
+            .map(|v| v.is_constant())
+            .unwrap_or(false)
+        {
             return;
         }
         let sa = data.vbank().get(cvn).unwrap().get_offset() as int4;
@@ -266,7 +276,8 @@ impl BitFieldPullTransform {
             } else {
                 false
             };
-            let mut ns = BitFieldNodeState::with_new_field(state, &new_range, out.unwrap(), new_sign_ext);
+            let mut ns =
+                BitFieldNodeState::with_new_field(state, &new_range, out.unwrap(), new_sign_ext);
             ns.bits_used.shift(-sa);
             if code == OpCode::CPUI_INT_SRIGHT && !state.is_sign_extended {
                 ns.bits_used.expand_to_most();
@@ -291,7 +302,12 @@ impl BitFieldPullTransform {
             Some(v) => v,
             None => return,
         };
-        if !data.vbank().get(cvn).map(|v| v.is_constant()).unwrap_or(false) {
+        if !data
+            .vbank()
+            .get(cvn)
+            .map(|v| v.is_constant())
+            .unwrap_or(false)
+        {
             return;
         }
         let and_val = data.vbank().get(cvn).unwrap().get_offset();
@@ -352,7 +368,12 @@ impl BitFieldPullTransform {
             Some(v) => v,
             None => return,
         };
-        if !data.vbank().get(vn1).map(|v| v.is_constant()).unwrap_or(false) {
+        if !data
+            .vbank()
+            .get(vn1)
+            .map(|v| v.is_constant())
+            .unwrap_or(false)
+        {
             return;
         }
         let val = data.vbank().get(vn1).unwrap().get_offset();
@@ -434,7 +455,12 @@ impl BitFieldPullTransform {
         let o = data.obank().get(op).unwrap();
         let slot = o.get_slot(state.node);
         let cvn = o.get_in(1 - slot).unwrap();
-        if !data.vbank().get(cvn).map(|v| v.is_constant()).unwrap_or(false) {
+        if !data
+            .vbank()
+            .get(cvn)
+            .map(|v| v.is_constant())
+            .unwrap_or(false)
+        {
             return;
         }
         let val = data.vbank().get(cvn).unwrap().get_offset();
@@ -505,7 +531,12 @@ impl BitFieldPullTransform {
         if state.bits_field.byte_size > SIZEOF_UINTB {
             return;
         }
-        if !data.vbank().get(cvn).map(|v| v.is_constant()).unwrap_or(false) {
+        if !data
+            .vbank()
+            .get(cvn)
+            .map(|v| v.is_constant())
+            .unwrap_or(false)
+        {
             return;
         }
         match state.field() {
@@ -583,7 +614,7 @@ impl BitFieldPullTransform {
                     Ordering::Equal
                 }
             }
-            (None, _) => Ordering::Less,    // readOp == 0 -> true (this before)
+            (None, _) => Ordering::Less, // readOp == 0 -> true (this before)
             (Some(_), None) => Ordering::Greater, // op2.readOp == 0 -> false
         }
     }
@@ -709,7 +740,12 @@ impl BitFieldPullTransform {
 
     /// Perform transform corresponding to the given PullRecord (C++
     /// `BitFieldPullTransform::applyRecord`, bitfield.cc:1435-1499).
-    fn apply_record(&mut self, data: &mut Funcdata, mut rec: PullRecord, state: &mut TransformState) {
+    fn apply_record(
+        &mut self,
+        data: &mut Funcdata,
+        mut rec: PullRecord,
+        state: &mut TransformState,
+    ) {
         if rec.read_op.is_none() && rec.read_vn == Some(self.root) {
             self.apply_root_record(data, rec, state);
             return;
@@ -747,13 +783,14 @@ impl BitFieldPullTransform {
                 let lin1 = data.obank().get(load).unwrap().get_in(1).unwrap();
                 data.op_set_input(new_load, lin0, 0).ok();
                 data.op_set_input(new_load, lin1, 1).ok();
-                in_vn = data.new_unique_out(self.base.container_size, new_load).unwrap();
+                in_vn = data
+                    .new_unique_out(self.base.container_size, new_load)
+                    .unwrap();
                 data.op_insert_after(new_load, load);
                 data.op_mark_non_printing_pub(new_load);
             }
         }
-        data
-            .vbank_mut()
+        data.vbank_mut()
             .get_mut(in_vn)
             .map(|v| v.update_type(Rc::clone(&state.partial_type)));
         let mod_addr = data.obank().get(mod_op).unwrap().get_addr().clone();
@@ -770,7 +807,11 @@ impl BitFieldPullTransform {
         let c_num = data.new_constant(4, rec.num_bits as uintb);
         data.op_set_input(pull_op, c_num, 2).ok();
         if let Some(load) = self.load_op {
-            let source = data.vbank().get(in_vn).and_then(|v| v.get_def()).unwrap_or(load);
+            let source = data
+                .vbank()
+                .get(in_vn)
+                .and_then(|v| v.get_def())
+                .unwrap_or(load);
             data.op_insert_after(pull_op, source);
         } else if Some(mod_op) != rec.read_op {
             data.op_insert_after(pull_op, mod_op);
@@ -778,7 +819,9 @@ impl BitFieldPullTransform {
             data.op_insert_before(pull_op, mod_op);
         }
         if rec.left_shift != 0 {
-            let shift_vn = data.new_unique_out(self.base.container_size, pull_op).unwrap();
+            let shift_vn = data
+                .new_unique_out(self.base.container_size, pull_op)
+                .unwrap();
             let shift_op = data.new_op(2, mod_addr);
             data.op_set_opcode_code(shift_op, OpCode::CPUI_INT_LEFT);
             data.op_set_input(shift_op, shift_vn, 0).ok();
@@ -793,15 +836,26 @@ impl BitFieldPullTransform {
         let pull_out = data.obank().get(pull_op).unwrap().get_out().unwrap();
         if self.load_op.is_some() {
             let size = data.vbank().get(pull_out).unwrap().get_size();
-            state.loaded.push((rec.pos, rec.num_bits, pull_code, size, pull_out));
+            state
+                .loaded
+                .push((rec.pos, rec.num_bits, pull_code, size, pull_out));
         }
-        let pull_out_meta = data.vbank().get(pull_out).unwrap().get_type().get_metatype();
+        let pull_out_meta = data
+            .vbank()
+            .get(pull_out)
+            .unwrap()
+            .get_type()
+            .get_metatype();
         let pull_out_size = data.vbank().get(pull_out).unwrap().get_size();
         if pull_out_meta == type_metatype::TYPE_UNKNOWN {
             let arch = Rc::clone(data.get_arch());
             if let Some(types) = arch.types() {
-                if let Ok(dt) = types.resize_integer(Rc::clone(rec.dt.as_ref().unwrap()), pull_out_size) {
-                    data.vbank_mut().get_mut(pull_out).map(|v| v.update_type(dt));
+                if let Ok(dt) =
+                    types.resize_integer(Rc::clone(rec.dt.as_ref().unwrap()), pull_out_size)
+                {
+                    data.vbank_mut()
+                        .get_mut(pull_out)
+                        .map(|v| v.update_type(dt));
                 }
             }
         } else if rec.dt.as_ref().unwrap().get_metatype() == type_metatype::TYPE_BOOL
@@ -809,13 +863,19 @@ impl BitFieldPullTransform {
             && rec.num_bits == 1
         {
             let dt = Rc::clone(rec.dt.as_ref().unwrap());
-            data.vbank_mut().get_mut(pull_out).map(|v| v.update_type(dt));
+            data.vbank_mut()
+                .get_mut(pull_out)
+                .map(|v| v.update_type(dt));
         }
         if Some(mod_op) != rec.read_op {
             let outvn = data.obank().get(mod_op).unwrap().get_out();
             let dead = match outvn {
                 None => true,
-                Some(v) => data.vbank().get(v).map(|x| x.has_no_descend()).unwrap_or(true),
+                Some(v) => data
+                    .vbank()
+                    .get(v)
+                    .map(|x| x.has_no_descend())
+                    .unwrap_or(true),
             };
             if dead {
                 data.op_destroy_recursive(mod_op, &mut state.dead_scratch);
@@ -827,8 +887,15 @@ impl BitFieldPullTransform {
     /// (kuna) Every pull of a LOAD sits right after it, so a second pull of the
     /// same bits reads the same value: feed the record's reader from the first
     /// one (shifted when the record asks for it), so the field is read once.
-    fn reuse_loaded_pull(&mut self, data: &mut Funcdata, rec: &PullRecord, state: &mut TransformState) -> bool {
-        let Some(read_vn) = rec.read_vn.filter(|_| self.load_op.is_some()) else { return false };
+    fn reuse_loaded_pull(
+        &mut self,
+        data: &mut Funcdata,
+        rec: &PullRecord,
+        state: &mut TransformState,
+    ) -> bool {
+        let Some(read_vn) = rec.read_vn.filter(|_| self.load_op.is_some()) else {
+            return false;
+        };
         let read = data.vbank().get(read_vn).unwrap();
         let size = read.get_size();
         if (rec.left_shift != 0 && size != self.base.container_size)
@@ -841,7 +908,9 @@ impl BitFieldPullTransform {
         } else {
             OpCode::CPUI_ZPULL
         };
-        let Some(&(.., mut value)) = state.loaded.iter()
+        let Some(&(.., mut value)) = state
+            .loaded
+            .iter()
             .find(|l| l.0 == rec.pos && l.1 == rec.num_bits && l.2 == code && l.3 == size)
         else {
             return false;
@@ -872,7 +941,11 @@ impl BitFieldPullTransform {
                 data.vbank().get(read_vn).unwrap().get_def().unwrap()
             }
         };
-        let dead = data.obank().get(mod_op).unwrap().get_out()
+        let dead = data
+            .obank()
+            .get(mod_op)
+            .unwrap()
+            .get_out()
             .is_none_or(|v| data.vbank().get(v).is_none_or(|x| x.has_no_descend()));
         if dead {
             data.op_destroy_recursive(mod_op, &mut state.dead_scratch);
@@ -883,26 +956,40 @@ impl BitFieldPullTransform {
     /// Pull a root without replacing its definition or losing its input symbol.
     /// Rewire existing readers before adding the pull's own root read, so the
     /// inserted operation cannot read its output or be traced repeatedly.
-    fn apply_root_record(&mut self, data: &mut Funcdata, rec: PullRecord, state: &mut TransformState) {
+    fn apply_root_record(
+        &mut self,
+        data: &mut Funcdata,
+        rec: PullRecord,
+        state: &mut TransformState,
+    ) {
         let root = data.vbank().get(self.root).unwrap();
         let size = root.get_size();
         let definition = root.get_def();
         let mapped = root.is_addr_tied() || root.is_persist();
         let readers: Vec<OpId> = root.descend_iter().collect();
-        let address = definition.and_then(|op| data.obank().get(op))
+        let address = definition
+            .and_then(|op| data.obank().get(op))
             .map_or_else(|| data.get_address().clone(), |op| op.get_addr().clone());
         let pull = data.new_op(3, address);
         let field = rec.dt.as_ref().unwrap();
-        data.op_set_opcode_code(pull, if field.get_metatype() == type_metatype::TYPE_INT {
-            OpCode::CPUI_SPULL
-        } else {
-            OpCode::CPUI_ZPULL
-        });
+        data.op_set_opcode_code(
+            pull,
+            if field.get_metatype() == type_metatype::TYPE_INT {
+                OpCode::CPUI_SPULL
+            } else {
+                OpCode::CPUI_ZPULL
+            },
+        );
         let output = data.new_unique_out(size, pull).unwrap();
         if mapped {
             for reader in readers {
-                let Some(operation) = data.obank().get(reader) else { continue };
-                if matches!(operation.code(), OpCode::CPUI_MULTIEQUAL | OpCode::CPUI_INDIRECT) {
+                let Some(operation) = data.obank().get(reader) else {
+                    continue;
+                };
+                if matches!(
+                    operation.code(),
+                    OpCode::CPUI_MULTIEQUAL | OpCode::CPUI_INDIRECT
+                ) {
                     continue;
                 }
                 loop {
@@ -922,11 +1009,17 @@ impl BitFieldPullTransform {
         let width = data.new_constant(4, rec.num_bits as uintb);
         data.op_set_input(pull, position, 1).unwrap();
         data.op_set_input(pull, width, 2).unwrap();
-        data.vbank_mut().get_mut(self.root).unwrap().update_type(Rc::clone(&state.partial_type));
+        data.vbank_mut()
+            .get_mut(self.root)
+            .unwrap()
+            .update_type(Rc::clone(&state.partial_type));
         let arch = Rc::clone(data.get_arch());
         if let Some(types) = arch.types() {
             if let Ok(dt) = types.resize_integer(Rc::clone(field), size) {
-                data.vbank_mut().get_mut(output).unwrap().update_type(Rc::clone(&dt));
+                data.vbank_mut()
+                    .get_mut(output)
+                    .unwrap()
+                    .update_type(Rc::clone(&dt));
                 self.retype_compared_constants(data, output, &dt);
             }
         }
@@ -943,19 +1036,33 @@ impl BitFieldPullTransform {
     fn retype_compared_constants(&self, data: &mut Funcdata, output: VarnodeId, dt: &Rc<Datatype>) {
         let readers: Vec<OpId> = data.vbank().get(output).unwrap().descend_iter().collect();
         for op in readers {
-            let Some(operation) = data.obank().get(op) else { continue };
-            if !matches!(operation.code(), OpCode::CPUI_INT_EQUAL | OpCode::CPUI_INT_NOTEQUAL
-                | OpCode::CPUI_INT_LESS | OpCode::CPUI_INT_LESSEQUAL
-                | OpCode::CPUI_INT_SLESS | OpCode::CPUI_INT_SLESSEQUAL)
-            {
+            let Some(operation) = data.obank().get(op) else {
+                continue;
+            };
+            if !matches!(
+                operation.code(),
+                OpCode::CPUI_INT_EQUAL
+                    | OpCode::CPUI_INT_NOTEQUAL
+                    | OpCode::CPUI_INT_LESS
+                    | OpCode::CPUI_INT_LESSEQUAL
+                    | OpCode::CPUI_INT_SLESS
+                    | OpCode::CPUI_INT_SLESSEQUAL
+            ) {
                 continue;
             }
             let constants: Vec<VarnodeId> = (0..operation.num_input())
                 .filter_map(|i| operation.get_in(i))
-                .filter(|&v| data.vbank().get(v).is_some_and(|v| v.is_constant() && v.get_size() == dt.get_size()))
+                .filter(|&v| {
+                    data.vbank()
+                        .get(v)
+                        .is_some_and(|v| v.is_constant() && v.get_size() == dt.get_size())
+                })
                 .collect();
             for constant in constants {
-                data.vbank_mut().get_mut(constant).unwrap().update_type(Rc::clone(dt));
+                data.vbank_mut()
+                    .get_mut(constant)
+                    .unwrap()
+                    .update_type(Rc::clone(dt));
             }
         }
     }
@@ -1049,7 +1156,8 @@ impl BitFieldPullTransform {
         let descend: Vec<OpId> = data.vbank().get(outvn).unwrap().descend_iter().collect();
         for op in descend {
             let opc = data.obank().get(op).unwrap().code();
-            if opc != OpCode::CPUI_ZPULL && opc != OpCode::CPUI_SPULL && opc != OpCode::CPUI_INSERT {
+            if opc != OpCode::CPUI_ZPULL && opc != OpCode::CPUI_SPULL && opc != OpCode::CPUI_INSERT
+            {
                 return false;
             }
         }
@@ -1064,7 +1172,12 @@ impl BitFieldPullTransform {
             Some(v) => v,
             None => return,
         };
-        if !data.vbank().get(vn).map(|v| v.is_written()).unwrap_or(false) {
+        if !data
+            .vbank()
+            .get(vn)
+            .map(|v| v.is_written())
+            .unwrap_or(false)
+        {
             return;
         }
         let ptrsub = data.vbank().get(vn).unwrap().get_def().unwrap();
@@ -1096,7 +1209,10 @@ pub(crate) fn printed_load(data: &Funcdata, op: OpId) -> Option<OpId> {
         OpCode::CPUI_LOAD => Some(op),
         OpCode::CPUI_ZPULL | OpCode::CPUI_SPULL => {
             let load = data.vbank().get(operation.get_in(0)?)?.get_def()?;
-            let load_op = data.obank().get(load).filter(|o| o.code() == OpCode::CPUI_LOAD)?;
+            let load_op = data
+                .obank()
+                .get(load)
+                .filter(|o| o.code() == OpCode::CPUI_LOAD)?;
             if load_op.not_printed() {
                 return Some(load);
             }

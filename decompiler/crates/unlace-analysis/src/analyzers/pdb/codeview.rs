@@ -34,10 +34,10 @@
 //! non-PE input, a PE with no debug directory, no CodeView entry, an unknown
 //! magic, or a truncated record all yield `None` — never a panic, never an error.
 
-use object::pe::{ImageDebugDirectory, IMAGE_DIRECTORY_ENTRY_DEBUG};
-use object::pe::{ImageNtHeaders32, ImageNtHeaders64, IMAGE_DEBUG_TYPE_CODEVIEW};
+use object::pe::{IMAGE_DEBUG_TYPE_CODEVIEW, ImageNtHeaders32, ImageNtHeaders64};
+use object::pe::{IMAGE_DIRECTORY_ENTRY_DEBUG, ImageDebugDirectory};
 use object::read::pe::{ImageNtHeaders, PeFile, PeFile32, PeFile64};
-use object::{pod, FileKind, LittleEndian as LE};
+use object::{FileKind, LittleEndian as LE, pod};
 
 /// A decoded PE CodeView debug record — the fingerprint linking a PE to its
 /// external `.pdb`. The two variants mirror Ghidra's `PdbInfoDotNet` (RSDS) and
@@ -178,7 +178,11 @@ fn parse_record(rec: &[u8]) -> Option<CodeViewInfo> {
             let guid: [u8; 16] = rec.get(4..20)?.try_into().ok()?;
             let age = read_u32_le(rec, 20)?;
             let pdb_path = read_c_string(rec, 24);
-            Some(CodeViewInfo::Rsds { guid, age, pdb_path })
+            Some(CodeViewInfo::Rsds {
+                guid,
+                age,
+                pdb_path,
+            })
         }
         b"NB10" => {
             // magic[4], offset:u32 (always 0), sig:u32, age:u32, path
@@ -186,7 +190,11 @@ fn parse_record(rec: &[u8]) -> Option<CodeViewInfo> {
             let signature = read_u32_le(rec, 8)?;
             let age = read_u32_le(rec, 12)?;
             let pdb_path = read_c_string(rec, 16);
-            Some(CodeViewInfo::Nb10 { signature, age, pdb_path })
+            Some(CodeViewInfo::Nb10 {
+                signature,
+                age,
+                pdb_path,
+            })
         }
         _ => None,
     }
@@ -232,12 +240,19 @@ mod tests {
         let info = parse_record(&rec).expect("RSDS decodes");
         assert_eq!(
             info,
-            CodeViewInfo::Rsds { guid, age: 7, pdb_path: "foo.pdb".to_string() }
+            CodeViewInfo::Rsds {
+                guid,
+                age: 7,
+                pdb_path: "foo.pdb".to_string()
+            }
         );
         assert_eq!(info.age(), 7);
         assert_eq!(info.pdb_path(), "foo.pdb");
         // Microsoft mixed-endian render: data1/2/3 LE, data4 byte-order.
-        assert_eq!(info.guid_string().as_deref(), Some("61AC3963-FF48-9024-4C4C-44205044422E"));
+        assert_eq!(
+            info.guid_string().as_deref(),
+            Some("61AC3963-FF48-9024-4C4C-44205044422E")
+        );
     }
 
     /// `parse_record` decodes a hand-built NB10 payload (magic, offset:u32,
@@ -255,7 +270,11 @@ mod tests {
         let info = parse_record(&rec).expect("NB10 decodes");
         assert_eq!(
             info,
-            CodeViewInfo::Nb10 { signature: 0xDEAD_BEEF, age: 3, pdb_path: "bar.pdb".to_string() }
+            CodeViewInfo::Nb10 {
+                signature: 0xDEAD_BEEF,
+                age: 3,
+                pdb_path: "bar.pdb".to_string()
+            }
         );
         // NB10 has no GUID.
         assert_eq!(info.guid_string(), None);

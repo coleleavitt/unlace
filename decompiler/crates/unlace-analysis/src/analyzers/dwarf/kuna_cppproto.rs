@@ -76,11 +76,11 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use unlace_base::types::uint4;
-use unlace_decomp::dtype::{type_metatype, Datatype, TypeFactory};
+use unlace_decomp::dtype::{Datatype, TypeFactory, type_metatype};
 use unlace_decomp::fspec::PrototypePieces;
 
 use super::kuna_typedepth::TypeWalk;
-use super::{build_datatype, DieSnap};
+use super::{DieSnap, build_datatype};
 
 /// A subprogram definition fused with the declaration it points at — the reduced
 /// `DIEAggregate` view the prototype/local builders read.
@@ -109,8 +109,11 @@ pub(super) fn resolve_subprogram(
     sub: &DieSnap,
     dies: &BTreeMap<usize, DieSnap>,
 ) -> Option<ResolvedSub> {
-    let decl =
-        if sub.origin_is_spec { sub.origin_ref.and_then(|o| dies.get(&o)) } else { None };
+    let decl = if sub.origin_is_spec {
+        sub.origin_ref.and_then(|o| dies.get(&o))
+    } else {
+        None
+    };
 
     // The DIE that owns the source name also owns the namespace/class ancestry.
     let (named, chased) = if !sub.name.is_empty() {
@@ -178,11 +181,7 @@ fn var_arg_slot(die: &DieSnap, dies: &BTreeMap<usize, DieSnap>, nparams: usize) 
         .iter()
         .filter_map(|c| dies.get(c))
         .any(|c| c.tag == gimli::DW_TAG_unspecified_parameters);
-    if variadic {
-        nparams as i32
-    } else {
-        -1
-    }
+    if variadic { nparams as i32 } else { -1 }
 }
 
 /// Build the `A::B::name` source name by walking `die`'s namespace/class/struct
@@ -329,20 +328,29 @@ pub(super) fn collect_fbreg_locals(
     cfa: i64,
     out: &mut Vec<crate::pass::LocalFact>,
 ) {
-    let Some(base) = super::kuna_dwarfscopes::frame_base_offset(sub.frame_base, cfa) else { return };
+    let Some(base) = super::kuna_dwarfscopes::frame_base_offset(sub.frame_base, cfa) else {
+        return;
+    };
     let mut walk = TypeWalk::new();
     let scopes = super::kuna_dwarfscopes::enabled();
     let mut pending: Vec<usize> = sub.children.iter().rev().copied().collect();
     while let Some(coff) = pending.pop() {
-        let Some(child) = dies.get(&coff) else { continue };
+        let Some(child) = dies.get(&coff) else {
+            continue;
+        };
         if child.tag == gimli::DW_TAG_lexical_block && scopes {
             pending.extend(child.children.iter().rev().copied());
             continue;
         }
-        if !matches!(child.tag, gimli::DW_TAG_variable | gimli::DW_TAG_formal_parameter) {
+        if !matches!(
+            child.tag,
+            gimli::DW_TAG_variable | gimli::DW_TAG_formal_parameter
+        ) {
             continue;
         }
-        let Some(fbreg) = child.fbreg_location else { continue };
+        let Some(fbreg) = child.fbreg_location else {
+            continue;
+        };
         let origin = child.origin_ref.and_then(|o| dies.get(&o));
         let name = if child.name.is_empty() {
             origin.map(|o| o.name.clone()).unwrap_or_default()

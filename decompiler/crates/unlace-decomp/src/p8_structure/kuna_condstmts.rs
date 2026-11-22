@@ -151,7 +151,7 @@ impl OptionCondStmts {
             _ => {
                 return Err(KunaError::parse(
                     "Must specify off or a decimal statement count",
-                ))
+                ));
             }
         };
         if val > MAX_CAP {
@@ -183,7 +183,10 @@ mod tests {
         assert_eq!(OptionCondStmts.apply("2").unwrap().0, 2);
         assert_eq!(OptionCondStmts.apply(" 7 ").unwrap().0, 7);
         for bad in ["", "on", "-1", "2.5", "1001"] {
-            assert!(OptionCondStmts.apply(bad).is_err(), "{bad:?} must be refused");
+            assert!(
+                OptionCondStmts.apply(bad).is_err(),
+                "{bad:?} must be refused"
+            );
         }
     }
 

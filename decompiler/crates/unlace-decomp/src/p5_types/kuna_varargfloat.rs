@@ -8,12 +8,12 @@
 //! is one.
 use crate::{
     context::{OpId, VarnodeId},
-    dtype::{type_class, type_metatype, Datatype},
+    dtype::{Datatype, type_class, type_metatype},
     fspec::FuncCallSpecs,
     funcdata::Funcdata,
 };
-use unlace_num::opcodes::OpCode;
 use std::rc::Rc;
+use unlace_num::opcodes::OpCode;
 
 /// The `double` vote on argument `slot` of `op`, when it lies past the declared
 /// parameters of the variadic call `fc` and its storage is a floating-point
@@ -66,15 +66,22 @@ pub fn argument_requirement(
 /// only when its own source is integer bits or already a float.
 pub(crate) fn integer_bits(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
     let bits = |v| crate::kuna_bitcast::reinterprets_to_float(data, v);
-    let Some(node) = data.vbank().get(vn) else { return false };
+    let Some(node) = data.vbank().get(vn) else {
+        return false;
+    };
     let folded = node
         .get_def()
         .and_then(|d| data.obank().get(d))
-        .filter(|d| d.code() == OpCode::CPUI_CAST && node.is_implied() && data.lone_descend(vn) == Some(op))
+        .filter(|d| {
+            d.code() == OpCode::CPUI_CAST && node.is_implied() && data.lone_descend(vn) == Some(op)
+        })
         .and_then(|d| d.get_in(0));
     let source_ok = folded.is_none_or(|src| {
         bits(src)
-            || data.vbank().get(src).is_some_and(|s| s.get_type().get_metatype() == type_metatype::TYPE_FLOAT)
+            || data
+                .vbank()
+                .get(src)
+                .is_some_and(|s| s.get_type().get_metatype() == type_metatype::TYPE_FLOAT)
     });
     bits(vn) && source_ok
 }
@@ -85,5 +92,7 @@ fn spells_as_a_float(data: &Funcdata, vn: VarnodeId) -> bool {
     };
     data.get_arch()
         .get_float_format(node.get_size())
-        .is_some_and(|f| f.get_host_float(node.get_offset()).1 != unlace_num::float::floatclass::nan)
+        .is_some_and(|f| {
+            f.get_host_float(node.get_offset()).1 != unlace_num::float::floatclass::nan
+        })
 }

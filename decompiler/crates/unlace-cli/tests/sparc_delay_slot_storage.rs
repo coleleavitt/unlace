@@ -18,14 +18,33 @@ const WORDS: [u32; 12] = [
 
 fn decompile(words: [u32; 12], proto: &str, extent: &str) -> Value {
     let path = common::scratch_file("sparc-delay-slot-storage", "bin");
-    std::fs::write(&path, words.into_iter().flat_map(u32::to_be_bytes).collect::<Vec<_>>())
-        .unwrap();
+    std::fs::write(
+        &path,
+        words
+            .into_iter()
+            .flat_map(u32::to_be_bytes)
+            .collect::<Vec<_>>(),
+    )
+    .unwrap();
     let (out, err, status) = common::run_kuna(&[
-        "decompile", path.to_str().unwrap(), "0x1000", "--json", "--raw-image",
-        "--target", "sparc:BE:32:default:gcc", "--base", "0x1000",
-        "--option", "arrayextent", extent,
-        "--define-function", "0x1000-0x1028=fixture",
-        "--define-function", "0x1028-0x1030=inspect_pair", "--assert", proto,
+        "decompile",
+        path.to_str().unwrap(),
+        "0x1000",
+        "--json",
+        "--raw-image",
+        "--target",
+        "sparc:BE:32:default:gcc",
+        "--base",
+        "0x1000",
+        "--option",
+        "arrayextent",
+        extent,
+        "--define-function",
+        "0x1000-0x1028=fixture",
+        "--define-function",
+        "0x1028-0x1030=inspect_pair",
+        "--assert",
+        proto,
     ]);
     std::fs::remove_file(path).unwrap();
     assert_eq!(status, 0, "{err}");
@@ -36,9 +55,14 @@ fn decompile(words: [u32; 12], proto: &str, extent: &str) -> Value {
 }
 
 fn at(record: &Value, offset: i64, size: u64) -> &Value {
-    record["variables"].as_array().unwrap().iter().find(|var| {
-        var["stack_offset"].as_i64() == Some(offset) && var["size"].as_u64() == Some(size)
-    }).unwrap_or_else(|| panic!("missing {size}-byte local at {offset}: {}", record["code"]))
+    record["variables"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|var| {
+            var["stack_offset"].as_i64() == Some(offset) && var["size"].as_u64() == Some(size)
+        })
+        .unwrap_or_else(|| panic!("missing {size}-byte local at {offset}: {}", record["code"]))
 }
 
 #[test]
@@ -50,7 +74,10 @@ fn name_independent_sparc_call_delay_slot_keeps_both_words() {
     let code = record["code"].as_str().unwrap();
     assert!(code.contains(&format!("{array}[0] = 0;")), "{code}");
     assert!(code.contains(&format!("{array}[1] = 0;")), "{code}");
-    assert!(code.contains(&format!("inspect_pair({array}) ^ {separate}")), "{code}");
+    assert!(
+        code.contains(&format!("inspect_pair({array}) ^ {separate}")),
+        "{code}"
+    );
     let off = decompile(WORDS, proto, "off");
     at(&off, -12, 4);
     at(&off, -8, 4);
@@ -60,7 +87,11 @@ fn name_independent_sparc_call_delay_slot_keeps_both_words() {
 fn adjacent_zero_without_delay_slot_evidence_stays_separate() {
     let mut words = WORDS;
     words.swap(3, 5); // Put the tail store before the call, not in its bundle.
-    let record = decompile(words, "prototype inspect_pair unsigned int inspect_pair(void *data)", "on");
+    let record = decompile(
+        words,
+        "prototype inspect_pair unsigned int inspect_pair(void *data)",
+        "on",
+    );
     at(&record, -12, 4);
     at(&record, -8, 4);
     at(&record, -4, 4);
@@ -71,15 +102,25 @@ fn separately_passed_delay_slot_word_stays_separate() {
     let mut words = WORDS;
     words[1] = 0x9207_bff8; // add %fp, -8, %o1
     words[6] = 0x0100_0000; // nop (the independent slot is not used)
-    let record = decompile(words,
-        "prototype inspect_pair unsigned int inspect_pair(void *head, void *tail)", "on");
+    let record = decompile(
+        words,
+        "prototype inspect_pair unsigned int inspect_pair(void *head, void *tail)",
+        "on",
+    );
     let head = at(&record, -12, 4)["name"].as_str().unwrap();
-    let tail = record["variables"].as_array().unwrap().iter()
+    let tail = record["variables"]
+        .as_array()
+        .unwrap()
+        .iter()
         .find(|v| v["stack_offset"].as_i64() == Some(-8))
-        .and_then(|v| v["name"].as_str()).expect("no separate local at -8");
+        .and_then(|v| v["name"].as_str())
+        .expect("no separate local at -8");
     let c = record["code"].as_str().unwrap();
-    assert!(c.contains(&format!("inspect_pair(&{head},{tail})"))
-        || c.contains(&format!("inspect_pair(&{head},&{tail})")), "{c}");
+    assert!(
+        c.contains(&format!("inspect_pair(&{head},{tail})"))
+            || c.contains(&format!("inspect_pair(&{head},&{tail})")),
+        "{c}"
+    );
 }
 
 #[test]

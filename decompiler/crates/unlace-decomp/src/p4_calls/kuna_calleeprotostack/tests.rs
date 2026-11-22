@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 
 use super::*;
 

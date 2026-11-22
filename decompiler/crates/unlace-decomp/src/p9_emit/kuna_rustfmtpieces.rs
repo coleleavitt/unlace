@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use super::kuna_rustfmtargs::{self, constant_word, stack_offset, Plan};
+use super::kuna_rustfmtargs::{self, Plan, constant_word, stack_offset};
 use super::kuna_rustfmtflags::Trait;
 use crate::architecture::Architecture;
 use crate::context::OpId;

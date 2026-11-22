@@ -16,8 +16,8 @@
 //! asserted shapes (the loop head is the first block visited in a cyclic region,
 //! and its body is exactly the blocks visited while that region is open).
 
-use unlace_decomp::kuna_regionid::{KunaGraphRegion, KunaRegionIdentifier, KunaRegionVisitor};
 use unlace_decomp::context::BlockId;
+use unlace_decomp::kuna_regionid::{KunaGraphRegion, KunaRegionIdentifier, KunaRegionVisitor};
 
 /// Collect every leaf block address (in walk order) and every cyclic region.
 ///

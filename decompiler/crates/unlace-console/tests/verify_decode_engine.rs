@@ -12,13 +12,13 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use object::{Object, ObjectSymbol};
 use unlace_analysis::listing::classify::classify;
 use unlace_analysis::listing::decode::decode_one;
 use unlace_analysis::listing::{Listing, ListingDetail};
 use unlace_console::engine::bootstrap_from_object;
-use unlace_decomp::kuna_decodekit::{build_decode_engine, EngineRecipe};
+use unlace_decomp::kuna_decodekit::{EngineRecipe, build_decode_engine};
 use unlace_sleigh::kuna_ctxsnapshot::snapshot_context;
-use object::{Object, ObjectSymbol};
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -159,11 +159,14 @@ fn agree_everywhere(name: &str) -> usize {
 
 #[test]
 fn a_rebuilt_engine_decodes_every_address_the_same() {
-    assert!(specs_ready(&[
-        "x86/data/languages/x86.sla",
-        "x86/data/languages/x86-64.sla",
-        "AARCH64/data/languages/AARCH64.sla",
-    ]), "required processor specs must be available");
+    assert!(
+        specs_ready(&[
+            "x86/data/languages/x86.sla",
+            "x86/data/languages/x86-64.sla",
+            "AARCH64/data/languages/AARCH64.sla",
+        ]),
+        "required processor specs must be available"
+    );
     // fauxware (a small non-PIE ELF), a DWARF-typed ELF, a CET PIE (whose GOT
     // slots the loader patches, so a re-parse of the file would read zeroes),
     // a PE, and the two largest in-repo x86-64 images.
@@ -211,7 +214,10 @@ fn a_recipe_that_carries_no_sla_is_refused() {
 
 #[test]
 fn arm_thumb_declares_its_context_commits() {
-    assert!(specs_ready(&["ARM/data/languages/ARM7_le.sla"]), "required processor specs must be available");
+    assert!(
+        specs_ready(&["ARM/data/languages/ARM7_le.sla"]),
+        "required processor specs must be available"
+    );
     let bin = fixture("arm_thumb_linked_le32");
     let path = bin.to_str().unwrap().to_string();
     let prog = bootstrap_from_object(&path, "", &spec_roots())
@@ -251,7 +257,10 @@ fn arm_thumb_declares_its_context_commits() {
 
 #[test]
 fn recipe_space_truncations_are_applied() {
-    assert!(specs_ready(&["AARCH64/data/languages/AARCH64.sla"]), "required processor specs must be available");
+    assert!(
+        specs_ready(&["AARCH64/data/languages/AARCH64.sla"]),
+        "required processor specs must be available"
+    );
     let bin = fixture("entrymain_aarch64");
     let path = bin.to_str().unwrap().to_string();
     let prog = bootstrap_from_object(&path, "", &spec_roots())

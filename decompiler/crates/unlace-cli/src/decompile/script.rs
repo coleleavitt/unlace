@@ -1,9 +1,9 @@
 //! Console-script construction and path quoting for single-function requests.
 
+use super::DecompileArgs;
 use std::borrow::Cow;
 use std::path::Path;
 use unlace_console::engine::EntrySelector;
-use super::DecompileArgs;
 
 /// An addressed VMA, excluding section coordinates and invalid numbers.
 fn selected_vma(target: &str, by_address: bool) -> Option<u64> {
@@ -16,7 +16,10 @@ fn selected_vma(target: &str, by_address: bool) -> Option<u64> {
     ) {
         return None;
     }
-    let digits = target.strip_prefix("0x").or_else(|| target.strip_prefix("0X")).unwrap_or(target);
+    let digits = target
+        .strip_prefix("0x")
+        .or_else(|| target.strip_prefix("0X"))
+        .unwrap_or(target);
     if digits.is_empty() || !digits.chars().all(|c| c.is_ascii_hexdigit()) {
         return None;
     }
@@ -25,10 +28,17 @@ fn selected_vma(target: &str, by_address: bool) -> Option<u64> {
 
 /// Borrow ordinary paths; quote only characters the console would split.
 pub(super) fn console_path(path: &str) -> Cow<'_, str> {
-    if !path.as_bytes().iter().any(|b| b.is_ascii_whitespace() || *b == b'"') {
+    if !path
+        .as_bytes()
+        .iter()
+        .any(|b| b.is_ascii_whitespace() || *b == b'"')
+    {
         return Cow::Borrowed(path);
     }
-    Cow::Owned(format!("\"{}\"", path.replace('\\', "\\\\").replace('"', "\\\"")))
+    Cow::Owned(format!(
+        "\"{}\"",
+        path.replace('\\', "\\\\").replace('"', "\\\"")
+    ))
 }
 
 /// The line-based transport cannot carry embedded newlines, even when quoted.
@@ -55,7 +65,16 @@ pub(super) fn build_script_for_input(
     regions_path: Option<&Path>,
 ) -> String {
     let DecompileArgs {
-        target, bfd_target, raw_image, base, raw, options, kasserts, func_decls, assertions, ..
+        target,
+        bfd_target,
+        raw_image,
+        base,
+        raw,
+        options,
+        kasserts,
+        func_decls,
+        assertions,
+        ..
     } = args;
     let target = target.as_str();
     let bfd_target = bfd_target.as_deref();
@@ -146,16 +165,20 @@ pub(super) fn build_script_for_input(
     };
     lines.push(format!("function containing {selection}"));
     if let Some(vma) = selected_vma(target, by_address)
-        && !func_decls.iter().any(|decl| decl.start == vma) {
-            lines.push(format!("function symbol {vma:#x}"));
-        }
+        && !func_decls.iter().any(|decl| decl.start == vma)
+    {
+        lines.push(format!("function symbol {vma:#x}"));
+    }
     // (kuna `--assert`) The PROGRAM-scoped directives -- a parsed type, a
     // declared prototype, a named global -- go here, after the analysis commit
     // and before the selection, so the function is loaded against them.
     for form in forms(crate::assertdecl::Slot::Program) {
         lines.push(form.line);
     }
-    if options.iter().any(|(name, value)| name == "callwide" && value == "on") {
+    if options
+        .iter()
+        .any(|(name, value)| name == "callwide" && value == "on")
+    {
         lines.push("callwide prepare".into());
     }
     lines.push(format!("load {verb} {selection}"));

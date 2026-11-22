@@ -1,13 +1,13 @@
 //! Compare emitted Go arithmetic with its native compiler across narrow boundaries.
 
 use crate::common;
-use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
-};
-use unlace_console::ifaceterm::ConsoleCommands;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use unlace_console::engine::bootstrap_from_object;
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
+use unlace_console::ifaceterm::ConsoleCommands;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")

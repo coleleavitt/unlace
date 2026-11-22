@@ -18,7 +18,10 @@ fn demand(r: Read) -> Option<(bool, bool)> {
 fn the_sign_sensitive_operators_vote_for_the_sign_they_compute_with() {
     use OpCode::*;
     assert_eq!(demand(classify(CPUI_INT_SLESS, 0)), Some((true, false)));
-    assert_eq!(demand(classify(CPUI_INT_LESSEQUAL, 1)), Some((false, false)));
+    assert_eq!(
+        demand(classify(CPUI_INT_LESSEQUAL, 1)),
+        Some((false, false))
+    );
     assert_eq!(demand(classify(CPUI_INT_SDIV, 0)), Some((true, true)));
     assert_eq!(demand(classify(CPUI_INT_REM, 1)), Some((false, true)));
     assert_eq!(demand(classify(CPUI_INT_SRIGHT, 0)), Some((true, true)));

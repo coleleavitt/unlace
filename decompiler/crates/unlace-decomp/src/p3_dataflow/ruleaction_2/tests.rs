@@ -10,12 +10,12 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 
-use crate::dtype::{type_metatype, Datatype};
 use crate::context::{ArchContext, BlockId};
+use crate::dtype::{Datatype, type_metatype};
 use crate::varnode::DefOpInfo;
 
 // -----------------------------------------------------------------------------
@@ -25,7 +25,8 @@ use crate::varnode::DefOpInfo;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -107,10 +108,14 @@ fn mk_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
 /// `isFree()`/`isHeritageKnown()` guards the rules apply to leaf operands.
 fn mk_reg(fd: &mut Funcdata, off: u64, size: int4) -> VarnodeId {
     let ram = ram_space(fd);
-    let vn = fd.vbank_mut().create(size, Address::new(ram, off), dt(size));
+    let vn = fd
+        .vbank_mut()
+        .create(size, Address::new(ram, off), dt(size));
     let mut no_replace =
         |_b: &mut crate::varnode::VarnodeBank, _a: VarnodeId, _c: VarnodeId| Ok(());
-    fd.vbank_mut().set_input(vn, &mut no_replace).expect("mk_reg set_input")
+    fd.vbank_mut()
+        .set_input(vn, &mut no_replace)
+        .expect("mk_reg set_input")
 }
 
 /// A constant varnode (free, in the constant space; heritage-known).
@@ -131,16 +136,30 @@ fn mk_written(
 ) -> (VarnodeId, OpId) {
     let defop = mk_op(fd, ins.len() as int4, off, opc);
     for (i, &vn) in ins.iter().enumerate() {
-        fd.op_set_input(defop, vn, i as int4).expect("mk_written set input");
+        fd.op_set_input(defop, vn, i as int4)
+            .expect("mk_written set input");
     }
     let ram = ram_space(fd);
-    let outvn = fd.new_varnode(out_size, &Address::new(ram, off + 0x800), Some(dt(out_size)));
+    let outvn = fd.new_varnode(
+        out_size,
+        &Address::new(ram, off + 0x800),
+        Some(dt(out_size)),
+    );
     let seq = fd.obank().get(defop).unwrap().get_seq_num().clone();
-    let info = DefOpInfo { id: defop, seqnum: seq };
+    let info = DefOpInfo {
+        id: defop,
+        seqnum: seq,
+    };
     let mut no_replace =
         |_b: &mut crate::varnode::VarnodeBank, _a: VarnodeId, _c: VarnodeId| Ok(());
-    let outvn = fd.vbank_mut().set_def(outvn, info, &mut no_replace).expect("mk_written set_def");
-    fd.obank_mut().get_mut(defop).unwrap().set_output(Some(outvn));
+    let outvn = fd
+        .vbank_mut()
+        .set_def(outvn, info, &mut no_replace)
+        .expect("mk_written set_def");
+    fd.obank_mut()
+        .get_mut(defop)
+        .unwrap()
+        .set_output(Some(outvn));
     fd.op_insert(defop, bl, None);
     (outvn, defop)
 }
@@ -563,7 +582,14 @@ fn andzext_sext_with_full_low_mask_becomes_zext() {
     let x = mk_reg(&mut fd, 0x100, 2);
     let (sext_out, _s) = mk_written(&mut fd, bl, 0x10, 4, OpCode::CPUI_INT_SEXT, &[x]);
     let mask = mk_const(&mut fd, 4, 0xffff); // calc_mask(2)
-    let (_anded, andop) = mk_written(&mut fd, bl, 0x20, 4, OpCode::CPUI_INT_AND, &[sext_out, mask]);
+    let (_anded, andop) = mk_written(
+        &mut fd,
+        bl,
+        0x20,
+        4,
+        OpCode::CPUI_INT_AND,
+        &[sext_out, mask],
+    );
 
     assert_eq!(RuleAndZext.apply_op(andop, &mut fd), 1);
     assert_eq!(code_of(&fd, andop), OpCode::CPUI_INT_ZEXT);
@@ -579,7 +605,14 @@ fn andzext_declines_wrong_mask() {
     let x = mk_reg(&mut fd, 0x100, 2);
     let (sext_out, _s) = mk_written(&mut fd, bl, 0x10, 4, OpCode::CPUI_INT_SEXT, &[x]);
     let mask = mk_const(&mut fd, 4, 0x7fff); // != 0xffff
-    let (_anded, andop) = mk_written(&mut fd, bl, 0x20, 4, OpCode::CPUI_INT_AND, &[sext_out, mask]);
+    let (_anded, andop) = mk_written(
+        &mut fd,
+        bl,
+        0x20,
+        4,
+        OpCode::CPUI_INT_AND,
+        &[sext_out, mask],
+    );
     assert_eq!(RuleAndZext.apply_op(andop, &mut fd), 0);
     assert_eq!(code_of(&fd, andop), OpCode::CPUI_INT_AND);
 }
@@ -833,7 +866,14 @@ fn doublearithshift_adds_amounts() {
     let c = mk_const(&mut fd, 4, 2);
     let (inner_out, _i) = mk_written(&mut fd, bl, 0x10, 4, OpCode::CPUI_INT_SRIGHT, &[x, c]);
     let d = mk_const(&mut fd, 4, 3);
-    let (_o, outer) = mk_written(&mut fd, bl, 0x20, 4, OpCode::CPUI_INT_SRIGHT, &[inner_out, d]);
+    let (_o, outer) = mk_written(
+        &mut fd,
+        bl,
+        0x20,
+        4,
+        OpCode::CPUI_INT_SRIGHT,
+        &[inner_out, d],
+    );
 
     assert_eq!(RuleDoubleArithShift.apply_op(outer, &mut fd), 1);
     assert_eq!(code_of(&fd, outer), OpCode::CPUI_INT_SRIGHT);
@@ -851,7 +891,14 @@ fn doublearithshift_saturates() {
     let c = mk_const(&mut fd, 4, 20);
     let (inner_out, _i) = mk_written(&mut fd, bl, 0x10, 4, OpCode::CPUI_INT_SRIGHT, &[x, c]);
     let d = mk_const(&mut fd, 4, 20);
-    let (_o, outer) = mk_written(&mut fd, bl, 0x20, 4, OpCode::CPUI_INT_SRIGHT, &[inner_out, d]);
+    let (_o, outer) = mk_written(
+        &mut fd,
+        bl,
+        0x20,
+        4,
+        OpCode::CPUI_INT_SRIGHT,
+        &[inner_out, d],
+    );
 
     assert_eq!(RuleDoubleArithShift.apply_op(outer, &mut fd), 1);
     let sa = in_of(&fd, outer, 1).unwrap();
@@ -954,8 +1001,16 @@ fn clone_rule_filters_by_group() {
         let rule = (spec.ctor)();
         let yes = ActionGroupList::from_names([spec.group]);
         let no = ActionGroupList::from_names(["some_other_group"]);
-        assert!(rule.clone_rule(&yes).is_some(), "{} should clone in its group", spec.group);
-        assert!(rule.clone_rule(&no).is_none(), "{} should not clone out of group", spec.group);
+        assert!(
+            rule.clone_rule(&yes).is_some(),
+            "{} should clone in its group",
+            spec.group
+        );
+        assert!(
+            rule.clone_rule(&no).is_none(),
+            "{} should not clone out of group",
+            spec.group
+        );
     }
 }
 
@@ -974,7 +1029,11 @@ fn trivialarith_survives_the_real_grouplists_via_its_analysis_group() {
     //   (c) NOT be clonable by the bare rule name (the old, wrong gate).
     let rule = RuleTrivialArith;
     let decompile = ActionGroupList::from_names([
-        "base", "analysis", "canonicalcompare", "typerecovery", "deadcode",
+        "base",
+        "analysis",
+        "canonicalcompare",
+        "typerecovery",
+        "deadcode",
     ]);
     let jumptable = ActionGroupList::from_names(["base", "analysis", "deadcode"]);
     let by_name = ActionGroupList::from_names(["trivialarith"]);
@@ -1005,23 +1064,42 @@ fn op_typeop_answers_for_every_opcode() {
         };
         let t = op_typeop(opc);
         assert_eq!(t.get_opcode(), opc);
-        assert_ne!(t.get_flags(), 0, "{opc:?}: seam produced a property-less TypeOp");
+        assert_ne!(
+            t.get_flags(),
+            0,
+            "{opc:?}: seam produced a property-less TypeOp"
+        );
     }
-    assert_eq!(op_typeop(OpCode::CPUI_INT_SRIGHT).get_flags(), crate::op::pcodeop_flags::binary);
+    assert_eq!(
+        op_typeop(OpCode::CPUI_INT_SRIGHT).get_flags(),
+        crate::op::pcodeop_flags::binary
+    );
 }
 
 #[test]
 fn op_typeop_flags_match_typeop_cc() {
     // Spot-check the seam flag words against typeop.cc.
     use crate::op::pcodeop_flags as f;
-    assert_eq!(op_typeop(OpCode::CPUI_COPY).get_flags(), f::unary | f::nocollapse);
-    assert_eq!(op_typeop(OpCode::CPUI_INT_AND).get_flags(), f::binary | f::commutative);
+    assert_eq!(
+        op_typeop(OpCode::CPUI_COPY).get_flags(),
+        f::unary | f::nocollapse
+    );
+    assert_eq!(
+        op_typeop(OpCode::CPUI_INT_AND).get_flags(),
+        f::binary | f::commutative
+    );
     assert_eq!(
         op_typeop(OpCode::CPUI_INT_EQUAL).get_flags(),
         f::binary | f::booloutput | f::commutative
     );
-    assert_eq!(op_typeop(OpCode::CPUI_INT_LESS).get_flags(), f::binary | f::booloutput);
+    assert_eq!(
+        op_typeop(OpCode::CPUI_INT_LESS).get_flags(),
+        f::binary | f::booloutput
+    );
     assert_eq!(op_typeop(OpCode::CPUI_INT_ZEXT).get_flags(), f::unary);
     assert_eq!(op_typeop(OpCode::CPUI_PIECE).get_flags(), f::binary);
-    assert_eq!(op_typeop(OpCode::CPUI_BOOL_NEGATE).get_flags(), f::unary | f::booloutput);
+    assert_eq!(
+        op_typeop(OpCode::CPUI_BOOL_NEGATE).get_flags(),
+        f::unary | f::booloutput
+    );
 }

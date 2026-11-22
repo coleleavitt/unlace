@@ -44,21 +44,22 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use unlace_console::engine::{ConsoleProgram, EntrySelector, FunctionEntry};
 use unlace_console::project::{
-    build_header_with_names, collect_dat_addrs, decompile_pulled, render_c, render_readme,
-    render_readme_streaming, deferred_callwide_header, validate_callwide_header, AsmPhase, BatchOutcome, DecompileOptions, FuncResult, ReadmeCounts,
-    GlobalAliasNames, ReadmeFacts, ReadmeLayout, StreamPhase, StreamProgress,
+    AsmPhase, BatchOutcome, DecompileOptions, FuncResult, GlobalAliasNames, ReadmeCounts,
+    ReadmeFacts, ReadmeLayout, StreamPhase, StreamProgress, build_header_with_names,
+    collect_dat_addrs, decompile_pulled, deferred_callwide_header, render_c, render_readme,
+    render_readme_streaming, validate_callwide_header,
 };
 use unlace_console::project_stream::{
-    asm_labels_from_entries, render_data_tail, render_variables_section, AsmSweep,
+    AsmSweep, asm_labels_from_entries, render_data_tail, render_variables_section,
 };
 use unlace_decomp::decompile_drive::{print_c_recompile_prelude, print_c_types};
 use unlace_sleigh::loadimage::section_flags;
 
 use crate::decompile_all::{
-    flatten_targets, load_program, pool_config, resolve_targets, Args, DriverDefaults,
+    Args, DriverDefaults, flatten_targets, load_program, pool_config, resolve_targets,
 };
 use crate::jobs::{self, ChunkSource, TargetSpec};
-use crate::jsonfmt::{dumps_compact, Json};
+use crate::jsonfmt::{Json, dumps_compact};
 
 /// The status file, present only while an export is running.
 const STATUS_FILE: &str = ".streaming";
@@ -146,7 +147,12 @@ impl Layout {
                 .unwrap_or_else(|| Path::new("."))
                 .join(format!("{file_name}.kuna")),
         };
-        Ok(Self { path_label: binary_path.display().to_string(), binary_path, file_name, out_dir })
+        Ok(Self {
+            path_label: binary_path.display().to_string(),
+            binary_path,
+            file_name,
+            out_dir,
+        })
     }
 }
 
@@ -228,7 +234,10 @@ impl StreamStatus {
             ("functions_total".into(), count(self.total)),
             ("functions_done".into(), num(self.done as u64)),
             ("functions_failed".into(), num(self.failed as u64)),
-            ("seconds_since_last_result".into(), num(self.last_result.elapsed().as_secs())),
+            (
+                "seconds_since_last_result".into(),
+                num(self.last_result.elapsed().as_secs()),
+            ),
             ("c_bytes".into(), num(self.c_bytes)),
             ("asm".into(), Json::Str(self.asm.as_str().into())),
             (
@@ -310,7 +319,10 @@ impl StreamRun {
         Self {
             dir,
             readme,
-            state: Mutex::new(Shared { facts, status: StreamStatus::new(jobs) }),
+            state: Mutex::new(Shared {
+                facts,
+                status: StreamStatus::new(jobs),
+            }),
             abort: Arc::new(Abort::default()),
             workers: AtomicUsize::new(jobs),
             status_warned: AtomicBool::new(false),
@@ -370,7 +382,10 @@ impl StreamRun {
 }
 
 fn unix_now() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
 }
 
 /// Report one file's publish failure the first time it happens, and again only
@@ -391,7 +406,9 @@ fn warn_once(warned: &AtomicBool, published: Result<(), String>) {
 /// filesystem, and carrying this process's pid so two exports into one folder
 /// cannot fight over the same temp name.
 fn temp_path(path: &Path) -> PathBuf {
-    let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+    let name = path
+        .file_name()
+        .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
     path.with_file_name(format!("{name}.kuna-tmp.{}", std::process::id()))
 }
 
@@ -416,8 +433,12 @@ fn refuse_a_live_export(dir: &Path) -> Result<(), String> {
     if !cfg!(target_os = "linux") {
         return Ok(());
     }
-    let Ok(status) = std::fs::read_to_string(dir.join(STATUS_FILE)) else { return Ok(()) };
-    let Some(pid) = json_number(&status, "pid") else { return Ok(()) };
+    let Ok(status) = std::fs::read_to_string(dir.join(STATUS_FILE)) else {
+        return Ok(());
+    };
+    let Some(pid) = json_number(&status, "pid") else {
+        return Ok(());
+    };
     if pid == u64::from(std::process::id()) || !Path::new(&format!("/proc/{pid}")).exists() {
         return Ok(());
     }
@@ -433,7 +454,10 @@ fn refuse_a_live_export(dir: &Path) -> Result<(), String> {
 /// to read back out of a status file it did not write.
 fn json_number(line: &str, key: &str) -> Option<u64> {
     let at = line.find(&format!("\"{key}\":"))? + key.len() + 3;
-    let digits: String = line[at..].chars().take_while(char::is_ascii_digit).collect();
+    let digits: String = line[at..]
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect();
     digits.parse().ok()
 }
 
@@ -523,7 +547,9 @@ impl Scheduler {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         for r in results {
             for hint in &r.callee_hints {
-                let Some(i) = self.by_addr.get(hint).copied() else { continue };
+                let Some(i) = self.by_addr.get(hint).copied() else {
+                    continue;
+                };
                 if !state.claimed[i] && !state.queued[i] {
                     state.queued[i] = true;
                     state.frontier.push_back(i);
@@ -540,14 +566,20 @@ impl Scheduler {
 
     #[cfg(test)]
     fn frontier_len(&self) -> usize {
-        self.state.lock().unwrap_or_else(|e| e.into_inner()).frontier.len()
+        self.state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .frontier
+            .len()
     }
 
     fn next_chunk_of(&self, frontier_k: usize, cursor_k: usize) -> Option<Vec<usize>> {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         let mut out = Vec::new();
         while out.len() < frontier_k {
-            let Some(i) = state.frontier.pop_front() else { break };
+            let Some(i) = state.frontier.pop_front() else {
+                break;
+            };
             state.queued[i] = false;
             if !state.claimed[i] {
                 state.claimed[i] = true;
@@ -581,7 +613,10 @@ impl Scheduler {
             let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
             state.frontier.len() < 8 * self.jobs
         };
-        (if thin { FRONTIER_CHUNK_THIN } else { CHUNK_MAX }, CHUNK_MAX)
+        (
+            if thin { FRONTIER_CHUNK_THIN } else { CHUNK_MAX },
+            CHUNK_MAX,
+        )
     }
 }
 
@@ -636,7 +671,11 @@ impl ProjectWriter {
     /// Truncate and create the streamed artifacts.  Called only once the load,
     /// the language check and the target set have all succeeded — before that a
     /// previous export's artifacts are still the best answer in the folder.
-    fn create(layout: &Layout, prelude: String, selected_entries: BTreeSet<u64>) -> Result<Self, String> {
+    fn create(
+        layout: &Layout,
+        prelude: String,
+        selected_entries: BTreeSet<u64>,
+    ) -> Result<Self, String> {
         let dir = layout.out_dir.clone();
         let file_name = layout.file_name.clone();
         let mut c = create(&dir.join(format!("{file_name}.c")))?;
@@ -678,15 +717,25 @@ impl ProjectWriter {
     fn append(&mut self, r: FuncResult, run: &StreamRun) -> Result<(), String> {
         if self.callwide || !r.callwide_prototypes.is_empty() {
             let unresolved = deferred_callwide_header(
-                &self.prelude, "", self.records.iter().chain(&self.pending).chain(std::iter::once(&r)),
+                &self.prelude,
+                "",
+                self.records
+                    .iter()
+                    .chain(&self.pending)
+                    .chain(std::iter::once(&r)),
                 &self.selected_entries,
             )?;
             if !unresolved.is_empty() {
                 let bytes = r.code.as_ref().map_or(0, String::len);
-                let total = self.pending_code_bytes.checked_add(bytes)
-                    .ok_or_else(|| "callwide export: pending stream exceeds its byte bound".to_string())?;
-                if self.pending.len() >= self.selected_entries.len().min(CALLWIDE_PENDING_RECORDS) || total > CALLWIDE_PENDING_CODE_BYTES {
-                    return Err("callwide export: pending stream exceeds its record or byte bound".into());
+                let total = self.pending_code_bytes.checked_add(bytes).ok_or_else(|| {
+                    "callwide export: pending stream exceeds its byte bound".to_string()
+                })?;
+                if self.pending.len() >= self.selected_entries.len().min(CALLWIDE_PENDING_RECORDS)
+                    || total > CALLWIDE_PENDING_CODE_BYTES
+                {
+                    return Err(
+                        "callwide export: pending stream exceeds its record or byte bound".into(),
+                    );
                 }
                 self.pending_code_bytes = total;
                 self.pending.push(r);
@@ -778,10 +827,18 @@ impl ProjectWriter {
     /// type block is a whole-program artifact the decompile itself produces, so
     /// a mid-run `.h` says so rather than declaring half of it.
     fn write_header(&self, types: Option<&str>) -> Result<(), String> {
-        let types =
-            types.unwrap_or("/* pending until the export completes */\n");
-        let text = build_header_with_names(&self.file_name, &self.prelude, types, &self.records, &self.global_alias_names)?;
-        write_atomic(&self.dir.join(format!("{}.h", self.file_name)), text.as_bytes())
+        let types = types.unwrap_or("/* pending until the export completes */\n");
+        let text = build_header_with_names(
+            &self.file_name,
+            &self.prelude,
+            types,
+            &self.records,
+            &self.global_alias_names,
+        )?;
+        write_atomic(
+            &self.dir.join(format!("{}.h", self.file_name)),
+            text.as_bytes(),
+        )
     }
 }
 
@@ -804,7 +861,10 @@ fn index_line(seq: usize, r: &FuncResult, span: Option<(u64, usize)>) -> String 
         ("size".into(), Json::Number(r.size.to_string())),
         ("c_offset".into(), offset),
         ("c_len".into(), len),
-        ("error".into(), r.error.clone().map_or(Json::Null, Json::Str)),
+        (
+            "error".into(),
+            r.error.clone().map_or(Json::Null, Json::Str),
+        ),
     ]);
     format!("{}\n", dumps_compact(&line))
 }
@@ -875,13 +935,19 @@ fn export(
     }
     let mut targets = resolve_targets(&prog, args)?;
     if targets.is_empty() {
-        return Err(format!("no functions selected/discovered in {}", args.binary));
+        return Err(format!(
+            "no functions selected/discovered in {}",
+            args.binary
+        ));
     }
     crate::interior::selections(&prog, args, &targets);
     // The scheduler's fallback cursor, the `.asm` labels and the reconciliation
     // all read one order, so the target list is sorted once here.
     targets.sort_by(|a, b| {
-        a.addr.get_offset().cmp(&b.addr.get_offset()).then_with(|| a.name.cmp(&b.name))
+        a.addr
+            .get_offset()
+            .cmp(&b.addr.get_offset())
+            .then_with(|| a.name.cmp(&b.name))
     });
     let specs = flatten_targets(&targets);
     if args.jobs <= 1 && targets.len() > SERIAL_HINT_MIN {
@@ -899,8 +965,11 @@ fn export(
     scheduler.seed(&seeds);
 
     let prelude = print_c_recompile_prelude(prog.arch());
-    let mut sweep =
-        AsmSweep::new(&prog, &layout.file_name, asm_labels_from_entries(&prog, &targets));
+    let mut sweep = AsmSweep::new(
+        &prog,
+        &layout.file_name,
+        asm_labels_from_entries(&prog, &targets),
+    );
     // An image with no CODE section has nothing to sweep, so its `.asm` is final
     // before the first function is decompiled: `pending` means the sweep has not
     // started, and an agent waiting for `complete` must not wait for the export.
@@ -909,12 +978,16 @@ fn export(
     }
     // From here the folder is this run's: everything below truncates.
     run.artifacts.store(true, Ordering::SeqCst);
-    let mut asm = BufWriter::new(create(&layout.out_dir.join(format!("{}.asm", layout.file_name)))?);
+    let mut asm = BufWriter::new(create(
+        &layout.out_dir.join(format!("{}.asm", layout.file_name)),
+    )?);
     asm.write_all(sweep.header_lines().as_bytes())
         .map_err(|e| format!("cannot write {}.asm: {e}", layout.file_name))?;
     let selected_entries = if prog.arch().call_wide && specs.len() <= CALLWIDE_PENDING_RECORDS {
         specs.iter().map(|spec| spec.addr).collect()
-    } else { BTreeSet::new() };
+    } else {
+        BTreeSet::new()
+    };
     let writer = ProjectWriter::create(layout, prelude.clone(), selected_entries)?;
     {
         let mut shared = run.lock();
@@ -955,8 +1028,17 @@ fn export(
             let writing = scope.spawn(move || writer_loop(writer, rx, run));
             let produced = if args.jobs > 1 {
                 let pooled = run_pooled(
-                    args, layout, &prog, &specs, &scheduler, &tx, load_seconds, &mut sweep,
-                    &mut asm, run, scope,
+                    args,
+                    layout,
+                    &prog,
+                    &specs,
+                    &scheduler,
+                    &tx,
+                    load_seconds,
+                    &mut sweep,
+                    &mut asm,
+                    run,
+                    scope,
                 );
                 drop(tx);
                 pooled
@@ -970,7 +1052,9 @@ fn export(
             // The writer owns every artifact, so ITS error is why the run
             // stopped; a producer that only saw its channel close carries the
             // sentinel, and the writer is joined before either is propagated.
-            let written = writing.join().map_err(|_| "the streaming writer panicked".to_string())?;
+            let written = writing
+                .join()
+                .map_err(|_| "the streaming writer panicked".to_string())?;
             match (produced, written) {
                 (Ok(pooled), Ok(writer)) => Ok((writer, pooled)),
                 (_, Err(writer)) => Err(writer),
@@ -1023,7 +1107,9 @@ fn export(
     ]
     .iter()
     .map(|name| {
-        let size = std::fs::metadata(layout.out_dir.join(name)).map(|m| m.len()).unwrap_or(0);
+        let size = std::fs::metadata(layout.out_dir.join(name))
+            .map(|m| m.len())
+            .unwrap_or(0);
         format!("{name} ({size} bytes)")
     })
     .collect::<Vec<_>>()
@@ -1109,9 +1195,10 @@ fn seed_indices(prog: &ConsoleProgram, args: &Args, scheduler: &Scheduler) -> Ve
     let mut seeds: Vec<usize> = Vec::new();
     for addr in addrs {
         if let Some(i) = scheduler.index_of(addr)
-            && !seeds.contains(&i) {
-                seeds.push(i);
-            }
+            && !seeds.contains(&i)
+        {
+            seeds.push(i);
+        }
     }
     seeds
 }
@@ -1193,22 +1280,22 @@ fn run_pooled<'scope, 'env>(
     let pool = scope.spawn(move || {
         let sink = |_indices: &[usize], produced: Vec<FuncResult>| {
             scheduler.on_results(&produced);
-            if send.lock().unwrap_or_else(|e| e.into_inner()).send(produced).is_err() {
+            if send
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .send(produced)
+                .is_err()
+            {
                 run.abort.stop(None);
             }
         };
-        jobs::run_pool_streaming(
-            &cfg,
-            specs,
-            &inventory,
-            scheduler,
-            &run.workers,
-            &sink,
-        )
+        jobs::run_pool_streaming(&cfg, specs, &inventory, scheduler, &run.workers, &sink)
     });
 
     let swept = sweep_to_end(prog, sweep, asm, run);
-    let pooled = pool.join().map_err(|_| "the --stream worker pool panicked".to_string())?;
+    let pooled = pool
+        .join()
+        .map_err(|_| "the --stream worker pool panicked".to_string())?;
     swept.map_err(|e| format!("cannot write {}.asm: {e}", layout.file_name))?;
     pooled
 }
@@ -1365,32 +1452,56 @@ mod tests {
     #[test]
     fn streamed_string_aliases_preserve_body_name_checks_in_either_order() {
         let string = |name: &str, address, size| unlace_decomp::decompile_drive::GlobalInfo {
-            address, name: name.into(), declaration: format!("char {name}[{size}]"), size,
-            unknown: false, direct: true, aggregate: false, elem: false, integer: false,
+            address,
+            name: name.into(),
+            declaration: format!("char {name}[{size}]"),
+            size,
+            unknown: false,
+            direct: true,
+            aggregate: false,
+            elem: false,
+            integer: false,
         };
         for shadowed in [false, true] {
             for reverse in [false, true] {
                 let dir = std::env::temp_dir().join(format!(
-                    "kuna_stream_string_aliases_{}_{shadowed}_{reverse}", std::process::id(),
+                    "kuna_stream_string_aliases_{}_{shadowed}_{reverse}",
+                    std::process::id(),
                 ));
                 std::fs::create_dir_all(&dir).unwrap();
                 let layout = Layout {
-                    binary_path: dir.join("image"), path_label: "image".into(),
-                    file_name: "image".into(), out_dir: dir.clone(),
+                    binary_path: dir.join("image"),
+                    path_label: "image".into(),
+                    file_name: "image".into(),
+                    out_dir: dir.clone(),
                 };
                 let mut caller = result(0x1000, Vec::new());
                 caller.globals = vec![string("whole", 0x5000, 16), string("part", 0x5004, 8)];
                 caller.code = Some("void sub_1000(void) { consume(whole, part); }".into());
                 let mut other = result(0x2000, Vec::new());
                 if shadowed {
-                    other.code = Some("void sub_2000(void) {\n  char whole[16]; // local\n  consume(whole);\n}".into());
+                    other.code = Some(
+                        "void sub_2000(void) {\n  char whole[16]; // local\n  consume(whole);\n}"
+                            .into(),
+                    );
                 }
                 let mut records = [caller, other];
-                if reverse { records.reverse(); }
-                let expected = unlace_console::project::build_header("image", "", "", &records).unwrap();
-                let run = StreamRun::new(dir.clone(), ReadmeLayout::Streamed, ReadmeFacts::default(), 1);
-                let mut writer = ProjectWriter::create(&layout, String::new(), BTreeSet::new()).unwrap();
-                for record in records { writer.append(record, &run).unwrap(); }
+                if reverse {
+                    records.reverse();
+                }
+                let expected =
+                    unlace_console::project::build_header("image", "", "", &records).unwrap();
+                let run = StreamRun::new(
+                    dir.clone(),
+                    ReadmeLayout::Streamed,
+                    ReadmeFacts::default(),
+                    1,
+                );
+                let mut writer =
+                    ProjectWriter::create(&layout, String::new(), BTreeSet::new()).unwrap();
+                for record in records {
+                    writer.append(record, &run).unwrap();
+                }
                 assert!(writer.records.iter().all(|r| r.code.is_none()));
                 writer.write_header(Some("")).unwrap();
                 let actual = std::fs::read_to_string(dir.join("image.h")).unwrap();
@@ -1407,16 +1518,26 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("kuna_stream_callwide_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let layout = Layout {
-            binary_path: dir.join("image"), path_label: "image".into(),
-            file_name: "image".into(), out_dir: dir.clone(),
+            binary_path: dir.join("image"),
+            path_label: "image".into(),
+            file_name: "image".into(),
+            out_dir: dir.clone(),
         };
-        let run = StreamRun::new(dir.clone(), ReadmeLayout::Streamed, ReadmeFacts::default(), 1);
+        let run = StreamRun::new(
+            dir.clone(),
+            ReadmeLayout::Streamed,
+            ReadmeFacts::default(),
+            1,
+        );
         let mut writer = ProjectWriter::create(&layout, String::new(), BTreeSet::new()).unwrap();
         let mut first = result(0x1000, Vec::new());
         first.call_declarations = vec!["unsigned long long producer(int);".into()];
         first.callwide_prototypes = vec![unlace_decomp::kuna_callwide::ExportPrototype {
-            name: "producer".into(), entry: 0x2000, signed: false,
-            inputs: vec![true], definition: false,
+            name: "producer".into(),
+            entry: 0x2000,
+            signed: false,
+            inputs: vec![true],
+            definition: false,
         }];
         writer.append(first.clone(), &run).unwrap();
         let c = std::fs::read(dir.join("image.c")).unwrap();
@@ -1441,8 +1562,11 @@ mod tests {
         caller.code = Some("void sub_1000(void) { producer(1); }".into());
         caller.call_declarations = vec!["unsigned long long producer(int);".into()];
         caller.callwide_prototypes = vec![unlace_decomp::kuna_callwide::ExportPrototype {
-            name: "producer".into(), entry: 0x2000, signed: false,
-            inputs: vec![true], definition: false,
+            name: "producer".into(),
+            entry: 0x2000,
+            signed: false,
+            inputs: vec![true],
+            definition: false,
         }];
         let mut other = result(0x1040, Vec::new());
         other.code = Some("void sub_1040(void) { producer((unsigned int)1); }".into());
@@ -1461,13 +1585,23 @@ mod tests {
     #[test]
     fn selected_producer_resolves_held_word_conflicts_without_reordering() {
         for order in [[0, 1, 2], [2, 0, 1]] {
-            let dir = std::env::temp_dir().join(format!("kuna_stream_callwide_order_{}_{order:?}", std::process::id()));
+            let dir = std::env::temp_dir().join(format!(
+                "kuna_stream_callwide_order_{}_{order:?}",
+                std::process::id()
+            ));
             std::fs::create_dir_all(&dir).unwrap();
             let layout = Layout {
-                binary_path: dir.join("image"), path_label: "image".into(),
-                file_name: "image".into(), out_dir: dir.clone(),
+                binary_path: dir.join("image"),
+                path_label: "image".into(),
+                file_name: "image".into(),
+                out_dir: dir.clone(),
             };
-            let run = StreamRun::new(dir.clone(), ReadmeLayout::Streamed, ReadmeFacts::default(), 1);
+            let run = StreamRun::new(
+                dir.clone(),
+                ReadmeLayout::Streamed,
+                ReadmeFacts::default(),
+                1,
+            );
             let records = wide_records();
             let selected = records.iter().map(|r| r.byte_address).collect();
             let mut writer = ProjectWriter::create(&layout, String::new(), selected).unwrap();
@@ -1481,12 +1615,24 @@ mod tests {
             }
             writer.finish_pending().unwrap();
             assert!(writer.pending.is_empty());
-            assert_eq!(writer.records.iter().map(|r| r.byte_address).collect::<Vec<_>>(),
-                order.map(|index| records[index].byte_address));
+            assert_eq!(
+                writer
+                    .records
+                    .iter()
+                    .map(|r| r.byte_address)
+                    .collect::<Vec<_>>(),
+                order.map(|index| records[index].byte_address)
+            );
             let index = std::fs::read_to_string(dir.join(INDEX_FILE)).unwrap();
             assert_eq!(index.lines().count(), 3);
             for (sequence, line) in index.lines().enumerate() {
-                assert!(line.contains(&format!("\"addr\":\"0x{:x}\"", records[order[sequence]].address)), "{line}");
+                assert!(
+                    line.contains(&format!(
+                        "\"addr\":\"0x{:x}\"",
+                        records[order[sequence]].address
+                    )),
+                    "{line}"
+                );
             }
             writer.write_header(Some("")).unwrap();
             let header = std::fs::read_to_string(dir.join("image.h")).unwrap();
@@ -1500,15 +1646,31 @@ mod tests {
     #[test]
     fn missing_or_incompatible_selected_producer_never_publishes_held_records() {
         for change in 0..5 {
-            let dir = std::env::temp_dir().join(format!("kuna_stream_callwide_missing_{}_{change}", std::process::id()));
+            let dir = std::env::temp_dir().join(format!(
+                "kuna_stream_callwide_missing_{}_{change}",
+                std::process::id()
+            ));
             std::fs::create_dir_all(&dir).unwrap();
             let layout = Layout {
-                binary_path: dir.join("image"), path_label: "image".into(),
-                file_name: "image".into(), out_dir: dir.clone(),
+                binary_path: dir.join("image"),
+                path_label: "image".into(),
+                file_name: "image".into(),
+                out_dir: dir.clone(),
             };
-            let run = StreamRun::new(dir.clone(), ReadmeLayout::Streamed, ReadmeFacts::default(), 1);
+            let run = StreamRun::new(
+                dir.clone(),
+                ReadmeLayout::Streamed,
+                ReadmeFacts::default(),
+                1,
+            );
             let [caller, other, mut producer] = wide_records();
-            let selected = [caller.byte_address, other.byte_address, producer.byte_address].into_iter().collect();
+            let selected = [
+                caller.byte_address,
+                other.byte_address,
+                producer.byte_address,
+            ]
+            .into_iter()
+            .collect();
             let mut writer = ProjectWriter::create(&layout, String::new(), selected).unwrap();
             writer.append(caller, &run).unwrap();
             let c = std::fs::read(dir.join("image.c")).unwrap();
@@ -1540,9 +1702,20 @@ mod tests {
     fn actual_callers_wait_for_their_selected_producer_without_changing_c() {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let image = root.join("tests/fixtures/callwide/mips32_be_declared.elf");
-        let mut argv = vec![image.to_string_lossy().into_owned(), "--sleighpath".into(),
-            root.join("../../..").join("specs").to_string_lossy().into_owned()];
-        for (name, value) in [("bejoin", "evidence"), ("dwarf", "off"), ("narrowext", "abi"), ("callwide", "on")] {
+        let mut argv = vec![
+            image.to_string_lossy().into_owned(),
+            "--sleighpath".into(),
+            root.join("../../..")
+                .join("specs")
+                .to_string_lossy()
+                .into_owned(),
+        ];
+        for (name, value) in [
+            ("bejoin", "evidence"),
+            ("dwarf", "off"),
+            ("narrowext", "abi"),
+            ("callwide", "on"),
+        ] {
             argv.extend(["--option".into(), name.into(), value.into()]);
         }
         for declaration in [
@@ -1561,28 +1734,59 @@ mod tests {
         argv.push("--assert-strict".into());
         let args = crate::decompile_all::parse_args(&argv, "decompile-project").unwrap();
         let mut prog = load_program(&args, DriverDefaults::Decompile).unwrap();
-        let targets: Vec<_> = ["caller64", "caller_ignored", "produce_sum"].into_iter()
-            .map(|name| prog.find_entry_by_name(name).unwrap()).collect();
-        let selected = targets.iter().map(|target| target.addr.get_offset()).collect();
+        let targets: Vec<_> = ["caller64", "caller_ignored", "produce_sum"]
+            .into_iter()
+            .map(|name| prog.find_entry_by_name(name).unwrap())
+            .collect();
+        let selected = targets
+            .iter()
+            .map(|target| target.addr.get_offset())
+            .collect();
         let records = unlace_console::project::decompile_export_targets(&mut prog, targets);
         assert_eq!(records.len(), 3);
-        assert!(records.iter().all(|r| r.error.is_none() && r.code.is_some()));
-        let first = records[0].callwide_prototypes.iter().find(|p| p.name == "produce_sum").unwrap();
-        let second = records[1].callwide_prototypes.iter().find(|p| p.name == "produce_sum").unwrap();
+        assert!(
+            records
+                .iter()
+                .all(|r| r.error.is_none() && r.code.is_some())
+        );
+        let first = records[0]
+            .callwide_prototypes
+            .iter()
+            .find(|p| p.name == "produce_sum")
+            .unwrap();
+        let second = records[1]
+            .callwide_prototypes
+            .iter()
+            .find(|p| p.name == "produce_sum")
+            .unwrap();
         assert_eq!(first.entry, second.entry);
         assert_eq!(first.signed, second.signed);
         assert_eq!(first.inputs.len(), second.inputs.len());
         assert_ne!(first.inputs, second.inputs);
         let keep = std::env::var_os("KUNA_CALLWIDE_REPLAY_DIR");
-        let dir = keep.as_ref().map_or_else(|| std::env::temp_dir()
-            .join(format!("kuna_stream_actual_callwide_{}", std::process::id())), PathBuf::from);
+        let dir = keep.as_ref().map_or_else(
+            || {
+                std::env::temp_dir().join(format!(
+                    "kuna_stream_actual_callwide_{}",
+                    std::process::id()
+                ))
+            },
+            PathBuf::from,
+        );
         std::fs::create_dir_all(&dir).unwrap();
         let layout = Layout {
-            binary_path: image, path_label: "callwide actual records".into(),
-            file_name: "mips32_be_declared.elf".into(), out_dir: dir.clone(),
+            binary_path: image,
+            path_label: "callwide actual records".into(),
+            file_name: "mips32_be_declared.elf".into(),
+            out_dir: dir.clone(),
         };
         let prelude = print_c_recompile_prelude(prog.arch());
-        let run = StreamRun::new(dir.clone(), ReadmeLayout::Streamed, ReadmeFacts::default(), 1);
+        let run = StreamRun::new(
+            dir.clone(),
+            ReadmeLayout::Streamed,
+            ReadmeFacts::default(),
+            1,
+        );
         let mut writer = ProjectWriter::create(&layout, prelude, selected).unwrap();
         let expected = render_c(&records);
         for (index, record) in records.into_iter().enumerate() {
@@ -1594,11 +1798,21 @@ mod tests {
             }
         }
         writer.finish_pending().unwrap();
-        writer.write_header(Some(&print_c_types(prog.arch_mut()))).unwrap();
-        assert_eq!(std::fs::read_to_string(dir.join("mips32_be_declared.elf.c")).unwrap(),
-            format!("#include \"mips32_be_declared.elf.h\"\n\n{expected}"));
-        assert_eq!(writer.records.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(),
-            ["caller64", "caller_ignored", "produce_sum"]);
+        writer
+            .write_header(Some(&print_c_types(prog.arch_mut())))
+            .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(dir.join("mips32_be_declared.elf.c")).unwrap(),
+            format!("#include \"mips32_be_declared.elf.h\"\n\n{expected}")
+        );
+        assert_eq!(
+            writer
+                .records
+                .iter()
+                .map(|r| r.name.as_str())
+                .collect::<Vec<_>>(),
+            ["caller64", "caller_ignored", "produce_sum"]
+        );
         drop(writer);
         if keep.is_none() {
             std::fs::remove_dir_all(dir).unwrap();
@@ -1631,10 +1845,6 @@ mod tests {
         assert_eq!(sched.claim_one(), Some(0));
         assert_eq!(sched.claim_one(), Some(2));
     }
-
-
-
-
 
     /// Every target exactly once, whatever the hints claim.
     #[test]
@@ -1684,7 +1894,11 @@ mod tests {
         assert_eq!(fixed.chunk_sizes(), (7, 7), "--jobs-chunk pins both halves");
 
         let auto = scheduler(&specs, 4, None);
-        assert_eq!(auto.chunk_sizes(), (4, CHUNK_MAX), "a thin frontier is followed closely");
+        assert_eq!(
+            auto.chunk_sizes(),
+            (4, CHUNK_MAX),
+            "a thin frontier is followed closely"
+        );
         assert_eq!(
             auto.next_chunk().unwrap().len(),
             CHUNK_MAX,
@@ -1692,7 +1906,11 @@ mod tests {
         );
         let hints: Vec<u64> = specs[100..300].iter().map(|s| s.addr).collect();
         auto.on_results(&[result(0x1, hints)]);
-        assert_eq!(auto.chunk_sizes(), (CHUNK_MAX, CHUNK_MAX), "a deep frontier batches");
+        assert_eq!(
+            auto.chunk_sizes(),
+            (CHUNK_MAX, CHUNK_MAX),
+            "a deep frontier batches"
+        );
     }
 
     /// A callee with many callers is queued once: the frontier length decides
@@ -1720,10 +1938,15 @@ mod tests {
         let abort = Arc::new(Abort::default());
         let sched = Scheduler::new(&specs, 4, Some(4), Arc::clone(&abort));
         assert_eq!(sched.next_chunk().map(|c| c.len()), Some(4));
-        abort.stop(Some("cannot replace x.h: Is a directory (os error 21)".into()));
+        abort.stop(Some(
+            "cannot replace x.h: Is a directory (os error 21)".into(),
+        ));
         assert_eq!(sched.next_chunk(), None, "a stopped run schedules nothing");
         assert_eq!(sched.claim_one(), None);
-        assert!(abort.reason().contains("Is a directory"), "the writer's error is the reason");
+        assert!(
+            abort.reason().contains("Is a directory"),
+            "the writer's error is the reason"
+        );
     }
 
     /// A producer that only saw its channel close still reports something.
@@ -1734,9 +1957,17 @@ mod tests {
         assert!(abort.stopped());
         assert_eq!(abort.reason(), WRITER_STOPPED);
         abort.stop(Some("second".into()));
-        assert_eq!(abort.reason(), "second", "the first real error wins over the sentinel");
+        assert_eq!(
+            abort.reason(),
+            "second",
+            "the first real error wins over the sentinel"
+        );
         abort.stop(Some("third".into()));
-        assert_eq!(abort.reason(), "second", "and is not overwritten by a later one");
+        assert_eq!(
+            abort.reason(),
+            "second",
+            "and is not overwritten by a later one"
+        );
     }
 
     /// Two streamed exports into one folder truncate each other's `.c` and
@@ -1747,14 +1978,23 @@ mod tests {
     fn a_second_export_refuses_a_folder_a_live_one_is_writing() {
         let dir = std::env::temp_dir().join(format!("kuna_stream_live_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        assert!(refuse_a_live_export(&dir).is_ok(), "an empty folder is free");
+        assert!(
+            refuse_a_live_export(&dir).is_ok(),
+            "an empty folder is free"
+        );
 
         // pid 1 is alive on any Linux this runs on.
-        std::fs::write(dir.join(STATUS_FILE), "{\"schema\":1,\"phase\":\"decompiling\",\"pid\":1}\n")
-            .unwrap();
+        std::fs::write(
+            dir.join(STATUS_FILE),
+            "{\"schema\":1,\"phase\":\"decompiling\",\"pid\":1}\n",
+        )
+        .unwrap();
         let refused = refuse_a_live_export(&dir).unwrap_err();
         assert!(refused.contains("pid 1"), "{refused}");
-        assert!(refused.contains("-o"), "the refusal has to say what to do instead: {refused}");
+        assert!(
+            refused.contains("-o"),
+            "the refusal has to say what to do instead: {refused}"
+        );
         assert!(
             refused.contains(STATUS_FILE),
             "a recycled pid is the case the folder is not really busy, so the refusal has to \
@@ -1766,7 +2006,10 @@ mod tests {
             format!("{{\"schema\":1,\"pid\":{}}}\n", std::process::id()),
         )
         .unwrap();
-        assert!(refuse_a_live_export(&dir).is_ok(), "our own pid is not a second export");
+        assert!(
+            refuse_a_live_export(&dir).is_ok(),
+            "our own pid is not a second export"
+        );
 
         // Past `pid_max`, so no process can hold it: the run was killed and the
         // folder is free.
@@ -1775,7 +2018,10 @@ mod tests {
             .unwrap_or(4_194_304)
             + 1;
         std::fs::write(dir.join(STATUS_FILE), format!("{{\"pid\":{dead}}}\n")).unwrap();
-        assert!(refuse_a_live_export(&dir).is_ok(), "a dead pid does not hold the folder");
+        assert!(
+            refuse_a_live_export(&dir).is_ok(),
+            "a dead pid does not hold the folder"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1785,9 +2031,16 @@ mod tests {
     fn the_status_pid_is_readable_back_out_of_the_line() {
         let status = StreamStatus::new(2);
         let line = dumps_compact(&status.to_json());
-        assert_eq!(json_number(&line, "pid"), Some(u64::from(std::process::id())));
+        assert_eq!(
+            json_number(&line, "pid"),
+            Some(u64::from(std::process::id()))
+        );
         assert_eq!(json_number(&line, "functions_done"), Some(0));
-        assert_eq!(json_number(&line, "functions_total"), None, "a null is not a number");
+        assert_eq!(
+            json_number(&line, "functions_total"),
+            None,
+            "a null is not a number"
+        );
         assert_eq!(json_number(&line, "nope"), None);
     }
 
@@ -1799,7 +2052,11 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("x.h");
         let temp = temp_path(&path);
-        assert_eq!(temp.parent(), path.parent(), "the temp is staged beside its target");
+        assert_eq!(
+            temp.parent(),
+            path.parent(),
+            "the temp is staged beside its target"
+        );
         let name = temp.file_name().unwrap().to_string_lossy().into_owned();
         assert!(
             name.ends_with(&format!(".kuna-tmp.{}", std::process::id())),
@@ -1808,7 +2065,10 @@ mod tests {
 
         write_atomic(&path, b"one").unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), b"one");
-        assert!(leftover_temps(&dir).is_empty(), "the temp file is renamed away");
+        assert!(
+            leftover_temps(&dir).is_empty(),
+            "the temp file is renamed away"
+        );
         assert!(
             write_atomic(&dir.join("nested/x.h"), b"two").is_err(),
             "a path that cannot be written is an error, not a panic"
@@ -1818,7 +2078,10 @@ mod tests {
         // one path that used to leave its staged file in the folder.
         let blocked = dir.join("y.h");
         std::fs::create_dir(&blocked).unwrap();
-        assert!(write_atomic(&blocked, b"three").is_err(), "a directory cannot be replaced");
+        assert!(
+            write_atomic(&blocked, b"three").is_err(),
+            "a directory cannot be replaced"
+        );
         assert!(
             leftover_temps(&dir).is_empty(),
             "a failed rename left its temp behind: {:?}",

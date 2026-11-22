@@ -32,15 +32,15 @@
 //!   arguments and is not walked.
 
 use unlace_base::address::Address;
-use unlace_base::space::{spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use std::rc::Rc;
 
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
-use crate::fspec::{FuncCallSpecs, FuncProto, PrototypePieces, EXTRAPOP_UNKNOWN};
+use crate::dtype::{Datatype, type_metatype};
+use crate::fspec::{EXTRAPOP_UNKNOWN, FuncCallSpecs, FuncProto, PrototypePieces};
 use crate::funcdata::Funcdata;
 
 const MAX_OPS: usize = 2048;
@@ -57,14 +57,22 @@ pub fn input_only(mut pieces: PrototypePieces) -> PrototypePieces {
 /// The pointer a library-table declaration says the call `op` returns, when
 /// the call took only that declaration's parameters and recovered a register
 /// result of the pointer's width.
-pub fn declared_result_type(data: &Funcdata, op: OpId, fc: &FuncCallSpecs, size: int4) -> Option<Rc<Datatype>> {
+pub fn declared_result_type(
+    data: &Funcdata,
+    op: OpId,
+    fc: &FuncCallSpecs,
+    size: int4,
+) -> Option<Rc<Datatype>> {
     let proto = fc.proto();
     if !proto.is_input_locked() || proto.is_output_locked() {
         return None;
     }
     let o = data.obank().get(op)?;
     let out = data.vbank().get(o.get_out()?)?;
-    if o.code() != OpCode::CPUI_CALL || out.get_size() != size || out.get_space().get_type() != spacetype::IPTR_PROCESSOR {
+    if o.code() != OpCode::CPUI_CALL
+        || out.get_size() != size
+        || out.get_space().get_type() != spacetype::IPTR_PROCESSOR
+    {
         return None;
     }
     let arch = data.get_arch();
@@ -86,7 +94,9 @@ struct Walk {
 impl Walk {
     fn is_sp(&self, data: &Funcdata, vn: VarnodeId) -> bool {
         data.vbank().get(vn).is_some_and(|v| {
-            v.get_space().get_index() == self.sp_space && v.get_offset() == self.sp_offset && v.get_size() == self.sp_size
+            v.get_space().get_index() == self.sp_space
+                && v.get_offset() == self.sp_offset
+                && v.get_size() == self.sp_size
         })
     }
 
@@ -121,11 +131,21 @@ fn signed(space: &AddrSpace, value: u64) -> i64 {
     let sign = 1u64 << (bits - 1);
     let mask = (1u64 << bits) - 1;
     let v = value & mask;
-    if v & sign != 0 { (v | !mask) as i64 } else { v as i64 }
+    if v & sign != 0 {
+        (v | !mask) as i64
+    } else {
+        v as i64
+    }
 }
 
 /// The constant `c` of `sp <op> c` when `base` is the stack pointer.
-fn sp_offset(data: &Funcdata, walk: &Walk, stack: &AddrSpace, base: VarnodeId, c: VarnodeId) -> Option<i64> {
+fn sp_offset(
+    data: &Funcdata,
+    walk: &Walk,
+    stack: &AddrSpace,
+    base: VarnodeId,
+    c: VarnodeId,
+) -> Option<i64> {
     if !walk.is_sp(data, base) {
         return None;
     }
@@ -148,7 +168,10 @@ fn def_in_instruction(data: &Funcdata, op: OpId, vn: VarnodeId) -> Option<OpId> 
         if prev.get_addr() != &at {
             return None;
         }
-        let writes = prev.get_out().and_then(|o| data.vbank().get(o)).is_some_and(|o| o.get_addr() == &addr && o.get_size() == size);
+        let writes = prev
+            .get_out()
+            .and_then(|o| data.vbank().get(o))
+            .is_some_and(|o| o.get_addr() == &addr && o.get_size() == size);
         if writes {
             return Some(cur);
         }
@@ -169,18 +192,25 @@ fn stored_register(data: &Funcdata, op: OpId, value: VarnodeId) -> Option<(Addre
         }
         _ => return None,
     };
-    (src.get_space().get_type() == spacetype::IPTR_PROCESSOR).then(|| (src.get_addr().clone(), src.get_size()))
+    (src.get_space().get_type() == spacetype::IPTR_PROCESSOR)
+        .then(|| (src.get_addr().clone(), src.get_size()))
 }
 
 /// Whether every stack parameter of `proto`, placed at the call `call_op`, is a
 /// slot the caller writes for this call.
 pub fn backed(data: &Funcdata, call_op: OpId, proto: &FuncProto) -> bool {
-    let Some(stack) = data.get_arch().manage().get_stack_space().cloned() else { return true };
-    let Some(call) = data.obank().get(call_op) else { return false };
+    let Some(stack) = data.get_arch().manage().get_stack_space().cloned() else {
+        return true;
+    };
+    let Some(call) = data.obank().get(call_op) else {
+        return false;
+    };
     let call_addr: Address = call.get_addr().clone();
     let mut need: Vec<(i64, int4)> = Vec::new();
     for j in 0..proto.num_params() {
-        let Some(param) = proto.get_param(j) else { continue };
+        let Some(param) = proto.get_param(j) else {
+            continue;
+        };
         let addr = param.get_address();
         if addr.get_space().map(|s| s.get_index()) != Some(stack.get_index()) {
             continue;
@@ -190,16 +220,29 @@ pub fn backed(data: &Funcdata, call_op: OpId, proto: &FuncProto) -> bool {
     if need.is_empty() {
         return true;
     }
-    let Some(ret) = crate::p6_variables::kuna_calleepop::return_address_bytes(data, &stack, &call_addr) else {
+    let Some(ret) =
+        crate::p6_variables::kuna_calleepop::return_address_bytes(data, &stack, &call_addr)
+    else {
         return true;
     };
-    let need: Vec<(i64, int4)> = need.into_iter().map(|(off, size)| (off - ret as i64, size)).collect();
-    let top = need.iter().map(|&(off, size)| off + size as i64).max().unwrap_or(0);
+    let need: Vec<(i64, int4)> = need
+        .into_iter()
+        .map(|(off, size)| (off - ret as i64, size))
+        .collect();
+    let top = need
+        .iter()
+        .map(|&(off, size)| off + size as i64)
+        .max()
+        .unwrap_or(0);
     if need.iter().any(|&(off, _)| off < 0) || top > MAX_SLOT_BYTES {
         return false;
     }
-    let Ok(sp) = stack.get_spacebase(0) else { return true };
-    let Some(sp_space) = sp.space.as_ref() else { return true };
+    let Ok(sp) = stack.get_spacebase(0) else {
+        return true;
+    };
+    let Some(sp_space) = sp.space.as_ref() else {
+        return true;
+    };
     let mut walk = Walk {
         sp_space: sp_space.get_index(),
         sp_offset: sp.offset,
@@ -245,17 +288,24 @@ pub fn backed(data: &Funcdata, call_op: OpId, proto: &FuncProto) -> bool {
         if ops > MAX_OPS {
             break;
         }
-        let Some(op) = data.obank().get(op_id) else { break };
+        let Some(op) = data.obank().get(op_id) else {
+            break;
+        };
         cur = op.basic_neighbours().0;
         match op.code() {
             OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => {
-                let Some(k) = data.get_call_specs_index(op_id) else { break };
+                let Some(k) = data.get_call_specs_index(op_id) else {
+                    break;
+                };
                 let fc = data.get_call_specs(k);
                 let mut pop = fc.proto().get_extra_pop();
                 if !fc.proto().has_model() {
                     break;
                 }
-                if pop == EXTRAPOP_UNKNOWN && op.code() == OpCode::CPUI_CALL && fc.callee_purge() == Some(ret) {
+                if pop == EXTRAPOP_UNKNOWN
+                    && op.code() == OpCode::CPUI_CALL
+                    && fc.callee_purge() == Some(ret)
+                {
                     pop = ret;
                 }
                 if pop == EXTRAPOP_UNKNOWN {
@@ -267,18 +317,34 @@ pub fn backed(data: &Funcdata, call_op: OpId, proto: &FuncProto) -> bool {
                 continue;
             }
             OpCode::CPUI_STORE => {
-                let (Some(ptr), Some(value)) = (op.get_in(1), op.get_in(2)) else { continue };
+                let (Some(ptr), Some(value)) = (op.get_in(1), op.get_in(2)) else {
+                    continue;
+                };
                 let size = data.vbank().get(value).map(|v| v.get_size()).unwrap_or(0);
                 let slot = if walk.is_sp(data, ptr) {
                     Some(p)
-                } else if data.vbank().get(ptr).is_some_and(|v| v.get_space().get_type() == spacetype::IPTR_INTERNAL) {
+                } else if data
+                    .vbank()
+                    .get(ptr)
+                    .is_some_and(|v| v.get_space().get_type() == spacetype::IPTR_INTERNAL)
+                {
                     def_in_instruction(data, op_id, ptr).and_then(|d| {
                         let def = data.obank().get(d)?;
                         match def.code() {
                             OpCode::CPUI_COPY => walk.is_sp(data, def.get_in(0)?).then_some(p),
-                            OpCode::CPUI_INT_ADD => sp_offset(data, &walk, &stack, def.get_in(0)?, def.get_in(1)?)
-                                .or_else(|| sp_offset(data, &walk, &stack, def.get_in(1)?, def.get_in(0)?))
-                                .map(|c| p + c),
+                            OpCode::CPUI_INT_ADD => {
+                                sp_offset(data, &walk, &stack, def.get_in(0)?, def.get_in(1)?)
+                                    .or_else(|| {
+                                        sp_offset(
+                                            data,
+                                            &walk,
+                                            &stack,
+                                            def.get_in(1)?,
+                                            def.get_in(0)?,
+                                        )
+                                    })
+                                    .map(|c| p + c)
+                            }
                             _ => None,
                         }
                     })
@@ -288,7 +354,9 @@ pub fn backed(data: &Funcdata, call_op: OpId, proto: &FuncProto) -> bool {
                 if let Some(slot) = slot {
                     if walk.mark(slot, size, true) {
                         if let Some((reg, reg_size)) = stored_register(data, op_id, value) {
-                            if proto.has_effect(&reg, reg_size) == crate::fspec::effect_type::UNAFFECTED {
+                            if proto.has_effect(&reg, reg_size)
+                                == crate::fspec::effect_type::UNAFFECTED
+                            {
                                 walk.saves.push((slot, size, reg, reg_size));
                             }
                         }
@@ -300,14 +368,18 @@ pub fn backed(data: &Funcdata, call_op: OpId, proto: &FuncProto) -> bool {
         }
         let Some(out) = op.get_out() else { continue };
         if walk.is_sp(data, out) {
-            let (Some(a), Some(b)) = (op.get_in(0), op.get_in(1)) else { break };
+            let (Some(a), Some(b)) = (op.get_in(0), op.get_in(1)) else {
+                break;
+            };
             match op.code() {
                 OpCode::CPUI_INT_SUB => match sp_offset(data, &walk, &stack, a, b) {
                     Some(c) => p += c,
                     None => break,
                 },
                 OpCode::CPUI_INT_ADD => {
-                    match sp_offset(data, &walk, &stack, a, b).or_else(|| sp_offset(data, &walk, &stack, b, a)) {
+                    match sp_offset(data, &walk, &stack, a, b)
+                        .or_else(|| sp_offset(data, &walk, &stack, b, a))
+                    {
                         Some(c) => {
                             if c > 0 {
                                 walk.mark(p - c, c as int4, false);
@@ -324,7 +396,8 @@ pub fn backed(data: &Funcdata, call_op: OpId, proto: &FuncProto) -> bool {
         if let Some(o) = data.vbank().get(out) {
             if o.get_space().get_type() == spacetype::IPTR_PROCESSOR && !walk.saves.is_empty() {
                 let (written, wsize) = (o.get_addr().clone(), o.get_size());
-                walk.saves.retain(|(_, _, reg, size)| !overlaps(&written, wsize, reg, *size));
+                walk.saves
+                    .retain(|(_, _, reg, size)| !overlaps(&written, wsize, reg, *size));
             }
         }
     }
@@ -338,5 +411,6 @@ pub fn backed(data: &Funcdata, call_op: OpId, proto: &FuncProto) -> bool {
             walk.written[b as usize] = false;
         }
     }
-    need.iter().all(|&(off, size)| (off..off + size as i64).all(|b| walk.written[b as usize]))
+    need.iter()
+        .all(|&(off, size)| (off..off + size as i64).all(|b| walk.written[b as usize]))
 }

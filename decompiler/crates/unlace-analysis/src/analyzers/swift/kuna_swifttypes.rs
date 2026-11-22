@@ -39,13 +39,7 @@ use unlace_decomp::fspec::PrototypePieces;
 
 use super::Namer;
 use super::descriptors::{
-    Context,
-    ContextKind,
-    FieldDescriptor,
-    Metadata,
-    MethodKind,
-    Reader,
-    Target,
+    Context, ContextKind, FieldDescriptor, Metadata, MethodKind, Reader, Target,
 };
 use crate::demangle::kuna_swift::node::{Kind, Node, NodeRef};
 use crate::demangle::kuna_swift::parse::mk_type;
@@ -98,8 +92,15 @@ pub fn locate_metadata(img: &MachoImage, arch: object::Architecture, accessor: u
 }
 
 fn locate_arm64(img: &MachoImage, accessor: u64) -> Option<u64> {
-    let bytes = [20usize, 16, 12].iter().find_map(|&n| img.read(accessor, n))?;
-    let word = |i: usize| bytes.get(i * 4..i * 4 + 4).and_then(|b| b.try_into().ok()).map(u32::from_le_bytes);
+    let bytes = [20usize, 16, 12]
+        .iter()
+        .find_map(|&n| img.read(accessor, n))?;
+    let word = |i: usize| {
+        bytes
+            .get(i * 4..i * 4 + 4)
+            .and_then(|b| b.try_into().ok())
+            .map(u32::from_le_bytes)
+    };
     let words: Vec<Option<u32>> = (0..5).map(word).collect();
     let mut i = 0;
     // `stp x29, x30, [sp, #-16]!; mov x29, sp` opens the accessor that
@@ -111,7 +112,11 @@ fn locate_arm64(img: &MachoImage, accessor: u64) -> Option<u64> {
     if adrp & 0x9f00_0000 == 0x1000_0000 && adrp & 31 == 0 && words[i + 1] == Some(0xd503_201f) {
         // `adr x0, …; nop`: the linker's relaxation of the `adrp`/`add` pair.
         let imm = ((((adrp >> 5) & 0x7_ffff) << 2) | ((adrp >> 29) & 3)) as i64;
-        let imm = if imm & (1 << 20) != 0 { imm - (1 << 21) } else { imm };
+        let imm = if imm & (1 << 20) != 0 {
+            imm - (1 << 21)
+        } else {
+            imm
+        };
         let next = words[i + 2]?;
         let plain = next == 0x5280_0001 || next == 0xd280_0001 || next == 0xd65f_03c0;
         let call = next & 0xfc00_0000 == 0x9400_0000 || next & 0xfc00_0000 == 0x1400_0000;
@@ -144,7 +149,9 @@ fn locate_arm64(img: &MachoImage, accessor: u64) -> Option<u64> {
 }
 
 fn locate_x86_64(img: &MachoImage, accessor: u64) -> Option<u64> {
-    let bytes = [16usize, 12, 10].iter().find_map(|&n| img.read(accessor, n))?;
+    let bytes = [16usize, 12, 10]
+        .iter()
+        .find_map(|&n| img.read(accessor, n))?;
     let mut i = 0;
     if bytes.starts_with(&[0x55, 0x48, 0x89, 0xe5]) {
         i = 4;
@@ -299,7 +306,8 @@ impl<'a> Types<'a> {
             if !ctx.kind.is_nominal()
                 || ctx.flags & 0x80 != 0
                 || specific & 3 != 0
-                || (ctx.kind == ContextKind::Class && specific & CLASS_HAS_RESILIENT_SUPERCLASS != 0)
+                || (ctx.kind == ContextKind::Class
+                    && specific & CLASS_HAS_RESILIENT_SUPERCLASS != 0)
             {
                 continue;
             }
@@ -621,7 +629,9 @@ impl<'a> Types<'a> {
         match ctx.kind {
             ContextKind::Module => Some(Node::text(Kind::Module, ctx.name.clone()?)),
             ContextKind::Anonymous => parent(self),
-            ContextKind::Extension => demangle_swift_type(ctx.name.as_ref()?.as_bytes(), &|_, _, _| None),
+            ContextKind::Extension => {
+                demangle_swift_type(ctx.name.as_ref()?.as_bytes(), &|_, _, _| None)
+            }
             ContextKind::Class
             | ContextKind::Struct
             | ContextKind::Enum
@@ -660,7 +670,12 @@ impl<'a> Types<'a> {
     /// The kuna type of a demangled Swift type, sized `hint` bytes in its
     /// container, or `None` for one outside the mapping (or wrapped in more
     /// than [`MAX_NESTING`] optionals).
-    pub(super) fn kuna_type(&self, node: &NodeRef, hint: u32, depth: usize) -> Option<Rc<Datatype>> {
+    pub(super) fn kuna_type(
+        &self,
+        node: &NodeRef,
+        hint: u32,
+        depth: usize,
+    ) -> Option<Rc<Datatype>> {
         if depth > MAX_NESTING {
             return None;
         }
@@ -773,11 +788,15 @@ impl<'a> Types<'a> {
             }
             Kind::Metatype => (hint >= 8).then(|| self.void_ptr()).flatten(),
             // A value of a generic parameter's type is passed by address.
-            Kind::DependentGenericParamType | Kind::DependentMemberType => (hint >= 8).then(|| self.void_ptr()).flatten(),
+            Kind::DependentGenericParamType | Kind::DependentMemberType => {
+                (hint >= 8).then(|| self.void_ptr()).flatten()
+            }
             // An `inout` argument is the address of the value.
             Kind::InOut => {
                 let t = self.kuna_type(inner.first()?, u32::MAX, depth + 1)?;
-                (hint >= 8).then(|| tf.get_type_pointer(self.ptr_size, t, 1).ok()).flatten()
+                (hint >= 8)
+                    .then(|| tf.get_type_pointer(self.ptr_size, t, 1).ok())
+                    .flatten()
             }
             // A tuple is laid out like a struct of its elements, each at its
             // natural alignment, named `_0`, `_1`, … (the empty tuple is no
@@ -817,7 +836,9 @@ impl<'a> Types<'a> {
                     .enumerate()
                     .map(|(i, (off, n, t))| TypeField::new(i as i32, off, n, t))
                     .collect();
-                self.tf.set_fields_struct_raw(&shell, fields, Vec::new(), size as i32, align as i32, 0).ok()
+                self.tf
+                    .set_fields_struct_raw(&shell, fields, Vec::new(), size as i32, align as i32, 0)
+                    .ok()
             }
             _ => None,
         }
@@ -960,14 +981,22 @@ impl<'a> Types<'a> {
         let meta = self.metadata_struct()?;
         let ptr = self.tf.get_type_pointer(self.ptr_size, meta, 1).ok()?;
         let word = self.tf.get_base(8, type_metatype::TYPE_UINT).ok()?;
-        self.interned_struct("swift.MetadataResponse", &[(0, "metadata", ptr), (8, "state", word)], 16)
+        self.interned_struct(
+            "swift.MetadataResponse",
+            &[(0, "metadata", ptr), (8, "state", word)],
+            16,
+        )
     }
 
     /// `swift.AsyncContext`: the parent context and the function that
     /// resumes it; a function's own frame follows.
     pub fn async_context_struct(&self) -> Option<Rc<Datatype>> {
         let ptr = self.void_ptr()?;
-        self.interned_struct("swift.AsyncContext", &[(0, "parent", Rc::clone(&ptr)), (8, "resume_parent", ptr)], 16)
+        self.interned_struct(
+            "swift.AsyncContext",
+            &[(0, "parent", Rc::clone(&ptr)), (8, "resume_parent", ptr)],
+            16,
+        )
     }
 
     /// `swift.value_witness_table`.
@@ -1194,7 +1223,12 @@ impl<'a> Types<'a> {
     /// The `self` a protocol witness of the type at `addr` receives: the
     /// address of the value (`T *` for a struct, `Class **` for a class),
     /// or the class reference itself under a class-bound protocol.
-    pub(super) fn witness_self(&self, addr: u64, path: &str, class_bound: bool) -> Option<Rc<Datatype>> {
+    pub(super) fn witness_self(
+        &self,
+        addr: u64,
+        path: &str,
+        class_bound: bool,
+    ) -> Option<Rc<Datatype>> {
         let t = self.self_pointer(addr, path)?;
         match self.md.contexts.get(&addr)?.kind {
             ContextKind::Class if !class_bound => self.pointer_to(t),

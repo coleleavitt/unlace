@@ -55,14 +55,14 @@ use std::path::{Path, PathBuf};
 
 use unlace_console::engine::ConsoleProgram;
 use unlace_console::project::{
-    build_asm, build_c, build_header, build_readme, collect_dat_addrs,
-    decompile_export_targets_watched, BatchOutcome, FuncResult,
+    BatchOutcome, FuncResult, build_asm, build_c, build_header, build_readme, collect_dat_addrs,
+    decompile_export_targets_watched,
 };
 use unlace_decomp::decompile_drive::{print_c_recompile_prelude, print_c_types};
 
 use crate::decompile_all::{
-    decompile_targets_pooled, load_program, parse_args, resolve_targets, synth_base, Args,
-    DriverDefaults,
+    Args, DriverDefaults, decompile_targets_pooled, load_program, parse_args, resolve_targets,
+    synth_base,
 };
 use crate::jobs::PoolWatch;
 use crate::project_stream::StreamMode;
@@ -132,7 +132,10 @@ pub fn run(argv: &[String]) -> i32 {
     let run = match mode {
         Some(mode) => {
             if mode == StreamMode::Stream {
-                crate::decompile_all::warn_protoorder_inert(&args.options, "decompile-project --stream");
+                crate::decompile_all::warn_protoorder_inert(
+                    &args.options,
+                    "decompile-project --stream",
+                );
             }
             crate::project_stream::run(&args, output.as_deref(), mode)
         }
@@ -153,10 +156,8 @@ pub(crate) struct ProjectCompletion {
 }
 
 pub(crate) fn emit_completion(completion: ProjectCompletion) -> i32 {
-    let status = crate::output::emit_with_status(
-        &completion.summary,
-        i32::from(completion.error.is_some()),
-    );
+    let status =
+        crate::output::emit_with_status(&completion.summary, i32::from(completion.error.is_some()));
     if let Some(error) = completion.error {
         eprintln!("error: {error}");
     }
@@ -279,7 +280,10 @@ pub(crate) fn decompile_project(
     }
     let targets = resolve_targets(&prog, args)?;
     if targets.is_empty() {
-        return Err(format!("no functions selected/discovered in {}", args.binary));
+        return Err(format!(
+            "no functions selected/discovered in {}",
+            args.binary
+        ));
     }
     crate::interior::selections(&prog, args, &targets);
     if let Some(watch) = watch {
@@ -337,12 +341,20 @@ pub(crate) fn decompile_project(
         }
         let base = unlace_console::project::export_options(targets.len() == 1);
         let funcs = crate::decompile_all::decompile_callee_first(
-            &mut prog, args, targets, explicit, base, &mut landed,
+            &mut prog,
+            args,
+            targets,
+            explicit,
+            base,
+            &mut landed,
         );
         (funcs, None)
     } else {
         crate::decompile_all::note_custom_inert(&prog, targets.len());
-        (decompile_export_targets_watched(&mut prog, targets, &mut landed), None)
+        (
+            decompile_export_targets_watched(&mut prog, targets, &mut landed),
+            None,
+        )
     };
     if let Some(watch) = watch {
         watch.finalizing();
@@ -362,8 +374,13 @@ pub(crate) fn decompile_project(
     let asm = build_asm(&prog, &results, &dat_addrs, &file_name);
     // The CLI's `| Path |` row prints the canonicalized on-disk path (the wasm
     // front-end passes a virtual label instead), so output stays byte-identical.
-    let readme =
-        build_readme(&binary_path, &binary_path.display().to_string(), &file_name, &prog, &results);
+    let readme = build_readme(
+        &binary_path,
+        &binary_path.display().to_string(),
+        &file_name,
+        &prog,
+        &results,
+    );
 
     std::fs::create_dir_all(&out_dir)
         .map_err(|e| format!("cannot create {}: {e}", out_dir.display()))?;
@@ -394,7 +411,9 @@ pub(crate) fn decompile_project(
     } else {
         None
     };
-    let error = BatchOutcome::of(&results).all_failed_error(&args.binary).or(assertion_error);
+    let error = BatchOutcome::of(&results)
+        .all_failed_error(&args.binary)
+        .or(assertion_error);
     let files = sizes
         .iter()
         .map(|(n, s)| format!("{n} ({s} bytes)"))

@@ -26,15 +26,15 @@ use std::rc::Rc;
 
 use unlace_base::address::{Address, SeqNum};
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
-use unlace_decomp::dtype::{type_metatype, Datatype};
-use unlace_decomp::op::{gather_pieces, piece_is_leaf, PcodeOpBank, PieceNode};
-use unlace_decomp::ruleaction_6::RulePieceStructure;
 use unlace_decomp::context::{OpId, TypeOp, VarnodeId};
+use unlace_decomp::dtype::{Datatype, type_metatype};
+use unlace_decomp::op::{PcodeOpBank, PieceNode, gather_pieces, piece_is_leaf};
+use unlace_decomp::ruleaction_6::RulePieceStructure;
 use unlace_decomp::varnode::{DefOpInfo, VarnodeBank};
 
 fn dt(size: int4) -> Rc<Datatype> {
@@ -46,7 +46,8 @@ fn dt(size: int4) -> Rc<Datatype> {
 fn manager(big_end: bool) -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -95,7 +96,9 @@ fn piece_op(
 fn mark_written(obank: &PcodeOpBank, vbank: &mut VarnodeBank, vn: VarnodeId, op: OpId) {
     let seqnum: SeqNum = obank.get(op).unwrap().get_seq_num().clone();
     let mut noop = |_: &mut VarnodeBank, _: VarnodeId, _: VarnodeId| Ok(());
-    vbank.set_def(vn, DefOpInfo { id: op, seqnum }, &mut noop).unwrap();
+    vbank
+        .set_def(vn, DefOpInfo { id: op, seqnum }, &mut noop)
+        .unwrap();
 }
 
 // ---------------------------------------------------------------------------

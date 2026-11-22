@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::p2_lift::kuna_atomicxadd::Instruction;
 use unlace_num::opcodes::OpCode;

@@ -45,8 +45,8 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::Rc;
 
-use unlace_decomp::dtype::{type_metatype, Datatype};
-use unlace_decomp::fspec::{PrototypePieces, ProtoModel};
+use unlace_decomp::dtype::{Datatype, type_metatype};
+use unlace_decomp::fspec::{ProtoModel, PrototypePieces};
 use unlace_decomp::kuna_formatstring::VarargAbi;
 use unlace_num::opcodes::OpCode;
 
@@ -54,7 +54,7 @@ use crate::listing::{Listing, RefKind};
 use crate::pass::{AnalysisCtx, FormatSiteFact};
 
 use super::kuna_fmtstatic::{self as fmtstatic, Key, LiftCache};
-use super::{apply, Spec};
+use super::{Spec, apply};
 
 /// How many leading argument slots may hold the format.
 const FORMAT_SLOTS: usize = 4;
@@ -116,18 +116,25 @@ pub(super) struct Inputs<'a> {
 pub(super) fn infer(inp: &Inputs, lifts: &mut LiftCache) -> Vec<FormatSiteFact> {
     let sysv = sysv_al(inp.ctx);
     let callees = format_callees(inp, sysv.as_ref(), lifts);
-    let Some(slot_keys) = slot_keys(inp) else { return Vec::new() };
+    let Some(slot_keys) = slot_keys(inp) else {
+        return Vec::new();
+    };
     let mut out = Vec::new();
     for (callee, (name, is_output)) in &callees {
         let mut sites: Vec<FormatSiteFact> = Vec::new();
         let mut slots: HashSet<usize> = HashSet::new();
         for edge in inp.listing.refs_to(*callee) {
-            let tail = edge.kind == RefKind::Code && !fmtstatic::falls_into(inp.listing, edge.from, *callee);
+            let tail = edge.kind == RefKind::Code
+                && !fmtstatic::falls_into(inp.listing, edge.from, *callee);
             if edge.kind != RefKind::Call && !tail {
                 continue;
             }
-            let Some(func) = inp.listing.function_containing(edge.from) else { continue };
-            let Some((slot, vma, fmt)) = format_at(inp, edge.from, &slot_keys, lifts) else { continue };
+            let Some(func) = inp.listing.function_containing(edge.from) else {
+                continue;
+            };
+            let Some((slot, vma, fmt)) = format_at(inp, edge.from, &slot_keys, lifts) else {
+                continue;
+            };
             let specs = if *is_output {
                 super::parse_output_types(&fmt)
             } else {
@@ -140,7 +147,10 @@ pub(super) fn infer(inp: &Inputs, lifts: &mut LiftCache) -> Vec<FormatSiteFact> 
                 let floats = specs.iter().filter(|s| matches!(s, Spec::Double)).count() as u64;
                 if al_at(inp, edge.from, al, lifts).is_some_and(|n| n != floats) {
                     if inp.dbg {
-                        eprintln!("fmtcallee:   {:#x}: AL disagrees with {floats} floats", edge.from);
+                        eprintln!(
+                            "fmtcallee:   {:#x}: AL disagrees with {floats} floats",
+                            edge.from
+                        );
                     }
                     continue;
                 }
@@ -148,12 +158,18 @@ pub(super) fn infer(inp: &Inputs, lifts: &mut LiftCache) -> Vec<FormatSiteFact> 
             let widths: Vec<u32> = slot_keys[..slot]
                 .iter()
                 .map(|(key, _)| {
-                    fmtstatic::written_width(inp.ctx, inp.listing, edge.from, key, lifts).unwrap_or(key.2)
+                    fmtstatic::written_width(inp.ctx, inp.listing, edge.from, key, lifts)
+                        .unwrap_or(key.2)
                 })
                 .collect();
-            let Some(pieces) = site_pieces(inp, name, &slot_keys[slot].1, &widths, &specs) else { continue };
+            let Some(pieces) = site_pieces(inp, name, &slot_keys[slot].1, &widths, &specs) else {
+                continue;
+            };
             if inp.dbg {
-                eprintln!("fmtcallee:   {name} site {:#x}: format {fmt:?} at slot {slot}", edge.from);
+                eprintln!(
+                    "fmtcallee:   {name} site {:#x}: format {fmt:?} at slot {slot}",
+                    edge.from
+                );
             }
             slots.insert(slot);
             sites.push(FormatSiteFact {
@@ -184,8 +200,9 @@ fn format_callees(
     let types = ctx.arch.types();
     let (_, word_size) = ctx.arch.data_org();
     let layout = crate::protos::effective_libctypes_layout(ctx.file);
-    let declared =
-        |name: &str| crate::protos::declared_libc_prototype(name, types, word_size, layout).is_some();
+    let declared = |name: &str| {
+        crate::protos::declared_libc_prototype(name, types, word_size, layout).is_some()
+    };
     let mut callees: BTreeMap<u64, (String, bool)> = BTreeMap::new();
     let mut va_list: HashMap<u64, bool> = HashMap::new();
     for (name, addr) in inp.imports {
@@ -202,7 +219,12 @@ fn format_callees(
         .listing
         .functions()
         .filter(|(entry, f)| !import_addrs.contains(entry) && f.call_fixup.is_none())
-        .map(|(entry, f)| (*entry, f.name.clone().unwrap_or_else(|| format!("sub_{entry:x}"))))
+        .map(|(entry, f)| {
+            (
+                *entry,
+                f.name.clone().unwrap_or_else(|| format!("sub_{entry:x}")),
+            )
+        })
         .filter(|(_, name)| !declared(name))
         .collect();
     let mut forwarders: HashMap<u64, bool> = HashMap::new();
@@ -220,7 +242,10 @@ fn format_callees(
             continue;
         }
         if inp.dbg {
-            eprintln!("fmtcallee: {name} @ {entry:#x} is a {} function", if dir { "printf" } else { "scanf" });
+            eprintln!(
+                "fmtcallee: {name} @ {entry:#x} is a {} function",
+                if dir { "printf" } else { "scanf" }
+            );
         }
         callees.insert(*entry, (name.clone(), dir));
     }
@@ -246,7 +271,8 @@ fn sysv_al(ctx: &AnalysisCtx) -> Option<Key> {
     let archid = &ctx.arch.archid;
     if !archid.starts_with("x86:LE:64")
         || archid.ends_with(":windows")
-        || fmtstatic::image_family(ctx.bytes) == unlace_decomp::kuna_formatstring::ImageFamily::Windows
+        || fmtstatic::image_family(ctx.bytes)
+            == unlace_decomp::kuna_formatstring::ImageFamily::Windows
     {
         return None;
     }
@@ -256,10 +282,13 @@ fn sysv_al(ctx: &AnalysisCtx) -> Option<Key> {
 /// Does the function at `entry` read `al` before it writes any of it, within
 /// its first straight-line instructions?
 fn reads_at_entry(inp: &Inputs, entry: u64, al: &Key, lifts: &mut LiftCache) -> bool {
-    let overlaps = |k: Key| k.0 == al.0 && k.1 < al.1 + u64::from(al.2) && al.1 < k.1 + u64::from(k.2);
+    let overlaps =
+        |k: Key| k.0 == al.0 && k.1 < al.1 + u64::from(al.2) && al.1 < k.1 + u64::from(k.2);
     let mut at = entry;
     for _ in 0..PROLOGUE_INSNS {
-        let Some(lifted) = fmtstatic::lift(inp.ctx, at, lifts) else { return false };
+        let Some(lifted) = fmtstatic::lift(inp.ctx, at, lifts) else {
+            return false;
+        };
         if !lifted.ok {
             return false;
         }
@@ -270,11 +299,17 @@ fn reads_at_entry(inp: &Inputs, entry: u64, al: &Key, lifts: &mut LiftCache) -> 
             if !zeroing && ins.iter().filter_map(fmtstatic::key_of).any(overlaps) {
                 return true;
             }
-            if out.as_ref().and_then(fmtstatic::key_of).is_some_and(overlaps) {
+            if out
+                .as_ref()
+                .and_then(fmtstatic::key_of)
+                .is_some_and(overlaps)
+            {
                 return false;
             }
         }
-        let Some(insn) = inp.listing.instruction_at(at) else { return false };
+        let Some(insn) = inp.listing.instruction_at(at) else {
+            return false;
+        };
         if insn.flow.is_call || insn.flow.is_jump {
             return false;
         }
@@ -291,7 +326,8 @@ fn reads_at_entry(inp: &Inputs, entry: u64, al: &Key, lifts: &mut LiftCache) -> 
 fn al_at(inp: &Inputs, site: u64, al: &Key, lifts: &mut LiftCache) -> Option<u64> {
     [1u32, 4, 8].into_iter().find_map(|size| {
         let key = (al.0, al.1, size);
-        fmtstatic::resolve_at(inp.ctx, inp.listing, site, &key, inp.gettext, lifts, false).map(|v| v & 0xff)
+        fmtstatic::resolve_at(inp.ctx, inp.listing, site, &key, inp.gettext, lifts, false)
+            .map(|v| v & 0xff)
     })
 }
 
@@ -313,8 +349,17 @@ fn slot_keys(inp: &Inputs) -> Option<Vec<(Key, Rc<Datatype>)>> {
         kuna_library_names: None,
     };
     let assigned = fmtstatic::assign(inp.model, &probe, inp.ctx.arch)?;
-    let keys: Option<Vec<Key>> = assigned.iter().skip(1).map(fmtstatic::storage_key).collect();
-    Some(keys?.into_iter().map(|k| (k, Rc::clone(&char_ptr))).collect())
+    let keys: Option<Vec<Key>> = assigned
+        .iter()
+        .skip(1)
+        .map(fmtstatic::storage_key)
+        .collect();
+    Some(
+        keys?
+            .into_iter()
+            .map(|k| (k, Rc::clone(&char_ptr)))
+            .collect(),
+    )
 }
 
 /// The format at a call site: the slot, the string's address and the string.
@@ -325,11 +370,14 @@ fn format_at(
     lifts: &mut LiftCache,
 ) -> Option<(usize, u64, String)> {
     for (slot, (key, _)) in slot_keys.iter().enumerate() {
-        let Some(vma) = fmtstatic::resolve_at(inp.ctx, inp.listing, site, key, inp.gettext, lifts, false)
+        let Some(vma) =
+            fmtstatic::resolve_at(inp.ctx, inp.listing, site, key, inp.gettext, lifts, false)
         else {
             continue;
         };
-        let Some(fmt) = fmtstatic::read_cstring(inp.ctx.arch, vma) else { continue };
+        let Some(fmt) = fmtstatic::read_cstring(inp.ctx.arch, vma) else {
+            continue;
+        };
         if !fmtstatic::in_readonly_section(inp.ctx, vma, fmt.len() as u64 + 1) {
             continue;
         }
@@ -352,11 +400,16 @@ fn site_pieces(
     let (_, word_size) = inp.ctx.arch.data_org();
     let mut fixed: Vec<Rc<Datatype>> = Vec::with_capacity(widths.len() + 1);
     for width in widths {
-        fixed.push(types.get_base(*width as i32, type_metatype::TYPE_UNKNOWN).ok()?);
+        fixed.push(
+            types
+                .get_base(*width as i32, type_metatype::TYPE_UNKNOWN)
+                .ok()?,
+        );
     }
     fixed.push(Rc::clone(format));
     let mut pieces =
-        apply::build_override_pieces(name, None, &fixed, specs, types, word_size, inp.abi).ok()??;
+        apply::build_override_pieces(name, None, &fixed, specs, types, word_size, inp.abi)
+            .ok()??;
     if unlace_decomp::kuna_armfloatargs::applies(inp.ctx.arch)
         && !unlace_decomp::kuna_armfloatargs::base_inputs(inp.ctx.arch, &mut pieces)
     {
@@ -371,7 +424,15 @@ mod tests {
 
     #[test]
     fn va_list_functions_by_family() {
-        for name in ["vfprintf", "vprintf", "vsnprintf", "__vfprintf_chk", "__vsnprintf_chk", "vasprintf", "vsyslog"] {
+        for name in [
+            "vfprintf",
+            "vprintf",
+            "vsnprintf",
+            "__vfprintf_chk",
+            "__vsnprintf_chk",
+            "vasprintf",
+            "vsyslog",
+        ] {
             assert_eq!(va_list_family(name), Some(true), "{name}");
         }
         for name in ["vsscanf", "__isoc99_vsscanf", "__isoc23_vfscanf", "vscanf"] {

@@ -15,9 +15,15 @@ fn a_function_pointer_entry_holds_an_address() {
     let slots = PointerSlots::new(&file);
     assert!(slots.holds_address(0x405020));
     assert!(slots.holds_address(0x405028));
-    assert!(!slots.holds_address(0x405021), "an unaligned run start is not a slot");
+    assert!(
+        !slots.holds_address(0x405021),
+        "an unaligned run start is not a slot"
+    );
     assert!(!slots.holds_address(0x405038), "a NULL entry is no address");
-    assert!(!slots.holds_address(0x405000), "_IO_stdin_used holds 0x20001");
+    assert!(
+        !slots.holds_address(0x405000),
+        "_IO_stdin_used holds 0x20001"
+    );
     assert!(!slots.holds_address(0x408000), "past every section");
 }
 
@@ -27,7 +33,10 @@ fn a_function_pointer_entry_holds_an_address() {
 fn a_table_the_string_scan_finds_is_a_slot() {
     let bytes = fixture("ptrslot_gcc_O1_i386");
     let file = object::File::parse(bytes.as_slice()).unwrap();
-    let run = StringFact { addr: 0x21414300, len: 13 };
+    let run = StringFact {
+        addr: 0x21414300,
+        len: 13,
+    };
     assert!(crate::strings::scan_strings(&file, 4, false).contains(&run));
     assert!(PointerSlots::new(&file).holds_address(run.addr));
 }
@@ -69,7 +78,12 @@ fn a_rebased_pe_answers_from_its_base_relocations() {
     let bytes = fixture("msvc_rtti_x86.exe");
     let file = object::File::parse(bytes.as_slice()).unwrap();
     let slots = PointerSlots::new(&file);
-    assert!(slots.relocated.as_ref().is_some_and(|r| r.contains(&0x402020)));
+    assert!(
+        slots
+            .relocated
+            .as_ref()
+            .is_some_and(|r| r.contains(&0x402020))
+    );
     assert!(slots.holds_address(0x402020));
     assert!(!slots.holds_address(0x403018));
 }
@@ -83,9 +97,15 @@ fn a_pie_answers_from_its_dynamic_relocations() {
     let file = object::File::parse(bytes.as_slice()).unwrap();
     let slots = PointerSlots::new(&file);
     assert!(slots.holds_address(0x3d78));
-    let unlisted = PointerSlots { relocated: Some(Vec::new()), ..PointerSlots::new(&file) };
+    let unlisted = PointerSlots {
+        relocated: Some(Vec::new()),
+        ..PointerSlots::new(&file)
+    };
     assert!(!unlisted.holds_address(0x3d78));
-    let unrebased = PointerSlots { relocated: None, ..PointerSlots::new(&file) };
+    let unrebased = PointerSlots {
+        relocated: None,
+        ..PointerSlots::new(&file)
+    };
     assert!(unrebased.holds_address(0x3d78));
 }
 

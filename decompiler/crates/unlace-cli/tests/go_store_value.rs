@@ -42,8 +42,8 @@ fn complete_go_integer_stores_match_native_source_and_call_counts() {
     assert_eq!(String::from_utf8_lossy(&expected).lines().count(), 33 * 324);
     std::fs::remove_file(source).unwrap();
     std::fs::remove_file(executable).unwrap();
-    let kuna = std::env::var_os("KUNA_TEST_BIN")
-        .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
+    let kuna =
+        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let output = process::required_output(Command::new(kuna).args([
         "decompile-all",
         &common::fixture("go_store_value_x86_64"),
@@ -67,16 +67,26 @@ fn complete_go_integer_stores_match_native_source_and_call_counts() {
     }
     let functions = document["functions"].as_array().unwrap();
     assert_eq!(functions.len(), names.len());
-    let bodies = functions.iter().map(|function| {
-        assert!(function["error"].is_null(), "{function}");
-        function["code"].as_str().unwrap()
-    }).collect::<Vec<_>>().join("\n");
+    let bodies = functions
+        .iter()
+        .map(|function| {
+            assert!(function["error"].is_null(), "{function}");
+            function["code"].as_str().unwrap()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
     let template = std::fs::read_to_string(common::fixture("go_store_value_harness.go")).unwrap();
     assert_eq!(template.matches("/* EMITTED_BODIES */").count(), 1);
     let file = common::scratch_file("go_store_emitted", "go");
     std::fs::write(&file, template.replace("/* EMITTED_BODIES */", &bodies)).unwrap();
     let executable = file.with_extension("out");
-    process::required_output(Command::new("go").arg("build").arg("-o").arg(&executable).arg(&file));
+    process::required_output(
+        Command::new("go")
+            .arg("build")
+            .arg("-o")
+            .arg(&executable)
+            .arg(&file),
+    );
     let actual = process::required_output(&mut Command::new(&executable));
     assert_eq!(actual.stdout, expected);
     std::fs::remove_file(executable).unwrap();

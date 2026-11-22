@@ -77,7 +77,10 @@ impl fmt::Display for LzmaError {
         match self {
             LzmaError::TooShort => write!(f, "LZMA block is too short to carry a header"),
             LzmaError::BadProperties { lc, lp, pb } => {
-                write!(f, "LZMA properties lc={lc} lp={lp} pb={pb} are out of range")
+                write!(
+                    f,
+                    "LZMA properties lc={lc} lp={lp} pb={pb} are out of range"
+                )
             }
             LzmaError::BadRangeInit(b) => {
                 write!(f, "LZMA range coder starts with {b:#04x}, not zero")
@@ -85,7 +88,10 @@ impl fmt::Display for LzmaError {
             LzmaError::InputOverrun => write!(f, "compressed block ended mid-symbol"),
             LzmaError::OutputOverrun => write!(f, "block expanded past its declared size"),
             LzmaError::LookbehindOverrun { dist, have } => {
-                write!(f, "match distance {dist} points before the block ({have} bytes decoded)")
+                write!(
+                    f,
+                    "match distance {dist} points before the block ({have} bytes decoded)"
+                )
             }
             LzmaError::Truncated { got, want } => {
                 write!(f, "block decoded to {got} bytes, header declared {want}")
@@ -143,7 +149,11 @@ pub fn decompress_exhaustive(src: &[u8], max: usize) -> Result<Exhausted, LzmaEr
     let mut dec = Decoder::new(props, body, None, max)?;
     dec.run()?;
     let consumed = HEADER_LEN + dec.rc.pos;
-    Ok(Exhausted { bytes: std::mem::take(&mut dec.out), end_marker: dec.end_marker, consumed })
+    Ok(Exhausted {
+        bytes: std::mem::take(&mut dec.out),
+        end_marker: dec.end_marker,
+        consumed,
+    })
 }
 
 /// `lc`/`lp`/`pb` as the two UPX header bytes spell them.
@@ -166,7 +176,11 @@ impl Properties {
         // 0x300 << (lc + lp) entries, so an out-of-range pair is refused here
         // rather than turned into a multi-gigabyte allocation.
         if props.lc > 8 || props.lp > 4 || props.pb > 4 || props.lc + props.lp > 8 {
-            return Err(LzmaError::BadProperties { lc: props.lc, lp: props.lp, pb: props.pb });
+            return Err(LzmaError::BadProperties {
+                lc: props.lc,
+                lp: props.lp,
+                pb: props.pb,
+            });
         }
         Ok((props, &src[HEADER_LEN..]))
     }
@@ -368,9 +382,10 @@ impl<'a> Decoder<'a> {
             Err(e) => return Err(e),
         }
         match self.u_len {
-            Some(want) if self.out.len() != want => {
-                Err(LzmaError::Truncated { got: self.out.len(), want })
-            }
+            Some(want) if self.out.len() != want => Err(LzmaError::Truncated {
+                got: self.out.len(),
+                want,
+            }),
             _ => Ok(()),
         }
     }
@@ -386,7 +401,11 @@ impl<'a> Decoder<'a> {
         while self.out.len() < self.max_out {
             let pos = self.out.len();
             let pos_state = pos & pb_mask;
-            if self.rc.bit(&mut self.is_match[(state << NUM_POS_BITS_MAX) + pos_state])? == 0 {
+            if self
+                .rc
+                .bit(&mut self.is_match[(state << NUM_POS_BITS_MAX) + pos_state])?
+                == 0
+            {
                 let byte = self.literal(state, pos, lp_mask, rep0)?;
                 self.out.push(byte);
                 state = if state < 4 {
@@ -402,11 +421,15 @@ impl<'a> Decoder<'a> {
             let len;
             if self.rc.bit(&mut self.is_rep[state])? != 0 {
                 if pos == 0 {
-                    return Err(LzmaError::LookbehindOverrun { dist: rep0, have: 0 });
+                    return Err(LzmaError::LookbehindOverrun {
+                        dist: rep0,
+                        have: 0,
+                    });
                 }
                 if self.rc.bit(&mut self.is_rep_g0[state])? == 0 {
-                    let long =
-                        self.rc.bit(&mut self.is_rep0_long[(state << NUM_POS_BITS_MAX) + pos_state])?;
+                    let long = self
+                        .rc
+                        .bit(&mut self.is_rep0_long[(state << NUM_POS_BITS_MAX) + pos_state])?;
                     if long == 0 {
                         state = if state < 7 { 9 } else { 11 };
                         let b = self.back(rep0)?;
@@ -467,9 +490,17 @@ impl<'a> Decoder<'a> {
         lp_mask: usize,
         rep0: u32,
     ) -> Result<u8, LzmaError> {
-        let prev = if pos == 0 { 0u32 } else { u32::from(self.out[pos - 1]) };
+        let prev = if pos == 0 {
+            0u32
+        } else {
+            u32::from(self.out[pos - 1])
+        };
         let ctx = ((pos & lp_mask) << self.props.lc) + (prev >> (8 - self.props.lc)) as usize;
-        let mut match_byte = if state >= 7 { u32::from(self.back(rep0)?) } else { 0 };
+        let mut match_byte = if state >= 7 {
+            u32::from(self.back(rep0)?)
+        } else {
+            0
+        };
 
         let Decoder { rc, literal, .. } = self;
         let probs = &mut literal[ctx * LIT_SIZE..(ctx + 1) * LIT_SIZE];
@@ -513,7 +544,9 @@ impl<'a> Decoder<'a> {
         let mut dist = (2 | (slot & 1)) << num_direct;
         if slot < END_POS_MODEL_INDEX {
             let base = dist as isize - slot as isize - 1;
-            dist += self.rc.bittree_rev(&mut self.spec_pos, base, num_direct as usize)?;
+            dist += self
+                .rc
+                .bittree_rev(&mut self.spec_pos, base, num_direct as usize)?;
         } else {
             let direct = self.rc.direct(num_direct - NUM_ALIGN_BITS as u32)?;
             dist = dist.wrapping_add(direct << NUM_ALIGN_BITS);
@@ -546,7 +579,10 @@ impl<'a> Decoder<'a> {
             .len()
             .checked_sub(1)
             .and_then(|i| i.checked_sub(dist as usize))
-            .ok_or(LzmaError::LookbehindOverrun { dist, have: self.out.len() })?;
+            .ok_or(LzmaError::LookbehindOverrun {
+                dist,
+                have: self.out.len(),
+            })?;
         for _ in 0..len {
             let b = self.out[at];
             self.out.push(b);
@@ -565,20 +601,37 @@ mod tests {
     #[test]
     fn upx_property_bytes_decode_to_the_default_triple() {
         let (p, body) = Properties::split(&[0x1a, 0x03, 0x00, 0, 0, 0, 0]).unwrap();
-        assert_eq!(p, Properties { lc: 3, lp: 0, pb: 2 });
+        assert_eq!(
+            p,
+            Properties {
+                lc: 3,
+                lp: 0,
+                pb: 2
+            }
+        );
         assert_eq!(body.len(), 5);
     }
 
     #[test]
     fn out_of_range_properties_are_refused_not_allocated() {
         let err = Properties::split(&[0x00, 0xff, 0x00, 0, 0, 0, 0]).unwrap_err();
-        assert!(matches!(err, LzmaError::BadProperties { lc: 15, lp: 15, pb: 0 }));
+        assert!(matches!(
+            err,
+            LzmaError::BadProperties {
+                lc: 15,
+                lp: 15,
+                pb: 0
+            }
+        ));
     }
 
     #[test]
     fn a_short_block_is_refused() {
         assert_eq!(decompress(&[0x1a], 4).unwrap_err(), LzmaError::TooShort);
-        assert_eq!(decompress(&[0x1a, 0x03, 0, 0], 4).unwrap_err(), LzmaError::TooShort);
+        assert_eq!(
+            decompress(&[0x1a, 0x03, 0, 0], 4).unwrap_err(),
+            LzmaError::TooShort
+        );
     }
 
     #[test]
@@ -653,8 +706,14 @@ mod tests {
     #[test]
     fn a_declared_length_still_refuses_a_stream_that_misses_it() {
         let (block, u_len) = witness_block();
-        assert_eq!(decompress(&block, u_len + 1).unwrap_err(), LzmaError::InputOverrun);
-        assert_eq!(decompress(&block, u_len - 1).unwrap_err(), LzmaError::OutputOverrun);
+        assert_eq!(
+            decompress(&block, u_len + 1).unwrap_err(),
+            LzmaError::InputOverrun
+        );
+        assert_eq!(
+            decompress(&block, u_len - 1).unwrap_err(),
+            LzmaError::OutputOverrun
+        );
     }
 
     /// The vendored witness's first block, and the `u_len` its `b_info` declares.

@@ -137,7 +137,11 @@ pub fn conflict_is_self_call_effect(
     let Some(high_cover) = data.high_bank().internal_cover(high).cloned() else {
         return false;
     };
-    let n = data.high_bank().get(ahigh).map(|h| h.num_instances()).unwrap_or(0);
+    let n = data
+        .high_bank()
+        .get(ahigh)
+        .map(|h| h.num_instances())
+        .unwrap_or(0);
     let mut saw_conflict = false;
     for i in 0..n {
         let b = match data.high_bank().get(ahigh) {
@@ -299,8 +303,14 @@ fn wider_int_return_contains(
             let stored_size = stored.type_.as_ref().map(|t| t.get_size()).unwrap_or(0);
             if !stored.addr.is_invalid()
                 && stored_size > size
-                && addr.overlap_join(0, &stored.addr, stored_size).unwrap_or(-1) >= 0
-                && addr.overlap_join(size - 1, &stored.addr, stored_size).unwrap_or(-1) >= 0
+                && addr
+                    .overlap_join(0, &stored.addr, stored_size)
+                    .unwrap_or(-1)
+                    >= 0
+                && addr
+                    .overlap_join(size - 1, &stored.addr, stored_size)
+                    .unwrap_or(-1)
+                    >= 0
             {
                 return true;
             }
@@ -336,7 +346,10 @@ fn op_reads_indirect_effect_of(data: &Funcdata, op: OpId, call: OpId) -> bool {
     (0..o.num_input()).any(|slot| {
         o.get_in(slot)
             .filter(|&vn| {
-                data.vbank().get(vn).map(|v| !v.is_annotation()).unwrap_or(false)
+                data.vbank()
+                    .get(vn)
+                    .map(|v| !v.is_annotation())
+                    .unwrap_or(false)
             })
             .map(|vn| is_indirect_effect_of(data, vn, call))
             .unwrap_or(false)

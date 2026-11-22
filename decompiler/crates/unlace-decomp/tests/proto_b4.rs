@@ -26,7 +26,7 @@ use unlace_base::xml::{DocumentStorage, Element};
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::decompile_drive::decompile_func;
 use unlace_decomp::funcdata::Funcdata;
-use unlace_decomp::sleigh_arch::{register_sleigh_arch_ids, LanguageDatabase};
+use unlace_decomp::sleigh_arch::{LanguageDatabase, register_sleigh_arch_ids};
 use unlace_decomp::xml_arch::{XmlArchitecture, XmlArchitectureCapability};
 
 use unlace_num::opcodes::OpCode;
@@ -39,7 +39,10 @@ use unlace_sleigh::translate::register_translate_ids;
 // ===========================================================================
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 struct SymbolFn {
@@ -73,11 +76,15 @@ fn find_named(el: &Rc<Element>, name: &str, out: &mut Vec<Rc<Element>>) {
 }
 
 fn attr(el: &Element, name: &str) -> Option<String> {
-    el.get_attribute_value(name).ok().map(|b| String::from_utf8_lossy(b).into_owned())
+    el.get_attribute_value(name)
+        .ok()
+        .map(|b| String::from_utf8_lossy(b).into_owned())
 }
 
 fn parse_datatest(stem: &str) -> Result<DataTest, String> {
-    let path = repo_root().join("tests/datatests").join(format!("{stem}.xml"));
+    let path = repo_root()
+        .join("tests/datatests")
+        .join(format!("{stem}.xml"));
     let xml = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
     let mut store = DocumentStorage::new();
     let root = store
@@ -101,7 +108,11 @@ fn parse_datatest(stem: &str) -> Result<DataTest, String> {
             })
         })
         .collect();
-    Ok(DataTest { binaryimage, arch_id, symbols })
+    Ok(DataTest {
+        binaryimage,
+        arch_id,
+        symbols,
+    })
 }
 
 struct DummyImg;
@@ -131,10 +142,12 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
     let registry = build_registry();
     let capability = XmlArchitectureCapability::new();
     let mut arch = capability.build_architecture("datatest", "");
-    arch.build_loader(Rc::clone(&dt.binaryimage)).map_err(|e| format!("build_loader: {e}"))?;
+    arch.build_loader(Rc::clone(&dt.binaryimage))
+        .map_err(|e| format!("build_loader: {e}"))?;
     let mut db = LanguageDatabase::new();
     db.scan_for_sleigh_directories(root.join("specs").to_str().unwrap());
-    db.get_descriptions(&registry).map_err(|e| format!("collect ldefs: {e}"))?;
+    db.get_descriptions(&registry)
+        .map_err(|e| format!("collect ldefs: {e}"))?;
     arch.sleigh_mut().set_archid(&dt.arch_id);
     arch.sleigh_mut()
         .resolve_architecture(&db, &dt.arch_id)
@@ -142,7 +155,10 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
     if arch.sleigh().language_index() < 0 {
         return Err("language index unresolved".to_string());
     }
-    let specs = arch.sleigh().build_spec_file(&db).map_err(|e| format!("build_spec_file: {e}"))?;
+    let specs = arch
+        .sleigh()
+        .build_spec_file(&db)
+        .map_err(|e| format!("build_spec_file: {e}"))?;
     let resolved_sla = specs.slafile.ok_or("build_spec_file resolved no .sla")?;
     let sla = std::fs::read(&resolved_sla).map_err(|e| format!("read sla: {e}"))?;
     arch.sleigh_mut()
@@ -168,7 +184,10 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
     arch.open_image(unsafe { &*manager_ptr }, &registry)
         .map_err(|e| format!("open_image: {e}"))?;
     let img = arch.take_loader().ok_or("loader vanished after open")?;
-    arch.sleigh_mut().base_mut().unwrap().set_loader(Box::new(img));
+    arch.sleigh_mut()
+        .base_mut()
+        .unwrap()
+        .set_loader(Box::new(img));
     Ok(arch)
 }
 
@@ -239,7 +258,10 @@ fn run_full(stem: &str, which: usize) -> Result<(XmlArchitecture, Funcdata), Str
     let space_name = sym.space.clone();
     let off = sym.offset;
     let name = sym.name.clone();
-    let arch = xarch.sleigh_mut().base_mut().ok_or("no Architecture base")?;
+    let arch = xarch
+        .sleigh_mut()
+        .base_mut()
+        .ok_or("no Architecture base")?;
     let space = arch
         .manage()
         .get_space_by_name(&space_name)
@@ -265,7 +287,10 @@ fn boolless_return_recovers_accumulator() {
     let mut alive: Vec<unlace_decomp::context::OpId> = fd.obank().iter_alive().collect();
     alive.sort_by_key(|&op| {
         let o = fd.obank().get(op).unwrap();
-        let blk = o.get_parent().map(|b| fd.bblocks_ref().block(b).get_index()).unwrap_or(-1);
+        let blk = o
+            .get_parent()
+            .map(|b| fd.bblocks_ref().block(b).get_index())
+            .unwrap_or(-1);
         (blk, o.get_seq_num().get_time())
     });
 
@@ -286,7 +311,11 @@ fn boolless_return_recovers_accumulator() {
     let n_in = ro.num_input();
     eprintln!("RETURN num_input = {n_in}");
     let in0 = ro.get_in(0).expect("RETURN in0");
-    let in0_is_const = fd.vbank().get(in0).map(|v| v.is_constant()).unwrap_or(false);
+    let in0_is_const = fd
+        .vbank()
+        .get(in0)
+        .map(|v| v.is_constant())
+        .unwrap_or(false);
     let in0_const_val = fd.vbank().get(in0).map(|v| v.get_offset()).unwrap_or(0);
     eprintln!(
         "RETURN in0: const={in0_is_const} val={in0_const_val} ; form = {}",
@@ -320,7 +349,9 @@ fn boolless_return_recovers_accumulator() {
     use std::collections::BTreeMap;
     let mut by_code: BTreeMap<String, usize> = BTreeMap::new();
     for &op in &alive {
-        *by_code.entry(format!("{:?}", fd.obank().get(op).unwrap().code())).or_default() += 1;
+        *by_code
+            .entry(format!("{:?}", fd.obank().get(op).unwrap().code()))
+            .or_default() += 1;
     }
     eprintln!("by opcode: {by_code:?}");
     assert!(

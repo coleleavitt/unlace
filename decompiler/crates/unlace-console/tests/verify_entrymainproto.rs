@@ -21,9 +21,9 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
@@ -32,7 +32,10 @@ use unlace_console::ifaceterm::ConsoleCommands;
 const MAIN: &str = "sub_140001000";
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn bootstrap(fast_funcdisc: bool) -> ConsoleProgram {
@@ -45,14 +48,19 @@ fn bootstrap(fast_funcdisc: bool) -> ConsoleProgram {
     prog.arch_mut()
         .set_kuna_option("fast_funcdisc", if fast_funcdisc { "on" } else { "off" })
         .expect("fast_funcdisc flips");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
 fn decompile(prog: ConsoleProgram, name: &str) -> String {
-    let cmds: Vec<String> = [format!("load function {name}"), "decompile".into(), "print C".into()]
-        .into_iter()
-        .collect();
+    let cmds: Vec<String> = [
+        format!("load function {name}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .into_iter()
+    .collect();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -73,7 +81,10 @@ fn decompile(prog: ConsoleProgram, name: &str) -> String {
 #[test]
 fn entry_function_declares_the_crt_arguments() {
     let prog = bootstrap(true);
-    assert!(prog.lookup_symbol(MAIN).is_none(), "pemain renames the callee");
+    assert!(
+        prog.lookup_symbol(MAIN).is_none(),
+        "pemain renames the callee"
+    );
     let body = decompile(prog, "main");
     assert!(
         !body.contains("main(void)"),
@@ -103,9 +114,15 @@ fn named_functions_keep_their_own_signatures() {
         .filter(|e| !e.name.starts_with("sub_") && e.name != "main")
         .map(|e| e.name)
         .collect();
-    assert!(!named.is_empty(), "the fixture must carry named import functions");
+    assert!(
+        !named.is_empty(),
+        "the fixture must carry named import functions"
+    );
     for name in &named {
-        assert!(prog.lookup_symbol(name).is_some(), "{name} must keep its own symbol");
+        assert!(
+            prog.lookup_symbol(name).is_some(),
+            "{name} must keep its own symbol"
+        );
     }
 }
 
@@ -120,5 +137,8 @@ fn the_entry_function_is_registered_even_with_no_recursive_discovery() {
         "the CRT call target must be registered so the by-name prototype park lands"
     );
     let body = decompile(prog, "main");
-    assert!(body.contains("argc"), "and it must carry the recovered slots; got:\n{body}");
+    assert!(
+        body.contains("argc"),
+        "and it must carry the recovered slots; got:\n{body}"
+    );
 }

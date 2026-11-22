@@ -103,7 +103,7 @@ use std::rc::Rc;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::types::int4;
 
-use crate::dtype::{type_metatype, Datatype, TypeFactory, TypeField};
+use crate::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
 use crate::p5_types::kuna_structsynth::ledger::{self, Layout, Member};
 
 /// How many claims two layouts must share before the union is evidence, when one
@@ -145,7 +145,7 @@ impl OptionStructMerge {
             other => {
                 return Err(KunaError::parse(format!(
                     "Unknown structmerge value: {other} (expected off|siblings)"
-                )))
+                )));
             }
         };
         Ok((mode, format!("Sibling layout merge set to {p1}")))
@@ -204,9 +204,10 @@ fn shared_claims(a: &Layout, b: &Layout) -> Option<usize> {
 
 /// Is the agreement between two layouts evidence that they read one record?
 fn agreement_is_evidence(a: &Layout, b: &Layout, shared: usize) -> bool {
-    let typed = a.fields.iter().any(|ka| {
-        ka.pointer && b.fields.iter().any(|kb| kb.offset == ka.offset && kb == ka)
-    });
+    let typed = a
+        .fields
+        .iter()
+        .any(|ka| ka.pointer && b.fields.iter().any(|kb| kb.offset == ka.offset && kb == ka));
     shared >= MIN_SHARED_UNTYPED || (shared >= MIN_SHARED_CLAIMS && typed)
 }
 
@@ -247,7 +248,12 @@ fn plan(
             Some(t) => t,
             None => types.get_type_array(width, Rc::clone(&byte)).ok()?,
         };
-        fields.push(TypeField::new(i as int4, off, format!("field_0x{off:x}"), ct));
+        fields.push(TypeField::new(
+            i as int4,
+            off,
+            format!("field_0x{off:x}"),
+            ct,
+        ));
     }
     Some((fields, size))
 }
@@ -270,8 +276,12 @@ pub(crate) fn merge(
 ) -> Option<(Vec<TypeField>, int4, Vec<int4>)> {
     let own: Vec<Member> = fields.iter().map(|f| Member::of_with(f, selfs)).collect();
     let mine = claims_of_fields(fields);
-    let mut best: Option<((usize, std::cmp::Reverse<(int4, usize)>), Vec<TypeField>, int4, Vec<int4>)> =
-        None;
+    let mut best: Option<(
+        (usize, std::cmp::Reverse<(int4, usize)>),
+        Vec<TypeField>,
+        int4,
+        Vec<int4>,
+    )> = None;
     for (rank, (ct, layout)) in candidates.iter().enumerate() {
         let Some(shared) = shared_claims(layout, want) else {
             trace(ct, want, 0, "conflict");
@@ -281,7 +291,9 @@ pub(crate) fn merge(
             trace(ct, want, shared, "agreement-too-weak");
             continue;
         }
-        let Some((theirs, their_selfs, their_size)) = claims_of(ct) else { continue };
+        let Some((theirs, their_selfs, their_size)) = claims_of(ct) else {
+            continue;
+        };
         let mut claims = mine.clone();
         for (off, ty) in theirs {
             claims.entry(off).or_insert(ty);
@@ -303,8 +315,10 @@ pub(crate) fn merge(
             trace(ct, want, shared, "union-too-far-for-the-held");
             continue;
         }
-        let members: Vec<Member> =
-            mfields.iter().map(|f| Member::of_with(f, &merged_selfs)).collect();
+        let members: Vec<Member> = mfields
+            .iter()
+            .map(|f| Member::of_with(f, &merged_selfs))
+            .collect();
         if !unclaimed.is_empty() && !ledger::keeps_unclaimed(&members, &own, unclaimed) {
             trace(ct, want, shared, "unclaimed-bytes");
             continue;

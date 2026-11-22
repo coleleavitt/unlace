@@ -13,7 +13,7 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 
 use crate::context::ArchContext;
@@ -24,7 +24,8 @@ use crate::kuna_sourcelang::SourceLang;
 fn build_fd(mode: FatStrMode, lang: SourceLang) -> Funcdata {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -108,7 +109,8 @@ fn facet_table_registers_and_looks_up() {
     use crate::dtype::TypeFactory;
     let tf = TypeFactoryImpl::default();
     assert!(tf.kuna_lang_facet("alloc::string::String").is_none());
-    tf.kuna_register_lang_facet("&str", LangFacet::RustStr).expect("registers");
+    tf.kuna_register_lang_facet("&str", LangFacet::RustStr)
+        .expect("registers");
     tf.kuna_register_lang_facet("&[u8]", LangFacet::RustSlice { elem: "u8".into() })
         .expect("registers");
     assert_eq!(tf.kuna_lang_facet("&str"), Some(LangFacet::RustStr));
@@ -117,5 +119,8 @@ fn facet_table_registers_and_looks_up() {
     // Re-registration replaces (a provider refining its record).
     tf.kuna_register_lang_facet("&[u8]", LangFacet::RustSlice { elem: "u16".into() })
         .expect("re-registers");
-    assert_eq!(tf.kuna_lang_facet("&[u8]"), Some(LangFacet::RustSlice { elem: "u16".into() }));
+    assert_eq!(
+        tf.kuna_lang_facet("&[u8]"),
+        Some(LangFacet::RustSlice { elem: "u16".into() })
+    );
 }

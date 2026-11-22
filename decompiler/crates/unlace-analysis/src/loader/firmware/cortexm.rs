@@ -37,19 +37,46 @@ impl VectorTable {
 }
 
 const SYSTEM: [&str; 15] = [
-    "Reset", "NMI", "HardFault", "MemManage", "BusFault", "UsageFault", "SecureFault", "", "", "", "SVC",
-    "DebugMon", "", "PendSV", "SysTick",
+    "Reset",
+    "NMI",
+    "HardFault",
+    "MemManage",
+    "BusFault",
+    "UsageFault",
+    "SecureFault",
+    "",
+    "",
+    "",
+    "SVC",
+    "DebugMon",
+    "",
+    "PendSV",
+    "SysTick",
 ];
 
 const MAX_IRQS: usize = 496;
 const MIN_VOTES: usize = 15;
-const COMMON_BASES: [u64; 6] = [0x0800_0000, 0x0000_0000, 0x0040_0000, 0x0001_0000, 0x0000_8000, 0x1000_0000];
+const COMMON_BASES: [u64; 6] = [
+    0x0800_0000,
+    0x0000_0000,
+    0x0040_0000,
+    0x0001_0000,
+    0x0000_8000,
+    0x1000_0000,
+];
 
 /// Dummy-handler encodings: `bx lr`, `b .`, `b.w .`, `nop; b .`.
-const DUMMY: [&[u8]; 4] = [&[0x70, 0x47], &[0xfe, 0xe7], &[0xff, 0xf7, 0xfe, 0xbf], &[0x00, 0xbf, 0xfe, 0xe7]];
+const DUMMY: [&[u8]; 4] = [
+    &[0x70, 0x47],
+    &[0xfe, 0xe7],
+    &[0xff, 0xf7, 0xfe, 0xbf],
+    &[0x00, 0xbf, 0xfe, 0xe7],
+];
 
 fn word(bytes: &[u8], i: usize) -> Option<u32> {
-    Some(u32::from_le_bytes(bytes.get(4 * i..4 * i + 4)?.try_into().ok()?))
+    Some(u32::from_le_bytes(
+        bytes.get(4 * i..4 * i + 4)?.try_into().ok()?,
+    ))
 }
 
 fn code_pointer(w: u32) -> bool {
@@ -80,7 +107,9 @@ pub fn probe(bytes: &[u8], base: Option<u64>) -> Option<VectorTable> {
     }
     let mut words = 16;
     for irq in 0..MAX_IRQS {
-        let Some(w) = word(bytes, 16 + irq) else { break };
+        let Some(w) = word(bytes, 16 + irq) else {
+            break;
+        };
         if w != 0 && !code_pointer(w) {
             break;
         }
@@ -109,10 +138,18 @@ pub fn probe(bytes: &[u8], base: Option<u64>) -> Option<VectorTable> {
         match handlers.iter_mut().find(|h| h.addr == addr) {
             Some(h) if name.starts_with("IRQ") => h.name = "Default_Handler".into(),
             Some(_) => {}
-            None => handlers.push(Handler { name: name.clone(), addr }),
+            None => handlers.push(Handler {
+                name: name.clone(),
+                addr,
+            }),
         }
     }
-    Some(VectorTable { base, initial_sp: sp, handlers, words })
+    Some(VectorTable {
+        base,
+        initial_sp: sp,
+        handlers,
+        words,
+    })
 }
 
 fn vote(bytes: &[u8], targets: &[u64], words: usize) -> Option<u64> {
@@ -132,7 +169,11 @@ fn vote(bytes: &[u8], targets: &[u64], words: usize) -> Option<u64> {
             }
         }
     }
-    votes.into_iter().filter(|&(_, n)| n >= MIN_VOTES).max_by_key(|&(b, n)| (n, std::cmp::Reverse(b))).map(|(b, _)| b)
+    votes
+        .into_iter()
+        .filter(|&(_, n)| n >= MIN_VOTES)
+        .max_by_key(|&(b, n)| (n, std::cmp::Reverse(b)))
+        .map(|(b, _)| b)
 }
 
 #[cfg(test)]

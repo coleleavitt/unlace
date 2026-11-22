@@ -43,13 +43,18 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
-use object::read::pe::{ImageNtHeaders, PeFile};
-use object::read::Object;
 use object::LittleEndian as LE;
+use object::read::Object;
+use object::read::pe::{ImageNtHeaders, PeFile};
 
 /// Whether the thunk decoded at `data[i]` (section base `vma`) is a REX tail: the
 /// byte before it is a REX prefix and no resolving `FF 25` ends at `i`.
-pub(crate) fn is_rex_tail(vma: u64, data: &[u8], i: usize, slot_to_name: &HashMap<u64, Vec<u8>>) -> bool {
+pub(crate) fn is_rex_tail(
+    vma: u64,
+    data: &[u8],
+    i: usize,
+    slot_to_name: &HashMap<u64, Vec<u8>>,
+) -> bool {
     if i == 0 || !(0x40..=0x4F).contains(&data[i - 1]) {
         return false;
     }
@@ -62,13 +67,20 @@ pub(crate) fn is_rex_tail(vma: u64, data: &[u8], i: usize, slot_to_name: &HashMa
 
 /// The addresses an x64 PE declares to begin code: every `.pdata` `BeginAddress`
 /// and every export.
-pub(crate) fn declared_starts<Pe: ImageNtHeaders>(neutral: &object::File, pe: &PeFile<Pe>, bytes: &[u8]) -> Vec<u64> {
+pub(crate) fn declared_starts<Pe: ImageNtHeaders>(
+    neutral: &object::File,
+    pe: &PeFile<Pe>,
+    bytes: &[u8],
+) -> Vec<u64> {
     let mut starts: Vec<u64> = Vec::new();
     if pe.nt_headers().file_header().machine.get(LE) != object::pe::IMAGE_FILE_MACHINE_AMD64 {
         return starts;
     }
     let base = pe.relative_address_base();
-    if let Some(dir) = pe.data_directories().get(object::pe::IMAGE_DIRECTORY_ENTRY_EXCEPTION) {
+    if let Some(dir) = pe
+        .data_directories()
+        .get(object::pe::IMAGE_DIRECTORY_ENTRY_EXCEPTION)
+    {
         if let Ok(data) = dir.data(bytes, &pe.section_table()) {
             for rec in data.chunks_exact(12) {
                 starts.push(base + u32::from_le_bytes([rec[0], rec[1], rec[2], rec[3]]) as u64);
@@ -93,7 +105,12 @@ pub(crate) fn referenced_cached(
 ) -> HashSet<u64> {
     static CACHE: Mutex<Vec<(u64, HashSet<u64>)>> = Mutex::new(Vec::new());
     let key = fingerprint(code, image, starts, wanted);
-    if let Some((_, hit)) = CACHE.lock().unwrap_or_else(|e| e.into_inner()).iter().find(|e| e.0 == key) {
+    if let Some((_, hit)) = CACHE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .iter()
+        .find(|e| e.0 == key)
+    {
         return hit.clone();
     }
     let found = referenced(code, image, starts, wanted);
@@ -105,13 +122,21 @@ pub(crate) fn referenced_cached(
     found
 }
 
-fn fingerprint(code: &[(u64, &[u8])], image: &[(u64, &[u8])], starts: &[u64], wanted: &HashSet<u64>) -> u64 {
+fn fingerprint(
+    code: &[(u64, &[u8])],
+    image: &[(u64, &[u8])],
+    starts: &[u64],
+    wanted: &HashSet<u64>,
+) -> u64 {
     const K: u64 = 0x9E37_79B9_7F4A_7C15;
     let mix = |h: u64, v: u64| (h ^ v).wrapping_mul(K).rotate_left(29);
     let mut h = 0x243F_6A88_85A3_08D3u64;
     let mut sorted: Vec<u64> = wanted.iter().copied().collect();
     sorted.sort_unstable();
-    let heads = code.iter().chain(image).map(|&(vma, data)| [vma, data.len() as u64]);
+    let heads = code
+        .iter()
+        .chain(image)
+        .map(|&(vma, data)| [vma, data.len() as u64]);
     for v in heads.flatten().chain(starts.iter().copied()).chain(sorted) {
         h = mix(h, v);
     }
@@ -119,8 +144,14 @@ fn fingerprint(code: &[(u64, &[u8])], image: &[(u64, &[u8])], starts: &[u64], wa
         let (mut a, mut b) = (h, h.rotate_left(32) ^ K);
         let mut chunks = data.chunks_exact(16);
         for c in &mut chunks {
-            a = mix(a, u64::from_le_bytes([c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7]]));
-            b = mix(b, u64::from_le_bytes([c[8], c[9], c[10], c[11], c[12], c[13], c[14], c[15]]));
+            a = mix(
+                a,
+                u64::from_le_bytes([c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7]]),
+            );
+            b = mix(
+                b,
+                u64::from_le_bytes([c[8], c[9], c[10], c[11], c[12], c[13], c[14], c[15]]),
+            );
         }
         for &byte in chunks.remainder() {
             a = mix(a, byte as u64);
@@ -142,8 +173,14 @@ pub(crate) fn referenced(
 ) -> HashSet<u64> {
     let mut sorted: Vec<u64> = wanted.iter().copied().collect();
     sorted.sort_unstable();
-    let mut hit: HashSet<u64> = starts.iter().copied().filter(|a| wanted.contains(a)).collect();
-    let (Some(&lo), Some(&hi)) = (sorted.first(), sorted.last()) else { return hit };
+    let mut hit: HashSet<u64> = starts
+        .iter()
+        .copied()
+        .filter(|a| wanted.contains(a))
+        .collect();
+    let (Some(&lo), Some(&hi)) = (sorted.first(), sorted.last()) else {
+        return hit;
+    };
     let mut note = |target: u64| {
         if (lo..=hi).contains(&target) && sorted.binary_search(&target).is_ok() {
             hit.insert(target);
@@ -158,7 +195,9 @@ pub(crate) fn referenced(
     }
     for &(_, data) in image {
         for w in data.windows(8) {
-            note(u64::from_le_bytes([w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7]]));
+            note(u64::from_le_bytes([
+                w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7],
+            ]));
         }
     }
     hit
@@ -170,7 +209,12 @@ fn rel_target(vma: u64, data: &[u8], p: usize) -> Option<u64> {
     let (end, disp_at) = match data[p] {
         0xE8 | 0xE9 => (p + 5, p + 1),
         0x0F if (0x80..=0x8F).contains(data.get(p + 1)?) => (p + 6, p + 2),
-        0x8D if p > 0 && (0x40..=0x4F).contains(&data[p - 1]) && data.get(p + 1)? & 0xC7 == 0x05 => (p + 6, p + 2),
+        0x8D if p > 0
+            && (0x40..=0x4F).contains(&data[p - 1])
+            && data.get(p + 1)? & 0xC7 == 0x05 =>
+        {
+            (p + 6, p + 2)
+        }
         _ => return None,
     };
     let d = data.get(disp_at..disp_at + 4)?;
@@ -205,10 +249,17 @@ mod tests {
         let with = target.to_le_bytes();
         let without = (target + 1).to_le_bytes();
         for _ in 0..2 {
-            assert_eq!(referenced_cached(&[], &[(0x140003000, &with[..])], &[], &wanted), wanted);
-            assert!(referenced_cached(&[], &[(0x140003000, &without[..])], &[], &wanted).is_empty());
+            assert_eq!(
+                referenced_cached(&[], &[(0x140003000, &with[..])], &[], &wanted),
+                wanted
+            );
+            assert!(
+                referenced_cached(&[], &[(0x140003000, &without[..])], &[], &wanted).is_empty()
+            );
             let code = [(0x140001000u64, &without[..])];
-            assert!(referenced_cached(&code, &[(0x140001000, &without[..])], &[], &wanted).is_empty());
+            assert!(
+                referenced_cached(&code, &[(0x140001000, &without[..])], &[], &wanted).is_empty()
+            );
         }
     }
 
@@ -216,13 +267,27 @@ mod tests {
     fn a_rex_byte_before_ff25_is_a_tail_and_padding_is_not() {
         let vma = 0x140001000;
         let slot = 0x140002000;
-        for (prev, tail) in [(0x48u8, true), (0x40, true), (0x4F, true), (0xCC, false), (0x90, false), (0x00, false)] {
+        for (prev, tail) in [
+            (0x48u8, true),
+            (0x40, true),
+            (0x4F, true),
+            (0xCC, false),
+            (0x90, false),
+            (0x00, false),
+        ] {
             let mut data = vec![prev];
             data.extend(ff25(vma + 1, slot));
-            assert_eq!(is_rex_tail(vma, &data, 1, &slots(&[slot])), tail, "prev {prev:#x}");
+            assert_eq!(
+                is_rex_tail(vma, &data, 1, &slots(&[slot])),
+                tail,
+                "prev {prev:#x}"
+            );
         }
         let data = ff25(vma, slot);
-        assert!(!is_rex_tail(vma, &data, 0, &slots(&[slot])), "a section-leading FF 25 has no prefix");
+        assert!(
+            !is_rex_tail(vma, &data, 0, &slots(&[slot])),
+            "a section-leading FF 25 has no prefix"
+        );
     }
 
     /// A contiguous link.exe table in a layout over 1 GiB: the previous thunk's
@@ -235,14 +300,23 @@ mod tests {
         assert_eq!(data[5], 0x40);
         data.extend(ff25(vma + 6, s1));
         assert!(!is_rex_tail(vma, &data, 6, &slots(&[s0, s1])));
-        assert!(is_rex_tail(vma, &data, 6, &slots(&[s1])), "an unresolving look-back proves nothing");
+        assert!(
+            is_rex_tail(vma, &data, 6, &slots(&[s1])),
+            "an unresolving look-back proves nothing"
+        );
     }
 
     #[test]
     fn rel32_branches_and_rip_relative_lea_are_references() {
         let vma = 0x140001000u64;
         let target = 0x140001100u64;
-        for op in [&[0xE8u8][..], &[0xE9], &[0x0F, 0x84], &[0x48, 0x8D, 0x0D], &[0x4C, 0x8D, 0x05]] {
+        for op in [
+            &[0xE8u8][..],
+            &[0xE9],
+            &[0x0F, 0x84],
+            &[0x48, 0x8D, 0x0D],
+            &[0x4C, 0x8D, 0x05],
+        ] {
             let mut code = vec![0x90; 3];
             code.extend_from_slice(op);
             let end = vma + (code.len() + 4) as u64;
@@ -253,7 +327,10 @@ mod tests {
         let mov = [0x48u8, 0x8B, 0x0D, 0, 0, 0, 0];
         assert!(!refs(&[(vma, &mov)], vma + 7), "a load is not a reference");
         let short = [0xEBu8, 0x10, 0x74, 0x0E];
-        assert!(!refs(&[(vma, &short)], vma + 0x12), "a short branch is not counted");
+        assert!(
+            !refs(&[(vma, &short)], vma + 0x12),
+            "a short branch is not counted"
+        );
     }
 
     #[test]
@@ -274,12 +351,23 @@ mod tests {
         let wanted = HashSet::from([target]);
         let mut data = vec![0u8; 3];
         data.extend_from_slice(&target.to_le_bytes());
-        let imm64 = [&[0x48u8, 0xB8][..], &target.to_le_bytes()[..], &[0xFF, 0xD0][..]].concat();
+        let imm64 = [
+            &[0x48u8, 0xB8][..],
+            &target.to_le_bytes()[..],
+            &[0xFF, 0xD0][..],
+        ]
+        .concat();
         for blob in [&data[..], &imm64[..]] {
-            assert_eq!(referenced(&[], &[(0x140003000, blob)], &[], &wanted), wanted);
+            assert_eq!(
+                referenced(&[], &[(0x140003000, blob)], &[], &wanted),
+                wanted
+            );
         }
         let off = (target + 1).to_le_bytes();
         assert!(referenced(&[], &[(0x140003000, &off[..])], &[], &wanted).is_empty());
-        assert_eq!(referenced(&[], &[], &[0x140001000, target], &wanted), wanted);
+        assert_eq!(
+            referenced(&[], &[], &[0x140001000, target], &wanted),
+            wanted
+        );
     }
 }

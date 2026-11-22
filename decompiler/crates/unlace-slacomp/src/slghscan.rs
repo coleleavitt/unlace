@@ -66,39 +66,128 @@ pub enum TokenKind {
     Eof,
 
     // Boolean / bitwise / comparison / shift / arithmetic operators
-    OpBoolOr, OpBoolAnd, OpBoolXor,
-    OpOr, OpXor, OpAnd,
-    OpEqual, OpNotEqual, OpFEqual, OpFNotEqual,
-    OpGreatEqual, OpLessEqual, OpSless, OpSgreatEqual, OpSlessEqual, OpSgreat,
-    OpFless, OpFgreat, OpFlessEqual, OpFgreatEqual,
-    OpLeft, OpRight, OpSright,
-    OpFadd, OpFsub, OpSdiv, OpSrem, OpFmult, OpFdiv,
+    OpBoolOr,
+    OpBoolAnd,
+    OpBoolXor,
+    OpOr,
+    OpXor,
+    OpAnd,
+    OpEqual,
+    OpNotEqual,
+    OpFEqual,
+    OpFNotEqual,
+    OpGreatEqual,
+    OpLessEqual,
+    OpSless,
+    OpSgreatEqual,
+    OpSlessEqual,
+    OpSgreat,
+    OpFless,
+    OpFgreat,
+    OpFlessEqual,
+    OpFgreatEqual,
+    OpLeft,
+    OpRight,
+    OpSright,
+    OpFadd,
+    OpFsub,
+    OpSdiv,
+    OpSrem,
+    OpFmult,
+    OpFdiv,
 
     // Unary / intrinsic p-code operators
-    OpZext, OpCarry, OpBorrow, OpSext, OpScarry, OpSborrow, OpNan, OpAbs,
-    OpSqrt, OpCeil, OpFloor, OpRound, OpInt2Float, OpFloat2Float,
-    OpTrunc, OpCpoolref, OpNew, OpPopcount, OpLzcount, OpUnimpl,
+    OpZext,
+    OpCarry,
+    OpBorrow,
+    OpSext,
+    OpScarry,
+    OpSborrow,
+    OpNan,
+    OpAbs,
+    OpSqrt,
+    OpCeil,
+    OpFloor,
+    OpRound,
+    OpInt2Float,
+    OpFloat2Float,
+    OpTrunc,
+    OpCpoolref,
+    OpNew,
+    OpPopcount,
+    OpLzcount,
+    OpUnimpl,
 
     BadInteger,
 
     // Statement keywords
-    GotoKey, CallKey, ReturnKey, IfKey,
+    GotoKey,
+    CallKey,
+    ReturnKey,
+    IfKey,
 
     // Definition keywords
-    DefineKey, AttachKey, MacroKey, SpaceKey, TypeKey, RamKey, DefaultKey,
-    RegisterKey, EndianKey, WithKey, AlignKey,
-    TokenKey, SignedKey, NoflowKey, HexKey, DecKey, BigKey, LittleKey,
-    SizeKey, WordsizeKey, OffsetKey, NamesKey, ValuesKey, VariablesKey, PcodeopKey,
-    IsKey, LocalKey, DelayslotKey, CrossbuildKey, ExportKey, BuildKey, ContextKey,
-    EllipsisKey, GlobalsetKey, BitrangeKey,
+    DefineKey,
+    AttachKey,
+    MacroKey,
+    SpaceKey,
+    TypeKey,
+    RamKey,
+    DefaultKey,
+    RegisterKey,
+    EndianKey,
+    WithKey,
+    AlignKey,
+    TokenKey,
+    SignedKey,
+    NoflowKey,
+    HexKey,
+    DecKey,
+    BigKey,
+    LittleKey,
+    SizeKey,
+    WordsizeKey,
+    OffsetKey,
+    NamesKey,
+    ValuesKey,
+    VariablesKey,
+    PcodeopKey,
+    IsKey,
+    LocalKey,
+    DelayslotKey,
+    CrossbuildKey,
+    ExportKey,
+    BuildKey,
+    ContextKey,
+    EllipsisKey,
+    GlobalsetKey,
+    BitrangeKey,
 
     // Literals
-    Char, Integer, Intb, String, SymbolString,
+    Char,
+    Integer,
+    Intb,
+    String,
+    SymbolString,
 
     // Existing-symbol tokens (`find_symbol`)
-    SpaceSym, SectionSym, TokenSym, UseropSym, ValueSym, ValueMapSym, ContextSym,
-    NameSym, VarSym, BitSym, SpecSym, VarListSym, OperandSym, JumpSym, MacroSym,
-    LabelSym, SubtableSym,
+    SpaceSym,
+    SectionSym,
+    TokenSym,
+    UseropSym,
+    ValueSym,
+    ValueMapSym,
+    ContextSym,
+    NameSym,
+    VarSym,
+    BitSym,
+    SpecSym,
+    VarListSym,
+    OperandSym,
+    JumpSym,
+    MacroSym,
+    LabelSym,
+    SubtableSym,
 
     // Single-character punctuation/operator tokens returned verbatim by the
     // flex `.` rule (e.g. `;` `:` `(` `)` `[` `]` `{` `}` `,` `=` `*` `+` ...).
@@ -115,7 +204,10 @@ pub struct Token {
 impl Token {
     /// A token with no semantic payload.
     fn bare(kind: TokenKind) -> Token {
-        Token { kind, value: TokenValue::None }
+        Token {
+            kind,
+            value: TokenValue::None,
+        }
     }
 }
 
@@ -546,7 +638,10 @@ impl SleighScanner {
             // [a-zA-Z_.][a-zA-Z0-9_.]*  -> STRING (NOT find_symbol)
             let name = rest[..len].to_vec();
             self.consume(len);
-            return Some(Token { kind: TokenKind::String, value: TokenValue::Str(name) });
+            return Some(Token {
+                kind: TokenKind::String,
+                value: TokenValue::Str(name),
+            });
         }
         if matches!(c, b'\r' | b' ' | b'\t' | 0x0b) {
             self.consume_hspace();
@@ -641,18 +736,27 @@ impl SleighScanner {
         // [~!@#$%&*()\-=+\[\]{}|;:<>?,/0-9]  -> CHAR (sleighlval.ch = c)
         if is_print_char(c) {
             self.consume(1);
-            return Some(Token { kind: TokenKind::Char, value: TokenValue::Char(c) });
+            return Some(Token {
+                kind: TokenKind::Char,
+                value: TokenValue::Char(c),
+            });
         }
         // \^  -> '^' (returns the char '^', sleighlval.ch='^')
         if c == b'^' {
             self.consume(1);
-            return Some(Token { kind: TokenKind::Char1(b'^'), value: TokenValue::Char(b'^') });
+            return Some(Token {
+                kind: TokenKind::Char1(b'^'),
+                value: TokenValue::Char(b'^'),
+            });
         }
         // [a-zA-Z_.][a-zA-Z0-9_.]*  -> SYMBOLSTRING
         if let Some(len) = match_identifier(rest) {
             let name = rest[..len].to_vec();
             self.consume(len);
-            return Some(Token { kind: TokenKind::SymbolString, value: TokenValue::Str(name) });
+            return Some(Token {
+                kind: TokenKind::SymbolString,
+                value: TokenValue::Str(name),
+            });
         }
         // \"([^\"[:cntrl:]]|\"\")*\"  -> STRING
         if let Some(tok) = self.try_string_literal() {
@@ -661,13 +765,19 @@ impl SleighScanner {
         // [\r \t\v]+  -> ' ' (a single space token, sleighlval.ch=' ')
         if matches!(c, b'\r' | b' ' | b'\t' | 0x0b) {
             self.consume_hspace();
-            return Some(Token { kind: TokenKind::Char1(b' '), value: TokenValue::Char(b' ') });
+            return Some(Token {
+                kind: TokenKind::Char1(b' '),
+                value: TokenValue::Char(b' '),
+            });
         }
         // \n  -> nextLine() + ' '
         if c == b'\n' {
             self.consume(1);
             host.next_line();
-            return Some(Token { kind: TokenKind::Char1(b' '), value: TokenValue::Char(b' ') });
+            return Some(Token {
+                kind: TokenKind::Char1(b' '),
+                value: TokenValue::Char(b' '),
+            });
         }
         self.consume(1);
         Some(char1_no_val(c))
@@ -685,7 +795,11 @@ impl SleighScanner {
         let c = rest[0];
         if c == b'{' {
             self.consume(1);
-            let next = if self.withsection { ScanState::Initial } else { ScanState::Sem };
+            let next = if self.withsection {
+                ScanState::Initial
+            } else {
+                ScanState::Sem
+            };
             self.begin(next);
             self.withsection = false;
             return Some(char1(c));
@@ -701,17 +815,44 @@ impl SleighScanner {
             return Some(Token::bare(TokenKind::GlobalsetKey));
         }
         // multi-char operators (must beat single chars by longest match)
-        if rest.starts_with(b">>") { self.consume(2); return Some(Token::bare(TokenKind::OpRight)); }
-        if rest.starts_with(b"<<") { self.consume(2); return Some(Token::bare(TokenKind::OpLeft)); }
-        if rest.starts_with(b"!=") { self.consume(2); return Some(Token::bare(TokenKind::OpNotEqual)); }
-        if rest.starts_with(b"<=") { self.consume(2); return Some(Token::bare(TokenKind::OpLessEqual)); }
-        if rest.starts_with(b">=") { self.consume(2); return Some(Token::bare(TokenKind::OpGreatEqual)); }
+        if rest.starts_with(b">>") {
+            self.consume(2);
+            return Some(Token::bare(TokenKind::OpRight));
+        }
+        if rest.starts_with(b"<<") {
+            self.consume(2);
+            return Some(Token::bare(TokenKind::OpLeft));
+        }
+        if rest.starts_with(b"!=") {
+            self.consume(2);
+            return Some(Token::bare(TokenKind::OpNotEqual));
+        }
+        if rest.starts_with(b"<=") {
+            self.consume(2);
+            return Some(Token::bare(TokenKind::OpLessEqual));
+        }
+        if rest.starts_with(b">=") {
+            self.consume(2);
+            return Some(Token::bare(TokenKind::OpGreatEqual));
+        }
         // $and $or $xor (the dollar-prefixed action operators)
-        if rest.starts_with(b"$and") { self.consume(4); return Some(Token::bare(TokenKind::OpAnd)); }
-        if rest.starts_with(b"$or") { self.consume(3); return Some(Token::bare(TokenKind::OpOr)); }
-        if rest.starts_with(b"$xor") { self.consume(4); return Some(Token::bare(TokenKind::OpXor)); }
+        if rest.starts_with(b"$and") {
+            self.consume(4);
+            return Some(Token::bare(TokenKind::OpAnd));
+        }
+        if rest.starts_with(b"$or") {
+            self.consume(3);
+            return Some(Token::bare(TokenKind::OpOr));
+        }
+        if rest.starts_with(b"$xor") {
+            self.consume(4);
+            return Some(Token::bare(TokenKind::OpXor));
+        }
         // ...  (ellipsis)
-        if rest.starts_with(b"...") { self.consume(3); return Some(Token::bare(TokenKind::EllipsisKey)); }
+        if rest.starts_with(b"...") {
+            self.consume(3);
+            return Some(Token::bare(TokenKind::EllipsisKey));
+        }
         if c == b'[' {
             self.consume(1);
             self.actionon = true;
@@ -725,7 +866,10 @@ impl SleighScanner {
         if c == b'&' {
             self.consume(1);
             return Some(if self.actionon {
-                Token { kind: TokenKind::OpAnd, value: TokenValue::Char(c) }
+                Token {
+                    kind: TokenKind::OpAnd,
+                    value: TokenValue::Char(c),
+                }
             } else {
                 char1(c)
             });
@@ -733,7 +877,10 @@ impl SleighScanner {
         if c == b'|' {
             self.consume(1);
             return Some(if self.actionon {
-                Token { kind: TokenKind::OpOr, value: TokenValue::Char(c) }
+                Token {
+                    kind: TokenKind::OpOr,
+                    value: TokenValue::Char(c),
+                }
             } else {
                 char1(c)
             });
@@ -743,7 +890,21 @@ impl SleighScanner {
             return Some(Token::bare(TokenKind::OpXor));
         }
         // [=(),:;+\-*/~<>]  -> char
-        if matches!(c, b'=' | b'(' | b')' | b',' | b':' | b';' | b'+' | b'-' | b'*' | b'/' | b'~' | b'<' | b'>') {
+        if matches!(
+            c,
+            b'=' | b'('
+                | b')'
+                | b','
+                | b':'
+                | b';'
+                | b'+'
+                | b'-'
+                | b'*'
+                | b'/'
+                | b'~'
+                | b'<'
+                | b'>'
+        ) {
             self.consume(1);
             return Some(char1(c));
         }
@@ -797,9 +958,27 @@ impl SleighScanner {
             return Some(Token::bare(kind));
         }
         // [=(),:\[\];!&|^+\-*/%~<>]  -> char
-        if matches!(c,
-            b'=' | b'(' | b')' | b',' | b':' | b'[' | b']' | b';' | b'!' | b'&' | b'|'
-            | b'^' | b'+' | b'-' | b'*' | b'/' | b'%' | b'~' | b'<' | b'>'
+        if matches!(
+            c,
+            b'=' | b'('
+                | b')'
+                | b','
+                | b':'
+                | b'['
+                | b']'
+                | b';'
+                | b'!'
+                | b'&'
+                | b'|'
+                | b'^'
+                | b'+'
+                | b'-'
+                | b'*'
+                | b'/'
+                | b'%'
+                | b'~'
+                | b'<'
+                | b'>'
         ) {
             self.consume(1);
             return Some(char1(c));
@@ -926,9 +1105,15 @@ impl SleighScanner {
         match parse_radix_u64(&digits, radix) {
             Some(v) => {
                 if signed_num {
-                    Some(Token { kind: TokenKind::Intb, value: TokenValue::Intb(v as i64) })
+                    Some(Token {
+                        kind: TokenKind::Intb,
+                        value: TokenValue::Intb(v as i64),
+                    })
                 } else {
-                    Some(Token { kind: TokenKind::Integer, value: TokenValue::Integer(v) })
+                    Some(Token {
+                        kind: TokenKind::Integer,
+                        value: TokenValue::Integer(v),
+                    })
                 }
             }
             None => Some(Token::bare(TokenKind::BadInteger)),
@@ -968,7 +1153,10 @@ impl SleighScanner {
         let raw = rest[1..i - 1].to_vec();
         let total = i;
         self.consume(total);
-        Some(Token { kind: TokenKind::String, value: TokenValue::Str(raw) })
+        Some(Token {
+            kind: TokenKind::String,
+            value: TokenValue::Str(raw),
+        })
     }
 
     /// `find_symbol()` (slghscan.l:389): an identifier resolves to its symbol's
@@ -979,7 +1167,10 @@ impl SleighScanner {
                 kind: kind.token_kind(),
                 value: TokenValue::SymbolName(name),
             },
-            None => Token { kind: TokenKind::String, value: TokenValue::Str(name) },
+            None => Token {
+                kind: TokenKind::String,
+                value: TokenValue::Str(name),
+            },
         }
     }
 
@@ -1163,13 +1354,19 @@ impl Default for SleighScanner {
 /// A single-char token returned verbatim, carrying its char in `sleighlval.ch`
 /// (the flex rules that do `sleighlval.ch = sleightext[0]; return sleightext[0]`).
 fn char1(c: u8) -> Token {
-    Token { kind: TokenKind::Char1(c), value: TokenValue::Char(c) }
+    Token {
+        kind: TokenKind::Char1(c),
+        value: TokenValue::Char(c),
+    }
 }
 
 /// A single-char token returned by a `.` rule that does NOT set `sleighlval`
 /// (the bare `. { return sleightext[0]; }` rules).
 fn char1_no_val(c: u8) -> Token {
-    Token { kind: TokenKind::Char1(c), value: TokenValue::None }
+    Token {
+        kind: TokenKind::Char1(c),
+        value: TokenValue::None,
+    }
 }
 
 /// flex identifier-start char class `[a-zA-Z_.]`.
@@ -1192,9 +1389,31 @@ fn is_cntrl(c: u8) -> bool {
 fn is_print_char(c: u8) -> bool {
     matches!(
         c,
-        b'~' | b'!' | b'@' | b'#' | b'$' | b'%' | b'&' | b'*' | b'(' | b')' | b'-' | b'='
-            | b'+' | b'[' | b']' | b'{' | b'}' | b'|' | b';' | b':' | b'<' | b'>' | b'?'
-            | b',' | b'/' | b'0'..=b'9'
+        b'~' | b'!'
+            | b'@'
+            | b'#'
+            | b'$'
+            | b'%'
+            | b'&'
+            | b'*'
+            | b'('
+            | b')'
+            | b'-'
+            | b'='
+            | b'+'
+            | b'['
+            | b']'
+            | b'{'
+            | b'}'
+            | b'|'
+            | b';'
+            | b':'
+            | b'<'
+            | b'>'
+            | b'?'
+            | b','
+            | b'/'
+            | b'0'..=b'9'
     )
 }
 

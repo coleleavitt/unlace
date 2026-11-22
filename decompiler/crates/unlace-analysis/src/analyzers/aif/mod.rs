@@ -106,7 +106,10 @@ use std::rc::Rc;
 use unlace_base::space::AddrSpace;
 use unlace_sleigh::translate::Translate;
 
-use crate::listing::{decode::{decode_one_with_assembly, Decoded}, FlowKind, Listing};
+use crate::listing::{
+    FlowKind, Listing,
+    decode::{Decoded, decode_one_with_assembly},
+};
 
 pub(crate) mod kuna_addrtakenentry;
 pub mod kuna_aifbracket;
@@ -114,17 +117,17 @@ pub mod kuna_aifcorroborate;
 pub mod kuna_aifnoppad;
 mod kuna_aifpoolslide;
 pub mod kuna_aifstrict;
-pub mod kuna_poolentry;
-pub(crate) mod kuna_entrychecks;
-pub(crate) mod kuna_frameretain;
 mod kuna_armprologue;
-mod kuna_framecalls;
+pub(crate) mod kuna_entrychecks;
 mod kuna_framecache;
-mod kuna_framepool;
+mod kuna_framecalls;
 pub(crate) mod kuna_frameflow;
+mod kuna_framepool;
 pub mod kuna_framereplay;
-mod kuna_thumbframes;
+pub(crate) mod kuna_frameretain;
+pub mod kuna_poolentry;
 mod kuna_sparcprologue;
+mod kuna_thumbframes;
 pub(crate) use kuna_framecache::ArmFrames;
 pub mod kuna_ptrentry;
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
@@ -289,10 +292,25 @@ impl<'a> GapDecoder<'a> {
         exec_ranges: &'a [(u64, u64)],
     ) -> Self {
         GapDecoder {
-            translate, code_space, exec_ranges, prior_partition: None, cache: BTreeMap::new(),
-            spare: None, frame_instructions: None, memo: None, full_capture: None, keep_ops: true,
-            frame_probe: false, prologue_starts: None, straight_line: None, scratch: Decoded::default(), mnemonics: Vec::new(),
-            visited: HashSet::new(), worklist: Vec::new(), linear_run: None, linear_events: VecDeque::new(),
+            translate,
+            code_space,
+            exec_ranges,
+            prior_partition: None,
+            cache: BTreeMap::new(),
+            spare: None,
+            frame_instructions: None,
+            memo: None,
+            full_capture: None,
+            keep_ops: true,
+            frame_probe: false,
+            prologue_starts: None,
+            straight_line: None,
+            scratch: Decoded::default(),
+            mnemonics: Vec::new(),
+            visited: HashSet::new(),
+            worklist: Vec::new(),
+            linear_run: None,
+            linear_events: VecDeque::new(),
             #[cfg(test)]
             peak_cache_len: 0,
             #[cfg(test)]
@@ -312,20 +330,32 @@ impl<'a> GapDecoder<'a> {
     }
 
     fn in_exec(&self, vma: u64) -> bool {
-        self.exec_ranges.iter().any(|&(lo, hi)| vma >= lo && vma < hi)
+        self.exec_ranges
+            .iter()
+            .any(|&(lo, hi)| vma >= lo && vma < hi)
     }
 
     /// Speculatively decode the instruction at `vma`. `None` if out of range or
     /// undecodable. Caches the result (good or bad).
     fn probe(&mut self, vma: u64) -> Option<Rc<ProbedInsn>> {
-        let current = |insn: &Rc<ProbedInsn>| insn.reusable.as_ref().is_some_and(|reusable|
-            reusable.matches(self.translate, &unlace_base::address::Address::new(Rc::clone(&self.code_space), vma)));
+        let current = |insn: &Rc<ProbedInsn>| {
+            insn.reusable.as_ref().is_some_and(|reusable| {
+                reusable.matches(
+                    self.translate,
+                    &unlace_base::address::Address::new(Rc::clone(&self.code_space), vma),
+                )
+            })
+        };
         if let Some(cached) = self.cache.get(&vma) {
             if self.frame_instructions.is_none() || cached.as_ref().is_some_and(current) {
                 return cached.clone();
             }
         }
-        if let Some(insn) = self.frame_instructions.as_ref().and_then(|insns| insns.get(&vma)) {
+        if let Some(insn) = self
+            .frame_instructions
+            .as_ref()
+            .and_then(|insns| insns.get(&vma))
+        {
             if current(insn) {
                 let insn = Rc::clone(insn);
                 self.cache.insert(vma, Some(Rc::clone(&insn)));
@@ -357,20 +387,37 @@ impl<'a> GapDecoder<'a> {
                 run.start += (cursor - run.start).div_ceil(run.stride) * run.stride;
             }
         }
-        while self.linear_events.front().is_some_and(|event| event.addr < cursor) {
+        while self
+            .linear_events
+            .front()
+            .is_some_and(|event| event.addr < cursor)
+        {
             self.linear_events.pop_front();
         }
-        while self.cache.first_key_value().is_some_and(|(&addr, _)| addr < cursor) {
+        while self
+            .cache
+            .first_key_value()
+            .is_some_and(|(&addr, _)| addr < cursor)
+        {
             if let Some((_, Some(mut retired))) = self.cache.pop_first() {
-                if Rc::get_mut(&mut retired).is_some() { self.spare = Some(retired); }
+                if Rc::get_mut(&mut retired).is_some() {
+                    self.spare = Some(retired);
+                }
             }
         }
     }
 
     fn recorded(&self, at: u64) -> Rc<ProbedInsn> {
-        self.cache.get(&at).and_then(Option::as_ref)
-            .or_else(|| self.frame_instructions.as_ref().and_then(|insns| insns.get(&at)))
-            .cloned().expect("validated instruction has a decode record")
+        self.cache
+            .get(&at)
+            .and_then(Option::as_ref)
+            .or_else(|| {
+                self.frame_instructions
+                    .as_ref()
+                    .and_then(|insns| insns.get(&at))
+            })
+            .cloned()
+            .expect("validated instruction has a decode record")
     }
 
     /// The shared memo's record for `vma`, in this decoder's form.
@@ -379,9 +426,15 @@ impl<'a> GapDecoder<'a> {
         let (translate, space) = (self.translate, Rc::clone(&self.code_space));
         memo.recall(translate, &space, vma, |m| {
             Rc::new(ProbedInsn {
-                len: m.len, kind: m.flow.kind, is_call: m.flow.is_call, is_terminal: m.flow.is_terminal,
-                fall_through: m.fall_through, flows: m.flows.to_vec(), mnemonic: self.intern_mnemonic(m.mnemonic),
-                operands: m.operands.to_string(), reusable: Some(Rc::clone(m.reusable)),
+                len: m.len,
+                kind: m.flow.kind,
+                is_call: m.flow.is_call,
+                is_terminal: m.flow.is_terminal,
+                fall_through: m.fall_through,
+                flows: m.flows.to_vec(),
+                mnemonic: self.intern_mnemonic(m.mnemonic),
+                operands: m.operands.to_string(),
+                reusable: Some(Rc::clone(m.reusable)),
             })
         })
     }
@@ -391,27 +444,51 @@ impl<'a> GapDecoder<'a> {
             Rc::clone(existing)
         } else {
             let value: Rc<str> = Rc::from(text);
-            if self.mnemonics.len() == 16 { self.mnemonics.remove(0); }
+            if self.mnemonics.len() == 16 {
+                self.mnemonics.remove(0);
+            }
             self.mnemonics.push(Rc::clone(&value));
             value
         }
     }
 
     fn decode_uncached(&mut self, vma: u64) -> Option<Rc<ProbedInsn>> {
-        if !self.in_exec(vma) { return None; }
+        if !self.in_exec(vma) {
+            return None;
+        }
         let mut reusable = if let Some(capture) = &mut self.full_capture {
-            crate::listing::kuna_decodereuse::capture(self.translate, vma, &self.code_space,
-                &mut self.scratch, capture, self.keep_ops).ok()?
+            crate::listing::kuna_decodereuse::capture(
+                self.translate,
+                vma,
+                &self.code_space,
+                &mut self.scratch,
+                capture,
+                self.keep_ops,
+            )
+            .ok()?
         } else {
-            decode_one_with_assembly(self.translate, vma, &self.code_space, &mut self.scratch).ok()?;
+            decode_one_with_assembly(self.translate, vma, &self.code_space, &mut self.scratch)
+                .ok()?;
             None
         };
-        if self.scratch.len == 0 { return None; }
+        if self.scratch.len == 0 {
+            return None;
+        }
         let c = crate::listing::classify::classify(&self.scratch.ops, vma, self.scratch.len);
-        if let (Some(memo), Some(certified)) = (self.memo.as_ref().filter(|_| !self.keep_ops), &reusable) {
+        if let (Some(memo), Some(certified)) =
+            (self.memo.as_ref().filter(|_| !self.keep_ops), &reusable)
+        {
             let decoded = &self.scratch;
-            if let Some(shared) = memo.keep(vma, certified.context(), decoded.len, c.flow, c.fall_through,
-                &c.flows, &decoded.mnemonic, &decoded.operands) {
+            if let Some(shared) = memo.keep(
+                vma,
+                certified.context(),
+                decoded.len,
+                c.flow,
+                c.fall_through,
+                &c.flows,
+                &decoded.mnemonic,
+                &decoded.operands,
+            ) {
                 reusable = Some(shared);
             }
         }
@@ -433,9 +510,15 @@ impl<'a> GapDecoder<'a> {
             Some(spare)
         } else {
             Some(Rc::new(ProbedInsn {
-                len: decoded.len, kind: c.flow.kind, is_call: c.flow.is_call,
-                is_terminal: c.flow.is_terminal, fall_through: c.fall_through,
-                flows: c.flows, mnemonic, operands: decoded.operands.clone(), reusable,
+                len: decoded.len,
+                kind: c.flow.kind,
+                is_call: c.flow.is_call,
+                is_terminal: c.flow.is_terminal,
+                fall_through: c.fall_through,
+                flows: c.flows,
+                mnemonic,
+                operands: decoded.operands.clone(),
+                reusable,
             }))
         }
     }
@@ -586,7 +669,8 @@ fn check_valid_subroutine_strict(
 /// instruction start. Checking only `vma < gap_hi` lets a multi-byte decode
 /// overlap bytes the Listing already assigned to another instruction.
 fn strict_instruction_fits_gap(vma: u64, len: u32, gap_hi: u64) -> bool {
-    vma.checked_add(u64::from(len)).is_some_and(|end| end <= gap_hi)
+    vma.checked_add(u64::from(len))
+        .is_some_and(|end| end <= gap_hi)
 }
 
 pub(crate) fn validate_referenced_targets(
@@ -603,7 +687,9 @@ pub(crate) fn validate_referenced_targets(
         if !listing.is_undefined(target) || claimed.contains(&target) {
             continue;
         }
-        let gap_hi = listing.next_instruction_start_after(target).unwrap_or(u64::MAX);
+        let gap_hi = listing
+            .next_instruction_start_after(target)
+            .unwrap_or(u64::MAX);
         if let Some(body) =
             check_valid_subroutine_strict(&mut decoder, listing, target, target, gap_hi)
         {
@@ -635,19 +721,34 @@ fn check_valid_subroutine_with_policy(
     let mut worklist = std::mem::take(&mut decoder.worklist);
     body.clear();
     worklist.clear();
-    let mut prefix = LinearRun { start: entry, end: entry, stride: 1, strict };
-    if let Some(run) = decoder.linear_run.filter(|run| run.strict == strict && run.contains(entry)) {
+    let mut prefix = LinearRun {
+        start: entry,
+        end: entry,
+        stride: 1,
+        strict,
+    };
+    if let Some(run) = decoder
+        .linear_run
+        .filter(|run| run.strict == strict && run.contains(entry))
+    {
         if entry >= gap_lo && entry < gap_hi {
-            let count = ((run.end.min(gap_hi) - entry) / run.stride)
-                .min(MAX_FOLLOW_INSNS as u64);
+            let count = ((run.end.min(gap_hi) - entry) / run.stride).min(MAX_FOLLOW_INSNS as u64);
             prefix.end = entry + count * run.stride;
             prefix.stride = run.stride;
         }
     }
-    while decoder.linear_events.front().is_some_and(|event| event.addr < prefix.start) {
+    while decoder
+        .linear_events
+        .front()
+        .is_some_and(|event| event.addr < prefix.start)
+    {
         decoder.linear_events.pop_front();
     }
-    while decoder.linear_events.back().is_some_and(|event| event.addr >= prefix.end) {
+    while decoder
+        .linear_events
+        .back()
+        .is_some_and(|event| event.addr >= prefix.end)
+    {
         decoder.linear_events.pop_back();
     }
     let mut flags = (false, false);
@@ -659,9 +760,22 @@ fn check_valid_subroutine_with_policy(
     decoder.linear_run = (prefix.count() != 0).then_some(prefix);
     worklist.push(prefix.end);
     let accepted = follow_subroutine(
-        decoder, listing, gap_lo, gap_hi, strict, prefix, flags, &mut body, &mut worklist);
-    let result = accepted.map(|corroborated| (
-        prefix.addresses().chain(body.iter().copied()).collect(), corroborated));
+        decoder,
+        listing,
+        gap_lo,
+        gap_hi,
+        strict,
+        prefix,
+        flags,
+        &mut body,
+        &mut worklist,
+    );
+    let result = accepted.map(|corroborated| {
+        (
+            prefix.addresses().chain(body.iter().copied()).collect(),
+            corroborated,
+        )
+    });
     decoder.visited = body;
     decoder.worklist = worklist;
     result
@@ -678,8 +792,13 @@ fn follow_subroutine(
     body: &mut HashSet<u64>,
     worklist: &mut Vec<u64>,
 ) -> Option<bool> {
-    let validation_hi = decoder.prior_partition
-        .map(|prior| prior.next_instruction_start_after(gap_lo).unwrap_or(u64::MAX))
+    let validation_hi = decoder
+        .prior_partition
+        .map(|prior| {
+            prior
+                .next_instruction_start_after(gap_lo)
+                .unwrap_or(u64::MAX)
+        })
         .unwrap_or(gap_hi);
     let mut did_terminate = false;
     let (mut adds_info, mut corroborated) = flags;
@@ -688,14 +807,18 @@ fn follow_subroutine(
     let mut extend_linear = true;
     let mut speculative: HashSet<u64> = HashSet::new();
     let thumb_walk = prefix.start & 3 == 2
-        || decoder.probe(prefix.start).is_some_and(|insn| insn.len == 2);
+        || decoder
+            .probe(prefix.start)
+            .is_some_and(|insn| insn.len == 2);
 
     'follow: while let Some(vma) = worklist.pop() {
         if prefix.contains(vma) || body.contains(&vma) {
             continue; // already followed (the VisitStat dedup)
         }
         #[cfg(test)]
-        { decoder.validation_steps += 1; }
+        {
+            decoder.validation_steps += 1;
+        }
         steps += 1;
         if steps > MAX_FOLLOW_INSNS {
             if strict && !(decoder.frame_probe && did_terminate) {
@@ -741,7 +864,10 @@ fn follow_subroutine(
 
         // Inside the gap: speculatively decode. An undecodable byte invalidates.
         if speculative.contains(&vma)
-            && decoder.prologue_starts.as_ref().is_some_and(|starts| starts.contains(&vma))
+            && decoder
+                .prologue_starts
+                .as_ref()
+                .is_some_and(|starts| starts.contains(&vma))
         {
             continue;
         }
@@ -767,7 +893,7 @@ fn follow_subroutine(
             }
         }
         if matches!(insn.kind, FlowKind::ComputedJump) {
-            extend_linear = false;            // A computed/indirect jump with no static target is a terminate signal.
+            extend_linear = false; // A computed/indirect jump with no static target is a terminate signal.
             did_terminate = true;
             if !decoder.frame_probe {
                 continue;
@@ -775,7 +901,10 @@ fn follow_subroutine(
         }
 
         let mut event = RunEvent {
-            addr: vma, branches: Vec::new(), adds_info: false, corroborated: false,
+            addr: vma,
+            branches: Vec::new(),
+            adds_info: false,
+            corroborated: false,
         };
         for &target in &insn.flows {
             if !decoder.in_exec(target) {
@@ -798,7 +927,9 @@ fn follow_subroutine(
                     corroborated = true;
                     event.corroborated = true;
                 }
-                if extend_linear { event.branches.push(target); }
+                if extend_linear {
+                    event.branches.push(target);
+                }
                 if speculative.contains(&vma) {
                     speculative.insert(target);
                 } else {
@@ -809,7 +940,9 @@ fn follow_subroutine(
         }
         if extend_linear {
             let fall = vma.checked_add(u64::from(insn.len));
-            if vma == linear.end && fall.is_some() && insn.fall_through == fall
+            if vma == linear.end
+                && fall.is_some()
+                && insn.fall_through == fall
                 && (linear.count() == 0 || linear.stride == u64::from(insn.len))
             {
                 linear.stride = u64::from(insn.len);
@@ -870,8 +1003,17 @@ pub fn run_aif(
     aifbracket: Option<&kuna_aifbracket::BracketEvidence>,
     aifpoolslide: Option<&unlace_decomp::architecture::Architecture>,
 ) -> Vec<u64> {
-    run_aif_sharing(listing, translate, code_space, exec_ranges, aifstrict, aifcorroborate, aifbracket,
-        aifpoolslide, None)
+    run_aif_sharing(
+        listing,
+        translate,
+        code_space,
+        exec_ranges,
+        aifstrict,
+        aifcorroborate,
+        aifbracket,
+        aifpoolslide,
+        None,
+    )
 }
 
 /// [`run_aif`] over decodes shared through `memo`.
@@ -892,10 +1034,21 @@ pub(crate) fn run_aif_sharing(
     let mut decoder = GapDecoder::new(translate, code_space, exec_ranges);
     decoder.share(memo);
     let policy = GapWalk {
-        strict: aifstrict, corroborate: aifcorroborate, bracket: aifbracket, noppad: true,
+        strict: aifstrict,
+        corroborate: aifcorroborate,
+        bracket: aifbracket,
+        noppad: true,
         poolslide,
     };
-    aif_candidates(listing, listing, &mut decoder, policy, &BTreeMap::new(), None, None)
+    aif_candidates(
+        listing,
+        listing,
+        &mut decoder,
+        policy,
+        &BTreeMap::new(),
+        None,
+        None,
+    )
 }
 
 /// Retain pre-frame validation extents while admitting starts only in current gaps.
@@ -919,11 +1072,23 @@ pub(crate) fn run_aif_after_frames(
     decoder.prior_partition = Some(prior);
     decoder.straight_line = straight_line.is_some().then(BTreeSet::new);
     let policy = GapWalk {
-        strict: aifstrict, corroborate: aifcorroborate, bracket: aifbracket, noppad: true,
+        strict: aifstrict,
+        corroborate: aifcorroborate,
+        bracket: aifbracket,
+        noppad: true,
         poolslide,
     };
-    let entries = aif_candidates(listing, listing, &mut decoder, policy, &BTreeMap::new(), None, None);
-    if let (Some(out), Some(reached)) = (straight_line.as_deref_mut(), decoder.straight_line.take()) {
+    let entries = aif_candidates(
+        listing,
+        listing,
+        &mut decoder,
+        policy,
+        &BTreeMap::new(),
+        None,
+        None,
+    );
+    if let (Some(out), Some(reached)) = (straight_line.as_deref_mut(), decoder.straight_line.take())
+    {
         out.extend(reached);
     }
     entries
@@ -947,10 +1112,21 @@ fn run_aif_with_decoder(
     aifbracket: Option<&kuna_aifbracket::BracketEvidence>,
 ) -> Vec<u64> {
     let gap_walk = GapWalk {
-        strict: aifstrict, corroborate: aifcorroborate, bracket: aifbracket, noppad: false,
+        strict: aifstrict,
+        corroborate: aifcorroborate,
+        bracket: aifbracket,
+        noppad: false,
         poolslide: None,
     };
-    aif_candidates(listing, listing, decoder, gap_walk, &BTreeMap::new(), None, None)
+    aif_candidates(
+        listing,
+        listing,
+        decoder,
+        gap_walk,
+        &BTreeMap::new(),
+        None,
+        None,
+    )
 }
 
 /// The per-run AIF gap-walk policy flags.
@@ -974,14 +1150,24 @@ fn aif_candidates(
     roots: Option<&BTreeSet<u64>>,
     mut bodies: Option<&mut BTreeMap<u64, ProbedBody>>,
 ) -> Vec<u64> {
-    let GapWalk { strict: aifstrict, corroborate: aifcorroborate, bracket, noppad, poolslide } = policy;
+    let GapWalk {
+        strict: aifstrict,
+        corroborate: aifcorroborate,
+        bracket,
+        noppad,
+        poolslide,
+    } = policy;
     let bracket = bracket.filter(|_| roots.is_none());
-    let mut padding = (noppad && roots.is_none()).then(|| kuna_aifnoppad::PaddingRuns::new(decoder));
+    let mut padding =
+        (noppad && roots.is_none()).then(|| kuna_aifnoppad::PaddingRuns::new(decoder));
     let mut literals = if roots.is_some() {
         kuna_framepool::literals(listing, decoder, frames, poolslide)
     } else {
         poolslide.map(|(arch, code_space)| {
-            kuna_aifpoolslide::LiteralWords::from_listing(listing, kuna_poolentry::DecodeMode { arch, code_space })
+            kuna_aifpoolslide::LiteralWords::from_listing(
+                listing,
+                kuna_poolentry::DecodeMode { arch, code_space },
+            )
         })
     };
     if corpus.function_count() < MINIMUM_FUNCTION_COUNT || corpus.num_instructions() == 0 {
@@ -1005,9 +1191,10 @@ fn aif_candidates(
     let mut gap_hi = u64::MAX;
     while let Some(gap_start) = cursor {
         decoder.retire_before(gap_start);
-        while frame_spans.peek().is_some_and(|&(&start, &len)| {
-            start.saturating_add(u64::from(len)) <= gap_start
-        }) {
+        while frame_spans
+            .peek()
+            .is_some_and(|&(&start, &len)| start.saturating_add(u64::from(len)) <= gap_start)
+        {
             frame_spans.next();
         }
         if let Some(&(&start, &len)) = frame_spans.peek() {
@@ -1021,14 +1208,23 @@ fn aif_candidates(
         // this interior is "must-decode-here"; flows past it into discovered code
         // are legitimate.
         if gap_start >= scan_end {
-            gap_hi = listing.next_instruction_start_after(gap_start).unwrap_or(u64::MAX);
-            let exec_hi = listing.exec_ranges().iter()
+            gap_hi = listing
+                .next_instruction_start_after(gap_start)
+                .unwrap_or(u64::MAX);
+            let exec_hi = listing
+                .exec_ranges()
+                .iter()
                 .find(|&&(lo, hi)| lo <= gap_start && gap_start < hi)
-                .map(|&(_, hi)| hi).expect("undefined address belongs to an executable range");
+                .map(|&(_, hi)| hi)
+                .expect("undefined address belongs to an executable range");
             scan_end = gap_hi.min(exec_hi);
         }
         if roots.is_some_and(|roots| roots.range(gap_start..gap_hi).next().is_none()) {
-            cursor = if gap_hi == u64::MAX { None } else { listing.first_undefined_after(gap_hi) };
+            cursor = if gap_hi == u64::MAX {
+                None
+            } else {
+                listing.first_undefined_after(gap_hi)
+            };
             continue;
         }
 
@@ -1041,7 +1237,8 @@ fn aif_candidates(
             gap_start.saturating_add(1)
         };
         let probe_here = (!aifstrict || kuna_aifstrict::probe_allowed(listing, gap_start))
-            && listing.is_undefined(gap_start) && !claimed.contains(&gap_start);
+            && listing.is_undefined(gap_start)
+            && !claimed.contains(&gap_start);
         // (kuna, `aifnoppad`) No entry starts on filler: filler in front of a known
         // function or zero fill is not probed, and an accept moves past padding.
         let filler = match &mut padding {
@@ -1051,12 +1248,17 @@ fn aif_candidates(
         if probe_here && filler != kuna_aifnoppad::Filler::Refuse {
             // (kuna, `aifbracket`) A fragment of the enclosing known function is
             // refused but, like an `aif precise` refusal, consumes its body.
-            let probe = match probe_gap_start(decoder, listing, &hist, gap_start, gap_hi, aifcorroborate) {
-                Probe::Accept(body) if bracket.is_some_and(|evidence| {
-                    kuna_aifbracket::rejects(listing, decoder, evidence, gap_start, &body)
-                }) => Probe::Uncorroborated(body),
-                other => other,
-            };
+            let probe =
+                match probe_gap_start(decoder, listing, &hist, gap_start, gap_hi, aifcorroborate) {
+                    Probe::Accept(body)
+                        if bracket.is_some_and(|evidence| {
+                            kuna_aifbracket::rejects(listing, decoder, evidence, gap_start, &body)
+                        }) =>
+                    {
+                        Probe::Uncorroborated(body)
+                    }
+                    other => other,
+                };
             // (kuna, `aifpoolslide`) A candidate on a literal-pool word plants its
             // accept on the code after the pool; it is refused, consuming its body,
             // when that is data, and rejected when its body never decoded there.
@@ -1072,11 +1274,12 @@ fn aif_candidates(
                 (_, Some(_)) => Probe::Reject,
                 (probe, None) => probe,
             };
-            if let (Some(lits), Probe::Accept(body) | Probe::Uncorroborated(body)) = (&mut literals, &probe) {
+            if let (Some(lits), Probe::Accept(body) | Probe::Uncorroborated(body)) =
+                (&mut literals, &probe)
+            {
                 lits.add_body(listing, decoder, body);
             }
-            match probe
-            {
+            match probe {
                 Probe::Accept(mut body) => {
                     let mut entry = match (pool_end, filler) {
                         (Some(end), _) => end,
@@ -1084,20 +1287,33 @@ fn aif_candidates(
                         _ => gap_start,
                     };
                     if roots.is_none() && entry == gap_start {
-                        if let Some(prefix) = kuna_sparcprologue::prefix(decoder, listing, &claimed, entry) {
+                        if let Some(prefix) =
+                            kuna_sparcprologue::prefix(decoder, listing, &claimed, entry)
+                        {
                             body.extend([prefix, prefix + 4]);
                             entry = prefix;
                         }
                     }
                     if let Some(bodies) = &mut bodies {
-                        bodies.insert(entry, body.iter().copied().filter(|&at| at >= entry)
-                            .map(|at| (at, decoder.recorded(at))).collect());
+                        bodies.insert(
+                            entry,
+                            body.iter()
+                                .copied()
+                                .filter(|&at| at >= entry)
+                                .map(|at| (at, decoder.recorded(at)))
+                                .collect(),
+                        );
                     }
                     if decoder.straight_line.is_some() {
-                        let reached: Vec<u64> = body.iter().filter_map(|&at| decoder.probe(at))
+                        let reached: Vec<u64> = body
+                            .iter()
+                            .filter_map(|&at| decoder.probe(at))
                             .flat_map(|insn| {
-                                let taken = (insn.kind == FlowKind::ConditionalBranch).then(|| insn.flows.clone());
-                                insn.fall_through.into_iter().chain(taken.into_iter().flatten())
+                                let taken = (insn.kind == FlowKind::ConditionalBranch)
+                                    .then(|| insn.flows.clone());
+                                insn.fall_through
+                                    .into_iter()
+                                    .chain(taken.into_iter().flatten())
                             })
                             .collect();
                         decoder.straight_line.as_mut().unwrap().extend(reached);
@@ -1129,7 +1345,8 @@ fn aif_candidates(
         cursor = if advanced > gap_start && advanced < scan_end {
             Some(advanced)
         } else {
-            listing.first_undefined_after(advanced.saturating_sub(1))
+            listing
+                .first_undefined_after(advanced.saturating_sub(1))
                 .filter(|&next| next > gap_start)
         };
     }
@@ -1163,7 +1380,9 @@ fn probe_gap_start(
     gap_hi: u64,
     aifcorroborate: bool,
 ) -> Probe {
-    let Some(fp) = decoder.fingerprint(gap_start) else { return Probe::Reject };
+    let Some(fp) = decoder.fingerprint(gap_start) else {
+        return Probe::Reject;
+    };
     let count = hist.get(&fp).copied().unwrap_or(0);
     if count < FINGERPRINT_THRESHOLD {
         return Probe::Reject;
@@ -1186,8 +1405,10 @@ pub(crate) fn validate_pointer_targets(
     exec_ranges: &[(u64, u64)],
     candidates: impl IntoIterator<Item = u64>,
 ) -> Vec<u64> {
-    let candidates: Vec<u64> =
-        candidates.into_iter().filter(|&target| listing.is_undefined(target)).collect();
+    let candidates: Vec<u64> = candidates
+        .into_iter()
+        .filter(|&target| listing.is_undefined(target))
+        .collect();
     if candidates.is_empty() {
         return Vec::new();
     }
@@ -1203,11 +1424,15 @@ pub(crate) fn validate_pointer_targets(
         if claimed.contains(&target) {
             continue;
         }
-        let Some(fp) = decoder.fingerprint(target) else { continue };
+        let Some(fp) = decoder.fingerprint(target) else {
+            continue;
+        };
         if hist.get(&fp).copied().unwrap_or(0) < FINGERPRINT_THRESHOLD {
             continue;
         }
-        let gap_hi = listing.next_instruction_start_after(target).unwrap_or(u64::MAX);
+        let gap_hi = listing
+            .next_instruction_start_after(target)
+            .unwrap_or(u64::MAX);
         if let Some(body) =
             check_valid_subroutine_strict(&mut decoder, listing, target, target, gap_hi)
         {
@@ -1229,11 +1454,24 @@ pub(crate) fn validate_pointer_targets(
 /// Preserve AIF-supported prefixes that reach a frame before installing roots.
 /// Both Listing and reference walks use this under `funcstart_patterns`.
 pub fn raw_arm_prologue_seeds(
-    file: &object::File, listing: &Listing,
-    arch: &unlace_decomp::architecture::Architecture, translate: &dyn Translate,
-    code_space: Rc<AddrSpace>, exec_ranges: &[(u64, u64)],
+    file: &object::File,
+    listing: &Listing,
+    arch: &unlace_decomp::architecture::Architecture,
+    translate: &dyn Translate,
+    code_space: Rc<AddrSpace>,
+    exec_ranges: &[(u64, u64)],
 ) -> Vec<u64> {
-    raw_arm_frames(file, listing, arch, translate, code_space, exec_ranges, false, None).roots
+    raw_arm_frames(
+        file,
+        listing,
+        arch,
+        translate,
+        code_space,
+        exec_ranges,
+        false,
+        None,
+    )
+    .roots
 }
 
 pub fn raw_thumb_prologue_seeds(
@@ -1302,20 +1540,25 @@ pub(crate) fn raw_arm_frames(
     // Address order, so an accepted routine claims its body before a
     // prologue-shaped halfword in its interior is considered.
     for vma in candidates {
-        if claimed.range(..=vma).next_back()
+        if claimed
+            .range(..=vma)
+            .next_back()
             .is_some_and(|(&start, &len)| vma - start < u64::from(len))
         {
             continue;
         }
-        let gap_hi = listing.next_instruction_start_after(vma).unwrap_or(u64::MAX);
+        let gap_hi = listing
+            .next_instruction_start_after(vma)
+            .unwrap_or(u64::MAX);
         let Some(body) = check_valid_subroutine_strict(&mut decoder, listing, vma, vma, gap_hi)
         else {
             continue;
         };
         accepted.insert(vma);
-        let spans: Vec<_> = body.into_iter().map(|start| {
-            (start, decoder.probe(start).unwrap().len)
-        }).collect();
+        let spans: Vec<_> = body
+            .into_iter()
+            .map(|start| (start, decoder.probe(start).unwrap().len))
+            .collect();
         claimed.extend(spans.iter().copied());
         if arch.analysis_aif.enabled() || capture_xrefs {
             frames.validated(vma, spans, &mut decoder);
@@ -1324,7 +1567,10 @@ pub(crate) fn raw_arm_frames(
         }
     }
 
-    if arch.analysis_aif.enabled() && !accepted.is_empty() && listing.function_count() >= MINIMUM_FUNCTION_COUNT {
+    if arch.analysis_aif.enabled()
+        && !accepted.is_empty()
+        && listing.function_count() >= MINIMUM_FUNCTION_COUNT
+    {
         let policy = kuna_framepool::policy(arch, Rc::clone(&decoder.code_space));
         let replacements = frames.reconcile(listing, listing, &mut decoder, &accepted, &[], policy);
         accepted.retain(|root| !replacements.contains_key(root));
@@ -1349,10 +1595,14 @@ pub(crate) fn arm_frame_prefixes(
     translate: &dyn Translate,
     code_space: Rc<AddrSpace>,
 ) -> BTreeMap<u64, u64> {
-    if !arch.analysis_aif.enabled() || roots.is_empty() || corpus.function_count() < MINIMUM_FUNCTION_COUNT {
+    if !arch.analysis_aif.enabled()
+        || roots.is_empty()
+        || corpus.function_count() < MINIMUM_FUNCTION_COUNT
+    {
         return BTreeMap::new();
     }
-    let context = frame_context.map(|scope| scope.probe_original())
+    let context = frame_context
+        .map(|scope| scope.probe_original())
         .or_else(|| translate.context_scope());
     if let Some(scope) = &context {
         let _ = scope.protect_variable(b"TMode");
@@ -1375,25 +1625,45 @@ fn reconcile_frame_prefixes(
 ) -> BTreeMap<u64, u64> {
     let mut accepted = roots.clone();
     let mut replacements = BTreeMap::new();
-    let prefixes = aif_candidates(listing, corpus, decoder, policy, &claimed, Some(roots), Some(bodies));
+    let prefixes = aif_candidates(
+        listing,
+        corpus,
+        decoder,
+        policy,
+        &claimed,
+        Some(roots),
+        Some(bodies),
+    );
     for prefix in prefixes {
         if !listing.is_undefined(prefix) || roots.contains(&prefix) {
             continue;
         }
-        if claimed.range(..=prefix).next_back()
+        if claimed
+            .range(..=prefix)
+            .next_back()
             .is_some_and(|(&start, &len)| prefix - start < u64::from(len))
         {
             continue;
         }
-        let gap_hi = listing.next_instruction_start_after(prefix).unwrap_or(u64::MAX);
+        let gap_hi = listing
+            .next_instruction_start_after(prefix)
+            .unwrap_or(u64::MAX);
         if accepted.range(prefix..gap_hi).next().is_none() {
             continue;
         }
-        let spans: Vec<_> = bodies[&prefix].iter().map(|(&start, insn)| (start, insn.len)).collect();
-        let interior: Vec<_> = spans.iter().filter(|(start, _)| *start >= prefix)
+        let spans: Vec<_> = bodies[&prefix]
+            .iter()
+            .map(|(&start, insn)| (start, insn.len))
+            .collect();
+        let interior: Vec<_> = spans
+            .iter()
+            .filter(|(start, _)| *start >= prefix)
             .flat_map(|&(start, len)| {
-                accepted.range(start..start.saturating_add(u64::from(len))).copied()
-            }).collect();
+                accepted
+                    .range(start..start.saturating_add(u64::from(len)))
+                    .copied()
+            })
+            .collect();
         if !interior.is_empty() {
             for root in interior {
                 accepted.remove(&root);
@@ -1556,11 +1826,15 @@ pub fn code_pointer_table_seeds(
         // The pointed-to entry must begin with a stack-frame prologue (the precision
         // signal that separates a real function pointer from a coincidental code
         // pointer / mid-function label / misread data descriptor).
-        let Some(bytes) = exec_bytes_at(target, 4) else { continue };
+        let Some(bytes) = exec_bytes_at(target, 4) else {
+            continue;
+        };
         if !is_thumb_function_prologue(&bytes) {
             continue;
         }
-        let gap_hi = listing.next_instruction_start_after(target).unwrap_or(u64::MAX);
+        let gap_hi = listing
+            .next_instruction_start_after(target)
+            .unwrap_or(u64::MAX);
         if let Some(body) = check_valid_subroutine(&mut decoder, listing, target, target, gap_hi) {
             accepted.insert(target);
             claimed.extend(body);
@@ -1738,7 +2012,10 @@ mod tests {
                 Some(("movs".to_string(), 2))
             }
         };
-        assert_eq!(fingerprint_over_listing(&textless, 0x1000, alt_isa_second), None);
+        assert_eq!(
+            fingerprint_over_listing(&textless, 0x1000, alt_isa_second),
+            None
+        );
 
         // An undecodable re-decode and an empty mnemonic still reject, as before.
         assert_eq!(fingerprint_over_listing(&textless, 0x1000, |_| None), None);

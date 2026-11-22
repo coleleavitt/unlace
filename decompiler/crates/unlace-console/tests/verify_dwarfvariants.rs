@@ -35,11 +35,16 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Bootstrap the shapes fixture, decompile each of `funcs` and return the
@@ -56,12 +61,14 @@ fn decompile_in(fixture: &str, funcs: &[&str]) -> String {
     let path = root
         .join("decompiler/crates/unlace-analysis/tests/fixtures")
         .join(fixture)
-        .to_str().expect("UTF-8 fixture path")
+        .to_str()
+        .expect("UTF-8 fixture path")
         .to_string();
 
     let mut prog = bootstrap_from_object(&path, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
     let mut cmds: Vec<String> = Vec::new();
     for f in funcs {
@@ -101,7 +108,10 @@ fn result_return_loses_its_phantom_sret_parameter() {
         on.contains("core::result::Result<u32, u32> ret_result(uint4 x)"),
         "the source signature should come back, got:\n{on}"
     );
-    assert!(!on.contains("rethidden"), "no phantom parameter survives:\n{on}");
+    assert!(
+        !on.contains("rethidden"),
+        "no phantom parameter survives:\n{on}"
+    );
 }
 
 /// The recovered type is spelled with the compiler's own name and its
@@ -113,7 +123,10 @@ fn the_discriminant_is_a_named_field() {
         on.contains("rethidden->tag = "),
         "the discriminant should be a named field, got:\n{on}"
     );
-    assert!(!on.contains("field_0x4"), "no byte-offset spelling of the tag:\n{on}");
+    assert!(
+        !on.contains("field_0x4"),
+        "no byte-offset spelling of the tag:\n{on}"
+    );
 }
 
 /// The union facet is named by the SOURCE variant name where that name is
@@ -131,7 +144,10 @@ fn uncontested_variant_payloads_are_named_by_the_source_variant() {
         on.contains("(rethidden->payload).B.__0 = "),
         "and so should variant B's, got:\n{on}"
     );
-    assert!(!on.contains("Variant0"), "no synthesized variant name:\n{on}");
+    assert!(
+        !on.contains("Variant0"),
+        "no synthesized variant name:\n{on}"
+    );
 }
 
 /// A variant with TWO fields keeps every field, and the naming rule is applied
@@ -182,7 +198,10 @@ fn a_niche_option_recovers_its_signature_and_its_default_variant() {
         on.contains("core::option::Option<&u32>::Some"),
         "the pointer belongs to the DEFAULT variant `Some`, got:\n{on}"
     );
-    assert!(!on.contains("None"), "the fieldless variant overlays nothing:\n{on}");
+    assert!(
+        !on.contains("None"),
+        "the fieldless variant overlays nothing:\n{on}"
+    );
 }
 
 /// A FIELDLESS enum is a `DW_TAG_enumeration_type`, not a variant part, so this
@@ -215,7 +234,9 @@ fn the_layout_side_table_is_recorded() {
 
     let prog = bootstrap_from_object(&path, "", &spec_roots).expect("required fixture setup");
     let types = prog.arch().types();
-    let l = types.kuna_variant_layout("core::result::Result<u32, u32>").expect("Result layout recorded");
+    let l = types
+        .kuna_variant_layout("core::result::Result<u32, u32>")
+        .expect("Result layout recorded");
     assert_eq!(l.size, 8);
     assert_eq!((l.tag_offset, l.tag_size), (0, 4));
     assert_eq!(l.payload_offset, 4);
@@ -243,10 +264,15 @@ fn the_layout_side_table_is_recorded() {
 
     // Three variants, and the fieldless one is on the table with no payload
     // type -- it has no bytes to overlay.
-    let t = types.kuna_variant_layout("fx::Three").expect("Three layout recorded");
+    let t = types
+        .kuna_variant_layout("fx::Three")
+        .expect("Three layout recorded");
     assert_eq!(t.variants.len(), 3);
     assert!(t.facet_named("C").unwrap().payload_type.is_empty());
-    assert_eq!(t.facet_named("B").unwrap().fields, vec![("__0".to_string(), 8)]);
+    assert_eq!(
+        t.facet_named("B").unwrap().fields,
+        vec![("__0".to_string(), 8)]
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -283,11 +309,17 @@ fn an_overlaying_result_names_neither_variant() {
 #[test]
 fn reading_an_overlaying_result_names_neither_variant() {
     let on = overlay("use16");
-    assert!(on.contains("+ 100"), "the Err arm is still in the body, got:\n{on}");
+    assert!(
+        on.contains("+ 100"),
+        "the Err arm is still in the body, got:\n{on}"
+    );
     for bad in [".Ok", ".Err"] {
         assert!(!on.contains(bad), "`{bad}` must not be printed, got:\n{on}");
     }
-    assert!(on.contains("payload.field_0x8"), "the offset spelling is used, got:\n{on}");
+    assert!(
+        on.contains("payload.field_0x8"),
+        "the offset spelling is used, got:\n{on}"
+    );
 }
 
 /// **The kept half.** `Option<u64>` has exactly ONE payload-carrying variant, so
@@ -312,7 +344,10 @@ fn suppression_does_not_give_back_the_phantom_sret() {
         on.contains("core::result::Result<u64, u64> r16(uint4 x)"),
         "the source signature should come back, got:\n{on}"
     );
-    assert!(!on.contains("rethidden"), "no phantom parameter survives:\n{on}");
+    assert!(
+        !on.contains("rethidden"),
+        "no phantom parameter survives:\n{on}"
+    );
 }
 
 /// The side table still carries the compiler's own variant names and
@@ -337,7 +372,10 @@ fn the_side_table_keeps_the_names_the_type_does_not() {
     assert_eq!(r.facet_for_discr(1).unwrap().name, "Err");
     assert_eq!(r.facet_named("Ok").unwrap().label, "field_0x8");
     assert_eq!(r.facet_named("Err").unwrap().label, "field_0x8");
-    assert!(!r.names_any_variant(), "nothing in the emitted type names a variant");
+    assert!(
+        !r.names_any_variant(),
+        "nothing in the emitted type names a variant"
+    );
 
     let o = types
         .kuna_variant_layout("core::option::Option<u64>")

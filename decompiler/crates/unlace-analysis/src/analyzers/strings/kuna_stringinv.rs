@@ -64,7 +64,7 @@ use object::read::{Object, ObjectSection, ObjectSegment};
 
 use super::kuna_utf8strings::scan_utf8_runs;
 use super::kuna_widestrings::scan_utf16_runs;
-use super::{is_loaded_initialized, scan_runs, Run};
+use super::{Run, is_loaded_initialized, scan_runs};
 
 pub use super::Termination;
 
@@ -177,8 +177,16 @@ fn section_regions<'d>(file: &'d object::File<'d>) -> Vec<Region<'d>> {
             Ok(d) if !d.is_empty() => d,
             _ => continue,
         };
-        let name = sec.name().ok().filter(|n| !n.is_empty()).map(str::to_string);
-        out.push(Region { name, vma: sec.address(), data });
+        let name = sec
+            .name()
+            .ok()
+            .filter(|n| !n.is_empty())
+            .map(str::to_string);
+        out.push(Region {
+            name,
+            vma: sec.address(),
+            data,
+        });
     }
     out
 }
@@ -193,7 +201,11 @@ fn segment_regions<'d>(file: &'d object::File<'d>) -> Vec<Region<'d>> {
             Ok(d) if !d.is_empty() => d,
             _ => continue,
         };
-        out.push(Region { name: None, vma: seg.address(), data });
+        out.push(Region {
+            name: None,
+            vma: seg.address(),
+            data,
+        });
     }
     out
 }
@@ -211,7 +223,9 @@ fn retain_within(regions: &mut Vec<Region<'_>>, ranges: &[(u64, u64)]) {
         })
         .collect();
     regions.retain(|r| {
-        let Some(end) = r.vma.checked_add(r.data.len() as u64) else { return false };
+        let Some(end) = r.vma.checked_add(r.data.len() as u64) else {
+            return false;
+        };
         let n = sorted.partition_point(|&(lo, _)| lo <= r.vma);
         n > 0 && end <= reach[n - 1]
     });
@@ -221,11 +235,17 @@ fn retain_within(regions: &mut Vec<Region<'_>>, ranges: &[(u64, u64)]) {
 /// overlap: then the first region holding an address is the only one, and
 /// [`region_of`] can binary-search for it instead of scanning.
 fn disjoint_index(regions: &[Region<'_>]) -> Option<Vec<(u64, usize)>> {
-    let mut starts: Vec<(u64, usize)> =
-        regions.iter().enumerate().map(|(i, r)| (r.vma, i)).collect();
+    let mut starts: Vec<(u64, usize)> = regions
+        .iter()
+        .enumerate()
+        .map(|(i, r)| (r.vma, i))
+        .collect();
     starts.sort_unstable();
     let end = |i: usize| u128::from(regions[i].vma) + regions[i].data.len() as u128;
-    starts.windows(2).all(|w| end(w[0].1) <= u128::from(w[1].0)).then_some(starts)
+    starts
+        .windows(2)
+        .all(|w| end(w[0].1) <= u128::from(w[1].0))
+        .then_some(starts)
 }
 
 /// The first region, in image order, holding `addr`, if any.
@@ -290,10 +310,18 @@ pub fn inventory_in_image(file: &object::File, q: &Query, ranges: &[(u64, u64)])
     inventory_with_ranges(file, q, Some(ranges))
 }
 
-fn inventory_with_ranges(file: &object::File, q: &Query, ranges: Option<&[(u64, u64)]>) -> Inventory {
+fn inventory_with_ranges(
+    file: &object::File,
+    q: &Query,
+    ranges: Option<&[(u64, u64)]>,
+) -> Inventory {
     let sections = section_regions(file);
     let from_segments = sections.is_empty();
-    let mut regions = if from_segments { segment_regions(file) } else { sections };
+    let mut regions = if from_segments {
+        segment_regions(file)
+    } else {
+        sections
+    };
     if let Some(ranges) = ranges {
         retain_within(&mut regions, ranges);
     }
@@ -372,7 +400,11 @@ fn inventory_with_ranges(file: &object::File, q: &Query, ranges: Option<&[(u64, 
     strings.sort_by(|a, b| (a.addr, a.encoding).cmp(&(b.addr, b.encoding)));
 
     let names = regions.iter().filter_map(|r| r.name.clone()).collect();
-    Inventory { strings, regions: names, from_segments }
+    Inventory {
+        strings,
+        regions: names,
+        from_segments,
+    }
 }
 
 #[cfg(test)]
@@ -404,7 +436,13 @@ mod tests {
         }
         data.extend_from_slice(&[0, 0]);
         let out = scan_utf16_run(&data, 0x1000, 5);
-        assert_eq!(out, vec![StringFact { addr: 0x1000, len: 20 }]);
+        assert_eq!(
+            out,
+            vec![StringFact {
+                addr: 0x1000,
+                len: 20
+            }]
+        );
 
         // The same bytes read at 1-byte width are a one-character run, which the
         // pass rejects outright — this is the defect the width exists to fix.
@@ -433,7 +471,13 @@ mod tests {
         }
         data.extend_from_slice(&[0, 0]);
         let out = scan_utf16_run(&data, 0x1001, 5);
-        assert_eq!(out, vec![StringFact { addr: 0x1002, len: 12 }]);
+        assert_eq!(
+            out,
+            vec![StringFact {
+                addr: 0x1002,
+                len: 12
+            }]
+        );
     }
 
     #[test]
@@ -442,15 +486,25 @@ mod tests {
         // anywhere. `strings(1)` reads all three; require-NUL-end reads none.
         let data = b"\x0cout.js\x06std\x12_0x8ec6b3\x11".to_vec();
         let nul_runs = scan_runs(&data, 0x1000, 4, Termination::Nul);
-        assert!(nul_runs.is_empty(), "no run here ends at a NUL: {nul_runs:?}");
+        assert!(
+            nul_runs.is_empty(),
+            "no run here ends at a NUL: {nul_runs:?}"
+        );
 
         let any_runs = scan_runs(&data, 0x1000, 4, Termination::Any);
         let texts: Vec<String> = any_runs
             .iter()
             .map(|r| ascii_text(&data[(r.addr - 0x1000) as usize..][..r.visible_len]))
             .collect();
-        assert_eq!(texts, vec!["out.js", "_0x8ec6b3"], "\"std\" is below the minimum");
-        assert!(any_runs.iter().all(|r| !r.nul_terminated), "none of them is a C string");
+        assert_eq!(
+            texts,
+            vec!["out.js", "_0x8ec6b3"],
+            "\"std\" is below the minimum"
+        );
+        assert!(
+            any_runs.iter().all(|r| !r.nul_terminated),
+            "none of them is a C string"
+        );
     }
 
     #[test]
@@ -459,7 +513,11 @@ mod tests {
         assert!(scan_runs(&data, 0, 4, Termination::Nul).is_empty());
         assert_eq!(
             scan_runs(&data, 0, 4, Termination::Any),
-            vec![Run { addr: 0, visible_len: 8, nul_terminated: false }]
+            vec![Run {
+                addr: 0,
+                visible_len: 8,
+                nul_terminated: false
+            }]
         );
     }
 
@@ -510,7 +568,11 @@ mod tests {
         assert!(scan_utf16_run(&data, 0, 5).is_empty());
         assert_eq!(
             scan_utf16_runs(&data, 0, 5, Termination::Any),
-            vec![Run { addr: 0, visible_len: 10, nul_terminated: false }]
+            vec![Run {
+                addr: 0,
+                visible_len: 10,
+                nul_terminated: false
+            }]
         );
     }
 
@@ -518,19 +580,33 @@ mod tests {
     /// ranges that overlap, touch, repeat, or are empty or inverted.
     #[test]
     fn retain_within_matches_the_pairwise_rule() {
-        let ranges =
-            [(0x60, 0x40), (0x10, 0x20), (0x20, 0x30), (0x0, 0x18), (0x50, 0x50), (0x10, 0x20)];
+        let ranges = [
+            (0x60, 0x40),
+            (0x10, 0x20),
+            (0x20, 0x30),
+            (0x0, 0x18),
+            (0x50, 0x50),
+            (0x10, 0x20),
+        ];
         let data = [0u8; 0x40];
         for vma in 0..0x60u64 {
             for len in 0..0x20usize {
-                let mut regions = vec![Region { name: None, vma, data: &data[..len] }];
+                let mut regions = vec![Region {
+                    name: None,
+                    vma,
+                    data: &data[..len],
+                }];
                 retain_within(&mut regions, &ranges);
                 let end = vma + len as u64;
                 let want = ranges.iter().any(|&(lo, hi)| vma >= lo && end <= hi);
                 assert_eq!(!regions.is_empty(), want, "[{vma:#x}, {end:#x})");
             }
         }
-        let mut edge = vec![Region { name: None, vma: u64::MAX, data: &data[..1] }];
+        let mut edge = vec![Region {
+            name: None,
+            vma: u64::MAX,
+            data: &data[..1],
+        }];
         retain_within(&mut edge, &[(0, u64::MAX)]);
         assert!(edge.is_empty(), "an extent that overflows is never inside");
     }
@@ -543,10 +619,19 @@ mod tests {
         let mk = |spans: &[(&str, u64, usize)]| -> Vec<Region<'_>> {
             spans
                 .iter()
-                .map(|&(n, vma, len)| Region { name: Some(n.into()), vma, data: &data[..len] })
+                .map(|&(n, vma, len)| Region {
+                    name: Some(n.into()),
+                    vma,
+                    data: &data[..len],
+                })
                 .collect()
         };
-        let spans = [("a", 0x40, 0x10), ("b", 0x10, 0x8), ("c", 0x18, 0x8), ("d", 0x30, 0x4)];
+        let spans = [
+            ("a", 0x40, 0x10),
+            ("b", 0x10, 0x8),
+            ("c", 0x18, 0x8),
+            ("d", 0x30, 0x4),
+        ];
         let disjoint = mk(&spans);
         assert!(disjoint_index(&disjoint).is_some());
         let mut overlap = vec![("early", 0x44, 0x8)];
@@ -556,8 +641,9 @@ mod tests {
         assert!(disjoint_index(&overlapping).is_none());
         for addr in 0..0x60u64 {
             for regions in [&disjoint, &overlapping] {
-                let linear =
-                    regions.iter().find(|r| addr >= r.vma && addr - r.vma < r.data.len() as u64);
+                let linear = regions
+                    .iter()
+                    .find(|r| addr >= r.vma && addr - r.vma < r.data.len() as u64);
                 let found = region_of(regions, disjoint_index(regions).as_deref(), addr);
                 assert_eq!(found.map(|r| &r.name), linear.map(|r| &r.name), "{addr:#x}");
             }
@@ -594,7 +680,10 @@ mod tests {
         let facts = scan_strings(&file, 5, false);
         for row in inv.strings.iter().filter(|s| s.encoding == Encoding::Ascii) {
             assert!(
-                facts.contains(&StringFact { addr: row.addr, len: row.byte_len }),
+                facts.contains(&StringFact {
+                    addr: row.addr,
+                    len: row.byte_len
+                }),
                 "row 0x{:x} is not a StringLiteralPass fact",
                 row.addr
             );
@@ -607,7 +696,10 @@ mod tests {
     /// `prompt_user` actually loads.
     #[test]
     fn the_utf8_reading_recovers_a_multi_byte_prefix() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/utf8prompt_x86_64");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/utf8prompt_x86_64"
+        );
         let bytes = std::fs::read(path).expect("read utf8prompt_x86_64 fixture");
         let file = object::File::parse(bytes.as_slice()).expect("parse utf8prompt_x86_64");
         let q = |utf8: bool| Query {
@@ -620,14 +712,21 @@ mod tests {
         };
 
         let ascii = inventory(&file, &q(false));
-        let truncated =
-            ascii.strings.iter().find(|s| s.addr == 0x10100c).expect("the ASCII reading");
+        let truncated = ascii
+            .strings
+            .iter()
+            .find(|s| s.addr == 0x10100c)
+            .expect("the ASCII reading");
         assert_eq!(truncated.char_len, 43);
         assert_eq!(truncated.encoding, Encoding::Ascii);
         assert!(!ascii.strings.iter().any(|s| s.addr == 0x101000));
 
         let utf8 = inventory(&file, &q(true));
-        let whole = utf8.strings.iter().find(|s| s.addr == 0x101000).expect("the UTF-8 reading");
+        let whole = utf8
+            .strings
+            .iter()
+            .find(|s| s.addr == 0x101000)
+            .expect("the UTF-8 reading");
         assert_eq!(whole.encoding, Encoding::Utf8);
         assert_eq!(whole.char_len, 50, "fifty characters");
         assert_eq!(whole.byte_len, 56, "in fifty-five bytes plus the NUL");
@@ -640,7 +739,11 @@ mod tests {
 
         // The ASCII-only control literal is the same row under both readings.
         let control = |inv: &Inventory| {
-            inv.strings.iter().find(|s| s.addr == 0x101038).cloned().expect("the control literal")
+            inv.strings
+                .iter()
+                .find(|s| s.addr == 0x101038)
+                .cloned()
+                .expect("the control literal")
         };
         assert_eq!(control(&ascii), control(&utf8));
         assert_eq!(control(&ascii).encoding, Encoding::Ascii);
@@ -653,9 +756,8 @@ mod tests {
     #[test]
     fn the_utf8_reading_is_a_superset_of_the_ascii_one() {
         for name in ["utf8prompt_x86_64", "fauxware"] {
-            let path =
-                std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures"))
-                    .join(name);
+            let path = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures"))
+                .join(name);
             let bytes = std::fs::read(&path).unwrap_or_else(|e| panic!("read {name}: {e}"));
             let file = object::File::parse(bytes.as_slice()).expect("parse the fixture");
             for termination in [Termination::Nul, Termination::Any] {
@@ -691,7 +793,11 @@ mod tests {
         let file = object::File::parse(bytes.as_slice()).expect("parse fauxware");
         let inv = inventory(&file, &nul(5, true, false, Some("rodata")));
         assert!(!inv.strings.is_empty(), "fauxware has .rodata strings");
-        assert!(inv.strings.iter().all(|s| s.section.as_deref() == Some(".rodata")));
+        assert!(
+            inv.strings
+                .iter()
+                .all(|s| s.section.as_deref() == Some(".rodata"))
+        );
         assert!(inv.regions.iter().any(|n| n == ".rodata"));
     }
 }

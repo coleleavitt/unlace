@@ -234,7 +234,12 @@ fn swifttypes_off_installs_nothing() {
 #[test]
 fn an_accessor_at_the_end_of_its_section_is_located() {
     let prog = load_fixture("swift_ext_types_elf", true);
-    let holder = prog.arch().types().find_by_name("extfix.Holder").unwrap().expect("extfix.Holder is interned");
+    let holder = prog
+        .arch()
+        .types()
+        .find_by_name("extfix.Holder")
+        .unwrap()
+        .expect("extfix.Holder is interned");
     assert_eq!(holder.get_size(), 24);
 }
 
@@ -246,16 +251,29 @@ fn a_type_nested_in_an_extension_is_a_field_type() {
     let prog = load_fixture("swift_ext_types_elf", true);
     let types = prog.arch().types();
     let fields = |name: &str| {
-        let t = types.find_by_name(name).unwrap().unwrap_or_else(|| panic!("{name} is interned"));
+        let t = types
+            .find_by_name(name)
+            .unwrap()
+            .unwrap_or_else(|| panic!("{name} is interned"));
         let mut got = Vec::new();
         while let Some(f) = t.get_field(got.len() as i32) {
-            got.push((f.name.clone(), f.offset, f.field_type.get_name().to_string()));
+            got.push((
+                f.name.clone(),
+                f.offset,
+                f.field_type.get_name().to_string(),
+            ));
         }
         got
     };
     let row = |n: &str, o: i32, t: &str| (n.to_string(), o, t.to_string());
-    assert_eq!(fields("Swift.Int.Pair"), vec![row("lo", 0, "int8"), row("hi", 8, "int8")]);
-    assert_eq!(fields("extfix.Holder"), vec![row("pair", 0, "Swift.Int.Pair"), row("count", 16, "int8")]);
+    assert_eq!(
+        fields("Swift.Int.Pair"),
+        vec![row("lo", 0, "int8"), row("hi", 8, "int8")]
+    );
+    assert_eq!(
+        fields("extfix.Holder"),
+        vec![row("pair", 0, "Swift.Int.Pair"), row("count", 16, "int8")]
+    );
 }
 
 /// A class's vtable getter has its `self` pinned as a parameter and is bound
@@ -263,11 +281,16 @@ fn a_type_nested_in_an_extension_is_a_field_type() {
 /// lock rather than dropped for it.
 #[test]
 fn a_getter_with_a_pinned_self_keeps_the_swift_model() {
-    use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+    use unlace_console::ifacedecomp::{
+        DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+    };
     use unlace_console::ifaceterm::ConsoleCommands;
     let mut prog = load(true);
     let addr = code_addr(&prog, 0x3e60);
-    assert!(prog.arch().loader_param_locks.contains_key(&addr), "self pinned at 0x3e60");
+    assert!(
+        prog.arch().loader_param_locks.contains_key(&addr),
+        "self pinned at 0x3e60"
+    );
     let name = match prog.arch().symboltab.find_function_across_scopes(&addr) {
         Some((sid, _)) => prog.arch().symboltab.symbol(sid).get_name().to_string(),
         None => prog.arch().name_function(&addr),
@@ -279,7 +302,8 @@ fn a_getter_with_a_pinned_self_keeps_the_swift_model() {
         unlace_console::engine::UNBOUNDED_SIZE,
     )
     .expect("the getter builds");
-    let mut status = ConsoleCommands::into_status(vec!["decompile".to_string(), "print C".to_string()]);
+    let mut status =
+        ConsoleCommands::into_status(vec!["decompile".to_string(), "print C".to_string()]);
     register_decomp_commands(&mut status);
     {
         let data = status.get_data_mut(DECOMPILE_MODULE).unwrap();

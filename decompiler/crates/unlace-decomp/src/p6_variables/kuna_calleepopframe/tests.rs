@@ -1,28 +1,59 @@
 use super::*;
 
-
-
 fn frame_guess(stores: &[(i32, i32)], adjustment: i32) -> Option<i32> {
-    use std::rc::Rc;
-    use unlace_base::space::{spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace};
     use crate::context::ArchContext;
-    use crate::dtype::{type_metatype, Datatype};
+    use crate::dtype::{Datatype, type_metatype};
+    use std::rc::Rc;
+    use unlace_base::space::{AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, spacetype};
 
     let mut spaces = AddrSpaceManager::new();
     spaces.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    spaces.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
-    let ram = Rc::new(AddrSpace::new(spacetype::IPTR_PROCESSOR, "ram", false, 4, 1, 2, 0, 1, 1));
-    let reg = Rc::new(AddrSpace::new(spacetype::IPTR_PROCESSOR, "register", false, 4, 1, 3, 0, 1, 1));
+    spaces
+        .insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
+    let ram = Rc::new(AddrSpace::new(
+        spacetype::IPTR_PROCESSOR,
+        "ram",
+        false,
+        4,
+        1,
+        2,
+        0,
+        1,
+        1,
+    ));
+    let reg = Rc::new(AddrSpace::new(
+        spacetype::IPTR_PROCESSOR,
+        "register",
+        false,
+        4,
+        1,
+        3,
+        0,
+        1,
+        1,
+    ));
     spaces.insert_space(ram.clone()).unwrap();
     spaces.insert_space(reg.clone()).unwrap();
     let arch = Rc::new(ArchContext::new(spaces));
-    let mut fd = Funcdata::new("frame", "frame", arch, Address::new(ram.clone(), 0x1000), 0, 0x100).unwrap();
+    let mut fd = Funcdata::new(
+        "frame",
+        "frame",
+        arch,
+        Address::new(ram.clone(), 0x1000),
+        0,
+        0x100,
+    )
+    .unwrap();
     let root = fd.bblocks_ref().root.unwrap();
     let block = fd.bblocks_mut().new_block_basic(root);
     let sp = Address::new(reg, 0x20);
     let ty = Rc::new(Datatype::new(4, type_metatype::TYPE_UNKNOWN));
     let base = fd.vbank_mut().create(4, sp.clone(), ty.clone());
-    let base = fd.vbank_mut().set_input(base, &mut |_, _, _| Ok(())).unwrap();
+    let base = fd
+        .vbank_mut()
+        .set_input(base, &mut |_, _, _| Ok(()))
+        .unwrap();
     let mut address = 0x1000;
     let mut op = |fd: &mut Funcdata, code, inputs: &[VarnodeId], output: Option<Address>| {
         address += 4;
@@ -44,18 +75,33 @@ fn frame_guess(stores: &[(i32, i32)], adjustment: i32) -> Option<i32> {
         let (_, pointer) = op(&mut fd, OpCode::CPUI_INT_ADD, &[base, k], Some(sp.clone()));
         let space = fd.new_constant(4, 2);
         let value = fd.new_constant(width, 0);
-        op(&mut fd, OpCode::CPUI_STORE, &[space, pointer.unwrap(), value], None);
+        op(
+            &mut fd,
+            OpCode::CPUI_STORE,
+            &[space, pointer.unwrap(), value],
+            None,
+        );
     }
     let k = fd.new_constant(4, (-4i32) as u32 as u64);
     let (_, call_sp) = op(&mut fd, OpCode::CPUI_INT_ADD, &[base, k], Some(sp.clone()));
     let call_sp = call_sp.unwrap();
     let marker = fd.new_constant(4, 0);
-    let (_, call_out) = op(&mut fd, OpCode::CPUI_INDIRECT, &[call_sp, marker], Some(sp.clone()));
+    let (_, call_out) = op(
+        &mut fd,
+        OpCode::CPUI_INDIRECT,
+        &[call_sp, marker],
+        Some(sp.clone()),
+    );
     let call_out = call_out.unwrap();
     let target = fd.new_constant(4, 0x2000);
     let (call, _) = op(&mut fd, OpCode::CPUI_CALL, &[target], None);
     let k = fd.new_constant(4, adjustment as u32 as u64);
-    op(&mut fd, OpCode::CPUI_INT_ADD, &[call_out, k], Some(sp.clone()));
+    op(
+        &mut fd,
+        OpCode::CPUI_INT_ADD,
+        &[call_out, k],
+        Some(sp.clone()),
+    );
     guess_extra_pop(&fd, &sp, call, call_sp, call_out)
 }
 

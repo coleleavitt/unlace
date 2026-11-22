@@ -7,15 +7,15 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace,
-    UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace, addrspace_flags,
+    spacetype,
 };
 use unlace_base::types::int4;
 
 use unlace_base::error::KunaResult;
 
 use crate::context::{ArchContext, TypeOp};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::varnode::{DefOpInfo, VarnodeBank};
 
 use super::*;
@@ -25,7 +25,8 @@ use super::*;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(IopSpace::new(2))).unwrap();
     m.insert_space(Rc::new(FspecSpace::new(3))).unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
@@ -77,7 +78,10 @@ fn mk_vn(fd: &mut Funcdata, off: u64, size: int4) -> VarnodeId {
 }
 
 fn wire(fd: &mut Funcdata, vn: VarnodeId, op: OpId, slot: int4) {
-    fd.obank_mut().get_mut(op).unwrap().set_input(Some(vn), slot);
+    fd.obank_mut()
+        .get_mut(op)
+        .unwrap()
+        .set_input(Some(vn), slot);
 }
 
 fn no_replace() -> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> KunaResult<()> {
@@ -95,8 +99,14 @@ fn mk_defined_ptr(fd: &mut Funcdata, bl: BlockId, off: u64) -> VarnodeId {
     let r = ram(fd);
     let out = fd.new_varnode(8, &Address::new(r, 0x40), Some(unk(8)));
     let seq = fd.obank().get(op).unwrap().get_seq_num().clone();
-    let info = DefOpInfo { id: op, seqnum: seq };
-    let out = fd.vbank_mut().set_def(out, info, &mut no_replace()).unwrap();
+    let info = DefOpInfo {
+        id: op,
+        seqnum: seq,
+    };
+    let out = fd
+        .vbank_mut()
+        .set_def(out, info, &mut no_replace())
+        .unwrap();
     fd.obank_mut().get_mut(op).unwrap().set_output(Some(out));
     out
 }

@@ -57,7 +57,7 @@ use unlace_sleigh::translate::PcodeEmit;
 
 use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
-use crate::fspec::{FuncCallSpecs, ProtoModel, EXTRAPOP_UNKNOWN};
+use crate::fspec::{EXTRAPOP_UNKNOWN, FuncCallSpecs, ProtoModel};
 use crate::funcdata::Funcdata;
 
 /// Instructions read from the callee's entry.
@@ -88,7 +88,11 @@ pub(crate) fn model_name(inputs: u8) -> Option<&'static str> {
     if inputs & ECX == 0 || inputs & FOREIGN != 0 {
         return None;
     }
-    Some(if inputs & EDX != 0 { "__fastcall" } else { "__thiscall" })
+    Some(if inputs & EDX != 0 {
+        "__fastcall"
+    } else {
+        "__thiscall"
+    })
 }
 
 /// The `__thiscall` model, ECX's storage and EAX's, for [`virtual_call`], when
@@ -108,7 +112,12 @@ pub fn virtual_this(arch: &Architecture) -> Option<(Rc<ProtoModel>, Address, int
     let eax = arch.translate().get_register_data("EAX").ok()?;
     let addr = Address::new(ecx.space.clone()?, ecx.offset);
     let eax_addr = Address::new(eax.space.clone()?, eax.offset);
-    Some((Rc::clone(arch.get_model("__thiscall")?), addr, ecx.size as int4, eax_addr))
+    Some((
+        Rc::clone(arch.get_model("__thiscall")?),
+        addr,
+        ecx.size as int4,
+        eax_addr,
+    ))
 }
 
 /// The `__thiscall` model for an indirect call through the vtable of the object
@@ -132,10 +141,22 @@ pub fn virtual_this(arch: &Architecture) -> Option<(Rc<ProtoModel>, Address, int
 pub fn virtual_call(data: &Funcdata, call: OpId) -> Option<Rc<ProtoModel>> {
     use crate::kuna_swiftcall::defining_op;
     let (model, ecx, ecx_size, eax) = data.get_arch().virtual_this.as_ref()?;
-    let op = data.obank().get(call).filter(|o| o.code() == OpCode::CPUI_CALLIND)?;
+    let op = data
+        .obank()
+        .get(call)
+        .filter(|o| o.code() == OpCode::CPUI_CALLIND)?;
     let target = data.vbank().get(op.get_in(0)?)?;
-    let slot_load = defining_op(data, call, target.get_addr().clone(), target.get_size(), &[OpCode::CPUI_COPY])?;
-    let slot = data.obank().get(slot_load).filter(|o| o.code() == OpCode::CPUI_LOAD)?;
+    let slot_load = defining_op(
+        data,
+        call,
+        target.get_addr().clone(),
+        target.get_size(),
+        &[OpCode::CPUI_COPY],
+    )?;
+    let slot = data
+        .obank()
+        .get(slot_load)
+        .filter(|o| o.code() == OpCode::CPUI_LOAD)?;
     let slot_ptr = data.vbank().get(slot.get_in(1)?)?;
     let table_load = defining_op(
         data,
@@ -144,13 +165,22 @@ pub fn virtual_call(data: &Funcdata, call: OpId) -> Option<Rc<ProtoModel>> {
         slot_ptr.get_size(),
         &[OpCode::CPUI_COPY, OpCode::CPUI_INT_ADD],
     )?;
-    data.obank().get(table_load).filter(|o| o.code() == OpCode::CPUI_LOAD)?;
-    let sp = data.get_arch().manage().get_stack_space().and_then(|s| s.get_spacebase(0).ok())?;
+    data.obank()
+        .get(table_load)
+        .filter(|o| o.code() == OpCode::CPUI_LOAD)?;
+    let sp = data
+        .get_arch()
+        .manage()
+        .get_stack_space()
+        .and_then(|s| s.get_spacebase(0).ok())?;
     let sp_addr = Address::new(sp.space.clone()?, sp.offset);
     let mut window = Vec::new();
     let mut cur = data.op_previous_op(call);
     while let Some(id) = cur.filter(|_| window.len() < VIRTUAL_SCAN) {
-        if matches!(data.obank().get(id)?.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND) {
+        if matches!(
+            data.obank().get(id)?.code(),
+            OpCode::CPUI_CALL | OpCode::CPUI_CALLIND
+        ) {
             break;
         }
         window.push(id);
@@ -178,14 +208,25 @@ pub fn virtual_call(data: &Funcdata, call: OpId) -> Option<Rc<ProtoModel>> {
             }
         }
         if let (OpCode::CPUI_INT_ADD, Some(esp)) = (o.code(), esp) {
-            let four = |k| o.get_in(k).and_then(|v| data.vbank().get(v)).is_some_and(|v| v.is_constant() && v.get_offset() == 4);
-            let base = if four(0) { o.get_in(1) } else if four(1) { o.get_in(0) } else { None };
+            let four = |k| {
+                o.get_in(k)
+                    .and_then(|v| data.vbank().get(v))
+                    .is_some_and(|v| v.is_constant() && v.get_offset() == 4)
+            };
+            let base = if four(0) {
+                o.get_in(1)
+            } else if four(1) {
+                o.get_in(0)
+            } else {
+                None
+            };
             if base.is_some_and(|b| values.read(data, b, id) == esp) {
                 second_ptrs.push((Value::Output(id), esp));
             }
         }
         let out = o.get_out().and_then(|v| data.vbank().get(v));
-        let sets_ecx = after_table && out.is_some_and(|v| overlaps(v.get_addr(), v.get_size(), ecx, *ecx_size));
+        let sets_ecx = after_table
+            && out.is_some_and(|v| overlaps(v.get_addr(), v.get_size(), ecx, *ecx_size));
         after_table |= id == table_load;
         values.write(data, id);
         if sets_ecx && values.at(ecx, *ecx_size) != object {
@@ -194,11 +235,21 @@ pub fn virtual_call(data: &Funcdata, call: OpId) -> Option<Rc<ProtoModel>> {
     }
     let receiver = values.at(ecx, *ecx_size)?;
     let call_esp = call_esp.unwrap_or_else(|| values.at(&sp_addr, sp.size as int4));
-    let second = second_slot.iter().rev().find(|(at, _)| Some(*at) == call_esp).is_some_and(|&(_, v)| v == receiver);
-    if object? != receiver || last_push == Some(receiver) || second || values.at(eax, *ecx_size) == Some(receiver) {
+    let second = second_slot
+        .iter()
+        .rev()
+        .find(|(at, _)| Some(*at) == call_esp)
+        .is_some_and(|&(_, v)| v == receiver);
+    if object? != receiver
+        || last_push == Some(receiver)
+        || second
+        || values.at(eax, *ecx_size) == Some(receiver)
+    {
         return None;
     }
-    let cleaned = data.get_call_specs_index(call).is_some_and(|i| data.get_call_specs(i).callind_cleanup() > 0);
+    let cleaned = data
+        .get_call_specs_index(call)
+        .is_some_and(|i| data.get_call_specs(i).callind_cleanup() > 0);
     (!cleaned).then(|| Rc::clone(model))
 }
 
@@ -229,24 +280,44 @@ struct Values(Vec<(Address, int4, Value)>);
 impl Values {
     /// The value of `(addr, size)`, or `None` when the run wrote only part of it.
     fn at(&self, addr: &Address, size: int4) -> Option<Value> {
-        match self.0.iter().rev().find(|(a, s, _)| overlaps(a, *s, addr, size)) {
+        match self
+            .0
+            .iter()
+            .rev()
+            .find(|(a, s, _)| overlaps(a, *s, addr, size))
+        {
             Some((a, s, v)) => (a == addr && *s == size).then_some(*v),
-            None => Some(Value::Entry(addr.get_space().map(|s| s.get_index()), addr.get_offset(), size)),
+            None => Some(Value::Entry(
+                addr.get_space().map(|s| s.get_index()),
+                addr.get_offset(),
+                size,
+            )),
         }
     }
 
     fn read(&self, data: &Funcdata, vn: VarnodeId, op: OpId) -> Value {
-        let Some(v) = data.vbank().get(vn) else { return Value::Partial(op, vn) };
+        let Some(v) = data.vbank().get(vn) else {
+            return Value::Partial(op, vn);
+        };
         if v.is_constant() {
             return Value::Constant(v.get_offset(), v.get_size());
         }
-        self.at(v.get_addr(), v.get_size()).unwrap_or(Value::Partial(op, vn))
+        self.at(v.get_addr(), v.get_size())
+            .unwrap_or(Value::Partial(op, vn))
     }
 
     fn write(&mut self, data: &Funcdata, id: OpId) {
-        let Some(o) = data.obank().get(id) else { return };
-        let Some(out) = o.get_out().and_then(|v| data.vbank().get(v)) else { return };
-        let zero = |k| o.get_in(k).and_then(|v| data.vbank().get(v)).is_some_and(|v| v.is_constant() && v.get_offset() == 0);
+        let Some(o) = data.obank().get(id) else {
+            return;
+        };
+        let Some(out) = o.get_out().and_then(|v| data.vbank().get(v)) else {
+            return;
+        };
+        let zero = |k| {
+            o.get_in(k)
+                .and_then(|v| data.vbank().get(v))
+                .is_some_and(|v| v.is_constant() && v.get_offset() == 0)
+        };
         let source = match o.code() {
             OpCode::CPUI_COPY => o.get_in(0),
             OpCode::CPUI_INT_ADD if zero(1) => o.get_in(0),
@@ -289,8 +360,15 @@ pub fn callee_register_model(arch: &Architecture, entry: &Address) -> Option<Rc<
 /// match what its callers pass: the synthesized custom-register model the
 /// whole-image rule decided, or `None` (the default evaluation is left alone,
 /// byte-identical to before) when it decided nothing.
-pub fn own_register_model(ctx: &crate::context::ArchContext, entry: &Address) -> Option<Rc<ProtoModel>> {
-    custom_model(&ctx.kuna_custom_reg_callers, &ctx.kuna_custom_reg_models, entry)
+pub fn own_register_model(
+    ctx: &crate::context::ArchContext,
+    entry: &Address,
+) -> Option<Rc<ProtoModel>> {
+    custom_model(
+        &ctx.kuna_custom_reg_callers,
+        &ctx.kuna_custom_reg_models,
+        entry,
+    )
 }
 
 /// The model `entry` takes: the synthesized custom-register model the
@@ -300,7 +378,11 @@ fn register_model_for(arch: &Architecture, entry: &Address) -> Option<Rc<ProtoMo
     if !arch.callee_reginputs {
         return None;
     }
-    if let Some(m) = custom_model(&arch.kuna_custom_reg_callers, &arch.kuna_custom_reg_models, entry) {
+    if let Some(m) = custom_model(
+        &arch.kuna_custom_reg_callers,
+        &arch.kuna_custom_reg_models,
+        entry,
+    ) {
         return Some(m);
     }
     let name = model_name(callee_register_inputs(arch, entry)?)?;
@@ -361,7 +443,9 @@ pub fn key_registers(key: u16) -> (Vec<&'static str>, bool) {
 /// and EDX) beside EBX/ESI/EDI must carry all of them, or the unmodelled ECX/EDX
 /// stays a phantom read and the recovery misaligns.
 pub fn ecx_edx_key(arch: &Architecture, entry: &Address) -> u16 {
-    let Some(raw) = callee_register_inputs(arch, entry) else { return 0 };
+    let Some(raw) = callee_register_inputs(arch, entry) else {
+        return 0;
+    };
     let mut key = 0;
     if raw & ECX != 0 {
         key |= KEY_ECX;
@@ -390,12 +474,23 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
         if callee.is_invalid() {
             continue;
         }
-        if let Some(site) = data.obank().get(fc.get_op()).map(|o| o.get_addr().get_offset()) {
-            arch.kuna_custom_reg_calls.entry(callee.get_offset()).or_default().insert((entry.get_offset(), site));
+        if let Some(site) = data
+            .obank()
+            .get(fc.get_op())
+            .map(|o| o.get_addr().get_offset())
+        {
+            arch.kuna_custom_reg_calls
+                .entry(callee.get_offset())
+                .or_default()
+                .insert((entry.get_offset(), site));
         }
     }
-    let Some(reads) = data.kuna_entry_reads() else { return };
-    let Some(space) = arch.manage().get_space_by_name("register").cloned() else { return };
+    let Some(reads) = data.kuna_entry_reads() else {
+        return;
+    };
+    let Some(space) = arch.manage().get_space_by_name("register").cloned() else {
+        return;
+    };
     let reg_idx = space.get_index();
     let regs: Vec<(u64, u64, u8)> = CUSTOM
         .iter()
@@ -426,9 +521,13 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
 /// Is the register `addr`/`size` a parameter of the model the callee's reads
 /// selected for `fc`, while the call still carries that model?
 pub fn reads_register(fc: &FuncCallSpecs, addr: &Address, size: int4) -> bool {
-    let Some(model) = fc.callee_reg_model() else { return false };
+    let Some(model) = fc.callee_reg_model() else {
+        return false;
+    };
     fc.proto().has_matching_model(model)
-        && addr.get_space().is_some_and(|s| s.get_type() == spacetype::IPTR_PROCESSOR)
+        && addr
+            .get_space()
+            .is_some_and(|s| s.get_type() == spacetype::IPTR_PROCESSOR)
         && model.possible_input_param(addr, size)
 }
 
@@ -437,31 +536,43 @@ pub fn reads_register(fc: &FuncCallSpecs, addr: &Address, size: int4) -> bool {
 /// rests on a guessed pop, which leaves offsets on the two sides of the guess
 /// incomparable.
 pub fn skips_read_operands(data: &Funcdata) -> bool {
-    data.call_specs().iter().any(|fc| fc.callee_reg_model().is_some())
+    data.call_specs()
+        .iter()
+        .any(|fc| fc.callee_reg_model().is_some())
         && !crate::p4_calls::kuna_calleepurge::every_pop_settled(data)
 }
 
 /// Is `vn`, read by the call `op` while its trials are scored, the operand of
 /// a register trial the direct callee reads?
 pub fn is_read_operand(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
-    let Some(o) = data.obank().get(op).filter(|o| o.code() == OpCode::CPUI_CALL) else {
+    let Some(o) = data
+        .obank()
+        .get(op)
+        .filter(|o| o.code() == OpCode::CPUI_CALL)
+    else {
         return false;
     };
-    let Some(idx) = data.get_call_specs_index(op) else { return false };
+    let Some(idx) = data.get_call_specs_index(op) else {
+        return false;
+    };
     let fc = data.get_call_specs(idx);
     if fc.callee_reg_model().is_none() || !fc.is_input_active() {
         return false;
     }
     let active = fc.active_input();
-    (0..o.num_input()).filter(|&slot| o.get_in(slot) == Some(vn)).any(|slot| {
-        (0..active.get_num_trials())
-            .map(|i| active.get_trial(i))
-            .any(|t| t.get_slot() == slot && reads_register(fc, t.get_address(), t.get_size()))
-    })
+    (0..o.num_input())
+        .filter(|&slot| o.get_in(slot) == Some(vn))
+        .any(|slot| {
+            (0..active.get_num_trials())
+                .map(|i| active.get_trial(i))
+                .any(|t| t.get_slot() == slot && reads_register(fc, t.get_address(), t.get_size()))
+        })
 }
 
 fn is_import(arch: &Architecture, entry: &Address) -> bool {
-    let Some(scope) = arch.symboltab.get_global_scope() else { return false };
+    let Some(scope) = arch.symboltab.get_global_scope() else {
+        return false;
+    };
     let size = entry.get_space().map_or(1, |s| s.get_addr_size() as i32);
     let (_, flags) = arch.symboltab.query_properties(scope, entry, size, entry);
     flags & crate::varnode::varnode_flags::externref != 0
@@ -501,7 +612,13 @@ pub fn callee_register_inputs(arch: &Architecture, entry: &Address) -> Option<u8
 struct Collect(Vec<(OpCode, Option<VarnodeData>, Vec<VarnodeData>)>);
 
 impl PcodeEmit for Collect {
-    fn dump(&mut self, _at: &Address, opcode: OpCode, out: Option<&VarnodeData>, inputs: &[VarnodeData]) {
+    fn dump(
+        &mut self,
+        _at: &Address,
+        opcode: OpCode,
+        out: Option<&VarnodeData>,
+        inputs: &[VarnodeData],
+    ) {
         self.0.push((opcode, out.cloned(), inputs.to_vec()));
     }
 }
@@ -536,10 +653,18 @@ fn same(a: &VarnodeData, b: &VarnodeData) -> bool {
 /// Is `v` the constant that fixes the result of `opc` whatever the other input
 /// holds (all ones for `INT_OR`, zero for `INT_AND`)?
 fn absorbs(opc: OpCode, v: &VarnodeData) -> bool {
-    if !v.space.as_ref().is_some_and(|sp| sp.get_type() == unlace_base::space::spacetype::IPTR_CONSTANT) {
+    if !v
+        .space
+        .as_ref()
+        .is_some_and(|sp| sp.get_type() == unlace_base::space::spacetype::IPTR_CONSTANT)
+    {
         return false;
     }
-    let ones = if v.size >= 8 { u64::MAX } else { (1u64 << (8 * v.size)) - 1 };
+    let ones = if v.size >= 8 {
+        u64::MAX
+    } else {
+        (1u64 << (8 * v.size)) - 1
+    };
     match opc {
         OpCode::CPUI_INT_OR => v.offset & ones == ones,
         _ => v.offset & ones == 0,
@@ -564,19 +689,31 @@ pub(crate) fn step(
     regs: &Regs,
     written: [u8; 6],
 ) -> Step {
-    let mut s = Step { written, ..Step::default() };
+    let mut s = Step {
+        written,
+        ..Step::default()
+    };
     let is_unique = |v: &VarnodeData| {
-        v.space.as_ref().is_some_and(|sp| sp.get_type() == unlace_base::space::spacetype::IPTR_INTERNAL)
+        v.space
+            .as_ref()
+            .is_some_and(|sp| sp.get_type() == unlace_base::space::spacetype::IPTR_INTERNAL)
     };
     let read_bits = |v: &VarnodeData, done: &[u8; 6]| {
         regs.tracked.iter().enumerate().fold(0u8, |acc, (k, r)| {
-            if byte_mask(v, r) != 0 && done[k] == 0 { acc | (1 << k) } else { acc }
+            if byte_mask(v, r) != 0 && done[k] == 0 {
+                acc | (1 << k)
+            } else {
+                acc
+            }
         })
     };
     // A register copied into a temporary that is then only pushed is saved, not used.
     let mut held: Vec<(VarnodeData, u8)> = Vec::new();
     for (opc, out, ins) in ops {
-        if *opc == OpCode::CPUI_COPY && ins.len() == 1 && out.as_ref().is_some_and(|o| same(o, &ins[0])) {
+        if *opc == OpCode::CPUI_COPY
+            && ins.len() == 1
+            && out.as_ref().is_some_and(|o| same(o, &ins[0]))
+        {
             continue;
         }
         match opc {
@@ -592,8 +729,10 @@ pub(crate) fn step(
                     held.remove(pos);
                 }
             }
-            OpCode::CPUI_INT_XOR | OpCode::CPUI_INT_SUB if ins.len() == 2 && same(&ins[0], &ins[1]) => {}
-            OpCode::CPUI_INT_OR | OpCode::CPUI_INT_AND if ins.len() == 2 && ins.iter().any(|v| absorbs(*opc, v)) => {}
+            OpCode::CPUI_INT_XOR | OpCode::CPUI_INT_SUB
+                if ins.len() == 2 && same(&ins[0], &ins[1]) => {}
+            OpCode::CPUI_INT_OR | OpCode::CPUI_INT_AND
+                if ins.len() == 2 && ins.iter().any(|v| absorbs(*opc, v)) => {}
             _ => {
                 for v in ins {
                     s.read |= read_bits(v, &s.written);
@@ -611,7 +750,9 @@ pub(crate) fn step(
         match opc {
             OpCode::CPUI_BRANCH
                 if ins.first().is_some_and(|d| {
-                    !d.space.as_ref().is_some_and(|sp| sp.get_type() == unlace_base::space::spacetype::IPTR_CONSTANT)
+                    !d.space.as_ref().is_some_and(|sp| {
+                        sp.get_type() == unlace_base::space::spacetype::IPTR_CONSTANT
+                    })
                 }) =>
             {
                 s.jump = Some(ins[0].offset);
@@ -637,7 +778,11 @@ fn registers(arch: &Architecture) -> Option<Regs> {
         .map(|r| translate.get_register_data(r).ok())
         .collect::<Option<Vec<_>>>()?;
     let base = arch.manage().get_stack_space()?.get_spacebase(0).ok()?;
-    let sp = VarnodeData { space: base.space.clone(), offset: base.offset, size: base.size as u32 };
+    let sp = VarnodeData {
+        space: base.space.clone(),
+        offset: base.offset,
+        size: base.size as u32,
+    };
     Some(Regs { tracked, sp })
 }
 

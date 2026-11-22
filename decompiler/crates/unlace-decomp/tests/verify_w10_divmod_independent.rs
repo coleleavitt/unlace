@@ -28,17 +28,17 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
 use unlace_decomp::action::{ActionGroupList, Rule};
-use unlace_decomp::dtype::{type_metatype, Datatype};
+use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
+use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::ruleaction_2::RuleDoubleShift;
 use unlace_decomp::ruleaction_6::RuleDivOpt;
-use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
 use unlace_decomp::varnode::{DefOpInfo, VarnodeBank};
 
 // -----------------------------------------------------------------------------
@@ -48,7 +48,8 @@ use unlace_decomp::varnode::{DefOpInfo, VarnodeBank};
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -88,7 +89,8 @@ fn mk_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
     let r = ram(fd);
     let op = fd.new_op(inputs, Address::new(r, off));
     fd.obank_mut().mark_alive(op);
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
     op
 }
 
@@ -100,7 +102,10 @@ fn give_output(fd: &mut Funcdata, op: OpId, off: u64, size: int4) -> VarnodeId {
     let r = ram(fd);
     let vn = fd.new_varnode(size, &Address::new(r, off), Some(unk(size)));
     let seq = fd.obank().get(op).unwrap().get_seq_num().clone();
-    let info = DefOpInfo { id: op, seqnum: seq };
+    let info = DefOpInfo {
+        id: op,
+        seqnum: seq,
+    };
     let vn = fd.vbank_mut().set_def(vn, info, &mut no_replace()).unwrap();
     fd.obank_mut().get_mut(op).unwrap().set_output(Some(vn));
     vn
@@ -151,12 +156,28 @@ fn w10_indep_findform_const_mult_input0_declines() {
 #[test]
 fn w10_indep_calc_divisor_guards_return_zero() {
     // y <= 1 boundary (ulessequal128(y, 1)) -> 0.  (C++ oracle: 0)
-    assert_eq!(RuleDivOpt::calc_divisor(33, &[1, 0], 32), 0, "y=1 boundary -> 0");
-    assert_eq!(RuleDivOpt::calc_divisor(33, &[0, 0], 32), 0, "y=0 boundary -> 0");
+    assert_eq!(
+        RuleDivOpt::calc_divisor(33, &[1, 0], 32),
+        0,
+        "y=1 boundary -> 0"
+    );
+    assert_eq!(
+        RuleDivOpt::calc_divisor(33, &[0, 0], 32),
+        0,
+        "y=0 boundary -> 0"
+    );
     // n > 127 precision guard -> 0.  (C++ oracle: 0)
-    assert_eq!(RuleDivOpt::calc_divisor(128, &[0xaaaaaaab, 0], 32), 0, "n>127 -> 0");
+    assert_eq!(
+        RuleDivOpt::calc_divisor(128, &[0xaaaaaaab, 0], 32),
+        0,
+        "n>127 -> 0"
+    );
     // xsize > 64 precision guard -> 0.  (C++ oracle: 0)
-    assert_eq!(RuleDivOpt::calc_divisor(33, &[0xaaaaaaab, 0], 65), 0, "xsize>64 -> 0");
+    assert_eq!(
+        RuleDivOpt::calc_divisor(33, &[0xaaaaaaab, 0], 65),
+        0,
+        "xsize>64 -> 0"
+    );
 }
 
 // =============================================================================

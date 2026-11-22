@@ -1,12 +1,20 @@
 use crate::common;
 
 use object::write::{Object, Relocation, Symbol, SymbolSection};
-use object::{Architecture, BinaryFormat, Endianness, SectionKind, SymbolFlags, SymbolKind, SymbolScope};
+use object::{
+    Architecture, BinaryFormat, Endianness, SectionKind, SymbolFlags, SymbolKind, SymbolScope,
+};
 use std::process::Command;
 
-fn get32(b: &[u8], p: usize) -> u32 { u32::from_le_bytes(b[p..p + 4].try_into().unwrap()) }
-fn get64(b: &[u8], p: usize) -> u64 { u64::from_le_bytes(b[p..p + 8].try_into().unwrap()) }
-fn put64(b: &mut [u8], p: usize, n: u64) { b[p..p + 8].copy_from_slice(&n.to_le_bytes()); }
+fn get32(b: &[u8], p: usize) -> u32 {
+    u32::from_le_bytes(b[p..p + 4].try_into().unwrap())
+}
+fn get64(b: &[u8], p: usize) -> u64 {
+    u64::from_le_bytes(b[p..p + 8].try_into().unwrap())
+}
+fn put64(b: &mut [u8], p: usize, n: u64) {
+    b[p..p + 8].copy_from_slice(&n.to_le_bytes());
+}
 
 /// A linked ELF with a dynamically interposable function and its PLT stub.
 fn image(definitions: usize, named_stub: bool) -> Vec<u8> {
@@ -20,19 +28,41 @@ fn image(definitions: usize, named_stub: bool) -> Vec<u8> {
     let mut symbol = None;
     for i in 0..definitions.max(1) {
         symbol = Some(o.add_symbol(Symbol {
-            name: b"answer".to_vec(), value: (i * 6) as u64, size: 6,
-            kind: SymbolKind::Text, scope: SymbolScope::Linkage, weak: false,
-            section: if definitions == 0 { SymbolSection::Undefined } else { SymbolSection::Section(text) },
+            name: b"answer".to_vec(),
+            value: (i * 6) as u64,
+            size: 6,
+            kind: SymbolKind::Text,
+            scope: SymbolScope::Linkage,
+            weak: false,
+            section: if definitions == 0 {
+                SymbolSection::Undefined
+            } else {
+                SymbolSection::Section(text)
+            },
             flags: SymbolFlags::None,
         }));
     }
-    o.add_relocation(got, Relocation { offset: 0, symbol: symbol.unwrap(), addend: 0,
-        flags: object::RelocationFlags::Elf { r_type: object::elf::R_X86_64_JUMP_SLOT },
-    }).unwrap();
+    o.add_relocation(
+        got,
+        Relocation {
+            offset: 0,
+            symbol: symbol.unwrap(),
+            addend: 0,
+            flags: object::RelocationFlags::Elf {
+                r_type: object::elf::R_X86_64_JUMP_SLOT,
+            },
+        },
+    )
+    .unwrap();
     if named_stub {
         o.add_symbol(Symbol {
-            name: b"answer".to_vec(), value: 0, size: 6, kind: SymbolKind::Text,
-            scope: SymbolScope::Linkage, weak: false, section: SymbolSection::Section(plt),
+            name: b"answer".to_vec(),
+            value: 0,
+            size: 6,
+            kind: SymbolKind::Text,
+            scope: SymbolScope::Linkage,
+            weak: false,
+            section: SymbolSection::Section(plt),
             flags: SymbolFlags::None,
         });
     }
@@ -46,7 +76,9 @@ fn image(definitions: usize, named_stub: bool) -> Vec<u8> {
         let kind = get32(&b, sh + 4);
         let begin = get64(&b, sh + 24) as usize;
         let end = begin + get64(&b, sh + 32) as usize;
-        if i <= 3 { put64(&mut b, sh + 16, i as u64 * 0x1000); }
+        if i <= 3 {
+            put64(&mut b, sh + 16, i as u64 * 0x1000);
+        }
         if kind == object::elf::SHT_SYMTAB {
             b[sh + 4..sh + 8].copy_from_slice(&object::elf::SHT_DYNSYM.to_le_bytes());
             for sym in (begin..end).step_by(24) {
@@ -57,7 +89,9 @@ fn image(definitions: usize, named_stub: bool) -> Vec<u8> {
                 }
             }
         } else if kind == object::elf::SHT_RELA {
-            for reloc in (begin..end).step_by(24) { put64(&mut b, reloc, 0x3000); }
+            for reloc in (begin..end).step_by(24) {
+                put64(&mut b, reloc, 0x3000);
+            }
         }
     }
     let phoff = b.len() as u64;
@@ -82,8 +116,16 @@ fn definition_wins_over_its_plt_but_real_definitions_remain_ambiguous() {
         let path = common::scratch_file("definition-and-plt", "elf");
         std::fs::write(&path, image(definitions, named_stub)).unwrap();
         let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
-            .args(["decompile", path.to_str().unwrap(), "answer", "--mode", "reliable", "--json"])
-            .output().unwrap();
+            .args([
+                "decompile",
+                path.to_str().unwrap(),
+                "answer",
+                "--mode",
+                "reliable",
+                "--json",
+            ])
+            .output()
+            .unwrap();
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
         if definitions == 2 {
@@ -92,21 +134,51 @@ fn definition_wins_over_its_plt_but_real_definitions_remain_ambiguous() {
         } else {
             assert!(output.status.success(), "{stdout}\n{stderr}");
             let addr = if definitions == 1 { "0x1000" } else { "0x2000" };
-            assert!(stdout.contains(&format!("\"address_hex\": \"{addr}\"")), "{stdout}");
+            assert!(
+                stdout.contains(&format!("\"address_hex\": \"{addr}\"")),
+                "{stdout}"
+            );
             if definitions == 1 {
                 assert!(stdout.contains("return 7;"), "{stdout}");
                 for selector in ["0x1000", "0x2000"] {
                     let selected = Command::new(env!("CARGO_BIN_EXE_unlace"))
-                        .args(["decompile", path.to_str().unwrap(), selector, "--addr", "--mode", "reliable", "--json"])
-                        .output().unwrap();
+                        .args([
+                            "decompile",
+                            path.to_str().unwrap(),
+                            selector,
+                            "--addr",
+                            "--mode",
+                            "reliable",
+                            "--json",
+                        ])
+                        .output()
+                        .unwrap();
                     let text = String::from_utf8_lossy(&selected.stdout);
-                    assert!(selected.status.success(), "{text}\n{}", String::from_utf8_lossy(&selected.stderr));
-                    assert!(text.contains(&format!("\"address_hex\": \"{selector}\"")), "{text}");
+                    assert!(
+                        selected.status.success(),
+                        "{text}\n{}",
+                        String::from_utf8_lossy(&selected.stderr)
+                    );
+                    assert!(
+                        text.contains(&format!("\"address_hex\": \"{selector}\"")),
+                        "{text}"
+                    );
                 }
                 let text = Command::new(env!("CARGO_BIN_EXE_unlace"))
-                    .args(["decompile", path.to_str().unwrap(), "answer", "--mode", "reliable"])
-                    .output().unwrap();
-                assert!(text.status.success(), "{}", String::from_utf8_lossy(&text.stderr));
+                    .args([
+                        "decompile",
+                        path.to_str().unwrap(),
+                        "answer",
+                        "--mode",
+                        "reliable",
+                    ])
+                    .output()
+                    .unwrap();
+                assert!(
+                    text.status.success(),
+                    "{}",
+                    String::from_utf8_lossy(&text.stderr)
+                );
                 assert!(String::from_utf8_lossy(&text.stdout).contains("return 7;"));
             }
         }
@@ -121,8 +193,11 @@ fn name_lookup_agrees_with_decompile_selection() {
         let path = common::scratch_file("definition-name-lookup", "elf");
         std::fs::write(&path, image(definitions, true)).unwrap();
         let prog = unlace_console::engine::bootstrap_from_file(
-            path.to_str().unwrap(), "", &[specs.to_str().unwrap().into()],
-        ).unwrap();
+            path.to_str().unwrap(),
+            "",
+            &[specs.to_str().unwrap().into()],
+        )
+        .unwrap();
         let entry = prog.find_entry_by_name("answer");
         assert_eq!(entry.map(|entry| entry.addr.get_offset()), expected);
         std::fs::remove_file(path).unwrap();

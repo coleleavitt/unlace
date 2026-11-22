@@ -18,15 +18,15 @@
 use std::rc::Rc;
 
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::pcoderaw::VarnodeData;
 
-use unlace_decomp::dtype::{type_metatype, Datatype};
+use unlace_decomp::context::ArchContext;
+use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::prefersplit::{PreferSplitManager, PreferSplitRecord};
-use unlace_decomp::context::ArchContext;
 
 use unlace_base::address::Address;
 
@@ -35,7 +35,8 @@ use unlace_base::address::Address;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -77,12 +78,21 @@ fn space(fd: &Funcdata, name: &str) -> Rc<AddrSpace> {
 
 fn rec(space: Rc<AddrSpace>, off: u64, size: u32, splitoffset: int4) -> PreferSplitRecord {
     PreferSplitRecord {
-        storage: VarnodeData { space: Some(space), offset: off, size },
+        storage: VarnodeData {
+            space: Some(space),
+            offset: off,
+            size,
+        },
         splitoffset,
     }
 }
 
-fn mk_vn(fd: &mut Funcdata, sp: Rc<AddrSpace>, off: u64, size: int4) -> unlace_decomp::context::VarnodeId {
+fn mk_vn(
+    fd: &mut Funcdata,
+    sp: Rc<AddrSpace>,
+    off: u64,
+    size: int4,
+) -> unlace_decomp::context::VarnodeId {
     let ct: Rc<Datatype> = Rc::new(Datatype::new(size, type_metatype::TYPE_UNKNOWN));
     fd.vbank_mut().create(size, Address::new(sp, off), ct)
 }
@@ -137,7 +147,10 @@ fn w6s5_record_comparator_is_total_order() {
     let big = rec(Rc::clone(&ram), 0x100, 8, 4);
     let mid = rec(Rc::clone(&ram), 0x100, 4, 2);
     let small = rec(Rc::clone(&ram), 0x100, 1, 0);
-    assert!(big < mid && mid < small, "bigger size must come first (Reverse leg)");
+    assert!(
+        big < mid && mid < small,
+        "bigger size must come first (Reverse leg)"
+    );
 }
 
 /// `initialize` (a plain `sort`) must lay the table out in exactly the order
@@ -164,7 +177,13 @@ fn w6s5_initialize_full_order_across_spaces() {
 
     let key: Vec<(i32, u32, u64)> = recs
         .iter()
-        .map(|r| (r.storage.space.as_ref().unwrap().get_index(), r.storage.size, r.storage.offset))
+        .map(|r| {
+            (
+                r.storage.space.as_ref().unwrap().get_index(),
+                r.storage.size,
+                r.storage.offset,
+            )
+        })
         .collect();
     assert_eq!(
         key,
@@ -203,24 +222,43 @@ fn w6s5_find_record_lower_bound_boundaries() {
 
     // Buried exact hit: size-4 at ram:0x100 (second record after size-desc sort).
     let vn_mid = mk_vn(&mut fd, Rc::clone(&ram), 0x100, 4);
-    assert_eq!(mgr.find_record(&fd, vn_mid).expect("buried hit").splitoffset, 5);
+    assert_eq!(
+        mgr.find_record(&fd, vn_mid)
+            .expect("buried hit")
+            .splitoffset,
+        5
+    );
 
     // Past-the-end key: reg:0x200 sorts after every record -> lower_bound == end
     // -> None (NOT a wrap to records[0]).
     let vn_end = mk_vn(&mut fd, Rc::clone(&reg), 0x200, 4);
-    assert!(mgr.find_record(&fd, vn_end).is_none(), "key past end must miss");
+    assert!(
+        mgr.find_record(&fd, vn_end).is_none(),
+        "key past end must miss"
+    );
 
     // Before-the-start key: ram:0x100 size 16 sorts before the size-8 record
     // (bigger size first), so lower_bound lands on records[0] but templ < *iter
     // -> None.
     let vn_before = mk_vn(&mut fd, Rc::clone(&ram), 0x100, 16);
-    assert!(mgr.find_record(&fd, vn_before).is_none(), "key before start must miss");
+    assert!(
+        mgr.find_record(&fd, vn_before).is_none(),
+        "key before start must miss"
+    );
 
     // Genuine hit at the very first slot (size-8 at ram:0x100).
     let vn_first = mk_vn(&mut fd, Rc::clone(&ram), 0x100, 8);
-    assert_eq!(mgr.find_record(&fd, vn_first).expect("first hit").splitoffset, 7);
+    assert_eq!(
+        mgr.find_record(&fd, vn_first)
+            .expect("first hit")
+            .splitoffset,
+        7
+    );
 
     // Genuine hit at the very last slot (reg:0x100 size 4).
     let vn_last = mk_vn(&mut fd, Rc::clone(&reg), 0x100, 4);
-    assert_eq!(mgr.find_record(&fd, vn_last).expect("last hit").splitoffset, 1);
+    assert_eq!(
+        mgr.find_record(&fd, vn_last).expect("last hit").splitoffset,
+        1
+    );
 }

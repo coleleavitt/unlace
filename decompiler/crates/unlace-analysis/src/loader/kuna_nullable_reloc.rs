@@ -1,8 +1,8 @@
 //! Preserve nullable symbol identity separately from a pre-link display address.
 use super::kuna_mipsreloc;
-use unlace_decomp::kuna_nullable_reloc::{NullableRelocation, Operand};
 use object::{Object, ObjectSection, ObjectSymbol, RelocationTarget, SectionIndex, SymbolIndex};
 use std::collections::HashMap;
+use unlace_decomp::kuna_nullable_reloc::{NullableRelocation, Operand};
 
 fn is_mips(arch: object::Architecture) -> bool {
     matches!(
@@ -20,7 +20,10 @@ pub(super) fn reserved_bytes(file: &object::File<'_>) -> u64 {
     if !is_mips(arch) && arch != object::Architecture::X86_64 {
         return 0;
     }
-    let weak = file.symbols().filter(|s| s.is_undefined() && s.is_weak()).count() as u64;
+    let weak = file
+        .symbols()
+        .filter(|s| s.is_undefined() && s.is_weak())
+        .count() as u64;
     weak.saturating_mul(if file.is_64() { 8 } else { 4 })
 }
 
@@ -123,9 +126,14 @@ pub(super) fn references(
                         bytes.iter().fold(0u64, |a, &b| (a << 8) | b as u64)
                     } as i64;
                 }
-                let Some(slot) =
-                    slot_for(slots, &mut allocated, idx, cursor, limit, pointer_size as u64)
-                else {
+                let Some(slot) = slot_for(
+                    slots,
+                    &mut allocated,
+                    idx,
+                    cursor,
+                    limit,
+                    pointer_size as u64,
+                ) else {
                     continue;
                 };
                 out.push(NullableRelocation {
@@ -153,15 +161,14 @@ pub(super) fn references(
                 {
                     continue;
                 }
-                let word = bytes_at(data, *offset, 4)
-                    .map(|bytes| {
-                        let bytes: [u8; 4] = bytes.try_into().unwrap();
-                        if file.is_little_endian() {
-                            u32::from_le_bytes(bytes)
-                        } else {
-                            u32::from_be_bytes(bytes)
-                        }
-                    });
+                let word = bytes_at(data, *offset, 4).map(|bytes| {
+                    let bytes: [u8; 4] = bytes.try_into().unwrap();
+                    if file.is_little_endian() {
+                        u32::from_le_bytes(bytes)
+                    } else {
+                        u32::from_be_bytes(bytes)
+                    }
+                });
                 let Some(word) = word else { continue };
                 let (shift, bias) = match kind {
                     5 => (16, 0x8000),
@@ -218,9 +225,14 @@ pub(super) fn references(
                     }
                 }
             };
-            let Some(slot) =
-                slot_for(slots, &mut allocated, idx, cursor, limit, pointer_size as u64)
-            else {
+            let Some(slot) = slot_for(
+                slots,
+                &mut allocated,
+                idx,
+                cursor,
+                limit,
+                pointer_size as u64,
+            ) else {
                 out.push(unsupported(field, value, pointer_size));
                 continue;
             };

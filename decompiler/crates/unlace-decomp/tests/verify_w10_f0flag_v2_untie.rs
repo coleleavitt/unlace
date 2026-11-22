@@ -33,7 +33,10 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn specs_root() -> PathBuf {
@@ -113,11 +116,7 @@ fn function_block<'a>(dump: &'a str, sig_needle: &str) -> Option<String> {
             break;
         }
     }
-    if started {
-        Some(out.join("\n"))
-    } else {
-        None
-    }
+    if started { Some(out.join("\n")) } else { None }
 }
 
 /// (A1) THE WIN — `f0` un-tied renders IMPLIED.  doublemove's `loaddouble`
@@ -295,8 +294,7 @@ fn untie_is_generic_geometry_not_f0_or_register_name_special_case() {
             return;
         }
     };
-    let m2_body =
-        function_block(&m2, "mod2(").unwrap_or_else(|| panic!("no mod2 block in:\n{m2}"));
+    let m2_body = function_block(&m2, "mod2(").unwrap_or_else(|| panic!("no mod2 block in:\n{m2}"));
     // Implied integer return: the modulo expression is in the `return`, no tied
     // return-register assignment `vN = ... % 2;` round-trip survives.
     assert!(

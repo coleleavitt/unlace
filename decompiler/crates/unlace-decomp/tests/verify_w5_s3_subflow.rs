@@ -23,16 +23,16 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace,
-    UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace, addrspace_flags,
+    spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use unlace_decomp::action::Rule;
-use unlace_decomp::dtype::{type_metatype, Datatype};
-use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::context::{ArchContext, TypeOp, VarnodeId};
+use unlace_decomp::dtype::{Datatype, type_metatype};
+use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::subflow::{RuleSubvarShift, SubfloatFlow, SubvariableFlow};
 use unlace_decomp::varnode::DefOpInfo;
 
@@ -41,7 +41,8 @@ use unlace_decomp::varnode::DefOpInfo;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(IopSpace::new(2))).unwrap();
     m.insert_space(Rc::new(FspecSpace::new(3))).unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
@@ -75,8 +76,8 @@ fn unk(size: int4) -> Rc<Datatype> {
     Rc::new(Datatype::new(size, type_metatype::TYPE_UNKNOWN))
 }
 
-fn no_replace(
-) -> impl FnMut(&mut unlace_decomp::varnode::VarnodeBank, VarnodeId, VarnodeId) -> KunaResult<()> {
+fn no_replace()
+-> impl FnMut(&mut unlace_decomp::varnode::VarnodeBank, VarnodeId, VarnodeId) -> KunaResult<()> {
     |_: &mut unlace_decomp::varnode::VarnodeBank, _: VarnodeId, _: VarnodeId| -> KunaResult<()> {
         Ok(())
     }
@@ -86,7 +87,8 @@ fn mk_op(fd: &mut Funcdata, off: u64, ninput: int4, opc: OpCode) -> unlace_decom
     let r = ram(fd);
     let pc = Address::new(r, off);
     let op = fd.obank_mut().create_at(ninput, pc);
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
     op
 }
 
@@ -102,12 +104,18 @@ fn mk_input(fd: &mut Funcdata, off: u64, size: int4) -> VarnodeId {
 
 fn wire_in(fd: &mut Funcdata, op: unlace_decomp::context::OpId, vn: VarnodeId, slot: int4) {
     fd.vbank_mut().add_descend(vn, op).unwrap();
-    fd.obank_mut().get_mut(op).unwrap().set_input(Some(vn), slot);
+    fd.obank_mut()
+        .get_mut(op)
+        .unwrap()
+        .set_input(Some(vn), slot);
 }
 
 fn wire_out(fd: &mut Funcdata, defop: unlace_decomp::context::OpId, vn: VarnodeId) -> VarnodeId {
     let seq = fd.obank().get(defop).unwrap().get_seq_num().clone();
-    let info = DefOpInfo { id: defop, seqnum: seq };
+    let info = DefOpInfo {
+        id: defop,
+        seqnum: seq,
+    };
     let vn = fd.vbank_mut().set_def(vn, info, &mut no_replace()).unwrap();
     fd.obank_mut().get_mut(defop).unwrap().set_output(Some(vn));
     vn
@@ -182,10 +190,16 @@ fn w5s3_forward_int_less_non_aggressive_bails_aggressive_proceeds() {
     }
     // Non-aggressive: nz(MAX)|mask != mask -> bail -> the only descendant is
     // unhandled -> do_trace false.
-    assert!(!build(false), "non-aggressive INT_LESS must bail on nz!=mask");
+    assert!(
+        !build(false),
+        "non-aggressive INT_LESS must bail on nz!=mask"
+    );
     // Aggressive: skips the nz guard; the compare-bridge terminal bumps pullcount
     // -> do_trace true.  (Asymmetry proves the `!aggressive` guard is live.)
-    assert!(build(true), "aggressive INT_LESS must proceed through the compare bridge");
+    assert!(
+        build(true),
+        "aggressive INT_LESS must proceed through the compare bridge"
+    );
 }
 
 // ---- F-check: backward INT_ADD single-bit -> XOR, input-flag guard ----------
@@ -297,14 +311,30 @@ fn subfloat_trace_keeps_wide_binary_arithmetic_from_both_directions() {
 #[test]
 fn subfloat_trace_preserves_integer_conversion_rounding() {
     for (integer_size, original_size, can_lower) in [
-        (2, 8, true), (3, 8, true), (4, 8, false), (8, 8, false), (2, 16, true), (2, 10, true),
+        (2, 8, true),
+        (3, 8, true),
+        (4, 8, false),
+        (8, 8, false),
+        (2, 16, true),
+        (2, 10, true),
         (4, 10, false),
     ] {
         let mut context = ArchContext::new(build_manager());
-        context.floatformats = [4, 8].into_iter().map(unlace_num::float::FloatFormat::new).collect();
+        context.floatformats = [4, 8]
+            .into_iter()
+            .map(unlace_num::float::FloatFormat::new)
+            .collect();
         let context = Rc::new(context);
         let ram = Rc::clone(context.manage().get_space_by_name("ram").unwrap());
-        let mut fd = Funcdata::new("convert", "convert", context, Address::new(ram, 0x1000), 0, 0x40).unwrap();
+        let mut fd = Funcdata::new(
+            "convert",
+            "convert",
+            context,
+            Address::new(ram, 0x1000),
+            0,
+            0x40,
+        )
+        .unwrap();
         let input = mk_input(&mut fd, 0x40, integer_size);
         let convert = mk_op(&mut fd, 0x100, 1, OpCode::CPUI_FLOAT_INT2FLOAT);
         wire_in(&mut fd, convert, input, 0);
@@ -316,7 +346,11 @@ fn subfloat_trace_preserves_integer_conversion_rounding() {
         wire_out(&mut fd, narrow, result);
 
         let mut trace = SubfloatFlow::new(&mut fd, output, 4);
-        assert_eq!(trace.do_trace(&mut fd).unwrap(), can_lower, "integer size={integer_size}, original float size={original_size}");
+        assert_eq!(
+            trace.do_trace(&mut fd).unwrap(),
+            can_lower,
+            "integer size={integer_size}, original float size={original_size}"
+        );
         assert!(!fd.vbank().get(output).unwrap().is_mark());
         assert_eq!(fd.vbank().get(output).unwrap().get_size(), original_size);
     }
@@ -325,10 +359,14 @@ fn subfloat_trace_preserves_integer_conversion_rounding() {
 #[test]
 fn subfloat_trace_does_not_round_integer_before_square_root() {
     let mut context = ArchContext::new(build_manager());
-    context.floatformats = [4, 8].into_iter().map(unlace_num::float::FloatFormat::new).collect();
+    context.floatformats = [4, 8]
+        .into_iter()
+        .map(unlace_num::float::FloatFormat::new)
+        .collect();
     let context = Rc::new(context);
     let ram = Rc::clone(context.manage().get_space_by_name("ram").unwrap());
-    let mut fd = Funcdata::new("root", "root", context, Address::new(ram, 0x1000), 0, 0x40).unwrap();
+    let mut fd =
+        Funcdata::new("root", "root", context, Address::new(ram, 0x1000), 0, 0x40).unwrap();
     let input = mk_input(&mut fd, 0x40, 4);
     let convert = mk_op(&mut fd, 0x100, 1, OpCode::CPUI_FLOAT_INT2FLOAT);
     wire_in(&mut fd, convert, input, 0);

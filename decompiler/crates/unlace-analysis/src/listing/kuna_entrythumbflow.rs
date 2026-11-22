@@ -141,7 +141,12 @@ pub fn entry_thumb_flow(
     Ok(EntryThumbFlow {
         paints: painted
             .into_iter()
-            .map(|(addr, end)| ContextPaint { addr, end: Some(end), var: "TMode", value: 1 })
+            .map(|(addr, end)| ContextPaint {
+                addr,
+                end: Some(end),
+                var: "TMode",
+                value: 1,
+            })
             .collect(),
         truncated,
     })
@@ -219,7 +224,10 @@ fn walk_from_entry(
         // guard can skip the call, leaving its successor reachable.
         let returns = !classified.flow.is_call
             || classified.flow.is_conditional
-            || !classified.flows.iter().any(|target| noreturn.contains(&(target & !1)));
+            || !classified
+                .flows
+                .iter()
+                .any(|target| noreturn.contains(&(target & !1)));
         if follow_targets {
             pending.extend(classified.flows.into_iter().map(|target| target & !1));
         }

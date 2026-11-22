@@ -11,15 +11,15 @@ use unlace_base::address::{
     calc_mask, count_leading_zeros, popcount, sign_extend, sign_extend_sized, signbit_negative,
 };
 use unlace_base::error::{KunaError, KunaResult};
-use unlace_base::types::{int4, int8, uint4, uintb, Wrap};
+use unlace_base::types::{Wrap, int4, int8, uint4, uintb};
 use unlace_num::multiprecision::{
     add128, leftshift128, set_u128, subtract128, udiv128, uless128, ulessequal128,
 };
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{ActionGroupList, Rule, RuleSpec};
-use crate::funcdata::Funcdata;
 use crate::context::{OpId, VarnodeId};
+use crate::funcdata::Funcdata;
 
 #[inline]
 fn set_opcode(data: &mut Funcdata, op: OpId, opc: OpCode) {
@@ -53,7 +53,11 @@ fn is_constant_extended(data: &Funcdata, vn: VarnodeId) -> Option<[u64; 2]> {
             if size(data, vn0) < 8 {
                 v0 = sign_extend_sized(v0, size(data, vn0), size(data, vn));
             }
-            let v1 = if signbit_negative(v0, 8) { 0xffffffffffffffffu64 } else { 0 };
+            let v1 = if signbit_negative(v0, 8) {
+                0xffffffffffffffffu64
+            } else {
+                0
+            };
             return Some([v0, v1]);
         }
     } else if opc == OpCode::CPUI_PIECE {
@@ -148,47 +152,75 @@ fn out_vn(data: &Funcdata, op: OpId) -> VarnodeId {
 /// `op->getSlot(vn)`.
 #[inline]
 fn slot_of(data: &Funcdata, op: OpId, vn: VarnodeId) -> int4 {
-    data.obank().get(op).expect("ruleaction_6: stale op").get_slot(vn)
+    data.obank()
+        .get(op)
+        .expect("ruleaction_6: stale op")
+        .get_slot(vn)
 }
 /// `vn->isConstant()`.
 #[inline]
 fn is_const(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).expect("ruleaction_6: stale vn").is_constant()
+    data.vbank()
+        .get(vn)
+        .expect("ruleaction_6: stale vn")
+        .is_constant()
 }
 /// `vn->getOffset()`.
 #[inline]
 fn offset(data: &Funcdata, vn: VarnodeId) -> uintb {
-    data.vbank().get(vn).expect("ruleaction_6: stale vn").get_offset()
+    data.vbank()
+        .get(vn)
+        .expect("ruleaction_6: stale vn")
+        .get_offset()
 }
 /// `vn->getSize()`.
 #[inline]
 fn size(data: &Funcdata, vn: VarnodeId) -> int4 {
-    data.vbank().get(vn).expect("ruleaction_6: stale vn").get_size()
+    data.vbank()
+        .get(vn)
+        .expect("ruleaction_6: stale vn")
+        .get_size()
 }
 /// `vn->isWritten()`.
 #[inline]
 fn is_written(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).expect("ruleaction_6: stale vn").is_written()
+    data.vbank()
+        .get(vn)
+        .expect("ruleaction_6: stale vn")
+        .is_written()
 }
 /// `vn->getDef()`.
 #[inline]
 fn def_of(data: &Funcdata, vn: VarnodeId) -> Option<OpId> {
-    data.vbank().get(vn).expect("ruleaction_6: stale vn").get_def()
+    data.vbank()
+        .get(vn)
+        .expect("ruleaction_6: stale vn")
+        .get_def()
 }
 /// `vn->isFree()`.
 #[inline]
 fn is_free(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).expect("ruleaction_6: stale vn").is_free()
+    data.vbank()
+        .get(vn)
+        .expect("ruleaction_6: stale vn")
+        .is_free()
 }
 /// `vn->getNZMask()`.
 #[inline]
 fn nz_mask(data: &Funcdata, vn: VarnodeId) -> uintb {
-    data.vbank().get(vn).expect("ruleaction_6: stale vn").get_nz_mask()
+    data.vbank()
+        .get(vn)
+        .expect("ruleaction_6: stale vn")
+        .get_nz_mask()
 }
 /// `op->getAddr()` (cloned for op-creation calls).
 #[inline]
 fn op_addr(data: &Funcdata, op: OpId) -> unlace_base::address::Address {
-    data.obank().get(op).expect("ruleaction_6: stale op").get_addr().clone()
+    data.obank()
+        .get(op)
+        .expect("ruleaction_6: stale op")
+        .get_addr()
+        .clone()
 }
 /// `vn->loneDescend()`.
 #[inline]
@@ -198,7 +230,10 @@ fn lone_descend(data: &Funcdata, vn: VarnodeId) -> Option<OpId> {
 /// `vn->isAddrTied()`.
 #[inline]
 fn is_addr_tied(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).expect("ruleaction_6: stale vn").is_addr_tied()
+    data.vbank()
+        .get(vn)
+        .expect("ruleaction_6: stale vn")
+        .is_addr_tied()
 }
 /// `a->overlap(*b)`.
 #[inline]
@@ -210,17 +245,29 @@ fn overlap(data: &Funcdata, a: VarnodeId, b: VarnodeId) -> int4 {
 /// `vn->isProtoPartial()`.
 #[inline]
 fn is_proto_partial(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).expect("ruleaction_6: stale vn").is_proto_partial()
+    data.vbank()
+        .get(vn)
+        .expect("ruleaction_6: stale vn")
+        .is_proto_partial()
 }
 /// `vn->getAddr()` (cloned).
 #[inline]
 fn vn_addr(data: &Funcdata, vn: VarnodeId) -> unlace_base::address::Address {
-    data.vbank().get(vn).expect("ruleaction_6: stale vn").get_addr().clone()
+    data.vbank()
+        .get(vn)
+        .expect("ruleaction_6: stale vn")
+        .get_addr()
+        .clone()
 }
 /// `vn->getType()` (cloned `Rc`).
 #[inline]
 fn vn_type(data: &Funcdata, vn: VarnodeId) -> std::rc::Rc<crate::dtype::Datatype> {
-    std::rc::Rc::clone(data.vbank().get(vn).expect("ruleaction_6: stale vn").get_type())
+    std::rc::Rc::clone(
+        data.vbank()
+            .get(vn)
+            .expect("ruleaction_6: stale vn")
+            .get_type(),
+    )
 }
 /// `vn->getSpace()->isBigEndian()`.
 #[inline]
@@ -279,7 +326,8 @@ impl Rule for RulePtraddUndo {
                 let ptrto_align = dt.get_ptr_to().map(|p| p.get_align_size()).unwrap_or(-1);
                 // cast: getAlignSize()/addressToByteInt return int4-range type sizes.
                 if ptrto_align
-                    == unlace_base::space::AddrSpace::address_to_byte_int(size as i64, word_size) as int4
+                    == unlace_base::space::AddrSpace::address_to_byte_int(size as i64, word_size)
+                        as int4
                 {
                     let ind_vn = in_vn(data, op, 1);
                     let (ind_const, ind_off) = data
@@ -441,10 +489,8 @@ impl RulePtrsubUndo {
                 data.op_remove_input(op, 1);
                 set_opcode(data, op, OpCode::CPUI_COPY);
             } else {
-                retval =
-                    retval.wadd(Self::remove_local_add_recurse(data, op, 0, max_level));
-                retval =
-                    retval.wadd(Self::remove_local_add_recurse(data, op, 1, max_level));
+                retval = retval.wadd(Self::remove_local_add_recurse(data, op, 0, max_level));
+                retval = retval.wadd(Self::remove_local_add_recurse(data, op, 1, max_level));
             }
         }
         retval
@@ -535,7 +581,7 @@ impl RulePtrsubUndo {
     ) -> bool {
         use crate::dtype::type_metatype;
         use crate::kuna_thumbfuncptr::{
-            kuna_preserve_thumb_funcptr, ThumbPtrTypeFacts, ThumbSubTypeFact,
+            ThumbPtrTypeFacts, ThumbSubTypeFact, kuna_preserve_thumb_funcptr,
         };
         let funcptr_align = data.get_arch().funcptr_align;
         if funcptr_align == 0 {
@@ -556,8 +602,7 @@ impl RulePtrsubUndo {
         // predicate re-checks `ptr_to_metatype == TYPE_SPACEBASE` itself, so only
         // resolve the sub-type when that holds.
         let sub = if ptr_to_metatype == type_metatype::TYPE_SPACEBASE {
-            let newoff =
-                unlace_base::space::AddrSpace::address_to_byte_int(val, word_size);
+            let newoff = unlace_base::space::AddrSpace::address_to_byte_int(val, word_size);
             match data.spacebase_get_sub_type(&ptr_to, newoff) {
                 Some((sub_type, residual)) => Some(ThumbSubTypeFact {
                     metatype: sub_type.get_metatype(),
@@ -574,13 +619,7 @@ impl RulePtrsubUndo {
             word_size,
             sub,
         };
-        kuna_preserve_thumb_funcptr(
-            funcptr_align,
-            val,
-            extra,
-            multiplier,
-            &facts,
-        )
+        kuna_preserve_thumb_funcptr(funcptr_align, val, extra, multiplier, &facts)
     }
 }
 
@@ -636,7 +675,8 @@ impl Rule for RulePtrsubUndo {
             val = val.wadd(extra);
             let csize = size(data, cvn);
             let nc = data.new_constant(csize, (val as uintb) & calc_mask(csize));
-            data.op_set_input(op, nc, 1).expect("ptrsubundo: opSetInput");
+            data.op_set_input(op, nc, 1)
+                .expect("ptrsubundo: opSetInput");
         }
         1
     }
@@ -738,7 +778,11 @@ impl Rule for RuleAddUnsigned {
             return 0;
         }
         // named equate
-        if let Some(sym) = data.vbank().get(constvn).and_then(|v| v.kuna_symbol_entry()) {
+        if let Some(sym) = data
+            .vbank()
+            .get(constvn)
+            .and_then(|v| v.kuna_symbol_entry())
+        {
             if let Some(local) = data.get_scope_local() {
                 let s = local.database().symbol(sym);
                 if s.get_category() == crate::database::symbol_category::EQUATE
@@ -808,10 +852,12 @@ impl Rule for Rule2Comp2Sub {
         set_opcode(data, addop, OpCode::CPUI_INT_SUB);
         if in_vn(data, addop, 0) == opout {
             let addin1 = in_vn(data, addop, 1);
-            data.op_set_input(addop, addin1, 0).expect("2comp2sub: opSetInput");
+            data.op_set_input(addop, addin1, 0)
+                .expect("2comp2sub: opSetInput");
         }
         let opin0 = in_vn(data, op, 0);
-        data.op_set_input(addop, opin0, 1).expect("2comp2sub: opSetInput");
+        data.op_set_input(addop, opin0, 1)
+            .expect("2comp2sub: opSetInput");
         // Completely remove 2COMP
         data.op_destroy(op);
         1
@@ -846,7 +892,12 @@ impl Rule for RuleSubRight {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if data.obank().get(op).expect("subright: stale op").does_special_printing() {
+        if data
+            .obank()
+            .get(op)
+            .expect("subright: stale op")
+            .does_special_printing()
+        {
             return 0;
         }
         //
@@ -920,16 +971,21 @@ impl Rule for RuleSubRight {
         let shiftop = data.new_op(2, op_addr(data, op));
         set_opcode(data, shiftop, opc);
         let newout = data.new_unique(asize, Some(ct));
-        data.op_set_output(shiftop, newout).expect("subright: opSetOutput");
-        data.op_set_input(shiftop, a, 0).expect("subright: opSetInput");
+        data.op_set_output(shiftop, newout)
+            .expect("subright: opSetOutput");
+        data.op_set_input(shiftop, a, 0)
+            .expect("subright: opSetInput");
         let dvn = data.new_constant(4, d as uintb);
-        data.op_set_input(shiftop, dvn, 1).expect("subright: opSetInput");
+        data.op_set_input(shiftop, dvn, 1)
+            .expect("subright: opSetInput");
         data.op_insert_before(shiftop, op);
 
         // Change SUBPIECE into a least sig SUBPIECE
-        data.op_set_input(op, newout, 0).expect("subright: opSetInput");
+        data.op_set_input(op, newout, 0)
+            .expect("subright: opSetInput");
         let zero = data.new_constant(4, 0);
-        data.op_set_input(op, zero, 1).expect("subright: opSetInput");
+        data.op_set_input(op, zero, 1)
+            .expect("subright: opSetInput");
         1
     }
 }
@@ -992,8 +1048,7 @@ impl Rule for RulePtrsubCharConstant {
         //   isReadOnly / stringManager->isString) is W6/W4.  The descendant
         //   push-const loop (pushConstFurther) and the COPY conversion are also W6.
         //   Without the read-facing type we cannot proceed.
-        let _push = Self::push_const_further
-            as fn(&mut Funcdata, OpId, int4, uintb) -> bool;
+        let _push = Self::push_const_further as fn(&mut Funcdata, OpId, int4, uintb) -> bool;
         if type_read_facing_stub(data, sb, op).is_err() {
             return 0; // STUB(W6)
         }
@@ -1034,10 +1089,20 @@ impl Rule for RuleExtensionPush {
         if is_const(data, invn) {
             return 0;
         }
-        if data.vbank().get(invn).expect("extpush: stale vn").is_addr_force() {
+        if data
+            .vbank()
+            .get(invn)
+            .expect("extpush: stale vn")
+            .is_addr_force()
+        {
             return 0;
         }
-        if data.vbank().get(invn).expect("extpush: stale vn").is_addr_tied() {
+        if data
+            .vbank()
+            .get(invn)
+            .expect("extpush: stale vn")
+            .is_addr_tied()
+        {
             return 0;
         }
         let outvn = out_vn(data, op);
@@ -1159,10 +1224,11 @@ impl RulePieceStructure {
         let container = data
             .get_scope_local()
             .and_then(|lm| lm.query_container_for_link(&addr, &usepoint));
-        let (ct, base_offset_hint) = match container
-            .as_ref()
-            .and_then(|c| c.sym_type.as_ref().map(|t| (std::rc::Rc::clone(t), c.sym_off)))
-        {
+        let (ct, base_offset_hint) = match container.as_ref().and_then(|c| {
+            c.sym_type
+                .as_ref()
+                .map(|t| (std::rc::Rc::clone(t), c.sym_off))
+        }) {
             Some((symty, off)) => (symty, off),
             None => (vn_type(data, vn), 0),
         };
@@ -1220,7 +1286,11 @@ impl RulePieceStructure {
         if sz as usize > std::mem::size_of::<uintb>() {
             return Ok(false);
         }
-        offset += if vn_is_big_endian(data, outvn) { 0 } else { size(data, invn) };
+        offset += if vn_is_big_endian(data, outvn) {
+            0
+        } else {
+            size(data, invn)
+        };
         let mut new_off: int8 = offset as int8;
         // Walk down to the concrete sub-type matching size `sz`.
         let mut cur = ct;
@@ -1235,7 +1305,10 @@ impl RulePieceStructure {
         let zerovn = data.new_constant(sz, 0);
         if let Some(c) = &cur {
             if c.get_size() == sz {
-                data.vbank_mut().get_mut(zerovn).expect("convertZextToPiece: stale zerovn").update_type(std::rc::Rc::clone(c));
+                data.vbank_mut()
+                    .get_mut(zerovn)
+                    .expect("convertZextToPiece: stale zerovn")
+                    .update_type(std::rc::Rc::clone(c));
             }
         }
         data.op_set_opcode_code(zext, OpCode::CPUI_PIECE);
@@ -1273,7 +1346,12 @@ impl RulePieceStructure {
             if !Self::spanning_range(structured_type, node.get_type_offset(), size(data, vn))? {
                 continue;
             }
-            if Self::convert_zext_to_piece(data, op, Some(std::rc::Rc::clone(structured_type)), node.get_type_offset())? {
+            if Self::convert_zext_to_piece(
+                data,
+                op,
+                Some(std::rc::Rc::clone(structured_type)),
+                node.get_type_offset(),
+            )? {
                 change = true;
             }
         }
@@ -1300,7 +1378,12 @@ impl RulePieceStructure {
             return true; // Already in another tree
         }
         let op = def_of(data, leaf).expect("separateSymbol: written leaf no def");
-        if data.obank().get(op).expect("separateSymbol: stale op").is_marker() {
+        if data
+            .obank()
+            .get(op)
+            .expect("separateSymbol: stale op")
+            .is_marker()
+        {
             return true; // Leaf is not defined locally
         }
         if code(data, op) != OpCode::CPUI_PIECE {
@@ -1327,7 +1410,12 @@ impl Rule for RulePieceStructure {
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         // Check if CONCAT tree already visited
-        if data.obank().get(op).expect("piecestructure: stale op").is_partial_root() {
+        if data
+            .obank()
+            .get(op)
+            .expect("piecestructure: stale op")
+            .is_partial_root()
+        {
             return 0;
         }
         let outvn = out_vn(data, op);
@@ -1400,7 +1488,10 @@ impl Rule for RulePieceStructure {
             }
         }
 
-        data.obank_mut().get_mut(op).expect("piecestructure: stale op").set_partial_root();
+        data.obank_mut()
+            .get_mut(op)
+            .expect("piecestructure: stale op")
+            .set_partial_root();
         let mut any_addr_tied = is_addr_tied(data, outvn);
         let base_addr = &vn_addr(data, outvn) - base_offset as i64;
 
@@ -1426,7 +1517,10 @@ impl Rule for RulePieceStructure {
             {
                 // Varnode already has correct address and same symbol as root.
                 if !is_addr_tied(data, vn) && !is_proto_partial(data, vn) {
-                    data.vbank_mut().get_mut(vn).expect("piecestructure: stale vn").set_proto_partial();
+                    data.vbank_mut()
+                        .get_mut(vn)
+                        .expect("piecestructure: stale vn")
+                        .set_proto_partial();
                 }
                 any_addr_tied = any_addr_tied || is_addr_tied(data, vn);
                 continue;
@@ -1440,15 +1534,18 @@ impl Rule for RulePieceStructure {
                     Err(_) => continue,
                 };
                 any_addr_tied = any_addr_tied || is_addr_tied(data, new_vn);
-                let new_type = match data
-                    .get_arch()
-                    .types()
-                    .and_then(|t| t.get_exact_piece(std::rc::Rc::clone(&ct), node.get_type_offset(), vnsize).ok().flatten())
-                {
+                let new_type = match data.get_arch().types().and_then(|t| {
+                    t.get_exact_piece(std::rc::Rc::clone(&ct), node.get_type_offset(), vnsize)
+                        .ok()
+                        .flatten()
+                }) {
                     Some(t) => t,
                     None => vn_type(data, vn),
                 };
-                data.vbank_mut().get_mut(new_vn).expect("piecestructure: stale newVn").update_type(std::rc::Rc::clone(&new_type));
+                data.vbank_mut()
+                    .get_mut(new_vn)
+                    .expect("piecestructure: stale newVn")
+                    .update_type(std::rc::Rc::clone(&new_type));
                 data.op_set_opcode_code(copy_op, OpCode::CPUI_COPY);
                 if data.op_set_input(copy_op, vn, 0).is_err() {
                     continue;
@@ -1460,7 +1557,10 @@ impl Rule for RulePieceStructure {
                 // Union resolution transfer is a W8 stub (no unions in the corpus).
                 // STUB(W8 union): inheritUnionField / resolveInFlow on newType.
                 if !is_addr_tied(data, new_vn) {
-                    data.vbank_mut().get_mut(new_vn).expect("piecestructure: stale newVn").set_proto_partial();
+                    data.vbank_mut()
+                        .get_mut(new_vn)
+                        .expect("piecestructure: stale newVn")
+                        .set_proto_partial();
                 }
             } else {
                 // vn is NOT addrtied and has a lone descendant; replace storage.
@@ -1485,7 +1585,10 @@ impl Rule for RulePieceStructure {
                     continue;
                 }
                 if !is_addr_tied(data, new_vn) {
-                    data.vbank_mut().get_mut(new_vn).expect("piecestructure: stale newVn").set_proto_partial();
+                    data.vbank_mut()
+                        .get_mut(new_vn)
+                        .expect("piecestructure: stale newVn")
+                        .set_proto_partial();
                 }
             }
         }
@@ -1575,12 +1678,15 @@ impl Rule for RuleSubNormal {
                     Ok(v) => v,
                     Err(_) => return 0,
                 };
-                data.op_set_input(newop, a, 0).expect("subnormal: opSetInput");
+                data.op_set_input(newop, a, 0)
+                    .expect("subnormal: opSetInput");
                 let cst = data.new_constant(4, c as uintb);
-                data.op_set_input(newop, cst, 1).expect("subnormal: opSetInput");
+                data.op_set_input(newop, cst, 1)
+                    .expect("subnormal: opSetInput");
                 data.op_insert_before(newop, op);
 
-                data.op_set_input(op, newout, 0).expect("subnormal: opSetInput");
+                data.op_set_input(op, newout, 0)
+                    .expect("subnormal: opSetInput");
                 data.op_remove_input(op, 1);
                 set_opcode(data, op, opc);
                 return 1;
@@ -1596,7 +1702,8 @@ impl Rule for RuleSubNormal {
             // Extra shift is unnecessary
             data.op_set_input(op, a, 0).expect("subnormal: opSetInput");
             let cst = data.new_constant(4, c as uintb);
-            data.op_set_input(op, cst, 1).expect("subnormal: opSetInput");
+            data.op_set_input(op, cst, 1)
+                .expect("subnormal: opSetInput");
             return 1;
         } else if n >= outsize * 8 {
             n = outsize * 8; // Can only shift so far
@@ -1611,12 +1718,15 @@ impl Rule for RuleSubNormal {
             Ok(v) => v,
             Err(_) => return 0,
         };
-        data.op_set_input(newop, a, 0).expect("subnormal: opSetInput");
+        data.op_set_input(newop, a, 0)
+            .expect("subnormal: opSetInput");
         let cst = data.new_constant(4, c as uintb);
-        data.op_set_input(newop, cst, 1).expect("subnormal: opSetInput");
+        data.op_set_input(newop, cst, 1)
+            .expect("subnormal: opSetInput");
         data.op_insert_before(newop, op);
 
-        data.op_set_input(op, newout, 0).expect("subnormal: opSetInput");
+        data.op_set_input(op, newout, 0)
+            .expect("subnormal: opSetInput");
         let nc = data.new_constant(4, n as uintb);
         data.op_set_input(op, nc, 1).expect("subnormal: opSetInput");
         set_opcode(data, op, opc);
@@ -1729,7 +1839,11 @@ impl RuleDivTermAdd {
 
 impl Rule for RuleDivTermAdd {
     fn get_op_list(&self) -> Vec<OpCode> {
-        vec![OpCode::CPUI_SUBPIECE, OpCode::CPUI_INT_RIGHT, OpCode::CPUI_INT_SRIGHT]
+        vec![
+            OpCode::CPUI_SUBPIECE,
+            OpCode::CPUI_INT_RIGHT,
+            OpCode::CPUI_INT_SRIGHT,
+        ]
     }
 
     fn clone_rule(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Rule>> {
@@ -1801,11 +1915,11 @@ impl Rule for RuleDivTermAdd {
             }
 
             // Construct the new constant
-            let new_const_vn =
-                match new_extended_constant(data, size(data, extvn), &mult_const, op) {
-                    Ok(v) => v,
-                    Err(_) => return 0,
-                };
+            let new_const_vn = match new_extended_constant(data, size(data, extvn), &mult_const, op)
+            {
+                Ok(v) => v,
+                Err(_) => return 0,
+            };
 
             // Construct the new multiply
             let newmultop = data.new_op(2, op_addr(data, op));
@@ -1814,8 +1928,10 @@ impl Rule for RuleDivTermAdd {
                 Ok(v) => v,
                 Err(_) => return 0,
             };
-            data.op_set_input(newmultop, extvn, 0).expect("RuleDivTermAdd: opSetInput");
-            data.op_set_input(newmultop, new_const_vn, 1).expect("RuleDivTermAdd: opSetInput");
+            data.op_set_input(newmultop, extvn, 0)
+                .expect("RuleDivTermAdd: opSetInput");
+            data.op_set_input(newmultop, new_const_vn, 1)
+                .expect("RuleDivTermAdd: opSetInput");
             data.op_insert_before(newmultop, op);
 
             let newshiftop = data.new_op(2, op_addr(data, op));
@@ -1827,15 +1943,19 @@ impl Rule for RuleDivTermAdd {
                 Ok(v) => v,
                 Err(_) => return 0,
             };
-            data.op_set_input(newshiftop, newmultvn, 0).expect("RuleDivTermAdd: opSetInput");
+            data.op_set_input(newshiftop, newmultvn, 0)
+                .expect("RuleDivTermAdd: opSetInput");
             let nc = data.new_constant(4, n as uintb);
-            data.op_set_input(newshiftop, nc, 1).expect("RuleDivTermAdd: opSetInput");
+            data.op_set_input(newshiftop, nc, 1)
+                .expect("RuleDivTermAdd: opSetInput");
             data.op_insert_before(newshiftop, op);
 
             set_opcode(data, addop, OpCode::CPUI_SUBPIECE);
-            data.op_set_input(addop, newshiftvn, 0).expect("RuleDivTermAdd: opSetInput");
+            data.op_set_input(addop, newshiftvn, 0)
+                .expect("RuleDivTermAdd: opSetInput");
             let c0 = data.new_constant(4, 0);
-            data.op_set_input(addop, c0, 1).expect("RuleDivTermAdd: opSetInput");
+            data.op_set_input(addop, c0, 1)
+                .expect("RuleDivTermAdd: opSetInput");
             return 1;
         }
         0
@@ -1967,13 +2087,15 @@ impl Rule for RuleDivTermAdd2 {
                 Ok(v) => v,
                 Err(_) => return 0,
             };
-            data.op_set_input(newmultop, zextvn, 0).expect("RuleDivTermAdd2: opSetInput");
+            data.op_set_input(newmultop, zextvn, 0)
+                .expect("RuleDivTermAdd2: opSetInput");
             let new_const_vn =
                 match new_extended_constant(data, size(data, zextvn), &mult_const, op) {
                     Ok(v) => v,
                     Err(_) => return 0,
                 };
-            data.op_set_input(newmultop, new_const_vn, 1).expect("RuleDivTermAdd2: opSetInput");
+            data.op_set_input(newmultop, new_const_vn, 1)
+                .expect("RuleDivTermAdd2: opSetInput");
             data.op_insert_before(newmultop, op);
 
             let newshiftop = data.new_op(2, op_addr(data, op));
@@ -1982,15 +2104,19 @@ impl Rule for RuleDivTermAdd2 {
                 Ok(v) => v,
                 Err(_) => return 0,
             };
-            data.op_set_input(newshiftop, newmultvn, 0).expect("RuleDivTermAdd2: opSetInput");
+            data.op_set_input(newshiftop, newmultvn, 0)
+                .expect("RuleDivTermAdd2: opSetInput");
             let nc = data.new_constant(4, (n + 1) as uintb);
-            data.op_set_input(newshiftop, nc, 1).expect("RuleDivTermAdd2: opSetInput");
+            data.op_set_input(newshiftop, nc, 1)
+                .expect("RuleDivTermAdd2: opSetInput");
             data.op_insert_before(newshiftop, op);
 
             set_opcode(data, addop, OpCode::CPUI_SUBPIECE);
-            data.op_set_input(addop, newshiftvn, 0).expect("RuleDivTermAdd2: opSetInput");
+            data.op_set_input(addop, newshiftvn, 0)
+                .expect("RuleDivTermAdd2: opSetInput");
             let c0 = data.new_constant(4, 0);
-            data.op_set_input(addop, c0, 1).expect("RuleDivTermAdd2: opSetInput");
+            data.op_set_input(addop, c0, 1)
+                .expect("RuleDivTermAdd2: opSetInput");
             return 1;
         }
         0
@@ -2019,37 +2145,60 @@ impl RuleDivOpt {
             (in_vn(data, op, 0), in_vn(data, op, 1))
         } else if is_const(data, in_vn(data, op, 0)) {
             (in_vn(data, op, 1), in_vn(data, op, 0))
-        } else { return false };
+        } else {
+            return false;
+        };
         if offset(data, mask_vn) != u64::MAX - 1 || !is_written(data, masked_vn) {
             return false;
         }
         let sub_op = def_of(data, masked_vn).expect("divopt: masked vn has no def");
-        if code(data, sub_op) != OpCode::CPUI_SUBPIECE
-            || offset(data, in_vn(data, sub_op, 1)) != 8 { return false }
+        if code(data, sub_op) != OpCode::CPUI_SUBPIECE || offset(data, in_vn(data, sub_op, 1)) != 8
+        {
+            return false;
+        }
         let wide_product = in_vn(data, sub_op, 0);
-        if size(data, wide_product) != 16 || !is_written(data, wide_product) { return false }
+        if size(data, wide_product) != 16 || !is_written(data, wide_product) {
+            return false;
+        }
         let mult_op = def_of(data, wide_product).expect("divopt: product has no def");
-        if code(data, mult_op) != OpCode::CPUI_INT_MULT { return false }
+        if code(data, mult_op) != OpCode::CPUI_INT_MULT {
+            return false;
+        }
         let wide_x = if is_constant_extended(data, in_vn(data, mult_op, 1))
-            == Some([0xaaaa_aaaa_aaaa_aaab, 0]) {
+            == Some([0xaaaa_aaaa_aaaa_aaab, 0])
+        {
             in_vn(data, mult_op, 0)
         } else if is_constant_extended(data, in_vn(data, mult_op, 0))
-            == Some([0xaaaa_aaaa_aaaa_aaab, 0]) {
+            == Some([0xaaaa_aaaa_aaaa_aaab, 0])
+        {
             in_vn(data, mult_op, 1)
-        } else { return false };
-        if !is_written(data, wide_x) { return false }
+        } else {
+            return false;
+        };
+        if !is_written(data, wide_x) {
+            return false;
+        }
         let ext_op = def_of(data, wide_x).expect("divopt: wide multiplicand has no def");
         let x = match code(data, ext_op) {
-            OpCode::CPUI_INT_ZEXT if size(data, wide_x) == 16
-                && size(data, in_vn(data, ext_op, 0)) == 8 => in_vn(data, ext_op, 0),
-            OpCode::CPUI_PIECE if is_const(data, in_vn(data, ext_op, 0))
-                && offset(data, in_vn(data, ext_op, 0)) == 0
-                && size(data, wide_x) == 16
-                && size(data, in_vn(data, ext_op, 1)) == 8 => in_vn(data, ext_op, 1),
+            OpCode::CPUI_INT_ZEXT
+                if size(data, wide_x) == 16 && size(data, in_vn(data, ext_op, 0)) == 8 =>
+            {
+                in_vn(data, ext_op, 0)
+            }
+            OpCode::CPUI_PIECE
+                if is_const(data, in_vn(data, ext_op, 0))
+                    && offset(data, in_vn(data, ext_op, 0)) == 0
+                    && size(data, wide_x) == 16
+                    && size(data, in_vn(data, ext_op, 1)) == 8 =>
+            {
+                in_vn(data, ext_op, 1)
+            }
             _ => return false,
         };
         let and_op = data.obank().get(op).expect("divopt: stale AND");
-        let Some(and_parent) = and_op.get_parent() else { return false };
+        let Some(and_parent) = and_op.get_parent() else {
+            return false;
+        };
         let and_order = and_op.get_seq_num().get_order();
         let quotient = data.descend_snapshot(x).into_iter().find_map(|div_op| {
             if code(data, div_op) != OpCode::CPUI_INT_DIV || in_vn(data, div_op, 0) != x {
@@ -2057,15 +2206,19 @@ impl RuleDivOpt {
             }
             let candidate = data.obank().get(div_op).expect("divopt: stale quotient");
             if candidate.get_parent() != Some(and_parent)
-                || candidate.get_seq_num().get_order() >= and_order {
+                || candidate.get_seq_num().get_order() >= and_order
+            {
                 return None;
             }
             let divisor = in_vn(data, div_op, 1);
             (is_const(data, divisor) && offset(data, divisor) == 3).then(|| out_vn(data, div_op))
         });
-        let Some(quotient) = quotient else { return false };
+        let Some(quotient) = quotient else {
+            return false;
+        };
         set_opcode(data, op, OpCode::CPUI_INT_MULT);
-        data.op_set_input(op, quotient, 0).expect("divopt: quotient input");
+        data.op_set_input(op, quotient, 0)
+            .expect("divopt: quotient input");
         let two = data.new_constant(8, 2);
         data.op_set_input(op, two, 1).expect("divopt: scale input");
         true
@@ -2125,8 +2278,7 @@ impl RuleDivOpt {
         let mut r_scratch = [0u64; 2];
         // denom = diff = (off-by-one carry) + (q[0]-r[0]); with r < q here this is
         // >= 1, so the divisor is non-zero (C++ divides directly).
-        udiv128(&power, &denom, &mut tmp, &mut r_scratch)
-            .expect("calc_divisor: udiv128 by denom");
+        udiv128(&power, &denom, &mut tmp, &mut r_scratch).expect("calc_divisor: udiv128 by denom");
         if tmp[1] != 0 {
             return q[0]; // tmp is bigger than 2^64 > maxx
         }
@@ -2340,8 +2492,12 @@ impl RuleDivOpt {
 
 impl Rule for RuleDivOpt {
     fn get_op_list(&self) -> Vec<OpCode> {
-        vec![OpCode::CPUI_SUBPIECE, OpCode::CPUI_INT_RIGHT, OpCode::CPUI_INT_SRIGHT,
-             OpCode::CPUI_INT_AND]
+        vec![
+            OpCode::CPUI_SUBPIECE,
+            OpCode::CPUI_INT_RIGHT,
+            OpCode::CPUI_INT_SRIGHT,
+            OpCode::CPUI_INT_AND,
+        ]
     }
 
     fn clone_rule(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Rule>> {
@@ -2383,7 +2539,8 @@ impl Rule for RuleDivOpt {
                 Ok(v) => v,
                 Err(_) => return 0,
             };
-            data.op_set_input(in_ext, in_vn0, 0).expect("RuleDivOpt: opSetInput");
+            data.op_set_input(in_ext, in_vn0, 0)
+                .expect("RuleDivOpt: opSetInput");
             in_vn0 = ext_out;
             data.op_insert_before(in_ext, op);
         } else if size(data, in_vn0) > out_size {
@@ -2399,18 +2556,22 @@ impl Rule for RuleDivOpt {
             };
             data.op_insert_before(newop, op);
             set_opcode(data, op, OpCode::CPUI_SUBPIECE);
-            data.op_set_input(op, res_vn, 0).expect("RuleDivOpt: opSetInput");
+            data.op_set_input(op, res_vn, 0)
+                .expect("RuleDivOpt: opSetInput");
             let c0 = data.new_constant(4, 0);
-            data.op_set_input(op, c0, 1).expect("RuleDivOpt: opSetInput");
+            data.op_set_input(op, c0, 1)
+                .expect("RuleDivOpt: opSetInput");
             op = newop; // Main transform now changes newop
             out_size = size(data, in_vn0);
         }
 
         if ext_opc == OpCode::CPUI_INT_ZEXT {
             // Unsigned division
-            data.op_set_input(op, in_vn0, 0).expect("RuleDivOpt: opSetInput");
+            data.op_set_input(op, in_vn0, 0)
+                .expect("RuleDivOpt: opSetInput");
             let dvn = data.new_constant(out_size, divisor);
-            data.op_set_input(op, dvn, 1).expect("RuleDivOpt: opSetInput");
+            data.op_set_input(op, dvn, 1)
+                .expect("RuleDivOpt: opSetInput");
             set_opcode(data, op, OpCode::CPUI_INT_DIV);
         } else {
             // Sign division
@@ -2422,9 +2583,11 @@ impl Rule for RuleDivOpt {
                 Ok(v) => v,
                 Err(_) => return 0,
             };
-            data.op_set_input(divop, in_vn0, 0).expect("RuleDivOpt: opSetInput");
+            data.op_set_input(divop, in_vn0, 0)
+                .expect("RuleDivOpt: opSetInput");
             let dvn = data.new_constant(out_size, divisor);
-            data.op_set_input(divop, dvn, 1).expect("RuleDivOpt: opSetInput");
+            data.op_set_input(divop, dvn, 1)
+                .expect("RuleDivOpt: opSetInput");
             data.op_insert_before(divop, op);
             // Build the sign value correction
             let sgnop = data.new_op(2, op_addr(data, op));
@@ -2433,13 +2596,17 @@ impl Rule for RuleDivOpt {
                 Ok(v) => v,
                 Err(_) => return 0,
             };
-            data.op_set_input(sgnop, in_vn0, 0).expect("RuleDivOpt: opSetInput");
+            data.op_set_input(sgnop, in_vn0, 0)
+                .expect("RuleDivOpt: opSetInput");
             let shc = data.new_constant(out_size, (out_size * 8 - 1) as uintb);
-            data.op_set_input(sgnop, shc, 1).expect("RuleDivOpt: opSetInput");
+            data.op_set_input(sgnop, shc, 1)
+                .expect("RuleDivOpt: opSetInput");
             data.op_insert_before(sgnop, op);
             // Add the correction into the division op
-            data.op_set_input(op, newout, 0).expect("RuleDivOpt: opSetInput");
-            data.op_set_input(op, sgnvn, 1).expect("RuleDivOpt: opSetInput");
+            data.op_set_input(op, newout, 0)
+                .expect("RuleDivOpt: opSetInput");
+            data.op_set_input(op, sgnvn, 1)
+                .expect("RuleDivOpt: opSetInput");
             set_opcode(data, op, OpCode::CPUI_INT_ADD);
         }
         1
@@ -2456,12 +2623,30 @@ impl Rule for RuleDivOpt {
 /// `coreaction.cc`'s `ActionDatabase::universalAction`.
 pub fn specs() -> Vec<RuleSpec> {
     vec![
-        RuleSpec { group: "ptraddundo", ctor: || Box::new(RulePtraddUndo::new("ptraddundo")) },
-        RuleSpec { group: "ptrsubundo", ctor: || Box::new(RulePtrsubUndo::new("ptrsubundo")) },
-        RuleSpec { group: "multnegone", ctor: || Box::new(RuleMultNegOne::new("multnegone")) },
-        RuleSpec { group: "addunsigned", ctor: || Box::new(RuleAddUnsigned::new("addunsigned")) },
-        RuleSpec { group: "2comp2sub", ctor: || Box::new(Rule2Comp2Sub::new("2comp2sub")) },
-        RuleSpec { group: "subright", ctor: || Box::new(RuleSubRight::new("subright")) },
+        RuleSpec {
+            group: "ptraddundo",
+            ctor: || Box::new(RulePtraddUndo::new("ptraddundo")),
+        },
+        RuleSpec {
+            group: "ptrsubundo",
+            ctor: || Box::new(RulePtrsubUndo::new("ptrsubundo")),
+        },
+        RuleSpec {
+            group: "multnegone",
+            ctor: || Box::new(RuleMultNegOne::new("multnegone")),
+        },
+        RuleSpec {
+            group: "addunsigned",
+            ctor: || Box::new(RuleAddUnsigned::new("addunsigned")),
+        },
+        RuleSpec {
+            group: "2comp2sub",
+            ctor: || Box::new(Rule2Comp2Sub::new("2comp2sub")),
+        },
+        RuleSpec {
+            group: "subright",
+            ctor: || Box::new(RuleSubRight::new("subright")),
+        },
         RuleSpec {
             group: "ptrsubcharconstant",
             ctor: || Box::new(RulePtrsubCharConstant::new("ptrsubcharconstant")),
@@ -2474,11 +2659,26 @@ pub fn specs() -> Vec<RuleSpec> {
             group: "piecestructure",
             ctor: || Box::new(RulePieceStructure::new("piecestructure")),
         },
-        RuleSpec { group: "subnormal", ctor: || Box::new(RuleSubNormal::new("subnormal")) },
-        RuleSpec { group: "positivediv", ctor: || Box::new(RulePositiveDiv::new("positivediv")) },
-        RuleSpec { group: "divtermadd", ctor: || Box::new(RuleDivTermAdd::new("divtermadd")) },
-        RuleSpec { group: "divtermadd2", ctor: || Box::new(RuleDivTermAdd2::new("divtermadd2")) },
-        RuleSpec { group: "divopt", ctor: || Box::new(RuleDivOpt::new("divopt")) },
+        RuleSpec {
+            group: "subnormal",
+            ctor: || Box::new(RuleSubNormal::new("subnormal")),
+        },
+        RuleSpec {
+            group: "positivediv",
+            ctor: || Box::new(RulePositiveDiv::new("positivediv")),
+        },
+        RuleSpec {
+            group: "divtermadd",
+            ctor: || Box::new(RuleDivTermAdd::new("divtermadd")),
+        },
+        RuleSpec {
+            group: "divtermadd2",
+            ctor: || Box::new(RuleDivTermAdd2::new("divtermadd2")),
+        },
+        RuleSpec {
+            group: "divopt",
+            ctor: || Box::new(RuleDivOpt::new("divopt")),
+        },
     ]
 }
 

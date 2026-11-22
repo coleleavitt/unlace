@@ -1,13 +1,13 @@
 //! Execute Go callers that consume every word of a recovered array result.
 
 use crate::common;
-use unlace_console::engine::{bootstrap_from_file, bootstrap_from_object, ConsoleProgram};
-use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
-};
-use unlace_console::ifaceterm::ConsoleCommands;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_file, bootstrap_from_object};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
+use unlace_console::ifaceterm::ConsoleCommands;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
@@ -81,7 +81,14 @@ fn go_imports(bodies: &[&str], harness: &[&str]) -> String {
     if packages.is_empty() {
         return String::new();
     }
-    format!("import ({})\n", packages.iter().map(|p| format!("\"{p}\"")).collect::<Vec<_>>().join("; "))
+    format!(
+        "import ({})\n",
+        packages
+            .iter()
+            .map(|p| format!("\"{p}\""))
+            .collect::<Vec<_>>()
+            .join("; ")
+    )
 }
 
 fn native_body(binary: &Path, name: &str) -> String {
@@ -122,7 +129,10 @@ fn native_caller_and_callee_execute_with_both_result_words() {
     let output = common::scratch_file("gobyteextract-execute", "go");
     std::fs::write(
         &output,
-        format!("package main\n{}{pair}\n{combine}\n{support}\n", go_imports(&[&pair, &combine], &[])),
+        format!(
+            "package main\n{}{pair}\n{combine}\n{support}\n",
+            go_imports(&[&pair, &combine], &[])
+        ),
     )
     .unwrap();
     run(Command::new("go").arg("run").arg(output));

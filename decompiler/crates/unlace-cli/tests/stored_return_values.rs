@@ -43,7 +43,9 @@ extern int gi, gj;
 "#,
     );
     for (name, params, _) in cases {
-        out.push_str(&format!("int {name}({params});\nint emitted_{name}({params});\n"));
+        out.push_str(&format!(
+            "int {name}({params});\nint emitted_{name}({params});\n"
+        ));
     }
     out.push_str("int main(void) {\n    for (int a = -20; a < 20; a++) {\n");
     for (name, _, args) in cases {
@@ -61,7 +63,12 @@ fn fixture() -> Option<std::path::PathBuf> {
     std::fs::write(&asm, ASM).unwrap();
     process::required_output(
         Command::new("clang")
-            .args(["-nostdlib", "-no-pie", "-Wl,--build-id=none", "-Wl,-e,reader"])
+            .args([
+                "-nostdlib",
+                "-no-pie",
+                "-Wl,--build-id=none",
+                "-Wl,-e,reader",
+            ])
             .arg(&asm)
             .arg("-o")
             .arg(&elf),
@@ -106,9 +113,11 @@ fn kuna() -> std::ffi::OsString {
 }
 
 fn decompile_all(elf: &std::path::Path) -> Vec<(String, String)> {
-    let output = process::required_output(
-        Command::new(kuna()).args(["decompile-all", elf.to_str().unwrap(), "--json"]),
-    );
+    let output = process::required_output(Command::new(kuna()).args([
+        "decompile-all",
+        elf.to_str().unwrap(),
+        "--json",
+    ]));
     let doc: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     doc["functions"]
         .as_array()
@@ -151,13 +160,20 @@ fn a_single_function_decompile_returns_what_its_callers_read() {
     let elf = asm.with_extension("elf");
     let decompile = |name: &str, extra: &[&str]| {
         let output = process::required_output(
-            Command::new(kuna()).arg("decompile").arg(&elf).arg(name).args(extra),
+            Command::new(kuna())
+                .arg("decompile")
+                .arg(&elf)
+                .arg(name)
+                .args(extra),
         );
         String::from_utf8(output.stdout).unwrap()
     };
     let void = decompile("triple_void", &[]);
     assert!(void.contains("void triple_void("), "{void}");
-    let cases: Vec<_> = RETURNING.iter().filter(|(name, _, _)| *name != "put").collect();
+    let cases: Vec<_> = RETURNING
+        .iter()
+        .filter(|(name, _, _)| *name != "put")
+        .collect();
     round_trip(&asm, &cases, |name| decompile(name, &[]));
 }
 
@@ -209,11 +225,13 @@ fn a_selected_batch_returns_the_indirect_result_its_unselected_caller_reads() {
                 )
             })
             .collect();
-        assert!(output["assertions"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .all(|row| row["status"] == "applied"));
+        assert!(
+            output["assertions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|row| row["status"] == "applied")
+        );
         bodies
     };
     let selected = decompile(

@@ -12,12 +12,12 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
-use unlace_base::space::{spacetype, AddrSpace, AddrSpaceManager};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, spacetype};
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
-use crate::dtype::{type_class, type_metatype, Datatype, TypeFactory};
+use crate::dtype::{Datatype, TypeFactory, type_class, type_metatype};
 
 use super::*;
 
@@ -223,15 +223,24 @@ fn assumed_extension_zext_le() {
     .unwrap();
     let mut res = VarnodeData::default();
     // A 2-byte justified value (LE, at base) gets zero-extended to the whole 4.
-    assert_eq!(e.assumed_extension(&addr(&reg, 0x10), 2, &mut res), OpCode::CPUI_INT_ZEXT);
+    assert_eq!(
+        e.assumed_extension(&addr(&reg, 0x10), 2, &mut res),
+        OpCode::CPUI_INT_ZEXT
+    );
     assert_eq!(res.offset, 0x10);
     assert_eq!(res.size, 4);
     // A full-size value needs no extension.
     let mut res2 = VarnodeData::default();
-    assert_eq!(e.assumed_extension(&addr(&reg, 0x10), 4, &mut res2), OpCode::CPUI_COPY);
+    assert_eq!(
+        e.assumed_extension(&addr(&reg, 0x10), 4, &mut res2),
+        OpCode::CPUI_COPY
+    );
     // A non-justified value cannot be extended.
     let mut res3 = VarnodeData::default();
-    assert_eq!(e.assumed_extension(&addr(&reg, 0x12), 2, &mut res3), OpCode::CPUI_COPY);
+    assert_eq!(
+        e.assumed_extension(&addr(&reg, 0x12), 2, &mut res3),
+        OpCode::CPUI_COPY
+    );
 }
 
 #[test]
@@ -643,12 +652,7 @@ impl TypeFactory for PanicTypeFactory {
     fn get_base(&self, _s: int4, _m: type_metatype) -> KunaResult<Rc<Datatype>> {
         unreached!()
     }
-    fn get_base_named(
-        &self,
-        _s: int4,
-        _m: type_metatype,
-        _n: &str,
-    ) -> KunaResult<Rc<Datatype>> {
+    fn get_base_named(&self, _s: int4, _m: type_metatype, _n: &str) -> KunaResult<Rc<Datatype>> {
         unreached!()
     }
     fn get_type_char(&self, _s: int4) -> KunaResult<Rc<Datatype>> {
@@ -800,7 +804,8 @@ fn manager_with_default_data_space() -> (AddrSpaceManager, Rc<AddrSpace>) {
     use unlace_base::space::{ConstantSpace, UniqueSpace};
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     let reg = Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "register",
@@ -858,12 +863,18 @@ fn assign_map_standard_out_hidden_return_emits_indirect_output_plus_pointer_para
     assert_eq!(res.len(), 2);
     assert_ne!(res[0].flags & parameter_pieces_flags::INDIRECTSTORAGE, 0);
     // The output's recovered type is the pointer to the struct (size = addr_size).
-    assert_eq!(res[0].type_.as_ref().unwrap().get_metatype(), type_metatype::TYPE_PTR);
+    assert_eq!(
+        res[0].type_.as_ref().unwrap().get_metatype(),
+        type_metatype::TYPE_PTR
+    );
     assert_eq!(res[0].type_.as_ref().unwrap().get_size(), 8);
     // The hidden return parameter carries the pointer type and an invalid
     // address (filled in by the input-list assignMap), and — with no model
     // rules — is the plain (non-special) hidden return (flags 0).
-    assert_eq!(res[1].type_.as_ref().unwrap().get_metatype(), type_metatype::TYPE_PTR);
+    assert_eq!(
+        res[1].type_.as_ref().unwrap().get_metatype(),
+        type_metatype::TYPE_PTR
+    );
     assert!(res[1].addr.is_invalid());
     assert_eq!(res[1].flags, 0);
 }
@@ -877,7 +888,14 @@ fn assign_address_fallback_exhausts_groups() {
     let mut p0 = ParameterPieces::default();
     // First assignment grabs group 0.
     let r0 = model
-        .assign_address_fallback(type_class::TYPECLASS_GENERAL, &tp, false, &mut status, &mut p0, &mgr)
+        .assign_address_fallback(
+            type_class::TYPECLASS_GENERAL,
+            &tp,
+            false,
+            &mut status,
+            &mut p0,
+            &mgr,
+        )
         .unwrap();
     assert_eq!(r0, AssignActionResponse::success);
     assert_eq!(p0.addr.get_offset(), 0x10);
@@ -885,7 +903,14 @@ fn assign_address_fallback_exhausts_groups() {
     // Second assignment grabs group 1.
     let mut p1 = ParameterPieces::default();
     let r1 = model
-        .assign_address_fallback(type_class::TYPECLASS_GENERAL, &tp, false, &mut status, &mut p1, &mgr)
+        .assign_address_fallback(
+            type_class::TYPECLASS_GENERAL,
+            &tp,
+            false,
+            &mut status,
+            &mut p1,
+            &mgr,
+        )
         .unwrap();
     assert_eq!(r1, AssignActionResponse::success);
     assert_eq!(p1.addr.get_offset(), 0x20);
@@ -941,7 +966,11 @@ fn effect_record_from_param_entry() {
 // =========================================================================
 
 fn vdata(spc: &Rc<AddrSpace>, off: u64, sz: u32) -> VarnodeData {
-    VarnodeData { space: Some(Rc::clone(spc)), offset: off, size: sz }
+    VarnodeData {
+        space: Some(Rc::clone(spc)),
+        offset: off,
+        size: sz,
+    }
 }
 
 /// Build a standard ProtoModel with two int register entries (groups 0/1 at
@@ -1151,8 +1180,16 @@ fn score_proto_model_hole_and_mismatch_penalties() {
 #[test]
 fn proto_model_intersect_registers_keeps_common() {
     let reg = reg_space_le();
-    let mut a = vec![vdata(&reg, 0x10, 4), vdata(&reg, 0x20, 4), vdata(&reg, 0x30, 4)];
-    let mut b = vec![vdata(&reg, 0x20, 4), vdata(&reg, 0x30, 4), vdata(&reg, 0x40, 4)];
+    let mut a = vec![
+        vdata(&reg, 0x10, 4),
+        vdata(&reg, 0x20, 4),
+        vdata(&reg, 0x30, 4),
+    ];
+    let mut b = vec![
+        vdata(&reg, 0x20, 4),
+        vdata(&reg, 0x30, 4),
+        vdata(&reg, 0x40, 4),
+    ];
     a.sort_unstable();
     b.sort_unstable();
     ProtoModel::intersect_registers(&mut a, &b);
@@ -1241,7 +1278,7 @@ fn parameter_basic_override_size_lock_type() {
     let unk = Rc::new(Datatype::new_with_align(4, 4, type_metatype::TYPE_UNKNOWN));
     let mut p = ParameterBasic::new("a", addr(&reg, 0x10), unk, 0);
     p.set_type_lock(true); // sets size lock too (unknown type)
-                           // Override with a same-size int succeeds.
+    // Override with a same-size int succeeds.
     assert!(p.override_size_lock_type(int4_type()).is_ok());
     assert_eq!(
         p.get_type().unwrap().get_metatype(),
@@ -1270,11 +1307,23 @@ fn proto_store_internal_round_trip() {
     );
 
     // Set two inputs and an output.
-    let p0 = ParameterPieces { addr: addr(&reg, 0x10), type_: Some(int4_type()), flags: 0 };
-    let p1 = ParameterPieces { addr: addr(&reg, 0x20), type_: Some(int4_type()), flags: 0 };
+    let p0 = ParameterPieces {
+        addr: addr(&reg, 0x10),
+        type_: Some(int4_type()),
+        flags: 0,
+    };
+    let p1 = ParameterPieces {
+        addr: addr(&reg, 0x20),
+        type_: Some(int4_type()),
+        flags: 0,
+    };
     store.set_input(0, "a", &p0);
     store.set_input(1, "b", &p1);
-    let out = ParameterPieces { addr: addr(&reg, 0x10), type_: Some(int4_type()), flags: 0 };
+    let out = ParameterPieces {
+        addr: addr(&reg, 0x10),
+        type_: Some(int4_type()),
+        flags: 0,
+    };
     store.set_output(&out);
     assert_eq!(store.get_num_inputs(), 2);
     assert_eq!(store.get_input(0).unwrap().get_name(), "a");
@@ -1404,7 +1453,11 @@ fn func_proto_input_lock_void_and_params() {
     assert!(!fp.is_input_locked());
 
     // With a param: input lock type-locks the parameter.
-    let p0 = ParameterPieces { addr: addr(&reg, 0x10), type_: Some(int4_type()), flags: 0 };
+    let p0 = ParameterPieces {
+        addr: addr(&reg, 0x10),
+        type_: Some(int4_type()),
+        flags: 0,
+    };
     fp.set_param(0, "a", &p0);
     assert!(!fp.is_input_locked());
     fp.set_input_lock(true);
@@ -1424,7 +1477,11 @@ fn func_proto_resolve_extra_pop_x86() {
     fp.set_internal(Rc::clone(&model), Rc::clone(&voidt));
     // A single stack parameter at offset 0 of size 4 -> cur = (0+4+3)&~3 = 4,
     // extrapop = max(4 (retaddr), 4) = 4.
-    let p0 = ParameterPieces { addr: addr(&stack, 0x0), type_: Some(int4_type()), flags: 0 };
+    let p0 = ParameterPieces {
+        addr: addr(&stack, 0x0),
+        type_: Some(int4_type()),
+        flags: 0,
+    };
     fp.set_param(0, "a", &p0);
     fp.set_input_lock(true); // resolveExtraPop only runs when input is locked
     fp.resolve_extra_pop();
@@ -1433,7 +1490,11 @@ fn func_proto_resolve_extra_pop_x86() {
     // A stack parameter at offset 4 size 4 -> cur = (4+4+3)&~3 = 8 -> extrapop 8.
     let mut fp2 = FuncProto::new();
     fp2.set_internal(Rc::clone(&model), Rc::clone(&voidt));
-    let p1 = ParameterPieces { addr: addr(&stack, 0x4), type_: Some(int4_type()), flags: 0 };
+    let p1 = ParameterPieces {
+        addr: addr(&stack, 0x4),
+        type_: Some(int4_type()),
+        flags: 0,
+    };
     fp2.set_param(0, "a", &p1);
     fp2.set_input_lock(true);
     fp2.resolve_extra_pop();
@@ -1499,10 +1560,10 @@ fn func_proto_stub_methods_error() {
 // fspec-3: FuncCallSpecs
 // =========================================================================
 
+use crate::context::{ArchContext, OpId, TypeOp, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::kuna_restartlog::RestartLog;
 use crate::op::pcodeop_flags;
-use crate::context::{ArchContext, OpId, TypeOp, VarnodeId};
 use crate::varnode::DefOpInfo;
 
 /// A manager carrying const / unique / ram (code) / stack (spacebase) spaces,
@@ -1511,7 +1572,8 @@ fn fcs_manager() -> AddrSpaceManager {
     use unlace_base::space::{ConstantSpace, UniqueSpace};
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -1539,7 +1601,8 @@ fn fcs_manager() -> AddrSpaceManager {
     .unwrap();
     // The fspec space, so deindirect's CALLIND->CALL rewrite can build the
     // call-spec annotation Varnode (newVarnodeCallSpecs).
-    m.insert_space(Rc::new(unlace_base::space::FspecSpace::new(4))).unwrap();
+    m.insert_space(Rc::new(unlace_base::space::FspecSpace::new(4)))
+        .unwrap();
     m.set_default_code_space(2).unwrap();
     m
 }
@@ -1569,21 +1632,31 @@ fn fcs_new_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
     } else {
         0
     };
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, flags, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, flags, format!("{opc:?}")));
     op
 }
 
 /// A varnode in `space` at `off`/`size` defined by `op` (sets `written`).
 fn fcs_out(fd: &mut Funcdata, op: OpId, space: Rc<AddrSpace>, off: u64, size: int4) -> VarnodeId {
     let seq = fd.obank().get(op).unwrap().get_seq_num().clone();
-    let def = DefOpInfo { id: op, seqnum: seq };
+    let def = DefOpInfo {
+        id: op,
+        seqnum: seq,
+    };
     let vn = {
         let mut noop = |_b: &mut crate::varnode::VarnodeBank,
                         _o: VarnodeId,
                         _n: VarnodeId|
          -> KunaResult<()> { panic!("collision") };
         fd.vbank_mut()
-            .create_def(size, Address::new(space, off), Rc::new(Datatype::new(size, type_metatype::TYPE_UNKNOWN)), def, &mut noop)
+            .create_def(
+                size,
+                Address::new(space, off),
+                Rc::new(Datatype::new(size, type_metatype::TYPE_UNKNOWN)),
+                def,
+                &mut noop,
+            )
             .unwrap()
     };
     fd.obank_mut().get_mut(op).unwrap().set_output(Some(vn));
@@ -1592,7 +1665,11 @@ fn fcs_out(fd: &mut Funcdata, op: OpId, space: Rc<AddrSpace>, off: u64, size: in
 
 fn fcs_const_vn(fd: &mut Funcdata, val: u64, size: int4) -> VarnodeId {
     let c = fcs_const(fd);
-    fd.vbank_mut().create(size, Address::new(c, val), Rc::new(Datatype::new(size, type_metatype::TYPE_UNKNOWN)))
+    fd.vbank_mut().create(
+        size,
+        Address::new(c, val),
+        Rc::new(Datatype::new(size, type_metatype::TYPE_UNKNOWN)),
+    )
 }
 
 /// A `FuncProto` with a standard model and an internal (void-output) store —
@@ -1708,16 +1785,28 @@ fn param_active_trial_for_input_varnode_index_math() {
     pa.register_trial(&addr(&stk, 0x8), 4); // slot 3
 
     // No placeholder: input slot s maps to trial[s-1].
-    assert_eq!(pa.get_trial_for_input_varnode(1).get_address().get_offset(), 0x0);
-    assert_eq!(pa.get_trial_for_input_varnode(2).get_address().get_offset(), 0x4);
+    assert_eq!(
+        pa.get_trial_for_input_varnode(1).get_address().get_offset(),
+        0x0
+    );
+    assert_eq!(
+        pa.get_trial_for_input_varnode(2).get_address().get_offset(),
+        0x4
+    );
 
     // After establishing a placeholder (slot 4), input slots past it subtract 2.
     pa.set_placeholder_slot(); // stackplaceholder = slotbase (4)
     // slot 2 < placeholder(4): subtract 1 -> trial[1] (offset 0x4)
-    assert_eq!(pa.get_trial_for_input_varnode(2).get_address().get_offset(), 0x4);
+    assert_eq!(
+        pa.get_trial_for_input_varnode(2).get_address().get_offset(),
+        0x4
+    );
     // slot 5 >= placeholder(4): subtract 2 -> trial[3]... but only 3 trials;
     // use slot 4 -> trial[2] (offset 0x8).
-    assert_eq!(pa.get_trial_for_input_varnode(4).get_address().get_offset(), 0x8);
+    assert_eq!(
+        pa.get_trial_for_input_varnode(4).get_address().get_offset(),
+        0x8
+    );
 }
 
 #[test]
@@ -1759,10 +1848,7 @@ fn func_call_specs_do_input_join_locked_errs() {
     // any join-address construction, so a dummy lookup is fine.
     struct NoLookup;
     impl unlace_base::space::RegisterLookup for NoLookup {
-        fn get_register(
-            &self,
-            _nm: &str,
-        ) -> KunaResult<unlace_base::space::VarnodeStorage> {
+        fn get_register(&self, _nm: &str) -> KunaResult<unlace_base::space::VarnodeStorage> {
             Err(unlace_base::error::KunaError::lowlevel("no register"))
         }
         fn get_register_name(&self, _base: &Rc<AddrSpace>, _off: u64, _size: int4) -> String {
@@ -1789,7 +1875,9 @@ fn func_call_specs_late_restriction_no_model_copies() {
 
     let mut newinput: Vec<Option<VarnodeId>> = Vec::new();
     let mut newoutput: Vec<VarnodeId> = Vec::new();
-    let ok = fc.late_restriction(&fd, &restricted, &mut newinput, &mut newoutput).unwrap();
+    let ok = fc
+        .late_restriction(&fd, &restricted, &mut newinput, &mut newoutput)
+        .unwrap();
     assert!(ok);
     assert_eq!(fc.proto().get_extra_pop(), 12);
 }
@@ -1814,7 +1902,9 @@ fn func_call_specs_late_restriction_incompatible_models_false() {
 
     let mut ni: Vec<Option<VarnodeId>> = Vec::new();
     let mut no: Vec<VarnodeId> = Vec::new();
-    let ok = fc.late_restriction(&fd, &restricted, &mut ni, &mut no).unwrap();
+    let ok = fc
+        .late_restriction(&fd, &restricted, &mut ni, &mut no)
+        .unwrap();
     assert!(!ok);
 }
 
@@ -1839,13 +1929,24 @@ fn func_call_specs_deindirect_restart_when_incompatible() {
 
     let mut log = RestartLog::new();
     let new_entry = Address::new(ram, 0x2000);
-    fc.deindirect(&mut fd, new_entry.clone(), "callee", &newproto, false, false, &mut log)
-        .unwrap();
+    fc.deindirect(
+        &mut fd,
+        new_entry.clone(),
+        "callee",
+        &newproto,
+        false,
+        false,
+        &mut log,
+    )
+    .unwrap();
 
     assert!(fd.has_restart_pending());
     assert!(!log.is_empty_for(&fd));
     let dump = log.render(&fd);
-    assert!(dump.contains("prototype discovered late at indirect call"), "dump={dump}");
+    assert!(
+        dump.contains("prototype discovered late at indirect call"),
+        "dump={dump}"
+    );
     // The de-indirect updated the entry/name even though it restarted.
     assert_eq!(*fc.get_entry_address(), new_entry);
     assert_eq!(fc.get_name(), "callee");
@@ -1872,8 +1973,10 @@ fn func_call_specs_deindirect_override_short_circuits() {
 
     let mut log = RestartLog::new();
     let new_entry = Address::new(ram, 0x2000);
-    fc.deindirect(&mut fd, new_entry, "callee", &newproto, false, false, &mut log)
-        .unwrap();
+    fc.deindirect(
+        &mut fd, new_entry, "callee", &newproto, false, false, &mut log,
+    )
+    .unwrap();
 
     assert!(!fd.has_restart_pending());
     assert!(log.is_empty_for(&fd));
@@ -1901,7 +2004,10 @@ fn func_call_specs_force_set_restart_and_locks() {
 
     assert!(fd.has_restart_pending());
     let dump = log.render(&fd);
-    assert!(dump.contains("prototype forced late at call site"), "dump={dump}");
+    assert!(
+        dump.contains("prototype forced late at call site"),
+        "dump={dump}"
+    );
     // Regardless of restart, the input is locked (0 params => VOIDINPUTLOCK) and
     // the error flags are transferred from fp.
     assert!(fc.proto().is_input_locked());
@@ -1937,7 +2043,10 @@ fn build_call_with_placeholder(mgr: &AddrSpaceManager) -> (Funcdata, FuncCallSpe
     // phvn: the LOAD output (written), placed in unique space, marked placeholder.
     let uniq = Rc::clone(fd.get_arch().manage().get_space(1).unwrap());
     let phvn = fcs_out(&mut fd, load, uniq, 0x0, 8);
-    fd.vbank_mut().get_mut(phvn).unwrap().set_spacebase_placeholder();
+    fd.vbank_mut()
+        .get_mut(phvn)
+        .unwrap()
+        .set_spacebase_placeholder();
 
     // Wire phvn as the CALLIND placeholder input at slot 1.
     fd.op_set_input(call, phvn, 1).unwrap();
@@ -1983,14 +2092,27 @@ fn func_call_specs_fspec_registry_roundtrip() {
 
     // Named call spec: printed name is the name verbatim, regardless of angr.
     let mut fc = FuncCallSpecs::new(call, Address::new(Rc::clone(&ram), 0x2000));
-    fc.set_funcdata(Address::new(Rc::clone(&ram), 0x2000), "my_func").unwrap();
-    assert_eq!(fc.fspec_printed_name(crate::database::KunaNameStyle::Func), "my_func");
-    assert_eq!(fc.fspec_printed_name(crate::database::KunaNameStyle::Angr), "my_func");
+    fc.set_funcdata(Address::new(Rc::clone(&ram), 0x2000), "my_func")
+        .unwrap();
+    assert_eq!(
+        fc.fspec_printed_name(crate::database::KunaNameStyle::Func),
+        "my_func"
+    );
+    assert_eq!(
+        fc.fspec_printed_name(crate::database::KunaNameStyle::Angr),
+        "my_func"
+    );
 
     // Unnamed: angr => sub_<addr>, non-angr => func_<addr>.
     let fc2 = FuncCallSpecs::new(call, Address::new(Rc::clone(&ram), 0x3000));
-    assert!(fc2.fspec_printed_name(crate::database::KunaNameStyle::Angr).starts_with("sub_"));
-    assert!(fc2.fspec_printed_name(crate::database::KunaNameStyle::Func).starts_with("func_"));
+    assert!(
+        fc2.fspec_printed_name(crate::database::KunaNameStyle::Angr)
+            .starts_with("sub_")
+    );
+    assert!(
+        fc2.fspec_printed_name(crate::database::KunaNameStyle::Func)
+            .starts_with("func_")
+    );
 
     // Register and look up via the unlace-base FspecSpace registry.
     let handle: u64 = 0xCAFE;
@@ -2030,7 +2152,8 @@ fn func_call_specs_transfer_locked_output_void_ok() {
     let voidt = Rc::new(Datatype::new(1, type_metatype::TYPE_VOID));
 
     // fc and restricted share the same model => isCompatible true.
-    fc.proto_mut().set_internal(Rc::clone(&model), Rc::clone(&voidt));
+    fc.proto_mut()
+        .set_internal(Rc::clone(&model), Rc::clone(&voidt));
 
     let mut restricted = FuncProto::new();
     restricted.set_internal(Rc::clone(&model), Rc::clone(&voidt));
@@ -2039,7 +2162,9 @@ fn func_call_specs_transfer_locked_output_void_ok() {
     let mut ni: Vec<Option<VarnodeId>> = Vec::new();
     let mut no: Vec<VarnodeId> = Vec::new();
     // Not input-locked, output-locked-void => lateRestriction succeeds.
-    let ok = fc.late_restriction(&fd, &restricted, &mut ni, &mut no).unwrap();
+    let ok = fc
+        .late_restriction(&fd, &restricted, &mut ni, &mut no)
+        .unwrap();
     assert!(ok);
     assert!(no.is_empty());
 }
@@ -2064,7 +2189,9 @@ fn float10_type() -> Rc<Datatype> {
 /// multi-slot stack resource (group 1), plus a single trailing `goto_stack`
 /// ModelRule.  Mirrors (in miniature) the SysV `<input>` list: registers for
 /// the small ints, the stack for everything the rule routes there.
-fn reg_plus_stack_gotostack_model(mgr: &AddrSpaceManager) -> (ParamListStandard, Rc<AddrSpace>, Rc<AddrSpace>) {
+fn reg_plus_stack_gotostack_model(
+    mgr: &AddrSpaceManager,
+) -> (ParamListStandard, Rc<AddrSpace>, Rc<AddrSpace>) {
     let reg = reg_space_le();
     let stk = stack_space();
     let mut model = ParamListStandard::new(ParamListKind::Standard);
@@ -2098,7 +2225,9 @@ fn reg_plus_stack_gotostack_model(mgr: &AddrSpaceManager) -> (ParamListStandard,
     let filter = crate::modelrules::DatatypeFilter::SizeRestricted(
         crate::modelrules::SizeRestriction::new(0, 0),
     );
-    model.push_model_rule(crate::modelrules::ModelRule::from_components(filter, action));
+    model.push_model_rule(crate::modelrules::ModelRule::from_components(
+        filter, action,
+    ));
     (model, reg, stk)
 }
 
@@ -2245,7 +2374,18 @@ fn w10_float_typeclass_failing_rule_does_not_short_circuit_chain() {
     let stk = stack_space();
     let mut model = ParamListStandard::new(ParamListKind::Standard);
     let e0 = ParamEntry::seed(
-        0, type_class::TYPECLASS_GENERAL, Rc::clone(&reg), 0x10, 8, 1, 0, 0, true, false, &[], &mgr,
+        0,
+        type_class::TYPECLASS_GENERAL,
+        Rc::clone(&reg),
+        0x10,
+        8,
+        1,
+        0,
+        0,
+        true,
+        false,
+        &[],
+        &mgr,
     )
     .expect("seed reg entry");
     model.push_entry(e0);
@@ -2260,7 +2400,10 @@ fn w10_float_typeclass_failing_rule_does_not_short_circuit_chain() {
     let fail_action = crate::modelrules::AssignAction::GotoStack {
         stack_entry: model.get_stack_entry(),
     };
-    model.push_model_rule(crate::modelrules::ModelRule::from_components(fail_filter, fail_action));
+    model.push_model_rule(crate::modelrules::ModelRule::from_components(
+        fail_filter,
+        fail_action,
+    ));
     // Rule 2: true filter goto_stack (matches everything).
     let ok_filter = crate::modelrules::DatatypeFilter::SizeRestricted(
         crate::modelrules::SizeRestriction::new(0, 0),
@@ -2268,7 +2411,9 @@ fn w10_float_typeclass_failing_rule_does_not_short_circuit_chain() {
     let ok_action = crate::modelrules::AssignAction::GotoStack {
         stack_entry: model.get_stack_entry(),
     };
-    model.push_model_rule(crate::modelrules::ModelRule::from_components(ok_filter, ok_action));
+    model.push_model_rule(crate::modelrules::ModelRule::from_components(
+        ok_filter, ok_action,
+    ));
     assert_eq!(model.num_model_rules(), 2);
     let tf = PanicTypeFactory;
     let proto = PrototypePieces {
@@ -2338,7 +2483,14 @@ fn explicit_return_storage_removes_only_the_model_hidden_return_input() {
     let mut model = ProtoModel::new(&manager);
     let mut inputs = ParamListStandard::new(ParamListKind::Standard);
     for (group, offset) in [(0, 0x10), (1, 0x20), (2, 0x30)] {
-        inputs.push_entry(excl_entry(group, &reg, offset, 8, inputs.get_entry(), &manager));
+        inputs.push_entry(excl_entry(
+            group,
+            &reg,
+            offset,
+            8,
+            inputs.get_entry(),
+            &manager,
+        ));
     }
     inputs.finish_decode();
     model.input = Some(inputs);
@@ -2346,34 +2498,63 @@ fn explicit_return_storage_removes_only_the_model_hidden_return_input() {
     let model = Rc::new(model);
     let float = float10_type();
     let mut pieces = PrototypePieces {
-        name: "custom_result".into(), outtype: Some(float.clone()),
-        intypes: vec![int4_type(), int4_type()], innames: vec!["first".into(), "second".into()],
-        first_var_arg_slot: -1, ..Default::default()
+        name: "custom_result".into(),
+        outtype: Some(float.clone()),
+        intypes: vec![int4_type(), int4_type()],
+        innames: vec!["first".into(), "second".into()],
+        first_var_arg_slot: -1,
+        ..Default::default()
     };
     let mut prototype = FuncProto::new();
     prototype.attach_internal_store(types.get_type_void().unwrap());
-    prototype.set_pieces(&pieces, Some(model.clone()), &types, &manager).unwrap();
+    prototype
+        .set_pieces(&pieces, Some(model.clone()), &types, &manager)
+        .unwrap();
     assert_eq!(prototype.num_params(), 3);
     pieces.output_storage = Some(ParameterPieces {
-        addr: Address::new(reg.clone(), 0x100), type_: Some(float),
+        addr: Address::new(reg.clone(), 0x100),
+        type_: Some(float),
         flags: parameter_pieces_flags::TYPELOCK,
     });
-    pieces.input_storage.push((0, ParameterPieces {
-        addr: Address::new(reg.clone(), 0x80), type_: Some(int4_type()),
-        flags: parameter_pieces_flags::TYPELOCK,
-    }));
+    pieces.input_storage.push((
+        0,
+        ParameterPieces {
+            addr: Address::new(reg.clone(), 0x80),
+            type_: Some(int4_type()),
+            flags: parameter_pieces_flags::TYPELOCK,
+        },
+    ));
     let explicit_output = pieces.output_storage.take();
-    prototype.set_pieces(&pieces, Some(model.clone()), &types, &manager).unwrap();
+    prototype
+        .set_pieces(&pieces, Some(model.clone()), &types, &manager)
+        .unwrap();
     assert_eq!(prototype.num_params(), 3);
     assert_eq!(prototype.get_param(0).unwrap().get_name(), "rethidden");
-    assert_eq!(prototype.get_param(0).unwrap().get_address().get_offset(), 0x10);
-    assert_eq!(prototype.get_param(1).unwrap().get_address().get_offset(), 0x80);
-    assert_eq!(prototype.get_param(2).unwrap().get_address().get_offset(), 0x20);
+    assert_eq!(
+        prototype.get_param(0).unwrap().get_address().get_offset(),
+        0x10
+    );
+    assert_eq!(
+        prototype.get_param(1).unwrap().get_address().get_offset(),
+        0x80
+    );
+    assert_eq!(
+        prototype.get_param(2).unwrap().get_address().get_offset(),
+        0x20
+    );
     pieces.output_storage = explicit_output;
-    prototype.set_pieces(&pieces, Some(model), &types, &manager).unwrap();
+    prototype
+        .set_pieces(&pieces, Some(model), &types, &manager)
+        .unwrap();
     assert_eq!(prototype.num_params(), 2);
-    assert_eq!(prototype.get_param(0).unwrap().get_address().get_offset(), 0x80);
-    assert_eq!(prototype.get_param(1).unwrap().get_address().get_offset(), 0x10);
+    assert_eq!(
+        prototype.get_param(0).unwrap().get_address().get_offset(),
+        0x80
+    );
+    assert_eq!(
+        prototype.get_param(1).unwrap().get_address().get_offset(),
+        0x10
+    );
     assert_eq!(prototype.get_param(1).unwrap().get_name(), "second");
     assert_eq!(prototype.get_output().get_address().get_offset(), 0x100);
 }
@@ -2386,7 +2567,8 @@ fn return_only_seed_preserves_partial_contract_locks() {
     types.setup_sizes(Some(4), 8, 8);
     let model = Rc::new(three_reg_proto_model(&manager, &reg));
     let output = ParameterPieces {
-        addr: Address::new(reg.clone(), 0x80), type_: Some(int4_type()),
+        addr: Address::new(reg.clone(), 0x80),
+        type_: Some(int4_type()),
         flags: parameter_pieces_flags::TYPELOCK,
     };
     for (full, input, custom_output, input_locked, output_locked) in [
@@ -2400,28 +2582,46 @@ fn return_only_seed_preserves_partial_contract_locks() {
         let pieces = PrototypePieces {
             outtype: full.then(int4_type),
             intypes: if input { vec![int4_type()] } else { Vec::new() },
-            innames: if input { vec!["retained".into()] } else { Vec::new() },
+            innames: if input {
+                vec!["retained".into()]
+            } else {
+                Vec::new()
+            },
             input_storage: if input {
-                vec![(0, ParameterPieces {
-                    addr: Address::new(reg.clone(), 0x40), type_: Some(int4_type()),
-                    flags: parameter_pieces_flags::TYPELOCK | parameter_pieces_flags::NAMELOCK,
-                })]
-            } else { Vec::new() },
+                vec![(
+                    0,
+                    ParameterPieces {
+                        addr: Address::new(reg.clone(), 0x40),
+                        type_: Some(int4_type()),
+                        flags: parameter_pieces_flags::TYPELOCK | parameter_pieces_flags::NAMELOCK,
+                    },
+                )]
+            } else {
+                Vec::new()
+            },
             output_storage: custom_output.then(|| output.clone()),
             first_var_arg_slot: -1,
             ..Default::default()
         };
         let mut prototype = FuncProto::new();
         for _ in 0..2 {
-            prototype.seed_locked_from_pieces(
-                &pieces, model.clone(), types.get_type_void().unwrap(), &types, &manager,
-            ).unwrap();
+            prototype
+                .seed_locked_from_pieces(
+                    &pieces,
+                    model.clone(),
+                    types.get_type_void().unwrap(),
+                    &types,
+                    &manager,
+                )
+                .unwrap();
             assert_eq!(prototype.is_input_locked(), input_locked, "{pieces:?}");
             assert_eq!(prototype.is_output_locked(), output_locked, "{pieces:?}");
             assert!(prototype.is_model_locked());
             assert_eq!(prototype.num_params(), i32::from(input));
-            assert_eq!(prototype.flags & func_proto_flags::VOIDINPUTLOCK != 0,
-                input_locked && !input);
+            assert_eq!(
+                prototype.flags & func_proto_flags::VOIDINPUTLOCK != 0,
+                input_locked && !input
+            );
             if input {
                 let parameter = prototype.get_param(0).unwrap();
                 assert_eq!(parameter.get_address(), Address::new(reg.clone(), 0x40));
@@ -2431,7 +2631,10 @@ fn return_only_seed_preserves_partial_contract_locks() {
             if custom_output {
                 assert_eq!(prototype.get_output().get_address(), output.addr);
                 assert_eq!(prototype.get_output().get_size(), 4);
-                assert_eq!(prototype.get_output_type().unwrap().get_metatype(), type_metatype::TYPE_INT);
+                assert_eq!(
+                    prototype.get_output_type().unwrap().get_metatype(),
+                    type_metatype::TYPE_INT
+                );
             }
         }
     }
@@ -2447,7 +2650,8 @@ fn return_only_seed_does_not_unlock_other_input_metadata() {
     for input_metadata in 0..3 {
         let mut pieces = PrototypePieces {
             output_storage: Some(ParameterPieces {
-                addr: Address::new(reg.clone(), 0x80), type_: Some(int4_type()),
+                addr: Address::new(reg.clone(), 0x80),
+                type_: Some(int4_type()),
                 flags: parameter_pieces_flags::TYPELOCK,
             }),
             first_var_arg_slot: -1,
@@ -2456,15 +2660,25 @@ fn return_only_seed_does_not_unlock_other_input_metadata() {
         match input_metadata {
             0 => pieces.first_var_arg_slot = 0,
             1 => pieces.innames.push("untyped_input".into()),
-            _ => pieces.input_storage.push((0, ParameterPieces {
-                addr: Address::new(reg.clone(), 0x40), type_: Some(int4_type()),
-                flags: parameter_pieces_flags::TYPELOCK,
-            })),
+            _ => pieces.input_storage.push((
+                0,
+                ParameterPieces {
+                    addr: Address::new(reg.clone(), 0x40),
+                    type_: Some(int4_type()),
+                    flags: parameter_pieces_flags::TYPELOCK,
+                },
+            )),
         }
         let mut prototype = FuncProto::new();
-        prototype.seed_locked_from_pieces(
-            &pieces, model.clone(), types.get_type_void().unwrap(), &types, &manager,
-        ).unwrap();
+        prototype
+            .seed_locked_from_pieces(
+                &pieces,
+                model.clone(),
+                types.get_type_void().unwrap(),
+                &types,
+                &manager,
+            )
+            .unwrap();
         assert!(prototype.is_input_locked(), "{pieces:?}");
         assert!(prototype.is_output_locked());
         assert_eq!(prototype.is_dotdotdot(), input_metadata == 0);
@@ -2476,8 +2690,21 @@ fn stack_argument_slots_can_ignore_object_alignment() {
     let manager = AddrSpaceManager::new();
     let stack = stack_space();
     for (flags, expected, next) in [(0, 12, 6), (param_entry_flags::IGNORE_TYPE_ALIGN, 8, 5)] {
-        let entry = ParamEntry::seed(0, type_class::TYPECLASS_GENERAL, stack.clone(), 4, 500,
-            1, 4, flags, true, false, &[], &manager).unwrap();
+        let entry = ParamEntry::seed(
+            0,
+            type_class::TYPECLASS_GENERAL,
+            stack.clone(),
+            4,
+            500,
+            1,
+            4,
+            flags,
+            true,
+            false,
+            &[],
+            &manager,
+        )
+        .unwrap();
         let mut slot = 1;
         let address = entry.get_addr_by_slot(&mut slot, 16, 8, &manager).unwrap();
         assert_eq!(address.get_offset(), expected);
@@ -2491,23 +2718,42 @@ fn partial_input_storage_reserves_aliases_before_allocating_defaults() {
     let reg = reg_space_le();
     let mut inputs = ParamListStandard::new(ParamListKind::Standard);
     for (group, offset) in [(0, 0x10), (1, 0x20), (2, 0x30)] {
-        inputs.push_entry(excl_entry(group, &reg, offset, 8, inputs.get_entry(), &manager));
+        inputs.push_entry(excl_entry(
+            group,
+            &reg,
+            offset,
+            8,
+            inputs.get_entry(),
+            &manager,
+        ));
     }
     inputs.finish_decode();
     for slot in 0..3 {
         let proto = PrototypePieces {
             intypes: vec![int4_type(), int4_type(), int4_type()],
-            input_storage: vec![(slot, ParameterPieces {
-                addr: Address::new(reg.clone(), 0x12), type_: Some(int4_type()),
-                flags: parameter_pieces_flags::CUSTOM_STORAGE,
-            })],
+            input_storage: vec![(
+                slot,
+                ParameterPieces {
+                    addr: Address::new(reg.clone(), 0x12),
+                    type_: Some(int4_type()),
+                    flags: parameter_pieces_flags::CUSTOM_STORAGE,
+                },
+            )],
             ..Default::default()
         };
         let mut result = Vec::new();
-        inputs.assign_map(&proto, &PanicTypeFactory, &mut result, &manager).unwrap();
+        inputs
+            .assign_map(&proto, &PanicTypeFactory, &mut result, &manager)
+            .unwrap();
         let mut expected = vec![0x20, 0x30];
         expected.insert(slot as usize, 0x12);
-        assert_eq!(result.iter().map(|p| p.addr.get_offset()).collect::<Vec<_>>(), expected);
+        assert_eq!(
+            result
+                .iter()
+                .map(|p| p.addr.get_offset())
+                .collect::<Vec<_>>(),
+            expected
+        );
     }
 }
 
@@ -2516,23 +2762,54 @@ fn partial_input_storage_skips_reserved_stack_ranges() {
     let manager = AddrSpaceManager::new();
     let stack = stack_space();
     let mut inputs = ParamListStandard::new(ParamListKind::Standard);
-    inputs.push_entry(ParamEntry::seed(0, type_class::TYPECLASS_GENERAL, stack.clone(),
-        4, 0x100000, 1, 4, 0, true, false, &[], &manager).unwrap());
+    inputs.push_entry(
+        ParamEntry::seed(
+            0,
+            type_class::TYPECLASS_GENERAL,
+            stack.clone(),
+            4,
+            0x100000,
+            1,
+            4,
+            0,
+            true,
+            false,
+            &[],
+            &manager,
+        )
+        .unwrap(),
+    );
     inputs.finish_decode();
-    for (offset, expected) in [(4, vec![4, 8, 12]), (8, vec![4, 8, 12]),
-                               (0x80000, vec![4, 0x80000, 8])] {
+    for (offset, expected) in [
+        (4, vec![4, 8, 12]),
+        (8, vec![4, 8, 12]),
+        (0x80000, vec![4, 0x80000, 8]),
+    ] {
         let proto = PrototypePieces {
             intypes: vec![int4_type(), int4_type(), int4_type()],
-            input_storage: vec![(1, ParameterPieces {
-                addr: Address::new(stack.clone(), offset), type_: Some(int4_type()),
-                flags: parameter_pieces_flags::CUSTOM_STORAGE,
-            })],
+            input_storage: vec![(
+                1,
+                ParameterPieces {
+                    addr: Address::new(stack.clone(), offset),
+                    type_: Some(int4_type()),
+                    flags: parameter_pieces_flags::CUSTOM_STORAGE,
+                },
+            )],
             ..Default::default()
         };
         let mut result = Vec::new();
-        inputs.assign_map(&proto, &PanicTypeFactory, &mut result, &manager).unwrap();
-        let actual = result.iter().map(|p| p.addr.get_offset()).collect::<Vec<_>>();
-        let expected = if offset == 4 { vec![8, 4, 12] } else { expected };
+        inputs
+            .assign_map(&proto, &PanicTypeFactory, &mut result, &manager)
+            .unwrap();
+        let actual = result
+            .iter()
+            .map(|p| p.addr.get_offset())
+            .collect::<Vec<_>>();
+        let expected = if offset == 4 {
+            vec![8, 4, 12]
+        } else {
+            expected
+        };
         assert_eq!(actual, expected);
     }
 }
@@ -2542,20 +2819,41 @@ fn partial_input_storage_handles_large_stack_reservations_without_consuming_a_de
     let manager = AddrSpaceManager::new();
     let stack = stack_space();
     let mut inputs = ParamListStandard::new(ParamListKind::Standard);
-    inputs.push_entry(ParamEntry::seed(0, type_class::TYPECLASS_GENERAL, stack.clone(),
-        4, 0x100000, 1, 4, 0, true, false, &[], &manager).unwrap());
+    inputs.push_entry(
+        ParamEntry::seed(
+            0,
+            type_class::TYPECLASS_GENERAL,
+            stack.clone(),
+            4,
+            0x100000,
+            1,
+            4,
+            0,
+            true,
+            false,
+            &[],
+            &manager,
+        )
+        .unwrap(),
+    );
     inputs.finish_decode();
     let large = Rc::new(Datatype::new(0x80000, type_metatype::TYPE_UNKNOWN));
     let proto = PrototypePieces {
         intypes: vec![large.clone(), int4_type()],
-        input_storage: vec![(0, ParameterPieces {
-            addr: Address::new(stack, 4), type_: Some(large),
-            flags: parameter_pieces_flags::CUSTOM_STORAGE,
-        })],
+        input_storage: vec![(
+            0,
+            ParameterPieces {
+                addr: Address::new(stack, 4),
+                type_: Some(large),
+                flags: parameter_pieces_flags::CUSTOM_STORAGE,
+            },
+        )],
         ..Default::default()
     };
     let mut result = Vec::new();
-    inputs.assign_map(&proto, &PanicTypeFactory, &mut result, &manager).unwrap();
+    inputs
+        .assign_map(&proto, &PanicTypeFactory, &mut result, &manager)
+        .unwrap();
     assert_eq!(result[1].addr.get_offset(), 0x80004);
 }
 
@@ -2566,15 +2864,31 @@ fn partial_input_storage_can_override_every_input_of_an_empty_model() {
     let inputs = ParamListStandard::new(ParamListKind::Standard);
     let proto = PrototypePieces {
         intypes: vec![int4_type(), int4_type()],
-        input_storage: (0..2).map(|slot| (slot, ParameterPieces {
-            addr: Address::new(reg.clone(), 0x80 + slot as u64 * 8),
-            type_: Some(int4_type()), flags: parameter_pieces_flags::CUSTOM_STORAGE,
-        })).collect(),
+        input_storage: (0..2)
+            .map(|slot| {
+                (
+                    slot,
+                    ParameterPieces {
+                        addr: Address::new(reg.clone(), 0x80 + slot as u64 * 8),
+                        type_: Some(int4_type()),
+                        flags: parameter_pieces_flags::CUSTOM_STORAGE,
+                    },
+                )
+            })
+            .collect(),
         ..Default::default()
     };
     let mut result = Vec::new();
-    inputs.assign_map(&proto, &PanicTypeFactory, &mut result, &manager).unwrap();
-    assert_eq!(result.iter().map(|p|p.addr.get_offset()).collect::<Vec<_>>(), vec![0x80, 0x88]);
+    inputs
+        .assign_map(&proto, &PanicTypeFactory, &mut result, &manager)
+        .unwrap();
+    assert_eq!(
+        result
+            .iter()
+            .map(|p| p.addr.get_offset())
+            .collect::<Vec<_>>(),
+        vec![0x80, 0x88]
+    );
 }
 
 fn padded_assignment_type(payload: i32, alignment: i32, metatype: type_metatype) -> Rc<Datatype> {

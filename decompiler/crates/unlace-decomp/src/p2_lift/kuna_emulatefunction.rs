@@ -33,9 +33,9 @@ use unlace_num::opcodes::OpCode;
 
 use unlace_sleigh::emulate::{Emulate, EmulateCore};
 
+use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::jumptable::{LoadTable, PathMeld};
-use crate::context::{OpId, VarnodeId};
 
 /// C++ `EmulateFunction` (jumptable.hh:110), folding in the `EmulatePcodeOp`
 /// base (emulateutil.hh:43).
@@ -213,7 +213,12 @@ impl<'a> EmulateFunction<'a> {
     /// op's `OpBehavior` into `currentBehave`).
     fn set_current_op(&mut self, op: OpId) {
         self.current_op = Some(op);
-        let opc = self.fd.obank().get(op).map(|o| o.code()).unwrap_or(OpCode::CPUI_COPY);
+        let opc = self
+            .fd
+            .obank()
+            .get(op)
+            .map(|o| o.code())
+            .unwrap_or(OpCode::CPUI_COPY);
         self.core.current_behave = self.fd.get_arch().op_behavior(opc).cloned();
     }
 
@@ -311,7 +316,12 @@ impl<'a> EmulateFunction<'a> {
         let mut startvn = startvn;
         if self.fd.obank().get(startop).map(|o| o.code()) == Some(OpCode::CPUI_MULTIEQUAL) {
             // If we start on a MULTIEQUAL: is startvn one of the branches?
-            let ninput = self.fd.obank().get(startop).map(|o| o.num_input()).unwrap_or(0);
+            let ninput = self
+                .fd
+                .obank()
+                .get(startop)
+                .map(|o| o.num_input())
+                .unwrap_or(0);
             let mut j: int4 = 0;
             while j < ninput {
                 if self.fd.obank().get(startop).and_then(|o| o.get_in(j)) == Some(startvn) {
@@ -342,8 +352,12 @@ impl<'a> EmulateFunction<'a> {
         if i == num_ops {
             return Err(KunaError::lowlevel("Bad jumptable emulation"));
         }
-        let startvn_is_const =
-            self.fd.vbank().get(startvn).map(|v| v.is_constant()).unwrap_or(false);
+        let startvn_is_const = self
+            .fd
+            .vbank()
+            .get(startvn)
+            .map(|v| v.is_constant())
+            .unwrap_or(false);
         if !startvn_is_const {
             self.set_varnode_value(startvn, val);
         }
@@ -453,7 +467,12 @@ impl Emulate for EmulateFunction<'_> {
         let op = self.current_op.expect("executeCbranch: no current op");
         let in1 = self.in_vn(op, 1)?;
         let cond = self.get_varnode_value(in1)?;
-        let flip = self.fd.obank().get(op).map(|o| o.is_boolean_flip()).unwrap_or(false);
+        let flip = self
+            .fd
+            .obank()
+            .get(op)
+            .map(|o| o.is_boolean_flip())
+            .unwrap_or(false);
         Ok((cond != 0) != flip)
     }
 
@@ -531,7 +550,12 @@ impl Emulate for EmulateFunction<'_> {
     fn execute_segment_op(&mut self) -> KunaResult<()> {
         let op = self.current_op.expect("executeSegmentOp: no current op");
         let in0 = self.in_vn(op, 0)?;
-        let index = self.fd.vbank().get(in0).map(|v| v.get_offset() as int4).unwrap_or(-1);
+        let index = self
+            .fd
+            .vbank()
+            .get(in0)
+            .map(|v| v.get_offset() as int4)
+            .unwrap_or(-1);
         let glb = std::rc::Rc::clone(self.fd.get_arch());
         let segdef = glb
             .get_segment_op(index)

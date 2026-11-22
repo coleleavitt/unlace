@@ -36,7 +36,10 @@ pub fn formatter_symbols(
         })
         .collect();
     for (address, formatter) in symbols {
-        if entries.get(&address).is_some_and(|known| Some(*known) != formatter) {
+        if entries
+            .get(&address)
+            .is_some_and(|known| Some(*known) != formatter)
+        {
             entries.remove(&address);
         }
     }

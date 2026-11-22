@@ -51,13 +51,13 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::space::{spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::context::OpId;
-use crate::dtype::{type_metatype, Datatype, TypeFactory};
-use crate::fspec::{FuncCallSpecs, FuncProto, PrototypePieces, EXTRAPOP_UNKNOWN, OFFSET_UNKNOWN};
+use crate::dtype::{Datatype, TypeFactory, type_metatype};
+use crate::fspec::{EXTRAPOP_UNKNOWN, FuncCallSpecs, FuncProto, OFFSET_UNKNOWN, PrototypePieces};
 use crate::funcdata::Funcdata;
 
 /// An MSVC `__cdecl` declaration with one by-value class parameter of unstated
@@ -110,7 +110,10 @@ fn key(addr: &Address) -> Option<(int4, uintb)> {
 fn stack_pointer(data: &Funcdata) -> Option<(Address, int4)> {
     let stack = data.get_arch().manage().get_stack_space()?;
     let point = stack.get_spacebase(0).ok()?;
-    Some((Address::new(point.space.clone()?, point.offset), point.size as int4))
+    Some((
+        Address::new(point.space.clone()?, point.offset),
+        point.size as int4,
+    ))
 }
 
 /// Size the by-value slot of every call to a [`ByvalDecl`] callee, replacing the
@@ -122,9 +125,13 @@ pub fn size_slots(data: &mut Funcdata) {
     if arch.msvc_byval_decls.is_empty() {
         return;
     }
-    let Some(sp) = stack_pointer(data) else { return };
+    let Some(sp) = stack_pointer(data) else {
+        return;
+    };
     let Some(types) = arch.types() else { return };
-    let Ok(void_ty) = types.get_type_void() else { return };
+    let Ok(void_ty) = types.get_type_void() else {
+        return;
+    };
     let mut sites = Vec::new();
     for i in 0..data.num_calls() {
         let Some(decl) = key(data.get_call_specs(i).get_entry_address())
@@ -141,17 +148,30 @@ pub fn size_slots(data: &mut Funcdata) {
         }
         let model = Rc::clone(fc.proto().model());
         let call = fc.get_op();
-        let Some(k) = cleanup_after(data, call, &sp) else { continue };
+        let Some(k) = cleanup_after(data, call, &sp) else {
+            continue;
+        };
         let top = 4 + k;
-        let widths: Vec<int4> = decl.pieces.intypes.iter().map(|t| align4(t.get_size())).collect();
-        let known: int4 =
-            widths.iter().enumerate().filter(|(j, _)| *j != decl.at).map(|(_, w)| *w).sum();
+        let widths: Vec<int4> = decl
+            .pieces
+            .intypes
+            .iter()
+            .map(|t| align4(t.get_size()))
+            .collect();
+        let known: int4 = widths
+            .iter()
+            .enumerate()
+            .filter(|(j, _)| *j != decl.at)
+            .map(|(_, w)| *w)
+            .sum();
         if known >= k {
             continue;
         }
         // The class slot starts above the parameters below it, all known-width.
         let lo: int4 = 4 + widths[..decl.at].iter().sum::<int4>();
-        let Some(walk) = walk_back(data, call, &sp, top, lo, &arch.msvc_builders) else { continue };
+        let Some(walk) = walk_back(data, call, &sp, top, lo, &arch.msvc_builders) else {
+            continue;
+        };
         // The class slot's size, cross-checked against the cleanup so a padding
         // reservation or a local released by the same `add esp` is declined.
         let slot = match walk.builder {
@@ -160,7 +180,9 @@ pub fn size_slots(data: &mut Funcdata) {
             // captured, and require the cleanup to account for exactly it plus
             // the declared parameters.
             Some(_) => {
-                let Some(r) = walk.slot_reserved else { continue };
+                let Some(r) = walk.slot_reserved else {
+                    continue;
+                };
                 if r <= 0 || r % 4 != 0 || known + r != k {
                     continue;
                 }
@@ -181,7 +203,11 @@ pub fn size_slots(data: &mut Funcdata) {
         }
         // An address formed into a live byte of the argument area outside the
         // class slot is a local the cleanup also releases.
-        if walk.pointers.iter().any(|t| (4..top).contains(t) && !(lo..lo + slot).contains(t)) {
+        if walk
+            .pointers
+            .iter()
+            .any(|t| (4..top).contains(t) && !(lo..lo + slot).contains(t))
+        {
             continue;
         }
         let mut layout = Vec::with_capacity(widths.len());
@@ -199,12 +225,17 @@ pub fn size_slots(data: &mut Funcdata) {
         if !pushed {
             continue;
         }
-        let Some(slot_ty) = slot_type(types, slot) else { continue };
+        let Some(slot_ty) = slot_type(types, slot) else {
+            continue;
+        };
         let mut pieces = decl.pieces.clone();
         pieces.intypes[decl.at] = slot_ty;
         pieces.first_var_arg_slot = -1;
         let mut fp = FuncProto::new();
-        if fp.seed_locked_from_pieces(&pieces, model, void_ty.clone(), types, arch.manage()).is_err() {
+        if fp
+            .seed_locked_from_pieces(&pieces, model, void_ty.clone(), types, arch.manage())
+            .is_err()
+        {
             continue;
         }
         if !laid_out(&fp, &layout) {
@@ -213,7 +244,12 @@ pub fn size_slots(data: &mut Funcdata) {
         data.get_call_specs_mut(i).proto_mut().copy(&fp);
         let mapped =
             walk.builder.is_some() || walk.pointers.iter().any(|p| (lo..lo + slot).contains(p));
-        sites.push(ByvalSite { call, param: decl.at, builder: walk.builder, mapped });
+        sites.push(ByvalSite {
+            call,
+            param: decl.at,
+            builder: walk.builder,
+            mapped,
+        });
     }
     data.kuna_set_msvc_byval_sites(sites);
 }
@@ -235,7 +271,8 @@ fn laid_out(fp: &FuncProto, layout: &[(int4, int4)]) -> bool {
     layout.iter().enumerate().all(|(j, (off, w))| {
         fp.get_param(j as int4).is_some_and(|p| {
             let addr = p.get_address();
-            addr.get_space().is_some_and(|s| s.get_type() == spacetype::IPTR_SPACEBASE)
+            addr.get_space()
+                .is_some_and(|s| s.get_type() == spacetype::IPTR_SPACEBASE)
                 && addr.get_offset() == *off as uintb
                 && align4(p.get_size()) == *w
         })
@@ -299,7 +336,12 @@ fn next_instruction(data: &Funcdata, op: OpId) -> Vec<OpId> {
     let mut ops = vec![first];
     let mut cur = first;
     while let Some(next) = data.obank().get(cur).and_then(|o| o.basic_neighbours().1) {
-        if data.obank().get(next).map(|o| o.get_addr() != &at).unwrap_or(true) {
+        if data
+            .obank()
+            .get(next)
+            .map(|o| o.get_addr() != &at)
+            .unwrap_or(true)
+        {
             break;
         }
         ops.push(next);
@@ -320,9 +362,7 @@ fn cleanup_after(data: &Funcdata, op: OpId, sp: &(Address, int4)) -> Option<int4
     let ops = next_instruction(data, op);
     for &o in &ops {
         let code = data.obank().get(o).map(|o| o.code());
-        if matches!(code, Some(OpCode::CPUI_LOAD | OpCode::CPUI_STORE))
-            && touches_sp(data, o, sp)
-        {
+        if matches!(code, Some(OpCode::CPUI_LOAD | OpCode::CPUI_STORE)) && touches_sp(data, o, sp) {
             return None; // a pop/push, not a bare `add esp,k`
         }
         match sp_delta(data, o, sp) {
@@ -346,7 +386,9 @@ fn split_cleanup(data: &Funcdata, last: OpId, sp: &(Address, int4)) -> bool {
     let mut reads_sp = false;
     let mut cur = data.obank().get(last).and_then(|o| o.basic_neighbours().1);
     while let Some(op) = cur {
-        let Some(o) = data.obank().get(op) else { return false };
+        let Some(o) = data.obank().get(op) else {
+            return false;
+        };
         if matches!(
             o.code(),
             OpCode::CPUI_CALL
@@ -373,7 +415,9 @@ fn split_cleanup(data: &Funcdata, last: OpId, sp: &(Address, int4)) -> bool {
 
 /// Does a LOAD or STORE address the stack through `sp` (`sp` or `sp + #c`)?
 fn touches_sp(data: &Funcdata, op: OpId, sp: &(Address, int4)) -> bool {
-    let Some(o) = data.obank().get(op) else { return false };
+    let Some(o) = data.obank().get(op) else {
+        return false;
+    };
     let addr = match o.code() {
         OpCode::CPUI_LOAD | OpCode::CPUI_STORE => o.get_in(1),
         _ => return false,
@@ -559,7 +603,12 @@ fn walk_back(
                     return None;
                 }
                 if d == top {
-                    return Some(Walk { written, builder, slot_reserved, pointers });
+                    return Some(Walk {
+                        written,
+                        builder,
+                        slot_reserved,
+                        pointers,
+                    });
                 }
             }
             Some(Some(delta)) => {
@@ -579,7 +628,11 @@ fn cleanup_of(data: &Funcdata, op: OpId) -> Option<OpId> {
     while data.obank().get(cur)?.get_addr() == &at {
         cur = data.op_previous_op(cur)?;
     }
-    matches!(data.obank().get(cur)?.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND).then_some(cur)
+    matches!(
+        data.obank().get(cur)?.code(),
+        OpCode::CPUI_CALL | OpCode::CPUI_CALLIND
+    )
+    .then_some(cur)
 }
 
 /// A locked, non-variadic prototype with no parameter on the stack.
@@ -590,15 +643,25 @@ fn declares_no_stack_input(fc: &FuncCallSpecs) -> bool {
     }
     (0..p.num_params()).all(|j| {
         p.get_param(j).is_some_and(|param| {
-            param.get_address().get_space().is_some_and(|s| s.get_type() != spacetype::IPTR_SPACEBASE)
+            param
+                .get_address()
+                .get_space()
+                .is_some_and(|s| s.get_type() != spacetype::IPTR_SPACEBASE)
         })
     })
 }
 
 /// The `__thiscall` `this` register (`ECX`), as an address and size.
 fn this_register(data: &Funcdata) -> Option<(Address, int4)> {
-    let reg = data.get_arch().manage().register_lookup()?.probe_register("ECX")?;
-    Some((Address::new(reg.space.clone()?, reg.offset), reg.size as int4))
+    let reg = data
+        .get_arch()
+        .manage()
+        .register_lookup()?
+        .probe_register("ECX")?;
+    Some((
+        Address::new(reg.space.clone()?, reg.offset),
+        reg.size as int4,
+    ))
 }
 
 /// The caller-frame stack range each recorded builder call builds, as
@@ -611,24 +674,40 @@ pub fn constructed_ranges(
 ) -> Vec<(OpId, uintb, int4)> {
     let mut out = Vec::new();
     for site in data.kuna_msvc_byval_sites() {
-        let Some(builder) = site.builder else { continue };
-        let Some(fc) = qlst.iter().find(|fc| fc.get_op() == site.call) else { continue };
+        let Some(builder) = site.builder else {
+            continue;
+        };
+        let Some(fc) = qlst.iter().find(|fc| fc.get_op() == site.call) else {
+            continue;
+        };
         let base = fc.get_spacebase_offset();
         if base == OFFSET_UNKNOWN {
             continue;
         }
-        let Some(param) = fc.proto().get_param(site.param as int4) else { continue };
+        let Some(param) = fc.proto().get_param(site.param as int4) else {
+            continue;
+        };
         let addr = param.get_address();
         if !addr.get_space().is_some_and(|s| Rc::ptr_eq(s, stack)) {
             continue;
         }
-        out.push((builder, stack.wrap_offset(addr.get_offset().wrapping_add(base)), param.get_size()));
+        out.push((
+            builder,
+            stack.wrap_offset(addr.get_offset().wrapping_add(base)),
+            param.get_size(),
+        ));
     }
     out
 }
 
 /// Is `[off, off+size)` inside the range the call `op` constructs?
-pub fn constructs(ranges: &[(OpId, uintb, int4)], op: OpId, stack: &AddrSpace, off: uintb, size: int4) -> bool {
+pub fn constructs(
+    ranges: &[(OpId, uintb, int4)],
+    op: OpId,
+    stack: &AddrSpace,
+    off: uintb,
+    size: int4,
+) -> bool {
     ranges
         .iter()
         .any(|(c, lo, sz)| *c == op && within(stack.wrap_offset(off.wrapping_sub(*lo)), size, *sz))
@@ -637,7 +716,10 @@ pub fn constructs(ranges: &[(OpId, uintb, int4)], op: OpId, stack: &AddrSpace, o
 /// Does a range `size` bytes long, starting `rel` bytes into an object of
 /// `object` bytes, lie wholly inside it?
 fn within(rel: uintb, size: int4, object: int4) -> bool {
-    size > 0 && rel.checked_add(size as uintb).is_some_and(|end| end <= object as uintb)
+    size > 0
+        && rel
+            .checked_add(size as uintb)
+            .is_some_and(|end| end <= object as uintb)
 }
 
 /// Does `ActionRestrictLocal` leave parameter `param` of the call `op` mapped?

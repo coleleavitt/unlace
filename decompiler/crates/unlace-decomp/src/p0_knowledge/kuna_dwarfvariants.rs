@@ -134,7 +134,9 @@ impl VariantLayout {
     /// for every enum with two or more variants overlaying the same bytes — the
     /// suppression rule in [`VariantFacet::label`].
     pub fn names_any_variant(&self) -> bool {
-        self.variants.iter().any(|v| !v.label.is_empty() && v.label == v.name)
+        self.variants
+            .iter()
+            .any(|v| !v.label.is_empty() && v.label == v.name)
     }
 }
 
@@ -178,7 +180,10 @@ mod tests {
         assert_eq!(l.facet_for_discr(0).unwrap().name, "None");
         assert_eq!(l.facet_for_discr(1).unwrap().name, "Some");
         assert_eq!(l.facet_for_discr(0xdeadbeef).unwrap().name, "Some");
-        assert_eq!(l.facet_named("Some").unwrap().fields, vec![("__0".to_string(), 0)]);
+        assert_eq!(
+            l.facet_named("Some").unwrap().fields,
+            vec![("__0".to_string(), 0)]
+        );
         assert!(l.facet_named("Err").is_none());
     }
 
@@ -187,7 +192,10 @@ mod tests {
     #[test]
     fn names_any_variant_tracks_the_suppression() {
         let l = layout();
-        assert!(l.names_any_variant(), "`Some` is the only payload variant here");
+        assert!(
+            l.names_any_variant(),
+            "`Some` is the only payload variant here"
+        );
 
         let mut r = layout();
         r.type_name = "Result<u64, u64>".into();
@@ -205,7 +213,10 @@ mod tests {
             payload_type: "Result<u64, u64>::field_0x8".into(),
             fields: vec![("__0".into(), 8)],
         };
-        assert!(!r.names_any_variant(), "two variants at one offset name neither");
+        assert!(
+            !r.names_any_variant(),
+            "two variants at one offset name neither"
+        );
         // The SOURCE names are still on the table -- suppression is a rendering
         // decision, not a loss of what DWARF said.
         assert_eq!(r.facet_for_discr(1).unwrap().name, "Err");
@@ -219,6 +230,9 @@ mod tests {
         l.niche = false;
         l.variants[1].discr = Some(1);
         assert_eq!(l.facet_for_discr(1).unwrap().name, "Some");
-        assert!(l.facet_for_discr(7).is_none(), "no default variant => no answer");
+        assert!(
+            l.facet_for_discr(7).is_none(),
+            "no default variant => no answer"
+        );
     }
 }

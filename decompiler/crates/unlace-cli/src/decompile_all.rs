@@ -24,28 +24,28 @@ use std::fmt::Write as _;
 use unlace_analysis::loader::macho_fat::SlicePref;
 use unlace_base::address::Address;
 use unlace_console::engine::{
-    bootstrap_from_image_with_isa, bootstrap_from_raw, ArmIsa, ConsoleProgram, EntryLookupError,
-    EntrySelector, FunctionEntry, ObjectLocation,
+    ArmIsa, ConsoleProgram, EntryLookupError, EntrySelector, FunctionEntry, ObjectLocation,
+    bootstrap_from_image_with_isa, bootstrap_from_raw,
 };
 // The decompile loop + result shape live in the shared decompile-project core
 // (`unlace_console::project` — also reused by the `unlace_wasm` front-end).
 use unlace_console::project::{
-    converge_synthesized_structs, decompile_pulled, default_fn_budget_seconds,
-    render_c, BatchOutcome, DecompileOptions, FuncResult,
+    BatchOutcome, DecompileOptions, FuncResult, converge_synthesized_structs, decompile_pulled,
+    default_fn_budget_seconds, render_c,
 };
 // `File::architecture()` (the ARM-discovery default, decbench) plus the
 // section/segment walks the zero-discovery diagnosis reads.
 use object::{Object, ObjectSection, ObjectSegment};
-use unlace_decomp::decompile_drive::{print_c_types, LineMapping, TypeInfo, VarInfo};
+use unlace_decomp::decompile_drive::{LineMapping, TypeInfo, VarInfo, print_c_types};
 use unlace_decomp::kuna_structsynth::shard::{self, ShardHook};
-use unlace_decomp::options::{OptionDatabase, KUNA_OPTION_NAMES};
+use unlace_decomp::options::{KUNA_OPTION_NAMES, OptionDatabase};
 
 use regex::Regex;
 
 use crate::args::take_value as take;
 use crate::callgraph::CallGraph;
 use crate::jobs;
-use crate::jsonfmt::{dumps_indent2, Json};
+use crate::jsonfmt::{Json, dumps_indent2};
 #[cfg(test)]
 use crate::loadtime::last_option_value;
 use crate::loadtime::{apply_to_process as apply_loadtime_env, is_loadtime_gate};
@@ -199,7 +199,10 @@ impl Args {
 
     /// The Mach-O fat-slice preference this run's `--slice` / `--target` names.
     pub(crate) fn slice_pref(&self) -> SlicePref {
-        unlace_analysis::loader::macho_fat::slice_pref(self.slice.as_deref(), self.target.as_deref())
+        unlace_analysis::loader::macho_fat::slice_pref(
+            self.slice.as_deref(),
+            self.target.as_deref(),
+        )
     }
 
     /// Whether the decompile runs the markup render: the `--json` line mappings
@@ -208,7 +211,6 @@ impl Args {
         self.json && !(self.omit.line_mappings && self.no_vars)
     }
 }
-
 
 // --- triage: narrowing a whole-binary run before it runs ---------------------
 
@@ -330,9 +332,11 @@ impl Filters {
 
     fn keeps(&self, e: &FunctionEntry, reachable: Option<&BTreeSet<u64>>) -> bool {
         if let Some(re) = &self.name
-            && !re.is_match(&e.name) && !e.aliases.iter().any(|a| re.is_match(a)) {
-                return false;
-            }
+            && !re.is_match(&e.name)
+            && !e.aliases.iter().any(|a| re.is_match(a))
+        {
+            return false;
+        }
         if self.min_size.is_some_and(|min| e.size < min) {
             return false;
         }
@@ -351,10 +355,14 @@ impl Filters {
         match self.sort {
             SortKey::Addr => entries.sort_by_key(|e| e.addr.get_offset()),
             SortKey::Size => entries.sort_by(|a, b| {
-                b.size.cmp(&a.size).then(a.addr.get_offset().cmp(&b.addr.get_offset()))
+                b.size
+                    .cmp(&a.size)
+                    .then(a.addr.get_offset().cmp(&b.addr.get_offset()))
             }),
             SortKey::Name => entries.sort_by(|a, b| {
-                a.name.cmp(&b.name).then(a.addr.get_offset().cmp(&b.addr.get_offset()))
+                a.name
+                    .cmp(&b.name)
+                    .then(a.addr.get_offset().cmp(&b.addr.get_offset()))
             }),
         }
     }
@@ -364,7 +372,6 @@ impl Filters {
         self.limit.unwrap_or(DEFAULT_SUMMARY_LARGEST)
     }
 }
-
 
 // --- the `--summary` orientation document ------------------------------------
 
@@ -408,20 +415,31 @@ fn summarize(
     let entry = image_entry(prog);
     let reachable_from_entry = entry.as_ref().and_then(|(vma, _)| {
         let reached = graph.reachable_from(prog, &format!("0x{vma:x}")).ok()?;
-        Some(all.iter().filter(|e| reached.contains(&e.addr.get_offset())).count())
+        Some(
+            all.iter()
+                .filter(|e| reached.contains(&e.addr.get_offset()))
+                .count(),
+        )
     });
 
-    let mut buckets: Vec<(&'static str, usize)> =
-        SIZE_BUCKETS.iter().map(|(label, _, _)| (*label, 0)).collect();
+    let mut buckets: Vec<(&'static str, usize)> = SIZE_BUCKETS
+        .iter()
+        .map(|(label, _, _)| (*label, 0))
+        .collect();
     for e in selected {
-        if let Some(i) = SIZE_BUCKETS.iter().position(|(_, lo, hi)| e.size >= *lo && e.size <= *hi) {
+        if let Some(i) = SIZE_BUCKETS
+            .iter()
+            .position(|(_, lo, hi)| e.size >= *lo && e.size <= *hi)
+        {
             buckets[i].1 += 1;
         }
     }
 
     let mut largest = selected.to_vec();
     largest.sort_by(|a, b| {
-        b.size.cmp(&a.size).then(a.addr.get_offset().cmp(&b.addr.get_offset()))
+        b.size
+            .cmp(&a.size)
+            .then(a.addr.get_offset().cmp(&b.addr.get_offset()))
     });
     largest.truncate(filters.largest_wanted());
 
@@ -437,8 +455,10 @@ fn summarize(
         code_bytes: selected.iter().map(|e| e.size).sum(),
         buckets,
         largest,
-        runtime: crate::image::inspect(binary, |bytes| Some(crate::runtime_hints::detect(bytes, true)))
-            .unwrap_or_default(),
+        runtime: crate::image::inspect(binary, |bytes| {
+            Some(crate::runtime_hints::detect(bytes, true))
+        })
+        .unwrap_or_default(),
         limits: crate::limits::measure(prog, graph, selected),
         rust_fields: Vec::new(),
     }
@@ -456,17 +476,23 @@ fn image_entry(prog: &ConsoleProgram) -> Option<(u64, String)> {
     // bit is answered at the even entry the rest of the document uses.
     match prog.find_entry_at(vma) {
         Some(entry) => Some((entry.addr.get_offset(), entry.name)),
-        None => Some((vma, prog.function_named_at(vma).unwrap_or_else(|| format!("0x{vma:x}")))),
+        None => Some((
+            vma,
+            prog.function_named_at(vma)
+                .unwrap_or_else(|| format!("0x{vma:x}")),
+        )),
     }
 }
 
 /// The user entry function by name, in the order a C runtime would call them.
 fn user_main(all: &[FunctionEntry]) -> Option<(u64, String)> {
-    ["main", "wmain", "WinMain", "wWinMain"].iter().find_map(|want| {
-        all.iter()
-            .find(|e| e.name == *want || e.aliases.iter().any(|a| a == want))
-            .map(|e| (e.addr.get_offset(), (*want).to_string()))
-    })
+    ["main", "wmain", "WinMain", "wWinMain"]
+        .iter()
+        .find_map(|want| {
+            all.iter()
+                .find(|e| e.name == *want || e.aliases.iter().any(|a| a == want))
+                .map(|e| (e.addr.get_offset(), (*want).to_string()))
+        })
 }
 
 fn summary_json(
@@ -537,12 +563,27 @@ fn summary_json(
                     .map(|n| Json::Number(n.to_string()))
                     .unwrap_or(Json::Null),
             ),
-            ("no_callers".into(), Json::Number(summary.no_callers.to_string())),
-            ("code_bytes".into(), Json::Number(summary.code_bytes.to_string())),
+            (
+                "no_callers".into(),
+                Json::Number(summary.no_callers.to_string()),
+            ),
+            (
+                "code_bytes".into(),
+                Json::Number(summary.code_bytes.to_string()),
+            ),
             ("size_buckets".into(), buckets),
-            ("largest".into(), entries_json(&summary.largest, display_address, declared)),
-            ("runtime".into(), crate::runtime_hints::to_json(&summary.runtime)),
-            ("limits".into(), crate::limits::to_json(&summary.limits, display_address)),
+            (
+                "largest".into(),
+                entries_json(&summary.largest, display_address, declared),
+            ),
+            (
+                "runtime".into(),
+                crate::runtime_hints::to_json(&summary.runtime),
+            ),
+            (
+                "limits".into(),
+                crate::limits::to_json(&summary.limits, display_address),
+            ),
         ]),
     ));
     format!("{}\n", dumps_indent2(&Json::Object(doc)))
@@ -564,7 +605,11 @@ fn summary_text(
     for line in crate::fid::report::text_lines(declared.fid_databases()) {
         let _ = writeln!(out, "{line}");
     }
-    let _ = writeln!(out, "functions\t{selected} selected / {} discovered", summary.total);
+    let _ = writeln!(
+        out,
+        "functions\t{selected} selected / {} discovered",
+        summary.total
+    );
     match &summary.entry {
         Some((vma, name)) => {
             let address = display_address(*vma);
@@ -749,17 +794,28 @@ fn run_jobs_worker(args: &Args) -> Result<(), String> {
                     // parent's to know, so it also gets the block without them.
                     if synth_hook.is_some() {
                         shard::forget_minted(prog.arch().types_impl(), at_load.held())?;
-                        jobs::write_type_block(scratch, token, true, &print_c_types(prog.arch_mut()))?;
+                        jobs::write_type_block(
+                            scratch,
+                            token,
+                            true,
+                            &print_c_types(prog.arch_mut()),
+                        )?;
                     }
                 }
                 break;
             }
         };
         let targets = jobs::read_spec(&dir.join(jobs::spec_name(idx)).to_string_lossy())?;
-        let answers: Vec<Vec<Option<String>>> =
-            targets.iter().map(|t| t.synth.clone().unwrap_or_default()).collect();
+        let answers: Vec<Vec<Option<String>>> = targets
+            .iter()
+            .map(|t| t.synth.clone().unwrap_or_default())
+            .collect();
         let entries = rehydrate_entries(&prog, targets)?;
-        let replay = if converge { entries.clone() } else { Vec::new() };
+        let replay = if converge {
+            entries.clone()
+        } else {
+            Vec::new()
+        };
         {
             let out = std::cell::RefCell::new(jobs::ResultWriter::create(
                 &dir.join(jobs::result_name(idx)).to_string_lossy(),
@@ -856,7 +912,10 @@ fn take_synth_table(
     at_load: &std::rc::Rc<shard::AtLoad>,
 ) -> Result<shard::ShardHandle, String> {
     if jobs::Faults::from_env().refuses_synth_install() {
-        return Err(format!("cannot install the synthesized structures: {} refused", jobs::JOBS_FAULT_ENV));
+        return Err(format!(
+            "cannot install the synthesized structures: {} refused",
+            jobs::JOBS_FAULT_ENV
+        ));
     }
     let table = jobs::read_synth_table(scratch)?;
     shard::forget_minted(prog.arch().types_impl(), at_load.held())
@@ -907,9 +966,17 @@ fn seed_worker_inventory(prog: &mut ConsoleProgram, path: &str) -> Result<(), St
         .ok_or("no default code space")?;
     let manage = prog.arch().manage();
     let inventory = jobs::read_spec(path)?;
-    let callwide_inventory = prog.arch().call_wide.then(|| inventory.iter().map(|entry| unlace_console::kuna_callwide::InventoryEntry {
-        address: entry.addr, size: entry.size, name: entry.name.clone(), aliases: entry.aliases.clone(),
-    }).collect());
+    let callwide_inventory = prog.arch().call_wide.then(|| {
+        inventory
+            .iter()
+            .map(|entry| unlace_console::kuna_callwide::InventoryEntry {
+                address: entry.addr,
+                size: entry.size,
+                name: entry.name.clone(),
+                aliases: entry.aliases.clone(),
+            })
+            .collect()
+    });
     let entries: Vec<(String, Address)> = inventory
         .into_iter()
         .map(|t| {
@@ -920,8 +987,12 @@ fn seed_worker_inventory(prog: &mut ConsoleProgram, path: &str) -> Result<(), St
             (t.name, Address::new(space, t.addr))
         })
         .collect();
-    prog.seed_function_inventory(&entries)
-        .map_err(|e| format!("seeding the worker function inventory failed: {}", e.explain()))?;
+    prog.seed_function_inventory(&entries).map_err(|e| {
+        format!(
+            "seeding the worker function inventory failed: {}",
+            e.explain()
+        )
+    })?;
     if let Some(inventory) = callwide_inventory {
         unlace_console::kuna_callwide::replay_inventory(prog, inventory);
     }
@@ -985,8 +1056,12 @@ fn replay_worker_arm_frames(prog: &mut ConsoleProgram, args: &Args) -> Result<()
     if !path.is_file() {
         return Ok(());
     }
-    let text = std::fs::read_to_string(&path)
-        .map_err(|e| format!("cannot read the worker frame record {}: {e}", path.display()))?;
+    let text = std::fs::read_to_string(&path).map_err(|e| {
+        format!(
+            "cannot read the worker frame record {}: {e}",
+            path.display()
+        )
+    })?;
     let record = unlace_analysis::aif::kuna_framereplay::ArmFrameReplay::decode(&text)
         .map_err(|e| format!("{}: {e}", path.display()))?;
     prog.replay_arm_frames(record);
@@ -997,7 +1072,10 @@ fn replay_worker_arm_frames(prog: &mut ConsoleProgram, args: &Args) -> Result<()
 /// from, read off the parent's program before any decompile: `None` when this
 /// run does not synthesize structures.
 pub(crate) fn synth_base(prog: &ConsoleProgram) -> Option<shard::Replay> {
-    prog.arch().struct_synth.fires().then(|| shard::Replay::probe(prog.arch().types()))
+    prog.arch()
+        .struct_synth
+        .fires()
+        .then(|| shard::Replay::probe(prog.arch().types()))
 }
 
 /// Flatten resolved entries into the thread- and process-crossing form
@@ -1007,7 +1085,11 @@ pub(crate) fn flatten_targets(entries: &[FunctionEntry]) -> Vec<jobs::TargetSpec
         .iter()
         .map(|e| jobs::TargetSpec {
             addr: e.addr.get_offset(),
-            space: e.addr.get_space().map(|s| s.get_name().to_string()).unwrap_or_default(),
+            space: e
+                .addr
+                .get_space()
+                .map(|s| s.get_name().to_string())
+                .unwrap_or_default(),
             name: e.name.clone(),
             aliases: e.aliases.clone(),
             size: e.size,
@@ -1036,7 +1118,11 @@ pub(crate) fn pool_config<'a>(
         binary: &args.binary,
         mode: args.mode,
         options: &args.options,
-        func_decls: args.func_decls.iter().map(crate::funcdecl::FuncDecl::flag_value).collect(),
+        func_decls: args
+            .func_decls
+            .iter()
+            .map(crate::funcdecl::FuncDecl::flag_value)
+            .collect(),
         no_vars: args.no_vars,
         want_proto,
         want_provenance,
@@ -1068,9 +1154,7 @@ pub(crate) fn pool_config<'a>(
 /// The human surface has no `assertions[]` to read, and a directive that was
 /// silently dropped is the failure mode this plane exists to end -- so a
 /// rejection is always spoken, on both surfaces.
-pub(crate) fn report_rejected_assertions(
-    outcomes: &[unlace_console::assertions::Outcome],
-) -> bool {
+pub(crate) fn report_rejected_assertions(outcomes: &[unlace_console::assertions::Outcome]) -> bool {
     let mut any = false;
     for outcome in outcomes.iter().filter(|o| o.status == "rejected") {
         let reason = outcome.detail.as_deref().unwrap_or("no reason given");
@@ -1088,7 +1172,10 @@ pub(crate) fn report_rejected_assertions(
                 outcome.directive
             );
         } else {
-            eprintln!("warning: --assert {:?} rejected: {reason}", outcome.directive);
+            eprintln!(
+                "warning: --assert {:?} rejected: {reason}",
+                outcome.directive
+            );
         }
     }
     any
@@ -1196,14 +1283,16 @@ pub fn run_functions(argv: &[String]) -> i32 {
             let total = all.len();
             let (entries, graph) =
                 match filters.select(&prog, &args.binary, args.slice_pref(), all, args.json) {
-                Ok(pair) => pair,
-                Err(e) => {
-                    eprintln!("error: {e}");
-                    return 1;
-                }
-            };
+                    Ok(pair) => pair,
+                    Err(e) => {
+                        eprintln!("error: {e}");
+                        return 1;
+                    }
+                };
             let written = if args.json {
-                let limits = graph.as_ref().map(|g| crate::limits::measure(&prog, g, &entries));
+                let limits = graph
+                    .as_ref()
+                    .map(|g| crate::limits::measure(&prog, g, &entries));
                 let limits = limits.as_ref().map(|limits| {
                     crate::limits::to_json(limits, &|address| prog.output_code_offset(address))
                 });
@@ -1260,11 +1349,14 @@ fn run_summary(args: &Args, filters: &Filters) -> i32 {
         None => (None, None),
     };
     let loaded = match request {
-        Some(request) => load_program_with_rust_profiles(args, DriverDefaults::Functions, Some(request))
-            .map(|prog| {
-                let all = prog.function_entries_canonical();
-                (prog, all)
-            }),
+        Some(request) => {
+            load_program_with_rust_profiles(args, DriverDefaults::Functions, Some(request)).map(
+                |prog| {
+                    let all = prog.function_entries_canonical();
+                    (prog, all)
+                },
+            )
+        }
         None => list_functions(args),
     };
     let (prog, all) = match loaded {
@@ -1282,12 +1374,12 @@ fn run_summary(args: &Args, filters: &Filters) -> i32 {
         .flatten();
     let (selected, graph) =
         match filters.select(&prog, &args.binary, args.slice_pref(), all.clone(), true) {
-        Ok(pair) => pair,
-        Err(e) => {
-            eprintln!("error: {e}");
-            return 1;
-        }
-    };
+            Ok(pair) => pair,
+            Err(e) => {
+                eprintln!("error: {e}");
+                return 1;
+            }
+        };
     let Some(graph) = graph else {
         eprintln!("error: --summary could not build the program call graph");
         return 1;
@@ -1355,7 +1447,9 @@ fn decompile_all(args: &Args, filters: &Filters) -> Result<AllRun, String> {
     let targets = resolve_targets(&prog, args)?;
     let discovered = targets.len();
     let targets = if filters.narrows() {
-        filters.select(&prog, &args.binary, args.slice_pref(), targets, false)?.0
+        filters
+            .select(&prog, &args.binary, args.slice_pref(), targets, false)?
+            .0
     } else {
         targets
     };
@@ -1394,7 +1488,13 @@ fn decompile_all(args: &Args, filters: &Filters) -> Result<AllRun, String> {
             arm_frames,
             None,
         )?;
-        return Ok(AllRun { funcs: pooled.results, discovered, assertions, interior, declared });
+        return Ok(AllRun {
+            funcs: pooled.results,
+            discovered,
+            assertions,
+            interior,
+            declared,
+        });
     }
     if explicit && prog.arch().protoorder.is_on() && !whole {
         eprintln!(
@@ -1407,9 +1507,17 @@ fn decompile_all(args: &Args, filters: &Filters) -> Result<AllRun, String> {
         decompile_entries_callee_first(&mut prog, args, targets, explicit)
     } else {
         note_custom_inert(&prog, targets.len());
-        decompile_entries(&mut prog, args, targets, /* pointer_arguments= */ true, !whole)
+        decompile_entries(
+            &mut prog, args, targets, /* pointer_arguments= */ true, !whole,
+        )
     };
-    Ok(AllRun { funcs, discovered, assertions: prog.assertion_outcomes(), interior, declared })
+    Ok(AllRun {
+        funcs,
+        discovered,
+        assertions: prog.assertion_outcomes(),
+        interior,
+        declared,
+    })
 }
 
 /// Arm the per-function budgets `args` asks for: the wall-clock watchdog on the
@@ -1419,8 +1527,7 @@ fn decompile_all(args: &Args, filters: &Filters) -> Result<AllRun, String> {
 /// serial run and every `--jobs` worker alike.
 pub(crate) fn arm_fn_budgets(prog: &mut ConsoleProgram, args: &Args) {
     if args.max_fn_seconds > 0 {
-        prog.arch_mut().kuna_fn_budget =
-            Some(std::time::Duration::from_secs(args.max_fn_seconds));
+        prog.arch_mut().kuna_fn_budget = Some(std::time::Duration::from_secs(args.max_fn_seconds));
     }
     match args.max_fn_memory {
         Some(mib) => unlace_decomp::kuna_fnmemory::set_limit_mib(mib),
@@ -1439,7 +1546,7 @@ pub(crate) fn parse_max_fn_memory(v: &str) -> Result<u64, String> {
         .map_err(|_| format!("invalid --max-fn-memory value {v:?} (MiB)"))?;
     if mib > 0 && !unlace_decomp::kuna_fnmemory::supported() {
         return Err(
-            "--max-fn-memory needs the resident set, which this platform does not report".into()
+            "--max-fn-memory needs the resident set, which this platform does not report".into(),
         );
     }
     Ok(mib)
@@ -1493,9 +1600,8 @@ pub(crate) fn callee_first_decision(
     whole: bool,
 ) -> (bool, bool) {
     let explicit = args.options.iter().any(|(name, _)| name == "protoorder");
-    let on = prog.arch().protoorder.is_on()
-        && selected > 1
-        && (explicit || (whole && !args.raw_image));
+    let on =
+        prog.arch().protoorder.is_on() && selected > 1 && (explicit || (whole && !args.raw_image));
     (on, explicit)
 }
 
@@ -1512,8 +1618,12 @@ pub(crate) fn callee_first_decision(
 /// loop and are inert in exactly the same places.
 pub fn warn_protoorder_inert(options: &[(String, String)], surface: &str) {
     let named = |name: &str| options.iter().any(|(n, value)| n == name && value != "off");
-    let custom = options.iter().any(|(n, value)| n == "calleereginputs" && is_custom(value));
-    let inert = ["protoorder", "callbacktype"].into_iter().filter(|name| named(name));
+    let custom = options
+        .iter()
+        .any(|(n, value)| n == "calleereginputs" && is_custom(value));
+    let inert = ["protoorder", "callbacktype"]
+        .into_iter()
+        .filter(|name| named(name));
     for option in inert.chain(custom.then_some("calleereginputs custom")) {
         eprintln!(
             "warning: --option {option} has no effect on `unlace {surface}`: the callee-first \
@@ -1685,12 +1795,14 @@ pub(crate) fn driver_default_options(
     // than an inert one. (`image_bytes` is deliberately not used here: a TE is
     // an ordinary "no object view" answer, not an error, on this path.)
     let non_x86_64 = crate::image::inspect(binary, |bytes| {
-            if unlace_analysis::loadimage_te::is_te_image(bytes) { return None }
-            unlace_analysis::loadimage_object::parse_object(bytes)
-                .ok()
-                .map(|file| file.architecture() != object::Architecture::X86_64)
-        })
-        .unwrap_or(false);
+        if unlace_analysis::loadimage_te::is_te_image(bytes) {
+            return None;
+        }
+        unlace_analysis::loadimage_object::parse_object(bytes)
+            .ok()
+            .map(|file| file.architecture() != object::Architecture::X86_64)
+    })
+    .unwrap_or(false);
 
     // A headerless image (no object view, not a TE): IDA's own default case for
     // pattern discovery. The raw path sweeps its bytes with the target's
@@ -1698,7 +1810,8 @@ pub(crate) fn driver_default_options(
     let raw = unlace_analysis::loader::elf_shdr::read_image(binary)
         .ok()
         .is_some_and(|bytes| {
-            !unlace_analysis::loadimage_te::is_te_image(&bytes) && unlace_analysis::loadimage_object::parse_object(&bytes).is_err()
+            !unlace_analysis::loadimage_te::is_te_image(&bytes)
+                && unlace_analysis::loadimage_object::parse_object(&bytes).is_err()
         });
 
     driver_default_options_for_arch(non_x86_64, raw, decompiles, wants_listing, options)
@@ -1746,10 +1859,14 @@ pub(crate) fn load_program(
     args: &Args,
     defaults: DriverDefaults,
 ) -> Result<ConsoleProgram, String> {
-    let request = args.apply_rust_signatures.as_deref().map(|path| {
-        crate::rust_signatures::validate_application(args)?;
-        crate::rust_signatures::load(std::path::Path::new(path)).map(|(request, _)| request)
-    }).transpose()?;
+    let request = args
+        .apply_rust_signatures
+        .as_deref()
+        .map(|path| {
+            crate::rust_signatures::validate_application(args)?;
+            crate::rust_signatures::load(std::path::Path::new(path)).map(|(request, _)| request)
+        })
+        .transpose()?;
     load_program_with_rust_profiles(args, defaults, request)
 }
 
@@ -1895,7 +2012,9 @@ fn load_program_with_rust_profiles(
 /// image does carry, or the data object the name labels). `None` for a bare
 /// miss, which is what a stripped image answers.
 pub(crate) fn name_miss_hint(error: &EntryLookupError) -> Option<String> {
-    let EntryLookupError::NotFound { .. } = error else { return None };
+    let EntryLookupError::NotFound { .. } = error else {
+        return None;
+    };
     let text = error.to_string();
     let (_, hint) = text.split_once("\"; ")?;
     (!hint.trim().is_empty()).then(|| hint.trim().to_string())
@@ -2010,7 +2129,10 @@ fn resolve_targets_with_policy(
     // Dedup the explicitly-selected targets by entry offset: `--addr 0xX` and
     // `--functions f` can resolve to the same function, and decompiling it twice
     // just wastes work + duplicates the JSON entry.
-    #[expect(clippy::disallowed_types, reason = "Membership only; retain keeps explicit targets in input order.")]
+    #[expect(
+        clippy::disallowed_types,
+        reason = "Membership only; retain keeps explicit targets in input order."
+    )]
     let mut seen = std::collections::HashSet::new();
     targets.retain(|e| seen.insert(e.addr.get_offset()));
 
@@ -2052,9 +2174,11 @@ pub fn detected_output_language(
             || unlace_analysis::loadimage_dex::is_odex(head)
             || unlace_analysis::loadimage_dex::is_vdex(head)
             || (head.starts_with(b"\x7fELF")
-                && std::fs::read(binary).is_ok_and(|bytes| unlace_analysis::loadimage_dex::is_oat(&bytes)))
+                && std::fs::read(binary)
+                    .is_ok_and(|bytes| unlace_analysis::loadimage_dex::is_oat(&bytes)))
             || (head.starts_with(b"PK\x03\x04")
-                && std::fs::read(binary).is_ok_and(|bytes| unlace_analysis::loadimage_dex::is_apk(&bytes)))
+                && std::fs::read(binary)
+                    .is_ok_and(|bytes| unlace_analysis::loadimage_dex::is_apk(&bytes)))
     }) {
         return Some("java-language");
     }
@@ -2065,12 +2189,12 @@ pub fn detected_output_language(
         .and_then(unlace_decomp::kuna_sourcelang::SourceLang::parse_forced)
     {
         Some(lang) => unlace_analysis::sourcelang::Compiler::from_forced_lang(lang),
-        None => {
-            crate::image::inspect(binary, |bytes| {
-                let file = unlace_analysis::loadimage_object::parse_object(bytes).ok()?;
-                Some(unlace_analysis::sourcelang::effective_compiler(&file, bytes))
-            })?
-        }
+        None => crate::image::inspect(binary, |bytes| {
+            let file = unlace_analysis::loadimage_object::parse_object(bytes).ok()?;
+            Some(unlace_analysis::sourcelang::effective_compiler(
+                &file, bytes,
+            ))
+        })?,
     };
     match compiler {
         unlace_analysis::sourcelang::Compiler::Rustc => Some("rust-language"),
@@ -2099,7 +2223,10 @@ pub fn parse_language_flag(v: &str) -> Result<Option<&'static str>, String> {
 /// console `option` command (`IfcOption`): kuna stage-model options route to
 /// `set_kuna_option`, upstream options to the `OptionDatabase`.  Load-time gates
 /// are still applied here (so they are recorded) after their env export above.
-fn apply_runtime_options(prog: &mut ConsoleProgram, options: &[(String, String)]) -> Result<(), String> {
+fn apply_runtime_options(
+    prog: &mut ConsoleProgram,
+    options: &[(String, String)],
+) -> Result<(), String> {
     for (name, value) in options {
         apply_one_option(prog, name, value)?;
     }
@@ -2141,9 +2268,10 @@ fn spec_roots(sleighpath: Option<&str>) -> Vec<String> {
         return roots;
     }
     if let Ok(home) = std::env::var("SLEIGHHOME")
-        && !home.is_empty() {
-            roots.push(home);
-        }
+        && !home.is_empty()
+    {
+        roots.push(home);
+    }
     let specs = paths::specs_dir().to_string_lossy().into_owned();
     if !roots.contains(&specs) {
         roots.push(specs);
@@ -2182,7 +2310,9 @@ pub(crate) fn zero_discovery_error(binary: &str) -> Option<String> {
         ));
     }
     if let Some(packer) = detect_packer(&bytes) {
-        detail.push(format!("image appears {packer}-packed; try `unlace unpack`"));
+        detail.push(format!(
+            "image appears {packer}-packed; try `unlace unpack`"
+        ));
     }
     Some(if detail.is_empty() {
         format!("no functions discovered in {binary}")
@@ -2276,8 +2406,9 @@ fn classify_code_evidence(bytes: &[u8]) -> CodeEvidence {
     // at its bare image base, which no section covers.
     let entry = file.entry();
     let landed = (entry != 0).then(|| {
-        file.sections()
-            .find(|sec| sec.size() != 0 && entry >= sec.address() && entry - sec.address() < sec.size())
+        file.sections().find(|sec| {
+            sec.size() != 0 && entry >= sec.address() && entry - sec.address() < sec.size()
+        })
     });
     match landed.flatten() {
         Some(sec) => CodeEvidence::EntryPointOnly {
@@ -2290,8 +2421,6 @@ fn classify_code_evidence(bytes: &[u8]) -> CodeEvidence {
         None => CodeEvidence::None,
     }
 }
-
-
 
 // --- output rendering --------------------------------------------------------
 
@@ -2311,7 +2440,9 @@ pub(crate) fn render_result_json(
     declared: &crate::funcdecl::Declared,
     omit: Omit,
 ) -> String {
-    render_selected_json(binary, funcs, options, error, None, assertions, interior, declared, omit)
+    render_selected_json(
+        binary, funcs, options, error, None, assertions, interior, declared, omit,
+    )
 }
 
 /// [`render_result_json`] plus the inventory `total` a NARROWED whole-binary run
@@ -2359,10 +2490,21 @@ pub(crate) fn write_selected_json(
 ) -> std::io::Result<()> {
     let language = crate::loadtime::explicit_output_language(options)
         .and_then(unlace_decomp::kuna_lang::OutLang::from_print_name)
-        .map(|lang| lang.print_name()).unwrap_or("c-language");
-    let (head, tail) =
-        document_fields(binary, funcs.len(), language, error, total, assertions, declared, omit);
-    let records = funcs.iter().map(|f| function_json(f, interior, declared, omit));
+        .map(|lang| lang.print_name())
+        .unwrap_or("c-language");
+    let (head, tail) = document_fields(
+        binary,
+        funcs.len(),
+        language,
+        error,
+        total,
+        assertions,
+        declared,
+        omit,
+    );
+    let records = funcs
+        .iter()
+        .map(|f| function_json(f, interior, declared, omit));
     crate::jsonfmt::write_indent2_streamed(out, &head, "functions", records, &tail)?;
     out.write_all(b"\n")
 }
@@ -2391,7 +2533,10 @@ fn functions_json(
     ];
     doc.extend(declared.notes_field());
     doc.extend(declared.fid_databases_field());
-    doc.push(("functions".into(), entries_json(entries, display_address, declared)));
+    doc.push((
+        "functions".into(),
+        entries_json(entries, display_address, declared),
+    ));
     if let Some(limits) = limits {
         doc.push(("limits".into(), limits.clone()));
     }
@@ -2432,23 +2577,37 @@ fn entries_json(
 /// The run-level `error` field. Always present (`null` on a healthy run) so a
 /// consumer can read it unconditionally, exactly as [`aliases_json`] is.
 fn error_json(error: Option<&str>) -> Json {
-    error.map(|e| Json::Str(e.to_string())).unwrap_or(Json::Null)
+    error
+        .map(|e| Json::Str(e.to_string()))
+        .unwrap_or(Json::Null)
 }
 
 fn stack_object_json(object: &unlace_decomp::kuna_stackobjectinfo::StackObjectInfo) -> Json {
     Json::Object(vec![
         ("id".into(), Json::Str(object.id.clone())),
         ("name".into(), Json::Str(object.name.clone())),
-        ("stack_offset".into(), Json::Number(object.stack_offset.to_string())),
+        (
+            "stack_offset".into(),
+            Json::Number(object.stack_offset.to_string()),
+        ),
         ("size".into(), Json::Number(object.size.to_string())),
         ("defined".into(), Json::Bool(object.defined)),
-        ("uses".into(), Json::Array(object.uses.iter().map(|use_| {
-            Json::Object(vec![
-                ("address".into(), Json::Number(use_.address.to_string())),
-                ("slot".into(), Json::Number(use_.slot.to_string())),
-                ("type".into(), Json::Str(use_.type_name.clone())),
-            ])
-        }).collect())),
+        (
+            "uses".into(),
+            Json::Array(
+                object
+                    .uses
+                    .iter()
+                    .map(|use_| {
+                        Json::Object(vec![
+                            ("address".into(), Json::Number(use_.address.to_string())),
+                            ("slot".into(), Json::Number(use_.slot.to_string())),
+                            ("type".into(), Json::Str(use_.type_name.clone())),
+                        ])
+                    })
+                    .collect(),
+            ),
+        ),
     ])
 }
 
@@ -2467,9 +2626,20 @@ fn result_json(
     omit: Omit,
 ) -> Json {
     let declared = crate::funcdecl::Declared::default();
-    let (mut fields, tail) =
-        document_fields(binary, funcs.len(), language, error, total, assertions, &declared, omit);
-    let functions = funcs.iter().map(|f| function_json(f, interior, &declared, omit)).collect();
+    let (mut fields, tail) = document_fields(
+        binary,
+        funcs.len(),
+        language,
+        error,
+        total,
+        assertions,
+        &declared,
+        omit,
+    );
+    let functions = funcs
+        .iter()
+        .map(|f| function_json(f, interior, &declared, omit))
+        .collect();
     fields.push(("functions".to_string(), Json::Array(functions)));
     fields.extend(tail);
     Json::Object(fields)
@@ -2537,7 +2707,10 @@ fn function_json(
     let mut record = vec![
         ("name".into(), Json::Str(f.name.clone())),
         ("address".into(), Json::Number(f.address.to_string())),
-        ("address_hex".into(), Json::Str(format!("0x{:x}", f.address))),
+        (
+            "address_hex".into(),
+            Json::Str(format!("0x{:x}", f.address)),
+        ),
     ];
     if !omit.aliases {
         record.push(("aliases".into(), aliases_json(&f.aliases)));
@@ -2564,7 +2737,10 @@ fn function_json(
             "unstructured_gotos".into(),
             Json::Number(f.unstructured_gotos().to_string()),
         ),
-        ("warnings".into(), Json::Array(f.warnings.iter().map(warning_json).collect())),
+        (
+            "warnings".into(),
+            Json::Array(f.warnings.iter().map(warning_json).collect()),
+        ),
     ]);
     if !omit.line_mappings {
         record.push((
@@ -2573,18 +2749,25 @@ fn function_json(
         ));
     }
     if !omit.variables {
-        record.push(("variables".into(), Json::Array(f.variables.iter().map(var_json).collect())));
+        record.push((
+            "variables".into(),
+            Json::Array(f.variables.iter().map(var_json).collect()),
+        ));
     }
     // (kuna `structdefs`) The layout side: the definitions of the
     // composites this function's C names, as records. Present unless
     // omitted, `[]` unless the option is on.
     if !omit.types {
-        record.push(("types".into(), Json::Array(f.types.iter().map(type_json).collect())));
+        record.push((
+            "types".into(),
+            Json::Array(f.types.iter().map(type_json).collect()),
+        ));
     }
     if !omit.variables && !f.stack_objects.is_empty() {
-        record.push(("stack_objects".into(), Json::Array(
-            f.stack_objects.iter().map(stack_object_json).collect(),
-        )));
+        record.push((
+            "stack_objects".into(),
+            Json::Array(f.stack_objects.iter().map(stack_object_json).collect()),
+        ));
     }
     record.extend(declared.marker(f.byte_address));
     if let Some(inside) = interior.get(&f.byte_address) {
@@ -2621,13 +2804,21 @@ fn warning_json(warning: &unlace_decomp::kuna_functionwarnings::Warning) -> Json
         ("kind".into(), Json::Str(warning.kind())),
         ("message".into(), Json::Str(warning.message())),
         ("line".into(), Json::Number(warning.line.to_string())),
-        ("address".into(), warning.address.map_or(Json::Null, |a| Json::Number(a.to_string()))),
+        (
+            "address".into(),
+            warning
+                .address
+                .map_or(Json::Null, |a| Json::Number(a.to_string())),
+        ),
     ])
 }
 
 fn line_mapping_json(mapping: &LineMapping) -> Json {
     Json::Object(vec![
-        ("line_number".into(), Json::Number(mapping.line_number.to_string())),
+        (
+            "line_number".into(),
+            Json::Number(mapping.line_number.to_string()),
+        ),
         (
             "addresses".into(),
             Json::Array(
@@ -2685,17 +2876,18 @@ fn var_json(v: &VarInfo) -> Json {
     Json::Object(vec![
         ("name".into(), Json::Str(v.name.clone())),
         ("type".into(), Json::Str(v.type_name.clone())),
-        (
-            "kind".into(),
-            Json::Str(v.kind().into()),
-        ),
+        ("kind".into(), Json::Str(v.kind().into())),
         (
             "arg_index".into(),
-            v.arg_index.map(|i| Json::Number(i.to_string())).unwrap_or(Json::Null),
+            v.arg_index
+                .map(|i| Json::Number(i.to_string()))
+                .unwrap_or(Json::Null),
         ),
         (
             "stack_offset".into(),
-            v.stack_offset.map(|o| Json::Number(o.to_string())).unwrap_or(Json::Null),
+            v.stack_offset
+                .map(|o| Json::Number(o.to_string()))
+                .unwrap_or(Json::Null),
         ),
         ("size".into(), Json::Number(v.size.to_string())),
         (
@@ -2718,7 +2910,6 @@ fn var_json(v: &VarInfo) -> Json {
         ),
     ])
 }
-
 
 #[cfg(test)]
 mod provenance_json_tests {
@@ -2771,14 +2962,30 @@ mod provenance_json_tests {
 
     fn render(omit: Omit) -> serde_json::Value {
         let text = dumps_indent2(&result_json(
-            "fixture", &[function()], "c-language", None, None, &[], &Default::default(), omit,
+            "fixture",
+            &[function()],
+            "c-language",
+            None,
+            None,
+            &[],
+            &Default::default(),
+            omit,
         ));
         serde_json::from_str(&text).unwrap()
     }
 
     #[test]
     fn result_schema_adds_line_and_variable_provenance() {
-        let rendered = dumps_indent2(&result_json("fixture", &[function()], "c-language", None, None, &[], &Default::default(), Default::default()));
+        let rendered = dumps_indent2(&result_json(
+            "fixture",
+            &[function()],
+            "c-language",
+            None,
+            None,
+            &[],
+            &Default::default(),
+            Default::default(),
+        ));
         assert!(!rendered.contains("\"omitted\""));
         assert!(rendered.contains("\"address\": 4198400"));
         assert!(rendered.contains("\"code\": \"int f(int x)\\n{\\n  return x;\\n}\""));
@@ -2796,12 +3003,43 @@ mod provenance_json_tests {
     fn the_written_document_is_the_whole_one() {
         let mut omit = Omit::default();
         omit.add("types").unwrap();
-        let funcs = [function(), FuncResult { code: None, error: Some("boom".into()), ..function() }];
-        for (funcs, error, total, omit) in [(&funcs[..], None, None, Omit::default()), (&funcs[..1], Some("x"), Some(9), omit), (&[][..], None, None, omit)] {
-            let whole = dumps_indent2(&result_json("fixture", funcs, "c-language", error, total, &[], &Default::default(), omit));
-            assert_eq!(render_selected_json(
-                "fixture", funcs, &[], error, total, &[], &Default::default(), &Default::default(), omit,
-            ), whole + "\n");
+        let funcs = [
+            function(),
+            FuncResult {
+                code: None,
+                error: Some("boom".into()),
+                ..function()
+            },
+        ];
+        for (funcs, error, total, omit) in [
+            (&funcs[..], None, None, Omit::default()),
+            (&funcs[..1], Some("x"), Some(9), omit),
+            (&[][..], None, None, omit),
+        ] {
+            let whole = dumps_indent2(&result_json(
+                "fixture",
+                funcs,
+                "c-language",
+                error,
+                total,
+                &[],
+                &Default::default(),
+                omit,
+            ));
+            assert_eq!(
+                render_selected_json(
+                    "fixture",
+                    funcs,
+                    &[],
+                    error,
+                    total,
+                    &[],
+                    &Default::default(),
+                    &Default::default(),
+                    omit,
+                ),
+                whole + "\n"
+            );
         }
     }
 
@@ -2810,11 +3048,24 @@ mod provenance_json_tests {
         let mut omit = Omit::default();
         omit.add("line_mappings,types").unwrap();
         let doc = render(omit);
-        assert_eq!(doc["omitted"], serde_json::json!(["line_mappings", "types"]));
+        assert_eq!(
+            doc["omitted"],
+            serde_json::json!(["line_mappings", "types"])
+        );
         let record = doc["functions"][0].as_object().unwrap();
         assert!(!record.contains_key("line_mappings") && !record.contains_key("types"));
-        assert_eq!(record["variables"][0]["line_numbers"], serde_json::json!([3]));
-        for key in ["name", "address", "code", "error", "unstructured_gotos", "warnings"] {
+        assert_eq!(
+            record["variables"][0]["line_numbers"],
+            serde_json::json!([3])
+        );
+        for key in [
+            "name",
+            "address",
+            "code",
+            "error",
+            "unstructured_gotos",
+            "warnings",
+        ] {
             assert!(record.contains_key(key), "{key} must survive --omit");
         }
         assert_eq!(doc["language"], "c-language");
@@ -2825,7 +3076,12 @@ mod provenance_json_tests {
             doc["omitted"],
             serde_json::json!(["line_mappings", "variables", "types", "stack_objects"])
         );
-        assert!(!doc["functions"][0].as_object().unwrap().contains_key("variables"));
+        assert!(
+            !doc["functions"][0]
+                .as_object()
+                .unwrap()
+                .contains_key("variables")
+        );
     }
 
     #[test]
@@ -2833,15 +3089,38 @@ mod provenance_json_tests {
         use unlace_decomp::kuna_functionwarnings::Warning;
         let warned = FuncResult {
             warnings: vec![
-                Warning { address: Some(0x401000), text: "WARNING: Subroutine does not return".into(), line: 1 },
-                Warning { address: Some(0x401010), text: "WARNING: Function flows out of bounds".into(), line: 4 },
-                Warning { address: None, text: "WARNING: structured blocks unavailable".into(), line: 5 },
+                Warning {
+                    address: Some(0x401000),
+                    text: "WARNING: Subroutine does not return".into(),
+                    line: 1,
+                },
+                Warning {
+                    address: Some(0x401010),
+                    text: "WARNING: Function flows out of bounds".into(),
+                    line: 4,
+                },
+                Warning {
+                    address: None,
+                    text: "WARNING: structured blocks unavailable".into(),
+                    line: 5,
+                },
             ],
             ..function()
         };
-        let failed = FuncResult { code: None, error: Some("boom".into()), ..function() };
+        let failed = FuncResult {
+            code: None,
+            error: Some("boom".into()),
+            ..function()
+        };
         let text = dumps_indent2(&result_json(
-            "fixture", &[warned, failed], "c-language", None, None, &[], &Default::default(), Omit::default(),
+            "fixture",
+            &[warned, failed],
+            "c-language",
+            None,
+            None,
+            &[],
+            &Default::default(),
+            Omit::default(),
         ));
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
         assert_eq!(
@@ -2857,11 +3136,21 @@ mod provenance_json_tests {
 
     #[test]
     fn omitted_aliases_leave_the_record_and_keep_its_identity() {
-        let aliased = FuncResult { aliases: vec!["sub_401000".into()], ..function() };
+        let aliased = FuncResult {
+            aliases: vec!["sub_401000".into()],
+            ..function()
+        };
         let mut omit = Omit::default();
         omit.add("aliases").unwrap();
         let text = dumps_indent2(&result_json(
-            "fixture", &[aliased], "c-language", None, None, &[], &Default::default(), omit,
+            "fixture",
+            &[aliased],
+            "c-language",
+            None,
+            None,
+            &[],
+            &Default::default(),
+            omit,
         ));
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
         assert_eq!(doc["omitted"], serde_json::json!(["aliases"]));
@@ -2882,10 +3171,16 @@ fn mode_override_pairs(mode: &str) -> Result<Vec<(String, String)>, String> {
         return Err("mode `auto` requires input binary size".into());
     }
     match unlace_decomp::modes::mode_overrides(mode) {
-        Some(ovr) => Ok(ovr.iter().map(|(o, v)| ((*o).to_string(), (*v).to_string())).collect()),
+        Some(ovr) => Ok(ovr
+            .iter()
+            .map(|(o, v)| ((*o).to_string(), (*v).to_string()))
+            .collect()),
         None => {
             let known: Vec<&str> = unlace_decomp::modes::mode_names().collect();
-            Err(format!("unknown mode {mode:?} (known: {})", known.join(", ")))
+            Err(format!(
+                "unknown mode {mode:?} (known: {})",
+                known.join(", ")
+            ))
         }
     }
 }
@@ -2902,7 +3197,10 @@ fn resolved_mode(mode: Option<&str>, binary_size: u64) -> Result<ResolvedMode, S
             let known: Vec<&str> = unlace_decomp::modes::mode_names().collect();
             format!("unknown mode {requested:?} (known: {})", known.join(", "))
         })?;
-    let options = overrides.iter().map(|(o, v)| ((*o).to_string(), (*v).to_string())).collect();
+    let options = overrides
+        .iter()
+        .map(|(o, v)| ((*o).to_string(), (*v).to_string()))
+        .collect();
     Ok(ResolvedMode { name, options })
 }
 
@@ -2933,12 +3231,17 @@ fn mode_and_options_for_binary(
             Some(value) => unlace_decomp::kuna_dyldcache::image_name(value).map(str::to_string),
             None => unlace_decomp::kuna_dyldcache::selected_image(),
         };
-        match unlace_analysis::loader::kuna_dyldcache::image_size(std::path::Path::new(binary), image.as_deref())
-            .and_then(Result::ok)
+        match unlace_analysis::loader::kuna_dyldcache::image_size(
+            std::path::Path::new(binary),
+            image.as_deref(),
+        )
+        .and_then(Result::ok)
         {
             Some(size) => size,
             None => std::fs::metadata(binary)
-                .map_err(|e| format!("cannot read input binary metadata for mode auto: {binary}: {e}"))?
+                .map_err(|e| {
+                    format!("cannot read input binary metadata for mode auto: {binary}: {e}")
+                })?
                 .len(),
         }
     } else {
@@ -3010,7 +3313,10 @@ pub(crate) fn parse_args_with_filters(
     // discovery walk's decode lanes, which `functions` very much does run, so
     // that one flag is accepted there too while `--jobs-chunk` /
     // `--jobs-full-load` / `--jobs-worker` stay pool-only.
-    let batch = matches!(cmd, "decompile-all" | "decompile-project" | "decompile-graph");
+    let batch = matches!(
+        cmd,
+        "decompile-all" | "decompile-project" | "decompile-graph"
+    );
     let jobs_flag = batch || cmd == "functions";
 
     let mut i = 0;
@@ -3025,10 +3331,17 @@ pub(crate) fn parse_args_with_filters(
                 }
             }
             "--no-vars" => no_vars = true,
-            "--omit" if matches!(cmd, "decompile-all" | "decompile") => omit.add(&take(argv, &mut i, "--omit")?)?,
+            "--omit" if matches!(cmd, "decompile-all" | "decompile") => {
+                omit.add(&take(argv, &mut i, "--omit")?)?
+            }
             "--functions" => {
                 let v = take(argv, &mut i, "--functions")?;
-                names = Some(v.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect());
+                names = Some(
+                    v.split(',')
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect(),
+                );
             }
             "--addr" | "--entry" => {
                 let flag = a;
@@ -3077,10 +3390,17 @@ pub(crate) fn parse_args_with_filters(
             "--jobs-pointerargs" if cmd == "decompile-all" => jobs_pointerargs = true,
             "--jobs-objects" if cmd == "decompile-all" => jobs_objects = true,
             "--jobs-synth" if cmd == "decompile-all" => {
-                jobs_synth = Some(jobs::SynthWorker::parse(&take(argv, &mut i, "--jobs-synth")?)?);
+                jobs_synth = Some(jobs::SynthWorker::parse(&take(
+                    argv,
+                    &mut i,
+                    "--jobs-synth",
+                )?)?);
             }
             "--max-fn-seconds"
-                if matches!(cmd, "decompile" | "decompile-all" | "decompile-project" | "decompile-graph") =>
+                if matches!(
+                    cmd,
+                    "decompile" | "decompile-all" | "decompile-project" | "decompile-graph"
+                ) =>
             {
                 let v = take(argv, &mut i, "--max-fn-seconds")?;
                 max_fn_seconds = Some(
@@ -3090,15 +3410,21 @@ pub(crate) fn parse_args_with_filters(
                 );
             }
             "--max-fn-memory"
-                if matches!(cmd, "decompile" | "decompile-all" | "decompile-project" | "decompile-graph") =>
+                if matches!(
+                    cmd,
+                    "decompile" | "decompile-all" | "decompile-project" | "decompile-graph"
+                ) =>
             {
-                max_fn_memory = Some(parse_max_fn_memory(&take(argv, &mut i, "--max-fn-memory")?)?);
+                max_fn_memory = Some(parse_max_fn_memory(&take(
+                    argv,
+                    &mut i,
+                    "--max-fn-memory",
+                )?)?);
             }
             "--filter" if triageable => {
                 let v = take(argv, &mut i, "--filter")?;
-                filters.name = Some(
-                    Regex::new(&v).map_err(|e| format!("invalid --filter regex {v:?}: {e}"))?,
-                );
+                filters.name =
+                    Some(Regex::new(&v).map_err(|e| format!("invalid --filter regex {v:?}: {e}"))?);
             }
             "--min-size" if triageable => {
                 let v = take(argv, &mut i, "--min-size")?;
@@ -3170,14 +3496,22 @@ pub(crate) fn parse_args_with_filters(
     let assertions = crate::assertdecl::with_types(&types, types_cpp.as_deref(), assertions)?;
     if filters.rust_signature_manifest.is_some() {
         if apply_rust_signatures.is_some() {
-            return Err("--rust-signature-manifest and --apply-rust-signatures are exclusive".into());
+            return Err(
+                "--rust-signature-manifest and --apply-rust-signatures are exclusive".into(),
+            );
         }
         if !filters.summary || !json {
             return Err("--rust-signature-manifest requires functions --summary --json".into());
         }
-        if raw_image || slice.is_some() || target.is_some() || isa.is_some()
-            || !assertions.is_empty() || !func_decls.is_empty()
-            || options.iter().any(|(name, _)| matches!(name.as_str(), "dyldimage" | "kernelcache"))
+        if raw_image
+            || slice.is_some()
+            || target.is_some()
+            || isa.is_some()
+            || !assertions.is_empty()
+            || !func_decls.is_empty()
+            || options
+                .iter()
+                .any(|(name, _)| matches!(name.as_str(), "dyldimage" | "kernelcache"))
         {
             return Err("--rust-signature-manifest requires an unmodified object image without raw, slice, target, ISA, image-selection, assertion, or function-definition overrides".into());
         }
@@ -3190,7 +3524,10 @@ pub(crate) fn parse_args_with_filters(
     }
 
     if raw_image {
-        if target.as_deref().is_none_or(|value| value.trim().is_empty()) {
+        if target
+            .as_deref()
+            .is_none_or(|value| value.trim().is_empty())
+        {
             return Err("--raw-image requires --target <SLEIGH-language-id>".into());
         }
         if base.is_none() {
@@ -3199,9 +3536,14 @@ pub(crate) fn parse_args_with_filters(
         if names.is_some() {
             return Err("--raw-image uses explicit --entry/--addr seeds, not --functions".into());
         }
-        let patterns_off = options.iter().any(|(name, value)| name == "funcstart_patterns" && value == "off");
+        let patterns_off = options
+            .iter()
+            .any(|(name, value)| name == "funcstart_patterns" && value == "off");
         if addrs.is_empty() && entry_seeds.is_empty() && patterns_off {
-            return Err("--raw-image with funcstart_patterns off requires at least one --entry or --addr".into());
+            return Err(
+                "--raw-image with funcstart_patterns off requires at least one --entry or --addr"
+                    .into(),
+            );
         }
         if addrs
             .iter()
@@ -3235,9 +3577,10 @@ pub(crate) fn parse_args_with_filters(
         && cmd != "decompile-project"
         && cmd != "decompile-graph"
         && crate::loadtime::explicit_output_language(&options).is_none()
-        && let Some(lang) = detected_output_language(&binary, &options) {
-            options.push(("setlanguage".into(), lang.into()));
-        }
+        && let Some(lang) = detected_output_language(&binary, &options)
+    {
+        options.push(("setlanguage".into(), lang.into()));
+    }
 
     let explicit_fast_funcdisc = options.iter().any(|(name, _)| name == "fast_funcdisc");
     // Omitted mode is the size-driven `auto` policy. Mode overrides are
@@ -3246,16 +3589,25 @@ pub(crate) fn parse_args_with_filters(
     // auto-inject skips, `apply_runtime_options`) reads `args.options`, so this
     // is the single wire point for decompile-all, decompile-project, and
     // functions.
-    let ResolvedMode { name: concrete_mode, options: merged } =
-        mode_and_options_for_binary(mode.as_deref(), &binary, options)?;
+    let ResolvedMode {
+        name: concrete_mode,
+        options: merged,
+    } = mode_and_options_for_binary(mode.as_deref(), &binary, options)?;
     options = merged;
-    if names.is_none() && !addrs.is_empty() && !explicit_fast_funcdisc && apply_rust_signatures.is_none() {
+    if names.is_none()
+        && !addrs.is_empty()
+        && !explicit_fast_funcdisc
+        && apply_rust_signatures.is_none()
+    {
         options.push(("fast_funcdisc".into(), "off".into()));
     }
     let whole_binary = batch && names.is_none() && addrs.is_empty();
-    let max_fn_seconds = max_fn_seconds
-        .unwrap_or_else(|| default_fn_budget_seconds(concrete_mode, whole_binary));
-    let decompiles = matches!(cmd, "decompile" | "decompile-all" | "decompile-project" | "decompile-graph");
+    let max_fn_seconds =
+        max_fn_seconds.unwrap_or_else(|| default_fn_budget_seconds(concrete_mode, whole_binary));
+    let decompiles = matches!(
+        cmd,
+        "decompile" | "decompile-all" | "decompile-project" | "decompile-graph"
+    );
     let max_fn_memory = if decompiles { max_fn_memory } else { Some(0) };
     // The pool re-execs this binary, so a policy it cannot express is one the
     // shards would silently drop rather than honour. Pool-only: on `functions`
@@ -3266,8 +3618,7 @@ pub(crate) fn parse_args_with_filters(
     if batch && jobs > 1 {
         if raw_image {
             return Err(
-                "--jobs does not apply to --raw-image input (the entry seeds are the load)"
-                    .into(),
+                "--jobs does not apply to --raw-image input (the entry seeds are the load)".into(),
             );
         }
         if !assertions.is_empty() {
@@ -3305,7 +3656,10 @@ pub(crate) fn parse_args_with_filters(
             );
         }
         // (kuna `calleereginputs custom`) Nor does the whole-image decision.
-        if options.iter().any(|(name, value)| name == "calleereginputs" && is_custom(value)) {
+        if options
+            .iter()
+            .any(|(name, value)| name == "calleereginputs" && is_custom(value))
+        {
             return Err(
                 "--option calleereginputs custom and --jobs are exclusive: whether a callee-saved \
                  register is an argument is decided over every caller and callee of the load, \
@@ -3316,45 +3670,46 @@ pub(crate) fn parse_args_with_filters(
     }
 
     if let (Some(min), Some(max)) = (filters.min_size, filters.max_size)
-        && min > max {
-            return Err(format!("--min-size {min} is greater than --max-size {max}"));
-        }
+        && min > max
+    {
+        return Err(format!("--min-size {min} is greater than --max-size {max}"));
+    }
 
     let args = Args {
-            binary,
-            apply_rust_signatures,
-            json,
-            names,
-            addrs,
-            entry_seeds,
-            no_vars,
-            omit,
-            max_fn_seconds,
-            max_fn_memory,
-            options,
-            func_decls,
-            assertions,
-            assert_strict,
-            slice,
-            target,
-            sleighpath,
-            isa,
-            raw_image,
-            base,
-            mode: concrete_mode,
-            jobs,
-            jobs_auto,
-            jobs_chunk,
-            jobs_full_load,
-            jobs_worker,
-            jobs_proto,
-            jobs_provenance,
-            jobs_types,
-            jobs_callees,
-            jobs_pointerargs,
-            jobs_synth,
-            jobs_objects,
-        };
+        binary,
+        apply_rust_signatures,
+        json,
+        names,
+        addrs,
+        entry_seeds,
+        no_vars,
+        omit,
+        max_fn_seconds,
+        max_fn_memory,
+        options,
+        func_decls,
+        assertions,
+        assert_strict,
+        slice,
+        target,
+        sleighpath,
+        isa,
+        raw_image,
+        base,
+        mode: concrete_mode,
+        jobs,
+        jobs_auto,
+        jobs_chunk,
+        jobs_full_load,
+        jobs_worker,
+        jobs_proto,
+        jobs_provenance,
+        jobs_types,
+        jobs_callees,
+        jobs_pointerargs,
+        jobs_synth,
+        jobs_objects,
+    };
     if args.apply_rust_signatures.is_some() {
         crate::rust_signatures::validate_application(&args)?;
     }
@@ -3367,10 +3722,12 @@ fn parse_count(v: &str, flag: &str) -> Result<u64, String> {
         .map_err(|_| format!("invalid {flag} value {v:?} (expected a non-negative integer)"))
 }
 
-
 fn parse_hex(s: &str) -> Result<u64, String> {
     let t = s.trim();
-    let body = t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")).unwrap_or(t);
+    let body = t
+        .strip_prefix("0x")
+        .or_else(|| t.strip_prefix("0X"))
+        .unwrap_or(t);
     u64::from_str_radix(body, 16).map_err(|_| format!("invalid address {s:?}"))
 }
 
@@ -3571,7 +3928,15 @@ mod discovery_tests {
         }
         // `.data`: SHT_PROGBITS, SHF_ALLOC|SHF_WRITE — allocated, never executed.
         shdr(&mut out, shoff + SHDR, 1, 1, 0x3, data_off as u64, 4);
-        shdr(&mut out, shoff + 2 * SHDR, 7, 3, 0, names_off as u64, names.len() as u64);
+        shdr(
+            &mut out,
+            shoff + 2 * SHDR,
+            7,
+            3,
+            0,
+            names_off as u64,
+            names.len() as u64,
+        );
         out
     }
 
@@ -3611,7 +3976,10 @@ mod discovery_tests {
         let message = zero_discovery_error(plain.to_str().unwrap())
             .expect("an executable image that yielded nothing is a failure");
         assert!(message.contains("no functions"), "{message}");
-        assert!(!message.contains("packed"), "no packer, no packer claim: {message}");
+        assert!(
+            !message.contains("packed"),
+            "no packer, no packer claim: {message}"
+        );
         std::fs::remove_file(plain).expect("remove the discovery fixture");
     }
 
@@ -3667,7 +4035,10 @@ mod discovery_tests {
         let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../unlace-analysis/tests/fixtures/aif_gap_x86_64");
         let bytes = std::fs::read(fixture).expect("the fixture is checked in");
-        assert!(matches!(classify_code_evidence(&bytes), CodeEvidence::Flagged));
+        assert!(matches!(
+            classify_code_evidence(&bytes),
+            CodeEvidence::Flagged
+        ));
         assert_eq!(detect_packer(&bytes), None);
     }
 
@@ -3675,8 +4046,15 @@ mod discovery_tests {
     /// reads it unconditionally rather than inferring failure from `count`.
     #[test]
     fn the_run_level_error_field_is_always_present() {
-        let healthy =
-            functions_json("fixture", &[], 0, None, None, &|address| address, &Default::default());
+        let healthy = functions_json(
+            "fixture",
+            &[],
+            0,
+            None,
+            None,
+            &|address| address,
+            &Default::default(),
+        );
         assert!(healthy.contains("\"error\": null"), "{healthy}");
         let failed = functions_json(
             "fixture",
@@ -3691,10 +4069,29 @@ mod discovery_tests {
             failed.contains("\"error\": \"no functions discovered in fixture\""),
             "{failed}"
         );
-        let decompiled = render_result_json("fixture", &[], &[], Some("boom"), &[], &Default::default(), &Default::default(), Default::default());
+        let decompiled = render_result_json(
+            "fixture",
+            &[],
+            &[],
+            Some("boom"),
+            &[],
+            &Default::default(),
+            &Default::default(),
+            Default::default(),
+        );
         assert!(decompiled.contains("\"error\": \"boom\""), "{decompiled}");
         assert!(
-            render_result_json("fixture", &[], &[], None, &[], &Default::default(), &Default::default(), Default::default()).contains("\"error\": null")
+            render_result_json(
+                "fixture",
+                &[],
+                &[],
+                None,
+                &[],
+                &Default::default(),
+                &Default::default(),
+                Default::default()
+            )
+            .contains("\"error\": null")
         );
     }
 
@@ -3706,13 +4103,61 @@ mod discovery_tests {
             ("setlanguage".into(), "rust-language".into()),
             ("setlanguage".into(), "c-language".into()),
         ];
-        assert!(render_result_json("f", &[], &options, None, &[], &Default::default(), &Default::default(), Default::default()).contains("\"c-language\""));
-        assert!(render_result_json("f", &[], &[], None, &[], &Default::default(), &Default::default(), Default::default()).contains("\"c-language\""));
+        assert!(
+            render_result_json(
+                "f",
+                &[],
+                &options,
+                None,
+                &[],
+                &Default::default(),
+                &Default::default(),
+                Default::default()
+            )
+            .contains("\"c-language\"")
+        );
+        assert!(
+            render_result_json(
+                "f",
+                &[],
+                &[],
+                None,
+                &[],
+                &Default::default(),
+                &Default::default(),
+                Default::default()
+            )
+            .contains("\"c-language\"")
+        );
         let mut aliases = options.clone();
         aliases.push(("outlang".into(), "go".into()));
-        assert!(render_result_json("f", &[], &aliases, None, &[], &Default::default(), &Default::default(), Default::default()).contains("\"go-language\""));
+        assert!(
+            render_result_json(
+                "f",
+                &[],
+                &aliases,
+                None,
+                &[],
+                &Default::default(),
+                &Default::default(),
+                Default::default()
+            )
+            .contains("\"go-language\"")
+        );
         aliases.push(("setlanguage".into(), "rust-language".into()));
-        assert!(render_result_json("f", &[], &aliases, None, &[], &Default::default(), &Default::default(), Default::default()).contains("\"rust-language\""));
+        assert!(
+            render_result_json(
+                "f",
+                &[],
+                &aliases,
+                None,
+                &[],
+                &Default::default(),
+                &Default::default(),
+                Default::default()
+            )
+            .contains("\"rust-language\"")
+        );
     }
 }
 
@@ -3725,10 +4170,8 @@ mod mode_tests {
 
     fn sparse_binary(size: u64) -> std::path::PathBuf {
         let id = TEMP_ID.fetch_add(1, Ordering::Relaxed);
-        let path = std::env::temp_dir().join(format!(
-            "kuna-auto-mode-{}-{id}.bin",
-            std::process::id()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("kuna-auto-mode-{}-{id}.bin", std::process::id()));
         let file = std::fs::File::create(&path).expect("create auto-mode fixture");
         file.set_len(size).expect("size auto-mode fixture");
         path
@@ -3753,10 +4196,8 @@ mod mode_tests {
 
     #[test]
     fn explicit_concrete_mode_ignores_binary_metadata() {
-        let missing = std::env::temp_dir().join(format!(
-            "kuna-auto-mode-missing-{}.bin",
-            std::process::id()
-        ));
+        let missing =
+            std::env::temp_dir().join(format!("kuna-auto-mode-missing-{}.bin", std::process::id()));
         let options =
             mode_options_for_binary(Some("fast"), missing.to_str().unwrap(), Vec::new()).unwrap();
         assert_eq!(options, mode_override_pairs("fast").unwrap());
@@ -3789,20 +4230,18 @@ mod mode_tests {
     fn shared_surfaces_parse_arm_isa_override() {
         let path = sparse_binary(1);
         let binary = path.to_string_lossy().into_owned();
-        for cmd in ["decompile-all", "decompile-project", "decompile-graph", "functions"] {
-            let args = parse_args(
-                &[binary.clone(), "--isa".into(), "thumb".into()],
-                cmd,
-            )
-            .unwrap();
+        for cmd in [
+            "decompile-all",
+            "decompile-project",
+            "decompile-graph",
+            "functions",
+        ] {
+            let args = parse_args(&[binary.clone(), "--isa".into(), "thumb".into()], cmd).unwrap();
             assert_eq!(args.isa, Some(ArmIsa::Thumb), "{cmd}");
         }
-        let error = parse_args(
-            &[binary, "--isa".into(), "mixed".into()],
-            "functions",
-        )
-        .err()
-        .expect("invalid ISA must fail");
+        let error = parse_args(&[binary, "--isa".into(), "mixed".into()], "functions")
+            .err()
+            .expect("invalid ISA must fail");
         assert!(error.contains("expected auto, arm, or thumb"));
         std::fs::remove_file(path).expect("remove auto-mode fixture");
     }
@@ -3982,8 +4421,8 @@ mod triage_tests {
     /// triage parse needs a real path — the bytes are never looked at.
     fn sparse_binary() -> std::path::PathBuf {
         let id = TEMP_ID.fetch_add(1, Ordering::Relaxed);
-        let path = std::env::temp_dir()
-            .join(format!("kuna-triage-{}-{id}.bin", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("kuna-triage-{}-{id}.bin", std::process::id()));
         std::fs::File::create(&path)
             .expect("create triage fixture")
             .set_len(1024)
@@ -4020,16 +4459,30 @@ mod triage_tests {
 
     #[test]
     fn rust_signature_application_keeps_discovery_independent_of_selection() {
-        let common = ["--mode", "reliable", "--apply-rust-signatures", "trusted.json"];
+        let common = [
+            "--mode",
+            "reliable",
+            "--apply-rust-signatures",
+            "trusted.json",
+        ];
         let (inventory, _) = parse("functions", &common).unwrap();
         let flags: Vec<_> = common.into_iter().chain(["--addr", "0x1000"]).collect();
         let (addressed, _) = parse("decompile", &flags).unwrap();
         assert_eq!(inventory.options, addressed.options);
-        assert_eq!(addressed.apply_rust_signatures.as_deref(), Some("trusted.json"));
+        assert_eq!(
+            addressed.apply_rust_signatures.as_deref(),
+            Some("trusted.json")
+        );
         for extra in [
-            vec!["--jobs", "2"], vec!["--jobs", "auto"],
+            vec!["--jobs", "2"],
+            vec!["--jobs", "auto"],
             vec!["--apply-rust-signatures", "second.json"],
-            vec!["--summary", "--json", "--rust-signature-manifest", "report.json"],
+            vec![
+                "--summary",
+                "--json",
+                "--rust-signature-manifest",
+                "report.json",
+            ],
             vec!["--assert", "bytes 0x1000 90"],
         ] {
             let flags: Vec<_> = common.into_iter().chain(extra).collect();
@@ -4042,10 +4495,23 @@ mod triage_tests {
 
     #[test]
     fn rust_signature_manifest_requires_the_unmodified_json_summary_surface() {
-        let valid = ["--summary", "--json", "--rust-signature-manifest", "manifest.json"];
+        let valid = [
+            "--summary",
+            "--json",
+            "--rust-signature-manifest",
+            "manifest.json",
+        ];
         let (_, filters) = parse("functions", &valid).unwrap();
-        assert_eq!(filters.rust_signature_manifest.as_deref(), Some("manifest.json"));
-        for cmd in ["decompile-all", "decompile-project", "decompile-graph", "decompile"] {
+        assert_eq!(
+            filters.rust_signature_manifest.as_deref(),
+            Some("manifest.json")
+        );
+        for cmd in [
+            "decompile-all",
+            "decompile-project",
+            "decompile-graph",
+            "decompile",
+        ] {
             assert!(parse(cmd, &valid).is_err(), "{cmd}");
         }
         for flags in [
@@ -4053,7 +4519,9 @@ mod triage_tests {
             vec!["--summary", "--rust-signature-manifest", "manifest.json"],
             vec!["--json", "--rust-signature-manifest", "manifest.json"],
         ] {
-            assert!(err(parse("functions", &flags)).contains("requires functions --summary --json"));
+            assert!(
+                err(parse("functions", &flags)).contains("requires functions --summary --json")
+            );
         }
         for extra in [
             vec!["--rust-signature-manifest", "second.json"],
@@ -4095,17 +4563,26 @@ mod triage_tests {
             let (_, filters) = parse(
                 cmd,
                 &[
-                    "--filter", "^auth",
-                    "--min-size", "16",
-                    "--max-size", "256",
-                    "--reachable-from", "0x1000",
-                    "--sort", "size",
-                    "--limit", "4",
+                    "--filter",
+                    "^auth",
+                    "--min-size",
+                    "16",
+                    "--max-size",
+                    "256",
+                    "--reachable-from",
+                    "0x1000",
+                    "--sort",
+                    "size",
+                    "--limit",
+                    "4",
                     "--summary",
                 ],
             )
             .unwrap_or_else(|e| panic!("{cmd}: {e}"));
-            assert!(filters.name.as_ref().unwrap().is_match("authenticate"), "{cmd}");
+            assert!(
+                filters.name.as_ref().unwrap().is_match("authenticate"),
+                "{cmd}"
+            );
             assert!(!filters.name.as_ref().unwrap().is_match("deauth"), "{cmd}");
             assert_eq!(filters.min_size, Some(16), "{cmd}");
             assert_eq!(filters.max_size, Some(256), "{cmd}");
@@ -4140,11 +4617,27 @@ mod triage_tests {
     /// falls in no bucket would silently vanish from the summary.
     #[test]
     fn the_size_buckets_partition_every_extent() {
-        for size in [0u64, 1, 15, 16, 63, 64, 255, 256, 1023, 1024, 4095, 4096, u64::MAX] {
-            let hits = SIZE_BUCKETS.iter().filter(|(_, lo, hi)| size >= *lo && size <= *hi).count();
+        for size in [
+            0u64,
+            1,
+            15,
+            16,
+            63,
+            64,
+            255,
+            256,
+            1023,
+            1024,
+            4095,
+            4096,
+            u64::MAX,
+        ] {
+            let hits = SIZE_BUCKETS
+                .iter()
+                .filter(|(_, lo, hi)| size >= *lo && size <= *hi)
+                .count();
             assert_eq!(hits, 1, "size {size} lands in {hits} buckets");
         }
         assert_eq!(DEFAULT_SUMMARY_LARGEST, 10);
     }
-
 }

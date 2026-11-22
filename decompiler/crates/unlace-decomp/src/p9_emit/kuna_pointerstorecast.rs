@@ -1,10 +1,10 @@
 //! Pointer and integer storage members require explicit C representation conversions.
 
 use crate::context::OpId;
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use unlace_num::opcodes::OpCode;
 use std::rc::Rc;
+use unlace_num::opcodes::OpCode;
 
 pub(super) fn target(
     fd: &Funcdata,
@@ -37,13 +37,12 @@ pub(super) fn target(
     }
     if operation.code() == OpCode::CPUI_COPY
         && source.get_metatype() == type_metatype::TYPE_PTR
-        && crate::printc::declared_variable_type(fd, input)
-            .is_some_and(|declared| {
-                matches!(
-                    declared.get_metatype(),
-                    type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN
-                ) && declared.get_size() == source.get_size()
-            })
+        && crate::printc::declared_variable_type(fd, input).is_some_and(|declared| {
+            matches!(
+                declared.get_metatype(),
+                type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN
+            ) && declared.get_size() == source.get_size()
+        })
     {
         return None;
     }

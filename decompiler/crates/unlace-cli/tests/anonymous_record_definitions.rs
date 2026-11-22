@@ -2,22 +2,34 @@
 #![cfg(target_os = "linux")]
 use crate::common;
 use common::process;
-use unlace_console::grammar::{parse_c, DataOrg};
-use unlace_decomp::dtype::{type_metatype as Meta, Datatype, TypeFactory, TypeFactoryImpl};
-use unlace_decomp::kuna_langtypes::SpellCtx;
 use std::{collections::HashSet, process::Command, rc::Rc};
+use unlace_console::grammar::{DataOrg, parse_c};
+use unlace_decomp::dtype::{Datatype, TypeFactory, TypeFactoryImpl, type_metatype as Meta};
+use unlace_decomp::kuna_langtypes::SpellCtx;
 
 #[test]
 fn nested_anonymous_members_compile() {
-    check("typedef struct Envelope {struct {uint4 first;uint4 second;} nested;union {uint4 word;float4 value;} choice;} Envelope;","Envelope","Envelope e={0};e.nested.first=7;e.nested.second=11;e.choice.word=0x3f800000;return e.nested.first+e.nested.second==18&&e.choice.value==1.0f?0:1;");
+    check(
+        "typedef struct Envelope {struct {uint4 first;uint4 second;} nested;union {uint4 word;float4 value;} choice;} Envelope;",
+        "Envelope",
+        "Envelope e={0};e.nested.first=7;e.nested.second=11;e.choice.word=0x3f800000;return e.nested.first+e.nested.second==18&&e.choice.value==1.0f?0:1;",
+    );
 }
 #[test]
 fn shared_anonymous_members_keep_one_type() {
-    check("typedef struct Pair {struct {uint4 value;} first,second;} Pair;","Pair","_Static_assert(__builtin_types_compatible_p(__typeof__(((Pair*)0)->first),__typeof__(((Pair*)0)->second)),\"shared type\");Pair p={0};p.first.value=19;p.second=p.first;return p.second.value==19?0:1;");
+    check(
+        "typedef struct Pair {struct {uint4 value;} first,second;} Pair;",
+        "Pair",
+        "_Static_assert(__builtin_types_compatible_p(__typeof__(((Pair*)0)->first),__typeof__(((Pair*)0)->second)),\"shared type\");Pair p={0};p.first.value=19;p.second=p.first;return p.second.value==19?0:1;",
+    );
 }
 #[test]
 fn distinct_anonymous_members_keep_distinct_types() {
-    check("typedef struct Split {struct {uint4 value;} first;struct {uint4 value;} second;} Split;","Split","_Static_assert(!__builtin_types_compatible_p(__typeof__(((Split*)0)->first),__typeof__(((Split*)0)->second)),\"distinct types\");Split p={0};p.first.value=17;p.second.value=23;return p.first.value+p.second.value==40?0:1;");
+    check(
+        "typedef struct Split {struct {uint4 value;} first;struct {uint4 value;} second;} Split;",
+        "Split",
+        "_Static_assert(!__builtin_types_compatible_p(__typeof__(((Split*)0)->first),__typeof__(((Split*)0)->second)),\"distinct types\");Split p={0};p.first.value=17;p.second.value=23;return p.first.value+p.second.value==40?0:1;",
+    );
 }
 #[test]
 fn anonymous_union_typedef_compiles() {
@@ -163,7 +175,9 @@ fn check(declaration: &str, name: &str, body: &str) {
     )
     .unwrap();
     let ty = f.find_by_name(name).unwrap().unwrap();
-    let mut text=String::from("typedef unsigned int uint4;typedef float float4;typedef unsigned int undefined4;typedef unsigned long long undefined8;\n");
+    let mut text = String::from(
+        "typedef unsigned int uint4;typedef float float4;typedef unsigned int undefined4;typedef unsigned long long undefined8;\n",
+    );
     definitions(&ty, &mut HashSet::new(), &mut text);
     text.push_str(&format!("\nint main(void){{{body}}}\n"));
     println!("{text}");

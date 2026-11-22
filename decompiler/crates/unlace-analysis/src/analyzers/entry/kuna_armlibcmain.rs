@@ -118,7 +118,10 @@ pub(super) fn main_vma(file: &object::File, bytes: &[u8]) -> Option<u64> {
     if vma == entry || !in_executable_section(&executable_sections(file), vma) {
         return None;
     }
-    if existing_function_addrs(file, bytes).binary_search(&vma).is_ok() {
+    if existing_function_addrs(file, bytes)
+        .binary_search(&vma)
+        .is_ok()
+    {
         return None;
     }
     Some(vma)
@@ -135,8 +138,10 @@ fn decode_window(file: &object::File, entry: u64, window: &[u8], stub: u64) -> O
         let addr = entry + off as u64;
         let insn = super::read_u32(&window[off..], le);
         if let Some(pool_vma) = ldr_literal(insn, addr, 0) {
-            let next =
-                window.get(off + 4..off + 8).map(|b| super::read_u32(b, le)).unwrap_or(0);
+            let next = window
+                .get(off + 4..off + 8)
+                .map(|b| super::read_u32(b, le))
+                .unwrap_or(0);
             pool = Some((pool_vma, next));
         } else if bl_target(insn, addr) == Some(stub) {
             let (pool_vma, next) = pool?;
@@ -175,7 +180,11 @@ fn ldr_literal(insn: u32, addr: u64, rt: u32) -> Option<u64> {
     };
     let imm = (insn & 0xFFF) as u64;
     let pc = addr.wrapping_add(8);
-    Some(if up { pc.wrapping_add(imm) } else { pc.wrapping_sub(imm) })
+    Some(if up {
+        pc.wrapping_add(imm)
+    } else {
+        pc.wrapping_sub(imm)
+    })
 }
 
 /// `ldr r0,[rN,rM]` (A32 register-offset load into `r0`): `cond 011 P U 0 W 1
@@ -240,7 +249,11 @@ mod tests {
     fn defers_to_the_pie_and_static_arm_shapes() {
         assert_eq!(claim("entrymain_arm"), None, "PIE crt1 is oracle 4's own");
         assert_eq!(claim("poolref_arm_le32"), None, "no PLT stub to anchor on");
-        assert_eq!(claim("arm_thumb_linked_le32"), None, "static, and already named");
+        assert_eq!(
+            claim("arm_thumb_linked_le32"),
+            None,
+            "static, and already named"
+        );
     }
 
     /// Structurally inert off 32-bit ARM ELF, which is why no parity assertion

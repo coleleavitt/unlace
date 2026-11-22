@@ -34,7 +34,10 @@ const ZSTD: &str = "28b52ffd6480000d0200b2430d11903d0650fa43e90fa5cffff7d5e3f9af
 
 fn unhex(s: &str) -> Vec<u8> {
     let digits: Vec<u8> = s.bytes().filter(u8::is_ascii_hexdigit).collect();
-    digits.chunks(2).map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap()).collect()
+    digits
+        .chunks(2)
+        .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
+        .collect()
 }
 
 fn png_chunk(kind: &[u8; 4], data: &[u8]) -> Vec<u8> {
@@ -48,7 +51,12 @@ fn png_chunk(kind: &[u8; 4], data: &[u8]) -> Vec<u8> {
 fn png_file(with_end: bool) -> Vec<u8> {
     let mut out = b"\x89PNG\r\n\x1a\n".to_vec();
     out.extend(png_chunk(b"IHDR", &[0, 0, 0, 1, 0, 0, 0, 1, 8, 2, 0, 0, 0]));
-    out.extend(png_chunk(b"IDAT", &[0x78, 0x9c, 0x63, 0xf8, 0xcf, 0xc0, 0x00, 0x00, 0x03, 0x01, 0x01, 0x00]));
+    out.extend(png_chunk(
+        b"IDAT",
+        &[
+            0x78, 0x9c, 0x63, 0xf8, 0xcf, 0xc0, 0x00, 0x00, 0x03, 0x01, 0x01, 0x00,
+        ],
+    ));
     if with_end {
         out.extend(png_chunk(b"IEND", &[]));
     }
@@ -98,7 +106,15 @@ fn padded(file: &[u8]) -> Vec<u8> {
 fn every_kind_is_found_at_its_exact_length() {
     for (kind, file) in samples() {
         let found = scan(&padded(&file));
-        assert_eq!(found, [Blob { offset: 8, len: file.len(), kind }], "{kind:?}");
+        assert_eq!(
+            found,
+            [Blob {
+                offset: 8,
+                len: file.len(),
+                kind
+            }],
+            "{kind:?}"
+        );
     }
 }
 
@@ -107,7 +123,10 @@ fn a_truncated_file_is_not_a_blob() {
     for (kind, file) in samples() {
         for cut in [1, file.len() / 2] {
             let found = scan(&file[..file.len() - cut]);
-            assert!(found.iter().all(|b| b.kind != kind), "{kind:?} cut by {cut}: {found:?}");
+            assert!(
+                found.iter().all(|b| b.kind != kind),
+                "{kind:?} cut by {cut}: {found:?}"
+            );
         }
     }
     assert_eq!(scan(&padded(&png_file(false))), []);
@@ -129,7 +148,11 @@ fn files_side_by_side_are_reported_in_order_and_disjoint() {
     let mut want = Vec::new();
     for (kind, file) in samples() {
         data.extend_from_slice(b"--");
-        want.push(Blob { offset: data.len(), len: file.len(), kind });
+        want.push(Blob {
+            offset: data.len(),
+            len: file.len(),
+            kind,
+        });
         data.extend_from_slice(&file);
     }
     assert_eq!(scan(&data), want);
@@ -138,7 +161,14 @@ fn files_side_by_side_are_reported_in_order_and_disjoint() {
 #[test]
 fn a_file_inside_another_is_reported_once() {
     let icon = ico_file(&png_file(true));
-    assert_eq!(scan(&padded(&icon)), [Blob { offset: 8, len: icon.len(), kind: BlobKind::Ico }]);
+    assert_eq!(
+        scan(&padded(&icon)),
+        [Blob {
+            offset: 8,
+            len: icon.len(),
+            kind: BlobKind::Ico
+        }]
+    );
 }
 
 #[test]

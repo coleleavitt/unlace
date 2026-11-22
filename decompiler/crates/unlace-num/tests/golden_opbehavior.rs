@@ -21,8 +21,8 @@ use std::rc::Rc;
 
 use unlace_base::address::calc_mask;
 use unlace_num::float::FloatFormat;
-use unlace_num::opbehavior::{register_instructions, FloatFormatProvider, OpBehavior};
-use unlace_num::opcodes::{get_opname, OpCode};
+use unlace_num::opbehavior::{FloatFormatProvider, OpBehavior, register_instructions};
+use unlace_num::opcodes::{OpCode, get_opname};
 
 /// The sizes (in bytes) every vector matrix iterates over, in fixed order
 const GOLDEN_SIZES: [i32; 4] = [1, 2, 4, 8];
@@ -63,9 +63,9 @@ fn golden_inputs(size: i32) -> Vec<u64> {
         0,
         1,
         2,
-        mask >> 1,            // sign bit - 1 (max signed)
-        (mask >> 1) + 1,      // sign bit (min signed)
-        mask,                 // all ones for size
+        mask >> 1,                     // sign bit - 1 (max signed)
+        (mask >> 1) + 1,               // sign bit (min signed)
+        mask,                          // all ones for size
         0xdeadbeefdeadbeef_u64 & mask, // fixed odd constant 1
         0x123456789abcdef1_u64 & mask, // fixed odd constant 2
     ]
@@ -88,7 +88,13 @@ fn golden_eval_unary(beh: &dyn OpBehavior, sizeout: i32, sizein: i32, in0: u64) 
 /// emitted.  Likewise SPULL is short-circuited to "ERR" in C++ (the throw
 /// path would read past the stale name table); the Rust evaluation must
 /// error.
-fn golden_eval_binary(beh: &dyn OpBehavior, sizeout: i32, sizein: i32, in0: u64, in1: u64) -> String {
+fn golden_eval_binary(
+    beh: &dyn OpBehavior,
+    sizeout: i32,
+    sizein: i32,
+    in0: u64,
+    in1: u64,
+) -> String {
     let opc = beh.get_opcode();
     if (opc == OpCode::CPUI_INT_SDIV || opc == OpCode::CPUI_INT_SREM)
         && sizein == 8
@@ -118,8 +124,10 @@ fn golden_eval_binary(beh: &dyn OpBehavior, sizeout: i32, sizein: i32, in0: u64,
 /// Transcription of IfcKunaGoldenOpbehavior::execute, producing the CSV
 /// lines (including the three header comments).
 fn generate_lines() -> Vec<String> {
-    let trans: Rc<dyn FloatFormatProvider> =
-        Rc::new(DefaultFloatFormats { fmt4: FloatFormat::new(4), fmt8: FloatFormat::new(8) });
+    let trans: Rc<dyn FloatFormatProvider> = Rc::new(DefaultFloatFormats {
+        fmt4: FloatFormat::new(4),
+        fmt8: FloatFormat::new(8),
+    });
     let mut inst: Vec<Option<Rc<dyn OpBehavior>>> = Vec::new();
     register_instructions(&mut inst, &trans);
 
@@ -215,7 +223,9 @@ fn golden_opbehavior_vectors() {
     assert_eq!(expected.len(), 20227);
 
     // Byte-for-byte: the generator writes '\n' after every line.
-    let regenerated: String =
-        expected.iter().map(|l| format!("{l}\n")).collect();
-    assert_eq!(regenerated, data, "regenerated vector text is not byte-identical");
+    let regenerated: String = expected.iter().map(|l| format!("{l}\n")).collect();
+    assert_eq!(
+        regenerated, data,
+        "regenerated vector text is not byte-identical"
+    );
 }

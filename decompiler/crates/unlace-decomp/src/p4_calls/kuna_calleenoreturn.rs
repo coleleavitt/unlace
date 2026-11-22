@@ -20,7 +20,10 @@ pub(crate) fn is_no_return(arch: &Architecture, entry: &Address) -> bool {
         {
             return true;
         }
-        if arch.go_bounds && arch.source_lang().is_go() && crate::kuna_gobounds::is_go_check_name(name) {
+        if arch.go_bounds
+            && arch.source_lang().is_go()
+            && crate::kuna_gobounds::is_go_check_name(name)
+        {
             return true;
         }
         if arch.strip_security_check && crate::kuna_securitycheck::is_security_check_name(name) {
@@ -44,8 +47,15 @@ pub(crate) fn is_no_return(arch: &Architecture, entry: &Address) -> bool {
 /// Under `noreturn_known`, a direct call at `call` (falling through to
 /// `fallthrough`) to a `<prefix>__<entry>` proxy stub is no-return when it is the
 /// last instruction of its sized function (`kuna_noreturn_externmatch.rs`).
-pub(crate) fn is_proxy_no_return_at(arch: &Architecture, entry: &Address, call: &Address, fallthrough: &Address) -> bool {
-    use crate::kuna_noreturn_externmatch::{call_ends_function, is_proxy_noreturn_name, is_stub_body};
+pub(crate) fn is_proxy_no_return_at(
+    arch: &Architecture,
+    entry: &Address,
+    call: &Address,
+    fallthrough: &Address,
+) -> bool {
+    use crate::kuna_noreturn_externmatch::{
+        call_ends_function, is_proxy_noreturn_name, is_stub_body,
+    };
     arch.analysis_noreturn_known
         && call_ends_function(arch, call, fallthrough)
         && arch

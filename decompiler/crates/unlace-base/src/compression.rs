@@ -63,7 +63,11 @@ impl Compress {
             // mixed signed/unsigned: zlib takes the level as int; valid
             // nonnegative levels fit u32 exactly
             0..=9 => flate2::Compression::new(level as u32),
-            _ => return Err(KunaError::lowlevel("Could not initialize deflate stream state")),
+            _ => {
+                return Err(KunaError::lowlevel(
+                    "Could not initialize deflate stream state",
+                ));
+            }
         };
         Ok(Compress {
             // true: emit the zlib header/trailer, as C++ deflateInit does
@@ -98,10 +102,18 @@ impl Compress {
     /// (no progress possible) is not an error there and maps to
     /// `Status::BufError` here, also not an error.
     pub fn deflate(&mut self, buffer: &mut [u8], finish: bool) -> KunaResult<i32> {
-        let flush = if finish { FlushCompress::Finish } else { FlushCompress::None };
+        let flush = if finish {
+            FlushCompress::Finish
+        } else {
+            FlushCompress::None
+        };
         let before_in = self.comp_stream.total_in();
         let before_out = self.comp_stream.total_out();
-        if self.comp_stream.compress(&self.in_buf[self.in_pos..], buffer, flush).is_err() {
+        if self
+            .comp_stream
+            .compress(&self.in_buf[self.in_pos..], buffer, flush)
+            .is_err()
+        {
             return Err(KunaError::lowlevel("Error compressing stream"));
         }
         self.in_pos += (self.comp_stream.total_in() - before_in) as usize;
@@ -175,8 +187,11 @@ impl Decompress {
         let before_in = self.comp_stream.total_in();
         let before_out = self.comp_stream.total_out();
         // C++ passes Z_NO_FLUSH
-        match self.comp_stream.decompress(&self.in_buf[self.in_pos..], buffer, FlushDecompress::None)
-        {
+        match self.comp_stream.decompress(
+            &self.in_buf[self.in_pos..],
+            buffer,
+            FlushDecompress::None,
+        ) {
             Err(_) => Err(KunaError::lowlevel("Error decompressing stream")),
             Ok(status) => {
                 self.in_pos += (self.comp_stream.total_in() - before_in) as usize;
@@ -256,7 +271,8 @@ impl<W: Write> CompressBuffer<W> {
                 .compressor
                 .deflate(&mut self.out_buffer, last_buffer)
                 .map_err(std::io::Error::other)? as usize;
-            self.out_stream.write_all(&self.out_buffer[..OUT_BUFFER_SIZE - out_avail])?;
+            self.out_stream
+                .write_all(&self.out_buffer[..OUT_BUFFER_SIZE - out_avail])?;
             if out_avail != 0 {
                 break;
             }
@@ -282,7 +298,8 @@ impl<W: Write> Write for CompressBuffer<W> {
                 self.flush_input(false)?;
             }
             let take = (IN_BUFFER_SIZE - self.in_buffer.len()).min(buf.len() - written);
-            self.in_buffer.extend_from_slice(&buf[written..written + take]);
+            self.in_buffer
+                .extend_from_slice(&buf[written..written + take]);
             written += take;
         }
         Ok(buf.len())

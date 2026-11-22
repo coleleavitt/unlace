@@ -33,15 +33,15 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, IopSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, IopSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::{int4, uint4};
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
+use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::op::pcodeop_flags;
-use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
 
 // ---------------------------------------------------------------------------
 // Public-API scaffolding (mirrors tests/verify_w3_ir_funcdata_op.rs)
@@ -50,7 +50,8 @@ use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(IopSpace::new(2))).unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
@@ -84,7 +85,12 @@ fn const_space(fd: &Funcdata) -> Rc<AddrSpace> {
 }
 
 fn unique_space(fd: &Funcdata) -> Rc<AddrSpace> {
-    Rc::clone(fd.get_arch().manage().get_space_by_name(UniqueSpace::NAME).unwrap())
+    Rc::clone(
+        fd.get_arch()
+            .manage()
+            .get_space_by_name(UniqueSpace::NAME)
+            .unwrap(),
+    )
 }
 
 fn opcode_flags(opc: OpCode) -> uint4 {
@@ -196,7 +202,10 @@ fn w4x_flow_linkage_new_varnode_out_does_not_clobber_free_at_same_address() {
     let out = fd.new_varnode_out(4, &oaddr, def_op).unwrap();
 
     // The new output is a DISTINCT (written) Varnode from the free `pre`.
-    assert_ne!(out, pre, "the written output is a separate Varnode from the free one");
+    assert_ne!(
+        out, pre,
+        "the written output is a separate Varnode from the free one"
+    );
     assert_eq!(fd.obank().get(def_op).unwrap().get_out(), Some(out));
     assert_eq!(fd.vbank().get(out).unwrap().get_def(), Some(def_op));
     // The consumer STILL reads the original free Varnode — it was NOT repointed
@@ -207,7 +216,11 @@ fn w4x_flow_linkage_new_varnode_out_does_not_clobber_free_at_same_address() {
         "consumer still reads the free Varnode (no clobber across flag classes)"
     );
     // Both Varnodes coexist in the bank.
-    assert_eq!(fd.num_varnodes(), 2, "free input and written output both live");
+    assert_eq!(
+        fd.num_varnodes(),
+        2,
+        "free input and written output both live"
+    );
 }
 
 // ===========================================================================
@@ -226,7 +239,10 @@ fn w4x_flow_linkage_new_unique_out_allocates_unique_and_links_def() {
 
     // Both are in the unique space, defined by their ops.
     let va = fd.vbank().get(a).unwrap();
-    assert!(Rc::ptr_eq(va.get_space(), &uniq), "newUniqueOut lands in the unique space");
+    assert!(
+        Rc::ptr_eq(va.get_space(), &uniq),
+        "newUniqueOut lands in the unique space"
+    );
     assert_eq!(va.get_size(), 4);
     assert_eq!(va.get_def(), Some(op0));
     assert_eq!(fd.obank().get(op0).unwrap().get_out(), Some(a));
@@ -241,7 +257,11 @@ fn w4x_flow_linkage_new_unique_out_allocates_unique_and_links_def() {
     // `uniqid += s`), so `b`'s offset == `a`'s offset + 4.
     let oa = fd.vbank().get(a).unwrap().get_offset();
     let ob = fd.vbank().get(b).unwrap().get_offset();
-    assert_eq!(ob, oa + 4, "the unique offset advances by the prior allocation's size");
+    assert_eq!(
+        ob,
+        oa + 4,
+        "the unique offset advances by the prior allocation's size"
+    );
 }
 
 // ===========================================================================
@@ -258,10 +278,17 @@ fn w4x_flow_linkage_new_code_ref_is_size1_annotation_at_target() {
     // is the only thing the branch input / flow following needs.
     assert_eq!(v.get_size(), 1, "newCodeRef Varnode is size 1");
     assert!(Rc::ptr_eq(v.get_space(), &ram_space(&fd)));
-    assert_eq!(v.get_offset(), 0x2040, "annotation sits AT the branch destination");
+    assert_eq!(
+        v.get_offset(),
+        0x2040,
+        "annotation sits AT the branch destination"
+    );
     // LOSS-077 RESTORED: `Varnode::annotation` is now set (newCodeRef wires the
     // `pub(crate)` set_annotation sliver, matching the C++ setFlags(annotation)).
-    assert!(v.is_annotation(), "the code-ref Varnode carries the annotation flag");
+    assert!(
+        v.is_annotation(),
+        "the code-ref Varnode carries the annotation flag"
+    );
     // An annotation Varnode is otherwise free (no def, no readers).
     assert!(v.is_free(), "the code-ref annotation is a free Varnode");
     assert!(!v.is_input(), "the code-ref annotation is not an input");
@@ -282,7 +309,10 @@ fn w4x_flow_linkage_dump_branch_links_coderef_input_at_target() {
 
     // op = newOp(1, addr); opSetOpcode(op, BRANCH)  -- BRANCH is a coderef op.
     let op = mk_op(&mut fd, 1, 0x1000, OpCode::CPUI_BRANCH);
-    assert!(fd.obank().get(op).unwrap().is_code_ref(), "BRANCH carries the coderef flag");
+    assert!(
+        fd.obank().get(op).unwrap().is_code_ref(),
+        "BRANCH carries the coderef flag"
+    );
 
     // dump's coderef arm: addrcode(vars[0].space, vars[0].offset); cref =
     // newCodeRef(addrcode); opSetInput(op, cref, 0).
@@ -353,8 +383,15 @@ fn w4x_flow_linkage_dump_constant_space_input_is_plain_constant_varnode() {
     fd.op_set_input(op, vn_sp, 0).unwrap();
 
     let v = fd.vbank().get(vn_sp).unwrap();
-    assert!(v.is_constant(), "the spaceid operand is a constant-space Varnode");
-    assert_eq!(v.get_offset(), 3, "its offset is the encoded space index (LOSS-015)");
+    assert!(
+        v.is_constant(),
+        "the spaceid operand is a constant-space Varnode"
+    );
+    assert_eq!(
+        v.get_offset(),
+        3,
+        "its offset is the encoded space index (LOSS-015)"
+    );
     assert_eq!(v.get_size(), 8);
     assert_eq!(fd.obank().get(op).unwrap().get_in(0), Some(vn_sp));
 }
@@ -389,7 +426,10 @@ fn w4x_flow_linkage_set_input_varnode_formalizes_and_dedups() {
     // and returns the pre-existing input (the candidate is discarded for it).
     let f2 = fd.new_varnode_space_off(4, Rc::clone(&ram), 0x500);
     let in2 = fd.set_input_varnode(f2).unwrap();
-    assert_eq!(in2, in1, "identical candidate dedups onto the existing input");
+    assert_eq!(
+        in2, in1,
+        "identical candidate dedups onto the existing input"
+    );
 }
 
 // A compile-time anchor that the emitter's VarnodeData shape is the one dump

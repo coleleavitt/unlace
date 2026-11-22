@@ -2,22 +2,22 @@
 
 mod args;
 mod armember;
+mod assertdecl;
 mod blobs;
 mod callgraph;
 mod catalog;
 mod crypto;
 mod cryptosig;
 mod decompile;
-mod docs;
 mod decompile_all;
-mod decompile_project;
 mod decompile_graph;
+mod decompile_project;
 mod disassemble;
+mod docs;
 mod embedded_specs;
 mod fid;
 mod flirt;
 mod followimages;
-mod assertdecl;
 mod funcdecl;
 mod function_info;
 mod image;
@@ -81,7 +81,9 @@ fn main() -> ExitCode {
     }
     let sub = args[1].as_str();
     match sub {
-        paths::DECOMP_DBG_SUBCOMMAND => return unlace_console::consolemain::main(args[1..].to_vec()),
+        paths::DECOMP_DBG_SUBCOMMAND => {
+            return unlace_console::consolemain::main(args[1..].to_vec());
+        }
         paths::SLACOMP_SUBCOMMAND => return unlace_slacomp::slacompmain::main(args[1..].to_vec()),
         _ => {}
     }
@@ -147,7 +149,11 @@ fn main() -> ExitCode {
 }
 
 fn usage() {
-    let names = COMMANDS.iter().map(|(name, _)| *name).collect::<Vec<_>>().join("|");
+    let names = COMMANDS
+        .iter()
+        .map(|(name, _)| *name)
+        .collect::<Vec<_>>()
+        .join("|");
     eprintln!(
         "usage: unlace <{names}> ...\n\
          \n\
@@ -317,12 +323,16 @@ fn cmd_catalog(argv: &[String]) -> Result<i32, String> {
             "--engine" => engine = Some(take_value(argv, &mut i, "--engine")?),
             "--decomp-dbg" => {
                 // FIXME: Audit that the environment access only happens in single-threaded code.
-                unsafe { std::env::set_var("KUNA_DECOMP_DBG", take_value(argv, &mut i, "--decomp-dbg")?) };
+                unsafe {
+                    std::env::set_var("KUNA_DECOMP_DBG", take_value(argv, &mut i, "--decomp-dbg")?)
+                };
                 decomp_dbg_flag = true;
             }
             "--sleighpath" => {
                 // FIXME: Audit that the environment access only happens in single-threaded code.
-                unsafe { std::env::set_var("KUNA_SPECS", take_value(argv, &mut i, "--sleighpath")?) };
+                unsafe {
+                    std::env::set_var("KUNA_SPECS", take_value(argv, &mut i, "--sleighpath")?)
+                };
             }
             "-h" | "--help" => {
                 usage_catalog();
@@ -451,8 +461,11 @@ fn cmd_modes(argv: &[String]) -> i32 {
         for m in unlace_decomp::modes::MODE_TABLE {
             let _ = writeln!(text, "{}", m.name);
             let _ = writeln!(text, "  {}", m.summary);
-            let joined: Vec<String> =
-                m.overrides.iter().map(|(o, v)| format!("{o}={v}")).collect();
+            let joined: Vec<String> = m
+                .overrides
+                .iter()
+                .map(|(o, v)| format!("{o}={v}"))
+                .collect();
             if m.automatic {
                 let _ = writeln!(
                     text,

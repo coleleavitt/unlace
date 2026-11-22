@@ -70,7 +70,7 @@
 //! the pointer.
 
 use unlace_base::marshal::ElementId;
-use unlace_base::space::{spacetype, VarnodeStorage};
+use unlace_base::space::{VarnodeStorage, spacetype};
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
@@ -99,12 +99,20 @@ struct VnKey {
 
 fn key_of(vn: &VarnodeData) -> Option<VnKey> {
     let space = vn.space.as_ref()?;
-    Some(VnKey { space: space.get_index(), offset: vn.offset, size: vn.size })
+    Some(VnKey {
+        space: space.get_index(),
+        offset: vn.offset,
+        size: vn.size,
+    })
 }
 
 fn key_of_storage(sp: &VarnodeStorage) -> Option<VnKey> {
     let space = sp.space.as_ref()?;
-    Some(VnKey { space: space.get_index(), offset: sp.offset, size: sp.size })
+    Some(VnKey {
+        space: space.get_index(),
+        offset: sp.offset,
+        size: sp.size,
+    })
 }
 
 /// The literal behind `vn`, sign-extended from its own width, or `None` when it
@@ -152,7 +160,10 @@ struct Track {
 
 impl Track {
     fn new(sp: VnKey) -> Self {
-        Track { sp, known: vec![(sp, Held::StackPtr(0))] }
+        Track {
+            sp,
+            known: vec![(sp, Held::StackPtr(0))],
+        }
     }
 
     fn get(&self, k: &VnKey) -> Option<Held> {
@@ -212,7 +223,9 @@ pub fn kuna_call_pops_return_address(ops: &[RawOp], sp: &VarnodeStorage) -> bool
     if ops.is_empty() || ops.len() > KUNA_CALLPOPRET_MAX_OPS {
         return false;
     }
-    let Some(spkey) = key_of_storage(sp) else { return false };
+    let Some(spkey) = key_of_storage(sp) else {
+        return false;
+    };
     let pushed = spkey.size as i64;
     let mut track = Track::new(spkey);
     let mut discarded = false;
@@ -262,7 +275,9 @@ pub fn kuna_call_pops_return_address(ops: &[RawOp], sp: &VarnodeStorage) -> bool
         }
         // A write the scan could not account for has landed on the stack pointer:
         // nothing after this point is measurable.
-        let Some(delta) = track.sp_delta() else { return false };
+        let Some(delta) = track.sp_delta() else {
+            return false;
+        };
         if delta == pushed {
             discarded = true;
         }

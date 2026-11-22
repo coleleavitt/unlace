@@ -19,7 +19,11 @@ fn start_builds_registry_with_inject_ids() {
 #[test]
 fn start_initializes_and_sorts_capabilities_raw_last() {
     let mut caps = CapabilityRegistry::new();
-    caps.register(Box::new(NamedCapability::new("xml", false, Some("save_state"))));
+    caps.register(Box::new(NamedCapability::new(
+        "xml",
+        false,
+        Some("save_state"),
+    )));
     caps.register(Box::new(NamedCapability::new("raw", false, None)));
     caps.register(Box::new(NamedCapability::new("sleigh", true, None)));
     let lib = start_decompiler_library(None, &[], caps);

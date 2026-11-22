@@ -13,13 +13,15 @@ fn arm_aliases_select_the_definition_instead_of_its_import() {
                 let file = object::File::parse(bytes.as_slice()).unwrap();
                 let address = if linked { 0x1000 } else { 0 };
                 for name in ["answer", "__answer_from_arm", "answer_alias"] {
-                    assert!(file
-                        .symbols()
-                        .any(|s| s.name() == Ok(name) && s.address() == address));
+                    assert!(
+                        file.symbols()
+                            .any(|s| s.name() == Ok(name) && s.address() == address)
+                    );
                     if linked {
-                        assert!(file
-                            .dynamic_symbols()
-                            .any(|s| s.name() == Ok(name) && s.address() == address));
+                        assert!(
+                            file.dynamic_symbols()
+                                .any(|s| s.name() == Ok(name) && s.address() == address)
+                        );
                     }
                 }
                 let path = common::scratch_file("arm-aliases", "elf");
@@ -52,7 +54,10 @@ fn arm_aliases_select_the_definition_instead_of_its_import() {
                 for name in ["answer_alias", "__answer_from_arm"] {
                     assert_eq!(prog.find_entry_by_name(name).unwrap().addr, entry.addr);
                 }
-                assert_eq!(entry.name, "__answer_from_arm", "the first name stays reported");
+                assert_eq!(
+                    entry.name, "__answer_from_arm",
+                    "the first name stays reported"
+                );
                 assert_eq!(entry.aliases.len(), 2);
                 assert_eq!(prog.find_entry_at(definition).unwrap().name, entry.name);
                 if veneer {
@@ -113,7 +118,14 @@ fn an_alias_never_outbids_a_function_of_the_same_name() {
         .iter()
         .find(|f| f["name"] == "twin")
         .unwrap();
-    assert!(twin["aliases"].as_array().unwrap().iter().any(|a| a == "shared"), "{twin}");
+    assert!(
+        twin["aliases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|a| a == "shared"),
+        "{twin}"
+    );
 
     let (text, stderr, code) = common::run_kuna(&["decompile", &binary, "shared"]);
     assert_eq!(code, 0, "{stderr}");
@@ -121,7 +133,12 @@ fn an_alias_never_outbids_a_function_of_the_same_name() {
     let (json, stderr, code) = common::run_kuna(&["decompile", &binary, "shared", "--json"]);
     assert_eq!(code, 0, "{stderr}");
     assert!(json.contains("\"address_hex\": \"0x1155\""), "{json}");
-    let (_, stderr, code) =
-        common::run_kuna(&["decompile-all", &binary, "--functions", "shared,twin", "--json"]);
+    let (_, stderr, code) = common::run_kuna(&[
+        "decompile-all",
+        &binary,
+        "--functions",
+        "shared,twin",
+        "--json",
+    ]);
     assert_eq!(code, 0, "{stderr}");
 }

@@ -49,11 +49,16 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture() -> PathBuf {
@@ -84,14 +89,19 @@ fn bootstrap(on: bool) -> unlace_console::engine::ConsoleProgram {
     prog.arch_mut()
         .set_kuna_option("cortexmvectors", if on { "on" } else { "off" })
         .expect("cortexmvectors flips");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
 /// Decompile `func` in an already-bootstrapped program and return the captured C.
 fn decompile(prog: unlace_console::engine::ConsoleProgram, func: &str) -> String {
-    let cmds: Vec<String> =
-        [format!("load function {func}"), "decompile".into(), "print C".into()].to_vec();
+    let cmds: Vec<String> = [
+        format!("load function {func}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .to_vec();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -112,7 +122,12 @@ fn decompile(prog: unlace_console::engine::ConsoleProgram, func: &str) -> String
 #[test]
 fn off_misses_the_ccm_relocated_vector_table() {
     let off = bootstrap(false);
-    for h in [RESET_HANDLER, NMI_HANDLER, HARDFAULT_HANDLER, SYSTICK_HANDLER] {
+    for h in [
+        RESET_HANDLER,
+        NMI_HANDLER,
+        HARDFAULT_HANDLER,
+        SYSTICK_HANDLER,
+    ] {
         assert!(
             off.lookup_symbol(h).is_none(),
             "default (cortexmvectors off) must NOT discover {h}: the shipped \
@@ -122,7 +137,10 @@ fn off_misses_the_ccm_relocated_vector_table() {
     }
     // `e_entry` still finds `_start`, but with no table there is no Thumb region
     // paint, so its two Thumb halfwords are decoded as A32 and produce no C.
-    assert!(off.lookup_symbol(START).is_some(), "e_entry always finds {START}");
+    assert!(
+        off.lookup_symbol(START).is_some(),
+        "e_entry always finds {START}"
+    );
     let body = decompile(off, START);
     eprintln!("---- {START} (cortexmvectors off / default) ----\n{body}");
     assert!(

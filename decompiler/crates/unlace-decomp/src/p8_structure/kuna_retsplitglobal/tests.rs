@@ -20,8 +20,14 @@ fn a_guard_returns_self_copy_is_not_a_store() {
     // persistent global before every RETURN; counting them would price a bare
     // epilogue by how many globals the whole program has.  Either recogniser
     // alone is enough.
-    assert!(!is_global_store(true, true, true, false), "the return_copy flag");
-    assert!(!is_global_store(true, true, false, true), "input and output name the same storage");
+    assert!(
+        !is_global_store(true, true, true, false),
+        "the return_copy flag"
+    );
+    assert!(
+        !is_global_store(true, true, false, true),
+        "input and output name the same storage"
+    );
 }
 
 #[test]

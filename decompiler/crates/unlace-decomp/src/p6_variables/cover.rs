@@ -92,8 +92,14 @@ fn pack(p: Option<CoverPoint>) -> (uintm, u8) {
         Some(CoverPoint::Begin) => (0, K_BEGIN),
         Some(CoverPoint::End) => (uintm::MAX, K_END),
         Some(CoverPoint::Input) => (0, K_INPUT),
-        Some(CoverPoint::Op { uindex, multiequal: false }) => (uindex, K_OP),
-        Some(CoverPoint::Op { uindex, multiequal: true }) => (uindex, K_MULTI),
+        Some(CoverPoint::Op {
+            uindex,
+            multiequal: false,
+        }) => (uindex, K_OP),
+        Some(CoverPoint::Op {
+            uindex,
+            multiequal: true,
+        }) => (uindex, K_MULTI),
     }
 }
 
@@ -104,8 +110,14 @@ fn unpack(u: uintm, k: u8) -> Option<CoverPoint> {
         K_BEGIN => Some(CoverPoint::Begin),
         K_END => Some(CoverPoint::End),
         K_INPUT => Some(CoverPoint::Input),
-        K_OP => Some(CoverPoint::Op { uindex: u, multiequal: false }),
-        _ => Some(CoverPoint::Op { uindex: u, multiequal: true }),
+        K_OP => Some(CoverPoint::Op {
+            uindex: u,
+            multiequal: false,
+        }),
+        _ => Some(CoverPoint::Op {
+            uindex: u,
+            multiequal: true,
+        }),
     }
 }
 
@@ -443,7 +455,12 @@ pub struct Cover {
 }
 
 /// Global empty CoverBlock for blocks not covered (C++ `Cover::emptyBlock`).
-const EMPTY_BLOCK: CoverBlock = CoverBlock { ustart: 0, ustop: 0, kstart: K_NONE, kstop: K_NONE };
+const EMPTY_BLOCK: CoverBlock = CoverBlock {
+    ustart: 0,
+    ustop: 0,
+    kstart: K_NONE,
+    kstop: K_NONE,
+};
 
 impl Cover {
     /// Construct an empty Cover.
@@ -473,7 +490,9 @@ impl Cover {
     /// Iterate the `(block_index, CoverBlock)` entries in ascending block order
     /// (C++ `begin`/`end`).
     pub fn iter(&self) -> impl Iterator<Item = (int4, &CoverBlock)> {
-        self.runs.iter().flat_map(|r| (r.lo..=r.hi).map(move |bl| (bl, &r.cb)))
+        self.runs
+            .iter()
+            .flat_map(|r| (r.lo..=r.hi).map(move |bl| (bl, &r.cb)))
     }
 
     /// Give ordering of \b this and another Cover (C++ `Cover::compareTo`,
@@ -504,7 +523,11 @@ impl Cover {
 
     /// Visit, in ascending order, each stretch of blocks both covers hold with
     /// the two CoverBlocks covering it; stop when `f` returns true.
-    fn overlaps(&self, op2: &Cover, mut f: impl FnMut(int4, int4, &CoverBlock, &CoverBlock) -> bool) {
+    fn overlaps(
+        &self,
+        op2: &Cover,
+        mut f: impl FnMut(int4, int4, &CoverBlock, &CoverBlock) -> bool,
+    ) {
         let (a, b) = (&self.runs, &op2.runs);
         let (mut i, mut j) = (0, 0);
         while i < a.len() && j < b.len() {
@@ -650,10 +673,18 @@ impl Cover {
     pub fn add_def_point(&mut self, def: Option<(int4, CoverPoint)>, is_input: bool) {
         self.clear();
         if let Some((blk, point)) = def {
-            self.runs.push(Run { lo: blk, hi: blk, cb: Self::def_block(point) });
+            self.runs.push(Run {
+                lo: blk,
+                hi: blk,
+                cb: Self::def_block(point),
+            });
         } else if is_input {
             // Special mark for input
-            self.runs.push(Run { lo: 0, hi: 0, cb: Self::def_block(CoverPoint::Input) });
+            self.runs.push(Run {
+                lo: 0,
+                hi: 0,
+                cb: Self::def_block(CoverPoint::Input),
+            });
         }
     }
 
@@ -673,19 +704,37 @@ impl Cover {
     /// Varnode is built from `addDefPoint(domVn)` followed by `addRefPoint(*iter,
     /// outVn)` for each read `*iter` of a *different* Varnode (`outVn`), so it is
     /// distinct from the [`Cover::rebuild`] single-varnode walk.
-    pub fn add_ref_point_for(&mut self, ctx: &dyn CoverContext, ref_op: OpId, vn: crate::context::VarnodeId) {
+    pub fn add_ref_point_for(
+        &mut self,
+        ctx: &dyn CoverContext,
+        ref_op: OpId,
+        vn: crate::context::VarnodeId,
+    ) {
         self.add_ref_points_for(ctx, &[ref_op], vn);
     }
 
     /// (kuna) [`Self::add_ref_point_for`] for each of `ref_ops` in turn.
-    pub fn add_ref_points_for(&mut self, ctx: &dyn CoverContext, ref_ops: &[OpId], vn: crate::context::VarnodeId) {
+    pub fn add_ref_points_for(
+        &mut self,
+        ctx: &dyn CoverContext,
+        ref_ops: &[OpId],
+        vn: crate::context::VarnodeId,
+    ) {
         if ref_ops.is_empty() {
             return;
         }
         let (runs, ()) = with_scratch(&self.runs, |s| {
             for &ref_op in ref_ops {
                 let (bl, ref_point, is_multiequal, pred_blocks) = ctx.ref_point(ref_op, vn);
-                Self::add_ref_point(s, ctx, bl, ref_point, is_multiequal, &pred_blocks, &mut |_, _| false);
+                Self::add_ref_point(
+                    s,
+                    ctx,
+                    bl,
+                    ref_point,
+                    is_multiequal,
+                    &pred_blocks,
+                    &mut |_, _| false,
+                );
             }
         });
         self.runs = runs;
@@ -1159,15 +1208,22 @@ mod tests {
 
     /// Build a real-op CoverPoint with a synthetic order (non-MULTIEQUAL).
     fn op_point(uindex: uintm) -> CoverPoint {
-        CoverPoint::Op { uindex, multiequal: false }
+        CoverPoint::Op {
+            uindex,
+            multiequal: false,
+        }
     }
 
     fn meq_point(uindex: uintm) -> CoverPoint {
-        CoverPoint::Op { uindex, multiequal: true }
+        CoverPoint::Op {
+            uindex,
+            multiequal: true,
+        }
     }
 
     fn put(c: &mut Cover, bl: int4, cb: CoverBlock) {
-        let mut all: std::collections::BTreeMap<int4, CoverBlock> = c.iter().map(|(k, v)| (k, *v)).collect();
+        let mut all: std::collections::BTreeMap<int4, CoverBlock> =
+            c.iter().map(|(k, v)| (k, *v)).collect();
         all.insert(bl, cb);
         c.runs.clear();
         for (k, v) in all {
@@ -1434,9 +1490,9 @@ mod tests {
     impl CoverContext for DiamondCtx {
         fn size_in(&self, bl: int4) -> int4 {
             match bl {
-                0 => 0,       // entry
-                1 | 2 => 1,   // each branch has one pred (block 0)
-                3 => 2,       // join has two preds (1,2)
+                0 => 0,     // entry
+                1 | 2 => 1, // each branch has one pred (block 0)
+                3 => 2,     // join has two preds (1,2)
                 _ => 0,
             }
         }
@@ -1497,9 +1553,9 @@ mod tests {
     impl CoverContext for LoopCtx {
         fn size_in(&self, bl: int4) -> int4 {
             match bl {
-                0 => 0,     // entry
-                1 => 2,     // loop head: pred 0 (entry) and 2 (back edge)
-                2 => 1,     // loop body: pred 1
+                0 => 0, // entry
+                1 => 2, // loop head: pred 0 (entry) and 2 (back edge)
+                2 => 1, // loop body: pred 1
                 _ => 0,
             }
         }
@@ -1568,7 +1624,9 @@ mod tests {
             }
             let points: Vec<(int4, CoverPoint)> = (0..4)
                 .flat_map(|bl| {
-                    (0..12).map(move |k| (bl, op_point(k))).chain([(bl, meq_point(0))])
+                    (0..12)
+                        .map(move |k| (bl, op_point(k)))
+                        .chain([(bl, meq_point(0))])
                 })
                 .collect();
             for point in &points {
@@ -1596,7 +1654,11 @@ mod tests {
         fn descend(&self, _vn: crate::context::VarnodeId) -> Vec<OpId> {
             vec![OpId::from(KeyData::from_ffi(100))]
         }
-        fn ref_point(&self, _op: OpId, _vn: crate::context::VarnodeId) -> (int4, CoverPoint, bool, Vec<int4>) {
+        fn ref_point(
+            &self,
+            _op: OpId,
+            _vn: crate::context::VarnodeId,
+        ) -> (int4, CoverPoint, bool, Vec<int4>) {
             (99, op_point(3), false, vec![])
         }
         fn out_implied(&self, _op: OpId) -> Option<crate::context::VarnodeId> {
@@ -1609,7 +1671,10 @@ mod tests {
     #[test]
     fn whole_blocks_between_def_and_read_share_one_run() {
         let mut c = Cover::new();
-        c.rebuild(&ChainCtx, crate::context::VarnodeId::from(KeyData::from_ffi(1)));
+        c.rebuild(
+            &ChainCtx,
+            crate::context::VarnodeId::from(KeyData::from_ffi(1)),
+        );
         assert_eq!(c.runs.len(), 3);
         assert_eq!(c.iter().count(), 100);
         assert_eq!(c.get_cover_block(0).get_start(), Some(op_point(5)));
@@ -1785,7 +1850,10 @@ mod tests {
             let i3 = s2 == 0 && self.stop == Some(CoverPoint::End);
             let i2 = i3 || self.contain(o.start);
             if i1 && i2 && (s != s2 || i3 || i4) {
-                *self = PtBlock { start: None, stop: Some(CoverPoint::End) };
+                *self = PtBlock {
+                    start: None,
+                    stop: Some(CoverPoint::End),
+                };
                 return;
             }
             if i1 {
@@ -1811,7 +1879,12 @@ mod tests {
     }
 
     fn point_alphabet() -> Vec<Option<CoverPoint>> {
-        let mut pts = vec![None, Some(CoverPoint::Begin), Some(CoverPoint::End), Some(CoverPoint::Input)];
+        let mut pts = vec![
+            None,
+            Some(CoverPoint::Begin),
+            Some(CoverPoint::End),
+            Some(CoverPoint::Input),
+        ];
         for u in [0, 1, 7, uintm::MAX - 1, uintm::MAX] {
             pts.push(Some(op_point(u)));
             pts.push(Some(meq_point(u)));
@@ -1826,8 +1899,10 @@ mod tests {
         assert_eq!(std::mem::size_of::<CoverBlock>(), 12);
         assert_eq!(std::mem::size_of::<Run>(), 20);
         let pts = point_alphabet();
-        let blocks: Vec<PtBlock> =
-            pts.iter().flat_map(|&start| pts.iter().map(move |&stop| PtBlock { start, stop })).collect();
+        let blocks: Vec<PtBlock> = pts
+            .iter()
+            .flat_map(|&start| pts.iter().map(move |&stop| PtBlock { start, stop }))
+            .collect();
         for a in &blocks {
             let pa = a.packed();
             assert_eq!((pa.get_start(), pa.get_stop()), (a.start, a.stop));
@@ -1869,12 +1944,55 @@ mod tests {
         full.set_all();
         let mut tip = CoverBlock::new();
         tip.set_end(Some(op_point(4)));
-        let (outer, inner) = with_scratch(&[Run { lo: 0, hi: 3, cb: full }], |s| {
-            s.entry(5).set_all();
-            with_scratch(&[Run { lo: 7, hi: 7, cb: tip }], |t| *t.entry(8) = full).0
-        });
-        assert_eq!(outer, vec![Run { lo: 0, hi: 3, cb: full }, Run { lo: 5, hi: 5, cb: full }]);
-        assert_eq!(inner, vec![Run { lo: 7, hi: 7, cb: tip }, Run { lo: 8, hi: 8, cb: full }]);
+        let (outer, inner) = with_scratch(
+            &[Run {
+                lo: 0,
+                hi: 3,
+                cb: full,
+            }],
+            |s| {
+                s.entry(5).set_all();
+                with_scratch(
+                    &[Run {
+                        lo: 7,
+                        hi: 7,
+                        cb: tip,
+                    }],
+                    |t| *t.entry(8) = full,
+                )
+                .0
+            },
+        );
+        assert_eq!(
+            outer,
+            vec![
+                Run {
+                    lo: 0,
+                    hi: 3,
+                    cb: full
+                },
+                Run {
+                    lo: 5,
+                    hi: 5,
+                    cb: full
+                }
+            ]
+        );
+        assert_eq!(
+            inner,
+            vec![
+                Run {
+                    lo: 7,
+                    hi: 7,
+                    cb: tip
+                },
+                Run {
+                    lo: 8,
+                    hi: 8,
+                    cb: full
+                }
+            ]
+        );
     }
 
     /// The Cover as a map of one CoverBlock per block, with upstream's walks.
@@ -1886,7 +2004,13 @@ mod tests {
         pub(super) type Hit<'a> = &'a mut dyn FnMut(int4, &CoverBlock) -> bool;
 
         fn stop_is_multiequal(cb: &CoverBlock) -> bool {
-            matches!(cb.get_stop(), Some(CoverPoint::Op { multiequal: true, .. }))
+            matches!(
+                cb.get_stop(),
+                Some(CoverPoint::Op {
+                    multiequal: true,
+                    ..
+                })
+            )
         }
 
         fn recurse(m: &mut Map, ctx: &dyn CoverContext, bl: int4, hit: Hit) -> bool {
@@ -1949,8 +2073,11 @@ mod tests {
                     }
                 }
             }
-            let preds: Vec<int4> =
-                if all || !is_meq { (0..ctx.size_in(bl)).map(|j| ctx.get_in(bl, j)).collect() } else { listed };
+            let preds: Vec<int4> = if all || !is_meq {
+                (0..ctx.size_in(bl)).map(|j| ctx.get_in(bl, j)).collect()
+            } else {
+                listed
+            };
             preds.into_iter().any(|p| recurse(m, ctx, p, hit))
         }
 
@@ -2000,7 +2127,10 @@ mod tests {
                 } else {
                     cover_iter.next();
                     set_block += 1;
-                    let op_max = set.block_start.get(set_block).map_or(set.op_list.len(), |&s| s as usize);
+                    let op_max = set
+                        .block_start
+                        .get(set_block)
+                        .map_or(set.op_list.len(), |&s| s as usize);
                     loop {
                         let e = &set.op_list[op_index];
                         if (!stores || e.store)
@@ -2055,10 +2185,18 @@ mod tests {
             self.def
         }
         fn descend(&self, vn: crate::context::VarnodeId) -> Vec<OpId> {
-            let range = if vn == vid(1) { 0..self.split } else { self.split..self.reads.len() };
+            let range = if vn == vid(1) {
+                0..self.split
+            } else {
+                self.split..self.reads.len()
+            };
             range.map(oid).collect()
         }
-        fn ref_point(&self, op: OpId, _vn: crate::context::VarnodeId) -> (int4, CoverPoint, bool, Vec<int4>) {
+        fn ref_point(
+            &self,
+            op: OpId,
+            _vn: crate::context::VarnodeId,
+        ) -> (int4, CoverPoint, bool, Vec<int4>) {
             self.reads[(slotmap::Key::data(&op).as_ffi() & 0xffff_ffff) as usize - 1].clone()
         }
         fn out_implied(&self, op: OpId) -> Option<crate::context::VarnodeId> {
@@ -2069,19 +2207,30 @@ mod tests {
     fn random_ctx(r: &mut Rng) -> RandCtx {
         let n = 1 + r.below(56) as usize;
         let preds = (0..n)
-            .map(|b| if b == 0 { vec![] } else { (0..r.below(4)).map(|_| r.below(n as u64) as int4).collect() })
+            .map(|b| {
+                if b == 0 {
+                    vec![]
+                } else {
+                    (0..r.below(4)).map(|_| r.below(n as u64) as int4).collect()
+                }
+            })
             .collect::<Vec<Vec<int4>>>();
         let def = match r.below(4) {
             0 => (None, true),
             1 => (None, false),
-            _ => (Some((r.below(n as u64) as int4, op_point(r.below(12) as uintm))), false),
+            _ => (
+                Some((r.below(n as u64) as int4, op_point(r.below(12) as uintm))),
+                false,
+            ),
         };
         let reads = (0..r.below(10))
             .map(|_| {
                 let bl = r.below(n as u64) as int4;
                 let ins = &preds[bl as usize];
                 if !ins.is_empty() && r.below(3) == 0 {
-                    let listed = (0..1 + r.below(3)).map(|_| ins[r.below(ins.len() as u64) as usize]).collect();
+                    let listed = (0..1 + r.below(3))
+                        .map(|_| ins[r.below(ins.len() as u64) as usize])
+                        .collect();
                     (bl, meq_point(0), true, listed)
                 } else {
                     (bl, op_point(r.below(12) as uintm), false, vec![])
@@ -2089,13 +2238,28 @@ mod tests {
             })
             .collect::<Vec<_>>();
         let split = r.below(reads.len() as u64 + 1) as usize;
-        RandCtx { preds, def, reads, split }
+        RandCtx {
+            preds,
+            def,
+            reads,
+            split,
+        }
     }
 
     fn assert_canonical(c: &Cover) {
-        assert!(c.runs.iter().all(|r| r.lo <= r.hi && (r.lo == r.hi || r.cb.is_full())), "{:?}", c.runs);
-        assert!(c.runs.windows(2).all(|w| w[0].hi < w[1].lo
-            && !(w[0].cb.is_full() && w[1].cb.is_full() && w[0].hi + 1 == w[1].lo)), "{:?}", c.runs);
+        assert!(
+            c.runs
+                .iter()
+                .all(|r| r.lo <= r.hi && (r.lo == r.hi || r.cb.is_full())),
+            "{:?}",
+            c.runs
+        );
+        assert!(
+            c.runs.windows(2).all(|w| w[0].hi < w[1].lo
+                && !(w[0].cb.is_full() && w[1].cb.is_full() && w[0].hi + 1 == w[1].lo)),
+            "{:?}",
+            c.runs
+        );
     }
 
     fn blocks_of(c: &Cover) -> Vec<(int4, CoverBlock)> {
@@ -2112,7 +2276,10 @@ mod tests {
             let ctx = random_ctx(&mut r);
             let mut c = Cover::new();
             c.rebuild(&ctx, vid(1));
-            assert_eq!(blocks_of(&c), model::rebuild(&ctx, vid(1)).into_iter().collect::<Vec<_>>());
+            assert_eq!(
+                blocks_of(&c),
+                model::rebuild(&ctx, vid(1)).into_iter().collect::<Vec<_>>()
+            );
             assert_canonical(&c);
 
             let (mut c, mut m) = random_cover(&mut r);
@@ -2130,7 +2297,8 @@ mod tests {
             let (mut c, mut m) = random_cover(&mut r);
             let (tb, tp) = (r.below(60) as int4, op_point(r.below(14) as uintm));
             let mut hit = |bl: int4, cb: &CoverBlock| bl == tb && cb.contain(Some(tp));
-            let want = m.iter().any(|(&bl, cb)| hit(bl, cb)) || model::add_ref(&mut m, &ctx, oid(0), vid(1), &mut hit);
+            let want = m.iter().any(|(&bl, cb)| hit(bl, cb))
+                || model::add_ref(&mut m, &ctx, oid(0), vid(1), &mut hit);
             assert_eq!(c.add_ref_point_until(&ctx, oid(0), vid(1), hit), want);
             assert_eq!(blocks_of(&c), m.into_iter().collect::<Vec<_>>());
             assert_canonical(&c);
@@ -2156,23 +2324,33 @@ mod tests {
                 assert_eq!(a.intersect_by_block(bl, &b), by_block);
                 for p in point_alphabet().into_iter().flatten() {
                     let found = ma.get(&bl);
-                    let contain = |max| found.is_some_and(|cb| cb.contain(Some(p)) && (max == 1 || cb.boundary(Some(p)) == 0));
+                    let contain = |max| {
+                        found.is_some_and(|cb| {
+                            cb.contain(Some(p)) && (max == 1 || cb.boundary(Some(p)) == 0)
+                        })
+                    };
                     assert_eq!(a.contain(bl, p, 1), contain(1));
                     assert_eq!(a.contain(bl, p, 2), contain(2));
-                    let def = found.map_or(0, |cb| match (cb.contain(Some(p)), cb.boundary(Some(p))) {
-                        (false, _) => 0,
-                        (true, 0) => 1,
-                        (true, 2) => 2,
-                        _ => 3,
-                    });
+                    let def =
+                        found.map_or(0, |cb| match (cb.contain(Some(p)), cb.boundary(Some(p))) {
+                            (false, _) => 0,
+                            (true, 0) => 1,
+                            (true, 2) => 2,
+                            _ => 3,
+                        });
                     assert_eq!(a.contain_varnode_def(Some((bl, p))), def, "{bl} {p:?}");
                 }
             }
-            let input = ma.get(&0).map_or(0, |cb| match (cb.contain(Some(CoverPoint::Input)), cb.boundary(Some(CoverPoint::Input))) {
-                (false, _) => 0,
-                (true, 0) => 1,
-                (true, 2) => 2,
-                _ => 3,
+            let input = ma.get(&0).map_or(0, |cb| {
+                match (
+                    cb.contain(Some(CoverPoint::Input)),
+                    cb.boundary(Some(CoverPoint::Input)),
+                ) {
+                    (false, _) => 0,
+                    (true, 0) => 1,
+                    (true, 2) => 2,
+                    _ => 3,
+                }
             });
             assert_eq!(a.contain_varnode_def(None), input);
 
@@ -2189,7 +2367,12 @@ mod tests {
                 })
                 .collect();
             let listed = entries.clone();
-            let mut set = PcodeOpSet::new(Box::new(move || listed.clone()), Box::new(|op: OpId, _: &Address| (slotmap::Key::data(&op).as_ffi() & 0xffff_ffff) % 3 != 0));
+            let mut set = PcodeOpSet::new(
+                Box::new(move || listed.clone()),
+                Box::new(|op: OpId, _: &Address| {
+                    (slotmap::Key::data(&op).as_ffi() & 0xffff_ffff) % 3 != 0
+                }),
+            );
             set.populate();
             let want = model::walk_op_set(&ma, &set, &addr, false)
                 || (entries.iter().any(|e| e.store) && model::walk_op_set(&ma, &set, &addr, true));
@@ -2289,7 +2472,7 @@ mod tests {
 
     /// Minimal RAM-like space for the affectsTest address fixture.
     fn test_ram_space() -> std::rc::Rc<unlace_base::space::AddrSpace> {
-        use unlace_base::space::{addrspace_flags, spacetype, AddrSpace};
+        use unlace_base::space::{AddrSpace, addrspace_flags, spacetype};
         std::rc::Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
             "ram",

@@ -21,18 +21,18 @@
 //! value, a load or store the pointee does not cover, a family member that is
 //! declared, global or frame memory).
 
-use std::collections::VecDeque;
 use crate::kuna_fasthash::FxHashSet;
+use std::collections::VecDeque;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::infra::architecture::Architecture;
-use crate::kuna_calleevote::{committed, same_type, trace, CallSite, Typed};
+use crate::kuna_calleevote::{CallSite, Typed, committed, same_type, trace};
 
 /// How far [`dereferenced`] follows a value through copies and literal offsets.
 const HOP_CAP: usize = 10;
@@ -46,13 +46,19 @@ pub fn void_pointer(arch: &Architecture) -> Option<Rc<Datatype>> {
     let tlst = arch.types();
     let spc = arch.manage().get_default_data_space()?;
     let void = tlst.get_type_void().ok()?;
-    tlst.get_type_pointer(tlst.get_size_of_pointer(), void, spc.get_word_size()).ok()
+    tlst.get_type_pointer(tlst.get_size_of_pointer(), void, spc.get_word_size())
+        .ok()
 }
 
 /// What the callers state about the callee parameter `p` at position `j`, or
 /// `None`: `p` already says it is a pointer, a call passes something other than
 /// a pointer or a null in `p`'s storage, or every call passes a null.
-pub fn pointer_vote(sites: &[&CallSite], j: usize, p: &Typed, void_ptr: &Rc<Datatype>) -> Option<Typed> {
+pub fn pointer_vote(
+    sites: &[&CallSite],
+    j: usize,
+    p: &Typed,
+    void_ptr: &Rc<Datatype>,
+) -> Option<Typed> {
     if p.ct.get_metatype() == type_metatype::TYPE_PTR || p.size != void_ptr.get_size() {
         return None;
     }
@@ -89,7 +95,15 @@ pub fn pointer_vote(sites: &[&CallSite], j: usize, p: &Typed, void_ptr: &Rc<Data
             sites.len()
         );
     }
-    Some(Typed { addr: p.addr.clone(), size: p.size, ct, frame, null: false, proven: false, by_class: true })
+    Some(Typed {
+        addr: p.addr.clone(),
+        size: p.size,
+        ct,
+        frame,
+        null: false,
+        proven: false,
+        by_class: true,
+    })
 }
 
 /// Does anything the callee does with its input `vn` outrank the callers'
@@ -109,15 +123,26 @@ pub(crate) fn refuses(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
 /// Does the callee derive an address from a member of `family` by a literal
 /// offset and then treat it as a number: mask, shift, divide or multiply it?
 fn masks_a_derived_address(data: &Funcdata, family: &[VarnodeId]) -> bool {
-    let constant = |v: Option<VarnodeId>| v.and_then(|v| data.vbank().get(v)).is_some_and(|c| c.is_constant());
+    let constant = |v: Option<VarnodeId>| {
+        v.and_then(|v| data.vbank().get(v))
+            .is_some_and(|c| c.is_constant())
+    };
     let mut seen: FxHashSet<VarnodeId> = family.iter().copied().collect();
     let mut work: VecDeque<(VarnodeId, usize)> = family.iter().map(|&v| (v, 0)).collect();
     while let Some((v, hops)) = work.pop_front() {
-        let Some(node) = data.vbank().get(v) else { continue };
+        let Some(node) = data.vbank().get(v) else {
+            continue;
+        };
         for r in node.descend_iter() {
-            let Some(o) = data.obank().get(r) else { continue };
+            let Some(o) = data.obank().get(r) else {
+                continue;
+            };
             let derived = match o.code() {
-                OpCode::CPUI_INT_ADD => constant(if o.get_in(0) == Some(v) { o.get_in(1) } else { o.get_in(0) }),
+                OpCode::CPUI_INT_ADD => constant(if o.get_in(0) == Some(v) {
+                    o.get_in(1)
+                } else {
+                    o.get_in(0)
+                }),
                 OpCode::CPUI_INT_SUB => o.get_in(0) == Some(v) && constant(o.get_in(1)),
                 OpCode::CPUI_COPY | OpCode::CPUI_CAST => true,
                 OpCode::CPUI_INT_AND
@@ -168,7 +193,9 @@ pub fn provably_a_pointer(data: &Funcdata, vn: VarnodeId) -> bool {
         return true;
     }
     value.iter().any(|&v| {
-        let Some(node) = data.vbank().get(v) else { return false };
+        let Some(node) = data.vbank().get(v) else {
+            return false;
+        };
         if frame_address(data, v) || addresses_a_string(data, v) {
             return true;
         }
@@ -180,7 +207,8 @@ pub fn provably_a_pointer(data: &Funcdata, vn: VarnodeId) -> bool {
                 return true;
             }
         }
-        node.descend_iter().any(|r| declared_pointer_argument(data, r, v))
+        node.descend_iter()
+            .any(|r| declared_pointer_argument(data, r, v))
     })
 }
 
@@ -193,15 +221,22 @@ fn same_value(data: &Funcdata, vn: VarnodeId) -> Vec<VarnodeId> {
     while at < out.len() && out.len() < 64 {
         let v = out[at];
         at += 1;
-        let Some(node) = data.vbank().get(v) else { continue };
+        let Some(node) = data.vbank().get(v) else {
+            continue;
+        };
         let mut next: Vec<VarnodeId> = Vec::new();
         if let Some(o) = node.get_def().and_then(|d| data.obank().get(d)) {
-            if matches!(o.code(), OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_INDIRECT) {
+            if matches!(
+                o.code(),
+                OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_INDIRECT
+            ) {
                 next.extend(o.get_in(0));
             }
         }
         for r in node.descend_iter() {
-            let Some(o) = data.obank().get(r) else { continue };
+            let Some(o) = data.obank().get(r) else {
+                continue;
+            };
             let joins = match o.code() {
                 OpCode::CPUI_COPY | OpCode::CPUI_CAST => true,
                 OpCode::CPUI_INDIRECT => o.get_in(0) == Some(v),
@@ -223,16 +258,25 @@ fn same_value(data: &Funcdata, vn: VarnodeId) -> Vec<VarnodeId> {
 /// Is `v` computed from the stack pointer by copies and literal offsets alone
 /// -- the address of a frame object on every path?
 fn frame_address(data: &Funcdata, v: VarnodeId) -> bool {
-    let constant = |x: Option<VarnodeId>| x.and_then(|x| data.vbank().get(x)).is_some_and(|c| c.is_constant());
+    let constant = |x: Option<VarnodeId>| {
+        x.and_then(|x| data.vbank().get(x))
+            .is_some_and(|c| c.is_constant())
+    };
     let mut at = Some(v);
     for _ in 0..16 {
-        let Some(node) = at.and_then(|x| data.vbank().get(x)) else { return false };
+        let Some(node) = at.and_then(|x| data.vbank().get(x)) else {
+            return false;
+        };
         if node.is_spacebase() && !node.is_constant() {
             return true;
         }
-        let Some(o) = node.get_def().and_then(|d| data.obank().get(d)) else { return false };
+        let Some(o) = node.get_def().and_then(|d| data.obank().get(d)) else {
+            return false;
+        };
         at = match o.code() {
-            OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_PTRSUB | OpCode::CPUI_PTRADD => o.get_in(0),
+            OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_PTRSUB | OpCode::CPUI_PTRADD => {
+                o.get_in(0)
+            }
             OpCode::CPUI_INT_ADD if constant(o.get_in(1)) => o.get_in(0),
             OpCode::CPUI_INT_ADD if constant(o.get_in(0)) => o.get_in(1),
             OpCode::CPUI_INT_SUB if constant(o.get_in(1)) => o.get_in(0),
@@ -251,9 +295,13 @@ fn dereferenced(data: &Funcdata, family: &[VarnodeId]) -> bool {
     let mut seen: FxHashSet<VarnodeId> = family.iter().copied().collect();
     let mut work: VecDeque<(VarnodeId, usize)> = family.iter().map(|&v| (v, 0)).collect();
     while let Some((v, hops)) = work.pop_front() {
-        let Some(node) = data.vbank().get(v) else { continue };
+        let Some(node) = data.vbank().get(v) else {
+            continue;
+        };
         for r in node.descend_iter() {
-            let Some(o) = data.obank().get(r) else { continue };
+            let Some(o) = data.obank().get(r) else {
+                continue;
+            };
             let carries = match o.code() {
                 OpCode::CPUI_LOAD | OpCode::CPUI_STORE => {
                     if o.get_in(1) == Some(v) {
@@ -262,10 +310,18 @@ fn dereferenced(data: &Funcdata, family: &[VarnodeId]) -> bool {
                     false
                 }
                 OpCode::CPUI_COPY | OpCode::CPUI_CAST => true,
-                OpCode::CPUI_INDIRECT | OpCode::CPUI_PTRSUB | OpCode::CPUI_PTRADD => o.get_in(0) == Some(v),
+                OpCode::CPUI_INDIRECT | OpCode::CPUI_PTRSUB | OpCode::CPUI_PTRADD => {
+                    o.get_in(0) == Some(v)
+                }
                 OpCode::CPUI_INT_ADD => {
-                    let other = if o.get_in(0) == Some(v) { o.get_in(1) } else { o.get_in(0) };
-                    other.and_then(|c| data.vbank().get(c)).is_some_and(|c| c.is_constant())
+                    let other = if o.get_in(0) == Some(v) {
+                        o.get_in(1)
+                    } else {
+                        o.get_in(0)
+                    };
+                    other
+                        .and_then(|c| data.vbank().get(c))
+                        .is_some_and(|c| c.is_constant())
                 }
                 _ => false,
             };
@@ -288,7 +344,9 @@ fn dereferenced(data: &Funcdata, family: &[VarnodeId]) -> bool {
 /// often as an address -- `0x2000` is a buffer size and the address of
 /// `.init` -- so it proves nothing.
 fn addresses_a_string(data: &Funcdata, v: VarnodeId) -> bool {
-    let Some(node) = data.vbank().get(v) else { return false };
+    let Some(node) = data.vbank().get(v) else {
+        return false;
+    };
     let (reader, constant) = if node.is_constant() {
         (node.descend_iter().next(), Some(v))
     } else {
@@ -296,7 +354,11 @@ fn addresses_a_string(data: &Funcdata, v: VarnodeId) -> bool {
         let base = def
             .and_then(|d| data.obank().get(d))
             .filter(|o| o.code() == OpCode::CPUI_PTRSUB)
-            .filter(|o| o.get_in(0).and_then(|b| data.vbank().get(b)).is_some_and(|b| b.is_constant() && b.get_offset() == 0))
+            .filter(|o| {
+                o.get_in(0)
+                    .and_then(|b| data.vbank().get(b))
+                    .is_some_and(|b| b.is_constant() && b.get_offset() == 0)
+            })
             .and_then(|o| o.get_in(1));
         (def, base)
     };
@@ -315,27 +377,42 @@ fn stated_pointer(data: &Funcdata, addr: &Address, size: i32) -> bool {
 
 /// Is `def` a call whose declared prototype returns a pointer?
 fn declared_pointer_result(data: &Funcdata, def: OpId) -> bool {
-    let Some(o) = data.obank().get(def) else { return false };
+    let Some(o) = data.obank().get(def) else {
+        return false;
+    };
     if !matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND) {
         return false;
     }
-    let Some(i) = data.get_call_specs_index(def) else { return false };
+    let Some(i) = data.get_call_specs_index(def) else {
+        return false;
+    };
     let proto = data.get_call_specs(i).proto();
-    proto.is_output_locked() && proto.get_output_type().is_some_and(|t| t.get_metatype() == type_metatype::TYPE_PTR)
+    proto.is_output_locked()
+        && proto
+            .get_output_type()
+            .is_some_and(|t| t.get_metatype() == type_metatype::TYPE_PTR)
 }
 
 /// Does the call `r` hand `v` to a parameter its declared prototype types as a
 /// pointer?
 fn declared_pointer_argument(data: &Funcdata, r: OpId, v: VarnodeId) -> bool {
-    let Some(o) = data.obank().get(r) else { return false };
+    let Some(o) = data.obank().get(r) else {
+        return false;
+    };
     if !matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND) {
         return false;
     }
-    let Some(i) = data.get_call_specs_index(r) else { return false };
+    let Some(i) = data.get_call_specs_index(r) else {
+        return false;
+    };
     let proto = data.get_call_specs(i).proto();
-    (1..o.num_input()).filter(|&s| o.get_in(s) == Some(v)).any(|s| {
-        proto.get_param(s - 1).is_some_and(|p| {
-            p.is_type_locked() && p.get_type().is_some_and(|t| t.get_metatype() == type_metatype::TYPE_PTR)
+    (1..o.num_input())
+        .filter(|&s| o.get_in(s) == Some(v))
+        .any(|s| {
+            proto.get_param(s - 1).is_some_and(|p| {
+                p.is_type_locked()
+                    && p.get_type()
+                        .is_some_and(|t| t.get_metatype() == type_metatype::TYPE_PTR)
+            })
         })
-    })
 }

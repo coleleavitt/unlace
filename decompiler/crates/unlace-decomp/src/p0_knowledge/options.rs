@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 
 use unlace_base::error::{KunaError, KunaResult};
-use unlace_base::marshal::{Decoder, ElementId, IdRegistry, ATTRIB_CONTENT, ELEM_UNKNOWN};
+use unlace_base::marshal::{ATTRIB_CONTENT, Decoder, ELEM_UNKNOWN, ElementId, IdRegistry};
 use unlace_base::types::{int4, uint4};
 
 use crate::flow::flow_flags;
@@ -286,9 +286,7 @@ fn parse_int_auto<T: IntParse>(s: &str) -> Option<T> {
     let bytes = s.as_bytes();
     let mut i = 0usize;
     // Leading whitespace (C locale isspace): operator>> skips it.
-    while i < bytes.len()
-        && matches!(bytes[i], b' ' | b'\t' | b'\n' | b'\x0b' | b'\x0c' | b'\r')
-    {
+    while i < bytes.len() && matches!(bytes[i], b' ' | b'\t' | b'\n' | b'\x0b' | b'\x0c' | b'\r') {
         i += 1;
     }
     // C++11 `num_get` distinguishes a truly-empty field (input was empty or
@@ -396,11 +394,7 @@ impl IntParse for int4 {
     }
     fn saturate(self, overflow: bool, neg: bool) -> Self {
         if overflow {
-            if neg {
-                int4::MIN
-            } else {
-                int4::MAX
-            }
+            if neg { int4::MIN } else { int4::MAX }
         } else {
             self
         }
@@ -422,11 +416,7 @@ impl IntParse for uint4 {
         v as uint4 // justified: faithful to `>> uint4` narrowing for in-range input
     }
     fn saturate(self, overflow: bool, _neg: bool) -> Self {
-        if overflow {
-            uint4::MAX
-        } else {
-            self
-        }
+        if overflow { uint4::MAX } else { self }
     }
 }
 
@@ -679,7 +669,9 @@ macro_rules! arch_option {
 arch_option!(
     /// `extrapop`: set the `extrapop` used by the (default) prototype model
     /// (C++ `OptionExtraPop`, options.cc:257).
-    OptionExtraPop, "extrapop");
+    OptionExtraPop,
+    "extrapop"
+);
 impl ArchOption for OptionExtraPop {
     fn get_name(&self) -> &str {
         "extrapop"
@@ -713,7 +705,9 @@ impl ArchOption for OptionExtraPop {
 arch_option!(
     /// `readonly`: toggle propagation of read-only memory values
     /// (C++ `OptionReadOnly`, options.cc:295).
-    OptionReadOnly, "readonly");
+    OptionReadOnly,
+    "readonly"
+);
 impl ArchOption for OptionReadOnly {
     fn get_name(&self) -> &str {
         "readonly"
@@ -743,7 +737,9 @@ impl ArchOption for OptionReadOnly {
 arch_option!(
     /// `defaultprototype`: set the default prototype model
     /// (C++ `OptionDefaultPrototype`, options.cc:310).
-    OptionDefaultPrototype, "defaultprototype");
+    OptionDefaultPrototype,
+    "defaultprototype"
+);
 impl ArchOption for OptionDefaultPrototype {
     fn get_name(&self) -> &str {
         "defaultprototype"
@@ -764,7 +760,9 @@ impl ArchOption for OptionDefaultPrototype {
 arch_option!(
     /// `inferconstptr`: toggle constant-pointer inference
     /// (C++ `OptionInferConstPtr`, options.cc:325).
-    OptionInferConstPtr, "inferconstptr");
+    OptionInferConstPtr,
+    "inferconstptr"
+);
 impl ArchOption for OptionInferConstPtr {
     fn get_name(&self) -> &str {
         "inferconstptr"
@@ -790,7 +788,9 @@ impl ArchOption for OptionInferConstPtr {
 arch_option!(
     /// `analyzeforloops`: toggle for-loop variable recovery
     /// (C++ `OptionForLoops`, options.cc:351).
-    OptionForLoops, "analyzeforloops");
+    OptionForLoops,
+    "analyzeforloops"
+);
 impl ArchOption for OptionForLoops {
     fn get_name(&self) -> &str {
         "analyzeforloops"
@@ -810,7 +810,9 @@ impl ArchOption for OptionForLoops {
 arch_option!(
     /// `inline`: mark/unmark a function as inline
     /// (C++ `OptionInline`, options.cc:365).
-    OptionInline, "inline");
+    OptionInline,
+    "inline"
+);
 impl ArchOption for OptionInline {
     fn get_name(&self) -> &str {
         "inline"
@@ -833,7 +835,9 @@ impl ArchOption for OptionInline {
 arch_option!(
     /// `noreturn`: mark/unmark a function with the noreturn property
     /// (C++ `OptionNoReturn`, options.cc:391).
-    OptionNoReturn, "noreturn");
+    OptionNoReturn,
+    "noreturn"
+);
 impl ArchOption for OptionNoReturn {
     fn get_name(&self) -> &str {
         "noreturn"
@@ -855,7 +859,9 @@ impl ArchOption for OptionNoReturn {
 arch_option!(
     /// `warning`: toggle a per-action/rule warning
     /// (C++ `OptionWarning`, options.cc:417).
-    OptionWarning, "warning");
+    OptionWarning,
+    "warning"
+);
 impl ArchOption for OptionWarning {
     fn get_name(&self) -> &str {
         "warning"
@@ -882,7 +888,9 @@ impl ArchOption for OptionWarning {
 arch_option!(
     /// `nullprinting`: toggle whether null pointers print as "NULL"
     /// (C++ `OptionNullPrinting`, options.cc:437).
-    OptionNullPrinting, "nullprinting");
+    OptionNullPrinting,
+    "nullprinting"
+);
 impl ArchOption for OptionNullPrinting {
     fn get_name(&self) -> &str {
         "nullprinting"
@@ -907,7 +915,9 @@ impl ArchOption for OptionNullPrinting {
 arch_option!(
     /// `inplaceops`: toggle in-place operators (+=, *=, ...)
     /// (C++ `OptionInPlaceOps`, options.cc:452).
-    OptionInPlaceOps, "inplaceops");
+    OptionInPlaceOps,
+    "inplaceops"
+);
 impl ArchOption for OptionInPlaceOps {
     fn get_name(&self) -> &str {
         "inplaceops"
@@ -932,7 +942,9 @@ impl ArchOption for OptionInPlaceOps {
 arch_option!(
     /// `conventionprinting`: toggle printing of the calling convention
     /// (C++ `OptionConventionPrinting`, options.cc:467).
-    OptionConventionPrinting, "conventionprinting");
+    OptionConventionPrinting,
+    "conventionprinting"
+);
 impl ArchOption for OptionConventionPrinting {
     fn get_name(&self) -> &str {
         "conventionprinting"
@@ -957,7 +969,9 @@ impl ArchOption for OptionConventionPrinting {
 arch_option!(
     /// `nocastprinting`: toggle whether cast syntax is emitted or stripped
     /// (C++ `OptionNoCastPrinting`, options.cc:482).
-    OptionNoCastPrinting, "nocastprinting");
+    OptionNoCastPrinting,
+    "nocastprinting"
+);
 impl ArchOption for OptionNoCastPrinting {
     fn get_name(&self) -> &str {
         "nocastprinting"
@@ -984,7 +998,9 @@ arch_option!(
     /// `hideextensions`: toggle whether implied ZEXT/SEXT are printed
     /// (C++ `OptionHideExtensions`, options.cc:497).  Not registered in the
     /// `OptionDatabase` ctor; reachable via the console `option` command.
-    OptionHideExtensions, "hideextensions");
+    OptionHideExtensions,
+    "hideextensions"
+);
 impl ArchOption for OptionHideExtensions {
     fn get_name(&self) -> &str {
         "hideextensions"
@@ -1009,7 +1025,9 @@ impl ArchOption for OptionHideExtensions {
 arch_option!(
     /// `maxlinewidth`: max characters per decompiled line
     /// (C++ `OptionMaxLineWidth`, options.cc:515).
-    OptionMaxLineWidth, "maxlinewidth");
+    OptionMaxLineWidth,
+    "maxlinewidth"
+);
 impl ArchOption for OptionMaxLineWidth {
     fn get_name(&self) -> &str {
         "maxlinewidth"
@@ -1034,7 +1052,9 @@ impl ArchOption for OptionMaxLineWidth {
 arch_option!(
     /// `indentincrement`: characters to indent per nested scope
     /// (C++ `OptionIndentIncrement`, options.cc:532).
-    OptionIndentIncrement, "indentincrement");
+    OptionIndentIncrement,
+    "indentincrement"
+);
 impl ArchOption for OptionIndentIncrement {
     fn get_name(&self) -> &str {
         "indentincrement"
@@ -1058,7 +1078,9 @@ impl ArchOption for OptionIndentIncrement {
 arch_option!(
     /// `commentindent`: characters to indent comment lines
     /// (C++ `OptionCommentIndent`, options.cc:550).
-    OptionCommentIndent, "commentindent");
+    OptionCommentIndent,
+    "commentindent"
+);
 impl ArchOption for OptionCommentIndent {
     fn get_name(&self) -> &str {
         "commentindent"
@@ -1082,7 +1104,9 @@ impl ArchOption for OptionCommentIndent {
 arch_option!(
     /// `commentstyle`: style of comment emitted
     /// (C++ `OptionCommentStyle`, options.cc:567).
-    OptionCommentStyle, "commentstyle");
+    OptionCommentStyle,
+    "commentstyle"
+);
 impl ArchOption for OptionCommentStyle {
     fn get_name(&self) -> &str {
         "commentstyle"
@@ -1102,7 +1126,9 @@ impl ArchOption for OptionCommentStyle {
 arch_option!(
     /// `commentheader`: toggle header comment types
     /// (C++ `OptionCommentHeader`, options.cc:579).
-    OptionCommentHeader, "commentheader");
+    OptionCommentHeader,
+    "commentheader"
+);
 impl ArchOption for OptionCommentHeader {
     fn get_name(&self) -> &str {
         "commentheader"
@@ -1131,7 +1157,9 @@ impl ArchOption for OptionCommentHeader {
 arch_option!(
     /// `commentinstruction`: toggle body comment types
     /// (C++ `OptionCommentInstruction`, options.cc:600).
-    OptionCommentInstruction, "commentinstruction");
+    OptionCommentInstruction,
+    "commentinstruction"
+);
 impl ArchOption for OptionCommentInstruction {
     fn get_name(&self) -> &str {
         "commentinstruction"
@@ -1160,7 +1188,9 @@ impl ArchOption for OptionCommentInstruction {
 arch_option!(
     /// `integerformat`: integer-emission strategy ("hex"/"dec"/"best")
     /// (C++ `OptionIntegerFormat`, options.cc:620).
-    OptionIntegerFormat, "integerformat");
+    OptionIntegerFormat,
+    "integerformat"
+);
 impl ArchOption for OptionIntegerFormat {
     fn get_name(&self) -> &str {
         "integerformat"
@@ -1180,7 +1210,9 @@ impl ArchOption for OptionIntegerFormat {
 arch_option!(
     /// `braceformat`: brace-formatting strategy per block category
     /// (C++ `OptionBraceFormat`, options.cc:640).
-    OptionBraceFormat, "braceformat");
+    OptionBraceFormat,
+    "braceformat"
+);
 impl ArchOption for OptionBraceFormat {
     fn get_name(&self) -> &str {
         "braceformat"
@@ -1206,7 +1238,11 @@ impl ArchOption for OptionBraceFormat {
             "ifelse" => BraceCategory::IfElse,
             "loop" => BraceCategory::Loop,
             "switch" => BraceCategory::Switch,
-            _ => return Err(KunaError::parse(format!("Unknown brace format category: {p1}"))),
+            _ => {
+                return Err(KunaError::parse(format!(
+                    "Unknown brace format category: {p1}"
+                )));
+            }
         };
         glb.set_brace_format(category, style);
         Ok(format!("Brace formatting for {p1} set to {p2}"))
@@ -1216,7 +1252,9 @@ impl ArchOption for OptionBraceFormat {
 arch_option!(
     /// `setaction`: establish a new root Action
     /// (C++ `OptionSetAction`, options.cc:675).
-    OptionSetAction, "setaction");
+    OptionSetAction,
+    "setaction"
+);
 impl ArchOption for OptionSetAction {
     fn get_name(&self) -> &str {
         "setaction"
@@ -1244,7 +1282,9 @@ impl ArchOption for OptionSetAction {
 arch_option!(
     /// `currentaction`: toggle a sub-group of actions in a root Action
     /// (C++ `OptionCurrentAction`, options.cc:698).
-    OptionCurrentAction, "currentaction");
+    OptionCurrentAction,
+    "currentaction"
+);
 impl ArchOption for OptionCurrentAction {
     fn get_name(&self) -> &str {
         "currentaction"
@@ -1278,7 +1318,9 @@ impl ArchOption for OptionCurrentAction {
 arch_option!(
     /// `allowcontextset`: toggle whether disassembly can modify context
     /// (C++ `OptionAllowContextSet`, options.cc:725).
-    OptionAllowContextSet, "allowcontextset");
+    OptionAllowContextSet,
+    "allowcontextset"
+);
 impl ArchOption for OptionAllowContextSet {
     fn get_name(&self) -> &str {
         "allowcontextset"
@@ -1301,7 +1343,9 @@ impl ArchOption for OptionAllowContextSet {
 arch_option!(
     /// `ignoreunimplemented`: treat unimplemented instructions as no-ops
     /// (C++ `OptionIgnoreUnimplemented`, options.cc:742).
-    OptionIgnoreUnimplemented, "ignoreunimplemented");
+    OptionIgnoreUnimplemented,
+    "ignoreunimplemented"
+);
 impl ArchOption for OptionIgnoreUnimplemented {
     fn get_name(&self) -> &str {
         "ignoreunimplemented"
@@ -1330,7 +1374,9 @@ impl ArchOption for OptionIgnoreUnimplemented {
 arch_option!(
     /// `errorunimplemented`: treat unimplemented instructions as fatal
     /// (C++ `OptionErrorUnimplemented`, options.cc:765).
-    OptionErrorUnimplemented, "errorunimplemented");
+    OptionErrorUnimplemented,
+    "errorunimplemented"
+);
 impl ArchOption for OptionErrorUnimplemented {
     fn get_name(&self) -> &str {
         "errorunimplemented"
@@ -1359,7 +1405,9 @@ impl ArchOption for OptionErrorUnimplemented {
 arch_option!(
     /// `errorreinterpreted`: treat off-cut reinterpretation as fatal
     /// (C++ `OptionErrorReinterpreted`, options.cc:788).
-    OptionErrorReinterpreted, "errorreinterpreted");
+    OptionErrorReinterpreted,
+    "errorreinterpreted"
+);
 impl ArchOption for OptionErrorReinterpreted {
     fn get_name(&self) -> &str {
         "errorreinterpreted"
@@ -1388,7 +1436,9 @@ impl ArchOption for OptionErrorReinterpreted {
 arch_option!(
     /// `errortoomanyinstructions`: treat too-many-instructions as fatal
     /// (C++ `OptionErrorTooManyInstructions`, options.cc:811).
-    OptionErrorTooManyInstructions, "errortoomanyinstructions");
+    OptionErrorTooManyInstructions,
+    "errortoomanyinstructions"
+);
 impl ArchOption for OptionErrorTooManyInstructions {
     fn get_name(&self) -> &str {
         "errortoomanyinstructions"
@@ -1417,7 +1467,9 @@ impl ArchOption for OptionErrorTooManyInstructions {
 arch_option!(
     /// `protoeval`: prototype model for the current function's parameters
     /// (C++ `OptionProtoEval`, options.cc:836).
-    OptionProtoEval, "protoeval");
+    OptionProtoEval,
+    "protoeval"
+);
 impl ArchOption for OptionProtoEval {
     fn get_name(&self) -> &str {
         "protoeval"
@@ -1441,7 +1493,9 @@ impl ArchOption for OptionProtoEval {
 arch_option!(
     /// `setlanguage`: language emitted by the decompiler
     /// (C++ `OptionSetLanguage`, options.cc:860).
-    OptionSetLanguage, "setlanguage");
+    OptionSetLanguage,
+    "setlanguage"
+);
 impl ArchOption for OptionSetLanguage {
     fn get_name(&self) -> &str {
         "setlanguage"
@@ -1469,7 +1523,9 @@ impl ArchOption for OptionSetLanguage {
 arch_option!(
     /// `jumptablemax`: max recovered entries for a single jump table
     /// (C++ `OptionJumpTableMax`, options.cc:877).
-    OptionJumpTableMax, "jumptablemax");
+    OptionJumpTableMax,
+    "jumptablemax"
+);
 impl ArchOption for OptionJumpTableMax {
     fn get_name(&self) -> &str {
         "jumptablemax"
@@ -1494,7 +1550,9 @@ impl ArchOption for OptionJumpTableMax {
 arch_option!(
     /// `jumpload`: toggle recording of switch-table loads
     /// (C++ `OptionJumpLoad`, options.cc:895).
-    OptionJumpLoad, "jumpload");
+    OptionJumpLoad,
+    "jumpload"
+);
 impl ArchOption for OptionJumpLoad {
     fn get_name(&self) -> &str {
         "jumpload"
@@ -1511,7 +1569,10 @@ impl ArchOption for OptionJumpLoad {
         if val {
             flags |= flow_flags::record_jumploads;
             glb.set_flow_options(flags);
-            Ok("Jumptable analysis will record loads required to calculate jump address".to_string())
+            Ok(
+                "Jumptable analysis will record loads required to calculate jump address"
+                    .to_string(),
+            )
         } else {
             flags &= !flow_flags::record_jumploads;
             glb.set_flow_options(flags);
@@ -1523,7 +1584,9 @@ impl ArchOption for OptionJumpLoad {
 arch_option!(
     /// `togglerule`: toggle a specific Rule in the current Action
     /// (C++ `OptionToggleRule`, options.cc:917).
-    OptionToggleRule, "togglerule");
+    OptionToggleRule,
+    "togglerule"
+);
 impl ArchOption for OptionToggleRule {
     fn get_name(&self) -> &str {
         "togglerule"
@@ -1569,7 +1632,9 @@ impl ArchOption for OptionToggleRule {
 arch_option!(
     /// `aliasblock`: how locked data-types on the stack block aliases
     /// (C++ `OptionAliasBlock`, options.cc:957).
-    OptionAliasBlock, "aliasblock");
+    OptionAliasBlock,
+    "aliasblock"
+);
 impl ArchOption for OptionAliasBlock {
     fn get_name(&self) -> &str {
         "aliasblock"
@@ -1603,7 +1668,9 @@ impl ArchOption for OptionAliasBlock {
 arch_option!(
     /// `maxinstruction`: max instructions processed per function
     /// (C++ `OptionMaxInstruction`, options.cc:982).
-    OptionMaxInstruction, "maxinstruction");
+    OptionMaxInstruction,
+    "maxinstruction"
+);
 impl ArchOption for OptionMaxInstruction {
     fn get_name(&self) -> &str {
         "maxinstruction"
@@ -1631,7 +1698,9 @@ impl ArchOption for OptionMaxInstruction {
 arch_option!(
     /// `namespacestrategy`: how namespace tokens are displayed
     /// (C++ `OptionNamespaceStrategy`, options.cc:1002).
-    OptionNamespaceStrategy, "namespacestrategy");
+    OptionNamespaceStrategy,
+    "namespacestrategy"
+);
 impl ArchOption for OptionNamespaceStrategy {
     fn get_name(&self) -> &str {
         "namespacestrategy"
@@ -1669,7 +1738,9 @@ pub mod split_datatype {
 arch_option!(
     /// `splitdatatype`: which data-type assignments are split into multiple ops
     /// (C++ `OptionSplitDatatypes`, options.cc:1043).
-    OptionSplitDatatypes, "splitdatatype");
+    OptionSplitDatatypes,
+    "splitdatatype"
+);
 impl OptionSplitDatatypes {
     /// Translate an option string to a configuration bit (C++
     /// `OptionSplitDatatypes::getOptionBit`, options.cc:1026).
@@ -1724,7 +1795,9 @@ impl ArchOption for OptionSplitDatatypes {
 arch_option!(
     /// `nanignore`: which NaN operations are replaced by false
     /// (C++ `OptionNanIgnore`, options.cc:1074).
-    OptionNanIgnore, "nanignore");
+    OptionNanIgnore,
+    "nanignore"
+);
 impl ArchOption for OptionNanIgnore {
     fn get_name(&self) -> &str {
         "nanignore"
@@ -1751,15 +1824,18 @@ impl ArchOption for OptionNanIgnore {
                 glb.set_nan_ignore_all(true);
                 glb.set_nan_ignore_compare(true);
             }
-            _ => return Err(KunaError::lowlevel(format!("Unknown nanignore option: {p1}"))),
+            _ => {
+                return Err(KunaError::lowlevel(format!(
+                    "Unknown nanignore option: {p1}"
+                )));
+            }
         }
         if !glb.nan_ignore_all() && !glb.nan_ignore_compare() {
             glb.disable_rule("ignorenan");
         } else {
             glb.enable_rule("ignorenan");
         }
-        if old_ignore_all == glb.nan_ignore_all()
-            && old_ignore_compare == glb.nan_ignore_compare()
+        if old_ignore_all == glb.nan_ignore_all() && old_ignore_compare == glb.nan_ignore_compare()
         {
             return Ok("NaN ignore configuration unchanged".to_string());
         }
@@ -1803,11 +1879,16 @@ impl OptionDatabase {
     ///
     /// Kuna options dispatch by name through `Architecture::set_kuna_option`.
     pub fn new() -> Self {
-        let mut db = OptionDatabase { optionmap: BTreeMap::new() };
+        let mut db = OptionDatabase {
+            optionmap: BTreeMap::new(),
+        };
         // Registration order mirrors options.cc:119-155 exactly.
         db.register_option(ELEM_EXTRAPOP, Box::new(OptionExtraPop));
         db.register_option(ELEM_READONLY, Box::new(OptionReadOnly));
-        db.register_option(ELEM_IGNOREUNIMPLEMENTED, Box::new(OptionIgnoreUnimplemented));
+        db.register_option(
+            ELEM_IGNOREUNIMPLEMENTED,
+            Box::new(OptionIgnoreUnimplemented),
+        );
         db.register_option(ELEM_ERRORUNIMPLEMENTED, Box::new(OptionErrorUnimplemented));
         db.register_option(ELEM_ERRORREINTERPRETED, Box::new(OptionErrorReinterpreted));
         db.register_option(

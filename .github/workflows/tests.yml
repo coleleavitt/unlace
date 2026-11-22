@@ -58,8 +58,11 @@ jobs:
 
       - name: Install Rust (stable)
         run: |
-          rustup toolchain install stable --profile minimal --component clippy
+          rustup toolchain install stable --profile minimal --component clippy,rustfmt
           rustup default stable
+
+      - name: rustfmt (edition 2024 style, decompiler/rustfmt.toml)
+        run: cd decompiler && cargo fmt --all --check
 
       # The browser front-end (integrations/web, unlace-wasm) is opt-in: its steps run only
       # when the repository variable UNLACE_WEB is `true`.

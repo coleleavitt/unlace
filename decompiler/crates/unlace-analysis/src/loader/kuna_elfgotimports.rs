@@ -16,9 +16,11 @@
 //! (`exported_value`, `&exported_value`); painting it `externref` would stop that
 //! fold. The relocation types are `dynrelocs`' (x86-64, AArch64, i386, ARM).
 
-use unlace_decomp::kuna_symbolnamechars::{sanitize_symbol_name_bytes, symbolnamechars_mode, NameChars};
 use object::read::{Object, ObjectSymbol};
 use object::{RelocationFlags, RelocationTarget};
+use unlace_decomp::kuna_symbolnamechars::{
+    NameChars, sanitize_symbol_name_bytes, symbolnamechars_mode,
+};
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
@@ -27,10 +29,12 @@ use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 /// `dynrelocs` does not handle.
 pub(crate) fn resolve(file: &object::File) -> Vec<(u64, Vec<u8>)> {
     let mut out = Vec::new();
-    if file.format() != object::BinaryFormat::Elf || file.kind() == object::ObjectKind::Relocatable {
+    if file.format() != object::BinaryFormat::Elf || file.kind() == object::ObjectKind::Relocatable
+    {
         return out;
     }
-    let Some((_, r_glob_dat, _)) = crate::loader::kuna_dynrelocs::reloc_triple(file.architecture()) else {
+    let Some((_, r_glob_dat, _)) = crate::loader::kuna_dynrelocs::reloc_triple(file.architecture())
+    else {
         return out;
     };
     let Some(relocs) = file.dynamic_relocations() else {
@@ -61,7 +65,10 @@ pub(crate) fn resolve(file: &object::File) -> Vec<(u64, Vec<u8>)> {
 /// would run past the end of the address space is dropped.
 fn ranged(file: &object::File) -> Vec<((u64, u64), Vec<u8>)> {
     let width = if file.is_64() { 8 } else { 4 };
-    resolve(file).into_iter().filter_map(|(slot, name)| Some(((slot, slot.checked_add(width)?), name))).collect()
+    resolve(file)
+        .into_iter()
+        .filter_map(|(slot, name)| Some(((slot, slot.checked_add(width)?), name)))
+        .collect()
 }
 
 /// The `[slot, slot + ptr)` ranges of [`resolve`]'s slots.
@@ -94,7 +101,10 @@ impl AnalysisPass for ElfGotImportPass {
         let mut out = AnalysisOutput::default();
         let mode = symbolnamechars_mode();
         let named: std::collections::HashSet<u64> =
-            crate::loader::elf_plt::got_call_slot_ranges(ctx.file, ctx.bytes).into_iter().map(|(lo, _)| lo).collect();
+            crate::loader::elf_plt::got_call_slot_ranges(ctx.file, ctx.bytes)
+                .into_iter()
+                .map(|(lo, _)| lo)
+                .collect();
         for ((slot, end), name) in ranged(ctx.file) {
             out.externref.push((slot, end));
             if !named.contains(&slot) {
@@ -109,17 +119,24 @@ impl AnalysisPass for ElfGotImportPass {
 mod tests {
     use object::read::{Object, ObjectSection};
 
-    use super::{minted_name, ranged, resolve, slots, NameChars};
+    use super::{NameChars, minted_name, ranged, resolve, slots};
 
     fn fixture() -> Vec<u8> {
-        std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/elf_gotdata_x86_64.so")).unwrap()
+        std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/elf_gotdata_x86_64.so"
+        ))
+        .unwrap()
     }
 
     #[test]
     fn a_slot_name_is_sanitized_like_every_minted_name() {
         assert_eq!(minted_name(b"stdout", NameChars::Safe), "stdout");
         let hostile = minted_name(b"imported_c\nunter*/x", NameChars::Safe);
-        assert!(!hostile.contains('\n') && !hostile.contains("*/"), "{hostile:?}");
+        assert!(
+            !hostile.contains('\n') && !hostile.contains("*/"),
+            "{hostile:?}"
+        );
     }
 
     #[test]
@@ -128,7 +145,10 @@ mod tests {
         let (off, len) = {
             let file = object::File::parse(&*bytes).unwrap();
             assert_eq!(slots(&file).len(), 3);
-            file.section_by_name(".rela.dyn").unwrap().file_range().unwrap()
+            file.section_by_name(".rela.dyn")
+                .unwrap()
+                .file_range()
+                .unwrap()
         };
         let stdout_slot = 0x2690u64.to_le_bytes();
         let at = (off..off + len)
@@ -137,7 +157,11 @@ mod tests {
             .unwrap() as usize;
         bytes[at..at + 8].copy_from_slice(&0xffff_ffff_ffff_fffcu64.to_le_bytes());
         let file = object::File::parse(&*bytes).unwrap();
-        assert!(resolve(&file).iter().any(|&(slot, _)| slot == 0xffff_ffff_ffff_fffc));
+        assert!(
+            resolve(&file)
+                .iter()
+                .any(|&(slot, _)| slot == 0xffff_ffff_ffff_fffc)
+        );
         assert_eq!(slots(&file), [(0x2680, 0x2688), (0x2688, 0x2690)]);
         assert_eq!(ranged(&file).len(), 2);
     }

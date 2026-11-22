@@ -84,7 +84,7 @@
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
-use crate::action::{ruleflags, Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
+use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult, ruleflags};
 use crate::funcdata::Funcdata;
 
 // =============================================================================
@@ -100,7 +100,9 @@ pub struct ActionStart {
 
 impl ActionStart {
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionStart { base: ActionBase::new(0, "start", g) })
+        Box::new(ActionStart {
+            base: ActionBase::new(0, "start", g),
+        })
     }
 }
 
@@ -115,7 +117,9 @@ impl Action for ActionStart {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionStart { base: self.base.clone() }))
+        Some(Box::new(ActionStart {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++: data.startProcessing(); return 0;
@@ -139,7 +143,9 @@ pub struct ActionStop {
 
 impl ActionStop {
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionStop { base: ActionBase::new(0, "stop", g) })
+        Box::new(ActionStop {
+            base: ActionBase::new(0, "stop", g),
+        })
     }
 }
 
@@ -154,7 +160,9 @@ impl Action for ActionStop {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionStop { base: self.base.clone() }))
+        Some(Box::new(ActionStop {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, _data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++: data.stopProcessing(); return 0;
@@ -173,7 +181,9 @@ pub struct ActionStartCleanUp {
 
 impl ActionStartCleanUp {
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionStartCleanUp { base: ActionBase::new(0, "startcleanup", g) })
+        Box::new(ActionStartCleanUp {
+            base: ActionBase::new(0, "startcleanup", g),
+        })
     }
 }
 
@@ -188,7 +198,9 @@ impl Action for ActionStartCleanUp {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionStartCleanUp { base: self.base.clone() }))
+        Some(Box::new(ActionStartCleanUp {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         data.start_clean_up();
@@ -208,7 +220,9 @@ pub struct ActionStartTypes {
 
 impl ActionStartTypes {
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionStartTypes { base: ActionBase::new(0, "starttypes", g) })
+        Box::new(ActionStartTypes {
+            base: ActionBase::new(0, "starttypes", g),
+        })
     }
 }
 
@@ -223,7 +237,9 @@ impl Action for ActionStartTypes {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionStartTypes { base: self.base.clone() }))
+        Some(Box::new(ActionStartTypes {
+            base: self.base.clone(),
+        }))
     }
     /// C++ `ActionStartTypes::reset`: `{ data.setTypeRecovery(true); }`.
     ///
@@ -256,7 +272,9 @@ pub struct ActionConstbase {
 
 impl ActionConstbase {
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionConstbase { base: ActionBase::new(0, "constbase", g) })
+        Box::new(ActionConstbase {
+            base: ActionBase::new(0, "constbase", g),
+        })
     }
 }
 
@@ -271,7 +289,9 @@ impl Action for ActionConstbase {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionConstbase { base: self.base.clone() }))
+        Some(Box::new(ActionConstbase {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:693.
@@ -316,10 +336,12 @@ impl Action for ActionConstbase {
             let addr = unlace_base::address::Address::new(space, ctx.loc.offset);
             let size = ctx.loc.size as int4;
             let op = data.new_op(1, bb_start.clone());
-            data.new_varnode_out(size, &addr, op).expect("ActionConstbase: newVarnodeOut");
+            data.new_varnode_out(size, &addr, op)
+                .expect("ActionConstbase: newVarnodeOut");
             let vnin = data.new_constant(size, ctx.val);
             data.op_set_opcode_code(op, OpCode::CPUI_COPY);
-            data.op_set_input(op, vnin, 0).expect("ActionConstbase: opSetInput");
+            data.op_set_input(op, vnin, 0)
+                .expect("ActionConstbase: opSetInput");
             data.op_insert_begin(op, bb);
         }
         0
@@ -336,7 +358,9 @@ pub struct ActionSpacebase {
 
 impl ActionSpacebase {
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionSpacebase { base: ActionBase::new(0, "spacebase", g) })
+        Box::new(ActionSpacebase {
+            base: ActionBase::new(0, "spacebase", g),
+        })
     }
 }
 
@@ -351,7 +375,9 @@ impl Action for ActionSpacebase {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionSpacebase { base: self.base.clone() }))
+        Some(Box::new(ActionSpacebase {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:1648.
@@ -370,7 +396,9 @@ pub struct ActionHeritage {
 
 impl ActionHeritage {
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionHeritage { base: ActionBase::new(0, "heritage", g) })
+        Box::new(ActionHeritage {
+            base: ActionBase::new(0, "heritage", g),
+        })
     }
 }
 
@@ -385,7 +413,9 @@ impl Action for ActionHeritage {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionHeritage { base: self.base.clone() }))
+        Some(Box::new(ActionHeritage {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.hh:289.
@@ -425,7 +455,9 @@ pub struct ActionNonzeroMask {
 
 impl ActionNonzeroMask {
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionNonzeroMask { base: ActionBase::new(0, "nonzeromask", g) })
+        Box::new(ActionNonzeroMask {
+            base: ActionBase::new(0, "nonzeromask", g),
+        })
     }
 }
 
@@ -440,7 +472,9 @@ impl Action for ActionNonzeroMask {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionNonzeroMask { base: self.base.clone() }))
+        Some(Box::new(ActionNonzeroMask {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         data.calc_nz_mask();
@@ -460,7 +494,9 @@ pub struct ActionVarnodeProps {
 
 impl ActionVarnodeProps {
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionVarnodeProps { base: ActionBase::new(0, "varnodeprops", g) })
+        Box::new(ActionVarnodeProps {
+            base: ActionBase::new(0, "varnodeprops", g),
+        })
     }
 }
 
@@ -475,7 +511,9 @@ impl Action for ActionVarnodeProps {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionVarnodeProps { base: self.base.clone() }))
+        Some(Box::new(ActionVarnodeProps {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:1298.
@@ -541,12 +579,18 @@ impl Action for ActionVarnodeProps {
                             if let Some(p) = ptr {
                                 let (pc, pro, pw, pdef) = {
                                     let v = data.vbank().get(p).expect("varnodeprops: stale ptr");
-                                    (v.is_constant(), v.is_read_only(), v.is_written(), v.get_def())
+                                    (
+                                        v.is_constant(),
+                                        v.is_read_only(),
+                                        v.is_written(),
+                                        v.get_def(),
+                                    )
                                 };
                                 if pc || pro {
                                     skip = true;
                                 } else if pw {
-                                    let copyop = pdef.expect("varnodeprops: written ptr has no def");
+                                    let copyop =
+                                        pdef.expect("varnodeprops: written ptr has no def");
                                     if data.obank().get(copyop).map(|o| o.code())
                                         == Some(OpCode::CPUI_COPY)
                                     {
@@ -569,7 +613,9 @@ impl Action for ActionVarnodeProps {
                         }
                     }
                     skip |= crate::kuna_stackalias::holds_store(data, vn);
-                    skip |= def.is_some_and(|op| crate::p3_dataflow::kuna_volatileload::is_volatile(data, op));
+                    skip |= def.is_some_and(|op| {
+                        crate::p3_dataflow::kuna_volatileload::is_volatile(data, op)
+                    });
                     if !skip {
                         data.vbank_mut()
                             .get_mut(vn)
@@ -599,12 +645,10 @@ impl Action for ActionVarnodeProps {
                 // every path that has no object loader.
                 let litpool_fold = is_read_only
                     && !cachereadonly
-                    && data
-                        .vbank()
-                        .get(vn)
-                        .is_some_and(|v| {
-                            data.get_arch().litpool_const_contains(v.get_offset(), vn_size as u32)
-                        });
+                    && data.vbank().get(vn).is_some_and(|v| {
+                        data.get_arch()
+                            .litpool_const_contains(v.get_offset(), vn_size as u32)
+                    });
                 // A loader-resolved external reference's symbolic identity
                 // outranks every policy for folding its on-disk bytes.
                 if !is_external_ref
@@ -619,7 +663,8 @@ impl Action for ActionVarnodeProps {
                         self.base.count += 1;
                     }
                 }
-            } else if (nz_mask & consume) == 0 && (vn_size as usize) <= std::mem::size_of::<uintb>() {
+            } else if (nz_mask & consume) == 0 && (vn_size as usize) <= std::mem::size_of::<uintb>()
+            {
                 // FIXME: uintb should be arbitrary precision
                 if is_constant {
                     continue; // Don't replace a constant
@@ -664,7 +709,9 @@ pub struct ActionUnreachable {
 
 impl ActionUnreachable {
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionUnreachable { base: ActionBase::new(0, "unreachable", g) })
+        Box::new(ActionUnreachable {
+            base: ActionBase::new(0, "unreachable", g),
+        })
     }
 }
 
@@ -679,7 +726,9 @@ impl Action for ActionUnreachable {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionUnreachable { base: self.base.clone() }))
+        Some(Box::new(ActionUnreachable {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:3560
@@ -724,7 +773,9 @@ impl Action for ActionDoNothing {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionDoNothing { base: self.base.clone() }))
+        Some(Box::new(ActionDoNothing {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:3569.
@@ -777,7 +828,9 @@ pub struct ActionLateDoNothing {
 
 impl ActionLateDoNothing {
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionLateDoNothing { base: ActionBase::new(0, "latedonothing", g) })
+        Box::new(ActionLateDoNothing {
+            base: ActionBase::new(0, "latedonothing", g),
+        })
     }
 
     /// Does removing the given block create a redundant branch point?
@@ -826,7 +879,9 @@ impl Action for ActionLateDoNothing {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionLateDoNothing { base: self.base.clone() }))
+        Some(Box::new(ActionLateDoNothing {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:3623.
@@ -873,7 +928,9 @@ pub struct ActionRedundBranch {
 
 impl ActionRedundBranch {
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionRedundBranch { base: ActionBase::new(0, "redundbranch", g) })
+        Box::new(ActionRedundBranch {
+            base: ActionBase::new(0, "redundbranch", g),
+        })
     }
 }
 
@@ -888,7 +945,9 @@ impl Action for ActionRedundBranch {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionRedundBranch { base: self.base.clone() }))
+        Some(Box::new(ActionRedundBranch {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:3650.
@@ -911,7 +970,11 @@ impl Action for ActionRedundBranch {
                 // Do not splice a block coming from a single-exit switch — this
                 // prevents possible second-stage recovery.
                 // (kuna javatry) A `try` dispatch keeps a block of its own.
-                if bl_size_in == 1 && !bl_is_entry && !bb_is_switch && !crate::kuna_javatry::is_dispatch_only(data, bl) {
+                if bl_size_in == 1
+                    && !bl_is_entry
+                    && !bb_is_switch
+                    && !crate::kuna_javatry::is_dispatch_only(data, bl)
+                {
                     // splice_block_basic Errs when the spliced block ends in a
                     // branch op (STUB(W3-op)); a successful splice counts as a
                     // change and resets the scan, exactly as C++ `i = -1`.
@@ -954,7 +1017,9 @@ pub struct ActionDeterminedBranch {
 
 impl ActionDeterminedBranch {
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionDeterminedBranch { base: ActionBase::new(0, "determinedbranch", g) })
+        Box::new(ActionDeterminedBranch {
+            base: ActionBase::new(0, "determinedbranch", g),
+        })
     }
 }
 
@@ -969,7 +1034,9 @@ impl Action for ActionDeterminedBranch {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionDeterminedBranch { base: self.base.clone() }))
+        Some(Box::new(ActionDeterminedBranch {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:3688.
@@ -988,8 +1055,15 @@ impl Action for ActionDeterminedBranch {
                 None => continue,
             };
             let (code, nin, is_flip) = {
-                let cbranch_op = data.obank().get(cbranch).expect("determinedbranch: cbranch");
-                (cbranch_op.code(), cbranch_op.num_input(), cbranch_op.is_boolean_flip())
+                let cbranch_op = data
+                    .obank()
+                    .get(cbranch)
+                    .expect("determinedbranch: cbranch");
+                (
+                    cbranch_op.code(),
+                    cbranch_op.num_input(),
+                    cbranch_op.is_boolean_flip(),
+                )
             };
             if code != OpCode::CPUI_CBRANCH {
                 continue;
@@ -1000,13 +1074,20 @@ impl Action for ActionDeterminedBranch {
             if nin < 2 {
                 continue;
             }
-            let cond_vn_id = data.obank().get(cbranch).expect("determinedbranch: cbranch").get_in(1);
+            let cond_vn_id = data
+                .obank()
+                .get(cbranch)
+                .expect("determinedbranch: cbranch")
+                .get_in(1);
             let cond_vn_id = match cond_vn_id {
                 Some(v) => v,
                 None => continue,
             };
             let val: uintb = {
-                let cond_vn = data.vbank().get(cond_vn_id).expect("determinedbranch: cond vn");
+                let cond_vn = data
+                    .vbank()
+                    .get(cond_vn_id)
+                    .expect("determinedbranch: cond vn");
                 if !cond_vn.is_constant() {
                     continue;
                 }
@@ -1052,7 +1133,9 @@ impl Action for ActionNormalizeSetup {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionNormalizeSetup { base: self.base.clone() }))
+        Some(Box::new(ActionNormalizeSetup {
+            base: self.base.clone(),
+        }))
     }
     /// C++ `ActionNormalizeSetup::reset`: `{ data.setNormalization(true); }`.
     ///

@@ -21,8 +21,8 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use unlace_base::address::calc_mask;
-use unlace_base::types::{int4, uintb, Wrap};
-use unlace_decomp::dtype::{flags, type_metatype, Datatype, DatatypeKind};
+use unlace_base::types::{Wrap, int4, uintb};
+use unlace_decomp::dtype::{Datatype, DatatypeKind, flags, type_metatype};
 use unlace_decomp::rangeutil::CircleRange;
 
 // ---------------------------------------------------------------------------
@@ -31,10 +31,7 @@ use unlace_decomp::rangeutil::CircleRange;
 // oracle.  Mixed-sign / wrap handling is made explicit.
 // ---------------------------------------------------------------------------
 
-fn ref_get_start_stop_step(
-    mut elements: Vec<uintb>,
-    mask: uintb,
-) -> Option<(uintb, uintb, int4)> {
+fn ref_get_start_stop_step(mut elements: Vec<uintb>, mask: uintb) -> Option<(uintb, uintb, int4)> {
     if elements.is_empty() {
         return Some((0, 0, 1));
     }
@@ -156,9 +153,21 @@ fn assert_roundtrip(lft: uintb, rgt: uintb, size: int4, step: int4) {
         "ref getStartStopStep rejected a real CircleRange [{lft:#x},{rgt:#x}) step {step} els={els:x?}"
     );
     let (start, stop, st) = got.unwrap();
-    assert_eq!(start, range.get_min(), "start mismatch for [{lft:#x},{rgt:#x}) step {step}");
-    assert_eq!(stop, range.get_end(), "stop mismatch for [{lft:#x},{rgt:#x}) step {step}");
-    assert_eq!(st, range.get_step(), "step mismatch for [{lft:#x},{rgt:#x}) step {step}");
+    assert_eq!(
+        start,
+        range.get_min(),
+        "start mismatch for [{lft:#x},{rgt:#x}) step {step}"
+    );
+    assert_eq!(
+        stop,
+        range.get_end(),
+        "stop mismatch for [{lft:#x},{rgt:#x}) step {step}"
+    );
+    assert_eq!(
+        st,
+        range.get_step(),
+        "step mismatch for [{lft:#x},{rgt:#x}) step {step}"
+    );
 }
 
 #[test]
@@ -249,7 +258,10 @@ fn w6_harness_unittests_multiset_ops() {
     assert_eq!(set_union(&a, &b), vec![1, 2, 2, 2, 5, 5, 5, 7, 9]);
     // disjoint -> empty intersection (the `code==0` false / empty-elements arm
     // of testEqual, e.g. circlerange_intersect6 inputs touch this).
-    assert_eq!(set_intersection(&[1u64, 3, 5], &[2u64, 4, 6]), Vec::<u64>::new());
+    assert_eq!(
+        set_intersection(&[1u64, 3, 5], &[2u64, 4, 6]),
+        Vec::<u64>::new()
+    );
     // empty operand
     assert_eq!(set_union(&[], &[3u64, 4]), vec![3, 4]);
     assert_eq!(set_intersection(&[3u64, 4], &[]), Vec::<u64>::new());
@@ -275,7 +287,13 @@ fn w6_harness_unittests_enum_zero_and_complement_boundary() {
     // enum3 from the C++ TEST, but probing values the ported TESTs skip.
     let enum3 = make_enum(
         8,
-        &[(0, "ZERO"), (1, "ONE"), (2, "TWO"), (4, "FOUR"), (8, "EIGHT")],
+        &[
+            (0, "ZERO"),
+            (1, "ONE"),
+            (2, "TWO"),
+            (4, "FOUR"),
+            (8, "EIGHT"),
+        ],
     );
 
     // 3 = ONE|TWO, both present, no complement (ordered most-significant first).

@@ -12,9 +12,9 @@
 use std::cmp::Ordering;
 use std::rc::Rc;
 
-use unlace_base::address::{Address, AddrSpacePtr, SeqNum};
+use unlace_base::address::{AddrSpacePtr, Address, SeqNum};
 use unlace_base::error::KunaResult;
-use unlace_base::marshal::{AttributeId, Decoder, ElementId, ATTRIB_NAME, ATTRIB_SPACE, ELEM_VOID};
+use unlace_base::marshal::{ATTRIB_NAME, ATTRIB_SPACE, AttributeId, Decoder, ELEM_VOID, ElementId};
 use unlace_base::space::{AddrSpace, AddrSpaceManager};
 use unlace_base::types::Wrap;
 
@@ -223,8 +223,10 @@ impl VarnodeData {
             return false;
         }
         // C++ dereferences the space pointer below: null is UB -> panic
-        let space =
-            self.space.as_ref().expect("VarnodeData::is_contiguous: null space pointer (C++ UB)");
+        let space = self
+            .space
+            .as_ref()
+            .expect("VarnodeData::is_contiguous: null space pointer (C++ UB)");
         if space.is_big_endian() {
             let nextoff = space.wrap_offset(self.offset.wadd(u64::from(self.size)));
             if nextoff == lo.offset {
@@ -443,7 +445,7 @@ mod tests {
     use unlace_base::address::ELEM_ADDR;
     use unlace_base::error::KunaError;
     use unlace_base::marshal::{Encoder, IdRegistry, PackedDecode, PackedEncode, XmlDecode};
-    use unlace_base::space::{addrspace_flags, spacetype, ConstantSpace};
+    use unlace_base::space::{ConstantSpace, addrspace_flags, spacetype};
 
     use crate::opcodes::OpcodeEncoder;
 
@@ -472,7 +474,11 @@ mod tests {
     }
 
     fn vn(space: Rc<AddrSpace>, offset: u64, size: u32) -> VarnodeData {
-        VarnodeData { space: Some(space), offset, size }
+        VarnodeData {
+            space: Some(space),
+            offset,
+            size,
+        }
     }
 
     #[test]
@@ -484,7 +490,10 @@ mod tests {
         assert_eq!(vn(Rc::clone(&r), 0x10, 4), vn(Rc::clone(&r), 0x10, 4));
         assert_ne!(vn(Rc::clone(&r), 0x10, 4), vn(Rc::clone(&r), 0x10, 8));
         assert_ne!(vn(Rc::clone(&r), 0x10, 4), vn(Rc::clone(&r), 0x11, 4));
-        assert_ne!(vn(Rc::clone(&r), 0x10, 4), vn(Rc::clone(&constant), 0x10, 4));
+        assert_ne!(
+            vn(Rc::clone(&r), 0x10, 4),
+            vn(Rc::clone(&constant), 0x10, 4)
+        );
         // Ordering: space index, then offset, then BIG sizes first.
         assert!(vn(Rc::clone(&constant), 0x10, 4) < vn(Rc::clone(&r), 0x0, 4));
         assert!(vn(Rc::clone(&r), 0x10, 4) < vn(Rc::clone(&r), 0x11, 4));
@@ -600,10 +609,16 @@ mod tests {
             enc.open_element(&ELEM_ADDR); // any element: decode assumes <op> is open
             enc.write_opcode(&ATTRIB_CODE, OpCode::CPUI_INT_SUB);
             // output varnode
-            Address::new(Rc::clone(&r), 0x50).encode_sized(&mut enc, 4).unwrap();
+            Address::new(Rc::clone(&r), 0x50)
+                .encode_sized(&mut enc, 4)
+                .unwrap();
             // two input varnodes
-            Address::new(Rc::clone(&r), 0x60).encode_sized(&mut enc, 4).unwrap();
-            Address::new(Rc::clone(&r), 0x64).encode_sized(&mut enc, 4).unwrap();
+            Address::new(Rc::clone(&r), 0x60)
+                .encode_sized(&mut enc, 4)
+                .unwrap();
+            Address::new(Rc::clone(&r), 0x64)
+                .encode_sized(&mut enc, 4)
+                .unwrap();
             enc.close_element(&ELEM_ADDR);
         }
         let mut dec = PackedDecode::new(&manager);
@@ -630,10 +645,14 @@ mod tests {
         let mut dec = XmlDecode::new(&manager, &registry);
         dec.ingest_stream(b"<addr name=\"EAX\"/>").unwrap();
         let mut v = VarnodeData::default();
-        assert!(matches!(v.decode(&mut dec), Err(KunaError::Lowlevel { .. })));
+        assert!(matches!(
+            v.decode(&mut dec),
+            Err(KunaError::Lowlevel { .. })
+        ));
 
         let mut dec = XmlDecode::new(&manager, &registry);
-        dec.ingest_stream(b"<op code=\"NOT_AN_OP\"><void/></op>").unwrap();
+        dec.ingest_stream(b"<op code=\"NOT_AN_OP\"><void/></op>")
+            .unwrap();
         dec.open_element().unwrap();
         let mut invar: Vec<VarnodeData> = Vec::new();
         let mut outvar = Some(VarnodeData::default());

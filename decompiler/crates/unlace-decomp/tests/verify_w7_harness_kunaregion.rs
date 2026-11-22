@@ -23,8 +23,8 @@
 //! exercise (multi-direct-subregion top, a loop with a nested sub-region body,
 //! a head that is NOT the lowest input address).
 
-use unlace_decomp::kuna_regionid::{KunaGraphRegion, KunaRegionIdentifier, KunaRegionVisitor};
 use unlace_decomp::context::BlockId;
+use unlace_decomp::kuna_regionid::{KunaGraphRegion, KunaRegionIdentifier, KunaRegionVisitor};
 
 /// Re-implementation of the harness collector, kept byte-for-byte equivalent so
 /// the tests exercise the SAME reconstruction logic under review.
@@ -285,7 +285,10 @@ fn cyclic_body_includes_nested_region_blocks() {
 
     // Head reconstruction: the loop header is address 2 (the back-edge target),
     // and it is the first leaf visited while the frame is open.
-    assert_eq!(*head, 2, "loop head reconstruction = back-edge target addr 2");
+    assert_eq!(
+        *head, 2,
+        "loop head reconstruction = back-edge target addr 2"
+    );
 
     // Body reconstruction must include the nested diamond's blocks (3,4,5,6),
     // proving the open-frame capture recurses through nested sub-regions exactly

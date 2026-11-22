@@ -70,7 +70,13 @@ fn processor(v: &VarnodeData) -> Option<Reg> {
 }
 
 impl unlace_sleigh::translate::PcodeEmit for Emit {
-    fn dump(&mut self, _addr: &Address, opc: OpCode, outvar: Option<&VarnodeData>, vars: &[VarnodeData]) {
+    fn dump(
+        &mut self,
+        _addr: &Address,
+        opc: OpCode,
+        outvar: Option<&VarnodeData>,
+        vars: &[VarnodeData],
+    ) {
         for r in vars.iter().filter_map(processor) {
             if !self.writes.iter().any(|w| overlaps(*w, r)) {
                 self.reads.push(r);
@@ -81,7 +87,10 @@ impl unlace_sleigh::translate::PcodeEmit for Emit {
         }
         match opc {
             OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => self.call = true,
-            OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH | OpCode::CPUI_BRANCHIND | OpCode::CPUI_RETURN => {
+            OpCode::CPUI_BRANCH
+            | OpCode::CPUI_CBRANCH
+            | OpCode::CPUI_BRANCHIND
+            | OpCode::CPUI_RETURN => {
                 let internal = vars
                     .first()
                     .and_then(|v| v.space.as_ref())
@@ -93,20 +102,35 @@ impl unlace_sleigh::translate::PcodeEmit for Emit {
     }
 }
 
-fn decode(tr: &dyn unlace_sleigh::translate::Translate, space: &Rc<unlace_base::space::AddrSpace>, at: u64) -> Option<(Emit, u64)> {
+fn decode(
+    tr: &dyn unlace_sleigh::translate::Translate,
+    space: &Rc<unlace_base::space::AddrSpace>,
+    at: u64,
+) -> Option<(Emit, u64)> {
     let mut emit = Emit::default();
-    let len = tr.one_instruction(&mut emit, &Address::new(Rc::clone(space), at)).ok().filter(|&n| n > 0)?;
+    let len = tr
+        .one_instruction(&mut emit, &Address::new(Rc::clone(space), at))
+        .ok()
+        .filter(|&n| n > 0)?;
     Some((emit, len as u64))
 }
 
 /// The instructions before `site`, decoded from the earliest start in the
 /// window whose instruction boundaries land exactly on `site`.
-fn before(tr: &dyn unlace_sleigh::translate::Translate, space: &Rc<unlace_base::space::AddrSpace>, site: u64) -> Vec<Emit> {
+fn before(
+    tr: &dyn unlace_sleigh::translate::Translate,
+    space: &Rc<unlace_base::space::AddrSpace>,
+    site: u64,
+) -> Vec<Emit> {
     for back in (1..=WINDOW).rev() {
-        let Some(mut at) = site.checked_sub(back) else { continue };
+        let Some(mut at) = site.checked_sub(back) else {
+            continue;
+        };
         let mut insns = Vec::new();
         while at < site {
-            let Some((e, len)) = decode(tr, space, at) else { break };
+            let Some((e, len)) = decode(tr, space, at) else {
+                break;
+            };
             insns.push(e);
             at += len;
         }
@@ -117,7 +141,13 @@ fn before(tr: &dyn unlace_sleigh::translate::Translate, space: &Rc<unlace_base::
     Vec::new()
 }
 
-fn site_vote(tr: &dyn unlace_sleigh::translate::Translate, space: &Rc<unlace_base::space::AddrSpace>, site: u64, regs: &[Reg], rax: Reg) -> Option<ImportVote> {
+fn site_vote(
+    tr: &dyn unlace_sleigh::translate::Translate,
+    space: &Rc<unlace_base::space::AddrSpace>,
+    site: u64,
+    regs: &[Reg],
+    rax: Reg,
+) -> Option<ImportVote> {
     let (call, len) = decode(tr, space, site)?;
     if !call.call {
         return None;
@@ -135,7 +165,9 @@ fn site_vote(tr: &dyn unlace_sleigh::translate::Translate, space: &Rc<unlace_bas
     let mut output = false;
     let mut at = site + len;
     for _ in 0..LOOK_AHEAD {
-        let Some((e, len)) = decode(tr, space, at) else { break };
+        let Some((e, len)) = decode(tr, space, at) else {
+            break;
+        };
         if e.reads.iter().any(|r| overlaps(*r, rax)) {
             output = true;
             break;
@@ -150,14 +182,22 @@ fn site_vote(tr: &dyn unlace_sleigh::translate::Translate, space: &Rc<unlace_bas
 
 fn register(arch: &Architecture, name: &str) -> Option<(Address, int4)> {
     let v = arch.translate().probe_register_varnode(name.as_bytes())?;
-    Some((Address::new(Rc::clone(v.space.as_ref()?), v.offset), v.size as int4))
+    Some((
+        Address::new(Rc::clone(v.space.as_ref()?), v.offset),
+        v.size as int4,
+    ))
 }
 
 /// The vote of the import at `stub` over its recorded call sites.
 pub fn vote(arch: &Architecture, stub: &Address) -> Option<ImportVote> {
     let space = stub.get_space()?;
-    let sites = arch.kuna_import_sites.get(&(space.get_index(), stub.get_offset()))?;
-    let reg = |name: &str| register(arch, name).and_then(|(a, s)| Some((a.get_space()?.get_index(), a.get_offset(), s as u32)));
+    let sites = arch
+        .kuna_import_sites
+        .get(&(space.get_index(), stub.get_offset()))?;
+    let reg = |name: &str| {
+        register(arch, name)
+            .and_then(|(a, s)| Some((a.get_space()?.get_index(), a.get_offset(), s as u32)))
+    };
     let regs: Vec<Reg> = ARG_REGS.iter().filter_map(|r| reg(r)).collect();
     let rax = reg("RAX")?;
     if regs.len() != ARG_REGS.len() {
@@ -184,20 +224,36 @@ pub fn seed(arch: &mut Architecture, data: &Funcdata) {
     let returns: Vec<Address> = data
         .obank()
         .iter_alive()
-        .filter_map(|op| data.obank().get(op).filter(|o| o.code() == OpCode::CPUI_RETURN).map(|o| o.get_addr().clone()))
+        .filter_map(|op| {
+            data.obank()
+                .get(op)
+                .filter(|o| o.code() == OpCode::CPUI_RETURN)
+                .map(|o| o.get_addr().clone())
+        })
         .collect();
     for i in 0..data.num_calls() {
         let fc = data.get_call_specs(i);
-        let Some(at) = data.obank().get(fc.get_op()).map(|o| o.get_addr().clone()) else { continue };
+        let Some(at) = data.obank().get(fc.get_op()).map(|o| o.get_addr().clone()) else {
+            continue;
+        };
         if !returns.contains(&at) {
             continue;
         }
         let stub = fc.get_entry_address().clone();
-        let Some(key) = crate::p4_calls::kuna_protoorder::stated_key(&stub) else { continue };
-        if arch.kuna_protoorder_types.contains_key(&key) || arch.symboltab.function_proto_pieces_across_scopes(&stub).is_some() {
+        let Some(key) = crate::p4_calls::kuna_protoorder::stated_key(&stub) else {
+            continue;
+        };
+        if arch.kuna_protoorder_types.contains_key(&key)
+            || arch
+                .symboltab
+                .function_proto_pieces_across_scopes(&stub)
+                .is_some()
+        {
             continue;
         }
-        let Some(v) = vote(arch, &stub).filter(|v| v.arity > 0 || v.output) else { continue };
+        let Some(v) = vote(arch, &stub).filter(|v| v.arity > 0 || v.output) else {
+            continue;
+        };
         if let Some(stated) = statement(arch, v) {
             arch.kuna_protoorder_types.insert(key, Rc::new(stated));
         }
@@ -205,7 +261,8 @@ pub fn seed(arch: &mut Architecture, data: &Funcdata) {
 }
 
 fn statement(arch: &Architecture, v: ImportVote) -> Option<RecoveredTypes> {
-    let ct = crate::dtype::TypeFactory::get_base(arch.types(), 8, type_metatype::TYPE_UNKNOWN).ok()?;
+    let ct =
+        crate::dtype::TypeFactory::get_base(arch.types(), 8, type_metatype::TYPE_UNKNOWN).ok()?;
     let inputs: Vec<(Address, int4, Rc<crate::dtype::Datatype>)> = ARG_REGS
         .iter()
         .take(v.arity as usize)
@@ -215,7 +272,11 @@ fn statement(arch: &Architecture, v: ImportVote) -> Option<RecoveredTypes> {
     if inputs.len() != v.arity as usize {
         return None;
     }
-    let output = if v.output { register(arch, "RAX").map(|(a, s)| (a, s, Rc::clone(&ct))) } else { None };
+    let output = if v.output {
+        register(arch, "RAX").map(|(a, s)| (a, s, Rc::clone(&ct)))
+    } else {
+        None
+    };
     let reads = inputs.iter().map(|(a, s, _)| (a.clone(), *s)).collect();
     let result = output.as_ref().map(|(a, s, _)| (a.clone(), *s));
     Some(RecoveredTypes {

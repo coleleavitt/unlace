@@ -22,7 +22,12 @@ struct Image {
 fn link(root: &Path, extra: &[&str], out: &str) -> Result<Vec<u8>, String> {
     let binary = root.join(out);
     let output = Command::new("clang")
-        .args(["--target=i686-w64-windows-gnu", "-shared", "-nostdlib", "-O1"])
+        .args([
+            "--target=i686-w64-windows-gnu",
+            "-shared",
+            "-nostdlib",
+            "-O1",
+        ])
         .args(["-Wl,--entry,_sample", "-Wl,--image-base,0x10000000"])
         .args(extra)
         .arg(root.join("sample.c"))
@@ -98,7 +103,11 @@ fn kuna(args: &[&std::ffi::OsStr]) -> (String, String) {
         .arg(common::repo_root().join("specs"))
         .output()
         .unwrap();
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     (
         String::from_utf8(output.stdout).unwrap(),
         String::from_utf8(output.stderr).unwrap(),
@@ -147,48 +156,109 @@ fn pe_trace_names_only_free_placeholders() {
     let names = |path: &Path, mode: &str| functions(path, mode);
     let name = |map: &BTreeMap<u32, (String, String)>, at: u32| map[&at].0.clone();
 
-    let plain = record(low, &["minimal.for"], &[(image.sample, "FROM_TRACE"), (image.helper, "HELPER_TRACE"), (image.exported, "EXPORTED_TRACE")]);
+    let plain = record(
+        low,
+        &["minimal.for"],
+        &[
+            (image.sample, "FROM_TRACE"),
+            (image.helper, "HELPER_TRACE"),
+            (image.exported, "EXPORTED_TRACE"),
+        ],
+    );
     let binary = traced(&root, &image, &image.stripped, "plain.dll", &plain);
     let on = names(&binary, "on");
     assert_eq!(name(&on, image.sample), "FROM_TRACE");
     assert_eq!(name(&on, image.helper), "HELPER_TRACE");
     assert_eq!(name(&on, image.exported), "exported");
-    assert!(on.values().all(|(_, c)| !c.contains("minimal.for") && !c.contains("EXPORTED_TRACE")));
+    assert!(
+        on.values()
+            .all(|(_, c)| !c.contains("minimal.for") && !c.contains("EXPORTED_TRACE"))
+    );
     let lines = names(&binary, "lines");
-    assert!(lines[&image.sample].1.contains("minimal.for:7"), "{}", lines[&image.sample].1);
+    assert!(
+        lines[&image.sample].1.contains("minimal.for:7"),
+        "{}",
+        lines[&image.sample].1
+    );
     let off = names(&binary, "off");
-    assert!(off.values().all(|(n, c)| !n.ends_with("_TRACE") && !c.contains("_TRACE")));
-    kuna(&["decompile".as_ref(), binary.as_os_str(), "FROM_TRACE".as_ref()]);
+    assert!(
+        off.values()
+            .all(|(n, c)| !n.ends_with("_TRACE") && !c.contains("_TRACE"))
+    );
+    kuna(&[
+        "decompile".as_ref(),
+        binary.as_os_str(),
+        "FROM_TRACE".as_ref(),
+    ]);
 
-    let collide = record(low, &["a.for"], &[(image.helper, "exported"), (image.sample, "DUP"), (image.exported, "DUP")]);
+    let collide = record(
+        low,
+        &["a.for"],
+        &[
+            (image.helper, "exported"),
+            (image.sample, "DUP"),
+            (image.exported, "DUP"),
+        ],
+    );
     let binary = traced(&root, &image, &image.stripped, "collide.dll", &collide);
     let on = names(&binary, "on");
     assert_eq!(name(&on, image.exported), "exported");
     assert!(name(&on, image.helper).starts_with("sub_"), "{on:?}");
     assert!(name(&on, image.sample).starts_with("sub_"), "{on:?}");
-    let (by_name, _) = kuna(&["decompile".as_ref(), binary.as_os_str(), "exported".as_ref()]);
+    let (by_name, _) = kuna(&[
+        "decompile".as_ref(),
+        binary.as_os_str(),
+        "exported".as_ref(),
+    ]);
     let helper_call = format!("sub_{:x}(", image.helper);
-    assert!(by_name.contains("exported(") && by_name.contains(&helper_call), "{by_name}");
+    assert!(
+        by_name.contains("exported(") && by_name.contains(&helper_call),
+        "{by_name}"
+    );
 
-    let interior = record(low, &["a.for"], &[(image.sample + 1, "MID_FUNCTION"), (image.helper + 2, "MID_INSN")]);
+    let interior = record(
+        low,
+        &["a.for"],
+        &[
+            (image.sample + 1, "MID_FUNCTION"),
+            (image.helper + 2, "MID_INSN"),
+        ],
+    );
     let binary = traced(&root, &image, &image.stripped, "interior.dll", &interior);
     let base = names(&binary, "off");
     let on = names(&binary, "on");
-    assert_eq!(base, on, "a routine marker inside a function created or split one");
+    assert_eq!(
+        base, on,
+        "a routine marker inside a function created or split one"
+    );
 
-    let coff = record(low, &["a.for"], &[(image.sample, "FROM_TRACE"), (image.exported, "_helper")]);
+    let coff = record(
+        low,
+        &["a.for"],
+        &[(image.sample, "FROM_TRACE"), (image.exported, "_helper")],
+    );
     let binary = traced(&root, &image, &image.symbols, "coff.dll", &coff);
     let on = names(&binary, "on");
     assert_eq!(name(&on, image.sample), "_sample");
     assert_eq!(name(&on, image.helper), "_helper");
-    assert!(on.values().all(|(n, c)| n != "FROM_TRACE" && !c.contains("FROM_TRACE")));
+    assert!(
+        on.values()
+            .all(|(n, c)| n != "FROM_TRACE" && !c.contains("FROM_TRACE"))
+    );
 
     let mut capped = record(low, &vec![""; 65537], &[(image.sample, "LOST")]);
     capped.extend(record(low, &["a.for"], &[(image.helper, "KEPT")]));
     let binary = traced(&root, &image, &image.stripped, "capped.dll", &capped);
-    let (json, stderr) = kuna(&["decompile-all".as_ref(), binary.as_os_str(), "--json".as_ref()]);
+    let (json, stderr) = kuna(&[
+        "decompile-all".as_ref(),
+        binary.as_os_str(),
+        "--json".as_ref(),
+    ]);
     assert!(stderr.contains("[kuna cvftrace]"), "{stderr}");
-    assert!(json.contains("\"KEPT\"") && !json.contains("LOST"), "{json}");
+    assert!(
+        json.contains("\"KEPT\"") && !json.contains("LOST"),
+        "{json}"
+    );
 
     let binary = traced(&root, &image, &image.stripped, "project.dll", &plain);
     let entry = format!("0x{:x}", image.sample);
@@ -202,10 +272,19 @@ fn pe_trace_names_only_free_placeholders() {
             .arg(object)
             .output()
             .unwrap();
-        assert!(built.status.success(), "{}", String::from_utf8_lossy(&built.stderr));
+        assert!(
+            built.status.success(),
+            "{}",
+            String::from_utf8_lossy(&built.stderr)
+        );
         let bytes = std::fs::read(object).unwrap();
         let file = object::File::parse(bytes.as_slice()).unwrap();
-        let text = file.section_by_name(".text").unwrap().data().unwrap().to_vec();
+        let text = file
+            .section_by_name(".text")
+            .unwrap()
+            .data()
+            .unwrap()
+            .to_vec();
         text
     };
     let expected = text(&only, &root.join("original.obj"));
@@ -224,7 +303,10 @@ fn pe_trace_names_only_free_placeholders() {
             "-o".as_ref(),
             project.as_os_str(),
         ]);
-        let regenerated = text(&project.join("project.dll.c"), &project.join("regenerated.obj"));
+        let regenerated = text(
+            &project.join("project.dll.c"),
+            &project.join("regenerated.obj"),
+        );
         assert_eq!(expected, regenerated, "{mode}");
     }
 

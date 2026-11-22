@@ -1,13 +1,19 @@
 //! Exact legacy Rust runtime contracts missing from the vendored no-return list.
 
 pub(super) fn process_exit(name: &str) -> bool {
-    let Some(tail) = name.trim_start_matches('_').strip_prefix("ZN3std7process4exit17h") else {
+    let Some(tail) = name
+        .trim_start_matches('_')
+        .strip_prefix("ZN3std7process4exit17h")
+    else {
         return false;
     };
     let Some(hash) = tail.strip_suffix('E') else {
         return false;
     };
-    hash.len() == 16 && hash.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    hash.len() == 16
+        && hash
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 #[cfg(test)]

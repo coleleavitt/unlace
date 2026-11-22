@@ -37,13 +37,19 @@ use crate::varnode::varnode_flags;
 /// edge out of it: the block through which a depth-first walk entered it.
 pub(crate) fn exitless_loops(fd: &Funcdata) -> Vec<BlockId> {
     let g = fd.bblocks_ref();
-    let Some(root) = g.root else { return Vec::new() };
+    let Some(root) = g.root else {
+        return Vec::new();
+    };
     let n = g.block(root).get_size() as usize;
     if n == 0 {
         return Vec::new();
     }
     let blocks: Vec<BlockId> = (0..n).map(|i| g.block(root).get_block(i as int4)).collect();
-    if blocks.iter().enumerate().any(|(i, &b)| g.block(b).get_index() as usize != i) {
+    if blocks
+        .iter()
+        .enumerate()
+        .any(|(i, &b)| g.block(b).get_index() as usize != i)
+    {
         return Vec::new();
     }
     let succ = |v: usize, e: int4| g.block(g.block(blocks[v]).get_out(e)).get_index() as usize;
@@ -152,8 +158,12 @@ pub(crate) fn mark(fd: &mut Funcdata, reaching: &[VarnodeId]) {
         if !seen.insert(vn) {
             continue;
         }
-        let Some(def) = fd.vbank().get(vn).and_then(|v| v.get_def()) else { continue };
-        let Some(op) = fd.obank().get(def) else { continue };
+        let Some(def) = fd.vbank().get(vn).and_then(|v| v.get_def()) else {
+            continue;
+        };
+        let Some(op) = fd.obank().get(def) else {
+            continue;
+        };
         if op.code() == OpCode::CPUI_MULTIEQUAL {
             work.extend((0..op.num_input()).filter_map(|i| op.get_in(i)));
             continue;

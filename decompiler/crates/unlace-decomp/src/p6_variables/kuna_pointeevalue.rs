@@ -32,7 +32,7 @@ use crate::context::{HighVariableId, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::merge::MergeContext;
 use crate::p3_dataflow::kuna_pointeestorekeep::{
-    loads_stored_global, offsets_address, reads_pointee, written_between, WALK_BOUND,
+    WALK_BOUND, loads_stored_global, offsets_address, reads_pointee, written_between,
 };
 use crate::varnode::varnode_flags;
 

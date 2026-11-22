@@ -38,9 +38,9 @@ use std::rc::Rc;
 use unlace_base::address::{Address, Range, RangeList};
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::marshal::{
-    AttributeId, Decoder, ElementId, IdRegistry, PackedDecode, ATTRIB_CONTENT, ATTRIB_ID,
-    ATTRIB_INDEX, ATTRIB_MODEL, ATTRIB_NAME, ATTRIB_NAMELOCK, ATTRIB_READONLY, ATTRIB_SIZE,
-    ATTRIB_TYPELOCK, ATTRIB_VAL, ELEM_SYMBOL,
+    ATTRIB_CONTENT, ATTRIB_ID, ATTRIB_INDEX, ATTRIB_MODEL, ATTRIB_NAME, ATTRIB_NAMELOCK,
+    ATTRIB_READONLY, ATTRIB_SIZE, ATTRIB_TYPELOCK, ATTRIB_VAL, AttributeId, Decoder, ELEM_SYMBOL,
+    ElementId, IdRegistry, PackedDecode,
 };
 use unlace_base::partmap::PartMap;
 use unlace_base::space::AddrSpaceManager;
@@ -48,8 +48,8 @@ use unlace_base::types::{int4, uint4};
 
 use crate::context::{GlobalEntry, GlobalQuery};
 use crate::dtype::{Datatype, TypeFactory, TypeFactoryImpl};
-use crate::funcdata_encode::ATTRIB_VOLATILE;
 use crate::fspec::{ProtoModel, PrototypePieces};
+use crate::funcdata_encode::ATTRIB_VOLATILE;
 use crate::varnode::varnode_flags;
 
 // ---------------------------------------------------------------------------
@@ -160,11 +160,7 @@ pub fn register_remote_provider_ids(reg: &mut IdRegistry) {
 /// caller-supplied decoder (matching the `GhidraClient` signatures).
 pub trait RemoteProviderFetch {
     /// getMappedSymbols(addr): `Ok(false)` = empty response (no answer at all).
-    fn fetch_mapped_symbols(
-        &self,
-        addr: &Address,
-        decoder: &mut dyn Decoder,
-    ) -> KunaResult<bool>;
+    fn fetch_mapped_symbols(&self, addr: &Address, decoder: &mut dyn Decoder) -> KunaResult<bool>;
     /// getNamespacePath(id): the `<parent>` document for a scope id.
     fn fetch_namespace_path(&self, id: u64, decoder: &mut dyn Decoder) -> KunaResult<bool>;
     /// getExternalRef(addr): the resolved `<doc><mapsym>` for an external
@@ -390,14 +386,15 @@ impl RemoteProto {
             kuna_library_names: None,
         };
         if self.custom {
-            pieces.output_storage = self.out_type.as_ref().map(|ct| {
-                crate::fspec::ParameterPieces {
-                    addr: self.out_storage.clone(),
-                    type_: Some(Rc::clone(ct)),
-                    flags: crate::fspec::parameter_pieces_flags::TYPELOCK
-                        | crate::fspec::parameter_pieces_flags::CUSTOM_STORAGE,
-                }
-            });
+            pieces.output_storage =
+                self.out_type
+                    .as_ref()
+                    .map(|ct| crate::fspec::ParameterPieces {
+                        addr: self.out_storage.clone(),
+                        type_: Some(Rc::clone(ct)),
+                        flags: crate::fspec::parameter_pieces_flags::TYPELOCK
+                            | crate::fspec::parameter_pieces_flags::CUSTOM_STORAGE,
+                    });
         }
         for p in &self.params {
             if p.hidden {
@@ -859,10 +856,7 @@ fn decode_localdb_params(
 
 /// Decode a `<prototype>` (C++ `FuncProto::decode`, fspec.cc:4675-4840,
 /// reduced to model/extrapop/flags + the `<returnsym>` type).
-fn decode_prototype(
-    decoder: &mut dyn Decoder,
-    types: &TypeFactoryImpl,
-) -> KunaResult<RemoteProto> {
+fn decode_prototype(decoder: &mut dyn Decoder, types: &TypeFactoryImpl) -> KunaResult<RemoteProto> {
     let elem_id = decoder.open_element_id(&ELEM_PROTOTYPE)?;
     let mut proto = RemoteProto {
         model: String::new(),
@@ -939,7 +933,10 @@ fn decode_prototype(
 /// first.  Returns the display names, INNERMOST FIRST (the
 /// `GlobalEntry::scope_path` convention), global excluded.
 pub fn decode_namespace_path(decoder: &mut dyn Decoder) -> KunaResult<Vec<String>> {
-    Ok(decode_namespace_levels(decoder)?.into_iter().map(|(name, _)| name).collect())
+    Ok(decode_namespace_levels(decoder)?
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect())
 }
 
 /// [`decode_namespace_path`] keeping each level's host namespace id, the
@@ -984,7 +981,9 @@ fn is_dynamic_symbol_name(name: &str) -> bool {
     let b = name.as_bytes();
     b.len() >= 8
         && (b.starts_with(b"FUN_") || b.starts_with(b"DAT_"))
-        && b[b.len() - 4..].iter().all(|c| matches!(c, b'0'..=b'9' | b'a'..=b'f'))
+        && b[b.len() - 4..]
+            .iter()
+            .all(|c| matches!(c, b'0'..=b'9' | b'a'..=b'f'))
 }
 
 // ---------------------------------------------------------------------------
@@ -1167,7 +1166,10 @@ impl RemoteScope {
         if nm.is_empty() || nm == "default" {
             return self.defaultfp.clone();
         }
-        self.models.get(nm).cloned().or_else(|| self.defaultfp.clone())
+        self.models
+            .get(nm)
+            .cloned()
+            .or_else(|| self.defaultfp.clone())
     }
 
     /// C++ `ScopeGhidra::clear()` (database_ghidra.cc:222-231) — the
@@ -1306,10 +1308,7 @@ impl RemoteScope {
     /// `ContextGhidra::getTrackedSet` — a getTrackedRegisters query), cached
     /// per address until flush.  `None` only for a space-less address; an
     /// EMPTY host answer caches as an empty set.
-    pub fn tracked_at(
-        &self,
-        addr: &Address,
-    ) -> Option<unlace_sleigh::globalcontext::TrackedSet> {
+    pub fn tracked_at(&self, addr: &Address) -> Option<unlace_sleigh::globalcontext::TrackedSet> {
         let spc = addr.get_space()?;
         let key = (spc.get_index(), addr.get_offset());
         if let Some(set) = self.state.borrow().tracked.get(&key) {
@@ -1357,7 +1356,9 @@ impl RemoteScope {
         addr: &Address,
         current: unlace_sleigh::globalcontext::TrackedSet,
     ) -> unlace_sleigh::globalcontext::TrackedSet {
-        let Some(spc) = addr.get_space() else { return current };
+        let Some(spc) = addr.get_space() else {
+            return current;
+        };
         let key = (spc.get_index(), addr.get_offset());
         self.pristine_tracked
             .borrow_mut()
@@ -1477,9 +1478,7 @@ impl RemoteScope {
                             // convention (the `parse line extern` shape).
                             let model = self.model_by_name(&p.model);
                             let parked = match &model {
-                                Some(m) => self
-                                    .types
-                                    .get_type_code_proto_model(&pc, Rc::clone(m)),
+                                Some(m) => self.types.get_type_code_proto_model(&pc, Rc::clone(m)),
                                 None => self.types.get_type_code_proto(&pc),
                             };
                             if let Ok(tc) = parked {
@@ -1488,11 +1487,7 @@ impl RemoteScope {
                             if let Some(m) = model {
                                 st.callee_models.insert(key, m);
                             }
-                            st.callee_pieces.push((
-                                key.0,
-                                key.1,
-                                pc.clone(),
-                            ));
+                            st.callee_pieces.push((key.0, key.1, pc.clone()));
                             pieces = Some(pc);
                         }
                     }
@@ -1572,7 +1567,9 @@ impl RemoteScope {
             if e.addr.is_invalid() {
                 continue; // dynamic (<hash>) entries have no static range
             }
-            let Some(spc) = e.addr.get_space() else { continue };
+            let Some(spc) = e.addr.get_space() else {
+                continue;
+            };
             let size = if e.size <= 0 { 1 } else { e.size };
             let first = e.addr.get_offset();
             let last = first.wrapping_add(size as u64).wrapping_sub(1);
@@ -1609,8 +1606,7 @@ impl RemoteScope {
                 // the very top of its space paints to the space end (an
                 // invalid/next-space open end) instead of wrapping to 0 and
                 // painting nothing.
-                let a2 = Range::new(Rc::clone(spc), first, last)
-                    .get_last_addr_open(&self.manager);
+                let a2 = Range::new(Rc::clone(spc), first, last).get_last_addr_open(&self.manager);
                 Self::paint_property(&mut st.flagbase, props, &a1, &a2);
             }
         }
@@ -1633,10 +1629,7 @@ impl RemoteScope {
             Ok(true) => decode_namespace_levels(&mut dec).unwrap_or_default(),
             _ => Vec::new(),
         };
-        self.state
-            .borrow_mut()
-            .namespaces
-            .insert(id, path.clone());
+        self.state.borrow_mut().namespaces.insert(id, path.clone());
         path
     }
 
@@ -1648,7 +1641,9 @@ impl RemoteScope {
         if is_dynamic_symbol_name(name) {
             return false;
         }
-        self.fetch.fetch_is_name_used(name, start, stop).unwrap_or(false)
+        self.fetch
+            .fetch_is_name_used(name, start, stop)
+            .unwrap_or(false)
     }
 
     /// The merged read snapshot: the base Database snapshot's owned ranges,

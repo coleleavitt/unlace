@@ -132,7 +132,9 @@ pub struct PendingBodyArgs {
 /// [`probe_callee_entry_dead`](crate::p4_calls::kuna_calleedeadarg::probe_callee_entry_dead)
 /// resolves its own index from.
 pub(crate) fn is_register(addr: &Address) -> bool {
-    addr.get_space().map(|s| s.get_name() == "register").unwrap_or(false)
+    addr.get_space()
+        .map(|s| s.get_name() == "register")
+        .unwrap_or(false)
 }
 
 /// Capture a call site that is about to render with an empty argument list.
@@ -160,7 +162,9 @@ pub fn capture_lone_call(fc: &FuncCallSpecs, data: &Funcdata) -> Option<PendingB
     for i in 0..active.get_num_trials() {
         let t = active.get_trial(i);
         if t.is_used() {
-            if swift_self || !crate::kuna_swiftcall::is_self_storage(data, t.get_address(), t.get_size()) {
+            if swift_self
+                || !crate::kuna_swiftcall::is_self_storage(data, t.get_address(), t.get_size())
+            {
                 return None; // this site recovered something; not ours to speak to
             }
             swift_self = true;
@@ -168,7 +172,9 @@ pub fn capture_lone_call(fc: &FuncCallSpecs, data: &Funcdata) -> Option<PendingB
         let addr = t.get_address().clone();
         let size = t.get_size();
         let slot = t.get_slot();
-        let at_slot = (slot >= 1).then(|| data.obank().get(op).and_then(|o| o.get_in(slot))).flatten();
+        let at_slot = (slot >= 1)
+            .then(|| data.obank().get(op).and_then(|o| o.get_in(slot)))
+            .flatten();
         // A definitely-not-used or unreferenced trial holds nothing the caller
         // put there -- `check_input_trial_use` has already overwritten the slot
         // with a zero constant for the first of those.
@@ -205,10 +211,19 @@ pub fn capture_lone_call(fc: &FuncCallSpecs, data: &Funcdata) -> Option<PendingB
             caller_constant,
         });
     }
-    if !trials.first().map(|t| is_register(&t.addr)).unwrap_or(false) {
+    if !trials
+        .first()
+        .map(|t| is_register(&t.addr))
+        .unwrap_or(false)
+    {
         return None;
     }
-    Some(PendingBodyArgs { op, entry, trials, swift_self })
+    Some(PendingBodyArgs {
+        op,
+        entry,
+        trials,
+        swift_self,
+    })
 }
 
 /// Which of this call's trials the callee's body claims as arguments, or `None`
@@ -283,7 +298,9 @@ pub fn plan_from_body(
 
 /// Do two storage locations share a byte?
 fn overlaps(a: &Address, asz: int4, b: &Address, bsz: int4) -> bool {
-    let (Some(sa), Some(sb)) = (a.get_space(), b.get_space()) else { return false };
+    let (Some(sa), Some(sb)) = (a.get_space(), b.get_space()) else {
+        return false;
+    };
     if sa.get_index() != sb.get_index() {
         return false;
     }
@@ -295,7 +312,12 @@ fn overlaps(a: &Address, asz: int4, b: &Address, bsz: int4) -> bool {
 fn entry_locations(entries: &[ParamEntry]) -> Vec<(Address, int4)> {
     entries
         .iter()
-        .map(|e| (Address::new(std::rc::Rc::clone(e.get_space()), e.get_base()), e.get_size()))
+        .map(|e| {
+            (
+                Address::new(std::rc::Rc::clone(e.get_space()), e.get_base()),
+                e.get_size(),
+            )
+        })
         .collect()
 }
 
@@ -316,10 +338,15 @@ fn recover_one(data: &mut Funcdata, p: &PendingBodyArgs) -> bool {
     // `num_input() == 1` is also what defers to the sibling rules: a call
     // `calleearityfwd` already rescued is no longer empty and is not touched.
     match data.obank().get(p.op) {
-        Some(o) if !o.is_dead() && o.code() == OpCode::CPUI_CALL && o.num_input() == 1 + p.swift_self as int4 => {}
+        Some(o)
+            if !o.is_dead()
+                && o.code() == OpCode::CPUI_CALL
+                && o.num_input() == 1 + p.swift_self as int4 => {}
         _ => return false,
     }
-    let Some(idx) = data.get_call_specs_index(p.op) else { return false };
+    let Some(idx) = data.get_call_specs_index(p.op) else {
+        return false;
+    };
     let entries = {
         let fc = data.get_call_specs(idx);
         if !fc.proto().has_model() {
@@ -328,16 +355,22 @@ fn recover_one(data: &mut Funcdata, p: &PendingBodyArgs) -> bool {
         entry_locations(&fc.proto().input_param_entries())
     };
     let picked = {
-        let Some(live) = data.kuna_callee_entry_dead(&p.entry) else { return false };
+        let Some(live) = data.kuna_callee_entry_dead(&p.entry) else {
+            return false;
+        };
         match plan_from_body(&p.trials, &entries, live) {
             Some(v) => v,
             None => return false,
         }
     };
-    let Some(in0) = data.obank().get(p.op).and_then(|o| o.get_in(0)) else { return false };
+    let Some(in0) = data.obank().get(p.op).and_then(|o| o.get_in(0)) else {
+        return false;
+    };
     let mut newparam = vec![in0];
     for i in &picked {
-        let Some(vn) = p.trials[*i as usize].vn else { return false };
+        let Some(vn) = p.trials[*i as usize].vn else {
+            return false;
+        };
         if data.vbank().get(vn).is_none() {
             return false;
         }
@@ -355,7 +388,8 @@ fn recover_one(data: &mut Funcdata, p: &PendingBodyArgs) -> bool {
             (t.addr.clone(), t.size)
         })
         .collect();
-    data.get_call_specs_mut(idx).set_final_input_storage(storage);
+    data.get_call_specs_mut(idx)
+        .set_final_input_storage(storage);
     true
 }
 

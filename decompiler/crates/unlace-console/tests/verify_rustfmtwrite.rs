@@ -1,14 +1,14 @@
 //! String mutation and byte results at verified Rust formatting calls.
 
+use std::path::PathBuf;
 use unlace_console::engine::bootstrap_from_object;
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::kuna_rustfmt::RustFmtMode;
-use std::path::PathBuf;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
@@ -167,7 +167,7 @@ fn layout_language_and_complete_method_identity_bound_recovery() {
 
 #[test]
 fn ambiguous_object_symbols_never_establish_a_string_writer() {
-    use unlace_decomp::kuna_rustfmtwrite::{writer_symbols, WriterMethod};
+    use unlace_decomp::kuna_rustfmtwrite::{WriterMethod, writer_symbols};
     let names = [
         (
             "core::ptr::drop_in_place<alloc::string::String>",

@@ -35,11 +35,16 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn specs_root() -> PathBuf {
-    std::env::var_os("KUNA_SPECS").map(PathBuf::from).unwrap_or_else(|| repo_root().join("specs"))
+    std::env::var_os("KUNA_SPECS")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| repo_root().join("specs"))
 }
 
 fn datatests_dir() -> PathBuf {
@@ -53,7 +58,10 @@ fn rust_harness() -> PathBuf {
         return PathBuf::from(p);
     }
     let profile = std::env::var("KUNA_RUST_PROFILE").unwrap_or_else(|_| "release".to_string());
-    repo_root().join("decompiler/target").join(profile).join("decomp_test_dbg")
+    repo_root()
+        .join("decompiler/target")
+        .join(profile)
+        .join("decomp_test_dbg")
 }
 
 /// Drive `bin` on `stem`.xml with `KUNA_DUMP=1`, returning the full concatenated
@@ -121,7 +129,9 @@ fn count(hay: &str, needle: &str) -> usize {
 // =============================================================================
 #[test]
 fn t1_concat_struct_return_shares_one_whole_symbol_decl() {
-    let Some(dump) = dump_print_c(&rust_harness(), "concat") else { return };
+    let Some(dump) = dump_print_c(&rust_harness(), "concat") else {
+        return;
+    };
     let body = func_body(&dump, "concatreturn")
         .unwrap_or_else(|| panic!("concatreturn not found in dump:\n{dump}"));
 
@@ -174,7 +184,9 @@ fn t1_concat_struct_return_shares_one_whole_symbol_decl() {
 // =============================================================================
 #[test]
 fn t2_global_spacebase_array_is_not_locally_declared() {
-    let Some(dump) = dump_print_c(&rust_harness(), "twodim") else { return };
+    let Some(dump) = dump_print_c(&rust_harness(), "twodim") else {
+        return;
+    };
     let body = func_body(&dump, "array_access")
         .unwrap_or_else(|| panic!("array_access not found:\n{dump}"));
 
@@ -230,7 +242,9 @@ fn t2_global_spacebase_array_is_not_locally_declared() {
 // =============================================================================
 #[test]
 fn t2b_local_frame_spacebase_symbol_still_declared() {
-    let Some(dump) = dump_print_c(&rust_harness(), "ptrtoarray") else { return };
+    let Some(dump) = dump_print_c(&rust_harness(), "ptrtoarray") else {
+        return;
+    };
     let body = func_body(&dump, "passPtrToArray")
         .unwrap_or_else(|| panic!("passPtrToArray not found:\n{dump}"));
     // The stack-local array `c` (a LOCAL-frame symbol) is STILL declared — the
@@ -250,7 +264,9 @@ fn t2b_local_frame_spacebase_symbol_still_declared() {
 // =============================================================================
 #[test]
 fn t3_address_of_array_cast_collapses_to_ampersand_name() {
-    let Some(dump) = dump_print_c(&rust_harness(), "ptrtoarray") else { return };
+    let Some(dump) = dump_print_c(&rust_harness(), "ptrtoarray") else {
+        return;
+    };
     let body = func_body(&dump, "passPtrToArray")
         .unwrap_or_else(|| panic!("passPtrToArray not found:\n{dump}"));
 

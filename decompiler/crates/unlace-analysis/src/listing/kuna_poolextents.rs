@@ -75,7 +75,8 @@ use super::{CodeUnit, Listing};
 
 /// The condition suffixes the ARM SLEIGH appends to a mnemonic.
 const CONDS: [&str; 17] = [
-    "eq", "ne", "cs", "hs", "cc", "lo", "mi", "pl", "vs", "vc", "hi", "ls", "ge", "lt", "gt", "le", "al",
+    "eq", "ne", "cs", "hs", "cc", "lo", "mi", "pl", "vs", "vc", "hi", "ls", "ge", "lt", "gt", "le",
+    "al",
 ];
 
 /// A call, indirect call or user operation: flow past it depends on whether
@@ -86,7 +87,9 @@ fn suspect(insn: &Insn) -> bool {
 
 /// The direct callee of a call instruction.
 fn direct_callee(insn: &Insn) -> Option<u64> {
-    (insn.flow.is_call && !insn.flow.is_computed).then(|| insn.flows.first().copied()).flatten()
+    (insn.flow.is_call && !insn.flow.is_computed)
+        .then(|| insn.flows.first().copied())
+        .flatten()
 }
 
 /// Does flow provably continue from `insn` into its fall-through?
@@ -104,7 +107,12 @@ fn falls_through(insn: &Insn, returns: &BTreeSet<u64>) -> bool {
 }
 
 /// The library helpers that return past an inline table after their call.
-const RETURNS_PAST_TABLE: [&str; 4] = ["__gnu_thumb1_case_", "__ARM_common_switch", "__ARM_switch", "__aeabi_switch"];
+const RETURNS_PAST_TABLE: [&str; 4] = [
+    "__gnu_thumb1_case_",
+    "__ARM_common_switch",
+    "__ARM_switch",
+    "__aeabi_switch",
+];
 
 /// How an instruction treats the return address on its way to a `RETURN`.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -121,22 +129,42 @@ enum LrUse {
 /// What `insn` does to `lr`. A call counts as keeping it: the code after a
 /// call restores `lr` before it returns through it.
 fn lr_use(insn: &Insn) -> LrUse {
-    if insn.flow.is_call || !insn.operands.as_bytes().windows(2).any(|w| w.eq_ignore_ascii_case(b"lr")) {
+    if insn.flow.is_call
+        || !insn
+            .operands
+            .as_bytes()
+            .windows(2)
+            .any(|w| w.eq_ignore_ascii_case(b"lr"))
+    {
         return LrUse::Keeps;
     }
     let m = insn.mnemonic.to_ascii_lowercase();
     let ops = insn.operands.to_ascii_lowercase();
     if m.starts_with("pop") || m.starts_with("ldm") {
-        if !ops.split(|c: char| !c.is_ascii_alphanumeric()).any(|r| r == "lr") {
+        if !ops
+            .split(|c: char| !c.is_ascii_alphanumeric())
+            .any(|r| r == "lr")
+        {
             return LrUse::Keeps;
         }
-        return if m.starts_with("pop") || ops.starts_with("sp") { LrUse::Restores } else { LrUse::Computes };
+        return if m.starts_with("pop") || ops.starts_with("sp") {
+            LrUse::Restores
+        } else {
+            LrUse::Computes
+        };
     }
-    let Some(rest) = ops.strip_prefix("lr,") else { return LrUse::Keeps };
+    let Some(rest) = ops.strip_prefix("lr,") else {
+        return LrUse::Keeps;
+    };
     if m.starts_with("ldr") && rest.starts_with("[sp") {
         return LrUse::Restores;
     }
-    if m.starts_with("str") || m.starts_with("cmp") || m.starts_with("cmn") || m.starts_with("tst") || m.starts_with("teq") {
+    if m.starts_with("str")
+        || m.starts_with("cmp")
+        || m.starts_with("cmn")
+        || m.starts_with("tst")
+        || m.starts_with("teq")
+    {
         return LrUse::Keeps;
     }
     LrUse::Computes
@@ -148,7 +176,10 @@ fn returns_through_lr(insn: &Insn) -> Option<bool> {
     let ops = insn.operands.to_ascii_lowercase();
     if ops == "lr" || ops == "pc,lr" {
         Some(true)
-    } else if ops.split(|c: char| !c.is_ascii_alphanumeric()).any(|r| r == "lr") {
+    } else if ops
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .any(|r| r == "lr")
+    {
         None
     } else {
         Some(false)
@@ -180,7 +211,12 @@ pub(crate) fn returning_entries(listing: &Listing) -> BTreeSet<u64> {
         if let Some(callee) = direct_callee(insn) {
             call_sites.entry(callee).or_default().push(p);
         } else {
-            branch_edges.extend(insn.flows.iter().filter_map(|t| index.get(t)).map(|&s| (s, p)));
+            branch_edges.extend(
+                insn.flows
+                    .iter()
+                    .filter_map(|t| index.get(t))
+                    .map(|&s| (s, p)),
+            );
         }
         if let Some(&s) = insn.fall_through.as_ref().and_then(|f| index.get(f)) {
             fall_edges.push((s, p));
@@ -226,7 +262,11 @@ pub(crate) fn returning_entries(listing: &Listing) -> BTreeSet<u64> {
         }
     }
     let past_table = |f: &DiscoveredFunction| {
-        f.name.as_deref().is_some_and(|name| RETURNS_PAST_TABLE.iter().any(|helper| name.starts_with(helper)))
+        f.name.as_deref().is_some_and(|name| {
+            RETURNS_PAST_TABLE
+                .iter()
+                .any(|helper| name.starts_with(helper))
+        })
     };
     while let Some((s, flags)) = work.pop() {
         if let Some(f) = entry_at[s] {
@@ -298,10 +338,15 @@ impl Trusted {
 /// unproven call or user operation. With an empty `returns` no call's
 /// fall-through is crossed at all: the strict notion.
 pub(crate) fn trusted_instructions(listing: &Listing, returns: &BTreeSet<u64>) -> Trusted {
-    let mut trusted = Trusted { insns: FxHashSet::default(), labels: FxHashSet::default() };
+    let mut trusted = Trusted {
+        insns: FxHashSet::default(),
+        labels: FxHashSet::default(),
+    };
     let mut work: Vec<u64> = listing.functions().map(|(&entry, _)| entry).collect();
     while let Some(at) = work.pop() {
-        let Some(insn) = listing.instruction_at(at) else { continue };
+        let Some(insn) = listing.instruction_at(at) else {
+            continue;
+        };
         if !trusted.insns.insert(at) {
             continue;
         }
@@ -318,7 +363,10 @@ pub(crate) fn trusted_instructions(listing: &Listing, returns: &BTreeSet<u64>) -
 /// with any condition suffix or width? A byte or halfword read proves nothing
 /// about the word it sits in.
 fn is_word_load(mnemonic: &str) -> bool {
-    if !matches!(mnemonic.as_bytes().first().map(u8::to_ascii_lowercase), Some(b'l' | b'v')) {
+    if !matches!(
+        mnemonic.as_bytes().first().map(u8::to_ascii_lowercase),
+        Some(b'l' | b'v')
+    ) {
         return false;
     }
     let m = mnemonic.to_ascii_lowercase();
@@ -326,7 +374,9 @@ fn is_word_load(mnemonic: &str) -> bool {
     if m.starts_with("vldr") {
         return true;
     }
-    let Some(rest) = m.strip_prefix("ldr") else { return false };
+    let Some(rest) = m.strip_prefix("ldr") else {
+        return false;
+    };
     let rest = rest.strip_prefix('d').unwrap_or(rest);
     rest.is_empty() || CONDS.contains(&rest)
 }
@@ -356,7 +406,11 @@ pub fn pool_extents(
     let loads = Loads::new(listing, literal, wide);
     let returns = returning_entries(listing);
     let mut words = pool_words(listing, &trusted_instructions(listing, &returns), &loads);
-    words.append(&mut pool_words(listing, &trusted_instructions(listing, &BTreeSet::new()), &loads));
+    words.append(&mut pool_words(
+        listing,
+        &trusted_instructions(listing, &BTreeSet::new()),
+        &loads,
+    ));
     runs(&words)
 }
 
@@ -371,14 +425,20 @@ struct Loads {
 }
 
 impl Loads {
-    fn new(listing: &Listing, literal: &dyn Fn(u64, &str) -> Option<u64>, wide: &dyn Fn(&str) -> bool) -> Self {
+    fn new(
+        listing: &Listing,
+        literal: &dyn Fn(u64, &str) -> Option<u64>,
+        wide: &dyn Fn(&str) -> bool,
+    ) -> Self {
         let mut all = Vec::new();
         let mut read = FxHashSet::default();
         for (&at, insn) in listing.instructions() {
             if !is_word_load(&insn.mnemonic) {
                 continue;
             }
-            let Some(t) = literal(at, &insn.operands) else { continue };
+            let Some(t) = literal(at, &insn.operands) else {
+                continue;
+            };
             let n = if wide(&insn.mnemonic) { 2 } else { 1 };
             for k in 0..n {
                 let w = t.wrapping_add(k * 4);
@@ -387,7 +447,11 @@ impl Loads {
             }
             all.push((at, t, n));
         }
-        Loads { all, read, entries: listing.functions().map(|(&entry, _)| entry).collect() }
+        Loads {
+            all,
+            read,
+            entries: listing.functions().map(|(&entry, _)| entry).collect(),
+        }
     }
 
     /// Can the load `insn` witness `word`? Not when some load reads its own
@@ -416,10 +480,17 @@ fn pool_words(listing: &Listing, trusted: &Trusted, loads: &Loads) -> BTreeSet<u
         if !trusted.contains(&at) {
             continue;
         }
-        let Some(insn) = listing.instruction_at(at) else { continue };
+        let Some(insn) = listing.instruction_at(at) else {
+            continue;
+        };
         for k in 0..n {
             let w = t.wrapping_add(k * 4);
-            if w % 4 == 0 && in_exec(w) && !trusted.labels.contains(&w) && !covered(w) && loads.witnesses(insn, w) {
+            if w % 4 == 0
+                && in_exec(w)
+                && !trusted.labels.contains(&w)
+                && !covered(w)
+                && loads.witnesses(insn, w)
+            {
                 words.insert(w);
             }
         }

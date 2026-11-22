@@ -62,11 +62,19 @@ impl LangFacet {
     }
 
     /// Validate the complete storage before treating a struct as paired results.
-    pub fn go_pair_fields(&self, ty: &crate::dtype::Datatype) -> Option<[std::rc::Rc<crate::dtype::Datatype>; 2]> {
-        use crate::dtype::{type_metatype, DatatypeKind};
-        let Self::GoPairResults { signed } = self else { return None };
-        if ty.get_metatype() != type_metatype::TYPE_STRUCT || ty.get_size() != 16
-            || ty.get_alignment() != 8 || ty.is_incomplete() || ty.has_bitfields()
+    pub fn go_pair_fields(
+        &self,
+        ty: &crate::dtype::Datatype,
+    ) -> Option<[std::rc::Rc<crate::dtype::Datatype>; 2]> {
+        use crate::dtype::{DatatypeKind, type_metatype};
+        let Self::GoPairResults { signed } = self else {
+            return None;
+        };
+        if ty.get_metatype() != type_metatype::TYPE_STRUCT
+            || ty.get_size() != 16
+            || ty.get_alignment() != 8
+            || ty.is_incomplete()
+            || ty.has_bitfields()
             || ty.num_depend() != 2
             || !matches!(&ty.kind, DatatypeKind::Struct { bitfield, .. } if bitfield.is_empty())
             || crate::kuna_typequal::is_volatile(ty)
@@ -75,9 +83,15 @@ impl LangFacet {
         }
         let fields = [ty.get_field(0)?, ty.get_field(1)?];
         for (index, field) in fields.iter().enumerate() {
-            let meta = if signed[index] { type_metatype::TYPE_INT } else { type_metatype::TYPE_UINT };
-            if field.offset != index as i32 * 8 || field.name != ["result0", "result1"][index]
-                || field.field_type.get_size() != 8 || field.field_type.get_metatype() != meta
+            let meta = if signed[index] {
+                type_metatype::TYPE_INT
+            } else {
+                type_metatype::TYPE_UINT
+            };
+            if field.offset != index as i32 * 8
+                || field.name != ["result0", "result1"][index]
+                || field.field_type.get_size() != 8
+                || field.field_type.get_metatype() != meta
                 || crate::kuna_typequal::is_volatile(&field.field_type)
             {
                 return None;
@@ -87,11 +101,18 @@ impl LangFacet {
     }
 
     /// Validate the integer and both interface words without conflating typed nil with nil.
-    pub fn go_int_error_fields(&self, ty: &crate::dtype::Datatype) -> Option<[std::rc::Rc<crate::dtype::Datatype>; 3]> {
-        use crate::dtype::{type_metatype, DatatypeKind};
-        if *self != Self::GoIntErrorResults || ty.get_metatype() != type_metatype::TYPE_STRUCT
-            || ty.get_size() != 24 || ty.get_alignment() != 8 || ty.is_incomplete()
-            || ty.has_bitfields() || ty.num_depend() != 3
+    pub fn go_int_error_fields(
+        &self,
+        ty: &crate::dtype::Datatype,
+    ) -> Option<[std::rc::Rc<crate::dtype::Datatype>; 3]> {
+        use crate::dtype::{DatatypeKind, type_metatype};
+        if *self != Self::GoIntErrorResults
+            || ty.get_metatype() != type_metatype::TYPE_STRUCT
+            || ty.get_size() != 24
+            || ty.get_alignment() != 8
+            || ty.is_incomplete()
+            || ty.has_bitfields()
+            || ty.num_depend() != 3
             || !matches!(&ty.kind, DatatypeKind::Struct { bitfield, .. } if bitfield.is_empty())
             || crate::kuna_typequal::is_volatile(ty)
         {
@@ -102,20 +123,34 @@ impl LangFacet {
             let field_type = &field.field_type;
             if field.offset != index as i32 * 8
                 || field.name != ["result0", "error_tab", "error_data"][index]
-                || field_type.get_size() != 8 || field_type.is_incomplete()
-                || field_type.has_bitfields() || crate::kuna_typequal::is_volatile(field_type)
+                || field_type.get_size() != 8
+                || field_type.is_incomplete()
+                || field_type.has_bitfields()
+                || crate::kuna_typequal::is_volatile(field_type)
             {
                 return None;
             }
             if index == 0 {
-                if field_type.get_metatype() != type_metatype::TYPE_INT { return None; }
+                if field_type.get_metatype() != type_metatype::TYPE_INT {
+                    return None;
+                }
             } else {
-                if field_type.get_metatype() != type_metatype::TYPE_PTR { return None; }
-                let DatatypeKind::Pointer { ptrto, spaceid: None, truncate: None, wordsize: 1 } = &field_type.kind else {
+                if field_type.get_metatype() != type_metatype::TYPE_PTR {
+                    return None;
+                }
+                let DatatypeKind::Pointer {
+                    ptrto,
+                    spaceid: None,
+                    truncate: None,
+                    wordsize: 1,
+                } = &field_type.kind
+                else {
                     return None;
                 };
-                if ptrto.get_metatype() != type_metatype::TYPE_VOID || ptrto.get_size() != 0
-                    || ptrto.is_incomplete() || crate::kuna_typequal::is_volatile(ptrto)
+                if ptrto.get_metatype() != type_metatype::TYPE_VOID
+                    || ptrto.get_size() != 0
+                    || ptrto.is_incomplete()
+                    || crate::kuna_typequal::is_volatile(ptrto)
                 {
                     return None;
                 }
@@ -136,21 +171,43 @@ mod tests {
         assert!(!LangFacet::RustSlice { elem: "u64".into() }.is_text());
         assert!(!LangFacet::GoSlice { elem: "u64".into() }.is_text());
         assert!(!LangFacet::GoIface { eface: true }.is_text());
-        assert!(!LangFacet::GoPairResults { signed: [true, false] }.is_text());
+        assert!(
+            !LangFacet::GoPairResults {
+                signed: [true, false]
+            }
+            .is_text()
+        );
         assert!(!LangFacet::GoIntErrorResults.is_text());
     }
 
     #[test]
     fn pair_metadata_rejects_inconsistent_storage() {
-        use crate::dtype::{type_metatype::*, Datatype, TypeField};
+        use crate::dtype::{Datatype, TypeField, type_metatype::*};
         use std::rc::Rc;
-        let facet = LangFacet::GoPairResults { signed: [true, false] };
+        let facet = LangFacet::GoPairResults {
+            signed: [true, false],
+        };
         let pair = |size, align, second_offset, second_name, second_size, second_meta| {
             let mut ty = Datatype::new_with_align(size, align, TYPE_STRUCT);
-            ty.set_struct_fields(vec![
-                TypeField::new(0, 0, "result0", Rc::new(Datatype::new_with_align(8, 8, TYPE_INT))),
-                TypeField::new(8, second_offset, second_name, Rc::new(Datatype::new_with_align(second_size, 8, second_meta))),
-            ], Vec::new(), size, align);
+            ty.set_struct_fields(
+                vec![
+                    TypeField::new(
+                        0,
+                        0,
+                        "result0",
+                        Rc::new(Datatype::new_with_align(8, 8, TYPE_INT)),
+                    ),
+                    TypeField::new(
+                        8,
+                        second_offset,
+                        second_name,
+                        Rc::new(Datatype::new_with_align(second_size, 8, second_meta)),
+                    ),
+                ],
+                Vec::new(),
+                size,
+                align,
+            );
             ty
         };
         let valid = pair(16, 8, 8, "result1", 8, TYPE_UINT);
@@ -166,41 +223,77 @@ mod tests {
         ] {
             assert!(facet.go_pair_fields(&malformed).is_none());
         }
-        assert!(LangFacet::GoIface { eface: false }.go_pair_fields(&valid).is_none());
+        assert!(
+            LangFacet::GoIface { eface: false }
+                .go_pair_fields(&valid)
+                .is_none()
+        );
     }
 
     fn int_error_carrier() -> crate::dtype::Datatype {
-        use crate::dtype::{type_metatype::*, Datatype, DatatypeKind, TypeField};
+        use crate::dtype::{Datatype, DatatypeKind, TypeField, type_metatype::*};
         use std::rc::Rc;
         let mut pointer = Datatype::new_with_align(8, 8, TYPE_PTR);
         pointer.kind = DatatypeKind::Pointer {
             ptrto: Rc::new(Datatype::new_with_align(0, 1, TYPE_VOID)),
-            spaceid: None, truncate: None, wordsize: 1,
+            spaceid: None,
+            truncate: None,
+            wordsize: 1,
         };
         let pointer = Rc::new(pointer);
         let mut carrier = Datatype::new_with_align(24, 8, TYPE_STRUCT);
-        carrier.set_struct_fields(vec![
-            TypeField::new(0, 0, "result0", Rc::new(Datatype::new_with_align(8, 8, TYPE_INT))),
-            TypeField::new(8, 8, "error_tab", Rc::clone(&pointer)),
-            TypeField::new(16, 16, "error_data", pointer),
-        ], Vec::new(), 24, 8);
+        carrier.set_struct_fields(
+            vec![
+                TypeField::new(
+                    0,
+                    0,
+                    "result0",
+                    Rc::new(Datatype::new_with_align(8, 8, TYPE_INT)),
+                ),
+                TypeField::new(8, 8, "error_tab", Rc::clone(&pointer)),
+                TypeField::new(16, 16, "error_data", pointer),
+            ],
+            Vec::new(),
+            24,
+            8,
+        );
         carrier
     }
 
     #[test]
     fn int_error_metadata_is_distinct_from_interface_and_integer_pairs() {
         let carrier = int_error_carrier();
-        let fields = LangFacet::GoIntErrorResults.go_int_error_fields(&carrier).unwrap();
+        let fields = LangFacet::GoIntErrorResults
+            .go_int_error_fields(&carrier)
+            .unwrap();
         assert_eq!(fields.len(), 3);
-        assert!(LangFacet::GoIface { eface: false }.go_int_error_fields(&carrier).is_none());
-        assert!(LangFacet::GoIface { eface: true }.go_int_error_fields(&carrier).is_none());
-        assert!(LangFacet::GoPairResults { signed: [true, true] }.go_int_error_fields(&carrier).is_none());
-        assert!(LangFacet::GoIntErrorResults.go_pair_fields(&carrier).is_none());
+        assert!(
+            LangFacet::GoIface { eface: false }
+                .go_int_error_fields(&carrier)
+                .is_none()
+        );
+        assert!(
+            LangFacet::GoIface { eface: true }
+                .go_int_error_fields(&carrier)
+                .is_none()
+        );
+        assert!(
+            LangFacet::GoPairResults {
+                signed: [true, true]
+            }
+            .go_int_error_fields(&carrier)
+            .is_none()
+        );
+        assert!(
+            LangFacet::GoIntErrorResults
+                .go_pair_fields(&carrier)
+                .is_none()
+        );
     }
 
     #[test]
     fn int_error_metadata_rejects_incomplete_or_changed_carriers() {
-        use crate::dtype::{flags, type_metatype::*, DatatypeKind, TypeBitField};
+        use crate::dtype::{DatatypeKind, TypeBitField, flags, type_metatype::*};
         use std::rc::Rc;
         for change in 0..9 {
             let mut carrier = int_error_carrier();
@@ -213,24 +306,41 @@ mod tests {
                 5 => carrier.qualifiers = crate::kuna_typequal::VOLATILE,
                 6 => carrier.kind = DatatypeKind::Base,
                 _ => {
-                    let DatatypeKind::Struct { field, bitfield } = &mut carrier.kind else { unreachable!() };
-                    if change == 7 { field.pop(); } else {
-                        bitfield.push(TypeBitField::new(0, 1, false, "extra", Rc::clone(&field[0].field_type)));
+                    let DatatypeKind::Struct { field, bitfield } = &mut carrier.kind else {
+                        unreachable!()
+                    };
+                    if change == 7 {
+                        field.pop();
+                    } else {
+                        bitfield.push(TypeBitField::new(
+                            0,
+                            1,
+                            false,
+                            "extra",
+                            Rc::clone(&field[0].field_type),
+                        ));
                     }
                 }
             }
-            assert!(LangFacet::GoIntErrorResults.go_int_error_fields(&carrier).is_none(), "mutation {change}");
+            assert!(
+                LangFacet::GoIntErrorResults
+                    .go_int_error_fields(&carrier)
+                    .is_none(),
+                "mutation {change}"
+            );
         }
     }
 
     #[test]
     fn int_error_metadata_rejects_changed_fields_and_pointer_targets() {
-        use crate::dtype::{flags, type_metatype::*, Datatype, DatatypeKind};
+        use crate::dtype::{Datatype, DatatypeKind, flags, type_metatype::*};
         use std::rc::Rc;
         for index in 0..3 {
             for change in 0..10 {
                 let mut carrier = int_error_carrier();
-                let DatatypeKind::Struct { field, .. } = &mut carrier.kind else { unreachable!() };
+                let DatatypeKind::Struct { field, .. } = &mut carrier.kind else {
+                    unreachable!()
+                };
                 let member = &mut field[index];
                 let ty = Rc::make_mut(&mut member.field_type);
                 match change {
@@ -243,7 +353,12 @@ mod tests {
                     6 => ty.flags |= flags::has_bitfields,
                     _ if index == 0 => continue,
                     _ => {
-                        let DatatypeKind::Pointer { ptrto, wordsize, .. } = &mut ty.kind else { unreachable!() };
+                        let DatatypeKind::Pointer {
+                            ptrto, wordsize, ..
+                        } = &mut ty.kind
+                        else {
+                            unreachable!()
+                        };
                         match change {
                             7 => *ptrto = Rc::new(Datatype::new_with_align(8, 8, TYPE_INT)),
                             8 => Rc::make_mut(ptrto).qualifiers = crate::kuna_typequal::VOLATILE,
@@ -251,7 +366,12 @@ mod tests {
                         }
                     }
                 }
-                assert!(LangFacet::GoIntErrorResults.go_int_error_fields(&carrier).is_none(), "field {index}, mutation {change}");
+                assert!(
+                    LangFacet::GoIntErrorResults
+                        .go_int_error_fields(&carrier)
+                        .is_none(),
+                    "field {index}, mutation {change}"
+                );
             }
         }
     }

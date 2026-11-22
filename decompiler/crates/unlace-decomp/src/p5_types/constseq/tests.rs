@@ -16,19 +16,20 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::{int4, uint4};
 
-use crate::dtype::{type_metatype, Datatype};
+use crate::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::op::pcodeop_flags;
-use crate::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
 
 fn build_manager(big: bool) -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -129,12 +130,14 @@ fn check_interference_selects_max_window() {
     let mut fd = build_fd(false);
     let bl = mk_block(&mut fd);
     // Five consecutive COPYs, no interference; root is the third.
-    let ops: Vec<OpId> =
-        (0..5).map(|i| mk_copy_const(&mut fd, bl, 0x10 + i * 4, 0x41 + i)).collect();
+    let ops: Vec<OpId> = (0..5)
+        .map(|i| mk_copy_const(&mut fd, bl, 0x10 + i * 4, 0x41 + i))
+        .collect();
     let ct = char1(&fd);
     let mut seq = ArraySequence::new(ct);
     for (i, &op) in ops.iter().enumerate() {
-        seq.move_ops.push(WriteNode::new(i as u64, op, -1, order_of(&fd, op)));
+        seq.move_ops
+            .push(WriteNode::new(i as u64, op, -1, order_of(&fd, op)));
     }
     let root = ops[2];
     assert!(seq.check_interference(&fd, root));
@@ -161,7 +164,8 @@ fn check_interference_rejects_short_window() {
     let ct = char1(&fd);
     let mut seq = ArraySequence::new(ct);
     for (i, &op) in [root, c1, c2].iter().enumerate() {
-        seq.move_ops.push(WriteNode::new(i as u64, op, -1, order_of(&fd, op)));
+        seq.move_ops
+            .push(WriteNode::new(i as u64, op, -1, order_of(&fd, op)));
     }
     // Only root survives forward (LOAD blocks); window length 1 < 4.
     assert!(!seq.check_interference(&fd, root));
@@ -177,7 +181,8 @@ fn check_interference_missing_root_fails() {
     let ct = char1(&fd);
     let mut seq = ArraySequence::new(ct);
     for (i, &op) in [a, b].iter().enumerate() {
-        seq.move_ops.push(WriteNode::new(i as u64, op, -1, order_of(&fd, op)));
+        seq.move_ops
+            .push(WriteNode::new(i as u64, op, -1, order_of(&fd, op)));
     }
     // root not in move_ops -> false.
     assert!(!seq.check_interference(&fd, stray));
@@ -191,12 +196,16 @@ fn form_byte_array_little_endian_with_terminator() {
     let bl = mk_block(&mut fd);
     // "ABCD\0" : five 1-byte COPYs at offsets 0..4, the last a null terminator.
     let chars = [0x41u64, 0x42, 0x43, 0x44, 0x00];
-    let ops: Vec<OpId> =
-        chars.iter().enumerate().map(|(i, &c)| mk_copy_const(&mut fd, bl, 0x10 + i as u64 * 4, c)).collect();
+    let ops: Vec<OpId> = chars
+        .iter()
+        .enumerate()
+        .map(|(i, &c)| mk_copy_const(&mut fd, bl, 0x10 + i as u64 * 4, c))
+        .collect();
     let ct = char1(&fd);
     let mut seq = ArraySequence::new(ct);
     for (i, &op) in ops.iter().enumerate() {
-        seq.move_ops.push(WriteNode::new(i as u64, op, -1, order_of(&fd, op)));
+        seq.move_ops
+            .push(WriteNode::new(i as u64, op, -1, order_of(&fd, op)));
     }
     // root offset 0, slot 0 (COPY input), little-endian, sz covers all 5.
     let count = seq.form_byte_array(&fd, 5, 0, 0, false);
@@ -211,12 +220,16 @@ fn form_byte_array_rejects_too_short() {
     let bl = mk_block(&mut fd);
     // Only 3 contiguous chars -> below MINIMUM_SEQUENCE_LENGTH (4).
     let chars = [0x41u64, 0x42, 0x43];
-    let ops: Vec<OpId> =
-        chars.iter().enumerate().map(|(i, &c)| mk_copy_const(&mut fd, bl, 0x10 + i as u64 * 4, c)).collect();
+    let ops: Vec<OpId> = chars
+        .iter()
+        .enumerate()
+        .map(|(i, &c)| mk_copy_const(&mut fd, bl, 0x10 + i as u64 * 4, c))
+        .collect();
     let ct = char1(&fd);
     let mut seq = ArraySequence::new(ct);
     for (i, &op) in ops.iter().enumerate() {
-        seq.move_ops.push(WriteNode::new(i as u64, op, -1, order_of(&fd, op)));
+        seq.move_ops
+            .push(WriteNode::new(i as u64, op, -1, order_of(&fd, op)));
     }
     let count = seq.form_byte_array(&fd, 3, 0, 0, false);
     assert_eq!(count, 0);
@@ -234,7 +247,8 @@ fn form_byte_array_truncates_after_gap() {
     let mut seq = ArraySequence::new(ct);
     for (i, &(off, cval)) in entries.iter().enumerate() {
         let op = mk_copy_const(&mut fd, bl, 0x10 + i as u64 * 4, cval);
-        seq.move_ops.push(WriteNode::new(off, op, -1, order_of(&fd, op)));
+        seq.move_ops
+            .push(WriteNode::new(off, op, -1, order_of(&fd, op)));
     }
     let count = seq.form_byte_array(&fd, 6, 0, 0, false);
     assert_eq!(count, 4);
@@ -262,7 +276,8 @@ fn w6s5_form_byte_array_offset_before_root_is_skipped_not_panic() {
     let mut seq = ArraySequence::new(ct);
     for (i, &(off, cval)) in entries.iter().enumerate() {
         let op = mk_copy_const(&mut fd, bl, 0x10 + i as u64 * 4, cval);
-        seq.move_ops.push(WriteNode::new(off, op, -1, order_of(&fd, op)));
+        seq.move_ops
+            .push(WriteNode::new(off, op, -1, order_of(&fd, op)));
     }
     // sz = 4 (region after root), root_off = 4.
     let count = seq.form_byte_array(&fd, 4, 0, 4, false);
@@ -275,12 +290,19 @@ fn out_of_range_writes_do_not_interrupt_byte_array_assembly() {
     let mut fd = build_fd(false);
     let bl = mk_block(&mut fd);
     let huge_off = i32::MAX as u64; // 0x7fff_ffff
-    let entries = [(huge_off, 0x39u64), (0, 0x41), (1, 0x42), (2, 0x43), (3, 0x44)];
+    let entries = [
+        (huge_off, 0x39u64),
+        (0, 0x41),
+        (1, 0x42),
+        (2, 0x43),
+        (3, 0x44),
+    ];
     let ct = char1(&fd);
     let mut seq = ArraySequence::new(ct);
     for (i, &(off, cval)) in entries.iter().enumerate() {
         let op = mk_copy_const(&mut fd, bl, 0x10 + i as u64 * 4, cval);
-        seq.move_ops.push(WriteNode::new(off, op, -1, order_of(&fd, op)));
+        seq.move_ops
+            .push(WriteNode::new(off, op, -1, order_of(&fd, op)));
     }
     assert_eq!(seq.form_byte_array(&fd, 4, 0, 0, false), 4);
     assert_eq!(seq.byte_array, b"ABCD");
@@ -300,7 +322,8 @@ fn w6s5_form_byte_array_little_endian_multibyte_shift() {
         let op = mk_op_in_block(&mut fd, bl, 0x10 + i as u64 * 4, OpCode::CPUI_COPY);
         let c = fd.new_constant(2, v);
         fd.op_set_input(op, c, 0).unwrap();
-        seq.move_ops.push(WriteNode::new((i * 2) as u64, op, -1, order_of(&fd, op)));
+        seq.move_ops
+            .push(WriteNode::new((i * 2) as u64, op, -1, order_of(&fd, op)));
     }
     let count = seq.form_byte_array(&fd, 8, 0, 0, false);
     assert_eq!(count, 4);
@@ -324,7 +347,8 @@ fn form_byte_array_big_endian_multibyte() {
         let op = mk_op_in_block(&mut fd, bl, 0x10 + i as u64 * 4, OpCode::CPUI_COPY);
         let c = fd.new_constant(2, v);
         fd.op_set_input(op, c, 0).unwrap();
-        seq.move_ops.push(WriteNode::new((i * 2) as u64, op, -1, order_of(&fd, op)));
+        seq.move_ops
+            .push(WriteNode::new((i * 2) as u64, op, -1, order_of(&fd, op)));
     }
     let count = seq.form_byte_array(&fd, 8, 0, 0, true);
     assert_eq!(count, 4);
@@ -347,12 +371,18 @@ use crate::action::{ActionGroupList, Rule};
 
 #[test]
 fn string_copy_op_list_is_copy() {
-    assert_eq!(RuleStringCopy::new("analysis").get_op_list(), vec![OpCode::CPUI_COPY]);
+    assert_eq!(
+        RuleStringCopy::new("analysis").get_op_list(),
+        vec![OpCode::CPUI_COPY]
+    );
 }
 
 #[test]
 fn string_store_op_list_is_store() {
-    assert_eq!(RuleStringStore::new("analysis").get_op_list(), vec![OpCode::CPUI_STORE]);
+    assert_eq!(
+        RuleStringStore::new("analysis").get_op_list(),
+        vec![OpCode::CPUI_STORE]
+    );
 }
 
 #[test]

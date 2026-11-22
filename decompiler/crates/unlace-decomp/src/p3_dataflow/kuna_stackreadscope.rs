@@ -58,17 +58,30 @@ pub(crate) fn mark_stack_read(data: &mut Funcdata, op: OpId) {
 
 /// (kuna `loadguardreads`) Record the read a LOAD guard `COPY` of the stack
 /// range `addr`/`size` in front of `load` would have marked.
-pub(crate) fn mark_guarded_read(data: &mut Funcdata, load: OpId, addr: &unlace_base::address::Address, size: i32) {
+pub(crate) fn mark_guarded_read(
+    data: &mut Funcdata,
+    load: OpId,
+    addr: &unlace_base::address::Address,
+    size: i32,
+) {
     if data.num_calls() == 0 {
         return;
     }
-    let Some(space) = addr.get_space().filter(|s| s.get_type() == spacetype::IPTR_SPACEBASE) else {
+    let Some(space) = addr
+        .get_space()
+        .filter(|s| s.get_type() == spacetype::IPTR_SPACEBASE)
+    else {
         return;
     };
     let Some(block) = data.obank().get(load).and_then(|op| op.get_parent()) else {
         return;
     };
-    let read = MachineRead { block, space: space.get_index(), offset: addr.get_offset(), size };
+    let read = MachineRead {
+        block,
+        space: space.get_index(),
+        offset: addr.get_offset(),
+        size,
+    };
     data.kuna_guarded_reads.guarded.insert(read);
 }
 

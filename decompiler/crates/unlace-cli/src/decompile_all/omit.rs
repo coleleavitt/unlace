@@ -24,7 +24,11 @@ impl Omit {
     /// Add one `--omit` value (comma-separated record keys) to this selection.
     pub(crate) fn add(&mut self, value: &str) -> Result<(), String> {
         let mut named = false;
-        for key in value.split(',').map(str::trim).filter(|key| !key.is_empty()) {
+        for key in value
+            .split(',')
+            .map(str::trim)
+            .filter(|key| !key.is_empty())
+        {
             match key {
                 "aliases" => self.aliases = true,
                 "line_mappings" => self.line_mappings = true,
@@ -34,7 +38,7 @@ impl Omit {
                     return Err(format!(
                         "--omit {other:?}: expected a comma-separated list of {}",
                         KEYS.join(", ")
-                    ))
+                    ));
                 }
             }
             named = true;
@@ -67,7 +71,12 @@ impl Omit {
     /// The document's top-level `omitted` array, `None` when nothing is withheld.
     pub(crate) fn json(self) -> Option<Json> {
         (!self.is_empty()).then(|| {
-            Json::Array(self.withheld().into_iter().map(|key| Json::Str(key.to_string())).collect())
+            Json::Array(
+                self.withheld()
+                    .into_iter()
+                    .map(|key| Json::Str(key.to_string()))
+                    .collect(),
+            )
         })
     }
 }
@@ -81,19 +90,34 @@ mod tests {
         let mut omit = Omit::default();
         omit.add("types").unwrap();
         omit.add(" variables , line_mappings").unwrap();
-        assert_eq!(omit.withheld(), ["line_mappings", "variables", "types", "stack_objects"]);
+        assert_eq!(
+            omit.withheld(),
+            ["line_mappings", "variables", "types", "stack_objects"]
+        );
         omit.add("aliases").unwrap();
         assert_eq!(
             omit.withheld(),
-            ["aliases", "line_mappings", "variables", "types", "stack_objects"]
+            [
+                "aliases",
+                "line_mappings",
+                "variables",
+                "types",
+                "stack_objects"
+            ]
         );
     }
 
     #[test]
     fn unknown_and_empty_values_are_refused() {
         let err = Omit::default().add("variables,lines").unwrap_err();
-        assert!(err.contains("\"lines\"") && err.contains("line_mappings"), "{err}");
-        assert!(err.contains("aliases, line_mappings, variables, types"), "{err}");
+        assert!(
+            err.contains("\"lines\"") && err.contains("line_mappings"),
+            "{err}"
+        );
+        assert!(
+            err.contains("aliases, line_mappings, variables, types"),
+            "{err}"
+        );
         assert!(Omit::default().add(" , ").is_err());
     }
 

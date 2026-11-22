@@ -24,17 +24,17 @@
 
 use std::rc::Rc;
 
-use unlace_base::address::{calc_int_min, calc_uint_max, Address};
+use unlace_base::address::{Address, calc_int_min, calc_uint_max};
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::{int4, uint4, uintm};
 use unlace_num::opcodes::OpCode;
 
-use unlace_decomp::dtype::{type_metatype, Datatype};
+use unlace_decomp::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
+use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::op::pcodeop_flags;
-use unlace_decomp::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
 
 // ---------------------------------------------------------------------------
 // harness (mirrors verify_w3_ir_funcdata_op.rs)
@@ -43,7 +43,8 @@ use unlace_decomp::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -78,7 +79,8 @@ fn dt(size: int4) -> Rc<Datatype> {
 fn mk_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode, flags: uint4) -> OpId {
     let ram = ram_space(fd);
     let op = fd.new_op(inputs, Address::new(ram, off));
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, flags, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, flags, format!("{opc:?}")));
     op
 }
 
@@ -88,7 +90,9 @@ fn mk_input(fd: &mut Funcdata, off: u64) -> VarnodeId {
     let ram = ram_space(fd);
     let vn = fd.vbank_mut().create(4, Address::new(ram, off), dt(4));
     fd.vbank_mut()
-        .set_input(vn, &mut |_: &mut unlace_decomp::varnode::VarnodeBank, _, _| Ok(()))
+        .set_input(vn, &mut |_: &mut unlace_decomp::varnode::VarnodeBank,
+                             _,
+                             _| Ok(()))
         .unwrap()
 }
 
@@ -132,12 +136,21 @@ fn w5x_replace_lessequal_signed_min_in_slot0_declines() {
     fd.op_set_input(op, x, 1).unwrap();
     let _o = give_out(&mut fd, op, 0x40);
 
-    assert!(!fd.replace_lessequal(op).unwrap(), "SMIN <= x cannot underflow-rewrite");
+    assert!(
+        !fd.replace_lessequal(op).unwrap(),
+        "SMIN <= x cannot underflow-rewrite"
+    );
     // Op untouched: still SLESSEQUAL, slot 0 still the SMIN constant.
-    assert_eq!(fd.obank().get(op).unwrap().code(), OpCode::CPUI_INT_SLESSEQUAL);
+    assert_eq!(
+        fd.obank().get(op).unwrap().code(),
+        OpCode::CPUI_INT_SLESSEQUAL
+    );
     let in0 = fd.obank().get(op).unwrap().get_in(0).unwrap();
     assert_eq!(fd.vbank().get(in0).unwrap().get_offset(), smin);
-    assert!(!fd.obank().get(op).unwrap().is_canonical_lessequal(), "no provenance on decline");
+    assert!(
+        !fd.obank().get(op).unwrap().is_canonical_lessequal(),
+        "no provenance on decline"
+    );
 }
 
 // Companion: a NON-boundary `c <= x` signed case rewrites to `(c-1) < x`.
@@ -195,8 +208,14 @@ fn w5x_replace_lessequal_unsigned_zero_and_uintmax_decline() {
         fd.op_set_input(op, zero, 0).unwrap();
         fd.op_set_input(op, x, 1).unwrap();
         let _o = give_out(&mut fd, op, 0x40);
-        assert!(!fd.replace_lessequal(op).unwrap(), "0 <= x cannot underflow-rewrite");
-        assert_eq!(fd.obank().get(op).unwrap().code(), OpCode::CPUI_INT_LESSEQUAL);
+        assert!(
+            !fd.replace_lessequal(op).unwrap(),
+            "0 <= x cannot underflow-rewrite"
+        );
+        assert_eq!(
+            fd.obank().get(op).unwrap().code(),
+            OpCode::CPUI_INT_LESSEQUAL
+        );
     }
     // (b) `x <= UINT_MAX` (const slot 1, diff=+1, val=calc_uint_max) -> decline.
     {
@@ -213,8 +232,14 @@ fn w5x_replace_lessequal_unsigned_zero_and_uintmax_decline() {
         fd.op_set_input(op, x, 0).unwrap();
         fd.op_set_input(op, umax, 1).unwrap();
         let _o = give_out(&mut fd, op, 0x40);
-        assert!(!fd.replace_lessequal(op).unwrap(), "x <= UINT_MAX cannot overflow-rewrite");
-        assert_eq!(fd.obank().get(op).unwrap().code(), OpCode::CPUI_INT_LESSEQUAL);
+        assert!(
+            !fd.replace_lessequal(op).unwrap(),
+            "x <= UINT_MAX cannot overflow-rewrite"
+        );
+        assert_eq!(
+            fd.obank().get(op).unwrap().code(),
+            OpCode::CPUI_INT_LESSEQUAL
+        );
     }
 }
 
@@ -235,11 +260,18 @@ fn w5x_cse_eliminate_list_empty_and_single_are_noops() {
     // Empty list: outlist stays empty.
     let mut empty: Vec<(uintm, OpId)> = Vec::new();
     let mut outlist: Vec<VarnodeId> = Vec::new();
-    fd.cse_eliminate_list(&mut empty, &mut outlist, |_, _| true).unwrap();
+    fd.cse_eliminate_list(&mut empty, &mut outlist, |_, _| true)
+        .unwrap();
     assert!(outlist.is_empty(), "empty list -> no output");
 
     // Single element: build one real op, list it once.
-    let op = mk_op(&mut fd, 2, 0x100, OpCode::CPUI_INT_ADD, pcodeop_flags::binary);
+    let op = mk_op(
+        &mut fd,
+        2,
+        0x100,
+        OpCode::CPUI_INT_ADD,
+        pcodeop_flags::binary,
+    );
     let c1 = fd.new_constant(4, 1);
     fd.op_set_input(op, x, 0).unwrap();
     fd.op_set_input(op, c1, 1).unwrap();
@@ -247,9 +279,13 @@ fn w5x_cse_eliminate_list_empty_and_single_are_noops() {
     fd.op_insert(op, bl, None);
     let h = unlace_decomp::op::get_cse_hash(fd.obank().get(op).unwrap(), fd.vbank());
     let mut single = vec![(h, op)];
-    fd.cse_eliminate_list(&mut single, &mut outlist, |_, _| true).unwrap();
+    fd.cse_eliminate_list(&mut single, &mut outlist, |_, _| true)
+        .unwrap();
     assert!(outlist.is_empty(), "single element -> loop body never runs");
-    assert!(!fd.obank().get(op).unwrap().is_dead(), "single op survives untouched");
+    assert!(
+        !fd.obank().get(op).unwrap().is_dead(),
+        "single op survives untouched"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -264,7 +300,13 @@ fn w5x_distribute_int_mult_add_both_const_folds_no_new_mult() {
     let mut fd = build_fd();
     let bl = mk_block(&mut fd);
     // addop = INT_ADD(#2, #7).
-    let addop = mk_op(&mut fd, 2, 0x100, OpCode::CPUI_INT_ADD, pcodeop_flags::binary);
+    let addop = mk_op(
+        &mut fd,
+        2,
+        0x100,
+        OpCode::CPUI_INT_ADD,
+        pcodeop_flags::binary,
+    );
     let c2 = fd.new_constant(4, 2);
     let c7 = fd.new_constant(4, 7);
     fd.op_set_input(addop, c2, 0).unwrap();
@@ -272,7 +314,13 @@ fn w5x_distribute_int_mult_add_both_const_folds_no_new_mult() {
     let addout = give_out(&mut fd, addop, 0x40);
     fd.op_insert(addop, bl, None);
     // op = INT_MULT(addout, #3).
-    let op = mk_op(&mut fd, 2, 0x104, OpCode::CPUI_INT_MULT, pcodeop_flags::binary);
+    let op = mk_op(
+        &mut fd,
+        2,
+        0x104,
+        OpCode::CPUI_INT_MULT,
+        pcodeop_flags::binary,
+    );
     let c3 = fd.new_constant(4, 3);
     fd.op_set_input(op, addout, 0).unwrap();
     fd.op_set_input(op, c3, 1).unwrap();
@@ -282,12 +330,18 @@ fn w5x_distribute_int_mult_add_both_const_folds_no_new_mult() {
     let ops_before = fd.obank().num_alive();
     assert!(fd.distribute_int_mult_add(op).unwrap(), "distributes");
     // No new INT_MULT op was created (both branches folded to constants).
-    assert_eq!(fd.obank().num_alive(), ops_before, "all-constant fold creates no new op");
+    assert_eq!(
+        fd.obank().num_alive(),
+        ops_before,
+        "all-constant fold creates no new op"
+    );
     // op is now INT_ADD(#6, #21).
     assert_eq!(fd.obank().get(op).unwrap().code(), OpCode::CPUI_INT_ADD);
     let in0 = fd.obank().get(op).unwrap().get_in(0).unwrap();
     let in1 = fd.obank().get(op).unwrap().get_in(1).unwrap();
-    assert!(fd.vbank().get(in0).unwrap().is_constant() && fd.vbank().get(in1).unwrap().is_constant());
+    assert!(
+        fd.vbank().get(in0).unwrap().is_constant() && fd.vbank().get(in1).unwrap().is_constant()
+    );
     assert_eq!(fd.vbank().get(in0).unwrap().get_offset(), 6, "3*2");
     assert_eq!(fd.vbank().get(in1).unwrap().get_offset(), 21, "3*7");
 }
@@ -327,7 +381,15 @@ fn w5x_op_set_input_third_reshare_dups_independently() {
 
     // Every distinct constant carries the same value and exactly one reader.
     for v in [k, kb, kc] {
-        assert_eq!(fd.vbank().get(v).unwrap().get_offset(), 0x2a, "value preserved");
-        assert_eq!(fd.vbank().get(v).unwrap().num_descend(), 1, "single descendant each");
+        assert_eq!(
+            fd.vbank().get(v).unwrap().get_offset(),
+            0x2a,
+            "value preserved"
+        );
+        assert_eq!(
+            fd.vbank().get(v).unwrap().num_descend(),
+            1,
+            "single descendant each"
+        );
     }
 }

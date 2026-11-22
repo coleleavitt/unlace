@@ -73,9 +73,9 @@ use unlace_base::error::KunaResult;
 use unlace_base::types::{int4, uint4, uintb};
 use unlace_num::opcodes::OpCode;
 
-use crate::dtype::{type_metatype, Datatype, TypeFactory};
-use crate::op::pcodeop_flags as pf;
 use crate::context::TypeOp;
+use crate::dtype::{Datatype, TypeFactory, type_metatype};
+use crate::op::pcodeop_flags as pf;
 
 /// `TypeOp::addlflags` attribute bits (`typeop.hh:41-48`, the anonymous `enum`
 /// in `class TypeOp`).  These are the per-op-code *display/typing* attributes
@@ -178,7 +178,15 @@ impl TypeOpInfo {
         metaout: type_metatype,
         metain: type_metatype,
     ) -> Self {
-        TypeOpInfo { opcode, opflags, addlflags, name, class, metaout, metain }
+        TypeOpInfo {
+            opcode,
+            opflags,
+            addlflags,
+            name,
+            class,
+            metaout,
+            metain,
+        }
     }
 
     // -- addlflags predicates (typeop.hh:128-146) ---------------------------
@@ -367,13 +375,19 @@ pub fn type_op_info(opc: OpCode) -> TypeOpInfo {
         // TypeOpStore: special|nocollapse (typeop.cc:514-519).
         CPUI_STORE => TypeOpInfo::base(opc, pf::special | pf::nocollapse, 0, "store"),
         // TypeOpBranch: special|branch|coderef|nocollapse (typeop.cc:585-590).
-        CPUI_BRANCH => {
-            TypeOpInfo::base(opc, pf::special | pf::branch | pf::coderef | pf::nocollapse, 0, "goto")
-        }
+        CPUI_BRANCH => TypeOpInfo::base(
+            opc,
+            pf::special | pf::branch | pf::coderef | pf::nocollapse,
+            0,
+            "goto",
+        ),
         // TypeOpCbranch: special|branch|coderef|nocollapse (typeop.cc:604-609).
-        CPUI_CBRANCH => {
-            TypeOpInfo::base(opc, pf::special | pf::branch | pf::coderef | pf::nocollapse, 0, "goto")
-        }
+        CPUI_CBRANCH => TypeOpInfo::base(
+            opc,
+            pf::special | pf::branch | pf::coderef | pf::nocollapse,
+            0,
+            "goto",
+        ),
         // TypeOpBranchind: special|branch|nocollapse (typeop.cc:648-653).
         CPUI_BRANCHIND => {
             TypeOpInfo::base(opc, pf::special | pf::branch | pf::nocollapse, 0, "switch")
@@ -468,13 +482,9 @@ pub fn type_op_info(opc: OpCode) -> TypeOpInfo {
 
         // -- Extensions (TypeOpFunc) ----------------------------------------
         // TypeOpIntZext: unary; metaout/in UINT (typeop.cc:1117-1122).
-        CPUI_INT_ZEXT => {
-            TypeOpInfo::typed(opc, pf::unary, 0, "ZEXT", Func, TYPE_UINT, TYPE_UINT)
-        }
+        CPUI_INT_ZEXT => TypeOpInfo::typed(opc, pf::unary, 0, "ZEXT", Func, TYPE_UINT, TYPE_UINT),
         // TypeOpIntSext: unary; metaout/in INT (typeop.cc:1143-1148).
-        CPUI_INT_SEXT => {
-            TypeOpInfo::typed(opc, pf::unary, 0, "SEXT", Func, TYPE_INT, TYPE_INT)
-        }
+        CPUI_INT_SEXT => TypeOpInfo::typed(opc, pf::unary, 0, "SEXT", Func, TYPE_INT, TYPE_INT),
 
         // -- Integer arithmetic (TypeOpBinary/Unary) ------------------------
         // TypeOpIntAdd: binary|commutative; addl arithmetic_op|inherits_sign (typeop.cc:1169-1175).
@@ -891,37 +901,31 @@ pub fn type_op_info(opc: OpCode) -> TypeOpInfo {
 
         // -- Markers / structural (derive from TypeOp) ----------------------
         // TypeOpMulti: special|marker|nocollapse (typeop.cc:1946-1951).
-        CPUI_MULTIEQUAL => {
-            TypeOpInfo::base(opc, pf::special | pf::marker | pf::nocollapse, 0, "?")
-        }
+        CPUI_MULTIEQUAL => TypeOpInfo::base(opc, pf::special | pf::marker | pf::nocollapse, 0, "?"),
         // TypeOpIndirect: special|marker|nocollapse (typeop.cc:1987-1992).
-        CPUI_INDIRECT => {
-            TypeOpInfo::base(opc, pf::special | pf::marker | pf::nocollapse, 0, "[]")
-        }
+        CPUI_INDIRECT => TypeOpInfo::base(opc, pf::special | pf::marker | pf::nocollapse, 0, "[]"),
         // TypeOpPiece (Func): binary; metaout/in UNKNOWN (typeop.cc:2039-2048).
-        CPUI_PIECE => {
-            TypeOpInfo::typed(opc, pf::binary, 0, "CONCAT", Func, TYPE_UNKNOWN, TYPE_UNKNOWN)
-        }
+        CPUI_PIECE => TypeOpInfo::typed(
+            opc,
+            pf::binary,
+            0,
+            "CONCAT",
+            Func,
+            TYPE_UNKNOWN,
+            TYPE_UNKNOWN,
+        ),
         // TypeOpSubpiece (Func): binary; metaout/in UNKNOWN (typeop.cc:2118-2127).
         CPUI_SUBPIECE => {
             TypeOpInfo::typed(opc, pf::binary, 0, "SUB", Func, TYPE_UNKNOWN, TYPE_UNKNOWN)
         }
         // TypeOpCast: unary|special|nocollapse (typeop.cc:2211-2216).
-        CPUI_CAST => {
-            TypeOpInfo::base(opc, pf::unary | pf::special | pf::nocollapse, 0, "(cast)")
-        }
+        CPUI_CAST => TypeOpInfo::base(opc, pf::unary | pf::special | pf::nocollapse, 0, "(cast)"),
         // TypeOpPtradd: ternary|nocollapse; addl arithmetic_op (typeop.cc:2226-2232).
-        CPUI_PTRADD => {
-            TypeOpInfo::base(opc, pf::ternary | pf::nocollapse, af::arithmetic_op, "+")
-        }
+        CPUI_PTRADD => TypeOpInfo::base(opc, pf::ternary | pf::nocollapse, af::arithmetic_op, "+"),
         // TypeOpPtrsub: binary|nocollapse; addl arithmetic_op (typeop.cc:2298-2308).
-        CPUI_PTRSUB => {
-            TypeOpInfo::base(opc, pf::binary | pf::nocollapse, af::arithmetic_op, "->")
-        }
+        CPUI_PTRSUB => TypeOpInfo::base(opc, pf::binary | pf::nocollapse, af::arithmetic_op, "->"),
         // TypeOpSegment: special|nocollapse (typeop.cc:2392-2397).
-        CPUI_SEGMENTOP => {
-            TypeOpInfo::base(opc, pf::special | pf::nocollapse, 0, "segmentop")
-        }
+        CPUI_SEGMENTOP => TypeOpInfo::base(opc, pf::special | pf::nocollapse, 0, "segmentop"),
         // TypeOpCpoolref: special|nocollapse (typeop.cc:2445-2451).
         CPUI_CPOOLREF => TypeOpInfo::base(opc, pf::special | pf::nocollapse, 0, "cpoolref"),
         // TypeOpNew: special|call|nocollapse (typeop.cc:2496-2501).
@@ -946,7 +950,9 @@ pub fn type_op_info(opc: OpCode) -> TypeOpInfo {
         // CPUI_MAX and the unused discriminant have no `inst[]` entry in C++
         // (`inst[CPUI_MAX]` is the trailing null `registerInstructions` inserts);
         // querying them is a porting bug, not a runtime path.
-        CPUI_MAX => panic!("type_op_info: CPUI_MAX has no TypeOp entry (matches null inst[CPUI_MAX])"),
+        CPUI_MAX => {
+            panic!("type_op_info: CPUI_MAX has no TypeOp entry (matches null inst[CPUI_MAX])")
+        }
     }
 }
 

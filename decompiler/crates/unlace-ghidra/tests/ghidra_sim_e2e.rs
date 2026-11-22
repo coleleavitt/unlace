@@ -52,14 +52,12 @@ use unlace_base::marshal::{Encoder, PackedEncode};
 use unlace_ghidra::ids::{ELEM_COMMAND_GETMAPPEDSYMBOLS, ELEM_COMMAND_GETPCODE};
 use unlace_ghidra::process::GhidraProcess;
 
-use ghidra_sim::oracle::{
-    decompile_cli, generate_tspec, repo_root, SimOracle,
-};
+use ghidra_sim::oracle::{SimOracle, decompile_cli, generate_tspec, repo_root};
 use ghidra_sim::{
+    MockReader, MockState, MockWriter, ParsedDoc, QUERY_COMMAND_IDS, SessionTrace,
     cmd_decompile_at, cmd_deregister_program, cmd_flush_native, cmd_register_program,
-    cmd_set_action, cmd_set_options, line_diff_ratio, normalized_lines, parse_decompile_doc, placeholder_addrs,
-    query_doc_id, register_leaks, trace_session, unique_leaks, MockReader, MockState, MockWriter,
-    ParsedDoc, SessionTrace, QUERY_COMMAND_IDS,
+    cmd_set_action, cmd_set_options, line_diff_ratio, normalized_lines, parse_decompile_doc,
+    placeholder_addrs, query_doc_id, register_leaks, trace_session, unique_leaks,
 };
 
 /// One driven ghidra-mode session over a vendored ELF.
@@ -154,8 +152,12 @@ fn run_session_config(
     let n_commands = 1 + actions.len() + n_options + addrs.len() + 2 + 1;
 
     let shared = Rc::new(RefCell::new(MockState::new(commands, oracle)));
-    let reader = MockReader { shared: Rc::clone(&shared) };
-    let writer = MockWriter { shared: Rc::clone(&shared) };
+    let reader = MockReader {
+        shared: Rc::clone(&shared),
+    };
+    let writer = MockWriter {
+        shared: Rc::clone(&shared),
+    };
     let mut process = GhidraProcess::new(reader, writer);
     for i in 0..n_commands {
         let status = process
@@ -256,7 +258,15 @@ fn run_session_config(
         .clone()
         .expect("repeat decompileAt payload present");
 
-    SessionRun { oracle, trace, docs, payloads, repeat_payload, addrs, first_decompile }
+    SessionRun {
+        oracle,
+        trace,
+        docs,
+        payloads,
+        repeat_payload,
+        addrs,
+        first_decompile,
+    }
 }
 
 /// The r5 wire/structure contract, per decompiled function.
@@ -313,7 +323,9 @@ fn assert_structure(run: &SessionRun) {
             .as_ref()
             .unwrap_or_else(|| panic!("target #{i}: <highlist> missing"));
         assert!(
-            highs.iter().any(|h| h.class == "local" || h.class == "param"),
+            highs
+                .iter()
+                .any(|h| h.class == "local" || h.class == "param"),
             "target #{i}: no local/param <high> — rename/retype has no target"
         );
         let proto = parsed
@@ -399,15 +411,21 @@ fn is_parameter_source_line(line: &str, parameters: &BTreeSet<&str>) -> bool {
     let Some((name, sources)) = line.strip_prefix("// ").and_then(|s| s.split_once(": ")) else {
         return false;
     };
-    let identifier = |s: &str| !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+    let identifier =
+        |s: &str| !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
     let hexadecimal = |s: &str| !s.is_empty() && s.chars().all(|c| c.is_ascii_hexdigit());
-    parameters.contains(name) && sources.split(" | ").all(|home| {
-        home == "tmp"
-            || home.split(':').all(identifier)
-            || home.strip_prefix("stack - 0x").or_else(|| home.strip_prefix("stack + 0x"))
-                .is_some_and(hexadecimal)
-            || home.split_once(" 0x").is_some_and(|(space, offset)| identifier(space) && hexadecimal(offset))
-    })
+    parameters.contains(name)
+        && sources.split(" | ").all(|home| {
+            home == "tmp"
+                || home.split(':').all(identifier)
+                || home
+                    .strip_prefix("stack - 0x")
+                    .or_else(|| home.strip_prefix("stack + 0x"))
+                    .is_some_and(hexadecimal)
+                || home
+                    .split_once(" 0x")
+                    .is_some_and(|(space, offset)| identifier(space) && hexadecimal(offset))
+        })
 }
 
 /// Rewrite the ghidra-mode naming conventions onto the CLI's so the diff
@@ -658,17 +676,29 @@ fn ghidra_sim_faillog_pins() {
         ph_resolvables.push(resolvable_placeholders(&run.oracle, c));
         mangled_counts.push(parsed.mangled_tokens);
         vardecl_unresolved_counts.push(ghidra_sim::vardecl_unresolved(parsed));
-        let parameters: BTreeSet<&str> = parsed.localdb.as_deref().unwrap_or(&[]).iter()
+        let parameters: BTreeSet<&str> = parsed
+            .localdb
+            .as_deref()
+            .unwrap_or(&[])
+            .iter()
             .filter(|symbol| symbol.cat == 0)
             .map(|symbol| symbol.name.as_str())
             .collect();
-        c_line_counts.push(normalized_lines(c).iter()
-            .filter(|line| !is_parameter_source_line(line, &parameters))
-            .count());
+        c_line_counts.push(
+            normalized_lines(c)
+                .iter()
+                .filter(|line| !is_parameter_source_line(line, &parameters))
+                .count(),
+        );
     }
 
     // The differential-C gap vs the in-process CLI path.
-    let SessionRun { mut oracle, docs, addrs, .. } = run;
+    let SessionRun {
+        mut oracle,
+        docs,
+        addrs,
+        ..
+    } = run;
     oracle
         .prog
         .arch_mut()
@@ -708,8 +738,15 @@ fn ghidra_sim_faillog_pins() {
         summary.push_str(&format!(
             "{t}: registers={} {:?} unique={} placeholders={} resolvable={} mangled={} \
              vardecl_unresolved={} c_lines={} diff_ratio={:.3}\n",
-            reg_counts[i], reg_names_seen[i], uniq_counts[i], ph_totals[i], ph_resolvables[i],
-            mangled_counts[i], vardecl_unresolved_counts[i], c_line_counts[i], ratios[i]
+            reg_counts[i],
+            reg_names_seen[i],
+            uniq_counts[i],
+            ph_totals[i],
+            ph_resolvables[i],
+            mangled_counts[i],
+            vardecl_unresolved_counts[i],
+            c_line_counts[i],
+            ratios[i]
         ));
     }
     summary.push_str(&format!(
@@ -753,13 +790,15 @@ fn ghidra_sim_faillog_pins() {
             "{t}: ghidra-vs-CLI diff ratio {:.3} fell below the pinned floor {} — \
              the GUI-path gap shrank!  If a provider change earned this, flip the pin \
              (and celebrate); otherwise investigate.",
-            ratios[i], PIN_FAILLOG_DIFF_FLOOR[i]
+            ratios[i],
+            PIN_FAILLOG_DIFF_FLOOR[i]
         );
         assert!(
             ratios[i] <= PIN_FAILLOG_DIFF_CEILING[i],
             "{t}: ghidra-vs-CLI diff ratio {:.3} rose above the pinned ceiling {} — \
              the GUI path got WORSE (a markup/flatten regression?).",
-            ratios[i], PIN_FAILLOG_DIFF_CEILING[i]
+            ratios[i],
+            PIN_FAILLOG_DIFF_CEILING[i]
         );
         assert_eq!(
             c_line_counts[i], PIN_FAILLOG_C_LINES[i],
@@ -769,11 +808,30 @@ fn ghidra_sim_faillog_pins() {
     }
 
     let rendered = &docs[0].c_text;
-    for (arm, globals) in [("case 0x75:", &["DAT_00006280", "DAT_00006277", "DAT_00006288", "DAT_00006278"][..]),
-                            ("case 0x74:", &["DAT_00006273", "DAT_00006290"][..])] {
+    for (arm, globals) in [
+        (
+            "case 0x75:",
+            &[
+                "DAT_00006280",
+                "DAT_00006277",
+                "DAT_00006288",
+                "DAT_00006278",
+            ][..],
+        ),
+        ("case 0x74:", &["DAT_00006273", "DAT_00006290"][..]),
+    ] {
         let code = &rendered[rendered.find(arm).expect("faillog switch arm")..];
-        let positions: Vec<_> = globals.iter().map(|name| code.find(&format!("{name} =")).expect("faillog global store")).collect();
-        assert!(positions.windows(2).all(|p| p[0] < p[1]), "faillog store order: {arm}\n{code}");
+        let positions: Vec<_> = globals
+            .iter()
+            .map(|name| {
+                code.find(&format!("{name} ="))
+                    .expect("faillog global store")
+            })
+            .collect();
+        assert!(
+            positions.windows(2).all(|p| p[0] < p[1]),
+            "faillog store order: {arm}\n{code}"
+        );
     }
 
     // ---- query-traffic fingerprints ----
@@ -814,29 +872,48 @@ fn ghidra_sim_faillog_switch_analyzer_shape() {
     let run = run_session_config(
         &binary,
         &["sub_2620"],
-        &[("decompile", ""), ("", "noc"), ("", "notree"), ("", "jumpload")],
+        &[
+            ("decompile", ""),
+            ("", "noc"),
+            ("", "notree"),
+            ("", "jumpload"),
+        ],
         |_| {},
     );
     let parsed = &run.docs[0];
     ghidra_sim::assert_phase4_traps(parsed, "switch-analyzer");
-    assert!(!parsed.has_markup, "noc: the markup <function> must be absent");
+    assert!(
+        !parsed.has_markup,
+        "noc: the markup <function> must be absent"
+    );
     assert!(
         !parsed.function_child_ids.contains(&ghidra_sim::ELEM_AST_ID),
         "notree: the <ast> must be absent"
     );
     assert!(
-        !parsed.function_child_ids.contains(&ghidra_sim::ELEM_HIGHLIST_ID),
+        !parsed
+            .function_child_ids
+            .contains(&ghidra_sim::ELEM_HIGHLIST_ID),
         "notree: the <highlist> must be absent"
     );
-    assert!(parsed.localdb.is_some(), "the <localdb> still travels under notree");
-    assert!(parsed.prototype.is_some(), "the <prototype> still travels under notree");
+    assert!(
+        parsed.localdb.is_some(),
+        "the <localdb> still travels under notree"
+    );
+    assert!(
+        parsed.prototype.is_some(),
+        "the <prototype> still travels under notree"
+    );
     assert!(
         !parsed.jumptables.is_empty(),
         "no <jumptablelist> — the switch analyzer gets nothing (children: {:?})",
         parsed.function_child_ids
     );
     let (dests, loads) = parsed.jumptables[0];
-    assert!(dests >= 2, "a recovered switch needs >= 2 <dest> targets, got {dests}");
+    assert!(
+        dests >= 2,
+        "a recovered switch needs >= 2 <dest> targets, got {dests}"
+    );
     assert!(
         loads >= 1,
         "jumpload was toggled but no <loadtable> was collected — \
@@ -854,7 +931,12 @@ fn ghidra_sim_faillog_paramid_shape() {
     let run = run_session_config(
         &binary,
         &["sub_3320"],
-        &[("paramid", ""), ("", "noc"), ("", "notree"), ("", "parammeasures")],
+        &[
+            ("paramid", ""),
+            ("", "noc"),
+            ("", "notree"),
+            ("", "parammeasures"),
+        ],
         |_| {},
     );
     let parsed = &run.docs[0];
@@ -891,9 +973,14 @@ fn sim_symbol_size(s: &ghidra_sim::SimSymbol) -> Option<i64> {
         }
     }
     let name = s.type_name.as_deref()?;
-    let digits: String =
-        name.chars().rev().take_while(|c| c.is_ascii_digit()).collect::<Vec<_>>()
-            .into_iter().rev().collect();
+    let digits: String = name
+        .chars()
+        .rev()
+        .take_while(|c| c.is_ascii_digit())
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect();
     if digits.is_empty() {
         return matches!(name, "bool" | "char" | "byte").then_some(1);
     }
@@ -920,7 +1007,9 @@ fn ghidra_sim_faillog_rename_persistence() {
         .iter()
         .find(|s| {
             s.cat < 0
-                && s.entry_storage.as_ref().is_some_and(|(spc, _)| spc != "unique")
+                && s.entry_storage
+                    .as_ref()
+                    .is_some_and(|(spc, _)| spc != "unique")
                 && sim_symbol_size(s).is_some()
                 && parsed.c_text.contains(s.name.as_str())
         })
@@ -969,7 +1058,6 @@ fn ghidra_sim_faillog_rename_persistence() {
         "the seeded local is missing from the re-encoded <localdb>"
     );
 }
-
 
 /// C2 (review round): a host-committed local whose only SymbolEntry is a
 /// DYNAMIC `<hash>` — the storage class Java writes for every
@@ -1043,8 +1131,11 @@ fn ghidra_sim_faillog_high_symrefs_are_not_shared_with_params() {
     let run = run_session(&binary, FAILLOG_TARGETS);
     for (i, parsed) in run.docs.iter().enumerate() {
         let symbols = parsed.localdb.as_ref().expect("<localdb> present");
-        let param_ids: BTreeSet<u64> =
-            symbols.iter().filter(|s| s.cat == 0).map(|s| s.id).collect();
+        let param_ids: BTreeSet<u64> = symbols
+            .iter()
+            .filter(|s| s.cat == 0)
+            .map(|s| s.id)
+            .collect();
         let highs = parsed.highlist.as_ref().expect("<highlist> present");
         for h in highs {
             let Some(sr) = h.symref else { continue };
@@ -1084,12 +1175,7 @@ fn ghidra_sim_faillog_flush_native_stability() {
 fn ghidra_sim_faillog_flush_native_clears_symbol_cache() {
     let binary = repo_root().join("tests/bug-repro/faillog");
     // sub_2620 (main) calls sub_38d0 in its first statement.
-    let run = run_session_with_override(
-        &binary,
-        "sub_2620",
-        0x38d0,
-        "renamed_after_flush",
-    );
+    let run = run_session_with_override(&binary, "sub_2620", 0x38d0, "renamed_after_flush");
     let (before, after) = run;
     assert!(
         before.contains("sub_38d0"),
@@ -1200,8 +1286,12 @@ fn run_flush_epoch_session(
     cmd_deregister_program(&mut commands, "0");
 
     let shared = Rc::new(RefCell::new(MockState::new(commands, source)));
-    let reader = MockReader { shared: Rc::clone(&shared) };
-    let writer = MockWriter { shared: Rc::clone(&shared) };
+    let reader = MockReader {
+        shared: Rc::clone(&shared),
+    };
+    let writer = MockWriter {
+        shared: Rc::clone(&shared),
+    };
     let mut process = GhidraProcess::new(reader, writer);
     for i in 0..6 {
         // Arm the override once the FIRST decompileAt (command #2) completed;
@@ -1221,11 +1311,17 @@ fn run_flush_epoch_session(
     };
     let trace = trace_session(&state.from_process);
     let first = parse_decompile_doc(
-        trace.responses[2].payload.as_ref().expect("first decompile payload"),
+        trace.responses[2]
+            .payload
+            .as_ref()
+            .expect("first decompile payload"),
         &manager,
     );
     let second = parse_decompile_doc(
-        trace.responses[4].payload.as_ref().expect("second decompile payload"),
+        trace.responses[4]
+            .payload
+            .as_ref()
+            .expect("second decompile payload"),
         &manager,
     );
     (first.c_text, second.c_text)
@@ -1358,8 +1454,8 @@ fn ghidra_sim_pe_import_calls_and_function_pointers_print_names() {
 /// the literal, as the stock decompiler prints it, not the label.
 #[test]
 fn ghidra_sim_pe_string_data_prints_as_literals() {
-    let binary = repo_root()
-        .join("decompiler/crates/unlace-analysis/tests/fixtures/widestrings_x86_64.exe");
+    let binary =
+        repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/widestrings_x86_64.exe");
     let run = run_session_with(&binary, &["sub_140001000"], |oracle| {
         oracle.cspec = "x86-64-win.cspec".to_string();
         oracle
@@ -1371,11 +1467,17 @@ fn ghidra_sim_pe_string_data_prints_as_literals() {
         );
     });
     let c = &run.docs[0].c_text;
-    for literal in ["LoadLibraryW(L\"ntdll.dll\")", "\"NtQueryInformationProcess\")"] {
+    for literal in [
+        "LoadLibraryW(L\"ntdll.dll\")",
+        "\"NtQueryInformationProcess\")",
+    ] {
         assert!(c.contains(literal), "{literal} is not printed:\n{c}");
     }
     for label in ["u_ntdll_dll_", "s_NtQueryInformationProcess_"] {
-        assert!(!c.contains(label), "{label} is printed instead of the literal:\n{c}");
+        assert!(
+            !c.contains(label),
+            "{label} is printed instead of the literal:\n{c}"
+        );
     }
 }
 
@@ -1390,7 +1492,9 @@ fn ghidra_sim_pe_call_fixups_replace_the_helper_calls() {
         .join("decompiler/crates/unlace-analysis/tests/fixtures/callfixup_pe_x86_64.exe");
     let run = run_session_with(&binary, &["sub_140001000"], |oracle| {
         oracle.cspec = "x86-64-win.cspec".to_string();
-        oracle.call_fixup_overrides.insert(0x140001080, "alloca_probe".to_string());
+        oracle
+            .call_fixup_overrides
+            .insert(0x140001080, "alloca_probe".to_string());
         oracle
             .call_fixup_overrides
             .insert(0x1400010a0, "guard_dispatch_icall".to_string());
@@ -1412,7 +1516,10 @@ fn ghidra_sim_pe_call_fixups_replace_the_helper_calls() {
     for helper in ["__chkstk(", "_guard_dispatch_icall_nop("] {
         assert!(!c.contains(helper), "{helper} is still called:\n{c}");
     }
-    assert!(c.contains("(**"), "the guarded virtual call is missing:\n{c}");
+    assert!(
+        c.contains("(**"),
+        "the guarded virtual call is missing:\n{c}"
+    );
     let fixups = run
         .oracle
         .log
@@ -1438,11 +1545,18 @@ fn ghidra_sim_cpp_names_carry_their_namespaces() {
     let run = run_session(&binary, &["main", "Account::Account"]);
     assert_structure(&run);
     let main = &run.docs[0].c_text;
-    for call in ["db::inner::scaled_add(", "Account::deposit(", "Account::make_id("] {
+    for call in [
+        "db::inner::scaled_add(",
+        "Account::deposit(",
+        "Account::make_id(",
+    ] {
         assert!(main.contains(call), "{call} is not qualified:\n{main}");
     }
     let ctor = &run.docs[1].c_text;
-    assert!(ctor.contains("Account::Account("), "the declaration is not qualified:\n{ctor}");
+    assert!(
+        ctor.contains("Account::Account("),
+        "the declaration is not qualified:\n{ctor}"
+    );
 }
 
 // ===========================================================================
@@ -1459,8 +1573,14 @@ fn ghidra_sim_cpp_names_carry_their_namespaces() {
             `make test-ghidra` do)"]
 fn ghidra_sim_sort_grep_breadth() {
     for (fixture, targets) in [
-        ("tests/bug-repro/sort", &["sub_62f0", "sub_6370", "sub_63d0"][..]),
-        ("tests/bug-repro/grep", &["sub_e5c0", "sub_e640", "sub_e8f0"][..]),
+        (
+            "tests/bug-repro/sort",
+            &["sub_62f0", "sub_6370", "sub_63d0"][..],
+        ),
+        (
+            "tests/bug-repro/grep",
+            &["sub_e5c0", "sub_e640", "sub_e8f0"][..],
+        ),
     ] {
         let binary = repo_root().join(fixture);
         let run = run_session(&binary, targets);
@@ -1487,7 +1607,8 @@ fn ghidra_sim_sort_grep_breadth() {
             // "Invalid symbol reference" and returns -- a dead rename on that one
             // line, never a decode throw), not absorbed silently.
             assert_eq!(
-                unresolved, 0,
+                unresolved,
+                0,
                 "{fixture} {}: {unresolved} of {} <vardecl symref>s do not resolve \
                  against <localdb> — declaration-line rename/retype is dead on \
                  those lines\n{}",
@@ -1520,8 +1641,7 @@ fn ghidra_sim_hidden_return_auto_param_is_not_declared_twice() {
         .find(|line| line.contains("ret_big("))
         .expect("signature line");
     assert_eq!(
-        signature,
-        "Big24 * ret_big(Big24 *__return_storage_ptr__,long q)",
+        signature, "Big24 * ret_big(Big24 *__return_storage_ptr__,long q)",
         "{c}"
     );
 }
@@ -1561,7 +1681,10 @@ fn ghidra_sim_custom_large_return_with_no_formals_clears_hidden_input() {
             .expect("ret_big fixture symbol")
             .addr
             .get_offset();
-        let pieces = oracle.callee_pieces.get_mut(&entry).expect("ret_big prototype");
+        let pieces = oracle
+            .callee_pieces
+            .get_mut(&entry)
+            .expect("ret_big prototype");
         pieces.intypes.clear();
         pieces.innames.clear();
         oracle.custom_storage_overrides.insert(entry);
@@ -1576,7 +1699,6 @@ fn ghidra_sim_custom_large_return_with_no_formals_clears_hidden_input() {
     assert_eq!(signature, "Big24 ret_big(void)", "{c}");
 }
 
-
 /// A value MSVC spills into the home slot its caller allocated, then passes by
 /// reference, survives a declared callee: the shape of every Qt
 /// `connect(sender, &Class::signal, ...)`, where Ghidra hands kuna a locked
@@ -1585,8 +1707,8 @@ fn ghidra_sim_custom_large_return_with_no_formals_clears_hidden_input() {
 /// the argument name the same variable, as the stock decompiler prints them.
 #[test]
 fn ghidra_sim_home_slot_store_survives_a_declared_callee() {
-    let binary = repo_root()
-        .join("decompiler/crates/unlace-analysis/tests/fixtures/homeslot_pe_x86_64.exe");
+    let binary =
+        repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/homeslot_pe_x86_64.exe");
     let run = run_session_with(&binary, &["sub_140001000"], |oracle| {
         oracle.cspec = "x86-64-win.cspec".to_string();
         let types = oracle.prog.arch().types();
@@ -1619,6 +1741,12 @@ fn ghidra_sim_home_slot_store_survives_a_declared_callee() {
     });
     assert_structure(&run);
     let c = &run.docs[0].c_text;
-    assert!(c.contains("local_res18[0] = worker_proc;"), "the store into the home slot is gone:\n{c}");
-    assert!(c.contains("consume(local_res18);"), "the call is not passed the slot by name:\n{c}");
+    assert!(
+        c.contains("local_res18[0] = worker_proc;"),
+        "the store into the home slot is gone:\n{c}"
+    );
+    assert!(
+        c.contains("consume(local_res18);"),
+        "the call is not passed the slot by name:\n{c}"
+    );
 }

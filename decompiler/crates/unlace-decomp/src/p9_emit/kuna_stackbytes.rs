@@ -595,19 +595,19 @@ fn is_pointer_type(meta: type_metatype) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{def_facing_pointer, expression, named, safe_global_source, Byte};
+    use super::{Byte, def_facing_pointer, expression, named, safe_global_source};
     use crate::context::ArchContext;
     use crate::database::SymbolId;
-    use crate::dtype::{type_metatype, Datatype};
+    use crate::dtype::{Datatype, type_metatype};
     use crate::funcdata::Funcdata;
     use crate::varnode::varnode_flags;
+    use std::rc::Rc;
     use unlace_base::address::Address;
     use unlace_base::space::{
-        addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, IopSpace,
-        SpacebaseSpace, UniqueSpace,
+        AddrSpace, AddrSpaceManager, ConstantSpace, IopSpace, SpacebaseSpace, UniqueSpace,
+        addrspace_flags, spacetype,
     };
     use unlace_num::opcodes::OpCode;
-    use std::rc::Rc;
 
     fn global_read_fixture(
         with_write: bool,

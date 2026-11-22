@@ -13,7 +13,9 @@
 use crate::common;
 use common::process;
 use object::write::{Object, Symbol, SymbolSection};
-use object::{Architecture, BinaryFormat, Endianness, SectionKind, SymbolFlags, SymbolKind, SymbolScope};
+use object::{
+    Architecture, BinaryFormat, Endianness, SectionKind, SymbolFlags, SymbolKind, SymbolScope,
+};
 use std::process::Command;
 
 const ASM: &str = include_str!("fixtures/mixed_tail_returns.S");
@@ -60,7 +62,8 @@ int main(void) {
 "#;
 
 fn decompile_all(path: &std::path::Path, mixed: bool) -> Vec<(String, String)> {
-    let binary = std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
+    let binary =
+        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let mut command = Command::new(binary);
     command.args(["decompile-all", path.to_str().unwrap(), "--json"]);
     if mixed {
@@ -74,7 +77,10 @@ fn decompile_all(path: &std::path::Path, mixed: bool) -> Vec<(String, String)> {
         .iter()
         .map(|f| {
             assert!(f["error"].is_null(), "{f}");
-            (f["name"].as_str().unwrap().to_owned(), f["code"].as_str().unwrap().to_owned())
+            (
+                f["name"].as_str().unwrap().to_owned(),
+                f["code"].as_str().unwrap().to_owned(),
+            )
         })
         .collect()
 }
@@ -104,11 +110,16 @@ fn a_value_returned_beside_a_tail_call_is_returned() {
             .arg(&elf),
     );
     let functions = decompile_all(&elf, true);
-    let mut emitted = String::from("extern int g;\nextern long gl;\nint getv(void);\nint getk(int);\nlong getl(void);\n");
+    let mut emitted = String::from(
+        "extern int g;\nextern long gl;\nint getv(void);\nint getk(int);\nlong getl(void);\n",
+    );
     for (name, ret) in RETURNING {
         let text = code(&functions, name);
         assert!(text.contains(&format!("{ret} {name}(")), "{text}");
-        assert!(!text.contains("void") && text.matches("return ").count() == 2, "{text}");
+        assert!(
+            !text.contains("void") && text.matches("return ").count() == 2,
+            "{text}"
+        );
         emitted.push_str(&text.replace(&format!(" {name}("), &format!(" emitted_{name}(")));
         emitted.push('\n');
     }
@@ -127,7 +138,13 @@ fn a_value_returned_beside_a_tail_call_is_returned() {
     for level in ["-O0", "-O2"] {
         let exe = asm.with_extension("emitted");
         process::required_output(
-            Command::new("clang").arg(level).arg("-no-pie").arg(&source).arg(&asm).arg("-o").arg(&exe),
+            Command::new("clang")
+                .arg(level)
+                .arg("-no-pie")
+                .arg(&source)
+                .arg(&asm)
+                .arg("-o")
+                .arg(&exe),
         );
         process::required_output(&mut Command::new(&exe));
     }
@@ -143,15 +160,31 @@ fn words(code: &[u32]) -> Vec<u8> {
 fn aarch64_object() -> Vec<u8> {
     let funcs: [(&str, Vec<u8>, Option<(&str, u64)>); 5] = [
         // adrp x8,0; ldr w8,[x8]; add w0,w8,w8,lsl #1; ret
-        ("getv", words(&[0x90000008, 0xb9400108, 0x0b080500, 0xd65f03c0]), None),
+        (
+            "getv",
+            words(&[0x90000008, 0xb9400108, 0x0b080500, 0xd65f03c0]),
+            None,
+        ),
         // add w0,w0,w0,lsl #1; ret
         ("getk", words(&[0x0b000400, 0xd65f03c0]), None),
         // ldr w0,[x0]; cmp w0,#5; b.le +8; ret; b getv
-        ("keep", words(&[0xb9400000, 0x7100141f, 0x5400004d, 0xd65f03c0, 0x14000000]), Some(("getv", 16))),
+        (
+            "keep",
+            words(&[0xb9400000, 0x7100141f, 0x5400004d, 0xd65f03c0, 0x14000000]),
+            Some(("getv", 16)),
+        ),
         // ldr w0,[x0]; cmp w0,#5; b.le +8; ret; b getk
-        ("fwd", words(&[0xb9400000, 0x7100141f, 0x5400004d, 0xd65f03c0, 0x14000000]), Some(("getk", 16))),
+        (
+            "fwd",
+            words(&[0xb9400000, 0x7100141f, 0x5400004d, 0xd65f03c0, 0x14000000]),
+            Some(("getk", 16)),
+        ),
         // ldr w0,[x0]; cmp w0,#7; b.eq +8; b getv; ret
-        ("eq7", words(&[0xb9400000, 0x71001c1f, 0x54000040, 0x14000000, 0xd65f03c0]), Some(("getv", 12))),
+        (
+            "eq7",
+            words(&[0xb9400000, 0x71001c1f, 0x54000040, 0x14000000, 0xd65f03c0]),
+            Some(("getv", 12)),
+        ),
     ];
     let mut text = Vec::new();
     let mut at = Vec::new();
@@ -160,7 +193,9 @@ fn aarch64_object() -> Vec<u8> {
         text.extend_from_slice(code);
     }
     for (k, (_, _, target)) in funcs.iter().enumerate() {
-        let Some((target, off)) = target else { continue };
+        let Some((target, off)) = target else {
+            continue;
+        };
         let to = at[funcs.iter().position(|(n, _, _)| n == target).unwrap()];
         let from = at[k] + off;
         let word = 0x14000000u32 | (((to as i64 - from as i64) >> 2) as u32 & 0x3ffffff);
@@ -190,7 +225,10 @@ fn an_aarch64_value_returned_beside_a_tail_call_is_returned_unless_the_callee_re
     std::fs::write(&path, aarch64_object()).unwrap();
     let functions = decompile_all(&path, true);
     let keep = code(&functions, "keep");
-    assert!(keep.contains("int keep(") && keep.contains("return getv();"), "{keep}");
+    assert!(
+        keep.contains("int keep(") && keep.contains("return getv();"),
+        "{keep}"
+    );
     assert!(keep.matches("return ").count() == 2, "{keep}");
     let fwd = code(&functions, "fwd");
     assert!(fwd.contains("void fwd("), "{fwd}");

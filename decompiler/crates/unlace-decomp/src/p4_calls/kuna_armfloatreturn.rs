@@ -2,14 +2,14 @@
 use crate::{
     context::VarnodeId,
     dtype::{type_class, type_metatype},
-    fspec::{ParamActive, ParamEntry, ParamListStandard, PrototypePieces, ProtoModel},
+    fspec::{ParamActive, ParamEntry, ParamListStandard, ProtoModel, PrototypePieces},
     funcdata::Funcdata,
     infra::architecture::Architecture,
 };
-use unlace_base::{address::Address, space::AddrSpaceManager};
-use unlace_num::opcodes::OpCode;
 use std::borrow::Cow;
 use std::rc::Rc;
+use unlace_base::{address::Address, space::AddrSpaceManager};
+use unlace_num::opcodes::OpCode;
 
 /// The option is on and the loaded ARM image states the VFP procedure-call standard.
 pub fn applies(arch: &Architecture) -> bool {
@@ -37,7 +37,10 @@ pub fn park_float_library_prototypes(arch: &mut Architecture) {
     }
     for (at, pieces) in pending {
         let sid = match &at {
-            Some(addr) => arch.symboltab.find_function_across_scopes(addr).map(|(sid, _)| sid),
+            Some(addr) => arch
+                .symboltab
+                .find_function_across_scopes(addr)
+                .map(|(sid, _)| sid),
             None => arch.query_global_function(&pieces.name).ok(),
         };
         let Some(sid) = sid else { continue };
@@ -53,24 +56,34 @@ pub fn park_float_library_prototypes(arch: &mut Architecture) {
 /// A hard-float libgcc may compute in VFP registers inside them, which the widened
 /// model would otherwise read as a double result in `d0`.
 pub fn base_pcs_helper(name: &str) -> bool {
-    let Some(rest) = name.strip_prefix("__") else { return false };
+    let Some(rest) = name.strip_prefix("__") else {
+        return false;
+    };
     if rest.starts_with("aeabi_") || rest == "extendsfdf2" || rest == "truncdfsf2" {
         return true;
     }
     let mode = |m: &str| m == "sf" || m == "df";
     let int = |m: &str| m == "si" || m == "di";
-    let arith = ["add", "sub", "mul", "div"]
-        .iter()
-        .any(|op| rest.strip_prefix(op).and_then(|r| r.strip_suffix('3')).is_some_and(mode));
+    let arith = ["add", "sub", "mul", "div"].iter().any(|op| {
+        rest.strip_prefix(op)
+            .and_then(|r| r.strip_suffix('3'))
+            .is_some_and(mode)
+    });
     let unary_or_cmp = ["neg", "eq", "ne", "lt", "le", "ge", "gt", "unord", "cmp"]
         .iter()
-        .any(|op| rest.strip_prefix(op).and_then(|r| r.strip_suffix('2')).is_some_and(mode));
-    let fix = rest.strip_prefix("fix").map(|r| r.strip_prefix("uns").unwrap_or(r)).is_some_and(|r| {
-        r.len() == 4 && mode(&r[..2]) && int(&r[2..])
-    });
-    let float = rest.strip_prefix("float").map(|r| r.strip_prefix("un").unwrap_or(r)).is_some_and(|r| {
-        r.len() == 4 && int(&r[..2]) && mode(&r[2..])
-    });
+        .any(|op| {
+            rest.strip_prefix(op)
+                .and_then(|r| r.strip_suffix('2'))
+                .is_some_and(mode)
+        });
+    let fix = rest
+        .strip_prefix("fix")
+        .map(|r| r.strip_prefix("uns").unwrap_or(r))
+        .is_some_and(|r| r.len() == 4 && mode(&r[..2]) && int(&r[2..]));
+    let float = rest
+        .strip_prefix("float")
+        .map(|r| r.strip_prefix("un").unwrap_or(r))
+        .is_some_and(|r| r.len() == 4 && int(&r[..2]) && mode(&r[2..]));
     arith || unary_or_cmp || fix || float
 }
 
@@ -78,15 +91,22 @@ pub fn base_pcs_helper(name: &str) -> bool {
 /// default one: the unwidened default for a [`base_pcs_helper`], whose callers
 /// pass and read its values in core registers.
 pub fn helper_model(arch: &crate::context::ArchContext, name: &str) -> Option<Rc<ProtoModel>> {
-    arch.arm_base_model.clone().filter(|_| arch.arm_float_return && base_pcs_helper(name))
+    arch.arm_base_model
+        .clone()
+        .filter(|_| arch.arm_float_return && base_pcs_helper(name))
 }
 
 /// The model a declared prototype of `name` is laid out under where the option
 /// applies to the image: the core-register model for a [`base_pcs_helper`],
 /// whose debug information states its types but not that it keeps the base
 /// standard (`long long __fixdfdi(double a)` takes `a` in r0:r1).
-pub fn declared_helper_model(arch: &crate::context::ArchContext, name: &str) -> Option<Rc<ProtoModel>> {
-    arch.arm_helper_model.clone().filter(|_| base_pcs_helper(name))
+pub fn declared_helper_model(
+    arch: &crate::context::ArchContext,
+    name: &str,
+) -> Option<Rc<ProtoModel>> {
+    arch.arm_helper_model
+        .clone()
+        .filter(|_| base_pcs_helper(name))
 }
 
 /// Does one instruction at `addr` save or restore the VFP register bank with
@@ -98,15 +118,22 @@ fn bank_access(data: &Funcdata, addr: &Address, code: OpCode) -> bool {
     let entries = data.get_func_proto().model().input().get_entry();
     let argument = |v: &crate::varnode::Varnode| {
         entries.iter().any(|e| {
-            e.get_type() == type_class::TYPECLASS_FLOAT && e.justified_contain(v.get_addr(), v.get_size()) >= 0
+            e.get_type() == type_class::TYPECLASS_FLOAT
+                && e.justified_contain(v.get_addr(), v.get_size()) >= 0
         })
     };
     let mut count = 0;
     let mut beyond = false;
     for (_, id) in data.obank().iter_at(addr) {
-        let Some(op) = data.obank().get(id).filter(|o| o.code() == code) else { continue };
+        let Some(op) = data.obank().get(id).filter(|o| o.code() == code) else {
+            continue;
+        };
         count += 1;
-        let reg = if code == OpCode::CPUI_STORE { op.get_in(2) } else { op.get_out() };
+        let reg = if code == OpCode::CPUI_STORE {
+            op.get_in(2)
+        } else {
+            op.get_out()
+        };
         if let Some(v) = reg.and_then(|r| data.vbank().get(r)) {
             let register = v
                 .get_addr()
@@ -125,15 +152,20 @@ pub fn bank_saved_input(data: &Funcdata, vn: VarnodeId) -> bool {
     if !data.get_arch().arm_float_return {
         return false;
     }
-    let Some(value) = data.vbank().get(vn) else { return false };
+    let Some(value) = data.vbank().get(vn) else {
+        return false;
+    };
     let entries = data.get_func_proto().model().input().get_entry();
     let vfp = entries.iter().any(|e| {
-        e.get_type() == type_class::TYPECLASS_FLOAT && e.justified_contain(value.get_addr(), value.get_size()) >= 0
+        e.get_type() == type_class::TYPECLASS_FLOAT
+            && e.justified_contain(value.get_addr(), value.get_size()) >= 0
     });
     vfp && !value.has_no_descend()
         && value.descend_iter().all(|id| {
             data.obank().get(id).is_some_and(|o| {
-                o.code() == OpCode::CPUI_STORE && o.get_in(2) == Some(vn) && bank_access(data, o.get_addr(), OpCode::CPUI_STORE)
+                o.code() == OpCode::CPUI_STORE
+                    && o.get_in(2) == Some(vn)
+                    && bank_access(data, o.get_addr(), OpCode::CPUI_STORE)
             })
         })
 }
@@ -144,15 +176,23 @@ fn bank_restored(data: &Funcdata, vn: VarnodeId) -> bool {
         .get(vn)
         .and_then(|v| v.get_def())
         .and_then(|id| data.obank().get(id))
-        .is_some_and(|o| o.code() == OpCode::CPUI_LOAD && bank_access(data, o.get_addr(), OpCode::CPUI_LOAD))
+        .is_some_and(|o| {
+            o.code() == OpCode::CPUI_LOAD && bank_access(data, o.get_addr(), OpCode::CPUI_LOAD)
+        })
 }
 
 /// A recovered prototype's open tail read as a closed list for the canonical-storage
 /// check: a variadic callee receives even its fixed floats in r0-r3, so a recovered
 /// VFP parameter already rules the variadic reading out.
-pub fn closed_recovery<'a>(arch: &Architecture, pieces: &'a PrototypePieces) -> Cow<'a, PrototypePieces> {
+pub fn closed_recovery<'a>(
+    arch: &Architecture,
+    pieces: &'a PrototypePieces,
+) -> Cow<'a, PrototypePieces> {
     if applies(arch) || crate::kuna_armfloatargs::applies(arch) {
-        Cow::Owned(PrototypePieces { first_var_arg_slot: -1, ..pieces.clone() })
+        Cow::Owned(PrototypePieces {
+            first_var_arg_slot: -1,
+            ..pieces.clone()
+        })
     } else {
         Cow::Borrowed(pieces)
     }
@@ -383,7 +423,9 @@ fn partial_path(
 /// The value is written by an op of this function other than a call, and only
 /// RETURNs read it: it exists to be returned.
 fn computed_result(data: &Funcdata, vn: VarnodeId) -> bool {
-    let Some(value) = data.vbank().get(vn) else { return false };
+    let Some(value) = data.vbank().get(vn) else {
+        return false;
+    };
     let Some(op) = value.get_def().and_then(|id| data.obank().get(id)) else {
         return false;
     };
@@ -419,7 +461,9 @@ fn call_leftover(data: &Funcdata, vn: VarnodeId, budget: &mut usize) -> bool {
         return false;
     }
     *budget -= 1;
-    let Some(value) = data.vbank().get(vn) else { return false };
+    let Some(value) = data.vbank().get(vn) else {
+        return false;
+    };
     if value.is_input() {
         return true;
     }
@@ -427,10 +471,13 @@ fn call_leftover(data: &Funcdata, vn: VarnodeId, budget: &mut usize) -> bool {
         return false;
     };
     match op.code() {
-        OpCode::CPUI_COPY | OpCode::CPUI_CAST => op.get_in(0).is_some_and(|v| call_leftover(data, v, budget)),
+        OpCode::CPUI_COPY | OpCode::CPUI_CAST => {
+            op.get_in(0).is_some_and(|v| call_leftover(data, v, budget))
+        }
         OpCode::CPUI_MULTIEQUAL => {
             op.num_input() > 0
-                && (0..op.num_input()).all(|i| op.get_in(i).is_some_and(|v| call_leftover(data, v, budget)))
+                && (0..op.num_input())
+                    .all(|i| op.get_in(i).is_some_and(|v| call_leftover(data, v, budget)))
         }
         _ => left_by_call(data, vn),
     }
@@ -443,7 +490,11 @@ fn call_leftover(data: &Funcdata, vn: VarnodeId, budget: &mut usize) -> bool {
 /// `half(x); return k + 1;` leaves `half`'s double in d0 beside `k + 1` in r0,
 /// and mpg123's `getpar` loads a double into d0 on one path while every exit
 /// returns an error code; the wider d0 would otherwise win the fill-in.
-fn drop_call_leftovers(data: &Funcdata, active: &mut ParamActive, returns: &[crate::context::OpId]) {
+fn drop_call_leftovers(
+    data: &Funcdata,
+    active: &mut ParamActive,
+    returns: &[crate::context::OpId],
+) {
     let entries = data.get_func_proto().model().output().get_entry();
     let vfp = |addr: &Address, size: i32| {
         entries.iter().any(|e| {
@@ -468,13 +519,19 @@ fn drop_call_leftovers(data: &Funcdata, active: &mut ParamActive, returns: &[cra
         return;
     }
     let some = |slot: i32, test: &dyn Fn(VarnodeId) -> bool| {
-        returns.iter().any(|&id| data.obank().get(id).and_then(|o| o.get_in(slot)).is_some_and(test))
+        returns.iter().any(|&id| {
+            data.obank()
+                .get(id)
+                .and_then(|o| o.get_in(slot))
+                .is_some_and(test)
+        })
     };
     for i in 0..active.get_num_trials() {
         let t = active.get_trial(i);
         if t.is_active()
             && vfp(t.get_address(), t.get_size())
-            && (some(t.get_slot(), &|vn| call_leftover(data, vn, &mut 64)) || temporaries(data, returns, t.get_slot()))
+            && (some(t.get_slot(), &|vn| call_leftover(data, vn, &mut 64))
+                || temporaries(data, returns, t.get_slot()))
         {
             active.get_trial_mut(i).mark_inactive();
         }
@@ -499,8 +556,10 @@ fn temporaries(data: &Funcdata, returns: &[crate::context::OpId], slot: i32) -> 
             data.vbank().get(leaf).is_some_and(|v| {
                 v.descend_iter().any(|id| {
                     data.obank().get(id).is_some_and(|o| {
-                        !matches!(o.code(), OpCode::CPUI_RETURN | OpCode::CPUI_MULTIEQUAL | OpCode::CPUI_INDIRECT)
-                            && !o.get_out().is_some_and(|out| seen.contains(&out))
+                        !matches!(
+                            o.code(),
+                            OpCode::CPUI_RETURN | OpCode::CPUI_MULTIEQUAL | OpCode::CPUI_INDIRECT
+                        ) && !o.get_out().is_some_and(|out| seen.contains(&out))
                     })
                 })
             })
@@ -526,19 +585,32 @@ fn exit_writes(
         return false;
     }
     seen.push(vn);
-    let Some(value) = data.vbank().get(vn) else { return false };
-    let Some(op) = value.get_def().and_then(|id| data.obank().get(id)) else { return true };
+    let Some(value) = data.vbank().get(vn) else {
+        return false;
+    };
+    let Some(op) = value.get_def().and_then(|id| data.obank().get(id)) else {
+        return true;
+    };
     let low_half = op.code() == OpCode::CPUI_SUBPIECE
-        && op.get_in(0).and_then(|w| data.vbank().get(w)).is_some_and(|w| w.get_size() > 8)
-        && op.get_in(1).and_then(|c| data.vbank().get(c)).is_some_and(|c| c.is_constant() && c.get_offset() == 0);
+        && op
+            .get_in(0)
+            .and_then(|w| data.vbank().get(w))
+            .is_some_and(|w| w.get_size() > 8)
+        && op
+            .get_in(1)
+            .and_then(|c| data.vbank().get(c))
+            .is_some_and(|c| c.is_constant() && c.get_offset() == 0);
     match op.code() {
-        OpCode::CPUI_COPY | OpCode::CPUI_CAST => {
-            op.get_in(0).is_some_and(|v| exit_writes(data, v, vector, seen, scalars, vectors))
-        }
-        _ if low_half => op.get_in(0).is_some_and(|v| exit_writes(data, v, true, seen, scalars, vectors)),
-        OpCode::CPUI_MULTIEQUAL => {
-            (0..op.num_input()).all(|i| op.get_in(i).is_some_and(|v| exit_writes(data, v, vector, seen, scalars, vectors)))
-        }
+        OpCode::CPUI_COPY | OpCode::CPUI_CAST => op
+            .get_in(0)
+            .is_some_and(|v| exit_writes(data, v, vector, seen, scalars, vectors)),
+        _ if low_half => op
+            .get_in(0)
+            .is_some_and(|v| exit_writes(data, v, true, seen, scalars, vectors)),
+        OpCode::CPUI_MULTIEQUAL => (0..op.num_input()).all(|i| {
+            op.get_in(i)
+                .is_some_and(|v| exit_writes(data, v, vector, seen, scalars, vectors))
+        }),
         OpCode::CPUI_INDIRECT => true,
         _ if left_by_call(data, vn) => true,
         _ => {
@@ -562,7 +634,10 @@ fn drop_vector_halves(data: &Funcdata, active: &mut ParamActive, returns: &[crat
         let t = active.get_trial(i);
         if !t.is_active()
             || t.get_size() != 8
-            || !entries.iter().any(|e| e.get_type() == type_class::TYPECLASS_FLOAT && e.justified_contain(t.get_address(), 8) >= 0)
+            || !entries.iter().any(|e| {
+                e.get_type() == type_class::TYPECLASS_FLOAT
+                    && e.justified_contain(t.get_address(), 8) >= 0
+            })
         {
             continue;
         }
@@ -572,7 +647,9 @@ fn drop_vector_halves(data: &Funcdata, active: &mut ParamActive, returns: &[crat
             data.obank()
                 .get(id)
                 .and_then(|o| o.get_in(slot))
-                .is_some_and(|vn| exit_writes(data, vn, false, &mut seen, &mut scalars, &mut vectors))
+                .is_some_and(|vn| {
+                    exit_writes(data, vn, false, &mut seen, &mut scalars, &mut vectors)
+                })
         });
         if walked && scalars.is_empty() && !vectors.is_empty() {
             active.get_trial_mut(i).mark_inactive();
@@ -587,13 +664,17 @@ fn drop_bank_restores(data: &Funcdata, active: &mut ParamActive, returns: &[crat
     for i in 0..active.get_num_trials() {
         let t = active.get_trial(i);
         let vfp = entries.iter().any(|e| {
-            e.get_type() == type_class::TYPECLASS_FLOAT && e.justified_contain(t.get_address(), t.get_size()) >= 0
+            e.get_type() == type_class::TYPECLASS_FLOAT
+                && e.justified_contain(t.get_address(), t.get_size()) >= 0
         });
         let slot = t.get_slot();
         if t.is_active()
             && vfp
             && returns.iter().all(|&id| {
-                data.obank().get(id).and_then(|o| o.get_in(slot)).is_some_and(|vn| bank_restored(data, vn))
+                data.obank()
+                    .get(id)
+                    .and_then(|o| o.get_in(slot))
+                    .is_some_and(|vn| bank_restored(data, vn))
             })
         {
             active.get_trial_mut(i).mark_inactive();
@@ -644,14 +725,17 @@ pub fn narrow_returns(data: &mut Funcdata, active: &mut ParamActive) {
         let slot = trial.get_slot();
         let mut partial = false;
         let proven = returns.iter().all(|&id| {
-            data.obank().get(id).and_then(|o| o.get_in(slot)).is_some_and(|vn| {
-                if partial_return(data, vn, &addr, &mut 256) {
-                    partial = true;
-                    true
-                } else {
-                    call_leftover(data, vn, &mut 64)
-                }
-            })
+            data.obank()
+                .get(id)
+                .and_then(|o| o.get_in(slot))
+                .is_some_and(|vn| {
+                    if partial_return(data, vn, &addr, &mut 256) {
+                        partial = true;
+                        true
+                    } else {
+                        call_leftover(data, vn, &mut 64)
+                    }
+                })
         });
         if !proven || !partial {
             continue;
@@ -749,20 +833,30 @@ fn core_input_leaf(data: &Funcdata, vn: VarnodeId, budget: &mut usize) -> bool {
         return false;
     }
     *budget -= 1;
-    let Some(value) = data.vbank().get(vn) else { return false };
+    let Some(value) = data.vbank().get(vn) else {
+        return false;
+    };
     if value.is_input() {
         let entries = data.get_func_proto().model().input().get_entry();
-        return data.get_func_proto().possible_input_param(value.get_addr(), value.get_size())
+        return data
+            .get_func_proto()
+            .possible_input_param(value.get_addr(), value.get_size())
             && !entries.iter().any(|e| {
-                e.get_type() == type_class::TYPECLASS_FLOAT && e.justified_contain(value.get_addr(), value.get_size()) >= 0
+                e.get_type() == type_class::TYPECLASS_FLOAT
+                    && e.justified_contain(value.get_addr(), value.get_size()) >= 0
             });
     }
     let Some(op) = value.get_def().and_then(|id| data.obank().get(id)) else {
         return false;
     };
     match op.code() {
-        OpCode::CPUI_COPY | OpCode::CPUI_CAST => op.get_in(0).is_some_and(|v| core_input_leaf(data, v, budget)),
-        OpCode::CPUI_MULTIEQUAL => (0..op.num_input()).any(|i| op.get_in(i).is_some_and(|v| core_input_leaf(data, v, budget))),
+        OpCode::CPUI_COPY | OpCode::CPUI_CAST => op
+            .get_in(0)
+            .is_some_and(|v| core_input_leaf(data, v, budget)),
+        OpCode::CPUI_MULTIEQUAL => (0..op.num_input()).any(|i| {
+            op.get_in(i)
+                .is_some_and(|v| core_input_leaf(data, v, budget))
+        }),
         _ => false,
     }
 }
@@ -798,13 +892,21 @@ pub fn unlock_unspelled(data: &mut Funcdata) {
     else {
         return;
     };
-    let forwards_core = returned.iter().any(|&vn| core_input_leaf(data, vn, &mut 32));
-    if !forwards_core && returned.iter().all(|&vn| crate::kuna_floatreg::spells_exactly(data, vn)) {
+    let forwards_core = returned
+        .iter()
+        .any(|&vn| core_input_leaf(data, vn, &mut 32));
+    if !forwards_core
+        && returned
+            .iter()
+            .all(|&vn| crate::kuna_floatreg::spells_exactly(data, vn))
+    {
         return;
     }
     let mut constants = Vec::new();
     if !forwards_core
-        && returned.iter().all(|&vn| unspelled_constants(data, vn, &mut constants, &mut 64))
+        && returned
+            .iter()
+            .all(|&vn| unspelled_constants(data, vn, &mut constants, &mut 64))
         && !constants.is_empty()
     {
         let bits = data
@@ -836,22 +938,36 @@ pub fn unlock_unspelled(data: &mut Funcdata) {
 
 /// Collect the constants no float literal spells that reach `vn` through
 /// copies and merges; `false` when the walk runs out.
-fn unspelled_constants(data: &Funcdata, vn: VarnodeId, out: &mut Vec<VarnodeId>, budget: &mut usize) -> bool {
+fn unspelled_constants(
+    data: &Funcdata,
+    vn: VarnodeId,
+    out: &mut Vec<VarnodeId>,
+    budget: &mut usize,
+) -> bool {
     if *budget == 0 {
         return false;
     }
     *budget -= 1;
-    let Some(value) = data.vbank().get(vn) else { return false };
+    let Some(value) = data.vbank().get(vn) else {
+        return false;
+    };
     if value.is_constant() {
         if !crate::kuna_floatreg::spells(data, vn) && !out.contains(&vn) {
             out.push(vn);
         }
         return true;
     }
-    let Some(op) = value.get_def().and_then(|id| data.obank().get(id)) else { return true };
+    let Some(op) = value.get_def().and_then(|id| data.obank().get(id)) else {
+        return true;
+    };
     match op.code() {
-        OpCode::CPUI_COPY | OpCode::CPUI_CAST => op.get_in(0).is_none_or(|v| unspelled_constants(data, v, out, budget)),
-        OpCode::CPUI_MULTIEQUAL => (0..op.num_input()).all(|i| op.get_in(i).is_none_or(|v| unspelled_constants(data, v, out, budget))),
+        OpCode::CPUI_COPY | OpCode::CPUI_CAST => op
+            .get_in(0)
+            .is_none_or(|v| unspelled_constants(data, v, out, budget)),
+        OpCode::CPUI_MULTIEQUAL => (0..op.num_input()).all(|i| {
+            op.get_in(i)
+                .is_none_or(|v| unspelled_constants(data, v, out, budget))
+        }),
         _ => true,
     }
 }
@@ -864,9 +980,15 @@ pub fn forwarded_vfp_return(data: &Funcdata, addr: &Address, size: i32) -> bool 
     if !data.get_arch().arm_float_return || !data.get_func_proto().has_model() {
         return false;
     }
-    let vfp = data.get_func_proto().model().output().get_entry().iter().any(|e| {
-        e.get_type() == type_class::TYPECLASS_FLOAT && e.justified_contain(addr, size) >= 0
-    });
+    let vfp = data
+        .get_func_proto()
+        .model()
+        .output()
+        .get_entry()
+        .iter()
+        .any(|e| {
+            e.get_type() == type_class::TYPECLASS_FLOAT && e.justified_contain(addr, size) >= 0
+        });
     let space = addr.get_space().map(|s| s.get_index());
     let end = addr.get_offset() + size.max(0) as u64;
     let claims: Vec<_> = data
@@ -887,9 +1009,15 @@ pub fn forwarded_vfp_return(data: &Funcdata, addr: &Address, size: i32) -> bool 
 pub fn convention_float_storage(data: &Funcdata, addr: &Address, size: i32) -> bool {
     data.get_arch().arm_float_return
         && data.get_func_proto().has_model()
-        && data.get_func_proto().model().output().get_entry().iter().any(|e| {
-            e.get_type() == type_class::TYPECLASS_FLOAT && e.justified_contain(addr, size) >= 0
-        })
+        && data
+            .get_func_proto()
+            .model()
+            .output()
+            .get_entry()
+            .iter()
+            .any(|e| {
+                e.get_type() == type_class::TYPECLASS_FLOAT && e.justified_contain(addr, size) >= 0
+            })
 }
 
 /// A returned value [`type_returns`] locked to the float of its width: the lock
@@ -947,11 +1075,17 @@ pub fn split_double_input(data: &Funcdata, vn: VarnodeId) -> bool {
 /// Every read of `vn` ends in a 4-byte SUBPIECE, directly or through a CAST,
 /// COPY or a right shift by 32 that only such reads consume.
 pub(crate) fn halves_only(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
-    let Some(value) = data.vbank().get(vn) else { return false };
+    let Some(value) = data.vbank().get(vn) else {
+        return false;
+    };
     depth > 0
         && value.descend_iter().all(|id| {
-            let Some(op) = data.obank().get(id) else { return false };
-            let Some(out) = op.get_out() else { return false };
+            let Some(op) = data.obank().get(id) else {
+                return false;
+            };
+            let Some(out) = op.get_out() else {
+                return false;
+            };
             let small = data.vbank().get(out).is_some_and(|o| o.get_size() <= 4);
             match op.code() {
                 OpCode::CPUI_SUBPIECE => small,
@@ -1016,7 +1150,10 @@ pub fn unused_vfp_type(
     if !float_after {
         return None;
     }
-    data.get_arch().types()?.get_base(size, type_metatype::TYPE_FLOAT).ok()
+    data.get_arch()
+        .types()?
+        .get_base(size, type_metatype::TYPE_FLOAT)
+        .ok()
 }
 
 /// A widened call-argument trial needs a callee contract; a live d-register

@@ -118,9 +118,7 @@ pub fn kuna_should_bound_at_entry(
         return false;
     }
     // the fall-through target must be another function's entry
-    next_is_known_function
-        && !next_is_self
-        && !next_is_unconditional_return
+    next_is_known_function && !next_is_self && !next_is_unconditional_return
 }
 
 /// The widest alignment padding a compiler puts between a call and the literal
@@ -133,7 +131,11 @@ pub const MAX_POOL_PAD: u64 = 4;
 /// `extents` the analysis tier proved, the gap when a pool starts within
 /// [`MAX_POOL_PAD`] of it, and `None` otherwise or when `is_pool_slot` denies
 /// the word (writable bytes are not the instruction stream).
-pub fn kuna_pool_pad(extents: &[(u64, u64)], is_pool_slot: impl Fn(u64) -> bool, next: u64) -> Option<u64> {
+pub fn kuna_pool_pad(
+    extents: &[(u64, u64)],
+    is_pool_slot: impl Fn(u64) -> bool,
+    next: u64,
+) -> Option<u64> {
     let i = extents.partition_point(|&(_, hi)| hi <= next);
     let &(lo, _) = extents.get(i)?;
     let pad = lo.saturating_sub(next);
@@ -147,10 +149,11 @@ pub fn kuna_pool_pad(extents: &[(u64, u64)], is_pool_slot: impl Fn(u64) -> bool,
 pub fn kuna_is_padding_run<'a>(
     ops: impl IntoIterator<Item = (OpCode, Option<(i32, u64, u32)>, &'a [(i32, u64, u32)])>,
 ) -> bool {
-    ops.into_iter().all(|(code, out, ins)| match (code, out, ins) {
-        (OpCode::CPUI_COPY, Some(out), [input]) => out == *input,
-        _ => false,
-    })
+    ops.into_iter()
+        .all(|(code, out, ins)| match (code, out, ins) {
+            (OpCode::CPUI_COPY, Some(out), [input]) => out == *input,
+            _ => false,
+        })
 }
 
 /// Should a call's fall-through be truncated because it leads into the

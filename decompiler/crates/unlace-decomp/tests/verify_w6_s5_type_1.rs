@@ -27,8 +27,8 @@
 
 use std::rc::Rc;
 
-use unlace_base::space::{spacetype, AddrSpace};
-use unlace_decomp::dtype::{sub_metatype, type_metatype, Datatype, DatatypeKind};
+use unlace_base::space::{AddrSpace, spacetype};
+use unlace_decomp::dtype::{Datatype, DatatypeKind, sub_metatype, type_metatype};
 
 fn space_with_index(idx: i32) -> Rc<AddrSpace> {
     Rc::new(AddrSpace::new(

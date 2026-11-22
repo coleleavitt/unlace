@@ -57,7 +57,7 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 /// Pinned target VMA of the Box vftable's first (and only) slot — `Box::area`
 /// (`return side*side;`) — in each fixture. Read from `objdump -s -j .rdata`
@@ -68,7 +68,10 @@ const BOX_AREA_VMA_X64: u64 = 0x1_4000_1040;
 const BOX_AREA_VMA_X86: u64 = 0x0040_1030;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixtures() -> PathBuf {
@@ -89,7 +92,8 @@ fn bootstrap_rtti(fixture: &str, on: bool) -> ConsoleProgram {
         .expect("rtti flips");
     // Analysis facts commit at `read symbols` (gated by the per-pass flag), not
     // eagerly at bootstrap — trigger that commit after the option is applied.
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 

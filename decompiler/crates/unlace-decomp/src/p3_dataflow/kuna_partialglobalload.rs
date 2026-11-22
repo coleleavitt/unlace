@@ -2,10 +2,10 @@
 
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use unlace_base::address::{calc_mask, Address};
+use crate::kuna_fasthash::{FxHashMap, FxHashSet};
+use unlace_base::address::{Address, calc_mask};
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
-use crate::kuna_fasthash::{FxHashMap, FxHashSet};
 
 #[derive(Debug)]
 pub(crate) struct Guard {
@@ -280,11 +280,7 @@ fn unsigned_bounds(
                 (Some((a, b)), Some((c, d))) if c == d && c < if shift_bytes { 8 } else { 64 } => {
                     let shift = if shift_bytes { c * 8 } else { c };
                     let (a, b) = (a >> shift, b >> shift);
-                    if a <= mask && b <= mask {
-                        (a, b)
-                    } else {
-                        full
-                    }
+                    if a <= mask && b <= mask { (a, b) } else { full }
                 }
                 _ => full,
             }
@@ -308,11 +304,7 @@ fn unsigned_bounds(
                 let (a, b) = input(i).unwrap_or(full);
                 range = (range.0.min(a), range.1.max(b));
             }
-            if op.num_input() == 0 {
-                full
-            } else {
-                range
-            }
+            if op.num_input() == 0 { full } else { range }
         }
         _ => full,
     };

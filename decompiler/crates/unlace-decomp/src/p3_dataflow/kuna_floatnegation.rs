@@ -62,7 +62,12 @@ fn same_instruction_read(data: &Funcdata, x: VarnodeId, y: VarnodeId) -> bool {
             }
             addr
         }
-        (None, None) if vx.is_free() && vy.is_free() && !vx.is_constant() && vx.get_addr() == vy.get_addr() => {
+        (None, None)
+            if vx.is_free()
+                && vy.is_free()
+                && !vx.is_constant()
+                && vx.get_addr() == vy.get_addr() =>
+        {
             match (reading_instruction(data, x), reading_instruction(data, y)) {
                 (Some(ax), Some(ay)) if ax == ay => ax,
                 _ => return false,
@@ -246,7 +251,9 @@ fn complement_at_leaf(data: &mut Funcdata, c: &Complement) -> VarnodeId {
     let addr = data.obank().get(c.leaf).unwrap().get_addr().clone();
     let op = data.new_op(2, addr);
     data.op_set_opcode(op, crate::typeop::seam_type_op_for(c.code));
-    let result = data.new_unique_out(1, op).expect("guarded complement output");
+    let result = data
+        .new_unique_out(1, op)
+        .expect("guarded complement output");
     let inputs = [operand_copy(data, c.lhs), operand_copy(data, c.rhs)];
     data.op_set_all_input(op, &inputs)
         .expect("guarded complement inputs");
@@ -287,10 +294,14 @@ fn consumed_directly(data: &Funcdata, vn: VarnodeId) -> bool {
     let mut live = false;
     for reader in data.vbank().get(vn).unwrap().descend_iter() {
         let op = data.obank().get(reader).unwrap();
-        if op
-            .get_out()
-            .is_some_and(|out| data.vbank().get(out).unwrap().descend_iter().next().is_none())
-        {
+        if op.get_out().is_some_and(|out| {
+            data.vbank()
+                .get(out)
+                .unwrap()
+                .descend_iter()
+                .next()
+                .is_none()
+        }) {
             continue;
         }
         if combines(op.code()) || packs_bits(data, op) {
@@ -371,7 +382,10 @@ fn fold_guarded_root(data: &mut Funcdata, root: VarnodeId) -> bool {
         return false;
     };
     let result = complement_at_leaf(data, &c);
-    data.op_set_opcode(def, crate::typeop::seam_type_op_for(OpCode::CPUI_BOOL_NEGATE));
+    data.op_set_opcode(
+        def,
+        crate::typeop::seam_type_op_for(OpCode::CPUI_BOOL_NEGATE),
+    );
     data.op_set_all_input(def, &[result])
         .expect("guarded root negation");
     true

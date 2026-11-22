@@ -77,12 +77,12 @@ use std::rc::Rc;
 
 use unlace_base::address::{Address, RangeList};
 use unlace_base::error::{KunaError, KunaResult};
-use unlace_base::space::{spacetype, AddrSpace, AddrSpaceManager, JoinRecord, VarnodeStorage};
-use unlace_base::types::{int4, uint4, uintb, Wrap};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, JoinRecord, VarnodeStorage, spacetype};
+use unlace_base::types::{Wrap, int4, uint4, uintb};
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
-use crate::dtype::{metatype2typeclass, type_class, type_metatype, Datatype, TypeFactory};
+use crate::dtype::{Datatype, TypeFactory, metatype2typeclass, type_class, type_metatype};
 
 // -----------------------------------------------------------------------------
 // Wire marshaling ids owned by fspec (upstream numbers, fspec.cc:40-51;
@@ -331,7 +331,8 @@ impl ParamEntry {
     /// Is the logical value left-justified within its container (C++
     /// `isLeftJustified`).
     fn is_left_justified(&self) -> bool {
-        (self.flags & param_entry_flags::FORCE_LEFT_JUSTIFY) != 0 || (!self.spaceid().is_big_endian())
+        (self.flags & param_entry_flags::FORCE_LEFT_JUSTIFY) != 0
+            || (!self.spaceid().is_big_endian())
     }
 
     // -- group / containment predicates (fspec.cc:159-365) ------------------
@@ -669,7 +670,11 @@ impl ParamEntry {
                 return Ok(res);
             }
         } else {
-            let type_align = super::kuna_stackparamalign::effective_alignment(self.flags, type_align, self.alignment);
+            let type_align = super::kuna_stackparamalign::effective_alignment(
+                self.flags,
+                type_align,
+                self.alignment,
+            );
             if type_align > self.alignment {
                 let tmp = (*slotnum * self.alignment) % type_align;
                 if tmp != 0 {
@@ -692,7 +697,8 @@ impl ParamEntry {
             // addressbase + index * alignment
             res = Address::new(
                 Rc::clone(self.spaceid()),
-                self.addressbase.wadd((index * self.alignment) as i64 as u64),
+                self.addressbase
+                    .wadd((index * self.alignment) as i64 as u64),
             );
             *slotnum += slotsused; // Inform caller of number of slots used
         }
@@ -759,7 +765,11 @@ impl ParamEntry {
 
     /// Cache the join record and adjust groups for a join entry (C++
     /// `resolveJoin`).  `prev_list` excludes `self`.
-    fn resolve_join(&mut self, prev_list: &[ParamEntry], manager: &AddrSpaceManager) -> KunaResult<()> {
+    fn resolve_join(
+        &mut self,
+        prev_list: &[ParamEntry],
+        manager: &AddrSpaceManager,
+    ) -> KunaResult<()> {
         if self.spaceid().get_type() != spacetype::IPTR_JOIN {
             self.joinrec = None;
             return Ok(());
@@ -822,7 +832,9 @@ impl ParamEntry {
                     };
                 }
             } else {
-                return Err(KunaError::lowlevel("Illegal overlap of <pentry> in compiler spec"));
+                return Err(KunaError::lowlevel(
+                    "Illegal overlap of <pentry> in compiler spec",
+                ));
             }
         }
         if overlap_set.is_empty() {
@@ -956,7 +968,11 @@ fn rc_opt_eq_space(a: &Option<Rc<AddrSpace>>, b: Option<&Rc<AddrSpace>>) -> bool
 /// returns a `VarnodeData &`; the unlace-base join record stores the equivalent
 /// `VarnodeStorage`, so this is a field-for-field copy (recorded in losses).
 fn piece_as_varnodedata(p: &VarnodeStorage) -> VarnodeData {
-    VarnodeData { space: p.space.clone(), offset: p.offset, size: p.size }
+    VarnodeData {
+        space: p.space.clone(),
+        offset: p.offset,
+        size: p.size,
+    }
 }
 
 // =============================================================================
@@ -1163,14 +1179,26 @@ impl ParamTrial {
         self.flags |= param_trial_flags::ANCESTOR_SOLID;
     }
     /// Record opt-in evidence that this input carries a stack address.
-    pub fn set_stack_address(&mut self) { self.flags |= param_trial_flags::STACK_ADDRESS; }
-    pub fn has_stack_address(&self) -> bool { self.flags & param_trial_flags::STACK_ADDRESS != 0 }
-    pub fn set_frame_reload(&mut self) { self.flags |= param_trial_flags::FRAME_RELOAD; }
-    pub fn has_frame_reload(&self) -> bool { self.flags & param_trial_flags::FRAME_RELOAD != 0 }
+    pub fn set_stack_address(&mut self) {
+        self.flags |= param_trial_flags::STACK_ADDRESS;
+    }
+    pub fn has_stack_address(&self) -> bool {
+        self.flags & param_trial_flags::STACK_ADDRESS != 0
+    }
+    pub fn set_frame_reload(&mut self) {
+        self.flags |= param_trial_flags::FRAME_RELOAD;
+    }
+    pub fn has_frame_reload(&self) -> bool {
+        self.flags & param_trial_flags::FRAME_RELOAD != 0
+    }
     /// (kuna) `calleefilledarg`: the callee writes this register before it
     /// could read it, and the caller put nothing in it.
-    pub fn set_callee_filled(&mut self) { self.flags |= param_trial_flags::CALLEE_FILLED; }
-    pub fn is_callee_filled(&self) -> bool { self.flags & param_trial_flags::CALLEE_FILLED != 0 }
+    pub fn set_callee_filled(&mut self) {
+        self.flags |= param_trial_flags::CALLEE_FILLED;
+    }
+    pub fn is_callee_filled(&self) -> bool {
+        self.flags & param_trial_flags::CALLEE_FILLED != 0
+    }
 
     /// Does this show solid movement into the Varnode (C++ `hasAncestorSolid`)?
     pub fn has_ancestor_solid(&self) -> bool {
@@ -1247,7 +1275,7 @@ impl ParamTrial {
         let (ea, eb) = match (self.entry, b.entry) {
             (None, None) => return Equal, // both null: equivalent (C++ both `<` false)
             (None, Some(_)) => return Greater, // self not "<" b  (C++ line 1898 false)
-            (Some(_), None) => return Less,    // self "<" b       (C++ line 1899 true)
+            (Some(_), None) => return Less, // self "<" b       (C++ line 1899 true)
             (Some(ea), Some(eb)) => (ea, eb),
         };
         let entry_a = &entries[ea];
@@ -1371,14 +1399,14 @@ impl ParamActive {
             needsfinalcheck: false,
             recoversubcall: recoversub,
             join_reverse: false,
-            vararg_stack_split: false, // (kuna) varargstackargs
-            own_input_gap: false,      // (kuna) inputparamgap
-            stack_arg_gap: false,      // (kuna) stackarggap
-            callee_reads_registers: false, // (kuna) calleereginputs
+            vararg_stack_split: false,          // (kuna) varargstackargs
+            own_input_gap: false,               // (kuna) inputparamgap
+            stack_arg_gap: false,               // (kuna) stackarggap
+            callee_reads_registers: false,      // (kuna) calleereginputs
             cond_exe_retry: Default::default(), // (kuna) condexeret
-            single_floats: Vec::new(), // (kuna) armfloatargs
-            read_singles: Vec::new(),  // (kuna) armfloatargs
-            callee_filled: None,       // (kuna) calleefilledarg
+            single_floats: Vec::new(),          // (kuna) armfloatargs
+            read_singles: Vec::new(),           // (kuna) armfloatargs
+            callee_filled: None,                // (kuna) calleefilledarg
         }
     }
 
@@ -1430,8 +1458,12 @@ impl ParamActive {
     /// subtracts an additional 1:
     /// `slot -= ((stackplaceholder<0)||(slot<stackplaceholder)) ? 1 : 2;`
     pub fn get_trial_for_input_varnode(&self, slot: int4) -> &ParamTrial {
-        let slot =
-            slot - if (self.stackplaceholder < 0) || (slot < self.stackplaceholder) { 1 } else { 2 };
+        let slot = slot
+            - if (self.stackplaceholder < 0) || (slot < self.stackplaceholder) {
+                1
+            } else {
+                2
+            };
         &self.trial[slot as usize]
     }
 
@@ -1474,11 +1506,7 @@ impl ParamActive {
     /// so when the matched rule consumed the most significant piece first (a
     /// big-endian ABI's r3:r4, v0:v1, o0:o1) trial 0 is the high half.
     pub fn join_pair_order(&self) -> (int4, int4) {
-        if self.join_reverse {
-            (1, 0)
-        } else {
-            (0, 1)
-        }
+        if self.join_reverse { (1, 0) } else { (0, 1) }
     }
     /// (kuna) `varargstackargs`: are these the trials of a variadic call whose
     /// stack tail must be scored as its own `fillinMap` section?
@@ -1560,7 +1588,10 @@ impl ParamActive {
         let t = self.get_trial(i);
         t.is_callee_filled()
             || (t.is_unref()
-                && self.callee_filled.as_ref().is_some_and(|d| d.proves_dead(t.get_address(), t.get_size())))
+                && self
+                    .callee_filled
+                    .as_ref()
+                    .is_some_and(|d| d.proves_dead(t.get_address(), t.get_size())))
     }
     /// (kuna) `condexeret`: the state of the retry pass.
     pub fn cond_exe_retry(&self) -> &crate::p4_calls::kuna_condexeret::CondExeRetry {
@@ -1780,7 +1811,11 @@ pub struct ParameterPieces {
 
 impl Default for ParameterPieces {
     fn default() -> Self {
-        ParameterPieces { addr: Address::new_invalid(), type_: None, flags: 0 }
+        ParameterPieces {
+            addr: Address::new_invalid(),
+            type_: None,
+            flags: 0,
+        }
     }
 }
 
@@ -1815,7 +1850,11 @@ impl ParameterPieces {
         // continue on the merged storage list.
         let mut seq: Vec<VarnodeStorage> = pieces
             .iter()
-            .map(|p| VarnodeStorage { space: p.space.clone(), offset: p.offset, size: p.size })
+            .map(|p| VarnodeStorage {
+                space: p.space.clone(),
+                offset: p.offset,
+                size: p.size,
+            })
             .collect();
         if let Some(lookup) = manager.register_lookup() {
             let lookup = Rc::clone(lookup);
@@ -1830,9 +1869,14 @@ impl ParameterPieces {
                 p.offset,
             );
             // Reflect the merge back into the caller's piece list.
-            *pieces = seq.iter().map(|p| VarnodeData {
-                space: p.space.clone(), offset: p.offset, size: p.size,
-            }).collect();
+            *pieces = seq
+                .iter()
+                .map(|p| VarnodeData {
+                    space: p.space.clone(),
+                    offset: p.offset,
+                    size: p.size,
+                })
+                .collect();
             return Ok(());
         }
         let join_record = manager.find_add_join(&seq, 0)?;
@@ -1844,9 +1888,14 @@ impl ParameterPieces {
             unified.offset,
         );
         // Reflect the (possibly merged) piece list back to the caller.
-        *pieces = seq.iter().map(|p| VarnodeData {
-            space: p.space.clone(), offset: p.offset, size: p.size,
-        }).collect();
+        *pieces = seq
+            .iter()
+            .map(|p| VarnodeData {
+                space: p.space.clone(),
+                offset: p.offset,
+                size: p.size,
+            })
+            .collect();
         Ok(())
     }
 }
@@ -1909,7 +1958,10 @@ impl EffectRecord {
     /// Construct an effect on a memory range (C++
     /// `EffectRecord(const VarnodeData&,uint4)`).
     pub fn from_varnode(data: VarnodeData, t: uint4) -> EffectRecord {
-        EffectRecord { range: data, type_: t }
+        EffectRecord {
+            range: data,
+            type_: t,
+        }
     }
 
     /// Get the type of effect (C++ `getType`).
@@ -2126,7 +2178,12 @@ impl unlace_base::rangemap::RangeRecord for ParamEntryRange {
     type InitType = ParamEntryRangeInit;
 
     fn create(data: ParamEntryRangeInit, a: uintb, b: uintb) -> ParamEntryRange {
-        ParamEntryRange { first: a, last: b, position: data.position, entry: data.entry }
+        ParamEntryRange {
+            first: a,
+            last: b,
+            position: data.position,
+            entry: data.entry,
+        }
     }
     fn get_first(&self) -> uintb {
         self.first
@@ -2206,7 +2263,8 @@ impl ParamListStandard {
             return false;
         }
         let float = |e: usize, size: int4| {
-            self.entry[e].get_type() == type_class::TYPECLASS_FLOAT && self.entry[e].get_size() == size
+            self.entry[e].get_type() == type_class::TYPECLASS_FLOAT
+                && self.entry[e].get_size() == size
         };
         let paired = self.entry.iter().any(|e| {
             e.get_type() == type_class::TYPECLASS_FLOAT
@@ -2232,7 +2290,8 @@ impl ParamListStandard {
         if !self.whole_float_groups {
             return None;
         }
-        let double = |e: &ParamEntry| e.get_type() == type_class::TYPECLASS_FLOAT && e.get_size() == 8;
+        let double =
+            |e: &ParamEntry| e.get_type() == type_class::TYPECLASS_FLOAT && e.get_size() == 8;
         let (idx, entry) = self
             .entry
             .iter()
@@ -2263,8 +2322,17 @@ impl ParamListStandard {
     /// them in (C++ `MultiSlotAssign::consumeMostSig`: big-endian storage,
     /// flipped by `reversesignif`), the same order [`ParamActive::join_pair_order`]
     /// reports while the trials are still live.
-    pub fn holds_high_first(&self, hi: &Address, hi_size: int4, lo: &Address, lo_size: int4) -> bool {
-        match (self.find_entry(hi, hi_size, false), self.find_entry(lo, lo_size, false)) {
+    pub fn holds_high_first(
+        &self,
+        hi: &Address,
+        hi_size: int4,
+        lo: &Address,
+        lo_size: int4,
+    ) -> bool {
+        match (
+            self.find_entry(hi, hi_size, false),
+            self.find_entry(lo, lo_size, false),
+        ) {
             (Some(h), Some(l)) => h < l,
             _ => false,
         }
@@ -2438,7 +2506,9 @@ impl ParamListStandard {
         match self.kind {
             ParamListKind::StandardOut | ParamListKind::RegisterOut => {
                 // ParamListStandardOut::possibleParam
-                self.entry.iter().any(|e| e.justified_contain(loc, size) >= 0)
+                self.entry
+                    .iter()
+                    .any(|e| e.justified_contain(loc, size) >= 0)
             }
             _ => self.find_entry(loc, size, true).is_some(),
         }
@@ -2598,10 +2668,12 @@ impl ParamListStandard {
             if !hiaddr.is_contiguous(hisize, loaddr, losize) {
                 return false;
             }
-            if !(hiaddr.get_offset().wsub(e_hi.get_base())).is_multiple_of(e_hi.get_align() as u64) {
+            if !(hiaddr.get_offset().wsub(e_hi.get_base())).is_multiple_of(e_hi.get_align() as u64)
+            {
                 return false;
             }
-            if !(loaddr.get_offset().wsub(e_lo.get_base())).is_multiple_of(e_lo.get_align() as u64) {
+            if !(loaddr.get_offset().wsub(e_lo.get_base())).is_multiple_of(e_lo.get_align() as u64)
+            {
                 return false;
             }
             true
@@ -2668,7 +2740,10 @@ impl ParamListStandard {
         }
         let resolver = self.resolver_map[index].as_mut().unwrap();
         resolver.insert(
-            ParamEntryRangeInit { position, entry: param_entry },
+            ParamEntryRangeInit {
+                position,
+                entry: param_entry,
+            },
             first,
             last,
         );
@@ -2709,7 +2784,13 @@ impl ParamListStandard {
             } else {
                 let first = param_entry.get_base();
                 let last = first.wadd((param_entry.get_size() - 1) as i64 as u64);
-                inserts.push(Ins { spc: Rc::clone(spc), first, last, entry: i, position });
+                inserts.push(Ins {
+                    spc: Rc::clone(spc),
+                    first,
+                    last,
+                    entry: i,
+                    position,
+                });
                 position += 1;
             }
         }
@@ -2804,8 +2885,12 @@ impl ParamListStandard {
             ParamListKind::Standard | ParamListKind::Register => {
                 self.assign_map_standard(proto, typefactory, res, manager)
             }
-            ParamListKind::StandardOut => self.assign_map_standard_out(proto, typefactory, res, manager),
-            ParamListKind::RegisterOut => self.assign_map_register_out(proto, typefactory, res, manager),
+            ParamListKind::StandardOut => {
+                self.assign_map_standard_out(proto, typefactory, res, manager)
+            }
+            ParamListKind::RegisterOut => {
+                self.assign_map_register_out(proto, typefactory, res, manager)
+            }
         }
     }
 
@@ -2819,7 +2904,14 @@ impl ParamListStandard {
     ) -> KunaResult<()> {
         let mut status = vec![0i32; self.numgroup as usize];
         if !proto.input_storage.is_empty() {
-            return super::kuna_inputstorage::assign(self, proto, typefactory, res, manager, &mut status);
+            return super::kuna_inputstorage::assign(
+                self,
+                proto,
+                typefactory,
+                res,
+                manager,
+                &mut status,
+            );
         }
         if res.len() == 2 {
             // Hidden parameters defined by the output list.
@@ -2841,7 +2933,15 @@ impl ParamListStandard {
                 }
             } else {
                 let mut back = res.pop().unwrap();
-                let r = self.assign_address(&dt, proto, 0, typefactory, &mut status, &mut back, manager)?;
+                let r = self.assign_address(
+                    &dt,
+                    proto,
+                    0,
+                    typefactory,
+                    &mut status,
+                    &mut back,
+                    manager,
+                )?;
                 res.push(back);
                 if r == AssignActionResponse::fail {
                     return Err(unassigned_err(&dt));
@@ -2852,10 +2952,19 @@ impl ParamListStandard {
         for i in 0..proto.intypes.len() {
             let dt = Rc::clone(&proto.intypes[i]);
             let mut back = ParameterPieces::default();
-            let response =
-                self.assign_address(&dt, proto, i as i32, typefactory, &mut status, &mut back, manager)?;
+            let response = self.assign_address(
+                &dt,
+                proto,
+                i as i32,
+                typefactory,
+                &mut status,
+                &mut back,
+                manager,
+            )?;
             res.push(back);
-            if response == AssignActionResponse::fail || response == AssignActionResponse::no_assignment {
+            if response == AssignActionResponse::fail
+                || response == AssignActionResponse::no_assignment
+            {
                 return Err(unassigned_err(&dt));
             }
         }
@@ -2874,7 +2983,15 @@ impl ParamListStandard {
         let mut back = ParameterPieces::default();
         let outtype = proto.outtype.clone().expect("outtype null");
         if outtype.get_metatype() != type_metatype::TYPE_VOID {
-            self.assign_address(&outtype, proto, -1, typefactory, &mut status, &mut back, manager)?;
+            self.assign_address(
+                &outtype,
+                proto,
+                -1,
+                typefactory,
+                &mut status,
+                &mut back,
+                manager,
+            )?;
             if back.addr.is_invalid() {
                 return Err(unassigned_err(&outtype));
             }
@@ -2910,8 +3027,15 @@ impl ParamListStandard {
             res.push(back);
             return Ok(()); // Leave the address as invalid
         }
-        let mut response =
-            self.assign_address(&outtype, proto, -1, typefactory, &mut status, &mut back, manager)?;
+        let mut response = self.assign_address(
+            &outtype,
+            proto,
+            -1,
+            typefactory,
+            &mut status,
+            &mut back,
+            manager,
+        )?;
         if response == AssignActionResponse::fail {
             // Invoke default hidden return input assignment action.
             response = AssignActionResponse::hiddenret_ptrparam;
@@ -2932,8 +3056,7 @@ impl ParamListStandard {
             };
             let pointersize = spc.get_addr_size() as int4;
             let wordsize = spc.get_word_size();
-            let pointertp =
-                typefactory.get_type_pointer(pointersize, outtype.clone(), wordsize)?;
+            let pointertp = typefactory.get_type_pointer(pointersize, outtype.clone(), wordsize)?;
             if response == AssignActionResponse::hiddenret_specialreg_void {
                 back.type_ = Some(typefactory.get_type_void()?);
             } else {
@@ -2971,7 +3094,11 @@ impl ParamListStandard {
                 || response == AssignActionResponse::hiddenret_specialreg_void;
             res.push(ParameterPieces {
                 type_: Some(pointertp),
-                flags: if is_special { parameter_pieces_flags::HIDDENRETPARM } else { 0 },
+                flags: if is_special {
+                    parameter_pieces_flags::HIDDENRETPARM
+                } else {
+                    0
+                },
                 ..Default::default()
             });
             return Ok(());
@@ -2984,7 +3111,11 @@ impl ParamListStandard {
 
     /// Build the map from parameter trials to model ParamEntrys (C++
     /// `buildTrialMap`).
-    fn build_trial_map(&self, active: &mut ParamActive, manager: &AddrSpaceManager) -> KunaResult<()> {
+    fn build_trial_map(
+        &self,
+        active: &mut ParamActive,
+        manager: &AddrSpaceManager,
+    ) -> KunaResult<()> {
         let mut hitlist: Vec<Option<usize>> = Vec::new();
         let mut float_count = 0;
         let mut int_count = 0;
@@ -3045,12 +3176,17 @@ impl ParamListStandard {
                     if let Some(w) = whole {
                         covered = i + self.entry[w].get_all_groups().len();
                     }
-                    let curentry = match whole.or_else(|| self.select_unreference_entry(i as i32, pref)) {
-                        Some(c) => c,
-                        None => continue,
-                    };
+                    let curentry =
+                        match whole.or_else(|| self.select_unreference_entry(i as i32, pref)) {
+                            Some(c) => c,
+                            None => continue,
+                        };
                     let ce = &self.entry[curentry];
-                    let sz = if ce.is_exclusion() { ce.get_size() } else { ce.get_align() };
+                    let sz = if ce.is_exclusion() {
+                        ce.get_size()
+                    } else {
+                        ce.get_align()
+                    };
                     let mut nextslot = 0;
                     let addr = ce.get_addr_by_slot(&mut nextslot, sz, 1, manager)?;
                     let trialpos = active.get_num_trials();
@@ -3112,20 +3248,30 @@ impl ParamListStandard {
     /// argument: its trial is active, a register the caller never wrote included
     /// (the callee receives the caller's own value). See
     /// [`crate::p4_calls::kuna_calleereginputs`].
-    fn activate_register_entries(&self, active: &mut ParamActive, manager: &AddrSpaceManager) -> KunaResult<()> {
+    fn activate_register_entries(
+        &self,
+        active: &mut ParamActive,
+        manager: &AddrSpaceManager,
+    ) -> KunaResult<()> {
         let mut added = false;
         for (eidx, e) in self.entry.iter().enumerate() {
             if e.get_space().get_type() != spacetype::IPTR_PROCESSOR {
                 continue;
             }
-            match (0..active.get_num_trials()).find(|&i| active.get_trial(i).get_entry() == Some(eidx)) {
+            match (0..active.get_num_trials())
+                .find(|&i| active.get_trial(i).get_entry() == Some(eidx))
+            {
                 Some(i) => {
                     if active.get_trial(i).is_unref() {
                         active.get_trial_mut(i).mark_active();
                     }
                 }
                 None => {
-                    let sz = if e.is_exclusion() { e.get_size() } else { e.get_align() };
+                    let sz = if e.is_exclusion() {
+                        e.get_size()
+                    } else {
+                        e.get_align()
+                    };
                     let mut nextslot = 0;
                     let addr = e.get_addr_by_slot(&mut nextslot, sz, 1, manager)?;
                     let trialpos = active.get_num_trials();
@@ -3146,7 +3292,11 @@ impl ParamListStandard {
 
     /// Calculate the range of trials in each resource section (C++
     /// `separateSections`).
-    fn separate_sections(&self, active: &ParamActive, trial_start: &mut Vec<int4>) -> KunaResult<()> {
+    fn separate_sections(
+        &self,
+        active: &ParamActive,
+        trial_start: &mut Vec<int4>,
+    ) -> KunaResult<()> {
         let numtrials = active.get_num_trials();
         let mut next_group = self.resource_start[1];
         let mut next_section = 2usize;
@@ -3174,7 +3324,10 @@ impl ParamListStandard {
     /// (C++ `markGroupNoUse`).
     fn mark_group_no_use(&self, active: &mut ParamActive, active_trial: int4, trial_start: int4) {
         let num_trials = active.get_num_trials();
-        let active_entry = active.get_trial(active_trial).get_entry().expect("null entry");
+        let active_entry = active
+            .get_trial(active_trial)
+            .get_entry()
+            .expect("null entry");
         for i in trial_start..num_trials {
             if i == active_trial {
                 continue;
@@ -3259,7 +3412,12 @@ impl ParamListStandard {
             }
             if grp != cur_group {
                 if inactive_count > 1 {
-                    self.mark_best_inactive(active, cur_group, group_start, type_class::TYPECLASS_GENERAL);
+                    self.mark_best_inactive(
+                        active,
+                        cur_group,
+                        group_start,
+                        type_class::TYPECLASS_GENERAL,
+                    );
                 }
                 cur_group = grp;
                 group_start = i;
@@ -3272,7 +3430,12 @@ impl ParamListStandard {
             }
         }
         if inactive_count > 1 {
-            self.mark_best_inactive(active, cur_group, group_start, type_class::TYPECLASS_GENERAL);
+            self.mark_best_inactive(
+                active,
+                cur_group,
+                group_start,
+                type_class::TYPECLASS_GENERAL,
+            );
         }
     }
 
@@ -3354,7 +3517,11 @@ impl ParamListStandard {
                         active,
                         trial,
                         &self.entry,
-                    ) || crate::p4_calls::kuna_stackaddrargtrial::trial_is_protected(active, trial, &self.entry),
+                    ) || crate::p4_calls::kuna_stackaddrargtrial::trial_is_protected(
+                        active,
+                        trial,
+                        &self.entry,
+                    ),
                 )
             };
             if defnouse {
@@ -3369,16 +3536,11 @@ impl ParamListStandard {
                 // argument list -- the ABI reaches the stack only past a full
                 // register file -- not a hole to fill on the way to a stack
                 // trial.  See [`crate::p4_calls::kuna_stackarggap`].
-                if crate::p4_calls::kuna_stackarggap::ends_argument_list(
-                    active,
-                    i,
-                    stop,
-                    |j| {
-                        crate::p4_calls::kuna_stackarggap::address_is_spacebase(
-                            active.get_trial(j).get_address(),
-                        )
-                    },
-                ) {
+                if crate::p4_calls::kuna_stackarggap::ends_argument_list(active, i, stop, |j| {
+                    crate::p4_calls::kuna_stackarggap::address_is_spacebase(
+                        active.get_trial(j).get_address(),
+                    )
+                }) {
                     seenchain = true;
                 }
                 if i == start {
@@ -3430,7 +3592,11 @@ impl ParamListStandard {
 
     /// Given an unordered list of trials, calculate the formal prototype (C++
     /// `fillinMap` / subclasses).  Dispatches on `kind`.
-    pub fn fillin_map(&self, active: &mut ParamActive, manager: &AddrSpaceManager) -> KunaResult<()> {
+    pub fn fillin_map(
+        &self,
+        active: &mut ParamActive,
+        manager: &AddrSpaceManager,
+    ) -> KunaResult<()> {
         match self.kind {
             ParamListKind::Merged => Err(KunaError::lowlevel(
                 "Cannot determine prototype before model has been resolved",
@@ -3448,7 +3614,11 @@ impl ParamListStandard {
     }
 
     /// `ParamListStandard::fillinMap`.
-    fn fillin_map_standard(&self, active: &mut ParamActive, manager: &AddrSpaceManager) -> KunaResult<()> {
+    fn fillin_map_standard(
+        &self,
+        active: &mut ParamActive,
+        manager: &AddrSpaceManager,
+    ) -> KunaResult<()> {
         if active.get_num_trials() == 0 {
             return Ok(());
         }
@@ -3470,8 +3640,9 @@ impl ParamListStandard {
         // own section.  Off (and for every non-variadic call) this leaves
         // `trial_start`/`resource_start` exactly as `separate_sections` built
         // them.  See [`crate::p4_calls::kuna_varargstackargs`].
-        let mut group_start: Vec<int4> =
-            (0..trial_start.len() - 1).map(|i| self.resource_start[i]).collect();
+        let mut group_start: Vec<int4> = (0..trial_start.len() - 1)
+            .map(|i| self.resource_start[i])
+            .collect();
         let mut sec = 0usize;
         while sec + 1 < trial_start.len() {
             if let Some(cut) = crate::p4_calls::kuna_varargstackargs::stack_section_split(
@@ -3491,7 +3662,13 @@ impl ParamListStandard {
             self.force_no_use(active, trial_start[i], trial_start[i + 1]);
         }
         for i in 0..num_section {
-            self.force_inactive_chain(active, 2, trial_start[i], trial_start[i + 1], group_start[i]);
+            self.force_inactive_chain(
+                active,
+                2,
+                trial_start[i],
+                trial_start[i + 1],
+                group_start[i],
+            );
         }
         for i in 0..active.get_num_trials() {
             if active.get_trial(i).is_active() {
@@ -4227,7 +4404,10 @@ impl ProtoModel {
     /// Does this model automatically consider potential output locations as
     /// killed-by-call (C++ `isAutoKilledByCall`).
     pub fn is_auto_killed_by_call(&self) -> bool {
-        self.output.as_ref().map(|o| o.is_auto_killed_by_call()).unwrap_or(false)
+        self.output
+            .as_ref()
+            .map(|o| o.is_auto_killed_by_call())
+            .unwrap_or(false)
     }
     /// Is this a merged prototype model (C++ `isMerged`).
     pub fn is_merged(&self) -> bool {
@@ -4255,7 +4435,9 @@ impl ProtoModel {
     /// Restrict a convention with one forward stack resource to a whole-slot frame area.
     pub fn kuna_bound_stack_inputs(&self, bytes: u32) -> Option<Self> {
         let input = self.input_opt()?;
-        let [entry] = input.entry.as_slice() else { return None };
+        let [entry] = input.entry.as_slice() else {
+            return None;
+        };
         let bytes = i32::try_from(bytes).ok()?;
         if entry.get_space().get_type() != spacetype::IPTR_SPACEBASE
             || entry.is_reverse_stack()
@@ -4347,7 +4529,8 @@ impl ProtoModel {
         slot: &mut int4,
         slotsize: &mut int4,
     ) -> bool {
-        self.input().possible_param_with_slot(loc, size, slot, slotsize)
+        self.input()
+            .possible_param_with_slot(loc, size, slot, slotsize)
     }
     /// Pass back the slot/slot-size for the storage as a return value (C++
     /// `possibleOutputParamWithSlot`).
@@ -4358,41 +4541,75 @@ impl ProtoModel {
         slot: &mut int4,
         slotsize: &mut int4,
     ) -> bool {
-        self.output().possible_param_with_slot(loc, size, slot, slotsize)
+        self.output()
+            .possible_param_with_slot(loc, size, slot, slotsize)
     }
     /// Check if the storage looks like an unjustified input parameter (C++
     /// `unjustifiedInputParam`).
-    pub fn unjustified_input_param(&self, loc: &Address, size: int4, res: &mut VarnodeData) -> bool {
+    pub fn unjustified_input_param(
+        &self,
+        loc: &Address,
+        size: int4,
+        res: &mut VarnodeData,
+    ) -> bool {
         self.input().unjustified_container(loc, size, res)
     }
     /// Get the type of extension and containing input parameter (C++
     /// `assumedInputExtension`).
-    pub fn assumed_input_extension(&self, addr: &Address, size: int4, res: &mut VarnodeData) -> OpCode {
+    pub fn assumed_input_extension(
+        &self,
+        addr: &Address,
+        size: int4,
+        res: &mut VarnodeData,
+    ) -> OpCode {
         self.input().assumed_extension(addr, size, res)
     }
     /// Get the type of extension and containing return value location (C++
     /// `assumedOutputExtension`).
-    pub fn assumed_output_extension(&self, addr: &Address, size: int4, res: &mut VarnodeData) -> OpCode {
+    pub fn assumed_output_extension(
+        &self,
+        addr: &Address,
+        size: int4,
+        res: &mut VarnodeData,
+    ) -> OpCode {
         self.output().assumed_extension(addr, size, res)
     }
     /// Pass back the biggest input parameter contained in the range (C++
     /// `getBiggestContainedInputParam`).
-    pub fn get_biggest_contained_input_param(&self, loc: &Address, size: int4, res: &mut VarnodeData) -> bool {
+    pub fn get_biggest_contained_input_param(
+        &self,
+        loc: &Address,
+        size: int4,
+        res: &mut VarnodeData,
+    ) -> bool {
         self.input().get_biggest_contained_param(loc, size, res)
     }
     /// Pass back the biggest output parameter contained in the range (C++
     /// `getBiggestContainedOutput`).
-    pub fn get_biggest_contained_output(&self, loc: &Address, size: int4, res: &mut VarnodeData) -> bool {
+    pub fn get_biggest_contained_output(
+        &self,
+        loc: &Address,
+        size: int4,
+        res: &mut VarnodeData,
+    ) -> bool {
         self.output().get_biggest_contained_param(loc, size, res)
     }
     /// Derive the most likely input prototype from a list of trials (C++
     /// `deriveInputMap`).
-    pub fn derive_input_map(&self, active: &mut ParamActive, manager: &AddrSpaceManager) -> KunaResult<()> {
+    pub fn derive_input_map(
+        &self,
+        active: &mut ParamActive,
+        manager: &AddrSpaceManager,
+    ) -> KunaResult<()> {
         self.input().fillin_map(active, manager)
     }
     /// Derive the most likely output prototype from a list of trials (C++
     /// `deriveOutputMap`).
-    pub fn derive_output_map(&self, active: &mut ParamActive, manager: &AddrSpaceManager) -> KunaResult<()> {
+    pub fn derive_output_map(
+        &self,
+        active: &mut ParamActive,
+        manager: &AddrSpaceManager,
+    ) -> KunaResult<()> {
         self.output().fillin_map(active, manager)
     }
 
@@ -4571,7 +4788,8 @@ impl ProtoModel {
         let hitrec = &efflist[idx - 1];
         let hit = hitrec.get_address();
         let sz = hitrec.get_size();
-        if sz == 0 && rc_opt_eq_space(&Some(Rc::clone(hit.get_space().unwrap())), addr.get_space()) {
+        if sz == 0 && rc_opt_eq_space(&Some(Rc::clone(hit.get_space().unwrap())), addr.get_space())
+        {
             // A size of zero indicates the whole space is unaffected
             return effect_type::UNAFFECTED;
         }
@@ -4601,7 +4819,11 @@ impl ProtoModel {
         if idx == 0 {
             // C++ dereferences *iter (== efflist.begin()) here.
             let close_addr = efflist[0].get_address();
-            return if close_addr.overlap(0, addr, size) < 0 { -1 } else { -2 };
+            return if close_addr.overlap(0, addr, size) < 0 {
+                -1
+            } else {
+                -2
+            };
         }
         let closerec = &efflist[idx - 1];
         let close_addr = closerec.get_address();
@@ -4640,13 +4862,18 @@ impl ProtoModel {
     /// Construct an empty merged model (C++ `ProtoModelMerged(Architecture *g)`).
     pub fn new_merged(manager: &AddrSpaceManager) -> ProtoModel {
         let mut res = ProtoModel::new(manager);
-        res.merged = Some(ProtoModelMerged { modellist: Vec::new() });
+        res.merged = Some(ProtoModelMerged {
+            modellist: Vec::new(),
+        });
         res
     }
 
     /// Number of constituent models (C++ `ProtoModelMerged::numModels`).
     pub fn num_models(&self) -> int4 {
-        self.merged.as_ref().map(|m| m.modellist.len() as i32).unwrap_or(0)
+        self.merged
+            .as_ref()
+            .map(|m| m.modellist.len() as i32)
+            .unwrap_or(0)
     }
 
     /// Get the i-th constituent model (C++ `ProtoModelMerged::getModel`).
@@ -4833,11 +5060,15 @@ impl ProtoModel {
     }
     /// Mutable access to the input resource model for builder hooks.
     pub fn input_mut(&mut self) -> &mut ParamListStandard {
-        self.input.as_mut().expect("ProtoModel::input_mut: not built")
+        self.input
+            .as_mut()
+            .expect("ProtoModel::input_mut: not built")
     }
     /// Mutable access to the output resource model for builder hooks.
     pub fn output_mut(&mut self) -> &mut ParamListStandard {
-        self.output.as_mut().expect("ProtoModel::output_mut: not built")
+        self.output
+            .as_mut()
+            .expect("ProtoModel::output_mut: not built")
     }
     /// Append a side-effect record and re-sort (test/builder hook; the C++
     /// `decode` sorts `effectlist` by `compareByAddress`).
@@ -4946,7 +5177,11 @@ impl ScoreProtoModel {
             model.possible_output_param_with_slot(addr, sz, &mut slot, &mut slotsize)
         };
         if isparam {
-            self.entry.push(PEntry { orig_index: orig, slot, size: slotsize });
+            self.entry.push(PEntry {
+                orig_index: orig,
+                slot,
+                size: slotsize,
+            });
         } else {
             self.mismatch += 1;
         }
@@ -5082,7 +5317,12 @@ impl ParameterBasic {
     /// Construct from components (C++
     /// `ParameterBasic(const string&,const Address&,Datatype*,uint4)`).
     pub fn new(name: &str, addr: Address, type_: Rc<Datatype>, flags: uint4) -> ParameterBasic {
-        ParameterBasic { name: name.to_string(), addr, type_: Some(type_), flags }
+        ParameterBasic {
+            name: name.to_string(),
+            addr,
+            type_: Some(type_),
+            flags,
+        }
     }
 
     /// Construct a void parameter (C++ `ParameterBasic(Datatype *tp)`).  The
@@ -5239,8 +5479,16 @@ impl ProtoStoreInternal {
     /// Construct with the given void data-type, seeding a void output (C++
     /// `ProtoStoreInternal(Datatype *vt)`).
     pub fn new(vt: Rc<Datatype>) -> ProtoStoreInternal {
-        let mut res = ProtoStoreInternal { voidtype: Rc::clone(&vt), inparam: Vec::new(), outparam: None };
-        let pieces = ParameterPieces { addr: Address::new_invalid(), type_: Some(vt), flags: 0 };
+        let mut res = ProtoStoreInternal {
+            voidtype: Rc::clone(&vt),
+            inparam: Vec::new(),
+            outparam: None,
+        };
+        let pieces = ParameterPieces {
+            addr: Address::new_invalid(),
+            type_: Some(vt),
+            flags: 0,
+        };
         res.set_output(&pieces);
         res
     }
@@ -5284,13 +5532,17 @@ impl ProtoStore for ProtoStoreInternal {
         if i < 0 || (i as usize) >= self.inparam.len() {
             return None;
         }
-        self.inparam[i as usize].as_ref().map(|p| p as &dyn ProtoParameter)
+        self.inparam[i as usize]
+            .as_ref()
+            .map(|p| p as &dyn ProtoParameter)
     }
     fn get_input_mut(&mut self, i: int4) -> Option<&mut dyn ProtoParameter> {
         if i < 0 || (i as usize) >= self.inparam.len() {
             return None;
         }
-        self.inparam[i as usize].as_mut().map(|p| p as &mut dyn ProtoParameter)
+        self.inparam[i as usize]
+            .as_mut()
+            .map(|p| p as &mut dyn ProtoParameter)
     }
     fn set_output(&mut self, piece: &ParameterPieces) {
         self.outparam = Some(ParameterBasic::new(
@@ -5304,10 +5556,14 @@ impl ProtoStore for ProtoStoreInternal {
         self.outparam = Some(ParameterBasic::new_void(Rc::clone(&self.voidtype)));
     }
     fn get_output(&self) -> &dyn ProtoParameter {
-        self.outparam.as_ref().expect("ProtoStoreInternal::get_output: null")
+        self.outparam
+            .as_ref()
+            .expect("ProtoStoreInternal::get_output: null")
     }
     fn get_output_mut(&mut self) -> &mut dyn ProtoParameter {
-        self.outparam.as_mut().expect("ProtoStoreInternal::get_output_mut: null")
+        self.outparam
+            .as_mut()
+            .expect("ProtoStoreInternal::get_output_mut: null")
     }
     fn clone_box(&self) -> Box<dyn ProtoStore> {
         Box::new(self.clone())
@@ -5466,8 +5722,16 @@ impl FuncProto {
     /// (kuna) Does a value this prototype returns in the two output registers
     /// `hi` and `lo` keep its most significant piece in the first of them?  See
     /// [`ParamListStandard::holds_high_first`]; `false` without a model.
-    pub fn output_holds_high_first(&self, hi: &Address, hi_size: int4, lo: &Address, lo_size: int4) -> bool {
-        self.model.as_ref().is_some_and(|m| m.output().holds_high_first(hi, hi_size, lo, lo_size))
+    pub fn output_holds_high_first(
+        &self,
+        hi: &Address,
+        hi_size: int4,
+        lo: &Address,
+        lo_size: int4,
+    ) -> bool {
+        self.model
+            .as_ref()
+            .is_some_and(|m| m.output().holds_high_first(hi, hi_size, lo, lo_size))
     }
     /// Does this use the given model (C++ `hasMatchingModel`).
     pub fn has_matching_model(&self, op2: &Rc<ProtoModel>) -> bool {
@@ -5633,7 +5897,9 @@ impl FuncProto {
         if self.num_params() == 0 {
             return false;
         }
-        self.get_param(0).map(|p| p.is_type_locked()).unwrap_or(false)
+        self.get_param(0)
+            .map(|p| p.is_type_locked())
+            .unwrap_or(false)
     }
     /// Is the output data-type locked (C++ `isOutputLocked`).
     pub fn is_output_locked(&self) -> bool {
@@ -5928,7 +6194,9 @@ impl FuncProto {
         };
         if type_locked {
             if size_locked && self.model.is_some() {
-                self.store_mut().get_output_mut().reset_size_lock_type(factory)?;
+                self.store_mut()
+                    .get_output_mut()
+                    .reset_size_lock_type(factory)?;
             }
         } else {
             self.store_mut().clear_output();
@@ -5969,7 +6237,12 @@ impl FuncProto {
             return;
         }
         let mut idx = 0;
-        if self.store().get_input(0).map(|p| p.is_hidden_return()).unwrap_or(false) {
+        if self
+            .store()
+            .get_input(0)
+            .map(|p| p.is_hidden_return())
+            .unwrap_or(false)
+        {
             if num_inputs < 2 {
                 return;
             }
@@ -6140,10 +6413,15 @@ impl FuncProto {
                 let mut j = 0usize;
                 for (i, piece) in pieces.iter().enumerate().skip(1) {
                     if (piece.flags & parameter_pieces_flags::HIDDENRETPARM) != 0 {
-                        self.store_mut().set_input((i - 1) as i32, "rethidden", piece);
+                        self.store_mut()
+                            .set_input((i - 1) as i32, "rethidden", piece);
                         continue; // increment i but not j
                     }
-                    let nm = if j >= proto.innames.len() { "" } else { proto.innames[j].as_str() };
+                    let nm = if j >= proto.innames.len() {
+                        ""
+                    } else {
+                        proto.innames[j].as_str()
+                    };
                     let nm = nm.to_string();
                     self.store_mut().set_input((i - 1) as i32, &nm, piece);
                     j += 1;
@@ -6337,7 +6615,11 @@ impl FuncProto {
             // are no locked params to test, so fall straight through to the
             // model -- mirrors C++ with `numParams()==0`. Guard the store call
             // so it never panics.
-            let num = if self.has_store() { self.num_params() } else { 0 };
+            let num = if self.has_store() {
+                self.num_params()
+            } else {
+                0
+            };
             if num > 0 {
                 let mut locktest = false;
                 for i in 0..num {
@@ -6383,7 +6665,12 @@ impl FuncProto {
 
     /// Check if the storage looks like an unjustified input parameter (C++
     /// `unjustifiedInputParam`).
-    pub fn unjustified_input_param(&self, addr: &Address, size: int4, res: &mut VarnodeData) -> bool {
+    pub fn unjustified_input_param(
+        &self,
+        addr: &Address,
+        size: int4,
+        res: &mut VarnodeData,
+    ) -> bool {
         if !self.is_dotdotdot() {
             if (self.flags & func_proto_flags::VOIDINPUTLOCK) != 0 {
                 return false;
@@ -6422,7 +6709,12 @@ impl FuncProto {
 
     /// Pass back the biggest input parameter contained in the range (C++
     /// `getBiggestContainedInputParam`).
-    pub fn get_biggest_contained_input_param(&self, loc: &Address, size: int4, res: &mut VarnodeData) -> bool {
+    pub fn get_biggest_contained_input_param(
+        &self,
+        loc: &Address,
+        size: int4,
+        res: &mut VarnodeData,
+    ) -> bool {
         if !self.is_dotdotdot() {
             if (self.flags & func_proto_flags::VOIDINPUTLOCK) != 0 {
                 return false;
@@ -6454,12 +6746,18 @@ impl FuncProto {
                 }
             }
         }
-        self.model().get_biggest_contained_input_param(loc, size, res)
+        self.model()
+            .get_biggest_contained_input_param(loc, size, res)
     }
 
     /// Pass back the biggest output storage contained in the range (C++
     /// `getBiggestContainedOutput`).
-    pub fn get_biggest_contained_output(&self, loc: &Address, size: int4, res: &mut VarnodeData) -> bool {
+    pub fn get_biggest_contained_output(
+        &self,
+        loc: &Address,
+        size: int4,
+        res: &mut VarnodeData,
+    ) -> bool {
         if self.is_output_locked() {
             let outparam = self.get_output();
             if outparam.get_type().map(|t| t.get_metatype()) == Some(type_metatype::TYPE_VOID) {
@@ -6488,7 +6786,10 @@ impl FuncProto {
         if !self.model().has_this_pointer() {
             return Ok(Address::new_invalid());
         }
-        let mut proto = PrototypePieces { first_var_arg_slot: -1, ..Default::default() };
+        let mut proto = PrototypePieces {
+            first_var_arg_slot: -1,
+            ..Default::default()
+        };
         proto.outtype = self.get_output_type().cloned();
         proto.intypes.push(dt);
         let mut res: Vec<ParameterPieces> = Vec::new();
@@ -6598,7 +6899,13 @@ impl FuncProto {
     }
     /// Check if two input storage locations can represent a single logical
     /// parameter (C++ `checkInputJoin`).
-    pub fn check_input_join(&self, hiaddr: &Address, hisz: int4, loaddr: &Address, losz: int4) -> bool {
+    pub fn check_input_join(
+        &self,
+        hiaddr: &Address,
+        hisz: int4,
+        loaddr: &Address,
+        losz: int4,
+    ) -> bool {
         self.model().check_input_join(hiaddr, hisz, loaddr, losz)
     }
     /// Check if a single storage location can be split into two input
@@ -6608,12 +6915,22 @@ impl FuncProto {
     }
     /// Get any assumed input extension and container (C++
     /// `assumedInputExtension`).
-    pub fn assumed_input_extension(&self, addr: &Address, size: int4, res: &mut VarnodeData) -> OpCode {
+    pub fn assumed_input_extension(
+        &self,
+        addr: &Address,
+        size: int4,
+        res: &mut VarnodeData,
+    ) -> OpCode {
         self.model().assumed_input_extension(addr, size, res)
     }
     /// Get any assumed output extension and container (C++
     /// `assumedOutputExtension`).
-    pub fn assumed_output_extension(&self, addr: &Address, size: int4, res: &mut VarnodeData) -> OpCode {
+    pub fn assumed_output_extension(
+        &self,
+        addr: &Address,
+        size: int4,
+        res: &mut VarnodeData,
+    ) -> OpCode {
         self.model().assumed_output_extension(addr, size, res)
     }
 
@@ -6671,18 +6988,22 @@ impl FuncProto {
     /// kuna's internal store follows the wire shape (input parameters travel
     /// as `<localdb>` category-0 symbols, `LocalSymbolMap.decodeSymbolList`).
     pub fn encode(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> KunaResult<()> {
-        use unlace_base::marshal::{
-            ATTRIB_CONSTRUCTOR, ATTRIB_DESTRUCTOR, ATTRIB_MODEL, ATTRIB_TYPELOCK,
-        };
         use crate::remote_provider::{
             ATTRIB_CUSTOM, ATTRIB_DOTDOTDOT, ATTRIB_EXTRAPOP, ATTRIB_INLINE, ATTRIB_MODELLOCK,
             ATTRIB_NORETURN, ATTRIB_VOIDLOCK, ELEM_PROTOTYPE, ELEM_RETURNSYM,
+        };
+        use unlace_base::marshal::{
+            ATTRIB_CONSTRUCTOR, ATTRIB_DESTRUCTOR, ATTRIB_MODEL, ATTRIB_TYPELOCK,
         };
         encoder.open_element(&ELEM_PROTOTYPE);
         // C++ `model->getName()` (a null model never encodes upstream); an
         // un-modeled kuna proto degrades to the "default" spelling, which the
         // Java side maps onto the program's default model.
-        let model_name = self.model.as_ref().map(|m| m.get_name()).unwrap_or("default");
+        let model_name = self
+            .model
+            .as_ref()
+            .map(|m| m.get_name())
+            .unwrap_or("default");
         encoder.write_string(&ATTRIB_MODEL, model_name.as_bytes());
         if self.extrapop == EXTRAPOP_UNKNOWN {
             encoder.write_string(&ATTRIB_EXTRAPOP, b"unknown");
@@ -6724,7 +7045,9 @@ impl FuncProto {
         if outparam.is_type_locked() {
             encoder.write_bool(&ATTRIB_TYPELOCK, true);
         }
-        outparam.get_address().encode_sized(encoder, outparam.get_size())?;
+        outparam
+            .get_address()
+            .encode_sized(encoder, outparam.get_size())?;
         match outparam.get_type() {
             Some(t) => t.encode_ref(encoder)?,
             None => {
@@ -6795,7 +7118,10 @@ impl FuncProto {
 
     /// Encode the likely-trash overrides (C++ `FuncProto::encodeLikelyTrash`,
     /// fspec.cc:3631-3648): the entries not already in the `ProtoModel`'s list.
-    fn encode_likely_trash(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> KunaResult<()> {
+    fn encode_likely_trash(
+        &self,
+        encoder: &mut dyn unlace_base::marshal::Encoder,
+    ) -> KunaResult<()> {
         if self.likelytrash.is_empty() {
             return Ok(());
         }
@@ -6858,9 +7184,9 @@ impl FuncProto {
 /// `FuncCallSpecs::offset_unknown`, `fspec.hh:1677`).
 pub const OFFSET_UNKNOWN: uintb = 0xBADBEEF;
 
+use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::kuna_restartlog::{KunaRestartReason, RestartLog};
-use crate::context::{OpId, VarnodeId};
 
 /// A class for analyzing parameters to a sub-function call (C++
 /// `FuncCallSpecs`, `fspec.hh:1645`).
@@ -7082,7 +7408,9 @@ impl FuncCallSpecs {
     /// `throw LowlevelError("Setting call spec function multiple times")`).
     pub fn set_funcdata(&mut self, entry: Address, name: &str) -> KunaResult<()> {
         if self.has_fd {
-            return Err(KunaError::lowlevel("Setting call spec function multiple times"));
+            return Err(KunaError::lowlevel(
+                "Setting call spec function multiple times",
+            ));
         }
         self.has_fd = true;
         self.entryaddress = entry;
@@ -7282,7 +7610,8 @@ impl FuncCallSpecs {
     /// proto/activeoutput field split is done here (the borrow checker rejects
     /// `derive_output_map(&mut self.activeoutput)` with `&self.proto`).
     pub fn derive_output_map_self(&mut self, manager: &AddrSpaceManager) -> KunaResult<()> {
-        self.proto.derive_output_map(&mut self.activeoutput, manager)
+        self.proto
+            .derive_output_map(&mut self.activeoutput, manager)
     }
 
     /// The analysis object for input parameter recovery (C++ `getActiveInput`).
@@ -7438,7 +7767,10 @@ impl FuncCallSpecs {
     }
 
     /// Record the stack-argument bytes the direct callee reads.
-    pub fn set_callee_stack_arg_bytes(&mut self, bytes: Option<crate::p4_calls::kuna_calleepurge::StackArgs>) {
+    pub fn set_callee_stack_arg_bytes(
+        &mut self,
+        bytes: Option<crate::p4_calls::kuna_calleepurge::StackArgs>,
+    ) {
         self.callee_stack_arg_bytes = bytes;
     }
 
@@ -7495,11 +7827,13 @@ impl FuncCallSpecs {
     /// (kuna `tailcalljump`) Does an input trial at `addr`/`size` overlap the
     /// register that carried this tail call's computed target?
     pub fn carries_jump_target(&self, addr: &Address, size: int4) -> bool {
-        self.jump_target_storage.as_ref().is_some_and(|(start, len)| {
-            start.get_space().map(|s| s.get_index()) == addr.get_space().map(|s| s.get_index())
-                && addr.get_offset() < start.get_offset() + *len as u64
-                && start.get_offset() < addr.get_offset() + size as u64
-        })
+        self.jump_target_storage
+            .as_ref()
+            .is_some_and(|(start, len)| {
+                start.get_space().map(|s| s.get_index()) == addr.get_space().map(|s| s.get_index())
+                    && addr.get_offset() < start.get_offset() + *len as u64
+                    && start.get_offset() < addr.get_offset() + size as u64
+            })
     }
 
     /// (kuna `truncarg`) Is input `slot`, still `size` bytes wide in a call with
@@ -7581,7 +7915,10 @@ impl FuncCallSpecs {
         }
 
         let trial1 = self.activeinput.get_trial_for_input_varnode(slot1).clone();
-        let trial2 = self.activeinput.get_trial_for_input_varnode(slot1 + 1).clone();
+        let trial2 = self
+            .activeinput
+            .get_trial_for_input_varnode(slot1 + 1)
+            .clone();
 
         let addr1 = trial1.get_address().clone();
         let addr2 = trial2.get_address().clone();
@@ -7603,7 +7940,8 @@ impl FuncCallSpecs {
             )?
         };
 
-        self.activeinput.join_trial(slot1, &joinaddr, trial1.get_size() + trial2.get_size())
+        self.activeinput
+            .join_trial(slot1, &joinaddr, trial1.get_size() + trial2.get_size())
     }
 
     // -- prototype restriction / de-indirection (fspec.cc:5413-5516) --------
@@ -7705,7 +8043,8 @@ impl FuncCallSpecs {
         // schedules, `FlowInfo::setupCallindSpecs` (`applyIndirect`) rebuilds the
         // CALLIND straight as a direct CALL to the resolved target.
         let site = self.op_addr(data);
-        data.get_override_mut().insert_indirect_override(site, newfd_entry);
+        data.get_override_mut()
+            .insert_indirect_override(site, newfd_entry);
 
         // Try our best to merge existing prototype with the one just handed.
         let mut newinput: Vec<Option<VarnodeId>> = Vec::new();
@@ -7750,7 +8089,8 @@ impl FuncCallSpecs {
         let site = self.op_addr(data);
         let mut saved = FuncProto::new();
         saved.copy(fp);
-        data.get_override_mut().insert_proto_override(site.clone(), Box::new(saved));
+        data.get_override_mut()
+            .insert_proto_override(site.clone(), Box::new(saved));
 
         if self.late_restriction(data, fp, &mut newinput, &mut newoutput)? {
             self.commit_new_inputs(data, &mut newinput)?;
@@ -7895,15 +8235,23 @@ impl FuncCallSpecs {
         phvn: VarnodeId,
     ) -> KunaResult<()> {
         let refvn_id = {
-            let phv = data.vbank().get(phvn).expect("resolveSpacebaseRelative: stale phvn");
-            let def = phv.get_def().expect("resolveSpacebaseRelative: phvn not written");
+            let phv = data
+                .vbank()
+                .get(phvn)
+                .expect("resolveSpacebaseRelative: stale phvn");
+            let def = phv
+                .get_def()
+                .expect("resolveSpacebaseRelative: phvn not written");
             data.obank()
                 .get(def)
                 .expect("resolveSpacebaseRelative: stale def op")
                 .get_in(0)
                 .expect("resolveSpacebaseRelative: def has no input 0")
         };
-        let refvn = data.vbank().get(refvn_id).expect("resolveSpacebaseRelative: stale refvn");
+        let refvn = data
+            .vbank()
+            .get(refvn_id)
+            .expect("resolveSpacebaseRelative: stale refvn");
         let spacebase = Rc::clone(refvn.get_space());
         // STUB(w6-fspec-3 W4): when spacebase is not IPTR_SPACEBASE the C++ emits
         // data.warningHeader("This function may have set the stack pointer");
@@ -7975,7 +8323,10 @@ impl FuncCallSpecs {
             // internal write.
             if let Some(vn_id) = vn {
                 let (no_descend, internal, written, def) = {
-                    let v = data.vbank().get(vn_id).expect("abortSpacebaseRelative: stale vn");
+                    let v = data
+                        .vbank()
+                        .get(vn_id)
+                        .expect("abortSpacebaseRelative: stale vn");
                     (
                         v.has_no_descend(),
                         v.get_space().get_type() == spacetype::IPTR_INTERNAL,
@@ -8049,7 +8400,9 @@ impl FuncCallSpecs {
         let mut stackref: Option<VarnodeId> = None;
         let mut stackref_resolved = false;
         for i in 0..numparams {
-            let param = source.get_param(i).expect("transferLockedInput: source param missing");
+            let param = source
+                .get_param(i)
+                .expect("transferLockedInput: source param missing");
             let reuse = self.transfer_locked_input_param(param);
             if reuse == 0 {
                 return Ok(false);
@@ -8134,8 +8487,14 @@ impl FuncCallSpecs {
                 break;
             }
             if opref.is_indirect_creation() {
-                if let Some(out) = opref.get_out().and_then(|ov| data.vbank().get(ov).map(|_| ov)) {
-                    let vn = data.vbank().get(out).expect("transferLockedOutputParam: stale out");
+                if let Some(out) = opref
+                    .get_out()
+                    .and_then(|ov| data.vbank().get(ov).map(|_| ov))
+                {
+                    let vn = data
+                        .vbank()
+                        .get(out)
+                        .expect("transferLockedOutputParam: stale out");
                     let vaddr = vn.get_addr();
                     let vsize = vn.get_size();
                     if paddr.justified_contain(psize, vaddr, vsize, false) >= 0
@@ -8162,13 +8521,19 @@ impl FuncCallSpecs {
         param_size: int4,
         stackref: Option<VarnodeId>,
     ) -> KunaResult<VarnodeId> {
-        let opaddr =
-            data.obank().get(self.op).expect("buildParam: stale call op").get_addr().clone();
+        let opaddr = data
+            .obank()
+            .get(self.op)
+            .expect("buildParam: stale call op")
+            .get_addr()
+            .clone();
         let vn = match vn {
             None => {
                 // Need to build a spacebase relative varnode.
                 let spc = std::rc::Rc::clone(
-                    param_addr.get_space().expect("buildParam: param has no space"),
+                    param_addr
+                        .get_space()
+                        .expect("buildParam: param has no space"),
                 );
                 let off = param_addr.get_offset();
                 return data.op_stack_load(
@@ -8182,7 +8547,11 @@ impl FuncCallSpecs {
             }
             Some(v) => v,
         };
-        let vsize = data.vbank().get(vn).expect("buildParam: stale input vn").get_size();
+        let vsize = data
+            .vbank()
+            .get(vn)
+            .expect("buildParam: stale input vn")
+            .get_size();
         if vsize == param_size {
             return Ok(vn);
         }
@@ -8239,7 +8608,10 @@ impl FuncCallSpecs {
         let numparams = self.proto.num_params();
         for i in 0..numparams {
             let (paddr, psize, pspace_is_spacebase) = {
-                let param = self.proto.get_param(i).expect("commitNewInputs: source param missing");
+                let param = self
+                    .proto
+                    .get_param(i)
+                    .expect("commitNewInputs: source param missing");
                 let a = param.get_address();
                 let is_sb = a
                     .get_space()
@@ -8267,7 +8639,8 @@ impl FuncCallSpecs {
             trial.set_fixed_position(-1);
             newinput.push(Some(vn));
             let index = self.activeinput.get_num_trials();
-            self.activeinput.register_trial(trial.get_address(), trial.get_size());
+            self.activeinput
+                .register_trial(trial.get_address(), trial.get_size());
             *self.activeinput.get_trial_mut(index) = trial;
         }
         if let Some(ph) = placeholder {
@@ -8275,8 +8648,10 @@ impl FuncCallSpecs {
             newinput.push(Some(ph));
             self.set_stack_placeholder_slot((newinput.len() - 1) as int4);
         }
-        let all: Vec<VarnodeId> =
-            newinput.iter().map(|v| v.expect("commitNewInputs: null input after build")).collect();
+        let all: Vec<VarnodeId> = newinput
+            .iter()
+            .map(|v| v.expect("commitNewInputs: null input after build"))
+            .collect();
         data.op_set_all_input(self.op, &all)?;
         if !self.is_dotdotdot() {
             self.clear_active_input();
@@ -8323,8 +8698,12 @@ impl FuncCallSpecs {
             .copied()
             .find(|v| data.vbank().get(*v).map(|vn| vn.get_size()) == Some(psize));
 
-        let opaddr =
-            data.obank().get(self.op).expect("commitNewOutputs: stale call op").get_addr().clone();
+        let opaddr = data
+            .obank()
+            .get(self.op)
+            .expect("commitNewOutputs: stale call op")
+            .get_addr()
+            .clone();
 
         let real_out: VarnodeId = if let Some(em) = exact_match {
             // Make sure the exact match is the output of the CALL.
@@ -8342,18 +8721,33 @@ impl FuncCallSpecs {
             data.new_varnode_out(psize, &paddr, self.op)?
         };
 
-        let realout_addr =
-            data.vbank().get(real_out).expect("commitNewOutputs: stale realOut").get_addr().clone();
-        let realout_size =
-            data.vbank().get(real_out).expect("commitNewOutputs: stale realOut").get_size();
+        let realout_addr = data
+            .vbank()
+            .get(real_out)
+            .expect("commitNewOutputs: stale realOut")
+            .get_addr()
+            .clone();
+        let realout_size = data
+            .vbank()
+            .get(real_out)
+            .expect("commitNewOutputs: stale realOut")
+            .get_size();
 
         for &old_out in newoutput.iter() {
             if Some(old_out) == exact_match {
                 continue;
             }
-            let oldsize = data.vbank().get(old_out).expect("commitNewOutputs: stale oldOut").get_size();
-            let oldaddr =
-                data.vbank().get(old_out).expect("commitNewOutputs: stale oldOut").get_addr().clone();
+            let oldsize = data
+                .vbank()
+                .get(old_out)
+                .expect("commitNewOutputs: stale oldOut")
+                .get_size();
+            let oldaddr = data
+                .vbank()
+                .get(old_out)
+                .expect("commitNewOutputs: stale oldOut")
+                .get_addr()
+                .clone();
             let mut ind_op = data.vbank().get(old_out).and_then(|v| v.get_def());
             if ind_op == Some(self.op) {
                 ind_op = None;
@@ -8371,7 +8765,10 @@ impl FuncCallSpecs {
                     nop
                 };
                 let overlap = {
-                    let ov = data.vbank().get(old_out).expect("commitNewOutputs: stale oldOut");
+                    let ov = data
+                        .vbank()
+                        .get(old_out)
+                        .expect("commitNewOutputs: stale oldOut");
                     overlap_addr(ov.get_addr(), ov.get_size(), &realout_addr, realout_size)
                 };
                 data.op_set_input(sub, real_out, 0)?;
@@ -8380,8 +8777,7 @@ impl FuncCallSpecs {
                 data.op_insert_after(sub, self.op);
             } else if psize < oldsize {
                 // Extend: realOut is contained in oldOut.
-                let overlap =
-                    oldaddr.justified_contain(oldsize, &paddr, psize, false);
+                let overlap = oldaddr.justified_contain(oldsize, &paddr, psize, false);
                 let mut vardata = VarnodeData::default();
                 let (mut opc, stated) = crate::kuna_narrowext::or_model(
                     data.get_arch().narrow_ext.output,
@@ -8446,8 +8842,11 @@ impl FuncCallSpecs {
                         data.op_set_input(concat, new_ind_out, 1)?; // least significant
                         data.op_insert_after(concat, self.op);
                         if most_sig_size != 0 {
-                            let mid_addr =
-                                if is_big_endian { realout_addr.clone() } else { lo_addr.clone() };
+                            let mid_addr = if is_big_endian {
+                                realout_addr.clone()
+                            } else {
+                                lo_addr.clone()
+                            };
                             data.new_varnode_out(overlap + realout_size, &mid_addr, concat)?;
                         }
                         last_op = concat;
@@ -8497,11 +8896,7 @@ fn overlap_addr(addr: &Address, size: int4, op: &Address, opsize: int4) -> int4 
         addr.overlap(0, op, opsize)
     } else {
         let over = addr.overlap(size - 1, op, opsize);
-        if over != -1 {
-            opsize - 1 - over
-        } else {
-            -1
-        }
+        if over != -1 { opsize - 1 - over } else { -1 }
     }
 }
 

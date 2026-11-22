@@ -32,16 +32,16 @@ use std::collections::BTreeMap;
 use std::ops::Bound;
 use std::rc::Rc;
 
-use unlace_base::address::{mach_extreme, Address, SeqNum};
-use unlace_base::error::{KunaError, KunaResult};
-use unlace_base::space::{spacetype, AddrSpace, AddrSpaceManager};
-use unlace_base::types::{int2, int4, uint2, uint4, uintb, uintm, Wrap};
 use crate::kuna_checkedarena::Arena;
 use smallvec::SmallVec;
+use unlace_base::address::{Address, SeqNum, mach_extreme};
+use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, spacetype};
+use unlace_base::types::{Wrap, int2, int4, uint2, uint4, uintb, uintm};
 
-use crate::cover::{Cover, CoverContext};
-use crate::dtype::{type_metatype, Datatype};
 use crate::context::{HighVariableId, OpId, VarnodeId};
+use crate::cover::{Cover, CoverContext};
+use crate::dtype::{Datatype, type_metatype};
 
 /// Boolean attributes of a [`Varnode`] (C++ `Varnode::varnode_flags`).
 ///
@@ -195,7 +195,9 @@ impl AddrKey {
 impl Ord for AddrKey {
     #[inline]
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.space.cmp(&other.space).then_with(|| self.offset.cmp(&other.offset))
+        self.space
+            .cmp(&other.space)
+            .then_with(|| self.offset.cmp(&other.offset))
     }
 }
 impl PartialOrd for AddrKey {
@@ -216,14 +218,23 @@ struct SeqKey {
 impl Default for SeqKey {
     /// Matches `SeqNum::default()` (a null pc and `uniq == 0`).
     fn default() -> SeqKey {
-        SeqKey { pc: AddrKey { offset: 0, space: 0x8000_0000 }, uniq: 0 }
+        SeqKey {
+            pc: AddrKey {
+                offset: 0,
+                space: 0x8000_0000,
+            },
+            uniq: 0,
+        }
     }
 }
 
 impl SeqKey {
     #[inline]
     fn of(s: &SeqNum) -> SeqKey {
-        SeqKey { pc: AddrKey::of(s.get_addr()), uniq: s.get_time() }
+        SeqKey {
+            pc: AddrKey::of(s.get_addr()),
+            uniq: s.get_time(),
+        }
     }
 }
 
@@ -293,7 +304,11 @@ impl LocKey {
     #[inline]
     fn new(addr: AddrKey, size: int4, flagclass: FlagClass, seqnum: SeqKey) -> Self {
         let size_class = ((size as u32 ^ 0x8000_0000) as u64) << 32 | flagclass.0 as u64;
-        Self { addr, size_class, seqnum }
+        Self {
+            addr,
+            size_class,
+            seqnum,
+        }
     }
 
     #[inline]
@@ -588,7 +603,11 @@ impl Varnode {
             loc: m,
             def: None,
             high: None,
-            type_: if is_unknown_skeleton(&dt) { std::cell::OnceCell::new() } else { dt.into() },
+            type_: if is_unknown_skeleton(&dt) {
+                std::cell::OnceCell::new()
+            } else {
+                dt.into()
+            },
             temp_type: None,
             lociter: None,
             descend: SmallVec::new(),
@@ -627,7 +646,9 @@ impl Varnode {
     /// Get the AddrSpace storing this Varnode (C++ `getSpace`).  Panics on the
     /// null/sentinel address (C++ would dereference an invalid pointer).
     pub fn get_space(&self) -> &Rc<AddrSpace> {
-        self.loc.get_space().expect("Varnode::getSpace on invalid address (C++ UB)")
+        self.loc
+            .get_space()
+            .expect("Varnode::getSpace on invalid address (C++ UB)")
     }
     /// Get the offset within the space (C++ `getOffset`).
     pub fn get_offset(&self) -> uintb {
@@ -656,7 +677,8 @@ impl Varnode {
     }
     /// Get the Datatype (C++ `getType`).
     pub fn get_type(&self) -> &Rc<Datatype> {
-        self.type_.get_or_init(|| Rc::new(Datatype::new(self.size, type_metatype::TYPE_UNKNOWN)))
+        self.type_
+            .get_or_init(|| Rc::new(Datatype::new(self.size, type_metatype::TYPE_UNKNOWN)))
     }
     /// C++ `Varnode::getTypeReadFacing(op)` (varnode.cc:658).  Generally just the
     /// Varnode's own data-type; for a \e union it would be the resolved field for
@@ -982,8 +1004,11 @@ impl Varnode {
         self.addlflags & addl_flags::synthetic_literal != 0
     }
     pub(crate) fn set_synthetic_literal(&mut self, value: bool) {
-        if value { self.addlflags |= addl_flags::synthetic_literal; }
-        else { self.addlflags &= !addl_flags::synthetic_literal; }
+        if value {
+            self.addlflags |= addl_flags::synthetic_literal;
+        } else {
+            self.addlflags &= !addl_flags::synthetic_literal;
+        }
     }
     /// C++ `isPtrFlow`.
     pub fn is_ptr_flow(&self) -> bool {
@@ -1078,8 +1103,7 @@ impl Varnode {
     }
     /// C++ `isHeritageKnown`.
     pub fn is_heritage_known(&self) -> bool {
-        (self.flags
-            & (varnode_flags::insert | varnode_flags::constant | varnode_flags::annotation))
+        (self.flags & (varnode_flags::insert | varnode_flags::constant | varnode_flags::annotation))
             != 0
     }
     /// C++ `isTypeLock`.
@@ -1236,8 +1260,11 @@ impl Varnode {
                 | varnode_flags::precislo
                 | varnode_flags::precishi);
         self.set_flags(vflags);
-        let aflags =
-            src_addl & (addl_flags::writemask | addl_flags::ptrflow | addl_flags::stack_store | addl_flags::global_load);
+        let aflags = src_addl
+            & (addl_flags::writemask
+                | addl_flags::ptrflow
+                | addl_flags::stack_store
+                | addl_flags::global_load);
         self.addlflags |= aflags;
     }
 
@@ -1452,27 +1479,15 @@ impl Varnode {
         let opoff = op.loc.get_offset();
         if off == opoff {
             // Left sides match: either total match or partial
-            if self.size == op.size {
-                2
-            } else {
-                1
-            }
+            if self.size == op.size { 2 } else { 1 }
         } else if off < opoff {
             // Test if this ends before op begins
             let thisright = off.wadd((self.size - 1) as i64 as u64);
-            if thisright < opoff {
-                0
-            } else {
-                1
-            }
+            if thisright < opoff { 0 } else { 1 }
         } else {
             // Test if op ends before this begins
             let opright = opoff.wadd((op.size - 1) as i64 as u64);
-            if opright < off {
-                0
-            } else {
-                1
-            }
+            if opright < off { 0 } else { 1 }
         }
     }
 
@@ -1533,7 +1548,8 @@ impl Varnode {
             if (self.flags & (varnode_flags::input | varnode_flags::typelock))
                 == (varnode_flags::input | varnode_flags::typelock)
             {
-                return self.size == 1 && self.get_type().get_metatype() == type_metatype::TYPE_BOOL;
+                return self.size == 1
+                    && self.get_type().get_metatype() == type_metatype::TYPE_BOOL;
             }
         }
         false
@@ -1724,12 +1740,21 @@ impl VarnodeBank {
 
     /// Create a free Varnode with a creation index taken by
     /// [`Self::reserve_create_index`].
-    pub fn create_reserved(&mut self, s: int4, m: Address, ct: Rc<Datatype>, index: uint4) -> VarnodeId {
+    pub fn create_reserved(
+        &mut self,
+        s: int4,
+        m: Address,
+        ct: Rc<Datatype>,
+        index: uint4,
+    ) -> VarnodeId {
         let lk = LocKey::new(
             AddrKey::of(&m),
             s,
             flag_class_of(0),
-            SeqKey { uniq: index, ..SeqKey::default() },
+            SeqKey {
+                uniq: index,
+                ..SeqKey::default()
+            },
         );
         let mut vn = Varnode::new(s, m, ct);
         vn.create_index = index;
@@ -1764,7 +1789,10 @@ impl VarnodeBank {
     /// Remove a Varnode from the container and reclaim it (C++ `destroy`).
     pub fn destroy(&mut self, vn: VarnodeId) -> KunaResult<()> {
         self.check_destroy(vn)?;
-        let lk = self.arena[vn].lociter.take().expect("destroy: missing lociter");
+        let lk = self.arena[vn]
+            .lociter
+            .take()
+            .expect("destroy: missing lociter");
         self.loc_tree.remove(&lk);
         if lk.flag_class().raw() != 0 {
             self.def_tree.remove(&DefKey::from(lk));
@@ -1819,13 +1847,18 @@ impl VarnodeBank {
     ) -> KunaResult<VarnodeId> {
         let v = &self.arena[vn];
         if !v.is_free() {
-            return Err(KunaError::lowlevel("Making input out of varnode which is not free"));
+            return Err(KunaError::lowlevel(
+                "Making input out of varnode which is not free",
+            ));
         }
         if v.is_constant() {
             return Err(KunaError::lowlevel("Making input out of constant varnode"));
         }
         // Erase the previous ordering snapshot.
-        let lk = self.arena[vn].lociter.take().expect("set_input: missing lociter");
+        let lk = self.arena[vn]
+            .lociter
+            .take()
+            .expect("set_input: missing lociter");
         self.loc_tree.remove(&lk);
         if lk.flag_class().raw() != 0 {
             self.def_tree.remove(&DefKey::from(lk));
@@ -1854,7 +1887,10 @@ impl VarnodeBank {
         if v.is_constant() {
             return Err(KunaError::lowlevel("Assignment to constant"));
         }
-        let lk = self.arena[vn].lociter.take().expect("set_def: missing lociter");
+        let lk = self.arena[vn]
+            .lociter
+            .take()
+            .expect("set_def: missing lociter");
         self.loc_tree.remove(&lk);
         if lk.flag_class().raw() != 0 {
             self.def_tree.remove(&DefKey::from(lk));
@@ -1867,7 +1903,10 @@ impl VarnodeBank {
 
     /// Convert a Varnode to be \e free (C++ `makeFree`).
     pub fn make_free(&mut self, vn: VarnodeId) {
-        let lk = self.arena[vn].lociter.take().expect("make_free: missing lociter");
+        let lk = self.arena[vn]
+            .lociter
+            .take()
+            .expect("make_free: missing lociter");
         self.loc_tree.remove(&lk);
         if lk.flag_class().raw() != 0 {
             self.def_tree.remove(&DefKey::from(lk));
@@ -1876,7 +1915,10 @@ impl VarnodeBank {
         self.arena[vn].set_free();
 
         // Re-insert as free varnode.
-        let seqnum = SeqKey { uniq: self.arena[vn].create_index, ..SeqKey::default() };
+        let seqnum = SeqKey {
+            uniq: self.arena[vn].create_index,
+            ..SeqKey::default()
+        };
         let lk = lk.with_class(flag_class_of(0), seqnum);
         self.arena[vn].lociter = Some(lk);
         self.loc_tree.insert(lk, vn);
@@ -1989,7 +2031,9 @@ impl VarnodeBank {
     /// Iterate all varnode ids in definition order (C++ `beginDef()`..`endDef()`).
     pub fn iter_def(&self) -> impl Iterator<Item = VarnodeId> + '_ {
         self.def_tree.values().copied().chain(
-            self.loc_tree.iter().filter_map(|(k, &id)| (k.flag_class().raw() == 0).then_some(id))
+            self.loc_tree
+                .iter()
+                .filter_map(|(k, &id)| (k.flag_class().raw() == 0).then_some(id)),
         )
     }
 
@@ -2000,7 +2044,9 @@ impl VarnodeBank {
         start: LocProbe,
         end: LocProbe,
     ) -> impl Iterator<Item = VarnodeId> + '_ {
-        self.loc_tree.range((start.into_start(), end.into_end())).map(|(_, &id)| id)
+        self.loc_tree
+            .range((start.into_start(), end.into_end()))
+            .map(|(_, &id)| id)
     }
 
     /// Find a Varnode given its (loc,size) and the address/seqnum where it is
@@ -2242,7 +2288,10 @@ impl VarnodeBank {
         end: DefProbe,
     ) -> impl DoubleEndedIterator<Item = VarnodeId> + '_ {
         let bounds = (start.into_start(), end.into_end());
-        self.def_tree.range(bounds).map(|(_, &id)| id).chain(self.iter_free_def(bounds))
+        self.def_tree
+            .range(bounds)
+            .map(|(_, &id)| id)
+            .chain(self.iter_free_def(bounds))
     }
 
     /// Free nodes have identical relative order in the location and definition indexes.
@@ -2329,7 +2378,9 @@ impl VarnodeBank {
     /// written AND addressed").
     fn begin_def_flag_addr(&self, fl: uint4, addr: &Address) -> KunaResult<DefProbe> {
         if fl == varnode_flags::written {
-            return Err(KunaError::lowlevel("Cannot get contiguous written AND addressed"));
+            return Err(KunaError::lowlevel(
+                "Cannot get contiguous written AND addressed",
+            ));
         }
         if fl == varnode_flags::input {
             // searchvn{loc=addr} ; lower_bound  (flags default = input)
@@ -2352,7 +2403,9 @@ impl VarnodeBank {
     /// `endDef(uint4 fl,const Address &addr)` (`varnode.cc:1961`).
     fn end_def_flag_addr(&self, fl: uint4, addr: &Address) -> KunaResult<DefProbe> {
         if fl == varnode_flags::written {
-            return Err(KunaError::lowlevel("Cannot get contiguous written AND addressed"));
+            return Err(KunaError::lowlevel(
+                "Cannot get contiguous written AND addressed",
+            ));
         }
         if fl == varnode_flags::input {
             // searchvn{loc=addr, size=1000000} ; lower_bound
@@ -2385,7 +2438,9 @@ impl VarnodeBank {
     /// Find the first input Varnode completely contained within the given range
     /// (C++ `findCoveredInput`).
     pub fn find_covered_input(&self, s: int4, loc: &Address) -> KunaResult<Option<VarnodeId>> {
-        let space = loc.get_space().expect("findCoveredInput on invalid address (C++ UB)");
+        let space = loc
+            .get_space()
+            .expect("findCoveredInput on invalid address (C++ UB)");
         let highest = space.get_highest();
         let end = loc.get_offset().wadd(s as i64 as u64).wsub(1);
 
@@ -2438,7 +2493,10 @@ impl VarnodeBank {
         };
         let vn = &self.arena[vn_id];
         if vn.is_input()
-            && Rc::ptr_eq(vn.get_space(), loc.get_space().expect("covering: invalid addr"))
+            && Rc::ptr_eq(
+                vn.get_space(),
+                loc.get_space().expect("covering: invalid addr"),
+            )
             && vn.get_offset() <= loc.get_offset()
             && vn.get_offset().wadd(vn.size as i64 as u64).wsub(1)
                 >= loc.get_offset().wadd(s as i64 as u64).wsub(1)
@@ -2459,7 +2517,11 @@ impl VarnodeBank {
             }
         }
         // (the `begin` probe is used as an *end* bound to step back one)
-        if let Some((_, &id)) = self.def_tree.range((Bound::Unbounded, begin.into_end())).next_back() {
+        if let Some((_, &id)) = self
+            .def_tree
+            .range((Bound::Unbounded, begin.into_end()))
+            .next_back()
+        {
             let vn = &self.arena[id];
             if vn.is_input() && vn.intersects_range(loc, s) {
                 return Ok(true);
@@ -2472,8 +2534,8 @@ impl VarnodeBank {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use unlace_base::space::{addrspace_flags, AddrSpace, ConstantSpace, UniqueSpace};
     use std::cmp::Ordering;
+    use unlace_base::space::{AddrSpace, ConstantSpace, UniqueSpace, addrspace_flags};
 
     fn dt(size: int4) -> Rc<Datatype> {
         Rc::new(Datatype::new(size, type_metatype::TYPE_UNKNOWN))
@@ -2483,7 +2545,8 @@ mod tests {
     fn build_manager() -> AddrSpaceManager {
         let mut m = AddrSpaceManager::new();
         m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+            .unwrap();
         m.insert_space(Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
             "ram",
@@ -2525,7 +2588,10 @@ mod tests {
         }
         let id = sm.insert(());
         *id_counter += 1;
-        DefOpInfo { id, seqnum: SeqNum::new(pc, uniq) }
+        DefOpInfo {
+            id,
+            seqnum: SeqNum::new(pc, uniq),
+        }
     }
 
     /// A no-op `replace_reads` callback (no equivalent varnode is expected).
@@ -2637,8 +2703,13 @@ mod tests {
             size,
             flag_class_of(fl),
             if fl & (varnode_flags::input | varnode_flags::written) == 0 {
-                SeqKey { uniq: ci, ..SeqKey::of(&seq) }
-            } else { SeqKey::of(&seq) },
+                SeqKey {
+                    uniq: ci,
+                    ..SeqKey::of(&seq)
+                }
+            } else {
+                SeqKey::of(&seq)
+            },
         )
     }
     fn make_def_key(addr: Address, size: int4, fl: uint4, seq: SeqNum, ci: uint4) -> DefKey {
@@ -2647,11 +2718,15 @@ mod tests {
             size,
             flagclass: flag_class_of(fl),
             seqnum: if fl & (varnode_flags::input | varnode_flags::written) == 0 {
-                SeqKey { uniq: ci, ..SeqKey::of(&seq) }
-            } else { SeqKey::of(&seq) },
+                SeqKey {
+                    uniq: ci,
+                    ..SeqKey::of(&seq)
+                }
+            } else {
+                SeqKey::of(&seq)
+            },
         }
     }
-
 
     #[test]
     fn packed_address_order_matches_sentinels_and_signed_space_indexes() {
@@ -2745,7 +2820,9 @@ mod tests {
         ];
         let sizes: [int4; 3] = [1, 4, 8];
         let classes: [uint4; 4] = [
-            0, varnode_flags::input, varnode_flags::written,
+            0,
+            varnode_flags::input,
+            varnode_flags::written,
             varnode_flags::input | varnode_flags::written,
         ];
         let seqs: Vec<SeqNum> = vec![
@@ -2804,7 +2881,10 @@ mod tests {
                 pairs += 1;
             }
         }
-        assert!(pairs > 100_000, "expected a large exhaustive product, got {pairs}");
+        assert!(
+            pairs > 100_000,
+            "expected a large exhaustive product, got {pairs}"
+        );
     }
 
     /// The `(f1-1)<(f2-1)` free-class wrap: input < written < free.
@@ -2891,8 +2971,9 @@ mod tests {
 
         let inputs: Vec<VarnodeId> = bank.iter_loc_flag(4, &addr, varnode_flags::input).collect();
         assert_eq!(inputs, vec![input]);
-        let writtens: Vec<VarnodeId> =
-            bank.iter_loc_flag(4, &addr, varnode_flags::written).collect();
+        let writtens: Vec<VarnodeId> = bank
+            .iter_loc_flag(4, &addr, varnode_flags::written)
+            .collect();
         assert_eq!(writtens, vec![written]);
         let frees: Vec<VarnodeId> = bank.iter_loc_flag(4, &addr, 0).collect();
         assert_eq!(frees, vec![free]);
@@ -2921,7 +3002,11 @@ mod tests {
         let start = Address::new(Rc::clone(&sp), 0x100);
         let end = Address::new(Rc::clone(&sp), 0x110); // exclusive
         let got: Vec<VarnodeId> = bank.iter_loc_addr_range(&start, &end).collect();
-        assert_eq!(got, vec![v100, v104], "[0x100,0x110) excludes the 0x110 element");
+        assert_eq!(
+            got,
+            vec![v100, v104],
+            "[0x100,0x110) excludes the 0x110 element"
+        );
 
         // A window that wraps below `start` runs to the end of the space.
         let wrap_end = Address::new(Rc::clone(&sp), 0x10);
@@ -2959,7 +3044,11 @@ mod tests {
         let actual: Vec<VarnodeId> = bank.iter_loc_addr_range(&start, &end).collect();
 
         assert_eq!(actual, expected);
-        assert_eq!(actual.len(), 3, "both start-address varnodes and the middle are included");
+        assert_eq!(
+            actual.len(),
+            3,
+            "both start-address varnodes and the middle are included"
+        );
         assert!(
             bank.iter_loc_addr_range(&start, &start).next().is_none(),
             "an empty half-open window contains no varnodes"
@@ -2987,7 +3076,6 @@ mod tests {
         let all: Vec<VarnodeId> = bank.iter_def().collect();
         assert_eq!(all, vec![input, written]);
     }
-
 
     #[test]
     fn free_definition_ranges_match_full_tree() {
@@ -3080,7 +3168,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn definition_view_preserves_uniq_only_seqnum_equality() {
         let m = build_manager();
@@ -3143,11 +3230,12 @@ mod tests {
         let kept = bank.create(4, addr.clone(), dt(4));
         bank.set_input(kept, &mut no_replace()).unwrap();
         let orphan = bank.create(4, addr, dt(4));
-        assert!(bank
-            .set_input(orphan, &mut |_, _, _| Err(KunaError::lowlevel(
+        assert!(
+            bank.set_input(orphan, &mut |_, _, _| Err(KunaError::lowlevel(
                 "replacement failed"
             )))
-            .is_err());
+            .is_err()
+        );
         assert!(bank.get(orphan).is_some());
         assert_eq!(bank.num_varnodes(), 1);
         assert_eq!(bank.iter_loc().collect::<Vec<_>>(), vec![kept]);

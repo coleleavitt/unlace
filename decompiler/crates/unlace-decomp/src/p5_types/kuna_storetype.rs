@@ -16,7 +16,7 @@ use std::rc::Rc;
 
 use unlace_base::space::spacetype;
 
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
 
@@ -61,7 +61,10 @@ pub struct Ledger {
 
 impl Ledger {
     pub fn start(&mut self, mode: StoreTypeMode) {
-        *self = Ledger { recording: mode != StoreTypeMode::Off, ..Ledger::default() };
+        *self = Ledger {
+            recording: mode != StoreTypeMode::Off,
+            ..Ledger::default()
+        };
     }
 
     pub fn stop(&mut self) {
@@ -75,8 +78,12 @@ impl Ledger {
             if self.decided.contains(&addr) {
                 continue;
             }
-            let Some((size, first)) = stores.first() else { continue };
-            let agree = stores.iter().all(|(s, t)| s == size && type_key(t) == type_key(first));
+            let Some((size, first)) = stores.first() else {
+                continue;
+            };
+            let agree = stores
+                .iter()
+                .all(|(s, t)| s == size && type_key(t) == type_key(first));
             if std::env::var_os("KUNA_STORETYPE_TRACE").is_some() {
                 let keys: Vec<_> = stores.iter().map(|(s, t)| (s, type_key(t).1)).collect();
                 eprintln!("[storetype] {addr:#x} agree={agree} {keys:?}");
@@ -91,12 +98,20 @@ impl Ledger {
 
     /// The functions that refer to any of `globals`.
     pub fn readers(&self, globals: &[u64]) -> BTreeSet<u64> {
-        globals.iter().filter_map(|g| self.refs.get(g)).flatten().copied().collect()
+        globals
+            .iter()
+            .filter_map(|g| self.refs.get(g))
+            .flatten()
+            .copied()
+            .collect()
     }
 }
 
 fn type_key(ty: &Datatype) -> (type_metatype, String) {
-    let pointee = ty.get_ptr_to().map(|p| p.get_name().to_string()).unwrap_or_default();
+    let pointee = ty
+        .get_ptr_to()
+        .map(|p| p.get_name().to_string())
+        .unwrap_or_default();
     (ty.get_metatype(), format!("{}*{pointee}", ty.get_name()))
 }
 
@@ -104,9 +119,13 @@ fn qualifies(ty: &Datatype, mode: StoreTypeMode) -> bool {
     if ty.get_metatype() != type_metatype::TYPE_PTR {
         return false;
     }
-    let Some(pointee) = ty.get_ptr_to() else { return false };
-    if !matches!(pointee.get_metatype(), type_metatype::TYPE_STRUCT | type_metatype::TYPE_UNION)
-        || pointee.is_incomplete()
+    let Some(pointee) = ty.get_ptr_to() else {
+        return false;
+    };
+    if !matches!(
+        pointee.get_metatype(),
+        type_metatype::TYPE_STRUCT | type_metatype::TYPE_UNION
+    ) || pointee.is_incomplete()
     {
         return false;
     }
@@ -114,7 +133,9 @@ fn qualifies(ty: &Datatype, mode: StoreTypeMode) -> bool {
     match mode {
         StoreTypeMode::Off => false,
         StoreTypeMode::Uefi => name.starts_with("EFI_"),
-        StoreTypeMode::All => !name.is_empty() && !name.starts_with("struct_") && !name.starts_with("anon_"),
+        StoreTypeMode::All => {
+            !name.is_empty() && !name.starts_with("struct_") && !name.starts_with("anon_")
+        }
     }
 }
 
@@ -125,7 +146,9 @@ pub fn record(ledger: &mut Ledger, data: &Funcdata) {
     }
     let func = data.get_address().get_offset();
     for id in data.vbank().iter_loc() {
-        let Some(v) = data.vbank().get(id) else { continue };
+        let Some(v) = data.vbank().get(id) else {
+            continue;
+        };
         if !v.is_persist() || v.get_space().get_type() != spacetype::IPTR_PROCESSOR {
             continue;
         }
@@ -143,7 +166,11 @@ pub fn record(ledger: &mut Ledger, data: &Funcdata) {
                 _ => true,
             });
         if stored {
-            ledger.stores.entry(addr).or_default().push((v.get_size(), Rc::clone(v.get_type())));
+            ledger
+                .stores
+                .entry(addr)
+                .or_default()
+                .push((v.get_size(), Rc::clone(v.get_type())));
         }
     }
 }

@@ -4,8 +4,8 @@ use std::collections::BTreeSet;
 use std::io::Read;
 use std::path::Path;
 
-use unlace_slacomp::slgh_compile::SleighCompile;
 use sha2::{Digest, Sha256};
+use unlace_slacomp::slgh_compile::SleighCompile;
 
 const ORACLE: &str = include_str!("golden/compiler.sha256");
 

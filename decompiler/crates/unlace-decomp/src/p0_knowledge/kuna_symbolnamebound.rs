@@ -155,7 +155,6 @@ const SUFFIX_LEN: usize = SUFFIX_TAG.len() + 16;
 /// fold stays readable rather than becoming a bare hash.
 const SYNTH_PREFIX_LEN: usize = 24;
 
-
 /// FNV-1a 64, constants written out.
 ///
 /// The folded spelling of a symbol name must be a function of the input bytes
@@ -194,7 +193,11 @@ fn floor_char_boundary(s: &str, i: usize) -> usize {
 fn fold_component(lead: &str, hashed: &[u8]) -> String {
     let mut out = String::with_capacity(SYNTH_PREFIX_LEN + SUFFIX_LEN);
     for &b in lead.as_bytes().iter().take(SYNTH_PREFIX_LEN) {
-        out.push(if b.is_ascii_alphanumeric() || b == b'_' { b as char } else { '_' });
+        out.push(if b.is_ascii_alphanumeric() || b == b'_' {
+            b as char
+        } else {
+            '_'
+        });
     }
     out.push_str(SUFFIX_TAG);
     out.push_str(&format!("{:016x}", fnv1a64(hashed)));
@@ -235,7 +238,9 @@ fn bound_scope_path_capped<'a>(fullname: &'a str, delim: &str, cap: usize) -> Co
     let mut worst_len = 0usize;
     let mut mark = 0usize;
     loop {
-        let Some(rel) = fullname[mark..].find(delim) else { break };
+        let Some(rel) = fullname[mark..].find(delim) else {
+            break;
+        };
         let end = mark + rel;
         count += 1;
         worst_len = worst_len.max(end - mark);
@@ -250,7 +255,9 @@ fn bound_scope_path_capped<'a>(fullname: &'a str, delim: &str, cap: usize) -> Co
     let mut ranges: Vec<std::ops::Range<usize>> = Vec::with_capacity(count);
     let mut mark = 0usize;
     loop {
-        let Some(rel) = fullname[mark..].find(delim) else { break };
+        let Some(rel) = fullname[mark..].find(delim) else {
+            break;
+        };
         let end = mark + rel;
         ranges.push(mark..end);
         mark = end + delim.len();
@@ -262,7 +269,10 @@ fn bound_scope_path_capped<'a>(fullname: &'a str, delim: &str, cap: usize) -> Co
     let verbatim = if count > cap { cap - 1 } else { count };
     let mut kept: Vec<Kept<'a>> = Vec::with_capacity(verbatim + 1);
     for r in ranges.iter().take(verbatim) {
-        kept.push(Kept { src: r.clone(), text: Cow::Borrowed(&fullname[r.clone()]) });
+        kept.push(Kept {
+            src: r.clone(),
+            text: Cow::Borrowed(&fullname[r.clone()]),
+        });
     }
     if count > cap {
         let from = ranges[verbatim].start;
@@ -307,7 +317,8 @@ fn bound_scope_path_capped<'a>(fullname: &'a str, delim: &str, cap: usize) -> Co
         kept.splice(0..take, std::iter::once(folded));
     }
 
-    let mut out = String::with_capacity(scope_path_len(&kept, delim) + (fullname.len() - basename_at));
+    let mut out =
+        String::with_capacity(scope_path_len(&kept, delim) + (fullname.len() - basename_at));
     for k in &kept {
         out.push_str(&k.text);
         out.push_str(delim);
@@ -355,7 +366,10 @@ mod tests {
             "a::::b",
             "::absolute",
         ] {
-            assert!(matches!(bound_scope_path(n, "::"), Cow::Borrowed(_)), "{n} must borrow");
+            assert!(
+                matches!(bound_scope_path(n, "::"), Cow::Borrowed(_)),
+                "{n} must borrow"
+            );
         }
     }
 
@@ -370,12 +384,19 @@ mod tests {
         let comps: Vec<&str> = out.split("::").collect();
         assert_eq!(comps.len(), 9, "8 scope components + the base name: {out}");
         assert_eq!(comps[8], "z", "the base name is verbatim");
-        assert!(comps[7].starts_with("a__x"), "the fold keeps a readable lead: {}", comps[7]);
+        assert!(
+            comps[7].starts_with("a__x"),
+            "the fold keeps a readable lead: {}",
+            comps[7]
+        );
 
         // Deterministic across calls, and idempotent (the read path re-bounds
         // a name the listing already renders folded).
         assert_eq!(at8(&deep), out);
-        assert!(matches!(bound_scope_path_capped(&out, "::", 8), Cow::Borrowed(_)));
+        assert!(matches!(
+            bound_scope_path_capped(&out, "::", 8),
+            Cow::Borrowed(_)
+        ));
         assert_eq!(at8(&out), out);
 
         // Distinct originals stay distinct.
@@ -407,7 +428,10 @@ mod tests {
         // A 4,000-byte BASE name (the real 928-byte D-language symbol shape,
         // exaggerated) is left exactly alone -- it nests no Scope.
         let basename_only = format!("ns::{long}");
-        assert!(matches!(bound_scope_path(&basename_only, "::"), Cow::Borrowed(_)));
+        assert!(matches!(
+            bound_scope_path(&basename_only, "::"),
+            Cow::Borrowed(_)
+        ));
     }
 
     /// The total-scope-path bound folds from the head and converges.
@@ -427,7 +451,10 @@ mod tests {
         for c in path.split("::") {
             assert!(c.len() <= MAX_COMPONENT_LEN);
         }
-        assert!(matches!(bound_scope_path_capped(&out, "::", 128), Cow::Borrowed(_)), "idempotent");
+        assert!(
+            matches!(bound_scope_path_capped(&out, "::", 128), Cow::Borrowed(_)),
+            "idempotent"
+        );
     }
 
     /// A folded component can never re-split, re-nest, or reach emitted C as
@@ -440,12 +467,22 @@ mod tests {
         assert_eq!(comps.len(), 3, "2 scope components + base: {out}");
         for c in &comps[..2] {
             assert!(
-                c.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'(' || b == b')' || b == b' '),
+                c.bytes().all(|b| b.is_ascii_alphanumeric()
+                    || b == b'_'
+                    || b == b'('
+                    || b == b')'
+                    || b == b' '),
                 "{c}"
             );
         }
         // The SYNTHETIC one is strictly identifier-safe.
-        assert!(comps[1].bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_'), "{}", comps[1]);
+        assert!(
+            comps[1]
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'_'),
+            "{}",
+            comps[1]
+        );
     }
 
     /// FNV-1a 64 against its published vectors -- the spelling of a folded name
@@ -465,6 +502,9 @@ mod tests {
         let name = format!("{comp}::{comp}::{comp}::{comp}::{comp}::base");
         let out = bound_scope_path_capped(&name, "::", 4);
         assert!(out.ends_with("::base"));
-        assert!(matches!(bound_scope_path_capped(&out, "::", 4), Cow::Borrowed(_)));
+        assert!(matches!(
+            bound_scope_path_capped(&out, "::", 4),
+            Cow::Borrowed(_)
+        ));
     }
 }

@@ -112,15 +112,15 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::rc::Rc;
 
-use unlace_base::space::{spacetype, AddrSpace};
+use smallvec::SmallVec;
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_decomp::kuna_fasthash::FxBuildHasher;
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
-use smallvec::SmallVec;
 
 use super::kuna_pcform::Formed;
 use super::kuna_poolref::PoolImage;
-use super::xrefs::{in_range, looks_like_address, FullOp, XrefKind};
+use super::xrefs::{FullOp, XrefKind, in_range, looks_like_address};
 
 /// How many instructions a carried value may reach past the one that formed
 /// it. Compilers schedule the two halves of a pair a few instructions apart
@@ -200,7 +200,10 @@ impl<'a> Machine<'a> {
         }
         let pc_only = file.format() == object::BinaryFormat::Elf
             && file.kind() == object::ObjectKind::Dynamic
-            && !matches!(file.architecture(), object::Architecture::X86_64 | object::Architecture::Aarch64);
+            && !matches!(
+                file.architecture(),
+                object::Architecture::X86_64 | object::Architecture::Aarch64
+            );
         Some(Machine {
             big_endian: reg.is_big_endian(),
             reg,
@@ -218,7 +221,10 @@ impl<'a> Machine<'a> {
     /// Is the instruction at `vma` an AArch64 `adrp`? Read off its encoding,
     /// since `adr` to a page-aligned label lifts to the same `COPY`.
     fn is_adrp(&self, vma: u64) -> bool {
-        self.code.as_ref().and_then(|c| c.bytes_at(vma, 4)).is_some_and(|b| b[3] & 0x9f == 0x90)
+        self.code
+            .as_ref()
+            .and_then(|c| c.bytes_at(vma, 4))
+            .is_some_and(|b| b[3] & 0x9f == 0x90)
     }
 
     fn is_register(&self, vn: &VarnodeData) -> bool {
@@ -242,7 +248,10 @@ impl<'a> Machine<'a> {
 /// An AArch64 image's executable sections, which an `adrp` is read from.
 fn code<'a>(file: &object::File<'a>) -> Option<PoolImage<'a>> {
     use object::{Object, ObjectSection};
-    if !matches!(file.architecture(), object::Architecture::Aarch64 | object::Architecture::Aarch64_Ilp32) {
+    if !matches!(
+        file.architecture(),
+        object::Architecture::Aarch64 | object::Architecture::Aarch64_Ilp32
+    ) {
         return None;
     }
     let ranges = file
@@ -251,7 +260,11 @@ fn code<'a>(file: &object::File<'a>) -> Option<PoolImage<'a>> {
         .filter_map(|sec| {
             let data = sec.data().ok().filter(|d| !d.is_empty())?;
             let lo = sec.address();
-            Some((lo, lo.saturating_add(sec.size().min(data.len() as u64)), data))
+            Some((
+                lo,
+                lo.saturating_add(sec.size().min(data.len() as u64)),
+                data,
+            ))
         })
         .collect();
     PoolImage::from_ranges(ranges, 8, true)
@@ -339,7 +352,14 @@ struct Val {
 impl Val {
     /// The word a load read from the reference `at`.
     fn loaded(at: &Val) -> Val {
-        Val { composed: None, own: false, formed: None, base: None, loaded: true, ..*at }
+        Val {
+            composed: None,
+            own: false,
+            formed: None,
+            base: None,
+            loaded: true,
+            ..*at
+        }
     }
 }
 
@@ -361,13 +381,18 @@ fn sign_extend(v: u64, size: u32) -> u64 {
 }
 
 fn is_constant(vn: &VarnodeData) -> bool {
-    vn.space.as_ref().is_some_and(|s| s.get_type() == spacetype::IPTR_CONSTANT)
+    vn.space
+        .as_ref()
+        .is_some_and(|s| s.get_type() == spacetype::IPTR_CONSTANT)
 }
 
 fn is_constant_or_temp(vn: &VarnodeData) -> bool {
-    vn.space
-        .as_ref()
-        .is_some_and(|s| matches!(s.get_type(), spacetype::IPTR_CONSTANT | spacetype::IPTR_INTERNAL))
+    vn.space.as_ref().is_some_and(|s| {
+        matches!(
+            s.get_type(),
+            spacetype::IPTR_CONSTANT | spacetype::IPTR_INTERNAL
+        )
+    })
 }
 
 fn overlaps(a: (u64, u32), b: (u64, u32)) -> bool {
@@ -486,7 +511,10 @@ fn constant(vma: u64, formed: &Formed, vn: &VarnodeData) -> Val {
 /// conditional.
 fn branches_within(op: &FullOp, fall: u64) -> bool {
     matches!(op.opcode, OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH)
-        && op.ins.first().is_some_and(|vn| is_constant(vn) || vn.offset == fall)
+        && op
+            .ins
+            .first()
+            .is_some_and(|vn| is_constant(vn) || vn.offset == fall)
 }
 
 /// One instruction's registers and temporaries while it is evaluated.
@@ -524,7 +552,12 @@ impl Frame {
                     }
                     let shift = if m.big_endian { end - hi } else { lo - o };
                     let v = val.v.checked_shr((8 * shift) as u32).unwrap_or(0) & mask(vn.size);
-                    Some(Val { v, composed: None, addr: val.addr && shift == 0 && vn.size >= ADDR_BYTES, ..val })
+                    Some(Val {
+                        v,
+                        composed: None,
+                        addr: val.addr && shift == 0 && vn.size >= ADDR_BYTES,
+                        ..val
+                    })
                 })
             }
             _ => None,
@@ -532,8 +565,13 @@ impl Frame {
     }
 
     fn write(&mut self, m: &Machine, vn: &VarnodeData, val: Option<Val>) {
-        let Some(space) = vn.space.as_ref() else { return };
-        let val = val.map(|v| Val { v: v.v & mask(vn.size), ..v });
+        let Some(space) = vn.space.as_ref() else {
+            return;
+        };
+        let val = val.map(|v| Val {
+            v: v.v & mask(vn.size),
+            ..v
+        });
         let span = (vn.offset, vn.size);
         if space.get_type() == spacetype::IPTR_INTERNAL {
             self.temps.retain(|&(o, s, _)| !overlaps((o, s), span));
@@ -559,15 +597,26 @@ fn fold(op: &FullOp, a: Option<Val>, b: Option<Val>) -> Option<Val> {
     }
     let resized = out.size != op.ins.first()?.size;
     let unary = |v: u64| {
-        Some(Val { v: v & mask(out.size), composed: if resized { None } else { a.composed }, own: false, ..a })
+        Some(Val {
+            v: v & mask(out.size),
+            composed: if resized { None } else { a.composed },
+            own: false,
+            ..a
+        })
     };
     match op.opcode {
         OpCode::CPUI_COPY | OpCode::CPUI_INT_ZEXT | OpCode::CPUI_CAST => unary(a.v),
         OpCode::CPUI_INT_SEXT => unary(sign_extend(a.v, op.ins.first()?.size)),
         OpCode::CPUI_SUBPIECE => {
             let by = b?.v;
-            let low = unary(a.v.checked_shr(u32::try_from(by.checked_mul(8)?).ok()?).unwrap_or(0))?;
-            Some(Val { addr: a.addr && by == 0 && out.size >= ADDR_BYTES, ..low })
+            let low = unary(
+                a.v.checked_shr(u32::try_from(by.checked_mul(8)?).ok()?)
+                    .unwrap_or(0),
+            )?;
+            Some(Val {
+                addr: a.addr && by == 0 && out.size >= ADDR_BYTES,
+                ..low
+            })
         }
         OpCode::CPUI_INT_ADD
         | OpCode::CPUI_INT_SUB
@@ -600,7 +649,11 @@ fn fold(op: &FullOp, a: Option<Val>, b: Option<Val>) -> Option<Val> {
                 _ => None,
             };
             let input = if a.carried { a } else { b };
-            let (formed, base) = if moved { (input.formed, input.base) } else { (None, input.formed.or(input.base)) };
+            let (formed, base) = if moved {
+                (input.formed, input.base)
+            } else {
+                (None, input.formed.or(input.base))
+            };
             let (pa, pb) = (a.addr || a.own, b.addr || b.own);
             let addr = match op.opcode {
                 OpCode::CPUI_INT_ADD => pa != pb,
@@ -609,7 +662,19 @@ fn fold(op: &FullOp, a: Option<Val>, b: Option<Val>) -> Option<Val> {
             };
             let (age, pc) = (a.age.max(b.age), a.pc || b.pc);
             let bias = op.opcode == OpCode::CPUI_INT_SUB && a.carried && !b.carried && !moved;
-            Some(Val { v, carried, composed, age, pc, addr, own: false, formed, base, loaded: false, bias })
+            Some(Val {
+                v,
+                carried,
+                composed,
+                age,
+                pc,
+                addr,
+                own: false,
+                formed,
+                base,
+                loaded: false,
+                bias,
+            })
         }
         _ => None,
     }
@@ -642,7 +707,8 @@ impl Tracker {
         self.pending.clear();
         self.found.retain(|f| !removed.contains(&f.from));
         for f in &mut self.found {
-            f.stepped.retain(|t| t.last().is_none_or(|at| !removed.contains(at)));
+            f.stepped
+                .retain(|t| t.last().is_none_or(|at| !removed.contains(at)));
         }
     }
 
@@ -651,15 +717,32 @@ impl Tracker {
     /// on to its fall-through.
     pub(super) fn step(&mut self, m: &Machine, insn: Insn) {
         self.targets.extend(insn.branches.iter().copied());
-        let carry = if self.pending.is_empty() { None } else { self.pending.remove(&insn.vma) };
+        let carry = if self.pending.is_empty() {
+            None
+        } else {
+            self.pending.remove(&insn.vma)
+        };
         if carry.is_some() || has_seed(m, &insn) {
             self.evaluate(m, &insn, carry.unwrap_or_default());
         }
     }
 
     fn evaluate(&mut self, m: &Machine, insn: &Insn, carry: Carry) {
-        let Tracker { pending, found, scratch: frame, hits, .. } = self;
-        let &Insn { vma, ops, fall, calls, formed, .. } = insn;
+        let Tracker {
+            pending,
+            found,
+            scratch: frame,
+            hits,
+            ..
+        } = self;
+        let &Insn {
+            vma,
+            ops,
+            fall,
+            calls,
+            formed,
+            ..
+        } = insn;
         frame.vma = vma;
         frame.formed = formed;
         frame.regs.clear();
@@ -684,10 +767,14 @@ impl Tracker {
         }));
         let first = found.len();
         let base_of = |found: &[Found], val: &Val, to: u64| {
-            val.formed.or(val.base).filter(|&i| i < first && found[i].to != to)
+            val.formed
+                .or(val.base)
+                .filter(|&i| i < first && found[i].to != to)
         };
         let pin = |found: &mut [Found], val: &Val| {
-            let at_page = val.formed.filter(|&i| i < first && found[i].page && found[i].to == val.v);
+            let at_page = val
+                .formed
+                .filter(|&i| i < first && found[i].page && found[i].to == val.v);
             if let Some(i) = at_page.filter(|_| val.carried && !val.loaded) {
                 found[i].pinned = true;
             }
@@ -696,7 +783,11 @@ impl Tracker {
         let mut conditional = false;
         let mut joined = false;
         for op in ops {
-            let from_data = || op.ins.first().is_some_and(|vn| Some(vn.offset) == m.data_index);
+            let from_data = || {
+                op.ins
+                    .first()
+                    .is_some_and(|vn| Some(vn.offset) == m.data_index)
+            };
             match op.opcode {
                 OpCode::CPUI_LOAD | OpCode::CPUI_STORE => {
                     let load = op.opcode == OpCode::CPUI_LOAD;
@@ -705,13 +796,30 @@ impl Tracker {
                         if from_data() {
                             pin(found, &a);
                         }
-                        if a.carried && !a.loaded && !joined && from_data() && m.admits(a.v, a.addr) {
-                            let kind = if load { XrefKind::Read } else { XrefKind::Write };
+                        if a.carried && !a.loaded && !joined && from_data() && m.admits(a.v, a.addr)
+                        {
+                            let kind = if load {
+                                XrefKind::Read
+                            } else {
+                                XrefKind::Write
+                            };
                             let base = base_of(found, &a, a.v);
-                            hits.push(Hit { to: a.v, kind, age: a.age, base, page: false });
+                            hits.push(Hit {
+                                to: a.v,
+                                kind,
+                                age: a.age,
+                                base,
+                                page: false,
+                            });
                             let width = op.out.as_ref().map(|o| o.size).filter(|_| load);
                             if let Some(t) = width.and_then(|w| m.pool?.follow(a.v, w, m.mapped)) {
-                                hits.push(Hit { to: t, kind: XrefKind::Data, age: a.age, base: None, page: false });
+                                hits.push(Hit {
+                                    to: t,
+                                    kind: XrefKind::Data,
+                                    age: a.age,
+                                    base: None,
+                                    page: false,
+                                });
                             }
                             word = (width == Some(m.ptr)).then(|| Val::loaded(&a));
                         }
@@ -724,7 +832,13 @@ impl Tracker {
                     let dest = op.ins.first().filter(|_| op.opcode == OpCode::CPUI_CALLIND);
                     if let Some(d) = dest.and_then(|vn| frame.read(m, vn)) {
                         if d.loaded && d.carried && !joined {
-                            hits.push(Hit { to: d.v, kind: XrefKind::Call, age: d.age, base: None, page: false });
+                            hits.push(Hit {
+                                to: d.v,
+                                kind: XrefKind::Call,
+                                age: d.age,
+                                base: None,
+                                page: false,
+                            });
                         }
                     }
                     if let Some(out) = &op.out {
@@ -746,8 +860,14 @@ impl Tracker {
                     let a = op.ins.first().and_then(|vn| frame.read(m, vn));
                     let b = op.ins.get(1).and_then(|vn| frame.read(m, vn));
                     let mut val = fold(op, a, b).or_else(|| {
-                        let v = m.slot(op.ins.first().filter(|_| op.opcode == OpCode::CPUI_COPY)?)?;
-                        Some(Val::loaded(&Val { v, pc: false, addr: false, ..constant(vma, &formed, &op.ins[0]) }))
+                        let v =
+                            m.slot(op.ins.first().filter(|_| op.opcode == OpCode::CPUI_COPY)?)?;
+                        Some(Val::loaded(&Val {
+                            v,
+                            pc: false,
+                            addr: false,
+                            ..constant(vma, &formed, &op.ins[0])
+                        }))
                     });
                     if let Some(v) = val.as_mut() {
                         if op.opcode == OpCode::CPUI_INT_ADD {
@@ -762,7 +882,13 @@ impl Tracker {
                             && m.admits(v.v, v.addr)
                         {
                             let base = base_of(found, v, v.v);
-                            hits.push(Hit { to: v.v, kind: XrefKind::Data, age: v.age, base, page: false });
+                            hits.push(Hit {
+                                to: v.v,
+                                kind: XrefKind::Data,
+                                age: v.age,
+                                base,
+                                page: false,
+                            });
                             v.formed = Some(first + hits.len() - 1);
                         } else if !v.carried
                             && op.opcode == OpCode::CPUI_COPY
@@ -772,7 +898,13 @@ impl Tracker {
                             && m.admits(v.v, v.addr)
                             && m.is_adrp(vma)
                         {
-                            hits.push(Hit { to: v.v, kind: XrefKind::Data, age: 0, base: None, page: true });
+                            hits.push(Hit {
+                                to: v.v,
+                                kind: XrefKind::Data,
+                                age: 0,
+                                base: None,
+                                page: true,
+                            });
                             v.formed = Some(first + hits.len() - 1);
                         }
                     }
@@ -783,7 +915,10 @@ impl Tracker {
 
         for (k, h) in hits.iter().enumerate() {
             let reach = usize::from(h.age).saturating_sub(1).min(carry.trail.len());
-            let mut trail: Trail = carry.trail[carry.trail.len() - reach..].iter().copied().collect();
+            let mut trail: Trail = carry.trail[carry.trail.len() - reach..]
+                .iter()
+                .copied()
+                .collect();
             trail.push(vma);
             if let Some(i) = h.base {
                 if found[i].page || !frame.regs.iter().any(|&(_, _, v)| v.formed == Some(i)) {
@@ -791,9 +926,21 @@ impl Tracker {
                 }
             }
             let writeback = h.kind == XrefKind::Data
-                && hits.iter().enumerate().any(|(j, o)| j != k && o.to == h.to && o.kind != XrefKind::Data);
+                && hits
+                    .iter()
+                    .enumerate()
+                    .any(|(j, o)| j != k && o.to == h.to && o.kind != XrefKind::Data);
             let stepped = Vec::new();
-            found.push(Found { from: vma, to: h.to, kind: h.kind, trail, writeback, stepped, page: h.page, pinned: false });
+            found.push(Found {
+                from: vma,
+                to: h.to,
+                kind: h.kind,
+                trail,
+                writeback,
+                stepped,
+                page: h.page,
+                pinned: false,
+            });
         }
 
         let Some(next) = fall else { return };
@@ -805,7 +952,16 @@ impl Tracker {
                 && !(conditional && frame.written.iter().any(|&w| overlaps(w, (off, size))));
             if keep {
                 let age = if v.carried { v.age } else { 0 };
-                held.push(Held { off, size, v: v.v, age, pc: v.pc, addr: v.addr, formed: v.formed, loaded: v.loaded });
+                held.push(Held {
+                    off,
+                    size,
+                    v: v.v,
+                    age,
+                    pc: v.pc,
+                    addr: v.addr,
+                    formed: v.formed,
+                    loaded: v.loaded,
+                });
             }
         }
         if held.is_empty() {
@@ -824,10 +980,16 @@ impl Tracker {
     /// The references whose every carrying instruction nothing else enters, as
     /// `(from, to, kind)`.
     pub(super) fn finish(&self, funcs: &BTreeSet<u64>) -> Vec<(u64, u64, XrefKind)> {
-        let holds = |trail: &[u64]| trail.iter().all(|at| !self.targets.contains(at) && !funcs.contains(at));
+        let holds = |trail: &[u64]| {
+            trail
+                .iter()
+                .all(|at| !self.targets.contains(at) && !funcs.contains(at))
+        };
         self.found
             .iter()
-            .filter(|f| !f.page && !f.writeback && holds(&f.trail) && !f.stepped.iter().any(|t| holds(t)))
+            .filter(|f| {
+                !f.page && !f.writeback && holds(&f.trail) && !f.stepped.iter().any(|t| holds(t))
+            })
             .map(|f| (f.from, f.to, f.kind))
             .collect()
     }
@@ -837,7 +999,11 @@ impl Tracker {
     /// offset 0: the page was a step to it, and [`super::xrefs`]' own `Data` row
     /// for it names whatever datum the page happens to start with.
     pub(super) fn superseded(&self, funcs: &BTreeSet<u64>) -> Vec<(u64, u64)> {
-        let holds = |trail: &[u64]| trail.iter().all(|at| !self.targets.contains(at) && !funcs.contains(at));
+        let holds = |trail: &[u64]| {
+            trail
+                .iter()
+                .all(|at| !self.targets.contains(at) && !funcs.contains(at))
+        };
         self.found
             .iter()
             .filter(|f| f.page && !f.pinned && f.stepped.iter().any(|t| holds(t)))
@@ -861,7 +1027,11 @@ mod tests {
     }
 
     fn vn(space: &Rc<AddrSpace>, offset: u64, size: u32) -> VarnodeData {
-        VarnodeData { space: Some(Rc::clone(space)), offset, size }
+        VarnodeData {
+            space: Some(Rc::clone(space)),
+            offset,
+            size,
+        }
     }
 
     fn op(opcode: OpCode, out: Option<VarnodeData>, ins: Vec<VarnodeData>) -> FullOp {
@@ -883,7 +1053,12 @@ mod tests {
     impl Isa {
         fn new() -> Self {
             let (c, r, u) = spaces();
-            Isa { c, r, u, m: Rc::new(AddrSpace::new_for_decode(spacetype::IPTR_PROCESSOR)) }
+            Isa {
+                c,
+                r,
+                u,
+                m: Rc::new(AddrSpace::new_for_decode(spacetype::IPTR_PROCESSOR)),
+            }
         }
         fn machine(&self, pc_only: bool) -> Machine<'static> {
             Machine {
@@ -914,33 +1089,61 @@ mod tests {
         }
         /// `xD = xN + imm`.
         fn add(&self, d: u64, n: u64, imm: u64) -> Vec<FullOp> {
-            vec![op(OpCode::CPUI_INT_ADD, Some(self.x(d)), vec![self.x(n), self.k(imm)])]
+            vec![op(
+                OpCode::CPUI_INT_ADD,
+                Some(self.x(d)),
+                vec![self.x(n), self.k(imm)],
+            )]
         }
         /// `xD = *(xN + imm)`.
         fn load(&self, d: u64, n: u64, imm: u64) -> Vec<FullOp> {
             vec![
-                op(OpCode::CPUI_INT_ADD, Some(self.t(0)), vec![self.x(n), self.k(imm)]),
-                op(OpCode::CPUI_LOAD, Some(self.x(d)), vec![self.k(2), self.t(0)]),
+                op(
+                    OpCode::CPUI_INT_ADD,
+                    Some(self.t(0)),
+                    vec![self.x(n), self.k(imm)],
+                ),
+                op(
+                    OpCode::CPUI_LOAD,
+                    Some(self.x(d)),
+                    vec![self.k(2), self.t(0)],
+                ),
             ]
         }
         /// `*(xN + imm) = xS`.
         fn store(&self, s: u64, n: u64, imm: u64) -> Vec<FullOp> {
             vec![
-                op(OpCode::CPUI_INT_ADD, Some(self.t(0)), vec![self.x(n), self.k(imm)]),
-                op(OpCode::CPUI_STORE, None, vec![self.k(2), self.t(0), self.x(s)]),
+                op(
+                    OpCode::CPUI_INT_ADD,
+                    Some(self.t(0)),
+                    vec![self.x(n), self.k(imm)],
+                ),
+                op(
+                    OpCode::CPUI_STORE,
+                    None,
+                    vec![self.k(2), self.t(0), self.x(s)],
+                ),
             ]
         }
         /// `bl target`, writing the link register `x30` first.
         fn call(&self, at: u64) -> Vec<FullOp> {
             vec![
-                op(OpCode::CPUI_INT_ADD, Some(self.x(30)), vec![self.k(at), self.k(4)]),
+                op(
+                    OpCode::CPUI_INT_ADD,
+                    Some(self.x(30)),
+                    vec![self.k(at), self.k(4)],
+                ),
                 op(OpCode::CPUI_CALL, None, vec![self.k(0x30000)]),
             ]
         }
         /// `blr xN` at `at`.
         fn call_reg(&self, at: u64, n: u64) -> Vec<FullOp> {
             vec![
-                op(OpCode::CPUI_INT_ADD, Some(self.x(30)), vec![self.k(at), self.k(4)]),
+                op(
+                    OpCode::CPUI_INT_ADD,
+                    Some(self.x(30)),
+                    vec![self.k(at), self.k(4)],
+                ),
                 op(OpCode::CPUI_CALLIND, None, vec![self.x(n)]),
             ]
         }
@@ -959,8 +1162,20 @@ mod tests {
         }
         for (i, ops) in insns.iter().enumerate() {
             let vma = 0x20000 + 4 * i as u64;
-            let calls = ops.iter().any(|op| matches!(op.opcode, OpCode::CPUI_CALL | OpCode::CPUI_CALLIND));
-            t.step(m, Insn { vma, ops, fall: Some(vma + 4), branches: &[], calls, formed: Formed::default() });
+            let calls = ops
+                .iter()
+                .any(|op| matches!(op.opcode, OpCode::CPUI_CALL | OpCode::CPUI_CALLIND));
+            t.step(
+                m,
+                Insn {
+                    vma,
+                    ops,
+                    fall: Some(vma + 4),
+                    branches: &[],
+                    calls,
+                    formed: Formed::default(),
+                },
+            );
         }
         let mut out = t.finish(&BTreeSet::from([0x20000]));
         out.sort_unstable();
@@ -972,13 +1187,30 @@ mod tests {
 
     /// [`walk`] over [`LOW`] from 0x1000, each instruction with the value it
     /// folded from its own address ([`super::super::kuna_pcform`]), if any.
-    fn walk_low(isa: &Isa, pc_only: bool, insns: &[(Vec<FullOp>, Option<u64>)]) -> Vec<(u64, u64, XrefKind)> {
-        let m = Machine { mapped: &LOW, ..isa.machine(pc_only) };
+    fn walk_low(
+        isa: &Isa,
+        pc_only: bool,
+        insns: &[(Vec<FullOp>, Option<u64>)],
+    ) -> Vec<(u64, u64, XrefKind)> {
+        let m = Machine {
+            mapped: &LOW,
+            ..isa.machine(pc_only)
+        };
         let mut t = Tracker::default();
         for (i, (ops, formed)) in insns.iter().enumerate() {
             let vma = 0x1000 + 4 * i as u64;
             let formed = formed.map_or_else(Formed::default, Formed::one);
-            t.step(&m, Insn { vma, ops, fall: Some(vma + 4), branches: &[], calls: false, formed });
+            t.step(
+                &m,
+                Insn {
+                    vma,
+                    ops,
+                    fall: Some(vma + 4),
+                    branches: &[],
+                    calls: false,
+                    formed,
+                },
+            );
         }
         let mut out = t.finish(&BTreeSet::from([0x1000]));
         out.sort_unstable();
@@ -992,7 +1224,10 @@ mod tests {
     fn a_pc_relative_page_below_the_floor_forms_an_address() {
         let isa = Isa::new();
         let pair = |formed| vec![(isa.set(0, 0), formed), (isa.add(0, 0, 0x378), None)];
-        assert_eq!(walk_low(&isa, false, &pair(Some(0))), vec![(0x1004, 0x378, XrefKind::Data)]);
+        assert_eq!(
+            walk_low(&isa, false, &pair(Some(0))),
+            vec![(0x1004, 0x378, XrefKind::Data)]
+        );
         assert!(walk_low(&isa, false, &pair(None)).is_empty());
     }
 
@@ -1002,10 +1237,22 @@ mod tests {
     fn an_auipc_pair_below_the_floor_forms_an_address() {
         let isa = Isa::new();
         let auipc = vec![
-            op(OpCode::CPUI_INT_LEFT, Some(isa.t(0)), vec![isa.k(0), vn(&isa.c, 0xc, 4)]),
-            op(OpCode::CPUI_INT_ADD, Some(isa.x(0)), vec![isa.t(0), isa.k(0x1000)]),
+            op(
+                OpCode::CPUI_INT_LEFT,
+                Some(isa.t(0)),
+                vec![isa.k(0), vn(&isa.c, 0xc, 4)],
+            ),
+            op(
+                OpCode::CPUI_INT_ADD,
+                Some(isa.x(0)),
+                vec![isa.t(0), isa.k(0x1000)],
+            ),
         ];
-        let got = walk_low(&isa, true, &[(auipc, None), (isa.add(0, 0, 0xffff_ffff_ffff_f378), None)]);
+        let got = walk_low(
+            &isa,
+            true,
+            &[(auipc, None), (isa.add(0, 0, 0xffff_ffff_ffff_f378), None)],
+        );
         assert_eq!(got, vec![(0x1004, 0x378, XrefKind::Data)]);
     }
 
@@ -1014,8 +1261,16 @@ mod tests {
     #[test]
     fn the_difference_of_two_pc_relative_values_is_not_an_address() {
         let isa = Isa::new();
-        let sub = vec![op(OpCode::CPUI_INT_SUB, Some(isa.x(0)), vec![isa.x(0), isa.x(1)])];
-        let insns = [(isa.set(1, 0x1100), Some(0x1100)), (isa.set(0, 0x1500), Some(0x1500)), (sub, None)];
+        let sub = vec![op(
+            OpCode::CPUI_INT_SUB,
+            Some(isa.x(0)),
+            vec![isa.x(0), isa.x(1)],
+        )];
+        let insns = [
+            (isa.set(1, 0x1100), Some(0x1100)),
+            (isa.set(0, 0x1500), Some(0x1500)),
+            (sub, None),
+        ];
         let got = walk_low(&isa, false, &insns);
         assert!(got.is_empty(), "{got:?}");
     }
@@ -1028,16 +1283,35 @@ mod tests {
         let isa = Isa::new();
         let low = |vn: VarnodeData| vec![op(OpCode::CPUI_INT_ZEXT, Some(isa.x(1)), vec![vn])];
         let subpiece = vec![
-            op(OpCode::CPUI_SUBPIECE, Some(vn(&isa.u, 0x100, 1)), vec![isa.x(0), vn(&isa.c, 0, 4)]),
-            op(OpCode::CPUI_INT_ZEXT, Some(isa.x(1)), vec![vn(&isa.u, 0x100, 1)]),
+            op(
+                OpCode::CPUI_SUBPIECE,
+                Some(vn(&isa.u, 0x100, 1)),
+                vec![isa.x(0), vn(&isa.c, 0, 4)],
+            ),
+            op(
+                OpCode::CPUI_INT_ZEXT,
+                Some(isa.x(1)),
+                vec![vn(&isa.u, 0x100, 1)],
+            ),
         ];
         let run = |narrow: Vec<FullOp>| {
-            walk_low(&isa, false, &[(isa.set(0, 0x5a0), Some(0x5a0)), (narrow, None), (isa.add(2, 1, 0x300), None)])
+            walk_low(
+                &isa,
+                false,
+                &[
+                    (isa.set(0, 0x5a0), Some(0x5a0)),
+                    (narrow, None),
+                    (isa.add(2, 1, 0x300), None),
+                ],
+            )
         };
         assert!(run(low(vn(&isa.r, 0, 1))).is_empty());
         assert!(run(low(vn(&isa.r, 0, 2))).is_empty());
         assert!(run(subpiece).is_empty());
-        assert_eq!(run(low(vn(&isa.r, 0, 4))), vec![(0x1008, 0x8a0, XrefKind::Data)]);
+        assert_eq!(
+            run(low(vn(&isa.r, 0, 4))),
+            vec![(0x1008, 0x8a0, XrefKind::Data)]
+        );
     }
 
     #[test]
@@ -1066,8 +1340,22 @@ mod tests {
     fn a_load_and_a_store_through_a_carried_base_are_a_read_and_a_write() {
         let isa = Isa::new();
         let m = isa.machine(false);
-        let got = walk(&m, &[isa.set(1, 0x21000), isa.load(0, 1, 0x1d0), isa.store(0, 1, 0x1d8)], &[]);
-        assert_eq!(got, vec![(0x20004, 0x211d0, XrefKind::Read), (0x20008, 0x211d8, XrefKind::Write)]);
+        let got = walk(
+            &m,
+            &[
+                isa.set(1, 0x21000),
+                isa.load(0, 1, 0x1d0),
+                isa.store(0, 1, 0x1d8),
+            ],
+            &[],
+        );
+        assert_eq!(
+            got,
+            vec![
+                (0x20004, 0x211d0, XrefKind::Read),
+                (0x20008, 0x211d8, XrefKind::Write)
+            ]
+        );
     }
 
     #[test]
@@ -1075,18 +1363,42 @@ mod tests {
         let isa = Isa::new();
         let m = isa.machine(false);
         let insns = [isa.set(0, 0x21000), isa.set(1, 5), isa.add(0, 0, 0x488)];
-        assert_eq!(walk(&m, &insns, &[0x20008]).len(), 0, "the add is a branch target");
-        assert_eq!(walk(&m, &insns, &[0x20004]).len(), 0, "so is the instruction it passed through");
-        assert_eq!(walk(&m, &insns, &[0x20000]).len(), 1, "the page's own instruction may be a join");
+        assert_eq!(
+            walk(&m, &insns, &[0x20008]).len(),
+            0,
+            "the add is a branch target"
+        );
+        assert_eq!(
+            walk(&m, &insns, &[0x20004]).len(),
+            0,
+            "so is the instruction it passed through"
+        );
+        assert_eq!(
+            walk(&m, &insns, &[0x20000]).len(),
+            1,
+            "the page's own instruction may be a join"
+        );
     }
 
     #[test]
     fn a_call_keeps_a_preserved_register_and_drops_the_rest() {
         let isa = Isa::new();
         let m = isa.machine(false);
-        let saved = walk(&m, &[isa.set(19, 0x21000), isa.call(0x20004), isa.add(0, 19, 0x25)], &[]);
+        let saved = walk(
+            &m,
+            &[
+                isa.set(19, 0x21000),
+                isa.call(0x20004),
+                isa.add(0, 19, 0x25),
+            ],
+            &[],
+        );
         assert_eq!(saved, vec![(0x20008, 0x21025, XrefKind::Data)]);
-        let scratch = walk(&m, &[isa.set(8, 0x21000), isa.call(0x20004), isa.add(0, 8, 0x25)], &[]);
+        let scratch = walk(
+            &m,
+            &[isa.set(8, 0x21000), isa.call(0x20004), isa.add(0, 8, 0x25)],
+            &[],
+        );
         assert!(scratch.is_empty(), "{scratch:?}");
     }
 
@@ -1094,9 +1406,15 @@ mod tests {
     fn a_register_the_call_itself_writes_does_not_survive_it() {
         let isa = Isa::new();
         let preserved = [(0x98, 0xa0), (30 * 8, 31 * 8)];
-        let m = Machine { preserved: &preserved, ..isa.machine(false) };
+        let m = Machine {
+            preserved: &preserved,
+            ..isa.machine(false)
+        };
         let got = walk(&m, &[isa.call(0x20000), isa.add(0, 30, 0x10)], &[]);
-        assert!(got.is_empty(), "a link register the cspec calls unaffected: {got:?}");
+        assert!(
+            got.is_empty(),
+            "a link register the cspec calls unaffected: {got:?}"
+        );
     }
 
     #[test]
@@ -1105,15 +1423,33 @@ mod tests {
         let m = isa.machine(false);
         let mv = walk(&m, &[isa.set(0, 0x21000), isa.add(1, 0, 0)], &[]);
         assert!(mv.is_empty(), "`addi a1,a0,0` is a move: {mv:?}");
-        let ori = vec![op(OpCode::CPUI_INT_OR, Some(isa.x(0)), vec![isa.x(0), isa.k(0xff)])];
-        assert!(walk(&m, &[isa.set(0, 0x21000), ori], &[]).is_empty(), "`ori` builds a number");
+        let ori = vec![op(
+            OpCode::CPUI_INT_OR,
+            Some(isa.x(0)),
+            vec![isa.x(0), isa.k(0xff)],
+        )];
+        assert!(
+            walk(&m, &[isa.set(0, 0x21000), ori], &[]).is_empty(),
+            "`ori` builds a number"
+        );
         let w = vn(&isa.u, 0x200, 4);
         let addiw = vec![
-            op(OpCode::CPUI_INT_ADD, Some(isa.t(0)), vec![isa.x(0), isa.k(0x4c0)]),
-            op(OpCode::CPUI_SUBPIECE, Some(w.clone()), vec![isa.t(0), vn(&isa.c, 0, 4)]),
+            op(
+                OpCode::CPUI_INT_ADD,
+                Some(isa.t(0)),
+                vec![isa.x(0), isa.k(0x4c0)],
+            ),
+            op(
+                OpCode::CPUI_SUBPIECE,
+                Some(w.clone()),
+                vec![isa.t(0), vn(&isa.c, 0, 4)],
+            ),
             op(OpCode::CPUI_INT_SEXT, Some(isa.x(0)), vec![w]),
         ];
-        assert!(walk(&m, &[isa.set(0, 0x21000), addiw], &[]).is_empty(), "`addiw` is 32-bit arithmetic");
+        assert!(
+            walk(&m, &[isa.set(0, 0x21000), addiw], &[]).is_empty(),
+            "`addiw` is 32-bit arithmetic"
+        );
     }
 
     #[test]
@@ -1121,8 +1457,15 @@ mod tests {
         let isa = Isa::new();
         let m = isa.machine(true);
         let lui = walk(&m, &[isa.set(0, 0x21000), isa.add(0, 0, 0x488)], &[]);
-        assert!(lui.is_empty(), "an absolute immediate is a number in an ET_DYN image: {lui:?}");
-        let auipc = vec![op(OpCode::CPUI_INT_ADD, Some(isa.x(0)), vec![isa.k(0x1000), isa.k(0x20000)])];
+        assert!(
+            lui.is_empty(),
+            "an absolute immediate is a number in an ET_DYN image: {lui:?}"
+        );
+        let auipc = vec![op(
+            OpCode::CPUI_INT_ADD,
+            Some(isa.x(0)),
+            vec![isa.k(0x1000), isa.k(0x20000)],
+        )];
         let got = walk(&m, &[auipc, isa.add(0, 0, 0x488)], &[]);
         assert_eq!(got, vec![(0x20004, 0x21488, XrefKind::Data)]);
     }
@@ -1132,13 +1475,35 @@ mod tests {
         let isa = Isa::new();
         let m = isa.machine(false);
         let writeback = vec![
-            op(OpCode::CPUI_INT_ADD, Some(isa.x(12)), vec![isa.x(12), isa.k(0x2f0)]),
+            op(
+                OpCode::CPUI_INT_ADD,
+                Some(isa.x(12)),
+                vec![isa.x(12), isa.k(0x2f0)],
+            ),
             op(OpCode::CPUI_LOAD, Some(isa.t(1)), vec![isa.k(2), isa.x(12)]),
         ];
-        let got = walk(&m, &[isa.set(12, 0x20008), isa.add(12, 12, 0x1000), writeback], &[]);
-        assert_eq!(got, vec![(0x20008, 0x212f8, XrefKind::Read)], "an A32 PLT entry reads its slot");
-        let kept = walk(&m, &[isa.set(8, 0x21000), isa.add(8, 8, 0x40), isa.load(0, 8, 8)], &[]);
-        assert_eq!(kept, vec![(0x20004, 0x21040, XrefKind::Data), (0x20008, 0x21048, XrefKind::Read)]);
+        let got = walk(
+            &m,
+            &[isa.set(12, 0x20008), isa.add(12, 12, 0x1000), writeback],
+            &[],
+        );
+        assert_eq!(
+            got,
+            vec![(0x20008, 0x212f8, XrefKind::Read)],
+            "an A32 PLT entry reads its slot"
+        );
+        let kept = walk(
+            &m,
+            &[isa.set(8, 0x21000), isa.add(8, 8, 0x40), isa.load(0, 8, 8)],
+            &[],
+        );
+        assert_eq!(
+            kept,
+            vec![
+                (0x20004, 0x21040, XrefKind::Data),
+                (0x20008, 0x21048, XrefKind::Read)
+            ]
+        );
     }
 
     #[test]
@@ -1146,9 +1511,19 @@ mod tests {
         let isa = Isa::new();
         let m = isa.machine(false);
         let mut predicated = isa.set(0, 0x22000);
-        predicated.insert(0, op(OpCode::CPUI_CBRANCH, None, vec![isa.k(0x20008), isa.x(5)]));
-        let got = walk(&m, &[isa.set(0, 0x21000), predicated, isa.add(0, 0, 0x10)], &[]);
-        assert!(got.is_empty(), "x0 is 0x21000 or 0x22000 after a conditional write: {got:?}");
+        predicated.insert(
+            0,
+            op(OpCode::CPUI_CBRANCH, None, vec![isa.k(0x20008), isa.x(5)]),
+        );
+        let got = walk(
+            &m,
+            &[isa.set(0, 0x21000), predicated, isa.add(0, 0, 0x10)],
+            &[],
+        );
+        assert!(
+            got.is_empty(),
+            "x0 is 0x21000 or 0x22000 after a conditional write: {got:?}"
+        );
         let mut far = vec![isa.set(0, 0x21000)];
         far.extend((0..MAX_HOPS).map(|_| isa.set(1, 5)));
         far.push(isa.add(0, 0, 0x10));
@@ -1161,13 +1536,52 @@ mod tests {
     fn a_call_through_a_register_loaded_from_a_slot_is_a_call_to_the_slot() {
         let isa = Isa::new();
         let m = isa.machine(false);
-        let got = walk(&m, &[isa.set(16, 0x24000), isa.load(16, 16, 0x10), isa.call_reg(0x20008, 16)], &[]);
-        assert_eq!(got, vec![(0x20004, 0x24010, XrefKind::Read), (0x20008, 0x24010, XrefKind::Call)]);
+        let got = walk(
+            &m,
+            &[
+                isa.set(16, 0x24000),
+                isa.load(16, 16, 0x10),
+                isa.call_reg(0x20008, 16),
+            ],
+            &[],
+        );
+        assert_eq!(
+            got,
+            vec![
+                (0x20004, 0x24010, XrefKind::Read),
+                (0x20008, 0x24010, XrefKind::Call)
+            ]
+        );
         let mv = vec![op(OpCode::CPUI_COPY, Some(isa.x(17)), vec![isa.x(16)])];
-        let copied = walk(&m, &[isa.set(16, 0x24000), isa.load(16, 16, 0x10), mv, isa.call_reg(0x2000c, 17)], &[]);
-        assert_eq!(copied.last(), Some(&(0x2000c, 0x24010, XrefKind::Call)), "{copied:?}");
-        let joined = walk(&m, &[isa.set(16, 0x24000), isa.load(16, 16, 0x10), isa.call_reg(0x20008, 16)], &[0x20008]);
-        assert_eq!(joined, vec![(0x20004, 0x24010, XrefKind::Read)], "another path into the call may hold anything");
+        let copied = walk(
+            &m,
+            &[
+                isa.set(16, 0x24000),
+                isa.load(16, 16, 0x10),
+                mv,
+                isa.call_reg(0x2000c, 17),
+            ],
+            &[],
+        );
+        assert_eq!(
+            copied.last(),
+            Some(&(0x2000c, 0x24010, XrefKind::Call)),
+            "{copied:?}"
+        );
+        let joined = walk(
+            &m,
+            &[
+                isa.set(16, 0x24000),
+                isa.load(16, 16, 0x10),
+                isa.call_reg(0x20008, 16),
+            ],
+            &[0x20008],
+        );
+        assert_eq!(
+            joined,
+            vec![(0x20004, 0x24010, XrefKind::Read)],
+            "another path into the call may hold anything"
+        );
     }
 
     /// The word a slot holds is unknown: an offset from it is no address, a
@@ -1177,28 +1591,72 @@ mod tests {
         let isa = Isa::new();
         let m = isa.machine(false);
         let loaded = || [isa.set(16, 0x24000), isa.load(16, 16, 0x10)];
-        let add: Vec<_> = loaded().into_iter().chain([isa.add(0, 16, 0x21000)]).collect();
-        assert_eq!(walk(&m, &add, &[]), vec![(0x20004, 0x24010, XrefKind::Read)]);
-        let deref: Vec<_> = loaded().into_iter().chain([isa.load(0, 16, 0x21000)]).collect();
-        assert_eq!(walk(&m, &deref, &[]), vec![(0x20004, 0x24010, XrefKind::Read)]);
+        let add: Vec<_> = loaded()
+            .into_iter()
+            .chain([isa.add(0, 16, 0x21000)])
+            .collect();
+        assert_eq!(
+            walk(&m, &add, &[]),
+            vec![(0x20004, 0x24010, XrefKind::Read)]
+        );
+        let deref: Vec<_> = loaded()
+            .into_iter()
+            .chain([isa.load(0, 16, 0x21000)])
+            .collect();
+        assert_eq!(
+            walk(&m, &deref, &[]),
+            vec![(0x20004, 0x24010, XrefKind::Read)]
+        );
         let narrow = vec![
-            op(OpCode::CPUI_INT_ADD, Some(isa.t(0)), vec![isa.x(16), isa.k(0x10)]),
-            op(OpCode::CPUI_LOAD, Some(vn(&isa.r, 16 * 8, 4)), vec![isa.k(2), isa.t(0)]),
+            op(
+                OpCode::CPUI_INT_ADD,
+                Some(isa.t(0)),
+                vec![isa.x(16), isa.k(0x10)],
+            ),
+            op(
+                OpCode::CPUI_LOAD,
+                Some(vn(&isa.r, 16 * 8, 4)),
+                vec![isa.k(2), isa.t(0)],
+            ),
         ];
-        let got = walk(&m, &[isa.set(16, 0x24000), narrow, isa.call_reg(0x20008, 16)], &[]);
-        assert_eq!(got, vec![(0x20004, 0x24010, XrefKind::Read)], "`ldr w16` loads no pointer");
+        let got = walk(
+            &m,
+            &[isa.set(16, 0x24000), narrow, isa.call_reg(0x20008, 16)],
+            &[],
+        );
+        assert_eq!(
+            got,
+            vec![(0x20004, 0x24010, XrefKind::Read)],
+            "`ldr w16` loads no pointer"
+        );
     }
 
     /// The `adrp` pages a straight-line run supersedes, and the rows it files.
-    fn pages(m: &Machine, insns: &[Vec<FullOp>], targets: &[u64]) -> (Vec<(u64, u64)>, Vec<(u64, u64, XrefKind)>) {
+    fn pages(
+        m: &Machine,
+        insns: &[Vec<FullOp>],
+        targets: &[u64],
+    ) -> (Vec<(u64, u64)>, Vec<(u64, u64, XrefKind)>) {
         let mut t = Tracker::default();
         for &at in targets {
             t.enter(at);
         }
         for (i, ops) in insns.iter().enumerate() {
             let vma = 0x20000 + 4 * i as u64;
-            let calls = ops.iter().any(|op| matches!(op.opcode, OpCode::CPUI_CALL | OpCode::CPUI_CALLIND));
-            t.step(m, Insn { vma, ops, fall: Some(vma + 4), branches: &[], calls, formed: Formed::default() });
+            let calls = ops
+                .iter()
+                .any(|op| matches!(op.opcode, OpCode::CPUI_CALL | OpCode::CPUI_CALLIND));
+            t.step(
+                m,
+                Insn {
+                    vma,
+                    ops,
+                    fall: Some(vma + 4),
+                    branches: &[],
+                    calls,
+                    formed: Formed::default(),
+                },
+            );
         }
         let funcs = BTreeSet::from([0x20000]);
         (t.superseded(&funcs), t.finish(&funcs))
@@ -1211,33 +1669,98 @@ mod tests {
         use super::super::kuna_poolref::PoolImage;
         let isa = Isa::new();
         // `adrp x16, ..`, then three `nop`s.
-        let adrp: [u8; 16] = [0x10, 0, 0, 0x90, 0x1f, 0x20, 0x03, 0xd5, 0x1f, 0x20, 0x03, 0xd5, 0x1f, 0x20, 0x03, 0xd5];
+        let adrp: [u8; 16] = [
+            0x10, 0, 0, 0x90, 0x1f, 0x20, 0x03, 0xd5, 0x1f, 0x20, 0x03, 0xd5, 0x1f, 0x20, 0x03,
+            0xd5,
+        ];
         let img = PoolImage::from_ranges(vec![(0x20000, 0x20010, &adrp[..])], 8, true).unwrap();
-        let m = Machine { code: Some(img), ..isa.machine(false) };
+        let m = Machine {
+            code: Some(img),
+            ..isa.machine(false)
+        };
         let (gone, rows) = pages(&m, &[isa.set(16, 0x24000), isa.load(16, 16, 0x10)], &[]);
         assert_eq!(gone, vec![(0x20000, 0x24000)]);
-        assert_eq!(rows, vec![(0x20004, 0x24010, XrefKind::Read)], "the page is no row of the carry's");
-        let (gone, _) = pages(&m, &[isa.set(8, 0x24000), isa.add(9, 8, 0x10), isa.load(0, 8, 0x20)], &[]);
-        assert_eq!(gone, vec![(0x20000, 0x24000)], "the page still in x8 is still only a base");
-        for at_page in [vec![isa.set(16, 0x24000), isa.load(16, 16, 0)], vec![isa.set(0, 0x24000), isa.add(0, 0, 0)]] {
-            assert!(pages(&m, &at_page, &[]).0.is_empty(), "offset 0 names the page itself");
+        assert_eq!(
+            rows,
+            vec![(0x20004, 0x24010, XrefKind::Read)],
+            "the page is no row of the carry's"
+        );
+        let (gone, _) = pages(
+            &m,
+            &[
+                isa.set(8, 0x24000),
+                isa.add(9, 8, 0x10),
+                isa.load(0, 8, 0x20),
+            ],
+            &[],
+        );
+        assert_eq!(
+            gone,
+            vec![(0x20000, 0x24000)],
+            "the page still in x8 is still only a base"
+        );
+        for at_page in [
+            vec![isa.set(16, 0x24000), isa.load(16, 16, 0)],
+            vec![isa.set(0, 0x24000), isa.add(0, 0, 0)],
+        ] {
+            assert!(
+                pages(&m, &at_page, &[]).0.is_empty(),
+                "offset 0 names the page itself"
+            );
         }
         let field = [isa.set(0, 0x24000), isa.add(0, 0, 0), isa.store(1, 0, 0x18)];
-        assert!(pages(&m, &field, &[]).0.is_empty(), "`add #0` is the `:lo12:` of the symbol at the page");
+        assert!(
+            pages(&m, &field, &[]).0.is_empty(),
+            "`add #0` is the `:lo12:` of the symbol at the page"
+        );
         let both = [isa.set(8, 0x24000), isa.load(0, 8, 0x8), isa.load(1, 8, 0)];
-        assert!(pages(&m, &both, &[]).0.is_empty(), "the page's own datum is read too");
+        assert!(
+            pages(&m, &both, &[]).0.is_empty(),
+            "the page's own datum is read too"
+        );
         let copy = vec![op(OpCode::CPUI_COPY, Some(isa.x(9)), vec![isa.x(8)])];
         let (gone, _) = pages(&m, &[isa.set(8, 0x24000), copy, isa.load(0, 9, 0x10)], &[]);
-        assert_eq!(gone, vec![(0x20000, 0x24000)], "a copy of the page uses nothing at it");
-        assert!(pages(&m, &[isa.set(16, 0x24000), isa.load(16, 16, 0x10)], &[0x20004]).0.is_empty(), "past a join");
-        assert!(pages(&m, &[isa.set(16, 0x24010), isa.load(16, 16, 0x10)], &[]).0.is_empty(), "not a page");
+        assert_eq!(
+            gone,
+            vec![(0x20000, 0x24000)],
+            "a copy of the page uses nothing at it"
+        );
+        assert!(
+            pages(
+                &m,
+                &[isa.set(16, 0x24000), isa.load(16, 16, 0x10)],
+                &[0x20004]
+            )
+            .0
+            .is_empty(),
+            "past a join"
+        );
+        assert!(
+            pages(&m, &[isa.set(16, 0x24010), isa.load(16, 16, 0x10)], &[])
+                .0
+                .is_empty(),
+            "not a page"
+        );
         let mut adr = adrp;
         adr[3] = 0x10;
         let img = PoolImage::from_ranges(vec![(0x20000, 0x20010, &adr[..])], 8, true).unwrap();
-        let m = Machine { code: Some(img), ..isa.machine(false) };
-        assert!(pages(&m, &[isa.set(16, 0x24000), isa.load(16, 16, 0x10)], &[]).0.is_empty(), "`adr` names its label");
+        let m = Machine {
+            code: Some(img),
+            ..isa.machine(false)
+        };
+        assert!(
+            pages(&m, &[isa.set(16, 0x24000), isa.load(16, 16, 0x10)], &[])
+                .0
+                .is_empty(),
+            "`adr` names its label"
+        );
         let x86 = isa.machine(false);
-        assert!(pages(&x86, &[isa.set(16, 0x24000), isa.load(16, 16, 0x10)], &[]).0.is_empty(), "no adrp");
+        assert!(
+            pages(&x86, &[isa.set(16, 0x24000), isa.load(16, 16, 0x10)], &[])
+                .0
+                .is_empty(),
+            "no adrp"
+        );
     }
 
     /// Swift's string literal: `adrp/add` forms the literal, `sub #0x20` biases
@@ -1246,7 +1769,11 @@ mod tests {
     fn a_constant_subtracted_from_an_address_is_a_bias() {
         let isa = Isa::new();
         let m = isa.machine(false);
-        let sub = vec![op(OpCode::CPUI_INT_SUB, Some(isa.x(8)), vec![isa.x(8), isa.k(0x20)])];
+        let sub = vec![op(
+            OpCode::CPUI_INT_SUB,
+            Some(isa.x(8)),
+            vec![isa.x(8), isa.k(0x20)],
+        )];
         let got = walk(&m, &[isa.set(8, 0x24000), isa.add(8, 8, 0x40), sub], &[]);
         assert_eq!(got, vec![(0x20004, 0x24040, XrefKind::Data)]);
     }
@@ -1257,7 +1784,11 @@ mod tests {
     fn a_register_copied_from_a_direct_slot_operand_calls_through_it() {
         let isa = Isa::new();
         let m = isa.machine(false);
-        let mov = vec![op(OpCode::CPUI_COPY, Some(isa.x(0)), vec![isa.mem(0x24010, 8)])];
+        let mov = vec![op(
+            OpCode::CPUI_COPY,
+            Some(isa.x(0)),
+            vec![isa.mem(0x24010, 8)],
+        )];
         let got = walk(&m, &[mov, isa.call_reg(0x20004, 0)], &[]);
         assert_eq!(got, vec![(0x20004, 0x24010, XrefKind::Call)]);
         let one = vec![
@@ -1265,8 +1796,15 @@ mod tests {
             op(OpCode::CPUI_CALLIND, None, vec![isa.t(0)]),
         ];
         assert!(walk(&m, &[one], &[]).is_empty());
-        let word = vec![op(OpCode::CPUI_COPY, Some(vn(&isa.r, 0, 4)), vec![isa.mem(0x24010, 4)])];
-        assert!(walk(&m, &[word, isa.call_reg(0x20004, 0)], &[]).is_empty(), "a 32-bit load is no pointer");
+        let word = vec![op(
+            OpCode::CPUI_COPY,
+            Some(vn(&isa.r, 0, 4)),
+            vec![isa.mem(0x24010, 4)],
+        )];
+        assert!(
+            walk(&m, &[word, isa.call_reg(0x20004, 0)], &[]).is_empty(),
+            "a 32-bit load is no pointer"
+        );
     }
 
     #[test]
@@ -1276,10 +1814,17 @@ mod tests {
         let cinc = vec![
             op(OpCode::CPUI_COPY, Some(isa.t(0)), vec![isa.x(0)]),
             op(OpCode::CPUI_CBRANCH, None, vec![vn(&isa.c, 2, 8), isa.x(5)]),
-            op(OpCode::CPUI_INT_ADD, Some(isa.t(0)), vec![isa.x(0), isa.k(1)]),
+            op(
+                OpCode::CPUI_INT_ADD,
+                Some(isa.t(0)),
+                vec![isa.x(0), isa.k(1)],
+            ),
             op(OpCode::CPUI_COPY, Some(isa.x(0)), vec![isa.t(0)]),
         ];
         let got = walk(&m, &[isa.set(0, 0x21000), cinc], &[]);
-        assert!(got.is_empty(), "`cinc x0,x0,eq` leaves x0 or x0 + 1: {got:?}");
+        assert!(
+            got.is_empty(),
+            "`cinc x0,x0,eq` leaves x0 or x0 + 1: {got:?}"
+        );
     }
 }

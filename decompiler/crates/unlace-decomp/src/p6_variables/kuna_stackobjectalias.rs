@@ -3,7 +3,7 @@
 use std::rc::Rc;
 
 use crate::context::VarnodeId;
-use crate::dtype::{type_metatype, TypeFactory};
+use crate::dtype::{TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::kuna_stackobjectasserts::{ObjectAssertion, UseAnchor};
 use crate::varmap::LinkEntryInfo;

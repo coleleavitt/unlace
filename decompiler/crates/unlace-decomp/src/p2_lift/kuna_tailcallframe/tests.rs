@@ -6,14 +6,14 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
-    VarnodeStorage,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, VarnodeStorage, addrspace_flags,
+    spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{ArchContext, OpId, TypeOp};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 
 use super::*;
@@ -22,7 +22,8 @@ use super::*;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -69,17 +70,23 @@ fn space_of(fd: &Funcdata, name: &str) -> Rc<AddrSpace> {
 /// The stack-pointer register location the driver resolves from the stack
 /// space's base register: `register:0x20`, 8 bytes.
 fn sp_loc(fd: &Funcdata) -> VarnodeStorage {
-    VarnodeStorage { space: Some(space_of(fd, "register")), offset: 0x20, size: 8 }
+    VarnodeStorage {
+        space: Some(space_of(fd, "register")),
+        offset: 0x20,
+        size: 8,
+    }
 }
 
 fn sp_vn(fd: &mut Funcdata) -> crate::context::VarnodeId {
     let reg = space_of(fd, "register");
-    fd.vbank_mut().create(8, Address::new(reg, 0x20), unk_type(8))
+    fd.vbank_mut()
+        .create(8, Address::new(reg, 0x20), unk_type(8))
 }
 
 fn const_vn(fd: &mut Funcdata, val: u64) -> crate::context::VarnodeId {
     let cst = space_of(fd, "const");
-    fd.vbank_mut().create(8, Address::new(cst, val), unk_type(8))
+    fd.vbank_mut()
+        .create(8, Address::new(cst, val), unk_type(8))
 }
 
 /// `SP = SP <opc> k` at instruction address `at`.
@@ -100,10 +107,15 @@ fn emit_sp_arith(fd: &mut Funcdata, at: u64, opc: OpCode, k: u64) -> OpId {
 fn emit_filler(fd: &mut Funcdata, at: u64) -> OpId {
     let ram = space_of(fd, "ram");
     let op = fd.obank_mut().create_at(1, Address::new(ram, at));
-    fd.obank_mut().change_opcode(op, TypeOp::new(OpCode::CPUI_COPY, 0, "op"));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(OpCode::CPUI_COPY, 0, "op"));
     let reg = space_of(fd, "register");
-    let src = fd.vbank_mut().create(8, Address::new(Rc::clone(&reg), 0x18), unk_type(8));
-    let dst = fd.vbank_mut().create(8, Address::new(reg, 0x10), unk_type(8));
+    let src = fd
+        .vbank_mut()
+        .create(8, Address::new(Rc::clone(&reg), 0x18), unk_type(8));
+    let dst = fd
+        .vbank_mut()
+        .create(8, Address::new(reg, 0x10), unk_type(8));
     fd.obank_mut().get_mut(op).unwrap().set_input(Some(src), 0);
     fd.obank_mut().get_mut(op).unwrap().set_output(Some(dst));
     op
@@ -112,9 +124,14 @@ fn emit_filler(fd: &mut Funcdata, at: u64) -> OpId {
 /// A direct `CPUI_BRANCH` to `dest` at instruction address `at`.
 fn emit_branch(fd: &mut Funcdata, at: u64, dest: u64) -> OpId {
     let ram = space_of(fd, "ram");
-    let op = fd.obank_mut().create_at(1, Address::new(Rc::clone(&ram), at));
-    fd.obank_mut().change_opcode(op, TypeOp::new(OpCode::CPUI_BRANCH, 0, "op"));
-    let vn = fd.vbank_mut().create(8, Address::new(ram, dest), unk_type(8));
+    let op = fd
+        .obank_mut()
+        .create_at(1, Address::new(Rc::clone(&ram), at));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(OpCode::CPUI_BRANCH, 0, "op"));
+    let vn = fd
+        .vbank_mut()
+        .create(8, Address::new(ram, dest), unk_type(8));
     fd.obank_mut().get_mut(op).unwrap().set_input(Some(vn), 0);
     op
 }
@@ -123,13 +140,20 @@ fn emit_branch(fd: &mut Funcdata, at: u64, dest: u64) -> OpId {
 /// of a `push`.
 fn emit_sp_store(fd: &mut Funcdata, at: u64) {
     let ram = space_of(fd, "ram");
-    let op = fd.obank_mut().create_at(3, Address::new(Rc::clone(&ram), at));
-    fd.obank_mut().change_opcode(op, TypeOp::new(OpCode::CPUI_STORE, 0, "op"));
+    let op = fd
+        .obank_mut()
+        .create_at(3, Address::new(Rc::clone(&ram), at));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(OpCode::CPUI_STORE, 0, "op"));
     let cst = space_of(fd, "const");
-    let spc = fd.vbank_mut().create(8, Address::new(cst, ram.get_index() as u64), unk_type(8));
+    let spc = fd
+        .vbank_mut()
+        .create(8, Address::new(cst, ram.get_index() as u64), unk_type(8));
     let ptr = sp_vn(fd);
     let reg = space_of(fd, "register");
-    let val = fd.vbank_mut().create(8, Address::new(reg, 0x8), unk_type(8));
+    let val = fd
+        .vbank_mut()
+        .create(8, Address::new(reg, 0x8), unk_type(8));
     fd.obank_mut().get_mut(op).unwrap().set_input(Some(spc), 0);
     fd.obank_mut().get_mut(op).unwrap().set_input(Some(ptr), 1);
     fd.obank_mut().get_mut(op).unwrap().set_input(Some(val), 2);
@@ -139,13 +163,20 @@ fn emit_sp_store(fd: &mut Funcdata, at: u64) {
 /// of a `pop`.
 fn emit_sp_load(fd: &mut Funcdata, at: u64) {
     let ram = space_of(fd, "ram");
-    let op = fd.obank_mut().create_at(2, Address::new(Rc::clone(&ram), at));
-    fd.obank_mut().change_opcode(op, TypeOp::new(OpCode::CPUI_LOAD, 0, "op"));
+    let op = fd
+        .obank_mut()
+        .create_at(2, Address::new(Rc::clone(&ram), at));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(OpCode::CPUI_LOAD, 0, "op"));
     let cst = space_of(fd, "const");
-    let spc = fd.vbank_mut().create(8, Address::new(cst, ram.get_index() as u64), unk_type(8));
+    let spc = fd
+        .vbank_mut()
+        .create(8, Address::new(cst, ram.get_index() as u64), unk_type(8));
     let ptr = sp_vn(fd);
     let reg = space_of(fd, "register");
-    let out = fd.vbank_mut().create(8, Address::new(reg, 0x8), unk_type(8));
+    let out = fd
+        .vbank_mut()
+        .create(8, Address::new(reg, 0x8), unk_type(8));
     fd.obank_mut().get_mut(op).unwrap().set_input(Some(spc), 0);
     fd.obank_mut().get_mut(op).unwrap().set_input(Some(ptr), 1);
     fd.obank_mut().get_mut(op).unwrap().set_output(Some(out));
@@ -188,7 +219,14 @@ fn gate_off_never_fires() {
     let br = build_teardown_shape(&mut fd, 0x2000);
     let sp = sp_loc(&fd);
     let (e, d) = (entry_addr(&fd), dest_addr(&fd, 0x2000));
-    assert!(!kuna_is_frame_teardown_tail_call(&fd, br, false, &e, &d, Some(&sp)));
+    assert!(!kuna_is_frame_teardown_tail_call(
+        &fd,
+        br,
+        false,
+        &e,
+        &d,
+        Some(&sp)
+    ));
 }
 
 #[test]
@@ -197,7 +235,14 @@ fn exact_teardown_of_the_entry_frame_fires() {
     let br = build_teardown_shape(&mut fd, 0x2000);
     let sp = sp_loc(&fd);
     let (e, d) = (entry_addr(&fd), dest_addr(&fd, 0x2000));
-    assert!(kuna_is_frame_teardown_tail_call(&fd, br, true, &e, &d, Some(&sp)));
+    assert!(kuna_is_frame_teardown_tail_call(
+        &fd,
+        br,
+        true,
+        &e,
+        &d,
+        Some(&sp)
+    ));
 }
 
 #[test]
@@ -207,7 +252,10 @@ fn explicit_branch_precedence_suppresses_a_positive_frame_teardown() {
     let sp = sp_loc(&fd);
     let (e, d) = (entry_addr(&fd), dest_addr(&fd, 0x2000));
     let frame_matches = kuna_is_frame_teardown_tail_call(&fd, br, true, &e, &d, Some(&sp));
-    assert!(frame_matches, "control must positively trigger tailcallframe");
+    assert!(
+        frame_matches,
+        "control must positively trigger tailcallframe"
+    );
 
     assert_eq!(
         crate::flow::select_inferred_tail_call(false, false, || false, || frame_matches),
@@ -265,7 +313,9 @@ fn no_stack_pointer_location_declines() {
     let mut fd = build_fd();
     let br = build_teardown_shape(&mut fd, 0x2000);
     let (e, d) = (entry_addr(&fd), dest_addr(&fd, 0x2000));
-    assert!(!kuna_is_frame_teardown_tail_call(&fd, br, true, &e, &d, None));
+    assert!(!kuna_is_frame_teardown_tail_call(
+        &fd, br, true, &e, &d, None
+    ));
 }
 
 #[test]
@@ -280,7 +330,14 @@ fn partial_teardown_declines() {
     let br = emit_branch(&mut fd, 0x1104, 0x2000);
     let sp = sp_loc(&fd);
     let (e, d) = (entry_addr(&fd), dest_addr(&fd, 0x2000));
-    assert!(!kuna_is_frame_teardown_tail_call(&fd, br, true, &e, &d, Some(&sp)));
+    assert!(!kuna_is_frame_teardown_tail_call(
+        &fd,
+        br,
+        true,
+        &e,
+        &d,
+        Some(&sp)
+    ));
 }
 
 #[test]
@@ -292,7 +349,14 @@ fn frameless_leaf_never_fires() {
     let br = emit_branch(&mut fd, 0x1100, 0x2000);
     let sp = sp_loc(&fd);
     let (e, d) = (entry_addr(&fd), dest_addr(&fd, 0x2000));
-    assert!(!kuna_is_frame_teardown_tail_call(&fd, br, true, &e, &d, Some(&sp)));
+    assert!(!kuna_is_frame_teardown_tail_call(
+        &fd,
+        br,
+        true,
+        &e,
+        &d,
+        Some(&sp)
+    ));
 }
 
 #[test]
@@ -305,16 +369,26 @@ fn opaque_frame_pointer_restore_declines() {
     emit_filler(&mut fd, 0x1005);
     let ram = space_of(&fd, "ram");
     let op = fd.obank_mut().create_at(1, Address::new(ram, 0x1100));
-    fd.obank_mut().change_opcode(op, TypeOp::new(OpCode::CPUI_COPY, 0, "op"));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(OpCode::CPUI_COPY, 0, "op"));
     let reg = space_of(&fd, "register");
-    let src = fd.vbank_mut().create(8, Address::new(reg, 0x28), unk_type(8));
+    let src = fd
+        .vbank_mut()
+        .create(8, Address::new(reg, 0x28), unk_type(8));
     let out = sp_vn(&mut fd);
     fd.obank_mut().get_mut(op).unwrap().set_input(Some(src), 0);
     fd.obank_mut().get_mut(op).unwrap().set_output(Some(out));
     let br = emit_branch(&mut fd, 0x1104, 0x2000);
     let sp = sp_loc(&fd);
     let (e, d) = (entry_addr(&fd), dest_addr(&fd, 0x2000));
-    assert!(!kuna_is_frame_teardown_tail_call(&fd, br, true, &e, &d, Some(&sp)));
+    assert!(!kuna_is_frame_teardown_tail_call(
+        &fd,
+        br,
+        true,
+        &e,
+        &d,
+        Some(&sp)
+    ));
 }
 
 #[test]
@@ -323,7 +397,14 @@ fn self_tail_recursion_excluded() {
     let br = build_teardown_shape(&mut fd, 0x1000);
     let sp = sp_loc(&fd);
     let (e, d) = (entry_addr(&fd), dest_addr(&fd, 0x1000));
-    assert!(!kuna_is_frame_teardown_tail_call(&fd, br, true, &e, &d, Some(&sp)));
+    assert!(!kuna_is_frame_teardown_tail_call(
+        &fd,
+        br,
+        true,
+        &e,
+        &d,
+        Some(&sp)
+    ));
 }
 
 #[test]
@@ -334,7 +415,14 @@ fn already_decoded_target_excluded() {
     let br = build_teardown_shape(&mut fd, 0x1005);
     let sp = sp_loc(&fd);
     let (e, d) = (entry_addr(&fd), dest_addr(&fd, 0x1005));
-    assert!(!kuna_is_frame_teardown_tail_call(&fd, br, true, &e, &d, Some(&sp)));
+    assert!(!kuna_is_frame_teardown_tail_call(
+        &fd,
+        br,
+        true,
+        &e,
+        &d,
+        Some(&sp)
+    ));
 }
 
 #[test]
@@ -342,13 +430,25 @@ fn indirect_branch_excluded() {
     let mut fd = build_fd();
     build_teardown_shape(&mut fd, 0x2000);
     let ram = space_of(&fd, "ram");
-    let op = fd.obank_mut().create_at(1, Address::new(Rc::clone(&ram), 0x1106));
-    fd.obank_mut().change_opcode(op, TypeOp::new(OpCode::CPUI_BRANCHIND, 0, "op"));
-    let vn = fd.vbank_mut().create(8, Address::new(ram, 0x2000), unk_type(8));
+    let op = fd
+        .obank_mut()
+        .create_at(1, Address::new(Rc::clone(&ram), 0x1106));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(OpCode::CPUI_BRANCHIND, 0, "op"));
+    let vn = fd
+        .vbank_mut()
+        .create(8, Address::new(ram, 0x2000), unk_type(8));
     fd.obank_mut().get_mut(op).unwrap().set_input(Some(vn), 0);
     let sp = sp_loc(&fd);
     let (e, d) = (entry_addr(&fd), dest_addr(&fd, 0x2000));
-    assert!(!kuna_is_frame_teardown_tail_call(&fd, op, true, &e, &d, Some(&sp)));
+    assert!(!kuna_is_frame_teardown_tail_call(
+        &fd,
+        op,
+        true,
+        &e,
+        &d,
+        Some(&sp)
+    ));
 }
 
 #[test]
@@ -364,7 +464,14 @@ fn a_gap_before_the_branch_ends_the_epilogue_run() {
     let br = emit_branch(&mut fd, 0x1150, 0x2000);
     let sp = sp_loc(&fd);
     let (e, d) = (entry_addr(&fd), dest_addr(&fd, 0x2000));
-    assert!(!kuna_is_frame_teardown_tail_call(&fd, br, true, &e, &d, Some(&sp)));
+    assert!(!kuna_is_frame_teardown_tail_call(
+        &fd,
+        br,
+        true,
+        &e,
+        &d,
+        Some(&sp)
+    ));
 }
 
 #[test]
@@ -381,7 +488,14 @@ fn argument_cleanup_after_a_call_is_not_a_teardown() {
     let br = emit_branch(&mut fd, 0x1104, 0x2000);
     let sp = sp_loc(&fd);
     let (e, d) = (entry_addr(&fd), dest_addr(&fd, 0x2000));
-    assert!(!kuna_is_frame_teardown_tail_call(&fd, br, true, &e, &d, Some(&sp)));
+    assert!(!kuna_is_frame_teardown_tail_call(
+        &fd,
+        br,
+        true,
+        &e,
+        &d,
+        Some(&sp)
+    ));
 }
 
 #[test]
@@ -397,7 +511,14 @@ fn popping_back_what_was_pushed_still_fires() {
     let br = emit_branch(&mut fd, 0x1104, 0x2000);
     let sp = sp_loc(&fd);
     let (e, d) = (entry_addr(&fd), dest_addr(&fd, 0x2000));
-    assert!(kuna_is_frame_teardown_tail_call(&fd, br, true, &e, &d, Some(&sp)));
+    assert!(kuna_is_frame_teardown_tail_call(
+        &fd,
+        br,
+        true,
+        &e,
+        &d,
+        Some(&sp)
+    ));
 }
 
 #[test]
@@ -411,5 +532,12 @@ fn an_alignment_only_frame_still_fires() {
     let br = emit_branch(&mut fd, 0x1104, 0x2000);
     let sp = sp_loc(&fd);
     let (e, d) = (entry_addr(&fd), dest_addr(&fd, 0x2000));
-    assert!(kuna_is_frame_teardown_tail_call(&fd, br, true, &e, &d, Some(&sp)));
+    assert!(kuna_is_frame_teardown_tail_call(
+        &fd,
+        br,
+        true,
+        &e,
+        &d,
+        Some(&sp)
+    ));
 }

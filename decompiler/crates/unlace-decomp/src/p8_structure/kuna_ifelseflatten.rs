@@ -59,9 +59,9 @@ use unlace_num::opcodes::OpCode;
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
 use crate::block::BlockType;
+use crate::context::BlockId;
 use crate::funcdata::Funcdata;
 use crate::options::on_or_off;
-use crate::context::BlockId;
 
 use unlace_base::marshal::ElementId;
 
@@ -81,7 +81,9 @@ pub struct ActionIfElseFlatten {
 impl ActionIfElseFlatten {
     /// Construct in group `g`.
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionIfElseFlatten { base: ActionBase::new(0, "ifelseflatten", g) })
+        Box::new(ActionIfElseFlatten {
+            base: ActionBase::new(0, "ifelseflatten", g),
+        })
     }
 }
 
@@ -96,7 +98,9 @@ impl Action for ActionIfElseFlatten {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionIfElseFlatten { base: self.base.clone() }))
+        Some(Box::new(ActionIfElseFlatten {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // P0 assertion `option ifelseflatten on|off`, carried on the Architecture boundary.
@@ -287,4 +291,3 @@ impl OptionIfElseFlatten {
         Ok((val, format!("If-else flattening turned {prop}")))
     }
 }
-

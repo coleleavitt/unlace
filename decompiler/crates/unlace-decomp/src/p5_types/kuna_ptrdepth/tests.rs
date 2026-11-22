@@ -15,9 +15,12 @@ fn factory() -> TypeFactoryImpl {
     let f = TypeFactoryImpl::new();
     f.set_default_alignment_map();
     f.set_max_basetype_size(8);
-    f.set_core_type("undefined", 1, type_metatype::TYPE_UNKNOWN, false).unwrap();
-    f.set_core_type("undefined8", 8, type_metatype::TYPE_UNKNOWN, false).unwrap();
-    f.set_core_type("char", 1, type_metatype::TYPE_INT, true).unwrap();
+    f.set_core_type("undefined", 1, type_metatype::TYPE_UNKNOWN, false)
+        .unwrap();
+    f.set_core_type("undefined8", 8, type_metatype::TYPE_UNKNOWN, false)
+        .unwrap();
+    f.set_core_type("char", 1, type_metatype::TYPE_INT, true)
+        .unwrap();
     f.cache_core_types().unwrap();
     f
 }
@@ -86,7 +89,10 @@ fn the_capped_type_is_a_fixed_point() {
     let f = factory();
     let p3 = ptr(&f, ptr(&f, ptr(&f, char_t(&f))));
     let once = cap_pointer_depth(&f, &p3).unwrap();
-    assert!(cap_pointer_depth(&f, &once).is_none(), "the cap must be idempotent");
+    assert!(
+        cap_pointer_depth(&f, &once).is_none(),
+        "the cap must be idempotent"
+    );
 }
 
 #[test]

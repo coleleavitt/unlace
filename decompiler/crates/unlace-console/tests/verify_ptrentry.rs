@@ -47,11 +47,16 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture() -> PathBuf {
@@ -81,21 +86,28 @@ fn bootstrap(on: bool) -> unlace_console::engine::ConsoleProgram {
     // The non-x86-64 discovery set the `decompile-all` / `functions` drivers
     // inject (DIV-20). `funcstart_patterns` is what COMMITS the recursive-descent
     // walk's own finds, so without it `callee` would be discovered but unnamed.
-    prog.arch_mut().set_kuna_option("listing", "on").expect("listing flips on");
+    prog.arch_mut()
+        .set_kuna_option("listing", "on")
+        .expect("listing flips on");
     prog.arch_mut()
         .set_kuna_option("funcstart_patterns", "on")
         .expect("funcstart_patterns flips on");
     prog.arch_mut()
         .set_kuna_option("ptrentry", if on { "on" } else { "off" })
         .expect("ptrentry flips");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
 /// Decompile `func` in an already-bootstrapped program and return the captured C.
 fn decompile(prog: unlace_console::engine::ConsoleProgram, func: &str) -> String {
-    let cmds: Vec<String> =
-        [format!("load function {func}"), "decompile".into(), "print C".into()].to_vec();
+    let cmds: Vec<String> = [
+        format!("load function {func}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .to_vec();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -116,8 +128,14 @@ fn decompile(prog: unlace_console::engine::ConsoleProgram, func: &str) -> String
 #[test]
 fn off_drops_the_pointer_only_leaf() {
     let off = bootstrap(false);
-    assert!(off.lookup_symbol(RESET).is_some(), "the reset vector is always found");
-    assert!(off.lookup_symbol(CALLEE).is_some(), "the walk always follows the BL");
+    assert!(
+        off.lookup_symbol(RESET).is_some(),
+        "the reset vector is always found"
+    );
+    assert!(
+        off.lookup_symbol(CALLEE).is_some(),
+        "the walk always follows the BL"
+    );
     assert!(
         off.lookup_symbol(LEAF).is_none(),
         "default (ptrentry off) must NOT discover {LEAF}: Stage 3 finds its \
@@ -128,7 +146,10 @@ fn off_drops_the_pointer_only_leaf() {
     // that produces no output.
     let body = decompile(off, RESET);
     eprintln!("---- {RESET} (ptrentry off / default) ----\n{body}");
-    assert!(!body.contains("return 7;"), "the leaf's body is nowhere in the output");
+    assert!(
+        !body.contains("return 7;"),
+        "the leaf's body is nowhere in the output"
+    );
 }
 
 /// Pass 2 — THE FIX. The containment precision model admits the pointer-only leaf
@@ -143,7 +164,10 @@ fn ptrentry_recovers_the_pointer_only_leaf() {
     let prog = bootstrap(true);
     let body = decompile(prog, LEAF);
     eprintln!("---- {LEAF} (ptrentry on) ----\n{body}");
-    assert!(body.contains("return 7;"), "{LEAF} must decompile to its real constant, got:\n{body}");
+    assert!(
+        body.contains("return 7;"),
+        "{LEAF} must decompile to its real constant, got:\n{body}"
+    );
 }
 
 /// The precision guard, pinned: a code pointer whose word lies in the same
@@ -173,7 +197,10 @@ fn ptrentry_only_adds_entries() {
     let off = bootstrap(false);
     let on = bootstrap(true);
     for f in [RESET, CALLEE] {
-        assert!(off.lookup_symbol(f).is_some() && on.lookup_symbol(f).is_some(), "{f} survives");
+        assert!(
+            off.lookup_symbol(f).is_some() && on.lookup_symbol(f).is_some(),
+            "{f} survives"
+        );
     }
     assert!(off.lookup_symbol(LEAF).is_none() && on.lookup_symbol(LEAF).is_some());
 }

@@ -17,20 +17,21 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace,
-    UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace, addrspace_flags,
+    spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
-use unlace_decomp::dtype::{type_metatype, Datatype, DatatypeKind, TypeFactoryImpl, TypeField};
-use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
+use unlace_decomp::dtype::{Datatype, DatatypeKind, TypeFactoryImpl, TypeField, type_metatype};
+use unlace_decomp::funcdata::Funcdata;
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(IopSpace::new(2))).unwrap();
     m.insert_space(Rc::new(FspecSpace::new(3))).unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
@@ -92,7 +93,14 @@ fn new_op_code(fd: &mut Funcdata, inputs: int4, opc: OpCode, name: &str) -> OpId
 
 /// Build a Varnode at `ram:off` of `size` bytes (typed `ty`) and wire it as input
 /// slot `slot` of `op`.
-fn wire_input(fd: &mut Funcdata, op: OpId, slot: int4, off: u64, size: int4, ty: Rc<Datatype>) -> VarnodeId {
+fn wire_input(
+    fd: &mut Funcdata,
+    op: OpId,
+    slot: int4,
+    off: u64,
+    size: int4,
+    ty: Rc<Datatype>,
+) -> VarnodeId {
     let r = ram(fd);
     let m = Address::new(r, off);
     let vn = fd.new_varnode(size, &m, Some(ty));
@@ -138,9 +146,18 @@ fn w10_union_resolves_float_field_into_float_add() {
     // The float field (index 1) wins; resolve dt is the float4 field type.
     assert_eq!(resolved.get_metatype(), type_metatype::TYPE_FLOAT);
     // The resolution is cached on the read edge with field index 1.
-    let cached = fd.get_union_field(&u, op, 0).expect("resolution cached on edge");
-    assert_eq!(cached.get_field_num(), 1, "FLOAT_ADD resolves to the float field");
-    assert_eq!(cached.get_datatype().get_metatype(), type_metatype::TYPE_FLOAT);
+    let cached = fd
+        .get_union_field(&u, op, 0)
+        .expect("resolution cached on edge");
+    assert_eq!(
+        cached.get_field_num(),
+        1,
+        "FLOAT_ADD resolves to the float field"
+    );
+    assert_eq!(
+        cached.get_datatype().get_metatype(),
+        type_metatype::TYPE_FLOAT
+    );
 }
 
 // ===========================================================================
@@ -162,14 +179,25 @@ fn w10_union_resolves_int_field_into_int_add() {
 
     let resolved = fd.resolve_in_flow(&u, op, 0).unwrap();
     assert_eq!(resolved.get_metatype(), type_metatype::TYPE_INT);
-    let cached = fd.get_union_field(&u, op, 0).expect("resolution cached on edge");
-    assert_eq!(cached.get_field_num(), 0, "INT_ADD resolves to the int field");
+    let cached = fd
+        .get_union_field(&u, op, 0)
+        .expect("resolution cached on edge");
+    assert_eq!(
+        cached.get_field_num(),
+        0,
+        "INT_ADD resolves to the int field"
+    );
 }
 
 #[test]
 fn union_contract_scoring_keeps_absent_prototypes_unknown_and_locked_types_authoritative() {
     use unlace_decomp::fspec::{FuncCallSpecs, FuncProto, ParameterPieces};
-    for opcode in [OpCode::CPUI_CALL, OpCode::CPUI_CALLIND, OpCode::CPUI_CALLOTHER, OpCode::CPUI_RETURN] {
+    for opcode in [
+        OpCode::CPUI_CALL,
+        OpCode::CPUI_CALLIND,
+        OpCode::CPUI_CALLOTHER,
+        OpCode::CPUI_RETURN,
+    ] {
         for locked in [false, true] {
             let mut fd = build_fd();
             let int = base(4, type_metatype::TYPE_INT);
@@ -200,11 +228,15 @@ fn union_contract_scoring_keeps_absent_prototypes_unknown_and_locked_types_autho
                 fd.push_call_specs(call);
             }
             let resolved = fd.resolve_in_flow(&union, op, 1).unwrap();
-            assert_eq!(resolved.get_metatype(), if locked {
-                type_metatype::TYPE_FLOAT
-            } else {
-                type_metatype::TYPE_INT
-            }, "{opcode:?}, locked={locked}");
+            assert_eq!(
+                resolved.get_metatype(),
+                if locked {
+                    type_metatype::TYPE_FLOAT
+                } else {
+                    type_metatype::TYPE_INT
+                },
+                "{opcode:?}, locked={locked}"
+            );
             let cached = fd.get_union_field(&union, op, 1).unwrap();
             assert_eq!(cached.get_field_num(), if locked { 1 } else { 0 });
             assert_eq!(proto.has_store(), locked);

@@ -328,7 +328,9 @@ fn ppc32_pic_dynamic_pointer_relocations_prevent_global_contracts() {
         };
         bytes[offset..offset + 12].copy_from_slice(&fixture.words(&relocation));
         let file = object::File::parse(&*bytes).unwrap();
-        assert!(unlace_analysis::loader::kuna_ppc32_imports::resolve_with_pic_abi(&file).is_empty());
+        assert!(
+            unlace_analysis::loader::kuna_ppc32_imports::resolve_with_pic_abi(&file).is_empty()
+        );
     }
 }
 
@@ -411,9 +413,11 @@ fn ppc32_proved_tail_stub_becomes_a_separate_named_function() {
             "{inventory}"
         );
         if option == "abi" {
-            assert!(functions
-                .iter()
-                .any(|f| f["address"] == 0x1800 && f["name"] == "__stack_chk_fail"));
+            assert!(
+                functions
+                    .iter()
+                    .any(|f| f["address"] == 0x1800 && f["name"] == "__stack_chk_fail")
+            );
         }
     }
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
@@ -509,7 +513,9 @@ fn ppc32_pic_unbounded_lr_writer_cannot_supply_a_return_token() {
         let end = (symbols.file_range().unwrap().0 + symbols.size()) as usize;
         bytes[end - 8..end - 4].copy_from_slice(&f.word(0));
         let file = object::File::parse(&*bytes).unwrap();
-        assert!(unlace_analysis::loader::kuna_ppc32_imports::resolve_with_pic_abi(&file).is_empty());
+        assert!(
+            unlace_analysis::loader::kuna_ppc32_imports::resolve_with_pic_abi(&file).is_empty()
+        );
     }
 }
 
@@ -766,21 +772,41 @@ fn ppc32_pic_driver_provenance_licenses_every_linked_component() {
     use object::{Object, ObjectSection};
     let fixtures = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/");
     let bytes = std::fs::read(format!("{fixtures}ppc32-pic-driver.so")).unwrap();
-    let provenance = std::fs::read_to_string(format!("{fixtures}ppc32-pic-driver.provenance")).unwrap();
-    assert!(provenance.contains(&format!("A {},{:03}-byte", bytes.len() / 1000, bytes.len() % 1000)));
+    let provenance =
+        std::fs::read_to_string(format!("{fixtures}ppc32-pic-driver.provenance")).unwrap();
+    assert!(provenance.contains(&format!(
+        "A {},{:03}-byte",
+        bytes.len() / 1000,
+        bytes.len() % 1000
+    )));
     let file = object::File::parse(&*bytes).unwrap();
     let comment = file.section_by_name(".comment").unwrap().data().unwrap();
     let compiler = std::str::from_utf8(comment).unwrap().trim_matches('\0');
     let version = compiler.strip_prefix("GCC: ").unwrap();
-    assert!(provenance.contains(&format!("powerpc-linux-gnu-gcc {version}")), "{compiler}");
-    let (_, license) = provenance.split_once("\nLicense\n").expect("a License section");
+    assert!(
+        provenance.contains(&format!("powerpc-linux-gnu-gcc {version}")),
+        "{compiler}"
+    );
+    let (_, license) = provenance
+        .split_once("\nLicense\n")
+        .expect("a License section");
     for (component, terms) in [
         ("check.c", "Apache-2.0"),
         ("crti.o and crtn.o", "LGPL-2.1-or-later with"),
         ("crtbeginS.o and crtendS.o", "GPL-3.0-or-later WITH"),
     ] {
-        let entry = license.split("\n  - ").find(|e| e.starts_with(component)).unwrap_or_else(|| panic!("{component}"));
-        assert!(entry.split_whitespace().collect::<Vec<_>>().join(" ").contains(terms), "{component}: {entry}");
+        let entry = license
+            .split("\n  - ")
+            .find(|e| e.starts_with(component))
+            .unwrap_or_else(|| panic!("{component}"));
+        assert!(
+            entry
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+                .contains(terms),
+            "{component}: {entry}"
+        );
     }
 }
 
@@ -1122,7 +1148,9 @@ fn abi_load_scopes_share_one_proof_per_buffer_and_retain_nothing() {
     let resolve = |bytes: &[u8]| -> Vec<(u64, Vec<u8>)> {
         let file = object::File::parse(bytes).unwrap();
         unlace_analysis::loader::kuna_ppc32_imports::resolve_with_pic_abi(&file)
-            .into_iter().map(|s| (s.addr, s.name)).collect()
+            .into_iter()
+            .map(|s| (s.addr, s.name))
+            .collect()
     };
     for little in [false, true] {
         let (original, swapped) = fixture::cache_pair_ordered(little);
@@ -1172,11 +1200,22 @@ fn abi_and_on_agree_on_which_imports_never_return() {
             let path = common::scratch_file("ppc32-noreturn-agreement", "elf");
             std::fs::write(&path, f.bytes()).unwrap();
             for mode in ["on", "abi"] {
-                let (code, err, status) = common::run_kuna(&["decompile", path.to_str().unwrap(),
-                    "check", "--mode", "fast", "--option", "ppc32picimports", mode]);
+                let (code, err, status) = common::run_kuna(&[
+                    "decompile",
+                    path.to_str().unwrap(),
+                    "check",
+                    "--mode",
+                    "fast",
+                    "--option",
+                    "ppc32picimports",
+                    mode,
+                ]);
                 assert_eq!(status, 0, "{code}\n{err}");
                 assert_eq!(
-                    (code.contains(&format!("{name}(")), code.contains("no-return")),
+                    (
+                        code.contains(&format!("{name}(")),
+                        code.contains("no-return")
+                    ),
                     (terminal, terminal),
                     "{name} {mode} little={little}: {code}"
                 );

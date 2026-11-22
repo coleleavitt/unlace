@@ -1,4 +1,4 @@
-use super::{trim_lines, Warning, STEMS};
+use super::{STEMS, Warning, trim_lines};
 use crate::printc::warning_slug;
 
 fn warning(text: &str) -> Warning {
@@ -36,7 +36,10 @@ fn an_abbreviated_warning_s_kind_is_its_slug() {
         ("crossjumprevert: split 3 shared tails", "crossjump-dupe"),
         ("int3pad: 11 bytes of int3 padding", "int3-pad"),
         ("outline: 4 outlined bodies", "outlined"),
-        ("returndup: duplicated 5 shared bare-epilogue return(s)", "return-dupe"),
+        (
+            "returndup: duplicated 5 shared bare-epilogue return(s)",
+            "return-dupe",
+        ),
         ("earlyreturn: hoisted 3 returns", "early-return"),
         ("switchreturn: 2 cases return", "switch-return"),
         ("dedupitetail: merged 2 tails", "ite-dedupe"),
@@ -44,10 +47,19 @@ fn an_abbreviated_warning_s_kind_is_its_slug() {
         ("ifelseflatten: 6 else blocks", "else-flattened"),
         ("Inlined function: g<int, int> x2", "inlined"),
         ("Function: f replaced with injection: g", "injected"),
-        ("Unable to use symbol s: size mismatch", "symbol-size-mismatch"),
+        (
+            "Unable to use symbol s: size mismatch",
+            "symbol-size-mismatch",
+        ),
     ] {
-        for text in [format!("WARNING: {text}"), format!("WARNING (jumptable): {text}")] {
-            assert!(!warning_slug(&text).contains("warn: "), "{text} is abbreviated");
+        for text in [
+            format!("WARNING: {text}"),
+            format!("WARNING (jumptable): {text}"),
+        ] {
+            assert!(
+                !warning_slug(&text).contains("warn: "),
+                "{text} is abbreviated"
+            );
             assert_eq!(slug_base(&text), kind, "{text}");
             assert_eq!(warning(&text).kind(), kind, "{text}");
         }
@@ -57,23 +69,53 @@ fn an_abbreviated_warning_s_kind_is_its_slug() {
 #[test]
 fn a_stem_is_one_the_slugs_leave_whole() {
     for (stem, _) in STEMS {
-        for text in [format!("WARNING: {stem}"), format!("WARNING (jumptable): {stem}")] {
-            assert!(warning_slug(&text).contains("warn: "), "{stem} is abbreviated; its kind is its slug");
+        for text in [
+            format!("WARNING: {stem}"),
+            format!("WARNING (jumptable): {stem}"),
+        ] {
+            assert!(
+                warning_slug(&text).contains("warn: "),
+                "{stem} is abbreviated; its kind is its slug"
+            );
         }
     }
     for (text, kind) in [
-        ("WARNING: Bad instruction - Truncating control flow here", "bad-instruction"),
-        ("WARNING: Control flow ignored unimplemented instructions", "unimplemented-instruction"),
-        ("WARNING: Exceeded the 1 instruction budget: some flow is truncated", "instruction-limit"),
-        ("WARNING (jumptable): Could not recover jumptable at 0x10. Too many branches", "jumptable"),
-        ("WARNING: structured blocks unavailable (structuring declined)", "structuring-declined"),
-        ("WARNING: Nullable weak code relocation could not be modeled", "weak-relocation"),
+        (
+            "WARNING: Bad instruction - Truncating control flow here",
+            "bad-instruction",
+        ),
+        (
+            "WARNING: Control flow ignored unimplemented instructions",
+            "unimplemented-instruction",
+        ),
+        (
+            "WARNING: Exceeded the 1 instruction budget: some flow is truncated",
+            "instruction-limit",
+        ),
+        (
+            "WARNING (jumptable): Could not recover jumptable at 0x10. Too many branches",
+            "jumptable",
+        ),
+        (
+            "WARNING: structured blocks unavailable (structuring declined)",
+            "structuring-declined",
+        ),
+        (
+            "WARNING: Nullable weak code relocation could not be modeled",
+            "weak-relocation",
+        ),
         (
             "WARNING: Nullable weak relocation operand could not be modeled; address guards may be incomplete",
             "weak-relocation",
         ),
-        ("WARNING: funcboundflow: fall-through reached the next function entry", "funcboundflow"),
-        ("WARNING: calltrampoline: 0x0044a677 discards the return address", "calltrampoline"),
+        (
+            "WARNING: funcboundflow: fall-through reached the next function entry",
+            "funcboundflow",
+        ),
+        (
+            "WARNING: calltrampoline: 0x0044a677 discards the return address",
+            "calltrampoline",
+        ),
         ("WARNING: ptrarith problems", "other"),
         ("WARNING: Unknown: data", "other"),
     ] {
@@ -83,7 +125,10 @@ fn a_stem_is_one_the_slugs_leave_whole() {
 
 #[test]
 fn a_message_is_the_text_less_its_marker() {
-    assert_eq!(warning("WARNING: Subroutine does not return").message(), "Subroutine does not return");
+    assert_eq!(
+        warning("WARNING: Subroutine does not return").message(),
+        "Subroutine does not return"
+    );
     assert_eq!(
         warning("WARNING (jumptable): Treating indirect jump as return").message(),
         "(jumptable): Treating indirect jump as return"

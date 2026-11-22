@@ -35,7 +35,9 @@ pub struct RuleSelectDiv {
 
 impl RuleSelectDiv {
     pub fn new(group: impl Into<String>) -> RuleSelectDiv {
-        RuleSelectDiv { group: group.into() }
+        RuleSelectDiv {
+            group: group.into(),
+        }
     }
 }
 
@@ -94,7 +96,9 @@ fn negation_of(data: &Funcdata, vn: VarnodeId) -> Option<VarnodeId> {
     }
     let mult = def_of(data, vn, OpCode::CPUI_INT_MULT)?;
     let mask = unlace_base::address::calc_mask(size(data, vn));
-    (constant(data, input(data, mult, 1)?) == Some(mask)).then(|| input(data, mult, 0)).flatten()
+    (constant(data, input(data, mult, 1)?) == Some(mask))
+        .then(|| input(data, mult, 0))
+        .flatten()
 }
 
 fn last_op(data: &Funcdata, bl: BlockId) -> Option<OpId> {
@@ -137,7 +141,10 @@ fn select_condition(data: &Funcdata, phi: OpId) -> Option<(VarnodeId, [bool; 2])
         edges[i] = outs.iter().position(|&o| o == via)?;
         values[i] = (edges[i] == 1) != branch.is_boolean_flip();
     }
-    (edges[0] != edges[1]).then(|| branch.get_in(1)).flatten().map(|c| (c, values))
+    (edges[0] != edges[1])
+        .then(|| branch.get_in(1))
+        .flatten()
+        .map(|c| (c, values))
 }
 
 /// The values of `x` for which `cond` is `value`, when `cond` compares `x` or
@@ -165,7 +172,9 @@ fn x_set(data: &Funcdata, cond: VarnodeId, value: bool, x: VarnodeId) -> Option<
     if same(data, z, x) {
         return Some(range);
     }
-    if negation_of(data, z).is_some_and(|y| same(data, y, x)) && range.pull_back_unary(OpCode::CPUI_INT_2COMP, n, n) {
+    if negation_of(data, z).is_some_and(|y| same(data, y, x))
+        && range.pull_back_unary(OpCode::CPUI_INT_2COMP, n, n)
+    {
         return Some(range);
     }
     None
@@ -174,12 +183,17 @@ fn x_set(data: &Funcdata, cond: VarnodeId, value: bool, x: VarnodeId) -> Option<
 /// Does the select send every positive `x` to input `pos` of `phi` and every
 /// negative `x` (but the most negative) to the other input?
 fn picks_by_sign(data: &Funcdata, phi: OpId, pos: usize, x: VarnodeId) -> bool {
-    let Some((cond, values)) = select_condition(data, phi) else { return false };
+    let Some((cond, values)) = select_condition(data, phi) else {
+        return false;
+    };
     let n = size(data, x);
     let half: uintb = 1 << (n * 8 - 1);
     let positive = CircleRange::new(1, half, n, 1);
     let negative = CircleRange::new(half + 1, 0, n, 1);
-    match (x_set(data, cond, values[pos], x), x_set(data, cond, values[1 - pos], x)) {
+    match (
+        x_set(data, cond, values[pos], x),
+        x_set(data, cond, values[1 - pos], x),
+    ) {
         (Some(p), Some(q)) => p.contains(&positive) && q.contains(&negative),
         _ => false,
     }
@@ -213,7 +227,9 @@ fn division(data: &Funcdata, op: OpId) -> Option<(VarnodeId, int4)> {
             continue;
         }
         let sign = def_of(data, input(data, right, 0)?, OpCode::CPUI_INT_SRIGHT)?;
-        if same(data, input(data, sign, 0)?, x) && constant(data, input(data, sign, 1)?) == Some(bits - 1) {
+        if same(data, input(data, sign, 0)?, x)
+            && constant(data, input(data, sign, 1)?) == Some(bits - 1)
+        {
             return Some((x, k as int4));
         }
     }
@@ -223,19 +239,28 @@ fn division(data: &Funcdata, op: OpId) -> Option<(VarnodeId, int4)> {
 /// `x` and `m` when the MULTIEQUAL `phi` selects `x & m` or `-(-x & m)`, `m = 2^k - 1`.
 fn remainder(data: &Funcdata, phi: OpId) -> Option<(VarnodeId, uintb)> {
     for pos in 0..2 {
-        let Some(and) = def_of(data, input(data, phi, pos as int4)?, OpCode::CPUI_INT_AND) else { continue };
+        let Some(and) = def_of(data, input(data, phi, pos as int4)?, OpCode::CPUI_INT_AND) else {
+            continue;
+        };
         let x = input(data, and, 0)?;
-        let Some(m) = constant(data, input(data, and, 1)?) else { continue };
+        let Some(m) = constant(data, input(data, and, 1)?) else {
+            continue;
+        };
         if m == 0 || m & (m + 1) != 0 || m >= 1 << (size(data, x) * 8 - 1) {
             continue;
         }
-        let Some(neg_and) = negation_of(data, input(data, phi, 1 - pos as int4)?) else { continue };
-        let Some(and2) = def_of(data, neg_and, OpCode::CPUI_INT_AND) else { continue };
+        let Some(neg_and) = negation_of(data, input(data, phi, 1 - pos as int4)?) else {
+            continue;
+        };
+        let Some(and2) = def_of(data, neg_and, OpCode::CPUI_INT_AND) else {
+            continue;
+        };
         if constant(data, input(data, and2, 1)?) != Some(m) {
             continue;
         }
         let y = input(data, and2, 0)?;
-        let magnitude = negation_of(data, y).is_some_and(|v| same(data, v, x)) || (m == 1 && same(data, y, x));
+        let magnitude =
+            negation_of(data, y).is_some_and(|v| same(data, v, x)) || (m == 1 && same(data, y, x));
         if magnitude && picks_by_sign(data, phi, pos, x) {
             return Some((x, m));
         }
@@ -249,7 +274,11 @@ impl Rule for RuleSelectDiv {
     }
 
     fn clone_rule(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Rule>> {
-        grouplist.contains(&self.group).then(|| Box::new(RuleSelectDiv { group: self.group.clone() }) as Box<dyn Rule>)
+        grouplist.contains(&self.group).then(|| {
+            Box::new(RuleSelectDiv {
+                group: self.group.clone(),
+            }) as Box<dyn Rule>
+        })
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
@@ -258,16 +287,23 @@ impl Rule for RuleSelectDiv {
         }
         match data.obank().get(op).map(|o| o.code()) {
             Some(OpCode::CPUI_INT_SRIGHT) => {
-                let Some((x, k)) = division(data, op) else { return 0 };
+                let Some((x, k)) = division(data, op) else {
+                    return 0;
+                };
                 let divisor = data.new_constant(size(data, x), 1 << k);
                 data.op_set_opcode(op, crate::typeop::type_op_for(OpCode::CPUI_INT_SDIV));
                 data.op_set_input(op, x, 0).expect("selectdiv: dividend");
-                data.op_set_input(op, divisor, 1).expect("selectdiv: divisor");
+                data.op_set_input(op, divisor, 1)
+                    .expect("selectdiv: divisor");
                 1
             }
             Some(OpCode::CPUI_MULTIEQUAL) => {
-                let Some((x, m)) = remainder(data, op) else { return 0 };
-                let Some(out) = data.obank().get(op).and_then(|o| o.get_out()) else { return 0 };
+                let Some((x, m)) = remainder(data, op) else {
+                    return 0;
+                };
+                let Some(out) = data.obank().get(op).and_then(|o| o.get_out()) else {
+                    return 0;
+                };
                 let bl = data.obank().get(op).and_then(|o| o.get_parent()).unwrap();
                 let addr = data.obank().get(op).unwrap().get_addr().clone();
                 let rem = data.new_op(2, addr);
@@ -276,9 +312,11 @@ impl Rule for RuleSelectDiv {
                 let rem_out = data.new_unique_out(n, rem).expect("selectdiv: output");
                 let modulus = data.new_constant(n, m + 1);
                 data.op_set_input(rem, x, 0).expect("selectdiv: dividend");
-                data.op_set_input(rem, modulus, 1).expect("selectdiv: modulus");
+                data.op_set_input(rem, modulus, 1)
+                    .expect("selectdiv: modulus");
                 data.op_insert_begin(rem, bl);
-                data.total_replace(out, rem_out).expect("selectdiv: replace");
+                data.total_replace(out, rem_out)
+                    .expect("selectdiv: replace");
                 1
             }
             _ => 0,

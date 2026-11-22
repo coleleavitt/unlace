@@ -52,7 +52,7 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_base::space::AddrSpace;
-use unlace_base::types::{int4, uint4, uintb, Wrap};
+use unlace_base::types::{Wrap, int4, uint4, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{OpId, VarnodeId};
@@ -122,10 +122,16 @@ impl OptionConstSelectJump {
             other => {
                 return Err(unlace_base::error::KunaError::parse(format!(
                     "Unknown constselectjump value: {other} (expected off|reentry|on)"
-                )))
+                )));
             }
         };
-        Ok((mode, format!("Constant-select indirect branch recovery set to {}", mode.as_str())))
+        Ok((
+            mode,
+            format!(
+                "Constant-select indirect branch recovery set to {}",
+                mode.as_str()
+            ),
+        ))
     }
 }
 
@@ -255,14 +261,18 @@ impl JumpModelConstSelect {
             return false;
         };
         let ceiling = self.walk_ceiling(maxtablesize);
-        let Some(found) = crate::kuna_indirectreturn::destinations(fd, root, encoding, ceiling) else {
+        let Some(found) = crate::kuna_indirectreturn::destinations(fd, root, encoding, ceiling)
+        else {
             return false;
         };
         let stub = branch_offset.wadd(1);
         if !found.returns
             || found.constants.is_empty()
             || found.constants.len() >= maxtablesize as usize
-            || found.constants.iter().any(|&d| d == stub || !kuna_destination_is_local(branch_offset, d))
+            || found
+                .constants
+                .iter()
+                .any(|&d| d == stub || !kuna_destination_is_local(branch_offset, d))
         {
             return false;
         }
@@ -272,7 +282,12 @@ impl JumpModelConstSelect {
     }
 
     pub(crate) fn from_flow_targets(dests: Vec<u64>, stub: Option<u64>) -> Self {
-        Self { dests, return_stub: stub, reentered: true, return_encoding: None }
+        Self {
+            dests,
+            return_stub: stub,
+            reentered: true,
+            return_encoding: None,
+        }
     }
 
     /// The recovered destination offsets.
@@ -306,7 +321,13 @@ impl JumpModel for JumpModelConstSelect {
             },
             None => return Ok(false),
         };
-        match collect_within(fd, root, branch_offset, maxtablesize, self.walk_ceiling(maxtablesize)) {
+        match collect_within(
+            fd,
+            root,
+            branch_offset,
+            maxtablesize,
+            self.walk_ceiling(maxtablesize),
+        ) {
             Some(d) => {
                 self.dests = d;
                 Ok(true)
@@ -328,7 +349,14 @@ impl JumpModel for JumpModelConstSelect {
         _loadcounts: Option<&mut Vec<int4>>,
     ) -> KunaResult<()> {
         addresstable.clear();
-        let spc = Rc::clone(fd.obank().get(indop).unwrap().get_addr().get_space().unwrap());
+        let spc = Rc::clone(
+            fd.obank()
+                .get(indop)
+                .unwrap()
+                .get_addr()
+                .get_space()
+                .unwrap(),
+        );
         let mut mask: uintb = !0u64;
         let bit = fd.get_arch().funcptr_align;
         if bit != 0 {
@@ -363,7 +391,11 @@ impl JumpModel for JumpModelConstSelect {
     ) -> KunaResult<()> {
         for a in addresstable.iter() {
             let returns = self.return_stub == Some(a.get_offset());
-            label.push(if returns { crate::jumptable::NO_LABEL } else { a.get_offset() });
+            label.push(if returns {
+                crate::jumptable::NO_LABEL
+            } else {
+                a.get_offset()
+            });
         }
         Ok(())
     }

@@ -28,7 +28,7 @@ mod storage {
 
     use unlace_base::address::Address;
     use unlace_base::space::{
-        addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+        AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
     };
     use unlace_base::types::int4;
     use unlace_num::opcodes::OpCode;
@@ -42,7 +42,8 @@ mod storage {
     fn build_fd() -> Funcdata {
         let mut m = AddrSpaceManager::new();
         m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+            .unwrap();
         m.insert_space(Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
             "ram",
@@ -163,7 +164,10 @@ mod storage {
     fn a_self_copy_of_a_volatile_location_is_a_barrier() {
         let mut fd = build_fd();
         let g = glob(&mut fd, 0x4000, 4);
-        fd.vbank_mut().get_mut(g).unwrap().set_flags_pub(varnode_flags::volatil);
+        fd.vbank_mut()
+            .get_mut(g)
+            .unwrap()
+            .set_flags_pub(varnode_flags::volatil);
         let op = write_op(&mut fd, OpCode::CPUI_COPY, &[g], 0x4000, 4);
         assert!(op_is_barrier(&fd, op));
     }
@@ -222,7 +226,10 @@ mod shortcircuit {
     use std::rc::Rc;
 
     use unlace_base::address::Address;
-    use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, IopSpace, UniqueSpace};
+    use unlace_base::space::{
+        AddrSpace, AddrSpaceManager, ConstantSpace, IopSpace, UniqueSpace, addrspace_flags,
+        spacetype,
+    };
     use unlace_num::opcodes::OpCode;
 
     use crate::context::{ArchContext, OpId, VarnodeId};
@@ -233,7 +240,8 @@ mod shortcircuit {
     fn build_fd() -> Funcdata {
         let mut m = AddrSpaceManager::new();
         m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+            .unwrap();
         m.insert_space(Rc::new(IopSpace::new(3))).unwrap();
         m.insert_space(Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
@@ -253,7 +261,10 @@ mod shortcircuit {
     }
 
     fn op(fd: &mut Funcdata, opc: OpCode, ins: &[VarnodeId], out_size: i32) -> (OpId, VarnodeId) {
-        let pc = Address::new(Rc::clone(fd.get_arch().manage().get_space_by_name("ram").unwrap()), 0x1100);
+        let pc = Address::new(
+            Rc::clone(fd.get_arch().manage().get_space_by_name("ram").unwrap()),
+            0x1100,
+        );
         let o = fd.new_op(ins.len() as i32, pc);
         fd.op_set_opcode_code(o, opc);
         for (slot, vn) in ins.iter().enumerate() {
@@ -277,7 +288,11 @@ mod shortcircuit {
                 let other = fd.new_constant(1, 1);
                 let ins = if rhs { [other, t] } else { [t, other] };
                 let (bop, _) = op(&mut fd, bool_op, &ins, 1);
-                assert_eq!(chain_reaches_short_circuit_rhs(&fd, call, &[eq, bop]), rhs, "{bool_op:?} rhs={rhs}");
+                assert_eq!(
+                    chain_reaches_short_circuit_rhs(&fd, call, &[eq, bop]),
+                    rhs,
+                    "{bool_op:?} rhs={rhs}"
+                );
             }
         }
     }
@@ -299,7 +314,12 @@ mod shortcircuit {
 
     #[test]
     fn fold_spans_exclude_outside_barriers_and_reject_backward_uses() {
-        for (order, expected) in [([2, 0, 1], true), ([0, 1, 2], true), ([0, 2, 1], false), ([1, 0, 2], false)] {
+        for (order, expected) in [
+            ([2, 0, 1], true),
+            ([0, 1, 2], true),
+            ([0, 2, 1], false),
+            ([1, 0, 2], false),
+        ] {
             let mut fd = build_fd();
             let root = fd.bblocks_root_pub();
             let block = fd.bblocks_mut().new_block_basic(root);
@@ -312,20 +332,32 @@ mod shortcircuit {
             for index in order {
                 fd.op_insert_end(ops[index], block);
             }
-            assert_eq!(super::super::call_output_foldable(&fd, result), expected, "{order:?}");
-            assert_eq!(super::super::fold_print_point_is_order_safe(&fd, result), expected, "{order:?}");
+            assert_eq!(
+                super::super::call_output_foldable(&fd, result),
+                expected,
+                "{order:?}"
+            );
+            assert_eq!(
+                super::super::fold_print_point_is_order_safe(&fd, result),
+                expected,
+                "{order:?}"
+            );
         }
     }
 
     #[test]
     fn a_separate_snapshot_of_this_calls_effect_keeps_the_call_before_the_branch() {
-        for (own_effect, derived, classification, same_high) in [false, true].into_iter().flat_map(|own| {
-            [OpCode::CPUI_COPY, OpCode::CPUI_CAST, OpCode::CPUI_INT_ADD].into_iter().flat_map(move |code| {
-                [0, 1, 2].into_iter().flat_map(move |classification| {
-                    [false, true].map(|same_high| (own, code, classification, same_high))
-                })
+        for (own_effect, derived, classification, same_high) in
+            [false, true].into_iter().flat_map(|own| {
+                [OpCode::CPUI_COPY, OpCode::CPUI_CAST, OpCode::CPUI_INT_ADD]
+                    .into_iter()
+                    .flat_map(move |code| {
+                        [0, 1, 2].into_iter().flat_map(move |classification| {
+                            [false, true].map(|same_high| (own, code, classification, same_high))
+                        })
+                    })
             })
-        }) {
+        {
             let mut fd = build_fd();
             let root = fd.bblocks_root_pub();
             let block = fd.bblocks_mut().new_block_basic(root);
@@ -346,7 +378,11 @@ mod shortcircuit {
                 updated
             } else {
                 let one = fd.new_constant(8, 1);
-                let inputs = if derived == OpCode::CPUI_CAST { vec![updated] } else { vec![updated, one] };
+                let inputs = if derived == OpCode::CPUI_CAST {
+                    vec![updated]
+                } else {
+                    vec![updated, one]
+                };
                 let (expression, source) = op(&mut fd, derived, &inputs, 8);
                 fd.vbank_mut().get_mut(source).unwrap().set_implied();
                 fd.op_insert_end(expression, block);
@@ -370,7 +406,11 @@ mod shortcircuit {
             fd.op_insert_end(branch, block);
 
             assert!(super::super::call_output_foldable(&fd, result));
-            assert_eq!(super::super::fold_print_point_is_order_safe(&fd, result), !(own_effect && classification != 2 && !same_high), "own={own_effect} derived={derived:?} classification={classification} same_high={same_high}");
+            assert_eq!(
+                super::super::fold_print_point_is_order_safe(&fd, result),
+                !(own_effect && classification != 2 && !same_high),
+                "own={own_effect} derived={derived:?} classification={classification} same_high={same_high}"
+            );
         }
     }
 
@@ -385,14 +425,22 @@ mod shortcircuit {
                 let effect = fd.new_varnode_iop(call);
                 let (_, updated) = op(&mut fd, OpCode::CPUI_INDIRECT, &[old, effect], 8);
                 let one = fd.new_constant(8, 1);
-                let inputs = if derived == OpCode::CPUI_CAST { vec![updated] } else { vec![updated, one] };
+                let inputs = if derived == OpCode::CPUI_CAST {
+                    vec![updated]
+                } else {
+                    vec![updated, one]
+                };
                 let (_, expression) = op(&mut fd, derived, &inputs, 8);
                 if explicit_input {
                     fd.vbank_mut().get_mut(expression).unwrap().set_explicit();
                 }
                 let (copy, snapshot) = op(&mut fd, OpCode::CPUI_COPY, &[expression], 8);
                 fd.vbank_mut().get_mut(snapshot).unwrap().set_explicit();
-                assert_eq!(super::super::statement_reads_indirect_output_of(&fd, copy, call), !explicit_input, "derived={derived:?} explicit_input={explicit_input}");
+                assert_eq!(
+                    super::super::statement_reads_indirect_output_of(&fd, copy, call),
+                    !explicit_input,
+                    "derived={derived:?} explicit_input={explicit_input}"
+                );
             }
         }
     }

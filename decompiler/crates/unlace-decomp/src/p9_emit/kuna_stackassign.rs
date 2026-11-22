@@ -1,11 +1,11 @@
 //! Byte stores retain a user-declared layout across incompatible object views.
 
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
+use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_num::opcodes::OpCode;
-use std::rc::Rc;
 
 pub(crate) struct Assignment {
     pub output: VarnodeId,
@@ -325,9 +325,7 @@ pub(super) fn memmove_source(
             break;
         }
         let input = cast.1.get_in(0)?;
-        if fd.vbank().get(input)?.get_size() != value.get_size()
-            || !typed_pointer(input, cast.0)?
-        {
+        if fd.vbank().get(input)?.get_size() != value.get_size() || !typed_pointer(input, cast.0)? {
             break;
         }
         pointer = input;

@@ -31,11 +31,14 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::project::decompile_targets;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// `ptx.o` — the vendored ET_REL fixture, whose undefined externals
@@ -56,8 +59,11 @@ fn boot() -> ConsoleProgram {
 /// Every extern-area entry: those the canonical inventory carries but the
 /// executable (decompilable) one does not.
 fn extern_entries(prog: &ConsoleProgram) -> Vec<unlace_console::engine::FunctionEntry> {
-    let executable: std::collections::BTreeSet<u64> =
-        prog.function_entries_executable().iter().map(|e| e.addr.get_offset()).collect();
+    let executable: std::collections::BTreeSet<u64> = prog
+        .function_entries_executable()
+        .iter()
+        .map(|e| e.addr.get_offset())
+        .collect();
     prog.function_entries_canonical()
         .into_iter()
         .filter(|e| !executable.contains(&e.addr.get_offset()))
@@ -71,7 +77,10 @@ fn selecting_an_external_reports_an_external_not_an_error() {
     let mut prog = boot();
 
     let externs = extern_entries(&prog);
-    assert!(!externs.is_empty(), "fixture must carry extern-area entries");
+    assert!(
+        !externs.is_empty(),
+        "fixture must carry extern-area entries"
+    );
     let target = externs[0].clone();
     let name = target.name.clone();
 
@@ -112,7 +121,11 @@ fn a_failed_read_does_not_make_its_neighbours_look_mapped() {
     // and hide the rest — the exact order the browser inventory classifies in.
     let mut addrs: Vec<u64> = externs.iter().map(|e| e.addr.get_offset()).collect();
     addrs.sort_unstable();
-    let mapped: Vec<u64> = addrs.iter().copied().filter(|&a| prog.vma_bytes_mapped(a)).collect();
+    let mapped: Vec<u64> = addrs
+        .iter()
+        .copied()
+        .filter(|&a| prog.vma_bytes_mapped(a))
+        .collect();
     assert!(
         mapped.is_empty(),
         "no extern slot is backed by bytes; these reported mapped: {mapped:x?}"

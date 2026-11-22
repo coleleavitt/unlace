@@ -345,5 +345,8 @@ fn strings_refuses_an_isa_it_would_never_apply() {
     );
     assert_eq!(output.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("--isa has no effect with --no-xrefs"), "{stderr}");
+    assert!(
+        stderr.contains("--isa has no effect with --no-xrefs"),
+        "{stderr}"
+    );
 }

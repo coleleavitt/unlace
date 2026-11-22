@@ -23,10 +23,10 @@
 //!
 //! Origin (upstream Ghidra): `Ghidra/Features/MicrosoftCodeAnalyzer/.../rtti/`.
 
-use super::refkind::RefKind;
-use unlace_decomp::kuna_fasthash::{FxHashMap, FxHashSet};
 #[cfg(test)]
 use super::refkind::End;
+use super::refkind::RefKind;
+use unlace_decomp::kuna_fasthash::{FxHashMap, FxHashSet};
 
 /// A view over the loaded image's bytes addressable by virtual address — the
 /// loadable sections, sorted, so a `read(vma, len)` resolves through whichever
@@ -231,7 +231,11 @@ impl TypeDescriptor {
         if !mangled_name.starts_with(".?A") {
             return None;
         }
-        Some(TypeDescriptor { addr, p_vftable, mangled_name })
+        Some(TypeDescriptor {
+            addr,
+            p_vftable,
+            mangled_name,
+        })
     }
 }
 
@@ -263,7 +267,12 @@ impl CompleteObjectLocator {
             rk.resolve_ref(img.read(addr + Self::OFF_TYPE_DESCRIPTOR, rk.ref_size())?)?;
         let p_class_hierarchy =
             rk.resolve_ref(img.read(addr + Self::OFF_CLASS_HIERARCHY, rk.ref_size())?)?;
-        Some(CompleteObjectLocator { addr, signature, p_type_descriptor, p_class_hierarchy })
+        Some(CompleteObjectLocator {
+            addr,
+            signature,
+            p_type_descriptor,
+            p_class_hierarchy,
+        })
     }
 }
 
@@ -295,7 +304,11 @@ impl ClassHierarchyDescriptor {
         }
         let p_base_class_array =
             rk.resolve_ref(img.read(addr + Self::OFF_BASE_ARRAY, rk.ref_size())?)?;
-        Some(ClassHierarchyDescriptor { addr, num_base_classes, p_base_class_array })
+        Some(ClassHierarchyDescriptor {
+            addr,
+            num_base_classes,
+            p_base_class_array,
+        })
     }
 }
 
@@ -314,19 +327,17 @@ impl BaseClassDescriptor {
     /// `pTypeDescriptor ref @0` (the first field).
     pub fn read(img: &ImageBytes, rk: &RefKind, addr: u64) -> Option<Self> {
         let p_type_descriptor = rk.resolve_ref(img.read(addr, rk.ref_size())?)?;
-        Some(BaseClassDescriptor { addr, p_type_descriptor })
+        Some(BaseClassDescriptor {
+            addr,
+            p_type_descriptor,
+        })
     }
 }
 
 /// Read the RTTI2 `BaseClassArray` at `addr`: `count` 4-byte refs to RTTI1s,
 /// resolved to absolute VMAs. Stops early (returns what it has) if a ref is
 /// unreadable — defensive, never partial-panics.
-pub fn read_base_class_array(
-    img: &ImageBytes,
-    rk: &RefKind,
-    addr: u64,
-    count: u32,
-) -> Vec<u64> {
+pub fn read_base_class_array(img: &ImageBytes, rk: &RefKind, addr: u64, count: u32) -> Vec<u64> {
     let mut out = Vec::with_capacity(count as usize);
     for i in 0..count as u64 {
         let Some(bytes) = img.read(addr + i * rk.ref_size() as u64, rk.ref_size()) else {
@@ -357,8 +368,10 @@ mod tests {
         let rk = RefKind::new(true, ib, End::Little);
         // .rdata @ 0x140002000 (0x100 bytes)
         let mut rdata = vec![0u8; 0x100];
-        let put_u32 = |v: &mut [u8], off: usize, x: u32| v[off..off + 4].copy_from_slice(&x.to_le_bytes());
-        let put_u64 = |v: &mut [u8], off: usize, x: u64| v[off..off + 8].copy_from_slice(&x.to_le_bytes());
+        let put_u32 =
+            |v: &mut [u8], off: usize, x: u32| v[off..off + 4].copy_from_slice(&x.to_le_bytes());
+        let put_u64 =
+            |v: &mut [u8], off: usize, x: u64| v[off..off + 8].copy_from_slice(&x.to_le_bytes());
         // type_info vftable cell @0x2000 (just zero).
         // COL @ 0x2020: sig=1, off=0, cd=0, pTD=ibo(0x3010), pCHD=ibo(0x2038)
         put_u32(&mut rdata, 0x20, 1);
@@ -412,9 +425,14 @@ mod tests {
     fn scan_refs_groups_every_reference_by_target_in_image_order() {
         let (rdata, data, rk) = x64_img();
         let img = ImageBytes::from_spans(vec![(0x1_4000_2000, &rdata), (0x1_4000_3000, &data)]);
-        let targets: FxHashSet<u64> = [0x1_4000_3010, 0x1_4000_3030, 0x1_4000_9000].into_iter().collect();
+        let targets: FxHashSet<u64> = [0x1_4000_3010, 0x1_4000_3030, 0x1_4000_9000]
+            .into_iter()
+            .collect();
         let hits = img.scan_refs(&rk, &targets);
-        assert_eq!(hits.get(&0x1_4000_3010), Some(&vec![0x1_4000_202c, 0x1_4000_2060]));
+        assert_eq!(
+            hits.get(&0x1_4000_3010),
+            Some(&vec![0x1_4000_202c, 0x1_4000_2060])
+        );
         assert_eq!(hits.get(&0x1_4000_3030), Some(&vec![0x1_4000_2080]));
         assert!(!hits.contains_key(&0x1_4000_9000));
         assert!(img.scan_refs(&rk, &Default::default()).is_empty());

@@ -3,14 +3,14 @@
 //! Stage-aligned module group; declared flatly at the crate root via re-export in
 //! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
 
-pub mod options;
-mod kuna_option_dispatch;
-pub mod modes;
 pub mod database;
-pub mod overrides;
-pub mod kuna_phases;
 pub mod kuna_assert;
+mod kuna_option_dispatch;
+pub mod kuna_phases;
 pub mod kuna_restartlog;
+pub mod modes;
+pub mod options;
+pub mod overrides;
 // (kuna) i386-PIE PLT-stub decode option gate (angr test_decompiling_nl_i386_pie).
 pub mod kuna_ppc32picimports;
 // (kuna) x86-64 IFUNC (IRELATIVE) PLT-stub naming option gate (load-time, env-bridged).
@@ -49,9 +49,9 @@ pub mod kuna_exporttrie;
 pub mod kuna_goabi;
 // (kuna) Discriminant-value naming for recovered variant parts (load-time,
 // env-bridged; the first VariantLayout consumer).
-pub mod kuna_gotypes;
 pub mod kuna_gopointermethod;
 pub mod kuna_gostringinput;
+pub mod kuna_gotypes;
 // (kuna) Language facets: what a C-shaped type means in the source language
 // (the VariantLayout-style side table on the type factory).
 pub mod kuna_langfacet;

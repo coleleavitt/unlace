@@ -30,7 +30,10 @@ use unlace_sleigh::sleigh::Sleigh;
 use unlace_sleigh::translate::{AssemblyEmit, PcodeEmit, Translate};
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// In-memory image: the instruction bytes at `base`, zero-filled elsewhere so
@@ -103,13 +106,14 @@ impl LoadImage for DummyImg {
 
 /// Build an x86-64 SLEIGH over `bytes` at `base` using the required spec.
 fn x86_64_sleigh(base: u64, bytes: Vec<u8>) -> (Sleigh, Address) {
-    let sla_path =
-        repo_root().join("specs/Ghidra/Processors/x86/data/languages/x86-64.sla");
+    let sla_path = repo_root().join("specs/Ghidra/Processors/x86/data/languages/x86-64.sla");
     let sla = std::fs::read(&sla_path).expect("read compiled x86-64 spec");
 
     let ctx = Box::new(ContextInternal::new());
     let mut sleigh = Sleigh::new(Box::new(DummyImg), ctx);
-    sleigh.initialize_from_sla(&sla).expect("initialize x86-64.sla");
+    sleigh
+        .initialize_from_sla(&sla)
+        .expect("initialize x86-64.sla");
     // x86-64.pspec `<context_data>`: 64-bit long mode, 32-bit default operand.
     sleigh.set_context_default("addrsize", 2);
     sleigh.set_context_default("opsize", 1);
@@ -118,8 +122,13 @@ fn x86_64_sleigh(base: u64, bytes: Vec<u8>) -> (Sleigh, Address) {
 
     sleigh.set_loader(Box::new(MemImg { base, bytes }));
 
-    let ram =
-        Rc::clone(sleigh.base().manager().get_space_by_name("ram").expect("ram space"));
+    let ram = Rc::clone(
+        sleigh
+            .base()
+            .manager()
+            .get_space_by_name("ram")
+            .expect("ram space"),
+    );
     (sleigh, Address::new(ram, base))
 }
 
@@ -130,8 +139,7 @@ fn x86_64_fifteen_byte_alignment_nop_decodes() {
     // segment override, then `0f 1f /4` with SIB + disp32 -- 15 bytes, the x86
     // maximum. `c3` (RET) anchors the far side so we can see the stream realign.
     let mut bytes = vec![
-        0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x2e, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00,
-        0x00, 0x00,
+        0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x2e, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00,
     ];
     bytes.push(0xc3);
 

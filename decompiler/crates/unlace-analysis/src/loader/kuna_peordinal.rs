@@ -1222,7 +1222,10 @@ mod tests {
 
     #[test]
     fn fixture_ordinal_imports_are_named_at_their_iat_slots() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/pe_ordinal_i386.exe");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/pe_ordinal_i386.exe"
+        );
         let bytes = std::fs::read(path).expect("fixture");
         let file = object::File::parse(&*bytes).expect("pe");
         let got: Vec<(u64, String)> = super::super::pe_iat::resolve_pe_imports(&file, &bytes)
@@ -1238,7 +1241,10 @@ mod tests {
             (0x401020, "MYLIB_Ordinal_7"),
             (0x401028, "OLEAUT32_Ordinal_9999"),
         ] {
-            assert!(got.iter().any(|(a, n)| *a == want.0 && n == want.1), "{want:?} not in {got:?}");
+            assert!(
+                got.iter().any(|(a, n)| *a == want.0 && n == want.1),
+                "{want:?} not in {got:?}"
+            );
         }
     }
 

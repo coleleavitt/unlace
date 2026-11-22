@@ -18,9 +18,9 @@ use std::path::Path;
 use unlace_analysis::blobs::{self, Blob, BlobKind};
 
 use crate::args::take_value as take;
-use crate::decompile_all::{load_program, mode_options_for_binary, Args, DriverDefaults};
+use crate::decompile_all::{Args, DriverDefaults, load_program, mode_options_for_binary};
 use crate::function_info::function_json;
-use crate::jsonfmt::{dumps_indent2, Json};
+use crate::jsonfmt::{Json, dumps_indent2};
 
 pub(crate) struct BlobArgs {
     binary: String,
@@ -73,10 +73,15 @@ fn section_matches(name: Option<&str>, want: &str) -> bool {
 pub(crate) fn query(args: &BlobArgs) -> Result<String, String> {
     let bytes = crate::image::image_bytes(
         &args.binary,
-        unlace_analysis::loader::macho_fat::slice_pref(args.slice.as_deref(), args.target.as_deref()),
+        unlace_analysis::loader::macho_fat::slice_pref(
+            args.slice.as_deref(),
+            args.target.as_deref(),
+        ),
     )?;
-    let options = mode_options_for_binary(args.mode.as_deref(), &args.binary, args.options.clone())?;
-    let _loadtime_env = crate::loadtime::apply_to_process(&options, args.slice.as_deref(), 1, false);
+    let options =
+        mode_options_for_binary(args.mode.as_deref(), &args.binary, args.options.clone())?;
+    let _loadtime_env =
+        crate::loadtime::apply_to_process(&options, args.slice.as_deref(), 1, false);
     let raw = unlace_analysis::loadimage_object::parse_object(&bytes)
         .map_err(|e| format!("could not parse {}: {e}", args.binary))?;
     let view = unlace_analysis::loader::kuna_relocrebase::rebased_view(&raw, &bytes);
@@ -97,7 +102,11 @@ pub(crate) fn query(args: &BlobArgs) -> Result<String, String> {
     let mut rows: Vec<Row> = Vec::new();
     for region in &regions {
         for blob in blobs::scan(region.data) {
-            if args.kinds.as_ref().is_some_and(|kinds| !kinds.contains(&blob.kind)) {
+            if args
+                .kinds
+                .as_ref()
+                .is_some_and(|kinds| !kinds.contains(&blob.kind))
+            {
                 continue;
             }
             rows.push(Row {
@@ -119,7 +128,10 @@ pub(crate) fn query(args: &BlobArgs) -> Result<String, String> {
         extract(Path::new(dir), &mut rows)?;
     }
     Ok(if args.json {
-        format!("{}\n", dumps_indent2(&result_json(args, from_segments, &rows)))
+        format!(
+            "{}\n",
+            dumps_indent2(&result_json(args, from_segments, &rows))
+        )
     } else {
         render_text(args, from_segments, &rows)
     })
@@ -152,18 +164,22 @@ fn attribute(
         ..Args::serial()
     };
     let prog = load_program(&load, DriverDefaults::Inventory)?;
-    let inventory: BTreeMap<u64, String> =
-        prog.function_entries_canonical().into_iter().map(|e| (e.addr.get_offset(), e.name)).collect();
+    let inventory: BTreeMap<u64, String> = prog
+        .function_entries_canonical()
+        .into_iter()
+        .map(|e| (e.addr.get_offset(), e.name))
+        .collect();
     let seeds: Vec<u64> = inventory.keys().copied().collect();
-    let index = unlace_analysis::listing::xrefs::build(file, prog.arch(), prog.arch().translate(), &seeds);
+    let index =
+        unlace_analysis::listing::xrefs::build(file, prog.arch(), prog.arch().translate(), &seeds);
     for row in rows {
         let mut owners: BTreeMap<u64, String> = BTreeMap::new();
         for xref in index.refs_into(row.addr..row.addr.saturating_add(row.blob.len as u64)) {
             row.xrefs_count += 1;
             if let Some(entry) = crate::function_info::owning_function(&prog, &index, xref.from) {
-                owners
-                    .entry(entry)
-                    .or_insert_with(|| crate::function_info::function_name(&prog, &inventory, entry));
+                owners.entry(entry).or_insert_with(|| {
+                    crate::function_info::function_name(&prog, &inventory, entry)
+                });
             }
         }
         row.functions = owners.into_iter().collect();
@@ -175,9 +191,15 @@ fn attribute(
 fn extract(dir: &Path, rows: &mut [Row]) -> Result<(), String> {
     std::fs::create_dir_all(dir).map_err(|e| format!("could not create {}: {e}", dir.display()))?;
     for row in rows {
-        let name = format!("{}_{:x}.{}", row.blob.kind.as_str(), row.addr, row.blob.kind.extension());
+        let name = format!(
+            "{}_{:x}.{}",
+            row.blob.kind.as_str(),
+            row.addr,
+            row.blob.kind.extension()
+        );
         let path = dir.join(name);
-        std::fs::write(&path, row.bytes).map_err(|e| format!("could not write {}: {e}", path.display()))?;
+        std::fs::write(&path, row.bytes)
+            .map_err(|e| format!("could not write {}: {e}", path.display()))?;
         row.file = Some(path.to_string_lossy().into_owned());
     }
     Ok(())
@@ -198,10 +220,18 @@ fn result_json(args: &BlobArgs, from_segments: bool, rows: &[Row]) -> Json {
                     ("length".into(), Json::Number(row.blob.len.to_string())),
                     ("section".into(), optional_str(row.section.as_deref())),
                     ("file".into(), optional_str(row.file.as_deref())),
-                    ("xrefs_count".into(), Json::Number(row.xrefs_count.to_string())),
+                    (
+                        "xrefs_count".into(),
+                        Json::Number(row.xrefs_count.to_string()),
+                    ),
                     (
                         "functions".into(),
-                        Json::Array(row.functions.iter().map(|(a, n)| function_json(n, *a)).collect()),
+                        Json::Array(
+                            row.functions
+                                .iter()
+                                .map(|(a, n)| function_json(n, *a))
+                                .collect(),
+                        ),
                     ),
                 ])
             })
@@ -210,7 +240,17 @@ fn result_json(args: &BlobArgs, from_segments: bool, rows: &[Row]) -> Json {
     Json::Object(vec![
         ("binary".into(), Json::Str(args.binary.clone())),
         ("section".into(), optional_str(args.section.as_deref())),
-        ("scanned".into(), Json::Str(if from_segments { "segments" } else { "sections" }.into())),
+        (
+            "scanned".into(),
+            Json::Str(
+                if from_segments {
+                    "segments"
+                } else {
+                    "sections"
+                }
+                .into(),
+            ),
+        ),
         ("xrefs".into(), Json::Bool(!args.no_xrefs)),
         ("count".into(), Json::Number(rows.len().to_string())),
         ("blobs".into(), blobs),
@@ -228,13 +268,21 @@ fn render_text(args: &BlobArgs, from_segments: bool, rows: &[Row]) -> String {
         "# {} embedded {plural} in {} (scanned by {})",
         rows.len(),
         args.binary,
-        if from_segments { "segments" } else { "sections" }
+        if from_segments {
+            "segments"
+        } else {
+            "sections"
+        }
     );
     for row in rows {
         let functions = if row.functions.is_empty() {
             "-".to_string()
         } else {
-            row.functions.iter().map(|(_, n)| n.as_str()).collect::<Vec<_>>().join(",")
+            row.functions
+                .iter()
+                .map(|(_, n)| n.as_str())
+                .collect::<Vec<_>>()
+                .join(",")
         };
         let _ = write!(
             out,
@@ -257,10 +305,13 @@ fn render_text(args: &BlobArgs, from_segments: bool, rows: &[Row]) -> String {
 fn parse_kinds(list: &str) -> Result<Vec<BlobKind>, String> {
     list.split(',')
         .map(|name| {
-            BlobKind::ALL.into_iter().find(|k| k.as_str() == name).ok_or_else(|| {
-                let known: Vec<&str> = BlobKind::ALL.iter().map(|k| k.as_str()).collect();
-                format!("unknown --kind {name:?} (one of {})", known.join(", "))
-            })
+            BlobKind::ALL
+                .into_iter()
+                .find(|k| k.as_str() == name)
+                .ok_or_else(|| {
+                    let known: Vec<&str> = BlobKind::ALL.iter().map(|k| k.as_str()).collect();
+                    format!("unknown --kind {name:?} (one of {})", known.join(", "))
+                })
         })
         .collect()
 }
@@ -307,7 +358,20 @@ pub(crate) fn parse_args(argv: &[String]) -> Result<BlobArgs, String> {
     if no_xrefs && isa.is_some() {
         return Err("--isa has no effect with --no-xrefs (no code is decoded)".into());
     }
-    Ok(BlobArgs { binary, json, extract, kinds, section, no_xrefs, options, mode, slice, target, sleighpath, isa })
+    Ok(BlobArgs {
+        binary,
+        json,
+        extract,
+        kinds,
+        section,
+        no_xrefs,
+        options,
+        mode,
+        slice,
+        target,
+        sleighpath,
+        isa,
+    })
 }
 
 fn usage() {

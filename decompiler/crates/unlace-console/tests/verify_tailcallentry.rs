@@ -37,11 +37,16 @@ use std::path::PathBuf;
 use unlace_analysis::listing::kuna_tailcallentry::tail_call_entries;
 use unlace_analysis::listing::{Listing, ListingDetail};
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture() -> PathBuf {
@@ -74,21 +79,28 @@ fn bootstrap(on: bool) -> unlace_console::engine::ConsoleProgram {
     let bin = fixture().to_str().expect("UTF-8 fixture path").to_string();
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.arch_mut().set_kuna_option("listing", "on").expect("listing flips on");
+    prog.arch_mut()
+        .set_kuna_option("listing", "on")
+        .expect("listing flips on");
     prog.arch_mut()
         .set_kuna_option("funcstart_patterns", "on")
         .expect("funcstart_patterns flips on");
     prog.arch_mut()
         .set_kuna_option("tailcallentry", if on { "on" } else { "off" })
         .expect("tailcallentry flips");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
 /// Decompile `func` in an already-bootstrapped program and return the captured C.
 fn decompile(prog: unlace_console::engine::ConsoleProgram, func: &str) -> String {
-    let cmds: Vec<String> =
-        [format!("load function {func}"), "decompile".into(), "print C".into()].to_vec();
+    let cmds: Vec<String> = [
+        format!("load function {func}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .to_vec();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);

@@ -68,19 +68,19 @@ pub mod models;
 pub mod refkind;
 pub mod vftable;
 
-use object::read::pe::{ImageNtHeaders, PeFile32, PeFile64};
 use object::read::Object;
+use object::read::pe::{ImageNtHeaders, PeFile32, PeFile64};
 use object::{BinaryFormat, FileKind};
 
-use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase, SymFact, SymKind};
 use crate::demangle::demangle_rtti_class_name;
+use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase, SymFact, SymKind};
 use models::{
-    read_base_class_array, BaseClassDescriptor, ClassHierarchyDescriptor, CompleteObjectLocator,
-    ImageBytes, TypeDescriptor,
+    BaseClassDescriptor, ClassHierarchyDescriptor, CompleteObjectLocator, ImageBytes,
+    TypeDescriptor, read_base_class_array,
 };
 use refkind::{End, RefKind};
 use unlace_decomp::kuna_fasthash::{FxHashMap, FxHashSet};
-use vftable::{walk_vftable, TextRanges};
+use vftable::{TextRanges, walk_vftable};
 
 /// The byte distance from a reference-to-a-`TypeDescriptor` back to the
 /// `CompleteObjectLocator` that names it: the COL's `pTypeDescriptor` field is at
@@ -196,7 +196,10 @@ fn emit_classes(
         meta_slots.entry(col_addr).or_default().push(slot);
     }
     for col in &cols {
-        let slots = meta_slots.get(&col.addr).map(Vec::as_slice).unwrap_or_default();
+        let slots = meta_slots
+            .get(&col.addr)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
         emit_for_col(img, rk, text, col, slots, out);
     }
 }
@@ -428,7 +431,10 @@ mod tests {
     #[test]
     fn virtual_method_is_named_after_the_function_not_the_table() {
         assert_eq!(vfunc_name("Box", 0), "Box::vfunc_0");
-        assert_eq!(vfunc_name("std::basic_stringbuf", 11), "std::basic_stringbuf::vfunc_11");
+        assert_eq!(
+            vfunc_name("std::basic_stringbuf", 11),
+            "std::basic_stringbuf::vfunc_11"
+        );
         for slot in [0usize, 1, 11] {
             let n = vfunc_name("std::bad_alloc", slot);
             assert!(
@@ -486,7 +492,10 @@ mod tests {
 
         let started = std::time::Instant::now();
         let descriptors = find_type_descriptors(&img, &rk);
-        assert_eq!(pick_common_type_info_vftable(&descriptors), Some(ib + 0x2000));
+        assert_eq!(
+            pick_common_type_info_vftable(&descriptors),
+            Some(ib + 0x2000)
+        );
         let tds: Vec<&TypeDescriptor> = descriptors.iter().collect();
         let mut out = AnalysisOutput::default();
         emit_classes(&img, &rk, &text, &tds, &mut out);
@@ -495,12 +504,22 @@ mod tests {
         for i in [0, 1, CLASSES / 2, CLASSES - 1] {
             let class = name(i);
             let at = |n: &str| out.symbols.iter().find(|s| s.name == n).map(|s| s.addr);
-            assert_eq!(at(&format!("{class}::vftable")), Some(rdata_base + i * 0x60 + 0x50));
+            assert_eq!(
+                at(&format!("{class}::vftable")),
+                Some(rdata_base + i * 0x60 + 0x50)
+            );
             assert_eq!(at(&format!("{class}::vfunc_0")), Some(text_base + i * 16));
         }
-        let vftables = out.symbols.iter().filter(|s| s.name.ends_with("::vftable")).count();
+        let vftables = out
+            .symbols
+            .iter()
+            .filter(|s| s.name.ends_with("::vftable"))
+            .count();
         assert_eq!(vftables, CLASSES as usize);
-        assert!(elapsed < std::time::Duration::from_secs(30), "{CLASSES} classes took {elapsed:?}");
+        assert!(
+            elapsed < std::time::Duration::from_secs(30),
+            "{CLASSES} classes took {elapsed:?}"
+        );
     }
 
     #[test]
@@ -513,14 +532,30 @@ mod tests {
         }];
         assert_eq!(pick_common_type_info_vftable(&one), None);
         let two = vec![
-            TypeDescriptor { addr: 0x1000, p_vftable: 0x2000, mangled_name: ".?AVA@@".into() },
-            TypeDescriptor { addr: 0x1100, p_vftable: 0x2000, mangled_name: ".?AVB@@".into() },
+            TypeDescriptor {
+                addr: 0x1000,
+                p_vftable: 0x2000,
+                mangled_name: ".?AVA@@".into(),
+            },
+            TypeDescriptor {
+                addr: 0x1100,
+                p_vftable: 0x2000,
+                mangled_name: ".?AVB@@".into(),
+            },
         ];
         assert_eq!(pick_common_type_info_vftable(&two), Some(0x2000));
         // A null pVFTable never wins.
         let nulls = vec![
-            TypeDescriptor { addr: 1, p_vftable: 0, mangled_name: ".?AVA@@".into() },
-            TypeDescriptor { addr: 2, p_vftable: 0, mangled_name: ".?AVB@@".into() },
+            TypeDescriptor {
+                addr: 1,
+                p_vftable: 0,
+                mangled_name: ".?AVA@@".into(),
+            },
+            TypeDescriptor {
+                addr: 2,
+                p_vftable: 0,
+                mangled_name: ".?AVB@@".into(),
+            },
         ];
         assert_eq!(pick_common_type_info_vftable(&nulls), None);
     }

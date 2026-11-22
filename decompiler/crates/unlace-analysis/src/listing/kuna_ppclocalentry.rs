@@ -103,8 +103,12 @@ pub(super) fn declared_local_entries(file: &object::File) -> BTreeMap<u64, u64> 
         if sym.kind() != SymbolKind::Text || sym.address() == 0 {
             continue;
         }
-        let SymbolFlags::Elf { st_other, .. } = sym.flags() else { continue };
-        let Some(offset) = local_entry_offset(st_other) else { continue };
+        let SymbolFlags::Elf { st_other, .. } = sym.flags() else {
+            continue;
+        };
+        let Some(offset) = local_entry_offset(st_other) else {
+            continue;
+        };
         if sym.size() != 0 && offset >= sym.size() {
             continue;
         }
@@ -164,7 +168,13 @@ mod tests {
         let bytes = std::fs::read(path).expect("fixture readable");
         let file = object::File::parse(&*bytes).expect("fixture parses");
         let folds = declared_local_entries(&file);
-        for (global, local) in [(0x6f0, 0x6f8), (0x750, 0x758), (0x7c0, 0x7c8), (0x8b0, 0x8b8), (0x940, 0x948)] {
+        for (global, local) in [
+            (0x6f0, 0x6f8),
+            (0x750, 0x758),
+            (0x7c0, 0x7c8),
+            (0x8b0, 0x8b8),
+            (0x940, 0x948),
+        ] {
             assert_eq!(
                 folds.get(&local),
                 Some(&global),
@@ -173,7 +183,11 @@ mod tests {
         }
         // Every fold is 8 bytes past its global entry and nothing else folds.
         for (&local, &global) in &folds {
-            assert_eq!(local - global, 8, "fixture is built with an 8-byte TOC prologue");
+            assert_eq!(
+                local - global,
+                8,
+                "fixture is built with an 8-byte TOC prologue"
+            );
         }
     }
 

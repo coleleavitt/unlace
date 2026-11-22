@@ -26,20 +26,20 @@
 
 use std::rc::Rc;
 
-use unlace_base::address::{calc_int_max, calc_int_min, calc_uint_max, Address};
+use unlace_base::address::{Address, calc_int_max, calc_int_min, calc_uint_max};
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace,
-    UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace, addrspace_flags,
+    spacetype,
 };
 use unlace_base::types::{int4, uintb};
 
 use unlace_decomp::action::{Action, ActionContext};
-use unlace_decomp::dtype::{type_metatype, Datatype};
-use unlace_decomp::funcdata::Funcdata;
-use unlace_decomp::kuna_compareform::{parse_compare_form, ActionPresentCompareForm, CompareForm};
-use unlace_decomp::kuna_memsetsequence::{parse_memset_recover_form, MemsetRecoverForm};
-use unlace_decomp::kuna_returnpair::{keep_single_return, parse_return_pair_form, ReturnPairForm};
 use unlace_decomp::context::{ArchContext, TypeOp};
+use unlace_decomp::dtype::{Datatype, type_metatype};
+use unlace_decomp::funcdata::Funcdata;
+use unlace_decomp::kuna_compareform::{ActionPresentCompareForm, CompareForm, parse_compare_form};
+use unlace_decomp::kuna_memsetsequence::{MemsetRecoverForm, parse_memset_recover_form};
+use unlace_decomp::kuna_returnpair::{ReturnPairForm, keep_single_return, parse_return_pair_form};
 use unlace_decomp::varnode::{DefOpInfo, VarnodeBank};
 use unlace_num::opcodes::OpCode;
 
@@ -50,7 +50,8 @@ use unlace_num::opcodes::OpCode;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(IopSpace::new(2))).unwrap();
     m.insert_space(Rc::new(FspecSpace::new(3))).unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
@@ -84,9 +85,11 @@ fn unk(size: int4) -> Rc<Datatype> {
     Rc::new(Datatype::new(size, type_metatype::TYPE_UNKNOWN))
 }
 
-fn no_replace(
-) -> impl FnMut(&mut VarnodeBank, unlace_decomp::context::VarnodeId, unlace_decomp::context::VarnodeId) -> unlace_base::error::KunaResult<()>
-{
+fn no_replace() -> impl FnMut(
+    &mut VarnodeBank,
+    unlace_decomp::context::VarnodeId,
+    unlace_decomp::context::VarnodeId,
+) -> unlace_base::error::KunaResult<()> {
     |_: &mut VarnodeBank, _, _| Ok(())
 }
 
@@ -95,7 +98,8 @@ fn mk_op(fd: &mut Funcdata, off: u64, inputs: int4, opc: OpCode) -> unlace_decom
     let pc = Address::new(r, off);
     let op = fd.obank_mut().create_at(inputs, pc);
     fd.obank_mut().mark_alive(op);
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
     op
 }
 
@@ -105,15 +109,26 @@ fn set_def(
     defop: unlace_decomp::context::OpId,
 ) -> unlace_decomp::context::VarnodeId {
     let seq = fd.obank().get(defop).unwrap().get_seq_num().clone();
-    let info = DefOpInfo { id: defop, seqnum: seq };
+    let info = DefOpInfo {
+        id: defop,
+        seqnum: seq,
+    };
     let vn = fd.vbank_mut().set_def(vn, info, &mut no_replace()).unwrap();
     fd.obank_mut().get_mut(defop).unwrap().set_output(Some(vn));
     vn
 }
 
-fn wire(fd: &mut Funcdata, vn: unlace_decomp::context::VarnodeId, op: unlace_decomp::context::OpId, slot: int4) {
+fn wire(
+    fd: &mut Funcdata,
+    vn: unlace_decomp::context::VarnodeId,
+    op: unlace_decomp::context::OpId,
+    slot: int4,
+) {
     fd.vbank_mut().add_descend(vn, op).unwrap();
-    fd.obank_mut().get_mut(op).unwrap().set_input(Some(vn), slot);
+    fd.obank_mut()
+        .get_mut(op)
+        .unwrap()
+        .set_input(Some(vn), slot);
 }
 
 fn mk_var(fd: &mut Funcdata, off: u64, size: int4) -> unlace_decomp::context::VarnodeId {
@@ -186,15 +201,30 @@ fn t1_signed_roundtrip_at_intmax_boundary_4_and_8() {
         let op = mk_cmp_with_const(&mut fd, width, OpCode::CPUI_INT_SLESSEQUAL, start, false);
 
         // canonicalize: V s<= (INT_MAX-1)  =>  V s< INT_MAX  (marked)
-        assert!(fd.replace_lessequal(op).unwrap(), "width {width}: canon should fire");
+        assert!(
+            fd.replace_lessequal(op).unwrap(),
+            "width {width}: canon should fire"
+        );
         assert_eq!(code_of(&fd, op), OpCode::CPUI_INT_SLESS);
-        assert_eq!(const_in(&fd, op, 1), int_max, "width {width}: canon constant");
+        assert_eq!(
+            const_in(&fd, op, 1),
+            int_max,
+            "width {width}: canon constant"
+        );
         assert!(fd.obank().get(op).unwrap().is_canonical_lessequal());
 
         // restore: V s< INT_MAX  =>  V s<= (INT_MAX-1)
-        assert_eq!(run_present(&mut fd), 1, "width {width}: restore should fire");
+        assert_eq!(
+            run_present(&mut fd),
+            1,
+            "width {width}: restore should fire"
+        );
         assert_eq!(code_of(&fd, op), OpCode::CPUI_INT_SLESSEQUAL);
-        assert_eq!(const_in(&fd, op, 1), start, "width {width}: restored constant");
+        assert_eq!(
+            const_in(&fd, op, 1),
+            start,
+            "width {width}: restored constant"
+        );
         assert!(!fd.obank().get(op).unwrap().is_canonical_lessequal());
     }
 }
@@ -219,7 +249,10 @@ fn t2_restore_guards_decline_and_keep_mark() {
     {
         let mut fd = build_fd();
         let op = mk_cmp_with_const(&mut fd, 4, OpCode::CPUI_INT_LESS, 0, false);
-        fd.obank_mut().get_mut(op).unwrap().set_canonical_lessequal();
+        fd.obank_mut()
+            .get_mut(op)
+            .unwrap()
+            .set_canonical_lessequal();
         assert_eq!(run_present(&mut fd), 0, "unsigned-0 must decline");
         assert_eq!(code_of(&fd, op), OpCode::CPUI_INT_LESS);
         assert_eq!(const_in(&fd, op, 1), 0);
@@ -234,7 +267,10 @@ fn t2_restore_guards_decline_and_keep_mark() {
         let int_min = calc_int_min(width); // 0x8000_0000
         let mut fd = build_fd();
         let op = mk_cmp_with_const(&mut fd, width, OpCode::CPUI_INT_SLESS, int_min, false);
-        fd.obank_mut().get_mut(op).unwrap().set_canonical_lessequal();
+        fd.obank_mut()
+            .get_mut(op)
+            .unwrap()
+            .set_canonical_lessequal();
         assert_eq!(run_present(&mut fd), 0, "signed-INT_MIN must decline");
         assert_eq!(code_of(&fd, op), OpCode::CPUI_INT_SLESS);
         assert_eq!(const_in(&fd, op, 1), int_min);
@@ -247,8 +283,15 @@ fn t2_restore_guards_decline_and_keep_mark() {
         let umax = calc_uint_max(width); // 0xffff_ffff
         let mut fd = build_fd();
         let op = mk_cmp_with_const(&mut fd, width, OpCode::CPUI_INT_LESS, umax, true);
-        fd.obank_mut().get_mut(op).unwrap().set_canonical_lessequal();
-        assert_eq!(run_present(&mut fd), 0, "unsigned-UINT_MAX-left must decline");
+        fd.obank_mut()
+            .get_mut(op)
+            .unwrap()
+            .set_canonical_lessequal();
+        assert_eq!(
+            run_present(&mut fd),
+            0,
+            "unsigned-UINT_MAX-left must decline"
+        );
         assert_eq!(code_of(&fd, op), OpCode::CPUI_INT_LESS);
         assert_eq!(const_in(&fd, op, 0), umax);
         assert!(fd.obank().get(op).unwrap().is_canonical_lessequal());
@@ -270,19 +313,33 @@ fn t3_returnpair_gate_boundary_and_exact_token_parse() {
     // gate: single + sizes around the size>2 boundary
     assert!(!keep_single_return(true, 0));
     assert!(!keep_single_return(true, 1));
-    assert!(!keep_single_return(true, 2), "size==2 is NOT > 2: must keep");
+    assert!(
+        !keep_single_return(true, 2),
+        "size==2 is NOT > 2: must keep"
+    );
     assert!(keep_single_return(true, 3), "size==3 IS > 2: must truncate");
     assert!(keep_single_return(true, usize::MAX));
     // pair never truncates
     for sz in 0..6usize {
-        assert!(!keep_single_return(false, sz), "pair must never truncate (sz={sz})");
+        assert!(
+            !keep_single_return(false, sz),
+            "pair must never truncate (sz={sz})"
+        );
     }
 
     // exact-token parse: only "single"/"pair" accepted
-    assert_eq!(parse_return_pair_form("single").unwrap().0, ReturnPairForm::Single);
-    assert_eq!(parse_return_pair_form("pair").unwrap().0, ReturnPairForm::Pair);
+    assert_eq!(
+        parse_return_pair_form("single").unwrap().0,
+        ReturnPairForm::Single
+    );
+    assert_eq!(
+        parse_return_pair_form("pair").unwrap().0,
+        ReturnPairForm::Pair
+    );
     // adversarial near-misses must error (C++ `p1 == "single"` is exact)
-    for bad in ["Single", "PAIR", " pair", "pair ", "single\n", "", "p", "join", "0"] {
+    for bad in [
+        "Single", "PAIR", " pair", "pair ", "single\n", "", "p", "join", "0",
+    ] {
         assert!(
             parse_return_pair_form(bad).is_err(),
             "near-miss token {bad:?} must be rejected (exact match only)"
@@ -291,11 +348,23 @@ fn t3_returnpair_gate_boundary_and_exact_token_parse() {
 
     // memsetrecover parse: onOrOff semantics — "" and "on" -> On, "off" -> Off,
     // anything else -> error (no case fold).  Oracle: kuna_memsetsequence.cc:214.
-    assert_eq!(parse_memset_recover_form("on").unwrap().0, MemsetRecoverForm::On);
-    assert_eq!(parse_memset_recover_form("off").unwrap().0, MemsetRecoverForm::Off);
-    assert_eq!(parse_memset_recover_form("").unwrap().0, MemsetRecoverForm::On);
+    assert_eq!(
+        parse_memset_recover_form("on").unwrap().0,
+        MemsetRecoverForm::On
+    );
+    assert_eq!(
+        parse_memset_recover_form("off").unwrap().0,
+        MemsetRecoverForm::Off
+    );
+    assert_eq!(
+        parse_memset_recover_form("").unwrap().0,
+        MemsetRecoverForm::On
+    );
     for bad in ["ON", "Off", "yes", "true", "1", " on"] {
-        assert!(parse_memset_recover_form(bad).is_err(), "memset near-miss {bad:?} must error");
+        assert!(
+            parse_memset_recover_form(bad).is_err(),
+            "memset near-miss {bad:?} must error"
+        );
     }
 }
 
@@ -324,22 +393,38 @@ fn r2_t1_compareform_parse_public_api() {
     // original -> Original, present_lessequal = true, exact message
     let (form, msg) = parse_compare_form("original").unwrap();
     assert_eq!(form, CompareForm::Original);
-    assert!(form.present_lessequal(), "original => present_lessequal=true (gate ON)");
+    assert!(
+        form.present_lessequal(),
+        "original => present_lessequal=true (gate ON)"
+    );
     assert_eq!(msg, "Comparison presentation set to original form");
     assert_eq!(form.as_str(), "original");
 
     // canonical -> Canonical, present_lessequal = false
     let (form, msg) = parse_compare_form("canonical").unwrap();
     assert_eq!(form, CompareForm::Canonical);
-    assert!(!form.present_lessequal(), "canonical => present_lessequal=false (gate OFF)");
+    assert!(
+        !form.present_lessequal(),
+        "canonical => present_lessequal=false (gate OFF)"
+    );
     assert_eq!(msg, "Comparison presentation set to canonical form");
     assert_eq!(form.as_str(), "canonical");
 
     // EXACT match only — every near miss is an error carrying the C++ message.
-    for bad in ["Original", "CANONICAL", " original", "canonical ", "orig", "", "default", "1"] {
+    for bad in [
+        "Original",
+        "CANONICAL",
+        " original",
+        "canonical ",
+        "orig",
+        "",
+        "default",
+        "1",
+    ] {
         let e = parse_compare_form(bad).unwrap_err();
         assert!(
-            e.to_string().contains("Must specify compareform as 'canonical' or 'original'"),
+            e.to_string()
+                .contains("Must specify compareform as 'canonical' or 'original'"),
             "near-miss {bad:?} must surface the C++ ParseError text, got {e}"
         );
     }
@@ -366,7 +451,10 @@ fn r2_t2_unsigned_left_const_roundtrip() {
     let op = mk_cmp_with_const(&mut fd, width, OpCode::CPUI_INT_LESSEQUAL, c, true);
 
     // canonicalize: `0x40 <= V` => `0x3f < V`  (INT_LESS, in0 = 0x3f, marked)
-    assert!(fd.replace_lessequal(op).unwrap(), "forward canon should fire");
+    assert!(
+        fd.replace_lessequal(op).unwrap(),
+        "forward canon should fire"
+    );
     assert_eq!(code_of(&fd, op), OpCode::CPUI_INT_LESS);
     assert_eq!(const_in(&fd, op, 0), c - 1, "canon left constant = c-1");
     assert!(fd.obank().get(op).unwrap().is_canonical_lessequal());
@@ -374,8 +462,15 @@ fn r2_t2_unsigned_left_const_roundtrip() {
     // restore: `0x3f < V` => `0x40 <= V`  (INT_LESSEQUAL, in0 = 0x40, unmarked)
     assert_eq!(run_present(&mut fd), 1, "inverse restore should fire");
     assert_eq!(code_of(&fd, op), OpCode::CPUI_INT_LESSEQUAL);
-    assert_eq!(const_in(&fd, op, 0), c, "restored left constant = c (exact round trip)");
-    assert!(!fd.obank().get(op).unwrap().is_canonical_lessequal(), "mark cleared on success");
+    assert_eq!(
+        const_in(&fd, op, 0),
+        c,
+        "restored left constant = c (exact round trip)"
+    );
+    assert!(
+        !fd.obank().get(op).unwrap().is_canonical_lessequal(),
+        "mark cleared on success"
+    );
 }
 
 // ===========================================================================
@@ -407,9 +502,17 @@ fn r2_t3_idempotent_and_mark_gated() {
         let mut again = ActionPresentCompareForm::new(true, "analysis");
         let mut ctx = ActionContext::new();
         again.apply(&mut fd, &mut ctx);
-        assert_eq!(again.base().count, 0, "second restore must be a no-op (idempotent)");
+        assert_eq!(
+            again.base().count,
+            0,
+            "second restore must be a no-op (idempotent)"
+        );
         assert_eq!(code_of(&fd, op), OpCode::CPUI_INT_SLESSEQUAL);
-        assert_eq!(const_in(&fd, op, 1), start, "constant must NOT be decremented twice");
+        assert_eq!(
+            const_in(&fd, op, 1),
+            start,
+            "constant must NOT be decremented twice"
+        );
     }
     // (b) an UNMARKED INT_LESS is never touched even with the gate ON.
     {
@@ -418,7 +521,11 @@ fn r2_t3_idempotent_and_mark_gated() {
         // deliberately do NOT set_canonical_lessequal.
         assert!(!fd.obank().get(op).unwrap().is_canonical_lessequal());
         assert_eq!(run_present(&mut fd), 0, "unmarked op must be skipped");
-        assert_eq!(code_of(&fd, op), OpCode::CPUI_INT_LESS, "unmarked op unchanged");
+        assert_eq!(
+            code_of(&fd, op),
+            OpCode::CPUI_INT_LESS,
+            "unmarked op unchanged"
+        );
         assert_eq!(const_in(&fd, op, 1), 0x10);
     }
 }

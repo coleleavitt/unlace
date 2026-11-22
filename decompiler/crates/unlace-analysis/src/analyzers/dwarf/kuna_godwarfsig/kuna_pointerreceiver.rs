@@ -16,8 +16,11 @@ impl Facts {
         parameters: &[(&DieSnap, Location, bool)],
         linked: &LinkedMethod,
     ) -> Option<Receiver> {
-        let [(receiver, Location::Register(0), false), (argument, Location::Register(3), false), (result, result_storage, true)] =
-            parameters
+        let [
+            (receiver, Location::Register(0), false),
+            (argument, Location::Register(3), false),
+            (result, result_storage, true),
+        ] = parameters
         else {
             return None;
         };

@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
 
-use crate::loader::kuna_dyldcache::{is_dyld_cache_file, DyldCache};
+use crate::loader::kuna_dyldcache::{DyldCache, is_dyld_cache_file};
 
 const PAGE: u64 = 0x4000;
 
@@ -28,9 +28,18 @@ pub struct CacheReader {
 impl CacheReader {
     /// The cache `path` opens, when the image under analysis was loaded from one.
     pub fn open(path: &Path) -> Option<CacheReader> {
-        let cache = is_dyld_cache_file(path).then(|| DyldCache::open(path).ok()).flatten()?;
-        let mapped = cache.mappings().iter().fold(0u64, |n, m| n.saturating_add(m.size));
-        Some(CacheReader { cache, pages: RefCell::default(), left: Cell::new((mapped / PAGE).saturating_mul(2).max(64)) })
+        let cache = is_dyld_cache_file(path)
+            .then(|| DyldCache::open(path).ok())
+            .flatten()?;
+        let mapped = cache
+            .mappings()
+            .iter()
+            .fold(0u64, |n, m| n.saturating_add(m.size));
+        Some(CacheReader {
+            cache,
+            pages: RefCell::default(),
+            left: Cell::new((mapped / PAGE).saturating_mul(2).max(64)),
+        })
     }
 
     pub fn selector_base(&self) -> Option<u64> {
@@ -43,11 +52,15 @@ impl CacheReader {
         let mut out = Vec::new();
         let mut at = va;
         while out.len() < n {
-            let Some((start, page)) = self.page(at) else { break };
+            let Some((start, page)) = self.page(at) else {
+                break;
+            };
             let from = (at - start) as usize;
             let take = (n - out.len()).min(page.len() - from);
             out.extend_from_slice(&page[from..from + take]);
-            let Some(next) = at.checked_add(take as u64) else { break };
+            let Some(next) = at.checked_add(take as u64) else {
+                break;
+            };
             at = next;
         }
         (!out.is_empty()).then_some(out)
@@ -56,13 +69,21 @@ impl CacheReader {
     /// The slid page holding `va` and its address. Pages are counted from the
     /// start of their mapping, as the slide info counts them.
     fn page(&self, va: u64) -> Option<(u64, Rc<[u8]>)> {
-        let m = self.cache.mappings().iter().find(|m| va >= m.address && va - m.address < m.size)?;
+        let m = self
+            .cache
+            .mappings()
+            .iter()
+            .find(|m| va >= m.address && va - m.address < m.size)?;
         let start = m.address + (va - m.address) / PAGE * PAGE;
         if let Some(page) = self.pages.borrow().get(&start) {
             return page.clone().map(|p| (start, p));
         }
         let len = PAGE.min(m.size - (start - m.address)) as usize;
-        let page = self.spend().then(|| self.cache.read_slid(start, len).ok()).flatten().map(Rc::from);
+        let page = self
+            .spend()
+            .then(|| self.cache.read_slid(start, len).ok())
+            .flatten()
+            .map(Rc::from);
         let mut pages = self.pages.borrow_mut();
         if pages.len() >= MAX_PAGES {
             pages.clear();

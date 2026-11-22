@@ -1,7 +1,7 @@
 //! Whole named reference-Option inputs whose only use tests the null niche.
 
 use super::*;
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 
 const OPTION_REF_U64: &str = "core::option::Option<&u64>";
 

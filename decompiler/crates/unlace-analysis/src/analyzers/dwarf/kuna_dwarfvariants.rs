@@ -166,14 +166,15 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use unlace_base::types::{int4, uint4};
-use unlace_decomp::dtype::{type_metatype, Datatype, TypeField, TypeFactory};
+use unlace_decomp::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
 use unlace_decomp::kuna_dwarfvariants::{VariantFacet, VariantLayout};
 
+use super::DieSnap;
 use super::kuna_dwarfstructs::{
-    aggregate_alignment, aggregate_size, is_static_member, member_offset, qualified_name, resolve_name,
+    aggregate_alignment, aggregate_size, is_static_member, member_offset, qualified_name,
+    resolve_name,
 };
 use super::kuna_typedepth::TypeWalk;
-use super::DieSnap;
 
 /// One `DW_TAG_variant`, as read from DWARF and before any kuna type exists.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -254,7 +255,9 @@ fn variant_fields(
         if m.tag != gimli::DW_TAG_member || m.name.is_empty() || is_static_member(m) {
             continue;
         }
-        let Some(off) = member_offset(m) else { continue };
+        let Some(off) = member_offset(m) else {
+            continue;
+        };
         if off < 0 || off > int4::MAX as i64 {
             continue;
         }
@@ -329,7 +332,11 @@ pub(super) fn read_variant_part(
             return None;
         }
     }
-    Some(RawVariantPart { tag_offset: tag_offset as int4, tag_type: tag.type_ref, variants })
+    Some(RawVariantPart {
+        tag_offset: tag_offset as int4,
+        tag_type: tag.type_ref,
+        variants,
+    })
 }
 
 /// Intern the discriminated union for `die` and populate it from DWARF.
@@ -369,7 +376,11 @@ pub(super) fn intern_variant_aggregate(
     // at. No field anywhere means this is a C-like enum wearing a variant part,
     // which rustc does not emit and this module will not synthesize an overlay
     // for.
-    let lowest = raw.variants.iter().flat_map(|v| v.fields.iter().map(|f| f.1)).min()?;
+    let lowest = raw
+        .variants
+        .iter()
+        .flat_map(|v| v.fields.iter().map(|f| f.1))
+        .min()?;
 
     // NICHE: the discriminant's bytes and the payload's overlap, because Rust
     // read the tag out of the payload itself (`Option<&T>` uses the null
@@ -385,7 +396,11 @@ pub(super) fn intern_variant_aggregate(
         return None;
     }
 
-    let want = if niche { type_metatype::TYPE_UNION } else { type_metatype::TYPE_STRUCT };
+    let want = if niche {
+        type_metatype::TYPE_UNION
+    } else {
+        type_metatype::TYPE_STRUCT
+    };
     let name = resolve_name(
         types,
         &qualified_name(die, dies, alias, fallback, Some(size)),
@@ -403,8 +418,18 @@ pub(super) fn intern_variant_aggregate(
         // interned is what the inner pointer must name.
         return Some(shell);
     }
-    let built =
-        build_facets(types, dies, &raw, &name, size, payload_offset, tag_size, walk, word_size, cpp);
+    let built = build_facets(
+        types,
+        dies,
+        &raw,
+        &name,
+        size,
+        payload_offset,
+        tag_size,
+        walk,
+        word_size,
+        cpp,
+    );
     walk.end_aggregate(&name);
 
     // From here on the name is ALREADY interned, so a refusal must not return
@@ -468,7 +493,9 @@ fn install_layout(
 
     if niche {
         let align = facet_alignment(die.alignment, size, &union_fields);
-        let done = types.set_fields_union_raw(shell, union_fields, size, align).ok()?;
+        let done = types
+            .set_fields_union_raw(shell, union_fields, size, align)
+            .ok()?;
         types.kuna_record_variant_layout(layout);
         return Some(done);
     }
@@ -486,7 +513,9 @@ fn install_layout(
         ushell
     } else {
         let ualign = facet_alignment(None, payload_size, &union_fields);
-        types.set_fields_union_raw(&ushell, union_fields, payload_size, ualign).ok()?
+        types
+            .set_fields_union_raw(&ushell, union_fields, payload_size, ualign)
+            .ok()?
     };
     layout.union_type = uname;
 
@@ -499,11 +528,18 @@ fn install_layout(
             .unwrap_or_else(|| Rc::clone(&tag_type));
     let mut fields = vec![
         TypeField::new(payload_offset, payload_offset, "payload".to_string(), union),
-        TypeField::new(raw.tag_offset, raw.tag_offset, "tag".to_string(), tag_field_type),
+        TypeField::new(
+            raw.tag_offset,
+            raw.tag_offset,
+            "tag".to_string(),
+            tag_field_type,
+        ),
     ];
     fields.sort_by_key(|f| f.offset);
     let align = aggregate_alignment(die, size, &fields, &[]);
-    let done = types.set_fields_struct_raw(shell, fields, Vec::new(), size, align, 0).ok()?;
+    let done = types
+        .set_fields_struct_raw(shell, fields, Vec::new(), size, align, 0)
+        .ok()?;
     types.kuna_record_variant_layout(layout);
     Some(done)
 }
@@ -560,11 +596,17 @@ fn label_for(i: usize, built: &[BuiltFacet]) -> String {
     let contested = built.iter().enumerate().any(|(j, other)| {
         j != i
             && me.claims.iter().any(|(_, ao, asz)| {
-                other.claims.iter().any(|(_, bo, bsz)| ranges_overlap(*ao, *asz, *bo, *bsz))
+                other
+                    .claims
+                    .iter()
+                    .any(|(_, bo, bsz)| ranges_overlap(*ao, *asz, *bo, *bsz))
             })
     });
     if contested {
-        format!("field_0x{:x}", me.claims.iter().map(|c| c.1).min().unwrap_or(0))
+        format!(
+            "field_0x{:x}",
+            me.claims.iter().map(|c| c.1).min().unwrap_or(0)
+        )
     } else {
         me.name.clone()
     }
@@ -583,8 +625,7 @@ fn field_name_survives(i: usize, off: int4, width: int4, name: &str, built: &[Bu
     built.iter().enumerate().all(|(j, other)| {
         j == i
             || other.claims.iter().all(|(on, oo, ow)| {
-                !ranges_overlap(off, width, *oo, *ow)
-                    || (*oo == off && *ow == width && on == name)
+                !ranges_overlap(off, width, *oo, *ow) || (*oo == off && *ow == width && on == name)
             })
     })
 }
@@ -595,14 +636,17 @@ fn same_layout(t: &Rc<Datatype>, fields: &[TypeField]) -> bool {
     if t.num_depend() != fields.len() as int4 {
         return false;
     }
-    fields.iter().enumerate().all(|(i, f)| match t.get_field(i as int4) {
-        Some(g) => {
-            g.offset == f.offset
-                && g.name == f.name
-                && g.field_type.get_size() == f.field_type.get_size()
-        }
-        None => false,
-    })
+    fields
+        .iter()
+        .enumerate()
+        .all(|(i, f)| match t.get_field(i as int4) {
+            Some(g) => {
+                g.offset == f.offset
+                    && g.name == f.name
+                    && g.field_type.get_size() == f.field_type.get_size()
+            }
+            None => false,
+        })
 }
 
 /// Intern the payload struct for one facet under `base`, stepping over a
@@ -624,9 +668,18 @@ fn open_facet(
     align: int4,
 ) -> Option<(Rc<Datatype>, String)> {
     for attempt in 0..8 {
-        let cand = if attempt == 0 { base.to_string() } else { format!("{base}_{attempt}") };
-        let fname =
-            resolve_name(types, &cand, Some(size), fallback, type_metatype::TYPE_STRUCT)?;
+        let cand = if attempt == 0 {
+            base.to_string()
+        } else {
+            format!("{base}_{attempt}")
+        };
+        let fname = resolve_name(
+            types,
+            &cand,
+            Some(size),
+            fallback,
+            type_metatype::TYPE_STRUCT,
+        )?;
         let (fshell, fcomplete) = open_shell(types, &fname, false)?;
         if fcomplete {
             if same_layout(&fshell, &fields) {
@@ -634,7 +687,9 @@ fn open_facet(
             }
             continue;
         }
-        let done = types.set_fields_struct_raw(&fshell, fields, Vec::new(), size, align, 0).ok()?;
+        let done = types
+            .set_fields_struct_raw(&fshell, fields, Vec::new(), size, align, 0)
+            .ok()?;
         return Some((done, fname));
     }
     None
@@ -670,15 +725,18 @@ fn build_facets(
     let payload_size = size - payload_offset;
     // `DW_AT_discr_value` is masked to the discriminant's width, matching how the
     // printer looks a constant up: the Varnode carries the truncated value.
-    let tag_mask: u64 = if tag_size >= 8 { u64::MAX } else { (1u64 << (tag_size * 8)) - 1 };
+    let tag_mask: u64 = if tag_size >= 8 {
+        u64::MAX
+    } else {
+        (1u64 << (tag_size * 8)) - 1
+    };
 
     let mut built: Vec<BuiltFacet> = Vec::new();
     for v in &raw.variants {
         let mut fields: Vec<TypeField> = Vec::new();
         let mut claims: Vec<(String, int4, int4)> = Vec::new();
         for (fname, foff, ftype) in &v.fields {
-            let Some(fty) = super::build_datatype(*ftype, dies, types, word_size, walk, cpp)
-            else {
+            let Some(fty) = super::build_datatype(*ftype, dies, types, word_size, walk, cpp) else {
                 continue;
             };
             if fty.get_metatype() == type_metatype::TYPE_VOID || fty.get_size() <= 0 {
@@ -758,7 +816,11 @@ fn build_facets(
             discr: built[i].discr.map(|d| (d as u64) & tag_mask),
             label,
             payload_type,
-            fields: built[i].claims.iter().map(|(n, o, _)| (n.clone(), *o)).collect(),
+            fields: built[i]
+                .claims
+                .iter()
+                .map(|(n, o, _)| (n.clone(), *o))
+                .collect(),
         });
     }
 
@@ -790,12 +852,12 @@ fn is_discriminant_shaped(t: &Rc<Datatype>) -> bool {
 /// one is reused verbatim, an incomplete one is the shell to populate. `None`
 /// when the name is held by something that is not the wanted aggregate, or the
 /// factory refuses it.
-fn open_shell(
-    types: &dyn TypeFactory,
-    name: &str,
-    is_union: bool,
-) -> Option<(Rc<Datatype>, bool)> {
-    let want = if is_union { type_metatype::TYPE_UNION } else { type_metatype::TYPE_STRUCT };
+fn open_shell(types: &dyn TypeFactory, name: &str, is_union: bool) -> Option<(Rc<Datatype>, bool)> {
+    let want = if is_union {
+        type_metatype::TYPE_UNION
+    } else {
+        type_metatype::TYPE_STRUCT
+    };
     match types.find_by_name(name) {
         Ok(Some(t)) if t.get_metatype() == want => {
             let complete = !t.is_incomplete();
@@ -803,9 +865,15 @@ fn open_shell(
         }
         Ok(Some(_)) => None,
         Ok(None) => {
-            let built =
-                if is_union { types.get_type_union(name) } else { types.get_type_struct(name) };
-            built.ok().filter(|t| t.get_metatype() == want).map(|t| (t, false))
+            let built = if is_union {
+                types.get_type_union(name)
+            } else {
+                types.get_type_struct(name)
+            };
+            built
+                .ok()
+                .filter(|t| t.get_metatype() == want)
+                .map(|t| (t, false))
         }
         Err(_) => None,
     }
@@ -822,7 +890,10 @@ fn facet_alignment(stated: Option<u64>, size: int4, fields: &[TypeField]) -> int
         .max()
         .unwrap_or(1)
         .max(1);
-    let align = stated.filter(|&a| a > 0 && a <= 64).map(|a| a as int4).unwrap_or(derived);
+    let align = stated
+        .filter(|&a| a > 0 && a <= 64)
+        .map(|a| a as int4)
+        .unwrap_or(derived);
     let mut a = 1;
     while a * 2 <= align && a * 2 <= size {
         a *= 2;

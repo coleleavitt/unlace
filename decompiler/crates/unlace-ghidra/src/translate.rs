@@ -39,32 +39,32 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::marshal::{
-    Decoder, Encoder, IdRegistry, PackedDecode, XmlDecode, ATTRIB_BIGENDIAN, ATTRIB_OFFSET,
-    ELEM_INPUT, ELEM_OUTPUT,
+    ATTRIB_BIGENDIAN, ATTRIB_OFFSET, Decoder, ELEM_INPUT, ELEM_OUTPUT, Encoder, IdRegistry,
+    PackedDecode, XmlDecode,
 };
 use unlace_base::space::{
-    spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, RegisterLookup, VarnodeStorage,
-    ATTRIB_DEFAULTSPACE,
+    ATTRIB_DEFAULTSPACE, AddrSpace, AddrSpaceManager, ConstantSpace, RegisterLookup,
+    VarnodeStorage, spacetype,
 };
 use unlace_base::types::int4;
-use unlace_base::xml::{xml_tree, DocumentStorage};
+use unlace_base::xml::{DocumentStorage, xml_tree};
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::globalcontext::{ContextDatabase, ContextInternal};
 use unlace_sleigh::loadimage::LoadImage;
 use unlace_sleigh::translate::{
-    register_translate_ids, varnode_data_from_storage, AssemblyEmit, PcodeEmit, Translate,
-    TranslateBase, TruncationTag, ATTRIB_UNIQBASE, ELEM_SLEIGH,
+    ATTRIB_UNIQBASE, AssemblyEmit, ELEM_SLEIGH, PcodeEmit, Translate, TranslateBase, TruncationTag,
+    register_translate_ids, varnode_data_from_storage,
 };
 
 use unlace_decomp::engine_translate::EngineTranslate;
 use unlace_decomp::pcodeinject::{
-    InjectContext, CALLFIXUP_TYPE, CALLMECHANISM_TYPE, CALLOTHERFIXUP_TYPE, ELEM_CONTEXT,
+    CALLFIXUP_TYPE, CALLMECHANISM_TYPE, CALLOTHERFIXUP_TYPE, ELEM_CONTEXT, InjectContext,
 };
 
 use crate::client::InjectType;
-use crate::ids::{register_ghidra_ids, ELEM_UNIMPL};
+use crate::ids::{ELEM_UNIMPL, register_ghidra_ids};
 use crate::protocol::WireError;
-use crate::provider::{wire_to_kuna, GhidraLoadImage, SharedClient};
+use crate::provider::{GhidraLoadImage, SharedClient, wire_to_kuna};
 
 /// Build the marshaling [`IdRegistry`] a ghidra-mode session needs: the
 /// unlace-base tables, the translate.cc ids (the tspec vocabulary), and the
@@ -157,7 +157,7 @@ impl TspecModel {
             None => {
                 return Err(KunaError::lowlevel(format!(
                     "Bad 'defaultspace' attribute: {defname}"
-                )))
+                )));
             }
         };
         manager.set_default_code_space(def_index)?;
@@ -396,7 +396,7 @@ impl<R: Read + 'static, W: Write + 'static> GhidraTranslate<R, W> {
         let mut base = TranslateBase::new();
         base.set_big_endian(big_endian);
         base.set_unique_base(unique_base as u32); // uintb -> uintm (uint4), as C++ setUniqueBase
-                                                  // Downstream stages (float-op typing) expect IEEE formats present.
+        // Downstream stages (float-op typing) expect IEEE formats present.
         base.set_default_float_formats();
 
         let loader: Box<dyn LoadImage> = Box::new(GhidraLoadImage::new(Rc::clone(&client)));
@@ -661,13 +661,13 @@ impl<R: Read, W: Write> EngineTranslate for GhidraTranslate<R, W> {
             // error, so the warning names the payload rather than repeating the
             // host's bare text.
             Err(WireError::Kuna(KunaError::Java { explain, .. })) => {
-                return Err(KunaError::lowlevel(format!("Injection error: {explain}")))
+                return Err(KunaError::lowlevel(format!("Injection error: {explain}")));
             }
             // C++ catch(DecoderError&).
             Err(WireError::Kuna(KunaError::Decoder { explain })) => {
                 return Err(KunaError::lowlevel(format!(
                     "Error decoding injection: {explain}"
-                )))
+                )));
             }
             Err(other) => return Err(wire_to_kuna(other)),
         };
@@ -853,7 +853,7 @@ mod tests {
             let mut e = PackedEncode::new(&mut doc);
             e.open_element(&elem_inst);
             e.write_signed_integer(&ATTRIB_OFFSET, 4); // instruction length
-                                                       // the pc <addr>
+            // the pc <addr>
             Address::new(Rc::clone(&ram), 0x401000)
                 .encode(&mut e)
                 .unwrap();

@@ -20,14 +20,17 @@
 //! Anchors: cpp `decompiler/cpp/cover.cc`, `decompiler/cpp/variable.cc`;
 //! rust `decompiler/crates/unlace-decomp/src/cover.rs`, `.../variable.rs`.
 
-use unlace_base::types::{int4, uintm};
-use unlace_decomp::cover::{Cover, CoverBlock, CoverPoint, PcodeOpSet, PcodeOpSetEntry};
-use unlace_decomp::context::{OpId, VarnodeId};
-use unlace_decomp::variable::HighVariableBank;
 use slotmap::KeyData;
+use unlace_base::types::{int4, uintm};
+use unlace_decomp::context::{OpId, VarnodeId};
+use unlace_decomp::cover::{Cover, CoverBlock, CoverPoint, PcodeOpSet, PcodeOpSetEntry};
+use unlace_decomp::variable::HighVariableBank;
 
 fn op_point(uindex: uintm) -> CoverPoint {
-    CoverPoint::Op { uindex, multiequal: false }
+    CoverPoint::Op {
+        uindex,
+        multiequal: false,
+    }
 }
 
 fn block(start: uintm, stop: uintm) -> CoverBlock {
@@ -194,11 +197,19 @@ fn intersect_op_set_skips_boundary_ops() {
     // construction value).
     let ffi = |u: uintm| -> u64 {
         use slotmap::Key;
-        OpId::from(KeyData::from_ffi(u64::from(u) + 1)).data().as_ffi()
+        OpId::from(KeyData::from_ffi(u64::from(u) + 1))
+            .data()
+            .as_ffi()
     };
     let seen = tested.borrow();
-    assert!(seen.contains(&ffi(15)), "interior op must be tested, saw {seen:?}");
-    assert!(!seen.contains(&ffi(10)), "start-boundary op must be skipped");
+    assert!(
+        seen.contains(&ffi(15)),
+        "interior op must be tested, saw {seen:?}"
+    );
+    assert!(
+        !seen.contains(&ffi(10)),
+        "start-boundary op must be skipped"
+    );
     assert!(!seen.contains(&ffi(20)), "tail-boundary op must be skipped");
 }
 

@@ -13,9 +13,9 @@ use unlace_num::opcodes::OpCode;
 
 use crate::action::{ActionGroupList, Rule, RuleSpec};
 use crate::constseq::{ArraySequence, StringSequence, WriteNode};
+use crate::context::OpId;
 use crate::dtype::Datatype;
 use crate::funcdata::Funcdata;
-use crate::context::OpId;
 
 /// (kuna GH-9230) A constant-fill run of COPY ops collapsed into builtin_memset
 /// (C++ `class MemsetSequence : public StringSequence`).
@@ -60,7 +60,6 @@ impl MemsetSequence {
         seq
     }
 
-
     /// Return `true` if a fill run was found (C++ `MemsetSequence::isValidFill`:
     /// `return fillCount != 0;`).
     pub fn is_valid_fill(&self) -> bool {
@@ -97,7 +96,6 @@ impl MemsetSequence {
             self.base.num_elements = total_bytes;
         }
     }
-
 }
 
 /// (kuna GH-9230) Recognize a constant-fill run of COPY ops as builtin_memset
@@ -115,11 +113,17 @@ pub struct RuleMemsetCopy {
 impl RuleMemsetCopy {
     /// Construct with the resolved gate.  Default group `"analysis"`.
     pub fn new(enabled: bool) -> RuleMemsetCopy {
-        RuleMemsetCopy { enabled, group: String::from("analysis") }
+        RuleMemsetCopy {
+            enabled,
+            group: String::from("analysis"),
+        }
     }
     /// Construct with an explicit group (C++ `RuleMemsetCopy(const string &g)`).
     pub fn with_group(enabled: bool, group: impl Into<String>) -> RuleMemsetCopy {
-        RuleMemsetCopy { enabled, group: group.into() }
+        RuleMemsetCopy {
+            enabled,
+            group: group.into(),
+        }
     }
 }
 
@@ -133,7 +137,10 @@ impl Rule for RuleMemsetCopy {
         if !grouplist.contains(&self.group) {
             return None;
         }
-        Some(Box::new(RuleMemsetCopy { enabled: self.enabled, group: self.group.clone() }))
+        Some(Box::new(RuleMemsetCopy {
+            enabled: self.enabled,
+            group: self.group.clone(),
+        }))
     }
 
     /// Recover a validated constant-fill run, subject to the resolved gate.
@@ -145,7 +152,12 @@ impl Rule for RuleMemsetCopy {
             Some(v) => v,
             None => return 0,
         };
-        if !data.vbank().get(in0).map(|v| v.is_constant()).unwrap_or(false) {
+        if !data
+            .vbank()
+            .get(in0)
+            .map(|v| v.is_constant())
+            .unwrap_or(false)
+        {
             return 0;
         }
         let outvn = match data.obank().get(op).and_then(|o| o.get_out()) {
@@ -153,7 +165,10 @@ impl Rule for RuleMemsetCopy {
             None => return 0,
         };
         let ct = Rc::clone(
-            data.vbank().get(outvn).expect("RuleMemsetCopy: stale outvn").get_type_def_facing(),
+            data.vbank()
+                .get(outvn)
+                .expect("RuleMemsetCopy: stale outvn")
+                .get_type_def_facing(),
         );
         if !ct.is_char_print() {
             return 0;
@@ -173,15 +188,17 @@ impl Rule for RuleMemsetCopy {
             .get_scope_local()
             .and_then(|lm| lm.query_container(&out_addr, out_size, &op_addr))
             .or_else(|| {
-                data.get_arch().query_container_global(&out_addr, out_size, &op_addr).and_then(|g| {
-                    let sym_type = g.symbol_type.clone()?;
-                    Some(crate::varmap::StringContainerEntry {
-                        first: g.entry_addr.get_offset(),
-                        size: sym_type.get_size(),
-                        addr: g.entry_addr.clone(),
-                        sym_type,
+                data.get_arch()
+                    .query_container_global(&out_addr, out_size, &op_addr)
+                    .and_then(|g| {
+                        let sym_type = g.symbol_type.clone()?;
+                        Some(crate::varmap::StringContainerEntry {
+                            first: g.entry_addr.get_offset(),
+                            size: sym_type.get_size(),
+                            addr: g.entry_addr.clone(),
+                            sym_type,
+                        })
                     })
-                })
             });
         let entry = match entry {
             Some(e) => e,
@@ -232,13 +249,19 @@ impl MemsetRecoverForm {
 /// error.  The caller writes [`MemsetRecoverForm::memset_recover`] into
 /// [`Architecture::memset_recover`].
 pub fn parse_memset_recover_form(p1: &str) -> KunaResult<(MemsetRecoverForm, String)> {
-    let val = crate::options::on_or_off(p1).map_err(|_: KunaError| {
-        KunaError::parse("Must specify toggle value, on/off")
-    })?;
+    let val = crate::options::on_or_off(p1)
+        .map_err(|_: KunaError| KunaError::parse("Must specify toggle value, on/off"))?;
     // The memset_recover flag is left to the caller (Architecture::memset_recover).
-    let form = if val { MemsetRecoverForm::On } else { MemsetRecoverForm::Off };
+    let form = if val {
+        MemsetRecoverForm::On
+    } else {
+        MemsetRecoverForm::Off
+    };
     let prop = if val { "on" } else { "off" };
-    Ok((form, format!("Constant-fill (memset) recovery turned {prop}")))
+    Ok((
+        form,
+        format!("Constant-fill (memset) recovery turned {prop}"),
+    ))
 }
 
 /// Per-file registration rows in C++ definition order (one rule).
@@ -262,7 +285,10 @@ fn copy_const_offset(data: &Funcdata, op: OpId) -> uintb {
         .get(op)
         .and_then(|o| o.get_in(0))
         .expect("memset: COPY missing input 0");
-    data.vbank().get(in0).expect("memset: stale COPY input").get_offset()
+    data.vbank()
+        .get(in0)
+        .expect("memset: stale COPY input")
+        .get_offset()
 }
 
 /// The single-value-fill detection (C++ `MemsetSequence::formFillRun`), factored
@@ -276,7 +302,10 @@ fn copy_const_offset(data: &Funcdata, op: OpId) -> uintb {
 /// footprint.  On success `move_ops` is truncated to the contiguous run and
 /// `(fill_byte, total_bytes)` is returned.  Each `WriteNode.slot` carries the
 /// COPY's byte stride.
-pub(crate) fn detect_fill_run(data: &Funcdata, move_ops: &mut Vec<WriteNode>) -> Option<(u8, int4)> {
+pub(crate) fn detect_fill_run(
+    data: &Funcdata,
+    move_ops: &mut Vec<WriteNode>,
+) -> Option<(u8, int4)> {
     if move_ops.is_empty() {
         return None;
     }

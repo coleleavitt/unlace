@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use crate::context::{HighVariableId, OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use unlace_base::address::Address;
 use unlace_num::opcodes::OpCode;
@@ -53,7 +53,11 @@ pub struct Record {
 impl Record {
     pub(crate) fn new(fd: &Funcdata) -> Option<Self> {
         let proto = fd.get_func_proto();
-        let slots = if proto.has_store() { proto.num_params().max(0) as usize } else { 0 };
+        let slots = if proto.has_store() {
+            proto.num_params().max(0) as usize
+        } else {
+            0
+        };
         Some(Self {
             entry: entry(fd.get_address())?,
             parameters: vec![None; slots],
@@ -87,15 +91,21 @@ impl Record {
             .chain(original.match_indices('\n').map(|(i, _)| i + 1))
             .collect();
         for call in &mut self.calls {
-            let Some(&line_start) = call.position.line.checked_sub(1).and_then(|l| starts.get(l))
+            let Some(&line_start) = call
+                .position
+                .line
+                .checked_sub(1)
+                .and_then(|l| starts.get(l))
             else {
                 continue;
             };
             let at = line_start + call.position.column;
             let first = spans.partition_point(|&(start, ..)| start < line_start);
             let last = spans.partition_point(|&(_, end, _)| end <= at).max(first);
-            call.position.column =
-                call.position.column.saturating_add_signed(shift[last] - shift[first]);
+            call.position.column = call
+                .position
+                .column
+                .saturating_add_signed(shift[last] - shift[first]);
         }
     }
 }
@@ -165,9 +175,10 @@ pub fn apply(code: &str, edits: &[Insertion]) -> Applied {
     for edit in edits {
         match site(code, &starts, edit) {
             Err(reason) => skipped.push((edit.clone(), reason)),
-            Ok(at) if sites
-                .last()
-                .is_some_and(|&(previous, prior)| previous + prior.expression.len() > at) =>
+            Ok(at)
+                if sites
+                    .last()
+                    .is_some_and(|&(previous, prior)| previous + prior.expression.len() > at) =>
             {
                 skipped.push((edit.clone(), "pointer argument emission positions overlap"));
             }
@@ -175,7 +186,11 @@ pub fn apply(code: &str, edits: &[Insertion]) -> Applied {
         }
     }
     let mut out = String::with_capacity(
-        code.len() + sites.iter().map(|(_, e)| e.spelling.len() + 2).sum::<usize>(),
+        code.len()
+            + sites
+                .iter()
+                .map(|(_, e)| e.spelling.len() + 2)
+                .sum::<usize>(),
     );
     let mut previous = 0;
     for &(at, edit) in &sites {

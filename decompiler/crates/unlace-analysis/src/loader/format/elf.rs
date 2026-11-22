@@ -43,7 +43,10 @@ pub(crate) fn is_loader_table(name: &str, kind: SectionKind) -> bool {
     match kind {
         SectionKind::Metadata | SectionKind::Note => true,
         SectionKind::Elf(t) => {
-            matches!(t, SHT_GNU_HASH | SHT_GNU_VERDEF | SHT_GNU_VERNEED | SHT_GNU_VERSYM)
+            matches!(
+                t,
+                SHT_GNU_HASH | SHT_GNU_VERDEF | SHT_GNU_VERNEED | SHT_GNU_VERSYM
+            )
         }
         _ => name == ".interp",
     }
@@ -148,7 +151,10 @@ impl ObjectFormat for ElfFormat {
     }
 
     fn local_import_targets(&self, file: &object::File, bytes: &[u8]) -> Vec<(u64, u64)> {
-        crate::loader::kuna_pltlocal::bind(file, &crate::loader::elf_plt::resolve_plt_imports(file, bytes))
+        crate::loader::kuna_pltlocal::bind(
+            file,
+            &crate::loader::elf_plt::resolve_plt_imports(file, bytes),
+        )
     }
 
     fn const_ranges(&self, file: &object::File, _bytes: &[u8]) -> Vec<(u64, u64)> {
@@ -182,8 +188,12 @@ mod tests {
     #[test]
     fn elf_compiler_model_matches_today() {
         let f = ElfFormat;
-        for a in [Architecture::X86_64, Architecture::I386, Architecture::Riscv64, Architecture::Riscv32]
-        {
+        for a in [
+            Architecture::X86_64,
+            Architecture::I386,
+            Architecture::Riscv64,
+            Architecture::Riscv32,
+        ] {
             assert_eq!(f.compiler_model(a), Some("gcc"), "{a:?} must keep :gcc");
         }
         for a in [
@@ -195,7 +205,11 @@ mod tests {
             Architecture::Sparc,
             Architecture::Sparc64,
         ] {
-            assert_eq!(f.compiler_model(a), Some("default"), "{a:?} must keep :default");
+            assert_eq!(
+                f.compiler_model(a),
+                Some("default"),
+                "{a:?} must keep :default"
+            );
         }
     }
 
@@ -207,14 +221,35 @@ mod tests {
         use unlace_sleigh::loadimage::section_flags;
         let f = ElfFormat;
         // SHF_ALLOC|SHF_EXECINSTR, non-writable.
-        let bits = f.section_bits(".text", SectionKind::Text, SectionFlags::Elf { sh_flags: 0x2 | 0x4 });
+        let bits = f.section_bits(
+            ".text",
+            SectionKind::Text,
+            SectionFlags::Elf {
+                sh_flags: 0x2 | 0x4,
+            },
+        );
         assert!(bits & section_flags::CODE != 0, "exec section is CODE");
-        assert!(bits & section_flags::READONLY != 0, "alloc+!write is READONLY");
-        assert!(bits & section_flags::UNALLOC == 0, "alloc section is not UNALLOC");
+        assert!(
+            bits & section_flags::READONLY != 0,
+            "alloc+!write is READONLY"
+        );
+        assert!(
+            bits & section_flags::UNALLOC == 0,
+            "alloc section is not UNALLOC"
+        );
         // SHF_ALLOC|SHF_WRITE data section: DATA, not READONLY.
-        let bits = f.section_bits(".data", SectionKind::Data, SectionFlags::Elf { sh_flags: 0x2 | 0x1 });
+        let bits = f.section_bits(
+            ".data",
+            SectionKind::Data,
+            SectionFlags::Elf {
+                sh_flags: 0x2 | 0x1,
+            },
+        );
         assert!(bits & section_flags::DATA != 0, "data section is DATA");
-        assert!(bits & section_flags::READONLY == 0, "writable section is not READONLY");
+        assert!(
+            bits & section_flags::READONLY == 0,
+            "writable section is not READONLY"
+        );
     }
 
     /// The loader's tables, the notes and `.interp` are allocated and
@@ -238,7 +273,10 @@ mod tests {
         ] {
             assert!(is_loader_table(name, kind), "{name} is a loader table");
             let bits = f.section_bits(name, kind, alloc_ro);
-            assert!(bits & section_flags::READONLY == 0, "{name} must not be READONLY");
+            assert!(
+                bits & section_flags::READONLY == 0,
+                "{name} must not be READONLY"
+            );
         }
         for (name, kind) in [
             (".rodata", SectionKind::ReadOnlyData),

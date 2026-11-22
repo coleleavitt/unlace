@@ -23,7 +23,7 @@ use unlace_base::address::Address;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::p4_calls::fspec::FuncCallSpecs;
 
@@ -50,7 +50,12 @@ pub struct ObjcClassTable {
 }
 
 /// The runtime entry points that allocate an instance of their class argument.
-const ALLOCATORS: [&str; 4] = ["objc_alloc", "objc_alloc_init", "objc_opt_new", "objc_allocWithZone"];
+const ALLOCATORS: [&str; 4] = [
+    "objc_alloc",
+    "objc_alloc_init",
+    "objc_opt_new",
+    "objc_allocWithZone",
+];
 
 /// Selectors that return a new instance of the receiver class.
 fn allocates(sel: &str) -> bool {
@@ -59,7 +64,11 @@ fn allocates(sel: &str) -> bool {
 
 /// Selectors that return their receiver (`instancetype` on an instance).
 fn returns_receiver(sel: &str) -> bool {
-    sel.starts_with("init") || matches!(sel, "self" | "retain" | "autorelease" | "copy" | "mutableCopy")
+    sel.starts_with("init")
+        || matches!(
+            sel,
+            "self" | "retain" | "autorelease" | "copy" | "mutableCopy"
+        )
 }
 
 impl ObjcClassTable {
@@ -122,7 +131,11 @@ fn selector_of(data: &Funcdata, vn: VarnodeId, depth: u32) -> Option<String> {
 /// address of a `class_t`.
 fn class_of_constant(data: &Funcdata, vn: VarnodeId) -> Option<String> {
     let addr = constant_address(data, vn, 0)?;
-    data.get_arch().kuna_objc_classes.class_at.get(&addr).cloned()
+    data.get_arch()
+        .kuna_objc_classes
+        .class_at
+        .get(&addr)
+        .cloned()
 }
 
 /// The address a varnode names: a constant, `&sym` as `PTRSUB(0, addr)`, either
@@ -141,7 +154,8 @@ pub(crate) fn constant_address(data: &Funcdata, vn: VarnodeId, depth: u32) -> Op
         OpCode::CPUI_PTRSUB => {
             let base = data.vbank().get(d.get_in(0)?)?;
             let off = data.vbank().get(d.get_in(1)?)?;
-            (base.is_constant() && base.get_offset() == 0 && off.is_constant()).then(|| off.get_offset())
+            (base.is_constant() && base.get_offset() == 0 && off.is_constant())
+                .then(|| off.get_offset())
         }
         _ => None,
     }
@@ -153,11 +167,17 @@ pub(crate) fn constant_address(data: &Funcdata, vn: VarnodeId, depth: u32) -> Op
 fn class_of_receiver(data: &Funcdata, vn: VarnodeId, depth: u32) -> Option<Rc<Datatype>> {
     let v = data.vbank().get(vn)?;
     if depth < 6 && !v.is_type_lock() {
-        if let Some(d) = v.get_def().and_then(|def| data.obank().get(def).map(|o| (def, o))) {
+        if let Some(d) = v
+            .get_def()
+            .and_then(|def| data.obank().get(def).map(|o| (def, o)))
+        {
             let (def, o) = d;
             match o.code() {
                 OpCode::CPUI_CALL => {
-                    if let Some(fc) = data.get_call_specs_index(def).map(|i| data.get_call_specs(i)) {
+                    if let Some(fc) = data
+                        .get_call_specs_index(def)
+                        .map(|i| data.get_call_specs(i))
+                    {
                         if let Some(t) = instancetype_at(data, def, fc, depth + 1) {
                             return Some(t);
                         }
@@ -178,7 +198,8 @@ fn class_of_receiver(data: &Funcdata, vn: VarnodeId, depth: u32) -> Option<Rc<Da
 
 fn pointer_to_struct(t: &Rc<Datatype>) -> bool {
     t.get_metatype() == type_metatype::TYPE_PTR
-        && t.get_ptr_to().is_some_and(|p| p.get_metatype() == type_metatype::TYPE_STRUCT)
+        && t.get_ptr_to()
+            .is_some_and(|p| p.get_metatype() == type_metatype::TYPE_STRUCT)
 }
 
 fn struct_pointer(data: &Funcdata, class: &str) -> Option<Rc<Datatype>> {
@@ -189,10 +210,17 @@ fn struct_pointer(data: &Funcdata, class: &str) -> Option<Rc<Datatype>> {
         return None;
     }
     let space = arch.manage.get_default_data_space()?;
-    types.get_type_pointer(space.get_addr_size() as i32, st, space.get_word_size()).ok()
+    types
+        .get_type_pointer(space.get_addr_size() as i32, st, space.get_word_size())
+        .ok()
 }
 
-fn instancetype_at(data: &Funcdata, op: OpId, fc: &FuncCallSpecs, depth: u32) -> Option<Rc<Datatype>> {
+fn instancetype_at(
+    data: &Funcdata,
+    op: OpId,
+    fc: &FuncCallSpecs,
+    depth: u32,
+) -> Option<Rc<Datatype>> {
     let sel = selector(data, op, fc)?;
     let recv = data.obank().get(op)?.get_in(1)?;
     if allocates(&sel) {
@@ -248,12 +276,24 @@ pub fn resolve_send(data: &Funcdata, op: OpId) -> Option<ResolvedSend> {
     let table = &arch.kuna_objc_classes;
     if let Some(class) = class_of_constant(data, recv) {
         let (label, imp) = table.resolve(&class, &sel, true)?;
-        return Some(ResolvedSend { site, imp, label: label.to_string(), stub, self_type: None });
+        return Some(ResolvedSend {
+            site,
+            imp,
+            label: label.to_string(),
+            stub,
+            self_type: None,
+        });
     }
     let t = class_of_receiver(data, recv, 0)?;
     let class = t.get_ptr_to()?.get_name().to_string();
     let (label, imp) = table.resolve(&class, &sel, false)?;
-    Some(ResolvedSend { site, imp, label: label.to_string(), stub, self_type: Some(t) })
+    Some(ResolvedSend {
+        site,
+        imp,
+        label: label.to_string(),
+        stub,
+        self_type: Some(t),
+    })
 }
 
 /// The method a message send reaches when its receiver's class is known: the
@@ -277,10 +317,16 @@ mod tests {
     fn table() -> ObjcClassTable {
         let mut t = ObjcClassTable::default();
         let mut base = ObjcClass::default();
-        base.methods.insert((false, "count".into()), ("-[Base count]".into(), 0x100));
-        base.methods.insert((true, "alloc".into()), ("+[Base alloc]".into(), 0x200));
-        let mut sub = ObjcClass { superclass: Some("Base".into()), ..Default::default() };
-        sub.methods.insert((false, "x".into()), ("-[Sub x]".into(), 0x300));
+        base.methods
+            .insert((false, "count".into()), ("-[Base count]".into(), 0x100));
+        base.methods
+            .insert((true, "alloc".into()), ("+[Base alloc]".into(), 0x200));
+        let mut sub = ObjcClass {
+            superclass: Some("Base".into()),
+            ..Default::default()
+        };
+        sub.methods
+            .insert((false, "x".into()), ("-[Sub x]".into(), 0x300));
         t.classes.insert("Base".into(), base);
         t.classes.insert("Sub".into(), sub);
         t
@@ -290,15 +336,29 @@ mod tests {
     fn resolution_walks_the_superclass_chain() {
         let t = table();
         assert_eq!(t.resolve("Sub", "x", false), Some(("-[Sub x]", 0x300)));
-        assert_eq!(t.resolve("Sub", "count", false), Some(("-[Base count]", 0x100)));
-        assert_eq!(t.resolve("Sub", "alloc", true), Some(("+[Base alloc]", 0x200)));
-        assert_eq!(t.resolve("Sub", "count", true), None, "a class method is not an instance one");
+        assert_eq!(
+            t.resolve("Sub", "count", false),
+            Some(("-[Base count]", 0x100))
+        );
+        assert_eq!(
+            t.resolve("Sub", "alloc", true),
+            Some(("+[Base alloc]", 0x200))
+        );
+        assert_eq!(
+            t.resolve("Sub", "count", true),
+            None,
+            "a class method is not an instance one"
+        );
         assert_eq!(t.resolve("Other", "count", false), None);
     }
 
     #[test]
     fn instancetype_selectors() {
         assert!(allocates("alloc") && allocates("new") && !allocates("init"));
-        assert!(returns_receiver("initWithFrame:") && returns_receiver("self") && !returns_receiver("count"));
+        assert!(
+            returns_receiver("initWithFrame:")
+                && returns_receiver("self")
+                && !returns_receiver("count")
+        );
     }
 }

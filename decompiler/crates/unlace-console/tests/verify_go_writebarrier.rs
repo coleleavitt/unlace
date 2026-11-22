@@ -16,14 +16,17 @@
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// `true` if a runnable `go` toolchain is on PATH.
@@ -146,9 +149,12 @@ fn decompile_fns(bin: &str, option: Option<&str>, names: &[String]) -> String {
     let mut prog: ConsoleProgram = bootstrap_from_object(bin, "", &spec_roots)
         .expect("bootstrap go fixture with built processor specs");
     if let Some(v) = option {
-        prog.arch_mut().set_kuna_option("gowritebarrier", v).expect("gowritebarrier applies");
+        prog.arch_mut()
+            .set_kuna_option("gowritebarrier", v)
+            .expect("gowritebarrier applies");
     }
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     let mut cmds: Vec<String> = Vec::new();
     for n in names {
         cmds.push(format!("load function {n}"));
@@ -263,7 +269,9 @@ fn program_store_count(code: &str) -> usize {
         if !bare.ends_with(';') {
             continue;
         }
-        let Some((lhs, _)) = bare.split_once(" = ") else { continue };
+        let Some((lhs, _)) = bare.split_once(" = ") else {
+            continue;
+        };
         if !lhs.contains('*') && !lhs.contains('[') && !lhs.contains("->") {
             continue;
         }
@@ -335,8 +343,14 @@ fn phi_fed_barrier_arms_fold_and_preserve_every_program_store() {
             folded += 1;
         }
     }
-    assert!(carried >= 3, "fixture must exercise the residual class (got {carried})");
-    assert!(folded * 2 >= carried, "most residual arms fold ({folded}/{carried})");
+    assert!(
+        carried >= 3,
+        "fixture must exercise the residual class (got {carried})"
+    );
+    assert!(
+        folded * 2 >= carried,
+        "most residual arms fold ({folded}/{carried})"
+    );
 
     let _ = std::fs::remove_dir_all(&dir);
 }

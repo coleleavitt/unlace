@@ -2,8 +2,8 @@
 
 use crate::context::VarnodeId;
 use crate::funcdata::Funcdata;
-use unlace_num::opcodes::OpCode;
 use std::collections::BTreeSet;
+use unlace_num::opcodes::OpCode;
 
 const MAX_WORK: usize = 8192;
 

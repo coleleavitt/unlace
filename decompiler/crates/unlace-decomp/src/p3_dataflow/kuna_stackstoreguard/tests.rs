@@ -1,6 +1,6 @@
 use super::*;
 use crate::{context::OpId, heritage::LoadGuard};
-use unlace_base::space::{spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, spacetype};
 
 fn partial_guard() -> LoadGuard {
     let space = Rc::new(AddrSpace::new(

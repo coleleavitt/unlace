@@ -5,11 +5,11 @@ use crate::common;
 use std::path::PathBuf;
 
 use unlace_analysis::listing::kuna_entrythumbflow::MAX_INSTRUCTIONS;
-use unlace_analysis::loadimage_te::synthetic::{TeImage, CODE_RVA};
+use unlace_analysis::loadimage_te::synthetic::{CODE_RVA, TeImage};
 use unlace_base::address::Address;
 use unlace_console::assertions::{self, Body, Directive};
 use unlace_console::engine::{
-    bootstrap_from_file, bootstrap_from_te, ArmIsa, ConsoleProgram, EntrySelector,
+    ArmIsa, ConsoleProgram, EntrySelector, bootstrap_from_file, bootstrap_from_te,
 };
 use unlace_console::project::decompile_targets;
 
@@ -17,18 +17,21 @@ struct TeFixture(PathBuf);
 
 impl TeFixture {
     fn thumb_return_7() -> Self {
-        Self::write("te-thumb", TeImage::thumb(&[0x07, 0x20, 0x70, 0x47]).build())
+        Self::write(
+            "te-thumb",
+            TeImage::thumb(&[0x07, 0x20, 0x70, 0x47]).build(),
+        )
     }
 
     fn mixed_arm_with_odd_thumb_entry() -> Self {
-        let image = TeImage::arm(&[0x1e, 0xff, 0x2f, 0xe1, 0x07, 0x20, 0x70, 0x47])
-            .entry_rva(CODE_RVA + 5);
+        let image =
+            TeImage::arm(&[0x1e, 0xff, 0x2f, 0xe1, 0x07, 0x20, 0x70, 0x47]).entry_rva(CODE_RVA + 5);
         Self::write("te-mixed-arm-thumb", image.build())
     }
 
     fn thumb_entry_before_arm() -> Self {
-        let image = TeImage::arm(&[0x07, 0x20, 0x70, 0x47, 0x1e, 0xff, 0x2f, 0xe1])
-            .entry_rva(CODE_RVA | 1);
+        let image =
+            TeImage::arm(&[0x07, 0x20, 0x70, 0x47, 0x1e, 0xff, 0x2f, 0xe1]).entry_rva(CODE_RVA | 1);
         Self::write("te-thumb-entry-before-arm", image.build())
     }
 
@@ -41,17 +44,15 @@ impl TeFixture {
     }
 
     fn mixed_machine_thumb2_and_arm() -> Self {
-        let image = TeImage::thumb(&[
-            0x1e, 0xff, 0x2f, 0xe1, 0x4f, 0xf0, 0x07, 0x00, 0x70, 0x47,
-        ])
-        .entry_rva(CODE_RVA + 5);
+        let image = TeImage::thumb(&[0x1e, 0xff, 0x2f, 0xe1, 0x4f, 0xf0, 0x07, 0x00, 0x70, 0x47])
+            .entry_rva(CODE_RVA + 5);
         Self::write("te-armthumb-mixed", image.build())
     }
 
     fn thumb_calls_arm() -> Self {
         let image = TeImage::arm(&[
-            0x00, 0xf0, 0x02, 0xf8, 0x70, 0x47, 0x00, 0xbf, 0x00, 0xf0, 0x02, 0xe8, 0x70,
-            0x47, 0x00, 0xbf, 0x07, 0x00, 0xa0, 0xe3, 0x1e, 0xff, 0x2f, 0xe1,
+            0x00, 0xf0, 0x02, 0xf8, 0x70, 0x47, 0x00, 0xbf, 0x00, 0xf0, 0x02, 0xe8, 0x70, 0x47,
+            0x00, 0xbf, 0x07, 0x00, 0xa0, 0xe3, 0x1e, 0xff, 0x2f, 0xe1,
         ])
         .entry_rva(CODE_RVA | 1);
         Self::write("te-thumb-calls-arm", image.build())
@@ -74,7 +75,9 @@ impl TeFixture {
 
     /// Two Thumb no-ops that fall through into a zero-filled virtual tail.
     fn thumb_entry_into_zero_tail() -> Self {
-        let mut bytes = TeImage::arm(&[0x00, 0xbf, 0x00, 0xbf]).entry_rva(CODE_RVA | 1).build();
+        let mut bytes = TeImage::arm(&[0x00, 0xbf, 0x00, 0xbf])
+            .entry_rva(CODE_RVA | 1)
+            .build();
         bytes[48..52].copy_from_slice(&0x20u32.to_le_bytes());
         Self::write("te-thumb-zero-tail", bytes)
     }
@@ -87,7 +90,10 @@ impl TeFixture {
             code.extend_from_slice(&[0xc0, 0x46]);
         }
         code.extend_from_slice(&[0x70, 0x47]);
-        Self::write("te-long-thumb-entry", TeImage::arm(&code).entry_rva(CODE_RVA | 1).build())
+        Self::write(
+            "te-long-thumb-entry",
+            TeImage::arm(&code).entry_rva(CODE_RVA | 1).build(),
+        )
     }
 
     fn arm_literal_pool_return_7() -> Self {
@@ -117,8 +123,10 @@ fn repo_root() -> PathBuf {
 }
 
 fn specs() -> Vec<String> {
-    vec![std::env::var("KUNA_SPECS")
-        .unwrap_or_else(|_| repo_root().join("specs").to_string_lossy().into_owned())]
+    vec![
+        std::env::var("KUNA_SPECS")
+            .unwrap_or_else(|_| repo_root().join("specs").to_string_lossy().into_owned()),
+    ]
 }
 
 /// Bootstrap a TE fixture with built ARM/x86 specs.
@@ -169,8 +177,16 @@ fn explicit_targets_keep_te_mappings_and_use_the_selected_entry_convention() {
     ] {
         let mut program = load_fixture(&path, target, None);
         program.commit_pending_analysis().unwrap();
-        assert!(program.description().starts_with(target), "{}", program.description());
-        assert_eq!(program.find_entry_at(0x401001).unwrap().addr.get_offset(), entry, "{target}");
+        assert!(
+            program.description().starts_with(target),
+            "{}",
+            program.description()
+        );
+        assert_eq!(
+            program.find_entry_at(0x401001).unwrap().addr.get_offset(),
+            entry,
+            "{target}"
+        );
         assert!(program.vma_bytes_mapped(0x401000), "{target}");
         assert!(!program.vma_bytes_mapped(0x400000), "{target}");
     }
@@ -283,7 +299,12 @@ fn odd_thumb_entry_carries_mode_across_bl_but_not_blx() {
 }
 
 fn tmode_at(program: &unlace_console::engine::ConsoleProgram, offset: u64) -> u32 {
-    let space = program.arch().manage().get_default_code_space().cloned().unwrap();
+    let space = program
+        .arch()
+        .manage()
+        .get_default_code_space()
+        .cloned()
+        .unwrap();
     program
         .arch()
         .with_context_db_mut(|db| db.get_variable_value(b"TMode", &Address::new(space, offset)))
@@ -321,16 +342,30 @@ fn assert_it_return_paths(code: &[u8]) {
     for isa in [None, Some(ArmIsa::Thumb)] {
         let mut program = load_fixture(&path, "", isa);
         program.commit_pending_analysis().unwrap();
-        assert_eq!(tmode_at(&program, 0x401006), 1, "the conditional fall-through is Thumb");
-        assert_eq!(tmode_at(&program, 0x401008), 1, "the fall-through return is Thumb");
+        assert_eq!(
+            tmode_at(&program, 0x401006),
+            1,
+            "the conditional fall-through is Thumb"
+        );
+        assert_eq!(
+            tmode_at(&program, 0x401008),
+            1,
+            "the fall-through return is Thumb"
+        );
         let entry = program.find_entry_at(0x401001).unwrap();
         let results = decompile_targets(&mut program, vec![entry], true, false, false);
         assert!(results[0].error.is_none(), "{:?}", results[0].error);
         let code = results[0].code.clone().unwrap();
-        assert!(code.contains("if (") && code.contains("return 7;"), "{code}");
+        assert!(
+            code.contains("if (") && code.contains("return 7;"),
+            "{code}"
+        );
         outputs.push(code);
     }
-    assert_eq!(outputs[0], outputs[1], "entry-local and explicit Thumb must agree");
+    assert_eq!(
+        outputs[0], outputs[1],
+        "entry-local and explicit Thumb must agree"
+    );
 }
 
 /// The walk's budget is a bound on its own work, not on the load: the ranges
@@ -348,11 +383,24 @@ fn odd_thumb_entry_walk_truncates_at_its_budget_and_keeps_the_load_usable() {
 
     let walked_end = 0x401000 + 2 * MAX_INSTRUCTIONS as u64;
     assert_eq!(tmode_at(&program, 0x401000), 1);
-    assert_eq!(tmode_at(&program, walked_end - 2), 1, "the last walked instruction is Thumb");
-    assert_eq!(tmode_at(&program, walked_end), 0, "past the budget decodes as A32");
+    assert_eq!(
+        tmode_at(&program, walked_end - 2),
+        1,
+        "the last walked instruction is Thumb"
+    );
+    assert_eq!(
+        tmode_at(&program, walked_end),
+        0,
+        "past the budget decodes as A32"
+    );
     assert_eq!(tmode_at(&program, walked_end + 2), 0);
 
-    let space = program.arch().manage().get_default_code_space().cloned().unwrap();
+    let space = program
+        .arch()
+        .manage()
+        .get_default_code_space()
+        .cloned()
+        .unwrap();
     let (first, last) = program.arch().with_context_db_mut(|db| {
         let (_, first, last) = db.get_context_bounds(&Address::new(space, 0x401000));
         (first, last)
@@ -370,15 +418,19 @@ fn odd_thumb_entry_walk_truncates_at_its_budget_and_keeps_the_load_usable() {
     let entry = program.find_entry_at(0x401001).expect("odd Thumb entry");
     assert_eq!(entry.addr.get_offset(), 0x401000);
 
-    let mut explicit = bootstrap_from_te(&path, "", &specs(), Some(ArmIsa::Thumb))
-        .unwrap_or_else(|error| {
+    let mut explicit =
+        bootstrap_from_te(&path, "", &specs(), Some(ArmIsa::Thumb)).unwrap_or_else(|error| {
             panic!(
                 "explicit Thumb mode should bypass the walk: {}",
                 error.explain()
             )
         });
     explicit.commit_pending_analysis().unwrap();
-    assert_eq!(tmode_at(&explicit, walked_end + 2), 1, "--isa thumb paints the whole image");
+    assert_eq!(
+        tmode_at(&explicit, walked_end + 2),
+        1,
+        "--isa thumb paints the whole image"
+    );
 }
 
 /// The `blx` decode runs the language's `globalset(TMode=0)` at its target.
@@ -393,7 +445,11 @@ fn a_blx_target_below_a_thumb_callee_does_not_flatten_it() {
     program.commit_pending_analysis().unwrap();
     assert_eq!(tmode_at(&program, 0x401010), 0, "the BLX target is A32");
     assert_eq!(tmode_at(&program, 0x401018), 1, "the BL callee is Thumb");
-    assert_eq!(tmode_at(&program, 0x40101c), 1, "and so is its second instruction");
+    assert_eq!(
+        tmode_at(&program, 0x40101c),
+        1,
+        "and so is its second instruction"
+    );
     let callee = program
         .resolve_entry(&EntrySelector::Numeric(0x401018))
         .expect("Thumb callee");
@@ -414,7 +470,11 @@ fn the_walk_stops_at_the_file_backed_bytes() {
     let path = fixture.0.to_string_lossy();
     let mut program = load_fixture(&path, "", None);
     program.commit_pending_analysis().unwrap();
-    assert_eq!(tmode_at(&program, 0x401002), 1, "the second no-op is walked");
+    assert_eq!(
+        tmode_at(&program, 0x401002),
+        1,
+        "the second no-op is walked"
+    );
     assert_eq!(tmode_at(&program, 0x401004), 0, "the zero tail is not");
     assert_eq!(tmode_at(&program, 0x401010), 0);
 }
@@ -422,24 +482,55 @@ fn the_walk_stops_at_the_file_backed_bytes() {
 #[test]
 fn odd_generic_arm_entry_preserves_a32_code_on_either_side() {
     for (fixture, arm_addr, thumb_addr) in [
-        (TeFixture::mixed_arm_with_odd_thumb_entry(), 0x401000, 0x401004),
+        (
+            TeFixture::mixed_arm_with_odd_thumb_entry(),
+            0x401000,
+            0x401004,
+        ),
         (TeFixture::thumb_entry_before_arm(), 0x401004, 0x401000),
     ] {
         let path = fixture.0.to_string_lossy();
         let mut program = load_fixture(&path, "", None);
         program.commit_pending_analysis().unwrap();
-        assert_eq!(tmode_at(&program, thumb_addr), 1, "entry at {thumb_addr:#x}");
-        assert_eq!(tmode_at(&program, thumb_addr + 2), 1, "reachable Thumb return");
-        assert_eq!(tmode_at(&program, arm_addr), 0, "A32 function at {arm_addr:#x}");
+        assert_eq!(
+            tmode_at(&program, thumb_addr),
+            1,
+            "entry at {thumb_addr:#x}"
+        );
+        assert_eq!(
+            tmode_at(&program, thumb_addr + 2),
+            1,
+            "reachable Thumb return"
+        );
+        assert_eq!(
+            tmode_at(&program, arm_addr),
+            0,
+            "A32 function at {arm_addr:#x}"
+        );
 
-        let arm = program.resolve_entry(&EntrySelector::Numeric(arm_addr)).expect("A32 function");
-        let thumb = program.find_entry_at(thumb_addr | 1).expect("odd Thumb entry");
-        let entries = if arm_addr < thumb_addr { vec![arm, thumb] } else { vec![thumb, arm] };
+        let arm = program
+            .resolve_entry(&EntrySelector::Numeric(arm_addr))
+            .expect("A32 function");
+        let thumb = program
+            .find_entry_at(thumb_addr | 1)
+            .expect("odd Thumb entry");
+        let entries = if arm_addr < thumb_addr {
+            vec![arm, thumb]
+        } else {
+            vec![thumb, arm]
+        };
         let results = decompile_targets(&mut program, entries, true, false, false);
         for (addr, expected) in [(arm_addr, "return;"), (thumb_addr, "return 7;")] {
-            let result = results.iter().find(|result| result.address == addr).unwrap();
+            let result = results
+                .iter()
+                .find(|result| result.address == addr)
+                .unwrap();
             assert!(result.error.is_none(), "{addr:#x}: {:?}", result.error);
-            assert!(result.code.as_deref().unwrap().contains(expected), "{addr:#x}: {:?}", result.code);
+            assert!(
+                result.code.as_deref().unwrap().contains(expected),
+                "{addr:#x}: {:?}",
+                result.code
+            );
         }
     }
 }
@@ -483,20 +574,33 @@ fn entry_thumb_walk_decodes_overlaid_bytes() {
 
 #[test]
 fn entry_thumb_walk_reaches_a_materialized_virtual_tail() {
-    let mut bytes = TeImage::arm(&[0x00, 0xbf, 0x00, 0xbf]).entry_rva(CODE_RVA | 1).build();
+    let mut bytes = TeImage::arm(&[0x00, 0xbf, 0x00, 0xbf])
+        .entry_rva(CODE_RVA | 1)
+        .build();
     bytes[48..52].copy_from_slice(&16u32.to_le_bytes());
     let fixture = TeFixture::write("te-thumb-tail-overlay", bytes);
     let path = fixture.0.to_string_lossy();
     let mut program = load_fixture(&path, "", None);
-    apply_byte_assertions(&mut program, &[
-        (0x401000, &[0x02, 0xe0]),
-        (0x401008, &[0x07, 0x20, 0x70, 0x47]),
-    ]);
+    apply_byte_assertions(
+        &mut program,
+        &[
+            (0x401000, &[0x02, 0xe0]),
+            (0x401008, &[0x07, 0x20, 0x70, 0x47]),
+        ],
+    );
     program.commit_pending_analysis().unwrap();
-    assert_eq!(tmode_at(&program, 0x401008), 1, "materialized branch target");
+    assert_eq!(
+        tmode_at(&program, 0x401008),
+        1,
+        "materialized branch target"
+    );
     assert_eq!(tmode_at(&program, 0x40100a), 1, "materialized return");
     for offset in [0x401002, 0x401004, 0x401006, 0x40100c, 0x40100e] {
-        assert_eq!(tmode_at(&program, offset), 0, "unreached or uninitialized: {offset:x}");
+        assert_eq!(
+            tmode_at(&program, offset),
+            0,
+            "unreached or uninitialized: {offset:x}"
+        );
     }
     assert_entry_returns_7(&mut program);
 }
@@ -508,13 +612,20 @@ fn entry_thumb_walk_merges_adjacent_and_overlapping_materialized_spans() {
     let fixture = TeFixture::write("te-thumb-split-overlay", bytes);
     let path = fixture.0.to_string_lossy();
     let mut program = load_fixture(&path, "", None);
-    apply_byte_assertions(&mut program, &[
-        (0x401004, &[0x70, 0x47]),
-        (0x401003, &[0x00]),
-        (0x401001, &[0xf0, 0x07]),
-    ]);
+    apply_byte_assertions(
+        &mut program,
+        &[
+            (0x401004, &[0x70, 0x47]),
+            (0x401003, &[0x00]),
+            (0x401001, &[0xf0, 0x07]),
+        ],
+    );
     program.commit_pending_analysis().unwrap();
-    assert_eq!(tmode_at(&program, 0x401000), 1, "mov.w spans the file and two overlays");
+    assert_eq!(
+        tmode_at(&program, 0x401000),
+        1,
+        "mov.w spans the file and two overlays"
+    );
     assert_eq!(tmode_at(&program, 0x401004), 1);
     assert_eq!(tmode_at(&program, 0x401006), 0, "uninitialized tail");
     assert_entry_returns_7(&mut program);
@@ -527,21 +638,36 @@ fn entry_thumb_walk_excludes_uninitialized_gaps_and_rejected_overlays() {
     let fixture = TeFixture::write("te-thumb-incomplete-overlay", bytes);
     let path = fixture.0.to_string_lossy();
     let mut program = load_fixture(&path, "", None);
-    apply_byte_assertions(&mut program, &[
-        (0x401008, &[0x4f, 0xf0]),
-        (0x40100c, &[0x70, 0x47]),
-    ]);
+    apply_byte_assertions(
+        &mut program,
+        &[(0x401008, &[0x4f, 0xf0]), (0x40100c, &[0x70, 0x47])],
+    );
     program.set_assertions(vec![Directive {
         raw: "bytes 0x40100a 0700704700000000".into(),
-        body: Body::Bytes { addr: 0x40100a, data: vec![0x07, 0x00, 0x70, 0x47, 0, 0, 0, 0] },
+        body: Body::Bytes {
+            addr: 0x40100a,
+            data: vec![0x07, 0x00, 0x70, 0x47, 0, 0, 0, 0],
+        },
     }]);
     assertions::apply_image_scoped(&mut program);
     assert_eq!(program.assertion_outcomes()[0].status, "rejected");
     program.commit_pending_analysis().unwrap();
     assert_eq!(tmode_at(&program, 0x401000), 1);
-    assert_eq!(tmode_at(&program, 0x401008), 0, "incomplete Thumb-2 instruction");
-    assert_eq!(tmode_at(&program, 0x40100a), 0, "rejected bytes did not fill the gap");
-    assert_eq!(tmode_at(&program, 0x40100c), 0, "unreachable return beyond the gap");
+    assert_eq!(
+        tmode_at(&program, 0x401008),
+        0,
+        "incomplete Thumb-2 instruction"
+    );
+    assert_eq!(
+        tmode_at(&program, 0x40100a),
+        0,
+        "rejected bytes did not fill the gap"
+    );
+    assert_eq!(
+        tmode_at(&program, 0x40100c),
+        0,
+        "unreachable return beyond the gap"
+    );
 }
 
 #[test]
@@ -555,26 +681,47 @@ fn entry_thumb_walk_excludes_overlays_in_nonexecutable_mappings() {
     apply_byte_assertions(&mut program, &[(0x400ff8, &[0x07, 0x20, 0x70, 0x47])]);
     program.commit_pending_analysis().unwrap();
     assert_eq!(tmode_at(&program, 0x401000), 1);
-    assert_eq!(tmode_at(&program, 0x400ff8), 0, "the branch target is not executable");
+    assert_eq!(
+        tmode_at(&program, 0x400ff8),
+        0,
+        "the branch target is not executable"
+    );
 }
 
 fn apply_byte_assertions(program: &mut ConsoleProgram, overlays: &[(u64, &[u8])]) {
-    program.set_assertions(overlays.iter().map(|&(addr, data)| {
-        let hex = data.iter().map(|b| format!("{b:02x}")).collect::<String>();
-        Directive {
-            raw: format!("bytes 0x{addr:x} {hex}"),
-            body: Body::Bytes { addr, data: data.to_vec() },
-        }
-    }).collect());
+    program.set_assertions(
+        overlays
+            .iter()
+            .map(|&(addr, data)| {
+                let hex = data.iter().map(|b| format!("{b:02x}")).collect::<String>();
+                Directive {
+                    raw: format!("bytes 0x{addr:x} {hex}"),
+                    body: Body::Bytes {
+                        addr,
+                        data: data.to_vec(),
+                    },
+                }
+            })
+            .collect(),
+    );
     assertions::apply_image_scoped(program);
-    assert!(program.assertion_outcomes().iter().all(|outcome| outcome.status == "applied"));
+    assert!(
+        program
+            .assertion_outcomes()
+            .iter()
+            .all(|outcome| outcome.status == "applied")
+    );
 }
 
 fn assert_entry_returns_7(program: &mut ConsoleProgram) {
     let entry = program.find_entry_at(0x401001).unwrap();
     let results = decompile_targets(program, vec![entry], true, false, false);
     assert!(results[0].error.is_none(), "{:?}", results[0].error);
-    assert!(results[0].code.as_deref().unwrap().contains("return 7;"), "{:?}", results[0].code);
+    assert!(
+        results[0].code.as_deref().unwrap().contains("return 7;"),
+        "{:?}",
+        results[0].code
+    );
 }
 
 #[test]

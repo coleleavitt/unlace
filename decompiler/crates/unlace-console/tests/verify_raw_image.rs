@@ -8,7 +8,7 @@ use std::process::{Command, Stdio};
 
 use unlace_base::address::Address;
 use unlace_console::assertions::{self, Body, Directive};
-use unlace_console::engine::{bootstrap_from_raw, ArmIsa};
+use unlace_console::engine::{ArmIsa, bootstrap_from_raw};
 use unlace_console::project::decompile_targets;
 use unlace_decomp::varnode::varnode_flags;
 
@@ -46,8 +46,10 @@ fn repo_root() -> PathBuf {
 }
 
 fn specs() -> Vec<String> {
-    vec![std::env::var("KUNA_SPECS")
-        .unwrap_or_else(|_| repo_root().join("specs").to_string_lossy().into_owned())]
+    vec![
+        std::env::var("KUNA_SPECS")
+            .unwrap_or_else(|_| repo_root().join("specs").to_string_lossy().into_owned()),
+    ]
 }
 
 fn run_console(script: &str, isa: Option<&str>) -> std::process::Output {
@@ -88,7 +90,8 @@ fn raw_thumb_maps_base_zero_and_nonzero() {
             &[base, selected],
             Some(ArmIsa::Thumb),
             &specs(),
-        ).expect("bootstrap raw ARM fixture with built specs");
+        )
+        .expect("bootstrap raw ARM fixture with built specs");
         program.commit_pending_analysis().unwrap();
         assert_eq!(program.sections(), vec![(base, 4, 4)]);
         assert_eq!(program.num_symbols(), 1);
@@ -120,22 +123,34 @@ fn raw_arm_data_addresses_preserve_their_low_bit() {
         &[0x4001],
         Some(ArmIsa::Thumb),
         &specs(),
-    ).expect("bootstrap raw ARM fixture with built specs");
+    )
+    .expect("bootstrap raw ARM fixture with built specs");
     program.commit_pending_analysis().unwrap();
     assert_eq!(program.input_address_offset(0x4001).unwrap(), 0x4001);
     assert_eq!(program.input_code_offset(0x4001).unwrap(), 0x4000);
     program.set_assertions(vec![
         Directive {
             raw: "data 0x4001 char odd_data".into(),
-            body: Body::Data { addr: 0x4001, decl: "char odd_data".into() },
+            body: Body::Data {
+                addr: 0x4001,
+                decl: "char odd_data".into(),
+            },
         },
         Directive {
             raw: "volatile 0x4001+1".into(),
-            body: Body::Volatile { addr: 0x4001, size: 1 },
+            body: Body::Volatile {
+                addr: 0x4001,
+                size: 1,
+            },
         },
     ]);
     assertions::apply_program_scoped(&mut program);
-    assert!(program.assertion_outcomes().iter().all(|outcome| outcome.status == "applied"));
+    assert!(
+        program
+            .assertion_outcomes()
+            .iter()
+            .all(|outcome| outcome.status == "applied")
+    );
     let (_, address, _) = program
         .global_data_symbol_addresses()
         .into_iter()
@@ -145,8 +160,14 @@ fn raw_arm_data_addresses_preserve_their_low_bit() {
     let code = program.arch().manage().get_default_code_space().unwrap();
     let odd = Address::new(std::rc::Rc::clone(code), 0x4001);
     let even = Address::new(std::rc::Rc::clone(code), 0x4000);
-    assert_ne!(program.arch().symboltab.get_property(&odd) & varnode_flags::volatil, 0);
-    assert_eq!(program.arch().symboltab.get_property(&even) & varnode_flags::volatil, 0);
+    assert_ne!(
+        program.arch().symboltab.get_property(&odd) & varnode_flags::volatil,
+        0
+    );
+    assert_eq!(
+        program.arch().symboltab.get_property(&even) & varnode_flags::volatil,
+        0
+    );
 }
 
 #[test]
@@ -163,17 +184,24 @@ fn word_addressed_targets_scale_base_and_entries_to_byte_offsets() {
         .find_entry_at(0x200)
         .expect("word-addressed base must become a byte VMA");
     assert!(at_nonzero_base.entry_bytes_mapped(&entry.addr));
-    assert_eq!(at_nonzero_base.output_code_offset(entry.addr.get_offset()), 0x100);
+    assert_eq!(
+        at_nonzero_base.output_code_offset(entry.addr.get_offset()),
+        0x100
+    );
     assert_eq!(at_nonzero_base.output_code_end_offset(0x201), 0x101);
 
-    let mut at_second_word = bootstrap_from_raw(&path, "avr8:LE:16:default", 0, &[1], None, &specs())
-        .expect("same built AVR8 specification");
+    let mut at_second_word =
+        bootstrap_from_raw(&path, "avr8:LE:16:default", 0, &[1], None, &specs())
+            .expect("same built AVR8 specification");
     at_second_word.commit_pending_analysis().unwrap();
     let entry = at_second_word
         .find_entry_at(2)
         .expect("entry word 1 must select file byte offset 2");
     assert_eq!(entry.addr.get_offset(), 2);
-    assert_eq!(at_second_word.output_code_offset(entry.addr.get_offset()), 1);
+    assert_eq!(
+        at_second_word.output_code_offset(entry.addr.get_offset()),
+        1
+    );
     assert!(at_second_word.entry_bytes_mapped(&entry.addr));
 }
 
@@ -181,9 +209,12 @@ fn word_addressed_targets_scale_base_and_entries_to_byte_offsets() {
 fn raw_console_reports_word_addresses_in_target_units() {
     let fixture = RawFixture::new("raw-word-report", &[0, 0, 0x08, 0x95]);
     let roots = specs();
-    assert!(PathBuf::from(&roots[0])
-        .join("Ghidra/Processors/Atmel/data/languages/avr8.sla")
-        .exists(), "required processor specs must be available");
+    assert!(
+        PathBuf::from(&roots[0])
+            .join("Ghidra/Processors/Atmel/data/languages/avr8.sla")
+            .exists(),
+        "required processor specs must be available"
+    );
     let script = format!(
         "load raw avr8:LE:16:default 0x100 0x101 \"{}\"\n\
          read symbols\n\
@@ -200,10 +231,23 @@ fn raw_console_reports_word_addresses_in_target_units() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "{stdout}\n{stderr}");
-    for expected in ["0x101 sub_101", "[0x101]", "region head=0x101", "walk 0x101"] {
-        assert!(stdout.contains(expected), "missing {expected:?}:\n{stdout}\n{stderr}");
+    for expected in [
+        "0x101 sub_101",
+        "[0x101]",
+        "region head=0x101",
+        "walk 0x101",
+    ] {
+        assert!(
+            stdout.contains(expected),
+            "missing {expected:?}:\n{stdout}\n{stderr}"
+        );
     }
-    for byte_address in ["0x202 sub_101", "[0x202]", "region head=0x202", "walk 0x202"] {
+    for byte_address in [
+        "0x202 sub_101",
+        "[0x202]",
+        "region head=0x202",
+        "walk 0x202",
+    ] {
         assert!(
             !stdout.contains(byte_address),
             "leaked byte address {byte_address:?}:\n{stdout}\n{stderr}"
@@ -215,9 +259,12 @@ fn raw_console_reports_word_addresses_in_target_units() {
 fn raw_map_function_normalizes_an_odd_thumb_pointer() {
     let fixture = RawFixture::thumb_return_7();
     let roots = specs();
-    assert!(PathBuf::from(&roots[0])
-        .join("Ghidra/Processors/ARM/data/languages/ARM8_le.sla")
-        .exists(), "required processor specs must be available");
+    assert!(
+        PathBuf::from(&roots[0])
+            .join("Ghidra/Processors/ARM/data/languages/ARM8_le.sla")
+            .exists(),
+        "required processor specs must be available"
+    );
     let script = format!(
         "load raw ARM:LE:32:v4t:default 0x4000 0x4000 \"{}\"\n\
          map function 0x4001 mapped_thumb\n\
@@ -241,9 +288,12 @@ fn raw_map_address_preserves_an_odd_arm_data_address() {
         &[0x01, 0x48, 0x00, 0x78, 0x70, 0x47, 0, 0, 0x01, 0x40, 0, 0],
     );
     let roots = specs();
-    assert!(PathBuf::from(&roots[0])
-        .join("Ghidra/Processors/ARM/data/languages/ARM8_le.sla")
-        .exists(), "required processor specs must be available");
+    assert!(
+        PathBuf::from(&roots[0])
+            .join("Ghidra/Processors/ARM/data/languages/ARM8_le.sla")
+            .exists(),
+        "required processor specs must be available"
+    );
     let script = format!(
         "load raw ARM:LE:32:v4t:default 0x4000 0x4001 \"{}\"\n\
          map address 0x4001 char odd_data\n\
@@ -268,9 +318,12 @@ fn raw_map_address_preserves_an_odd_arm_data_address() {
 fn console_load_raw_preserves_whitespace_in_final_filename() {
     let fixture = RawFixture::thumb_return_7_with_spaces();
     let roots = specs();
-    assert!(PathBuf::from(&roots[0])
-        .join("Ghidra/Processors/ARM/data/languages/ARM8_le.sla")
-        .exists(), "required processor specs must be available");
+    assert!(
+        PathBuf::from(&roots[0])
+            .join("Ghidra/Processors/ARM/data/languages/ARM8_le.sla")
+            .exists(),
+        "required processor specs must be available"
+    );
     let mut child = Command::new(env!("CARGO_BIN_EXE_decomp_dbg"))
         .args(["-sleighpath", &roots[0]])
         .env(unlace_console::engine::ARM_ISA_ENV, "thumb")
@@ -319,7 +372,10 @@ fn raw_real_mode_images_decode_near_calls_in_their_code_segment() {
         (
             "raw-x86-rom",
             0xc8000,
-            image(0x10000, &[(0xfff0, &[0xe8, 0x00, 0x70, 0xc3]), (0x6ff3, ret7)]),
+            image(
+                0x10000,
+                &[(0xfff0, &[0xe8, 0x00, 0x70, 0xc3]), (0x6ff3, ret7)],
+            ),
             0xd7ff0,
             0xceff3,
         ),
@@ -327,7 +383,10 @@ fn raw_real_mode_images_decode_near_calls_in_their_code_segment() {
         (
             "raw-x86-large",
             0x10000,
-            image(0x21000, &[(0x1b680, &[0xe8, 0x8d, 0x49, 0xc3]), (0x20010, ret7)]),
+            image(
+                0x21000,
+                &[(0x1b680, &[0xe8, 0x8d, 0x49, 0xc3]), (0x20010, ret7)],
+            ),
             0x2b680,
             0x30010,
         ),
@@ -345,12 +404,20 @@ fn raw_real_mode_images_decode_near_calls_in_their_code_segment() {
         )
         .expect("bootstrap raw real-mode fixture with built specs");
         program.commit_pending_analysis().unwrap();
-        assert!(program.find_entry_at(callee).is_some(), "{stem}: no function at {callee:#x}");
-        let entry = program.find_entry_at(caller).expect("seeded raw entry must resolve");
+        assert!(
+            program.find_entry_at(callee).is_some(),
+            "{stem}: no function at {callee:#x}"
+        );
+        let entry = program
+            .find_entry_at(caller)
+            .expect("seeded raw entry must resolve");
         let results = decompile_targets(&mut program, vec![entry], true, false, false);
         assert!(results[0].error.is_none(), "{stem}: {:?}", results[0].error);
         let code = results[0].code.as_deref().unwrap();
-        assert!(code.contains(&format!("sub_{callee:x}();")), "{stem}:\n{code}");
+        assert!(
+            code.contains(&format!("sub_{callee:x}();")),
+            "{stem}:\n{code}"
+        );
     }
 }
 
@@ -365,15 +432,30 @@ fn ret_transfer_probes_do_not_change_another_functions_return_ip() {
         pushed: Option<u64>,
     }
     impl PcodeEmit for PushedIp {
-        fn dump(&mut self, _: &Address, code: OpCode, out: Option<&VarnodeData>, inputs: &[VarnodeData]) {
+        fn dump(
+            &mut self,
+            _: &Address,
+            code: OpCode,
+            out: Option<&VarnodeData>,
+            inputs: &[VarnodeData],
+        ) {
             if code == OpCode::CPUI_COPY {
-                if let (Some(out), Some(value)) = (out, inputs.first().filter(|v| v.get_addr().is_constant() && v.size == 2)) {
+                if let (Some(out), Some(value)) = (
+                    out,
+                    inputs
+                        .first()
+                        .filter(|v| v.get_addr().is_constant() && v.size == 2),
+                ) {
                     self.saved = Some((out.get_addr(), value.offset));
                 }
             }
             if code == OpCode::CPUI_STORE {
                 if let Some(value) = inputs.get(2) {
-                    self.pushed = self.saved.as_ref().filter(|(at, _)| *at == value.get_addr()).map(|(_, n)| *n);
+                    self.pushed = self
+                        .saved
+                        .as_ref()
+                        .filter(|(at, _)| *at == value.get_addr())
+                        .map(|(_, n)| *n);
                 }
             }
         }
@@ -391,24 +473,37 @@ fn ret_transfer_probes_do_not_change_another_functions_return_ip() {
         &[0x18890],
         None,
         &specs(),
-    ).unwrap();
+    )
+    .unwrap();
     let arch = program.arch();
     let space = arch.manage().get_default_code_space().cloned().unwrap();
     let probe = Address::new(space.clone(), 0x100);
     let caller = Address::new(space, 0x18890);
     let pushed = || {
         let mut emit = PushedIp::default();
-        arch.translate().one_instruction(&mut emit, &caller).unwrap();
+        arch.translate()
+            .one_instruction(&mut emit, &caller)
+            .unwrap();
         emit.pushed
     };
     assert_eq!(pushed(), Some(0x8893));
     unlace_console::kuna_retcallchain::kuna_entry_chain_sites(arch.translate(), &probe, 8, 16);
-    assert_eq!(pushed(), Some(0x8893), "an advisory chain walk changed the caller's IP");
+    assert_eq!(
+        pushed(),
+        Some(0x8893),
+        "an advisory chain walk changed the caller's IP"
+    );
     unlace_console::kuna_retcallchain::kuna_push_immediate_ret(arch.translate(), &probe, 16);
-    assert_eq!(pushed(), Some(0x8893), "an advisory tail walk changed the caller's IP");
+    assert_eq!(
+        pushed(),
+        Some(0x8893),
+        "an advisory tail walk changed the caller's IP"
+    );
 
     // A real far transfer must still teach the decoder the destination's CS.
-    arch.translate().one_instruction(&mut PushedIp::default(), &probe).unwrap();
+    arch.translate()
+        .one_instruction(&mut PushedIp::default(), &probe)
+        .unwrap();
     assert_eq!(pushed(), Some(0x103));
 }
 
@@ -466,22 +561,19 @@ fn raw_input_rejects_entry_at_end_of_mapping() {
 fn word_addressed_mapping_errors_report_target_units() {
     let fixture = RawFixture::new("raw-word-bounds", &[0, 0, 0, 0]);
     let path = fixture.0.to_string_lossy();
-    let error = match bootstrap_from_raw(
-        &path,
-        "avr8:LE:16:default",
-        0x100,
-        &[0x103],
-        None,
-        &specs(),
-    ) {
-        Ok(_) => panic!("out-of-range word-addressed entry unexpectedly loaded"),
-        Err(error) => error.explain().to_string(),
-    };
+    let error =
+        match bootstrap_from_raw(&path, "avr8:LE:16:default", 0x100, &[0x103], None, &specs()) {
+            Ok(_) => panic!("out-of-range word-addressed entry unexpectedly loaded"),
+            Err(error) => error.explain().to_string(),
+        };
     assert!(
         error.contains("raw entry 0x103 is outside mapped range 0x100..0x102"),
         "unexpected error: {error}"
     );
-    assert!(!error.contains("0x200..0x204"), "byte bounds leaked: {error}");
+    assert!(
+        !error.contains("0x200..0x204"),
+        "byte bounds leaked: {error}"
+    );
 }
 
 #[test]
@@ -534,20 +626,39 @@ fn raw_image_takes_pattern_starts_when_the_option_is_on() {
     let path = fixture.0.to_string_lossy();
     let mut counts = Vec::new();
     for on in ["off", "on"] {
-        let mut program = bootstrap_from_raw(&path, "x86:LE:64:default", 0x401000, &[0x401055], None, &specs())
-            .expect("bootstrap raw x86-64 fixture with built specs");
-        program.arch_mut().set_kuna_option("funcstart_patterns", on).unwrap();
+        let mut program = bootstrap_from_raw(
+            &path,
+            "x86:LE:64:default",
+            0x401000,
+            &[0x401055],
+            None,
+            &specs(),
+        )
+        .expect("bootstrap raw x86-64 fixture with built specs");
+        program
+            .arch_mut()
+            .set_kuna_option("funcstart_patterns", on)
+            .unwrap();
         program.commit_pending_analysis().unwrap();
-        counts.push((program.find_entry_at(0x401015).is_some(), program.find_entry_at(0x401043).is_some()));
+        counts.push((
+            program.find_entry_at(0x401015).is_some(),
+            program.find_entry_at(0x401043).is_some(),
+        ));
     }
     assert_eq!(counts, vec![(false, false), (true, true)]);
 
     // No seed at all: the pattern sweep alone finds the functions.
     let mut program = bootstrap_from_raw(&path, "x86:LE:64:default", 0x401000, &[], None, &specs())
         .expect("a raw image needs no --entry");
-    program.arch_mut().set_kuna_option("funcstart_patterns", "on").unwrap();
+    program
+        .arch_mut()
+        .set_kuna_option("funcstart_patterns", "on")
+        .unwrap();
     program.commit_pending_analysis().unwrap();
     for start in [0x401015, 0x401043, 0x401055] {
-        assert!(program.find_entry_at(start).is_some(), "0x{start:x} is a pattern start");
+        assert!(
+            program.find_entry_at(start).is_some(),
+            "0x{start:x} is a pattern start"
+        );
     }
 }

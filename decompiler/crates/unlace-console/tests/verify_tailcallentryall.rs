@@ -5,17 +5,21 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 const HELPER: &str = "sub_40101f";
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn bootstrap(all: bool) -> ConsoleProgram {
     let spec_roots = vec![repo_root().join("specs").to_str().unwrap().to_string()];
-    let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/tailcallentryall_x86_64");
+    let bin = repo_root()
+        .join("decompiler/crates/unlace-analysis/tests/fixtures/tailcallentryall_x86_64");
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     let arch = prog.arch_mut();
@@ -24,13 +28,20 @@ fn bootstrap(all: bool) -> ConsoleProgram {
     if all {
         arch.set_kuna_option("tailcallentryall", "on").unwrap();
     }
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
 #[test]
 fn x86_tail_called_helper_is_a_function_only_with_tailcallentryall() {
-    assert!(bootstrap(false).lookup_symbol(HELPER).is_none(), "tailcallentry alone is ARM-only");
+    assert!(
+        bootstrap(false).lookup_symbol(HELPER).is_none(),
+        "tailcallentry alone is ARM-only"
+    );
     let on = bootstrap(true);
-    assert!(on.lookup_symbol(HELPER).is_some(), "the tail-called helper is a function");
+    assert!(
+        on.lookup_symbol(HELPER).is_some(),
+        "the tail-called helper is a function"
+    );
 }

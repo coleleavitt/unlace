@@ -22,13 +22,26 @@ fn run(args: &[&str]) -> String {
 #[test]
 fn narrowed_decompile_all_forwards_the_tail_callees_arguments() {
     let out = run(&["decompile-all", "--addr", FORWARD]);
-    assert!(out.contains("target(a0,a1,a2,a3,a4); // tail-call"), "{out}");
-    let off = run(&["decompile-all", "--addr", FORWARD, "--option", "protoorder", "off"]);
+    assert!(
+        out.contains("target(a0,a1,a2,a3,a4); // tail-call"),
+        "{out}"
+    );
+    let off = run(&[
+        "decompile-all",
+        "--addr",
+        FORWARD,
+        "--option",
+        "protoorder",
+        "off",
+    ]);
     assert!(off.contains("target(); // tail-call"), "{off}");
 }
 
 #[test]
 fn decompile_json_forwards_the_tail_callees_arguments() {
     let out = run(&["decompile", FORWARD, "--addr", "--json"]);
-    assert!(out.contains("target(a0,a1,a2,a3,a4); // tail-call"), "{out}");
+    assert!(
+        out.contains("target(a0,a1,a2,a3,a4); // tail-call"),
+        "{out}"
+    );
 }

@@ -5,7 +5,9 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace};
+use unlace_base::space::{
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
+};
 use unlace_num::opcodes::OpCode;
 
 use super::*;
@@ -15,7 +17,8 @@ use crate::p2_lift::kuna_loweredswitch::{ActionLowerSwitchDetect, KunaLoweredSwi
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -34,11 +37,22 @@ fn build_manager() -> AddrSpaceManager {
 fn build_fd() -> Funcdata {
     let glb = Rc::new(ArchContext::new(build_manager()));
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
-    Funcdata::new("func", "func", glb, Address::new(ram, 0x1000), 0x10000000, 0x40).unwrap()
+    Funcdata::new(
+        "func",
+        "func",
+        glb,
+        Address::new(ram, 0x1000),
+        0x10000000,
+        0x40,
+    )
+    .unwrap()
 }
 
 fn ram(fd: &Funcdata, off: u64) -> Address {
-    Address::new(Rc::clone(fd.get_arch().manage().get_space_by_name("ram").unwrap()), off)
+    Address::new(
+        Rc::clone(fd.get_arch().manage().get_space_by_name("ram").unwrap()),
+        off,
+    )
 }
 
 fn new_block(fd: &mut Funcdata, off: u64) -> BlockId {
@@ -67,7 +81,10 @@ fn switch_var(fd: &mut Funcdata, size: int4) -> VarnodeId {
 /// `out = code(v)` in a block of its own at `off`.
 fn unary(fd: &mut Funcdata, code: OpCode, v: VarnodeId, out_size: int4, off: u64) -> VarnodeId {
     let bl = new_block(fd, off);
-    let op = fd.new_op(if code == OpCode::CPUI_SUBPIECE { 2 } else { 1 }, ram(fd, off));
+    let op = fd.new_op(
+        if code == OpCode::CPUI_SUBPIECE { 2 } else { 1 },
+        ram(fd, off),
+    );
     fd.op_set_opcode(op, TypeOp::new(code, 0, "unary"));
     fd.op_set_input(op, v, 0).unwrap();
     if code == OpCode::CPUI_SUBPIECE {
@@ -103,7 +120,12 @@ fn edges(fd: &mut Funcdata, bl: BlockId, on_false: BlockId, on_true: BlockId) {
     fd.bblocks_mut().add_edge(bl, on_true);
 }
 
-fn record(fd: &Funcdata, cases: &[(u64, u64)], default: u64, size: int4) -> KunaLoweredSwitchRecord {
+fn record(
+    fd: &Funcdata,
+    cases: &[(u64, u64)],
+    default: u64,
+    size: int4,
+) -> KunaLoweredSwitchRecord {
     KunaLoweredSwitchRecord {
         branch_addr: ram(fd, 0x1001),
         var_addr: ram(fd, 0x4000),
@@ -147,7 +169,11 @@ fn shared_body_tree(fd: &mut Funcdata) -> Tree {
     edges(fd, b2, b3, b);
     cmp_branch(fd, b3, 0x1300, OpCode::CPUI_INT_EQUAL, v, 3);
     edges(fd, b3, d, a);
-    Tree { head: b0, spine: [b0, b1, b2, b3].into_iter().collect(), v }
+    Tree {
+        head: b0,
+        spine: [b0, b1, b2, b3].into_iter().collect(),
+        v,
+    }
 }
 
 #[test]
@@ -163,19 +189,37 @@ fn a_moved_arm_a_missing_case_or_an_extra_case_is_refused() {
     let mut fd = build_fd();
     let t = shared_body_tree(&mut fd);
     let moved = record(&fd, &[(0, 0x2000), (2, 0x2000), (3, 0x2100)], 0x3000, 4);
-    assert!(!switch_routes_like_cascade(&fd, t.head, &t.spine, t.v, &moved));
+    assert!(!switch_routes_like_cascade(
+        &fd, t.head, &t.spine, t.v, &moved
+    ));
     let missing = record(&fd, &[(0, 0x2000), (2, 0x2100)], 0x3000, 4);
-    assert!(!switch_routes_like_cascade(&fd, t.head, &t.spine, t.v, &missing));
-    let extra = record(&fd, &[(0, 0x2000), (1, 0x2100), (2, 0x2100), (3, 0x2000)], 0x3000, 4);
-    assert!(!switch_routes_like_cascade(&fd, t.head, &t.spine, t.v, &extra));
+    assert!(!switch_routes_like_cascade(
+        &fd, t.head, &t.spine, t.v, &missing
+    ));
+    let extra = record(
+        &fd,
+        &[(0, 0x2000), (1, 0x2100), (2, 0x2100), (3, 0x2000)],
+        0x3000,
+        4,
+    );
+    assert!(!switch_routes_like_cascade(
+        &fd, t.head, &t.spine, t.v, &extra
+    ));
 }
 
 #[test]
 fn a_default_that_is_a_case_body_is_refused() {
     let mut fd = build_fd();
     let t = shared_body_tree(&mut fd);
-    let rec = record(&fd, &[(0, 0x2000), (2, 0x2100), (3, 0x2000), (4, 0x3000)], 0x2000, 4);
-    assert!(!switch_routes_like_cascade(&fd, t.head, &t.spine, t.v, &rec));
+    let rec = record(
+        &fd,
+        &[(0, 0x2000), (2, 0x2100), (3, 0x2000), (4, 0x3000)],
+        0x2000,
+        4,
+    );
+    assert!(!switch_routes_like_cascade(
+        &fd, t.head, &t.spine, t.v, &rec
+    ));
 }
 
 #[test]
@@ -206,7 +250,12 @@ fn a_range_edge_pinned_to_one_value_must_be_a_case() {
 }
 
 /// B0: if (V s< 0) true -> NEG false -> B1;  B1: if (V == 1) true -> ONE false -> D
-fn signed_tree(fd: &mut Funcdata, code: OpCode, operand: impl Fn(&mut Funcdata, VarnodeId) -> VarnodeId, size: int4) -> Tree {
+fn signed_tree(
+    fd: &mut Funcdata,
+    code: OpCode,
+    operand: impl Fn(&mut Funcdata, VarnodeId) -> VarnodeId,
+    size: int4,
+) -> Tree {
     let v = switch_var(fd, size);
     let x = operand(fd, v);
     let b0 = new_block(fd, 0x1000);
@@ -218,7 +267,11 @@ fn signed_tree(fd: &mut Funcdata, code: OpCode, operand: impl Fn(&mut Funcdata, 
     edges(fd, b0, b1, neg);
     cmp_branch(fd, b1, 0x1100, OpCode::CPUI_INT_EQUAL, x, 1);
     edges(fd, b1, d, one);
-    Tree { head: b0, spine: [b0, b1].into_iter().collect(), v }
+    Tree {
+        head: b0,
+        spine: [b0, b1].into_iter().collect(),
+        v,
+    }
 }
 
 #[test]
@@ -228,31 +281,59 @@ fn signed_and_unsigned_thresholds_are_evaluated_as_written() {
     let mut fd = build_fd();
     let t = signed_tree(&mut fd, OpCode::CPUI_INT_SLESS, |_, v| v, 1);
     let rec = record(&fd, &[(1, 0x2100)], 0x3000, 1);
-    assert!(!switch_routes_like_cascade(&fd, t.head, &t.spine, t.v, &rec), "0x80 reaches NEG, not the default");
+    assert!(
+        !switch_routes_like_cascade(&fd, t.head, &t.spine, t.v, &rec),
+        "0x80 reaches NEG, not the default"
+    );
     let mut fd = build_fd();
     let t = signed_tree(&mut fd, OpCode::CPUI_INT_LESS, |_, v| v, 1);
     let rec = record(&fd, &[(1, 0x2100)], 0x3000, 1);
-    assert!(switch_routes_like_cascade(&fd, t.head, &t.spine, t.v, &rec), "unsigned V < 0 never holds");
+    assert!(
+        switch_routes_like_cascade(&fd, t.head, &t.spine, t.v, &rec),
+        "unsigned V < 0 never holds"
+    );
 }
 
 #[test]
 fn a_sign_extended_operand_turns_negative_at_the_narrow_sign_bit() {
     let mut fd = build_fd();
-    let t = signed_tree(&mut fd, OpCode::CPUI_INT_SLESS, |fd, v| unary(fd, OpCode::CPUI_INT_SEXT, v, 4, 0x0f10), 1);
+    let t = signed_tree(
+        &mut fd,
+        OpCode::CPUI_INT_SLESS,
+        |fd, v| unary(fd, OpCode::CPUI_INT_SEXT, v, 4, 0x0f10),
+        1,
+    );
     let rec = record(&fd, &[(1, 0x2100)], 0x3000, 1);
-    assert!(!switch_routes_like_cascade(&fd, t.head, &t.spine, t.v, &rec));
+    assert!(!switch_routes_like_cascade(
+        &fd, t.head, &t.spine, t.v, &rec
+    ));
     let mut fd = build_fd();
-    let t = signed_tree(&mut fd, OpCode::CPUI_INT_SLESS, |fd, v| unary(fd, OpCode::CPUI_INT_ZEXT, v, 4, 0x0f10), 1);
+    let t = signed_tree(
+        &mut fd,
+        OpCode::CPUI_INT_SLESS,
+        |fd, v| unary(fd, OpCode::CPUI_INT_ZEXT, v, 4, 0x0f10),
+        1,
+    );
     let rec = record(&fd, &[(1, 0x2100)], 0x3000, 1);
-    assert!(switch_routes_like_cascade(&fd, t.head, &t.spine, t.v, &rec), "a zero-extended byte is never negative");
+    assert!(
+        switch_routes_like_cascade(&fd, t.head, &t.spine, t.v, &rec),
+        "a zero-extended byte is never negative"
+    );
 }
 
 #[test]
 fn a_narrowed_operand_is_refused() {
     let mut fd = build_fd();
-    let t = signed_tree(&mut fd, OpCode::CPUI_INT_LESS, |fd, v| unary(fd, OpCode::CPUI_SUBPIECE, v, 1, 0x0f10), 4);
+    let t = signed_tree(
+        &mut fd,
+        OpCode::CPUI_INT_LESS,
+        |fd, v| unary(fd, OpCode::CPUI_SUBPIECE, v, 1, 0x0f10),
+        4,
+    );
     let rec = record(&fd, &[(1, 0x2100)], 0x3000, 4);
-    assert!(!switch_routes_like_cascade(&fd, t.head, &t.spine, t.v, &rec));
+    assert!(!switch_routes_like_cascade(
+        &fd, t.head, &t.spine, t.v, &rec
+    ));
 }
 
 #[test]
@@ -270,10 +351,28 @@ fn values_at_the_wrap_points_are_replayed() {
     cmp_branch(&mut fd, b1, 0x1100, OpCode::CPUI_INT_EQUAL, v, 0);
     edges(&mut fd, b1, d, b);
     let spine: BTreeSet<BlockId> = [b0, b1].into_iter().collect();
-    assert!(!switch_routes_like_cascade(&fd, b0, &spine, v, &record(&fd, &[(0, 0x2100)], 0x3000, 4)));
-    assert!(switch_routes_like_cascade(&fd, b0, &spine, v, &record(&fd, &[(0, 0x2100), (0xffff_ffff, 0x2000)], 0x3000, 4)));
+    assert!(!switch_routes_like_cascade(
+        &fd,
+        b0,
+        &spine,
+        v,
+        &record(&fd, &[(0, 0x2100)], 0x3000, 4)
+    ));
+    assert!(switch_routes_like_cascade(
+        &fd,
+        b0,
+        &spine,
+        v,
+        &record(&fd, &[(0, 0x2100), (0xffff_ffff, 0x2000)], 0x3000, 4)
+    ));
     assert!(
-        switch_routes_like_cascade(&fd, b0, &spine, v, &record(&fd, &[(0, 0x2100), (u64::MAX, 0x2000)], 0x3000, 4)),
+        switch_routes_like_cascade(
+            &fd,
+            b0,
+            &spine,
+            v,
+            &record(&fd, &[(0, 0x2100), (u64::MAX, 0x2000)], 0x3000, 4)
+        ),
         "a sign-extended label is the same bit pattern"
     );
 }
@@ -283,7 +382,9 @@ fn a_label_wider_than_the_switch_variable_is_refused() {
     let mut fd = build_fd();
     let t = signed_tree(&mut fd, OpCode::CPUI_INT_LESS, |_, v| v, 1);
     let rec = record(&fd, &[(0x101, 0x2100)], 0x3000, 1);
-    assert!(!switch_routes_like_cascade(&fd, t.head, &t.spine, t.v, &rec));
+    assert!(!switch_routes_like_cascade(
+        &fd, t.head, &t.spine, t.v, &rec
+    ));
 }
 
 #[test]
@@ -298,7 +399,13 @@ fn a_spine_that_loops_is_refused() {
     cmp_branch(&mut fd, b1, 0x1100, OpCode::CPUI_INT_LESS, v, 5);
     edges(&mut fd, b1, d, b0);
     let spine: BTreeSet<BlockId> = [b0, b1].into_iter().collect();
-    assert!(!switch_routes_like_cascade(&fd, b0, &spine, v, &record(&fd, &[], 0x3000, 4)));
+    assert!(!switch_routes_like_cascade(
+        &fd,
+        b0,
+        &spine,
+        v,
+        &record(&fd, &[], 0x3000, 4)
+    ));
 }
 
 // -----------------------------------------------------------------------------
@@ -444,7 +551,15 @@ fn detection_drops_a_cascade_that_would_lose_a_statement() {
 }
 
 /// `out = code(inputs)` appended to `bl` at `off`, writing `size` bytes at `ram:out`.
-fn write_ram(fd: &mut Funcdata, bl: BlockId, off: u64, code: OpCode, inputs: &[VarnodeId], out: u64, size: int4) {
+fn write_ram(
+    fd: &mut Funcdata,
+    bl: BlockId,
+    off: u64,
+    code: OpCode,
+    inputs: &[VarnodeId],
+    out: u64,
+    size: int4,
+) {
     let op = fd.new_op(inputs.len() as int4, ram(fd, off));
     fd.op_set_opcode(op, TypeOp::new(code, 0, "op"));
     for (i, &v) in inputs.iter().enumerate() {
@@ -472,7 +587,15 @@ fn raw_load_in_spine(fd: &mut Funcdata, body_writes_first: bool) -> (BlockId, Ve
     let seven = fd.new_constant(4, 7);
     write_ram(fd, b1, 0x1100, OpCode::CPUI_COPY, &[seven], 0x40, 4);
     let flag_in = fd.new_constant(4, 0);
-    write_ram(fd, b1, 0x1100, OpCode::CPUI_INT_EQUAL, &[flag_in, flag_in], 0x200, 1);
+    write_ram(
+        fd,
+        b1,
+        0x1100,
+        OpCode::CPUI_INT_EQUAL,
+        &[flag_in, flag_in],
+        0x200,
+        1,
+    );
     cmp_branch(fd, b1, 0x1101, OpCode::CPUI_INT_EQUAL, v, 2);
     edges(fd, b1, d, t);
     if body_writes_first {
@@ -507,8 +630,15 @@ fn a_register_every_body_writes_before_reading_is_not_a_lost_value() {
 fn two_labels_for_one_value_are_refused() {
     let mut fd = build_fd();
     let t = shared_body_tree(&mut fd);
-    let rec = record(&fd, &[(0, 0x2000), (0, 0x2100), (2, 0x2100), (3, 0x2000)], 0x3000, 4);
-    assert!(!switch_routes_like_cascade(&fd, t.head, &t.spine, t.v, &rec));
+    let rec = record(
+        &fd,
+        &[(0, 0x2000), (0, 0x2100), (2, 0x2100), (3, 0x2000)],
+        0x3000,
+        4,
+    );
+    assert!(!switch_routes_like_cascade(
+        &fd, t.head, &t.spine, t.v, &rec
+    ));
 }
 
 #[test]
@@ -528,7 +658,10 @@ fn a_later_head_is_refused_when_a_body_is_entered_from_outside_the_tree() {
     let rec = record(&fd, &[(1, 0x2000), (2, 0x2100)], 0x3000, 4);
     assert!(!case_body_entered_elsewhere(&fd, b0, &rec));
     fd.bblocks_mut().add_edge(a, c);
-    assert!(case_body_entered_elsewhere(&fd, b0, &rec), "a body falling into another body");
+    assert!(
+        case_body_entered_elsewhere(&fd, b0, &rec),
+        "a body falling into another body"
+    );
     let mut fd = build_fd();
     let v = switch_var(&mut fd, 4);
     let b0 = new_block(&mut fd, 0x1000);
@@ -543,7 +676,10 @@ fn a_later_head_is_refused_when_a_body_is_entered_from_outside_the_tree() {
     edges(&mut fd, b1, d, c);
     fd.bblocks_mut().add_edge(other, d);
     let rec = record(&fd, &[(1, 0x2000), (2, 0x2100)], 0x3000, 4);
-    assert!(case_body_entered_elsewhere(&fd, b0, &rec), "a default also entered after the switch");
+    assert!(
+        case_body_entered_elsewhere(&fd, b0, &rec),
+        "a default also entered after the switch"
+    );
 }
 
 /// A raw two-compare cascade whose second compare block loads 7 into `ram:0x40`;
@@ -585,5 +721,8 @@ fn a_call_that_may_take_the_register_as_a_parameter_reads_it() {
     assert!(raw_install_keeps_values(&fd, head, &targets));
     let mut fd = build_fd();
     let (head, targets) = raw_call_in_body(&mut fd, true);
-    assert!(!raw_install_keeps_values(&fd, head, &targets), "the call may pass the loaded register");
+    assert!(
+        !raw_install_keeps_values(&fd, head, &targets),
+        "the call may pass the loaded register"
+    );
 }

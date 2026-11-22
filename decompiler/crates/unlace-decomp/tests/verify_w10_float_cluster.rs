@@ -26,8 +26,8 @@
 //! encoding — feed a different encoding, get a different number — so no
 //! function name, address, or constant value is hardcoded anywhere on the path.
 
-use unlace_decomp::printc::{format_float_token, FloatClass};
-use unlace_num::float::{floatclass, FloatFormat};
+use unlace_decomp::printc::{FloatClass, format_float_token};
+use unlace_num::float::{FloatFormat, floatclass};
 
 /// `format_float_token` reproduces the C++ `push_float` sentinel/`.0` body
 /// (printc.cc:1454-1487) for EVERY class, with the sign honoured on
@@ -35,22 +35,46 @@ use unlace_num::float::{floatclass, FloatFormat};
 #[test]
 fn w10fc_format_float_token_covers_all_classes() {
     // No FloatFormat for the size -> FLOAT_UNKNOWN (printc.cc:1454).
-    assert_eq!(format_float_token(FloatClass::Unknown, false, "", false), "FLOAT_UNKNOWN");
-    assert_eq!(format_float_token(FloatClass::Unknown, true, "ignored", false), "FLOAT_UNKNOWN");
+    assert_eq!(
+        format_float_token(FloatClass::Unknown, false, "", false),
+        "FLOAT_UNKNOWN"
+    );
+    assert_eq!(
+        format_float_token(FloatClass::Unknown, true, "ignored", false),
+        "FLOAT_UNKNOWN"
+    );
 
     // Infinity / NaN carry the sign (printc.cc:1458-1469).
-    assert_eq!(format_float_token(FloatClass::Infinity, false, "", false), "INFINITY");
-    assert_eq!(format_float_token(FloatClass::Infinity, true, "", false), "-INFINITY");
+    assert_eq!(
+        format_float_token(FloatClass::Infinity, false, "", false),
+        "INFINITY"
+    );
+    assert_eq!(
+        format_float_token(FloatClass::Infinity, true, "", false),
+        "-INFINITY"
+    );
     assert_eq!(format_float_token(FloatClass::Nan, false, "", false), "NAN");
     assert_eq!(format_float_token(FloatClass::Nan, true, "", false), "-NAN");
 
     // Normal: a decimal that already looks like a float is passed through
     // verbatim; one that does NOT gets the `.0` fix-up (printc.cc:1477-1487).
-    assert_eq!(format_float_token(FloatClass::Normal, false, "1.1234567812345", false), "1.1234567812345");
-    assert_eq!(format_float_token(FloatClass::Normal, false, "3", false), "3.0");
-    assert_eq!(format_float_token(FloatClass::Normal, false, "1e10", false), "1e10");
+    assert_eq!(
+        format_float_token(FloatClass::Normal, false, "1.1234567812345", false),
+        "1.1234567812345"
+    );
+    assert_eq!(
+        format_float_token(FloatClass::Normal, false, "3", false),
+        "3.0"
+    );
+    assert_eq!(
+        format_float_token(FloatClass::Normal, false, "1e10", false),
+        "1e10"
+    );
     // force_scinote: passed through verbatim (printc.cc:1472-1474), no `.0`.
-    assert_eq!(format_float_token(FloatClass::Normal, false, "5e0", true), "5e0");
+    assert_eq!(
+        format_float_token(FloatClass::Normal, false, "5e0", true),
+        "5e0"
+    );
 }
 
 /// The float8 constant the `floatcast` oracle renders, `1.1234567812345`, is
@@ -91,10 +115,17 @@ fn w10fc_float8_constant_decoded_from_encoding_not_hardcoded() {
     // value tracks the bits — not a constant pinned to one test input).
     let enc_other: u64 = 0x4023c0ca45ddccdb; // prec_comparison's 9.8765432198765
     let (val_other, _) = fmt.get_host_float(enc_other);
-    let tok_other =
-        format_float_token(FloatClass::Normal, false, &fmt.print_decimal(val_other, false), false);
+    let tok_other = format_float_token(
+        FloatClass::Normal,
+        false,
+        &fmt.print_decimal(val_other, false),
+        false,
+    );
     assert_eq!(tok_other, "9.8765432198765");
-    assert_ne!(tok_other, tok_a, "distinct encodings must render distinct literals");
+    assert_ne!(
+        tok_other, tok_a,
+        "distinct encodings must render distinct literals"
+    );
 }
 
 /// The `getEncoding`/`getHostFloat` round-trip is exact for the readonly float8
@@ -104,10 +135,18 @@ fn w10fc_float8_constant_decoded_from_encoding_not_hardcoded() {
 #[test]
 fn w10fc_float8_decode_roundtrips_encoding() {
     let fmt = FloatFormat::new(8);
-    for enc in [0x3ff1f9add15df217u64, 0x3ff1f9add1091c89u64, 0x4023c0ca45ddccdbu64] {
+    for enc in [
+        0x3ff1f9add15df217u64,
+        0x3ff1f9add1091c89u64,
+        0x4023c0ca45ddccdbu64,
+    ] {
         let (host, class) = fmt.get_host_float(enc);
         assert_eq!(class, floatclass::normalized);
-        assert_eq!(fmt.get_encoding(host), enc, "host->encoding must reproduce the bits for {enc:#x}");
+        assert_eq!(
+            fmt.get_encoding(host),
+            enc,
+            "host->encoding must reproduce the bits for {enc:#x}"
+        );
     }
 }
 
@@ -136,7 +175,10 @@ fn w10fc_float8_special_classes_render_sentinels() {
         format_float_token(FloatClass::Infinity, fmt.extract_sign(neg_inf), "", false),
         "-INFINITY"
     );
-    assert_eq!(format_float_token(FloatClass::Nan, fmt.extract_sign(a_nan), "", false), "NAN");
+    assert_eq!(
+        format_float_token(FloatClass::Nan, fmt.extract_sign(a_nan), "", false),
+        "NAN"
+    );
 }
 
 /// `FloatFormat::new(4)` and `new(8)` are the IEEE-754 defaults
@@ -155,6 +197,22 @@ fn w10fc_default_float_formats_decode_both_sizes() {
     let (v8, c8) = f8.get_host_float(0x3ff0_0000_0000_0000);
     assert_eq!(c4, floatclass::normalized);
     assert_eq!(c8, floatclass::normalized);
-    assert_eq!(format_float_token(FloatClass::Normal, false, &f4.print_decimal(v4, false), false), "1.0");
-    assert_eq!(format_float_token(FloatClass::Normal, false, &f8.print_decimal(v8, false), false), "1.0");
+    assert_eq!(
+        format_float_token(
+            FloatClass::Normal,
+            false,
+            &f4.print_decimal(v4, false),
+            false
+        ),
+        "1.0"
+    );
+    assert_eq!(
+        format_float_token(
+            FloatClass::Normal,
+            false,
+            &f8.print_decimal(v8, false),
+            false
+        ),
+        "1.0"
+    );
 }

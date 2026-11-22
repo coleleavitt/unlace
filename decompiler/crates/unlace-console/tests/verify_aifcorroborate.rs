@@ -52,7 +52,10 @@ use std::path::PathBuf;
 use unlace_console::engine::bootstrap_from_object;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture() -> PathBuf {
@@ -80,12 +83,17 @@ fn bootstrap(aif: &str) -> unlace_console::engine::ConsoleProgram {
     let bin = fixture().to_str().expect("UTF-8 fixture path").to_string();
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.arch_mut().set_kuna_option("listing", "on").expect("listing flips on");
+    prog.arch_mut()
+        .set_kuna_option("listing", "on")
+        .expect("listing flips on");
     prog.arch_mut()
         .set_kuna_option("funcstart_patterns", "on")
         .expect("funcstart_patterns flips on");
-    prog.arch_mut().set_kuna_option("aif", aif).expect("aif takes its value");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.arch_mut()
+        .set_kuna_option("aif", aif)
+        .expect("aif takes its value");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
@@ -100,8 +108,14 @@ fn default_accepts_an_uncorroborated_routine() {
          jumps nowhere known and only reaches a `bx lr`, yet a 20-function prologue \
          fingerprint is enough to make it a function"
     );
-    assert!(off.lookup_symbol(V).is_some(), "the corroborated routine {V} is always found");
-    assert!(off.lookup_symbol(W).is_some(), "the count-50 routine {W} is always found");
+    assert!(
+        off.lookup_symbol(V).is_some(),
+        "the corroborated routine {V} is always found"
+    );
+    assert!(
+        off.lookup_symbol(W).is_some(),
+        "the count-50 routine {W} is always found"
+    );
 }
 
 /// Pass 2 — THE FIX (`aif precise`). Upstream's second fingerprint test is

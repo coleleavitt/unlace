@@ -25,21 +25,22 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace,
-    UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace, addrspace_flags,
+    spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
-use unlace_decomp::dtype::{type_metatype, Datatype, DatatypeKind, TypeFactoryImpl, TypeField};
-use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
+use unlace_decomp::dtype::{Datatype, DatatypeKind, TypeFactoryImpl, TypeField, type_metatype};
+use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::unionresolve::ResolvedUnion;
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(IopSpace::new(2))).unwrap();
     m.insert_space(Rc::new(FspecSpace::new(3))).unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
@@ -133,7 +134,11 @@ fn w10_get_union_field_size_guard_rejects_but_resolution_still_hits() {
     let op = new_op_code(&mut fd, 1, OpCode::CPUI_COPY, "COPY", 0);
 
     let res = resolve_field(&u8, 0);
-    assert_eq!(res.get_datatype().get_size(), 4, "resolved field dt is size 4");
+    assert_eq!(
+        res.get_datatype().get_size(),
+        4,
+        "resolved field dt is size 4"
+    );
     assert_eq!(u8.get_size(), 8, "the union being resolved is size 8");
     assert!(fd.set_union_field(&u8, op, 0, res), "unlocked first set");
 
@@ -166,15 +171,24 @@ fn w10_multiequal_output_edge_does_not_fan_out() {
     let phi = new_op_code(&mut fd, 2, OpCode::CPUI_MULTIEQUAL, "MULTIEQUAL", 0x10);
     let r = ram(&fd);
     let same: VarnodeId = fd.new_varnode(4, &Address::new(Rc::clone(&r), 0x300), None);
-    fd.obank_mut().get_mut(phi).unwrap().set_input(Some(same), 0);
-    fd.obank_mut().get_mut(phi).unwrap().set_input(Some(same), 1);
+    fd.obank_mut()
+        .get_mut(phi)
+        .unwrap()
+        .set_input(Some(same), 0);
+    fd.obank_mut()
+        .get_mut(phi)
+        .unwrap()
+        .set_input(Some(same), 1);
 
     // Set on the OUTPUT edge (slot -1): the `slot >= 0` guard is false, so NO
     // fan-out happens to slots 0/1 even though both hold `same`.
     let res = resolve_field(&u, 0);
     assert!(fd.set_union_field(&u, phi, -1, res));
 
-    assert!(fd.get_union_resolution(&u, phi, -1).is_some(), "output edge is set");
+    assert!(
+        fd.get_union_resolution(&u, phi, -1).is_some(),
+        "output edge is set"
+    );
     assert!(
         fd.get_union_resolution(&u, phi, 0).is_none(),
         "slot 0 NOT touched by an output-edge set (funcdata.cc:988 slot>=0 guard)"
@@ -203,16 +217,28 @@ fn w10_multiequal_fanout_is_op_local() {
     let r = ram(&fd);
     let same: VarnodeId = fd.new_varnode(4, &Address::new(Rc::clone(&r), 0x400), None);
     for slot in 0..2 {
-        fd.obank_mut().get_mut(phi).unwrap().set_input(Some(same), slot);
-        fd.obank_mut().get_mut(other_phi).unwrap().set_input(Some(same), slot);
+        fd.obank_mut()
+            .get_mut(phi)
+            .unwrap()
+            .set_input(Some(same), slot);
+        fd.obank_mut()
+            .get_mut(other_phi)
+            .unwrap()
+            .set_input(Some(same), slot);
     }
 
     let res = resolve_field(&u, 0);
     assert!(fd.set_union_field(&u, phi, 0, res));
 
     // phi's own slots 0 and 1 are populated...
-    assert!(fd.get_union_resolution(&u, phi, 0).is_some(), "phi slot 0 set");
-    assert!(fd.get_union_resolution(&u, phi, 1).is_some(), "phi slot 1 fanned out");
+    assert!(
+        fd.get_union_resolution(&u, phi, 0).is_some(),
+        "phi slot 0 set"
+    );
+    assert!(
+        fd.get_union_resolution(&u, phi, 1).is_some(),
+        "phi slot 1 fanned out"
+    );
     // ...but `other_phi` (different opTime) is entirely untouched.
     assert!(
         fd.get_union_resolution(&u, other_phi, 0).is_none(),
@@ -240,7 +266,10 @@ fn w10_unlocked_overwrite_changes_field_number() {
 
     let f0 = resolve_field(&u, 0);
     assert!(fd.set_union_field(&u, op, 0, f0), "first set true");
-    assert_eq!(fd.get_union_resolution(&u, op, 0).unwrap().get_field_num(), 0);
+    assert_eq!(
+        fd.get_union_resolution(&u, op, 0).unwrap().get_field_num(),
+        0
+    );
 
     // Overwrite with a DIFFERENT field on an UNLOCKED entry: update() returns
     // true, setUnionField returns true, and field number flips to 1.
@@ -258,8 +287,14 @@ fn w10_unlocked_overwrite_changes_field_number() {
     // Re-setting the SAME field is a no-op update (update() returns false) but
     // still returns true (not locked) — funcdata.cc:985-986.
     let f1_again = resolve_field(&u, 1);
-    assert!(fd.set_union_field(&u, op, 0, f1_again), "no-op same-field set still returns true");
-    assert_eq!(fd.get_union_resolution(&u, op, 0).unwrap().get_field_num(), 1);
+    assert!(
+        fd.set_union_field(&u, op, 0, f1_again),
+        "no-op same-field set still returns true"
+    );
+    assert_eq!(
+        fd.get_union_resolution(&u, op, 0).unwrap().get_field_num(),
+        1
+    );
 }
 
 // ===========================================================================

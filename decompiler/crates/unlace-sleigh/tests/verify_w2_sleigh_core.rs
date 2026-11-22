@@ -18,11 +18,9 @@ use unlace_base::space::AddrSpaceManager;
 
 use unlace_sleigh::globalcontext::ContextInternal;
 use unlace_sleigh::loadimage::LoadImage;
+use unlace_sleigh::slaformat::{FORMAT_VERSION, is_sla_format, write_sla_header};
 use unlace_sleigh::sleigh::Sleigh;
 use unlace_sleigh::sleighbase::SourceFileIndexer;
-use unlace_sleigh::slaformat::{
-    is_sla_format, write_sla_header, FORMAT_VERSION,
-};
 
 // ---------------------------------------------------------------------------
 // Shared helper: build a real MIPS engine from the committed mips32be.sla so
@@ -41,7 +39,11 @@ impl LoadImage for DummyImg {
     fn get_file_name(&self) -> &str {
         "dummy"
     }
-    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> unlace_base::error::KunaResult<()> {
+    fn load_fill(
+        &mut self,
+        _ptr: &mut [u8],
+        _addr: &Address,
+    ) -> unlace_base::error::KunaResult<()> {
         Err(unlace_base::error::KunaError::data_unavail("dummy"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
@@ -52,13 +54,13 @@ impl LoadImage for DummyImg {
 
 fn mips_engine() -> Sleigh {
     let root = repo_root();
-    let sla = std::fs::read(
-        root.join("specs/Ghidra/Processors/MIPS/data/languages/mips32be.sla"),
-    )
-    .expect("read mips32be.sla");
+    let sla = std::fs::read(root.join("specs/Ghidra/Processors/MIPS/data/languages/mips32be.sla"))
+        .expect("read mips32be.sla");
     let ctx = Box::new(ContextInternal::new());
     let mut sleigh = Sleigh::new(Box::new(DummyImg), ctx);
-    sleigh.initialize_from_sla(&sla).expect("initialize from sla");
+    sleigh
+        .initialize_from_sla(&sla)
+        .expect("initialize from sla");
     sleigh
 }
 
@@ -118,7 +120,12 @@ fn verify_w2core_get_register_name_exact_match_every_register() {
          lookups (C++ returns the register name for all of them). First few:\n{}",
         failures.len(),
         checked,
-        failures.iter().take(8).cloned().collect::<Vec<_>>().join("\n"),
+        failures
+            .iter()
+            .take(8)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n"),
     );
 }
 
@@ -148,7 +155,8 @@ fn verify_w2core_get_register_name_subregister_containment() {
     // off+size with off=point.offset, size=1).
     let inside = base.get_register_name(space, off, 1);
     assert_eq!(
-        &inside, name,
+        &inside,
+        name,
         "getRegisterName(first byte of {}) should name the containing register",
         String::from_utf8_lossy(name)
     );
@@ -156,7 +164,8 @@ fn verify_w2core_get_register_name_subregister_containment() {
     // And the exact whole-register lookup again, explicitly.
     let whole = base.get_register_name(space, off, size);
     assert_eq!(
-        &whole, name,
+        &whole,
+        name,
         "getRegisterName(whole {}) should name the register",
         String::from_utf8_lossy(name)
     );
@@ -215,7 +224,10 @@ fn verify_w2core_is_sla_format_boundaries() {
     assert_eq!(hdr, vec![b's', b'l', b'a', FORMAT_VERSION as u8]);
     let (ok, rest) = is_sla_format(&hdr);
     assert!(ok, "freshly written header must verify");
-    assert!(rest.is_empty(), "no bytes consumed beyond the 4-byte header");
+    assert!(
+        rest.is_empty(),
+        "no bytes consumed beyond the 4-byte header"
+    );
 
     // Trailing bytes are preserved as the tail.
     let mut withtail = hdr.clone();
@@ -225,7 +237,13 @@ fn verify_w2core_is_sla_format_boundaries() {
     assert_eq!(rest, b"BODY");
 
     // Wrong version byte -> reject (but still consumes 4 bytes).
-    let bad_ver = [b's', b'l', b'a', (FORMAT_VERSION as u8).wrapping_add(1), b'X'];
+    let bad_ver = [
+        b's',
+        b'l',
+        b'a',
+        (FORMAT_VERSION as u8).wrapping_add(1),
+        b'X',
+    ];
     let (ok, rest) = is_sla_format(&bad_ver);
     assert!(!ok, "wrong version must be rejected");
     assert_eq!(rest, b"X");

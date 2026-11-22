@@ -115,10 +115,13 @@ pub fn parse_gomorestack_mode(value: &str) -> Result<(GoMorestackMode, String), 
         other => {
             return Err(format!(
                 "unknown gomorestack value {other:?} (expected off, auto or always)"
-            ))
+            ));
         }
     };
-    Ok((mode, format!("Go stack-growth prologue folding set to {}", mode.as_str())))
+    Ok((
+        mode,
+        format!("Go stack-growth prologue folding set to {}", mode.as_str()),
+    ))
 }
 
 /// Is `name` a Go runtime stack-growth entry point?
@@ -128,8 +131,9 @@ pub fn parse_gomorestack_mode(value: &str) -> Result<(GoMorestackMode, String), 
 /// runtime spelling folds too; the *shape* requirement is what keeps a
 /// coincidental name in ordinary flow from cutting anything.
 pub fn is_morestack_name(name: &str) -> bool {
-    name.strip_prefix("runtime.morestack")
-        .is_some_and(|rest| rest.is_empty() || rest.starts_with('_') || rest.starts_with('.') || rest == "c")
+    name.strip_prefix("runtime.morestack").is_some_and(|rest| {
+        rest.is_empty() || rest.starts_with('_') || rest.starts_with('.') || rest == "c"
+    })
 }
 
 /// Is the fold live for this function?
@@ -150,7 +154,9 @@ pub struct ActionGoMorestack {
 impl ActionGoMorestack {
     /// Construct the action in the given group.
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionGoMorestack { base: ActionBase::new(0, "gomorestack", g) })
+        Box::new(ActionGoMorestack {
+            base: ActionBase::new(0, "gomorestack", g),
+        })
     }
 }
 
@@ -165,7 +171,9 @@ impl Action for ActionGoMorestack {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionGoMorestack { base: self.base.clone() }))
+        Some(Box::new(ActionGoMorestack {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !live(data) {

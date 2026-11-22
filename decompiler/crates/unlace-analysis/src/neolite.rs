@@ -110,7 +110,11 @@ pub struct Unpacked {
 impl Unpacked {
     /// Bytes of compressed stream decoded, across every section.
     pub fn compressed_bytes(&self) -> u64 {
-        self.sections.iter().filter(|s| s.compressed).map(|s| u64::from(s.packed)).sum()
+        self.sections
+            .iter()
+            .filter(|s| s.compressed)
+            .map(|s| u64::from(s.packed))
+            .sum()
     }
 
     /// How many sections held a compressed stream.
@@ -121,7 +125,9 @@ impl Unpacked {
 
 /// Is this image NEOLite-packed? Cheap: section names and the entry point.
 pub fn detect(image: &[u8]) -> bool {
-    Pe::parse(image).map(|pe| pe.stub_index().is_some()).unwrap_or(false)
+    Pe::parse(image)
+        .map(|pe| pe.stub_index().is_some())
+        .unwrap_or(false)
 }
 
 /// Unpack `image`, returning the reconstructed original file.
@@ -157,7 +163,12 @@ struct BitReader<'a> {
 
 impl<'a> BitReader<'a> {
     fn new(data: &'a [u8]) -> Self {
-        BitReader { data, pos: 0, value: 0, bit_pos: 32 }
+        BitReader {
+            data,
+            pos: 0,
+            value: 0,
+            bit_pos: 32,
+        }
     }
 
     /// True once the reader has run off the end and is being fed zeros.
@@ -248,7 +259,11 @@ impl Huffman {
                 }
             }
         }
-        Ok(Huffman { limits, poses, syms })
+        Ok(Huffman {
+            limits,
+            poses,
+            syms,
+        })
     }
 
     fn decode(&self, bits: &mut BitReader) -> Result<u32, String> {
@@ -586,14 +601,19 @@ impl Pe {
         let from = (self.entry - s.virtual_address) as usize + s.raw_offset as usize;
         let to = (from + HANDOVER_WINDOW).min(image.len());
         let win = image.get(from..to).ok_or_else(|| {
-            NeoliteError::Corrupt(format!("entry point {:#x} is not backed by file bytes", self.entry))
+            NeoliteError::Corrupt(format!(
+                "entry point {:#x} is not backed by file bytes",
+                self.entry
+            ))
         })?;
         for i in 0..win.len().saturating_sub(5) {
             if win[i] != 0x68 || win[i + 5] != 0xc3 {
                 continue;
             }
             let va = u32::from_le_bytes(win[i + 1..i + 5].try_into().unwrap());
-            let Some(rva) = va.checked_sub(self.image_base) else { continue };
+            let Some(rva) = va.checked_sub(self.image_base) else {
+                continue;
+            };
             match self.section_of_rva(rva) {
                 Some(sec) if !sec.is_stub() => return Ok(rva),
                 _ => continue,
@@ -608,7 +628,11 @@ impl Pe {
 
     fn rebuild(&self, image: &[u8], stub: usize) -> Result<Unpacked, NeoliteError> {
         let oep = self.original_entry(image, stub)?;
-        let file_alignment = if self.file_alignment == 0 { 0x200 } else { self.file_alignment };
+        let file_alignment = if self.file_alignment == 0 {
+            0x200
+        } else {
+            self.file_alignment
+        };
 
         let mut bodies: Vec<Vec<u8>> = Vec::with_capacity(self.sections.len());
         let mut outcomes: Vec<SectionOutcome> = Vec::with_capacity(self.sections.len());
@@ -658,11 +682,18 @@ impl Pe {
             .ok_or_else(|| NeoliteError::Corrupt("header size overflows".into()))?
             as usize;
         if header_bytes > image.len() {
-            return Err(NeoliteError::Corrupt("headers run past the end of the file".into()));
+            return Err(NeoliteError::Corrupt(
+                "headers run past the end of the file".into(),
+            ));
         }
         // Every field the rebuild writes has to live inside the bytes the
         // rebuild copies, and a hostile SizeOfHeaders is how it would not.
-        let last_header_end = self.sections.iter().map(|s| s.header_at + 40).max().unwrap_or(0);
+        let last_header_end = self
+            .sections
+            .iter()
+            .map(|s| s.header_at + 40)
+            .max()
+            .unwrap_or(0);
         if last_header_end > header_bytes || self.opt_at + 96 + 16 > header_bytes {
             return Err(NeoliteError::Corrupt(
                 "the section table lies outside the image's own declared headers".into(),
@@ -677,7 +708,11 @@ impl Pe {
                 .and_then(|n| align_up(n, file_alignment))
                 .and_then(|n| cursor.checked_add(n).map(|_| n))
                 .ok_or_else(|| NeoliteError::Corrupt("the rebuilt image does not fit".into()))?;
-            let (offset, size) = if body.is_empty() { (0, 0) } else { (cursor, padded) };
+            let (offset, size) = if body.is_empty() {
+                (0, 0)
+            } else {
+                (cursor, padded)
+            };
             let h = s.header_at;
             wr32(&mut out, h + 16, size);
             wr32(&mut out, h + 20, offset);
@@ -776,14 +811,10 @@ impl Pe {
     /// The NUL-terminated ASCII string at `rva` in the recovered image, if it is
     /// short, printable and inside a section.
     fn cstring_at(&self, rva: u32, bodies: &[Vec<u8>]) -> Option<String> {
-        let (i, s) = self
-            .sections
-            .iter()
-            .enumerate()
-            .find(|(_, s)| {
-                let span = s.virtual_size.max(s.raw_size);
-                span != 0 && rva >= s.virtual_address && rva - s.virtual_address < span
-            })?;
+        let (i, s) = self.sections.iter().enumerate().find(|(_, s)| {
+            let span = s.virtual_size.max(s.raw_size);
+            span != 0 && rva >= s.virtual_address && rva - s.virtual_address < span
+        })?;
         let body = &bodies[i];
         let from = (rva - s.virtual_address) as usize;
         let win = body.get(from..(from + 64).min(body.len()))?;
@@ -822,7 +853,11 @@ mod tests {
             .map(|s| {
                 let from = s.raw_offset as usize;
                 let to = (from + s.raw_size as usize).min(image.len());
-                let body = if from < to { image[from..to].to_vec() } else { Vec::new() };
+                let body = if from < to {
+                    image[from..to].to_vec()
+                } else {
+                    Vec::new()
+                };
                 (s.name.clone(), rd32(image, s.header_at + 36).unwrap(), body)
             })
             .collect()
@@ -863,14 +898,20 @@ mod tests {
         let data = &secs.iter().find(|(n, _, _)| n == ".data").unwrap().2;
         assert_eq!(data.len(), 0x2000);
         assert!(data.starts_with(b"kuna neolite fixture payload\0"));
-        assert!(data[29..].iter().all(|&b| b == 0), "the zero tail is part of the stream");
+        assert!(
+            data[29..].iter().all(|&b| b == 0),
+            "the zero tail is part of the stream"
+        );
     }
 
     #[test]
     fn a_section_the_packer_stored_is_carried_through_verbatim() {
         let u = unpack(&fixture()).expect("fixture unpacks");
         let rsrc = u.sections.iter().find(|s| s.name == ".rsrc").unwrap();
-        assert!(!rsrc.compressed, "plaintext must not be run through the decoder");
+        assert!(
+            !rsrc.compressed,
+            "plaintext must not be run through the decoder"
+        );
         assert_eq!(rsrc.packed, rsrc.unpacked);
         let secs = sections(&u.bytes);
         let body = &secs.iter().find(|(n, _, _)| n == ".rsrc").unwrap().2;
@@ -882,7 +923,10 @@ mod tests {
         let u = unpack(&fixture()).expect("fixture unpacks");
         let secs = sections(&u.bytes);
         let (_, ch, _) = secs.iter().find(|(n, _, _)| n == ".text").unwrap();
-        assert_eq!(*ch, TEXT_CHARACTERISTICS, "the packer left .text as plain rw data");
+        assert_eq!(
+            *ch, TEXT_CHARACTERISTICS,
+            "the packer left .text as plain rw data"
+        );
         let (_, other, _) = secs.iter().find(|(n, _, _)| n == ".data").unwrap();
         assert_eq!(*other, 0xC000_0040, "no other section's flags are touched");
     }
@@ -919,7 +963,10 @@ mod tests {
                     }
                     let a = at(hint) + 2;
                     let n = u.bytes[a..].iter().position(|&c| c == 0).unwrap();
-                    out.push(format!("{dll}!{}", String::from_utf8_lossy(&u.bytes[a..a + n])));
+                    out.push(format!(
+                        "{dll}!{}",
+                        String::from_utf8_lossy(&u.bytes[a..a + n])
+                    ));
                     thunk += 4;
                 }
                 d += 20;
@@ -944,7 +991,10 @@ mod tests {
         assert!(Huffman::build(&[1, 3, 3]).is_err(), "under-subscribed");
         assert!(Huffman::build(&[1, 1, 1]).is_err(), "over-subscribed");
         assert!(Huffman::build(&[1, 2, 2]).is_ok());
-        assert!(Huffman::build(&[0, 1, 0]).is_ok(), "a lone symbol is well defined");
+        assert!(
+            Huffman::build(&[0, 1, 0]).is_ok(),
+            "a lone symbol is well defined"
+        );
     }
 
     #[test]

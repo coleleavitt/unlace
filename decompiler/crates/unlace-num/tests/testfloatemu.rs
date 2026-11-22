@@ -39,11 +39,7 @@ fn expected_arithmetic_encoding(raw: u64, inputs_nan: bool) -> u64 {
         return float_to_raw_bits(FLOAT_QNAN);
     }
     let is_nan = (raw & 0x7f80_0000) == 0x7f80_0000 && (raw & 0x007f_ffff) != 0;
-    if is_nan {
-        0xffc0_0000
-    } else {
-        raw
-    }
+    if is_nan { 0xffc0_0000 } else { raw }
 }
 
 // macros to preserve call site (testfloatemu.cc:64-82); Rust panics carry the

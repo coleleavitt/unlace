@@ -15,8 +15,8 @@
 //! through the slot as the import. A plain C import carries no such mark and
 //! stays a callable slot, as before.
 
-use unlace_decomp::kuna_symbolnamechars::{sanitize_symbol_name_bytes, symbolnamechars_mode};
 use object::read::Object;
+use unlace_decomp::kuna_symbolnamechars::{sanitize_symbol_name_bytes, symbolnamechars_mode};
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
@@ -38,7 +38,9 @@ pub(crate) fn is_data_import(raw: &[u8]) -> bool {
     if OBJC_OBJECTS.iter().any(|prefix| raw.starts_with(prefix)) {
         return true;
     }
-    let Ok(name) = std::str::from_utf8(raw) else { return false };
+    let Ok(name) = std::str::from_utf8(raw) else {
+        return false;
+    };
     let name = name.strip_prefix('_').unwrap_or(name);
     let swift = crate::sourcelang::is_swift_mangled(name);
     if !swift && !name.starts_with("_Z") {
@@ -77,10 +79,15 @@ fn itanium_is_data(name: &str) -> bool {
     if name.starts_with("_ZTH") || name.starts_with("_ZTW") {
         return false;
     }
-    let Ok(sym) = cpp_demangle::Symbol::new(name) else { return false };
+    let Ok(sym) = cpp_demangle::Symbol::new(name) else {
+        return false;
+    };
     let full = cpp_demangle::DemangleOptions::new();
     let bare = cpp_demangle::DemangleOptions::new().no_params();
-    match (sym.demangle_with_options(&full), sym.demangle_with_options(&bare)) {
+    match (
+        sym.demangle_with_options(&full),
+        sym.demangle_with_options(&bare),
+    ) {
         (Ok(full), Ok(bare)) => full == bare,
         _ => false,
     }
@@ -89,7 +96,9 @@ fn itanium_is_data(name: &str) -> bool {
 /// The name a slot is minted under: the import demangled and sanitized as the
 /// loader's function-symbol stream spells it.
 fn minted_name(raw: &[u8]) -> String {
-    let demangled = std::str::from_utf8(raw).ok().and_then(crate::demangle::demangle_name);
+    let demangled = std::str::from_utf8(raw)
+        .ok()
+        .and_then(crate::demangle::demangle_name);
     let name = match &demangled {
         Some(d) => d.as_bytes(),
         None => raw,
@@ -114,8 +123,11 @@ impl AnalysisPass for MachODataImportPass {
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
         let mut out = AnalysisOutput::default();
         let width = if ctx.file.is_64() { 8 } else { 4 };
-        for (slot, name) in super::macho_stubs::resolve_macho_data_import_slots(ctx.file, ctx.bytes) {
-            let Some(end) = slot.checked_add(width) else { continue };
+        for (slot, name) in super::macho_stubs::resolve_macho_data_import_slots(ctx.file, ctx.bytes)
+        {
+            let Some(end) = slot.checked_add(width) else {
+                continue;
+            };
             out.externref.push((slot, end));
             out.import_slot_names.push((slot, minted_name(&name)));
         }
@@ -140,17 +152,31 @@ mod tests {
         assert!(is_data_import(b"_$sSSN"));
         assert!(is_data_import(b"_$s8StoreKit10StorefrontVMn"));
         assert!(is_data_import(b"_$s5UIKit13UIContentViewMp"));
-        assert!(is_data_import(b"_$s5UIKit19UITraitDisplayScaleVAA0B10DefinitionAAWP"));
+        assert!(is_data_import(
+            b"_$s5UIKit19UITraitDisplayScaleVAA0B10DefinitionAAWP"
+        ));
         assert!(is_data_import(b"_$s8StoreKit03AppA0O11EnvironmentVSQAAMc"));
         assert!(is_data_import(b"_$ss7KeyPathCMo"));
-        assert!(is_data_import(b"_$s12CoreGraphics14CGPathFillRuleO7evenOddyA2CmFWC"));
+        assert!(is_data_import(
+            b"_$s12CoreGraphics14CGPathFillRuleO7evenOddyA2CmFWC"
+        ));
         assert!(is_data_import(b"_$sSY8rawValue03RawB0QzvgTq"));
-        assert!(is_data_import(b"_$s8StoreKit10StorefrontV7currentACSgvgZTu"));
+        assert!(is_data_import(
+            b"_$s8StoreKit10StorefrontV7currentACSgvgZTu"
+        ));
         assert!(!is_data_import(b"_$s8StoreKit10StorefrontVMa"));
-        assert!(!is_data_import(b"_$s8StoreKit10StorefrontV11countryCodeSSvg"));
-        assert!(!is_data_import(b"_$s8StoreKit03AppA0O11EnvironmentV10productionAEvgZ"));
-        assert!(!is_data_import(b"_$s10Foundation11JSONDecoderC19keyDecodingStrategyAC03KeydE0OvsTj"));
-        assert!(!is_data_import(b"_$s5UIKit17UIApplicationMainys5Int32VAD_SpySpys4Int8VGGSgSSSgAJtF"));
+        assert!(!is_data_import(
+            b"_$s8StoreKit10StorefrontV11countryCodeSSvg"
+        ));
+        assert!(!is_data_import(
+            b"_$s8StoreKit03AppA0O11EnvironmentV10productionAEvgZ"
+        ));
+        assert!(!is_data_import(
+            b"_$s10Foundation11JSONDecoderC19keyDecodingStrategyAC03KeydE0OvsTj"
+        ));
+        assert!(!is_data_import(
+            b"_$s5UIKit17UIApplicationMainys5Int32VAD_SpySpys4Int8VGGSgSSSgAJtF"
+        ));
     }
 
     #[test]
@@ -167,7 +193,13 @@ mod tests {
 
     #[test]
     fn slot_name_is_the_demangled_sanitized_import() {
-        assert_eq!(minted_name(b"$s8StoreKit10StorefrontVMn"), "StoreKit.Storefront.nominal_type_descriptor");
-        assert_eq!(minted_name(b"OBJC_CLASS_$_NSMutableData"), "OBJC_CLASS_$_NSMutableData");
+        assert_eq!(
+            minted_name(b"$s8StoreKit10StorefrontVMn"),
+            "StoreKit.Storefront.nominal_type_descriptor"
+        );
+        assert_eq!(
+            minted_name(b"OBJC_CLASS_$_NSMutableData"),
+            "OBJC_CLASS_$_NSMutableData"
+        );
     }
 }

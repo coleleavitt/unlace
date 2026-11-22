@@ -83,11 +83,18 @@ fn main() { unsafe {
 fn decompile(binary: &Path, language: &str) -> String {
     let functions: Vec<_> = PROTOTYPES.iter().map(|(name, _)| *name).collect();
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
-    cmd.arg("decompile-all")
-        .arg(binary)
-        .args(["--functions", &functions.join(","), "--language", language, "--assert-strict"]);
+    cmd.arg("decompile-all").arg(binary).args([
+        "--functions",
+        &functions.join(","),
+        "--language",
+        language,
+        "--assert-strict",
+    ]);
     for (name, selector) in PROTOTYPES {
-        cmd.args(["--assert", &format!("prototype {name} int {name}({selector} s)")]);
+        cmd.args([
+            "--assert",
+            &format!("prototype {name} int {name}({selector} s)"),
+        ]);
     }
     let out = process::required_output(&mut cmd);
     String::from_utf8(out.stdout).unwrap()
@@ -106,23 +113,44 @@ fn narrow_signed_switch_labels_round_trip_through_c_and_rust() {
     std::fs::write(&source, SOURCE).unwrap();
     process::required_output(
         Command::new(cc)
-            .args(["-O2", "-fno-pic", "-fno-asynchronous-unwind-tables", "-fcf-protection=none"])
-            .args(["-nostdlib", "-no-pie", "-Wl,--build-id=none", "-Wl,-e,pick16"])
+            .args([
+                "-O2",
+                "-fno-pic",
+                "-fno-asynchronous-unwind-tables",
+                "-fcf-protection=none",
+            ])
+            .args([
+                "-nostdlib",
+                "-no-pie",
+                "-Wl,--build-id=none",
+                "-Wl,-e,pick16",
+            ])
             .arg(&source)
             .arg("-o")
             .arg(&binary),
     );
-    let mut renames: Vec<String> =
-        PROTOTYPES.iter().map(|(name, _)| format!("-D{name}=native_{name}")).collect();
+    let mut renames: Vec<String> = PROTOTYPES
+        .iter()
+        .map(|(name, _)| format!("-D{name}=native_{name}"))
+        .collect();
     renames.push("-Dsink=native_sink".into());
     process::required_output(
-        Command::new(cc).args(["-O2", "-c"]).args(&renames).arg(&source).arg("-o").arg(&native),
+        Command::new(cc)
+            .args(["-O2", "-c"])
+            .args(&renames)
+            .arg(&source)
+            .arg("-o")
+            .arg(&native),
     );
 
     let printed = decompile(&binary, "c");
     let c_source = dir.path().join("printed.c");
     let c_exe = dir.path().join("printed-c");
-    std::fs::write(&c_source, format!("volatile int sink;\n{printed}\n{C_MAIN}")).unwrap();
+    std::fs::write(
+        &c_source,
+        format!("volatile int sink;\n{printed}\n{C_MAIN}"),
+    )
+    .unwrap();
     process::required_output(
         Command::new(cc)
             .args(["-O0", "-w", "-no-pie"])
@@ -133,14 +161,23 @@ fn narrow_signed_switch_labels_round_trip_through_c_and_rust() {
             .arg(&c_exe),
     );
     let status = Command::new(&c_exe).status().unwrap();
-    assert!(status.success(), "printed C diverges ({status}):\n{printed}");
+    assert!(
+        status.success(),
+        "printed C diverges ({status}):\n{printed}"
+    );
 
     let rust = decompile(&binary, "rust");
     let rust_source = dir.path().join("printed.rs");
     let rust_exe = dir.path().join("printed-rs");
     std::fs::write(&rust_source, format!("{RUST_HARNESS}\n{rust}")).unwrap();
     let compile = Command::new("rustc")
-        .args(["--crate-name", "narrow_switch_labels", "--edition", "2021", "-O"])
+        .args([
+            "--crate-name",
+            "narrow_switch_labels",
+            "--edition",
+            "2021",
+            "-O",
+        ])
         .arg(&rust_source)
         .arg("-C")
         .arg(format!("link-arg={}", native.display()))

@@ -123,7 +123,11 @@ pub struct Attributes {
 impl Attributes {
     /// Construct from element name (C++ `Attributes(string *el)`).
     pub fn new(el: String) -> Self {
-        Attributes { elementname: el, name: Vec::new(), value: Vec::new() }
+        Attributes {
+            elementname: el,
+            name: Vec::new(),
+            value: Vec::new(),
+        }
     }
 
     /// Get the namespace URI associated with this element (always the
@@ -277,7 +281,8 @@ impl Element {
     /// Append new character content to \b this element:
     /// `str[start..start+length]` (C++ `addContent`).
     pub fn add_content(&mut self, str_: &[u8], start: i32, length: i32) {
-        self.content.extend_from_slice(&str_[start as usize..(start + length) as usize]);
+        self.content
+            .extend_from_slice(&str_[start as usize..(start + length) as usize]);
     }
 
     /// Add a new child Element to the model, with \b this as the parent.
@@ -423,7 +428,10 @@ impl TreeHandler {
     /// Constructor (owns the document-level element; cf. C++
     /// `TreeHandler(Element *rt)`).
     pub fn new() -> Self {
-        TreeHandler { stack: vec![Element::new()], error: String::new() }
+        TreeHandler {
+            stack: vec![Element::new()],
+            error: String::new(),
+        }
     }
 
     /// Get the current error message.
@@ -1245,8 +1253,8 @@ impl Parser<'_, '_> {
                 return Err(SYNTAX_ERROR.to_string());
             }
             let name_bytes = lval.expect("scanner invariant: NAME carries lvalue");
-            let name = String::from_utf8(name_bytes)
-                .expect("scanner invariant: XML names are ASCII");
+            let name =
+                String::from_utf8(name_bytes).expect("scanner invariant: XML names are ASCII");
             let mut atts = Attributes::new(name);
 
             // stagstart: elemstart NAME | stagstart SAttribute (xml.y:198-199)
@@ -1414,7 +1422,10 @@ impl Parser<'_, '_> {
 /// `xml_parse` / bison `yyparse` contract.  (The C++ `dbg` trace parameter
 /// is not ported.)
 pub fn xml_parse(input: &[u8], handler: &mut dyn ContentHandler) -> i32 {
-    let mut parser = Parser { scan: XmlScan::new(input), handler };
+    let mut parser = Parser {
+        scan: XmlScan::new(input),
+        handler,
+    };
     parser.handler.start_document();
     match parser.parse() {
         Ok(()) => {
@@ -1503,7 +1514,11 @@ pub fn a_v_b(s: &mut Vec<u8>, attr: &str, val: bool) {
     s.push(b' ');
     s.extend_from_slice(attr.as_bytes());
     s.extend_from_slice(b"=\"");
-    s.extend_from_slice(if val { b"true".as_slice() } else { b"false".as_slice() });
+    s.extend_from_slice(if val {
+        b"true".as_slice()
+    } else {
+        b"false".as_slice()
+    });
     s.push(b'"');
 }
 
@@ -2278,26 +2293,86 @@ mod tests {
     /// ~20 representative SLEIGH spec files across varied processors
     /// (NOT .sla — those are binary build artifacts).
     const SPEC_FILES: &[(&str, &str)] = &[
-        ("specs/Ghidra/Processors/x86/data/languages/x86.ldefs", "language_definitions"),
-        ("specs/Ghidra/Processors/x86/data/languages/x86.pspec", "processor_spec"),
-        ("specs/Ghidra/Processors/x86/data/languages/x86-64-gcc.cspec", "compiler_spec"),
-        ("specs/Ghidra/Processors/AARCH64/data/languages/AARCH64.pspec", "processor_spec"),
-        ("specs/Ghidra/Processors/AARCH64/data/languages/AARCH64.cspec", "compiler_spec"),
-        ("specs/Ghidra/Processors/ARM/data/languages/ARM.ldefs", "language_definitions"),
-        ("specs/Ghidra/Processors/ARM/data/languages/ARM.cspec", "compiler_spec"),
-        ("specs/Ghidra/Processors/MIPS/data/languages/mips32be.cspec", "compiler_spec"),
-        ("specs/Ghidra/Processors/MIPS/data/languages/mips32_16e.pspec", "processor_spec"),
-        ("specs/Ghidra/Processors/PowerPC/data/languages/ppc_32.pspec", "processor_spec"),
-        ("specs/Ghidra/Processors/Sparc/data/languages/SparcV9_32.cspec", "compiler_spec"),
-        ("specs/Ghidra/Processors/68000/data/languages/68000.ldefs", "language_definitions"),
-        ("specs/Ghidra/Processors/RISCV/data/languages/riscv.ldefs", "language_definitions"),
-        ("specs/Ghidra/Processors/6502/data/languages/6502.pspec", "processor_spec"),
-        ("specs/Ghidra/Processors/Z80/data/languages/z80.cspec", "compiler_spec"),
-        ("specs/Ghidra/Processors/HCS08/data/languages/HC05.pspec", "processor_spec"),
-        ("specs/Ghidra/Processors/tricore/data/languages/tricore.cspec", "compiler_spec"),
-        ("specs/Ghidra/Processors/SuperH4/data/languages/SuperH4.ldefs", "language_definitions"),
-        ("specs/Ghidra/Processors/PA-RISC/data/languages/pa-risc32.pspec", "processor_spec"),
-        ("specs/Ghidra/Processors/DATA/data/languages/data.pspec", "processor_spec"),
+        (
+            "specs/Ghidra/Processors/x86/data/languages/x86.ldefs",
+            "language_definitions",
+        ),
+        (
+            "specs/Ghidra/Processors/x86/data/languages/x86.pspec",
+            "processor_spec",
+        ),
+        (
+            "specs/Ghidra/Processors/x86/data/languages/x86-64-gcc.cspec",
+            "compiler_spec",
+        ),
+        (
+            "specs/Ghidra/Processors/AARCH64/data/languages/AARCH64.pspec",
+            "processor_spec",
+        ),
+        (
+            "specs/Ghidra/Processors/AARCH64/data/languages/AARCH64.cspec",
+            "compiler_spec",
+        ),
+        (
+            "specs/Ghidra/Processors/ARM/data/languages/ARM.ldefs",
+            "language_definitions",
+        ),
+        (
+            "specs/Ghidra/Processors/ARM/data/languages/ARM.cspec",
+            "compiler_spec",
+        ),
+        (
+            "specs/Ghidra/Processors/MIPS/data/languages/mips32be.cspec",
+            "compiler_spec",
+        ),
+        (
+            "specs/Ghidra/Processors/MIPS/data/languages/mips32_16e.pspec",
+            "processor_spec",
+        ),
+        (
+            "specs/Ghidra/Processors/PowerPC/data/languages/ppc_32.pspec",
+            "processor_spec",
+        ),
+        (
+            "specs/Ghidra/Processors/Sparc/data/languages/SparcV9_32.cspec",
+            "compiler_spec",
+        ),
+        (
+            "specs/Ghidra/Processors/68000/data/languages/68000.ldefs",
+            "language_definitions",
+        ),
+        (
+            "specs/Ghidra/Processors/RISCV/data/languages/riscv.ldefs",
+            "language_definitions",
+        ),
+        (
+            "specs/Ghidra/Processors/6502/data/languages/6502.pspec",
+            "processor_spec",
+        ),
+        (
+            "specs/Ghidra/Processors/Z80/data/languages/z80.cspec",
+            "compiler_spec",
+        ),
+        (
+            "specs/Ghidra/Processors/HCS08/data/languages/HC05.pspec",
+            "processor_spec",
+        ),
+        (
+            "specs/Ghidra/Processors/tricore/data/languages/tricore.cspec",
+            "compiler_spec",
+        ),
+        (
+            "specs/Ghidra/Processors/SuperH4/data/languages/SuperH4.ldefs",
+            "language_definitions",
+        ),
+        (
+            "specs/Ghidra/Processors/PA-RISC/data/languages/pa-risc32.pspec",
+            "processor_spec",
+        ),
+        (
+            "specs/Ghidra/Processors/DATA/data/languages/data.pspec",
+            "processor_spec",
+        ),
     ];
 
     #[test]
@@ -2348,7 +2423,10 @@ mod tests {
             let bytes = std::fs::read(root.join(rel)).unwrap();
             let expected = raw_first_bytechunk(&bytes);
             // sanity: the payload really exercises whitespace preservation
-            assert!(expected.starts_with(b"\n"), "{rel}: expected leading newline");
+            assert!(
+                expected.starts_with(b"\n"),
+                "{rel}: expected leading newline"
+            );
             assert!(expected.contains(&b'\n') && expected.len() > 16, "{rel}");
             let doc = xml_tree(&bytes).unwrap();
             let chunk = find_first(doc.get_root(), "bytechunk")
@@ -2365,7 +2443,8 @@ mod tests {
 
     #[test]
     fn test_xml_element_tree_and_attributes() {
-        let doc = parse_ok("<top a=\"1\" b='two'>\n  <kid x=\"&lt;y&gt;\"/>\n  <kid2></kid2>\n</top>\n");
+        let doc =
+            parse_ok("<top a=\"1\" b='two'>\n  <kid x=\"&lt;y&gt;\"/>\n  <kid2></kid2>\n</top>\n");
         let root = doc.get_root();
         assert_eq!(root.get_name(), "top");
         assert_eq!(root.get_num_attributes(), 2);
@@ -2431,10 +2510,16 @@ mod tests {
     #[test]
     fn test_xml_attribute_value_whitespace_preserved() {
         let doc = parse_ok("<a v=\"l1\nl2\tend  \"/>\n");
-        assert_eq!(doc.get_root().get_attribute_value("v").unwrap(), b"l1\nl2\tend  ");
+        assert_eq!(
+            doc.get_root().get_attribute_value("v").unwrap(),
+            b"l1\nl2\tend  "
+        );
         // whitespace around '=' is fine; other quote char is plain data
         let doc = parse_ok("<a v = 'say \"hi\"'/>\n");
-        assert_eq!(doc.get_root().get_attribute_value("v").unwrap(), b"say \"hi\"");
+        assert_eq!(
+            doc.get_root().get_attribute_value("v").unwrap(),
+            b"say \"hi\""
+        );
     }
 
     #[test]
@@ -2449,9 +2534,8 @@ mod tests {
 
     #[test]
     fn test_xml_prolog_comments_and_decl() {
-        let doc = parse_ok(
-            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- a comment -->\n\n<root/>\n",
-        );
+        let doc =
+            parse_ok("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- a comment -->\n\n<root/>\n");
         assert_eq!(doc.get_root().get_name(), "root");
         // comment-only prolog, no decl
         let doc = parse_ok("<!-- c1 -->\n<!-- c2 -->\n<root/>\n");
@@ -2649,26 +2733,26 @@ mod tests {
     #[test]
     fn test_xml_malformed_plain_syntax_errors() {
         for case in [
-            &b""[..],                       // empty input
-            b"<a>",                         // unclosed element
-            b"<a></a>x",                    // garbage after the document
-            b"<a/><b/>",                    // second root element
-            b"<a b=c/>",                    // unquoted attribute value
-            b"<a b='x'c='y'/>",             // no whitespace between attributes
-            b"< a/>",                       // space after '<'
-            b"<a>]]></a>",                  // stray "]]>" in content
-            b"<a v='val<'/>",               // raw '<' in an attribute value
-            b"<a>&amp</a>",                 // entity without ';'
-            b"<a>&#;</a>",                  // empty char ref
-            b"<a>&#x;</a>",                 // hex char ref without digits
-            b"<a>&#xZ;</a>",                // hex char ref with bad digit
-            b"<a><!--x--y--></a>",          // "--" inside a comment
-            b"<a><!--c---></a>",            // comment ending "--->"
-            b"</a>",                        // close tag with no open
-            b"<a>x\x00y</a>",               // NUL acts as end of stream
-            b"<?xml?><a/>",                 // XML decl without version
+            &b""[..],                                      // empty input
+            b"<a>",                                        // unclosed element
+            b"<a></a>x",                                   // garbage after the document
+            b"<a/><b/>",                                   // second root element
+            b"<a b=c/>",                                   // unquoted attribute value
+            b"<a b='x'c='y'/>",                            // no whitespace between attributes
+            b"< a/>",                                      // space after '<'
+            b"<a>]]></a>",                                 // stray "]]>" in content
+            b"<a v='val<'/>",                              // raw '<' in an attribute value
+            b"<a>&amp</a>",                                // entity without ';'
+            b"<a>&#;</a>",                                 // empty char ref
+            b"<a>&#x;</a>",                                // hex char ref without digits
+            b"<a>&#xZ;</a>",                               // hex char ref with bad digit
+            b"<a><!--x--y--></a>",                         // "--" inside a comment
+            b"<a><!--c---></a>",                           // comment ending "--->"
+            b"</a>",                                       // close tag with no open
+            b"<a>x\x00y</a>",                              // NUL acts as end of stream
+            b"<?xml?><a/>",                                // XML decl without version
             b"<?xml version='1.0' standalone='yes'?><a/>", // unsupported decl attr
-            b"<1a/>",                       // name starting with a digit
+            b"<1a/>",                                      // name starting with a digit
         ] {
             assert_eq!(
                 parse_err(case),
@@ -2745,7 +2829,11 @@ mod tests {
         }
         assert_eq!(store.get_tag("top").unwrap().get_name(), "top");
         assert_eq!(
-            store.get_tag("sub1").unwrap().get_attribute_value("a").unwrap(),
+            store
+                .get_tag("sub1")
+                .unwrap()
+                .get_attribute_value("a")
+                .unwrap(),
             b"1"
         );
         assert_eq!(store.get_tag("sub2").unwrap().get_name(), "sub2");
@@ -2851,15 +2939,12 @@ mod tests {
         assert_eq!(convert_char_ref(b"xFf"), 0xff);
         assert_eq!(convert_char_ref(b"x0"), 0);
         // no overflow guard upstream: the i32 accumulator wraps
-        assert_eq!(
-            convert_char_ref(b"99999999999999999999"),
-            {
-                let mut v: i32 = 0;
-                for _ in 0..20 {
-                    v = v.wmul(10).wadd(9);
-                }
-                v
+        assert_eq!(convert_char_ref(b"99999999999999999999"), {
+            let mut v: i32 = 0;
+            for _ in 0..20 {
+                v = v.wmul(10).wadd(9);
             }
-        );
+            v
+        });
     }
 }

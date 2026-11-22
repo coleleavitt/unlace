@@ -40,14 +40,15 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 
 use unlace_base::space::AddrSpace;
 use unlace_decomp::architecture::Architecture;
-use unlace_decomp::kuna_decodekit::{build_decode_engine_traced, EngineRecipe};
+use unlace_decomp::kuna_decodekit::{EngineRecipe, build_decode_engine_traced};
 use unlace_decomp::kuna_hostmem::peak_resident_bytes;
-use unlace_sleigh::kuna_ctxsnapshot::{snapshot_context, ContextValueSnapshot};
+use unlace_sleigh::kuna_ctxsnapshot::{ContextValueSnapshot, snapshot_context};
 use unlace_sleigh::kuna_sharedbytes::UnmappedTripwire;
 use unlace_sleigh::loadimage::ImageBytes;
 use unlace_sleigh::sleigh::Sleigh;
 use unlace_sleigh::translate::Translate;
 
+use super::ListingDetail;
 use super::context::ContextPainter;
 use super::decode::decode_one;
 use super::kuna_insnstore::InstructionStore;
@@ -56,7 +57,6 @@ use super::walk::{
     self, CallbackEvidence, CallbackSink, InsnSink, RefCollector, StepCtx, Successors, WalkPolicy,
     WalkState,
 };
-use super::ListingDetail;
 
 /// How many decode lanes the walk should use. Set by `kuna --jobs N` for the
 /// duration of the load; absent means the serial walk.
@@ -153,7 +153,9 @@ fn lane_excess(before: u64, after: u64, insns: usize, footprint: u64) -> u64 {
 /// done with them. An upper bound on the lane cost, computed from the shards
 /// themselves rather than inferred from a density.
 fn lane_footprint(lanes: usize, shard_bytes: u64) -> u64 {
-    (lanes as u64).saturating_mul(LANE_ENGINE_BYTES).saturating_add(shard_bytes)
+    (lanes as u64)
+        .saturating_mul(LANE_ENGINE_BYTES)
+        .saturating_add(shard_bytes)
 }
 
 mod refusal;
@@ -210,11 +212,15 @@ impl WalkPlan {
     /// The plan [`DECODE_JOBS_ENV`] asks for. The only place the decode-lane
     /// environment is read.
     pub fn from_env(arch: &Architecture) -> WalkPlan {
-        let lanes = env_usize(DECODE_JOBS_ENV).unwrap_or(1).min(MAX_DECODE_LANES);
+        let lanes = env_usize(DECODE_JOBS_ENV)
+            .unwrap_or(1)
+            .min(MAX_DECODE_LANES);
         let per_lane = env_usize(DECODE_INTERVALS_ENV)
             .filter(|&n| n > 0)
             .unwrap_or(INTERVALS_PER_LANE);
-        let floor = env_usize(DECODE_MIN_BYTES_ENV).map(|n| n as u64).unwrap_or(MIN_EXEC_BYTES);
+        let floor = env_usize(DECODE_MIN_BYTES_ENV)
+            .map(|n| n as u64)
+            .unwrap_or(MIN_EXEC_BYTES);
         WalkPlan::for_lanes(arch, lanes, per_lane, floor)
     }
 
@@ -296,8 +302,12 @@ impl WalkPlan {
     /// the very `Arc`s `arch` handed out, so a plan captured from a DIFFERENT
     /// load of the same `archid` fails too.
     pub(super) fn built_from(&self, arch: &Architecture) -> bool {
-        let Some(kit) = self.kit.as_ref() else { return true };
-        let Some(live) = arch.decode_recipe() else { return false };
+        let Some(kit) = self.kit.as_ref() else {
+            return true;
+        };
+        let Some(live) = arch.decode_recipe() else {
+            return false;
+        };
         *kit.recipe.archid == *live.archid
             && Arc::ptr_eq(&kit.recipe.sla, &live.sla)
             && Arc::ptr_eq(&kit.recipe.truncations, &live.truncations)
@@ -395,7 +405,10 @@ impl Intervals {
     /// allocate more than the program can fill.
     fn new(seeds: &[u64], k: usize) -> Intervals {
         let m = seeds.len();
-        debug_assert!(!seeds.is_empty(), "the gate refuses an empty seed list before the cut");
+        debug_assert!(
+            !seeds.is_empty(),
+            "the gate refuses an empty seed list before the cut"
+        );
         let k = k.max(1).min(m.max(1));
         let mut bounds: Vec<u64> = Vec::with_capacity(k + 1);
         bounds.push(0);
@@ -487,7 +500,10 @@ struct LaneCallbacks {
 
 impl CallbackSink for LaneCallbacks {
     fn file(&mut self, source: u64, target: u64) {
-        self.refs.entry(target).and_modify(|p| *p = (*p).min(source)).or_insert(source);
+        self.refs
+            .entry(target)
+            .and_modify(|p| *p = (*p).min(source))
+            .or_insert(source);
     }
 }
 
@@ -552,7 +568,8 @@ impl Successors for Router<'_> {
         if self.owns(vma) {
             self.local_insn.push(vma);
         } else {
-            self.out.push(Crossing::Insn(self.ivs.owner(vma) as u32, vma)); // cast: < K
+            self.out
+                .push(Crossing::Insn(self.ivs.owner(vma) as u32, vma)); // cast: < K
         }
     }
     #[inline]
@@ -560,7 +577,8 @@ impl Successors for Router<'_> {
         if self.owns(entry) {
             self.local_func.push(entry);
         } else {
-            self.out.push(Crossing::Func(self.ivs.owner(entry) as u32, entry)); // cast: < K
+            self.out
+                .push(Crossing::Func(self.ivs.owner(entry) as u32, entry)); // cast: < K
         }
     }
 }
@@ -645,8 +663,10 @@ fn admit<'a>(plan: &'a WalkPlan, inputs: &ParallelInputs<'_>) -> Result<Admitted
         }
     }
 
-    let intervals =
-        Intervals::new(inputs.seeds, plan.lanes.saturating_mul(plan.intervals_per_lane));
+    let intervals = Intervals::new(
+        inputs.seeds,
+        plan.lanes.saturating_mul(plan.intervals_per_lane),
+    );
     let mut counts = vec![0usize; intervals.len()];
     for &s in inputs.seeds {
         counts[intervals.owner(s)] += 1;
@@ -654,7 +674,12 @@ fn admit<'a>(plan: &'a WalkPlan, inputs: &ParallelInputs<'_>) -> Result<Admitted
     let mut order: Vec<usize> = (0..intervals.len()).filter(|&i| counts[i] > 0).collect();
     order.sort_by(|&a, &b| counts[b].cmp(&counts[a]).then(a.cmp(&b)));
 
-    Ok(Admitted { lanes: plan.lanes, seed, intervals, order })
+    Ok(Admitted {
+        lanes: plan.lanes,
+        seed,
+        intervals,
+        order,
+    })
 }
 
 /// Executable bytes, counting an address once. The section-less fallback takes
@@ -710,7 +735,11 @@ struct GateState {
 impl Gate {
     fn new(parties: usize) -> Gate {
         Gate {
-            state: Mutex::new(GateState { count: 0, generation: 0, poisoned: false }),
+            state: Mutex::new(GateState {
+                count: 0,
+                generation: 0,
+                poisoned: false,
+            }),
             signal: Condvar::new(),
             parties,
         }
@@ -828,8 +857,9 @@ fn run(
     let kit0 = build_kit(admitted.seed)?;
     probe(&kit0, inputs)?;
 
-    let states: Vec<Mutex<IntervalState>> =
-        (0..ivs.len()).map(|_| Mutex::new(IntervalState::new(inputs.detail.refs))).collect();
+    let states: Vec<Mutex<IntervalState>> = (0..ivs.len())
+        .map(|_| Mutex::new(IntervalState::new(inputs.detail.refs)))
+        .collect();
     for &s in inputs.seeds {
         lock(&states[ivs.owner(s)]).roots.push(s);
     }
@@ -838,7 +868,10 @@ fn run(
     let cursor = AtomicUsize::new(0);
     let sort_cursor = AtomicUsize::new(0);
     let delivered = AtomicUsize::new(0);
-    let round = Mutex::new(Round { active: admitted.order.clone(), delivered: usize::MAX });
+    let round = Mutex::new(Round {
+        active: admitted.order.clone(),
+        delivered: usize::MAX,
+    });
     let rounds = AtomicUsize::new(0);
     let total_decodes = AtomicUsize::new(0);
     let total_crossings = AtomicUsize::new(0);
@@ -969,7 +1002,10 @@ fn run(
             if at >= states.len() {
                 break;
             }
-            lock(&states[at]).insns.out.sort_unstable_by_key(|&(vma, _)| vma);
+            lock(&states[at])
+                .insns
+                .out
+                .sort_unstable_by_key(|&(vma, _)| vma);
         }
 
         total_decodes.fetch_add(stats.decodes, Ordering::Relaxed);
@@ -1007,7 +1043,9 @@ fn run(
             let spawned = if refused {
                 None
             } else {
-                std::thread::Builder::new().spawn_scoped(scope, move || guarded(me, None)).ok()
+                std::thread::Builder::new()
+                    .spawn_scoped(scope, move || guarded(me, None))
+                    .ok()
             };
             match spawned {
                 Some(handle) => handles.push(handle),
@@ -1050,21 +1088,30 @@ fn run(
     outcome?;
 
     // Nothing under the gate may write the parent's context database.
-    let after = inputs.arch.with_context_db_mut(|db| snapshot_context(db, inputs.code_space));
+    let after = inputs
+        .arch
+        .with_context_db_mut(|db| snapshot_context(db, inputs.code_space));
     if after != admitted.seed.ctx {
         return Err(Refusal::ContextMoved);
     }
 
     let walk_time = started.elapsed();
     let merge_started = std::time::Instant::now();
-    let shards: Vec<IntervalState> =
-        states.into_iter().map(|m| m.into_inner().unwrap_or_else(|e| e.into_inner())).collect();
+    let shards: Vec<IntervalState> = states
+        .into_iter()
+        .map(|m| m.into_inner().unwrap_or_else(|e| e.into_inner()))
+        .collect();
     let (state, shard_bytes) = reconcile(shards, inputs.seeds, inputs.seed_funcs)?;
 
     // What the lanes cost the process, for the worker pool's memory model.
     let mut excess = 0u64;
     if let (Some(before), Some(after)) = (peak_before, peak_resident_bytes()) {
-        excess = lane_excess(before, after, state.insns.len(), lane_footprint(lanes, shard_bytes));
+        excess = lane_excess(
+            before,
+            after,
+            state.insns.len(),
+            lane_footprint(lanes, shard_bytes),
+        );
         LANE_PEAK_EXCESS.fetch_max(excess, Ordering::Relaxed);
     }
 
@@ -1089,7 +1136,11 @@ fn build_kit(seed: &DecodeSeed) -> Result<Kit, Refusal> {
     let (engine, space, tripwire) =
         build_decode_engine_traced(&seed.recipe, Arc::clone(&seed.bytes), &seed.ctx)
             .map_err(|_| Refusal::KitFailed)?;
-    Ok(Kit { engine, space, tripwire })
+    Ok(Kit {
+        engine,
+        space,
+        tripwire,
+    })
 }
 
 /// Re-decode a sample of the seeds on `kit` and compare against the parent.
@@ -1155,7 +1206,10 @@ fn reconcile(
     // The seed pass first, so a seeded entry keeps its name/from_symbol even
     // when a CALL also targeted it -- exactly the serial walk's pre-population.
     for &entry in seeds {
-        let df = seed_funcs.get(&entry).cloned().unwrap_or_else(|| walk::discovered(entry));
+        let df = seed_funcs
+            .get(&entry)
+            .cloned()
+            .unwrap_or_else(|| walk::discovered(entry));
         funcs.entry(entry).or_insert(df);
     }
 
@@ -1163,9 +1217,15 @@ fn reconcile(
     let mut previous: Option<u64> = None;
     for shard in shards {
         shard_bytes = shard_bytes
-            .saturating_add(bytes_of(shard.insns.out.len(), size_of::<(u64, InsnLite)>()))
+            .saturating_add(bytes_of(
+                shard.insns.out.len(),
+                size_of::<(u64, InsnLite)>(),
+            ))
             .saturating_add(bytes_of(shard.insns.seen.len(), size_of::<u64>()))
-            .saturating_add(bytes_of(shard.funcs.len(), size_of::<(u64, DiscoveredFunction)>()))
+            .saturating_add(bytes_of(
+                shard.funcs.len(),
+                size_of::<(u64, DiscoveredFunction)>(),
+            ))
             .saturating_add(bytes_of(shard.visited.len(), size_of::<u64>()))
             .saturating_add(bytes_of(shard.callbacks.refs.len(), 2 * size_of::<u64>()));
         for (vma, lite) in shard.insns.out {
@@ -1182,10 +1242,14 @@ fn reconcile(
             funcs.entry(entry).or_insert(record);
         }
         let edges = shard.refs.into_edges();
-        shard_bytes = shard_bytes.saturating_add(bytes_of(edges.capacity(), size_of::<Reference>()));
+        shard_bytes =
+            shard_bytes.saturating_add(bytes_of(edges.capacity(), size_of::<Reference>()));
         refs.extend(edges);
         for (target, source) in shard.callbacks.refs {
-            callbacks.entry(target).and_modify(|p| *p = (*p).min(source)).or_insert(source);
+            callbacks
+                .entry(target)
+                .and_modify(|p| *p = (*p).min(source))
+                .or_insert(source);
         }
     }
 
@@ -1286,12 +1350,21 @@ mod tests {
 
     #[test]
     fn owner_is_total_and_agrees_with_the_bounds() {
-        let seeds = [0x1000u64, 0x2000, 0x3000, 0x4000, 0x5000, 0x6000, 0x7000, 0x8000];
+        let seeds = [
+            0x1000u64, 0x2000, 0x3000, 0x4000, 0x5000, 0x6000, 0x7000, 0x8000,
+        ];
         for k in [1usize, 2, 3, 4, 8, 16, 64] {
             let iv = ivs(&seeds, k);
             assert_eq!(iv.bounds[0], 0, "k={k}: the first bound covers address 0");
-            assert_eq!(*iv.bounds.last().unwrap(), u64::MAX, "k={k}: the map is total");
-            assert!(iv.bounds.windows(2).all(|w| w[0] < w[1]), "k={k}: bounds ascend strictly");
+            assert_eq!(
+                *iv.bounds.last().unwrap(),
+                u64::MAX,
+                "k={k}: the map is total"
+            );
+            assert!(
+                iv.bounds.windows(2).all(|w| w[0] < w[1]),
+                "k={k}: bounds ascend strictly"
+            );
             // Every bound, one below it, one above it, plus the extremes.
             let mut probes: Vec<u64> = vec![0, 1, u64::MAX - 1, u64::MAX];
             for &b in &iv.bounds {
@@ -1300,7 +1373,10 @@ mod tests {
             probes.extend(seeds.iter().copied());
             for a in probes {
                 let owner = iv.owner(a);
-                assert!(owner < iv.len(), "k={k}: owner({a:#x}) = {owner} is out of range");
+                assert!(
+                    owner < iv.len(),
+                    "k={k}: owner({a:#x}) = {owner} is out of range"
+                );
                 assert!(
                     a >= iv.bounds[owner],
                     "k={k}: owner({a:#x}) = {owner} starts above the address"
@@ -1439,8 +1515,7 @@ mod tests {
         let want = super::super::kuna_compactrefs::ReferenceIndex::new(single.into_edges());
 
         // ...against three shards that each filed a slice of it.
-        let mut shards: Vec<IntervalState> =
-            (0..3).map(|_| IntervalState::new(true)).collect();
+        let mut shards: Vec<IntervalState> = (0..3).map(|_| IntervalState::new(true)).collect();
         for (i, &(from, to, kind)) in edges.iter().enumerate() {
             shards[i % 3].refs.file(from, to, kind);
         }
@@ -1460,14 +1535,21 @@ mod tests {
             want.file(0x8000 + i, 0x1000 + i); // a lower source for the same target
         }
         // Four shards, each with a slice, merged then capped once.
-        let mut shards: Vec<IntervalState> =
-            (0..4).map(|_| IntervalState::new(true)).collect();
+        let mut shards: Vec<IntervalState> = (0..4).map(|_| IntervalState::new(true)).collect();
         for i in 0..count as u64 {
-            shards[(i % 4) as usize].callbacks.file(0x9000 + i, 0x1000 + i);
-            shards[((i + 1) % 4) as usize].callbacks.file(0x8000 + i, 0x1000 + i);
+            shards[(i % 4) as usize]
+                .callbacks
+                .file(0x9000 + i, 0x1000 + i);
+            shards[((i + 1) % 4) as usize]
+                .callbacks
+                .file(0x8000 + i, 0x1000 + i);
         }
         let (st, _) = reconcile(shards, &[], &BTreeMap::new()).expect("no collision");
-        assert_eq!(st.stack_callback_refs.len(), cap, "the union is capped once");
+        assert_eq!(
+            st.stack_callback_refs.len(),
+            cap,
+            "the union is capped once"
+        );
         assert_eq!(st.stack_callback_refs, want.into_refs());
     }
 
@@ -1491,7 +1573,10 @@ mod tests {
         }
         gate.poison();
         for handle in handles {
-            assert!(!handle.join().expect("the waiter returned"), "a poisoned wait must fail");
+            assert!(
+                !handle.join().expect("the waiter returned"),
+                "a poisoned wait must fail"
+            );
         }
         assert_eq!(woke.load(Ordering::SeqCst), 2);
         assert!(!gate.wait(), "a poisoned gate refuses every later arrival");
@@ -1500,7 +1585,11 @@ mod tests {
     #[test]
     fn every_refusal_has_a_distinct_spelling() {
         let spellings: BTreeSet<&str> = Refusal::ALL.iter().map(|r| r.reason()).collect();
-        assert_eq!(spellings.len(), Refusal::ALL.len(), "a reason must name exactly one refusal");
+        assert_eq!(
+            spellings.len(),
+            Refusal::ALL.len(),
+            "a reason must name exactly one refusal"
+        );
     }
 
     /// `KUNA_DECODE_INTERVALS` is a knob this ships, and the gate's contract is
@@ -1511,7 +1600,10 @@ mod tests {
         let seeds = [0x1000u64, 0x2000, 0x3000];
         for k in [usize::MAX, usize::MAX / 2, 1 << 40, 4096] {
             let iv = ivs(&seeds, k);
-            assert!(iv.len() <= seeds.len(), "k={k}: the cut cannot exceed the seed count");
+            assert!(
+                iv.len() <= seeds.len(),
+                "k={k}: the cut cannot exceed the seed count"
+            );
             assert_eq!(iv.bounds[0], 0);
             assert_eq!(*iv.bounds.last().unwrap(), u64::MAX);
             assert_eq!(iv.owner(u64::MAX), iv.len() - 1);
@@ -1529,8 +1621,17 @@ mod tests {
     fn overlapping_executable_ranges_are_counted_once() {
         // The section-less fallback's PT_LOAD segments: one nested, one
         // overlapping, one disjoint, one empty, and the list out of order.
-        let ranges = [(0x1000u64, 0x5000u64), (0x2000, 0x3000), (0x4000, 0x6000), (0x9000, 0x9000)];
-        assert_eq!(exec_bytes(&ranges), 0x5000, "a doubly-counted image must not clear the floor");
+        let ranges = [
+            (0x1000u64, 0x5000u64),
+            (0x2000, 0x3000),
+            (0x4000, 0x6000),
+            (0x9000, 0x9000),
+        ];
+        assert_eq!(
+            exec_bytes(&ranges),
+            0x5000,
+            "a doubly-counted image must not clear the floor"
+        );
         assert_eq!(exec_bytes(&[(0x8000, 0x9000), (0x1000, 0x2000)]), 0x2000);
         assert_eq!(exec_bytes(&[]), 0);
     }
@@ -1543,7 +1644,10 @@ mod tests {
         let insns = 4_000_000usize;
         let map = insns as u64 * SERIAL_MAP_BYTES_PER_INSN;
         let roomy = mb(100_000);
-        assert_eq!(lane_excess(mb(6000), mb(6000) + mb(3000) + map, insns, roomy), mb(3000));
+        assert_eq!(
+            lane_excess(mb(6000), mb(6000) + mb(3000) + map, insns, roomy),
+            mb(3000)
+        );
         // A serial-shaped growth is no excess at all, and nothing underflows.
         assert_eq!(lane_excess(mb(6000), mb(6000) + map, insns, roomy), 0);
         assert_eq!(lane_excess(mb(6000), mb(5000), insns, roomy), 0);
@@ -1565,7 +1669,10 @@ mod tests {
         let before = kb(1_000_000);
         let after = before + kb(17_727_772 - 14_079_200) + insns as u64 * 713;
         let naive = lane_excess(before, after, insns, u64::MAX);
-        assert!(naive > 10 * 1024 * 1024 * 1024, "the uncapped subtraction over-reports: {naive}");
+        assert!(
+            naive > 10 * 1024 * 1024 * 1024,
+            "the uncapped subtraction over-reports: {naive}"
+        );
         // The shards for that walk: one record and one `seen` key per
         // instruction, plus a reference in each map.
         let shards = bytes_of(insns, size_of::<(u64, InsnLite)>())

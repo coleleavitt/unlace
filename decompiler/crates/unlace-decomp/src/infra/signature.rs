@@ -52,11 +52,11 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use unlace_base::crc32::crc_update;
 use unlace_base::error::{KunaError, KunaResult};
-use unlace_base::marshal::{AttributeId, ElementId, Encoder, ATTRIB_INDEX, ATTRIB_VAL};
+use unlace_base::marshal::{ATTRIB_INDEX, ATTRIB_VAL, AttributeId, ElementId, Encoder};
 use unlace_num::opcodes::OpCode;
 
-use crate::funcdata::Funcdata;
 use crate::context::{BlockId, OpId, VarnodeId};
+use crate::funcdata::Funcdata;
 
 // ===========================================================================
 // Marshaling identifiers (signature.cc:26-41)
@@ -197,7 +197,11 @@ pub enum SignatureKind {
     Varnode(VarnodeId),
     /// Rooted at a basic block (`BlockSignature`); the two ops are the in-sequence
     /// pair for "form 2" (both `None` for the pure control-flow "form 1").
-    Block { bl: BlockId, op1: Option<OpId>, op2: Option<OpId> },
+    Block {
+        bl: BlockId,
+        op1: Option<OpId>,
+        op2: Option<OpId>,
+    },
     /// One-or-more stand-alone COPYs in a block (`CopySignature`).
     Copy(BlockId),
 }
@@ -220,22 +224,34 @@ impl Signature {
     /// Construct from a hashword (C++ `Signature::Signature(hashword)` —
     /// `sig=(uint4)h`).
     pub fn new(h: Hashword) -> Signature {
-        Signature { sig: h as u32, kind: SignatureKind::Generic }
+        Signature {
+            sig: h as u32,
+            kind: SignatureKind::Generic,
+        }
     }
 
     /// Construct a Varnode-rooted feature (C++ `VarnodeSignature`).
     fn new_varnode(vn: VarnodeId, h: Hashword) -> Signature {
-        Signature { sig: h as u32, kind: SignatureKind::Varnode(vn) }
+        Signature {
+            sig: h as u32,
+            kind: SignatureKind::Varnode(vn),
+        }
     }
 
     /// Construct a block-rooted feature (C++ `BlockSignature`).
     fn new_block(bl: BlockId, h: Hashword, op1: Option<OpId>, op2: Option<OpId>) -> Signature {
-        Signature { sig: h as u32, kind: SignatureKind::Block { bl, op1, op2 } }
+        Signature {
+            sig: h as u32,
+            kind: SignatureKind::Block { bl, op1, op2 },
+        }
     }
 
     /// Construct a stand-alone-COPY feature (C++ `CopySignature`).
     fn new_copy(bl: BlockId, h: Hashword) -> Signature {
-        Signature { sig: h as u32, kind: SignatureKind::Copy(bl) }
+        Signature {
+            sig: h as u32,
+            kind: SignatureKind::Copy(bl),
+        }
     }
 
     /// Get the underlying 32-bit hash of the feature (C++ `Signature::getHash`).
@@ -252,11 +268,7 @@ impl Signature {
     /// The hashes are compared as unsigned values; returns -1, 0, or 1.
     pub fn compare(&self, op2: &Signature) -> i32 {
         if self.sig != op2.sig {
-            if self.sig < op2.sig {
-                -1
-            } else {
-                1
-            }
+            if self.sig < op2.sig { -1 } else { 1 }
         } else {
             0
         }
@@ -313,8 +325,7 @@ impl Signature {
 /// `vn` is dereferenced through `fd`.  With `SIG_COLLAPSE_SIZE`, sizes 4 and
 /// larger collapse to 4.
 fn hash_size(fd: &Funcdata, vn: VarnodeId, modifiers: u32) -> Hashword {
-    let mut val: Hashword =
-        fd.vbank().get(vn).expect("hash_size: stale vn").get_size() as Hashword; // Size of varnode
+    let mut val: Hashword = fd.vbank().get(vn).expect("hash_size: stale vn").get_size() as Hashword; // Size of varnode
     if (modifiers & sig_mods::SIG_COLLAPSE_SIZE) != 0 && val > 4 {
         // Treat sizes 4 and larger the same
         val = 4;
@@ -412,7 +423,11 @@ impl SignatureEntry {
             vn: Some(v),
             flags: 0,
             hash: [0, 0],
-            op: fd.vbank().get(v).expect("SignatureEntry::new: stale vn").get_def(),
+            op: fd
+                .vbank()
+                .get(v)
+                .expect("SignatureEntry::new: stale vn")
+                .get_def(),
             startvn: 0,
             in_size: 0,
             index: -1,
@@ -427,8 +442,16 @@ impl SignatureEntry {
             Some(o) => o,
         };
         e.startvn = 0;
-        e.in_size = fd.obank().get(opid).expect("SignatureEntry::new: stale op").num_input();
-        let code = fd.obank().get(opid).expect("SignatureEntry::new: stale op").code();
+        e.in_size = fd
+            .obank()
+            .get(opid)
+            .expect("SignatureEntry::new: stale op")
+            .num_input();
+        let code = fd
+            .obank()
+            .get(opid)
+            .expect("SignatureEntry::new: stale op")
+            .code();
         match code {
             OpCode::CPUI_COPY => {
                 if test_standalone_copy(fd, v) {
@@ -503,8 +526,14 @@ impl SignatureEntry {
         // For constant pool operations, hash in the resolved tag type constant,
         // which is the last input.
         if opc == OpCode::CPUI_CPOOLREF {
-            let last = o.get_in(o.num_input() - 1).expect("CPOOLREF: null last input (C++ UB)");
-            let off = fd.vbank().get(last).expect("get_op_hash: stale vn").get_offset();
+            let last = o
+                .get_in(o.num_input() - 1)
+                .expect("CPOOLREF: null last input (C++ UB)");
+            let off = fd
+                .vbank()
+                .get(last)
+                .expect("get_op_hash: stale vn")
+                .get_offset();
             ophash = ophash.wrapping_add(0xfeedface) ^ off;
         }
         ophash
@@ -515,10 +544,17 @@ impl SignatureEntry {
 /// `SignatureEntry::testStandaloneCopy`, signature.cc:231-258).
 fn test_standalone_copy(fd: &Funcdata, vn: VarnodeId) -> bool {
     let v = fd.vbank().get(vn).expect("testStandaloneCopy: stale vn");
-    let opid = v.get_def().expect("testStandaloneCopy: vn->getDef() null (C++ UB)");
+    let opid = v
+        .get_def()
+        .expect("testStandaloneCopy: vn->getDef() null (C++ UB)");
     let op = fd.obank().get(opid).expect("testStandaloneCopy: stale op");
-    let invnid = op.get_in(0).expect("testStandaloneCopy: getIn(0) null (C++ UB)");
-    let invn = fd.vbank().get(invnid).expect("testStandaloneCopy: stale in vn");
+    let invnid = op
+        .get_in(0)
+        .expect("testStandaloneCopy: getIn(0) null (C++ UB)");
+    let invn = fd
+        .vbank()
+        .get(invnid)
+        .expect("testStandaloneCopy: stale in vn");
     if invn.is_written() {
         return false;
     }
@@ -538,7 +574,11 @@ fn test_standalone_copy(fd: &Funcdata, vn: VarnodeId) -> bool {
     if iter.next().is_some() {
         return false;
     }
-    let opc = fd.obank().get(desc_op).expect("testStandaloneCopy: stale desc op").code();
+    let opc = fd
+        .obank()
+        .get(desc_op)
+        .expect("testStandaloneCopy: stale desc op")
+        .code();
     if v.is_persist() && opc == OpCode::CPUI_INDIRECT {
         return true;
     }
@@ -549,7 +589,11 @@ fn test_standalone_copy(fd: &Funcdata, vn: VarnodeId) -> bool {
     let out = fd.obank().get(desc_op).expect("stale desc op").get_out();
     match out {
         None => false, // descOp->getOut()->hasNoDescend() — null out is C++ UB; be conservative
-        Some(o) => fd.vbank().get(o).expect("testStandaloneCopy: stale out vn").has_no_descend(),
+        Some(o) => fd
+            .vbank()
+            .get(o)
+            .expect("testStandaloneCopy: stale out vn")
+            .has_no_descend(),
     }
 }
 
@@ -569,7 +613,10 @@ struct BlockSignatureEntry {
 
 impl BlockSignatureEntry {
     fn new(b: BlockId) -> BlockSignatureEntry {
-        BlockSignatureEntry { bl: b, hash: [0, 0] }
+        BlockSignatureEntry {
+            bl: b,
+            hash: [0, 0],
+        }
     }
     fn flip(&mut self) {
         self.hash[1] = self.hash[0];
@@ -727,7 +774,11 @@ impl GraphSigManager {
         // Iterate varnodes in location order.
         for vn in fd.vbank().iter_loc() {
             let entry = SignatureEntry::from_varnode(fd, vn, self.sigmods);
-            let ci = fd.vbank().get(vn).expect("setCurrentFunction: stale vn").get_create_index();
+            let ci = fd
+                .vbank()
+                .get(vn)
+                .expect("setCurrentFunction: stale vn")
+                .get_create_index();
             self.sigmap.insert(ci, entry);
         }
         if (self.sigmods & sig_mods::SIG_COLLAPSE_INDNOISE) != 0 {
@@ -754,22 +805,32 @@ impl GraphSigManager {
     /// chain of COPY/INDIRECT/CAST ops back to their input Varnode (C++
     /// `SignatureEntry::calculateShadow`, signature.cc:84-99).
     fn calculate_shadow(&mut self, fd: &Funcdata, ci: u32) {
-        let start_vn = self.sigmap.get(&ci).expect("calculate_shadow: missing entry").vn;
+        let start_vn = self
+            .sigmap
+            .get(&ci)
+            .expect("calculate_shadow: missing entry")
+            .vn;
         let mut shadow_vn = start_vn.expect("calculate_shadow: real entry has a vn");
         // The C++ `op` member is rewritten each loop turn (the loop body always
         // runs at least once, so this is always assigned before the post-loop read).
         let mut eff_op: Option<OpId>;
         loop {
-            let op = fd.vbank().get(shadow_vn).expect("calculate_shadow: stale vn").get_def();
+            let op = fd
+                .vbank()
+                .get(shadow_vn)
+                .expect("calculate_shadow: stale vn")
+                .get_def();
             eff_op = op;
             let opid = match op {
                 None => break,
                 Some(o) => o,
             };
-            let opc = fd.obank().get(opid).expect("calculate_shadow: stale op").code();
-            if opc != OpCode::CPUI_COPY
-                && opc != OpCode::CPUI_INDIRECT
-                && opc != OpCode::CPUI_CAST
+            let opc = fd
+                .obank()
+                .get(opid)
+                .expect("calculate_shadow: stale op")
+                .code();
+            if opc != OpCode::CPUI_COPY && opc != OpCode::CPUI_INDIRECT && opc != OpCode::CPUI_CAST
             {
                 break;
             }
@@ -782,29 +843,45 @@ impl GraphSigManager {
         }
         // The C++ assigns `op = shadowVn->getDef()` each loop turn (a member
         // write); transcribe that final value back onto the entry.
-        let entry = self.sigmap.get_mut(&ci).expect("calculate_shadow: missing entry");
+        let entry = self
+            .sigmap
+            .get_mut(&ci)
+            .expect("calculate_shadow: missing entry");
         entry.op = eff_op;
         if Some(shadow_vn) != start_vn {
-            let base_ci =
-                fd.vbank().get(shadow_vn).expect("stale vn").get_create_index();
-            self.sigmap.get_mut(&ci).expect("missing entry").shadow =
-                Some(EntryKey::Real(base_ci));
+            let base_ci = fd
+                .vbank()
+                .get(shadow_vn)
+                .expect("stale vn")
+                .get_create_index();
+            self.sigmap.get_mut(&ci).expect("missing entry").shadow = Some(EntryKey::Real(base_ci));
         }
     }
 
     /// Compute the standalone-COPY hash for the entry keyed by `ci` (C++
     /// `SignatureEntry::standaloneCopyHash`, signature.cc:122-140).
     fn standalone_copy_hash(&mut self, fd: &Funcdata, ci: u32, modifiers: u32) {
-        let vn = self.sigmap.get(&ci).expect("standalone_copy_hash: missing").vn.unwrap();
+        let vn = self
+            .sigmap
+            .get(&ci)
+            .expect("standalone_copy_hash: missing")
+            .vn
+            .unwrap();
         let mut val = hash_size(fd, vn, modifiers);
         val ^= 0xaf29e23b;
         let v = fd.vbank().get(vn).expect("stale vn");
         if v.is_persist() {
             val ^= 0x55055055;
         }
-        let def = v.get_def().expect("standaloneCopyHash: getDef null (C++ UB)");
-        let invnid =
-            fd.obank().get(def).expect("stale op").get_in(0).expect("getIn(0) null (C++ UB)");
+        let def = v
+            .get_def()
+            .expect("standaloneCopyHash: getDef null (C++ UB)");
+        let invnid = fd
+            .obank()
+            .get(def)
+            .expect("stale op")
+            .get_in(0)
+            .expect("getIn(0) null (C++ UB)");
         let invn = fd.vbank().get(invnid).expect("stale in vn");
         if invn.is_constant() {
             if (modifiers & sig_mods::SIG_DONOTUSE_CONST) == 0 {
@@ -824,7 +901,12 @@ impl GraphSigManager {
     /// entry keyed by `ci` (C++ `SignatureEntry::localHash`, signature.cc:268-316).
     fn local_hash(&mut self, fd: &Funcdata, ci: u32) {
         let modifiers = self.sigmods;
-        let vn = self.sigmap.get(&ci).expect("local_hash: missing").vn.unwrap();
+        let vn = self
+            .sigmap
+            .get(&ci)
+            .expect("local_hash: missing")
+            .vn
+            .unwrap();
         let v = fd.vbank().get(vn).expect("local_hash: stale vn");
 
         if v.is_annotation() {
@@ -852,7 +934,11 @@ impl GraphSigManager {
             // If there isn't at least some tree above this varnode
             self.sigmap.get_mut(&ci).expect("missing").flags |= sig_flags::SIG_NODE_NOT_EMITTED;
         }
-        let ophash = self.sigmap.get(&ci).expect("missing").get_op_hash(fd, modifiers);
+        let ophash = self
+            .sigmap
+            .get(&ci)
+            .expect("missing")
+            .get_op_hash(fd, modifiers);
 
         let v = fd.vbank().get(vn).expect("stale vn");
         // Class of varnode
@@ -892,7 +978,11 @@ impl GraphSigManager {
     /// caller resolves them before mutating, since the sigmap is borrowed
     /// mutably here).
     fn hash_in(&mut self, ci: u32, neigh: &[Hashword]) {
-        let commutative = self.sigmap.get(&ci).expect("hash_in: missing").is_commutative();
+        let commutative = self
+            .sigmap
+            .get(&ci)
+            .expect("hash_in: missing")
+            .is_commutative();
         let mut curhash = self.sigmap.get(&ci).expect("missing").hash[1];
         if commutative {
             let mut accum: Hashword = 0;
@@ -916,14 +1006,22 @@ impl GraphSigManager {
     /// Find the SignatureEntry key for a Varnode (C++ `mapToEntry`,
     /// signature.hh:310-317).
     fn map_to_entry(fd: &Funcdata, vn: VarnodeId) -> u32 {
-        fd.vbank().get(vn).expect("map_to_entry: stale vn").get_create_index()
+        fd.vbank()
+            .get(vn)
+            .expect("map_to_entry: stale vn")
+            .get_create_index()
     }
 
     /// Find the SignatureEntry key for a Varnode, collapsing shadows (C++
     /// `mapToEntryCollapse`, signature.hh:325-332).
     fn map_to_entry_collapse(&self, fd: &Funcdata, vn: VarnodeId) -> u32 {
         let ci = Self::map_to_entry(fd, vn);
-        match self.sigmap.get(&ci).expect("map_to_entry_collapse: missing").shadow {
+        match self
+            .sigmap
+            .get(&ci)
+            .expect("map_to_entry_collapse: missing")
+            .shadow
+        {
             None => ci,
             Some(EntryKey::Real(base)) => base,
             Some(EntryKey::Virtual(_)) => ci, // virtual roots never shadow a real node
@@ -960,7 +1058,12 @@ impl GraphSigManager {
         let mut rootlist: Vec<u32> = Vec::new();
         let keys: Vec<u32> = self.sigmap.keys().copied().collect();
         for k in keys {
-            let vn = self.sigmap.get(&k).expect("remove_noise: missing").vn.unwrap();
+            let vn = self
+                .sigmap
+                .get(&k)
+                .expect("remove_noise: missing")
+                .vn
+                .unwrap();
             let v = fd.vbank().get(vn).expect("remove_noise: stale vn");
             if v.is_input() || v.is_constant() {
                 rootlist.push(k);
@@ -1019,10 +1122,19 @@ impl GraphSigManager {
 
     /// Get an entry's `shadow` field, whether it lives in `sigmap` (real) or
     /// `virt_map` (virtual root).
-    fn entry_shadow(&self, k: EntryKey, virt_map: &BTreeMap<i32, SignatureEntry>) -> Option<EntryKey> {
+    fn entry_shadow(
+        &self,
+        k: EntryKey,
+        virt_map: &BTreeMap<i32, SignatureEntry>,
+    ) -> Option<EntryKey> {
         match k {
             EntryKey::Real(ci) => self.sigmap.get(&ci).expect("entry_shadow: missing").shadow,
-            EntryKey::Virtual(ix) => virt_map.get(&ix).expect("entry_shadow: missing virt").shadow,
+            EntryKey::Virtual(ix) => {
+                virt_map
+                    .get(&ix)
+                    .expect("entry_shadow: missing virt")
+                    .shadow
+            }
         }
     }
 
@@ -1035,10 +1147,16 @@ impl GraphSigManager {
     ) {
         match k {
             EntryKey::Real(ci) => {
-                self.sigmap.get_mut(&ci).expect("set_entry_shadow: missing").shadow = val
+                self.sigmap
+                    .get_mut(&ci)
+                    .expect("set_entry_shadow: missing")
+                    .shadow = val
             }
             EntryKey::Virtual(ix) => {
-                virt_map.get_mut(&ix).expect("set_entry_shadow: missing virt").shadow = val
+                virt_map
+                    .get_mut(&ix)
+                    .expect("set_entry_shadow: missing virt")
+                    .shadow = val
             }
         }
     }
@@ -1057,7 +1175,12 @@ impl GraphSigManager {
     /// Marker/COPY out-edges (`op->isMarker() || op->code() == CPUI_COPY`) define
     /// the children; the traversal stores the post-order index on each entry and
     /// returns the entries in post-order.
-    fn noise_post_order(&mut self, fd: &Funcdata, rootlist: &[u32], post_order: &mut Vec<EntryKey>) {
+    fn noise_post_order(
+        &mut self,
+        fd: &Funcdata,
+        rootlist: &[u32],
+        post_order: &mut Vec<EntryKey>,
+    ) {
         // DFSNode: (entry-key, the descend iterator position).
         struct DfsNode {
             entry: u32,
@@ -1065,9 +1188,18 @@ impl GraphSigManager {
             pos: usize,
         }
         for &root in rootlist {
-            let rvn = self.sigmap.get(&root).expect("noise_post_order: missing").vn.unwrap();
+            let rvn = self
+                .sigmap
+                .get(&root)
+                .expect("noise_post_order: missing")
+                .vn
+                .unwrap();
             let mut stack: Vec<DfsNode> = Vec::new();
-            stack.push(DfsNode { entry: root, descend: fd.descend_snapshot(rvn), pos: 0 });
+            stack.push(DfsNode {
+                entry: root,
+                descend: fd.descend_snapshot(rvn),
+                pos: 0,
+            });
             self.sigmap.get_mut(&root).expect("missing").set_visited();
             while let Some(top) = stack.last_mut() {
                 if top.pos >= top.descend.len() {
@@ -1082,10 +1214,20 @@ impl GraphSigManager {
                     top.pos += 1;
                     let o = fd.obank().get(op).expect("noise_post_order: stale op");
                     if o.is_marker() || o.code() == OpCode::CPUI_COPY {
-                        let out = o.get_out().expect("noisePostOrder: marker getOut null (C++ UB)");
+                        let out = o
+                            .get_out()
+                            .expect("noisePostOrder: marker getOut null (C++ UB)");
                         let child_ci = Self::map_to_entry(fd, out);
-                        if !self.sigmap.get(&child_ci).expect("missing child").is_visited() {
-                            self.sigmap.get_mut(&child_ci).expect("missing").set_visited();
+                        if !self
+                            .sigmap
+                            .get(&child_ci)
+                            .expect("missing child")
+                            .is_visited()
+                        {
+                            self.sigmap
+                                .get_mut(&child_ci)
+                                .expect("missing")
+                                .set_visited();
                             let cvn = self.sigmap.get(&child_ci).expect("missing").vn.unwrap();
                             stack.push(DfsNode {
                                 entry: child_ci,
@@ -1243,7 +1385,11 @@ impl GraphSigManager {
         self.flip_blocks();
         let keys: Vec<i32> = self.blockmap.keys().copied().collect();
         for k in keys {
-            let blid = self.blockmap.get(&k).expect("signature_block_iterate: missing").bl;
+            let blid = self
+                .blockmap
+                .get(&k)
+                .expect("signature_block_iterate: missing")
+                .bl;
             let bl = fd.bblocks_ref().block(blid);
             let size_in = bl.size_in();
             // Resolve incoming block previous-hashes + their CBRANCH edge info.
@@ -1322,7 +1468,11 @@ impl GraphSigManager {
         // blockmap iteration is block-index order.
         let block_keys: Vec<i32> = self.blockmap.keys().copied().collect();
         for bk in block_keys {
-            let blid = self.blockmap.get(&bk).expect("collect_block_sigs: missing").bl;
+            let blid = self
+                .blockmap
+                .get(&bk)
+                .expect("collect_block_sigs: missing")
+                .bl;
 
             let mut lastop: Option<OpId> = None;
             let mut lasthash: Hashword = 0;
@@ -1375,13 +1525,19 @@ impl GraphSigManager {
                         stopind = o.num_input();
                     }
                     OpCode::CPUI_INDIRECT | OpCode::CPUI_COPY => {
-                        let outid =
-                            o.get_out().expect("collectBlockSigs: COPY/INDIRECT getOut null (UB)");
+                        let outid = o
+                            .get_out()
+                            .expect("collectBlockSigs: COPY/INDIRECT getOut null (UB)");
                         let out_ci = Self::map_to_entry(fd, outid);
-                        if self.sigmap.get(&out_ci).expect("missing out entry").is_standalone_copy()
+                        if self
+                            .sigmap
+                            .get(&out_ci)
+                            .expect("missing out entry")
+                            .is_standalone_copy()
                         {
-                            copyhash = copyhash
-                                .wrapping_add(self.sigmap.get(&out_ci).expect("missing").get_hash());
+                            copyhash = copyhash.wrapping_add(
+                                self.sigmap.get(&out_ci).expect("missing").get_hash(),
+                            );
                         }
                         continue;
                     }
@@ -1406,7 +1562,12 @@ impl GraphSigManager {
                 let val: Hashword;
                 if let Some(ovn) = outvn {
                     let out_ci = Self::map_to_entry(fd, ovn);
-                    if self.sigmap.get(&out_ci).expect("missing out entry").is_not_emitted() {
+                    if self
+                        .sigmap
+                        .get(&out_ci)
+                        .expect("missing out entry")
+                        .is_not_emitted()
+                    {
                         continue;
                     }
                     val = self.sigmap.get(&out_ci).expect("missing").get_hash();
@@ -1573,13 +1734,13 @@ mod tests {
     use std::rc::Rc;
 
     use unlace_base::address::Address;
-    use unlace_base::space::{
-        addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
-    };
     use unlace_base::marshal::XmlEncode;
+    use unlace_base::space::{
+        AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
+    };
 
-    use crate::op::pcodeop_flags;
     use crate::context::{ArchContext, TypeOp};
+    use crate::op::pcodeop_flags;
 
     // Settings-touching tests serialize on the shared crate-level lock (see
     // [`SETTINGS_TEST_LOCK`]).
@@ -1590,7 +1751,8 @@ mod tests {
     fn build_manager() -> AddrSpaceManager {
         let mut m = AddrSpaceManager::new();
         m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+            .unwrap();
         m.insert_space(Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
             "ram",
@@ -1693,14 +1855,28 @@ mod tests {
         // c = const 5 (size 4).
         let c = fd.new_constant(4, 5);
         // add: out = p + c  at ram:0x1000
-        let add = add_op(&mut fd, bl, OpCode::CPUI_INT_ADD, 2, Address::new(Rc::clone(&rs), 0x1000));
-        let out = fd.new_varnode_out(4, &Address::new(Rc::clone(&rs), 0x200), add).unwrap();
+        let add = add_op(
+            &mut fd,
+            bl,
+            OpCode::CPUI_INT_ADD,
+            2,
+            Address::new(Rc::clone(&rs), 0x1000),
+        );
+        let out = fd
+            .new_varnode_out(4, &Address::new(Rc::clone(&rs), 0x200), add)
+            .unwrap();
         fd.op_set_input(add, p, 0).unwrap();
         fd.op_set_input(add, c, 1).unwrap();
         let _ = out;
 
         // RETURN out  at ram:0x1004 (input0 = iop placeholder, input1 = returned vn).
-        let ret = add_op(&mut fd, bl, OpCode::CPUI_RETURN, 2, Address::new(Rc::clone(&rs), 0x1004));
+        let ret = add_op(
+            &mut fd,
+            bl,
+            OpCode::CPUI_RETURN,
+            2,
+            Address::new(Rc::clone(&rs), 0x1004),
+        );
         let iop = fd.new_constant(8, 0);
         fd.op_set_input(ret, iop, 0).unwrap();
         fd.op_set_input(ret, out, 1).unwrap();
@@ -1765,7 +1941,10 @@ mod tests {
         }
         let xml = String::from_utf8(buf).unwrap();
         assert!(xml.contains("<signatures"), "got: {xml}");
-        assert!(xml.contains("<sig "), "expected at least one <sig val=..>: {xml}");
+        assert!(
+            xml.contains("<sig "),
+            "expected at least one <sig val=..>: {xml}"
+        );
     }
 
     #[test]
@@ -1779,7 +1958,10 @@ mod tests {
         let xml = String::from_utf8(buf).unwrap();
         assert!(xml.contains("<gensig"), "got: {xml}");
         // sig truncates to the low 32 bits: 0x9abcdef0.
-        assert!(xml.contains("0x9abcdef0") || xml.contains("9abcdef0"), "got: {xml}");
+        assert!(
+            xml.contains("0x9abcdef0") || xml.contains("9abcdef0"),
+            "got: {xml}"
+        );
     }
 
     #[test]
@@ -1791,4 +1973,3 @@ mod tests {
         assert!(GraphSigManager::new().is_ok());
     }
 }
-

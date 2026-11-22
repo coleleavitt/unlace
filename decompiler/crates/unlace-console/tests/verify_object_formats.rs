@@ -32,13 +32,16 @@ use std::path::PathBuf;
 use unlace_analysis::loadimage_object::ObjectLoadImage;
 use unlace_console::engine::bootstrap_from_object;
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_sleigh::loadimage::section_flags;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixtures() -> PathBuf {
@@ -149,7 +152,11 @@ fn pe_object_loads_maps_and_disassembles() {
         prog,
         &[
             &format!("disassemble 0x{:x} 0x{:x}", PE_TEXT_VMA, PE_TEXT_VMA + 0x10),
-            &format!("disassemble 0x{:x} 0x{:x}", PE_HELPER_OFF, PE_HELPER_OFF + 0x10),
+            &format!(
+                "disassemble 0x{:x} 0x{:x}",
+                PE_HELPER_OFF,
+                PE_HELPER_OFF + 0x10
+            ),
         ],
     );
     assert!(
@@ -182,7 +189,10 @@ fn macho_object_loads_maps_and_disassembles() {
     // (3) Mach-O x86-64 is System V AMD64 → the `gcc` spec (same description as
     // ELF x86-64 — the spec id differs only in the compiler model field).
     let desc = prog.description().to_string();
-    assert!(desc.contains("x86"), "Mach-O: expected x86 spec, got {desc:?}");
+    assert!(
+        desc.contains("x86"),
+        "Mach-O: expected x86 spec, got {desc:?}"
+    );
 
     // Confirm the *id* (not just the description) is the gcc model, distinguishing
     // it from PE's windows model — via the loader directly.
@@ -201,8 +211,16 @@ fn macho_object_loads_maps_and_disassembles() {
     let out = run_console(
         prog,
         &[
-            &format!("disassemble 0x{:x} 0x{:x}", MACHO_TEXT_VMA, MACHO_TEXT_VMA + 0x10),
-            &format!("disassemble 0x{:x} 0x{:x}", MACHO_HELPER_OFF, MACHO_HELPER_OFF + 0x10),
+            &format!(
+                "disassemble 0x{:x} 0x{:x}",
+                MACHO_TEXT_VMA,
+                MACHO_TEXT_VMA + 0x10
+            ),
+            &format!(
+                "disassemble 0x{:x} 0x{:x}",
+                MACHO_HELPER_OFF,
+                MACHO_HELPER_OFF + 0x10
+            ),
         ],
     );
     assert!(

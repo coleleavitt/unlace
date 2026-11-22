@@ -142,7 +142,11 @@ impl OptionIndexAliasGuard {
 
 /// The live `STORE`s whose address space is `spc` and whose address is not the
 /// stack pointer plus a constant: the ops that can write a global in `spc`.
-pub fn stores_into(fd: &Funcdata, spc: &Rc<AddrSpace>, store_space: impl Fn(&Funcdata, VarnodeId) -> Option<Rc<AddrSpace>>) -> Vec<OpId> {
+pub fn stores_into(
+    fd: &Funcdata,
+    spc: &Rc<AddrSpace>,
+    store_space: impl Fn(&Funcdata, VarnodeId) -> Option<Rc<AddrSpace>>,
+) -> Vec<OpId> {
     let sp: Vec<(Rc<AddrSpace>, u64)> = fd
         .get_arch()
         .manage()
@@ -177,7 +181,10 @@ pub fn loads_from(
 ) -> Vec<(OpId, Option<(u64, u64)>)> {
     let manage = fd.get_arch().manage();
     let mut bases: Vec<(Rc<AddrSpace>, u64)> = Vec::new();
-    if let Some(st) = manage.get_stack_space().and_then(|s| s.get_spacebase(0).ok()) {
+    if let Some(st) = manage
+        .get_stack_space()
+        .and_then(|s| s.get_spacebase(0).ok())
+    {
         if let Some(space) = st.space {
             bases.push((space, st.offset));
         }
@@ -199,7 +206,11 @@ pub fn loads_from(
         if o.is_dead() || o.uses_spacebase_ptr() {
             continue;
         }
-        if !o.get_in(0).and_then(|v| load_space(fd, v)).is_some_and(|s| Rc::ptr_eq(&s, spc)) {
+        if !o
+            .get_in(0)
+            .and_then(|v| load_space(fd, v))
+            .is_some_and(|s| Rc::ptr_eq(&s, spc))
+        {
             continue;
         }
         let Some(ptr) = o.get_in(1) else {
@@ -209,7 +220,10 @@ pub fn loads_from(
             continue;
         }
         let bytes = fd.vbank().get(ptr).filter(|p| p.is_constant()).map(|p| {
-            let size = o.get_out().and_then(|w| fd.vbank().get(w)).map_or(1, |w| w.get_size() as u64);
+            let size = o
+                .get_out()
+                .and_then(|w| fd.vbank().get(w))
+                .map_or(1, |w| w.get_size() as u64);
             (p.get_offset(), p.get_offset().wrapping_add(size))
         });
         loads.push((op, bytes));
@@ -231,10 +245,16 @@ pub fn keeps_forced_self_copy(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool 
     if o.code() != OpCode::CPUI_COPY {
         return false;
     }
-    let (Some(v), Some(w)) = (data.vbank().get(vn), o.get_out().and_then(|w| data.vbank().get(w))) else {
+    let (Some(v), Some(w)) = (
+        data.vbank().get(vn),
+        o.get_out().and_then(|w| data.vbank().get(w)),
+    ) else {
         return false;
     };
-    v.is_addr_force() && v.is_persist() && w.get_addr() == v.get_addr() && w.get_size() == v.get_size()
+    v.is_addr_force()
+        && v.is_persist()
+        && w.get_addr() == v.get_addr()
+        && w.get_size() == v.get_size()
 }
 
 /// Must `RuleMultiCollapse` keep `out`, a `MULTIEQUAL` on a global, from
@@ -242,7 +262,11 @@ pub fn keeps_forced_self_copy(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool 
 /// a store that a global LOAD guard forced?  The forced store is kept anyway,
 /// so the collapse would print the store again where the paths meet.
 pub fn keeps_forced_join(data: &Funcdata, out: VarnodeId, a: VarnodeId, b: VarnodeId) -> bool {
-    let forced = |v: VarnodeId| data.vbank().get(v).is_some_and(|d| d.is_addr_force() && d.is_written());
+    let forced = |v: VarnodeId| {
+        data.vbank()
+            .get(v)
+            .is_some_and(|d| d.is_addr_force() && d.is_written())
+    };
     data.get_arch().index_alias_guard >= LEVEL_GLOBAL
         && data.vbank().get(out).is_some_and(|o| o.is_persist())
         && (forced(a) || forced(b))
@@ -266,27 +290,44 @@ pub fn load_crosses_global_store(data: &Funcdata, vn: VarnodeId) -> bool {
     let Some(v) = data.vbank().get(vn) else {
         return false;
     };
-    let Some(load) = v.get_def().and_then(|d| crate::bitfield::pull::printed_load(data, d))
-        .and_then(|d| data.obank().get(d)) else {
+    let Some(load) = v
+        .get_def()
+        .and_then(|d| crate::bitfield::pull::printed_load(data, d))
+        .and_then(|d| data.obank().get(d))
+    else {
         return false;
     };
     let Some(cover) = v.cover() else {
         return false;
     };
-    let Some(index) = load.get_in(0).and_then(|s| data.vbank().get(s)).map(|s| s.get_offset()) else {
+    let Some(index) = load
+        .get_in(0)
+        .and_then(|s| data.vbank().get(s))
+        .map(|s| s.get_offset())
+    else {
         return false;
     };
     let window = load
         .get_in(1)
         .and_then(|p| data.vbank().get(p))
         .filter(|p| p.is_constant())
-        .map(|p| (p.get_offset(), p.get_offset().wrapping_add(load.get_out()
-            .and_then(|v| data.vbank().get(v)).map_or(1, |v| v.get_size()) as u64)));
+        .map(|p| {
+            (
+                p.get_offset(),
+                p.get_offset().wrapping_add(
+                    load.get_out()
+                        .and_then(|v| data.vbank().get(v))
+                        .map_or(1, |v| v.get_size()) as u64,
+                ),
+            )
+        });
     let global = |w: VarnodeId| {
         data.vbank().get(w).is_some_and(|w| {
             w.is_persist()
                 && w.get_space().get_index() as u64 == index
-                && window.is_none_or(|(a, b)| w.get_offset() < b && a < w.get_offset().wrapping_add(w.get_size() as u64))
+                && window.is_none_or(|(a, b)| {
+                    w.get_offset() < b && a < w.get_offset().wrapping_add(w.get_size() as u64)
+                })
         })
     };
     for (blk, _) in cover.iter() {
@@ -307,10 +348,14 @@ pub fn load_crosses_global_store(data: &Funcdata, vn: VarnodeId) -> bool {
                 continue;
             };
             if o.code() == OpCode::CPUI_COPY
-                && o.get_in(0).and_then(|i| data.vbank().get(i)).is_some_and(|i| {
-                    (i.get_addr() == w.get_addr() && i.get_size() == w.get_size())
-                        || (!w.is_persist() && i.get_high().is_some() && i.get_high() == w.get_high())
-                })
+                && o.get_in(0)
+                    .and_then(|i| data.vbank().get(i))
+                    .is_some_and(|i| {
+                        (i.get_addr() == w.get_addr() && i.get_size() == w.get_size())
+                            || (!w.is_persist()
+                                && i.get_high().is_some()
+                                && i.get_high() == w.get_high())
+                    })
             {
                 continue;
             }
@@ -318,9 +363,9 @@ pub fn load_crosses_global_store(data: &Funcdata, vn: VarnodeId) -> bool {
                 continue;
             }
             let writes = global(wid)
-                || w.get_high().and_then(|h| data.high_bank().get(h)).is_some_and(|h| {
-                    (0..h.num_instances()).any(|i| global(h.get_instance(i)))
-                });
+                || w.get_high()
+                    .and_then(|h| data.high_bank().get(h))
+                    .is_some_and(|h| (0..h.num_instances()).any(|i| global(h.get_instance(i))));
             if writes {
                 return true;
             }
@@ -335,16 +380,25 @@ fn based_on(fd: &Funcdata, mut ptr: VarnodeId, bases: &[(Rc<AddrSpace>, u64)]) -
         let Some(v) = fd.vbank().get(ptr) else {
             return false;
         };
-        if bases.iter().any(|(space, off)| Rc::ptr_eq(v.get_space(), space) && v.get_offset() == *off) {
+        if bases
+            .iter()
+            .any(|(space, off)| Rc::ptr_eq(v.get_space(), space) && v.get_offset() == *off)
+        {
             return true;
         }
         let Some(def) = v.get_def().and_then(|d| fd.obank().get(d)) else {
             return false;
         };
-        let constant = |i: int4| def.get_in(i).and_then(|c| fd.vbank().get(c)).is_some_and(|c| c.is_constant());
+        let constant = |i: int4| {
+            def.get_in(i)
+                .and_then(|c| fd.vbank().get(c))
+                .is_some_and(|c| c.is_constant())
+        };
         let next = match def.code() {
             OpCode::CPUI_COPY => def.get_in(0),
-            OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB | OpCode::CPUI_PTRSUB if constant(1) => def.get_in(0),
+            OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB | OpCode::CPUI_PTRSUB if constant(1) => {
+                def.get_in(0)
+            }
             OpCode::CPUI_PTRADD if constant(1) && constant(2) => def.get_in(0),
             _ => None,
         };
@@ -371,7 +425,9 @@ pub fn keeps_store_guard_input(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool
     o.code() == OpCode::CPUI_INDIRECT
         && o.is_indirect_store()
         && data.vbank().get(vn).is_some_and(|v| v.is_persist())
-        && o.get_out().and_then(|out| data.vbank().get(out)).is_some_and(|out| out.is_persist())
+        && o.get_out()
+            .and_then(|out| data.vbank().get(out))
+            .is_some_and(|out| out.is_persist())
 }
 
 /// Must `RulePropagateCopy` leave `vn`, a guarded global's stored value, as the
@@ -393,9 +449,12 @@ pub fn keeps_store_before_load(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool
         return false;
     };
     let self_copy = o.code() == OpCode::CPUI_COPY
-        && o.get_out().and_then(|w| data.vbank().get(w)).zip(data.vbank().get(vn)).is_some_and(|(w, v)| {
-            w.is_persist() && w.get_addr() == v.get_addr() && w.get_size() == v.get_size()
-        });
+        && o.get_out()
+            .and_then(|w| data.vbank().get(w))
+            .zip(data.vbank().get(vn))
+            .is_some_and(|(w, v)| {
+                w.is_persist() && w.get_addr() == v.get_addr() && w.get_size() == v.get_size()
+            });
     if !o.is_marker() && !self_copy {
         return false;
     }
@@ -414,7 +473,11 @@ pub fn keeps_store_before_load(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool
     let Some(start) = data.obank().get(copy).and_then(|o| o.get_parent()) else {
         return false;
     };
-    let (index, lo, hi) = (v.get_space().get_index() as u64, v.get_offset(), v.get_offset().wrapping_add(v.get_size() as u64));
+    let (index, lo, hi) = (
+        v.get_space().get_index() as u64,
+        v.get_offset(),
+        v.get_offset().wrapping_add(v.get_size() as u64),
+    );
     // Some(true): a LOAD that may read the global; Some(false): a write of it.
     let effect = |op: OpId| -> Option<bool> {
         let o = data.obank().get(op)?;
@@ -422,10 +485,19 @@ pub fn keeps_store_before_load(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool
             return None;
         }
         if o.code() == OpCode::CPUI_LOAD
-            && o.get_in(0).and_then(|s| data.vbank().get(s)).is_some_and(|s| s.get_offset() == index)
+            && o.get_in(0)
+                .and_then(|s| data.vbank().get(s))
+                .is_some_and(|s| s.get_offset() == index)
         {
-            let size = o.get_out().and_then(|w| data.vbank().get(w)).map_or(1, |w| w.get_size() as u64);
-            let reads = match o.get_in(1).and_then(|p| data.vbank().get(p)).filter(|p| p.is_constant()) {
+            let size = o
+                .get_out()
+                .and_then(|w| data.vbank().get(w))
+                .map_or(1, |w| w.get_size() as u64);
+            let reads = match o
+                .get_in(1)
+                .and_then(|p| data.vbank().get(p))
+                .filter(|p| p.is_constant())
+            {
                 Some(p) => p.get_offset() < hi && lo < p.get_offset().wrapping_add(size),
                 None => true,
             };
@@ -482,23 +554,45 @@ mod tests {
     #[test]
     fn load_crossing_requires_an_interior_overlapping_global_write() {
         use crate::context::{ArchContext, TypeOp};
-        use unlace_base::address::Address;
         use crate::cover::Cover;
         use crate::funcdata::FuncdataCoverCtx;
         use crate::varnode::varnode_flags;
-        use unlace_base::space::{addrspace_flags, spacetype, AddrSpaceManager, ConstantSpace, UniqueSpace};
+        use unlace_base::address::Address;
+        use unlace_base::space::{
+            AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
+        };
 
         for via_high in [false, true] {
             for global_offset in [0x8000, 0x9000] {
                 for writer_position in 0..5 {
                     let mut manager = AddrSpaceManager::new();
                     manager.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-                    manager.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
-                    let ram = Rc::new(AddrSpace::new(spacetype::IPTR_PROCESSOR, "ram", false, 8, 1, 2, addrspace_flags::hasphysical, 1, 1));
+                    manager
+                        .insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+                        .unwrap();
+                    let ram = Rc::new(AddrSpace::new(
+                        spacetype::IPTR_PROCESSOR,
+                        "ram",
+                        false,
+                        8,
+                        1,
+                        2,
+                        addrspace_flags::hasphysical,
+                        1,
+                        1,
+                    ));
                     manager.insert_space(Rc::clone(&ram)).unwrap();
                     let mut arch = ArchContext::new(manager);
                     arch.index_alias_guard = LEVEL_GLOBAL;
-                    let mut fd = Funcdata::new("f", "f", Rc::new(arch), Address::new(Rc::clone(&ram), 0x1000), 0x1000_0000, 0x40).unwrap();
+                    let mut fd = Funcdata::new(
+                        "f",
+                        "f",
+                        Rc::new(arch),
+                        Address::new(Rc::clone(&ram), 0x1000),
+                        0x1000_0000,
+                        0x40,
+                    )
+                    .unwrap();
                     fd.set_high_level();
                     let unique = Rc::clone(fd.get_arch().manage().get_unique_space().unwrap());
                     let root = fd.bblocks_root_pub();
@@ -507,8 +601,15 @@ mod tests {
                     let mut writer = None;
                     for position in 0..5 {
                         let is_load = position == 1;
-                        let op = fd.new_op(if is_load { 2 } else { 1 }, Address::new(Rc::clone(&ram), 0x1000 + position));
-                        let code = if is_load { OpCode::CPUI_LOAD } else { OpCode::CPUI_COPY };
+                        let op = fd.new_op(
+                            if is_load { 2 } else { 1 },
+                            Address::new(Rc::clone(&ram), 0x1000 + position),
+                        );
+                        let code = if is_load {
+                            OpCode::CPUI_LOAD
+                        } else {
+                            OpCode::CPUI_COPY
+                        };
                         fd.op_set_opcode(op, TypeOp::new(code, 0, "test"));
                         let output_address = if position == writer_position && !via_high {
                             Address::new(Rc::clone(&ram), global_offset)
@@ -518,7 +619,12 @@ mod tests {
                         let output = fd.new_varnode_out(4, &output_address, op).unwrap();
                         if position == writer_position {
                             writer = Some(output);
-                            if !via_high { fd.vbank_mut().get_mut(output).unwrap().set_flags_pub(varnode_flags::persist); }
+                            if !via_high {
+                                fd.vbank_mut()
+                                    .get_mut(output)
+                                    .unwrap()
+                                    .set_flags_pub(varnode_flags::persist);
+                            }
                         }
                         if is_load {
                             let space = fd.new_constant(8, ram.get_index() as u64);
@@ -527,27 +633,49 @@ mod tests {
                             fd.op_set_input(op, pointer, 1).unwrap();
                             loaded = Some(output);
                         } else {
-                            let input = if position == 3 { loaded.unwrap() } else { fd.new_constant(4, 1) };
+                            let input = if position == 3 {
+                                loaded.unwrap()
+                            } else {
+                                fd.new_constant(4, 1)
+                            };
                             fd.op_set_input(op, input, 0).unwrap();
                         }
                         fd.op_insert_end(op, block);
                     }
                     if via_high {
-                        let member = fd.new_varnode(4, &Address::new(Rc::clone(&ram), global_offset), None);
+                        let member =
+                            fd.new_varnode(4, &Address::new(Rc::clone(&ram), global_offset), None);
                         let member = fd.set_input_varnode(member).unwrap();
-                        fd.vbank_mut().get_mut(member).unwrap().set_flags_pub(varnode_flags::persist);
+                        fd.vbank_mut()
+                            .get_mut(member)
+                            .unwrap()
+                            .set_flags_pub(varnode_flags::persist);
                         let target = fd.vbank().get(writer.unwrap()).unwrap().get_high().unwrap();
                         let source = fd.vbank().get(member).unwrap().get_high().unwrap();
                         let mut updates = Vec::new();
-                        fd.with_high_split(|bank, context| bank.merge_internal(target, source, false, context, &mut |vn, high, group| updates.push((vn, high, group)))).unwrap();
-                        for (vn, high, group) in updates { fd.vbank_mut().get_mut(vn).unwrap().set_high(high, group); }
+                        fd.with_high_split(|bank, context| {
+                            bank.merge_internal(
+                                target,
+                                source,
+                                false,
+                                context,
+                                &mut |vn, high, group| updates.push((vn, high, group)),
+                            )
+                        })
+                        .unwrap();
+                        for (vn, high, group) in updates {
+                            fd.vbank_mut().get_mut(vn).unwrap().set_high(high, group);
+                        }
                     }
                     let loaded = loaded.unwrap();
                     let mut cover = Cover::new();
                     cover.rebuild(&FuncdataCoverCtx::new(&fd), loaded);
                     fd.vbank_mut().get_mut(loaded).unwrap().set_cover(cover);
-                    assert_eq!(load_crosses_global_store(&fd, loaded), writer_position == 2 && global_offset == 0x8000,
-                        "high={via_high}, offset={global_offset:x}, position={writer_position}");
+                    assert_eq!(
+                        load_crosses_global_store(&fd, loaded),
+                        writer_position == 2 && global_offset == 0x8000,
+                        "high={via_high}, offset={global_offset:x}, position={writer_position}"
+                    );
                 }
             }
         }

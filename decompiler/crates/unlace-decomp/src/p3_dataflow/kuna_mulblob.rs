@@ -32,7 +32,7 @@ use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 
 /// The widest extension output this module will leave un-structured.  A
@@ -51,9 +51,7 @@ fn is_size_fallback_array(ct: &Datatype, sz: int4) -> bool {
         return false;
     }
     match ct.get_array_base() {
-        Some(elem) => {
-            elem.get_size() == 1 && elem.get_metatype() == type_metatype::TYPE_UNKNOWN
-        }
+        Some(elem) => elem.get_size() == 1 && elem.get_metatype() == type_metatype::TYPE_UNKNOWN,
         None => false,
     }
 }
@@ -163,10 +161,13 @@ fn name_only_value(data: &Funcdata, vn: VarnodeId) -> bool {
     let Some(symbol) = data.vbank().get(vn).and_then(|v| v.kuna_symbol_entry()) else {
         return false;
     };
-    let Some(scope) = data.get_scope_local() else { return false };
-    let Some(symbol) = scope.database().try_symbol(symbol) else { return false };
-    !symbol.is_type_locked()
-        && symbol.get_flags() & crate::varnode::varnode_flags::namelock != 0
+    let Some(scope) = data.get_scope_local() else {
+        return false;
+    };
+    let Some(symbol) = scope.database().try_symbol(symbol) else {
+        return false;
+    };
+    !symbol.is_type_locked() && symbol.get_flags() & crate::varnode::varnode_flags::namelock != 0
 }
 
 #[cfg(test)]
@@ -177,7 +178,10 @@ mod tests {
     fn undefined_array(elems: int4) -> Datatype {
         let elem = Datatype::new(1, type_metatype::TYPE_UNKNOWN);
         let mut arr = Datatype::new(elems, type_metatype::TYPE_ARRAY);
-        arr.kind = crate::dtype::DatatypeKind::Array { arrayof: Rc::new(elem), arraysize: elems };
+        arr.kind = crate::dtype::DatatypeKind::Array {
+            arrayof: Rc::new(elem),
+            arraysize: elems,
+        };
         arr
     }
 
@@ -191,10 +195,16 @@ mod tests {
         // a recovered array of a real element type is not the fallback
         let elem = Datatype::new(1, type_metatype::TYPE_INT);
         let mut arr = Datatype::new(16, type_metatype::TYPE_ARRAY);
-        arr.kind = crate::dtype::DatatypeKind::Array { arrayof: Rc::new(elem), arraysize: 16 };
+        arr.kind = crate::dtype::DatatypeKind::Array {
+            arrayof: Rc::new(elem),
+            arraysize: 16,
+        };
         assert!(!is_size_fallback_array(&arr, 16));
         // a struct is piece-structured but is not an array
-        assert!(!is_size_fallback_array(&Datatype::new(16, type_metatype::TYPE_STRUCT), 16));
+        assert!(!is_size_fallback_array(
+            &Datatype::new(16, type_metatype::TYPE_STRUCT),
+            16
+        ));
     }
 
     /// Only integer arithmetic consumes a widened operand as a value; a LOAD,

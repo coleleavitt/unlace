@@ -1,9 +1,9 @@
 //! Equal-width aggregate CAST operations transfer object representations.
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype, DatatypeKind};
+use crate::dtype::{Datatype, DatatypeKind, type_metatype};
 use crate::funcdata::Funcdata;
-use unlace_num::opcodes::OpCode;
 use std::rc::Rc;
+use unlace_num::opcodes::OpCode;
 
 pub(crate) struct Transfer {
     pub input: VarnodeId,

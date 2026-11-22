@@ -27,7 +27,9 @@
 use std::rc::Rc;
 
 use unlace_decomp::bitfield::BitRange;
-use unlace_decomp::dtype::{flags, type_metatype, BitFieldTriple, Datatype, DatatypeKind, TypeBitField};
+use unlace_decomp::dtype::{
+    BitFieldTriple, Datatype, DatatypeKind, TypeBitField, flags, type_metatype,
+};
 
 fn bf(id: i32, byte_off: i32, byte_sz: i32, lsb: i32, nb: i32, big: bool) -> TypeBitField {
     let mut b = TypeBitField::new(
@@ -48,7 +50,10 @@ fn struct_with(bitfield: Vec<TypeBitField>, size: i32) -> Datatype {
     if !bitfield.is_empty() {
         s.flags |= flags::has_bitfields;
     }
-    s.kind = DatatypeKind::Struct { field: vec![], bitfield };
+    s.kind = DatatypeKind::Struct {
+        field: vec![],
+        bitfield,
+    };
     s
 }
 
@@ -171,12 +176,16 @@ fn r2_find_matching_be_multibyte_window_narrowing() {
             m.ident, want_id,
             "BE search returned the wrong field for byte{byte_off} lsb{lsb}"
         );
-        assert_eq!((m.byte_offset, m.least_sig_bit, m.num_bits), (byte_off, lsb, nb));
+        assert_eq!(
+            (m.byte_offset, m.least_sig_bit, m.num_bits),
+            (byte_off, lsb, nb)
+        );
     }
     // A partial range straddling byte0 lsb2 and lsb4 must return None (break on
     // overlapTest==4), not the nearest field.
     assert!(
-        s.find_matching_bit_field(&BitRange::new(0, 1, 3, 2, true)).is_none(),
+        s.find_matching_bit_field(&BitRange::new(0, 1, 3, 2, true))
+            .is_none(),
         "straddling query must not match a partial field"
     );
 }
@@ -203,8 +212,15 @@ fn r3_collect_upper_bound_boundary_is_strict() {
     // The collected set must be exactly {field1}, never {field0, field1}.
     let mut res = Vec::new();
     s.collect_bit_fields(0, &mut res, 1, 1);
-    assert_eq!(res.len(), 1, "field ending exactly at the query offset is excluded");
-    assert_eq!(res[0].bitfield.ident, 1, "iteration starts at the first not-yet-ended field");
+    assert_eq!(
+        res.len(),
+        1,
+        "field ending exactly at the query offset is excluded"
+    );
+    assert_eq!(
+        res[0].bitfield.ident, 1,
+        "iteration starts at the first not-yet-ended field"
+    );
 
     // Query offset 0 must include field0 (ends at 1 > 0) and break at field1
     // (byte 1 entirely above [0,1)).

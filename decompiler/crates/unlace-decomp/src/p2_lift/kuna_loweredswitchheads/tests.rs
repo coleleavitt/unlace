@@ -4,7 +4,9 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace};
+use unlace_base::space::{
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
+};
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
@@ -16,7 +18,8 @@ use crate::p2_lift::kuna_loweredswitch::ActionLowerSwitchDetect;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -35,11 +38,22 @@ fn build_manager() -> AddrSpaceManager {
 fn build_fd() -> Funcdata {
     let glb = Rc::new(ArchContext::new(build_manager()));
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
-    Funcdata::new("func", "func", glb, Address::new(ram, 0x1000), 0x10000000, 0x40).unwrap()
+    Funcdata::new(
+        "func",
+        "func",
+        glb,
+        Address::new(ram, 0x1000),
+        0x10000000,
+        0x40,
+    )
+    .unwrap()
 }
 
 fn ram(fd: &Funcdata, off: u64) -> Address {
-    Address::new(Rc::clone(fd.get_arch().manage().get_space_by_name("ram").unwrap()), off)
+    Address::new(
+        Rc::clone(fd.get_arch().manage().get_space_by_name("ram").unwrap()),
+        off,
+    )
 }
 
 fn new_block(fd: &mut Funcdata, off: u64) -> BlockId {
@@ -126,7 +140,12 @@ fn cascade(fd: &mut Funcdata, v: VarnodeId, shared: bool) -> BlockId {
 fn detect(fd: &mut Funcdata) -> (int4, Option<u64>) {
     let mut act = ActionLowerSwitchDetect::new(true, "base");
     let n = act.detect(fd);
-    let at = act.store().borrow().records(fd).first().map(|r| r.branch_addr.get_offset());
+    let at = act
+        .store()
+        .borrow()
+        .records(fd)
+        .first()
+        .map(|r| r.branch_addr.get_offset());
     (n, at)
 }
 
@@ -145,7 +164,11 @@ fn the_cascade_behind_an_unrelated_compare_is_found() {
     let v = switch_var(&mut fd, 4);
     decoy(&mut fd, v);
     cascade(&mut fd, v, false);
-    assert_eq!(detect(&mut fd), (1, Some(0x1001)), "the switch replaces the cascade head, not the decoy");
+    assert_eq!(
+        detect(&mut fd),
+        (1, Some(0x1001)),
+        "the switch replaces the cascade head, not the decoy"
+    );
 }
 
 #[test]
@@ -165,7 +188,11 @@ fn a_later_head_entered_twice_or_with_a_body_entered_from_outside_is_refused() {
     let head = cascade(&mut fd, v, false);
     let one = new_block(&mut fd, 0x0c00);
     fd.bblocks_mut().add_edge(one, head);
-    assert_eq!(detect(&mut fd), (1, Some(0x1001)), "a head block with one predecessor");
+    assert_eq!(
+        detect(&mut fd),
+        (1, Some(0x1001)),
+        "a head block with one predecessor"
+    );
 
     let mut fd = build_fd();
     let v = switch_var(&mut fd, 4);
@@ -175,7 +202,11 @@ fn a_later_head_entered_twice_or_with_a_body_entered_from_outside_is_refused() {
     let two = new_block(&mut fd, 0x0d00);
     fd.bblocks_mut().add_edge(one, head);
     fd.bblocks_mut().add_edge(two, head);
-    assert_eq!(detect(&mut fd), (0, None), "a head block with two predecessors");
+    assert_eq!(
+        detect(&mut fd),
+        (0, None),
+        "a head block with two predecessors"
+    );
 
     let mut fd = build_fd();
     let v = switch_var(&mut fd, 4);
@@ -185,5 +216,9 @@ fn a_later_head_entered_twice_or_with_a_body_entered_from_outside_is_refused() {
     let body = fd.bblocks_ref().block(body).get_out(1);
     let other = new_block(&mut fd, 0x0c00);
     fd.bblocks_mut().add_edge(other, body);
-    assert_eq!(detect(&mut fd), (0, None), "a case body entered from outside the tree");
+    assert_eq!(
+        detect(&mut fd),
+        (0, None),
+        "a case body entered from outside the tree"
+    );
 }

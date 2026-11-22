@@ -11,9 +11,7 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::marshal::{Decoder, Encoder, PackedDecode, PackedEncode};
-use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace,
-};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, ConstantSpace, addrspace_flags, spacetype};
 use unlace_base::types::Wrap;
 
 use unlace_sleigh::context::FixedHandle;
@@ -22,8 +20,8 @@ use unlace_sleigh::slghpatexpress::{
 };
 use unlace_sleigh::slghpattern::InstructionPattern;
 use unlace_sleigh::slghsymbol::{
-    sla, ConstructTplHandle, Constructor, ConstructorRef, ContextChange, ContextOp,
-    SleighBaseTrans, SymbolKind, SymbolTable, SymbolWalker, SymbolWalkerChange,
+    ConstructTplHandle, Constructor, ConstructorRef, ContextChange, ContextOp, SleighBaseTrans,
+    SymbolKind, SymbolTable, SymbolWalker, SymbolWalkerChange, sla,
 };
 
 // -- harness -----------------------------------------------------------------
@@ -317,8 +315,16 @@ fn verify_w2sym_operand_decode_all_attributes_and_byte_roundtrip() {
         panic!("expected operand symbol");
     };
     // every attribute after the skipped ATTRIB_ID must have been picked up
-    assert_eq!(op.get_defining_symbol(), Some(2), "SUBSYM lost by the attribute loop");
-    assert_eq!(op.get_relative_offset(), 5, "OFF lost by the attribute loop");
+    assert_eq!(
+        op.get_defining_symbol(),
+        Some(2),
+        "SUBSYM lost by the attribute loop"
+    );
+    assert_eq!(
+        op.get_relative_offset(),
+        5,
+        "OFF lost by the attribute loop"
+    );
     assert_eq!(op.get_offset_base(), -1);
     assert_eq!(op.get_minimum_length(), 2);
     assert!(op.is_code_address(), "CODE lost by the attribute loop");

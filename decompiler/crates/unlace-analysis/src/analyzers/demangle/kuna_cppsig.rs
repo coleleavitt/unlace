@@ -90,11 +90,11 @@
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use object::read::{Object, ObjectSection, ObjectSymbol};
 use object::SymbolKind;
+use object::read::{Object, ObjectSection, ObjectSymbol};
 
 use unlace_base::types::{int4, uint4};
-use unlace_decomp::dtype::{type_metatype, Datatype, TypeFactory};
+use unlace_decomp::dtype::{Datatype, TypeFactory, type_metatype};
 use unlace_decomp::fspec::PrototypePieces;
 
 use crate::demangle::demangle_raw;
@@ -189,8 +189,12 @@ impl AnalysisPass for CppSigPass {
                 continue;
             };
             if hidden.contains(addr) {
-                let Ok(void) = types.get_type_void() else { continue };
-                let Ok(retptr) = types.get_type_pointer(ptr, void, word_size) else { continue };
+                let Ok(void) = types.get_type_void() else {
+                    continue;
+                };
+                let Ok(retptr) = types.get_type_pointer(ptr, void, word_size) else {
+                    continue;
+                };
                 pieces.intypes.insert(0, retptr);
                 pieces.innames.insert(0, "rethidden".to_string());
                 if pieces.first_var_arg_slot >= 0 {
@@ -228,7 +232,8 @@ fn hidden_return_entries(ctx: &AnalysisCtx) -> HashSet<u64> {
                 return None;
             }
             let data = s.data().ok()?;
-            data.get((end - 3 - lo) as usize..(end - lo) as usize).map(|b| b.to_vec())
+            data.get((end - 3 - lo) as usize..(end - lo) as usize)
+                .map(|b| b.to_vec())
         });
         if tail.as_deref() == Some(&[0xc2, 0x04, 0x00]) {
             out.insert(sym.address());
@@ -311,7 +316,9 @@ fn class_scopes<'a>(file: &object::File, decls: impl Iterator<Item = &'a Decl>) 
         }
         // `_ZTVN7leveldb5CacheE` demangles to `vtable for leveldb::Cache`; the
         // class is the text after the `for `.
-        let Some(dem) = demangle_raw(name) else { continue };
+        let Some(dem) = demangle_raw(name) else {
+            continue;
+        };
         if let Some((_, cls)) = dem.split_once(" for ") {
             let cls = cls.trim();
             if !cls.is_empty() && !cls.contains('(') {
@@ -695,9 +702,17 @@ fn build_pieces(
         // recovery.
         return None;
     }
-    let first_var_arg_slot = if decl.varargs { intypes.len() as int4 } else { -1 };
+    let first_var_arg_slot = if decl.varargs {
+        intypes.len() as int4
+    } else {
+        -1
+    };
     let outtype = if decl.returns_pointer {
-        Some(types.get_type_pointer(ptr, types.get_type_void().ok()?, word_size).ok()?)
+        Some(
+            types
+                .get_type_pointer(ptr, types.get_type_void().ok()?, word_size)
+                .ok()?,
+        )
     } else {
         None
     };
@@ -779,22 +794,25 @@ fn build_param_type(
             break;
         }
     }
-    let base = match primitive_type(base_text, types) { Some(prim) => {
-        prim?
-    } _ => if indirection == 0 {
-        // A by-value aggregate whose width the mangling does not carry.
-        return None;
-    } else {
-        // A class/struct/enum name, reachable only as a pointee. The bare
-        // innermost component is what Ghidra names the placeholder structure and
-        // what the DWARF ground truth spells (`Slice *`, not `leveldb::Slice *`).
-        let comps = split_top_level(base_text);
-        let name = strip_template_args(comps[comps.len() - 1]);
-        if name.is_empty() || !is_identifier(&name) {
-            return None;
+    let base = match primitive_type(base_text, types) {
+        Some(prim) => prim?,
+        _ => {
+            if indirection == 0 {
+                // A by-value aggregate whose width the mangling does not carry.
+                return None;
+            } else {
+                // A class/struct/enum name, reachable only as a pointee. The bare
+                // innermost component is what Ghidra names the placeholder structure and
+                // what the DWARF ground truth spells (`Slice *`, not `leveldb::Slice *`).
+                let comps = split_top_level(base_text);
+                let name = strip_template_args(comps[comps.len() - 1]);
+                if name.is_empty() || !is_identifier(&name) {
+                    return None;
+                }
+                class_record(types, &name)?
+            }
         }
-        class_record(types, &name)?
-    }};
+    };
     let mut ty = base;
     for _ in 0..indirection {
         ty = types.get_type_pointer(ptr, ty, word_size).ok()?;
@@ -895,12 +913,16 @@ pub fn select(facts: CppSigFacts, inferred: bool) -> Vec<SelectedSig> {
         msvc: false,
     };
     let mut out: Vec<SelectedSig> = proven.into_iter().map(plain).collect();
-    out.extend(msvc_sigs.into_iter().map(|(addr, pieces, model)| SelectedSig {
-        addr,
-        pieces,
-        model,
-        msvc: true,
-    }));
+    out.extend(
+        msvc_sigs
+            .into_iter()
+            .map(|(addr, pieces, model)| SelectedSig {
+                addr,
+                pieces,
+                model,
+                msvc: true,
+            }),
+    );
     if inferred {
         out.extend(amb.into_iter().map(plain));
     }

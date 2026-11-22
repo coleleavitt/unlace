@@ -16,9 +16,9 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
@@ -26,23 +26,33 @@ use unlace_console::ifaceterm::ConsoleCommands;
 const ENTRY: &str = "sub_1000005b0";
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn bootstrap(fixture: &str) -> ConsoleProgram {
-    let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(fixture);
+    let bin = repo_root()
+        .join("decompiler/crates/unlace-analysis/tests/fixtures")
+        .join(fixture);
     let specs = repo_root().join("specs");
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
 fn decompile(prog: ConsoleProgram, name: &str) -> String {
-    let cmds: Vec<String> = [format!("load function {name}"), "decompile".into(), "print C".into()]
-        .into_iter()
-        .collect();
+    let cmds: Vec<String> = [
+        format!("load function {name}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .into_iter()
+    .collect();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -75,7 +85,10 @@ fn the_lc_main_entry_is_named_main() {
     // (`int4` in the console, `int` under the CLI default), while the slot names
     // and their order are what this pass actually asserts.
     for want in ["main", "argc", "argv"] {
-        assert!(body.contains(want), "the {want} slot must be declared; got:\n{body}");
+        assert!(
+            body.contains(want),
+            "the {want} slot must be declared; got:\n{body}"
+        );
     }
     assert!(
         !body.contains("a0"),
@@ -94,7 +107,10 @@ fn the_lc_main_entry_is_named_main() {
 #[test]
 fn a_named_entry_keeps_its_own_name() {
     let prog = bootstrap("macho_imports");
-    assert!(prog.lookup_symbol("_main").is_some(), "the image's own _main must survive");
+    assert!(
+        prog.lookup_symbol("_main").is_some(),
+        "the image's own _main must survive"
+    );
     assert!(
         prog.lookup_symbol("main").is_none(),
         "the pass must not claim an entry that already carries a symbol"

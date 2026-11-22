@@ -42,7 +42,9 @@ fn label_loops_and_doms(g: &mut BlockGraph, root: BlockId) {
 /// count (always 0 here since the standalone negate path is pure-topology).
 fn collapse(g: &mut BlockGraph, root: BlockId) -> int4 {
     let mut collapse = CollapseStructure::new(g, root);
-    collapse.collapse_all().expect("collapse_all should succeed on a reducible CFG");
+    collapse
+        .collapse_all()
+        .expect("collapse_all should succeed on a reducible CFG");
     collapse.get_change_count()
 }
 
@@ -360,22 +362,23 @@ fn new_block_switch_stub_is_err() {
 // is cut down to a single input.  No function-name / address special-casing — the
 // pattern is recognized purely by topology + the shared condition.
 
+use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_num::opcodes::OpCode;
-use std::rc::Rc;
 
-use crate::dtype::{type_metatype, Datatype};
+use crate::context::{ArchContext, OpId, TypeOp, VarnodeId};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::op::pcodeop_flags;
-use crate::context::{ArchContext, OpId, TypeOp, VarnodeId};
 
 fn cj_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -415,13 +418,18 @@ fn cj_flags(opc: OpCode) -> u32 {
 fn cj_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
     let ram = cj_ram(fd);
     let op = fd.new_op(inputs, Address::new(ram, off));
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, cj_flags(opc), format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, cj_flags(opc), format!("{opc:?}")));
     op
 }
 
 fn cj_vn(fd: &mut Funcdata, off: u64) -> VarnodeId {
     let ram = cj_ram(fd);
-    fd.vbank_mut().create(4, Address::new(ram, off), Rc::new(Datatype::new(4, type_metatype::TYPE_UNKNOWN)))
+    fd.vbank_mut().create(
+        4,
+        Address::new(ram, off),
+        Rc::new(Datatype::new(4, type_metatype::TYPE_UNKNOWN)),
+    )
 }
 
 #[test]
@@ -514,20 +522,38 @@ fn conditional_join_execute_joins_split_condition() {
 
     // Match + execute the join (mirrors ActionNodeJoin's inner call).
     let mut cj = ConditionalJoin::new();
-    assert!(cj.match_blocks(block1, block2, &fd), "split-condition pattern must match");
-    cj.execute(&mut fd).expect("ConditionalJoin::execute must succeed (no longer a stub)");
+    assert!(
+        cj.match_blocks(block1, block2, &fd),
+        "split-condition pattern must match"
+    );
+    cj.execute(&mut fd)
+        .expect("ConditionalJoin::execute must succeed (no longer a stub)");
 
     // A new join block was created (nodeJoinCreateBlock).
-    assert_eq!(fd.bblocks_get_size(), n_blocks_before + 1, "execute must add one join block");
+    assert_eq!(
+        fd.bblocks_get_size(),
+        n_blocks_before + 1,
+        "execute must add one join block"
+    );
 
     // The duplicate CBRANCH (cbr2) was destroyed (marked dead, unlinked from its
     // block); the surviving one (cbr1) is still alive.  (opDestroy marks dead +
     // removes from parent; the op shell stays in the bank per the W3-varnode boundary.)
     let cbr2_op = fd.obank().get(cbr2).expect("cbr2 shell remains in bank");
-    assert!(cbr2_op.is_dead(), "moveCbranch must opDestroy (mark dead) the duplicate CBRANCH");
-    assert_eq!(cbr2_op.get_parent(), None, "the destroyed CBRANCH is removed from its block");
+    assert!(
+        cbr2_op.is_dead(),
+        "moveCbranch must opDestroy (mark dead) the duplicate CBRANCH"
+    );
+    assert_eq!(
+        cbr2_op.get_parent(),
+        None,
+        "the destroyed CBRANCH is removed from its block"
+    );
     let alive: Vec<_> = fd.obank().iter_alive().collect();
-    assert!(!alive.contains(&cbr2), "the duplicate CBRANCH is off the alive list");
+    assert!(
+        !alive.contains(&cbr2),
+        "the duplicate CBRANCH is off the alive list"
+    );
     assert!(alive.contains(&cbr1), "the surviving CBRANCH stays alive");
     assert_eq!(
         fd.obank().get(cbr1).unwrap().code(),
@@ -538,12 +564,19 @@ fn conditional_join_execute_joins_split_condition() {
     // The surviving CBRANCH now lives in the new join block (opUninsert+opInsertEnd).
     let cbr1_parent = fd.obank().get(cbr1).unwrap().get_parent();
     assert!(cbr1_parent.is_some());
-    assert_ne!(cbr1_parent, Some(block1), "the CBRANCH moved out of block1 into the join block");
+    assert_ne!(
+        cbr1_parent,
+        Some(block1),
+        "the CBRANCH moved out of block1 into the join block"
+    );
 
     // exita's MULTIEQUAL was cut down: with vn1==vn2? no — va1 != va2, so the hi
     // input is removed and lo set to the merged Varnode -> numInput drops to 1 and
     // the op is rewritten to a COPY (cutDownMultiequals).
-    assert!(fd.obank().get(mq).is_some(), "the exit merge op survives (rewritten)");
+    assert!(
+        fd.obank().get(mq).is_some(),
+        "the exit merge op survives (rewritten)"
+    );
     assert_eq!(
         fd.obank().get(mq).unwrap().num_input(),
         1,
@@ -576,7 +609,16 @@ fn cj_build_split(
     fd: &mut Funcdata,
     same_exit_merge: bool, // exita MULTIEQUAL uses the SAME varnode on both edges
     extra_exita_preds: usize, // extra predecessors (and MULTIEQUAL inputs) on exita
-) -> (BlockId, BlockId, BlockId, BlockId, BlockId, OpId, OpId, OpId) {
+) -> (
+    BlockId,
+    BlockId,
+    BlockId,
+    BlockId,
+    BlockId,
+    OpId,
+    OpId,
+    OpId,
+) {
     let root = fd.bblocks_root_pub();
     let entry = fd.bblocks_mut().new_block_basic(root);
     let block1 = fd.bblocks_mut().new_block_basic(root);
@@ -689,13 +731,21 @@ fn cj_cutdown_same_varnode_branch_no_mergeneed_lookup() {
         cj_build_split(&mut fd, /*same_exit_merge=*/ true, /*extra=*/ 0);
 
     let mut cj = ConditionalJoin::new();
-    assert!(cj.match_blocks(block1, block2, &fd), "split-condition pattern must match");
+    assert!(
+        cj.match_blocks(block1, block2, &fd),
+        "split-condition pattern must match"
+    );
     // If the port wrongly looked up mergeneed on the vn1==vn2 path it would panic
     // ("mergeneed entry missing"); a faithful execute completes.
-    cj.execute(&mut fd).expect("execute must not consult mergeneed on the vn1==vn2 cutdown branch");
+    cj.execute(&mut fd)
+        .expect("execute must not consult mergeneed on the vn1==vn2 cutdown branch");
 
     // 2-input merge of identical varnodes -> opRemoveInput(hi) -> 1 input -> COPY.
-    assert_eq!(fd.obank().get(mq).unwrap().num_input(), 1, "same-varnode merge collapses to 1 input");
+    assert_eq!(
+        fd.obank().get(mq).unwrap().num_input(),
+        1,
+        "same-varnode merge collapses to 1 input"
+    );
     assert_eq!(
         fd.obank().get(mq).unwrap().code(),
         OpCode::CPUI_COPY,
@@ -723,8 +773,12 @@ fn cj_movecbranch_shared_condition_uses_vn1_not_mergeneed() {
     );
 
     let mut cj = ConditionalJoin::new();
-    assert!(cj.match_blocks(block1, block2, &fd), "split-condition pattern must match");
-    cj.execute(&mut fd).expect("execute must take the vn1==vn2 moveCbranch branch without a lookup");
+    assert!(
+        cj.match_blocks(block1, block2, &fd),
+        "split-condition pattern must match"
+    );
+    cj.execute(&mut fd)
+        .expect("execute must take the vn1==vn2 moveCbranch branch without a lookup");
 
     // The surviving CBRANCH still reads the shared condition (vn = vn1), and the
     // duplicate was destroyed.
@@ -733,7 +787,10 @@ fn cj_movecbranch_shared_condition_uses_vn1_not_mergeneed() {
         shared_cond,
         "moveCbranch repoints the surviving CBRANCH to vn1 (the shared condition)"
     );
-    assert!(fd.obank().get(cbr2).unwrap().is_dead(), "the duplicate CBRANCH is destroyed");
+    assert!(
+        fd.obank().get(cbr2).unwrap().is_dead(),
+        "the duplicate CBRANCH is destroyed"
+    );
 }
 
 /// ADVERSARIAL 3 (w10-nodejoin-compare): the numInput()==1 boundary in
@@ -748,10 +805,17 @@ fn cj_cutdown_keeps_multiequal_when_extra_pred_remains() {
     let (_entry, block1, block2, _exita, _exitb, _cbr1, _cbr2, mq) =
         cj_build_split(&mut fd, /*same_exit_merge=*/ false, /*extra=*/ 1);
 
-    assert_eq!(fd.obank().get(mq).unwrap().num_input(), 3, "precondition: 3-input exit MULTIEQUAL");
+    assert_eq!(
+        fd.obank().get(mq).unwrap().num_input(),
+        3,
+        "precondition: 3-input exit MULTIEQUAL"
+    );
 
     let mut cj = ConditionalJoin::new();
-    assert!(cj.match_blocks(block1, block2, &fd), "split-condition pattern must match");
+    assert!(
+        cj.match_blocks(block1, block2, &fd),
+        "split-condition pattern must match"
+    );
     cj.execute(&mut fd).expect("execute");
 
     // block1+block2 edges collapse to one merged input; the extra pred survives.
@@ -773,8 +837,7 @@ fn conditional_join_preserves_phis_after_an_arithmetic_op() {
         for extra in [0, 1] {
             for reverse in [false, true] {
                 let mut fd = cj_fd();
-                let (_, block1, block2, exit, _, _, _, phi) =
-                    cj_build_split(&mut fd, same, extra);
+                let (_, block1, block2, exit, _, _, _, phi) = cj_build_split(&mut fd, same, extra);
                 let original: Vec<_> = (0..fd.obank().get(phi).unwrap().num_input())
                     .map(|slot| fd.obank().get(phi).unwrap().get_in(slot).unwrap())
                     .collect();
@@ -785,13 +848,20 @@ fn conditional_join_preserves_phis_after_an_arithmetic_op() {
                 fd.op_set_input(add, offset, 1).unwrap();
                 let output = fd.new_unique_out(4, add).unwrap();
                 fd.op_insert_before(add, phi);
-                let (first, second) = if reverse { (block2, block1) } else { (block1, block2) };
+                let (first, second) = if reverse {
+                    (block2, block1)
+                } else {
+                    (block1, block2)
+                };
                 let mut join = ConditionalJoin::new();
                 assert!(join.match_blocks(first, second, &fd));
                 join.execute(&mut fd).unwrap();
 
                 let surviving = fd.obank().get(phi).unwrap();
-                assert_eq!(surviving.num_input(), fd.bblocks_ref().block(exit).size_in());
+                assert_eq!(
+                    surviving.num_input(),
+                    fd.bblocks_ref().block(exit).size_in()
+                );
                 if extra != 0 {
                     assert_eq!(surviving.get_in(1), Some(original[2]));
                 }
@@ -802,10 +872,24 @@ fn conditional_join_preserves_phis_after_an_arithmetic_op() {
                     let def = fd.vbank().get(merged).unwrap().get_def().unwrap();
                     let new_phi = fd.obank().get(def).unwrap();
                     assert_eq!(new_phi.code(), OpCode::CPUI_MULTIEQUAL);
-                    let expected = if reverse { [original[1], original[0]] } else { [original[0], original[1]] };
-                    assert_eq!([new_phi.get_in(0).unwrap(), new_phi.get_in(1).unwrap()], expected);
+                    let expected = if reverse {
+                        [original[1], original[0]]
+                    } else {
+                        [original[0], original[1]]
+                    };
+                    assert_eq!(
+                        [new_phi.get_in(0).unwrap(), new_phi.get_in(1).unwrap()],
+                        expected
+                    );
                 }
-                assert_eq!(surviving.code(), if extra == 0 { OpCode::CPUI_COPY } else { OpCode::CPUI_MULTIEQUAL });
+                assert_eq!(
+                    surviving.code(),
+                    if extra == 0 {
+                        OpCode::CPUI_COPY
+                    } else {
+                        OpCode::CPUI_MULTIEQUAL
+                    }
+                );
                 let kept = fd.obank().get(add).unwrap();
                 assert_eq!(kept.code(), OpCode::CPUI_INT_ADD);
                 assert_eq!(kept.get_out(), Some(output));
@@ -845,7 +929,10 @@ fn is_complex_resolves_through_block_copy() {
     let mut complex = std::collections::BTreeSet::new();
     complex.insert(basic);
     let cs = CollapseStructure::new(&mut g, root).with_complex_blocks(complex);
-    assert!(cs.is_complex(copyleaf), "marked basic -> complex through the copy pointer");
+    assert!(
+        cs.is_complex(copyleaf),
+        "marked basic -> complex through the copy pointer"
+    );
 }
 
 #[test]
@@ -872,12 +959,20 @@ fn is_complex_blocklist_is_unconditionally_complex() {
     let copyleaf = g.new_block_copy(root, basic); // trivial front leaf
     let tail = g.new_block(root);
     g.add_edge(copyleaf, tail);
-    let list = g.new_block_list(root, &[copyleaf, tail]).expect("new_block_list");
+    let list = g
+        .new_block_list(root, &[copyleaf, tail])
+        .expect("new_block_list");
 
     // `basic` is NOT in complex_blocks -> the front leaf alone would say false.
     let cs = CollapseStructure::new(&mut g, root);
-    assert!(!cs.is_complex(copyleaf), "the front leaf itself is not complex");
-    assert!(cs.is_complex(list), "a BlockList is unconditionally complex (base isComplex)");
+    assert!(
+        !cs.is_complex(copyleaf),
+        "the front leaf itself is not complex"
+    );
+    assert!(
+        cs.is_complex(list),
+        "a BlockList is unconditionally complex (base isComplex)"
+    );
 }
 
 #[test]
@@ -896,7 +991,10 @@ fn is_complex_blockif_is_unconditionally_complex() {
     let ifblk = g.new_block_if(root, cond, clause);
 
     let cs = CollapseStructure::new(&mut g, root);
-    assert!(cs.is_complex(ifblk), "a BlockIf is unconditionally complex (base isComplex)");
+    assert!(
+        cs.is_complex(ifblk),
+        "a BlockIf is unconditionally complex (base isComplex)"
+    );
 }
 
 #[test]
@@ -916,7 +1014,9 @@ fn is_complex_condition_delegates_to_component_zero() {
     g.add_edge(b1, clause);
     g.add_edge(b2, clause);
     g.add_edge(b2, exit);
-    let cond = g.new_block_condition(root, b1, b2).expect("new_block_condition");
+    let cond = g
+        .new_block_condition(root, b1, b2)
+        .expect("new_block_condition");
 
     // Mark only the SECOND component's basic complex: the condition still
     // delegates to component 0 -> not complex.
@@ -933,7 +1033,10 @@ fn is_complex_condition_delegates_to_component_zero() {
     let mut complex = std::collections::BTreeSet::new();
     complex.insert(basic1);
     let cs = CollapseStructure::new(&mut g, root).with_complex_blocks(complex);
-    assert!(cs.is_complex(cond), "complex getBlock(0) -> the condition is complex");
+    assert!(
+        cs.is_complex(cond),
+        "complex getBlock(0) -> the condition is complex"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -1000,9 +1103,7 @@ fn prefix_only(bb: BlockId) -> crate::p8_structure::kuna_condfold::CondFoldSets 
 
 /// A `CondFoldSets` admitting each `(bb, scored_statements)` under **Rule B**
 /// (statement shape) only.
-fn shape_only(
-    entries: &[(BlockId, int4)],
-) -> crate::p8_structure::kuna_condfold::CondFoldSets {
+fn shape_only(entries: &[(BlockId, int4)]) -> crate::p8_structure::kuna_condfold::CondFoldSets {
     let mut s = crate::p8_structure::kuna_condfold::CondFoldSets::default();
     for &(bb, n) in entries {
         // `printed` is not consulted at the fold site (the printed-width budget is

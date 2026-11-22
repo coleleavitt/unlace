@@ -23,20 +23,21 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{Action, ActionContext};
-use crate::dtype::{type_metatype, Datatype};
-use crate::funcdata::Funcdata;
 use crate::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
+use crate::dtype::{Datatype, type_metatype};
+use crate::funcdata::Funcdata;
 
 fn build_manager(big: bool) -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -71,7 +72,8 @@ fn unk(size: int4) -> Rc<Datatype> {
 fn mk_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
     let r = ram(fd);
     let op = fd.new_op(inputs, Address::new(r, off));
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
     op
 }
 
@@ -123,7 +125,14 @@ fn load_op(fd: &mut Funcdata, bl: BlockId, off: u64, ptr: VarnodeId, out_off: u6
 }
 
 /// `ptr = INT_ADD(base, #cst)` placed in `bl`; returns the output ptr varnode.
-fn add_const(fd: &mut Funcdata, bl: BlockId, off: u64, base: VarnodeId, cst: u64, out_off: u64) -> VarnodeId {
+fn add_const(
+    fd: &mut Funcdata,
+    bl: BlockId,
+    off: u64,
+    base: VarnodeId,
+    cst: u64,
+    out_off: u64,
+) -> VarnodeId {
     let op = mk_op(fd, 2, off, OpCode::CPUI_INT_ADD);
     fd.op_set_input(op, base, 0).unwrap();
     let c = fd.new_constant(8, cst);
@@ -244,7 +253,11 @@ fn is_canary_compare_true_for_notequal_of_two_canary_loads() {
     let mut fd = build_fd();
     let (_h, cbr, _fail) = build_canary_epilogue(&mut fd);
     let res = is_canary_compare(cbr, &fd);
-    assert_eq!(res, Some(true), "INT_NOTEQUAL canary compare, isNotEqual=true");
+    assert_eq!(
+        res,
+        Some(true),
+        "INT_NOTEQUAL canary compare, isNotEqual=true"
+    );
 }
 
 #[test]
@@ -334,7 +347,11 @@ fn action_strips_canary_edge_when_on() {
     // pipeline — is realized.)
     let mut fd = build_fd();
     let (h, _cbr, _fail) = build_canary_epilogue(&mut fd);
-    assert_eq!(fd.bblocks_ref().block(h).size_out(), 2, "header has both edges before strip");
+    assert_eq!(
+        fd.bblocks_ref().block(h).size_out(),
+        2,
+        "header has both edges before strip"
+    );
     let mut act = ActionStripStackGuard::new(true, "stackptrflow");
     let mut ctx = ActionContext::default();
     let res = act.apply(&mut fd, &mut ctx);

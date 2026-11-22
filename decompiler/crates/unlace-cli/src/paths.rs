@@ -28,7 +28,9 @@ use std::process::Command;
 /// A non-empty environment variable read as a path (`OsString`, so a Windows
 /// path that is not valid UTF-8 still resolves).
 fn env_path(var: &str) -> Option<PathBuf> {
-    env::var_os(var).filter(|v| !v.is_empty()).map(PathBuf::from)
+    env::var_os(var)
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
 }
 
 /// The directory the running `unlace` binary lives in (its built-binary siblings).
@@ -155,8 +157,7 @@ pub fn require_specs_dir() -> Result<PathBuf, String> {
 
 /// How to point kuna at a SLEIGH tree, for the failures that surface after the
 /// directory itself resolved (a checkout that never ran `make specs`).
-pub const SPECS_HINT: &str =
-    "set KUNA_SPECS to a specs/ directory (from the kuna-v<ver>-specs release \
+pub const SPECS_HINT: &str = "set KUNA_SPECS to a specs/ directory (from the kuna-v<ver>-specs release \
      archive), or run `make specs` in a checkout";
 
 /// The directories [`binary`] probes, in order.
@@ -199,7 +200,10 @@ fn probe_binary(dir: &Path, name: &str) -> Option<PathBuf> {
 
 /// A comma-separated rendering of a probe list, for a diagnostic.
 fn joined(dirs: &[PathBuf]) -> String {
-    dirs.iter().map(|d| d.display().to_string()).collect::<Vec<_>>().join(", ")
+    dirs.iter()
+        .map(|d| d.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// The XML datatest corpus directory.
@@ -281,10 +285,16 @@ fn builtin(env_var: &str, subcommand: &'static str) -> Result<Program, String> {
                 path.display()
             ));
         }
-        return Ok(Program { path, subcommand: None });
+        return Ok(Program {
+            path,
+            subcommand: None,
+        });
     }
     let path = env::current_exe().map_err(|e| format!("cannot locate the kuna binary: {e}"))?;
-    Ok(Program { path, subcommand: Some(subcommand) })
+    Ok(Program {
+        path,
+        subcommand: Some(subcommand),
+    })
 }
 
 /// The decompiler console `unlace decompile` and `unlace catalog` drive.
@@ -336,8 +346,14 @@ mod tests {
         let dir = sandbox("bare");
         std::fs::write(dir.join("decomp_dbg"), b"").expect("write");
         std::fs::write(dir.join("decomp_dbg.exe"), b"").expect("write");
-        assert_eq!(probe_binary_with(&dir, "decomp_dbg", ".exe"), Some(dir.join("decomp_dbg")));
-        assert_eq!(probe_binary_with(&dir, "decomp_dbg", ""), Some(dir.join("decomp_dbg")));
+        assert_eq!(
+            probe_binary_with(&dir, "decomp_dbg", ".exe"),
+            Some(dir.join("decomp_dbg"))
+        );
+        assert_eq!(
+            probe_binary_with(&dir, "decomp_dbg", ""),
+            Some(dir.join("decomp_dbg"))
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -359,7 +375,9 @@ mod tests {
             Some(PathBuf::from("/r"))
         );
         assert_eq!(
-            in_tree_root(Path::new("/r/decompiler/target/x86_64-pc-windows-msvc/release")),
+            in_tree_root(Path::new(
+                "/r/decompiler/target/x86_64-pc-windows-msvc/release"
+            )),
             Some(PathBuf::from("/r"))
         );
         assert_eq!(
@@ -372,7 +390,10 @@ mod tests {
     /// pop must be refused rather than reported.
     #[test]
     fn an_extracted_archive_has_no_repo_root() {
-        assert_eq!(in_tree_root(Path::new("/c/kuna-v1.329-windows-x86_64")), None);
+        assert_eq!(
+            in_tree_root(Path::new("/c/kuna-v1.329-windows-x86_64")),
+            None
+        );
         assert_eq!(in_tree_root(Path::new("/usr/local/bin")), None);
         assert_eq!(in_tree_root(Path::new("/")), None);
         // `target` alone is not the marker -- its parent must be `decompiler`.
@@ -387,8 +408,11 @@ mod tests {
         std::fs::create_dir_all(&bindir).expect("create the extracted binary dir");
         std::fs::create_dir_all(root.join("specs").join("Ghidra").join("Processors"))
             .expect("create the extracted specs tree");
-        let candidates =
-            vec![bindir.join("specs"), root.join("specs"), root.join("nowhere").join("specs")];
+        let candidates = vec![
+            bindir.join("specs"),
+            root.join("specs"),
+            root.join("nowhere").join("specs"),
+        ];
         assert_eq!(first_spec_tree(&candidates), Some(root.join("specs")));
         assert!(!is_spec_tree(&bindir.join("specs")));
         let _ = std::fs::remove_dir_all(&root);

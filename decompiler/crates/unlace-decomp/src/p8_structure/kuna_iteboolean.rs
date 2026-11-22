@@ -133,7 +133,9 @@ pub struct ActionIteBoolean {
 impl ActionIteBoolean {
     /// Construct in group `g`.
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionIteBoolean { base: ActionBase::new(0, "iteboolean", g) })
+        Box::new(ActionIteBoolean {
+            base: ActionBase::new(0, "iteboolean", g),
+        })
     }
 }
 
@@ -148,7 +150,9 @@ impl Action for ActionIteBoolean {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionIteBoolean { base: self.base.clone() }))
+        Some(Box::new(ActionIteBoolean {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // P0 assertion `option iteboolean on|off`, carried on the Architecture

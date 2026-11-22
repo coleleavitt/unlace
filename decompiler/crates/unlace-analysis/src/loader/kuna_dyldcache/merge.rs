@@ -18,8 +18,8 @@
 //! first. Export tries and data-in-code are not carried: every export of a
 //! cache image is also an external definition in its symbol table.
 
-use super::extract::{self, align, put_u32, put_u64, ImageLayout, Linkedit, PAGE};
-use super::{u32_at, xrefs, DyldCache};
+use super::extract::{self, ImageLayout, Linkedit, PAGE, align, put_u32, put_u64};
+use super::{DyldCache, u32_at, xrefs};
 
 const N_STAB: u8 = 0xe0;
 const N_TYPE: u8 = 0x0e;
@@ -39,15 +39,24 @@ struct Part<'a> {
 
 impl<'a> Part<'a> {
     fn parse(address: u64, bytes: &'a [u8]) -> Result<Part<'a>, String> {
-        let header = bytes.get(..32).ok_or("rebuilt image is shorter than a Mach-O header")?;
+        let header = bytes
+            .get(..32)
+            .ok_or("rebuilt image is shorter than a Mach-O header")?;
         let cmds = bytes
             .get(32..32usize.saturating_add(u32_at(header, 20) as usize))
             .ok_or("rebuilt image is shorter than its load commands")?;
-        Ok(Part { bytes, layout: extract::parse_layout(address, extract::WIDE, header.to_vec(), cmds.to_vec()) })
+        Ok(Part {
+            bytes,
+            layout: extract::parse_layout(address, extract::WIDE, header.to_vec(), cmds.to_vec()),
+        })
     }
 
     fn text_base(&self) -> u64 {
-        self.layout.segments.iter().find(|s| s.name == "__TEXT").map_or(self.layout.address, |s| s.vmaddr)
+        self.layout
+            .segments
+            .iter()
+            .find(|s| s.name == "__TEXT")
+            .map_or(self.layout.address, |s| s.vmaddr)
     }
 
     fn slice(&self, offset: u64, len: u64) -> Result<&'a [u8], String> {
@@ -60,7 +69,10 @@ impl<'a> Part<'a> {
 
     fn linkedit_data(&self, kind: u32) -> Result<&'a [u8], String> {
         match self.layout.commands().into_iter().find(|c| c.0 == kind) {
-            Some((_, at)) => self.slice(self.layout.cmd_u32(at + 8) as u64, self.layout.cmd_u32(at + 12) as u64),
+            Some((_, at)) => self.slice(
+                self.layout.cmd_u32(at + 8) as u64,
+                self.layout.cmd_u32(at + 12) as u64,
+            ),
             None => Ok(&[]),
         }
     }
@@ -106,7 +118,11 @@ impl DyldCache {
     pub fn extract_merged(&self, indices: &[usize]) -> Result<Vec<u8>, String> {
         let mut chosen: Vec<(u64, usize)> = Vec::new();
         for &index in indices {
-            let address = self.images.get(index).ok_or("image index out of range")?.address;
+            let address = self
+                .images
+                .get(index)
+                .ok_or("image index out of range")?
+                .address;
             if !chosen.iter().any(|c| c.0 == address) {
                 chosen.push((address, index));
             }
@@ -117,15 +133,20 @@ impl DyldCache {
         }
         for &(_, index) in &chosen {
             if !self.image_layout(index)?.width.wide {
-                return Err(format!("{} is a 32-bit image; only 64-bit images load several at once", self.images[index].path));
+                return Err(format!(
+                    "{} is a 32-bit image; only 64-bit images load several at once",
+                    self.images[index].path
+                ));
             }
         }
         let rebuilt = chosen
             .iter()
             .map(|&(address, index)| Ok((address, self.extract(index)?)))
             .collect::<Result<Vec<_>, String>>()?;
-        let mut parts =
-            rebuilt.iter().map(|(address, bytes)| Part::parse(*address, bytes)).collect::<Result<Vec<_>, _>>()?;
+        let mut parts = rebuilt
+            .iter()
+            .map(|(address, bytes)| Part::parse(*address, bytes))
+            .collect::<Result<Vec<_>, _>>()?;
         parts.sort_by_key(Part::text_base);
         merge(&parts, primary)
     }
@@ -157,20 +178,31 @@ impl Tables {
 
     /// Append `part`'s symbols, each section ordinal moved up by
     /// `section_base`; returns each one's class and index within it.
-    fn add_symbols(&mut self, part: &Part, section_base: usize) -> Result<Vec<(usize, u32)>, String> {
+    fn add_symbols(
+        &mut self,
+        part: &Part,
+        section_base: usize,
+    ) -> Result<Vec<(usize, u32)>, String> {
         let layout = &part.layout;
         let Some(at) = layout.symtab else {
             return Ok(Vec::new());
         };
-        let nlists = part.slice(layout.cmd_u32(at + 8) as u64, (layout.cmd_u32(at + 12) as u64).saturating_mul(16))?;
-        let pool = part.slice(layout.cmd_u32(at + 16) as u64, layout.cmd_u32(at + 20) as u64)?;
+        let nlists = part.slice(
+            layout.cmd_u32(at + 8) as u64,
+            (layout.cmd_u32(at + 12) as u64).saturating_mul(16),
+        )?;
+        let pool = part.slice(
+            layout.cmd_u32(at + 16) as u64,
+            layout.cmd_u32(at + 20) as u64,
+        )?;
         let mut placed = Vec::with_capacity(nlists.len() / 16);
         for n in nlists.chunks_exact(16) {
             let name = pool.get(u32_at(n, 0) as usize..).unwrap_or(&[]);
             let name = &name[..name.iter().position(|&b| b == 0).unwrap_or(name.len())];
             let mut strx = 0;
             if !name.is_empty() {
-                strx = u32::try_from(self.strings.len()).map_err(|_| "merged string table exceeds 4 GiB")?;
+                strx = u32::try_from(self.strings.len())
+                    .map_err(|_| "merged string table exceeds 4 GiB")?;
                 self.strings.extend(name);
                 self.strings.push(0);
             }
@@ -196,7 +228,10 @@ impl Tables {
 
     fn gather(parts: &[Part]) -> Result<Tables, String> {
         let holds = |va: u64| parts.iter().any(|p| p.layout.holds(va));
-        let mut tables = Tables { strings: vec![0], ..Tables::default() };
+        let mut tables = Tables {
+            strings: vec![0],
+            ..Tables::default()
+        };
         let mut placed = Vec::new();
         let mut indirect: Vec<(usize, u32)> = Vec::new();
         let mut starts = Vec::new();
@@ -204,13 +239,28 @@ impl Tables {
         for (k, part) in parts.iter().enumerate() {
             let layout = &part.layout;
             placed.push(tables.add_symbols(part, section_base)?);
-            section_base += layout.segments.iter().map(|s| s.sections.len()).sum::<usize>();
+            section_base += layout
+                .segments
+                .iter()
+                .map(|s| s.sections.len())
+                .sum::<usize>();
             tables.indirect_bases.push(indirect.len() as u32);
             if let Some(at) = layout.dysymtab {
-                let (off, count) = (layout.cmd_u32(at + 56) as u64, layout.cmd_u32(at + 60) as u64);
-                indirect.extend(part.slice(off, count.saturating_mul(4))?.chunks_exact(4).map(|v| (k, u32_at(v, 0))));
+                let (off, count) = (
+                    layout.cmd_u32(at + 56) as u64,
+                    layout.cmd_u32(at + 60) as u64,
+                );
+                indirect.extend(
+                    part.slice(off, count.saturating_mul(4))?
+                        .chunks_exact(4)
+                        .map(|v| (k, u32_at(v, 0))),
+                );
             }
-            function_starts(part.linkedit_data(extract::LC_FUNCTION_STARTS)?, part.text_base(), &mut starts);
+            function_starts(
+                part.linkedit_data(extract::LC_FUNCTION_STARTS)?,
+                part.text_base(),
+                &mut starts,
+            );
             tables.notes.extend(
                 xrefs::read_note(part.bytes)
                     .into_iter()
@@ -219,10 +269,15 @@ impl Tables {
         }
         let firsts = tables.firsts();
         for (k, v) in indirect {
-            let moved = if v & (extract::INDIRECT_SYMBOL_LOCAL | extract::INDIRECT_SYMBOL_ABS) != 0 {
+            let moved = if v & (extract::INDIRECT_SYMBOL_LOCAL | extract::INDIRECT_SYMBOL_ABS) != 0
+            {
                 v
             } else {
-                placed[k].get(v as usize).map_or(extract::INDIRECT_SYMBOL_LOCAL, |&(class, at)| firsts[class] + at)
+                placed[k]
+                    .get(v as usize)
+                    .map_or(extract::INDIRECT_SYMBOL_LOCAL, |&(class, at)| {
+                        firsts[class] + at
+                    })
             };
             tables.indirect.extend(moved.to_le_bytes());
         }
@@ -237,7 +292,9 @@ impl Tables {
         }
         tables.function_starts.push(0);
         tables.notes.sort_by_key(|x| (x.addr, x.kind as u32));
-        tables.notes.dedup_by(|a, b| a.addr == b.addr && a.kind == b.kind);
+        tables
+            .notes
+            .dedup_by(|a, b| a.addr == b.addr && a.kind == b.kind);
         Ok(tables)
     }
 }
@@ -292,12 +349,25 @@ fn retarget(cmd: u32, raw: &mut [u8], tables: &Tables, at: &Placed) {
 
 /// Every non-`__LINKEDIT` segment command of `parts`, as `(part, segment,
 /// bytes)`, its sections' `reserved1` moved to the merged indirect-symbol table.
-fn segment_commands(parts: &[Part], tables: &Tables) -> Result<Vec<(usize, usize, Vec<u8>)>, String> {
+fn segment_commands(
+    parts: &[Part],
+    tables: &Tables,
+) -> Result<Vec<(usize, usize, Vec<u8>)>, String> {
     let mut out = Vec::new();
     for (k, part) in parts.iter().enumerate() {
-        for (s, seg) in part.layout.segments.iter().enumerate().filter(|(_, s)| s.name != "__LINKEDIT") {
+        for (s, seg) in part
+            .layout
+            .segments
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| s.name != "__LINKEDIT")
+        {
             let mut raw = part.layout.command(seg.cmd_offset)?.to_vec();
-            for sec in seg.sections.iter().filter(|sec| USES_INDIRECT.contains(&sec.section_type())) {
+            for sec in seg
+                .sections
+                .iter()
+                .filter(|sec| USES_INDIRECT.contains(&sec.section_type()))
+            {
                 let moved = sec.reserved1.wrapping_add(tables.indirect_bases[k]);
                 put_u32(&mut raw, sec.cmd_offset - seg.cmd_offset + 68, moved);
             }
@@ -310,8 +380,15 @@ fn segment_commands(parts: &[Part], tables: &Tables) -> Result<Vec<(usize, usize
 /// Join `parts`, sorted by address; `primary` is the header address of the
 /// image whose identity commands the result keeps.
 fn merge(parts: &[Part], primary: u64) -> Result<Vec<u8>, String> {
-    let main = parts.iter().find(|p| p.layout.address == primary).ok_or("no image selected")?;
-    let sections: usize = parts.iter().flat_map(|p| &p.layout.segments).map(|s| s.sections.len()).sum();
+    let main = parts
+        .iter()
+        .find(|p| p.layout.address == primary)
+        .ok_or("no image selected")?;
+    let sections: usize = parts
+        .iter()
+        .flat_map(|p| &p.layout.segments)
+        .map(|s| s.sections.len())
+        .sum();
     if sections > MAX_SECTIONS {
         return Err(format!(
             "the selected images hold {sections} sections and one Mach-O symbol table can index {MAX_SECTIONS}; \
@@ -320,7 +397,10 @@ fn merge(parts: &[Part], primary: u64) -> Result<Vec<u8>, String> {
     }
     let tables = Tables::gather(parts)?;
     let mut segments = segment_commands(parts, &tables)?;
-    let le_seg = main.layout.linkedit().ok_or("image has no __LINKEDIT segment")?;
+    let le_seg = main
+        .layout
+        .linkedit()
+        .ok_or("image has no __LINKEDIT segment")?;
     let mut le_cmd = main.layout.command(le_seg.cmd_offset)?.to_vec();
     let mut other = Vec::new();
     for (cmd, at) in main.layout.commands() {
@@ -347,7 +427,9 @@ fn merge(parts: &[Part], primary: u64) -> Result<Vec<u8>, String> {
             let at = sec.cmd_offset - seg.cmd_offset + 48;
             let old = u32_at(raw, at) as u64;
             if old != 0 {
-                let moved = old.checked_sub(seg.fileoff).and_then(|d| u32::try_from(offset + d).ok());
+                let moved = old
+                    .checked_sub(seg.fileoff)
+                    .and_then(|d| u32::try_from(offset + d).ok());
                 put_u32(raw, at, moved.ok_or_else(too_big)?);
             }
         }
@@ -410,9 +492,11 @@ mod tests {
     fn thin(base: u64, local: &str, imports: [&str; 2], starts: &[u64]) -> Vec<u8> {
         let mut strings = vec![0u8];
         let mut nlists = Vec::new();
-        for (name, n_type, n_sect, value) in
-            [(local, 0x0fu8, 1u8, base + 0x1000), (imports[0], 0x01, 0, 0), (imports[1], 0x01, 0, 0)]
-        {
+        for (name, n_type, n_sect, value) in [
+            (local, 0x0fu8, 1u8, base + 0x1000),
+            (imports[0], 0x01, 0, 0),
+            (imports[1], 0x01, 0, 0),
+        ] {
             nlists.extend((strings.len() as u32).to_le_bytes());
             nlists.extend([n_type, n_sect, 0, 0]);
             nlists.extend(value.to_le_bytes());
@@ -427,15 +511,23 @@ mod tests {
             last = addr;
         }
         let mut le = Linkedit::default();
-        let (symoff, indirectoff, startsoff, stroff) =
-            (le.push(&nlists), le.push(&indirect), le.push(&table), le.push(&strings));
+        let (symoff, indirectoff, startsoff, stroff) = (
+            le.push(&nlists),
+            le.push(&indirect),
+            le.push(&table),
+            le.push(&strings),
+        );
 
         let name16 = |s: &str| {
             let mut raw = s.as_bytes().to_vec();
             raw.resize(16, 0);
             raw
         };
-        let segment = |name: &str, vmaddr: u64, fileoff: u64, size: u64, sections: &[(&str, u64, u64, u32, u32, u32)]| {
+        let segment = |name: &str,
+                       vmaddr: u64,
+                       fileoff: u64,
+                       size: u64,
+                       sections: &[(&str, u64, u64, u32, u32, u32)]| {
             let mut cmd = extract::LC_SEGMENT_64.to_le_bytes().to_vec();
             cmd.extend((72 + 80 * sections.len() as u32).to_le_bytes());
             cmd.extend(name16(name));
@@ -457,22 +549,52 @@ mod tests {
             cmd
         };
         let words = |cmd: u32, fields: &[u32]| -> Vec<u8> {
-            [cmd, 8 + 4 * fields.len() as u32].iter().chain(fields).flat_map(|v| v.to_le_bytes()).collect()
+            [cmd, 8 + 4 * fields.len() as u32]
+                .iter()
+                .chain(fields)
+                .flat_map(|v| v.to_le_bytes())
+                .collect()
         };
         let le_at = |off: u64| (0x4000 + off) as u32;
         let mut dysymtab = vec![0u32, 0, 0, 1, 1, 2];
         dysymtab.resize(18, 0);
         (dysymtab[12], dysymtab[13]) = (le_at(indirectoff), 2);
         let cmds = [
-            segment("__TEXT", base, 0, 0x4000, &[("__text", 0x1000, 8, 0x8000_0400, 0, 0), ("__stubs", 0x2000, 24, STUB, 0, 12)]),
+            segment(
+                "__TEXT",
+                base,
+                0,
+                0x4000,
+                &[
+                    ("__text", 0x1000, 8, 0x8000_0400, 0, 0),
+                    ("__stubs", 0x2000, 24, STUB, 0, 12),
+                ],
+            ),
             segment("__LINKEDIT", LINKEDIT, 0x4000, le.bytes.len() as u64, &[]),
-            words(extract::LC_SYMTAB, &[le_at(symoff), 3, le_at(stroff), strings.len() as u32]),
+            words(
+                extract::LC_SYMTAB,
+                &[le_at(symoff), 3, le_at(stroff), strings.len() as u32],
+            ),
             words(extract::LC_DYSYMTAB, &dysymtab),
-            words(extract::LC_FUNCTION_STARTS, &[le_at(startsoff), table.len() as u32]),
+            words(
+                extract::LC_FUNCTION_STARTS,
+                &[le_at(startsoff), table.len() as u32],
+            ),
         ]
         .concat();
-        let mut out: Vec<u8> =
-            [0xfeed_facfu32, 0x0100_000c, 2, 6, 5, cmds.len() as u32, 0, 0].iter().flat_map(|v| v.to_le_bytes()).collect();
+        let mut out: Vec<u8> = [
+            0xfeed_facfu32,
+            0x0100_000c,
+            2,
+            6,
+            5,
+            cmds.len() as u32,
+            0,
+            0,
+        ]
+        .iter()
+        .flat_map(|v| v.to_le_bytes())
+        .collect();
         out.extend(cmds);
         out.resize(0x4000, 0);
         out.extend(&le.bytes);
@@ -481,9 +603,17 @@ mod tests {
 
     fn merged() -> Vec<u8> {
         let (low, high) = (0x1_0000_0000u64, 0x2_0000_0000u64);
-        let a = thin(high, "_high_fn", ["_malloc", "_free"], &[high + 0x1000, high + 0x1004]);
+        let a = thin(
+            high,
+            "_high_fn",
+            ["_malloc", "_free"],
+            &[high + 0x1000, high + 0x1004],
+        );
         let b = thin(low, "_low_fn", ["_open", "_close"], &[low + 0x1000]);
-        let mut parts = vec![Part::parse(high, &a).unwrap(), Part::parse(low, &b).unwrap()];
+        let mut parts = vec![
+            Part::parse(high, &a).unwrap(),
+            Part::parse(low, &b).unwrap(),
+        ];
         parts.sort_by_key(Part::text_base);
         merge(&parts, high).unwrap()
     }
@@ -496,33 +626,68 @@ mod tests {
         for (name, addr) in [("_low_fn", 0x1_0000_1000u64), ("_high_fn", 0x2_0000_1000)] {
             let sym = file.symbols().find(|s| s.name() == Ok(name)).unwrap();
             let section = file.section_by_index(sym.section_index().unwrap()).unwrap();
-            assert_eq!((sym.address(), section.name().unwrap(), section.address()), (addr, "__text", addr), "{name}");
+            assert_eq!(
+                (sym.address(), section.name().unwrap(), section.address()),
+                (addr, "__text", addr),
+                "{name}"
+            );
         }
 
         let part = Part::parse(0x2_0000_0000, &bytes).unwrap();
         let layout = &part.layout;
         let (symtab, dysymtab) = (layout.symtab.unwrap(), layout.dysymtab.unwrap());
-        let fields: Vec<u32> = (0..6).map(|i| layout.cmd_u32(dysymtab + 8 + i * 4)).collect();
-        assert_eq!(fields, [0, 0, 0, 2, 2, 4], "no locals, two definitions, four imports");
-        let nlists = part.slice(layout.cmd_u32(symtab + 8) as u64, 6 * 16).unwrap();
-        let pool = part.slice(layout.cmd_u32(symtab + 16) as u64, layout.cmd_u32(symtab + 20) as u64).unwrap();
+        let fields: Vec<u32> = (0..6)
+            .map(|i| layout.cmd_u32(dysymtab + 8 + i * 4))
+            .collect();
+        assert_eq!(
+            fields,
+            [0, 0, 0, 2, 2, 4],
+            "no locals, two definitions, four imports"
+        );
+        let nlists = part
+            .slice(layout.cmd_u32(symtab + 8) as u64, 6 * 16)
+            .unwrap();
+        let pool = part
+            .slice(
+                layout.cmd_u32(symtab + 16) as u64,
+                layout.cmd_u32(symtab + 20) as u64,
+            )
+            .unwrap();
         let name = |index: u32| {
             let at = u32_at(nlists, index as usize * 16) as usize;
-            String::from_utf8_lossy(&pool[at..at + pool[at..].iter().position(|&b| b == 0).unwrap()]).into_owned()
+            String::from_utf8_lossy(
+                &pool[at..at + pool[at..].iter().position(|&b| b == 0).unwrap()],
+            )
+            .into_owned()
         };
-        let indirect = part.slice(layout.cmd_u32(dysymtab + 56) as u64, 16).unwrap();
+        let indirect = part
+            .slice(layout.cmd_u32(dysymtab + 56) as u64, 16)
+            .unwrap();
         let stubs: Vec<(u64, Vec<String>)> = layout
             .segments
             .iter()
             .flat_map(|s| &s.sections)
             .filter(|s| s.sectname == "__stubs")
-            .map(|s| (s.addr, (0..2).map(|i| name(u32_at(indirect, (s.reserved1 as usize + i) * 4))).collect()))
+            .map(|s| {
+                (
+                    s.addr,
+                    (0..2)
+                        .map(|i| name(u32_at(indirect, (s.reserved1 as usize + i) * 4)))
+                        .collect(),
+                )
+            })
             .collect();
         assert_eq!(
             stubs,
             [
-                (0x1_0000_2000, vec!["_close".to_string(), "_open".to_string()]),
-                (0x2_0000_2000, vec!["_free".to_string(), "_malloc".to_string()]),
+                (
+                    0x1_0000_2000,
+                    vec!["_close".to_string(), "_open".to_string()]
+                ),
+                (
+                    0x2_0000_2000,
+                    vec!["_free".to_string(), "_malloc".to_string()]
+                ),
             ]
         );
     }
@@ -531,16 +696,29 @@ mod tests {
     fn function_starts_count_from_the_lowest_text() {
         let bytes = merged();
         let part = Part::parse(0x2_0000_0000, &bytes).unwrap();
-        assert_eq!(part.layout.segments.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["__TEXT", "__TEXT", "__LINKEDIT"]);
+        assert_eq!(
+            part.layout
+                .segments
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["__TEXT", "__TEXT", "__LINKEDIT"]
+        );
         let mut starts = Vec::new();
-        function_starts(part.linkedit_data(extract::LC_FUNCTION_STARTS).unwrap(), 0x1_0000_0000, &mut starts);
+        function_starts(
+            part.linkedit_data(extract::LC_FUNCTION_STARTS).unwrap(),
+            0x1_0000_0000,
+            &mut starts,
+        );
         assert_eq!(starts, [0x1_0000_1000, 0x2_0000_1000, 0x2_0000_1004]);
     }
 
     #[test]
     fn more_sections_than_a_symbol_can_index_are_refused() {
         let image = thin(0x1_0000_0000, "_f", ["_a", "_b"], &[]);
-        let parts: Vec<Part> = (0..128).map(|i| Part::parse(0x1_0000_0000 + i * 0x4000, &image).unwrap()).collect();
+        let parts: Vec<Part> = (0..128)
+            .map(|i| Part::parse(0x1_0000_0000 + i * 0x4000, &image).unwrap())
+            .collect();
         let err = merge(&parts, 0x1_0000_0000).unwrap_err();
         assert!(err.contains("256 sections"), "{err}");
     }

@@ -79,7 +79,7 @@ use unlace_num::opcodes::OpCode;
 use crate::context::{OpId, VarnodeId};
 use crate::fspec::FuncCallSpecs;
 use crate::funcdata::Funcdata;
-use crate::p4_calls::kuna_calleearity::{best_witness_for, plan_promotions, TrialView};
+use crate::p4_calls::kuna_calleearity::{TrialView, best_witness_for, plan_promotions};
 
 /// Marshaling element `<calleearityfwd>` (kuna 4000+ range; 4133 = calleearity).
 pub const ELEM_CALLEEARITYFWD: ElementId = ElementId::new("calleearityfwd", 4137);
@@ -133,7 +133,9 @@ pub fn capture_empty_call(fc: &FuncCallSpecs, data: &Funcdata) -> Option<Pending
         if slot < 1 {
             continue;
         }
-        let Some(vn) = data.obank().get(op).and_then(|o| o.get_in(slot)) else { continue };
+        let Some(vn) = data.obank().get(op).and_then(|o| o.get_in(slot)) else {
+            continue;
+        };
         // The normal path would insert a truncating SUBPIECE here; the retry runs
         // after the trials are gone, so an oversized Varnode is declined instead.
         if data.vbank().get(vn).map(|v| v.get_size()) != Some(t.get_size()) {
@@ -144,7 +146,11 @@ pub fn capture_empty_call(fc: &FuncCallSpecs, data: &Funcdata) -> Option<Pending
     if candidates.is_empty() {
         return None;
     }
-    Some(PendingRescue { op, entry: fc.get_entry_address().clone(), candidates })
+    Some(PendingRescue {
+        op,
+        entry: fc.get_entry_address().clone(),
+        candidates,
+    })
 }
 
 /// Retry every captured call site now that the pass has finalized all of them.
@@ -186,9 +192,13 @@ fn rescue_one(data: &mut Funcdata, p: &PendingRescue) -> bool {
             has_value: true,
         })
         .collect();
-    let Some(mut promote) = plan_promotions(&witness, &views) else { return false };
+    let Some(mut promote) = plan_promotions(&witness, &views) else {
+        return false;
+    };
     promote.sort_unstable();
-    let Some(in0) = data.obank().get(p.op).and_then(|o| o.get_in(0)) else { return false };
+    let Some(in0) = data.obank().get(p.op).and_then(|o| o.get_in(0)) else {
+        return false;
+    };
     let mut newparam = vec![in0];
     for i in &promote {
         let (_, _, vn) = p.candidates[*i as usize];
@@ -209,7 +219,8 @@ fn rescue_one(data: &mut Funcdata, p: &PendingRescue) -> bool {
                 (addr.clone(), *size)
             })
             .collect();
-        data.get_call_specs_mut(idx).set_final_input_storage(storage);
+        data.get_call_specs_mut(idx)
+            .set_final_input_storage(storage);
     }
     true
 }

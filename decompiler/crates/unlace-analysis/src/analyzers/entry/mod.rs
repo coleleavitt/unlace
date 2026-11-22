@@ -85,24 +85,24 @@
 use object::read::{Object, ObjectSection, ObjectSegment, ObjectSymbol};
 use object::{SectionKind, SymbolKind};
 
-use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, ContextPaint, Phase};
 use crate::loader::format::FormatKind;
+use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, ContextPaint, Phase};
 
-pub mod kuna_entrymainproto;
 pub mod kuna_armlibcmain;
 pub mod kuna_elfmain;
+pub mod kuna_entrymainproto;
 pub mod kuna_machomain;
 pub mod kuna_unwindinfo;
 // (kuna `machoehframe`) Mach-O `__eh_frame` FDE function starts.
-pub mod kuna_machoehframe;
-pub mod kuna_pemain;
-pub mod kuna_cortexmvectors;
 pub mod kuna_coldentry;
+pub mod kuna_cortexmvectors;
 pub mod kuna_ehcold;
 pub mod kuna_fdeinterior;
-pub mod kuna_pdatainterior;
-pub mod kuna_pereloccode;
 pub mod kuna_itaniumeh;
+pub mod kuna_machoehframe;
+pub mod kuna_pdatainterior;
+pub mod kuna_pemain;
+pub mod kuna_pereloccode;
 mod macho_entry;
 pub mod patterns;
 mod pe_entry;
@@ -143,10 +143,15 @@ pub fn image_entry_vma(file: &object::File, bytes: &[u8]) -> Option<u64> {
 /// machine words `Unknown`. Discovery with a selected decoder uses
 /// `collect_entries_for_language`.
 pub fn image_code_entry(file: &object::File, bytes: &[u8]) -> Option<(u64, bool)> {
-    let vma = crate::loader::elfv1::Descriptors::read(file).code_address(image_entry_vma(file, bytes)?);
-    let arm = crate::loadimage_object::effective_architecture(file, bytes)
-        == object::Architecture::Arm;
-    Some(if arm { (vma & !1, vma & 1 != 0) } else { (vma, false) })
+    let vma =
+        crate::loader::elfv1::Descriptors::read(file).code_address(image_entry_vma(file, bytes)?);
+    let arm =
+        crate::loadimage_object::effective_architecture(file, bytes) == object::Architecture::Arm;
+    Some(if arm {
+        (vma & !1, vma & 1 != 0)
+    } else {
+        (vma, false)
+    })
 }
 
 // ===========================================================================
@@ -195,7 +200,8 @@ impl AnalysisPass for EntryDiscoveryPass {
         // reached only through the reset→main call tree would still decode as A32
         // without the region paint. Empty on any non-Cortex-M ARM object (and every
         // non-ARM arch); see `cortexm_thumb_paints`.
-        out.context_paints.extend(cortexm_thumb_paints(ctx.file, false));
+        out.context_paints
+            .extend(cortexm_thumb_paints(ctx.file, false));
         // Ghidra-faithful names for the dynamic INIT/FINI entries (oracle 2 only),
         // restricted to the VMAs that actually survived into `out.entries` (a named
         // entry already covered by a funcsym is filtered out above, so its name is
@@ -320,7 +326,12 @@ impl AnalysisPass for FuncStartPatternPass {
             .iter()
             .filter(|_| !explicit_isa)
             .filter(|&&(_, mode)| mode == Some(1))
-            .map(|&(addr, _)| crate::pass::ContextPaint { addr, end: None, var: "TMode", value: 1 })
+            .map(|&(addr, _)| crate::pass::ContextPaint {
+                addr,
+                end: None,
+                var: "TMode",
+                value: 1,
+            })
             .collect();
         out.entries = starts.into_iter().map(|(vma, _)| vma).collect();
         out
@@ -336,7 +347,10 @@ impl AnalysisPass for FuncStartPatternPass {
 /// This is the testable seam (drive it over fixture bytes); it parallels
 /// [`collect_entries`] but is the *full-pattern* superset, gated default-off.
 pub fn full_pattern_starts(file: &object::File) -> Vec<u64> {
-    full_pattern_starts_with_mode(file).into_iter().map(|(vma, _)| vma).collect()
+    full_pattern_starts_with_mode(file)
+        .into_iter()
+        .map(|(vma, _)| vma)
+        .collect()
 }
 
 /// [`full_pattern_starts`], with the `TMode` value the matching ARM pattern
@@ -352,7 +366,11 @@ pub fn full_pattern_starts_with_mode(file: &object::File) -> Vec<(u64, Option<u3
     // and a Mach-O or PE image's own function tables (LC_FUNCTION_STARTS,
     // .pdata) already list what such a weak hint could add.
     let weak_ok = set.only_weak() && matches!(file.format(), object::BinaryFormat::Elf);
-    let bodies = if weak_ok { kuna_fdeinterior::scan_fde_bodies(file) } else { Vec::new() };
+    let bodies = if weak_ok {
+        kuna_fdeinterior::scan_fde_bodies(file)
+    } else {
+        Vec::new()
+    };
     let sized = sized_function_bodies(file);
 
     let mut cand: Vec<(u64, Option<u32>)> = Vec::new();
@@ -456,8 +474,8 @@ fn existing_function_addrs_for_file(file: &object::File) -> Vec<u64> {
 ///
 /// This is the testable seam (drive it over fixture bytes).
 pub fn collect_entries(file: &object::File, bytes: &[u8]) -> Vec<u64> {
-    let arm = crate::loadimage_object::effective_architecture(file, bytes)
-        == object::Architecture::Arm;
+    let arm =
+        crate::loadimage_object::effective_architecture(file, bytes) == object::Architecture::Arm;
     collect_entries_with_pe_mode(file, bytes, arm)
 }
 
@@ -468,7 +486,11 @@ pub(crate) fn collect_entries_for_language(
     bytes: &[u8],
     language: &str,
 ) -> Vec<u64> {
-    collect_entries_with_pe_mode(file, bytes, crate::loadimage_object::is_arm32_language(language))
+    collect_entries_with_pe_mode(
+        file,
+        bytes,
+        crate::loadimage_object::is_arm32_language(language),
+    )
 }
 
 fn collect_entries_with_pe_mode(file: &object::File, bytes: &[u8], pe_arm: bool) -> Vec<u64> {
@@ -527,7 +549,9 @@ fn collect_entries_with_pe_mode(file: &object::File, bytes: &[u8], pe_arm: bool)
             // when available: a non-ARM override can have a real odd entry.
             let code_address = |vma: u64| if pe_arm { vma & !1 } else { vma };
             cand.extend(
-                pe_entry::pe_entry_candidates(file, bytes, &execs).into_iter().map(code_address),
+                pe_entry::pe_entry_candidates(file, bytes, &execs)
+                    .into_iter()
+                    .map(code_address),
             );
             // (kuna) The header page is no section, so no section flag ever spoke
             // for the bytes in it: `AddressOfEntryPoint` is the image's only
@@ -679,7 +703,8 @@ pub(crate) fn is_executable(sec: &object::Section) -> bool {
 /// withholds the fallback, which is precisely the behavior every section-less
 /// image had before it existed.
 fn is_packer_stub(segs: &[(u64, u64, Vec<u8>)]) -> bool {
-    segs.iter().any(|(_, _, data)| data.windows(4).any(|w| w == b"UPX!"))
+    segs.iter()
+        .any(|(_, _, data)| data.windows(4).any(|w| w == b"UPX!"))
 }
 
 /// `(address, address+size, data)` for every `PF_X` `PT_LOAD` segment -- the
@@ -858,7 +883,10 @@ const DT_FINI_ARRAYSZ: u64 = 28;
 pub(crate) fn dynamic_entry_points(file: &object::File) -> Vec<u64> {
     // The address-only projection of the named oracle. Discovery (WHICH VMAs) is
     // defined here; the names are an additive overlay (see `dynamic_entry_names`).
-    dynamic_entry_points_named(file).into_iter().map(|(addr, _name)| addr).collect()
+    dynamic_entry_points_named(file)
+        .into_iter()
+        .map(|(addr, _name)| addr)
+        .collect()
 }
 
 /// The dynamic INIT/FINI names overlay (oracle 2): the `(addr, name)` pairs for
@@ -900,7 +928,10 @@ fn dynamic_entry_points_named(file: &object::File) -> Vec<(u64, Option<String>)>
 
 /// The raw `.dynamic` function pointers, before ELFv1 descriptor resolution.
 pub(crate) fn dynamic_function_pointers(file: &object::File) -> Vec<u64> {
-    dynamic_pointers_named(file).into_iter().map(|(addr, _)| addr).collect()
+    dynamic_pointers_named(file)
+        .into_iter()
+        .map(|(addr, _)| addr)
+        .collect()
 }
 
 fn dynamic_pointers_named(file: &object::File) -> Vec<(u64, Option<String>)> {
@@ -927,7 +958,10 @@ fn dynamic_pointers_named(file: &object::File) -> Vec<(u64, Option<String>)> {
         let (tag, val) = if is64 {
             (read_u64(&data[off..], le), read_u64(&data[off + 8..], le))
         } else {
-            (read_u32(&data[off..], le) as u64, read_u32(&data[off + 4..], le) as u64)
+            (
+                read_u32(&data[off..], le) as u64,
+                read_u32(&data[off + 4..], le) as u64,
+            )
         };
         off += entsz;
         if tag == DT_NULL {
@@ -952,9 +986,10 @@ fn dynamic_pointers_named(file: &object::File) -> Vec<(u64, Option<String>)> {
     // Order preserved from the prior implementation: INIT_ARRAY pointers then
     // FINI_ARRAY pointers. The element index `i` drives the `_INIT_<i>`/`_FINI_<i>`
     // name (Ghidra's `baseName + i`).
-    for (base, sz, base_name) in
-        [(init_array, init_array_sz, "_INIT_"), (fini_array, fini_array_sz, "_FINI_")]
-    {
+    for (base, sz, base_name) in [
+        (init_array, init_array_sz, "_INIT_"),
+        (fini_array, fini_array_sz, "_FINI_"),
+    ] {
         let Some(base) = base else { continue };
         out.extend(read_pointer_table(file, base, sz, ptr, le, base_name));
     }
@@ -990,7 +1025,11 @@ fn read_pointer_table(
         if o + ptr > data.len() {
             break;
         }
-        stored.push(if ptr == 8 { read_u64(&data[o..], le) } else { read_u32(&data[o..], le) as u64 });
+        stored.push(if ptr == 8 {
+            read_u64(&data[o..], le)
+        } else {
+            read_u32(&data[o..], le) as u64
+        });
     }
     let values = if file.architecture() == object::Architecture::PowerPc64 && ptr == 8 {
         crate::loader::elfv1::relocated_words(file, base, &stored)
@@ -1233,7 +1272,9 @@ fn aarch64_main_target(file: &object::File, entry: u64) -> Option<u64> {
             let page_off = imm21 << 12;
             let ldr_off = (((ldr >> 10) & 0xfff) as u64) * 8; // 64-bit scale
             let adrp_addr = sec_addr + (start + off) as u64;
-            let slot = (adrp_addr & !0xFFF).wrapping_add(page_off as u64).wrapping_add(ldr_off);
+            let slot = (adrp_addr & !0xFFF)
+                .wrapping_add(page_off as u64)
+                .wrapping_add(ldr_off);
             if let Some(&target) = rel.get(&slot) {
                 return Some(target & !1); // mask any thumb-style LSB (defensive)
             }
@@ -1362,11 +1403,7 @@ fn arm_main_target_raw(file: &object::File, entry: u64) -> Option<u64> {
         }
         w += 2; // Thumb literal pools are halfword-stepped; align-check gates it.
     }
-    if found == 1 {
-        best
-    } else {
-        None
-    }
+    if found == 1 { best } else { None }
 }
 
 /// Decode-mode (`TMode`) paints for ARM-discovered Thumb entries — the analog of
@@ -1388,7 +1425,12 @@ fn thumb_entry_paints(file: &object::File) -> Vec<ContextPaint> {
         if raw & 1 == 1 {
             // Thumb `main`: paint TMode=1 at the even (decode) VMA. `end: None` is
             // the point-set shape `arm_markers`/`ArmSymbolAnalyzer` use.
-            out.push(ContextPaint { addr: raw & !1, end: None, var: "TMode", value: 1 });
+            out.push(ContextPaint {
+                addr: raw & !1,
+                end: None,
+                var: "TMode",
+                value: 1,
+            });
         }
     }
     out
@@ -1461,7 +1503,9 @@ fn cortexm_vector_table_shipped(file: &object::File) -> Option<(u64, u64, Vec<u8
         .into_iter()
         .find(|(_, _, data)| signature(data))
         .or_else(|| {
-            phdr_executable_sections(file).into_iter().find(|(_, _, data)| signature(data))
+            phdr_executable_sections(file)
+                .into_iter()
+                .find(|(_, _, data)| signature(data))
         })
 }
 
@@ -1496,7 +1540,13 @@ fn cortexm_vector_entries(file: &object::File, widen: bool) -> Vec<u64> {
     };
     let le = file.is_little_endian();
     let execs = executable_sections(file);
-    harvest_vector_words(sec_addr, &data, le, &|vma| in_executable_section(&execs, vma), widen)
+    harvest_vector_words(
+        sec_addr,
+        &data,
+        le,
+        &|vma| in_executable_section(&execs, vma),
+        widen,
+    )
 }
 
 /// The pure vector-table harvest loop (testable without a full ELF): walk the
@@ -1618,8 +1668,8 @@ pub(crate) fn cortexm_thumb_paints(file: &object::File, widen: bool) -> Vec<Cont
 /// when present (AArch64/RISC-V), else the in-place value stored at the slot (ARM
 /// REL, `has_implicit_addend`), read from the containing section's bytes.
 fn relative_targets(file: &object::File) -> std::collections::HashMap<u64, u64> {
-    use object::read::Object;
     use object::RelocationTarget;
+    use object::read::Object;
     let mut map: std::collections::HashMap<u64, u64> = std::collections::HashMap::new();
     let le = file.is_little_endian();
     let is64 = file.is_64();
@@ -1740,9 +1790,7 @@ fn prologue_patterns() -> Vec<DittedSeq> {
         // push rbp ; mov rbp,rsp             (55 48 89 e5)
         DittedSeq::from_binary("01010101 01001000 10001001 11100101"),
         // endbr64 ; sub rsp, imm8/32         (f3 0f 1e fa 48 83 ec ..)
-        DittedSeq::from_binary(
-            "11110011 00001111 00011110 11111010 01001000 10000011 11101100",
-        ),
+        DittedSeq::from_binary("11110011 00001111 00011110 11111010 01001000 10000011 11101100"),
     ]
 }
 
@@ -1868,13 +1916,22 @@ fn scan_eh_frame_starts_sized(file: &object::File, ptr_size: usize) -> Vec<u64> 
             let cie_ptr_field = o + 4;
             if (cie_id as usize) <= cie_ptr_field {
                 let cie_off = cie_ptr_field - cie_id as usize;
-                let enc = cie_enc.iter().find(|&&(co, _)| co == cie_off).map(|&(_, e)| e);
+                let enc = cie_enc
+                    .iter()
+                    .find(|&&(co, _)| co == cie_off)
+                    .map(|&(_, e)| e);
                 if let Some(enc) = enc {
                     // pcBegin field starts at o+8.
                     let field_vma = sec_vma + (o + 8) as u64;
-                    if let Some(pc) =
-                        decode_eh_pointer_ordered(enc, field_vma, sec_vma, &data[..next], o + 8, ptr_size, le)
-                    {
+                    if let Some(pc) = decode_eh_pointer_ordered(
+                        enc,
+                        field_vma,
+                        sec_vma,
+                        &data[..next],
+                        o + 8,
+                        ptr_size,
+                        le,
+                    ) {
                         out.push(pc);
                     }
                 }
@@ -1956,7 +2013,12 @@ pub fn scan_eh_frame_landing_pads(file: &object::File) -> Vec<u64> {
     let (ptr_size, little) = (if file.is_64() { 8 } else { 4 }, file.is_little_endian());
     for_each_fde_lsda(file, ptr_size, &mut |pc_begin, lsda_ptr| {
         if let Some(lsda) = decode_lsda(gcc_data, gcc_vma, lsda_ptr, pc_begin, ptr_size, little) {
-            out.extend(lsda.call_sites.iter().filter(|cs| cs.pad != 0).map(|cs| cs.pad));
+            out.extend(
+                lsda.call_sites
+                    .iter()
+                    .filter(|cs| cs.pad != 0)
+                    .map(|cs| cs.pad),
+            );
         }
     });
     out.sort_unstable();
@@ -1977,7 +2039,12 @@ pub fn scan_eh_frame_landing_pads_owned(file: &object::File) -> Vec<(u64, u64)> 
     let (ptr_size, little) = (if file.is_64() { 8 } else { 4 }, file.is_little_endian());
     for_each_fde_lsda(file, ptr_size, &mut |pc_begin, lsda_ptr| {
         if let Some(lsda) = decode_lsda(gcc_data, gcc_vma, lsda_ptr, pc_begin, ptr_size, little) {
-            out.extend(lsda.call_sites.iter().filter(|cs| cs.pad != 0).map(|cs| (pc_begin, cs.pad)));
+            out.extend(
+                lsda.call_sites
+                    .iter()
+                    .filter(|cs| cs.pad != 0)
+                    .map(|cs| (pc_begin, cs.pad)),
+            );
         }
     });
     out
@@ -1985,7 +2052,11 @@ pub fn scan_eh_frame_landing_pads_owned(file: &object::File) -> Vec<(u64, u64)> 
 
 /// Call `on_lsda(pc_begin, lsda_ptr)` for every `.eh_frame` FDE that carries a
 /// non-null LSDA pointer.
-pub(crate) fn for_each_fde_lsda(file: &object::File, ptr_size: usize, on_lsda: &mut dyn FnMut(u64, u64)) {
+pub(crate) fn for_each_fde_lsda(
+    file: &object::File,
+    ptr_size: usize,
+    on_lsda: &mut dyn FnMut(u64, u64),
+) {
     for_each_fde_lsda_classified(file, ptr_size, &mut |pc_begin, lsda, personality| {
         if personality.reads_itanium_lsda() {
             on_lsda(pc_begin, lsda);
@@ -2074,10 +2145,16 @@ impl PersonalityNames {
             }
         }
         let mut slot = std::collections::HashMap::new();
-        if let (Some(relocs), Some(dynsym)) = (file.dynamic_relocations(), file.dynamic_symbol_table()) {
+        if let (Some(relocs), Some(dynsym)) =
+            (file.dynamic_relocations(), file.dynamic_symbol_table())
+        {
             for (off, r) in relocs {
                 if let object::RelocationTarget::Symbol(idx) = r.target() {
-                    if let Some(name) = dynsym.symbol_by_index(idx).ok().and_then(|s| s.name().ok().map(str::to_string)) {
+                    if let Some(name) = dynsym
+                        .symbol_by_index(idx)
+                        .ok()
+                        .and_then(|s| s.name().ok().map(str::to_string))
+                    {
                         slot.insert(off, name);
                     }
                 }
@@ -2087,14 +2164,22 @@ impl PersonalityNames {
     }
 
     fn classify(&self, value: u64, indirect: bool) -> Personality {
-        let name = if indirect { self.slot.get(&value).or_else(|| self.at.get(&value)) } else { self.at.get(&value) };
+        let name = if indirect {
+            self.slot.get(&value).or_else(|| self.at.get(&value))
+        } else {
+            self.at.get(&value)
+        };
         name.map_or(Personality::Unknown, |n| Personality::of_name(n))
     }
 }
 
 /// [`for_each_fde_lsda`], with the personality of the FDE's CIE, including the
 /// SjLj LSDAs it skips.
-pub(crate) fn for_each_fde_lsda_classified(file: &object::File, ptr_size: usize, on_lsda: &mut dyn FnMut(u64, u64, Personality)) {
+pub(crate) fn for_each_fde_lsda_classified(
+    file: &object::File,
+    ptr_size: usize,
+    on_lsda: &mut dyn FnMut(u64, u64, Personality),
+) {
     if !matches!(file.format(), object::BinaryFormat::Elf) {
         return;
     }
@@ -2150,8 +2235,16 @@ pub(crate) fn for_each_fde_lsda_classified(file: &object::File, ptr_size: usize,
             if let Some(aug) = parse_cie_aug(&data[o..next], ptr_size) {
                 let personality = aug.personality.map_or(Personality::Unknown, |(enc, off)| {
                     let field = o + off;
-                    decode_eh_pointer_ordered(enc & 0x7f, sec_vma + field as u64, sec_vma, &data[..next], field, ptr_size, le)
-                        .map_or(Personality::Unknown, |v| names.classify(v, enc & 0x80 != 0))
+                    decode_eh_pointer_ordered(
+                        enc & 0x7f,
+                        sec_vma + field as u64,
+                        sec_vma,
+                        &data[..next],
+                        field,
+                        ptr_size,
+                        le,
+                    )
+                    .map_or(Personality::Unknown, |v| names.classify(v, enc & 0x80 != 0))
                 });
                 cie_aug.push((o, aug));
                 cie_personality.push((o, personality));
@@ -2177,15 +2270,25 @@ pub(crate) fn for_each_fde_lsda_classified(file: &object::File, ptr_size: usize,
             //             [augData: lsdaPtr ...][cfi...]. pcBegin starts at o+8.
             let pc_begin_off = o + 8;
             let pc_begin_vma = sec_vma + pc_begin_off as u64;
-            let Some(pc_begin) =
-                decode_eh_pointer_ordered(aug.fde_enc, pc_begin_vma, sec_vma, &data[..next], pc_begin_off, ptr_size, le)
-            else {
+            let Some(pc_begin) = decode_eh_pointer_ordered(
+                aug.fde_enc,
+                pc_begin_vma,
+                sec_vma,
+                &data[..next],
+                pc_begin_off,
+                ptr_size,
+                le,
+            ) else {
                 o = next;
                 continue;
             };
             // Skip pcBegin + pcRange (both the FDE `R` encoding's size), then the
             // augmentation-data length (uleb), to reach the FDE aug-data block.
-            let enc_sz = encoded_size(aug.fde_enc, ptr_size, data.get(pc_begin_off..).unwrap_or(&[]));
+            let enc_sz = encoded_size(
+                aug.fde_enc,
+                ptr_size,
+                data.get(pc_begin_off..).unwrap_or(&[]),
+            );
             let pc_range_off = pc_begin_off + enc_sz;
             let aug_len_off = pc_range_off + enc_sz;
             let Some((_aug_len, aug_data_off)) = read_uleb128(data, aug_len_off) else {
@@ -2214,7 +2317,10 @@ pub(crate) fn for_each_fde_lsda_classified(file: &object::File, ptr_size: usize,
             }
             // Decode the `.gcc_except_table` LSDA at `lsda_ptr`. lpStart defaults to
             // the FDE's pcBegin when the LSDA omits its own lpStart.
-            let personality = cie_personality.iter().find(|&&(co, _)| co == cie_off).map_or(Personality::Unknown, |&(_, p)| p);
+            let personality = cie_personality
+                .iter()
+                .find(|&&(co, _)| co == cie_off)
+                .map_or(Personality::Unknown, |&(_, p)| p);
             on_lsda(pc_begin, lsda_ptr, personality);
         }
         o = next;
@@ -2264,7 +2370,8 @@ pub(crate) fn decode_lsda(
         func_pc_begin
     } else {
         let field_vma = gcc_vma + p as u64;
-        let v = decode_eh_pointer_ordered(lp_enc, field_vma, gcc_vma, gcc_data, p, ptr_size, little)?;
+        let v =
+            decode_eh_pointer_ordered(lp_enc, field_vma, gcc_vma, gcc_data, p, ptr_size, little)?;
         p += encoded_size(lp_enc, ptr_size, gcc_data.get(p..).unwrap_or(&[]));
         v
     };
@@ -2280,32 +2387,58 @@ pub(crate) fn decode_lsda(
     p += 1;
     let (cs_table_len, np) = read_uleb128(gcc_data, p)?;
     p = np;
-    let table_end = p.checked_add(cs_table_len as usize).filter(|&e| e <= gcc_data.len())?;
+    let table_end = p
+        .checked_add(cs_table_len as usize)
+        .filter(|&e| e <= gcc_data.len())?;
 
     let mut call_sites = Vec::new();
     while p < table_end && call_sites.len() < 10_000 {
         let field = |p: usize| {
-            decode_eh_pointer_ordered(cs_enc, gcc_vma + p as u64, gcc_vma, &gcc_data[..table_end], p, ptr_size, little)
+            decode_eh_pointer_ordered(
+                cs_enc,
+                gcc_vma + p as u64,
+                gcc_vma,
+                &gcc_data[..table_end],
+                p,
+                ptr_size,
+                little,
+            )
         };
         let Some(start) = field(p) else { break };
-        let Some(np) = skip_eh_pointer(cs_enc, gcc_data, p, ptr_size) else { break };
+        let Some(np) = skip_eh_pointer(cs_enc, gcc_data, p, ptr_size) else {
+            break;
+        };
         p = np;
         let Some(len) = field(p) else { break };
-        let Some(np) = skip_eh_pointer(cs_enc, gcc_data, p, ptr_size) else { break };
+        let Some(np) = skip_eh_pointer(cs_enc, gcc_data, p, ptr_size) else {
+            break;
+        };
         p = np;
         let Some(cs_lp) = field(p) else { break };
-        let Some(np) = skip_eh_pointer(cs_enc, gcc_data, p, ptr_size) else { break };
+        let Some(np) = skip_eh_pointer(cs_enc, gcc_data, p, ptr_size) else {
+            break;
+        };
         p = np;
-        let Some((action, np)) = read_uleb128(gcc_data, p) else { break };
+        let Some((action, np)) = read_uleb128(gcc_data, p) else {
+            break;
+        };
         p = np;
         call_sites.push(LsdaCallSite {
             start: func_pc_begin.wrapping_add(start),
             len,
-            pad: if cs_lp == 0 { 0 } else { lp_start.wrapping_add(cs_lp) },
+            pad: if cs_lp == 0 {
+                0
+            } else {
+                lp_start.wrapping_add(cs_lp)
+            },
             action,
         });
     }
-    Some(Lsda { call_sites, action_table: table_end, ttype })
+    Some(Lsda {
+        call_sites,
+        action_table: table_end,
+        ttype,
+    })
 }
 
 /// Parse a CIE record's augmentation and return its decoded [`CieAug`] (the FDE
@@ -2348,7 +2481,13 @@ fn parse_cie_aug(rec: &[u8], ptr_size: usize) -> Option<CieAug> {
     let mut has_lsda = false;
     let mut lsda_enc = DW_EH_PE_ABSPTR;
     if aug.first() != Some(&b'z') {
-        return Some(CieAug { fde_enc, has_lsda, lsda_enc, fde_lsda_off: 0, personality: None });
+        return Some(CieAug {
+            fde_enc,
+            has_lsda,
+            lsda_enc,
+            fde_lsda_off: 0,
+            personality: None,
+        });
     }
     let (aug_len, np) = read_uleb128(rec, p)?;
     p = np;
@@ -2384,7 +2523,13 @@ fn parse_cie_aug(rec: &[u8], ptr_size: usize) -> Option<CieAug> {
     // The FDE aug-data LSDA pointer is the FIRST FDE aug-data field for the
     // `zL`/`zPL`/`zPLR` augmentations gcc emits (the `R` char only sizes the FDE
     // pcBegin/pcRange; `P`'s personality is CIE aug-data). Offset 0.
-    Some(CieAug { fde_enc, has_lsda, lsda_enc, fde_lsda_off: 0, personality })
+    Some(CieAug {
+        fde_enc,
+        has_lsda,
+        lsda_enc,
+        fde_lsda_off: 0,
+        personality,
+    })
 }
 
 /// Advance past a DW_EH_PE-encoded value at `bytes[off..]`, returning the next
@@ -2609,7 +2754,9 @@ fn read_u64_opt(b: &[u8]) -> Option<u64> {
     if b.len() < 8 {
         return None;
     }
-    Some(u64::from_le_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]]))
+    Some(u64::from_le_bytes([
+        b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
+    ]))
 }
 
 fn read_i32(b: &[u8]) -> i32 {
@@ -2681,15 +2828,26 @@ mod tests {
         for name in ["funcstart_shrinkwrap_el.o", "funcstart_shrinkwrap_eb.o"] {
             let bytes = fixture(name);
             let file = object::File::parse(bytes.as_slice()).expect("parse");
-            let set = patterns::for_arch(file.architecture(), file.is_little_endian()).expect("MIPS set");
+            let set =
+                patterns::for_arch(file.architecture(), file.is_little_endian()).expect("MIPS set");
             let text = file.section_by_name(".text").expect(".text");
-            assert!(set.scan(text.address(), text.data().unwrap()).contains(&0x10), "{name}: the pair matches");
+            assert!(
+                set.scan(text.address(), text.data().unwrap())
+                    .contains(&0x10),
+                "{name}: the pair matches"
+            );
             assert_eq!(full_pattern_starts(&file), Vec::<u64>::new(), "{name}");
         }
         let bodies = [(0x10, 0x20), (0x18, 0x30)];
         assert!(!inside_body(&bodies, 0x10), "an extent's own start");
-        assert!(inside_body(&bodies, 0x11) && inside_body(&bodies, 0x2f), "strictly inside");
-        assert!(!inside_body(&bodies, 0x30) && !inside_body(&bodies, 0x8), "outside");
+        assert!(
+            inside_body(&bodies, 0x11) && inside_body(&bodies, 0x2f),
+            "strictly inside"
+        );
+        assert!(
+            !inside_body(&bodies, 0x30) && !inside_body(&bodies, 0x8),
+            "outside"
+        );
     }
 
     /// A Mach-O `LC_MAIN` states its entry as a `__TEXT`-relative FILE OFFSET, so
@@ -2701,7 +2859,11 @@ mod tests {
         for name in ["macho_imports", "macho_stripped_main"] {
             let bytes = fixture(name);
             let file = object::File::parse(bytes.as_slice()).expect("parse");
-            assert_eq!(file.entry(), 0x5b0, "{name}: object reports the raw entryoff");
+            assert_eq!(
+                file.entry(),
+                0x5b0,
+                "{name}: object reports the raw entryoff"
+            );
             assert_eq!(image_entry_vma(&file, &bytes), Some(0x1000005b0), "{name}");
         }
         let bytes = fixture("macho_imports_arm64");
@@ -2741,7 +2903,10 @@ mod tests {
         let mut broken = bytes;
         broken[40..48].copy_from_slice(&0xdeadu64.to_le_bytes()); // ELF64 e_shoff
         let (recovered, note) = crate::loader::elf_shdr::tolerate_unusable_section_table(broken);
-        assert!(note.is_some(), "the fixture must look corrupt to the repair");
+        assert!(
+            note.is_some(),
+            "the fixture must look corrupt to the repair"
+        );
         recovered
     }
 
@@ -2755,15 +2920,25 @@ mod tests {
     fn section_less_image_falls_back_to_its_load_segments() {
         let bytes = without_sections(fixture("fauxware"));
         let file = object::File::parse(bytes.as_slice()).expect("recovered image parses");
-        assert_eq!(file.sections().count(), 0, "the fixture must present no sections");
+        assert_eq!(
+            file.sections().count(),
+            0,
+            "the fixture must present no sections"
+        );
 
         let execs = executable_sections(&file);
-        assert!(!execs.is_empty(), "the PF_X PT_LOAD must stand in for the missing sections");
+        assert!(
+            !execs.is_empty(),
+            "the PF_X PT_LOAD must stand in for the missing sections"
+        );
         assert!(
             in_executable_section(&execs, file.entry()),
             "e_entry {:#x} must be plausible code in {:#x?}",
             file.entry(),
-            execs.iter().map(|&(lo, hi, _)| (lo, hi)).collect::<Vec<_>>()
+            execs
+                .iter()
+                .map(|&(lo, hi, _)| (lo, hi))
+                .collect::<Vec<_>>()
         );
 
         let entries = collect_entries(&file, &bytes);
@@ -2783,7 +2958,10 @@ mod tests {
         let segs = executable_segments(&file);
         assert!(!execs.is_empty());
         assert_ne!(
-            execs.iter().map(|&(lo, hi, _)| (lo, hi)).collect::<Vec<_>>(),
+            execs
+                .iter()
+                .map(|&(lo, hi, _)| (lo, hi))
+                .collect::<Vec<_>>(),
             segs.iter().map(|&(lo, hi, _)| (lo, hi)).collect::<Vec<_>>(),
             "the two views differ, so the healthy path is demonstrably not the fallback"
         );
@@ -2797,12 +2975,21 @@ mod tests {
     fn packed_image_does_not_take_the_segment_fallback() {
         let bytes = fixture("upx_packed_x86_64");
         let file = object::File::parse(bytes.as_slice()).expect("parse upx fixture");
-        assert!(file.sections().next().is_none(), "the fixture is section-less, like a stripped one");
+        assert!(
+            file.sections().next().is_none(),
+            "the fixture is section-less, like a stripped one"
+        );
         let segs = executable_segments(&file);
         assert!(!segs.is_empty(), "with a PF_X PT_LOAD to be tempted by");
         assert!(is_packer_stub(&segs), "but that segment is a UPX stub");
-        assert!(executable_sections(&file).is_empty(), "so it reports no executable ranges");
-        assert!(collect_entries(&file, &bytes).is_empty(), "and discovery still finds nothing");
+        assert!(
+            executable_sections(&file).is_empty(),
+            "so it reports no executable ranges"
+        );
+        assert!(
+            collect_entries(&file, &bytes).is_empty(),
+            "and discovery still finds nothing"
+        );
     }
 
     /// A relocatable object has no program headers and a COFF object's segments
@@ -2827,8 +3014,19 @@ mod tests {
         let file = object::File::parse(bytes.as_slice()).expect("parse fauxware");
         let starts = scan_eh_frame_starts(&file);
         // readelf --debug-dump=frames ground truth.
-        for want in [0x400500u64, 0x400664, 0x4006ed, 0x4006fd, 0x40071d, 0x4007e0, 0x400870] {
-            assert!(starts.contains(&want), "FDE start {want:#x} missing from {starts:#x?}");
+        for want in [
+            0x400500u64,
+            0x400664,
+            0x4006ed,
+            0x4006fd,
+            0x40071d,
+            0x4007e0,
+            0x400870,
+        ] {
+            assert!(
+                starts.contains(&want),
+                "FDE start {want:#x} missing from {starts:#x?}"
+            );
         }
         // The known funcsyms (authenticate=0x400664, accepted=0x4006ed,
         // rejected=0x4006fd, main=0x40071d) are a subset — the oracle property.
@@ -2842,7 +3040,10 @@ mod tests {
         let bytes = fixture("fauxware");
         let file = object::File::parse(bytes.as_slice()).expect("parse fauxware");
         let starts = scan_eh_frame_starts(&file);
-        assert!(starts.contains(&0x400500), "first FDE pcBegin should be 0x400500");
+        assert!(
+            starts.contains(&0x400500),
+            "first FDE pcBegin should be 0x400500"
+        );
     }
 
     // -- `.eh_frame` LSDA landing pads (eh_lsda_x86_64, the gated headline) ----
@@ -2861,7 +3062,10 @@ mod tests {
         let file = object::File::parse(bytes.as_slice()).expect("parse eh_lsda_x86_64");
         let pads = scan_eh_frame_landing_pads(&file);
         for want in [0x4012bfu64, 0x4012e2, 0x401352, 0x401366] {
-            assert!(pads.contains(&want), "landing pad {want:#x} missing from {pads:#x?}");
+            assert!(
+                pads.contains(&want),
+                "landing pad {want:#x} missing from {pads:#x?}"
+            );
         }
         assert!(!pads.contains(&0), "no spurious 0 landing pad");
     }
@@ -2886,7 +3090,10 @@ mod tests {
         // this stripped binary) — the additive product the gated option commits.
         let entries = collect_landing_pad_entries(&file, &bytes);
         for want in [0x4012bfu64, 0x4012e2, 0x401352, 0x401366] {
-            assert!(entries.contains(&want), "filtered entry {want:#x} missing from {entries:#x?}");
+            assert!(
+                entries.contains(&want),
+                "filtered entry {want:#x} missing from {entries:#x?}"
+            );
         }
     }
 
@@ -2897,8 +3104,14 @@ mod tests {
     fn landing_pads_empty_without_except_table() {
         let bytes = fixture("fauxware");
         let file = object::File::parse(bytes.as_slice()).expect("parse fauxware");
-        assert!(file.section_by_name(".gcc_except_table").is_none(), "fauxware has no LSDA");
-        assert!(scan_eh_frame_landing_pads(&file).is_empty(), "no landing pads without LSDA");
+        assert!(
+            file.section_by_name(".gcc_except_table").is_none(),
+            "fauxware has no LSDA"
+        );
+        assert!(
+            scan_eh_frame_landing_pads(&file).is_empty(),
+            "no landing pads without LSDA"
+        );
     }
 
     // Unit-test the LSDA call-site-table parse over SYNTHETIC bytes (no fixture):
@@ -2934,7 +3147,12 @@ mod tests {
         let func_pc_begin = 0x4012d6u64;
         // gcc_vma=0, lsda_vma=0 (section offset 0), ptr_size 8.
         let lsda = decode_lsda(gcc, 0, 0, func_pc_begin, 8, true).expect("lsda");
-        let mut out: Vec<u64> = lsda.call_sites.iter().filter(|cs| cs.pad != 0).map(|cs| cs.pad).collect();
+        let mut out: Vec<u64> = lsda
+            .call_sites
+            .iter()
+            .filter(|cs| cs.pad != 0)
+            .map(|cs| cs.pad)
+            .collect();
         out.sort_unstable();
         out.dedup();
         assert_eq!(
@@ -2955,11 +3173,23 @@ mod tests {
         let bytes = fixture("stripped_dynamic_x86_64");
         let file = object::File::parse(bytes.as_slice()).expect("parse stripped_dynamic");
         let eps = dynamic_entry_points(&file);
-        assert!(eps.contains(&0x1000), "DT_INIT 0x1000 missing from {eps:#x?}");
-        assert!(eps.contains(&0x1464), "DT_FINI 0x1464 missing from {eps:#x?}");
+        assert!(
+            eps.contains(&0x1000),
+            "DT_INIT 0x1000 missing from {eps:#x?}"
+        );
+        assert!(
+            eps.contains(&0x1464),
+            "DT_FINI 0x1464 missing from {eps:#x?}"
+        );
         // INIT_ARRAY (1 ptr @0x3d78 → 0x1240 frame_dummy), FINI_ARRAY (→ 0x1200).
-        assert!(eps.contains(&0x1240), "INIT_ARRAY ptr 0x1240 missing from {eps:#x?}");
-        assert!(eps.contains(&0x1200), "FINI_ARRAY ptr 0x1200 missing from {eps:#x?}");
+        assert!(
+            eps.contains(&0x1240),
+            "INIT_ARRAY ptr 0x1240 missing from {eps:#x?}"
+        );
+        assert!(
+            eps.contains(&0x1200),
+            "FINI_ARRAY ptr 0x1200 missing from {eps:#x?}"
+        );
     }
 
     /// Every function of this stripped ELFv1 PIE is reached through a descriptor:
@@ -2970,13 +3200,30 @@ mod tests {
             let bytes = fixture(name);
             let file = object::File::parse(bytes.as_slice()).expect("parse elfv1_initfini");
             let entries = collect_entries(&file, &bytes);
-            assert_eq!(entries, [0x350, 0x370, 0x390, 0x3b0, 0x3d0], "{name}: {entries:#x?}");
+            assert_eq!(
+                entries,
+                [0x350, 0x370, 0x390, 0x3b0, 0x3d0],
+                "{name}: {entries:#x?}"
+            );
             let names = collect_entry_names(&file, &entries);
-            assert_eq!(names, [(0x350, "_FINI_0".to_string()), (0x370, "_INIT_0".to_string()),
-                (0x390, "_DT_INIT".to_string()), (0x3b0, "_DT_FINI".to_string())], "{name}");
-            let image = crate::loadimage_object::ObjectLoadImage::from_bytes_silent(name, &bytes).unwrap();
+            assert_eq!(
+                names,
+                [
+                    (0x350, "_FINI_0".to_string()),
+                    (0x370, "_INIT_0".to_string()),
+                    (0x390, "_DT_INIT".to_string()),
+                    (0x3b0, "_DT_FINI".to_string())
+                ],
+                "{name}"
+            );
+            let image =
+                crate::loadimage_object::ObjectLoadImage::from_bytes_silent(name, &bytes).unwrap();
             let tocs: Vec<_> = image.elfv1_descriptors().entry_tocs().into_iter().collect();
-            assert_eq!(tocs, entries.iter().map(|&e| (e, 0x9f00)).collect::<Vec<_>>(), "{name}");
+            assert_eq!(
+                tocs,
+                entries.iter().map(|&e| (e, 0x9f00)).collect::<Vec<_>>(),
+                "{name}"
+            );
         }
     }
 
@@ -2990,12 +3237,22 @@ mod tests {
             let le = file.is_little_endian();
             let get = |b: &[u8], at: usize| {
                 let w: [u8; 8] = b[at..at + 8].try_into().unwrap();
-                if le { u64::from_le_bytes(w) } else { u64::from_be_bytes(w) }
+                if le {
+                    u64::from_le_bytes(w)
+                } else {
+                    u64::from_be_bytes(w)
+                }
             };
             let put = |b: &mut [u8], at: usize, v: u64| {
                 b[at..at + 8].copy_from_slice(&if le { v.to_le_bytes() } else { v.to_be_bytes() });
             };
-            let at = |section: &str| file.section_by_name(section).unwrap().file_range().unwrap().0 as usize;
+            let at = |section: &str| {
+                file.section_by_name(section)
+                    .unwrap()
+                    .file_range()
+                    .unwrap()
+                    .0 as usize
+            };
             let (init, fini) = (at(".init_array"), at(".fini_array"));
             let mut swapped = original.clone();
             put(&mut swapped, init, get(&original, fini));
@@ -3003,25 +3260,58 @@ mod tests {
             let mut zeroed = original.clone();
             put(&mut zeroed, init, 0);
             put(&mut zeroed, fini, 0);
-            let (rela, size) = file.section_by_name(".rela.dyn").unwrap().file_range().unwrap();
+            let (rela, size) = file
+                .section_by_name(".rela.dyn")
+                .unwrap()
+                .file_range()
+                .unwrap();
             let init_vma = file.section_by_name(".init_array").unwrap().address();
-            let record = (rela as usize..(rela + size) as usize).step_by(24)
-                .find(|&r| get(&original, r) == init_vma).expect("init_array relocation");
+            let record = (rela as usize..(rela + size) as usize)
+                .step_by(24)
+                .find(|&r| get(&original, r) == init_vma)
+                .expect("init_array relocation");
             let mut uncertain = original.clone();
-            put(&mut uncertain, record + 8, u64::from(object::elf::R_PPC64_ADDR64));
-            let all = [(0x350, Some("_FINI_0")), (0x370, Some("_INIT_0")), (0x390, Some("_DT_INIT")),
-                (0x3b0, Some("_DT_FINI")), (0x3d0, None)];
-            for (variant, bytes, missing) in [("swapped", swapped, None), ("zeroed", zeroed, None),
-                ("uncertain", uncertain, Some(0x370))] {
+            put(
+                &mut uncertain,
+                record + 8,
+                u64::from(object::elf::R_PPC64_ADDR64),
+            );
+            let all = [
+                (0x350, Some("_FINI_0")),
+                (0x370, Some("_INIT_0")),
+                (0x390, Some("_DT_INIT")),
+                (0x3b0, Some("_DT_FINI")),
+                (0x3d0, None),
+            ];
+            for (variant, bytes, missing) in [
+                ("swapped", swapped, None),
+                ("zeroed", zeroed, None),
+                ("uncertain", uncertain, Some(0x370)),
+            ] {
                 let expected: Vec<_> = all.iter().filter(|e| Some(e.0) != missing).collect();
                 let file = object::File::parse(bytes.as_slice()).expect("parse variant");
                 let entries = collect_entries(&file, &bytes);
-                assert_eq!(entries, expected.iter().map(|e| e.0).collect::<Vec<_>>(), "{name} {variant}");
-                let names: Vec<_> = collect_entry_names(&file, &entries).into_iter()
-                    .map(|(a, n)| (a, Some(n))).collect();
-                assert_eq!(names, expected.iter().filter(|e| e.1.is_some())
-                    .map(|e| (e.0, e.1.map(str::to_string))).collect::<Vec<_>>(), "{name} {variant}");
-                let image = crate::loadimage_object::ObjectLoadImage::from_bytes_silent(name, &bytes).unwrap();
+                assert_eq!(
+                    entries,
+                    expected.iter().map(|e| e.0).collect::<Vec<_>>(),
+                    "{name} {variant}"
+                );
+                let names: Vec<_> = collect_entry_names(&file, &entries)
+                    .into_iter()
+                    .map(|(a, n)| (a, Some(n)))
+                    .collect();
+                assert_eq!(
+                    names,
+                    expected
+                        .iter()
+                        .filter(|e| e.1.is_some())
+                        .map(|e| (e.0, e.1.map(str::to_string)))
+                        .collect::<Vec<_>>(),
+                    "{name} {variant}"
+                );
+                let image =
+                    crate::loadimage_object::ObjectLoadImage::from_bytes_silent(name, &bytes)
+                        .unwrap();
                 let tocs: Vec<_> = image.elfv1_descriptors().entry_tocs().into_keys().collect();
                 assert_eq!(tocs, entries, "{name} {variant}");
             }
@@ -3066,7 +3356,11 @@ mod tests {
         let bytes = fixture("armv4t_thumb_pe.exe");
         let file = object::File::parse(bytes.as_slice()).expect("parse the Thumb PE");
         assert_eq!(file.architecture(), object::Architecture::Unknown);
-        assert_eq!(file.entry(), 0x401001, "the fixture's entry carries the Thumb bit");
+        assert_eq!(
+            file.entry(),
+            0x401001,
+            "the fixture's entry carries the Thumb bit"
+        );
         let entries = collect_entries(&file, bytes.as_slice());
         assert!(entries.contains(&0x401000), "{entries:x?}");
         assert!(!entries.contains(&0x401001), "{entries:x?}");
@@ -3079,11 +3373,20 @@ mod tests {
         let entries = collect_entries(&file, bytes.as_slice());
         let names = collect_entry_names(&file, &entries);
         // The array-element starts survive into the entry set and carry their names.
-        assert!(names.contains(&(0x1240, "_INIT_0".to_string())), "_INIT_0 missing");
-        assert!(names.contains(&(0x1200, "_FINI_0".to_string())), "_FINI_0 missing");
+        assert!(
+            names.contains(&(0x1240, "_INIT_0".to_string())),
+            "_INIT_0 missing"
+        );
+        assert!(
+            names.contains(&(0x1200, "_FINI_0".to_string())),
+            "_FINI_0 missing"
+        );
         // Every named VMA is a genuinely-discovered entry (overlay never invents).
         for (addr, _name) in &names {
-            assert!(entries.contains(addr), "named entry {addr:#x} not in discovered set");
+            assert!(
+                entries.contains(addr),
+                "named entry {addr:#x} not in discovered set"
+            );
         }
     }
 
@@ -3094,8 +3397,14 @@ mod tests {
         let bytes = fixture("stripped_dynamic_x86_64");
         let file = object::File::parse(bytes.as_slice()).expect("parse stripped_dynamic");
         let addrs = dynamic_entry_points(&file);
-        let named: Vec<u64> = dynamic_entry_points_named(&file).into_iter().map(|(a, _)| a).collect();
-        assert_eq!(addrs, named, "dynamic_entry_points must equal the named oracle's addresses");
+        let named: Vec<u64> = dynamic_entry_points_named(&file)
+            .into_iter()
+            .map(|(a, _)| a)
+            .collect();
+        assert_eq!(
+            addrs, named,
+            "dynamic_entry_points must equal the named oracle's addresses"
+        );
     }
 
     // -- Oracle 4: _start -> main idiom (stripped_dynamic) --------------------
@@ -3106,7 +3415,11 @@ mod tests {
         let file = object::File::parse(bytes.as_slice()).expect("parse stripped_dynamic");
         let main = libc_start_main_target(&file, file.entry());
         // lea rdi at 0x1178, disp 0x286 → 0x117f + 0x286 = 0x1405 = main.
-        assert_eq!(main, Some(0x1405), "libc-start idiom should recover main at 0x1405");
+        assert_eq!(
+            main,
+            Some(0x1405),
+            "libc-start idiom should recover main at 0x1405"
+        );
     }
 
     /// A stripped Thumb-2 image: the ARM pattern pairs that set `TMode` 1 carry
@@ -3116,9 +3429,18 @@ mod tests {
         let bytes = fixture("funcstart_thumb_arm");
         let file = object::File::parse(bytes.as_slice()).expect("parse funcstart_thumb_arm");
         let starts = full_pattern_starts_with_mode(&file);
-        assert!(starts.contains(&(0x101ec, Some(1))), "a2 is a Thumb start: {starts:x?}");
-        assert!(starts.contains(&(0x101fc, Some(1))), "a3 is a Thumb start: {starts:x?}");
-        assert!(starts.iter().all(|&(_, mode)| mode == Some(1)), "{starts:x?}");
+        assert!(
+            starts.contains(&(0x101ec, Some(1))),
+            "a2 is a Thumb start: {starts:x?}"
+        );
+        assert!(
+            starts.contains(&(0x101fc, Some(1))),
+            "a3 is a Thumb start: {starts:x?}"
+        );
+        assert!(
+            starts.iter().all(|&(_, mode)| mode == Some(1)),
+            "{starts:x?}"
+        );
     }
 
     /// Non-PIE x86-64: `_start` hands `main` over as `mov rdi,imm32`
@@ -3131,7 +3453,11 @@ mod tests {
         let file = object::File::parse(bytes.as_slice()).expect("parse funcstart_patterns");
         assert_eq!(file.entry(), 0x401040, "non-PIE _start (e_entry)");
         let main = libc_start_main_target(&file, file.entry());
-        assert_eq!(main, Some(0x401020), "absolute-immediate idiom should recover main at 0x401020");
+        assert_eq!(
+            main,
+            Some(0x401020),
+            "absolute-immediate idiom should recover main at 0x401020"
+        );
         assert!(
             collect_entries(&file, bytes.as_slice()).contains(&0x401020),
             "the recovered main must reach the entry union"
@@ -3209,9 +3535,17 @@ mod tests {
         assert_eq!(file.entry(), 0x600, "aarch64 _start (e_entry)");
         // The GOT slot 0x10ff0 resolves to main (0x714) via the RELATIVE map.
         let rel = relative_targets(&file);
-        assert_eq!(rel.get(&0x10ff0).copied(), Some(0x714), "RELATIVE @0x10ff0 → main");
+        assert_eq!(
+            rel.get(&0x10ff0).copied(),
+            Some(0x714),
+            "RELATIVE @0x10ff0 → main"
+        );
         let main = libc_start_main_target(&file, file.entry());
-        assert_eq!(main, Some(0x714), "aarch64 idiom should recover main at 0x714");
+        assert_eq!(
+            main,
+            Some(0x714),
+            "aarch64 idiom should recover main at 0x714"
+        );
     }
 
     /// ARM/Thumb: `_start` (0x3dd, Thumb @0x3dc) loads `main` (0x4d8) into `r0`
@@ -3225,9 +3559,17 @@ mod tests {
         assert_eq!(file.entry(), 0x3dd, "arm _start (Thumb, LSB set)");
         // The RELATIVE map carries the GOT slot 0x10ff8 → 0x4d9 (Thumb LSB).
         let rel = relative_targets(&file);
-        assert_eq!(rel.get(&0x10ff8).copied(), Some(0x4d9), "RELATIVE @0x10ff8 → main|1");
+        assert_eq!(
+            rel.get(&0x10ff8).copied(),
+            Some(0x4d9),
+            "RELATIVE @0x10ff8 → main|1"
+        );
         let main = libc_start_main_target(&file, file.entry());
-        assert_eq!(main, Some(0x4d8), "arm idiom should recover main at 0x4d8 (LSB masked)");
+        assert_eq!(
+            main,
+            Some(0x4d8),
+            "arm idiom should recover main at 0x4d8 (LSB masked)"
+        );
     }
 
     /// ARM Cortex-M vector-table harvest (oracle 6): the pure harvest loop over a
@@ -3363,7 +3705,15 @@ mod tests {
         push_shdr(&mut buf, 0, 0, 0, 0, 0, 0); // 0: null
         push_shdr(&mut buf, off_isr, 1, isr_flags, 0, seg_off, 0x20); // 1: .isr_vector
         push_shdr(&mut buf, off_text, 1, 0x2 | 0x4, 0x20, seg_off + 0x20, 0x20); // 2: .text (AX)
-        push_shdr(&mut buf, off_shstrtab, 3, 0, 0, shstr_off, shstr.len() as u32); // 3
+        push_shdr(
+            &mut buf,
+            off_shstrtab,
+            3,
+            0,
+            0,
+            shstr_off,
+            shstr.len() as u32,
+        ); // 3
         buf
     }
 
@@ -3396,7 +3746,10 @@ mod tests {
         );
 
         let table = cortexm_vector_table(&file, false);
-        assert!(table.is_some(), "vector table must be detected in the WA `.isr_vector`");
+        assert!(
+            table.is_some(),
+            "vector table must be detected in the WA `.isr_vector`"
+        );
         assert_eq!(table.unwrap().0, 0, "the table is the section at VMA 0");
 
         // The reset + handler seeds are harvested (masked, sorted, deduped) and
@@ -3404,12 +3757,20 @@ mod tests {
         assert_eq!(cortexm_vector_entries(&file, false), vec![0x20, 0x30, 0x38]);
         let entries = collect_entries(&file, bytes.as_slice());
         for want in [0x20u64, 0x30, 0x38] {
-            assert!(entries.contains(&want), "entry {want:#x} missing from {entries:#x?}");
+            assert!(
+                entries.contains(&want),
+                "entry {want:#x} missing from {entries:#x?}"
+            );
         }
         // A confirmed table also unlocks the whole-image Thumb region paint.
         assert_eq!(
             cortexm_thumb_paints(&file, false),
-            vec![ContextPaint { addr: 0x20, end: Some(0x40), var: "TMode", value: 1 }],
+            vec![ContextPaint {
+                addr: 0x20,
+                end: Some(0x40),
+                var: "TMode",
+                value: 1
+            }],
             "a confirmed table paints TMode=1 over the executable sections"
         );
     }
@@ -3420,18 +3781,28 @@ mod tests {
     /// relocatable-object shape) is unchanged.
     #[test]
     fn cortexm_vector_table_requires_executable_load() {
-        for (label, seg_flags, phdrs) in
-            [("RW PT_LOAD", 0x4u32 | 0x2, true), ("no program headers", 0, false)]
-        {
+        for (label, seg_flags, phdrs) in [
+            ("RW PT_LOAD", 0x4u32 | 0x2, true),
+            ("no program headers", 0, false),
+        ] {
             let bytes = build_cortexm_elf32(0x1 | 0x2, seg_flags, phdrs);
             let file = object::File::parse(bytes.as_slice()).expect("parse synthetic firmware");
             assert!(
                 phdr_executable_sections(&file).is_empty(),
                 "{label}: nothing is loaded executable"
             );
-            assert!(cortexm_vector_table(&file, false).is_none(), "{label}: no table candidate");
-            assert!(cortexm_vector_entries(&file, false).is_empty(), "{label}: no seeds");
-            assert!(cortexm_thumb_paints(&file, false).is_empty(), "{label}: no Thumb paint");
+            assert!(
+                cortexm_vector_table(&file, false).is_none(),
+                "{label}: no table candidate"
+            );
+            assert!(
+                cortexm_vector_entries(&file, false).is_empty(),
+                "{label}: no seeds"
+            );
+            assert!(
+                cortexm_thumb_paints(&file, false).is_empty(),
+                "{label}: no Thumb paint"
+            );
         }
     }
 
@@ -3465,9 +3836,17 @@ mod tests {
         assert_eq!(file.architecture(), object::Architecture::Riscv64);
         assert_eq!(file.entry(), 0x550, "riscv _start (e_entry)");
         let rel = relative_targets(&file);
-        assert_eq!(rel.get(&0x2030).copied(), Some(0x608), "RELATIVE @0x2030 → main");
+        assert_eq!(
+            rel.get(&0x2030).copied(),
+            Some(0x608),
+            "RELATIVE @0x2030 → main"
+        );
         let main = libc_start_main_target(&file, file.entry());
-        assert_eq!(main, Some(0x608), "riscv idiom should recover main at 0x608");
+        assert_eq!(
+            main,
+            Some(0x608),
+            "riscv idiom should recover main at 0x608"
+        );
     }
 
     /// The fused core proves oracle 4 SPECIFICALLY contributes `main` on each
@@ -3524,7 +3903,10 @@ mod tests {
         let execs = executable_sections(&file);
         for &e in &entries {
             assert!(e != 0, "no zero entry");
-            assert!(in_executable_section(&execs, e), "entry {e:#x} outside exec section");
+            assert!(
+                in_executable_section(&execs, e),
+                "entry {e:#x} outside exec section"
+            );
         }
     }
 
@@ -3538,11 +3920,17 @@ mod tests {
         let named = existing_function_addrs(&file, bytes.as_slice());
         // No emitted entry coincides with an already-named function.
         for &e in &entries {
-            assert!(named.binary_search(&e).is_err(), "entry {e:#x} duplicates a funcsym");
+            assert!(
+                named.binary_search(&e).is_err(),
+                "entry {e:#x} duplicates a funcsym"
+            );
         }
         // An FDE-derived start that is NOT a funcsym (e.g. _start 0x400500) is
         // recovered; main/authenticate (funcsyms) are correctly skipped here.
-        assert!(entries.contains(&0x400500), "_start 0x400500 should be discovered");
+        assert!(
+            entries.contains(&0x400500),
+            "_start 0x400500 should be discovered"
+        );
     }
 
     // -- The fused core, PE (the PR-12 headline): a stripped PE finds functions ---
@@ -3557,15 +3945,28 @@ mod tests {
         let bytes = fixture("pe_imports_stripped.exe");
         let file = object::File::parse(bytes.as_slice()).expect("parse stripped PE");
         let entries = collect_entries(&file, bytes.as_slice());
-        assert!(entries.contains(&0x1400014f0), "entry 0x1400014f0 missing from {entries:#x?}");
-        assert!(entries.contains(&0x140001592), "main 0x140001592 missing (.pdata)");
+        assert!(
+            entries.contains(&0x1400014f0),
+            "entry 0x1400014f0 missing from {entries:#x?}"
+        );
+        assert!(
+            entries.contains(&0x140001592),
+            "main 0x140001592 missing (.pdata)"
+        );
         // A bare load (no oracles) finds nothing in a stripped PE; the oracles
         // recover dozens.
-        assert!(entries.len() >= 50, ".pdata should recover many functions, got {}", entries.len());
+        assert!(
+            entries.len() >= 50,
+            ".pdata should recover many functions, got {}",
+            entries.len()
+        );
         let execs = executable_sections(&file);
         for &e in &entries {
             assert!(e != 0, "no zero entry");
-            assert!(in_executable_section(&execs, e), "entry {e:#x} outside exec section");
+            assert!(
+                in_executable_section(&execs, e),
+                "entry {e:#x} outside exec section"
+            );
         }
     }
 
@@ -3588,14 +3989,23 @@ mod tests {
             // The raw candidate set (the oracle output before the funcsym-skip)
             // carries both starts — the stripped-survivable discovery fact.
             let cands = macho_entry::macho_entry_candidates(&file, bytes.as_slice());
-            assert!(cands.contains(&compute), "{name}: _compute {compute:#x} not in function-starts");
-            assert!(cands.contains(&main), "{name}: _main {main:#x} not in function-starts");
+            assert!(
+                cands.contains(&compute),
+                "{name}: _compute {compute:#x} not in function-starts"
+            );
+            assert!(
+                cands.contains(&main),
+                "{name}: _main {main:#x} not in function-starts"
+            );
             // Every emitted entry (post-filter) lands in an exec section, non-zero.
             let entries = collect_entries(&file, bytes.as_slice());
             let execs = executable_sections(&file);
             for &e in &entries {
                 assert!(e != 0, "{name}: no zero entry");
-                assert!(in_executable_section(&execs, e), "{name}: entry {e:#x} outside exec section");
+                assert!(
+                    in_executable_section(&execs, e),
+                    "{name}: entry {e:#x} outside exec section"
+                );
             }
         }
     }
@@ -3620,7 +4030,10 @@ mod tests {
         let data = vec![0xf3, 0x0f, 0x1e, 0xfa, 0x55, 0x48, 0x89, 0xe5, 0x00, 0x00];
         let execs = vec![(0x1000u64, 0x1000 + data.len() as u64, data)];
         let hits = prologue_pattern_starts(&execs);
-        assert!(hits.contains(&0x1000), "endbr64-frame prologue should match at 0x1000");
+        assert!(
+            hits.contains(&0x1000),
+            "endbr64-frame prologue should match at 0x1000"
+        );
     }
 
     // -- LEB128 readers --------------------------------------------------------

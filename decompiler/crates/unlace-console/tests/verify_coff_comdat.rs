@@ -45,14 +45,17 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use unlace_analysis::loadimage_object::ObjectLoadImage;
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture() -> PathBuf {
@@ -64,9 +67,13 @@ fn func_syms() -> BTreeMap<String, u64> {
     let path = fixture();
     assert!(path.exists(), "missing fixture {path:?}");
     let bytes = std::fs::read(&path).unwrap();
-    let image = ObjectLoadImage::from_bytes(path.to_str().unwrap(), &bytes)
-        .expect("COFF object must load");
-    image.func_symbols().into_iter().map(|(a, n)| (n, a)).collect()
+    let image =
+        ObjectLoadImage::from_bytes(path.to_str().unwrap(), &bytes).expect("COFF object must load");
+    image
+        .func_symbols()
+        .into_iter()
+        .map(|(a, n)| (n, a))
+        .collect()
 }
 
 /// The "before" half, stated structurally: the object really does stack every
@@ -83,7 +90,10 @@ fn coff_comdat_sections_all_claim_vma_zero() {
         .filter(|s| s.name() == Ok(".text") && s.size() > 0)
         .map(|s| s.address())
         .collect();
-    assert!(text.len() >= 3, "fixture must carry ≥3 non-empty COMDAT .text sections");
+    assert!(
+        text.len() >= 3,
+        "fixture must carry ≥3 non-empty COMDAT .text sections"
+    );
     assert!(
         text.iter().all(|a| *a == 0),
         "COFF sections are section-relative: every one must report VMA 0, got {text:?}"
@@ -97,17 +107,29 @@ fn coff_comdat_sections_all_claim_vma_zero() {
 fn coff_comdat_loads_every_function() {
     let syms = func_syms();
     for name in ["_alpha", "_beta", "_gamma_"] {
-        assert!(syms.contains_key(name), "COMDAT function {name} missing; loader saw {syms:?}");
+        assert!(
+            syms.contains_key(name),
+            "COMDAT function {name} missing; loader saw {syms:?}"
+        );
     }
-    let addrs: Vec<u64> = ["_alpha", "_beta", "_gamma_"].iter().map(|n| syms[*n]).collect();
+    let addrs: Vec<u64> = ["_alpha", "_beta", "_gamma_"]
+        .iter()
+        .map(|n| syms[*n])
+        .collect();
     assert!(
-        addrs.iter().all(|a| *a >= unlace_analysis::loader::reloc_object::RELOC_BASE),
+        addrs
+            .iter()
+            .all(|a| *a >= unlace_analysis::loader::reloc_object::RELOC_BASE),
         "every function must be rebased above RELOC_BASE, got {addrs:x?}"
     );
     let mut sorted = addrs.clone();
     sorted.sort_unstable();
     sorted.dedup();
-    assert_eq!(sorted.len(), 3, "the three functions must occupy distinct VMAs, got {addrs:x?}");
+    assert_eq!(
+        sorted.len(),
+        3,
+        "the three functions must occupy distinct VMAs, got {addrs:x?}"
+    );
 }
 
 /// Bootstrap the object.
@@ -120,9 +142,13 @@ fn boot() -> ConsoleProgram {
 
 /// Run `load function <name>` → `decompile` → `print C` and return the C.
 fn decompile_func(prog: ConsoleProgram, name: &str) -> String {
-    let cmds: Vec<String> = [format!("load function {name}"), "decompile".into(), "print C".into()]
-        .into_iter()
-        .collect();
+    let cmds: Vec<String> = [
+        format!("load function {name}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .into_iter()
+    .collect();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -146,7 +172,10 @@ fn decompile_func(prog: ConsoleProgram, name: &str) -> String {
 fn coff_comdat_second_section_decompiles() {
     let prog = boot();
     let out = decompile_func(prog, "_beta");
-    assert!(out.contains("_beta"), "expected the function to be named `_beta`, got:\n{out}");
+    assert!(
+        out.contains("_beta"),
+        "expected the function to be named `_beta`, got:\n{out}"
+    );
     assert!(
         out.contains("* 3 +"),
         "`_beta` should decompile its inlined multiply-add body, got:\n{out}"

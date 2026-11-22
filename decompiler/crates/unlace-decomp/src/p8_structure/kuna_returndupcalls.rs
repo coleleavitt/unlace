@@ -35,7 +35,9 @@ pub struct ActionReturnDupCalls {
 impl ActionReturnDupCalls {
     /// Construct in group `g`.
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionReturnDupCalls { base: ActionBase::new(0, "returndupcalls", g) })
+        Box::new(ActionReturnDupCalls {
+            base: ActionBase::new(0, "returndupcalls", g),
+        })
     }
 }
 
@@ -51,14 +53,23 @@ fn block_ops(data: &Funcdata, b: BlockId) -> Vec<OpId> {
 
 /// Does `op`'s value depend, within `ops`, on a MULTIEQUAL?
 fn reads_merge(data: &Funcdata, ops: &[OpId], op: OpId, depth: u32) -> bool {
-    let Some(o) = data.obank().get(op) else { return false };
+    let Some(o) = data.obank().get(op) else {
+        return false;
+    };
     (0..o.num_input()).any(|slot| {
-        let Some(def) = o.get_in(slot).and_then(|v| data.vbank().get(v)).and_then(|v| v.get_def()) else { return false };
+        let Some(def) = o
+            .get_in(slot)
+            .and_then(|v| data.vbank().get(v))
+            .and_then(|v| v.get_def())
+        else {
+            return false;
+        };
         if !ops.contains(&def) {
             return false;
         }
         let code = data.obank().get(def).map(|d| d.code());
-        code == Some(OpCode::CPUI_MULTIEQUAL) || (depth < 4 && reads_merge(data, ops, def, depth + 1))
+        code == Some(OpCode::CPUI_MULTIEQUAL)
+            || (depth < 4 && reads_merge(data, ops, def, depth + 1))
     })
 }
 
@@ -80,7 +91,9 @@ fn is_candidate(data: &Funcdata, b: BlockId) -> bool {
     }
     let mut call = None;
     for &op in &ops {
-        let Some(o) = data.obank().get(op) else { return false };
+        let Some(o) = data.obank().get(op) else {
+            return false;
+        };
         if (o.is_branch() && o.code() != OpCode::CPUI_RETURN) || o.is_indirect_creation() {
             return false;
         }
@@ -90,14 +103,20 @@ fn is_candidate(data: &Funcdata, b: BlockId) -> bool {
             }
             call = Some(op);
         }
-        let free_input = (0..o.num_input())
-            .any(|s| o.get_in(s).and_then(|v| data.vbank().get(v)).is_some_and(|v| v.is_free() && !v.is_constant() && !v.is_annotation()));
+        let free_input = (0..o.num_input()).any(|s| {
+            o.get_in(s)
+                .and_then(|v| data.vbank().get(v))
+                .is_some_and(|v| v.is_free() && !v.is_constant() && !v.is_annotation())
+        });
         if free_input {
             return false;
         }
     }
     let Some(call) = call else { return false };
-    let ends_in_return = ops.last().and_then(|&op| data.obank().get(op)).is_some_and(|o| o.code() == OpCode::CPUI_RETURN);
+    let ends_in_return = ops
+        .last()
+        .and_then(|&op| data.obank().get(op))
+        .is_some_and(|o| o.code() == OpCode::CPUI_RETURN);
     ends_in_return && data.get_call_specs_index(call).is_some() && reads_merge(data, &ops, call, 0)
 }
 
@@ -112,15 +131,23 @@ impl Action for ActionReturnDupCalls {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionReturnDupCalls { base: self.base.clone() }))
+        Some(Box::new(ActionReturnDupCalls {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data.get_arch().duplicate_call_returns {
             return 0;
         }
         let root = data.bblocks_root_pub();
-        let cands: Vec<BlockId> =
-            data.bblocks_ref().block(root).get_list().iter().copied().filter(|&b| is_candidate(data, b)).collect();
+        let cands: Vec<BlockId> = data
+            .bblocks_ref()
+            .block(root)
+            .get_list()
+            .iter()
+            .copied()
+            .filter(|&b| is_candidate(data, b))
+            .collect();
         let mut count = 0;
         for b in cands {
             while count < MAX_SPLITS && data.bblocks_ref().block(b).size_in() > 1 {

@@ -34,7 +34,7 @@ use unlace_decomp::architecture::Architecture;
 use unlace_decomp::decompile_drive::{build_and_follow_flow, decompile_func, print_c};
 use unlace_decomp::options::ArchOptionContext;
 use unlace_decomp::printc::PrintC;
-use unlace_decomp::sleigh_arch::{register_sleigh_arch_ids, LanguageDatabase};
+use unlace_decomp::sleigh_arch::{LanguageDatabase, register_sleigh_arch_ids};
 use unlace_decomp::xml_arch::{XmlArchitecture, XmlArchitectureCapability};
 
 use unlace_sleigh::loadimage::LoadImage;
@@ -42,7 +42,10 @@ use unlace_sleigh::loadimage_xml::register_loadimage_xml_ids;
 use unlace_sleigh::translate::register_translate_ids;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 struct SymbolFn {
@@ -76,15 +79,22 @@ fn find_named(el: &Rc<Element>, name: &str, out: &mut Vec<Rc<Element>>) {
 }
 
 fn attr(el: &Element, name: &str) -> Option<String> {
-    el.get_attribute_value(name).ok().map(|b| String::from_utf8_lossy(b).into_owned())
+    el.get_attribute_value(name)
+        .ok()
+        .map(|b| String::from_utf8_lossy(b).into_owned())
 }
 
 fn parse_datatest(stem: &str) -> Result<DataTest, String> {
-    let path = repo_root().join("tests/datatests").join(format!("{stem}.xml"));
+    let path = repo_root()
+        .join("tests/datatests")
+        .join(format!("{stem}.xml"));
     let xml = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
     let mut store = DocumentStorage::new();
-    let root =
-        store.parse_document(&xml).map_err(|e| format!("parse {stem}: {e}"))?.get_root().clone();
+    let root = store
+        .parse_document(&xml)
+        .map_err(|e| format!("parse {stem}: {e}"))?
+        .get_root()
+        .clone();
     let mut bis = Vec::new();
     find_named(&root, "binaryimage", &mut bis);
     let binaryimage = bis.into_iter().next().ok_or("no <binaryimage>")?;
@@ -101,7 +111,11 @@ fn parse_datatest(stem: &str) -> Result<DataTest, String> {
             })
         })
         .collect();
-    Ok(DataTest { binaryimage, arch_id, symbols })
+    Ok(DataTest {
+        binaryimage,
+        arch_id,
+        symbols,
+    })
 }
 
 struct DummyImg;
@@ -132,10 +146,12 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
     let registry = build_registry();
     let capability = XmlArchitectureCapability::new();
     let mut arch = capability.build_architecture("datatest", "");
-    arch.build_loader(Rc::clone(&dt.binaryimage)).map_err(|e| format!("build_loader: {e}"))?;
+    arch.build_loader(Rc::clone(&dt.binaryimage))
+        .map_err(|e| format!("build_loader: {e}"))?;
     let mut db = LanguageDatabase::new();
     db.scan_for_sleigh_directories(root.join("specs").to_str().unwrap());
-    db.get_descriptions(&registry).map_err(|e| format!("collect ldefs: {e}"))?;
+    db.get_descriptions(&registry)
+        .map_err(|e| format!("collect ldefs: {e}"))?;
     arch.sleigh_mut().set_archid(&dt.arch_id);
     arch.sleigh_mut()
         .resolve_architecture(&db, &dt.arch_id)
@@ -143,7 +159,10 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
     if arch.sleigh().language_index() < 0 {
         return Err("language index unresolved".to_string());
     }
-    let specs = arch.sleigh().build_spec_file(&db).map_err(|e| format!("build_spec_file: {e}"))?;
+    let specs = arch
+        .sleigh()
+        .build_spec_file(&db)
+        .map_err(|e| format!("build_spec_file: {e}"))?;
     let resolved_sla = specs.slafile.ok_or("build_spec_file resolved no .sla")?;
     let sla = std::fs::read(&resolved_sla).map_err(|e| format!("read sla: {e}"))?;
     arch.sleigh_mut()
@@ -156,9 +175,13 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
         .map_err(|e| format!("init_post_engine: {e}"))?;
     let manager_ptr: *const AddrSpaceManager = arch.sleigh().base().unwrap().manage();
     // SAFETY: same shape as the gate / corpus_bootstrap — manager outlives open().
-    arch.open_image(unsafe { &*manager_ptr }, &registry).map_err(|e| format!("open_image: {e}"))?;
+    arch.open_image(unsafe { &*manager_ptr }, &registry)
+        .map_err(|e| format!("open_image: {e}"))?;
     let img = arch.take_loader().ok_or("loader vanished after open")?;
-    arch.sleigh_mut().base_mut().unwrap().set_loader(Box::new(img));
+    arch.sleigh_mut()
+        .base_mut()
+        .unwrap()
+        .set_loader(Box::new(img));
     Ok(arch)
 }
 
@@ -245,13 +268,19 @@ fn w9x_decompile_func_runs_perform_and_prints() {
     let fd = decompile_func(arch, &name, entry, 0).expect("decompile_func ran perform");
     let c = print_c(arch, &fd);
     assert!(!c.trim().is_empty(), "printed C is empty");
-    assert!(c.contains(&name), "printed C does not name the function `{name}`:\n{c}");
+    assert!(
+        c.contains(&name),
+        "printed C does not name the function `{name}`:\n{c}"
+    );
     assert_eq!(
         c.matches('{').count(),
         c.matches('}').count(),
         "printed C has unbalanced braces:\n{c}"
     );
-    assert!(c.matches('{').count() >= 1, "printed C has no function body braces:\n{c}");
+    assert!(
+        c.matches('{').count() >= 1,
+        "printed C has no function body braces:\n{c}"
+    );
 }
 
 /// ADVERSARIAL 3a — init-order faithfulness: `option extrapop` with NO default
@@ -264,11 +293,20 @@ fn w9x_decompile_func_runs_perform_and_prints() {
 fn w9x_extrapop_with_no_default_model_is_a_safe_noop() {
     let bare = bare_sleigh();
     let mut arch = Architecture::new("t", bare);
-    assert!(arch.default_fp().is_none(), "precondition: no default model");
+    assert!(
+        arch.default_fp().is_none(),
+        "precondition: no default model"
+    );
     // Must not panic (Rc::make_mut on a None would; the guard prevents it).
     arch.set_default_extra_pop(8);
-    assert!(arch.default_fp().is_none(), "extrapop spuriously created a default model");
-    assert!(!arch.has_model("unknown"), "extrapop spuriously registered a model");
+    assert!(
+        arch.default_fp().is_none(),
+        "extrapop spuriously created a default model"
+    );
+    assert!(
+        !arch.has_model("unknown"),
+        "extrapop spuriously registered a model"
+    );
     // After seeding, the same call DOES reach the model (round-trips).
     arch.build_default_proto();
     arch.set_default_extra_pop(8);
@@ -283,7 +321,10 @@ fn w9x_unknown_model_is_an_error_not_a_panic() {
     let mut arch = Architecture::new("t", bare_sleigh());
     let err: KunaError = arch.set_default_model("no-such-model").unwrap_err();
     let msg = format!("{err}");
-    assert!(msg.contains("Unknown prototype model"), "unfaithful error text: {msg}");
+    assert!(
+        msg.contains("Unknown prototype model"),
+        "unfaithful error text: {msg}"
+    );
     // eval model uses a distinct C++ ParseError text; also must not panic.
     let err2 = arch.set_eval_current_model("no-such-model").unwrap_err();
     assert!(format!("{err2}").contains("Unknown prototype model"));

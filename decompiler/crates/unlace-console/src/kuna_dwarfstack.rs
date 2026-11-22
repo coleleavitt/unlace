@@ -1,9 +1,9 @@
 //! Overlapping debug locals describe views of one physical frame object.
 
-use unlace_base::error::KunaResult;
-use unlace_decomp::dtype::{type_metatype, Datatype, TypeFactory, TypeField};
 use std::collections::BTreeSet;
 use std::rc::Rc;
+use unlace_base::error::KunaResult;
+use unlace_decomp::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
 
 pub(crate) type Local = (String, Rc<Datatype>, i64);
 
@@ -117,7 +117,11 @@ fn backing(factory: &dyn TypeFactory, function: u64, group: &[Local]) -> KunaRes
                 false,
             )?
         };
-        let label = if name.is_empty() { "view" } else { name.as_str() };
+        let label = if name.is_empty() {
+            "view"
+        } else {
+            name.as_str()
+        };
         let mut member = label.to_owned();
         let mut variant = 0;
         while !members.insert(member.clone()) {
@@ -212,15 +216,20 @@ pub(crate) fn coalesce(
         }
         if group.len() == 1 {
             result.extend(group);
-        } else { match backing(factory, function, &group) { Ok(mut shared) => {
-            let stem = shared.0.clone();
-            let mut variant = 0;
-            while !names.insert(shared.0.clone()) {
-                variant += 1;
-                shared.0 = format!("{stem}_{variant}");
+        } else {
+            match backing(factory, function, &group) {
+                Ok(mut shared) => {
+                    let stem = shared.0.clone();
+                    let mut variant = 0;
+                    while !names.insert(shared.0.clone()) {
+                        variant += 1;
+                        shared.0 = format!("{stem}_{variant}");
+                    }
+                    result.push(shared);
+                }
+                _ => {}
             }
-            result.push(shared);
-        } _ => {}}}
+        }
         first = next;
     }
     result

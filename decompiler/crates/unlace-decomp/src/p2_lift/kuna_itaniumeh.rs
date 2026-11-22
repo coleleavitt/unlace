@@ -30,7 +30,10 @@ pub enum EhClause {
     /// The pad runs cleanups (destructors) and resumes unwinding.
     Cleanup,
     /// `catch (T)`; `type_name` is the demangled `typeinfo` name when known.
-    Catch { selector: i64, type_name: Option<String> },
+    Catch {
+        selector: i64,
+        type_name: Option<String>,
+    },
     /// `catch (...)`.
     CatchAll { selector: i64 },
     /// A dynamic exception specification (`throw(...)` / `noexcept`).
@@ -64,7 +67,12 @@ impl EhTable {
         let mut pads: Vec<u64> = sites.iter().map(|s| s.pad).collect();
         pads.sort_unstable();
         pads.dedup();
-        EhTable { sites, pads, exception_reg: None, selector_reg: None }
+        EhTable {
+            sites,
+            pads,
+            exception_reg: None,
+            selector_reg: None,
+        }
     }
 
     /// The call-site record covering the instruction at `off`.
@@ -97,10 +105,18 @@ pub fn pad_comment(table: &EhTable, pad: u64) -> String {
         .into_iter()
         .map(|c| match c {
             EhClause::Cleanup => "cleanup".to_string(),
-            EhClause::Catch { selector, type_name: Some(t) } => format!("catch ({t}) when selector == {selector}"),
-            EhClause::Catch { selector, type_name: None } => format!("catch (<unknown type>) when selector == {selector}"),
+            EhClause::Catch {
+                selector,
+                type_name: Some(t),
+            } => format!("catch ({t}) when selector == {selector}"),
+            EhClause::Catch {
+                selector,
+                type_name: None,
+            } => format!("catch (<unknown type>) when selector == {selector}"),
             EhClause::CatchAll { selector } => format!("catch (...) when selector == {selector}"),
-            EhClause::Filter { selector } => format!("exception specification when selector == {selector}"),
+            EhClause::Filter { selector } => {
+                format!("exception specification when selector == {selector}")
+            }
         })
         .collect();
     format!("landing pad: {}", parts.join("; "))
@@ -110,7 +126,11 @@ pub fn pad_comment(table: &EhTable, pad: u64) -> String {
 /// dead list of the instruction being decoded. Returns the CBRANCH, which the
 /// caller anchors any no-return halt after.
 pub fn insert_unwind_edge(data: &mut Funcdata, call: OpId, pad: &Address) -> KunaResult<OpId> {
-    let pc = data.obank().get(call).map(|o| o.get_addr().clone()).unwrap_or_else(|| pad.clone());
+    let pc = data
+        .obank()
+        .get(call)
+        .map(|o| o.get_addr().clone())
+        .unwrap_or_else(|| pad.clone());
     let test = data.new_op(1, pc.clone());
     data.op_set_opcode_code(test, OpCode::CPUI_CALLOTHER);
     if let Some(o) = data.obank_mut().get_mut(test) {
@@ -133,9 +153,15 @@ pub fn insert_unwind_edge(data: &mut Funcdata, call: OpId, pad: &Address) -> Kun
 /// `eh_exception()` / `eh_selector()`. Called before the pad's own instruction
 /// is translated, so the two ops lead that instruction.
 pub fn define_pad_registers(data: &mut Funcdata, table: &EhTable, pad: &Address) -> KunaResult<()> {
-    let catches = table.clauses_at(pad.get_offset()).iter().any(|c| **c != EhClause::Cleanup);
+    let catches = table
+        .clauses_at(pad.get_offset())
+        .iter()
+        .any(|c| **c != EhClause::Cleanup);
     let selector = if catches { &table.selector_reg } else { &None };
-    for (reg, id) in [(&table.exception_reg, BUILTIN_EH_EXCEPTION), (selector, BUILTIN_EH_SELECTOR)] {
+    for (reg, id) in [
+        (&table.exception_reg, BUILTIN_EH_EXCEPTION),
+        (selector, BUILTIN_EH_SELECTOR),
+    ] {
         let Some((addr, size)) = reg else { continue };
         let op = data.new_op(1, pad.clone());
         data.op_set_opcode_code(op, OpCode::CPUI_CALLOTHER);
@@ -159,13 +185,21 @@ mod tests {
 
     fn table() -> EhTable {
         EhTable::new(vec![
-            EhCallSite { start: 0x20, end: 0x30, pad: 0x80, clauses: vec![EhClause::Cleanup] },
+            EhCallSite {
+                start: 0x20,
+                end: 0x30,
+                pad: 0x80,
+                clauses: vec![EhClause::Cleanup],
+            },
             EhCallSite {
                 start: 0x5,
                 end: 0xa,
                 pad: 0x40,
                 clauses: vec![
-                    EhClause::Catch { selector: 1, type_name: Some("std::runtime_error const&".into()) },
+                    EhClause::Catch {
+                        selector: 1,
+                        type_name: Some("std::runtime_error const&".into()),
+                    },
                     EhClause::CatchAll { selector: 2 },
                 ],
             },

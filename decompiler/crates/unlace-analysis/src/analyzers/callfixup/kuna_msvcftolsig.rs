@@ -21,8 +21,8 @@
 use std::ops::Range;
 
 use memchr::memmem;
-use object::read::{Object, ObjectSection};
 use object::SectionKind;
+use object::read::{Object, ObjectSection};
 
 use crate::pass::{AnalysisOutput, CallFixupFact, FidMatch, SymFact, SymKind};
 
@@ -77,10 +77,18 @@ const SIGNATURES: [Signature; 2] = [
             at: 0x36,
             bytes: FTOL2_SSE_HEAD,
             wild: FTOL2_SSE_HEAD_WILD,
-            entries: &[(0, "__ftol2_sse"), (0x09, "__ftol2_pentium4"), (0x1c, "__ftol2_sse_excpt")],
+            entries: &[
+                (0, "__ftol2_sse"),
+                (0x09, "__ftol2_pentium4"),
+                (0x1c, "__ftol2_sse_excpt"),
+            ],
         }),
     },
-    Signature { bytes: FTOL, entries: &[(0, "__ftol")], head: None },
+    Signature {
+        bytes: FTOL,
+        entries: &[(0, "__ftol")],
+        head: None,
+    },
 ];
 
 fn head_matches(code: &[u8], start: usize, head: &Head) -> bool {
@@ -97,12 +105,20 @@ pub fn scan_bytes(code: &[u8], base: u64) -> Vec<(u64, &'static str)> {
     let mut hits = Vec::new();
     for sig in &SIGNATURES {
         for at in memmem::find_iter(code, sig.bytes) {
-            hits.extend(sig.entries.iter().map(|&(off, name)| (base + (at + off) as u64, name)));
+            hits.extend(
+                sig.entries
+                    .iter()
+                    .map(|&(off, name)| (base + (at + off) as u64, name)),
+            );
             let Some(head) = &sig.head else { continue };
-            let Some(start) = at.checked_sub(head.at) else { continue };
+            let Some(start) = at.checked_sub(head.at) else {
+                continue;
+            };
             if head_matches(code, start, head) {
                 hits.extend(
-                    head.entries.iter().map(|&(off, name)| (base + (start + off) as u64, name)),
+                    head.entries
+                        .iter()
+                        .map(|&(off, name)| (base + (start + off) as u64, name)),
                 );
             }
         }
@@ -134,10 +150,21 @@ pub fn scan(file: &object::File, out: &mut AnalysisOutput) {
         }
         let Ok(code) = sec.data() else { continue };
         for (addr, name) in scan_bytes(code, sec.address()) {
-            out.symbols.push(SymFact { addr, name: name.to_string(), kind: SymKind::Function });
-            out.fid_names.push(FidMatch { addr, name: name.to_string(), by_signature: false });
+            out.symbols.push(SymFact {
+                addr,
+                name: name.to_string(),
+                kind: SymKind::Function,
+            });
+            out.fid_names.push(FidMatch {
+                addr,
+                name: name.to_string(),
+                by_signature: false,
+            });
             if !out.call_fixups.iter().any(|f| f.func_name == name) {
-                out.call_fixups.push(CallFixupFact { func_name: name.to_string(), addr: None });
+                out.call_fixups.push(CallFixupFact {
+                    func_name: name.to_string(),
+                    addr: None,
+                });
             }
         }
     }

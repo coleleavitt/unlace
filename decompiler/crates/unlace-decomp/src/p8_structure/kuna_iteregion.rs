@@ -70,10 +70,10 @@ use unlace_num::opcodes::OpCode;
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
 use crate::block::BlockType;
+use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::op::pcodeop_addlflags;
 use crate::options::on_or_off;
-use crate::context::{BlockId, OpId, VarnodeId};
 
 use unlace_base::marshal::ElementId;
 
@@ -112,7 +112,9 @@ pub struct ActionIteRegion {
 impl ActionIteRegion {
     /// Construct in group `g`.
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionIteRegion { base: ActionBase::new(0, "iteregion", g) })
+        Box::new(ActionIteRegion {
+            base: ActionBase::new(0, "iteregion", g),
+        })
     }
 }
 
@@ -127,7 +129,9 @@ impl Action for ActionIteRegion {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionIteRegion { base: self.base.clone() }))
+        Some(Box::new(ActionIteRegion {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // P0 assertion `option iteregion on|off`, carried on the Architecture boundary.
@@ -226,7 +230,13 @@ pub fn match_ite_assignment(data: &Funcdata, n: BlockId) -> Option<IteAssignMatc
         return None;
     }
 
-    Some(IteAssignMatch { cond_block, cbranch, true_op, else_op, dest: dest_true })
+    Some(IteAssignMatch {
+        cond_block,
+        cbranch,
+        true_op,
+        else_op,
+        dest: dest_true,
+    })
 }
 
 /// The single basic block underlying a structured leaf `id`, descending through a
@@ -268,7 +278,10 @@ pub(crate) fn leaf_bblock(data: &Funcdata, id: BlockId) -> Option<BlockId> {
 /// same tolerance across a block boundary, and the reason a chain of diamonds no
 /// longer folds only every other one.
 fn cond_cbranch(data: &Funcdata, id: BlockId) -> Option<OpId> {
-    let bb = leaf_bblock(data, crate::p8_structure::kuna_itecondlist::cond_list_tail(data, id))?;
+    let bb = leaf_bblock(
+        data,
+        crate::p8_structure::kuna_itecondlist::cond_list_tail(data, id),
+    )?;
     let ops = printed_ops(data, bb);
     let op = *ops.last()?;
     if data.obank().get(op)?.code() != OpCode::CPUI_CBRANCH {
@@ -351,7 +364,12 @@ pub(crate) fn printed_ops(data: &Funcdata, bb: BlockId) -> Vec<OpId> {
             }
             // An op whose output is implied is inlined at its use — no statement.
             if let Some(outvn) = opref.get_out() {
-                if data.vbank().get(outvn).map(|v| v.is_implied()).unwrap_or(false) {
+                if data
+                    .vbank()
+                    .get(outvn)
+                    .map(|v| v.is_implied())
+                    .unwrap_or(false)
+                {
                     continue;
                 }
             }
@@ -390,6 +408,9 @@ impl OptionIteRegion {
     pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
-        Ok((val, format!("ITE-region assignment-diamond -> ?: ternary recovery turned {prop}")))
+        Ok((
+            val,
+            format!("ITE-region assignment-diamond -> ?: ternary recovery turned {prop}"),
+        ))
     }
 }

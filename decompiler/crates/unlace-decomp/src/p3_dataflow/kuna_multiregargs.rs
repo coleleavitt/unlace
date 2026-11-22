@@ -3,7 +3,7 @@
 use crate::dtype::type_class;
 use crate::fspec::{FuncProto, ParamEntry};
 use unlace_base::address::Address;
-use unlace_base::space::{spacetype, AddrSpaceManager};
+use unlace_base::space::{AddrSpaceManager, spacetype};
 use unlace_base::types::int4;
 use unlace_num::pcoderaw::VarnodeData;
 
@@ -98,18 +98,36 @@ pub(crate) fn subpiece_drops_reached_piece(
     op: crate::context::OpId,
     vn: crate::context::VarnodeId,
 ) -> bool {
-    let Some(sub) = fd.obank().get(op) else { return false };
-    let Some(def) = fd.vbank().get(vn).and_then(|v| v.get_def()) else { return false };
-    let Some(piece) = fd.obank().get(def) else { return false };
+    let Some(sub) = fd.obank().get(op) else {
+        return false;
+    };
+    let Some(def) = fd.vbank().get(vn).and_then(|v| v.get_def()) else {
+        return false;
+    };
+    let Some(piece) = fd.obank().get(def) else {
+        return false;
+    };
     if piece.code() != unlace_num::opcodes::OpCode::CPUI_PIECE {
         return false;
     }
-    let (Some(high), Some(low)) = (piece.get_in(0), piece.get_in(1)) else { return false };
-    let (Some(high), Some(low)) = (fd.vbank().get(high), fd.vbank().get(low)) else { return false };
-    let Some(offset) = sub.get_in(1).and_then(|c| fd.vbank().get(c)).map(|c| c.get_offset()) else {
+    let (Some(high), Some(low)) = (piece.get_in(0), piece.get_in(1)) else {
         return false;
     };
-    let Some(size) = sub.get_out().and_then(|o| fd.vbank().get(o)).map(|o| o.get_size()) else {
+    let (Some(high), Some(low)) = (fd.vbank().get(high), fd.vbank().get(low)) else {
+        return false;
+    };
+    let Some(offset) = sub
+        .get_in(1)
+        .and_then(|c| fd.vbank().get(c))
+        .map(|c| c.get_offset())
+    else {
+        return false;
+    };
+    let Some(size) = sub
+        .get_out()
+        .and_then(|o| fd.vbank().get(o))
+        .map(|o| o.get_size())
+    else {
         return false;
     };
     let low_end = low.get_size() as u64;
@@ -124,10 +142,10 @@ pub(crate) fn subpiece_drops_reached_piece(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dtype::{type_class, type_metatype, Datatype};
+    use crate::dtype::{Datatype, type_class, type_metatype};
     use crate::fspec::{ParamEntry, ProtoModel};
-    use unlace_base::space::{AddrSpace, AddrSpaceManager, ConstantSpace};
     use std::rc::Rc;
+    use unlace_base::space::{AddrSpace, AddrSpaceManager, ConstantSpace};
 
     fn prototype(
         big: bool,
@@ -254,13 +272,10 @@ mod tests {
                 (0x20, 0),
                 (0x20, 128),
             ] {
-                assert!(input_partition(
-                    &proto,
-                    &manager,
-                    &Address::new(space.clone(), start),
-                    size
-                )
-                .is_none());
+                assert!(
+                    input_partition(&proto, &manager, &Address::new(space.clone(), start), size)
+                        .is_none()
+                );
             }
         }
     }

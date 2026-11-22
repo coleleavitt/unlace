@@ -32,9 +32,9 @@
 
 use std::rc::Rc;
 
-use crate::dtype::{type_metatype, Datatype, DatatypeKind};
-use crate::funcdata::Funcdata;
 use crate::context::{OpId, VarnodeId};
+use crate::dtype::{Datatype, DatatypeKind, type_metatype};
+use crate::funcdata::Funcdata;
 
 impl Funcdata {
     /// `Datatype::findResolve(op, slot)` dispatched against the live union cache
@@ -47,12 +47,7 @@ impl Funcdata {
     /// `needsResolution()`, but the per-kind dispatch is transcribed in full so the
     /// fallback type (the C++ `field[0].type` / `arrayof` / `stripped`) is faithful
     /// when a needs-resolution type misses the cache.
-    pub fn find_resolve_facing(
-        &self,
-        ct: &Rc<Datatype>,
-        op: OpId,
-        slot: i32,
-    ) -> Rc<Datatype> {
+    pub fn find_resolve_facing(&self, ct: &Rc<Datatype>, op: OpId, slot: i32) -> Rc<Datatype> {
         match &ct.kind {
             // TypePointer::findResolve (type.cc:1335-1345): only a pointer *to a
             // union* consults the cache; any other pointer returns itself.
@@ -123,7 +118,9 @@ impl Funcdata {
         if !ty.needs_resolution() {
             return ty;
         }
-        let def = v.get_def().expect("getTypeDefFacing: Varnode must be written");
+        let def = v
+            .get_def()
+            .expect("getTypeDefFacing: Varnode must be written");
         self.find_resolve_facing(&ty, def, -1)
     }
 
@@ -137,7 +134,12 @@ impl Funcdata {
                 return view;
             }
         }
-        let ty = Rc::clone(self.vbank().get(vn).expect("vn_type_read_facing: stale vn").get_type());
+        let ty = Rc::clone(
+            self.vbank()
+                .get(vn)
+                .expect("vn_type_read_facing: stale vn")
+                .get_type(),
+        );
         if !ty.needs_resolution() {
             return ty;
         }

@@ -26,7 +26,7 @@
 //! no names), so these assertions are exactly the "is the routing faithful and
 //! special-case-free" check.
 
-use unlace_decomp::printc::{op_emit_kind, OpEmitKind};
+use unlace_decomp::printc::{OpEmitKind, op_emit_kind};
 use unlace_num::opcodes::OpCode;
 
 /// The one decision the diff added: FLOAT_INT2FLOAT is dispatched as `Custom`
@@ -37,7 +37,10 @@ use unlace_num::opcodes::OpCode;
 #[test]
 fn w10ff_float_int2float_routes_to_custom() {
     assert!(
-        matches!(op_emit_kind(OpCode::CPUI_FLOAT_INT2FLOAT), OpEmitKind::Custom),
+        matches!(
+            op_emit_kind(OpCode::CPUI_FLOAT_INT2FLOAT),
+            OpEmitKind::Custom
+        ),
         "FLOAT_INT2FLOAT must dispatch to the hand-written (floatN) cast arm (Custom)"
     );
 }
@@ -52,7 +55,10 @@ fn w10ff_sibling_float_ops_keep_their_kinds() {
     // The two sibling float CASTS stay TypeCast (NOT Custom — only INT2FLOAT
     // got the hand-written override).
     assert!(
-        matches!(op_emit_kind(OpCode::CPUI_FLOAT_FLOAT2FLOAT), OpEmitKind::TypeCast),
+        matches!(
+            op_emit_kind(OpCode::CPUI_FLOAT_FLOAT2FLOAT),
+            OpEmitKind::TypeCast
+        ),
         "FLOAT_FLOAT2FLOAT stays a plain opTypeCast"
     );
     assert!(
@@ -128,5 +134,8 @@ fn w10ff_emit_kind_is_total_no_panics() {
         );
     }
     // And re-confirm the specific cell once more for documentation locality.
-    assert!(matches!(op_emit_kind(OpCode::CPUI_FLOAT_INT2FLOAT), OpEmitKind::Custom));
+    assert!(matches!(
+        op_emit_kind(OpCode::CPUI_FLOAT_INT2FLOAT),
+        OpEmitKind::Custom
+    ));
 }

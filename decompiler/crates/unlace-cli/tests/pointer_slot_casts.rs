@@ -59,7 +59,13 @@ fn record_declared_source_keeps_cast() {
     let object = root.join("sample.o");
     process::required_output(
         Command::new("gcc")
-            .args(["-g", "-O2", "-fno-stack-protector", "-fcf-protection=none", "-c"])
+            .args([
+                "-g",
+                "-O2",
+                "-fno-stack-protector",
+                "-fcf-protection=none",
+                "-c",
+            ])
             .arg(&source)
             .arg("-o")
             .arg(&object),
@@ -92,7 +98,11 @@ fn run(windows: bool, views: bool, record: bool, derived: bool) {
     let root = common::scratch_file("pointer-slot-cast", "dir");
     std::fs::create_dir_all(&root).unwrap();
     let source = root.join("sample.c");
-    let mov = if derived { "lea 1(%rdi),%rax" } else { "mov %rdi,%rax" };
+    let mov = if derived {
+        "lea 1(%rdi),%rax"
+    } else {
+        "mov %rdi,%rax"
+    };
     std::fs::write(&source, format!("#define MOVE \"{mov}\"\n") + r#"
 typedef __UINTPTR_TYPE__ uintptr_t;
 #ifdef _WIN32
@@ -159,7 +169,13 @@ API __attribute__((naked)) unsigned emit(unsigned char *value) {
         format!("{word} frame[{count}]")
     };
     let body_file = root.join("body.c");
-    let script = format!("load file \"{}\"\nread symbols\noption ctypes on\nparse line {declaration}\noption stackviews {}\nmap prototype 0x{entry:x} unsigned int emit(unsigned char *value)\nmap prototype 0x{:x} unsigned int consume(void *slot)\nload addr 0x{entry:x}\nmap address {offset} {mapping}\ntype varnode %{register}(0x{pc:x}) unsigned char *address\ndecompile\nopenfile write \"{}\"\nprint C\nclosefile\nquit\n",binary.display(),if views {"on"}else{"off"},address(b"consume"),body_file.display());
+    let script = format!(
+        "load file \"{}\"\nread symbols\noption ctypes on\nparse line {declaration}\noption stackviews {}\nmap prototype 0x{entry:x} unsigned int emit(unsigned char *value)\nmap prototype 0x{:x} unsigned int consume(void *slot)\nload addr 0x{entry:x}\nmap address {offset} {mapping}\ntype varnode %{register}(0x{pc:x}) unsigned char *address\ndecompile\nopenfile write \"{}\"\nprint C\nclosefile\nquit\n",
+        binary.display(),
+        if views { "on" } else { "off" },
+        address(b"consume"),
+        body_file.display()
+    );
     render(&script);
     let body = std::fs::read_to_string(&body_file).unwrap();
     std::fs::write(

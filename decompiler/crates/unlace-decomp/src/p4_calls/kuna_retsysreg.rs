@@ -42,7 +42,7 @@ use unlace_base::space::spacetype;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{OpId, VarnodeId};
-use crate::fspec::{effect_type, Containment, ParamActive};
+use crate::fspec::{Containment, ParamActive, effect_type};
 use crate::funcdata::Funcdata;
 
 /// How many Varnodes a forward walk visits before it gives up.
@@ -61,7 +61,11 @@ pub fn drop_set_aside(data: &Funcdata, active: &mut ParamActive, return_ops: &[O
     let rets: Vec<OpId> = return_ops
         .iter()
         .copied()
-        .filter(|&r| data.obank().get(r).is_some_and(|o| !o.is_dead() && o.get_halt_type() == 0))
+        .filter(|&r| {
+            data.obank()
+                .get(r)
+                .is_some_and(|o| !o.is_dead() && o.get_halt_type() == 0)
+        })
         .collect();
     if rets.is_empty() {
         return;
@@ -85,11 +89,18 @@ pub fn drop_set_aside(data: &Funcdata, active: &mut ParamActive, return_ops: &[O
         let others: Vec<VarnodeId> = rets
             .iter()
             .filter_map(|&r| data.obank().get(r))
-            .flat_map(|o| (1..o.num_input()).filter(|&k| k != slot).filter_map(|k| o.get_in(k)))
+            .flat_map(|o| {
+                (1..o.num_input())
+                    .filter(|&k| k != slot)
+                    .filter_map(|k| o.get_in(k))
+            })
             .collect();
         let handed_over = |vn: VarnodeId| {
-            crate::kuna_retcallhalf::roots(data, vn)
-                .is_none_or(|roots| roots.into_iter().any(|r| sinks(data, r).is_none_or(|s| !s.is_empty())))
+            crate::kuna_retcallhalf::roots(data, vn).is_none_or(|roots| {
+                roots
+                    .into_iter()
+                    .any(|r| sinks(data, r).is_none_or(|s| !s.is_empty()))
+            })
         };
         if values.iter().all(|&vn| alone(data, vn, &others))
             && !others.iter().any(|&o| handed_over(o))
@@ -104,19 +115,24 @@ pub fn drop_set_aside(data: &Funcdata, active: &mut ParamActive, return_ops: &[O
 /// system register: is every value it merges handed to the machine
 /// ([`sinks`]) and not computed from a call's result in that register?
 fn set_aside(data: &Funcdata, vn: VarnodeId, addr: &Address, size: i32) -> bool {
-    let Some(roots) = crate::kuna_retcallhalf::roots(data, vn) else { return false };
+    let Some(roots) = crate::kuna_retcallhalf::roots(data, vn) else {
+        return false;
+    };
     roots.into_iter().all(|root| {
-        sinks(data, root).is_some_and(|s| !s.is_empty()) && !from_call_result(data, root, addr, size)
+        sinks(data, root).is_some_and(|s| !s.is_empty())
+            && !from_call_result(data, root, addr, size)
     })
 }
 
 /// Is every write that takes a value `vn` merges to the machine free of the
 /// other registers a RETURN reads (`others`)?
 fn alone(data: &Funcdata, vn: VarnodeId, others: &[VarnodeId]) -> bool {
-    let Some(roots) = crate::kuna_retcallhalf::roots(data, vn) else { return false };
-    roots
-        .into_iter()
-        .all(|root| sinks(data, root).is_some_and(|s| s.iter().all(|&op| !reads_any(data, op, others))))
+    let Some(roots) = crate::kuna_retcallhalf::roots(data, vn) else {
+        return false;
+    };
+    roots.into_iter().all(|root| {
+        sinks(data, root).is_some_and(|s| s.iter().all(|&op| !reads_any(data, op, others)))
+    })
 }
 
 /// The ops that write `root`, followed forward through phis, INDIRECTs and
@@ -204,14 +220,25 @@ pub const COP_USEROP_NAMES: &[&[u8]] = &[b"setCopReg", b"setCopRegH", b"setCopCo
 /// a [`COP_USEROP_NAMES`] write to coprocessor 0 or 1, or the volatile write
 /// of a register the prototype model names nowhere (AArch64's `msr fpcr`)?
 fn sets_state(data: &Funcdata, op: OpId) -> bool {
-    let Some(o) = data.obank().get(op).filter(|o| o.code() == OpCode::CPUI_CALLOTHER) else { return false };
+    let Some(o) = data
+        .obank()
+        .get(op)
+        .filter(|o| o.code() == OpCode::CPUI_CALLOTHER)
+    else {
+        return false;
+    };
     let input = |k: i32| o.get_in(k).and_then(|v| data.vbank().get(v));
     let constant = |k: i32| input(k).filter(|v| v.is_constant()).map(|v| v.get_offset());
     let Some(id) = constant(0) else { return false };
     let arch = data.get_arch();
     if id == crate::userop::BUILTIN_VOLATILE_WRITE as u64 {
-        let (Some(dest), Some(value)) = (input(1), input(2)) else { return false };
-        let register = dest.get_addr().get_space().is_some_and(|sp| sp.get_type() == spacetype::IPTR_PROCESSOR);
+        let (Some(dest), Some(value)) = (input(1), input(2)) else {
+            return false;
+        };
+        let register = dest
+            .get_addr()
+            .get_space()
+            .is_some_and(|sp| sp.get_type() == spacetype::IPTR_PROCESSOR);
         return register && unnamed(data, dest.get_addr(), value.get_size());
     }
     arch.retsysreg_userops.contains(&(id as u32))
@@ -241,20 +268,29 @@ fn only_flags(data: &Funcdata, vn: VarnodeId) -> bool {
         if seen.len() > MAX_WALK {
             return false;
         }
-        let Some(v) = data.vbank().get(cur) else { return false };
+        let Some(v) = data.vbank().get(cur) else {
+            return false;
+        };
         for reader in v.descend_iter() {
-            let Some(op) = data.obank().get(reader) else { return false };
+            let Some(op) = data.obank().get(reader) else {
+                return false;
+            };
             if sets_state(data, reader) {
                 continue;
             }
-            let Some(out) = op.get_out() else { return false };
-            let Some(o) = data.vbank().get(out) else { return false };
+            let Some(out) = op.get_out() else {
+                return false;
+            };
+            let Some(o) = data.vbank().get(out) else {
+                return false;
+            };
             let space = o.get_addr().get_space().map(|sp| sp.get_type());
             if space == Some(spacetype::IPTR_PROCESSOR) && o.get_size() <= 1 {
                 continue;
             }
             let follow = space == Some(spacetype::IPTR_INTERNAL)
-                || space == Some(spacetype::IPTR_PROCESSOR) && unnamed(data, o.get_addr(), o.get_size());
+                || space == Some(spacetype::IPTR_PROCESSOR)
+                    && unnamed(data, o.get_addr(), o.get_size());
             if !follow || matches!(op.code(), OpCode::CPUI_CALLOTHER | OpCode::CPUI_LOAD) {
                 return false;
             }
@@ -276,13 +312,20 @@ fn reads_any(data: &Funcdata, op: OpId, others: &[VarnodeId]) -> bool {
         if seen.len() > MAX_WALK {
             return true;
         }
-        let Some(o) = data.obank().get(cur) else { return true };
+        let Some(o) = data.obank().get(cur) else {
+            return true;
+        };
         for vn in (0..o.num_input()).filter_map(|k| o.get_in(k)) {
             if others.contains(&vn) {
                 return true;
             }
-            let Some(v) = data.vbank().get(vn) else { continue };
-            let temporary = v.get_addr().get_space().is_some_and(|sp| sp.get_type() == spacetype::IPTR_INTERNAL);
+            let Some(v) = data.vbank().get(vn) else {
+                continue;
+            };
+            let temporary = v
+                .get_addr()
+                .get_space()
+                .is_some_and(|sp| sp.get_type() == spacetype::IPTR_INTERNAL);
             if let Some(def) = v.get_def().filter(|_| temporary) {
                 work.push(def);
             }
@@ -303,18 +346,27 @@ fn from_call_result(data: &Funcdata, vn: VarnodeId, addr: &Address, size: i32) -
         if seen.len() > MAX_WALK {
             return true;
         }
-        let Some(v) = data.vbank().get(cur) else { continue };
-        let Some(op) = v.get_def().and_then(|d| data.obank().get(d)) else { continue };
+        let Some(v) = data.vbank().get(cur) else {
+            continue;
+        };
+        let Some(op) = v.get_def().and_then(|d| data.obank().get(d)) else {
+            continue;
+        };
         match op.code() {
             OpCode::CPUI_INDIRECT if op.is_indirect_creation() => {
-                let overlaps = v.get_addr().overlap(0, addr, size) >= 0 || addr.overlap(0, v.get_addr(), v.get_size()) >= 0;
+                let overlaps = v.get_addr().overlap(0, addr, size) >= 0
+                    || addr.overlap(0, v.get_addr(), v.get_size()) >= 0;
                 if overlaps && crate::kuna_retcallhalf::created_by_call(data, op) {
                     return true;
                 }
             }
             OpCode::CPUI_CALL | OpCode::CPUI_CALLIND if v.get_size() > size => return true,
             OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => {}
-            _ if depth > 0 => work.extend((0..op.num_input()).filter_map(|k| op.get_in(k)).map(|i| (i, depth - 1))),
+            _ if depth > 0 => work.extend(
+                (0..op.num_input())
+                    .filter_map(|k| op.get_in(k))
+                    .map(|i| (i, depth - 1)),
+            ),
             _ => {}
         }
     }
@@ -329,7 +381,11 @@ fn returned_alone(data: &Funcdata, active: &ParamActive, i: i32) -> bool {
         probe.get_trial_mut(k).mark_inactive();
     }
     let manager = data.get_arch().manage.clone();
-    if data.get_func_proto().derive_output_map(&mut probe, &manager).is_err() {
+    if data
+        .get_func_proto()
+        .derive_output_map(&mut probe, &manager)
+        .is_err()
+    {
         return true;
     }
     (0..probe.get_num_trials()).any(|k| probe.get_trial(k).is_used())

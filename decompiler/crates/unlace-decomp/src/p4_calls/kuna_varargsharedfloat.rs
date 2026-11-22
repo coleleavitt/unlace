@@ -30,9 +30,9 @@
 //! post-RA scheduler moves instructions so a scratch value can look like it
 //! had f0 or f1 free, and the rule then prints arguments the source never
 //! passed. Hence off by default.
+use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::types::int4;
-use std::rc::Rc;
 
 use unlace_num::opcodes::OpCode;
 
@@ -40,7 +40,7 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::type_class;
 use crate::fspec::ParamTrial;
 use crate::funcdata::Funcdata;
-use crate::p4_calls::kuna_varargretreg::{float_register_count, VarargFloats};
+use crate::p4_calls::kuna_varargretreg::{VarargFloats, float_register_count};
 
 /// Is the inactive trial `trial`, holding `vn` at call spec `idx`, a variadic
 /// double that also feeds an earlier argument of the call (see the module)?
@@ -71,14 +71,18 @@ pub fn feeds_earlier_argument(
         .filter(|e| e.get_type() == type_class::TYPECLASS_FLOAT && e.get_size() == 8)
         .map(|e| Address::new(Rc::clone(e.get_space()), e.get_base()))
         .collect();
-    let Some(k) = floats.iter().position(|a| a == trial.get_address()).filter(|&k| k > 0) else {
+    let Some(k) = floats
+        .iter()
+        .position(|a| a == trial.get_address())
+        .filter(|&k| k > 0)
+    else {
         return false;
     };
     let active = fc.active_input();
     let earlier_active = floats[..k].iter().all(|a| {
-        (0..active.get_num_trials()).map(|t| active.get_trial(t)).any(|t| {
-            t.get_address() == a && t.get_size() == 8 && t.is_checked() && t.is_active()
-        })
+        (0..active.get_num_trials())
+            .map(|t| active.get_trial(t))
+            .any(|t| t.get_address() == a && t.get_size() == 8 && t.is_checked() && t.is_active())
     });
     if !earlier_active || float_register_count(data, call) != Some(1) {
         return false;
@@ -99,7 +103,11 @@ pub fn feeds_earlier_argument(
 
 /// FPR 0, the first register a compiler gives a scratch double.
 fn scratch_register(data: &Funcdata) -> Option<Address> {
-    let f0 = data.get_arch().manage().register_lookup()?.probe_register("f0")?;
+    let f0 = data
+        .get_arch()
+        .manage()
+        .register_lookup()?
+        .probe_register("f0")?;
     let space = f0.space.filter(|_| f0.size == 8)?;
     Some(Address::new(space, f0.offset))
 }
@@ -137,9 +145,17 @@ fn register_free(data: &Funcdata, call: OpId, vn: VarnodeId, reg: &Address) -> b
     }
     let position = |op: OpId| window.iter().position(|&w| w == op);
     let mut last_read = None;
-    for reader in data.vbank().get(vn).map(|v| v.descend_iter().collect::<Vec<_>>()).unwrap_or_default() {
+    for reader in data
+        .vbank()
+        .get(vn)
+        .map(|v| v.descend_iter().collect::<Vec<_>>())
+        .unwrap_or_default()
+    {
         if reader == call
-            || data.obank().get(reader).is_some_and(|o| o.code() == OpCode::CPUI_INDIRECT)
+            || data
+                .obank()
+                .get(reader)
+                .is_some_and(|o| o.code() == OpCode::CPUI_INDIRECT)
         {
             continue;
         }
@@ -151,15 +167,20 @@ fn register_free(data: &Funcdata, call: OpId, vn: VarnodeId, reg: &Address) -> b
     let Some(last_read) = last_read else {
         return false;
     };
-    let read_at = data.obank().get(window[last_read]).map(|o| o.get_addr().clone());
-    let read_start =
-        window.iter().position(|&w| data.obank().get(w).map(|o| o.get_addr().clone()) == read_at);
+    let read_at = data
+        .obank()
+        .get(window[last_read])
+        .map(|o| o.get_addr().clone());
+    let read_start = window
+        .iter()
+        .position(|&w| data.obank().get(w).map(|o| o.get_addr().clone()) == read_at);
     let Some(read_start) = read_start else {
         return false;
     };
     let overlaps = |v: VarnodeId| {
         data.vbank().get(v).is_some_and(|v| {
-            reg.get_space().is_some_and(|s| s.get_index() == v.get_space().get_index())
+            reg.get_space()
+                .is_some_and(|s| s.get_index() == v.get_space().get_index())
                 && v.get_offset() < reg.get_offset() + 8
                 && reg.get_offset() < v.get_offset() + v.get_size() as u64
         })
@@ -178,7 +199,11 @@ fn register_free(data: &Funcdata, call: OpId, vn: VarnodeId, reg: &Address) -> b
             let Some(input) = o.get_in(slot).filter(|&v| overlaps(v)) else {
                 continue;
             };
-            let written_at = data.vbank().get(input).and_then(|v| v.get_def()).and_then(position);
+            let written_at = data
+                .vbank()
+                .get(input)
+                .and_then(|v| v.get_def())
+                .and_then(position);
             if written_at.is_none_or(|w| w < read_start) {
                 return false;
             }

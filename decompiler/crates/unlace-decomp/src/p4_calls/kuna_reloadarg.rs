@@ -42,7 +42,9 @@ pub(crate) fn note(data: &mut Funcdata, idx: int4, i: int4, loads: &[OpId]) {
     if loads.is_empty() || data.get_arch().source_lang.is_go() {
         return;
     }
-    let Some(sp) = super::kuna_spillargtrial::stack_pointer_storage(data) else { return };
+    let Some(sp) = super::kuna_spillargtrial::stack_pointer_storage(data) else {
+        return;
+    };
     let from_frame = loads.iter().any(|&load| {
         data.obank()
             .get(load)
@@ -89,8 +91,14 @@ pub(crate) fn recheck(data: &mut Funcdata, idx: int4, mut alias: Option<&mut Ali
         if !reload {
             return;
         }
-        let slot = data.get_call_specs(idx).active_input().get_trial(i).get_slot();
-        let Some(vn) = data.obank().get(op).and_then(|o| o.get_in(slot)) else { return };
+        let slot = data
+            .get_call_specs(idx)
+            .active_input()
+            .get_trial(i)
+            .get_slot();
+        let Some(vn) = data.obank().get(op).and_then(|o| o.get_in(slot)) else {
+            return;
+        };
         if !junk(data, vn, 16, &mut alias) {
             return;
         }
@@ -100,7 +108,10 @@ pub(crate) fn recheck(data: &mut Funcdata, idx: int4, mut alias: Option<&mut Ali
         if super::kuna_varargformat::activate_trial(data, idx, i, args) {
             return;
         }
-        data.get_call_specs_mut(idx).get_active_input().get_trial_mut(i).mark_no_use();
+        data.get_call_specs_mut(idx)
+            .get_active_input()
+            .get_trial_mut(i)
+            .mark_no_use();
         let width = data.vbank().get(vn).map(|v| v.get_size()).unwrap_or(0);
         let zero = data.new_constant(width, 0);
         let _ = data.op_set_input(op, zero, slot);
@@ -111,14 +122,17 @@ pub(crate) fn recheck(data: &mut Funcdata, idx: int4, mut alias: Option<&mut Ali
 /// calls and cannot take as a parameter?
 fn scratch_input(data: &Funcdata, addr: &Address, size: int4) -> bool {
     let proto = data.get_func_proto();
-    proto.has_effect(addr, size) == effect_type::KILLEDBYCALL && !proto.possible_input_param(addr, size)
+    proto.has_effect(addr, size) == effect_type::KILLEDBYCALL
+        && !proto.possible_input_param(addr, size)
 }
 
 /// Does `vn` hold, through copies, truncations, concatenations and call
 /// guards on a stack slot whose address never escapes, only register inputs
 /// [`scratch_input`] accepts?
 fn junk(data: &Funcdata, vn: VarnodeId, depth: u32, alias: &mut Option<&mut AliasChecker>) -> bool {
-    let Some(v) = data.vbank().get(vn) else { return false };
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
     if v.is_input() {
         return v.get_space().get_type() == spacetype::IPTR_PROCESSOR
             && !v.is_persist()
@@ -126,10 +140,18 @@ fn junk(data: &Funcdata, vn: VarnodeId, depth: u32, alias: &mut Option<&mut Alia
             && !v.is_direct_write()
             && scratch_input(data, v.get_addr(), v.get_size());
     }
-    let Some(op) = v.get_def().and_then(|d| data.obank().get(d)).filter(|_| depth > 0) else { return false };
+    let Some(op) = v
+        .get_def()
+        .and_then(|d| data.obank().get(d))
+        .filter(|_| depth > 0)
+    else {
+        return false;
+    };
     let next = |i: int4| op.get_in(i);
     match op.code() {
-        OpCode::CPUI_COPY | OpCode::CPUI_SUBPIECE => next(0).is_some_and(|n| junk(data, n, depth - 1, alias)),
+        OpCode::CPUI_COPY | OpCode::CPUI_SUBPIECE => {
+            next(0).is_some_and(|n| junk(data, n, depth - 1, alias))
+        }
         OpCode::CPUI_PIECE => {
             next(0).is_some_and(|n| junk(data, n, depth - 1, alias))
                 && next(1).is_some_and(|n| junk(data, n, depth - 1, alias))

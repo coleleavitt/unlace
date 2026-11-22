@@ -89,11 +89,24 @@ impl<'a> Image<'a> {
             2 => false,
             _ => return None,
         };
-        let mut img = Image { bytes, is64, le, phdrs: Vec::new() };
+        let mut img = Image {
+            bytes,
+            is64,
+            le,
+            phdrs: Vec::new(),
+        };
         let (phoff, phentsize, phnum) = if is64 {
-            (img.u64at(0x20)?, img.u16at(0x36)? as usize, img.u16at(0x38)? as usize)
+            (
+                img.u64at(0x20)?,
+                img.u16at(0x36)? as usize,
+                img.u16at(0x38)? as usize,
+            )
         } else {
-            (img.u32at(0x1c)? as u64, img.u16at(0x2a)? as usize, img.u16at(0x2c)? as usize)
+            (
+                img.u32at(0x1c)? as u64,
+                img.u16at(0x2a)? as usize,
+                img.u16at(0x2c)? as usize,
+            )
         };
         if phentsize < if is64 { 56 } else { 32 } {
             return None;
@@ -102,7 +115,12 @@ impl<'a> Image<'a> {
             let ph = (phoff as usize).checked_add(i.checked_mul(phentsize)?)?;
             let p_type = img.u32at(ph)?;
             let (flags, off, vaddr, filesz) = if is64 {
-                (img.u32at(ph + 4)?, img.u64at(ph + 8)?, img.u64at(ph + 0x10)?, img.u64at(ph + 0x20)?)
+                (
+                    img.u32at(ph + 4)?,
+                    img.u64at(ph + 8)?,
+                    img.u64at(ph + 0x10)?,
+                    img.u64at(ph + 0x20)?,
+                )
             } else {
                 (
                     img.u32at(ph + 24)?,
@@ -118,17 +136,29 @@ impl<'a> Image<'a> {
 
     fn u16at(&self, o: usize) -> Option<u16> {
         let b: [u8; 2] = self.bytes.get(o..o + 2)?.try_into().ok()?;
-        Some(if self.le { u16::from_le_bytes(b) } else { u16::from_be_bytes(b) })
+        Some(if self.le {
+            u16::from_le_bytes(b)
+        } else {
+            u16::from_be_bytes(b)
+        })
     }
 
     fn u32at(&self, o: usize) -> Option<u32> {
         let b: [u8; 4] = self.bytes.get(o..o + 4)?.try_into().ok()?;
-        Some(if self.le { u32::from_le_bytes(b) } else { u32::from_be_bytes(b) })
+        Some(if self.le {
+            u32::from_le_bytes(b)
+        } else {
+            u32::from_be_bytes(b)
+        })
     }
 
     fn u64at(&self, o: usize) -> Option<u64> {
         let b: [u8; 8] = self.bytes.get(o..o + 8)?.try_into().ok()?;
-        Some(if self.le { u64::from_le_bytes(b) } else { u64::from_be_bytes(b) })
+        Some(if self.le {
+            u64::from_le_bytes(b)
+        } else {
+            u64::from_be_bytes(b)
+        })
     }
 
     /// Pointer-width word (`Elf32_Addr`/`Elf64_Addr`) at a file offset.
@@ -196,16 +226,26 @@ pub(crate) fn dynamic_imports(bytes: &[u8]) -> Option<DynImports> {
     let img = Image::parse(bytes)?;
     let tags = dynamic_tags(&img)?;
 
-    let get = |t: u64| tags.iter().rev().find(|&&(tag, _)| tag == t).map(|&(_, v)| v);
+    let get = |t: u64| {
+        tags.iter()
+            .rev()
+            .find(|&&(tag, _)| tag == t)
+            .map(|&(_, v)| v)
+    };
     let pltgot = get(DT_PLTGOT);
     let (Some(symtab), Some(strtab)) = (get(DT_SYMTAB), get(DT_STRTAB)) else {
-        return Some(DynImports { got_to_name: HashMap::new(), pltgot });
+        return Some(DynImports {
+            got_to_name: HashMap::new(),
+            pltgot,
+        });
     };
     // `DT_SYMENT` is mandatory alongside `DT_SYMTAB`, and an image that omits it or
     // declares a stride shorter than the symbol it strides over is not readable at
     // all; the ABI size is the only defensible reading.
     let abi_syment = if img.is64 { 24 } else { 16 };
-    let syment = get(DT_SYMENT).filter(|&s| s >= abi_syment).unwrap_or(abi_syment);
+    let syment = get(DT_SYMENT)
+        .filter(|&s| s >= abi_syment)
+        .unwrap_or(abi_syment);
 
     let mut got_to_name: HashMap<u64, Vec<u8>> = HashMap::new();
     // `DT_JMPREL` is read first because its `JUMP_SLOT` entries are the stub
@@ -218,16 +258,30 @@ pub(crate) fn dynamic_imports(bytes: &[u8]) -> Option<DynImports> {
         Some(DT_REL) => (get(DT_JMPREL), get(DT_PLTRELSZ), false),
         _ => (None, None, true),
     };
-    for (base, size, rela) in
-        [jmprel, (get(DT_RELA), get(DT_RELASZ), true), (get(DT_REL), get(DT_RELSZ), false)]
-    {
+    for (base, size, rela) in [
+        jmprel,
+        (get(DT_RELA), get(DT_RELASZ), true),
+        (get(DT_REL), get(DT_RELSZ), false),
+    ] {
         let (Some(base), Some(size)) = (base, size) else {
             continue;
         };
-        read_reloc_table(&img, base, size, rela, symtab, syment, strtab, &mut got_to_name);
+        read_reloc_table(
+            &img,
+            base,
+            size,
+            rela,
+            symtab,
+            syment,
+            strtab,
+            &mut got_to_name,
+        );
     }
 
-    Some(DynImports { got_to_name, pltgot })
+    Some(DynImports {
+        got_to_name,
+        pltgot,
+    })
 }
 
 /// The `(d_tag, d_un)` pairs of the `PT_DYNAMIC` segment, up to `DT_NULL`.
@@ -274,21 +328,27 @@ fn read_reloc_table(
     // more entries than the file has bytes to hold them.
     let n = n.min(img.bytes.len() as u64 / entsz.max(1));
     for i in 0..n {
-        let Some(off) = i.checked_mul(entsz).and_then(|d| base.checked_add(d)).and_then(|v| img.off_of(v))
+        let Some(off) = i
+            .checked_mul(entsz)
+            .and_then(|d| base.checked_add(d))
+            .and_then(|v| img.off_of(v))
         else {
             return;
         };
-        let (Some(r_offset), Some(r_info)) =
-            (img.wordat(off), img.wordat(off + if img.is64 { 8 } else { 4 }))
-        else {
+        let (Some(r_offset), Some(r_info)) = (
+            img.wordat(off),
+            img.wordat(off + if img.is64 { 8 } else { 4 }),
+        ) else {
             return;
         };
         let sym = if img.is64 { r_info >> 32 } else { r_info >> 8 };
         if sym == 0 {
             continue;
         }
-        let Some(st_off) =
-            sym.checked_mul(syment).and_then(|d| symtab.checked_add(d)).and_then(|v| img.off_of(v))
+        let Some(st_off) = sym
+            .checked_mul(syment)
+            .and_then(|d| symtab.checked_add(d))
+            .and_then(|v| img.off_of(v))
         else {
             continue;
         };
@@ -298,13 +358,17 @@ fn read_reloc_table(
         if st_name == 0 {
             continue;
         }
-        let Some(name) = strtab.checked_add(u64::from(st_name)).and_then(|v| img.cstr_at(v)) else {
+        let Some(name) = strtab
+            .checked_add(u64::from(st_name))
+            .and_then(|v| img.cstr_at(v))
+        else {
             continue;
         };
         if name.is_empty() {
             continue;
         }
-        out.entry(r_offset).or_insert_with(|| super::elf_plt::strip_version(name));
+        out.entry(r_offset)
+            .or_insert_with(|| super::elf_plt::strip_version(name));
     }
 }
 

@@ -9,7 +9,10 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// The vendored UPX 3.96 witness; see its `.provenance` sidecar.
@@ -110,9 +113,18 @@ fn unpack_recovers_the_original_elf() {
         panic!("unlace unpack failed: {stderr}");
     }
 
-    assert!(stdout.contains("NRV2B_LE32"), "report names no method:\n{stdout}");
-    assert!(stdout.contains("linux/amd64"), "report names no format:\n{stdout}");
-    assert!(stdout.contains(&out), "report names no output path:\n{stdout}");
+    assert!(
+        stdout.contains("NRV2B_LE32"),
+        "report names no method:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("linux/amd64"),
+        "report names no format:\n{stdout}"
+    );
+    assert!(
+        stdout.contains(&out),
+        "report names no output path:\n{stdout}"
+    );
 
     let bytes = std::fs::read(&out).expect("unpacked file was written");
     assert_eq!(bytes.len(), 31640, "unpacked size");
@@ -133,15 +145,20 @@ fn the_unpacked_output_is_analyzable() {
         panic!("unlace unpack failed: {stderr}");
     }
 
-    let (stdout, stderr, ok) =
-        run_kuna(&["functions", &out, "--json", "--sleighpath", &specs()]);
+    let (stdout, stderr, ok) = run_kuna(&["functions", &out, "--json", "--sleighpath", &specs()]);
     if !ok {
         panic!("unlace functions failed on the unpacked output: {stderr}");
     }
     let count = json_count(&stdout).expect("functions --json has a count");
-    assert!(count >= 50, "expected the recovered program's functions, got {count}:\n{stdout}");
+    assert!(
+        count >= 50,
+        "expected the recovered program's functions, got {count}:\n{stdout}"
+    );
     for name in ["main", "gameplay", "chacha20_xor"] {
-        assert!(stdout.contains(&format!("\"{name}\"")), "no {name} in:\n{stdout}");
+        assert!(
+            stdout.contains(&format!("\"{name}\"")),
+            "no {name} in:\n{stdout}"
+        );
     }
 }
 
@@ -153,7 +170,10 @@ fn unpack_json_reports_the_pack_header() {
     if !ok {
         panic!("unlace unpack --json failed: {stderr}");
     }
-    assert!(stdout.trim_start().starts_with('{'), "output is not a JSON object:\n{stdout}");
+    assert!(
+        stdout.trim_start().starts_with('{'),
+        "output is not a JSON object:\n{stdout}"
+    );
     for field in [
         "\"packer\": \"upx\"",
         "\"format\": 22",
@@ -177,8 +197,14 @@ fn an_unpacked_binary_is_refused_by_name() {
     let out = scratch.path("plain.unpacked");
     let (_, stderr, ok) = run_kuna(&["unpack", &plain_fixture(), "-o", &out]);
     assert!(!ok, "unpacking a plain ELF should fail");
-    assert!(stderr.contains("no UPX PackHeader"), "unhelpful diagnostic:\n{stderr}");
-    assert!(!PathBuf::from(&out).exists(), "a refused run must write nothing");
+    assert!(
+        stderr.contains("no UPX PackHeader"),
+        "unhelpful diagnostic:\n{stderr}"
+    );
+    assert!(
+        !PathBuf::from(&out).exists(),
+        "a refused run must write nothing"
+    );
 }
 
 /// A method this build does not implement must be named, not guessed at: a
@@ -192,9 +218,18 @@ fn an_unimplemented_method_is_refused_by_name() {
 
     let out = scratch.path("deflate.unpacked");
     let (_, stderr, ok) = run_kuna(&["unpack", &input, "-o", &out]);
-    assert!(!ok, "a DEFLATE-compressed image must not be unpacked by this build");
-    assert!(stderr.contains("DEFLATE"), "the refusal does not name the method:\n{stderr}");
-    assert!(!PathBuf::from(&out).exists(), "a refused run must write nothing");
+    assert!(
+        !ok,
+        "a DEFLATE-compressed image must not be unpacked by this build"
+    );
+    assert!(
+        stderr.contains("DEFLATE"),
+        "the refusal does not name the method:\n{stderr}"
+    );
+    assert!(
+        !PathBuf::from(&out).exists(),
+        "a refused run must write nothing"
+    );
 }
 
 /// The other half of the same contract, now that method 14 *is* implemented: an
@@ -218,8 +253,14 @@ fn a_block_mislabelled_as_lzma_is_refused_not_guessed_at() {
     let out = scratch.path("mislabelled.unpacked");
     let (_, stderr, ok) = run_kuna(&["unpack", &input, "-o", &out]);
     assert!(!ok, "an NRV block relabelled as LZMA must not unpack");
-    assert!(stderr.contains("block at 0x100"), "the refusal does not name the block:\n{stderr}");
-    assert!(!PathBuf::from(&out).exists(), "a refused run must write nothing");
+    assert!(
+        stderr.contains("block at 0x100"),
+        "the refusal does not name the block:\n{stderr}"
+    );
+    assert!(
+        !PathBuf::from(&out).exists(),
+        "a refused run must write nothing"
+    );
 }
 
 /// `docs/re-needs/upx-lzma-compression-blocks.md`: a `--lzma` image used to exit
@@ -234,11 +275,21 @@ fn unpack_recovers_an_lzma_packed_elf() {
     if !ok {
         panic!("unlace unpack failed on an LZMA image: {stderr}");
     }
-    assert!(!stderr.contains("unsupported UPX image"), "still refused:\n{stderr}");
-    for field in ["\"method\": 14", "\"method_name\": \"LZMA\"", "\"unpacked_size\": 31640"] {
+    assert!(
+        !stderr.contains("unsupported UPX image"),
+        "still refused:\n{stderr}"
+    );
+    for field in [
+        "\"method\": 14",
+        "\"method_name\": \"LZMA\"",
+        "\"unpacked_size\": 31640",
+    ] {
         assert!(stdout.contains(field), "missing {field} in:\n{stdout}");
     }
-    assert!(json_count(&stdout).is_some_and(|n| n > 0), "no blocks reported:\n{stdout}");
+    assert!(
+        json_count(&stdout).is_some_and(|n| n > 0),
+        "no blocks reported:\n{stdout}"
+    );
 
     let bytes = std::fs::read(&out).expect("unpacked file was written");
     assert_eq!(bytes.len(), 31640);
@@ -248,7 +299,11 @@ fn unpack_recovers_an_lzma_packed_elf() {
     let nrv_out = scratch.path("snake.nrv.unpacked");
     let (_, _, ok) = run_kuna(&["unpack", &packed_fixture(), "-o", &nrv_out]);
     assert!(ok, "the NRV witness stopped unpacking");
-    assert_eq!(bytes, std::fs::read(&nrv_out).expect("read"), "the two packings disagree");
+    assert_eq!(
+        bytes,
+        std::fs::read(&nrv_out).expect("read"),
+        "the two packings disagree"
+    );
 }
 
 /// The PE64 whose payload is a real UPX LZMA1 stream and whose `PackHeader`
@@ -286,10 +341,22 @@ fn raw_lzma_recovers_a_stream_no_pack_header_describes() {
         panic!("unlace unpack --raw-lzma failed: {stderr}");
     }
 
-    assert!(!stderr.contains("no UPX PackHeader found"), "discovery ran anyway:\n{stderr}");
-    assert!(stdout.contains(r#""unpacked_size": 792"#), "size is not a result:\n{stdout}");
-    assert!(stdout.contains(r#""range_kind": "vma""#), "range was not read as an address:\n{stdout}");
-    assert!(stdout.contains(r#""end_marker": false"#), "UPX writes no end marker:\n{stdout}");
+    assert!(
+        !stderr.contains("no UPX PackHeader found"),
+        "discovery ran anyway:\n{stderr}"
+    );
+    assert!(
+        stdout.contains(r#""unpacked_size": 792"#),
+        "size is not a result:\n{stdout}"
+    );
+    assert!(
+        stdout.contains(r#""range_kind": "vma""#),
+        "range was not read as an address:\n{stdout}"
+    );
+    assert!(
+        stdout.contains(r#""end_marker": false"#),
+        "UPX writes no end marker:\n{stdout}"
+    );
 
     let bytes = std::fs::read(&out).expect("payload was written");
     assert_eq!(bytes.len(), HEADERLESS_SIZE);
@@ -307,7 +374,10 @@ fn the_pack_header_search_is_not_degraded_by_the_override() {
     let (_stdout, stderr, ok) = run_kuna(&["unpack", &headerless_fixture(), "-o", &out]);
     assert!(!ok, "a file with no PackHeader must not unpack:\n{stderr}");
     assert!(stderr.contains("no UPX PackHeader found"), "{stderr}");
-    assert!(!PathBuf::from(&out).exists(), "a refusal wrote a file anyway");
+    assert!(
+        !PathBuf::from(&out).exists(),
+        "a refusal wrote a file anyway"
+    );
 }
 
 /// The other two spellings an analyst reaches for: a file offset (the only
@@ -333,7 +403,10 @@ fn raw_lzma_accepts_file_offsets_and_explicit_properties() {
         "--json",
     ]);
     assert!(ok, "unlace unpack --raw-offsets failed: {stderr}");
-    assert!(stdout.contains(r#""range_kind": "file-offset""#), "{stdout}");
+    assert!(
+        stdout.contains(r#""range_kind": "file-offset""#),
+        "{stdout}"
+    );
     let bytes = std::fs::read(&out).expect("payload was written");
     assert_eq!(bytes.len(), HEADERLESS_SIZE);
     assert_eq!(&bytes[..4], b"\x7fELF");
@@ -362,11 +435,20 @@ fn raw_lzma_accepts_file_offsets_and_explicit_properties() {
 fn a_range_that_is_not_a_stream_is_refused_not_half_written() {
     let scratch = Scratch::new("rawbad");
     let out = scratch.path("payload.bin");
-    let (_o, stderr, ok) =
-        run_kuna(&["unpack", &headerless_fixture(), "-o", &out, "--raw-lzma", "0x140009000:0x14000a000"]);
+    let (_o, stderr, ok) = run_kuna(&[
+        "unpack",
+        &headerless_fixture(),
+        "-o",
+        &out,
+        "--raw-lzma",
+        "0x140009000:0x14000a000",
+    ]);
     assert!(!ok, "an unmapped range must not decode");
     assert!(stderr.contains("not inside any section"), "{stderr}");
-    assert!(!PathBuf::from(&out).exists(), "a refusal wrote a file anyway");
+    assert!(
+        !PathBuf::from(&out).exists(),
+        "a refusal wrote a file anyway"
+    );
 
     let (_o, stderr, ok) = run_kuna(&[
         "unpack",
@@ -380,7 +462,10 @@ fn a_range_that_is_not_a_stream_is_refused_not_half_written() {
     ]);
     assert!(!ok, "the cap must bound a length-less decode");
     assert!(stderr.contains("output cap"), "{stderr}");
-    assert!(!PathBuf::from(&out).exists(), "a refusal wrote a file anyway");
+    assert!(
+        !PathBuf::from(&out).exists(),
+        "a refusal wrote a file anyway"
+    );
 }
 
 /// The raw-mode modifiers are inert on their own, so they are a usage error
@@ -405,13 +490,20 @@ fn unpack_rebuilds_the_reported_win64_pe() {
     if !ok {
         panic!("unlace unpack failed: {stderr}");
     }
-    assert!(stdout.contains("win64/pe"), "report names no format:\n{stdout}");
+    assert!(
+        stdout.contains("win64/pe"),
+        "report names no format:\n{stdout}"
+    );
 
     let bytes = std::fs::read(&out).expect("unpacked file was written");
     assert_eq!(bytes.len(), 3072, "unpacked size");
     let pe = u32::from_le_bytes(bytes[0x3c..0x40].try_into().unwrap()) as usize;
     assert_eq!(&bytes[pe..pe + 4], b"PE\0\0");
-    assert_eq!(u16::from_le_bytes([bytes[pe + 24], bytes[pe + 25]]), 0x20b, "PE32+");
+    assert_eq!(
+        u16::from_le_bytes([bytes[pe + 24], bytes[pe + 25]]),
+        0x20b,
+        "PE32+"
+    );
 
     let (stdout, stderr, ok) = run_kuna(&["functions", &out, "--json", "--sleighpath", &specs()]);
     if !ok {
@@ -421,12 +513,21 @@ fn unpack_rebuilds_the_reported_win64_pe() {
     for addr in ["0x140001000", "0x140001020", "0x140001060"] {
         assert!(stdout.contains(addr), "no function at {addr}:\n{stdout}");
     }
-    let (stdout, stderr, ok) =
-        run_kuna(&["decompile", &out, "0x140001020", "--addr", "--sleighpath", &specs()]);
+    let (stdout, stderr, ok) = run_kuna(&[
+        "decompile",
+        &out,
+        "0x140001020",
+        "--addr",
+        "--sleighpath",
+        &specs(),
+    ]);
     if !ok {
         panic!("unlace decompile failed on the unpacked output: {stderr}");
     }
-    assert!(stdout.contains("sub_140001000(a0)"), "the call to `increment` is lost:\n{stdout}");
+    assert!(
+        stdout.contains("sub_140001000(a0)"),
+        "the call to `increment` is lost:\n{stdout}"
+    );
 }
 
 /// A PE target this build does not rebuild exits 1 naming it, and leaves no
@@ -441,7 +542,10 @@ fn win64_arm64_is_refused_by_name_and_writes_nothing() {
         stderr.contains("unsupported UPX image: target format 43 (win64/arm64)"),
         "unhelpful refusal: {stderr}"
     );
-    assert!(!std::path::Path::new(&out).exists(), "a refused unpack wrote {out}");
+    assert!(
+        !std::path::Path::new(&out).exists(),
+        "a refused unpack wrote {out}"
+    );
 }
 
 /// Write the NRV witness out with its `b_method` overwritten and its header

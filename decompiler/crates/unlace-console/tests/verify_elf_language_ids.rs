@@ -23,14 +23,15 @@
 use std::path::PathBuf;
 
 use unlace_base::marshal::IdRegistry;
-use unlace_decomp::sleigh_arch::{
-    register_sleigh_arch_ids, LanguageDatabase, SleighArchitecture,
-};
+use unlace_decomp::sleigh_arch::{LanguageDatabase, SleighArchitecture, register_sleigh_arch_ids};
 use unlace_sleigh::loadimage_xml::register_loadimage_xml_ids;
 use unlace_sleigh::translate::register_translate_ids;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// The same per-module id registration the console bootstrap's `build_registry`
@@ -49,17 +50,21 @@ fn every_elf_language_id_resolves_in_the_database() {
     let registry = build_registry();
     let mut db = LanguageDatabase::new();
     db.scan_for_sleigh_directories(specs.to_str().unwrap());
-    db.get_descriptions(&registry).expect("load required processor descriptions");
+    db.get_descriptions(&registry)
+        .expect("load required processor descriptions");
 
     let ids = unlace_analysis::loadimage_object::elf_language_ids();
-    assert!(!ids.is_empty(), "the ELF id producer must enumerate at least one id");
+    assert!(
+        !ids.is_empty(),
+        "the ELF id producer must enumerate at least one id"
+    );
 
     for id in &ids {
         let mut sleigh = SleighArchitecture::new("t", "");
         sleigh.set_archid(id);
-        sleigh
-            .resolve_architecture(&db, id)
-            .unwrap_or_else(|e| panic!("ELF language id {id:?} failed to resolve: {}", e.explain()));
+        sleigh.resolve_architecture(&db, id).unwrap_or_else(|e| {
+            panic!("ELF language id {id:?} failed to resolve: {}", e.explain())
+        });
         assert!(
             sleigh.language_index() >= 0,
             "ELF language id {id:?} did not resolve to a language (index {})",
@@ -69,8 +74,14 @@ fn every_elf_language_id_resolves_in_the_database() {
 
     // Sanity: the headline arches are present in the enumerated set, so a future
     // arm deletion can't quietly shrink the gate to nothing.
-    for stem in ["x86:LE:64", "x86:LE:32", "ARM:LE:32", "AARCH64:LE:64", "MIPS:LE:32", "RISCV:LE:64"]
-    {
+    for stem in [
+        "x86:LE:64",
+        "x86:LE:32",
+        "ARM:LE:32",
+        "AARCH64:LE:64",
+        "MIPS:LE:32",
+        "RISCV:LE:64",
+    ] {
         assert!(
             ids.iter().any(|id| id.starts_with(stem)),
             "expected an id beginning {stem:?} in {ids:?}"
@@ -91,7 +102,8 @@ fn every_object_format_language_id_resolves_in_the_database() {
     let registry = build_registry();
     let mut db = LanguageDatabase::new();
     db.scan_for_sleigh_directories(specs.to_str().unwrap());
-    db.get_descriptions(&registry).expect("load required processor descriptions");
+    db.get_descriptions(&registry)
+        .expect("load required processor descriptions");
 
     // (primary, fallback) per format. A format passes if, for every pair, the
     // primary resolves OR the fallback resolves (the §2.2 retry path).
@@ -130,10 +142,16 @@ fn every_object_format_language_id_resolves_in_the_database() {
     ];
 
     for (fmt_name, ids, expected) in suites {
-        assert!(!ids.is_empty(), "{fmt_name} id producer must enumerate at least one id");
+        assert!(
+            !ids.is_empty(),
+            "{fmt_name} id producer must enumerate at least one id"
+        );
         for (primary, fallback) in ids {
             let ok = resolves(&db, primary)
-                || fallback.as_deref().map(|fb| resolves(&db, fb)).unwrap_or(false);
+                || fallback
+                    .as_deref()
+                    .map(|fb| resolves(&db, fb))
+                    .unwrap_or(false);
             assert!(
                 ok,
                 "{fmt_name} language id {primary:?} (fallback {fallback:?}) failed to resolve"

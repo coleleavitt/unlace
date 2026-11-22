@@ -44,17 +44,17 @@
 //! These deferrals are recorded as losses; the verify-path content — the genuine
 //! algorithmic novelty of this file — is complete.
 
+use std::collections::BTreeMap;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
-use std::collections::BTreeMap;
 
 use crate::action::{
     Action, ActionBase, ActionContext, ActionGroupList, ApplyResult, Rule, RuleSpec, RuleState,
 };
+use crate::context::{BlockId, OpId, TypeOp, VarnodeId};
 use crate::expression::BooleanExpressionMatch;
 use crate::funcdata::Funcdata;
-use crate::context::{BlockId, OpId, TypeOp, VarnodeId};
 
 /// Resolve an [`OpCode`] to the [`TypeOp`] `opSetOpcode` needs.
 ///
@@ -155,8 +155,16 @@ impl ConditionalExecution {
         if init.get_out(0) == init.get_out(1) {
             return None;
         }
-        let camethruposta_slot = if ce.init2a_true { 1 - ce.prea_inslot } else { ce.prea_inslot };
-        Some(fd.bblocks_ref().block(iblock).get_out(if inslot == camethruposta_slot { 0 } else { 1 }))
+        let camethruposta_slot = if ce.init2a_true {
+            1 - ce.prea_inslot
+        } else {
+            ce.prea_inslot
+        };
+        Some(
+            fd.bblocks_ref()
+                .block(iblock)
+                .get_out(if inslot == camethruposta_slot { 0 } else { 1 }),
+        )
     }
 
     /// Calculate boolean array of all address spaces that have had a heritage
@@ -200,7 +208,13 @@ impl ConditionalExecution {
             None => return false,
         };
         self.cbranch = Some(cbranch);
-        if fd.obank().get(cbranch).expect("testIBlock: stale cbranch").code() != OpCode::CPUI_CBRANCH {
+        if fd
+            .obank()
+            .get(cbranch)
+            .expect("testIBlock: stale cbranch")
+            .code()
+            != OpCode::CPUI_CBRANCH
+        {
             return false;
         }
         true
@@ -214,7 +228,9 @@ impl ConditionalExecution {
         let iblock = self.iblock.expect("findInitPre: no iblock");
         let mut tmp = fd.bblocks_ref().block(iblock).get_in(self.prea_inslot);
         let mut last = iblock;
-        while fd.bblocks_ref().block(tmp).size_out() == 1 && fd.bblocks_ref().block(tmp).size_in() == 1 {
+        while fd.bblocks_ref().block(tmp).size_out() == 1
+            && fd.bblocks_ref().block(tmp).size_in() == 1
+        {
             last = tmp;
             tmp = fd.bblocks_ref().block(tmp).get_in(0);
         }
@@ -223,7 +239,9 @@ impl ConditionalExecution {
         }
         self.initblock = Some(tmp);
         let mut tmp2 = fd.bblocks_ref().block(iblock).get_in(1 - self.prea_inslot);
-        while fd.bblocks_ref().block(tmp2).size_out() == 1 && fd.bblocks_ref().block(tmp2).size_in() == 1 {
+        while fd.bblocks_ref().block(tmp2).size_out() == 1
+            && fd.bblocks_ref().block(tmp2).size_in() == 1
+        {
             tmp2 = fd.bblocks_ref().block(tmp2).get_in(0);
         }
         if Some(tmp2) != self.initblock {
@@ -248,7 +266,12 @@ impl ConditionalExecution {
             Some(o) => o,
             None => return false,
         };
-        if fd.obank().get(init_cbranch).expect("verifySameCondition: stale op").code() != OpCode::CPUI_CBRANCH
+        if fd
+            .obank()
+            .get(init_cbranch)
+            .expect("verifySameCondition: stale op")
+            .code()
+            != OpCode::CPUI_CBRANCH
         {
             return false;
         }
@@ -291,28 +314,60 @@ impl ConditionalExecution {
     /// `ConditionalExecution::testOpRead`, `condexe.cc:120-142`).
     fn test_op_read(&self, vn: VarnodeId, op: OpId, fd: &Funcdata) -> bool {
         let iblock = self.iblock.expect("testOpRead: no iblock");
-        if fd.obank().get(op).expect("testOpRead: stale op").get_parent() == Some(iblock) {
+        if fd
+            .obank()
+            .get(op)
+            .expect("testOpRead: stale op")
+            .get_parent()
+            == Some(iblock)
+        {
             return true;
         }
-        let write_op = fd.vbank().get(vn).expect("testOpRead: stale vn").get_def().expect("testOpRead: vn not written");
-        let opc = fd.obank().get(write_op).expect("testOpRead: stale writeOp").code();
+        let write_op = fd
+            .vbank()
+            .get(vn)
+            .expect("testOpRead: stale vn")
+            .get_def()
+            .expect("testOpRead: vn not written");
+        let opc = fd
+            .obank()
+            .get(write_op)
+            .expect("testOpRead: stale writeOp")
+            .code();
         if opc == OpCode::CPUI_COPY
             || opc == OpCode::CPUI_SUBPIECE
             || opc == OpCode::CPUI_INT_ADD
             || opc == OpCode::CPUI_PTRSUB
         {
             if opc == OpCode::CPUI_INT_ADD || opc == OpCode::CPUI_PTRSUB {
-                let in1 = fd.obank().get(write_op).expect("testOpRead").get_in(1).expect("testOpRead: null in");
-                if !fd.vbank().get(in1).expect("testOpRead: stale vn").is_constant() {
+                let in1 = fd
+                    .obank()
+                    .get(write_op)
+                    .expect("testOpRead")
+                    .get_in(1)
+                    .expect("testOpRead: null in");
+                if !fd
+                    .vbank()
+                    .get(in1)
+                    .expect("testOpRead: stale vn")
+                    .is_constant()
+                {
                     return false;
                 }
             }
-            let invn = fd.obank().get(write_op).expect("testOpRead").get_in(0).expect("testOpRead: null in");
+            let invn = fd
+                .obank()
+                .get(write_op)
+                .expect("testOpRead")
+                .get_in(0)
+                .expect("testOpRead: null in");
             let invn_ref = fd.vbank().get(invn).expect("testOpRead: stale vn");
             if invn_ref.is_written() {
                 let upop = invn_ref.get_def().expect("testOpRead: written no def");
                 let upop_ref = fd.obank().get(upop).expect("testOpRead: stale upop");
-                if upop_ref.get_parent() == Some(iblock) && upop_ref.code() != OpCode::CPUI_MULTIEQUAL {
+                if upop_ref.get_parent() == Some(iblock)
+                    && upop_ref.code() != OpCode::CPUI_MULTIEQUAL
+                {
                     return false;
                 }
             } else if invn_ref.is_free() {
@@ -346,38 +401,96 @@ impl ConditionalExecution {
     /// `opSetOutput`) and resolving its opcode (`opSetOpcode` → W6) both surface
     /// the documented stub `Err`.  The op-shell creation, input wiring, and
     /// insertion are reproduced.
-    fn pullback_op(&mut self, op: OpId, inbranch: int4, fd: &mut Funcdata) -> KunaResult<VarnodeId> {
+    fn pullback_op(
+        &mut self,
+        op: OpId,
+        inbranch: int4,
+        fd: &mut Funcdata,
+    ) -> KunaResult<VarnodeId> {
         if let Some(invn) = self.find_pullback(inbranch) {
             return Ok(invn);
         }
         let iblock = self.iblock.expect("pullbackOp: no iblock");
-        let mut invn = fd.obank().get(op).expect("pullbackOp: stale op").get_in(0).expect("pullbackOp: null in");
+        let mut invn = fd
+            .obank()
+            .get(op)
+            .expect("pullbackOp: stale op")
+            .get_in(0)
+            .expect("pullbackOp: null in");
         let bl: BlockId;
-        if fd.vbank().get(invn).expect("pullbackOp: stale vn").is_written() {
-            let def_op = fd.vbank().get(invn).expect("pullbackOp").get_def().expect("pullbackOp: written no def");
-            if fd.obank().get(def_op).expect("pullbackOp: stale defOp").get_parent() == Some(iblock) {
+        if fd
+            .vbank()
+            .get(invn)
+            .expect("pullbackOp: stale vn")
+            .is_written()
+        {
+            let def_op = fd
+                .vbank()
+                .get(invn)
+                .expect("pullbackOp")
+                .get_def()
+                .expect("pullbackOp: written no def");
+            if fd
+                .obank()
+                .get(def_op)
+                .expect("pullbackOp: stale defOp")
+                .get_parent()
+                == Some(iblock)
+            {
                 bl = fd.bblocks_ref().block(iblock).get_in(inbranch);
                 // defOp must be MULTIEQUAL
-                invn = fd.obank().get(def_op).expect("pullbackOp").get_in(inbranch).expect("pullbackOp: null in");
+                invn = fd
+                    .obank()
+                    .get(def_op)
+                    .expect("pullbackOp")
+                    .get_in(inbranch)
+                    .expect("pullbackOp: null in");
             } else {
-                bl = fd.bblocks_ref().block(iblock).get_immed_dom().expect("pullbackOp: no immedDom");
+                bl = fd
+                    .bblocks_ref()
+                    .block(iblock)
+                    .get_immed_dom()
+                    .expect("pullbackOp: no immedDom");
             }
         } else {
-            bl = fd.bblocks_ref().block(iblock).get_immed_dom().expect("pullbackOp: no immedDom");
+            bl = fd
+                .bblocks_ref()
+                .block(iblock)
+                .get_immed_dom()
+                .expect("pullbackOp: no immedDom");
         }
         let numinput = fd.obank().get(op).expect("pullbackOp").num_input();
         let opaddr = fd.obank().get(op).expect("pullbackOp").get_addr().clone();
         let new_op = fd.new_op(numinput, opaddr);
-        let orig_out_vn = fd.obank().get(op).expect("pullbackOp").get_out().expect("pullbackOp: op has no out");
-        let out_size = fd.vbank().get(orig_out_vn).expect("pullbackOp: stale out").get_size();
-        let out_addr = fd.vbank().get(orig_out_vn).expect("pullbackOp").get_addr().clone();
+        let orig_out_vn = fd
+            .obank()
+            .get(op)
+            .expect("pullbackOp")
+            .get_out()
+            .expect("pullbackOp: op has no out");
+        let out_size = fd
+            .vbank()
+            .get(orig_out_vn)
+            .expect("pullbackOp: stale out")
+            .get_size();
+        let out_addr = fd
+            .vbank()
+            .get(orig_out_vn)
+            .expect("pullbackOp")
+            .get_addr()
+            .clone();
         let out_vn = self.new_varnode_out(out_size, &out_addr, new_op, fd)?;
         // fd->opSetOpcode(newOp,op->code());   -- STUB(W6)
         let opc = fd.obank().get(op).expect("pullbackOp").code();
         fd.op_set_opcode(new_op, resolve_typeop(opc)?);
         fd.op_set_input(new_op, invn, 0)?;
         for i in 1..numinput {
-            let ini = fd.obank().get(op).expect("pullbackOp").get_in(i).expect("pullbackOp: null in");
+            let ini = fd
+                .obank()
+                .get(op)
+                .expect("pullbackOp")
+                .get_in(i)
+                .expect("pullbackOp: null in");
             fd.op_set_input(new_op, ini, i)?;
         }
         fd.op_insert_end(new_op, bl);
@@ -395,8 +508,17 @@ impl ConditionalExecution {
         let sizein = fd.bblocks_ref().block(bl).size_in();
         let start = crate::block::block_get_start(&fd.bblocks_ref().arena, bl);
         let newop = fd.new_op(sizein, start);
-        let outvn = fd.obank().get(op).expect("getNewMulti: stale op").get_out().expect("getNewMulti: op has no out");
-        let outsize = fd.vbank().get(outvn).expect("getNewMulti: stale out").get_size();
+        let outvn = fd
+            .obank()
+            .get(op)
+            .expect("getNewMulti: stale op")
+            .get_out()
+            .expect("getNewMulti: op has no out");
+        let outsize = fd
+            .vbank()
+            .get(outvn)
+            .expect("getNewMulti: stale out")
+            .get_size();
         // Using the original outvn address may cause merge conflicts (see C++ comment);
         let newoutvn = self.new_unique_out(outsize, newop, fd)?;
         // fd->opSetOpcode(newop,CPUI_MULTIEQUAL);   -- STUB(W6)
@@ -457,15 +579,45 @@ impl ConditionalExecution {
 
     /// Resolve a read op coming through the \b iblock (C++
     /// `ConditionalExecution::resolveIblockRead`, `condexe.cc:242-262`).
-    fn resolve_iblock_read(&mut self, op: OpId, inbranch: int4, fd: &mut Funcdata) -> KunaResult<VarnodeId> {
+    fn resolve_iblock_read(
+        &mut self,
+        op: OpId,
+        inbranch: int4,
+        fd: &mut Funcdata,
+    ) -> KunaResult<VarnodeId> {
         let iblock = self.iblock.expect("resolveIblockRead: no iblock");
         let mut op = op;
-        if fd.obank().get(op).expect("resolveIblockRead: stale op").code() == OpCode::CPUI_COPY {
-            let vn = fd.obank().get(op).expect("resolveIblockRead").get_in(0).expect("resolveIblockRead: null in");
-            if fd.vbank().get(vn).expect("resolveIblockRead: stale vn").is_written() {
-                let def_op = fd.vbank().get(vn).expect("resolveIblockRead").get_def().expect("resolveIblockRead: written no def");
-                let def_ref = fd.obank().get(def_op).expect("resolveIblockRead: stale defOp");
-                if def_ref.code() == OpCode::CPUI_MULTIEQUAL && def_ref.get_parent() == Some(iblock) {
+        if fd
+            .obank()
+            .get(op)
+            .expect("resolveIblockRead: stale op")
+            .code()
+            == OpCode::CPUI_COPY
+        {
+            let vn = fd
+                .obank()
+                .get(op)
+                .expect("resolveIblockRead")
+                .get_in(0)
+                .expect("resolveIblockRead: null in");
+            if fd
+                .vbank()
+                .get(vn)
+                .expect("resolveIblockRead: stale vn")
+                .is_written()
+            {
+                let def_op = fd
+                    .vbank()
+                    .get(vn)
+                    .expect("resolveIblockRead")
+                    .get_def()
+                    .expect("resolveIblockRead: written no def");
+                let def_ref = fd
+                    .obank()
+                    .get(def_op)
+                    .expect("resolveIblockRead: stale defOp");
+                if def_ref.code() == OpCode::CPUI_MULTIEQUAL && def_ref.get_parent() == Some(iblock)
+                {
                     op = def_op;
                 }
             } else {
@@ -474,20 +626,41 @@ impl ConditionalExecution {
         }
         let opc = fd.obank().get(op).expect("resolveIblockRead").code();
         if opc == OpCode::CPUI_MULTIEQUAL {
-            Ok(fd.obank().get(op).expect("resolveIblockRead").get_in(inbranch).expect("resolveIblockRead: null in"))
-        } else if opc == OpCode::CPUI_SUBPIECE || opc == OpCode::CPUI_INT_ADD || opc == OpCode::CPUI_PTRSUB {
+            Ok(fd
+                .obank()
+                .get(op)
+                .expect("resolveIblockRead")
+                .get_in(inbranch)
+                .expect("resolveIblockRead: null in"))
+        } else if opc == OpCode::CPUI_SUBPIECE
+            || opc == OpCode::CPUI_INT_ADD
+            || opc == OpCode::CPUI_PTRSUB
+        {
             self.pullback_op(op, inbranch, fd)
         } else {
-            Err(KunaError::lowlevel("Conditional execution: Illegal op in iblock"))
+            Err(KunaError::lowlevel(
+                "Conditional execution: Illegal op in iblock",
+            ))
         }
     }
 
     /// Get the replacement Varnode for the output of a MULTIEQUAL in the \b iblock,
     /// given the op reading it (C++ `ConditionalExecution::getMultiequalRead`,
     /// `condexe.cc:270-279`).
-    fn get_multiequal_read(&mut self, op: OpId, readop: OpId, slot: int4, fd: &mut Funcdata) -> KunaResult<VarnodeId> {
+    fn get_multiequal_read(
+        &mut self,
+        op: OpId,
+        readop: OpId,
+        slot: int4,
+        fd: &mut Funcdata,
+    ) -> KunaResult<VarnodeId> {
         let iblock = self.iblock.expect("getMultiequalRead: no iblock");
-        let bl = fd.obank().get(readop).expect("getMultiequalRead: stale readop").get_parent().expect("getMultiequalRead: readop no parent");
+        let bl = fd
+            .obank()
+            .get(readop)
+            .expect("getMultiequalRead: stale readop")
+            .get_parent()
+            .expect("getMultiequalRead: readop no parent");
         let inbl = fd.bblocks_ref().block(bl).get_in(slot);
         if inbl != iblock {
             return self.get_replacement_read(op, inbl, fd);
@@ -504,7 +677,12 @@ impl ConditionalExecution {
     /// Find a replacement Varnode for the output of the given PcodeOp that is read
     /// in the given block (C++ `ConditionalExecution::getReplacementRead`,
     /// `condexe.cc:291-315`).
-    fn get_replacement_read(&mut self, op: OpId, bl: BlockId, fd: &mut Funcdata) -> KunaResult<VarnodeId> {
+    fn get_replacement_read(
+        &mut self,
+        op: OpId,
+        bl: BlockId,
+        fd: &mut Funcdata,
+    ) -> KunaResult<VarnodeId> {
         let iblock = self.iblock.expect("getReplacementRead: no iblock");
         let bl_index = fd.bblocks_ref().block(bl).get_index();
         if let Some(&res) = self.replacement.get(&bl_index) {
@@ -515,7 +693,11 @@ impl ConditionalExecution {
         while fd.bblocks_ref().block(curbl).get_immed_dom() != Some(iblock) {
             curbl = match fd.bblocks_ref().block(curbl).get_immed_dom() {
                 Some(d) => d,
-                None => return Err(KunaError::lowlevel("Conditional execution: Could not find dominator")),
+                None => {
+                    return Err(KunaError::lowlevel(
+                        "Conditional execution: Could not find dominator",
+                    ));
+                }
             };
         }
         let curbl_index = fd.bblocks_ref().block(curbl).get_index();
@@ -540,16 +722,36 @@ impl ConditionalExecution {
         self.replacement.clear();
         self.pullback.clear();
         let iblock = self.iblock.expect("doReplacement: no iblock");
-        let vn = fd.obank().get(op).expect("doReplacement: stale op").get_out().expect("doReplacement: op has no out");
+        let vn = fd
+            .obank()
+            .get(op)
+            .expect("doReplacement: stale op")
+            .get_out()
+            .expect("doReplacement: op has no out");
         loop {
             // The C++ re-fetches beginDescend() each iteration because the body
             // destroys the *current* descendant link; take the first descendant.
-            let readop = match fd.vbank().get(vn).expect("doReplacement: stale vn").descend_iter().next() {
+            let readop = match fd
+                .vbank()
+                .get(vn)
+                .expect("doReplacement: stale vn")
+                .descend_iter()
+                .next()
+            {
                 Some(o) => o,
                 None => break,
             };
-            let mut slot = fd.obank().get(readop).expect("doReplacement: stale readop").get_slot(vn);
-            let bl = fd.obank().get(readop).expect("doReplacement").get_parent().expect("doReplacement: readop no parent");
+            let mut slot = fd
+                .obank()
+                .get(readop)
+                .expect("doReplacement: stale readop")
+                .get_slot(vn);
+            let bl = fd
+                .obank()
+                .get(readop)
+                .expect("doReplacement")
+                .get_parent()
+                .expect("doReplacement: readop no parent");
             let mut readop = readop;
             if bl == iblock {
                 fd.op_unset_input(readop, slot);
@@ -560,13 +762,27 @@ impl ConditionalExecution {
                     rvn = self.get_multiequal_read(op, readop, slot, fd)?;
                 } else if code == OpCode::CPUI_RETURN && slot > 0 {
                     // Cannot replace input of RETURN directly, create COPY to hold input.
-                    let raddr = fd.obank().get(readop).expect("doReplacement").get_addr().clone();
+                    let raddr = fd
+                        .obank()
+                        .get(readop)
+                        .expect("doReplacement")
+                        .get_addr()
+                        .clone();
                     let newcopyop = fd.new_op(1, raddr);
                     // fd->opSetOpcode(newcopyop,CPUI_COPY);   -- STUB(W6)
                     fd.op_set_opcode(newcopyop, resolve_typeop(OpCode::CPUI_COPY)?);
                     // Preserve storage
-                    let vsize = fd.vbank().get(vn).expect("doReplacement: stale vn").get_size();
-                    let vaddr = fd.vbank().get(vn).expect("doReplacement").get_addr().clone();
+                    let vsize = fd
+                        .vbank()
+                        .get(vn)
+                        .expect("doReplacement: stale vn")
+                        .get_size();
+                    let vaddr = fd
+                        .vbank()
+                        .get(vn)
+                        .expect("doReplacement")
+                        .get_addr()
+                        .clone();
                     let outvn = self.new_varnode_out(vsize, &vaddr, newcopyop, fd)?;
                     fd.op_set_input(readop, outvn, slot)?;
                     fd.op_insert_before(newcopyop, readop);
@@ -590,7 +806,12 @@ impl ConditionalExecution {
         let o = fd.obank().get(op).expect("testRemovability: stale op");
         if o.code() == OpCode::CPUI_MULTIEQUAL {
             let vn = o.get_out().expect("testRemovability: multiequal no out");
-            let readers: Vec<OpId> = fd.vbank().get(vn).expect("testRemovability: stale vn").descend_iter().collect();
+            let readers: Vec<OpId> = fd
+                .vbank()
+                .get(vn)
+                .expect("testRemovability: stale vn")
+                .descend_iter()
+                .collect();
             for readop in readers {
                 if !self.test_multi_read(vn, readop, fd) {
                     return false;
@@ -611,11 +832,21 @@ impl ConditionalExecution {
             // guard in the source; faithful ports keep the same evaluation but the
             // C++ relies on op outputs being non-null here.  We guard defensively:
             if let Some(vn) = vn_opt {
-                if fd.vbank().get(vn).expect("testRemovability: stale vn").is_addr_tied() {
+                if fd
+                    .vbank()
+                    .get(vn)
+                    .expect("testRemovability: stale vn")
+                    .is_addr_tied()
+                {
                     return false;
                 }
                 let mut hasnodescend = true;
-                let readers: Vec<OpId> = fd.vbank().get(vn).expect("testRemovability").descend_iter().collect();
+                let readers: Vec<OpId> = fd
+                    .vbank()
+                    .get(vn)
+                    .expect("testRemovability")
+                    .descend_iter()
+                    .collect();
                 for readop in readers {
                     if !self.test_op_read(vn, readop, fd) {
                         return false;
@@ -624,7 +855,12 @@ impl ConditionalExecution {
                 }
                 if hasnodescend {
                     // Check if heritage is performed for this varnode's space
-                    let spc_index = fd.vbank().get(vn).expect("testRemovability").get_space().get_index();
+                    let spc_index = fd
+                        .vbank()
+                        .get(vn)
+                        .expect("testRemovability")
+                        .get_space()
+                        .get_index();
                     if !self.heritageyes[spc_index as usize] {
                         return false;
                     }
@@ -662,7 +898,11 @@ impl ConditionalExecution {
             1 - self.prea_inslot
         };
         self.posta_block = Some(fd.bblocks_ref().block(iblock).get_out(self.posta_outslot));
-        self.postb_block = Some(fd.bblocks_ref().block(iblock).get_out(1 - self.posta_outslot));
+        self.postb_block = Some(
+            fd.bblocks_ref()
+                .block(iblock)
+                .get_out(1 - self.posta_outslot),
+        );
 
         // Iterate the iblock's ops from the one BEFORE the last (branch) back to
         // the first, testing each.  The basic intrusive list gives us tail/head.
@@ -740,7 +980,9 @@ pub struct ActionConditionalExe {
 
 impl ActionConditionalExe {
     pub fn new(g: impl Into<String>) -> ActionConditionalExe {
-        ActionConditionalExe { base: ActionBase::new(0, "conditionalexe", g) }
+        ActionConditionalExe {
+            base: ActionBase::new(0, "conditionalexe", g),
+        }
     }
 }
 
@@ -757,7 +999,9 @@ impl Action for ActionConditionalExe {
         if !grouplist.contains(&self.base.basegroup) {
             return None;
         }
-        Some(Box::new(ActionConditionalExe::new(self.base.basegroup.clone())))
+        Some(Box::new(ActionConditionalExe::new(
+            self.base.basegroup.clone(),
+        )))
     }
 
     /// C++ `ActionConditionalExe::apply` (`condexe.cc:477-502`).
@@ -848,12 +1092,28 @@ impl MultiPredicate {
     /// Check if `vn` is produced by a 2-branch MULTIEQUAL, one side a zero
     /// constant (C++ `MultiPredicate::discoverZeroSlot`, `condexe.cc:508-528`).
     fn discover_zero_slot(&mut self, vn: VarnodeId, fd: &Funcdata) -> bool {
-        if !fd.vbank().get(vn).expect("discoverZeroSlot: stale vn").is_written() {
+        if !fd
+            .vbank()
+            .get(vn)
+            .expect("discoverZeroSlot: stale vn")
+            .is_written()
+        {
             return false;
         }
-        let op = fd.vbank().get(vn).expect("discoverZeroSlot").get_def().expect("discoverZeroSlot: written no def");
+        let op = fd
+            .vbank()
+            .get(vn)
+            .expect("discoverZeroSlot")
+            .get_def()
+            .expect("discoverZeroSlot: written no def");
         self.op = Some(op);
-        if fd.obank().get(op).expect("discoverZeroSlot: stale op").code() != OpCode::CPUI_MULTIEQUAL {
+        if fd
+            .obank()
+            .get(op)
+            .expect("discoverZeroSlot: stale op")
+            .code()
+            != OpCode::CPUI_MULTIEQUAL
+        {
             return false;
         }
         if fd.obank().get(op).expect("discoverZeroSlot").num_input() != 2 {
@@ -862,31 +1122,78 @@ impl MultiPredicate {
         let mut zs = 0;
         while zs < 2 {
             self.zero_slot = zs;
-            let tmpvn = fd.obank().get(op).expect("discoverZeroSlot").get_in(zs).expect("discoverZeroSlot: null in");
-            if !fd.vbank().get(tmpvn).expect("discoverZeroSlot: stale vn").is_written() {
+            let tmpvn = fd
+                .obank()
+                .get(op)
+                .expect("discoverZeroSlot")
+                .get_in(zs)
+                .expect("discoverZeroSlot: null in");
+            if !fd
+                .vbank()
+                .get(tmpvn)
+                .expect("discoverZeroSlot: stale vn")
+                .is_written()
+            {
                 zs += 1;
                 continue;
             }
-            let copyop = fd.vbank().get(tmpvn).expect("discoverZeroSlot").get_def().expect("discoverZeroSlot: written no def");
+            let copyop = fd
+                .vbank()
+                .get(tmpvn)
+                .expect("discoverZeroSlot")
+                .get_def()
+                .expect("discoverZeroSlot: written no def");
             // Multiequal must have CPUI_COPY input
-            if fd.obank().get(copyop).expect("discoverZeroSlot: stale copyop").code() != OpCode::CPUI_COPY {
+            if fd
+                .obank()
+                .get(copyop)
+                .expect("discoverZeroSlot: stale copyop")
+                .code()
+                != OpCode::CPUI_COPY
+            {
                 zs += 1;
                 continue;
             }
-            let zerovn = fd.obank().get(copyop).expect("discoverZeroSlot").get_in(0).expect("discoverZeroSlot: null in");
-            if !fd.vbank().get(zerovn).expect("discoverZeroSlot: stale vn").is_constant() {
+            let zerovn = fd
+                .obank()
+                .get(copyop)
+                .expect("discoverZeroSlot")
+                .get_in(0)
+                .expect("discoverZeroSlot: null in");
+            if !fd
+                .vbank()
+                .get(zerovn)
+                .expect("discoverZeroSlot: stale vn")
+                .is_constant()
+            {
                 zs += 1;
                 continue;
             }
             // which copies #0
-            if fd.vbank().get(zerovn).expect("discoverZeroSlot").get_offset() != 0 {
+            if fd
+                .vbank()
+                .get(zerovn)
+                .expect("discoverZeroSlot")
+                .get_offset()
+                != 0
+            {
                 zs += 1;
                 continue;
             }
             // store off varnode from other path
-            let other_vn = fd.obank().get(op).expect("discoverZeroSlot").get_in(1 - zs).expect("discoverZeroSlot: null in");
+            let other_vn = fd
+                .obank()
+                .get(op)
+                .expect("discoverZeroSlot")
+                .get_in(1 - zs)
+                .expect("discoverZeroSlot: null in");
             self.other_vn = Some(other_vn);
-            if fd.vbank().get(other_vn).expect("discoverZeroSlot: stale vn").is_free() {
+            if fd
+                .vbank()
+                .get(other_vn)
+                .expect("discoverZeroSlot: stale vn")
+                .is_free()
+            {
                 return false;
             }
             return true;
@@ -898,10 +1205,18 @@ impl MultiPredicate {
     /// `MultiPredicate::discoverCbranch`, `condexe.cc:538-566`).
     fn discover_cbranch(&mut self, fd: &Funcdata) -> bool {
         let op = self.op.expect("discoverCbranch: no op");
-        let base_block = fd.obank().get(op).expect("discoverCbranch: stale op").get_parent().expect("discoverCbranch: op no parent");
+        let base_block = fd
+            .obank()
+            .get(op)
+            .expect("discoverCbranch: stale op")
+            .get_parent()
+            .expect("discoverCbranch: op no parent");
         let zero_block = fd.bblocks_ref().block(base_block).get_in(self.zero_slot);
         self.zero_block = Some(zero_block);
-        let other_block = fd.bblocks_ref().block(base_block).get_in(1 - self.zero_slot);
+        let other_block = fd
+            .bblocks_ref()
+            .block(base_block)
+            .get_in(1 - self.zero_slot);
         let zb_sizeout = fd.bblocks_ref().block(zero_block).size_out();
         let cond_block;
         if zb_sizeout == 1 {
@@ -938,7 +1253,13 @@ impl MultiPredicate {
             None => return false,
         };
         self.cbranch = Some(cbranch);
-        if fd.obank().get(cbranch).expect("discoverCbranch: stale cbranch").code() != OpCode::CPUI_CBRANCH {
+        if fd
+            .obank()
+            .get(cbranch)
+            .expect("discoverCbranch: stale cbranch")
+            .code()
+            != OpCode::CPUI_CBRANCH
+        {
             return false;
         }
         true
@@ -956,7 +1277,12 @@ impl MultiPredicate {
         } else {
             // condBlock must be zeroBlock
             let op = self.op.expect("discoverPathIsTrue: no op");
-            let parent = fd.obank().get(op).expect("discoverPathIsTrue: stale op").get_parent().expect("discoverPathIsTrue: op no parent");
+            let parent = fd
+                .obank()
+                .get(op)
+                .expect("discoverPathIsTrue: stale op")
+                .get_parent()
+                .expect("discoverPathIsTrue: op no parent");
             self.zero_path_is_true = fd.bblocks_ref().block(cond_block).get_true_out() == parent;
         }
     }
@@ -965,19 +1291,48 @@ impl MultiPredicate {
     /// `MultiPredicate::discoverConditionalZero`, `condexe.cc:589-614`).
     fn discover_conditional_zero(&mut self, vn: VarnodeId, fd: &Funcdata) -> bool {
         let cbranch = self.cbranch.expect("discoverConditionalZero: no cbranch");
-        let boolvn = fd.obank().get(cbranch).expect("discoverConditionalZero: stale cbranch").get_in(1).expect("discoverConditionalZero: null in");
-        if !fd.vbank().get(boolvn).expect("discoverConditionalZero: stale vn").is_written() {
+        let boolvn = fd
+            .obank()
+            .get(cbranch)
+            .expect("discoverConditionalZero: stale cbranch")
+            .get_in(1)
+            .expect("discoverConditionalZero: null in");
+        if !fd
+            .vbank()
+            .get(boolvn)
+            .expect("discoverConditionalZero: stale vn")
+            .is_written()
+        {
             return false;
         }
-        let compareop = fd.vbank().get(boolvn).expect("discoverConditionalZero").get_def().expect("discoverConditionalZero: written no def");
-        let opc = fd.obank().get(compareop).expect("discoverConditionalZero: stale compareop").code();
+        let compareop = fd
+            .vbank()
+            .get(boolvn)
+            .expect("discoverConditionalZero")
+            .get_def()
+            .expect("discoverConditionalZero: written no def");
+        let opc = fd
+            .obank()
+            .get(compareop)
+            .expect("discoverConditionalZero: stale compareop")
+            .code();
         if opc == OpCode::CPUI_INT_NOTEQUAL {
             self.zero_path_is_true = !self.zero_path_is_true;
         } else if opc != OpCode::CPUI_INT_EQUAL {
             return false;
         }
-        let a1 = fd.obank().get(compareop).expect("discoverConditionalZero").get_in(0).expect("discoverConditionalZero: null in");
-        let a2 = fd.obank().get(compareop).expect("discoverConditionalZero").get_in(1).expect("discoverConditionalZero: null in");
+        let a1 = fd
+            .obank()
+            .get(compareop)
+            .expect("discoverConditionalZero")
+            .get_in(0)
+            .expect("discoverConditionalZero: null in");
+        let a2 = fd
+            .obank()
+            .get(compareop)
+            .expect("discoverConditionalZero")
+            .get_in(1)
+            .expect("discoverConditionalZero: null in");
         let zerovn = if a1 == vn {
             a2
         } else if a2 == vn {
@@ -985,14 +1340,30 @@ impl MultiPredicate {
         } else {
             return false;
         };
-        if !fd.vbank().get(zerovn).expect("discoverConditionalZero: stale vn").is_constant() {
+        if !fd
+            .vbank()
+            .get(zerovn)
+            .expect("discoverConditionalZero: stale vn")
+            .is_constant()
+        {
             return false;
         }
         // Verify we are comparing to zero
-        if fd.vbank().get(zerovn).expect("discoverConditionalZero").get_offset() != 0 {
+        if fd
+            .vbank()
+            .get(zerovn)
+            .expect("discoverConditionalZero")
+            .get_offset()
+            != 0
+        {
             return false;
         }
-        if fd.obank().get(cbranch).expect("discoverConditionalZero").is_boolean_flip() {
+        if fd
+            .obank()
+            .get(cbranch)
+            .expect("discoverConditionalZero")
+            .is_boolean_flip()
+        {
             self.zero_path_is_true = !self.zero_path_is_true;
         }
         true
@@ -1007,7 +1378,9 @@ pub struct RuleOrPredicate {
 
 impl RuleOrPredicate {
     pub fn new(g: impl Into<String>) -> RuleOrPredicate {
-        RuleOrPredicate { state: RuleState::new(g, 0, "orpredicate") }
+        RuleOrPredicate {
+            state: RuleState::new(g, 0, "orpredicate"),
+        }
     }
 
     /// Boxed-ctor + group used by [`specs`].
@@ -1027,7 +1400,12 @@ impl RuleOrPredicate {
         op: OpId,
         data: &mut Funcdata,
     ) -> KunaResult<int4> {
-        if data.vbank().get(vn).expect("checkSingle: stale vn").is_free() {
+        if data
+            .vbank()
+            .get(vn)
+            .expect("checkSingle: stale vn")
+            .is_free()
+        {
             return Ok(0);
         }
         if !branch.discover_cbranch(data) {
@@ -1035,7 +1413,12 @@ impl RuleOrPredicate {
         }
         // Must only be one use of MULTIEQUAL
         let branch_op = branch.op.expect("checkSingle: branch has no op");
-        let branch_out = data.obank().get(branch_op).expect("checkSingle: stale branch op").get_out().expect("checkSingle: branch op no out");
+        let branch_out = data
+            .obank()
+            .get(branch_op)
+            .expect("checkSingle: stale branch op")
+            .get_out()
+            .expect("checkSingle: branch op no out");
         if data.lone_descend(branch_out) != Some(op) {
             return Ok(0);
         }
@@ -1087,8 +1470,18 @@ impl RuleOrPredicate {
     fn apply_op_inner(&self, op: OpId, data: &mut Funcdata) -> KunaResult<int4> {
         let mut branch0 = MultiPredicate::new();
         let mut branch1 = MultiPredicate::new();
-        let op_in0 = data.obank().get(op).expect("applyOp: stale op").get_in(0).expect("applyOp: null in");
-        let op_in1 = data.obank().get(op).expect("applyOp").get_in(1).expect("applyOp: null in");
+        let op_in0 = data
+            .obank()
+            .get(op)
+            .expect("applyOp: stale op")
+            .get_in(0)
+            .expect("applyOp: null in");
+        let op_in1 = data
+            .obank()
+            .get(op)
+            .expect("applyOp")
+            .get_in(1)
+            .expect("applyOp: null in");
         let test0 = branch0.discover_zero_slot(op_in0, data);
         let test1 = branch1.discover_zero_slot(op_in1, data);
         if !test0 && !test1 {
@@ -1146,11 +1539,21 @@ impl RuleOrPredicate {
         let slot0_sets_branch0: bool; // True if non-zero setting of branch0 flows throw slot0
         if order < 0 {
             // branch1 happens after
-            final_block = data.obank().get(branch1_op).expect("applyOp: stale branch1 op").get_parent().expect("applyOp: branch1 op no parent");
+            final_block = data
+                .obank()
+                .get(branch1_op)
+                .expect("applyOp: stale branch1 op")
+                .get_parent()
+                .expect("applyOp: branch1 op no parent");
             slot0_sets_branch0 = branch1.zero_slot == 0;
         } else {
             // branch0 happens after
-            final_block = data.obank().get(branch0_op).expect("applyOp: stale branch0 op").get_parent().expect("applyOp: branch0 op no parent");
+            final_block = data
+                .obank()
+                .get(branch0_op)
+                .expect("applyOp: stale branch0 op")
+                .get_parent()
+                .expect("applyOp: branch0 op no parent");
             slot0_sets_branch0 = branch0.zero_slot == 1;
         }
         let start = crate::block::block_get_start(&data.bblocks_ref().arena, final_block);
@@ -1166,7 +1569,11 @@ impl RuleOrPredicate {
             data.op_set_input(new_multi, b1_other, 0)?;
             data.op_set_input(new_multi, b0_other, 1)?;
         }
-        let other_size = data.vbank().get(b0_other).expect("applyOp: stale otherVn").get_size();
+        let other_size = data
+            .vbank()
+            .get(b0_other)
+            .expect("applyOp: stale otherVn")
+            .get_size();
         let newvn = self.new_unique_out_data(other_size, new_multi, data)?;
         data.op_insert_begin(new_multi, final_block);
         data.op_remove_input(op, 1);
@@ -1190,12 +1597,30 @@ impl RuleOrPredicate {
     /// fn [`crate::block::pcodeop_compare_order`] (same-block by `SeqNum` order,
     /// cross-block by common-dominator).
     fn compare_order(&self, op_a: OpId, op_b: OpId, data: &mut Funcdata) -> int4 {
-        let parent_a = data.obank().get(op_a).expect("compareOrder: stale op").get_parent().expect("compareOrder: op_a no parent");
-        let parent_b = data.obank().get(op_b).expect("compareOrder: stale op").get_parent().expect("compareOrder: op_b no parent");
+        let parent_a = data
+            .obank()
+            .get(op_a)
+            .expect("compareOrder: stale op")
+            .get_parent()
+            .expect("compareOrder: op_a no parent");
+        let parent_b = data
+            .obank()
+            .get(op_b)
+            .expect("compareOrder: stale op")
+            .get_parent()
+            .expect("compareOrder: op_b no parent");
         // Clone the lightweight op state needed by the comparator (it reads only
         // SeqNum / parent), avoiding holding an op borrow across the &mut graph.
-        let a = data.obank().get(op_a).expect("compareOrder: stale op").clone();
-        let b = data.obank().get(op_b).expect("compareOrder: stale op").clone();
+        let a = data
+            .obank()
+            .get(op_a)
+            .expect("compareOrder: stale op")
+            .clone();
+        let b = data
+            .obank()
+            .get(op_b)
+            .expect("compareOrder: stale op")
+            .clone();
         crate::block::pcodeop_compare_order(data.bblocks_mut(), &a, parent_a, &b, parent_b)
     }
 }
@@ -1205,7 +1630,10 @@ impl RuleOrPredicate {
 /// rule, `RuleOrPredicate`; [`ActionConditionalExe`] is a leaf [`Action`], not a
 /// [`Rule`], and is registered separately by the action-group builder.
 pub fn specs() -> Vec<RuleSpec> {
-    vec![RuleSpec { group: "condexe", ctor: RuleOrPredicate::boxed }]
+    vec![RuleSpec {
+        group: "condexe",
+        ctor: RuleOrPredicate::boxed,
+    }]
 }
 
 #[cfg(test)]

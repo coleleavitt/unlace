@@ -77,7 +77,11 @@ impl DeclIdentity {
     pub fn of(fd: &Funcdata, high: HighVariableId) -> Self {
         fd.high_bank()
             .get(high)
-            .and_then(|h| h.kuna_ref_symbol().or(h.kuna_link_symbol()).or(h.kuna_dynamic_symbol()))
+            .and_then(|h| {
+                h.kuna_ref_symbol()
+                    .or(h.kuna_link_symbol())
+                    .or(h.kuna_dynamic_symbol())
+            })
             .map_or(Self::High(high), Self::Symbol)
     }
 }
@@ -111,9 +115,7 @@ pub struct DeclNameUniquifier {
 #[derive(Debug)]
 enum NameState {
     Reserved,
-    Assigned {
-        next_suffix: u32,
-    },
+    Assigned { next_suffix: u32 },
 }
 
 impl DeclNameUniquifier {

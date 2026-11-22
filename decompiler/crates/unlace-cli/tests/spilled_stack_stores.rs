@@ -74,7 +74,8 @@ fn spilled_stack_pointer_writes_round_trip_with_alias_and_escape_controls() {
             for name in functions.iter().filter(|name| **name != "array_export") {
                 checks.push_str(&format!("CHECK({name}(a,x,y),source_{name}(a,x,y));\n"));
             }
-            let program = format!("#include <stdio.h>\nstatic int choose;\n\
+            let program = format!(
+                "#include <stdio.h>\nstatic int choose;\n\
                 void move_pointer(int **p,int *q) {{ if(choose) *p=q; }}\n\
                 {reference}\n{printed}\n\
                 #define CHECK(got,want) do {{ if((got)!=(want)) {{ puts(#got); return 1; }} }} while(0)\n\
@@ -84,7 +85,8 @@ fn spilled_stack_pointer_writes_round_trip_with_alias_and_escape_controls() {
                 int got[4]={{101,-7,-8,202}},want[4]={{101,-7,-8,202}};\n\
                 array_export(a,x,y,got+1); source_array_export(a,x,y,want+1);\n\
                 for(int i=0;i<4;i++) CHECK(got[i],want[i]);\n\
-                }} return 0; }}\n");
+                }} return 0; }}\n"
+            );
             let src = common::scratch_file("spillstoreguard", "c");
             let exe = common::scratch_file("spillstoreguard", "exe");
             std::fs::write(&src, program).unwrap();

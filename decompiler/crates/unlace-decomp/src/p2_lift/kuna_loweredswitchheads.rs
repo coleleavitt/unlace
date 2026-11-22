@@ -32,17 +32,32 @@ pub const ELEM_LOWEREDSWITCHHEADS: ElementId = ElementId::new("loweredswitchhead
 
 /// The cascade heads to try, in block order: every compare on the switch
 /// variable in `spine` that no other one continues into.
-pub(crate) fn cascade_heads(spine: &BTreeSet<BlockId>, is_child: &BTreeSet<BlockId>) -> Vec<BlockId> {
-    spine.iter().copied().filter(|bl| !is_child.contains(bl)).collect()
+pub(crate) fn cascade_heads(
+    spine: &BTreeSet<BlockId>,
+    is_child: &BTreeSet<BlockId>,
+) -> Vec<BlockId> {
+    spine
+        .iter()
+        .copied()
+        .filter(|bl| !is_child.contains(bl))
+        .collect()
 }
 
 /// True when the body of a case of `rec`, or its default, is also entered from
 /// somewhere other than the compare tree at `head`: from another case's body or
 /// from code outside the switch.
-pub(crate) fn case_body_entered_elsewhere(data: &Funcdata, head: BlockId, rec: &KunaLoweredSwitchRecord) -> bool {
+pub(crate) fn case_body_entered_elsewhere(
+    data: &Funcdata,
+    head: BlockId,
+    rec: &KunaLoweredSwitchRecord,
+) -> bool {
     let mut targets: Vec<BlockId> = Vec::new();
     let mut bodies: BTreeSet<BlockId> = BTreeSet::new();
-    for addr in rec.case_targets.iter().chain(std::iter::once(&rec.default_target)) {
+    for addr in rec
+        .case_targets
+        .iter()
+        .chain(std::iter::once(&rec.default_target))
+    {
         let b = match block_at_start(data, addr) {
             Some(b) => b,
             None => return true,
@@ -53,7 +68,9 @@ pub(crate) fn case_body_entered_elsewhere(data: &Funcdata, head: BlockId, rec: &
     let tree = removed_blocks(data, head, &targets);
     bodies.iter().any(|&body| {
         let blk = data.bblocks_ref().block(body);
-        (0..blk.size_in()).map(|i| blk.get_in(i)).any(|p| p != head && !tree.contains(&p))
+        (0..blk.size_in())
+            .map(|i| blk.get_in(i))
+            .any(|p| p != head && !tree.contains(&p))
     })
 }
 

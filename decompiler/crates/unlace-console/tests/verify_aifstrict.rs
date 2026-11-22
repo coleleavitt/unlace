@@ -42,7 +42,10 @@ use std::path::PathBuf;
 use unlace_console::engine::bootstrap_from_object;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture() -> PathBuf {
@@ -71,17 +74,26 @@ fn bootstrap(aif: &str) -> unlace_console::engine::ConsoleProgram {
     let bin = fixture().to_str().expect("UTF-8 fixture path").to_string();
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.arch_mut().set_kuna_option("listing", "on").expect("listing flips on");
+    prog.arch_mut()
+        .set_kuna_option("listing", "on")
+        .expect("listing flips on");
     prog.arch_mut()
         .set_kuna_option("funcstart_patterns", "on")
         .expect("funcstart_patterns flips on");
-    prog.arch_mut().set_kuna_option("aif", aif).expect("aif takes its value");
+    prog.arch_mut()
+        .set_kuna_option("aif", aif)
+        .expect("aif takes its value");
     // `aifpoolslide` (default-on) moves the phantom this file pins onto the real
     // function by itself; it is pinned off so the two passes isolate the cursor.
-    prog.arch_mut().set_kuna_option("aifpoolslide", "off").expect("aifpoolslide flips off");
+    prog.arch_mut()
+        .set_kuna_option("aifpoolslide", "off")
+        .expect("aifpoolslide flips off");
     // `poolentry` (default-on) retires the same phantom; pinned off for the same reason.
-    prog.arch_mut().set_kuna_option("poolentry", "off").expect("poolentry flips off");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.arch_mut()
+        .set_kuna_option("poolentry", "off")
+        .expect("poolentry flips off");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
@@ -91,7 +103,10 @@ fn bootstrap(aif: &str) -> unlace_console::engine::ConsoleProgram {
 #[test]
 fn default_plants_a_phantom_inside_the_literal_pool() {
     let off = bootstrap("on");
-    assert!(off.lookup_symbol(A).is_some(), "the pool's own loader is always found");
+    assert!(
+        off.lookup_symbol(A).is_some(),
+        "the pool's own loader is always found"
+    );
     assert!(
         off.lookup_symbol(PHANTOM).is_some(),
         "`aif on` must show the defect: the byte-slide probes \
@@ -116,7 +131,10 @@ fn default_plants_a_phantom_inside_the_literal_pool() {
 #[test]
 fn on_slides_past_the_pool_and_finds_the_real_function() {
     let on = bootstrap("strict");
-    assert!(on.lookup_symbol(A).is_some(), "the pool's own loader is always found");
+    assert!(
+        on.lookup_symbol(A).is_some(),
+        "the pool's own loader is always found"
+    );
     assert!(
         on.lookup_symbol(PHANTOM).is_none(),
         "`aif strict` must not probe {PHANTOM}: it is 2-mod-4 and is not the first \
@@ -141,7 +159,10 @@ fn on_slides_past_the_pool_and_finds_the_real_function() {
 #[test]
 fn the_acceptance_bar_is_unchanged() {
     let off = bootstrap("on");
-    assert!(off.lookup_symbol(D).is_none(), "{D}'s fingerprint is unshared (bug pass)");
+    assert!(
+        off.lookup_symbol(D).is_none(),
+        "{D}'s fingerprint is unshared (bug pass)"
+    );
     let on = bootstrap("strict");
     assert!(
         on.lookup_symbol(D).is_none(),

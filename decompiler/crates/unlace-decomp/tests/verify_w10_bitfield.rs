@@ -19,14 +19,28 @@
 use std::rc::Rc;
 
 use unlace_decomp::bitfield::{BitFieldTransform, FieldRef};
-use unlace_decomp::dtype::{
-    flags, type_metatype, BitFieldTriple, Datatype, DatatypeKind, TypeBitField, TypeField,
-};
 use unlace_decomp::context::VarnodeId;
+use unlace_decomp::dtype::{
+    BitFieldTriple, Datatype, DatatypeKind, TypeBitField, TypeField, flags, type_metatype,
+};
 
 /// Build one bitfield with an explicit container layout.
-fn bf(id: i32, byte_off: i32, byte_sz: i32, lsb: i32, nb: i32, big: bool, meta: type_metatype) -> TypeBitField {
-    let mut b = TypeBitField::new(id, nb, big, format!("f{id}"), Rc::new(Datatype::new(4, meta)));
+fn bf(
+    id: i32,
+    byte_off: i32,
+    byte_sz: i32,
+    lsb: i32,
+    nb: i32,
+    big: bool,
+    meta: type_metatype,
+) -> TypeBitField {
+    let mut b = TypeBitField::new(
+        id,
+        nb,
+        big,
+        format!("f{id}"),
+        Rc::new(Datatype::new(4, meta)),
+    );
     b.byte_offset = byte_off;
     b.byte_size = byte_sz;
     b.least_sig_bit = lsb;
@@ -88,15 +102,24 @@ fn w10bf_triple_compare_bigendian_reverses_byte_significance() {
 
     // Total-order: irreflexive on every record we built.
     for t in [&t_lo, &t_hi, &t_lo_le, &t_hi_le] {
-        assert!(!BitFieldTriple::compare(t, t), "comparator must be irreflexive");
+        assert!(
+            !BitFieldTriple::compare(t, t),
+            "comparator must be irreflexive"
+        );
     }
     // The `offset` term folds into the container byte offset (C++ byteOff =
     // op.offset + op.bitfield.byteOffset): a record at offset+2,byteOffset 0 must
     // compare equal-keyed to one at offset 0,byteOffset 2 under BE -> same total
     // significance, then leastSigBit tie-break (here both lsb 0 -> not-less).
     let t_off = BitFieldTriple::new(bf(2, 0, 1, 0, 3, true, type_metatype::TYPE_UINT), 2);
-    assert!(!BitFieldTriple::compare(&t_off, &t_hi), "equal folded byteOff + equal lsb -> not strictly less");
-    assert!(!BitFieldTriple::compare(&t_hi, &t_off), "equal folded byteOff + equal lsb -> not strictly less");
+    assert!(
+        !BitFieldTriple::compare(&t_off, &t_hi),
+        "equal folded byteOff + equal lsb -> not strictly less"
+    );
+    assert!(
+        !BitFieldTriple::compare(&t_hi, &t_off),
+        "equal folded byteOff + equal lsb -> not strictly less"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -132,7 +155,10 @@ fn w10bf_collect_upper_bound_skips_container_ending_at_offset() {
     // hasBitFieldsInRange must agree at every boundary with collect.
     assert!(s.has_bit_fields_in_range(0, 1));
     assert!(s.has_bit_fields_in_range(1, 1));
-    assert!(!s.has_bit_fields_in_range(2, 1), "byte 2 is past both containers");
+    assert!(
+        !s.has_bit_fields_in_range(2, 1),
+        "byte 2 is past both containers"
+    );
     // Zero-size query at the very end: no overlap (half-open range is empty).
     assert!(!s.has_bit_fields_in_range(2, 0));
 }
@@ -153,7 +179,12 @@ fn w10bf_collect_nested_offset_shift_and_halfopen_break() {
     ));
     // outer: plain field `pad` at 0 (1 byte, not a struct -> skipped), nested
     // struct `inner` at offset 3.
-    let pad = TypeField::new(0, 0, "pad", Rc::new(Datatype::new(1, type_metatype::TYPE_UINT)));
+    let pad = TypeField::new(
+        0,
+        0,
+        "pad",
+        Rc::new(Datatype::new(1, type_metatype::TYPE_UINT)),
+    );
     let inner_f = TypeField::new(1, 3, "inner", Rc::clone(&inner));
     let outer = struct_with(vec![pad, inner_f], vec![], 8);
 
@@ -162,16 +193,25 @@ fn w10bf_collect_nested_offset_shift_and_halfopen_break() {
     let mut res = Vec::new();
     outer.collect_bit_fields(0, &mut res, 3, 1);
     assert_eq!(res.len(), 1, "the nested bitfield at offset 3 is collected");
-    assert_eq!(res[0].offset, 3, "immediate-container offset is base+field.offset");
+    assert_eq!(
+        res[0].offset, 3,
+        "immediate-container offset is base+field.offset"
+    );
 
     // Query [0,3): the nested struct begins AT offset 3, and the field-loop
     // break is `curField.offset >= offset+sz` (3 >= 0+3) -> the nested struct is
     // excluded.  Half-open: byte 3 is NOT in [0,3).
     let mut res2 = Vec::new();
     outer.collect_bit_fields(0, &mut res2, 0, 3);
-    assert!(res2.is_empty(), "nested struct starting at offset 3 is outside [0,3)");
+    assert!(
+        res2.is_empty(),
+        "nested struct starting at offset 3 is outside [0,3)"
+    );
     assert!(!outer.has_bit_fields_in_range(0, 3));
-    assert!(outer.has_bit_fields_in_range(0, 4), "[0,4) reaches the nested struct at 3");
+    assert!(
+        outer.has_bit_fields_in_range(0, 4),
+        "[0,4) reaches the nested struct at 3"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -194,14 +234,23 @@ fn w10bf_establish_fields_bigendian_three_fields_no_holes() {
     let dt = Rc::new(struct_with(vec![], bitfield, 1));
 
     let mut t = BitFieldTransform::new(&dt, 0, /*big_endian*/ true);
-    assert!(t.parent_struct.is_some(), "TYPE_STRUCT root sets parentStruct");
+    assert!(
+        t.parent_struct.is_some(),
+        "TYPE_STRUCT root sets parentStruct"
+    );
     assert_eq!(t.initial_offset, 0);
     assert!(t.is_big_endian);
 
     t.establish_fields(vn(), /*vn_size*/ 1, /*follow_holes*/ false);
-    assert_eq!(t.work_list.len(), 3, "all three fields fully contained, no holes");
+    assert_eq!(
+        t.work_list.len(),
+        3,
+        "all three fields fully contained, no holes"
+    );
     assert!(
-        t.work_list.iter().all(|s| matches!(s.field, FieldRef::Field(_))),
+        t.work_list
+            .iter()
+            .all(|s| matches!(s.field, FieldRef::Field(_))),
         "no hole records with follow_holes=false"
     );
 
@@ -226,7 +275,10 @@ fn w10bf_establish_fields_bigendian_three_fields_no_holes() {
         .iter()
         .max_by_key(|s| s.bits_field.least_sig_bit)
         .unwrap();
-    assert!(!topmost.is_sign_extended, "bool top field is never sign-extended");
+    assert!(
+        !topmost.is_sign_extended,
+        "bool top field is never sign-extended"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -302,7 +354,11 @@ fn vrfy2_establish_fields_clamps_field_past_varnode_boundary() {
     // [0,4). overlapTest(field[4,12] vs vn[0,8)) is a partial overlap (code 4,
     // not 0/3) -> the else/hole branch fires: hole(pos=4, fieldEnd(8)-pos(4)=4).
     // Then pos = fieldEnd = 8; no trailing hole (pos == vnBitSize).
-    assert_eq!(t.work_list.len(), 2, "leading hole + clamped partial-overlap hole");
+    assert_eq!(
+        t.work_list.len(),
+        2,
+        "leading hole + clamped partial-overlap hole"
+    );
     assert!(matches!(t.work_list[0].field, FieldRef::Hole));
     assert_eq!(t.work_list[0].bits_field.least_sig_bit, 0);
     assert_eq!(t.work_list[0].bits_field.num_bits, 4, "leading hole [0,4)");
@@ -351,7 +407,10 @@ fn vrfy2_collect_overlap_codes_continue_then_break() {
     let mut res0 = Vec::new();
     s.collect_bit_fields(0, &mut res0, 0, 1);
     assert_eq!(res0.len(), 1);
-    assert_eq!(res0[0].bitfield.byte_offset, 0, "byte-0 query collects only b0 (b1 breaks)");
+    assert_eq!(
+        res0[0].bitfield.byte_offset, 0,
+        "byte-0 query collects only b0 (b1 breaks)"
+    );
 }
 
 // V3 — degenerate inputs must not panic and must collect nothing. Empty bitfield
@@ -375,7 +434,10 @@ fn vrfy2_collect_empty_and_past_end_are_safe_noops() {
     );
     let mut res2 = Vec::new();
     s.collect_bit_fields(0, &mut res2, 5, 1);
-    assert!(res2.is_empty(), "query past every container -> upper_bound at end, nothing");
+    assert!(
+        res2.is_empty(),
+        "query past every container -> upper_bound at end, nothing"
+    );
     assert!(!s.has_bit_fields_in_range(5, 1));
 
     // establish_fields with an empty struct + follow_holes -> exactly one
@@ -385,7 +447,10 @@ fn vrfy2_collect_empty_and_past_end_are_safe_noops() {
     t.establish_fields(vn(), 4, true);
     assert_eq!(t.work_list.len(), 1);
     assert!(matches!(t.work_list[0].field, FieldRef::Hole));
-    assert_eq!(t.work_list[0].bits_field.num_bits, 32, "whole 4-byte Varnode hole");
+    assert_eq!(
+        t.work_list[0].bits_field.num_bits, 32,
+        "whole 4-byte Varnode hole"
+    );
 }
 
 // V4 — BitFieldTriple::compare same-byte leastSigBit tie-break, both endians,
@@ -418,7 +483,10 @@ fn vrfy2_triple_compare_same_byte_lsb_tiebreak_both_endians() {
                 std::cmp::Ordering::Equal
             }
         });
-        assert_eq!(v[0].bitfield.least_sig_bit, 0, "sort puts lsb0 first (big={big})");
+        assert_eq!(
+            v[0].bitfield.least_sig_bit, 0,
+            "sort puts lsb0 first (big={big})"
+        );
         assert_eq!(v[1].bitfield.least_sig_bit, 4);
     }
 }

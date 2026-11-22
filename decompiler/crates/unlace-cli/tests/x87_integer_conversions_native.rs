@@ -17,18 +17,34 @@ fn regenerated_x87_integer_conversions_match_native_rounding_and_flags() {
     let helpers = directory.join("helpers.h");
     let driver = directory.join("driver.c");
     std::fs::write(&source, include_str!("fixtures/x87_integer_conversions.s")).unwrap();
-    std::fs::write(&helpers, include_str!("fixtures/x87_integer_conversions_helpers.h")).unwrap();
-    std::fs::write(&driver, include_str!("fixtures/x87_integer_conversions_driver.c")).unwrap();
-    process::required_output(Command::new("clang")
-        .args(["-shared", "-fPIC", "-nostdlib"])
-        .arg(&source).arg("-o").arg(&binary));
+    std::fs::write(
+        &helpers,
+        include_str!("fixtures/x87_integer_conversions_helpers.h"),
+    )
+    .unwrap();
+    std::fs::write(
+        &driver,
+        include_str!("fixtures/x87_integer_conversions_driver.c"),
+    )
+    .unwrap();
+    process::required_output(
+        Command::new("clang")
+            .args(["-shared", "-fPIC", "-nostdlib"])
+            .arg(&source)
+            .arg("-o")
+            .arg(&binary),
+    );
 
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let mut decompile = Command::new(env!("CARGO_BIN_EXE_unlace"));
-    decompile.arg("decompile-project").arg(&binary)
-        .arg("--sleighpath").arg(root.join("specs"))
+    decompile
+        .arg("decompile-project")
+        .arg(&binary)
+        .arg("--sleighpath")
+        .arg(root.join("specs"))
         .args(["--assert-strict", "--option", "nanignore", "none"])
-        .arg("-o").arg(&exported);
+        .arg("-o")
+        .arg(&exported);
     for declaration in [
         "short sample_fistp16(float10 *value,unsigned short control)",
         "int sample_fistp32(float10 *value,unsigned short control)",
@@ -36,8 +52,16 @@ fn regenerated_x87_integer_conversions_match_native_rounding_and_flags() {
         "short sample_fist16(float10 *value,unsigned short control,float10 *observed)",
         "int sample_fist32(float10 *value,unsigned short control,float10 *observed)",
     ] {
-        let name = declaration.split('(').next().unwrap().split_whitespace().last().unwrap();
-        decompile.arg("--assert").arg(format!("prototype {name} {declaration}"));
+        let name = declaration
+            .split('(')
+            .next()
+            .unwrap()
+            .split_whitespace()
+            .last()
+            .unwrap();
+        decompile
+            .arg("--assert")
+            .arg(format!("prototype {name} {declaration}"));
     }
     process::required_output(&mut decompile);
     let mut compilers = 0;
@@ -48,14 +72,29 @@ fn regenerated_x87_integer_conversions_match_native_rounding_and_flags() {
         compilers += 1;
         for optimization in ["-O0", "-O2"] {
             let executable = directory.join(format!("{compiler}{optimization}"));
-            process::required_output(Command::new(compiler)
-                .args(["-std=gnu11", optimization, "-fno-fast-math", "-frounding-math", "-ffp-contract=off"])
-                .arg("-I").arg(&exported)
-                .arg("-include").arg(&helpers)
-                .arg(exported.join("sample.so.c")).arg(&driver)
-                .args(["-ldl", "-lm", "-o"]).arg(&executable));
+            process::required_output(
+                Command::new(compiler)
+                    .args([
+                        "-std=gnu11",
+                        optimization,
+                        "-fno-fast-math",
+                        "-frounding-math",
+                        "-ffp-contract=off",
+                    ])
+                    .arg("-I")
+                    .arg(&exported)
+                    .arg("-include")
+                    .arg(&helpers)
+                    .arg(exported.join("sample.so.c"))
+                    .arg(&driver)
+                    .args(["-ldl", "-lm", "-o"])
+                    .arg(&executable),
+            );
             let result = process::required_output(Command::new(&executable).arg(&binary));
-            assert!(String::from_utf8_lossy(&result.stdout).contains("21140 native comparisons passed"), "{result:?}");
+            assert!(
+                String::from_utf8_lossy(&result.stdout).contains("21140 native comparisons passed"),
+                "{result:?}"
+            );
         }
     }
     assert!(compilers > 0);
@@ -74,19 +113,39 @@ fn truncating_control_words_become_c_conversions() {
     let exported = directory.join("exported");
     let helpers = directory.join("helpers.h");
     let driver = directory.join("driver.c");
-    std::fs::write(&source, include_str!("fixtures/x87_truncating_conversions.s")).unwrap();
-    std::fs::write(&helpers, include_str!("fixtures/x87_integer_conversions_helpers.h")).unwrap();
-    std::fs::write(&driver, include_str!("fixtures/x87_truncating_conversions_driver.c")).unwrap();
-    process::required_output(Command::new("clang")
-        .args(["-shared", "-fPIC", "-nostdlib"])
-        .arg(&source).arg("-o").arg(&binary));
+    std::fs::write(
+        &source,
+        include_str!("fixtures/x87_truncating_conversions.s"),
+    )
+    .unwrap();
+    std::fs::write(
+        &helpers,
+        include_str!("fixtures/x87_integer_conversions_helpers.h"),
+    )
+    .unwrap();
+    std::fs::write(
+        &driver,
+        include_str!("fixtures/x87_truncating_conversions_driver.c"),
+    )
+    .unwrap();
+    process::required_output(
+        Command::new("clang")
+            .args(["-shared", "-fPIC", "-nostdlib"])
+            .arg(&source)
+            .arg("-o")
+            .arg(&binary),
+    );
 
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let mut decompile = Command::new(env!("CARGO_BIN_EXE_unlace"));
-    decompile.arg("decompile-project").arg(&binary)
-        .arg("--sleighpath").arg(root.join("specs"))
+    decompile
+        .arg("decompile-project")
+        .arg(&binary)
+        .arg("--sleighpath")
+        .arg(root.join("specs"))
         .arg("--assert-strict")
-        .arg("-o").arg(&exported);
+        .arg("-o")
+        .arg(&exported);
     for declaration in [
         "short sample_cast16(float10 *value)",
         "int sample_cast32(float10 *value)",
@@ -95,8 +154,16 @@ fn truncating_control_words_become_c_conversions() {
         "int sample_restored32(float10 *value,void *area)",
         "int sample_xrestored32(float10 *value,void *area)",
     ] {
-        let name = declaration.split('(').next().unwrap().split_whitespace().last().unwrap();
-        decompile.arg("--assert").arg(format!("prototype {name} {declaration}"));
+        let name = declaration
+            .split('(')
+            .next()
+            .unwrap()
+            .split_whitespace()
+            .last()
+            .unwrap();
+        decompile
+            .arg("--assert")
+            .arg(format!("prototype {name} {declaration}"));
     }
     process::required_output(&mut decompile);
     let code = std::fs::read_to_string(exported.join("sample.so.c")).unwrap();
@@ -105,9 +172,18 @@ fn truncating_control_words_become_c_conversions() {
         let rest = &code[start + 1..];
         rest[..rest.find("// Function:").unwrap_or(rest.len())].to_string()
     };
-    for (name, cast) in [("sample_cast16", "(short)*value"), ("sample_cast32", "(int)*value"), ("sample_cast64", "*value")] {
+    for (name, cast) in [
+        ("sample_cast16", "(short)*value"),
+        ("sample_cast32", "(int)*value"),
+        ("sample_cast64", "*value"),
+    ] {
         let text = body(name);
-        assert!(text.contains(cast) && !text.contains("x87_float_to_int") && !text.contains("FLOAT_ROUND"), "{text}");
+        assert!(
+            text.contains(cast)
+                && !text.contains("x87_float_to_int")
+                && !text.contains("FLOAT_ROUND"),
+            "{text}"
+        );
     }
     for name in ["sample_floor32", "sample_restored32", "sample_xrestored32"] {
         assert!(body(name).contains("x87_float_to_int32("), "{code}");
@@ -121,15 +197,31 @@ fn truncating_control_words_become_c_conversions() {
         compilers += 1;
         for optimization in ["-O0", "-O2"] {
             let executable = directory.join(format!("{compiler}{optimization}"));
-            process::required_output(Command::new(compiler)
-                .args(["-std=gnu11", optimization, "-fno-fast-math", "-frounding-math", "-ffp-contract=off"])
-                .arg("-I").arg(&exported)
-                .arg("-include").arg(&helpers)
-                .arg(exported.join("sample.so.c")).arg(&driver)
-                .args(["-ldl", "-lm", "-o"]).arg(&executable));
+            process::required_output(
+                Command::new(compiler)
+                    .args([
+                        "-std=gnu11",
+                        optimization,
+                        "-fno-fast-math",
+                        "-frounding-math",
+                        "-ffp-contract=off",
+                    ])
+                    .arg("-I")
+                    .arg(&exported)
+                    .arg("-include")
+                    .arg(&helpers)
+                    .arg(exported.join("sample.so.c"))
+                    .arg(&driver)
+                    .args(["-ldl", "-lm", "-o"])
+                    .arg(&executable),
+            );
             let result = process::required_output(Command::new(&executable).arg(&binary));
             let stdout = String::from_utf8_lossy(&result.stdout);
-            assert!(stdout.contains("436 native comparisons passed") && stdout.contains("672 restored control words compared"), "{result:?}");
+            assert!(
+                stdout.contains("436 native comparisons passed")
+                    && stdout.contains("672 restored control words compared"),
+                "{result:?}"
+            );
         }
     }
     assert!(compilers > 0);
@@ -148,11 +240,31 @@ fn integer_conversion_results_keep_their_bits_in_float_storage() {
     let source = directory.join("sample.s");
     let helpers = directory.join("helpers.h");
     let driver = directory.join("driver.c");
-    std::fs::write(&source, include_str!("fixtures/x87_integer_storage_views.s")).unwrap();
-    std::fs::write(&helpers, format!("{}\nextern unsigned char storage[32];\n", include_str!("fixtures/x87_integer_conversions_helpers.h"))).unwrap();
-    std::fs::write(&driver, include_str!("fixtures/x87_integer_storage_views_driver.c")).unwrap();
-    process::required_output(Command::new("clang").args(["-shared", "-fPIC", "-nostdlib", "-Wl,-Bsymbolic"])
-        .arg(&source).arg("-o").arg(&binary));
+    std::fs::write(
+        &source,
+        include_str!("fixtures/x87_integer_storage_views.s"),
+    )
+    .unwrap();
+    std::fs::write(
+        &helpers,
+        format!(
+            "{}\nextern unsigned char storage[32];\n",
+            include_str!("fixtures/x87_integer_conversions_helpers.h")
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        &driver,
+        include_str!("fixtures/x87_integer_storage_views_driver.c"),
+    )
+    .unwrap();
+    process::required_output(
+        Command::new("clang")
+            .args(["-shared", "-fPIC", "-nostdlib", "-Wl,-Bsymbolic"])
+            .arg(&source)
+            .arg("-o")
+            .arg(&binary),
+    );
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     process::required_output(Command::new(env!("CARGO_BIN_EXE_unlace"))
         .arg("decompile-project").arg(&binary)
@@ -166,16 +278,32 @@ fn integer_conversion_results_keep_their_bits_in_float_storage() {
             "--assert", "data 0x3000 unsigned char storage[32]"])
         .arg("-o").arg(&exported));
     for compiler in ["gcc", "clang"] {
-        if process::optional_output(Command::new(compiler).arg("--version")).is_none() { continue; }
+        if process::optional_output(Command::new(compiler).arg("--version")).is_none() {
+            continue;
+        }
         for optimization in ["-O0", "-O2"] {
             let executable = directory.join(format!("{compiler}{optimization}"));
-            process::required_output(Command::new(compiler)
-                .args(["-std=gnu11", optimization, "-fno-fast-math", "-frounding-math", "-ffp-contract=off"])
-                .arg("-include").arg(&helpers)
-                .arg(exported.join("sample.so.c")).arg(&driver)
-                .args(["-ldl", "-lm", "-o"]).arg(&executable));
+            process::required_output(
+                Command::new(compiler)
+                    .args([
+                        "-std=gnu11",
+                        optimization,
+                        "-fno-fast-math",
+                        "-frounding-math",
+                        "-ffp-contract=off",
+                    ])
+                    .arg("-include")
+                    .arg(&helpers)
+                    .arg(exported.join("sample.so.c"))
+                    .arg(&driver)
+                    .args(["-ldl", "-lm", "-o"])
+                    .arg(&executable),
+            );
             let output = process::required_output(Command::new(&executable).arg(&binary));
-            assert!(String::from_utf8_lossy(&output.stdout).contains("32768 native storage comparisons passed"));
+            assert!(
+                String::from_utf8_lossy(&output.stdout)
+                    .contains("32768 native storage comparisons passed")
+            );
         }
     }
     std::fs::remove_dir_all(directory).unwrap();

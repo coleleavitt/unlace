@@ -37,8 +37,6 @@ explicit_branch_assertion_pe_i386.exe",
         .into_owned()
 }
 
-
-
 /// A refused assertion exits nonzero but still prints the function, so return
 /// its exit status for the caller to check.
 fn decompile_at(entry: &str, extra: &[&str]) -> Run {
@@ -61,7 +59,9 @@ fn decompile_at(entry: &str, extra: &[&str]) -> Run {
     let doc = String::from_utf8_lossy(&out.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
     let parsed: serde_json::Value = serde_json::from_str(&doc).expect("valid decompile JSON");
-    let code = parsed.pointer("/functions/0/code").and_then(serde_json::Value::as_str)
+    let code = parsed
+        .pointer("/functions/0/code")
+        .and_then(serde_json::Value::as_str)
         .unwrap_or_else(|| panic!("JSON result has no function code: {stderr}\n{doc}"))
         .to_string();
     Run {
@@ -147,7 +147,11 @@ fn applied_branch_at_another_instruction_keeps_tail_call_recovery() {
 #[test]
 fn refused_branch_fact_keeps_tail_call_recovery() {
     let run = decompile_at(NEAR_MISS_ENTRY, &["--assert", "flow 0x401148 branch"]);
-    assert!(!run.success, "a refused assertion must fail the command:\n{}", run.doc);
+    assert!(
+        !run.success,
+        "a refused assertion must fail the command:\n{}",
+        run.doc
+    );
     assert!(
         run.doc.contains("\"status\": \"rejected\""),
         "a branch fact on a jmp must be refused:\n{}",

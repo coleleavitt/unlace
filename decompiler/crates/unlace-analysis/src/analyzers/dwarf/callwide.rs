@@ -6,10 +6,10 @@ use object::{Object, ObjectSection};
 
 use unlace_base::types::uint4;
 use unlace_decomp::architecture::Architecture;
-use unlace_decomp::dtype::{type_metatype, Datatype, TypeFactory};
+use unlace_decomp::dtype::{Datatype, TypeFactory, type_metatype};
 use unlace_decomp::fspec::PrototypePieces;
 
-use super::{build_pieces, kuna_dwarfbyref, snapshot_unit_for_abi, DieSnap, Reader};
+use super::{DieSnap, Reader, build_pieces, kuna_dwarfbyref, snapshot_unit_for_abi};
 
 const MAX_BYTES: usize = 8 * 1024 * 1024;
 const MAX_ABBREV_BYTES: usize = 128 * 1024;
@@ -687,23 +687,27 @@ mod tests {
     #[test]
     fn ambiguous_names_and_mismatched_definition_addresses_refuse_every_fact() {
         let entries = [(0x1000, "caller64".into(), vec![])];
-        assert!(extract(
-            &[
-                Function::declaration("caller64"),
-                Function::declaration("caller64")
-            ],
-            &entries,
-            0
-        )
-        .is_none());
+        assert!(
+            extract(
+                &[
+                    Function::declaration("caller64"),
+                    Function::declaration("caller64")
+                ],
+                &entries,
+                0
+            )
+            .is_none()
+        );
         let mut definition = Function::declaration("caller64");
         definition.address = Some(0x2000);
         assert!(extract(&[definition], &entries, 0).is_none());
-        assert!(names(&[
-            (0x1000, "one".into(), vec!["same".into()]),
-            (0x2000, "two".into(), vec!["same".into()])
-        ])
-        .is_none());
+        assert!(
+            names(&[
+                (0x1000, "one".into(), vec!["same".into()]),
+                (0x2000, "two".into(), vec!["same".into()])
+            ])
+            .is_none()
+        );
     }
 
     #[test]
@@ -749,16 +753,18 @@ mod tests {
                 "{attribute:?}"
             );
         }
-        assert!(extract_representation(
-            &[Function::declaration("caller64")],
-            &entries,
-            0,
-            None,
-            gimli::DW_ATE_boolean,
-            8,
-        )
-        .unwrap()
-        .is_empty());
+        assert!(
+            extract_representation(
+                &[Function::declaration("caller64")],
+                &entries,
+                0,
+                None,
+                gimli::DW_ATE_boolean,
+                8,
+            )
+            .unwrap()
+            .is_empty()
+        );
 
         for size in [0, 3, 5, 6, 7, 9, 16, 32, 255] {
             assert!(
@@ -799,13 +805,15 @@ mod tests {
         alias.type_ref = Some(1);
         let dies = BTreeMap::from([(1, base), (2, alias)]);
         for offset in [1, 2] {
-            assert!(scalar(
-                2,
-                &dies,
-                &BTreeSet::from([offset]),
-                &mut TypeBudget::default(),
-            )
-            .is_none());
+            assert!(
+                scalar(
+                    2,
+                    &dies,
+                    &BTreeSet::from([offset]),
+                    &mut TypeBudget::default(),
+                )
+                .is_none()
+            );
         }
     }
 

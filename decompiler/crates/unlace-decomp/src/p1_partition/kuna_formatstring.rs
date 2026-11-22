@@ -23,7 +23,7 @@
 use unlace_base::error::{KunaError, KunaResult};
 
 use crate::architecture::Architecture;
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::fspec::PrototypePieces;
 
 /// One call-site override the load-time resolver parked, with the answer it was
@@ -173,7 +173,8 @@ pub fn reached_by_default(archid: &str) -> bool {
 /// The variadic convention of the loaded target: the loader's answer when it
 /// recorded one, else what the language id alone says.
 pub fn target_vararg_abi(arch: &Architecture) -> VarargAbi {
-    arch.format_vararg_abi.unwrap_or_else(|| vararg_abi(&arch.archid, None))
+    arch.format_vararg_abi
+        .unwrap_or_else(|| vararg_abi(&arch.archid, None))
 }
 
 /// Parse the `option formatstring off|static|full` argument, producing the
@@ -187,9 +188,16 @@ pub fn parse_formatstring_mode(p1: &str) -> KunaResult<(FormatStringMode, String
         "off" => FormatStringMode::Off,
         "static" => FormatStringMode::Static,
         "full" | "on" => FormatStringMode::Full,
-        _ => return Err(KunaError::parse("Must specify off, static or full (`on` = full)")),
+        _ => {
+            return Err(KunaError::parse(
+                "Must specify off, static or full (`on` = full)",
+            ));
+        }
     };
-    Ok((mode, format!("Format-string varargs typing set to {}", mode.as_str())))
+    Ok((
+        mode,
+        format!("Format-string varargs typing set to {}", mode.as_str()),
+    ))
 }
 
 #[cfg(test)]
@@ -198,11 +206,23 @@ mod tests {
 
     #[test]
     fn parses_the_three_values_and_the_on_alias() {
-        assert_eq!(parse_formatstring_mode("off").unwrap().0, FormatStringMode::Off);
-        assert_eq!(parse_formatstring_mode("static").unwrap().0, FormatStringMode::Static);
-        assert_eq!(parse_formatstring_mode("full").unwrap().0, FormatStringMode::Full);
+        assert_eq!(
+            parse_formatstring_mode("off").unwrap().0,
+            FormatStringMode::Off
+        );
+        assert_eq!(
+            parse_formatstring_mode("static").unwrap().0,
+            FormatStringMode::Static
+        );
+        assert_eq!(
+            parse_formatstring_mode("full").unwrap().0,
+            FormatStringMode::Full
+        );
         // The two-valued spelling keeps working and keeps meaning the loop.
-        assert_eq!(parse_formatstring_mode("on").unwrap().0, FormatStringMode::Full);
+        assert_eq!(
+            parse_formatstring_mode("on").unwrap().0,
+            FormatStringMode::Full
+        );
         assert!(parse_formatstring_mode("").is_err());
         assert!(parse_formatstring_mode("loop").is_err());
     }
@@ -210,21 +230,57 @@ mod tests {
     #[test]
     fn varargs_are_named_arguments_only_where_the_abi_says_so() {
         use ImageFamily::*;
-        assert_eq!(vararg_abi("x86:LE:64:default:gcc", Some(Other)), VarargAbi::Named);
-        assert_eq!(vararg_abi("x86:LE:64:default:windows", Some(Windows)), VarargAbi::Named);
+        assert_eq!(
+            vararg_abi("x86:LE:64:default:gcc", Some(Other)),
+            VarargAbi::Named
+        );
+        assert_eq!(
+            vararg_abi("x86:LE:64:default:windows", Some(Windows)),
+            VarargAbi::Named
+        );
         assert_eq!(vararg_abi("x86:LE:32:default:gcc", None), VarargAbi::Named);
-        assert_eq!(vararg_abi("AARCH64:LE:64:v8A:default", Some(Other)), VarargAbi::Named);
+        assert_eq!(
+            vararg_abi("AARCH64:LE:64:v8A:default", Some(Other)),
+            VarargAbi::Named
+        );
         // Apple passes every vararg on the stack; the container or the Apple
         // SLEIGH variant says so, and an unknown container is not assumed Linux.
-        assert_eq!(vararg_abi("AARCH64:LE:64:v8A:default", Some(Apple)), VarargAbi::Nothing);
-        assert_eq!(vararg_abi("AARCH64:LE:64:AppleSilicon:default", None), VarargAbi::Nothing);
-        assert_eq!(vararg_abi("AARCH64:LE:64:v8A:default", None), VarargAbi::Nothing);
-        assert_eq!(vararg_abi("AARCH64:LE:64:v8A:windows", None), VarargAbi::Integer);
-        assert_eq!(vararg_abi("AARCH64:LE:64:v8A:default", Some(Windows)), VarargAbi::Integer);
-        assert_eq!(vararg_abi("ARM:LE:32:v8:default", Some(Other)), VarargAbi::Integer);
-        assert_eq!(vararg_abi("RISCV:LE:64:RV64GC:gcc", Some(Other)), VarargAbi::Integer);
-        assert_eq!(vararg_abi("MIPS:BE:32:default:default", Some(Other)), VarargAbi::Integer);
-        assert_eq!(vararg_abi("AVR8:LE:16:atmega256:gcc", Some(Other)), VarargAbi::Nothing);
+        assert_eq!(
+            vararg_abi("AARCH64:LE:64:v8A:default", Some(Apple)),
+            VarargAbi::Nothing
+        );
+        assert_eq!(
+            vararg_abi("AARCH64:LE:64:AppleSilicon:default", None),
+            VarargAbi::Nothing
+        );
+        assert_eq!(
+            vararg_abi("AARCH64:LE:64:v8A:default", None),
+            VarargAbi::Nothing
+        );
+        assert_eq!(
+            vararg_abi("AARCH64:LE:64:v8A:windows", None),
+            VarargAbi::Integer
+        );
+        assert_eq!(
+            vararg_abi("AARCH64:LE:64:v8A:default", Some(Windows)),
+            VarargAbi::Integer
+        );
+        assert_eq!(
+            vararg_abi("ARM:LE:32:v8:default", Some(Other)),
+            VarargAbi::Integer
+        );
+        assert_eq!(
+            vararg_abi("RISCV:LE:64:RV64GC:gcc", Some(Other)),
+            VarargAbi::Integer
+        );
+        assert_eq!(
+            vararg_abi("MIPS:BE:32:default:default", Some(Other)),
+            VarargAbi::Integer
+        );
+        assert_eq!(
+            vararg_abi("AVR8:LE:16:atmega256:gcc", Some(Other)),
+            VarargAbi::Nothing
+        );
     }
 
     #[test]
@@ -234,7 +290,9 @@ mod tests {
         types.set_default_alignment_map();
         types.set_max_basetype_size(8);
         types.setup_sizes(Some(4), 4, 4);
-        types.set_core_type("char", 1, type_metatype::TYPE_INT, true).expect("char core type");
+        types
+            .set_core_type("char", 1, type_metatype::TYPE_INT, true)
+            .expect("char core type");
         types.cache_core_types().expect("cache core types");
         let int4 = types.get_base(4, type_metatype::TYPE_INT).unwrap();
         let int8 = types.get_base(8, type_metatype::TYPE_INT).unwrap();
@@ -252,7 +310,11 @@ mod tests {
             assert!(FormatStringMode::Static.resolves_at_load(id), "{id}");
             assert!(FormatStringMode::Full.resolves_at_load(id), "{id}");
         }
-        for id in ["AARCH64:LE:64:v8A:default", "ARM:LE:32:v8:default", "RISCV:LE:64:RV64GC:gcc"] {
+        for id in [
+            "AARCH64:LE:64:v8A:default",
+            "ARM:LE:32:v8:default",
+            "RISCV:LE:64:RV64GC:gcc",
+        ] {
             assert!(!FormatStringMode::Static.resolves_at_load(id), "{id}");
             assert!(FormatStringMode::Full.resolves_at_load(id), "{id}");
             assert!(!FormatStringMode::Off.resolves_at_load(id), "{id}");

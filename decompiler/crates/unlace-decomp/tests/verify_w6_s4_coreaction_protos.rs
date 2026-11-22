@@ -39,24 +39,25 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::{int4, uint4};
 
-use unlace_decomp::action::{ruleflags, Action, ActionContext, ActionGroupList};
+use unlace_decomp::action::{Action, ActionContext, ActionGroupList, ruleflags};
+use unlace_decomp::context::ArchContext;
 use unlace_decomp::coreaction_protos::{
-    proto_actions, ActionActiveParam, ActionActiveReturn, ActionDefaultParams,
-    ActionExtraPopSetup, ActionFuncLink, ActionFuncLinkOutOnly, ActionInputPrototype,
-    ActionOutputPrototype, ActionParamDouble, ActionPrototypeTypes, ActionPrototypeWarnings,
-    ActionRestrictLocal, ActionReturnRecovery,
+    ActionActiveParam, ActionActiveReturn, ActionDefaultParams, ActionExtraPopSetup,
+    ActionFuncLink, ActionFuncLinkOutOnly, ActionInputPrototype, ActionOutputPrototype,
+    ActionParamDouble, ActionPrototypeTypes, ActionPrototypeWarnings, ActionRestrictLocal,
+    ActionReturnRecovery, proto_actions,
 };
 use unlace_decomp::funcdata::Funcdata;
-use unlace_decomp::context::ArchContext;
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -122,7 +123,10 @@ fn proto_action_apply_change_signal_contract() {
         let before = act.base().count;
         assert_eq!(before, 0, "{name}: fresh action must start with count 0");
         let res: int4 = act.apply(&mut data, &mut ctx);
-        assert_eq!(res, 0, "{name}: apply must return 0 (change signalling is via count)");
+        assert_eq!(
+            res, 0,
+            "{name}: apply must return 0 (change signalling is via count)"
+        );
         if name == "prototypetypes" {
             // The realized init_active_output bumps count exactly once (one
             // effect: the active-output container was created).

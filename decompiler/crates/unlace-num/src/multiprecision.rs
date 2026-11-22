@@ -199,15 +199,21 @@ mod tests {
     fn test_edge_udiv_paths_against_u128() {
         // Narrow and wide inputs, smaller numerators and quotient boundaries.
         let cases: [([u64; 2], [u64; 2]); 9] = [
-            ([12345, 0], [7, 0]),                                  // fast path
-            ([0x1234_5678_9abc_def0, 5], [3, 0]),                  // n == 1
-            ([7, 0], [0, 1]),                                      // quotient 0
-            ([u64::MAX, u64::MAX], [0, 1]),                        // power-of-two high word
-            ([0x89a7_32a9_fb15_7c4d, 0x4ead_a203_9e48_443e], [0xbabf_3b71, 1]), // n == 3
+            ([12345, 0], [7, 0]),                 // fast path
+            ([0x1234_5678_9abc_def0, 5], [3, 0]), // n == 1
+            ([7, 0], [0, 1]),                     // quotient 0
+            ([u64::MAX, u64::MAX], [0, 1]),       // power-of-two high word
+            (
+                [0x89a7_32a9_fb15_7c4d, 0x4ead_a203_9e48_443e],
+                [0xbabf_3b71, 1],
+            ), // n == 3
             ([u64::MAX, u64::MAX], [u64::MAX, 0x7fff_ffff_ffff_ffff]), // m == n+? close magnitudes
             ([0, 0x8000_0000_0000_0000], [1, 0x4000_0000_0000_0000]), // add-back prone shape
-            ([u64::MAX, u64::MAX], [2, u64::MAX >> 1]),            // qhat correction loop
-            ([0xf7df_0315_d584_ad8d, 0xb9d5_5c0d_1d5c_fbbd], [0x8aa7_97db_ccee_6e96, 0x64_6be9]),
+            ([u64::MAX, u64::MAX], [2, u64::MAX >> 1]), // qhat correction loop
+            (
+                [0xf7df_0315_d584_ad8d, 0xb9d5_5c0d_1d5c_fbbd],
+                [0x8aa7_97db_ccee_6e96, 0x64_6be9],
+            ),
         ];
         for (numer, denom) in cases {
             let mut q = [0u64; 2];

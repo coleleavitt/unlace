@@ -123,11 +123,13 @@ fn aggregate_calls_and_function_pointers_compile_and_execute() {
         String::from_utf8_lossy(&output.stderr)
     );
     let document: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert!(document["assertions"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .all(|a| a["status"] == "applied"));
+    assert!(
+        document["assertions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|a| a["status"] == "applied")
+    );
     let mut source = String::from(
         "typedef struct Pair { int a; int b; } Pair;\n\
         typedef int int4;\n\

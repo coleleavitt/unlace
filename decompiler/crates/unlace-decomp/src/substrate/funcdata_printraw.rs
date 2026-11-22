@@ -23,9 +23,9 @@ use unlace_base::types::{int4, uint4, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::architecture::Architecture;
-use crate::funcdata::Funcdata;
 use crate::context::{BlockId, OpId, VarnodeId};
-use crate::typeop::{type_op_info, TypeOpClass};
+use crate::funcdata::Funcdata;
+use crate::typeop::{TypeOpClass, type_op_info};
 use crate::varnode::varnode_flags;
 
 /// C++ `Funcdata::printRaw(ostream &s)` (`funcdata.cc:207`).
@@ -59,7 +59,10 @@ fn print_block_graph_raw(s: &mut String, arch: &Architecture, fd: &Funcdata) -> 
     // C++ printHeader for the BlockGraph: `dec << index` (+ optional range). The
     // graph node's index is 0 for the top-level component graph; the range is
     // invalid for a non-basic graph block, so just the index is printed.
-    let root = fd.bblocks_ref().root.ok_or_else(|| "no block graph root".to_string())?;
+    let root = fd
+        .bblocks_ref()
+        .root
+        .ok_or_else(|| "no block graph root".to_string())?;
     let root_index = fd.bblocks_ref().block(root).get_index();
     s.push_str(&format!("{}", root_index));
     s.push('\n');
@@ -164,8 +167,13 @@ fn print_raw_implied_goto(
 /// `pc.printRaw(s); s << ':' << uniq;` with the trailing `uniq` in hex (the
 /// preceding address leaves the stream base in hex).
 fn render_seqnum(s: &mut String, fd: &Funcdata, op: OpId) -> Result<(), String> {
-    let o = fd.obank().get(op).ok_or_else(|| "render_seqnum: stale op".to_string())?;
-    o.get_seq_num().print_raw(s).map_err(|e| e.explain().to_string())
+    let o = fd
+        .obank()
+        .get(op)
+        .ok_or_else(|| "render_seqnum: stale op".to_string())?;
+    o.get_seq_num()
+        .print_raw(s)
+        .map_err(|e| e.explain().to_string())
 }
 
 /// C++ `Varnode::printRaw(ostream &s,const Varnode *vn)` (`varnode.cc:1226`):
@@ -195,7 +203,10 @@ fn render_varnode(
     fd: &Funcdata,
     vn: VarnodeId,
 ) -> Result<(), String> {
-    let v = fd.vbank().get(vn).ok_or_else(|| "render_varnode: stale vn".to_string())?;
+    let v = fd
+        .vbank()
+        .get(vn)
+        .ok_or_else(|| "render_varnode: stale vn".to_string())?;
     let size = v.get_size();
     let flags = v.get_flags();
     let addr = v.get_addr().clone();
@@ -209,7 +220,11 @@ fn render_varnode(
     // PcodeOp and prints `op->getSeqNum()` (the non-branch arm).  unlace-base's
     // `IopSpace::printRaw` leaves this to W3 (LOSS-012), so route it here where the
     // op arena is reachable: shortcut char `i` + the referenced op's seqnum.
-    let expect = if addr.get_space().map(|sp| sp.get_type() == spacetype::IPTR_IOP) == Some(true) {
+    let expect = if addr
+        .get_space()
+        .map(|sp| sp.get_type() == spacetype::IPTR_IOP)
+        == Some(true)
+    {
         let space = addr.get_space().expect("render_varnode: iop space present");
         s.push(space.get_shortcut());
         let referenced = crate::funcdata_varnode::op_iop_decode(addr.get_offset());
@@ -275,7 +290,10 @@ fn render_varnode_no_markup(
     // `getTrans()` back-pointer); reach the concrete engine's `SleighBase`
     // through the boundary downcast (only `Sleigh` implements it; this print-raw
     // path only ever runs on the standalone engine).
-    let sleigh = arch.translate().as_sleigh().expect("print_raw: standalone Sleigh engine");
+    let sleigh = arch
+        .translate()
+        .as_sleigh()
+        .expect("print_raw: standalone Sleigh engine");
     let name = sleigh.base().get_register_name(space, off, size);
     if !name.is_empty() {
         // C++ reads the canonical register storage to know the base offset/size.
@@ -306,18 +324,39 @@ fn render_varnode_no_markup(
 /// `in0.size`).  For every other op-code the bare [`type_op_info`] name.
 fn operator_name(fd: &Funcdata, op: OpId, opc: OpCode) -> Result<String, String> {
     let base = type_op_info(opc).get_name();
-    let o = fd.obank().get(op).ok_or_else(|| "operator_name: stale op".to_string())?;
+    let o = fd
+        .obank()
+        .get(op)
+        .ok_or_else(|| "operator_name: stale op".to_string())?;
     let in0_size = || -> Result<int4, String> {
-        let v = o.get_in(0).ok_or_else(|| "operator_name: missing in0".to_string())?;
-        Ok(fd.vbank().get(v).ok_or_else(|| "operator_name: stale in0".to_string())?.get_size())
+        let v = o
+            .get_in(0)
+            .ok_or_else(|| "operator_name: missing in0".to_string())?;
+        Ok(fd
+            .vbank()
+            .get(v)
+            .ok_or_else(|| "operator_name: stale in0".to_string())?
+            .get_size())
     };
     let in1_size = || -> Result<int4, String> {
-        let v = o.get_in(1).ok_or_else(|| "operator_name: missing in1".to_string())?;
-        Ok(fd.vbank().get(v).ok_or_else(|| "operator_name: stale in1".to_string())?.get_size())
+        let v = o
+            .get_in(1)
+            .ok_or_else(|| "operator_name: missing in1".to_string())?;
+        Ok(fd
+            .vbank()
+            .get(v)
+            .ok_or_else(|| "operator_name: stale in1".to_string())?
+            .get_size())
     };
     let out_size = || -> Result<int4, String> {
-        let v = o.get_out().ok_or_else(|| "operator_name: missing out".to_string())?;
-        Ok(fd.vbank().get(v).ok_or_else(|| "operator_name: stale out".to_string())?.get_size())
+        let v = o
+            .get_out()
+            .ok_or_else(|| "operator_name: missing out".to_string())?;
+        Ok(fd
+            .vbank()
+            .get(v)
+            .ok_or_else(|| "operator_name: stale out".to_string())?
+            .get_size())
     };
     Ok(match opc {
         OpCode::CPUI_INT_ZEXT | OpCode::CPUI_INT_SEXT | OpCode::CPUI_SUBPIECE => {
@@ -336,15 +375,17 @@ fn operator_name(fd: &Funcdata, op: OpId, opc: OpCode) -> Result<String, String>
 /// C++ `TypeOpCallother::getOperatorName(op)` (typeop.cc): resolve the userop
 /// index in `op`'s input(0) against `glb->userops` and return its displayed
 /// symbol; on an unknown index fall back to `<callother>[<in0>]`.
-fn callother_operator_name(
-    arch: &Architecture,
-    fd: &Funcdata,
-    op: OpId,
-) -> Result<String, String> {
-    let o = fd.obank().get(op).ok_or_else(|| "callother: stale op".to_string())?;
+fn callother_operator_name(arch: &Architecture, fd: &Funcdata, op: OpId) -> Result<String, String> {
+    let o = fd
+        .obank()
+        .get(op)
+        .ok_or_else(|| "callother: stale op".to_string())?;
     let in0 = o.get_in(0);
     if let Some(in0) = in0 {
-        let in0vn = fd.vbank().get(in0).ok_or_else(|| "callother: stale in0".to_string())?;
+        let in0vn = fd
+            .vbank()
+            .get(in0)
+            .ok_or_else(|| "callother: stale in0".to_string())?;
         let index = in0vn.get_offset() as uint4;
         if let Some(userop) = arch.userops.get_op(index) {
             // out.size for VolatileReadOp, in(2).size for VolatileWriteOp; the
@@ -354,7 +395,9 @@ fn callother_operator_name(
                 .and_then(|v| fd.vbank().get(v))
                 .map(|v| v.get_size());
             let in2_size = if o.num_input() > 2 {
-                o.get_in(2).and_then(|v| fd.vbank().get(v)).map(|v| v.get_size())
+                o.get_in(2)
+                    .and_then(|v| fd.vbank().get(v))
+                    .map(|v| v.get_size())
             } else {
                 None
             };
@@ -377,8 +420,16 @@ fn callother_operator_name(
 /// match their `TypeOp*::printRaw` override; everything else falls to the
 /// generic Binary/Unary/Func shape keyed by the [`TypeOpClass`].
 fn render_op(s: &mut String, arch: &Architecture, fd: &Funcdata, op: OpId) -> Result<(), String> {
-    let opc = fd.obank().get(op).ok_or_else(|| "render_op: stale op".to_string())?.code();
-    let num_input = fd.obank().get(op).ok_or_else(|| "render_op: stale op".to_string())?.num_input();
+    let opc = fd
+        .obank()
+        .get(op)
+        .ok_or_else(|| "render_op: stale op".to_string())?
+        .code();
+    let num_input = fd
+        .obank()
+        .get(op)
+        .ok_or_else(|| "render_op: stale op".to_string())?
+        .num_input();
     let in_at = |i: int4| -> Option<VarnodeId> { fd.obank().get(op).and_then(|o| o.get_in(i)) };
     let out = fd.obank().get(op).and_then(|o| o.get_out());
 
@@ -492,8 +543,11 @@ fn render_op(s: &mut String, arch: &Architecture, fd: &Funcdata, op: OpId) -> Re
             // TypeOpIndirect (typeop.cc:2024): `out = [create]|in0 [] in1`.
             render_varnode_opt(s, arch, fd, out)?;
             s.push_str(" = ");
-            let is_create =
-                fd.obank().get(op).map(|o| o.is_indirect_creation()).unwrap_or(false);
+            let is_create = fd
+                .obank()
+                .get(op)
+                .map(|o| o.is_indirect_creation())
+                .unwrap_or(false);
             if is_create {
                 s.push_str("[create] ");
             } else {
@@ -589,7 +643,11 @@ fn render_cbranch(
     }
     s.push_str(" if (");
     render_varnode_opt(s, arch, fd, fd.obank().get(op).and_then(|o| o.get_in(1)))?;
-    let flip = fd.obank().get(op).map(|o| o.is_boolean_flip()).unwrap_or(false);
+    let flip = fd
+        .obank()
+        .get(op)
+        .map(|o| o.is_boolean_flip())
+        .unwrap_or(false);
     if flip {
         s.push_str(" == 0)");
     } else {
@@ -614,7 +672,11 @@ fn render_call(
     with_space_after_name: bool,
 ) -> Result<(), String> {
     let out = fd.obank().get(op).and_then(|o| o.get_out());
-    let num_input = fd.obank().get(op).ok_or_else(|| "render_call: stale op".to_string())?.num_input();
+    let num_input = fd
+        .obank()
+        .get(op)
+        .ok_or_else(|| "render_call: stale op".to_string())?
+        .num_input();
     if out.is_some() {
         render_varnode_opt(s, arch, fd, out)?;
         s.push_str(" = ");

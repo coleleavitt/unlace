@@ -65,7 +65,7 @@ use unlace_base::space::AddrSpace;
 use unlace_base::types::{int4, uint4, uintb};
 use unlace_num::opcodes::OpCode;
 
-use crate::dtype::{type_metatype, Datatype, DatatypeKind, TypeFactory};
+use crate::dtype::{Datatype, DatatypeKind, TypeFactory, type_metatype};
 
 /// Types of integer promotion (C++ `CastStrategy::IntPromotionCode`,
 /// cast.hh:48-54).  For many languages small integers are automatically
@@ -200,7 +200,7 @@ pub trait CastStrategy {
     /// C++ `checkIntPromotionForCompare` — does promotion force a cast before the
     /// comparison `op` makes sense for input `slot`?
     fn check_int_promotion_for_compare(&self, ctx: &dyn CastContext, op: OpRef, slot: int4)
-        -> bool;
+    -> bool;
 
     /// C++ `checkIntPromotionForExtension` — does promotion force a cast before
     /// the extension `op` (ZEXT/SEXT) makes sense?
@@ -379,7 +379,12 @@ impl CastStrategyC {
     /// cast.cc:23-28): `promoteSize = tlst->getSizeOfInt()`.
     pub fn new(tlst: Rc<dyn TypeFactory>) -> CastStrategyC {
         let promote_size = tlst.get_size_of_int();
-        CastStrategyC { tlst, promote_size, record_identity: false, java: false }
+        CastStrategyC {
+            tlst,
+            promote_size,
+            record_identity: false,
+            java: false,
+        }
     }
 
     /// (kuna `calltargettype`) Treat a record's declaration and its completed
@@ -668,7 +673,11 @@ impl CastStrategy for CastStrategyC {
                     } else if !ctx.vn_is_explicit(other_vn) {
                         return false;
                     }
-                    if ctx.vn_high_type_read_facing(other_vn, read_op).get_metatype() != metatype {
+                    if ctx
+                        .vn_high_type_read_facing(other_vn, read_op)
+                        .get_metatype()
+                        != metatype
+                    {
                         return false;
                     }
                 }
@@ -765,8 +774,7 @@ impl CastStrategy for CastStrategyC {
                 }
                 return None;
             }
-            type_metatype::TYPE_PARTIALSTRUCT
-            | type_metatype::TYPE_PARTIALUNION => {
+            type_metatype::TYPE_PARTIALSTRUCT | type_metatype::TYPE_PARTIALUNION => {
                 // As they are ultimately stripped, treat partials as undefined
                 return None;
             }
@@ -854,7 +862,9 @@ impl CastStrategy for CastStrategyC {
         let mut res1 = ctx.vn_high_type_read_facing(ctx.op_in(op, 0), op);
         if res1.get_metatype() == type_metatype::TYPE_BOOL {
             // Treat boolean as if it is cast to an integer
-            res1 = self.tlst.get_base(res1.get_size(), type_metatype::TYPE_INT)?;
+            res1 = self
+                .tlst
+                .get_base(res1.get_size(), type_metatype::TYPE_INT)?;
         }
 
         let num = ctx.op_num_input(op);
@@ -920,7 +930,9 @@ impl CastStrategy for CastStrategyC {
         if isbigend {
             // intype->getSize()-1-offset: getSize() is int4, offset uint4.  The
             // C++ does the subtraction in uint4 (offset's type), so cast getSize.
-            tmpoff = (intype.get_size() as uint4).wrapping_sub(1).wrapping_sub(offset);
+            tmpoff = (intype.get_size() as uint4)
+                .wrapping_sub(1)
+                .wrapping_sub(offset);
         }
         self.is_subpiece_cast(outtype, intype, tmpoff)
     }
@@ -974,7 +986,9 @@ impl CastStrategyJava {
     /// Construct, establishing the data-type factory (shares
     /// `CastStrategyC::setTypeFactory`).
     pub fn new(tlst: Rc<dyn TypeFactory>) -> CastStrategyJava {
-        CastStrategyJava { inner: CastStrategyC::new(tlst) }
+        CastStrategyJava {
+            inner: CastStrategyC::new(tlst),
+        }
     }
 }
 
@@ -1037,7 +1051,8 @@ impl CastStrategy for CastStrategyJava {
         offset: uint4,
         isbigend: bool,
     ) -> bool {
-        self.inner.is_subpiece_cast_endian(outtype, intype, offset, isbigend)
+        self.inner
+            .is_subpiece_cast_endian(outtype, intype, offset, isbigend)
     }
 
     fn is_sext_cast(&self, outtype: &Datatype, intype: &Datatype) -> bool {
@@ -1150,7 +1165,6 @@ fn java_cast_standard(
 
     Some(Rc::clone(reqtype))
 }
-
 
 // C++ CastStrategyJava::isZextCast (cast.cc:533-544).
 fn java_is_zext_cast(outtype: &Datatype, intype: &Datatype) -> bool {

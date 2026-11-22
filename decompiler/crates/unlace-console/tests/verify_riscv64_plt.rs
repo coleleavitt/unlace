@@ -27,11 +27,16 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// The vendored linked RISC-V64 fixture (shared with the unlace-analysis loader gates).
@@ -55,9 +60,18 @@ fn riscv64_plt_calls_are_named_in_decompiled_c() {
 
     // The PLT imports are resolvable as functions (the elf_plt RISC-V markup), and
     // the local `.symtab` `main` resolves.
-    assert!(prog.lookup_symbol("puts").is_some(), "RISC-V PLT import `puts` not resolved by the loader");
-    assert!(prog.lookup_symbol("printf").is_some(), "RISC-V PLT import `printf` not resolved by the loader");
-    assert!(prog.lookup_symbol("main").is_some(), "defined `main` not resolved by the loader");
+    assert!(
+        prog.lookup_symbol("puts").is_some(),
+        "RISC-V PLT import `puts` not resolved by the loader"
+    );
+    assert!(
+        prog.lookup_symbol("printf").is_some(),
+        "RISC-V PLT import `printf` not resolved by the loader"
+    );
+    assert!(
+        prog.lookup_symbol("main").is_some(),
+        "defined `main` not resolved by the loader"
+    );
 
     // Drive `load function main` → `decompile` → `print C`.
     let cmds: Vec<String> = ["load function main", "decompile", "print C"]
@@ -87,8 +101,14 @@ fn riscv64_plt_calls_are_named_in_decompiled_c() {
     );
 
     // The library calls are named...
-    assert!(out.contains("puts("), "expected a `puts(` call, got:\n{out}");
-    assert!(out.contains("printf("), "expected a `printf(` call, got:\n{out}");
+    assert!(
+        out.contains("puts("),
+        "expected a `puts(` call, got:\n{out}"
+    );
+    assert!(
+        out.contains("printf("),
+        "expected a `printf(` call, got:\n{out}"
+    );
     // ...and the old PLT-stub placeholders are gone for those call sites
     // (`puts@plt`=0x5e0, `printf@plt`=0x5f0).
     assert!(

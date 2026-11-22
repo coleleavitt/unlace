@@ -15,12 +15,18 @@ fn factory() -> TypeFactoryImpl {
     let f = TypeFactoryImpl::new();
     f.set_default_alignment_map();
     f.set_max_basetype_size(8);
-    f.set_core_type("undefined", 1, type_metatype::TYPE_UNKNOWN, false).unwrap();
-    f.set_core_type("undefined8", 8, type_metatype::TYPE_UNKNOWN, false).unwrap();
-    f.set_core_type("char", 1, type_metatype::TYPE_INT, true).unwrap();
-    f.set_core_type("int4", 4, type_metatype::TYPE_INT, false).unwrap();
-    f.set_core_type("int8", 8, type_metatype::TYPE_INT, false).unwrap();
-    f.set_core_type("uint8", 8, type_metatype::TYPE_UINT, false).unwrap();
+    f.set_core_type("undefined", 1, type_metatype::TYPE_UNKNOWN, false)
+        .unwrap();
+    f.set_core_type("undefined8", 8, type_metatype::TYPE_UNKNOWN, false)
+        .unwrap();
+    f.set_core_type("char", 1, type_metatype::TYPE_INT, true)
+        .unwrap();
+    f.set_core_type("int4", 4, type_metatype::TYPE_INT, false)
+        .unwrap();
+    f.set_core_type("int8", 8, type_metatype::TYPE_INT, false)
+        .unwrap();
+    f.set_core_type("uint8", 8, type_metatype::TYPE_UINT, false)
+        .unwrap();
     f.cache_core_types().unwrap();
     f
 }
@@ -30,7 +36,11 @@ fn factory() -> TypeFactoryImpl {
 #[test]
 fn only_an_integer_or_a_pointer_at_nothing_is_replaced() {
     let f = factory();
-    for meta in [type_metatype::TYPE_INT, type_metatype::TYPE_UINT, type_metatype::TYPE_UNKNOWN] {
+    for meta in [
+        type_metatype::TYPE_INT,
+        type_metatype::TYPE_UINT,
+        type_metatype::TYPE_UNKNOWN,
+    ] {
         assert!(may_replace(&f.get_base(8, meta).unwrap()), "{meta:?}");
     }
     let void = f.get_type_void().unwrap();
@@ -41,15 +51,25 @@ fn only_an_integer_or_a_pointer_at_nothing_is_replaced() {
     assert!(!may_replace(&f.get_type_pointer(8, int4, 1).unwrap()));
     let ch = f.get_base(1, type_metatype::TYPE_INT).unwrap();
     let charp = f.get_type_pointer(8, ch, 1).unwrap();
-    assert!(!may_replace(&f.get_type_pointer(8, charp, 1).unwrap()), "char ** is a claim");
+    assert!(
+        !may_replace(&f.get_type_pointer(8, charp, 1).unwrap()),
+        "char ** is a claim"
+    );
 }
 
 fn typed(elem: &str, signed: Option<bool>, firm: bool) -> GlobalVerdict {
-    GlobalVerdict::Typed { elem: elem.to_string(), signed, firm }
+    GlobalVerdict::Typed {
+        elem: elem.to_string(),
+        signed,
+        firm,
+    }
 }
 
 fn claimed(elem: &str, signed: Option<bool>) -> GlobalVerdict {
-    GlobalVerdict::Claimed { elem: elem.to_string(), signed }
+    GlobalVerdict::Claimed {
+        elem: elem.to_string(),
+        signed,
+    }
 }
 
 /// Two walks of one function agree only when they found the same array; any
@@ -60,19 +80,58 @@ fn a_function_that_says_two_things_about_a_global_conflicts() {
     let bytes = typed("1:int", Some(true), true);
     let words = typed("4:int", Some(true), true);
     assert_eq!(bytes.clone().merge(bytes.clone()), bytes);
-    assert_eq!(typed("1:int", Some(true), false).merge(bytes.clone()), bytes, "evidence in either walk is evidence");
-    assert_eq!(bytes.clone().merge(typed("1:int", Some(false), true)), GlobalVerdict::Conflict);
+    assert_eq!(
+        typed("1:int", Some(true), false).merge(bytes.clone()),
+        bytes,
+        "evidence in either walk is evidence"
+    );
+    assert_eq!(
+        bytes.clone().merge(typed("1:int", Some(false), true)),
+        GlobalVerdict::Conflict
+    );
     assert_eq!(bytes.clone().merge(words), GlobalVerdict::Conflict);
-    assert_eq!(bytes.clone().merge(GlobalVerdict::Refused), GlobalVerdict::Conflict);
-    assert_eq!(typed("1:int", Some(true), false).merge(claimed("1:int", Some(true))), bytes, "a claim that agrees is evidence");
-    assert_eq!(bytes.clone().merge(claimed("*1:TYPE_INT:char", None)), GlobalVerdict::Conflict);
-    assert_eq!(claimed("x", None).merge(claimed("x", None)), claimed("x", None));
-    assert_eq!(claimed("x", None).merge(claimed("y", None)), GlobalVerdict::Refused);
-    assert_eq!(claimed("x", None).merge(GlobalVerdict::Refused), GlobalVerdict::Refused);
-    assert_eq!(GlobalVerdict::Conflict.merge(GlobalVerdict::Refused), GlobalVerdict::Conflict);
-    assert_eq!(GlobalVerdict::Refused.merge(GlobalVerdict::Refused), GlobalVerdict::Refused);
-    assert_eq!(bytes.merge(GlobalVerdict::Scalar), GlobalVerdict::Scalar, "a scalar name outweighs a type");
-    assert_eq!(GlobalVerdict::Refused.merge(GlobalVerdict::Scalar), GlobalVerdict::Scalar);
+    assert_eq!(
+        bytes.clone().merge(GlobalVerdict::Refused),
+        GlobalVerdict::Conflict
+    );
+    assert_eq!(
+        typed("1:int", Some(true), false).merge(claimed("1:int", Some(true))),
+        bytes,
+        "a claim that agrees is evidence"
+    );
+    assert_eq!(
+        bytes.clone().merge(claimed("*1:TYPE_INT:char", None)),
+        GlobalVerdict::Conflict
+    );
+    assert_eq!(
+        claimed("x", None).merge(claimed("x", None)),
+        claimed("x", None)
+    );
+    assert_eq!(
+        claimed("x", None).merge(claimed("y", None)),
+        GlobalVerdict::Refused
+    );
+    assert_eq!(
+        claimed("x", None).merge(GlobalVerdict::Refused),
+        GlobalVerdict::Refused
+    );
+    assert_eq!(
+        GlobalVerdict::Conflict.merge(GlobalVerdict::Refused),
+        GlobalVerdict::Conflict
+    );
+    assert_eq!(
+        GlobalVerdict::Refused.merge(GlobalVerdict::Refused),
+        GlobalVerdict::Refused
+    );
+    assert_eq!(
+        bytes.merge(GlobalVerdict::Scalar),
+        GlobalVerdict::Scalar,
+        "a scalar name outweighs a type"
+    );
+    assert_eq!(
+        GlobalVerdict::Refused.merge(GlobalVerdict::Scalar),
+        GlobalVerdict::Scalar
+    );
 }
 
 fn said(pairs: &[(Obj, GlobalVerdict)]) -> BTreeMap<Obj, GlobalVerdict> {
@@ -108,7 +167,10 @@ fn a_table_evidence_reads_at_two_signs_is_blocked() {
     l.file(0x100, said(&[(t, typed("1:int", Some(false), true))]));
     l.file(0x200, said(&[(t, typed("1:int", Some(true), true))]));
     assert_eq!(l.settled(t), None, "two signs settle nothing");
-    assert_eq!(l.disagreements().into_iter().collect::<Vec<_>>(), vec![0x100, 0x200]);
+    assert_eq!(
+        l.disagreements().into_iter().collect::<Vec<_>>(),
+        vec![0x100, 0x200]
+    );
     assert!(l.is_blocked(0x100, t) && l.is_blocked(0x200, t));
 }
 
@@ -123,8 +185,15 @@ fn a_defaulted_sign_takes_the_evidenced_one() {
     l.file(0x200, said(&[(t, typed("4:int", Some(true), false))]));
     l.file(0x300, said(&[(t, typed("4:int", Some(false), false))]));
     l.file(0x400, said(&[(t, typed("2:int", Some(false), false))]));
-    assert_eq!(l.settled(t), Some(false), "a function decompiled next reads it unsigned at once");
-    assert_eq!(l.disagreements().into_iter().collect::<Vec<_>>(), vec![0x200, 0x400]);
+    assert_eq!(
+        l.settled(t),
+        Some(false),
+        "a function decompiled next reads it unsigned at once"
+    );
+    assert_eq!(
+        l.disagreements().into_iter().collect::<Vec<_>>(),
+        vec![0x200, 0x400]
+    );
     assert_eq!(l.adopted(0x200, t), Some(false));
     assert!(l.is_blocked(0x400, t) && !l.is_blocked(0x200, t));
     // The redone function now reads it unsigned: nothing more to do.
@@ -134,7 +203,10 @@ fn a_defaulted_sign_takes_the_evidenced_one() {
     let mut l = Ledger::default();
     l.file(0x100, said(&[(u, typed("4:int", Some(true), false))]));
     l.file(0x200, said(&[(u, typed("4:int", Some(false), false))]));
-    assert_eq!(l.disagreements().into_iter().collect::<Vec<_>>(), vec![0x100]);
+    assert_eq!(
+        l.disagreements().into_iter().collect::<Vec<_>>(),
+        vec![0x100]
+    );
     assert_eq!(l.adopted(0x100, u), Some(false));
 }
 
@@ -151,7 +223,10 @@ fn a_refusal_disagrees_and_silence_does_not() {
     l.file(0x200, said(&[]));
     assert!(l.disagreements().is_empty());
     l.file(0x300, said(&[(g, GlobalVerdict::Refused)]));
-    assert_eq!(l.disagreements().into_iter().collect::<Vec<_>>(), vec![0x100]);
+    assert_eq!(
+        l.disagreements().into_iter().collect::<Vec<_>>(),
+        vec![0x100]
+    );
     let t = Obj::Table(0x4018);
     let mut l = Ledger::default();
     l.file(0x100, said(&[(t, bytes)]));
@@ -196,13 +271,29 @@ fn a_character_literal_is_printable_ascii() {
 /// sign a batch may replace.
 #[test]
 fn a_stored_value_sign_only_breaks_a_tie() {
-    let mut ev = Evidence { stored_signed: 1, unsigned: 1, ..Evidence::default() };
-    assert_eq!(element_signed(4, &ev), (false, true), "a load read unsigned decides");
+    let mut ev = Evidence {
+        stored_signed: 1,
+        unsigned: 1,
+        ..Evidence::default()
+    };
+    assert_eq!(
+        element_signed(4, &ev),
+        (false, true),
+        "a load read unsigned decides"
+    );
     ev.unsigned = 0;
-    assert_eq!(element_signed(4, &ev), (true, false), "the store alone is a default");
+    assert_eq!(
+        element_signed(4, &ev),
+        (true, false),
+        "the store alone is a default"
+    );
     ev.stored_unsigned = 1;
     ev.own_unsigned = 1;
-    assert_eq!(element_signed(4, &ev), (false, false), "stores that disagree fall to the load's own type");
+    assert_eq!(
+        element_signed(4, &ev),
+        (false, false),
+        "stores that disagree fall to the load's own type"
+    );
 }
 
 /// A function that names a table's first element prints that name as a
@@ -217,7 +308,10 @@ fn a_table_named_as_a_scalar_is_blocked_where_it_is_an_array() {
     l.file(0x100, said(&[(t, longs.clone())]));
     l.file(0x200, said(&[(t, longs.merge(GlobalVerdict::Scalar))]));
     l.file(0x300, said(&[(t, GlobalVerdict::Scalar)]));
-    assert_eq!(l.disagreements().into_iter().collect::<Vec<_>>(), vec![0x100]);
+    assert_eq!(
+        l.disagreements().into_iter().collect::<Vec<_>>(),
+        vec![0x100]
+    );
     assert!(l.is_blocked(0x100, t) && !l.is_blocked(0x200, t) && !l.is_blocked(0x300, t));
     assert!(l.disagreements().is_empty());
 }
@@ -232,16 +326,29 @@ fn a_claim_is_evidence_and_never_redone() {
     let mut l = Ledger::default();
     l.file(0x100, said(&[(g, typed("1:int", Some(false), false))]));
     l.file(0x200, said(&[(g, claimed("1:int", Some(true)))]));
-    assert_eq!(l.disagreements().into_iter().collect::<Vec<_>>(), vec![0x100]);
-    assert_eq!(l.adopted(0x100, g), Some(true), "the claimed sign decides a defaulted one");
+    assert_eq!(
+        l.disagreements().into_iter().collect::<Vec<_>>(),
+        vec![0x100]
+    );
+    assert_eq!(
+        l.adopted(0x100, g),
+        Some(true),
+        "the claimed sign decides a defaulted one"
+    );
     let mut l = Ledger::default();
     l.file(0x100, said(&[(g, typed("4:int", Some(true), true))]));
     l.file(0x200, said(&[(g, claimed("*216:TYPE_STRUCT:FILE", None))]));
     l.file(0x300, said(&[(g, GlobalVerdict::Refused)]));
-    assert_eq!(l.disagreements().into_iter().collect::<Vec<_>>(), vec![0x100]);
+    assert_eq!(
+        l.disagreements().into_iter().collect::<Vec<_>>(),
+        vec![0x100]
+    );
     assert!(!l.is_blocked(0x200, g));
     let mut l = Ledger::default();
     l.file(0x100, said(&[(g, typed("4:int", Some(true), true))]));
     l.file(0x200, said(&[(g, GlobalVerdict::Conflict)]));
-    assert_eq!(l.disagreements().into_iter().collect::<Vec<_>>(), vec![0x100, 0x200]);
+    assert_eq!(
+        l.disagreements().into_iter().collect::<Vec<_>>(),
+        vec![0x100, 0x200]
+    );
 }

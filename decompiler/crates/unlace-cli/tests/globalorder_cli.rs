@@ -172,7 +172,11 @@ fn switch_global_stores_keep_their_actual_access_sequence() {
                             }
                             let want = process::required_output(&mut native_run).stdout;
                             let got = process::required_output(&mut printed_run).stdout;
-                            assert_eq!(String::from_utf8_lossy(&got), String::from_utf8_lossy(&want), "{cc} {level}, mode {mode}, read/write {accesses}, rebuilt by {out_cc} {out_level}:\n{printed}");
+                            assert_eq!(
+                                String::from_utf8_lossy(&got),
+                                String::from_utf8_lossy(&want),
+                                "{cc} {level}, mode {mode}, read/write {accesses}, rebuilt by {out_cc} {out_level}:\n{printed}"
+                            );
                         }
                     }
                 }
@@ -223,7 +227,11 @@ fn computed_multi_global_writes_keep_the_instruction_order() {
                             let got =
                                 process::required_output(Command::new(&exe).args([mode, value]))
                                     .stdout;
-                            assert_eq!(String::from_utf8_lossy(&got), String::from_utf8_lossy(&want), "{cc} {level}, mode {mode}, value {value}, rebuilt by {out_cc} {out_level}:\n{printed}");
+                            assert_eq!(
+                                String::from_utf8_lossy(&got),
+                                String::from_utf8_lossy(&want),
+                                "{cc} {level}, mode {mode}, value {value}, rebuilt by {out_cc} {out_level}:\n{printed}"
+                            );
                         }
                     }
                 }

@@ -12,7 +12,9 @@ use object::read::{Object, ObjectSection};
 
 use crate::loader::format::macho::resolve_chained_fixups;
 use crate::objc::sections::MachoImage;
-use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, DataObjectFact, FidMatch, Phase, SymFact, SymKind};
+use crate::pass::{
+    AnalysisCtx, AnalysisOutput, AnalysisPass, DataObjectFact, FidMatch, Phase, SymFact, SymKind,
+};
 
 const LOAD_INFO_SIZE: u32 = 0xa0;
 const DESCRIPTION_SIZE: u32 = 0x138;
@@ -46,7 +48,9 @@ impl AnalysisPass for OsClassInfoPass {
 
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
         let mut out = AnalysisOutput::default();
-        if ctx.file.format() != object::BinaryFormat::MachO || ctx.file.section_by_name("__osclassinfo").is_none() {
+        if ctx.file.format() != object::BinaryFormat::MachO
+            || ctx.file.section_by_name("__osclassinfo").is_none()
+        {
             return out;
         }
         let img = MachoImage::with_fixups(ctx.file, resolve_chained_fixups(ctx.file, ctx.bytes));
@@ -60,7 +64,10 @@ impl AnalysisPass for OsClassInfoPass {
 fn identifier(img: &MachoImage, va: u64) -> Option<String> {
     let raw = img.read(va, NAME_LEN as usize)?;
     let s = std::str::from_utf8(&raw[..raw.iter().position(|&b| b == 0)?]).ok()?;
-    let ok = s.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+    let ok = s
+        .chars()
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
         && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
     ok.then(|| s.to_string())
 }
@@ -70,7 +77,9 @@ pub fn classes(file: &object::File, img: &MachoImage) -> Vec<DextClass> {
     let mut out = Vec::new();
     for sec in file.sections().filter(|s| s.name() == Ok("__osclassinfo")) {
         for k in 0..sec.size() / 8 {
-            let Some(info) = img.read_ptr(sec.address() + 8 * k).filter(|&p| p != 0) else { continue };
+            let Some(info) = img.read_ptr(sec.address() + 8 * k).filter(|&p| p != 0) else {
+                continue;
+            };
             if let Some(c) = class(img, info) {
                 out.push(c);
             }
@@ -101,7 +110,11 @@ fn class(img: &MachoImage, info: u64) -> Option<DextClass> {
 fn emit(c: &DextClass, out: &mut AnalysisOutput) {
     let data = [
         (c.load_info, format!("{}_Class", c.name), LOAD_INFO_SIZE),
-        (c.description, format!("{}_ClassDescription", c.name), c.description_size),
+        (
+            c.description,
+            format!("{}_ClassDescription", c.name),
+            c.description_size,
+        ),
         (c.meta_pointer, format!("g{}MetaClass", c.name), 8),
     ];
     for (addr, name, size) in data {
@@ -112,7 +125,15 @@ fn emit(c: &DextClass, out: &mut AnalysisOutput) {
     if c.new != 0 {
         let name = format!("{}_New", c.name);
         out.entries.push(c.new);
-        out.symbols.push(SymFact { addr: c.new, name: name.clone(), kind: SymKind::Function });
-        out.fid_names.push(FidMatch { addr: c.new, name, by_signature: false });
+        out.symbols.push(SymFact {
+            addr: c.new,
+            name: name.clone(),
+            kind: SymKind::Function,
+        });
+        out.fid_names.push(FidMatch {
+            addr: c.new,
+            name,
+            by_signature: false,
+        });
     }
 }

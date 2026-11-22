@@ -10,15 +10,17 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::ExitCode;
 
-use unlace_base::filemanage::FileManage;
 use crate::slgh_compile::SleighCompile;
+use unlace_base::filemanage::FileManage;
 
 const SLAEXT: &str = ".sla";
 const SLASPECEXT: &str = ".slaspec";
 
 fn usage() {
     eprintln!("USAGE: slacomp [options] inputfile [outputfile]");
-    eprintln!("   -a              scan for all slaspec files recursively where inputfile is a directory");
+    eprintln!(
+        "   -a              scan for all slaspec files recursively where inputfile is a directory"
+    );
     eprintln!("   -y              write .sla using XML debug format");
     eprintln!("   -u              print warnings for unnecessary pcode instructions");
     eprintln!("   -l              report pattern conflicts");
@@ -32,11 +34,7 @@ fn usage() {
 
 /// Compile one `.slaspec` to its sibling `.sla`, applying the parsed options
 /// (mirrors the single-file branch of C++ `main`, slgh_compile.cc:4048-4090).
-fn compile_one(
-    slaspec: &str,
-    sla_out: &str,
-    opts: &CompileOptions,
-) -> i32 {
+fn compile_one(slaspec: &str, sla_out: &str, opts: &CompileOptions) -> i32 {
     let mut compiler = SleighCompile::new();
     compiler.set_all_options(
         &opts.defines,
@@ -75,7 +73,11 @@ struct CompileOptions {
 fn with_extension(path: &str, extension: &str) -> Option<String> {
     if path.ends_with(extension) {
         Some(path.to_owned())
-    } else if Path::new(path).file_name()?.as_encoded_bytes().contains(&b'.') {
+    } else if Path::new(path)
+        .file_name()?
+        .as_encoded_bytes()
+        .contains(&b'.')
+    {
         None
     } else {
         Some(format!("{path}{extension}"))
@@ -143,7 +145,11 @@ pub fn main(argv: Vec<String>) -> ExitCode {
             eprintln!("Too many parameters");
             return ExitCode::from(1);
         }
-        let dir = if i != argv.len() { argv[i].clone() } else { ".".to_string() };
+        let dir = if i != argv.len() {
+            argv[i].clone()
+        } else {
+            ".".to_string()
+        };
         let mut slaspecs: Vec<String> = Vec::new();
         find_sla_specs(&mut slaspecs, &dir, SLASPECEXT);
         println!("Compiling {} slaspec files in {}", slaspecs.len(), dir);

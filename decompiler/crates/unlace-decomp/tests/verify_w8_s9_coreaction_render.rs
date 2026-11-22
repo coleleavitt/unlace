@@ -32,21 +32,22 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 
-use unlace_decomp::action::{ruleflags, statusflags, ActionContext, ActionGroupList};
+use unlace_decomp::action::{ActionContext, ActionGroupList, ruleflags, statusflags};
+use unlace_decomp::context::ArchContext;
 use unlace_decomp::coreaction_render::{
-    render_actions, ActionConstantPtr, ActionDirectWrite, ActionInferTypes,
-    ActionRestructureVarnode, ActionSegmentize, ActionStackPtrFlow,
+    ActionConstantPtr, ActionDirectWrite, ActionInferTypes, ActionRestructureVarnode,
+    ActionSegmentize, ActionStackPtrFlow, render_actions,
 };
 use unlace_decomp::funcdata::Funcdata;
-use unlace_decomp::context::ArchContext;
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -111,10 +112,25 @@ fn w8_render_ctor_facts_match_cpp_partition() {
     assert_eq!(acts.len(), EXPECTED.len(), "21 live render-residue classes");
     for (act, (name, flags)) in acts.iter().zip(EXPECTED.iter()) {
         assert_eq!(act.get_name(), *name, "name mismatch vs C++ ctor");
-        assert_eq!(act.base().flags, *flags, "{}: flags must match C++ ctor", name);
-        assert_eq!(act.get_group(), token, "{}: group must be the ctor's g", name);
+        assert_eq!(
+            act.base().flags,
+            *flags,
+            "{}: flags must match C++ ctor",
+            name
+        );
+        assert_eq!(
+            act.get_group(),
+            token,
+            "{}: group must be the ctor's g",
+            name
+        );
         // Fresh action starts at status_start (C++ Action::Action base ctor).
-        assert_eq!(act.get_status(), statusflags::status_start, "{}: fresh status", name);
+        assert_eq!(
+            act.get_status(),
+            statusflags::status_start,
+            "{}: fresh status",
+            name
+        );
     }
     // Exactly the four rule_onceperfunc actions, by name (no more, no fewer).
     let once: Vec<&str> = EXPECTED
@@ -122,7 +138,15 @@ fn w8_render_ctor_facts_match_cpp_partition() {
         .filter(|(_, f)| *f == ruleflags::rule_onceperfunc)
         .map(|(n, _)| *n)
         .collect();
-    assert_eq!(once, vec!["lanedivide", "mapglobals", "dynamicsymbols", "internalstorage"]);
+    assert_eq!(
+        once,
+        vec![
+            "lanedivide",
+            "mapglobals",
+            "dynamicsymbols",
+            "internalstorage"
+        ]
+    );
 }
 
 /// (b) `reset` NON-chaining: a stateful subclass override is `{ counter = 0; }`
@@ -205,7 +229,12 @@ fn w8_stub_totality_under_repetition() {
         for _ in 0..16 {
             let r = a.apply(&mut fd, &mut ctx);
             assert_eq!(r, 0, "{}: stub apply must return 0", a.get_name());
-            assert_eq!(a.base().count, 0, "{}: stub must report no change", a.get_name());
+            assert_eq!(
+                a.base().count,
+                0,
+                "{}: stub must report no change",
+                a.get_name()
+            );
         }
     }
 
@@ -216,7 +245,11 @@ fn w8_stub_totality_under_repetition() {
     let mut sp = ActionStackPtrFlow::boxed("g", Some(Rc::clone(&ram)));
     for _ in 0..8 {
         assert_eq!(sp.apply(&mut fd, &mut ctx), 0);
-        assert_eq!(sp.base().count, 0, "stackptrflow-with-stack stub: no change");
+        assert_eq!(
+            sp.base().count,
+            0,
+            "stackptrflow-with-stack stub: no change"
+        );
     }
 
     // StackPtrFlow WITHOUT a stack: the realized branch latches finished on the
@@ -245,8 +278,13 @@ fn w8_clone_filtered_independent_and_parameterized() {
     // (fresh-function value).  Built via the public ctor (fields are private to
     // the crate, as in C++).
     let src = ActionStackPtrFlow::boxed("g", Some(Rc::clone(&ram)));
-    assert!(src.clone_filtered(&no).is_none(), "filtered out when group absent");
-    let mut cl = src.clone_filtered(&yes).expect("present when group present");
+    assert!(
+        src.clone_filtered(&no).is_none(),
+        "filtered out when group absent"
+    );
+    let mut cl = src
+        .clone_filtered(&yes)
+        .expect("present when group present");
     assert_eq!(cl.get_name(), "stackptrflow");
     assert_eq!(cl.get_group(), "g");
     // The clone's `analysis_finished` starts unset: observable through behavior —
@@ -255,7 +293,11 @@ fn w8_clone_filtered_independent_and_parameterized() {
     let mut ctx = ActionContext::new();
     let mut fd2 = build_fd();
     assert_eq!(cl.apply(&mut fd2, &mut ctx), 0);
-    assert_eq!(cl.base().count, 0, "clone with stack runs the stub, reports no change");
+    assert_eq!(
+        cl.base().count,
+        0,
+        "clone with stack runs the stub, reports no change"
+    );
 
     // DirectWrite: propagateIndirect carried verbatim through the clone.
     for prop in [true, false] {

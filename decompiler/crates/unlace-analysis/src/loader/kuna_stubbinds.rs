@@ -25,7 +25,7 @@ use std::collections::HashSet;
 use object::read::macho::{MachOFile, Section as _};
 use object::read::{Object, ObjectSection};
 
-use crate::loader::format::macho::{resolve_chained_fixups, ChainedFixups};
+use crate::loader::format::macho::{ChainedFixups, resolve_chained_fixups};
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase, SymFact, SymKind};
 
 /// The stub-naming pass (gate id `stubbinds`).
@@ -44,7 +44,11 @@ impl AnalysisPass for StubBindsPass {
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
         let mut out = AnalysisOutput::default();
         for (addr, name) in stub_binds(ctx.file, ctx.bytes) {
-            out.symbols.push(SymFact { addr, name, kind: SymKind::Function });
+            out.symbols.push(SymFact {
+                addr,
+                name,
+                kind: SymKind::Function,
+            });
         }
         out
     }
@@ -54,7 +58,9 @@ impl AnalysisPass for StubBindsPass {
 /// left unnamed whose slot carries an addend-free chained bind, sorted by stub.
 /// The chains are walked only when the walk left some stub unnamed.
 pub(crate) fn stub_binds(file: &object::File, bytes: &[u8]) -> Vec<(u64, String)> {
-    let object::File::MachO64(macho) = file else { return Vec::new() };
+    let object::File::MachO64(macho) = file else {
+        return Vec::new();
+    };
     let decode: fn(&[u8], u64) -> Option<u64> = match file.architecture() {
         object::Architecture::Aarch64 => a64_stub_slot,
         object::Architecture::X86_64 => x64_stub_slot,
@@ -64,14 +70,19 @@ pub(crate) fn stub_binds(file: &object::File, bytes: &[u8]) -> Vec<(u64, String)
     if sections.is_empty() {
         return Vec::new();
     }
-    let named: HashSet<u64> =
-        super::macho_stubs::resolve_macho_imports(file, bytes).into_iter().map(|i| i.addr).collect();
+    let named: HashSet<u64> = super::macho_stubs::resolve_macho_imports(file, bytes)
+        .into_iter()
+        .map(|i| i.addr)
+        .collect();
     let mut unnamed = Vec::new();
     for section in &sections {
         let (base, stride) = (section.address(), section.stride);
         let Ok(data) = section.data() else { continue };
         for (i, stub) in data.chunks_exact(stride).enumerate() {
-            let Some(addr) = (i as u64).checked_mul(stride as u64).and_then(|o| base.checked_add(o)) else {
+            let Some(addr) = (i as u64)
+                .checked_mul(stride as u64)
+                .and_then(|o| base.checked_add(o))
+            else {
                 break;
             };
             if !named.contains(&addr) {
@@ -85,7 +96,12 @@ pub(crate) fn stub_binds(file: &object::File, bytes: &[u8]) -> Vec<(u64, String)
     let fixups = resolve_chained_fixups(file, bytes);
     let mut out: Vec<(u64, String)> = unnamed
         .into_iter()
-        .filter_map(|(addr, stub)| Some((addr, decode(stub, addr).and_then(|slot| bind_name(&fixups, slot))?)))
+        .filter_map(|(addr, stub)| {
+            Some((
+                addr,
+                decode(stub, addr).and_then(|slot| bind_name(&fixups, slot))?,
+            ))
+        })
         .collect();
     out.sort_unstable();
     out
@@ -162,7 +178,9 @@ fn a64_stub_slot(stub: &[u8], pc: u64) -> Option<u64> {
 
 /// The slot an x86-64 `jmp qword ptr [rip+disp32]` stub at `pc` jumps through.
 fn x64_stub_slot(stub: &[u8], pc: u64) -> Option<u64> {
-    let [0xFF, 0x25, d0, d1, d2, d3, ..] = *stub else { return None };
+    let [0xFF, 0x25, d0, d1, d2, d3, ..] = *stub else {
+        return None;
+    };
     let disp = i32::from_le_bytes([d0, d1, d2, d3]);
     pc.checked_add(6)?.checked_add_signed(disp.into())
 }
@@ -176,7 +194,11 @@ mod tests {
     use super::*;
 
     fn fixture(name: &str) -> Vec<u8> {
-        std::fs::read(format!("{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"))).expect("read fixture")
+        std::fs::read(format!(
+            "{}/tests/fixtures/{name}",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .expect("read fixture")
     }
 
     /// `macho_stubs_stripped_arm64`'s one stub has an `INDIRECT_SYMBOL_LOCAL |
@@ -185,7 +207,10 @@ mod tests {
     fn a_stripped_stub_is_named_from_its_slots_bind() {
         let bytes = fixture("macho_stubs_stripped_arm64");
         let file = object::File::parse(bytes.as_slice()).expect("parse Mach-O");
-        assert_eq!(stub_binds(&file, &bytes), vec![(0x100000520, "__chkstk_darwin".to_string())]);
+        assert_eq!(
+            stub_binds(&file, &bytes),
+            vec![(0x100000520, "__chkstk_darwin".to_string())]
+        );
     }
 
     /// The same image before stripping: the indirect-symbol walk names the
@@ -200,13 +225,21 @@ mod tests {
     #[test]
     fn stub_decoders() {
         // adrp x16, #0x4000; ldr x16, [x16]; br x16  at 0x100000520
-        let a64 = [0x30, 0x00, 0x00, 0x90, 0x10, 0x02, 0x40, 0xf9, 0x00, 0x02, 0x1f, 0xd6];
+        let a64 = [
+            0x30, 0x00, 0x00, 0x90, 0x10, 0x02, 0x40, 0xf9, 0x00, 0x02, 0x1f, 0xd6,
+        ];
         assert_eq!(a64_stub_slot(&a64, 0x100000520), Some(0x100004000));
         // adrp x17, #0x4000; add x17, x17, #0x18; ldr x16, [x17]; braa x16, x17
-        let auth = [0x31, 0x00, 0x00, 0x90, 0x31, 0x62, 0x00, 0x91, 0x30, 0x02, 0x40, 0xf9, 0x11, 0x0a, 0x1f, 0xd7];
+        let auth = [
+            0x31, 0x00, 0x00, 0x90, 0x31, 0x62, 0x00, 0x91, 0x30, 0x02, 0x40, 0xf9, 0x11, 0x0a,
+            0x1f, 0xd7,
+        ];
         assert_eq!(a64_stub_slot(&auth, 0x100000520), Some(0x100004018));
         assert_eq!(a64_stub_slot(&a64[..8], 0x100000520), None);
-        assert_eq!(x64_stub_slot(&[0xff, 0x25, 0xfa, 0x0f, 0x00, 0x00], 0x100000f00), Some(0x100001f00));
+        assert_eq!(
+            x64_stub_slot(&[0xff, 0x25, 0xfa, 0x0f, 0x00, 0x00], 0x100000f00),
+            Some(0x100001f00)
+        );
         assert_eq!(x64_stub_slot(&[0xe9, 0, 0, 0, 0, 0], 0x100000f00), None);
     }
 }

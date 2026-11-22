@@ -20,8 +20,8 @@ pub fn parse_function_flag(value: &str) -> Result<Vec<FunctionSpec>, String> {
     let Some(path) = value.strip_prefix('@') else {
         return Ok(vec![parse_function_spec(value)?]);
     };
-    let text = std::fs::read_to_string(path)
-        .map_err(|e| format!("--define-function @{path}: {e}"))?;
+    let text =
+        std::fs::read_to_string(path).map_err(|e| format!("--define-function @{path}: {e}"))?;
     let mut out = Vec::new();
     for (n, line) in text.lines().enumerate() {
         let line = line.split('#').next().unwrap_or("").trim();
@@ -52,13 +52,13 @@ pub fn parse_function_spec(spec: &str) -> Result<FunctionSpec, String> {
     };
     let start = parse_vma(start)
         .ok_or_else(|| format!("--define-function {spec:?}: {start:?} is not a hex address"))?;
-    let end = match end {
-        None => None,
-        Some(end) => Some(
-            parse_vma(end)
-                .ok_or_else(|| format!("--define-function {spec:?}: {end:?} is not a hex address"))?,
-        ),
-    };
+    let end =
+        match end {
+            None => None,
+            Some(end) => Some(parse_vma(end).ok_or_else(|| {
+                format!("--define-function {spec:?}: {end:?} is not a hex address")
+            })?),
+        };
     if let Some(end) = end {
         if end <= start {
             return Err(format!(
@@ -66,7 +66,11 @@ pub fn parse_function_spec(spec: &str) -> Result<FunctionSpec, String> {
             ));
         }
     }
-    Ok(FunctionSpec { start, end, name: name.map(str::to_string) })
+    Ok(FunctionSpec {
+        start,
+        end,
+        name: name.map(str::to_string),
+    })
 }
 
 /// Parse one `--assert` value: either a directive or `@FILE`.
@@ -91,7 +95,11 @@ pub fn parse_directive_flag(value: &str) -> Result<Vec<Directive>, String> {
 fn strip_comment(line: &str) -> &str {
     match line.find(" #") {
         Some(at) => line[..at].trim(),
-        None => line.trim().strip_prefix('#').map(|_| "").unwrap_or(line.trim()),
+        None => line
+            .trim()
+            .strip_prefix('#')
+            .map(|_| "")
+            .unwrap_or(line.trim()),
     }
 }
 
@@ -131,7 +139,10 @@ pub(crate) fn normalize_storage(tok: &str) -> String {
 /// A bare or `0x`-prefixed hexadecimal VMA (the `--define-function` convention).
 fn parse_vma(tok: &str) -> Option<u64> {
     let tok = tok.trim();
-    let body = tok.strip_prefix("0x").or_else(|| tok.strip_prefix("0X")).unwrap_or(tok);
+    let body = tok
+        .strip_prefix("0x")
+        .or_else(|| tok.strip_prefix("0X"))
+        .unwrap_or(tok);
     if body.is_empty() || !body.chars().all(|c| c.is_ascii_hexdigit()) {
         return None;
     }
@@ -153,7 +164,10 @@ fn parse_range(rest: &str) -> Option<(u64, i32)> {
     if size_tok.is_empty() || size_tok.split_whitespace().count() != 1 {
         return None;
     }
-    let size = match size_tok.strip_prefix("0x").or_else(|| size_tok.strip_prefix("0X")) {
+    let size = match size_tok
+        .strip_prefix("0x")
+        .or_else(|| size_tok.strip_prefix("0X"))
+    {
         Some(hex) => u64::from_str_radix(hex, 16).ok()?,
         None => size_tok.parse::<u64>().ok()?,
     };
@@ -204,23 +218,39 @@ pub fn parse_directive(spec: &str) -> Result<Directive, String> {
     };
     let body = match keyword {
         "function" => {
-            let decls = parse_function_flag(rest)
-                .map_err(|e| format!("--assert {raw:?}: {}", e.trim_start_matches("--define-function ")))?;
-            let decl = decls.into_iter().next().ok_or_else(|| bad("missing <start>"))?;
-            Body::Function { start: decl.start, end: decl.end, name: decl.name }
+            let decls = parse_function_flag(rest).map_err(|e| {
+                format!(
+                    "--assert {raw:?}: {}",
+                    e.trim_start_matches("--define-function ")
+                )
+            })?;
+            let decl = decls
+                .into_iter()
+                .next()
+                .ok_or_else(|| bad("missing <start>"))?;
+            Body::Function {
+                start: decl.start,
+                end: decl.end,
+                name: decl.name,
+            }
         }
         "typedef" => {
             if rest.is_empty() {
                 return Err(bad("typedef needs a C declaration"));
             }
-            Body::Typedef { decl: rest.to_string() }
+            Body::Typedef {
+                decl: rest.to_string(),
+            }
         }
         "prototype" => {
             let (func, decl) = take_token(rest);
             if func.is_empty() || decl.is_empty() {
                 return Err(bad("prototype needs <func> then a C declaration"));
             }
-            Body::Prototype { func: func.to_string(), decl: decl.to_string() }
+            Body::Prototype {
+                func: func.to_string(),
+                decl: decl.to_string(),
+            }
         }
         "data" => {
             let (addr, decl) = take_token(rest);
@@ -228,12 +258,17 @@ pub fn parse_directive(spec: &str) -> Result<Directive, String> {
             if decl.is_empty() {
                 return Err(bad("data needs a C type declaration naming the symbol"));
             }
-            Body::Data { addr, decl: decl.to_string() }
+            Body::Data {
+                addr,
+                decl: decl.to_string(),
+            }
         }
         "param" => {
             let (index, rest) = take_token(rest);
             let (func, index) = split_qualifier(index);
-            let index: i32 = index.parse().map_err(|_| bad("param needs a decimal index"))?;
+            let index: i32 = index
+                .parse()
+                .map_err(|_| bad("param needs a decimal index"))?;
             let (storage, decl) = take_token(rest);
             if storage.is_empty() || decl.is_empty() {
                 return Err(bad("param needs <i> <storage> then a C type declaration"));
@@ -251,7 +286,11 @@ pub fn parse_directive(spec: &str) -> Result<Directive, String> {
             if storage.is_empty() || decl.is_empty() {
                 return Err(bad("return needs <storage> then a C type declaration"));
             }
-            Body::Return { func, storage: normalize_storage(&storage), decl: decl.to_string() }
+            Body::Return {
+                func,
+                storage: normalize_storage(&storage),
+                decl: decl.to_string(),
+            }
         }
         "comment" => {
             let (addr, text) = take_token(rest);
@@ -260,7 +299,11 @@ pub fn parse_directive(spec: &str) -> Result<Directive, String> {
             if text.is_empty() {
                 return Err(bad("comment needs text"));
             }
-            Body::Comment { func, addr, text: text.to_string() }
+            Body::Comment {
+                func,
+                addr,
+                text: text.to_string(),
+            }
         }
         "name" => {
             let (symbol, newname) = take_token(rest);
@@ -272,7 +315,11 @@ pub fn parse_directive(spec: &str) -> Result<Directive, String> {
             if !tail.is_empty() {
                 return Err(bad("name takes exactly <symbol> <newname>"));
             }
-            Body::Name { func, symbol, newname: newname.to_string() }
+            Body::Name {
+                func,
+                symbol,
+                newname: newname.to_string(),
+            }
         }
         "type" => {
             let (symbol, decl) = take_token(rest);
@@ -280,7 +327,11 @@ pub fn parse_directive(spec: &str) -> Result<Directive, String> {
             if symbol.is_empty() || decl.is_empty() {
                 return Err(bad("type needs <symbol> then a C type"));
             }
-            Body::Type { func, symbol, decl: decl.to_string() }
+            Body::Type {
+                func,
+                symbol,
+                decl: decl.to_string(),
+            }
         }
         "format" => {
             let (addr, tail) = take_token(rest);
@@ -288,7 +339,9 @@ pub fn parse_directive(spec: &str) -> Result<Directive, String> {
             let addr = parse_vma(&addr).ok_or_else(|| bad("format needs a hex <addr>"))?;
             let (format, tail) = take_token(tail);
             if crate::kuna_constformat::format_code(format).is_none() {
-                return Err(bad("format needs <addr> then one of hex, dec, oct, bin, char"));
+                return Err(bad(
+                    "format needs <addr> then one of hex, dec, oct, bin, char",
+                ));
             }
             let (value, tail) = take_token(tail);
             if !tail.is_empty() {
@@ -301,7 +354,12 @@ pub fn parse_directive(spec: &str) -> Result<Directive, String> {
                         .ok_or_else(|| bad("format's <value> is decimal, or hex with 0x"))?,
                 ),
             };
-            Body::Format { func, addr, format: format.to_string(), value }
+            Body::Format {
+                func,
+                addr,
+                format: format.to_string(),
+                value,
+            }
         }
         "isolate" => {
             let (symbol, tail) = take_token(rest);
@@ -315,8 +373,8 @@ pub fn parse_directive(spec: &str) -> Result<Directive, String> {
             Body::Isolate { func, symbol }
         }
         "readonly" | "volatile" => {
-            let (addr, size) = parse_range(rest)
-                .ok_or_else(|| bad("needs <addr>+<size> (e.g. 0x404028+8)"))?;
+            let (addr, size) =
+                parse_range(rest).ok_or_else(|| bad("needs <addr>+<size> (e.g. 0x404028+8)"))?;
             if keyword == "readonly" {
                 Body::Readonly { addr, size }
             } else {
@@ -326,7 +384,8 @@ pub fn parse_directive(spec: &str) -> Result<Directive, String> {
         "register" => {
             let (name, rest) = take_token(rest);
             let (value, range) = take_token(rest);
-            let value = parse_vma(value).ok_or_else(|| bad("register needs <name> <hex value> [<addr>+<size>]"))?;
+            let value = parse_vma(value)
+                .ok_or_else(|| bad("register needs <name> <hex value> [<addr>+<size>]"))?;
             if name.is_empty() {
                 return Err(bad("register needs <name> <hex value> [<addr>+<size>]"));
             }
@@ -335,7 +394,11 @@ pub fn parse_directive(spec: &str) -> Result<Directive, String> {
             } else {
                 Some(parse_range(range).ok_or_else(|| bad("register range needs <addr>+<size>"))?)
             };
-            Body::Register { name: name.to_string(), value, range }
+            Body::Register {
+                name: name.to_string(),
+                value,
+                range,
+            }
         }
         "bytes" => {
             let (addr, payload) = take_token(rest);
@@ -348,10 +411,10 @@ pub fn parse_directive(spec: &str) -> Result<Directive, String> {
                 return Err(bad("bytes takes exactly <addr> <hex|@FILE>"));
             }
             let data = match payload.strip_prefix('@') {
-                Some(path) => std::fs::read(path)
-                    .map_err(|e| format!("--assert {raw:?}: {path}: {e}"))?,
-                None => crate::assertions::parse_hex_bytes(payload)
-                    .map_err(|e| bad(&e))?,
+                Some(path) => {
+                    std::fs::read(path).map_err(|e| format!("--assert {raw:?}: {path}: {e}"))?
+                }
+                None => crate::assertions::parse_hex_bytes(payload).map_err(|e| bad(&e))?,
             };
             if data.is_empty() {
                 return Err(bad("bytes needs at least one byte"));
@@ -373,7 +436,11 @@ pub fn parse_directive(spec: &str) -> Result<Directive, String> {
                     "flow needs <addr> then one of branch, call, callreturn, return",
                 ));
             }
-            Body::Flow { func, addr, kind: kind.to_string() }
+            Body::Flow {
+                func,
+                addr,
+                kind: kind.to_string(),
+            }
         }
         "callee" => {
             let (addr, callee) = take_token(rest);
@@ -383,7 +450,11 @@ pub fn parse_directive(spec: &str) -> Result<Directive, String> {
             if callee.is_empty() || !tail.is_empty() {
                 return Err(bad("callee takes exactly <callsite> <name|address>"));
             }
-            Body::Callee { func, addr, callee: callee.to_string() }
+            Body::Callee {
+                func,
+                addr,
+                callee: callee.to_string(),
+            }
         }
         "callproto" => {
             let (site, decl) = take_token(rest);
@@ -392,7 +463,11 @@ pub fn parse_directive(spec: &str) -> Result<Directive, String> {
             if decl.is_empty() {
                 return Err(bad("callproto needs <callsite> then a C declaration"));
             }
-            Body::CallProto { func, addr, decl: decl.to_string() }
+            Body::CallProto {
+                func,
+                addr,
+                decl: decl.to_string(),
+            }
         }
         "" => return Err("--assert: empty directive".into()),
         other => {
@@ -400,7 +475,7 @@ pub fn parse_directive(spec: &str) -> Result<Directive, String> {
                 "--assert {raw:?}: unknown directive {other:?} (want one of \
                  function, typedef, prototype, callproto, data, param, return, comment, flow, callee, \
                  name, type, format, isolate, readonly, volatile, bytes)"
-            ))
+            ));
         }
     };
     Ok(Directive { raw, body })

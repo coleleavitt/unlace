@@ -21,8 +21,8 @@
 //! engine graph; `decomp_test_dbg` adds `unlace-harness` to that graph.
 
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// The environment variable the parent sets to its own [`identity`].
 pub const PARENT_ENV: &str = "KUNA_PARENT_BUILD";

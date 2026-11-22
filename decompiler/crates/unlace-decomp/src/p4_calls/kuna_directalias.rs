@@ -29,10 +29,13 @@ const MAX_STEPS: usize = 16;
 /// Does a gathered pointer reach the trial at `[offset, offset + size)`?
 /// Call after `has_local_alias` answered `true` for it.
 pub fn aliases(data: &Funcdata, aliascheck: &mut AliasChecker, offset: uintb, size: int4) -> bool {
-    let (boundary, direct) = aliascheck.split_direct(|base: &AddBase| direct_bytes(data, base.base));
+    let (boundary, direct) =
+        aliascheck.split_direct(|base: &AddBase| direct_bytes(data, base.base));
     let end = offset as u128 + size.max(1) as u128;
     offset >= *boundary
-        || direct.iter().any(|&(start, bytes)| (start as u128) < end && (offset as u128) < start as u128 + bytes as u128)
+        || direct.iter().any(|&(start, bytes)| {
+            (start as u128) < end && (offset as u128) < start as u128 + bytes as u128
+        })
 }
 
 /// `vn` stopped or started being a call input: redraw the cached split if
@@ -44,13 +47,25 @@ pub fn refresh(data: &Funcdata, aliascheck: &mut AliasChecker, vn: VarnodeId) {
 /// The inputs of call `op`, taken before its argument list is rewritten and
 /// handed to [`refresh_rewritten`] after.
 pub fn call_inputs(data: &Funcdata, op: OpId) -> Vec<VarnodeId> {
-    data.obank().get(op).map(|o| (0..o.num_input()).filter_map(|i| o.get_in(i)).collect()).unwrap_or_default()
+    data.obank()
+        .get(op)
+        .map(|o| (0..o.num_input()).filter_map(|i| o.get_in(i)).collect())
+        .unwrap_or_default()
 }
 
 /// [`refresh`] every input the rewrite of call `op` from `before` dropped or added.
-pub fn refresh_rewritten(data: &Funcdata, aliascheck: &mut AliasChecker, op: OpId, before: &[VarnodeId]) {
+pub fn refresh_rewritten(
+    data: &Funcdata,
+    aliascheck: &mut AliasChecker,
+    op: OpId,
+    before: &[VarnodeId],
+) {
     let after = call_inputs(data, op);
-    for &vn in before.iter().filter(|v| !after.contains(v)).chain(after.iter().filter(|v| !before.contains(v))) {
+    for &vn in before
+        .iter()
+        .filter(|v| !after.contains(v))
+        .chain(after.iter().filter(|v| !before.contains(v)))
+    {
         refresh(data, aliascheck, vn);
     }
 }
@@ -63,7 +78,9 @@ fn direct_bytes(data: &Funcdata, vn: VarnodeId) -> Option<uintb> {
         let op = data.obank().get(id)?;
         let accessed = match op.code() {
             OpCode::CPUI_LOAD if op.get_in(1) == Some(vn) => op.get_out()?,
-            OpCode::CPUI_STORE if op.get_in(1) == Some(vn) && op.get_in(2) != Some(vn) => op.get_in(2)?,
+            OpCode::CPUI_STORE if op.get_in(1) == Some(vn) && op.get_in(2) != Some(vn) => {
+                op.get_in(2)?
+            }
             _ => return None,
         };
         widest = widest.max(data.vbank().get(accessed)?.get_size().max(0) as uintb);
@@ -74,15 +91,29 @@ fn direct_bytes(data: &Funcdata, vn: VarnodeId) -> Option<uintb> {
 /// Is `vn` the stack-pointer input plus constants, through copies only?
 fn fixed_offset(data: &Funcdata, mut vn: VarnodeId) -> bool {
     for _ in 0..MAX_STEPS {
-        let Some(node) = data.vbank().get(vn) else { return false };
+        let Some(node) = data.vbank().get(vn) else {
+            return false;
+        };
         if node.is_input() {
             return node.get_space().get_type() == unlace_base::space::spacetype::IPTR_PROCESSOR
-                && data.get_arch().manage().get_stack_space().is_some_and(|stack| {
-                    stack.get_spacebase(0).is_ok_and(|sp| sp.offset == node.get_offset() && sp.size as int4 == node.get_size())
-                });
+                && data
+                    .get_arch()
+                    .manage()
+                    .get_stack_space()
+                    .is_some_and(|stack| {
+                        stack.get_spacebase(0).is_ok_and(|sp| {
+                            sp.offset == node.get_offset() && sp.size as int4 == node.get_size()
+                        })
+                    });
         }
-        let Some(op) = node.get_def().and_then(|id| data.obank().get(id)) else { return false };
-        let constant = |slot| op.get_in(slot).and_then(|v| data.vbank().get(v)).is_some_and(|v| v.is_constant());
+        let Some(op) = node.get_def().and_then(|id| data.obank().get(id)) else {
+            return false;
+        };
+        let constant = |slot| {
+            op.get_in(slot)
+                .and_then(|v| data.vbank().get(v))
+                .is_some_and(|v| v.is_constant())
+        };
         let next = match op.code() {
             OpCode::CPUI_COPY => op.get_in(0),
             OpCode::CPUI_INT_ADD if constant(1) => op.get_in(0),

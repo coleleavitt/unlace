@@ -12,7 +12,7 @@ use unlace_console::kuna_buildstamp;
 use unlace_decomp::kuna_phases::{emit_catalog_json, emit_catalog_json_one, emit_catalog_markdown};
 use unlace_decomp::options::KUNA_OPTION_NAMES;
 
-use crate::jsonfmt::{dumps_indent2, extract_json_span, parse, Json};
+use crate::jsonfmt::{Json, dumps_indent2, extract_json_span, parse};
 use crate::paths;
 
 /// Read the local static catalog unless the caller selected an external console.
@@ -94,9 +94,10 @@ fn field<'a>(entry: &'a Json, key: &str) -> Option<&'a str> {
     if let Json::Object(pairs) = entry {
         for (k, v) in pairs {
             if k == key
-                && let Json::Str(s) = v {
-                    return Some(s);
-                }
+                && let Json::Str(s) = v
+            {
+                return Some(s);
+            }
         }
     }
     None
@@ -118,15 +119,16 @@ fn arr_field(entry: &Json, key: &str) -> Vec<String> {
     if let Json::Object(pairs) = entry {
         for (k, v) in pairs {
             if k == key
-                && let Json::Array(items) = v {
-                    return items
-                        .iter()
-                        .filter_map(|i| match i {
-                            Json::Str(s) => Some(s.clone()),
-                            _ => None,
-                        })
-                        .collect();
-                }
+                && let Json::Array(items) = v
+            {
+                return items
+                    .iter()
+                    .filter_map(|i| match i {
+                        Json::Str(s) => Some(s.clone()),
+                        _ => None,
+                    })
+                    .collect();
+            }
         }
     }
     Vec::new()
@@ -161,7 +163,9 @@ pub fn cmd_json(option: Option<&str>, tier: Option<&str>, pinned_by: Option<&str
 /// `tests/options_md_fresh.rs`.
 pub fn cmd_markdown(option: Option<&str>) -> i32 {
     if let Some(o) = option {
-        eprintln!("error: --markdown renders the whole catalog (got --option {o}); use --json/--option for one row");
+        eprintln!(
+            "error: --markdown renders the whole catalog (got --option {o}); use --json/--option for one row"
+        );
         return 2;
     }
     crate::output::emit_with_status(&emit_catalog_markdown(), 0)
@@ -180,9 +184,10 @@ pub fn cmd_text(option: Option<&str>, tier: Option<&str>, pinned_by: Option<&str
     let mut text = String::new();
     for e in entries(&v) {
         if let Some(want) = tier
-            && field(e, "tier") != Some(want) {
-                continue;
-            }
+            && field(e, "tier") != Some(want)
+        {
+            continue;
+        }
         let flag = if bool_field(e, "destructive_as_default") {
             "  (opt-in: destructive as global default)"
         } else {

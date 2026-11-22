@@ -2,7 +2,7 @@
 
 use std::io::Write;
 
-use super::{records_for_object_path, FidRecord, ObjectRefusal};
+use super::{FidRecord, ObjectRefusal, records_for_object_path};
 
 /// The records of every object member `lang` applies to. An archive with object
 /// members `lang` applies to none of is refused, so a mislabeled library writes

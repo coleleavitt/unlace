@@ -145,8 +145,22 @@ int main(void) {
         round_trip("void sink(unsigned char *);", &serial, main);
         for extra in [
             vec!["--functions", "change,sink"],
-            vec!["--functions", "change,sink", "--option", "protoorder", "types"],
-            vec!["--option", "protoorder", "off", "--jobs", "2", "--jobs-chunk", "1"],
+            vec![
+                "--functions",
+                "change,sink",
+                "--option",
+                "protoorder",
+                "types",
+            ],
+            vec![
+                "--option",
+                "protoorder",
+                "off",
+                "--jobs",
+                "2",
+                "--jobs-chunk",
+                "1",
+            ],
         ] {
             let mut args = extra;
             if !args.contains(&"--jobs") {
@@ -156,24 +170,53 @@ int main(void) {
             assert!(printed.contains("sink((unsigned char *)&"), "{printed}");
             round_trip("void sink(unsigned char *);", &printed, main);
             if args.contains(&"--jobs") {
-                assert_eq!(printed, decompile(&input, &["--option", "protoorder", "off"]),
-                    "worker scheduling changed the buffered C");
+                assert_eq!(
+                    printed,
+                    decompile(&input, &["--option", "protoorder", "off"]),
+                    "worker scheduling changed the buffered C"
+                );
             }
         }
         for jobs in ["1", "2"] {
             let dir = common::scratch_file("pointer-project", "dir");
             let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
-                .args(["decompile-project", input.to_str().unwrap(), "-o", dir.to_str().unwrap(),
-                    "--functions", "change,sink", "--option", "protoorder", "off", "--jobs", jobs,
-                    "--jobs-chunk", "1"])
-                .output().unwrap();
-            assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-            let files: Vec<_> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().path()).collect();
-            let c = files.iter().find(|p| p.extension().is_some_and(|e| e == "c")).unwrap();
+                .args([
+                    "decompile-project",
+                    input.to_str().unwrap(),
+                    "-o",
+                    dir.to_str().unwrap(),
+                    "--functions",
+                    "change,sink",
+                    "--option",
+                    "protoorder",
+                    "off",
+                    "--jobs",
+                    jobs,
+                    "--jobs-chunk",
+                    "1",
+                ])
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            let files: Vec<_> = std::fs::read_dir(&dir)
+                .unwrap()
+                .map(|e| e.unwrap().path())
+                .collect();
+            let c = files
+                .iter()
+                .find(|p| p.extension().is_some_and(|e| e == "c"))
+                .unwrap();
             let printed = std::fs::read_to_string(c).unwrap();
             assert!(printed.contains("sink((unsigned char *)&"), "{printed}");
-            let printed = printed.lines().filter(|line| !line.starts_with("#include"))
-                .collect::<Vec<_>>().join("\n");
+            let printed = printed
+                .lines()
+                .filter(|line| !line.starts_with("#include"))
+                .collect::<Vec<_>>()
+                .join("\n");
             round_trip("void sink(unsigned char *);", &printed, main);
             std::fs::remove_dir_all(dir).unwrap();
         }
@@ -201,19 +244,43 @@ fn every_buffered_document_prints_the_same_call() {
     assert!(all.contains("sink((unsigned char *)&"), "{all}");
     for jobs in ["1", "2"] {
         let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
-            .args(["decompile-graph", input.to_str().unwrap(), "--jobs", jobs, "--jobs-chunk", "1"])
+            .args([
+                "decompile-graph",
+                input.to_str().unwrap(),
+                "--jobs",
+                jobs,
+                "--jobs-chunk",
+                "1",
+            ])
             .output()
             .unwrap();
-        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
         let graph = String::from_utf8(out.stdout).unwrap();
-        assert!(graph.contains("sink((unsigned char *)&"), "--jobs {jobs}: {graph}");
+        assert!(
+            graph.contains("sink((unsigned char *)&"),
+            "--jobs {jobs}: {graph}"
+        );
     }
     let dir = common::scratch_file("pointer-stream", "dir");
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
-        .args(["decompile-project", input.to_str().unwrap(), "-o", dir.to_str().unwrap(), "--stream"])
+        .args([
+            "decompile-project",
+            input.to_str().unwrap(),
+            "-o",
+            dir.to_str().unwrap(),
+            "--stream",
+        ])
         .output()
         .unwrap();
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let c = std::fs::read_dir(&dir)
         .unwrap()
         .map(|e| e.unwrap().path())

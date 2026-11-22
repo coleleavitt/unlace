@@ -14,7 +14,7 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, AddrSpace, AddrSpaceManager, ConstantSpace, IopSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, IopSpace, UniqueSpace, addrspace_flags,
 };
 use unlace_base::types::int4;
 
@@ -29,7 +29,8 @@ const RET_SIZE: int4 = 4;
 fn build_fd() -> Funcdata {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(IopSpace::new(2))).unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
@@ -64,8 +65,10 @@ fn build_call(fd: &mut Funcdata, refine: bool) -> FuncCallSpecs {
     fd.bblocks_mut().set_start_block(root, bl);
 
     let call = fd.new_op(1, Address::new(Rc::clone(&sp), 0x1010));
-    fd.obank_mut()
-        .change_opcode(call, TypeOp::new(OpCode::CPUI_CALL, 0, "CPUI_CALL".to_string()));
+    fd.obank_mut().change_opcode(
+        call,
+        TypeOp::new(OpCode::CPUI_CALL, 0, "CPUI_CALL".to_string()),
+    );
     let entry = Address::new(Rc::clone(&sp), 0x2000);
     let target = fd.new_code_ref(&entry);
     let _ = fd.op_set_input(call, target, 0);
@@ -116,12 +119,18 @@ fn the_anchor_is_the_op_the_marker_speaks_for() {
     let bl = fd.bblocks_mut().new_block_basic(root);
     fd.bblocks_mut().set_start_block(root, bl);
     let call = fd.new_op(1, Address::new(Rc::clone(&sp), 0x1010));
-    fd.obank_mut()
-        .change_opcode(call, TypeOp::new(OpCode::CPUI_CALL, 0, "CPUI_CALL".to_string()));
+    fd.obank_mut().change_opcode(
+        call,
+        TypeOp::new(OpCode::CPUI_CALL, 0, "CPUI_CALL".to_string()),
+    );
     fd.op_insert(call, bl, None);
-    let ind = fd.new_indirect_creation(call, &Address::new(Rc::clone(&sp), RET_OFF), RET_SIZE, true);
+    let ind =
+        fd.new_indirect_creation(call, &Address::new(Rc::clone(&sp), RET_OFF), RET_SIZE, true);
 
-    assert_eq!(anchor_of(&fd, ind), Some(call), "the marker resolves to its CALL");
+    assert_eq!(
+        anchor_of(&fd, ind),
+        Some(call),
+        "the marker resolves to its CALL"
+    );
     assert_eq!(anchor_of(&fd, call), None, "a CALL is not a marker");
 }
-

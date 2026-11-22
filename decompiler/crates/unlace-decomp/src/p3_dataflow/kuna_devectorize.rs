@@ -78,7 +78,8 @@ impl Action for ActionDevectorize {
             let Some((guard, edge)) = match_reduction(data, data.bblocks_get_block(i)) else {
                 continue;
             };
-            data.remove_branch(guard, edge).expect("devectorize: remove_branch");
+            data.remove_branch(guard, edge)
+                .expect("devectorize: remove_branch");
             data.remove_unreachable_blocks(false, true)
                 .expect("devectorize: remove_unreachable_blocks");
             self.base.count += 1;
@@ -131,7 +132,10 @@ fn op(data: &Funcdata, id: OpId) -> &PcodeOp {
 }
 
 fn size(data: &Funcdata, v: VarnodeId) -> i64 {
-    data.vbank().get(v).expect("devectorize: varnode").get_size() as i64
+    data.vbank()
+        .get(v)
+        .expect("devectorize: varnode")
+        .get_size() as i64
 }
 
 fn constant(data: &Funcdata, v: VarnodeId) -> Option<u64> {
@@ -171,7 +175,9 @@ fn basic(data: &Funcdata, b: BlockId) -> bool {
 /// An op in [`PURE`] whose output is not global storage the caller can observe.
 fn effect_free(data: &Funcdata, o: OpId, codes: &[OpCode]) -> bool {
     let o = op(data, o);
-    codes.contains(&o.code()) && o.get_out().is_none_or(|v| !data.vbank().get(v).is_some_and(|n| n.is_persist()))
+    codes.contains(&o.code())
+        && o.get_out()
+            .is_none_or(|v| !data.vbank().get(v).is_some_and(|n| n.is_persist()))
 }
 
 fn pure_block(data: &Funcdata, b: BlockId) -> bool {
@@ -208,12 +214,21 @@ fn taken(data: &Funcdata, b: BlockId) -> Option<(BlockId, BlockId)> {
         return None;
     }
     let (t, f) = (fb.get_true_out(), fb.get_false_out());
-    Some(if tail.is_boolean_flip() { (f, t) } else { (t, f) })
+    Some(if tail.is_boolean_flip() {
+        (f, t)
+    } else {
+        (t, f)
+    })
 }
 
 /// For a block ending in `x == y` or `x != y` (either operand order, through
 /// COPY/ZEXT), the successors taken when the two differ and when they agree.
-fn branch_pair(data: &Funcdata, b: BlockId, x: VarnodeId, y: VarnodeId) -> Option<(BlockId, BlockId)> {
+fn branch_pair(
+    data: &Funcdata,
+    b: BlockId,
+    x: VarnodeId,
+    y: VarnodeId,
+) -> Option<(BlockId, BlockId)> {
     let (t, f) = taken(data, b)?;
     let (_, cond) = def(data, op(data, data.bb_op_tail(b)?).get_in(1)?)?;
     let equal = match cond.code() {
@@ -221,7 +236,10 @@ fn branch_pair(data: &Funcdata, b: BlockId, x: VarnodeId, y: VarnodeId) -> Optio
         CPUI_INT_NOTEQUAL => false,
         _ => return None,
     };
-    let (a, c) = (strip(data, cond.get_in(0)?, true), strip(data, cond.get_in(1)?, true));
+    let (a, c) = (
+        strip(data, cond.get_in(0)?, true),
+        strip(data, cond.get_in(1)?, true),
+    );
     if !((a == x && c == y) || (a == y && c == x)) {
         return None;
     }
@@ -286,7 +304,11 @@ fn lane(data: &Funcdata, v: VarnodeId) -> Option<(OpId, i64, i64)> {
             let bits = constant(data, o.get_in(1)?)? as i64;
             let inner = o.get_in(0)?;
             let (id, o) = def(data, inner)?;
-            (o.code() == CPUI_LOAD && size(data, inner) == width && bits % 8 == 0 && bits > 0 && bits < 8 * width)
+            (o.code() == CPUI_LOAD
+                && size(data, inner) == width
+                && bits % 8 == 0
+                && bits > 0
+                && bits < 8 * width)
                 .then(|| (id, bits / 8, width - bits / 8))
         }
         CPUI_LOAD => Some((id, 0, width)),
@@ -302,7 +324,9 @@ fn lane(data: &Funcdata, v: VarnodeId) -> Option<(OpId, i64, i64)> {
 fn big_endian(data: &Funcdata, load: OpId) -> bool {
     let manage = data.get_arch().manage();
     match op(data, load).get_in(0).and_then(|v| constant(data, v)) {
-        Some(i) if i < manage.num_spaces() as u64 => manage.get_space(i as i32).is_some_and(|s| s.is_big_endian()),
+        Some(i) if i < manage.num_spaces() as u64 => manage
+            .get_space(i as i32)
+            .is_some_and(|s| s.is_big_endian()),
         _ => false,
     }
 }
@@ -375,7 +399,9 @@ fn decompose(data: &Funcdata, v: VarnodeId, idx: VarnodeId, a: &mut Addr) -> boo
             k > 0 && strip(data, var, true) == idx && a.set_scale(k as i64)
         }
         CPUI_INT_LEFT => {
-            let Some(bits) = constant(data, y) else { return false };
+            let Some(bits) = constant(data, y) else {
+                return false;
+            };
             bits < 63 && strip(data, x, true) == idx && a.set_scale(1 << bits)
         }
         _ => a.set_base(data, v),
@@ -482,7 +508,9 @@ fn match_reduction(data: &Funcdata, h: BlockId) -> Option<(BlockId, int4)> {
     let (mut j, mut sum) = (None, None);
     for p in phis(data, h) {
         let (out, next) = (op(data, p).get_out()?, op(data, p).get_in(back)?);
-        let Some((_, add)) = def(data, next) else { continue };
+        let Some((_, add)) = def(data, next) else {
+            continue;
+        };
         if add.code() != CPUI_INT_ADD {
             continue;
         }
@@ -503,7 +531,10 @@ fn match_reduction(data: &Funcdata, h: BlockId) -> Option<(BlockId, int4)> {
         return None;
     }
     let mut addr = Addr::default();
-    if !decompose(data, op(data, load).get_in(1)?, j_out, &mut addr) || addr.scale != Some(elem) || addr.off != 0 {
+    if !decompose(data, op(data, load).get_in(1)?, j_out, &mut addr)
+        || addr.scale != Some(elem)
+        || addr.off != 0
+    {
         return None;
     }
     let base = addr.base?;
@@ -532,7 +563,14 @@ fn match_reduction(data: &Funcdata, h: BlockId) -> Option<(BlockId, int4)> {
     let sum_v = strip(data, op(data, s_phi).get_in(vec_k)?, false);
     let (e, x) = (hb.get_in(else_k), hb.get_in(vec_k));
     for p in phis(data, h) {
-        if p != j_phi && p != s_phi && !same(data, op(data, p).get_in(else_k)?, op(data, p).get_in(vec_k)?) {
+        if p != j_phi
+            && p != s_phi
+            && !same(
+                data,
+                op(data, p).get_in(else_k)?,
+                op(data, p).get_in(vec_k)?,
+            )
+        {
             return None;
         }
     }
@@ -602,7 +640,14 @@ fn match_reduction(data: &Funcdata, h: BlockId) -> Option<(BlockId, int4)> {
         {
             return None;
         }
-        lanes.push(addr.off + if big_endian(data, load) { wide - n - e } else { n });
+        lanes.push(
+            addr.off
+                + if big_endian(data, load) {
+                    wide - n - e
+                } else {
+                    n
+                },
+        );
     }
     lanes.sort_unstable();
     if !lanes_tile(&lanes, stride, elem) {
@@ -647,18 +692,26 @@ fn match_reduction(data: &Funcdata, h: BlockId) -> Option<(BlockId, int4)> {
 
     let mut arm: Vec<BlockId> = pre.into_iter().chain([v, x]).collect();
     if r == rs {
-        let (sx, sh) = (blocks.block(r).get_in_index(x), blocks.block(r).get_in_index(h));
+        let (sx, sh) = (
+            blocks.block(r).get_in_index(x),
+            blocks.block(r).get_in_index(h),
+        );
         if sx < 0 || sh < 0 {
             return None;
         }
         for p in phis(data, r) {
             let (a, b) = (op(data, p).get_in(sx)?, op(data, p).get_in(sh)?);
-            if !((strip(data, a, false) == sum_v && strip(data, b, false) == s_next) || same(data, a, b)) {
+            if !((strip(data, a, false) == sum_v && strip(data, b, false) == s_next)
+                || same(data, a, b))
+            {
                 return None;
             }
         }
     } else {
-        if blocks.block(r).size_in() != 1 || !pure_block(data, r) || returned_from(data, r, x)? != sum_v {
+        if blocks.block(r).size_in() != 1
+            || !pure_block(data, r)
+            || returned_from(data, r, x)? != sum_v
+        {
             return None;
         }
         let simple = |o: OpId| effect_free(data, o, &[CPUI_MULTIEQUAL, CPUI_COPY, CPUI_RETURN]);
@@ -670,10 +723,14 @@ fn match_reduction(data: &Funcdata, h: BlockId) -> Option<(BlockId, int4)> {
 
     for &b in &arm {
         for o in data.bb_ops(b) {
-            let Some(out) = op(data, o).get_out() else { continue };
+            let Some(out) = op(data, o).get_out() else {
+                continue;
+            };
             for d in data.descend_snapshot(out) {
                 let reader = op(data, d);
-                let Some(parent) = reader.get_parent() else { return None };
+                let Some(parent) = reader.get_parent() else {
+                    return None;
+                };
                 if arm.contains(&parent) {
                     continue;
                 }
@@ -681,7 +738,9 @@ fn match_reduction(data: &Funcdata, h: BlockId) -> Option<(BlockId, int4)> {
                     return None;
                 }
                 for slot in 0..reader.num_input() {
-                    if reader.get_in(slot) == Some(out) && !arm.contains(&blocks.block(parent).get_in(slot)) {
+                    if reader.get_in(slot) == Some(out)
+                        && !arm.contains(&blocks.block(parent).get_in(slot))
+                    {
                         return None;
                     }
                 }

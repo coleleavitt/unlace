@@ -123,13 +123,13 @@
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
+use object::read::{Object, ObjectSection, ObjectSymbol};
+use object::{BinaryFormat, ObjectKind, SectionKind, SymbolKind};
 use unlace_base::address::Address;
-use unlace_base::space::{spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::translate::{PcodeEmit, Translate};
-use object::read::{Object, ObjectSection, ObjectSymbol};
-use object::{BinaryFormat, ObjectKind, SectionKind, SymbolKind};
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase, StringFact};
 
@@ -213,7 +213,10 @@ impl SecRange {
                 && self.elf_flags & SHF_EXECINSTR == 0;
         }
         // Non-ELF fallback: the neutral section kind.
-        matches!(self.kind, SectionKind::ReadOnlyData | SectionKind::ReadOnlyString)
+        matches!(
+            self.kind,
+            SectionKind::ReadOnlyData | SectionKind::ReadOnlyString
+        )
     }
 }
 
@@ -354,7 +357,10 @@ struct TableUses {
 impl TableUses {
     /// The address `v` holds.
     fn base_of(&self, v: &Operand) -> Option<u64> {
-        self.held.iter().find(|(loc, ..)| loc == v).map(|&(_, base, _)| base)
+        self.held
+            .iter()
+            .find(|(loc, ..)| loc == v)
+            .map(|&(_, base, _)| base)
     }
 
     fn indexed(&mut self, base: u64) -> Option<u64> {
@@ -378,8 +384,10 @@ impl TableUses {
                 }
                 (OpCode::CPUI_COPY | OpCode::CPUI_INT_ZEXT, &[v, ..])
                 | (OpCode::CPUI_INT_MULT, &[v, Operand::Const(1)]) => self.base_of(&v),
-                (OpCode::CPUI_INT_ADD, &[a, b]) => match (self.base_of(&a), self.base_of(&b), a, b) {
-                    (Some(base), None, _, Operand::Const(_)) | (None, Some(base), Operand::Const(_), _) => Some(base),
+                (OpCode::CPUI_INT_ADD, &[a, b]) => match (self.base_of(&a), self.base_of(&b), a, b)
+                {
+                    (Some(base), None, _, Operand::Const(_))
+                    | (None, Some(base), Operand::Const(_), _) => Some(base),
                     (Some(base), None, ..) | (None, Some(base), ..) => self.indexed(base),
                     (None, None, Operand::Const(c), Operand::Loc(..))
                     | (None, None, Operand::Loc(..), Operand::Const(c))
@@ -427,7 +435,10 @@ struct IndexedBases {
 impl IndexedBases {
     /// The scalar `v` was computed from, if any.
     fn base_of(&self, v: &Operand) -> Option<u64> {
-        self.derived.iter().find(|(loc, _)| loc == v).map(|&(_, base)| base)
+        self.derived
+            .iter()
+            .find(|(loc, _)| loc == v)
+            .map(|&(_, base)| base)
     }
 
     /// Follow one p-code op, given its output and its first two inputs.
@@ -474,8 +485,14 @@ fn decode_scalars(
     tables: Option<&mut TableUses>,
 ) -> Option<(u32, Vec<u64>)> {
     let addr = Address::new(Rc::clone(code_space), vma);
-    let mut cap = ScalarCapture { steps: tables.as_ref().map(|_| Vec::new()), ..Default::default() };
-    let len = translate.one_instruction(&mut cap, &addr).ok().filter(|&len| len > 0);
+    let mut cap = ScalarCapture {
+        steps: tables.as_ref().map(|_| Vec::new()),
+        ..Default::default()
+    };
+    let len = translate
+        .one_instruction(&mut cap, &addr)
+        .ok()
+        .filter(|&len| len > 0);
     if let Some(tables) = tables {
         tables.instruction(len.and(cap.steps.as_deref()));
     }
@@ -497,7 +514,9 @@ fn bytes_at<'d>(file: &object::File<'d>, addr: u64) -> Option<&'d [u8]> {
         let lo = sec.address();
         sec.size() != 0 && addr >= lo && addr < lo.saturating_add(sec.size())
     })?;
-    sec.data().ok()?.get(usize::try_from(addr - sec.address()).ok()?..)
+    sec.data()
+        .ok()?
+        .get(usize::try_from(addr - sec.address()).ok()?..)
 }
 
 /// If `bytes` open a NUL-terminated printable run of at least
@@ -587,15 +606,28 @@ pub(crate) fn held_pointers(file: &object::File, wanted: &[u64], code_slots: boo
 /// positive character code (9..=0x7e, the first unit of a wide string or a code
 /// table the read has run into), points back into the entries read, or lands on
 /// no string, and at least two must remain.
-pub(crate) fn relative_string_table(file: &object::File, table: u64, little_endian: bool) -> Vec<u64> {
-    let Some(bytes) = bytes_at(file, table).filter(|b| table.is_multiple_of(4) && string_len(b).is_none())
+pub(crate) fn relative_string_table(
+    file: &object::File,
+    table: u64,
+    little_endian: bool,
+) -> Vec<u64> {
+    let Some(bytes) =
+        bytes_at(file, table).filter(|b| table.is_multiple_of(4) && string_len(b).is_none())
     else {
         return Vec::new();
     };
     let mut strings: Vec<u64> = Vec::new();
-    for (k, entry) in bytes.chunks_exact(4).take(RELATIVE_TABLE_ENTRIES).enumerate() {
+    for (k, entry) in bytes
+        .chunks_exact(4)
+        .take(RELATIVE_TABLE_ENTRIES)
+        .enumerate()
+    {
         let raw = [entry[0], entry[1], entry[2], entry[3]];
-        let offset = if little_endian { i32::from_le_bytes(raw) } else { i32::from_be_bytes(raw) };
+        let offset = if little_endian {
+            i32::from_le_bytes(raw)
+        } else {
+            i32::from_be_bytes(raw)
+        };
         let value = table.wrapping_add_signed(i64::from(offset));
         let in_entries = value >= table && value < table + 4 * (k as u64 + 1);
         if offset == 0
@@ -651,7 +683,10 @@ impl DataObjects {
     /// a table of `char` rows, says nothing against the string it holds there.
     fn contradicts(&self, addr: u64, len: u64) -> bool {
         let from = self.0.partition_point(|&(lo, _)| lo < addr);
-        self.0[from..].iter().take_while(|&&(lo, _)| lo == addr).any(|&(_, size)| size != len)
+        self.0[from..]
+            .iter()
+            .take_while(|&&(lo, _)| lo == addr)
+            .any(|&(_, size)| size != len)
     }
 
     /// The furthest end of the objects up to each one, for [`Self::overlaps`].
@@ -673,10 +708,16 @@ impl DataObjects {
 
     /// [`Self::overlaps`], by an object other than one of exactly that extent.
     pub(crate) fn overlaps_other(&self, reach: &[u64], addr: u64, len: u64) -> bool {
-        self.overlapping(reach, addr, len).any(|span| span != (addr, len))
+        self.overlapping(reach, addr, len)
+            .any(|span| span != (addr, len))
     }
 
-    fn overlapping<'s>(&'s self, reach: &'s [u64], addr: u64, len: u64) -> impl Iterator<Item = (u64, u64)> + 's {
+    fn overlapping<'s>(
+        &'s self,
+        reach: &'s [u64],
+        addr: u64,
+        len: u64,
+    ) -> impl Iterator<Item = (u64, u64)> + 's {
         let end = addr.saturating_add(len);
         let upto = self.0.partition_point(|&(lo, _)| lo < end);
         (0..upto)
@@ -740,14 +781,15 @@ fn scan(
         // linear sweep), so this stays O(consts) per instruction — no global set.
         let mut emitted_for_insn: Vec<u64> = Vec::new();
         while vma < hi {
-            let (len, consts) = match decode_scalars(translate, vma, code_space, tables.as_deref_mut()) {
-                Some(r) => r,
-                None => {
-                    // Undecodable: realign by one byte (CISC linear sweep).
-                    vma += 1;
-                    continue;
-                }
-            };
+            let (len, consts) =
+                match decode_scalars(translate, vma, code_space, tables.as_deref_mut()) {
+                    Some(r) => r,
+                    None => {
+                        // Undecodable: realign by one byte (CISC linear sweep).
+                        vma += 1;
+                        continue;
+                    }
+                };
             emitted_for_insn.clear();
             for &value in &consts {
                 if !looks_like_address(value) {
@@ -766,7 +808,10 @@ fn scan(
                     continue;
                 }
                 emitted_for_insn.push(value);
-                out.push(ScalarRef { from: vma, to: value });
+                out.push(ScalarRef {
+                    from: vma,
+                    to: value,
+                });
             }
             vma += len.max(1) as u64;
         }
@@ -817,7 +862,10 @@ fn emit_facts(file: &object::File, refs: &[ScalarRef]) -> AnalysisOutput {
             .map(|n| (n, n - r.to));
         runs.push((r.to, len, neighbour));
     }
-    let mut unreferenced: Vec<u64> = runs.iter().filter_map(|&(_, _, n)| n.map(|n| n.0)).collect();
+    let mut unreferenced: Vec<u64> = runs
+        .iter()
+        .filter_map(|&(_, _, n)| n.map(|n| n.0))
+        .collect();
     if !unreferenced.is_empty() {
         unreferenced.sort_unstable();
         unreferenced.dedup();
@@ -826,7 +874,9 @@ fn emit_facts(file: &object::File, refs: &[ScalarRef]) -> AnalysisOutput {
     }
     let mut narrow: Vec<u64> = runs
         .iter()
-        .filter_map(|&(_, _, n)| n.filter(|&(n, width)| width == 2 && unreferenced.binary_search(&n).is_ok()))
+        .filter_map(|&(_, _, n)| {
+            n.filter(|&(n, width)| width == 2 && unreferenced.binary_search(&n).is_ok())
+        })
         .map(|(n, _)| n)
         .collect();
     if !narrow.is_empty() && file.format() == BinaryFormat::Elf {
@@ -875,9 +925,13 @@ impl AnalysisPass for OperandRefsPass {
             None => return AnalysisOutput::default(),
         };
         if !ctx.arch.analysis_widestrings32 {
-            return emit_facts(ctx.file, &scan_scalar_refs(ctx.file, ctx.arch.translate(), &code_space));
+            return emit_facts(
+                ctx.file,
+                &scan_scalar_refs(ctx.file, ctx.arch.translate(), &code_space),
+            );
         }
-        let (refs, tables) = scan_scalar_refs_and_tables(ctx.file, ctx.arch.translate(), &code_space);
+        let (refs, tables) =
+            scan_scalar_refs_and_tables(ctx.file, ctx.arch.translate(), &code_space);
         let mut out = emit_facts(ctx.file, &refs);
         out.wide_strings32 = wide_strings32(ctx.file, &refs, &tables);
         out
@@ -886,7 +940,11 @@ impl AnalysisPass for OperandRefsPass {
 
 /// (kuna `widestrings32`) The 4-byte string facts of the decode's operand
 /// targets `refs` and table uses `tables` (sorted).
-fn wide_strings32(file: &object::File, refs: &[ScalarRef], tables: &[u64]) -> Vec<crate::pass::StringFact> {
+fn wide_strings32(
+    file: &object::File,
+    refs: &[ScalarRef],
+    tables: &[u64],
+) -> Vec<crate::pass::StringFact> {
     let mut targets: Vec<u64> = refs.iter().map(|r| r.to).collect();
     targets.sort_unstable();
     targets.dedup();
@@ -901,7 +959,10 @@ pub fn wide_strings32_alone(ctx: &AnalysisCtx) -> AnalysisOutput {
         return AnalysisOutput::default();
     };
     let (refs, tables) = scan_scalar_refs_and_tables(ctx.file, ctx.arch.translate(), &code_space);
-    AnalysisOutput { wide_strings32: wide_strings32(ctx.file, &refs, &tables), ..Default::default() }
+    AnalysisOutput {
+        wide_strings32: wide_strings32(ctx.file, &refs, &tables),
+        ..Default::default()
+    }
 }
 
 #[cfg(test)]
@@ -1050,38 +1111,86 @@ mod tests {
         let rdi = Operand::Loc(2, 0x38);
         // jmp qword ptr [0x4351f0 + RAX*8]
         let table = vec![
-            (OpCode::CPUI_INT_MULT, Some((unique(0x100), 8)), vec![rax, at(8)]),
-            (OpCode::CPUI_INT_ADD, Some((unique(0x180), 8)), vec![at(0x4351f0), unique(0x100)]),
-            (OpCode::CPUI_LOAD, Some((unique(0x200), 8)), vec![space, unique(0x180)]),
+            (
+                OpCode::CPUI_INT_MULT,
+                Some((unique(0x100), 8)),
+                vec![rax, at(8)],
+            ),
+            (
+                OpCode::CPUI_INT_ADD,
+                Some((unique(0x180), 8)),
+                vec![at(0x4351f0), unique(0x100)],
+            ),
+            (
+                OpCode::CPUI_LOAD,
+                Some((unique(0x200), 8)),
+                vec![space, unique(0x180)],
+            ),
             (OpCode::CPUI_BRANCHIND, None, vec![unique(0x200)]),
         ];
         assert_eq!(bases(table), vec![0x4351f0]);
         // movzx eax, word ptr [RDI + RDI*1 + 0x435248]
         let map = vec![
-            (OpCode::CPUI_INT_MULT, Some((unique(0x100), 8)), vec![rdi, at(1)]),
-            (OpCode::CPUI_INT_ADD, Some((unique(0x180), 8)), vec![rdi, unique(0x100)]),
-            (OpCode::CPUI_INT_ADD, Some((unique(0x200), 8)), vec![unique(0x180), at(0x435248)]),
-            (OpCode::CPUI_LOAD, Some((unique(0x280), 2)), vec![space, unique(0x200)]),
+            (
+                OpCode::CPUI_INT_MULT,
+                Some((unique(0x100), 8)),
+                vec![rdi, at(1)],
+            ),
+            (
+                OpCode::CPUI_INT_ADD,
+                Some((unique(0x180), 8)),
+                vec![rdi, unique(0x100)],
+            ),
+            (
+                OpCode::CPUI_INT_ADD,
+                Some((unique(0x200), 8)),
+                vec![unique(0x180), at(0x435248)],
+            ),
+            (
+                OpCode::CPUI_LOAD,
+                Some((unique(0x280), 2)),
+                vec![space, unique(0x200)],
+            ),
             (OpCode::CPUI_INT_ZEXT, Some((rax, 4)), vec![unique(0x280)]),
         ];
         assert_eq!(bases(map), vec![0x435248]);
         // movzx eax, byte ptr [RDI + 0x405048]: a byte array may be a string.
         let bytes = vec![
-            (OpCode::CPUI_INT_ADD, Some((unique(0x100), 8)), vec![rdi, at(0x405048)]),
-            (OpCode::CPUI_LOAD, Some((unique(0x180), 1)), vec![space, unique(0x100)]),
+            (
+                OpCode::CPUI_INT_ADD,
+                Some((unique(0x100), 8)),
+                vec![rdi, at(0x405048)],
+            ),
+            (
+                OpCode::CPUI_LOAD,
+                Some((unique(0x180), 1)),
+                vec![space, unique(0x100)],
+            ),
         ];
         assert!(bases(bytes).is_empty());
         // mov rax, qword ptr [0x402000]: no index.
         let absolute = vec![(OpCode::CPUI_LOAD, Some((rax, 8)), vec![space, at(0x402000)])];
         assert!(bases(absolute).is_empty());
         // lea rdi, [RAX + 0x402000]: no load.
-        let lea = vec![(OpCode::CPUI_INT_ADD, Some((rdi, 8)), vec![rax, at(0x402000)])];
+        let lea = vec![(
+            OpCode::CPUI_INT_ADD,
+            Some((rdi, 8)),
+            vec![rax, at(0x402000)],
+        )];
         assert!(bases(lea).is_empty());
         // A location overwritten before the load no longer carries the base.
         let killed = vec![
-            (OpCode::CPUI_INT_ADD, Some((unique(0x100), 8)), vec![rdi, at(0x405048)]),
+            (
+                OpCode::CPUI_INT_ADD,
+                Some((unique(0x100), 8)),
+                vec![rdi, at(0x405048)],
+            ),
             (OpCode::CPUI_COPY, Some((unique(0x100), 8)), vec![rax]),
-            (OpCode::CPUI_LOAD, Some((unique(0x180), 8)), vec![space, unique(0x100)]),
+            (
+                OpCode::CPUI_LOAD,
+                Some((unique(0x180), 8)),
+                vec![space, unique(0x100)],
+            ),
         ];
         assert!(bases(killed).is_empty());
     }
@@ -1108,27 +1217,62 @@ mod tests {
         let unique = |off: u64| Operand::Loc(3, off);
         let at = Operand::Const;
         let space = at(0x1234_5678);
-        let (rax, rcx, rdi) = (Operand::Loc(2, 0), Operand::Loc(2, 8), Operand::Loc(2, 0x38));
+        let (rax, rcx, rdi) = (
+            Operand::Loc(2, 0),
+            Operand::Loc(2, 8),
+            Operand::Loc(2, 0x38),
+        );
         let lea = |reg, addr| vec![(OpCode::CPUI_COPY, Some((reg, 8)), vec![at(addr)])];
         // lea rcx,[rip+table]; mov eax,[rcx+rax*4]
         let load = vec![
-            (OpCode::CPUI_INT_MULT, Some((unique(0x100), 8)), vec![rax, at(4)]),
-            (OpCode::CPUI_INT_ADD, Some((unique(0x180), 8)), vec![rcx, unique(0x100)]),
-            (OpCode::CPUI_LOAD, Some((rax, 4)), vec![space, unique(0x180)]),
+            (
+                OpCode::CPUI_INT_MULT,
+                Some((unique(0x100), 8)),
+                vec![rax, at(4)],
+            ),
+            (
+                OpCode::CPUI_INT_ADD,
+                Some((unique(0x180), 8)),
+                vec![rcx, unique(0x100)],
+            ),
+            (
+                OpCode::CPUI_LOAD,
+                Some((rax, 4)),
+                vec![space, unique(0x180)],
+            ),
         ];
         assert_eq!(tables(vec![lea(rcx, 0x20a0), load.clone()]), [0x20a0]);
         // lea rdx,[rip+table]; mov edx,[rcx+rdx*1]: the address as the index.
         let scaled = vec![
-            (OpCode::CPUI_INT_MULT, Some((unique(0x100), 8)), vec![rcx, at(1)]),
-            (OpCode::CPUI_INT_ADD, Some((unique(0x180), 8)), vec![rax, unique(0x100)]),
-            (OpCode::CPUI_LOAD, Some((rax, 4)), vec![space, unique(0x180)]),
+            (
+                OpCode::CPUI_INT_MULT,
+                Some((unique(0x100), 8)),
+                vec![rcx, at(1)],
+            ),
+            (
+                OpCode::CPUI_INT_ADD,
+                Some((unique(0x180), 8)),
+                vec![rax, unique(0x100)],
+            ),
+            (
+                OpCode::CPUI_LOAD,
+                Some((rax, 4)),
+                vec![space, unique(0x180)],
+            ),
         ];
         assert_eq!(tables(vec![lea(rcx, 0x3b7a8), scaled]), [0x3b7a8]);
         // lea rdi,[rip+rows]; add rdi,rax: a row of a table, passed on.
         let add = vec![(OpCode::CPUI_INT_ADD, Some((rdi, 8)), vec![rdi, rax])];
         assert_eq!(tables(vec![lea(rdi, 0x2060), add.clone()]), [0x2060]);
         // lea rdi,[rax+0x402100] in one instruction.
-        assert_eq!(tables(vec![vec![(OpCode::CPUI_INT_ADD, Some((rdi, 8)), vec![rax, at(0x402100)])]]), [0x402100]);
+        assert_eq!(
+            tables(vec![vec![(
+                OpCode::CPUI_INT_ADD,
+                Some((rdi, 8)),
+                vec![rax, at(0x402100)]
+            )]]),
+            [0x402100]
+        );
         // lea rdi,[rip+lit]; add rdi,4; call: a literal and its tail.
         let tail = vec![(OpCode::CPUI_INT_ADD, Some((rdi, 8)), vec![rdi, at(4)])];
         let call = vec![(OpCode::CPUI_CALL, None, vec![at(0x1130)])];
@@ -1136,7 +1280,10 @@ mod tests {
         // A call or a conditional branch keeps the address; a jump, an
         // overwrite or a window of instructions forgets it.
         let cbranch = vec![(OpCode::CPUI_CBRANCH, None, vec![at(0x1200), unique(0x500)])];
-        assert_eq!(tables(vec![lea(rcx, 0x20a0), call.clone(), cbranch, load.clone()]), [0x20a0]);
+        assert_eq!(
+            tables(vec![lea(rcx, 0x20a0), call.clone(), cbranch, load.clone()]),
+            [0x20a0]
+        );
         let jump = vec![(OpCode::CPUI_BRANCH, None, vec![at(0x1130)])];
         assert!(tables(vec![lea(rdi, 0x20bc), jump, add.clone()]).is_empty());
         let other = vec![(OpCode::CPUI_COPY, Some((rcx, 8)), vec![rax])];
@@ -1157,11 +1304,20 @@ mod tests {
     /// it plants nothing.
     #[test]
     fn a_pointer_table_target_is_not_planted() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/ptrslot_gcc_O1_x86_64");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/ptrslot_gcc_O1_x86_64"
+        );
         let bytes = std::fs::read(path).expect("read ptrslot fixture");
         let file = object::File::parse(bytes.as_slice()).expect("parse ptrslot");
         assert_eq!(bytes_at(&file, 0x405020).and_then(string_len), Some(4));
-        let out = emit_facts(&file, &[ScalarRef { from: 0x404280, to: 0x405020 }]);
+        let out = emit_facts(
+            &file,
+            &[ScalarRef {
+                from: 0x404280,
+                to: 0x405020,
+            }],
+        );
         assert!(out.strings.is_empty() && out.readonly.is_empty());
     }
 
@@ -1178,7 +1334,10 @@ mod tests {
         assert!(heads_wide_array(ints, 0x402010, &[0x402010]));
         assert!(!heads_wide_array(ints, 0x402010, &[0x402010, 0x402014]));
         assert_eq!(wide_element_neighbour(ints, 0x402012), None);
-        assert_eq!(wide_element_neighbour(b"h\0\0\0e\0\0\0l\0\0\0", 0x2004), Some(0x2008));
+        assert_eq!(
+            wide_element_neighbour(b"h\0\0\0e\0\0\0l\0\0\0", 0x2004),
+            Some(0x2008)
+        );
         assert_eq!(wide_element_neighbour(b"h\0\0\0\0\0\0\0", 0x2000), None);
         assert_eq!(wide_element_neighbour(b"h\0\0\0%s\n\0", 0x2000), None);
         assert_eq!(wide_element_neighbour(b"hi\0\0j\0\0\0", 0x2000), None);
@@ -1201,13 +1360,21 @@ mod tests {
         let gcc = [0x402060, 0x402050, 0x402048, 0x402010, 0x402004, 0x402006];
         let clang = [0x2010, 0x2020, 0x2028, 0x203c, 0x2030, 0x2039];
         for (fixture, targets, want) in [
-            ("widecodes_gcc_O1_x86_64", gcc, vec![(0x402004, 2), (0x402006, 2)]),
+            (
+                "widecodes_gcc_O1_x86_64",
+                gcc,
+                vec![(0x402004, 2), (0x402006, 2)],
+            ),
             (
                 "widecodes_gcc_O1_stripped_x86_64",
                 gcc,
                 vec![(0x402048, 2), (0x402004, 2), (0x402006, 2)],
             ),
-            ("widecodes_clang_O2_x86_64", clang, vec![(0x2030, 2), (0x2039, 2)]),
+            (
+                "widecodes_clang_O2_x86_64",
+                clang,
+                vec![(0x2030, 2), (0x2039, 2)],
+            ),
             (
                 "widecodes_clang_O2_stripped_x86_64",
                 clang,
@@ -1217,8 +1384,10 @@ mod tests {
             let path = format!("{}/tests/fixtures/{fixture}", env!("CARGO_MANIFEST_DIR"));
             let bytes = std::fs::read(path).expect("read widecodes fixture");
             let file = object::File::parse(bytes.as_slice()).expect("parse widecodes");
-            let refs: Vec<ScalarRef> =
-                targets.into_iter().map(|to| ScalarRef { from: 0x401106, to }).collect();
+            let refs: Vec<ScalarRef> = targets
+                .into_iter()
+                .map(|to| ScalarRef { from: 0x401106, to })
+                .collect();
             let out = emit_facts(&file, &refs);
             let planted: Vec<(u64, u32)> = out.strings.iter().map(|f| (f.addr, f.len)).collect();
             assert_eq!(planted, want, "{fixture}");
@@ -1231,8 +1400,16 @@ mod tests {
     #[test]
     fn pointers_the_image_holds() {
         for (fixture, held, not_held) in [
-            ("widecodes_gcc_O1_stripped_x86_64", [0x402008, 0x40200a, 0x40200c], 0x402010),
-            ("widecodes_clang_O2_stripped_x86_64", [0x2032, 0x2034, 0x2036], 0x203c),
+            (
+                "widecodes_gcc_O1_stripped_x86_64",
+                [0x402008, 0x40200a, 0x40200c],
+                0x402010,
+            ),
+            (
+                "widecodes_clang_O2_stripped_x86_64",
+                [0x2032, 0x2034, 0x2036],
+                0x203c,
+            ),
         ] {
             let path = format!("{}/tests/fixtures/{fixture}", env!("CARGO_MANIFEST_DIR"));
             let bytes = std::fs::read(path).expect("read widecodes fixture");
@@ -1260,14 +1437,20 @@ mod tests {
         let bytes = fixture_bytes("widecodes_switch_clang_O2_x86_64");
         let file = object::File::parse(bytes.as_slice()).expect("parse widecodes_switch");
         assert!(held_pointers(&file, &[0x2006], true).is_empty());
-        assert_eq!(relative_string_table(&file, 0x2010, true), [0x2004, 0x2006, 0x2008, 0x200a, 0x200c]);
+        assert_eq!(
+            relative_string_table(&file, 0x2010, true),
+            [0x2004, 0x2006, 0x2008, 0x200a, 0x200c]
+        );
         assert!(relative_string_table(&file, 0x2004, true).is_empty());
         let refs: Vec<ScalarRef> = [0x2010, 0x2004, 0x200e]
             .into_iter()
             .map(|to| ScalarRef { from: 0x1148, to })
             .collect();
-        let planted: Vec<(u64, u32)> =
-            emit_facts(&file, &refs).strings.iter().map(|f| (f.addr, f.len)).collect();
+        let planted: Vec<(u64, u32)> = emit_facts(&file, &refs)
+            .strings
+            .iter()
+            .map(|f| (f.addr, f.len))
+            .collect();
         assert_eq!(planted, [(0x2004, 2), (0x200e, 2)]);
     }
 
@@ -1282,7 +1465,10 @@ mod tests {
         let codes = fixture_bytes("widecodes_gcc_O1_stripped_x86_64");
         let codes = object::File::parse(codes.as_slice()).expect("parse widecodes");
         for not_a_table in [0x402010, 0x402048, 0x402050, 0x402060] {
-            assert!(relative_string_table(&codes, not_a_table, true).is_empty(), "{not_a_table:#x}");
+            assert!(
+                relative_string_table(&codes, not_a_table, true).is_empty(),
+                "{not_a_table:#x}"
+            );
         }
         let rec = fixture_bytes("widecodes_rec_gcc_O2_x86_64");
         let rec = object::File::parse(rec.as_slice()).expect("parse widecodes_rec");
@@ -1293,9 +1479,13 @@ mod tests {
         let over = object::File::parse(over.as_slice()).expect("parse widecodes_overread");
         let entries: Vec<u64> = (0..7).map(|k| 0x2004 + 2 * k).collect();
         assert_eq!(relative_string_table(&over, 0x2014, true), entries);
-        let refs = [0x2014, 0x2012, 0x2030, 0x2050, 0x2060].map(|to| ScalarRef { from: 0x1148, to });
-        let planted: Vec<(u64, u32)> =
-            emit_facts(&over, &refs).strings.iter().map(|f| (f.addr, f.len)).collect();
+        let refs =
+            [0x2014, 0x2012, 0x2030, 0x2050, 0x2060].map(|to| ScalarRef { from: 0x1148, to });
+        let planted: Vec<(u64, u32)> = emit_facts(&over, &refs)
+            .strings
+            .iter()
+            .map(|f| (f.addr, f.len))
+            .collect();
         assert_eq!(planted, [(0x2012, 2)]);
     }
 
@@ -1307,9 +1497,15 @@ mod tests {
     fn an_object_at_the_neighbour_is_not_the_second_element() {
         let bytes = fixture_bytes("widecodes_tail_gcc_O2_x86_64");
         let file = object::File::parse(bytes.as_slice()).expect("parse widecodes_tail");
-        let refs = [ScalarRef { from: 0x401126, to: 0x402004 }];
-        let planted: Vec<(u64, u32)> =
-            emit_facts(&file, &refs).strings.iter().map(|f| (f.addr, f.len)).collect();
+        let refs = [ScalarRef {
+            from: 0x401126,
+            to: 0x402004,
+        }];
+        let planted: Vec<(u64, u32)> = emit_facts(&file, &refs)
+            .strings
+            .iter()
+            .map(|f| (f.addr, f.len))
+            .collect();
         assert_eq!(planted, [(0x402004, 2)]);
     }
 
@@ -1368,12 +1564,15 @@ mod tests {
         );
         // The "Username: " literal @ 0x400915 lands in a readonly section.
         assert!(
-            secs.iter().any(|s| s.contains(0x400915) && s.is_readonly_data()),
+            secs.iter()
+                .any(|s| s.contains(0x400915) && s.is_readonly_data()),
             "0x400915 (\"Username: \") must be in a readonly-data section"
         );
         // A .text address must NOT classify as readonly data.
         assert!(
-            !secs.iter().any(|s| s.contains(0x400720) && s.is_readonly_data() && !s.is_got_or_plt),
+            !secs
+                .iter()
+                .any(|s| s.contains(0x400720) && s.is_readonly_data() && !s.is_got_or_plt),
             "a .text address must not be a readonly-data target"
         );
     }

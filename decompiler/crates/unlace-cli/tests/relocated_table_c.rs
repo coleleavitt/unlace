@@ -2,9 +2,9 @@
 
 use crate::common;
 use common::process;
-use unlace_analysis::loadimage_object::ObjectLoadImage;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use unlace_analysis::loadimage_object::ObjectLoadImage;
 
 fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

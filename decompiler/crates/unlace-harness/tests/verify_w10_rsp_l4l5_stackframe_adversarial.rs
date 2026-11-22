@@ -26,7 +26,10 @@ use unlace_harness::testfunction::run_test_files_with_specs;
 static RENDER_LOCK: Mutex<()> = Mutex::new(());
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn x86_64_sla() -> PathBuf {
@@ -103,9 +106,7 @@ fn rsp_l4l5_switchhide_andv1_shares_named_symbol_with_body() {
     // The raw spacebase intermediates must be finished (no leaked PTRSUB / RSP arg /
     // `$$undef` placeholder).
     assert!(
-        !body.contains("PTRSUB(RSP")
-            && !body.contains("PTRSUB(v1")
-            && !body.contains("$$undef"),
+        !body.contains("PTRSUB(RSP") && !body.contains("PTRSUB(v1") && !body.contains("$$undef"),
         "no raw `PTRSUB(...)` / `$$undef` placeholder may leak into the render:\n{body}"
     );
 }

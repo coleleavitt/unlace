@@ -30,7 +30,10 @@ fn removable(data: &Funcdata, block: BlockId) -> bool {
         return false;
     };
     data.bb_op_tail(block) == Some(op)
-        && data.obank().get(op).is_some_and(|op| op.code() == OpCode::CPUI_BRANCH)
+        && data
+            .obank()
+            .get(op)
+            .is_some_and(|op| op.code() == OpCode::CPUI_BRANCH)
 }
 
 fn follow(data: &Funcdata, mut block: BlockId) -> (BlockId, Vec<BlockId>) {
@@ -53,7 +56,9 @@ fn barrier_forwarders(data: &Funcdata) -> Option<Vec<BlockId>> {
         if data.bblocks_ref().block(guard).size_out() != 2 {
             continue;
         }
-        let Some(tail) = data.bb_op_tail(guard) else { continue };
+        let Some(tail) = data.bb_op_tail(guard) else {
+            continue;
+        };
         if data.obank().get(tail).expect("gojumpchain guard").code() != OpCode::CPUI_CBRANCH {
             continue;
         }
@@ -72,7 +77,12 @@ fn barrier_forwarders(data: &Funcdata) -> Option<Vec<BlockId>> {
             }
             let calls: Vec<_> = (0..data.num_calls())
                 .map(|i| data.get_call_specs(i))
-                .filter(|call| data.obank().get(call.get_op()).and_then(|op| op.get_parent()) == Some(cold))
+                .filter(|call| {
+                    data.obank()
+                        .get(call.get_op())
+                        .and_then(|op| op.get_parent())
+                        == Some(cold)
+                })
                 .collect();
             if calls.len() != 1
                 || !crate::kuna_gowritebarrier::is_write_barrier_name(calls[0].get_name())

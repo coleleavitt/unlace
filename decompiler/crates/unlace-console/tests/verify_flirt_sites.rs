@@ -20,16 +20,24 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 const ENTRIES: [u64; 4] = [0x401000, 0x401020, 0x401040, 0x401060];
 
 fn fixtures() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../tests/fixtures").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../tests/fixtures")
+        .canonicalize()
+        .unwrap()
 }
 
 fn name_at(prog: &ConsoleProgram, vma: u64) -> String {
-    let space = prog.arch().manage().get_default_code_space().unwrap().clone();
+    let space = prog
+        .arch()
+        .manage()
+        .get_default_code_space()
+        .unwrap()
+        .clone();
     let addr = Address::new(Rc::clone(&space), vma);
     match prog.arch().symboltab.find_function_across_scopes(&addr) {
         Some((sid, _)) => prog.arch().symboltab.symbol(sid).get_name().to_string(),
@@ -52,12 +60,17 @@ fn names_with(flirt: &str, fid: &str, fid_db: Option<PathBuf>) -> Vec<String> {
         unsafe { std::env::set_var("kuna_fid_db", db) };
     }
     let bin = dir.join("fid/callees/prog");
-    let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &[specs.to_str().unwrap().to_string()])
-        .expect("bootstrap fixture with built processor specs");
+    let mut prog = bootstrap_from_object(
+        bin.to_str().unwrap(),
+        "",
+        &[specs.to_str().unwrap().to_string()],
+    )
+    .expect("bootstrap fixture with built processor specs");
     for (k, v) in [("listing", "on"), ("flirt", flirt), ("fid", fid)] {
         prog.arch_mut().set_kuna_option(k, v).expect("option flips");
     }
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     ENTRIES.iter().map(|&a| name_at(&prog, a)).collect()
 }
 
@@ -65,17 +78,42 @@ fn names_with(flirt: &str, fid: &str, fid_db: Option<PathBuf>) -> Vec<String> {
 #[test]
 fn sites_name_prefix_modules_and_fid_disagreement_names_nothing() {
     let off = names("off", None);
-    assert!(off.iter().all(|n| n.starts_with("sub_")), "off: nothing is named, got {off:?}");
-    assert_eq!(names("on", None), ["scale_a", "scale_b", "wrap_a", "wrap_b"]);
-    assert_eq!(names("on", Some("lib.fid")), ["scale_a", "scale_b", "wrap_a", "wrap_b"]);
-    assert_eq!(names("on", Some("lib_alt.fid")), ["scale_a", "sub_401020", "wrap_a", "wrap_b"]);
+    assert!(
+        off.iter().all(|n| n.starts_with("sub_")),
+        "off: nothing is named, got {off:?}"
+    );
+    assert_eq!(
+        names("on", None),
+        ["scale_a", "scale_b", "wrap_a", "wrap_b"]
+    );
+    assert_eq!(
+        names("on", Some("lib.fid")),
+        ["scale_a", "scale_b", "wrap_a", "wrap_b"]
+    );
+    assert_eq!(
+        names("on", Some("lib_alt.fid")),
+        ["scale_a", "sub_401020", "wrap_a", "wrap_b"]
+    );
 
     use unlace_analysis::fid::db::FidDb;
     let alt = fixtures().join("fid/callees/lib_alt.fid");
-    let mut records: Vec<_> = FidDb::load(&std::fs::read(alt).unwrap()).unwrap().records().into_iter().cloned().collect();
-    records.iter_mut().find(|r| r.name == "alt_scale").unwrap().specific_hash ^= 1;
+    let mut records: Vec<_> = FidDb::load(&std::fs::read(alt).unwrap())
+        .unwrap()
+        .records()
+        .into_iter()
+        .cloned()
+        .collect();
+    records
+        .iter_mut()
+        .find(|r| r.name == "alt_scale")
+        .unwrap()
+        .specific_hash ^= 1;
     let held = std::env::temp_dir().join(format!("kuna-fid-held-{}.fid", std::process::id()));
-    std::fs::write(&held, FidDb::from_records("x86:LE:64:default", "gcc", records).serialize()).unwrap();
+    std::fs::write(
+        &held,
+        FidDb::from_records("x86:LE:64:default", "gcc", records).serialize(),
+    )
+    .unwrap();
     let strict = names_with("on", "strict", Some(held.clone()));
     let _ = std::fs::remove_file(&held);
     assert_eq!(strict, ["scale_a", "sub_401020", "wrap_a", "wrap_b"]);

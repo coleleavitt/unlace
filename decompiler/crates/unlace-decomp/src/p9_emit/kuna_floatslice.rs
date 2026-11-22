@@ -1,10 +1,10 @@
 //! A SUBPIECE into a float extracts storage bits rather than converting a number.
 
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use unlace_num::opcodes::OpCode;
 use std::rc::Rc;
+use unlace_num::opcodes::OpCode;
 
 pub(crate) struct Slice {
     pub input: VarnodeId,

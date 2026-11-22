@@ -50,7 +50,10 @@ impl KernelcacheChoice {
     /// `auto`. Reads only the environment; a load in progress reads
     /// [`Self::in_force`].
     pub fn from_env() -> Self {
-        std::env::var(KERNELCACHE_ENV).ok().and_then(|v| Self::parse(&v)).unwrap_or_default()
+        std::env::var(KERNELCACHE_ENV)
+            .ok()
+            .and_then(|v| Self::parse(&v))
+            .unwrap_or_default()
     }
 }
 
@@ -76,8 +79,14 @@ mod tests {
     #[test]
     fn parses_auto_off_and_entry_ids() {
         assert_eq!(KernelcacheChoice::parse(""), Some(KernelcacheChoice::Auto));
-        assert_eq!(KernelcacheChoice::parse(" ON "), Some(KernelcacheChoice::Auto));
-        assert_eq!(KernelcacheChoice::parse("Off"), Some(KernelcacheChoice::Off));
+        assert_eq!(
+            KernelcacheChoice::parse(" ON "),
+            Some(KernelcacheChoice::Auto)
+        );
+        assert_eq!(
+            KernelcacheChoice::parse("Off"),
+            Some(KernelcacheChoice::Off)
+        );
         assert_eq!(
             KernelcacheChoice::parse("com.apple.iokit.IOSurface"),
             Some(KernelcacheChoice::Entry("com.apple.iokit.IOSurface".into()))

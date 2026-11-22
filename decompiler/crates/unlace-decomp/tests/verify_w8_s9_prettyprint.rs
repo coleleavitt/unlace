@@ -112,7 +112,10 @@ fn adv3_short_break_heuristic_fills_to_width() {
     let out = run(20, |e| {
         e.begin_document();
         e.begin_statement(&NONE);
-        for (i, w) in ["aa", "bb", "cc", "dd", "ee", "ff", "gg"].iter().enumerate() {
+        for (i, w) in ["aa", "bb", "cc", "dd", "ee", "ff", "gg"]
+            .iter()
+            .enumerate()
+        {
             if i != 0 {
                 e.spaces(1, 0);
             }

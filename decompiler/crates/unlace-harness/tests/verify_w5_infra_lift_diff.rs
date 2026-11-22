@@ -24,7 +24,10 @@ use std::path::PathBuf;
 use unlace_harness::liftdiff::{self, BlockRec, DiffResult, OpClass, OpRec, StructModel};
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// F1 FIXED, against the committed corpus oracle: `gh6990-returnpair.b2.txt` is a
@@ -34,14 +37,21 @@ fn repo_root() -> PathBuf {
 /// Before the repair this collapsed to 2 keyed blocks / 31 ops (the spurious PASS).
 #[test]
 fn gh6990_fixture_keeps_all_five_blocks_f1() {
-    let fix = repo_root().join("decompiler/crates/unlace-harness/tests/fixtures/gh6990-returnpair.b2.txt");
+    let fix = repo_root()
+        .join("decompiler/crates/unlace-harness/tests/fixtures/gh6990-returnpair.b2.txt");
     let text = std::fs::read_to_string(&fix).expect("read gh6990 fixture");
 
     // The fixture really has 5 `Basic Block` headers.
-    let header_count = text.lines().filter(|l| l.starts_with("Basic Block ")).count();
+    let header_count = text
+        .lines()
+        .filter(|l| l.starts_with("Basic Block "))
+        .count();
     assert_eq!(header_count, 5, "gh6990 fixture is a 5-block CFG");
     // ...and the snapshot has 211 op lines (lines whose head is `<addr>:<time>:`).
-    let op_lines = text.lines().filter(|l| l.contains(":\t") && !l.contains("[ goto ")).count();
+    let op_lines = text
+        .lines()
+        .filter(|l| l.contains(":\t") && !l.contains("[ goto "))
+        .count();
     assert_eq!(op_lines, 211, "gh6990 fixture has 211 op lines");
 
     let mut ex = 0usize;
@@ -54,7 +64,10 @@ fn gh6990_fixture_keeps_all_five_blocks_f1() {
     }
     // Two ActionConstbase tracked-context COPYs (DECOMPILE_MODE, didrestore) at the
     // entry head are excluded; everything else survives (was <50 before).
-    assert_eq!(ex, 2, "exactly the two entry-head tracked COPYs are excluded");
+    assert_eq!(
+        ex, 2,
+        "exactly the two entry-head tracked COPYs are excluded"
+    );
     assert_eq!(
         m.total_ops(),
         211 - 2,
@@ -95,8 +108,15 @@ fn dup_start_blocks_all_survive_f1() {
     // Each block keeps its OWN ops in index order (no overwrite by a same-address
     // sibling).  Block 0: the entry head strips the DECOMPILE_MODE tracked COPY
     // (time d2 > the decode time 0), leaving the add + the CBRANCH.
-    assert_eq!(ex, 1, "the single entry-head tracked COPY (time d2) is excluded");
-    assert_eq!(m.blocks[0].ops.len(), 2, "block 0: add + CBRANCH (COPY stripped)");
+    assert_eq!(
+        ex, 1,
+        "the single entry-head tracked COPY (time d2) is excluded"
+    );
+    assert_eq!(
+        m.blocks[0].ops.len(),
+        2,
+        "block 0: add + CBRANCH (COPY stripped)"
+    );
     assert_eq!(m.blocks[0].ops[0].class, OpClass::Value);
     assert_eq!(m.blocks[0].ops[1].class, OpClass::Cbranch);
     // Block 0 CBRANCHes to blocks 2 (true) and 1 (false).
@@ -105,7 +125,11 @@ fn dup_start_blocks_all_survive_f1() {
     // Block 1 (also at 0x32148) is NOT overwritten by block 2: it keeps its single
     // multiply op and falls through to block 2.
     assert_eq!(m.blocks[1].ops.len(), 1, "block 1 keeps its own single op");
-    assert_eq!(m.blocks[1].out_indices, vec![2], "block 1 falls through to block 2");
+    assert_eq!(
+        m.blocks[1].out_indices,
+        vec![2],
+        "block 1 falls through to block 2"
+    );
 
     // Block 2 (third block at 0x32148) keeps its 2 ops and gotos block 3.
     assert_eq!(m.blocks[2].ops.len(), 2);
@@ -186,7 +210,10 @@ fn entry_head_strip_is_entry_block_only_f2() {
     let m = liftdiff::parse_cpp_b2(snap, &mut ex).unwrap();
     // Exactly the genuine block-0 tracked COPY is excluded (the strip never touched
     // block 1, even though block 1 shares the entry address 0x32148).
-    assert_eq!(ex, 1, "only block-0's tracked COPY is excluded (entry-block-only)");
+    assert_eq!(
+        ex, 1,
+        "only block-0's tracked COPY is excluded (entry-block-only)"
+    );
     assert_eq!(m.blocks.len(), 2);
     // Block 0: COPY stripped -> the add + the goto remain.
     assert_eq!(m.blocks[0].ops.len(), 2);
@@ -282,8 +309,16 @@ fn identical_models_pass() {
             start: 0,
             stop: 4,
             ops: vec![
-                OpRec { addr: 0, class: OpClass::Value, has_output: true },
-                OpRec { addr: 4, class: OpClass::Return, has_output: false },
+                OpRec {
+                    addr: 0,
+                    class: OpClass::Value,
+                    has_output: true,
+                },
+                OpRec {
+                    addr: 4,
+                    class: OpClass::Return,
+                    has_output: false,
+                },
             ],
             out_indices: vec![],
         }],
@@ -356,8 +391,16 @@ fn callind_misclass_diverges_never_spurious_pass_r2f6() {
             start: 0x410064,
             stop: 0x410068,
             ops: vec![
-                OpRec { addr: 0x410064, class: OpClass::Callind, has_output: false },
-                OpRec { addr: 0x410068, class: OpClass::Return, has_output: false },
+                OpRec {
+                    addr: 0x410064,
+                    class: OpClass::Callind,
+                    has_output: false,
+                },
+                OpRec {
+                    addr: 0x410068,
+                    class: OpClass::Return,
+                    has_output: false,
+                },
             ],
             out_indices: vec![],
         }],
@@ -417,7 +460,11 @@ fn entry_head_strip_declines_without_a_sibling_op_r2() {
         "no sibling op at the entry address -> the strip declines (conservative, \
          no over-strip)"
     );
-    assert_eq!(m.blocks[0].ops.len(), 3, "all three ops survive (nothing stripped)");
+    assert_eq!(
+        m.blocks[0].ops.len(),
+        3,
+        "all three ops survive (nothing stripped)"
+    );
 }
 
 /// R2: the strip stops at the FIRST head op whose time is not the latest at the
@@ -448,7 +495,11 @@ fn entry_head_strip_stops_at_first_decode_op_r2() {
         "a buried higher-time entry-addr op (time 9 > head time 5) defeats the \
          leading strip: the head op is removed only when STRICTLY the latest"
     );
-    assert_eq!(m.blocks[0].ops.len(), 4, "nothing stripped (head op is not the latest)");
+    assert_eq!(
+        m.blocks[0].ops.len(),
+        4,
+        "nothing stripped (head op is not the latest)"
+    );
 }
 
 /// R2: out-edge target indices are compared ORDER-INSENSITIVELY (sorted+deduped on
@@ -463,11 +514,27 @@ fn out_edges_are_order_insensitive_r2() {
                 index: 0,
                 start: 0,
                 stop: 4,
-                ops: vec![OpRec { addr: 0, class: OpClass::Cbranch, has_output: false }],
+                ops: vec![OpRec {
+                    addr: 0,
+                    class: OpClass::Cbranch,
+                    has_output: false,
+                }],
                 out_indices: vec![1, 2],
             },
-            BlockRec { index: 1, start: 8, stop: 8, ops: vec![], out_indices: vec![] },
-            BlockRec { index: 2, start: 0xc, stop: 0xc, ops: vec![], out_indices: vec![] },
+            BlockRec {
+                index: 1,
+                start: 8,
+                stop: 8,
+                ops: vec![],
+                out_indices: vec![],
+            },
+            BlockRec {
+                index: 2,
+                start: 0xc,
+                stop: 0xc,
+                ops: vec![],
+                out_indices: vec![],
+            },
         ],
     };
     let mut b = a.clone();

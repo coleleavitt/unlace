@@ -6,9 +6,9 @@
 //! `%s` (from `dimIndex` or the index). Registers that overlap an earlier one
 //! (SVD alternates) are dropped from the structure; gaps become reserved bytes.
 
-use unlace_base::xml::{xml_tree, Element};
 use std::collections::BTreeMap;
 use std::rc::Rc;
+use unlace_base::xml::{Element, xml_tree};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Register {
@@ -54,7 +54,10 @@ fn number(s: &str) -> Option<u64> {
 }
 
 fn c_name(s: &str) -> String {
-    let mut out: String = s.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
+    let mut out: String = s
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect();
     if out.chars().next().is_none_or(|c| c.is_ascii_digit()) {
         out.insert(0, '_');
     }
@@ -66,7 +69,9 @@ fn expand(e: &Element, name: &str, offset: u64) -> Vec<(String, u64)> {
     let Some(dim) = text(e, "dim").and_then(|d| number(&d)) else {
         return vec![(name.to_string(), offset)];
     };
-    let step = text(e, "dimIncrement").and_then(|d| number(&d)).unwrap_or(0);
+    let step = text(e, "dimIncrement")
+        .and_then(|d| number(&d))
+        .unwrap_or(0);
     let index: Vec<String> = match text(e, "dimIndex") {
         Some(list) if list.contains('-') && !list.contains(',') => {
             let (a, b) = list.split_once('-').unwrap_or_default();
@@ -80,8 +85,14 @@ fn expand(e: &Element, name: &str, offset: u64) -> Vec<(String, u64)> {
     };
     (0..dim.min(1024))
         .map(|i| {
-            let tag = index.get(i as usize).cloned().unwrap_or_else(|| i.to_string());
-            (name.replace("[%s]", &tag).replace("%s", &tag), offset + i * step)
+            let tag = index
+                .get(i as usize)
+                .cloned()
+                .unwrap_or_else(|| i.to_string());
+            (
+                name.replace("[%s]", &tag).replace("%s", &tag),
+                offset + i * step,
+            )
         })
         .collect()
 }
@@ -92,15 +103,25 @@ fn registers(parent: &Element, prefix: &str, base: u64, size_bits: u32, out: &mu
         if e.get_name() != "register" && !is_cluster {
             continue;
         }
-        let Some(name) = text(e, "name") else { continue };
-        let Some(offset) = text(e, "addressOffset").and_then(|o| number(&o)) else { continue };
-        let size = text(e, "size").and_then(|s| number(&s)).map_or(size_bits, |s| s as u32);
+        let Some(name) = text(e, "name") else {
+            continue;
+        };
+        let Some(offset) = text(e, "addressOffset").and_then(|o| number(&o)) else {
+            continue;
+        };
+        let size = text(e, "size")
+            .and_then(|s| number(&s))
+            .map_or(size_bits, |s| s as u32);
         for (n, off) in expand(e, &name, base + offset) {
             let full = format!("{prefix}{}", c_name(&n));
             if is_cluster {
                 registers(e, &format!("{full}_"), off, size, out);
             } else {
-                out.push(Register { name: full, offset: off, size: (size / 8).max(1) });
+                out.push(Register {
+                    name: full,
+                    offset: off,
+                    size: (size / 8).max(1),
+                });
             }
         }
     }
@@ -111,20 +132,42 @@ pub fn parse(bytes: &[u8]) -> Result<Device, String> {
     let doc = xml_tree(bytes).map_err(|e| format!("SVD: {}", e.explain()))?;
     let root = doc.get_root();
     if root.get_name() != "device" {
-        return Err(format!("SVD: root element is <{}>, not <device>", root.get_name()));
+        return Err(format!(
+            "SVD: root element is <{}>, not <device>",
+            root.get_name()
+        ));
     }
-    let mut dev = Device { name: text(root, "name").unwrap_or_default(), ..Device::default() };
+    let mut dev = Device {
+        name: text(root, "name").unwrap_or_default(),
+        ..Device::default()
+    };
     let dev_size = text(root, "size").and_then(|s| number(&s)).unwrap_or(32) as u32;
-    let Some(list) = child(root, "peripherals") else { return Ok(dev) };
+    let Some(list) = child(root, "peripherals") else {
+        return Ok(dev);
+    };
     let mut by_name: BTreeMap<String, (String, Vec<Register>)> = BTreeMap::new();
-    for p in list.get_children().iter().filter(|p| p.get_name() == "peripheral") {
-        let (Some(name), Some(base)) = (text(p, "name"), text(p, "baseAddress").and_then(|b| number(&b))) else { continue };
-        let size = text(p, "size").and_then(|s| number(&s)).map_or(dev_size, |s| s as u32);
+    for p in list
+        .get_children()
+        .iter()
+        .filter(|p| p.get_name() == "peripheral")
+    {
+        let (Some(name), Some(base)) = (
+            text(p, "name"),
+            text(p, "baseAddress").and_then(|b| number(&b)),
+        ) else {
+            continue;
+        };
+        let size = text(p, "size")
+            .and_then(|s| number(&s))
+            .map_or(dev_size, |s| s as u32);
         let mut regs = Vec::new();
         if let Some(r) = child(p, "registers") {
             registers(r, "", 0, size, &mut regs);
         }
-        let derived = p.get_attribute_value("derivedFrom").ok().map(|v| String::from_utf8_lossy(v).to_string());
+        let derived = p
+            .get_attribute_value("derivedFrom")
+            .ok()
+            .map(|v| String::from_utf8_lossy(v).to_string());
         let type_name = match derived.as_ref().and_then(|d| by_name.get(d)) {
             Some((t, base_regs)) if regs.is_empty() => {
                 regs = base_regs.clone();
@@ -132,14 +175,26 @@ pub fn parse(bytes: &[u8]) -> Result<Device, String> {
             }
             _ => format!("{}_Type", c_name(&name)),
         };
-        for irq in p.get_children().iter().filter(|c| c.get_name() == "interrupt") {
-            if let (Some(n), Some(v)) = (text(irq, "name"), text(irq, "value").and_then(|v| number(&v))) {
+        for irq in p
+            .get_children()
+            .iter()
+            .filter(|c| c.get_name() == "interrupt")
+        {
+            if let (Some(n), Some(v)) = (
+                text(irq, "name"),
+                text(irq, "value").and_then(|v| number(&v)),
+            ) {
                 dev.interrupts.entry(v as u32).or_insert(c_name(&n));
             }
         }
         regs.sort_by_key(|r| r.offset);
         by_name.insert(name.clone(), (type_name.clone(), regs.clone()));
-        dev.peripherals.push(Peripheral { name: c_name(&name), base, type_name, registers: regs });
+        dev.peripherals.push(Peripheral {
+            name: c_name(&name),
+            base,
+            type_name,
+            registers: regs,
+        });
     }
     Ok(dev)
 }
@@ -147,7 +202,11 @@ pub fn parse(bytes: &[u8]) -> Result<Device, String> {
 impl Peripheral {
     /// Bytes the registers span.
     pub fn extent(&self) -> u64 {
-        self.registers.iter().map(|r| r.offset + u64::from(r.size)).max().unwrap_or(0)
+        self.registers
+            .iter()
+            .map(|r| r.offset + u64::from(r.size))
+            .max()
+            .unwrap_or(0)
     }
 
     /// `struct <type> { ... };` with reserved padding, one member per
@@ -161,7 +220,10 @@ impl Peripheral {
                 continue;
             }
             if r.offset > at {
-                body.push_str(&format!(" unsigned char _reserved{pad}[{}];", r.offset - at));
+                body.push_str(&format!(
+                    " unsigned char _reserved{pad}[{}];",
+                    r.offset - at
+                ));
                 pad += 1;
             }
             let ty = match r.size {
@@ -196,7 +258,10 @@ mod tests {
         let d = parse(SVD.as_bytes()).unwrap();
         assert_eq!(d.peripherals.len(), 2);
         let u1 = &d.peripherals[0];
-        assert_eq!(u1.c_struct(), "struct USART1_Type { unsigned int SR; unsigned int DR; unsigned char _reserved0[4]; unsigned int CR1; unsigned int CR2; };");
+        assert_eq!(
+            u1.c_struct(),
+            "struct USART1_Type { unsigned int SR; unsigned int DR; unsigned char _reserved0[4]; unsigned int CR1; unsigned int CR2; };"
+        );
         assert_eq!(u1.extent(), 0x14);
         assert_eq!(d.peripherals[1].type_name, "USART1_Type");
         assert_eq!(d.interrupts.get(&37).map(String::as_str), Some("USART1"));

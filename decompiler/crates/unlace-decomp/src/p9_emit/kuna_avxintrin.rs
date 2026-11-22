@@ -19,16 +19,30 @@ pub fn intrinsic(name: &str, size: i32) -> Option<(String, Vec<usize>)> {
         let (intr, order) = intrinsic(base, size)?;
         let (head, tail) = intr.split_once('_').and_then(|(_, r)| r.split_once('_'))?;
         let named = format!("_{head}_maskz_{tail}");
-        return Some((named, std::iter::once(0).chain(order.into_iter().map(|a| a + 1)).collect()));
+        return Some((
+            named,
+            std::iter::once(0)
+                .chain(order.into_iter().map(|a| a + 1))
+                .collect(),
+        ));
     }
     if let Some(base) = name.strip_suffix("_mask") {
         let (intr, order) = intrinsic(base, size)?;
         let (head, tail) = intr.split_once('_').and_then(|(_, r)| r.split_once('_'))?;
         let named = format!("_{head}_mask_{tail}");
-        return Some((named, [0, 1].into_iter().chain(order.into_iter().map(|a| a + 2)).collect()));
+        return Some((
+            named,
+            [0, 1]
+                .into_iter()
+                .chain(order.into_iter().map(|a| a + 2))
+                .collect(),
+        ));
     }
     let (mnem, ext) = name.rsplit_once('_')?;
-    if !matches!(ext, "avx" | "avx2" | "fma" | "avx512f" | "avx512bw" | "avx512dq" | "avx512vl" | "avx512cd") {
+    if !matches!(
+        ext,
+        "avx" | "avx2" | "fma" | "avx512f" | "avx512bw" | "avx512dq" | "avx512vl" | "avx512cd"
+    ) {
         return None;
     }
     let w = match size {
@@ -75,7 +89,13 @@ pub fn intrinsic(name: &str, size: i32) -> Option<(String, Vec<usize>)> {
     ] {
         for ty in ["ps", "pd"] {
             if m == format!("{op}{ty}") {
-                let n = if matches!(op, "sqrt" | "rcp" | "rsqrt") { 1 } else if matches!(op, "blendv" | "blend" | "shuf") { 3 } else { 2 };
+                let n = if matches!(op, "sqrt" | "rcp" | "rsqrt") {
+                    1
+                } else if matches!(op, "blendv" | "blend" | "shuf") {
+                    3
+                } else {
+                    2
+                };
                 let n = if op == "permil" { 2 } else { n };
                 return Some((mm(intr, ty), ident(n)));
             }
@@ -90,7 +110,10 @@ pub fn intrinsic(name: &str, size: i32) -> Option<(String, Vec<usize>)> {
         'q' => Some("64"),
         _ => None,
     };
-    let split = |pre: &str| -> Option<&str> { p.strip_prefix(pre).and_then(|r| (r.len() == 1).then_some(r)) };
+    let split = |pre: &str| -> Option<&str> {
+        p.strip_prefix(pre)
+            .and_then(|r| (r.len() == 1).then_some(r))
+    };
     let bits = |r: &str| elem(r.chars().next()?);
     for (pre, op, ty) in [
         ("addus", "adds", "epu"),
@@ -205,7 +228,8 @@ pub fn vector_type(
     kind: u8,
 ) -> Option<std::rc::Rc<crate::dtype::Datatype>> {
     let name = vector_type_name(size, kind)?;
-    tf.get_base_named(size, crate::dtype::type_metatype::TYPE_UNKNOWN, &name).ok()
+    tf.get_base_named(size, crate::dtype::type_metatype::TYPE_UNKNOWN, &name)
+        .ok()
 }
 
 /// `(kind, form, type)` of an FMA mnemonic such as `vfnmsub231ps`.
@@ -213,7 +237,10 @@ fn fma(mnem: &str) -> Option<(&str, &str, &str)> {
     let rest = mnem.strip_prefix("vf")?;
     for kind in ["maddsub", "msubadd", "nmadd", "nmsub", "madd", "msub"] {
         if let Some(r) = rest.strip_prefix(kind) {
-            if r.len() == 5 && matches!(&r[..3], "132" | "213" | "231") && matches!(&r[3..], "ps" | "pd" | "ss" | "sd") {
+            if r.len() == 5
+                && matches!(&r[..3], "132" | "213" | "231")
+                && matches!(&r[3..], "ps" | "pd" | "ss" | "sd")
+            {
                 return Some((kind, &r[..3], &r[3..]));
             }
         }
@@ -239,21 +266,60 @@ mod tests {
 
     #[test]
     fn names_and_orders() {
-        assert_eq!(intrinsic("vpaddd_avx2", 32), Some(("_mm256_add_epi32".into(), vec![0, 1])));
-        assert_eq!(intrinsic("vpmaxub_avx2", 32), Some(("_mm256_max_epu8".into(), vec![0, 1])));
-        assert_eq!(intrinsic("vpshufb_avx2", 32), Some(("_mm256_shuffle_epi8".into(), vec![0, 1])));
-        assert_eq!(intrinsic("vaddps_avx512f", 64), Some(("_mm512_add_ps".into(), vec![0, 1])));
-        assert_eq!(intrinsic("vpand_avx2", 32), Some(("_mm256_and_si256".into(), vec![0, 1])));
-        assert_eq!(intrinsic("vfmadd132ps_fma", 32), Some(("_mm256_fmadd_ps".into(), vec![0, 2, 1])));
-        assert_eq!(intrinsic("vfmadd213ps_fma", 16), Some(("_mm_fmadd_ps".into(), vec![1, 0, 2])));
-        assert_eq!(intrinsic("vfnmsub231sd_fma", 16), Some(("_mm_fnmsub_sd".into(), vec![1, 2, 0])));
+        assert_eq!(
+            intrinsic("vpaddd_avx2", 32),
+            Some(("_mm256_add_epi32".into(), vec![0, 1]))
+        );
+        assert_eq!(
+            intrinsic("vpmaxub_avx2", 32),
+            Some(("_mm256_max_epu8".into(), vec![0, 1]))
+        );
+        assert_eq!(
+            intrinsic("vpshufb_avx2", 32),
+            Some(("_mm256_shuffle_epi8".into(), vec![0, 1]))
+        );
+        assert_eq!(
+            intrinsic("vaddps_avx512f", 64),
+            Some(("_mm512_add_ps".into(), vec![0, 1]))
+        );
+        assert_eq!(
+            intrinsic("vpand_avx2", 32),
+            Some(("_mm256_and_si256".into(), vec![0, 1]))
+        );
+        assert_eq!(
+            intrinsic("vfmadd132ps_fma", 32),
+            Some(("_mm256_fmadd_ps".into(), vec![0, 2, 1]))
+        );
+        assert_eq!(
+            intrinsic("vfmadd213ps_fma", 16),
+            Some(("_mm_fmadd_ps".into(), vec![1, 0, 2]))
+        );
+        assert_eq!(
+            intrinsic("vfnmsub231sd_fma", 16),
+            Some(("_mm_fnmsub_sd".into(), vec![1, 2, 0]))
+        );
         assert_eq!(intrinsic("vpaddd_avx2", 8), None);
         assert_eq!(intrinsic("cpuid", 16), None);
         assert_eq!(intrinsic("vzeroupper_avx", 16), None);
-        assert_eq!(intrinsic("vaddps_avx512f_mask", 64), Some(("_mm512_mask_add_ps".into(), vec![0, 1, 2, 3])));
-        assert_eq!(intrinsic("vaddps_avx512f_maskz", 64), Some(("_mm512_maskz_add_ps".into(), vec![0, 1, 2])));
-        assert_eq!(vector_type_name(32, element_kind("_mm256_add_epi32")).as_deref(), Some("__m256i"));
-        assert_eq!(vector_type_name(64, element_kind("_mm512_add_ps")).as_deref(), Some("__m512"));
-        assert_eq!(vector_type_name(16, element_kind("_mm_fmadd_sd")).as_deref(), Some("__m128d"));
+        assert_eq!(
+            intrinsic("vaddps_avx512f_mask", 64),
+            Some(("_mm512_mask_add_ps".into(), vec![0, 1, 2, 3]))
+        );
+        assert_eq!(
+            intrinsic("vaddps_avx512f_maskz", 64),
+            Some(("_mm512_maskz_add_ps".into(), vec![0, 1, 2]))
+        );
+        assert_eq!(
+            vector_type_name(32, element_kind("_mm256_add_epi32")).as_deref(),
+            Some("__m256i")
+        );
+        assert_eq!(
+            vector_type_name(64, element_kind("_mm512_add_ps")).as_deref(),
+            Some("__m512")
+        );
+        assert_eq!(
+            vector_type_name(16, element_kind("_mm_fmadd_sd")).as_deref(),
+            Some("__m128d")
+        );
     }
 }

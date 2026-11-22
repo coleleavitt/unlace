@@ -23,7 +23,9 @@ pub(super) fn discard_bodies(
     state.refs.retain(|r| !removed.contains(&r.from));
     state.indirect_call_sites.retain(|at| !removed.contains(at));
     state.carry.discard(&removed);
-    state.skips.retain(|(from, _, _, _)| !removed.contains(from));
+    state
+        .skips
+        .retain(|(from, _, _, _)| !removed.contains(from));
     state
         .switches
         .retain(|table| !removed.contains(&table.dispatch));
@@ -50,7 +52,14 @@ mod tests {
         state.skips.push((0x2004, 0x2008, 0x2000, Some(0)));
         let mut partition = vec![(0x1000, 4), (0x1004, 4), (0x2004, 4)];
         let replacements = BTreeMap::from([(0x1000, 0xff0)]);
-        discard_bodies(&mut state, &mut partition, &mut BTreeMap::new(), &mut None, &modes, &replacements);
+        discard_bodies(
+            &mut state,
+            &mut partition,
+            &mut BTreeMap::new(),
+            &mut None,
+            &modes,
+            &replacements,
+        );
         assert_eq!(partition, vec![(0x2004, 4)]);
         assert_eq!(state.skips, vec![(0x2004, 0x2008, 0x2000, Some(0))]);
     }

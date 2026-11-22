@@ -43,7 +43,7 @@ use unlace_base::space::AddrSpaceManager;
 use unlace_base::xml::{DocumentStorage, Element};
 
 use unlace_decomp::decompile_drive::{decompile_func, print_c};
-use unlace_decomp::sleigh_arch::{register_sleigh_arch_ids, LanguageDatabase};
+use unlace_decomp::sleigh_arch::{LanguageDatabase, register_sleigh_arch_ids};
 use unlace_decomp::xml_arch::{XmlArchitecture, XmlArchitectureCapability};
 
 use unlace_sleigh::loadimage::LoadImage;
@@ -68,7 +68,10 @@ const FIXTURES: &[(&str, &str)] = &[
 ];
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 // ===========================================================================
@@ -106,11 +109,15 @@ fn find_named(el: &Rc<Element>, name: &str, out: &mut Vec<Rc<Element>>) {
 }
 
 fn attr(el: &Element, name: &str) -> Option<String> {
-    el.get_attribute_value(name).ok().map(|b| String::from_utf8_lossy(b).into_owned())
+    el.get_attribute_value(name)
+        .ok()
+        .map(|b| String::from_utf8_lossy(b).into_owned())
 }
 
 fn parse_datatest(stem: &str) -> Result<DataTest, String> {
-    let path = repo_root().join("tests/datatests").join(format!("{stem}.xml"));
+    let path = repo_root()
+        .join("tests/datatests")
+        .join(format!("{stem}.xml"));
     let xml = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
     let mut store = DocumentStorage::new();
     let root = store
@@ -137,7 +144,11 @@ fn parse_datatest(stem: &str) -> Result<DataTest, String> {
         })
         .collect();
 
-    Ok(DataTest { binaryimage, arch_id, symbols })
+    Ok(DataTest {
+        binaryimage,
+        arch_id,
+        symbols,
+    })
 }
 
 // ===========================================================================
@@ -182,11 +193,13 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
     let capability = XmlArchitectureCapability::new();
     let mut arch = capability.build_architecture("datatest", "");
 
-    arch.build_loader(Rc::clone(&dt.binaryimage)).map_err(|e| format!("build_loader: {e}"))?;
+    arch.build_loader(Rc::clone(&dt.binaryimage))
+        .map_err(|e| format!("build_loader: {e}"))?;
 
     let mut db = LanguageDatabase::new();
     db.scan_for_sleigh_directories(specs_root().to_str().unwrap());
-    db.get_descriptions(&registry).map_err(|e| format!("collect ldefs: {e}"))?;
+    db.get_descriptions(&registry)
+        .map_err(|e| format!("collect ldefs: {e}"))?;
 
     arch.sleigh_mut().set_archid(&dt.arch_id);
     arch.sleigh_mut()
@@ -196,7 +209,10 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
         return Err("language index unresolved".to_string());
     }
 
-    let specs = arch.sleigh().build_spec_file(&db).map_err(|e| format!("build_spec_file: {e}"))?;
+    let specs = arch
+        .sleigh()
+        .build_spec_file(&db)
+        .map_err(|e| format!("build_spec_file: {e}"))?;
     let resolved_sla = specs.slafile.ok_or("build_spec_file resolved no .sla")?;
     let sla = std::fs::read(&resolved_sla).map_err(|e| format!("read sla: {e}"))?;
     arch.sleigh_mut()
@@ -214,7 +230,10 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
     arch.open_image(unsafe { &*manager_ptr }, &registry)
         .map_err(|e| format!("open_image: {e}"))?;
     let img = arch.take_loader().ok_or("loader vanished after open")?;
-    arch.sleigh_mut().base_mut().unwrap().set_loader(Box::new(img));
+    arch.sleigh_mut()
+        .base_mut()
+        .unwrap()
+        .set_loader(Box::new(img));
 
     Ok(arch)
 }
@@ -224,14 +243,19 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
 fn rust_print_c(stem: &str, sym_name: &str) -> Result<String, String> {
     let dt = parse_datatest(stem)?;
     let mut xarch = bootstrap(&dt)?;
-    let base = xarch.sleigh_mut().base_mut().ok_or("no Architecture base")?;
+    let base = xarch
+        .sleigh_mut()
+        .base_mut()
+        .ok_or("no Architecture base")?;
     let sym = dt
         .symbols
         .iter()
         .find(|s| s.name == sym_name)
         .ok_or_else(|| format!("symbol {sym_name} not in {stem}"))?;
     let space = Rc::clone(
-        base.manage().get_space_by_name(&sym.space).ok_or_else(|| format!("no space {}", sym.space))?,
+        base.manage()
+            .get_space_by_name(&sym.space)
+            .ok_or_else(|| format!("no space {}", sym.space))?,
     );
     let entry = Address::new(space, sym.offset);
     let fd = decompile_func(base, &sym.name, entry, 0).map_err(|e| format!("decompile: {e}"))?;
@@ -324,8 +348,10 @@ fn corpus_functions_byte_compare_against_cpp_oracle() {
         let braces_ok = rust.matches('{').count() >= 1
             && rust.matches('{').count() == rust.matches('}').count();
         assert!(braces_ok, "{stem}:{sym} Rust C not brace-matched:\n{rust}");
-        assert!(rust.contains(sym.split('_').next().unwrap_or(sym)) || rust.contains(sym),
-            "{stem}:{sym} Rust C missing the function name:\n{rust}");
+        assert!(
+            rust.contains(sym.split('_').next().unwrap_or(sym)) || rust.contains(sym),
+            "{stem}:{sym} Rust C missing the function name:\n{rust}"
+        );
 
         match cpp_print_c(stem) {
             Some(cpp) => {
@@ -384,5 +410,8 @@ fn corpus_functions_byte_compare_against_cpp_oracle() {
 }
 
 fn indent(s: &str) -> String {
-    s.lines().map(|l| format!("      {l}")).collect::<Vec<_>>().join("\n")
+    s.lines()
+        .map(|l| format!("      {l}"))
+        .collect::<Vec<_>>()
+        .join("\n")
 }

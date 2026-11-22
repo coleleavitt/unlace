@@ -9,7 +9,10 @@ use crate::dtype::DatatypeKind;
 use crate::kuna_lang::OutLang;
 
 fn ctx() -> SpellCtx {
-    SpellCtx { lang: OutLang::Rust, ..SpellCtx::OFF }
+    SpellCtx {
+        lang: OutLang::Rust,
+        ..SpellCtx::OFF
+    }
 }
 
 fn base(size: int4, m: type_metatype) -> Rc<Datatype> {
@@ -25,14 +28,22 @@ fn named(size: int4, m: type_metatype, nm: &str) -> Rc<Datatype> {
 
 fn ptr_to(ptrto: Rc<Datatype>) -> Rc<Datatype> {
     let mut p = Datatype::new_with_align(8, -1, type_metatype::TYPE_PTR);
-    p.kind = DatatypeKind::Pointer { ptrto, spaceid: None, truncate: None, wordsize: 1 };
+    p.kind = DatatypeKind::Pointer {
+        ptrto,
+        spaceid: None,
+        truncate: None,
+        wordsize: 1,
+    };
     Rc::new(p)
 }
 
 fn array_of(arrayof: Rc<Datatype>, n: int4) -> Rc<Datatype> {
     let elt = arrayof.get_size().max(1);
     let mut a = Datatype::new_with_align(elt * n, -1, type_metatype::TYPE_ARRAY);
-    a.kind = DatatypeKind::Array { arrayof, arraysize: n };
+    a.kind = DatatypeKind::Array {
+        arrayof,
+        arraysize: n,
+    };
     Rc::new(a)
 }
 
@@ -42,7 +53,12 @@ fn spell(ct: &Rc<Datatype>) -> String {
 
 #[test]
 fn integers_spell_by_width_and_sign() {
-    for (sz, s, u) in [(1, "i8", "u8"), (2, "i16", "u16"), (4, "i32", "u32"), (8, "i64", "u64")] {
+    for (sz, s, u) in [
+        (1, "i8", "u8"),
+        (2, "i16", "u16"),
+        (4, "i32", "u32"),
+        (8, "i64", "u64"),
+    ] {
         assert_eq!(spell(&base(sz, type_metatype::TYPE_INT)), s);
         assert_eq!(spell(&base(sz, type_metatype::TYPE_UINT)), u);
     }
@@ -57,7 +73,10 @@ fn integers_spell_by_width_and_sign() {
 #[test]
 fn widths_rust_cannot_name_become_byte_arrays() {
     for sz in [3, 5, 6, 7] {
-        assert_eq!(spell(&base(sz, type_metatype::TYPE_UNKNOWN)), format!("[u8; {sz}]"));
+        assert_eq!(
+            spell(&base(sz, type_metatype::TYPE_UNKNOWN)),
+            format!("[u8; {sz}]")
+        );
     }
     // x87 long double and the 16-byte float: no Rust type, so storage-exact.
     assert_eq!(spell(&base(10, type_metatype::TYPE_FLOAT)), "[u8; 10]");
@@ -151,7 +170,10 @@ fn deep_pointer_chains_terminate() {
     }
     let out = spell(&t);
     assert!(out.contains("*mut"));
-    assert!(out.ends_with("*const ()"), "guard rail should cap the walk: {out}");
+    assert!(
+        out.ends_with("*const ()"),
+        "guard rail should cap the walk: {out}"
+    );
 }
 
 /// Unlike C, the Rust speller does not consult `realtypes`/`ctypes`: those exist
@@ -159,8 +181,16 @@ fn deep_pointer_chains_terminate() {
 /// Rust has no such vocabulary to preserve.
 #[test]
 fn rust_ignores_the_realtypes_gates() {
-    let off = SpellCtx { lang: OutLang::Rust, ..SpellCtx::OFF };
-    let on = SpellCtx { lang: OutLang::Rust, enabled: true, ctypes: true, ..SpellCtx::OFF };
+    let off = SpellCtx {
+        lang: OutLang::Rust,
+        ..SpellCtx::OFF
+    };
+    let on = SpellCtx {
+        lang: OutLang::Rust,
+        enabled: true,
+        ctypes: true,
+        ..SpellCtx::OFF
+    };
     let t = base(4, type_metatype::TYPE_UNKNOWN);
     assert_eq!(
         RUST_SPELLER.declarator(&off, &t).0,
@@ -175,10 +205,16 @@ fn rust_ignores_the_realtypes_gates() {
 fn type_path_keeps_rust_generic_syntax() {
     for (raw, want) in [
         ("Result<u8, u32>", "Result<u8, u32>"),
-        ("Vec<u8, alloc::alloc::Global>", "Vec<u8, alloc::alloc::Global>"),
+        (
+            "Vec<u8, alloc::alloc::Global>",
+            "Vec<u8, alloc::alloc::Global>",
+        ),
         ("(u8, u32)", "(u8, u32)"),
         ("[u8; 4]", "[u8; 4]"),
-        ("&mut Box<dyn Error + 'static>", "&mut Box<dyn Error + 'static>"),
+        (
+            "&mut Box<dyn Error + 'static>",
+            "&mut Box<dyn Error + 'static>",
+        ),
         ("fn(u8) -> u32", "fn(u8) -> u32"),
         ("core::option::Option<&str>", "core::option::Option<&str>"),
     ] {

@@ -26,12 +26,17 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// The freestanding MIPS16 fixture (big-endian; shared with the unlace-analysis
@@ -59,7 +64,8 @@ fn decompile_m16() -> String {
 
     // Commit the gated analysis facts (what `IfcReadSymbols` does): the ISA_MODE
     // paint must land in the ContextDatabase BEFORE `load function` decodes.
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
     let cmds: Vec<String> = ["load function m16_square", "decompile", "print C"]
         .iter()
@@ -104,4 +110,3 @@ fn mips16_function_decodes_as_mips16_not_mips32() {
          ret={has_return}); a MIPS32 misdecode would not. Body:\n{out}"
     );
 }
-

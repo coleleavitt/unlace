@@ -44,9 +44,10 @@ use unlace_base::types::{int4, int8, uintb};
 
 use crate::funcdata::Funcdata;
 use crate::kuna_regiongraph::{
-    kuna_dfs_back_edges, kuna_dfs_postorder_deterministic, kuna_immediate_dominators,
-    kuna_quasi_topo_sort, kuna_slice_visits, kuna_subgraph_between_nodes, KunaIncrementalDominators,
-    KunaNodeId, KunaNodeKey, KunaNodePool, KunaNodeSet, KunaRegionGraph, NodeKind, RegionPayloadId,
+    KunaIncrementalDominators, KunaNodeId, KunaNodeKey, KunaNodePool, KunaNodeSet, KunaRegionGraph,
+    NodeKind, RegionPayloadId, kuna_dfs_back_edges, kuna_dfs_postorder_deterministic,
+    kuna_immediate_dominators, kuna_quasi_topo_sort, kuna_slice_visits,
+    kuna_subgraph_between_nodes,
 };
 
 /// (unlace decompile-all watchdog) An error once the running drive's budget is
@@ -54,7 +55,9 @@ use crate::kuna_regiongraph::{
 /// minutes inside a single structuring action, so every region attempt asks.
 fn budget() -> KunaResult<()> {
     if crate::decompile_drive::deadline_passed_in("region identification") {
-        return Err(KunaError::lowlevel("kuna regionid: stopped at the function's budget"));
+        return Err(KunaError::lowlevel(
+            "kuna regionid: stopped at the function's budget",
+        ));
     }
     Ok(())
 }
@@ -870,7 +873,11 @@ impl KunaRegionIdentifier {
 
     /// Whether `nodes` hold a live loop header other than `head` (compared by
     /// address, matching `n.addr != head.addr` at RI l.527).
-    fn holds_other_header(&self, head: KunaNodeId, mut nodes: impl Iterator<Item = KunaNodeId>) -> bool {
+    fn holds_other_header(
+        &self,
+        head: KunaNodeId,
+        mut nodes: impl Iterator<Item = KunaNodeId>,
+    ) -> bool {
         let head_addr = self.pool.get(head).get_addr();
         nodes.any(|n| self.pool.get(n).get_addr() != head_addr && self.loop_headers.contains(&n))
     }
@@ -1062,7 +1069,10 @@ impl KunaRegionIdentifier {
                 .collect();
             for (newnode, owners) in inverse_snapshot {
                 for owner in owners {
-                    initial_exit_to_new.entry(owner).or_default().insert(newnode);
+                    initial_exit_to_new
+                        .entry(owner)
+                        .or_default()
+                        .insert(newnode);
                 }
             }
             // Drop subtrees with more than one out-of-tree predecessor.
@@ -1350,9 +1360,9 @@ impl KunaRegionIdentifier {
             g.add_edge(&self.pool, a, b);
         }
 
-        let order = self.order_of(head).map_err(|_| {
-            KunaError::lowlevel("kuna regionid: loop head missing from node order")
-        })?;
+        let order = self
+            .order_of(head)
+            .map_err(|_| KunaError::lowlevel("kuna regionid: loop head missing from node order"))?;
         self.node_order.insert(wrapper, order); // RI l.1099
         Ok(region_id)
     }
@@ -1410,9 +1420,7 @@ impl KunaRegionIdentifier {
                         None => {
                             // Failed (nested header): remove from the LIVE header
                             // list so later attempts no longer see it (RI l.471).
-                            if let Some(pos) =
-                                self.loop_headers.iter().position(|&x| x == node)
-                            {
+                            if let Some(pos) = self.loop_headers.iter().position(|&x| x == node) {
                                 self.loop_headers.remove(pos);
                             }
                         }
@@ -1436,8 +1444,11 @@ impl KunaRegionIdentifier {
         // kuna represents that entry as region==None and routes it at g).
         for widx in 0..=new_regions.len() {
             let is_top = widx == new_regions.len();
-            let region_id: Option<RegionPayloadId> =
-                if is_top { None } else { Some(new_regions[widx]) };
+            let region_id: Option<RegionPayloadId> = if is_top {
+                None
+            } else {
+                Some(new_regions[widx])
+            };
 
             // The "sub" graph is either g (top) or the region's own graph; we
             // operate on an owned copy and write it back so the borrow checker
@@ -1474,8 +1485,13 @@ impl KunaRegionIdentifier {
             let mut inner_guard: int8 = 0;
             loop {
                 budget()?;
-                let made =
-                    self.make_acyclic_region(head, &mut sub, secondary.as_mut(), &mut failed_region_attempts, cyc)?;
+                let made = self.make_acyclic_region(
+                    head,
+                    &mut sub,
+                    secondary.as_mut(),
+                    &mut failed_region_attempts,
+                    cyc,
+                )?;
                 if !made {
                     break;
                 }
@@ -1683,7 +1699,10 @@ impl KunaRegionIdentifier {
             }
             let succs: Vec<KunaNodeId> = g.get_succs(member)?.to_vec();
             for s in succs {
-                if self.region_pool[region_id.0 as usize].graph.contains_node(s) {
+                if self.region_pool[region_id.0 as usize]
+                    .graph
+                    .contains_node(s)
+                {
                     continue;
                 }
                 res.push((wrapper, s));
@@ -1721,7 +1740,9 @@ impl KunaRegionIdentifier {
         {
             let members: Vec<KunaNodeId> = {
                 let mut v = Vec::new();
-                self.region_pool[region_id.0 as usize].graph.get_nodes(&mut v);
+                self.region_pool[region_id.0 as usize]
+                    .graph
+                    .get_nodes(&mut v);
                 v
             };
             for m in members {
@@ -1869,7 +1890,8 @@ impl KunaRegionIdentifier {
         }
 
         let mut doms = KunaIncrementalDominators::new(&self.pool, &gc_owned, head, false)?;
-        let mut postdoms = KunaIncrementalDominators::new(&self.pool, &gc_owned, endnodes[0], true)?;
+        let mut postdoms =
+            KunaIncrementalDominators::new(&self.pool, &gc_owned, endnodes[0], true)?;
 
         let mut region_created = false;
         let mut postorder_snap: Vec<KunaNodeId> = Vec::new();
@@ -1924,8 +1946,7 @@ impl KunaRegionIdentifier {
                 {
                     let mut frontier: KunaNodeSet = KunaNodeSet::new();
                     frontier.insert(self.pool.key(pdn));
-                    let region =
-                        self.compute_region(&gc_owned, node, &frontier, dummy, cyclic)?;
+                    let region = self.compute_region(&gc_owned, node, &frontier, dummy, cyclic)?;
                     if let Some(region_id) = region {
                         // Backpatch graph_with_successors from the parent's
                         // secondary graph (RI l.809-827).
@@ -1966,8 +1987,7 @@ impl KunaRegionIdentifier {
                             // no dummy on this path, so the copy is exact).
                             gc_owned = graph.clone();
                         }
-                        let wrapper =
-                            self.region_pool[region_id.0 as usize].wrapper.unwrap();
+                        let wrapper = self.region_pool[region_id.0 as usize].wrapper.unwrap();
                         let rhead = self.region_pool[region_id.0 as usize].head.unwrap();
                         doms.graph_updated(&self.pool, wrapper, &replaced_nodes, rhead)?;
                         postdoms.graph_updated(&self.pool, wrapper, &replaced_nodes, rhead)?;
@@ -2083,8 +2103,7 @@ impl KunaRegionIdentifier {
                         if let Some(sub) = node.get_region() {
                             if !seen_regions.contains(&sub) {
                                 children_regions.push(sub);
-                                let sub_head =
-                                    self.region_pool[sub.0 as usize].head.unwrap();
+                                let sub_head = self.region_pool[sub.0 as usize].head.unwrap();
                                 children_blocks.push(self.pool.get(sub_head).get_addr());
                                 seen_regions.insert(sub);
                             }
@@ -2223,7 +2242,11 @@ impl KunaRegionIdentifier {
             for sk in region.successors.iter() {
                 exits.insert(self.pool.get(sk.id).get_addr());
             }
-            res.push(KunaCyclicLoop { head_addr, body, exits });
+            res.push(KunaCyclicLoop {
+                head_addr,
+                body,
+                exits,
+            });
         }
         res
     }
@@ -2257,7 +2280,10 @@ impl KunaRegionIdentifier {
         }
         os.push_str("region head=0x");
         let head_addr = display_address(
-            region.get_head().map(|h| self.pool.get(h).get_addr()).unwrap_or(0),
+            region
+                .get_head()
+                .map(|h| self.pool.get(h).get_addr())
+                .unwrap_or(0),
         );
         os.push_str(&format!("{head_addr:x}"));
         os.push_str(" nodes=");
@@ -2280,7 +2306,10 @@ impl KunaRegionIdentifier {
                         os.push_str("  ");
                     }
                     os.push_str("block 0x");
-                    os.push_str(&format!("{:x}", display_address(self.pool.get(m).get_addr())));
+                    os.push_str(&format!(
+                        "{:x}",
+                        display_address(self.pool.get(m).get_addr())
+                    ));
                     os.push('\n');
                 }
             } else if node.get_kind() == NodeKind::Block {
@@ -2484,19 +2513,20 @@ mod tests {
 
         use unlace_base::address::Address;
         use unlace_base::space::{
-            addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+            AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
         };
         use unlace_num::opcodes::OpCode;
 
+        use crate::context::{ArchContext, BlockId, TypeOp};
         use crate::funcdata::Funcdata;
         use crate::kuna_regionid::KunaRegionIdentifier;
         use crate::op::pcodeop_flags;
-        use crate::context::{ArchContext, BlockId, TypeOp};
 
         fn build_manager() -> AddrSpaceManager {
             let mut m = AddrSpaceManager::new();
             m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-            m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+            m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+                .unwrap();
             m.insert_space(Rc::new(AddrSpace::new(
                 spacetype::IPTR_PROCESSOR,
                 "ram",
@@ -2531,8 +2561,10 @@ mod tests {
         /// Append a terminating op of `opc` at `pc` into block `bl`.
         fn term_op(fd: &mut Funcdata, bl: BlockId, opc: OpCode, pc: Address) {
             let op = fd.obank_mut().create_at(1, pc);
-            fd.obank_mut()
-                .change_opcode(op, TypeOp::new(opc, pcodeop_flags::branch, format!("{opc:?}")));
+            fd.obank_mut().change_opcode(
+                op,
+                TypeOp::new(opc, pcodeop_flags::branch, format!("{opc:?}")),
+            );
             fd.obank_mut().mark_alive(op);
             fd.bb_insert_op(op, bl, None);
         }

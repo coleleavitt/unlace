@@ -31,9 +31,9 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_decomp::decompile_drive::build_and_follow_flow;
@@ -56,11 +56,20 @@ struct Fixture {
     imp_vma: u64,
 }
 
-const X86_64: Fixture = Fixture { bin: "macho_objc", imp_vma: GREET_IMP_VMA };
-const ARM64: Fixture = Fixture { bin: "macho_objc_arm64", imp_vma: GREET_IMP_VMA_ARM64 };
+const X86_64: Fixture = Fixture {
+    bin: "macho_objc",
+    imp_vma: GREET_IMP_VMA,
+};
+const ARM64: Fixture = Fixture {
+    bin: "macho_objc_arm64",
+    imp_vma: GREET_IMP_VMA_ARM64,
+};
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixtures() -> PathBuf {
@@ -85,8 +94,12 @@ struct Run {
 /// Resolve the symbol-table name at the fixture's IMP VMA (the engine placeholder,
 /// or the ObjC-installed method name).
 fn name_at_imp(prog: &ConsoleProgram, imp_vma: u64) -> String {
-    let code_space =
-        prog.arch().manage().get_default_code_space().expect("a default code space").clone();
+    let code_space = prog
+        .arch()
+        .manage()
+        .get_default_code_space()
+        .expect("a default code space")
+        .clone();
     let addr = Address::new(Rc::clone(&code_space), imp_vma);
     match prog.arch().symboltab.find_function_across_scopes(&addr) {
         Some((sid, _)) => prog.arch().symboltab.symbol(sid).get_name().to_string(),
@@ -108,8 +121,11 @@ fn run(fx: Fixture, mode: Mode) -> Run {
     // Live-CLI ordering: the `option` line precedes the deferred commit. Flip the
     // flag on the live arch BEFORE committing so the gated objc facts are applied.
     let value = if let Mode::On = mode { "on" } else { "off" };
-    prog.arch_mut().set_kuna_option("objc", value).expect("objc flips");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.arch_mut()
+        .set_kuna_option("objc", value)
+        .expect("objc flips");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
     // The rename ground truth: the symbol-table name at the IMP after the commit.
     let name = name_at_imp(&prog, fx.imp_vma);
@@ -123,8 +139,12 @@ fn run(fx: Fixture, mode: Mode) -> Run {
     // grammar — because an ObjC method name carries a space the console tokenizer
     // would split; `IfcDecompile` then rebuilds the IR from that funcdata's
     // name/entry, so the rendered header carries the recovered name.
-    let code_space =
-        prog.arch().manage().get_default_code_space().expect("a default code space").clone();
+    let code_space = prog
+        .arch()
+        .manage()
+        .get_default_code_space()
+        .expect("a default code space")
+        .clone();
     let addr = Address::new(Rc::clone(&code_space), fx.imp_vma);
     let fd = {
         let arch = prog.arch_mut();
@@ -145,7 +165,10 @@ fn run(fx: Fixture, mode: Mode) -> Run {
     for _ in 0..count {
         execute(&mut status);
     }
-    Run { name, body: status.optr.clone() }
+    Run {
+        name,
+        body: status.optr.clone(),
+    }
 }
 
 /// The shared two-state proof for one fixture: the IMP is a generic `sub_<addr>`
@@ -167,7 +190,9 @@ fn assert_two_state_recovery(fx: Fixture) {
     assert!(
         is_placeholder(&off.name),
         "[{}] default (objc off) must leave 0x{:x} a generic placeholder, got `{}`",
-        fx.bin, fx.imp_vma, off.name
+        fx.bin,
+        fx.imp_vma,
+        off.name
     );
     assert_ne!(
         off.name, GREET_NAME,
@@ -177,7 +202,8 @@ fn assert_two_state_recovery(fx: Fixture) {
     assert!(
         !off.body.contains(GREET_NAME),
         "[{}] default (objc off) body must not render {GREET_NAME}:\n{}",
-        fx.bin, off.body
+        fx.bin,
+        off.body
     );
 
     // 2. objc ON: the SAME function is now `-[Greeter greet:]`, recovered from the
@@ -190,7 +216,8 @@ fn assert_two_state_recovery(fx: Fixture) {
     assert!(
         on.body.contains(GREET_NAME),
         "[{}] objc on body must render the recovered method name {GREET_NAME}:\n{}",
-        fx.bin, on.body
+        fx.bin,
+        on.body
     );
 
     // 3. Both modes retain the method's arithmetic body. ObjC type metadata also
@@ -246,8 +273,14 @@ fn objc_off_keeps_the_stripped_placeholder() {
         "with objc off the name must be a placeholder, got `{}`",
         off.name
     );
-    assert_ne!(off.name, GREET_NAME, "objc off must not recover the stripped method name");
-    assert!(!off.body.trim().is_empty(), "expected a non-empty body for the IMP function");
+    assert_ne!(
+        off.name, GREET_NAME,
+        "objc off must not recover the stripped method name"
+    );
+    assert!(
+        !off.body.trim().is_empty(),
+        "expected a non-empty body for the IMP function"
+    );
 }
 
 /// Is `name` an engine-generated placeholder (`sub_*`/`func_*`/`FUN_*`/`LAB_*`)?

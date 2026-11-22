@@ -67,7 +67,7 @@ use unlace_base::space::{AddrSpace, AddrSpaceManager};
 use unlace_base::types::{int4, uint4, uintb};
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
-use unlace_sleigh::loadimage::{section_flags, LoadImage, LoadImageSection};
+use unlace_sleigh::loadimage::{LoadImage, LoadImageSection, section_flags};
 use unlace_sleigh::translate::{PcodeEmit, Translate};
 
 use crate::interface::{
@@ -231,7 +231,9 @@ impl DisassemblyEngine {
                 res.success = false;
                 return;
             }
-            Err(KunaError::Unimpl { instruction_length, .. }) => {
+            Err(KunaError::Unimpl {
+                instruction_length, ..
+            }) => {
                 res.length = instruction_length;
             }
             // C++ only catches those three; any other throw escapes the try.
@@ -340,7 +342,12 @@ pub struct TargetHit {
 impl TargetHit {
     /// C++ `TargetHit(func,code,thunk,m)` (`codedata.hh:82`).
     pub fn new(func: Address, code: Address, thunk: Address, m: uint4) -> Self {
-        TargetHit { funcstart: func, codeaddr: code, thunkaddr: thunk, mask: m }
+        TargetHit {
+            funcstart: func,
+            codeaddr: code,
+            thunkaddr: thunk,
+            mask: m,
+        }
     }
 }
 
@@ -367,7 +374,10 @@ pub struct AddrLink {
 impl AddrLink {
     /// C++ `AddrLink(Address i)` (`codedata.hh:95`): `b` is invalid.
     pub fn single(i: Address) -> Self {
-        AddrLink { a: i, b: Address::new_invalid() }
+        AddrLink {
+            a: i,
+            b: Address::new_invalid(),
+        }
     }
 
     /// C++ `AddrLink(Address i,Address j)` (`codedata.hh:96`).
@@ -467,12 +477,21 @@ impl CodeDataAnalysis {
     /// C++ `CodeDataAnalysis::pushTaintAddress` (`codedata.cc:148`).
     pub fn push_taint_address(&mut self, addr: &Address) {
         // The last entry with key <= addr.
-        let prev = self.codeunit.range(..=addr).next_back().map(|(k, v)| (k.clone(), *v));
+        let prev = self
+            .codeunit
+            .range(..=addr)
+            .next_back()
+            .map(|(k, v)| (k.clone(), *v));
         let (key, cu) = match prev {
             Some(x) => x,
             None => return, // upper_bound==begin (no element <= addr)
         };
-        if key.get_offset().wrapping_add(cu.size as u64).wrapping_sub(1) < addr.get_offset() {
+        if key
+            .get_offset()
+            .wrapping_add(cu.size as u64)
+            .wrapping_sub(1)
+            < addr.get_offset()
+        {
             return;
         }
         if (cu.flags & code_unit_flags::NOTCODE) != 0 {
@@ -483,7 +502,10 @@ impl CodeDataAnalysis {
 
     /// C++ `CodeDataAnalysis::processTaint` (`codedata.cc:162`).
     pub fn process_taint(&mut self) {
-        let key = self.taintlist.pop().expect("processTaint on empty taintlist");
+        let key = self
+            .taintlist
+            .pop()
+            .expect("processTaint on empty taintlist");
         let cu_size = {
             let cu = self.codeunit.get_mut(&key).expect("taint key absent");
             cu.flags |= code_unit_flags::NOTCODE;
@@ -599,8 +621,11 @@ impl CodeDataAnalysis {
 
     /// C++ `CodeDataAnalysis::clearCodeUnits` (`codedata.cc:250`).
     pub fn clear_code_units(&mut self, addr: &Address, endaddr: &Address) {
-        let keys: Vec<Address> =
-            self.codeunit.range(addr.clone()..endaddr.clone()).map(|(k, _)| k.clone()).collect();
+        let keys: Vec<Address> = self
+            .codeunit
+            .range(addr.clone()..endaddr.clone())
+            .map(|(k, _)| k.clone())
+            .collect();
         for k in keys {
             self.codeunit.remove(&k);
         }
@@ -625,8 +650,11 @@ impl CodeDataAnalysis {
 
         let mut curaddr = addr.clone();
         // Track the lower_bound(addr) key as the C++ iterator.
-        let mut iter_key: Option<Address> =
-            self.codeunit.range(addr.clone()..).next().map(|(k, _)| k.clone());
+        let mut iter_key: Option<Address> = self
+            .codeunit
+            .range(addr.clone()..)
+            .next()
+            .map(|(k, _)| k.clone());
         let mut lastaddr: Address;
         if let Some(ref k) = iter_key {
             lastaddr = k.clone();
@@ -662,12 +690,18 @@ impl CodeDataAnalysis {
             curaddr = &curaddr + disresult.length as i64;
             while lastaddr < curaddr {
                 // (*iter).second flags / size — iter_key denotes the unit.
-                let iter_flags =
-                    iter_key.as_ref().and_then(|k| self.codeunit.get(k)).map(|cu| cu.flags);
-                let iter_size =
-                    iter_key.as_ref().and_then(|k| self.codeunit.get(k)).map(|cu| cu.size);
+                let iter_flags = iter_key
+                    .as_ref()
+                    .and_then(|k| self.codeunit.get(k))
+                    .map(|cu| cu.flags);
+                let iter_size = iter_key
+                    .as_ref()
+                    .and_then(|k| self.codeunit.get(k))
+                    .map(|cu| cu.size);
                 if (!hardend)
-                    && iter_flags.map(|f| (f & code_unit_flags::NOTCODE) != 0).unwrap_or(false)
+                    && iter_flags
+                        .map(|f| (f & code_unit_flags::NOTCODE) != 0)
+                        .unwrap_or(false)
                 {
                     if iter_size == Some(1) {
                         // delete the bad disassembly (it looks unaligned).
@@ -703,9 +737,14 @@ impl CodeDataAnalysis {
                 break;
             }
             if curaddr == lastaddr {
-                let iter_flags =
-                    iter_key.as_ref().and_then(|k| self.codeunit.get(k)).map(|cu| cu.flags);
-                if iter_flags.map(|f| (f & code_unit_flags::NOTCODE) != 0).unwrap_or(false) {
+                let iter_flags = iter_key
+                    .as_ref()
+                    .and_then(|k| self.codeunit.get(k))
+                    .map(|cu| cu.flags);
+                if iter_flags
+                    .map(|f| (f & code_unit_flags::NOTCODE) != 0)
+                    .unwrap_or(false)
+                {
                     flowin = true;
                     break;
                 }
@@ -786,8 +825,11 @@ impl CodeDataAnalysis {
 
     /// C++ `CodeDataAnalysis::markCrossHits` (`codedata.cc:412`).
     pub fn mark_cross_hits(&mut self) {
-        let entries: Vec<(Address, uint4)> =
-            self.tofrom_crossref.iter().map(|(k, &v)| (k.a.clone(), v)).collect();
+        let entries: Vec<(Address, uint4)> = self
+            .tofrom_crossref
+            .iter()
+            .map(|(k, &v)| (k.a.clone(), v))
+            .collect();
         for (akey, fromflags) in entries {
             if let Some(to) = self.codeunit.get_mut(&akey) {
                 if (fromflags & code_unit_flags::CALL) != 0 {
@@ -814,7 +856,8 @@ impl CodeDataAnalysis {
             Some(t) => t.featuremask,
             None => return Err(IfaceError::execution("Found thunk without a feature mask")),
         };
-        self.targethits.push(TargetHit::new(funcstart, codeaddr.clone(), thunkaddr, mask));
+        self.targethits
+            .push(TargetHit::new(funcstart, codeaddr.clone(), thunkaddr, mask));
         Ok(())
     }
 
@@ -889,7 +932,12 @@ impl CodeDataAnalysis {
                 self.codeunit.get_mut(&key).unwrap().flags |= code_unit_flags::ERRANTSTART;
                 return true;
             }
-            match self.codeunit.range(..key.clone()).next_back().map(|(k, _)| k.clone()) {
+            match self
+                .codeunit
+                .range(..key.clone())
+                .next_back()
+                .map(|(k, _)| k.clone())
+            {
                 Some(prev) => key = prev,
                 None => return false,
             }
@@ -909,8 +957,11 @@ impl CodeDataAnalysis {
         let mut curaddr = addr.clone();
         let mut count: int4 = 0;
 
-        let mut iter_key: Option<Address> =
-            self.codeunit.range(addr.clone()..).next().map(|(k, _)| k.clone());
+        let mut iter_key: Option<Address> = self
+            .codeunit
+            .range(addr.clone()..)
+            .next()
+            .map(|(k, _)| k.clone());
         if iter_key.is_none() {
             return false;
         }
@@ -966,7 +1017,11 @@ impl CodeDataAnalysis {
         let mut iter_key: Option<AddrLink> = self.tofrom_crossref.keys().next().cloned();
         while let Some(curlink) = iter_key.clone() {
             let addr = curlink.a.clone(); // Destination of a jump
-            let citer = self.codeunit.range(addr.clone()..).next().map(|(k, _)| k.clone());
+            let citer = self
+                .codeunit
+                .range(addr.clone()..)
+                .next()
+                .map(|(k, _)| k.clone());
             if let Some(ckey) = &citer {
                 if *ckey == addr {
                     // Not off cut.
@@ -976,8 +1031,11 @@ impl CodeDataAnalysis {
                         == (code_unit_flags::HIT_BY_FALLTHRU | code_unit_flags::HIT_BY_CALL)
                     {
                         // Somebody falls through into the call.
-                        if let Some(prev) =
-                            self.codeunit.range(..ckey.clone()).next_back().map(|(k, _)| k.clone())
+                        if let Some(prev) = self
+                            .codeunit
+                            .range(..ckey.clone())
+                            .next_back()
+                            .map(|(k, _)| k.clone())
                         {
                             self.check_errant_start(&prev);
                         }
@@ -988,7 +1046,11 @@ impl CodeDataAnalysis {
                     continue;
                 }
             }
-            let prevkey = self.codeunit.range(..addr.clone()).next_back().map(|(k, _)| k.clone());
+            let prevkey = self
+                .codeunit
+                .range(..addr.clone())
+                .next_back()
+                .map(|(k, _)| k.clone());
             let prevkey = match prevkey {
                 Some(k) => k, // last <= addr
                 None => {
@@ -1092,7 +1154,11 @@ impl CodeDataAnalysis {
         for hit in self.targethits.iter() {
             let funcaddr = &hit.funcstart;
             let addr = &hit.codeaddr;
-            let nm = &self.targets.get(&hit.thunkaddr).expect("target hit thunk absent").name;
+            let nm = &self
+                .targets
+                .get(&hit.thunkaddr)
+                .expect("target hit thunk absent")
+                .name;
             if !funcaddr.is_invalid() {
                 s.push_str(&format!("{:x} ", funcaddr.get_offset()));
             } else {
@@ -1137,9 +1203,16 @@ impl CodeDataAnalysis {
             }
             if (secinfo.flags & (section_flags::UNALLOC | section_flags::NOLOAD)) == 0 {
                 let spc = Rc::clone(
-                    secinfo.address.get_space().expect("section address in a null space"),
+                    secinfo
+                        .address
+                        .get_space()
+                        .expect("section address in a null space"),
                 );
-                self.modelhits.insert_range(spc, secinfo.address.get_offset(), endaddr.get_offset());
+                self.modelhits.insert_range(
+                    spc,
+                    secinfo.address.get_offset(),
+                    endaddr.get_offset(),
+                );
             }
             if !moresections {
                 break;
@@ -1163,12 +1236,16 @@ impl CodeDataAnalysis {
         self.clear_hit_by();
         self.mark_fallthru_hits();
         self.mark_cross_hits();
-        let code_space =
-            Rc::clone(manage.get_default_code_space().expect("runModel: no default code space"));
+        let code_space = Rc::clone(
+            manage
+                .get_default_code_space()
+                .expect("runModel: no default code space"),
+        );
         self.find_unlinked(trans, &code_space)?;
         // C++ `list<TargetHit>::sort` orders by operator< (funcstart) and is
         // stable; sort_by with the stable sort matches.
-        self.targethits.sort_by(|a, b| a.funcstart.cmp(&b.funcstart));
+        self.targethits
+            .sort_by(|a, b| a.funcstart.cmp(&b.funcstart));
         Ok(())
     }
 }
@@ -1368,11 +1445,26 @@ pub fn register_commands(status: &mut IfaceStatus) {
     status.register_com(Box::new(IfcCodeDataInit), &["codedata", "init"]);
     status.register_com(Box::new(IfcCodeDataTarget), &["codedata", "target"]);
     status.register_com(Box::new(IfcCodeDataRun), &["codedata", "run"]);
-    status.register_com(Box::new(IfcCodeDataDumpModelHits), &["codedata", "dump", "hits"]);
-    status.register_com(Box::new(IfcCodeDataDumpCrossRefs), &["codedata", "dump", "crossrefs"]);
-    status.register_com(Box::new(IfcCodeDataDumpStarts), &["codedata", "dump", "starts"]);
-    status.register_com(Box::new(IfcCodeDataDumpUnlinked), &["codedata", "dump", "unlinked"]);
-    status.register_com(Box::new(IfcCodeDataDumpTargetHits), &["codedata", "dump", "targethits"]);
+    status.register_com(
+        Box::new(IfcCodeDataDumpModelHits),
+        &["codedata", "dump", "hits"],
+    );
+    status.register_com(
+        Box::new(IfcCodeDataDumpCrossRefs),
+        &["codedata", "dump", "crossrefs"],
+    );
+    status.register_com(
+        Box::new(IfcCodeDataDumpStarts),
+        &["codedata", "dump", "starts"],
+    );
+    status.register_com(
+        Box::new(IfcCodeDataDumpUnlinked),
+        &["codedata", "dump", "unlinked"],
+    );
+    status.register_com(
+        Box::new(IfcCodeDataDumpTargetHits),
+        &["codedata", "dump", "targethits"],
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -1386,8 +1478,8 @@ mod tests {
 
     use unlace_base::error::KunaResult;
     use unlace_base::space::{
-        addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, JoinSpace,
-        OtherSpace, UniqueSpace, VarnodeStorage,
+        AddrSpace, AddrSpaceManager, ConstantSpace, JoinSpace, OtherSpace, UniqueSpace,
+        VarnodeStorage, addrspace_flags, spacetype,
     };
     use unlace_base::xml::DocumentStorage;
     use unlace_sleigh::loadimage::LoadImage;
@@ -1429,11 +1521,7 @@ mod tests {
                 None => Err(KunaError::bad_data("no instruction")),
             }
         }
-        fn one_instruction(
-            &self,
-            emit: &mut dyn PcodeEmit,
-            baseaddr: &Address,
-        ) -> KunaResult<i32> {
+        fn one_instruction(&self, emit: &mut dyn PcodeEmit, baseaddr: &Address) -> KunaResult<i32> {
             let insn = match self.prog.get(&baseaddr.get_offset()) {
                 Some(i) => i.clone(),
                 None => return Err(KunaError::bad_data("no instruction")),
@@ -1528,7 +1616,8 @@ mod tests {
         let mut m = AddrSpaceManager::new();
         m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
         m.insert_space(Rc::new(OtherSpace::new(1))).unwrap();
-        m.insert_space(Rc::new(UniqueSpace::new(2, 0, false))).unwrap();
+        m.insert_space(Rc::new(UniqueSpace::new(2, 0, false)))
+            .unwrap();
         m.insert_space(Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
             "ram",
@@ -1547,12 +1636,20 @@ mod tests {
     }
 
     fn synth(prog: BTreeMap<u64, Insn>, ram: Rc<AddrSpace>) -> SynthTranslate {
-        SynthTranslate { base: TranslateBase::new(), ram, prog }
+        SynthTranslate {
+            base: TranslateBase::new(),
+            ram,
+            prog,
+        }
     }
 
     fn fallthru(operand: Option<u64>) -> Insn {
         // COPY -> lastop COPY -> fallthru flag.
-        Insn { opc: OpCode::CPUI_COPY, operand, len: 4 }
+        Insn {
+            opc: OpCode::CPUI_COPY,
+            operand,
+            len: 4,
+        }
     }
 
     #[test]
@@ -1564,7 +1661,10 @@ mod tests {
         // single(a) has b = invalid, which sorts before any concrete b.
         assert!(AddrLink::single(a0.clone()) < AddrLink::pair(a0.clone(), a1.clone()));
         assert!(AddrLink::pair(a0.clone(), a1.clone()) < AddrLink::single(a1.clone()));
-        assert_eq!(AddrLink::pair(a0.clone(), a1.clone()), AddrLink::pair(a0, a1));
+        assert_eq!(
+            AddrLink::pair(a0.clone(), a1.clone()),
+            AddrLink::pair(a0, a1)
+        );
     }
 
     #[test]
@@ -1573,9 +1673,30 @@ mod tests {
         let ram = Rc::clone(m.get_space_by_name("ram").unwrap());
         let mut prog: BTreeMap<u64, Insn> = BTreeMap::new();
         prog.insert(0x100, fallthru(None));
-        prog.insert(0x104, Insn { opc: OpCode::CPUI_BRANCH, operand: Some(0x200), len: 4 });
-        prog.insert(0x108, Insn { opc: OpCode::CPUI_CALL, operand: Some(0x300), len: 4 });
-        prog.insert(0x10c, Insn { opc: OpCode::CPUI_RETURN, operand: None, len: 4 });
+        prog.insert(
+            0x104,
+            Insn {
+                opc: OpCode::CPUI_BRANCH,
+                operand: Some(0x200),
+                len: 4,
+            },
+        );
+        prog.insert(
+            0x108,
+            Insn {
+                opc: OpCode::CPUI_CALL,
+                operand: Some(0x300),
+                len: 4,
+            },
+        );
+        prog.insert(
+            0x10c,
+            Insn {
+                opc: OpCode::CPUI_RETURN,
+                operand: None,
+                len: 4,
+            },
+        );
         let t = synth(prog, Rc::clone(&ram));
 
         let mut eng = DisassemblyEngine::default();
@@ -1584,7 +1705,10 @@ mod tests {
 
         eng.disassemble(&t, &Address::new(Rc::clone(&ram), 0x100), &mut res);
         assert!(res.success);
-        assert_eq!(res.flags & code_unit_flags::FALLTHRU, code_unit_flags::FALLTHRU);
+        assert_eq!(
+            res.flags & code_unit_flags::FALLTHRU,
+            code_unit_flags::FALLTHRU
+        );
 
         eng.disassemble(&t, &Address::new(Rc::clone(&ram), 0x104), &mut res);
         assert_eq!(res.flags & code_unit_flags::JUMP, code_unit_flags::JUMP);
@@ -1593,7 +1717,10 @@ mod tests {
 
         eng.disassemble(&t, &Address::new(Rc::clone(&ram), 0x108), &mut res);
         assert_eq!(res.flags & code_unit_flags::CALL, code_unit_flags::CALL);
-        assert_eq!(res.flags & code_unit_flags::FALLTHRU, code_unit_flags::FALLTHRU);
+        assert_eq!(
+            res.flags & code_unit_flags::FALLTHRU,
+            code_unit_flags::FALLTHRU
+        );
 
         eng.disassemble(&t, &Address::new(Rc::clone(&ram), 0x10c), &mut res);
         assert_eq!(res.flags & code_unit_flags::FALLTHRU, 0);
@@ -1608,8 +1735,22 @@ mod tests {
         let m = manager();
         let ram = Rc::clone(m.get_space_by_name("ram").unwrap());
         let mut prog: BTreeMap<u64, Insn> = BTreeMap::new();
-        prog.insert(0x10, Insn { opc: OpCode::CPUI_COPY, operand: Some(0x900), len: 4 });
-        prog.insert(0x20, Insn { opc: OpCode::CPUI_BRANCHIND, operand: Some(0x900), len: 4 });
+        prog.insert(
+            0x10,
+            Insn {
+                opc: OpCode::CPUI_COPY,
+                operand: Some(0x900),
+                len: 4,
+            },
+        );
+        prog.insert(
+            0x20,
+            Insn {
+                opc: OpCode::CPUI_BRANCHIND,
+                operand: Some(0x900),
+                len: 4,
+            },
+        );
         let t = synth(prog, Rc::clone(&ram));
 
         let mut eng = DisassemblyEngine::default();
@@ -1618,13 +1759,22 @@ mod tests {
         let mut res = DisassemblyResult::default();
 
         eng.disassemble(&t, &Address::new(Rc::clone(&ram), 0x10), &mut res);
-        assert_eq!(res.flags & code_unit_flags::TARGETHIT, code_unit_flags::TARGETHIT);
+        assert_eq!(
+            res.flags & code_unit_flags::TARGETHIT,
+            code_unit_flags::TARGETHIT
+        );
         assert_eq!(res.flags & code_unit_flags::THUNKHIT, 0);
         assert_eq!(res.targethit, 0x900);
 
         eng.disassemble(&t, &Address::new(Rc::clone(&ram), 0x20), &mut res);
-        assert_eq!(res.flags & code_unit_flags::TARGETHIT, code_unit_flags::TARGETHIT);
-        assert_eq!(res.flags & code_unit_flags::THUNKHIT, code_unit_flags::THUNKHIT);
+        assert_eq!(
+            res.flags & code_unit_flags::TARGETHIT,
+            code_unit_flags::TARGETHIT
+        );
+        assert_eq!(
+            res.flags & code_unit_flags::THUNKHIT,
+            code_unit_flags::THUNKHIT
+        );
     }
 
     /// A straight-line block of fall-through units ending in returns, with a
@@ -1642,11 +1792,32 @@ mod tests {
         //   0x1014 RETURN
         let mut prog: BTreeMap<u64, Insn> = BTreeMap::new();
         prog.insert(0x1000, fallthru(None));
-        prog.insert(0x1004, Insn { opc: OpCode::CPUI_CALL, operand: Some(0x1010), len: 4 });
+        prog.insert(
+            0x1004,
+            Insn {
+                opc: OpCode::CPUI_CALL,
+                operand: Some(0x1010),
+                len: 4,
+            },
+        );
         prog.insert(0x1008, fallthru(None));
-        prog.insert(0x100c, Insn { opc: OpCode::CPUI_RETURN, operand: None, len: 4 });
+        prog.insert(
+            0x100c,
+            Insn {
+                opc: OpCode::CPUI_RETURN,
+                operand: None,
+                len: 4,
+            },
+        );
         prog.insert(0x1010, fallthru(None));
-        prog.insert(0x1014, Insn { opc: OpCode::CPUI_RETURN, operand: None, len: 4 });
+        prog.insert(
+            0x1014,
+            Insn {
+                opc: OpCode::CPUI_RETURN,
+                operand: None,
+                len: 4,
+            },
+        );
         let t = synth(prog, Rc::clone(&ram));
 
         let mut loader = SynthLoadImage {
@@ -1678,7 +1849,10 @@ mod tests {
 
         // 0x1010 is hit by the call.
         let target = Address::new(Rc::clone(&ram), 0x1010);
-        assert_ne!(cd.codeunit.get(&target).unwrap().flags & code_unit_flags::HIT_BY_CALL, 0);
+        assert_ne!(
+            cd.codeunit.get(&target).unwrap().flags & code_unit_flags::HIT_BY_CALL,
+            0
+        );
 
         // dumpFunctionStarts walks `tofrom_crossref` and prints `.a`, which for
         // a call cross-reference is the call *destination* (the function start),
@@ -1713,11 +1887,46 @@ mod tests {
         //   0x2020 CALL 0x2000   (the caller)
         //   0x2024 RETURN
         let mut prog: BTreeMap<u64, Insn> = BTreeMap::new();
-        prog.insert(0x2000, Insn { opc: OpCode::CPUI_COPY, operand: None, len: 4 });
-        prog.insert(0x2004, Insn { opc: OpCode::CPUI_COPY, operand: Some(0xBEEF), len: 4 });
-        prog.insert(0x2008, Insn { opc: OpCode::CPUI_RETURN, operand: None, len: 4 });
-        prog.insert(0x2020, Insn { opc: OpCode::CPUI_CALL, operand: Some(0x2000), len: 4 });
-        prog.insert(0x2024, Insn { opc: OpCode::CPUI_RETURN, operand: None, len: 4 });
+        prog.insert(
+            0x2000,
+            Insn {
+                opc: OpCode::CPUI_COPY,
+                operand: None,
+                len: 4,
+            },
+        );
+        prog.insert(
+            0x2004,
+            Insn {
+                opc: OpCode::CPUI_COPY,
+                operand: Some(0xBEEF),
+                len: 4,
+            },
+        );
+        prog.insert(
+            0x2008,
+            Insn {
+                opc: OpCode::CPUI_RETURN,
+                operand: None,
+                len: 4,
+            },
+        );
+        prog.insert(
+            0x2020,
+            Insn {
+                opc: OpCode::CPUI_CALL,
+                operand: Some(0x2000),
+                len: 4,
+            },
+        );
+        prog.insert(
+            0x2024,
+            Insn {
+                opc: OpCode::CPUI_RETURN,
+                operand: None,
+                len: 4,
+            },
+        );
         let t = synth(prog, Rc::clone(&ram));
 
         let mut loader = SynthLoadImage {
@@ -1756,7 +1965,8 @@ mod tests {
         let t = synth(BTreeMap::new(), Rc::clone(&ram));
 
         let mut cd = CodeDataAnalysis::default();
-        cd.codeunit.insert(Address::new(Rc::clone(&ram), 0x10), CodeUnit::default());
+        cd.codeunit
+            .insert(Address::new(Rc::clone(&ram), 0x10), CodeUnit::default());
         cd.unlinkedstarts.push(Address::new(Rc::clone(&ram), 0x10));
         cd.add_target("x", &Address::new(Rc::clone(&ram), 0x40), 1);
         assert!(!cd.codeunit.is_empty());
@@ -1799,7 +2009,9 @@ mod tests {
         assert!(cd.codeunit.is_empty());
         // dump crossrefs on the (empty) module data emits nothing.
         let mut s = CommandStream::new("");
-        IfcCodeDataDumpCrossRefs.execute(&mut status, &mut s).unwrap();
+        IfcCodeDataDumpCrossRefs
+            .execute(&mut status, &mut s)
+            .unwrap();
         assert_eq!(status.optr, "");
     }
 
@@ -1840,9 +2052,12 @@ mod tests {
         let a = |o: u64| Address::new(Rc::clone(&ram), o);
 
         // tofrom keys: a==0x10 (CALL), a==0x40 (JUMP, not call), a==0x80 (CALL).
-        cd.tofrom_crossref.insert(AddrLink::pair(a(0x10), a(0x500)), code_unit_flags::CALL);
-        cd.tofrom_crossref.insert(AddrLink::pair(a(0x40), a(0x600)), code_unit_flags::JUMP);
-        cd.tofrom_crossref.insert(AddrLink::pair(a(0x80), a(0x700)), code_unit_flags::CALL);
+        cd.tofrom_crossref
+            .insert(AddrLink::pair(a(0x10), a(0x500)), code_unit_flags::CALL);
+        cd.tofrom_crossref
+            .insert(AddrLink::pair(a(0x40), a(0x600)), code_unit_flags::JUMP);
+        cd.tofrom_crossref
+            .insert(AddrLink::pair(a(0x80), a(0x700)), code_unit_flags::CALL);
 
         // For addr=0x90: lower_bound(single(0x90)) is end()/past 0x80's entry,
         // reverse walk hits 0x80's CALL first -> 0x80.
@@ -1875,18 +2090,31 @@ mod tests {
         let a = |o: u64| Address::new(Rc::clone(&ram), o);
 
         // Two code units: 0x100 (seeded notcode) and 0x200 (good code, size 4).
-        cd.codeunit
-            .insert(a(0x100), CodeUnit { flags: code_unit_flags::NOTCODE, size: 4 });
-        cd.codeunit.insert(a(0x200), CodeUnit { flags: code_unit_flags::FALLTHRU, size: 4 });
+        cd.codeunit.insert(
+            a(0x100),
+            CodeUnit {
+                flags: code_unit_flags::NOTCODE,
+                size: 4,
+            },
+        );
+        cd.codeunit.insert(
+            a(0x200),
+            CodeUnit {
+                flags: code_unit_flags::FALLTHRU,
+                size: 4,
+            },
+        );
 
         // A from-to edge 0x100 -> 0x200 (and its tofrom mirror), so taint at the
         // 0x100 block flows to 0x200 via the tofrom_crossref edge keyed [start..end)
         // of the 0x100 block. The tofrom key's `.a` is the destination 0x100's
         // range; we key it inside [0x100,0x104).
-        cd.fromto_crossref.insert(AddrLink::pair(a(0x100), a(0x200)), code_unit_flags::JUMP);
+        cd.fromto_crossref
+            .insert(AddrLink::pair(a(0x100), a(0x200)), code_unit_flags::JUMP);
         // tofrom mirror: key.a in [start,end) of the tainted block, key.b is the
         // successor whose enclosing unit (0x200) gets tainted.
-        cd.tofrom_crossref.insert(AddrLink::pair(a(0x100), a(0x200)), code_unit_flags::JUMP);
+        cd.tofrom_crossref
+            .insert(AddrLink::pair(a(0x100), a(0x200)), code_unit_flags::JUMP);
 
         cd.find_not_code_units();
 
@@ -1912,8 +2140,13 @@ mod tests {
 
         // Unit at 0x100 spanning [0x100, 0x104) (size 4): last byte is 0x103.
         let mut cd = CodeDataAnalysis::default();
-        cd.codeunit
-            .insert(a(0x100), CodeUnit { flags: code_unit_flags::FALLTHRU, size: 4 });
+        cd.codeunit.insert(
+            a(0x100),
+            CodeUnit {
+                flags: code_unit_flags::FALLTHRU,
+                size: 4,
+            },
+        );
 
         // addr == 0x103 (last byte): key(0x100)+4-1 = 0x103, NOT < 0x103 -> taint.
         cd.push_taint_address(&a(0x103));
@@ -1953,7 +2186,10 @@ mod tests {
         // Range 1: "0x1000 0x1010", gap to next.first 0x2000 - last 0x1010 = 0xFF0 = 4080.
         // Range 2: "0x2000 0x2010", gap 0x3000 - 0x2010 = 0xFF0 = 4080.
         // Range 3: "0x3000 0x3008" (no trailing gap).
-        assert_eq!(out, "0x1000 0x1010 4080\n0x2000 0x2010 4080\n0x3000 0x3008\n");
+        assert_eq!(
+            out,
+            "0x1000 0x1010 4080\n0x2000 0x2010 4080\n0x3000 0x3008\n"
+        );
 
         // Single range: no trailing number at all.
         let mut cd2 = CodeDataAnalysis::default();
@@ -1985,14 +2221,29 @@ mod tests {
         // 0x10: clean -> unlinked.
         cd.codeunit.insert(a(0x10), CodeUnit { flags: 0, size: 4 });
         // 0x20: hit_by_fallthru -> not unlinked.
-        cd.codeunit
-            .insert(a(0x20), CodeUnit { flags: code_unit_flags::HIT_BY_FALLTHRU, size: 4 });
+        cd.codeunit.insert(
+            a(0x20),
+            CodeUnit {
+                flags: code_unit_flags::HIT_BY_FALLTHRU,
+                size: 4,
+            },
+        );
         // 0x30: notcode (no hit_by_*) -> still NOT unlinked (mask includes notcode).
-        cd.codeunit
-            .insert(a(0x30), CodeUnit { flags: code_unit_flags::NOTCODE, size: 4 });
+        cd.codeunit.insert(
+            a(0x30),
+            CodeUnit {
+                flags: code_unit_flags::NOTCODE,
+                size: 4,
+            },
+        );
         // 0x40: errantstart -> not unlinked.
-        cd.codeunit
-            .insert(a(0x40), CodeUnit { flags: code_unit_flags::ERRANTSTART, size: 4 });
+        cd.codeunit.insert(
+            a(0x40),
+            CodeUnit {
+                flags: code_unit_flags::ERRANTSTART,
+                size: 4,
+            },
+        );
 
         cd.find_unlinked(&t, &code_space).unwrap();
 

@@ -58,7 +58,10 @@ fn rn(ins: u32) -> u32 {
 }
 
 fn adr_imm(ins: u32) -> i64 {
-    sext((((ins >> 29) & 3) | (((ins >> 5) & 0x7ffff) << 2)) as u64, 21)
+    sext(
+        (((ins >> 29) & 3) | (((ins >> 5) & 0x7ffff) << 2)) as u64,
+        21,
+    )
 }
 
 enum Step {
@@ -67,14 +70,26 @@ enum Step {
 }
 
 /// Execute one instruction at `pc` on `regs`, reporting calls and stores.
-fn step(img: &MachoImage, pc: u64, ins: u32, regs: &mut Regs, events: &mut Vec<Event>, ctor: Option<u64>) -> Step {
+fn step(
+    img: &MachoImage,
+    pc: u64,
+    ins: u32,
+    regs: &mut Regs,
+    events: &mut Vec<Event>,
+    ctor: Option<u64>,
+) -> Step {
     let branch = |ins: u32| pc.wrapping_add((sext((ins & 0x03ff_ffff) as u64, 26) * 4) as u64);
     let args = |regs: &Regs| [regs.get(0), regs.get(1), regs.get(2), regs.get(3)];
     match ins {
         _ if ins & 0x9f00_0000 == 0x9000_0000 => {
-            regs.set(rd(ins), Some((pc & !0xfff).wrapping_add((adr_imm(ins) << 12) as u64)));
+            regs.set(
+                rd(ins),
+                Some((pc & !0xfff).wrapping_add((adr_imm(ins) << 12) as u64)),
+            );
         }
-        _ if ins & 0x9f00_0000 == 0x1000_0000 => regs.set(rd(ins), Some(pc.wrapping_add(adr_imm(ins) as u64))),
+        _ if ins & 0x9f00_0000 == 0x1000_0000 => {
+            regs.set(rd(ins), Some(pc.wrapping_add(adr_imm(ins) as u64)))
+        }
         _ if ins & 0xff80_0000 == 0x9100_0000 => {
             let imm = ((ins >> 10) & 0xfff) as u64;
             let imm = if ins & (1 << 22) != 0 { imm << 12 } else { imm };
@@ -82,16 +97,25 @@ fn step(img: &MachoImage, pc: u64, ins: u32, regs: &mut Regs, events: &mut Vec<E
             regs.set(rd(ins), v);
         }
         _ if ins & 0x7f80_0000 == 0x5280_0000 => {
-            regs.set(rd(ins), Some((((ins >> 5) & 0xffff) as u64) << (16 * ((ins >> 21) & 3))));
+            regs.set(
+                rd(ins),
+                Some((((ins >> 5) & 0xffff) as u64) << (16 * ((ins >> 21) & 3))),
+            );
         }
         _ if ins & 0x7fe0_ffe0 == 0x2a00_03e0 => {
             let rm = (ins >> 16) & 31;
             let v = if rm == 31 { Some(0) } else { regs.get(rm) };
-            let v = if ins & (1 << 31) == 0 { v.map(|v| v & 0xffff_ffff) } else { v };
+            let v = if ins & (1 << 31) == 0 {
+                v.map(|v| v & 0xffff_ffff)
+            } else {
+                v
+            };
             regs.set(rd(ins), v);
         }
         _ if ins & 0xffc0_0000 == 0xf940_0000 => {
-            let addr = regs.get(rn(ins)).map(|b| b.wrapping_add((((ins >> 10) & 0xfff) as u64) * 8));
+            let addr = regs
+                .get(rn(ins))
+                .map(|b| b.wrapping_add((((ins >> 10) & 0xfff) as u64) * 8));
             regs.set(rd(ins), addr.and_then(|a| img.read_ptr(a)));
         }
         _ if ins & 0xff00_0000 == 0x5800_0000 => {
@@ -99,7 +123,9 @@ fn step(img: &MachoImage, pc: u64, ins: u32, regs: &mut Regs, events: &mut Vec<E
             regs.set(rd(ins), img.read_ptr(addr));
         }
         _ if ins & 0xffc0_0000 == 0xf900_0000 => {
-            let addr = regs.get(rn(ins)).map(|b| b.wrapping_add((((ins >> 10) & 0xfff) as u64) * 8));
+            let addr = regs
+                .get(rn(ins))
+                .map(|b| b.wrapping_add((((ins >> 10) & 0xfff) as u64) * 8));
             if let (Some(addr), Some(value)) = (addr, regs.get(rd(ins))) {
                 events.push(Event::Store(Store { addr, value }));
             }
@@ -115,11 +141,16 @@ fn step(img: &MachoImage, pc: u64, ins: u32, regs: &mut Regs, events: &mut Vec<E
             events.push(Event::Call(Call { target, args }));
         }
         _ if ins & 0xfc00_0000 == 0x1400_0000 => {
-            events.push(Event::Call(Call { target: branch(ins), args: args(regs) }));
+            events.push(Event::Call(Call {
+                target: branch(ins),
+                args: args(regs),
+            }));
             return Step::Stop;
         }
         // BLR, BLRAA/BLRAB/BLRAAZ/BLRABZ: an indirect call.
-        _ if ins & 0xfefff800 == 0xd63f0800 || ins & 0xfffffc1f == 0xd63f0000 => regs.clobber_call(),
+        _ if ins & 0xfefff800 == 0xd63f0800 || ins & 0xfffffc1f == 0xd63f0000 => {
+            regs.clobber_call()
+        }
         // RET/RETAA/RETAB, BR and its authenticated forms, ERET.
         _ if ins & 0xfe9f_0000 == 0xd61f_0000 => return Step::Stop,
         _ => clobber_generic(ins, regs),

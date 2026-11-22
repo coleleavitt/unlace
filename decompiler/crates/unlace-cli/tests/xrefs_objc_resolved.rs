@@ -23,7 +23,11 @@ fn xrefs(args: &[&str]) -> String {
         .args(args)
         .output()
         .expect("failed to spawn the kuna binary");
-    assert!(out.status.success(), "unlace xrefs {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "unlace xrefs {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     String::from_utf8_lossy(&out.stdout).into_owned()
 }
 
@@ -35,16 +39,46 @@ fn resolved_sends_are_call_edges_both_ways() {
     let arc = fixture("macho_objc_arc_arm64");
     let to = xrefs(&[&arc, "--to", "-[Base setInner:]", "--option", "objc", "on"]);
     assert!(to.contains("# 1 reference to -[Base setInner:]"), "{to}");
-    assert!(to.contains("0x1000007d0\tcall\t-[Holder make]+0x38\tobjc_msgSend (resolved)"), "{to}");
+    assert!(
+        to.contains("0x1000007d0\tcall\t-[Holder make]+0x38\tobjc_msgSend (resolved)"),
+        "{to}"
+    );
 
-    let from = xrefs(&[&arc, "--from", "-[Holder make]", "--option", "objc", "on", "--kind", "call"]);
-    assert!(from.contains("0x100000744\tcall\t-[Base setInner:]\t@0x1000007d0\tobjc_msgSend (resolved)"), "{from}");
-    assert!(from.contains("objc_msgSend\t@0x1000007d0\tbl"), "the runtime edge stays: {from}");
+    let from = xrefs(&[
+        &arc,
+        "--from",
+        "-[Holder make]",
+        "--option",
+        "objc",
+        "on",
+        "--kind",
+        "call",
+    ]);
+    assert!(
+        from.contains(
+            "0x100000744\tcall\t-[Base setInner:]\t@0x1000007d0\tobjc_msgSend (resolved)"
+        ),
+        "{from}"
+    );
+    assert!(
+        from.contains("objc_msgSend\t@0x1000007d0\tbl"),
+        "the runtime edge stays: {from}"
+    );
 
     let types = fixture("macho_objc_types_arm64");
     let to = xrefs(&[&types, "--to", "-[Base count]", "--option", "objc", "on"]);
     assert!(to.contains("# 2 references to -[Base count]"), "{to}");
 
-    let off = xrefs(&[&arc, "--to", "-[Base setInner:]", "--option", "objc", "on", "--option", "objcresolve", "off"]);
+    let off = xrefs(&[
+        &arc,
+        "--to",
+        "-[Base setInner:]",
+        "--option",
+        "objc",
+        "on",
+        "--option",
+        "objcresolve",
+        "off",
+    ]);
     assert!(off.contains("# 0 references to -[Base setInner:]"), "{off}");
 }

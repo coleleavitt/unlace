@@ -6,32 +6,55 @@ use std::process::Command;
 #[test]
 #[cfg(all(target_arch = "x86_64", target_os = "linux"))]
 fn recovered_integer_call_arguments_match_complete_callee_contracts() {
-    if process::optional_output(Command::new("cc").arg("--version")).is_none() { return; }
+    if process::optional_output(Command::new("cc").arg("--version")).is_none() {
+        return;
+    }
     let have_go = process::optional_output(Command::new("go").arg("version")).is_some();
-    let kuna = std::env::var_os("KUNA_TEST_BIN")
-        .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
+    let kuna =
+        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let declarations = [
-        ("pass_u8", "uint8", "uint8 value"), ("pass_u16", "uint8", "uint8 value"),
-        ("pass_u32", "uint8", "uint8 value"), ("same_width", "uint8", "uint8 value"),
-        ("pass_signed", "uint8", "int4 value"), ("keep_signed", "uint8", "int4 value"),
-        ("signed_u8", "int8", "uint8 value"), ("signed_u16", "int8", "uint8 value"),
+        ("pass_u8", "uint8", "uint8 value"),
+        ("pass_u16", "uint8", "uint8 value"),
+        ("pass_u32", "uint8", "uint8 value"),
+        ("same_width", "uint8", "uint8 value"),
+        ("pass_signed", "uint8", "int4 value"),
+        ("keep_signed", "uint8", "int4 value"),
+        ("signed_u8", "int8", "uint8 value"),
+        ("signed_u16", "int8", "uint8 value"),
         ("signed_u32", "int8", "uint8 value"),
         ("store_u8", "uint8", "uint8 *destination,uint8 value"),
         ("store_u16", "uint8", "uint8 *destination,uint8 value"),
         ("store_u32", "uint8", "uint8 *destination,uint8 value"),
         ("store_signed", "uint8", "uint8 *destination,int4 value"),
-        ("pass_signed8", "uint8", "int1 value"), ("pass_signed16", "uint8", "int2 value"),
+        ("pass_signed8", "uint8", "int1 value"),
+        ("pass_signed16", "uint8", "int2 value"),
         ("store_signed8", "uint8", "uint8 *destination,int1 value"),
         ("store_signed16", "uint8", "uint8 *destination,int2 value"),
     ];
-    let names = ["consume", "consume_signed", "consume_store"].into_iter()
-        .chain(declarations.iter().map(|(name, _, _)| *name)).collect::<Vec<_>>().join(",");
+    let names = ["consume", "consume_signed", "consume_store"]
+        .into_iter()
+        .chain(declarations.iter().map(|(name, _, _)| *name))
+        .collect::<Vec<_>>()
+        .join(",");
     let bodies = |language: &str| {
         let mut command = Command::new(&kuna);
-        command.args(["decompile-all", &common::fixture("call_argument_extensions_x86_64"),
-            "--functions", &names, "--option", "protoorder", "types", "--language", language, "--json"]);
+        command.args([
+            "decompile-all",
+            &common::fixture("call_argument_extensions_x86_64"),
+            "--functions",
+            &names,
+            "--option",
+            "protoorder",
+            "types",
+            "--language",
+            language,
+            "--json",
+        ]);
         for (name, result, args) in declarations {
-            command.args(["--assert", &format!("prototype {name} {result} {name}({args})")]);
+            command.args([
+                "--assert",
+                &format!("prototype {name} {result} {name}({args})"),
+            ]);
         }
         let output = process::required_output(&mut command);
         let document: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
@@ -40,33 +63,86 @@ fn recovered_integer_call_arguments_match_complete_callee_contracts() {
         }
         let functions = document["functions"].as_array().unwrap();
         assert_eq!(functions.len(), 20);
-        functions.iter().map(|function| {
-            assert!(function["error"].is_null(), "{function}");
-            function["code"].as_str().unwrap()
-        }).collect::<Vec<_>>().join("\n")
+        functions
+            .iter()
+            .map(|function| {
+                assert!(function["error"].is_null(), "{function}");
+                function["code"].as_str().unwrap()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     };
     let c = bodies("c");
     let rust = bodies("rust");
     let go = have_go.then(|| bodies("go"));
-    let patterns: [u64; 16] = [0,0x100,0x7f00,0x8000,0xff00,0x10000,0x7fff00,0x800000,
-        0xffff00,0x7fffff00,0x80000000,0xffffff00,0x100000000,0x1ffffff00,
-        0x8000000000000000,0xffffffffffffff00];
-    let high = patterns.iter().map(|v| format!("0x{v:x}")).collect::<Vec<_>>().join(",");
+    let patterns: [u64; 16] = [
+        0,
+        0x100,
+        0x7f00,
+        0x8000,
+        0xff00,
+        0x10000,
+        0x7fff00,
+        0x800000,
+        0xffff00,
+        0x7fffff00,
+        0x80000000,
+        0xffffff00,
+        0x100000000,
+        0x1ffffff00,
+        0x8000000000000000,
+        0xffffffffffffff00,
+    ];
+    let high = patterns
+        .iter()
+        .map(|v| format!("0x{v:x}"))
+        .collect::<Vec<_>>()
+        .join(",");
     let mut expected = String::new();
-    for high in patterns { for byte in 0..256 {
-        let value = high | byte;
-        let low = value & 0xffffffff;
-        let signed = if low & 0x80000000 == 0 { low } else { low | 0xffffffff00000000 };
-        let row = [value & 255, value & 65535, low, low, signed, value,
-            (value & 255) >> 1, (value & 65535) >> 1, low >> 1,
-            value & 255, value & 65535, value & 255, value & 65535, low, low, value & 255, value & 65535];
-        expected.push_str(&row.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(" "));
-        expected.push('\n');
-    } }
+    for high in patterns {
+        for byte in 0..256 {
+            let value = high | byte;
+            let low = value & 0xffffffff;
+            let signed = if low & 0x80000000 == 0 {
+                low
+            } else {
+                low | 0xffffffff00000000
+            };
+            let row = [
+                value & 255,
+                value & 65535,
+                low,
+                low,
+                signed,
+                value,
+                (value & 255) >> 1,
+                (value & 65535) >> 1,
+                low >> 1,
+                value & 255,
+                value & 65535,
+                value & 255,
+                value & 65535,
+                low,
+                low,
+                value & 255,
+                value & 65535,
+            ];
+            expected.push_str(
+                &row.iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            );
+            expected.push('\n');
+        }
+    }
     let c_source = common::scratch_file("call_argument_extensions", "c");
     let rust_source = common::scratch_file("call_argument_extensions", "rs");
     let go_source = common::scratch_file("call_argument_extensions", "go");
-    std::fs::write(&c_source, format!(r#"
+    std::fs::write(
+        &c_source,
+        format!(
+            r#"
 #include <stdint.h>
 #include <stdio.h>
 #include <assert.h>
@@ -97,8 +173,14 @@ int main(void) {{
     putchar('\n');
   }}
 }}
-"#)).unwrap();
-    std::fs::write(&rust_source, format!(r#"
+"#
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        &rust_source,
+        format!(
+            r#"
 {rust}
 fn main() {{ unsafe {{
   for high in [{high}] {{ for byte in 0u64..256 {{
@@ -121,7 +203,10 @@ fn main() {{ unsafe {{
     println!("{{}}",row.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(" "));
   }} }}
 }} }}
-"#)).unwrap();
+"#
+        ),
+    )
+    .unwrap();
     if let Some(go) = go {
         std::fs::write(&go_source, format!(r#"
 package main
@@ -157,23 +242,61 @@ func main() {{
     let rust_binary = rust_source.with_extension("out");
     let go_binary = go_source.with_extension("out");
     for optimization in ["0", "2"] {
-        process::required_output(Command::new("cc")
-            .args(["-std=c11", "-Wall", "-Wextra", "-Werror", &format!("-O{optimization}")])
-            .arg(&c_source).arg("-o").arg(&c_binary));
-        assert_eq!(process::required_output(&mut Command::new(&c_binary)).stdout, expected.as_bytes());
-        process::required_output(Command::new("rustc")
-            .args(["--edition=2021", "--crate-name", "call_argument_extensions",
-                "-C", &format!("opt-level={optimization}"), "-C", "overflow-checks=yes"])
-            .arg(&rust_source).arg("-o").arg(&rust_binary));
-        assert_eq!(process::required_output(&mut Command::new(&rust_binary)).stdout, expected.as_bytes());
+        process::required_output(
+            Command::new("cc")
+                .args([
+                    "-std=c11",
+                    "-Wall",
+                    "-Wextra",
+                    "-Werror",
+                    &format!("-O{optimization}"),
+                ])
+                .arg(&c_source)
+                .arg("-o")
+                .arg(&c_binary),
+        );
+        assert_eq!(
+            process::required_output(&mut Command::new(&c_binary)).stdout,
+            expected.as_bytes()
+        );
+        process::required_output(
+            Command::new("rustc")
+                .args([
+                    "--edition=2021",
+                    "--crate-name",
+                    "call_argument_extensions",
+                    "-C",
+                    &format!("opt-level={optimization}"),
+                    "-C",
+                    "overflow-checks=yes",
+                ])
+                .arg(&rust_source)
+                .arg("-o")
+                .arg(&rust_binary),
+        );
+        assert_eq!(
+            process::required_output(&mut Command::new(&rust_binary)).stdout,
+            expected.as_bytes()
+        );
         if have_go {
             let mut compile = Command::new("go");
             compile.arg("build");
-            if optimization == "0" { compile.arg("-gcflags=all=-N -l"); }
+            if optimization == "0" {
+                compile.arg("-gcflags=all=-N -l");
+            }
             process::required_output(compile.arg("-o").arg(&go_binary).arg(&go_source));
-            assert_eq!(process::required_output(&mut Command::new(&go_binary)).stdout, expected.as_bytes());
+            assert_eq!(
+                process::required_output(&mut Command::new(&go_binary)).stdout,
+                expected.as_bytes()
+            );
         }
     }
-    for path in [c_source,rust_source,c_binary,rust_binary] { std::fs::remove_file(path).unwrap(); }
-    if have_go { for path in [go_source,go_binary] { std::fs::remove_file(path).unwrap(); } }
+    for path in [c_source, rust_source, c_binary, rust_binary] {
+        std::fs::remove_file(path).unwrap();
+    }
+    if have_go {
+        for path in [go_source, go_binary] {
+            std::fs::remove_file(path).unwrap();
+        }
+    }
 }

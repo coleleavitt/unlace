@@ -23,8 +23,10 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 /// The catch-dispatch landing pad, 12 bytes into `guarded`'s FDE body.
@@ -33,7 +35,10 @@ const PAD: &str = "sub_4012e2";
 const OWNER: &str = "sub_4012d6";
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Bootstrap the stripped C++ try/catch fixture with the LSDA landing-pad oracle on,
@@ -44,15 +49,22 @@ fn bootstrap() -> ConsoleProgram {
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.arch_mut().set_kuna_option("eh_frame_full", "on").expect("eh_frame_full flips on");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.arch_mut()
+        .set_kuna_option("eh_frame_full", "on")
+        .expect("eh_frame_full flips on");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
 fn decompile(prog: ConsoleProgram, name: &str) -> String {
-    let cmds: Vec<String> = [format!("load function {name}"), "decompile".into(), "print C".into()]
-        .into_iter()
-        .collect();
+    let cmds: Vec<String> = [
+        format!("load function {name}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .into_iter()
+    .collect();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -82,7 +94,10 @@ fn landing_pad_is_rejected_and_its_owner_survives() {
         "the FDE start {OWNER} is a function and must survive the interior filter"
     );
     let body = decompile(prog, OWNER);
-    assert!(body.contains(OWNER), "expected a decompiled body for {OWNER}, got:\n{body}");
+    assert!(
+        body.contains(OWNER),
+        "expected a decompiled body for {OWNER}, got:\n{body}"
+    );
 }
 
 /// The PLT property: the linker emits ONE FDE for the whole PLT, and every stub
@@ -96,8 +111,14 @@ fn no_named_function_is_lost() {
         .filter(|e| !e.name.starts_with("sub_"))
         .map(|e| e.name)
         .collect();
-    assert!(!named.is_empty(), "the fixture must carry named (PLT/import) functions");
+    assert!(
+        !named.is_empty(),
+        "the fixture must carry named (PLT/import) functions"
+    );
     for name in &named {
-        assert!(prog.lookup_symbol(name).is_some(), "{name} must keep its symbol");
+        assert!(
+            prog.lookup_symbol(name).is_some(),
+            "{name} must keep its symbol"
+        );
     }
 }

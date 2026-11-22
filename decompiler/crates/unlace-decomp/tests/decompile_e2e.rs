@@ -14,8 +14,8 @@ use unlace_base::xml::{DocumentStorage, Element};
 
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::decompile_drive::{decompile_func, print_c};
-use unlace_decomp::options::{register_option_elements, ArchOptionContext, OptionDatabase};
-use unlace_decomp::sleigh_arch::{register_sleigh_arch_ids, LanguageDatabase};
+use unlace_decomp::options::{ArchOptionContext, OptionDatabase, register_option_elements};
+use unlace_decomp::sleigh_arch::{LanguageDatabase, register_sleigh_arch_ids};
 use unlace_decomp::xml_arch::{XmlArchitecture, XmlArchitectureCapability};
 
 use unlace_sleigh::loadimage::LoadImage;
@@ -32,7 +32,10 @@ use unlace_sleigh::translate::register_translate_ids;
 const FIXTURES: &[&str] = &["boolless", "ccmp", "gp", "lzcount", "condexesub"];
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 // ===========================================================================
@@ -74,7 +77,9 @@ fn find_named(el: &Rc<Element>, name: &str, out: &mut Vec<Rc<Element>>) {
 }
 
 fn attr(el: &Element, name: &str) -> Option<String> {
-    el.get_attribute_value(name).ok().map(|b| String::from_utf8_lossy(b).into_owned())
+    el.get_attribute_value(name)
+        .ok()
+        .map(|b| String::from_utf8_lossy(b).into_owned())
 }
 
 /// Parse a `<com>option NAME P1 P2 P3</com>` script line into its tokens.
@@ -91,7 +96,9 @@ fn parse_option_com(text: &str) -> Option<(String, String, String, String)> {
 }
 
 fn parse_datatest(stem: &str) -> Result<DataTest, String> {
-    let path = repo_root().join("tests/datatests").join(format!("{stem}.xml"));
+    let path = repo_root()
+        .join("tests/datatests")
+        .join(format!("{stem}.xml"));
     let xml = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
     let mut store = DocumentStorage::new();
     let root = store
@@ -127,7 +134,12 @@ fn parse_datatest(stem: &str) -> Result<DataTest, String> {
         .filter_map(|c| parse_option_com(&String::from_utf8_lossy(c.get_content())))
         .collect();
 
-    Ok(DataTest { binaryimage, arch_id, symbols, options })
+    Ok(DataTest {
+        binaryimage,
+        arch_id,
+        symbols,
+        options,
+    })
 }
 
 // ===========================================================================
@@ -168,11 +180,13 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
     let capability = XmlArchitectureCapability::new();
     let mut arch = capability.build_architecture("datatest", "");
 
-    arch.build_loader(Rc::clone(&dt.binaryimage)).map_err(|e| format!("build_loader: {e}"))?;
+    arch.build_loader(Rc::clone(&dt.binaryimage))
+        .map_err(|e| format!("build_loader: {e}"))?;
 
     let mut db = LanguageDatabase::new();
     db.scan_for_sleigh_directories(root.join("specs").to_str().unwrap());
-    db.get_descriptions(&registry).map_err(|e| format!("collect ldefs: {e}"))?;
+    db.get_descriptions(&registry)
+        .map_err(|e| format!("collect ldefs: {e}"))?;
 
     arch.sleigh_mut().set_archid(&dt.arch_id);
     arch.sleigh_mut()
@@ -182,7 +196,10 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
         return Err("language index unresolved".to_string());
     }
 
-    let specs = arch.sleigh().build_spec_file(&db).map_err(|e| format!("build_spec_file: {e}"))?;
+    let specs = arch
+        .sleigh()
+        .build_spec_file(&db)
+        .map_err(|e| format!("build_spec_file: {e}"))?;
     let resolved_sla = specs.slafile.ok_or("build_spec_file resolved no .sla")?;
     let sla = std::fs::read(&resolved_sla).map_err(|e| format!("read sla: {e}"))?;
     arch.sleigh_mut()
@@ -204,7 +221,10 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
     arch.open_image(unsafe { &*manager_ptr }, &registry)
         .map_err(|e| format!("open_image: {e}"))?;
     let img = arch.take_loader().ok_or("loader vanished after open")?;
-    arch.sleigh_mut().base_mut().unwrap().set_loader(Box::new(img));
+    arch.sleigh_mut()
+        .base_mut()
+        .unwrap()
+        .set_loader(Box::new(img));
 
     Ok(arch)
 }
@@ -269,7 +289,10 @@ fn run_fixture(stem: &str) -> Result<Vec<(String, Outcome)>, String> {
         let base = match xarch.sleigh_mut().base_mut() {
             Some(b) => b,
             None => {
-                outcomes.push((sym.name.clone(), Outcome::Err("no Architecture base".into())));
+                outcomes.push((
+                    sym.name.clone(),
+                    Outcome::Err("no Architecture base".into()),
+                ));
                 continue;
             }
         };
@@ -277,8 +300,10 @@ fn run_fixture(stem: &str) -> Result<Vec<(String, Outcome)>, String> {
         let space = match base.manage().get_space_by_name(&sym.space) {
             Some(s) => Rc::clone(s),
             None => {
-                outcomes
-                    .push((sym.name.clone(), Outcome::Err(format!("no space {}", sym.space))));
+                outcomes.push((
+                    sym.name.clone(),
+                    Outcome::Err(format!("no space {}", sym.space)),
+                ));
                 continue;
             }
         };
@@ -377,25 +402,45 @@ fn option_command_mutates_the_real_architecture() {
     };
 
     // (1) a plain config field: `option readonly on` -> readonlypropagate=true.
-    assert!(!arch.readonlypropagate, "precondition: readonly defaults off");
+    assert!(
+        !arch.readonlypropagate,
+        "precondition: readonly defaults off"
+    );
     set(arch, "readonly", "on").expect("option readonly on");
-    assert!(arch.readonlypropagate, "option readonly on did not flip readonlypropagate");
+    assert!(
+        arch.readonlypropagate,
+        "option readonly on did not flip readonlypropagate"
+    );
     set(arch, "readonly", "off").expect("option readonly off");
-    assert!(!arch.readonlypropagate, "option readonly off did not clear readonlypropagate");
+    assert!(
+        !arch.readonlypropagate,
+        "option readonly off did not clear readonlypropagate"
+    );
 
     // (2) the printer: `option nullprinting off` -> PrintC option flips.
     //     (kuna DIV-34: null printing is default-ON; the option still drives it.)
-    assert!(arch.print().options.null, "precondition: null printing on (DIV-34)");
+    assert!(
+        arch.print().options.null,
+        "precondition: null printing on (DIV-34)"
+    );
     set(arch, "nullprinting", "off").expect("option nullprinting off");
-    assert!(!arch.print().options.null, "option nullprinting off did not flip the printer");
+    assert!(
+        !arch.print().options.null,
+        "option nullprinting off did not flip the printer"
+    );
     set(arch, "nullprinting", "on").expect("option nullprinting on");
-    assert!(arch.print().options.null, "option nullprinting on did not flip the printer");
+    assert!(
+        arch.print().options.null,
+        "option nullprinting on did not flip the printer"
+    );
 
     // (3) the proto-model registry: `option extrapop 8` -> defaultfp extrapop.
     //     The seeded default model exists, so the extrapop write resolves.
     set(arch, "extrapop", "8").expect("option extrapop 8");
     assert_eq!(
-        arch.default_fp().expect("a default proto model is seeded").get_extra_pop(),
+        arch.default_fp()
+            .expect("a default proto model is seeded")
+            .get_extra_pop(),
         8,
         "option extrapop did not reach the default prototype model"
     );
@@ -451,8 +496,11 @@ fn maxinstruction_option_bounds_flow_following() {
         .iter()
         .find(|s| s.name == "test_gp")
         .expect("gp has the test_gp <symbol>");
-    let space =
-        Rc::clone(arch.manage().get_space_by_name(&sym.space).expect("symbol space exists"));
+    let space = Rc::clone(
+        arch.manage()
+            .get_space_by_name(&sym.space)
+            .expect("symbol space exists"),
+    );
     let entry = Address::new(space, sym.offset);
 
     let options = OptionDatabase::new();
@@ -478,8 +526,7 @@ fn maxinstruction_option_bounds_flow_following() {
     // (2) `option errortoomanyinstructions off`: the same tiny bound now
     //     truncates flow with an artificial halt (flow.cc:414) instead of
     //     erroring, and the truncated function still prints sane C.
-    set(arch, "errortoomanyinstructions", "off")
-        .expect("option errortoomanyinstructions off");
+    set(arch, "errortoomanyinstructions", "off").expect("option errortoomanyinstructions off");
     let fd = decompile_func(arch, &sym.name, entry.clone(), 0)
         .expect("truncated flow should still decompile");
     let truncated = print_c(arch, &fd);
@@ -494,13 +541,14 @@ fn maxinstruction_option_bounds_flow_following() {
 
     // (3) Restore the error flag and the default bound: the full function
     //     decompiles again, proving the failure in (1) was the bound itself.
-    set(arch, "errortoomanyinstructions", "on")
-        .expect("option errortoomanyinstructions on");
+    set(arch, "errortoomanyinstructions", "on").expect("option errortoomanyinstructions on");
     set(arch, "maxinstruction", "100000").expect("option maxinstruction 100000");
-    let fd = decompile_func(arch, &sym.name, entry, 0)
-        .expect("decompile under the default bound");
+    let fd = decompile_func(arch, &sym.name, entry, 0).expect("decompile under the default bound");
     let full = print_c(arch, &fd);
-    assert!(is_structurally_sane(&full, &sym.name), "default-bound C is not sane:\n{full}");
+    assert!(
+        is_structurally_sane(&full, &sym.name),
+        "default-bound C is not sane:\n{full}"
+    );
     // The truncation must TRUNCATE.  The halt planted at the bound used to be
     // followed by a decode of the same instruction, so the next address was
     // queued and the walk carried on to the end of the reachable body -- the
@@ -511,7 +559,10 @@ fn maxinstruction_option_bounds_flow_following() {
     let statements = |c: &str| {
         c.lines()
             .filter(|l| {
-                l.split("//").next().map(|code| code.trim_end().ends_with(';')).unwrap_or(false)
+                l.split("//")
+                    .next()
+                    .map(|code| code.trim_end().ends_with(';'))
+                    .unwrap_or(false)
             })
             .count()
     };

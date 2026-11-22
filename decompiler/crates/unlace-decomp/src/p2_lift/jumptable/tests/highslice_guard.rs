@@ -155,7 +155,11 @@ fn highslice_guard_preserves_unsigned_signed_and_wrapping_ranges() {
                     mask - 2,
                     mask,
                 ] {
-                    assert_eq!(range.contains_val(value), expected.contains_val(value), "size={size} offset={offset} start={start} end={end} reverse={reverse} value={value}");
+                    assert_eq!(
+                        range.contains_val(value),
+                        expected.contains_val(value),
+                        "size={size} offset={offset} start={start} end={end} reverse={reverse} value={value}"
+                    );
                 }
                 let mut wanted = Vec::new();
                 let mut value = start;

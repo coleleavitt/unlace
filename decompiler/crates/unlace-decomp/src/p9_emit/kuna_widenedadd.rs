@@ -2,10 +2,10 @@
 //! observes the result.
 use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use unlace_num::opcodes::OpCode;
 use std::rc::Rc;
+use unlace_num::opcodes::OpCode;
 
 pub(crate) struct WidenedAddPlan {
     pub lhs: VarnodeId,
@@ -129,7 +129,7 @@ fn integer_observes(data: &Funcdata, start: VarnodeId) -> bool {
             };
             match op.code() {
                 OpCode::CPUI_RETURN if (1..op.num_input()).any(|i| op.get_in(i) == Some(vn)) => {
-                    return true
+                    return true;
                 }
                 OpCode::CPUI_STORE if op.get_in(2) == Some(vn) => return true,
                 OpCode::CPUI_INT_EQUAL

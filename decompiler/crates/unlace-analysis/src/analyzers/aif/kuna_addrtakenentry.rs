@@ -55,14 +55,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
+use object::read::Object;
 use unlace_base::space::AddrSpace;
 use unlace_sleigh::translate::Translate;
-use object::read::Object;
 
 use crate::listing::{FlowKind, Listing};
 
 use super::kuna_aifnoppad::{is_padding, is_zero_fill};
-use super::{GapDecoder, ProbedInsn, MAX_FOLLOW_INSNS};
+use super::{GapDecoder, MAX_FOLLOW_INSNS, ProbedInsn};
 
 /// How many re-walks the accepted entries may trigger.
 pub(crate) const MAX_ROUNDS: usize = 4;
@@ -105,7 +105,9 @@ impl AddrTaken {
             .collect();
         let mut dispatches = Vec::new();
         for (&at, insn) in listing.instructions() {
-            let Some(bytes) = self.bytes(at, insn.len) else { continue };
+            let Some(bytes) = self.bytes(at, insn.len) else {
+                continue;
+            };
             if is_indirect_jmp(bytes) {
                 dispatches.push(at);
             } else if let Some(target) = materialized(at, bytes) {
@@ -118,7 +120,10 @@ impl AddrTaken {
     }
 
     fn bytes(&self, at: u64, len: u32) -> Option<&[u8]> {
-        let (lo, _, data) = self.texts.iter().find(|&&(lo, hi, _)| at >= lo && at < hi)?;
+        let (lo, _, data) = self
+            .texts
+            .iter()
+            .find(|&&(lo, hi, _)| at >= lo && at < hi)?;
         let off = usize::try_from(at - lo).ok()?;
         data.get(off..off.checked_add(len as usize)?)
     }
@@ -139,7 +144,8 @@ impl AddrTaken {
         let mut claimed: BTreeMap<u64, Claimed> = BTreeMap::new();
         let mut accepted: BTreeSet<u64> = BTreeSet::new();
         for (target, takers) in candidates {
-            let Some(&(lo, hi)) = ranges.iter().find(|&&(lo, hi)| target >= lo && target < hi) else {
+            let Some(&(lo, hi)) = ranges.iter().find(|&&(lo, hi)| target >= lo && target < hi)
+            else {
                 continue;
             };
             let label = own_label(listing, &dispatches, target, &takers);
@@ -149,12 +155,18 @@ impl AddrTaken {
             let Some(padded) = isolated(listing, &mut decoder, &claimed, lo, target) else {
                 continue;
             };
-            let gap_hi = listing.next_instruction_start_after(target).map_or(hi, |n| n.min(hi));
-            let Some(body) = routine(listing, &mut decoder, &accepted, target, gap_hi, padded) else {
+            let gap_hi = listing
+                .next_instruction_start_after(target)
+                .map_or(hi, |n| n.min(hi));
+            let Some(body) = routine(listing, &mut decoder, &accepted, target, gap_hi, padded)
+            else {
                 continue;
             };
             let dispatches_again = || {
-                body.iter().any(|(&at, c)| self.bytes(at, (c.end - at) as u32).is_some_and(is_indirect_jmp))
+                body.iter().any(|(&at, c)| {
+                    self.bytes(at, (c.end - at) as u32)
+                        .is_some_and(is_indirect_jmp)
+                })
             };
             if label == Some(Label::After) && dispatches_again() {
                 continue;
@@ -193,7 +205,11 @@ fn materialized(at: u64, bytes: &[u8]) -> Option<u64> {
         i += 1;
     }
     let len = bytes.len();
-    let tail32 = || Some(u32::from_le_bytes(bytes.get(len.checked_sub(4)?..)?.try_into().ok()?));
+    let tail32 = || {
+        Some(u32::from_le_bytes(
+            bytes.get(len.checked_sub(4)?..)?.try_into().ok()?,
+        ))
+    };
     match *bytes.get(i)? {
         0x8D => {
             if bytes.get(i + 1)? & 0xC7 != 0x05 || len != i + 6 {
@@ -213,7 +229,11 @@ fn materialized(at: u64, bytes: &[u8]) -> Option<u64> {
                 return None;
             }
             let imm = tail32()?;
-            Some(if rex_w { imm as i32 as i64 as u64 } else { u64::from(imm) })
+            Some(if rex_w {
+                imm as i32 as i64 as u64
+            } else {
+                u64::from(imm)
+            })
         }
         0x68 => {
             if len != i + 5 {
@@ -250,8 +270,12 @@ fn own_label(listing: &Listing, dispatches: &[u64], target: u64, takers: &[u64])
     let next = listing.next_instruction_start_after(target);
     let mut label = None;
     for &taker in takers {
-        let Some(entry) = listing.function_containing(taker).map(|f| f.entry) else { continue };
-        let hi = listing.next_function_after(entry).map_or(u64::MAX, |f| f.entry);
+        let Some(entry) = listing.function_containing(taker).map(|f| f.entry) else {
+            continue;
+        };
+        let hi = listing
+            .next_function_after(entry)
+            .map_or(u64::MAX, |f| f.entry);
         if target < entry || target >= hi {
             continue;
         }
@@ -273,19 +297,30 @@ fn own_label(listing: &Listing, dispatches: &[u64], target: u64, takers: &[u64])
 /// or a pointer, not a dispatch.
 fn is_indirect_jmp(bytes: &[u8]) -> bool {
     let mut i = 0;
-    while bytes.get(i).is_some_and(|b| matches!(b, 0x66 | 0x67 | 0xF0 | 0xF2 | 0xF3 | 0x26 | 0x2E | 0x36 | 0x3E | 0x64 | 0x65)) {
+    while bytes.get(i).is_some_and(|b| {
+        matches!(
+            b,
+            0x66 | 0x67 | 0xF0 | 0xF2 | 0xF3 | 0x26 | 0x2E | 0x36 | 0x3E | 0x64 | 0x65
+        )
+    }) {
         i += 1;
     }
     if bytes.get(i).is_some_and(|&rex| rex & 0xF0 == 0x40) {
         i += 1;
     }
-    bytes.get(i) == Some(&0xFF) && bytes.get(i + 1).is_some_and(|&m| (m >> 3) & 7 == 4 && m & 0xC7 != 0x05)
+    bytes.get(i) == Some(&0xFF)
+        && bytes
+            .get(i + 1)
+            .is_some_and(|&m| (m >> 3) & 7 == 4 && m & 0xC7 != 0x05)
 }
 
 /// Whether `target` lies strictly inside an instruction a routine accepted this
 /// round.
 fn splits_claimed(claimed: &BTreeMap<u64, Claimed>, target: u64) -> bool {
-    claimed.range(..target).next_back().is_some_and(|(_, c)| c.end > target)
+    claimed
+        .range(..target)
+        .next_back()
+        .is_some_and(|(_, c)| c.end > target)
 }
 
 /// Whether `target` starts where a function starts: the instruction before it
@@ -303,11 +338,19 @@ fn isolated(
     let decoded = listing
         .instruction_before(target)
         .filter(|insn| insn.addr >= lo)
-        .map(|insn| (insn.addr, Claimed {
-            end: insn.addr.wrapping_add(u64::from(insn.len)),
-            falls: insn.fall_through.is_some(),
-        }));
-    let overlay = claimed.range(lo..target).next_back().map(|(&at, &c)| (at, c));
+        .map(|insn| {
+            (
+                insn.addr,
+                Claimed {
+                    end: insn.addr.wrapping_add(u64::from(insn.len)),
+                    falls: insn.fall_through.is_some(),
+                },
+            )
+        });
+    let overlay = claimed
+        .range(lo..target)
+        .next_back()
+        .map(|(&at, &c)| (at, c));
     let mut at = match decoded.into_iter().chain(overlay).max_by_key(|&(at, _)| at) {
         Some((_, prev)) if prev.end > target || prev.falls => return None,
         Some((_, prev)) => prev.end,
@@ -322,7 +365,9 @@ fn isolated(
         if !is_padding(&insn, true) && !is_zero_fill(&insn) {
             return None;
         }
-        at = at.checked_add(u64::from(insn.len)).filter(|&next| next <= target)?;
+        at = at
+            .checked_add(u64::from(insn.len))
+            .filter(|&next| next <= target)?;
     }
     None
 }
@@ -346,7 +391,14 @@ fn routine(
     }
     let is_entry = |at: u64| listing.function_at(at).is_some() || accepted.contains(&at);
     let mut body: BTreeMap<u64, Claimed> = BTreeMap::new();
-    let mut work: Vec<(u64, bool, Stack)> = vec![(target, false, Stack { depth: Some(0), frame: Frame::None })];
+    let mut work: Vec<(u64, bool, Stack)> = vec![(
+        target,
+        false,
+        Stack {
+            depth: Some(0),
+            frame: Frame::None,
+        },
+    )];
     while let Some((at, after_call, stack)) = work.pop() {
         if body.contains_key(&at) {
             continue;
@@ -361,8 +413,16 @@ fn routine(
         if is_zero_fill(&insn) || insn.mnemonic.eq_ignore_ascii_case("hlt") {
             return None;
         }
-        let end = at.checked_add(u64::from(insn.len)).filter(|&end| end <= gap_hi)?;
-        body.insert(at, Claimed { end, falls: insn.fall_through.is_some() });
+        let end = at
+            .checked_add(u64::from(insn.len))
+            .filter(|&end| end <= gap_hi)?;
+        body.insert(
+            at,
+            Claimed {
+                end,
+                falls: insn.fall_through.is_some(),
+            },
+        );
         if insn.is_terminal && stack.depth.is_some_and(|d| d > 0) {
             return None;
         }
@@ -420,18 +480,33 @@ impl Stack {
     /// a frame the routine did not build.
     fn step(self, insn: &ProbedInsn) -> Option<Stack> {
         let m = &*insn.mnemonic;
-        let writes_rbp = insn.operands.trim_start().to_ascii_lowercase().starts_with("rbp,");
+        let writes_rbp = insn
+            .operands
+            .trim_start()
+            .to_ascii_lowercase()
+            .starts_with("rbp,");
         if m.eq_ignore_ascii_case("leave") {
-            let Frame::At(at) = self.frame else { return None };
-            return Some(Stack { depth: at.map(|d| d + 8), frame: Frame::None });
+            let Frame::At(at) = self.frame else {
+                return None;
+            };
+            return Some(Stack {
+                depth: at.map(|d| d + 8),
+                frame: Frame::None,
+            });
         }
         let frame = if m.eq_ignore_ascii_case("enter") {
             Frame::At(self.depth.map(|d| d - 8))
-        } else if m.eq_ignore_ascii_case("pop") && insn.operands.trim().eq_ignore_ascii_case("rbp") {
+        } else if m.eq_ignore_ascii_case("pop") && insn.operands.trim().eq_ignore_ascii_case("rbp")
+        {
             Frame::None
         } else if writes_rbp && !m.eq_ignore_ascii_case("cmp") && !m.eq_ignore_ascii_case("test") {
             let mov_rsp = m.eq_ignore_ascii_case("mov")
-                && insn.operands.chars().filter(|c| !c.is_whitespace()).collect::<String>().eq_ignore_ascii_case("rbp,rsp");
+                && insn
+                    .operands
+                    .chars()
+                    .filter(|c| !c.is_whitespace())
+                    .collect::<String>()
+                    .eq_ignore_ascii_case("rbp,rsp");
             Frame::At(if mov_rsp { self.depth } else { None })
         } else {
             self.frame
@@ -439,7 +514,8 @@ impl Stack {
         let depth = if m.eq_ignore_ascii_case("enter") {
             None
         } else {
-            self.depth.and_then(|d| stack_step(insn).map(|step| d + step))
+            self.depth
+                .and_then(|d| stack_step(insn).map(|step| d + step))
         };
         Some(Stack { depth, frame })
     }
@@ -452,7 +528,12 @@ impl Stack {
 /// the function around it, not a function.
 fn stack_step(insn: &ProbedInsn) -> Option<i64> {
     let m = &*insn.mnemonic;
-    let operands: String = insn.operands.chars().filter(|c| !c.is_whitespace()).collect::<String>().to_ascii_lowercase();
+    let operands: String = insn
+        .operands
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect::<String>()
+        .to_ascii_lowercase();
     if m.eq_ignore_ascii_case("push") || m.eq_ignore_ascii_case("pushfq") {
         return Some(-8);
     }
@@ -463,7 +544,9 @@ fn stack_step(insn: &ProbedInsn) -> Option<i64> {
         return Some(0);
     };
     let imm = |text: &str| {
-        let (negative, digits) = text.strip_prefix('-').map_or((false, text), |rest| (true, rest));
+        let (negative, digits) = text
+            .strip_prefix('-')
+            .map_or((false, text), |rest| (true, rest));
         let value = i64::from_str_radix(digits.strip_prefix("0x")?, 16).ok()?;
         Some(if negative { -value } else { value })
     };
@@ -482,7 +565,9 @@ fn stack_step(insn: &ProbedInsn) -> Option<i64> {
 
 /// `int3` and `ud2`: flow does not continue past them.
 fn is_trap(insn: &ProbedInsn) -> bool {
-    ["int3", "ud2"].iter().any(|m| insn.mnemonic.eq_ignore_ascii_case(m))
+    ["int3", "ud2"]
+        .iter()
+        .any(|m| insn.mnemonic.eq_ignore_ascii_case(m))
 }
 
 #[cfg(test)]
@@ -510,29 +595,49 @@ mod tests {
     #[test]
     fn immediates_are_read_at_their_width() {
         // mov edi,0x401136
-        assert_eq!(materialized(0x1000, &[0xbf, 0x36, 0x11, 0x40, 0x00]), Some(0x401136));
+        assert_eq!(
+            materialized(0x1000, &[0xbf, 0x36, 0x11, 0x40, 0x00]),
+            Some(0x401136)
+        );
         // movabs rax,0x140001040
         let movabs = [0x48, 0xb8, 0x40, 0x10, 0x00, 0x40, 0x01, 0x00, 0x00, 0x00];
         assert_eq!(materialized(0x1000, &movabs), Some(0x1_4000_1040));
         // mov qword [rip+0x100],0x401136
-        let store = [0x48, 0xc7, 0x05, 0x00, 0x01, 0x00, 0x00, 0x36, 0x11, 0x40, 0x00];
+        let store = [
+            0x48, 0xc7, 0x05, 0x00, 0x01, 0x00, 0x00, 0x36, 0x11, 0x40, 0x00,
+        ];
         assert_eq!(materialized(0x1000, &store), Some(0x401136));
         // push 0x401000
-        assert_eq!(materialized(0x1000, &[0x68, 0x00, 0x10, 0x40, 0x00]), Some(0x401000));
+        assert_eq!(
+            materialized(0x1000, &[0x68, 0x00, 0x10, 0x40, 0x00]),
+            Some(0x401000)
+        );
         // lea eax,[rip+0x10]: a 32-bit lea keeps the low half
-        assert_eq!(materialized(0x1_0000_1000, &[0x8d, 0x05, 0x10, 0x00, 0x00, 0x00]), Some(0x1016));
+        assert_eq!(
+            materialized(0x1_0000_1000, &[0x8d, 0x05, 0x10, 0x00, 0x00, 0x00]),
+            Some(0x1016)
+        );
     }
 
     fn insn(mnemonic: &str, operands: &str) -> super::ProbedInsn {
         super::ProbedInsn {
-            len: 1, kind: crate::listing::FlowKind::Fallthrough, is_call: false, is_terminal: false,
-            fall_through: None, flows: Vec::new(), mnemonic: std::rc::Rc::from(mnemonic),
-            operands: operands.to_string(), reusable: None,
+            len: 1,
+            kind: crate::listing::FlowKind::Fallthrough,
+            is_call: false,
+            is_terminal: false,
+            fall_through: None,
+            flows: Vec::new(),
+            mnemonic: std::rc::Rc::from(mnemonic),
+            operands: operands.to_string(),
+            reusable: None,
         }
     }
 
     fn walk(insns: &[(&str, &str)]) -> Option<Option<i64>> {
-        let mut stack = super::Stack { depth: Some(0), frame: super::Frame::None };
+        let mut stack = super::Stack {
+            depth: Some(0),
+            frame: super::Frame::None,
+        };
         for (m, o) in insns {
             stack = stack.step(&insn(m, o))?;
         }
@@ -543,14 +648,25 @@ mod tests {
     /// without having built it; a function that builds its frame balances.
     #[test]
     fn a_frame_torn_down_but_never_built_is_refused() {
-        assert_eq!(walk(&[("MOV", "RAX,qword ptr [RBP + -0x30]"), ("LEAVE", "")]), None);
+        assert_eq!(
+            walk(&[("MOV", "RAX,qword ptr [RBP + -0x30]"), ("LEAVE", "")]),
+            None
+        );
         assert_eq!(walk(&[("POP", "RBP")]), Some(Some(8)));
         assert_eq!(walk(&[("ADD", "RSP,0x38")]), Some(Some(0x38)));
         assert_eq!(
-            walk(&[("PUSH", "RBP"), ("MOV", "RBP,RSP"), ("SUB", "RSP,0x20"), ("LEAVE", "")]),
+            walk(&[
+                ("PUSH", "RBP"),
+                ("MOV", "RBP,RSP"),
+                ("SUB", "RSP,0x20"),
+                ("LEAVE", "")
+            ]),
             Some(Some(0))
         );
-        assert_eq!(walk(&[("SUB", "RSP,0x28"), ("ADD", "RSP,0x28")]), Some(Some(0)));
+        assert_eq!(
+            walk(&[("SUB", "RSP,0x28"), ("ADD", "RSP,0x28")]),
+            Some(Some(0))
+        );
     }
 
     #[test]
@@ -570,7 +686,10 @@ mod tests {
         // mov ax,0x1234
         assert_eq!(materialized(0x1000, &[0x66, 0xb8, 0x34, 0x12]), None);
         // xbegin (c7 f8 rel32)
-        assert_eq!(materialized(0x1000, &[0xc7, 0xf8, 0x00, 0x00, 0x00, 0x00]), None);
+        assert_eq!(
+            materialized(0x1000, &[0xc7, 0xf8, 0x00, 0x00, 0x00, 0x00]),
+            None
+        );
         // call rel32
         assert_eq!(materialized(0x1000, &[0xe8, 0x00, 0x00, 0x00, 0x00]), None);
     }

@@ -53,7 +53,7 @@ fn missing_ambiguous_or_differently_stored_parameters_abstain() {
     caller.calls[0].storage.1 = 4;
     assert!(insertions(&caller, &defs).is_empty());
     caller.calls[0].storage.1 = 8;
-    caller.calls[0].storage.0 .1 += 1;
+    caller.calls[0].storage.0.1 += 1;
     assert!(insertions(&caller, &defs).is_empty());
 }
 
@@ -77,11 +77,14 @@ fn stale_and_overlapping_sites_stay_uncast_and_leave_the_document_intact() {
     for code in ["sink(0,&v2);", "sink(0,&v10);", "a\nxxxxx&v1", "sink(0,"] {
         let applied = apply(code, &edits);
         assert_eq!(applied.code, code);
-            assert_eq!(applied.skipped.len(), 1, "{code}");
+        assert_eq!(applied.skipped.len(), 1, "{code}");
     }
     let twice = apply("sink(0,&v1);", &[edits[0].clone(), edits[0].clone()]);
     assert_eq!(twice.code, "sink(0,(unsigned char *)&v1);");
-    assert_eq!(twice.skipped[0].1, "pointer argument emission positions overlap");
+    assert_eq!(
+        twice.skipped[0].1,
+        "pointer argument emission positions overlap"
+    );
     let mut broken = edits[0].clone();
     broken.spelling = "unsigned\nchar *".into();
     assert_eq!(apply("sink(0,&v1);", &[broken]).code, "sink(0,&v1);");
@@ -124,13 +127,19 @@ fn structure_renames_move_only_sites_after_them_on_the_same_line() {
     let (mut caller, _) = records();
     caller.calls[0].position.column = 20;
     let mut again = caller.calls[0].clone();
-    again.position = Position { line: 2, column: 20 };
+    again.position = Position {
+        line: 2,
+        column: 20,
+    };
     caller.calls.push(again);
-    caller.renamed(code, &[
-        (39, 47, "s".into()),
-        (26, 34, "struct_200".into()),
-        (0, 8, "struct_100".into()),
-    ]);
+    caller.renamed(
+        code,
+        &[
+            (39, 47, "s".into()),
+            (26, 34, "struct_200".into()),
+            (0, 8, "struct_100".into()),
+        ],
+    );
     assert_eq!(caller.calls[0].position.column, 22);
     assert_eq!(caller.calls[1].position.column, 13);
 }
@@ -161,11 +170,13 @@ fn a_prototype_slot_without_a_parameter_keeps_the_record_and_its_place() {
     use crate::funcdata::Funcdata;
     use unlace_base::address::Address;
     use unlace_base::space::{
-        addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+        AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
     };
     let mut manage = AddrSpaceManager::new();
     manage.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    manage.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    manage
+        .insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     let ram = Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -179,11 +190,22 @@ fn a_prototype_slot_without_a_parameter_keeps_the_record_and_its_place() {
     ));
     manage.insert_space(Rc::clone(&ram)).unwrap();
     let glb = Rc::new(ArchContext::new(manage));
-    let mut fd = Funcdata::new("f", "f", glb, Address::new(Rc::clone(&ram), 0x1000), 0x1000, 0x20)
-        .unwrap();
+    let mut fd = Funcdata::new(
+        "f",
+        "f",
+        glb,
+        Address::new(Rc::clone(&ram), 0x1000),
+        0x1000,
+        0x20,
+    )
+    .unwrap();
     let byte = Rc::new(Datatype::new(1, type_metatype::TYPE_UINT));
     let mut store = ProtoStoreInternal::new(Rc::new(Datatype::new(0, type_metatype::TYPE_VOID)));
-    let pieces = ParameterPieces { addr: Address::new(ram, 0x38), type_: Some(byte), flags: 0 };
+    let pieces = ParameterPieces {
+        addr: Address::new(ram, 0x38),
+        type_: Some(byte),
+        flags: 0,
+    };
     store.set_input(1, "b", &pieces);
     fd.get_func_proto_mut().set_store(Box::new(store));
     assert!(fd.get_func_proto().get_param(0).is_none());

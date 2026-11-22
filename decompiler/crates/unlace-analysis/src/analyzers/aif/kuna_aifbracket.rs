@@ -82,8 +82,8 @@ pub struct BracketEvidence {
 
 impl BracketEvidence {
     pub fn from_object(file: &object::File, exec: &[(u64, u64)]) -> Self {
-        use object::read::{Object, ObjectSection};
         use object::SectionKind;
+        use object::read::{Object, ObjectSection};
         let width = if file.is_64() { 8 } else { 4 };
         let little = file.is_little_endian();
         let in_exec = |v: u64| exec.iter().any(|&(lo, hi)| lo <= v && v < hi);
@@ -158,7 +158,11 @@ fn joins_enclosing_interior(
     };
     body.iter().any(|&at| {
         let insn = decoder.recorded(at);
-        let jumps = if insn.is_call { &[][..] } else { &insn.flows[..] };
+        let jumps = if insn.is_call {
+            &[][..]
+        } else {
+            &insn.flows[..]
+        };
         insn.fall_through.iter().chain(jumps).any(|&target| {
             !body.contains(&target)
                 && listing.is_instruction_start(target)
@@ -202,8 +206,12 @@ fn hole_start_within(listing: &Listing, entry: u64, slot: u64) -> Option<u64> {
 /// instruction before it has no fall-through and is not a computed jump, or no
 /// decoded instruction ends right before it.
 fn opens_hole(listing: &Listing, lo: u64) -> bool {
-    let Some(prev) = lo.checked_sub(1) else { return true };
-    let Some(insn) = listing.instruction_before(lo) else { return true };
+    let Some(prev) = lo.checked_sub(1) else {
+        return true;
+    };
+    let Some(insn) = listing.instruction_before(lo) else {
+        return true;
+    };
     if insn.addr.saturating_add(u64::from(insn.len)) <= prev {
         return true;
     }
@@ -214,7 +222,9 @@ fn opens_hole(listing: &Listing, lo: u64) -> bool {
 /// return or an unconditional jump.
 fn follows_boundary_instruction(decoder: &mut GapDecoder, entry: u64) -> bool {
     (1..=MAX_INSN_LEN).any(|len| {
-        let Some(at) = entry.checked_sub(len) else { return false };
+        let Some(at) = entry.checked_sub(len) else {
+            return false;
+        };
         decoder.probe(at).is_some_and(|insn| {
             u64::from(insn.len) == len
                 && (matches!(insn.kind, FlowKind::Return | FlowKind::UnconditionalBranch)
@@ -235,11 +245,16 @@ fn is_padding(mnemonic: &str, operands: &str) -> bool {
         .filter(|c| !c.is_whitespace())
         .collect::<String>()
         .to_ascii_lowercase();
-    let Some((dst, src)) = operands.split_once(',') else { return false };
+    let Some((dst, src)) = operands.split_once(',') else {
+        return false;
+    };
     match mnemonic.as_str() {
         "mov" | "cpy" | "xchg" => dst == src,
         "lea" => {
-            let inner = src.strip_prefix('[').and_then(|s| s.strip_suffix(']')).unwrap_or("");
+            let inner = src
+                .strip_prefix('[')
+                .and_then(|s| s.strip_suffix(']'))
+                .unwrap_or("");
             inner.strip_suffix("+0x0").unwrap_or(inner) == dst
         }
         _ => false,

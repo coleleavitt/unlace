@@ -127,7 +127,7 @@ use std::rc::Rc;
 
 use unlace_base::types::int4;
 
-use crate::dtype::{type_metatype, Datatype, TypeFactory, TypeField};
+use crate::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
 
 /// The highest `struct_N` the ledger will probe.
 pub(super) const MAX_LEDGER_SLOTS: u32 = 1024;
@@ -226,11 +226,21 @@ pub(crate) struct FieldKey {
 /// `T **` the same field; the chain is followed instead, to the depth
 /// `structsynth` can produce.
 fn type_key(ct: &Datatype) -> String {
-    let mut key = format!("{:?}:{}:{}", ct.get_metatype(), ct.get_size(), ct.get_name());
+    let mut key = format!(
+        "{:?}:{}:{}",
+        ct.get_metatype(),
+        ct.get_size(),
+        ct.get_name()
+    );
     let mut next = ct.get_ptr_to();
     for _ in 0..MAX_POINTEE_DEPTH {
         let Some(p) = next else { break };
-        key.push_str(&format!(">{:?}:{}:{}", p.get_metatype(), p.get_size(), p.get_name()));
+        key.push_str(&format!(
+            ">{:?}:{}:{}",
+            p.get_metatype(),
+            p.get_size(),
+            p.get_name()
+        ));
         next = p.get_ptr_to();
     }
     key
@@ -263,7 +273,11 @@ impl Layout {
 
     /// Where the last claim ends.
     fn claimed_end(&self) -> int4 {
-        self.fields.iter().map(|f| f.offset.saturating_add(f.width)).max().unwrap_or(0)
+        self.fields
+            .iter()
+            .map(|f| f.offset.saturating_add(f.width))
+            .max()
+            .unwrap_or(0)
     }
 
     /// The `[lo, hi)` byte ranges this layout leaves as alignment padding
@@ -274,8 +288,14 @@ impl Layout {
             .windows(2)
             .filter_map(|pair| {
                 let lo = pair[0].offset.saturating_add(pair[0].width);
-                let align = if matches!(pair[1].width, 1 | 2 | 4 | 8) { pair[1].width } else { 1 };
-                let hi = pair[1].offset.min(lo.saturating_add(align - 1) / align * align);
+                let align = if matches!(pair[1].width, 1 | 2 | 4 | 8) {
+                    pair[1].width
+                } else {
+                    1
+                };
+                let hi = pair[1]
+                    .offset
+                    .min(lo.saturating_add(align - 1) / align * align);
                 (lo < hi).then_some((lo, hi))
             })
             .collect()
@@ -283,7 +303,9 @@ impl Layout {
 
     /// Does any claim of this layout overlap `[lo, hi)`?
     fn claims_over(&self, lo: int4, hi: int4) -> bool {
-        self.fields.iter().any(|f| f.offset < hi && f.offset.saturating_add(f.width) > lo)
+        self.fields
+            .iter()
+            .any(|f| f.offset < hi && f.offset.saturating_add(f.width) > lo)
     }
 
     /// Is this layout the answer a reader who measured `other` should be given?
@@ -303,7 +325,11 @@ impl Layout {
         if self.size == other.size && self.fields.len() == other.fields.len() {
             return true;
         }
-        if other.interior_padding().into_iter().any(|(lo, hi)| self.claims_over(lo, hi)) {
+        if other
+            .interior_padding()
+            .into_iter()
+            .any(|(lo, hi)| self.claims_over(lo, hi))
+        {
             return false;
         }
         let claims = other.fields.len();
@@ -342,7 +368,13 @@ fn opaque_pointee(ct: &Datatype) -> bool {
 
 /// The key of a field that points at the structure holding it.
 fn self_key(offset: int4, width: int4) -> FieldKey {
-    FieldKey { offset, width, ty: SELF_KEY.to_string(), pointer: true, opaque: false }
+    FieldKey {
+        offset,
+        width,
+        ty: SELF_KEY.to_string(),
+        pointer: true,
+        opaque: false,
+    }
 }
 
 /// Does this field point at the structure named `owner`?
@@ -391,13 +423,19 @@ pub(crate) fn layout_of(ct: &Datatype) -> Option<Layout> {
             fields.push(k);
         }
     }
-    Some(Layout { size: ct.get_size(), fields })
+    Some(Layout {
+        size: ct.get_size(),
+        fields,
+    })
 }
 
 /// The same reading for a field list that has not been completed yet, the
 /// fields at `selfs` pointing at the structure they will belong to.
 pub(crate) fn layout_of_fields(fields: &[TypeField], size: int4, selfs: &[int4]) -> Layout {
-    Layout { size, fields: fields.iter().filter_map(|f| field_key(f, selfs)).collect() }
+    Layout {
+        size,
+        fields: fields.iter().filter_map(|f| field_key(f, selfs)).collect(),
+    }
 }
 
 /// [`key_of`], with a field at one of `selfs` spelled as a self pointer.
@@ -427,7 +465,11 @@ impl Member {
 
     /// [`Member::of`], with a field at one of `selfs` claimed as a self pointer.
     pub(crate) fn of_with(f: &TypeField, selfs: &[int4]) -> Member {
-        Member { offset: f.offset, size: f.field_type.get_size(), claim: field_key(f, selfs) }
+        Member {
+            offset: f.offset,
+            size: f.field_type.get_size(),
+            claim: field_key(f, selfs),
+        }
     }
 }
 
@@ -436,7 +478,11 @@ pub(super) fn members_of(ct: &Datatype) -> Vec<Member> {
     (0..ct.num_depend())
         .filter_map(|i| ct.get_field(i))
         .map(|f| {
-            let own = if points_at(f, ct.get_name()) { vec![f.offset] } else { Vec::new() };
+            let own = if points_at(f, ct.get_name()) {
+                vec![f.offset]
+            } else {
+                Vec::new()
+            };
             Member::of_with(f, &own)
         })
         .collect()
@@ -502,7 +548,10 @@ fn entries(
 
 /// Does some other entry say strictly more than entry `i`?
 pub(super) fn is_superseded(layouts: &[&Layout], i: usize) -> bool {
-    layouts.iter().enumerate().any(|(j, l)| j != i && l.strictly_subsumes(layouts[i]))
+    layouts
+        .iter()
+        .enumerate()
+        .any(|(j, l)| j != i && l.strictly_subsumes(layouts[i]))
 }
 
 /// The entry a new layout should reuse: the SMALLEST live one that answers for
@@ -524,8 +573,9 @@ pub(super) fn best_of(
     want: &Layout,
     fits: impl Fn(usize) -> bool,
 ) -> Option<usize> {
-    let mut answering: Vec<usize> =
-        (0..layouts.len()).filter(|&i| layouts[i].answers_for(want) && fits(i)).collect();
+    let mut answering: Vec<usize> = (0..layouts.len())
+        .filter(|&i| layouts[i].answers_for(want) && fits(i))
+        .collect();
     answering.sort_by_key(|&i| (layouts[i].fields.len(), layouts[i].size));
     answering
         .iter()
@@ -570,7 +620,9 @@ pub(crate) fn lookup_or_mint(
     let (held, free) = entries(types, lookup_window(size));
     let layouts: Vec<&Layout> = held.iter().map(|e| &e.layout).collect();
     let own: Vec<Member> = fields.iter().map(|f| Member::of_with(f, selfs)).collect();
-    let fits = |i: usize| unclaimed.is_empty() || keeps_unclaimed(&members_of(&held[i].ct), &own, unclaimed);
+    let fits = |i: usize| {
+        unclaimed.is_empty() || keeps_unclaimed(&members_of(&held[i].ct), &own, unclaimed)
+    };
     if let Some(i) = best_of(&layouts, &want, fits) {
         return Some(Rc::clone(&held[i].ct));
     }
@@ -624,9 +676,13 @@ pub(super) fn mint(
 ) -> Option<Rc<Datatype>> {
     let shell = types.get_type_struct(name).ok()?;
     for f in fields.iter_mut().filter(|f| selfs.contains(&f.offset)) {
-        f.field_type = types.get_type_pointer(f.field_type.get_size(), Rc::clone(&shell), 1).ok()?;
+        f.field_type = types
+            .get_type_pointer(f.field_type.get_size(), Rc::clone(&shell), 1)
+            .ok()?;
     }
-    types.set_fields_struct_raw(&shell, fields, Vec::new(), size, 1, 0).ok()
+    types
+        .set_fields_struct_raw(&shell, fields, Vec::new(), size, 1, 0)
+        .ok()
 }
 
 /// Is `ct` a structure this pass minted.
@@ -658,8 +714,9 @@ pub(super) fn minted_number(ct: &Datatype) -> Option<u32> {
 /// defined anywhere after the forward declarations; after everything else, in
 /// ascending `N`, is the same place every run and in every process.
 pub fn in_name_order(order: Vec<Rc<Datatype>>) -> Vec<Rc<Datatype>> {
-    let (mut minted, mut rest): (Vec<Rc<Datatype>>, Vec<Rc<Datatype>>) =
-        order.into_iter().partition(|ct| minted_number(ct).is_some());
+    let (mut minted, mut rest): (Vec<Rc<Datatype>>, Vec<Rc<Datatype>>) = order
+        .into_iter()
+        .partition(|ct| minted_number(ct).is_some());
     minted.sort_by_key(|ct| minted_number(ct));
     rest.append(&mut minted);
     rest
@@ -685,7 +742,13 @@ mod tests {
 
     /// A claimed scalar field.
     fn f(offset: int4, width: int4, meta: type_metatype) -> FieldKey {
-        FieldKey { offset, width, ty: format!("{meta:?}:{width}:"), pointer: false, opaque: false }
+        FieldKey {
+            offset,
+            width,
+            ty: format!("{meta:?}:{width}:"),
+            pointer: false,
+            opaque: false,
+        }
     }
 
     /// A claimed pointer field.
@@ -720,11 +783,19 @@ mod tests {
     }
 
     fn claim(offset: int4, width: int4, meta: type_metatype) -> Member {
-        Member { offset, size: width, claim: Some(f(offset, width, meta)) }
+        Member {
+            offset,
+            size: width,
+            claim: Some(f(offset, width, meta)),
+        }
     }
 
     fn filler(offset: int4, size: int4) -> Member {
-        Member { offset, size, claim: None }
+        Member {
+            offset,
+            size,
+            claim: None,
+        }
     }
 
     /// cx6 `rd_c8` loads four bytes at 7 and stores a byte at 8; its writer
@@ -762,7 +833,14 @@ mod tests {
         // A member that ends where the access starts moves a filler boundary
         // onto it, which spells the load through a member of its own.
         let mut edge = own.clone();
-        edge.splice(1..2, [filler(4, 2), claim(6, 1, type_metatype::TYPE_INT), filler(7, 1)]);
+        edge.splice(
+            1..2,
+            [
+                filler(4, 2),
+                claim(6, 1, type_metatype::TYPE_INT),
+                filler(7, 1),
+            ],
+        );
         assert!(!keeps_unclaimed(&edge, &own, &load));
         // Members away from the unclaimed bytes do not matter, but past the
         // reader's own end every member the container has is new.
@@ -779,7 +857,11 @@ mod tests {
         let want = layout(16, vec![p(0, "uint1"), f(8, 4, type_metatype::TYPE_INT)]);
         let wide = layout(
             24,
-            vec![p(0, "uint1"), f(8, 4, type_metatype::TYPE_INT), f(0xc, 4, type_metatype::TYPE_INT)],
+            vec![
+                p(0, "uint1"),
+                f(8, 4, type_metatype::TYPE_INT),
+                f(0xc, 4, type_metatype::TYPE_INT),
+            ],
         );
         let own = want.clone();
         assert_eq!(best_of(&[&wide], &want, any), Some(0));
@@ -819,7 +901,13 @@ mod tests {
     #[test]
     fn two_types_at_one_offset_are_a_conflict_not_a_refinement() {
         let a = layout(16, vec![p(0, "char"), f(8, 4, type_metatype::TYPE_INT)]);
-        let b = layout(16, vec![f(0, 8, type_metatype::TYPE_UINT), f(8, 4, type_metatype::TYPE_INT)]);
+        let b = layout(
+            16,
+            vec![
+                f(0, 8, type_metatype::TYPE_UINT),
+                f(8, 4, type_metatype::TYPE_INT),
+            ],
+        );
         assert!(!a.subsumes(&b));
         assert!(!b.subsumes(&a));
     }
@@ -865,7 +953,11 @@ mod tests {
         // Disagrees with `wide` at 0xc, so neither supersedes the other.
         let tight = layout(
             16,
-            vec![p(0, "uint1"), f(8, 4, type_metatype::TYPE_INT), f(0xc, 4, type_metatype::TYPE_UINT)],
+            vec![
+                p(0, "uint1"),
+                f(8, 4, type_metatype::TYPE_INT),
+                f(0xc, 4, type_metatype::TYPE_UINT),
+            ],
         );
         assert!(!wide.subsumes(&tight));
         assert_eq!(best_of(&[&wide, &tight], &want, any), Some(1));
@@ -877,7 +969,11 @@ mod tests {
         let gone = want.clone();
         let survivor = layout(
             24,
-            vec![p(0, "uint1"), f(8, 4, type_metatype::TYPE_INT), f(0xc, 4, type_metatype::TYPE_INT)],
+            vec![
+                p(0, "uint1"),
+                f(8, 4, type_metatype::TYPE_INT),
+                f(0xc, 4, type_metatype::TYPE_INT),
+            ],
         );
         let held = [&gone, &survivor];
         assert!(is_superseded(&held, 0));
@@ -889,7 +985,13 @@ mod tests {
     fn a_container_that_dwarfs_the_measurement_does_not_answer_for_it() {
         // `ls` O0: two words of a `hash_entry` against a 200-byte record that
         // happens to start with two words of the same width.
-        let measured = layout(16, vec![f(0, 8, type_metatype::TYPE_UINT), f(8, 8, type_metatype::TYPE_UINT)]);
+        let measured = layout(
+            16,
+            vec![
+                f(0, 8, type_metatype::TYPE_UINT),
+                f(8, 8, type_metatype::TYPE_UINT),
+            ],
+        );
         let big = layout(
             200,
             vec![
@@ -903,16 +1005,30 @@ mod tests {
         assert!(!big.answers_for(&measured));
         assert_eq!(best_of(&[&big], &measured, any), None);
         // `ls` O0 `sub_afe2`: only 1.5x the size, but eight times the claims.
-        let two = layout(80, vec![f(0, 8, type_metatype::TYPE_UINT), f(8, 8, type_metatype::TYPE_UINT)]);
+        let two = layout(
+            80,
+            vec![
+                f(0, 8, type_metatype::TYPE_UINT),
+                f(8, 8, type_metatype::TYPE_UINT),
+            ],
+        );
         let sixteen = layout(
             120,
-            (0..16).map(|i| f(i * 8, 8, type_metatype::TYPE_UINT)).collect(),
+            (0..16)
+                .map(|i| f(i * 8, 8, type_metatype::TYPE_UINT))
+                .collect(),
         );
         assert!(sixteen.subsumes(&two));
         assert!(!sixteen.answers_for(&two));
         // A layout the prune left with one claim is answered only by its shape.
         let lone = layout(32, vec![f(0, 8, type_metatype::TYPE_UINT)]);
-        let pair = layout(40, vec![f(0, 8, type_metatype::TYPE_UINT), f(0x20, 8, type_metatype::TYPE_UINT)]);
+        let pair = layout(
+            40,
+            vec![
+                f(0, 8, type_metatype::TYPE_UINT),
+                f(0x20, 8, type_metatype::TYPE_UINT),
+            ],
+        );
         assert!(!pair.answers_for(&lone));
         assert!(lone.answers_for(&layout(32, vec![f(0, 8, type_metatype::TYPE_UINT)])));
         // The witness pair is well inside both bounds.
@@ -964,7 +1080,15 @@ mod tests {
     fn two_integer_words_are_answered_only_by_their_own_shape() {
         let u8_ = |o: int4| f(o, 8, type_metatype::TYPE_UINT);
         let stat_reader = layout(16, vec![u8_(0), u8_(8)]);
-        let state = layout(32, vec![u8_(0), u8_(8), u8_(0x10), f(0x18, 4, type_metatype::TYPE_INT)]);
+        let state = layout(
+            32,
+            vec![
+                u8_(0),
+                u8_(8),
+                u8_(0x10),
+                f(0x18, 4, type_metatype::TYPE_INT),
+            ],
+        );
         assert!(state.subsumes(&stat_reader));
         assert!(!state.answers_for(&stat_reader));
         assert_eq!(best_of(&[&state], &stat_reader, any), None);
@@ -982,10 +1106,19 @@ mod tests {
     #[test]
     fn integer_claims_are_never_answered_by_a_larger_structure() {
         let u8_ = |o: int4| f(o, 8, type_metatype::TYPE_UINT);
-        let queue = layout(24, vec![u8_(0), u8_(8), f(0x10, 4, type_metatype::TYPE_UINT)]);
+        let queue = layout(
+            24,
+            vec![u8_(0), u8_(8), f(0x10, 4, type_metatype::TYPE_UINT)],
+        );
         let command = layout(
             40,
-            vec![u8_(0), u8_(8), f(0x10, 4, type_metatype::TYPE_UINT), u8_(0x18), u8_(0x20)],
+            vec![
+                u8_(0),
+                u8_(8),
+                f(0x10, 4, type_metatype::TYPE_UINT),
+                u8_(0x18),
+                u8_(0x20),
+            ],
         );
         assert!(command.subsumes(&queue));
         assert!(!command.answers_for(&queue));
@@ -1017,7 +1150,11 @@ mod tests {
         let two_fields = layout(16, vec![p(0, "uint1"), f(8, 4, type_metatype::TYPE_INT)]);
         let three_fields = layout(
             16,
-            vec![p(0, "uint1"), f(8, 4, type_metatype::TYPE_INT), f(0xc, 4, type_metatype::TYPE_INT)],
+            vec![
+                p(0, "uint1"),
+                f(8, 4, type_metatype::TYPE_INT),
+                f(0xc, 4, type_metatype::TYPE_INT),
+            ],
         );
         assert!(three_fields.answers_for(&two_fields));
     }
@@ -1071,10 +1208,14 @@ mod tests {
         for want in [chain(2, 16), chain(3, 24), chain(4, 32), chain(8, 64)] {
             let all: Vec<&Layout> = held.iter().collect();
             let window = lookup_window(want.size);
-            let kept: Vec<usize> =
-                (0..held.len()).filter(|&i| window.contains(&i64::from(held[i].size))).collect();
+            let kept: Vec<usize> = (0..held.len())
+                .filter(|&i| window.contains(&i64::from(held[i].size)))
+                .collect();
             let some: Vec<&Layout> = kept.iter().map(|&i| &held[i]).collect();
-            assert_eq!(best_of(&all, &want, any), best_of(&some, &want, any).map(|k| kept[k]));
+            assert_eq!(
+                best_of(&all, &want, any),
+                best_of(&some, &want, any).map(|k| kept[k])
+            );
         }
     }
 
@@ -1101,10 +1242,18 @@ mod tests {
         let wider = layout(32, vec![code(0), code(8), code(0x10), code(0x18)]);
         assert!(!wider.answers_for(&vtable));
         // One typed claim past offset 0 makes it a record again.
-        let record = layout(24, vec![f(0, 4, type_metatype::TYPE_INT), code(8), p(0x10, "char")]);
+        let record = layout(
+            24,
+            vec![f(0, 4, type_metatype::TYPE_INT), code(8), p(0x10, "char")],
+        );
         let bigger = layout(
             32,
-            vec![f(0, 4, type_metatype::TYPE_INT), code(8), p(0x10, "char"), code(0x18)],
+            vec![
+                f(0, 4, type_metatype::TYPE_INT),
+                code(8),
+                p(0x10, "char"),
+                code(0x18),
+            ],
         );
         assert!(!record.is_table());
         assert!(bigger.answers_for(&record));
@@ -1112,7 +1261,11 @@ mod tests {
         let two = layout(16, vec![code(0), f(8, 8, type_metatype::TYPE_UINT)]);
         let three = layout(
             24,
-            vec![code(0), f(8, 8, type_metatype::TYPE_UINT), f(0x10, 8, type_metatype::TYPE_UINT)],
+            vec![
+                code(0),
+                f(8, 8, type_metatype::TYPE_UINT),
+                f(0x10, 8, type_metatype::TYPE_UINT),
+            ],
         );
         assert!(!two.is_table());
         assert!(three.subsumes(&two));

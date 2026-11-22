@@ -11,12 +11,18 @@ pub(super) fn collect(file: &object::File<'_>, symbols: &[(u64, Option<String>)]
         .iter()
         .filter_map(|(address, name)| {
             let name = name.as_deref()?;
-            matches!(name, "<&T as core::fmt::Display>::fmt" | "core::fmt::Formatter::pad")
-                .then_some((*address, name))
+            matches!(
+                name,
+                "<&T as core::fmt::Display>::fmt" | "core::fmt::Formatter::pad"
+            )
+            .then_some((*address, name))
         })
         .collect();
     for (address, name) in symbols {
-        if names.get(address).is_some_and(|known| Some(*known) != name.as_deref()) {
+        if names
+            .get(address)
+            .is_some_and(|known| Some(*known) != name.as_deref())
+        {
             names.remove(address);
         }
     }

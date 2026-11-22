@@ -263,7 +263,10 @@ fn a_stored_variadic_integer_round_trips_without_claiming_unused_registers() {
     unsupported[0x4a1] = b'f';
     std::fs::write(&imported, unsupported).unwrap();
     let unsupported = decompile_imported(&imported);
-    assert!(!unsupported.contains("render_value(\"%i\","), "{unsupported}");
+    assert!(
+        !unsupported.contains("render_value(\"%i\","),
+        "{unsupported}"
+    );
     let mut unknown = image.clone();
     unknown[0x200 + 4..0x200 + 9].fill(0x90);
     std::fs::write(&imported, unknown).unwrap();
@@ -273,10 +276,7 @@ fn a_stored_variadic_integer_round_trips_without_claiming_unused_registers() {
     healthy[0x200 + 9..0x200 + 11].copy_from_slice(&[0x90, 0x90]);
     std::fs::write(&imported, healthy).unwrap();
     let healthy = decompile_imported(&imported);
-    assert!(
-        healthy.contains("render_value(\"%i\","),
-        "{healthy}"
-    );
+    assert!(healthy.contains("render_value(\"%i\","), "{healthy}");
     let generated = Command::new("python3")
         .arg(fixture.join("imported.py"))
         .arg(&imported)

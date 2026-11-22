@@ -16,9 +16,10 @@ use unlace_sleigh::pcodecompile::{
     ExprTree, Location, PcodeCompile, PcodeCompileSymbol, StarQuality,
 };
 use unlace_sleigh::semantics::{
-    ConstTpl, ConstType, ConstructTpl, HandleTpl, OpTpl, VarnodeTpl, BUILD, CROSSBUILD, DELAY_SLOT,
-    LABELBUILD, MACROBUILD,
+    BUILD, CROSSBUILD, ConstTpl, ConstType, ConstructTpl, DELAY_SLOT, HandleTpl, LABELBUILD,
+    MACROBUILD, OpTpl, VarnodeTpl,
 };
+use unlace_sleigh::sleighbase::SleighBase;
 use unlace_sleigh::slghpatexpress::{
     ConstantValue, ContextField, EquationArena, PatternEquation, PatternExpression, PatternValue,
 };
@@ -27,7 +28,6 @@ use unlace_sleigh::slghsymbol::{
     DecisionProperties, LabelTableSymbol, MacroSymbol, SectionSymbol, SleighSymbol, SymbolKind,
     SymbolType,
 };
-use unlace_sleigh::sleighbase::SleighBase;
 
 use crate::pcodecompile_actions::{CompilerHost, SleighPcode};
 use crate::slghparse::{ConstOp, FieldQual, ParserActions, PcodeOpc, SpaceQual};
@@ -563,9 +563,8 @@ impl SleighCompile {
             .iter()
             .map(|fc| (fc.sym, name_of(fc.sym)))
             .collect();
-        self.contexttable.sort_by(|a, b| {
-            (names.get(&a.sym), a.qual.low).cmp(&(names.get(&b.sym), b.qual.low))
-        });
+        self.contexttable
+            .sort_by(|a, b| (names.get(&a.sym), a.qual.low).cmp(&(names.get(&b.sym), b.qual.low)));
         let mut begin = 0usize;
         while begin < self.contexttable.len() {
             let mut sz = 1usize;
@@ -696,7 +695,13 @@ impl SleighCompile {
     }
 
     /// `defineVarnodes` (slgh_compile.cc:2776).
-    pub fn define_varnodes(&mut self, spacesym: SymbolId, off: u64, size: u64, names: Vec<Vec<u8>>) {
+    pub fn define_varnodes(
+        &mut self,
+        spacesym: SymbolId,
+        off: u64,
+        size: u64,
+        names: Vec<Vec<u8>>,
+    ) {
         let spc = match self.base.symtab().find_symbol_by_id(spacesym) {
             Some(s) => match s.kind() {
                 unlace_sleigh::slghsymbol::SymbolKind::Space(sp) => Rc::clone(sp.get_space()),
@@ -1069,17 +1074,18 @@ impl SleighCompile {
     }
 
     /// `pushWith` (slgh_compile.cc:3676).
-    pub fn push_with(&mut self, ss: Option<SymbolId>, pateq: Option<u32>, contvec: Option<Vec<u32>>) {
+    pub fn push_with(
+        &mut self,
+        ss: Option<SymbolId>,
+        pateq: Option<u32>,
+        contvec: Option<Vec<u32>>,
+    ) {
         let contvec = contvec
             .into_iter()
             .flatten()
             .map(|id| self.take_context_change(id))
             .collect();
-        let mut block = WithBlock {
-            ss,
-            pateq,
-            contvec,
-        };
+        let mut block = WithBlock { ss, pateq, contvec };
         if block.ss.is_none() {
             block.ss = self.with_block_current_subtable();
         }
@@ -1119,8 +1125,7 @@ impl SleighCompile {
                 if let Some(secid) = main {
                     let ct = self.take_section(secid);
                     let handle = self.base.add_template(ct);
-                    self.constructor_mut(ctor)
-                        .set_main_section(handle);
+                    self.constructor_mut(ctor).set_main_section(handle);
                 }
                 let maxid = sections.get_max_id();
                 for i in 0..maxid {
@@ -1128,8 +1133,7 @@ impl SleighCompile {
                     if let Some(secid) = named {
                         let ct = self.take_section(secid);
                         let handle = self.base.add_template(ct);
-                        self.constructor_mut(ctor)
-                            .set_named_section(handle, i);
+                        self.constructor_mut(ctor).set_named_section(handle, i);
                     }
                 }
             }
@@ -1140,9 +1144,9 @@ impl SleighCompile {
                 self.constructor_mut(ctor).add_equation(eq);
             } else {
                 let eps = self.arena.alloc(PatternEquation::Unconstrained {
-                    patex: PatternExpression::Value(PatternValue::ConstantValue(ConstantValue::new(
-                        0,
-                    ))),
+                    patex: PatternExpression::Value(PatternValue::ConstantValue(
+                        ConstantValue::new(0),
+                    )),
                 });
                 self.constructor_mut(ctor).add_equation(eps);
             }
@@ -1327,7 +1331,13 @@ impl SleighCompile {
             while i < j {
                 let (qlow, qhigh, qsign, qname, qflow) = {
                     let q = &self.contexttable[(i + start) as usize].qual;
-                    (q.low as i32, q.high as i32, q.signext, q.name.clone(), q.flow)
+                    (
+                        q.low as i32,
+                        q.high as i32,
+                        q.signext,
+                        q.name.clone(),
+                        q.flow,
+                    )
                 };
                 let l = qlow - min + low;
                 let h = numbits - 1 - (max - qhigh);
@@ -1390,7 +1400,10 @@ impl SleighCompile {
                 let name = self.symbol_name(t);
                 self.report_error_loc(
                     loc.as_ref(),
-                    &format!("Problem in table '{}':{message}", String::from_utf8_lossy(&name)),
+                    &format!(
+                        "Problem in table '{}':{message}",
+                        String::from_utf8_lossy(&name)
+                    ),
                 );
             }
             if self.subtable_pattern_none(t) {
@@ -1409,7 +1422,10 @@ impl SleighCompile {
     fn apply_handmaps(&mut self, table_id: SymbolId) {
         let numct = self.constructor_count(table_id);
         for ci in 0..numct {
-            let ctor = ConstructorRef { table_id, ct_id: ci };
+            let ctor = ConstructorRef {
+                table_id,
+                ct_id: ci,
+            };
             let handmap = self.constructor(ctor).get_handmap().to_vec();
             if handmap.is_empty() {
                 continue;
@@ -1495,10 +1511,8 @@ impl SleighCompile {
                     table_id: table,
                     ct_id: ct_idx,
                 };
-                let collision = crate::local_collisions::find_collision(
-                    &self.base,
-                    self.constructor(ctor),
-                );
+                let collision =
+                    crate::local_collisions::find_collision(&self.base, self.constructor(ctor));
                 if let Some((first, second)) = collision {
                     count += 1;
                     if self.warnalllocalcollisions {
@@ -2529,7 +2543,10 @@ impl SleighCompile {
             let nm = self.symbol_name(label);
             self.report_error_loc(
                 loc.as_ref(),
-                &format!("Label '{}' is placed more than once", String::from_utf8_lossy(&nm)),
+                &format!(
+                    "Label '{}' is placed more than once",
+                    String::from_utf8_lossy(&nm)
+                ),
             );
         }
         let idx = self
@@ -2712,7 +2729,11 @@ impl SleighCompile {
     pub fn self_define(&mut self, sym: SymbolId) {
         let name = self.symbol_name(sym);
         // glob = symtab.findSymbol(name, 1)  (skip the current scope)
-        let glob = self.base.symtab().find_symbol_skip(&name, 1).map(|s| s.get_id());
+        let glob = self
+            .base
+            .symtab()
+            .find_symbol_skip(&name, 1)
+            .map(|s| s.get_id());
         let glob = match glob {
             Some(g) => g,
             None => {
@@ -2723,7 +2744,11 @@ impl SleighCompile {
                 return;
             }
         };
-        let tp = self.base.symtab().find_symbol_by_id(glob).map(|s| s.get_type());
+        let tp = self
+            .base
+            .symtab()
+            .find_symbol_by_id(glob)
+            .map(|s| s.get_type());
         let defres = match tp {
             Some(SymbolType::Value) | Some(SymbolType::Context) => {
                 let pe = self
@@ -3059,10 +3084,7 @@ impl SleighCompile {
         let mut sectionstring = String::from("   Main section: ");
         let max = sections.get_max_id();
         loop {
-            let errstring = self
-                .base
-                .symtab()
-                .check_symbols(cur.scope.unwrap_or(0));
+            let errstring = self.base.symtab().check_symbols(cur.scope.unwrap_or(0));
             if !errstring.is_empty() {
                 errors.push(format!("{sectionstring}{errstring}"));
             } else if let Some(secid) = cur.section {
@@ -3108,10 +3130,7 @@ impl SleighCompile {
             }
             // Delay slot handling.
             if let Some(sid) = cur.section {
-                let delay = self
-                    .section_ref(sid)
-                    .map(|s| s.delay_slot())
-                    .unwrap_or(0);
+                let delay = self.section_ref(sid).map(|s| s.delay_slot()).unwrap_or(0);
                 if delay != 0 {
                     if root != parent {
                         let loc = self.constructor_location(ctor);
@@ -3354,7 +3373,9 @@ impl PcodeCompile for SleighCompile {
         self.constant_space = Some(spc);
     }
     fn get_unique_space(&self) -> Option<Rc<AddrSpace>> {
-        self.unique_space.clone().or_else(|| self.base.unique_space())
+        self.unique_space
+            .clone()
+            .or_else(|| self.base.unique_space())
     }
     fn set_unique_space(&mut self, spc: Rc<AddrSpace>) {
         self.unique_space = Some(spc);
@@ -3533,7 +3554,13 @@ impl ParserActions for SleighCompile {
     fn is_in_root(&self, ct: u32) -> bool {
         self.base.get_root() == Some(self.constructor_refs[ct as usize].table_id)
     }
-    fn build_constructor(&mut self, big: u32, pateq: Option<u32>, contvec: Option<Vec<u32>>, vec: u32) {
+    fn build_constructor(
+        &mut self,
+        big: u32,
+        pateq: Option<u32>,
+        contvec: Option<Vec<u32>>,
+        vec: u32,
+    ) {
         let v = if vec == u32::MAX { None } else { Some(vec) };
         SleighCompile::build_constructor_ws4c(self, big, pateq, contvec, v)
     }
@@ -3712,7 +3739,13 @@ impl ParserActions for SleighCompile {
     fn pcode_new_local_definition(&mut self, name: &[u8], size: Option<u64>) {
         SleighCompile::pcode_new_local_definition(self, name, size)
     }
-    fn pcode_new_output(&mut self, islocal: bool, expr: u32, name: &[u8], size: Option<u64>) -> u32 {
+    fn pcode_new_output(
+        &mut self,
+        islocal: bool,
+        expr: u32,
+        name: &[u8],
+        size: Option<u64>,
+    ) -> u32 {
         SleighCompile::pcode_new_output(self, islocal, expr, name, size)
     }
     fn stmt_assign(&mut self, lhs: u32, expr: u32) -> u32 {

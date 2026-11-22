@@ -4,15 +4,15 @@
 //! loadimage-backed `getStringData` happy/sad paths.
 
 use super::*;
+use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::marshal::{IdRegistry, XmlDecode, XmlEncode};
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_sleigh::loadimage::LoadImage;
-use std::rc::Rc;
 
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 
 // --- helpers ---------------------------------------------------------------
 
@@ -98,7 +98,10 @@ fn read_utf16_endianness() {
 #[test]
 fn get_codepoint_utf8_ascii() {
     let mut skip = 0;
-    assert_eq!(StringManager::get_codepoint(&[0x41], 1, false, &mut skip), 0x41);
+    assert_eq!(
+        StringManager::get_codepoint(&[0x41], 1, false, &mut skip),
+        0x41
+    );
     assert_eq!(skip, 1);
 }
 
@@ -106,7 +109,10 @@ fn get_codepoint_utf8_ascii() {
 fn get_codepoint_utf8_multibyte() {
     let mut skip = 0;
     // 2-byte: U+00A2
-    assert_eq!(StringManager::get_codepoint(&[0xc2, 0xa2], 1, false, &mut skip), 0xa2);
+    assert_eq!(
+        StringManager::get_codepoint(&[0xc2, 0xa2], 1, false, &mut skip),
+        0xa2
+    );
     assert_eq!(skip, 2);
     // 3-byte: U+20AC
     assert_eq!(
@@ -126,14 +132,20 @@ fn get_codepoint_utf8_multibyte() {
 fn get_codepoint_utf8_invalid_continuation() {
     let mut skip = 0;
     // 2-byte lead with bad continuation (high bits not 10).
-    assert_eq!(StringManager::get_codepoint(&[0xc2, 0x00], 1, false, &mut skip), -1);
+    assert_eq!(
+        StringManager::get_codepoint(&[0xc2, 0x00], 1, false, &mut skip),
+        -1
+    );
     // 3-byte lead with one bad continuation.
     assert_eq!(
         StringManager::get_codepoint(&[0xe2, 0x82, 0x00], 1, false, &mut skip),
         -1
     );
     // Standalone continuation byte (0x80) is not a valid lead.
-    assert_eq!(StringManager::get_codepoint(&[0x80], 1, false, &mut skip), -1);
+    assert_eq!(
+        StringManager::get_codepoint(&[0x80], 1, false, &mut skip),
+        -1
+    );
 }
 
 // --- get_codepoint: UTF-16 decode incl surrogates --------------------------
@@ -142,7 +154,10 @@ fn get_codepoint_utf8_invalid_continuation() {
 fn get_codepoint_utf16_bmp() {
     let mut skip = 0;
     // U+0041 'A' little-endian.
-    assert_eq!(StringManager::get_codepoint(&[0x41, 0x00], 2, false, &mut skip), 0x41);
+    assert_eq!(
+        StringManager::get_codepoint(&[0x41, 0x00], 2, false, &mut skip),
+        0x41
+    );
     assert_eq!(skip, 2);
 }
 
@@ -151,7 +166,10 @@ fn get_codepoint_utf16_surrogate_pair() {
     let mut skip = 0;
     // U+1D11E (musical G clef): high D834, low DD1E, little-endian bytes.
     let buf = [0x34, 0xd8, 0x1e, 0xdd];
-    assert_eq!(StringManager::get_codepoint(&buf, 2, false, &mut skip), 0x1d11e);
+    assert_eq!(
+        StringManager::get_codepoint(&buf, 2, false, &mut skip),
+        0x1d11e
+    );
     assert_eq!(skip, 4);
 }
 
@@ -173,11 +191,17 @@ fn get_codepoint_utf32() {
     let mut skip = 0;
     // U+1F600 little-endian.
     let le = [0x00, 0xf6, 0x01, 0x00];
-    assert_eq!(StringManager::get_codepoint(&le, 4, false, &mut skip), 0x1f600);
+    assert_eq!(
+        StringManager::get_codepoint(&le, 4, false, &mut skip),
+        0x1f600
+    );
     assert_eq!(skip, 4);
     // big-endian
     let be = [0x00, 0x01, 0xf6, 0x00];
-    assert_eq!(StringManager::get_codepoint(&be, 4, true, &mut skip), 0x1f600);
+    assert_eq!(
+        StringManager::get_codepoint(&be, 4, true, &mut skip),
+        0x1f600
+    );
     // Beyond max codepoint -> invalid.
     let bad = [0x00, 0x00, 0x11, 0x00]; // 0x110000
     assert_eq!(StringManager::get_codepoint(&bad, 4, false, &mut skip), -1);
@@ -194,7 +218,10 @@ fn get_codepoint_reserved_surrogate_range_invalid() {
 #[test]
 fn get_codepoint_bad_charsize() {
     let mut skip = 0;
-    assert_eq!(StringManager::get_codepoint(&[0x41, 0, 0], 3, false, &mut skip), -1);
+    assert_eq!(
+        StringManager::get_codepoint(&[0x41, 0, 0], 3, false, &mut skip),
+        -1
+    );
 }
 
 // --- check_characters / has_char_terminator --------------------------------
@@ -203,7 +230,10 @@ fn get_codepoint_bad_charsize() {
 fn check_characters_counts_until_terminator() {
     // "Hi\0" UTF-8.
     let buf = b"Hi\0";
-    assert_eq!(StringManager::check_characters(buf, buf.len() as int4, 1, false), 2);
+    assert_eq!(
+        StringManager::check_characters(buf, buf.len() as int4, 1, false),
+        2
+    );
 }
 
 #[test]
@@ -234,7 +264,8 @@ fn has_char_terminator_finds_full_width_zero() {
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -492,9 +523,17 @@ fn cache_classification_is_scoped_to_opaque_mode() {
         let mut is_trunc = false;
         let normal = chartype(1);
         let opaque = opaque_chartype(1);
-        let types = if opaque_first { [&opaque, &normal] } else { [&normal, &opaque] };
-        let first = sm.get_string_data(&addr, types[0], &mut loader, &mut is_trunc).to_vec();
-        let second = sm.get_string_data(&addr, types[1], &mut loader, &mut is_trunc).to_vec();
+        let types = if opaque_first {
+            [&opaque, &normal]
+        } else {
+            [&normal, &opaque]
+        };
+        let first = sm
+            .get_string_data(&addr, types[0], &mut loader, &mut is_trunc)
+            .to_vec();
+        let second = sm
+            .get_string_data(&addr, types[1], &mut loader, &mut is_trunc)
+            .to_vec();
 
         let normal_result = if opaque_first { &second } else { &first };
         let opaque_result = if opaque_first { &first } else { &second };
@@ -516,7 +555,10 @@ fn negative_result_at_one_width_does_not_poison_another() {
     };
     let mut is_trunc = false;
 
-    assert!(sm.get_string_data(&addr, &chartype(1), &mut loader, &mut is_trunc).is_empty());
+    assert!(
+        sm.get_string_data(&addr, &chartype(1), &mut loader, &mut is_trunc)
+            .is_empty()
+    );
     assert_eq!(
         &sm.get_string_data(&addr, &chartype(2), &mut loader, &mut is_trunc)[..3],
         &[0xc2, 0x80, 0]
@@ -548,7 +590,11 @@ fn serialized_classification_keeps_its_identity() {
     let mut restored = StringManagerUnicode::new(2048);
     restored.base.decode(&mut dec).unwrap();
 
-    let mut unavailable = MockLoad { base: 0, bytes: Vec::new(), mapped_len: 0 };
+    let mut unavailable = MockLoad {
+        base: 0,
+        bytes: Vec::new(),
+        mapped_len: 0,
+    };
     assert_eq!(
         &restored.get_string_data(&addr, &chartype(1), &mut unavailable, &mut is_trunc)[..2],
         b"B\0"
@@ -565,11 +611,14 @@ fn legacy_serialized_entry_is_not_a_wildcard_cache_hit() {
     let ram = mgr.get_space_by_name("ram").unwrap().clone();
     let addr = Address::new(ram, 0x6c00);
     let mut old = StringManager::new(2048);
-    old.string_map.insert(addr.clone(), StringData {
-        is_truncated: false,
-        byte_data: b"wrong\0".to_vec(),
-        decode_key: None,
-    });
+    old.string_map.insert(
+        addr.clone(),
+        StringData {
+            is_truncated: false,
+            byte_data: b"wrong\0".to_vec(),
+            decode_key: None,
+        },
+    );
     let mut buf = Vec::new();
     {
         let mut enc = XmlEncode::new(&mut buf);
@@ -649,18 +698,39 @@ fn a_truncated_encoding_is_refused_rather_than_read_past() {
     let mut skip: int4 = 1;
     // 3-byte lead with only 2 bytes present (the panic that lost a whole
     // function of crazyflie firmware.elf).
-    assert_eq!(StringManager::get_codepoint(&[0xe2, 0x80], 1, false, &mut skip), -1);
+    assert_eq!(
+        StringManager::get_codepoint(&[0xe2, 0x80], 1, false, &mut skip),
+        -1
+    );
     // 2-byte lead with 1, 4-byte lead with 3, and an empty window.
-    assert_eq!(StringManager::get_codepoint(&[0xc2], 1, false, &mut skip), -1);
-    assert_eq!(StringManager::get_codepoint(&[0xf0, 0x9f, 0x98], 1, false, &mut skip), -1);
+    assert_eq!(
+        StringManager::get_codepoint(&[0xc2], 1, false, &mut skip),
+        -1
+    );
+    assert_eq!(
+        StringManager::get_codepoint(&[0xf0, 0x9f, 0x98], 1, false, &mut skip),
+        -1
+    );
     assert_eq!(StringManager::get_codepoint(&[], 1, false, &mut skip), -1);
     // UTF-16: a half word, and a high surrogate with no trail.
-    assert_eq!(StringManager::get_codepoint(&[0x41], 2, false, &mut skip), -1);
-    assert_eq!(StringManager::get_codepoint(&[0x00, 0xd8], 2, false, &mut skip), -1);
+    assert_eq!(
+        StringManager::get_codepoint(&[0x41], 2, false, &mut skip),
+        -1
+    );
+    assert_eq!(
+        StringManager::get_codepoint(&[0x00, 0xd8], 2, false, &mut skip),
+        -1
+    );
     // UTF-32: three bytes of four.
-    assert_eq!(StringManager::get_codepoint(&[0x41, 0, 0], 4, false, &mut skip), -1);
+    assert_eq!(
+        StringManager::get_codepoint(&[0x41, 0, 0], 4, false, &mut skip),
+        -1
+    );
     // A complete encoding still decodes, so the guard costs nothing.
-    assert_eq!(StringManager::get_codepoint(&[0xe2, 0x82, 0xac], 1, false, &mut skip), 0x20ac);
+    assert_eq!(
+        StringManager::get_codepoint(&[0xe2, 0x82, 0xac], 1, false, &mut skip),
+        0x20ac
+    );
     assert_eq!(skip, 3);
 }
 
@@ -668,5 +738,8 @@ fn a_truncated_encoding_is_refused_rather_than_read_past() {
 /// encoding" instead of aborting the decompilation.
 #[test]
 fn a_window_ending_in_a_lead_byte_is_not_a_string() {
-    assert_eq!(StringManager::check_characters(&[0x41, 0xe2], 2, 1, false), -1);
+    assert_eq!(
+        StringManager::check_characters(&[0x41, 0xe2], 2, 1, false),
+        -1
+    );
 }

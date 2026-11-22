@@ -132,7 +132,10 @@ pub(crate) fn note(prog: &ConsoleProgram, start: u64, decl: &Declaration) -> Opt
     let at = prog.output_code_offset(start);
     let extent = match decl.size {
         0 => format!("{at:#x}"),
-        size => format!("{at:#x}-{:#x}", prog.output_code_offset(start.saturating_add(size))),
+        size => format!(
+            "{at:#x}-{:#x}",
+            prog.output_code_offset(start.saturating_add(size))
+        ),
     };
     match decl.bytes {
         DeclaredBytes::Mapped => None,
@@ -187,7 +190,10 @@ mod tests {
     #[test]
     fn labels_are_the_documented_spellings() {
         assert_eq!(DeclaredBytes::Mapped.label(), "mapped");
-        assert_eq!(DeclaredBytes::Partial { first_unmapped: 4 }.label(), "partial");
+        assert_eq!(
+            DeclaredBytes::Partial { first_unmapped: 4 }.label(),
+            "partial"
+        );
         assert_eq!(DeclaredBytes::Unmapped.label(), "unmapped");
     }
 }

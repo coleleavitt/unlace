@@ -51,7 +51,7 @@ use unlace_base::rangemap::{RangeMap, RangeRecord, RecordIdx, Subsort};
 use unlace_base::space::AddrSpace;
 use unlace_base::types::{int4, uint4, uint8, uintb};
 
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 
 // Varnode boolean property bits live in `varnode.rs` (W3); the Symbol/SymbolEntry
 // flag words are exactly the same bit space (`database.hh` documents the
@@ -230,18 +230,27 @@ impl EntrySubsort {
     /// C++ `EntrySubsort(const Address &addr)`.
     pub fn from_addr(addr: &Address) -> EntrySubsort {
         let space = addr.get_space().expect("EntrySubsort from invalid address");
-        EntrySubsort { useindex: space.get_index(), useoffset: addr.get_offset() }
+        EntrySubsort {
+            useindex: space.get_index(),
+            useoffset: addr.get_offset(),
+        }
     }
 }
 
 impl Subsort for EntrySubsort {
     /// C++ `EntrySubsort(false)` — less than any real value.
     fn minimal() -> Self {
-        EntrySubsort { useindex: 0, useoffset: 0 }
+        EntrySubsort {
+            useindex: 0,
+            useoffset: 0,
+        }
     }
     /// C++ `EntrySubsort(true)` — `useindex=0xffff`, greater than any real index.
     fn maximal() -> Self {
-        EntrySubsort { useindex: 0xffff, useoffset: 0 }
+        EntrySubsort {
+            useindex: 0xffff,
+            useoffset: 0,
+        }
     }
 }
 
@@ -466,7 +475,10 @@ impl RangeRecord for EntryRecord {
             uselimit: data.uselimit,
             hash: 0,
         };
-        EntryRecord { entry, addrtied_hint }
+        EntryRecord {
+            entry,
+            addrtied_hint,
+        }
     }
 
     fn get_first(&self) -> uintb {
@@ -1023,7 +1035,11 @@ impl Scope {
     /// C++ `Scope(uint8 id,const string &nm,Architecture *g,Scope *own)` plus the
     /// `ScopeInternal` constructor (`maptable.resize(numSpaces, null)`).
     fn new(id: uint8, nm: &str, num_spaces: int4) -> Scope {
-        let n = if num_spaces < 0 { 0 } else { num_spaces as usize };
+        let n = if num_spaces < 0 {
+            0
+        } else {
+            num_spaces as usize
+        };
         Scope {
             rangetree: RangeList::new(),
             parent: None,
@@ -1102,7 +1118,6 @@ impl Scope {
     }
 }
 
-
 // ===========================================================================
 // ScopeResolve  (database.hh:877-903): address -> owning namespace Scope.
 // ===========================================================================
@@ -1177,7 +1192,10 @@ pub struct DuplicateFunctionError {
 impl DuplicateFunctionError {
     /// C++ constructor `DuplicateFunctionError(addr, nm)`.
     pub fn new(address: Address, nm: &str) -> DuplicateFunctionError {
-        DuplicateFunctionError { address, function_name: nm.to_string() }
+        DuplicateFunctionError {
+            address,
+            function_name: nm.to_string(),
+        }
     }
 }
 
@@ -1272,7 +1290,11 @@ impl Database {
     /// never shrinks a populated table here, since spaces are only added).
     pub fn adjust_caches(&mut self, num_spaces: int4) {
         self.kuna_gen += 1;
-        let n = if num_spaces < 0 { 0 } else { num_spaces as usize };
+        let n = if num_spaces < 0 {
+            0
+        } else {
+            num_spaces as usize
+        };
         for (_id, scope) in self.scopes.iter_mut() {
             if scope.maptable.len() < n {
                 scope.maptable.resize_with(n, || None);
@@ -1532,7 +1554,10 @@ impl Database {
     /// Make the [`NameKey`] for a symbol id (its current name + dedup).
     fn name_key(&self, sym: SymbolId) -> NameKey {
         let s = &self.symbols[sym];
-        NameKey { name: s.name.clone(), name_dedup: s.name_dedup }
+        NameKey {
+            name: s.name.clone(),
+            name_dedup: s.name_dedup,
+        }
     }
 
     /// C++ `ScopeInternal::findFirstByName` (`database.cc:2763-2772`): the first
@@ -1540,7 +1565,10 @@ impl Database {
     fn find_first_by_name(&self, scope: ScopeId, nm: &str) -> Option<SymbolId> {
         use std::ops::Bound::{Included, Unbounded};
         // lower_bound on Symbol(name, dedup=0)
-        let lo = NameKey { name: nm.to_string(), name_dedup: 0 };
+        let lo = NameKey {
+            name: nm.to_string(),
+            name_dedup: 0,
+        };
         let nametree = &self.scopes[scope].nametree;
         let (k, &sid) = nametree.range((Included(lo), Unbounded)).next()?;
         if k.name != nm {
@@ -1569,8 +1597,14 @@ impl Database {
         // is that one's + 1.  The last entry sharing the name is the one with the
         // greatest dedup, found by ranging [name,0]..=[name,0xffffffff].
         let name = self.symbols[sym].name.clone();
-        let lo = NameKey { name: name.clone(), name_dedup: 0 };
-        let hi = NameKey { name: name.clone(), name_dedup: 0xffff_ffff };
+        let lo = NameKey {
+            name: name.clone(),
+            name_dedup: 0,
+        };
+        let hi = NameKey {
+            name: name.clone(),
+            name_dedup: 0xffff_ffff,
+        };
         let last_dedup = self.scopes[scope]
             .nametree
             .range((Included(lo), Included(hi)))
@@ -1599,8 +1633,7 @@ impl Database {
         if self.symbols[sym].symbol_id == 0 {
             let unique_id = self.scopes[scope].unique_id;
             let next = self.scopes[scope].next_unique_id;
-            self.symbols[sym].symbol_id =
-                SYMBOL_ID_BASE + ((unique_id & 0xffff) << 40) + next;
+            self.symbols[sym].symbol_id = SYMBOL_ID_BASE + ((unique_id & 0xffff) << 40) + next;
             self.scopes[scope].next_unique_id += 1;
         }
         // C++ wraps the rest in try/catch that deletes sym on LowlevelError; here
@@ -1690,7 +1723,10 @@ impl Database {
     /// `$$undefXXXXXXXX` name not yet used in `scope`.
     fn build_undefined_name(&self, scope: ScopeId) -> KunaResult<String> {
         use std::ops::Bound::{Included, Unbounded};
-        let probe = NameKey { name: "$$undefz".to_string(), name_dedup: 0 };
+        let probe = NameKey {
+            name: "$$undefz".to_string(),
+            name_dedup: 0,
+        };
         let nametree = &self.scopes[scope].nametree;
         // The last name < probe in most cases, since 'z' > any hex digit.
         let prev = nametree.range((Unbounded, Included(&probe))).next_back();
@@ -1724,7 +1760,10 @@ impl Database {
         };
         let nametree = &self.scopes[scope].nametree;
         // boundsym = Symbol(nm + "_x99999", dedup=0xffffffff); lower_bound(boundsym)
-        let bound = NameKey { name: format!("{nm}_x99999"), name_dedup: 0xffff_ffff };
+        let bound = NameKey {
+            name: format!("{nm}_x99999"),
+            name_dedup: 0xffff_ffff,
+        };
         // Walk backwards from lower_bound(bound) over names beginning with nm.
         let mut iter: Vec<&NameKey> = nametree
             .range((Unbounded, Included(&bound)))
@@ -1785,7 +1824,9 @@ impl Database {
             }
         };
         if self.find_first_by_name(scope, &res_string).is_some() {
-            return Err(KunaError::lowlevel(format!("Unable to uniquify name: {res_string}")));
+            return Err(KunaError::lowlevel(format!(
+                "Unable to uniquify name: {res_string}"
+            )));
         }
         Ok(res_string)
     }
@@ -1798,7 +1839,8 @@ impl Database {
         // C++ makeNameUnique throws only when it cannot uniquify; the stack
         // naming convention always can (the offset is part of the base), so the
         // fall-back to the raw name is never reached on well-formed input.
-        self.make_name_unique(scope, nm).unwrap_or_else(|_| nm.to_string())
+        self.make_name_unique(scope, nm)
+            .unwrap_or_else(|_| nm.to_string())
     }
 }
 
@@ -1858,7 +1900,10 @@ impl Database {
         let eref = EntryRef::Mapped { space_index, idx };
         self.symbols[sym].mapentry.push(eref);
         if matches!(self.symbols[sym].kind, SymbolKind::Function { .. }) {
-            let scopes = self.function_scopes.entry((space_index, addr.get_offset())).or_default();
+            let scopes = self
+                .function_scopes
+                .entry((space_index, addr.get_offset()))
+                .or_default();
             if !scopes.contains(&scope) {
                 scopes.push(scope);
             }
@@ -1947,7 +1992,10 @@ impl Database {
                 _ => None,
             };
             let union_facet = match symbol.kind {
-                SymbolKind::UnionFacet { field_num, addr_based } => Some((field_num, addr_based)),
+                SymbolKind::UnionFacet {
+                    field_num,
+                    addr_based,
+                } => Some((field_num, addr_based)),
                 _ => None,
             };
             out.push(DynamicSymbolSpec {
@@ -1989,11 +2037,7 @@ impl Database {
     /// `glb->findJoin`) needs the `JoinRecord` table, a W5 subsystem.  Until W5
     /// supplies it, a join address is mapped as a single entry and a
     /// [`KunaError`]-free note is returned via `joined_pieces == false`.
-    fn add_map(
-        &mut self,
-        scope: ScopeId,
-        mut entry: SymbolEntry,
-    ) -> KunaResult<EntryRef> {
+    fn add_map(&mut self, scope: ScopeId, mut entry: SymbolEntry) -> KunaResult<EntryRef> {
         self.kuna_gen += 1;
         let sym = entry.symbol;
         // First set persistence based on scope (database.cc:1136-1147).
@@ -2090,7 +2134,12 @@ impl Database {
                     } else {
                         varnode_flags::precislo | varnode_flags::precishi
                     };
-                    let exfl = exfl | if wrapped_stack { varnode_flags::mapped } else { 0 };
+                    let exfl = exfl
+                        | if wrapped_stack {
+                            varnode_flags::mapped
+                        } else {
+                            0
+                        };
                     let vdat_addr = vdat.get_addr();
                     let vdat_size = vdat.size as int4;
                     self.add_map_internal(
@@ -2127,7 +2176,9 @@ impl Database {
                 .get_space()
                 .cloned()
                 .expect("non-invalid usepoint has a space");
-            entry.uselimit.insert_range(space, usepoint.get_offset(), usepoint.get_offset());
+            entry
+                .uselimit
+                .insert_range(space, usepoint.get_offset(), usepoint.get_offset());
         }
         entry.addr = addr.clone();
         self.add_map(scope, entry)
@@ -2270,11 +2321,16 @@ impl Database {
     /// Map another address to the same function identity and declared prototype.
     pub fn add_function_alias(&mut self, entry: &Address, alias: &Address) -> KunaResult<()> {
         self.kuna_gen += 1;
-        let (symbol, scope) = self.find_function_across_scopes(entry)
+        let (symbol, scope) = self
+            .find_function_across_scopes(entry)
             .ok_or_else(|| KunaError::lowlevel("Function alias has no canonical function"))?;
         if let Some((other, _)) = self.find_function_across_scopes(alias) {
-            return if other == symbol { Ok(()) } else {
-                Err(KunaError::lowlevel("Function alias overlaps a different function"))
+            return if other == symbol {
+                Ok(())
+            } else {
+                Err(KunaError::lowlevel(
+                    "Function alias overlaps a different function",
+                ))
             };
         }
         self.add_map_point(scope, symbol, alias, &Address::new_invalid())?;
@@ -2384,7 +2440,10 @@ impl Database {
         self.kuna_gen += 1;
         let mut sym = Symbol::new(scope, nm, Some(dt));
         sym.category = symbol_category::UNION_FACET;
-        sym.kind = SymbolKind::UnionFacet { field_num, addr_based: false };
+        sym.kind = SymbolKind::UnionFacet {
+            field_num,
+            addr_based: false,
+        };
         let sid = self.symbols.insert(sym);
         self.add_symbol_internal(scope, sid)?;
         let mut rnglist = RangeList::new();
@@ -2421,7 +2480,11 @@ impl Database {
         space_index: usize,
     ) -> Vec<(uintb, Rc<Datatype>, bool)> {
         let mut out = Vec::new();
-        let rangemap = match self.scopes[scope].maptable.get(space_index).and_then(|m| m.as_ref()) {
+        let rangemap = match self.scopes[scope]
+            .maptable
+            .get(space_index)
+            .and_then(|m| m.as_ref())
+        {
             Some(rm) => rm,
             None => return out,
         };
@@ -2447,7 +2510,11 @@ impl Database {
         space_index: usize,
     ) -> Vec<(String, Rc<Datatype>, Address, uint4)> {
         let mut out = Vec::new();
-        let rangemap = match self.scopes[scope].maptable.get(space_index).and_then(|m| m.as_ref()) {
+        let rangemap = match self.scopes[scope]
+            .maptable
+            .get(space_index)
+            .and_then(|m| m.as_ref())
+        {
             Some(rm) => rm,
             None => return out,
         };
@@ -2493,7 +2560,11 @@ impl Database {
         space_index: usize,
     ) -> Vec<(String, Rc<Datatype>, Address, int4)> {
         let mut out = Vec::new();
-        let rangemap = match self.scopes[scope].maptable.get(space_index).and_then(|m| m.as_ref()) {
+        let rangemap = match self.scopes[scope]
+            .maptable
+            .get(space_index)
+            .and_then(|m| m.as_ref())
+        {
             Some(rm) => rm,
             None => return out,
         };
@@ -2508,7 +2579,12 @@ impl Database {
                 Some(c) => Rc::clone(c),
                 None => continue,
             };
-            out.push((symbol.name.clone(), ct, entry.get_addr().clone(), symbol.get_category()));
+            out.push((
+                symbol.name.clone(),
+                ct,
+                entry.get_addr().clone(),
+                symbol.get_category(),
+            ));
         }
         out
     }
@@ -2538,7 +2614,11 @@ impl Database {
             if space_index == skip_space_index {
                 continue;
             }
-            let rangemap = match self.scopes[scope].maptable.get(space_index).and_then(|m| m.as_ref()) {
+            let rangemap = match self.scopes[scope]
+                .maptable
+                .get(space_index)
+                .and_then(|m| m.as_ref())
+            {
                 Some(rm) => rm,
                 None => continue,
             };
@@ -2546,8 +2626,12 @@ impl Database {
                 let entry = &rec.entry;
                 // Only the whole-symbol starting entry (offset 0); pieces are rebuilt
                 // by re-mapping the whole symbol.
-                if entry.get_offset() != 0 || super::kuna_wrappedstackmap::is_wrapped_in_space(
-                    entry.get_addr(), skip_space_index) {
+                if entry.get_offset() != 0
+                    || super::kuna_wrappedstackmap::is_wrapped_in_space(
+                        entry.get_addr(),
+                        skip_space_index,
+                    )
+                {
                     continue;
                 }
                 let sym = entry.symbol;
@@ -2563,7 +2647,12 @@ impl Database {
                     Some(c) => Rc::clone(c),
                     None => continue,
                 };
-                out.push((symbol.name.clone(), ct, entry.get_addr().clone(), symbol.flags));
+                out.push((
+                    symbol.name.clone(),
+                    ct,
+                    entry.get_addr().clone(),
+                    symbol.flags,
+                ));
             }
         }
         out
@@ -2585,7 +2674,11 @@ impl Database {
     ) -> Vec<(String, Rc<Datatype>, Address, uint4, Address, bool)> {
         let mut out = Vec::new();
         for space_index in 0..self.scopes[scope].maptable.len() {
-            let rangemap = match self.scopes[scope].maptable.get(space_index).and_then(|m| m.as_ref()) {
+            let rangemap = match self.scopes[scope]
+                .maptable
+                .get(space_index)
+                .and_then(|m| m.as_ref())
+            {
                 Some(rm) => rm,
                 None => continue,
             };
@@ -2601,7 +2694,8 @@ impl Database {
                 // addr-tied / empty-uselimit symbols are usepoint-independent and
                 // already carried by `scope_space_symbol_specs` for the stack space;
                 // here we only carry the genuinely usepoint-scoped ones.
-                if (symbol.flags & varnode_flags::addrtied) != 0 || entry.uselimit.empty()
+                if (symbol.flags & varnode_flags::addrtied) != 0
+                    || entry.uselimit.empty()
                     || symbol.get_category() == symbol_category::FUNCTION_PARAMETER
                 {
                     continue;
@@ -2635,7 +2729,12 @@ impl Database {
 
     /// C++ `ScopeInternal::findAddr` (`database.cc:2252-2276`): find a Symbol at
     /// exactly `addr`, valid at `usepoint`.
-    pub fn find_addr(&self, scope: ScopeId, addr: &Address, usepoint: &Address) -> Option<EntryRef> {
+    pub fn find_addr(
+        &self,
+        scope: ScopeId,
+        addr: &Address,
+        usepoint: &Address,
+    ) -> Option<EntryRef> {
         let space = addr.get_space()?;
         let space_index = space.get_index() as usize;
         let rangemap = self.scopes[scope].maptable.get(space_index)?.as_ref()?;
@@ -2690,7 +2789,10 @@ impl Database {
         let mut it = rangemap.find_subsorts(addr.get_offset(), EntrySubsort::minimal(), sub2);
         let mut bestentry: Option<EntryRef> = None;
         let mut oldsize: int4 = -1;
-        let end = addr.get_offset().wrapping_add(size as uintb).wrapping_sub(1);
+        let end = addr
+            .get_offset()
+            .wrapping_add(size as uintb)
+            .wrapping_sub(1);
         while let Some(idx) = it.next_back() {
             let entry = self.mapped_entry(scope, space_index, idx);
             if entry.get_last() >= end {
@@ -2733,11 +2835,17 @@ impl Database {
         let space = addr.get_space()?;
         let space_index = space.get_index() as usize;
         let rangemap = self.scopes[scope].maptable.get(space_index)?.as_ref()?;
-        let mut it =
-            rangemap.find_subsorts(addr.get_offset(), EntrySubsort::minimal(), EntrySubsort::maximal());
+        let mut it = rangemap.find_subsorts(
+            addr.get_offset(),
+            EntrySubsort::minimal(),
+            EntrySubsort::maximal(),
+        );
         let mut bestentry: Option<EntryRef> = None;
         let mut oldsize: int4 = -1;
-        let end = addr.get_offset().wrapping_add(size as uintb).wrapping_sub(1);
+        let end = addr
+            .get_offset()
+            .wrapping_add(size as uintb)
+            .wrapping_sub(1);
         while let Some(idx) = it.next_back() {
             let entry = self.mapped_entry(scope, space_index, idx);
             if entry.get_last() >= end {
@@ -2800,7 +2908,10 @@ impl Database {
         let space = addr.get_space()?;
         let space_index = space.get_index() as usize;
         let rangemap = self.scopes[scope].maptable.get(space_index)?.as_ref()?;
-        let end = addr.get_offset().wrapping_add(size as uintb).wrapping_sub(1);
+        let end = addr
+            .get_offset()
+            .wrapping_add(size as uintb)
+            .wrapping_sub(1);
         let idx = rangemap.find_overlap(addr.get_offset(), end)?;
         Some(EntryRef::Mapped { space_index, idx })
     }
@@ -2940,7 +3051,10 @@ impl Database {
         self.kuna_gen += 1;
         Self::write_function_prototype(
             &mut self.symbols[sid].kind,
-            FunctionPrototype { pieces, go_string_input: None },
+            FunctionPrototype {
+                pieces,
+                go_string_input: None,
+            },
         );
     }
 
@@ -2953,12 +3067,20 @@ impl Database {
         self.kuna_gen += 1;
         Self::write_function_prototype(
             &mut self.symbols[sid].kind,
-            FunctionPrototype { pieces, go_string_input },
+            FunctionPrototype {
+                pieces,
+                go_string_input,
+            },
         );
     }
 
     fn write_function_prototype(kind: &mut SymbolKind, prototype: FunctionPrototype) {
-        if let SymbolKind::Function { proto_pieces, pointer_receiver, .. } = kind {
+        if let SymbolKind::Function {
+            proto_pieces,
+            pointer_receiver,
+            ..
+        } = kind
+        {
             *proto_pieces = Some(Box::new(prototype));
             *pointer_receiver = None;
         }
@@ -2970,22 +3092,37 @@ impl Database {
         addr: &Address,
     ) -> Option<&crate::kuna_gostringinput::GoStringInput> {
         let (sid, _) = self.find_function_across_scopes(addr)?;
-        let SymbolKind::Function { proto_pieces: Some(decl), .. } = &self.symbols[sid].kind else {
+        let SymbolKind::Function {
+            proto_pieces: Some(decl),
+            ..
+        } = &self.symbols[sid].kind
+        else {
             return None;
         };
-        decl.go_string_input.as_ref().filter(|formal| &formal.entry == addr)
+        decl.go_string_input
+            .as_ref()
+            .filter(|formal| &formal.entry == addr)
     }
 
     pub fn attach_go_pointer_receiver(
-        &mut self, addr: &Address, receiver: crate::kuna_gopointermethod::Receiver,
+        &mut self,
+        addr: &Address,
+        receiver: crate::kuna_gopointermethod::Receiver,
     ) {
         self.kuna_gen += 1;
-        let Some((id, _)) = self.find_function_across_scopes(addr) else { return };
+        let Some((id, _)) = self.find_function_across_scopes(addr) else {
+            return;
+        };
         let symbol = &mut self.symbols[id];
         if symbol.name != receiver.symbol || symbol.display_name != receiver.symbol {
             return;
         }
-        if let SymbolKind::Function { proto_pieces: Some(pieces), pointer_receiver, .. } = &mut symbol.kind {
+        if let SymbolKind::Function {
+            proto_pieces: Some(pieces),
+            pointer_receiver,
+            ..
+        } = &mut symbol.kind
+        {
             if pieces.pieces.name == receiver.symbol {
                 *pointer_receiver = Some(Box::new(receiver));
             }
@@ -2993,11 +3130,16 @@ impl Database {
     }
 
     pub(crate) fn go_pointer_receiver(
-        &self, addr: &Address,
+        &self,
+        addr: &Address,
     ) -> Option<&crate::kuna_gopointermethod::Receiver> {
         let (id, _) = self.find_function_across_scopes(addr)?;
         let symbol = &self.symbols[id];
-        let SymbolKind::Function { pointer_receiver: Some(receiver), .. } = &symbol.kind else {
+        let SymbolKind::Function {
+            pointer_receiver: Some(receiver),
+            ..
+        } = &symbol.kind
+        else {
             return None;
         };
         (symbol.name == receiver.symbol && symbol.display_name == receiver.symbol)
@@ -3006,9 +3148,14 @@ impl Database {
 
     /// The prototype pieces parked on FunctionSymbol `sid`, or `None` when it
     /// carries none or is not a function.
-    pub fn function_proto_pieces_of(&self, sid: SymbolId) -> Option<&crate::fspec::PrototypePieces> {
+    pub fn function_proto_pieces_of(
+        &self,
+        sid: SymbolId,
+    ) -> Option<&crate::fspec::PrototypePieces> {
         match &self.symbols[sid].kind {
-            SymbolKind::Function { proto_pieces, .. } => proto_pieces.as_deref().map(|decl| &decl.pieces),
+            SymbolKind::Function { proto_pieces, .. } => {
+                proto_pieces.as_deref().map(|decl| &decl.pieces)
+            }
             _ => None,
         }
     }
@@ -3024,7 +3171,9 @@ impl Database {
     ) -> Option<&crate::fspec::PrototypePieces> {
         let sid = self.find_function(scope, addr)?;
         match &self.symbols[sid].kind {
-            SymbolKind::Function { proto_pieces, .. } => proto_pieces.as_deref().map(|decl| &decl.pieces),
+            SymbolKind::Function { proto_pieces, .. } => {
+                proto_pieces.as_deref().map(|decl| &decl.pieces)
+            }
             _ => None,
         }
     }
@@ -3044,7 +3193,9 @@ impl Database {
     ) -> Option<&crate::fspec::PrototypePieces> {
         let (sid, _) = self.find_function_across_scopes(addr)?;
         match &self.symbols[sid].kind {
-            SymbolKind::Function { proto_pieces, .. } => proto_pieces.as_deref().map(|decl| &decl.pieces),
+            SymbolKind::Function { proto_pieces, .. } => {
+                proto_pieces.as_deref().map(|decl| &decl.pieces)
+            }
             _ => None,
         }
     }
@@ -3055,7 +3206,13 @@ impl Database {
     pub fn function_is_inline(&self, scope: ScopeId, addr: &Address) -> bool {
         match self.find_function(scope, addr) {
             Some(sid) => {
-                matches!(self.symbols[sid].kind, SymbolKind::Function { inline_func: true, .. })
+                matches!(
+                    self.symbols[sid].kind,
+                    SymbolKind::Function {
+                        inline_func: true,
+                        ..
+                    }
+                )
             }
             None => false,
         }
@@ -3081,7 +3238,13 @@ impl Database {
     pub fn function_is_no_return(&self, scope: ScopeId, addr: &Address) -> bool {
         match self.find_function(scope, addr) {
             Some(sid) => {
-                matches!(self.symbols[sid].kind, SymbolKind::Function { no_return: true, .. })
+                matches!(
+                    self.symbols[sid].kind,
+                    SymbolKind::Function {
+                        no_return: true,
+                        ..
+                    }
+                )
             }
             None => false,
         }
@@ -3137,7 +3300,13 @@ impl Database {
     pub fn function_is_no_return_across_scopes(&self, addr: &Address) -> bool {
         match self.find_function_across_scopes(addr) {
             Some((sid, _)) => {
-                matches!(self.symbols[sid].kind, SymbolKind::Function { no_return: true, .. })
+                matches!(
+                    self.symbols[sid].kind,
+                    SymbolKind::Function {
+                        no_return: true,
+                        ..
+                    }
+                )
             }
             None => false,
         }
@@ -3147,7 +3316,13 @@ impl Database {
     pub fn function_is_inline_across_scopes(&self, addr: &Address) -> bool {
         match self.find_function_across_scopes(addr) {
             Some((sid, _)) => {
-                matches!(self.symbols[sid].kind, SymbolKind::Function { inline_func: true, .. })
+                matches!(
+                    self.symbols[sid].kind,
+                    SymbolKind::Function {
+                        inline_func: true,
+                        ..
+                    }
+                )
             }
             None => false,
         }
@@ -3173,7 +3348,10 @@ impl Database {
         for idx in it.by_ref() {
             let entry = self.mapped_entry(scope, space_index, idx);
             if entry.get_addr().get_offset() == addr.get_offset() {
-                if matches!(self.symbols[entry.symbol].kind, SymbolKind::ExternRef { .. }) {
+                if matches!(
+                    self.symbols[entry.symbol].kind,
+                    SymbolKind::ExternRef { .. }
+                ) {
                     return Some(entry.symbol);
                 }
                 // C++ breaks on the first entry at this exact address regardless.
@@ -3210,7 +3388,10 @@ impl Database {
     pub fn find_by_name(&self, scope: ScopeId, nm: &str) -> Vec<SymbolId> {
         use std::ops::Bound::{Included, Unbounded};
         let mut res = Vec::new();
-        let lo = NameKey { name: nm.to_string(), name_dedup: 0 };
+        let lo = NameKey {
+            name: nm.to_string(),
+            name_dedup: 0,
+        };
         for (k, &sid) in self.scopes[scope].nametree.range((Included(lo), Unbounded)) {
             if k.name != nm {
                 break;
@@ -3224,8 +3405,15 @@ impl Database {
     /// `scope` or an ancestor up to (but not including) `op2`?
     pub fn is_name_used(&self, scope: ScopeId, nm: &str, op2: Option<ScopeId>) -> bool {
         use std::ops::Bound::{Included, Unbounded};
-        let lo = NameKey { name: nm.to_string(), name_dedup: 0 };
-        if let Some((k, _)) = self.scopes[scope].nametree.range((Included(lo), Unbounded)).next() {
+        let lo = NameKey {
+            name: nm.to_string(),
+            name_dedup: 0,
+        };
+        if let Some((k, _)) = self.scopes[scope]
+            .nametree
+            .range((Included(lo), Unbounded))
+            .next()
+        {
             if k.name == nm {
                 return true;
             }
@@ -3487,7 +3675,10 @@ impl Database {
                         // `GlobalEntry::func_no_return`.
                         func_no_return: matches!(
                             sym.kind,
-                            SymbolKind::Function { no_return: true, .. }
+                            SymbolKind::Function {
+                                no_return: true,
+                                ..
+                            }
                         ),
                         func_extra_pop: match sym.kind {
                             SymbolKind::Function { extra_pop, .. } => extra_pop,
@@ -3498,11 +3689,7 @@ impl Database {
             }
         }
         let scope = &self.scopes[gid];
-        crate::context::GlobalQuery::new(
-            entries,
-            scope.rangetree.clone(),
-            self.flagbase.clone(),
-        )
+        crate::context::GlobalQuery::new(entries, scope.rangetree.clone(), self.flagbase.clone())
     }
 
     /// Snapshot every global FunctionSymbol's source-declared prototype, keyed by
@@ -3519,9 +3706,7 @@ impl Database {
     /// function at every call site.  Inert before that arm — nothing outside the
     /// global scope could carry parked pieces, because the by-NAME park path
     /// resolves through the global scope only.
-    pub fn build_callee_proto_pieces(
-        &self,
-    ) -> Vec<(int4, uintb, crate::fspec::PrototypePieces)> {
+    pub fn build_callee_proto_pieces(&self) -> Vec<(int4, uintb, crate::fspec::PrototypePieces)> {
         let mut out: Vec<(int4, uintb, crate::fspec::PrototypePieces)> = Vec::new();
         for (sid, _) in self.scopes.iter() {
             for (space_index, slot) in self.scopes[sid].maptable.iter().enumerate() {
@@ -3534,10 +3719,16 @@ impl Database {
                     if entry.is_dynamic() {
                         continue;
                     }
-                    if let SymbolKind::Function { proto_pieces: Some(pieces), .. } =
-                        &self.symbols[entry.symbol].kind
+                    if let SymbolKind::Function {
+                        proto_pieces: Some(pieces),
+                        ..
+                    } = &self.symbols[entry.symbol].kind
                     {
-                        out.push((space_index as int4, entry.get_first(), pieces.pieces.clone()));
+                        out.push((
+                            space_index as int4,
+                            entry.get_first(),
+                            pieces.pieces.clone(),
+                        ));
                     }
                 }
             }
@@ -3769,7 +3960,9 @@ impl Database {
                 s.push_str("unaff_retaddr");
             } else {
                 let space = addr.get_space().expect("named varnode has a space");
-                let unaffname = arch.translate().get_register_name(space, addr.get_offset(), sz);
+                let unaffname = arch
+                    .translate()
+                    .get_register_name(space, addr.get_offset(), sz);
                 if unaffname.is_empty() {
                     let _ = write!(s, "unaff_{:08x}", addr.get_offset());
                 } else {
@@ -3778,7 +3971,9 @@ impl Database {
             }
         } else if (flags & varnode_flags::persist) != 0 {
             let space = addr.get_space().expect("named varnode has a space");
-            let spacename = arch.translate().get_register_name(space, addr.get_offset(), sz);
+            let spacename = arch
+                .translate()
+                .get_register_name(space, addr.get_offset(), sz);
             if !spacename.is_empty() {
                 s.push_str(&spacename);
             } else {
@@ -3798,7 +3993,9 @@ impl Database {
         } else if (flags & varnode_flags::input) != 0 && *index < 0 {
             // Irregular input.
             let space = addr.get_space().expect("named varnode has a space");
-            let regname = arch.translate().get_register_name(space, addr.get_offset(), sz);
+            let regname = arch
+                .translate()
+                .get_register_name(space, addr.get_offset(), sz);
             if regname.is_empty() {
                 let _ = write!(s, "in_{}_{:08x}", space.get_name(), addr.get_offset());
             } else {
@@ -3820,7 +4017,9 @@ impl Database {
         } else if (flags & varnode_flags::indirect_creation) != 0 {
             s.push_str("extraout_");
             let space = addr.get_space().expect("named varnode has a space");
-            let regname = arch.translate().get_register_name(space, addr.get_offset(), sz);
+            let regname = arch
+                .translate()
+                .get_register_name(space, addr.get_offset(), sz);
             if !regname.is_empty() {
                 s.push_str(&regname);
             } else {
@@ -3893,7 +4092,11 @@ impl Database {
                 };
             }
             if !naddr.is_invalid() && (nflags & varnode_flags::persist) != 0 {
-                let sz = self.symbols[sym].dtype.as_ref().map(|t| t.get_size()).unwrap_or(1);
+                let sz = self.symbols[sym]
+                    .dtype
+                    .as_ref()
+                    .map(|t| t.get_size())
+                    .unwrap_or(1);
                 let space = naddr.get_space().expect("persist addr has a space");
                 if arch
                     .translate()
@@ -3953,7 +4156,11 @@ impl Database {
                 let entry = self.entry(scope, eref);
                 (entry.get_addr().clone(), entry.get_first_use_address())
             };
-            let mut flags = if usepoint.is_invalid() { varnode_flags::addrtied } else { 0 };
+            let mut flags = if usepoint.is_invalid() {
+                varnode_flags::addrtied
+            } else {
+                0
+            };
             let dt = self.symbols[sym].dtype.clone();
             if category == symbol_category::FUNCTION_PARAMETER {
                 flags |= varnode_flags::input;
@@ -4063,7 +4270,9 @@ impl Database {
                 let mut current = sym_scope;
                 while current != ds {
                     depth_resolution += 1; // Print its name
-                    current = self.scopes[current].parent.expect("path reaches distinguish");
+                    current = self.scopes[current]
+                        .parent
+                        .expect("path reaches distinguish");
                 }
                 depth_resolution += 1; // Also print the distinguishing scope name
                 terminating_scope = self.scopes[ds].parent;
@@ -4192,8 +4401,16 @@ impl Database {
     /// single address-tied mapping, the mapping is rebuilt at the new size.
     pub fn retype_symbol(&mut self, sym: SymbolId, ct: Rc<Datatype>) -> KunaResult<()> {
         self.kuna_gen += 1;
-        let ct = if ct.has_stripped() { ct.get_stripped().unwrap_or(ct) } else { ct };
-        let old_size = self.symbols[sym].dtype.as_ref().map(|t| t.get_size()).unwrap_or(0);
+        let ct = if ct.has_stripped() {
+            ct.get_stripped().unwrap_or(ct)
+        } else {
+            ct
+        };
+        let old_size = self.symbols[sym]
+            .dtype
+            .as_ref()
+            .map(|t| t.get_size())
+            .unwrap_or(0);
         let mapentry_len = self.symbols[sym].mapentry.len();
         if old_size == ct.get_size() || mapentry_len == 0 {
             self.symbols[sym].dtype = Some(ct);
@@ -4353,7 +4570,8 @@ impl Database {
                     // Read before anything recomputes it: a refined type would
                     // clear the bit and hide the lock.
                     sym.is_size_type_locked(),
-                    sym.get_category() == symbol_category::EQUATE || (sym.is_name_locked() && sym.is_isolated()),
+                    sym.get_category() == symbol_category::EQUATE
+                        || (sym.is_name_locked() && sym.is_isolated()),
                 )
             };
             if !type_locked && !keep {
@@ -4494,17 +4712,22 @@ impl Database {
             if self.symbols[sym].is_type_locked() && alias_block_level != 0 {
                 if alias_block_level == 3 {
                     aliason = false;
-                } else { match self.symbols[sym].dtype.clone() { Some(ct) => {
-                    let meta = ct.get_metatype();
-                    // C++ varmap.cc: structures always block aliases; arrays block
-                    // only when alias_block_level > 1 (the two C++ `if`/`else if`
-                    // arms have the same body — collapsed here to keep clippy happy).
-                    if meta == type_metatype::TYPE_STRUCT
-                        || (meta == type_metatype::TYPE_ARRAY && alias_block_level > 1)
-                    {
-                        aliason = false;
+                } else {
+                    match self.symbols[sym].dtype.clone() {
+                        Some(ct) => {
+                            let meta = ct.get_metatype();
+                            // C++ varmap.cc: structures always block aliases; arrays block
+                            // only when alias_block_level > 1 (the two C++ `if`/`else if`
+                            // arms have the same body — collapsed here to keep clippy happy).
+                            if meta == type_metatype::TYPE_STRUCT
+                                || (meta == type_metatype::TYPE_ARRAY && alias_block_level > 1)
+                            {
+                                aliason = false;
+                            }
+                        }
+                        _ => {}
                     }
-                } _ => {}}}
+                }
             }
         }
     }
@@ -4546,7 +4769,10 @@ impl Database {
         // rename"; collecting up-front is the safe arena equivalent).
         // C++ probe is Symbol("$$undef") with nameDedup=0; upper_bound is the
         // first key strictly greater than ("$$undef", 0).
-        let probe = NameKey { name: "$$undef".to_string(), name_dedup: 0 };
+        let probe = NameKey {
+            name: "$$undef".to_string(),
+            name_dedup: 0,
+        };
         self.scopes[scope]
             .nametree
             .range((Excluded(probe), Unbounded))
@@ -4568,7 +4794,12 @@ impl Database {
                     return None;
                 }
                 let entry = self.entry(scope, eref);
-                Some((sid, entry.get_addr().clone(), entry.get_size(), symbol.name.clone()))
+                Some((
+                    sid,
+                    entry.get_addr().clone(),
+                    entry.get_size(),
+                    symbol.name.clone(),
+                ))
             })
             .collect()
     }
@@ -4739,7 +4970,9 @@ impl Symbol {
     pub fn encode_body(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> KunaResult<()> {
         match &self.dtype {
             Some(t) => t.encode_ref(encoder),
-            None => Err(KunaError::lowlevel("Symbol::encode: symbol has no data-type")),
+            None => Err(KunaError::lowlevel(
+                "Symbol::encode: symbol has no data-type",
+            )),
         }
     }
 
@@ -4854,14 +5087,21 @@ impl Database {
     }
 
     pub(crate) fn wrapped_stack_wire_specs(&self, scope: ScopeId) -> Vec<(uint8, int4)> {
-        self.scopes[scope].nametree.values().filter_map(|&sid| {
-            let sym = &self.symbols[sid];
-            if !sym.mapentry.iter().any(|&entry| super::kuna_wrappedstackmap::is_wrapped_address(
-                self.entry(scope, entry).get_addr())) {
-                return None;
-            }
-            Some((sym.symbol_id, sym.dtype.as_ref()?.get_size()))
-        }).collect()
+        self.scopes[scope]
+            .nametree
+            .values()
+            .filter_map(|&sid| {
+                let sym = &self.symbols[sid];
+                if !sym.mapentry.iter().any(|&entry| {
+                    super::kuna_wrappedstackmap::is_wrapped_address(
+                        self.entry(scope, entry).get_addr(),
+                    )
+                }) {
+                    return None;
+                }
+                Some((sym.symbol_id, sym.dtype.as_ref()?.get_size()))
+            })
+            .collect()
     }
 
     pub(crate) fn encode_scope_with_storage(
@@ -4914,7 +5154,11 @@ impl Database {
                     if sym.category == symbol_category::UNION_FACET {
                         continue; // Don't save override
                     }
-                    symbol_type = if sym.category == symbol_category::EQUATE { 2 } else { 1 };
+                    symbol_type = if sym.category == symbol_category::EQUATE {
+                        2
+                    } else {
+                        1
+                    };
                 }
                 encoder.open_element(&ELEM_MAPSYM);
                 if symbol_type == 1 {
@@ -4926,9 +5170,12 @@ impl Database {
                 for eref in &sym.mapentry {
                     let entry = self.entry(scope, *eref);
                     if !entry.is_piece() && entry.get_addr().is_join() {
-                        let wrapped = super::kuna_wrappedstackmap::is_wrapped_address(entry.get_addr());
-                        if let Some((addr, _)) = wrapped_storage.get(&sym.symbol_id).filter(|(_, size)|
-                            wrapped && *size == entry.get_size()) {
+                        let wrapped =
+                            super::kuna_wrappedstackmap::is_wrapped_address(entry.get_addr());
+                        if let Some((addr, _)) = wrapped_storage
+                            .get(&sym.symbol_id)
+                            .filter(|(_, size)| wrapped && *size == entry.get_size())
+                        {
                             let mut wire_entry = entry.clone();
                             wire_entry.addr = addr.clone();
                             wire_entry.encode(encoder)?;
@@ -4966,8 +5213,9 @@ mod wrapped_stack_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace,
-        UniqueSpace};
+    use unlace_base::space::{
+        AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
+    };
 
     /// A simple test data-type of the given size (TYPE_UNKNOWN unless given).
     fn dt(size: int4) -> Rc<Datatype> {
@@ -4978,14 +5226,30 @@ mod tests {
     fn build_manager() -> AddrSpaceManager {
         let mut m = AddrSpaceManager::new();
         m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+            .unwrap();
         m.insert_space(Rc::new(AddrSpace::new(
-            spacetype::IPTR_PROCESSOR, "ram", false, 8, 1, 2,
-            addrspace_flags::hasphysical, 1, 1,
+            spacetype::IPTR_PROCESSOR,
+            "ram",
+            false,
+            8,
+            1,
+            2,
+            addrspace_flags::hasphysical,
+            1,
+            1,
         )))
         .unwrap();
         m.insert_space(Rc::new(AddrSpace::new(
-            spacetype::IPTR_PROCESSOR, "register", false, 4, 1, 3, 0, 0, 0,
+            spacetype::IPTR_PROCESSOR,
+            "register",
+            false,
+            4,
+            1,
+            3,
+            0,
+            0,
+            0,
         )))
         .unwrap();
         m.set_default_code_space(2).unwrap();
@@ -5045,7 +5309,11 @@ mod tests {
     }
 
     fn test_arch(num_spaces: int4, angr: bool) -> TestArch {
-        TestArch { num_spaces, angr, regnames: BTreeMap::new() }
+        TestArch {
+            num_spaces,
+            angr,
+            regnames: BTreeMap::new(),
+        }
     }
 
     /// Build a database with an attached global scope.  Returns (db, global id).
@@ -5222,11 +5490,15 @@ mod tests {
         assert_eq!(db.entry(g, ea).symbol, a);
         let eb = db.find_addr(g, &b_addr, &inv).expect("B found");
         assert_eq!(db.entry(g, eb).symbol, b);
-        assert!(db.find_addr(g, &Address::new(Rc::clone(&ram), 0x1500), &inv).is_none());
+        assert!(
+            db.find_addr(g, &Address::new(Rc::clone(&ram), 0x1500), &inv)
+                .is_none()
+        );
         // mid-symbol address is not an exact-address hit for findAddr.
-        assert!(db
-            .find_addr(g, &Address::new(Rc::clone(&ram), 0x1002), &inv)
-            .is_none());
+        assert!(
+            db.find_addr(g, &Address::new(Rc::clone(&ram), 0x1002), &inv)
+                .is_none()
+        );
 
         // findContainer: a 2-byte access at 0x1000 is contained in A.
         let ec = db
@@ -5234,18 +5506,20 @@ mod tests {
             .expect("container for 2-byte access");
         assert_eq!(db.entry(g, ec).symbol, a);
         // access fully past A is not contained.
-        assert!(db
-            .find_container(g, &Address::new(Rc::clone(&ram), 0x1003), 4, &inv)
-            .is_none());
+        assert!(
+            db.find_container(g, &Address::new(Rc::clone(&ram), 0x1003), 4, &inv)
+                .is_none()
+        );
 
         // findOverlap: an access straddling A's start overlaps A.
         let eo = db
             .find_overlap(g, &Address::new(Rc::clone(&ram), 0x0ffe), 4)
             .expect("overlap with A");
         assert_eq!(db.entry(g, eo).symbol, a);
-        assert!(db
-            .find_overlap(g, &Address::new(Rc::clone(&ram), 0x1004), 4)
-            .is_none());
+        assert!(
+            db.find_overlap(g, &Address::new(Rc::clone(&ram), 0x1004), 4)
+                .is_none()
+        );
     }
 
     #[test]
@@ -5346,7 +5620,10 @@ mod tests {
             .upsert_data_mapped(g, "window_class", dt(6), &target, &invalid)
             .unwrap();
 
-        assert_eq!(asserted, automatic, "the assertion should replace, not shadow");
+        assert_eq!(
+            asserted, automatic,
+            "the assertion should replace, not shadow"
+        );
         assert_eq!(db.symbol(asserted).get_name(), "window_class");
         assert_eq!(db.symbol(asserted).dtype.as_ref().unwrap().get_size(), 6);
         let target_entry = db.find_container(g, &target, 1, &invalid).unwrap();
@@ -5364,16 +5641,21 @@ mod tests {
         let (mut db, g) = db_with_global(m.num_spaces());
         let base = Address::new(Rc::clone(&ram), 0x100);
         // Two overlapping symbols starting at 0x100: 8 bytes and 4 bytes.
-        let (big, _) = db.add_symbol_mapped(g, "big", dt(8), &base, &Address::new_invalid()).unwrap();
-        let (small, _) =
-            db.add_symbol_mapped(g, "small", dt(4), &base, &Address::new_invalid()).unwrap();
+        let (big, _) = db
+            .add_symbol_mapped(g, "big", dt(8), &base, &Address::new_invalid())
+            .unwrap();
+        let (small, _) = db
+            .add_symbol_mapped(g, "small", dt(4), &base, &Address::new_invalid())
+            .unwrap();
         let inv = Address::new_invalid();
         // Closest fit to a 4-byte access at 0x100 is the 4-byte symbol.
         let e = db.find_closest_fit(g, &base, 4, &inv).expect("closest fit");
         assert_eq!(db.entry(g, e).symbol, small);
         // Closest fit to a 6-byte access: small (size 4) is too small (newdiff
         // negative), big (size 8) gives newdiff +2 which wins over -2.
-        let e = db.find_closest_fit(g, &base, 6, &inv).expect("closest fit 6");
+        let e = db
+            .find_closest_fit(g, &base, 6, &inv)
+            .expect("closest fit 6");
         assert_eq!(db.entry(g, e).symbol, big);
     }
 
@@ -5382,12 +5664,23 @@ mod tests {
         // EntrySubsort orders by useindex then useoffset; minimal < real < maximal.
         let mn = EntrySubsort::minimal();
         let mx = EntrySubsort::maximal();
-        let lo = EntrySubsort { useindex: 2, useoffset: 0x10 };
-        let hi = EntrySubsort { useindex: 2, useoffset: 0x20 };
+        let lo = EntrySubsort {
+            useindex: 2,
+            useoffset: 0x10,
+        };
+        let hi = EntrySubsort {
+            useindex: 2,
+            useoffset: 0x20,
+        };
         assert!(mn < lo);
         assert!(lo < hi);
         assert!(hi < mx);
-        assert!(EntrySubsort { useindex: 1, useoffset: 0xffff } < lo);
+        assert!(
+            EntrySubsort {
+                useindex: 1,
+                useoffset: 0xffff
+            } < lo
+        );
     }
 
     // --- query walk through scope hierarchy ---
@@ -5437,11 +5730,16 @@ mod tests {
         db.symbol_mut(p).category = symbol_category::FUNCTION_PARAMETER;
         db.symbol_mut(p).catindex = 2;
         let mut base = 0;
-        assert_eq!(db.build_default_name(g, p, &mut base, None, &arch).unwrap(), "a2");
+        assert_eq!(
+            db.build_default_name(g, p, &mut base, None, &arch).unwrap(),
+            "a2"
+        );
 
         // A persistent global at ram with no register name -> dat_<addr>.
         let a_addr = Address::new(Rc::clone(&ram), 0x4010);
-        let (gd, _) = db.add_symbol_mapped(g, "gd", dt(4), &a_addr, &Address::new_invalid()).unwrap();
+        let (gd, _) = db
+            .add_symbol_mapped(g, "gd", dt(4), &a_addr, &Address::new_invalid())
+            .unwrap();
         // add_map set persist (global scope) and addrtied (empty uselimit).
         assert!(db.symbol(gd).flags & varnode_flags::persist != 0);
         let rep = VnRepresentative {
@@ -5452,13 +5750,17 @@ mod tests {
             is_input: false,
         };
         let mut base = 0;
-        let nm = db.build_default_name(g, gd, &mut base, Some(&rep), &arch).unwrap();
+        let nm = db
+            .build_default_name(g, gd, &mut base, Some(&rep), &arch)
+            .unwrap();
         assert_eq!(nm, "dat_4010");
 
         // A plain local (no persist) -> vN, advancing base.
         let loc = db.add_symbol(g, "loc", dt(4)).unwrap();
         let mut base = 7;
-        let nm = db.build_default_name(g, loc, &mut base, None, &arch).unwrap();
+        let nm = db
+            .build_default_name(g, loc, &mut base, None, &arch)
+            .unwrap();
         assert_eq!(nm, "v7");
         assert_eq!(base, 8);
     }
@@ -5495,8 +5797,14 @@ mod tests {
         db.clear_unlocked_category_negative(g).unwrap();
 
         // The unlocked local is gone; the locked local and the parameter survive.
-        assert!(!db.symbols.contains_key(local), "unlocked local must be removed");
-        assert!(db.symbols.contains_key(locked), "type/name-locked symbol kept");
+        assert!(
+            !db.symbols.contains_key(local),
+            "unlocked local must be removed"
+        );
+        assert!(
+            db.symbols.contains_key(locked),
+            "type/name-locked symbol kept"
+        );
         assert!(db.symbols.contains_key(param), "categorized parameter kept");
         // The mapping of the removed local is gone too (no stale EntryMap range).
         assert!(db.find_overlap(g, &a_addr, 4).is_none());
@@ -5514,39 +5822,74 @@ mod tests {
         use crate::dtype::TypeFactory;
         let types = crate::dtype::TypeFactoryImpl::new();
         types.set_default_alignment_map();
-        types.set_core_type("undefined", 1, type_metatype::TYPE_UNKNOWN, false).unwrap();
-        types.set_core_type("char", 1, type_metatype::TYPE_INT, true).unwrap();
-        types.set_core_type("undefined4", 4, type_metatype::TYPE_UNKNOWN, false).unwrap();
+        types
+            .set_core_type("undefined", 1, type_metatype::TYPE_UNKNOWN, false)
+            .unwrap();
+        types
+            .set_core_type("char", 1, type_metatype::TYPE_INT, true)
+            .unwrap();
+        types
+            .set_core_type("undefined4", 4, type_metatype::TYPE_UNKNOWN, false)
+            .unwrap();
         types.cache_core_types().unwrap();
         let int4 = || Rc::new(Datatype::new(4, type_metatype::TYPE_INT));
         let at = |off| Address::new(Rc::clone(&ram), off);
 
         // A local the previous pass recovered: removed.
-        let (recovered, _) = db.add_symbol_mapped(g, "v3", int4(), &at(0x100), &Address::new_invalid()).unwrap();
+        let (recovered, _) = db
+            .add_symbol_mapped(g, "v3", int4(), &at(0x100), &Address::new_invalid())
+            .unwrap();
         // A size-only lock (type-locked while undefined) whose type the pass
         // refined to `int`: kept, back to undefined of its size.
-        let (sized, _) = db.add_symbol_mapped(g, "sized", dt(4), &at(0x200), &Address::new_invalid()).unwrap();
+        let (sized, _) = db
+            .add_symbol_mapped(g, "sized", dt(4), &at(0x200), &Address::new_invalid())
+            .unwrap();
         db.set_attribute(sized, varnode_flags::typelock | varnode_flags::namelock);
         assert!(db.symbols[sized].is_size_type_locked());
         db.symbols[sized].dtype = Some(int4());
         // An asserted `int`: kept as `int`. The `nolocalalias` the pass marked
         // on it is cleared.
-        let (typed, _) = db.add_symbol_mapped(g, "typed", int4(), &at(0x300), &Address::new_invalid()).unwrap();
-        db.set_attribute(typed, varnode_flags::typelock | varnode_flags::namelock | varnode_flags::nolocalalias);
+        let (typed, _) = db
+            .add_symbol_mapped(g, "typed", int4(), &at(0x300), &Address::new_invalid())
+            .unwrap();
+        db.set_attribute(
+            typed,
+            varnode_flags::typelock | varnode_flags::namelock | varnode_flags::nolocalalias,
+        );
         assert!(!db.symbols[typed].is_size_type_locked());
         // An equate: kept although not type-locked.
-        let (equate, _) = db.add_symbol_mapped(g, "eq", dt(4), &at(0x400), &Address::new_invalid()).unwrap();
+        let (equate, _) = db
+            .add_symbol_mapped(g, "eq", dt(4), &at(0x400), &Address::new_invalid())
+            .unwrap();
         db.set_category(g, equate, symbol_category::EQUATE, 0);
 
         db.clear_unlocked(g, Some(&types)).unwrap();
 
-        assert!(!db.symbols.contains_key(recovered), "a recovered local must not seed the restart");
+        assert!(
+            !db.symbols.contains_key(recovered),
+            "a recovered local must not seed the restart"
+        );
         let sized = &db.symbols[sized];
-        assert_eq!(sized.dtype.as_ref().map(|t| (t.get_size(), t.get_metatype())), Some((4, type_metatype::TYPE_UNKNOWN)));
-        assert!(sized.is_type_locked() && sized.is_size_type_locked() && sized.get_name() == "sized");
+        assert_eq!(
+            sized
+                .dtype
+                .as_ref()
+                .map(|t| (t.get_size(), t.get_metatype())),
+            Some((4, type_metatype::TYPE_UNKNOWN))
+        );
+        assert!(
+            sized.is_type_locked() && sized.is_size_type_locked() && sized.get_name() == "sized"
+        );
         let typed = &db.symbols[typed];
-        assert_eq!(typed.dtype.as_ref().map(|t| t.get_metatype()), Some(type_metatype::TYPE_INT));
-        assert_eq!(typed.get_flags() & varnode_flags::nolocalalias, 0, "alias facts are recomputed each pass");
+        assert_eq!(
+            typed.dtype.as_ref().map(|t| t.get_metatype()),
+            Some(type_metatype::TYPE_INT)
+        );
+        assert_eq!(
+            typed.get_flags() & varnode_flags::nolocalalias,
+            0,
+            "alias facts are recomputed each pass"
+        );
         assert!(db.symbols.contains_key(equate));
     }
 
@@ -5566,28 +5909,43 @@ mod tests {
         // (a) type-locked, NOT name-locked, DEFINED name -> kept, name reset to
         //     an undefined default ($$undef...).
         let a_addr = Address::new(Rc::clone(&ram), 0x100);
-        let (a, _) = db.add_symbol_mapped(g, "defined_a", dt(4), &a_addr, &inv).unwrap();
+        let (a, _) = db
+            .add_symbol_mapped(g, "defined_a", dt(4), &a_addr, &inv)
+            .unwrap();
         db.set_attribute(a, varnode_flags::typelock); // type lock only
 
         // (b) type-locked, NOT name-locked, ALREADY-undefined name -> kept, name
         //     unchanged (the C++ `if (!isNameUndefined())` skip).
         let b_addr = Address::new(Rc::clone(&ram), 0x200);
-        let (b, _) = db.add_symbol_mapped(g, "tmpB", dt(4), &b_addr, &inv).unwrap();
+        let (b, _) = db
+            .add_symbol_mapped(g, "tmpB", dt(4), &b_addr, &inv)
+            .unwrap();
         db.rename_symbol(b, "$$undef00000000").unwrap();
         db.set_attribute(b, varnode_flags::typelock);
         assert!(db.symbol(b).is_name_undefined());
 
         // (c) type+name-locked, DEFINED name -> kept, name unchanged.
         let c_addr = Address::new(Rc::clone(&ram), 0x300);
-        let (c, _) = db.add_symbol_mapped(g, "named_c", dt(4), &c_addr, &inv).unwrap();
+        let (c, _) = db
+            .add_symbol_mapped(g, "named_c", dt(4), &c_addr, &inv)
+            .unwrap();
         db.set_attribute(c, varnode_flags::typelock | varnode_flags::namelock);
 
         db.clear_unlocked_category_negative(g).unwrap();
 
         // All three survive (type-locked are never removed by the cat<0 arm).
-        assert!(db.symbols.contains_key(a), "(a) type-locked symbol must be kept");
-        assert!(db.symbols.contains_key(b), "(b) type-locked symbol must be kept");
-        assert!(db.symbols.contains_key(c), "(c) type+name-locked symbol must be kept");
+        assert!(
+            db.symbols.contains_key(a),
+            "(a) type-locked symbol must be kept"
+        );
+        assert!(
+            db.symbols.contains_key(b),
+            "(b) type-locked symbol must be kept"
+        );
+        assert!(
+            db.symbols.contains_key(c),
+            "(c) type+name-locked symbol must be kept"
+        );
         // (a) defined name was reset to an undefined default.
         assert!(
             db.symbol(a).is_name_undefined(),
@@ -5602,7 +5960,11 @@ mod tests {
             "(b) an already-undefined name must not be re-bumped"
         );
         // (c) name-locked defined name preserved verbatim.
-        assert_eq!(db.symbol(c).get_name(), "named_c", "(c) name-locked name preserved");
+        assert_eq!(
+            db.symbol(c).get_name(),
+            "named_c",
+            "(c) name-locked name preserved"
+        );
     }
 
     // VERIFIER adversarial (w10-sized-stackvn): the collect-then-act ("advance
@@ -5623,23 +5985,38 @@ mod tests {
         let mut unlocked = Vec::new();
         for i in 0..5u64 {
             let addr = Address::new(Rc::clone(&ram), 0x100 + i * 0x10);
-            let (s, _) =
-                db.add_symbol_mapped(g, &format!("loc{i}"), dt(4), &addr, &inv).unwrap();
+            let (s, _) = db
+                .add_symbol_mapped(g, &format!("loc{i}"), dt(4), &addr, &inv)
+                .unwrap();
             unlocked.push((s, addr));
         }
         let keep_addr = Address::new(Rc::clone(&ram), 0x108); // between loc0 and loc1
-        let (keeper, _) = db.add_symbol_mapped(g, "keeper", dt(2), &keep_addr, &inv).unwrap();
+        let (keeper, _) = db
+            .add_symbol_mapped(g, "keeper", dt(2), &keep_addr, &inv)
+            .unwrap();
         db.set_attribute(keeper, varnode_flags::typelock | varnode_flags::namelock);
 
         db.clear_unlocked_category_negative(g).unwrap();
 
         // EVERY unlocked local is gone (none skipped); the keeper stands.
         for (s, addr) in &unlocked {
-            assert!(!db.symbols.contains_key(*s), "every unlocked local must be removed");
-            assert!(db.find_overlap(g, addr, 4).is_none(), "its mapping must be cleared");
+            assert!(
+                !db.symbols.contains_key(*s),
+                "every unlocked local must be removed"
+            );
+            assert!(
+                db.find_overlap(g, addr, 4).is_none(),
+                "its mapping must be cleared"
+            );
         }
-        assert!(db.symbols.contains_key(keeper), "the type-locked keeper survives");
-        assert!(db.find_overlap(g, &keep_addr, 2).is_some(), "keeper mapping intact");
+        assert!(
+            db.symbols.contains_key(keeper),
+            "the type-locked keeper survives"
+        );
+        assert!(
+            db.find_overlap(g, &keep_addr, 2).is_some(),
+            "keeper mapping intact"
+        );
     }
 
     #[test]
@@ -5658,14 +6035,20 @@ mod tests {
         db.symbol_mut(p).catindex = 0;
         // Map it so build_default_name has an entry to read.
         let p_addr = Address::new(Rc::clone(&reg), 0x0);
-        db.add_map_point(g, p, &p_addr, &Address::new_invalid()).unwrap();
+        db.add_map_point(g, p, &p_addr, &Address::new_invalid())
+            .unwrap();
         let mut base = 0;
         // param flag + index = catindex+1 = 1 -> "param_1".
-        assert_eq!(db.build_default_name(g, p, &mut base, None, &arch).unwrap(), "param_1");
+        assert_eq!(
+            db.build_default_name(g, p, &mut base, None, &arch).unwrap(),
+            "param_1"
+        );
 
         // A persistent global with a register name renders the register name.
         let addr = Address::new(Rc::clone(&reg), 0x0);
-        let (gd, _) = db.add_symbol_mapped(g, "gd", dt(4), &addr, &Address::new_invalid()).unwrap();
+        let (gd, _) = db
+            .add_symbol_mapped(g, "gd", dt(4), &addr, &Address::new_invalid())
+            .unwrap();
         let rep = VnRepresentative {
             addr,
             flags: varnode_flags::persist,
@@ -5674,13 +6057,16 @@ mod tests {
             is_input: false,
         };
         let mut base = 0;
-        let nm = db.build_default_name(g, gd, &mut base, Some(&rep), &arch).unwrap();
+        let nm = db
+            .build_default_name(g, gd, &mut base, Some(&rep), &arch)
+            .unwrap();
         assert_eq!(nm, "rax");
 
         // A persistent global at ram (no register) -> capitalized space + hex.
         let ram_addr = Address::new(Rc::clone(&ram), 0x1234);
-        let (rd, _) =
-            db.add_symbol_mapped(g, "rd", dt(4), &ram_addr, &Address::new_invalid()).unwrap();
+        let (rd, _) = db
+            .add_symbol_mapped(g, "rd", dt(4), &ram_addr, &Address::new_invalid())
+            .unwrap();
         let rep = VnRepresentative {
             addr: ram_addr,
             flags: varnode_flags::persist,
@@ -5689,7 +6075,9 @@ mod tests {
             is_input: false,
         };
         let mut base = 0;
-        let nm = db.build_default_name(g, rd, &mut base, Some(&rep), &arch).unwrap();
+        let nm = db
+            .build_default_name(g, rd, &mut base, Some(&rep), &arch)
+            .unwrap();
         // capitalize_first("ram")="Ram", width=2*8=16 hex digits of 0x1234.
         assert_eq!(nm, format!("Ram{:016x}", 0x1234));
     }
@@ -5784,26 +6172,29 @@ mod tests {
     /// `OptionNoReturn` / `IfcFixupApply` set and `FlowInfo::queryCall` reads).
     #[test]
     fn function_aliases_share_identity_without_merging_distinct_same_named_functions() {
-        let m=build_manager();
-        let (mut db,g)=db_with_global(m.num_spaces());
-        let a=Address::new(space(&m,2),0x1000);
-        let b=Address::new(space(&m,2),0x2000);
-        let alias=Address::new(space(&m,2),0x3000);
-        let first=db.add_function(g,&a,"optional",1,dt(1)).unwrap();
-        let second=db.add_function(g,&b,"optional",1,dt(1)).unwrap();
-        let generation=db.kuna_generation();
-        db.add_function_alias(&a,&alias).unwrap();
-        assert!(db.kuna_generation()>generation);
-        assert_eq!(db.find_by_name(g,"optional").len(),2);
-        assert_eq!(db.find_function_across_scopes(&alias),Some((first,g)));
-        assert!(db.add_function_alias(&a,&b).is_err());
-        assert_eq!(db.find_function_across_scopes(&b),Some((second,g)));
-        let mut pieces=crate::fspec::PrototypePieces::default();
-        pieces.name="optional".into();
-        pieces.intypes=vec![dt(4)];
-        db.set_function_proto_pieces(first,pieces);
-        assert_eq!(db.function_proto_pieces(g,&alias).unwrap().intypes.len(),1);
-        assert!(db.function_proto_pieces(g,&b).is_none());
+        let m = build_manager();
+        let (mut db, g) = db_with_global(m.num_spaces());
+        let a = Address::new(space(&m, 2), 0x1000);
+        let b = Address::new(space(&m, 2), 0x2000);
+        let alias = Address::new(space(&m, 2), 0x3000);
+        let first = db.add_function(g, &a, "optional", 1, dt(1)).unwrap();
+        let second = db.add_function(g, &b, "optional", 1, dt(1)).unwrap();
+        let generation = db.kuna_generation();
+        db.add_function_alias(&a, &alias).unwrap();
+        assert!(db.kuna_generation() > generation);
+        assert_eq!(db.find_by_name(g, "optional").len(), 2);
+        assert_eq!(db.find_function_across_scopes(&alias), Some((first, g)));
+        assert!(db.add_function_alias(&a, &b).is_err());
+        assert_eq!(db.find_function_across_scopes(&b), Some((second, g)));
+        let mut pieces = crate::fspec::PrototypePieces::default();
+        pieces.name = "optional".into();
+        pieces.intypes = vec![dt(4)];
+        db.set_function_proto_pieces(first, pieces);
+        assert_eq!(
+            db.function_proto_pieces(g, &alias).unwrap().intypes.len(),
+            1
+        );
+        assert!(db.function_proto_pieces(g, &b).is_none());
     }
 
     #[test]
@@ -5849,8 +6240,12 @@ mod tests {
         let ram = space(&m, 2);
         let declared_addr = Address::new(Rc::clone(&ram), 0x2000);
         let plain_addr = Address::new(Rc::clone(&ram), 0x3000);
-        let declared = db.add_function(g, &declared_addr, "declared_callee", 1, dt(1)).unwrap();
-        let _plain = db.add_function(g, &plain_addr, "plain_callee", 1, dt(1)).unwrap();
+        let declared = db
+            .add_function(g, &declared_addr, "declared_callee", 1, dt(1))
+            .unwrap();
+        let _plain = db
+            .add_function(g, &plain_addr, "plain_callee", 1, dt(1))
+            .unwrap();
 
         // No pieces yet anywhere; the snapshot is empty.
         assert!(db.function_proto_pieces(g, &declared_addr).is_none());
@@ -5866,7 +6261,9 @@ mod tests {
         db.set_function_proto_pieces(declared, pieces);
 
         // The declared callee now reports its pieces by address; the plain one does not.
-        let got = db.function_proto_pieces(g, &declared_addr).expect("declared has pieces");
+        let got = db
+            .function_proto_pieces(g, &declared_addr)
+            .expect("declared has pieces");
         assert_eq!(got.intypes.len(), 1);
         assert!(db.function_proto_pieces(g, &plain_addr).is_none());
 
@@ -5948,8 +6345,14 @@ mod tests {
             }
             i = j + 1;
         }
-        assert_eq!(declared, entered, "an `impl Database` block was not scanned");
-        assert!(checked >= 44, "the scanner found only {checked} mutators; it is broken");
+        assert_eq!(
+            declared, entered,
+            "an `impl Database` block was not scanned"
+        );
+        assert!(
+            checked >= 44,
+            "the scanner found only {checked} mutators; it is broken"
+        );
 
         // The scan reasons about `&mut self`, so interior mutability anywhere in
         // the database's own types would let a mutation past it unseen.  Needles

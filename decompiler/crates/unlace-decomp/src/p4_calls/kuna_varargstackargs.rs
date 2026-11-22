@@ -119,10 +119,7 @@ pub fn stack_section_split(active: &ParamActive, start: int4, stop: int4) -> Opt
             seen_register = true;
             continue;
         }
-        if !seen_register
-            || trial.get_entry().is_none()
-            || trial.get_address().get_offset() != 0
-        {
+        if !seen_register || trial.get_entry().is_none() || trial.get_address().get_offset() != 0 {
             return None;
         }
         return Some(i);

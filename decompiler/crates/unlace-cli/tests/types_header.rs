@@ -31,7 +31,10 @@ fn a_header_types_the_calls_into_its_library() {
     assert!(stderr.is_empty(), "{stderr}");
     assert!(c.contains("CURL *h;"), "{c}");
     assert!(c.contains("curl_easy_setopt(h,CURLOPT_URL,a0)"), "{c}");
-    assert!(c.contains("curl_easy_setopt(h,CURLOPT_TIMEOUT,0x1e)"), "{c}");
+    assert!(
+        c.contains("curl_easy_setopt(h,CURLOPT_TIMEOUT,0x1e)"),
+        "{c}"
+    );
 }
 
 #[test]
@@ -40,7 +43,10 @@ fn a_directory_and_a_second_header_combine() {
     assert_eq!(code, 0, "{stderr}");
     assert!(c.contains("int fetch(char *url)"), "{c}");
     assert!(c.contains("curl_easy_setopt(h,CURLOPT_URL,url)"), "{c}");
-    assert!(c.contains("return curl_easy_setopt(h,CURLOPT_TIMEOUT,0x1e)"), "{c}");
+    assert!(
+        c.contains("return curl_easy_setopt(h,CURLOPT_TIMEOUT,0x1e)"),
+        "{c}"
+    );
 }
 
 #[test]
@@ -86,7 +92,10 @@ fn the_whole_binary_surface_takes_the_header() {
     let (c, stderr, code) = common::run_kuna(&["decompile-all", &image, "--types", &header]);
     assert_eq!(code, 0, "{stderr}");
     assert!(c.contains("curl_easy_setopt(h,CURLOPT_URL,a0)"), "{c}");
-    assert!(c.contains("int curl_easy_setopt(CURL *h,CURLoption opt,...)"), "{c}");
+    assert!(
+        c.contains("int curl_easy_setopt(CURL *h,CURLoption opt,...)"),
+        "{c}"
+    );
 }
 
 #[test]
@@ -95,9 +104,17 @@ fn the_preprocessor_runs_only_when_asked() {
     let (c, stderr, code) = decompile(&["--types", &header]);
     assert_eq!(code, 0, "{stderr}");
     assert!(c.contains("curl_easy_setopt(v1,0x2712,a0)"), "{c}");
-    assert_eq!(stderr.lines().filter(|l| l.contains("macro.h:")).count(), 3, "{stderr}");
+    assert_eq!(
+        stderr.lines().filter(|l| l.contains("macro.h:")).count(),
+        3,
+        "{stderr}"
+    );
 
-    if !Command::new("cc").arg("--version").output().is_ok_and(|o| o.status.success()) {
+    if !Command::new("cc")
+        .arg("--version")
+        .output()
+        .is_ok_and(|o| o.status.success())
+    {
         eprintln!("cc unavailable; skipping the --types-cpp half");
         return;
     }
@@ -112,14 +129,21 @@ fn unusable_inputs_are_usage_errors() {
     let missing = fixture("absent.h");
     let (_, stderr, code) = decompile(&["--types", &missing]);
     assert_ne!(code, 0);
-    assert!(stderr.contains("--types") && stderr.contains("absent.h"), "{stderr}");
+    assert!(
+        stderr.contains("--types") && stderr.contains("absent.h"),
+        "{stderr}"
+    );
 
     let (_, stderr, code) = decompile(&["--types-cpp", "cc"]);
     assert_ne!(code, 0);
     assert!(stderr.contains("--types-cpp needs a --types"), "{stderr}");
 
-    let (_, stderr, code) =
-        decompile(&["--types", &fixture("curl.h"), "--types-cpp", "kuna-no-such-preprocessor"]);
+    let (_, stderr, code) = decompile(&[
+        "--types",
+        &fixture("curl.h"),
+        "--types-cpp",
+        "kuna-no-such-preprocessor",
+    ]);
     assert_ne!(code, 0);
     assert!(stderr.contains("--types-cpp"), "{stderr}");
 }

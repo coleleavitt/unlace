@@ -15,11 +15,16 @@ fn factory() -> TypeFactoryImpl {
     let f = TypeFactoryImpl::new();
     f.set_default_alignment_map();
     f.set_max_basetype_size(8);
-    f.set_core_type("undefined", 1, type_metatype::TYPE_UNKNOWN, false).unwrap();
-    f.set_core_type("undefined8", 8, type_metatype::TYPE_UNKNOWN, false).unwrap();
-    f.set_core_type("char", 1, type_metatype::TYPE_INT, true).unwrap();
-    f.set_core_type("int8", 8, type_metatype::TYPE_INT, false).unwrap();
-    f.set_core_type("uint8", 8, type_metatype::TYPE_UINT, false).unwrap();
+    f.set_core_type("undefined", 1, type_metatype::TYPE_UNKNOWN, false)
+        .unwrap();
+    f.set_core_type("undefined8", 8, type_metatype::TYPE_UNKNOWN, false)
+        .unwrap();
+    f.set_core_type("char", 1, type_metatype::TYPE_INT, true)
+        .unwrap();
+    f.set_core_type("int8", 8, type_metatype::TYPE_INT, false)
+        .unwrap();
+    f.set_core_type("uint8", 8, type_metatype::TYPE_UINT, false)
+        .unwrap();
     f.cache_core_types().unwrap();
     f
 }
@@ -31,9 +36,18 @@ fn byte_ptr(f: &TypeFactoryImpl) -> Rc<Datatype> {
 
 #[test]
 fn option_parses_its_three_values() {
-    assert_eq!(OptionPtrFromUse.apply("off").unwrap().0, PtrFromUseMode::Off);
-    assert_eq!(OptionPtrFromUse.apply("byte").unwrap().0, PtrFromUseMode::Byte);
-    assert_eq!(OptionPtrFromUse.apply("void").unwrap().0, PtrFromUseMode::Void);
+    assert_eq!(
+        OptionPtrFromUse.apply("off").unwrap().0,
+        PtrFromUseMode::Off
+    );
+    assert_eq!(
+        OptionPtrFromUse.apply("byte").unwrap().0,
+        PtrFromUseMode::Byte
+    );
+    assert_eq!(
+        OptionPtrFromUse.apply("void").unwrap().0,
+        PtrFromUseMode::Void
+    );
     assert!(OptionPtrFromUse.apply("on").is_err());
     assert!(OptionPtrFromUse.apply("").is_err());
 }
@@ -52,7 +66,11 @@ fn void_is_the_default_and_off_is_not_on() {
 fn candidate_folds_over_an_integer_vote() {
     let f = factory();
     let cand = byte_ptr(&f);
-    for meta in [type_metatype::TYPE_INT, type_metatype::TYPE_UINT, type_metatype::TYPE_UNKNOWN] {
+    for meta in [
+        type_metatype::TYPE_INT,
+        type_metatype::TYPE_UINT,
+        type_metatype::TYPE_UNKNOWN,
+    ] {
         let cur = f.get_base(8, meta).unwrap();
         assert!(folds_over(&cand, &cur), "pointer should outrank {meta:?}");
     }

@@ -7,13 +7,15 @@ use unlace_analysis::loader::macho_fat::SlicePref;
 /// Inspect a thin Mach-O through its mapping; retain legacy reads for other inputs.
 pub(crate) fn inspect<T>(binary: &str, inspect: impl FnOnce(&[u8]) -> Option<T>) -> Option<T> {
     match unlace_analysis::image_bytes::ImageBytes::map_thin_macho(binary)
-        .ok().flatten()
-    { Some(bytes) => {
-        inspect(&bytes)
-    } _ => {
-        let bytes = unlace_analysis::loader::elf_shdr::read_image(binary).ok()?;
-        inspect(&bytes)
-    }}
+        .ok()
+        .flatten()
+    {
+        Some(bytes) => inspect(&bytes),
+        _ => {
+            let bytes = unlace_analysis::loader::elf_shdr::read_image(binary).ok()?;
+            inspect(&bytes)
+        }
+    }
 }
 
 /// Read the loader's selected image slice for an object-file consumer. A UEFI
@@ -41,9 +43,13 @@ pub(crate) type Repairs = Vec<(u64, u64)>;
 /// rewrote so the image parses at all (a corrupt ELF section table, DOS magic
 /// or PE data-directory count). The file is read a second time only when a
 /// repair happened.
-pub(crate) fn image_bytes_and_repairs(binary: &str, pref: SlicePref) -> Result<(Vec<u8>, Repairs), String> {
-    let (bytes, repaired) = unlace_analysis::loader::elf_shdr::read_image_sliced_repaired(binary, pref)
-        .map_err(|e| format!("{binary}: {e}"))?;
+pub(crate) fn image_bytes_and_repairs(
+    binary: &str,
+    pref: SlicePref,
+) -> Result<(Vec<u8>, Repairs), String> {
+    let (bytes, repaired) =
+        unlace_analysis::loader::elf_shdr::read_image_sliced_repaired(binary, pref)
+            .map_err(|e| format!("{binary}: {e}"))?;
     let bytes = object_view(binary, bytes)?;
     if !repaired {
         return Ok((bytes, Vec::new()));
@@ -118,8 +124,12 @@ impl RawFlags {
     pub(crate) fn take(&mut self, argv: &[String], i: &mut usize) -> Result<bool, String> {
         match argv[*i].as_str() {
             "--raw-image" => self.on = true,
-            "--base" => self.base = Some(parse_address(&crate::args::take_value(argv, i, "--base")?)?),
-            "--entry" => self.entries.push(parse_address(&crate::args::take_value(argv, i, "--entry")?)?),
+            "--base" => {
+                self.base = Some(parse_address(&crate::args::take_value(argv, i, "--base")?)?)
+            }
+            "--entry" => self.entries.push(parse_address(&crate::args::take_value(
+                argv, i, "--entry",
+            )?)?),
             _ => return Ok(false),
         }
         Ok(true)
@@ -149,13 +159,23 @@ impl RawFlags {
     pub(crate) fn apply(&self, args: &mut crate::decompile_all::Args) {
         args.raw_image = self.on;
         args.base = self.base;
-        args.entry_seeds = self.entries.iter().map(|&a| unlace_console::engine::EntrySelector::Numeric(a)).collect();
+        args.entry_seeds = self
+            .entries
+            .iter()
+            .map(|&a| unlace_console::engine::EntrySelector::Numeric(a))
+            .collect();
     }
 
     /// The object view the consumer scans: the ELF view of a raw image, else
     /// [`image_bytes`].
-    pub(crate) fn image(&self, binary: &str, pref: SlicePref, target: Option<&str>) -> Result<Vec<u8>, String> {
-        self.image_and_fileset(binary, pref, target).map(|(bytes, _)| bytes)
+    pub(crate) fn image(
+        &self,
+        binary: &str,
+        pref: SlicePref,
+        target: Option<&str>,
+    ) -> Result<Vec<u8>, String> {
+        self.image_and_fileset(binary, pref, target)
+            .map(|(bytes, _)| bytes)
     }
 
     /// [`Self::image`], and the entry map of the `MH_FILESET` kernel collection
@@ -173,8 +193,13 @@ impl RawFlags {
         let base = self.base.unwrap_or(0);
         let entry = self.entries.first().copied().unwrap_or(base);
         let language = target.unwrap_or_default();
-        let view = unlace_analysis::loader::kuna_objectview::raw_as_elf(&bytes, base, entry, language).ok_or_else(|| {
-            format!("{binary}: --target {language:?} does not name a processor:endian:size language")
+        let view = unlace_analysis::loader::kuna_objectview::raw_as_elf(
+            &bytes, base, entry, language,
+        )
+        .ok_or_else(|| {
+            format!(
+                "{binary}: --target {language:?} does not name a processor:endian:size language"
+            )
         })?;
         Ok((view, None))
     }
@@ -182,6 +207,9 @@ impl RawFlags {
 
 fn parse_address(s: &str) -> Result<u64, String> {
     let t = s.trim();
-    let body = t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")).unwrap_or(t);
+    let body = t
+        .strip_prefix("0x")
+        .or_else(|| t.strip_prefix("0X"))
+        .unwrap_or(t);
     u64::from_str_radix(body, 16).map_err(|_| format!("invalid address {s:?}"))
 }

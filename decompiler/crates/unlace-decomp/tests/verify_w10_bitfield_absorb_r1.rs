@@ -31,16 +31,16 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 
 use unlace_decomp::action::Rule;
 use unlace_decomp::bitfield::{RuleInsertAbsorb, RulePullAbsorb};
-use unlace_decomp::dtype::{type_metatype, Datatype};
+use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
+use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::op::pcodeop_flags;
-use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
 use unlace_decomp::varnode::DefOpInfo;
 use unlace_num::opcodes::OpCode;
 
@@ -49,7 +49,8 @@ use unlace_num::opcodes::OpCode;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -98,7 +99,9 @@ fn opcode_flags(opc: OpCode) -> u32 {
         OpCode::CPUI_INT_LEFT | OpCode::CPUI_INT_RIGHT | OpCode::CPUI_INT_SRIGHT => {
             pcodeop_flags::binary
         }
-        OpCode::CPUI_INT_SEXT | OpCode::CPUI_INT_ZEXT | OpCode::CPUI_SUBPIECE => pcodeop_flags::unary,
+        OpCode::CPUI_INT_SEXT | OpCode::CPUI_INT_ZEXT | OpCode::CPUI_SUBPIECE => {
+            pcodeop_flags::unary
+        }
         _ => 0,
     }
 }
@@ -191,7 +194,11 @@ fn w10bfa_insert_and_full_mask_absorbs() {
     set_def(&mut fd, andout, andop);
 
     let ins = mk_insert(&mut fd, 0x300, cont, andout, 0, 8);
-    assert_eq!(RuleInsertAbsorb.apply_op(ins, &mut fd), 1, "full mask must absorb");
+    assert_eq!(
+        RuleInsertAbsorb.apply_op(ins, &mut fd),
+        1,
+        "full mask must absorb"
+    );
     // INSERT value input is now `x` directly (the AND is gone).
     assert_eq!(in_of(&fd, ins, 1), x, "INSERT now feeds x directly");
 }
@@ -212,8 +219,16 @@ fn w10bfa_insert_and_partial_mask_does_not_absorb() {
     set_def(&mut fd, andout, andop);
 
     let ins = mk_insert(&mut fd, 0x300, cont, andout, 0, 8);
-    assert_eq!(RuleInsertAbsorb.apply_op(ins, &mut fd), 0, "partial mask must NOT absorb");
-    assert_eq!(in_of(&fd, ins, 1), andout, "INSERT still feeds the AND output");
+    assert_eq!(
+        RuleInsertAbsorb.apply_op(ins, &mut fd),
+        0,
+        "partial mask must NOT absorb"
+    );
+    assert_eq!(
+        in_of(&fd, ins, 1),
+        andout,
+        "INSERT still feeds the AND output"
+    );
     assert_eq!(code_of(&fd, andop), OpCode::CPUI_INT_AND, "AND survives");
 }
 
@@ -224,7 +239,12 @@ fn w10bfa_insert_and_partial_mask_does_not_absorb() {
 
 /// Build `INSERT(container, ((a*K0) + (b*K1)) >> sa, pos, numbits)` and run the
 /// rule; `k0`/`k1` are the multiply constants, `sa` the right shift.
-fn shiftadd_fixture(k0: u64, k1: u64, sa: u64, numbits: u64) -> (Funcdata, OpId, VarnodeId, VarnodeId) {
+fn shiftadd_fixture(
+    k0: u64,
+    k1: u64,
+    sa: u64,
+    numbits: u64,
+) -> (Funcdata, OpId, VarnodeId, VarnodeId) {
     let mut fd = build_fd();
     let cont = mk_input(&mut fd, 0x100, 4);
     let a = mk_input(&mut fd, 0x110, 4);
@@ -267,10 +287,23 @@ fn w10bfa_shiftadd_poweroftwo_absorbs() {
     let sa = 4u64;
     let k = 1u64 << sa; // 16
     let (mut fd, ins, a, b) = shiftadd_fixture(k, k, sa, 4);
-    let rsh = fd.vbank().get(in_of(&fd, ins, 1)).unwrap().get_def().unwrap();
-    assert_eq!(RuleInsertAbsorb.apply_op(ins, &mut fd), 1, "power-of-two multiplies must absorb");
+    let rsh = fd
+        .vbank()
+        .get(in_of(&fd, ins, 1))
+        .unwrap()
+        .get_def()
+        .unwrap();
+    assert_eq!(
+        RuleInsertAbsorb.apply_op(ins, &mut fd),
+        1,
+        "power-of-two multiplies must absorb"
+    );
     // The right-shift op was rewritten to INT_ADD(a, b).
-    assert_eq!(code_of(&fd, rsh), OpCode::CPUI_INT_ADD, "shift rewritten to ADD");
+    assert_eq!(
+        code_of(&fd, rsh),
+        OpCode::CPUI_INT_ADD,
+        "shift rewritten to ADD"
+    );
     assert_eq!(in_of(&fd, rsh, 0), a);
     assert_eq!(in_of(&fd, rsh, 1), b);
 }
@@ -284,13 +317,22 @@ fn w10bfa_shiftadd_nonpoweroftwo_does_not_absorb() {
     let good = 1u64 << sa; // 16
     let bad = good + 1; // 17, not 1<<sa
     let (mut fd, ins, _a, _b) = shiftadd_fixture(good, bad, sa, 4);
-    let rsh = fd.vbank().get(in_of(&fd, ins, 1)).unwrap().get_def().unwrap();
+    let rsh = fd
+        .vbank()
+        .get(in_of(&fd, ins, 1))
+        .unwrap()
+        .get_def()
+        .unwrap();
     assert_eq!(
         RuleInsertAbsorb.apply_op(ins, &mut fd),
         0,
         "non-power-of-two multiply must NOT absorb"
     );
-    assert_eq!(code_of(&fd, rsh), OpCode::CPUI_INT_RIGHT, "shift op unchanged");
+    assert_eq!(
+        code_of(&fd, rsh),
+        OpCode::CPUI_INT_RIGHT,
+        "shift op unchanged"
+    );
 }
 
 // ===========================================================================
@@ -325,7 +367,11 @@ fn rightleft_fixture(c: u64, numbits: u64) -> (Funcdata, OpId, VarnodeId) {
 fn w10bfa_rightleft_narrow_field_absorbs() {
     // container in(1) = 4 bytes = 32 bits; c=8 => preserved = 24 bits; numbits=8 <= 24
     let (mut fd, ins, x) = rightleft_fixture(8, 8);
-    assert_eq!(RuleInsertAbsorb.apply_op(ins, &mut fd), 1, "narrow field must cancel shifts");
+    assert_eq!(
+        RuleInsertAbsorb.apply_op(ins, &mut fd),
+        1,
+        "narrow field must cancel shifts"
+    );
     assert_eq!(in_of(&fd, ins, 1), x, "INSERT now feeds x directly");
 }
 
@@ -372,9 +418,22 @@ fn nestedand_fixture(mask: u64, numbits: u64) -> (Funcdata, OpId, VarnodeId) {
 fn w10bfa_nestedand_contiguous_lsb_mask_absorbs() {
     // mask 0xff = contiguous LSB run, popcount 8 >= numbits 4 => absorb
     let (mut fd, ins, x) = nestedand_fixture(0xff, 4);
-    let add = fd.vbank().get(in_of(&fd, ins, 1)).unwrap().get_def().unwrap();
-    assert_eq!(RuleInsertAbsorb.apply_op(ins, &mut fd), 1, "contiguous LSB mask must absorb");
-    assert_eq!(in_of(&fd, add, 0), x, "ADD now feeds x directly (AND dropped)");
+    let add = fd
+        .vbank()
+        .get(in_of(&fd, ins, 1))
+        .unwrap()
+        .get_def()
+        .unwrap();
+    assert_eq!(
+        RuleInsertAbsorb.apply_op(ins, &mut fd),
+        1,
+        "contiguous LSB mask must absorb"
+    );
+    assert_eq!(
+        in_of(&fd, add, 0),
+        x,
+        "ADD now feeds x directly (AND dropped)"
+    );
 }
 
 #[test]
@@ -429,8 +488,16 @@ fn ext_fixture(pull: OpCode, ext: OpCode) -> (Funcdata, OpId, OpId) {
 fn w10bfa_ext_matching_sign_absorbs() {
     // SEXT over SPULL => fold (the EXT becomes a PULL).
     let (mut fd, pullop, extop) = ext_fixture(OpCode::CPUI_SPULL, OpCode::CPUI_INT_SEXT);
-    assert_eq!(RulePullAbsorb.apply_op(pullop, &mut fd), 1, "SEXT/SPULL must fold");
-    assert_eq!(code_of(&fd, extop), OpCode::CPUI_SPULL, "EXT rewritten to SPULL");
+    assert_eq!(
+        RulePullAbsorb.apply_op(pullop, &mut fd),
+        1,
+        "SEXT/SPULL must fold"
+    );
+    assert_eq!(
+        code_of(&fd, extop),
+        OpCode::CPUI_SPULL,
+        "EXT rewritten to SPULL"
+    );
 }
 
 #[test]

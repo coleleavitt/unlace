@@ -188,7 +188,14 @@ fn decompile(image: &[u8], asserts: &[&str], options: &[&str]) -> String {
         command.args(["--option", option, "off"]);
     }
     command
-        .args(["--addr", "0x401000", "--mode", "reliable", "--assert-strict", "--sleighpath"])
+        .args([
+            "--addr",
+            "0x401000",
+            "--mode",
+            "reliable",
+            "--assert-strict",
+            "--sleighpath",
+        ])
         .arg(specs());
     for assertion in asserts {
         command.args(["--assert", assertion]);
@@ -325,7 +332,11 @@ fn checked(map: &[u8], targets: &[u32], retry_bound: usize, guarded: bool) -> St
     let image = compact_fixture(map, targets, retry_bound);
     let c = run(&image, 0x401055, guarded);
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-    round_trip(&image, &c, &terminating_stores(map, targets, 0x1038, retry_bound));
+    round_trip(
+        &image,
+        &c,
+        &terminating_stores(map, targets, 0x1038, retry_bound),
+    );
     c
 }
 
@@ -333,7 +344,11 @@ fn checked_absolute(map: &[u8], targets: &[u32], retry_bound: usize) -> String {
     let image = absolute_fixture(map, targets, retry_bound);
     let c = run(&image, 0x401047, true);
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-    round_trip(&image, &c, &terminating_stores(map, targets, 0x40102e, retry_bound));
+    round_trip(
+        &image,
+        &c,
+        &terminating_stores(map, targets, 0x40102e, retry_bound),
+    );
     c
 }
 
@@ -422,7 +437,12 @@ fn constant_retry_index_survives_a_rejected_late_model() {
 /// index label.
 #[test]
 fn repeated_table_row_does_not_label_a_map_byte() {
-    let c = checked(&[4, 1, 2, 3], &[0x102c, 0x1032, 0x1038, 0x104f, 0x102c], 3, true);
+    let c = checked(
+        &[4, 1, 2, 3],
+        &[0x102c, 0x1032, 0x1038, 0x104f, 0x102c],
+        3,
+        true,
+    );
     assert_index_selector(&c, "switch(mode - 5)");
 }
 
@@ -444,12 +464,24 @@ fn a_switch_whose_cases_all_loop_back_keeps_its_loop() {
     let binary = common::fixture("switchtable_gcc_x86_64");
     let mut command = kuna();
     command
-        .args(["decompile", binary.as_ref(), "hoist_dispatch", "--sleighpath"])
+        .args([
+            "decompile",
+            binary.as_ref(),
+            "hoist_dispatch",
+            "--sleighpath",
+        ])
         .arg(specs());
     let c = printed(command);
     let lines: Vec<_> = c.lines().map(str::trim).collect();
-    let dispatch = lines.iter().position(|l| l.starts_with("switch(next_selector(")).unwrap_or_else(|| panic!("{c}"));
-    assert_eq!(lines[dispatch - 1], "while( true ) {", "the dispatch lost its loop: {c}");
+    let dispatch = lines
+        .iter()
+        .position(|l| l.starts_with("switch(next_selector("))
+        .unwrap_or_else(|| panic!("{c}"));
+    assert_eq!(
+        lines[dispatch - 1],
+        "while( true ) {",
+        "the dispatch lost its loop: {c}"
+    );
 }
 
 fn assert_index_selector(c: &str, selector: &str) {
@@ -526,7 +558,10 @@ fn cut_row_index_is_still_dispatched() {
 /// As above, but modes 4 and 5 read a table entry that no kept row read.
 #[test]
 fn cut_row_reading_an_unread_entry_is_still_dispatched() {
-    cut_row(&SourceFixture { name: "switch_cutrow_unread_mipsel", ..MIPS_CUT_ROW });
+    cut_row(&SourceFixture {
+        name: "switch_cutrow_unread_mipsel",
+        ..MIPS_CUT_ROW
+    });
 }
 
 /// The same bounded `map[mode] - 9` switch, where `map[mode] - 9 < 9` sends
@@ -543,8 +578,15 @@ fn cut_row_a_later_guard_sends_away_keeps_index_labels() {
         modes: 40,
     };
     let c = source_decompile(&fixture);
-    assert_eq!(c.matches("switch(a0)").count(), 2, "lost the index selector: {c}");
-    assert!(!c.contains("labelled by address"), "labelled cases by address: {c}");
+    assert_eq!(
+        c.matches("switch(a0)").count(),
+        2,
+        "lost the index selector: {c}"
+    );
+    assert!(
+        !c.contains("labelled by address"),
+        "labelled cases by address: {c}"
+    );
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     source_round_trip(&fixture, &c);
 }
@@ -564,7 +606,10 @@ fn cut_row_reaching_the_default_keeps_index_labels() {
     };
     let c = source_decompile(&fixture);
     assert!(c.contains("switch(a0)"), "lost the index selector: {c}");
-    assert!(!c.contains("labelled by address"), "labelled cases by address: {c}");
+    assert!(
+        !c.contains("labelled by address"),
+        "labelled cases by address: {c}"
+    );
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     source_round_trip(&fixture, &c);
 }
@@ -586,10 +631,22 @@ fn reloaded_map_entry_bounded_by_its_guard_is_the_switch_value() {
         modes: 40,
     };
     let c = source_decompile(&fixture);
-    assert!(!c.contains("labelled by address"), "labelled cases by address: {c}");
-    assert!(c.contains("&map[a0 * 4UL])"), "the switch is not over map[mode]: {c}");
-    assert!(c.contains("default:\n      sink = 7;"), "the entries past the table lost the default: {c}");
-    assert!(!c.contains('"'), "printed the table as a string literal: {c}");
+    assert!(
+        !c.contains("labelled by address"),
+        "labelled cases by address: {c}"
+    );
+    assert!(
+        c.contains("&map[a0 * 4UL])"),
+        "the switch is not over map[mode]: {c}"
+    );
+    assert!(
+        c.contains("default:\n      sink = 7;"),
+        "the entries past the table lost the default: {c}"
+    );
+    assert!(
+        !c.contains('"'),
+        "printed the table as a string literal: {c}"
+    );
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     source_round_trip(&fixture, &c);
 }
@@ -610,7 +667,10 @@ fn address_labels_are_the_table_values_not_the_block_starts() {
     };
     let c = source_decompile(&fixture);
     assert!(c.contains("switch("), "lost the switch: {c}");
-    assert!(!c.contains("case 0x40017c:"), "labelled a case by its block start: {c}");
+    assert!(
+        !c.contains("case 0x40017c:"),
+        "labelled a case by its block start: {c}"
+    );
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     source_round_trip(&fixture, &c);
 }
@@ -629,8 +689,14 @@ fn index_labels_hold_at_a_case_starting_with_a_nop() {
         modes: 40,
     };
     let c = source_decompile(&fixture);
-    assert!(!c.contains("labelled by address"), "labelled cases by address: {c}");
-    for case in ["case 2:\n      return g(0x818) ^ 3;", "case 3:\n      return g(0x819) ^ 4;"] {
+    assert!(
+        !c.contains("labelled by address"),
+        "labelled cases by address: {c}"
+    );
+    for case in [
+        "case 2:\n      return g(0x818) ^ 3;",
+        "case 3:\n      return g(0x819) ^ 4;",
+    ] {
         assert!(c.contains(case), "lost the nop-started case {case}: {c}");
     }
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
@@ -653,9 +719,18 @@ fn address_labels_hold_at_a_mips_case_starting_with_a_nop() {
         modes: 40,
     };
     let c = source_decompile(&fixture);
-    assert!(c.contains("labelled by address"), "kept index labels that miss modes 5 and 6: {c}");
-    assert!(c.contains("case 0x4001a8:"), "lost the table value 0x4001a8: {c}");
-    assert!(!c.contains("case 0x40017c:"), "labelled a case by its block start: {c}");
+    assert!(
+        c.contains("labelled by address"),
+        "kept index labels that miss modes 5 and 6: {c}"
+    );
+    assert!(
+        c.contains("case 0x4001a8:"),
+        "lost the table value 0x4001a8: {c}"
+    );
+    assert!(
+        !c.contains("case 0x40017c:"),
+        "labelled a case by its block start: {c}"
+    );
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     source_round_trip(&fixture, &c);
 }
@@ -674,7 +749,10 @@ fn map_value_a_guard_sends_away_keeps_later_rows() {
         modes: 40,
     };
     let c = source_decompile(&fixture);
-    assert!(!c.contains("labelled by address"), "labelled cases by address: {c}");
+    assert!(
+        !c.contains("labelled by address"),
+        "labelled cases by address: {c}"
+    );
     for body in ["return a0 * 5 + 0x3ef;", "return a0 * 3 + 1000;"] {
         assert!(c.contains(body), "lost the case body {body}: {c}");
     }
@@ -696,7 +774,10 @@ fn reloaded_map_value_bounds_the_table() {
         modes: 40,
     };
     let c = source_decompile(&fixture);
-    assert!(!c.contains("labelled by address"), "labelled cases by address: {c}");
+    assert!(
+        !c.contains("labelled by address"),
+        "labelled cases by address: {c}"
+    );
     assert!(c.contains("case 10:"), "lost the case mode 6 reaches: {c}");
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     source_round_trip(&fixture, &c);
@@ -715,7 +796,10 @@ fn map_value_reading_outside_the_image_keeps_the_switch() {
     };
     let c = source_decompile(&fixture);
     assert!(c.contains("switch("), "lost the switch: {c}");
-    assert!(!c.contains("jump-as-call"), "printed the dispatch as a call: {c}");
+    assert!(
+        !c.contains("jump-as-call"),
+        "printed the dispatch as a call: {c}"
+    );
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     source_round_trip(&fixture, &c);
 }
@@ -734,7 +818,10 @@ fn map_value_at_the_sign_bit_keeps_the_index_switch() {
         modes: 40,
     };
     let c = source_decompile(&fixture);
-    assert!(c.contains("switch(a0)"), "moved the switch off the index: {c}");
+    assert!(
+        c.contains("switch(a0)"),
+        "moved the switch off the index: {c}"
+    );
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     source_round_trip(&fixture, &c);
 }
@@ -753,7 +840,10 @@ fn reloaded_map_value_at_the_sign_bit_keeps_the_index_switch() {
         modes: 5,
     };
     let c = source_decompile(&fixture);
-    assert!(c.contains("switch(a0)"), "moved the switch off the index: {c}");
+    assert!(
+        c.contains("switch(a0)"),
+        "moved the switch off the index: {c}"
+    );
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     source_round_trip(&fixture, &c);
 }
@@ -778,7 +868,14 @@ fn source_decompile(fixture: &SourceFixture) -> String {
     command
         .arg("decompile-all")
         .arg(fixtures().join(fixture.name))
-        .args(["--addr", fixture.pick, "--option", "globalwidth", "off", "--sleighpath"])
+        .args([
+            "--addr",
+            fixture.pick,
+            "--option",
+            "globalwidth",
+            "off",
+            "--sleighpath",
+        ])
         .arg(specs());
     printed(command)
 }

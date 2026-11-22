@@ -1,6 +1,6 @@
 //! Explicit extensions from an ABI parameter slot to its wider physical register.
 use crate::{
-    fspec::{param_entry_flags, ParamEntry},
+    fspec::{ParamEntry, param_entry_flags},
     funcdata::Funcdata,
 };
 use unlace_base::address::Address;
@@ -62,7 +62,7 @@ pub(crate) fn decode(
         _ => {
             return Err(KunaError::lowlevel(
                 "Bad <pentry> registerextension attribute",
-            ))
+            ));
         }
     };
     let extension = declared(register, size, alignment, flags);
@@ -334,8 +334,8 @@ pub(crate) fn guard_output(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use unlace_base::space::{spacetype, AddrSpace};
     use std::rc::Rc;
+    use unlace_base::space::{AddrSpace, spacetype};
 
     fn register(big: bool, size: u32) -> VarnodeData {
         VarnodeData {
@@ -432,13 +432,15 @@ mod tests {
     #[test]
     fn aliases_and_conditional_or_missing_extensions_do_not_invent_upper_bits() {
         for big in [false, true] {
-            assert!(declared(
-                Some(register(big, 4)),
-                4,
-                0,
-                param_entry_flags::SMALLSIZE_SEXT
-            )
-            .is_none());
+            assert!(
+                declared(
+                    Some(register(big, 4)),
+                    4,
+                    0,
+                    param_entry_flags::SMALLSIZE_SEXT
+                )
+                .is_none()
+            );
             for flag in [
                 0,
                 param_entry_flags::SMALLSIZE_INTTYPE,
@@ -446,13 +448,15 @@ mod tests {
             ] {
                 assert!(declared(Some(register(big, 8)), 4, 0, flag).is_none());
             }
-            assert!(declared(
-                Some(register(big, 8)),
-                4,
-                4,
-                param_entry_flags::SMALLSIZE_SEXT
-            )
-            .is_none());
+            assert!(
+                declared(
+                    Some(register(big, 8)),
+                    4,
+                    4,
+                    param_entry_flags::SMALLSIZE_SEXT
+                )
+                .is_none()
+            );
             assert!(declared(None, 4, 0, param_entry_flags::SMALLSIZE_SEXT).is_none());
         }
     }

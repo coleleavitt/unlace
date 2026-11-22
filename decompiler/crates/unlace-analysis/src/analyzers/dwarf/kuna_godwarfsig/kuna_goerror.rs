@@ -4,31 +4,48 @@ use super::*;
 
 impl Facts {
     pub(super) fn int_error_results(&self, first: usize, error: usize) -> bool {
-        self.dies.get(&error).is_some_and(|die| die.tag == gimli::DW_TAG_typedef && die.name == "error")
-            && self.go_int(first).is_some() && self.error_words(error).is_some()
+        self.dies
+            .get(&error)
+            .is_some_and(|die| die.tag == gimli::DW_TAG_typedef && die.name == "error")
+            && self.go_int(first).is_some()
+            && self.error_words(error).is_some()
     }
 
     fn checked_type(&self, offset: usize, size: u64) -> Option<(&DieSnap, &Extra)> {
         let die = self.dies.get(&offset)?;
         let extra = self.extras.get(&offset)?;
-        (!extra.invalid && !die.declaration && die.origin_ref.is_none()
+        (!extra.invalid
+            && !die.declaration
+            && die.origin_ref.is_none()
             && die.byte_size.is_none_or(|actual| actual == size)
             && die.alignment.is_none_or(|alignment| alignment == 8)
-            && die.bit_size.is_none() && die.bit_offset.is_none()
-            && die.data_bit_offset.is_none()).then_some((die, extra))
+            && die.bit_size.is_none()
+            && die.bit_offset.is_none()
+            && die.data_bit_offset.is_none())
+        .then_some((die, extra))
     }
 
     fn go_int(&self, mut offset: usize) -> Option<()> {
         let mut visited = BTreeSet::new();
         for _ in 0..16 {
-            if !visited.insert(offset) { return None; }
+            if !visited.insert(offset) {
+                return None;
+            }
             let (die, extra) = self.checked_type(offset, 8)?;
-            if die.name != "int" || !die.children.is_empty() { return None; }
+            if die.name != "int" || !die.children.is_empty() {
+                return None;
+            }
             match die.tag {
-                gimli::DW_TAG_typedef if matches!(extra.kind, None | Some(2)) => offset = die.type_ref?,
-                gimli::DW_TAG_base_type => return (extra.kind == Some(2)
-                    && die.byte_size == Some(8) && die.encoding == Some(gimli::DW_ATE_signed)
-                    && die.type_ref.is_none()).then_some(()),
+                gimli::DW_TAG_typedef if matches!(extra.kind, None | Some(2)) => {
+                    offset = die.type_ref?
+                }
+                gimli::DW_TAG_base_type => {
+                    return (extra.kind == Some(2)
+                        && die.byte_size == Some(8)
+                        && die.encoding == Some(gimli::DW_ATE_signed)
+                        && die.type_ref.is_none())
+                    .then_some(());
+                }
                 _ => return None,
             }
         }
@@ -39,12 +56,17 @@ impl Facts {
         let mut visited = BTreeSet::new();
         let (mut error_kind, mut storage_alias) = (false, false);
         for _ in 0..16 {
-            if !visited.insert(offset) { return None; }
+            if !visited.insert(offset) {
+                return None;
+            }
             let (die, extra) = self.checked_type(offset, 16)?;
             if die.tag != gimli::DW_TAG_typedef {
-                if !error_kind || die.tag != gimli::DW_TAG_structure_type
-                    || die.name != "runtime.iface" || extra.kind != Some(25)
-                    || die.byte_size != Some(16) || die.type_ref.is_some()
+                if !error_kind
+                    || die.tag != gimli::DW_TAG_structure_type
+                    || die.name != "runtime.iface"
+                    || extra.kind != Some(25)
+                    || die.byte_size != Some(16)
+                    || die.type_ref.is_some()
                     || die.children.len() != 2
                 {
                     return None;
@@ -54,12 +76,16 @@ impl Facts {
                 self.error_data(self.interface_member(*members.next()?, "data", 8)?)?;
                 return Some(());
             }
-            if !die.children.is_empty() { return None; }
+            if !die.children.is_empty() {
+                return None;
+            }
             match die.name.as_str() {
                 "error" if !storage_alias && matches!(extra.kind, None | Some(20)) => {
                     error_kind |= extra.kind == Some(20);
                 }
-                "runtime.iface" if error_kind && matches!(extra.kind, None | Some(25)) => storage_alias = true,
+                "runtime.iface" if error_kind && matches!(extra.kind, None | Some(25)) => {
+                    storage_alias = true
+                }
                 _ => return None,
             }
             offset = die.type_ref?;
@@ -69,14 +95,19 @@ impl Facts {
 
     fn interface_member(&self, offset: usize, name: &str, displacement: i64) -> Option<usize> {
         let (die, extra) = self.checked_type(offset, 8)?;
-        (die.tag == gimli::DW_TAG_member && die.name == name && extra.kind.is_none()
-            && die.data_member_location == Some(displacement) && !die.member_location_unknown
-            && die.children.is_empty()).then_some(die.type_ref?)
+        (die.tag == gimli::DW_TAG_member
+            && die.name == name
+            && extra.kind.is_none()
+            && die.data_member_location == Some(displacement)
+            && !die.member_location_unknown
+            && die.children.is_empty())
+        .then_some(die.type_ref?)
     }
 
     fn error_table(&self, offset: usize) -> Option<()> {
         let (pointer, extra) = self.checked_type(offset, 8)?;
-        if pointer.tag != gimli::DW_TAG_pointer_type || extra.kind != Some(22)
+        if pointer.tag != gimli::DW_TAG_pointer_type
+            || extra.kind != Some(22)
             || !pointer.children.is_empty()
         {
             return None;
@@ -89,15 +120,25 @@ impl Facts {
         let mut offset = pointer.type_ref?;
         let mut visited = BTreeSet::new();
         for _ in 0..16 {
-            if !visited.insert(offset) { return None; }
+            if !visited.insert(offset) {
+                return None;
+            }
             let (die, extra) = self.checked_type(offset, 32)?;
-            if die.name != target_name { return None; }
+            if die.name != target_name {
+                return None;
+            }
             match die.tag {
-                gimli::DW_TAG_typedef if die.children.is_empty() && matches!(extra.kind, None | Some(25)) => {
+                gimli::DW_TAG_typedef
+                    if die.children.is_empty() && matches!(extra.kind, None | Some(25)) =>
+                {
                     offset = die.type_ref?;
                 }
-                gimli::DW_TAG_structure_type => return (extra.kind == Some(25)
-                    && die.byte_size == Some(32) && die.type_ref.is_none()).then_some(()),
+                gimli::DW_TAG_structure_type => {
+                    return (extra.kind == Some(25)
+                        && die.byte_size == Some(32)
+                        && die.type_ref.is_none())
+                    .then_some(());
+                }
                 _ => return None,
             }
         }
@@ -106,9 +147,12 @@ impl Facts {
 
     fn error_data(&self, offset: usize) -> Option<()> {
         let (die, extra) = self.checked_type(offset, 8)?;
-        (die.tag == gimli::DW_TAG_pointer_type && die.name == "unsafe.Pointer"
-            && matches!(extra.kind, None | Some(26)) && die.type_ref.is_none()
-            && die.children.is_empty()).then_some(())
+        (die.tag == gimli::DW_TAG_pointer_type
+            && die.name == "unsafe.Pointer"
+            && matches!(extra.kind, None | Some(26))
+            && die.type_ref.is_none()
+            && die.children.is_empty())
+        .then_some(())
     }
 }
 
@@ -121,20 +165,42 @@ pub(super) fn fields(integer: &Rc<Datatype>, pointer: &Rc<Datatype>) -> Vec<Type
 }
 
 pub(super) fn storage_matches(arch: &Architecture, slot: &ParameterPieces) -> bool {
-    if slot.flags != 0 || slot.type_.as_ref().is_none_or(|ty| LangFacet::GoIntErrorResults.go_int_error_fields(ty).is_none())
-        || !slot.addr.get_space().is_some_and(|space| space.get_type() == unlace_base::space::spacetype::IPTR_JOIN)
+    if slot.flags != 0
+        || slot.type_.as_ref().is_none_or(|ty| {
+            LangFacet::GoIntErrorResults
+                .go_int_error_fields(ty)
+                .is_none()
+        })
+        || !slot
+            .addr
+            .get_space()
+            .is_some_and(|space| space.get_type() == unlace_base::space::spacetype::IPTR_JOIN)
     {
         return false;
     }
-    let Ok(join) = arch.manage().find_join(slot.addr.get_offset()) else { return false };
-    if join.num_pieces() != 3 || join.get_unified().size != 24 { return false; }
-    ["RCX", "RBX", "RAX"].iter().enumerate().all(|(index, name)| {
-        let Ok(expected) = arch.get_register_varnode(name.as_bytes()) else { return false };
-        let piece = join.get_piece(index as i32);
-        piece.size == 8 && expected.size == 8 && piece.offset == expected.offset
-            && piece.space.as_ref().zip(expected.space.as_ref())
-                .is_some_and(|(space, expected)| space.get_index() == expected.get_index())
-    })
+    let Ok(join) = arch.manage().find_join(slot.addr.get_offset()) else {
+        return false;
+    };
+    if join.num_pieces() != 3 || join.get_unified().size != 24 {
+        return false;
+    }
+    ["RCX", "RBX", "RAX"]
+        .iter()
+        .enumerate()
+        .all(|(index, name)| {
+            let Ok(expected) = arch.get_register_varnode(name.as_bytes()) else {
+                return false;
+            };
+            let piece = join.get_piece(index as i32);
+            piece.size == 8
+                && expected.size == 8
+                && piece.offset == expected.offset
+                && piece
+                    .space
+                    .as_ref()
+                    .zip(expected.space.as_ref())
+                    .is_some_and(|(space, expected)| space.get_index() == expected.get_index())
+        })
 }
 
 #[cfg(test)]
@@ -147,21 +213,55 @@ mod tests {
             (1, gimli::DW_TAG_base_type, "int", Some(8), Some(2), None),
             (2, gimli::DW_TAG_typedef, "error", None, None, Some(3)),
             (3, gimli::DW_TAG_typedef, "error", None, Some(20), Some(4)),
-            (4, gimli::DW_TAG_typedef, "runtime.iface", None, None, Some(5)),
-            (5, gimli::DW_TAG_structure_type, "runtime.iface", Some(16), Some(25), None),
+            (
+                4,
+                gimli::DW_TAG_typedef,
+                "runtime.iface",
+                None,
+                None,
+                Some(5),
+            ),
+            (
+                5,
+                gimli::DW_TAG_structure_type,
+                "runtime.iface",
+                Some(16),
+                Some(25),
+                None,
+            ),
             (6, gimli::DW_TAG_member, "tab", None, None, Some(8)),
             (7, gimli::DW_TAG_member, "data", None, None, Some(11)),
             (8, gimli::DW_TAG_pointer_type, "", None, Some(22), Some(9)),
             (9, gimli::DW_TAG_typedef, table, None, None, Some(10)),
-            (10, gimli::DW_TAG_structure_type, table, Some(32), Some(25), None),
-            (11, gimli::DW_TAG_pointer_type, "unsafe.Pointer", None, None, None),
+            (
+                10,
+                gimli::DW_TAG_structure_type,
+                table,
+                Some(32),
+                Some(25),
+                None,
+            ),
+            (
+                11,
+                gimli::DW_TAG_pointer_type,
+                "unsafe.Pointer",
+                None,
+                None,
+                None,
+            ),
         ] {
             let mut die = DieSnap::new(tag, 1);
             die.name = name.into();
             die.byte_size = size;
             die.type_ref = target;
             facts.dies.insert(offset, die);
-            facts.extras.insert(offset, Extra { kind, ..Extra::default() });
+            facts.extras.insert(
+                offset,
+                Extra {
+                    kind,
+                    ..Extra::default()
+                },
+            );
         }
         facts.dies.get_mut(&1).unwrap().encoding = Some(gimli::DW_ATE_signed);
         facts.dies.get_mut(&5).unwrap().children = vec![6, 7];
@@ -176,8 +276,14 @@ mod tests {
         for table in ["runtime.itab", "internal/abi.ITab"] {
             let facts = graph(table);
             assert!(facts.int_error_results(1, 2));
-            assert!(!facts.int_error_results(1, 5), "storage alone does not establish error");
-            assert!(facts.scalar(2, &mut BTreeSet::new(), &mut 256).is_none(), "error is not a scalar or an accepted input");
+            assert!(
+                !facts.int_error_results(1, 5),
+                "storage alone does not establish error"
+            );
+            assert!(
+                facts.scalar(2, &mut BTreeSet::new(), &mut 256).is_none(),
+                "error is not a scalar or an accepted input"
+            );
         }
     }
 

@@ -29,9 +29,9 @@ use std::rc::Rc;
 
 use unlace_base::address::{Address, RangeList};
 use unlace_base::partmap::PartMap;
-use unlace_base::space::{spacetype, AddrSpace, ConstantSpace};
-use unlace_decomp::dtype::Datatype;
+use unlace_base::space::{AddrSpace, ConstantSpace, spacetype};
 use unlace_decomp::context::{GlobalEntry, GlobalQuery};
+use unlace_decomp::dtype::Datatype;
 use unlace_decomp::varnode::varnode_flags;
 
 fn ram_space(index: i32) -> Rc<AddrSpace> {
@@ -158,7 +158,7 @@ fn v3_query_properties_flagbase_only_and_constant_guard() {
     *flagbase.split(&addr(&ram, 0x9000)) = varnode_flags::readonly;
     *flagbase.split(&addr(&ram, 0x9004)) = 0;
     let gq = GlobalQuery::new(
-        Vec::new(), // no symbol
+        Vec::new(),       // no symbol
         RangeList::new(), // not owned
         flagbase,
     );
@@ -267,8 +267,15 @@ fn v5_sized_type_only_when_typelocked_and_boundary_inclusive() {
         PartMap::new(0u32),
     );
     let got = gq_lock.sized_type_geometry(&addr(&ram, 0x6000), 4, &usepoint);
-    assert!(got.is_some(), "a typelocked covering Symbol forces its type");
-    assert_eq!(got.unwrap().1, 0, "whole-symbol access → in-symbol offset 0");
+    assert!(
+        got.is_some(),
+        "a typelocked covering Symbol forces its type"
+    );
+    assert_eq!(
+        got.unwrap().1,
+        0,
+        "whole-symbol access → in-symbol offset 0"
+    );
 
     // (c) last-byte containment is inclusive: a 4-byte query at 0x6000 fits in
     //     [0x6000,0x6003] (end = 0x6003 == last); a 5-byte query does NOT.

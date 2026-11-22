@@ -38,7 +38,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use unlace_base::address::Address;
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 /// Serializes the `kuna_pdb_path` env-var dance: the pass reads the process-global
 /// env at LOAD, so two tests setting it in parallel would clobber each other. Each
@@ -57,7 +57,10 @@ const COMPUTE_NAME: &str = "pdb_demo_compute";
 const PDB_PATH_ENV: &str = "kuna_pdb_path";
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixtures() -> PathBuf {
@@ -86,11 +89,19 @@ struct Run {
 impl Run {
     /// The vendored fixture, in its own directory (the sidecar is present).
     fn fixture() -> Run {
-        Run { exe: fixtures().join("pdb_prog.exe"), env: None, force_off: false }
+        Run {
+            exe: fixtures().join("pdb_prog.exe"),
+            env: None,
+            force_off: false,
+        }
     }
     /// A copy of the fixture alone in a scratch directory (no sidecar).
     fn isolated(tag: &str) -> Run {
-        Run { exe: isolated_exe(tag), env: None, force_off: false }
+        Run {
+            exe: isolated_exe(tag),
+            env: None,
+            force_off: false,
+        }
     }
     fn env(mut self, pdb: PathBuf) -> Run {
         self.env = Some(pdb);
@@ -102,7 +113,11 @@ impl Run {
     }
     /// Place `src` beside the EXE under the sidecar name the CodeView record uses.
     fn with_sidecar(self, src: &Path) -> Run {
-        let dst = self.exe.parent().expect("the EXE has a parent").join("pdb_prog.pdb");
+        let dst = self
+            .exe
+            .parent()
+            .expect("the EXE has a parent")
+            .join("pdb_prog.pdb");
         std::fs::copy(src, dst).expect("install the sidecar");
         self
     }
@@ -111,8 +126,12 @@ impl Run {
 /// Resolve the symbol-table name at `COMPUTE_VMA` (the engine placeholder, or the
 /// PDB-recovered name).
 fn name_at_compute(prog: &ConsoleProgram) -> String {
-    let code_space =
-        prog.arch().manage().get_default_code_space().expect("a default code space").clone();
+    let code_space = prog
+        .arch()
+        .manage()
+        .get_default_code_space()
+        .expect("a default code space")
+        .clone();
     let addr = Address::new(std::rc::Rc::clone(&code_space), COMPUTE_VMA);
     match prog.arch().symboltab.find_function_across_scopes(&addr) {
         Some((sid, _)) => prog.arch().symboltab.symbol(sid).get_name().to_string(),
@@ -145,9 +164,12 @@ fn run(r: Run) -> String {
     let mut prog = prog.expect("bootstrap fixture with built processor specs");
 
     if r.force_off {
-        prog.arch_mut().set_kuna_option("pdb", "off").expect("pdb flips off");
+        prog.arch_mut()
+            .set_kuna_option("pdb", "off")
+            .expect("pdb flips off");
     }
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
     name_at_compute(&prog)
 }
@@ -196,8 +218,14 @@ fn pdb_name_follows_the_sidecar_file() {
 
     eprintln!("==== EXE alone: {alone:>24}   EXE + .pdb: {beside:>24} ====");
 
-    assert!(is_placeholder(&alone), "a PE with no .pdb beside it must stay stripped, got `{alone}`");
-    assert_eq!(beside, COMPUTE_NAME, "dropping the matching .pdb beside the PE must name it");
+    assert!(
+        is_placeholder(&alone),
+        "a PE with no .pdb beside it must stay stripped, got `{alone}`"
+    );
+    assert_eq!(
+        beside, COMPUTE_NAME,
+        "dropping the matching .pdb beside the PE must name it"
+    );
 }
 
 /// THE FINGERPRINT GATE on the automatic tier: a STALE `.pdb` sitting beside the
@@ -237,14 +265,16 @@ fn pdb_explicit_path_is_tried_first_and_falls_through() {
     // An explicit path that does not match, with a matching sidecar present.
     let fell_through = run(Run::fixture().env(mismatch.clone()));
     // An explicit path that does not match, with nothing else to fall back to.
-    let nothing_left =
-        run(Run::isolated("nofallback").env(mismatch));
+    let nothing_left = run(Run::isolated("nofallback").env(mismatch));
 
     eprintln!(
         "==== env only: {explicit:>24}   env mismatch + sidecar: {fell_through:>24}   env mismatch alone: {nothing_left:>24} ===="
     );
 
-    assert_eq!(explicit, COMPUTE_NAME, "kuna_pdb_path must still reach an out-of-tree .pdb");
+    assert_eq!(
+        explicit, COMPUTE_NAME,
+        "kuna_pdb_path must still reach an out-of-tree .pdb"
+    );
     assert_eq!(
         fell_through, COMPUTE_NAME,
         "a mismatching explicit path must not veto a sidecar that does match"
@@ -268,10 +298,15 @@ fn pdb_cpp_publics_are_demangled() {
     let exe = fixtures().join("pdb_cpp.exe");
     let mut prog = bootstrap_from_object(exe.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
-    let code_space =
-        prog.arch().manage().get_default_code_space().expect("a default code space").clone();
+    let code_space = prog
+        .arch()
+        .manage()
+        .get_default_code_space()
+        .expect("a default code space")
+        .clone();
     for (vma, name) in [
         (0x140001000, "operator new"),
         (0x140001050, "app::util::scale"),
@@ -281,7 +316,10 @@ fn pdb_cpp_publics_are_demangled() {
     ] {
         let addr = Address::new(std::rc::Rc::clone(&code_space), vma);
         assert_eq!(
-            prog.arch().symboltab.function_display_name_across_scopes(&addr).as_deref(),
+            prog.arch()
+                .symboltab
+                .function_display_name_across_scopes(&addr)
+                .as_deref(),
             Some(name),
             "the function at {vma:#x}"
         );
@@ -292,5 +330,9 @@ fn pdb_cpp_publics_are_demangled() {
         .filter(|entry| entry.name == "operator delete")
         .map(|entry| entry.addr.get_offset())
         .collect();
-    assert_eq!(deletes, [0x140001030, 0x140001040], "both overloads are listed");
+    assert_eq!(
+        deletes,
+        [0x140001030, 0x140001040],
+        "both overloads are listed"
+    );
 }

@@ -6,13 +6,13 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{ArchContext, OpId, TypeOp};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::op::pcodeop_flags;
 
@@ -21,7 +21,8 @@ use super::*;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -58,20 +59,29 @@ fn make_op(fd: &mut Funcdata, opc: OpCode, pc_off: u64, ninputs: int4, start: bo
     let op = fd.obank_mut().create_at(ninputs, pc);
     fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, "op"));
     if start {
-        fd.obank_mut().get_mut(op).unwrap().set_flag(pcodeop_flags::startmark);
+        fd.obank_mut()
+            .get_mut(op)
+            .unwrap()
+            .set_flag(pcodeop_flags::startmark);
     }
     op
 }
 
 fn set_const_input(fd: &mut Funcdata, op: OpId, slot: int4, value: uintb, size: int4) {
     let cspace = space(fd, "const");
-    let vn = fd.vbank_mut().create(size, Address::new(cspace, value), unk_type(size));
-    fd.obank_mut().get_mut(op).unwrap().set_input(Some(vn), slot);
+    let vn = fd
+        .vbank_mut()
+        .create(size, Address::new(cspace, value), unk_type(size));
+    fd.obank_mut()
+        .get_mut(op)
+        .unwrap()
+        .set_input(Some(vn), slot);
 }
 
 fn unique_vn(fd: &mut Funcdata, off: u64) -> crate::context::VarnodeId {
     let uspace = space(fd, "unique");
-    fd.vbank_mut().create(8, Address::new(uspace, off), unk_type(8))
+    fd.vbank_mut()
+        .create(8, Address::new(uspace, off), unk_type(8))
 }
 
 /// The `INT3` idiom in one instruction:
@@ -83,11 +93,17 @@ fn build_int_idiom(fd: &mut Funcdata, swi_id: uintb, vector: uintb) -> OpId {
     set_const_input(fd, callother, 0, swi_id, 4);
     set_const_input(fd, callother, 1, vector, 1);
     let out = unique_vn(fd, 0x9bd00);
-    fd.obank_mut().get_mut(callother).unwrap().set_output(Some(out));
+    fd.obank_mut()
+        .get_mut(callother)
+        .unwrap()
+        .set_output(Some(out));
 
     let callind = make_op(fd, OpCode::CPUI_CALLIND, 0x1000, 1, false);
     let target = unique_vn(fd, 0x9bd00);
-    fd.obank_mut().get_mut(callind).unwrap().set_input(Some(target), 0);
+    fd.obank_mut()
+        .get_mut(callind)
+        .unwrap()
+        .set_input(Some(target), 0);
     callind
 }
 
@@ -119,7 +135,10 @@ fn other_vectors_do_not_fire() {
     for vector in [0x29, 0x80, 0x1, 0x4] {
         let mut fd = build_fd();
         let callind = build_int_idiom(&mut fd, 3, vector);
-        assert!(!is_int3_callind(&fd, callind, resolver), "vector {vector:#x} fired");
+        assert!(
+            !is_int3_callind(&fd, callind, resolver),
+            "vector {vector:#x} fired"
+        );
     }
 }
 
@@ -131,10 +150,16 @@ fn a_wider_vector_constant_does_not_fire() {
     set_const_input(&mut fd, callother, 0, 3, 4);
     set_const_input(&mut fd, callother, 1, INT3_VECTOR, 4);
     let out = unique_vn(&mut fd, 0x9bd00);
-    fd.obank_mut().get_mut(callother).unwrap().set_output(Some(out));
+    fd.obank_mut()
+        .get_mut(callother)
+        .unwrap()
+        .set_output(Some(out));
     let callind = make_op(&mut fd, OpCode::CPUI_CALLIND, 0x1000, 1, false);
     let target = unique_vn(&mut fd, 0x9bd00);
-    fd.obank_mut().get_mut(callind).unwrap().set_input(Some(target), 0);
+    fd.obank_mut()
+        .get_mut(callind)
+        .unwrap()
+        .set_input(Some(target), 0);
     assert!(!is_int3_callind(&fd, callind, resolver));
 }
 
@@ -153,11 +178,17 @@ fn a_callother_in_another_instruction_does_not_fire() {
     set_const_input(&mut fd, callother, 0, 3, 4);
     set_const_input(&mut fd, callother, 1, INT3_VECTOR, 1);
     let out = unique_vn(&mut fd, 0x9bd00);
-    fd.obank_mut().get_mut(callother).unwrap().set_output(Some(out));
+    fd.obank_mut()
+        .get_mut(callother)
+        .unwrap()
+        .set_output(Some(out));
 
     let callind = make_op(&mut fd, OpCode::CPUI_CALLIND, 0x1004, 1, true);
     let target = unique_vn(&mut fd, 0x9bd00);
-    fd.obank_mut().get_mut(callind).unwrap().set_input(Some(target), 0);
+    fd.obank_mut()
+        .get_mut(callind)
+        .unwrap()
+        .set_input(Some(target), 0);
     assert!(!is_int3_callind(&fd, callind, resolver));
 }
 
@@ -166,7 +197,10 @@ fn a_plain_indirect_call_does_not_fire() {
     let mut fd = build_fd();
     let callind = make_op(&mut fd, OpCode::CPUI_CALLIND, 0x1000, 1, true);
     let target = unique_vn(&mut fd, 0x9bd00);
-    fd.obank_mut().get_mut(callind).unwrap().set_input(Some(target), 0);
+    fd.obank_mut()
+        .get_mut(callind)
+        .unwrap()
+        .set_input(Some(target), 0);
     assert!(!is_int3_callind(&fd, callind, resolver));
 }
 
@@ -189,8 +223,17 @@ fn warning_text_carries_the_run_and_no_earlier_digit() {
     // The P9 slug table reads the first integer AFTER the `int3pad:` tag as the
     // ` xN` suffix, so nothing between the tag and the count may be a digit.
     let long = warning_text(4);
-    assert_eq!(crate::printc::warning_slug(&format!("WARNING: {long}")), "int3-pad x4");
+    assert_eq!(
+        crate::printc::warning_slug(&format!("WARNING: {long}")),
+        "int3-pad x4"
+    );
     let short = warning_text(1);
-    assert_eq!(crate::printc::warning_slug(&format!("WARNING: {short}")), "int3-pad");
-    assert_eq!(crate::printc::warning_slug(&format!("WARNING: {}", warning_text(0))), "int3-pad");
+    assert_eq!(
+        crate::printc::warning_slug(&format!("WARNING: {short}")),
+        "int3-pad"
+    );
+    assert_eq!(
+        crate::printc::warning_slug(&format!("WARNING: {}", warning_text(0))),
+        "int3-pad"
+    );
 }

@@ -5,7 +5,9 @@ use crate::common;
 use common::process;
 
 use object::write::{Object, Symbol, SymbolSection};
-use object::{Architecture, BinaryFormat, Endianness, SectionKind, SymbolFlags, SymbolKind, SymbolScope};
+use object::{
+    Architecture, BinaryFormat, Endianness, SectionKind, SymbolFlags, SymbolKind, SymbolScope,
+};
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -17,13 +19,28 @@ const X86_64: [(&str, &[u8]); 3] = [
     ("read_mode", &[0x8b, 0x07, 0xc3]),
 ];
 const AARCH64: [(&str, &[u8]); 3] = [
-    ("read_value", &[0x00, 0x08, 0x40, 0xb9, 0xc0, 0x03, 0x5f, 0xd6]),
-    ("read_gain", &[0x00, 0x04, 0x40, 0xbd, 0xc0, 0x03, 0x5f, 0xd6]),
-    ("read_mode", &[0x00, 0x00, 0x40, 0xb9, 0xc0, 0x03, 0x5f, 0xd6]),
+    (
+        "read_value",
+        &[0x00, 0x08, 0x40, 0xb9, 0xc0, 0x03, 0x5f, 0xd6],
+    ),
+    (
+        "read_gain",
+        &[0x00, 0x04, 0x40, 0xbd, 0xc0, 0x03, 0x5f, 0xd6],
+    ),
+    (
+        "read_mode",
+        &[0x00, 0x00, 0x40, 0xb9, 0xc0, 0x03, 0x5f, 0xd6],
+    ),
 ];
 const I386: [(&str, &[u8]); 3] = [
-    ("read_value", &[0x8b, 0x44, 0x24, 0x04, 0x8b, 0x40, 0x08, 0xc3]),
-    ("read_gain", &[0x8b, 0x44, 0x24, 0x04, 0xd9, 0x40, 0x04, 0xc3]),
+    (
+        "read_value",
+        &[0x8b, 0x44, 0x24, 0x04, 0x8b, 0x40, 0x08, 0xc3],
+    ),
+    (
+        "read_gain",
+        &[0x8b, 0x44, 0x24, 0x04, 0xd9, 0x40, 0x04, 0xc3],
+    ),
     ("read_mode", &[0x8b, 0x44, 0x24, 0x04, 0x8b, 0x00, 0xc3]),
 ];
 
@@ -58,7 +75,13 @@ fn object_file(stem: &str, arch: Architecture, functions: &[(&str, &[u8])]) -> P
 
 /// Decompile `func` under `asserts` (all of which must apply) and return its C.
 fn decompile(input: &PathBuf, func: &str, asserts: &[&str]) -> String {
-    let mut args = vec!["decompile", input.to_str().unwrap(), func, "--json", "--assert-strict"];
+    let mut args = vec![
+        "decompile",
+        input.to_str().unwrap(),
+        func,
+        "--json",
+        "--assert-strict",
+    ];
     for a in asserts {
         args.extend(["--assert", a]);
     }
@@ -82,9 +105,16 @@ fn an_asserted_enum_is_as_wide_as_int() {
         ("enum-i386", Architecture::I386, &I386),
     ] {
         let input = object_file(stem, arch, functions);
-        for (func, read) in [("read_value", "packet->value;"), ("read_gain", "packet->gain;"), ("read_mode", "packet->mode;")] {
+        for (func, read) in [
+            ("read_value", "packet->value;"),
+            ("read_gain", "packet->gain;"),
+            ("read_mode", "packet->mode;"),
+        ] {
             let code = decompile(&input, func, &PACKET);
-            assert!(code.contains(&format!("return {read}")), "{stem} {func}: {code}");
+            assert!(
+                code.contains(&format!("return {read}")),
+                "{stem} {func}: {code}"
+            );
         }
         std::fs::remove_file(input).unwrap();
     }
@@ -94,7 +124,11 @@ fn an_asserted_enum_is_as_wide_as_int() {
 /// 32-bit target too, where the pointer-wide enum masked it away.
 #[test]
 fn a_constant_too_wide_for_int_widens_the_enum() {
-    let input = object_file("enum-big-i386", Architecture::I386, &[("read_rec", I386[0].1)]);
+    let input = object_file(
+        "enum-big-i386",
+        Architecture::I386,
+        &[("read_rec", I386[0].1)],
+    );
     let code = decompile(
         &input,
         "read_rec",
@@ -112,11 +146,18 @@ fn a_constant_too_wide_for_int_widens_the_enum() {
 /// returns `BLUE`, where the constants were once numbered from 1.
 #[test]
 fn an_unvalued_enumerator_counts_on_from_the_one_before() {
-    let input = object_file("enum-color", Architecture::X86_64, &[("blue", &[0xb8, 0x02, 0x00, 0x00, 0x00, 0xc3])]);
+    let input = object_file(
+        "enum-color",
+        Architecture::X86_64,
+        &[("blue", &[0xb8, 0x02, 0x00, 0x00, 0x00, 0xc3])],
+    );
     let code = decompile(
         &input,
         "blue",
-        &["typedef enum Color { RED, GREEN, BLUE };", "prototype blue enum Color blue(void)"],
+        &[
+            "typedef enum Color { RED, GREEN, BLUE };",
+            "prototype blue enum Color blue(void)",
+        ],
     );
     assert!(code.contains("return BLUE;"), "{code}");
     std::fs::remove_file(input).unwrap();
@@ -127,12 +168,20 @@ fn an_unvalued_enumerator_counts_on_from_the_one_before() {
 const S10_X86_64: [(&str, &[u8]); 3] = [
     ("get_v", &[0x8b, 0x47, 0x08, 0xc3]),
     ("get_c", &[0x8a, 0x47, 0x04, 0xc3]),
-    ("is_nb", &[0x31, 0xc0, 0x83, 0xff, 0xfc, 0x0f, 0x94, 0xc0, 0xc3]),
+    (
+        "is_nb",
+        &[0x31, 0xc0, 0x83, 0xff, 0xfc, 0x0f, 0x94, 0xc0, 0xc3],
+    ),
 ];
 const S10_I386: [(&str, &[u8]); 3] = [
     ("get_v", &[0x8b, 0x44, 0x24, 0x04, 0x8b, 0x40, 0x08, 0xc3]),
     ("get_c", &[0x8b, 0x44, 0x24, 0x04, 0x8a, 0x40, 0x04, 0xc3]),
-    ("is_nb", &[0x31, 0xc0, 0x83, 0x7c, 0x24, 0x04, 0xfc, 0x0f, 0x94, 0xc0, 0xc3]),
+    (
+        "is_nb",
+        &[
+            0x31, 0xc0, 0x83, 0x7c, 0x24, 0x04, 0xfc, 0x0f, 0x94, 0xc0, 0xc3,
+        ],
+    ),
 ];
 
 const S10: [&str; 6] = [
@@ -154,7 +203,11 @@ fn a_negative_constant_keeps_the_enum_int_wide() {
         ("enum-neg-i386", Architecture::I386, &S10_I386),
     ] {
         let input = object_file(stem, arch, functions);
-        for (func, read) in [("get_v", "return p->v;"), ("get_c", "return p->c;"), ("is_nb", "e == NB")] {
+        for (func, read) in [
+            ("get_v", "return p->v;"),
+            ("get_c", "return p->c;"),
+            ("is_nb", "e == NB"),
+        ] {
             let code = decompile(&input, func, &S10);
             assert!(code.contains(read), "{stem} {func}: {code}");
         }
@@ -168,7 +221,10 @@ fn a_c23_underlying_type_sets_the_width() {
     let input = object_file(
         "enum-short",
         Architecture::X86_64,
-        &[("read_h", &[0x0f, 0xbf, 0x47, 0x02, 0xc3]), ("read_s", &[0x8a, 0x07, 0xc3])],
+        &[
+            ("read_h", &[0x0f, 0xbf, 0x47, 0x02, 0xc3]),
+            ("read_s", &[0x8a, 0x07, 0xc3]),
+        ],
     );
     let decls = [
         "typedef enum Small : unsigned char { S0, S1, S2 };",
@@ -200,7 +256,10 @@ fn the_printed_readers_round_trip() {
         .into_iter()
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
-    assert!(!compilers.is_empty(), "the round trip requires a C compiler");
+    assert!(
+        !compilers.is_empty(),
+        "the round trip requires a C compiler"
+    );
     let src = common::scratch_file("enum-roundtrip", "c");
     let exe = common::scratch_file("enum-roundtrip", "exe");
     std::fs::write(
@@ -226,9 +285,22 @@ int main(void) {{
     )
     .unwrap();
     for cc in &compilers {
-        let compile = Command::new(cc).args(["-std=c11", "-O1"]).arg(&src).arg("-o").arg(&exe).output().unwrap();
-        assert!(compile.status.success(), "{cc}: {}\n{printed}", String::from_utf8_lossy(&compile.stderr));
-        assert!(Command::new(&exe).status().unwrap().success(), "{cc}: {printed}");
+        let compile = Command::new(cc)
+            .args(["-std=c11", "-O1"])
+            .arg(&src)
+            .arg("-o")
+            .arg(&exe)
+            .output()
+            .unwrap();
+        assert!(
+            compile.status.success(),
+            "{cc}: {}\n{printed}",
+            String::from_utf8_lossy(&compile.stderr)
+        );
+        assert!(
+            Command::new(&exe).status().unwrap().success(),
+            "{cc}: {printed}"
+        );
     }
     std::fs::remove_file(src).unwrap();
     std::fs::remove_file(exe).unwrap();

@@ -43,7 +43,7 @@ use unlace_base::types::{int4, int8};
 
 use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 
 /// Which pointer form an access takes.
@@ -72,7 +72,11 @@ pub enum Pointee {
 /// The planned rendering of one partial access.
 pub enum Piece {
     /// A pointer access; `bytes` is `char *`, for [`Form::Bytes`].
-    Pointer { form: Form, pointee: Pointee, bytes: Option<Rc<Datatype>> },
+    Pointer {
+        form: Form,
+        pointee: Pointee,
+        bytes: Option<Rc<Datatype>>,
+    },
     /// `SUB<in><out>(v, value_offset)`.
     Sub { name: String, value_offset: int8 },
 }
@@ -105,8 +109,12 @@ pub(crate) fn readable(ct: &Datatype, size: int4) -> bool {
 /// its bits.
 pub(crate) fn carries_float(fd: &Funcdata, vn: VarnodeId, op: OpId) -> bool {
     use unlace_num::opcodes::OpCode;
-    let Some(v) = fd.vbank().get(vn) else { return false };
-    let Some(o) = fd.obank().get(op) else { return false };
+    let Some(v) = fd.vbank().get(vn) else {
+        return false;
+    };
+    let Some(o) = fd.obank().get(op) else {
+        return false;
+    };
     if v.get_def() == Some(op) {
         let input_float = o
             .get_in(0)
@@ -114,16 +122,18 @@ pub(crate) fn carries_float(fd: &Funcdata, vn: VarnodeId, op: OpId) -> bool {
             .is_some_and(|i| i.get_type().get_metatype() == type_metatype::TYPE_FLOAT);
         return match o.code() {
             OpCode::CPUI_COPY => input_float,
-            c => crate::kuna_ptrfromuse::is_float_op(c)
-                && !matches!(
-                    c,
-                    OpCode::CPUI_FLOAT_EQUAL
-                        | OpCode::CPUI_FLOAT_NOTEQUAL
-                        | OpCode::CPUI_FLOAT_LESS
-                        | OpCode::CPUI_FLOAT_LESSEQUAL
-                        | OpCode::CPUI_FLOAT_NAN
-                        | OpCode::CPUI_FLOAT_TRUNC
-                ),
+            c => {
+                crate::kuna_ptrfromuse::is_float_op(c)
+                    && !matches!(
+                        c,
+                        OpCode::CPUI_FLOAT_EQUAL
+                            | OpCode::CPUI_FLOAT_NOTEQUAL
+                            | OpCode::CPUI_FLOAT_LESS
+                            | OpCode::CPUI_FLOAT_LESSEQUAL
+                            | OpCode::CPUI_FLOAT_NAN
+                            | OpCode::CPUI_FLOAT_TRUNC
+                    )
+            }
         };
     }
     match o.code() {
@@ -156,15 +166,24 @@ impl Piece {
         let char_t = types.get_type_char(1).ok()?;
         let char_ptr = types.get_type_pointer(ptr_size, char_t, 1).ok()?;
         if position {
-            return Some(Piece::Pointer { form: Form::Index(off), pointee: Pointee::Typed(char_ptr), bytes: None });
+            return Some(Piece::Pointer {
+                form: Form::Index(off),
+                pointee: Pointee::Typed(char_ptr),
+                bytes: None,
+            });
         }
         let own = fd
             .vbank()
             .get(vn)
             .map(|v| Rc::clone(v.get_type()))
             .filter(|t| readable(t, size))
-            .filter(|t| t.get_metatype() != type_metatype::TYPE_UNKNOWN || !carries_float(fd, vn, op));
-        let volatile = fd.vbank().get(vn).is_some_and(|v| v.is_annotation() && v.is_volatile());
+            .filter(|t| {
+                t.get_metatype() != type_metatype::TYPE_UNKNOWN || !carries_float(fd, vn, op)
+            });
+        let volatile = fd
+            .vbank()
+            .get(vn)
+            .is_some_and(|v| v.is_annotation() && v.is_volatile());
         let pointee = match own {
             Some(t) => Pointee::Typed(types.get_type_pointer(ptr_size, t, 1).ok()?),
             None if matches!(size, 4 | 8) && carries_float(fd, vn, op) => {
@@ -181,13 +200,16 @@ impl Piece {
         };
         let pointee = match pointee {
             Pointee::Typed(ptr) if volatile => {
-                let target = types.get_qualified_type(ptr.get_ptr_to()?, crate::kuna_typequal::VOLATILE).ok()?;
+                let target = types
+                    .get_qualified_type(ptr.get_ptr_to()?, crate::kuna_typequal::VOLATILE)
+                    .ok()?;
                 Pointee::Typed(types.get_type_pointer(ptr_size, target, 1).ok()?)
             }
             other => other,
         };
         let bytes_array = container.is_some_and(|c| {
-            c.get_metatype() == type_metatype::TYPE_ARRAY && c.get_array_base().is_some_and(|e| e.get_size() == 1)
+            c.get_metatype() == type_metatype::TYPE_ARRAY
+                && c.get_array_base().is_some_and(|e| e.get_size() == 1)
         });
         let form = if bytes_array && off == 0 {
             Form::Decay
@@ -201,24 +223,46 @@ impl Piece {
             Form::Bytes(off)
         };
         let bytes = matches!(form, Form::Bytes(_)).then_some(char_ptr);
-        Some(Piece::Pointer { form, pointee, bytes })
+        Some(Piece::Pointer {
+            form,
+            pointee,
+            bytes,
+        })
     }
 
     /// A 3-, 5-, 6- or 7-byte read out of a scalar as the `SUB` intrinsic, its
     /// offset counted from the value's low end: the memory offset on a
     /// little-endian space, the bytes after the access on a big-endian one.
-    fn sub(fd: &Funcdata, vn: VarnodeId, op: OpId, off: int8, size: int4, container: Option<&Datatype>) -> Option<Piece> {
+    fn sub(
+        fd: &Funcdata,
+        vn: VarnodeId,
+        op: OpId,
+        off: int8,
+        size: int4,
+        container: Option<&Datatype>,
+    ) -> Option<Piece> {
         let v = fd.vbank().get(vn)?;
         let c = container?;
         let scalar = matches!(
             c.get_metatype(),
-            type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN | type_metatype::TYPE_PTR
+            type_metatype::TYPE_INT
+                | type_metatype::TYPE_UINT
+                | type_metatype::TYPE_UNKNOWN
+                | type_metatype::TYPE_PTR
         );
-        if v.get_def() == Some(op) || !matches!(size, 3 | 5 | 6 | 7) || !scalar || c.get_size() > 8 {
+        if v.get_def() == Some(op) || !matches!(size, 3 | 5 | 6 | 7) || !scalar || c.get_size() > 8
+        {
             return None;
         }
         let big = v.get_addr().get_space().is_some_and(|s| s.is_big_endian());
-        let value_offset = if big { c.get_size() as int8 - off - size as int8 } else { off };
-        (value_offset >= 0).then(|| Piece::Sub { name: format!("SUB{}{}", c.get_size(), size), value_offset })
+        let value_offset = if big {
+            c.get_size() as int8 - off - size as int8
+        } else {
+            off
+        };
+        (value_offset >= 0).then(|| Piece::Sub {
+            name: format!("SUB{}{}", c.get_size(), size),
+            value_offset,
+        })
     }
 }

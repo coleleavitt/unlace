@@ -12,11 +12,11 @@
 //! data word, symbol, entry, landing pad or unresolved function scope reaches is
 //! never named. Table metadata and linker labels never supply a register value.
 use super::elf_plt::PltSym;
-use unlace_decomp::kuna_fasthash::{FxHashMap, FxHashSet};
 use object::{Object, ObjectSection, ObjectSymbol, SectionFlags, SectionKind, SymbolKind};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::marker::PhantomData;
 use std::sync::{Arc, Mutex, OnceLock};
+use unlace_decomp::kuna_fasthash::{FxHashMap, FxHashSet};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum Value {
@@ -326,11 +326,7 @@ fn signed(word: u32) -> u32 {
 fn rotate_mask(begin: u32, end: u32) -> u32 {
     let from = u32::MAX >> begin;
     let to = u32::MAX << (31 - end);
-    if begin <= end {
-        from & to
-    } else {
-        from | to
-    }
+    if begin <= end { from & to } else { from | to }
 }
 
 #[derive(Clone, Copy)]
@@ -1530,10 +1526,16 @@ impl<'a> ImportProofScope<'a> {
         } else {
             let memo = memo
                 .filter(|m| m.key == key)
-                .unwrap_or_else(|| ImportProofMemo { key, found: Arc::default() });
+                .unwrap_or_else(|| ImportProofMemo {
+                    key,
+                    found: Arc::default(),
+                });
             scopes.push((memo, 1));
         }
-        Self { key, _bytes: PhantomData }
+        Self {
+            key,
+            _bytes: PhantomData,
+        }
     }
 
     pub fn memo(&self) -> ImportProofMemo {
@@ -1569,12 +1571,18 @@ pub(super) fn resolve(
     imports: &[PltSym],
 ) -> Vec<PltSym> {
     let prove_found = || -> Found {
-        prove(file, slots, imports).into_iter().map(|s| (s.addr, s.name)).collect()
+        prove(file, slots, imports)
+            .into_iter()
+            .map(|s| (s.addr, s.name))
+            .collect()
     };
     let memo = match file {
         object::File::Elf32(elf) => {
             let key = buffer_key(elf.data());
-            scopes().iter().find(|(m, _)| m.key == key).map(|(m, _)| m.found.clone())
+            scopes()
+                .iter()
+                .find(|(m, _)| m.key == key)
+                .map(|(m, _)| m.found.clone())
         }
         _ => None,
     };
@@ -1584,7 +1592,11 @@ pub(super) fn resolve(
     };
     found
         .into_iter()
-        .map(|(addr, name)| PltSym { addr, name, slot: None })
+        .map(|(addr, name)| PltSym {
+            addr,
+            name,
+            slot: None,
+        })
         .collect()
 }
 

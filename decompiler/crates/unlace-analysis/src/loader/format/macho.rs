@@ -23,8 +23,8 @@
 //! are admitted by the engine dispatch unconditionally; the XML/datatest corpus
 //! never carries a Mach-O magic, so the ELF/XML oracles are untouched.
 
-use object::macho::{S_ATTR_PURE_INSTRUCTIONS, S_GB_ZEROFILL, S_ZEROFILL, SECTION_TYPE};
 use object::macho::{CPU_SUBTYPE_ARM64E, CPU_SUBTYPE_MASK};
+use object::macho::{S_ATTR_PURE_INSTRUCTIONS, S_GB_ZEROFILL, S_ZEROFILL, SECTION_TYPE};
 use object::read::macho::MachHeader;
 use object::{Architecture, FileKind, SectionFlags, SectionKind};
 
@@ -36,7 +36,7 @@ use super::{FormatKind, ImportSym, ObjectFormat};
 /// Mach-O format impl because it is loader infra shared by the ObjC walk (and any
 /// future chained-fixup consumer), keyed off the same typed Mach-O re-parse.
 pub mod chained;
-pub use chained::{resolve_chained_fixups, AuthContext, ChainedBind, ChainedFixups};
+pub use chained::{AuthContext, ChainedBind, ChainedFixups, resolve_chained_fixups};
 /// The classic `LC_DYLD_INFO` bind-opcode replay: which slots an imported symbol
 /// fills on an image that predates chained fixups.
 pub mod dyldinfo;
@@ -186,9 +186,17 @@ mod tests {
     #[test]
     fn macho_compiler_model_per_arch() {
         let f = MachOFormat;
-        assert_eq!(f.compiler_model(Architecture::X86_64), Some("gcc"), "x86-64 macOS is SysV → gcc");
+        assert_eq!(
+            f.compiler_model(Architecture::X86_64),
+            Some("gcc"),
+            "x86-64 macOS is SysV → gcc"
+        );
         assert_eq!(f.compiler_model(Architecture::I386), Some("gcc"));
-        assert_eq!(f.compiler_model(Architecture::Aarch64), Some("default"), "arm64 macOS → default");
+        assert_eq!(
+            f.compiler_model(Architecture::Aarch64),
+            Some("default"),
+            "arm64 macOS → default"
+        );
     }
 
     /// A `__text` Mach-O section (`SectionKind::Text`, `S_ATTR_PURE_INSTRUCTIONS`)
@@ -199,7 +207,9 @@ mod tests {
         let bits = f.section_bits(
             "",
             SectionKind::Text,
-            SectionFlags::MachO { flags: S_ATTR_PURE_INSTRUCTIONS },
+            SectionFlags::MachO {
+                flags: S_ATTR_PURE_INSTRUCTIONS,
+            },
         );
         assert!(bits & section_flags::CODE != 0, "__text is CODE");
         assert!(bits & section_flags::READONLY != 0, "__text is READONLY");
@@ -209,7 +219,10 @@ mod tests {
             SectionKind::UninitializedData,
             SectionFlags::MachO { flags: S_ZEROFILL },
         );
-        assert!(bss & section_flags::NOLOAD != 0, "zerofill section is NOLOAD");
+        assert!(
+            bss & section_flags::NOLOAD != 0,
+            "zerofill section is NOLOAD"
+        );
     }
 
     /// A minimal `mach_header_64` buffer with the given cputype/cpusubtype, the
@@ -235,13 +248,22 @@ mod tests {
     fn is_arm64e_detects_only_arm64e_subtype() {
         use object::macho::{CPU_SUBTYPE_ARM64_ALL, CPU_TYPE_ARM64, CPU_TYPE_X86_64};
         // arm64e — the high capability byte (CPU_SUBTYPE_PTRAUTH_ABI) set or not.
-        assert!(is_arm64e(&macho64_header(CPU_TYPE_ARM64 as u32, CPU_SUBTYPE_ARM64E)));
+        assert!(is_arm64e(&macho64_header(
+            CPU_TYPE_ARM64 as u32,
+            CPU_SUBTYPE_ARM64E
+        )));
         assert!(
-            is_arm64e(&macho64_header(CPU_TYPE_ARM64 as u32, CPU_SUBTYPE_ARM64E | 0x8000_0000)),
+            is_arm64e(&macho64_header(
+                CPU_TYPE_ARM64 as u32,
+                CPU_SUBTYPE_ARM64E | 0x8000_0000
+            )),
             "the capability high byte must be masked off before comparing"
         );
         // plain arm64 — not arm64e.
-        assert!(!is_arm64e(&macho64_header(CPU_TYPE_ARM64 as u32, CPU_SUBTYPE_ARM64_ALL)));
+        assert!(!is_arm64e(&macho64_header(
+            CPU_TYPE_ARM64 as u32,
+            CPU_SUBTYPE_ARM64_ALL
+        )));
         // x86-64 — never arm64e.
         assert!(!is_arm64e(&macho64_header(CPU_TYPE_X86_64 as u32, 3)));
         // non-Mach-O — false (no panic).
@@ -265,7 +287,10 @@ mod tests {
         // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::set_var(MACHO_ARM64E_ENV, "off") };
         // Gate OFF: even an arm64e Mach-O yields None (generic v8A wins).
-        assert_eq!(apple_silicon_id(&macho, Architecture::Aarch64, &arm64e), None);
+        assert_eq!(
+            apple_silicon_id(&macho, Architecture::Aarch64, &arm64e),
+            None
+        );
 
         // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::remove_var(MACHO_ARM64E_ENV) };
@@ -275,12 +300,22 @@ mod tests {
             Some("AARCH64:LE:64:AppleSilicon:default")
         );
         // Gate ON but a *plain* arm64 (not arm64e) → None.
-        assert_eq!(apple_silicon_id(&macho, Architecture::Aarch64, &arm64), None);
+        assert_eq!(
+            apple_silicon_id(&macho, Architecture::Aarch64, &arm64),
+            None
+        );
         // Gate ON, arm64e bytes, but wrong arch (x86-64) → None.
-        assert_eq!(apple_silicon_id(&macho, Architecture::X86_64, &arm64e), None);
+        assert_eq!(
+            apple_silicon_id(&macho, Architecture::X86_64, &arm64e),
+            None
+        );
         // Gate ON, arm64e bytes, but non-Mach-O format → None.
         assert_eq!(
-            apple_silicon_id(&crate::loader::format::elf::ElfFormat, Architecture::Aarch64, &arm64e),
+            apple_silicon_id(
+                &crate::loader::format::elf::ElfFormat,
+                Architecture::Aarch64,
+                &arm64e
+            ),
             None
         );
         // FIXME: Audit that the environment access only happens in single-threaded code.

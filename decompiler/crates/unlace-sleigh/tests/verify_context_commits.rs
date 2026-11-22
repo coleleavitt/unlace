@@ -35,7 +35,10 @@ impl LoadImage for DummyImg {
 }
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Every vendored `.sla`, sorted, as `(processor, file name, path)`.
@@ -69,19 +72,22 @@ fn source_closure(slaspec: &Path) -> BTreeSet<PathBuf> {
     let mut seen: BTreeSet<PathBuf> = BTreeSet::new();
     let mut stack = vec![slaspec.to_path_buf()];
     while let Some(f) = stack.pop() {
-        let f = f.canonicalize().unwrap_or_else(|e| panic!("{}: {e}", f.display()));
+        let f = f
+            .canonicalize()
+            .unwrap_or_else(|e| panic!("{}: {e}", f.display()));
         if !seen.insert(f.clone()) {
             continue;
         }
-        let text = std::fs::read_to_string(&f)
-            .unwrap_or_else(|e| panic!("{}: {e}", f.display()));
+        let text = std::fs::read_to_string(&f).unwrap_or_else(|e| panic!("{}: {e}", f.display()));
         let dir = f.parent().unwrap().to_path_buf();
         for line in text.lines() {
             let Some(rest) = line.trim_start().strip_prefix("@include") else {
                 continue;
             };
             let Some(open) = rest.find('"') else { continue };
-            let Some(close) = rest[open + 1..].find('"') else { continue };
+            let Some(close) = rest[open + 1..].find('"') else {
+                continue;
+            };
             stack.push(dir.join(&rest[open + 1..open + 1 + close]));
         }
     }
@@ -93,8 +99,7 @@ fn globalset_occurrences(sla: &Path) -> usize {
     let slaspec = sla.with_extension("slaspec");
     let mut n = 0;
     for f in source_closure(&slaspec) {
-        let text = std::fs::read_to_string(&f)
-            .unwrap_or_else(|e| panic!("{}: {e}", f.display()));
+        let text = std::fs::read_to_string(&f).unwrap_or_else(|e| panic!("{}: {e}", f.display()));
         n += text.matches("globalset").count();
     }
     n
@@ -103,7 +108,9 @@ fn globalset_occurrences(sla: &Path) -> usize {
 fn has_commits(sla: &Path) -> bool {
     let bytes = std::fs::read(sla).unwrap_or_else(|e| panic!("{}: {e}", sla.display()));
     let mut engine = Sleigh::new(Box::new(DummyImg), Box::new(ContextInternal::new()));
-    engine.initialize_from_sla(&bytes).expect("decode vendored processor spec");
+    engine
+        .initialize_from_sla(&bytes)
+        .expect("decode vendored processor spec");
     engine.base().has_context_commits()
 }
 
@@ -163,7 +170,10 @@ fn context_commits_agree_with_the_globalset_sources() {
     for name in ["x86.sla", "x86-64.sla"] {
         let found = answers.iter().find(|(_, n, ..)| n == name);
         let (_, _, commits, occurrences) = found.unwrap_or_else(|| panic!("{name} not vendored"));
-        assert!(!commits && *occurrences == 0, "{name} must be free of context commits");
+        assert!(
+            !commits && *occurrences == 0,
+            "{name} must be free of context commits"
+        );
     }
 }
 
@@ -171,7 +181,10 @@ fn context_commits_agree_with_the_globalset_sources() {
 fn delay_slot_bytes_are_zero_off_the_delay_slot_languages() {
     let corpus = vendored_sla();
     for name in ["x86-64.sla", "AARCH64.sla"] {
-        let (_, _, path) = corpus.iter().find(|(_, n, _)| n == name).expect("required processor spec");
+        let (_, _, path) = corpus
+            .iter()
+            .find(|(_, n, _)| n == name)
+            .expect("required processor spec");
         let bytes = std::fs::read(path).expect("read .sla");
         let mut engine = Sleigh::new(Box::new(DummyImg), Box::new(ContextInternal::new()));
         engine.initialize_from_sla(&bytes).expect("decode .sla");
@@ -182,7 +195,9 @@ fn delay_slot_bytes_are_zero_off_the_delay_slot_languages() {
         );
     }
     // SPARC is the counter-example: a decode there folds the delay slot in.
-    let (_, _, path) = corpus.iter().find(|(_, n, _)| n == "SparcV9_32.sla")
+    let (_, _, path) = corpus
+        .iter()
+        .find(|(_, n, _)| n == "SparcV9_32.sla")
         .expect("required SPARC processor spec");
     let bytes = std::fs::read(path).expect("read .sla");
     let mut engine = Sleigh::new(Box::new(DummyImg), Box::new(ContextInternal::new()));

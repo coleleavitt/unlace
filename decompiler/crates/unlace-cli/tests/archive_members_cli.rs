@@ -21,7 +21,11 @@ fn archive() -> String {
 fn member(name: &[u8]) -> Vec<u8> {
     let bytes = std::fs::read(archive()).unwrap();
     let parsed = object::read::archive::ArchiveFile::parse(&*bytes).unwrap();
-    let found = parsed.members().map(|m| m.unwrap()).find(|m| m.name() == name).unwrap();
+    let found = parsed
+        .members()
+        .map(|m| m.unwrap())
+        .find(|m| m.name() == name)
+        .unwrap();
     found.data(&*bytes).unwrap().to_vec()
 }
 
@@ -67,7 +71,12 @@ fn functions_lists_every_object_member_under_its_name() {
     let members = doc["members"].as_array().unwrap();
     let named: Vec<_> = members
         .iter()
-        .map(|m| (m["member"].as_str().unwrap(), m["functions"]["functions"][0]["name"].as_str().unwrap()))
+        .map(|m| {
+            (
+                m["member"].as_str().unwrap(),
+                m["functions"]["functions"][0]["name"].as_str().unwrap(),
+            )
+        })
         .collect();
     assert_eq!(named, [("sq.o", "sq"), ("cube.o", "cube")]);
 }
@@ -76,7 +85,10 @@ fn functions_lists_every_object_member_under_its_name() {
 fn member_without_a_name_lists_the_members() {
     let (stdout, stderr, code) = kuna(&["functions", &archive(), "--member"]);
     assert_eq!(code, 0, "{stderr}");
-    let names: Vec<_> = stdout.lines().map(|l| l.split('\t').next().unwrap()).collect();
+    let names: Vec<_> = stdout
+        .lines()
+        .map(|l| l.split('\t').next().unwrap())
+        .collect();
     assert_eq!(names, ["sq.o", "notes.txt", "cube.o"]);
 
     let (stdout, _, code) = kuna(&["decompile", &archive(), "--member", "--json"]);
@@ -129,7 +141,10 @@ fn an_unselected_member_is_refused_with_the_member_names() {
     let object = common::fixture("entry_selectors_x86_64.o");
     let (_, stderr, code) = kuna(&["functions", &object, "--member", "sq.o"]);
     assert_eq!(code, 2);
-    assert!(stderr.contains("--member applies to an ar archive input"), "{stderr}");
+    assert!(
+        stderr.contains("--member applies to an ar archive input"),
+        "{stderr}"
+    );
 }
 
 #[test]
@@ -151,10 +166,19 @@ fn a_selected_member_leaves_no_staging_files() {
 #[test]
 fn blobs_reads_a_selected_member() {
     let dir = tempfile::tempdir().unwrap();
-    let image = common::repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/embedded_blobs_x86_64.so");
+    let image = common::repo_root()
+        .join("decompiler/crates/unlace-analysis/tests/fixtures/embedded_blobs_x86_64.so");
     let lib = dir.path().join("libb.a");
-    write_archive(&lib, "!<arch>\n", &[("blobs.so/", &std::fs::read(image).unwrap())]);
-    let (stdout, stderr, code) = kuna(&["blobs", &format!("{}:blobs.so", lib.display()), "--no-xrefs"]);
+    write_archive(
+        &lib,
+        "!<arch>\n",
+        &[("blobs.so/", &std::fs::read(image).unwrap())],
+    );
+    let (stdout, stderr, code) = kuna(&[
+        "blobs",
+        &format!("{}:blobs.so", lib.display()),
+        "--no-xrefs",
+    ]);
     assert_eq!(code, 0, "{stderr}");
     assert!(stdout.starts_with("# 5 embedded blobs in "), "{stdout}");
     assert!(stdout.contains("0x3c0\tpng\t69\t.rodata"), "{stdout}");
@@ -164,7 +188,11 @@ fn blobs_reads_a_selected_member() {
 fn a_name_stored_twice_is_selected_by_its_occurrence() {
     let scratch = tempfile::tempdir().unwrap();
     let lib = scratch.path().join("libdup.a");
-    write_archive(&lib, "!<arch>\n", &[("x.o/", &member(b"sq.o")), ("x.o/", &member(b"cube.o"))]);
+    write_archive(
+        &lib,
+        "!<arch>\n",
+        &[("x.o/", &member(b"sq.o")), ("x.o/", &member(b"cube.o"))],
+    );
     let lib = lib.to_str().unwrap();
 
     let (stdout, stderr, code) = kuna(&["functions", lib]);
@@ -173,7 +201,10 @@ fn a_name_stored_twice_is_selected_by_its_occurrence() {
 
     let (_, stderr, code) = kuna(&["decompile", lib, "--member", "x.o", "sq"]);
     assert_eq!(code, 2);
-    assert!(stderr.contains("2 members are named x.o; select one as x.o#1, x.o#2"), "{stderr}");
+    assert!(
+        stderr.contains("2 members are named x.o; select one as x.o#1, x.o#2"),
+        "{stderr}"
+    );
 
     let (stdout, stderr, code) = kuna(&["decompile", &format!("{lib}:x.o#2"), "cube"]);
     assert_eq!(code, 0, "{stderr}");

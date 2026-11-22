@@ -22,13 +22,24 @@ pub(crate) fn prefix(
     }
     let scopes = crate::kuna_funcptrnames::proven_scopes(fd, arch, target, usepoint, name)?;
     let target: Vec<_> = scopes.target_inner.iter().rev().cloned().collect();
-    let caller: Vec<_> = arch.symboltab.get_scope_path(scopes.caller).iter().skip(1)
-        .map(|&scope| arch.symboltab.scope(scope).get_display_name().to_string()).collect();
-    if !target.iter().chain(&caller).all(|scope| plain_module(scope)) {
+    let caller: Vec<_> = arch
+        .symboltab
+        .get_scope_path(scopes.caller)
+        .iter()
+        .skip(1)
+        .map(|&scope| arch.symboltab.scope(scope).get_display_name().to_string())
+        .collect();
+    if !target
+        .iter()
+        .chain(&caller)
+        .all(|scope| plain_module(scope))
+    {
         return None;
     }
-    let used = |candidate: &str| fd.get_scope_local()
-        .is_some_and(|local| local.local_name_used(candidate));
+    let used = |candidate: &str| {
+        fd.get_scope_local()
+            .is_some_and(|local| local.local_name_used(candidate))
+    };
     let mut path = if matches!(strategy, NamespaceStrategy::MinimalNamespaces)
         && target.starts_with(&caller)
     {
@@ -53,11 +64,35 @@ pub(crate) fn prefix(
 
 fn plain_module(name: &str) -> bool {
     let mut bytes = name.bytes();
-    bytes.next().is_some_and(|b| b.is_ascii_alphabetic() || b == b'_')
+    bytes
+        .next()
+        .is_some_and(|b| b.is_ascii_alphabetic() || b == b'_')
         && bytes.all(|b| b.is_ascii_alphanumeric() || b == b'_')
-        && !matches!(name, "crate" | "self" | "Self" | "super" | "_"
-            | "bool" | "char" | "str"
-            | "u8" | "u16" | "u32" | "u64" | "u128" | "usize"
-            | "i8" | "i16" | "i32" | "i64" | "i128" | "isize"
-            | "f16" | "f32" | "f64" | "f128")
+        && !matches!(
+            name,
+            "crate"
+                | "self"
+                | "Self"
+                | "super"
+                | "_"
+                | "bool"
+                | "char"
+                | "str"
+                | "u8"
+                | "u16"
+                | "u32"
+                | "u64"
+                | "u128"
+                | "usize"
+                | "i8"
+                | "i16"
+                | "i32"
+                | "i64"
+                | "i128"
+                | "isize"
+                | "f16"
+                | "f32"
+                | "f64"
+                | "f128"
+        )
 }

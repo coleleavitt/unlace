@@ -10,23 +10,30 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_image, ConsoleProgram};
-use unlace_console::inspect::{function_rows, FUNCTION_ROW_CAP};
-use unlace_console::project::{decompile_targets_with, DecompileOptions, FuncResult};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_image};
+use unlace_console::inspect::{FUNCTION_ROW_CAP, function_rows};
+use unlace_console::project::{DecompileOptions, FuncResult, decompile_targets_with};
 use unlace_decomp::kuna_srcmap::verify;
 use unlace_decomp::prettyprint::TokenKind;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn load(binary: &str, language: Option<&str>) -> ConsoleProgram {
     let specs = vec![repo_root().join("specs").to_string_lossy().into_owned()];
     let mut prog = bootstrap_from_image(binary, "", &specs)
         .expect("bootstrap fixture with built processor specs");
-    prog.arch_mut().apply_mode("aggressive").expect("aggressive mode");
+    prog.arch_mut()
+        .apply_mode("aggressive")
+        .expect("aggressive mode");
     if let Some(language) = language {
-        prog.arch_mut().set_print_language_checked(language).expect("output language");
+        prog.arch_mut()
+            .set_print_language_checked(language)
+            .expect("output language");
     }
     prog.commit_pending_analysis().expect("analysis commit");
     prog
@@ -49,18 +56,33 @@ fn batch(
 }
 
 fn check(binary: &str, language: Option<&str>) -> usize {
-    let ((_, plain), (prog, mapped)) =
-        (batch(binary, language, false), batch(binary, language, true));
+    let ((_, plain), (prog, mapped)) = (
+        batch(binary, language, false),
+        batch(binary, language, true),
+    );
     assert_eq!(plain.len(), mapped.len(), "{binary}: batch sizes differ");
     let mut checked = 0;
     for (p, m) in plain.iter().zip(&mapped) {
-        let at = format!("{binary} [{}] {} @ 0x{:x}", language.unwrap_or("c"), m.name, m.address);
+        let at = format!(
+            "{binary} [{}] {} @ 0x{:x}",
+            language.unwrap_or("c"),
+            m.name,
+            m.address
+        );
         assert_eq!(p.code, m.code, "{at}: asking for tokens changed the code");
-        let Some(code) = m.code.as_deref() else { continue };
-        let detail = m.detail.as_deref().unwrap_or_else(|| panic!("{at}: no detail"));
+        let Some(code) = m.code.as_deref() else {
+            continue;
+        };
+        let detail = m
+            .detail
+            .as_deref()
+            .unwrap_or_else(|| panic!("{at}: no detail"));
         assert_eq!(detail.tokens_error, None, "{at}:\n{code}");
         assert_eq!(verify(&detail.tokens, code), Ok(()), "{at}");
-        assert!(!detail.tokens.is_empty() || code.trim().is_empty(), "{at}: no tokens");
+        assert!(
+            !detail.tokens.is_empty() || code.trim().is_empty(),
+            "{at}: no tokens"
+        );
         let lines: BTreeMap<usize, BTreeSet<u64>> = m
             .line_mappings
             .iter()
@@ -83,12 +105,20 @@ fn check(binary: &str, language: Option<&str>) -> usize {
                 );
             }
         }
-        let (rows, _) = function_rows(&prog, m.byte_address, m.size.max(0) as u64, FUNCTION_ROW_CAP);
+        let (rows, _) = function_rows(
+            &prog,
+            m.byte_address,
+            m.size.max(0) as u64,
+            FUNCTION_ROW_CAP,
+        );
         if let (Some(first), Some(last)) = (rows.first(), rows.last()) {
             let span = first.addr..last.addr + last.size;
             let starts: BTreeSet<u64> = rows.iter().map(|r| r.addr).collect();
             for address in lines.values().flatten().filter(|a| span.contains(a)) {
-                assert!(starts.contains(address), "{at}: 0x{address:x} starts no listed row");
+                assert!(
+                    starts.contains(address),
+                    "{at}: 0x{address:x} starts no listed row"
+                );
             }
         }
         checked += 1;
@@ -124,23 +154,49 @@ fn sample_tokens_name_callees_parameters_and_values() {
     let root = repo_root();
     let path = root.join("integrations/web/test/fixtures/sample.elf");
     let (_, out) = batch(path.to_str().unwrap(), None, true);
-    let find = |name: &str| out.iter().find(|f| f.name == name).unwrap_or_else(|| panic!("{name}"));
+    let find = |name: &str| {
+        out.iter()
+            .find(|f| f.name == name)
+            .unwrap_or_else(|| panic!("{name}"))
+    };
     let (main, sum_to) = (find("main"), find("sum_to"));
     let tokens = &main.detail.as_deref().expect("detail").tokens;
-    let first = tokens.iter().find(|t| t.kind == TokenKind::FuncName).expect("main's name");
-    assert_eq!((first.line, first.text.as_str(), first.decl), (1, "main", Some("function")));
+    let first = tokens
+        .iter()
+        .find(|t| t.kind == TokenKind::FuncName)
+        .expect("main's name");
+    assert_eq!(
+        (first.line, first.text.as_str(), first.decl),
+        (1, "main", Some("function"))
+    );
     let argc = tokens.iter().find(|t| t.text == "argc").expect("argc");
     assert_eq!((argc.line, argc.decl), (1, Some("param")));
-    assert!(argc.var.is_some_and(|i| main.variables[i].is_param), "{argc:?}");
-    let call = tokens.iter().find(|t| t.text == "sum_to").expect("the call");
+    assert!(
+        argc.var.is_some_and(|i| main.variables[i].is_param),
+        "{argc:?}"
+    );
+    let call = tokens
+        .iter()
+        .find(|t| t.text == "sum_to")
+        .expect("the call");
     assert_eq!(call.callee, Some(sum_to.address));
     assert!(call.address.is_some());
-    assert!(tokens.iter().any(|t| t.kind == TokenKind::Value && t.text == "3"));
+    assert!(
+        tokens
+            .iter()
+            .any(|t| t.kind == TokenKind::Value && t.text == "3")
+    );
     let sum_tokens = &sum_to.detail.as_deref().expect("detail").tokens;
-    let acc = sum_tokens.iter().find(|t| t.text == "acc" && t.decl == Some("local")).expect("acc");
+    let acc = sum_tokens
+        .iter()
+        .find(|t| t.text == "acc" && t.decl == Some("local"))
+        .expect("acc");
     assert_eq!(sum_to.variables[acc.var.expect("acc row")].name, "acc");
     for comment in sum_tokens.iter().filter(|t| t.kind == TokenKind::Comment) {
-        assert_eq!(comment.address, None, "a stack comment names no instruction: {comment:?}");
+        assert_eq!(
+            comment.address, None,
+            "a stack comment names no instruction: {comment:?}"
+        );
     }
 }
 
@@ -155,25 +211,53 @@ fn an_indent_increment_survives_every_render_of_a_batch() {
         let mut prog = load(path.to_str().expect("UTF-8 fixture path"), None);
         prog.arch_mut().print_mut().set_indent_increment(4);
         let targets = prog.function_entries_executable();
-        let opts = DecompileOptions { want_provenance, want_tokens, ..DecompileOptions::default() };
+        let opts = DecompileOptions {
+            want_provenance,
+            want_tokens,
+            ..DecompileOptions::default()
+        };
         decompile_targets_with(&mut prog, targets, &opts)
     };
-    let (plain, provenance, tokens) =
-        (render(false, false), render(true, false), render(false, true));
+    let (plain, provenance, tokens) = (
+        render(false, false),
+        render(true, false),
+        render(false, true),
+    );
     let bodies = plain.iter().filter(|f| f.code.is_some()).count();
     assert!(bodies >= 2, "the batch must hold more than one function");
     for (p, (q, t)) in plain.iter().zip(provenance.iter().zip(&tokens)) {
         let code = p.code.as_deref().unwrap_or("");
-        assert_eq!(Some(code), q.code.as_deref(), "{}: provenance changed the indent", p.name);
-        assert_eq!(Some(code), t.code.as_deref(), "{}: tokens changed the indent", p.name);
+        assert_eq!(
+            Some(code),
+            q.code.as_deref(),
+            "{}: provenance changed the indent",
+            p.name
+        );
+        assert_eq!(
+            Some(code),
+            t.code.as_deref(),
+            "{}: tokens changed the indent",
+            p.name
+        );
         for line in code.lines().filter(|l| l.starts_with(' ')) {
             let indent = line.len() - line.trim_start_matches(' ').len();
-            assert_eq!(indent % 4, 0, "{}: {line:?} is not indented by fours", p.name);
+            assert_eq!(
+                indent % 4,
+                0,
+                "{}: {line:?} is not indented by fours",
+                p.name
+            );
         }
         if let Some(detail) = t.detail.as_deref() {
             assert_eq!(detail.tokens_error, None, "{}", t.name);
         }
     }
-    let main = plain.iter().find(|f| f.name == "main").and_then(|f| f.code.as_deref());
-    assert!(main.is_some_and(|c| c.contains("\n    long v1;")), "{main:?}");
+    let main = plain
+        .iter()
+        .find(|f| f.name == "main")
+        .and_then(|f| f.code.as_deref());
+    assert!(
+        main.is_some_and(|c| c.contains("\n    long v1;")),
+        "{main:?}"
+    );
 }

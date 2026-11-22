@@ -14,13 +14,26 @@ fn an_unchecked_table_ends_at_the_functions_next_table() {
         out
     };
     let unchecked = decompile("unchecked", &[]);
-    assert!(unchecked.contains("switch(pick(a0) & 0xffffffff) {"), "{unchecked}");
+    assert!(
+        unchecked.contains("switch(pick(a0) & 0xffffffff) {"),
+        "{unchecked}"
+    );
     assert_eq!(unchecked.matches("case ").count(), 3, "{unchecked}");
-    assert_eq!(unchecked.matches("// jump-as-call").count(), 1, "the last table has no bound: {unchecked}");
+    assert_eq!(
+        unchecked.matches("// jump-as-call").count(),
+        1,
+        "the last table has no bound: {unchecked}"
+    );
     let off = decompile("unchecked", &["--option", "switchextent", "off"]);
-    assert!(!off.contains("switch(") && off.contains("// jump-as-call"), "{off}");
+    assert!(
+        !off.contains("switch(") && off.contains("// jump-as-call"),
+        "{off}"
+    );
     let last = decompile("last", &[]);
-    assert!(!last.contains("switch(") && last.contains("dat_1116e["), "bytes_last is not a table: {last}");
+    assert!(
+        !last.contains("switch(") && last.contains("dat_1116e["),
+        "bytes_last is not a table: {last}"
+    );
     let entering = decompile("entering", &[]);
     assert_eq!(entering.matches("case ").count(), 3, "{entering}");
 }
@@ -32,7 +45,8 @@ fn an_unchecked_table_ends_at_the_functions_next_table() {
 fn the_reference_walk_files_a_jump_to_each_case() {
     let binary = common::fixture("switchextent_aarch64");
     let jumps = |from: &str| {
-        let (out, stderr, rc) = common::run_kuna(&["xrefs", binary.as_str(), "--from", from, "--json"]);
+        let (out, stderr, rc) =
+            common::run_kuna(&["xrefs", binary.as_str(), "--from", from, "--json"]);
         assert_eq!(rc, 0, "{stderr}");
         let doc: serde_json::Value = serde_json::from_str(&out).unwrap();
         let mut to: Vec<String> = doc["xrefs"]
@@ -45,9 +59,21 @@ fn the_reference_walk_files_a_jump_to_each_case() {
         to.sort();
         to
     };
-    assert_eq!(jumps("0x1001c"), ["0x10020", "0x10028", "0x10030", "0x10038"], "guarded");
-    assert_eq!(jumps("0x1006c"), ["0x10070", "0x10078", "0x10080"], "entering");
-    assert_eq!(jumps("0x100b8"), ["0x100bc", "0x100c4", "0x100cc"], "unchecked, first table");
+    assert_eq!(
+        jumps("0x1001c"),
+        ["0x10020", "0x10028", "0x10030", "0x10038"],
+        "guarded"
+    );
+    assert_eq!(
+        jumps("0x1006c"),
+        ["0x10070", "0x10078", "0x10080"],
+        "entering"
+    );
+    assert_eq!(
+        jumps("0x100b8"),
+        ["0x100bc", "0x100c4", "0x100cc"],
+        "unchecked, first table"
+    );
     assert!(jumps("0x100ec").is_empty(), "unchecked, last table");
     assert!(jumps("0x10138").is_empty(), "last");
 }

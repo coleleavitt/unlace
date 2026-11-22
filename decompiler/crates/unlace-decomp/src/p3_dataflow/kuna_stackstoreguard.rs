@@ -2,9 +2,9 @@
 //! every recorded indexed byte STORE guards a constant-initialized slot, and an
 //! indexed STORE of any width guards a written slot inside the array it may write.
 
+use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::types::int4;
-use std::rc::Rc;
 
 pub(super) fn enabled(
     fd: &crate::funcdata::Funcdata,
@@ -36,7 +36,9 @@ pub(super) fn frame_unresolved(
             fd.obank().get(op).is_some_and(|o| {
                 o.code() == OpCode::CPUI_STORE
                     && !o.is_dead()
-                    && o.get_in(2).and_then(|v| fd.vbank().get(v)).is_some_and(|v| v.get_size() == 1)
+                    && o.get_in(2)
+                        .and_then(|v| fd.vbank().get(v))
+                        .is_some_and(|v| v.get_size() == 1)
             })
         })
         .collect();
@@ -63,7 +65,9 @@ pub(super) fn indexed_enabled(
                 .get(vn)
                 .and_then(|v| v.get_def())
                 .and_then(|d| fd.obank().get(d))
-                .is_some_and(|d| !matches!(d.code(), OpCode::CPUI_INDIRECT | OpCode::CPUI_MULTIEQUAL))
+                .is_some_and(|d| {
+                    !matches!(d.code(), OpCode::CPUI_INDIRECT | OpCode::CPUI_MULTIEQUAL)
+                })
         })
 }
 
@@ -79,9 +83,9 @@ fn store_bound(
     guard: &super::heritage::LoadGuard,
     bounds: &mut StoreBounds,
 ) -> Option<(u64, u64)> {
-    *bounds
-        .entry(guard.op)
-        .or_insert_with(|| crate::p6_variables::kuna_storereach::store_window(fd, guard.op, &guard.spc))
+    *bounds.entry(guard.op).or_insert_with(|| {
+        crate::p6_variables::kuna_storereach::store_window(fd, guard.op, &guard.spc)
+    })
 }
 
 /// Can this STORE overlap `[lo, lo + size)`? Unanalyzed guards may write
@@ -193,14 +197,19 @@ pub(super) fn prune_indexed(
         let (Some(input), Some(output)) = (op.get_in(0), op.get_out()) else {
             continue;
         };
-        let Some((lo, size)) = fd.vbank().get(output).map(|v| (v.get_offset(), v.get_size())) else {
+        let Some((lo, size)) = fd
+            .vbank()
+            .get(output)
+            .map(|v| (v.get_offset(), v.get_size()))
+        else {
             continue;
         };
         let bound = store_bound(fd, guard, bounds);
         if window_overlaps(guard, store_size, bound, lo, size) {
             continue;
         }
-        fd.total_replace(output, input).expect("remove indexed store guard");
+        fd.total_replace(output, input)
+            .expect("remove indexed store guard");
         fd.op_destroy(indirect);
     }
 }
@@ -245,21 +254,34 @@ pub(super) fn keeps_store_indirect_whole(
 ) -> bool {
     use unlace_num::opcodes::OpCode;
     if !fd.stack_store_guard()
-        || fd.obank().get(store).is_none_or(|op| op.code() != OpCode::CPUI_STORE)
+        || fd
+            .obank()
+            .get(store)
+            .is_none_or(|op| op.code() != OpCode::CPUI_STORE)
     {
         return false;
     }
     let Some(slot) = fd.vbank().get(vn) else {
         return false;
     };
-    fd.get_arch().manage().get_stack_space().is_some_and(|s| Rc::ptr_eq(s, slot.get_space()))
+    fd.get_arch()
+        .manage()
+        .get_stack_space()
+        .is_some_and(|s| Rc::ptr_eq(s, slot.get_space()))
         && slot.descend_iter().any(|op| {
-            let Some(out) = fd.obank().get(op).and_then(|o| o.get_out()).and_then(|o| fd.vbank().get(o)) else {
+            let Some(out) = fd
+                .obank()
+                .get(op)
+                .and_then(|o| o.get_out())
+                .and_then(|o| fd.vbank().get(o))
+            else {
                 return false;
             };
             out.get_size() > 1
                 && out.descend_iter().any(|use_op| {
-                    fd.obank().get(use_op).is_some_and(|u| u.code() != OpCode::CPUI_INDIRECT)
+                    fd.obank()
+                        .get(use_op)
+                        .is_some_and(|u| u.code() != OpCode::CPUI_INDIRECT)
                 })
         })
 }

@@ -164,7 +164,11 @@ fn routine_names_must_be_fortran_identifiers() {
         let mut code = Vec::new();
         routine(&mut code, 0x10001000, name);
         code.extend([3, 0, 0, 0, 0, 0x80]);
-        assert_eq!(!decode(&record(&["x.for"], &code)).routines.is_empty(), accepted, "{name}");
+        assert_eq!(
+            !decode(&record(&["x.for"], &code)).routines.is_empty(),
+            accepted,
+            "{name}"
+        );
     }
     let mut code = Vec::new();
     routine(&mut code, 0x10001000, &"Z".repeat(128));

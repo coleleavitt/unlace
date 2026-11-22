@@ -20,15 +20,15 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, addrspace_flags, spacetype};
 
 use unlace_decomp::capability::{CapabilityRegistry, NamedCapability};
 use unlace_decomp::libdecomp::start_decompiler_library;
 
+use unlace_base::error::{KunaError, KunaResult};
 use unlace_sleigh::globalcontext::ContextInternal;
 use unlace_sleigh::loadimage::LoadImage;
 use unlace_sleigh::sleigh::Sleigh;
-use unlace_base::error::{KunaError, KunaResult};
 
 use unlace_decomp::architecture::Architecture;
 
@@ -156,7 +156,10 @@ fn find_capability_by_file_first_match_after_sort() {
     reg.register(Box::new(NamedCapability::new("raw", true, None)));
     reg.register(Box::new(NamedCapability::new("specific", true, None)));
     // Before sort: raw is first, so raw would win — that's the bug sort fixes.
-    assert_eq!(reg.find_capability_by_file("/x").map(|c| c.get_name()), Some("raw"));
+    assert_eq!(
+        reg.find_capability_by_file("/x").map(|c| c.get_name()),
+        Some("raw")
+    );
     reg.sort_capabilities();
     // After sort raw is last, so the specific matcher wins.
     assert_eq!(

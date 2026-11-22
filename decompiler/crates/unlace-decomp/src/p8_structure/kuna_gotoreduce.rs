@@ -51,9 +51,9 @@ use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
-use crate::block::{block_flags, BlockType};
-use crate::funcdata::Funcdata;
+use crate::block::{BlockType, block_flags};
 use crate::context::BlockId;
+use crate::funcdata::Funcdata;
 
 use unlace_base::marshal::ElementId;
 
@@ -108,7 +108,9 @@ pub struct ActionGotoReduce {
 impl ActionGotoReduce {
     /// Construct in group `g`.
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionGotoReduce { base: ActionBase::new(0, "gotoreduce", g) })
+        Box::new(ActionGotoReduce {
+            base: ActionBase::new(0, "gotoreduce", g),
+        })
     }
 }
 
@@ -123,7 +125,9 @@ impl Action for ActionGotoReduce {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionGotoReduce { base: self.base.clone() }))
+        Some(Box::new(ActionGotoReduce {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data.get_arch().goto_reduce.return_tails() {
@@ -272,9 +276,12 @@ impl OptionGotoReduce {
             _ => {
                 return Err(KunaError::parse(
                     "Must specify gotoreduce as 'off', 'return' or 'on'",
-                ))
+                ));
             }
         };
-        Ok((mode, format!("Return-tail goto reduction set to {}", mode.as_str())))
+        Ok((
+            mode,
+            format!("Return-tail goto reduction set to {}", mode.as_str()),
+        ))
     }
 }

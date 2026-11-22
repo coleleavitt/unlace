@@ -8,7 +8,7 @@
 use std::rc::Rc;
 
 use unlace_base::marshal::{Decoder, IdRegistry, XmlDecode};
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, UniqueSpace};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, UniqueSpace, addrspace_flags, spacetype};
 
 use super::*;
 use crate::inject_sleigh::PcodeInjectLibrarySleigh;
@@ -39,7 +39,12 @@ impl TestArch {
             1,
             1,
         ));
-        TestArch { user_op_names, lib: PcodeInjectLibrarySleigh::new(0x1000), uniq, code }
+        TestArch {
+            user_op_names,
+            lib: PcodeInjectLibrarySleigh::new(0x1000),
+            uniq,
+            code,
+        }
     }
 }
 
@@ -70,8 +75,16 @@ impl UseropArchitecture for TestArch {
     }
     fn payload_io_sizes(&self, injectid: int4) -> KunaResult<(int4, int4, int4, int4)> {
         let core = self.lib.get_payload(injectid).core();
-        let in0 = if core.size_input() > 0 { core.get_input(0).get_size() as int4 } else { 0 };
-        let in1 = if core.size_input() > 1 { core.get_input(1).get_size() as int4 } else { 0 };
+        let in0 = if core.size_input() > 0 {
+            core.get_input(0).get_size() as int4
+        } else {
+            0
+        };
+        let in1 = if core.size_input() > 1 {
+            core.get_input(1).get_size() as int4
+        } else {
+            0
+        };
         Ok((core.size_output(), core.size_input(), in0, in1))
     }
 }
@@ -143,10 +156,22 @@ fn internal_string_op_is_display_string() {
 
 #[test]
 fn append_size_matches_cpp() {
-    assert_eq!(UserPcodeOp::append_size(b"read_volatile", 1), b"read_volatile_1");
-    assert_eq!(UserPcodeOp::append_size(b"read_volatile", 2), b"read_volatile_2");
-    assert_eq!(UserPcodeOp::append_size(b"read_volatile", 4), b"read_volatile_4");
-    assert_eq!(UserPcodeOp::append_size(b"read_volatile", 8), b"read_volatile_8");
+    assert_eq!(
+        UserPcodeOp::append_size(b"read_volatile", 1),
+        b"read_volatile_1"
+    );
+    assert_eq!(
+        UserPcodeOp::append_size(b"read_volatile", 2),
+        b"read_volatile_2"
+    );
+    assert_eq!(
+        UserPcodeOp::append_size(b"read_volatile", 4),
+        b"read_volatile_4"
+    );
+    assert_eq!(
+        UserPcodeOp::append_size(b"read_volatile", 8),
+        b"read_volatile_8"
+    );
     // odd size -> "_<dec>"
     assert_eq!(UserPcodeOp::append_size(b"x", 3), b"x_3");
     assert_eq!(UserPcodeOp::append_size(b"x", 16), b"x_16");
@@ -154,7 +179,10 @@ fn append_size_matches_cpp() {
 
 #[test]
 fn datatype_userop_pushes_only_nonnull_inputs() {
-    let t = Rc::new(crate::dtype::Datatype::new(4, crate::dtype::type_metatype::TYPE_INT));
+    let t = Rc::new(crate::dtype::Datatype::new(
+        4,
+        crate::dtype::type_metatype::TYPE_INT,
+    ));
     let op = UserPcodeOp::new_datatype(
         b"builtin_memcpy",
         BUILTIN_MEMCPY as int4,
@@ -199,24 +227,35 @@ fn initialize_assigns_unspecialized_by_index_skipping_blanks() {
 fn register_op_conflicting_index_for_same_name_errors() {
     let mut mgr = UserOpManage::new();
     // op "a" at index 0
-    mgr.register_op(UserPcodeOp::new_unspecialized(b"a", 0)).unwrap();
+    mgr.register_op(UserPcodeOp::new_unspecialized(b"a", 0))
+        .unwrap();
     // re-register "a" at a different index -> conflict
-    let err = mgr.register_op(UserPcodeOp::new_unspecialized(b"a", 1)).unwrap_err();
-    assert!(err.to_string().contains("Conflicting indices for userop name a"));
+    let err = mgr
+        .register_op(UserPcodeOp::new_unspecialized(b"a", 1))
+        .unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("Conflicting indices for userop name a")
+    );
 }
 
 #[test]
 fn register_op_same_index_different_name_errors() {
     let mut mgr = UserOpManage::new();
-    mgr.register_op(UserPcodeOp::new_unspecialized(b"a", 0)).unwrap();
-    let err = mgr.register_op(UserPcodeOp::new_unspecialized(b"b", 0)).unwrap_err();
+    mgr.register_op(UserPcodeOp::new_unspecialized(b"a", 0))
+        .unwrap();
+    let err = mgr
+        .register_op(UserPcodeOp::new_unspecialized(b"b", 0))
+        .unwrap_err();
     assert!(err.to_string().contains("User op b has same index as a"));
 }
 
 #[test]
 fn register_op_negative_index_errors() {
     let mut mgr = UserOpManage::new();
-    let err = mgr.register_op(UserPcodeOp::new_unspecialized(b"x", -1)).unwrap_err();
+    let err = mgr
+        .register_op(UserPcodeOp::new_unspecialized(b"x", -1))
+        .unwrap_err();
     assert!(err.to_string().contains("UserOp not assigned an index"));
 }
 
@@ -243,7 +282,9 @@ fn decode_call_other_fixup_overrides_unspecialized() {
 
     let mut dec = XmlDecode::new(&mgr_spaces, &reg);
     dec.ingest_stream(xml).unwrap();
-    userops.decode_call_other_fixup(&mut dec, &mut arch).unwrap();
+    userops
+        .decode_call_other_fixup(&mut dec, &mut arch)
+        .unwrap();
 
     // The userop is now Injected, keeping setISAMode's index (0).
     let op = userops.get_op_by_name(b"setISAMode").unwrap();
@@ -265,8 +306,13 @@ fn decode_call_other_fixup_unknown_userop_errors() {
     let mut arch = TestArch::new(vec![]); // no userops registered
     let mut dec = XmlDecode::new(&mgr_spaces, &reg);
     dec.ingest_stream(xml).unwrap();
-    let err = userops.decode_call_other_fixup(&mut dec, &mut arch).unwrap_err();
-    assert!(err.to_string().contains("Unknown userop name in <callotherfixup>: ghost"));
+    let err = userops
+        .decode_call_other_fixup(&mut dec, &mut arch)
+        .unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("Unknown userop name in <callotherfixup>: ghost")
+    );
 }
 
 // --- decode: <segmentop> ---------------------------------------------------
@@ -309,8 +355,15 @@ fn decode_segmentop_reads_sizes_and_constresolve() {
     assert_eq!(seg.constresolve.offset, 0x10);
     assert_eq!(seg.constresolve.size, 2);
     // registered in the per-space table.
-    assert_eq!(userops.num_segment_ops() as usize, mgr_spaces.get_space(1).unwrap().get_index() as usize + 1);
-    assert!(userops.get_segment_op(mgr_spaces.get_space(1).unwrap().get_index()).is_some());
+    assert_eq!(
+        userops.num_segment_ops() as usize,
+        mgr_spaces.get_space(1).unwrap().get_index() as usize + 1
+    );
+    assert!(
+        userops
+            .get_segment_op(mgr_spaces.get_space(1).unwrap().get_index())
+            .is_some()
+    );
 }
 
 #[test]
@@ -328,7 +381,10 @@ fn decode_segmentop_missing_space_errors() {
     let mut dec = XmlDecode::new(&mgr_spaces, &reg);
     dec.ingest_stream(xml).unwrap();
     let err = userops.decode_segment_op(&mut dec, &mut arch).unwrap_err();
-    assert!(err.to_string().contains("<segmentop> expecting space attribute"));
+    assert!(
+        err.to_string()
+            .contains("<segmentop> expecting space attribute")
+    );
 }
 
 // --- decode: <jumpassist> --------------------------------------------------

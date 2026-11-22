@@ -29,7 +29,7 @@ use unlace_num::opcodes::OpCode;
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 
 #[derive(Default)]
@@ -52,22 +52,42 @@ impl Votes {
     /// The vote of `op` on its output (`slot == None`) or input `slot`.
     fn op(&mut self, data: &Funcdata, op: OpId, slot: Option<i32>) {
         use OpCode::*;
-        let Some(o) = data.obank().get(op) else { return };
+        let Some(o) = data.obank().get(op) else {
+            return;
+        };
         match o.code() {
-            CPUI_INT_SLESS | CPUI_INT_SLESSEQUAL | CPUI_INT_SDIV | CPUI_INT_SREM | CPUI_INT_SCARRY | CPUI_INT_SBORROW => self.signed += 2,
+            CPUI_INT_SLESS | CPUI_INT_SLESSEQUAL | CPUI_INT_SDIV | CPUI_INT_SREM
+            | CPUI_INT_SCARRY | CPUI_INT_SBORROW => self.signed += 2,
             CPUI_INT_SEXT if slot == Some(0) => self.signed += 2,
             CPUI_INT_SRIGHT if slot != Some(1) => self.signed += 2,
-            CPUI_INT_LESS | CPUI_INT_LESSEQUAL | CPUI_INT_DIV | CPUI_INT_REM | CPUI_INT_CARRY => self.unsigned += 2,
+            CPUI_INT_LESS | CPUI_INT_LESSEQUAL | CPUI_INT_DIV | CPUI_INT_REM | CPUI_INT_CARRY => {
+                self.unsigned += 2
+            }
             CPUI_INT_ZEXT if slot == Some(0) => self.unsigned += 1,
             CPUI_INT_RIGHT if slot != Some(1) => self.unsigned += 1,
-            CPUI_INT_ADD | CPUI_INT_SUB | CPUI_INT_MULT | CPUI_INT_2COMP | CPUI_INT_LEFT | CPUI_INT_AND | CPUI_INT_OR
-            | CPUI_INT_XOR | CPUI_INT_NEGATE | CPUI_INT_EQUAL | CPUI_INT_NOTEQUAL | CPUI_INT_ZEXT | CPUI_INT_SEXT
-            | CPUI_INT_RIGHT | CPUI_INT_SRIGHT => self.numeric += 1,
-            CPUI_FLOAT_ADD | CPUI_FLOAT_SUB | CPUI_FLOAT_MULT | CPUI_FLOAT_DIV | CPUI_FLOAT_LESS | CPUI_FLOAT_LESSEQUAL
-            | CPUI_FLOAT_EQUAL | CPUI_FLOAT_NOTEQUAL | CPUI_FLOAT_NEG | CPUI_FLOAT_ABS | CPUI_FLOAT_SQRT
-            | CPUI_FLOAT_FLOAT2FLOAT | CPUI_FLOAT_TRUNC => self.float += 2,
+            CPUI_INT_ADD | CPUI_INT_SUB | CPUI_INT_MULT | CPUI_INT_2COMP | CPUI_INT_LEFT
+            | CPUI_INT_AND | CPUI_INT_OR | CPUI_INT_XOR | CPUI_INT_NEGATE | CPUI_INT_EQUAL
+            | CPUI_INT_NOTEQUAL | CPUI_INT_ZEXT | CPUI_INT_SEXT | CPUI_INT_RIGHT
+            | CPUI_INT_SRIGHT => self.numeric += 1,
+            CPUI_FLOAT_ADD
+            | CPUI_FLOAT_SUB
+            | CPUI_FLOAT_MULT
+            | CPUI_FLOAT_DIV
+            | CPUI_FLOAT_LESS
+            | CPUI_FLOAT_LESSEQUAL
+            | CPUI_FLOAT_EQUAL
+            | CPUI_FLOAT_NOTEQUAL
+            | CPUI_FLOAT_NEG
+            | CPUI_FLOAT_ABS
+            | CPUI_FLOAT_SQRT
+            | CPUI_FLOAT_FLOAT2FLOAT
+            | CPUI_FLOAT_TRUNC => self.float += 2,
             CPUI_COPY => {
-                let other = if slot.is_none() { o.get_in(0) } else { o.get_out() };
+                let other = if slot.is_none() {
+                    o.get_in(0)
+                } else {
+                    o.get_out()
+                };
                 if let Some(t) = other.and_then(|v| data.vbank().get(v)) {
                     self.integer(t.get_type(), 3);
                 }
@@ -80,12 +100,18 @@ impl Votes {
 /// Does `vn` flow into a RETURN, directly or through copies, joins into a
 /// register pair, extensions and truncations?
 fn reaches_return(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
-    data.descend_snapshot(vn).into_iter().any(|d| match data.obank().get(d).map(|o| (o.code(), o.get_out())) {
-        Some((OpCode::CPUI_RETURN, _)) => true,
-        Some((OpCode::CPUI_COPY | OpCode::CPUI_PIECE | OpCode::CPUI_INT_ZEXT | OpCode::CPUI_SUBPIECE, Some(out))) if depth > 0 => {
-            reaches_return(data, out, depth - 1)
+    data.descend_snapshot(vn).into_iter().any(|d| {
+        match data.obank().get(d).map(|o| (o.code(), o.get_out())) {
+            Some((OpCode::CPUI_RETURN, _)) => true,
+            Some((
+                OpCode::CPUI_COPY
+                | OpCode::CPUI_PIECE
+                | OpCode::CPUI_INT_ZEXT
+                | OpCode::CPUI_SUBPIECE,
+                Some(out),
+            )) if depth > 0 => reaches_return(data, out, depth - 1),
+            _ => false,
         }
-        _ => false,
     })
 }
 
@@ -98,7 +124,10 @@ fn vote(data: &Funcdata, instances: &[VarnodeId], size: i32) -> Option<Rc<Dataty
             v.op(data, def, None);
         }
         for d in data.descend_snapshot(vn) {
-            let slot = data.obank().get(d).and_then(|o| (0..o.num_input()).find(|&i| o.get_in(i) == Some(vn)));
+            let slot = data
+                .obank()
+                .get(d)
+                .and_then(|o| (0..o.num_input()).find(|&i| o.get_in(i) == Some(vn)));
             v.op(data, d, slot);
         }
     }
@@ -110,7 +139,11 @@ fn vote(data: &Funcdata, instances: &[VarnodeId], size: i32) -> Option<Rc<Dataty
     if v.signed == 0 && v.unsigned == 0 {
         return None;
     }
-    let meta = if v.unsigned > v.signed { type_metatype::TYPE_UINT } else { type_metatype::TYPE_INT };
+    let meta = if v.unsigned > v.signed {
+        type_metatype::TYPE_UINT
+    } else {
+        type_metatype::TYPE_INT
+    };
     types.get_base(size, meta).ok()
 }
 
@@ -121,7 +154,9 @@ pub struct ActionTypeVote {
 
 impl ActionTypeVote {
     pub fn boxed(g: &str) -> Box<dyn Action> {
-        Box::new(ActionTypeVote { base: ActionBase::new(0, "typevote", g) })
+        Box::new(ActionTypeVote {
+            base: ActionBase::new(0, "typevote", g),
+        })
     }
 }
 
@@ -133,7 +168,11 @@ impl Action for ActionTypeVote {
         &mut self.base
     }
     fn clone_filtered(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Action>> {
-        grouplist.contains(self.get_group()).then(|| Box::new(ActionTypeVote { base: self.base.clone() }) as Box<dyn Action>)
+        grouplist.contains(self.get_group()).then(|| {
+            Box::new(ActionTypeVote {
+                base: self.base.clone(),
+            }) as Box<dyn Action>
+        })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data.get_arch().type_vote {
@@ -142,24 +181,42 @@ impl Action for ActionTypeVote {
         let mut seen = std::collections::BTreeSet::new();
         let all: Vec<VarnodeId> = data.vbank().iter_loc().collect();
         for vn in all {
-            let Some(h) = data.vbank().get(vn).and_then(|v| v.get_high()) else { continue };
+            let Some(h) = data.vbank().get(vn).and_then(|v| v.get_high()) else {
+                continue;
+            };
             if !seen.insert(h) {
                 continue;
             }
-            let Some(ht) = data.high_get_type(vn) else { continue };
-            if ht.get_metatype() != type_metatype::TYPE_UNKNOWN || !matches!(ht.get_size(), 1 | 2 | 4 | 8) {
+            let Some(ht) = data.high_get_type(vn) else {
+                continue;
+            };
+            if ht.get_metatype() != type_metatype::TYPE_UNKNOWN
+                || !matches!(ht.get_size(), 1 | 2 | 4 | 8)
+            {
                 continue;
             }
-            let Some(hv) = data.high_bank().get(h) else { continue };
-            let instances: Vec<VarnodeId> = (0..hv.num_instances()).map(|i| hv.get_instance(i)).collect();
-            if instances.iter().any(|&i| data.vbank().get(i).is_none_or(|n| n.is_type_lock() || n.is_constant() || n.get_size() != ht.get_size())) {
+            let Some(hv) = data.high_bank().get(h) else {
+                continue;
+            };
+            let instances: Vec<VarnodeId> = (0..hv.num_instances())
+                .map(|i| hv.get_instance(i))
+                .collect();
+            if instances.iter().any(|&i| {
+                data.vbank().get(i).is_none_or(|n| {
+                    n.is_type_lock() || n.is_constant() || n.get_size() != ht.get_size()
+                })
+            }) {
                 continue;
             }
-            let input = instances.iter().any(|&i| data.vbank().get(i).is_some_and(|n| n.is_input()));
+            let input = instances
+                .iter()
+                .any(|&i| data.vbank().get(i).is_some_and(|n| n.is_input()));
             if instances.iter().any(|&i| reaches_return(data, i, 3)) {
                 continue;
             }
-            let Some(ct) = vote(data, &instances, ht.get_size()) else { continue };
+            let Some(ct) = vote(data, &instances, ht.get_size()) else {
+                continue;
+            };
             if input && ct.get_metatype() != type_metatype::TYPE_UINT {
                 continue;
             }

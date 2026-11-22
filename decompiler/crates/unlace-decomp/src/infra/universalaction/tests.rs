@@ -2,18 +2,43 @@
 //! `tests/universalaction_listing.rs` compares its listing with the kuna snapshot.
 
 use super::*;
-use crate::action::{build_default_groups, ActionDatabase};
+use crate::action::{ActionDatabase, build_default_groups};
 
 /// The C++ `decompile` group members (same list as `build_default_groups`).
 const DECOMPILE_GROUPS: &[&str] = &[
-    "base", "protorecovery", "protorecovery_a", "deindirect", "localrecovery",
-    "deadcode", "typerecovery", "stackptrflow",
-    "blockrecovery", "stackvars", "deadcontrolflow", "switchnorm",
-    "cleanup", "splitcopy", "splitpointer", "merge", "dynamic", "casts", "analysis",
-    "canonicalcompare", "presentcompare",
-    "fixateglobals", "fixateproto", "constsequence", "bitfields",
-    "segment", "returnsplit", "nodejoin", "doubleload", "doubleprecis",
-    "unreachable", "subvar", "floatprecision",
+    "base",
+    "protorecovery",
+    "protorecovery_a",
+    "deindirect",
+    "localrecovery",
+    "deadcode",
+    "typerecovery",
+    "stackptrflow",
+    "blockrecovery",
+    "stackvars",
+    "deadcontrolflow",
+    "switchnorm",
+    "cleanup",
+    "splitcopy",
+    "splitpointer",
+    "merge",
+    "dynamic",
+    "casts",
+    "analysis",
+    "canonicalcompare",
+    "presentcompare",
+    "fixateglobals",
+    "fixateproto",
+    "constsequence",
+    "bitfields",
+    "segment",
+    "returnsplit",
+    "nodejoin",
+    "doubleload",
+    "doubleprecis",
+    "unreachable",
+    "subvar",
+    "floatprecision",
     "conditionalexe",
 ];
 
@@ -43,7 +68,10 @@ fn unported_allowlist_is_empty() {
     assert!(
         UNPORTED_ALLOWLIST.is_empty(),
         "UNPORTED_ALLOWLIST must be empty after wiring (still missing: {:?})",
-        UNPORTED_ALLOWLIST.iter().map(|e| e.name).collect::<Vec<_>>()
+        UNPORTED_ALLOWLIST
+            .iter()
+            .map(|e| e.name)
+            .collect::<Vec<_>>()
     );
 }
 
@@ -57,7 +85,9 @@ fn dump_filters_out_excluded_group_actions() {
     let dump = sched.list_action_dump(&filter);
     for excluded in ["normalizesetup", "funclink_outonly"] {
         assert!(
-            !dump.lines().any(|l| l.trim_start_matches(|c: char| !c.is_alphabetic()) == excluded),
+            !dump
+                .lines()
+                .any(|l| l.trim_start_matches(|c: char| !c.is_alphabetic()) == excluded),
             "decompile dump unexpectedly contains group-filtered action {excluded}"
         );
     }
@@ -68,7 +98,10 @@ fn dump_filters_out_excluded_group_actions() {
     let wide = ActionListFilter::from_names(groups);
     let wide_dump = sched.list_action_dump(&wide);
     for present in ["normalizesetup", "funclink_outonly", "normalizebranches"] {
-        assert!(wide_dump.contains(present), "wider grouplist dump should contain {present}");
+        assert!(
+            wide_dump.contains(present),
+            "wider grouplist dump should contain {present}"
+        );
     }
 }
 
@@ -98,5 +131,8 @@ fn dump_indices_are_sequential_and_dense() {
         assert_eq!(idx, expect, "non-sequential index in dump");
         expect += 1;
     }
-    assert!(expect > 200, "decompile dump unexpectedly small ({expect} entries)");
+    assert!(
+        expect > 200,
+        "decompile dump unexpectedly small ({expect} entries)"
+    );
 }

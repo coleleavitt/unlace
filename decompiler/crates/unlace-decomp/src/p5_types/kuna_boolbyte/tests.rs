@@ -18,12 +18,18 @@ fn factory() -> TypeFactoryImpl {
     let f = TypeFactoryImpl::new();
     f.set_default_alignment_map();
     f.set_max_basetype_size(8);
-    f.set_core_type("bool", 1, type_metatype::TYPE_BOOL, false).unwrap();
-    f.set_core_type("uint1", 1, type_metatype::TYPE_UINT, false).unwrap();
-    f.set_core_type("int1", 1, type_metatype::TYPE_INT, false).unwrap();
-    f.set_core_type("xunknown1", 1, type_metatype::TYPE_UNKNOWN, false).unwrap();
-    f.set_core_type("undefined8", 8, type_metatype::TYPE_UNKNOWN, false).unwrap();
-    f.set_core_type("char", 1, type_metatype::TYPE_INT, true).unwrap();
+    f.set_core_type("bool", 1, type_metatype::TYPE_BOOL, false)
+        .unwrap();
+    f.set_core_type("uint1", 1, type_metatype::TYPE_UINT, false)
+        .unwrap();
+    f.set_core_type("int1", 1, type_metatype::TYPE_INT, false)
+        .unwrap();
+    f.set_core_type("xunknown1", 1, type_metatype::TYPE_UNKNOWN, false)
+        .unwrap();
+    f.set_core_type("undefined8", 8, type_metatype::TYPE_UNKNOWN, false)
+        .unwrap();
+    f.set_core_type("char", 1, type_metatype::TYPE_INT, true)
+        .unwrap();
     f.cache_core_types().unwrap();
     f
 }
@@ -83,8 +89,14 @@ fn a_truncation_into_bool_prints_as_a_cast() {
     let f = factory();
     let b = f.get_base(1, type_metatype::TYPE_BOOL).unwrap();
     let u4 = f.get_base(4, type_metatype::TYPE_UINT).unwrap();
-    assert_eq!(truncation_form(true, &b, &u4, 0, 1, || 1), TruncationForm::Cast);
-    assert_eq!(truncation_form(false, &b, &u4, 0, 1, || unreachable!()), TruncationForm::Upstream);
+    assert_eq!(
+        truncation_form(true, &b, &u4, 0, 1, || 1),
+        TruncationForm::Cast
+    );
+    assert_eq!(
+        truncation_form(false, &b, &u4, 0, 1, || unreachable!()),
+        TruncationForm::Upstream
+    );
 }
 
 /// `(bool)x` tests every bit of `x`; the truncation keeps the low byte.  When
@@ -96,13 +108,22 @@ fn a_truncation_whose_operand_has_high_bits_keeps_the_truncation() {
     let b = f.get_base(1, type_metatype::TYPE_BOOL).unwrap();
     let u4 = f.get_base(4, type_metatype::TYPE_UINT).unwrap();
     let u8_ = f.get_base(8, type_metatype::TYPE_UINT).unwrap();
-    assert_eq!(truncation_form(true, &b, &u4, 0, 1, || 0x201), TruncationForm::CastThroughByte);
+    assert_eq!(
+        truncation_form(true, &b, &u4, 0, 1, || 0x201),
+        TruncationForm::CastThroughByte
+    );
     assert_eq!(
         truncation_form(true, &b, &u8_, 0, 1, || 0x1_0000_0001),
         TruncationForm::CastThroughByte
     );
-    assert_eq!(truncation_form(true, &b, &u4, 0, 1, || 0xff), TruncationForm::Cast);
-    assert_eq!(truncation_form(true, &b, &u4, 0, 1, || 0), TruncationForm::Cast);
+    assert_eq!(
+        truncation_form(true, &b, &u4, 0, 1, || 0xff),
+        TruncationForm::Cast
+    );
+    assert_eq!(
+        truncation_form(true, &b, &u4, 0, 1, || 0),
+        TruncationForm::Cast
+    );
 }
 
 /// It speaks only for a bool destination at offset 0: a truncation of a
@@ -115,7 +136,16 @@ fn the_printer_arm_speaks_only_for_a_low_piece_into_bool() {
     let u4 = f.get_base(4, type_metatype::TYPE_UINT).unwrap();
     let c = f.get_base(1, type_metatype::TYPE_INT).unwrap();
     let st = f.get_type_struct("flags_t").unwrap();
-    assert_eq!(truncation_form(true, &b, &u4, 1, 1, || 0x201), TruncationForm::Upstream);
-    assert_eq!(truncation_form(true, &c, &u4, 0, 1, || 0x201), TruncationForm::Upstream);
-    assert_eq!(truncation_form(true, &b, &st, 0, 1, || unreachable!()), TruncationForm::Upstream);
+    assert_eq!(
+        truncation_form(true, &b, &u4, 1, 1, || 0x201),
+        TruncationForm::Upstream
+    );
+    assert_eq!(
+        truncation_form(true, &c, &u4, 0, 1, || 0x201),
+        TruncationForm::Upstream
+    );
+    assert_eq!(
+        truncation_form(true, &b, &st, 0, 1, || unreachable!()),
+        TruncationForm::Upstream
+    );
 }

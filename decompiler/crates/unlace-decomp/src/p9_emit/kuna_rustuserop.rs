@@ -16,11 +16,7 @@ pub(crate) fn operator_name(name: Option<&[u8]>, index: u64) -> String {
         fallback.push('_');
         fallback.extend(name.chars().take(64).map(
             |c| {
-                if c.is_ascii_alphanumeric() {
-                    c
-                } else {
-                    '_'
-                }
+                if c.is_ascii_alphanumeric() { c } else { '_' }
             },
         ));
     }
@@ -41,13 +37,53 @@ fn is_ascii_identifier(name: &str) -> bool {
 pub(crate) fn raw_keyword(name: &str) -> bool {
     matches!(
         name,
-        "as" | "async" | "await" | "break" | "const" | "continue" | "dyn" | "else"
-            | "enum" | "extern" | "false" | "fn" | "for" | "if" | "impl" | "in"
-            | "let" | "loop" | "match" | "mod" | "move" | "mut" | "pub" | "ref"
-            | "return" | "static" | "struct" | "trait" | "true" | "type" | "unsafe"
-            | "use" | "where" | "while" | "abstract" | "become" | "box" | "do"
-            | "final" | "gen" | "macro" | "override" | "priv" | "try" | "typeof"
-            | "unsized" | "virtual" | "yield"
+        "as" | "async"
+            | "await"
+            | "break"
+            | "const"
+            | "continue"
+            | "dyn"
+            | "else"
+            | "enum"
+            | "extern"
+            | "false"
+            | "fn"
+            | "for"
+            | "if"
+            | "impl"
+            | "in"
+            | "let"
+            | "loop"
+            | "match"
+            | "mod"
+            | "move"
+            | "mut"
+            | "pub"
+            | "ref"
+            | "return"
+            | "static"
+            | "struct"
+            | "trait"
+            | "true"
+            | "type"
+            | "unsafe"
+            | "use"
+            | "where"
+            | "while"
+            | "abstract"
+            | "become"
+            | "box"
+            | "do"
+            | "final"
+            | "gen"
+            | "macro"
+            | "override"
+            | "priv"
+            | "try"
+            | "typeof"
+            | "unsized"
+            | "virtual"
+            | "yield"
     )
 }
 
@@ -84,10 +120,22 @@ mod tests {
     #[test]
     fn unicode_names_keep_their_operation_identity_after_rust_normalization() {
         assert_eq!(operator_name(Some("é".as_bytes()), 0), "__kuna_userop_0__");
-        assert_eq!(operator_name(Some("e\u{301}".as_bytes()), 1), "__kuna_userop_1_e_");
-        assert_eq!(operator_name(Some("ação".as_bytes()), 2), "__kuna_userop_2_a__o");
-        assert_eq!(operator_name(Some("東京".as_bytes()), 3), "__kuna_userop_3___");
-        assert_eq!(operator_name(Some("_я".as_bytes()), 4), "__kuna_userop_4___");
+        assert_eq!(
+            operator_name(Some("e\u{301}".as_bytes()), 1),
+            "__kuna_userop_1_e_"
+        );
+        assert_eq!(
+            operator_name(Some("ação".as_bytes()), 2),
+            "__kuna_userop_2_a__o"
+        );
+        assert_eq!(
+            operator_name(Some("東京".as_bytes()), 3),
+            "__kuna_userop_3___"
+        );
+        assert_eq!(
+            operator_name(Some("_я".as_bytes()), 4),
+            "__kuna_userop_4___"
+        );
     }
 
     #[test]
@@ -96,8 +144,20 @@ mod tests {
             assert!(raw_keyword(name));
         }
         for name in [
-            "input", "breakpoint", "yield_now", "in_", "r#in", "CALLOTHER[0x1]",
-            "union", "raw", "safe", "_", "crate", "self", "Self", "super",
+            "input",
+            "breakpoint",
+            "yield_now",
+            "in_",
+            "r#in",
+            "CALLOTHER[0x1]",
+            "union",
+            "raw",
+            "safe",
+            "_",
+            "crate",
+            "self",
+            "Self",
+            "super",
         ] {
             assert!(!raw_keyword(name));
         }

@@ -24,11 +24,16 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// The vendored `printf("%d %s\n", argc, argv[0])` fixture (`main`=0x401136,
@@ -50,16 +55,23 @@ fn decompile_main(formatstring_on: bool) -> String {
     // Commit the load-time analysis facts (libproto, etc.) — what `read symbols`
     // does — so the `printf` proto is recovered before the decompile.
     // The untyped varargs are `main`'s body-driven parameters; `elfmain` declares them.
-    prog.arch_mut().set_kuna_option("elfmain", "off").expect("elfmain flips off");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.arch_mut()
+        .set_kuna_option("elfmain", "off")
+        .expect("elfmain flips off");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     if formatstring_on {
         prog.arch_mut()
             .set_kuna_option("formatstring", "on")
             .expect("formatstring option flips on");
     }
 
-    let cmds: Vec<String> =
-        ["load function main".into(), "decompile".into(), "print C".into()].to_vec();
+    let cmds: Vec<String> = [
+        "load function main".into(),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .to_vec();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -77,7 +89,10 @@ fn decompile_main(formatstring_on: bool) -> String {
 #[test]
 fn formatstring_off_leaves_varargs_untyped() {
     let out = decompile_main(false);
-    assert!(out.contains("printf("), "expected a printf call, got:\n{out}");
+    assert!(
+        out.contains("printf("),
+        "expected a printf call, got:\n{out}"
+    );
     // Default: the %d arg is widened with a (uint8) cast and the %s arg is the
     // bare untyped `*a1` — the feature is OFF.
     assert!(
@@ -93,7 +108,10 @@ fn formatstring_off_leaves_varargs_untyped() {
 #[test]
 fn formatstring_on_types_printf_varargs() {
     let out = decompile_main(true);
-    assert!(out.contains("printf("), "expected a printf call, got:\n{out}");
+    assert!(
+        out.contains("printf("),
+        "expected a printf call, got:\n{out}"
+    );
     // With the feature on: the %s arg is cast to `char *` (the override typed it),
     // and the %d arg is no longer widened with a (uint8) cast (the format-derived
     // `int` matches the recovered parameter, so no widening cast renders).

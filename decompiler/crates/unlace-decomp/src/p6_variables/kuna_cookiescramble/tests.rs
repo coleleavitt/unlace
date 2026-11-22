@@ -16,7 +16,12 @@ fn a_stack_pointer_scramble_is_not_an_escape() {
 
 #[test]
 fn other_non_additive_uses_are_untouched() {
-    for code in [OpCode::CPUI_STORE, OpCode::CPUI_LOAD, OpCode::CPUI_CALL, OpCode::CPUI_INT_AND] {
+    for code in [
+        OpCode::CPUI_STORE,
+        OpCode::CPUI_LOAD,
+        OpCode::CPUI_CALL,
+        OpCode::CPUI_INT_AND,
+    ] {
         assert!(is_escape_site(true, code), "{code:?}");
     }
 }

@@ -21,7 +21,7 @@
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
-use unlace_console::engine::{ArmIsa, ARM_ISA_ENV};
+use unlace_console::engine::{ARM_ISA_ENV, ArmIsa};
 use unlace_console::kuna_buildstamp;
 
 use crate::args::take_value;
@@ -128,7 +128,10 @@ const CONSOLE_DIAGNOSTICS: [&str; 7] = [
 
 /// Strip the prompt a transcript line may carry, and the surrounding whitespace.
 fn console_text(trimmed: &str) -> &str {
-    trimmed.strip_prefix(CONSOLE_PROMPT).unwrap_or(trimmed).trim()
+    trimmed
+        .strip_prefix(CONSOLE_PROMPT)
+        .unwrap_or(trimmed)
+        .trim()
 }
 
 /// The real reason `load file` failed, recovered from the transcript.
@@ -332,9 +335,8 @@ fn check_errors(
         // The selector model knows what the image DOES carry; this surface only
         // has the transcript. So its explanation wins where it has one, and the
         // stripped-binary advice is the answer only when it has none.
-        let hint = name_miss_hint(out).unwrap_or_else(|| {
-            "for a stripped binary pass an address with --addr".to_string()
-        });
+        let hint = name_miss_hint(out)
+            .unwrap_or_else(|| "for a stripped binary pass an address with --addr".to_string());
         return Some(format!("no function {target:?} in {binary}; {hint}"));
     }
     // An ambiguous or unmapped selector is answered by the selector model, whose
@@ -344,14 +346,17 @@ fn check_errors(
     // A proven undefined external is not a bad selector. Other entries with
     // missing bytes remain selection failures.
     if !(allow_external && is_undefined_external_entry(out))
-        && let Some(reason) = selection_failure(out) {
-            if reason.contains("per-function decompile budget exceeded")
-                || reason.contains("per-function memory limit exceeded")
-            {
-                return Some(format!("decompilation failed for {target} in {binary}: {reason}"));
-            }
-            return Some(reason);
+        && let Some(reason) = selection_failure(out)
+    {
+        if reason.contains("per-function decompile budget exceeded")
+            || reason.contains("per-function memory limit exceeded")
+        {
+            return Some(format!(
+                "decompilation failed for {target} in {binary}: {reason}"
+            ));
         }
+        return Some(reason);
+    }
     None
 }
 
@@ -376,7 +381,9 @@ fn is_unknown_function(out: &str) -> bool {
 /// image the `--addr` advice exists for.
 fn name_miss_hint(out: &str) -> Option<String> {
     let reason = selection_failure(out)?;
-    let (_selector, hint) = reason.strip_prefix("no function matches ")?.split_once("\"; ")?;
+    let (_selector, hint) = reason
+        .strip_prefix("no function matches ")?
+        .split_once("\"; ")?;
     let hint = hint.trim();
     (!hint.is_empty()).then(|| hint.to_string())
 }
@@ -397,7 +404,11 @@ fn find_pipeline_failure(out: &str) -> Option<(String, String)> {
     for line in out.lines() {
         // The console prompt is written before the command echo, so an output
         // line can carry it as a prefix.
-        let line = line.trim_start().strip_prefix("[decomp]>").unwrap_or(line).trim_start();
+        let line = line
+            .trim_start()
+            .strip_prefix("[decomp]>")
+            .unwrap_or(line)
+            .trim_start();
         let Some(rest) = line.strip_prefix("Skipping ") else {
             continue;
         };
@@ -467,18 +478,25 @@ fn assertion_outcomes(
                 kind,
                 phase,
                 subphase,
-                status: if detail.is_none() { "applied" } else { "rejected" },
+                status: if detail.is_none() {
+                    "applied"
+                } else {
+                    "rejected"
+                },
                 detail,
                 fatal,
             }
         })
         .collect();
     let applied: Vec<bool> = outcomes.iter().map(|o| o.status == "applied").collect();
-    let binds = |d: &unlace_console::assertions::Directive| crate::assertdecl::console_form(d, selected).is_ok();
+    let binds = |d: &unlace_console::assertions::Directive| {
+        crate::assertdecl::console_form(d, selected).is_ok()
+    };
     for i in unlace_console::assertions::restated_callees(directives, |i| applied[i], binds) {
         outcomes[i] = unlace_console::assertions::restated_callee(&directives[i]);
     }
-    for i in unlace_console::assertions::restated_call_prototypes(directives, |i| applied[i], binds) {
+    for i in unlace_console::assertions::restated_call_prototypes(directives, |i| applied[i], binds)
+    {
         outcomes[i] = unlace_console::assertions::restated(&directives[i]);
     }
     outcomes
@@ -498,7 +516,9 @@ fn command_failures(out: &str) -> std::collections::BTreeMap<&str, Option<String
             current = Some(text);
             continue;
         }
-        let Some(command) = current.filter(|_| !text.is_empty()) else { continue };
+        let Some(command) = current.filter(|_| !text.is_empty()) else {
+            continue;
+        };
         let reason = CONSOLE_DIAGNOSTICS
             .iter()
             .filter_map(|prefix| text.strip_prefix(prefix).map(str::trim))
@@ -576,14 +596,20 @@ fn engine_panic(stderr: &str) -> Option<String> {
     let mut lines = stderr.lines();
     let at = lines.find_map(|line| line.split_once("panicked at ").map(|(_, at)| at.trim()))?;
     let message = lines.next().map(str::trim).unwrap_or_default();
-    Some(format!("{} {message}", at.trim_end_matches(':')).trim_end().to_string())
+    Some(
+        format!("{} {message}", at.trim_end_matches(':'))
+            .trim_end()
+            .to_string(),
+    )
 }
 
 /// The function the console last announced (`Decompiling <name>`), so a failure
 /// report names the same function the JSON surface's does.
 fn decompiling_name(out: &str) -> Option<String> {
     out.lines().rev().find_map(|raw| {
-        console_text(raw.trim()).strip_prefix("Decompiling ").map(|n| n.trim().to_string())
+        console_text(raw.trim())
+            .strip_prefix("Decompiling ")
+            .map(|n| n.trim().to_string())
     })
 }
 
@@ -628,7 +654,10 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
         Some(d) if !Path::new(d).exists() => {
             return Err(format!("decomp_dbg not found at {d} (--decomp-dbg)"));
         }
-        Some(d) => paths::Program { path: PathBuf::from(d), subcommand: None },
+        Some(d) => paths::Program {
+            path: PathBuf::from(d),
+            subcommand: None,
+        },
         None => paths::decomp_dbg()?,
     };
     let pinned_by = match &args.decomp_dbg {
@@ -686,7 +715,11 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
 
     // The selected function's name, or `None` for an `--addr` run — what decides
     // whether a `<func>::`-qualified directive binds to the selection.
-    let selected: Option<&str> = if by_address { None } else { Some(args.target.as_str()) };
+    let selected: Option<&str> = if by_address {
+        None
+    } else {
+        Some(args.target.as_str())
+    };
     let attempt = |injected: &[(&'static str, &'static str)], defer_fast_funcdisc: bool| {
         let script = build_script_for_input(
             args,
@@ -697,7 +730,6 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
             defer_fast_funcdisc,
             regions_path.as_deref(),
         );
-
 
         let mut cmd = engine.command();
         cmd.arg("-s").arg(&specs).env("SLEIGHHOME", &specs);
@@ -711,7 +743,8 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
             }
         }
         if args.max_fn_seconds > 0 {
-            cmd.arg("--max-fn-seconds").arg(args.max_fn_seconds.to_string());
+            cmd.arg("--max-fn-seconds")
+                .arg(args.max_fn_seconds.to_string());
         }
         cmd.env(
             kuna_buildstamp::PARENT_ENV,
@@ -747,7 +780,9 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
             &engine.path,
             pinned_by,
         );
-        let forwarded = |line: &&str| line.starts_with("[kuna target] ") || line.starts_with("[kuna] MH_FILESET: ");
+        let forwarded = |line: &&str| {
+            line.starts_with("[kuna target] ") || line.starts_with("[kuna] MH_FILESET: ")
+        };
         for note in stderr_text.lines().filter(forwarded) {
             unlace_base::notes::say_once(&binary, note);
         }
@@ -806,11 +841,17 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
             }
             if let Some(reason) = print_command_failure(&stdout_text) {
                 let func = decompiling_name(&stdout_text).unwrap_or_else(|| args.target.clone());
-                return Err((format!("decompilation failed for {func} in {binary}: {reason}"), false));
+                return Err((
+                    format!("decompilation failed for {func} in {binary}: {reason}"),
+                    false,
+                ));
             }
             if let Some(panic) = engine_panic(&stderr_text) {
                 let func = decompiling_name(&stdout_text).unwrap_or_else(|| args.target.clone());
-                return Err((format!("decompiler panicked on {func} in {binary}: {panic}"), false));
+                return Err((
+                    format!("decompiler panicked on {func} in {binary}: {panic}"),
+                    false,
+                ));
             }
             return Err((
                 format!(
@@ -829,19 +870,18 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
         let failure = find_pipeline_failure(&stdout_text)
             .or_else(|| {
                 let reason = decompile_command_failure(&stdout_text)?;
-                let func = decompiling_name(&stdout_text)
-                    .unwrap_or_else(|| args.target.clone());
+                let func = decompiling_name(&stdout_text).unwrap_or_else(|| args.target.clone());
                 Some((func, reason))
             })
             .map(|(func, reason)| {
-            let mut msg = format!("decompilation failed for {func} in {binary}: {reason}");
-            let note = stderr_text.trim();
-            if !note.is_empty() {
-                msg.push_str("\nnote: decomp_dbg stderr:\n");
-                msg.push_str(&note.chars().take(2000).collect::<String>());
-            }
-            msg
-        });
+                let mut msg = format!("decompilation failed for {func} in {binary}: {reason}");
+                let note = stderr_text.trim();
+                if !note.is_empty() {
+                    msg.push_str("\nnote: decomp_dbg stderr:\n");
+                    msg.push_str(&note.chars().take(2000).collect::<String>());
+                }
+                msg
+            });
 
         let mut regions_text = None;
         if let Some(rp) = &regions_path {
@@ -948,7 +988,6 @@ fn note_budget_flag(msg: &str) {
         eprintln!("note: --max-fn-seconds N sets the budget (0 disables it)");
     }
 }
-
 
 // --- command entry point -----------------------------------------------------
 
@@ -1155,7 +1194,11 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
             ("--decomp-dbg", decomp_dbg.is_some()),
         ] {
             if requested {
-                let request = if apply_rust_signatures.is_some() { "--apply-rust-signatures" } else { "--json" };
+                let request = if apply_rust_signatures.is_some() {
+                    "--apply-rust-signatures"
+                } else {
+                    "--json"
+                };
                 return Err(format!("{flag} is not supported with {request}"));
             }
         }
@@ -1182,10 +1225,12 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
 
     // (kuna outlang, DIV-80) The auto policy -- follow the binary when the caller
     // named no language. See `decompile_all::detected_output_language`.
-    if !saw_language && crate::loadtime::explicit_output_language(&options).is_none()
-        && let Some(lang) = decompile_all::detected_output_language(&binary, &options) {
-            options.push(("setlanguage".into(), lang.into()));
-        }
+    if !saw_language
+        && crate::loadtime::explicit_output_language(&options).is_none()
+        && let Some(lang) = decompile_all::detected_output_language(&binary, &options)
+    {
+        options.push(("setlanguage".into(), lang.into()));
+    }
 
     let explicit_fast_funcdisc = options.iter().any(|(name, _)| name == "fast_funcdisc");
     // Omitted mode is the size-driven `auto` policy. Preset overrides are
@@ -1350,7 +1395,10 @@ fn run_in_process(req: &SingleRequest) -> i32 {
     if req.raw_image {
         argv.push("--raw-image".into());
         argv.push("--base".into());
-        argv.push(format!("0x{:x}", req.base.expect("raw parser requires --base")));
+        argv.push(format!(
+            "0x{:x}",
+            req.base.expect("raw parser requires --base")
+        ));
     }
     argv.extend(req.forwarded.iter().cloned());
     for (flag, value) in [
@@ -1365,7 +1413,11 @@ fn run_in_process(req: &SingleRequest) -> i32 {
         }
     }
 
-    let command = if req.apply_rust_signatures.is_some() { "decompile" } else { "decompile-all" };
+    let command = if req.apply_rust_signatures.is_some() {
+        "decompile"
+    } else {
+        "decompile-all"
+    };
     let args = match decompile_all::parse_args(&argv, command) {
         Ok(args) => args,
         Err(e) => {
@@ -1381,16 +1433,20 @@ fn run_in_process(req: &SingleRequest) -> i32 {
     let (text, failure) = match decompile_one(&args, req.target) {
         Ok(answered) => answered,
         Err((message, declared)) => (
-            if req.json { decompile_all::render_result_json(
-                &args.binary,
-                &[],
-                &args.options,
-                Some(&message),
-                &[],
-                &Default::default(),
-                &declared,
-                args.omit,
-            ) } else { String::new() },
+            if req.json {
+                decompile_all::render_result_json(
+                    &args.binary,
+                    &[],
+                    &args.options,
+                    Some(&message),
+                    &[],
+                    &Default::default(),
+                    &declared,
+                    args.omit,
+                )
+            } else {
+                String::new()
+            },
             Some(message),
         ),
     };
@@ -1430,7 +1486,9 @@ fn decompile_one(
                 .unwrap_or_else(|| format!("no function {target:?} in {}", args.binary))
         } else {
             let hint = prog
-                .resolve_entry(&unlace_console::engine::EntrySelector::Name(target.to_string()))
+                .resolve_entry(&unlace_console::engine::EntrySelector::Name(
+                    target.to_string(),
+                ))
                 .err()
                 .and_then(|error| decompile_all::name_miss_hint(&error))
                 .unwrap_or_else(|| "for a stripped binary pass an address with --addr".to_string());
@@ -1443,7 +1501,10 @@ fn decompile_one(
     let assertions = prog.assertion_outcomes();
     let mut failure = funcs.iter().find_map(|f| {
         f.error.as_ref().map(|reason| {
-            format!("decompilation failed for {} in {}: {reason}", f.name, args.binary)
+            format!(
+                "decompilation failed for {} in {}: {reason}",
+                f.name, args.binary
+            )
         })
     });
     decompile_all::report_unstructured_gotos(&funcs);
@@ -1455,21 +1516,34 @@ fn decompile_one(
     // get one, so the run-level `error` says so rather than leaving `assertions[]`
     // as the only place a reader could notice.
     if failure.is_none() && decompile_all::any_refused_assertion(&assertions) {
-        failure = Some(format!("--assert directive refused by the pipeline in {}", args.binary));
+        failure = Some(format!(
+            "--assert directive refused by the pipeline in {}",
+            args.binary
+        ));
     }
-    let text = if args.json { decompile_all::render_result_json(
-        &args.binary,
-        &funcs,
-        &args.options,
-        failure.as_deref(),
-        &assertions,
-        &interior,
-        &declared,
-        args.omit,
-    ) } else {
-        funcs.iter().filter_map(|function| function.code.as_deref()).map(|code| {
-            if code.ends_with('\n') { code.to_string() } else { format!("{code}\n") }
-        }).collect::<String>()
+    let text = if args.json {
+        decompile_all::render_result_json(
+            &args.binary,
+            &funcs,
+            &args.options,
+            failure.as_deref(),
+            &assertions,
+            &interior,
+            &declared,
+            args.omit,
+        )
+    } else {
+        funcs
+            .iter()
+            .filter_map(|function| function.code.as_deref())
+            .map(|code| {
+                if code.ends_with('\n') {
+                    code.to_string()
+                } else {
+                    format!("{code}\n")
+                }
+            })
+            .collect::<String>()
     };
     if failure.is_none() && args.assert_strict && rejected {
         failure = Some(format!("--assert directive rejected in {}", args.binary));
@@ -1501,7 +1575,10 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            assert_eq!(std::fs::metadata(&first).unwrap().permissions().mode() & 0o777, 0o600);
+            assert_eq!(
+                std::fs::metadata(&first).unwrap().permissions().mode() & 0o777,
+                0o600
+            );
         }
         std::fs::write(&first, b"rendered C").unwrap();
         assert_eq!(std::fs::read(&first).unwrap(), b"rendered C");
@@ -1525,18 +1602,16 @@ mod tests {
     }
 
     use super::{
-        arch_failure_reason, check_errors, command_failure,
-        decompile_all, decompile_command_failure, decompiling_name, find_pipeline_failure,
-        is_unknown_function, option_failure, pipeline_refusal, read_symbols_failure,
-        reject_unquotable,
+        arch_failure_reason, check_errors, command_failure, decompile_all,
+        decompile_command_failure, decompiling_name, find_pipeline_failure, is_unknown_function,
+        option_failure, pipeline_refusal, read_symbols_failure, reject_unquotable,
     };
     use std::borrow::Cow;
 
     /// What `decompile_all::driver_default_options` yields for the FIRST attempt
     /// on every architecture: the DIV-120 instruction-budget policy and the
     /// DIV-15 Listing, neither of which touches the entry set.
-    const LISTING: &[(&str, &str)] =
-        &[("errortoomanyinstructions", "off"), ("listing", "on")];
+    const LISTING: &[(&str, &str)] = &[("errortoomanyinstructions", "off"), ("listing", "on")];
 
     /// The DIV-20/DIV-68 non-x86-64 bundle, held back for the retry.
     const WIDENED: &[(&str, &str)] = &[
@@ -1545,8 +1620,8 @@ mod tests {
         ("funcstart_patterns", "on"),
         ("aif", "on"),
     ];
-    use std::path::Path;
     use super::script::console_path;
+    use std::path::Path;
 
     fn script_args(binary: &str, target: &str) -> super::DecompileArgs {
         super::DecompileArgs {
@@ -1600,7 +1675,12 @@ mod tests {
         assert!(defers("sub_main", false));
         assert!(defers("ns::Foo::bar", false));
         assert!(!defers("main", true));
-        for placeholder in ["sub_401280", "FUN_00401280", "func_0x00401280", "sub_ABCDEF"] {
+        for placeholder in [
+            "sub_401280",
+            "FUN_00401280",
+            "func_0x00401280",
+            "sub_ABCDEF",
+        ] {
             assert!(!defers(placeholder, false), "{placeholder}");
         }
     }
@@ -1627,10 +1707,19 @@ mod tests {
             super::build_script_for_input(&args, &args.binary, false, out, LISTING, defer, None)
         };
         let last = |text: String| {
-            text.lines().filter(|l| l.starts_with("option fast_funcdisc")).last().map(str::to_owned)
+            text.lines()
+                .filter(|l| l.starts_with("option fast_funcdisc"))
+                .last()
+                .map(str::to_owned)
         };
-        assert_eq!(last(script(true)).as_deref(), Some("option fast_funcdisc off"));
-        assert_eq!(last(script(false)).as_deref(), Some("option fast_funcdisc on"));
+        assert_eq!(
+            last(script(true)).as_deref(),
+            Some("option fast_funcdisc off")
+        );
+        assert_eq!(
+            last(script(false)).as_deref(),
+            Some("option fast_funcdisc on")
+        );
     }
 
     /// Recorded `decomp_dbg` transcript: the empty-scope load failure (DIV-88),
@@ -1708,7 +1797,10 @@ Decompilation complete
             arch_failure_reason(MISSING_SLA).as_deref(),
             Some("No sleigh specification for x86:LE:64:default")
         );
-        assert_eq!(arch_failure_reason(JUNK_MAGIC).as_deref(), Some("syntax error"));
+        assert_eq!(
+            arch_failure_reason(JUNK_MAGIC).as_deref(),
+            Some("syntax error")
+        );
     }
 
     /// The recovered reason is reported in the in-process surfaces' wording
@@ -1890,7 +1982,10 @@ Decompilation complete
         let (func, reason) = find_pipeline_failure(out).expect("the notice is recognized");
         assert_eq!(func, "sub_3994");
         assert!(reason.contains("LOSS-131"), "{reason}");
-        assert!(reason.contains("Option::unwrap()"), "the real panic text survives: {reason}");
+        assert!(
+            reason.contains("Option::unwrap()"),
+            "the real panic text survives: {reason}"
+        );
     }
 
     /// A prompt sharing the line with the notice is still recognized.
@@ -1928,7 +2023,11 @@ Decompilation complete
     fn finds_a_raised_decompile_abort() {
         let out = "[decomp]> decompile\nClearing old decompilation\nDecompiling sub_100054\n\
                    Execution error: Could not apply flowoverride\n[decomp]> print C\n";
-        assert_eq!(find_pipeline_failure(out), None, "it is not the Skipping notice");
+        assert_eq!(
+            find_pipeline_failure(out),
+            None,
+            "it is not the Skipping notice"
+        );
         assert_eq!(
             decompile_command_failure(out).as_deref(),
             Some("Could not apply flowoverride")
@@ -1976,20 +2075,29 @@ Decompilation complete
         // Not merely equal — untouched. The borrow is the contract: a path that
         // needs no quoting is passed through, never rebuilt.
         assert!(matches!(console_path("/home/u/a.out"), Cow::Borrowed(_)));
-        assert!(matches!(console_path("/home/u/test dir/a.out"), Cow::Owned(_)));
+        assert!(matches!(
+            console_path("/home/u/test dir/a.out"),
+            Cow::Owned(_)
+        ));
     }
 
     /// A path with a space is quoted, with `\` and `"` escaped so the console's
     /// `read_filename` recovers the original bytes.
     #[test]
     fn console_path_quotes_whitespace() {
-        assert_eq!(console_path("/home/u/test dir/a.out"), "\"/home/u/test dir/a.out\"");
+        assert_eq!(
+            console_path("/home/u/test dir/a.out"),
+            "\"/home/u/test dir/a.out\""
+        );
         assert_eq!(console_path("/a\tb/c.out"), "\"/a\tb/c.out\"");
         assert_eq!(
             console_path(r"C:\Users\John Doe\a.out"),
             r#""C:\\Users\\John Doe\\a.out""#
         );
-        assert_eq!(console_path("/odd \"name\"/a.out"), r#""/odd \"name\"/a.out""#);
+        assert_eq!(
+            console_path("/odd \"name\"/a.out"),
+            r#""/odd \"name\"/a.out""#
+        );
     }
 
     /// The declarations land AFTER `read symbols` and BEFORE the load: the commit
@@ -2025,11 +2133,10 @@ Decompilation complete
     /// `prototype 0x…` for the very address being decompiled was rejected.
     #[test]
     fn build_script_symbols_the_entry_a_by_address_run_selected() {
-        let directives =
-            vec![
-                crate::assertdecl::parse_one("prototype 0x401571 void decrypt(unsigned int key)")
-                    .expect("parses"),
-            ];
+        let directives = vec![
+            crate::assertdecl::parse_one("prototype 0x401571 void decrypt(unsigned int key)")
+                .expect("parses"),
+        ];
         let script = build_script(
             &super::DecompileArgs {
                 by_address: true,
@@ -2131,7 +2238,9 @@ Decompilation complete
                 .position(|l| l == needle)
                 .unwrap_or_else(|| panic!("{needle:?} missing from:\n{script}"))
         };
-        assert!(line("read symbols") < line("map prototype authenticate int4 authenticate(char *u);"));
+        assert!(
+            line("read symbols") < line("map prototype authenticate int4 authenticate(char *u);")
+        );
         assert!(
             line("map prototype authenticate int4 authenticate(char *u);")
                 < line("load function authenticate")
@@ -2153,7 +2262,8 @@ Decompilation complete
     /// need it.
     #[test]
     fn build_script_emits_one_decompile_without_a_symbol_scoped_assertion() {
-        let directives = vec![crate::assertdecl::parse_one("data 0x601048 char *pw").expect("parses")];
+        let directives =
+            vec![crate::assertdecl::parse_one("data 0x601048 char *pw").expect("parses")];
         let script = build_script(
             &super::DecompileArgs {
                 assertions: directives.clone(),
@@ -2200,10 +2310,15 @@ Execution error: No symbol named: v9
     #[test]
     fn a_restated_call_prototype_rejects_the_earlier_one() {
         let parse = |specs: &[&str]| -> Vec<_> {
-            specs.iter().map(|spec| crate::assertdecl::parse_one(spec).expect("parses")).collect()
+            specs
+                .iter()
+                .map(|spec| crate::assertdecl::parse_one(spec).expect("parses"))
+                .collect()
         };
-        let directives =
-            parse(&["callproto 0x13b0 void f(char *)", "callproto report::0x13b0 void g(char *, int)"]);
+        let directives = parse(&[
+            "callproto 0x13b0 void f(char *)",
+            "callproto report::0x13b0 void g(char *, int)",
+        ]);
         let transcript = "\
 [decomp]> override prototype 0x13b0 void f(char *);
 Successfully added override
@@ -2212,9 +2327,18 @@ Successfully added override
 ";
         let report = super::assertion_outcomes(transcript, &directives, Some("report"));
         assert_eq!(report[0].status, "rejected");
-        assert!(report[0].detail.as_deref().unwrap_or_default().contains("later callproto"));
+        assert!(
+            report[0]
+                .detail
+                .as_deref()
+                .unwrap_or_default()
+                .contains("later callproto")
+        );
         assert_eq!(report[1].status, "applied");
-        let directives = parse(&["callproto 0x13b0 void f(char *)", "callproto 0x13b0 void g(nosuch)"]);
+        let directives = parse(&[
+            "callproto 0x13b0 void f(char *)",
+            "callproto 0x13b0 void g(nosuch)",
+        ]);
         let transcript = "\
 [decomp]> override prototype 0x13b0 void f(char *);
 Successfully added override
@@ -2231,10 +2355,19 @@ Execution error: Syntax error
     #[test]
     fn an_unreached_directive_is_rejected_not_assumed_applied() {
         let directives = vec![crate::assertdecl::parse_one("name v2 buf").expect("parses")];
-        let report =
-            super::assertion_outcomes("[decomp]> load file /tmp/a.out\n", &directives, Some("main"));
+        let report = super::assertion_outcomes(
+            "[decomp]> load file /tmp/a.out\n",
+            &directives,
+            Some("main"),
+        );
         assert_eq!(report[0].status, "rejected");
-        assert!(report[0].detail.as_deref().unwrap_or_default().contains("did not reach"));
+        assert!(
+            report[0]
+                .detail
+                .as_deref()
+                .unwrap_or_default()
+                .contains("did not reach")
+        );
     }
 
     /// No declarations ⇒ the script is byte-identical to what it always was.
@@ -2308,13 +2441,16 @@ Execution error: Syntax error
             LISTING,
             Some(Path::new("/tmp/out dir/regions.txt")),
         );
-        assert_eq!(script, concat!(
+        assert_eq!(
+            script,
+            concat!(
                 "load raw x86:LE:64:default 0x4000 0x4000 \"/tmp/raw image.bin\"\n",
                 "option errortoomanyinstructions off\noption listing on\nread symbols\n",
                 "function containing 0x4000\nfunction symbol 0x4000\nload addr 0x4000\ndecompile\n",
                 "openfile write \"/tmp/out dir/kuna.c\"\nprint C\nprint raw\nclosefile\n",
                 "openfile write \"/tmp/out dir/regions.txt\"\nregion blocks\nregion tree\nclosefile\nquit\n",
-            ));
+            )
+        );
     }
 
     /// The x86 real-mode language id contains a space; the load line quotes it
@@ -2389,10 +2525,15 @@ Execution error: Syntax error
     #[test]
     fn the_bundle_yields_to_a_named_option() {
         let options = vec![("aif".to_string(), "off".to_string())];
-        let full = decompile_all::driver_default_options(&fixture("entrymain_arm"), true, true, &options);
+        let full =
+            decompile_all::driver_default_options(&fixture("entrymain_arm"), true, true, &options);
         assert_eq!(
             full,
-            &[("errortoomanyinstructions", "off"), ("listing", "on"), ("funcstart_patterns", "on")]
+            &[
+                ("errortoomanyinstructions", "off"),
+                ("listing", "on"),
+                ("funcstart_patterns", "on")
+            ]
         );
     }
 
@@ -2426,10 +2567,14 @@ Execution error: Syntax error
     /// widening the inventory would only change the answer for the worse.
     #[test]
     fn only_a_name_miss_is_retryable() {
-        assert!(is_unknown_function("Execution error: no function matches \"sub_410\""));
+        assert!(is_unknown_function(
+            "Execution error: no function matches \"sub_410\""
+        ));
         assert!(is_unknown_function("Unknown function name: nope"));
         assert!(is_unknown_function("Bad namespace: a::b"));
-        assert!(!is_unknown_function("Execution error: selector \"main\" is ambiguous"));
+        assert!(!is_unknown_function(
+            "Execution error: selector \"main\" is ambiguous"
+        ));
         assert!(!is_unknown_function(EMPTY_SCOPE));
         assert!(!is_unknown_function(COMMIT_FAILED));
     }
@@ -2464,8 +2609,8 @@ Execution error: Syntax error
         assert!(reject_unquotable("binary path", "/home/u/a.out").is_ok());
         assert!(reject_unquotable("binary path", "/home/u/test dir/a.out").is_ok());
 
-        let err =
-            reject_unquotable("binary path", "/home/u/nl\ndir/a.out").expect_err("must be rejected");
+        let err = reject_unquotable("binary path", "/home/u/nl\ndir/a.out")
+            .expect_err("must be rejected");
         assert!(err.contains("binary path contains a newline"), "got: {err}");
         assert!(err.contains("one command per line"), "got: {err}");
         assert!(reject_unquotable("temp directory", "/tmp/cr\rdir/x.c").is_err());

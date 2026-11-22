@@ -38,17 +38,17 @@
 //! (ADR: BTree-only for owned maps; this is a sorted-`Vec` binary search, the
 //! exact analogue of the C++ `vector` + `lower_bound`).
 
-use unlace_base::address::{calc_mask, Address};
+use std::cmp::Ordering;
+use std::rc::Rc;
+use unlace_base::address::{Address, calc_mask};
 use unlace_base::marshal::ElementId;
-use unlace_base::space::{spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
-use std::cmp::Ordering;
-use std::rc::Rc;
 
-use crate::funcdata::Funcdata;
 use crate::context::{OpId, VarnodeId};
+use crate::funcdata::Funcdata;
 
 /// Marshaling element `<prefersplit>` (C++ `ELEM_PREFERSPLIT = ElementId("prefersplit",225)`).
 pub const ELEM_PREFERSPLIT: ElementId = ElementId::new("prefersplit", 225);
@@ -78,7 +78,11 @@ impl PreferSplitRecord {
             .map(|s| s.get_index())
             .unwrap_or(-1);
         // size: bigger sizes come first -> Reverse on the size
-        (space_index, std::cmp::Reverse(self.storage.size), self.storage.offset)
+        (
+            space_index,
+            std::cmp::Reverse(self.storage.size),
+            self.storage.offset,
+        )
     }
 }
 
@@ -105,53 +109,95 @@ impl Ord for PreferSplitRecord {
 
 #[inline]
 fn vn_is_constant(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).expect("prefersplit: stale vn").is_constant()
+    data.vbank()
+        .get(vn)
+        .expect("prefersplit: stale vn")
+        .is_constant()
 }
 #[inline]
 fn vn_is_written(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).expect("prefersplit: stale vn").is_written()
+    data.vbank()
+        .get(vn)
+        .expect("prefersplit: stale vn")
+        .is_written()
 }
 #[inline]
 fn vn_is_free(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).expect("prefersplit: stale vn").is_free()
+    data.vbank()
+        .get(vn)
+        .expect("prefersplit: stale vn")
+        .is_free()
 }
 #[inline]
 fn vn_has_no_descend(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).expect("prefersplit: stale vn").has_no_descend()
+    data.vbank()
+        .get(vn)
+        .expect("prefersplit: stale vn")
+        .has_no_descend()
 }
 #[inline]
 fn vn_get_def(data: &Funcdata, vn: VarnodeId) -> Option<OpId> {
-    data.vbank().get(vn).expect("prefersplit: stale vn").get_def()
+    data.vbank()
+        .get(vn)
+        .expect("prefersplit: stale vn")
+        .get_def()
 }
 #[inline]
 fn vn_get_size(data: &Funcdata, vn: VarnodeId) -> int4 {
-    data.vbank().get(vn).expect("prefersplit: stale vn").get_size()
+    data.vbank()
+        .get(vn)
+        .expect("prefersplit: stale vn")
+        .get_size()
 }
 #[inline]
 fn vn_get_offset(data: &Funcdata, vn: VarnodeId) -> uintb {
-    data.vbank().get(vn).expect("prefersplit: stale vn").get_offset()
+    data.vbank()
+        .get(vn)
+        .expect("prefersplit: stale vn")
+        .get_offset()
 }
 #[inline]
 fn vn_get_addr(data: &Funcdata, vn: VarnodeId) -> Address {
-    data.vbank().get(vn).expect("prefersplit: stale vn").get_addr().clone()
+    data.vbank()
+        .get(vn)
+        .expect("prefersplit: stale vn")
+        .get_addr()
+        .clone()
 }
 #[inline]
 fn vn_get_space(data: &Funcdata, vn: VarnodeId) -> Rc<AddrSpace> {
-    Rc::clone(data.vbank().get(vn).expect("prefersplit: stale vn").get_space())
+    Rc::clone(
+        data.vbank()
+            .get(vn)
+            .expect("prefersplit: stale vn")
+            .get_space(),
+    )
 }
 #[inline]
 fn vn_space_is_big_endian(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).expect("prefersplit: stale vn").get_space().is_big_endian()
+    data.vbank()
+        .get(vn)
+        .expect("prefersplit: stale vn")
+        .get_space()
+        .is_big_endian()
 }
 #[inline]
 fn vn_space_type(data: &Funcdata, vn: VarnodeId) -> spacetype {
-    data.vbank().get(vn).expect("prefersplit: stale vn").get_space().get_type()
+    data.vbank()
+        .get(vn)
+        .expect("prefersplit: stale vn")
+        .get_space()
+        .get_type()
 }
 /// Snapshot a Varnode's descendant op ids in `beginDescend` order (the C++ holds
 /// a `list::const_iterator` and advances it before mutating).
 #[inline]
 fn descend_ops(data: &Funcdata, vn: VarnodeId) -> Vec<OpId> {
-    data.vbank().get(vn).expect("prefersplit: stale vn").descend_iter().collect()
+    data.vbank()
+        .get(vn)
+        .expect("prefersplit: stale vn")
+        .descend_iter()
+        .collect()
 }
 /// `Varnode::loneDescend` — the single reading op, or `None`.
 #[inline]
@@ -179,15 +225,25 @@ fn op_get_in(data: &Funcdata, op: OpId, slot: int4) -> VarnodeId {
 }
 #[inline]
 fn op_get_out(data: &Funcdata, op: OpId) -> Option<VarnodeId> {
-    data.obank().get(op).expect("prefersplit: stale op").get_out()
+    data.obank()
+        .get(op)
+        .expect("prefersplit: stale op")
+        .get_out()
 }
 #[inline]
 fn op_get_addr(data: &Funcdata, op: OpId) -> Address {
-    data.obank().get(op).expect("prefersplit: stale op").get_addr().clone()
+    data.obank()
+        .get(op)
+        .expect("prefersplit: stale op")
+        .get_addr()
+        .clone()
 }
 #[inline]
 fn op_is_dead(data: &Funcdata, op: OpId) -> bool {
-    data.obank().get(op).expect("prefersplit: stale op").is_dead()
+    data.obank()
+        .get(op)
+        .expect("prefersplit: stale op")
+        .is_dead()
 }
 
 /// Resolve `vn->getSpaceFromConst()`: `getSpace()->getManager()->getSpace((int4)getOffset())`.
@@ -229,7 +285,12 @@ struct SplitInstance {
 
 impl SplitInstance {
     fn new(v: Option<VarnodeId>, off: int4) -> Self {
-        SplitInstance { vn: v, splitoffset: off, hi: None, lo: None }
+        SplitInstance {
+            vn: v,
+            splitoffset: off,
+            hi: None,
+            lo: None,
+        }
     }
 }
 
@@ -263,7 +324,11 @@ impl PreferSplitManager {
     ) {
         let vn = inst.vn.expect("fillinInstance: null vn");
         let vn_size = vn_get_size(data, vn);
-        let losize = if bigendian { vn_size - inst.splitoffset } else { inst.splitoffset };
+        let losize = if bigendian {
+            vn_size - inst.splitoffset
+        } else {
+            inst.splitoffset
+        };
         let hisize = vn_size - losize;
         if vn_is_constant(data, vn) {
             let origval = vn_get_offset(data, vn);
@@ -318,10 +383,14 @@ impl PreferSplitManager {
         data.op_insert_after(hiop, op);
         data.op_unset_input(op, 0); // Unset input so we can reassign free inputs to new ops
 
-        data.op_set_output(hiop, outinst.hi.expect("createCopyOps: out hi")).ok(); // Outputs
-        data.op_set_output(loop_, outinst.lo.expect("createCopyOps: out lo")).ok();
-        data.op_set_input(hiop, ininst.hi.expect("createCopyOps: in hi"), 0).ok();
-        data.op_set_input(loop_, ininst.lo.expect("createCopyOps: in lo"), 0).ok();
+        data.op_set_output(hiop, outinst.hi.expect("createCopyOps: out hi"))
+            .ok(); // Outputs
+        data.op_set_output(loop_, outinst.lo.expect("createCopyOps: out lo"))
+            .ok();
+        data.op_set_input(hiop, ininst.hi.expect("createCopyOps: in hi"), 0)
+            .ok();
+        data.op_set_input(loop_, ininst.lo.expect("createCopyOps: in lo"), 0)
+            .ok();
         self.tempsplits.push(hiop);
         self.tempsplits.push(loop_);
     }
@@ -370,7 +439,12 @@ impl PreferSplitManager {
 
     /// Check that `inst`, read by `readop` (a COPY), is really splittable
     /// (C++ `testReadingCopy`).  Returns `(ok, istemp)`.
-    fn test_reading_copy(&self, data: &Funcdata, inst: &SplitInstance, readop: OpId) -> (bool, bool) {
+    fn test_reading_copy(
+        &self,
+        data: &Funcdata,
+        inst: &SplitInstance,
+        readop: OpId,
+    ) -> (bool, bool) {
         let outvn = op_get_out(data, readop).expect("testReadingCopy: no out");
         let mut istemp = false;
         if vn_space_type(data, outvn) != spacetype::IPTR_INTERNAL {
@@ -482,8 +556,10 @@ impl PreferSplitManager {
         let loop_ = data.new_op(1, addr);
         set_opcode(data, hiop, OpCode::CPUI_COPY);
         set_opcode(data, loop_, OpCode::CPUI_COPY);
-        data.op_set_output(hiop, inst.hi.expect("splitPiece: hi")).ok(); // Outputs are the pieces of the original
-        data.op_set_output(loop_, inst.lo.expect("splitPiece: lo")).ok();
+        data.op_set_output(hiop, inst.hi.expect("splitPiece: hi"))
+            .ok(); // Outputs are the pieces of the original
+        data.op_set_output(loop_, inst.lo.expect("splitPiece: lo"))
+            .ok();
 
         data.op_insert_after(loop_, op);
         data.op_insert_after(hiop, op);
@@ -571,13 +647,17 @@ impl PreferSplitManager {
         data.op_unset_input(op, 1); // Free up ptrvn
 
         let ptrvn_size = vn_get_size(data, ptrvn);
-        let addvn = data.new_unique_out(ptrvn_size, addop).expect("splitLoad: addvn");
+        let addvn = data
+            .new_unique_out(ptrvn_size, addop)
+            .expect("splitLoad: addvn");
         data.op_set_input(addop, ptrvn, 0).ok();
         let c = data.new_constant(ptrvn_size, inst.splitoffset as uintb);
         data.op_set_input(addop, c, 1).ok();
 
-        data.op_set_output(hiop, inst.hi.expect("splitLoad: hi")).ok(); // Outputs are the pieces of the original
-        data.op_set_output(loop_, inst.lo.expect("splitLoad: lo")).ok();
+        data.op_set_output(hiop, inst.hi.expect("splitLoad: hi"))
+            .ok(); // Outputs are the pieces of the original
+        data.op_set_output(loop_, inst.lo.expect("splitLoad: lo"))
+            .ok();
         let spaceid0 = op_get_in(data, op, 0);
         let spc = space_from_const(data, spaceid0);
         // Duplicate original spaceid into new LOADs
@@ -632,13 +712,17 @@ impl PreferSplitManager {
         data.op_unset_input(op, 2); // Free up inst
 
         let ptrvn_size = vn_get_size(data, ptrvn);
-        let addvn = data.new_unique_out(ptrvn_size, addop).expect("splitStore: addvn");
+        let addvn = data
+            .new_unique_out(ptrvn_size, addop)
+            .expect("splitStore: addvn");
         data.op_set_input(addop, ptrvn, 0).ok();
         let c = data.new_constant(ptrvn_size, inst.splitoffset as uintb);
         data.op_set_input(addop, c, 1).ok();
 
-        data.op_set_input(hiop, inst.hi.expect("splitStore: hi"), 2).ok(); // Varnodes "being stored" are the pieces of the original
-        data.op_set_input(loop_, inst.lo.expect("splitStore: lo"), 2).ok();
+        data.op_set_input(hiop, inst.hi.expect("splitStore: hi"), 2)
+            .ok(); // Varnodes "being stored" are the pieces of the original
+        data.op_set_input(loop_, inst.lo.expect("splitStore: lo"), 2)
+            .ok();
         let spaceid0 = op_get_in(data, op, 0);
         let spc = space_from_const(data, spaceid0);
         // Duplicate original spaceid into new STOREs
@@ -746,8 +830,7 @@ impl PreferSplitManager {
 
         let mut inst = SplitInstance::new(None, rec.splitoffset);
         // iter = data->beginLoc(rec.storage.size,addr) .. endLoc(...)
-        let mut worklist: Vec<VarnodeId> =
-            data.vbank().iter_loc_size_addr(size, &addr).collect();
+        let mut worklist: Vec<VarnodeId> = data.vbank().iter_loc_size_addr(size, &addr).collect();
         let mut pos = 0;
         while pos < worklist.len() {
             inst.vn = Some(worklist[pos]);
@@ -940,12 +1023,18 @@ impl PreferSplitManager {
                 let splitoff = if vn_space_is_big_endian(data, vn) {
                     if suboff == 0 {
                         vn_get_size(data, vn)
-                            - vn_get_size(data, op_get_out(data, op).expect("splitAdditional: SUBPIECE no out"))
+                            - vn_get_size(
+                                data,
+                                op_get_out(data, op).expect("splitAdditional: SUBPIECE no out"),
+                            )
                     } else {
                         vn_get_size(data, vn) - suboff as int4
                     }
                 } else if suboff == 0 {
-                    vn_get_size(data, op_get_out(data, op).expect("splitAdditional: SUBPIECE no out"))
+                    vn_get_size(
+                        data,
+                        op_get_out(data, op).expect("splitAdditional: SUBPIECE no out"),
+                    )
                 } else {
                     suboff as int4
                 };

@@ -89,7 +89,7 @@ impl OptionStructHeadless {
             other => {
                 return Err(KunaError::parse(format!(
                     "Unknown structheadless value: {other} (expected off|closed)"
-                )))
+                )));
             }
         };
         Ok((mode, format!("Headless record synthesis set to {p1}")))
@@ -114,31 +114,47 @@ pub(crate) fn admits(data: &Funcdata, base: VarnodeId, ct: &Datatype) -> bool {
 /// group past its start, and `tail`'s `main` hands `getopt_long` the `char **argv`
 /// it passes to a function reading only `argv[1]` and `argv[2]`; either callee's
 /// own record would otherwise retype the variable.
-pub(crate) fn yields_to_a_declared_pointer(data: &Funcdata, vn: VarnodeId, vote: &Datatype) -> bool {
-    if !data.get_arch().struct_headless.fires() || !crate::kuna_structsynth::points_at_synthesized_record(vote) {
+pub(crate) fn yields_to_a_declared_pointer(
+    data: &Funcdata,
+    vn: VarnodeId,
+    vote: &Datatype,
+) -> bool {
+    if !data.get_arch().struct_headless.fires()
+        || !crate::kuna_structsynth::points_at_synthesized_record(vote)
+    {
         return false;
     }
     let family = crate::kuna_protoorder::value_family(data, vn);
-    family.iter().filter_map(|&v| data.vbank().get(v).map(|n| (v, n))).any(|(v, node)| {
-        let written = node.get_def().and_then(|d| {
-            let fc = data.get_call_specs(data.get_call_specs_index(d)?);
-            let proto = fc.proto();
-            (proto.is_output_locked() && data.obank().get(d)?.get_out() == Some(v))
-                .then(|| proto.get_output_type().cloned())
-                .flatten()
-        });
-        written.is_some_and(|t| gives_a_pointee(&t))
-            || node.descend_iter().any(|r| {
-                let Some(o) = data.obank().get(r) else { return false };
-                let Some(i) = data.get_call_specs_index(r) else { return false };
-                let fc = data.get_call_specs(i);
-                (1..o.num_input()).filter(|&s| o.get_in(s) == Some(v)).any(|s| {
-                    fc.proto().get_param(s - 1).is_some_and(|p| {
-                        p.is_type_locked() && p.get_type().is_some_and(|t| gives_a_pointee(t))
-                    })
+    family
+        .iter()
+        .filter_map(|&v| data.vbank().get(v).map(|n| (v, n)))
+        .any(|(v, node)| {
+            let written = node.get_def().and_then(|d| {
+                let fc = data.get_call_specs(data.get_call_specs_index(d)?);
+                let proto = fc.proto();
+                (proto.is_output_locked() && data.obank().get(d)?.get_out() == Some(v))
+                    .then(|| proto.get_output_type().cloned())
+                    .flatten()
+            });
+            written.is_some_and(|t| gives_a_pointee(&t))
+                || node.descend_iter().any(|r| {
+                    let Some(o) = data.obank().get(r) else {
+                        return false;
+                    };
+                    let Some(i) = data.get_call_specs_index(r) else {
+                        return false;
+                    };
+                    let fc = data.get_call_specs(i);
+                    (1..o.num_input())
+                        .filter(|&s| o.get_in(s) == Some(v))
+                        .any(|s| {
+                            fc.proto().get_param(s - 1).is_some_and(|p| {
+                                p.is_type_locked()
+                                    && p.get_type().is_some_and(|t| gives_a_pointee(t))
+                            })
+                        })
                 })
-            })
-    })
+        })
 }
 
 /// The `void *` a callee's headless record falls back to at a call site where
@@ -153,7 +169,9 @@ pub(crate) fn yields_to_a_declared_pointer(data: &Funcdata, vn: VarnodeId, vote:
 /// record. It stands in for a headless record only: any other refused record
 /// is one `off` refuses too, where the vote says nothing.
 pub(crate) fn bare_pointer_for(data: &Funcdata, vote: &Datatype) -> Option<std::rc::Rc<Datatype>> {
-    if !data.get_arch().struct_headless.fires() || !crate::kuna_structsynth::points_at_headless_record(vote) {
+    if !data.get_arch().struct_headless.fires()
+        || !crate::kuna_structsynth::points_at_headless_record(vote)
+    {
         return None;
     }
     let types = data.get_arch().types()?;
@@ -165,7 +183,10 @@ pub(crate) fn bare_pointer_for(data: &Funcdata, vote: &Datatype) -> Option<std::
 /// that no synthesized record may replace?
 pub(crate) fn gives_a_pointee(ct: &Datatype) -> bool {
     ct.get_ptr_to().is_some_and(|p| {
-        !matches!(p.get_metatype(), crate::dtype::type_metatype::TYPE_VOID | crate::dtype::type_metatype::TYPE_UNKNOWN)
+        !matches!(
+            p.get_metatype(),
+            crate::dtype::type_metatype::TYPE_VOID | crate::dtype::type_metatype::TYPE_UNKNOWN
+        )
     }) && !crate::kuna_structsynth::points_at_synthesized_record(ct)
 }
 
@@ -176,9 +197,16 @@ pub(crate) fn gives_a_pointee(ct: &Datatype) -> bool {
 /// integer: `tar`'s `wsnode_remove` copies `ws_head` as a word, and
 /// `wordsplit_varexp`, which walks the list from it, took its record at the
 /// call it makes and lost `int8 *` for `int8`.
-pub(crate) fn types_a_pointer_as_a_word(data: &Funcdata, vote: &Datatype, member: &Datatype) -> bool {
+pub(crate) fn types_a_pointer_as_a_word(
+    data: &Funcdata,
+    vote: &Datatype,
+    member: &Datatype,
+) -> bool {
     data.get_arch().struct_headless.fires()
-        && data.get_arch().types().is_some_and(|t| minted_word(vote, member, t.get_size_of_pointer()))
+        && data
+            .get_arch()
+            .types()
+            .is_some_and(|t| minted_word(vote, member, t.get_size_of_pointer()))
 }
 
 /// Is `member` a pointer-width integer or undefined word of the record `vote`
@@ -186,13 +214,18 @@ pub(crate) fn types_a_pointer_as_a_word(data: &Funcdata, vote: &Datatype, member
 fn minted_word(vote: &Datatype, member: &Datatype, ptr_size: unlace_base::types::int4) -> bool {
     use crate::dtype::type_metatype;
     crate::kuna_structsynth::points_at_headless_record(vote)
-        && matches!(member.get_metatype(), type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN)
+        && matches!(
+            member.get_metatype(),
+            type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN
+        )
         && member.get_size() == ptr_size
 }
 
 /// Do these offsets read as a record past its start: two or more, none of them
 /// zero?
-pub(crate) fn is_headless<'a>(mut offsets: impl Iterator<Item = &'a unlace_base::types::intb>) -> bool {
+pub(crate) fn is_headless<'a>(
+    mut offsets: impl Iterator<Item = &'a unlace_base::types::intb>,
+) -> bool {
     let mut n = 0;
     offsets.all(|o| {
         n += 1;
@@ -206,8 +239,14 @@ mod tests {
 
     #[test]
     fn option_parses_both_modes_and_rejects_anything_else() {
-        assert_eq!(OptionStructHeadless.apply("off").unwrap().0, StructHeadlessMode::Off);
-        assert_eq!(OptionStructHeadless.apply("closed").unwrap().0, StructHeadlessMode::Closed);
+        assert_eq!(
+            OptionStructHeadless.apply("off").unwrap().0,
+            StructHeadlessMode::Off
+        );
+        assert_eq!(
+            OptionStructHeadless.apply("closed").unwrap().0,
+            StructHeadlessMode::Closed
+        );
         assert!(OptionStructHeadless.apply("on").is_err());
         assert!(!StructHeadlessMode::Off.fires());
         assert!(StructHeadlessMode::Closed.fires());
@@ -215,10 +254,15 @@ mod tests {
     }
 
     fn ptr_to(ptrto: std::rc::Rc<Datatype>) -> Datatype {
-        use crate::dtype::{sub_metatype, type_metatype, DatatypeKind};
+        use crate::dtype::{DatatypeKind, sub_metatype, type_metatype};
         let mut p = Datatype::new(8, type_metatype::TYPE_PTR);
         p.submeta = sub_metatype::SUB_PTR;
-        p.kind = DatatypeKind::Pointer { ptrto, spaceid: None, truncate: None, wordsize: 1 };
+        p.kind = DatatypeKind::Pointer {
+            ptrto,
+            spaceid: None,
+            truncate: None,
+            wordsize: 1,
+        };
         p
     }
 
@@ -227,7 +271,7 @@ mod tests {
     /// `structsynth` minted do not.
     #[test]
     fn a_declared_character_vector_gives_a_pointee_and_void_does_not() {
-        use crate::dtype::{flags, type_metatype, DatatypeKind, TypeField};
+        use crate::dtype::{DatatypeKind, TypeField, flags, type_metatype};
         use std::rc::Rc;
         let mut ch = Datatype::new(1, type_metatype::TYPE_INT);
         ch.flags |= flags::chartype;
@@ -238,7 +282,10 @@ mod tests {
         let mut named = Datatype::new(0x20, type_metatype::TYPE_STRUCT);
         named.name = "group".to_string();
         assert!(gives_a_pointee(&ptr_to(Rc::new(named))));
-        assert!(!gives_a_pointee(&ptr_to(Rc::new(Datatype::new(0, type_metatype::TYPE_VOID)))));
+        assert!(!gives_a_pointee(&ptr_to(Rc::new(Datatype::new(
+            0,
+            type_metatype::TYPE_VOID
+        )))));
         let mut minted = Datatype::new(0x18, type_metatype::TYPE_STRUCT);
         minted.name = "struct_19".to_string();
         let field = |offset: i32| TypeField {
@@ -247,7 +294,10 @@ mod tests {
             name: format!("field_0x{offset:x}"),
             field_type: Rc::new(Datatype::new(8, type_metatype::TYPE_INT)),
         };
-        minted.kind = DatatypeKind::Struct { field: vec![field(8), field(0x10)], bitfield: Vec::new() };
+        minted.kind = DatatypeKind::Struct {
+            field: vec![field(8), field(0x10)],
+            bitfield: Vec::new(),
+        };
         let minted = ptr_to(Rc::new(minted));
         assert!(!gives_a_pointee(&minted));
         assert!(crate::kuna_structsynth::points_at_headless_record(&minted));
@@ -258,8 +308,16 @@ mod tests {
         // own.
         let word = Datatype::new(8, type_metatype::TYPE_INT);
         assert!(minted_word(&minted, &word, 8));
-        assert!(minted_word(&minted, &Datatype::new(8, type_metatype::TYPE_UNKNOWN), 8));
-        assert!(!minted_word(&minted, &Datatype::new(4, type_metatype::TYPE_INT), 8));
+        assert!(minted_word(
+            &minted,
+            &Datatype::new(8, type_metatype::TYPE_UNKNOWN),
+            8
+        ));
+        assert!(!minted_word(
+            &minted,
+            &Datatype::new(4, type_metatype::TYPE_INT),
+            8
+        ));
         assert!(!minted_word(&minted, &charp, 8));
         let mut group = Datatype::new(0x20, type_metatype::TYPE_STRUCT);
         group.name = "group".to_string();

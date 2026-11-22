@@ -56,16 +56,16 @@ pub fn orders_its_constant(opcode: OpCode) -> bool {
 pub fn reads_as_integer(opcode: OpCode) -> bool {
     orders_its_constant(opcode)
         || matches!(
-        opcode,
-        OpCode::CPUI_INT_MULT
-            | OpCode::CPUI_INT_DIV
-            | OpCode::CPUI_INT_SDIV
-            | OpCode::CPUI_INT_REM
-            | OpCode::CPUI_INT_SREM
-            | OpCode::CPUI_INT_LEFT
-            | OpCode::CPUI_INT_RIGHT
-            | OpCode::CPUI_INT_SRIGHT
-    )
+            opcode,
+            OpCode::CPUI_INT_MULT
+                | OpCode::CPUI_INT_DIV
+                | OpCode::CPUI_INT_SDIV
+                | OpCode::CPUI_INT_REM
+                | OpCode::CPUI_INT_SREM
+                | OpCode::CPUI_INT_LEFT
+                | OpCode::CPUI_INT_RIGHT
+                | OpCode::CPUI_INT_SRIGHT
+        )
 }
 
 /// (kuna) May the single-bit escape be consulted for this constant?

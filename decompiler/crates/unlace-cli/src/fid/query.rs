@@ -1,15 +1,17 @@
 //! Read-only candidate lookup against a user-supplied kuna FID database.
+use object::Object;
+use serde_json::json;
 use unlace_analysis::fid::db::{FidDatabase, FidDb};
 use unlace_analysis::fid::fingerprint_function;
 use unlace_analysis::listing::CodeUnit;
 use unlace_analysis::listing::Listing;
 use unlace_analysis::loadimage_object::ObjectLoadImage;
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
-use object::Object;
-use serde_json::json;
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 fn usage() {
-    eprintln!("usage: unlace fid query <binary> --db <file.fid> --addr <address> [--addr <address> ...] --json\n--json emits {{binary, database, address, status, ...}} or {{binary, database, queries, ...}} for multiple addresses; addresses are hex (0x optional); single_candidate is an unverified name");
+    eprintln!(
+        "usage: unlace fid query <binary> --db <file.fid> --addr <address> [--addr <address> ...] --json\n--json emits {{binary, database, address, status, ...}} or {{binary, database, queries, ...}} for multiple addresses; addresses are hex (0x optional); single_candidate is an unverified name"
+    );
 }
 
 pub(super) fn run(args: &[String]) -> i32 {
@@ -227,7 +229,7 @@ fn fid_candidate(
         Err(reason) => {
             return Ok(
                 json!({"binary": binary, "database": db_path, "address": format!("0x{addr:x}"), "status": "unavailable", "reason": reason, "candidates": []}),
-            )
+            );
         }
     };
     let mut candidates: Vec<_> = db
@@ -255,7 +257,10 @@ fn fid_candidate(
         .collect();
     let specific_evidence = if candidates.is_empty() {
         "no_candidates"
-    } else if candidates.iter().any(|candidate| candidate["specific_hash_matches"] == true) {
+    } else if candidates
+        .iter()
+        .any(|candidate| candidate["specific_hash_matches"] == true)
+    {
         "matching_candidate"
     } else {
         "no_candidate_matches"
@@ -283,7 +288,8 @@ mod tests {
             .join("../../..")
             .canonicalize()
             .unwrap();
-        let binary = root.join("decompiler/crates/unlace-analysis/tests/fixtures/arm_interwork_le32");
+        let binary =
+            root.join("decompiler/crates/unlace-analysis/tests/fixtures/arm_interwork_le32");
         let path = binary.to_str().unwrap();
         let bytes = std::fs::read(&binary).unwrap();
         let file = object::File::parse(&*bytes).unwrap();

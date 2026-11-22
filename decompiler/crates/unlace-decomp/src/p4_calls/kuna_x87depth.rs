@@ -49,7 +49,12 @@ struct Calls {
 
 impl Calls {
     fn new() -> Self {
-        Calls { parent: Vec::new(), offset: Vec::new(), lo: Vec::new(), hi: Vec::new() }
+        Calls {
+            parent: Vec::new(),
+            offset: Vec::new(),
+            lo: Vec::new(),
+            hi: Vec::new(),
+        }
     }
 
     fn add(&mut self) -> usize {
@@ -139,7 +144,11 @@ type Reg = (unlace_base::types::int4, u64, u64);
 
 fn reg_of_varnode(data: &Funcdata, id: crate::context::VarnodeId) -> Option<Reg> {
     let v = data.vbank().get(id)?;
-    Some((v.get_addr().get_space()?.get_index(), v.get_offset(), v.get_size() as u64))
+    Some((
+        v.get_addr().get_space()?.get_index(),
+        v.get_offset(),
+        v.get_size() as u64,
+    ))
 }
 
 fn reg_of_data(v: &VarnodeData) -> Option<Reg> {
@@ -157,7 +166,11 @@ fn bank_index(r: Option<Reg>, storage: &Storage) -> Result<Option<usize>, ()> {
     let Some(r) = r else { return Ok(None) };
     for (i, reg) in storage.bank.iter().enumerate() {
         if overlaps(r, reg) {
-            return if r.1 == reg.offset && r.2 == u64::from(reg.size) { Ok(Some(i)) } else { Err(()) };
+            return if r.1 == reg.offset && r.2 == u64::from(reg.size) {
+                Ok(Some(i))
+            } else {
+                Err(())
+            };
         }
     }
     Ok(None)
@@ -254,9 +267,14 @@ fn walk_block(
     for id in data.bb_ops(block) {
         let op = data.obank().get(id)?;
         let out = op.get_out().and_then(|o| reg_of_varnode(data, o));
-        let ins: Vec<_> = (0..op.num_input()).map(|i| op.get_in(i).and_then(|v| reg_of_varnode(data, v))).collect();
+        let ins: Vec<_> = (0..op.num_input())
+            .map(|i| op.get_in(i).and_then(|v| reg_of_varnode(data, v)))
+            .collect();
         let free = op.code() == OpCode::CPUI_CALLOTHER
-            && op.get_in(0).and_then(|v| data.vbank().get(v)).is_some_and(|v| v.is_constant() && v.get_offset() == storage.free);
+            && op
+                .get_in(0)
+                .and_then(|v| data.vbank().get(v))
+                .is_some_and(|v| v.is_constant() && v.get_offset() == storage.free);
         let step = classify(op.code(), out, &ins, free, storage)?;
         if matches!(step, Step::Return) && op.get_halt_type() == 0 {
             returns.push((op.get_addr().clone(), d));
@@ -265,8 +283,13 @@ fn walk_block(
         d = apply(step, d, calls)?;
         if let (true, Depth::AfterCall(c, _)) = (is_call, d) {
             sites.calls.push((op.get_addr().clone(), c));
-            let entry = data.get_call_specs_index(id).map(|i| data.get_call_specs(i).get_entry_address().clone());
-            if let Some(key) = entry.filter(|e| !e.is_invalid()).and_then(|e| Some((e.get_space()?.get_index(), e.get_offset()))) {
+            let entry = data
+                .get_call_specs_index(id)
+                .map(|i| data.get_call_specs(i).get_entry_address().clone());
+            if let Some(key) = entry
+                .filter(|e| !e.is_invalid())
+                .and_then(|e| Some((e.get_space()?.get_index(), e.get_offset())))
+            {
                 match sites.by_callee.get(&key) {
                     Some(&first) => calls.link(c, 0, first, 0)?,
                     None => {
@@ -285,7 +308,13 @@ struct OpsEmit {
 }
 
 impl unlace_sleigh::translate::PcodeEmit for OpsEmit {
-    fn dump(&mut self, _addr: &Address, opc: OpCode, outvar: Option<&VarnodeData>, vars: &[VarnodeData]) {
+    fn dump(
+        &mut self,
+        _addr: &Address,
+        opc: OpCode,
+        outvar: Option<&VarnodeData>,
+        vars: &[VarnodeData],
+    ) {
         self.ops.push((opc, outvar.cloned(), vars.to_vec()));
     }
 }
@@ -320,8 +349,18 @@ pub fn call_leaves<T: unlace_sleigh::translate::Translate + ?Sized>(
         for (code, out, ins) in emit.ops {
             let ins_regs: Vec<_> = ins.iter().map(reg_of_data).collect();
             let free = code == OpCode::CPUI_CALLOTHER
-                && ins.first().is_some_and(|v| v.space.as_ref().is_some_and(|s| s.get_type() == unlace_base::space::spacetype::IPTR_CONSTANT) && v.offset == free_userop);
-            let step = classify(code, out.as_ref().and_then(reg_of_data), &ins_regs, free, storage)?;
+                && ins.first().is_some_and(|v| {
+                    v.space.as_ref().is_some_and(|s| {
+                        s.get_type() == unlace_base::space::spacetype::IPTR_CONSTANT
+                    }) && v.offset == free_userop
+                });
+            let step = classify(
+                code,
+                out.as_ref().and_then(reg_of_data),
+                &ins_regs,
+                free,
+                storage,
+            )?;
             match step {
                 Step::Call => {
                     calls.pin(d, 0)?;
@@ -376,8 +415,11 @@ fn solve(data: &Funcdata, storage: &Storage) -> Option<DepthFacts> {
     if n == 0 {
         return None;
     }
-    let blocks: Vec<_> = (0..n).map(|i| data.bblocks_get_block(i as unlace_base::types::int4)).collect();
-    let index: std::collections::HashMap<_, _> = blocks.iter().enumerate().map(|(i, &b)| (b, i)).collect();
+    let blocks: Vec<_> = (0..n)
+        .map(|i| data.bblocks_get_block(i as unlace_base::types::int4))
+        .collect();
+    let index: std::collections::HashMap<_, _> =
+        blocks.iter().enumerate().map(|(i, &b)| (b, i)).collect();
     let mut calls = Calls::new();
     let mut returns = Vec::new();
     let mut sites = Sites::default();
@@ -385,7 +427,15 @@ fn solve(data: &Funcdata, storage: &Storage) -> Option<DepthFacts> {
     entry[0] = Some(Depth::Known(0));
     let mut pending = vec![0usize];
     while let Some(i) = pending.pop() {
-        let exit = walk_block(data, blocks[i], entry[i]?, storage, &mut calls, &mut returns, &mut sites)?;
+        let exit = walk_block(
+            data,
+            blocks[i],
+            entry[i]?,
+            storage,
+            &mut calls,
+            &mut returns,
+            &mut sites,
+        )?;
         let b = data.bblocks_ref().block(blocks[i]);
         for s in 0..b.size_out() {
             let j = *index.get(&b.get_out(s))?;
@@ -410,7 +460,12 @@ fn solve(data: &Funcdata, storage: &Storage) -> Option<DepthFacts> {
             _ => {}
         }
     }
-    out.float_calls = sites.calls.into_iter().filter(|&(_, c)| calls.value(c) == Some(1)).map(|(a, _)| a).collect();
+    out.float_calls = sites
+        .calls
+        .into_iter()
+        .filter(|&(_, c)| calls.value(c) == Some(1))
+        .map(|(a, _)| a)
+        .collect();
     Some(out)
 }
 
@@ -422,7 +477,9 @@ pub fn warn(data: &mut Funcdata) {
     if !data.get_arch().x87_depth {
         return;
     }
-    let float = |t: Option<&std::rc::Rc<crate::dtype::Datatype>>| t.is_some_and(|t| t.get_metatype() == crate::dtype::type_metatype::TYPE_FLOAT);
+    let float = |t: Option<&std::rc::Rc<crate::dtype::Datatype>>| {
+        t.is_some_and(|t| t.get_metatype() == crate::dtype::type_metatype::TYPE_FLOAT)
+    };
     let proto = data.get_func_proto();
     if proto.is_output_locked()
         && !float(proto.get_output_type())
@@ -434,8 +491,13 @@ pub fn warn(data: &mut Funcdata) {
     let mut warnings = Vec::new();
     for i in 0..data.num_calls() {
         let fc = data.get_call_specs(i);
-        let Some(addr) = data.obank().get(fc.get_op()).map(|o| o.get_addr().clone()) else { continue };
-        if data.kuna_x87_float_calls.contains(&addr) && fc.proto().is_output_locked() && !float(fc.proto().get_output_type()) {
+        let Some(addr) = data.obank().get(fc.get_op()).map(|o| o.get_addr().clone()) else {
+            continue;
+        };
+        if data.kuna_x87_float_calls.contains(&addr)
+            && fc.proto().is_output_locked()
+            && !float(fc.proto().get_output_type())
+        {
             warnings.push((format!("x87depth: call to {} leaves a value on the x87 stack but is not typed to return one", fc.get_name()), addr));
         }
     }
@@ -467,7 +529,8 @@ mod tests {
         let w = c.add();
         c.need(Depth::AfterCall(w, 0), 0).unwrap();
         assert_eq!(c.value(w), None);
-        c.join(Depth::AfterCall(w, 0), Depth::AfterCall(v, 0)).unwrap();
+        c.join(Depth::AfterCall(w, 0), Depth::AfterCall(v, 0))
+            .unwrap();
         assert_eq!(c.value(w), Some(1));
         assert!(c.pin(Depth::AfterCall(w, 0), 0).is_none());
     }

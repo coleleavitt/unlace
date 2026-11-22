@@ -29,7 +29,12 @@ pub struct Token {
 impl Token {
     /// Constructor
     pub fn new(nm: &[u8], sz: i32, be: bool, ind: i32) -> Token {
-        Token { name: nm.to_vec(), size: sz, bigendian: be, index: ind }
+        Token {
+            name: nm.to_vec(),
+            size: sz,
+            bigendian: be,
+            index: ind,
+        }
     }
 
     /// Get the size in bytes

@@ -45,15 +45,15 @@
 //! engine's dispatch (the `kuna_addcarrychain` / `kuna_arraystride` idiom).
 //! // STUB(W6): `glb->inst[CPUI_INT_ADD]` property flags.
 
-use unlace_base::address::{calc_mask, Address};
+use unlace_base::address::{Address, calc_mask};
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
 use unlace_base::marshal::ElementId;
 
 use crate::action::{ActionGroupList, Rule, RuleSpec};
-use crate::funcdata::Funcdata;
 use crate::context::{OpId, TypeOp, VarnodeId};
+use crate::funcdata::Funcdata;
 
 /// Marshaling element `<stackprobeloop>` (kuna).  ElementIds live in the 4000+
 /// range (C++ `ELEM_STACKPROBELOOP = ElementId("stackprobeloop",4012)`).
@@ -90,7 +90,9 @@ impl Rule for RuleStackProbeLoop {
         if !grouplist.contains(&self.group) {
             return None;
         }
-        Some(Box::new(RuleStackProbeLoop { group: self.group.clone() }))
+        Some(Box::new(RuleStackProbeLoop {
+            group: self.group.clone(),
+        }))
     }
 
     /// C++ `RuleStackProbeLoop::applyOp` (`kuna_stackprobeloop.cc:63`).
@@ -211,7 +213,8 @@ impl Rule for RuleStackProbeLoop {
         let inlist = [sp_in, cvn];
         // STUB(W6): glb->inst[CPUI_INT_ADD] property flags; opcode value is exact.
         data.op_set_opcode(op, TypeOp::new(OpCode::CPUI_INT_ADD, 0, "INT_ADD"));
-        data.op_set_all_input(op, &inlist).expect("opSetAllInput on rewritten MULTIEQUAL");
+        data.op_set_all_input(op, &inlist)
+            .expect("opSetAllInput on rewritten MULTIEQUAL");
         1
     }
 }
@@ -302,7 +305,10 @@ fn stack_relative(data: &Funcdata, sp_in: VarnodeId, vn: VarnodeId) -> Option<ui
 // ---------------------------------------------------------------------------
 
 fn op_num_input(data: &Funcdata, op: OpId) -> int4 {
-    data.obank().get(op).expect("op_num_input: stale op").num_input()
+    data.obank()
+        .get(op)
+        .expect("op_num_input: stale op")
+        .num_input()
 }
 fn op_out(data: &Funcdata, op: OpId) -> Option<VarnodeId> {
     data.obank().get(op).and_then(|o| o.get_out())
@@ -317,10 +323,16 @@ fn vn_descend(data: &Funcdata, vn: VarnodeId) -> Vec<OpId> {
     data.descend_snapshot(vn)
 }
 fn vn_is_written(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).map(|v| v.is_written()).unwrap_or(false)
+    data.vbank()
+        .get(vn)
+        .map(|v| v.is_written())
+        .unwrap_or(false)
 }
 fn vn_is_constant(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).map(|v| v.is_constant()).unwrap_or(false)
+    data.vbank()
+        .get(vn)
+        .map(|v| v.is_constant())
+        .unwrap_or(false)
 }
 fn vn_def(data: &Funcdata, vn: VarnodeId) -> Option<OpId> {
     data.vbank().get(vn).and_then(|v| v.get_def())
@@ -332,7 +344,11 @@ fn vn_size(data: &Funcdata, vn: VarnodeId) -> int4 {
     data.vbank().get(vn).map(|v| v.get_size()).unwrap_or(0)
 }
 fn vn_addr(data: &Funcdata, vn: VarnodeId) -> Address {
-    data.vbank().get(vn).expect("vn_addr: stale vn").get_addr().clone()
+    data.vbank()
+        .get(vn)
+        .expect("vn_addr: stale vn")
+        .get_addr()
+        .clone()
 }
 
 #[cfg(test)]

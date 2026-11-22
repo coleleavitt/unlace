@@ -5,7 +5,9 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace};
+use unlace_base::space::{
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
+};
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
@@ -16,7 +18,8 @@ use crate::funcdata::Funcdata;
 fn build_fd() -> Funcdata {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -36,7 +39,10 @@ fn build_fd() -> Funcdata {
 }
 
 fn ram(fd: &Funcdata, off: u64) -> Address {
-    Address::new(Rc::clone(fd.get_arch().manage().get_space_by_name("ram").unwrap()), off)
+    Address::new(
+        Rc::clone(fd.get_arch().manage().get_space_by_name("ram").unwrap()),
+        off,
+    )
 }
 
 struct Ir {
@@ -50,13 +56,18 @@ impl Ir {
         let mut fd = build_fd();
         let root = fd.bblocks_root_pub();
         let bl = fd.bblocks_mut().new_block_basic(root);
-        Ir { fd, bl, next: 0x100 }
+        Ir {
+            fd,
+            bl,
+            next: 0x100,
+        }
     }
 
     fn op(&mut self, opc: OpCode, ninputs: int4) -> OpId {
         self.next += 4;
         let o = self.fd.new_op(ninputs, ram(&self.fd, self.next));
-        self.fd.op_set_opcode(o, TypeOp::new(opc, 0, format!("{opc:?}")));
+        self.fd
+            .op_set_opcode(o, TypeOp::new(opc, 0, format!("{opc:?}")));
         self.fd.op_insert_end(o, self.bl);
         o
     }
@@ -114,9 +125,17 @@ impl Ir {
         call
     }
 
-    fn score(&mut self, every_path: bool, maxlevel: int4, vn: VarnodeId, call: OpId) -> (bool, bool, u64) {
+    fn score(
+        &mut self,
+        every_path: bool,
+        maxlevel: int4,
+        vn: VarnodeId,
+        call: OpId,
+    ) -> (bool, bool, u64) {
         let mut trial = ParamTrial::new(ram(&self.fd, 0x8), 4, 1);
-        let (used, steps) = self.fd.ancestor_op_use_counted(every_path, maxlevel, vn, call, &mut trial, 0, 0);
+        let (used, steps) = self
+            .fd
+            .ancestor_op_use_counted(every_path, maxlevel, vn, call, &mut trial, 0, 0);
         (used, trial.is_rem_formed(), steps)
     }
 }
@@ -172,7 +191,11 @@ fn random_graph(rng: &mut Rng) -> (Ir, Vec<OpId>, VarnodeId, OpId) {
     }
     for _ in 0..1 + rng.below(4) {
         let bad = rng.below(3) != 0;
-        let v = if rng.below(3) == 0 { ir.rem_leaf(place(), bad) } else { ir.leaf(place(), 4, bad) };
+        let v = if rng.below(3) == 0 {
+            ir.rem_leaf(place(), bad)
+        } else {
+            ir.leaf(place(), 4, bad)
+        };
         narrow.push(v);
     }
     let all: Vec<VarnodeId> = wide.iter().chain(narrow.iter()).copied().collect();
@@ -181,7 +204,10 @@ fn random_graph(rng: &mut Rng) -> (Ir, Vec<OpId>, VarnodeId, OpId) {
         ir.set(o, &ins);
     }
     for &o in &pieces {
-        let ins = [narrow[rng.below(narrow.len())], narrow[rng.below(narrow.len())]];
+        let ins = [
+            narrow[rng.below(narrow.len())],
+            narrow[rng.below(narrow.len())],
+        ];
         ir.set(o, &ins);
     }
     let root = all[rng.below(all.len())];
@@ -207,11 +233,20 @@ fn the_memo_answers_as_the_walk_over_every_path_does() {
             rem += usize::from(walk.1);
         }
         for o in phis {
-            assert!(!ir.fd.obank().get(o).unwrap().is_mark(), "seed {seed}: a MULTIEQUAL stayed marked");
+            assert!(
+                !ir.fd.obank().get(o).unwrap().is_mark(),
+                "seed {seed}: a MULTIEQUAL stayed marked"
+            );
         }
     }
-    assert!(differ.is_empty(), "memo differs from the full walk (seed, level, walk, memo): {differ:?}");
-    assert!(saved > 1000 && used > 1000 && rem > 100, "saved {saved}, used {used}, rem {rem}");
+    assert!(
+        differ.is_empty(),
+        "memo differs from the full walk (seed, level, walk, memo): {differ:?}"
+    );
+    assert!(
+        saved > 1000 && used > 1000 && rem > 100,
+        "saved {saved}, used {used}, rem {rem}"
+    );
 }
 
 /// Four layers of 40 MULTIEQUALs, each reading every output of the layer
@@ -220,8 +255,9 @@ fn the_memo_answers_as_the_walk_over_every_path_does() {
 fn lattice(good_leaf: Option<usize>) -> (Ir, VarnodeId, OpId) {
     const WIDTH: usize = 40;
     let mut ir = Ir::new();
-    let mut below: Vec<VarnodeId> =
-        (0..WIDTH).map(|i| ir.leaf(0x20_000 + 0x10 * i as u64, 4, Some(i) != good_leaf)).collect();
+    let mut below: Vec<VarnodeId> = (0..WIDTH)
+        .map(|i| ir.leaf(0x20_000 + 0x10 * i as u64, 4, Some(i) != good_leaf))
+        .collect();
     for layer in 0..3u64 {
         below = (0..WIDTH)
             .map(|i| {
@@ -377,7 +413,11 @@ fn rich_graph(rng: &mut Rng) -> (Ir, Vec<OpId>, Vec<VarnodeId>, OpId) {
     }
     for _ in 0..1 + rng.below(4) {
         let bad = rng.below(2) == 0;
-        let v = if rng.below(3) == 0 { ir.rem_leaf(place(), bad) } else { ir.leaf(place(), 4, bad) };
+        let v = if rng.below(3) == 0 {
+            ir.rem_leaf(place(), bad)
+        } else {
+            ir.leaf(place(), 4, bad)
+        };
         if returns && rng.below(2) == 0 {
             let zero = ir.fd.new_constant(4, 0);
             let ret = ir.op(OpCode::CPUI_RETURN, 2);
@@ -391,7 +431,10 @@ fn rich_graph(rng: &mut Rng) -> (Ir, Vec<OpId>, Vec<VarnodeId>, OpId) {
         ir.set(o, &ins);
     }
     for &o in &pieces {
-        let ins = [narrow[rng.below(narrow.len())], narrow[rng.below(narrow.len())]];
+        let ins = [
+            narrow[rng.below(narrow.len())],
+            narrow[rng.below(narrow.len())],
+        ];
         ir.set(o, &ins);
     }
     for &o in &links {
@@ -434,12 +477,21 @@ fn the_memo_answers_as_the_walk_does_through_indirects_copies_and_returns() {
             }
         }
         for o in phis {
-            assert!(!ir.fd.obank().get(o).unwrap().is_mark(), "seed {seed}: a MULTIEQUAL stayed marked");
+            assert!(
+                !ir.fd.obank().get(o).unwrap().is_mark(),
+                "seed {seed}: a MULTIEQUAL stayed marked"
+            );
         }
     }
     differ.truncate(20);
-    assert!(differ.is_empty(), "memo differs from the full walk (seed, level, walk, memo): {differ:?}");
-    assert!(saved > 2000 && used > 2000, "cases {cases}, saved {saved}, used {used}");
+    assert!(
+        differ.is_empty(),
+        "memo differs from the full walk (seed, level, walk, memo): {differ:?}"
+    );
+    assert!(
+        saved > 2000 && used > 2000,
+        "cases {cases}, saved {saved}, used {used}"
+    );
 }
 
 /// `r = phi(p1, k)`, `p1 = phi(p2)`, `p2 = phi(p3)`, `p3 = phi(x)`,

@@ -42,11 +42,16 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture() -> PathBuf {
@@ -77,16 +82,23 @@ fn decompile(func: &str, mode: Mode) -> String {
     // deferred commit). Set the flags on the live arch BEFORE committing so the
     // deferred Listing build + consumer run see them on.
     if let Mode::On = mode {
-        prog.arch_mut().set_kuna_option("listing", "on").expect("listing flips on");
+        prog.arch_mut()
+            .set_kuna_option("listing", "on")
+            .expect("listing flips on");
         prog.arch_mut()
             .set_kuna_option("noreturn_disc", "on")
             .expect("noreturn_disc flips on");
     }
     // `read symbols`: build the Listing (deferred) and run the consumer, gated.
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
-    let cmds: Vec<String> =
-        [format!("load function {func}"), "decompile".into(), "print C".into()].to_vec();
+    let cmds: Vec<String> = [
+        format!("load function {func}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .to_vec();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -146,7 +158,10 @@ fn discovered_noreturn_eliminates_dead_code_after_custom_wrapper() {
 #[test]
 fn flags_off_is_the_today_baseline() {
     let off = decompile("compute_a", Mode::Off);
-    assert!(!off.trim().is_empty(), "expected a non-empty body for compute_a");
+    assert!(
+        !off.trim().is_empty(),
+        "expected a non-empty body for compute_a"
+    );
     // The default body follows the fall-through, so it is the larger merged form
     // (it references more than one `compute_*`/`die` site). The exact bytes are the
     // today baseline; we only assert the no-return terminator is absent (assertion

@@ -9,12 +9,15 @@
 use std::path::PathBuf;
 
 use unlace_console::assertions;
-use unlace_console::decompile_step::{decompile_one, DecompileSeed};
-use unlace_console::engine::{bootstrap_from_object, EntrySelector};
-use unlace_console::grammar::{parse_type, DataOrg};
+use unlace_console::decompile_step::{DecompileSeed, decompile_one};
+use unlace_console::engine::{EntrySelector, bootstrap_from_object};
+use unlace_console::grammar::{DataOrg, parse_type};
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn refusals(
@@ -40,7 +43,9 @@ fn a_directive_the_output_does_not_show_is_reported() {
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .unwrap_or_else(|e| panic!("bootstrap stablenames_x86_64: {}", e.explain()));
     prog.commit_pending_analysis().expect("analysis commit");
-    let entry = prog.resolve_entry(&EntrySelector::Name("mix".into())).expect("the fixture has a `mix`");
+    let entry = prog
+        .resolve_entry(&EntrySelector::Name("mix".into()))
+        .expect("the fixture has a `mix`");
     let mut fd = decompile_one(
         prog.arch_mut(),
         &entry.name,
@@ -52,24 +57,50 @@ fn a_directive_the_output_does_not_show_is_reported() {
     .result
     .expect("mix decompiles");
     let (addr_size, word_size) = prog.arch().data_org();
-    let (float8, _) = parse_type("double", prog.arch().types(), DataOrg { addr_size, word_size }).expect("parses");
+    let (float8, _) = parse_type(
+        "double",
+        prog.arch().types(),
+        DataOrg {
+            addr_size,
+            word_size,
+        },
+    )
+    .expect("parses");
 
-    let renamed = unlace_console::kuna_hightarget::apply_local(&mut fd, "v5", "hash", None, 8, None)
-        .expect("applies")
-        .expect("binds a Symbol");
-    let retyped = unlace_console::kuna_hightarget::apply_local(&mut fd, "v7", "", Some(float8.clone()), 8, None)
-        .expect("applies")
-        .expect("binds a Symbol");
-    let expected = assertions::expected_locals(&fd, &[(0, renamed, None), (1, retyped, Some(float8))]);
+    let renamed =
+        unlace_console::kuna_hightarget::apply_local(&mut fd, "v5", "hash", None, 8, None)
+            .expect("applies")
+            .expect("binds a Symbol");
+    let retyped = unlace_console::kuna_hightarget::apply_local(
+        &mut fd,
+        "v7",
+        "",
+        Some(float8.clone()),
+        8,
+        None,
+    )
+    .expect("applies")
+    .expect("binds a Symbol");
+    let expected =
+        assertions::expected_locals(&fd, &[(0, renamed, None), (1, retyped, Some(float8))]);
     let code = unlace_decomp::decompile_drive::print_c(prog.arch_mut(), &fd);
     let unapplied = refusals(&prog, &fd, &code, &expected);
     assert_eq!(unapplied.len(), 2, "{unapplied:?}");
-    assert!(unapplied.contains(&(0, "nothing is declared as `hash` after it".into())), "{unapplied:?}");
-    assert!(unapplied.iter().any(|(i, reason)| *i == 1 && reason.starts_with("`v7` is declared as")), "{unapplied:?}");
+    assert!(
+        unapplied.contains(&(0, "nothing is declared as `hash` after it".into())),
+        "{unapplied:?}"
+    );
+    assert!(
+        unapplied
+            .iter()
+            .any(|(i, reason)| *i == 1 && reason.starts_with("`v7` is declared as")),
+        "{unapplied:?}"
+    );
 
-    let untouched = unlace_console::kuna_hightarget::apply_local(&mut fd, "v2", "v2", None, 8, None)
-        .expect("applies")
-        .expect("binds a Symbol");
+    let untouched =
+        unlace_console::kuna_hightarget::apply_local(&mut fd, "v2", "v2", None, 8, None)
+            .expect("applies")
+            .expect("binds a Symbol");
     let expected = assertions::expected_locals(&fd, &[(2, untouched, None)]);
     assert!(refusals(&prog, &fd, &code, &expected).is_empty());
 }

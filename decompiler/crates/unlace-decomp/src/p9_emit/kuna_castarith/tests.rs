@@ -2,8 +2,8 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace,
-    UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace, addrspace_flags,
+    spacetype,
 };
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
@@ -289,7 +289,11 @@ fn a_negative_index_c_would_read_as_unsigned_keeps_the_integer_form() {
         assert!(!rewrite(&mut fx.fd, add));
         assert_eq!(fx.fd.obank().get(add).unwrap().code(), OpCode::CPUI_INT_ADD);
     }
-    for (width, k) in [(8, -0x3_ffff_fff8i64), (4, -0x1_ffff_fffc), (8, 0x4_0000_0000)] {
+    for (width, k) in [
+        (8, -0x3_ffff_fff8i64),
+        (4, -0x1_ffff_fffc),
+        (8, 0x4_0000_0000),
+    ] {
         let mut fx = Fx::new();
         let vp = fx.void_ptr();
         let t = fx.base(width, type_metatype::TYPE_INT);
@@ -403,8 +407,15 @@ fn a_base_that_is_a_cast_other_ops_read_is_recast_from_its_input() {
         }) if src == x
     ));
     let base = rewritten(&mut fx, add, 10, 1, 10);
-    assert_ne!(base, p, "the shared cast is not retyped under its other reader");
-    assert_eq!(cast_input_of(&fx, base), Some(x), "no cast is stacked on the shared one");
+    assert_ne!(
+        base, p,
+        "the shared cast is not retyped under its other reader"
+    );
+    assert_eq!(
+        cast_input_of(&fx, base),
+        Some(x),
+        "no cast is stacked on the shared one"
+    );
     assert!(Rc::ptr_eq(fx.fd.vbank().get(base).unwrap().get_type(), &tp));
     assert!(Rc::ptr_eq(fx.fd.vbank().get(p).unwrap().get_type(), &up));
 }
@@ -839,11 +850,18 @@ impl Fx {
 
 fn index_rewritten(fx: &mut Fx, add: OpId, index: VarnodeId, elem: u64) -> VarnodeId {
     let strat = fx.strat();
-    assert!(rewrite_index(&mut fx.fd, &strat, add), "the add was not rewritten");
+    assert!(
+        rewrite_index(&mut fx.fd, &strat, add),
+        "the add was not rewritten"
+    );
     let o = fx.fd.obank().get(add).unwrap();
     assert_eq!(o.code(), OpCode::CPUI_PTRADD);
     assert_eq!(fx.input(add, 1), index, "the index is the unscaled value");
-    assert_eq!(fx.offset(fx.input(add, 2)), elem, "the element is the scale");
+    assert_eq!(
+        fx.offset(fx.input(add, 2)),
+        elem,
+        "the element is the scale"
+    );
     fx.input(add, 0)
 }
 
@@ -858,10 +876,34 @@ fn index_plan(fx: &mut Fx, add: OpId) -> Result<IndexPlan, Leave> {
 #[test]
 fn a_scaled_index_becomes_a_subscript_of_that_element() {
     for (size, meta, ext, isize, imeta) in [
-        (2, type_metatype::TYPE_INT, OpCode::CPUI_INT_SEXT, 4, type_metatype::TYPE_INT),
-        (4, type_metatype::TYPE_UINT, OpCode::CPUI_INT_ZEXT, 4, type_metatype::TYPE_UINT),
-        (8, type_metatype::TYPE_INT, OpCode::CPUI_INT_SEXT, 2, type_metatype::TYPE_INT),
-        (8, type_metatype::TYPE_FLOAT, OpCode::CPUI_INT_ZEXT, 1, type_metatype::TYPE_UINT),
+        (
+            2,
+            type_metatype::TYPE_INT,
+            OpCode::CPUI_INT_SEXT,
+            4,
+            type_metatype::TYPE_INT,
+        ),
+        (
+            4,
+            type_metatype::TYPE_UINT,
+            OpCode::CPUI_INT_ZEXT,
+            4,
+            type_metatype::TYPE_UINT,
+        ),
+        (
+            8,
+            type_metatype::TYPE_INT,
+            OpCode::CPUI_INT_SEXT,
+            2,
+            type_metatype::TYPE_INT,
+        ),
+        (
+            8,
+            type_metatype::TYPE_FLOAT,
+            OpCode::CPUI_INT_ZEXT,
+            1,
+            type_metatype::TYPE_UINT,
+        ),
     ] {
         let mut fx = Fx::new();
         let vp = fx.void_ptr();
@@ -872,10 +914,17 @@ fn a_scaled_index_becomes_a_subscript_of_that_element() {
         let (add, x, mul) = fx.scaled(p, i, ext, size as u64, Rc::clone(&t));
         fx.high();
         let base = index_rewritten(&mut fx, add, x, size as u64);
-        assert_eq!(cast_input_of(&fx, base), Some(p), "size {size}: the base is a cast of p");
+        assert_eq!(
+            cast_input_of(&fx, base),
+            Some(p),
+            "size {size}: the base is a cast of p"
+        );
         let tp = fx.ptr(t);
         assert!(Rc::ptr_eq(fx.fd.vbank().get(base).unwrap().get_type(), &tp));
-        assert!(fx.fd.obank().get(mul).unwrap().is_dead(), "size {size}: the multiply is gone");
+        assert!(
+            fx.fd.obank().get(mul).unwrap().is_dead(),
+            "size {size}: the multiply is gone"
+        );
     }
 }
 
@@ -929,7 +978,10 @@ fn a_scale_that_is_not_the_element_keeps_the_integer_form() {
         let i = fx.var(4, int);
         let (add, _, _) = fx.scaled(p, i, OpCode::CPUI_INT_SEXT, scale, t);
         fx.high();
-        assert!(matches!(index_plan(&mut fx, add), Err(Leave::ScaleMismatch)), "scale {scale}");
+        assert!(
+            matches!(index_plan(&mut fx, add), Err(Leave::ScaleMismatch)),
+            "scale {scale}"
+        );
     }
     let mut fx = Fx::new();
     let vp = fx.void_ptr();
@@ -940,7 +992,10 @@ fn a_scale_that_is_not_the_element_keeps_the_integer_form() {
     let (add, out) = fx.implied(OpCode::CPUI_INT_ADD, &[p, off], lp);
     fx.load(out, long);
     fx.high();
-    assert!(matches!(index_plan(&mut fx, add), Err(Leave::ScaleMismatch)));
+    assert!(matches!(
+        index_plan(&mut fx, add),
+        Err(Leave::ScaleMismatch)
+    ));
 }
 
 /// The index must convert the way the integer form adds it: a pointer (the sum
@@ -968,7 +1023,10 @@ fn an_index_that_is_not_a_plain_integer_keeps_the_integer_form() {
     let (add, out) = fx.implied(OpCode::CPUI_INT_ADD, &[p, f], cp);
     fx.load(out, c);
     fx.high();
-    assert!(matches!(index_plan(&mut fx, add), Err(Leave::IndexNotInteger)));
+    assert!(matches!(
+        index_plan(&mut fx, add),
+        Err(Leave::IndexNotInteger)
+    ));
 
     let mut fx = Fx::new();
     let vp = fx.void_ptr();
@@ -981,7 +1039,10 @@ fn an_index_that_is_not_a_plain_integer_keeps_the_integer_form() {
     let (add, out) = fx.implied(OpCode::CPUI_INT_ADD, &[p, cast], cp);
     fx.load(out, c);
     fx.high();
-    assert!(matches!(index_plan(&mut fx, add), Err(Leave::IndexNotInteger)));
+    assert!(matches!(
+        index_plan(&mut fx, add),
+        Err(Leave::IndexNotInteger)
+    ));
 }
 
 /// A sum that is itself another pointer's subscript is an integer: the integer
@@ -1025,7 +1086,10 @@ fn a_scale_after_the_add_keeps_the_integer_form() {
     fx.fd.op_set_input(add, iv, 1).unwrap();
     fx.load(out, t);
     fx.high();
-    assert!(matches!(index_plan(&mut fx, add), Err(Leave::ScaleUnsettled)));
+    assert!(matches!(
+        index_plan(&mut fx, add),
+        Err(Leave::ScaleUnsettled)
+    ));
 }
 
 /// A value whose consumer needs its own cast anyway saves nothing: a sum typed
@@ -1048,7 +1112,11 @@ fn a_value_use_is_rewritten_only_where_it_saves_a_cast() {
         fx.binary(OpCode::CPUI_COPY, out, out, if same { up } else { lp });
         fx.high();
         let strat = fx.strat();
-        assert_eq!(rewrite_index(&mut fx.fd, &strat, add), want, "same type {same}");
+        assert_eq!(
+            rewrite_index(&mut fx.fd, &strat, add),
+            want,
+            "same type {same}"
+        );
     }
 }
 
@@ -1064,12 +1132,21 @@ fn the_cast_pass_rewrites_a_scaled_index_only_when_the_option_is_on() {
         let (add, _, _) = fx.scaled(p, i, OpCode::CPUI_INT_SEXT, 4, t);
         fx.high();
         let _ = fx.fd.action_set_casts();
-        assert_eq!(fx.fd.obank().get(add).unwrap().code(), want, "castindex {on}");
+        assert_eq!(
+            fx.fd.obank().get(add).unwrap().code(),
+            want,
+            "castindex {on}"
+        );
     }
 }
 
 /// `sub = a - b` of two pointers typed `pa` and `pb`, `sub` an explicit `long`.
-fn difference(fx: &mut Fx, pa: Rc<Datatype>, pb: Rc<Datatype>, out: Rc<Datatype>) -> (OpId, VarnodeId, VarnodeId) {
+fn difference(
+    fx: &mut Fx,
+    pa: Rc<Datatype>,
+    pb: Rc<Datatype>,
+    out: Rc<Datatype>,
+) -> (OpId, VarnodeId, VarnodeId) {
     let a = fx.var(8, pa);
     let b = fx.var(8, pb);
     let op = fx.binary(OpCode::CPUI_INT_SUB, a, b, out);
@@ -1105,7 +1182,10 @@ fn other_differences_keep_the_integer_form() {
     let lp = fx.ptr(Rc::clone(&long));
     let (op, _, _) = difference(&mut fx, Rc::clone(&lp), lp, Rc::clone(&long));
     fx.high();
-    assert!(matches!(pointer_difference(&mut fx.fd, op), Err(Leave::DiffPointee)));
+    assert!(matches!(
+        pointer_difference(&mut fx.fd, op),
+        Err(Leave::DiffPointee)
+    ));
 
     let mut fx = Fx::new();
     let long = fx.base(8, type_metatype::TYPE_INT);
@@ -1114,21 +1194,30 @@ fn other_differences_keep_the_integer_form() {
     let (pc, puc) = (fx.ptr(c), fx.ptr(uc));
     let (op, _, _) = difference(&mut fx, pc, puc, Rc::clone(&long));
     fx.high();
-    assert!(matches!(pointer_difference(&mut fx.fd, op), Err(Leave::DiffPointee)));
+    assert!(matches!(
+        pointer_difference(&mut fx.fd, op),
+        Err(Leave::DiffPointee)
+    ));
 
     let mut fx = Fx::new();
     let long = fx.base(8, type_metatype::TYPE_INT);
     let vp = fx.void_ptr();
     let (op, _, _) = difference(&mut fx, Rc::clone(&vp), vp, long);
     fx.high();
-    assert!(matches!(pointer_difference(&mut fx.fd, op), Err(Leave::DiffPointee)));
+    assert!(matches!(
+        pointer_difference(&mut fx.fd, op),
+        Err(Leave::DiffPointee)
+    ));
 
     let mut fx = Fx::new();
     let c = fx.base(1, type_metatype::TYPE_INT);
     let cp = fx.ptr(c);
     let (op, _, _) = difference(&mut fx, Rc::clone(&cp), Rc::clone(&cp), cp);
     fx.high();
-    assert!(matches!(pointer_difference(&mut fx.fd, op), Err(Leave::DiffResult)));
+    assert!(matches!(
+        pointer_difference(&mut fx.fd, op),
+        Err(Leave::DiffResult)
+    ));
 
     let mut fx = Fx::new();
     let long = fx.base(8, type_metatype::TYPE_INT);
@@ -1138,7 +1227,10 @@ fn other_differences_keep_the_integer_form() {
     let k = fx.konst(8, 0x1000);
     let op = fx.binary(OpCode::CPUI_INT_SUB, b, k, long);
     fx.high();
-    assert!(matches!(pointer_difference(&mut fx.fd, op), Err(Leave::DiffNotPointers)));
+    assert!(matches!(
+        pointer_difference(&mut fx.fd, op),
+        Err(Leave::DiffNotPointers)
+    ));
 }
 
 /// An operand that is an integer the pass cast to a pointer costs the integer
@@ -1157,7 +1249,10 @@ fn a_difference_that_saves_no_cast_keeps_the_integer_form() {
     fx.binary(OpCode::CPUI_COPY, b2, b2, Rc::clone(&cp));
     let op = fx.binary(OpCode::CPUI_INT_SUB, a, b2, Rc::clone(&long));
     fx.high();
-    assert!(matches!(pointer_difference(&mut fx.fd, op), Err(Leave::NoCastSaved)));
+    assert!(matches!(
+        pointer_difference(&mut fx.fd, op),
+        Err(Leave::NoCastSaved)
+    ));
 }
 
 #[test]

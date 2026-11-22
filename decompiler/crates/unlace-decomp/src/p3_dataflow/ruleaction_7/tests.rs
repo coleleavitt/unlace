@@ -17,14 +17,14 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
-use crate::dtype::{type_metatype, Datatype};
-use crate::funcdata::Funcdata;
 use crate::context::{ArchContext, OpId, TypeOp, VarnodeId};
+use crate::dtype::{Datatype, type_metatype};
+use crate::funcdata::Funcdata;
 use crate::varnode::{DefOpInfo, VarnodeBank};
 
 use super::*;
@@ -36,7 +36,8 @@ use super::*;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -53,12 +54,17 @@ fn build_manager() -> AddrSpaceManager {
     m
 }
 
-fn build_fd() -> Funcdata { build_fd_nan(false) }
+fn build_fd() -> Funcdata {
+    build_fd_nan(false)
+}
 
 fn build_fd_nan(ignore_nan: bool) -> Funcdata {
     let manage = build_manager();
     let mut context = ArchContext::new(manage);
-    context.floatformats = [4, 8].into_iter().map(unlace_num::float::FloatFormat::new).collect();
+    context.floatformats = [4, 8]
+        .into_iter()
+        .map(unlace_num::float::FloatFormat::new)
+        .collect();
     context.nan_ignore_all = ignore_nan;
     let glb = Rc::new(context);
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
@@ -109,12 +115,19 @@ fn make_op(
     let r = ram(fd);
     let pc = Address::new(Rc::clone(&r), off);
     let op = fd.obank_mut().create_at(num_in, pc);
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, opcode_flags(opc), format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, opcode_flags(opc), format!("{opc:?}")));
     // Output varnode at a distinct address (off) so set_def doesn't dedup.
     let out = fd.new_varnode(outsize, &Address::new(r, off), Some(unk(outsize)));
     let seq = fd.obank().get(op).unwrap().get_seq_num().clone();
-    let info = DefOpInfo { id: op, seqnum: seq };
-    let out = fd.vbank_mut().set_def(out, info, &mut no_replace()).unwrap();
+    let info = DefOpInfo {
+        id: op,
+        seqnum: seq,
+    };
+    let out = fd
+        .vbank_mut()
+        .set_def(out, info, &mut no_replace())
+        .unwrap();
     fd.obank_mut().get_mut(op).unwrap().set_output(Some(out));
     (op, out)
 }
@@ -124,14 +137,18 @@ fn make_op_noout(fd: &mut Funcdata, off: u64, opc: OpCode, num_in: int4) -> OpId
     let r = ram(fd);
     let pc = Address::new(r, off);
     let op = fd.obank_mut().create_at(num_in, pc);
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, opcode_flags(opc), format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, opcode_flags(opc), format!("{opc:?}")));
     op
 }
 
 /// Wire `vn` as input slot `slot` of `op` (descend link + op input).
 fn wire(fd: &mut Funcdata, vn: VarnodeId, op: OpId, slot: int4) {
     fd.vbank_mut().add_descend(vn, op).unwrap();
-    fd.obank_mut().get_mut(op).unwrap().set_input(Some(vn), slot);
+    fd.obank_mut()
+        .get_mut(op)
+        .unwrap()
+        .set_input(Some(vn), slot);
 }
 
 /// Minimal opcode flags for ops we build (branch/booloutput where it matters).
@@ -209,7 +226,11 @@ fn signdiv2_positive_rewrites_to_sdiv_by_2() {
     assert_eq!(rule.apply_op(root, &mut fd), 1, "must fire");
 
     // op now: a s/ 2
-    assert_eq!(op_of(&fd, root), OpCode::CPUI_INT_SDIV, "opcode -> INT_SDIV");
+    assert_eq!(
+        op_of(&fd, root),
+        OpCode::CPUI_INT_SDIV,
+        "opcode -> INT_SDIV"
+    );
     assert_eq!(in_vn(&fd, root, 0), a, "input0 = a");
     assert_eq!(in_off(&fd, root, 1), 2, "input1 = constant 2");
 }
@@ -299,7 +320,11 @@ fn divchain_negative_intermediate_has_other_use() {
     wire(&mut fd, c1, other, 1);
 
     let mut rule = RuleDivChain::new();
-    assert_eq!(rule.apply_op(root, &mut fd), 0, "non-lone intermediate -> no fire");
+    assert_eq!(
+        rule.apply_op(root, &mut fd),
+        0,
+        "non-lone intermediate -> no fire"
+    );
 }
 
 #[test]
@@ -319,7 +344,11 @@ fn divchain_negative_signed_overflow() {
     wire(&mut fd, c2, root, 1);
 
     let mut rule = RuleDivChain::new();
-    assert_eq!(rule.apply_op(root, &mut fd), 0, "signed overflow -> no fire");
+    assert_eq!(
+        rule.apply_op(root, &mut fd),
+        0,
+        "signed overflow -> no fire"
+    );
 }
 
 // ===========================================================================
@@ -406,7 +435,11 @@ fn modopt_positive_signed_constant_divisor() {
 
     let mut rule = RuleModOpt::new();
     assert_eq!(rule.apply_op(op, &mut fd), 1, "must fire");
-    assert_eq!(op_of(&fd, addop), OpCode::CPUI_INT_SREM, "addop -> INT_SREM");
+    assert_eq!(
+        op_of(&fd, addop),
+        OpCode::CPUI_INT_SREM,
+        "addop -> INT_SREM"
+    );
     assert_eq!(in_vn(&fd, addop, 0), x, "addop in0 = x");
     assert_eq!(in_off(&fd, addop, 1), 7, "addop in1 = divisor 7");
 }
@@ -452,7 +485,11 @@ fn modopt_negative_div_unsigned_becomes_rem() {
 
     let mut rule = RuleModOpt::new();
     assert_eq!(rule.apply_op(op, &mut fd), 1, "must fire");
-    assert_eq!(op_of(&fd, addop), OpCode::CPUI_INT_REM, "INT_DIV -> INT_REM (unsigned)");
+    assert_eq!(
+        op_of(&fd, addop),
+        OpCode::CPUI_INT_REM,
+        "INT_DIV -> INT_REM (unsigned)"
+    );
 }
 
 // ===========================================================================
@@ -484,7 +521,11 @@ fn negatenegate_negative_inner_not_negate() {
     wire(&mut fd, copout, root, 0);
 
     let mut rule = RuleNegateNegate::new();
-    assert_eq!(rule.apply_op(root, &mut fd), 0, "inner not NEGATE -> no fire");
+    assert_eq!(
+        rule.apply_op(root, &mut fd),
+        0,
+        "inner not NEGATE -> no fire"
+    );
     assert_eq!(op_of(&fd, root), OpCode::CPUI_INT_NEGATE, "unchanged");
 }
 
@@ -496,7 +537,11 @@ fn negatenegate_negative_input_not_written() {
     wire(&mut fd, v, root, 0); // input is an INPUT varnode, not written
 
     let mut rule = RuleNegateNegate::new();
-    assert_eq!(rule.apply_op(root, &mut fd), 0, "in0 not written -> no fire");
+    assert_eq!(
+        rule.apply_op(root, &mut fd),
+        0,
+        "in0 not written -> no fire"
+    );
 }
 
 // ===========================================================================
@@ -512,8 +557,18 @@ fn floatcast_identity_preserves_nan_quieting() {
         wire(&mut fd, source, inner, 0);
         let root = make_op(&mut fd, 0x210, OpCode::CPUI_FLOAT_FLOAT2FLOAT, 1, 4).0;
         wire(&mut fd, wide, root, 0);
-        assert_eq!(RuleFloatCast::new().apply_op(root, &mut fd), i32::from(ignore));
-        assert_eq!(op_of(&fd, root), if ignore { OpCode::CPUI_COPY } else { OpCode::CPUI_FLOAT_FLOAT2FLOAT });
+        assert_eq!(
+            RuleFloatCast::new().apply_op(root, &mut fd),
+            i32::from(ignore)
+        );
+        assert_eq!(
+            op_of(&fd, root),
+            if ignore {
+                OpCode::CPUI_COPY
+            } else {
+                OpCode::CPUI_FLOAT_FLOAT2FLOAT
+            }
+        );
         assert_eq!(in_vn(&fd, root, 0), if ignore { source } else { wide });
     }
 }
@@ -530,24 +585,37 @@ fn floatcast_int2float_through_float2float() {
 
     let mut rule = RuleFloatCast::new();
     assert_eq!(rule.apply_op(root, &mut fd), 1, "must fire");
-    assert_eq!(op_of(&fd, root), OpCode::CPUI_FLOAT_INT2FLOAT, "-> INT2FLOAT");
+    assert_eq!(
+        op_of(&fd, root),
+        OpCode::CPUI_FLOAT_INT2FLOAT,
+        "-> INT2FLOAT"
+    );
     assert_eq!(in_vn(&fd, root, 0), vn2, "input0 = vn2");
 }
 
 #[test]
 fn floatcast_preserves_integer_rounding_before_a_different_float_width() {
-    for (integer_size, intermediate_size, final_size) in [
-        (4, 4, 8),
-        (8, 8, 4),
-        (8, 8, 16),
-        (7, 8, 4),
-        (4, 16, 8),
-    ] {
+    for (integer_size, intermediate_size, final_size) in
+        [(4, 4, 8), (8, 8, 4), (8, 8, 16), (7, 8, 4), (4, 16, 8)]
+    {
         let mut fd = build_fd();
         let source = make_input(&mut fd, 0x100, integer_size);
-        let (inner, rounded) = make_op(&mut fd, 0x200, OpCode::CPUI_FLOAT_INT2FLOAT, 1, intermediate_size);
+        let (inner, rounded) = make_op(
+            &mut fd,
+            0x200,
+            OpCode::CPUI_FLOAT_INT2FLOAT,
+            1,
+            intermediate_size,
+        );
         wire(&mut fd, source, inner, 0);
-        let root = make_op(&mut fd, 0x210, OpCode::CPUI_FLOAT_FLOAT2FLOAT, 1, final_size).0;
+        let root = make_op(
+            &mut fd,
+            0x210,
+            OpCode::CPUI_FLOAT_FLOAT2FLOAT,
+            1,
+            final_size,
+        )
+        .0;
         wire(&mut fd, rounded, root, 0);
 
         assert_eq!(RuleFloatCast::new().apply_op(root, &mut fd), 0);
@@ -568,9 +636,22 @@ fn floatcast_combines_exact_integer_intermediates_and_identical_float_widths() {
     ] {
         let mut fd = build_fd();
         let source = make_input(&mut fd, 0x100, integer_size);
-        let (inner, rounded) = make_op(&mut fd, 0x200, OpCode::CPUI_FLOAT_INT2FLOAT, 1, intermediate_size);
+        let (inner, rounded) = make_op(
+            &mut fd,
+            0x200,
+            OpCode::CPUI_FLOAT_INT2FLOAT,
+            1,
+            intermediate_size,
+        );
         wire(&mut fd, source, inner, 0);
-        let root = make_op(&mut fd, 0x210, OpCode::CPUI_FLOAT_FLOAT2FLOAT, 1, final_size).0;
+        let root = make_op(
+            &mut fd,
+            0x210,
+            OpCode::CPUI_FLOAT_FLOAT2FLOAT,
+            1,
+            final_size,
+        )
+        .0;
         wire(&mut fd, rounded, root, 0);
 
         assert_eq!(RuleFloatCast::new().apply_op(root, &mut fd), 1);
@@ -586,7 +667,14 @@ fn floatcast_combines_through_the_unlisted_extended_format() {
         let source = make_input(&mut fd, 0x100, integer_size);
         let (inner, rounded) = make_op(&mut fd, 0x200, OpCode::CPUI_FLOAT_INT2FLOAT, 1, 10);
         wire(&mut fd, source, inner, 0);
-        let root = make_op(&mut fd, 0x210, OpCode::CPUI_FLOAT_FLOAT2FLOAT, 1, final_size).0;
+        let root = make_op(
+            &mut fd,
+            0x210,
+            OpCode::CPUI_FLOAT_FLOAT2FLOAT,
+            1,
+            final_size,
+        )
+        .0;
         wire(&mut fd, rounded, root, 0);
 
         assert_eq!(RuleFloatCast::new().apply_op(root, &mut fd), 1);
@@ -655,7 +743,11 @@ fn check_sign_extraction_rejects_non_sright() {
     let c = konst(&mut fd, 4, 31);
     wire(&mut fd, c, op, 1);
 
-    assert_eq!(RuleSignMod2nOpt::check_sign_extraction(&fd, out), None, "not INT_SRIGHT");
+    assert_eq!(
+        RuleSignMod2nOpt::check_sign_extraction(&fd, out),
+        None,
+        "not INT_SRIGHT"
+    );
 }
 
 // ===========================================================================
@@ -681,11 +773,21 @@ fn ptrflow_copy_propagates_when_flagged() {
     fd.obank_mut().get_mut(copyop).unwrap().set_ptr_flow();
 
     let mut rule = RulePtrFlow::new(true);
-    assert_eq!(rule.apply_op(copyop, &mut fd), 1, "ptrflow COPY must report a change");
+    assert_eq!(
+        rule.apply_op(copyop, &mut fd),
+        1,
+        "ptrflow COPY must report a change"
+    );
     // copyout varnode is now ptrflow.
-    assert!(fd.vbank().get(copyout).unwrap().is_ptr_flow(), "out varnode marked ptrflow");
+    assert!(
+        fd.vbank().get(copyout).unwrap().is_ptr_flow(),
+        "out varnode marked ptrflow"
+    );
     // the reader (INT_ADD) is now ptrflow.
-    assert!(fd.obank().get(reader).unwrap().is_ptr_flow(), "reader op marked ptrflow");
+    assert!(
+        fd.obank().get(reader).unwrap().is_ptr_flow(),
+        "reader op marked ptrflow"
+    );
 }
 
 #[test]
@@ -696,7 +798,11 @@ fn ptrflow_copy_not_flagged_is_noop() {
     wire(&mut fd, src, copyop, 0);
     // NOT marked ptrflow -> early return 0.
     let mut rule = RulePtrFlow::new(true);
-    assert_eq!(rule.apply_op(copyop, &mut fd), 0, "un-flagged COPY -> no change");
+    assert_eq!(
+        rule.apply_op(copyop, &mut fd),
+        0,
+        "un-flagged COPY -> no change"
+    );
 }
 
 #[test]
@@ -742,37 +848,76 @@ fn ptrflow_leaves_nontruncated_architectures_unchanged() {
 
 #[test]
 fn oplists_match_cpp() {
-    assert_eq!(RuleSignDiv2::new().get_op_list(), vec![OpCode::CPUI_INT_SRIGHT]);
+    assert_eq!(
+        RuleSignDiv2::new().get_op_list(),
+        vec![OpCode::CPUI_INT_SRIGHT]
+    );
     assert_eq!(
         RuleDivChain::new().get_op_list(),
         vec![OpCode::CPUI_INT_DIV, OpCode::CPUI_INT_SDIV]
     );
-    assert_eq!(RuleSignForm::new().get_op_list(), vec![OpCode::CPUI_SUBPIECE]);
-    assert_eq!(RuleSignForm2::new().get_op_list(), vec![OpCode::CPUI_INT_SRIGHT]);
-    assert_eq!(RuleSignNearMult::new().get_op_list(), vec![OpCode::CPUI_INT_AND]);
+    assert_eq!(
+        RuleSignForm::new().get_op_list(),
+        vec![OpCode::CPUI_SUBPIECE]
+    );
+    assert_eq!(
+        RuleSignForm2::new().get_op_list(),
+        vec![OpCode::CPUI_INT_SRIGHT]
+    );
+    assert_eq!(
+        RuleSignNearMult::new().get_op_list(),
+        vec![OpCode::CPUI_INT_AND]
+    );
     assert_eq!(
         RuleModOpt::new().get_op_list(),
         vec![OpCode::CPUI_INT_DIV, OpCode::CPUI_INT_SDIV]
     );
-    assert_eq!(RuleSignMod2nOpt::new().get_op_list(), vec![OpCode::CPUI_INT_RIGHT]);
-    assert_eq!(RuleSignMod2Opt::new().get_op_list(), vec![OpCode::CPUI_INT_AND]);
-    assert_eq!(RuleSignMod2nOpt2::new().get_op_list(), vec![OpCode::CPUI_INT_MULT]);
-    assert_eq!(RuleSegment::new().get_op_list(), vec![OpCode::CPUI_SEGMENTOP]);
-    assert_eq!(RuleNegateNegate::new().get_op_list(), vec![OpCode::CPUI_INT_NEGATE]);
-    assert_eq!(RuleConditionalMove::new().get_op_list(), vec![OpCode::CPUI_MULTIEQUAL]);
+    assert_eq!(
+        RuleSignMod2nOpt::new().get_op_list(),
+        vec![OpCode::CPUI_INT_RIGHT]
+    );
+    assert_eq!(
+        RuleSignMod2Opt::new().get_op_list(),
+        vec![OpCode::CPUI_INT_AND]
+    );
+    assert_eq!(
+        RuleSignMod2nOpt2::new().get_op_list(),
+        vec![OpCode::CPUI_INT_MULT]
+    );
+    assert_eq!(
+        RuleSegment::new().get_op_list(),
+        vec![OpCode::CPUI_SEGMENTOP]
+    );
+    assert_eq!(
+        RuleNegateNegate::new().get_op_list(),
+        vec![OpCode::CPUI_INT_NEGATE]
+    );
+    assert_eq!(
+        RuleConditionalMove::new().get_op_list(),
+        vec![OpCode::CPUI_MULTIEQUAL]
+    );
     assert_eq!(
         RuleFloatCast::new().get_op_list(),
         vec![OpCode::CPUI_FLOAT_FLOAT2FLOAT, OpCode::CPUI_FLOAT_TRUNC]
     );
-    assert_eq!(RuleIgnoreNan::new().get_op_list(), vec![OpCode::CPUI_FLOAT_NAN]);
+    assert_eq!(
+        RuleIgnoreNan::new().get_op_list(),
+        vec![OpCode::CPUI_FLOAT_NAN]
+    );
 }
 
 #[test]
 fn clone_respects_group_membership() {
     let analysis = ActionGroupList::from_names(["analysis"]);
     let empty = ActionGroupList::new();
-    assert!(RuleSignDiv2::new().clone_rule(&analysis).is_some(), "in analysis");
-    assert!(RuleSignDiv2::new().clone_rule(&empty).is_none(), "not in empty");
+    assert!(
+        RuleSignDiv2::new().clone_rule(&analysis).is_some(),
+        "in analysis"
+    );
+    assert!(
+        RuleSignDiv2::new().clone_rule(&empty).is_none(),
+        "not in empty"
+    );
 
     // RuleConditionalMove belongs to "conditionalexe".
     let condexe = ActionGroupList::from_names(["conditionalexe"]);
@@ -892,8 +1037,18 @@ fn floatcast_combines_exact_widening_followed_by_narrowing() {
             destination_size,
         );
         wire(&mut fd, widened, outer, 0);
-        assert_eq!(RuleFloatCast::new().apply_op(outer, &mut fd), i32::from(source_size != destination_size));
-        assert_eq!(in_vn(&fd, outer, 0), if source_size == destination_size { widened } else { source });
+        assert_eq!(
+            RuleFloatCast::new().apply_op(outer, &mut fd),
+            i32::from(source_size != destination_size)
+        );
+        assert_eq!(
+            in_vn(&fd, outer, 0),
+            if source_size == destination_size {
+                widened
+            } else {
+                source
+            }
+        );
     }
 }
 
@@ -945,7 +1100,8 @@ fn floatcast_can_elide_a_conversion_after_quieting_arithmetic() {
     let x = make_input(&mut fd, 0x100, 4);
     let y = make_input(&mut fd, 0x110, 4);
     let (add, sum) = make_op(&mut fd, 0x180, OpCode::CPUI_FLOAT_ADD, 2, 4);
-    wire(&mut fd, x, add, 0);wire(&mut fd, y, add, 1);
+    wire(&mut fd, x, add, 0);
+    wire(&mut fd, y, add, 1);
     let (inner, wide) = make_op(&mut fd, 0x200, OpCode::CPUI_FLOAT_FLOAT2FLOAT, 1, 8);
     wire(&mut fd, sum, inner, 0);
     let (outer, _) = make_op(&mut fd, 0x210, OpCode::CPUI_FLOAT_FLOAT2FLOAT, 1, 4);

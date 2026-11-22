@@ -18,9 +18,9 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
@@ -32,18 +32,24 @@ const EXIT_THUNK: u64 = 0x140001057;
 const SLOT: u64 = 0x140002050;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Load a fixture and commit its analysis.
 fn boot_fixture(name: &str) -> ConsoleProgram {
     let root = repo_root();
     let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
-    let path = root.join("decompiler/crates/unlace-analysis/tests/fixtures").join(name);
+    let path = root
+        .join("decompiler/crates/unlace-analysis/tests/fixtures")
+        .join(name);
     assert!(path.exists(), "missing fixture {path:?}");
     let mut prog = bootstrap_from_object(path.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
@@ -52,9 +58,13 @@ fn boot() -> ConsoleProgram {
 }
 
 fn decompile_at(prog: ConsoleProgram, vma: u64) -> String {
-    let cmds: Vec<String> = [format!("load addr 0x{vma:x}"), "decompile".into(), "print C".into()]
-        .into_iter()
-        .collect();
+    let cmds: Vec<String> = [
+        format!("load addr 0x{vma:x}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .into_iter()
+    .collect();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -70,11 +80,17 @@ fn decompile_at(prog: ConsoleProgram, vma: u64) -> String {
 }
 
 fn executable_entries(prog: &ConsoleProgram) -> Vec<u64> {
-    prog.function_entries_executable().iter().map(|e| e.addr.get_offset()).collect()
+    prog.function_entries_executable()
+        .iter()
+        .map(|e| e.addr.get_offset())
+        .collect()
 }
 
 fn name_at(prog: &ConsoleProgram, vma: u64) -> String {
-    prog.find_entry_at(vma).unwrap_or_else(|| panic!("no entry at {vma:#x}")).name.clone()
+    prog.find_entry_at(vma)
+        .unwrap_or_else(|| panic!("no entry at {vma:#x}"))
+        .name
+        .clone()
 }
 
 /// No entry one byte into the wrapper's tail jump, while both
@@ -95,7 +111,10 @@ fn rex_tail_is_not_a_thunk_and_real_thunks_keep_their_names() {
 fn wrapper_tail_jump_still_names_the_import() {
     let prog = boot();
     let out = decompile_at(prog, WRAPPER);
-    assert!(out.contains("InitializeSListHead(&dat_140002100);"), "got:\n{out}");
+    assert!(
+        out.contains("InitializeSListHead(&dat_140002100);"),
+        "got:\n{out}"
+    );
 }
 
 /// The caller reaches the wrapper by its own entry, the import through the bare
@@ -156,7 +175,13 @@ fn noreturn_calls_through_pointers_keep_the_import() {
     for (vma, next_body) in [(0x140001170u64, "return 7;"), (0x140001150, "0x140002100")] {
         let prog = boot_fixture("pe_rexthunk_reach_x86_64.exe");
         let out = decompile_at(prog, vma);
-        assert!(out.contains("ExitProcess(0); // no-return"), "{vma:#x} got:\n{out}");
-        assert!(!out.contains(next_body), "{vma:#x} absorbed the next function:\n{out}");
+        assert!(
+            out.contains("ExitProcess(0); // no-return"),
+            "{vma:#x} got:\n{out}"
+        );
+        assert!(
+            !out.contains(next_body),
+            "{vma:#x} absorbed the next function:\n{out}"
+        );
     }
 }

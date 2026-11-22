@@ -21,7 +21,12 @@ impl ScratchDir {
     /// sweep can ever reclaim the directory.
     fn create_in(temp: &Path) -> Result<Self, String> {
         sweep_stale_scratch(temp);
-        let create_error = |e| format!("cannot create the worker scratch dir in {}: {e}", temp.display());
+        let create_error = |e| {
+            format!(
+                "cannot create the worker scratch dir in {}: {e}",
+                temp.display()
+            )
+        };
         std::fs::create_dir_all(temp).map_err(create_error)?;
         let prefix = format!("{SCRATCH_PREFIX}{}-", std::process::id());
         let mut builder = tempfile::Builder::new();
@@ -46,7 +51,11 @@ impl ScratchDir {
         }
         let pending = tempfile::NamedTempFile::new_in(dir.path()).map_err(create_error)?;
         let owner = match pending.as_file().try_lock() {
-            Ok(()) => Some(pending.persist(dir.path().join(OWNER_LOCK)).map_err(|e| create_error(e.error))?),
+            Ok(()) => Some(
+                pending
+                    .persist(dir.path().join(OWNER_LOCK))
+                    .map_err(|e| create_error(e.error))?,
+            ),
             Err(_) => None,
         };
         Ok(Self { _owner: owner, dir })
@@ -60,7 +69,9 @@ impl ScratchDir {
 /// Reclaim only published, unlocked owners. PIDs and directory ages cannot
 /// prove abandonment when processes share storage across PID namespaces.
 fn sweep_stale_scratch(temp: &Path) {
-    let Ok(entries) = std::fs::read_dir(temp) else { return };
+    let Ok(entries) = std::fs::read_dir(temp) else {
+        return;
+    };
     for entry in entries.flatten() {
         let name = entry.file_name();
         if name.to_str().and_then(scratch_owner).is_none()
@@ -68,7 +79,11 @@ fn sweep_stale_scratch(temp: &Path) {
         {
             continue;
         }
-        let Ok(owner) = OpenOptions::new().read(true).write(true).open(entry.path().join(OWNER_LOCK)) else {
+        let Ok(owner) = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(entry.path().join(OWNER_LOCK))
+        else {
             continue;
         };
         if owner.try_lock().is_ok() {
@@ -80,14 +95,19 @@ fn sweep_stale_scratch(temp: &Path) {
 /// Read the diagnostic PID from a versioned scratch name; it does not prove liveness.
 fn scratch_owner(name: &str) -> Option<u32> {
     let (pid, suffix) = name.strip_prefix(SCRATCH_PREFIX)?.split_once('-')?;
-    if suffix.is_empty() { return None; }
+    if suffix.is_empty() {
+        return None;
+    }
     pid.parse().ok()
 }
 
 /// Recognize the scratch-name prefix used by the parent's assignment protocol.
 pub(super) fn pool_scratch(dir: &str) -> Option<PathBuf> {
     let path = Path::new(dir);
-    path.file_name()?.to_str()?.starts_with(POOL_PREFIX).then(|| path.to_path_buf())
+    path.file_name()?
+        .to_str()?
+        .starts_with(POOL_PREFIX)
+        .then(|| path.to_path_buf())
 }
 
 #[cfg(test)]
@@ -115,7 +135,10 @@ mod tests {
             std::fs::write(path.join("inventory.spec"), b"payload").unwrap();
             path
         };
-        assert!(!kept.exists(), "a non-empty scratch dir must go with its guard");
+        assert!(
+            !kept.exists(),
+            "a non-empty scratch dir must go with its guard"
+        );
 
         let leaked = std::sync::Mutex::new(PathBuf::new());
         let _ = std::panic::catch_unwind(|| {
@@ -134,10 +157,21 @@ mod tests {
             Some(PathBuf::from("/tmp/kuna-jobs-4242-99"))
         );
         for foreign in ["/tmp", "/home/u/out", "kuna-jobs-1/nested", "/"] {
-            assert_eq!(pool_scratch(foreign), None, "{foreign} is not a pool scratch dir");
+            assert_eq!(
+                pool_scratch(foreign),
+                None,
+                "{foreign} is not a pool scratch dir"
+            );
         }
         assert_eq!(scratch_owner("kuna-jobs-v2-4242-17384"), Some(4242));
-        for bad in ["kuna-jobs-4242-17384", "kuna-jobs-v2-", "kuna-jobs-v2-abc-1", "kuna-jobs-v2-1-", "kunajobs-1-2", "tmpdir"] {
+        for bad in [
+            "kuna-jobs-4242-17384",
+            "kuna-jobs-v2-",
+            "kuna-jobs-v2-abc-1",
+            "kuna-jobs-v2-1-",
+            "kunajobs-1-2",
+            "tmpdir",
+        ] {
             assert_eq!(scratch_owner(bad), None, "{bad}");
         }
     }
@@ -157,8 +191,14 @@ mod tests {
 
         sweep_stale_scratch(&temp);
 
-        assert!(mine.is_dir(), "a live run's directory must survive the sweep");
-        assert!(unrelated.is_dir(), "the sweep must not touch directories it did not create");
+        assert!(
+            mine.is_dir(),
+            "a live run's directory must survive the sweep"
+        );
+        assert!(
+            unrelated.is_dir(),
+            "the sweep must not touch directories it did not create"
+        );
         assert!(!dead.exists(), "a released owner's directory must be swept");
         let _ = std::fs::remove_dir_all(&dead);
         let _ = std::fs::remove_dir_all(&unrelated);
@@ -173,19 +213,28 @@ mod tests {
         let second_path = second.path().to_path_buf();
         assert_ne!(first_path, second_path);
         for path in [&first_path, &second_path] {
-            assert_eq!(scratch_owner(path.file_name().unwrap().to_str().unwrap()), Some(std::process::id()));
+            assert_eq!(
+                scratch_owner(path.file_name().unwrap().to_str().unwrap()),
+                Some(std::process::id())
+            );
             assert_eq!(pool_scratch(path.to_str().unwrap()), Some(path.clone()));
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
-                assert_eq!(std::fs::metadata(path).unwrap().permissions().mode() & 0o777, 0o700);
+                assert_eq!(
+                    std::fs::metadata(path).unwrap().permissions().mode() & 0o777,
+                    0o700
+                );
             }
         }
         std::fs::write(first.path().join("inventory.spec"), b"first").unwrap();
         std::fs::write(second.path().join("inventory.spec"), b"second").unwrap();
         drop(first);
         assert!(!first_path.exists());
-        assert_eq!(std::fs::read(second.path().join("inventory.spec")).unwrap(), b"second");
+        assert_eq!(
+            std::fs::read(second.path().join("inventory.spec")).unwrap(),
+            b"second"
+        );
         drop(second);
         assert!(!second_path.exists());
         assert_eq!(std::fs::read_dir(base.path()).unwrap().count(), 0);
@@ -224,7 +273,10 @@ mod tests {
         std::fs::create_dir(&legacy).unwrap();
         std::fs::write(legacy.join("inventory.spec"), b"live inventory").unwrap();
         sweep_stale_scratch(base.path());
-        assert_eq!(std::fs::read(legacy.join("inventory.spec")).unwrap(), b"live inventory");
+        assert_eq!(
+            std::fs::read(legacy.join("inventory.spec")).unwrap(),
+            b"live inventory"
+        );
     }
 
     #[test]
@@ -237,10 +289,16 @@ mod tests {
             owner.try_lock().unwrap();
             std::fs::write(dir.join("inventory.spec"), b"live inventory").unwrap();
             sweep_stale_scratch(base.path());
-            assert_eq!(std::fs::read(dir.join("inventory.spec")).unwrap(), b"live inventory");
+            assert_eq!(
+                std::fs::read(dir.join("inventory.spec")).unwrap(),
+                b"live inventory"
+            );
             drop(owner);
             sweep_stale_scratch(base.path());
-            assert!(!dir.exists(), "a released owner must be reclaimable even with a live PID");
+            assert!(
+                !dir.exists(),
+                "a released owner must be reclaimable even with a live PID"
+            );
         }
     }
 
@@ -281,5 +339,4 @@ mod tests {
         });
         assert_eq!(std::fs::read_dir(base.path()).unwrap().count(), 0);
     }
-
 }

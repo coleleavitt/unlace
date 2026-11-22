@@ -2,9 +2,9 @@
 
 use std::rc::Rc;
 
-use unlace_base::address::Address;
-use unlace_base::space::{spacetype, AddrSpace};
 use slotmap::SlotMap;
+use unlace_base::address::Address;
+use unlace_base::space::{AddrSpace, spacetype};
 
 use super::*;
 
@@ -38,7 +38,12 @@ fn rets() -> (OpId, OpId) {
 }
 
 fn rem(trial: int4, ret: OpId, merges: Vec<BlockId>) -> Remembered {
-    Remembered { trial, ret, merges, inputs: vec![(Address::new(reg(), 0), 8)] }
+    Remembered {
+        trial,
+        ret,
+        merges,
+        inputs: vec![(Address::new(reg(), 0), 8)],
+    }
 }
 
 #[test]
@@ -48,7 +53,14 @@ fn a_remembered_trial_schedules_exactly_one_extra_pass() {
     let mut active = active_with(3, 0);
     active.get_trial_mut(2).mark_active();
     assert!(remembering(&active));
-    end_pass(&mut active, vec![rem(1, r0, vec![threaded]), rem(2, r0, vec![threaded]), rem(0, r1, vec![kept])]);
+    end_pass(
+        &mut active,
+        vec![
+            rem(1, r0, vec![threaded]),
+            rem(2, r0, vec![threaded]),
+            rem(0, r1, vec![kept]),
+        ],
+    );
     assert_eq!(
         active.cond_exe_retry(),
         &CondExeRetry::Pending(vec![rem(1, r0, vec![threaded]), rem(0, r1, vec![kept])])

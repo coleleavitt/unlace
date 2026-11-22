@@ -22,7 +22,7 @@ use unlace_base::xml::{DocumentStorage, Element};
 
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::dtype::type_metatype;
-use unlace_decomp::sleigh_arch::{register_sleigh_arch_ids, LanguageDatabase};
+use unlace_decomp::sleigh_arch::{LanguageDatabase, register_sleigh_arch_ids};
 use unlace_decomp::xml_arch::{XmlArchitecture, XmlArchitectureCapability};
 
 use unlace_sleigh::loadimage::LoadImage;
@@ -30,7 +30,10 @@ use unlace_sleigh::loadimage_xml::register_loadimage_xml_ids;
 use unlace_sleigh::translate::register_translate_ids;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn find_named(el: &Rc<Element>, name: &str, out: &mut Vec<Rc<Element>>) {
@@ -43,7 +46,9 @@ fn find_named(el: &Rc<Element>, name: &str, out: &mut Vec<Rc<Element>>) {
 }
 
 fn attr(el: &Element, name: &str) -> Option<String> {
-    el.get_attribute_value(name).ok().map(|b| String::from_utf8_lossy(b).into_owned())
+    el.get_attribute_value(name)
+        .ok()
+        .map(|b| String::from_utf8_lossy(b).into_owned())
 }
 
 struct DummyImg;
@@ -74,8 +79,11 @@ fn bootstrap(stem: &str) -> Result<XmlArchitecture, String> {
     let path = root.join("tests/datatests").join(format!("{stem}.xml"));
     let xml = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
     let mut store = DocumentStorage::new();
-    let doc_root =
-        store.parse_document(&xml).map_err(|e| format!("parse {stem}: {e}"))?.get_root().clone();
+    let doc_root = store
+        .parse_document(&xml)
+        .map_err(|e| format!("parse {stem}: {e}"))?
+        .get_root()
+        .clone();
     let mut bis = Vec::new();
     find_named(&doc_root, "binaryimage", &mut bis);
     let binaryimage = bis.into_iter().next().ok_or("no <binaryimage>")?;
@@ -84,10 +92,12 @@ fn bootstrap(stem: &str) -> Result<XmlArchitecture, String> {
     let registry = build_registry();
     let capability = XmlArchitectureCapability::new();
     let mut arch = capability.build_architecture("datatest", "");
-    arch.build_loader(Rc::clone(&binaryimage)).map_err(|e| format!("build_loader: {e}"))?;
+    arch.build_loader(Rc::clone(&binaryimage))
+        .map_err(|e| format!("build_loader: {e}"))?;
     let mut db = LanguageDatabase::new();
     db.scan_for_sleigh_directories(root.join("specs").to_str().unwrap());
-    db.get_descriptions(&registry).map_err(|e| format!("collect ldefs: {e}"))?;
+    db.get_descriptions(&registry)
+        .map_err(|e| format!("collect ldefs: {e}"))?;
     arch.sleigh_mut().set_archid(&arch_id);
     arch.sleigh_mut()
         .resolve_architecture(&db, &arch_id)
@@ -95,7 +105,10 @@ fn bootstrap(stem: &str) -> Result<XmlArchitecture, String> {
     if arch.sleigh().language_index() < 0 {
         return Err("language index unresolved".to_string());
     }
-    let specs = arch.sleigh().build_spec_file(&db).map_err(|e| format!("build_spec_file: {e}"))?;
+    let specs = arch
+        .sleigh()
+        .build_spec_file(&db)
+        .map_err(|e| format!("build_spec_file: {e}"))?;
     let resolved_sla = specs.slafile.ok_or("build_spec_file resolved no .sla")?;
     let sla = std::fs::read(&resolved_sla).map_err(|e| format!("read sla: {e}"))?;
     arch.sleigh_mut()
@@ -108,9 +121,13 @@ fn bootstrap(stem: &str) -> Result<XmlArchitecture, String> {
         .map_err(|e| format!("init_post_engine: {e}"))?;
     let manager_ptr: *const AddrSpaceManager = arch.sleigh().base().unwrap().manage();
     // SAFETY: same shape as the gate / corpus_bootstrap — manager outlives open().
-    arch.open_image(unsafe { &*manager_ptr }, &registry).map_err(|e| format!("open_image: {e}"))?;
+    arch.open_image(unsafe { &*manager_ptr }, &registry)
+        .map_err(|e| format!("open_image: {e}"))?;
     let img = arch.take_loader().ok_or("loader vanished after open")?;
-    arch.sleigh_mut().base_mut().unwrap().set_loader(Box::new(img));
+    arch.sleigh_mut()
+        .base_mut()
+        .unwrap()
+        .set_loader(Box::new(img));
     Ok(arch)
 }
 
@@ -125,8 +142,15 @@ fn snapshot_text(arch: &Architecture) -> (String, String) {
 
 /// Map one new global into `symboltab`, the cheapest real mutation.
 fn map_a_global(arch: &mut Architecture, name: &str, offset: u64) {
-    let ram = arch.manage().get_default_code_space().cloned().expect("code space");
-    let ty = arch.types().get_base(4, type_metatype::TYPE_INT).expect("int4 base type");
+    let ram = arch
+        .manage()
+        .get_default_code_space()
+        .cloned()
+        .expect("code space");
+    let ty = arch
+        .types()
+        .get_base(4, type_metatype::TYPE_INT)
+        .expect("int4 base type");
     let g = arch.symboltab.get_global_scope().expect("global scope");
     let addr = Address::new(ram, offset);
     arch.symboltab
@@ -149,7 +173,10 @@ fn symbol_snapshot_cache_reuses_and_invalidation_rebuilds() {
     let a = arch.build_arch_handle();
     let b = arch.build_arch_handle();
     assert!(
-        Rc::ptr_eq(a.global_query.as_ref().unwrap(), b.global_query.as_ref().unwrap()),
+        Rc::ptr_eq(
+            a.global_query.as_ref().unwrap(),
+            b.global_query.as_ref().unwrap()
+        ),
         "the global-symbol snapshot was rebuilt for an unmutated symbol table"
     );
     assert!(
@@ -163,12 +190,21 @@ fn symbol_snapshot_cache_reuses_and_invalidation_rebuilds() {
     let c = arch.build_arch_handle();
     let d = arch.build_arch_handle();
     assert!(
-        !Rc::ptr_eq(c.global_query.as_ref().unwrap(), d.global_query.as_ref().unwrap()),
+        !Rc::ptr_eq(
+            c.global_query.as_ref().unwrap(),
+            d.global_query.as_ref().unwrap()
+        ),
         "the bypass did not bypass: snapshots were still shared"
     );
     let (gq_bypass, cp_bypass) = snapshot_text(arch);
-    assert_eq!(gq_before, gq_bypass, "cached global query differs from the re-derived one");
-    assert_eq!(cp_before, cp_bypass, "cached callee protos differ from the re-derived ones");
+    assert_eq!(
+        gq_before, gq_bypass,
+        "cached global query differs from the re-derived one"
+    );
+    assert_eq!(
+        cp_before, cp_bypass,
+        "cached callee protos differ from the re-derived ones"
+    );
 
     // 3. A mutation between two `build_arch_handle` calls must move the snapshot.
     arch.set_symbol_snapshot_cache(true);
@@ -176,11 +212,17 @@ fn symbol_snapshot_cache_reuses_and_invalidation_rebuilds() {
     map_a_global(arch, "kuna_snapshot_probe", 0xb000);
     let f = arch.build_arch_handle();
     assert!(
-        !Rc::ptr_eq(e.global_query.as_ref().unwrap(), f.global_query.as_ref().unwrap()),
+        !Rc::ptr_eq(
+            e.global_query.as_ref().unwrap(),
+            f.global_query.as_ref().unwrap()
+        ),
         "a mapped global was added and the cache still served the stale snapshot"
     );
     let (gq_after, _) = snapshot_text(arch);
-    assert_ne!(gq_before, gq_after, "the new global never reached the global query");
+    assert_ne!(
+        gq_before, gq_after,
+        "the new global never reached the global query"
+    );
     assert!(
         gq_after.contains("kuna_snapshot_probe"),
         "the rebuilt global query does not carry the symbol that invalidated it"
@@ -189,5 +231,8 @@ fn symbol_snapshot_cache_reuses_and_invalidation_rebuilds() {
     // And the post-mutation cached snapshot still matches a full re-derivation.
     arch.set_symbol_snapshot_cache(false);
     let (gq_after_bypass, _) = snapshot_text(arch);
-    assert_eq!(gq_after, gq_after_bypass, "post-invalidation snapshot is not the re-derived one");
+    assert_eq!(
+        gq_after, gq_after_bypass,
+        "post-invalidation snapshot is not the re-derived one"
+    );
 }

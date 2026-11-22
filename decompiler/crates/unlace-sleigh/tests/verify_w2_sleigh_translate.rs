@@ -16,14 +16,14 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
-use unlace_base::marshal::{Decoder, IdRegistry, XmlDecode, ATTRIB_SPACE};
+use unlace_base::marshal::{ATTRIB_SPACE, Decoder, IdRegistry, XmlDecode};
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, JoinRecord, JoinSpace,
-    RegisterLookup, SpacebaseSpace, VarnodeStorage,
+    AddrSpace, AddrSpaceManager, ConstantSpace, JoinRecord, JoinSpace, RegisterLookup,
+    SpacebaseSpace, VarnodeStorage, addrspace_flags, spacetype,
 };
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
-use unlace_sleigh::translate::{register_translate_ids, PcodeEmit};
+use unlace_sleigh::translate::{PcodeEmit, register_translate_ids};
 
 /// The oracle harness's DummyTranslate: getRegister always throws a
 /// LowlevelError, register names are always empty.
@@ -98,8 +98,15 @@ fn verify_w2translate_renormalize_big_endian_resplit_oracle() {
 
     let mut addr = Address::new(Rc::clone(&join), 3);
     addr.renormalize(6, &m).unwrap();
-    assert!(Rc::ptr_eq(addr.get_space().unwrap(), &join), "stays a join address");
-    assert_eq!(addr.get_offset(), 0x10, "12 rounds to 16 for the next allocation");
+    assert!(
+        Rc::ptr_eq(addr.get_space().unwrap(), &join),
+        "stays a join address"
+    );
+    assert_eq!(
+        addr.get_offset(),
+        0x10,
+        "12 rounds to 16 for the next allocation"
+    );
     let newrec = m.find_join(0x10).unwrap();
     assert_eq!(newrec.get_unified().size, 6);
     assert_eq!(newrec.num_pieces(), 3);
@@ -108,7 +115,10 @@ fn verify_w2translate_renormalize_big_endian_resplit_oracle() {
         (0x13, 1),
         "front piece truncated by sizeTrunc1 and rebased to addr1"
     );
-    assert_eq!((newrec.get_piece(1).offset, newrec.get_piece(1).size), (0x20, 4));
+    assert_eq!(
+        (newrec.get_piece(1).offset, newrec.get_piece(1).size),
+        (0x20, 4)
+    );
     assert_eq!(
         (newrec.get_piece(2).offset, newrec.get_piece(2).size),
         (0x30, 1),
@@ -205,21 +215,33 @@ fn verify_w2translate_merge_sequence_spacebase_and_noname_join_oracle() {
     };
     let mut seq = vec![svn(4, 4), svn(0, 4)];
     JoinRecord::merge_sequence(&mut seq, &NoRegisters);
-    assert_eq!(seq.len(), 1, "spacebase pieces merge without a register name");
+    assert_eq!(
+        seq.len(),
+        1,
+        "spacebase pieces merge without a register name"
+    );
     assert_eq!((seq[0].offset, seq[0].size), (0, 8));
 
     let mut seq = vec![reg(&m, 6, 2), reg(&m, 4, 2)];
     let orig = seq.clone();
     JoinRecord::merge_sequence(&mut seq, &NoRegisters);
-    assert_eq!(seq, orig, "informal register merge keeps the original sequence");
+    assert_eq!(
+        seq, orig,
+        "informal register merge keeps the original sequence"
+    );
 
     // contiguous registers, no parent name -> formal JoinRecord (offset 0
     // since this manager has no prior records)
     let register = Rc::clone(m.get_space_by_name("register").unwrap());
     let hi = Address::new(Rc::clone(&register), 4);
     let lo = Address::new(Rc::clone(&register), 0);
-    let addr = m.construct_join_address(&NoRegisters, &hi, 4, &lo, 4).unwrap();
-    assert!(Rc::ptr_eq(addr.get_space().unwrap(), m.get_join_space().unwrap()));
+    let addr = m
+        .construct_join_address(&NoRegisters, &hi, 4, &lo, 4)
+        .unwrap();
+    assert!(Rc::ptr_eq(
+        addr.get_space().unwrap(),
+        m.get_join_space().unwrap()
+    ));
     let rec = m.find_join(addr.get_offset()).unwrap();
     assert_eq!(rec.num_pieces(), 2);
     assert_eq!((rec.get_piece(0).offset, rec.get_piece(1).offset), (4, 0));

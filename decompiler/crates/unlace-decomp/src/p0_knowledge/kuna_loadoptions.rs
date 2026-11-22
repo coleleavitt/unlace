@@ -160,7 +160,12 @@ impl LoadOptions {
     /// environment's.
     pub fn in_force() -> Rc<LoadOptions> {
         SCOPES
-            .with(|scopes| scopes.borrow().last().and_then(|(_, options)| options.clone()))
+            .with(|scopes| {
+                scopes
+                    .borrow()
+                    .last()
+                    .and_then(|(_, options)| options.clone())
+            })
             .unwrap_or_else(|| {
                 FALLBACKS.with(|count| count.set(count.get() + 1));
                 Rc::new(LoadOptions::from_env())
@@ -194,16 +199,18 @@ impl LoadOptions {
             }
             "libctypes" => kuna_libctypes::set_libctypes_env_layout(self.libctypes),
             // FIXME: Audit that the environment access only happens in single-threaded code.
-            "calltargettype" => unsafe { std::env::set_var(
-                kuna_calltargettype::CALLTARGETTYPE_ENV,
-                if self.calltargettype { "on" } else { "off" },
-            ) },
+            "calltargettype" => unsafe {
+                std::env::set_var(
+                    kuna_calltargettype::CALLTARGETTYPE_ENV,
+                    if self.calltargettype { "on" } else { "off" },
+                )
+            },
             "macho-arm64e" => kuna_macho_arm64e::set_macho_arm64e_env(self.macho_arm64e),
             "sourcelang" => kuna_sourcelang::set_sourcelang_env(self.sourcelang),
             "objcivars" => kuna_objcivars::set_objcivars_env(self.objcivars),
-            "objcsdk" => kuna_objcsdk::set_objcsdk_env(
-                self.objcsdk.as_deref().and_then(|p| p.to_str()),
-            ),
+            "objcsdk" => {
+                kuna_objcsdk::set_objcsdk_env(self.objcsdk.as_deref().and_then(|p| p.to_str()))
+            }
             "dyldimage" => {
                 kuna_dyldcache::set_dyldimage_env(self.dyldimage.as_deref().unwrap_or("none"))
             }
@@ -223,13 +230,23 @@ thread_local! {
 fn push(options: Option<Rc<LoadOptions>>) -> LoadScope {
     let id = NEXT_SCOPE.with(|next| next.replace(next.get().wrapping_add(1)));
     SCOPES.with(|scopes| scopes.borrow_mut().push((id, options)));
-    LoadScope { id, _thread: PhantomData }
+    LoadScope {
+        id,
+        _thread: PhantomData,
+    }
 }
 
 /// The options of the innermost live scope, or `None` when there is none or it
 /// defers to the environment.
 fn current<T>(read: impl FnOnce(Option<&LoadOptions>) -> T) -> T {
-    SCOPES.with(|scopes| read(scopes.borrow().last().and_then(|(_, options)| options.as_deref())))
+    SCOPES.with(|scopes| {
+        read(
+            scopes
+                .borrow()
+                .last()
+                .and_then(|(_, options)| options.as_deref()),
+        )
+    })
 }
 
 /// Make `options` the options in force on this thread until the scope drops.
@@ -359,9 +376,10 @@ pub mod env {
 
     pub fn objcivars() -> bool {
         match std::env::var(crate::kuna_objcivars::OBJCIVARS_ENV) {
-            Ok(v) => {
-                !matches!(v.trim().to_ascii_lowercase().as_str(), "off" | "0" | "false" | "no")
-            }
+            Ok(v) => !matches!(
+                v.trim().to_ascii_lowercase().as_str(),
+                "off" | "0" | "false" | "no"
+            ),
             Err(_) => true,
         }
     }
@@ -402,7 +420,10 @@ pub mod env {
 
     fn load_pass(name: &str) -> bool {
         !std::env::var(name).is_ok_and(|value| {
-            matches!(value.trim().to_ascii_lowercase().as_str(), "off" | "0" | "false")
+            matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "off" | "0" | "false"
+            )
         })
     }
 
@@ -415,7 +436,8 @@ pub mod env {
     }
 
     pub fn load_mmap() -> bool {
-        !std::env::var(LOAD_MMAP_ENV).is_ok_and(|value| matches!(value.as_str(), "off" | "0" | "false"))
+        !std::env::var(LOAD_MMAP_ENV)
+            .is_ok_and(|value| matches!(value.as_str(), "off" | "0" | "false"))
     }
 
     /// The `"<maj>.<min>"` release in `KUNA_GOVERSION`; `None` when it is
@@ -468,14 +490,30 @@ mod tests {
 
     #[test]
     fn a_scope_dropped_out_of_order_leaves_the_live_ones_in_force() {
-        let first = LoadOptions { goabi: false, ..LoadOptions::default() }.enter();
-        let second = LoadOptions { ppcapu: true, ..LoadOptions::default() }.enter();
+        let first = LoadOptions {
+            goabi: false,
+            ..LoadOptions::default()
+        }
+        .enter();
+        let second = LoadOptions {
+            ppcapu: true,
+            ..LoadOptions::default()
+        }
+        .enter();
         let environment = enter_environment();
         drop(second);
-        assert_eq!(scoped(|o| o.goabi), None, "the environment scope is still innermost");
+        assert_eq!(
+            scoped(|o| o.goabi),
+            None,
+            "the environment scope is still innermost"
+        );
         drop(first);
         assert_eq!(scoped(|o| o.goabi), None);
-        let third = LoadOptions { ppcapu: true, ..LoadOptions::default() }.enter();
+        let third = LoadOptions {
+            ppcapu: true,
+            ..LoadOptions::default()
+        }
+        .enter();
         drop(environment);
         assert_eq!(scoped(|o| o.ppcapu), Some(true));
         drop(third);
@@ -521,7 +559,10 @@ mod tests {
         assert!(crate::kuna_ppc32picimports::abi_enabled());
         assert!(!crate::kuna_objcivars::objcivars_enabled());
         assert_eq!(crate::kuna_objcsdk::sdk_path(), Some(PathBuf::from("/sdk")));
-        assert_eq!(crate::kuna_dyldcache::selected_image().as_deref(), Some("libfoo.dylib"));
+        assert_eq!(
+            crate::kuna_dyldcache::selected_image().as_deref(),
+            Some("libfoo.dylib")
+        );
         assert!(!crate::kuna_dyldcache::dyldcrossrefs_enabled());
     }
 }

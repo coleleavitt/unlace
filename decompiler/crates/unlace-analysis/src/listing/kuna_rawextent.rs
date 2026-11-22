@@ -44,10 +44,10 @@ use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::translate::Translate;
 
+use crate::listing::Listing;
 use crate::listing::classify::classify;
 use crate::listing::decode::decode_one;
 use crate::listing::kuna_dosexit::{self, DosExits, Op};
-use crate::listing::Listing;
 
 /// The exclusive end of every measured entry's flow, keyed by entry, or `None`
 /// when the language is not x86 real mode.
@@ -72,25 +72,37 @@ pub fn measure(
         entries,
         exits,
         noreturn: exits.noreturn.iter().map(|fact| fact.addr).collect(),
-        segment: arch.userops.get_op_by_name(b"segment").map(|op| op.get_index() as u64),
+        segment: arch
+            .userops
+            .get_op_by_name(b"segment")
+            .map(|op| op.get_index() as u64),
         cs: translate.get_register_data("CS").ok(),
     };
     let ranges = listing.exec_ranges();
-    Some(crate::loader::kuna_realmodecs::without_commits(arch, translate, || {
-        let mut ends = BTreeMap::new();
-        let mut seen = FxHashSet::default();
-        let mut stack = Vec::new();
-        for (i, &entry) in entries.iter().enumerate() {
-            let Some(&(lo, hi)) = ranges.iter().find(|&&(lo, hi)| lo <= entry && entry < hi) else {
-                continue;
-            };
-            let bound = entries.get(i + 1).copied().filter(|&next| next > entry && next < hi).unwrap_or(hi);
-            if let Some(end) = walk.end(entry, bound, (lo, hi), &mut seen, &mut stack) {
-                ends.insert(entry, end);
+    Some(crate::loader::kuna_realmodecs::without_commits(
+        arch,
+        translate,
+        || {
+            let mut ends = BTreeMap::new();
+            let mut seen = FxHashSet::default();
+            let mut stack = Vec::new();
+            for (i, &entry) in entries.iter().enumerate() {
+                let Some(&(lo, hi)) = ranges.iter().find(|&&(lo, hi)| lo <= entry && entry < hi)
+                else {
+                    continue;
+                };
+                let bound = entries
+                    .get(i + 1)
+                    .copied()
+                    .filter(|&next| next > entry && next < hi)
+                    .unwrap_or(hi);
+                if let Some(end) = walk.end(entry, bound, (lo, hi), &mut seen, &mut stack) {
+                    ends.insert(entry, end);
+                }
             }
-        }
-        ends
-    }))
+            ends
+        },
+    ))
 }
 
 /// The most instructions one entry's walk visits before it gives up and the
@@ -175,12 +187,20 @@ impl Walk<'_> {
                 continue;
             }
             if step.is_call {
-                if !step.flows.iter().any(|target| self.noreturn.contains(target)) {
+                if !step
+                    .flows
+                    .iter()
+                    .any(|target| self.noreturn.contains(target))
+                {
                     stack.extend(step.fall_through.map(|next| (next, false)));
                 }
                 continue;
             }
-            stack.extend(step.flows.iter().map(|&target| (target, step.is_conditional)));
+            stack.extend(
+                step.flows
+                    .iter()
+                    .map(|&target| (target, step.is_conditional)),
+            );
             stack.extend(step.fall_through.map(|next| (next, false)));
             if step.unresolved_jump {
                 match self.through(vma) {
@@ -202,7 +222,9 @@ impl Walk<'_> {
                 len: insn.len,
                 is_call: insn.flow.is_call,
                 is_conditional: insn.flow.is_conditional,
-                unresolved_jump: insn.flow.is_computed && insn.flow.is_jump && insn.flows.is_empty(),
+                unresolved_jump: insn.flow.is_computed
+                    && insn.flow.is_jump
+                    && insn.flows.is_empty(),
                 flows: Cow::Borrowed(&insn.flows),
                 fall_through: insn.fall_through,
             });
@@ -240,19 +262,32 @@ impl Walk<'_> {
     /// table itself lies in `[entry, bound)` and names an address there:
     /// otherwise the constant is a displacement off a pointer (`jmp
     /// cs:[bx+0eh]` after a value search), not a table.
-    fn table(&self, vma: u64, offset: u64, entry: u64, bound: u64, range: (u64, u64)) -> Option<Vec<u64>> {
+    fn table(
+        &self,
+        vma: u64,
+        offset: u64,
+        entry: u64,
+        bound: u64,
+        range: (u64, u64),
+    ) -> Option<Vec<u64>> {
         let at = Address::new(Rc::clone(self.code_space), vma);
-        let cs = self.arch.with_context_db(|db| db.get_variable_value(b"realCS", &at)).unwrap_or(0);
+        let cs = self
+            .arch
+            .with_context_db(|db| db.get_variable_value(b"realCS", &at))
+            .unwrap_or(0);
         let base = u64::from(cs) << 4;
         let offset = offset & 0xffff;
         let table = base + offset;
         if !(entry..bound).contains(&table) {
             return None;
         }
-        let mut words = vec![0u8; (bound - table).min(2 * MAX_TABLE).min(0x1_0000 - offset) as usize];
+        let mut words =
+            vec![0u8; (bound - table).min(2 * MAX_TABLE).min(0x1_0000 - offset) as usize];
         let loader = self.arch.translate().loader_rc();
         let mut loader = loader.try_borrow_mut().ok()?;
-        loader.load_fill(&mut words, &Address::new(Rc::clone(self.code_space), table)).ok()?;
+        loader
+            .load_fill(&mut words, &Address::new(Rc::clone(self.code_space), table))
+            .ok()?;
         let targets: Vec<u64> = words
             .chunks_exact(2)
             .map(|word| base + u64::from(u16::from_le_bytes([word[0], word[1]])))
@@ -267,7 +302,11 @@ impl Walk<'_> {
 /// loaded from is `segment(seg, offset)`, a constant offset is a fixed word,
 /// and a constant added to a register under `cs` is a table.
 fn through(ops: &[Op], segment: u64, cs: &VarnodeData) -> Through {
-    let Some(branch) = ops.iter().rev().find(|op| op.opcode == OpCode::CPUI_BRANCHIND) else {
+    let Some(branch) = ops
+        .iter()
+        .rev()
+        .find(|op| op.opcode == OpCode::CPUI_BRANCHIND)
+    else {
         return Through::Unknown;
     };
     let Some(mut target) = branch.ins.first() else {
@@ -276,7 +315,9 @@ fn through(ops: &[Op], segment: u64, cs: &VarnodeData) -> Through {
     if let Some(seg) = defining(ops, target).filter(|op| is_segment(op, segment)) {
         target = &seg.ins[2];
     }
-    let Some(load) = defining(ops, target).filter(|op| op.opcode == OpCode::CPUI_LOAD && op.ins.len() == 2) else {
+    let Some(load) =
+        defining(ops, target).filter(|op| op.opcode == OpCode::CPUI_LOAD && op.ins.len() == 2)
+    else {
         return Through::Unknown;
     };
     let Some(seg) = defining(ops, &load.ins[1]).filter(|op| is_segment(op, segment)) else {
@@ -305,7 +346,11 @@ fn defining<'o>(ops: &'o [Op], v: &VarnodeData) -> Option<&'o Op> {
     if !kuna_dosexit::is_unique(v) {
         return None;
     }
-    ops.iter().rev().find(|op| op.out.as_ref().is_some_and(|out| kuna_dosexit::same(out, v)))
+    ops.iter().rev().find(|op| {
+        op.out
+            .as_ref()
+            .is_some_and(|out| kuna_dosexit::same(out, v))
+    })
 }
 
 fn is_segment(op: &Op, segment: u64) -> bool {

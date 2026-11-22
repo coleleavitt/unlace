@@ -12,15 +12,15 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
-use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
-};
 use unlace_base::marshal::{Decoder, IdRegistry, XmlDecode, XmlEncode};
+use unlace_base::space::{
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
+};
 use unlace_base::types::int4;
-use unlace_decomp::dtype::{type_metatype, Datatype};
+use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::stringmanage::{
-    StringData, StringManager, StringManagerUnicode, ATTRIB_STRING_CHARSIZE,
-    ATTRIB_STRING_OPAQUE, ATTRIB_TRUNC, ELEM_BYTES, ELEM_STRING, ELEM_STRINGMANAGE,
+    ATTRIB_STRING_CHARSIZE, ATTRIB_STRING_OPAQUE, ATTRIB_TRUNC, ELEM_BYTES, ELEM_STRING,
+    ELEM_STRINGMANAGE, StringData, StringManager, StringManagerUnicode,
 };
 use unlace_sleigh::loadimage::LoadImage;
 
@@ -29,7 +29,8 @@ use unlace_sleigh::loadimage::LoadImage;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -196,7 +197,10 @@ fn f3_register_internal_legality_and_constant_keying() {
     // A lone 0xFF byte is an invalid UTF-8 lead -> checkCharacters == -1 -> 0.
     let bad = [0xFFu8];
     let h_bad = sm.register_internal_string_data(&addr, &bad, 1, &ct, &mgr);
-    assert_eq!(h_bad, 0, "invalid encoding must return hash 0 and register nothing");
+    assert_eq!(
+        h_bad, 0,
+        "invalid encoding must return hash 0 and register nothing"
+    );
     assert!(sm.string_map.is_empty());
 
     // A legal NUL-terminated ASCII string -> non-zero hash, cached at the
@@ -387,13 +391,19 @@ fn g2_utf32_range_gate_and_no_add_overflow() {
     // A valid 3-byte codepoint U+20AC (euro) packed as UTF-32 LE: 0xAC,0x20,0,0.
     let mut sk = 0;
     let euro = [0xACu8, 0x20, 0x00, 0x00];
-    assert_eq!(StringManager::get_codepoint(&euro, 4, false, &mut sk), 0x20AC);
+    assert_eq!(
+        StringManager::get_codepoint(&euro, 4, false, &mut sk),
+        0x20AC
+    );
     assert_eq!(sk, 4, "UTF-32 always consumes 4 bytes");
 
     // Big-endian assembly of the same codepoint: 0,0,0x20,0xAC.
     let mut skb = 0;
     let euro_be = [0x00u8, 0x00, 0x20, 0xAC];
-    assert_eq!(StringManager::get_codepoint(&euro_be, 4, true, &mut skb), 0x20AC);
+    assert_eq!(
+        StringManager::get_codepoint(&euro_be, 4, true, &mut skb),
+        0x20AC
+    );
 
     // Just past the maximum codepoint (0x110000 > 0x10ffff) -> -1.
     let mut sk2 = 0;
@@ -428,13 +438,19 @@ fn g2_utf32_range_gate_and_no_add_overflow() {
          (caught by the caller's `codepoint < 0`); got {cp}"
     );
     // It must be the exact C++ bit-pattern reinterpretation, not -1.
-    assert_eq!(cp, 0xFF030201u32 as i32, "must be the byte-disjoint sum, reinterpreted");
+    assert_eq!(
+        cp, 0xFF030201u32 as i32,
+        "must be the byte-disjoint sum, reinterpreted"
+    );
 
     // The worst-case all-ones input must also not panic and must reinterpret to
     // the exact bit pattern (-1), proving the byte-disjoint sum never carries.
     let mut sk5 = 0;
     let all_ones = [0xFFu8, 0xFF, 0xFF, 0xFF]; // assembles to 0xFFFFFFFF = -1
-    assert_eq!(StringManager::get_codepoint(&all_ones, 4, false, &mut sk5), -1);
+    assert_eq!(
+        StringManager::get_codepoint(&all_ones, 4, false, &mut sk5),
+        -1
+    );
 
     // And confirm the negative codepoint really does gate string emission at the
     // caller: checkCharacters over a UTF-32 buffer whose first element is negative
@@ -497,8 +513,15 @@ fn g3_no_terminator_returns_empty_but_edge_terminator_decodes() {
         .get_string_data(&addr_b, &ct, &mut loader_b, &mut tr_b)
         .to_vec();
     // numChars(19) < maximumChars(20) -> raw charsize==1 copy of all 20 bytes.
-    assert_eq!(&out_b[..19], &[b'Z'; 19][..], "edge-terminated string must decode");
-    assert_eq!(out_b[19], 0, "the terminator byte is preserved by the raw copy");
+    assert_eq!(
+        &out_b[..19],
+        &[b'Z'; 19][..],
+        "edge-terminated string must decode"
+    );
+    assert_eq!(
+        out_b[19], 0,
+        "the terminator byte is preserved by the raw copy"
+    );
     assert!(
         !tr_b,
         "a terminator inside maximumChars is not a truncation"

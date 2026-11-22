@@ -3,8 +3,8 @@
 //! declared wide result does not return it.
 use crate::common;
 use object::{
-    write, Architecture, BinaryFormat, Endianness, RelocationFlags, SymbolFlags, SymbolKind,
-    SymbolScope,
+    Architecture, BinaryFormat, Endianness, RelocationFlags, SymbolFlags, SymbolKind, SymbolScope,
+    write,
 };
 use std::process::Command;
 
@@ -84,7 +84,10 @@ fn signed_di_quotient_low_word_survives_an_opaque_call() {
         assert_eq!(status, 0, "{error}");
         let document: serde_json::Value = serde_json::from_str(&output).unwrap();
         assert!(document["functions"][0]["error"].is_null(), "{output}");
-        document["functions"][0]["code"].as_str().unwrap().to_string()
+        document["functions"][0]["code"]
+            .as_str()
+            .unwrap()
+            .to_string()
     };
     let off = decompile(Some("off"));
     assert_eq!(decompile(None), off, "libgccsigs is off by default");
@@ -145,10 +148,17 @@ fn an_explicit_scalar_signature_overrides_the_runtime_contract() {
     let image = root.path().join("scalar.o");
     std::fs::write(&image, caller(false)).unwrap();
     let (output, error, status) = common::run_kuna(&[
-        "decompile", image.to_str().unwrap(), "divide_low", "--json",
-        "--option", "libgccsigs", "on",
-        "--assert", "prototype divide_low void divide_low(int value,unsigned int *result)",
-        "--assert", "prototype __divdi3 unsigned int __divdi3(unsigned int a,unsigned int b,unsigned int c,unsigned int d)",
+        "decompile",
+        image.to_str().unwrap(),
+        "divide_low",
+        "--json",
+        "--option",
+        "libgccsigs",
+        "on",
+        "--assert",
+        "prototype divide_low void divide_low(int value,unsigned int *result)",
+        "--assert",
+        "prototype __divdi3 unsigned int __divdi3(unsigned int a,unsigned int b,unsigned int c,unsigned int d)",
     ]);
     assert_eq!(status, 0, "{error}");
     let document: serde_json::Value = serde_json::from_str(&output).unwrap();
@@ -359,8 +369,12 @@ void twice(long long a,long long *p){p[0]=f(a);p[1]=f(a+1);}
             ("twice", "void twice("),
         ] {
             let (output, error, status) = common::run_kuna(&[
-                "decompile", image.to_str().unwrap(), function, "--json",
-                "--assert", "prototype f long long f(long long a)",
+                "decompile",
+                image.to_str().unwrap(),
+                function,
+                "--json",
+                "--assert",
+                "prototype f long long f(long long a)",
             ]);
             assert_eq!(status, 0, "{error}");
             let document: serde_json::Value = serde_json::from_str(&output).unwrap();

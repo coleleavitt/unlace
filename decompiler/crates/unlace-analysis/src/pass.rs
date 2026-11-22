@@ -13,7 +13,7 @@
 //! `loader`/`analyzers/*` modules implementing [`AnalysisPass`].
 
 use unlace_decomp::architecture::Architecture;
-use unlace_decomp::kuna_symbolnamechars::{sanitize_symbol_name, NameChars};
+use unlace_decomp::kuna_symbolnamechars::{NameChars, sanitize_symbol_name};
 
 use crate::listing::Listing;
 use crate::loadimage_object::ObjectLoadImage;
@@ -760,7 +760,8 @@ pub struct AnalysisOutput {
     /// Go DWARF signatures, with type interning deferred until the commit gate.
     pub go_dwarf: Vec<crate::dwarf::kuna_godwarfsig::Facts>,
     /// Exact linked pointer method statements, intersected with Go DWARF at commit.
-    pub go_pointer_methods: std::collections::BTreeMap<u64, crate::gotypes::kuna_pointermethods::LinkedMethod>,
+    pub go_pointer_methods:
+        std::collections::BTreeMap<u64, crate::gotypes::kuna_pointermethods::LinkedMethod>,
     /// (kuna `cppsig`) The prototypes recovered from the MANGLED SYMBOL, split by
     /// how certain the pass is that argument 0 is an implicit `this`. Held apart
     /// for the same reason as [`Self::cpp_dwarf`] — the producing pass runs at
@@ -846,18 +847,30 @@ impl AnalysisOutput {
                 }
             }
             if p.first_var_arg_slot >= 0 {
-                p.first_var_arg_slot -= dropped.iter().filter(|&&i| (i as i32) < p.first_var_arg_slot).count() as i32;
+                p.first_var_arg_slot -= dropped
+                    .iter()
+                    .filter(|&&i| (i as i32) < p.first_var_arg_slot)
+                    .count() as i32;
             }
         }
         let unique: std::collections::BTreeSet<_> = self.dwarf_nocall.iter().collect();
         for (addr, name, dropped) in unique {
-            self.prototypes.iter_mut().filter(|p| &p.name == name).for_each(|p| drop_params(p, dropped));
-            self.cpp_dwarf.prototypes.iter_mut().filter(|(a, _)| a == addr).for_each(|(_, p)| drop_params(p, dropped));
+            self.prototypes
+                .iter_mut()
+                .filter(|p| &p.name == name)
+                .for_each(|p| drop_params(p, dropped));
+            self.cpp_dwarf
+                .prototypes
+                .iter_mut()
+                .filter(|(a, _)| a == addr)
+                .for_each(|(_, p)| drop_params(p, dropped));
         }
     }
 
     pub fn sanitize_names(&mut self, mode: NameChars) {
-        self.go_dwarf.iter_mut().for_each(|facts| facts.sanitize_names(mode));
+        self.go_dwarf
+            .iter_mut()
+            .for_each(|facts| facts.sanitize_names(mode));
         if mode == NameChars::Off {
             return;
         }
@@ -872,35 +885,82 @@ impl AnalysisOutput {
         };
         // Data identifiers are allocated together at commit, before folding can
         // collapse distinct spellings such as counter.3 and counter_3.
-        let data_mode = if mode == NameChars::Ident { NameChars::Safe } else { mode };
+        let data_mode = if mode == NameChars::Ident {
+            NameChars::Safe
+        } else {
+            mode
+        };
         let fix_data = |s: &mut String| {
-            if let std::borrow::Cow::Owned(v) = sanitize_symbol_name(s, data_mode) { *s = v; }
+            if let std::borrow::Cow::Owned(v) = sanitize_symbol_name(s, data_mode) {
+                *s = v;
+            }
         };
         self.symbols.iter_mut().for_each(|s| {
-            if s.kind == SymKind::Data { fix_data(&mut s.name); } else { fix(&mut s.name); }
+            if s.kind == SymKind::Data {
+                fix_data(&mut s.name);
+            } else {
+                fix(&mut s.name);
+            }
         });
-        self.data_objects.iter_mut().for_each(|d| fix_data(&mut d.name));
-        self.typed_data.iter_mut().for_each(|d| fix_data(&mut d.name));
-        self.go_type_globals.iter_mut().for_each(|d| fix_data(&mut d.name));
+        self.data_objects
+            .iter_mut()
+            .for_each(|d| fix_data(&mut d.name));
+        self.typed_data
+            .iter_mut()
+            .for_each(|d| fix_data(&mut d.name));
+        self.go_type_globals
+            .iter_mut()
+            .for_each(|d| fix_data(&mut d.name));
         self.go_itabs.iter_mut().for_each(|s| fix_data(&mut s.name));
         self.entry_names.iter_mut().for_each(|(_, n)| fix(n));
         self.locals.iter_mut().for_each(|l| fix(&mut l.name));
         self.fid_names.iter_mut().for_each(|f| fix(&mut f.name));
-        self.signature_vetoes.iter_mut().for_each(|f| fix(&mut f.name));
-        self.fallback_names.iter_mut().for_each(|f| fix(&mut f.name));
+        self.signature_vetoes
+            .iter_mut()
+            .for_each(|f| fix(&mut f.name));
+        self.fallback_names
+            .iter_mut()
+            .for_each(|f| fix(&mut f.name));
         self.prototypes.iter_mut().for_each(fix_proto);
-        self.prototypes_at.iter_mut().for_each(|(_, p)| fix_proto(p));
+        self.prototypes_at
+            .iter_mut()
+            .for_each(|(_, p)| fix_proto(p));
         self.dwarf_nocall.iter_mut().for_each(|(_, n, _)| fix(n));
-        self.arm_float_prototypes.iter_mut().for_each(|(_, p)| fix_proto(p));
+        self.arm_float_prototypes
+            .iter_mut()
+            .for_each(|(_, p)| fix_proto(p));
         self.main_decl_at.iter_mut().for_each(|(_, p)| fix_proto(p));
-        self.cpp_dwarf.symbols.iter_mut().for_each(|s| fix(&mut s.name));
-        self.cpp_dwarf.locals.iter_mut().for_each(|l| fix(&mut l.name));
-        self.cpp_dwarf.prototypes.iter_mut().for_each(|(_, p)| fix_proto(p));
-        self.cpp_sig.proven.iter_mut().for_each(|(_, p)| fix_proto(p));
-        self.cpp_sig.inferred.iter_mut().for_each(|(_, p)| fix_proto(p));
-        self.cpp_sig.msvc.iter_mut().for_each(|(_, p, _)| fix_proto(p));
-        self.cpp_sig.msvc_byval.iter_mut().for_each(|(_, d)| fix_proto(&mut d.pieces));
-        self.format_sites.iter_mut().for_each(|f| fix_proto(&mut f.pieces));
+        self.cpp_dwarf
+            .symbols
+            .iter_mut()
+            .for_each(|s| fix(&mut s.name));
+        self.cpp_dwarf
+            .locals
+            .iter_mut()
+            .for_each(|l| fix(&mut l.name));
+        self.cpp_dwarf
+            .prototypes
+            .iter_mut()
+            .for_each(|(_, p)| fix_proto(p));
+        self.cpp_sig
+            .proven
+            .iter_mut()
+            .for_each(|(_, p)| fix_proto(p));
+        self.cpp_sig
+            .inferred
+            .iter_mut()
+            .for_each(|(_, p)| fix_proto(p));
+        self.cpp_sig
+            .msvc
+            .iter_mut()
+            .for_each(|(_, p, _)| fix_proto(p));
+        self.cpp_sig
+            .msvc_byval
+            .iter_mut()
+            .for_each(|(_, d)| fix_proto(&mut d.pieces));
+        self.format_sites
+            .iter_mut()
+            .for_each(|f| fix_proto(&mut f.pieces));
     }
 }
 
@@ -930,7 +990,11 @@ pub struct CppSigFacts {
     /// from PE imports. The third field names the prototype model the pieces were
     /// laid out for (`__thiscall`, `__cdecl`, ...) on a 32-bit x86 image, where the
     /// convention decides the storage; `None` elsewhere.
-    pub msvc: Vec<(u64, unlace_decomp::fspec::PrototypePieces, Option<&'static str>)>,
+    pub msvc: Vec<(
+        u64,
+        unlace_decomp::fspec::PrototypePieces,
+        Option<&'static str>,
+    )>,
     /// (kuna `msvcbyval`) The MSVC `__cdecl` imports in [`Self::msvc`] left open
     /// at a by-value class, as whole declarations the call sites size.
     pub msvc_byval: Vec<(u64, unlace_decomp::kuna_msvcbyval::ByvalDecl)>,
@@ -977,11 +1041,19 @@ impl AnalysisOutput {
         self.typed_data.extend(other.typed_data);
         self.go_type_globals.extend(other.go_type_globals);
         self.go_itabs.extend(other.go_itabs);
-        self.swift_types.typed_data.extend(other.swift_types.typed_data);
-        self.swift_types.prototypes.extend(other.swift_types.prototypes);
-        self.swift_types.param_locks.extend(other.swift_types.param_locks);
+        self.swift_types
+            .typed_data
+            .extend(other.swift_types.typed_data);
+        self.swift_types
+            .prototypes
+            .extend(other.swift_types.prototypes);
+        self.swift_types
+            .param_locks
+            .extend(other.swift_types.param_locks);
         self.swift_types.models.extend(other.swift_types.models);
-        self.swift_types.input_hints.extend(other.swift_types.input_hints);
+        self.swift_types
+            .input_hints
+            .extend(other.swift_types.input_hints);
         self.swift_types.declared.extend(other.swift_types.declared);
         self.swift_types.no_self.extend(other.swift_types.no_self);
         self.swift_types.regs = self.swift_types.regs.or(other.swift_types.regs);
@@ -1011,7 +1083,9 @@ impl AnalysisOutput {
         self.import_slot_names.extend(other.import_slot_names);
         self.vcall_sites.extend(other.vcall_sites);
         self.cpp_vtables.classes.extend(other.cpp_vtables.classes);
-        self.cpp_vtables.slot_ranges.extend(other.cpp_vtables.slot_ranges);
+        self.cpp_vtables
+            .slot_ranges
+            .extend(other.cpp_vtables.slot_ranges);
         self.strings.extend(other.strings);
         self.bounded_strings.extend(other.bounded_strings);
         self.wide_strings.extend(other.wide_strings);
@@ -1025,7 +1099,8 @@ impl AnalysisOutput {
         self.main_decl_at.extend(other.main_decl_at);
         self.c_runtime_imports.extend(other.c_runtime_imports);
         self.context_paints.extend(other.context_paints);
-        self.inventory_context_paints.extend(other.inventory_context_paints);
+        self.inventory_context_paints
+            .extend(other.inventory_context_paints);
         self.tracked_regs.extend(other.tracked_regs);
         self.entry_tracks.extend(other.entry_tracks);
         self.call_fixups.extend(other.call_fixups);
@@ -1050,7 +1125,9 @@ impl AnalysisOutput {
         self.cpp_sig.inferred.extend(other.cpp_sig.inferred);
         self.cpp_sig.msvc.extend(other.cpp_sig.msvc);
         self.cpp_sig.msvc_byval.extend(other.cpp_sig.msvc_byval);
-        self.cpp_sig.msvc_builders.extend(other.cpp_sig.msvc_builders);
+        self.cpp_sig
+            .msvc_builders
+            .extend(other.cpp_sig.msvc_builders);
         self.format_sites.extend(other.format_sites);
         self.libctypes_glibc |= other.libctypes_glibc;
         self.libctypes_refused |= other.libctypes_refused;

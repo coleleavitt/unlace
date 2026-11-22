@@ -22,13 +22,13 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::marshal::{Decoder, PackedDecode, PackedEncode};
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 
-use crate::dtype::{type_metatype, Datatype};
-use crate::op::pcodeop_flags;
 use crate::context::{ArchContext, TypeOp};
+use crate::dtype::{Datatype, type_metatype};
+use crate::op::pcodeop_flags;
 
 use super::*;
 
@@ -41,7 +41,8 @@ mod highslice_guard;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -80,7 +81,9 @@ fn dt(size: int4) -> Rc<Datatype> {
 
 fn opcode_flags(opc: OpCode) -> unlace_base::types::uint4 {
     match opc {
-        OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH | OpCode::CPUI_BRANCHIND => pcodeop_flags::branch,
+        OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH | OpCode::CPUI_BRANCHIND => {
+            pcodeop_flags::branch
+        }
         _ => 0,
     }
 }
@@ -88,7 +91,8 @@ fn opcode_flags(opc: OpCode) -> unlace_base::types::uint4 {
 fn mk_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
     let ram = ram_space(fd);
     let op = fd.new_op(inputs, Address::new(ram, off));
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, opcode_flags(opc), format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, opcode_flags(opc), format!("{opc:?}")));
     op
 }
 
@@ -107,7 +111,9 @@ fn mk_input(fd: &mut Funcdata, off: u64) -> VarnodeId {
     let ram = ram_space(fd);
     let vn = fd.new_varnode(4, &Address::new(ram, off), None);
     fd.vbank_mut()
-        .set_input(vn, &mut |_: &mut crate::varnode::VarnodeBank, _: VarnodeId, _: VarnodeId| {
+        .set_input(vn, &mut |_: &mut crate::varnode::VarnodeBank,
+                             _: VarnodeId,
+                             _: VarnodeId| {
             Ok(())
         })
         .unwrap()
@@ -484,7 +490,11 @@ fn jumpvaluesrange_iterates_an_exact_noncontiguous_domain() {
     assert!(!clone.contains(9).unwrap());
 
     range.set_range(CircleRange::new(4, 7, 4, 1));
-    assert_eq!(range.get_size(), 3, "setting a range replaces the exact domain");
+    assert_eq!(
+        range.get_size(),
+        3,
+        "setting a range replaces the exact domain"
+    );
     assert!(range.initialize_for_reading());
     assert_eq!(range.get_value(), 4);
 }
@@ -527,7 +537,8 @@ fn encode_sample_jumptable(m: &AddrSpaceManager, buf: &mut Vec<u8>) {
     jt.label.push(0);
     jt.label.push(1);
     // one loadtable record.
-    jt.loadpoints.push(LoadTable::full(Address::new(Rc::clone(&ram), 0x6000), 4, 2));
+    jt.loadpoints
+        .push(LoadTable::full(Address::new(Rc::clone(&ram), 0x6000), 4, 2));
 
     let mut enc = PackedEncode::new(buf);
     jt.encode(&mut enc).unwrap();
@@ -549,8 +560,14 @@ fn jumptable_decode_recovers_addresses_labels_loads() {
     assert!(jt.is_labelled());
     assert_eq!(jt.num_entries(), 2);
     assert_eq!(jt.get_op_address(), &Address::new(Rc::clone(&ram), 0x4000));
-    assert_eq!(jt.get_address_by_index(0), Address::new(Rc::clone(&ram), 0x5000));
-    assert_eq!(jt.get_address_by_index(1), Address::new(Rc::clone(&ram), 0x5100));
+    assert_eq!(
+        jt.get_address_by_index(0),
+        Address::new(Rc::clone(&ram), 0x5000)
+    );
+    assert_eq!(
+        jt.get_address_by_index(1),
+        Address::new(Rc::clone(&ram), 0x5100)
+    );
     assert_eq!(jt.get_label_by_index(0), 0);
     assert_eq!(jt.get_label_by_index(1), 1);
     assert_eq!(jt.load_points().len(), 1);
@@ -582,8 +599,14 @@ fn jumptable_encode_decode_roundtrip() {
 
     assert_eq!(jt2.get_op_address(), &Address::new(Rc::clone(&ram), 0x4000));
     assert_eq!(jt2.num_entries(), 2);
-    assert_eq!(jt2.get_address_by_index(0), Address::new(Rc::clone(&ram), 0x5000));
-    assert_eq!(jt2.get_address_by_index(1), Address::new(Rc::clone(&ram), 0x5100));
+    assert_eq!(
+        jt2.get_address_by_index(0),
+        Address::new(Rc::clone(&ram), 0x5000)
+    );
+    assert_eq!(
+        jt2.get_address_by_index(1),
+        Address::new(Rc::clone(&ram), 0x5100)
+    );
     assert_eq!(jt2.get_label_by_index(0), 0);
     assert_eq!(jt2.get_label_by_index(1), 1);
     assert_eq!(jt2.load_points().len(), 1);
@@ -669,7 +692,11 @@ fn label_rows_judge_a_value_by_the_entries_it_reads() {
     assert!(rows.may_be_dispatched(&[at(0x500, 2), at(0x400, 1), at(0x210, 8)]));
     assert!(!rows.may_be_dispatched(&[at(0x500, 2), at(0x100, 1), at(0x218, 8)]));
 
-    let empty = RowLoads { entries: Vec::new(), reached: Vec::new(), depth: 1 };
+    let empty = RowLoads {
+        entries: Vec::new(),
+        reached: Vec::new(),
+        depth: 1,
+    };
     let empty = LabelRows::new(&basic, &addrs, Some(&empty)).unwrap();
     assert!(empty.may_be_dispatched(&[at(0x400, 8)]));
     let unrecorded = LabelRows::new(&basic, &addrs, None).unwrap();
@@ -730,15 +757,26 @@ fn dropped_model_labels_each_out_edge_by_its_table_values() {
     let ram = ram_of(&m);
     let at = |off: u64| Address::new(Rc::clone(&ram), off);
     let mut jt = JumpTable::new(at(0x1000));
-    jt.case_values = vec![(0, at(0x1a8)), (0, at(0x1b0)), (1, at(0x170)), (2, at(0x300))];
+    jt.case_values = vec![
+        (0, at(0x1a8)),
+        (0, at(0x1b0)),
+        (1, at(0x170)),
+        (2, at(0x300)),
+    ];
     jt.addresstable = vec![at(0x17c), at(0x16c), at(0x200)];
     jt.label = vec![0x17c, 0x16c, 0x200];
     jt.block2addr = (0..3).map(|i| IndexPair::new(i, i)).collect();
     jt.label_by_case_values(|_, address| address.get_offset() != 0x300);
     assert_eq!(jt.label, vec![0x1a8, 0x1b0, 0x170, 0x200]);
-    assert_eq!(jt.addresstable, vec![at(0x1a8), at(0x1b0), at(0x170), at(0x200)]);
-    let pairs: Vec<(int4, int4)> =
-        jt.block2addr.iter().map(|p| (p.block_position, p.address_index)).collect();
+    assert_eq!(
+        jt.addresstable,
+        vec![at(0x1a8), at(0x1b0), at(0x170), at(0x200)]
+    );
+    let pairs: Vec<(int4, int4)> = jt
+        .block2addr
+        .iter()
+        .map(|p| (p.block_position, p.address_index))
+        .collect();
     assert_eq!(pairs, vec![(0, 0), (0, 1), (1, 2), (2, 3)]);
 }
 
@@ -749,8 +787,24 @@ fn guard_range_retry_keeps_both_wrapped_bounds() {
     let lower = mk_op(&mut fd, 2, 0x114, OpCode::CPUI_CBRANCH);
     let upper = mk_op(&mut fd, 2, 0x10c, OpCode::CPUI_CBRANCH);
     let guards = vec![
-        GuardRecord::new(&fd, lower, lower, 0, CircleRange::new(58, 0x8000003a, 4, 1), input, false),
-        GuardRecord::new(&fd, upper, upper, 0, CircleRange::new(0x80000000, 62, 4, 1), input, false),
+        GuardRecord::new(
+            &fd,
+            lower,
+            lower,
+            0,
+            CircleRange::new(58, 0x8000003a, 4, 1),
+            input,
+            false,
+        ),
+        GuardRecord::new(
+            &fd,
+            upper,
+            upper,
+            0,
+            CircleRange::new(0x80000000, 62, 4, 1),
+            input,
+            false,
+        ),
     ];
     let mut range = CircleRange::new(0, 0, 4, 1);
     crate::kuna_switchguardrange::intersect(&fd, &guards, input, &mut range);
@@ -759,7 +813,10 @@ fn guard_range_retry_keeps_both_wrapped_bounds() {
     let mut model = JumpBasicModel::new();
     model.selectguards = guards;
     model.calc_range(&fd, input, &mut range);
-    assert_eq!((range.get_min(), range.get_end(), range.get_size()), (58, 62, 4));
+    assert_eq!(
+        (range.get_min(), range.get_end(), range.get_size()),
+        (58, 62, 4)
+    );
 }
 
 /// A caller-return destination that would sit on decoded code is dropped, and
@@ -770,9 +827,16 @@ fn a_dropped_return_destination_keeps_the_constant_targets() {
     let mut jt = JumpTable::new(Address::new(ram.clone(), 0x1004));
     jt.kuna_push_entry(Address::new(ram.clone(), 0x1040), 0, 0x1040);
     jt.addresstable.push(Address::new(ram.clone(), 0x1005));
-    jt.jmodel = Some(Box::new(crate::kuna_constselectjump::JumpModelConstSelect::from_flow_targets(
-        vec![0x1040], Some(0x1005))));
-    assert_eq!(jt.kuna_return_default(), Some(&Address::new(ram.clone(), 0x1005)));
+    jt.jmodel = Some(Box::new(
+        crate::kuna_constselectjump::JumpModelConstSelect::from_flow_targets(
+            vec![0x1040],
+            Some(0x1005),
+        ),
+    ));
+    assert_eq!(
+        jt.kuna_return_default(),
+        Some(&Address::new(ram.clone(), 0x1005))
+    );
     jt.kuna_drop_return_default();
     assert!(jt.kuna_return_default().is_none());
     let offsets: Vec<_> = jt.address_table().iter().map(|a| a.get_offset()).collect();

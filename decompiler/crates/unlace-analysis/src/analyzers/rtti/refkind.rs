@@ -51,28 +51,24 @@ pub struct RefKind {
 impl RefKind {
     /// Build the ref-kind for a PE image.
     pub fn new(is64: bool, image_base: u64, end: End) -> Self {
-        RefKind { is64, image_base, end }
+        RefKind {
+            is64,
+            image_base,
+            end,
+        }
     }
 
     /// Pointer width in bytes (8 on x64, 4 on x86).
     #[inline]
     pub fn ptr_size(&self) -> usize {
-        if self.is64 {
-            8
-        } else {
-            4
-        }
+        if self.is64 { 8 } else { 4 }
     }
 
     /// The byte offset of the class-name string inside an RTTI0 `TypeDescriptor`:
     /// 16 on x64 (8-byte `pVFTable` + 8-byte spare), 8 on x86 (4 + 4).
     #[inline]
     pub fn type_descriptor_name_offset(&self) -> u64 {
-        if self.is64 {
-            16
-        } else {
-            8
-        }
+        if self.is64 { 16 } else { 8 }
     }
 
     /// Read a raw little/big-endian `u32` from the front of `b` (caller guarantees

@@ -14,11 +14,34 @@ fn compressed_debug_info_names_and_types_the_program() {
     std::fs::create_dir_all(&root).unwrap();
     let source = root.join("sample.c");
     std::fs::write(&source, SOURCE).unwrap();
-    let common_args = ["-O1", "-gdwarf-4", "-ffreestanding", "-fno-pic", "-nostdlib", "-no-pie"];
+    let common_args = [
+        "-O1",
+        "-gdwarf-4",
+        "-ffreestanding",
+        "-fno-pic",
+        "-nostdlib",
+        "-no-pie",
+    ];
     let builds: [(&str, &str, &[&str]); 3] = [
         ("gcc", "-gz", &["-static", "-Wl,--discard-all"]),
-        ("clang", "-gz=zlib", &["-fuse-ld=lld", "-Wl,--no-dynamic-linker", "-Wl,--discard-all"]),
-        ("clang", "-gz=zstd", &["-fuse-ld=lld", "-Wl,--no-dynamic-linker", "-Wl,--discard-all"]),
+        (
+            "clang",
+            "-gz=zlib",
+            &[
+                "-fuse-ld=lld",
+                "-Wl,--no-dynamic-linker",
+                "-Wl,--discard-all",
+            ],
+        ),
+        (
+            "clang",
+            "-gz=zstd",
+            &[
+                "-fuse-ld=lld",
+                "-Wl,--no-dynamic-linker",
+                "-Wl,--discard-all",
+            ],
+        ),
     ];
     for (cc, compression, link) in builds {
         if process::optional_output(Command::new(cc).arg("--version")).is_none() {
@@ -34,7 +57,8 @@ fn compressed_debug_info_names_and_types_the_program() {
                 .arg("-o")
                 .arg(&binary),
         );
-        let (body, err, status) = common::run_kuna(&["decompile", binary.to_str().unwrap(), "bump"]);
+        let (body, err, status) =
+            common::run_kuna(&["decompile", binary.to_str().unwrap(), "bump"]);
         assert_eq!(status, 0, "{cc} {compression}: {err}");
         assert!(
             body.contains("int bump(int k)") && body.contains("counter"),

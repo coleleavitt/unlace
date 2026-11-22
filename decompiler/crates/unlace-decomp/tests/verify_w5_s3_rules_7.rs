@@ -23,20 +23,18 @@
 
 use std::rc::Rc;
 
-use unlace_base::address::{calc_mask, Address};
+use unlace_base::address::{Address, calc_mask};
 use unlace_base::error::KunaResult;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::{int4, uintb};
 
 use unlace_decomp::action::Rule;
-use unlace_decomp::dtype::{type_metatype, Datatype};
-use unlace_decomp::funcdata::Funcdata;
-use unlace_decomp::ruleaction_7::{
-    RuleDivChain, RuleSignForm2, RuleSignMod2Opt, RuleSignMod2nOpt,
-};
 use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
+use unlace_decomp::dtype::{Datatype, type_metatype};
+use unlace_decomp::funcdata::Funcdata;
+use unlace_decomp::ruleaction_7::{RuleDivChain, RuleSignForm2, RuleSignMod2Opt, RuleSignMod2nOpt};
 use unlace_decomp::varnode::{DefOpInfo, VarnodeBank};
 use unlace_num::opcodes::OpCode;
 
@@ -47,7 +45,8 @@ use unlace_num::opcodes::OpCode;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -103,11 +102,18 @@ fn make_op(
     let r = ram(fd);
     let pc = Address::new(Rc::clone(&r), off);
     let op = fd.obank_mut().create_at(num_in, pc);
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
     let out = fd.new_varnode(outsize, &Address::new(r, off), Some(unk(outsize)));
     let seq = fd.obank().get(op).unwrap().get_seq_num().clone();
-    let info = DefOpInfo { id: op, seqnum: seq };
-    let out = fd.vbank_mut().set_def(out, info, &mut no_replace()).unwrap();
+    let info = DefOpInfo {
+        id: op,
+        seqnum: seq,
+    };
+    let out = fd
+        .vbank_mut()
+        .set_def(out, info, &mut no_replace())
+        .unwrap();
     fd.obank_mut().get_mut(op).unwrap().set_output(Some(out));
     (op, out)
 }
@@ -116,13 +122,17 @@ fn make_op_noout(fd: &mut Funcdata, off: u64, opc: OpCode, num_in: int4) -> OpId
     let r = ram(fd);
     let pc = Address::new(r, off);
     let op = fd.obank_mut().create_at(num_in, pc);
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
     op
 }
 
 fn wire(fd: &mut Funcdata, vn: VarnodeId, op: OpId, slot: int4) {
     fd.vbank_mut().add_descend(vn, op).unwrap();
-    fd.obank_mut().get_mut(op).unwrap().set_input(Some(vn), slot);
+    fd.obank_mut()
+        .get_mut(op)
+        .unwrap()
+        .set_input(Some(vn), slot);
 }
 
 fn op_of(fd: &Funcdata, op: OpId) -> OpCode {
@@ -168,9 +178,17 @@ fn w5s3_divchain_right_small_shift_is_faithful() {
     let mut fd = build_fd();
     let root = build_divchain_right(&mut fd, 2, 3);
     let mut rule = RuleDivChain::new();
-    assert_eq!(rule.apply_op(root, &mut fd), 1, "small-shift divchain must fire");
+    assert_eq!(
+        rule.apply_op(root, &mut fd),
+        1,
+        "small-shift divchain must fire"
+    );
     assert_eq!(op_of(&fd, root), OpCode::CPUI_INT_DIV, "root stays INT_DIV");
-    assert_eq!(in_off(&fd, root, 1), 12, "collapsed constant = (1<<2)*3 = 12");
+    assert_eq!(
+        in_off(&fd, root, 1),
+        12,
+        "collapsed constant = (1<<2)*3 = 12"
+    );
 }
 
 #[test]
@@ -183,9 +201,17 @@ fn w5s3_divchain_right_shift64_wraps_like_cpp() {
     let mut fd = build_fd();
     let root = build_divchain_right(&mut fd, 64, 3);
     let mut rule = RuleDivChain::new();
-    assert_eq!(rule.apply_op(root, &mut fd), 1, "shift-64 divchain fires (wrapped val1=1)");
+    assert_eq!(
+        rule.apply_op(root, &mut fd),
+        1,
+        "shift-64 divchain fires (wrapped val1=1)"
+    );
     assert_eq!(op_of(&fd, root), OpCode::CPUI_INT_DIV, "root stays INT_DIV");
-    assert_eq!(in_off(&fd, root, 1), 3, "collapsed constant = (1<<64 wrapped to 1)*3 = 3");
+    assert_eq!(
+        in_off(&fd, root, 1),
+        3,
+        "collapsed constant = (1<<64 wrapped to 1)*3 = 3"
+    );
 }
 
 // ===========================================================================
@@ -234,7 +260,11 @@ fn w5s3_signmod2nopt_in_range_is_faithful() {
     wire(&mut fd, c1, root, 1);
 
     let mut rule = RuleSignMod2nOpt::new();
-    assert_eq!(rule.apply_op(root, &mut fd), 0, "no INT_MULT descend -> no fire");
+    assert_eq!(
+        rule.apply_op(root, &mut fd),
+        0,
+        "no INT_MULT descend -> no fire"
+    );
 }
 
 #[test]
@@ -246,7 +276,11 @@ fn w5s3_signmod2nopt_shiftamt0_returns_zero_like_cpp() {
     let mut fd = build_fd();
     let root = build_signmod2nopt_shiftamt0(&mut fd);
     let mut rule = RuleSignMod2nOpt::new();
-    assert_eq!(rule.apply_op(root, &mut fd), 0, "n==64 wraps mask to 0 -> no fire");
+    assert_eq!(
+        rule.apply_op(root, &mut fd),
+        0,
+        "n==64 wraps mask to 0 -> no fire"
+    );
 }
 
 // ===========================================================================
@@ -289,7 +323,11 @@ fn w5s3_divchain_div_at_limit_fires_sdiv_rejects() {
     let mut fd2 = build_fd();
     let root_sdiv = build_divchain_same(&mut fd2, OpCode::CPUI_INT_SDIV, 0x4000_0000, 1);
     let mut rule2 = RuleDivChain::new();
-    assert_eq!(rule2.apply_op(root_sdiv, &mut fd2), 0, "SDIV at same bitcount rejects");
+    assert_eq!(
+        rule2.apply_op(root_sdiv, &mut fd2),
+        0,
+        "SDIV at same bitcount rejects"
+    );
 }
 
 // ===========================================================================
@@ -306,7 +344,11 @@ fn w5s3_divchain_resval_zero_rejects() {
     let mut fd = build_fd();
     let root = build_divchain_same(&mut fd, OpCode::CPUI_INT_DIV, 0x1_0000, 0x1_0000);
     let mut rule = RuleDivChain::new();
-    assert_eq!(rule.apply_op(root, &mut fd), 0, "resval masks to 0 -> reject");
+    assert_eq!(
+        rule.apply_op(root, &mut fd),
+        0,
+        "resval masks to 0 -> reject"
+    );
     assert_eq!(op_of(&fd, root), OpCode::CPUI_INT_DIV, "unchanged");
     // calc_mask sanity (mask of 4 bytes = 0xffffffff).
     assert_eq!(calc_mask(4), 0xffff_ffff);
@@ -395,9 +437,17 @@ fn w5s3_signmod2nopt_positive_nontrunc_fires_to_srem() {
     wire(&mut fd, andout, base, 1);
 
     let mut rule = RuleSignMod2nOpt::new();
-    assert_eq!(rule.apply_op(root, &mut fd), 1, "non-trunc SREM form must fire");
+    assert_eq!(
+        rule.apply_op(root, &mut fd),
+        1,
+        "non-trunc SREM form must fire"
+    );
     // baseOp rewritten to  a s% 4
-    assert_eq!(op_of(&fd, base), OpCode::CPUI_INT_SREM, "baseOp -> INT_SREM");
+    assert_eq!(
+        op_of(&fd, base),
+        OpCode::CPUI_INT_SREM,
+        "baseOp -> INT_SREM"
+    );
     assert_eq!(in_vn(&fd, base, 0), a, "SREM in0 == a");
     assert_eq!(in_off(&fd, base, 1), 4, "SREM in1 == mask+1 == 4");
 }
@@ -482,11 +532,23 @@ fn w5s3_signform2_matches_but_returns_zero_and_rewires_in0() {
 
     let mut rule = RuleSignForm2::new();
     // Faithful: matches, performs opSetInput(op, a, 0), but returns 0.
-    assert_eq!(rule.apply_op(root, &mut fd), 0, "C++ returns 0 despite matching");
+    assert_eq!(
+        rule.apply_op(root, &mut fd),
+        0,
+        "C++ returns 0 despite matching"
+    );
     // The input rewrite DID happen (C++ ruleaction.cc:8562 opSetInput(op,a,0)).
-    assert_eq!(in_vn(&fd, root, 0), a, "input0 rewired to a even though return 0");
+    assert_eq!(
+        in_vn(&fd, root, 0),
+        a,
+        "input0 rewired to a even though return 0"
+    );
     // Opcode is NOT changed (only opSetInput was called, no opSetOpcode).
-    assert_eq!(op_of(&fd, root), OpCode::CPUI_INT_SRIGHT, "opcode unchanged");
+    assert_eq!(
+        op_of(&fd, root),
+        OpCode::CPUI_INT_SRIGHT,
+        "opcode unchanged"
+    );
 }
 
 #[test]
@@ -512,7 +574,11 @@ fn w5s3_signform2_rejects_when_const_too_large() {
     wire(&mut fd, c31, root, 1);
 
     let mut rule = RuleSignForm2::new();
-    assert_eq!(rule.apply_op(root, &mut fd), 0, "oversized multiplier -> reject");
+    assert_eq!(
+        rule.apply_op(root, &mut fd),
+        0,
+        "oversized multiplier -> reject"
+    );
     // input0 must still be the SUBPIECE output (NOT rewired to a).
     assert_eq!(in_vn(&fd, root, 0), subout, "input0 untouched on reject");
 }
@@ -569,8 +635,16 @@ fn w5s3_signmod2opt_positive_nontrunc_fires_to_srem2() {
     wire(&mut fd, sgn2out, root, 1);
 
     let mut rule = RuleSignMod2Opt::new();
-    assert_eq!(rule.apply_op(andop, &mut fd), 1, "mod-2 SREM form must fire");
-    assert_eq!(op_of(&fd, root), OpCode::CPUI_INT_SREM, "rootOp -> INT_SREM");
+    assert_eq!(
+        rule.apply_op(andop, &mut fd),
+        1,
+        "mod-2 SREM form must fire"
+    );
+    assert_eq!(
+        op_of(&fd, root),
+        OpCode::CPUI_INT_SREM,
+        "rootOp -> INT_SREM"
+    );
     assert_eq!(in_vn(&fd, root, 0), a, "SREM in0 == base == a");
     assert_eq!(in_off(&fd, root, 1), 2, "SREM in1 == 2");
 }

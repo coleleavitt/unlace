@@ -28,9 +28,9 @@ use std::collections::BTreeMap;
 
 use unlace_base::types::{uint4, uintb};
 use unlace_decomp::kuna_regiongraph::{
+    KunaIncrementalDominators, KunaNodeId, KunaNodePool, KunaNodeSet, KunaRegionGraph, NodeKind,
     kuna_dfs_postorder_deterministic, kuna_immediate_dominators, kuna_quasi_topo_sort,
-    kuna_subgraph_between_nodes, KunaIncrementalDominators, KunaNodeId, KunaNodeSet, KunaNodePool,
-    KunaRegionGraph, NodeKind,
+    kuna_subgraph_between_nodes,
 };
 
 /// Test harness mirroring the in-crate `Builder`: a pool plus auto-incrementing
@@ -42,7 +42,10 @@ struct B {
 
 impl B {
     fn new() -> B {
-        B { pool: KunaNodePool::new(), next_ident: 0 }
+        B {
+            pool: KunaNodePool::new(),
+            next_ident: 0,
+        }
     }
     fn node(&mut self, addr: uintb) -> KunaNodeId {
         let id = self.next_ident;
@@ -297,6 +300,9 @@ fn post_dominators_diamond_merge() {
     assert_eq!(dom.idom(c), Some(d));
     assert_eq!(dom.idom(a), Some(d));
     assert!(dom.dominates(d, a), "exit post-dominates entry");
-    assert!(!dom.dominates(bb, a), "one branch does not post-dominate entry");
+    assert!(
+        !dom.dominates(bb, a),
+        "one branch does not post-dominate entry"
+    );
     dom.verify(&b.pool, &g).unwrap();
 }

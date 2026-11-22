@@ -6,11 +6,11 @@ use std::rc::Rc;
 
 use unlace_base::address::{Address, ELEM_RANGELIST};
 use unlace_base::marshal::{
-    Encoder, IdRegistry, PackedEncode, XmlDecode, ATTRIB_CONTENT, ATTRIB_ID, ATTRIB_INDEX,
-    ATTRIB_MODEL, ATTRIB_NAME, ATTRIB_NAMELOCK, ATTRIB_READONLY, ATTRIB_SIZE,
-    ATTRIB_TYPELOCK, ELEM_SYMBOL, ELEM_VOID,
+    ATTRIB_CONTENT, ATTRIB_ID, ATTRIB_INDEX, ATTRIB_MODEL, ATTRIB_NAME, ATTRIB_NAMELOCK,
+    ATTRIB_READONLY, ATTRIB_SIZE, ATTRIB_TYPELOCK, ELEM_SYMBOL, ELEM_VOID, Encoder, IdRegistry,
+    PackedEncode, XmlDecode,
 };
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, addrspace_flags, spacetype};
 
 use super::*;
 use crate::dtype::type_metatype;
@@ -35,10 +35,14 @@ fn manager() -> Rc<AddrSpaceManager> {
 fn types_with_core() -> Rc<TypeFactoryImpl> {
     let t = TypeFactoryImpl::new();
     t.setup_sizes(Some(8), 8, 8);
-    t.set_core_type("void", 1, type_metatype::TYPE_VOID, false).unwrap();
-    t.set_core_type("int4", 4, type_metatype::TYPE_INT, false).unwrap();
-    t.set_core_type("uint8", 8, type_metatype::TYPE_UINT, false).unwrap();
-    t.set_core_type("char", 1, type_metatype::TYPE_INT, true).unwrap();
+    t.set_core_type("void", 1, type_metatype::TYPE_VOID, false)
+        .unwrap();
+    t.set_core_type("int4", 4, type_metatype::TYPE_INT, false)
+        .unwrap();
+    t.set_core_type("uint8", 8, type_metatype::TYPE_UINT, false)
+        .unwrap();
+    t.set_core_type("char", 1, type_metatype::TYPE_INT, true)
+        .unwrap();
     t.cache_core_types().unwrap();
     Rc::new(t)
 }
@@ -101,7 +105,9 @@ fn data_symbol_mapsym_decodes() {
         e.write_unsigned_integer(&ATTRIB_ID, int4.get_id());
         e.close_element(&crate::dtype::ELEM_TYPEREF);
         e.close_element(&ELEM_SYMBOL);
-        Address::new(ram(&m), 0x2000).encode_sized(&mut e, 4).unwrap();
+        Address::new(ram(&m), 0x2000)
+            .encode_sized(&mut e, 4)
+            .unwrap();
         e.open_element(&ELEM_RANGELIST);
         e.close_element(&ELEM_RANGELIST);
         e.close_element(&ELEM_MAPSYM);
@@ -201,7 +207,9 @@ fn function_mapsym_decodes_prototype_and_params() {
         e.close_element(&ELEM_PROTOTYPE);
         e.close_element(&crate::funcdata_encode::ELEM_FUNCTION);
         // The mapping SymbolEntry.
-        Address::new(ram(&m), 0x3000).encode_sized(&mut e, 1).unwrap();
+        Address::new(ram(&m), 0x3000)
+            .encode_sized(&mut e, 1)
+            .unwrap();
         e.open_element(&ELEM_RANGELIST);
         e.close_element(&ELEM_RANGELIST);
         e.close_element(&ELEM_MAPSYM);
@@ -232,7 +240,10 @@ fn function_mapsym_decodes_prototype_and_params() {
     assert_eq!(proto.params[1].name, "second");
     assert!(!proto.params[1].hidden);
     let pieces = proto.to_pieces(&func.name);
-    let output = pieces.output_storage.as_ref().expect("custom return storage");
+    let output = pieces
+        .output_storage
+        .as_ref()
+        .expect("custom return storage");
     assert_eq!(output.addr.get_offset(), 0x88);
     assert_ne!(
         output.flags & crate::fspec::parameter_pieces_flags::CUSTOM_STORAGE,
@@ -267,7 +278,10 @@ fn namespace_path_decodes_innermost_first() {
     let mut dec = PackedDecode::new(&m);
     dec.ingest_stream(&doc).unwrap();
     let levels = decode_namespace_levels(&mut dec).unwrap();
-    assert_eq!(levels, vec![("inner".to_string(), 11), ("outer".to_string(), 10)]);
+    assert_eq!(
+        levels,
+        vec![("inner".to_string(), 11), ("outer".to_string(), 10)]
+    );
 }
 
 /// The wire `<coretypes>` XML mirror of the default core-type list decodes to
@@ -308,7 +322,9 @@ fn coretypes_xml_mirror_matches_default_build() {
             *meta
         })
         .unwrap();
-        xml.push_str(&format!("<type name=\"{name}\" size=\"{size}\" metatype=\"{ms}\""));
+        xml.push_str(&format!(
+            "<type name=\"{name}\" size=\"{size}\" metatype=\"{ms}\""
+        ));
         if *chartp && *size == 1 {
             xml.push_str(" char=\"true\"");
         } else if *chartp {
@@ -321,7 +337,9 @@ fn coretypes_xml_mirror_matches_default_build() {
     let reference = TypeFactoryImpl::new();
     reference.setup_sizes(Some(8), 8, 8);
     for (name, size, meta, chartp) in DEFAULTS {
-        reference.set_core_type(name, *size, *meta, *chartp).unwrap();
+        reference
+            .set_core_type(name, *size, *meta, *chartp)
+            .unwrap();
     }
     reference.cache_core_types().unwrap();
 
@@ -346,7 +364,11 @@ fn coretypes_xml_mirror_matches_default_build() {
         // (void's interned size is the TypeVoid-internal 0 on both sides, so
         // compare a-vs-b rather than against the table.)
         assert_eq!(a.get_size(), b.get_size(), "{name}: size mismatch");
-        assert_eq!(a.get_metatype(), b.get_metatype(), "{name}: metatype mismatch");
+        assert_eq!(
+            a.get_metatype(),
+            b.get_metatype(),
+            "{name}: metatype mismatch"
+        );
         assert!(b.is_core_type(), "{name}: decoded type not core");
         let _ = size;
     }
@@ -482,7 +504,10 @@ fn captured_java_function_mapsym_decodes() {
     assert_eq!(proto.params.len(), 2);
     assert_eq!(proto.params[0].name, "argc");
     let argc_ty = proto.params[0].dtype.as_ref().unwrap();
-    assert!(Rc::ptr_eq(argc_ty, out), "both int refs intern to one instance");
+    assert!(
+        Rc::ptr_eq(argc_ty, out),
+        "both int refs intern to one instance"
+    );
     assert_eq!(proto.params[1].name, "argv");
     let argv_ty = proto.params[1].dtype.as_ref().unwrap();
     assert_eq!(argv_ty.get_metatype(), type_metatype::TYPE_PTR);
@@ -506,16 +531,25 @@ fn captured_java_locked_params_materialize_with_pieces_locks() {
     let scope = scope_over(&m, Rc::clone(&types), MockFetch::default());
     scope.materialize(*decode_captured_main(&m, &types));
 
-    let facts =
-        scope.function_at(&Address::new(ram(&m), 0x101900)).expect("the captured function");
+    let facts = scope
+        .function_at(&Address::new(ram(&m), 0x101900))
+        .expect("the captured function");
     let locks = crate::fspec::parameter_pieces_flags::TYPELOCK
         | crate::fspec::parameter_pieces_flags::NAMELOCK;
     let want = [(0, "argc", 0x38u64), (1, "argv", 0x30)];
-    assert_eq!(facts.param_storage.len(), want.len(), "both host params carried storage");
+    assert_eq!(
+        facts.param_storage.len(),
+        want.len(),
+        "both host params carried storage"
+    );
     for ((slot, name, piece), (wslot, wname, woff)) in facts.param_storage.iter().zip(&want) {
         assert_eq!(slot, wslot, "{wname}: compacted slot basis");
         assert_eq!(name, wname);
-        assert_eq!(piece.addr.get_offset(), *woff, "{wname}: host storage verbatim");
+        assert_eq!(
+            piece.addr.get_offset(),
+            *woff,
+            "{wname}: host storage verbatim"
+        );
         assert_eq!(
             piece.flags & locks,
             locks,
@@ -561,11 +595,7 @@ impl MockFetch {
 }
 
 impl RemoteProviderFetch for MockFetch {
-    fn fetch_mapped_symbols(
-        &self,
-        addr: &Address,
-        decoder: &mut dyn Decoder,
-    ) -> KunaResult<bool> {
+    fn fetch_mapped_symbols(&self, addr: &Address, decoder: &mut dyn Decoder) -> KunaResult<bool> {
         self.bump("mapped");
         if self.fail_mapped.contains(&addr.get_offset()) {
             return Err(unlace_base::error::KunaError::lowlevel("mock wire failure"));
@@ -598,7 +628,11 @@ impl RemoteProviderFetch for MockFetch {
     }
 }
 
-fn scope_over(m: &Rc<AddrSpaceManager>, types: Rc<TypeFactoryImpl>, fetch: MockFetch) -> RemoteScope {
+fn scope_over(
+    m: &Rc<AddrSpaceManager>,
+    types: Rc<TypeFactoryImpl>,
+    fetch: MockFetch,
+) -> RemoteScope {
     let mut owned = unlace_base::address::RangeList::default();
     owned.insert_range(ram(m), 0, u64::MAX >> 8);
     let base = GlobalQuery::new(Vec::new(), owned, PartMap::default());
@@ -632,7 +666,9 @@ fn extern_ref_resolves_and_splits_name_from_label() {
         e.write_string(&ATTRIB_NAME, b"imp_templated");
         Address::new(ram(&m), 0x7000).encode(&mut e).unwrap();
         e.close_element(&ELEM_EXTERNREFSYMBOL);
-        Address::new(ram(&m), 0x5000).encode_sized(&mut e, 8).unwrap();
+        Address::new(ram(&m), 0x5000)
+            .encode_sized(&mut e, 8)
+            .unwrap();
         e.open_element(&ELEM_RANGELIST);
         e.close_element(&ELEM_RANGELIST);
         e.close_element(&ELEM_MAPSYM);
@@ -653,7 +689,9 @@ fn extern_ref_resolves_and_splits_name_from_label() {
         e.write_bool(&ATTRIB_NORETURN, true);
         Address::new(ram(&m), 0x7000).encode(&mut e).unwrap();
         e.close_element(&crate::funcdata_encode::ELEM_FUNCTION);
-        Address::new(ram(&m), 0x7000).encode_sized(&mut e, 1).unwrap();
+        Address::new(ram(&m), 0x7000)
+            .encode_sized(&mut e, 1)
+            .unwrap();
         e.open_element(&ELEM_RANGELIST);
         e.close_element(&ELEM_RANGELIST);
         e.close_element(&ELEM_MAPSYM);
@@ -745,7 +783,9 @@ fn extern_ref_slot_covers_a_pointer_read() {
         .name_for_varnode(&slot, 8, &invalid)
         .expect("the slot symbol covers the whole pointer");
     assert_eq!(nm, "CreateThread_exref");
-    let facts = scope.function_at(&slot).expect("external function resolved");
+    let facts = scope
+        .function_at(&slot)
+        .expect("external function resolved");
     assert_eq!(facts.name, "CreateThread");
     let (ty, _) = snap
         .sized_type_geometry(&slot, 1, &invalid)
@@ -786,7 +826,9 @@ fn prototype_inject_resolves_to_the_call_fixup_payload() {
             e.close_element(&crate::pcodeinject::ELEM_INJECT);
             e.close_element(&ELEM_PROTOTYPE);
             e.close_element(&crate::funcdata_encode::ELEM_FUNCTION);
-            Address::new(ram(&m), entry).encode_sized(&mut e, 1).unwrap();
+            Address::new(ram(&m), entry)
+                .encode_sized(&mut e, 1)
+                .unwrap();
             e.open_element(&ELEM_RANGELIST);
             e.close_element(&ELEM_RANGELIST);
             e.close_element(&ELEM_MAPSYM);
@@ -795,14 +837,22 @@ fn prototype_inject_resolves_to_the_call_fixup_payload() {
         doc
     };
     let mut fetch = MockFetch::default();
-    fetch.mapped.insert(0x4000, fn_doc(0x4000, b"__chkstk", b"alloca_probe"));
-    fetch.mapped.insert(0x4100, fn_doc(0x4100, b"helper", b"no_such_fixup"));
+    fetch
+        .mapped
+        .insert(0x4000, fn_doc(0x4000, b"__chkstk", b"alloca_probe"));
+    fetch
+        .mapped
+        .insert(0x4100, fn_doc(0x4100, b"helper", b"no_such_fixup"));
     let mut scope = scope_over(&m, types, fetch);
     scope.set_call_fixups([("alloca_probe".to_string(), 3)].into_iter().collect());
 
-    let probe = scope.function_at(&Address::new(ram(&m), 0x4000)).expect("function");
+    let probe = scope
+        .function_at(&Address::new(ram(&m), 0x4000))
+        .expect("function");
     assert_eq!(probe.inject_id, 3);
-    let other = scope.function_at(&Address::new(ram(&m), 0x4100)).expect("function");
+    let other = scope
+        .function_at(&Address::new(ram(&m), 0x4100))
+        .expect("function");
     assert_eq!(other.inject_id, -1);
 }
 
@@ -825,12 +875,8 @@ fn tracked_caches_and_failures_negative_cache() {
             loc: reg_loc.clone(),
             val: 0x1234,
         }];
-        unlace_sleigh::globalcontext::encode_tracked(
-            &mut e,
-            &Address::new(ram(&m), 0x1000),
-            &set,
-        )
-        .unwrap();
+        unlace_sleigh::globalcontext::encode_tracked(&mut e, &Address::new(ram(&m), 0x1000), &set)
+            .unwrap();
     }
     let mut fetch = MockFetch::default();
     fetch.tracked.insert(0x1000, tr_doc);
@@ -877,8 +923,7 @@ fn phase4_localdb_encode_decodes_as_params() {
     let int4_t = crate::dtype::TypeFactory::find_by_name(types.as_ref(), "int4")
         .unwrap()
         .unwrap();
-    let mut lm =
-        crate::varmap::ScopeLocal::new(0x1234, ram(&m), "testfn", m.num_spaces()).unwrap();
+    let mut lm = crate::varmap::ScopeLocal::new(0x1234, ram(&m), "testfn", m.num_spaces()).unwrap();
     // A register-style cat-0 parameter (exact storage + slot index 0).
     let param_addr = Address::new(ram(&m), 0x38);
     let usepoint = Address::new(ram(&m), 0x100f);
@@ -889,8 +934,13 @@ fn phase4_localdb_encode_decodes_as_params() {
     // Lock it (the Java write path needs cat/index/storage; locks ride along).
     let _ = sid;
     // A plain mapped local (no category).
-    lm.add_symbol("local_10", Rc::clone(&int4_t), &Address::new(ram(&m), 0x2000), &Address::new_invalid())
-        .unwrap();
+    lm.add_symbol(
+        "local_10",
+        Rc::clone(&int4_t),
+        &Address::new(ram(&m), 0x2000),
+        &Address::new_invalid(),
+    )
+    .unwrap();
 
     let mut doc = Vec::new();
     {
@@ -904,8 +954,14 @@ fn phase4_localdb_encode_decodes_as_params() {
     let mut params: Vec<RemoteParam> = Vec::new();
     let mut locals: Vec<RemoteLocalVar> = Vec::new();
     let mut locked = true;
-    decode_localdb_params(&mut dec, types.as_ref(), &mut params, &mut locked, &mut locals)
-        .unwrap();
+    decode_localdb_params(
+        &mut dec,
+        types.as_ref(),
+        &mut params,
+        &mut locked,
+        &mut locals,
+    )
+    .unwrap();
     assert_eq!(params.len(), 1, "exactly the cat-0 symbol is a parameter");
     assert_eq!(params[0].index, 0);
     assert_eq!(params[0].name, "argc");
@@ -915,7 +971,10 @@ fn phase4_localdb_encode_decodes_as_params() {
     assert_eq!(locals.len(), 1, "the plain local is captured for seeding");
     assert_eq!(locals[0].name, "local_10");
     assert_eq!(locals[0].addr.get_offset(), 0x2000);
-    assert!(locals[0].usepoint.is_invalid(), "empty uselimit ⇒ addr-tied seed");
+    assert!(
+        locals[0].usepoint.is_invalid(),
+        "empty uselimit ⇒ addr-tied seed"
+    );
 
     // Structural walk: every <symbol> has a nonzero internal-range id, and every
     // <mapsym> carries at least one entry (addr|hash) + rangelist pair.
@@ -928,10 +987,18 @@ fn phase4_localdb_encode_decodes_as_params() {
     // Positional contract: <parent> then <rangelist> BEFORE <symbollist>
     // (LocalSymbolMap.decodeScope skips the first two children blind).
     let parent_el = dec.open_element().unwrap();
-    assert_eq!(parent_el, ELEM_PARENT.get_id(), "first scope child must be <parent>");
+    assert_eq!(
+        parent_el,
+        ELEM_PARENT.get_id(),
+        "first scope child must be <parent>"
+    );
     dec.close_element_skipping(parent_el).unwrap();
     let rl_el = dec.open_element().unwrap();
-    assert_eq!(rl_el, ELEM_RANGELIST.get_id(), "second scope child must be <rangelist>");
+    assert_eq!(
+        rl_el,
+        ELEM_RANGELIST.get_id(),
+        "second scope child must be <rangelist>"
+    );
     dec.close_element_skipping(rl_el).unwrap();
     let list_el = dec.open_element().unwrap();
     assert_eq!(list_el, ELEM_SYMBOLLIST.get_id());
@@ -943,21 +1010,24 @@ fn phase4_localdb_encode_decodes_as_params() {
         // <symbol id=NONZERO ...>
         let sym_el = dec.open_element().unwrap();
         assert_eq!(sym_el, ELEM_SYMBOL.get_id());
-        let id = unlace_base::marshal::Decoder::read_unsigned_integer_id(&mut dec, &ATTRIB_ID)
-            .unwrap();
+        let id =
+            unlace_base::marshal::Decoder::read_unsigned_integer_id(&mut dec, &ATTRIB_ID).unwrap();
         assert_ne!(id, 0, "symbol id must be nonzero (Java hard-throw)");
         assert_eq!(id >> 56, 0x40, "invented symbols carry internal-range ids");
         dec.close_element_skipping(sym_el).unwrap();
         // >=1 SymbolEntry: (addr|hash) + rangelist.
         let entry_el = dec.open_element().unwrap();
         assert!(
-            entry_el == unlace_base::address::ELEM_ADDR.get_id()
-                || entry_el == ELEM_HASH.get_id(),
+            entry_el == unlace_base::address::ELEM_ADDR.get_id() || entry_el == ELEM_HASH.get_id(),
             "mapsym entry must open with <addr> or <hash>"
         );
         dec.close_element_skipping(entry_el).unwrap();
         let ul_el = dec.open_element().unwrap();
-        assert_eq!(ul_el, ELEM_RANGELIST.get_id(), "entry uselimit rangelist required");
+        assert_eq!(
+            ul_el,
+            ELEM_RANGELIST.get_id(),
+            "entry uselimit rangelist required"
+        );
         dec.close_element_skipping(ul_el).unwrap();
         dec.close_element_skipping(ms).unwrap();
     }

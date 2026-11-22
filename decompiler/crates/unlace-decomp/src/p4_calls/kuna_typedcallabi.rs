@@ -19,18 +19,18 @@
 //! VFP variant.
 use crate::{
     context::ArchContext,
-    dtype::{type_class, type_metatype, TypeFactory},
+    dtype::{TypeFactory, type_class, type_metatype},
     fspec::{FuncProto, ProtoModel, PrototypePieces},
     funcdata::Funcdata,
     infra::architecture::Architecture,
     kuna_narrowext::Widen,
 };
+use std::rc::Rc;
 use unlace_base::{
     address::Address,
     space::{AddrSpace, AddrSpaceManager},
 };
 use unlace_num::{opcodes::OpCode, pcoderaw::VarnodeData};
-use std::rc::Rc;
 
 /// The ARM model for the base (core-register) procedure-call standard.
 const SOFT_FLOAT_MODEL: &str = "__stdcall_softfp";
@@ -74,11 +74,7 @@ pub fn caller_extends_from(arch: &Architecture) -> i32 {
             .loader_rc()
             .try_borrow()
             .is_ok_and(|loader| loader.callee_extends_returns() == Some(false));
-    if stated_other {
-        1
-    } else {
-        4
-    }
+    if stated_other { 1 } else { 4 }
 }
 
 /// The spec's soft-float model, on an image that states the soft-float
@@ -133,7 +129,11 @@ pub fn returns_doubles_whole(arch: &Architecture) -> bool {
 
 /// Does `pieces` declare a `float` or `double` parameter or return value?
 pub fn declares_a_float(pieces: &PrototypePieces) -> bool {
-    pieces.outtype.iter().chain(&pieces.intypes).any(|ty| ty.get_metatype() == type_metatype::TYPE_FLOAT)
+    pieces
+        .outtype
+        .iter()
+        .chain(&pieces.intypes)
+        .any(|ty| ty.get_metatype() == type_metatype::TYPE_FLOAT)
 }
 
 /// The model a declared prototype that names no convention is laid out under,
@@ -151,11 +151,20 @@ pub fn undeclared_model(arch: &ArchContext, pieces: &PrototypePieces) -> Option<
             .clone();
     }
     let soft = arch.soft_float_declarations.as_ref()?;
-    soft_layout(soft, arch.default_fp()?, pieces, arch.types()?, arch.manage())
+    soft_layout(
+        soft,
+        arch.default_fp()?,
+        pieces,
+        arch.types()?,
+        arch.manage(),
+    )
 }
 
 /// [`undeclared_model`] for the architecture a declaration is parked on.
-pub fn undeclared_model_for(arch: &Architecture, pieces: &PrototypePieces) -> Option<Rc<ProtoModel>> {
+pub fn undeclared_model_for(
+    arch: &Architecture,
+    pieces: &PrototypePieces,
+) -> Option<Rc<ProtoModel>> {
     if crate::kuna_vfpvariadic::moves_return(pieces) && crate::kuna_vfpvariadic::applies(arch) {
         return crate::kuna_vfpvariadic::declarations(arch);
     }
@@ -163,7 +172,13 @@ pub fn undeclared_model_for(arch: &Architecture, pieces: &PrototypePieces) -> Op
         return None;
     }
     let soft = soft_model(arch, image_evidence(arch))?;
-    soft_layout(&soft, arch.default_fp()?, pieces, arch.types(), arch.manage())
+    soft_layout(
+        &soft,
+        arch.default_fp()?,
+        pieces,
+        arch.types(),
+        arch.manage(),
+    )
 }
 
 fn may_use_float_storage(pieces: &PrototypePieces) -> bool {
@@ -280,7 +295,10 @@ fn unextended_return(proto: &FuncProto) -> bool {
     }
     let addr = output.get_address();
     let mut container = VarnodeData::default();
-    match proto.model().assumed_output_extension(&addr, size, &mut container) {
+    match proto
+        .model()
+        .assumed_output_extension(&addr, size, &mut container)
+    {
         OpCode::CPUI_PIECE => false,
         OpCode::CPUI_COPY => {
             let Some(space) = addr.get_space() else {
@@ -308,8 +326,15 @@ fn abi_extended_return(rule: Option<Widen>, proto: &FuncProto) -> bool {
     };
     let mut container = VarnodeData::default();
     let list = proto.model().output();
-    crate::kuna_narrowext::extension(rule, list, &output.get_address(), output.get_size(), ty, &mut container)
-        .is_some()
+    crate::kuna_narrowext::extension(
+        rule,
+        list,
+        &output.get_address(),
+        output.get_size(),
+        ty,
+        &mut container,
+    )
+    .is_some()
 }
 
 /// The storage of each parameter and of a non-void return value.

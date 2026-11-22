@@ -8,16 +8,22 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 fn bootstrap(ehcold: bool) -> ConsoleProgram {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap();
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap();
     let bin = root.join("decompiler/crates/unlace-analysis/tests/fixtures/ehcold_x86_64");
     let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.arch_mut().set_kuna_option("ehcold", if ehcold { "on" } else { "off" }).expect("ehcold flips");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.arch_mut()
+        .set_kuna_option("ehcold", if ehcold { "on" } else { "off" })
+        .expect("ehcold flips");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
@@ -31,7 +37,16 @@ fn cleanup_cold_parts_are_functions_with_the_option_off() {
 #[test]
 fn cleanup_cold_parts_are_withheld_by_default() {
     let prog = bootstrap(true);
-    assert!(prog.lookup_symbol("sub_11e2").is_none(), "work.cold is reached only from work's landing pads");
-    assert!(prog.lookup_symbol("sub_12a6").is_none(), "main.cold is reached only from main's landing pads");
-    assert!(prog.lookup_symbol("sub_11c0").is_some(), "may_throw.cold is the throw path, not a cleanup");
+    assert!(
+        prog.lookup_symbol("sub_11e2").is_none(),
+        "work.cold is reached only from work's landing pads"
+    );
+    assert!(
+        prog.lookup_symbol("sub_12a6").is_none(),
+        "main.cold is reached only from main's landing pads"
+    );
+    assert!(
+        prog.lookup_symbol("sub_11c0").is_some(),
+        "may_throw.cold is the throw path, not a cleanup"
+    );
 }

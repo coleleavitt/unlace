@@ -7,7 +7,10 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture(name: &str) -> String {
@@ -28,7 +31,13 @@ fn decompile(binary: &str, selector: &str) -> (String, String, bool) {
         .env_remove("KUNA_DECOMP_DBG")
         .env_remove("KUNA_DECOMP_TEST")
         .env_remove("KUNA_SLACOMP")
-        .args(["decompile", &fixture(binary), selector, "--sleighpath", &specs()])
+        .args([
+            "decompile",
+            &fixture(binary),
+            selector,
+            "--sleighpath",
+            &specs(),
+        ])
         .output()
         .expect("run kuna");
     (
@@ -94,13 +103,29 @@ fn a_macho_data_name_is_reported_as_data() {
         .env_remove("KUNA_DECOMP_DBG")
         .env_remove("KUNA_DECOMP_TEST")
         .env_remove("KUNA_SLACOMP")
-        .args(["functions", &fixture("macho_datasyms_arm64"), "--sleighpath", &specs()])
+        .args([
+            "functions",
+            &fixture("macho_datasyms_arm64"),
+            "--sleighpath",
+            &specs(),
+        ])
         .output()
         .expect("run unlace functions");
     let listing = String::from_utf8_lossy(&out.stdout);
-    assert!(out.status.success(), "functions failed: {}", String::from_utf8_lossy(&out.stderr));
-    let names: Vec<&str> = listing.lines().filter_map(|l| l.split('\t').nth(1)).collect();
-    assert_eq!(names, ["_audit_read", "_main"], "only the two code entries:\n{listing}");
+    assert!(
+        out.status.success(),
+        "functions failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let names: Vec<&str> = listing
+        .lines()
+        .filter_map(|l| l.split('\t').nth(1))
+        .collect();
+    assert_eq!(
+        names,
+        ["_audit_read", "_main"],
+        "only the two code entries:\n{listing}"
+    );
 
     for name in ["audit_global", "_audit_global"] {
         let (stdout, stderr, ok) = decompile("macho_datasyms_arm64", name);
@@ -109,7 +134,10 @@ fn a_macho_data_name_is_reported_as_data() {
             stderr.contains("it names data at 0x100004000 in __data"),
             "the miss must say what {name} is:\n{stderr}"
         );
-        assert!(!stdout.contains("UndefinedInstructionException"), "{stdout}");
+        assert!(
+            !stdout.contains("UndefinedInstructionException"),
+            "{stdout}"
+        );
     }
 
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
@@ -129,7 +157,8 @@ fn a_macho_data_name_is_reported_as_data() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(!out.status.success(), "audit_message names data:\n{stdout}");
     assert!(
-        stdout.contains("it names data at 0x100004008 in __data") && stdout.contains("\"functions\": []"),
+        stdout.contains("it names data at 0x100004008 in __data")
+            && stdout.contains("\"functions\": []"),
         "the JSON document must carry the same answer:\n{stdout}"
     );
 }
@@ -143,14 +172,26 @@ fn a_macho_data_name_is_reported_as_data() {
 fn a_macho_global_reads_by_name_at_its_width() {
     let (stdout, stderr, ok) = decompile("macho_datawidth_arm64", "_bump");
     assert!(ok, "decompile failed:\n{stderr}");
-    assert!(stdout.contains("_counter += 1;"), "the 32-bit global reads by name:\n{stdout}");
+    assert!(
+        stdout.contains("_counter += 1;"),
+        "the 32-bit global reads by name:\n{stdout}"
+    );
     assert!(
         stdout.contains("*(int *)&_origin += 1;"),
         "the first field's increment is a store to part of _origin:\n{stdout}"
     );
-    assert!(!stdout.contains("(int)_origin +="), "a cast is not an lvalue:\n{stdout}");
-    assert!(!stdout.contains("dat_10000400"), "both globals are named:\n{stdout}");
+    assert!(
+        !stdout.contains("(int)_origin +="),
+        "a cast is not an lvalue:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("dat_10000400"),
+        "both globals are named:\n{stdout}"
+    );
 
     let (stdout, _, ok) = decompile("macho_datasyms_arm64", "_audit_read");
-    assert!(ok && stdout.contains("_audit_global") && !stdout.contains("dat_100004000"), "{stdout}");
+    assert!(
+        ok && stdout.contains("_audit_global") && !stdout.contains("dat_100004000"),
+        "{stdout}"
+    );
 }

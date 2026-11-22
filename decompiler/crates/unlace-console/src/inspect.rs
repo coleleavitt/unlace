@@ -12,7 +12,7 @@ use unlace_decomp::kuna_srcmap::{self, CodeToken};
 use unlace_decomp::prettyprint::EmitToken;
 use unlace_sleigh::loadimage::section_flags;
 
-use crate::disasm::{self, mapped_run_end, Row, Window};
+use crate::disasm::{self, Row, Window, mapped_run_end};
 use crate::engine::ConsoleProgram;
 
 /// How many rows [`function_rows`] lists before it reports a truncated listing.
@@ -54,14 +54,22 @@ impl FuncDetail {
     ) -> Self {
         let mut tokens = kuna_srcmap::resolve(fd, var_refs, raw, untrimmed, variables);
         if let Err(error) = kuna_srcmap::verify(&tokens, code) {
-            return FuncDetail { tokens_error: Some(error), ..FuncDetail::default() };
+            return FuncDetail {
+                tokens_error: Some(error),
+                ..FuncDetail::default()
+            };
         }
         for t in &mut tokens {
             t.address = t.address.map(|a| prog.output_code_offset(a));
             t.callee = t.callee.map(|a| prog.output_code_offset(a));
         }
         let (globals, token_globals) = global_refs(prog, fd, &tokens);
-        FuncDetail { tokens, tokens_error: None, globals, token_globals }
+        FuncDetail {
+            tokens,
+            tokens_error: None,
+            globals,
+            token_globals,
+        }
     }
 }
 
@@ -69,18 +77,28 @@ impl FuncDetail {
 /// scope does not hold that the global scope maps, whole, in the default data
 /// space, with a type that is not code. A local with the same name shadows the
 /// global, as it does in the C.
-fn global_refs(prog: &ConsoleProgram, fd: &Funcdata, tokens: &[CodeToken]) -> (Vec<GlobalRef>, Vec<Option<usize>>) {
+fn global_refs(
+    prog: &ConsoleProgram,
+    fd: &Funcdata,
+    tokens: &[CodeToken],
+) -> (Vec<GlobalRef>, Vec<Option<usize>>) {
     use unlace_decomp::dtype::type_metatype::TYPE_CODE;
     use unlace_decomp::prettyprint::TokenKind;
     let arch = prog.arch();
     let db = &arch.symboltab;
-    let (Some(scope), Some(data_space)) = (db.get_global_scope(), arch.manage().get_default_data_space()) else {
+    let (Some(scope), Some(data_space)) = (
+        db.get_global_scope(),
+        arch.manage().get_default_data_space(),
+    ) else {
         return (Vec::new(), vec![None; tokens.len()]);
     };
     let mut globals: Vec<GlobalRef> = Vec::new();
     let mut by_name: BTreeMap<&str, Option<usize>> = BTreeMap::new();
     let lookup = |name: &str| -> Option<GlobalRef> {
-        if fd.get_scope_local().is_some_and(|local| !local.query_by_name(name).is_empty()) {
+        if fd
+            .get_scope_local()
+            .is_some_and(|local| !local.query_by_name(name).is_empty())
+        {
             return None;
         }
         db.find_by_name(scope, name).into_iter().find_map(|sid| {
@@ -92,12 +110,14 @@ fn global_refs(prog: &ConsoleProgram, fd: &Funcdata, tokens: &[CodeToken]) -> (V
             symbol.mapentry.iter().find_map(|&eref| {
                 let entry = db.entry(scope, eref);
                 let space = entry.get_addr().get_space()?;
-                (entry.get_offset() == 0 && space.get_index() == data_space.get_index()).then(|| GlobalRef {
-                    name: name.to_string(),
-                    address: entry.get_addr().get_offset(),
-                    size: u64::try_from(ct.get_size()).unwrap_or(0),
-                    type_name: unlace_decomp::printc::type_to_c_string(arch, ct),
-                })
+                (entry.get_offset() == 0 && space.get_index() == data_space.get_index()).then(
+                    || GlobalRef {
+                        name: name.to_string(),
+                        address: entry.get_addr().get_offset(),
+                        size: u64::try_from(ct.get_size()).unwrap_or(0),
+                        type_name: unlace_decomp::printc::type_to_c_string(arch, ct),
+                    },
+                )
             })
         })
     };
@@ -109,10 +129,15 @@ fn global_refs(prog: &ConsoleProgram, fd: &Funcdata, tokens: &[CodeToken]) -> (V
             }
             *by_name.entry(t.text.as_str()).or_insert_with(|| {
                 let found = lookup(&t.text)?;
-                Some(globals.iter().position(|g| g.address == found.address).unwrap_or_else(|| {
-                    globals.push(found);
-                    globals.len() - 1
-                }))
+                Some(
+                    globals
+                        .iter()
+                        .position(|g| g.address == found.address)
+                        .unwrap_or_else(|| {
+                            globals.push(found);
+                            globals.len() - 1
+                        }),
+                )
             })
         })
         .collect();
@@ -139,28 +164,37 @@ pub struct SectionRow {
 /// off the loader-owned tables on purpose), else when its own flags say so.
 pub fn section_rows(prog: &ConsoleProgram) -> Vec<SectionRow> {
     let segments = prog.segments();
-    let row = |name: String, address: u64, size: u64, file: (Option<u64>, Option<u64>), flags: u32| {
-        let mapping = segments
-            .iter()
-            .find(|&&(start, len, _)| address >= start && address - start < len)
-            .map(|&(_, _, seg)| seg);
-        SectionRow {
-            name,
-            address,
-            size,
-            file_offset: file.0,
-            file_size: file.1,
-            executable: flags & section_flags::CODE != 0,
-            writable: mapping.unwrap_or(flags) & section_flags::READONLY == 0,
-        }
-    };
+    let row =
+        |name: String, address: u64, size: u64, file: (Option<u64>, Option<u64>), flags: u32| {
+            let mapping = segments
+                .iter()
+                .find(|&&(start, len, _)| address >= start && address - start < len)
+                .map(|&(_, _, seg)| seg);
+            SectionRow {
+                name,
+                address,
+                size,
+                file_offset: file.0,
+                file_size: file.1,
+                executable: flags & section_flags::CODE != 0,
+                writable: mapping.unwrap_or(flags) & section_flags::READONLY == 0,
+            }
+        };
     let mut rows: Vec<SectionRow> = prog
         .image_metadata()
         .map(|meta| {
             meta.sections
                 .iter()
                 .filter(|s| s.flags & section_flags::UNALLOC == 0)
-                .map(|s| row(s.name.clone(), s.vma, s.size, (s.file_offset, s.file_size), s.flags))
+                .map(|s| {
+                    row(
+                        s.name.clone(),
+                        s.vma,
+                        s.size,
+                        (s.file_offset, s.file_size),
+                        s.flags,
+                    )
+                })
                 .collect()
         })
         .unwrap_or_default();
@@ -230,10 +264,15 @@ pub struct FunctionXrefs {
 pub fn function_xrefs(prog: &ConsoleProgram, file: &object::File, entry: u64) -> FunctionXrefs {
     use unlace_analysis::listing::xrefs::{self as xr, XrefKind};
     let entries = prog.function_entries_canonical();
-    let names: BTreeMap<u64, String> =
-        entries.iter().map(|e| (e.addr.get_offset(), e.name.clone())).collect();
-    let data: BTreeMap<u64, String> =
-        prog.global_data_symbols().into_iter().map(|(name, vma, _)| (vma, name)).collect();
+    let names: BTreeMap<u64, String> = entries
+        .iter()
+        .map(|e| (e.addr.get_offset(), e.name.clone()))
+        .collect();
+    let data: BTreeMap<u64, String> = prog
+        .global_data_symbols()
+        .into_iter()
+        .map(|(name, vma, _)| (vma, name))
+        .collect();
     let inventory: Vec<u64> = names.keys().copied().collect();
     let seeds = xr::discovery_seeds(file, &inventory, prog.arch().analysis_funcstart_patterns);
     let index = xr::build_with_focus(file, prog.arch(), prog.arch().translate(), &seeds, &[entry]);
@@ -289,13 +328,21 @@ pub struct StringUse {
 /// its strings there, used by address). The reference walk is the
 /// one behind [`function_xrefs`], built once for the whole set. Each list is in
 /// instruction order.
-pub fn string_uses(prog: &ConsoleProgram, file: &object::File, strings: &[(u64, u64)]) -> Vec<Vec<StringUse>> {
+pub fn string_uses(
+    prog: &ConsoleProgram,
+    file: &object::File,
+    strings: &[(u64, u64)],
+) -> Vec<Vec<StringUse>> {
     use unlace_analysis::listing::xrefs as xr;
     if strings.is_empty() {
         return Vec::new();
     }
     let walk = UseWalk::build(prog, file);
-    let pointed = strings.iter().map(|&(addr, _)| addr).filter(|&addr| addr != 0 && !walk.in_code(addr)).collect();
+    let pointed = strings
+        .iter()
+        .map(|&(addr, _)| addr)
+        .filter(|&addr| addr != 0 && !walk.in_code(addr))
+        .collect();
     let slots = pointer_slots(file, &pointed);
     strings
         .iter()
@@ -304,12 +351,24 @@ pub fn string_uses(prog: &ConsoleProgram, file: &object::File, strings: &[(u64, 
             let mut uses: Vec<StringUse> = (addr..addr.saturating_add(len.max(1)))
                 .filter(|&vma| !walk.is_entry(vma))
                 .flat_map(|vma| walk.index.refs_to(vma))
-                .filter(|r| if code_text { r.kind == xr::XrefKind::Data } else { is_data(r) })
+                .filter(|r| {
+                    if code_text {
+                        r.kind == xr::XrefKind::Data
+                    } else {
+                        is_data(r)
+                    }
+                })
                 .map(|r| walk.use_of(r, None))
                 .collect();
             if !walk.is_entry(addr) {
                 for &slot in slots.get(&addr).into_iter().flatten() {
-                    uses.extend(walk.index.refs_to(slot).iter().filter(|r| is_data(r)).map(|r| walk.use_of(r, Some(slot))));
+                    uses.extend(
+                        walk.index
+                            .refs_to(slot)
+                            .iter()
+                            .filter(|r| is_data(r))
+                            .map(|r| walk.use_of(r, Some(slot))),
+                    );
                 }
             }
             uses.sort_by_key(|u| (u.row.site, u.via.as_ref().map(|v| v.0)));
@@ -342,7 +401,11 @@ pub fn data_uses(
     for vma in (start..end).filter(|&vma| !walk.is_entry(vma)) {
         let code_data = walk.in_code(vma);
         for r in walk.index.refs_to(vma) {
-            if if code_data { r.kind == xr::XrefKind::Data } else { is_data(r) } {
+            if if code_data {
+                r.kind == xr::XrefKind::Data
+            } else {
+                is_data(r)
+            } {
                 uses.push((vma, walk.use_of(r, None)));
             }
         }
@@ -351,11 +414,19 @@ pub fn data_uses(
         .iter()
         .copied()
         .chain(uses.iter().map(|(to, _)| *to))
-        .filter(|&addr| addr != 0 && addr >= start && addr < end && !walk.in_code(addr) && !walk.is_entry(addr))
+        .filter(|&addr| {
+            addr != 0 && addr >= start && addr < end && !walk.in_code(addr) && !walk.is_entry(addr)
+        })
         .collect();
     for (&target, list) in &pointer_slots(file, &pointed) {
         for &slot in list.iter().filter(|&&slot| slot != target) {
-            uses.extend(walk.index.refs_to(slot).iter().filter(|r| is_data(r)).map(|r| (target, walk.use_of(r, Some(slot)))));
+            uses.extend(
+                walk.index
+                    .refs_to(slot)
+                    .iter()
+                    .filter(|r| is_data(r))
+                    .map(|r| (target, walk.use_of(r, Some(slot)))),
+            );
         }
     }
     uses.sort_by_key(|(to, u)| (*to, u.row.site, u.via.as_ref().map(|v| v.0)));
@@ -379,15 +450,18 @@ struct UseWalk {
 
 impl UseWalk {
     fn build(prog: &ConsoleProgram, file: &object::File) -> Self {
-        use unlace_analysis::listing::xrefs as xr;
         use object::{Object, ObjectSection, SectionKind};
+        use unlace_analysis::listing::xrefs as xr;
         let names: BTreeMap<u64, String> = prog
             .function_entries_canonical()
             .into_iter()
             .map(|e| (e.addr.get_offset(), e.name))
             .collect();
-        let data: BTreeMap<u64, String> =
-            prog.global_data_symbols().into_iter().map(|(name, vma, _)| (vma, name)).collect();
+        let data: BTreeMap<u64, String> = prog
+            .global_data_symbols()
+            .into_iter()
+            .map(|(name, vma, _)| (vma, name))
+            .collect();
         let inventory: Vec<u64> = names.keys().copied().collect();
         let seeds = xr::discovery_seeds(file, &inventory, prog.arch().analysis_funcstart_patterns);
         let index = xr::build(file, prog.arch(), prog.arch().translate(), &seeds);
@@ -396,7 +470,12 @@ impl UseWalk {
             .filter(|s| s.kind() == SectionKind::Text)
             .map(|s| (s.address(), s.address().saturating_add(s.size())))
             .collect();
-        UseWalk { names, data, index, code }
+        UseWalk {
+            names,
+            data,
+            index,
+            code,
+        }
     }
 
     fn in_code(&self, addr: u64) -> bool {
@@ -441,7 +520,9 @@ fn pointer_slots(file: &object::File, targets: &BTreeSet<u64>) -> BTreeMap<u64, 
         let Ok(bytes) = section.data() else { continue };
         let base = section.address();
         let skip = (width - base % width) % width;
-        let Some(aligned) = bytes.get(skip as usize..) else { continue };
+        let Some(aligned) = bytes.get(skip as usize..) else {
+            continue;
+        };
         for (i, word) in aligned.chunks_exact(width as usize).enumerate() {
             let mut buf = [0u8; 8];
             let value = if little {
@@ -452,7 +533,9 @@ fn pointer_slots(file: &object::File, targets: &BTreeSet<u64>) -> BTreeMap<u64, 
                 u64::from_be_bytes(buf)
             };
             if targets.contains(&value) {
-                out.entry(value).or_default().push(base + skip + i as u64 * width);
+                out.entry(value)
+                    .or_default()
+                    .push(base + skip + i as u64 * width);
             }
         }
     }

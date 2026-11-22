@@ -1,16 +1,36 @@
 //! Unit tests for the variadic stack-section split predicate.
 
 use super::*;
+use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::space::AddrSpace;
-use std::rc::Rc;
 
 fn reg_space() -> Rc<AddrSpace> {
-    Rc::new(AddrSpace::new(spacetype::IPTR_PROCESSOR, "register", false, 8, 1, 1, 0, 0, 0))
+    Rc::new(AddrSpace::new(
+        spacetype::IPTR_PROCESSOR,
+        "register",
+        false,
+        8,
+        1,
+        1,
+        0,
+        0,
+        0,
+    ))
 }
 
 fn stack_space() -> Rc<AddrSpace> {
-    Rc::new(AddrSpace::new(spacetype::IPTR_SPACEBASE, "stack", false, 8, 1, 1, 0, 0, 0))
+    Rc::new(AddrSpace::new(
+        spacetype::IPTR_SPACEBASE,
+        "stack",
+        false,
+        8,
+        1,
+        1,
+        0,
+        0,
+        0,
+    ))
 }
 
 /// The AArch64 shape: one section holding `x0`..`x7` and then the outgoing

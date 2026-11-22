@@ -22,10 +22,15 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_decomp::decompile_drive::{decompile_func_full_with_override_dyn, extract_variables, print_c};
+use unlace_decomp::decompile_drive::{
+    decompile_func_full_with_override_dyn, extract_variables, print_c,
+};
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// The vendored fauxware fixture (shared with the unlace-analysis loader gate).
@@ -41,14 +46,21 @@ fn decompile_all_enumerates_and_decompiles_every_function() {
 
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("read symbols (analysis commit) must succeed");
+    prog.commit_pending_analysis()
+        .expect("read symbols (analysis commit) must succeed");
 
     // (1) Enumeration: the loader + analysis function set must include the real
     // defined function `main` and the resolved PLT imports — the same set the
     // `unlace functions` command lists.
-    let names: Vec<String> = prog.function_entries().map(|(n, _)| n.to_string()).collect();
+    let names: Vec<String> = prog
+        .function_entries()
+        .map(|(n, _)| n.to_string())
+        .collect();
     assert!(!names.is_empty(), "function_entries returned no functions");
-    assert!(names.iter().any(|n| n == "main"), "enumeration missing `main`: {names:?}");
+    assert!(
+        names.iter().any(|n| n == "main"),
+        "enumeration missing `main`: {names:?}"
+    );
     assert!(
         prog.function_entries_executable()
             .iter()
@@ -83,8 +95,14 @@ fn decompile_all_enumerates_and_decompiles_every_function() {
     )
     .expect("main must decompile");
     let code = print_c(prog.arch_mut(), &fd);
-    assert!(code.contains("main"), "decompiled C does not name `main`:\n{code}");
-    assert!(code.contains('{') && code.contains('}'), "decompiled C is not a function body");
+    assert!(
+        code.contains("main"),
+        "decompiled C does not name `main`:\n{code}"
+    );
+    assert!(
+        code.contains('{') && code.contains('}'),
+        "decompiled C is not a function body"
+    );
 
     // (3) Variable extraction: every variable has a non-empty C type string, the
     // recovered parameters carry a dense ABI `arg_index` (0,1,2,...), and a stack
@@ -102,7 +120,17 @@ fn decompile_all_enumerates_and_decompiles_every_function() {
         .expect("authenticate present in enumeration");
     let mapped = prog.dwarf_locals_for(auth_addr.get_offset());
     let fd = decompile_func_full_with_override_dyn(
-        prog.arch_mut(), "authenticate", auth_addr, 0, &mapped, &[], &[], None, &[], &[], &[],
+        prog.arch_mut(),
+        "authenticate",
+        auth_addr,
+        0,
+        &mapped,
+        &[],
+        &[],
+        None,
+        &[],
+        &[],
+        &[],
         unlace_decomp::decompile_drive::DrivePurpose::Batch,
     )
     .expect("authenticate must decompile");
@@ -110,8 +138,15 @@ fn decompile_all_enumerates_and_decompiles_every_function() {
     assert_var_invariants(&auth_vars);
     let args: Vec<_> = auth_vars.iter().filter(|v| v.is_param).collect();
     assert!(!args.is_empty(), "authenticate recovered no parameters");
-    assert_eq!(args[0].arg_index, Some(0), "first parameter must have arg_index 0");
-    assert!(!args[0].type_name.is_empty(), "parameter type string is empty");
+    assert_eq!(
+        args[0].arg_index,
+        Some(0),
+        "first parameter must have arg_index 0"
+    );
+    assert!(
+        !args[0].type_name.is_empty(),
+        "parameter type string is empty"
+    );
 }
 
 /// The vendored ARM/Thumb fixture — two functions (`compute` @ 0x100b8, `_start`
@@ -139,10 +174,14 @@ fn canonical_enumeration_reports_each_entry_address_once() {
         let bin = fixture.to_str().expect("UTF-8 fixture path").to_string();
         let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
             .expect("bootstrap fixture with built processor specs");
-        prog.commit_pending_analysis().expect("read symbols (analysis commit) must succeed");
+        prog.commit_pending_analysis()
+            .expect("read symbols (analysis commit) must succeed");
 
         let canonical = prog.function_entries_canonical();
-        assert!(!canonical.is_empty(), "{bin}: canonical enumeration is empty");
+        assert!(
+            !canonical.is_empty(),
+            "{bin}: canonical enumeration is empty"
+        );
 
         // One record per entry address, strictly ascending (the accessor's order
         // contract — the surfaces emit it as-is).
@@ -150,7 +189,10 @@ fn canonical_enumeration_reports_each_entry_address_once() {
         for e in &canonical {
             let off = e.addr.get_offset();
             if let Some(p) = prev {
-                assert!(p < off, "{bin}: entries not strictly address-ordered at 0x{off:x}");
+                assert!(
+                    p < off,
+                    "{bin}: entries not strictly address-ordered at 0x{off:x}"
+                );
             }
             prev = Some(off);
             // A generated placeholder may only be the reported name when it is the
@@ -185,12 +227,23 @@ fn canonical_enumeration_reports_each_entry_address_once() {
 fn assert_var_invariants(vars: &[unlace_decomp::decompile_drive::VarInfo]) {
     let mut next_arg = 0usize;
     for v in vars {
-        assert!(!v.type_name.is_empty(), "variable {:?} has an empty type", v.name);
+        assert!(
+            !v.type_name.is_empty(),
+            "variable {:?} has an empty type",
+            v.name
+        );
         if v.is_param {
-            assert_eq!(v.arg_index, Some(next_arg), "parameter arg_index not dense/ordered");
+            assert_eq!(
+                v.arg_index,
+                Some(next_arg),
+                "parameter arg_index not dense/ordered"
+            );
             next_arg += 1;
         } else {
-            assert!(v.arg_index.is_none(), "a stack local must not carry an arg_index");
+            assert!(
+                v.arg_index.is_none(),
+                "a stack local must not carry an arg_index"
+            );
         }
     }
 }

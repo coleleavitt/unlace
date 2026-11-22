@@ -15,7 +15,7 @@ pub(crate) fn language_id(file: &object::File<'_>) -> Option<String> {
         && file.architecture() == Architecture::PowerPc64
         && !file.is_little_endian()
         && matches!(file.flags(), FileFlags::Elf { e_flags, .. } if e_flags & 3 == 2))
-        .then(|| ID.to_string())
+    .then(|| ID.to_string())
 }
 
 #[cfg(test)]
@@ -25,7 +25,11 @@ mod tests {
 
     fn selected(endian: Endianness, e_flags: u32) -> Option<String> {
         let mut object = Object::new(BinaryFormat::Elf, Architecture::PowerPc64, endian);
-        object.flags = FileFlags::Elf { os_abi: 0, abi_version: 0, e_flags };
+        object.flags = FileFlags::Elf {
+            os_abi: 0,
+            abi_version: 0,
+            e_flags,
+        };
         let bytes = object.write().unwrap();
         super::language_id(&object::File::parse(&*bytes).unwrap())
     }
@@ -34,7 +38,15 @@ mod tests {
     fn only_a_big_endian_abi_version_2_image_takes_the_elfv2_spec() {
         assert_eq!(selected(Endianness::Big, 2).as_deref(), Some(super::ID));
         assert_eq!(selected(Endianness::Big, 1), None, "ELFv1");
-        assert_eq!(selected(Endianness::Big, 0), None, "unspecified stays ELFv1");
-        assert_eq!(selected(Endianness::Little, 2), None, "LE's default spec is ELFv2");
+        assert_eq!(
+            selected(Endianness::Big, 0),
+            None,
+            "unspecified stays ELFv1"
+        );
+        assert_eq!(
+            selected(Endianness::Little, 2),
+            None,
+            "LE's default spec is ELFv2"
+        );
     }
 }

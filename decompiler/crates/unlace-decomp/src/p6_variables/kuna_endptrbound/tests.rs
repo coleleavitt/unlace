@@ -5,21 +5,21 @@ use std::rc::Rc;
 
 use unlace_base::address::{Address, RangeList};
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, SpacebaseSpace,
-    UniqueSpace, VarnodeStorage,
+    AddrSpace, AddrSpaceManager, ConstantSpace, SpacebaseSpace, UniqueSpace, VarnodeStorage,
+    addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{ArchContext, BlockId, OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype, TypeFactory, TypeFactoryImpl};
+use crate::dtype::{Datatype, TypeFactory, TypeFactoryImpl, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::op::pcodeop_flags;
-use crate::varmap::{MapState, RangeType, COPY_CONSTANT, TYPELOCK};
+use crate::varmap::{COPY_CONSTANT, MapState, RangeType, TYPELOCK};
 
 use super::{
-    coalesce_hints, find_pointer_walks, gather_walks, rebase_bounds, OptionEndPtrBound, PointerWalk,
-    ELEM_ENDPTRBOUND,
+    ELEM_ENDPTRBOUND, OptionEndPtrBound, PointerWalk, coalesce_hints, find_pointer_walks,
+    gather_walks, rebase_bounds,
 };
 
 const SP_OFF: u64 = 0x20;
@@ -36,7 +36,9 @@ impl Fx {
     fn new(option: bool) -> Fx {
         let mut manage = AddrSpaceManager::new();
         manage.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-        manage.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+        manage
+            .insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+            .unwrap();
         let reg = Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
             "register",
@@ -49,10 +51,20 @@ impl Fx {
             1,
         ));
         manage.insert_space(Rc::clone(&reg)).unwrap();
-        manage.insert_space(Rc::new(SpacebaseSpace::new("stack", 3, 8, &reg, 1, true, false))).unwrap();
+        manage
+            .insert_space(Rc::new(SpacebaseSpace::new(
+                "stack", 3, 8, &reg, 1, true, false,
+            )))
+            .unwrap();
         let stack = Rc::clone(manage.get_stack_space().unwrap());
-        let sp_data = VarnodeStorage { space: Some(Rc::clone(&reg)), offset: SP_OFF, size: 8 };
-        manage.add_spacebase_pointer(&stack, &sp_data, 8, true).unwrap();
+        let sp_data = VarnodeStorage {
+            space: Some(Rc::clone(&reg)),
+            offset: SP_OFF,
+            size: 8,
+        };
+        manage
+            .add_spacebase_pointer(&stack, &sp_data, 8, true)
+            .unwrap();
         let mut glb = ArchContext::new(manage);
         glb.end_ptr_bound = option;
         let entry = Address::new(Rc::clone(&reg), 0x1000);
@@ -63,7 +75,13 @@ impl Fx {
     }
 
     fn reg(&self) -> Rc<AddrSpace> {
-        Rc::clone(self.fd.get_arch().manage().get_space_by_name("register").unwrap())
+        Rc::clone(
+            self.fd
+                .get_arch()
+                .manage()
+                .get_space_by_name("register")
+                .unwrap(),
+        )
     }
 
     fn stack(&self) -> Rc<AddrSpace> {
@@ -84,13 +102,23 @@ impl Fx {
     }
 
     fn register_input(&mut self, off: u64, size: int4) -> VarnodeId {
-        let vn = self.fd.new_varnode(size, &Address::new(self.reg(), off), None);
+        let vn = self
+            .fd
+            .new_varnode(size, &Address::new(self.reg(), off), None);
         self.fd.set_input_varnode(vn).unwrap()
     }
 
-    fn emit(&mut self, bl: BlockId, code: OpCode, ins: &[VarnodeId], out: Option<int4>) -> (OpId, Option<VarnodeId>) {
+    fn emit(
+        &mut self,
+        bl: BlockId,
+        code: OpCode,
+        ins: &[VarnodeId],
+        out: Option<int4>,
+    ) -> (OpId, Option<VarnodeId>) {
         self.pc += 1;
-        let op = self.fd.new_op(ins.len() as int4, Address::new(self.reg(), self.pc));
+        let op = self
+            .fd
+            .new_op(ins.len() as int4, Address::new(self.reg(), self.pc));
         self.fd.op_set_opcode_code(op, code);
         let out = out.map(|size| self.fd.new_unique_out(size, op).unwrap());
         for (slot, vn) in ins.iter().enumerate() {
@@ -116,7 +144,8 @@ impl Fx {
 
     fn load(&mut self, bl: BlockId, ptr: VarnodeId, width: int4) -> OpId {
         let space = self.konst(0);
-        self.emit(bl, OpCode::CPUI_LOAD, &[space, ptr], Some(width)).0
+        self.emit(bl, OpCode::CPUI_LOAD, &[space, ptr], Some(width))
+            .0
     }
 
     fn cmp(&mut self, bl: BlockId, code: OpCode, a: VarnodeId, b: VarnodeId) -> (OpId, VarnodeId) {
@@ -189,25 +218,45 @@ fn do_while(
     DoWhile { fx, cmp }
 }
 
-fn not_equal(fx: &mut Fx, bl: BlockId, _p: VarnodeId, p1: VarnodeId, e: VarnodeId) -> (OpId, VarnodeId) {
+fn not_equal(
+    fx: &mut Fx,
+    bl: BlockId,
+    _p: VarnodeId,
+    p1: VarnodeId,
+    e: VarnodeId,
+) -> (OpId, VarnodeId) {
     fx.cmp(bl, OpCode::CPUI_INT_NOTEQUAL, p1, e)
 }
 
 #[test]
 fn a_do_while_walk_to_one_past_the_buffer_is_found() {
     let dw = do_while(START, END, 1, 1, false, not_equal);
-    assert_eq!(dw.fx.walks(), vec![PointerWalk { cmp: dw.cmp, slot: 1, start: START, end: END, step: 1 }]);
+    assert_eq!(
+        dw.fx.walks(),
+        vec![PointerWalk {
+            cmp: dw.cmp,
+            slot: 1,
+            start: START,
+            end: END,
+            step: 1
+        }]
+    );
 }
 
 #[test]
 fn each_exit_form_of_the_comparison_is_found() {
-    let eq = do_while(START, END, 1, 1, true, |fx, bl, _p, p1, e| fx.cmp(bl, OpCode::CPUI_INT_EQUAL, e, p1));
+    let eq = do_while(START, END, 1, 1, true, |fx, bl, _p, p1, e| {
+        fx.cmp(bl, OpCode::CPUI_INT_EQUAL, e, p1)
+    });
     assert_eq!(eq.fx.walks().len(), 1);
     assert_eq!(eq.fx.walks()[0].slot, 0);
-    let less = do_while(START, END, 1, 1, false, |fx, bl, _p, p1, e| fx.cmp(bl, OpCode::CPUI_INT_LESS, p1, e));
+    let less = do_while(START, END, 1, 1, false, |fx, bl, _p, p1, e| {
+        fx.cmp(bl, OpCode::CPUI_INT_LESS, p1, e)
+    });
     assert_eq!(less.fx.walks().len(), 1);
-    let lesseq =
-        do_while(START, END, 1, 1, true, |fx, bl, _p, p1, e| fx.cmp(bl, OpCode::CPUI_INT_LESSEQUAL, e, p1));
+    let lesseq = do_while(START, END, 1, 1, true, |fx, bl, _p, p1, e| {
+        fx.cmp(bl, OpCode::CPUI_INT_LESSEQUAL, e, p1)
+    });
     assert_eq!(lesseq.fx.walks().len(), 1);
     let negated = do_while(START, END, 1, 1, true, |fx, bl, _p, p1, e| {
         let (op, c) = fx.cmp(bl, OpCode::CPUI_INT_NOTEQUAL, p1, e);
@@ -220,10 +269,13 @@ fn each_exit_form_of_the_comparison_is_found() {
 fn a_comparison_whose_exit_edge_keeps_looping_is_not_a_bound() {
     let flipped = do_while(START, END, 1, 1, true, not_equal);
     assert!(flipped.fx.walks().is_empty());
-    let wrong_way = do_while(START, END, 1, 1, false, |fx, bl, _p, p1, e| fx.cmp(bl, OpCode::CPUI_INT_LESS, e, p1));
+    let wrong_way = do_while(START, END, 1, 1, false, |fx, bl, _p, p1, e| {
+        fx.cmp(bl, OpCode::CPUI_INT_LESS, e, p1)
+    });
     assert!(wrong_way.fx.walks().is_empty());
-    let inclusive =
-        do_while(START, END, 1, 1, true, |fx, bl, _p, p1, e| fx.cmp(bl, OpCode::CPUI_INT_LESSEQUAL, p1, e));
+    let inclusive = do_while(START, END, 1, 1, true, |fx, bl, _p, p1, e| {
+        fx.cmp(bl, OpCode::CPUI_INT_LESSEQUAL, p1, e)
+    });
     assert!(inclusive.fx.walks().is_empty());
 }
 
@@ -233,7 +285,12 @@ fn a_flipped_branch_is_read_the_other_way() {
     assert!(dw.fx.walks().is_empty());
     let head = dw.fx.fd.obank().get(dw.cmp).unwrap().get_parent().unwrap();
     let cbranch = dw.fx.fd.bb_op_tail(head).unwrap();
-    dw.fx.fd.obank_mut().get_mut(cbranch).unwrap().set_flag(pcodeop_flags::boolean_flip);
+    dw.fx
+        .fd
+        .obank_mut()
+        .get_mut(cbranch)
+        .unwrap()
+        .set_flag(pcodeop_flags::boolean_flip);
     assert_eq!(dw.fx.walks().len(), 1);
 }
 
@@ -277,27 +334,77 @@ fn a_narrower_read_first_does_not_hide_the_step_wide_read() {
     fx.set_in(phi, 0, s);
     fx.set_in(phi, 1, p1);
     fx.finish(entry);
-    assert_eq!(fx.walks(), vec![PointerWalk { cmp, slot: 1, start: START, end: START + 8, step: 2 }]);
+    assert_eq!(
+        fx.walks(),
+        vec![PointerWalk {
+            cmp,
+            slot: 1,
+            start: START,
+            end: START + 8,
+            step: 2
+        }]
+    );
 }
 
 #[test]
 fn a_read_wider_or_narrower_than_the_step_is_not_a_walk() {
-    assert!(do_while(START, END, 1, 2, false, not_equal).fx.walks().is_empty());
-    assert!(do_while(START, START + 8, 2, 1, false, not_equal).fx.walks().is_empty());
+    assert!(
+        do_while(START, END, 1, 2, false, not_equal)
+            .fx
+            .walks()
+            .is_empty()
+    );
+    assert!(
+        do_while(START, START + 8, 2, 1, false, not_equal)
+            .fx
+            .walks()
+            .is_empty()
+    );
 }
 
 #[test]
 fn a_decrementing_walk_is_not_a_walk() {
-    assert!(do_while(END, START, -1, 1, false, not_equal).fx.walks().is_empty());
+    assert!(
+        do_while(END, START, -1, 1, false, not_equal)
+            .fx
+            .walks()
+            .is_empty()
+    );
 }
 
 #[test]
 fn a_span_that_is_not_whole_steps_or_is_one_step_is_not_a_walk() {
-    assert!(do_while(START, START + 7, 2, 2, false, not_equal).fx.walks().is_empty());
-    assert!(do_while(START, START + 1, 1, 1, false, not_equal).fx.walks().is_empty());
-    assert!(do_while(START, START - 8, 1, 1, false, not_equal).fx.walks().is_empty());
-    assert!(do_while(-0x20000, -0x20000 + 0x10001, 1, 1, false, not_equal).fx.walks().is_empty());
-    assert_eq!(do_while(-0x20000, -0x20000 + 0x10000, 1, 1, false, not_equal).fx.walks().len(), 1);
+    assert!(
+        do_while(START, START + 7, 2, 2, false, not_equal)
+            .fx
+            .walks()
+            .is_empty()
+    );
+    assert!(
+        do_while(START, START + 1, 1, 1, false, not_equal)
+            .fx
+            .walks()
+            .is_empty()
+    );
+    assert!(
+        do_while(START, START - 8, 1, 1, false, not_equal)
+            .fx
+            .walks()
+            .is_empty()
+    );
+    assert!(
+        do_while(-0x20000, -0x20000 + 0x10001, 1, 1, false, not_equal)
+            .fx
+            .walks()
+            .is_empty()
+    );
+    assert_eq!(
+        do_while(-0x20000, -0x20000 + 0x10000, 1, 1, false, not_equal)
+            .fx
+            .walks()
+            .len(),
+        1
+    );
 }
 
 #[test]
@@ -340,7 +447,8 @@ fn a_walk_that_does_not_start_on_the_stack_is_not_a_walk() {
 #[test]
 fn a_midpoint_comparison_inside_the_loop_is_not_a_bound() {
     let mut fx = Fx::new(true);
-    let (entry, head, side, latch, exit) = (fx.block(), fx.block(), fx.block(), fx.block(), fx.block());
+    let (entry, head, side, latch, exit) =
+        (fx.block(), fx.block(), fx.block(), fx.block(), fx.block());
     let s = fx.stack_addr(entry, START);
     let mid = fx.stack_addr(entry, START + 8);
     let more = fx.register_input(0x50, 1);
@@ -392,7 +500,8 @@ fn a_comparison_that_feeds_no_branch_is_not_a_bound() {
 #[test]
 fn an_exit_test_a_back_edge_can_bypass_is_not_a_bound() {
     let mut fx = Fx::new(true);
-    let (entry, head, test, latch, exit) = (fx.block(), fx.block(), fx.block(), fx.block(), fx.block());
+    let (entry, head, test, latch, exit) =
+        (fx.block(), fx.block(), fx.block(), fx.block(), fx.block());
     let s = fx.stack_addr(entry, START);
     let e = fx.stack_addr(entry, END);
     let skip = fx.register_input(0x50, 1);
@@ -417,7 +526,8 @@ fn an_exit_test_a_back_edge_can_bypass_is_not_a_bound() {
 #[test]
 fn back_edges_with_different_steps_are_not_a_walk() {
     let mut fx = Fx::new(true);
-    let (entry, head, one, two, exit) = (fx.block(), fx.block(), fx.block(), fx.block(), fx.block());
+    let (entry, head, one, two, exit) =
+        (fx.block(), fx.block(), fx.block(), fx.block(), fx.block());
     let s = fx.stack_addr(entry, START);
     let e = fx.stack_addr(entry, START + 8);
     let pick = fx.register_input(0x50, 1);
@@ -522,7 +632,16 @@ fn while_loop(read_before_test: bool) -> (Fx, OpId) {
 #[test]
 fn a_test_of_the_pointer_itself_must_guard_every_read() {
     let (guarded, cmp) = while_loop(false);
-    assert_eq!(guarded.walks(), vec![PointerWalk { cmp, slot: 1, start: START, end: END, step: 1 }]);
+    assert_eq!(
+        guarded.walks(),
+        vec![PointerWalk {
+            cmp,
+            slot: 1,
+            start: START,
+            end: END,
+            step: 1
+        }]
+    );
     let (unguarded, _) = while_loop(true);
     assert!(unguarded.walks().is_empty());
 }
@@ -576,7 +695,16 @@ fn a_second_exit_on_the_data_keeps_the_walk() {
     fx.set_in(phi, 0, s);
     fx.set_in(phi, 1, p1);
     fx.finish(entry);
-    assert_eq!(fx.walks(), vec![PointerWalk { cmp, slot: 1, start: START, end: END, step: 1 }]);
+    assert_eq!(
+        fx.walks(),
+        vec![PointerWalk {
+            cmp,
+            slot: 1,
+            start: START,
+            end: END,
+            step: 1
+        }]
+    );
 }
 
 #[test]
@@ -612,14 +740,22 @@ fn map_local(fx: &mut Fx, off: i64, ty: Rc<Datatype>) {
     let stack = fx.stack();
     let addr = Address::new(Rc::clone(&stack), stack.wrap_offset(off as u64));
     let inv = Address::new_invalid();
-    fx.fd.get_scope_local_mut().unwrap().add_symbol("buf", ty, &addr, &inv).unwrap();
+    fx.fd
+        .get_scope_local_mut()
+        .unwrap()
+        .add_symbol("buf", ty, &addr, &inv)
+        .unwrap();
 }
 
 fn bound_def(fx: &Fx, cmp: OpId, slot: int4) -> (OpCode, Option<i64>) {
     let bound = fx.fd.obank().get(cmp).unwrap().get_in(slot).unwrap();
     let def = fx.fd.vbank().get(bound).unwrap().get_def().unwrap();
     let o = fx.fd.obank().get(def).unwrap();
-    let k = o.get_in(1).and_then(|c| fx.fd.vbank().get(c)).filter(|c| c.is_constant()).map(|c| c.get_offset() as i64);
+    let k = o
+        .get_in(1)
+        .and_then(|c| fx.fd.vbank().get(c))
+        .filter(|c| c.is_constant())
+        .map(|c| c.get_offset() as i64);
     (o.code(), k)
 }
 
@@ -631,16 +767,29 @@ fn the_bound_is_rebuilt_on_an_array_covering_exactly_the_walk() {
     let walks = dw.fx.walks();
     let stack = dw.fx.stack();
     assert_eq!(rebase_bounds(&mut dw.fx.fd, &stack, &walks), 1);
-    assert_eq!(bound_def(&dw.fx, dw.cmp, 1), (OpCode::CPUI_INT_ADD, Some(8)));
+    assert_eq!(
+        bound_def(&dw.fx, dw.cmp, 1),
+        (OpCode::CPUI_INT_ADD, Some(8))
+    );
     let again = dw.fx.walks();
     assert_eq!(again, walks, "the rebuilt bound is still the same walk");
-    assert_eq!(rebase_bounds(&mut dw.fx.fd, &stack, &again), 0, "a rebuilt bound is not rebuilt again");
+    assert_eq!(
+        rebase_bounds(&mut dw.fx.fd, &stack, &again),
+        0,
+        "a rebuilt bound is not rebuilt again"
+    );
 }
 
 #[test]
 fn the_bound_is_left_alone_without_that_exact_array() {
-    let cases: Vec<(i64, Rc<Datatype>)> =
-        vec![(START, char_array(16)), (START - 1, char_array(9)), (START, factory().get_base(8, type_metatype::TYPE_INT).unwrap())];
+    let cases: Vec<(i64, Rc<Datatype>)> = vec![
+        (START, char_array(16)),
+        (START - 1, char_array(9)),
+        (
+            START,
+            factory().get_base(8, type_metatype::TYPE_INT).unwrap(),
+        ),
+    ];
     for (off, ty) in cases {
         let mut dw = do_while(START, END, 1, 1, false, not_equal);
         map_local(&mut dw.fx, off, ty);
@@ -648,22 +797,43 @@ fn the_bound_is_left_alone_without_that_exact_array() {
         let walks = dw.fx.walks();
         let stack = dw.fx.stack();
         assert_eq!(rebase_bounds(&mut dw.fx.fd, &stack, &walks), 0);
-        assert_eq!(bound_def(&dw.fx, dw.cmp, 1), (OpCode::CPUI_PTRSUB, Some(END)));
+        assert_eq!(
+            bound_def(&dw.fx, dw.cmp, 1),
+            (OpCode::CPUI_PTRSUB, Some(END))
+        );
     }
     let mut none = do_while(START, END, 1, 1, false, not_equal);
     map_local(&mut none.fx, START, char_array(8));
     assert!(none.fx.fd.start_type_recovery());
     let stack = none.fx.stack();
-    assert_eq!(rebase_bounds(&mut none.fx.fd, &stack, &[]), 0, "nothing is rebuilt without a proven walk");
+    assert_eq!(
+        rebase_bounds(&mut none.fx.fd, &stack, &[]),
+        0,
+        "nothing is rebuilt without a proven walk"
+    );
     let mut early = do_while(START, END, 1, 1, false, not_equal);
     map_local(&mut early.fx, START, char_array(8));
     let (walks, stack) = (early.fx.walks(), early.fx.stack());
     assert_eq!(walks.len(), 1);
-    assert_eq!(rebase_bounds(&mut early.fx.fd, &stack, &walks), 0, "nothing is rebuilt before type recovery");
+    assert_eq!(
+        rebase_bounds(&mut early.fx.fd, &stack, &walks),
+        0,
+        "nothing is rebuilt before type recovery"
+    );
 }
 
 fn stack_space() -> Rc<AddrSpace> {
-    Rc::new(AddrSpace::new(spacetype::IPTR_PROCESSOR, "stack", false, 8, 1, 4, addrspace_flags::hasphysical, 1, 1))
+    Rc::new(AddrSpace::new(
+        spacetype::IPTR_PROCESSOR,
+        "stack",
+        false,
+        8,
+        1,
+        4,
+        addrspace_flags::hasphysical,
+        1,
+        1,
+    ))
 }
 
 fn base(size: i32, meta: type_metatype) -> Rc<Datatype> {
@@ -685,11 +855,21 @@ fn state(space: &Rc<AddrSpace>, types: &TypeFactoryImpl) -> MapState {
 }
 
 fn walk(start: i64, end: i64, step: i64) -> PointerWalk {
-    PointerWalk { cmp: OpId::default(), slot: 1, start, end, step }
+    PointerWalk {
+        cmp: OpId::default(),
+        slot: 1,
+        start,
+        end,
+        step,
+    }
 }
 
 fn layout(state: &mut MapState) -> Vec<(i64, i32, RangeType, i32)> {
-    let mut v: Vec<_> = state.hints_mut().iter().map(|h| (h.sstart, h.size, h.range_type, h.highind)).collect();
+    let mut v: Vec<_> = state
+        .hints_mut()
+        .iter()
+        .map(|h| (h.sstart, h.size, h.range_type, h.highind))
+        .collect();
     v.sort();
     v
 }
@@ -699,14 +879,47 @@ fn constant_initializers_and_pointer_hints_become_one_buffer() {
     let (space, types) = (stack_space(), factory());
     let mut st = state(&space, &types);
     let char1 = base(1, type_metatype::TYPE_INT);
-    st.add_range_pub(0x20, Some(base(4, type_metatype::TYPE_UNKNOWN)), COPY_CONSTANT, RangeType::Fixed, -1);
-    st.add_range_pub(0x24, Some(base(4, type_metatype::TYPE_UNKNOWN)), COPY_CONSTANT, RangeType::Fixed, -1);
+    st.add_range_pub(
+        0x20,
+        Some(base(4, type_metatype::TYPE_UNKNOWN)),
+        COPY_CONSTANT,
+        RangeType::Fixed,
+        -1,
+    );
+    st.add_range_pub(
+        0x24,
+        Some(base(4, type_metatype::TYPE_UNKNOWN)),
+        COPY_CONSTANT,
+        RangeType::Fixed,
+        -1,
+    );
     st.add_range_pub(0x20, Some(Rc::clone(&char1)), 0, RangeType::Open, -1);
-    st.add_range_pub(0x28, Some(base(8, type_metatype::TYPE_UINT)), 0, RangeType::Fixed, -1);
+    st.add_range_pub(
+        0x28,
+        Some(base(8, type_metatype::TYPE_UINT)),
+        0,
+        RangeType::Fixed,
+        -1,
+    );
     coalesce_hints(&mut st, &[walk(0x20, 0x28, 1)], &space, &types);
-    assert_eq!(layout(&mut st), vec![(0x20, 1, RangeType::Open, 7), (0x28, 8, RangeType::Fixed, -1)]);
-    let buf = st.hints_mut().iter().find(|h| h.sstart == 0x20).unwrap().type_.clone();
-    assert!(Rc::ptr_eq(&buf, &char1), "the element type comes from the walk's own byte hint");
+    assert_eq!(
+        layout(&mut st),
+        vec![
+            (0x20, 1, RangeType::Open, 7),
+            (0x28, 8, RangeType::Fixed, -1)
+        ]
+    );
+    let buf = st
+        .hints_mut()
+        .iter()
+        .find(|h| h.sstart == 0x20)
+        .unwrap()
+        .type_
+        .clone();
+    assert!(
+        Rc::ptr_eq(&buf, &char1),
+        "the element type comes from the walk's own byte hint"
+    );
 }
 
 #[test]
@@ -721,8 +934,20 @@ fn a_store_straddling_either_edge_vetoes_the_buffer() {
     ];
     for (at, size, rt, flags) in cases {
         let mut st = state(&space, &types);
-        st.add_range_pub(0x20, Some(base(4, type_metatype::TYPE_UNKNOWN)), COPY_CONSTANT, RangeType::Fixed, -1);
-        st.add_range_pub(at, Some(base(size, type_metatype::TYPE_UNKNOWN)), flags, rt, -1);
+        st.add_range_pub(
+            0x20,
+            Some(base(4, type_metatype::TYPE_UNKNOWN)),
+            COPY_CONSTANT,
+            RangeType::Fixed,
+            -1,
+        );
+        st.add_range_pub(
+            at,
+            Some(base(size, type_metatype::TYPE_UNKNOWN)),
+            flags,
+            rt,
+            -1,
+        );
         let before = layout(&mut st);
         coalesce_hints(&mut st, &[walk(0x20, 0x28, 1)], &space, &types);
         assert_eq!(layout(&mut st), before, "hint at {at:#x} size {size}");
@@ -733,11 +958,35 @@ fn a_store_straddling_either_edge_vetoes_the_buffer() {
 fn a_fresh_walk_leaves_the_buffer_open_to_the_next_hint() {
     let (space, types) = (stack_space(), factory());
     let mut st = state(&space, &types);
-    st.add_range_pub(0x20, Some(base(1, type_metatype::TYPE_UNKNOWN)), 0, RangeType::Open, -1);
-    st.add_range_pub(0x24, Some(base(4, type_metatype::TYPE_UNKNOWN)), COPY_CONSTANT, RangeType::Fixed, -1);
-    st.add_range_pub(0x28, Some(base(1, type_metatype::TYPE_UNKNOWN)), 0, RangeType::Open, -1);
+    st.add_range_pub(
+        0x20,
+        Some(base(1, type_metatype::TYPE_UNKNOWN)),
+        0,
+        RangeType::Open,
+        -1,
+    );
+    st.add_range_pub(
+        0x24,
+        Some(base(4, type_metatype::TYPE_UNKNOWN)),
+        COPY_CONSTANT,
+        RangeType::Fixed,
+        -1,
+    );
+    st.add_range_pub(
+        0x28,
+        Some(base(1, type_metatype::TYPE_UNKNOWN)),
+        0,
+        RangeType::Open,
+        -1,
+    );
     coalesce_hints(&mut st, &[walk(0x20, 0x28, 1)], &space, &types);
-    assert_eq!(layout(&mut st), vec![(0x20, 1, RangeType::Open, 7), (0x28, 1, RangeType::Open, -1)]);
+    assert_eq!(
+        layout(&mut st),
+        vec![
+            (0x20, 1, RangeType::Open, 7),
+            (0x28, 1, RangeType::Open, -1)
+        ]
+    );
 }
 
 #[test]
@@ -765,22 +1014,44 @@ fn a_non_constant_access_that_is_not_one_element_vetoes_the_buffer() {
     let (space, types) = (stack_space(), factory());
     for (at, size) in [(0x20, 8), (0x22, 2)] {
         let mut st = state(&space, &types);
-        st.add_range_pub(at, Some(base(size, type_metatype::TYPE_UNKNOWN)), 0, RangeType::Fixed, -1);
+        st.add_range_pub(
+            at,
+            Some(base(size, type_metatype::TYPE_UNKNOWN)),
+            0,
+            RangeType::Fixed,
+            -1,
+        );
         let before = layout(&mut st);
         coalesce_hints(&mut st, &[walk(0x20, 0x28, 1)], &space, &types);
         assert_eq!(layout(&mut st), before, "access at {at:#x} size {size}");
     }
     let mut st = state(&space, &types);
-    st.add_range_pub(0x23, Some(base(1, type_metatype::TYPE_UNKNOWN)), 0, RangeType::Fixed, -1);
+    st.add_range_pub(
+        0x23,
+        Some(base(1, type_metatype::TYPE_UNKNOWN)),
+        0,
+        RangeType::Fixed,
+        -1,
+    );
     coalesce_hints(&mut st, &[walk(0x20, 0x28, 1)], &space, &types);
-    assert_eq!(layout(&mut st), vec![(0x20, 1, RangeType::Open, 7)], "an untyped one-element access is an element");
+    assert_eq!(
+        layout(&mut st),
+        vec![(0x20, 1, RangeType::Open, 7)],
+        "an untyped one-element access is an element"
+    );
 }
 
 #[test]
 fn index_evidence_past_the_end_vetoes_the_buffer() {
     let (space, types) = (stack_space(), factory());
     let mut st = state(&space, &types);
-    st.add_range_pub(0x20, Some(base(1, type_metatype::TYPE_UNKNOWN)), 0, RangeType::Open, 15);
+    st.add_range_pub(
+        0x20,
+        Some(base(1, type_metatype::TYPE_UNKNOWN)),
+        0,
+        RangeType::Open,
+        15,
+    );
     let before = layout(&mut st);
     coalesce_hints(&mut st, &[walk(0x20, 0x28, 1)], &space, &types);
     assert_eq!(layout(&mut st), before);
@@ -790,7 +1061,16 @@ fn index_evidence_past_the_end_vetoes_the_buffer() {
 fn the_widest_nested_walk_wins_and_the_window_bounds_it() {
     let (space, types) = (stack_space(), factory());
     let mut st = state(&space, &types);
-    coalesce_hints(&mut st, &[walk(0x20, 0x28, 1), walk(0x20, 0x30, 1), walk(0xf8, 0x108, 4)], &space, &types);
+    coalesce_hints(
+        &mut st,
+        &[
+            walk(0x20, 0x28, 1),
+            walk(0x20, 0x30, 1),
+            walk(0xf8, 0x108, 4),
+        ],
+        &space,
+        &types,
+    );
     assert_eq!(layout(&mut st), vec![(0x20, 1, RangeType::Open, 15)]);
 }
 
@@ -798,14 +1078,20 @@ fn the_widest_nested_walk_wins_and_the_window_bounds_it() {
 fn walks_that_cross_without_nesting_are_both_left_alone() {
     let (space, types) = (stack_space(), factory());
     let mut st = state(&space, &types);
-    coalesce_hints(&mut st, &[walk(0x20, 0x30, 1), walk(0x28, 0x38, 1)], &space, &types);
+    coalesce_hints(
+        &mut st,
+        &[walk(0x20, 0x30, 1), walk(0x28, 0x38, 1)],
+        &space,
+        &types,
+    );
     assert!(layout(&mut st).is_empty());
 }
 
 #[test]
 fn entry_edges_that_start_at_different_addresses_are_not_a_walk() {
     let mut fx = Fx::new(true);
-    let (entry, left, right, head, exit) = (fx.block(), fx.block(), fx.block(), fx.block(), fx.block());
+    let (entry, left, right, head, exit) =
+        (fx.block(), fx.block(), fx.block(), fx.block(), fx.block());
     let pick = fx.register_input(0x50, 1);
     let e = fx.stack_addr(entry, START + 12);
     fx.cbranch(entry, pick);
@@ -880,7 +1166,14 @@ fn a_phi_whose_inputs_do_not_match_its_block_is_not_a_walk() {
 #[test]
 fn back_edges_that_step_differently_are_not_a_walk_at_either_width() {
     let mut fx = Fx::new(true);
-    let (entry, head, body, one, two, exit) = (fx.block(), fx.block(), fx.block(), fx.block(), fx.block(), fx.block());
+    let (entry, head, body, one, two, exit) = (
+        fx.block(),
+        fx.block(),
+        fx.block(),
+        fx.block(),
+        fx.block(),
+        fx.block(),
+    );
     let s = fx.stack_addr(entry, START);
     let e = fx.stack_addr(entry, START + 8);
     let pick = fx.register_input(0x50, 1);
@@ -910,7 +1203,8 @@ fn back_edges_that_step_differently_are_not_a_walk_at_either_width() {
 #[test]
 fn a_read_before_a_later_test_of_the_pointer_is_not_guarded() {
     let mut fx = Fx::new(true);
-    let (entry, head, test, latch, exit) = (fx.block(), fx.block(), fx.block(), fx.block(), fx.block());
+    let (entry, head, test, latch, exit) =
+        (fx.block(), fx.block(), fx.block(), fx.block(), fx.block());
     let s = fx.stack_addr(entry, START);
     let e = fx.stack_addr(entry, END);
     fx.edge(entry, head);
@@ -955,7 +1249,14 @@ fn a_read_after_a_loop_that_tested_the_pointer_is_not_a_walk() {
 #[test]
 fn a_bound_that_is_one_of_two_addresses_is_not_a_walk() {
     let mut fx = Fx::new(true);
-    let (entry, left, right, join, head, exit) = (fx.block(), fx.block(), fx.block(), fx.block(), fx.block(), fx.block());
+    let (entry, left, right, join, head, exit) = (
+        fx.block(),
+        fx.block(),
+        fx.block(),
+        fx.block(),
+        fx.block(),
+        fx.block(),
+    );
     let pick = fx.register_input(0x50, 1);
     fx.cbranch(entry, pick);
     fx.edge(entry, left);
@@ -1021,7 +1322,11 @@ fn a_read_before_the_pointer_is_not_a_walk() {
         fx.load(bl, q, 1);
         fx.cmp(bl, OpCode::CPUI_INT_NOTEQUAL, p1, e)
     });
-    assert_eq!(back_one.fx.walks().len(), 1, "p + 1 - 1 is the element itself");
+    assert_eq!(
+        back_one.fx.walks().len(),
+        1,
+        "p + 1 - 1 is the element itself"
+    );
 }
 
 /// The end address also reaches something other than the comparison: a call
@@ -1055,11 +1360,24 @@ fn a_bound_also_used_elsewhere_keeps_its_definition() {
         let (walks, stack) = (dw.fx.walks(), dw.fx.stack());
         let e = dw.fx.fd.obank().get(dw.cmp).unwrap().get_in(1).unwrap();
         assert_eq!(rebase_bounds(&mut dw.fx.fd, &stack, &walks), 1);
-        assert_eq!(bound_def(&dw.fx, dw.cmp, 1), (OpCode::CPUI_INT_ADD, Some(8)));
+        assert_eq!(
+            bound_def(&dw.fx, dw.cmp, 1),
+            (OpCode::CPUI_INT_ADD, Some(8))
+        );
         let def = dw.fx.fd.vbank().get(e).unwrap().get_def().unwrap();
-        assert_eq!(dw.fx.fd.obank().get(def).unwrap().code(), OpCode::CPUI_PTRSUB, "{used:?} still reads the address");
+        assert_eq!(
+            dw.fx.fd.obank().get(def).unwrap().code(),
+            OpCode::CPUI_PTRSUB,
+            "{used:?} still reads the address"
+        );
         let fd = &dw.fx.fd;
-        assert!(fd.vbank().get(e).unwrap().descend_iter().any(|d| Some(fd.obank().get(d).unwrap().code()) == used));
+        assert!(
+            fd.vbank()
+                .get(e)
+                .unwrap()
+                .descend_iter()
+                .any(|d| Some(fd.obank().get(d).unwrap().code()) == used)
+        );
     }
 }
 
@@ -1068,23 +1386,46 @@ fn typed_index_evidence_of_another_width_vetoes_the_buffer() {
     let (space, types) = (stack_space(), factory());
     let int4 = base(4, type_metatype::TYPE_INT);
     let mut st = state(&space, &types);
-    st.add_range_pub(0x20, Some(base(1, type_metatype::TYPE_UNKNOWN)), 0, RangeType::Open, -1);
+    st.add_range_pub(
+        0x20,
+        Some(base(1, type_metatype::TYPE_UNKNOWN)),
+        0,
+        RangeType::Open,
+        -1,
+    );
     st.add_range_pub(0x20, Some(Rc::clone(&int4)), 0, RangeType::Open, 3);
     let before = layout(&mut st);
     coalesce_hints(&mut st, &[walk(0x20, 0x30, 1)], &space, &types);
-    assert_eq!(layout(&mut st), before, "a byte walk keeps an int array's indexing");
+    assert_eq!(
+        layout(&mut st),
+        before,
+        "a byte walk keeps an int array's indexing"
+    );
 
     let mut st = state(&space, &types);
     st.add_range_pub(0x20, Some(Rc::clone(&int4)), 0, RangeType::Open, 3);
     coalesce_hints(&mut st, &[walk(0x20, 0x30, 4)], &space, &types);
     assert_eq!(layout(&mut st), vec![(0x20, 4, RangeType::Open, 3)]);
     let elem = st.hints_mut()[0].type_.clone();
-    assert!(Rc::ptr_eq(&elem, &int4), "same-width index evidence types the elements");
+    assert!(
+        Rc::ptr_eq(&elem, &int4),
+        "same-width index evidence types the elements"
+    );
 
     let mut st = state(&space, &types);
-    st.add_range_pub(0x20, Some(base(4, type_metatype::TYPE_UNKNOWN)), 0, RangeType::Open, 3);
+    st.add_range_pub(
+        0x20,
+        Some(base(4, type_metatype::TYPE_UNKNOWN)),
+        0,
+        RangeType::Open,
+        3,
+    );
     coalesce_hints(&mut st, &[walk(0x20, 0x30, 1)], &space, &types);
-    assert_eq!(layout(&mut st), vec![(0x20, 1, RangeType::Open, 15)], "untyped index evidence is not a type");
+    assert_eq!(
+        layout(&mut st),
+        vec![(0x20, 1, RangeType::Open, 15)],
+        "untyped index evidence is not a type"
+    );
 }
 
 #[test]

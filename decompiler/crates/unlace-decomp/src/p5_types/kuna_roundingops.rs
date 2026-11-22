@@ -21,11 +21,16 @@ use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::OpId;
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 
 /// The user-op names a spec gives the float-to-float roundings p-code lacks.
-pub const USEROP_NAMES: [&[u8]; 4] = [b"FLOAT_ROUNDEVEN", b"FLOAT_TRUNC", b"FLOAT_RINT", b"FLOAT_NEARBYINT"];
+pub const USEROP_NAMES: [&[u8]; 4] = [
+    b"FLOAT_ROUNDEVEN",
+    b"FLOAT_TRUNC",
+    b"FLOAT_RINT",
+    b"FLOAT_NEARBYINT",
+];
 
 /// Whether `op` is a CALLOTHER of one of the rounding user ops.
 fn is_rounding_op(data: &Funcdata, op: OpId) -> Option<()> {
@@ -38,7 +43,10 @@ fn is_rounding_op(data: &Funcdata, op: OpId) -> Option<()> {
         return None;
     }
     let id = data.vbank().get(o.get_in(0)?)?.get_offset();
-    arch.float_rounding_userops.iter().any(|&u| u64::from(u) == id).then_some(())
+    arch.float_rounding_userops
+        .iter()
+        .any(|&u| u64::from(u) == id)
+        .then_some(())
 }
 
 /// Whether `op` is a rounding user op, a pure function of its operand that

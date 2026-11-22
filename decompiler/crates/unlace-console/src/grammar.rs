@@ -59,7 +59,7 @@ use std::rc::Rc;
 
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::types::{int4, uint4, uintb};
-use unlace_decomp::dtype::{type_metatype, Datatype, TypeBitField, TypeFactory, TypeField};
+use unlace_decomp::dtype::{Datatype, TypeBitField, TypeFactory, TypeField, type_metatype};
 use unlace_decomp::fspec::PrototypePieces;
 
 mod kuna_enumlayout;
@@ -147,7 +147,13 @@ pub struct GrammarToken {
 impl GrammarToken {
     /// C++ `GrammarToken::GrammarToken(void)` (`grammar.cc:285-293`).
     fn new() -> GrammarToken {
-        GrammarToken { ty: 0, value: TokenValue::None, lineno: -1, colno: -1, filenum: -1 }
+        GrammarToken {
+            ty: 0,
+            value: TokenValue::None,
+            lineno: -1,
+            colno: -1,
+            filenum: -1,
+        }
     }
 
     /// C++ `GrammarToken::set(uint4 tp)` (`grammar.cc:220-224`).
@@ -424,7 +430,8 @@ impl GrammarLexer {
         self.has_file = true;
         self.input = content;
         // A line cannot exceed the input; keep one extra slot for the EOF space.
-        self.buffer.resize(self.input.len().min(self.buffersize.max(0) as usize) + 1, 0);
+        self.buffer
+            .resize(self.input.len().min(self.buffersize.max(0) as usize) + 1, 0);
         self.input_pos = 0;
         self.endoffile = false;
     }
@@ -455,7 +462,10 @@ impl GrammarLexer {
             if lookahead == 9 || lookahead == 11 || lookahead == 12 || lookahead == 13 {
                 lookahead = b' ';
             } else if lookahead == b'\n' {
-                if matches!(self.state, LexState::Doublequote | LexState::Singlequote | LexState::Singlebackslash) {
+                if matches!(
+                    self.state,
+                    LexState::Doublequote | LexState::Singlequote | LexState::Singlebackslash
+                ) {
                     self.set_error("Incomplete token");
                     return tok::BADTOKEN;
                 }
@@ -585,7 +595,9 @@ impl GrammarLexer {
             }
             LexState::Number => {
                 if lookahead == b'x' {
-                    if (self.bufend - self.bufstart) != 2 || self.buffer[self.bufstart as usize] != b'0' {
+                    if (self.bufend - self.bufstart) != 2
+                        || self.buffer[self.bufstart as usize] != b'0'
+                    {
                         syntaxerror = true; // x only allowed as 0x hex indicator
                     }
                 } else if lookahead.is_ascii_digit()
@@ -733,7 +745,10 @@ enum TypeModifier {
     /// `FunctionModifier` (`grammar.hh:155-166`).  `paramlist` holds the parsed
     /// parameter declarators; a trailing `None` is **not** stored here (the
     /// `...` is captured in `dotdotdot`, exactly as `newFunc` pops the null).
-    Function { paramlist: Vec<TypeDeclarator>, dotdotdot: bool },
+    Function {
+        paramlist: Vec<TypeDeclarator>,
+        dotdotdot: bool,
+    },
 }
 
 impl TypeModifier {
@@ -799,7 +814,10 @@ impl TypeModifier {
                 })?;
                 factory.get_type_array(*arraysize, base)
             }
-            TypeModifier::Function { paramlist, dotdotdot } => {
+            TypeModifier::Function {
+                paramlist,
+                dotdotdot,
+            } => {
                 // FunctionModifier::modType (grammar.cc:2306-2325): build a
                 // PrototypePieces describing the pointed-to function (no parameter
                 // names, as upstream) and intern a TypeCode for it under the
@@ -811,7 +829,11 @@ impl TypeModifier {
                 let intypes = function_get_in_types(paramlist, factory, org)?;
                 let proto = PrototypePieces {
                     outtype: Some(outtype),
-                    first_var_arg_slot: if *dotdotdot { intypes.len() as int4 } else { -1 },
+                    first_var_arg_slot: if *dotdotdot {
+                        intypes.len() as int4
+                    } else {
+                        -1
+                    },
                     intypes,
                     ..PrototypePieces::default()
                 };
@@ -834,7 +856,10 @@ fn function_modifier_new(mut paramlist: Vec<TypeDeclarator>, dtdtdt: bool) -> Ty
             }
         }
     }
-    TypeModifier::Function { paramlist, dotdotdot: dtdtdt }
+    TypeModifier::Function {
+        paramlist,
+        dotdotdot: dtdtdt,
+    }
 }
 
 /// C++ `FunctionModifier::getInTypes` (`grammar.cc:710-717`).
@@ -972,7 +997,8 @@ impl TypeDeclarator {
     }
 
     fn qualified_basetype(&self, factory: &dyn TypeFactory) -> KunaResult<Option<Rc<Datatype>>> {
-        self.basetype.clone()
+        self.basetype
+            .clone()
             .map(|base| factory.get_qualified_type(base, type_qualifiers(self.flags)))
             .transpose()
     }
@@ -996,7 +1022,10 @@ impl TypeDeclarator {
             _ => return Ok(false),
         };
         let (paramlist, dotdotdot) = match fmod {
-            TypeModifier::Function { paramlist, dotdotdot } => (paramlist, *dotdotdot),
+            TypeModifier::Function {
+                paramlist,
+                dotdotdot,
+            } => (paramlist, *dotdotdot),
             _ => unreachable!(),
         };
 
@@ -1006,8 +1035,11 @@ impl TypeDeclarator {
         pieces.intypes = function_get_in_types(paramlist, factory, org)?;
         pieces.innames.clear();
         pieces.innames = function_get_in_names(paramlist);
-        pieces.first_var_arg_slot =
-            if dotdotdot { pieces.intypes.len() as int4 } else { -1 };
+        pieces.first_var_arg_slot = if dotdotdot {
+            pieces.intypes.len() as int4
+        } else {
+            -1
+        };
 
         // Construct the output type: apply every modification EXCEPT the leading
         // function modifier (grammar.cc:812-820).
@@ -1097,7 +1129,11 @@ struct TypeSpecifiers {
 
 impl TypeSpecifiers {
     fn new() -> TypeSpecifiers {
-        TypeSpecifiers { type_specifier: None, function_specifier: String::new(), flags: 0 }
+        TypeSpecifiers {
+            type_specifier: None,
+            function_specifier: String::new(),
+            flags: 0,
+        }
     }
 }
 
@@ -1111,11 +1147,19 @@ struct Enumerator {
 
 impl Enumerator {
     fn new(nm: &str) -> Enumerator {
-        Enumerator { enumconstant: nm.to_string(), constantassigned: false, value: 0 }
+        Enumerator {
+            enumconstant: nm.to_string(),
+            constantassigned: false,
+            value: 0,
+        }
     }
 
     fn with_value(nm: &str, val: uintb) -> Enumerator {
-        Enumerator { enumconstant: nm.to_string(), constantassigned: true, value: val }
+        Enumerator {
+            enumconstant: nm.to_string(),
+            constantassigned: true,
+            value: val,
+        }
     }
 }
 
@@ -1392,10 +1436,13 @@ impl<'a> CParse<'a> {
     fn lookup_identifier(&mut self, nm: &str) -> IdentClass {
         if let Some(&kw) = self.keywords.get(nm) {
             match kw {
-                flags::F_TYPEDEF | flags::F_EXTERN | flags::F_STATIC | flags::F_AUTO
+                flags::F_TYPEDEF
+                | flags::F_EXTERN
+                | flags::F_STATIC
+                | flags::F_AUTO
                 | flags::F_REGISTER => return IdentClass::StorageClassSpecifier,
                 flags::F_CONST | flags::F_RESTRICT | flags::F_VOLATILE => {
-                    return IdentClass::TypeQualifier
+                    return IdentClass::TypeQualifier;
                 }
                 flags::F_INLINE => return IdentClass::FunctionSpecifier,
                 flags::F_STRUCT => return IdentClass::Struct,
@@ -1535,7 +1582,10 @@ impl<'a> CParse<'a> {
         spec: &TypeSpecifiers,
         declist: Vec<TypeDeclarator>,
     ) -> Vec<TypeDeclarator> {
-        declist.into_iter().map(|d| self.merge_spec_dec(spec, d)).collect()
+        declist
+            .into_iter()
+            .map(|d| self.merge_spec_dec(spec, d))
+            .collect()
     }
 
     /// C++ `mergeSpecDecVec(TypeSpecifiers*)` (`grammar.cc:925-935`).
@@ -1588,13 +1638,19 @@ impl<'a> CParse<'a> {
 
     /// C++ `newArray(TypeDeclarator*,uint4,uintb*)` (`grammar.cc:1032-1038`).
     fn new_array(mut dec: TypeDeclarator, fl: uint4, num: uintb) -> TypeDeclarator {
-        dec.mods.push(TypeModifier::Array { flags: fl, arraysize: num as int4 });
+        dec.mods.push(TypeModifier::Array {
+            flags: fl,
+            arraysize: num as int4,
+        });
         dec
     }
 
     /// C++ `newFunc(TypeDeclarator*,vector*)` (`grammar.cc:1040-1053`): a trailing
     /// null (varargs marker) is popped and recorded as `dotdotdot`.
-    fn new_func(mut dec: TypeDeclarator, mut declist: Vec<Option<TypeDeclarator>>) -> TypeDeclarator {
+    fn new_func(
+        mut dec: TypeDeclarator,
+        mut declist: Vec<Option<TypeDeclarator>>,
+    ) -> TypeDeclarator {
         let mut dotdotdot = false;
         if let Some(last) = declist.last() {
             if last.is_none() {
@@ -1733,13 +1789,12 @@ impl<'a> CParse<'a> {
     /// (`grammar.y:93-97`).
     fn type_specifier(&mut self) -> KunaResult<Rc<Datatype>> {
         match self.peek()? {
-            PToken::TypeName(_) => {
-                match self.next()? { PToken::TypeName(tp) => {
-                    Ok(tp)
-                } _ => {
+            PToken::TypeName(_) => match self.next()? {
+                PToken::TypeName(tp) => Ok(tp),
+                _ => {
                     unreachable!()
-                }}
-            }
+                }
+            },
             PToken::ScalarSpecifier(_) => self.scalar_specifier(),
             PToken::Struct | PToken::Union => self.struct_or_union_specifier(),
             PToken::Enum => self.enum_specifier(),
@@ -2240,7 +2295,10 @@ impl<'a> CParse<'a> {
 
     /// The left-recursive array/function suffixes shared by `direct_declarator`
     /// and `direct_abstract_declarator`.
-    fn direct_declarator_suffixes(&mut self, mut dec: TypeDeclarator) -> KunaResult<TypeDeclarator> {
+    fn direct_declarator_suffixes(
+        &mut self,
+        mut dec: TypeDeclarator,
+    ) -> KunaResult<TypeDeclarator> {
         loop {
             match self.peek()? {
                 PToken::Punct(b'[') => {
@@ -2477,7 +2535,11 @@ impl<'a> CParse<'a> {
     /// body leaves a tagged stub incomplete, so existing forward pointers remain
     /// valid when a subsequent declaration supplies a correct definition; an
     /// anonymous record is built fresh and destroyed on failure, as upstream.
-    fn new_struct(&mut self, ident: &str, declist: Vec<TypeDeclarator>) -> KunaResult<Rc<Datatype>> {
+    fn new_struct(
+        &mut self,
+        ident: &str,
+        declist: Vec<TypeDeclarator>,
+    ) -> KunaResult<Rc<Datatype>> {
         let (anonymous, res) = if ident.is_empty() {
             let (name, record) = self.new_anonymous_record(false)?;
             (Some(name), record)
@@ -2507,7 +2569,10 @@ impl<'a> CParse<'a> {
         }
         // Preserve the incomplete shell on errors: prior pointers already own
         // it, and a later successful definition must complete that same shell.
-        match self.factory.assign_raw_fields_struct(&res, sublist, bitlist) {
+        match self
+            .factory
+            .assign_raw_fields_struct(&res, sublist, bitlist)
+        {
             Ok(completed) => match anonymous {
                 Some(name) => self.finish_anonymous_record(completed, name),
                 None => Ok(completed),
@@ -2523,7 +2588,10 @@ impl<'a> CParse<'a> {
     /// equal layout must not share the empty name's type id.
     fn new_anonymous_record(&mut self, union: bool) -> KunaResult<(String, Rc<Datatype>)> {
         self.anonymous_serial += 1;
-        let name = format!("__kuna_anon_{:032x}_{}", self.anonymous_key, self.anonymous_serial);
+        let name = format!(
+            "__kuna_anon_{:032x}_{}",
+            self.anonymous_key, self.anonymous_serial
+        );
         let shell = if self.factory.find_by_name(&name)?.is_some() {
             format!("{name}__candidate")
         } else {
@@ -2539,9 +2607,16 @@ impl<'a> CParse<'a> {
 
     /// Repeated parsing of the same declaration can reuse its existing type,
     /// after checking the new layout. Candidate shells never escape the parser.
-    fn finish_anonymous_record(&mut self, record: Rc<Datatype>, name: String) -> KunaResult<Rc<Datatype>> {
+    fn finish_anonymous_record(
+        &mut self,
+        record: Rc<Datatype>,
+        name: String,
+    ) -> KunaResult<Rc<Datatype>> {
         let named = if record.get_name() != name {
-            let existing = self.factory.find_by_name(&name)?.ok_or_else(|| KunaError::parse("Missing anonymous record identity"))?;
+            let existing = self
+                .factory
+                .find_by_name(&name)?
+                .ok_or_else(|| KunaError::parse("Missing anonymous record identity"))?;
             let mut candidate = (*record).clone();
             candidate.name = name.clone();
             candidate.display_name = name.clone();
@@ -2597,7 +2672,12 @@ impl<'a> CParse<'a> {
                 return self.abandon_record(ident, &res);
             }
             let field_type = decl.build_type(self.factory, &self.org)?;
-            sublist.push(TypeField::new(i as int4, 0, decl.get_identifier(), field_type));
+            sublist.push(TypeField::new(
+                i as int4,
+                0,
+                decl.get_identifier(),
+                field_type,
+            ));
         }
         match self.factory.assign_raw_fields_union(&res, sublist) {
             Ok(completed) => match anonymous {
@@ -2644,7 +2724,9 @@ impl<'a> CParse<'a> {
         let vallist = kuna_enumlayout::enum_constants(&vecenum);
         if let Some(tp) = &underlying {
             if let Some(name) = kuna_enumlayout::enumerator_out_of_range(tp, &vecenum, &vallist) {
-                self.set_error(&format!("Enumerator {name} does not fit the underlying type"));
+                self.set_error(&format!(
+                    "Enumerator {name} does not fit the underlying type"
+                ));
                 return Err(KunaError::parse(self.lasterror.clone()));
             }
         }
@@ -2653,21 +2735,25 @@ impl<'a> CParse<'a> {
             Some((size, meta)) => self.factory.get_type_enum_sized(ident, size, meta)?,
             None => self.factory.get_type_enum(ident)?,
         };
-        let (namelist, vallist) = kuna_enumlayout::named_constants(&vecenum, &vallist, res.get_size());
+        let (namelist, vallist) =
+            kuna_enumlayout::named_constants(&vecenum, &vallist, res.get_size());
         let assignlist = vec![true; namelist.len()];
         // C++ TypeEnum::assignValues (the value map; no duplicate remains).
-        match Datatype::assign_values(res.get_size(), res.get_name(), &namelist, &vallist, &assignlist)
-        {
-            Ok(namemap) => {
-                match self.factory.set_enum_values(&res, namemap) {
-                    Ok(completed) => Ok(completed),
-                    Err(err) => {
-                        self.set_error(err.explain());
-                        let _ = self.factory.destroy_type(&res);
-                        Err(KunaError::parse(self.lasterror.clone()))
-                    }
+        match Datatype::assign_values(
+            res.get_size(),
+            res.get_name(),
+            &namelist,
+            &vallist,
+            &assignlist,
+        ) {
+            Ok(namemap) => match self.factory.set_enum_values(&res, namemap) {
+                Ok(completed) => Ok(completed),
+                Err(err) => {
+                    self.set_error(err.explain());
+                    let _ = self.factory.destroy_type(&res);
+                    Err(KunaError::parse(self.lasterror.clone()))
                 }
-            }
+            },
             Err(err) => {
                 // C++ catches LowlevelError, calls setError(err.explain), destroys
                 // the stub, returns null.
@@ -2707,7 +2793,8 @@ impl<'a> CParse<'a> {
         for byte in &content {
             key = (key ^ u128::from(*byte)).wrapping_mul(0x0000000001000000000000000000013bu128);
         }
-        self.anonymous_key = key ^ ((self.org.addr_size as u128) << 64) ^ u128::from(self.org.word_size);
+        self.anonymous_key =
+            key ^ ((self.org.addr_size as u128) << 64) ^ u128::from(self.org.word_size);
         self.lexer.push_file("stream", content);
         match self.parse_document(doctype) {
             Ok(()) => Ok(true),
@@ -2878,9 +2965,15 @@ pub fn parse_c(
         if decl.get_identifier().is_empty() {
             return Err(KunaError::parse("Missing identifier for typedef"));
         }
-        if matches!(ct.get_metatype(), type_metatype::TYPE_STRUCT | type_metatype::TYPE_UNION)
-            && (ct.get_name().is_empty() || ct.get_name() == decl.get_identifier()
-                || parser.anonymous_names.iter().any(|name| name == ct.get_name()))
+        if matches!(
+            ct.get_metatype(),
+            type_metatype::TYPE_STRUCT | type_metatype::TYPE_UNION
+        ) && (ct.get_name().is_empty()
+            || ct.get_name() == decl.get_identifier()
+            || parser
+                .anonymous_names
+                .iter()
+                .any(|name| name == ct.get_name()))
         {
             factory.set_name(&ct, decl.get_identifier())?;
         } else {

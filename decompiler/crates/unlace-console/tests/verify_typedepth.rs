@@ -17,11 +17,16 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Bootstrap the fixture, decompile each of `funcs` and return the concatenated C.
@@ -31,12 +36,14 @@ fn decompile(funcs: &[&str]) -> String {
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
     let path = root
         .join("decompiler/crates/unlace-analysis/tests/fixtures/typedepth_x86_64")
-        .to_str().expect("UTF-8 fixture path")
+        .to_str()
+        .expect("UTF-8 fixture path")
         .to_string();
 
     let mut prog = bootstrap_from_object(&path, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
     let mut cmds: Vec<String> = Vec::new();
     for f in funcs {
@@ -102,7 +109,10 @@ fn colliding_typedef_name_falls_back_not_to_void() {
         !on.contains("void *base"),
         "a name collision must not degrade the pointer to void, got:\n{on}"
     );
-    assert!(on.contains("code_4 *base"), "expected the size-suffixed aggregate, got:\n{on}");
+    assert!(
+        on.contains("code_4 *base"),
+        "expected the size-suffixed aggregate, got:\n{on}"
+    );
 }
 
 /// A global whose element type is four DIEs deep was marked one byte wide, so it
@@ -122,7 +132,16 @@ fn global_array_gets_its_real_extent() {
 #[test]
 fn recursive_struct_types_terminate() {
     let on = decompile(&["list_len", "ping", "pong"]);
-    assert!(on.contains("list_len"), "self-referential struct walk should decompile:\n{on}");
-    assert!(on.contains("ping_s"), "mutually recursive struct should resolve:\n{on}");
-    assert!(on.contains("pong_s"), "mutually recursive struct should resolve:\n{on}");
+    assert!(
+        on.contains("list_len"),
+        "self-referential struct walk should decompile:\n{on}"
+    );
+    assert!(
+        on.contains("ping_s"),
+        "mutually recursive struct should resolve:\n{on}"
+    );
+    assert!(
+        on.contains("pong_s"),
+        "mutually recursive struct should resolve:\n{on}"
+    );
 }

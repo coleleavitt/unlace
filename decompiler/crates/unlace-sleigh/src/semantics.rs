@@ -18,7 +18,7 @@ use std::rc::Rc;
 
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::marshal::{Decoder, Encoder};
-use unlace_base::space::{spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::Wrap;
 use unlace_num::opcodes::{OpCode, OpcodeDecoder, OpcodeEncoder};
 
@@ -352,7 +352,10 @@ impl ConstTpl {
     /// C++ `fixSpace`: get the value of the ConstTpl in context when we
     /// know it is a space.  `Option` mirrors the nullable C++ result
     /// pointer; `Err` mirrors the C++ `LowlevelError`.
-    pub fn fix_space(&self, walker: &(impl SymbolWalker + ?Sized)) -> KunaResult<Option<Rc<AddrSpace>>> {
+    pub fn fix_space(
+        &self,
+        walker: &(impl SymbolWalker + ?Sized),
+    ) -> KunaResult<Option<Rc<AddrSpace>>> {
         match self.type_ {
             ConstType::JCurspace => return Ok(Some(walker.get_cur_space())),
             ConstType::Handle => {
@@ -943,7 +946,11 @@ impl HandleTpl {
     }
 
     /// C++ `fix`: resolve this template into `hand` against the walker.
-    pub fn fix(&self, hand: &mut FixedHandle, walker: &(impl SymbolWalker + ?Sized)) -> KunaResult<()> {
+    pub fn fix(
+        &self,
+        hand: &mut FixedHandle,
+        walker: &(impl SymbolWalker + ?Sized),
+    ) -> KunaResult<()> {
         if self.ptrspace.get_type() == ConstType::Real {
             // The export is unstarred, but this doesn't mean the varnode
             // being exported isn't dynamic
@@ -1466,7 +1473,7 @@ pub trait PcodeBuilder {
 
         let oldbase = self.get_label_base(); // Recursively store old labelbase
         self.set_label_base(self.get_label_count()); // Set the newbase
-                                                     // Add labels from this template
+        // Add labels from this template
         self.set_label_count(self.get_label_count().wadd(construct.num_labels()));
 
         for op in construct.get_opvec() {
@@ -1489,11 +1496,11 @@ pub trait PcodeBuilder {
 
 #[cfg(test)]
 mod tests {
-    use unlace_base::address::Address;
-    use unlace_base::marshal::{PackedDecode, PackedEncode};
-    use unlace_base::space::{addrspace_flags, AddrSpaceManager, ConstantSpace, UniqueSpace};
     use std::borrow::Cow;
     use std::cell::Cell;
+    use unlace_base::address::Address;
+    use unlace_base::marshal::{PackedDecode, PackedEncode};
+    use unlace_base::space::{AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags};
 
     use super::*;
     use crate::slghpatexpress::PatternExpressionContext;
@@ -1607,7 +1614,9 @@ mod tests {
         }
         fn borrow_fixed_handle(&self, i: i32) -> KunaResult<Cow<'_, FixedHandle>> {
             if self.borrowed_handles {
-                self.handles.get(i as usize).map(Cow::Borrowed)
+                self.handles
+                    .get(i as usize)
+                    .map(Cow::Borrowed)
                     .ok_or_else(|| KunaError::sleigh("no fixed handle for operand"))
             } else {
                 self.get_fixed_handle(i).map(Cow::Owned)
@@ -1859,9 +1868,11 @@ mod tests {
             .unwrap_err();
         assert_eq!(err.explain(), "ConstTpl is not a spaceid as expected");
         // handle with a non-space select also throws
-        assert!(ConstTpl::new_handle(0, VField::VOffset)
-            .fix_space(&walker)
-            .is_err());
+        assert!(
+            ConstTpl::new_handle(0, VField::VOffset)
+                .fix_space(&walker)
+                .is_err()
+        );
     }
 
     #[test]
@@ -1951,34 +1962,62 @@ mod tests {
     fn borrowed_handles_preserve_scalar_fields_and_dynamic_exports() {
         let manager = test_manager();
         let mut owned = TestWalker::new(&manager);
-        owned.handles = vec![static_handle(&manager), dynamic_handle(&manager), const_handle(&manager)];
+        owned.handles = vec![
+            static_handle(&manager),
+            dynamic_handle(&manager),
+            const_handle(&manager),
+        ];
         let mut borrowed = TestWalker::new(&manager);
         borrowed.handles = owned.handles.clone();
         borrowed.borrowed_handles = true;
         let space_id = |space: &Option<Rc<AddrSpace>>| space.as_ref().map(Rc::as_ptr);
         for index in 0..3 {
-            for field in [VField::VSpace, VField::VOffset, VField::VSize, VField::VOffsetPlus] {
+            for field in [
+                VField::VSpace,
+                VField::VOffset,
+                VField::VSize,
+                VField::VOffsetPlus,
+            ] {
                 let tpl = ConstTpl::new_handle_plus(index, field, 0x0004_0002);
                 assert_eq!(tpl.fix(&owned).unwrap(), tpl.fix(&borrowed).unwrap());
             }
             let space = ConstTpl::new_handle(index, VField::VSpace);
-            assert_eq!(space_id(&space.fix_space(&owned).unwrap()), space_id(&space.fix_space(&borrowed).unwrap()));
+            assert_eq!(
+                space_id(&space.fix_space(&owned).unwrap()),
+                space_id(&space.fix_space(&borrowed).unwrap())
+            );
             let varnode = VarnodeTpl::new_from_handle(index, false);
-            assert_eq!(varnode.is_dynamic(&owned).unwrap(), varnode.is_dynamic(&borrowed).unwrap());
+            assert_eq!(
+                varnode.is_dynamic(&owned).unwrap(),
+                varnode.is_dynamic(&borrowed).unwrap()
+            );
             let tpl = HandleTpl::new_from_varnode(&varnode);
             let mut owned_export = FixedHandle::default();
             let mut borrowed_export = FixedHandle::default();
             tpl.fix(&mut owned_export, &owned).unwrap();
             tpl.fix(&mut borrowed_export, &borrowed).unwrap();
-            assert_eq!(space_id(&owned_export.space), space_id(&borrowed_export.space));
+            assert_eq!(
+                space_id(&owned_export.space),
+                space_id(&borrowed_export.space)
+            );
             assert_eq!(owned_export.size, borrowed_export.size);
-            assert_eq!(space_id(&owned_export.offset_space), space_id(&borrowed_export.offset_space));
+            assert_eq!(
+                space_id(&owned_export.offset_space),
+                space_id(&borrowed_export.offset_space)
+            );
             assert_eq!(owned_export.offset_offset, borrowed_export.offset_offset);
             assert_eq!(owned_export.offset_size, borrowed_export.offset_size);
-            assert_eq!(space_id(&owned_export.temp_space), space_id(&borrowed_export.temp_space));
+            assert_eq!(
+                space_id(&owned_export.temp_space),
+                space_id(&borrowed_export.temp_space)
+            );
             assert_eq!(owned_export.temp_offset, borrowed_export.temp_offset);
         }
-        assert!(ConstTpl::new_handle(3, VField::VSize).fix(&borrowed).is_err());
+        assert!(
+            ConstTpl::new_handle(3, VField::VSize)
+                .fix(&borrowed)
+                .is_err()
+        );
         assert_eq!(borrowed.owned_reads.get(), 0);
         assert!(owned.owned_reads.get() > 0);
     }

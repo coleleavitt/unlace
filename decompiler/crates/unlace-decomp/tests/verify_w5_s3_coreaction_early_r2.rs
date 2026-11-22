@@ -27,20 +27,21 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 
 use unlace_decomp::action::ActionContext;
+use unlace_decomp::context::ArchContext;
 use unlace_decomp::coreaction_early::{ActionRedundBranch, ActionStartCleanUp};
 use unlace_decomp::funcdata::Funcdata;
-use unlace_decomp::context::ArchContext;
 
 // ---- fixtures (mirror the in-module / round-1 ones) -----------------------
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -109,7 +110,10 @@ fn r2_startcleanup_snapshots_live_create_index() {
     let res = act.apply(&mut fd, &mut ctx);
     assert_eq!(res, 0);
     let snap2 = fd.get_clean_up_index();
-    assert_eq!(snap2, live2, "second startCleanUp re-snapshots the new live index");
+    assert_eq!(
+        snap2, live2,
+        "second startCleanUp re-snapshots the new live index"
+    );
     assert!(snap2 > snap1, "the re-snapshot strictly moved forward");
 }
 
@@ -143,7 +147,11 @@ fn r2_redundbranch_multi_out_distinct_targets_not_removed() {
     assert_eq!(res, 0);
     // getOut(1) != getOut(0) -> j stops at 1 != sizeOut(2) -> `continue`.
     // No removeBranch (seamed) AND no splice -> count stays 0, nothing removed.
-    assert_eq!(act.base().count, 0, "distinct multi-out targets are not redundant");
+    assert_eq!(
+        act.base().count,
+        0,
+        "distinct multi-out targets are not redundant"
+    );
     assert_eq!(fd.bblocks_get_size(), size_before, "no block removed");
 }
 
@@ -184,7 +192,11 @@ fn r2_redundbranch_all_exits_same_block_removes_one_edge() {
         1,
         "one of the two parallel edges is severed"
     );
-    assert_eq!(fd.bblocks_get_size(), size_before, "no whole block removed, only an edge");
+    assert_eq!(
+        fd.bblocks_get_size(),
+        size_before,
+        "no whole block removed, only an edge"
+    );
 }
 
 /// Sanity: an empty graph (no blocks) makes `ActionRedundBranch::apply` a clean

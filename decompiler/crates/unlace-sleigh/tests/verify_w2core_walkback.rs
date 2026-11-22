@@ -25,10 +25,10 @@
 //! sub-registers AH@0x1, CL@0x8, MM0_Bb@0x1101, ST0h@0x1108, BND0_UB@0x748 that
 //! shape the C++ `offbase`-constrained walk-back).
 
+use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_base::space::AddrSpace;
-use std::rc::Rc;
 
 use unlace_sleigh::globalcontext::ContextInternal;
 use unlace_sleigh::loadimage::LoadImage;
@@ -56,13 +56,14 @@ fn repo_root() -> std::path::PathBuf {
 }
 
 fn x86_64_engine() -> Sleigh {
-    let sla = std::fs::read(
-        repo_root().join("specs/Ghidra/Processors/x86/data/languages/x86-64.sla"),
-    )
-    .expect("read x86-64.sla");
+    let sla =
+        std::fs::read(repo_root().join("specs/Ghidra/Processors/x86/data/languages/x86-64.sla"))
+            .expect("read x86-64.sla");
     let ctx = Box::new(ContextInternal::new());
     let mut sleigh = Sleigh::new(Box::new(DummyImg), ctx);
-    sleigh.initialize_from_sla(&sla).expect("initialize from sla");
+    sleigh
+        .initialize_from_sla(&sla)
+        .expect("initialize from sla");
     sleigh
 }
 
@@ -106,19 +107,21 @@ fn verify_w2core_walkback_rax_cluster() {
         // is at a *different* offbase than RAX/EAX — the C++ walk-back is
         // constrained to `point.offset == offbase`, so it stops and returns ""
         // exactly where the real map's sub-registers break the chain.
-        (0x1, 1, "AH"),  // AH is the exact byte at offset 1
-        (0x2, 2, ""),    // greatest-<= is AH(1,1); offbase 1, walk-back hits off 0 -> stop
-        (0x4, 4, ""),    // no reg at offbase 4 covers; chain breaks
+        (0x1, 1, "AH"), // AH is the exact byte at offset 1
+        (0x2, 2, ""),   // greatest-<= is AH(1,1); offbase 1, walk-back hits off 0 -> stop
+        (0x4, 4, ""),   // no reg at offbase 4 covers; chain breaks
         (0x4, 5, ""),
-        (0x7, 1, ""),    // byte 7: greatest-<= is at a sub-offset, chain breaks
-        (0x8, 1, "CL"),  // first byte past RAX is CL (next cluster)
+        (0x7, 1, ""),   // byte 7: greatest-<= is at a sub-offset, chain breaks
+        (0x8, 1, "CL"), // first byte past RAX is CL (next cluster)
     ];
 
     let mut fails = Vec::new();
     for &(off, size, want) in cases {
         let got = name(&sleigh, &sp, off, size);
         if got != want {
-            fails.push(format!("(off=0x{off:x},size={size}) got {got:?} want {want:?}"));
+            fails.push(format!(
+                "(off=0x{off:x},size={size}) got {got:?} want {want:?}"
+            ));
         }
     }
     assert!(
@@ -154,7 +157,9 @@ fn verify_w2core_walkback_mm0_cluster() {
     for &(off, size, want) in cases {
         let got = name(&sleigh, &sp, off, size);
         if got != want {
-            fails.push(format!("(off=0x{off:x},size={size}) got {got:?} want {want:?}"));
+            fails.push(format!(
+                "(off=0x{off:x},size={size}) got {got:?} want {want:?}"
+            ));
         }
     }
     assert!(
@@ -189,7 +194,9 @@ fn verify_w2core_walkback_bnd_and_space_mismatch() {
     for &(off, size, want) in cases {
         let got = name(&sleigh, &sp, off, size);
         if got != want {
-            fails.push(format!("(off=0x{off:x},size={size}) got {got:?} want {want:?}"));
+            fails.push(format!(
+                "(off=0x{off:x},size={size}) got {got:?} want {want:?}"
+            ));
         }
     }
     assert!(

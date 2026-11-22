@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use unlace_decomp::kuna_kernelcache::KernelcacheChoice;
 
 use super::linked::{self, LinkSearch};
-use crate::loader::format::macho::{resolve_chained_fixups, ChainedFixups};
+use crate::loader::format::macho::{ChainedFixups, resolve_chained_fixups};
 use crate::rtti::kuna_arm64evcall::SignedImage;
 
 mod merge;
@@ -41,7 +41,10 @@ pub(super) struct FilesetEntry {
 /// chained pointers: the pointers are rebased, then `auto` loads the kernel
 /// (with every kext, on a cache that merged them into it), `list` prints the
 /// kexts the cache holds, and kexts are chosen as in a fileset.
-pub(super) fn legacy(mut bytes: Vec<u8>, choice: &KernelcacheChoice) -> Result<(Vec<u8>, Option<String>), String> {
+pub(super) fn legacy(
+    mut bytes: Vec<u8>,
+    choice: &KernelcacheChoice,
+) -> Result<(Vec<u8>, Option<String>), String> {
     if !prelinked::is_prelinked(&bytes) {
         return Ok((bytes, None));
     }
@@ -52,7 +55,10 @@ pub(super) fn legacy(mut bytes: Vec<u8>, choice: &KernelcacheChoice) -> Result<(
             let kexts = if info.is_empty() {
                 String::new()
             } else {
-                format!("; {} kexts listed in __PRELINK_INFO (--option kernelcache list)", info.len())
+                format!(
+                    "; {} kexts listed in __PRELINK_INFO (--option kernelcache list)",
+                    info.len()
+                )
             };
             format!("prelinked kernelcache: {rebased} threaded/chained pointers rebased{kexts}")
         });
@@ -60,21 +66,38 @@ pub(super) fn legacy(mut bytes: Vec<u8>, choice: &KernelcacheChoice) -> Result<(
     };
     let (all, merged) = prelinked::entries(&mut bytes, &info);
     if name == "list" {
-        let by_id: HashMap<&str, &prelink::KextInfo> = info.iter().map(|k| (k.id.as_str(), k)).collect();
-        let lines: Vec<String> =
-            all.iter().map(|e| by_id.get(e.id.as_str()).map_or_else(|| e.id.clone(), |k| prelink::describe(k))).collect();
+        let by_id: HashMap<&str, &prelink::KextInfo> =
+            info.iter().map(|k| (k.id.as_str(), k)).collect();
+        let lines: Vec<String> = all
+            .iter()
+            .map(|e| {
+                by_id
+                    .get(e.id.as_str())
+                    .map_or_else(|| e.id.clone(), |k| prelink::describe(k))
+            })
+            .collect();
         return Err(format!(
             "prelinked kernelcache entries ({}{}):\n{}",
             all.len(),
-            if merged { ", kexts merged into the kernel" } else { "" },
+            if merged {
+                ", kexts merged into the kernel"
+            } else {
+                ""
+            },
             lines.join("\n")
         ));
     }
     let chosen = select_many(&all, choice)?;
     let ids: Vec<&str> = chosen.iter().map(|&i| all[i].id.as_str()).collect();
-    let shown = if ids.len() > 4 { format!("{} entries", ids.len()) } else { ids.join(", ") };
+    let shown = if ids.len() > 4 {
+        format!("{} entries", ids.len())
+    } else {
+        ids.join(", ")
+    };
     let image = prelinked::cut(bytes, &all, merged, &chosen)?;
-    let note = format!("prelinked kernelcache: loaded {shown} ({rebased} threaded/chained pointers rebased)");
+    let note = format!(
+        "prelinked kernelcache: loaded {shown} ({rebased} threaded/chained pointers rebased)"
+    );
     Ok((image, Some(note)))
 }
 
@@ -121,7 +144,9 @@ fn fileset_map(bytes: &[u8], all: &[FilesetEntry], index: usize) -> FilesetMap {
         if !seen.insert(entry.fileoff) {
             continue;
         }
-        let Some(cmds) = load_commands(bytes, entry.fileoff as usize) else { continue };
+        let Some(cmds) = load_commands(bytes, entry.fileoff as usize) else {
+            continue;
+        };
         work = work.saturating_sub(cmds.len());
         let ranges = cmds
             .iter()
@@ -134,7 +159,10 @@ fn fileset_map(bytes: &[u8], all: &[FilesetEntry], index: usize) -> FilesetMap {
             .collect();
         entries.push((entry.id.clone(), ranges));
     }
-    FilesetMap { loaded: all[index].id.clone(), entries }
+    FilesetMap {
+        loaded: all[index].id.clone(),
+        entries,
+    }
 }
 
 struct Segment {
@@ -150,7 +178,10 @@ pub(super) fn load_commands(bytes: &[u8], at: usize) -> Option<Vec<(u32, usize)>
         return None;
     }
     let ncmds = rd_u32(bytes, at + 16)? as usize;
-    let end = at.checked_add(HEADER_LEN)?.checked_add(rd_u32(bytes, at + 20)? as usize)?.min(bytes.len());
+    let end = at
+        .checked_add(HEADER_LEN)?
+        .checked_add(rd_u32(bytes, at + 20)? as usize)?
+        .min(bytes.len());
     let mut out = Vec::with_capacity(ncmds.min(4096));
     let mut p = at + HEADER_LEN;
     for _ in 0..ncmds {
@@ -174,7 +205,8 @@ fn command_fits(bytes: &[u8], cmd: u32, p: usize, size: usize) -> bool {
     match cmd {
         LC_SEGMENT_64 => {
             size >= SEGMENT_CMD_LEN
-                && rd_u32(bytes, p + 64).is_some_and(|n| SEGMENT_CMD_LEN + n as usize * SECTION_LEN <= size)
+                && rd_u32(bytes, p + 64)
+                    .is_some_and(|n| SEGMENT_CMD_LEN + n as usize * SECTION_LEN <= size)
         }
         LC_SYMTAB => size >= 24,
         LC_DYSYMTAB => size >= 80,
@@ -249,7 +281,10 @@ fn select_entries(all: &[FilesetEntry], choice: &KernelcacheChoice) -> Result<Ve
     }
 }
 
-fn select<'a>(all: &'a [FilesetEntry], choice: &KernelcacheChoice) -> Result<&'a FilesetEntry, String> {
+fn select<'a>(
+    all: &'a [FilesetEntry],
+    choice: &KernelcacheChoice,
+) -> Result<&'a FilesetEntry, String> {
     let name = match choice {
         KernelcacheChoice::Entry(name) => name,
         _ => {
@@ -265,7 +300,11 @@ fn select<'a>(all: &'a [FilesetEntry], choice: &KernelcacheChoice) -> Result<&'a
     }
     if name == "list" {
         let ids: Vec<&str> = all.iter().map(|e| e.id.as_str()).collect();
-        return Err(format!("MH_FILESET entries ({}):\n{}", all.len(), ids.join("\n")));
+        return Err(format!(
+            "MH_FILESET entries ({}):\n{}",
+            all.len(),
+            ids.join("\n")
+        ));
     }
     let lower = name.to_ascii_lowercase();
     let suffix = format!(".{lower}");
@@ -280,16 +319,27 @@ fn select<'a>(all: &'a [FilesetEntry], choice: &KernelcacheChoice) -> Result<&'a
         return Ok(one);
     }
     let near: Vec<&str> = if hits.is_empty() {
-        all.iter().filter(|e| e.id.to_ascii_lowercase().contains(&lower)).map(|e| e.id.as_str()).collect()
+        all.iter()
+            .filter(|e| e.id.to_ascii_lowercase().contains(&lower))
+            .map(|e| e.id.as_str())
+            .collect()
     } else {
         hits.iter().map(|e| e.id.as_str()).collect()
     };
-    let shown = if near.is_empty() { all.iter().map(|e| e.id.as_str()).take(8).collect() } else { near };
+    let shown = if near.is_empty() {
+        all.iter().map(|e| e.id.as_str()).take(8).collect()
+    } else {
+        near
+    };
     Err(format!(
         "no single MH_FILESET entry matches {name:?} ({} entries; {}: {}; \
          `--option kernelcache list` prints them all)",
         all.len(),
-        if hits.len() > 1 { "ambiguous between" } else { "for example" },
+        if hits.len() > 1 {
+            "ambiguous between"
+        } else {
+            "for example"
+        },
         shown.join(", ")
     ))
 }
@@ -306,18 +356,34 @@ pub(super) fn extract(
 ) -> Result<(Vec<u8>, String, SignedImage, Option<FilesetMap>), String> {
     let all = entries(&bytes).ok_or("malformed MH_FILESET load commands")?;
     if *choice == KernelcacheChoice::Entry("list".into()) {
-        let info: HashMap<String, prelink::KextInfo> =
-            prelink::kexts(&bytes).unwrap_or_default().into_iter().map(|k| (k.id.clone(), k)).collect();
-        let lines: Vec<String> =
-            all.iter().map(|e| info.get(&e.id).map_or_else(|| e.id.clone(), prelink::describe)).collect();
-        return Err(format!("MH_FILESET entries ({}):\n{}", all.len(), lines.join("\n")));
+        let info: HashMap<String, prelink::KextInfo> = prelink::kexts(&bytes)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|k| (k.id.clone(), k))
+            .collect();
+        let lines: Vec<String> = all
+            .iter()
+            .map(|e| {
+                info.get(&e.id)
+                    .map_or_else(|| e.id.clone(), prelink::describe)
+            })
+            .collect();
+        return Err(format!(
+            "MH_FILESET entries ({}):\n{}",
+            all.len(),
+            lines.join("\n")
+        ));
     }
     let chosen = select_many(&all, choice)?;
     let (applied, signed, linked) = apply_fixups(&mut bytes, &all, search)?;
     let branch = merge::branch_segments(&bytes).len();
     if chosen.len() > 1 || branch > 0 {
         let ids: Vec<&str> = chosen.iter().map(|&i| all[i].id.as_str()).collect();
-        let shown = if ids.len() > 4 { format!("{} entries", ids.len()) } else { ids.join(", ") };
+        let shown = if ids.len() > 4 {
+            format!("{} entries", ids.len())
+        } else {
+            ids.join(", ")
+        };
         let image = merge::merge(bytes, &all, &chosen)?;
         let mut note = format!(
             "MH_FILESET: loaded {shown} as one image ({applied} chained-fixup pointers rebased, \
@@ -336,18 +402,41 @@ pub(super) fn extract(
 
     let at = usize::try_from(entry.fileoff).map_err(|_| "fileset entry offset out of range")?;
     let sizeofcmds = rd_u32(&bytes, at + 20).ok_or("truncated fileset entry header")? as usize;
-    let header_len = HEADER_LEN.checked_add(sizeofcmds).ok_or("fileset entry load commands overflow")?;
-    if at.checked_add(header_len).is_none_or(|end| end > bytes.len()) {
-        return Err(format!("the header of {} runs past the end of the collection", entry.id));
+    let header_len = HEADER_LEN
+        .checked_add(sizeofcmds)
+        .ok_or("fileset entry load commands overflow")?;
+    if at
+        .checked_add(header_len)
+        .is_none_or(|end| end > bytes.len())
+    {
+        return Err(format!(
+            "the header of {} runs past the end of the collection",
+            entry.id
+        ));
     }
-    let segs = segments(&bytes, at).ok_or_else(|| format!("malformed load commands in {}", entry.id))?;
-    if segs.iter().any(|s| s.filesize > 0 && s.fileoff < header_len as u64) {
-        return Err(format!("cannot cut {} out of its collection: its data starts inside the header", entry.id));
+    let segs =
+        segments(&bytes, at).ok_or_else(|| format!("malformed load commands in {}", entry.id))?;
+    if segs
+        .iter()
+        .any(|s| s.filesize > 0 && s.fileoff < header_len as u64)
+    {
+        return Err(format!(
+            "cannot cut {} out of its collection: its data starts inside the header",
+            entry.id
+        ));
     }
-    let bound = if entry.filetype == MH_EXECUTE { 0 } else { bind_to_collection(&mut bytes, &all, index) };
+    let bound = if entry.filetype == MH_EXECUTE {
+        0
+    } else {
+        bind_to_collection(&mut bytes, &all, index)
+    };
     append_bound_symbols(&mut bytes, at, &linked.names);
     bytes.copy_within(at..at + header_len, 0);
-    let mut bound = if bound > 0 { format!(", {bound} undefined symbols bound to the collection") } else { String::new() };
+    let mut bound = if bound > 0 {
+        format!(", {bound} undefined symbols bound to the collection")
+    } else {
+        String::new()
+    };
     for clause in &linked.notes {
         bound.push_str(", ");
         bound.push_str(clause);
@@ -376,10 +465,17 @@ pub(super) struct Symbols {
 pub(super) fn symbols(bytes: &[u8], cmds: &[(u32, usize)]) -> Option<Symbols> {
     let (_, st) = *cmds.iter().find(|&&(cmd, _)| cmd == LC_SYMTAB)?;
     let mut syms = symbols_of(bytes, st)?;
-    let Some(&(_, dy)) = cmds.iter().find(|&&(cmd, _)| cmd == LC_DYSYMTAB) else { return Some(syms) };
+    let Some(&(_, dy)) = cmds.iter().find(|&&(cmd, _)| cmd == LC_DYSYMTAB) else {
+        return Some(syms);
+    };
     let range = |i: usize| -> Option<std::ops::Range<usize>> {
         let first = (rd_u32(bytes, dy + i)? as usize).min(syms.count);
-        Some(first..first.saturating_add(rd_u32(bytes, dy + i + 4)? as usize).min(syms.count))
+        Some(
+            first
+                ..first
+                    .saturating_add(rd_u32(bytes, dy + i + 4)? as usize)
+                    .min(syms.count),
+        )
     };
     (syms.extdef, syms.undef) = (range(16)?, range(24)?);
     Some(syms)
@@ -388,12 +484,27 @@ pub(super) fn symbols(bytes: &[u8], cmds: &[(u32, usize)]) -> Option<Symbols> {
 /// The symbol table of the `LC_SYMTAB` at `st`, its index ranges empty.
 fn symbols_of(bytes: &[u8], st: usize) -> Option<Symbols> {
     let symoff = rd_u32(bytes, st + 8)? as usize;
-    let count = (rd_u32(bytes, st + 12)? as usize).min(bytes.len().saturating_sub(symoff) / NLIST_LEN);
-    Some(Symbols { symoff, stroff: rd_u32(bytes, st + 16)? as usize, count, extdef: 0..0, undef: 0..0 })
+    let count =
+        (rd_u32(bytes, st + 12)? as usize).min(bytes.len().saturating_sub(symoff) / NLIST_LEN);
+    Some(Symbols {
+        symoff,
+        stroff: rd_u32(bytes, st + 16)? as usize,
+        count,
+        extdef: 0..0,
+        undef: 0..0,
+    })
 }
 
-pub(super) fn nlist_name<'a>(bytes: &'a [u8], syms: &Symbols, index: usize, work: &mut usize) -> Option<&'a [u8]> {
-    let strx = rd_u32(bytes, syms.symoff.checked_add(index.checked_mul(NLIST_LEN)?)?)? as usize;
+pub(super) fn nlist_name<'a>(
+    bytes: &'a [u8],
+    syms: &Symbols,
+    index: usize,
+    work: &mut usize,
+) -> Option<&'a [u8]> {
+    let strx = rd_u32(
+        bytes,
+        syms.symoff.checked_add(index.checked_mul(NLIST_LEN)?)?,
+    )? as usize;
     let tail = bytes.get(syms.stroff.checked_add(strx)?..)?;
     let window = &tail[..tail.len().min(*work)];
     let Some(len) = window.iter().position(|&b| b == 0) else {
@@ -421,13 +532,18 @@ pub(super) fn bind_work(bytes: &[u8]) -> usize {
 /// the [`bind_work`] budget. Returns how many were bound.
 fn bind_to_collection(bytes: &mut [u8], all: &[FilesetEntry], index: usize) -> usize {
     let mut work = bind_work(bytes);
-    let Some(own) = load_commands(bytes, all[index].fileoff as usize).and_then(|c| symbols(bytes, &c)) else {
+    let Some(own) =
+        load_commands(bytes, all[index].fileoff as usize).and_then(|c| symbols(bytes, &c))
+    else {
         return 0;
     };
-    let mut wanted: std::collections::HashMap<Vec<u8>, Option<(u64, bool)>> = std::collections::HashMap::new();
+    let mut wanted: std::collections::HashMap<Vec<u8>, Option<(u64, bool)>> =
+        std::collections::HashMap::new();
     let mut allowance = bytes.len();
     for i in own.undef.clone() {
-        let Some(name) = nlist_name(bytes, &own, i, &mut work) else { continue };
+        let Some(name) = nlist_name(bytes, &own, i, &mut work) else {
+            continue;
+        };
         if wanted.contains_key(name) || name.len() > allowance {
             continue;
         }
@@ -443,16 +559,26 @@ fn bind_to_collection(bytes: &mut [u8], all: &[FilesetEntry], index: usize) -> u
             continue;
         }
         let at = entry.fileoff as usize;
-        let Some(cmds) = load_commands(bytes, at) else { continue };
+        let Some(cmds) = load_commands(bytes, at) else {
+            continue;
+        };
         work = work.saturating_sub(cmds.len());
-        let (Some(syms), Some(code)) = (symbols(bytes, &cmds), code_ranges(bytes, &cmds, &mut work)) else {
+        let (Some(syms), Some(code)) =
+            (symbols(bytes, &cmds), code_ranges(bytes, &cmds, &mut work))
+        else {
             continue;
         };
         let is_kernel = entry.filetype == MH_EXECUTE;
         for s in syms.extdef.clone() {
-            let Some(name) = nlist_name(bytes, &syms, s, &mut work) else { continue };
-            let Some(slot) = wanted.get_mut(name) else { continue };
-            let Some(addr) = rd_u64(bytes, syms.symoff + s * NLIST_LEN + 8) else { continue };
+            let Some(name) = nlist_name(bytes, &syms, s, &mut work) else {
+                continue;
+            };
+            let Some(slot) = wanted.get_mut(name) else {
+                continue;
+            };
+            let Some(addr) = rd_u64(bytes, syms.symoff + s * NLIST_LEN + 8) else {
+                continue;
+            };
             work = work.saturating_sub(code.len());
             if !code.iter().any(|r| r.contains(&addr)) {
                 continue;
@@ -467,13 +593,19 @@ fn bind_to_collection(bytes: &mut [u8], all: &[FilesetEntry], index: usize) -> u
     let mut bound = 0;
     let mut work = bind_work(bytes);
     for i in own.undef.clone() {
-        let Some(name) = nlist_name(bytes, &own, i, &mut work) else { continue };
-        let Some(&Some((addr, _))) = wanted.get(name) else { continue };
+        let Some(name) = nlist_name(bytes, &own, i, &mut work) else {
+            continue;
+        };
+        let Some(&Some((addr, _))) = wanted.get(name) else {
+            continue;
+        };
         if addr == 0 {
             continue;
         }
         let at = own.symoff + i * NLIST_LEN;
-        let Some(nlist) = bytes.get_mut(at..at + NLIST_LEN) else { continue };
+        let Some(nlist) = bytes.get_mut(at..at + NLIST_LEN) else {
+            continue;
+        };
         nlist[4] = N_ABS | N_EXT;
         nlist[5] = 0;
         nlist[8..].copy_from_slice(&addr.to_le_bytes());
@@ -484,7 +616,11 @@ fn bind_to_collection(bytes: &mut [u8], all: &[FilesetEntry], index: usize) -> u
 
 /// The address ranges of an entry's instruction-bearing sections. A segment's
 /// sections are read only as far as its own `cmdsize` holds them.
-pub(super) fn code_ranges(bytes: &[u8], cmds: &[(u32, usize)], work: &mut usize) -> Option<Vec<std::ops::Range<u64>>> {
+pub(super) fn code_ranges(
+    bytes: &[u8],
+    cmds: &[(u32, usize)],
+    work: &mut usize,
+) -> Option<Vec<std::ops::Range<u64>>> {
     let mut out = Vec::new();
     for &(cmd, p) in cmds {
         if cmd != LC_SEGMENT_64 {
@@ -510,7 +646,11 @@ pub(super) fn code_ranges(bytes: &[u8], cmds: &[(u32, usize)], work: &mut usize)
 /// The lowest address a collection maps file content at: the base its own
 /// kernel-cache fixup targets are offsets from.
 pub(super) fn image_base(bytes: &[u8]) -> Option<u64> {
-    segments(bytes, 0)?.iter().filter(|s| s.filesize > 0).map(|s| s.vmaddr).min()
+    segments(bytes, 0)?
+        .iter()
+        .filter(|s| s.filesize > 0)
+        .map(|s| s.vmaddr)
+        .min()
 }
 
 /// Give the entry whose header is at `at` one `N_ABS | N_EXT` symbol per
@@ -525,7 +665,12 @@ fn append_bound_symbols(bytes: &mut Vec<u8>, at: usize, names: &[(u64, Vec<u8>)]
         let cmds = load_commands(bytes, at)?;
         let (_, st) = *cmds.iter().find(|&&(cmd, _)| cmd == LC_SYMTAB)?;
         let syms = symbols_of(bytes, st)?;
-        let old = bytes.get(syms.symoff..syms.symoff.checked_add(syms.count.checked_mul(NLIST_LEN)?)?)?;
+        let old = bytes.get(
+            syms.symoff
+                ..syms
+                    .symoff
+                    .checked_add(syms.count.checked_mul(NLIST_LEN)?)?,
+        )?;
         let symoff = bytes.len().next_multiple_of(8);
         let strings = symoff + old.len() + names.len() * NLIST_LEN;
         let mut table = vec![0u8; symoff - bytes.len()];
@@ -547,7 +692,9 @@ fn append_bound_symbols(bytes: &mut Vec<u8>, at: usize, names: &[(u64, Vec<u8>)]
     if names.is_empty() {
         return 0;
     }
-    let Some((st, symoff, count, strsize, table)) = plan() else { return 0 };
+    let Some((st, symoff, count, strsize, table)) = plan() else {
+        return 0;
+    };
     bytes.extend_from_slice(&table);
     bytes[st + 8..st + 12].copy_from_slice(&symoff.to_le_bytes());
     bytes[st + 12..st + 16].copy_from_slice(&count.to_le_bytes());
@@ -571,22 +718,41 @@ fn apply_fixups(
     let (rebases, targets, signed): (Vec<(u64, u64)>, Vec<(u64, u8, u64)>, SignedImage) = {
         let file = object::File::parse(&*bytes).map_err(|e| format!("MH_FILESET: {e}"))?;
         let fixups = resolve_chained_fixups(&file, bytes);
-        (fixups.rebases().collect(), fixups.linked_targets().collect(), signed_image(bytes, all, &fixups))
+        (
+            fixups.rebases().collect(),
+            fixups.linked_targets().collect(),
+            signed_image(bytes, all, &fixups),
+        )
     };
-    let linked = if targets.is_empty() { linked::Linked::default() } else { linked::resolve(bytes, &targets, search) };
+    let linked = if targets.is_empty() {
+        linked::Linked::default()
+    } else {
+        linked::resolve(bytes, &targets, search)
+    };
     let mut write = |va: u64, target: u64| {
-        let Some(seg) = segs[..segs.partition_point(|s| s.vmaddr <= va)].last() else { return false };
+        let Some(seg) = segs[..segs.partition_point(|s| s.vmaddr <= va)].last() else {
+            return false;
+        };
         if va - seg.vmaddr >= seg.filesize.saturating_sub(7) {
             return false;
         }
-        let Some(off) = seg.fileoff.checked_add(va - seg.vmaddr).and_then(|o| usize::try_from(o).ok()) else {
+        let Some(off) = seg
+            .fileoff
+            .checked_add(va - seg.vmaddr)
+            .and_then(|o| usize::try_from(o).ok())
+        else {
             return false;
         };
-        let Some(slot) = bytes.get_mut(off..off.saturating_add(8)) else { return false };
+        let Some(slot) = bytes.get_mut(off..off.saturating_add(8)) else {
+            return false;
+        };
         slot.copy_from_slice(&target.to_le_bytes());
         true
     };
-    let applied = rebases.into_iter().filter(|&(va, target)| write(va, target)).count();
+    let applied = rebases
+        .into_iter()
+        .filter(|&(va, target)| write(va, target))
+        .count();
     for &(va, target) in &linked.rebases {
         write(va, target);
     }
@@ -601,7 +767,9 @@ fn signed_image(bytes: &[u8], all: &[FilesetEntry], fixups: &ChainedFixups) -> S
     let mut vtable_ranges = Vec::new();
     let mut readonly_ranges = Vec::new();
     for entry in all {
-        let Ok(at) = usize::try_from(entry.fileoff) else { continue };
+        let Ok(at) = usize::try_from(entry.fileoff) else {
+            continue;
+        };
         for (cmd, p) in load_commands(bytes, at).unwrap_or_default() {
             if cmd != LC_SEGMENT_64 {
                 continue;
@@ -622,7 +790,8 @@ fn signed_image(bytes: &[u8], all: &[FilesetEntry], fixups: &ChainedFixups) -> S
                     continue;
                 }
                 let range = (addr, addr.saturating_add(size));
-                let segment = String::from_utf8_lossy(segment.split(|&b| b == 0).next().unwrap_or(&[]));
+                let segment =
+                    String::from_utf8_lossy(segment.split(|&b| b == 0).next().unwrap_or(&[]));
                 if name.split(|&b| b == 0).next() == Some(b"__const") {
                     vtable_ranges.push(range);
                     readonly_ranges.push(range);
@@ -632,16 +801,20 @@ fn signed_image(bytes: &[u8], all: &[FilesetEntry], fixups: &ChainedFixups) -> S
             }
         }
     }
-    let slots = fixups.auth_slots().map(|(va, ctx)| (va, (ctx, fixups.resolved_ptr(va))));
+    let slots = fixups
+        .auth_slots()
+        .map(|(va, ctx)| (va, (ctx, fixups.resolved_ptr(va))));
     SignedImage::new(slots, vtable_ranges, readonly_ranges)
 }
 
 pub(super) fn rd_u32(b: &[u8], off: usize) -> Option<u32> {
-    b.get(off..off.checked_add(4)?).map(|s| u32::from_le_bytes(s.try_into().unwrap()))
+    b.get(off..off.checked_add(4)?)
+        .map(|s| u32::from_le_bytes(s.try_into().unwrap()))
 }
 
 pub(super) fn rd_u64(b: &[u8], off: usize) -> Option<u64> {
-    b.get(off..off.checked_add(8)?).map(|s| u64::from_le_bytes(s.try_into().unwrap()))
+    b.get(off..off.checked_add(8)?)
+        .map(|s| u64::from_le_bytes(s.try_into().unwrap()))
 }
 
 #[cfg(test)]
@@ -649,12 +822,25 @@ mod tests {
     use super::*;
 
     fn fixture() -> Vec<u8> {
-        std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/kernelcache/fileset.macho")).unwrap()
+        std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/kernelcache/fileset.macho"
+        ))
+        .unwrap()
     }
 
     fn mach_header(filetype: u32, ncmds: u32, cmds: &[u8]) -> Vec<u8> {
         let mut out = Vec::new();
-        for v in [MH_MAGIC_64, 0x0100_000c, 0, filetype, ncmds, cmds.len() as u32, 0, 0] {
+        for v in [
+            MH_MAGIC_64,
+            0x0100_000c,
+            0,
+            filetype,
+            ncmds,
+            cmds.len() as u32,
+            0,
+            0,
+        ] {
             out.extend_from_slice(&v.to_le_bytes());
         }
         out.extend_from_slice(cmds);
@@ -676,21 +862,37 @@ mod tests {
         let ncmds = 50_000u32;
         let at = image.len().next_multiple_of(8);
         image.resize(at, 0);
-        for v in [MH_MAGIC_64, 0x0100_000c, 0, MH_EXECUTE, ncmds, ncmds * 8, 0, 0] {
+        for v in [
+            MH_MAGIC_64,
+            0x0100_000c,
+            0,
+            MH_EXECUTE,
+            ncmds,
+            ncmds * 8,
+            0,
+            0,
+        ] {
             image.extend_from_slice(&v.to_le_bytes());
         }
         for _ in 0..ncmds {
             image.extend_from_slice(&0x7fff_ffffu32.to_le_bytes());
             image.extend_from_slice(&8u32.to_le_bytes());
         }
-        let alias = FilesetEntry { id: "alias".into(), fileoff: at as u64, filetype: MH_EXECUTE };
+        let alias = FilesetEntry {
+            id: "alias".into(),
+            fileoff: at as u64,
+            filetype: MH_EXECUTE,
+        };
         let mut aliased = all.clone();
         aliased.extend(std::iter::repeat_n(alias, 10_000));
         let start = std::time::Instant::now();
         let bound = bind_to_collection(&mut image, &aliased, kext);
         let elapsed = start.elapsed();
         assert_eq!(bound, expected);
-        assert!(elapsed < std::time::Duration::from_millis(500), "10k aliases took {elapsed:?}");
+        assert!(
+            elapsed < std::time::Duration::from_millis(500),
+            "10k aliases took {elapsed:?}"
+        );
     }
 
     /// Distinct entry headers that skip into one shared tail of load commands
@@ -716,7 +918,11 @@ mod tests {
             image.extend_from_slice(&cmds.1.to_le_bytes());
             image.extend_from_slice(&header[24..]);
             image.extend_from_slice(&le_words(&[0x7fff_ffff, skip]));
-            aliased.push(FilesetEntry { id: format!("h{i}"), fileoff: at as u64, filetype: MH_EXECUTE });
+            aliased.push(FilesetEntry {
+                id: format!("h{i}"),
+                fileoff: at as u64,
+                filetype: MH_EXECUTE,
+            });
         }
         for _ in 0..tail_cmds {
             image.extend_from_slice(&le_words(&[0x7fff_ffff, 8]));
@@ -725,7 +931,10 @@ mod tests {
         let bound = bind_to_collection(&mut image, &aliased, kext);
         let elapsed = start.elapsed();
         assert_eq!(bound, expected);
-        assert!(elapsed < std::time::Duration::from_secs(5), "shared-tail headers took {elapsed:?}");
+        assert!(
+            elapsed < std::time::Duration::from_secs(5),
+            "shared-tail headers took {elapsed:?}"
+        );
     }
 
     /// A segment command must hold every section its header declares, so one
@@ -753,7 +962,14 @@ mod tests {
         let name_len = 1usize << 20;
         let symoff = 0x4000usize;
         let stroff = symoff + count as usize * NLIST_LEN;
-        let mut cmds = le_words(&[LC_SYMTAB, 24, symoff as u32, count, stroff as u32, name_len as u32 + 2]);
+        let mut cmds = le_words(&[
+            LC_SYMTAB,
+            24,
+            symoff as u32,
+            count,
+            stroff as u32,
+            name_len as u32 + 2,
+        ]);
         let mut dysym = le_words(&[LC_DYSYMTAB, 80, 0, 0, 0, 0, 0, count]);
         dysym.resize(80, 0);
         cmds.extend_from_slice(&dysym);
@@ -765,10 +981,17 @@ mod tests {
             image[at..at + 4].copy_from_slice(&(1 + i as u32).to_le_bytes());
         }
         image[stroff + 1..stroff + 1 + name_len].fill(b'A');
-        let all = [FilesetEntry { id: "own".into(), fileoff: 0x1000, filetype: 0xb }];
+        let all = [FilesetEntry {
+            id: "own".into(),
+            fileoff: 0x1000,
+            filetype: 0xb,
+        }];
         let start = std::time::Instant::now();
         assert_eq!(bind_to_collection(&mut image, &all, 0), 0);
         let elapsed = start.elapsed();
-        assert!(elapsed < std::time::Duration::from_secs(5), "undefined-name bomb took {elapsed:?}");
+        assert!(
+            elapsed < std::time::Duration::from_secs(5),
+            "undefined-name bomb took {elapsed:?}"
+        );
     }
 }

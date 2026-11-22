@@ -78,10 +78,10 @@ use std::rc::Rc;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::kuna_castimplied::{int_range, preserves, CType, ImpliedCasts, PrintedForms};
-use crate::kuna_castternary::{literal_type, promote, usual, INT, LONG, UINT, ULONG};
+use crate::kuna_castimplied::{CType, ImpliedCasts, PrintedForms, int_range, preserves};
+use crate::kuna_castternary::{INT, LONG, UINT, ULONG, literal_type, promote, usual};
 
 /// The value of `castwiden`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -119,10 +119,13 @@ impl OptionCastWiden {
             other => {
                 return Err(unlace_base::error::KunaError::parse(format!(
                     "Unknown castwiden value: {other} (expected off|on|literal)"
-                )))
+                )));
             }
         };
-        Ok((mode, format!("Implied 64-bit widening elision set to {}", mode.as_str())))
+        Ok((
+            mode,
+            format!("Implied 64-bit widening elision set to {}", mode.as_str()),
+        ))
     }
 }
 
@@ -168,36 +171,56 @@ fn is_arith(code: OpCode) -> bool {
 
 /// An integer C converts arithmetically: not `bool`, not an enum.
 pub(crate) fn plain_int(t: &Datatype) -> bool {
-    matches!(t.get_metatype(), type_metatype::TYPE_INT | type_metatype::TYPE_UINT)
-        && !t.is_enum_type()
+    matches!(
+        t.get_metatype(),
+        type_metatype::TYPE_INT | type_metatype::TYPE_UINT
+    ) && !t.is_enum_type()
         && matches!(t.get_size(), 1 | 2 | 4 | 8)
         && int_range(t).is_some()
 }
 
 /// What the arithmetic op `r` prints differently (uncached; see
 /// [`ImpliedCasts::widen_plan`]).
-pub(crate) fn plan(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, r: OpId, depth: u32) -> Plan {
-    let Some(o) = fd.obank().get(r) else { return Plan::default() };
+pub(crate) fn plan(
+    ic: &ImpliedCasts,
+    p: &dyn PrintedForms,
+    fd: &Funcdata,
+    r: OpId,
+    depth: u32,
+) -> Plan {
+    let Some(o) = fd.obank().get(r) else {
+        return Plan::default();
+    };
     if !is_arith(o.code()) || o.num_input() != 2 {
         return Plan::default();
     }
-    let (Some(a), Some(b)) = (o.get_in(0), o.get_in(1)) else { return Plan::default() };
+    let (Some(a), Some(b)) = (o.get_in(0), o.get_in(1)) else {
+        return Plan::default();
+    };
     if a == b {
         return Plan::default();
     }
     let ins = [a, b];
     for slot in [1usize, 0] {
-        let Some(w) = widening(ic, p, fd, ins[slot], r, depth) else { continue };
+        let Some(w) = widening(ic, p, fd, ins[slot], r, depth) else {
+            continue;
+        };
         let other = ins[1 - slot];
         if slot == 0 && !first_leaf_fits(ic, p, fd, o.code(), other, &w, depth) {
             continue;
         }
         if operand_set(ic, p, fd, other, r, depth).is_some_and(|y| fits(&w, y)) {
-            return Plan { drop: Some(w.op), suffix: None };
+            return Plan {
+                drop: Some(w.op),
+                suffix: None,
+            };
         }
         if ic.widen_literal() {
             if let Some(unsigned) = literal_suffix(p, fd, other, r, &w) {
-                return Plan { drop: Some(w.op), suffix: Some((other, unsigned)) };
+                return Plan {
+                    drop: Some(w.op),
+                    suffix: Some((other, unsigned)),
+                };
             }
         }
     }
@@ -209,26 +232,44 @@ pub(crate) fn plan(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, r: Op
 /// right takes no parentheses), which C reads as `(x + y) + z`: `x` meets `y`, the
 /// first leaf of the chain `other`, not the chain.  That leaf, as printed, must
 /// let the cast go too, or `x` and `y` would be added at 32 bits.
-fn first_leaf_fits(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, code: OpCode, other: VarnodeId, w: &Widening, depth: u32) -> bool {
+fn first_leaf_fits(
+    ic: &ImpliedCasts,
+    p: &dyn PrintedForms,
+    fd: &Funcdata,
+    code: OpCode,
+    other: VarnodeId,
+    w: &Widening,
+    depth: u32,
+) -> bool {
     if !matches!(
         code,
-        OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_MULT | OpCode::CPUI_INT_AND | OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR
+        OpCode::CPUI_INT_ADD
+            | OpCode::CPUI_INT_MULT
+            | OpCode::CPUI_INT_AND
+            | OpCode::CPUI_INT_OR
+            | OpCode::CPUI_INT_XOR
     ) {
         return true;
     }
     let mut leaf = other;
     let mut reader = None;
     loop {
-        let Some(v) = fd.vbank().get(leaf) else { return false };
+        let Some(v) = fd.vbank().get(leaf) else {
+            return false;
+        };
         if v.is_explicit() || v.is_constant() || v.is_annotation() {
             break;
         }
         let Some(d) = v.get_def() else { break };
-        let Some(dop) = fd.obank().get(d) else { return false };
+        let Some(dop) = fd.obank().get(d) else {
+            return false;
+        };
         if dop.code() != code || dop.num_input() != 2 {
             break;
         }
-        let Some(first) = dop.get_in(0) else { return false };
+        let Some(first) = dop.get_in(0) else {
+            return false;
+        };
         reader = Some(d);
         leaf = first;
     }
@@ -249,7 +290,9 @@ fn first_leaf_fits(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, code:
 
 /// The promoted types the set `y` holds.
 fn each(y: u8) -> impl Iterator<Item = u8> {
-    [INT, UINT, LONG, ULONG].into_iter().filter(move |b| y & b != 0)
+    [INT, UINT, LONG, ULONG]
+        .into_iter()
+        .filter(move |b| y & b != 0)
 }
 
 /// The C type of the integer literal `tok` in either base: the printer picks
@@ -287,9 +330,19 @@ fn fits(w: &Widening, y: u8) -> bool {
 /// The suffix (`true` for `UL`) that types the constant `vn` read by `r` as
 /// `w`'s target, when the suffixed literal keeps its value and the operation its
 /// type.
-fn literal_suffix(p: &dyn PrintedForms, fd: &Funcdata, vn: VarnodeId, r: OpId, w: &Widening) -> Option<bool> {
+fn literal_suffix(
+    p: &dyn PrintedForms,
+    fd: &Funcdata,
+    vn: VarnodeId,
+    r: OpId,
+    w: &Widening,
+) -> Option<bool> {
     let v = fd.vbank().get(vn)?;
-    if !v.is_constant() || v.is_annotation() || v.get_size() != 8 || fd.vn_high_equate_symbol(vn).is_some() {
+    if !v.is_constant()
+        || v.is_annotation()
+        || v.get_size() != 8
+        || fd.vn_high_equate_symbol(vn).is_some()
+    {
         return None;
     }
     let today_tok = p.integer_token(vn, r, None)?;
@@ -305,7 +358,14 @@ fn literal_suffix(p: &dyn PrintedForms, fd: &Funcdata, vn: VarnodeId, r: OpId, w
 
 /// The widening the operand `vn` of `r` prints as a cast there, when C would
 /// perform that same extension on the operand's printed type.
-fn widening(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, vn: VarnodeId, r: OpId, depth: u32) -> Option<Widening> {
+fn widening(
+    ic: &ImpliedCasts,
+    p: &dyn PrintedForms,
+    fd: &Funcdata,
+    vn: VarnodeId,
+    r: OpId,
+    depth: u32,
+) -> Option<Widening> {
     let v = fd.vbank().get(vn)?;
     if v.is_explicit() || v.is_annotation() || v.is_constant() {
         return None;
@@ -347,13 +407,25 @@ fn widening(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, vn: VarnodeI
         },
         CType::Opaque => return None,
     };
-    Some(Widening { op: def, to, from, keeps })
+    Some(Widening {
+        op: def,
+        to,
+        from,
+        keeps,
+    })
 }
 
 /// The promoted types (a set of `INT`/`UINT`/`LONG`/`ULONG`) the operand `vn`
 /// has in C as printed where `reader` reads it, when the text says.  A widening
 /// read by `reader` is taken as printed with its cast.
-pub(crate) fn operand_set(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, vn: VarnodeId, reader: OpId, depth: u32) -> Option<u8> {
+pub(crate) fn operand_set(
+    ic: &ImpliedCasts,
+    p: &dyn PrintedForms,
+    fd: &Funcdata,
+    vn: VarnodeId,
+    reader: OpId,
+    depth: u32,
+) -> Option<u8> {
     if depth > DEPTH {
         return None;
     }
@@ -376,7 +448,10 @@ pub(crate) fn operand_set(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata
     let def = v.get_def()?;
     let d = fd.obank().get(def)?;
     let t = v.get_type_def_facing().clone();
-    let inner = |d2: &crate::op::PcodeOp| d2.get_in(0).and_then(|i| operand_set(ic, p, fd, i, def, depth + 1));
+    let inner = |d2: &crate::op::PcodeOp| {
+        d2.get_in(0)
+            .and_then(|i| operand_set(ic, p, fd, i, def, depth + 1))
+    };
     match d.code() {
         OpCode::CPUI_INT_SEXT | OpCode::CPUI_INT_ZEXT => {
             if !p.extension_is_cast(def) {
@@ -400,7 +475,9 @@ pub(crate) fn operand_set(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata
         OpCode::CPUI_COPY => inner(d),
         OpCode::CPUI_LOAD => match ic.def_type(p, fd, def, t.clone(), Some(reader)) {
             CType::Known(k) if plain_int(&k) => promote(&k),
-            _ => load_type(ic, p, fd, def).filter(|k| plain_int(k) && k.get_size() == t.get_size()).and_then(|k| promote(&k)),
+            _ => load_type(ic, p, fd, def)
+                .filter(|k| plain_int(k) && k.get_size() == t.get_size())
+                .and_then(|k| promote(&k)),
         },
         OpCode::CPUI_INT_2COMP | OpCode::CPUI_INT_NEGATE => inner(d),
         c if is_arith(c) => expr_set(ic, p, fd, def, depth + 1),
@@ -410,7 +487,13 @@ pub(crate) fn operand_set(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata
 
 /// The promoted types of the arithmetic op `def` as printed: the common types
 /// of its operands', after what [`plan`] prints differently there.
-fn expr_set(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, def: OpId, depth: u32) -> Option<u8> {
+fn expr_set(
+    ic: &ImpliedCasts,
+    p: &dyn PrintedForms,
+    fd: &Funcdata,
+    def: OpId,
+    depth: u32,
+) -> Option<u8> {
     if depth > DEPTH {
         return None;
     }
@@ -422,7 +505,9 @@ fn expr_set(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, def: OpId, d
     let mut sets = [0u8; 2];
     for (slot, set) in sets.iter_mut().enumerate() {
         let vn = d.get_in(slot as i32)?;
-        let dropped = pl.drop.is_some_and(|w| fd.vbank().get(vn).and_then(|v| v.get_def()) == Some(w));
+        let dropped = pl
+            .drop
+            .is_some_and(|w| fd.vbank().get(vn).and_then(|v| v.get_def()) == Some(w));
         *set = if dropped {
             widening(ic, p, fd, vn, def, depth)?.from
         } else if let Some((_, unsigned)) = pl.suffix.filter(|&(c, _)| c == vn) {
@@ -432,8 +517,14 @@ fn expr_set(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, def: OpId, d
         };
     }
     let mut out = 0u8;
-    for a in [INT, UINT, LONG, ULONG].into_iter().filter(|a| sets[0] & a != 0) {
-        for b in [INT, UINT, LONG, ULONG].into_iter().filter(|b| sets[1] & b != 0) {
+    for a in [INT, UINT, LONG, ULONG]
+        .into_iter()
+        .filter(|a| sets[0] & a != 0)
+    {
+        for b in [INT, UINT, LONG, ULONG]
+            .into_iter()
+            .filter(|b| sets[1] & b != 0)
+        {
             out |= usual(a, b);
         }
     }
@@ -443,15 +534,24 @@ fn expr_set(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, def: OpId, d
 /// Does the widening `ext` extend an operand that prints as a C integer narrower
 /// than its output, the way C extends that type (`castimplied`'s destinations
 /// under `castwiden`)?
-pub(crate) fn narrow_operand(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, ext: OpId) -> bool {
-    let Some(d) = fd.obank().get(ext) else { return false };
+pub(crate) fn narrow_operand(
+    ic: &ImpliedCasts,
+    p: &dyn PrintedForms,
+    fd: &Funcdata,
+    ext: OpId,
+) -> bool {
+    let Some(d) = fd.obank().get(ext) else {
+        return false;
+    };
     let sext = match d.code() {
         OpCode::CPUI_INT_SEXT => Some(true),
         OpCode::CPUI_INT_ZEXT => Some(false),
         OpCode::CPUI_CAST => None,
         _ => return false,
     };
-    let (Some(inn), Some(out)) = (d.get_in(0), d.get_out().and_then(|o| fd.vbank().get(o))) else { return false };
+    let (Some(inn), Some(out)) = (d.get_in(0), d.get_out().and_then(|o| fd.vbank().get(o))) else {
+        return false;
+    };
     let size = out.get_size();
     match ic.operand_type(p, fd, inn, ext) {
         CType::Known(s) => {
@@ -468,7 +568,12 @@ pub(crate) fn narrow_operand(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcd
 }
 
 /// The type of the object a `STORE` writes, as its printed pointer states it.
-pub(crate) fn store_pointee(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, store: OpId) -> Option<Rc<Datatype>> {
+pub(crate) fn store_pointee(
+    ic: &ImpliedCasts,
+    p: &dyn PrintedForms,
+    fd: &Funcdata,
+    store: OpId,
+) -> Option<Rc<Datatype>> {
     let o = fd.obank().get(store)?;
     if o.code() != OpCode::CPUI_STORE {
         return None;
@@ -479,7 +584,12 @@ pub(crate) fn store_pointee(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcda
 }
 
 /// The type of the object a `LOAD` reads, as its printed pointer states it.
-fn load_type(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, load: OpId) -> Option<Rc<Datatype>> {
+fn load_type(
+    ic: &ImpliedCasts,
+    p: &dyn PrintedForms,
+    fd: &Funcdata,
+    load: OpId,
+) -> Option<Rc<Datatype>> {
     let o = fd.obank().get(load)?;
     if o.code() != OpCode::CPUI_LOAD {
         return None;
@@ -492,7 +602,13 @@ fn load_type(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, load: OpId)
 /// The type the pointer `ptr` read by `op` points at as printed: a variable
 /// declared `T *`, a cast `(T *)`, a field `base->f` of a structure, or an element
 /// `base[i]` of a base printed as one of the first two.
-fn pointee(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, ptr: VarnodeId, op: OpId) -> Option<Rc<Datatype>> {
+fn pointee(
+    ic: &ImpliedCasts,
+    p: &dyn PrintedForms,
+    fd: &Funcdata,
+    ptr: VarnodeId,
+    op: OpId,
+) -> Option<Rc<Datatype>> {
     let pv = fd.vbank().get(ptr)?;
     if pv.is_constant() || pv.is_annotation() {
         return None;
@@ -505,7 +621,9 @@ fn pointee(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, ptr: VarnodeI
     match d.code() {
         OpCode::CPUI_CAST => {
             let t = pv.get_type_def_facing().clone();
-            (t.get_metatype() == type_metatype::TYPE_PTR).then(|| t.get_ptr_to()).flatten()
+            (t.get_metatype() == type_metatype::TYPE_PTR)
+                .then(|| t.get_ptr_to())
+                .flatten()
         }
         OpCode::CPUI_PTRSUB => field_type(fd, def),
         OpCode::CPUI_PTRADD => {
@@ -532,7 +650,13 @@ fn pointee(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, ptr: VarnodeI
 }
 
 /// The pointee of the declaration an explicit pointer `vn` prints with.
-fn declared_pointee(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, vn: VarnodeId, op: OpId) -> Option<Rc<Datatype>> {
+fn declared_pointee(
+    ic: &ImpliedCasts,
+    p: &dyn PrintedForms,
+    fd: &Funcdata,
+    vn: VarnodeId,
+    op: OpId,
+) -> Option<Rc<Datatype>> {
     match ic.explicit_type(p, fd, vn, op) {
         CType::Known(t) if t.get_metatype() == type_metatype::TYPE_PTR => t.get_ptr_to(),
         _ => None,
@@ -545,9 +669,16 @@ fn declared_pointee(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, vn: 
 fn field_type(fd: &Funcdata, op: OpId) -> Option<Rc<Datatype>> {
     let o = fd.obank().get(op)?;
     let base = fd.vbank().get(o.get_in(0)?)?;
-    let off = fd.vbank().get(o.get_in(1)?).filter(|c| c.is_constant())?.get_offset();
+    let off = fd
+        .vbank()
+        .get(o.get_in(1)?)
+        .filter(|c| c.is_constant())?
+        .get_offset();
     let pt = base.get_type().clone();
-    if pt.get_metatype() != type_metatype::TYPE_PTR || pt.is_formal_pointer_rel() || pt.get_word_size() != Some(1) {
+    if pt.get_metatype() != type_metatype::TYPE_PTR
+        || pt.is_formal_pointer_rel()
+        || pt.get_word_size() != Some(1)
+    {
         return None;
     }
     let ct = pt.get_ptr_to()?;
@@ -565,7 +696,10 @@ fn field_type(fd: &Funcdata, op: OpId) -> Option<Rc<Datatype>> {
 }
 
 fn p_same(a: &Datatype, b: &Datatype) -> bool {
-    std::ptr::eq(a, b) || (a.get_size() == b.get_size() && a.get_metatype() == b.get_metatype() && a.get_name() == b.get_name())
+    std::ptr::eq(a, b)
+        || (a.get_size() == b.get_size()
+            && a.get_metatype() == b.get_metatype()
+            && a.get_name() == b.get_name())
 }
 
 #[cfg(test)]

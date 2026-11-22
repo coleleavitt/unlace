@@ -411,11 +411,16 @@ fn replay(case: Case, sources: &[&Path], header: &Path) {
                 let run = Command::new(&executable)
                     .output()
                     .expect("run actual emitted C/header");
-                assert!(run.status.success(),
+                assert!(
+                    run.status.success(),
                     "{} {} {compiler} {level}: actual C/header disagreed with native oracle, exit {:?} \
                      (1=full64, 2=high32, 3=high16, 4=high8, 5=bool, 6=ignored, 7=wide helper, 8=narrow helper, 9=producer):\n{}\n{}",
-                    case.name(), source.display(), run.status.code(),
-                    String::from_utf8_lossy(&run.stdout), String::from_utf8_lossy(&run.stderr));
+                    case.name(),
+                    source.display(),
+                    run.status.code(),
+                    String::from_utf8_lossy(&run.stdout),
+                    String::from_utf8_lossy(&run.stderr)
+                );
             }
         }
     }
@@ -685,11 +690,16 @@ fn replay_mips(case: Case, sources: &[&Path], header: &Path, support: &Path) {
                 .arg(&executable)
                 .output()
                 .expect("run emitted C on MIPS");
-            assert!(run.status.success(),
+            assert!(
+                run.status.success(),
                 "{} {} {level}: cross-MIPS actual C/header disagreed with native oracle, exit {:?} \
                  (1=full64, 2=high32, 3=high16, 4=high8, 5=bool, 6=ignored, 7=wide helper, 8=narrow helper, 9=producer):\n{}\n{}",
-                case.name(), source.display(), run.status.code(),
-                String::from_utf8_lossy(&run.stdout), String::from_utf8_lossy(&run.stderr));
+                case.name(),
+                source.display(),
+                run.status.code(),
+                String::from_utf8_lossy(&run.stdout),
+                String::from_utf8_lossy(&run.stderr)
+            );
         }
     }
 }
@@ -784,11 +794,15 @@ fn replay_selected_mips(case: Case, source: &Path, header: &Path, selected: &str
             .arg(&executable)
             .output()
             .expect("run selected actual C against unchanged native callees");
-        assert!(run.status.success(),
+        assert!(
+            run.status.success(),
             "{} {selected} {level}: selected actual C/header disagreed with native oracle, exit {:?} \
              (1=full64, 2=high32, 3=high16, 4=high8, 5=bool, 6=ignored, 7=wide helper, 8=narrow helper, 9=producer):\n{}\n{}",
-            case.name(), run.status.code(),
-            String::from_utf8_lossy(&run.stdout), String::from_utf8_lossy(&run.stderr));
+            case.name(),
+            run.status.code(),
+            String::from_utf8_lossy(&run.stdout),
+            String::from_utf8_lossy(&run.stderr)
+        );
     }
 }
 

@@ -3,7 +3,7 @@
 use std::rc::Rc;
 
 use crate::context::VarnodeId;
-use crate::dtype::{type_metatype, TypeFactory};
+use crate::dtype::{TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
 
 pub(crate) fn prepare(fd: &mut Funcdata, factory: &dyn TypeFactory) {

@@ -204,7 +204,11 @@ fn decompile_one_prefollowed_once(
         match arch.format_call_overrides.get(&entry.get_offset()) {
             Some(sites) if entry.get_space().is_some() => sites
                 .iter()
-                .filter(|s| !proto_overrides.iter().any(|(a, _)| a.get_offset() == s.callpoint))
+                .filter(|s| {
+                    !proto_overrides
+                        .iter()
+                        .any(|(a, _)| a.get_offset() == s.callpoint)
+                })
                 .cloned()
                 .collect(),
             _ => Vec::new(),
@@ -217,11 +221,12 @@ fn decompile_one_prefollowed_once(
     } else {
         let space = entry.get_space().expect("checked above");
         let mut merged = proto_overrides.to_vec();
-        merged.extend(
-            parked
-                .iter()
-                .map(|s| (Address::new(Rc::clone(space), s.callpoint), s.pieces.clone())),
-        );
+        merged.extend(parked.iter().map(|s| {
+            (
+                Address::new(Rc::clone(space), s.callpoint),
+                s.pieces.clone(),
+            )
+        }));
         merged
     };
     let proto_overrides: &[(Address, PrototypePieces)] = &first_overrides;
@@ -275,7 +280,11 @@ fn decompile_one_prefollowed_once(
     // the already-followed IR. A parked format-string override is the same
     // shape: prototype overrides are consumed AT FLOW TIME, so IR followed
     // without them does not carry the typing.
-    let prefollowed = if has_derived_flow || !parked.is_empty() { None } else { prefollowed };
+    let prefollowed = if has_derived_flow || !parked.is_empty() {
+        None
+    } else {
+        prefollowed
+    };
     let mut result = unlace_decomp::decompile_drive::decompile_func_full_with_objects(
         arch,
         name,
@@ -299,13 +308,21 @@ fn decompile_one_prefollowed_once(
     // whole-program scan ran: take it once for the run, and drive again. One
     // function of a large image does not pay for it, and refuses the global.
     if arch.kuna_float_globals.is_none()
-        && result.as_ref().is_ok_and(|fd| fd.get_arch().float_globals_wanted.get())
+        && result
+            .as_ref()
+            .is_ok_and(|fd| fd.get_arch().float_globals_wanted.get())
     {
         let input = arch.kuna_float_scan.clone().filter(|input| {
-            arch.kuna_float_scan_batch || input.code_bytes() <= unlace_decomp::kuna_floatglobals::SINGLE_FUNCTION_SCAN_BYTES
+            arch.kuna_float_scan_batch
+                || input.code_bytes()
+                    <= unlace_decomp::kuna_floatglobals::SINGLE_FUNCTION_SCAN_BYTES
         });
         match input {
-            None => arch.kuna_float_globals = Some(Rc::new(unlace_decomp::kuna_floatglobals::FloatGlobals::new())),
+            None => {
+                arch.kuna_float_globals = Some(Rc::new(
+                    unlace_decomp::kuna_floatglobals::FloatGlobals::new(),
+                ))
+            }
             Some(input) => {
                 let found = unlace_analysis::listing::kuna_floatglobals::scan(arch, &input);
                 arch.kuna_float_globals = Some(Rc::new(found));
@@ -361,8 +378,10 @@ fn decompile_one_prefollowed_once(
             .collect();
         merged.extend(discovered.iter().cloned());
         last_overrides.clone_from(&merged);
-        arch.format_override_callpoints.retain(|at| !dropped.contains(at));
-        arch.format_override_callpoints.extend(discovered.iter().map(|(a, _)| a.get_offset()));
+        arch.format_override_callpoints
+            .retain(|at| !dropped.contains(at));
+        arch.format_override_callpoints
+            .extend(discovered.iter().map(|(a, _)| a.get_offset()));
         result = unlace_decomp::decompile_drive::decompile_func_full_with_objects(
             arch,
             name,
@@ -454,7 +473,10 @@ fn decompile_one_prefollowed_once(
             seed.purpose,
         );
         unlace_decomp::kuna_callerreads::release(arch, &redo_entry);
-        if redo.as_ref().is_ok_and(unlace_decomp::kuna_callerreads::returns_value) {
+        if redo
+            .as_ref()
+            .is_ok_and(unlace_decomp::kuna_callerreads::returns_value)
+        {
             result = redo;
         }
     }
@@ -493,12 +515,16 @@ fn audit_parked_format_sites(
     use unlace_num::opcodes::OpCode;
     let mut dropped: Vec<u64> = Vec::new();
     for i in 0..fd.num_calls() {
-        let Some(op) = fd.obank().get(fd.get_call_specs(i).get_op()) else { continue };
+        let Some(op) = fd.obank().get(fd.get_call_specs(i).get_op()) else {
+            continue;
+        };
         if op.code() != OpCode::CPUI_CALL {
             continue;
         }
         let at = op.get_addr().get_offset();
-        let Some(site) = parked.iter().find(|s| s.callpoint == at) else { continue };
+        let Some(site) = parked.iter().find(|s| s.callpoint == at) else {
+            continue;
+        };
         if dropped.contains(&at) {
             continue;
         }
@@ -541,25 +567,36 @@ fn format_is(
     if let Some(v) = const_value(fd, vn_id, 0) {
         return v == vma;
     }
-    let Some(def) = fd.vbank().get(vn_id).and_then(|vn| vn.get_def()) else { return false };
-    let Some(op) = fd.obank().get(def) else { return false };
+    let Some(def) = fd.vbank().get(vn_id).and_then(|vn| vn.get_def()) else {
+        return false;
+    };
+    let Some(op) = fd.obank().get(def) else {
+        return false;
+    };
     let input = |slot: int4| op.get_in(slot);
     match op.code() {
-        OpCode::CPUI_MULTIEQUAL => (0..op.num_input())
-            .all(|i| input(i).is_some_and(|v| format_is(arch, fd, v, vma, seen))),
+        OpCode::CPUI_MULTIEQUAL => {
+            (0..op.num_input()).all(|i| input(i).is_some_and(|v| format_is(arch, fd, v, vma, seen)))
+        }
         OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_INDIRECT => {
             input(0).is_some_and(|v| format_is(arch, fd, v, vma, seen))
         }
         OpCode::CPUI_LOAD => {
             let size = fd.vbank().get(vn_id).map_or(0, |vn| vn.get_size());
-            input(1).and_then(|a| const_value(fd, a, 0)).is_some_and(|at| {
-                let Some(space) = arch.manage().get_default_code_space() else { return false };
-                arch.read_loadimage_value(&Address::new(Rc::clone(space), at), size)
-                    .is_ok_and(|v| v == vma)
-            })
+            input(1)
+                .and_then(|a| const_value(fd, a, 0))
+                .is_some_and(|at| {
+                    let Some(space) = arch.manage().get_default_code_space() else {
+                        return false;
+                    };
+                    arch.read_loadimage_value(&Address::new(Rc::clone(space), at), size)
+                        .is_ok_and(|v| v == vma)
+                })
         }
         OpCode::CPUI_CALL => {
-            let Some(spec) = fd.get_call_specs_index(def) else { return false };
+            let Some(spec) = fd.get_call_specs_index(def) else {
+                return false;
+            };
             let name = fd.get_call_specs(spec).get_name();
             unlace_analysis::formatstring::kuna_fmtstatic::gettext_msgid_slot(name).is_some_and(
                 |slot| input(slot as int4 + 1).is_some_and(|v| format_is(arch, fd, v, vma, seen)),
@@ -571,7 +608,11 @@ fn format_is(
 
 /// The value of `vn_id` when it is a constant or an address arithmetic of
 /// constants (the `->(#0x0,#0xVMA)` shape a global's address takes).
-fn const_value(fd: &Funcdata, vn_id: unlace_decomp::context::VarnodeId, depth: u32) -> Option<uintb> {
+fn const_value(
+    fd: &Funcdata,
+    vn_id: unlace_decomp::context::VarnodeId,
+    depth: u32,
+) -> Option<uintb> {
     use unlace_num::opcodes::OpCode;
     let vn = fd.vbank().get(vn_id)?;
     if vn.is_constant() {
@@ -668,7 +709,9 @@ pub(crate) fn read_cstring(arch: &Architecture, vma: uintb) -> Option<String> {
 /// Is every byte of `[vma, vma + len)` painted read-only (the loader's
 /// read-only sections, or an XML `readonly` bytechunk)?
 fn is_readonly_span(arch: &Architecture, vma: uintb, len: u64) -> bool {
-    let Some(space) = arch.manage().get_default_code_space() else { return false };
+    let Some(space) = arch.manage().get_default_code_space() else {
+        return false;
+    };
     (0..len).all(|i| {
         let addr = Address::new(Rc::clone(space), vma.wrapping_add(i));
         arch.symboltab.get_property(&addr) & unlace_decomp::varnode::varnode_flags::readonly != 0
@@ -766,11 +809,14 @@ pub(crate) fn extract_format_string_overrides(
         // Collect the callee's recovered *fixed* param types (the analog of
         // Ghidra `namesToParameters.get(callFunctionName)` = the declared params
         // minus the trailing "...").
-        let mut fixed: Vec<Rc<Datatype>> =
-            Vec::with_capacity(num_params as usize);
+        let mut fixed: Vec<Rc<Datatype>> = Vec::with_capacity(num_params as usize);
         let mut ok = true;
         for p in 0..num_params {
-            match spec.proto().get_param(p).and_then(|pp| pp.get_type().cloned()) {
+            match spec
+                .proto()
+                .get_param(p)
+                .and_then(|pp| pp.get_type().cloned())
+            {
                 Some(ty) => fixed.push(ty),
                 None => {
                     ok = false;
@@ -822,14 +868,22 @@ fn objc_retargets(arch: &mut Architecture, fd: &unlace_decomp::funcdata::Funcdat
             continue;
         }
         if send.stub {
-            let Some(space) = send.site.get_space().cloned() else { continue };
+            let Some(space) = send.site.get_space().cloned() else {
+                continue;
+            };
             let stub_entry = (0..fd.num_calls())
                 .map(|i| fd.get_call_specs(i))
-                .find(|fc| fd.obank().get(fc.get_op()).is_some_and(|o| *o.get_addr() == send.site))
+                .find(|fc| {
+                    fd.obank()
+                        .get(fc.get_op())
+                        .is_some_and(|o| *o.get_addr() == send.site)
+                })
                 .map(|fc| fc.get_entry_address().clone());
-            let Some(mut pieces) = stub_entry
-                .and_then(|e| arch.symboltab.function_proto_pieces_across_scopes(&e).cloned())
-            else {
+            let Some(mut pieces) = stub_entry.and_then(|e| {
+                arch.symboltab
+                    .function_proto_pieces_across_scopes(&e)
+                    .cloned()
+            }) else {
                 continue;
             };
             if let (Some(first), Some(t)) = (pieces.intypes.first_mut(), send.self_type.as_ref()) {

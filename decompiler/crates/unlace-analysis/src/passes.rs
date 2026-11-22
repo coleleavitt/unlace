@@ -9,13 +9,13 @@
 //! is enabled — see the downstream-compatibility note in
 //! `docs/missing-analyses.md`.
 
+use object::Object;
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::kuna_symbolnamechars::symbolnamechars_mode;
 use unlace_sleigh::translate::Translate;
-use object::Object;
 
 use crate::loadimage_object::ObjectLoadImage;
-use crate::pass::{run_analyses, AnalysisCtx, AnalysisOutput, AnalysisPass};
+use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, run_analyses};
 use crate::sourcelang::Compiler;
 
 pub use unlace_decomp::kuna_loadoptions::{LOAD_OBJC_ENV, LOAD_STRINGS_ENV};
@@ -75,7 +75,9 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         // Go binary, also match the Golang list (runtime.gopanic/throw/goexit/…).
         // `for_compiler` selects the matching `<compiler>` arm
         // (noReturnFunctionConstraints.xml), base ELF list only otherwise.
-        Box::new(crate::loader::noreturn::NoReturnKnownPass::for_compiler(compiler)),
+        Box::new(crate::loader::noreturn::NoReturnKnownPass::for_compiler(
+            compiler,
+        )),
         // S1 strings (StringLiteralPass): NUL-terminated ASCII string-literal
         // detection. Uses a 4-character ASCII minimum while retaining Ghidra's
         // length-5 minimum for the UTF-16 arm. Both require a NUL end and plant a
@@ -353,7 +355,6 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         Box::new(crate::listing::kuna_thunkentry::IncrementalLinkPass),
         // (kuna) The MSVC x87 one-operand intrinsics take ST0 and return in ST0.
         Box::new(crate::protos::kuna_x87intrinsics::X87IntrinsicPass),
-
         // S1 address tables (AddrTablePass) run DEFERRED, from [`run_addrtable`]
         // at the commit point, and only under `--option addrtable on` (off,
         // matching Ghidra's `AddressTableAnalyzer.setDefaultEnablement(false)`:
@@ -405,7 +406,10 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
     // facts are computed at load but committed only when `--option itaniumrtti on`
     // (`engine.rs::analysis_pass_enabled` reads `arch.analysis_itaniumrtti`, default
     // false), so a default run is byte-identical.
-    if matches!(format, object::BinaryFormat::Elf | object::BinaryFormat::MachO) {
+    if matches!(
+        format,
+        object::BinaryFormat::Elf | object::BinaryFormat::MachO
+    ) {
         passes.push(Box::new(crate::rtti::kuna_itaniumrtti::ItaniumRttiPass));
         passes.push(Box::new(crate::rtti::kuna_vtabletypes::VtableTypesPass));
     }
@@ -415,7 +419,9 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
     // Mach-O `__got` slot, so `importdata` renders a read through it as the import.
     // Committed only when `importdata` is on.
     if format == object::BinaryFormat::Elf {
-        passes.push(Box::new(crate::loader::kuna_elfgotimports::ElfGotImportPass));
+        passes.push(Box::new(
+            crate::loader::kuna_elfgotimports::ElfGotImportPass,
+        ));
     }
 
     // S1 PE/Mach-O/ELF import-slot call binding (PeImportCallPass): paint
@@ -447,7 +453,9 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
     // for its import and paint it `externref`, so `importdata` renders a read
     // through it as the import. Committed only when `importdata` is on.
     if format == object::BinaryFormat::MachO {
-        passes.push(Box::new(crate::loader::kuna_machodataslots::MachODataImportPass));
+        passes.push(Box::new(
+            crate::loader::kuna_machodataslots::MachODataImportPass,
+        ));
     }
 
     // S1 Go pclntab function-name recovery (GoPclntabPass): when the binary is Go
@@ -466,7 +474,9 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         // Go data image (.data/.noptrdata). FIRST in the Go block so
         // `gopclntab` keeps its appended-last contract. Committed under the
         // same `fatstr` mode gate as the rustc arm.
-        passes.push(Box::new(crate::strings::kuna_strrecords::StrRecordPass::go()));
+        passes.push(Box::new(
+            crate::strings::kuna_strrecords::StrRecordPass::go(),
+        ));
         // (kuna `gonoreturn`) BEFORE `gopclntab`, preserving that pass's
         // appended-last contract: apply the vendored Go no-return list to the
         // pclntab's own function list, so a STRIPPED Go binary (no .symtab for
@@ -485,7 +495,9 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
     // the `fatstr` mode gate (`Architecture::fat_str`), so `--option fatstr
     // off` drops the facts at the read-symbols boundary.
     if compiler.is_rust() {
-        passes.push(Box::new(crate::strings::kuna_strrecords::StrRecordPass::rust()));
+        passes.push(Box::new(
+            crate::strings::kuna_strrecords::StrRecordPass::rust(),
+        ));
         // (kuna `fatstr`) The code-side (ptr, len) literal finder.
         passes.push(Box::new(crate::strings::kuna_strcodelen::StrCodeLenPass));
         // (kuna `panicloc`) The panic `Location` records, typed and named.
@@ -522,7 +534,6 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
     if format == object::BinaryFormat::Pe {
         passes.push(Box::new(crate::rtti::RttiPass));
     }
-
 
     // S1 Mach-O Core Foundation constant strings (CFStringPass): when the binary
     // is a Mach-O, read each `__cfstring` entry's resolved char pointer and emit
@@ -566,7 +577,12 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
     // override implementations, protocol witnesses and the descriptor records
     // themselves. Default-OFF (`--option swiftmetadata`, the objc precedent);
     // an image without the sections produces nothing.
-    if compiler == Compiler::Swift && matches!(format, object::BinaryFormat::MachO | object::BinaryFormat::Elf) {
+    if compiler == Compiler::Swift
+        && matches!(
+            format,
+            object::BinaryFormat::MachO | object::BinaryFormat::Elf
+        )
+    {
         passes.push(Box::new(crate::swift::SwiftMetadataPass));
         // (kuna `swiftruntime`) The runtime's entry points with their
         // header signatures, bound by name. Default-ON.
@@ -676,12 +692,7 @@ pub fn run_deferred_entry_passes(
     arch: &Architecture,
     enabled: &dyn Fn(&str) -> bool,
 ) -> Vec<(&'static str, AnalysisOutput)> {
-    run_deferred_entry_passes_without_image(
-        bytes,
-        arch,
-        image_on_disk_path(image),
-        enabled,
-    )
+    run_deferred_entry_passes_without_image(bytes, arch, image_on_disk_path(image), enabled)
 }
 
 pub fn run_deferred_entry_passes_without_image(
@@ -816,7 +827,13 @@ pub fn run_listing_consumers(
     plan: &crate::listing::WalkPlan,
 ) -> Vec<(&'static str, AnalysisOutput)> {
     run_listing_consumers_without_image(
-        bytes, arch, translate, noreturn_seeds, callfixup_seeds, committed_entries, cold_entries,
+        bytes,
+        arch,
+        translate,
+        noreturn_seeds,
+        callfixup_seeds,
+        committed_entries,
+        cold_entries,
         plan,
     )
 }
@@ -833,8 +850,15 @@ pub fn run_listing_consumers_without_image(
     plan: &crate::listing::WalkPlan,
 ) -> Vec<(&'static str, AnalysisOutput)> {
     run_listing_consumers_replaying(
-        bytes, arch, translate, noreturn_seeds, callfixup_seeds, committed_entries, cold_entries,
-        plan, None,
+        bytes,
+        arch,
+        translate,
+        noreturn_seeds,
+        callfixup_seeds,
+        committed_entries,
+        cold_entries,
+        plan,
+        None,
     )
 }
 
@@ -854,8 +878,16 @@ pub fn run_listing_consumers_replaying(
     frames_replay: Option<&crate::aif::kuna_framereplay::ArmFrameReplay>,
 ) -> Vec<(&'static str, AnalysisOutput)> {
     run_listing_consumers_replaying_observed(
-        bytes, arch, translate, noreturn_seeds, callfixup_seeds, committed_entries, cold_entries,
-        plan, frames_replay, None,
+        bytes,
+        arch,
+        translate,
+        noreturn_seeds,
+        callfixup_seeds,
+        committed_entries,
+        cold_entries,
+        plan,
+        frames_replay,
+        None,
     )
 }
 
@@ -901,9 +933,12 @@ pub fn run_listing_consumers_replaying_observed(
         seeds.retain(|seed| go.binary_search(seed).is_err());
     }
     let bracket_evidence = std::cell::OnceCell::new();
-    let bracket = |exec: &[(u64, u64)]| {
-        Some(bracket_evidence.get_or_init(|| crate::aif::kuna_aifbracket::BracketEvidence::from_object(&file, exec)))
-    };
+    let bracket =
+        |exec: &[(u64, u64)]| {
+            Some(bracket_evidence.get_or_init(|| {
+                crate::aif::kuna_aifbracket::BracketEvidence::from_object(&file, exec)
+            }))
+        };
     // (kuna, recursive-descent discovery) When the prologue-pattern pass is active
     // (`funcstart_patterns`, default-ON for non-x86-64 on `decompile-all`, DIV-20),
     // seed the recursive-descent walk with its `<patternpairs>` function starts too — not
@@ -985,7 +1020,10 @@ pub fn run_listing_consumers_replaying_observed(
         plan,
     );
     if arch.analysis_fast_funcdisc
-        && matches!(file.architecture(), object::Architecture::I386 | object::Architecture::X86_64)
+        && matches!(
+            file.architecture(),
+            object::Architecture::I386 | object::Architecture::X86_64
+        )
     {
         // One initial walk plus at most four accepted callback generations. The
         // witness needs two; four retains nested-registration headroom without
@@ -995,7 +1033,9 @@ pub fn run_listing_consumers_replaying_observed(
         let mut callback_roots = 0usize;
         let mut examined = std::collections::BTreeSet::new();
         for _ in 0..MAX_CALLBACK_ROUNDS {
-            let Some(code_space) = arch.manage().get_default_code_space() else { break };
+            let Some(code_space) = arch.manage().get_default_code_space() else {
+                break;
+            };
             let candidates: Vec<u64> =
                 crate::listing::kuna_callbackentry::stack_callback_candidates(&listing)
                     .into_iter()
@@ -1031,7 +1071,16 @@ pub fn run_listing_consumers_replaying_observed(
             // the way IDA queues only what a new fact affects, instead of
             // decoding the whole program again.
             listing = if arch.analysis_incrementalwalk {
-                listing.resume(&file, arch, translate, &seeds, &funcsym_seeds, &seed_names, detail, plan)
+                listing.resume(
+                    &file,
+                    arch,
+                    translate,
+                    &seeds,
+                    &funcsym_seeds,
+                    &seed_names,
+                    detail,
+                    plan,
+                )
             } else {
                 crate::listing::Listing::build_with_meta_planned_without_image(
                     &file,
@@ -1048,14 +1097,16 @@ pub fn run_listing_consumers_replaying_observed(
     }
     // (kuna `thunkentry`, `addrtakenentry`) Where the walk's own function set is
     // committed (`funcdisc_recursive`, `fast_funcdisc`).
-    let walk_committed = (arch.analysis_listing && arch.analysis_funcstart_patterns)
-        || arch.analysis_fast_funcdisc;
+    let walk_committed =
+        (arch.analysis_listing && arch.analysis_funcstart_patterns) || arch.analysis_fast_funcdisc;
     // (kuna `addrtakenentry`) Code whose address the program takes and no flow
     // reaches re-seeds the walk, which resumes from the Listing it already has.
     // See `aif/kuna_addrtakenentry.rs`.
     if arch.analysis_addrtakenentry && walk_committed {
         let evidence = crate::aif::kuna_addrtakenentry::AddrTaken::new(&file, bytes);
-        if let (Some(evidence), Some(code_space)) = (evidence, arch.manage().get_default_code_space()) {
+        if let (Some(evidence), Some(code_space)) =
+            (evidence, arch.manage().get_default_code_space())
+        {
             for _ in 0..crate::aif::kuna_addrtakenentry::MAX_ROUNDS {
                 let accepted = evidence.accept(&listing, translate, std::rc::Rc::clone(code_space));
                 let before = seeds.len();
@@ -1066,7 +1117,14 @@ pub fn run_listing_consumers_replaying_observed(
                     break;
                 }
                 listing = listing.resume(
-                    &file, arch, translate, &seeds, &funcsym_seeds, &seed_names, detail, plan,
+                    &file,
+                    arch,
+                    translate,
+                    &seeds,
+                    &funcsym_seeds,
+                    &seed_names,
+                    detail,
+                    plan,
                 );
             }
         }
@@ -1083,7 +1141,9 @@ pub fn run_listing_consumers_replaying_observed(
     // parent's recovery and builds only its final Listing.
     if arch.analysis_listing && arch.analysis_funcstart_patterns && arch.analysis_armframes {
         if let Some(code_space) = arch.manage().get_default_code_space() {
-            let memo = std::rc::Rc::new(crate::listing::kuna_decodememo::DecodeMemo::new(listing.exec_ranges()));
+            let memo = std::rc::Rc::new(crate::listing::kuna_decodememo::DecodeMemo::new(
+                listing.exec_ranges(),
+            ));
             let mut frame_cache = match frames_replay {
                 Some(_) => None,
                 None => Some(crate::aif::raw_arm_frames(
@@ -1098,7 +1158,11 @@ pub fn run_listing_consumers_replaying_observed(
                 )),
             };
             frames_recovered = frames_replay.map_or_else(
-                || frame_cache.as_ref().is_some_and(|cache| !cache.roots.is_empty()),
+                || {
+                    frame_cache
+                        .as_ref()
+                        .is_some_and(|cache| !cache.roots.is_empty())
+                },
                 |replay| replay.recovered,
             );
             if frames_recovered {
@@ -1128,10 +1192,14 @@ pub fn run_listing_consumers_replaying_observed(
                 if let Some(replay) = frames_replay {
                     let frames = replay.frames.iter().copied().collect();
                     frame_pointers = Some(replay.pointers.clone());
-                    frame_aif = replay.aif.as_ref().map(crate::aif::kuna_framereplay::AifReplay::checked);
+                    frame_aif = replay
+                        .aif
+                        .as_ref()
+                        .map(crate::aif::kuna_framereplay::AifReplay::checked);
                     let frame_context = translate.context_scope();
                     let modes;
-                    (seeds, listing, modes) = build(&frames, frame_pointers.as_ref(), frame_aif.as_ref(), None);
+                    (seeds, listing, modes) =
+                        build(&frames, frame_pointers.as_ref(), frame_aif.as_ref(), None);
                     retained_entries.clone_from(&replay.retained);
                     inventory_context_paints = modes.decoded_paints();
                     if let Some(context) = frame_context {
@@ -1140,34 +1208,70 @@ pub fn run_listing_consumers_replaying_observed(
                 } else {
                     let frame_cache = frame_cache.as_mut().unwrap();
                     let prior = crate::aif::kuna_frameretain::prior_inventory(
-                        &file, &original, &seeds,
-                        |seeds| crate::listing::Listing::build_with_meta_planned_without_image(
-                            &file, arch, translate, seeds, &funcsym_seeds, &seed_names, detail, plan,
-                        ),
-                        arch, translate, code_space, bracket(original.exec_ranges()), &memo,
+                        &file,
+                        &original,
+                        &seeds,
+                        |seeds| {
+                            crate::listing::Listing::build_with_meta_planned_without_image(
+                                &file,
+                                arch,
+                                translate,
+                                seeds,
+                                &funcsym_seeds,
+                                &seed_names,
+                                detail,
+                                plan,
+                            )
+                        },
+                        arch,
+                        translate,
+                        code_space,
+                        bracket(original.exec_ranges()),
+                        &memo,
                     );
-                    let mut frames: std::collections::BTreeSet<u64> = frame_cache.roots.iter().copied().collect();
+                    let mut frames: std::collections::BTreeSet<u64> =
+                        frame_cache.roots.iter().copied().collect();
                     prior.restore(&mut frames, frame_cache);
                     let mut rejected = std::collections::BTreeSet::new();
                     loop {
                         let frame_context = translate.context_scope();
                         let modes;
-                        (seeds, listing, modes) =
-                            build(&frames, frame_pointers.as_ref(), frame_aif.as_ref(), Some(&memo));
-                        let mut replacements = crate::aif::arm_frame_prefixes(
-                            frame_cache, &original, &listing, &frames, &[], frame_context.as_ref(),
-                            arch, translate, std::rc::Rc::clone(code_space),
+                        (seeds, listing, modes) = build(
+                            &frames,
+                            frame_pointers.as_ref(),
+                            frame_aif.as_ref(),
+                            Some(&memo),
                         );
-                        replacements.retain(|&root, &mut prefix| !prior.shields(root, prefix, frame_cache));
+                        let mut replacements = crate::aif::arm_frame_prefixes(
+                            frame_cache,
+                            &original,
+                            &listing,
+                            &frames,
+                            &[],
+                            frame_context.as_ref(),
+                            arch,
+                            translate,
+                            std::rc::Rc::clone(code_space),
+                        );
+                        replacements
+                            .retain(|&root, &mut prefix| !prior.shields(root, prefix, frame_cache));
                         let stale = if replacements.is_empty() {
                             let mut stale = modes.stale().clone();
                             stale.extend(crate::aif::kuna_frameflow::entered(&listing, &frames));
                             stale
-                        } else { std::collections::BTreeSet::new() };
+                        } else {
+                            std::collections::BTreeSet::new()
+                        };
                         if !replacements.is_empty() || !stale.is_empty() {
                             rejected.extend(stale);
-                            frames.retain(|root| !replacements.contains_key(root) && !rejected.contains(root));
-                            frames.extend(replacements.into_values().filter(|root| !rejected.contains(root)));
+                            frames.retain(|root| {
+                                !replacements.contains_key(root) && !rejected.contains(root)
+                            });
+                            frames.extend(
+                                replacements
+                                    .into_values()
+                                    .filter(|root| !rejected.contains(root)),
+                            );
                             frame_aif = None;
                             frame_pointers = None;
                             continue;
@@ -1175,7 +1279,10 @@ pub fn run_listing_consumers_replaying_observed(
                         if frame_pointers.is_none() {
                             let probe = translate.context_scope();
                             let found = crate::aif::code_pointer_table_seeds(
-                                &file, &listing, translate, std::rc::Rc::clone(code_space),
+                                &file,
+                                &listing,
+                                translate,
+                                std::rc::Rc::clone(code_space),
                                 listing.exec_ranges(),
                             );
                             drop(probe);
@@ -1187,16 +1294,28 @@ pub fn run_listing_consumers_replaying_observed(
                         }
                         if arch.analysis_aif.enabled() && frame_aif.is_none() {
                             let probe = translate.context_scope();
-                            if let Some(scope) = &probe { let _ = scope.protect_variable(b"TMode"); }
+                            if let Some(scope) = &probe {
+                                let _ = scope.protect_variable(b"TMode");
+                            }
                             let pointers = if arch.analysis_ptrentry {
                                 crate::aif::kuna_ptrentry::pointer_entry_seeds(
-                                    &file, &listing, translate, std::rc::Rc::clone(code_space),
+                                    &file,
+                                    &listing,
+                                    translate,
+                                    std::rc::Rc::clone(code_space),
                                     listing.exec_ranges(),
                                 )
-                            } else { Vec::new() };
+                            } else {
+                                Vec::new()
+                            };
                             let mut checked = crate::aif::kuna_entrychecks::run(
-                                &listing, Some(&original), arch, translate,
-                                std::rc::Rc::clone(code_space), pointers, bracket(listing.exec_ranges()),
+                                &listing,
+                                Some(&original),
+                                arch,
+                                translate,
+                                std::rc::Rc::clone(code_space),
+                                pointers,
+                                bracket(listing.exec_ranges()),
                                 Some(&memo),
                             );
                             drop(probe);
@@ -1207,15 +1326,28 @@ pub fn run_listing_consumers_replaying_observed(
                                 continue;
                             }
                         }
-                        let found: std::collections::BTreeSet<u64> = frame_aif.iter()
-                            .flat_map(|checked| checked.entries.iter().chain(&checked.pool_entries)
-                                .chain(&checked.pointer_entries))
-                            .copied().collect();
-                        let refuted: std::collections::BTreeSet<u64> = frame_aif.iter()
+                        let found: std::collections::BTreeSet<u64> = frame_aif
+                            .iter()
+                            .flat_map(|checked| {
+                                checked
+                                    .entries
+                                    .iter()
+                                    .chain(&checked.pool_entries)
+                                    .chain(&checked.pointer_entries)
+                            })
+                            .copied()
+                            .collect();
+                        let refuted: std::collections::BTreeSet<u64> = frame_aif
+                            .iter()
                             .flat_map(|checked| checked.straight_line.iter().copied())
-                            .chain(rejected.iter().copied()).collect();
+                            .chain(rejected.iter().copied())
+                            .collect();
                         retained_entries = prior.retained(
-                            &found, &refuted, &listing, translate, std::rc::Rc::clone(code_space),
+                            &found,
+                            &refuted,
+                            &listing,
+                            translate,
+                            std::rc::Rc::clone(code_space),
                         );
                         inventory_context_paints = modes.decoded_paints();
                         if let Some(context) = frame_context {
@@ -1225,7 +1357,9 @@ pub fn run_listing_consumers_replaying_observed(
                             recovered: true,
                             frames: frames.iter().copied().collect(),
                             pointers: frame_pointers.clone().unwrap_or_default(),
-                            aif: frame_aif.as_ref().map(crate::aif::kuna_framereplay::AifReplay::of),
+                            aif: frame_aif
+                                .as_ref()
+                                .map(crate::aif::kuna_framereplay::AifReplay::of),
                             retained: retained_entries.clone(),
                         });
                         break;
@@ -1239,7 +1373,11 @@ pub fn run_listing_consumers_replaying_observed(
     if arch.analysis_listing && arch.analysis_funcstart_patterns && !frames_recovered {
         if let Some(code_space) = arch.manage().get_default_code_space() {
             let raw = crate::aif::raw_thumb_prologue_seeds(
-                &file, &listing, translate, std::rc::Rc::clone(code_space), listing.exec_ranges(),
+                &file,
+                &listing,
+                translate,
+                std::rc::Rc::clone(code_space),
+                listing.exec_ranges(),
             );
             if !raw.is_empty() {
                 let before = seeds.len();
@@ -1248,8 +1386,14 @@ pub fn run_listing_consumers_replaying_observed(
                 seeds.dedup();
                 if seeds.len() != before {
                     listing = crate::listing::Listing::build_with_meta_planned_without_image(
-                        &file, arch, translate, &seeds, &funcsym_seeds,
-                        &seed_names, detail, plan,
+                        &file,
+                        arch,
+                        translate,
+                        &seeds,
+                        &funcsym_seeds,
+                        &seed_names,
+                        detail,
+                        plan,
                     );
                 }
             }
@@ -1377,19 +1521,34 @@ pub fn run_listing_consumers_replaying_observed(
     if arch.analysis_listing && arch.analysis_aif.enabled() {
         if let Some(code_space) = arch.manage().get_default_code_space() {
             let mut aif_out = AnalysisOutput::default();
-            let checked = frame_aif.unwrap_or_else(|| crate::aif::kuna_entrychecks::run(
-                &listing, None, arch, translate, std::rc::Rc::clone(code_space), ptrentry_out.clone(),
-                bracket(listing.exec_ranges()), None,
-            ));
+            let checked = frame_aif.unwrap_or_else(|| {
+                crate::aif::kuna_entrychecks::run(
+                    &listing,
+                    None,
+                    arch,
+                    translate,
+                    std::rc::Rc::clone(code_space),
+                    ptrentry_out.clone(),
+                    bracket(listing.exec_ranges()),
+                    None,
+                )
+            });
             let bodies = crate::entry::sized_function_bodies(&file);
             aif_out.entries = checked.entries;
             // (kuna `aifdataveto`) IDA rolls a speculative code run back when
             // the program reads or writes any of it as data.
             if arch.analysis_aifdataveto {
                 if let Some(data) = arch.manage().get_default_data_space() {
-                    let targets = crate::listing::kuna_accesswidth::data_targets(&listing, translate, code_space, data);
+                    let targets = crate::listing::kuna_accesswidth::data_targets(
+                        &listing, translate, code_space, data,
+                    );
                     let flow_target = |e: u64| {
-                        listing.refs_to(e).iter().any(|r| matches!(r.kind, crate::listing::RefKind::Call | crate::listing::RefKind::Code))
+                        listing.refs_to(e).iter().any(|r| {
+                            matches!(
+                                r.kind,
+                                crate::listing::RefKind::Call | crate::listing::RefKind::Code
+                            )
+                        })
                     };
                     let mut veto_out = AnalysisOutput::default();
                     veto_out.data_vetoed = listing
@@ -1407,7 +1566,9 @@ pub fn run_listing_consumers_replaying_observed(
                     });
                 }
             }
-            aif_out.entries.retain(|&vma| !crate::entry::inside_body(&bodies, vma));
+            aif_out
+                .entries
+                .retain(|&vma| !crate::entry::inside_body(&bodies, vma));
             if !checked.pool_entries.is_empty() {
                 let mut pool_out = AnalysisOutput::default();
                 pool_out.entries = checked.pool_entries;
@@ -1429,12 +1590,11 @@ pub fn run_listing_consumers_replaying_observed(
     // `listing/kuna_tailcallentry.rs`).
     if arch.analysis_listing && arch.analysis_tailcallentry {
         let mut tce_out = AnalysisOutput::default();
-        tce_out.entries =
-            crate::listing::kuna_tailcallentry::tail_call_entries(
-                &file,
-                &listing,
-                arch.analysis_tailcallentryall,
-            );
+        tce_out.entries = crate::listing::kuna_tailcallentry::tail_call_entries(
+            &file,
+            &listing,
+            arch.analysis_tailcallentryall,
+        );
         out.push(("tailcallentry", tce_out));
     }
 
@@ -1462,17 +1622,23 @@ pub fn run_listing_consumers_replaying_observed(
 
     // (kuna `globalwidth`) The access width of each symbol-table data object.
     if arch.analysis_listing && arch.analysis_globalwidth {
-        if let (Some(code), Some(data)) = (arch.manage().get_default_code_space(), arch.manage().get_default_data_space()) {
+        if let (Some(code), Some(data)) = (
+            arch.manage().get_default_code_space(),
+            arch.manage().get_default_data_space(),
+        ) {
             use object::read::{Object, ObjectSymbol};
             let objects: Vec<(u64, u64)> = file
                 .symbols()
                 .chain(file.dynamic_symbols())
-                .filter(|s| s.kind() == object::SymbolKind::Data && s.address() != 0 && s.size() > 0)
+                .filter(|s| {
+                    s.kind() == object::SymbolKind::Data && s.address() != 0 && s.size() > 0
+                })
                 .map(|s| (s.address(), s.size()))
                 .collect();
             let mut gw_out = AnalysisOutput::default();
-            gw_out.global_widths =
-                crate::listing::kuna_accesswidth::access_widths(&listing, translate, code, data, &objects);
+            gw_out.global_widths = crate::listing::kuna_accesswidth::access_widths(
+                &listing, translate, code, data, &objects,
+            );
             out.push(("globalwidth", gw_out));
         }
     }
@@ -1493,7 +1659,10 @@ pub fn run_listing_consumers_replaying_observed(
         && crate::loadimage_object::is_arm32_language(&arch.archid)
     {
         if let Some(code_space) = arch.manage().get_default_code_space() {
-            let mode = crate::aif::kuna_poolentry::DecodeMode { arch, code_space: std::rc::Rc::clone(code_space) };
+            let mode = crate::aif::kuna_poolentry::DecodeMode {
+                arch,
+                code_space: std::rc::Rc::clone(code_space),
+            };
             let mut pe_out = AnalysisOutput::default();
             pe_out.arm_pool_extents = crate::listing::kuna_poolextents::pool_extents(
                 &listing,
@@ -1521,8 +1690,11 @@ pub fn run_listing_consumers_replaying_observed(
     // `analysis_funcstart_patterns` flag, so x86-64 (funcstart_patterns off) is byte-identical.
     if arch.analysis_listing && arch.analysis_funcstart_patterns {
         let mut rd_out = AnalysisOutput::default();
-        rd_out.entries =
-            listing.functions().map(|(&vma, _)| vma).chain(thunk_targets.iter().copied()).collect();
+        rd_out.entries = listing
+            .functions()
+            .map(|(&vma, _)| vma)
+            .chain(thunk_targets.iter().copied())
+            .collect();
         rd_out.entries.sort_unstable();
         out.push(("funcdisc_recursive", rd_out));
     }
@@ -1552,7 +1724,10 @@ pub fn run_listing_consumers_replaying_observed(
         mode_out.context_paints = mode_paints;
         out.push(("flowmode", mode_out));
     }
-    if !inventory_context_paints.is_empty() || !retained_entries.is_empty() || frame_record.is_some() {
+    if !inventory_context_paints.is_empty()
+        || !retained_entries.is_empty()
+        || frame_record.is_some()
+    {
         let mut modes = AnalysisOutput::default();
         modes.inventory_context_paints = inventory_context_paints;
         modes.entries = retained_entries;
@@ -1584,10 +1759,7 @@ pub fn run_listing_consumers_replaying_observed(
 /// A parse failure yields an empty output (additive, never fails). Bound to the
 /// real-ELF path: the XML datatest path never calls this, so the parity oracles
 /// are structurally untouched.
-pub fn run_operand_refs(
-    bytes: &[u8],
-    arch: &Architecture,
-) -> AnalysisOutput {
+pub fn run_operand_refs(bytes: &[u8], arch: &Architecture) -> AnalysisOutput {
     let Ok(raw) = crate::loadimage_object::parse_object(bytes) else {
         return AnalysisOutput::default();
     };
@@ -1615,7 +1787,11 @@ pub fn run_operand_refs(
 
 /// (kuna `addrtable`) The address-table pass over the same rebased view the
 /// load-time list takes, run at the commit point once its gate is known.
-pub fn run_addrtable(bytes: &[u8], arch: &Architecture, image_path: Option<&std::path::Path>) -> AnalysisOutput {
+pub fn run_addrtable(
+    bytes: &[u8],
+    arch: &Architecture,
+    image_path: Option<&std::path::Path>,
+) -> AnalysisOutput {
     let Ok(raw) = crate::loadimage_object::parse_object(bytes) else {
         return AnalysisOutput::default();
     };
@@ -1683,8 +1859,8 @@ pub fn image_on_disk_path(image: &ObjectLoadImage) -> Option<&std::path::Path> {
 /// callee resolves to its real name (e.g. the static `die` wrapper) instead of
 /// `sub_<addr>`. ASCII/UTF-8 names only (a non-UTF-8 name is skipped).
 fn funcsym_names(file: &object::File) -> Vec<(u64, String)> {
-    use object::read::{Object, ObjectSymbol};
     use object::SymbolKind;
+    use object::read::{Object, ObjectSymbol};
     let mut out: Vec<(u64, String)> = Vec::new();
     for sym in file.symbols().chain(file.dynamic_symbols()) {
         if sym.kind() != SymbolKind::Text {
@@ -1945,7 +2121,10 @@ mod tests {
     /// sourcelang brief calls for).
     #[test]
     fn unknown_matches_default_passes() {
-        assert_eq!(ids(&passes_for(Compiler::Unknown, NON_PE)), ids(&default_passes()));
+        assert_eq!(
+            ids(&passes_for(Compiler::Unknown, NON_PE)),
+            ids(&default_passes())
+        );
         // Both must still carry the always-on analysis passes.
         let want = ["noreturn_known", "libproto"];
         for id in want {
@@ -1965,22 +2144,55 @@ mod tests {
     fn non_go_compilers_have_same_pass_ids() {
         let base = ids(&passes_for(Compiler::Gcc, NON_PE));
         for c in [Compiler::Clang, Compiler::Unknown] {
-            assert_eq!(ids(&passes_for(c, NON_PE)), base, "{c:?} pass ids must match the base set");
+            assert_eq!(
+                ids(&passes_for(c, NON_PE)),
+                base,
+                "{c:?} pass ids must match the base set"
+            );
         }
         // Swift adds its metadata pass after the base (the next test but one).
         let swift = ids(&passes_for(Compiler::Swift, NON_PE));
-        assert_eq!(&swift[..base.len()], &base[..], "Swift set is the base set + extras");
+        assert_eq!(
+            &swift[..base.len()],
+            &base[..],
+            "Swift set is the base set + extras"
+        );
         let rust = ids(&passes_for(Compiler::Rustc, NON_PE));
-        assert_eq!(&rust[..base.len()], &base[..], "Rust set is the base set + extras");
-        assert_eq!(rust.get(base.len()), Some(&"fatstrrecords"), "Rust appends the record pass");
-        assert_eq!(rust.get(base.len() + 1), Some(&"strcodelen"), "then the code-side length finder");
-        assert_eq!(rust.last(), Some(&"panicloc"), "then the panic Location pass");
+        assert_eq!(
+            &rust[..base.len()],
+            &base[..],
+            "Rust set is the base set + extras"
+        );
+        assert_eq!(
+            rust.get(base.len()),
+            Some(&"fatstrrecords"),
+            "Rust appends the record pass"
+        );
+        assert_eq!(
+            rust.get(base.len() + 1),
+            Some(&"strcodelen"),
+            "then the code-side length finder"
+        );
+        assert_eq!(
+            rust.last(),
+            Some(&"panicloc"),
+            "then the panic Location pass"
+        );
         assert_eq!(rust.len(), base.len() + 3, "Rust adds exactly three passes");
         // No compiler without a string-record arm carries the record pass
         // (Go carries it too — the next test), and only Rust the Location pass.
-        for c in [Compiler::Gcc, Compiler::Clang, Compiler::Swift, Compiler::Unknown, Compiler::Go] {
+        for c in [
+            Compiler::Gcc,
+            Compiler::Clang,
+            Compiler::Swift,
+            Compiler::Unknown,
+            Compiler::Go,
+        ] {
             let set = ids(&passes_for(c, NON_PE));
-            assert!(c == Compiler::Go || !set.contains(&"fatstrrecords"), "{c:?} must not carry fatstrrecords");
+            assert!(
+                c == Compiler::Go || !set.contains(&"fatstrrecords"),
+                "{c:?} must not carry fatstrrecords"
+            );
             assert!(!set.contains(&"panicloc"), "{c:?} must not carry panicloc");
         }
     }
@@ -1994,17 +2206,49 @@ mod tests {
     fn go_adds_only_the_four_go_passes() {
         let base = ids(&passes_for(Compiler::Gcc, NON_PE));
         let go = ids(&passes_for(Compiler::Go, NON_PE));
-        assert_eq!(&go[..base.len()], &base[..], "Go set is the base set + extras");
-        assert_eq!(go.last(), Some(&"gopclntab"), "Go appends the gopclntab pass last");
-        assert_eq!(go.get(go.len() - 2), Some(&"gotypes"), "gotypes precedes gopclntab");
-        assert_eq!(go.get(go.len() - 3), Some(&"gonoreturn"), "gonoreturn precedes gotypes");
-        assert_eq!(go.get(go.len() - 4), Some(&"fatstrrecords"), "the record pass opens the Go block");
+        assert_eq!(
+            &go[..base.len()],
+            &base[..],
+            "Go set is the base set + extras"
+        );
+        assert_eq!(
+            go.last(),
+            Some(&"gopclntab"),
+            "Go appends the gopclntab pass last"
+        );
+        assert_eq!(
+            go.get(go.len() - 2),
+            Some(&"gotypes"),
+            "gotypes precedes gopclntab"
+        );
+        assert_eq!(
+            go.get(go.len() - 3),
+            Some(&"gonoreturn"),
+            "gonoreturn precedes gotypes"
+        );
+        assert_eq!(
+            go.get(go.len() - 4),
+            Some(&"fatstrrecords"),
+            "the record pass opens the Go block"
+        );
         assert_eq!(go.len(), base.len() + 4, "Go adds exactly four passes");
         // No non-Go compiler carries the Go-only passes.
-        for c in [Compiler::Gcc, Compiler::Rustc, Compiler::Clang, Compiler::Swift, Compiler::Unknown] {
+        for c in [
+            Compiler::Gcc,
+            Compiler::Rustc,
+            Compiler::Clang,
+            Compiler::Swift,
+            Compiler::Unknown,
+        ] {
             let set = ids(&passes_for(c, NON_PE));
-            assert!(!set.contains(&"gopclntab"), "{c:?} must not carry gopclntab");
-            assert!(!set.contains(&"gonoreturn"), "{c:?} must not carry gonoreturn");
+            assert!(
+                !set.contains(&"gopclntab"),
+                "{c:?} must not carry gopclntab"
+            );
+            assert!(
+                !set.contains(&"gonoreturn"),
+                "{c:?} must not carry gonoreturn"
+            );
             assert!(!set.contains(&"gotypes"), "{c:?} must not carry gotypes");
         }
     }
@@ -2019,8 +2263,17 @@ mod tests {
         let pe = ids(&passes_for(Compiler::Clang, object::BinaryFormat::Pe));
         assert!(pe.contains(&"rtti"), "PE pass set must carry the rtti pass");
         // Non-PE: never carried, for every format + compiler.
-        for fmt in [object::BinaryFormat::Elf, object::BinaryFormat::MachO, object::BinaryFormat::Coff] {
-            for c in [Compiler::Gcc, Compiler::Clang, Compiler::Go, Compiler::Unknown] {
+        for fmt in [
+            object::BinaryFormat::Elf,
+            object::BinaryFormat::MachO,
+            object::BinaryFormat::Coff,
+        ] {
+            for c in [
+                Compiler::Gcc,
+                Compiler::Clang,
+                Compiler::Go,
+                Compiler::Unknown,
+            ] {
                 assert!(
                     !ids(&passes_for(c, fmt)).contains(&"rtti"),
                     "{c:?}/{fmt:?} must not carry rtti"
@@ -2051,7 +2304,12 @@ mod tests {
     /// contract on a Go ELF.
     #[test]
     fn itaniumrtti_pass_is_elf_and_macho_gated() {
-        for c in [Compiler::Gcc, Compiler::Clang, Compiler::Go, Compiler::Unknown] {
+        for c in [
+            Compiler::Gcc,
+            Compiler::Clang,
+            Compiler::Go,
+            Compiler::Unknown,
+        ] {
             for fmt in [object::BinaryFormat::Elf, object::BinaryFormat::MachO] {
                 assert!(
                     ids(&passes_for(c, fmt)).contains(&"itaniumrtti"),
@@ -2074,7 +2332,12 @@ mod tests {
     /// loader exposes import-pointer slots: PE/COFF, Mach-O and ELF.
     #[test]
     fn peimportcall_pass_is_pe_coff_macho_elf_gated() {
-        for c in [Compiler::Gcc, Compiler::Clang, Compiler::Go, Compiler::Unknown] {
+        for c in [
+            Compiler::Gcc,
+            Compiler::Clang,
+            Compiler::Go,
+            Compiler::Unknown,
+        ] {
             for fmt in [
                 object::BinaryFormat::Pe,
                 object::BinaryFormat::Coff,
@@ -2110,13 +2373,31 @@ mod tests {
         let pdb_i = pe.iter().position(|&p| p == "pdb");
         assert!(rtti_i < pdb_i, "rtti precedes pdb on a PE");
         // Non-PE: never carried, for every format + compiler.
-        for fmt in [object::BinaryFormat::Elf, object::BinaryFormat::MachO, object::BinaryFormat::Coff] {
-            for c in [Compiler::Gcc, Compiler::Clang, Compiler::Go, Compiler::Unknown] {
+        for fmt in [
+            object::BinaryFormat::Elf,
+            object::BinaryFormat::MachO,
+            object::BinaryFormat::Coff,
+        ] {
+            for c in [
+                Compiler::Gcc,
+                Compiler::Clang,
+                Compiler::Go,
+                Compiler::Unknown,
+            ] {
                 let set = ids(&passes_for(c, fmt));
                 assert!(!set.contains(&"pdb"), "{c:?}/{fmt:?} must not carry pdb");
-                assert!(!set.contains(&"pdbinterior"), "{c:?}/{fmt:?} must not carry pdbinterior");
-                assert!(!set.contains(&"cvftrace"), "{c:?}/{fmt:?} must not carry cvftrace");
-                assert!(!set.contains(&"cvftrace_lines"), "{c:?}/{fmt:?} must not carry cvftrace_lines");
+                assert!(
+                    !set.contains(&"pdbinterior"),
+                    "{c:?}/{fmt:?} must not carry pdbinterior"
+                );
+                assert!(
+                    !set.contains(&"cvftrace"),
+                    "{c:?}/{fmt:?} must not carry cvftrace"
+                );
+                assert!(
+                    !set.contains(&"cvftrace_lines"),
+                    "{c:?}/{fmt:?} must not carry cvftrace_lines"
+                );
             }
         }
     }
@@ -2142,7 +2423,21 @@ mod tests {
         let macho_neutral: Vec<&str> = macho
             .iter()
             .copied()
-            .filter(|&p| !matches!(p, "authptrcall" | "arm64evcall" | "stubbinds" | "cfstrings" | "machobinds" | "machodataslots" | "iokitclasses" | "xnutables" | "osclassinfo" | "objc"))
+            .filter(|&p| {
+                !matches!(
+                    p,
+                    "authptrcall"
+                        | "arm64evcall"
+                        | "stubbinds"
+                        | "cfstrings"
+                        | "machobinds"
+                        | "machodataslots"
+                        | "iokitclasses"
+                        | "xnutables"
+                        | "osclassinfo"
+                        | "objc"
+                )
+            })
             .collect();
         assert_eq!(
             macho_neutral, elf_neutral,
@@ -2150,8 +2445,15 @@ mod tests {
         );
         assert_eq!(macho.last(), Some(&"objc"), "objc is appended last");
         // No non-Mach-O format carries it.
-        for f in [object::BinaryFormat::Elf, object::BinaryFormat::Pe, object::BinaryFormat::Coff] {
-            assert!(!ids(&passes_for(Compiler::Clang, f)).contains(&"objc"), "{f:?} must not carry objc");
+        for f in [
+            object::BinaryFormat::Elf,
+            object::BinaryFormat::Pe,
+            object::BinaryFormat::Coff,
+        ] {
+            assert!(
+                !ids(&passes_for(Compiler::Clang, f)).contains(&"objc"),
+                "{f:?} must not carry objc"
+            );
         }
     }
 
@@ -2164,14 +2466,34 @@ mod tests {
         for f in [object::BinaryFormat::MachO, object::BinaryFormat::Elf] {
             let swift = ids(&passes_for(Compiler::Swift, f));
             let base = ids(&passes_for(Compiler::Clang, f));
-            assert_eq!(&swift[..base.len()], &base[..], "{f:?}: the Swift set is the base set + the Swift passes");
-            assert_eq!(&swift[base.len()..], ["swiftmetadata", "swiftruntime"], "{f:?}: the Swift passes close the set");
+            assert_eq!(
+                &swift[..base.len()],
+                &base[..],
+                "{f:?}: the Swift set is the base set + the Swift passes"
+            );
+            assert_eq!(
+                &swift[base.len()..],
+                ["swiftmetadata", "swiftruntime"],
+                "{f:?}: the Swift passes close the set"
+            );
         }
         for f in [object::BinaryFormat::Pe, object::BinaryFormat::Coff] {
-            assert!(!ids(&passes_for(Compiler::Swift, f)).contains(&"swiftmetadata"), "{f:?} must not carry swiftmetadata");
+            assert!(
+                !ids(&passes_for(Compiler::Swift, f)).contains(&"swiftmetadata"),
+                "{f:?} must not carry swiftmetadata"
+            );
         }
-        for c in [Compiler::Gcc, Compiler::Clang, Compiler::Rustc, Compiler::Go, Compiler::Unknown] {
-            assert!(!ids(&passes_for(c, NON_PE)).contains(&"swiftmetadata"), "{c:?} must not carry swiftmetadata");
+        for c in [
+            Compiler::Gcc,
+            Compiler::Clang,
+            Compiler::Rustc,
+            Compiler::Go,
+            Compiler::Unknown,
+        ] {
+            assert!(
+                !ids(&passes_for(c, NON_PE)).contains(&"swiftmetadata"),
+                "{c:?} must not carry swiftmetadata"
+            );
         }
     }
 

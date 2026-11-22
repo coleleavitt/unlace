@@ -24,7 +24,8 @@ pub(crate) fn entered(listing: &Listing, roots: &BTreeSet<u64>) -> BTreeSet<u64>
                 insn.addr.saturating_add(u64::from(insn.len)) == root
                     && !insn.flow.is_call
                     && (insn.fall_through == Some(root)
-                        || (insn.flows.contains(&root) && insn.flow.kind != FlowKind::UnconditionalBranch))
+                        || (insn.flows.contains(&root)
+                            && insn.flow.kind != FlowKind::UnconditionalBranch))
                     && reached(listing, insn.addr)
             })
         })
@@ -55,6 +56,8 @@ fn reached(listing: &Listing, mut at: u64) -> bool {
 fn branched_to(listing: &Listing, at: u64) -> bool {
     listing.refs_to(at).iter().any(|r| {
         r.kind == RefKind::Code
-            && listing.instruction_at(r.from).is_some_and(|insn| insn.fall_through != Some(at))
+            && listing
+                .instruction_at(r.from)
+                .is_some_and(|insn| insn.fall_through != Some(at))
     })
 }

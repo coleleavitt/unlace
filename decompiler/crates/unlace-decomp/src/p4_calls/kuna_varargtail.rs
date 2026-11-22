@@ -71,7 +71,9 @@ pub fn vararg_tail_inputs(data: &Funcdata, storage: &[(Address, int4)]) -> Vec<A
 /// the walk cannot follow, and one that reaches any other kind of use — every
 /// shape but the one this module names keeps today's answer.
 pub fn only_feeds_a_vararg_tail(data: &Funcdata, addr: &Address, size: int4) -> bool {
-    let Some(vn) = data.find_varnode_input(size, addr) else { return false };
+    let Some(vn) = data.find_varnode_input(size, addr) else {
+        return false;
+    };
     let mut seen: HashSet<VarnodeId> = HashSet::new();
     let mut work: Vec<VarnodeId> = vec![vn];
     let mut budget = MAX_NODES;
@@ -89,7 +91,9 @@ pub fn only_feeds_a_vararg_tail(data: &Funcdata, addr: &Address, size: int4) -> 
             return false;
         }
         for op in uses {
-            let Some(o) = data.obank().get(op) else { return false };
+            let Some(o) = data.obank().get(op) else {
+                return false;
+            };
             if o.is_dead() {
                 continue;
             }
@@ -132,7 +136,12 @@ fn moves_the_value(data: &Funcdata, op: OpId, vn: VarnodeId, code: OpCode) -> bo
                 (0..o.num_input())
                     .filter_map(|i| o.get_in(i))
                     .filter(|&v| v != vn)
-                    .all(|v| data.vbank().get(v).map(|v| v.is_constant()).unwrap_or(false))
+                    .all(|v| {
+                        data.vbank()
+                            .get(v)
+                            .map(|v| v.is_constant())
+                            .unwrap_or(false)
+                    })
             })
             .unwrap_or(false),
         _ => false,
@@ -152,7 +161,9 @@ fn is_vararg_slot(data: &Funcdata, op: OpId, slot: int4) -> bool {
     if data.kuna_passthrough_vararg_calls().contains(&op) {
         return true;
     }
-    let Some(idx) = data.get_call_specs_index(op) else { return false };
+    let Some(idx) = data.get_call_specs_index(op) else {
+        return false;
+    };
     let fc = data.get_call_specs(idx);
     fc.is_dotdotdot() && slot - 1 >= fc.proto().num_params()
 }

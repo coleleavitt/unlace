@@ -143,7 +143,9 @@ pub fn mapped_run(segments: &[(u64, u64, u32)], vma: u64) -> Option<(u64, Option
             _ => merged.push((start, end)),
         }
     }
-    let hit = merged.iter().position(|&(start, end)| vma >= start && vma < end)?;
+    let hit = merged
+        .iter()
+        .position(|&(start, end)| vma >= start && vma < end)?;
     Some((merged[hit].1, merged.get(hit + 1).map(|&(start, _)| start)))
 }
 
@@ -183,10 +185,18 @@ pub fn walk(
     // of the followed targets the straight line would have walked over.
     let (rows, truncated, refs) = decode_rows(prog, region, count, 0);
     if !follow {
-        let skipped =
-            skipped_targets(&rows, &refs).into_iter().map(|t| (t, Skip::Straight)).collect();
+        let skipped = skipped_targets(&rows, &refs)
+            .into_iter()
+            .map(|t| (t, Skip::Straight))
+            .collect();
         let (rows, folded) = fold_pool_words(prog, region, rows, &refs);
-        return CodeWalk { rows, truncated, folded, skipped, anchored: Vec::new() };
+        return CodeWalk {
+            rows,
+            truncated,
+            folded,
+            skipped,
+            anchored: Vec::new(),
+        };
     }
     let followed = follow_rows(prog, region, count);
     let starts: BTreeSet<u64> = followed.rows.iter().map(|r| r.addr).collect();
@@ -215,7 +225,13 @@ pub fn walk(
         .map(|t| (t, why(t)))
         .collect();
     let (rows, folded) = fold_pool_words(prog, region, followed.rows, &followed.evidence);
-    CodeWalk { rows, truncated: followed.truncated, folded, skipped, anchored }
+    CodeWalk {
+        rows,
+        truncated: followed.truncated,
+        folded,
+        skipped,
+        anchored,
+    }
 }
 
 /// What one code-view walk produced: the rows, whether the derived-length cap
@@ -362,7 +378,11 @@ struct Followed {
 /// branch target forced to start a row, and the bytes that then do not tile an
 /// instruction spelled out as `.byte`.
 fn follow_rows(prog: &ConsoleProgram, region: &Window, count: Option<usize>) -> Followed {
-    let cap = if region.derived { Some(DERIVED_INSTRUCTION_CAP) } else { None };
+    let cap = if region.derived {
+        Some(DERIVED_INSTRUCTION_CAP)
+    } else {
+        None
+    };
     let stop = region.stop();
     let in_window = |a: u64| a >= region.start && stop.is_none_or(|end| a < end);
     let mut evidence = FixedRefs::default();
@@ -373,8 +393,9 @@ fn follow_rows(prog: &ConsoleProgram, region: &Window, count: Option<usize>) -> 
     // A row can only be printed once, so the printed budget bounds the claims;
     // an explicit range that asked for neither is bounded by the window itself.
     let budget = count.or(cap).unwrap_or(usize::MAX);
-    let mut work =
-        budget.saturating_mul(FOLLOW_DECODES_PER_ROW).saturating_add(FOLLOW_DECODE_SLACK);
+    let mut work = budget
+        .saturating_mul(FOLLOW_DECODES_PER_ROW)
+        .saturating_add(FOLLOW_DECODE_SLACK);
     // Once `budget` rows are claimed: the highest of the lowest `budget`.
     let mut frontier: Option<u64> = None;
     let (mut mnem, mut body, mut raw) = (String::new(), String::new(), Vec::new());
@@ -399,7 +420,11 @@ fn follow_rows(prog: &ConsoleProgram, region: &Window, count: Option<usize>) -> 
                 .disassemble_at_into(addr, &mut mnem, &mut body)
                 .ok()
                 .filter(|&n| n > 0)
-                .filter(|&n| region.mapped_end.is_none_or(|m| addr.saturating_add(n as u64) <= m))
+                .filter(|&n| {
+                    region
+                        .mapped_end
+                        .is_none_or(|m| addr.saturating_add(n as u64) <= m)
+                })
                 .filter(|&n| prog.read_bytes_into(addr, n as usize, &mut raw));
             let Some(len) = decoded else {
                 undecodable.insert(addr);
@@ -435,7 +460,14 @@ fn follow_rows(prog: &ConsoleProgram, region: &Window, count: Option<usize>) -> 
     }
     let named = evidence.flow_targets.iter().copied().collect();
     let (rows, truncated) = fill_between(prog, region, claimed, count, cap, &mut evidence);
-    Followed { rows, truncated, evidence, named, undecodable, exhausted: work == 0 }
+    Followed {
+        rows,
+        truncated,
+        evidence,
+        named,
+        undecodable,
+        exhausted: work == 0,
+    }
 }
 
 /// Merge the claimed rows with a straight-line decode of everything between
@@ -527,7 +559,11 @@ fn decode_rows(
     count: Option<usize>,
     seed_witness: u64,
 ) -> (Vec<Row>, bool, FixedRefs) {
-    let cap = if region.derived { Some(DERIVED_INSTRUCTION_CAP) } else { None };
+    let cap = if region.derived {
+        Some(DERIVED_INSTRUCTION_CAP)
+    } else {
+        None
+    };
     let stop = region.stop();
     let alignment = u64::try_from(prog.arch().translate().get_alignment()).unwrap_or(1);
     let mut rows: Vec<Row> = Vec::new();
@@ -557,7 +593,9 @@ fn decode_rows(
             .ok()
             .filter(|&n| n > 0)
             .filter(|&n| {
-                !region.mapped_end.is_some_and(|m| addr.saturating_add(n as u64) > m)
+                !region
+                    .mapped_end
+                    .is_some_and(|m| addr.saturating_add(n as u64) > m)
             });
         // The bytes are read back separately, so a row is only reported as an
         // instruction when BOTH the decode and the read succeeded — a row can
@@ -636,7 +674,11 @@ fn recovery_span(addr: u64, grid: u64, end: Option<u64>) -> u64 {
 /// The operand of a `.byte` row: every byte it covers, comma-separated in the
 /// spelling an assembler takes back.
 fn bad_byte_operand(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("0x{b:02x}")).collect::<Vec<_>>().join(",")
+    bytes
+        .iter()
+        .map(|b| format!("0x{b:02x}"))
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 /// Replace each proved literal-pool word with one data row.

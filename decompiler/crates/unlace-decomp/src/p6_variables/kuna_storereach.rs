@@ -57,12 +57,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use unlace_base::address::{calc_mask, sign_extend};
-use unlace_base::space::{spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::{int4, intb, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype, TypeFactory};
+use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::varmap::{MapState, RangeHint, RangeType};
 
@@ -84,7 +84,11 @@ struct Walk<T> {
 
 impl<T: Clone> Walk<T> {
     fn new() -> Self {
-        Walk { seen: RefCell::new(BTreeMap::new()), steps: Cell::new(0), expired: Cell::new(false) }
+        Walk {
+            seen: RefCell::new(BTreeMap::new()),
+            steps: Cell::new(0),
+            expired: Cell::new(false),
+        }
     }
 
     /// The answer at `(vn, depth)`, from `step` the first time. Every 256th new
@@ -96,7 +100,10 @@ impl<T: Clone> Walk<T> {
         }
         let n = self.steps.get().wrapping_add(1);
         self.steps.set(n);
-        if self.expired.get() || (n % 256 == 0 && crate::infra::decompile_drive::deadline_passed_in("store reachability")) {
+        if self.expired.get()
+            || (n % 256 == 0
+                && crate::infra::decompile_drive::deadline_passed_in("store reachability"))
+        {
             self.expired.set(true);
             return gave_up;
         }
@@ -281,16 +288,26 @@ fn widen_open_hints(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace>, 
         else {
             continue;
         };
-        let width = op.get_in(2).and_then(|v| fd.vbank().get(v)).map_or(0, |v| v.get_size());
+        let width = op
+            .get_in(2)
+            .and_then(|v| fd.vbank().get(v))
+            .map_or(0, |v| v.get_size());
         let (Some(bl), Some(ptr), true) = (op.get_parent(), op.get_in(1), width > 1) else {
             continue;
         };
-        let Some(kept_end) = kept_slots(fd, store, bl, space).into_iter().map(|(_, hi)| hi).max() else {
+        let Some(kept_end) = kept_slots(fd, store, bl, space)
+            .into_iter()
+            .map(|(_, hi)| hi)
+            .max()
+        else {
             continue;
         };
         let (lo, end) = match store_window(fd, store, space) {
             Some((lo, last)) => {
-                let (lo, last) = (sign_extend(lo as intb, bits), sign_extend(last as intb, bits));
+                let (lo, last) = (
+                    sign_extend(lo as intb, bits),
+                    sign_extend(last as intb, bits),
+                );
                 let elems = ((last - lo + 1) / width as intb) as int4;
                 for h in state.hints_mut().iter_mut() {
                     if h.range_type == RangeType::Open
@@ -309,11 +326,12 @@ fn widen_open_hints(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace>, 
                 let Some(lo) = plain_index_base(fd, ptr, sb, space) else {
                     continue;
                 };
-                let Some(h) = state
-                    .hints_mut()
-                    .iter()
-                    .find(|h| h.range_type == RangeType::Open && h.sstart == lo && h.size == width && h.highind >= 0)
-                else {
+                let Some(h) = state.hints_mut().iter().find(|h| {
+                    h.range_type == RangeType::Open
+                        && h.sstart == lo
+                        && h.size == width
+                        && h.highind >= 0
+                }) else {
                     continue;
                 };
                 (lo, hint_end(h))
@@ -330,7 +348,9 @@ fn widen_open_hints(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace>, 
                 || h.is_type_lock()
                 || !matches!(
                     h.type_.get_metatype(),
-                    type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN
+                    type_metatype::TYPE_INT
+                        | type_metatype::TYPE_UINT
+                        | type_metatype::TYPE_UNKNOWN
                 )
         });
     }
@@ -369,7 +389,11 @@ fn guard_only_ranges(fd: &Funcdata, space: &Rc<AddrSpace>) -> Vec<(intb, intb)> 
         else {
             continue;
         };
-        if fd.vbank().get(out).is_some_and(|v| v.get_space().get_index() == space.get_index()) {
+        if fd
+            .vbank()
+            .get(out)
+            .is_some_and(|v| v.get_space().get_index() == space.get_index())
+        {
             downstream.insert(out);
             ranges.extend(range_of(out));
         }
@@ -388,7 +412,13 @@ fn guard_only_ranges(fd: &Funcdata, space: &Rc<AddrSpace>) -> Vec<(intb, intb)> 
         .filter(|&(_, lo, hi)| ranges.iter().any(|&(rlo, rhi)| lo < rhi && rlo < hi))
         .collect();
     let carries = |code: OpCode| {
-        matches!(code, OpCode::CPUI_MULTIEQUAL | OpCode::CPUI_COPY | OpCode::CPUI_PIECE | OpCode::CPUI_SUBPIECE)
+        matches!(
+            code,
+            OpCode::CPUI_MULTIEQUAL
+                | OpCode::CPUI_COPY
+                | OpCode::CPUI_PIECE
+                | OpCode::CPUI_SUBPIECE
+        )
     };
     loop {
         let before = downstream.len();
@@ -396,10 +426,18 @@ fn guard_only_ranges(fd: &Funcdata, space: &Rc<AddrSpace>) -> Vec<(intb, intb)> 
             if downstream.contains(&vn) {
                 continue;
             }
-            let Some(def) = fd.vbank().get(vn).and_then(|v| v.get_def()).and_then(|d| fd.obank().get(d)) else {
+            let Some(def) = fd
+                .vbank()
+                .get(vn)
+                .and_then(|v| v.get_def())
+                .and_then(|d| fd.obank().get(d))
+            else {
                 continue;
             };
-            if carries(def.code()) && (0..def.num_input()).any(|k| def.get_in(k).is_some_and(|i| downstream.contains(&i))) {
+            if carries(def.code())
+                && (0..def.num_input())
+                    .any(|k| def.get_in(k).is_some_and(|i| downstream.contains(&i)))
+            {
                 downstream.insert(vn);
             }
         }
@@ -449,7 +487,10 @@ fn drop_guard_only_hints(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpa
         return;
     }
     let is_guard_only = |h: &RangeHint| {
-        h.range_type == RangeType::Fixed && guard_only.iter().any(|&(lo, hi)| lo <= h.sstart && hint_end(h) <= hi)
+        h.range_type == RangeType::Fixed
+            && guard_only
+                .iter()
+                .any(|&(lo, hi)| lo <= h.sstart && hint_end(h) <= hi)
     };
     let hints: &[RangeHint] = state.hints_mut();
     let mut order: Vec<usize> = (0..hints.len()).collect();
@@ -461,14 +502,22 @@ fn drop_guard_only_hints(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpa
         if !is_guard_only(h) {
             continue;
         }
-        let Some(&below) = order[..pos].iter().rev().find(|&&j| !is_guard_only(&hints[j])) else {
+        let Some(&below) = order[..pos]
+            .iter()
+            .rev()
+            .find(|&&j| !is_guard_only(&hints[j]))
+        else {
             continue;
         };
         let start = hints[below].sstart;
         let Some(o) = order[..pos]
             .iter()
             .copied()
-            .filter(|&j| hints[j].sstart == start && hints[j].range_type == RangeType::Open && hints[j].size > 0)
+            .filter(|&j| {
+                hints[j].sstart == start
+                    && hints[j].range_type == RangeType::Open
+                    && hints[j].size > 0
+            })
             .max_by_key(|&j| (hints[j].size, j))
         else {
             continue;
@@ -525,7 +574,10 @@ fn guard_shortens(
     let bits = space.get_addr_size() as int4 * 8 - 1;
     let only_guard = |lo: intb, hi: intb| {
         let mut covered = lo;
-        let mut ranges: Vec<&(intb, intb)> = guard_only.iter().filter(|&&(a, b)| a < hi && lo < b).collect();
+        let mut ranges: Vec<&(intb, intb)> = guard_only
+            .iter()
+            .filter(|&&(a, b)| a < hi && lo < b)
+            .collect();
         ranges.sort_unstable();
         for &&(a, b) in &ranges {
             if a > covered {
@@ -535,37 +587,57 @@ fn guard_shortens(
         }
         covered >= hi
     };
-    [OpCode::CPUI_LOAD, OpCode::CPUI_STORE].into_iter().any(|code| {
-        fd.obank().iter_code(code).any(|id| {
-            let Some(op) = fd.obank().get(id).filter(|o| !o.is_dead()) else {
-                return false;
-            };
-            let Some(pieces) = op
-                .get_in(1)
-                .and_then(|p| pointer_pieces(fd, p, sb, 0).or_else(|| variable_walk(fd, p, sb, 0).map(|b| vec![(b, None)])))
-            else {
-                return false;
-            };
-            pieces.iter().filter(|&&(_, extra)| extra != Some(0)).any(|&(off, _)| {
-                let base = sign_extend(space.wrap_offset(off) as intb, bits);
-                let Some(&(s, e, ref ct)) = symbols.iter().find(|&&(s, e, _)| s <= base && base < e) else {
+    [OpCode::CPUI_LOAD, OpCode::CPUI_STORE]
+        .into_iter()
+        .any(|code| {
+            fd.obank().iter_code(code).any(|id| {
+                let Some(op) = fd.obank().get(id).filter(|o| !o.is_dead()) else {
                     return false;
                 };
-                let next = symbols.iter().map(|&(s2, _, _)| s2).filter(|&s2| s2 >= e).min().unwrap_or(intb::MAX);
-                (ct.get_array_base().is_none() && only_guard(s, e))
-                    || guard_only.iter().any(|&(lo, hi)| lo <= next && e < hi)
+                let Some(pieces) = op.get_in(1).and_then(|p| {
+                    pointer_pieces(fd, p, sb, 0)
+                        .or_else(|| variable_walk(fd, p, sb, 0).map(|b| vec![(b, None)]))
+                }) else {
+                    return false;
+                };
+                pieces
+                    .iter()
+                    .filter(|&&(_, extra)| extra != Some(0))
+                    .any(|&(off, _)| {
+                        let base = sign_extend(space.wrap_offset(off) as intb, bits);
+                        let Some(&(s, e, ref ct)) =
+                            symbols.iter().find(|&&(s, e, _)| s <= base && base < e)
+                        else {
+                            return false;
+                        };
+                        let next = symbols
+                            .iter()
+                            .map(|&(s2, _, _)| s2)
+                            .filter(|&s2| s2 >= e)
+                            .min()
+                            .unwrap_or(intb::MAX);
+                        (ct.get_array_base().is_none() && only_guard(s, e))
+                            || guard_only.iter().any(|&(lo, hi)| lo <= next && e < hi)
+                    })
             })
         })
-    })
 }
 
 /// The signed stack ranges of the guard INDIRECTs `store` keeps in block `bl`.
-fn kept_slots(fd: &Funcdata, store: OpId, bl: crate::context::BlockId, space: &Rc<AddrSpace>) -> Vec<(intb, intb)> {
+fn kept_slots(
+    fd: &Funcdata,
+    store: OpId,
+    bl: crate::context::BlockId,
+    space: &Rc<AddrSpace>,
+) -> Vec<(intb, intb)> {
     let bits = space.get_addr_size() as int4 * 8 - 1;
     fd.bb_ops(bl)
         .into_iter()
         .filter_map(|id| {
-            let ind = fd.obank().get(id).filter(|o| o.code() == OpCode::CPUI_INDIRECT)?;
+            let ind = fd
+                .obank()
+                .get(id)
+                .filter(|o| o.code() == OpCode::CPUI_INDIRECT)?;
             let iop = fd
                 .vbank()
                 .get(ind.get_in(1)?)
@@ -587,7 +659,12 @@ fn kept_slots(fd: &Funcdata, store: OpId, bl: crate::context::BlockId, space: &R
 /// stack address plus indices, not a walk: no MULTIEQUAL on the way back to
 /// the stack base, so the C prints the store through the local there
 /// (`v1[i] = x`), not through a pointer variable (`*p = x`).
-fn plain_index_base(fd: &Funcdata, ptr: VarnodeId, sb: VarnodeId, space: &Rc<AddrSpace>) -> Option<intb> {
+fn plain_index_base(
+    fd: &Funcdata,
+    ptr: VarnodeId,
+    sb: VarnodeId,
+    space: &Rc<AddrSpace>,
+) -> Option<intb> {
     let bits = space.get_addr_size() as int4 * 8 - 1;
     if through_walk(fd, ptr, 0) {
         return None;
@@ -612,18 +689,24 @@ fn through_walk_step(fd: &Funcdata, vn: VarnodeId, depth: u32, walk: &Walk<bool>
     if depth > 12 {
         return true;
     }
-    let Some(op) = fd.vbank().get(vn).and_then(|v| v.get_def()).and_then(|d| fd.obank().get(d)) else {
+    let Some(op) = fd
+        .vbank()
+        .get(vn)
+        .and_then(|v| v.get_def())
+        .and_then(|d| fd.obank().get(d))
+    else {
         return false;
     };
     match op.code() {
         OpCode::CPUI_MULTIEQUAL => true,
-        OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_INDIRECT | OpCode::CPUI_PTRSUB => {
-            op.get_in(0).is_some_and(|i| through_walk_within(fd, i, depth + 1, walk))
-        }
+        OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_INDIRECT | OpCode::CPUI_PTRSUB => op
+            .get_in(0)
+            .is_some_and(|i| through_walk_within(fd, i, depth + 1, walk)),
         OpCode::CPUI_PTRADD | OpCode::CPUI_INT_ADD => (0..2).any(|k| {
             op.get_in(k).is_some_and(|i| {
-                fd.vbank().get(i).is_some_and(|v| v.get_type().get_metatype() == type_metatype::TYPE_PTR || k == 0)
-                    && through_walk_within(fd, i, depth + 1, walk)
+                fd.vbank().get(i).is_some_and(|v| {
+                    v.get_type().get_metatype() == type_metatype::TYPE_PTR || k == 0
+                }) && through_walk_within(fd, i, depth + 1, walk)
             })
         }),
         _ => false,
@@ -653,7 +736,11 @@ pub(crate) fn withdraw_spoiled_guard(fd: &Funcdata) -> bool {
     let checks = fd.store_reach_checks();
     let effects = guard_effects(fd, &space);
     let indexed = fd.indexed_guard_stores();
-    if checks.floats.is_empty() && checks.reaches.is_empty() && effects.read.is_empty() && indexed.is_empty() {
+    if checks.floats.is_empty()
+        && checks.reaches.is_empty()
+        && effects.read.is_empty()
+        && indexed.is_empty()
+    {
         return false;
     }
     let bits = space.get_addr_size() as int4 * 8 - 1;
@@ -692,10 +779,15 @@ pub(crate) fn withdraw_spoiled_guard(fd: &Funcdata) -> bool {
                 _ => true,
             })
         || fd.find_spacebase_input(&space).is_some_and(|sb| {
-            indexed
-                .iter()
-                .any(|&store| !indexes_own_array(fd, store, sb, &space, &symbols, effects.wide.get(&store)))
-                || guard_shortens(fd, &space, sb, &symbols, &fd.note_guard_only(guard_only_ranges(fd, &space)))
+            indexed.iter().any(|&store| {
+                !indexes_own_array(fd, store, sb, &space, &symbols, effects.wide.get(&store))
+            }) || guard_shortens(
+                fd,
+                &space,
+                sb,
+                &symbols,
+                &fd.note_guard_only(guard_only_ranges(fd, &space)),
+            )
         });
     if spoiled {
         fd.spoil_stack_store_guard();
@@ -725,11 +817,19 @@ fn indexes_own_array(
     symbols: &[(intb, intb, Rc<Datatype>)],
     slots: Option<&Vec<(intb, intb)>>,
 ) -> bool {
-    let Some(op) = fd.obank().get(store).filter(|o| !o.is_dead() && o.code() == OpCode::CPUI_STORE) else {
+    let Some(op) = fd
+        .obank()
+        .get(store)
+        .filter(|o| !o.is_dead() && o.code() == OpCode::CPUI_STORE)
+    else {
         return true;
     };
-    let (Some(ptr), Some(width)) = (op.get_in(1), op.get_in(2).and_then(|v| fd.vbank().get(v)).map(|v| v.get_size()))
-    else {
+    let (Some(ptr), Some(width)) = (
+        op.get_in(1),
+        op.get_in(2)
+            .and_then(|v| fd.vbank().get(v))
+            .map(|v| v.get_size()),
+    ) else {
         return true;
     };
     if width <= 1 {
@@ -751,7 +851,9 @@ fn indexes_own_array(
     let direct = choice && is_choice(fd, ptr);
     bases.iter().enumerate().all(|(k, &(base, extra))| {
         if choice && (extra == Some(0) || (direct && extra.is_none())) {
-            return symbols.iter().any(|&(s, e, _)| s <= base && base + width as intb <= e);
+            return symbols
+                .iter()
+                .any(|&(s, e, _)| s <= base && base + width as intb <= e);
         }
         let end = match extra {
             Some(x) if choice => base + x + width as intb,
@@ -762,9 +864,9 @@ fn indexes_own_array(
         let Some((_, e, ct)) = symbols.iter().find(|&&(s, e, _)| s <= base && base < e) else {
             return slots.is_none_or(|slots| !slots.iter().any(|slot| reached(&slot)));
         };
-        ct.get_array_base()
-            .is_some_and(|el| el.get_size() > 0 && el.get_size() <= width && width % el.get_size() == 0)
-            && slots.is_none_or(|slots| slots.iter().filter(reached).all(|&(_, hi)| hi <= *e))
+        ct.get_array_base().is_some_and(|el| {
+            el.get_size() > 0 && el.get_size() <= width && width % el.get_size() == 0
+        }) && slots.is_none_or(|slots| slots.iter().filter(reached).all(|&(_, hi)| hi <= *e))
     })
 }
 
@@ -778,9 +880,15 @@ fn variable_walk(fd: &Funcdata, vn: VarnodeId, sb: VarnodeId, depth: u32) -> Opt
     }
     let op = fd.obank().get(fd.vbank().get(vn)?.get_def()?)?;
     match op.code() {
-        OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_INDIRECT => variable_walk(fd, op.get_in(0)?, sb, depth + 1),
+        OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_INDIRECT => {
+            variable_walk(fd, op.get_in(0)?, sb, depth + 1)
+        }
         OpCode::CPUI_INT_ADD | OpCode::CPUI_PTRSUB => {
-            let c = fd.vbank().get(op.get_in(1)?).filter(|c| c.is_constant())?.get_offset();
+            let c = fd
+                .vbank()
+                .get(op.get_in(1)?)
+                .filter(|c| c.is_constant())?
+                .get_offset();
             Some(variable_walk(fd, op.get_in(0)?, sb, depth + 1)?.wrapping_add(c))
         }
         OpCode::CPUI_MULTIEQUAL => {
@@ -814,7 +922,12 @@ fn moves_from(fd: &Funcdata, vn: VarnodeId, phi: VarnodeId) -> bool {
                 .get(cur)
                 .and_then(|v| v.get_def())
                 .and_then(|d| fd.obank().get(d))
-                .filter(|op| matches!(op.code(), OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_INDIRECT))
+                .filter(|op| {
+                    matches!(
+                        op.code(),
+                        OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_INDIRECT
+                    )
+                })
             else {
                 break;
             };
@@ -825,7 +938,12 @@ fn moves_from(fd: &Funcdata, vn: VarnodeId, phi: VarnodeId) -> bool {
         }
         cur
     };
-    let Some(op) = fd.vbank().get(strip(vn)).and_then(|v| v.get_def()).and_then(|d| fd.obank().get(d)) else {
+    let Some(op) = fd
+        .vbank()
+        .get(strip(vn))
+        .and_then(|v| v.get_def())
+        .and_then(|d| fd.obank().get(d))
+    else {
         return false;
     };
     match op.code() {
@@ -840,7 +958,12 @@ fn moves_from(fd: &Funcdata, vn: VarnodeId, phi: VarnodeId) -> bool {
 fn is_choice(fd: &Funcdata, vn: VarnodeId) -> bool {
     let mut cur = vn;
     for _ in 0..12 {
-        let Some(op) = fd.vbank().get(cur).and_then(|v| v.get_def()).and_then(|d| fd.obank().get(d)) else {
+        let Some(op) = fd
+            .vbank()
+            .get(cur)
+            .and_then(|v| v.get_def())
+            .and_then(|d| fd.obank().get(d))
+        else {
             return false;
         };
         match op.code() {
@@ -870,20 +993,27 @@ fn loop_walk_step(fd: &Funcdata, vn: VarnodeId, depth: u32, walk: &Walk<bool>) -
     if depth > 12 {
         return true;
     }
-    let Some(op) = fd.vbank().get(vn).and_then(|v| v.get_def()).and_then(|d| fd.obank().get(d)) else {
+    let Some(op) = fd
+        .vbank()
+        .get(vn)
+        .and_then(|v| v.get_def())
+        .and_then(|d| fd.obank().get(d))
+    else {
         return false;
     };
     match op.code() {
         OpCode::CPUI_MULTIEQUAL => (0..op.num_input()).any(|k| {
-            op.get_in(k).is_some_and(|i| steps_from(fd, i, vn) || loop_walk_within(fd, i, depth + 1, walk))
+            op.get_in(k)
+                .is_some_and(|i| steps_from(fd, i, vn) || loop_walk_within(fd, i, depth + 1, walk))
         }),
-        OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_INDIRECT | OpCode::CPUI_PTRSUB => {
-            op.get_in(0).is_some_and(|i| loop_walk_within(fd, i, depth + 1, walk))
-        }
+        OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_INDIRECT | OpCode::CPUI_PTRSUB => op
+            .get_in(0)
+            .is_some_and(|i| loop_walk_within(fd, i, depth + 1, walk)),
         OpCode::CPUI_PTRADD | OpCode::CPUI_INT_ADD => (0..2).any(|k| {
             op.get_in(k).is_some_and(|i| {
-                fd.vbank().get(i).is_some_and(|v| v.get_type().get_metatype() == type_metatype::TYPE_PTR || k == 0)
-                    && loop_walk_within(fd, i, depth + 1, walk)
+                fd.vbank().get(i).is_some_and(|v| {
+                    v.get_type().get_metatype() == type_metatype::TYPE_PTR || k == 0
+                }) && loop_walk_within(fd, i, depth + 1, walk)
             })
         }),
         _ => false,
@@ -1238,7 +1368,12 @@ pub(crate) fn is_read(fd: &Funcdata, vn: VarnodeId) -> bool {
 /// guarded slot. A store whose index has no bound, such as a zeroing loop's
 /// pointer walk, writes through a pointer the C prints as one, not through
 /// the local, and its guarded slots are checked only for being whole locals.
-fn wide_reaches(fd: &Funcdata, space: &Rc<AddrSpace>, sb: VarnodeId, effects: &GuardEffects) -> Vec<(intb, intb)> {
+fn wide_reaches(
+    fd: &Funcdata,
+    space: &Rc<AddrSpace>,
+    sb: VarnodeId,
+    effects: &GuardEffects,
+) -> Vec<(intb, intb)> {
     let bits = space.get_addr_size() as int4 * 8 - 1;
     effects
         .wide
@@ -1248,7 +1383,12 @@ fn wide_reaches(fd: &Funcdata, space: &Rc<AddrSpace>, sb: VarnodeId, effects: &G
             let slot_hi = slots.iter().map(|&(_, hi)| hi).max()?;
             let op = fd.obank().get(store)?;
             let base = pointer_pieces(fd, op.get_in(1)?, sb, 0)
-                .and_then(|pieces| pieces.iter().map(|&(off, _)| sign_extend(space.wrap_offset(off) as intb, bits)).min())
+                .and_then(|pieces| {
+                    pieces
+                        .iter()
+                        .map(|&(off, _)| sign_extend(space.wrap_offset(off) as intb, bits))
+                        .min()
+                })
                 .unwrap_or(slot_lo);
             let bound = sign_extend(store_window(fd, store, space)?.1 as intb, bits) + 1;
             Some((base.min(slot_lo), bound.max(slot_hi)))
@@ -1317,11 +1457,23 @@ pub(crate) fn pointer_pieces(
 
 type Pieces = Option<Vec<(uintb, Option<intb>)>>;
 
-fn pieces_within(fd: &Funcdata, vn: VarnodeId, sb: VarnodeId, depth: u32, memo: &Walk<Pieces>) -> Pieces {
+fn pieces_within(
+    fd: &Funcdata,
+    vn: VarnodeId,
+    sb: VarnodeId,
+    depth: u32,
+    memo: &Walk<Pieces>,
+) -> Pieces {
     memo.at(vn, depth, None, || pieces_step(fd, vn, sb, depth, memo))
 }
 
-fn pieces_step(fd: &Funcdata, vn: VarnodeId, sb: VarnodeId, depth: u32, memo: &Walk<Pieces>) -> Pieces {
+fn pieces_step(
+    fd: &Funcdata,
+    vn: VarnodeId,
+    sb: VarnodeId,
+    depth: u32,
+    memo: &Walk<Pieces>,
+) -> Pieces {
     if vn == sb {
         return Some(vec![(0, Some(0))]);
     }
@@ -1444,14 +1596,22 @@ fn index_bound_at(fd: &Funcdata, vn: VarnodeId, depth: u32) -> Option<uintb> {
     let mut cur = vn;
     let mut sign_bit = uintb::MAX;
     for _ in 0..4 {
-        let Some(op) = fd.vbank().get(cur).and_then(|v| v.get_def()).and_then(|d| fd.obank().get(d)) else {
+        let Some(op) = fd
+            .vbank()
+            .get(cur)
+            .and_then(|v| v.get_def())
+            .and_then(|d| fd.obank().get(d))
+        else {
             break;
         };
         match (op.code(), op.get_in(0)) {
             (OpCode::CPUI_COPY | OpCode::CPUI_INT_ZEXT, Some(input)) => cur = input,
             (OpCode::CPUI_INT_SEXT, Some(input)) => {
                 let bits = fd.vbank().get(input).map_or(0, |v| v.get_size() as u32 * 8);
-                sign_bit = sign_bit.min(1u64.checked_shl(bits.saturating_sub(1)).unwrap_or(uintb::MAX));
+                sign_bit = sign_bit.min(
+                    1u64.checked_shl(bits.saturating_sub(1))
+                        .unwrap_or(uintb::MAX),
+                );
                 cur = input;
             }
             (OpCode::CPUI_INT_REM, _) => {
@@ -1460,10 +1620,20 @@ fn index_bound_at(fd: &Funcdata, vn: VarnodeId, depth: u32) -> Option<uintb> {
                     .and_then(|c| fd.vbank().get(c))
                     .filter(|c| c.is_constant())
                     .map_or(0, |c| c.get_offset());
-                return Some(if divisor == 0 || divisor - 1 >= sign_bit { mask } else { mask.min(divisor - 1) });
+                return Some(if divisor == 0 || divisor - 1 >= sign_bit {
+                    mask
+                } else {
+                    mask.min(divisor - 1)
+                });
             }
-            (OpCode::CPUI_INT_MULT | OpCode::CPUI_INT_LEFT, Some(input)) if depth < 4 && sign_bit == uintb::MAX => {
-                let Some(c) = op.get_in(1).and_then(|c| fd.vbank().get(c)).filter(|c| c.is_constant()) else {
+            (OpCode::CPUI_INT_MULT | OpCode::CPUI_INT_LEFT, Some(input))
+                if depth < 4 && sign_bit == uintb::MAX =>
+            {
+                let Some(c) = op
+                    .get_in(1)
+                    .and_then(|c| fd.vbank().get(c))
+                    .filter(|c| c.is_constant())
+                else {
                     break;
                 };
                 let scaled = index_bound_at(fd, input, depth + 1).and_then(|b| match op.code() {
@@ -1484,9 +1654,16 @@ fn index_bound_at(fd: &Funcdata, vn: VarnodeId, depth: u32) -> Option<uintb> {
 /// The stack bytes `[lo, last]`, as offsets in `space`, an indexed STORE of
 /// any width may write: its pointer is the stack base plus constants plus
 /// indices that `index_bound` bounds, at one address or a choice of close ones.
-pub(crate) fn store_window(fd: &Funcdata, store: OpId, space: &Rc<AddrSpace>) -> Option<(uintb, uintb)> {
+pub(crate) fn store_window(
+    fd: &Funcdata,
+    store: OpId,
+    space: &Rc<AddrSpace>,
+) -> Option<(uintb, uintb)> {
     let sb = fd.find_spacebase_input(space)?;
-    let op = fd.obank().get(store).filter(|o| !o.is_dead() && o.code() == OpCode::CPUI_STORE)?;
+    let op = fd
+        .obank()
+        .get(store)
+        .filter(|o| !o.is_dead() && o.code() == OpCode::CPUI_STORE)?;
     let width = fd.vbank().get(op.get_in(2)?)?.get_size().max(1) as intb;
     let bits = space.get_addr_size() as int4 * 8 - 1;
     let pieces = pointer_pieces(fd, op.get_in(1)?, sb, 0)?;
@@ -1497,7 +1674,10 @@ pub(crate) fn store_window(fd: &Funcdata, store: OpId, space: &Rc<AddrSpace>) ->
         span = Some(span.map_or((lo, last), |(l, h)| (l.min(lo), h.max(last))));
     }
     let (lo, last) = span.filter(|&(lo, last)| last - lo < MAX_REACH)?;
-    Some((space.wrap_offset(lo as uintb), space.wrap_offset(last as uintb)))
+    Some((
+        space.wrap_offset(lo as uintb),
+        space.wrap_offset(last as uintb),
+    ))
 }
 
 /// `vn` as `index + c` for a small non-negative constant `c`, which is at most

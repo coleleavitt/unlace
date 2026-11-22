@@ -54,13 +54,23 @@ impl FloatingEdge {
     /// `top`/`bottom` nodes are updated to FlowBlocks in the current collapsed
     /// graph (`graph_id` is the containing BlockGraph node).  On success returns
     /// `(Some(top), outedge)` where `outedge` is the outgoing-edge index.
-    pub fn get_current_edge(&mut self, graph: &BlockGraph, graph_id: BlockId) -> (Option<BlockId>, int4) {
+    pub fn get_current_edge(
+        &mut self,
+        graph: &BlockGraph,
+        graph_id: BlockId,
+    ) -> (Option<BlockId>, int4) {
         while graph.block(self.top).get_parent() != Some(graph_id) {
             // Move up through collapse hierarchy to current graph
-            self.top = graph.block(self.top).get_parent().expect("getCurrentEdge: top parent");
+            self.top = graph
+                .block(self.top)
+                .get_parent()
+                .expect("getCurrentEdge: top parent");
         }
         while graph.block(self.bottom).get_parent() != Some(graph_id) {
-            self.bottom = graph.block(self.bottom).get_parent().expect("getCurrentEdge: bottom parent");
+            self.bottom = graph
+                .block(self.bottom)
+                .get_parent()
+                .expect("getCurrentEdge: bottom parent");
         }
         let outedge = graph.block(self.top).get_out_index(self.bottom);
         if outedge < 0 {
@@ -138,7 +148,12 @@ impl LoopBody {
     /// Assuming \b this has all of its nodes marked, find all additional nodes
     /// that create the body of the `container` loop.  Mark these and put them in
     /// the `body` list.
-    fn extend_to_container(&self, container: &LoopBody, body: &mut Vec<BlockId>, graph: &mut BlockGraph) {
+    fn extend_to_container(
+        &self,
+        container: &LoopBody,
+        body: &mut Vec<BlockId>,
+        graph: &mut BlockGraph,
+    ) {
         let mut i = 0;
         let container_head = container.head.expect("extendToContainer: container head");
         if !graph.block(container_head).is_mark() {
@@ -206,7 +221,10 @@ impl LoopBody {
         for i in 0..self.tails.len() {
             let mut bottom = self.tails[i];
             while graph.block(bottom).get_parent() != Some(graph_id) {
-                bottom = graph.block(bottom).get_parent().expect("update: tail parent");
+                bottom = graph
+                    .block(bottom)
+                    .get_parent()
+                    .expect("update: tail parent");
             }
             self.tails[i] = bottom;
             if bottom != head {
@@ -497,8 +515,10 @@ impl LoopBody {
         for i in 0..toexitblock.len() {
             // Now we do exits to exitblock
             let bl = toexitblock[i];
-            self.exitedges
-                .push(FloatingEdge::new(bl, self.exitblock.expect("labelExitEdges: exitblock")));
+            self.exitedges.push(FloatingEdge::new(
+                bl,
+                self.exitblock.expect("labelExitEdges: exitblock"),
+            ));
         }
     }
 
@@ -550,22 +570,36 @@ impl LoopBody {
     /// `blockaction.cc:364`).  Add edges that exit from \b this loop body to the
     /// list of likely \e gotos, giving them the proper priority (`likely` holds
     /// the exit edges in reverse priority order).
-    pub fn emit_likely_edges(&mut self, likely: &mut Vec<FloatingEdge>, graph: &BlockGraph, graph_id: BlockId) {
+    pub fn emit_likely_edges(
+        &mut self,
+        likely: &mut Vec<FloatingEdge>,
+        graph: &BlockGraph,
+        graph_id: BlockId,
+    ) {
         let mut head = self.head.expect("emitLikelyEdges: head");
         while graph.block(head).get_parent() != Some(graph_id) {
-            head = graph.block(head).get_parent().expect("emitLikelyEdges: head parent");
+            head = graph
+                .block(head)
+                .get_parent()
+                .expect("emitLikelyEdges: head parent");
         }
         self.head = Some(head);
         if let Some(mut exitblock) = self.exitblock {
             while graph.block(exitblock).get_parent() != Some(graph_id) {
-                exitblock = graph.block(exitblock).get_parent().expect("emitLikelyEdges: exit parent");
+                exitblock = graph
+                    .block(exitblock)
+                    .get_parent()
+                    .expect("emitLikelyEdges: exit parent");
             }
             self.exitblock = Some(exitblock);
         }
         for i in 0..self.tails.len() {
             let mut tail = self.tails[i];
             while graph.block(tail).get_parent() != Some(graph_id) {
-                tail = graph.block(tail).get_parent().expect("emitLikelyEdges: tail parent");
+                tail = graph
+                    .block(tail)
+                    .get_parent()
+                    .expect("emitLikelyEdges: tail parent");
             }
             self.tails[i] = tail;
             if Some(tail) == self.exitblock {
@@ -680,11 +714,7 @@ impl LoopBody {
     /// Returns -1, 0, or 1.
     pub fn compare_head(a_head_index: int4, looptop_index: int4) -> int4 {
         if a_head_index != looptop_index {
-            if a_head_index < looptop_index {
-                -1
-            } else {
-                1
-            }
+            if a_head_index < looptop_index { -1 } else { 1 }
         } else {
             0
         }
@@ -695,7 +725,11 @@ impl LoopBody {
     /// ordered lookup `(head_index, loopbody_index)` pairs (sorted by head index;
     /// the C++ binary-searches the sorted `looporder` vector).  Returns the
     /// `loopbody` index or `None`.
-    pub fn find(looptop: BlockId, looporder_lookup: &[(int4, usize)], graph: &BlockGraph) -> Option<usize> {
+    pub fn find(
+        looptop: BlockId,
+        looporder_lookup: &[(int4, usize)],
+        graph: &BlockGraph,
+    ) -> Option<usize> {
         let looptop_index = graph.block(looptop).get_index();
         let mut min: int4 = 0;
         let mut max: int4 = looporder_lookup.len() as int4 - 1;
@@ -973,7 +1007,12 @@ impl<'a> TraceDAG<'a> {
 
     /// Comparator for grouping BlockTraces with the same exit block and parent
     /// BranchPoint (C++ `BadEdgeScore::operator<`, `blockaction.cc:635`).
-    fn bad_edge_less(&self, this: &BadEdgeScore, op2: &BadEdgeScore, graph: &BlockGraph) -> std::cmp::Ordering {
+    fn bad_edge_less(
+        &self,
+        this: &BadEdgeScore,
+        op2: &BadEdgeScore,
+        graph: &BlockGraph,
+    ) -> std::cmp::Ordering {
         let thisind = graph.block(this.exitproto).get_index();
         let op2ind = graph.block(op2.exitproto).get_index();
         if thisind != op2ind {
@@ -999,7 +1038,9 @@ impl<'a> TraceDAG<'a> {
     fn remove_trace(&mut self, trace: usize, graph: &mut BlockGraph) {
         // Record that we should now treat this edge like goto
         let bottom = self.tracelist[trace].bottom.expect("removeTrace: bottom");
-        let destnode = self.tracelist[trace].destnode.expect("removeTrace: destnode");
+        let destnode = self.tracelist[trace]
+            .destnode
+            .expect("removeTrace: destnode");
         self.likelygoto.push(FloatingEdge::new(bottom, destnode)); // Create goto record
         let newcount = graph.block(destnode).get_visit_count() + self.tracelist[trace].edgelump;
         graph.block_mut(destnode).set_visit_count(newcount); // Ignore edge(s)
@@ -1080,8 +1121,14 @@ impl<'a> TraceDAG<'a> {
             if top_top.is_none() && self.tracelist[aiter].bottom.is_none() {
                 continue; // Never remove virtual edges
             }
-            let destnode = self.tracelist[aiter].destnode.expect("selectBadEdge: destnode");
-            let terminal = if graph.block(destnode).size_out() == 0 { 1 } else { 0 };
+            let destnode = self.tracelist[aiter]
+                .destnode
+                .expect("selectBadEdge: destnode");
+            let terminal = if graph.block(destnode).size_out() == 0 {
+                1
+            } else {
+                0
+            };
             badedgelist.push(BadEdgeScore {
                 trace: aiter,
                 exitproto: destnode,
@@ -1204,7 +1251,10 @@ impl<'a> TraceDAG<'a> {
 
     /// Position of a trace within the active list (the C++ trace `activeiter`).
     fn active_pos(&self, trace: usize) -> usize {
-        self.activetrace.iter().position(|&t| t == trace).unwrap_or(self.activetrace.len())
+        self.activetrace
+            .iter()
+            .position(|&t| t == trace)
+            .unwrap_or(self.activetrace.len())
     }
 
     /// Check if a given BlockTrace can be retired (C++ `TraceDAG::checkRetirement`,
@@ -1378,7 +1428,6 @@ impl<'a> TraceDAG<'a> {
 // (the leaf `BlockBasic` CBRANCH `boolean_flip`/`fallthru_true` op flags +
 // the `BlockCondition` opcode) is recorded into `pending_flips` (op flags) and
 // realized against the obank by `ActionBlockStructure::apply` after the collapse.
-
 
 /// Surface the unported `BlockGraph::newBlockSwitch` (C++ `block.cc:1907`).
 ///
@@ -1602,12 +1651,17 @@ impl<'a> CollapseStructure<'a> {
     /// `BlockBasic::negateCondition`).  Even numbers of flips on the same block
     /// cancel out (a double-negation), so we reduce to parity here.
     pub fn take_pending_flips(&mut self) -> Vec<BlockId> {
-        let mut parity: std::collections::BTreeMap<BlockId, bool> = std::collections::BTreeMap::new();
+        let mut parity: std::collections::BTreeMap<BlockId, bool> =
+            std::collections::BTreeMap::new();
         for &b in &self.pending_flips {
             let e = parity.entry(b).or_insert(false);
             *e = !*e;
         }
-        parity.into_iter().filter(|&(_, v)| v).map(|(b, _)| b).collect()
+        parity
+            .into_iter()
+            .filter(|&(_, v)| v)
+            .map(|(b, _)| b)
+            .collect()
     }
 
     /// The data-flow half of `FlowBlock::negateCondition` and its subtype
@@ -1797,12 +1851,20 @@ impl<'a> CollapseStructure<'a> {
                 for &oldi in &keep {
                     let mut lb = self.loopbody[oldi].clone();
                     if let Some(ic) = lb.immed_container {
-                        lb.immed_container = if remap[ic] == usize::MAX { None } else { Some(remap[ic]) };
+                        lb.immed_container = if remap[ic] == usize::MAX {
+                            None
+                        } else {
+                            Some(remap[ic])
+                        };
                     }
                     compacted.push(lb);
                 }
                 self.loopbody = compacted;
-                looporder = looporder.iter().map(|&o| remap[o]).filter(|&n| n != usize::MAX).collect();
+                looporder = looporder
+                    .iter()
+                    .map(|&o| remap[o])
+                    .filter(|&n| n != usize::MAX)
+                    .collect();
             }
             // Build the sorted head-index lookup for LoopBody::find.
             let lookup = self.build_looporder_lookup(&looporder);
@@ -1824,20 +1886,26 @@ impl<'a> CollapseStructure<'a> {
             }
             // loopbody.sort(): by depth (deepest first), stable.
             self.stable_sort_loopbody_by_depth();
-            let handler_blocks: std::collections::BTreeSet<BlockId> = if self.exitleaf_facts.java_handlers.is_empty() {
-                Default::default()
-            } else {
-                let list: Vec<BlockId> = self.graph.block(self.graph_id).get_list().to_vec();
-                list.into_iter()
-                    .filter(|&b| self.is_java_handler(b))
-                    .collect()
-            };
+            let handler_blocks: std::collections::BTreeSet<BlockId> =
+                if self.exitleaf_facts.java_handlers.is_empty() {
+                    Default::default()
+                } else {
+                    let list: Vec<BlockId> = self.graph.block(self.graph_id).get_list().to_vec();
+                    list.into_iter()
+                        .filter(|&b| self.is_java_handler(b))
+                        .collect()
+                };
             for idx in 0..self.loopbody.len() {
                 let mut body: Vec<BlockId> = Vec::new();
                 self.loopbody[idx].find_base(&mut body, self.graph);
                 // findExit needs immed_container resolved against the full loopbody.
                 let looporder_snapshot = self.loopbody.clone();
-                self.loopbody[idx].find_exit_avoiding(&body, self.graph, &looporder_snapshot, &handler_blocks);
+                self.loopbody[idx].find_exit_avoiding(
+                    &body,
+                    self.graph,
+                    &looporder_snapshot,
+                    &handler_blocks,
+                );
                 self.loopbody[idx].order_tails(self.graph);
                 let lb = self.loopbody[idx].clone();
                 lb.extend(&mut body, self.graph);
@@ -1979,7 +2047,9 @@ impl<'a> CollapseStructure<'a> {
             }
         }
         if !self.clip_extra_roots()? {
-            return Err(KunaError::lowlevel("Could not finish collapsing block structure"));
+            return Err(KunaError::lowlevel(
+                "Could not finish collapsing block structure",
+            ));
         }
         Ok(None)
     }
@@ -2039,7 +2109,10 @@ impl<'a> CollapseStructure<'a> {
         let last = *nodes.last().expect("nodes");
         if nodes.len() > 1
             && self.graph.block(last).size_out() == 2
-            && (self.is_java_dispatch(last) || nodes[..nodes.len() - 1].iter().any(|&n| self.is_java_dispatch_if(n)))
+            && (self.is_java_dispatch(last)
+                || nodes[..nodes.len() - 1]
+                    .iter()
+                    .any(|&n| self.is_java_dispatch_if(n)))
         {
             nodes.pop();
             if nodes.len() < 2 {
@@ -2059,7 +2132,12 @@ impl<'a> CollapseStructure<'a> {
         }
         match self.graph.block(bl).get_type() {
             crate::block::BlockType::If => self.is_java_dispatch(self.graph.block(bl).get_block(0)),
-            crate::block::BlockType::Ls => self.graph.block(bl).get_list().iter().any(|&b| self.is_java_dispatch_if(b)),
+            crate::block::BlockType::Ls => self
+                .graph
+                .block(bl)
+                .get_list()
+                .iter()
+                .any(|&b| self.is_java_dispatch_if(b)),
             _ => false,
         }
     }
@@ -2523,15 +2601,26 @@ impl<'a> CollapseStructure<'a> {
             .and_then(|bb| self.exitleaf_facts.addr.get(&bb).copied())
             .map(|a| format!("0x{a:x}"))
             .unwrap_or_else(|| "?".to_string());
-        format!("#{}@{}:{} in={} out={}", b.get_index(), addr, ty, b.size_in(), b.size_out())
+        format!(
+            "#{}@{}:{} in={} out={}",
+            b.get_index(),
+            addr,
+            ty,
+            b.size_in(),
+            b.size_out()
+        )
     }
 
     /// (kuna, trace) The artificial-halt type of a structuring node's exit leaf.
     fn dbg_exit_halt(&self, bl: BlockId) -> String {
-        match self.graph.get_exit_leaf(bl).and_then(|lf| self.graph.block(lf).get_copy()) {
-            Some(bb) => crate::p8_structure::kuna_ifnoexit::halt_str(
-                self.exitleaf_facts.halt_type(bb),
-            ),
+        match self
+            .graph
+            .get_exit_leaf(bl)
+            .and_then(|lf| self.graph.block(lf).get_copy())
+        {
+            Some(bb) => {
+                crate::p8_structure::kuna_ifnoexit::halt_str(self.exitleaf_facts.halt_type(bb))
+            }
             None => "noleaf".to_string(),
         }
     }
@@ -2853,7 +2942,11 @@ impl<'a> CollapseStructure<'a> {
     /// \brief Check for switch edges that go straight to the exit block (C++
     /// `CollapseStructure::checkSwitchSkips`, `blockaction.cc:1607`).  If such skip
     /// edges exist, they are converted to gotos and `false` is returned.
-    fn check_switch_skips(&mut self, switchbl: BlockId, exitblock: Option<BlockId>) -> KunaResult<bool> {
+    fn check_switch_skips(
+        &mut self,
+        switchbl: BlockId,
+        exitblock: Option<BlockId>,
+    ) -> KunaResult<bool> {
         let exitblock = match exitblock {
             Some(e) => e,
             None => return Ok(true),
@@ -3053,7 +3146,9 @@ impl<'a> CollapseStructure<'a> {
                 nonfallthru += 1;
             } else if self.graph.block(curbl).size_out() == 1 {
                 let target = self.graph.block(curbl).get_out(0);
-                if self.graph.block(target).size_in() == 2 && self.graph.block(target).size_out() <= 1 {
+                if self.graph.block(target).size_in() == 2
+                    && self.graph.block(target).size_out() <= 1
+                {
                     let inslot = self.graph.block(curbl).get_out_rev_index(0);
                     if self.graph.block(target).get_in(1 - inslot) == bl {
                         fallthru.push(curbl);
@@ -3150,8 +3245,9 @@ impl<'a> CollapseStructure<'a> {
             fullchange = false;
             let mut index = 0;
             if self.dbg_ifne {
-                let order: Vec<String> =
-                    (0..self.size()).map(|i| self.dbg_node(self.block_at(i))).collect();
+                let order: Vec<String> = (0..self.size())
+                    .map(|i| self.dbg_node(self.block_at(i)))
+                    .collect();
                 eprintln!(
                     "[ifne] --- deferred scan (apply#{}) size={} order=[{}]",
                     self.dbg_apply,
@@ -3260,7 +3356,11 @@ fn first_op_of(data: &Funcdata, bl: BlockId) -> Option<crate::context::OpId> {
 
 /// The next op in the same basic block (C++ `++iter` over `op` list).
 fn next_op_in_block(data: &Funcdata, op: crate::context::OpId) -> Option<crate::context::OpId> {
-    let (_prev, next) = data.obank().get(op).expect("next_op_in_block: stale op").basic_neighbours();
+    let (_prev, next) = data
+        .obank()
+        .get(op)
+        .expect("next_op_in_block: stale op")
+        .basic_neighbours();
     next
 }
 
@@ -3346,13 +3446,29 @@ impl ConditionalJoin {
     /// Compare two MergePairs lexicographically by create-index of `side1` then
     /// `side2` (C++ `MergePair::operator<`, `blockaction.cc:1898`).
     fn merge_pair_less(a: &MergePair, b: &MergePair, data: &Funcdata) -> std::cmp::Ordering {
-        let s1 = data.vbank().get(a.side1).expect("mergePair: stale side1").get_create_index();
-        let s2 = data.vbank().get(b.side1).expect("mergePair: stale side1").get_create_index();
+        let s1 = data
+            .vbank()
+            .get(a.side1)
+            .expect("mergePair: stale side1")
+            .get_create_index();
+        let s2 = data
+            .vbank()
+            .get(b.side1)
+            .expect("mergePair: stale side1")
+            .get_create_index();
         if s1 != s2 {
             return s1.cmp(&s2);
         }
-        let a2 = data.vbank().get(a.side2).expect("mergePair: stale side2").get_create_index();
-        let b2 = data.vbank().get(b.side2).expect("mergePair: stale side2").get_create_index();
+        let a2 = data
+            .vbank()
+            .get(a.side2)
+            .expect("mergePair: stale side2")
+            .get_create_index();
+        let b2 = data
+            .vbank()
+            .get(b.side2)
+            .expect("mergePair: stale side2")
+            .get_create_index();
         a2.cmp(&b2)
     }
 
@@ -3370,7 +3486,9 @@ impl ConditionalJoin {
         let pos = self
             .mergeneed
             .iter()
-            .position(|(k, _)| ConditionalJoin::merge_pair_less(&mp, k, data) == std::cmp::Ordering::Less)
+            .position(|(k, _)| {
+                ConditionalJoin::merge_pair_less(&mp, k, data) == std::cmp::Ordering::Less
+            })
             .unwrap_or(self.mergeneed.len());
         self.mergeneed.insert(pos, (mp, None));
         pos
@@ -3385,14 +3503,26 @@ impl ConditionalJoin {
             Some(op) => op,
             None => return false,
         };
-        if data.obank().get(cbranch1).expect("findDups: cbranch1").code() != OpCode::CPUI_CBRANCH {
+        if data
+            .obank()
+            .get(cbranch1)
+            .expect("findDups: cbranch1")
+            .code()
+            != OpCode::CPUI_CBRANCH
+        {
             return false;
         }
         let cbranch2 = match last_op_of(data, b2) {
             Some(op) => op,
             None => return false,
         };
-        if data.obank().get(cbranch2).expect("findDups: cbranch2").code() != OpCode::CPUI_CBRANCH {
+        if data
+            .obank()
+            .get(cbranch2)
+            .expect("findDups: cbranch2")
+            .code()
+            != OpCode::CPUI_CBRANCH
+        {
             return false;
         }
         self.cbranch1 = Some(cbranch1);
@@ -3405,8 +3535,18 @@ impl ConditionalJoin {
             return false;
         }
 
-        let vn1 = data.obank().get(cbranch1).unwrap().get_in(1).expect("findDups: cbranch1 in1");
-        let vn2 = data.obank().get(cbranch2).unwrap().get_in(1).expect("findDups: cbranch2 in1");
+        let vn1 = data
+            .obank()
+            .get(cbranch1)
+            .unwrap()
+            .get_in(1)
+            .expect("findDups: cbranch1 in1");
+        let vn2 = data
+            .obank()
+            .get(cbranch2)
+            .unwrap()
+            .get_in(1)
+            .expect("findDups: cbranch2 in1");
 
         if vn1 == vn2 {
             return true;
@@ -3441,7 +3581,12 @@ impl ConditionalJoin {
         if res > 1 {
             return false;
         }
-        let op1 = data.vbank().get(vn1).unwrap().get_def().expect("findDups: vn1 def");
+        let op1 = data
+            .vbank()
+            .get(vn1)
+            .unwrap()
+            .get_def()
+            .expect("findDups: vn1 def");
         let op1c = data.obank().get(op1).unwrap().code();
         if op1c == OpCode::CPUI_SUBPIECE {
             return false;
@@ -3450,7 +3595,13 @@ impl ConditionalJoin {
             return false;
         }
 
-        self.merge_need_get_or_insert(MergePair { side1: vn1, side2: vn2 }, data);
+        self.merge_need_get_or_insert(
+            MergePair {
+                side1: vn1,
+                side2: vn2,
+            },
+            data,
+        );
         true
     }
 
@@ -3507,10 +3658,26 @@ impl ConditionalJoin {
             let code = data.obank().get(op).unwrap().code();
             if code == OpCode::CPUI_MULTIEQUAL {
                 // Anything merging from our two root blocks
-                let vn1 = data.obank().get(op).unwrap().get_in(in1).expect("checkExitBlock: in1");
-                let vn2 = data.obank().get(op).unwrap().get_in(in2).expect("checkExitBlock: in2");
+                let vn1 = data
+                    .obank()
+                    .get(op)
+                    .unwrap()
+                    .get_in(in1)
+                    .expect("checkExitBlock: in1");
+                let vn2 = data
+                    .obank()
+                    .get(op)
+                    .unwrap()
+                    .get_in(in2)
+                    .expect("checkExitBlock: in2");
                 if vn1 != vn2 {
-                    self.merge_need_get_or_insert(MergePair { side1: vn1, side2: vn2 }, data);
+                    self.merge_need_get_or_insert(
+                        MergePair {
+                            side1: vn1,
+                            side2: vn2,
+                        },
+                        data,
+                    );
                 }
             }
             iter = next;
@@ -3524,7 +3691,12 @@ impl ConditionalJoin {
         let joinblock = self.joinblock.expect("setupMultiequals: joinblock");
         let cbranch1 = self.cbranch1.expect("setupMultiequals: cbranch1");
         // C++ uses cbranch1->getAddr() for every new MULTIEQUAL.
-        let addr = data.obank().get(cbranch1).expect("setupMultiequals: stale cbranch1").get_addr().clone();
+        let addr = data
+            .obank()
+            .get(cbranch1)
+            .expect("setupMultiequals: stale cbranch1")
+            .get_addr()
+            .clone();
         for idx in 0..self.mergeneed.len() {
             if self.mergeneed[idx].1.is_some() {
                 continue;
@@ -3534,10 +3706,18 @@ impl ConditionalJoin {
             let vn2 = mp.side2;
             let multi = data.new_op(2, addr.clone());
             data.op_set_opcode(multi, crate::typeop::type_op_for(OpCode::CPUI_MULTIEQUAL));
-            let size = data.vbank().get(vn1).expect("setupMultiequals: stale vn1").get_size();
-            let outvn = data.new_unique_out(size, multi).expect("setupMultiequals: newUniqueOut");
-            data.op_set_input(multi, vn1, 0).expect("setupMultiequals: opSetInput 0");
-            data.op_set_input(multi, vn2, 1).expect("setupMultiequals: opSetInput 1");
+            let size = data
+                .vbank()
+                .get(vn1)
+                .expect("setupMultiequals: stale vn1")
+                .get_size();
+            let outvn = data
+                .new_unique_out(size, multi)
+                .expect("setupMultiequals: newUniqueOut");
+            data.op_set_input(multi, vn1, 0)
+                .expect("setupMultiequals: opSetInput 0");
+            data.op_set_input(multi, vn2, 1)
+                .expect("setupMultiequals: opSetInput 1");
             self.mergeneed[idx].1 = Some(outvn);
             data.op_insert_end(multi, joinblock);
         }
@@ -3549,17 +3729,31 @@ impl ConditionalJoin {
         let joinblock = self.joinblock.expect("moveCbranch: joinblock");
         let cbranch1 = self.cbranch1.expect("moveCbranch: cbranch1");
         let cbranch2 = self.cbranch2.expect("moveCbranch: cbranch2");
-        let vn1 = data.obank().get(cbranch1).expect("moveCbranch: cbranch1").get_in(1).expect("moveCbranch: cbranch1 in1");
-        let vn2 = data.obank().get(cbranch2).expect("moveCbranch: cbranch2").get_in(1).expect("moveCbranch: cbranch2 in1");
+        let vn1 = data
+            .obank()
+            .get(cbranch1)
+            .expect("moveCbranch: cbranch1")
+            .get_in(1)
+            .expect("moveCbranch: cbranch1 in1");
+        let vn2 = data
+            .obank()
+            .get(cbranch2)
+            .expect("moveCbranch: cbranch2")
+            .get_in(1)
+            .expect("moveCbranch: cbranch2 in1");
         data.op_uninsert(cbranch1);
         data.op_insert_end(cbranch1, joinblock);
         let vn = if vn1 != vn2 {
-            self.merge_need_lookup(MergePair { side1: vn1, side2: vn2 })
-                .expect("moveCbranch: mergeneed entry missing")
+            self.merge_need_lookup(MergePair {
+                side1: vn1,
+                side2: vn2,
+            })
+            .expect("moveCbranch: mergeneed entry missing")
         } else {
             vn1
         };
-        data.op_set_input(cbranch1, vn, 1).expect("moveCbranch: opSetInput");
+        data.op_set_input(cbranch1, vn, 1)
+            .expect("moveCbranch: opSetInput");
         data.op_destroy(cbranch2);
     }
 
@@ -3572,21 +3766,45 @@ impl ConditionalJoin {
         while let Some(op) = iter {
             // Advance iterator before inserts happen
             let next = next_op_in_block(data, op);
-            let code = data.obank().get(op).expect("cutDownMultiequals: stale op").code();
+            let code = data
+                .obank()
+                .get(op)
+                .expect("cutDownMultiequals: stale op")
+                .code();
             if code == OpCode::CPUI_MULTIEQUAL {
-                let vn1 = data.obank().get(op).unwrap().get_in(in1).expect("cutDownMultiequals: in1");
-                let vn2 = data.obank().get(op).unwrap().get_in(in2).expect("cutDownMultiequals: in2");
+                let vn1 = data
+                    .obank()
+                    .get(op)
+                    .unwrap()
+                    .get_in(in1)
+                    .expect("cutDownMultiequals: in1");
+                let vn2 = data
+                    .obank()
+                    .get(op)
+                    .unwrap()
+                    .get_in(in2)
+                    .expect("cutDownMultiequals: in2");
                 if vn1 == vn2 {
                     data.op_remove_input(op, hi);
                 } else {
                     let subvn = self
-                        .merge_need_lookup(MergePair { side1: vn1, side2: vn2 })
+                        .merge_need_lookup(MergePair {
+                            side1: vn1,
+                            side2: vn2,
+                        })
                         .expect("cutDownMultiequals: mergeneed entry missing");
                     data.op_remove_input(op, hi);
-                    data.op_set_input(op, subvn, lo).expect("cutDownMultiequals: opSetInput");
+                    data.op_set_input(op, subvn, lo)
+                        .expect("cutDownMultiequals: opSetInput");
                 }
                 // Collapsed to a single input: turn the MULTIEQUAL into a COPY.
-                if data.obank().get(op).expect("cutDownMultiequals: stale op").num_input() == 1 {
+                if data
+                    .obank()
+                    .get(op)
+                    .expect("cutDownMultiequals: stale op")
+                    .num_input()
+                    == 1
+                {
                     data.op_uninsert(op);
                     data.op_set_opcode(op, crate::typeop::type_op_for(OpCode::CPUI_COPY));
                     data.op_insert_begin(op, exit);
@@ -3598,7 +3816,10 @@ impl ConditionalJoin {
 
     /// Look up the merged Varnode for a MergePair (C++ `mergeneed[MergePair(...)]`).
     fn merge_need_lookup(&self, mp: MergePair) -> Option<VarnodeId> {
-        self.mergeneed.iter().find(|(k, _)| *k == mp).and_then(|(_, v)| *v)
+        self.mergeneed
+            .iter()
+            .find(|(k, _)| *k == mp)
+            .and_then(|(_, v)| *v)
     }
 
     /// Execute the merge (C++ `ConditionalJoin::execute`, `blockaction.cc:2094`).
@@ -3608,7 +3829,12 @@ impl ConditionalJoin {
         let exita = self.exita.expect("execute: exita");
         let exitb = self.exitb.expect("execute: exitb");
         let cbranch1 = self.cbranch1.expect("execute: cbranch1");
-        let addr = data.obank().get(cbranch1).expect("execute: stale cbranch1").get_addr().clone();
+        let addr = data
+            .obank()
+            .get(cbranch1)
+            .expect("execute: stale cbranch1")
+            .get_addr()
+            .clone();
         let joinblock = data.node_join_create_block(
             block1,
             block2,
@@ -3637,8 +3863,8 @@ impl ConditionalJoin {
 // ===========================================================================
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
-use crate::funcdata::Funcdata;
 use crate::context::VarnodeId;
+use crate::funcdata::Funcdata;
 
 /// \brief Give each control-flow structure an opportunity to make a final
 /// transform (C++ `ActionStructureTransform`).  Currently sets up \e for loops
@@ -3693,7 +3919,9 @@ pub struct ActionNormalizeBranches {
 impl ActionNormalizeBranches {
     /// Construct in group `g`.
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionNormalizeBranches { base: ActionBase::new(0, "normalizebranches", g) })
+        Box::new(ActionNormalizeBranches {
+            base: ActionBase::new(0, "normalizebranches", g),
+        })
     }
 }
 
@@ -3708,7 +3936,9 @@ impl Action for ActionNormalizeBranches {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionNormalizeBranches { base: self.base.clone() }))
+        Some(Box::new(ActionNormalizeBranches {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         let graph = data.bblocks_ref();
@@ -3845,7 +4075,9 @@ pub struct ActionBlockStructure {
 impl ActionBlockStructure {
     /// Construct in group `g`.
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionBlockStructure { base: ActionBase::new(0, "blockstructure", g) })
+        Box::new(ActionBlockStructure {
+            base: ActionBase::new(0, "blockstructure", g),
+        })
     }
 }
 
@@ -3860,7 +4092,9 @@ impl Action for ActionBlockStructure {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionBlockStructure { base: self.base.clone() }))
+        Some(Box::new(ActionBlockStructure {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, ctx: &mut ActionContext) -> ApplyResult {
         // C++ blockaction.cc:2170.
@@ -3889,7 +4123,8 @@ impl Action for ActionBlockStructure {
         // the `if` clause.
         let java_try = !crate::kuna_javatry::dispatch_blocks(data).is_empty();
         if data.get_arch().region_structure && !java_try {
-            match crate::p8_structure::region_structurer::run_region_structurer(data, ctx.deadline) {
+            match crate::p8_structure::region_structurer::run_region_structurer(data, ctx.deadline)
+            {
                 Ok((true, flips)) => {
                     // Realize the deferred data-flow half of the loop-condition
                     // `negateCondition`s the region structurer recorded (the same
@@ -3936,7 +4171,9 @@ impl Action for ActionBlockStructure {
         let guard_arm = data.get_arch().guard_arm;
         let loop_cond_hoist = data.get_arch().loop_cond_hoist;
         exitleaf_facts.java_handlers = crate::kuna_javatry::dispatch_targets(data);
-        exitleaf_facts.java_dispatch = crate::kuna_javatry::dispatch_blocks(data).into_iter().collect();
+        exitleaf_facts.java_dispatch = crate::kuna_javatry::dispatch_blocks(data)
+            .into_iter()
+            .collect();
         let want_addr = dbg_ifne || guard_arm || !exitleaf_facts.java_handlers.is_empty();
         let nbb = data.bblocks_get_size();
         for i in 0..nbb {
@@ -4048,7 +4285,9 @@ pub struct ActionFinalStructure {
 impl ActionFinalStructure {
     /// Construct in group `g`.
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionFinalStructure { base: ActionBase::new(0, "finalstructure", g) })
+        Box::new(ActionFinalStructure {
+            base: ActionBase::new(0, "finalstructure", g),
+        })
     }
 }
 
@@ -4063,7 +4302,9 @@ impl Action for ActionFinalStructure {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionFinalStructure { base: self.base.clone() }))
+        Some(Box::new(ActionFinalStructure {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // graph.orderBlocks(): put the residual top-level components in final
@@ -4100,7 +4341,11 @@ impl Action for ActionFinalStructure {
         let sroot = data.sblocks_root();
         if data.get_arch().loop_continue {
             let points = crate::p8_structure::kuna_loopcontinue::continue_points(data, sroot);
-            crate::p8_structure::kuna_loopcontinue::recover_continues(data.sblocks_mut(), sroot, &points);
+            crate::p8_structure::kuna_loopcontinue::recover_continues(
+                data.sblocks_mut(),
+                sroot,
+                &points,
+            );
         }
         data.sblocks_mut().mark_unstructured(sroot);
         // graph.markLabelBumpUp(false): let loop blocks steal the label of their
@@ -4122,7 +4367,9 @@ pub struct ActionNodeJoin {
 impl ActionNodeJoin {
     /// Construct in group `g`.
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionNodeJoin { base: ActionBase::new(0, "nodejoin", g) })
+        Box::new(ActionNodeJoin {
+            base: ActionBase::new(0, "nodejoin", g),
+        })
     }
 }
 
@@ -4137,7 +4384,9 @@ impl Action for ActionNodeJoin {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionNodeJoin { base: self.base.clone() }))
+        Some(Box::new(ActionNodeJoin {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ (blockaction.cc:2327): iterate the basic blocks; for each 2-out
@@ -4201,7 +4450,9 @@ pub struct ActionReturnSplit {
 impl ActionReturnSplit {
     /// Construct in group `g`.
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionReturnSplit { base: ActionBase::new(0, "returnsplit", g) })
+        Box::new(ActionReturnSplit {
+            base: ActionBase::new(0, "returnsplit", g),
+        })
     }
 }
 
@@ -4216,7 +4467,9 @@ impl Action for ActionReturnSplit {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionReturnSplit { base: self.base.clone() }))
+        Some(Box::new(ActionReturnSplit {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ (blockaction.cc:2265): iterate `data.beginOp(CPUI_RETURN)`, gather

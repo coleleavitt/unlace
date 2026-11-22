@@ -22,11 +22,16 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn specs_root() -> PathBuf {
-    std::env::var_os("KUNA_SPECS").map(PathBuf::from).unwrap_or_else(|| repo_root().join("specs"))
+    std::env::var_os("KUNA_SPECS")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| repo_root().join("specs"))
 }
 
 fn datatests_root() -> PathBuf {
@@ -43,7 +48,10 @@ fn rust_oracle() -> Option<PathBuf> {
         return pb.exists().then_some(pb);
     }
     for profile in ["release", "debug"] {
-        let pb = repo_root().join("decompiler/target").join(profile).join("decomp_test_dbg");
+        let pb = repo_root()
+            .join("decompiler/target")
+            .join(profile)
+            .join("decomp_test_dbg");
         if pb.exists() {
             return Some(pb);
         }

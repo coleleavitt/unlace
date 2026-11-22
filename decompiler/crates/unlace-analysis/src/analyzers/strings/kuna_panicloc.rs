@@ -17,12 +17,12 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use object::read::Object;
 use object::RelocationFlags;
+use object::read::Object;
 
-use unlace_decomp::dtype::{type_metatype, Datatype, TypeFactory, TypeField};
+use unlace_decomp::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
 
-use super::kuna_strrecords::{is_text, read_word, ro_regions, RoRegion};
+use super::kuna_strrecords::{RoRegion, is_text, read_word, ro_regions};
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase, StringFact, TypedDataFact};
 
 /// One recognized `Location`.
@@ -65,11 +65,17 @@ fn record_at(
 ) -> Option<PanicLocation> {
     let raw = region.bytes(at, 2 * width + 8)?;
     let w = width as usize;
-    let ptr = relative.get(&at).copied().unwrap_or_else(|| read_word(&raw[..w]));
+    let ptr = relative
+        .get(&at)
+        .copied()
+        .unwrap_or_else(|| read_word(&raw[..w]));
     let len = read_word(&raw[w..2 * w]);
     let line = u32::from_le_bytes(raw[2 * w..2 * w + 4].try_into().ok()?);
     let col = u32::from_le_bytes(raw[2 * w + 4..2 * w + 8].try_into().ok()?);
-    if !(1..=0x1000).contains(&len) || !(1..=0xff_ffff).contains(&line) || !(1..=0xfff).contains(&col) {
+    if !(1..=0x1000).contains(&len)
+        || !(1..=0xff_ffff).contains(&line)
+        || !(1..=0xfff).contains(&col)
+    {
         return None;
     }
     let text = regions.iter().find(|r| r.contains(ptr))?.bytes(ptr, len)?;
@@ -77,18 +83,27 @@ fn record_at(
     if !text.ends_with(b".rs") || !is_text(text) {
         return None;
     }
-    Some(PanicLocation { addr: at, file_addr: ptr, file: String::from_utf8_lossy(text).into_owned(), line, col })
+    Some(PanicLocation {
+        addr: at,
+        file_addr: ptr,
+        file: String::from_utf8_lossy(text).into_owned(),
+        line,
+        col,
+    })
 }
 
 /// `slot -> addend` for every `R_*_RELATIVE` dynamic relocation.
 fn relative_addends(file: &object::File) -> HashMap<u64, u64> {
-    let Some((r_relative, _, _)) = crate::loader::kuna_dynrelocs::reloc_triple(file.architecture()) else {
+    let Some((r_relative, _, _)) = crate::loader::kuna_dynrelocs::reloc_triple(file.architecture())
+    else {
         return HashMap::new();
     };
     file.dynamic_relocations()
         .into_iter()
         .flatten()
-        .filter(|(_, r)| matches!(r.flags(), RelocationFlags::Elf { r_type } if r_type == r_relative))
+        .filter(
+            |(_, r)| matches!(r.flags(), RelocationFlags::Elf { r_type } if r_type == r_relative),
+        )
         .map(|(off, r)| (off, r.addend() as u64))
         .collect()
 }
@@ -126,7 +141,8 @@ fn location_type(tf: &dyn TypeFactory, width: i32) -> Option<Rc<Datatype>> {
                 TypeField::new(0, 0, "data_ptr", data_t),
                 TypeField::new(1, width, "length", usize_t),
             ];
-            tf.set_fields_struct_raw(&shell, fields, Vec::new(), 2 * width, width, 0).ok()?
+            tf.set_fields_struct_raw(&shell, fields, Vec::new(), 2 * width, width, 0)
+                .ok()?
         }
     };
     let u32_t = tf.get_base(4, type_metatype::TYPE_UINT).ok()?;
@@ -136,7 +152,8 @@ fn location_type(tf: &dyn TypeFactory, width: i32) -> Option<Rc<Datatype>> {
         TypeField::new(1, 2 * width, "line", Rc::clone(&u32_t)),
         TypeField::new(2, 2 * width + 4, "col", u32_t),
     ];
-    tf.set_fields_struct_raw(&shell, fields, Vec::new(), 2 * width + 8, width, 0).ok()
+    tf.set_fields_struct_raw(&shell, fields, Vec::new(), 2 * width + 8, width, 0)
+        .ok()
 }
 
 /// (kuna `panicloc`) Registered for rustc-detected images; committed under
@@ -159,9 +176,16 @@ impl AnalysisPass for PanicLocationPass {
         let mut out = AnalysisOutput::default();
         let ty = location_type(ctx.arch.types(), width);
         for loc in &locs {
-            out.bounded_strings.push(StringFact { addr: loc.file_addr, len: loc.file.len() as u32 });
+            out.bounded_strings.push(StringFact {
+                addr: loc.file_addr,
+                len: loc.file.len() as u32,
+            });
             if let Some(t) = &ty {
-                out.typed_data.push(TypedDataFact { addr: loc.addr, name: location_name(loc), type_: Rc::clone(t) });
+                out.typed_data.push(TypedDataFact {
+                    addr: loc.addr,
+                    name: location_name(loc),
+                    type_: Rc::clone(t),
+                });
             }
         }
         out.bounded_strings.sort_by_key(|f| f.addr);
@@ -176,9 +200,21 @@ mod tests {
 
     #[test]
     fn names_keep_the_last_two_path_components() {
-        let loc = PanicLocation { addr: 0, file_addr: 0, file: "/rustc/abc/library/core/src/str/mod.rs".into(), line: 68, col: 5 };
+        let loc = PanicLocation {
+            addr: 0,
+            file_addr: 0,
+            file: "/rustc/abc/library/core/src/str/mod.rs".into(),
+            line: 68,
+            col: 5,
+        };
         assert_eq!(location_name(&loc), "panic_loc_str_mod_rs_68_5");
-        let loc = PanicLocation { addr: 0, file_addr: 0, file: "p.rs".into(), line: 3, col: 39 };
+        let loc = PanicLocation {
+            addr: 0,
+            file_addr: 0,
+            file: "p.rs".into(),
+            line: 3,
+            col: 39,
+        };
         assert_eq!(location_name(&loc), "panic_loc_p_rs_3_39");
     }
 
@@ -190,9 +226,21 @@ mod tests {
         data[8..16].copy_from_slice(&11u64.to_le_bytes());
         data[16..20].copy_from_slice(&10u32.to_le_bytes());
         data[20..24].copy_from_slice(&5u32.to_le_bytes());
-        let regions = vec![RoRegion { vma: 0x1000, data: &data }, RoRegion { vma: 0x2000, data: text }];
+        let regions = vec![
+            RoRegion {
+                vma: 0x1000,
+                data: &data,
+            },
+            RoRegion {
+                vma: 0x2000,
+                data: text,
+            },
+        ];
         let loc = record_at(&regions, &regions[0], 0x1000, 8, &HashMap::new()).expect("location");
-        assert_eq!((loc.file.as_str(), loc.line, loc.col), ("src/main.rs", 10, 5));
+        assert_eq!(
+            (loc.file.as_str(), loc.line, loc.col),
+            ("src/main.rs", 10, 5)
+        );
         assert!(record_at(&regions, &regions[0], 0x1008, 8, &HashMap::new()).is_none());
     }
 
@@ -207,9 +255,21 @@ mod tests {
         data[32..40].copy_from_slice(&12u64.to_le_bytes());
         data[40..44].copy_from_slice(&7u32.to_le_bytes());
         data[44..48].copy_from_slice(&3u32.to_le_bytes());
-        let regions = vec![RoRegion { vma: 0x1000, data: &data }, RoRegion { vma: 0x2000, data: text }];
+        let regions = vec![
+            RoRegion {
+                vma: 0x1000,
+                data: &data,
+            },
+            RoRegion {
+                vma: 0x2000,
+                data: text,
+            },
+        ];
         assert!(record_at(&regions, &regions[0], 0x1000, 8, &HashMap::new()).is_none());
         let loc = record_at(&regions, &regions[0], 0x1018, 8, &HashMap::new()).expect("location");
-        assert_eq!((loc.file.as_str(), loc.line, loc.col), ("src/main.rs", 7, 3));
+        assert_eq!(
+            (loc.file.as_str(), loc.line, loc.col),
+            ("src/main.rs", 7, 3)
+        );
     }
 }

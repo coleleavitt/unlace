@@ -7,22 +7,38 @@
 use super::*;
 
 fn fact(value: uintb, at: uintb, declared_by: &'static str, sig: Sig) -> Fact {
-    Fact { value, declared_by, sig, at }
+    Fact {
+        value,
+        declared_by,
+        sig,
+        at,
+    }
 }
 
 fn ledger(rows: &[((int4, uintb), Vec<Fact>)]) -> Ledger {
     let mut l = Ledger::default();
     for (caller, facts) in rows {
-        l.by_caller
-            .insert(*caller, CallerFacts { facts: facts.clone(), ..Default::default() });
+        l.by_caller.insert(
+            *caller,
+            CallerFacts {
+                facts: facts.clone(),
+                ..Default::default()
+            },
+        );
     }
     l
 }
 
 #[test]
 fn option_parses_both_values_and_rejects_anything_else() {
-    assert_eq!(OptionCallbackType.apply("on").unwrap().0, CallbackTypeMode::On);
-    assert_eq!(OptionCallbackType.apply("off").unwrap().0, CallbackTypeMode::Off);
+    assert_eq!(
+        OptionCallbackType.apply("on").unwrap().0,
+        CallbackTypeMode::On
+    );
+    assert_eq!(
+        OptionCallbackType.apply("off").unwrap().0,
+        CallbackTypeMode::Off
+    );
     assert!(OptionCallbackType.apply("types").is_err());
     assert!(CallbackTypeMode::On.is_on());
     assert!(!CallbackTypeMode::Off.is_on());
@@ -43,7 +59,12 @@ fn every_slot_index_is_inside_the_entry_points_own_parameter_list() {
                 e.name,
                 e.params.len()
             );
-            assert_eq!(e.params[*slot], Ty::VoidPtr, "{}: slot {slot} is not a pointer", e.name);
+            assert_eq!(
+                e.params[*slot],
+                Ty::VoidPtr,
+                "{}: slot {slot} is not a pointer",
+                e.name
+            );
             assert!(
                 sig.params.iter().all(|t| *t != Ty::Void),
                 "{}: a callback parameter cannot be void",
@@ -96,7 +117,10 @@ fn a_caller_decompiled_again_does_not_count_its_call_twice() {
     let mut l = ledger(&[((1, 0x2000), vec![fact(0x3a72, 0x415f, "qsort", CMP2)])]);
     l.by_caller.insert(
         (1, 0x2000),
-        CallerFacts { facts: vec![fact(0x3a72, 0x415f, "qsort", CMP2)], ..Default::default() },
+        CallerFacts {
+            facts: vec![fact(0x3a72, 0x415f, "qsort", CMP2)],
+            ..Default::default()
+        },
     );
     assert_eq!(l.decided()[&0x3a72].args, 1);
 }
@@ -111,7 +135,10 @@ fn two_callers_are_two_owners() {
     let row = &l.decided()[&0x3a72];
     assert_eq!(row.owners, [0x2000, 0x2400].into_iter().collect());
     assert_eq!(row.args, 2);
-    assert!(!row.conflict, "qsort and bsearch declare the same comparator");
+    assert!(
+        !row.conflict,
+        "qsort and bsearch declare the same comparator"
+    );
 }
 
 /// gcc hoists the `lea` out of two `signal(SIG, handler)` calls in a row, so
@@ -124,7 +151,10 @@ fn two_callers_are_two_owners() {
 fn one_owner_can_carry_two_arguments() {
     let l = ledger(&[(
         (1, 0x2000),
-        vec![fact(0x3b72, 0x21a0, "signal", HANDLER), fact(0x3b72, 0x21c0, "signal", HANDLER)],
+        vec![
+            fact(0x3b72, 0x21a0, "signal", HANDLER),
+            fact(0x3b72, 0x21c0, "signal", HANDLER),
+        ],
     )]);
     let row = &l.decided()[&0x3b72];
     assert_eq!(row.owners.len(), 1);
@@ -144,7 +174,10 @@ fn two_slots_that_disagree_are_a_conflict() {
 fn a_caller_that_passes_two_different_callbacks_records_both() {
     let l = ledger(&[(
         (1, 0x2000),
-        vec![fact(0x3a72, 0x415f, "qsort", CMP2), fact(0x3b72, 0x4180, "signal", HANDLER)],
+        vec![
+            fact(0x3a72, 0x415f, "qsort", CMP2),
+            fact(0x3b72, 0x4180, "signal", HANDLER),
+        ],
     )]);
     let d = l.decided();
     assert_eq!(d.len(), 2);
@@ -195,10 +228,17 @@ fn decline_tokens_are_distinct() {
 fn a_body_that_uses_the_address_somewhere_else_is_an_escape() {
     let mut l = ledger(&[((1, 0x2000), vec![fact(0x3b72, 0x21a0, "signal", HANDLER)])]);
     assert!(!l.decided()[&0x3b72].other_use);
-    l.by_caller.get_mut(&(1, 0x2000)).unwrap().other_use.insert(0x3b72);
+    l.by_caller
+        .get_mut(&(1, 0x2000))
+        .unwrap()
+        .other_use
+        .insert(0x3b72);
     let row = &l.decided()[&0x3b72];
     assert_eq!(row.args, 1, "the registration itself is still one argument");
-    assert!(row.other_use, "the second use of the same address is not explained");
+    assert!(
+        row.other_use,
+        "the second use of the same address is not explained"
+    );
 }
 
 /// Another function's unexplained use of a DIFFERENT address says nothing
@@ -209,7 +249,11 @@ fn another_addresss_other_use_does_not_touch_this_row() {
         ((1, 0x2000), vec![fact(0x3b72, 0x21a0, "signal", HANDLER)]),
         ((1, 0x2400), vec![fact(0x3a72, 0x4500, "qsort", CMP2)]),
     ]);
-    l.by_caller.get_mut(&(1, 0x2400)).unwrap().other_use.insert(0x3a72);
+    l.by_caller
+        .get_mut(&(1, 0x2400))
+        .unwrap()
+        .other_use
+        .insert(0x3a72);
     assert!(!l.decided()[&0x3b72].other_use);
     assert!(l.decided()[&0x3a72].other_use);
 }
@@ -275,11 +319,23 @@ const GLOBERR_IN: &[Range] = &[RDI, ESI];
 #[test]
 fn a_recovered_list_longer_than_the_declaration_is_refused() {
     assert_eq!(
-        body_contradicts(&own(&[RDI, RSI, RDX], Some(EAX), None), &CMP2, false, CMP2_IN, Some(EAX)),
+        body_contradicts(
+            &own(&[RDI, RSI, RDX], Some(EAX), None),
+            &CMP2,
+            false,
+            CMP2_IN,
+            Some(EAX)
+        ),
         Some(Decline::MoreInputsThanDeclared)
     );
     assert_eq!(
-        body_contradicts(&own(&[RDI, RSI], Some(EAX), None), &CMP2, true, CMP2_IN, Some(EAX)),
+        body_contradicts(
+            &own(&[RDI, RSI], Some(EAX), None),
+            &CMP2,
+            true,
+            CMP2_IN,
+            Some(EAX)
+        ),
         None
     );
 }
@@ -297,7 +353,13 @@ fn a_recovered_list_shorter_than_the_declaration_is_refused_only_with_a_direct_c
         Some(Decline::FewerInputsThanDeclared)
     );
     assert_eq!(
-        body_contradicts(&own(&[RDI], Some(EAX), None), &CMP2, true, CMP2_IN, Some(EAX)),
+        body_contradicts(
+            &own(&[RDI], Some(EAX), None),
+            &CMP2,
+            true,
+            CMP2_IN,
+            Some(EAX)
+        ),
         Some(Decline::FewerInputsThanDeclared)
     );
     assert_eq!(
@@ -320,18 +382,39 @@ fn an_input_wider_than_the_declared_storage_is_refused() {
             Some(Decline::WiderInputThanDeclared)
         );
     }
-    assert_eq!(body_contradicts(&own(&[EDI], None, None), &HANDLER, true, HANDLER_IN, None), None);
     assert_eq!(
-        body_contradicts(&own(&[EDI, RSI], Some(EAX), None), &CMP2, true, CMP2_IN, Some(EAX)),
+        body_contradicts(&own(&[EDI], None, None), &HANDLER, true, HANDLER_IN, None),
         None
     );
     assert_eq!(
-        body_contradicts(&own(&[RSI, RDI], Some(EAX), None), &CMP2, false, CMP2_IN, Some(EAX)),
+        body_contradicts(
+            &own(&[EDI, RSI], Some(EAX), None),
+            &CMP2,
+            true,
+            CMP2_IN,
+            Some(EAX)
+        ),
+        None
+    );
+    assert_eq!(
+        body_contradicts(
+            &own(&[RSI, RDI], Some(EAX), None),
+            &CMP2,
+            false,
+            CMP2_IN,
+            Some(EAX)
+        ),
         Some(Decline::WiderInputThanDeclared),
         "each input is held to the storage of ITS position"
     );
     assert_eq!(
-        body_contradicts(&own(&[RDI, RSI], Some(EAX), None), &GLOBERR, false, GLOBERR_IN, Some(EAX)),
+        body_contradicts(
+            &own(&[RDI, RSI], Some(EAX), None),
+            &GLOBERR,
+            false,
+            GLOBERR_IN,
+            Some(EAX)
+        ),
         Some(Decline::WiderInputThanDeclared),
         "the second input of an errfunc is an `int`"
     );
@@ -341,7 +424,13 @@ fn an_input_wider_than_the_declared_storage_is_refused() {
 #[test]
 fn a_computed_value_in_a_void_slot_is_refused() {
     assert_eq!(
-        body_contradicts(&own(&[EDI], Some(EAX), None), &HANDLER, false, HANDLER_IN, None),
+        body_contradicts(
+            &own(&[EDI], Some(EAX), None),
+            &HANDLER,
+            false,
+            HANDLER_IN,
+            None
+        ),
         Some(Decline::ReturnsAValue)
     );
 }
@@ -352,15 +441,33 @@ fn a_computed_value_in_a_void_slot_is_refused() {
 #[test]
 fn a_value_slot_on_a_body_that_computes_no_value_is_refused() {
     assert_eq!(
-        body_contradicts(&own(&[RDI], None, Some(EAX)), &THREAD, false, THREAD_IN, Some(RAX)),
+        body_contradicts(
+            &own(&[RDI], None, Some(EAX)),
+            &THREAD,
+            false,
+            THREAD_IN,
+            Some(RAX)
+        ),
         Some(Decline::ReturnsNoValue)
     );
     assert_eq!(
-        body_contradicts(&own(&[RDI, ESI], None, None), &GLOBERR, false, GLOBERR_IN, Some(EAX)),
+        body_contradicts(
+            &own(&[RDI, ESI], None, None),
+            &GLOBERR,
+            false,
+            GLOBERR_IN,
+            Some(EAX)
+        ),
         Some(Decline::ReturnsNoValue)
     );
     assert_eq!(
-        body_contradicts(&own(&[RDI, RSI], None, Some(EAX)), &CMP2, false, CMP2_IN, None),
+        body_contradicts(
+            &own(&[RDI, RSI], None, Some(EAX)),
+            &CMP2,
+            false,
+            CMP2_IN,
+            None
+        ),
         Some(Decline::ReturnsNoValue),
         "no declared storage to compare against states nothing"
     );
@@ -373,15 +480,33 @@ fn a_value_slot_on_a_body_that_computes_no_value_is_refused() {
 #[test]
 fn a_call_that_leaves_exactly_the_declared_value_computes_it() {
     assert_eq!(
-        body_contradicts(&own(&[RDI, RSI], None, Some(EAX)), &CMP2, false, CMP2_IN, Some(EAX)),
+        body_contradicts(
+            &own(&[RDI, RSI], None, Some(EAX)),
+            &CMP2,
+            false,
+            CMP2_IN,
+            Some(EAX)
+        ),
         None
     );
     assert_eq!(
-        body_contradicts(&own(&[RDI], None, Some(RAX)), &THREAD, false, THREAD_IN, Some(RAX)),
+        body_contradicts(
+            &own(&[RDI], None, Some(RAX)),
+            &THREAD,
+            false,
+            THREAD_IN,
+            Some(RAX)
+        ),
         None
     );
     assert_eq!(
-        body_contradicts(&own(&[RDI], Some(EAX), None), &THREAD, false, THREAD_IN, Some(RAX)),
+        body_contradicts(
+            &own(&[RDI], Some(EAX), None),
+            &THREAD,
+            false,
+            THREAD_IN,
+            Some(RAX)
+        ),
         None
     );
 }
@@ -395,16 +520,34 @@ fn a_call_that_leaves_exactly_the_declared_value_computes_it() {
 fn a_value_wider_than_the_declared_return_is_refused() {
     for direct in [false, true] {
         assert_eq!(
-            body_contradicts(&own(&[RDI, RSI], Some(RAX), None), &CMP2, direct, CMP2_IN, Some(EAX)),
+            body_contradicts(
+                &own(&[RDI, RSI], Some(RAX), None),
+                &CMP2,
+                direct,
+                CMP2_IN,
+                Some(EAX)
+            ),
             Some(Decline::WiderOutputThanDeclared)
         );
     }
     assert_eq!(
-        body_contradicts(&own(&[RDI, RSI], None, Some(RAX)), &CMP2, false, CMP2_IN, Some(EAX)),
+        body_contradicts(
+            &own(&[RDI, RSI], None, Some(RAX)),
+            &CMP2,
+            false,
+            CMP2_IN,
+            Some(EAX)
+        ),
         Some(Decline::WiderOutputThanDeclared)
     );
     assert_eq!(
-        body_contradicts(&own(&[RDI, RSI], Some(EAX), None), &CMP2, false, CMP2_IN, None),
+        body_contradicts(
+            &own(&[RDI, RSI], Some(EAX), None),
+            &CMP2,
+            false,
+            CMP2_IN,
+            None
+        ),
         Some(Decline::ReturnsNoValue),
         "no declared storage to hold the value in states nothing"
     );
@@ -418,8 +561,14 @@ fn a_value_wider_than_the_declared_return_is_refused() {
 /// zero-extended value looks like.
 #[test]
 fn a_zero_extended_value_in_a_wider_register_fits_without_a_direct_caller() {
-    let zext = OwnFacts { output_set: Some(EAX), ..own(&[RDI, RSI], Some(RAX), None) };
-    assert_eq!(body_contradicts(&zext, &CMP2, false, CMP2_IN, Some(EAX)), None);
+    let zext = OwnFacts {
+        output_set: Some(EAX),
+        ..own(&[RDI, RSI], Some(RAX), None)
+    };
+    assert_eq!(
+        body_contradicts(&zext, &CMP2, false, CMP2_IN, Some(EAX)),
+        None
+    );
     assert_eq!(
         body_contradicts(&zext, &CMP2, true, CMP2_IN, Some(EAX)),
         Some(Decline::WiderOutputThanDeclared)
@@ -453,8 +602,12 @@ fn the_set_part_is_the_low_bytes_that_hold_every_set_bit() {
 #[test]
 fn the_reads_of_a_callee_are_every_recorded_callers() {
     let mut l = Ledger::default();
-    let reads = |r: Vec<(uintb, Range)>| CallerFacts { reads: r, ..Default::default() };
-    l.by_caller.insert((1, 0x1000), reads(vec![(0x3a72, EAX), (0x4000, RAX)]));
+    let reads = |r: Vec<(uintb, Range)>| CallerFacts {
+        reads: r,
+        ..Default::default()
+    };
+    l.by_caller
+        .insert((1, 0x1000), reads(vec![(0x3a72, EAX), (0x4000, RAX)]));
     l.by_caller.insert((1, 0x2000), reads(vec![(0x3a72, RAX)]));
     let mut got: Vec<Range> = l.reads_of(0x3a72).collect();
     got.sort_unstable();
@@ -479,15 +632,30 @@ fn containment_is_by_bytes_in_one_space() {
 const AL: Range = (1, 0, 1);
 
 fn reg(offset: uintb, size: int4) -> Raw {
-    Raw { kind: RawKind::Space, space: 1, offset, size }
+    Raw {
+        kind: RawKind::Space,
+        space: 1,
+        offset,
+        size,
+    }
 }
 
 fn konst(value: uintb, size: int4) -> Raw {
-    Raw { kind: RawKind::Const, space: 0, offset: value, size }
+    Raw {
+        kind: RawKind::Const,
+        space: 0,
+        offset: value,
+        size,
+    }
 }
 
 fn temp(offset: uintb, size: int4) -> Raw {
-    Raw { kind: RawKind::Unique, space: 2, offset, size }
+    Raw {
+        kind: RawKind::Unique,
+        space: 2,
+        offset,
+        size,
+    }
 }
 
 /// Run raw operations over a window, as one straight line.
@@ -506,7 +674,11 @@ fn a_zero_extension_then_a_byte_write_leaves_the_upper_bytes_zero() {
     let ops = [
         (OpCode::CPUI_INT_ZEXT, reg(0, 4), vec![temp(0x100, 1)]),
         (OpCode::CPUI_INT_ZEXT, reg(0, 8), vec![reg(0, 4)]),
-        (OpCode::CPUI_INT_SUB, reg(0, 1), vec![reg(0, 1), temp(0x200, 1)]),
+        (
+            OpCode::CPUI_INT_SUB,
+            reg(0, 1),
+            vec![reg(0, 1), temp(0x200, 1)],
+        ),
     ];
     assert_eq!(run(EAX, &ops, false), 0b1110);
     assert_eq!(run(RAX, &ops, false), 0b1111_1110);
@@ -518,7 +690,11 @@ fn a_zero_extension_then_a_byte_write_leaves_the_upper_bytes_zero() {
 fn a_byte_write_alone_proves_nothing_above_it() {
     let ops = [(OpCode::CPUI_COPY, reg(0, 1), vec![reg(0x207, 1)])];
     assert_eq!(run(EAX, &ops, false), 0);
-    let ops = [(OpCode::CPUI_LOAD, reg(0, 1), vec![konst(0, 8), reg(0x38, 8)])];
+    let ops = [(
+        OpCode::CPUI_LOAD,
+        reg(0, 1),
+        vec![konst(0, 8), reg(0x38, 8)],
+    )];
     assert_eq!(run(EAX, &ops, false), 0);
 }
 
@@ -530,9 +706,17 @@ fn a_self_xor_a_constant_and_a_mask_are_zero_where_they_say() {
     assert_eq!(run(EAX, &xor, false), 0b1111);
     let one = [(OpCode::CPUI_COPY, reg(0, 4), vec![konst(1, 4)])];
     assert_eq!(run(EAX, &one, false), 0b1110);
-    let and = [(OpCode::CPUI_INT_AND, reg(0, 4), vec![reg(0x38, 4), konst(0xff, 4)])];
+    let and = [(
+        OpCode::CPUI_INT_AND,
+        reg(0, 4),
+        vec![reg(0x38, 4), konst(0xff, 4)],
+    )];
     assert_eq!(run(EAX, &and, false), 0b1110);
-    let two = [(OpCode::CPUI_INT_XOR, reg(0, 4), vec![reg(0, 4), reg(0x38, 4)])];
+    let two = [(
+        OpCode::CPUI_INT_XOR,
+        reg(0, 4),
+        vec![reg(0, 4), reg(0x38, 4)],
+    )];
     assert_eq!(run(EAX, &two, false), 0);
 }
 
@@ -568,8 +752,14 @@ fn a_narrower_computed_return_needs_zero_above_it() {
     let byte = own(CMP2_IN, Some(AL), None);
     assert_eq!(narrower_output(&byte, &CMP2, Some(EAX)), Some((EAX, AL)));
     assert_eq!(narrower_output(&byte, &THREAD, Some(RAX)), Some((RAX, AL)));
-    assert_eq!(narrower_output(&own(CMP2_IN, Some(EAX), None), &CMP2, Some(EAX)), None);
-    assert_eq!(narrower_output(&own(CMP2_IN, None, Some(EAX)), &CMP2, Some(EAX)), None);
+    assert_eq!(
+        narrower_output(&own(CMP2_IN, Some(EAX), None), &CMP2, Some(EAX)),
+        None
+    );
+    assert_eq!(
+        narrower_output(&own(CMP2_IN, None, Some(EAX)), &CMP2, Some(EAX)),
+        None
+    );
     assert_eq!(narrower_output(&byte, &HANDLER, None), None);
     assert!(rest_is_zero(EAX, AL, Some(0b1110)));
     assert!(rest_is_zero(RAX, EAX, Some(0b1111_0000)));
@@ -603,18 +793,39 @@ fn declared(intypes: &[Rc<Datatype>], outtype: Option<Rc<Datatype>>) -> Prototyp
 fn a_declaration_the_body_already_printed_is_not_parked() {
     let int = base(4, type_metatype::TYPE_INT);
     let long = base(8, type_metatype::TYPE_INT);
-    let printed = |inputs: Vec<Rc<Datatype>>, output: Option<Rc<Datatype>>, dotdotdot: bool| {
-        PrintedSig { inputs, output, dotdotdot }
-    };
-    assert!(agrees(Some(&printed(vec![], None, false)), &declared(&[], None)));
+    let printed =
+        |inputs: Vec<Rc<Datatype>>, output: Option<Rc<Datatype>>, dotdotdot: bool| PrintedSig {
+            inputs,
+            output,
+            dotdotdot,
+        };
+    assert!(agrees(
+        Some(&printed(vec![], None, false)),
+        &declared(&[], None)
+    ));
     let handler = printed(vec![Rc::clone(&int)], None, false);
     assert!(agrees(Some(&handler), &declared(&[Rc::clone(&int)], None)));
-    assert!(!agrees(Some(&handler), &declared(&[Rc::clone(&long)], None)), "a type differs");
-    assert!(!agrees(Some(&handler), &declared(&[], None)), "the count differs");
-    assert!(!agrees(Some(&handler), &declared(&[Rc::clone(&int)], Some(Rc::clone(&int)))));
+    assert!(
+        !agrees(Some(&handler), &declared(&[Rc::clone(&long)], None)),
+        "a type differs"
+    );
+    assert!(
+        !agrees(Some(&handler), &declared(&[], None)),
+        "the count differs"
+    );
+    assert!(!agrees(
+        Some(&handler),
+        &declared(&[Rc::clone(&int)], Some(Rc::clone(&int)))
+    ));
     let open = printed(vec![Rc::clone(&int)], None, true);
-    assert!(!agrees(Some(&open), &declared(&[Rc::clone(&int)], None)), "a `...` differs");
-    assert!(!agrees(None, &declared(&[], None)), "an untyped signature is not known to agree");
+    assert!(
+        !agrees(Some(&open), &declared(&[Rc::clone(&int)], None)),
+        "a `...` differs"
+    );
+    assert!(
+        !agrees(None, &declared(&[], None)),
+        "an untyped signature is not known to agree"
+    );
 }
 
 /// A direct caller is never decompiled again, so the call it printed has to
@@ -625,21 +836,61 @@ fn a_declaration_the_body_already_printed_is_not_parked() {
 #[test]
 fn a_direct_call_that_contradicts_the_declaration_refuses_it() {
     let mut l = Ledger::default();
-    let calls = |c: Vec<(uintb, usize, bool)>| CallerFacts { calls: c, ..Default::default() };
-    l.by_caller.insert((1, 0x1000), calls(vec![(0x3a72, 1, false), (0x4000, 2, true)]));
-    l.by_caller.insert((1, 0x2000), calls(vec![(0x3a72, 1, true)]));
-    l.by_caller.insert((1, 0x3000), calls(vec![(0x3a72, 0, false)]));
+    let calls = |c: Vec<(uintb, usize, bool)>| CallerFacts {
+        calls: c,
+        ..Default::default()
+    };
+    l.by_caller.insert(
+        (1, 0x1000),
+        calls(vec![(0x3a72, 1, false), (0x4000, 2, true)]),
+    );
+    l.by_caller
+        .insert((1, 0x2000), calls(vec![(0x3a72, 1, true)]));
+    l.by_caller
+        .insert((1, 0x3000), calls(vec![(0x3a72, 0, false)]));
     let disagree = |callers: Option<&[uintb]>, arity: usize, returns: bool| {
         l.direct_calls_disagree(0x3a72, callers, arity, returns)
     };
-    assert_eq!(disagree(Some(&[0x1000]), 1, true), None, "same count, a result ignored");
-    assert_eq!(disagree(Some(&[0x1000]), 1, false), None, "same count, no result used");
-    assert_eq!(disagree(Some(&[0x1000, 0x2000]), 1, true), None, "a result used where one is declared");
-    assert_eq!(disagree(Some(&[0x2000]), 1, false), Some(Decline::DirectCallDisagrees), "a void result used");
-    assert_eq!(disagree(Some(&[0x1000]), 2, true), Some(Decline::DirectCallDisagrees), "one more declared");
-    assert_eq!(disagree(Some(&[0x3000]), 1, true), Some(Decline::DirectCallDisagrees), "the call passed fewer");
-    assert_eq!(disagree(Some(&[0x9000]), 1, true), Some(Decline::CallerNotSeen), "never decompiled");
-    assert_eq!(disagree(None, 1, true), Some(Decline::CallerNotSeen), "a call in no function");
+    assert_eq!(
+        disagree(Some(&[0x1000]), 1, true),
+        None,
+        "same count, a result ignored"
+    );
+    assert_eq!(
+        disagree(Some(&[0x1000]), 1, false),
+        None,
+        "same count, no result used"
+    );
+    assert_eq!(
+        disagree(Some(&[0x1000, 0x2000]), 1, true),
+        None,
+        "a result used where one is declared"
+    );
+    assert_eq!(
+        disagree(Some(&[0x2000]), 1, false),
+        Some(Decline::DirectCallDisagrees),
+        "a void result used"
+    );
+    assert_eq!(
+        disagree(Some(&[0x1000]), 2, true),
+        Some(Decline::DirectCallDisagrees),
+        "one more declared"
+    );
+    assert_eq!(
+        disagree(Some(&[0x3000]), 1, true),
+        Some(Decline::DirectCallDisagrees),
+        "the call passed fewer"
+    );
+    assert_eq!(
+        disagree(Some(&[0x9000]), 1, true),
+        Some(Decline::CallerNotSeen),
+        "never decompiled"
+    );
+    assert_eq!(
+        disagree(None, 1, true),
+        Some(Decline::CallerNotSeen),
+        "a call in no function"
+    );
     assert_eq!(disagree(Some(&[]), 1, true), None, "no caller");
     assert_eq!(
         l.direct_calls_disagree(0x5000, Some(&[0x1000]), 1, false),

@@ -87,7 +87,10 @@ struct RepMove {
 }
 
 fn defining(fd: &Funcdata, vn: VarnodeId) -> Option<&crate::op::PcodeOp> {
-    fd.vbank().get(vn)?.get_def().and_then(|d| fd.obank().get(d))
+    fd.vbank()
+        .get(vn)?
+        .get_def()
+        .and_then(|d| fd.obank().get(d))
 }
 
 /// The constant `vn` holds, folding pure operations on constants.
@@ -135,7 +138,13 @@ enum Place {
 
 /// The constant `vn` adds to the stack pointer `sp`, through copies,
 /// constant additions and phis whose inputs agree.
-fn frame_offset(fd: &Funcdata, sp: VarnodeId, vn: VarnodeId, visiting: &mut Vec<VarnodeId>, budget: &mut u32) -> Place {
+fn frame_offset(
+    fd: &Funcdata,
+    sp: VarnodeId,
+    vn: VarnodeId,
+    visiting: &mut Vec<VarnodeId>,
+    budget: &mut u32,
+) -> Place {
     if vn == sp {
         return Place::At(0);
     }
@@ -143,7 +152,9 @@ fn frame_offset(fd: &Funcdata, sp: VarnodeId, vn: VarnodeId, visiting: &mut Vec<
         return Place::Unplaced;
     }
     *budget -= 1;
-    let Some(op) = defining(fd, vn) else { return Place::Unplaced };
+    let Some(op) = defining(fd, vn) else {
+        return Place::Unplaced;
+    };
     let size = fd.vbank().get(vn).map_or(0, |v| v.get_size());
     let shift = |place: Place, by: u64| match place {
         Place::At(o) => Place::At(o.wrapping_add(by) & unlace_base::address::calc_mask(size)),
@@ -153,17 +164,23 @@ fn frame_offset(fd: &Funcdata, sp: VarnodeId, vn: VarnodeId, visiting: &mut Vec<
     };
     match (op.code(), op.get_in(0), op.get_in(1)) {
         (OpCode::CPUI_COPY, Some(a), _) => frame_offset(fd, sp, a, visiting, budget),
-        (OpCode::CPUI_INT_ADD, Some(a), Some(b)) => match (constant(fd, a, 8), constant(fd, b, 8)) {
-            (_, Some(c)) => shift(frame_offset(fd, sp, a, visiting, budget), c),
-            (Some(c), _) => shift(frame_offset(fd, sp, b, visiting, budget), c),
-            _ => Place::Unplaced,
-        },
+        (OpCode::CPUI_INT_ADD, Some(a), Some(b)) => {
+            match (constant(fd, a, 8), constant(fd, b, 8)) {
+                (_, Some(c)) => shift(frame_offset(fd, sp, a, visiting, budget), c),
+                (Some(c), _) => shift(frame_offset(fd, sp, b, visiting, budget), c),
+                _ => Place::Unplaced,
+            }
+        }
         (OpCode::CPUI_INT_SUB, Some(a), Some(b)) => match constant(fd, b, 8) {
             Some(c) => shift(frame_offset(fd, sp, a, visiting, budget), c.wrapping_neg()),
             None => Place::Unplaced,
         },
         (OpCode::CPUI_INDIRECT, Some(a), _)
-            if fd.vbank().get(vn).is_some_and(|v| fd.vbank().get(sp).is_some_and(|s| v.get_addr() == s.get_addr() && v.get_size() == s.get_size())) =>
+            if fd.vbank().get(vn).is_some_and(|v| {
+                fd.vbank()
+                    .get(sp)
+                    .is_some_and(|s| v.get_addr() == s.get_addr() && v.get_size() == s.get_size())
+            }) =>
         {
             match frame_offset(fd, sp, a, visiting, budget) {
                 Place::At(_) | Place::Shifted => Place::Shifted,
@@ -201,13 +218,23 @@ fn frame_offset(fd: &Funcdata, sp: VarnodeId, vn: VarnodeId, visiting: &mut Vec<
 
 /// Is `vn` the stack pointer `sp` plus a constant?
 fn on_frame(fd: &Funcdata, sp: VarnodeId, vn: VarnodeId) -> bool {
-    matches!(frame_offset(fd, sp, vn, &mut Vec::new(), &mut 256), Place::At(_) | Place::Shifted)
+    matches!(
+        frame_offset(fd, sp, vn, &mut Vec::new(), &mut 256),
+        Place::At(_) | Place::Shifted
+    )
 }
 
 /// The value of the stack pointer register `vn` copies, and the copies on the
 /// way, `vn` included.
-fn stack_pointer_value(fd: &Funcdata, sp: VarnodeId, mut vn: VarnodeId) -> Option<(VarnodeId, Vec<VarnodeId>)> {
-    let reg = fd.vbank().get(sp).map(|v| (v.get_addr().clone(), v.get_size()))?;
+fn stack_pointer_value(
+    fd: &Funcdata,
+    sp: VarnodeId,
+    mut vn: VarnodeId,
+) -> Option<(VarnodeId, Vec<VarnodeId>)> {
+    let reg = fd
+        .vbank()
+        .get(sp)
+        .map(|v| (v.get_addr().clone(), v.get_size()))?;
     let mut chain = Vec::new();
     for _ in 0..16 {
         let v = fd.vbank().get(vn)?;
@@ -237,15 +264,29 @@ fn offset_from(fd: &Funcdata, base: VarnodeId, vn: VarnodeId) -> Option<i64> {
 }
 
 fn is_register(fd: &Funcdata, vn: VarnodeId, reg: &(unlace_base::address::Address, i32)) -> bool {
-    fd.vbank().get(vn).is_some_and(|v| *v.get_addr() == reg.0 && v.get_size() == reg.1)
+    fd.vbank()
+        .get(vn)
+        .is_some_and(|v| *v.get_addr() == reg.0 && v.get_size() == reg.1)
 }
 
 /// Does the address of a byte of the block `bytes` long at the stack pointer
 /// value `base` reach anything but frame loads and stores, the stack pointer
 /// and the values `allowed` that hand it to the move as its pointers? The
 /// copies `chain` of the destination may only reach the move.
-fn block_escapes(fd: &Funcdata, base: VarnodeId, bytes: i64, chain: &[VarnodeId], allowed: &[VarnodeId]) -> bool {
-    let Some(reg) = fd.vbank().get(base).map(|v| (v.get_addr().clone(), v.get_size())) else { return true };
+fn block_escapes(
+    fd: &Funcdata,
+    base: VarnodeId,
+    bytes: i64,
+    chain: &[VarnodeId],
+    allowed: &[VarnodeId],
+) -> bool {
+    let Some(reg) = fd
+        .vbank()
+        .get(base)
+        .map(|v| (v.get_addr().clone(), v.get_size()))
+    else {
+        return true;
+    };
     let inside = |r: i64| (0..bytes).contains(&r);
     let only_addresses = |vn: VarnodeId| {
         allowed.contains(&vn)
@@ -255,15 +296,21 @@ fn block_escapes(fd: &Funcdata, base: VarnodeId, bytes: i64, chain: &[VarnodeId]
                         let address = matches!(o.code(), OpCode::CPUI_LOAD | OpCode::CPUI_STORE)
                             && o.get_in(1) == Some(vn)
                             && o.get_in(2) != Some(vn);
-                        address || (o.code() == OpCode::CPUI_COPY && o.get_out().is_some_and(|out| allowed.contains(&out)))
+                        address
+                            || (o.code() == OpCode::CPUI_COPY
+                                && o.get_out().is_some_and(|out| allowed.contains(&out)))
                     })
                 })
             })
     };
     for &c in chain {
-        let Some(v) = fd.vbank().get(c) else { return true };
+        let Some(v) = fd.vbank().get(c) else {
+            return true;
+        };
         for d in v.descend_iter() {
-            let Some(o) = fd.obank().get(d) else { return true };
+            let Some(o) = fd.obank().get(d) else {
+                return true;
+            };
             let into_chain = matches!(o.code(), OpCode::CPUI_COPY | OpCode::CPUI_INT_ADD)
                 && o.get_out().is_some_and(|out| chain.contains(&out));
             if !into_chain && o.code() != OpCode::CPUI_MULTIEQUAL {
@@ -281,12 +328,17 @@ fn block_escapes(fd: &Funcdata, base: VarnodeId, bytes: i64, chain: &[VarnodeId]
             return true;
         }
         seen.push(v);
-        let Some(node) = fd.vbank().get(v) else { return true };
+        let Some(node) = fd.vbank().get(v) else {
+            return true;
+        };
         for d in node.descend_iter() {
-            let Some(o) = fd.obank().get(d) else { return true };
+            let Some(o) = fd.obank().get(d) else {
+                return true;
+            };
             let out = o.get_out();
             match o.code() {
-                OpCode::CPUI_LOAD | OpCode::CPUI_STORE if o.get_in(1) == Some(v) && o.get_in(2) != Some(v) => {}
+                OpCode::CPUI_LOAD | OpCode::CPUI_STORE
+                    if o.get_in(1) == Some(v) && o.get_in(2) != Some(v) => {}
                 OpCode::CPUI_INDIRECT | OpCode::CPUI_MULTIEQUAL => {}
                 OpCode::CPUI_COPY => match out {
                     Some(out) if is_register(fd, out, &reg) => work.push((out, r)),
@@ -295,7 +347,11 @@ fn block_escapes(fd: &Funcdata, base: VarnodeId, bytes: i64, chain: &[VarnodeId]
                     _ => {}
                 },
                 OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB => {
-                    let other = if o.get_in(0) == Some(v) { o.get_in(1) } else { o.get_in(0) };
+                    let other = if o.get_in(0) == Some(v) {
+                        o.get_in(1)
+                    } else {
+                        o.get_in(0)
+                    };
                     let Some(c) = other.and_then(|x| constant(fd, x, 8)) else {
                         if inside(r) {
                             return true;
@@ -331,23 +387,35 @@ fn block_escapes(fd: &Funcdata, base: VarnodeId, bytes: i64, chain: &[VarnodeId]
 /// Can the result of `op` not hold an address `width` bytes wide (a flag, or
 /// the low bits a parity test masks off)?
 fn narrow(fd: &Funcdata, op: &crate::op::PcodeOp, width: i32) -> bool {
-    if op.get_out().and_then(|o| fd.vbank().get(o)).is_some_and(|o| o.get_size() < width) {
+    if op
+        .get_out()
+        .and_then(|o| fd.vbank().get(o))
+        .is_some_and(|o| o.get_size() < width)
+    {
         return true;
     }
     op.code() == OpCode::CPUI_INT_AND
-        && (0..op.num_input()).filter_map(|i| op.get_in(i)).any(|x| constant(fd, x, 8).is_some_and(|c| c <= 0xffff))
+        && (0..op.num_input())
+            .filter_map(|i| op.get_in(i))
+            .any(|x| constant(fd, x, 8).is_some_and(|c| c <= 0xffff))
 }
 
 /// The first call after `rep` along straight-line code, through the moves in
 /// `moves`, its block and the blocks before it on the way.
-fn next_call(fd: &Funcdata, rep: &RepMove, moves: &[RepMove]) -> Option<(BlockId, OpId, Vec<BlockId>)> {
+fn next_call(
+    fd: &Funcdata,
+    rep: &RepMove,
+    moves: &[RepMove],
+) -> Option<(BlockId, OpId, Vec<BlockId>)> {
     let graph = fd.bblocks_ref();
     let mut block = rep.exit;
     let mut path = Vec::new();
     for _ in 0..16 {
         let ops = fd.bb_ops(block);
         if let Some(&c) = ops.iter().find(|&&o| {
-            fd.obank().get(o).is_some_and(|o| matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND))
+            fd.obank()
+                .get(o)
+                .is_some_and(|o| matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND))
         }) {
             return Some((block, c, path));
         }
@@ -370,19 +438,39 @@ fn next_call(fd: &Funcdata, rep: &RepMove, moves: &[RepMove]) -> Option<(BlockId
 /// all of it (by its reached returns too, when `returned`); under a model
 /// whose pop is stated, so may the caller's cleanup right after the call.
 /// Every move in `moves` is passed through on the way.
-fn argument_block(fd: &Funcdata, sp: VarnodeId, rep: &RepMove, moves: &[RepMove], returned: bool) -> bool {
-    let Some((base, chain)) = rep.base.as_ref() else { return false };
+fn argument_block(
+    fd: &Funcdata,
+    sp: VarnodeId,
+    rep: &RepMove,
+    moves: &[RepMove],
+    returned: bool,
+) -> bool {
+    let Some((base, chain)) = rep.base.as_ref() else {
+        return false;
+    };
     let bytes = rep.bytes as i64;
     let allowed: Vec<VarnodeId> = chain.iter().chain(rep.entering.iter()).copied().collect();
     if block_escapes(fd, *base, bytes, chain, &allowed) {
         return false;
     }
-    let Some((block, call, path)) = next_call(fd, rep, moves) else { return false };
-    let Some(call_op) = fd.obank().get(call) else { return false };
+    let Some((block, call, path)) = next_call(fd, rep, moves) else {
+        return false;
+    };
+    let Some(call_op) = fd.obank().get(call) else {
+        return false;
+    };
     let at = call_op.get_addr().clone();
-    let Some(reg) = fd.vbank().get(*base).map(|v| (v.get_addr().clone(), v.get_size())) else { return false };
+    let Some(reg) = fd
+        .vbank()
+        .get(*base)
+        .map(|v| (v.get_addr().clone(), v.get_size()))
+    else {
+        return false;
+    };
     let ops = fd.bb_ops(block);
-    let Some(position) = ops.iter().position(|&o| o == call) else { return false };
+    let Some(position) = ops.iter().position(|&o| o == call) else {
+        return false;
+    };
     let push = ops[..position].iter().rev().find_map(|&o| {
         let op = fd.obank().get(o)?;
         (*op.get_addr() == at
@@ -392,47 +480,83 @@ fn argument_block(fd: &Funcdata, sp: VarnodeId, rep: &RepMove, moves: &[RepMove]
         .flatten()
     });
     let Some(before) = push else { return false };
-    let Some(offset) = offset_from(fd, *base, before) else { return false };
+    let Some(offset) = offset_from(fd, *base, before) else {
+        return false;
+    };
     if offset > 0 {
         return false;
     }
     let pushed = -offset;
-    let Some(fc) = (0..fd.num_calls()).map(|i| fd.get_call_specs(i)).find(|fc| fc.get_op() == call) else { return false };
-    if fc.callee_stack_arg_bytes().is_some_and(|s| i64::from(s.read) > pushed) {
+    let Some(fc) = (0..fd.num_calls())
+        .map(|i| fd.get_call_specs(i))
+        .find(|fc| fc.get_op() == call)
+    else {
+        return false;
+    };
+    if fc
+        .callee_stack_arg_bytes()
+        .is_some_and(|s| i64::from(s.read) > pushed)
+    {
         return true;
     }
     let stated = fc.get_extra_pop();
-    let pop = if stated != crate::fspec::EXTRAPOP_UNKNOWN { Some(stated) } else { fc.callee_purge() };
-    let returned = (returned && pop.is_none()).then(|| fc.callee_return_pop()).flatten();
-    let Some(pop) = pop.map(|p| i64::from(p) - 4).or_else(|| returned.map(i64::from)) else { return false };
+    let pop = if stated != crate::fspec::EXTRAPOP_UNKNOWN {
+        Some(stated)
+    } else {
+        fc.callee_purge()
+    };
+    let returned = (returned && pop.is_none())
+        .then(|| fc.callee_return_pop())
+        .flatten();
+    let Some(pop) = pop
+        .map(|p| i64::from(p) - 4)
+        .or_else(|| returned.map(i64::from))
+    else {
+        return false;
+    };
     if pop >= pushed + bytes {
         return true;
     }
-    let unstated_model = fd.get_arch().default_fp().map(|m| m.get_extra_pop()) == Some(crate::fspec::EXTRAPOP_UNKNOWN);
+    let unstated_model = fd.get_arch().default_fp().map(|m| m.get_extra_pop())
+        == Some(crate::fspec::EXTRAPOP_UNKNOWN);
     if stated == crate::fspec::EXTRAPOP_UNKNOWN || unstated_model {
         return false;
     }
-    let Some(start) = offset_from(fd, sp, *base) else { return false };
+    let Some(start) = offset_from(fd, sp, *base) else {
+        return false;
+    };
     let mut until = None;
     for (i, &o) in ops.iter().enumerate().skip(position + 1) {
         let Some(op) = fd.obank().get(o) else { break };
         if op.is_call() || op.is_branch() {
             break;
         }
-        if op.get_out().is_some_and(|out| is_register(fd, out, &reg) && offset_from(fd, sp, out).is_some_and(|at| at >= start + bytes)) {
+        if op.get_out().is_some_and(|out| {
+            is_register(fd, out, &reg)
+                && offset_from(fd, sp, out).is_some_and(|at| at >= start + bytes)
+        }) {
             until = Some(i);
             break;
         }
     }
     let Some(until) = until else { return false };
-    let window = path.iter().flat_map(|&b| fd.bb_ops(b)).chain(ops[..until].iter().copied());
-    !window.into_iter().any(|id| reads_block(fd, sp, id, start, bytes))
+    let window = path
+        .iter()
+        .flat_map(|&b| fd.bb_ops(b))
+        .chain(ops[..until].iter().copied());
+    !window
+        .into_iter()
+        .any(|id| reads_block(fd, sp, id, start, bytes))
 }
 
 /// The pop to state on the call an argument block feeds, when only its
 /// callee's reached returns release the block: the solver would otherwise
 /// guess it, and an earlier call whose pushes the block reuses with it.
-fn returns_pop(fd: &Funcdata, rep: &RepMove, moves: &[RepMove]) -> Option<(unlace_base::types::int4, i32)> {
+fn returns_pop(
+    fd: &Funcdata,
+    rep: &RepMove,
+    moves: &[RepMove],
+) -> Option<(unlace_base::types::int4, i32)> {
     let (_, call, _) = next_call(fd, rep, moves)?;
     let i = (0..fd.num_calls()).find(|&i| fd.get_call_specs(i).get_op() == call)?;
     let fc = fd.get_call_specs(i);
@@ -483,7 +607,8 @@ fn reused_call(fd: &Funcdata, rep: &RepMove) -> Option<unlace_base::types::int4>
     let (base, _) = rep.base.as_ref()?;
     let (i, offset) = after_call(fd, *base)?;
     let fc = fd.get_call_specs(i);
-    let unstated = fc.get_extra_pop() == crate::fspec::EXTRAPOP_UNKNOWN && fc.callee_purge().is_none_or(|p| p == 4);
+    let unstated = fc.get_extra_pop() == crate::fspec::EXTRAPOP_UNKNOWN
+        && fc.callee_purge().is_none_or(|p| p == 4);
     (unstated && offset < 0 && -offset < rep.bytes as i64).then_some(i)
 }
 
@@ -493,7 +618,12 @@ fn after_call(fd: &Funcdata, mut vn: VarnodeId) -> Option<(unlace_base::types::i
     let mut offset = 0i64;
     for _ in 0..16 {
         let op = defining(fd, vn)?;
-        let constant = |k| op.get_in(k).and_then(|c| fd.vbank().get(c)).filter(|c| c.is_constant()).map(|c| c.get_offset() as u32 as i32 as i64);
+        let constant = |k| {
+            op.get_in(k)
+                .and_then(|c| fd.vbank().get(c))
+                .filter(|c| c.is_constant())
+                .map(|c| c.get_offset() as u32 as i32 as i64)
+        };
         match op.code() {
             OpCode::CPUI_COPY => vn = op.get_in(0)?,
             OpCode::CPUI_INT_ADD => {
@@ -522,9 +652,20 @@ fn after_call(fd: &Funcdata, mut vn: VarnodeId) -> Option<(unlace_base::types::i
 /// Is `id` a LOAD the frame places at a byte of the `bytes` at frame offset
 /// `start`? The caller reads a local back; it never reads an argument block.
 fn reads_block(fd: &Funcdata, sp: VarnodeId, id: OpId, start: i64, bytes: i64) -> bool {
-    let Some(op) = fd.obank().get(id).filter(|op| op.code() == OpCode::CPUI_LOAD) else { return false };
-    let width = op.get_out().and_then(|o| fd.vbank().get(o)).map_or(1, |o| i64::from(o.get_size()));
-    op.get_in(1).and_then(|p| offset_from(fd, sp, p)).is_some_and(|at| at < start + bytes && at + width > start)
+    let Some(op) = fd
+        .obank()
+        .get(id)
+        .filter(|op| op.code() == OpCode::CPUI_LOAD)
+    else {
+        return false;
+    };
+    let width = op
+        .get_out()
+        .and_then(|o| fd.vbank().get(o))
+        .map_or(1, |o| i64::from(o.get_size()));
+    op.get_in(1)
+        .and_then(|p| offset_from(fd, sp, p))
+        .is_some_and(|at| at < start + bytes && at + width > start)
 }
 
 /// Can `vn` be derived from the stack pointer `sp` at all?
@@ -560,13 +701,20 @@ fn from_frame(fd: &Funcdata, sp: VarnodeId, vn: VarnodeId) -> bool {
 }
 
 /// The head phi whose output `vn` copies inside the loop body `body`.
-fn entering_phi(fd: &Funcdata, entry: &BTreeMap<VarnodeId, Vec<VarnodeId>>, body: BlockId, mut vn: VarnodeId) -> Option<VarnodeId> {
+fn entering_phi(
+    fd: &Funcdata,
+    entry: &BTreeMap<VarnodeId, Vec<VarnodeId>>,
+    body: BlockId,
+    mut vn: VarnodeId,
+) -> Option<VarnodeId> {
     for _ in 0..8 {
         if entry.contains_key(&vn) {
             return Some(vn);
         }
         match defining(fd, vn) {
-            Some(op) if op.code() == OpCode::CPUI_COPY && op.get_parent() == Some(body) => vn = op.get_in(0)?,
+            Some(op) if op.code() == OpCode::CPUI_COPY && op.get_parent() == Some(body) => {
+                vn = op.get_in(0)?
+            }
             _ => return None,
         }
     }
@@ -616,7 +764,10 @@ fn rep_move(fd: &Funcdata, sp: VarnodeId, head: BlockId) -> Option<RepMove> {
         }
         let out = op.get_out()?;
         phis.push((out, op.get_in(back)?));
-        let inputs = (0..op.num_input()).filter(|&i| i != back).map(|i| op.get_in(i)).collect::<Option<Vec<_>>>()?;
+        let inputs = (0..op.num_input())
+            .filter(|&i| i != back)
+            .map(|i| op.get_in(i))
+            .collect::<Option<Vec<_>>>()?;
         entry.insert(out, inputs);
     }
     let zero = test_op.get_in(1).and_then(|v| fd.vbank().get(v))?;
@@ -638,7 +789,10 @@ fn rep_move(fd: &Funcdata, sp: VarnodeId, head: BlockId) -> Option<RepMove> {
     {
         return None;
     }
-    let counts: Vec<Option<u64>> = entry[&counter].iter().map(|&v| constant(fd, v, 8)).collect();
+    let counts: Vec<Option<u64>> = entry[&counter]
+        .iter()
+        .map(|&v| constant(fd, v, 8))
+        .collect();
     let count = counts[0]?;
     if counts.iter().any(|&c| c != Some(count)) {
         return None;
@@ -663,18 +817,31 @@ fn rep_move(fd: &Funcdata, sp: VarnodeId, head: BlockId) -> Option<RepMove> {
             OpCode::CPUI_LOAD => loads.push(id),
             OpCode::CPUI_STORE => stores.push(id),
             OpCode::CPUI_COPY => {}
-            code if !op.is_call() && fd.get_arch().op_behavior(code).is_some_and(|b| !b.is_special()) => {}
+            code if !op.is_call()
+                && fd
+                    .get_arch()
+                    .op_behavior(code)
+                    .is_some_and(|b| !b.is_special()) => {}
             _ => return None,
         }
         if let Some(out) = op.get_out().and_then(|v| fd.vbank().get(v)) {
-            if out.get_addr().overlap(0, &sp_addr, sp_size) >= 0 || sp_addr.overlap(0, out.get_addr(), out.get_size()) >= 0 {
+            if out.get_addr().overlap(0, &sp_addr, sp_size) >= 0
+                || sp_addr.overlap(0, out.get_addr(), out.get_size()) >= 0
+            {
                 return None;
             }
         }
     }
-    let (&[load], &[store]) = (loads.as_slice(), stores.as_slice()) else { return None };
+    let (&[load], &[store]) = (loads.as_slice(), stores.as_slice()) else {
+        return None;
+    };
     let element = fd.vbank().get(fd.obank().get(load)?.get_out()?)?.get_size() as u64;
-    if fd.vbank().get(fd.obank().get(store)?.get_in(2)?)?.get_size() as u64 != element {
+    if fd
+        .vbank()
+        .get(fd.obank().get(store)?.get_in(2)?)?
+        .get_size() as u64
+        != element
+    {
         return None;
     }
     if !(1..=MAX_ELEMENTS).contains(&count) || count * element > MAX_BYTES {
@@ -687,7 +854,9 @@ fn rep_move(fd: &Funcdata, sp: VarnodeId, head: BlockId) -> Option<RepMove> {
                 return Some(inputs);
             }
             match defining(fd, v) {
-                Some(op) if op.code() == OpCode::CPUI_COPY && op.get_parent() == Some(body) => v = op.get_in(0)?,
+                Some(op) if op.code() == OpCode::CPUI_COPY && op.get_parent() == Some(body) => {
+                    v = op.get_in(0)?
+                }
                 _ => return None,
             }
         }
@@ -697,18 +866,26 @@ fn rep_move(fd: &Funcdata, sp: VarnodeId, head: BlockId) -> Option<RepMove> {
     let destinations = entering(fd.obank().get(store)?.get_in(1)?)?;
     let reads_frame = sources.iter().all(|&v| on_frame(fd, sp, v));
     let writes_frame = destinations.iter().all(|&v| on_frame(fd, sp, v));
-    let bases: Vec<Option<(VarnodeId, Vec<VarnodeId>)>> =
-        destinations.iter().map(|&v| stack_pointer_value(fd, sp, v)).collect();
+    let bases: Vec<Option<(VarnodeId, Vec<VarnodeId>)>> = destinations
+        .iter()
+        .map(|&v| stack_pointer_value(fd, sp, v))
+        .collect();
     let to_arguments = bases.iter().all(Option::is_some);
     if !reads_frame && !writes_frame {
         return None;
     }
     let walker = fd.obank().get(store)?.get_in(1)?;
     let forward = phis.iter().any(|&(out, back)| {
-        entering_phi(fd, &entry, body, walker) == Some(out) && offset_from(fd, out, back) == Some(element as i64)
+        entering_phi(fd, &entry, body, walker) == Some(out)
+            && offset_from(fd, out, back) == Some(element as i64)
     });
     let base = match bases.as_slice() {
-        [Some(first), rest @ ..] if forward && rest.iter().all(|b| b.as_ref().map(|b| b.0) == Some(first.0)) => {
+        [Some(first), rest @ ..]
+            if forward
+                && rest
+                    .iter()
+                    .all(|b| b.as_ref().map(|b| b.0) == Some(first.0)) =>
+        {
             let mut chain = first.1.clone();
             for b in rest.iter().flatten() {
                 chain.extend(b.1.iter().copied());
@@ -741,7 +918,9 @@ fn walks_frame(fd: &Funcdata, sp: VarnodeId, moves: &[RepMove]) -> bool {
         if moves.iter().any(|m| m.store == id) {
             return false;
         }
-        let Some(ptr) = fd.obank().get(id).and_then(|op| op.get_in(1)) else { return false };
+        let Some(ptr) = fd.obank().get(id).and_then(|op| op.get_in(1)) else {
+            return false;
+        };
         !on_frame(fd, sp, ptr) && from_frame(fd, sp, ptr)
     })
 }
@@ -752,8 +931,15 @@ fn expand(fd: &mut Funcdata, rep: &RepMove) -> unlace_base::error::KunaResult<()
     let mut after: Vec<(VarnodeId, Vec<(OpId, i32)>)> = Vec::new();
     for &(out, _) in &rep.phis {
         let mut uses = Vec::new();
-        for op in fd.vbank().get(out).map(|v| v.descend_iter().collect::<Vec<_>>()).unwrap_or_default() {
-            let Some(o) = fd.obank().get(op) else { continue };
+        for op in fd
+            .vbank()
+            .get(out)
+            .map(|v| v.descend_iter().collect::<Vec<_>>())
+            .unwrap_or_default()
+        {
+            let Some(o) = fd.obank().get(op) else {
+                continue;
+            };
             if o.get_parent() == Some(rep.body) || o.get_parent() == Some(rep.head) {
                 continue;
             }
@@ -766,7 +952,9 @@ fn expand(fd: &mut Funcdata, rep: &RepMove) -> unlace_base::error::KunaResult<()
         after.push((out, uses));
     }
     let head = fd.bblocks_ref().block(rep.head);
-    let to_body = (0..head.size_out()).find(|&i| head.get_out(i) == rep.body).unwrap();
+    let to_body = (0..head.size_out())
+        .find(|&i| head.get_out(i) == rep.body)
+        .unwrap();
     let test = fd
         .bb_op_tail(rep.head)
         .and_then(|b| fd.obank().get(b))
@@ -786,15 +974,20 @@ fn expand(fd: &mut Funcdata, rep: &RepMove) -> unlace_base::error::KunaResult<()
             let op = fd.obank().get(id).unwrap();
             let code = op.code();
             let address = op.get_addr().clone();
-            let inputs: Vec<VarnodeId> = (0..op.num_input()).filter_map(|slot| op.get_in(slot)).collect();
+            let inputs: Vec<VarnodeId> = (0..op.num_input())
+                .filter_map(|slot| op.get_in(slot))
+                .collect();
             let output = op.get_out();
             let copy = fd.new_op(inputs.len() as i32, address);
             fd.op_set_opcode_code(copy, code);
             for (slot, input) in inputs.into_iter().enumerate() {
                 let value = if let Some(&v) = produced.get(&input).or_else(|| current.get(&input)) {
                     v
-                } else if let Some((size, value)) =
-                    fd.vbank().get(input).filter(|v| v.is_constant()).map(|v| (v.get_size(), v.get_offset()))
+                } else if let Some((size, value)) = fd
+                    .vbank()
+                    .get(input)
+                    .filter(|v| v.is_constant())
+                    .map(|v| (v.get_size(), v.get_offset()))
                 {
                     fd.new_constant(size, value)
                 } else {
@@ -805,9 +998,17 @@ fn expand(fd: &mut Funcdata, rep: &RepMove) -> unlace_base::error::KunaResult<()
             if let Some(output) = output {
                 let (size, addr, unique) = {
                     let v = fd.vbank().get(output).unwrap();
-                    (v.get_size(), v.get_addr().clone(), v.get_space().get_type() == unlace_base::space::spacetype::IPTR_INTERNAL)
+                    (
+                        v.get_size(),
+                        v.get_addr().clone(),
+                        v.get_space().get_type() == unlace_base::space::spacetype::IPTR_INTERNAL,
+                    )
                 };
-                let value = if unique { fd.new_unique_out(size, copy)? } else { fd.new_varnode_out(size, &addr, copy)? };
+                let value = if unique {
+                    fd.new_unique_out(size, copy)?
+                } else {
+                    fd.new_varnode_out(size, &addr, copy)?
+                };
                 produced.insert(output, value);
             }
             fd.op_insert_end(copy, rep.head);
@@ -815,7 +1016,16 @@ fn expand(fd: &mut Funcdata, rep: &RepMove) -> unlace_base::error::KunaResult<()
         current = rep
             .phis
             .iter()
-            .map(|&(out, back)| (out, produced.get(&back).or_else(|| current.get(&back)).copied().unwrap_or(back)))
+            .map(|&(out, back)| {
+                (
+                    out,
+                    produced
+                        .get(&back)
+                        .or_else(|| current.get(&back))
+                        .copied()
+                        .unwrap_or(back),
+                )
+            })
             .collect();
     }
     for (out, uses) in after {
@@ -844,18 +1054,29 @@ fn expand_with(fd: &mut Funcdata, returned: bool) -> i32 {
     {
         return 0;
     }
-    let Some(stack) = fd.get_arch().manage().get_stack_space().cloned() else { return 0 };
-    let Some(sp) = fd.find_spacebase_input(&stack) else { return 0 };
-    if fd.vbank().get(sp).map_or(true, |v| v.get_size() != STACK_POINTER_BYTES) {
+    let Some(stack) = fd.get_arch().manage().get_stack_space().cloned() else {
+        return 0;
+    };
+    let Some(sp) = fd.find_spacebase_input(&stack) else {
+        return 0;
+    };
+    if fd
+        .vbank()
+        .get(sp)
+        .map_or(true, |v| v.get_size() != STACK_POINTER_BYTES)
+    {
         return 0;
     }
-    let mut found: Vec<RepMove> =
-        (0..fd.bblocks_get_size()).filter_map(|i| rep_move(fd, sp, fd.bblocks_get_block(i))).collect();
+    let mut found: Vec<RepMove> = (0..fd.bblocks_get_size())
+        .filter_map(|i| rep_move(fd, sp, fd.bblocks_get_block(i)))
+        .collect();
     if !found.iter().any(|m| m.to_arguments) {
         return 0;
     }
-    let blocks: Vec<bool> =
-        found.iter().map(|m| m.to_arguments && argument_block(fd, sp, m, &found, returned)).collect();
+    let blocks: Vec<bool> = found
+        .iter()
+        .map(|m| m.to_arguments && argument_block(fd, sp, m, &found, returned))
+        .collect();
     for (m, keep) in found.iter_mut().zip(blocks) {
         m.to_arguments = keep;
     }
@@ -872,12 +1093,20 @@ fn expand_with(fd: &mut Funcdata, returned: bool) -> i32 {
         .map(|m| {
             !fed.is_empty()
                 && m.writes_frame
-                && (!m.at_stack_pointer || next_call(fd, m, &found).is_some_and(|c| fed.contains(&c.1)))
+                && (!m.at_stack_pointer
+                    || next_call(fd, m, &found).is_some_and(|c| fed.contains(&c.1)))
         })
         .collect();
-    let mut moves: Vec<RepMove> =
-        found.into_iter().zip(feeds).filter(|(m, feed)| m.to_arguments || *feed).map(|(m, _)| m).collect();
-    while let Some(i) = moves.iter().position(|m| m.reads_frame && walks_frame(fd, sp, &moves)) {
+    let mut moves: Vec<RepMove> = found
+        .into_iter()
+        .zip(feeds)
+        .filter(|(m, feed)| m.to_arguments || *feed)
+        .map(|(m, _)| m)
+        .collect();
+    while let Some(i) = moves
+        .iter()
+        .position(|m| m.reads_frame && walks_frame(fd, sp, &moves))
+    {
         moves.remove(i);
         if !moves.iter().any(|m| m.to_arguments && m.reads_frame) {
             moves.retain(|m| m.to_arguments);

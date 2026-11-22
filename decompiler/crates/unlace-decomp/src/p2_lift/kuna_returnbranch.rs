@@ -10,7 +10,7 @@
 
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use unlace_base::address::{calc_mask, Address};
+use unlace_base::address::{Address, calc_mask};
 use unlace_base::space::spacetype;
 use unlace_num::opcodes::OpCode;
 
@@ -79,19 +79,30 @@ impl<'a, F: Fn(u64) -> bool> Prefix<'a, F> {
                 if incoming_return.is_some_and(|ret| ret.overlaps(loc)) {
                     return None;
                 }
-                (1..=8).contains(&size).then(|| (loc, t.val & calc_mask(size)))
+                (1..=8)
+                    .contains(&size)
+                    .then(|| (loc, t.val & calc_mask(size)))
             })
             .collect();
-        Prefix { data, known, previous: None, mode_switch }
+        Prefix {
+            data,
+            known,
+            previous: None,
+            mode_switch,
+        }
     }
 
     /// Temporaries do not survive their instruction.
     fn enter(&mut self, id: OpId) {
-        let Some(op) = self.data.obank().get(id) else { return };
+        let Some(op) = self.data.obank().get(id) else {
+            return;
+        };
         if self.previous.as_ref() != Some(op.get_addr()) {
             let manage = self.data.get_arch().manage();
             self.known.retain(|(loc, _)| {
-                manage.get_space(loc.0).is_some_and(|s| s.get_type() != spacetype::IPTR_INTERNAL)
+                manage
+                    .get_space(loc.0)
+                    .is_some_and(|s| s.get_type() != spacetype::IPTR_INTERNAL)
             });
             self.previous = Some(op.get_addr().clone());
         }
@@ -112,19 +123,28 @@ impl<'a, F: Fn(u64) -> bool> Prefix<'a, F> {
         if node.is_constant() {
             return Some(node.get_offset() & calc_mask(node.get_size()));
         }
-        read_known(location(self.data, vn)?, node.get_space().is_big_endian(), &self.known)
+        read_known(
+            location(self.data, vn)?,
+            node.get_space().is_big_endian(),
+            &self.known,
+        )
     }
 
     /// Apply operation `id`, which must not transfer control. `false` means
     /// the operation may change anything and the proof stops.
     pub(crate) fn execute(&mut self, id: OpId) -> bool {
         self.enter(id);
-        let Some(op) = self.data.obank().get(id) else { return false };
+        let Some(op) = self.data.obank().get(id) else {
+            return false;
+        };
         match op.code() {
             OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => return false,
             OpCode::CPUI_CALLOTHER => {
                 return op.get_out().is_none()
-                    && op.get_in(0).and_then(|v| self.value(v)).is_some_and(&self.mode_switch)
+                    && op
+                        .get_in(0)
+                        .and_then(|v| self.value(v))
+                        .is_some_and(&self.mode_switch)
                     && op.get_in(1).and_then(|v| self.value(v)) == Some(0);
             }
             OpCode::CPUI_STORE => {
@@ -173,7 +193,9 @@ impl<'a, F: Fn(u64) -> bool> Prefix<'a, F> {
             if behavior.is_unary() {
                 behavior.evaluate_unary(out.2, size, x).ok()
             } else {
-                behavior.evaluate_binary(out.2, size, x, self.value(op.get_in(1)?)?).ok()
+                behavior
+                    .evaluate_binary(out.2, size, x, self.value(op.get_in(1)?)?)
+                    .ok()
             }
         })();
         self.known.retain(|(loc, _)| !loc.overlaps(out));
@@ -302,7 +324,12 @@ pub(crate) fn target_on_edge(
         cursor = prev;
     }
     slot.reverse();
-    let mut prefix = Prefix { data, known: Vec::new(), previous: None, mode_switch };
+    let mut prefix = Prefix {
+        data,
+        known: Vec::new(),
+        previous: None,
+        mode_switch,
+    };
     for id in run.into_iter().chain(slot) {
         let code = data.obank().get(id)?.code();
         if (id != from && transfers_control(code)) || !prefix.execute(id) {
@@ -316,9 +343,9 @@ pub(crate) fn target_on_edge(
 mod tests {
     use super::*;
     use crate::context::ArchContext;
+    use std::rc::Rc;
     use unlace_base::address::{Address, SeqNum};
     use unlace_base::space::{AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace};
-    use std::rc::Rc;
 
     /// Every decoded instruction emitted p-code, so the first raw op is the
     /// entry's; the prefix map only matters in the tests that build one.
@@ -473,7 +500,10 @@ mod tests {
             .map(|&(at, size)| {
                 (
                     Address::new(ram.clone(), at),
-                    crate::flow::VisitStat { seqnum: SeqNum::new(Address::default(), 0), size },
+                    crate::flow::VisitStat {
+                        seqnum: SeqNum::new(Address::default(), 0),
+                        size,
+                    },
                 )
             })
             .collect()
@@ -486,10 +516,25 @@ mod tests {
         for leading in [&[(0x1000, 4)][..], &[(0x1000, 4), (0x1004, 4)][..]] {
             let first = leading.last().unwrap().0 + 4;
             let mut fd = function();
-            emit(&mut fd, first, OpCode::CPUI_COPY, Some((0x20, 8)), &[(true, 0x1080, 8)]);
-            let ret = emit(&mut fd, first + 4, OpCode::CPUI_RETURN, None, &[(false, 0x20, 8)]);
+            emit(
+                &mut fd,
+                first,
+                OpCode::CPUI_COPY,
+                Some((0x20, 8)),
+                &[(true, 0x1080, 8)],
+            );
+            let ret = emit(
+                &mut fd,
+                first + 4,
+                OpCode::CPUI_RETURN,
+                None,
+                &[(false, 0x20, 8)],
+            );
             let visited = without_pcode(&fd, leading);
-            assert!(computed_target(&fd, ret, &visited, |_| false), "{leading:?}");
+            assert!(
+                computed_target(&fd, ret, &visited, |_| false),
+                "{leading:?}"
+            );
             assert!(!proves(&fd, ret, |_| false), "{leading:?}");
         }
     }
@@ -501,20 +546,66 @@ mod tests {
     #[test]
     fn a_gap_before_the_entry_prefix_is_not_assumed_empty() {
         let mut fd = function();
-        emit(&mut fd, 0x1004, OpCode::CPUI_COPY, Some((0x20, 8)), &[(true, 0x1080, 8)]);
-        let ret = emit(&mut fd, 0x1008, OpCode::CPUI_RETURN, None, &[(false, 0x20, 8)]);
+        emit(
+            &mut fd,
+            0x1004,
+            OpCode::CPUI_COPY,
+            Some((0x20, 8)),
+            &[(true, 0x1080, 8)],
+        );
+        let ret = emit(
+            &mut fd,
+            0x1008,
+            OpCode::CPUI_RETURN,
+            None,
+            &[(false, 0x20, 8)],
+        );
         let ram = fd.get_address().get_space().unwrap().clone();
-        assert!(!computed_target(&fd, ret, &crate::flow::VisitedMap::new(), |_| false));
+        assert!(!computed_target(
+            &fd,
+            ret,
+            &crate::flow::VisitedMap::new(),
+            |_| false
+        ));
         let mut emitted = without_pcode(&fd, &[(0x1000, 4)]);
-        emitted.get_mut(&Address::new(ram.clone(), 0x1000)).unwrap().seqnum =
-            SeqNum::new(Address::new(ram.clone(), 0x1000), 1);
+        emitted
+            .get_mut(&Address::new(ram.clone(), 0x1000))
+            .unwrap()
+            .seqnum = SeqNum::new(Address::new(ram.clone(), 0x1000), 1);
         assert!(!computed_target(&fd, ret, &emitted, |_| false));
-        assert!(!computed_target(&fd, ret, &without_pcode(&fd, &[(0x1000, 2)]), |_| false));
-        assert!(!computed_target(&fd, ret, &without_pcode(&fd, &[(0x1000, 8)]), |_| false));
+        assert!(!computed_target(
+            &fd,
+            ret,
+            &without_pcode(&fd, &[(0x1000, 2)]),
+            |_| false
+        ));
+        assert!(!computed_target(
+            &fd,
+            ret,
+            &without_pcode(&fd, &[(0x1000, 8)]),
+            |_| false
+        ));
         let mut below = function();
-        emit(&mut below, 0x0ffc, OpCode::CPUI_COPY, Some((0x20, 8)), &[(true, 0x1080, 8)]);
-        let ret = emit(&mut below, 0x1000, OpCode::CPUI_RETURN, None, &[(false, 0x20, 8)]);
-        assert!(!computed_target(&below, ret, &without_pcode(&below, &[(0x0ffc, 4)]), |_| false));
+        emit(
+            &mut below,
+            0x0ffc,
+            OpCode::CPUI_COPY,
+            Some((0x20, 8)),
+            &[(true, 0x1080, 8)],
+        );
+        let ret = emit(
+            &mut below,
+            0x1000,
+            OpCode::CPUI_RETURN,
+            None,
+            &[(false, 0x20, 8)],
+        );
+        assert!(!computed_target(
+            &below,
+            ret,
+            &without_pcode(&below, &[(0x0ffc, 4)]),
+            |_| false
+        ));
     }
 
     /// The marker is named by the language, not by an architecture id.
@@ -597,8 +688,20 @@ mod tests {
     fn a_zeroed_return_register_keeps_the_return() {
         for (value, kept) in [(0, false), (0x1020, true)] {
             let mut fd = function();
-            emit(&mut fd, 0x1000, OpCode::CPUI_COPY, Some((0x10, 8)), &[(true, value, 8)]);
-            let ret = emit(&mut fd, 0x1004, OpCode::CPUI_RETURN, None, &[(false, 0x10, 8)]);
+            emit(
+                &mut fd,
+                0x1000,
+                OpCode::CPUI_COPY,
+                Some((0x10, 8)),
+                &[(true, value, 8)],
+            );
+            let ret = emit(
+                &mut fd,
+                0x1004,
+                OpCode::CPUI_RETURN,
+                None,
+                &[(false, 0x10, 8)],
+            );
             assert_eq!(proves(&fd, ret, |_| false), kept, "{value:#x}");
         }
     }
@@ -744,38 +847,139 @@ mod tests {
         let ram = 2;
         for (space, kept) in [(ram, false), (7, true)] {
             let mut fd = function();
-            emit(&mut fd, 0x1000, OpCode::CPUI_COPY, Some((0x10, 8)), &[(true, 0x1020, 8)]);
-            emit(&mut fd, 0x1004, OpCode::CPUI_STORE, None,
-                 &[(true, space, 8), (false, 0x18, 8), (true, 0, 8)]);
-            let ret = emit(&mut fd, 0x1008, OpCode::CPUI_RETURN, None, &[(false, 0x10, 8)]);
+            emit(
+                &mut fd,
+                0x1000,
+                OpCode::CPUI_COPY,
+                Some((0x10, 8)),
+                &[(true, 0x1020, 8)],
+            );
+            emit(
+                &mut fd,
+                0x1004,
+                OpCode::CPUI_STORE,
+                None,
+                &[(true, space, 8), (false, 0x18, 8), (true, 0, 8)],
+            );
+            let ret = emit(
+                &mut fd,
+                0x1008,
+                OpCode::CPUI_RETURN,
+                None,
+                &[(false, 0x10, 8)],
+            );
             assert_eq!(proves(&fd, ret, |_| false), kept, "space {space}");
         }
         let mut fd = function();
-        emit(&mut fd, 0x1000, OpCode::CPUI_COPY, Some((0x10, 8)), &[(true, 0x1020, 8)]);
-        emit(&mut fd, 0x1004, OpCode::CPUI_STORE, None,
-             &[(false, 0x28, 8), (false, 0x18, 8), (true, 0, 8)]);
-        let ret = emit(&mut fd, 0x1008, OpCode::CPUI_RETURN, None, &[(false, 0x10, 8)]);
+        emit(
+            &mut fd,
+            0x1000,
+            OpCode::CPUI_COPY,
+            Some((0x10, 8)),
+            &[(true, 0x1020, 8)],
+        );
+        emit(
+            &mut fd,
+            0x1004,
+            OpCode::CPUI_STORE,
+            None,
+            &[(false, 0x28, 8), (false, 0x18, 8), (true, 0, 8)],
+        );
+        let ret = emit(
+            &mut fd,
+            0x1008,
+            OpCode::CPUI_RETURN,
+            None,
+            &[(false, 0x10, 8)],
+        );
         assert!(!proves(&fd, ret, |_| false), "unknown space");
     }
 
     #[test]
     fn local_edge_constants_stop_at_unknown_values_calls_and_partial_writes() {
-        for case in ["constant", "unknown", "call", "partial", "store-other", "store-same"] {
+        for case in [
+            "constant",
+            "unknown",
+            "call",
+            "partial",
+            "store-other",
+            "store-same",
+        ] {
             let mut fd = function();
-            let dispatch = emit(&mut fd, 0x1000, OpCode::CPUI_BRANCHIND, None, &[(false, 0x10, 8)]);
-            let start = emit(&mut fd, 0x1020, OpCode::CPUI_COPY, Some((0x10, 8)),
-                             &[(case != "unknown", if case == "unknown" { 0x18 } else { 0x1040 }, 8)]);
-            fd.obank_mut().get_mut(start).unwrap().set_flag(crate::op::pcodeop_flags::startbasic);
+            let dispatch = emit(
+                &mut fd,
+                0x1000,
+                OpCode::CPUI_BRANCHIND,
+                None,
+                &[(false, 0x10, 8)],
+            );
+            let start = emit(
+                &mut fd,
+                0x1020,
+                OpCode::CPUI_COPY,
+                Some((0x10, 8)),
+                &[(
+                    case != "unknown",
+                    if case == "unknown" { 0x18 } else { 0x1040 },
+                    8,
+                )],
+            );
+            fd.obank_mut()
+                .get_mut(start)
+                .unwrap()
+                .set_flag(crate::op::pcodeop_flags::startbasic);
             match case {
-                "call" => { emit(&mut fd, 0x1024, OpCode::CPUI_CALL, None, &[(true, 0x2000, 8)]); }
-                "partial" => { emit(&mut fd, 0x1024, OpCode::CPUI_COPY, Some((0x12, 1)), &[(true, 0, 1)]); }
-                "store-other" => { emit(&mut fd, 0x1024, OpCode::CPUI_STORE, None, &[(true, 7, 8), (false, 0x18, 8), (true, 0, 8)]); }
-                "store-same" => { emit(&mut fd, 0x1024, OpCode::CPUI_STORE, None, &[(true, 2, 8), (false, 0x18, 8), (true, 0, 8)]); }
+                "call" => {
+                    emit(
+                        &mut fd,
+                        0x1024,
+                        OpCode::CPUI_CALL,
+                        None,
+                        &[(true, 0x2000, 8)],
+                    );
+                }
+                "partial" => {
+                    emit(
+                        &mut fd,
+                        0x1024,
+                        OpCode::CPUI_COPY,
+                        Some((0x12, 1)),
+                        &[(true, 0, 1)],
+                    );
+                }
+                "store-other" => {
+                    emit(
+                        &mut fd,
+                        0x1024,
+                        OpCode::CPUI_STORE,
+                        None,
+                        &[(true, 7, 8), (false, 0x18, 8), (true, 0, 8)],
+                    );
+                }
+                "store-same" => {
+                    emit(
+                        &mut fd,
+                        0x1024,
+                        OpCode::CPUI_STORE,
+                        None,
+                        &[(true, 2, 8), (false, 0x18, 8), (true, 0, 8)],
+                    );
+                }
                 _ => {}
             }
-            let edge = emit(&mut fd, 0x1028, OpCode::CPUI_BRANCH, None, &[(true, 0x1000, 8)]);
+            let edge = emit(
+                &mut fd,
+                0x1028,
+                OpCode::CPUI_BRANCH,
+                None,
+                &[(true, 0x1000, 8)],
+            );
             let proved = matches!(case, "constant" | "store-other");
-            assert_eq!(target_on_edge(&fd, edge, dispatch, |_| false), proved.then_some(0x1040), "{case}");
+            assert_eq!(
+                target_on_edge(&fd, edge, dispatch, |_| false),
+                proved.then_some(0x1040),
+                "{case}"
+            );
         }
     }
 }

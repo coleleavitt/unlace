@@ -133,7 +133,7 @@ impl OptionInt3Pad {
             other => {
                 return Err(KunaError::parse(format!(
                     "Unknown int3pad value: {other} (expected off|warn|halt)"
-                )))
+                )));
             }
         };
         Ok((mode, format!("int3 pad handling set to {p1}")))
@@ -150,8 +150,7 @@ pub fn is_int3_callind<F>(data: &Funcdata, op: OpId, userop_name: F) -> bool
 where
     F: Fn(u32) -> Option<String>,
 {
-    crate::kuna_fastfailnoreturn::swi_vector_of_callind(data, op, userop_name)
-        == Some(INT3_VECTOR)
+    crate::kuna_fastfailnoreturn::swi_vector_of_callind(data, op, userop_name) == Some(INT3_VECTOR)
 }
 
 /// How many consecutive `0xcc` bytes the image holds at `addr`, capped at
@@ -163,7 +162,9 @@ where
 /// fills a full word and refuses a short one at a section end, which is exactly
 /// where a pad tends to sit.
 pub fn pad_run_length(data: &Funcdata, addr: &Address) -> u32 {
-    let Some(space) = addr.get_space() else { return 0 };
+    let Some(space) = addr.get_space() else {
+        return 0;
+    };
     let mut run = 0u32;
     while run < MAX_PAD_RUN {
         let at = Address::new(

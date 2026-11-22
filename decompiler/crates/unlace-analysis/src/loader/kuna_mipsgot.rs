@@ -47,13 +47,19 @@ struct Layout {
 /// an address the image defines, ascending and coalesced. Empty off-MIPS, for a
 /// relocatable object, or without the `DT_MIPS_*` tags.
 pub fn const_ranges(file: &object::File) -> Vec<(u64, u64)> {
-    if !matches!(file.architecture(), Architecture::Mips | Architecture::Mips64 | Architecture::Mips64_N32)
-        || file.kind() == object::ObjectKind::Relocatable
+    if !matches!(
+        file.architecture(),
+        Architecture::Mips | Architecture::Mips64 | Architecture::Mips64_N32
+    ) || file.kind() == object::ObjectKind::Relocatable
     {
         return Vec::new();
     }
-    let Some(layout) = layout(file) else { return Vec::new() };
-    let Some(got) = got_bytes(file, layout.base) else { return Vec::new() };
+    let Some(layout) = layout(file) else {
+        return Vec::new();
+    };
+    let Some(got) = got_bytes(file, layout.base) else {
+        return Vec::new();
+    };
     let ptr = if file.is_64() { 8u64 } else { 4u64 };
     let le = file.is_little_endian();
     let word = |index: u64| -> Option<u64> {
@@ -75,8 +81,12 @@ pub fn const_ranges(file: &object::File) -> Vec<(u64, u64)> {
         if index < layout.gotsym || layout.symtabno.is_some_and(|n| index >= n) {
             continue;
         }
-        let SymbolFlags::Elf { st_info, .. } = sym.flags() else { continue };
-        if !matches!(sym.section(), SymbolSection::Section(_)) || matches!(st_info & 0xf, STT_TLS | STT_GNU_IFUNC) {
+        let SymbolFlags::Elf { st_info, .. } = sym.flags() else {
+            continue;
+        };
+        if !matches!(sym.section(), SymbolSection::Section(_))
+            || matches!(st_info & 0xf, STT_TLS | STT_GNU_IFUNC)
+        {
             continue;
         }
         if let Some(got_index) = layout.local.checked_add(index - layout.gotsym) {
@@ -126,7 +136,12 @@ fn layout(file: &object::File) -> Option<Layout> {
             _ => {}
         }
     }
-    Some(Layout { base: base?, local: local?, gotsym: gotsym?, symtabno })
+    Some(Layout {
+        base: base?,
+        local: local?,
+        gotsym: gotsym?,
+        symtabno,
+    })
 }
 
 /// The bytes from `base` to the end of the allocated section holding it, so no

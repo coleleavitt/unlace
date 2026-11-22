@@ -91,11 +91,19 @@ impl Expr {
             Expr::Leaf(_) | Expr::Const(_) => 0,
             // `a + b * -1` is the IR's own spelling of `a - b`: the multiply is
             // free, or the rule and the core rules would trade the two forever.
-            Expr::Mul(a, c) if [8u32, 16, 32, 64].contains(&c.wrapping_add(1).trailing_zeros()) && c.wrapping_add(1).count_ones() <= 1 => a.ops(),
-            Expr::Neg(a) | Expr::Not(a) | Expr::Mul(a, _) => 1 + a.ops(),
-            Expr::Add(a, b) | Expr::Sub(a, b) | Expr::Prod(a, b) | Expr::And(a, b) | Expr::Or(a, b) | Expr::Xor(a, b) => {
-                1 + a.ops() + b.ops()
+            Expr::Mul(a, c)
+                if [8u32, 16, 32, 64].contains(&c.wrapping_add(1).trailing_zeros())
+                    && c.wrapping_add(1).count_ones() <= 1 =>
+            {
+                a.ops()
             }
+            Expr::Neg(a) | Expr::Not(a) | Expr::Mul(a, _) => 1 + a.ops(),
+            Expr::Add(a, b)
+            | Expr::Sub(a, b)
+            | Expr::Prod(a, b)
+            | Expr::And(a, b)
+            | Expr::Or(a, b)
+            | Expr::Xor(a, b) => 1 + a.ops() + b.ops(),
         }
     }
 
@@ -103,7 +111,9 @@ impl Expr {
         match self {
             Expr::Leaf(_) => true,
             Expr::Not(a) => a.is_bitwise_of_leaves(),
-            Expr::And(a, b) | Expr::Or(a, b) | Expr::Xor(a, b) => a.is_bitwise_of_leaves() && b.is_bitwise_of_leaves(),
+            Expr::And(a, b) | Expr::Or(a, b) | Expr::Xor(a, b) => {
+                a.is_bitwise_of_leaves() && b.is_bitwise_of_leaves()
+            }
             _ => false,
         }
     }
@@ -121,7 +131,9 @@ impl Expr {
     fn has_bitwise(&self) -> bool {
         match self {
             Expr::And(..) | Expr::Or(..) | Expr::Xor(..) | Expr::Not(_) => true,
-            Expr::Add(a, b) | Expr::Sub(a, b) | Expr::Prod(a, b) => a.has_bitwise() || b.has_bitwise(),
+            Expr::Add(a, b) | Expr::Sub(a, b) | Expr::Prod(a, b) => {
+                a.has_bitwise() || b.has_bitwise()
+            }
             Expr::Neg(a) | Expr::Mul(a, _) => a.has_bitwise(),
             _ => false,
         }
@@ -158,7 +170,9 @@ fn coefficients(f: &Expr, n: usize, mask: u64) -> Vec<u64> {
 
 /// `AND` of the leaves in `s`.
 fn conj(s: usize) -> Expr {
-    let mut it = (0..usize::BITS as usize).filter(|i| s & (1 << i) != 0).map(Expr::Leaf);
+    let mut it = (0..usize::BITS as usize)
+        .filter(|i| s & (1 << i) != 0)
+        .map(Expr::Leaf);
     let first = it.next().expect("non-empty set");
     it.fold(first, |acc, l| Expr::And(Box::new(acc), Box::new(l)))
 }
@@ -202,7 +216,10 @@ fn sum(terms: Vec<(Expr, u64)>, k: u64, mask: u64) -> Expr {
     if k == 0 {
         acc
     } else if (k.wrapping_neg() & mask) < k {
-        Expr::Sub(Box::new(acc), Box::new(Expr::Const(k.wrapping_neg() & mask)))
+        Expr::Sub(
+            Box::new(acc),
+            Box::new(Expr::Const(k.wrapping_neg() & mask)),
+        )
     } else {
         Expr::Add(Box::new(acc), Box::new(Expr::Const(k)))
     }
@@ -296,7 +313,12 @@ fn table_expr(n: usize, tt: u64) -> Option<Expr> {
     type Index = std::collections::BTreeMap<u64, Expr>;
     static INDEX: std::sync::OnceLock<[Index; 2]> = std::sync::OnceLock::new();
     let index = INDEX.get_or_init(|| {
-        [2, 3].map(|n| boolean_table(n).iter().map(|e| (truth_table(e, n), e.clone())).collect())
+        [2, 3].map(|n| {
+            boolean_table(n)
+                .iter()
+                .map(|e| (truth_table(e, n), e.clone()))
+                .collect()
+        })
     });
     match n {
         1 => match tt {
@@ -344,7 +366,11 @@ type Memo = std::collections::BTreeMap<(u64, Vec<usize>), Bool>;
 
 fn synth_memo(tt: u64, vars: &[usize], memo: &mut Memo) -> Bool {
     let m = vars.len();
-    let full = if m >= 6 { u64::MAX } else { (1u64 << (1 << m)) - 1 };
+    let full = if m >= 6 {
+        u64::MAX
+    } else {
+        (1u64 << (1 << m)) - 1
+    };
     let tt = tt & full;
     if tt == 0 {
         return Bool::Zero;
@@ -369,7 +395,12 @@ fn synth_memo(tt: u64, vars: &[usize], memo: &mut Memo) -> Bool {
     }
     for i in 0..m {
         let (t0, t1) = cofactors(tt, m, i);
-        let rest: Vec<usize> = vars.iter().enumerate().filter(|&(j, _)| j != i).map(|(_, &v)| v).collect();
+        let rest: Vec<usize> = vars
+            .iter()
+            .enumerate()
+            .filter(|&(j, _)| j != i)
+            .map(|(_, &v)| v)
+            .collect();
         let x = Expr::Leaf(vars[i]);
         let (f0, f1) = (synth_memo(t0, &rest, memo), synth_memo(t1, &rest, memo));
         for cand in shannon(x, f0, f1, || synth_memo(t0 ^ t1, &rest, memo)) {
@@ -383,7 +414,10 @@ fn synth_memo(tt: u64, vars: &[usize], memo: &mut Memo) -> Bool {
 
 /// The bits of `p` selected by `sel`, packed low.
 fn pext(p: usize, sel: usize) -> usize {
-    (0..usize::BITS as usize).filter(|&i| sel & (1 << i) != 0).enumerate().fold(0, |r, (k, i)| r | (((p >> i) & 1) << k))
+    (0..usize::BITS as usize)
+        .filter(|&i| sel & (1 << i) != 0)
+        .enumerate()
+        .fold(0, |r, (k, i)| r | (((p >> i) & 1) << k))
 }
 
 /// `tt` as `gA | gB`, `gA & gB` or `gA ^ gB` over each split of `vars` into two
@@ -421,9 +455,20 @@ fn bi_decompositions(tt: u64, vars: &[usize], memo: &mut Memo) -> Vec<Expr> {
         let holds = |op: fn(u64, u64) -> u64, ta: u128, tb: u128| {
             (0..=all).all(|p| f(p) == op(bit(ta, pext(p, amask)), bit(tb, pext(p, bmask))))
         };
-        let va: Vec<usize> = (0..m).filter(|&j| amask & (1 << j) != 0).map(|j| vars[j]).collect();
-        let vb: Vec<usize> = (0..m).filter(|&j| bmask & (1 << j) != 0).map(|j| vars[j]).collect();
-        let forms: [(fn(u64, u64) -> u64, u128, u128, fn(Box<Expr>, Box<Expr>) -> Expr); 3] = [
+        let va: Vec<usize> = (0..m)
+            .filter(|&j| amask & (1 << j) != 0)
+            .map(|j| vars[j])
+            .collect();
+        let vb: Vec<usize> = (0..m)
+            .filter(|&j| bmask & (1 << j) != 0)
+            .map(|j| vars[j])
+            .collect();
+        let forms: [(
+            fn(u64, u64) -> u64,
+            u128,
+            u128,
+            fn(Box<Expr>, Box<Expr>) -> Expr,
+        ); 3] = [
             (|x, y| x | y, a_all, b_all, Expr::Or),
             (|x, y| x & y, a_any, b_any, Expr::And),
             (|x, y| x ^ y, a_x, b_x, Expr::Xor),
@@ -432,7 +477,10 @@ fn bi_decompositions(tt: u64, vars: &[usize], memo: &mut Memo) -> Vec<Expr> {
             if !holds(op, ta, tb) {
                 continue;
             }
-            if let (Bool::E(ea), Bool::E(eb)) = (synth_memo(ta as u64, &va, memo), synth_memo(tb as u64, &vb, memo)) {
+            if let (Bool::E(ea), Bool::E(eb)) = (
+                synth_memo(ta as u64, &va, memo),
+                synth_memo(tb as u64, &vb, memo),
+            ) {
                 out.push(mk(Box::new(ea), Box::new(eb)));
             }
         }
@@ -452,7 +500,10 @@ fn shannon(x: Expr, f0: Bool, f1: Bool, diff: impl FnOnce() -> Bool) -> Vec<Expr
         (Bool::One, Bool::E(e1)) => vec![Expr::Or(b(e1), b(not_x()))],
         (Bool::E(e0), Bool::One) => vec![Expr::Or(b(x.clone()), b(e0))],
         (Bool::E(e0), Bool::E(e1)) => {
-            let mut out = vec![Expr::Or(b(Expr::And(b(x.clone()), b(e1.clone()))), b(Expr::And(b(e0.clone()), b(not_x()))))];
+            let mut out = vec![Expr::Or(
+                b(Expr::And(b(x.clone()), b(e1.clone()))),
+                b(Expr::And(b(e0.clone()), b(not_x()))),
+            )];
             match diff() {
                 Bool::Zero => out.push(e0),
                 Bool::One => out.push(Expr::Xor(b(e0), b(x.clone()))),
@@ -470,7 +521,9 @@ fn shannon(x: Expr, f0: Bool, f1: Bool, diff: impl FnOnce() -> Bool) -> Vec<Expr
 /// The cheapest expression equal to the linear MBA `f` over `n` leaves.
 fn simplify(f: &Expr, n: usize, mask: u64) -> Expr {
     let b = coefficients(f, n, mask);
-    let multi: Vec<usize> = (1..b.len()).filter(|&s| s.count_ones() > 1 && b[s] != 0).collect();
+    let multi: Vec<usize> = (1..b.len())
+        .filter(|&s| s.count_ones() > 1 && b[s] != 0)
+        .collect();
     let full = sum((1..b.len()).map(|s| (conj(s), b[s])).collect(), b[0], mask);
     if multi.is_empty() {
         return full;
@@ -497,7 +550,10 @@ fn simplify(f: &Expr, n: usize, mask: u64) -> Expr {
         // the subsets of the point.
         let vals: Vec<u64> = (0..1usize << m)
             .map(|e| {
-                let abs: usize = (0..m).filter(|&j| e & (1 << j) != 0).map(|j| 1 << vars[j]).sum();
+                let abs: usize = (0..m)
+                    .filter(|&j| e & (1 << j) != 0)
+                    .map(|j| 1 << vars[j])
+                    .sum();
                 let mut acc = 0u64;
                 let mut s = abs;
                 while s != 0 {
@@ -507,32 +563,45 @@ fn simplify(f: &Expr, n: usize, mask: u64) -> Expr {
                 acc & mask
             })
             .collect();
-        let Some(&w) = vals.iter().find(|&&v| v != 0) else { return full };
+        let Some(&w) = vals.iter().find(|&&v| v != 0) else {
+            return full;
+        };
         if vals.iter().any(|&v| v != 0 && v != w) {
             return full;
         }
-        let tt = vals.iter().enumerate().fold(0u64, |acc, (p, &v)| acc | (u64::from(v == w) << p));
+        let tt = vals
+            .iter()
+            .enumerate()
+            .fold(0u64, |acc, (p, &v)| acc | (u64::from(v == w) << p));
         let width = 1usize << m;
-        let not_tt = !tt & if width >= 64 { u64::MAX } else { (1u64 << width) - 1 };
-        let pick = [(synth(tt, &vars), w, 0u64), (synth(not_tt, &vars), w.wrapping_neg() & mask, w)]
-            .into_iter()
-            .filter_map(|(g, c, kk)| match g {
-                Bool::E(e) => Some((e, c, kk)),
-                _ => None,
-            })
-            .min_by_key(|(e, c, _)| scaled(e.clone(), *c, mask).0.ops());
+        let not_tt = !tt
+            & if width >= 64 {
+                u64::MAX
+            } else {
+                (1u64 << width) - 1
+            };
+        let pick = [
+            (synth(tt, &vars), w, 0u64),
+            (synth(not_tt, &vars), w.wrapping_neg() & mask, w),
+        ]
+        .into_iter()
+        .filter_map(|(g, c, kk)| match g {
+            Bool::E(e) => Some((e, c, kk)),
+            _ => None,
+        })
+        .min_by_key(|(e, c, _)| scaled(e.clone(), *c, mask).0.ops());
         let Some((g, c, kk)) = pick else { return full };
         terms.push((g, c));
         k = k.wrapping_add(kk) & mask;
     }
     let grouped = groups.iter().fold(0usize, |a, &g| a | g);
-    terms.extend((0..n).filter(|&i| grouped & (1 << i) == 0).map(|i| (Expr::Leaf(i), b[1 << i])));
+    terms.extend(
+        (0..n)
+            .filter(|&i| grouped & (1 << i) == 0)
+            .map(|i| (Expr::Leaf(i), b[1 << i])),
+    );
     let cand = sum(terms, k, mask);
-    if cand.ops() < full.ops() {
-        cand
-    } else {
-        full
-    }
+    if cand.ops() < full.ops() { cand } else { full }
 }
 
 /// A polynomial over the conjunctions `AND(S)`: each monomial is the sorted
@@ -598,13 +667,22 @@ fn to_poly(e: &Expr, n: usize, mask: u64) -> Option<Poly> {
 /// plus each higher-degree monomial as a product of conjunctions.
 fn from_poly(p: &Poly, n: usize, mask: u64) -> Expr {
     let k = p.get(&Vec::new()).copied().unwrap_or(0);
-    let linear = sum(p.iter().filter(|(m, _)| m.len() == 1).map(|(m, &c)| (conj(m[0]), c)).collect(), k, mask);
+    let linear = sum(
+        p.iter()
+            .filter(|(m, _)| m.len() == 1)
+            .map(|(m, &c)| (conj(m[0]), c))
+            .collect(),
+        k,
+        mask,
+    );
     let linear = simplify(&linear, n, mask);
     let mut terms: Vec<(Expr, u64)> = p
         .iter()
         .filter(|(m, _)| m.len() > 1)
         .map(|(m, &c)| {
-            let prod = m.iter().skip(1).fold(conj(m[0]), |acc, &s| Expr::Prod(Box::new(acc), Box::new(conj(s))));
+            let prod = m.iter().skip(1).fold(conj(m[0]), |acc, &s| {
+                Expr::Prod(Box::new(acc), Box::new(conj(s)))
+            });
             (prod, c)
         })
         .collect();
@@ -709,7 +787,9 @@ impl Collector<'_> {
             OpCode::CPUI_INT_XOR => {
                 let b = b()?;
                 match (*a, *b) {
-                    (e, Expr::Const(c)) | (Expr::Const(c), e) if c == mask_of(self.size) => Expr::Not(Box::new(e)),
+                    (e, Expr::Const(c)) | (Expr::Const(c), e) if c == mask_of(self.size) => {
+                        Expr::Not(Box::new(e))
+                    }
                     (a, b) => Expr::Xor(Box::new(a), Box::new(b)),
                 }
             }
@@ -735,12 +815,20 @@ fn emit(data: &mut Funcdata, root: OpId, e: &Expr, leaves: &[VarnodeId], size: i
     let bin = |data: &mut Funcdata, code: OpCode, a: &Expr, b: VarnodeId| {
         let va = emit(data, root, a, leaves, size);
         let op = data.new_op_before(root, code, va, b, None);
-        data.obank().get(op).and_then(|o| o.get_out()).expect("new_op_before output")
+        data.obank()
+            .get(op)
+            .and_then(|o| o.get_out())
+            .expect("new_op_before output")
     };
     match e {
         Expr::Leaf(i) => leaves[*i],
         Expr::Const(c) => data.new_constant(size, *c as uintb),
-        Expr::Add(a, b) | Expr::Sub(a, b) | Expr::Prod(a, b) | Expr::And(a, b) | Expr::Or(a, b) | Expr::Xor(a, b) => {
+        Expr::Add(a, b)
+        | Expr::Sub(a, b)
+        | Expr::Prod(a, b)
+        | Expr::And(a, b)
+        | Expr::Or(a, b)
+        | Expr::Xor(a, b) => {
             let vb = emit(data, root, b, leaves, size);
             let code = match e {
                 Expr::Add(..) => OpCode::CPUI_INT_ADD,
@@ -758,9 +846,20 @@ fn emit(data: &mut Funcdata, root: OpId, e: &Expr, leaves: &[VarnodeId], size: i
         }
         Expr::Neg(a) | Expr::Not(a) => {
             let va = emit(data, root, a, leaves, size);
-            let addr = data.obank().get(root).map(|o| o.get_addr().clone()).expect("root");
+            let addr = data
+                .obank()
+                .get(root)
+                .map(|o| o.get_addr().clone())
+                .expect("root");
             let op = data.new_op(1, addr);
-            data.op_set_opcode_code(op, if matches!(e, Expr::Neg(_)) { OpCode::CPUI_INT_2COMP } else { OpCode::CPUI_INT_NEGATE });
+            data.op_set_opcode_code(
+                op,
+                if matches!(e, Expr::Neg(_)) {
+                    OpCode::CPUI_INT_2COMP
+                } else {
+                    OpCode::CPUI_INT_NEGATE
+                },
+            );
             let out = data.new_unique_out(size, op).expect("unique out");
             data.op_set_input(op, va, 0).expect("set input");
             data.op_insert_before(op, root);
@@ -795,22 +894,35 @@ impl Rule for RuleMbaSimplify {
     }
 
     fn clone_rule(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Rule>> {
-        grouplist.contains(&self.group).then(|| Box::new(RuleMbaSimplify { group: self.group.clone() }) as Box<dyn Rule>)
+        grouplist.contains(&self.group).then(|| {
+            Box::new(RuleMbaSimplify {
+                group: self.group.clone(),
+            }) as Box<dyn Rule>
+        })
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         if !data.get_arch().mba {
             return 0;
         }
-        let Some(out) = data.obank().get(op).and_then(|o| o.get_out()) else { return 0 };
-        let Some(size) = data.vbank().get(out).map(|v| v.get_size()) else { return 0 };
+        let Some(out) = data.obank().get(op).and_then(|o| o.get_out()) else {
+            return 0;
+        };
+        let Some(size) = data.vbank().get(out).map(|v| v.get_size()) else {
+            return 0;
+        };
         if size > 8 {
             return 0;
         }
         // A subtree is simplified on its own too: a non-linear reader (an
         // `^ v0` over the whole sum) must not hide a linear tree below it.
         // Each rewrite strictly lowers the op count, so this terminates.
-        let mut col = Collector { data, size, leaves: Vec::new(), nodes: 0 };
+        let mut col = Collector {
+            data,
+            size,
+            leaves: Vec::new(),
+            nodes: 0,
+        };
         let Some(expr) = col.op(op) else { return 0 };
         let leaves = col.leaves;
         let n = leaves.len();
@@ -853,7 +965,10 @@ mod tests {
     #[test]
     fn xor_plus_twice_and_is_add() {
         let m = u32::MAX as u64;
-        let f = Expr::Add(Box::new(Expr::Xor(x(), y())), Box::new(Expr::Mul(Box::new(Expr::And(x(), y())), 2)));
+        let f = Expr::Add(
+            Box::new(Expr::Xor(x(), y())),
+            Box::new(Expr::Mul(Box::new(Expr::And(x(), y())), 2)),
+        );
         assert!(f.is_linear());
         assert_eq!(simplify(&f, 2, m), Expr::Add(x(), y()));
     }
@@ -871,7 +986,10 @@ mod tests {
     fn sub_via_not() {
         // x - y == x + ~y + 1
         let m = u64::MAX;
-        let f = Expr::Add(Box::new(Expr::Add(x(), Box::new(Expr::Not(y())))), Box::new(Expr::Const(1)));
+        let f = Expr::Add(
+            Box::new(Expr::Add(x(), Box::new(Expr::Not(y())))),
+            Box::new(Expr::Const(1)),
+        );
         assert_eq!(simplify(&f, 2, m), Expr::Sub(x(), y()));
     }
 
@@ -880,8 +998,17 @@ mod tests {
         // (x & ~y) + y + z == (x | y) + z
         let m = u32::MAX as u64;
         let z = Box::new(Expr::Leaf(2));
-        let f = Expr::Add(Box::new(Expr::Add(Box::new(Expr::And(x(), Box::new(Expr::Not(y())))), y())), z.clone());
-        assert_eq!(simplify(&f, 3, m), Expr::Add(Box::new(Expr::Or(x(), y())), z));
+        let f = Expr::Add(
+            Box::new(Expr::Add(
+                Box::new(Expr::And(x(), Box::new(Expr::Not(y())))),
+                y(),
+            )),
+            z.clone(),
+        );
+        assert_eq!(
+            simplify(&f, 3, m),
+            Expr::Add(Box::new(Expr::Or(x(), y())), z)
+        );
     }
 
     #[test]
@@ -890,7 +1017,10 @@ mod tests {
         let m = u32::MAX as u64;
         let z = || Box::new(Expr::Leaf(2));
         let and = |a: Box<Expr>, b: Box<Expr>| Box::new(Expr::And(a, b));
-        let f = Expr::Sub(Box::new(Expr::Add(and(x(), y()), and(x(), z()))), and(and(x(), y()), z()));
+        let f = Expr::Sub(
+            Box::new(Expr::Add(and(x(), y()), and(x(), z()))),
+            and(and(x(), y()), z()),
+        );
         let s = simplify(&f, 3, m);
         assert_eq!(s.ops(), 2, "{s:?}");
         assert!(agree(&f, &s, 3, m));
@@ -931,10 +1061,15 @@ mod tests {
             Box::new(Expr::Mul(and(leaf(0), leaf(1)), 2)),
             and(leaf(2), not(leaf(3))),
             leaf(3),
-            Box::new(Expr::Sub(Box::new(Expr::Or(leaf(4), leaf(5))), and(leaf(4), leaf(5)))),
+            Box::new(Expr::Sub(
+                Box::new(Expr::Or(leaf(4), leaf(5))),
+                and(leaf(4), leaf(5)),
+            )),
         ]
         .into_iter()
-        .fold(Expr::Xor(leaf(0), leaf(1)), |acc, t| Expr::Add(Box::new(acc), t));
+        .fold(Expr::Xor(leaf(0), leaf(1)), |acc, t| {
+            Expr::Add(Box::new(acc), t)
+        });
         assert!(f.is_linear());
         let s = simplify(&f, 6, m);
         assert_eq!(s.ops(), 5, "{s:?}");
@@ -948,7 +1083,12 @@ mod tests {
             let vars: Vec<usize> = (0..m).collect();
             for _ in 0..40 {
                 let width = 1usize << m;
-                let tt = splitmix(&mut st) & if width == 64 { u64::MAX } else { (1u64 << width) - 1 };
+                let tt = splitmix(&mut st)
+                    & if width == 64 {
+                        u64::MAX
+                    } else {
+                        (1u64 << width) - 1
+                    };
                 match synth(tt, &vars) {
                     Bool::E(e) => assert_eq!(truth_table(&e, m), tt, "{e:?}"),
                     Bool::Zero => assert_eq!(tt, 0),

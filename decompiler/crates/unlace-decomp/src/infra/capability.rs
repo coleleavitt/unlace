@@ -93,7 +93,11 @@ impl std::fmt::Debug for CapabilityRegistry {
         f.debug_struct("CapabilityRegistry")
             .field(
                 "names",
-                &self.thelist.iter().map(|c| c.get_name().to_string()).collect::<Vec<_>>(),
+                &self
+                    .thelist
+                    .iter()
+                    .map(|c| c.get_name().to_string())
+                    .collect::<Vec<_>>(),
             )
             .field("initialized", &self.initialized)
             .finish()

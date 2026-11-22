@@ -13,7 +13,7 @@ use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_base::space::AddrSpace;
 use unlace_sleigh::globalcontext::ContextInternal;
-use unlace_sleigh::kuna_ctxsnapshot::{restore_context, snapshot_context, ContextValueSnapshot};
+use unlace_sleigh::kuna_ctxsnapshot::{ContextValueSnapshot, restore_context, snapshot_context};
 use unlace_sleigh::loadimage::LoadImage;
 use unlace_sleigh::sleigh::Sleigh;
 
@@ -44,8 +44,16 @@ fn engine(rel: &str) -> (Sleigh, Rc<AddrSpace>) {
     let path = repo_root().join("specs/Ghidra/Processors").join(rel);
     let bytes = std::fs::read(&path).expect("read compiled processor spec");
     let mut sleigh = Sleigh::new(Box::new(DummyImg), Box::new(ContextInternal::new()));
-    sleigh.initialize_from_sla(&bytes).expect("initialize processor spec");
-    let space = Rc::clone(sleigh.base().manager().get_default_code_space().expect("default code space"));
+    sleigh
+        .initialize_from_sla(&bytes)
+        .expect("initialize processor spec");
+    let space = Rc::clone(
+        sleigh
+            .base()
+            .manager()
+            .get_default_code_space()
+            .expect("default code space"),
+    );
     (sleigh, space)
 }
 

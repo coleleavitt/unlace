@@ -8,11 +8,21 @@
 
 use super::*;
 
-use unlace_base::space::AddrSpace;
 use std::rc::Rc;
+use unlace_base::space::AddrSpace;
 
 fn reg_space() -> Rc<AddrSpace> {
-    Rc::new(AddrSpace::new(spacetype::IPTR_PROCESSOR, "register", false, 8, 1, 1, 0, 0, 0))
+    Rc::new(AddrSpace::new(
+        spacetype::IPTR_PROCESSOR,
+        "register",
+        false,
+        8,
+        1,
+        1,
+        0,
+        0,
+        0,
+    ))
 }
 
 /// All or nothing, and in prototype order: the tail has to be covered by
@@ -23,7 +33,10 @@ fn the_tail_is_covered_in_order_or_not_at_all() {
     let reg = reg_space();
     let at = |off: u64| (Address::new(Rc::clone(&reg), off), 8);
     let candidates = vec![at(0x20), at(0x28)];
-    assert_eq!(plan_tail(&[at(0x20), at(0x28)], &candidates), Some(vec![0, 1]));
+    assert_eq!(
+        plan_tail(&[at(0x20), at(0x28)], &candidates),
+        Some(vec![0, 1])
+    );
     assert_eq!(plan_tail(&[at(0x28)], &candidates), Some(vec![1]));
     // Out of prototype order: 0x20 is behind the 0x28 already consumed.
     assert_eq!(plan_tail(&[at(0x28), at(0x20)], &candidates), None);
@@ -70,8 +83,17 @@ fn an_empty_witness_covers_nothing() {
 #[test]
 fn a_location_in_another_space_covers_nothing() {
     let reg = reg_space();
-    let stack =
-        Rc::new(AddrSpace::new(spacetype::IPTR_SPACEBASE, "stack", false, 8, 1, 2, 0, 0, 0));
+    let stack = Rc::new(AddrSpace::new(
+        spacetype::IPTR_SPACEBASE,
+        "stack",
+        false,
+        8,
+        1,
+        2,
+        0,
+        0,
+        0,
+    ));
     let entries = vec![(Address::new(Rc::clone(&reg), 0x38), 8)];
     let witness = vec![(Address::new(Rc::clone(&stack), 0x38), 8)];
     assert_eq!(uncovered_argument_locations(&entries, &witness).len(), 1);

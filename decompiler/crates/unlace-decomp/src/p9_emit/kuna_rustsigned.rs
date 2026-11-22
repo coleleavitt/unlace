@@ -3,7 +3,7 @@
 use std::rc::Rc;
 
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
 
@@ -49,14 +49,18 @@ pub(crate) fn plan(fd: &Funcdata, op: OpId) -> Option<SignedTextPlan> {
     let mut constant_types = [None, None];
     for slot in 0..if shift { 1 } else { 2 } {
         let ty = fd.vn_type_read_facing(inputs[slot], op);
-        if !matches!(ty.get_metatype(), type_metatype::TYPE_INT | type_metatype::TYPE_UINT)
-            || !ty.is_core_type()
-            || ty.get_size() != width || fd.vbank().get(inputs[slot])?.get_size() != width
+        if !matches!(
+            ty.get_metatype(),
+            type_metatype::TYPE_INT | type_metatype::TYPE_UINT
+        ) || !ty.is_core_type()
+            || ty.get_size() != width
+            || fd.vbank().get(inputs[slot])?.get_size() != width
         {
             return None;
         }
         casts[slot] = signed_operand_name(&ty);
-        if casts[slot].is_some() && ty.get_metatype() == type_metatype::TYPE_UINT
+        if casts[slot].is_some()
+            && ty.get_metatype() == type_metatype::TYPE_UINT
             && fd.vbank().get(inputs[slot])?.is_constant()
         {
             constant_types[slot] = Some(ty);
@@ -65,20 +69,33 @@ pub(crate) fn plan(fd: &Funcdata, op: OpId) -> Option<SignedTextPlan> {
     let output = if shift {
         let out = operation.get_out()?;
         let ty = fd.vn_type_def_facing(out);
-        if ty.get_size() != width || fd.vbank().get(out)?.get_size() != width
+        if ty.get_size() != width
+            || fd.vbank().get(out)?.get_size() != width
             || !ty.is_core_type()
-            || !matches!(ty.get_metatype(), type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN)
+            || !matches!(
+                ty.get_metatype(),
+                type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN
+            )
         {
             return None;
         }
-        if ty.get_metatype() != type_metatype::TYPE_INT || ty.is_char_print() { Some(ty) } else { None }
+        if ty.get_metatype() != type_metatype::TYPE_INT || ty.is_char_print() {
+            Some(ty)
+        } else {
+            None
+        }
     } else {
         None
     };
     if casts.iter().all(Option::is_none) && output.is_none() {
         return None;
     }
-    Some(SignedTextPlan { inputs, casts, constant_types, output })
+    Some(SignedTextPlan {
+        inputs,
+        casts,
+        constant_types,
+        output,
+    })
 }
 
 #[cfg(test)]

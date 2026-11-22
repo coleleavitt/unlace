@@ -9,12 +9,18 @@ use unlace_base::space::AddrSpaceManager;
 fn environment_toggle_tokens_preserve_default_on_and_opt_in_policies() {
     for value in ["on", "1", "true", "", " ON ", "\tTrUe\n", "\u{2003}"] {
         for default in [false, true] {
-            assert!(parse_env_toggle(value, default), "{value:?}, default={default}");
+            assert!(
+                parse_env_toggle(value, default),
+                "{value:?}, default={default}"
+            );
         }
     }
     for value in ["off", "0", "false", " OFF ", "\tFaLsE\n"] {
         for default in [false, true] {
-            assert!(!parse_env_toggle(value, default), "{value:?}, default={default}");
+            assert!(
+                !parse_env_toggle(value, default),
+                "{value:?}, default={default}"
+            );
         }
     }
     for value in ["no", "yes", "2", "anything", "of", "off\0", "ＯＦＦ"] {
@@ -54,7 +60,11 @@ struct RecordingContext {
 
 impl RecordingContext {
     fn c_lang() -> Self {
-        RecordingContext { is_c_language: true, has_current_action: true, ..Default::default() }
+        RecordingContext {
+            is_c_language: true,
+            has_current_action: true,
+            ..Default::default()
+        }
     }
 }
 
@@ -116,7 +126,9 @@ impl ArchOptionContext for RecordingContext {
     }
     fn set_default_model(&mut self, name: &str) -> KunaResult<()> {
         if self.unknown_model {
-            return Err(KunaError::lowlevel(format!("Unknown prototype model :{name}")));
+            return Err(KunaError::lowlevel(format!(
+                "Unknown prototype model :{name}"
+            )));
         }
         self.log.push(format!("default_model={name}"));
         Ok(())
@@ -364,7 +376,10 @@ fn test_extrapop() {
         "ExtraPop set for function myfunc"
     );
     // per-function unknown name => RecovError.
-    let mut g = RecordingContext { unknown_function: true, ..Default::default() };
+    let mut g = RecordingContext {
+        unknown_function: true,
+        ..Default::default()
+    };
     let e = apply_named(&mut g, "extrapop", "4", "missing", "").unwrap_err();
     assert_eq!(e.explain(), "Unknown function name: missing");
     assert!(matches!(e, KunaError::Recov { .. }));
@@ -389,7 +404,10 @@ fn test_readonly() {
     assert!(!g.readonly_propagate);
     // empty p1 => the dedicated ParseError (NOT onOrOff's default-true).
     let e = apply_named(&mut g, "readonly", "", "", "").unwrap_err();
-    assert_eq!(e.explain(), "Read-only option must be set \"on\" or \"off\"");
+    assert_eq!(
+        e.explain(),
+        "Read-only option must be set \"on\" or \"off\""
+    );
     // bad value => onOrOff error.
     let e = apply_named(&mut g, "readonly", "maybe", "", "").unwrap_err();
     assert_eq!(e.explain(), "Must specify toggle value, on/off");
@@ -458,7 +476,10 @@ fn test_inline() {
         "Inline property for function foo = false"
     );
     // unknown function.
-    let mut g = RecordingContext { unknown_function: true, ..Default::default() };
+    let mut g = RecordingContext {
+        unknown_function: true,
+        ..Default::default()
+    };
     let e = apply_named(&mut g, "inline", "ghost", "true", "").unwrap_err();
     assert_eq!(e.explain(), "Unknown function name: ghost");
 }
@@ -470,7 +491,10 @@ fn test_noreturn() {
         apply_named(&mut g, "noreturn", "bar", "true", "").unwrap(),
         "No return property for function bar = true"
     );
-    let mut g = RecordingContext { unknown_function: true, ..Default::default() };
+    let mut g = RecordingContext {
+        unknown_function: true,
+        ..Default::default()
+    };
     let e = apply_named(&mut g, "noreturn", "bar", "true", "").unwrap_err();
     assert_eq!(e.explain(), "Unknown function name: bar");
 }
@@ -495,7 +519,10 @@ fn test_warning() {
     let e = apply_named(&mut g, "warning", "", "on", "").unwrap_err();
     assert_eq!(e.explain(), "No action/rule specified");
     // bad action/rule specifier => RecovError.
-    let mut g = RecordingContext { bad_action_warning: true, ..Default::default() };
+    let mut g = RecordingContext {
+        bad_action_warning: true,
+        ..Default::default()
+    };
     let e = apply_named(&mut g, "warning", "RuleBad", "on", "").unwrap_err();
     assert_eq!(e.explain(), "Bad action/rule specifier: RuleBad");
 }
@@ -732,12 +759,19 @@ fn test_setaction() {
 #[test]
 fn test_currentaction() {
     // two-param form: toggle subgroup in current action.
-    let mut g = RecordingContext { current_action: "decompile".into(), ..Default::default() };
+    let mut g = RecordingContext {
+        current_action: "decompile".into(),
+        ..Default::default()
+    };
     assert_eq!(
         apply_named(&mut g, "currentaction", "deadcode", "off", "").unwrap(),
         "Toggled deadcode in action decompile"
     );
-    assert!(g.log.iter().any(|s| s == "toggle[decompile.deadcode]=false"));
+    assert!(
+        g.log
+            .iter()
+            .any(|s| s == "toggle[decompile.deadcode]=false")
+    );
     // three-param form: set current then toggle.
     let mut g = RecordingContext::default();
     assert_eq!(
@@ -815,7 +849,10 @@ fn test_protoeval() {
     );
     let e = apply_named(&mut g, "protoeval", "", "", "").unwrap_err();
     assert_eq!(e.explain(), "Must specify prototype model");
-    let mut g = RecordingContext { unknown_model: true, ..Default::default() };
+    let mut g = RecordingContext {
+        unknown_model: true,
+        ..Default::default()
+    };
     let e = apply_named(&mut g, "protoeval", "weird", "", "").unwrap_err();
     assert_eq!(e.explain(), "Unknown prototype model: weird");
 }
@@ -827,7 +864,10 @@ fn test_defaultprototype() {
         apply_named(&mut g, "defaultprototype", "__stdcall", "", "").unwrap(),
         "Set default prototype to __stdcall"
     );
-    let mut g = RecordingContext { unknown_model: true, ..Default::default() };
+    let mut g = RecordingContext {
+        unknown_model: true,
+        ..Default::default()
+    };
     let e = apply_named(&mut g, "defaultprototype", "weird", "", "").unwrap_err();
     assert_eq!(e.explain(), "Unknown prototype model :weird");
 }
@@ -879,7 +919,10 @@ fn test_maxinstruction() {
 
 #[test]
 fn test_aliasblock() {
-    let mut g = RecordingContext { alias_block_level: 2, ..Default::default() };
+    let mut g = RecordingContext {
+        alias_block_level: 2,
+        ..Default::default()
+    };
     // changing 2 -> 0.
     assert_eq!(
         apply_named(&mut g, "aliasblock", "none", "", "").unwrap(),
@@ -927,7 +970,11 @@ fn test_namespacestrategy() {
 #[test]
 fn test_togglerule() {
     // enable success.
-    let mut g = RecordingContext { has_current_action: true, rule_present: true, ..Default::default() };
+    let mut g = RecordingContext {
+        has_current_action: true,
+        rule_present: true,
+        ..Default::default()
+    };
     assert_eq!(
         apply_named(&mut g, "togglerule", "decompile.rulepath", "on", "").unwrap(),
         "Successfully enabled rule"
@@ -938,7 +985,11 @@ fn test_togglerule() {
         "Successfully disabled rule"
     );
     // enable failure (rule not present).
-    let mut g = RecordingContext { has_current_action: true, rule_present: false, ..Default::default() };
+    let mut g = RecordingContext {
+        has_current_action: true,
+        rule_present: false,
+        ..Default::default()
+    };
     assert_eq!(
         apply_named(&mut g, "togglerule", "decompile.bad", "on", "").unwrap(),
         "Failed to enable rule"
@@ -953,7 +1004,10 @@ fn test_togglerule() {
     let e = apply_named(&mut g, "togglerule", "path", "", "").unwrap_err();
     assert_eq!(e.explain(), "Must specify on/off");
     // no current action.
-    let mut g = RecordingContext { has_current_action: false, ..Default::default() };
+    let mut g = RecordingContext {
+        has_current_action: false,
+        ..Default::default()
+    };
     let e = apply_named(&mut g, "togglerule", "path", "on", "").unwrap_err();
     assert_eq!(e.explain(), "Missing current action");
 }
@@ -983,26 +1037,44 @@ fn test_splitdatatype_bits() {
 
 #[test]
 fn test_splitdatatype_apply() {
-    let mut g = RecordingContext { current_action: "decompile".into(), ..Default::default() };
+    let mut g = RecordingContext {
+        current_action: "decompile".into(),
+        ..Default::default()
+    };
     // struct+pointer => splitcopy on, splitpointer on.
     assert_eq!(
         apply_named(&mut g, "splitdatatype", "struct", "pointer", "").unwrap(),
         "Split data-type configuration set"
     );
-    assert!(g.log.iter().any(|s| s == "toggle[decompile.splitcopy]=true"));
-    assert!(g.log.iter().any(|s| s == "toggle[decompile.splitpointer]=true"));
+    assert!(
+        g.log
+            .iter()
+            .any(|s| s == "toggle[decompile.splitcopy]=true")
+    );
+    assert!(
+        g.log
+            .iter()
+            .any(|s| s == "toggle[decompile.splitpointer]=true")
+    );
     // re-apply same config => "unchanged".
     assert_eq!(
         apply_named(&mut g, "splitdatatype", "struct", "pointer", "").unwrap(),
         "Split data-type configuration unchanged"
     );
     // empty (config 0, no struct/array bit) => splitcopy/splitpointer off.
-    let mut g = RecordingContext { current_action: "decompile".into(), ..Default::default() };
+    let mut g = RecordingContext {
+        current_action: "decompile".into(),
+        ..Default::default()
+    };
     assert_eq!(
         apply_named(&mut g, "splitdatatype", "", "", "").unwrap(),
         "Split data-type configuration unchanged"
     );
-    assert!(g.log.iter().any(|s| s == "toggle[decompile.splitcopy]=false"));
+    assert!(
+        g.log
+            .iter()
+            .any(|s| s == "toggle[decompile.splitcopy]=false")
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -1011,7 +1083,10 @@ fn test_splitdatatype_apply() {
 
 #[test]
 fn test_nanignore() {
-    let mut g = RecordingContext { has_current_action: true, ..Default::default() };
+    let mut g = RecordingContext {
+        has_current_action: true,
+        ..Default::default()
+    };
     assert_eq!(
         apply_named(&mut g, "nanignore", "all", "", "").unwrap(),
         "Nan ignore configuration set to: all"
@@ -1173,9 +1248,14 @@ fn test_decode_lenient_skips_unknown_and_applies_known() {
 #[test]
 fn the_element_list_and_the_dispatch_map_register_the_same_options() {
     let db = OptionDatabase::new();
-    let dispatched: BTreeMap<uint4, &str> =
-        db.optionmap.iter().map(|(id, opt)| (*id, opt.get_name())).collect();
-    let listed: BTreeMap<uint4, &str> =
-        UPSTREAM_OPTION_ELEMENTS.iter().map(|e| (e.get_id(), e.get_name())).collect();
+    let dispatched: BTreeMap<uint4, &str> = db
+        .optionmap
+        .iter()
+        .map(|(id, opt)| (*id, opt.get_name()))
+        .collect();
+    let listed: BTreeMap<uint4, &str> = UPSTREAM_OPTION_ELEMENTS
+        .iter()
+        .map(|e| (e.get_id(), e.get_name()))
+        .collect();
     assert_eq!(dispatched, listed);
 }

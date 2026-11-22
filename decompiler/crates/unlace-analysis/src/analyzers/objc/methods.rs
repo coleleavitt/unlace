@@ -158,7 +158,11 @@ fn read_small(img: &MachoImage, m: u64, architecture: Architecture) -> Option<Me
     let types = img.read_cstr(types_va);
 
     // imp: self-relative (field at m+8) to the function VA; 0 for a declaration.
-    let imp = if i_rel == 0 { 0 } else { rel_to(m.wrapping_add(8), i_rel) };
+    let imp = if i_rel == 0 {
+        0
+    } else {
+        rel_to(m.wrapping_add(8), i_rel)
+    };
     Some(Method {
         selector,
         selector_va: sel_ptr,
@@ -170,17 +174,35 @@ fn read_small(img: &MachoImage, m: u64, architecture: Architecture) -> Option<Me
 /// A small `method_t` whose `name` is an offset from the shared cache's
 /// selector base (the `0x40000000` list flag), and whose `types` is one too
 /// under `0x20000000`; `imp` as in [`read_small`].
-fn read_small_direct(img: &MachoImage, m: u64, architecture: Architecture, relative_types: bool) -> Option<Method> {
+fn read_small_direct(
+    img: &MachoImage,
+    m: u64,
+    architecture: Architecture,
+    relative_types: bool,
+) -> Option<Method> {
     let base = img.selector_base?;
     let n_rel = img.read_i32(m)?;
     let t_rel = img.read_i32(m.wrapping_add(4))?;
     let i_rel = img.read_i32(m.wrapping_add(8))?;
     let sel_ptr = rel_to(base, n_rel);
     let selector = img.read_cstr(sel_ptr)?;
-    let types_at = if relative_types { rel_to(base, t_rel) } else { rel_to(m.wrapping_add(4), t_rel) };
+    let types_at = if relative_types {
+        rel_to(base, t_rel)
+    } else {
+        rel_to(m.wrapping_add(4), t_rel)
+    };
     let types = img.read_cstr(types_at);
-    let imp = if i_rel == 0 { 0 } else { rel_to(m.wrapping_add(8), i_rel) };
-    Some(Method { selector, selector_va: sel_ptr, types, imp: normalize_imp(architecture, imp) })
+    let imp = if i_rel == 0 {
+        0
+    } else {
+        rel_to(m.wrapping_add(8), i_rel)
+    };
+    Some(Method {
+        selector,
+        selector_va: sel_ptr,
+        types,
+        imp: normalize_imp(architecture, imp),
+    })
 }
 
 /// Add a signed self-relative `i32` displacement to a base VMA with wrapping
@@ -224,7 +246,10 @@ mod tests {
     fn exhausted_walk_budget_stops_the_walk_and_the_strings() {
         use super::super::classt;
         use crate::loader::format::macho::resolve_chained_fixups;
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/macho_objc_refs_arm64");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/macho_objc_refs_arm64"
+        );
         let bytes = std::fs::read(path).expect("read fixture");
         let file = object::File::parse(bytes.as_slice()).expect("parse Mach-O");
         let img = MachoImage::with_fixups(&file, resolve_chained_fixups(&file, &bytes));

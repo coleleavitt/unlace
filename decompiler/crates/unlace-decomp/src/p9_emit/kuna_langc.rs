@@ -13,7 +13,7 @@ use std::rc::Rc;
 
 use unlace_base::types::int4;
 
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::kuna_langtypes::{SpellCtx, TypeSpeller};
 
 /// The c-language type speller.
@@ -349,7 +349,7 @@ mod tests {
     fn callback_pointer_does_not_erase_an_unknown_return_width() {
         use std::rc::Rc;
 
-        use crate::dtype::{type_metatype, Datatype, DatatypeKind};
+        use crate::dtype::{Datatype, DatatypeKind, type_metatype};
         use crate::fspec::{FuncProto, ParameterPieces};
         use crate::kuna_langtypes::{SpellCtx, TypeSpeller};
 
@@ -366,12 +366,20 @@ mod tests {
         let callback = |output| {
             let mut proto = FuncProto::new();
             proto.attach_internal_store(Rc::new(Datatype::new(0, type_metatype::TYPE_VOID)));
-            proto.set_output(&ParameterPieces { type_: Some(output), ..Default::default() });
+            proto.set_output(&ParameterPieces {
+                type_: Some(output),
+                ..Default::default()
+            });
             let mut code = Datatype::new(1, type_metatype::TYPE_CODE);
-            code.kind = DatatypeKind::Code { proto: Some(Rc::new(proto)) };
+            code.kind = DatatypeKind::Code {
+                proto: Some(Rc::new(proto)),
+            };
             pointer(Rc::new(code))
         };
-        let cx = SpellCtx { enabled: true, ..SpellCtx::OFF };
+        let cx = SpellCtx {
+            enabled: true,
+            ..SpellCtx::OFF
+        };
         for size in [3, 10, 16] {
             let unknown = Rc::new(Datatype::new(size, type_metatype::TYPE_UNKNOWN));
             assert_eq!(

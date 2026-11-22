@@ -1,4 +1,5 @@
 //! Synthetic `lwarx` encoding, checked for the reservation that `stwcx.` tests.
+use std::{path::PathBuf, rc::Rc};
 use unlace_base::space::RegisterLookup;
 use unlace_base::{address::Address, error::KunaResult};
 use unlace_num::{opcodes::OpCode, pcoderaw::VarnodeData};
@@ -8,7 +9,6 @@ use unlace_sleigh::{
     sleigh::Sleigh,
     translate::{AssemblyEmit, PcodeEmit},
 };
-use std::{path::PathBuf, rc::Rc};
 
 struct Bytes(Vec<u8>);
 impl LoadImage for Bytes {
@@ -60,10 +60,20 @@ fn lwarx_sets_the_reservation_tested_by_stwcx() {
         "ppc_64_isa_be",
         "ppc_64_isa_altivec_le",
     ] {
-        let sla = std::fs::read(root.join(format!("specs/Ghidra/Processors/PowerPC/data/languages/{spec}.sla"))).unwrap();
+        let sla = std::fs::read(root.join(format!(
+            "specs/Ghidra/Processors/PowerPC/data/languages/{spec}.sla"
+        )))
+        .unwrap();
         let word = 0x7d201828u32;
-        let bytes = if spec.ends_with("_le") { word.to_le_bytes() } else { word.to_be_bytes() };
-        let mut sleigh = Sleigh::new(Box::new(Bytes(Vec::new())), Box::new(ContextInternal::new()));
+        let bytes = if spec.ends_with("_le") {
+            word.to_le_bytes()
+        } else {
+            word.to_be_bytes()
+        };
+        let mut sleigh = Sleigh::new(
+            Box::new(Bytes(Vec::new())),
+            Box::new(ContextInternal::new()),
+        );
         sleigh.initialize_from_sla(&sla).unwrap();
         sleigh.set_loader(Box::new(Bytes(bytes.to_vec())));
         let ram = Rc::clone(sleigh.base().manager().get_space_by_name("ram").unwrap());
@@ -72,7 +82,11 @@ fn lwarx_sets_the_reservation_tested_by_stwcx() {
         assert_eq!(sleigh.print_assembly(&mut asm, &addr).unwrap(), 4, "{spec}");
         assert_eq!(asm.0, "lwarx", "{spec}");
         let mut ops = Ops::default();
-        assert_eq!(sleigh.one_instruction(&mut ops, &addr).unwrap(), 4, "{spec}");
+        assert_eq!(
+            sleigh.one_instruction(&mut ops, &addr).unwrap(),
+            4,
+            "{spec}"
+        );
         let written = |name: &str| {
             let reg = sleigh.get_register(name).unwrap();
             ops.0.iter().any(|(_, out)| {
@@ -87,7 +101,10 @@ fn lwarx_sets_the_reservation_tested_by_stwcx() {
             assert!(written(name), "{spec}: {name} not written: {:?}", ops.0);
         }
         assert!(
-            ops.0.iter().any(|(op, out)| *op == OpCode::CPUI_LOAD && out.as_ref().is_some_and(|v| v.size == 4)),
+            ops.0
+                .iter()
+                .any(|(op, out)| *op == OpCode::CPUI_LOAD
+                    && out.as_ref().is_some_and(|v| v.size == 4)),
             "{spec}: {:?}",
             ops.0
         );

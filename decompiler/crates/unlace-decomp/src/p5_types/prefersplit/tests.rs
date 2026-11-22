@@ -14,19 +14,20 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
-use crate::dtype::{type_metatype, Datatype};
-use crate::funcdata::Funcdata;
 use crate::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
+use crate::dtype::{Datatype, type_metatype};
+use crate::funcdata::Funcdata;
 
 fn build_manager(big: bool) -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -61,7 +62,8 @@ fn unk(size: int4) -> Rc<Datatype> {
 fn mk_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
     let r = ram(fd);
     let op = fd.new_op(inputs, Address::new(r, off));
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
     op
 }
 
@@ -77,7 +79,11 @@ fn mk_block(fd: &mut Funcdata) -> BlockId {
 
 fn rec(space: Rc<AddrSpace>, off: u64, size: u32, splitoffset: int4) -> PreferSplitRecord {
     PreferSplitRecord {
-        storage: VarnodeData { space: Some(space), offset: off, size },
+        storage: VarnodeData {
+            space: Some(space),
+            offset: off,
+            size,
+        },
         splitoffset,
     }
 }
@@ -125,14 +131,19 @@ fn initialize_sorts_records() {
 fn find_record_hit_and_size_miss() {
     let mut fd = build_fd(false);
     let r = ram(&fd);
-    let mut recs = vec![rec(Rc::clone(&r), 0x100, 8, 4), rec(Rc::clone(&r), 0x200, 4, 2)];
+    let mut recs = vec![
+        rec(Rc::clone(&r), 0x100, 8, 4),
+        rec(Rc::clone(&r), 0x200, 4, 2),
+    ];
     PreferSplitManager::initialize(&mut recs);
     let mut mgr = PreferSplitManager::default();
     mgr.init(&recs);
 
     // A size-8 vn at 0x100 matches the first record.
     let vn8 = mk_vn(&mut fd, 0x100, 8);
-    let found = mgr.find_record(&fd, vn8).expect("should match size-8 record");
+    let found = mgr
+        .find_record(&fd, vn8)
+        .expect("should match size-8 record");
     assert_eq!(found.splitoffset, 4);
 
     // A size-4 vn at 0x100 does NOT match (the record there is size 8).
@@ -141,7 +152,9 @@ fn find_record_hit_and_size_miss() {
 
     // A size-4 vn at 0x200 matches the second record.
     let vn4b = mk_vn(&mut fd, 0x200, 4);
-    let found2 = mgr.find_record(&fd, vn4b).expect("should match size-4 record");
+    let found2 = mgr
+        .find_record(&fd, vn4b)
+        .expect("should match size-4 record");
     assert_eq!(found2.splitoffset, 2);
 }
 
@@ -204,8 +217,12 @@ fn split_zero_extension_to_128_bits_keeps_the_high_half_zero() {
         let mut mgr = PreferSplitManager::default();
         mgr.init(&[rec(ram(&fd), 0x100, 16, 8)]);
         mgr.split(&mut fd);
-        let copies: Vec<_> = fd.bb_ops(block).iter().copied()
-            .filter(|&op| !op_is_dead(&fd, op)).collect();
+        let copies: Vec<_> = fd
+            .bb_ops(block)
+            .iter()
+            .copied()
+            .filter(|&op| !op_is_dead(&fd, op))
+            .collect();
         assert_eq!(copies.len(), 2);
         for copy in copies {
             let output = op_get_out(&fd, copy).unwrap();
@@ -287,7 +304,11 @@ fn split_reading_copy_of_free_storage() {
         .copied()
         .filter(|&o| op_code(&fd, o) == OpCode::CPUI_COPY && !op_is_dead(&fd, o))
         .collect();
-    assert_eq!(copies.len(), 2, "a free 8-byte read through a listed storage splits");
+    assert_eq!(
+        copies.len(),
+        2,
+        "a free 8-byte read through a listed storage splits"
+    );
     assert!(op_is_dead(&fd, copy));
 }
 

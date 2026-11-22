@@ -32,11 +32,11 @@
 
 use std::rc::Rc;
 
+use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
-use unlace_base::address::Address;
 use unlace_base::types::int4;
 
 use unlace_decomp::context::ArchContext;
@@ -67,7 +67,8 @@ fn bare_sleigh() -> Sleigh {
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -122,9 +123,9 @@ fn w10_lanedivide_binary_search_exact_and_miss() {
     // Size-sorted ascending, one record per whole size — the invariant
     // `decodeRegisterData` establishes (maskList walked by ascending index).
     arch.lanerecords = vec![
-        LanedRegister::with_mask(16, 1u32 << 8),  // XMM: 8-byte lanes
-        LanedRegister::with_mask(32, 1u32 << 8),  // YMM
-        LanedRegister::with_mask(64, 1u32 << 8),  // ZMM
+        LanedRegister::with_mask(16, 1u32 << 8), // XMM: 8-byte lanes
+        LanedRegister::with_mask(32, 1u32 << 8), // YMM
+        LanedRegister::with_mask(64, 1u32 << 8), // ZMM
     ];
     let addr = ram_addr(&arch, 0x200);
     // The `loc` Address is unused: a different address still hits on size.

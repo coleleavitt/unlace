@@ -71,10 +71,10 @@
 //!   non-interactive batch path that the datatests drive is ported faithfully.
 //!   See `ifaceterm.rs`.
 
-use unlace_base::types::int4;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::fmt;
+use unlace_base::types::int4;
 
 // ---------------------------------------------------------------------------
 // Interface exception hierarchy (interface.hh).
@@ -112,17 +112,26 @@ pub struct IfaceError {
 impl IfaceError {
     /// `throw IfaceError(s)`
     pub fn base(s: impl Into<String>) -> Self {
-        IfaceError { explain: s.into(), kind: IfaceErrorKind::Base }
+        IfaceError {
+            explain: s.into(),
+            kind: IfaceErrorKind::Base,
+        }
     }
 
     /// `throw IfaceParseError(s)`
     pub fn parse(s: impl Into<String>) -> Self {
-        IfaceError { explain: s.into(), kind: IfaceErrorKind::Parse }
+        IfaceError {
+            explain: s.into(),
+            kind: IfaceErrorKind::Parse,
+        }
     }
 
     /// `throw IfaceExecutionError(s)`
     pub fn execution(s: impl Into<String>) -> Self {
-        IfaceError { explain: s.into(), kind: IfaceErrorKind::Execution }
+        IfaceError {
+            explain: s.into(),
+            kind: IfaceErrorKind::Execution,
+        }
     }
 
     /// Would a C++ `catch (IfaceParseError &)` frame catch this?
@@ -186,7 +195,11 @@ impl CommandStream {
     /// Construct a stream over the given command line (C++
     /// `istringstream is(line)`).
     pub fn new(line: &str) -> Self {
-        CommandStream { buf: line.as_bytes().to_vec(), pos: 0, eof: false }
+        CommandStream {
+            buf: line.as_bytes().to_vec(),
+            pos: 0,
+            eof: false,
+        }
     }
 
     #[inline]
@@ -456,7 +469,10 @@ impl IfaceCommand {
     /// Build a command from its behavior; words are added with
     /// [`add_word`](IfaceCommand::add_word) (as `registerCom` does).
     pub fn new(action: Box<dyn IfaceCommandAction>) -> Self {
-        IfaceCommand { com: Vec::new(), action }
+        IfaceCommand {
+            com: Vec::new(),
+            action,
+        }
     }
 
     /// C++ `addWord`: append a token to the command-line string.
@@ -968,8 +984,11 @@ impl IfaceStatus {
     /// exactly as the framework defers script-file reads to the binary in
     /// [`push_script_lines`](IfaceStatus::push_script_lines).
     pub fn open_file_redirect(&mut self, filename: &str, append: bool) {
-        self.fileoptr =
-            Some(FileOut { contents: String::new(), filename: filename.to_string(), append });
+        self.fileoptr = Some(FileOut {
+            contents: String::new(),
+            filename: filename.to_string(),
+            append,
+        });
     }
 
     /// Tear down the bulk-output redirect (`closefile`), returning to `optr`.
@@ -1070,7 +1089,10 @@ impl IfaceStatus {
     /// flags.
     pub fn pop_script(&mut self) {
         self.source.pop_input();
-        self.prompt = self.promptstack.pop().expect("popScript: empty promptstack");
+        self.prompt = self
+            .promptstack
+            .pop()
+            .expect("popScript: empty promptstack");
         let flags = self.flagstack.pop().expect("popScript: empty flagstack");
         self.errorisdone = (flags & 1) != 0;
         self.inerror = false;
@@ -1173,10 +1195,7 @@ impl IfaceStatus {
         // Execute the (first) command.  The action is detached from `self`
         // for the call so the command can take `&mut self`, then re-installed
         // (the comlist never changes during a command's execute in C++).
-        let action = std::mem::replace(
-            &mut self.comlist[first].action,
-            Box::new(DummyAction),
-        );
+        let action = std::mem::replace(&mut self.comlist[first].action, Box::new(DummyAction));
         self.command_seq = self.command_seq.wrapping_add(1);
         let res = action.execute(self, &mut is);
         self.comlist[first].action = action;
@@ -1296,7 +1315,9 @@ impl IfaceStatus {
         let (mut first, mut last) = (0usize, self.comlist.len());
         let mat = self.expand_com(&mut expand, s, &mut first, &mut last);
         let candidates: Vec<String> = if mat != 0 {
-            (first..last).map(|i| self.comlist[i].command_string()).collect()
+            (first..last)
+                .map(|i| self.comlist[i].command_string())
+                .collect()
         } else {
             Vec::new()
         };
@@ -1561,7 +1582,9 @@ mod tests {
     }
     impl VecSource {
         fn new(lines: Vec<String>) -> Self {
-            VecSource { stack: vec![(lines, 0)] }
+            VecSource {
+                stack: vec![(lines, 0)],
+            }
         }
     }
     impl LineSource for VecSource {
@@ -1589,7 +1612,12 @@ mod tests {
     fn status_with_commands() -> IfaceStatus {
         let mut st = IfaceStatus::new("> ", dummy_source(), 10);
         let reg = |st: &mut IfaceStatus, ws: &[&str]| {
-            st.register_com(Box::new(TestAction { module: "base".into() }), ws);
+            st.register_com(
+                Box::new(TestAction {
+                    module: "base".into(),
+                }),
+                ws,
+            );
         };
         reg(&mut st, &["quit"]);
         reg(&mut st, &["load", "file"]);
@@ -1661,10 +1689,30 @@ mod tests {
     fn status_feeding(lines: &[&str]) -> IfaceStatus {
         let src = VecSource::new(lines.iter().map(|s| s.to_string()).collect());
         let mut st = IfaceStatus::new("> ", Box::new(src), 10);
-        st.register_com(Box::new(TestAction { module: "base".into() }), &["quit"]);
-        st.register_com(Box::new(TestAction { module: "base".into() }), &["load", "file"]);
-        st.register_com(Box::new(TestAction { module: "base".into() }), &["print", "C"]);
-        st.register_com(Box::new(TestAction { module: "base".into() }), &["print", "raw"]);
+        st.register_com(
+            Box::new(TestAction {
+                module: "base".into(),
+            }),
+            &["quit"],
+        );
+        st.register_com(
+            Box::new(TestAction {
+                module: "base".into(),
+            }),
+            &["load", "file"],
+        );
+        st.register_com(
+            Box::new(TestAction {
+                module: "base".into(),
+            }),
+            &["print", "C"],
+        );
+        st.register_com(
+            Box::new(TestAction {
+                module: "base".into(),
+            }),
+            &["print", "raw"],
+        );
         st
     }
 
@@ -1722,7 +1770,10 @@ mod tests {
 
     #[test]
     fn words_to_string_space_separated() {
-        assert_eq!(words_to_string(&["a".into(), "b".into(), "c".into()]), "a b c");
+        assert_eq!(
+            words_to_string(&["a".into(), "b".into(), "c".into()]),
+            "a b c"
+        );
         assert_eq!(words_to_string(&[]), "");
         assert_eq!(words_to_string(&["solo".into()]), "solo");
     }
@@ -1791,8 +1842,18 @@ mod tests {
     #[test]
     fn verify_w9_negative_match_incomplete() {
         let mut st = IfaceStatus::new("> ", dummy_source(), 10);
-        st.register_com(Box::new(TestAction { module: "base".into() }), &["aa"]);
-        st.register_com(Box::new(TestAction { module: "base".into() }), &["ab"]);
+        st.register_com(
+            Box::new(TestAction {
+                module: "base".into(),
+            }),
+            &["aa"],
+        );
+        st.register_com(
+            Box::new(TestAction {
+                module: "base".into(),
+            }),
+            &["ab"],
+        );
         // "a" matches both; maxmatch("aa","ab") => ("a", false) => res=false.
         let e = st.resolve("a").unwrap_err();
         assert!(e.is_parse());
@@ -2076,7 +2137,11 @@ mod tests {
     fn verify_w9_r2_read_int_overflow_returns_zero_not_intmax() {
         let mut s = CommandStream::new("999999999999");
         // C++ would saturate to i32::MAX (2147483647); the port returns 0.
-        assert_eq!(s.read_int(), 0, "port returns 0 on overflow (diverges from C++ INT_MAX)");
+        assert_eq!(
+            s.read_int(),
+            0,
+            "port returns 0 on overflow (diverges from C++ INT_MAX)"
+        );
         assert!(s.eof()); // digits ran to end either way
     }
 
@@ -2091,10 +2156,16 @@ mod tests {
         let mut s = CommandStream::new("+");
         assert_eq!(s.read_int(), 0);
         // Port leaves eof CLEAR (sign rewound); C++ would have latched eof here.
-        assert!(!s.eof(), "port does not latch eof on a rewound sign (diverges from C++)");
+        assert!(
+            !s.eof(),
+            "port does not latch eof on a rewound sign (diverges from C++)"
+        );
         // Reproduce the IfcHistory consequence: skip_ws then !eof => would throw.
         s.skip_ws();
-        assert!(!s.eof(), "the rewound '+' is not whitespace, so eof stays clear");
+        assert!(
+            !s.eof(),
+            "the rewound '+' is not whitespace, so eof stays clear"
+        );
         // => IfcHistory would raise the parse error here, where C++ stays silent.
     }
 
@@ -2141,13 +2212,19 @@ mod tests {
 
         // `openfile write out.txt` opens the redirect.
         assert!(st.run_command().unwrap());
-        assert!(st.is_file_open(), "openfile write must establish the redirect");
+        assert!(
+            st.is_file_open(),
+            "openfile write must establish the redirect"
+        );
         assert_eq!(st.optr, "", "openfile produces no command-line output");
 
         // `echo hello` lands in the redirect, not optr.  expandCom consumes the
         // unique "echo" token; the remainder " hello" is echoed verbatim + '\n'.
         assert!(st.run_command().unwrap());
-        assert!(st.optr.is_empty(), "echo goes to the file redirect, not optr");
+        assert!(
+            st.optr.is_empty(),
+            "echo goes to the file redirect, not optr"
+        );
 
         // `closefile` tears it down and returns the captured bytes.
         assert!(st.run_command().unwrap());

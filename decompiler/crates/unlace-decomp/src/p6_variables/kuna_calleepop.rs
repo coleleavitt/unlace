@@ -93,10 +93,16 @@ pub(crate) const MAX_ARG_BYTES: int4 = 256;
 /// x86-32 call), whether the store is still a STORE or already a COPY into
 /// `stack`.  `None` when the call stores nothing, as a call through a link
 /// register does.
-pub fn return_address_bytes(data: &Funcdata, stack: &AddrSpace, call_addr: &Address) -> Option<int4> {
+pub fn return_address_bytes(
+    data: &Funcdata,
+    stack: &AddrSpace,
+    call_addr: &Address,
+) -> Option<int4> {
     let mut pushed: int4 = 0;
     for (_, id) in data.obank().iter_at(call_addr) {
-        let Some(op) = data.obank().get(id) else { continue };
+        let Some(op) = data.obank().get(id) else {
+            continue;
+        };
         if op.is_dead() {
             continue;
         }
@@ -105,7 +111,11 @@ pub fn return_address_bytes(data: &Funcdata, stack: &AddrSpace, call_addr: &Addr
             OpCode::CPUI_COPY => op.get_out().filter(|&out| {
                 data.vbank()
                     .get(out)
-                    .and_then(|v| v.get_addr().get_space().map(|s| s.get_index() == stack.get_index()))
+                    .and_then(|v| {
+                        v.get_addr()
+                            .get_space()
+                            .map(|s| s.get_index() == stack.get_index())
+                    })
                     .unwrap_or(false)
             }),
             _ => None,
@@ -166,7 +176,11 @@ pub(crate) fn caller_raise(data: &Funcdata, spacebase: &Address, call_out: Varno
         Some(s) if s > 0 => s,
         _ => return 0,
     };
-    let mut high: int4 = if is_argument_push(data, call_out) { step } else { 0 };
+    let mut high: int4 = if is_argument_push(data, call_out) {
+        step
+    } else {
+        0
+    };
     let descend: Vec<_> = match data.vbank().get(call_out) {
         Some(v) => v.descend_iter().collect(),
         None => return 0,
@@ -179,7 +193,11 @@ pub(crate) fn caller_raise(data: &Funcdata, spacebase: &Address, call_out: Varno
         if o.code() != OpCode::CPUI_INT_ADD || !at_address(data, o.get_out(), spacebase) {
             continue;
         }
-        let other = if o.get_in(0) == Some(call_out) { o.get_in(1) } else { o.get_in(0) };
+        let other = if o.get_in(0) == Some(call_out) {
+            o.get_in(1)
+        } else {
+            o.get_in(0)
+        };
         let c = match const_signed(data, other) {
             Some(c) => c,
             None => continue,
@@ -235,7 +253,11 @@ pub(crate) fn child_at(
         if o.code() != OpCode::CPUI_INT_ADD {
             continue;
         }
-        let other = if o.get_in(0) == Some(base) { o.get_in(1) } else { o.get_in(0) };
+        let other = if o.get_in(0) == Some(base) {
+            o.get_in(1)
+        } else {
+            o.get_in(0)
+        };
         if const_signed(data, other) != Some(off) {
             continue;
         }
@@ -269,7 +291,9 @@ pub(crate) fn is_argument_push(data: &Funcdata, slot: VarnodeId) -> bool {
         // The saved value of a callee-saved register is the register's own
         // input Varnode; nothing else the caller pushes can be.
         if let Some(v) = o.get_in(2).and_then(|v| data.vbank().get(v)) {
-            if v.is_input() && v.get_space().get_type() == unlace_base::space::spacetype::IPTR_PROCESSOR {
+            if v.is_input()
+                && v.get_space().get_type() == unlace_base::space::spacetype::IPTR_PROCESSOR
+            {
                 return false;
             }
         }

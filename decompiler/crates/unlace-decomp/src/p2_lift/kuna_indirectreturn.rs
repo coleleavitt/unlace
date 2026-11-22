@@ -2,9 +2,9 @@
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::jumptable::JumpTable;
+use std::collections::{BTreeSet, HashMap, HashSet};
 use unlace_base::address::calc_mask;
 use unlace_num::opcodes::OpCode;
-use std::collections::{BTreeSet, HashMap, HashSet};
 
 /// What a dispatch can jump to: local constants and the incoming return.
 #[derive(Default)]
@@ -86,19 +86,34 @@ pub(crate) fn reentry_edges(
         cursor = data.obank().dead_prev(id);
     }
     fresh.reverse();
-    fresh.into_iter().flat_map(|id| {
-        let mut edges = Vec::new();
-        let Some(op) = data.obank().get(id) else { return edges };
-        if matches!(op.code(), OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH) {
-            if let Some(to) = op.get_in(0).and_then(|v| data.vbank().get(v))
-                .and_then(|v| target(v.get_addr())).filter(|&to| old(to))
-            { edges.push((id, to)); }
-        }
-        if !matches!(op.code(), OpCode::CPUI_BRANCH | OpCode::CPUI_BRANCHIND | OpCode::CPUI_RETURN) {
-            if let Some(to) = fallthru(id).filter(|&to| old(to)) { edges.push((id, to)); }
-        }
-        edges
-    }).collect()
+    fresh
+        .into_iter()
+        .flat_map(|id| {
+            let mut edges = Vec::new();
+            let Some(op) = data.obank().get(id) else {
+                return edges;
+            };
+            if matches!(op.code(), OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH) {
+                if let Some(to) = op
+                    .get_in(0)
+                    .and_then(|v| data.vbank().get(v))
+                    .and_then(|v| target(v.get_addr()))
+                    .filter(|&to| old(to))
+                {
+                    edges.push((id, to));
+                }
+            }
+            if !matches!(
+                op.code(),
+                OpCode::CPUI_BRANCH | OpCode::CPUI_BRANCHIND | OpCode::CPUI_RETURN
+            ) {
+                if let Some(to) = fallthru(id).filter(|&to| old(to)) {
+                    edges.push((id, to));
+                }
+            }
+            edges
+        })
+        .collect()
 }
 
 /// Operations one round's reachability walks may visit before every
@@ -163,7 +178,9 @@ fn reached(
                 if destination.is_constant() {
                     let address = op.get_addr();
                     let mut cursor = data.obank().dead_prev(id);
-                    while let Some(prev) = cursor.filter(|&p| data.obank().get(p).is_some_and(|o| o.get_addr() == address)) {
+                    while let Some(prev) = cursor
+                        .filter(|&p| data.obank().get(p).is_some_and(|o| o.get_addr() == address))
+                    {
                         work.push(prev);
                         cursor = data.obank().dead_prev(prev);
                     }
@@ -338,7 +355,8 @@ fn collect(
             }
             let bits = rhs.get_offset() & calc_mask(value.get_size());
             if bits != calc_mask(value.get_size())
-                && (value.get_size() > encoding.0 || bits != (encoding.1 & calc_mask(value.get_size())))
+                && (value.get_size() > encoding.0
+                    || bits != (encoding.1 & calc_mask(value.get_size())))
             {
                 return None;
             }
@@ -383,16 +401,28 @@ fn collect(
 /// dispatcher operations or changing other readers of the return address.
 /// Labels and guards must have been recovered before changing the selector.
 pub(crate) fn normalize_return_selector(data: &mut Funcdata, table: &JumpTable) -> bool {
-    let Some(branch) = table.get_indirect_op() else { return false };
-    let Some(encoding) = table.kuna_target_encoding() else { return false };
+    let Some(branch) = table.get_indirect_op() else {
+        return false;
+    };
+    let Some(encoding) = table.kuna_target_encoding() else {
+        return false;
+    };
     let Some(root) = data.obank().get(branch).and_then(|op| op.get_in(0)) else {
         return false;
     };
     let budget = 128.max(4 * table.address_table().len());
-    let Some(proof) = destinations(data, root, encoding, budget) else { return false };
-    if !proof.returns || proof.constants.is_empty() || !proof.constants.iter().all(|target| {
-        table.address_table().iter().any(|address| address.get_offset() == *target)
-    }) {
+    let Some(proof) = destinations(data, root, encoding, budget) else {
+        return false;
+    };
+    if !proof.returns
+        || proof.constants.is_empty()
+        || !proof.constants.iter().all(|target| {
+            table
+                .address_table()
+                .iter()
+                .any(|address| address.get_offset() == *target)
+        })
+    {
         return false;
     }
     let size = data.vbank().get(root).unwrap().get_size();
@@ -403,15 +433,20 @@ pub(crate) fn normalize_return_selector(data: &mut Funcdata, table: &JumpTable) 
         let mut bits = mask;
         while bits != 0 {
             let bit = bits & bits.wrapping_neg();
-            if source & 1 != 0 { value |= bit; }
+            if source & 1 != 0 {
+                value |= bit;
+            }
             source >>= 1;
             bits &= bits - 1;
         }
         (source == 0 && !proof.constants.contains(&value)).then_some(value)
     });
-    let Some(sentinel) = sentinel else { return false };
+    let Some(sentinel) = sentinel else {
+        return false;
+    };
     let replacement = clone_selector(data, root, sentinel, &mut HashMap::new());
-    data.op_set_input(branch, replacement, 0).expect("validated branch selector");
+    data.op_set_input(branch, replacement, 0)
+        .expect("validated branch selector");
     true
 }
 
@@ -421,24 +456,33 @@ fn clone_selector(
     sentinel: u64,
     copies: &mut HashMap<VarnodeId, VarnodeId>,
 ) -> VarnodeId {
-    if let Some(&copy) = copies.get(&vn) { return copy; }
+    if let Some(&copy) = copies.get(&vn) {
+        return copy;
+    }
     let value = data.vbank().get(vn).expect("validated selector");
-    if value.is_constant() { return vn; }
+    if value.is_constant() {
+        return vn;
+    }
     let size = value.get_size();
-    if incoming_return(data, vn) { return data.new_constant(size, sentinel); }
+    if incoming_return(data, vn) {
+        return data.new_constant(size, sentinel);
+    }
     let def = value.get_def().expect("validated selector definition");
     let producer = data.obank().get(def).unwrap();
     let code = producer.code();
     let address = producer.get_addr().clone();
     let block = producer.get_parent().expect("live selector producer");
-    let inputs: Vec<_> = (0..producer.num_input()).map(|i| producer.get_in(i).unwrap()).collect();
+    let inputs: Vec<_> = (0..producer.num_input())
+        .map(|i| producer.get_in(i).unwrap())
+        .collect();
     let op = data.new_op(inputs.len() as i32, address);
     data.op_set_opcode_code(op, code);
     let out = data.new_unique_out(size, op).expect("selector output");
     copies.insert(vn, out);
     for (slot, input) in inputs.into_iter().enumerate() {
         let copy = clone_selector(data, input, sentinel, copies);
-        data.op_set_input(op, copy, slot as i32).expect("selector input");
+        data.op_set_input(op, copy, slot as i32)
+            .expect("selector input");
     }
     if code == OpCode::CPUI_MULTIEQUAL {
         data.op_insert_begin(op, block);
@@ -452,11 +496,11 @@ fn clone_selector(
 mod tests {
     use super::*;
     use crate::context::{ArchContext, BlockId};
+    use std::rc::Rc;
     use unlace_base::address::Address;
     use unlace_base::space::{
-        addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+        AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
     };
-    use std::rc::Rc;
 
     fn function(size: u32, big: bool) -> Funcdata {
         let mut manager = AddrSpaceManager::new();
@@ -567,7 +611,9 @@ mod tests {
         let back = code(&mut fd, 0x1004);
         let (retry, _) = operation(&mut fd, 0x1024, OpCode::CPUI_CBRANCH, 0, &[back, zero]);
         assert!(reentered_since(&fd, mark, at, none));
-        assert!(!reentered_since(&fd, fd.obank().get_uniq_id(), at, |op| (op == retry).then_some(old)));
+        assert!(!reentered_since(&fd, fd.obank().get_uniq_id(), at, |op| {
+            (op == retry).then_some(old)
+        }));
     }
 
     #[test]
@@ -598,24 +644,38 @@ mod tests {
         let reached = reaching_edges(&fd, &both, &edges, at, next);
         assert_eq!(reached.get(&a).map(Vec::as_slice), Some(&edges[..1]));
         assert_eq!(reached.get(&b).map(Vec::as_slice), Some(&edges[2..]));
-        assert_eq!(reached.len(), 2, "the edge into unrelated code reaches no dispatch");
+        assert_eq!(
+            reached.len(),
+            2,
+            "the edge into unrelated code reaches no dispatch"
+        );
     }
 
     #[test]
     fn only_a_reentry_retry_bypasses_the_select_option_and_keeps_its_targets() {
-        let ram = function(8, false).get_address().get_space().unwrap().clone();
+        let ram = function(8, false)
+            .get_address()
+            .get_space()
+            .unwrap()
+            .clone();
         let mut jt = JumpTable::new(Address::new(ram.clone(), 0x1004));
         jt.increment_recovery_count();
         jt.increment_recovery_count();
         use crate::kuna_constselectjump::ConstSelectMode;
-        assert!(!jt.kuna_admits_const_select(ConstSelectMode::Reentry) && jt.kuna_admits_const_select(ConstSelectMode::On));
+        assert!(
+            !jt.kuna_admits_const_select(ConstSelectMode::Reentry)
+                && jt.kuna_admits_const_select(ConstSelectMode::On)
+        );
         jt.kuna_retry_flow();
         assert!(jt.kuna_admits_const_select(ConstSelectMode::Reentry));
         assert!(!jt.kuna_keeps_recovered_targets());
         jt.kuna_push_entry(Address::new(ram, 0x1040), 0, 0x1040);
         assert!(jt.kuna_keeps_recovered_targets());
         jt.mark_complete();
-        assert!(!jt.kuna_keeps_recovered_targets() && jt.kuna_admits_const_select(ConstSelectMode::Reentry));
+        assert!(
+            !jt.kuna_keeps_recovered_targets()
+                && jt.kuna_admits_const_select(ConstSelectMode::Reentry)
+        );
     }
 
     #[test]
@@ -719,10 +779,17 @@ mod tests {
         attach(&mut fd, block, phi);
         let target = target.unwrap();
         if variant == "pure" || variant == "returned" {
-            let (step, bumped) = operation(&mut fd, 0x1010, OpCode::CPUI_INT_ADD, 8, &[ret, constant]);
+            let (step, bumped) =
+                operation(&mut fd, 0x1010, OpCode::CPUI_INT_ADD, 8, &[ret, constant]);
             attach(&mut fd, block, step);
             if variant == "returned" {
-                let (leave, _) = operation(&mut fd, 0x1011, OpCode::CPUI_RETURN, 0, &[constant, bumped.unwrap()]);
+                let (leave, _) = operation(
+                    &mut fd,
+                    0x1011,
+                    OpCode::CPUI_RETURN,
+                    0,
+                    &[constant, bumped.unwrap()],
+                );
                 attach(&mut fd, p0, leave);
             }
         }
@@ -747,14 +814,19 @@ mod tests {
         };
         if variant == "likely" || variant == "internal" {
             let skip = if variant == "likely" {
-                fd.new_code_ref(&Address::new(fd.get_address().get_space().unwrap().clone(), 0x1030))
+                fd.new_code_ref(&Address::new(
+                    fd.get_address().get_space().unwrap().clone(),
+                    0x1030,
+                ))
             } else {
                 constant
             };
             operation(&mut fd, 0x1020, OpCode::CPUI_CBRANCH, 0, &[skip, constant]);
         }
-        let dispatcher =
-            fd.new_code_ref(&Address::new(fd.get_address().get_space().unwrap().clone(), 0x1010));
+        let dispatcher = fd.new_code_ref(&Address::new(
+            fd.get_address().get_space().unwrap().clone(),
+            0x1010,
+        ));
         let (last, _) = operation(&mut fd, 0x1020, code, 0, &[dispatcher]);
         attach(&mut fd, p1, last);
         if variant == "outside-reader" {
@@ -783,19 +855,40 @@ mod tests {
     }
     #[test]
     fn selector_normalization_preserves_all_operations_and_shared_readers() {
-        for variant in ["positive", "effect", "conditional", "unknown", "override",
-                        "missing-target", "prefix", "likely", "pure", "returned", "internal",
-                        "outside-reader"] {
+        for variant in [
+            "positive",
+            "effect",
+            "conditional",
+            "unknown",
+            "override",
+            "missing-target",
+            "prefix",
+            "likely",
+            "pure",
+            "returned",
+            "internal",
+            "outside-reader",
+        ] {
             let (mut fd, jt, site) = dispatch(variant);
             let branch = jt.get_indirect_op().unwrap();
             let old_root = fd.obank().get(branch).unwrap().get_in(0).unwrap();
             let operations: Vec<_> = fd.obank().iter_alive().collect();
-            assert_eq!(normalize_return_selector(&mut fd, &jt),
-                       !matches!(variant, "unknown" | "missing-target"), "{variant}");
-            assert_eq!(fd.get_override().get_flow_override(&site),
-                       if variant == "override" { crate::overrides::flow_type::BRANCH }
-                       else { crate::overrides::flow_type::NONE });
-            for op in operations { assert!(!fd.obank().get(op).unwrap().is_dead()); }
+            assert_eq!(
+                normalize_return_selector(&mut fd, &jt),
+                !matches!(variant, "unknown" | "missing-target"),
+                "{variant}"
+            );
+            assert_eq!(
+                fd.get_override().get_flow_override(&site),
+                if variant == "override" {
+                    crate::overrides::flow_type::BRANCH
+                } else {
+                    crate::overrides::flow_type::NONE
+                }
+            );
+            for op in operations {
+                assert!(!fd.obank().get(op).unwrap().is_dead());
+            }
             if !matches!(variant, "unknown" | "missing-target") {
                 let new_root = fd.obank().get(branch).unwrap().get_in(0).unwrap();
                 assert_ne!(old_root, new_root);
@@ -803,7 +896,11 @@ mod tests {
                 assert!(!proof.returns);
                 assert_eq!(proof.constants, [0, 0x1040].into_iter().collect());
                 assert!(!normalize_return_selector(&mut fd, &jt));
-                assert!(destinations(&fd, old_root, (8, u64::MAX), 128).unwrap().returns);
+                assert!(
+                    destinations(&fd, old_root, (8, u64::MAX), 128)
+                        .unwrap()
+                        .returns
+                );
             }
         }
     }
@@ -819,22 +916,46 @@ mod tests {
                 "unknown" => input(&mut fd, 0xf0, 8),
                 _ => far,
             };
-            let (_, target) = operation(&mut fd, 0x1010, OpCode::CPUI_MULTIEQUAL, 8, &[near, far, other]);
-            let (branch, _) = operation(&mut fd, 0x1010, OpCode::CPUI_BRANCHIND, 0, &[target.unwrap()]);
+            let (_, target) = operation(
+                &mut fd,
+                0x1010,
+                OpCode::CPUI_MULTIEQUAL,
+                8,
+                &[near, far, other],
+            );
+            let (branch, _) = operation(
+                &mut fd,
+                0x1010,
+                OpCode::CPUI_BRANCHIND,
+                0,
+                &[target.unwrap()],
+            );
             let mut model = crate::kuna_constselectjump::JumpModelConstSelect::new();
             if variant != "not-admitted" {
                 model.kuna_admit_return(Some((8, u64::MAX)));
             }
             let found = model.recover_model(&mut fd, branch, 0, 64).unwrap();
-            assert_eq!(found, variant == "return" || variant == "constants", "{variant}");
-            assert_eq!(model.kuna_returns_to_caller(), variant == "return", "{variant}");
+            assert_eq!(
+                found,
+                variant == "return" || variant == "constants",
+                "{variant}"
+            );
+            assert_eq!(
+                model.kuna_returns_to_caller(),
+                variant == "return",
+                "{variant}"
+            );
             if variant == "return" {
                 let mut addresses = Vec::new();
-                model.build_addresses(&fd, branch, &mut addresses, None, None).unwrap();
+                model
+                    .build_addresses(&fd, branch, &mut addresses, None, None)
+                    .unwrap();
                 let offsets: Vec<_> = addresses.iter().map(|a| a.get_offset()).collect();
                 assert_eq!(offsets, [0x1040, 0x1080, 0x1011]);
                 let mut labels = Vec::new();
-                model.build_labels(&mut fd, &mut addresses, &mut labels, &model.clone()).unwrap();
+                model
+                    .build_labels(&mut fd, &mut addresses, &mut labels, &model.clone())
+                    .unwrap();
                 assert_eq!(labels, [0x1040, 0x1080, crate::jumptable::NO_LABEL]);
                 assert_eq!(model.get_table_size(), 3);
             }

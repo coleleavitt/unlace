@@ -140,9 +140,9 @@
 //! only when the gate is on, so `--option elfmain off` restores the
 //! `sub_<addr>` / width-only form exactly.
 
+use object::read::{Object, ObjectSymbol};
 use unlace_decomp::dtype::type_metatype;
 use unlace_decomp::fspec::PrototypePieces;
-use object::read::{Object, ObjectSymbol};
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
@@ -226,7 +226,9 @@ fn main_claim(file: &object::File, bytes: &[u8]) -> Option<(u64, Source)> {
         // The non-PIE ARM32 shape oracle 4's relocation cross-check cannot see.
         // That pass emits the entry and the name; only the prototype is added
         // here, parked on the `main` it installs.
-        None => super::kuna_armlibcmain::main_vma(file, bytes).map(|vma| (vma, Source::ArmLibcMain)),
+        None => {
+            super::kuna_armlibcmain::main_vma(file, bytes).map(|vma| (vma, Source::ArmLibcMain))
+        }
     };
     let (vma, source) = match main_symbol {
         MainSymbol::Ambiguous => return None,
@@ -252,7 +254,10 @@ fn main_claim(file: &object::File, bytes: &[u8]) -> Option<(u64, Source)> {
             return None;
         }
         // A named entry has a better name coming from whatever named it.
-        if existing_function_addrs(file, bytes).binary_search(&vma).is_ok() {
+        if existing_function_addrs(file, bytes)
+            .binary_search(&vma)
+            .is_ok()
+        {
             return None;
         }
     }
@@ -280,7 +285,11 @@ fn is_executable(file: &object::File, bytes: &[u8]) -> bool {
 fn has_interp_or_pie(bytes: &[u8]) -> bool {
     let rd16 = |b: &[u8], off: usize, le: bool| -> Option<u16> {
         let v = b.get(off..off + 2)?;
-        Some(if le { u16::from_le_bytes([v[0], v[1]]) } else { u16::from_be_bytes([v[0], v[1]]) })
+        Some(if le {
+            u16::from_le_bytes([v[0], v[1]])
+        } else {
+            u16::from_be_bytes([v[0], v[1]])
+        })
     };
     let rd32 = |b: &[u8], off: usize, le: bool| -> Option<u32> {
         let v = b.get(off..off + 4)?;
@@ -294,7 +303,11 @@ fn has_interp_or_pie(bytes: &[u8]) -> bool {
         let v = b.get(off..off + 8)?;
         let mut a = [0u8; 8];
         a.copy_from_slice(v);
-        Some(if le { u64::from_le_bytes(a) } else { u64::from_be_bytes(a) })
+        Some(if le {
+            u64::from_le_bytes(a)
+        } else {
+            u64::from_be_bytes(a)
+        })
     };
     const ET_EXEC: u16 = 2;
     const PT_INTERP: u32 = 3;
@@ -310,8 +323,11 @@ fn has_interp_or_pie(bytes: &[u8]) -> bool {
         if rd16(bytes, 16, le)? == ET_EXEC {
             return Some(true);
         }
-        let (phoff, phentsz_off, phnum_off) =
-            if is64 { (rd64(bytes, 32, le)? as usize, 54, 56) } else { (rd32(bytes, 28, le)? as usize, 42, 44) };
+        let (phoff, phentsz_off, phnum_off) = if is64 {
+            (rd64(bytes, 32, le)? as usize, 54, 56)
+        } else {
+            (rd32(bytes, 28, le)? as usize, 42, 44)
+        };
         let phentsz = rd16(bytes, phentsz_off, le)? as usize;
         let phnum = rd16(bytes, phnum_off, le)? as usize;
         for i in 0..phnum {
@@ -321,15 +337,26 @@ fn has_interp_or_pie(bytes: &[u8]) -> bool {
                 // A static-pie has no interpreter; its `DT_FLAGS_1` says `DF_1_PIE`.
                 PT_DYNAMIC => {
                     let (off, filesz, ent) = if is64 {
-                        (rd64(bytes, base + 8, le)? as usize, rd64(bytes, base + 32, le)? as usize, 16)
+                        (
+                            rd64(bytes, base + 8, le)? as usize,
+                            rd64(bytes, base + 32, le)? as usize,
+                            16,
+                        )
                     } else {
-                        (rd32(bytes, base + 4, le)? as usize, rd32(bytes, base + 16, le)? as usize, 8)
+                        (
+                            rd32(bytes, base + 4, le)? as usize,
+                            rd32(bytes, base + 16, le)? as usize,
+                            8,
+                        )
                     };
                     for d in (off..off.saturating_add(filesz)).step_by(ent) {
                         let (tag, val) = if is64 {
                             (rd64(bytes, d, le)?, rd64(bytes, d + 8, le)?)
                         } else {
-                            (u64::from(rd32(bytes, d, le)?), u64::from(rd32(bytes, d + 4, le)?))
+                            (
+                                u64::from(rd32(bytes, d, le)?),
+                                u64::from(rd32(bytes, d + 4, le)?),
+                            )
                         };
                         if tag == 0 {
                             break;
@@ -433,7 +460,10 @@ mod tests {
     #[test]
     fn claims_the_libc_start_main_argument_of_a_stripped_elf() {
         // PIE: `lea rdi,[rip+0x286]` at 0x1178.
-        assert_eq!(claim("stripped_dynamic_x86_64"), Some((0x1405, Source::Decoded)));
+        assert_eq!(
+            claim("stripped_dynamic_x86_64"),
+            Some((0x1405, Source::Decoded))
+        );
         // ET_EXEC: `mov rdi,0x40137a` at 0x401188.
         assert_eq!(claim("eh_lsda_x86_64"), Some((0x40137a, Source::Decoded)));
     }
@@ -451,15 +481,24 @@ mod tests {
     /// `main` reading argument registers past the third still claims this pass.
     #[test]
     fn claims_a_main_that_reads_registers_past_the_third() {
-        assert_eq!(claim("elfmainextra_x86_64"), Some((0x1026, Source::Decoded)));
+        assert_eq!(
+            claim("elfmainextra_x86_64"),
+            Some((0x1026, Source::Decoded))
+        );
     }
 
     /// The non-PIE ARM32 shape oracle 4 cannot see: `armlibcmain` owns the entry
     /// and the name, so only the prototype is contributed here.
     #[test]
     fn contributes_only_the_prototype_on_the_non_pie_arm_shape() {
-        assert_eq!(claim("armlibcmain_le32"), Some((0x103dc, Source::ArmLibcMain)));
-        assert_eq!(claim("armlibcmain_got_le32"), Some((0x10518, Source::ArmLibcMain)));
+        assert_eq!(
+            claim("armlibcmain_le32"),
+            Some((0x103dc, Source::ArmLibcMain))
+        );
+        assert_eq!(
+            claim("armlibcmain_got_le32"),
+            Some((0x10518, Source::ArmLibcMain))
+        );
     }
 
     /// An un-stripped image names `main` itself, and that name stays: the pass
@@ -467,14 +506,46 @@ mod tests {
     /// reference to, whether or not oracle 4 can read `_start`.
     #[test]
     fn declares_an_image_that_names_its_own_main() {
-        assert_eq!(claim("fmt_x86_64"), Some((0x401136, Source::Symbol)), "ET_EXEC, not stripped");
-        assert_eq!(claim("cet_pie_x86_64"), Some((0x1405, Source::Symbol)), "PIE, not stripped");
-        assert_eq!(claim("fmt_aarch64"), Some((0x754, Source::Symbol)), "AArch64 PIE");
-        assert_eq!(claim("plt_aarch64"), Some((0x400604, Source::Symbol)), "AArch64 ET_EXEC");
-        assert_eq!(claim("fmt_arm"), Some((0x504, Source::Symbol)), "Thumb PIE, the symbol's mode bit cleared");
-        assert_eq!(claim("fmt_riscv64"), Some((0x668, Source::Symbol)), "RISC-V PIE");
-        assert_eq!(claim("i386_pie_nl"), Some((0x1190, Source::Symbol)), "i386 PIE, which oracle 4 does not decode");
-        assert_eq!(claim("mips_gp_le32"), Some((0x400704, Source::Symbol)), "MIPS, which oracle 4 does not decode");
+        assert_eq!(
+            claim("fmt_x86_64"),
+            Some((0x401136, Source::Symbol)),
+            "ET_EXEC, not stripped"
+        );
+        assert_eq!(
+            claim("cet_pie_x86_64"),
+            Some((0x1405, Source::Symbol)),
+            "PIE, not stripped"
+        );
+        assert_eq!(
+            claim("fmt_aarch64"),
+            Some((0x754, Source::Symbol)),
+            "AArch64 PIE"
+        );
+        assert_eq!(
+            claim("plt_aarch64"),
+            Some((0x400604, Source::Symbol)),
+            "AArch64 ET_EXEC"
+        );
+        assert_eq!(
+            claim("fmt_arm"),
+            Some((0x504, Source::Symbol)),
+            "Thumb PIE, the symbol's mode bit cleared"
+        );
+        assert_eq!(
+            claim("fmt_riscv64"),
+            Some((0x668, Source::Symbol)),
+            "RISC-V PIE"
+        );
+        assert_eq!(
+            claim("i386_pie_nl"),
+            Some((0x1190, Source::Symbol)),
+            "i386 PIE, which oracle 4 does not decode"
+        );
+        assert_eq!(
+            claim("mips_gp_le32"),
+            Some((0x400704, Source::Symbol)),
+            "MIPS, which oracle 4 does not decode"
+        );
     }
 
     /// Structurally inert off ELF, and on an ELF that never names the C runtime
@@ -483,8 +554,16 @@ mod tests {
     fn contributes_nothing_without_the_libc_runtime() {
         assert_eq!(claim("macho_stripped_main"), None, "Mach-O is machomain's");
         assert_eq!(claim("msvc_rtti_x64.exe"), None, "PE is entrymainproto's");
-        assert_eq!(claim("unmapped_call_x86_64"), None, "static, stripped, no crt1 name");
-        assert_eq!(claim("poolref_arm_le32"), None, "no __libc_start_main anywhere");
+        assert_eq!(
+            claim("unmapped_call_x86_64"),
+            None,
+            "static, stripped, no crt1 name"
+        );
+        assert_eq!(
+            claim("poolref_arm_le32"),
+            None,
+            "no __libc_start_main anywhere"
+        );
     }
 
     /// A 64-bit little-endian `ET_DYN` with one `PT_DYNAMIC` header whose
@@ -508,8 +587,14 @@ mod tests {
 
     #[test]
     fn a_static_pie_is_an_executable_and_a_shared_object_is_not() {
-        assert!(has_interp_or_pie(&et_dyn_with_flags_1(0x0800_0001)), "DF_1_PIE: static-pie");
-        assert!(!has_interp_or_pie(&et_dyn_with_flags_1(0x1)), "no interpreter, no DF_1_PIE: a .so");
+        assert!(
+            has_interp_or_pie(&et_dyn_with_flags_1(0x0800_0001)),
+            "DF_1_PIE: static-pie"
+        );
+        assert!(
+            !has_interp_or_pie(&et_dyn_with_flags_1(0x1)),
+            "no interpreter, no DF_1_PIE: a .so"
+        );
         assert!(!has_interp_or_pie(&[0x7f, b'E', b'L']), "truncated header");
     }
 }

@@ -44,8 +44,10 @@ impl Action for ActionReturnSelector {
                 self.base.count += 1;
                 changed = true;
             } else {
-                data.warning("Indirect jump caller-return selector could not be normalized",
-                    table.get_op_address());
+                data.warning(
+                    "Indirect jump caller-return selector could not be normalized",
+                    table.get_op_address(),
+                );
             }
             *data.get_jump_table_mut(i) = table;
         }

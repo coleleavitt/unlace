@@ -13,13 +13,17 @@
 
 use std::rc::Rc;
 
-use crate::dtype::{type_metatype, Datatype, TypeFactory};
+use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
 
 /// The type of value `value` that a store through a pointer to `pointed_to`
 /// must be cast to point at: `value` itself, when it is a float C can name and
 /// the pointee is unknown bytes of the same size that print as an integer.
-pub(crate) fn pointer(data: &Funcdata, pointed_to: &Datatype, value: &Rc<Datatype>) -> Option<Rc<Datatype>> {
+pub(crate) fn pointer(
+    data: &Funcdata,
+    pointed_to: &Datatype,
+    value: &Rc<Datatype>,
+) -> Option<Rc<Datatype>> {
     let mut bytes = pointed_to;
     while let Some(base) = bytes.qualified_base().or_else(|| bytes.get_typedef()) {
         bytes = base.as_ref();

@@ -52,7 +52,7 @@
 use std::rc::Rc;
 
 use unlace_decomp::cast::{CastContext, CastStrategy, CastStrategyC, OpRef, VnRef};
-use unlace_decomp::dtype::{type_metatype, Datatype, TypeFactoryImpl};
+use unlace_decomp::dtype::{Datatype, TypeFactoryImpl, type_metatype};
 use unlace_num::opcodes::OpCode;
 
 #[allow(non_camel_case_types)]
@@ -163,7 +163,10 @@ struct MockCtx {
 }
 impl MockCtx {
     fn new() -> MockCtx {
-        MockCtx { vns: Vec::new(), ops: Vec::new() }
+        MockCtx {
+            vns: Vec::new(),
+            ops: Vec::new(),
+        }
     }
     fn add_var(&mut self, size: int4, ty: Rc<Datatype>) -> VnRef {
         let id = self.vns.len();
@@ -305,8 +308,14 @@ fn w10_cast_strategy_zext_signed_input_stays_functional() {
     let zext = ctx.add_op(OpCode::CPUI_INT_ZEXT, vec![invn], Some(outvn));
 
     // No reader / null readOp, both hide settings: always functional.
-    assert_eq!(decide_zext(&strat, &ctx, zext, None, true), Render::Functional);
-    assert_eq!(decide_zext(&strat, &ctx, zext, None, false), Render::Functional);
+    assert_eq!(
+        decide_zext(&strat, &ctx, zext, None, true),
+        Render::Functional
+    );
+    assert_eq!(
+        decide_zext(&strat, &ctx, zext, None, false),
+        Render::Functional
+    );
 
     // Flip the input to UNSIGNED: now it IS a zext-cast (explicit, no reader).
     let mut ctx2 = MockCtx::new();
@@ -321,7 +330,10 @@ fn w10_cast_strategy_zext_signed_input_stays_functional() {
     let sin = ctx3.add_var(4, uint_t(4));
     let sout = ctx3.add_var(8, int_t(8));
     let sext = ctx3.add_op(OpCode::CPUI_INT_SEXT, vec![sin], Some(sout));
-    assert_eq!(decide_sext(&strat, &ctx3, sext, None, true), Render::Functional);
+    assert_eq!(
+        decide_sext(&strat, &ctx3, sext, None, true),
+        Render::Functional
+    );
     // INT input -> sext-cast (explicit).
     let mut ctx4 = MockCtx::new();
     let sin4 = ctx4.add_var(4, int_t(4));
@@ -343,7 +355,10 @@ fn w10_cast_strategy_null_readop_never_hidden() {
     let invn = ctx.add_var(4, uint_t(4));
     let outvn = ctx.add_var(8, uint_t(8));
     let zext = ctx.add_op(OpCode::CPUI_INT_ZEXT, vec![invn], Some(outvn));
-    assert!(!ctx.vn_is_explicit(outvn), "precondition: output non-explicit");
+    assert!(
+        !ctx.vn_is_explicit(outvn),
+        "precondition: output non-explicit"
+    );
 
     // hide_exts ON but readOp None: implied is false -> CAST, not Hidden.
     assert_eq!(
@@ -373,14 +388,9 @@ fn w10_cast_strategy_big_constant_boundary_flips_implied() {
     // out=uint8 = ZEXT(uint4 in); read = out + const(size).  metatype(out)=UINT.
     // The other operand is a UINT constant so its metatype matches.
     let build = |const_size: int4| {
-        zext_read_by(
-            uint_t(8),
-            uint_t(4),
-            4,
-            8,
-            OpCode::CPUI_INT_ADD,
-            move |c| c.add_const(const_size, 7, uint_t(const_size)),
-        )
+        zext_read_by(uint_t(8), uint_t(4), 4, 8, OpCode::CPUI_INT_ADD, move |c| {
+            c.add_const(const_size, 7, uint_t(const_size))
+        })
     };
 
     // const size == promoteSize (4): NOT bigger -> implied -> Hidden (hide on).
@@ -416,24 +426,23 @@ fn w10_cast_strategy_big_constant_boundary_flips_implied() {
 fn w10_cast_strategy_hide_exts_gate_is_and() {
     let strat = strategy_c();
     // A genuinely-implied zext: out uint8 = ZEXT(uint4), read by `out & explicit-uint8`.
-    let (ctx, zext, read) = zext_read_by(
-        uint_t(8),
-        uint_t(4),
-        4,
-        8,
-        OpCode::CPUI_INT_AND,
-        |c| {
-            let v = c.add_var(8, uint_t(8));
-            c.set_explicit(v, true);
-            v
-        },
-    );
+    let (ctx, zext, read) = zext_read_by(uint_t(8), uint_t(4), 4, 8, OpCode::CPUI_INT_AND, |c| {
+        let v = c.add_var(8, uint_t(8));
+        c.set_explicit(v, true);
+        v
+    });
     // Precondition: it IS implied.
     assert!(strat.is_extension_cast_implied(&ctx, zext, Some(read)));
 
     // hide ON  -> Hidden ; hide OFF -> Cast (the AND short-circuits the implied test).
-    assert_eq!(decide_zext(&strat, &ctx, zext, Some(read), true), Render::Hidden);
-    assert_eq!(decide_zext(&strat, &ctx, zext, Some(read), false), Render::Cast);
+    assert_eq!(
+        decide_zext(&strat, &ctx, zext, Some(read), true),
+        Render::Hidden
+    );
+    assert_eq!(
+        decide_zext(&strat, &ctx, zext, Some(read), false),
+        Render::Cast
+    );
 }
 
 /// (V5, bonus) Metatype-mismatch reader: if the OTHER operand's metatype differs
@@ -444,21 +453,17 @@ fn w10_cast_strategy_hide_exts_gate_is_and() {
 fn w10_cast_strategy_metatype_mismatch_not_implied() {
     let strat = strategy_c();
     // out is UINT8; other operand is an explicit INT8 (signed) -> metatype differs.
-    let (ctx, zext, read) = zext_read_by(
-        uint_t(8),
-        uint_t(4),
-        4,
-        8,
-        OpCode::CPUI_INT_ADD,
-        |c| {
-            let v = c.add_var(8, int_t(8)); // signed, mismatched metatype
-            c.set_explicit(v, true);
-            v
-        },
-    );
+    let (ctx, zext, read) = zext_read_by(uint_t(8), uint_t(4), 4, 8, OpCode::CPUI_INT_ADD, |c| {
+        let v = c.add_var(8, int_t(8)); // signed, mismatched metatype
+        c.set_explicit(v, true);
+        v
+    });
     assert!(
         !strat.is_extension_cast_implied(&ctx, zext, Some(read)),
         "a mismatched-metatype other operand must defeat the implied test"
     );
-    assert_eq!(decide_zext(&strat, &ctx, zext, Some(read), true), Render::Cast);
+    assert_eq!(
+        decide_zext(&strat, &ctx, zext, Some(read), true),
+        Render::Cast
+    );
 }

@@ -24,7 +24,7 @@ use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::infra::architecture::Architecture;
 use crate::p4_calls::fspec::{FuncCallSpecs, FuncProto, PrototypePieces};
@@ -132,10 +132,16 @@ impl OptionProtoOrder {
             other => {
                 return Err(unlace_base::error::KunaError::parse(format!(
                     "Unknown protoorder value: {other} (expected off|types|cycles|lock)"
-                )))
+                )));
             }
         };
-        Ok((mode, format!("Callee-first recovered-prototype ordering set to {}", mode.as_str())))
+        Ok((
+            mode,
+            format!(
+                "Callee-first recovered-prototype ordering set to {}",
+                mode.as_str()
+            ),
+        ))
     }
 }
 
@@ -242,7 +248,8 @@ fn vote_holds(
 ) -> Option<bool> {
     if class_of(ct).is_none()
         || ct.get_size() > arg_size
-        || crate::p5_types::kuna_ptrdepth::pointer_depth(ct, 3) > crate::p5_types::kuna_ptrdepth::MAX_INFERRED_PTR_DEPTH
+        || crate::p5_types::kuna_ptrdepth::pointer_depth(ct, 3)
+            > crate::p5_types::kuna_ptrdepth::MAX_INFERRED_PTR_DEPTH
     {
         return Some(false);
     }
@@ -261,34 +268,54 @@ fn vote_holds(
 /// Does `vn`, if it is a constant, print as a float literal that compiles back
 /// to the same bits?  Every NaN prints as `NAN`, whatever its payload.
 fn prints_exactly_as_a_float(data: &Funcdata, vn: VarnodeId) -> bool {
-    let Some(node) = data.vbank().get(vn).filter(|n| n.is_constant()) else { return true };
+    let Some(node) = data.vbank().get(vn).filter(|n| n.is_constant()) else {
+        return true;
+    };
     if node.get_size() > 8 {
         return false;
     }
-    data.get_arch().get_float_format(node.get_size()).is_some_and(|f| {
-        f.get_host_float(node.get_offset()).1 != unlace_num::float::floatclass::nan
-    })
+    data.get_arch()
+        .get_float_format(node.get_size())
+        .is_some_and(|f| {
+            f.get_host_float(node.get_offset()).1 != unlace_num::float::floatclass::nan
+        })
 }
 
 /// Is `vn` a constant inside a function's code?  A data pointer there renders
 /// as a subscript of the function (`&sub_80014f4[1]` for the Thumb address
 /// `0x80014f5`), which is not C.
 fn points_into_code(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
-    let Some(node) = data.vbank().get(vn).filter(|n| n.is_constant()) else { return false };
-    let Some(at) = data.obank().get(op).map(|o| o.get_addr().clone()) else { return false };
+    let Some(node) = data.vbank().get(vn).filter(|n| n.is_constant()) else {
+        return false;
+    };
+    let Some(at) = data.obank().get(op).map(|o| o.get_addr().clone()) else {
+        return false;
+    };
     let glb = data.get_arch();
     let (value, size) = (node.get_offset(), node.get_size());
-    glb.infer_ptr_spaces().iter().filter(|spc| spc.get_addr_size() as int4 == size).any(|spc| {
-        let mut full = 0;
-        glb.resolve_constant(spc, value, size, &at, &mut full).ok().is_some_and(|ram| {
-            glb.query_container_global(&ram, 1, &Address::new_invalid()).is_some_and(|e| {
-                e.symbol_type.as_ref().is_some_and(|t| t.get_metatype() == type_metatype::TYPE_CODE)
-            })
+    glb.infer_ptr_spaces()
+        .iter()
+        .filter(|spc| spc.get_addr_size() as int4 == size)
+        .any(|spc| {
+            let mut full = 0;
+            glb.resolve_constant(spc, value, size, &at, &mut full)
+                .ok()
+                .is_some_and(|ram| {
+                    glb.query_container_global(&ram, 1, &Address::new_invalid())
+                        .is_some_and(|e| {
+                            e.symbol_type
+                                .as_ref()
+                                .is_some_and(|t| t.get_metatype() == type_metatype::TYPE_CODE)
+                        })
+                })
         })
-    })
 }
 
-fn stated_argument_type<'a>(data: &'a Funcdata, fc: &FuncCallSpecs, slot: int4) -> Option<&'a Rc<Datatype>> {
+fn stated_argument_type<'a>(
+    data: &'a Funcdata,
+    fc: &FuncCallSpecs,
+    slot: int4,
+) -> Option<&'a Rc<Datatype>> {
     let stated = data.kuna_protoorder_types(fc.get_entry_address())?;
     let index = (slot - 1) as usize;
     let (addr, size) = fc.final_input_storage().get(index)?;
@@ -306,13 +333,20 @@ pub(crate) fn addresses_a_frame_object(data: &Funcdata, vn: VarnodeId) -> bool {
             continue;
         }
         seen.push(v);
-        let Some(node) = data.vbank().get(v) else { continue };
+        let Some(node) = data.vbank().get(v) else {
+            continue;
+        };
         if node.is_spacebase() && !node.is_constant() {
             return true;
         }
-        let Some(o) = node.get_def().and_then(|d| data.obank().get(d)) else { continue };
+        let Some(o) = node.get_def().and_then(|d| data.obank().get(d)) else {
+            continue;
+        };
         let inputs: &[int4] = match o.code() {
-            OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_PTRSUB | OpCode::CPUI_PTRADD
+            OpCode::CPUI_COPY
+            | OpCode::CPUI_CAST
+            | OpCode::CPUI_PTRSUB
+            | OpCode::CPUI_PTRADD
             | OpCode::CPUI_INT_SUB => &[0],
             OpCode::CPUI_INT_ADD => &[0, 1],
             OpCode::CPUI_MULTIEQUAL => &[0, 1, 2, 3],
@@ -335,7 +369,9 @@ fn inside_a_frame_aggregate(
     regions: &mut Option<Vec<(i64, Option<i64>)>>,
     word_ok: bool,
 ) -> bool {
-    let Some(scope) = data.get_scope_local() else { return false };
+    let Some(scope) = data.get_scope_local() else {
+        return false;
+    };
     let space = scope.get_space_id();
     if node.get_space().get_index() != space.get_index() {
         return false;
@@ -345,7 +381,10 @@ fn inside_a_frame_aggregate(
         let entry = db.entry(scope.scope_id(), eref);
         if entry.size > node.get_size()
             && db.symbol(entry.symbol).dtype.as_ref().is_some_and(|t| {
-                matches!(t.get_metatype(), type_metatype::TYPE_STRUCT | type_metatype::TYPE_ARRAY)
+                matches!(
+                    t.get_metatype(),
+                    type_metatype::TYPE_STRUCT | type_metatype::TYPE_ARRAY
+                )
             })
         {
             return true;
@@ -354,11 +393,15 @@ fn inside_a_frame_aggregate(
     let shift = 64 - 8 * space.get_addr_size().clamp(1, 8);
     let signed = |x: unlace_base::types::uintb| ((x << shift) as i64) >> shift;
     let regions = regions.get_or_insert_with(|| {
-        let Some(sp) = data.find_spacebase_input(space) else { return Vec::new() };
+        let Some(sp) = data.find_spacebase_input(space) else {
+            return Vec::new();
+        };
         let mut bases = Vec::new();
         data.gather_additive_base(sp, &mut bases, false);
-        let mut offs: Vec<(i64, bool)> =
-            bases.iter().map(|b| (signed(data.gather_offset(b.base)), b.index.is_some())).collect();
+        let mut offs: Vec<(i64, bool)> = bases
+            .iter()
+            .map(|b| (signed(data.gather_offset(b.base)), b.index.is_some()))
+            .collect();
         offs.sort_unstable();
         offs.iter()
             .map(|&(c, indexed)| {
@@ -368,8 +411,15 @@ fn inside_a_frame_aggregate(
             .collect()
     });
     let o = signed(node.get_offset());
-    let word = word_ok && node.get_size() == data.get_arch().types().map_or(8, |t| t.get_size_of_pointer());
-    regions.iter().any(|&(c, end)| o >= c && end.is_none_or(|n| o < n) && !(word && end == Some(c + 1)))
+    let word = word_ok
+        && node.get_size()
+            == data
+                .get_arch()
+                .types()
+                .map_or(8, |t| t.get_size_of_pointer());
+    regions
+        .iter()
+        .any(|&(c, end)| o >= c && end.is_none_or(|n| o < n) && !(word && end == Some(c + 1)))
 }
 
 /// Is the LOAD `o` reached through an address computed from the value it
@@ -386,11 +436,19 @@ fn loaded_through_itself(
         if members.contains(&v) {
             return true;
         }
-        let Some(def) = data.vbank().get(v).and_then(|n| n.get_def()).and_then(|d| data.obank().get(d)) else {
+        let Some(def) = data
+            .vbank()
+            .get(v)
+            .and_then(|n| n.get_def())
+            .and_then(|d| data.obank().get(d))
+        else {
             return false;
         };
         at = match def.code() {
-            OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_INT_ADD | OpCode::CPUI_PTRADD
+            OpCode::CPUI_COPY
+            | OpCode::CPUI_CAST
+            | OpCode::CPUI_INT_ADD
+            | OpCode::CPUI_PTRADD
             | OpCode::CPUI_PTRSUB => def.get_in(0),
             _ => return false,
         };
@@ -401,7 +459,8 @@ fn loaded_through_itself(
 /// Does the LOAD or STORE `o` reach memory through a frame address?  The value
 /// it moves is then frame memory, and typing it types the frame.
 fn through_the_frame(data: &Funcdata, o: &crate::op::PcodeOp) -> bool {
-    o.get_in(1).is_some_and(|p| addresses_a_frame_object(data, p))
+    o.get_in(1)
+        .is_some_and(|p| addresses_a_frame_object(data, p))
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -430,9 +489,12 @@ fn storage_disagrees(proto: &FuncProto, addr: &Address, size: int4, ct: &Datatyp
     if ct.get_metatype() == type_metatype::TYPE_FLOAT || !proto.has_model() {
         return false;
     }
-    let Some(list) = proto.model().input_opt() else { return false };
-    list.find_entry(addr, size, true)
-        .is_some_and(|i| list.get_entry()[i].get_type() == crate::dtype::type_class::TYPECLASS_FLOAT)
+    let Some(list) = proto.model().input_opt() else {
+        return false;
+    };
+    list.find_entry(addr, size, true).is_some_and(|i| {
+        list.get_entry()[i].get_type() == crate::dtype::type_class::TYPECLASS_FLOAT
+    })
 }
 
 /// The value `vn` carries: every varnode joined to it by COPY, CAST, MULTIEQUAL
@@ -449,18 +511,34 @@ pub(crate) fn value_family(data: &Funcdata, vn: VarnodeId) -> Vec<VarnodeId> {
         )
     };
     let mut family = vec![vn];
-    let mut seen: crate::kuna_fasthash::FxHashSet<VarnodeId> = crate::kuna_fasthash::FxHashSet::from_iter([vn]);
+    let mut seen: crate::kuna_fasthash::FxHashSet<VarnodeId> =
+        crate::kuna_fasthash::FxHashSet::from_iter([vn]);
     let mut at = 0;
     while at < family.len() && family.len() < 128 {
-        let Some(node) = data.vbank().get(family[at]) else { break };
+        let Some(node) = data.vbank().get(family[at]) else {
+            break;
+        };
         at += 1;
         let mut next: Vec<VarnodeId> = Vec::new();
-        if let Some(o) = node.get_def().and_then(|d| data.obank().get(d)).filter(|o| joins(o)) {
-            let n = if o.code() == OpCode::CPUI_INDIRECT { 1 } else { o.num_input() };
+        if let Some(o) = node
+            .get_def()
+            .and_then(|d| data.obank().get(d))
+            .filter(|o| joins(o))
+        {
+            let n = if o.code() == OpCode::CPUI_INDIRECT {
+                1
+            } else {
+                o.num_input()
+            };
             next.extend((0..n).filter_map(|i| o.get_in(i)));
         }
         for r in node.descend_iter() {
-            if let Some(out) = data.obank().get(r).filter(|o| joins(o)).and_then(|o| o.get_out()) {
+            if let Some(out) = data
+                .obank()
+                .get(r)
+                .filter(|o| joins(o))
+                .and_then(|o| o.get_out())
+            {
                 next.push(out);
             }
         }
@@ -521,7 +599,9 @@ fn indexes_a_pointer(data: &Funcdata, vn: VarnodeId) -> bool {
     value_family(data, vn).into_iter().any(|v| {
         data.vbank().get(v).is_some_and(|node| {
             node.descend_iter().any(|r| {
-                data.obank().get(r).is_some_and(|o| o.code() == OpCode::CPUI_PTRADD && o.get_in(1) == Some(v))
+                data.obank()
+                    .get(r)
+                    .is_some_and(|o| o.code() == OpCode::CPUI_PTRADD && o.get_in(1) == Some(v))
             })
         })
     })
@@ -531,21 +611,32 @@ fn indexes_a_pointer(data: &Funcdata, vn: VarnodeId) -> bool {
 /// prototype types that parameter a pointer to something (`pipe (int *)`)?
 pub(crate) fn handed_to_a_declared_pointer(data: &Funcdata, vn: VarnodeId) -> bool {
     value_family(data, vn).into_iter().any(|v| {
-        let Some(node) = data.vbank().get(v) else { return false };
+        let Some(node) = data.vbank().get(v) else {
+            return false;
+        };
         node.descend_iter().any(|r| {
-            let Some(o) = data.obank().get(r) else { return false };
+            let Some(o) = data.obank().get(r) else {
+                return false;
+            };
             if !matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND) {
                 return false;
             }
-            let Some(fc) = data.get_call_specs_index(r).map(|i| data.get_call_specs(i)) else { return false };
-            (1..o.num_input()).filter(|&s| o.get_in(s) == Some(v)).any(|s| {
-                fc.proto().get_param(s - 1).is_some_and(|p| {
-                    p.is_type_locked()
-                        && p.get_type().and_then(|t| t.get_ptr_to()).is_some_and(|pt| {
-                            !matches!(pt.get_metatype(), type_metatype::TYPE_VOID | type_metatype::TYPE_UNKNOWN)
-                        })
+            let Some(fc) = data.get_call_specs_index(r).map(|i| data.get_call_specs(i)) else {
+                return false;
+            };
+            (1..o.num_input())
+                .filter(|&s| o.get_in(s) == Some(v))
+                .any(|s| {
+                    fc.proto().get_param(s - 1).is_some_and(|p| {
+                        p.is_type_locked()
+                            && p.get_type().and_then(|t| t.get_ptr_to()).is_some_and(|pt| {
+                                !matches!(
+                                    pt.get_metatype(),
+                                    type_metatype::TYPE_VOID | type_metatype::TYPE_UNKNOWN
+                                )
+                            })
+                    })
                 })
-            })
         })
     })
 }
@@ -553,9 +644,15 @@ pub(crate) fn handed_to_a_declared_pointer(data: &Funcdata, vn: VarnodeId) -> bo
 /// (kuna `calleevote`) Does the function load or store outside the one pointee
 /// of `ct`, or step through more than that one object?
 pub(crate) fn reaches_past_the_pointee(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
-    let Some(pointee) = ct.get_ptr_to() else { return false };
-    let Some((accesses, _, _)) = accesses_through(data, &value_family(data, vn)) else { return true };
-    accesses.iter().any(|a| a.stride != 0 || a.at < 0 || a.at > pointee.get_size() as i64 - a.size as i64)
+    let Some(pointee) = ct.get_ptr_to() else {
+        return false;
+    };
+    let Some((accesses, _, _)) = accesses_through(data, &value_family(data, vn)) else {
+        return true;
+    };
+    accesses
+        .iter()
+        .any(|a| a.stride != 0 || a.at < 0 || a.at > pointee.get_size() as i64 - a.size as i64)
 }
 
 /// Would `ct` on the values in `family` make the printer spell a constant
@@ -563,23 +660,35 @@ pub(crate) fn reaches_past_the_pointee(data: &Funcdata, vn: VarnodeId, ct: &Data
 /// byte?  For a `char *` the stores are the ones through the value itself; for
 /// a pointer to a pointer, the ones through every pointer-width value loaded
 /// through it or stored through it, which take the pointee.
-fn splits_a_wide_constant(data: &Funcdata, family: &[VarnodeId], ct: &Datatype, depth: u32) -> bool {
-    let Some(pointee) = ct.get_ptr_to() else { return false };
+fn splits_a_wide_constant(
+    data: &Funcdata,
+    family: &[VarnodeId],
+    ct: &Datatype,
+    depth: u32,
+) -> bool {
+    let Some(pointee) = ct.get_ptr_to() else {
+        return false;
+    };
     let character = pointee.get_size() == 1 && pointee.is_char_print();
     if !character && (pointee.get_metatype() != type_metatype::TYPE_PTR || depth >= 2) {
         return false;
     }
     let family = with_sibling_loads(data, family);
-    let Some((accesses, _, _)) = accesses_through(data, &family) else { return true };
+    let Some((accesses, _, _)) = accesses_through(data, &family) else {
+        return true;
+    };
     if character {
-        return accesses
-            .iter()
-            .any(|a| a.store && a.size > 1 && data.vbank().get(a.value).is_some_and(|n| n.is_constant()));
+        return accesses.iter().any(|a| {
+            a.store && a.size > 1 && data.vbank().get(a.value).is_some_and(|n| n.is_constant())
+        });
     }
-    accesses.iter().filter(|a| a.size == pointee.get_size()).any(|a| {
-        data.vbank().get(a.value).is_some_and(|n| !n.is_constant())
-            && splits_a_wide_constant(data, &value_family(data, a.value), &pointee, depth + 1)
-    })
+    accesses
+        .iter()
+        .filter(|a| a.size == pointee.get_size())
+        .any(|a| {
+            data.vbank().get(a.value).is_some_and(|n| !n.is_constant())
+                && splits_a_wide_constant(data, &value_family(data, a.value), &pointee, depth + 1)
+        })
 }
 
 /// Does anything else about the value `vn` outrank the vote `ct`?
@@ -606,16 +715,27 @@ fn family_refuses(data: &Funcdata, vn: VarnodeId, reading: Reading, ct: &Datatyp
     let members: crate::kuna_fasthash::FxHashSet<VarnodeId> = family.iter().copied().collect();
     let mut globals: Vec<(Address, int4)> = Vec::new();
     for &v in &family {
-        let Some(node) = data.vbank().get(v) else { continue };
+        let Some(node) = data.vbank().get(v) else {
+            continue;
+        };
         let float_global = float_vote && node.is_persist() && node.get_size() == ct.get_size();
         if node.is_type_lock()
             || (node.is_persist() && !float_global)
-            || inside_a_frame_aggregate(data, node, &mut regions, matches!(reading, Reading::DeclaredInput))
+            || inside_a_frame_aggregate(
+                data,
+                node,
+                &mut regions,
+                matches!(reading, Reading::DeclaredInput),
+            )
             || (v != vn && addresses_a_frame_object(data, v))
         {
             return true;
         }
-        if float_global && !globals.iter().any(|(at, size)| at == node.get_addr() && *size == node.get_size()) {
+        if float_global
+            && !globals
+                .iter()
+                .any(|(at, size)| at == node.get_addr() && *size == node.get_size())
+        {
             globals.push((node.get_addr().clone(), node.get_size()));
         }
         if float_vote && node.is_input() && !a_float_can_arrive_in(data, node) {
@@ -624,7 +744,8 @@ fn family_refuses(data: &Funcdata, vn: VarnodeId, reading: Reading, ct: &Datatyp
         if let Some(def) = node.get_def() {
             let o = data.obank().get(def);
             if o.is_some_and(|o| {
-                o.code() == OpCode::CPUI_LOAD && (through_the_frame(data, o) || loaded_through_itself(data, o, &members))
+                o.code() == OpCode::CPUI_LOAD
+                    && (through_the_frame(data, o) || loaded_through_itself(data, o, &members))
             }) {
                 return true;
             }
@@ -632,7 +753,9 @@ fn family_refuses(data: &Funcdata, vn: VarnodeId, reading: Reading, ct: &Datatyp
                 Some(OpCode::CPUI_CALL | OpCode::CPUI_CALLIND) => match writer_class(data, def) {
                     Some(c) if Some(c) != class => return true,
                     Some(_) => {}
-                    None if float_vote => handed_on |= !in_a_float_register(call_model(data, def, false), node),
+                    None if float_vote => {
+                        handed_on |= !in_a_float_register(call_model(data, def, false), node)
+                    }
                     None => {}
                 },
                 Some(OpCode::CPUI_LOAD) if matches!(reading, Reading::Member(_)) && !own(def) => {
@@ -647,7 +770,9 @@ fn family_refuses(data: &Funcdata, vn: VarnodeId, reading: Reading, ct: &Datatyp
             }
         }
         for r in node.descend_iter() {
-            let Some(o) = data.obank().get(r) else { continue };
+            let Some(o) = data.obank().get(r) else {
+                continue;
+            };
             match o.code() {
                 OpCode::CPUI_STORE if o.get_in(2) == Some(v) => {
                     if through_the_frame(data, o) {
@@ -655,10 +780,14 @@ fn family_refuses(data: &Funcdata, vn: VarnodeId, reading: Reading, ct: &Datatyp
                     }
                     handed_on |= !own(r);
                 }
-                OpCode::CPUI_RETURN if float_vote => handed_on |= returned_as_other_than_float(data, o, v, node),
+                OpCode::CPUI_RETURN if float_vote => {
+                    handed_on |= returned_as_other_than_float(data, o, v, node)
+                }
                 OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => {
                     for s in 1..o.num_input() {
-                        if o.get_in(s) != Some(v) || matches!(reading, Reading::Argument(c, k) if (c, k) == (r, s)) {
+                        if o.get_in(s) != Some(v)
+                            || matches!(reading, Reading::Argument(c, k) if (c, k) == (r, s))
+                        {
                             continue;
                         }
                         let read = if matches!(reading, Reading::DeclaredInput) {
@@ -690,7 +819,9 @@ fn family_refuses(data: &Funcdata, vn: VarnodeId, reading: Reading, ct: &Datatyp
                 || bits_seen
                 || handed_on
                 || (loaded_elsewhere && !float_seen)
-                || globals.iter().any(|(at, size)| !crate::kuna_floatglobals::float_only(data, at, *size))
+                || globals
+                    .iter()
+                    .any(|(at, size)| !crate::kuna_floatglobals::float_only(data, at, *size))
         }
         Some(Class::Pointer) => float_seen || integer_seen || pointee_refuses(data, &family, ct, 0),
         _ => float_seen,
@@ -707,18 +838,33 @@ fn a_float_can_arrive_in(data: &Funcdata, node: &crate::varnode::Varnode) -> boo
         return true;
     }
     let proto = data.get_func_proto();
-    let Some(list) = proto.has_model().then(|| proto.model().input_opt()).flatten() else { return true };
-    let float_class = |e: &crate::p4_calls::fspec::ParamEntry| e.get_type() == crate::dtype::type_class::TYPECLASS_FLOAT;
+    let Some(list) = proto
+        .has_model()
+        .then(|| proto.model().input_opt())
+        .flatten()
+    else {
+        return true;
+    };
+    let float_class = |e: &crate::p4_calls::fspec::ParamEntry| {
+        e.get_type() == crate::dtype::type_class::TYPECLASS_FLOAT
+    };
     if !list.get_entry().iter().any(float_class) {
         return true;
     }
-    let Some(at) = list.find_entry(node.get_addr(), node.get_size(), true) else { return false };
+    let Some(at) = list.find_entry(node.get_addr(), node.get_size(), true) else {
+        return false;
+    };
     if float_class(&list.get_entry()[at]) {
         return true;
     }
-    let before = list.get_entry()[..at].iter().filter(|e| !float_class(e)).count();
+    let before = list.get_entry()[..at]
+        .iter()
+        .filter(|e| !float_class(e))
+        .count();
     let arch = data.get_arch();
-    let (Some(types), Some(dfp)) = (arch.types(), arch.default_fp()) else { return true };
+    let (Some(types), Some(dfp)) = (arch.types(), arch.default_fp()) else {
+        return true;
+    };
     let (Ok(void_ty), Ok(word), Ok(float)) = (
         types.get_type_void(),
         types.get_base(types.get_size_of_pointer(), type_metatype::TYPE_UINT),
@@ -739,7 +885,10 @@ fn a_float_can_arrive_in(data: &Funcdata, node: &crate::varnode::Varnode) -> boo
         kuna_library_names: None,
     };
     let mut fp = FuncProto::new();
-    if fp.seed_locked_from_pieces(&pieces, Rc::clone(dfp), void_ty, types, arch.manage()).is_err() {
+    if fp
+        .seed_locked_from_pieces(&pieces, Rc::clone(dfp), void_ty, types, arch.manage())
+        .is_err()
+    {
         return true;
     }
     fp.get_param(before as int4).is_some_and(|p| {
@@ -758,48 +907,81 @@ pub(crate) fn with_sibling_loads(data: &Funcdata, family: &[VarnodeId]) -> Vec<V
     let place = |mut v: VarnodeId| -> Option<(VarnodeId, uintb)> {
         let mut off: uintb = 0;
         for _ in 0..4 {
-            let def = data.vbank().get(v)?.get_def().and_then(|d| data.obank().get(d));
+            let def = data
+                .vbank()
+                .get(v)?
+                .get_def()
+                .and_then(|d| data.obank().get(d));
             match def {
                 Some(o) if matches!(o.code(), OpCode::CPUI_INT_ADD | OpCode::CPUI_PTRSUB) => {
-                    let k = o.get_in(1).and_then(|c| data.vbank().get(c)).filter(|n| n.is_constant())?;
+                    let k = o
+                        .get_in(1)
+                        .and_then(|c| data.vbank().get(c))
+                        .filter(|n| n.is_constant())?;
                     off = off.wrapping_add(k.get_offset());
                     v = o.get_in(0)?;
                 }
-                Some(o) if matches!(o.code(), OpCode::CPUI_COPY | OpCode::CPUI_CAST) => v = o.get_in(0)?,
+                Some(o) if matches!(o.code(), OpCode::CPUI_COPY | OpCode::CPUI_CAST) => {
+                    v = o.get_in(0)?
+                }
                 _ => return Some((v, off)),
             }
         }
         Some((v, off))
     };
     for &m in family {
-        let Some(node) = data.vbank().get(m) else { continue };
-        let Some(o) = node.get_def().and_then(|d| data.obank().get(d)).filter(|o| o.code() == OpCode::CPUI_LOAD) else {
+        let Some(node) = data.vbank().get(m) else {
+            continue;
+        };
+        let Some(o) = node
+            .get_def()
+            .and_then(|d| data.obank().get(d))
+            .filter(|o| o.code() == OpCode::CPUI_LOAD)
+        else {
             continue;
         };
         if through_the_frame(data, o) {
             continue;
         }
-        let Some((base, off)) = o.get_in(1).and_then(&place) else { continue };
-        let Some(bnode) = data.vbank().get(base) else { continue };
+        let Some((base, off)) = o.get_in(1).and_then(&place) else {
+            continue;
+        };
+        let Some(bnode) = data.vbank().get(base) else {
+            continue;
+        };
         let mut addrs: Vec<VarnodeId> = if off == 0 { vec![base] } else { Vec::new() };
         for r in bnode.descend_iter() {
-            let Some(u) = data.obank().get(r) else { continue };
+            let Some(u) = data.obank().get(r) else {
+                continue;
+            };
             if matches!(u.code(), OpCode::CPUI_INT_ADD | OpCode::CPUI_PTRSUB)
                 && u.get_in(0) == Some(base)
-                && u.get_in(1).and_then(|c| data.vbank().get(c)).is_some_and(|c| c.is_constant() && c.get_offset() == off)
+                && u.get_in(1)
+                    .and_then(|c| data.vbank().get(c))
+                    .is_some_and(|c| c.is_constant() && c.get_offset() == off)
             {
                 addrs.extend(u.get_out());
             }
         }
         for a in addrs {
-            let Some(anode) = data.vbank().get(a) else { continue };
+            let Some(anode) = data.vbank().get(a) else {
+                continue;
+            };
             for r in anode.descend_iter() {
-                let Some(l) = data.obank().get(r).filter(|l| l.code() == OpCode::CPUI_LOAD && l.get_in(1) == Some(a))
+                let Some(l) = data
+                    .obank()
+                    .get(r)
+                    .filter(|l| l.code() == OpCode::CPUI_LOAD && l.get_in(1) == Some(a))
                 else {
                     continue;
                 };
                 let Some(lo) = l.get_out() else { continue };
-                if out.contains(&lo) || data.vbank().get(lo).is_none_or(|n| n.get_size() != node.get_size()) {
+                if out.contains(&lo)
+                    || data
+                        .vbank()
+                        .get(lo)
+                        .is_none_or(|n| n.get_size() != node.get_size())
+                {
                     continue;
                 }
                 for v in value_family(data, lo) {
@@ -841,75 +1023,133 @@ fn gcd(a: i64, b: i64) -> i64 {
 /// following constant offsets, indexing and copies, and where every address it
 /// derives points. `None` when there are too many to follow. The final flag
 /// says every index was modeled; unknown grids cannot rule out a whole access.
-pub(crate) fn accesses_through(data: &Funcdata, family: &[VarnodeId]) -> Option<(Vec<Access>, Vec<(i64, i64)>, bool)> {
+pub(crate) fn accesses_through(
+    data: &Funcdata,
+    family: &[VarnodeId],
+) -> Option<(Vec<Access>, Vec<(i64, i64)>, bool)> {
     let mut place: crate::kuna_fasthash::FxHashMap<VarnodeId, (i64, i64)> =
         family.iter().map(|&v| (v, (0, 0))).collect();
     let mut work: Vec<VarnodeId> = family.to_vec();
     let mut budget = 512;
     let constant = |v: Option<VarnodeId>| {
-        v.and_then(|v| data.vbank().get(v)).filter(|n| n.is_constant()).map(|n| {
-            let shift = 64 - 8 * n.get_size().clamp(1, 8) as u32;
-            ((n.get_offset() << shift) as i64) >> shift
-        })
+        v.and_then(|v| data.vbank().get(v))
+            .filter(|n| n.is_constant())
+            .map(|n| {
+                let shift = 64 - 8 * n.get_size().clamp(1, 8) as u32;
+                ((n.get_offset() << shift) as i64) >> shift
+            })
     };
     // Keep a displacement and a divisor across distributed arithmetic. One
     // shared budget bounds the entire expression, not each side of an ADD;
     // `walk.1` records that a scalar merge contributed its unmodeled step.
-    fn grid(data: &Funcdata, value: Option<VarnodeId>, width: int4, walk: &mut (usize, bool)) -> (i64, i64, bool) {
-        let Some(left) = walk.0.checked_sub(1) else { return (0, 1, false) };
+    fn grid(
+        data: &Funcdata,
+        value: Option<VarnodeId>,
+        width: int4,
+        walk: &mut (usize, bool),
+    ) -> (i64, i64, bool) {
+        let Some(left) = walk.0.checked_sub(1) else {
+            return (0, 1, false);
+        };
         walk.0 = left;
-        let Some(node) = value.and_then(|value| data.vbank().get(value)) else { return (0, 1, false) };
+        let Some(node) = value.and_then(|value| data.vbank().get(value)) else {
+            return (0, 1, false);
+        };
         let bytes = node.get_size().clamp(1, 8);
         let shift = 64 - 8 * bytes as u32;
         let signed = |value: i64| (value << shift) >> shift;
-        if node.is_constant() { return (signed(node.get_offset() as i64), 0, true); }
-        let Some(op) = node.get_def().and_then(|id| data.obank().get(id)) else { return (0, 1, true) };
+        if node.is_constant() {
+            return (signed(node.get_offset() as i64), 0, true);
+        }
+        let Some(op) = node.get_def().and_then(|id| data.obank().get(id)) else {
+            return (0, 1, true);
+        };
         let result = match op.code() {
             OpCode::CPUI_MULTIEQUAL => {
                 walk.1 = true;
                 (0, 1, true)
             }
-            OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_INT_SEXT | OpCode::CPUI_INT_ZEXT => {
+            OpCode::CPUI_COPY
+            | OpCode::CPUI_CAST
+            | OpCode::CPUI_INT_SEXT
+            | OpCode::CPUI_INT_ZEXT => {
                 let result = grid(data, op.get_in(0), width, walk);
                 if result.1 == 0 && op.code() == OpCode::CPUI_INT_ZEXT {
-                    let size = op.get_in(0).and_then(|value| data.vbank().get(value))
+                    let size = op
+                        .get_in(0)
+                        .and_then(|value| data.vbank().get(value))
                         .map_or(8, |node| node.get_size().clamp(1, 8));
                     let shift = 64 - 8 * size as u32;
                     (((result.0 as u64) << shift >> shift) as i64, 0, result.2)
-                } else { result }
+                } else {
+                    result
+                }
             }
             OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB => {
                 let (a, sa, ka) = grid(data, op.get_in(0), width, walk);
                 let (b, sb, kb) = grid(data, op.get_in(1), width, walk);
-                (if op.code() == OpCode::CPUI_INT_ADD { a.wrapping_add(b) } else { a.wrapping_sub(b) }, gcd(sa, sb), ka && kb)
+                (
+                    if op.code() == OpCode::CPUI_INT_ADD {
+                        a.wrapping_add(b)
+                    } else {
+                        a.wrapping_sub(b)
+                    },
+                    gcd(sa, sb),
+                    ka && kb,
+                )
             }
             OpCode::CPUI_INT_MULT => {
                 let (a, sa, ka) = grid(data, op.get_in(0), width, walk);
                 let (b, sb, kb) = grid(data, op.get_in(1), width, walk);
-                if sa == 0 { (a.wrapping_mul(b), a.wrapping_mul(sb), ka && kb) }
-                else if sb == 0 { (a.wrapping_mul(b), b.wrapping_mul(sa), ka && kb) }
-                else { (0, 1, false) }
+                if sa == 0 {
+                    (a.wrapping_mul(b), a.wrapping_mul(sb), ka && kb)
+                } else if sb == 0 {
+                    (a.wrapping_mul(b), b.wrapping_mul(sa), ka && kb)
+                } else {
+                    (0, 1, false)
+                }
             }
             OpCode::CPUI_INT_LEFT => {
                 let (amount, step, known) = grid(data, op.get_in(1), width, walk);
-                if step != 0 || !(0..8 * bytes as i64).contains(&amount) { return (0, 1, false); }
+                if step != 0 || !(0..8 * bytes as i64).contains(&amount) {
+                    return (0, 1, false);
+                }
                 let (offset, stride, input_known) = grid(data, op.get_in(0), width, walk);
-                (offset.wrapping_shl(amount as u32), stride.wrapping_shl(amount as u32), known && input_known)
+                (
+                    offset.wrapping_shl(amount as u32),
+                    stride.wrapping_shl(amount as u32),
+                    known && input_known,
+                )
             }
             OpCode::CPUI_INT_2COMP | OpCode::CPUI_INT_NEGATE => {
                 let (offset, stride, known) = grid(data, op.get_in(0), width, walk);
                 let offset = offset.wrapping_neg();
-                (if op.code() == OpCode::CPUI_INT_NEGATE { offset.wrapping_sub(1) } else { offset }, stride, known)
+                (
+                    if op.code() == OpCode::CPUI_INT_NEGATE {
+                        offset.wrapping_sub(1)
+                    } else {
+                        offset
+                    },
+                    stride,
+                    known,
+                )
             }
             _ => return (0, 1, false),
         };
-        if result.1 == 0 { return (signed(result.0), 0, result.2); }
+        if result.1 == 0 {
+            return (signed(result.0), 0, result.2);
+        }
         // Narrow arithmetic can wrap before it is widened to an address.
         if bytes < width && bytes < 8 {
             (result.0, gcd(result.1, 1i64 << (8 * bytes)), result.2)
-        } else { result }
+        } else {
+            result
+        }
     }
-    let width = family.first().and_then(|value| data.vbank().get(*value)).map_or(8, |node| node.get_size());
+    let width = family
+        .first()
+        .and_then(|value| data.vbank().get(*value))
+        .map_or(8, |node| node.get_size());
     let mut complete = true;
     let mut loose: crate::kuna_fasthash::FxHashSet<VarnodeId> = Default::default();
     let mut edges: Vec<(VarnodeId, VarnodeId)> = Vec::new();
@@ -920,9 +1160,13 @@ pub(crate) fn accesses_through(data: &Funcdata, family: &[VarnodeId]) -> Option<
             return None;
         }
         let (c, stride) = place[&v];
-        let Some(node) = data.vbank().get(v) else { continue };
+        let Some(node) = data.vbank().get(v) else {
+            continue;
+        };
         for r in node.descend_iter() {
-            let Some(o) = data.obank().get(r) else { continue };
+            let Some(o) = data.obank().get(r) else {
+                continue;
+            };
             let out = o.get_out();
             let mut via = (32, false);
             let next = match o.code() {
@@ -939,7 +1183,11 @@ pub(crate) fn accesses_through(data: &Funcdata, family: &[VarnodeId]) -> Option<
                     None
                 }
                 OpCode::CPUI_INT_ADD => {
-                    let other = if o.get_in(0) == Some(v) { o.get_in(1) } else { o.get_in(0) };
+                    let other = if o.get_in(0) == Some(v) {
+                        o.get_in(1)
+                    } else {
+                        o.get_in(0)
+                    };
                     let (offset, step, known) = grid(data, other, width, &mut via);
                     complete &= known;
                     Some((c.wrapping_add(offset), gcd(stride, step)))
@@ -960,13 +1208,20 @@ pub(crate) fn accesses_through(data: &Funcdata, family: &[VarnodeId]) -> Option<
                     let elsize = elsize.unwrap_or(1);
                     let (offset, step, known) = grid(data, o.get_in(1), width, &mut via);
                     complete &= known;
-                    Some((c.wrapping_add(offset.wrapping_mul(elsize)), gcd(stride, step.wrapping_mul(elsize))))
+                    Some((
+                        c.wrapping_add(offset.wrapping_mul(elsize)),
+                        gcd(stride, step.wrapping_mul(elsize)),
+                    ))
                 }
-                OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_MULTIEQUAL => Some((c, stride)),
+                OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_MULTIEQUAL => {
+                    Some((c, stride))
+                }
                 OpCode::CPUI_INDIRECT if o.get_in(0) == Some(v) => Some((c, stride)),
                 _ => None,
             };
-            let (Some((nc, ns)), Some(out)) = (next, out) else { continue };
+            let (Some((nc, ns)), Some(out)) = (next, out) else {
+                continue;
+            };
             if via.1 {
                 loose.insert(out);
             }
@@ -1003,7 +1258,15 @@ pub(crate) fn accesses_through(data: &Funcdata, family: &[VarnodeId]) -> Option<
         .filter_map(|(op, ptr, value, store)| {
             let (at, stride) = place[&ptr];
             let size = data.vbank().get(value)?.get_size();
-            Some(Access { op, value, at, stride, size, store, loose: loose.contains(&ptr) })
+            Some(Access {
+                op,
+                value,
+                at,
+                stride,
+                size,
+                store,
+                loose: loose.contains(&ptr),
+            })
         })
         .collect();
     Some((accesses, place.into_values().collect(), complete))
@@ -1037,7 +1300,9 @@ fn member_at(ct: &Rc<Datatype>, off: i64, size: int4) -> Member {
             return Member::Exact(t);
         }
         match t.get_sub_type(o) {
-            Ok((Some(sub), newoff)) if newoff >= 0 && newoff + size as i64 <= sub.get_size() as i64 => {
+            Ok((Some(sub), newoff))
+                if newoff >= 0 && newoff + size as i64 <= sub.get_size() as i64 =>
+            {
                 t = sub;
                 o = newoff;
             }
@@ -1077,20 +1342,30 @@ fn member_at(ct: &Rc<Datatype>, off: i64, size: int4) -> Member {
 fn pointee_refuses(data: &Funcdata, family: &[VarnodeId], ct: &Datatype, depth: u32) -> bool {
     let (pointee, base) = match ct.get_metatype() {
         type_metatype::TYPE_PTR => (ct.get_ptr_to(), 0),
-        type_metatype::TYPE_PTRREL => (ct.get_rel_parent(), ct.get_byte_offset().unwrap_or(0) as i64),
+        type_metatype::TYPE_PTRREL => (
+            ct.get_rel_parent(),
+            ct.get_byte_offset().unwrap_or(0) as i64,
+        ),
         _ => return false,
     };
     let Some(pointee) = pointee else { return false };
     if matches!(
         pointee.get_metatype(),
-        type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_BOOL | type_metatype::TYPE_PTR
+        type_metatype::TYPE_INT
+            | type_metatype::TYPE_UINT
+            | type_metatype::TYPE_BOOL
+            | type_metatype::TYPE_PTR
     ) && !pointee.is_char_print()
     {
         let width = pointee.get_align_size() as i64;
         let family = with_sibling_loads(data, family);
-        let Some((accesses, _, complete)) = accesses_through(data, &family) else { return true };
+        let Some((accesses, _, complete)) = accesses_through(data, &family) else {
+            return true;
+        };
         if accesses.iter().any(|a| {
-            a.store && a.size as i64 > width && data.vbank().get(a.value).is_some_and(|n| n.is_constant())
+            a.store
+                && a.size as i64 > width
+                && data.vbank().get(a.value).is_some_and(|n| n.is_constant())
         }) {
             return true;
         }
@@ -1106,7 +1381,8 @@ fn pointee_refuses(data: &Funcdata, family: &[VarnodeId], ct: &Datatype, depth: 
         return accesses.iter().any(|a| !a.store && byte_cursor(a))
             && accesses.iter().any(|a| a.store && byte_cursor(a))
             && !accesses.iter().any(|a| {
-                a.size > 0 && a.size as i64 % width == 0
+                a.size > 0
+                    && a.size as i64 % width == 0
                     && a.at.wrapping_add(base).rem_euclid(grid(a)) == 0
                     && (a.loose || a.stride.rem_euclid(width) == 0)
             });
@@ -1126,13 +1402,19 @@ fn pointee_refuses(data: &Funcdata, family: &[VarnodeId], ct: &Datatype, depth: 
     }
     let size = pointee.get_size() as i64;
     let family = with_sibling_loads(data, family);
-    let Some((accesses, places, _)) = accesses_through(data, &family) else { return true };
+    let Some((accesses, places, _)) = accesses_through(data, &family) else {
+        return true;
+    };
     if size <= 0 {
         return !accesses.is_empty();
     }
     if !float
         && places.iter().any(|&(c, stride)| {
-            if stride == 0 { !(0..=size).contains(&c.wrapping_add(base)) } else { stride.unsigned_abs() != size as u64 }
+            if stride == 0 {
+                !(0..=size).contains(&c.wrapping_add(base))
+            } else {
+                stride.unsigned_abs() != size as u64
+            }
         })
     {
         return true;
@@ -1140,17 +1422,25 @@ fn pointee_refuses(data: &Funcdata, family: &[VarnodeId], ct: &Datatype, depth: 
     let mut floats: Vec<(&Access, Rc<Datatype>)> = Vec::new();
     for a in &accesses {
         let at = a.at.wrapping_add(base);
-        if a.stride % size != 0 || (!float && a.stride != 0 && a.stride.unsigned_abs() != size as u64) {
+        if a.stride % size != 0
+            || (!float && a.stride != 0 && a.stride.unsigned_abs() != size as u64)
+        {
             return true;
         }
-        let off = if float || a.stride != 0 { at.rem_euclid(size) } else { at };
+        let off = if float || a.stride != 0 {
+            at.rem_euclid(size)
+        } else {
+            at
+        };
         if off < 0 || off + a.size as i64 > size {
             return true;
         }
         match member_at(&pointee, off, a.size) {
             Member::Split => return true,
             Member::Gap => {}
-            Member::Exact(t) if t.get_metatype() == type_metatype::TYPE_FLOAT => floats.push((a, t)),
+            Member::Exact(t) if t.get_metatype() == type_metatype::TYPE_FLOAT => {
+                floats.push((a, t))
+            }
             Member::Exact(t) if depth < 2 && t.get_metatype() == type_metatype::TYPE_PTR => {
                 if !data.vbank().get(a.value).is_some_and(|n| n.is_constant())
                     && pointee_refuses(data, &value_family(data, a.value), &t, depth + 1)
@@ -1161,7 +1451,8 @@ fn pointee_refuses(data: &Funcdata, family: &[VarnodeId], ct: &Datatype, depth: 
             Member::Exact(t)
                 if !a.store
                     && crate::kuna_structheadless::types_a_pointer_as_a_word(data, ct, &t)
-                    && accesses_through(data, &value_family(data, a.value)).is_some_and(|(acc, _, _)| !acc.is_empty()) =>
+                    && accesses_through(data, &value_family(data, a.value))
+                        .is_some_and(|(acc, _, _)| !acc.is_empty()) =>
             {
                 return true;
             }
@@ -1193,23 +1484,45 @@ fn returned_as_other_than_float(
     if proto.is_output_locked() {
         return proto.get_output_type().and_then(|t| class_of(t)) != Some(Class::Float);
     }
-    !in_a_float_register(proto.has_model().then(|| proto.model().output_list()).flatten(), node)
+    !in_a_float_register(
+        proto
+            .has_model()
+            .then(|| proto.model().output_list())
+            .flatten(),
+        node,
+    )
 }
 
 /// The input (`input`) or output resource list of the call `call`'s model.
-fn call_model(data: &Funcdata, call: OpId, input: bool) -> Option<&crate::p4_calls::fspec::ParamListStandard> {
-    let proto = data.get_call_specs(data.get_call_specs_index(call)?).proto();
+fn call_model(
+    data: &Funcdata,
+    call: OpId,
+    input: bool,
+) -> Option<&crate::p4_calls::fspec::ParamListStandard> {
+    let proto = data
+        .get_call_specs(data.get_call_specs_index(call)?)
+        .proto();
     if !proto.has_model() {
         return None;
     }
-    if input { proto.model().input_opt() } else { proto.model().output_list() }
+    if input {
+        proto.model().input_opt()
+    } else {
+        proto.model().output_list()
+    }
 }
 
 /// Does `node` live in a register `list` assigns to floats?  A value a call reads
 /// or produces there is a float to that call whatever its declaration says.
-fn in_a_float_register(list: Option<&crate::p4_calls::fspec::ParamListStandard>, node: &crate::varnode::Varnode) -> bool {
-    list.and_then(|l| l.find_entry(node.get_addr(), node.get_size(), true).map(|i| (l, i)))
-        .is_some_and(|(l, i)| l.get_entry()[i].get_type() == crate::dtype::type_class::TYPECLASS_FLOAT)
+fn in_a_float_register(
+    list: Option<&crate::p4_calls::fspec::ParamListStandard>,
+    node: &crate::varnode::Varnode,
+) -> bool {
+    list.and_then(|l| {
+        l.find_entry(node.get_addr(), node.get_size(), true)
+            .map(|i| (l, i))
+    })
+    .is_some_and(|(l, i)| l.get_entry()[i].get_type() == crate::dtype::type_class::TYPECLASS_FLOAT)
 }
 
 /// Does the call `call` read its argument `slot` as a float: a declared
@@ -1229,25 +1542,38 @@ fn printed_reader_class(data: &Funcdata, call: OpId, slot: int4) -> Option<Class
         class_of(t).or((t.get_metatype() == type_metatype::TYPE_UNKNOWN).then_some(Class::Integer))
     };
     let fc = data.get_call_specs(data.get_call_specs_index(call)?);
-    if let Some(param) = fc.proto().get_param(slot - 1).filter(|p| p.is_type_locked()) {
+    if let Some(param) = fc
+        .proto()
+        .get_param(slot - 1)
+        .filter(|p| p.is_type_locked())
+    {
         return param.get_type().and_then(|t| printed(t));
     }
     let index = (slot - 1) as usize;
     let entry = fc.get_entry_address();
-    if let Some(class) = data.kuna_protoorder_types(entry).and_then(|s| s.inputs.get(index).and_then(|(_, _, t)| printed(t))) {
+    if let Some(class) = data
+        .kuna_protoorder_types(entry)
+        .and_then(|s| s.inputs.get(index).and_then(|(_, _, t)| printed(t)))
+    {
         return Some(class);
     }
     let key = (entry.get_space()?.get_index(), entry.get_offset());
-    data.kuna_callee_param_float(key, index).map(|f| if f { Class::Float } else { Class::Integer })
+    data.kuna_callee_param_float(key, index)
+        .map(|f| if f { Class::Float } else { Class::Integer })
 }
 
 /// The width of the float the call `call` reads at argument `slot`: a declared
 /// parameter's, or the type the callee's own decompile stated for its parameter
 /// at that position.  `None` where neither is a float, or no width is known.
 pub(crate) fn float_read_width(data: &Funcdata, call: OpId, slot: int4) -> Option<int4> {
-    let float = |t: &Datatype| (t.get_metatype() == type_metatype::TYPE_FLOAT).then(|| t.get_size());
+    let float =
+        |t: &Datatype| (t.get_metatype() == type_metatype::TYPE_FLOAT).then(|| t.get_size());
     let fc = data.get_call_specs(data.get_call_specs_index(call)?);
-    if let Some(param) = fc.proto().get_param(slot - 1).filter(|p| p.is_type_locked()) {
+    if let Some(param) = fc
+        .proto()
+        .get_param(slot - 1)
+        .filter(|p| p.is_type_locked())
+    {
         return param.get_type().and_then(|t| float(t));
     }
     let index = (slot - 1) as usize;
@@ -1258,7 +1584,10 @@ pub(crate) fn float_read_width(data: &Funcdata, call: OpId, slot: int4) -> Optio
 /// Does the call `call` read its argument `slot` as an integer or a pointer, by
 /// its declaration or the type the callee's own decompile stated?
 pub(crate) fn reads_other_than_a_float(data: &Funcdata, call: OpId, slot: int4) -> bool {
-    matches!(printed_reader_class(data, call, slot), Some(Class::Integer | Class::Pointer))
+    matches!(
+        printed_reader_class(data, call, slot),
+        Some(Class::Integer | Class::Pointer)
+    )
 }
 
 /// Does the function move an integer through the pointer the LOAD `load` reads
@@ -1268,19 +1597,37 @@ pub(crate) fn reads_other_than_a_float(data: &Funcdata, call: OpId, slot: int4) 
 /// `a0[1] = (float)((int)*a0 + 1)`.  `true` when the accesses are too many to
 /// follow.
 pub(crate) fn moves_integers_beside(data: &Funcdata, load: OpId, size: int4) -> bool {
-    let Some(mut base) = data.obank().get(load).and_then(|o| o.get_in(1)) else { return false };
+    let Some(mut base) = data.obank().get(load).and_then(|o| o.get_in(1)) else {
+        return false;
+    };
     for _ in 0..8 {
-        let Some(o) = data.vbank().get(base).and_then(|n| n.get_def()).and_then(|d| data.obank().get(d)) else { break };
+        let Some(o) = data
+            .vbank()
+            .get(base)
+            .and_then(|n| n.get_def())
+            .and_then(|d| data.obank().get(d))
+        else {
+            break;
+        };
         match o.code() {
-            OpCode::CPUI_INT_ADD | OpCode::CPUI_PTRSUB | OpCode::CPUI_PTRADD | OpCode::CPUI_COPY | OpCode::CPUI_CAST => {
+            OpCode::CPUI_INT_ADD
+            | OpCode::CPUI_PTRSUB
+            | OpCode::CPUI_PTRADD
+            | OpCode::CPUI_COPY
+            | OpCode::CPUI_CAST => {
                 let Some(b) = o.get_in(0) else { break };
                 base = b;
             }
             _ => break,
         }
     }
-    let Some((accesses, _, _)) = accesses_through(data, &value_family(data, base)) else { return true };
-    accesses.iter().filter(|a| a.op != load && a.size == size).any(|a| carries_an_integer(data, a.value))
+    let Some((accesses, _, _)) = accesses_through(data, &value_family(data, base)) else {
+        return true;
+    };
+    accesses
+        .iter()
+        .filter(|a| a.op != load && a.size == size)
+        .any(|a| carries_an_integer(data, a.value))
 }
 
 /// Is the value `vn` an integer to the function: computed by or read by an
@@ -1288,21 +1635,34 @@ pub(crate) fn moves_integers_beside(data: &Funcdata, load: OpId, size: int4) -> 
 /// zero?
 fn carries_an_integer(data: &Funcdata, vn: VarnodeId) -> bool {
     value_family(data, vn).into_iter().any(|v| {
-        let Some(node) = data.vbank().get(v) else { return false };
+        let Some(node) = data.vbank().get(v) else {
+            return false;
+        };
         if node.is_constant() {
             return node.get_offset() != 0;
         }
-        let defined = node.get_def().and_then(|d| data.obank().get(d).map(|o| (d, o))).is_some_and(|(d, o)| match o.code() {
-            OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => writer_class(data, d) == Some(Class::Integer),
-            code => produced_class(code) == Some(Class::Integer) || integer_but_pointer_neutral(code),
-        });
+        let defined = node
+            .get_def()
+            .and_then(|d| data.obank().get(d).map(|o| (d, o)))
+            .is_some_and(|(d, o)| match o.code() {
+                OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => {
+                    writer_class(data, d) == Some(Class::Integer)
+                }
+                code => {
+                    produced_class(code) == Some(Class::Integer)
+                        || integer_but_pointer_neutral(code)
+                }
+            });
         defined
             || node.descend_iter().any(|r| {
                 data.obank().get(r).is_some_and(|o| match o.code() {
-                    OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => {
-                        (1..o.num_input()).any(|s| o.get_in(s) == Some(v) && reader_class(data, r, s) == Some(Class::Integer))
+                    OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => (1..o.num_input()).any(|s| {
+                        o.get_in(s) == Some(v) && reader_class(data, r, s) == Some(Class::Integer)
+                    }),
+                    code => {
+                        read_class(code) == Some(Class::Integer)
+                            || integer_but_pointer_neutral(code)
                     }
-                    code => read_class(code) == Some(Class::Integer) || integer_but_pointer_neutral(code),
                 })
             })
     })
@@ -1332,7 +1692,9 @@ fn declared_reader_class(data: &Funcdata, call: OpId, slot: int4) -> Option<Clas
 
 /// The class a call's result is declared as, when its output is locked.
 fn writer_class(data: &Funcdata, call: OpId) -> Option<Class> {
-    let proto = data.get_call_specs(data.get_call_specs_index(call)?).proto();
+    let proto = data
+        .get_call_specs(data.get_call_specs_index(call)?)
+        .proto();
     if !proto.is_output_locked() {
         return None;
     }
@@ -1342,12 +1704,23 @@ fn writer_class(data: &Funcdata, call: OpId) -> Option<Class> {
 fn produced_class(code: OpCode) -> Option<Class> {
     use OpCode::*;
     match code {
-        CPUI_FLOAT_ADD | CPUI_FLOAT_SUB | CPUI_FLOAT_MULT | CPUI_FLOAT_DIV | CPUI_FLOAT_NEG
-        | CPUI_FLOAT_ABS | CPUI_FLOAT_SQRT | CPUI_FLOAT_INT2FLOAT | CPUI_FLOAT_FLOAT2FLOAT
-        | CPUI_FLOAT_CEIL | CPUI_FLOAT_FLOOR | CPUI_FLOAT_ROUND => Some(Class::Float),
-        CPUI_INT_MULT | CPUI_INT_DIV | CPUI_INT_SDIV | CPUI_INT_REM | CPUI_INT_SREM | CPUI_INT_AND
-        | CPUI_INT_OR | CPUI_INT_XOR | CPUI_INT_LEFT | CPUI_INT_RIGHT | CPUI_INT_SRIGHT
-        | CPUI_INT_2COMP | CPUI_INT_NEGATE | CPUI_FLOAT_TRUNC => Some(Class::Integer),
+        CPUI_FLOAT_ADD
+        | CPUI_FLOAT_SUB
+        | CPUI_FLOAT_MULT
+        | CPUI_FLOAT_DIV
+        | CPUI_FLOAT_NEG
+        | CPUI_FLOAT_ABS
+        | CPUI_FLOAT_SQRT
+        | CPUI_FLOAT_INT2FLOAT
+        | CPUI_FLOAT_FLOAT2FLOAT
+        | CPUI_FLOAT_CEIL
+        | CPUI_FLOAT_FLOOR
+        | CPUI_FLOAT_ROUND => Some(Class::Float),
+        CPUI_INT_MULT | CPUI_INT_DIV | CPUI_INT_SDIV | CPUI_INT_REM | CPUI_INT_SREM
+        | CPUI_INT_AND | CPUI_INT_OR | CPUI_INT_XOR | CPUI_INT_LEFT | CPUI_INT_RIGHT
+        | CPUI_INT_SRIGHT | CPUI_INT_2COMP | CPUI_INT_NEGATE | CPUI_FLOAT_TRUNC => {
+            Some(Class::Integer)
+        }
         _ => None,
     }
 }
@@ -1362,24 +1735,51 @@ fn integer_but_pointer_neutral(code: OpCode) -> bool {
     use OpCode::*;
     matches!(
         code,
-        CPUI_INT_ADD | CPUI_INT_SUB | CPUI_INT_ZEXT | CPUI_INT_SEXT | CPUI_INT_EQUAL | CPUI_INT_NOTEQUAL
-            | CPUI_INT_LESS | CPUI_INT_SLESS | CPUI_INT_LESSEQUAL | CPUI_INT_SLESSEQUAL | CPUI_INT_CARRY
-            | CPUI_INT_SCARRY | CPUI_INT_SBORROW | CPUI_POPCOUNT | CPUI_LZCOUNT | CPUI_SUBPIECE | CPUI_PIECE
+        CPUI_INT_ADD
+            | CPUI_INT_SUB
+            | CPUI_INT_ZEXT
+            | CPUI_INT_SEXT
+            | CPUI_INT_EQUAL
+            | CPUI_INT_NOTEQUAL
+            | CPUI_INT_LESS
+            | CPUI_INT_SLESS
+            | CPUI_INT_LESSEQUAL
+            | CPUI_INT_SLESSEQUAL
+            | CPUI_INT_CARRY
+            | CPUI_INT_SCARRY
+            | CPUI_INT_SBORROW
+            | CPUI_POPCOUNT
+            | CPUI_LZCOUNT
+            | CPUI_SUBPIECE
+            | CPUI_PIECE
     )
 }
 
 fn read_class(code: OpCode) -> Option<Class> {
     use OpCode::*;
     match code {
-        CPUI_FLOAT_ADD | CPUI_FLOAT_SUB | CPUI_FLOAT_MULT | CPUI_FLOAT_DIV | CPUI_FLOAT_NEG
-        | CPUI_FLOAT_ABS | CPUI_FLOAT_SQRT | CPUI_FLOAT_FLOAT2FLOAT | CPUI_FLOAT_CEIL
-        | CPUI_FLOAT_FLOOR | CPUI_FLOAT_ROUND | CPUI_FLOAT_EQUAL | CPUI_FLOAT_NOTEQUAL
-        | CPUI_FLOAT_LESS | CPUI_FLOAT_LESSEQUAL | CPUI_FLOAT_NAN | CPUI_FLOAT_TRUNC => {
-            Some(Class::Float)
+        CPUI_FLOAT_ADD
+        | CPUI_FLOAT_SUB
+        | CPUI_FLOAT_MULT
+        | CPUI_FLOAT_DIV
+        | CPUI_FLOAT_NEG
+        | CPUI_FLOAT_ABS
+        | CPUI_FLOAT_SQRT
+        | CPUI_FLOAT_FLOAT2FLOAT
+        | CPUI_FLOAT_CEIL
+        | CPUI_FLOAT_FLOOR
+        | CPUI_FLOAT_ROUND
+        | CPUI_FLOAT_EQUAL
+        | CPUI_FLOAT_NOTEQUAL
+        | CPUI_FLOAT_LESS
+        | CPUI_FLOAT_LESSEQUAL
+        | CPUI_FLOAT_NAN
+        | CPUI_FLOAT_TRUNC => Some(Class::Float),
+        CPUI_INT_MULT | CPUI_INT_DIV | CPUI_INT_SDIV | CPUI_INT_REM | CPUI_INT_SREM
+        | CPUI_INT_AND | CPUI_INT_OR | CPUI_INT_XOR | CPUI_INT_LEFT | CPUI_INT_RIGHT
+        | CPUI_INT_SRIGHT | CPUI_INT_2COMP | CPUI_INT_NEGATE | CPUI_FLOAT_INT2FLOAT => {
+            Some(Class::Integer)
         }
-        CPUI_INT_MULT | CPUI_INT_DIV | CPUI_INT_SDIV | CPUI_INT_REM | CPUI_INT_SREM | CPUI_INT_AND
-        | CPUI_INT_OR | CPUI_INT_XOR | CPUI_INT_LEFT | CPUI_INT_RIGHT | CPUI_INT_SRIGHT
-        | CPUI_INT_2COMP | CPUI_INT_NEGATE | CPUI_FLOAT_INT2FLOAT => Some(Class::Integer),
         _ => None,
     }
 }
@@ -1528,7 +1928,9 @@ pub fn recovered_pieces(
     }
     let nparams = proto.num_params();
     let outtype = proto.get_output_type().cloned();
-    let out_is_void = outtype.as_ref().is_none_or(|t| t.get_metatype() == crate::dtype::type_metatype::TYPE_VOID);
+    let out_is_void = outtype
+        .as_ref()
+        .is_none_or(|t| t.get_metatype() == crate::dtype::type_metatype::TYPE_VOID);
     if nparams == 0 && out_is_void {
         return Err(Decline::VoidVoid);
     }
@@ -1560,7 +1962,11 @@ pub fn recovered_pieces(
         }
         pieces.intypes.push(Rc::clone(ct));
         let pname = param.get_name();
-        pieces.innames.push(if pname.is_empty() { format!("a{i}") } else { pname.to_string() });
+        pieces.innames.push(if pname.is_empty() {
+            format!("a{i}")
+        } else {
+            pname.to_string()
+        });
         storage.push((addr, param.get_size()));
     }
     Ok((pieces, storage))
@@ -1573,7 +1979,10 @@ pub fn recovered_pieces(
 /// This is the same seam a caller takes: `ActionDefaultParams` builds the
 /// callee's `FuncProto` with `seed_locked_from_pieces`, and that is what decides
 /// where each parked type lands.
-pub fn model_storage(pieces: &PrototypePieces, arch: &Architecture) -> Option<Vec<(Address, int4)>> {
+pub fn model_storage(
+    pieces: &PrototypePieces,
+    arch: &Architecture,
+) -> Option<Vec<(Address, int4)>> {
     let dfp = crate::kuna_typedcallabi::undeclared_model_for(arch, pieces)
         .or_else(|| arch.default_fp().cloned())?;
     let void_ty = arch.types().get_type_void().ok()?;
@@ -1583,7 +1992,8 @@ pub fn model_storage(pieces: &PrototypePieces, arch: &Architecture) -> Option<Ve
         output_storage: None,
         ..pieces.clone()
     };
-    fp.seed_locked_from_pieces(&types_only, dfp, void_ty, arch.types(), arch.manage()).ok()?;
+    fp.seed_locked_from_pieces(&types_only, dfp, void_ty, arch.types(), arch.manage())
+        .ok()?;
     let n = fp.num_params();
     if n != pieces.intypes.len() as int4 {
         return None;
@@ -1610,7 +2020,10 @@ fn entry_facts(
     arch: &mut Architecture,
     entry: &Address,
 ) -> Option<Rc<crate::kuna_calleedeadarg::CalleeEntryDead>> {
-    let reg_idx = arch.manage().get_space_by_name("register").map(|s| s.get_index())?;
+    let reg_idx = arch
+        .manage()
+        .get_space_by_name("register")
+        .map(|s| s.get_index())?;
     if reg_idx < 0 {
         return None;
     }
@@ -1625,7 +2038,10 @@ fn entry_facts(
 /// SysV, `w1` after `w0` on AArch64, a stack slot once the register file runs
 /// out).
 fn next_slot_storage(pieces: &PrototypePieces, arch: &Architecture) -> Option<(Address, int4)> {
-    let ptr = arch.types().get_base(arch.types().get_size_of_pointer(), type_metatype::TYPE_UINT).ok()?;
+    let ptr = arch
+        .types()
+        .get_base(arch.types().get_size_of_pointer(), type_metatype::TYPE_UINT)
+        .ok()?;
     let mut probe = pieces.clone();
     probe.intypes.push(ptr);
     probe.innames.push("next".to_string());
@@ -1786,14 +2202,26 @@ pub fn park_recovered(
     proto: &FuncProto,
     mode: ProtoOrderMode,
 ) -> Result<Recovered, Decline> {
-    if arch.symboltab.function_proto_pieces_across_scopes(entry).is_some() {
+    if arch
+        .symboltab
+        .function_proto_pieces_across_scopes(entry)
+        .is_some()
+    {
         return Err(Decline::Declared);
     }
     let (mut pieces, mut storage) = recovered_pieces(proto, name)?;
     if mode.states_types_only() {
         let arity_sound = arch.pass_through && arity_claim_sound(arch, entry, &pieces, &storage);
-        let output = if arch.pass_through { recovered_output(proto, data) } else { None };
-        let result = if arch.pass_through { recovered_result(proto) } else { None };
+        let output = if arch.pass_through {
+            recovered_output(proto, data)
+        } else {
+            None
+        };
+        let result = if arch.pass_through {
+            recovered_result(proto)
+        } else {
+            None
+        };
         let vararg_tail = if arch.pass_through {
             crate::kuna_varargtail::vararg_tail_inputs(data, &storage)
         } else {
@@ -1808,7 +2236,14 @@ pub fn park_recovered(
             }
             _ => (Vec::new(), Vec::new()),
         };
-        let stated = Stated { arity_sound, output, result, vararg_tail, reads, passes };
+        let stated = Stated {
+            arity_sound,
+            output,
+            result,
+            vararg_tail,
+            reads,
+            passes,
+        };
         return state_recovered_types(arch, entry, pieces, storage, stated);
     }
     let mut trimmed = 0usize;
@@ -1851,11 +2286,18 @@ pub fn reads_past_the_list(
     pieces: &PrototypePieces,
     storage: &[(Address, int4)],
 ) -> bool {
-    if !storage.iter().all(|(a, _)| crate::kuna_calleearitybody::is_register(a)) {
+    if !storage
+        .iter()
+        .all(|(a, _)| crate::kuna_calleearitybody::is_register(a))
+    {
         return false;
     }
-    let Some(next) = next_slot_storage(pieces, arch) else { return false };
-    let Some(facts) = entry_facts(arch, entry) else { return false };
+    let Some(next) = next_slot_storage(pieces, arch) else {
+        return false;
+    };
+    let Some(facts) = entry_facts(arch, entry) else {
+        return false;
+    };
     facts.proves_input(&next.0, next.1)
 }
 
@@ -1885,12 +2327,19 @@ fn arity_claim_sound(
 ) -> bool {
     let closed = crate::kuna_armfloatreturn::closed_recovery(arch, pieces);
     let pieces = &*closed;
-    let Some(facts) = entry_facts(arch, entry) else { return false };
-    if !storage.iter().all(|(a, _)| crate::kuna_calleearitybody::is_register(a)) {
+    let Some(facts) = entry_facts(arch, entry) else {
+        return false;
+    };
+    if !storage
+        .iter()
+        .all(|(a, _)| crate::kuna_calleearitybody::is_register(a))
+    {
         return false;
     }
     let next = next_slot_storage(pieces, arch);
-    let next_read = next.as_ref().is_some_and(|(a, sz)| facts.proves_input(a, *sz));
+    let next_read = next
+        .as_ref()
+        .is_some_and(|(a, sz)| facts.proves_input(a, *sz));
     if next_read || ends_at_the_register_boundary(storage.last(), next) {
         return false;
     }
@@ -1971,7 +2420,14 @@ fn state_recovered_types(
     storage: Vec<(Address, int4)>,
     stated: Stated,
 ) -> Result<Recovered, Decline> {
-    let Stated { arity_sound, output, result, vararg_tail, reads, passes } = stated;
+    let Stated {
+        arity_sound,
+        output,
+        result,
+        vararg_tail,
+        reads,
+        passes,
+    } = stated;
     let inputs: Vec<(Address, int4, Rc<Datatype>)> = storage
         .iter()
         .zip(pieces.intypes.iter())
@@ -1984,8 +2440,19 @@ fn state_recovered_types(
     let Some(key) = stated_key(entry) else {
         return Err(Decline::InvalidStorage);
     };
-    arch.kuna_protoorder_types
-        .insert(key, Rc::new(RecoveredTypes { inputs, arity_sound, output, result, vararg_tail, reads, passes, callers_vote: false }));
+    arch.kuna_protoorder_types.insert(
+        key,
+        Rc::new(RecoveredTypes {
+            inputs,
+            arity_sound,
+            output,
+            result,
+            vararg_tail,
+            reads,
+            passes,
+            callers_vote: false,
+        }),
+    );
     Ok(Recovered { pieces, trimmed: 0 })
 }
 

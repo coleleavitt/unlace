@@ -31,16 +31,16 @@ use unlace_base::error::KunaError;
 use unlace_base::marshal::{
     Decoder, Encoder, IdRegistry, PackedDecode, PackedEncode, XmlDecode, XmlEncode,
 };
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, ConstantSpace, addrspace_flags, spacetype};
 use unlace_num::opbehavior::{
     OpBehavior, OpBehaviorCopy, OpBehaviorInt2Comp, OpBehaviorIntAdd, OpBehaviorIntLeft,
     OpBehaviorIntNegate, OpBehaviorIntRight, OpBehaviorIntSext, OpBehaviorIntSright,
     OpBehaviorIntSub, OpBehaviorIntZext,
 };
 use unlace_num::opcodes::{
-    get_booleanflip, get_opcode, get_opname, OpCode, OpcodeDecoder, OpcodeEncoder,
+    OpCode, OpcodeDecoder, OpcodeEncoder, get_booleanflip, get_opcode, get_opname,
 };
-use unlace_num::pcoderaw::{PcodeOpRaw, VarnodeData, ATTRIB_CODE};
+use unlace_num::pcoderaw::{ATTRIB_CODE, PcodeOpRaw, VarnodeData};
 
 const ORACLE: &str = include_str!("data/verify_w1_pcode_oracle.out");
 
@@ -234,7 +234,11 @@ fn test_manager() -> AddrSpaceManager {
 }
 
 fn vn(space: Rc<AddrSpace>, offset: u64, size: u32) -> VarnodeData {
-    VarnodeData { space: Some(space), offset, size }
+    VarnodeData {
+        space: Some(space),
+        offset,
+        size,
+    }
 }
 
 /// 3a. VarnodeData ordering: equal-key behavior, big-sizes-first inversion,
@@ -320,14 +324,14 @@ fn verify_packed_opcode_truncation_and_range() {
 
     // raw i64 -> what PackedDecode::readOpcode must yield
     let cases: [(i64, Option<OpCode>); 8] = [
-        (74, Some(OpCode::CPUI_SPULL)),         // top valid value
-        (75, None),                             // CPUI_MAX rejected
-        (0, None),                              // (OpCode)0 in C++: error path either way
-        (45, None),                             // nameless slot: C++ returns 45, Rust rejects (documented)
-        (-1, None),                             // negative rejected
+        (74, Some(OpCode::CPUI_SPULL)),           // top valid value
+        (75, None),                               // CPUI_MAX rejected
+        (0, None),                                // (OpCode)0 in C++: error path either way
+        (45, None), // nameless slot: C++ returns 45, Rust rejects (documented)
+        (-1, None), // negative rejected
         (0x1_0000_0001, Some(OpCode::CPUI_COPY)), // (int4) truncation -> 1
-        (0x1_0000_004B, None),                  // truncates to 75 -> rejected
-        (i64::MIN, None),                       // truncates to 0 -> rejected
+        (0x1_0000_004B, None), // truncates to 75 -> rejected
+        (i64::MIN, None), // truncates to 0 -> rejected
     ];
     for (raw, want) in cases {
         let mut stream: Vec<u8> = Vec::new();
@@ -364,7 +368,9 @@ fn verify_xml_opcode_roundtrip_all_ops() {
     let manager = test_manager();
     let registry = IdRegistry::with_base_ids();
     for raw in 1..OpCode::CPUI_MAX as i32 {
-        let Some(op) = OpCode::from_i32(raw) else { continue };
+        let Some(op) = OpCode::from_i32(raw) else {
+            continue;
+        };
         let mut buf: Vec<u8> = Vec::new();
         {
             let mut enc = XmlEncode::new(&mut buf);
@@ -393,10 +399,15 @@ fn verify_decode_bad_opcode_preserves_outvar() {
     let manager = test_manager();
     let registry = IdRegistry::with_base_ids();
     let mut dec = XmlDecode::new(&manager, &registry);
-    dec.ingest_stream(b"<op code=\"EXTRACT\"><void/></op>").unwrap();
+    dec.ingest_stream(b"<op code=\"EXTRACT\"><void/></op>")
+        .unwrap();
     dec.open_element().unwrap();
     let mut invar: Vec<VarnodeData> = Vec::new();
-    let sentinel = vn(Rc::clone(manager.get_space_by_name("ram").unwrap()), 0xabcd, 4);
+    let sentinel = vn(
+        Rc::clone(manager.get_space_by_name("ram").unwrap()),
+        0xabcd,
+        4,
+    );
     let mut outvar = Some(sentinel.clone());
     let res = PcodeOpRaw::decode(&mut dec, 0, &mut invar, &mut outvar);
     assert!(matches!(res, Err(KunaError::Decoder { .. })));

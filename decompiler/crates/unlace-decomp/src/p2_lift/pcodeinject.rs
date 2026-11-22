@@ -33,10 +33,10 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::marshal::{
-    AttributeId, Decoder, ElementId, IdRegistry, ATTRIB_NAME, ATTRIB_SIZE, ELEM_INPUT, ELEM_OUTPUT,
+    ATTRIB_NAME, ATTRIB_SIZE, AttributeId, Decoder, ELEM_INPUT, ELEM_OUTPUT, ElementId, IdRegistry,
 };
 use unlace_base::space::AddrSpace;
-use unlace_base::types::{int4, uint4, uintb, Wrap};
+use unlace_base::types::{Wrap, int4, uint4, uintb};
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::translate::PcodeEmit;
 
@@ -141,7 +141,11 @@ impl InjectParameter {
     /// C++ `InjectParameter(const string &nm,uint4 sz)`: index
     /// starts at 0 and is assigned by `orderParameters`.
     pub fn new(nm: &[u8], sz: uint4) -> InjectParameter {
-        InjectParameter { name: nm.to_vec(), index: 0, size: sz }
+        InjectParameter {
+            name: nm.to_vec(),
+            index: 0,
+            size: sz,
+        }
     }
 
     /// Get the parameter name (C++ `getName`).
@@ -537,7 +541,10 @@ impl PcodeInjectLibraryBase {
     /// C++ `PcodeInjectLibrary(Architecture*,uint4 tmpbase)`:
     /// only the `tempbase` is engine-neutral.
     pub fn new(tmpbase: uint4) -> PcodeInjectLibraryBase {
-        PcodeInjectLibraryBase { tempbase: tmpbase, ..Default::default() }
+        PcodeInjectLibraryBase {
+            tempbase: tmpbase,
+            ..Default::default()
+        }
     }
 
     /// Get the (current) offset for building temporary registers
@@ -576,7 +583,8 @@ impl PcodeInjectLibraryBase {
                 String::from_utf8_lossy(fixup_name)
             )));
         }
-        self.call_other_fixup_map.insert(fixup_name.to_vec(), injectid);
+        self.call_other_fixup_map
+            .insert(fixup_name.to_vec(), injectid);
         while (self.call_other_target.len() as int4) <= injectid {
             self.call_other_target.push(Vec::new());
         }
@@ -593,7 +601,8 @@ impl PcodeInjectLibraryBase {
                 String::from_utf8_lossy(fixup_name)
             )));
         }
-        self.call_mech_fixup_map.insert(fixup_name.to_vec(), injectid);
+        self.call_mech_fixup_map
+            .insert(fixup_name.to_vec(), injectid);
         while (self.call_mech_target.len() as int4) <= injectid {
             self.call_mech_target.push(Vec::new());
         }

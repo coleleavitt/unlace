@@ -54,19 +54,25 @@ pub fn widens_into_declared_field(data: &Funcdata, ptr: VarnodeId) -> bool {
     let Some(record) = base_type.get_ptr_to() else {
         return false;
     };
-    matches!(record.get_metatype(), type_metatype::TYPE_STRUCT | type_metatype::TYPE_UNION)
-        && !crate::kuna_structsynth::points_at_synthesized_record(base_type)
+    matches!(
+        record.get_metatype(),
+        type_metatype::TYPE_STRUCT | type_metatype::TYPE_UNION
+    ) && !crate::kuna_structsynth::points_at_synthesized_record(base_type)
         && reaches_type_lock(data, ptr)
 }
 
 fn reaches_type_lock(data: &Funcdata, ptr: VarnodeId) -> bool {
     let mut cur = ptr;
     for _ in 0..8 {
-        let Some(v) = data.vbank().get(cur) else { return false };
+        let Some(v) = data.vbank().get(cur) else {
+            return false;
+        };
         if v.is_type_lock() {
             return true;
         }
-        let Some(o) = v.get_def().and_then(|d| data.obank().get(d)) else { return false };
+        let Some(o) = v.get_def().and_then(|d| data.obank().get(d)) else {
+            return false;
+        };
         match o.code() {
             OpCode::CPUI_PTRADD
             | OpCode::CPUI_PTRSUB

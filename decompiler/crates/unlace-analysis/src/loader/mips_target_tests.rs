@@ -1,6 +1,6 @@
 use crate::loadimage_object::ObjectLoadImage;
+use object::{Architecture, BinaryFormat, Endianness, FileFlags, SectionKind, write::Object};
 use unlace_sleigh::loadimage::LoadImage;
-use object::{write::Object, Architecture, BinaryFormat, Endianness, FileFlags, SectionKind};
 
 fn image(arch: Architecture, little: bool, flags: u32) -> Vec<u8> {
     let endian = if little {
@@ -88,12 +88,14 @@ fn unsupported_or_conflicting_mips_declarations_require_an_override() {
         let bytes = image(arch, false, flags);
         let error = ObjectLoadImage::from_bytes("synthetic-invalid.elf", &bytes).unwrap_err();
         assert!(error.explain().contains("--target"), "{error:?}");
-        assert!(ObjectLoadImage::from_bytes_with_target(
-            "synthetic-invalid.elf",
-            &bytes,
-            "MIPS:BE:64:64-32addr:n32",
-        )
-        .is_ok());
+        assert!(
+            ObjectLoadImage::from_bytes_with_target(
+                "synthetic-invalid.elf",
+                &bytes,
+                "MIPS:BE:64:64-32addr:n32",
+            )
+            .is_ok()
+        );
     }
 }
 
@@ -230,12 +232,14 @@ fn conflicting_or_unsupported_mips_fp_metadata_requires_an_override() {
             let error =
                 ObjectLoadImage::from_bytes("synthetic-invalid-fpr.elf", &bytes).unwrap_err();
             assert!(error.explain().contains("--target"), "{error:?}");
-            assert!(ObjectLoadImage::from_bytes_with_target(
-                "synthetic-invalid-fpr.elf",
-                &bytes,
-                "MIPS:LE:64:64-32addr:o32"
-            )
-            .is_ok());
+            assert!(
+                ObjectLoadImage::from_bytes_with_target(
+                    "synthetic-invalid-fpr.elf",
+                    &bytes,
+                    "MIPS:LE:64:64-32addr:o32"
+                )
+                .is_ok()
+            );
         }
     }
 }
@@ -397,11 +401,13 @@ fn conflicting_segment_abi_records_require_an_explicit_target() {
             "{error:?}"
         );
         let target = "MIPS:BE:64:64-32addr:o32";
-        assert!(ObjectLoadImage::from_bytes_with_target(
-            "synthetic-conflicting-abi.elf",
-            &bytes,
-            target
-        )
-        .is_ok());
+        assert!(
+            ObjectLoadImage::from_bytes_with_target(
+                "synthetic-conflicting-abi.elf",
+                &bytes,
+                target
+            )
+            .is_ok()
+        );
     }
 }

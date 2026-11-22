@@ -35,9 +35,9 @@ use unlace_base::marshal::ElementId;
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
+use crate::context::{OpId, VarnodeId};
 use crate::dtype::Datatype;
 use crate::funcdata::Funcdata;
-use crate::context::{OpId, VarnodeId};
 use crate::varnode::varnode_flags;
 
 // ===========================================================================
@@ -135,7 +135,12 @@ pub struct ParamMeasure {
 impl ParamMeasure {
     /// Construct a measure for a given storage location (C++
     /// `ParamMeasure::ParamMeasure`, paramid.hh:62-63).
-    pub fn new(addr: &Address, sz: i32, dt: Option<Rc<Datatype>>, io_in: ParamIDIO) -> ParamMeasure {
+    pub fn new(
+        addr: &Address,
+        sz: i32,
+        dt: Option<Rc<Datatype>>,
+        io_in: ParamIDIO,
+    ) -> ParamMeasure {
         ParamMeasure {
             vndata: VarnodeData {
                 space: addr.get_space().cloned(),
@@ -157,7 +162,11 @@ impl ParamMeasure {
     /// Update the rank, taking the min (best) or max (worst) (C++
     /// `updaterank`, paramid.hh:60).
     fn updaterank(&mut self, rank_in: i32, best: bool) {
-        self.rank = if best { self.rank.min(rank_in) } else { self.rank.max(rank_in) };
+        self.rank = if best {
+            self.rank.min(rank_in)
+        } else {
+            self.rank.max(rank_in)
+        };
     }
 
     /// Calculate the rank by walking the data-flow from a base Varnode (C++
@@ -173,7 +182,11 @@ impl ParamMeasure {
         basevn: VarnodeId,
         ignoreop: Option<OpId>,
     ) {
-        let mut state = WalkState { best, depth: 0, terminalrank: 0 };
+        let mut state = WalkState {
+            best,
+            depth: 0,
+            terminalrank: 0,
+        };
         if best {
             self.rank = param_rank::WORSTRANK;
             state.terminalrank = if self.io == ParamIDIO::Input {
@@ -251,8 +264,9 @@ impl ParamMeasure {
                         // forward only if the path is not part of a loop.
                         let slot = o.get_slot(vn);
                         if !self.parent_is_loop_in(fd, op, slot) {
-                            let out =
-                                o.get_out().expect("walkforward: MULTIEQUAL getOut null (C++ UB)");
+                            let out = o
+                                .get_out()
+                                .expect("walkforward: MULTIEQUAL getOut null (C++ UB)");
                             self.walkforward(fd, state, None, out);
                         }
                     }
@@ -328,8 +342,7 @@ impl ParamMeasure {
                 let vaddr = v.get_addr().clone();
                 let vsize = v.get_size();
                 let vtype = v.get_type().clone();
-                let mut pmfw =
-                    ParamMeasure::new(&vaddr, vsize, Some(vtype), ParamIDIO::Input);
+                let mut pmfw = ParamMeasure::new(&vaddr, vsize, Some(vtype), ParamIDIO::Input);
                 pmfw.calculate_rank(fd, false, vn, ignoreop);
                 if pmfw.get_measure() == param_rank::DIRECTREAD {
                     self.updaterank(param_rank::DIRECTWRITEWITHREAD, state.best);
@@ -345,7 +358,12 @@ impl ParamMeasure {
     /// A null parent (op not yet placed in a block) cannot have a loop edge;
     /// matches the C++ where every walked op is in the placed graph.
     fn parent_is_loop_in(&self, fd: &Funcdata, op: OpId, slot: i32) -> bool {
-        match fd.obank().get(op).expect("parent_is_loop_in: stale op").get_parent() {
+        match fd
+            .obank()
+            .get(op)
+            .expect("parent_is_loop_in: stale op")
+            .get_parent()
+        {
             None => false,
             Some(bl) => fd.bblocks_ref().block(bl).is_loop_in(slot),
         }
@@ -354,7 +372,12 @@ impl ParamMeasure {
     /// Write a plain-text description of the measure (C++
     /// `ParamMeasure::savePretty`, paramid.cc:177-184).
     pub fn save_pretty(&self, s: &mut String, _moredetail: bool) {
-        let spacename = self.vndata.space.as_ref().map(|sp| sp.get_name()).unwrap_or("");
+        let spacename = self
+            .vndata
+            .space
+            .as_ref()
+            .map(|sp| sp.get_name())
+            .unwrap_or("");
         s.push_str(&format!("  Space: {spacename}\n"));
         s.push_str(&format!("  Addr: {}\n", self.vndata.offset));
         s.push_str(&format!("  Size: {}\n", self.vndata.size));
@@ -432,8 +455,11 @@ impl ParamIDAnalysis {
         // C++ always has a model + store by analysis end; hand-built fixtures
         // may not — degrade to the "default" model spelling / no measures
         // rather than panic.
-        let model_name =
-            if proto.has_model() { proto.get_model_name().to_string() } else { "default".into() };
+        let model_name = if proto.has_model() {
+            proto.get_model_name().to_string()
+        } else {
+            "default".into()
+        };
         let mut analysis = ParamIDAnalysis {
             fdname: fd.get_name().to_string(),
             fdaddr: fd.get_address().clone(),
@@ -444,7 +470,11 @@ impl ParamIDAnalysis {
         };
         if justproto {
             // We only provide info on the recovered prototype.
-            let num = if proto.has_store() { proto.num_params() } else { 0 };
+            let num = if proto.has_store() {
+                proto.num_params()
+            } else {
+                0
+            };
             for i in 0..num {
                 let param = match proto.get_param(i) {
                     Some(p) => p,
@@ -491,12 +521,14 @@ impl ParamIDAnalysis {
             // Need to list input varnodes that are outside of the model.
             let inputs: Vec<VarnodeId> = fd.vbank().iter_def_flag(varnode_flags::input).collect();
             for invn in inputs {
-                let v = fd.vbank().get(invn).expect("ParamIDAnalysis: stale input vn");
+                let v = fd
+                    .vbank()
+                    .get(invn)
+                    .expect("ParamIDAnalysis: stale input vn");
                 let addr = v.get_addr().clone();
                 let size = v.get_size();
                 let vtype = v.get_type().clone();
-                let mut pm =
-                    ParamMeasure::new(&addr, size, Some(vtype), ParamIDIO::Input);
+                let mut pm = ParamMeasure::new(&addr, size, Some(vtype), ParamIDIO::Input);
                 pm.calculate_rank(fd, true, invn, None);
                 analysis.input_param_measures.push(pm);
             }
@@ -528,11 +560,17 @@ impl ParamIDAnalysis {
     /// fields STUB with the prototype itself).
     pub fn save_pretty(&self, s: &mut String, moredetail: bool) {
         s.push_str(&format!("Param Measures\nFunction: {}\n", self.fdname));
-        s.push_str(&format!("Num Params: {}\n", self.input_param_measures.len()));
+        s.push_str(&format!(
+            "Num Params: {}\n",
+            self.input_param_measures.len()
+        ));
         for pm in &self.input_param_measures {
             pm.save_pretty(s, moredetail);
         }
-        s.push_str(&format!("Num Returns: {}\n", self.output_param_measures.len()));
+        s.push_str(&format!(
+            "Num Returns: {}\n",
+            self.output_param_measures.len()
+        ));
         for pm in &self.output_param_measures {
             pm.save_pretty(s, moredetail);
         }
@@ -557,8 +595,10 @@ impl ParamIDAnalysis {
         if self.extrapop == crate::fspec::EXTRAPOP_UNKNOWN {
             encoder.write_string(&crate::remote_provider::ATTRIB_EXTRAPOP, b"unknown");
         } else {
-            encoder
-                .write_signed_integer(&crate::remote_provider::ATTRIB_EXTRAPOP, self.extrapop as i64);
+            encoder.write_signed_integer(
+                &crate::remote_provider::ATTRIB_EXTRAPOP,
+                self.extrapop as i64,
+            );
         }
         encoder.close_element(&ELEM_PROTO);
         for pm in &self.input_param_measures {
@@ -577,7 +617,7 @@ mod tests {
     use super::*;
 
     use unlace_base::space::{
-        addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+        AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
     };
 
     use crate::context::{ArchContext, BlockId, TypeOp};
@@ -585,7 +625,8 @@ mod tests {
     fn build_manager() -> AddrSpaceManager {
         let mut m = AddrSpaceManager::new();
         m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+            .unwrap();
         m.insert_space(Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
             "ram",
@@ -634,8 +675,16 @@ mod tests {
         let p = fd.new_varnode(4, &Address::new(Rc::clone(&rs), 0x100), None);
         let p = fd.set_input_varnode(p).unwrap();
         // out = p + p  (INT_ADD reads p directly).
-        let add = add_op(&mut fd, bl, OpCode::CPUI_INT_ADD, 2, Address::new(Rc::clone(&rs), 0x1000));
-        let _out = fd.new_varnode_out(4, &Address::new(Rc::clone(&rs), 0x200), add).unwrap();
+        let add = add_op(
+            &mut fd,
+            bl,
+            OpCode::CPUI_INT_ADD,
+            2,
+            Address::new(Rc::clone(&rs), 0x1000),
+        );
+        let _out = fd
+            .new_varnode_out(4, &Address::new(Rc::clone(&rs), 0x200), add)
+            .unwrap();
         fd.op_set_input(add, p, 0).unwrap();
         fd.op_set_input(add, p, 1).unwrap();
         fd.structure_reset();
@@ -678,7 +727,13 @@ mod tests {
         let p = fd.new_varnode(4, &Address::new(Rc::clone(&rs), 0x100), None);
         let p = fd.set_input_varnode(p).unwrap();
         // CALL target(p): input0 = call target (code ref), input1 = p.
-        let call = add_op(&mut fd, bl, OpCode::CPUI_CALL, 2, Address::new(Rc::clone(&rs), 0x1000));
+        let call = add_op(
+            &mut fd,
+            bl,
+            OpCode::CPUI_CALL,
+            2,
+            Address::new(Rc::clone(&rs), 0x1000),
+        );
         let target = fd.new_code_ref(&Address::new(Rc::clone(&rs), 0x2000));
         fd.op_set_input(call, target, 0).unwrap();
         fd.op_set_input(call, p, 1).unwrap();
@@ -706,8 +761,16 @@ mod tests {
         let b = fd.new_varnode(4, &Address::new(Rc::clone(&rs), 0x108), None);
         let b = fd.set_input_varnode(b).unwrap();
         // out = a + b reads both directly.
-        let add = add_op(&mut fd, bl, OpCode::CPUI_INT_ADD, 2, Address::new(Rc::clone(&rs), 0x1000));
-        let _out = fd.new_varnode_out(4, &Address::new(Rc::clone(&rs), 0x200), add).unwrap();
+        let add = add_op(
+            &mut fd,
+            bl,
+            OpCode::CPUI_INT_ADD,
+            2,
+            Address::new(Rc::clone(&rs), 0x1000),
+        );
+        let _out = fd
+            .new_varnode_out(4, &Address::new(Rc::clone(&rs), 0x200), add)
+            .unwrap();
         fd.op_set_input(add, a, 0).unwrap();
         fd.op_set_input(add, b, 1).unwrap();
         fd.structure_reset();
@@ -716,7 +779,10 @@ mod tests {
         assert_eq!(analysis.num_input_measures(), 2);
         assert_eq!(analysis.num_output_measures(), 0);
         for i in 0..analysis.num_input_measures() {
-            assert_eq!(analysis.input_measure(i).get_measure(), param_rank::DIRECTREAD);
+            assert_eq!(
+                analysis.input_measure(i).get_measure(),
+                param_rank::DIRECTREAD
+            );
         }
 
         // savePretty renders the function name and per-measure lines.
@@ -751,8 +817,16 @@ mod tests {
         fd.bblocks_mut().set_start_block(root, bl);
         let a = fd.new_varnode(4, &Address::new(Rc::clone(&rs), 0x100), None);
         let a = fd.set_input_varnode(a).unwrap();
-        let add = add_op(&mut fd, bl, OpCode::CPUI_INT_ADD, 2, Address::new(Rc::clone(&rs), 0x1000));
-        let _out = fd.new_varnode_out(4, &Address::new(Rc::clone(&rs), 0x200), add).unwrap();
+        let add = add_op(
+            &mut fd,
+            bl,
+            OpCode::CPUI_INT_ADD,
+            2,
+            Address::new(Rc::clone(&rs), 0x1000),
+        );
+        let _out = fd
+            .new_varnode_out(4, &Address::new(Rc::clone(&rs), 0x200), add)
+            .unwrap();
         fd.op_set_input(add, a, 0).unwrap();
         fd.op_set_input(add, a, 1).unwrap();
         fd.structure_reset();
@@ -768,7 +842,9 @@ mod tests {
         dec.ingest_stream(&bytes).unwrap();
         let pm = dec.open_element().unwrap();
         assert_eq!(pm, ELEM_PARAMMEASURES.get_id());
-        let name = dec.read_string_id(&unlace_base::marshal::ATTRIB_NAME).unwrap();
+        let name = dec
+            .read_string_id(&unlace_base::marshal::ATTRIB_NAME)
+            .unwrap();
         assert_eq!(name, b"func");
         // <addr/> child.
         let ad = dec.open_element().unwrap();
@@ -789,13 +865,18 @@ mod tests {
             }
             let id = dec.open_element().unwrap();
             if id == ELEM_RANK.get_id() {
-                let val = dec.read_signed_integer_id(&unlace_base::marshal::ATTRIB_VAL).unwrap();
+                let val = dec
+                    .read_signed_integer_id(&unlace_base::marshal::ATTRIB_VAL)
+                    .unwrap();
                 assert_eq!(val, param_rank::DIRECTREAD as i64);
                 saw_rank = true;
             }
             dec.close_element_skipping(id).unwrap();
         }
-        assert!(saw_rank, "<rank> child is REQUIRED (ParamMeasure.decode throws)");
+        assert!(
+            saw_rank,
+            "<rank> child is REQUIRED (ParamMeasure.decode throws)"
+        );
         dec.close_element(inp).unwrap();
         dec.close_element(pm).unwrap();
     }

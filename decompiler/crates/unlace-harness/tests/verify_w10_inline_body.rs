@@ -36,7 +36,10 @@ use std::process::Command;
 use unlace_harness::testfunction::run_test_files_with_specs;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn specs_dir() -> PathBuf {
@@ -44,7 +47,12 @@ fn specs_dir() -> PathBuf {
 }
 
 fn datatest(name: &str) -> String {
-    repo_root().join("tests/datatests").join(name).to_str().unwrap().to_string()
+    repo_root()
+        .join("tests/datatests")
+        .join(name)
+        .to_str()
+        .unwrap()
+        .to_string()
 }
 
 /// Run a single datatest file and return its result/print text, or `None`
@@ -64,8 +72,7 @@ fn run_one(file_name: &str) -> Option<String> {
 
 /// The PowerPC `inlinetarget.xml` needs the default PPC `.sla`.
 fn run_one_ppc(file_name: &str) -> Option<String> {
-    let sla =
-        repo_root().join("specs/Ghidra/Processors/PowerPC/data/languages/ppc_32_be.sla");
+    let sla = repo_root().join("specs/Ghidra/Processors/PowerPC/data/languages/ppc_32_be.sla");
     if !sla.exists() {
         eprintln!("SKIP: {file_name}: ppc_32_be.sla not built (run `make specs`)");
         return None;
@@ -94,7 +101,10 @@ fn console_drive(script: &str) -> Option<String> {
     let profile_dir = self_exe.parent()?.parent()?; // deps -> <profile>
     let bin = profile_dir.join("decomp_dbg");
     if !bin.exists() {
-        eprintln!("SKIP: decomp_dbg console binary not built at {}", bin.display());
+        eprintln!(
+            "SKIP: decomp_dbg console binary not built at {}",
+            bin.display()
+        );
         return None;
     }
     let specs = specs_dir();
@@ -141,7 +151,9 @@ fn assert_no_exec_failure(file_name: &str, out: &str) {
 /// three header assertions are still part of that total and are asserted here.
 #[test]
 fn w10_inline_body_header_warnings_are_real_oracle_parity() {
-    let Some(out) = run_one("inline.xml") else { return };
+    let Some(out) = run_one("inline.xml") else {
+        return;
+    };
     assert_no_exec_failure("inline.xml", &out);
     // #10/#11/#12 are the three `WARNING: Inlined function: <name>` assertions
     // (add50 / compare / collatz1 respectively, per inline.xml:60-62).
@@ -241,7 +253,9 @@ option inline add50\n\
 lo fu add100\n\
 decompile\n\
 print C";
-    let Some(out) = console_drive(script) else { return };
+    let Some(out) = console_drive(script) else {
+        return;
+    };
     // Isolate the rendered body (everything after the final `print C`) so the
     // echoed input commands (which contain the literal `add50(int4 a)`) don't
     // pollute the residual-call check.
@@ -286,7 +300,9 @@ option inline collatz\n\
 lo fu collatz\n\
 decompile\n\
 print C";
-    let Some(out) = console_drive(script) else { return };
+    let Some(out) = console_drive(script) else {
+        return;
+    };
     let body = out.rsplit_once("print C").map(|(_, b)| b).unwrap_or(&out);
     // The outer inline succeeded (header emitted) ...
     assert!(
@@ -322,10 +338,15 @@ print C";
 /// revisited (it asserts the CURRENT partial, deliberately).
 #[test]
 fn w10_inline_body_placement_warning_is_documented_partial_not_misport() {
-    let Some(out) = run_one("inline.xml") else { return };
+    let Some(out) = run_one("inline.xml") else {
+        return;
+    };
     assert_no_exec_failure("inline.xml", &out);
     // Headers pass (real) ...
-    assert!(out.contains("Success -- Inlining #10"), "header #10 must pass:\n{out}");
+    assert!(
+        out.contains("Success -- Inlining #10"),
+        "header #10 must pass:\n{out}"
+    );
     // ... the placement-warning assertion #9 fails (CommentSorter not ported) ...
     assert!(
         out.contains("FAIL -- Inlining #9") || out.contains("Inlining #9"),
@@ -349,7 +370,9 @@ fn w10_inline_body_placement_warning_is_documented_partial_not_misport() {
 /// dangling target.
 #[test]
 fn w10_inline_body_inlinetarget_headers_real_and_no_target_corruption() {
-    let Some(out) = run_one_ppc("inlinetarget.xml") else { return };
+    let Some(out) = run_one_ppc("inlinetarget.xml") else {
+        return;
+    };
     assert_no_exec_failure("inlinetarget.xml", &out);
     for n in ["Inline target #1", "Inline target #2", "Inline target #3"] {
         assert!(

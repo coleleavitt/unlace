@@ -15,7 +15,10 @@ use std::process::{Command, Output};
 const FIXTURES: [&str; 2] = ["macho_trie_exports_arm64", "macho_trie_exports_info_arm64"];
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn kuna(args: &[&str]) -> Output {
@@ -31,7 +34,9 @@ fn kuna(args: &[&str]) -> Output {
 }
 
 fn fixture(name: &str) -> String {
-    let path = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(name);
+    let path = repo_root()
+        .join("decompiler/crates/unlace-analysis/tests/fixtures")
+        .join(name);
     path.to_str().unwrap().to_string()
 }
 
@@ -41,7 +46,11 @@ fn trie_names_list_and_select_on_a_stripped_dylib() {
         let image = fixture(name);
         let out = kuna(&["functions", &image]);
         let listing = String::from_utf8_lossy(&out.stdout);
-        assert!(out.status.success(), "{name}: {}", String::from_utf8_lossy(&out.stderr));
+        assert!(
+            out.status.success(),
+            "{name}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
         let rows: Vec<(&str, &str)> = listing
             .lines()
             .filter_map(|l| {
@@ -51,20 +60,31 @@ fn trie_names_list_and_select_on_a_stripped_dylib() {
             .collect();
         assert_eq!(
             rows,
-            [("0x328", "_audit_exported_function"), ("0x340", "_audit_caller")],
+            [
+                ("0x328", "_audit_exported_function"),
+                ("0x340", "_audit_caller")
+            ],
             "{name}:\n{listing}"
         );
 
         for selector in ["audit_exported_function", "_audit_exported_function"] {
             let out = kuna(&["decompile", &image, selector]);
             let c = String::from_utf8_lossy(&out.stdout);
-            assert!(out.status.success(), "{name} {selector}: {}", String::from_utf8_lossy(&out.stderr));
+            assert!(
+                out.status.success(),
+                "{name} {selector}: {}",
+                String::from_utf8_lossy(&out.stderr)
+            );
             assert!(c.contains("return a0 + 7;"), "{name} {selector}:\n{c}");
         }
 
         let out = kuna(&["decompile", &image, "audit_caller"]);
         let c = String::from_utf8_lossy(&out.stdout);
-        assert!(out.status.success(), "{name}: {}", String::from_utf8_lossy(&out.stderr));
+        assert!(
+            out.status.success(),
+            "{name}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
         assert!(
             c.contains("return _audit_exported_function(a0) + _audit_exported_data;"),
             "{name}: the callee and the global read by name:\n{c}"
@@ -72,8 +92,14 @@ fn trie_names_list_and_select_on_a_stripped_dylib() {
 
         let out = kuna(&["decompile", &image, "audit_exported_data"]);
         let stderr = String::from_utf8_lossy(&out.stderr);
-        assert!(!out.status.success(), "{name}: a data export is not a function");
-        assert!(stderr.contains("it names data at 0x4000 in __data"), "{name}:\n{stderr}");
+        assert!(
+            !out.status.success(),
+            "{name}: a data export is not a function"
+        );
+        assert!(
+            stderr.contains("it names data at 0x4000 in __data"),
+            "{name}:\n{stderr}"
+        );
     }
 }
 
@@ -84,13 +110,27 @@ fn trie_names_fill_a_partial_symbol_table() {
     let image = fixture("macho_trie_partial_arm64");
     let out = kuna(&["functions", &image]);
     let listing = String::from_utf8_lossy(&out.stdout);
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    assert!(listing.contains("0x240\t_audit_export_a\t(sub_240, _audit_export_b)"), "{listing}");
-    assert!(listing.contains("0x248\t_audit_caller\t(sub_248)"), "{listing}");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        listing.contains("0x240\t_audit_export_a\t(sub_240, _audit_export_b)"),
+        "{listing}"
+    );
+    assert!(
+        listing.contains("0x248\t_audit_caller\t(sub_248)"),
+        "{listing}"
+    );
     for selector in ["_audit_export_b", "audit_export_b"] {
         let out = kuna(&["decompile", &image, selector]);
         let c = String::from_utf8_lossy(&out.stdout);
-        assert!(out.status.success(), "{selector}: {}", String::from_utf8_lossy(&out.stderr));
+        assert!(
+            out.status.success(),
+            "{selector}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
         assert!(c.contains("return a0 + 7;"), "{selector}:\n{c}");
     }
 }

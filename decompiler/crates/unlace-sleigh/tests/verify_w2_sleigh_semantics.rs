@@ -17,16 +17,15 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_num::opcodes::OpCode;
 use unlace_sleigh::context::FixedHandle;
 use unlace_sleigh::pcodecompile::{
-    propagate_size, ExprTree, Location, PcodeCompile, PcodeCompileSymbol,
+    ExprTree, Location, PcodeCompile, PcodeCompileSymbol, propagate_size,
 };
 use unlace_sleigh::semantics::{
-    ConstTpl, ConstType, ConstructTpl, OpTpl, PcodeBuilder, VField, VarnodeTpl, BUILD,
-    LABELBUILD,
+    BUILD, ConstTpl, ConstType, ConstructTpl, LABELBUILD, OpTpl, PcodeBuilder, VField, VarnodeTpl,
 };
 use unlace_sleigh::slghpatexpress::PatternExpressionContext;
 use unlace_sleigh::slghsymbol::{ConstructorRef, SymbolWalker};

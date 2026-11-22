@@ -87,9 +87,9 @@ use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
-use crate::block::{block_flags, BlockType};
-use crate::funcdata::Funcdata;
+use crate::block::{BlockType, block_flags};
 use crate::context::BlockId;
+use crate::funcdata::Funcdata;
 
 use unlace_base::marshal::ElementId;
 
@@ -120,7 +120,9 @@ pub struct ActionTailDup {
 impl ActionTailDup {
     /// Construct in group `g`.
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionTailDup { base: ActionBase::new(0, "taildup", g) })
+        Box::new(ActionTailDup {
+            base: ActionBase::new(0, "taildup", g),
+        })
     }
 }
 
@@ -135,7 +137,9 @@ impl Action for ActionTailDup {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionTailDup { base: self.base.clone() }))
+        Some(Box::new(ActionTailDup {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data.get_arch().goto_reduce.call_tails() {
@@ -222,13 +226,17 @@ impl Action for ActionTailDup {
                 // goto's body and switch the node from Goto to a plain list (the
                 // `kuna_inline_crossjump_tail` helper — no fall-through to reconcile here
                 // because the tail returns).
-                data.sblocks_mut().kuna_inline_crossjump_tail(*src_id, chain);
+                data.sblocks_mut()
+                    .kuna_inline_crossjump_tail(*src_id, chain);
             } else {
                 // `if (cond) goto T` -> `if (cond) { <tail> }`: attach the tail as the
                 // if's true clause and drop the goto target (gotoreduce's surgery).
                 data.sblocks_mut().kuna_inline_return_tail(*src_id, chain);
             }
-            data.warning("taildup: duplicated return-call tail to remove goto", warn_addr);
+            data.warning(
+                "taildup: duplicated return-call tail to remove goto",
+                warn_addr,
+            );
             converted_targets.push(*target);
             count += 1;
         }

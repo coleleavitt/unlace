@@ -130,10 +130,7 @@ fn unbindable(func: &str) -> String {
 /// lowers to the cross-function console spelling and moves to the program slot;
 /// every other qualified directive that names a function this run does not
 /// decompile is rejected rather than applied to the selected one.
-pub(crate) fn console_form(
-    d: &Directive,
-    target: Option<&str>,
-) -> Result<ConsoleForm, String> {
+pub(crate) fn console_form(d: &Directive, target: Option<&str>) -> Result<ConsoleForm, String> {
     let (slot, line) = match &d.body {
         Body::Function { start, end, name } => {
             let mut line = format!("function bounds {start:#x}");
@@ -152,21 +149,40 @@ pub(crate) fn console_form(
         // console reported no error (`docs/re-needs/text-output-silently-ignores.md`).
         // `map prototype` takes the target as its first token, as the in-process
         // surface always has.
-        Body::Prototype { func, decl } => {
-            (Slot::Program, format!("map prototype {func} {}", semicolon(decl)))
-        }
+        Body::Prototype { func, decl } => (
+            Slot::Program,
+            format!("map prototype {func} {}", semicolon(decl)),
+        ),
         Body::Data { addr, decl } => (Slot::Program, format!("map address {addr:#x} {decl}")),
-        Body::Param { func, index, storage, decl } => match names_another(func, target) {
-            Some(f) => (Slot::Program, format!("map param {f}::{index} {storage} {decl}")),
-            None => (Slot::Function, format!("map param {index} {storage} {decl}")),
+        Body::Param {
+            func,
+            index,
+            storage,
+            decl,
+        } => match names_another(func, target) {
+            Some(f) => (
+                Slot::Program,
+                format!("map param {f}::{index} {storage} {decl}"),
+            ),
+            None => (
+                Slot::Function,
+                format!("map param {index} {storage} {decl}"),
+            ),
         },
-        Body::Return { func, storage, decl } => match names_another(func, target) {
+        Body::Return {
+            func,
+            storage,
+            decl,
+        } => match names_another(func, target) {
             Some(f) => (Slot::Program, format!("map return {f}::{storage} {decl}")),
             None => (Slot::Function, format!("map return {storage} {decl}")),
         },
         Body::Comment { func, addr, text } => match names_another(func, target) {
             Some(f) => return Err(unbindable(&f)),
-            None => (Slot::Function, format!("comment instruction {addr:#x} {text}")),
+            None => (
+                Slot::Function,
+                format!("comment instruction {addr:#x} {text}"),
+            ),
         },
         Body::Flow { func, addr, kind } => match names_another(func, target) {
             Some(f) => return Err(unbindable(&f)),
@@ -174,11 +190,17 @@ pub(crate) fn console_form(
         },
         Body::Callee { func, addr, callee } => match names_another(func, target) {
             Some(f) => return Err(unbindable(&f)),
-            None => (Slot::Function, format!("override indirect {addr:#x} {callee}")),
+            None => (
+                Slot::Function,
+                format!("override indirect {addr:#x} {callee}"),
+            ),
         },
         Body::CallProto { func, addr, decl } => match names_another(func, target) {
             Some(f) => return Err(unbindable(&f)),
-            None => (Slot::Function, format!("override prototype {addr:#x} {}", semicolon(decl))),
+            None => (
+                Slot::Function,
+                format!("override prototype {addr:#x} {}", semicolon(decl)),
+            ),
         },
         Body::Bytes { addr, data } => {
             let hex: String = data.iter().map(|b| format!("{b:02x}")).collect();
@@ -186,11 +208,27 @@ pub(crate) fn console_form(
         }
         Body::Readonly { addr, size } => (Slot::Image, format!("readonly {addr:#x} {size}")),
         Body::Volatile { addr, size } => (Slot::Image, format!("volatile {addr:#x} {size}")),
-        Body::Register { name, value, range: None } => (Slot::Program, format!("set track {name} {value:#x}")),
-        Body::Register { name, value, range: Some((addr, size)) } => {
-            (Slot::Program, format!("set track {name} {value:#x} {addr:#x} {:#x}", addr + *size as u64))
-        }
-        Body::Name { func, symbol, newname } => match names_another(func, target) {
+        Body::Register {
+            name,
+            value,
+            range: None,
+        } => (Slot::Program, format!("set track {name} {value:#x}")),
+        Body::Register {
+            name,
+            value,
+            range: Some((addr, size)),
+        } => (
+            Slot::Program,
+            format!(
+                "set track {name} {value:#x} {addr:#x} {:#x}",
+                addr + *size as u64
+            ),
+        ),
+        Body::Name {
+            func,
+            symbol,
+            newname,
+        } => match names_another(func, target) {
             Some(f) => return Err(unbindable(&f)),
             None => (Slot::Symbol, format!("rename {symbol} {newname}")),
         },
@@ -198,9 +236,17 @@ pub(crate) fn console_form(
             Some(f) => return Err(unbindable(&f)),
             None => (Slot::Symbol, format!("retype {symbol} {decl}")),
         },
-        Body::Format { func, addr, format, value } => match names_another(func, target) {
+        Body::Format {
+            func,
+            addr,
+            format,
+            value,
+        } => match names_another(func, target) {
             Some(f) => return Err(unbindable(&f)),
-            None => (Slot::Symbol, unlace_console::kuna_constformat::console_line(*addr, format, *value)),
+            None => (
+                Slot::Symbol,
+                unlace_console::kuna_constformat::console_line(*addr, format, *value),
+            ),
         },
         Body::Isolate { func, symbol } => match names_another(func, target) {
             Some(f) => return Err(unbindable(&f)),
@@ -246,11 +292,19 @@ mod tests {
         );
         assert_eq!(
             one("type v2 char[16]").body,
-            Body::Type { func: None, symbol: "v2".into(), decl: "char[16]".into() }
+            Body::Type {
+                func: None,
+                symbol: "v2".into(),
+                decl: "char[16]".into()
+            }
         );
         assert_eq!(
             one("name v2 credbuf").body,
-            Body::Name { func: None, symbol: "v2".into(), newname: "credbuf".into() }
+            Body::Name {
+                func: None,
+                symbol: "v2".into(),
+                newname: "credbuf".into()
+            }
         );
     }
 
@@ -300,11 +354,18 @@ mod tests {
     fn addresses_are_hex_with_or_without_the_prefix() {
         assert_eq!(
             one("data 0x601040 char *sneaky").body,
-            Body::Data { addr: 0x601040, decl: "char *sneaky".into() }
+            Body::Data {
+                addr: 0x601040,
+                decl: "char *sneaky".into()
+            }
         );
         assert_eq!(
             one("comment 400699 open the file").body,
-            Body::Comment { func: None, addr: 0x400699, text: "open the file".into() }
+            Body::Comment {
+                func: None,
+                addr: 0x400699,
+                text: "open the file".into()
+            }
         );
     }
 
@@ -312,7 +373,11 @@ mod tests {
     fn function_is_the_define_function_spelling() {
         assert_eq!(
             one("function 0x1400-0x1480=decrypt").body,
-            Body::Function { start: 0x1400, end: Some(0x1480), name: Some("decrypt".into()) }
+            Body::Function {
+                start: 0x1400,
+                end: Some(0x1480),
+                name: Some("decrypt".into())
+            }
         );
     }
 
@@ -323,13 +388,21 @@ mod tests {
         for kind in ["branch", "call", "callreturn", "return"] {
             assert_eq!(
                 one(&format!("flow 0x1405 {kind}")).body,
-                Body::Flow { func: None, addr: 0x1405, kind: kind.into() }
+                Body::Flow {
+                    func: None,
+                    addr: 0x1405,
+                    kind: kind.into()
+                }
             );
         }
         // Bare hex is the `--define-function` convention, here too.
         assert_eq!(
             one("flow 1405 return").body,
-            Body::Flow { func: None, addr: 0x1405, kind: "return".into() }
+            Body::Flow {
+                func: None,
+                addr: 0x1405,
+                kind: "return".into()
+            }
         );
         assert_eq!(
             one("flow sub_13c9::0x1405 callreturn").body,
@@ -413,11 +486,17 @@ mod tests {
         };
         assert_eq!(
             lowered("prototype authenticate int4 authenticate(char *u,char *p)"),
-            (Slot::Program, "map prototype authenticate int4 authenticate(char *u,char *p);".into())
+            (
+                Slot::Program,
+                "map prototype authenticate int4 authenticate(char *u,char *p);".into()
+            )
         );
         assert_eq!(
             lowered("typedef struct pt { int x; int y; };"),
-            (Slot::Program, "parse line struct pt { int x; int y; };".into())
+            (
+                Slot::Program,
+                "parse line struct pt { int x; int y; };".into()
+            )
         );
         assert_eq!(
             lowered("data 0x601040 char *sneaky"),
@@ -433,7 +512,10 @@ mod tests {
         );
         assert_eq!(
             lowered("comment 0x400699 open the file"),
-            (Slot::Function, "comment instruction 0x400699 open the file".into())
+            (
+                Slot::Function,
+                "comment instruction 0x400699 open the file".into()
+            )
         );
         assert_eq!(
             lowered("flow 0x1405 return"),
@@ -441,13 +523,25 @@ mod tests {
         );
         assert_eq!(
             lowered("callee authenticate::0x147a handle_open"),
-            (Slot::Function, "override indirect 0x147a handle_open".into())
+            (
+                Slot::Function,
+                "override indirect 0x147a handle_open".into()
+            )
         );
-        assert_eq!(lowered("type v2 char[16]"), (Slot::Symbol, "retype v2 char[16]".into()));
-        assert_eq!(lowered("name v2 credbuf"), (Slot::Symbol, "rename v2 credbuf".into()));
+        assert_eq!(
+            lowered("type v2 char[16]"),
+            (Slot::Symbol, "retype v2 char[16]".into())
+        );
+        assert_eq!(
+            lowered("name v2 credbuf"),
+            (Slot::Symbol, "rename v2 credbuf".into())
+        );
         assert_eq!(
             lowered("function 0x1400-0x1480=decrypt"),
-            (Slot::Program, "function bounds 0x1400 0x1480 as decrypt".into())
+            (
+                Slot::Program,
+                "function bounds 0x1400 0x1480 as decrypt".into()
+            )
         );
         assert_eq!(
             lowered("readonly 0x404028+8"),
@@ -465,22 +559,57 @@ mod tests {
     fn format_and_isolate_parse_and_lower() {
         assert_eq!(
             one("format is_rwx::0x1304 oct").body,
-            Body::Format { func: Some("is_rwx".into()), addr: 0x1304, format: "oct".into(), value: None }
+            Body::Format {
+                func: Some("is_rwx".into()),
+                addr: 0x1304,
+                format: "oct".into(),
+                value: None
+            }
         );
         assert_eq!(
             one("format 1304 char -1").body,
-            Body::Format { func: None, addr: 0x1304, format: "char".into(), value: Some(u64::MAX) }
+            Body::Format {
+                func: None,
+                addr: 0x1304,
+                format: "char".into(),
+                value: Some(u64::MAX)
+            }
         );
-        assert_eq!(one("isolate f::v1").body, Body::Isolate { func: Some("f".into()), symbol: "v1".into() });
+        assert_eq!(
+            one("isolate f::v1").body,
+            Body::Isolate {
+                func: Some("f".into()),
+                symbol: "v1".into()
+            }
+        );
         let lowered = |spec: &str| {
             let form = console_form(&one(spec), Some("f")).expect("has a console form");
             (form.slot, form.line)
         };
-        assert_eq!(lowered("format 0x1304 oct"), (Slot::Symbol, "force constant 0x1304 oct".into()));
-        assert_eq!(lowered("format 0x1304 dec 511"), (Slot::Symbol, "force constant 0x1304 dec 0x1ff".into()));
+        assert_eq!(
+            lowered("format 0x1304 oct"),
+            (Slot::Symbol, "force constant 0x1304 oct".into())
+        );
+        assert_eq!(
+            lowered("format 0x1304 dec 511"),
+            (Slot::Symbol, "force constant 0x1304 dec 0x1ff".into())
+        );
         assert_eq!(lowered("isolate v1"), (Slot::Symbol, "isolate v1".into()));
-        for spec in ["format 0x1304", "format 0x1304 roman", "format oct", "format 0x1304 oct x", "format 0x1304 oct 1 2", "isolate", "isolate v1 v2"] {
-            assert!(parse_one(spec).expect_err("refuses").starts_with("--assert"), "{spec:?}");
+        for spec in [
+            "format 0x1304",
+            "format 0x1304 roman",
+            "format oct",
+            "format 0x1304 oct x",
+            "format 0x1304 oct 1 2",
+            "isolate",
+            "isolate v1 v2",
+        ] {
+            assert!(
+                parse_one(spec)
+                    .expect_err("refuses")
+                    .starts_with("--assert"),
+                "{spec:?}"
+            );
         }
     }
 
@@ -490,15 +619,24 @@ mod tests {
     fn a_range_directive_takes_an_address_and_a_size() {
         assert_eq!(
             one("readonly 0x404028+8").body,
-            Body::Readonly { addr: 0x404028, size: 8 }
+            Body::Readonly {
+                addr: 0x404028,
+                size: 8
+            }
         );
         assert_eq!(
             one("volatile 50000000 4").body,
-            Body::Volatile { addr: 0x5000_0000, size: 4 }
+            Body::Volatile {
+                addr: 0x5000_0000,
+                size: 4
+            }
         );
         assert_eq!(
             one("readonly 0x404028+0x10").body,
-            Body::Readonly { addr: 0x404028, size: 16 }
+            Body::Readonly {
+                addr: 0x404028,
+                size: 16
+            }
         );
     }
 
@@ -525,7 +663,9 @@ mod tests {
     fn only_a_readonly_range_implies_read_only_propagation() {
         use unlace_console::assertions::implies_readonly_propagation;
         assert!(implies_readonly_propagation(&[one("readonly 0x404028+8")]));
-        assert!(!implies_readonly_propagation(&[one("volatile 0x50000000+4")]));
+        assert!(!implies_readonly_propagation(&[one(
+            "volatile 0x50000000+4"
+        )]));
         assert!(!implies_readonly_propagation(&[one("name v2 credbuf")]));
     }
 
@@ -539,7 +679,10 @@ mod tests {
     fn bytes_takes_an_address_and_hex_or_a_file() {
         assert_eq!(
             one("bytes 0x43d0c6 8bd581c21f324000").body,
-            Body::Bytes { addr: 0x43d0c6, data: vec![0x8b, 0xd5, 0x81, 0xc2, 0x1f, 0x32, 0x40, 0x00] }
+            Body::Bytes {
+                addr: 0x43d0c6,
+                data: vec![0x8b, 0xd5, 0x81, 0xc2, 0x1f, 0x32, 0x40, 0x00]
+            }
         );
         // The address takes the `--define-function` spellings and the payload an
         // optional 0x, so a copied dump line parses without re-editing.
@@ -553,7 +696,10 @@ mod tests {
         std::fs::write(&path, [0xb8u8, 0x2a, 0x00, 0x00, 0x00, 0xc3]).expect("write");
         assert_eq!(
             one(&format!("bytes 0x43d0c6 @{}", path.display())).body,
-            Body::Bytes { addr: 0x43d0c6, data: vec![0xb8, 0x2a, 0x00, 0x00, 0x00, 0xc3] }
+            Body::Bytes {
+                addr: 0x43d0c6,
+                data: vec![0xb8, 0x2a, 0x00, 0x00, 0x00, 0xc3]
+            }
         );
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -620,7 +766,10 @@ mod tests {
     /// every other invocation keeps its current cost.
     #[test]
     fn only_a_symbol_scoped_directive_forces_a_second_pass() {
-        assert!(!needs_second_pass(&[one("prototype f int4 f(void)")], Some("f")));
+        assert!(!needs_second_pass(
+            &[one("prototype f int4 f(void)")],
+            Some("f")
+        ));
         assert!(!needs_second_pass(&[one("param 0 RDI int4 a")], Some("f")));
         assert!(needs_second_pass(&[one("name v2 buf")], Some("f")));
         assert!(needs_second_pass(
@@ -644,7 +793,11 @@ mod tests {
         assert_eq!(directives[0].raw, "name v2 credbuf");
         assert_eq!(
             directives[1].body,
-            Body::Type { func: None, symbol: "v2".into(), decl: "char[16]".into() }
+            Body::Type {
+                func: None,
+                symbol: "v2".into(),
+                decl: "char[16]".into()
+            }
         );
         let _ = std::fs::remove_dir_all(&dir);
     }

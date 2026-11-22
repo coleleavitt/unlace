@@ -23,10 +23,10 @@
 //! The text must be valid UTF-8 of `2..=4096` bytes in read-only data. Each hit
 //! is a bounded string fact, which ends any glued NUL-scan row at that start.
 
-use object::read::{Object, ObjectSection};
 use object::SectionKind;
+use object::read::{Object, ObjectSection};
 
-use super::kuna_strrecords::{is_text, ro_regions, RoRegion};
+use super::kuna_strrecords::{RoRegion, is_text, ro_regions};
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase, StringFact};
 
 /// SysV integer argument registers by x86 register number.
@@ -53,7 +53,9 @@ fn mov_imm(code: &[u8], i: usize, reg: u8) -> Option<u32> {
     if !(0xb8..=0xbf).contains(&op) || (op - 0xb8) + rex_b != reg {
         return None;
     }
-    Some(u32::from_le_bytes(code.get(at + 1..at + 5)?.try_into().ok()?))
+    Some(u32::from_le_bytes(
+        code.get(at + 1..at + 5)?.try_into().ok()?,
+    ))
 }
 
 /// The `mov len_reg, imm32` nearest the pointer load at `code[i..i + width]`,
@@ -66,13 +68,19 @@ fn nearest_mov(code: &[u8], i: usize, width: usize, reg: u8, len_reg: u8) -> Opt
         let after = i + width + d - 1;
         mov_imm(code, after, len_reg)
             .map(|v| (v, after + 5 + usize::from(code[after] == 0x41)))
-            .or_else(|| i.checked_sub(d).and_then(|j| mov_imm(code, j, len_reg)).map(|v| (v, i + width)))
+            .or_else(|| {
+                i.checked_sub(d)
+                    .and_then(|j| mov_imm(code, j, len_reg))
+                    .map(|v| (v, i + width))
+            })
     })?;
     let tail = code.get(end..(end + WINDOW).min(code.len()))?;
     let consumed = if reg == 0 {
         tail.iter().take(16).any(|&b| b == 0xc3)
     } else {
-        tail.windows(2).any(|w| w[0] == 0xe8 || w[0] == 0xe9 || (w[0] == 0xff && matches!((w[1] >> 3) & 7, 2 | 4)))
+        tail.windows(2).any(|w| {
+            w[0] == 0xe8 || w[0] == 0xe9 || (w[0] == 0xff && matches!((w[1] >> 3) & 7, 2 | 4))
+        })
     };
     consumed.then_some(len)
 }
@@ -93,9 +101,12 @@ fn x86_hits(vma: u64, code: &[u8], regions: &[RoRegion], out: &mut Vec<StringFac
             i += 7;
             continue;
         }
-        if let Some((reg, ptr)) = (0..16).find_map(|reg| mov_imm(code, i, reg).map(|v| (reg, u64::from(v)))) {
+        if let Some((reg, ptr)) =
+            (0..16).find_map(|reg| mov_imm(code, i, reg).map(|v| (reg, u64::from(v))))
+        {
             let width = if code[i] == 0x41 { 6 } else { 5 };
-            if let Some(len_reg) = next_arg(reg).filter(|_| regions.iter().any(|r| r.contains(ptr))) {
+            if let Some(len_reg) = next_arg(reg).filter(|_| regions.iter().any(|r| r.contains(ptr)))
+            {
                 if let Some(len) = nearest_mov(code, i, width, reg, len_reg) {
                     push(regions, ptr, u64::from(len), out);
                 }
@@ -108,7 +119,10 @@ fn x86_hits(vma: u64, code: &[u8], regions: &[RoRegion], out: &mut Vec<StringFac
 }
 
 fn a64_hits(vma: u64, code: &[u8], regions: &[RoRegion], out: &mut Vec<StringFact>) {
-    let words: Vec<u32> = code.chunks_exact(4).map(|w| u32::from_le_bytes(w.try_into().expect("4 bytes"))).collect();
+    let words: Vec<u32> = code
+        .chunks_exact(4)
+        .map(|w| u32::from_le_bytes(w.try_into().expect("4 bytes")))
+        .collect();
     for (k, &w) in words.iter().enumerate() {
         if w & 0x9f00_0000 != 0x9000_0000 {
             continue;
@@ -118,7 +132,9 @@ fn a64_hits(vma: u64, code: &[u8], regions: &[RoRegion], out: &mut Vec<StringFac
         let imm = (imm << 43) >> 43;
         let pc = vma + 4 * k as u64;
         let page = (pc & !0xfff).wrapping_add((imm << 12) as u64);
-        let Some(&add) = words.get(k + 1) else { continue };
+        let Some(&add) = words.get(k + 1) else {
+            continue;
+        };
         if add & 0xffc0_0000 != 0x9100_0000 || add & 31 != rd || (add >> 5) & 31 != rd {
             continue;
         }
@@ -145,9 +161,18 @@ fn push(regions: &[RoRegion], ptr: u64, len: u64, out: &mut Vec<StringFact>) {
     if !(2..=4096).contains(&len) {
         return;
     }
-    let Some(bytes) = regions.iter().find(|r| r.contains(ptr)).and_then(|r| r.bytes(ptr, len)) else { return };
+    let Some(bytes) = regions
+        .iter()
+        .find(|r| r.contains(ptr))
+        .and_then(|r| r.bytes(ptr, len))
+    else {
+        return;
+    };
     if is_text(bytes) {
-        out.push(StringFact { addr: ptr, len: len as u32 });
+        out.push(StringFact {
+            addr: ptr,
+            len: len as u32,
+        });
     }
 }
 
@@ -191,7 +216,10 @@ impl AnalysisPass for StrCodeLenPass {
         "strcodelen"
     }
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
-        AnalysisOutput { bounded_strings: scan(ctx.file), ..AnalysisOutput::default() }
+        AnalysisOutput {
+            bounded_strings: scan(ctx.file),
+            ..AnalysisOutput::default()
+        }
     }
 }
 
@@ -202,7 +230,10 @@ mod tests {
     #[test]
     fn x86_lea_then_mov_esi() {
         let text = b"hello world!\0";
-        let regions = vec![RoRegion { vma: 0x2000, data: text }];
+        let regions = vec![RoRegion {
+            vma: 0x2000,
+            data: text,
+        }];
         // lea rdi,[rip+X] at 0x1000 (len 7) -> 0x2000 ; mov esi, 5
         let disp = (0x2000i64 - 0x1007) as i32;
         let mut code = vec![0x48, 0x8d, 0x3d];
@@ -213,21 +244,39 @@ mod tests {
         assert!(out.is_empty(), "no call consumes the pair");
         code.extend_from_slice(&[0xe8, 0, 0, 0, 0]);
         x86_hits(0x1000, &code, &regions, &mut out);
-        assert_eq!(out, vec![StringFact { addr: 0x2000, len: 5 }]);
+        assert_eq!(
+            out,
+            vec![StringFact {
+                addr: 0x2000,
+                len: 5
+            }]
+        );
     }
 
     #[test]
     fn a64_adrp_add_movz() {
         let text = b"hello world!\0";
-        let regions = vec![RoRegion { vma: 0x2010, data: text }];
+        let regions = vec![RoRegion {
+            vma: 0x2010,
+            data: text,
+        }];
         // adrp x0, #0x1000 (pc 0x1000 -> page 0x2000); add x0, x0, #0x10; mov w1, #5
         let adrp = 0x9000_0000u32 | (1 << 29);
         let add = 0x9100_0000u32 | (0x10 << 10);
         let mov = 0x5280_0000u32 | (5 << 5) | 1;
         let bl = 0x9400_0000u32;
-        let code: Vec<u8> = [adrp, add, mov, bl].iter().flat_map(|w| w.to_le_bytes()).collect();
+        let code: Vec<u8> = [adrp, add, mov, bl]
+            .iter()
+            .flat_map(|w| w.to_le_bytes())
+            .collect();
         let mut out = Vec::new();
         a64_hits(0x1000, &code, &regions, &mut out);
-        assert_eq!(out, vec![StringFact { addr: 0x2010, len: 5 }]);
+        assert_eq!(
+            out,
+            vec![StringFact {
+                addr: 0x2010,
+                len: 5
+            }]
+        );
     }
 }

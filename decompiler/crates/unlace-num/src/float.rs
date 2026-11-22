@@ -245,11 +245,11 @@ impl FloatFormat {
     /// Create a double given sign, fractional, and exponent.
     fn create_float(sign: bool, signif: u64, exp: i32) -> f64 {
         let signif = signif >> 1; // Throw away 1 bit of precision we will
-                                  // lose anyway, to make sure highbit is 0
+        // lose anyway, to make sure highbit is 0
         let precis: i32 = 8 * 8 - 1; // fullword - 1 we threw away
         let res = signif as f64; // (double)signif rounds to nearest, like C++
         let expchange = exp - precis + 1; // change in exponent is precis
-                                          // -1 integer bit
+        // -1 integer bit
         let res = ldexp(res, expchange);
         if sign {
             #[allow(clippy::neg_multiply)] // C++ writes res = res * -1.0
@@ -999,10 +999,22 @@ mod tests {
         let fmt8 = FloatFormat::new(8);
         let fmt4 = FloatFormat::new(4);
         // NaN / inf / out-of-range all produce 0x8000000000000000 (cvttsd2si)
-        assert_eq!(fmt8.op_trunc(0x7ff8_0000_0000_0000, 8), 0x8000_0000_0000_0000);
-        assert_eq!(fmt8.op_trunc(0x7ff0_0000_0000_0000, 8), 0x8000_0000_0000_0000);
-        assert_eq!(fmt8.op_trunc(0xfff0_0000_0000_0000, 8), 0x8000_0000_0000_0000);
-        assert_eq!(fmt8.op_trunc(fmt8.get_encoding(1e300), 8), 0x8000_0000_0000_0000);
+        assert_eq!(
+            fmt8.op_trunc(0x7ff8_0000_0000_0000, 8),
+            0x8000_0000_0000_0000
+        );
+        assert_eq!(
+            fmt8.op_trunc(0x7ff0_0000_0000_0000, 8),
+            0x8000_0000_0000_0000
+        );
+        assert_eq!(
+            fmt8.op_trunc(0xfff0_0000_0000_0000, 8),
+            0x8000_0000_0000_0000
+        );
+        assert_eq!(
+            fmt8.op_trunc(fmt8.get_encoding(1e300), 8),
+            0x8000_0000_0000_0000
+        );
         assert_eq!(fmt4.op_trunc(0x7f7f_ffff, 8), 0x8000_0000_0000_0000); // 3.4e38
         // ... and the same bit pattern masked for smaller outputs.
         assert_eq!(fmt8.op_trunc(0x7ff8_0000_0000_0000, 4), 0x0);

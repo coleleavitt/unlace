@@ -25,7 +25,7 @@ fn pe64_named_float_member_control() {
 fn check_target(target: &str, word_view: bool) {
     use unlace_console::{
         assertions, assertsyntax,
-        decompile_step::{decompile_one, DecompileSeed},
+        decompile_step::{DecompileSeed, decompile_one},
         engine::bootstrap_from_object,
     };
     if process::optional_output(Command::new("clang").arg("--version")).is_none() {

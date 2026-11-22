@@ -70,7 +70,11 @@ pub fn scope_prefix(
     };
     let mut chain: Vec<&str> = sym_scope_path.iter().map(String::as_str).collect();
     chain.push("");
-    chain[..depth.min(chain.len())].iter().rev().map(|s| s.to_string()).collect()
+    chain[..depth.min(chain.len())]
+        .iter()
+        .rev()
+        .map(|s| s.to_string())
+        .collect()
 }
 
 /// The scope names in front of the function's own name in its declaration.
@@ -87,26 +91,104 @@ pub fn declaration_prefix(strategy: NamespaceStrategy, sym_scope_path: &[String]
 /// Whether a scope component can be printed as an ordinary C++ identifier.
 pub fn plain_scope(name: &str) -> bool {
     let mut bytes = name.bytes();
-    bytes.next().is_some_and(|b| b.is_ascii_alphabetic() || b == b'_')
+    bytes
+        .next()
+        .is_some_and(|b| b.is_ascii_alphabetic() || b == b'_')
         && bytes.all(|b| b.is_ascii_alphanumeric() || b == b'_')
         && !matches!(
             name,
-            "alignas" | "alignof" | "and" | "and_eq" | "asm" | "auto" | "bitand"
-                | "bitor" | "bool" | "break" | "case" | "catch" | "char" | "char8_t"
-                | "char16_t" | "char32_t" | "class" | "compl" | "concept" | "const"
-                | "consteval" | "constexpr" | "constinit" | "const_cast" | "continue"
-                | "co_await" | "co_return" | "co_yield" | "decltype" | "default"
-                | "delete" | "do" | "double" | "dynamic_cast" | "else" | "enum"
-                | "explicit" | "export" | "extern" | "false" | "float" | "for"
-                | "friend" | "goto" | "if" | "inline" | "int" | "long" | "mutable"
-                | "namespace" | "new" | "noexcept" | "not" | "not_eq" | "nullptr"
-                | "operator" | "or" | "or_eq" | "private" | "protected" | "public"
-                | "register" | "reinterpret_cast" | "requires" | "return" | "short"
-                | "signed" | "sizeof" | "static" | "static_assert" | "static_cast"
-                | "struct" | "switch" | "template" | "this" | "thread_local"
-                | "throw" | "true" | "try" | "typedef" | "typeid" | "typename"
-                | "union" | "unsigned" | "using" | "virtual" | "void" | "volatile"
-                | "wchar_t" | "while" | "xor" | "xor_eq"
+            "alignas"
+                | "alignof"
+                | "and"
+                | "and_eq"
+                | "asm"
+                | "auto"
+                | "bitand"
+                | "bitor"
+                | "bool"
+                | "break"
+                | "case"
+                | "catch"
+                | "char"
+                | "char8_t"
+                | "char16_t"
+                | "char32_t"
+                | "class"
+                | "compl"
+                | "concept"
+                | "const"
+                | "consteval"
+                | "constexpr"
+                | "constinit"
+                | "const_cast"
+                | "continue"
+                | "co_await"
+                | "co_return"
+                | "co_yield"
+                | "decltype"
+                | "default"
+                | "delete"
+                | "do"
+                | "double"
+                | "dynamic_cast"
+                | "else"
+                | "enum"
+                | "explicit"
+                | "export"
+                | "extern"
+                | "false"
+                | "float"
+                | "for"
+                | "friend"
+                | "goto"
+                | "if"
+                | "inline"
+                | "int"
+                | "long"
+                | "mutable"
+                | "namespace"
+                | "new"
+                | "noexcept"
+                | "not"
+                | "not_eq"
+                | "nullptr"
+                | "operator"
+                | "or"
+                | "or_eq"
+                | "private"
+                | "protected"
+                | "public"
+                | "register"
+                | "reinterpret_cast"
+                | "requires"
+                | "return"
+                | "short"
+                | "signed"
+                | "sizeof"
+                | "static"
+                | "static_assert"
+                | "static_cast"
+                | "struct"
+                | "switch"
+                | "template"
+                | "this"
+                | "thread_local"
+                | "throw"
+                | "true"
+                | "try"
+                | "typedef"
+                | "typeid"
+                | "typename"
+                | "union"
+                | "unsigned"
+                | "using"
+                | "virtual"
+                | "void"
+                | "volatile"
+                | "wchar_t"
+                | "while"
+                | "xor"
+                | "xor_eq"
         )
 }
 
@@ -124,24 +206,45 @@ mod tests {
         let minimal = NamespaceStrategy::MinimalNamespaces;
         // A sibling class's method, called from a constructor.
         assert_eq!(
-            scope_prefix(minimal, "instance", &path(&["UIThemeManager"]),
-                &path(&["ArticleListWidget"]), &unused),
+            scope_prefix(
+                minimal,
+                "instance",
+                &path(&["UIThemeManager"]),
+                &path(&["ArticleListWidget"]),
+                &unused
+            ),
             path(&["UIThemeManager"])
         );
         // A method of the same class needs nothing.
-        assert!(scope_prefix(minimal, "setupLayout", &path(&["ArticleListWidget"]),
-            &path(&["ArticleListWidget"]), &unused).is_empty());
+        assert!(
+            scope_prefix(
+                minimal,
+                "setupLayout",
+                &path(&["ArticleListWidget"]),
+                &path(&["ArticleListWidget"]),
+                &unused
+            )
+            .is_empty()
+        );
         // Two levels, outermost first.
         assert_eq!(
-            scope_prefix(minimal, "smallIconSize", &path(&["Gui", "Utils"]),
-                &path(&["ArticleListWidget"]), &unused),
+            scope_prefix(
+                minimal,
+                "smallIconSize",
+                &path(&["Gui", "Utils"]),
+                &path(&["ArticleListWidget"]),
+                &unused
+            ),
             path(&["Utils", "Gui"])
         );
         // A global function from inside a class.
-        assert!(scope_prefix(minimal, "free", &[], &path(&["ArticleListWidget"]), &unused).is_empty());
+        assert!(
+            scope_prefix(minimal, "free", &[], &path(&["ArticleListWidget"]), &unused).is_empty()
+        );
         // A global the function shadows with a local of the same name.
         assert_eq!(
-            scope_prefix(minimal, "count", &[], &[], &|n: &str, _: usize| n == "count"),
+            scope_prefix(minimal, "count", &[], &[], &|n: &str, _: usize| n
+                == "count"),
             path(&[""])
         );
     }
@@ -151,11 +254,20 @@ mod tests {
         let unused = |_: &str, _: usize| false;
         let sym = path(&["Gui", "Utils"]);
         assert_eq!(
-            scope_prefix(NamespaceStrategy::AllNamespaces, "f", &sym, &path(&["Utils", "Gui"]), &unused),
+            scope_prefix(
+                NamespaceStrategy::AllNamespaces,
+                "f",
+                &sym,
+                &path(&["Utils", "Gui"]),
+                &unused
+            ),
             path(&["Utils", "Gui"])
         );
         assert!(scope_prefix(NamespaceStrategy::NoNamespaces, "f", &sym, &[], &unused).is_empty());
-        assert_eq!(declaration_prefix(NamespaceStrategy::MinimalNamespaces, &sym), path(&["Utils", "Gui"]));
+        assert_eq!(
+            declaration_prefix(NamespaceStrategy::MinimalNamespaces, &sym),
+            path(&["Utils", "Gui"])
+        );
         assert!(declaration_prefix(NamespaceStrategy::NoNamespaces, &sym).is_empty());
     }
 }

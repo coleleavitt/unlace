@@ -14,7 +14,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use unlace_console::kuna_buildstamp::{identity, ChildKind, PARENT_ENV, REPLY};
+use unlace_console::kuna_buildstamp::{ChildKind, PARENT_ENV, REPLY, identity};
 
 const OTHER_BUILD: &str = "1.329 (source 0123456789abcdef)";
 

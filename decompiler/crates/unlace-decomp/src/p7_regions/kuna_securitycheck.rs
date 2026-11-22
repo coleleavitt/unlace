@@ -152,10 +152,11 @@ pub fn is_security_check_name(name: &str) -> bool {
         return false;
     }
     SECURITY_CHECK_FUNCTIONS.iter().any(|full| {
-        *full == path || (full.len() > path.len() + 2 && full.ends_with(path) && {
-            let cut = full.len() - path.len();
-            full.as_bytes()[cut - 2] == b':' && full.as_bytes()[cut - 1] == b':'
-        })
+        *full == path
+            || (full.len() > path.len() + 2 && full.ends_with(path) && {
+                let cut = full.len() - path.len();
+                full.as_bytes()[cut - 2] == b':' && full.as_bytes()[cut - 1] == b':'
+            })
     })
 }
 
@@ -164,11 +165,7 @@ pub fn is_security_check_name(name: &str) -> bool {
 fn callee_name(op: OpId, data: &Funcdata) -> Option<&str> {
     let idx = data.get_call_specs_index(op)?;
     let nm = data.get_call_specs(idx).get_name();
-    if nm.is_empty() {
-        None
-    } else {
-        Some(nm)
-    }
+    if nm.is_empty() { None } else { Some(nm) }
 }
 
 /// Does basic block `bb` consist of exactly one call, to a rustc security-check
@@ -216,7 +213,10 @@ impl ActionRemoveSecurityCheck {
     /// `enabled` forces the pass on regardless of the architecture gate (unit
     /// tests); the scheduled instance passes `false`.
     pub fn new(enabled: bool, g: impl Into<String>) -> ActionRemoveSecurityCheck {
-        ActionRemoveSecurityCheck { base: ActionBase::new(0, "removesecuritycheck", g), enabled }
+        ActionRemoveSecurityCheck {
+            base: ActionBase::new(0, "removesecuritycheck", g),
+            enabled,
+        }
     }
 }
 
@@ -280,7 +280,8 @@ impl Action for ActionRemoveSecurityCheck {
                 Some(j) => j,
                 None => continue,
             };
-            data.remove_branch(h, idx).expect("ActionRemoveSecurityCheck: removeBranch");
+            data.remove_branch(h, idx)
+                .expect("ActionRemoveSecurityCheck: removeBranch");
             data.remove_unreachable_blocks(false, true)
                 .expect("ActionRemoveSecurityCheck: removeUnreachableBlocks");
             self.base.count += 1;

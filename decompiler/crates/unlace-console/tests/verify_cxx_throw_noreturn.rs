@@ -32,11 +32,16 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture() -> PathBuf {
@@ -64,12 +69,19 @@ fn decompile(func: &str, mode: Mode) -> String {
     // The live-CLI ordering: `option` lines precede `read symbols` (the deferred
     // analysis commit), so the flags are set before the pass would run.
     if let Mode::ListOff = mode {
-        prog.arch_mut().set_kuna_option("noreturn_known", "off").expect("noreturn_known flips off");
+        prog.arch_mut()
+            .set_kuna_option("noreturn_known", "off")
+            .expect("noreturn_known flips off");
     }
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
-    let cmds: Vec<String> =
-        [format!("load function {func}"), "decompile".into(), "print C".into()].to_vec();
+    let cmds: Vec<String> = [
+        format!("load function {func}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .to_vec();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -90,8 +102,7 @@ fn decompile(func: &str, mode: Mode) -> String {
 #[test]
 fn throw_length_error_eliminates_dead_tail() {
     let fixed = decompile("append_bound", Mode::Default);
-    let buggy =
-        decompile("append_bound", Mode::ListOff);
+    let buggy = decompile("append_bound", Mode::ListOff);
 
     eprintln!("---- append_bound (default / fixed) ----\n{fixed}");
     eprintln!("---- append_bound (list off / pre-fix) ----\n{buggy}");
@@ -130,18 +141,26 @@ fn throw_length_error_eliminates_dead_tail() {
 #[test]
 fn throw_out_of_range_eliminates_dead_tail() {
     let fixed = decompile("at_bound", Mode::Default);
-    let buggy =
-        decompile("at_bound", Mode::ListOff);
+    let buggy = decompile("at_bound", Mode::ListOff);
 
     eprintln!("---- at_bound (default / fixed) ----\n{fixed}");
     eprintln!("---- at_bound (list off / pre-fix) ----\n{buggy}");
 
-    assert_ne!(fixed, buggy, "the throw-family list entry must change at_bound too");
+    assert_ne!(
+        fixed, buggy,
+        "the throw-family list entry must change at_bound too"
+    );
     assert!(
         fixed.contains("__throw_out_of_range") && fixed.contains("// no-return"),
         "default output must show the throw call marked no-return:\n{fixed}"
     );
     // 0xb is the dead `* 11` multiplier the fall-through carried.
-    assert!(!fixed.contains("0xb"), "default output must not emit the dead `* 11` tail:\n{fixed}");
-    assert!(buggy.contains("0xb"), "list-off output must emit the dead `* 11` tail:\n{buggy}");
+    assert!(
+        !fixed.contains("0xb"),
+        "default output must not emit the dead `* 11` tail:\n{fixed}"
+    );
+    assert!(
+        buggy.contains("0xb"),
+        "list-off output must emit the dead `* 11` tail:\n{buggy}"
+    );
 }

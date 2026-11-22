@@ -8,8 +8,12 @@ use std::process::Command;
 
 /// `(base, memset)` of the four builds of `fixtures/stack_struct.c` in
 /// `tests/stages/kuna-stackstruct.xml`: gcc -O0, gcc -O2, clang -O0, clang -O2.
-const BUILDS: [(u64, Option<u64>); 4] =
-    [(0x401000, None), (0x501000, None), (0x601000, Some(0x60117f)), (0x701000, None)];
+const BUILDS: [(u64, Option<u64>); 4] = [
+    (0x401000, None),
+    (0x501000, None),
+    (0x601000, Some(0x60117f)),
+    (0x701000, None),
+];
 
 fn image() -> std::path::PathBuf {
     let xml = include_str!(concat!(
@@ -41,7 +45,8 @@ fn helpers(base: u64) -> Vec<(String, u64)> {
         env!("CARGO_MANIFEST_DIR"),
         "/../../../tests/stages/kuna-stackstruct.xml"
     ));
-    let symbol = regex::Regex::new(r#"offset="0x([0-9a-f]+)" name="(fetch|setup|report)_"#).unwrap();
+    let symbol =
+        regex::Regex::new(r#"offset="0x([0-9a-f]+)" name="(fetch|setup|report)_"#).unwrap();
     symbol
         .captures_iter(xml)
         .map(|c| (c[2].to_owned(), u64::from_str_radix(&c[1], 16).unwrap()))
@@ -61,7 +66,11 @@ fn decompile_with(
     off: &[&str],
 ) -> String {
     let mut asserts = vec![format!("function 0x{base:x}=parse_header")];
-    asserts.extend(helpers(base).into_iter().map(|(n, a)| format!("function 0x{a:x}={n}")));
+    asserts.extend(
+        helpers(base)
+            .into_iter()
+            .map(|(n, a)| format!("function 0x{a:x}={n}")),
+    );
     asserts.extend(memset.map(|a| format!("function 0x{a:x}=memset")));
     let entry = format!("0x{base:x}");
     let mut args = vec![
@@ -115,7 +124,10 @@ fn every_build_declares_the_record_and_prints_c() {
         let code = decompile(&image, base, memset, "aggressive");
         assert!(!partial.is_match(&code), "0x{base:x}: {code}");
         assert!(record.is_match(&code), "0x{base:x}: {code}");
-        assert!(code.contains("typedef struct struct_"), "0x{base:x}: {code}");
+        assert!(
+            code.contains("typedef struct struct_"),
+            "0x{base:x}: {code}"
+        );
         assert!(code.contains(".field_0x4"), "0x{base:x}: {code}");
         let source = common::scratch_file("stack-struct", "c");
         std::fs::write(&source, format!("{DECLARATIONS}{code}")).unwrap();
@@ -213,7 +225,12 @@ fn two_escaped_addresses_stay_two_objects() {
     ]);
     assert_eq!(status, 0, "{stderr}");
     assert!(!code.contains("struct_"), "{code}");
-    assert!(!regex::Regex::new(r"\._[0-9]+_[0-9]+_").unwrap().is_match(&code), "{code}");
+    assert!(
+        !regex::Regex::new(r"\._[0-9]+_[0-9]+_")
+            .unwrap()
+            .is_match(&code),
+        "{code}"
+    );
 }
 
 /// A 16-byte piece reads through `unsigned __int128`, a plain 16-byte store or
@@ -223,15 +240,27 @@ fn wide_pieces_print_as_c() {
     let vm = common::fixture("arraycoverwidth_x86_64");
     let (code, stderr, status) = common::run_kuna(&["decompile", &vm, "vm"]);
     assert_eq!(status, 0, "{stderr}");
-    for want in ["memset(&v2,0,0x10);", "memcpy(&v2,&v3[0],0x10);", "memcpy(&v1,&v2,0x10);"] {
+    for want in [
+        "memset(&v2,0,0x10);",
+        "memcpy(&v2,&v3[0],0x10);",
+        "memcpy(&v1,&v2,0x10);",
+    ] {
         assert!(code.contains(want), "missing `{want}`:\n{code}");
     }
     let pair = common::fixture("zerofillfwd_a64.o");
     let (pair_code, stderr, status) = common::run_kuna(&["decompile-all", &pair]);
     assert_eq!(status, 0, "{stderr}");
-    assert!(pair_code.contains("return *(unsigned __int128 *)v1;"), "{pair_code}");
+    assert!(
+        pair_code.contains("return *(unsigned __int128 *)v1;"),
+        "{pair_code}"
+    );
     for text in [&code, &pair_code] {
         assert!(!text.contains("(*)["), "{text}");
-        assert!(!regex::Regex::new(r"\._[0-9]+_[0-9]+_").unwrap().is_match(text), "{text}");
+        assert!(
+            !regex::Regex::new(r"\._[0-9]+_[0-9]+_")
+                .unwrap()
+                .is_match(text),
+            "{text}"
+        );
     }
 }

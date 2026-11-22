@@ -53,13 +53,13 @@
 //! zero) entries. This module never panics and never errors — it only ever
 //! produces *more* names (design §3.3, §8 PR-7).
 
+use object::FileKind;
 use object::macho::{INDIRECT_SYMBOL_ABS, INDIRECT_SYMBOL_LOCAL};
 use object::read::macho::{MachHeader, Nlist, Section, Segment, SymbolTable};
-use object::FileKind;
 
 use std::sync::{Arc, Mutex};
 
-use super::macho_fat::{select_fat_slice, SlicePref};
+use super::macho_fat::{SlicePref, select_fat_slice};
 
 use super::format::{ImportSym, ImportSymKind};
 
@@ -78,10 +78,7 @@ pub(crate) fn resolve_macho_imports(file: &object::File, bytes: &[u8]) -> Vec<Im
 /// Resolve the exact pointer-width ranges occupied by imported Mach-O lazy and
 /// non-lazy symbol-pointer entries. Stub entries, exports, indirect LOCAL/ABS
 /// entries, and ordinary data sections are excluded.
-pub(crate) fn resolve_macho_import_slots(
-    file: &object::File,
-    bytes: &[u8],
-) -> Vec<(u64, u64)> {
+pub(crate) fn resolve_macho_import_slots(file: &object::File, bytes: &[u8]) -> Vec<(u64, u64)> {
     resolve_macho_indirect_symbols(file, bytes).import_slots
 }
 
@@ -102,18 +99,11 @@ struct MachOIndirectSymbols {
     data_slots: Vec<(u64, Vec<u8>)>,
 }
 
-fn resolve_macho_indirect_symbols(
-    file: &object::File,
-    bytes: &[u8],
-) -> MachOIndirectSymbols {
+fn resolve_macho_indirect_symbols(file: &object::File, bytes: &[u8]) -> MachOIndirectSymbols {
     match FileKind::parse(bytes) {
         // A thin Mach-O: parse with the matching-width typed header.
-        Ok(FileKind::MachO64) => {
-            collect::<object::macho::MachHeader64<Endianness>>(file, bytes)
-        }
-        Ok(FileKind::MachO32) => {
-            collect::<object::macho::MachHeader32<Endianness>>(file, bytes)
-        }
+        Ok(FileKind::MachO64) => collect::<object::macho::MachHeader64<Endianness>>(file, bytes),
+        Ok(FileKind::MachO32) => collect::<object::macho::MachHeader32<Endianness>>(file, bytes),
         // A fat / universal binary (`0xcafebabe` / `0xcafebabf`): select one
         // slice through the *canonical* slice selector (so the import walk can
         // never drift onto a different slice than the loadimage), then re-dispatch
@@ -198,7 +188,11 @@ where
     if unlace_decomp::kuna_dyldcache::dyldcrossrefs_enabled() {
         for xref in super::kuna_dyldcache::xrefs::read_note(bytes) {
             if xref.kind == super::kuna_dyldcache::xrefs::XrefKind::Slot {
-                out.import_slots.push((xref.addr, xref.addr.saturating_add(std::mem::size_of::<Mach::Word>() as u64)));
+                out.import_slots.push((
+                    xref.addr,
+                    xref.addr
+                        .saturating_add(std::mem::size_of::<Mach::Word>() as u64),
+                ));
             }
             out.imports.push(ImportSym {
                 addr: xref.addr,
@@ -232,13 +226,10 @@ where
         let section_type = sec.section_type(endian);
         let (stride, import_slot) = match section_type {
             object::macho::S_SYMBOL_STUBS => (sec.reserved2(endian) as u64, false),
-            object::macho::S_LAZY_SYMBOL_POINTERS
-            | object::macho::S_NON_LAZY_SYMBOL_POINTERS => {
-                (
-                    std::mem::size_of::<Mach::Word>() as u64,
-                    is_external_import_slot_section(section_type),
-                )
-            }
+            object::macho::S_LAZY_SYMBOL_POINTERS | object::macho::S_NON_LAZY_SYMBOL_POINTERS => (
+                std::mem::size_of::<Mach::Word>() as u64,
+                is_external_import_slot_section(section_type),
+            ),
             object::macho::S_LAZY_DYLIB_SYMBOL_POINTERS
             | object::macho::S_THREAD_LOCAL_VARIABLE_POINTERS => {
                 (std::mem::size_of::<Mach::Word>() as u64, false)
@@ -326,11 +317,17 @@ fn push_kext_bound_imports<Mach: MachHeader<Endian = Endianness>>(
             continue;
         }
         let addr: u64 = nlist.n_value(endian).into();
-        let Ok(name) = nlist.name(endian, symtab.strings()) else { continue };
+        let Ok(name) = nlist.name(endian, symtab.strings()) else {
+            continue;
+        };
         if addr != 0 && !name.is_empty() {
             let name = strip_leading_underscore(name);
             bound.entry(addr).or_insert_with(|| name.clone());
-            out.imports.push(ImportSym { addr, name, kind: ImportSymKind::Import });
+            out.imports.push(ImportSym {
+                addr,
+                name,
+                kind: ImportSymKind::Import,
+            });
         }
     }
     bound
@@ -358,13 +355,26 @@ fn push_kext_bound_slots<Mach: MachHeader<Endian = Endianness>>(
     for sec in sections {
         let pointers = is_external_import_slot_section(sec.section_type(endian))
             || trim_section_name(sec.name()) == b"__auth_ptr";
-        let Some(data) = sec.data(endian, bytes).ok().filter(|_| pointers) else { continue };
+        let Some(data) = sec.data(endian, bytes).ok().filter(|_| pointers) else {
+            continue;
+        };
         let base: u64 = sec.addr(endian).into();
         for (i, word) in data.chunks_exact(WIDTH as usize).enumerate() {
             let target = u64::from_le_bytes(word.try_into().unwrap());
-            let Some(addr) = base.checked_add(i as u64 * WIDTH).filter(|a| !named.contains(a)) else { continue };
-            let Some(name) = bound.get(&target) else { continue };
-            out.imports.push(ImportSym { addr, name: name.clone(), kind: ImportSymKind::Import });
+            let Some(addr) = base
+                .checked_add(i as u64 * WIDTH)
+                .filter(|a| !named.contains(a))
+            else {
+                continue;
+            };
+            let Some(name) = bound.get(&target) else {
+                continue;
+            };
+            out.imports.push(ImportSym {
+                addr,
+                name: name.clone(),
+                kind: ImportSymKind::Import,
+            });
             out.import_slots.push((addr, addr.saturating_add(WIDTH)));
         }
     }
@@ -406,13 +416,21 @@ fn finish_with_exports(
         exported.insert(e.addr);
         if e.code {
             let name = strip_leading_underscore(&e.name);
-            out.imports.push(ImportSym { addr: e.addr, name, kind: ImportSymKind::Export });
+            out.imports.push(ImportSym {
+                addr: e.addr,
+                name,
+                kind: ImportSymKind::Export,
+            });
         }
     }
     if unlace_decomp::kuna_exporttrie::exporttrie_enabled() {
         for (addr, name) in trie_exports(neutral, bytes) {
             if exported.insert(addr) {
-                out.imports.push(ImportSym { addr, name: strip_leading_underscore(name.as_bytes()), kind: ImportSymKind::Export });
+                out.imports.push(ImportSym {
+                    addr,
+                    name: strip_leading_underscore(name.as_bytes()),
+                    kind: ImportSymKind::Export,
+                });
             }
         }
     }
@@ -424,7 +442,7 @@ fn finish_with_exports(
 /// once its symbol table is gone. Re-exports and absolute exports name no
 /// address here.
 fn trie_exports(neutral: &object::File, bytes: &[u8]) -> Vec<(u64, String)> {
-    use crate::loader::format::macho::exports::{parse_export_trie, ExportTarget};
+    use crate::loader::format::macho::exports::{ExportTarget, parse_export_trie};
     use object::read::{Object, ObjectSegment};
     let Some(base) = neutral
         .segments()
@@ -503,7 +521,9 @@ fn named_exports(neutral: &object::File) -> Arc<[NamedExport]> {
     let key = super::macho_trie::export_inputs(neutral);
     if let Some(key) = key {
         let cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
-        let hit = cache.iter().find(|(held, _)| held.iter().zip(key).all(|(a, b)| a.as_slice() == b));
+        let hit = cache
+            .iter()
+            .find(|(held, _)| held.iter().zip(key).all(|(a, b)| a.as_slice() == b));
         if let Some((_, hit)) = hit {
             return Arc::clone(hit);
         }
@@ -539,11 +559,17 @@ fn read_named_exports(neutral: &object::File) -> Vec<NamedExport> {
     let trie = super::macho_trie::exports(neutral, &code);
     let mut held = vec![false; trie.len()];
     for e in &out {
-        if let Ok(i) = trie.binary_search_by(|t| (t.addr, t.name.as_slice()).cmp(&(e.addr, e.name.as_slice()))) {
+        if let Ok(i) =
+            trie.binary_search_by(|t| (t.addr, t.name.as_slice()).cmp(&(e.addr, e.name.as_slice())))
+        {
             held[i] = true;
         }
     }
-    for (e, _) in trie.into_iter().zip(held).filter(|(e, held)| !held && !e.name.is_empty()) {
+    for (e, _) in trie
+        .into_iter()
+        .zip(held)
+        .filter(|(e, held)| !held && !e.name.is_empty())
+    {
         let absolute = e.kind == super::macho_trie::ExportKind::Absolute;
         out.push(NamedExport {
             code: !absolute && in_ranges(&code, e.addr),
@@ -575,8 +601,8 @@ pub(crate) fn trie_functions(file: &object::File) -> Vec<(u64, Vec<u8>)> {
 /// classifies as code (`MachOFormat::section_bits` `CODE`: an
 /// `S_ATTR_PURE_INSTRUCTIONS` section or `__TEXT,__text`).
 pub(crate) fn code_ranges(neutral: &object::File) -> Vec<(u64, u64)> {
-    use object::read::{Object, ObjectSection};
     use super::format::ObjectFormat;
+    use object::read::{Object, ObjectSection};
     let fmt = super::format::macho::MachOFormat;
     neutral
         .sections()
@@ -591,7 +617,9 @@ pub(crate) fn code_ranges(neutral: &object::File) -> Vec<(u64, u64)> {
 
 /// Whether `addr` lies inside one of `ranges` (`(start, size)` pairs).
 pub(crate) fn in_ranges(ranges: &[(u64, u64)], addr: u64) -> bool {
-    ranges.iter().any(|&(start, size)| addr >= start && addr - start < size)
+    ranges
+        .iter()
+        .any(|&(start, size)| addr >= start && addr - start < size)
 }
 
 /// The Mach-O exports that name data rather than code, as `(address, name)`:
@@ -649,10 +677,14 @@ pub fn data_symbols(file: &object::File) -> Vec<(u64, Vec<u8>, u64)> {
         if sym.is_undefined() || sym.kind() == object::SymbolKind::Section {
             continue;
         }
-        let Some(index) = sym.section_index() else { continue };
+        let Some(index) = sym.section_index() else {
+            continue;
+        };
         let addr = sym.address();
         let bounds = *sections.entry(index.0).or_insert_with(|| {
-            file.section_by_index(index).ok().map(|sec| (sec.address(), sec.size()))
+            file.section_by_index(index)
+                .ok()
+                .map(|sec| (sec.address(), sec.size()))
         });
         let inside = bounds.is_some_and(|(lo, size)| addr >= lo && addr - lo < size);
         if inside {
@@ -662,16 +694,22 @@ pub fn data_symbols(file: &object::File) -> Vec<(u64, Vec<u8>, u64)> {
             continue;
         }
         match sym.name_bytes() {
-            Ok(name) if !name.is_empty() => named.push((addr, name.to_vec(), inside.then_some(index.0))),
+            Ok(name) if !name.is_empty() => {
+                named.push((addr, name.to_vec(), inside.then_some(index.0)))
+            }
             _ => {}
         }
     }
     let exports = named_exports(file);
-    let trie: Vec<&NamedExport> =
-        exports.iter().filter(|e| e.trie_only && !e.code && !e.absolute).collect();
+    let trie: Vec<&NamedExport> = exports
+        .iter()
+        .filter(|e| e.trie_only && !e.code && !e.absolute)
+        .collect();
     if !trie.is_empty() {
-        let mut extents: Vec<(u64, u64, usize)> =
-            file.sections().map(|sec| (sec.address(), sec.size(), sec.index().0)).collect();
+        let mut extents: Vec<(u64, u64, usize)> = file
+            .sections()
+            .map(|sec| (sec.address(), sec.size(), sec.index().0))
+            .collect();
         extents.sort_unstable();
         for e in trie {
             let below = extents.partition_point(|&(lo, _, _)| lo <= e.addr);
@@ -702,7 +740,8 @@ pub fn data_symbols(file: &object::File) -> Vec<(u64, Vec<u8>, u64)> {
                     let (lo, len) = sections.get(&index).copied().flatten()?;
                     let end = lo + len;
                     let next = starts.get(&index).and_then(|list| {
-                        list.get(list.partition_point(|&start| start <= addr)).copied()
+                        list.get(list.partition_point(|&start| start <= addr))
+                            .copied()
                     });
                     Some((next.unwrap_or(end).min(end) - addr).min(MAX_DATA_EXTENT))
                 })
@@ -742,12 +781,21 @@ mod tests {
     /// `_printf` → `printf`; a name without the C-ABI underscore is untouched.
     #[test]
     fn a_stripped_dylib_keeps_its_trie_exports() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/macho_trieonly_arm64");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/macho_trieonly_arm64"
+        );
         let bytes = std::fs::read(path).unwrap();
         let file = object::File::parse(bytes.as_slice()).unwrap();
         let mut exports = trie_exports(&file, &bytes);
         exports.sort();
-        assert_eq!(exports, [(0x298, "_trie_scale".to_string()), (0x2a4, "_trie_entry".to_string())]);
+        assert_eq!(
+            exports,
+            [
+                (0x298, "_trie_scale".to_string()),
+                (0x2a4, "_trie_entry".to_string())
+            ]
+        );
     }
 
     #[test]
@@ -788,7 +836,9 @@ mod tests {
             if raw & (INDIRECT_SYMBOL_LOCAL | INDIRECT_SYMBOL_ABS) != 0 {
                 continue; // the LOCAL placeholder is skipped
             }
-            let Some(raw_name) = symbol_name(raw) else { continue };
+            let Some(raw_name) = symbol_name(raw) else {
+                continue;
+            };
             let name = strip_leading_underscore(raw_name);
             let addr = stub_base + (i as u64) * stride;
             out.push(ImportSym {
@@ -798,9 +848,20 @@ mod tests {
             });
         }
 
-        assert_eq!(out.len(), 1, "only the real import is named, the LOCAL is skipped");
-        assert_eq!(out[0].addr, 0x1000005cc, "stub entry 0 is at the section base");
-        assert_eq!(out[0].name, b"printf".to_vec(), "_printf is named, `_` stripped");
+        assert_eq!(
+            out.len(),
+            1,
+            "only the real import is named, the LOCAL is skipped"
+        );
+        assert_eq!(
+            out[0].addr, 0x1000005cc,
+            "stub entry 0 is at the section base"
+        );
+        assert_eq!(
+            out[0].name,
+            b"printf".to_vec(),
+            "_printf is named, `_` stripped"
+        );
     }
 
     /// Symbol-pointer slots (`__la_symbol_ptr` / `__got`) are named at

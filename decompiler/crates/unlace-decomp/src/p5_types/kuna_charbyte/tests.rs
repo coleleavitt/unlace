@@ -16,11 +16,16 @@ fn factory() -> TypeFactoryImpl {
     let f = TypeFactoryImpl::new();
     f.set_default_alignment_map();
     f.set_max_basetype_size(8);
-    f.set_core_type("bool", 1, type_metatype::TYPE_BOOL, false).unwrap();
-    f.set_core_type("uint1", 1, type_metatype::TYPE_UINT, false).unwrap();
-    f.set_core_type("int1", 1, type_metatype::TYPE_INT, false).unwrap();
-    f.set_core_type("xunknown1", 1, type_metatype::TYPE_UNKNOWN, false).unwrap();
-    f.set_core_type("char", 1, type_metatype::TYPE_INT, true).unwrap();
+    f.set_core_type("bool", 1, type_metatype::TYPE_BOOL, false)
+        .unwrap();
+    f.set_core_type("uint1", 1, type_metatype::TYPE_UINT, false)
+        .unwrap();
+    f.set_core_type("int1", 1, type_metatype::TYPE_INT, false)
+        .unwrap();
+    f.set_core_type("xunknown1", 1, type_metatype::TYPE_UNKNOWN, false)
+        .unwrap();
+    f.set_core_type("char", 1, type_metatype::TYPE_INT, true)
+        .unwrap();
     f.cache_core_types().unwrap();
     f
 }
@@ -41,7 +46,9 @@ fn the_zext_vote_outranks_char_in_the_lattice() {
 fn only_the_ascii_one_byte_int_is_char() {
     let f = factory();
     assert!(is_char(&f.get_base(1, type_metatype::TYPE_INT).unwrap()));
-    assert!(!is_char(&f.get_base_no_char(1, type_metatype::TYPE_INT).unwrap()));
+    assert!(!is_char(
+        &f.get_base_no_char(1, type_metatype::TYPE_INT).unwrap()
+    ));
     assert!(!is_char(&f.get_base(1, type_metatype::TYPE_UINT).unwrap()));
     assert!(!is_char(&f.get_base(1, type_metatype::TYPE_BOOL).unwrap()));
     assert!(!is_char(&f.get_base(4, type_metatype::TYPE_INT).unwrap()));
@@ -52,7 +59,9 @@ fn only_the_plain_one_byte_uint_is_uint1() {
     let f = factory();
     assert!(is_uint1(&f.get_base(1, type_metatype::TYPE_UINT).unwrap()));
     assert!(!is_uint1(&f.get_base(1, type_metatype::TYPE_INT).unwrap()));
-    assert!(!is_uint1(&f.get_base(1, type_metatype::TYPE_UNKNOWN).unwrap()));
+    assert!(!is_uint1(
+        &f.get_base(1, type_metatype::TYPE_UNKNOWN).unwrap()
+    ));
     assert!(!is_uint1(&f.get_base(2, type_metatype::TYPE_UINT).unwrap()));
 }
 

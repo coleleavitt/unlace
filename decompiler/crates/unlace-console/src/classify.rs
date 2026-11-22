@@ -89,16 +89,17 @@ impl Classifier {
             collect_stub_ranges(f, &mut stub_ranges);
             collect_imports(f, &mut imports);
         }
-        Classifier { arm, stub_ranges, imports, entries }
+        Classifier {
+            arm,
+            stub_ranges,
+            imports,
+            entries,
+        }
     }
 
     /// Thumb-mask an ARM VMA (identity elsewhere).
     fn normalize(&self, vma: u64) -> u64 {
-        if self.arm {
-            vma & !1
-        } else {
-            vma
-        }
+        if self.arm { vma & !1 } else { vma }
     }
 
     /// Classify one function entry (see the module doc for the rules).

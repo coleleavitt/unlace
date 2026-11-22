@@ -26,18 +26,16 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
-use unlace_decomp::dtype::{type_metatype, Datatype};
-use unlace_decomp::expression::{
-    boolean_match, functional_equality_level, BooleanMatch,
-};
+use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
+use unlace_decomp::dtype::{Datatype, type_metatype};
+use unlace_decomp::expression::{BooleanMatch, boolean_match, functional_equality_level};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::op::pcodeop_flags;
-use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
 use unlace_decomp::varnode::DefOpInfo;
 
 // -----------------------------------------------------------------------------
@@ -47,7 +45,8 @@ use unlace_decomp::varnode::DefOpInfo;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -85,7 +84,9 @@ fn dt(size: int4) -> Rc<Datatype> {
 
 fn opcode_flags(opc: OpCode) -> unlace_base::types::uint4 {
     match opc {
-        OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH | OpCode::CPUI_BRANCHIND => pcodeop_flags::branch,
+        OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH | OpCode::CPUI_BRANCHIND => {
+            pcodeop_flags::branch
+        }
         OpCode::CPUI_RETURN => pcodeop_flags::returns,
         OpCode::CPUI_INT_EQUAL | OpCode::CPUI_INT_NOTEQUAL => {
             pcodeop_flags::booloutput | pcodeop_flags::commutative
@@ -108,18 +109,22 @@ fn opcode_flags(opc: OpCode) -> unlace_base::types::uint4 {
 fn mk_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
     let ram = ram_space(fd);
     let op = fd.new_op(inputs, Address::new(ram, off));
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, opcode_flags(opc), format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, opcode_flags(opc), format!("{opc:?}")));
     op
 }
 
 fn mk_vn(fd: &mut Funcdata, off: u64, size: int4) -> VarnodeId {
     let ram = ram_space(fd);
-    fd.vbank_mut().create(size, Address::new(ram, off), dt(size))
+    fd.vbank_mut()
+        .create(size, Address::new(ram, off), dt(size))
 }
 
 fn mk_input(fd: &mut Funcdata, off: u64, size: int4) -> VarnodeId {
     let ram = ram_space(fd);
-    let vn = fd.vbank_mut().create(size, Address::new(ram, off), dt(size));
+    let vn = fd
+        .vbank_mut()
+        .create(size, Address::new(ram, off), dt(size));
     let mut noop_thunk = |_b: &mut unlace_decomp::varnode::VarnodeBank,
                           _o: VarnodeId,
                           _n: VarnodeId|
@@ -137,7 +142,10 @@ fn mk_const(fd: &mut Funcdata, val: u64, size: int4) -> VarnodeId {
 fn mk_out(fd: &mut Funcdata, op: OpId, off: u64, size: int4) -> VarnodeId {
     let ram = ram_space(fd);
     let seq = fd.obank().get(op).unwrap().get_seq_num().clone();
-    let def = DefOpInfo { id: op, seqnum: seq };
+    let def = DefOpInfo {
+        id: op,
+        seqnum: seq,
+    };
     let vn = {
         let mut noop_thunk = |_b: &mut unlace_decomp::varnode::VarnodeBank,
                               _o: VarnodeId,
@@ -154,7 +162,10 @@ fn mk_out(fd: &mut Funcdata, op: OpId, off: u64, size: int4) -> VarnodeId {
 }
 
 fn wire_read(fd: &mut Funcdata, reader: OpId, vn: VarnodeId, slot: int4) {
-    fd.obank_mut().get_mut(reader).unwrap().set_input(Some(vn), slot);
+    fd.obank_mut()
+        .get_mut(reader)
+        .unwrap()
+        .set_input(Some(vn), slot);
     fd.vbank_mut().add_descend(vn, reader).unwrap();
 }
 
@@ -324,7 +335,10 @@ fn w5_s3_funceqlevel_commutative_locks_first_pair_via_flip() {
     let mut res1 = [o1, o1];
     let mut res2 = [o2, o2];
     let n = functional_equality_level(o1, o2, &mut res1, &mut res2, fd.vbank(), fd.obank());
-    assert_eq!(n, 1, "comm2==0 locks one leftover pair (expression.cc:694-696)");
+    assert_eq!(
+        n, 1,
+        "comm2==0 locks one leftover pair (expression.cc:694-696)"
+    );
     // Leftover unmatch is (res1[0], res2[0]) == (p, s) after `res2[0]=res2[1]`.
     assert_eq!(res1[0], p, "res1[0] still the first op1 input");
     assert_eq!(res2[0], s, "res2[0] rewritten to res2[1] (s) per line 695");

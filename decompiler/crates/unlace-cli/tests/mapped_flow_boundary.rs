@@ -27,7 +27,10 @@ fn decompile(path: &std::path::Path, extra: &[&str]) -> Output {
 
 #[test]
 fn mapped_return_survives_another_path_falling_off_the_image() {
-    for (kind, warning) in [("boundary", " flows to "), ("straddle", "runs past the mapped bytes")] {
+    for (kind, warning) in [
+        ("boundary", " flows to "),
+        ("straddle", "runs past the mapped bytes"),
+    ] {
         for bits in [32, 64] {
             let path = named_fixture(kind, bits);
             for extra in [vec![], vec!["--json"]] {
@@ -86,11 +89,15 @@ fn with_code(code: &[u8]) -> std::path::PathBuf {
 fn queued_paths_resolve_before_and_after_a_missing_edge_is_cut() {
     for (code, diagnostic) in [
         (
-            &[0xeb, 6, 0xb8, 7, 0, 0, 0, 0xc3, 0x85, 0xc0, 0x74, 0xf6, 0xbb, 5, 0, 0, 0][..],
+            &[
+                0xeb, 6, 0xb8, 7, 0, 0, 0, 0xc3, 0x85, 0xc0, 0x74, 0xf6, 0xbb, 5, 0, 0, 0,
+            ][..],
             "halt_missing",
         ),
         (
-            &[0x85, 0xc0, 0x75, 6, 0xb8, 7, 0, 0, 0, 0xc3, 0x85, 0xdb, 0x75, 1, 0x90, 0x90][..],
+            &[
+                0x85, 0xc0, 0x75, 6, 0xb8, 7, 0, 0, 0, 0xc3, 0x85, 0xdb, 0x75, 1, 0x90, 0x90,
+            ][..],
             "halt_missing",
         ),
         (
@@ -133,7 +140,9 @@ fn an_instruction_running_past_the_mapped_end_ends_only_its_own_path() {
     let overlap_off = ["--option", "overlapbranch", "off"];
     for (code, options, kept) in [
         (
-            &[0x85, 0xc0, 0x75, 6, 0xb8, 7, 0, 0, 0, 0xc3, 0x8e, 0xc8, 0, 0, 0][..],
+            &[
+                0x85, 0xc0, 0x75, 6, 0xb8, 7, 0, 0, 0, 0xc3, 0x8e, 0xc8, 0, 0, 0,
+            ][..],
             &[][..],
             "return 7;",
         ),

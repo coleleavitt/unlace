@@ -12,23 +12,23 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use unlace_base::address::{Address, RangeList};
-use unlace_base::error::{KunaError, KunaResult};
-use unlace_base::space::AddrSpace;
-use unlace_base::types::Wrap;
-use unlace_sleigh::loadimage::{section_flags, LoadImage, LoadImageFunc, LoadImageSection};
 use object::pe::{
     IMAGE_FILE_MACHINE_ARM, IMAGE_FILE_MACHINE_THUMB, IMAGE_SUBSYSTEM_EFI_APPLICATION,
     IMAGE_SUBSYSTEM_EFI_ROM,
 };
 use object::{Architecture, SectionFlags, SectionKind};
+use unlace_base::address::{Address, RangeList};
+use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::space::AddrSpace;
+use unlace_base::types::Wrap;
+use unlace_sleigh::loadimage::{LoadImage, LoadImageFunc, LoadImageSection, section_flags};
 
 use crate::loader::format::pe::coff_section_bits;
-use crate::loader::le::{read_u16, read_u32, read_u64};
 use crate::loader::format::pe::coff_section_kind;
+use crate::loader::le::{read_u16, read_u32, read_u64};
 use crate::loadimage_object::{
-    compose_language_id, is_arm32_language, pe_arm_mode_policy, pe_machine_architecture,
-    ArmModePolicy, ObjectSectionMetadata, PE_MACHINES,
+    ArmModePolicy, ObjectSectionMetadata, PE_MACHINES, compose_language_id, is_arm32_language,
+    pe_arm_mode_policy, pe_machine_architecture,
 };
 
 const TE_HEADER_SIZE: usize = 40;
@@ -114,7 +114,11 @@ fn first_raw_offset(bytes: &[u8], section_count: usize, stripped_offset: u64) ->
             let virtual_size = read_u32(bytes, offset + 8)? as u64;
             let raw_size = read_u32(bytes, offset + 16)? as u64;
             let raw_pointer = read_u32(bytes, offset + 20)? as u64;
-            let mapped_size = if virtual_size == 0 { raw_size } else { virtual_size };
+            let mapped_size = if virtual_size == 0 {
+                raw_size
+            } else {
+                virtual_size
+            };
             (raw_size != 0 && mapped_size != 0).then_some(())?;
             raw_pointer.checked_sub(stripped_offset)
         })
@@ -848,13 +852,13 @@ pub mod synthetic {
 
 #[cfg(test)]
 mod tests {
-    use super::synthetic::{TeImage, CODE_FILE_OFFSET as SYNTHETIC_HEADER_SIZE, CODE_RVA};
+    use super::synthetic::{CODE_FILE_OFFSET as SYNTHETIC_HEADER_SIZE, CODE_RVA, TeImage};
     use super::*;
     use object::pe::{
         IMAGE_FILE_MACHINE_AMD64, IMAGE_FILE_MACHINE_ARM64, IMAGE_FILE_MACHINE_ARMNT,
         IMAGE_FILE_MACHINE_I386,
     };
-    use unlace_base::space::{addrspace_flags, spacetype, AddrSpaceManager, ConstantSpace};
+    use unlace_base::space::{AddrSpaceManager, ConstantSpace, addrspace_flags, spacetype};
 
     fn synthetic_thumb_te() -> Vec<u8> {
         TeImage::thumb(&[0x07, 0x20, 0x70, 0x47]).build()
@@ -920,8 +924,14 @@ mod tests {
     /// refuses the image outright.
     #[test]
     fn a_file_aligned_image_maps_its_header_with_a_zero_tail() {
-        let bytes = TeImage::thumb(&[0x07, 0x20, 0x70, 0x47]).raw_pointer(0x200).build();
-        assert_eq!(bytes.len(), 0x50 + 4, "the file holds only its real header plus the code");
+        let bytes = TeImage::thumb(&[0x07, 0x20, 0x70, 0x47])
+            .raw_pointer(0x200)
+            .build();
+        assert_eq!(
+            bytes.len(),
+            0x50 + 4,
+            "the file holds only its real header plus the code"
+        );
 
         let mut image = TeLoadImage::from_bytes("file-aligned.te", &bytes).unwrap();
         let manager = manager();
@@ -932,7 +942,11 @@ mod tests {
         assert_eq!(
             image.get_segments(),
             vec![
-                (header_vma, 0xe50, section_flags::DATA | section_flags::READONLY),
+                (
+                    header_vma,
+                    0xe50,
+                    section_flags::DATA | section_flags::READONLY
+                ),
                 (0x401000, 4, section_flags::CODE | section_flags::READONLY),
             ]
         );
@@ -945,17 +959,26 @@ mod tests {
         assert_eq!(retained, [b'V', b'Z', 0xc2, 0x01]);
         let mut slack = [0xffu8; 4];
         image
-            .load_fill(&mut slack, &Address::new(Rc::clone(&ram), header_vma + 0x50))
+            .load_fill(
+                &mut slack,
+                &Address::new(Rc::clone(&ram), header_vma + 0x50),
+            )
             .unwrap();
         assert_eq!(slack, [0; 4], "the unbacked header tail reads as zero");
 
         let mut code = [0u8; 4];
-        image.load_fill(&mut code, &Address::new(ram, 0x401000)).unwrap();
+        image
+            .load_fill(&mut code, &Address::new(ram, 0x401000))
+            .unwrap();
         assert_eq!(code, [0x07, 0x20, 0x70, 0x47]);
         assert_eq!(
             image.file_backed_segments(),
             vec![
-                (header_vma, 0x50, section_flags::DATA | section_flags::READONLY),
+                (
+                    header_vma,
+                    0x50,
+                    section_flags::DATA | section_flags::READONLY
+                ),
                 (0x401000, 4, section_flags::CODE | section_flags::READONLY),
             ]
         );
@@ -968,7 +991,9 @@ mod tests {
     /// the boundary alone misses it by one byte.
     #[test]
     fn a_read_starting_inside_an_unbacked_tail_reads_zeros() {
-        let bytes = TeImage::thumb(&[0x07, 0x20, 0x70, 0x47]).raw_pointer(0x200).build();
+        let bytes = TeImage::thumb(&[0x07, 0x20, 0x70, 0x47])
+            .raw_pointer(0x200)
+            .build();
         let mut image = TeLoadImage::from_bytes("file-aligned.te", &bytes).unwrap();
         let manager = manager();
         let ram = Rc::clone(manager.get_space_by_name("ram").unwrap());
@@ -978,9 +1003,15 @@ mod tests {
         for offset in [0x50, 0x51, 0x52, 0xe00] {
             let mut slack = [0xffu8; 4];
             image
-                .load_fill(&mut slack, &Address::new(Rc::clone(&ram), header_vma + offset))
+                .load_fill(
+                    &mut slack,
+                    &Address::new(Rc::clone(&ram), header_vma + offset),
+                )
                 .unwrap_or_else(|error| panic!("header slack at {offset:#x}: {}", error.explain()));
-            assert_eq!(slack, [0; 4], "the header's unbacked slack reads as zero at {offset:#x}");
+            assert_eq!(
+                slack, [0; 4],
+                "the header's unbacked slack reads as zero at {offset:#x}"
+            );
         }
 
         // The same shape one section over: a `.text` whose VirtualSize runs
@@ -1005,17 +1036,34 @@ mod tests {
         let ia32 = TeImage::thumb(&[0xb8, 0x07, 0x00, 0x00, 0x00, 0xc3])
             .machine(IMAGE_FILE_MACHINE_I386)
             .build();
-        assert_eq!(TeLoadImage::from_bytes("ia32.te", &ia32).unwrap().entry(), 0x401001);
-        let as_arm = TeLoadImage::from_bytes_with_target("ia32.te", &ia32, "ARM:LE:32:v8:default")
-            .unwrap();
-        assert_eq!(as_arm.entry(), 0x401000, "an ARM decode folds the bit whatever the machine");
-        assert!(!as_arm.entry_thumb_hint(), "IA-32 carries no ARM mode policy");
+        assert_eq!(
+            TeLoadImage::from_bytes("ia32.te", &ia32).unwrap().entry(),
+            0x401001
+        );
+        let as_arm =
+            TeLoadImage::from_bytes_with_target("ia32.te", &ia32, "ARM:LE:32:v8:default").unwrap();
+        assert_eq!(
+            as_arm.entry(),
+            0x401000,
+            "an ARM decode folds the bit whatever the machine"
+        );
+        assert!(
+            !as_arm.entry_thumb_hint(),
+            "IA-32 carries no ARM mode policy"
+        );
 
         let arm = synthetic_thumb_te();
-        assert_eq!(TeLoadImage::from_bytes("arm.te", &arm).unwrap().entry(), 0x401000);
+        assert_eq!(
+            TeLoadImage::from_bytes("arm.te", &arm).unwrap().entry(),
+            0x401000
+        );
         let as_x86 =
             TeLoadImage::from_bytes_with_target("arm.te", &arm, "x86:LE:32:default:gcc").unwrap();
-        assert_eq!(as_x86.entry(), 0x401001, "an x86 decode keeps every entry bit");
+        assert_eq!(
+            as_x86.entry(),
+            0x401001,
+            "an x86 decode keeps every entry bit"
+        );
         assert!(!as_x86.entry_thumb_hint());
         assert!(!as_x86.whole_image_thumb());
     }
@@ -1032,7 +1080,11 @@ mod tests {
         bytes[76..80].copy_from_slice(&0xc000_0080u32.to_le_bytes());
         bytes[8..12].copy_from_slice(&0x1000u32.to_le_bytes());
         let error = TeLoadImage::from_bytes("bss.te", &bytes).unwrap_err();
-        assert!(error.explain().contains("entry point"), "{}", error.explain());
+        assert!(
+            error.explain().contains("entry point"),
+            "{}",
+            error.explain()
+        );
 
         let mut bytes = TeImage::thumb(&[0x07, 0x20, 0x70, 0x47]).build();
         bytes[4] = 2;
@@ -1098,7 +1150,10 @@ mod tests {
         let valid = synthetic_thumb_te();
         assert!(is_te_image(&valid));
         assert!(is_te_image(&valid[..TE_PROBE_LEN]));
-        assert!(!is_te_image(&valid[..TE_PROBE_LEN - 1]), "a short prefix claims nothing");
+        assert!(
+            !is_te_image(&valid[..TE_PROBE_LEN - 1]),
+            "a short prefix claims nothing"
+        );
 
         assert!(!is_te_image(b"VZ this is prose, not a container"));
         // A TE for a machine kuna has no binding for is still a TE: the probe
@@ -1107,10 +1162,17 @@ mod tests {
         unsupported_machine[2..4].copy_from_slice(&0x0ebcu16.to_le_bytes());
         assert!(is_te_image(&unsupported_machine));
         let error = TeLoadImage::from_bytes("ebc.te", &unsupported_machine).unwrap_err();
-        assert!(error.explain().contains("unsupported machine value 0x0ebc"), "{}", error.explain());
+        assert!(
+            error.explain().contains("unsupported machine value 0x0ebc"),
+            "{}",
+            error.explain()
+        );
         let mut not_efi = valid.clone();
         not_efi[5] = 2;
-        assert!(!is_te_image(&not_efi), "a Windows GUI subsystem is not a TE");
+        assert!(
+            !is_te_image(&not_efi),
+            "a Windows GUI subsystem is not a TE"
+        );
         let mut no_stripped_header = valid;
         no_stripped_header[6..8].copy_from_slice(&40u16.to_le_bytes());
         assert!(!is_te_image(&no_stripped_header));
@@ -1133,13 +1195,13 @@ mod tests {
     #[test]
     fn rejects_an_unbacked_retained_header() {
         let bytes = synthetic_thumb_te();
-        let error = TeLoadImage::from_bytes(
-            "unbacked-header.te",
-            &bytes[..SYNTHETIC_HEADER_SIZE - 1],
-        )
-        .unwrap_err();
+        let error =
+            TeLoadImage::from_bytes("unbacked-header.te", &bytes[..SYNTHETIC_HEADER_SIZE - 1])
+                .unwrap_err();
         assert!(
-            error.explain().contains("retained header range extends past end of file"),
+            error
+                .explain()
+                .contains("retained header range extends past end of file"),
             "{}",
             error.explain()
         );
@@ -1148,19 +1210,39 @@ mod tests {
     #[test]
     fn te_defaults_to_uefi_abis_and_honors_explicit_windows_models() {
         for (machine, default, windows) in [
-            (IMAGE_FILE_MACHINE_ARM64, "AARCH64:LE:64:v8A:default", "AARCH64:LE:64:v8A:windows"),
-            (IMAGE_FILE_MACHINE_I386, "x86:LE:32:default:gcc", "x86:LE:32:default:windows"),
-            (IMAGE_FILE_MACHINE_ARMNT, "ARM:LE:32:v8:default", "ARM:LE:32:v8:windows"),
+            (
+                IMAGE_FILE_MACHINE_ARM64,
+                "AARCH64:LE:64:v8A:default",
+                "AARCH64:LE:64:v8A:windows",
+            ),
+            (
+                IMAGE_FILE_MACHINE_I386,
+                "x86:LE:32:default:gcc",
+                "x86:LE:32:default:windows",
+            ),
+            (
+                IMAGE_FILE_MACHINE_ARMNT,
+                "ARM:LE:32:v8:default",
+                "ARM:LE:32:v8:windows",
+            ),
         ] {
             let bytes = TeImage::thumb(&[0x07, 0x20, 0x70, 0x47])
                 .machine(machine)
                 .entry_rva(CODE_RVA)
                 .build();
             let automatic = TeLoadImage::from_bytes("abi.te", &bytes).unwrap();
-            assert_eq!(automatic.get_arch_type(), default.as_bytes(), "machine {machine:#x}");
+            assert_eq!(
+                automatic.get_arch_type(),
+                default.as_bytes(),
+                "machine {machine:#x}"
+            );
             assert_eq!(automatic.fallback_arch_id(), None, "machine {machine:#x}");
             let explicit = TeLoadImage::from_bytes_with_target("abi.te", &bytes, windows).unwrap();
-            assert_eq!(explicit.get_arch_type(), windows.as_bytes(), "machine {machine:#x}");
+            assert_eq!(
+                explicit.get_arch_type(),
+                windows.as_bytes(),
+                "machine {machine:#x}"
+            );
         }
     }
 
@@ -1262,13 +1344,24 @@ mod tests {
         x64[8..12].copy_from_slice(&0x1000u32.to_le_bytes());
         let x64 = TeLoadImage::from_bytes("x64.te", &x64).unwrap();
         assert_eq!(x64.get_arch_type(), b"x86:LE:64:default:windows");
-        assert_eq!(x64.fallback_arch_id(), Some(b"x86:LE:64:default:gcc".as_slice()));
+        assert_eq!(
+            x64.fallback_arch_id(),
+            Some(b"x86:LE:64:default:gcc".as_slice())
+        );
 
         let ids = te_language_ids();
         assert_eq!(ids.len(), PE_MACHINES.len());
-        assert!(ids.iter().any(|(primary, fallback)| primary == "x86:LE:64:default:windows"
-            && fallback.as_deref() == Some("x86:LE:64:default:gcc")));
-        assert!(ids.iter().filter(|(primary, _)| primary == "ARM:LE:32:v8:default").count() == 3);
+        assert!(
+            ids.iter()
+                .any(|(primary, fallback)| primary == "x86:LE:64:default:windows"
+                    && fallback.as_deref() == Some("x86:LE:64:default:gcc"))
+        );
+        assert!(
+            ids.iter()
+                .filter(|(primary, _)| primary == "ARM:LE:32:v8:default")
+                .count()
+                == 3
+        );
         assert!(machine_info(0x0166).is_none(), "MIPS is not a UEFI binding");
     }
 
@@ -1302,9 +1395,11 @@ mod tests {
         );
 
         let other = Rc::clone(manager.get_space_by_name("const").unwrap());
-        assert!(image
-            .kuna_overlay_bytes(&Address::new(other, 0x401000), &[0x90])
-            .is_err());
+        assert!(
+            image
+                .kuna_overlay_bytes(&Address::new(other, 0x401000), &[0x90])
+                .is_err()
+        );
     }
 
     #[test]
@@ -1348,12 +1443,16 @@ mod tests {
         let ram = Rc::clone(manager.get_space_by_name("ram").unwrap());
         image.attach_to_space(Rc::clone(&ram));
         let mut byte = [0u8; 1];
-        assert!(image
-            .load_fill(&mut byte, &Address::new(Rc::clone(&ram), 0x401003))
-            .is_ok());
-        assert!(image
-            .load_fill(&mut byte, &Address::new(ram, 0x401004))
-            .is_err());
+        assert!(
+            image
+                .load_fill(&mut byte, &Address::new(Rc::clone(&ram), 0x401003))
+                .is_ok()
+        );
+        assert!(
+            image
+                .load_fill(&mut byte, &Address::new(ram, 0x401004))
+                .is_err()
+        );
 
         let mut entry_in_padding = bytes.clone();
         entry_in_padding[8..12].copy_from_slice(&0x1005u32.to_le_bytes());
@@ -1381,7 +1480,10 @@ mod tests {
         let mut bytes = synthetic_thumb_te();
         bytes[48..52].copy_from_slice(&8u32.to_le_bytes());
         let mut image = TeLoadImage::from_bytes("zero-tail.te", &bytes).unwrap();
-        assert_eq!(image.get_segments()[1], (0x401000, 8, section_flags::CODE | section_flags::READONLY));
+        assert_eq!(
+            image.get_segments()[1],
+            (0x401000, 8, section_flags::CODE | section_flags::READONLY)
+        );
         assert_eq!(
             image.file_backed_segments()[1],
             (0x401000, 4, section_flags::CODE | section_flags::READONLY)

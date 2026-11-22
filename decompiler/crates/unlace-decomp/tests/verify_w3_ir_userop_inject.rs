@@ -26,17 +26,17 @@
 use std::rc::Rc;
 
 use unlace_base::marshal::{Decoder, IdRegistry, XmlDecode};
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, UniqueSpace};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, UniqueSpace, addrspace_flags, spacetype};
 use unlace_base::types::int4;
 
 use unlace_decomp::inject_sleigh::PcodeInjectLibrarySleigh;
 use unlace_decomp::pcodeinject::{
-    self, InjectArchitecture, InjectContext, InjectParameter, InjectPayloadCore,
-    PcodeInjectLibraryBase, SnippetLayout, CALLFIXUP_TYPE, CALLMECHANISM_TYPE, CALLOTHERFIXUP_TYPE,
-    EXECUTABLEPCODE_TYPE,
+    self, CALLFIXUP_TYPE, CALLMECHANISM_TYPE, CALLOTHERFIXUP_TYPE, EXECUTABLEPCODE_TYPE,
+    InjectArchitecture, InjectContext, InjectParameter, InjectPayloadCore, PcodeInjectLibraryBase,
+    SnippetLayout,
 };
 use unlace_decomp::userop::{
-    register_ids, UserOpManage, UserPcodeOp, UseropArchitecture, BUILTIN_VOLATILE_READ,
+    BUILTIN_VOLATILE_READ, UserOpManage, UserPcodeOp, UseropArchitecture, register_ids,
 };
 
 // ---------------------------------------------------------------------------
@@ -64,7 +64,12 @@ impl TestArch {
             1,
             1,
         ));
-        TestArch { user_op_names: names, lib: PcodeInjectLibrarySleigh::new(0x1000), uniq, code }
+        TestArch {
+            user_op_names: names,
+            lib: PcodeInjectLibrarySleigh::new(0x1000),
+            uniq,
+            code,
+        }
     }
 }
 
@@ -93,10 +98,21 @@ impl UseropArchitecture for TestArch {
     fn get_call_other_target(&self, injectid: int4) -> Vec<u8> {
         self.lib.base.get_call_other_target(injectid)
     }
-    fn payload_io_sizes(&self, injectid: int4) -> unlace_base::error::KunaResult<(int4, int4, int4, int4)> {
+    fn payload_io_sizes(
+        &self,
+        injectid: int4,
+    ) -> unlace_base::error::KunaResult<(int4, int4, int4, int4)> {
         let core = self.lib.get_payload(injectid).core();
-        let in0 = if core.size_input() > 0 { core.get_input(0).get_size() as int4 } else { 0 };
-        let in1 = if core.size_input() > 1 { core.get_input(1).get_size() as int4 } else { 0 };
+        let in0 = if core.size_input() > 0 {
+            core.get_input(0).get_size() as int4
+        } else {
+            0
+        };
+        let in1 = if core.size_input() > 1 {
+            core.get_input(1).get_size() as int4
+        } else {
+            0
+        };
         Ok((core.size_output(), core.size_input(), in0, in1))
     }
 }
@@ -272,7 +288,10 @@ fn register_op_rejects_two_segmentops_for_same_space() {
         s.spc = Some(space);
     }
     let err = mgr.register_op(seg1).unwrap_err();
-    assert!(err.to_string().contains("Multiple segmentops defined for same space"));
+    assert!(
+        err.to_string()
+            .contains("Multiple segmentops defined for same space")
+    );
 
     // get_segment_op past the end returns None (boundary, not panic).
     assert!(mgr.get_segment_op(99).is_none());
@@ -401,7 +420,12 @@ fn get_payload_id_routes_by_type_and_default_is_script() {
 fn manual_call_other_fixup_pushes_inputs_then_output_in_order() {
     let mut lib = PcodeInjectLibrarySleigh::new(0x1000);
     let id = lib
-        .manual_call_other_fixup(b"myop", b"out", &[b"x".to_vec(), b"y".to_vec()], b"out = x + y;")
+        .manual_call_other_fixup(
+            b"myop",
+            b"out",
+            &[b"x".to_vec(), b"y".to_vec()],
+            b"out = x + y;",
+        )
         .unwrap();
     let payload = lib.get_payload(id);
     let core = payload.core();
@@ -433,7 +457,9 @@ fn manual_call_other_fixup_pushes_inputs_then_output_in_order() {
 #[test]
 fn manual_call_other_fixup_empty_output_pushes_no_output() {
     let mut lib = PcodeInjectLibrarySleigh::new(0x1000);
-    let id = lib.manual_call_other_fixup(b"voidop", b"", &[b"a".to_vec()], b"a = a;").unwrap();
+    let id = lib
+        .manual_call_other_fixup(b"voidop", b"", &[b"a".to_vec()], b"a = a;")
+        .unwrap();
     let core = lib.get_payload(id).core();
     assert_eq!(core.size_input(), 1);
     assert_eq!(core.size_output(), 0);

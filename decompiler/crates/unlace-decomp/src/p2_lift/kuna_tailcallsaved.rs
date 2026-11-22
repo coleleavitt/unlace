@@ -101,7 +101,9 @@ pub fn kuna_teardown_restores_saves(saved: u64, restored: u64) -> bool {
 fn transfer_bytes(data: &Funcdata, at: &Address, sp: &VarnodeStorage, want: OpCode) -> u64 {
     let mut bytes: u64 = 0;
     for (_, id) in data.obank().iter_at(at) {
-        let Some(o) = data.obank().get(id) else { continue };
+        let Some(o) = data.obank().get(id) else {
+            continue;
+        };
         if o.code() != want {
             continue;
         }
@@ -109,8 +111,14 @@ fn transfer_bytes(data: &Funcdata, at: &Address, sp: &VarnodeStorage, want: OpCo
             continue;
         }
         let width = match want {
-            OpCode::CPUI_STORE => o.get_in(2).and_then(|v| data.vbank().get(v)).map(|v| v.get_size()),
-            _ => o.get_out().and_then(|v| data.vbank().get(v)).map(|v| v.get_size()),
+            OpCode::CPUI_STORE => o
+                .get_in(2)
+                .and_then(|v| data.vbank().get(v))
+                .map(|v| v.get_size()),
+            _ => o
+                .get_out()
+                .and_then(|v| data.vbank().get(v))
+                .map(|v| v.get_size()),
         };
         bytes = bytes.saturating_add(width.unwrap_or(0).max(0) as u64);
     }
@@ -124,8 +132,12 @@ fn is_stack_pointer(
     sp: &VarnodeStorage,
 ) -> bool {
     let Some(id) = vn else { return false };
-    let Some(v) = data.vbank().get(id) else { return false };
-    let Some(spspace) = sp.space.as_ref() else { return false };
+    let Some(v) = data.vbank().get(id) else {
+        return false;
+    };
+    let Some(spspace) = sp.space.as_ref() else {
+        return false;
+    };
     std::rc::Rc::ptr_eq(v.get_space(), spspace)
         && v.get_offset() == sp.offset
         && v.get_size() as u32 == sp.size

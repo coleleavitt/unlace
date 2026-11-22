@@ -54,9 +54,12 @@ use std::collections::BTreeMap;
 
 use unlace_base::types::{int4, intb};
 
-use super::{accepts_record, answer, fields_for, ledger, note_uses, points_at_named_composite, vn_type, Evidence};
+use super::{
+    Evidence, accepts_record, answer, fields_for, ledger, note_uses, points_at_named_composite,
+    vn_type,
+};
 use crate::context::VarnodeId;
-use crate::dtype::{type_metatype, Datatype, TypeFactory, TypeField};
+use crate::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
 use crate::funcdata::Funcdata;
 
 /// How many records below the parameter a chain of pointer fields is followed.
@@ -94,11 +97,15 @@ pub(super) fn nest_fields(
         if field.field_type.get_size() != cx.ptr_size || !is_record_pointer(&field.field_type) {
             continue;
         }
-        let Some(inner) = loaded_record(data, cx, rec, intb::from(field.offset)) else { continue };
+        let Some(inner) = loaded_record(data, cx, rec, intb::from(field.offset)) else {
+            continue;
+        };
         if !accepts_record(data, &field.field_type, &inner, false, false) {
             continue;
         }
-        let Some((mut inner_fields, inner_size)) = fields_for(cx.types, &inner) else { continue };
+        let Some((mut inner_fields, inner_size)) = fields_for(cx.types, &inner) else {
+            continue;
+        };
         let unclaimed = inner.unclaimed_ranges();
         if is_same_record(&own, size, &inner_fields, inner_size, &unclaimed) {
             selfs.push(field.offset);
@@ -108,10 +115,19 @@ pub(super) fn nest_fields(
             continue;
         }
         let inner_selfs = nest_fields(data, cx, &inner, &mut inner_fields, inner_size, depth + 1);
-        let Some(st) = answer(data, cx.types, inner_fields, inner_size, &unclaimed, &inner_selfs) else {
+        let Some(st) = answer(
+            data,
+            cx.types,
+            inner_fields,
+            inner_size,
+            &unclaimed,
+            &inner_selfs,
+        ) else {
             continue;
         };
-        let Ok(ptr) = cx.types.get_type_pointer(cx.ptr_size, st, 1) else { continue };
+        let Ok(ptr) = cx.types.get_type_pointer(cx.ptr_size, st, 1) else {
+            continue;
+        };
         fields[i].field_type = ptr;
     }
     selfs
@@ -201,22 +217,40 @@ mod tests {
     #[test]
     fn a_loaded_record_is_the_same_only_when_the_enclosing_one_holds_all_it_read() {
         let f = factory();
-        let ptr = f.get_type_pointer(8, f.get_base(8, type_metatype::TYPE_UINT).unwrap(), 1).unwrap();
+        let ptr = f
+            .get_type_pointer(8, f.get_base(8, type_metatype::TYPE_UINT).unwrap(), 1)
+            .unwrap();
         let long = f.get_base(8, type_metatype::TYPE_INT).unwrap();
         let byte = f.get_base(1, type_metatype::TYPE_UINT).unwrap();
-        let node = vec![field(0, &ptr), field(8, &ptr), field(0x10, &long), field(0x18, &byte)];
+        let node = vec![
+            field(0, &ptr),
+            field(8, &ptr),
+            field(0x10, &long),
+            field(0x18, &byte),
+        ];
         assert!(is_same_record(&node, 0x20, &node, 0x20, &[]));
         let part = vec![field(0, &ptr), field(0x10, &long)];
         assert!(is_same_record(&node, 0x20, &part, 0x18, &[]));
-        assert!(!is_same_record(&part, 0x18, &node, 0x20, &[]), "the loaded record reads more");
+        assert!(
+            !is_same_record(&part, 0x18, &node, 0x20, &[]),
+            "the loaded record reads more"
+        );
 
         let obstack = vec![field(0, &long), field(8, &ptr), field(0x10, &ptr)];
         let chunk = vec![field(0, &ptr), field(8, &ptr)];
-        assert!(!is_same_record(&obstack, 0x18, &chunk, 0x10, &[]), "a pointer where the holder keeps an integer");
+        assert!(
+            !is_same_record(&obstack, 0x18, &chunk, 0x10, &[]),
+            "a pointer where the holder keeps an integer"
+        );
 
         // Bytes the loaded record touched without claiming must be laid out alike.
         let ints = f.get_base(4, type_metatype::TYPE_INT).unwrap();
-        let split = vec![field(0, &ptr), field(8, &ints), field(0xc, &ints), field(0x10, &long)];
+        let split = vec![
+            field(0, &ptr),
+            field(8, &ints),
+            field(0xc, &ints),
+            field(0x10, &long),
+        ];
         let whole = vec![field(0, &ptr), field(0x10, &long)];
         assert!(is_same_record(&split, 0x18, &whole, 0x18, &[]));
         assert!(!is_same_record(&split, 0x18, &whole, 0x18, &[(8, 8)]));

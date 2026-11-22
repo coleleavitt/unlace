@@ -8,7 +8,7 @@
 use std::rc::Rc;
 
 use unlace_base::marshal::{Decoder, IdRegistry, XmlDecode};
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, UniqueSpace};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, UniqueSpace, addrspace_flags, spacetype};
 
 use super::*;
 
@@ -122,7 +122,10 @@ fn library_namespaces_register_and_lookup_independently() {
     assert_eq!(lib.get_payload_id(CALLFIXUP_TYPE, b"memcpy"), 0);
     assert_eq!(lib.get_payload_id(CALLOTHERFIXUP_TYPE, b"setISAMode"), 1);
     assert_eq!(lib.get_payload_id(CALLMECHANISM_TYPE, b"vararg"), 2);
-    assert_eq!(lib.get_payload_id(EXECUTABLEPCODE_TYPE, b"switch_index2addr"), 3);
+    assert_eq!(
+        lib.get_payload_id(EXECUTABLEPCODE_TYPE, b"switch_index2addr"),
+        3
+    );
 
     // Cross-namespace lookups miss (return -1) — the C++ separate-map semantics.
     assert_eq!(lib.get_payload_id(CALLFIXUP_TYPE, b"setISAMode"), -1);
@@ -188,7 +191,10 @@ fn snippet_layout_reserves_unique_slots() {
         1,
         1,
     ));
-    let arch = Arch { uniq: Rc::clone(&uniq), code };
+    let arch = Arch {
+        uniq: Rc::clone(&uniq),
+        code,
+    };
 
     let mut core = InjectPayloadCore::new(b"s", EXECUTABLEPCODE_TYPE);
     core.inputlist.push(InjectParameter::new(b"a", 4));

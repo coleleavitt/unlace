@@ -17,12 +17,14 @@
 //! unknown name at `decompile_all.rs (apply_one_option)`; checking up front
 //! makes every surface answer the same way, and answer before the load.
 
-use unlace_decomp::options::{UPSTREAM_OPTION_ELEMENTS, KUNA_OPTION_NAMES};
+use unlace_decomp::options::{KUNA_OPTION_NAMES, UPSTREAM_OPTION_ELEMENTS};
 
 /// Whether `name` is a settable option name the engine will dispatch on.
 pub(crate) fn is_known(name: &str) -> bool {
     KUNA_OPTION_NAMES.contains(&name)
-        || UPSTREAM_OPTION_ELEMENTS.iter().any(|e| e.get_name() == name)
+        || UPSTREAM_OPTION_ELEMENTS
+            .iter()
+            .any(|e| e.get_name() == name)
         || crate::loadtime::is_loadtime_gate(name)
 }
 
@@ -56,7 +58,10 @@ fn all_names() -> impl Iterator<Item = &'static str> {
 
 /// Lowercase and drop `_`/`-`, so a case or separator slip compares equal.
 fn squash(name: &str) -> String {
-    name.chars().filter(|c| *c != '_' && *c != '-').flat_map(char::to_lowercase).collect()
+    name.chars()
+        .filter(|c| *c != '_' && *c != '-')
+        .flat_map(char::to_lowercase)
+        .collect()
 }
 
 /// The catalogued name closest to `name`: an exact match after case and
@@ -102,14 +107,20 @@ mod tests {
     fn a_catalogued_name_from_either_table_is_accepted() {
         assert!(is_known("loweredswitch"), "a kuna stage-model option");
         assert!(is_known("setlanguage"), "an upstream OptionDatabase option");
-        assert!(is_known("readonly"), "an upstream option whose element id lives elsewhere");
+        assert!(
+            is_known("readonly"),
+            "an upstream option whose element id lives elsewhere"
+        );
         assert!(is_known("goabi"), "a load-time gate");
     }
 
     #[test]
     fn every_name_the_engine_dispatches_on_is_accepted() {
         for name in all_names() {
-            assert!(is_known(name), "{name} is dispatched on but rejected up front");
+            assert!(
+                is_known(name),
+                "{name} is dispatched on but rejected up front"
+            );
         }
     }
 
@@ -123,9 +134,17 @@ mod tests {
 
     #[test]
     fn the_reported_near_misses_each_suggest_the_real_name() {
-        for miss in ["LOWEREDSWITCH", "lowered_switch", "loweredswitc", "lowered-switch"] {
+        for miss in [
+            "LOWEREDSWITCH",
+            "lowered_switch",
+            "loweredswitc",
+            "lowered-switch",
+        ] {
             let err = check(miss).unwrap_err();
-            assert!(err.contains("did you mean \"loweredswitch\"?"), "{miss}: {err}");
+            assert!(
+                err.contains("did you mean \"loweredswitch\"?"),
+                "{miss}: {err}"
+            );
         }
     }
 }

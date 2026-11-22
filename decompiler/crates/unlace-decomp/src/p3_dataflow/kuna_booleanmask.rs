@@ -19,8 +19,8 @@ use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{ActionGroupList, Rule, RuleSpec};
-use crate::funcdata::Funcdata;
 use crate::context::{OpId, TypeOp, VarnodeId};
+use crate::funcdata::Funcdata;
 
 /// (kuna GH-1282) Fold `(b << k) s>> k` into the sign-extended-mask form `0 - b`
 /// (C++ `RuleBoolSignShift`).
@@ -35,12 +35,16 @@ impl RuleBoolSignShift {
     /// `"analysis"` (the C++ registers `new RuleBoolSignShift("analysis")` in
     /// oppool1 — `coreaction.cc:5811`).
     pub fn new() -> RuleBoolSignShift {
-        RuleBoolSignShift { group: String::from("analysis") }
+        RuleBoolSignShift {
+            group: String::from("analysis"),
+        }
     }
 
     /// Construct with an explicit group string.
     pub fn with_group(group: impl Into<String>) -> RuleBoolSignShift {
-        RuleBoolSignShift { group: group.into() }
+        RuleBoolSignShift {
+            group: group.into(),
+        }
     }
 }
 
@@ -56,7 +60,9 @@ impl Rule for RuleBoolSignShift {
         if !grouplist.contains(&self.group) {
             return None;
         }
-        Some(Box::new(RuleBoolSignShift { group: self.group.clone() }))
+        Some(Box::new(RuleBoolSignShift {
+            group: self.group.clone(),
+        }))
     }
 
     /// C++ `RuleBoolSignShift::applyOp` (`kuna_booleanmask.cc:19`) — transcribed.
@@ -161,12 +167,18 @@ fn op_code(data: &Funcdata, op: OpId) -> OpCode {
 
 /// `vn->isConstant()` (C++).
 fn vn_is_constant(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).map(|v| v.is_constant()).unwrap_or(false)
+    data.vbank()
+        .get(vn)
+        .map(|v| v.is_constant())
+        .unwrap_or(false)
 }
 
 /// `vn->isWritten()` (C++).
 fn vn_is_written(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).map(|v| v.is_written()).unwrap_or(false)
+    data.vbank()
+        .get(vn)
+        .map(|v| v.is_written())
+        .unwrap_or(false)
 }
 
 /// `vn->getDef()` (C++).

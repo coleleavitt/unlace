@@ -13,14 +13,14 @@ use super::*;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::types::uint4;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
+use unlace_base::types::uint4;
 
-use crate::dtype::{type_metatype, Datatype};
-use crate::op::pcodeop_flags;
 use crate::context::{ArchContext, VarnodeId};
+use crate::dtype::{Datatype, type_metatype};
+use crate::op::pcodeop_flags;
 use crate::varnode::DefOpInfo;
 
 // --- harness -----------------------------------------------------------------
@@ -28,7 +28,8 @@ use crate::varnode::DefOpInfo;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -47,7 +48,9 @@ fn build_manager() -> AddrSpaceManager {
 fn build_fd() -> Funcdata {
     let manage = build_manager();
     let mut context = ArchContext::new(manage);
-    context.floatformats.push(unlace_num::float::FloatFormat::new(4));
+    context
+        .floatformats
+        .push(unlace_num::float::FloatFormat::new(4));
     let glb = Rc::new(context);
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
     let addr = Address::new(ram, 0x1000);
@@ -82,9 +85,10 @@ fn opcode_flags(opc: OpCode) -> uint4 {
         OpCode::CPUI_INT_NEGATE | OpCode::CPUI_INT_2COMP => pcodeop_flags::unary,
         OpCode::CPUI_SUBPIECE => pcodeop_flags::binary,
         OpCode::CPUI_PIECE => pcodeop_flags::binary,
-        OpCode::CPUI_INT_AND | OpCode::CPUI_INT_LEFT | OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR => {
-            pcodeop_flags::binary
-        }
+        OpCode::CPUI_INT_AND
+        | OpCode::CPUI_INT_LEFT
+        | OpCode::CPUI_INT_OR
+        | OpCode::CPUI_INT_XOR => pcodeop_flags::binary,
         _ => 0,
     }
 }
@@ -92,7 +96,8 @@ fn opcode_flags(opc: OpCode) -> uint4 {
 fn mk_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
     let ram = ram_space(fd);
     let op = fd.new_op(inputs, Address::new(ram, off));
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, opcode_flags(opc), format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, opcode_flags(opc), format!("{opc:?}")));
     op
 }
 
@@ -109,7 +114,9 @@ fn mk_vn(fd: &mut Funcdata, off: u64, s: int4) -> VarnodeId {
 fn mk_input(fd: &mut Funcdata, off: u64, s: int4) -> VarnodeId {
     let ram = ram_space(fd);
     let vn = fd.vbank_mut().create(s, Address::new(ram, off), dt(s));
-    fd.vbank_mut().set_input(vn, &mut |_b, _a, _c| Ok(())).expect("set_input")
+    fd.vbank_mut()
+        .set_input(vn, &mut |_b, _a, _c| Ok(()))
+        .expect("set_input")
 }
 
 /// A constant varnode of value `val` size `s`.
@@ -124,7 +131,9 @@ fn set_def(fd: &mut Funcdata, vn: VarnodeId, op: OpId) {
     let seqnum = fd.obank().get(op).unwrap().get_seq_num().clone();
     fd.obank_mut().get_mut(op).unwrap().set_output(Some(vn));
     let info = DefOpInfo { id: op, seqnum };
-    fd.vbank_mut().set_def(vn, info, &mut |_b, _a, _c| Ok(())).expect("set_def");
+    fd.vbank_mut()
+        .set_def(vn, info, &mut |_b, _a, _c| Ok(()))
+        .expect("set_def");
 }
 
 fn code_of(fd: &Funcdata, op: OpId) -> OpCode {
@@ -451,7 +460,10 @@ fn less2zero_zero_rhs_becomes_false_copy() {
     // V < 0 => false
     assert_eq!(code_of(&fd, op), OpCode::CPUI_COPY);
     assert_eq!(fd.obank().get(op).unwrap().num_input(), 1);
-    assert_eq!(off_of(&fd, fd.obank().get(op).unwrap().get_in(0).unwrap()), 0);
+    assert_eq!(
+        off_of(&fd, fd.obank().get(op).unwrap().get_in(0).unwrap()),
+        0
+    );
 }
 
 #[test]
@@ -499,7 +511,10 @@ fn lessequal2zero_zero_lhs_becomes_true_copy() {
     // 0 <= V => true: COPY of const(1,1)
     assert_eq!(code_of(&fd, op), OpCode::CPUI_COPY);
     assert_eq!(fd.obank().get(op).unwrap().num_input(), 1);
-    assert_eq!(off_of(&fd, fd.obank().get(op).unwrap().get_in(0).unwrap()), 1);
+    assert_eq!(
+        off_of(&fd, fd.obank().get(op).unwrap().get_in(0).unwrap()),
+        1
+    );
 }
 
 #[test]
@@ -545,7 +560,10 @@ fn lessequal2zero_mask_rhs_becomes_true_copy() {
     // V <= ffff => true
     assert_eq!(code_of(&fd, op), OpCode::CPUI_COPY);
     assert_eq!(fd.obank().get(op).unwrap().num_input(), 1);
-    assert_eq!(off_of(&fd, fd.obank().get(op).unwrap().get_in(0).unwrap()), 1);
+    assert_eq!(
+        off_of(&fd, fd.obank().get(op).unwrap().get_in(0).unwrap()),
+        1
+    );
 }
 
 #[test]
@@ -932,10 +950,22 @@ fn equal2constant_negative_other_descendant_wrong_form() {
 
 #[test]
 fn op_lists_match_cpp() {
-    assert_eq!(RuleBoolNegate::new("g").get_op_list(), vec![OpCode::CPUI_BOOL_NEGATE]);
-    assert_eq!(RuleLess2Zero::new("g").get_op_list(), vec![OpCode::CPUI_INT_LESS]);
-    assert_eq!(RuleLessEqual2Zero::new("g").get_op_list(), vec![OpCode::CPUI_INT_LESSEQUAL]);
-    assert_eq!(RuleSLess2Zero::new("g").get_op_list(), vec![OpCode::CPUI_INT_SLESS]);
+    assert_eq!(
+        RuleBoolNegate::new("g").get_op_list(),
+        vec![OpCode::CPUI_BOOL_NEGATE]
+    );
+    assert_eq!(
+        RuleLess2Zero::new("g").get_op_list(),
+        vec![OpCode::CPUI_INT_LESS]
+    );
+    assert_eq!(
+        RuleLessEqual2Zero::new("g").get_op_list(),
+        vec![OpCode::CPUI_INT_LESSEQUAL]
+    );
+    assert_eq!(
+        RuleSLess2Zero::new("g").get_op_list(),
+        vec![OpCode::CPUI_INT_SLESS]
+    );
     assert_eq!(
         RuleEqual2Zero::new("g").get_op_list(),
         vec![OpCode::CPUI_INT_EQUAL, OpCode::CPUI_INT_NOTEQUAL]
@@ -944,24 +974,38 @@ fn op_lists_match_cpp() {
         RuleEqual2Constant::new("g").get_op_list(),
         vec![OpCode::CPUI_INT_EQUAL, OpCode::CPUI_INT_NOTEQUAL]
     );
-    assert_eq!(RulePtrArith::new("g").get_op_list(), vec![OpCode::CPUI_INT_ADD]);
+    assert_eq!(
+        RulePtrArith::new("g").get_op_list(),
+        vec![OpCode::CPUI_INT_ADD]
+    );
     assert_eq!(
         RuleStructOffset0::new("g").get_op_list(),
         vec![OpCode::CPUI_LOAD, OpCode::CPUI_STORE]
     );
-    assert_eq!(RulePushPtr::new("g").get_op_list(), vec![OpCode::CPUI_INT_ADD]);
+    assert_eq!(
+        RulePushPtr::new("g").get_op_list(),
+        vec![OpCode::CPUI_INT_ADD]
+    );
 }
 
 #[test]
 fn clone_filters_by_group() {
     let inlist = ActionGroupList::from_names(["analysis"]);
     let empty = ActionGroupList::new();
-    assert!(RuleBoolNegate::new("analysis").clone_rule(&inlist).is_some());
+    assert!(
+        RuleBoolNegate::new("analysis")
+            .clone_rule(&inlist)
+            .is_some()
+    );
     assert!(RuleBoolNegate::new("analysis").clone_rule(&empty).is_none());
     // pointer rules belong to typerecovery
     let tr = ActionGroupList::from_names(["typerecovery"]);
     assert!(RulePtrArith::new("typerecovery").clone_rule(&tr).is_some());
-    assert!(RulePtrArith::new("typerecovery").clone_rule(&inlist).is_none());
+    assert!(
+        RulePtrArith::new("typerecovery")
+            .clone_rule(&inlist)
+            .is_none()
+    );
 }
 
 #[test]
@@ -987,5 +1031,8 @@ fn pointer_rules_are_noop_stubs() {
     assert_eq!(RulePtrArith::new("typerecovery").apply_op(op, &mut fd), 0);
     assert_eq!(RulePushPtr::new("typerecovery").apply_op(op, &mut fd), 0);
     let ld = mk_op(&mut fd, 2, 0x200, OpCode::CPUI_LOAD);
-    assert_eq!(RuleStructOffset0::new("typerecovery").apply_op(ld, &mut fd), 0);
+    assert_eq!(
+        RuleStructOffset0::new("typerecovery").apply_op(ld, &mut fd),
+        0
+    );
 }

@@ -69,8 +69,8 @@ use unlace_num::opcodes::OpCode;
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
 use crate::block::BlockKind;
-use crate::funcdata::Funcdata;
 use crate::context::{BlockId, OpId, VarnodeId};
+use crate::funcdata::Funcdata;
 
 /// Does Varnode `ptr` address `<base> + 0x28` (the x86-64 TLS canary slot)?
 /// (C++ `ptrIsCanarySlot`, `kuna_stackguard.cc:34`).
@@ -156,7 +156,9 @@ fn ptr_is_fs_canary(ptr: VarnodeId, data: &Funcdata) -> bool {
             .is_some_and(|v| Rc::ptr_eq(v.get_space(), &fs_space) && v.get_offset() == fs.offset)
     };
     let is_slot = |vn: VarnodeId| {
-        data.vbank().get(vn).is_some_and(|v| v.is_constant() && v.get_offset() == 0x28)
+        data.vbank()
+            .get(vn)
+            .is_some_and(|v| v.is_constant() && v.get_offset() == 0x28)
     };
     match (add.get_in(0), add.get_in(1)) {
         (Some(a), Some(b)) => (is_slot(b) && is_fs(a)) || (is_slot(a) && is_fs(b)),
@@ -175,14 +177,18 @@ fn is_named_guard(vn: VarnodeId, data: &Funcdata) -> bool {
     if !data.get_arch().canary_global {
         return false;
     }
-    let Some(v) = data.vbank().get(vn) else { return false };
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
     if v.is_constant() || v.is_written() {
         return false;
     }
     let addr = v.get_addr().clone();
     data.get_arch()
         .name_for_global_varnode(&addr, v.get_size(), &addr)
-        .is_some_and(|(name, off, _)| off == 0 && GUARD_GLOBALS.contains(&name.trim_start_matches('_')))
+        .is_some_and(|(name, off, _)| {
+            off == 0 && GUARD_GLOBALS.contains(&name.trim_start_matches('_'))
+        })
 }
 
 /// Does `vn` ultimately derive from a LOAD of the canary slot?
@@ -216,7 +222,10 @@ fn derives_from_canary_load(
     let dop = data.obank().get(def).expect("derivesFromCanaryLoad: dop");
     let oc = dop.code();
     if oc == OpCode::CPUI_LOAD {
-        return ptr_is_canary_slot(dop.get_in(1).expect("derivesFromCanaryLoad: load ptr"), data);
+        return ptr_is_canary_slot(
+            dop.get_in(1).expect("derivesFromCanaryLoad: load ptr"),
+            data,
+        );
     }
     if oc == OpCode::CPUI_COPY
         || oc == OpCode::CPUI_CAST
@@ -229,7 +238,10 @@ fn derives_from_canary_load(
     }
     if oc == OpCode::CPUI_SUBPIECE {
         let in1 = dop.get_in(1).expect("derivesFromCanaryLoad: subpiece in1");
-        let in1v = data.vbank().get(in1).expect("derivesFromCanaryLoad: subpiece in1 vn");
+        let in1v = data
+            .vbank()
+            .get(in1)
+            .expect("derivesFromCanaryLoad: subpiece in1 vn");
         if in1v.is_constant() && in1v.get_offset() == 0 {
             let in0 = dop.get_in(0).expect("derivesFromCanaryLoad: subpiece in0");
             return derives_from_canary_load(in0, depth - 1, seen, data);
@@ -382,7 +394,9 @@ pub(crate) fn collect_value_slots(
             None => continue,
         };
         for r in readers {
-            let Some(rop) = data.obank().get(r) else { continue };
+            let Some(rop) = data.obank().get(r) else {
+                continue;
+            };
             let joins = match rop.code() {
                 OpCode::CPUI_COPY | OpCode::CPUI_CAST => true,
                 OpCode::CPUI_INDIRECT => rop.get_in(0) == Some(vn),
@@ -404,8 +418,13 @@ pub(crate) fn collect_value_slots(
         return;
     };
     for vn in set {
-        let Some(v) = data.vbank().get(vn) else { continue };
-        let on_stack = v.get_addr().get_space().is_some_and(|s| Rc::ptr_eq(s, &stack));
+        let Some(v) = data.vbank().get(vn) else {
+            continue;
+        };
+        let on_stack = v
+            .get_addr()
+            .get_space()
+            .is_some_and(|s| Rc::ptr_eq(s, &stack));
         if !v.is_addr_tied() || !on_stack {
             continue;
         }
@@ -442,7 +461,10 @@ pub(crate) fn release_canary_slots(data: &mut Funcdata, slots: &[(Address, int4)
     for (addr, size) in slots {
         let ids: Vec<VarnodeId> = data.vbank().iter_loc_size_addr(*size, addr).collect();
         for vn in ids {
-            let v = data.vbank_mut().get_mut(vn).expect("releaseCanarySlots: stale vn");
+            let v = data
+                .vbank_mut()
+                .get_mut(vn)
+                .expect("releaseCanarySlots: stale vn");
             if v.is_addr_tied() && v.is_addr_force() {
                 v.clear_addr_force();
             }
@@ -519,7 +541,10 @@ pub struct ActionStripStackGuard {
 impl ActionStripStackGuard {
     /// The scheduler passes false; `apply` also reads the live architecture gate.
     pub fn new(enabled: bool, g: impl Into<String>) -> ActionStripStackGuard {
-        ActionStripStackGuard { base: ActionBase::new(0, "stripstackguard", g), enabled }
+        ActionStripStackGuard {
+            base: ActionBase::new(0, "stripstackguard", g),
+            enabled,
+        }
     }
 }
 
@@ -536,7 +561,10 @@ impl Action for ActionStripStackGuard {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionStripStackGuard { base: self.base.clone(), enabled: self.enabled }))
+        Some(Box::new(ActionStripStackGuard {
+            base: self.base.clone(),
+            enabled: self.enabled,
+        }))
     }
 
     /// C++ `ActionStripStackGuard::apply`, `kuna_stackguard.cc:115`.
@@ -573,15 +601,30 @@ impl Action for ActionStripStackGuard {
             };
 
             // The successor taken when the boolean condition is TRUE.
-            let flip = data.obank().get(cb).expect("stackguard: cb flip").is_boolean_flip();
+            let flip = data
+                .obank()
+                .get(cb)
+                .expect("stackguard: cb flip")
+                .is_boolean_flip();
             let hblk = data.bblocks_ref().block(h);
-            let cond_true: BlockId = if flip { hblk.get_false_out() } else { hblk.get_true_out() };
-            let cond_false: BlockId = if flip { hblk.get_true_out() } else { hblk.get_false_out() };
+            let cond_true: BlockId = if flip {
+                hblk.get_false_out()
+            } else {
+                hblk.get_true_out()
+            };
+            let cond_false: BlockId = if flip {
+                hblk.get_true_out()
+            } else {
+                hblk.get_false_out()
+            };
             // Canary corrupted => the no-return handler.  For `slot != reload`
             // the true edge is the failure; for `slot == reload` the false edge.
             let fail_out: BlockId = if is_not_equal { cond_true } else { cond_false };
             // dynamic_cast<BlockBasic *>(failOut) — must be basic.
-            if !matches!(data.bblocks_ref().block(fail_out).kind(), BlockKind::Basic(_)) {
+            if !matches!(
+                data.bblocks_ref().block(fail_out).kind(),
+                BlockKind::Basic(_)
+            ) {
                 continue;
             }
             // Safety: the corrupted branch must actually call the handler.
@@ -638,7 +681,8 @@ impl Action for ActionStripStackGuard {
             let mut seen: BTreeSet<VarnodeId> = BTreeSet::new();
             collect_canary_slots(cmp_in1, 32, &mut seen, data, &mut slots, &mut loads);
             collect_value_slots(&loads, data, &mut slots);
-            data.remove_branch(h, idx).expect("ActionStripStackGuard: removeBranch");
+            data.remove_branch(h, idx)
+                .expect("ActionStripStackGuard: removeBranch");
             data.remove_unreachable_blocks(false, true)
                 .expect("ActionStripStackGuard: removeUnreachableBlocks");
             // The check is stripped; release the entry-side canary init (the

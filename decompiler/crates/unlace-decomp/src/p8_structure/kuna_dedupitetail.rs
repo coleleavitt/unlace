@@ -60,10 +60,10 @@ use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
-use crate::block::{block_flags, BlockType};
+use crate::block::{BlockType, block_flags};
+use crate::context::{BlockId, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::options::on_or_off;
-use crate::context::{BlockId, VarnodeId};
 
 use unlace_base::marshal::ElementId;
 
@@ -89,7 +89,9 @@ pub struct ActionDedupIteTail {
 impl ActionDedupIteTail {
     /// Construct in group `g`.
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionDedupIteTail { base: ActionBase::new(0, "dedupitetail", g) })
+        Box::new(ActionDedupIteTail {
+            base: ActionBase::new(0, "dedupitetail", g),
+        })
     }
 }
 
@@ -104,7 +106,9 @@ impl Action for ActionDedupIteTail {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionDedupIteTail { base: self.base.clone() }))
+        Some(Box::new(ActionDedupIteTail {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // P0 assertion `option dedupitetail on|off`, carried on the Architecture boundary.
@@ -136,12 +140,12 @@ impl Action for ActionDedupIteTail {
         let mut count: int4 = 0;
         for (if_id, kind, retained, duplicate) in &plans {
             let ok = match kind {
-                HoistKind::Prefix => {
-                    data.sblocks_mut().kuna_hoist_ite_prefix(*if_id, retained, duplicate)
-                }
-                HoistKind::Suffix => {
-                    data.sblocks_mut().kuna_hoist_ite_suffix(*if_id, retained, duplicate)
-                }
+                HoistKind::Prefix => data
+                    .sblocks_mut()
+                    .kuna_hoist_ite_prefix(*if_id, retained, duplicate),
+                HoistKind::Suffix => data
+                    .sblocks_mut()
+                    .kuna_hoist_ite_suffix(*if_id, retained, duplicate),
             };
             if ok {
                 count += 1;
@@ -207,17 +211,22 @@ fn ite_clause_comps(data: &Funcdata, n: BlockId) -> Option<(Vec<BlockId>, Vec<Bl
     let true_clause = blk.get_block(1);
     let else_clause = blk.get_block(2);
     // Both clauses must be plain lists (so we can splice off leading/trailing comps).
-    match (g.block(true_clause).get_type(), g.block(else_clause).get_type()) {
+    match (
+        g.block(true_clause).get_type(),
+        g.block(else_clause).get_type(),
+    ) {
         (BlockType::Ls, BlockType::Ls)
         | (BlockType::Ls, BlockType::Graph)
         | (BlockType::Graph, BlockType::Ls)
         | (BlockType::Graph, BlockType::Graph) => {}
         _ => return None,
     }
-    let tcomps: Vec<BlockId> =
-        (0..g.block(true_clause).get_size()).map(|i| g.block(true_clause).get_block(i)).collect();
-    let ecomps: Vec<BlockId> =
-        (0..g.block(else_clause).get_size()).map(|i| g.block(else_clause).get_block(i)).collect();
+    let tcomps: Vec<BlockId> = (0..g.block(true_clause).get_size())
+        .map(|i| g.block(true_clause).get_block(i))
+        .collect();
+    let ecomps: Vec<BlockId> = (0..g.block(else_clause).get_size())
+        .map(|i| g.block(else_clause).get_block(i))
+        .collect();
     Some((tcomps, ecomps))
 }
 
@@ -225,15 +234,16 @@ fn ite_clause_comps(data: &Funcdata, n: BlockId) -> Option<(Vec<BlockId>, Vec<Bl
 /// **prefix** of hoistable, C-equivalent *leaf* components, return
 /// `(if_id, retained_prefix, duplicate_prefix)` (true-arm retained, else-arm dropped).
 /// `None` if the shared prefix is empty.
-fn plan_prefix_merge(
-    data: &Funcdata,
-    n: BlockId,
-) -> Option<(BlockId, Vec<BlockId>, Vec<BlockId>)> {
+fn plan_prefix_merge(data: &Funcdata, n: BlockId) -> Option<(BlockId, Vec<BlockId>, Vec<BlockId>)> {
     let (tcomps, ecomps) = ite_clause_comps(data, n)?;
     // Both lists must keep at least one component *after* the shared prefix — never
     // empty an arm (that is the ifelseflatten / full-arm-collapse shape, not a tail
     // dedup, and emptying a clause would change the if's structure).
-    let maxrun = tcomps.len().min(ecomps.len()).saturating_sub(1).min(MAX_HOISTED_LEAVES);
+    let maxrun = tcomps
+        .len()
+        .min(ecomps.len())
+        .saturating_sub(1)
+        .min(MAX_HOISTED_LEAVES);
     let mut retained = Vec::new();
     let mut duplicate = Vec::new();
     for i in 0..maxrun {
@@ -255,10 +265,7 @@ fn plan_prefix_merge(
 /// sound) — return `(if_id, retained_suffix, duplicate_suffix)` (true-arm retained,
 /// else-arm dropped, in source order).  `None` if the shared suffix is empty or the
 /// fall-through soundness check fails.
-fn plan_suffix_merge(
-    data: &Funcdata,
-    n: BlockId,
-) -> Option<(BlockId, Vec<BlockId>, Vec<BlockId>)> {
+fn plan_suffix_merge(data: &Funcdata, n: BlockId) -> Option<(BlockId, Vec<BlockId>, Vec<BlockId>)> {
     let (tcomps, ecomps) = ite_clause_comps(data, n)?;
     let tn = tcomps.len();
     let en = ecomps.len();
@@ -424,7 +431,8 @@ fn leaves_emit_same_c(data: &Funcdata, a: BlockId, b: BlockId) -> bool {
     // temporary at the same producing position in B.  Built up as we walk; any
     // mismatch in the correspondence (a temp used before defined, or mapped two ways)
     // declines.
-    let mut tmap: std::collections::HashMap<VarnodeId, VarnodeId> = std::collections::HashMap::new();
+    let mut tmap: std::collections::HashMap<VarnodeId, VarnodeId> =
+        std::collections::HashMap::new();
     for (&oa, &ob) in aops.iter().zip(bops.iter()) {
         let (opa, opb) = match (data.obank().get(oa), data.obank().get(ob)) {
             (Some(x), Some(y)) => (x, y),
@@ -564,7 +572,9 @@ fn vn_equiv(
     // Any other non-constant operand (register / stack / ram global) renders by its
     // storage location — require the same space + offset + size so the printer emits
     // the same C name / fixed reference.
-    a_space_name == b_space_name && aa.get_offset() == ab.get_offset() && ra.get_size() == rb.get_size()
+    a_space_name == b_space_name
+        && aa.get_offset() == ab.get_offset()
+        && ra.get_size() == rb.get_size()
 }
 
 /// Do two CALL ops `oa`/`ob` resolve to the same callee?  Each op's call-spec index

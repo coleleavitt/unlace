@@ -3,18 +3,18 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use unlace_base::address::Address;
-use unlace_base::space::AddrSpace;
-use unlace_decomp::architecture::Architecture;
-use unlace_num::opcodes::OpCode;
 use object::{
     Object, ObjectSection, ObjectSegment, ObjectSymbol, SectionFlags, SegmentFlags, SymbolFlags,
     SymbolSection,
 };
+use unlace_base::address::Address;
+use unlace_base::space::AddrSpace;
+use unlace_decomp::architecture::Architecture;
+use unlace_num::opcodes::OpCode;
 
-use super::xrefs::{in_range, FullOp, XrefKind, MAX_SLOT_COPIES};
+use super::xrefs::{FullOp, MAX_SLOT_COPIES, XrefKind, in_range};
 use crate::loader::kuna_dataptrs::Coverage;
-use crate::loader::kuna_dynrelocs::{fixup_sites, relro_range, FixupKind};
+use crate::loader::kuna_dynrelocs::{FixupKind, fixup_sites, relro_range};
 
 pub(super) struct GotCalls(BTreeMap<u64, u64>);
 

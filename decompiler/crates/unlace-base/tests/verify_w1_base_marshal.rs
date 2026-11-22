@@ -36,11 +36,11 @@ use std::rc::Rc;
 
 use unlace_base::error::KunaError;
 use unlace_base::marshal::{
-    Decoder, Encoder, IdRegistry, PackedDecode, PackedEncode, XmlDecode, XmlEncode, ATTRIB_ALIGN,
-    ATTRIB_CONTENT, ATTRIB_FORMAT, ATTRIB_STORAGE, ATTRIB_UNKNOWN, ATTRIB_VAL, ELEM_DATA,
-    ELEM_VALUE,
+    ATTRIB_ALIGN, ATTRIB_CONTENT, ATTRIB_FORMAT, ATTRIB_STORAGE, ATTRIB_UNKNOWN, ATTRIB_VAL,
+    Decoder, ELEM_DATA, ELEM_VALUE, Encoder, IdRegistry, PackedDecode, PackedEncode, XmlDecode,
+    XmlEncode,
 };
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, addrspace_flags, spacetype};
 
 fn test_manager() -> AddrSpaceManager {
     let mut manager = AddrSpaceManager::new();
@@ -84,8 +84,14 @@ fn verify_marshal_indexed_attr_happy_and_error_paths() {
     assert_eq!(indexed_attr_id("val1").unwrap(), 24);
     assert_eq!(indexed_attr_id("val23").unwrap(), 46);
     // Exact base-name match and non-numeric suffix: val parses to 0 -> throw
-    assert!(matches!(indexed_attr_id("val").unwrap_err(), KunaError::Lowlevel { .. }));
-    assert!(matches!(indexed_attr_id("valabc").unwrap_err(), KunaError::Lowlevel { .. }));
+    assert!(matches!(
+        indexed_attr_id("val").unwrap_err(),
+        KunaError::Lowlevel { .. }
+    ));
+    assert!(matches!(
+        indexed_attr_id("valabc").unwrap_err(),
+        KunaError::Lowlevel { .. }
+    ));
     // Name not starting with the base name -> ATTRIB_UNKNOWN, no error
     assert_eq!(indexed_attr_id("zzz9").unwrap(), ATTRIB_UNKNOWN.get_id());
 }
@@ -106,7 +112,10 @@ fn verify_marshal_indexed_attr_dec_suffix_matches_cpp_oracle_f1() {
         "C++ `>> dec` parses suffix 08 as decimal 8 -> id 24+7"
     );
     assert!(
-        matches!(indexed_attr_id("val0x2").unwrap_err(), KunaError::Lowlevel { .. }),
+        matches!(
+            indexed_attr_id("val0x2").unwrap_err(),
+            KunaError::Lowlevel { .. }
+        ),
         "C++ `>> dec` extracts 0 from suffix 0x2 -> Bad indexed attribute"
     );
 }
@@ -215,10 +224,17 @@ fn verify_marshal_packed_ingest_nul_truncation_and_empty() {
     let el = dec.open_element_id(&ELEM_DATA).unwrap();
     assert!(!dec.read_bool_id(&ATTRIB_ALIGN).unwrap());
     dec.close_element(el).unwrap();
-    assert_eq!(dec.peek_element().unwrap(), 0, "post-NUL bytes must not be ingested");
+    assert_eq!(
+        dec.peek_element().unwrap(),
+        0,
+        "post-NUL bytes must not be ingested"
+    );
 
     let mut dec2 = PackedDecode::new(&manager);
-    assert!(matches!(dec2.ingest_stream(&[]).unwrap_err(), KunaError::Decoder { .. }));
+    assert!(matches!(
+        dec2.ingest_stream(&[]).unwrap_err(),
+        KunaError::Decoder { .. }
+    ));
     let mut dec3 = PackedDecode::new(&manager);
     assert!(matches!(
         dec3.ingest_stream(&[0x00, 0x41, 0x81]).unwrap_err(),
@@ -245,7 +261,8 @@ fn verify_marshal_packed_expect_string_paths() {
     dec.ingest_stream(&buf).unwrap();
     let el = dec.open_element_id(&ELEM_DATA).unwrap();
     assert_eq!(
-        dec.read_signed_integer_expect_string_id(&ATTRIB_FORMAT, b"blob", -42).unwrap(),
+        dec.read_signed_integer_expect_string_id(&ATTRIB_FORMAT, b"blob", -42)
+            .unwrap(),
         -42
     );
     // Re-read with a different expectation: mismatching string is an error
@@ -255,7 +272,8 @@ fn verify_marshal_packed_expect_string_paths() {
     assert!(matches!(err, KunaError::Decoder { .. }));
     // The failed read must not have corrupted element traversal
     assert_eq!(
-        dec.read_signed_integer_expect_string_id(&ATTRIB_FORMAT, b"blob", -42).unwrap(),
+        dec.read_signed_integer_expect_string_id(&ATTRIB_FORMAT, b"blob", -42)
+            .unwrap(),
         -42
     );
     dec.close_element(el).unwrap();
@@ -272,7 +290,8 @@ fn verify_marshal_packed_expect_string_paths() {
     dec2.ingest_stream(&buf2).unwrap();
     let el2 = dec2.open_element_id(&ELEM_DATA).unwrap();
     assert_eq!(
-        dec2.read_signed_integer_expect_string_id(&ATTRIB_FORMAT, b"blob", -42).unwrap(),
+        dec2.read_signed_integer_expect_string_id(&ATTRIB_FORMAT, b"blob", -42)
+            .unwrap(),
         1234
     );
     dec2.close_element(el2).unwrap();
@@ -325,7 +344,10 @@ fn verify_marshal_xml_content_tagstatus_exact_bytes() {
     dec2.ingest_stream(&buf2).unwrap();
     let el1 = dec2.open_element_id(&ELEM_DATA).unwrap();
     let el2 = dec2.open_element_id(&ELEM_VALUE).unwrap();
-    assert_eq!(dec2.read_unsigned_integer_id(&ATTRIB_CONTENT).unwrap(), 0xbeef);
+    assert_eq!(
+        dec2.read_unsigned_integer_id(&ATTRIB_CONTENT).unwrap(),
+        0xbeef
+    );
     dec2.close_element(el2).unwrap();
     dec2.close_element(el1).unwrap();
 }

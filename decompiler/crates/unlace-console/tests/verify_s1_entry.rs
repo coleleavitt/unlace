@@ -17,11 +17,16 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// The vendored stripped PIE fixture (shared with the unlace-analysis entry gate).
@@ -50,8 +55,11 @@ fn discovered_main_decompiles_without_supplied_address() {
     // replaces exactly that name at exactly this address with `main` — is turned
     // off here. The default path on this same fixture is gated by
     // `tests/stages/kuna-elfmain.xml` and `verify_crossarch_entry_main`.
-    prog.arch_mut().set_kuna_option("elfmain", "off").expect("elfmain flips");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.arch_mut()
+        .set_kuna_option("elfmain", "off")
+        .expect("elfmain flips");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
     // The discovery pass + commit seam registered the entries by their angr-style
     // names. `main` (0x1405) and the ELF entry `_start` (0x1160) are present even
@@ -120,7 +128,8 @@ fn dynamic_init_fini_elements_get_ghidra_names() {
 
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
     // The array-element starts resolve under their Ghidra names, NOT `sub_<addr>`.
     assert!(

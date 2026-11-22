@@ -118,7 +118,11 @@ impl<'a, 'b> Image<'a, 'b> {
             .map(|s| (s.address(), s.address().saturating_add(s.size()), s.index()))
             .collect();
         sections.sort_unstable_by_key(|&(lo, hi, _)| (lo, hi));
-        Image { file, exec: merged, sections }
+        Image {
+            file,
+            exec: merged,
+            sections,
+        }
     }
 
     fn is_executable(&self, addr: u64) -> bool {
@@ -128,18 +132,26 @@ impl<'a, 'b> Image<'a, 'b> {
 
     /// The section holding `addr`, with `addr`'s offset into its data.
     fn section_at(&self, addr: u64) -> Option<(object::Section<'a, 'b>, usize)> {
-        let i = self.sections.partition_point(|&(lo, _, _)| lo <= addr).checked_sub(1)?;
+        let i = self
+            .sections
+            .partition_point(|&(lo, _, _)| lo <= addr)
+            .checked_sub(1)?;
         let (lo, hi, index) = self.sections[i];
         if addr >= hi {
             return None;
         }
-        Some((self.file.section_by_index(index).ok()?, (addr - lo) as usize))
+        Some((
+            self.file.section_by_index(index).ok()?,
+            (addr - lo) as usize,
+        ))
     }
 
     /// Is `addr` in a mapped, non-executable section — where a string lives?
     fn is_data(&self, addr: u64) -> bool {
         !self.is_executable(addr)
-            && self.section_at(addr).is_some_and(|(s, _)| s.kind() != SectionKind::Text && s.kind() != SectionKind::Metadata)
+            && self.section_at(addr).is_some_and(|(s, _)| {
+                s.kind() != SectionKind::Text && s.kind() != SectionKind::Metadata
+            })
     }
 
     /// The NUL-terminated string at `addr`, bounded by [`MAX_PATH`].
@@ -158,31 +170,48 @@ impl<'a, 'b> Image<'a, 'b> {
             && self.section_at(addr).is_some_and(|(section, off)| {
                 let data = section.data().unwrap_or_default();
                 (off == 0 || data.get(off - 1) == Some(&0))
-                    && data.get(off..).is_some_and(|t| t.iter().take(MAX_PATH).any(|&b| b == 0))
+                    && data
+                        .get(off..)
+                        .is_some_and(|t| t.iter().take(MAX_PATH).any(|&b| b == 0))
             })
     }
 }
 
 fn read_u16(data: &[u8], off: usize, big: bool) -> Option<u16> {
     let b = data.get(off..off + 2)?;
-    Some(if big { u16::from_be_bytes([b[0], b[1]]) } else { u16::from_le_bytes([b[0], b[1]]) })
+    Some(if big {
+        u16::from_be_bytes([b[0], b[1]])
+    } else {
+        u16::from_le_bytes([b[0], b[1]])
+    })
 }
 
 fn read_u32(data: &[u8], off: usize, big: bool) -> Option<u32> {
     let b: [u8; 4] = data.get(off..off + 4)?.try_into().ok()?;
-    Some(if big { u32::from_be_bytes(b) } else { u32::from_le_bytes(b) })
+    Some(if big {
+        u32::from_be_bytes(b)
+    } else {
+        u32::from_le_bytes(b)
+    })
 }
 
 fn read_u64(data: &[u8], off: usize, big: bool) -> Option<u64> {
     let b: [u8; 8] = data.get(off..off + 8)?.try_into().ok()?;
-    Some(if big { u64::from_be_bytes(b) } else { u64::from_le_bytes(b) })
+    Some(if big {
+        u64::from_be_bytes(b)
+    } else {
+        u64::from_le_bytes(b)
+    })
 }
 
 /// The address a pointer field holds: `base + disp` for a self-relative one,
 /// the value itself for an absolute one.
 fn pointer(data: &[u8], base: u64, off: usize, width: u8, big: bool) -> Option<u64> {
     match width {
-        4 => Some(base.wrapping_add(off as u64).wrapping_add(read_u32(data, off, big)? as i32 as i64 as u64)),
+        4 => Some(
+            base.wrapping_add(off as u64)
+                .wrapping_add(read_u32(data, off, big)? as i32 as i64 as u64),
+        ),
         8 => read_u64(data, off, big),
         _ => None,
     }
@@ -190,13 +219,23 @@ fn pointer(data: &[u8], base: u64, off: usize, width: u8, big: bool) -> Option<u
 
 /// Is `s` a source file path rather than a `WARN` format string?
 fn looks_like_source_path(s: &str) -> bool {
-    s.contains('/') || [".c", ".h", ".S", ".rs", ".cc", ".cpp"].iter().any(|ext| s.ends_with(ext))
+    s.contains('/')
+        || [".c", ".h", ".S", ".rs", ".cc", ".cpp"]
+            .iter()
+            .any(|ext| s.ends_with(ext))
 }
 
 /// Does the table's self-relative string field at `off` count from the
 /// entry's start? Decided over [`VOTE_ENTRIES`] entries spread evenly through
 /// the table by which reading lands more of them on the first byte of a string.
-fn entry_relative(image: &Image, data: &[u8], vma: u64, big: bool, stride: usize, (off, width): (usize, u8)) -> bool {
+fn entry_relative(
+    image: &Image,
+    data: &[u8],
+    vma: u64,
+    big: bool,
+    stride: usize,
+    (off, width): (usize, u8),
+) -> bool {
     if width != 4 {
         return false;
     }
@@ -212,18 +251,51 @@ fn entry_relative(image: &Image, data: &[u8], vma: u64, big: bool, stride: usize
 }
 
 /// The address the string field at `off` of the entry at `e` names.
-fn string_pointer(layout: &Layout, data: &[u8], vma: u64, e: usize, (off, width): (usize, u8), big: bool) -> Option<u64> {
+fn string_pointer(
+    layout: &Layout,
+    data: &[u8],
+    vma: u64,
+    e: usize,
+    (off, width): (usize, u8),
+    big: bool,
+) -> Option<u64> {
     let a = pointer(data, vma, e + off, width, big)?;
-    Some(if layout.entry_relative && width == 4 { a.wrapping_sub(off as u64) } else { a })
+    Some(if layout.entry_relative && width == 4 {
+        a.wrapping_sub(off as u64)
+    } else {
+        a
+    })
 }
 
 /// Complete a layout whose entry size and pointer fields are known: which
 /// pointer is `file`, and where `line` and `flags` sit behind the pointers.
 /// `None` unless `flags` ends the entry, before at most its alignment padding.
-fn finish_layout(image: &Image, data: &[u8], vma: u64, big: bool, stride: usize, addr_width: u8, pointers: Vec<(usize, u8)>) -> Option<Layout> {
-    let after = pointers.iter().map(|&(off, w)| off + w as usize).max().unwrap_or(addr_width as usize);
-    let entry_relative = pointers.last().is_some_and(|&f| entry_relative(image, data, vma, big, stride, f));
-    let mut layout = Layout { stride, addr_width, pointers, file: None, line: None, flags: after, entry_relative };
+fn finish_layout(
+    image: &Image,
+    data: &[u8],
+    vma: u64,
+    big: bool,
+    stride: usize,
+    addr_width: u8,
+    pointers: Vec<(usize, u8)>,
+) -> Option<Layout> {
+    let after = pointers
+        .iter()
+        .map(|&(off, w)| off + w as usize)
+        .max()
+        .unwrap_or(addr_width as usize);
+    let entry_relative = pointers
+        .last()
+        .is_some_and(|&f| entry_relative(image, data, vma, big, stride, f));
+    let mut layout = Layout {
+        stride,
+        addr_width,
+        pointers,
+        file: None,
+        line: None,
+        flags: after,
+        entry_relative,
+    };
     layout.file = match layout.pointers.len() {
         0 => None,
         1 => string_pointer(&layout, data, vma, 0, layout.pointers[0], big)
@@ -235,28 +307,45 @@ fn finish_layout(image: &Image, data: &[u8], vma: u64, big: bool, stride: usize,
     if layout.file.is_some() {
         (layout.line, layout.flags) = (Some(after), after + 2);
     }
-    let align = if layout.addr_width == 8 || layout.pointers.iter().any(|&(_, w)| w == 8) { 8 } else { 4 };
+    let align = if layout.addr_width == 8 || layout.pointers.iter().any(|&(_, w)| w == 8) {
+        8
+    } else {
+        4
+    };
     let end = layout.flags + 2;
     (end == stride || end.next_multiple_of(align) == stride).then_some(layout)
 }
 
 /// The layout a module's `.rela__bug_table` describes, or `None` when the
 /// relocations do not spell out one.
-fn layout_from_relocations(image: &Image, section: &object::Section, data: &[u8], big: bool) -> Option<Layout> {
+fn layout_from_relocations(
+    image: &Image,
+    section: &object::Section,
+    data: &[u8],
+    big: bool,
+) -> Option<Layout> {
     let file = image.file;
     let mut code: Vec<(usize, u8)> = Vec::new();
     let mut other: Vec<(usize, u8)> = Vec::new();
     for (off, reloc) in section.relocations() {
-        let RelocationTarget::Symbol(index) = reloc.target() else { return None };
+        let RelocationTarget::Symbol(index) = reloc.target() else {
+            return None;
+        };
         let sym = file.symbol_by_index(index).ok()?;
         let width = match (reloc.kind(), reloc.size()) {
             (RelocationKind::Relative, 32) => 4,
             (RelocationKind::Absolute, 64) => 8,
             _ => return None,
         };
-        let SymbolSection::Section(sec) = sym.section() else { return None };
+        let SymbolSection::Section(sec) = sym.section() else {
+            return None;
+        };
         let is_code = file.section_by_index(sec).ok()?.kind() == SectionKind::Text;
-        if is_code { code.push((off as usize, width)) } else { other.push((off as usize, width)) }
+        if is_code {
+            code.push((off as usize, width))
+        } else {
+            other.push((off as usize, width))
+        }
     }
     code.sort_unstable();
     let n = code.len();
@@ -266,16 +355,31 @@ fn layout_from_relocations(image: &Image, section: &object::Section, data: &[u8]
     }
     let stride = size / n;
     let addr_width = code[0].1;
-    if code.iter().enumerate().any(|(i, &(off, w))| off != i * stride || w != addr_width) {
+    if code
+        .iter()
+        .enumerate()
+        .any(|(i, &(off, w))| off != i * stride || w != addr_width)
+    {
         return None;
     }
     let mut pointers: Vec<(usize, u8)> = other.iter().map(|&(off, w)| (off % stride, w)).collect();
     pointers.sort_unstable();
     pointers.dedup();
-    if pointers.iter().any(|&(off, w)| off < addr_width as usize || off + w as usize > stride) {
+    if pointers
+        .iter()
+        .any(|&(off, w)| off < addr_width as usize || off + w as usize > stride)
+    {
         return None;
     }
-    finish_layout(image, data, section.address(), big, stride, addr_width, pointers)
+    finish_layout(
+        image,
+        data,
+        section.address(),
+        big,
+        stride,
+        addr_width,
+        pointers,
+    )
 }
 
 /// The layout under which every entry of a relocation-free table names code,
@@ -286,14 +390,18 @@ fn layout_by_probe(image: &Image, data: &[u8], vma: u64, big: bool) -> Option<La
             return None;
         }
         let entries = (0..data.len()).step_by(stride);
-        let in_code = entries.clone().all(|e| pointer(data, vma, e, 4, big).is_some_and(|a| image.is_executable(a)));
+        let in_code = entries
+            .clone()
+            .all(|e| pointer(data, vma, e, 4, big).is_some_and(|a| image.is_executable(a)));
         if !in_code {
             return None;
         }
         let mut pointers = Vec::new();
         let mut off = 4;
         while off + 4 + 2 <= stride {
-            let all_data = entries.clone().all(|e| pointer(data, vma, e + off, 4, big).is_some_and(|a| image.is_data(a)));
+            let all_data = entries
+                .clone()
+                .all(|e| pointer(data, vma, e + off, 4, big).is_some_and(|a| image.is_data(a)));
             if !all_data {
                 break;
             }
@@ -311,9 +419,20 @@ pub fn decode(layout: &Layout, data: &[u8], vma: u64, big: bool) -> Vec<KernelBu
         .filter_map(|e| {
             let addr = pointer(data, vma, e, layout.addr_width, big)?;
             let flags = read_u16(data, e + layout.flags, big)?;
-            let file = layout.file.and_then(|i| layout.pointers.get(i)).and_then(|&f| string_pointer(layout, data, vma, e, f, big));
-            let line = layout.line.and_then(|off| read_u16(data, e + off, big)).map(u32::from);
-            Some(KernelBugSite { addr, warning: flags & BUGFLAG_WARNING != 0, file, line })
+            let file = layout
+                .file
+                .and_then(|i| layout.pointers.get(i))
+                .and_then(|&f| string_pointer(layout, data, vma, e, f, big));
+            let line = layout
+                .line
+                .and_then(|off| read_u16(data, e + off, big))
+                .map(u32::from);
+            Some(KernelBugSite {
+                addr,
+                warning: flags & BUGFLAG_WARNING != 0,
+                file,
+                line,
+            })
         })
         .collect()
 }
@@ -321,20 +440,27 @@ pub fn decode(layout: &Layout, data: &[u8], vma: u64, big: bool) -> Vec<KernelBu
 /// The sites of `file`'s `__bug_table` whose trap lies in one of the executable
 /// `[lo, hi)` extents `exec`, sorted by trap address; empty without a table.
 pub fn scan(file: &object::File, exec: Vec<(u64, u64)>) -> Vec<KernelBugSite> {
-    let Some(section) = file.section_by_name(BUG_TABLE_SECTION) else { return Vec::new() };
-    let Ok(data) = section.data() else { return Vec::new() };
+    let Some(section) = file.section_by_name(BUG_TABLE_SECTION) else {
+        return Vec::new();
+    };
+    let Ok(data) = section.data() else {
+        return Vec::new();
+    };
     if data.is_empty() {
         return Vec::new();
     }
     let image = Image::new(file, exec);
     let big = !file.is_little_endian();
     let vma = section.address();
-    let layout = if file.kind() == ObjectKind::Relocatable && section.relocations().next().is_some() {
+    let layout = if file.kind() == ObjectKind::Relocatable && section.relocations().next().is_some()
+    {
         layout_from_relocations(&image, &section, data, big)
     } else {
         layout_by_probe(&image, data, vma, big)
     };
-    let Some(layout) = layout else { return Vec::new() };
+    let Some(layout) = layout else {
+        return Vec::new();
+    };
     let mut sites: Vec<KernelBugSite> = decode(&layout, data, vma, big)
         .into_iter()
         .filter(|s| image.is_executable(s.addr))
@@ -361,7 +487,12 @@ impl AnalysisPass for KernelBugPass {
         let mut out = AnalysisOutput::default();
         let exec = ctx
             .image
-            .map(|i| i.executable_ranges().into_iter().map(|(vma, size)| (vma, vma.saturating_add(size))).collect())
+            .map(|i| {
+                i.executable_ranges()
+                    .into_iter()
+                    .map(|(vma, size)| (vma, vma.saturating_add(size)))
+                    .collect()
+            })
             .unwrap_or_default();
         out.kernel_bugs = scan(ctx.file, exec);
         out

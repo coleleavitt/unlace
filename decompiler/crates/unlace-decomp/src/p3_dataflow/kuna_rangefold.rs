@@ -74,12 +74,18 @@ fn compare_range(data: &Funcdata, op: OpId, value: bool) -> Option<(VarnodeId, C
     let size = data.vbank().get(vn)?.get_size();
     let mut range = CircleRange::new_bool(value);
     let opc = data.obank().get(op)?.code();
-    range.pull_back_binary(opc, k, slot, size, 1).then_some((vn, range))
+    range
+        .pull_back_binary(opc, k, slot, size, 1)
+        .then_some((vn, range))
 }
 
 /// The input a `COPY`, extension or add-constant op defining `vn` reads, and the
 /// range that input holds when `vn` holds `range`.
-fn pull_back_def(data: &Funcdata, vn: VarnodeId, range: &CircleRange) -> Option<(VarnodeId, CircleRange)> {
+fn pull_back_def(
+    data: &Funcdata,
+    vn: VarnodeId,
+    range: &CircleRange,
+) -> Option<(VarnodeId, CircleRange)> {
     let def = data.vbank().get(vn)?.get_def()?;
     let o = data.obank().get(def)?;
     let input = o.get_in(0)?;
@@ -115,8 +121,12 @@ fn collect_facts(data: &Funcdata) -> HashMap<VarnodeId, Vec<Fact>> {
     let graph = data.bblocks_ref();
     for i in 0..data.bblocks_get_size() {
         let bl = data.bblocks_get_block(i);
-        let Some(cbranch) = last_op(data, bl) else { continue };
-        let Some(op) = data.obank().get(cbranch) else { continue };
+        let Some(cbranch) = last_op(data, bl) else {
+            continue;
+        };
+        let Some(op) = data.obank().get(cbranch) else {
+            continue;
+        };
         if op.code() != OpCode::CPUI_CBRANCH || graph.block(bl).size_out() != 2 {
             continue;
         }
@@ -124,7 +134,9 @@ fn collect_facts(data: &Funcdata) -> HashMap<VarnodeId, Vec<Fact>> {
             continue;
         }
         let flip = op.is_boolean_flip();
-        let Some(mut cond) = op.get_in(1) else { continue };
+        let Some(mut cond) = op.get_in(1) else {
+            continue;
+        };
         let mut negated = false;
         while let Some(def) = data.vbank().get(cond).and_then(|v| v.get_def()) {
             let d = data.obank().get(def).unwrap();
@@ -134,19 +146,26 @@ fn collect_facts(data: &Funcdata) -> HashMap<VarnodeId, Vec<Fact>> {
             negated = !negated;
             cond = d.get_in(0).unwrap();
         }
-        let Some(cmp) = data.vbank().get(cond).and_then(|v| v.get_def()) else { continue };
+        let Some(cmp) = data.vbank().get(cond).and_then(|v| v.get_def()) else {
+            continue;
+        };
         for edge in 0..2 {
             let target = graph.block(bl).get_out(edge);
             if !graph.restricted_by_conditional(target, bl) || graph.dominates(target, Some(bl)) {
                 continue;
             }
             let value = ((edge == 1) != flip) != negated;
-            let Some((mut vn, mut range)) = compare_range(data, cmp, value) else { continue };
+            let Some((mut vn, mut range)) = compare_range(data, cmp, value) else {
+                continue;
+            };
             for _ in 0..=CHAIN_DEPTH {
                 if range.is_full() || range.is_empty() {
                     break;
                 }
-                facts.entry(vn).or_default().push(Fact { edge_block: target, range: range.clone() });
+                facts.entry(vn).or_default().push(Fact {
+                    edge_block: target,
+                    range: range.clone(),
+                });
                 match pull_back_def(data, vn, &range) {
                     Some((input, r)) => (vn, range) = (input, r),
                     None => break,
@@ -158,7 +177,12 @@ fn collect_facts(data: &Funcdata) -> HashMap<VarnodeId, Vec<Fact>> {
 }
 
 /// The range `vn` holds throughout `bl`, if any branch bounds it there.
-fn range_at(data: &Funcdata, facts: &HashMap<VarnodeId, Vec<Fact>>, vn: VarnodeId, bl: BlockId) -> Option<CircleRange> {
+fn range_at(
+    data: &Funcdata,
+    facts: &HashMap<VarnodeId, Vec<Fact>>,
+    vn: VarnodeId,
+    bl: BlockId,
+) -> Option<CircleRange> {
     let mut out: Option<CircleRange> = None;
     for f in facts.get(&vn)? {
         if !data.bblocks_ref().dominates(f.edge_block, Some(bl)) {
@@ -217,16 +241,24 @@ pub(crate) fn rangefold_apply(data: &mut Funcdata) -> int4 {
     }
     let candidates: Vec<OpId> = facts
         .keys()
-        .flat_map(|&vn| data.vbank().get(vn).map(|v| v.descend_iter().collect::<Vec<_>>()).unwrap_or_default())
+        .flat_map(|&vn| {
+            data.vbank()
+                .get(vn)
+                .map(|v| v.descend_iter().collect::<Vec<_>>())
+                .unwrap_or_default()
+        })
         .collect();
     let mut count = 0;
     for op in candidates {
-        let Some(fold) = fold_for(data, &facts, op) else { continue };
+        let Some(fold) = fold_for(data, &facts, op) else {
+            continue;
+        };
         match fold {
             Fold::Bool(value) => {
                 let k = data.new_constant(1, value as uintb);
                 data.op_remove_input(op, 1);
-                data.op_set_input(op, k, 0).expect("rangefold: set constant");
+                data.op_set_input(op, k, 0)
+                    .expect("rangefold: set constant");
             }
             Fold::Identity(vn) => {
                 data.op_remove_input(op, 1);
@@ -248,7 +280,9 @@ pub struct ActionRangeFold {
 
 impl ActionRangeFold {
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionRangeFold { base: ActionBase::new(0, "rangefold", g) })
+        Box::new(ActionRangeFold {
+            base: ActionBase::new(0, "rangefold", g),
+        })
     }
 }
 
@@ -260,9 +294,11 @@ impl Action for ActionRangeFold {
         &mut self.base
     }
     fn clone_filtered(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Action>> {
-        grouplist
-            .contains(self.get_group())
-            .then(|| Box::new(ActionRangeFold { base: self.base.clone() }) as Box<dyn Action>)
+        grouplist.contains(self.get_group()).then(|| {
+            Box::new(ActionRangeFold {
+                base: self.base.clone(),
+            }) as Box<dyn Action>
+        })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data.get_arch().range_fold {

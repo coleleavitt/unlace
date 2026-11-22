@@ -11,8 +11,7 @@ const FUNCS: &str = "p_int,r_short,r_char,r_rec,r_long,r_void,w_long,w_short,m_c
 const DECLS: &str = "struct rec { int a; short b; long c; };\nextern char *gc;\nextern short *gs;\nextern int *gi;\n\
                      extern long *gl;\nextern struct rec *gr;\nextern void *gv;\nextern long gd;\nvoid touch(void);\n";
 
-const WANT: &str =
-    "p_int 51 8\nr_short 20 6\nr_char 72 4\nr_rec 199986 16\nr_long 7000021 16\nr_void 179 20\n\
+const WANT: &str = "p_int 51 8\nr_short 20 6\nr_char 72 4\nr_rec 199986 16\nr_long 7000021 16\nr_void 179 20\n\
                     w_long 3000009 -9 -8 24\nw_short 1 21 42 4\nm_call 65 12 1\nm_join 44 4 0 4 3\n\
                     m_write 29 77 78 16 4\nm_loop 221 32\ng_reread 37 4\ng_alias 22 8 0 8 0\n\
                     g_reload 51 37 0\ng_write 82 80 0\ng_before 99 85 0\ng_diff 17 5 0\n\

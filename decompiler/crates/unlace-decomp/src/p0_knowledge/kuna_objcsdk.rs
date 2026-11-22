@@ -28,7 +28,10 @@ pub fn sdk_path_from_env() -> Option<PathBuf> {
     match parse_option_value(&v) {
         Ok(path) => path,
         Err(e) => {
-            unlace_base::notes::say_once(OBJCSDK_ENV, &format!("{OBJCSDK_ENV}: {e}; no SDK headers are read"));
+            unlace_base::notes::say_once(
+                OBJCSDK_ENV,
+                &format!("{OBJCSDK_ENV}: {e}; no SDK headers are read"),
+            );
             None
         }
     }
@@ -69,6 +72,9 @@ mod tests {
         assert_eq!(parse_option_value("  ").unwrap(), None);
         assert!(parse_option_value("/definitely/not/here").is_err());
         let here = std::env::temp_dir();
-        assert_eq!(parse_option_value(here.to_str().unwrap()).unwrap(), Some(here));
+        assert_eq!(
+            parse_option_value(here.to_str().unwrap()).unwrap(),
+            Some(here)
+        );
     }
 }

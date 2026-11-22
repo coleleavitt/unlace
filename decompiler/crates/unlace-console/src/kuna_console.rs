@@ -65,25 +65,29 @@
 //! writes [`IfaceStatus::out`]. The exact text in both streams is what the
 //! Python harness and the datatest `<stringmatch>` assertions parse.
 
-use crate::ifacedecomp::{IfaceDecompData, DECOMPILE_MODULE};
-use crate::interface::{
-    CommandStream, IfaceCommandAction, IfaceError, IfaceResult, IfaceStatus,
-};
-use unlace_decomp::architecture::Architecture;
-use unlace_decomp::kuna_assert::{validate_assertion, AssertLog, Dispatch, KunaAssertion};
-use unlace_decomp::kuna_regionid::KunaRegionIdentifier;
-use unlace_decomp::kuna_phases::{
-    emit_catalog_json, emit_catalog_json_one, kuna_group_by_index, kuna_num_groups,
-    kuna_num_subphases, kuna_num_surfaces, kuna_subphase_by_index, kuna_surface_by_index,
-    lookup_group, lookup_settable, lookup_subphase, lookup_surface, KunaPhase, KunaStrength,
-};
+use crate::ifacedecomp::{DECOMPILE_MODULE, IfaceDecompData};
+use crate::interface::{CommandStream, IfaceCommandAction, IfaceError, IfaceResult, IfaceStatus};
 use std::borrow::Cow;
 use std::cell::RefCell;
+use unlace_decomp::architecture::Architecture;
+use unlace_decomp::kuna_assert::{AssertLog, Dispatch, KunaAssertion, validate_assertion};
+use unlace_decomp::kuna_phases::{
+    KunaPhase, KunaStrength, emit_catalog_json, emit_catalog_json_one, kuna_group_by_index,
+    kuna_num_groups, kuna_num_subphases, kuna_num_surfaces, kuna_subphase_by_index,
+    kuna_surface_by_index, lookup_group, lookup_settable, lookup_subphase, lookup_surface,
+};
+use unlace_decomp::kuna_regionid::KunaRegionIdentifier;
 
 /// The named pipeline variants built by `ActionDatabase::buildDefaultGroups`
 /// (C++ `PIPELINE_VARIANTS`).
-const PIPELINE_VARIANTS: [&str; 6] =
-    ["decompile", "jumptable", "normalize", "paramid", "register", "firstpass"];
+const PIPELINE_VARIANTS: [&str; 6] = [
+    "decompile",
+    "jumptable",
+    "normalize",
+    "paramid",
+    "register",
+    "firstpass",
+];
 
 /// The stages in registry order P0,S1..S9 — the `for(i=0;i<=9;++i)(KunaPhase)i`
 /// loop of `IfcKunaPhaseList::execute`.
@@ -180,7 +184,13 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
     Some(Cow::Borrowed(match option {
         "bytearrayc" => on_off(conf.print().options.bytearray_c),
         "partialaccess" => on_off(conf.print().options.partial_access),
-        "infloopstyle" => if conf.print().options.inf_loop_top { "while" } else { "do" },
+        "infloopstyle" => {
+            if conf.print().options.inf_loop_top {
+                "while"
+            } else {
+                "do"
+            }
+        }
         "loopcontinue" => on_off(conf.loop_continue),
         "postinc" => on_off(conf.post_increment),
         "compareform" => {
@@ -260,9 +270,14 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         "rustprobestack" => conf.rust_probestack.as_str(),
         "rustfmt" => conf.rust_fmt.as_str(),
         // (kuna `gomorestack`) Three-valued, so it reports its own token.
-        "gomorestack" => unlace_decomp::kuna_gomorestack::GoMorestackMode::from_u8(conf.go_morestack).as_str(),
+        "gomorestack" => {
+            unlace_decomp::kuna_gomorestack::GoMorestackMode::from_u8(conf.go_morestack).as_str()
+        }
         // (kuna `gowritebarrier`) Three-valued, so it reports its own token.
-        "gowritebarrier" => unlace_decomp::kuna_gowritebarrier::GoWriteBarrierMode::from_u8(conf.go_write_barrier).as_str(),
+        "gowritebarrier" => {
+            unlace_decomp::kuna_gowritebarrier::GoWriteBarrierMode::from_u8(conf.go_write_barrier)
+                .as_str()
+        }
         "gonewtype" => on_off(conf.go_new_type),
         // (kuna `sourcelang`) Reports the OPTION state, not the detected fact:
         // `auto` until a run forces a language.
@@ -340,9 +355,24 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         "cppsig" => conf.analysis_cppsig.as_str(),
         "addrtable" => on_off(conf.analysis_addrtable),
         "listing" => on_off(conf.analysis_listing),
-        "fid" => if !conf.analysis_fid { "off" } else if conf.analysis_fid_strict { "strict" } else { "on" },
-        "armframes" => if !conf.analysis_armframes { "off" }
-            else if conf.analysis_armframes_full { "on" } else { "inventory" },
+        "fid" => {
+            if !conf.analysis_fid {
+                "off"
+            } else if conf.analysis_fid_strict {
+                "strict"
+            } else {
+                "on"
+            }
+        }
+        "armframes" => {
+            if !conf.analysis_armframes {
+                "off"
+            } else if conf.analysis_armframes_full {
+                "on"
+            } else {
+                "inventory"
+            }
+        }
         "x86listingswitch" => on_off(conf.analysis_x86listingswitch),
         "addrtakenentry" => on_off(conf.analysis_addrtakenentry),
         // (kuna `flowmode`) Valued `on|aftercall|off`, so it reports its own token.
@@ -616,10 +646,18 @@ impl IfaceCommandAction for IfcKunaPhaseStatus {
         os.push_str(conf.allacts.get_current_name());
         os.push('\n');
         os.push_str("compareform: ");
-        os.push_str(if conf.present_lessequal { "original" } else { "canonical" });
+        os.push_str(if conf.present_lessequal {
+            "original"
+        } else {
+            "canonical"
+        });
         os.push('\n');
         os.push_str("arraynotation: ");
-        os.push_str(if conf.print().options.array_notation() { "on" } else { "off" });
+        os.push_str(if conf.print().options.array_notation() {
+            "on"
+        } else {
+            "off"
+        });
         os.push('\n');
         // C++ writes the bulk stream (`*status->fileoptr`); the datatest harness
         // sets `fileoptr` to the matched bulk buffer (the interactive console
@@ -711,7 +749,9 @@ pub struct IfcKunaAssert {
 impl IfcKunaAssert {
     /// A fresh `kassert` command with an empty session log.
     pub fn new() -> IfcKunaAssert {
-        IfcKunaAssert { assert_log: RefCell::new(AssertLog::new()) }
+        IfcKunaAssert {
+            assert_log: RefCell::new(AssertLog::new()),
+        }
     }
 }
 
@@ -825,7 +865,9 @@ impl IfaceCommandAction for IfcKunaAssert {
             Dispatch::Unroutable => {
                 // C++: throw IfaceExecutionError("Sub-stage <name> is not yet
                 //   routable through kassert; use its native surface: <exposure>")
-                let exposure = lookup_subphase(&subname).map(|sub| sub.exposure).unwrap_or("");
+                let exposure = lookup_subphase(&subname)
+                    .map(|sub| sub.exposure)
+                    .unwrap_or("");
                 Err(IfaceError::execution(format!(
                     "Sub-phase {subname} is not yet routable through kassert; use its native surface: {exposure}"
                 )))
@@ -850,12 +892,15 @@ impl IfaceCommandAction for IfcKunaAssert {
             )),
             Dispatch::Isolate => {
                 let Some(name) = tokens.first().cloned() else {
-                    return Err(IfaceError::parse("merge-aggressiveness assertion needs <name>"));
+                    return Err(IfaceError::parse(
+                        "merge-aggressiveness assertion needs <name>",
+                    ));
                 };
                 let dcp = dcp_mut(status)?;
                 let maxduplicates = unlace_decomp::kuna_dynamichashmax::MAX_DUPLICATES;
                 dcp.local_symbol_fd(&name)?;
-                let (Some(fd), arch) = (dcp.fd.as_mut(), dcp.conf.as_ref().map(|p| p.arch())) else {
+                let (Some(fd), arch) = (dcp.fd.as_mut(), dcp.conf.as_ref().map(|p| p.arch()))
+                else {
                     return Err(IfaceError::execution("no function selected"));
                 };
                 crate::kuna_hightarget::isolate_local(fd, &name, maxduplicates, arch)
@@ -875,11 +920,19 @@ impl IfaceCommandAction for IfcKunaAssert {
                 let dcp = dcp_mut(status)?;
                 let maxduplicates = unlace_decomp::kuna_dynamichashmax::MAX_DUPLICATES;
                 dcp.local_symbol_fd(&oldname)?;
-                let (Some(fd), arch) = (dcp.fd.as_mut(), dcp.conf.as_ref().map(|p| p.arch())) else {
+                let (Some(fd), arch) = (dcp.fd.as_mut(), dcp.conf.as_ref().map(|p| p.arch()))
+                else {
                     return Err(IfaceError::execution("no function selected"));
                 };
-                crate::kuna_hightarget::apply_local(fd, &oldname, &newname, None, maxduplicates, arch)
-                    .map_err(IfaceError::execution)?;
+                crate::kuna_hightarget::apply_local(
+                    fd,
+                    &oldname,
+                    &newname,
+                    None,
+                    maxduplicates,
+                    arch,
+                )
+                .map_err(IfaceError::execution)?;
                 status.out(&applied_line);
                 self.assert_log.borrow_mut().push(record);
                 Ok(())
@@ -976,10 +1029,9 @@ impl IfcKunaPipeline {
     /// `IfcKunaPipeline::listPipelines`).
     fn list_pipelines(&self, status: &mut IfaceStatus) {
         // C++: if (conf != 0 && allacts.getCurrentName() == variant) "  (current)"
-        let current =
-            dcp_ref(status).and_then(|dcp| dcp.conf.as_ref()).map(|conf| {
-                conf.arch().allacts.get_current_name().to_string()
-            });
+        let current = dcp_ref(status)
+            .and_then(|dcp| dcp.conf.as_ref())
+            .map(|conf| conf.arch().allacts.get_current_name().to_string());
         let mut os = String::new();
         os.push_str("Named pipeline variants (group filters over the universal action; P0 pipeline-variant sub-phase):\n");
         for v in PIPELINE_VARIANTS {
@@ -1064,9 +1116,7 @@ impl IfaceCommandAction for IfcKunaPipeline {
         match result {
             Ok(fd) => {
                 dcp.fd = Some(fd);
-                status.out(
-                    "Sub-query complete (root action restored to `decompile`)\n",
-                );
+                status.out("Sub-query complete (root action restored to `decompile`)\n");
                 Ok(())
             }
             Err(e) => Err(IfaceError::execution(e.explain().to_string())),
@@ -1196,7 +1246,8 @@ fn build_region_identifier(
     let mut ri = KunaRegionIdentifier::new();
     ri.build_from_block_graph(fd)
         .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
-    ri.compute().map_err(|e| IfaceError::execution(e.explain().to_string()))?;
+    ri.compute()
+        .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
     Ok(ri)
 }
 
@@ -1311,7 +1362,9 @@ impl IfaceCommandAction for IfcKunaRegionWalk {
                 .ok_or_else(|| IfaceError::execution("No load image present"))?;
             let fname = fd.get_name().to_string();
             let ri = build_region_identifier(fd)?;
-            let mut visitor = RegionWalkVisitor { addresses: Vec::new() };
+            let mut visitor = RegionWalkVisitor {
+                addresses: Vec::new(),
+            };
             ri.walk_blocks(&mut visitor)
                 .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
             let mut os = String::new();
@@ -1339,15 +1392,22 @@ pub struct IfcCallwidePrepare;
 
 impl IfaceCommandAction for IfcCallwidePrepare {
     fn execute(&self, status: &mut IfaceStatus, _s: &mut CommandStream) -> IfaceResult<()> {
-        let prog = dcp_mut(status)?.conf.as_mut()
+        let prog = dcp_mut(status)?
+            .conf
+            .as_mut()
             .ok_or_else(|| IfaceError::execution("No load image present"))?;
-        if !prog.arch().call_wide { return Ok(()); }
-        prog.commit_pending_analysis().map_err(|error| IfaceError::execution(error.explain().to_string()))?;
+        if !prog.arch().call_wide {
+            return Ok(());
+        }
+        prog.commit_pending_analysis()
+            .map_err(|error| IfaceError::execution(error.explain().to_string()))?;
         crate::kuna_callwide::prepare(prog);
         Ok(())
     }
 
-    fn module(&self) -> String { DECOMPILE_MODULE.to_string() }
+    fn module(&self) -> String {
+        DECOMPILE_MODULE.to_string()
+    }
 }
 
 impl IfaceCommandAction for IfcKunaFunctions {
@@ -1423,7 +1483,9 @@ impl IfaceCommandAction for IfcKunaFunctionBounds {
         } else if tok.is_empty() {
             None
         } else {
-            return Err(IfaceError::parse(format!("Unexpected token {tok:?} (expected 'as')")));
+            return Err(IfaceError::parse(format!(
+                "Unexpected token {tok:?} (expected 'as')"
+            )));
         };
         if let Some(end) = end {
             if end <= start {
@@ -1507,7 +1569,9 @@ impl IfaceCommandAction for IfcKunaFunctionSymbol {
         let name = prog
             .ensure_function_symbol(unlace_base::address::Address::new(space, start))
             .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
-        status.out(&format!("Registered {name} at {display_start:#x} without a body assertion\n"));
+        status.out(&format!(
+            "Registered {name} at {display_start:#x} without a body assertion\n"
+        ));
         Ok(())
     }
 
@@ -1527,21 +1591,24 @@ pub struct IfcKunaFunctionContaining;
 impl IfaceCommandAction for IfcKunaFunctionContaining {
     fn execute(&self, status: &mut IfaceStatus, s: &mut CommandStream) -> IfaceResult<()> {
         s.skip_ws();
-        let token =
-            unlace_decomp::kuna_symbolnamebound::bound_scope_path(&s.read_token(), "::").into_owned();
+        let token = unlace_decomp::kuna_symbolnamebound::bound_scope_path(&s.read_token(), "::")
+            .into_owned();
         let dcp = dcp_mut(status)?;
         let prog = dcp
             .conf
             .as_mut()
             .ok_or_else(|| IfaceError::execution("No load image present"))?;
         let selector = match crate::engine::EntrySelector::parse(&token) {
-            crate::engine::EntrySelector::Numeric(display) => match prog.input_code_offset(display) {
+            crate::engine::EntrySelector::Numeric(display) => match prog.input_code_offset(display)
+            {
                 Ok(vma) => crate::engine::EntrySelector::Numeric(vma),
                 Err(_) => return Ok(()),
             },
             selector => selector,
         };
-        let Some(vma) = prog.selection_address(&selector) else { return Ok(()) };
+        let Some(vma) = prog.selection_address(&selector) else {
+            return Ok(());
+        };
         let Some(Some(owner)) = prog.entries_containing(&[vma]).pop() else {
             let line = prog.flow_ended_before(vma).map(|(owner, end)| {
                 format!(
@@ -1609,7 +1676,10 @@ impl IfaceCommandAction for IfcKunaMapPrototype {
 /// plain numbers rather than the console address grammar precisely so its size
 /// argument cannot be confused with an address width.
 fn read_vma(tok: &str) -> Option<u64> {
-    let body = tok.strip_prefix("0x").or_else(|| tok.strip_prefix("0X")).unwrap_or(tok);
+    let body = tok
+        .strip_prefix("0x")
+        .or_else(|| tok.strip_prefix("0X"))
+        .unwrap_or(tok);
     if body.is_empty() || !body.chars().all(|c| c.is_ascii_hexdigit()) {
         return None;
     }
@@ -1653,7 +1723,10 @@ pub fn register_kuna_commands(status: &mut IfaceStatus) {
     // exposes as `--define-function`.
     status.register_com(Box::new(IfcKunaFunctionBounds), &["function", "bounds"]);
     status.register_com(Box::new(IfcKunaFunctionSymbol), &["function", "symbol"]);
-    status.register_com(Box::new(IfcKunaFunctionContaining), &["function", "containing"]);
+    status.register_com(
+        Box::new(IfcKunaFunctionContaining),
+        &["function", "containing"],
+    );
     // (kuna) Not a C++ command either: `parse line extern` binds a prototype by
     // the name in the declaration, which is the wrong key for an override that
     // exists because the function has no name worth keeping.

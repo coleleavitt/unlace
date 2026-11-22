@@ -24,7 +24,7 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 /// `(global entry symbol, the husk's anonymous twin, the whole routine's size)`.
 /// Sizes are `objdump`'s: each routine runs to the next symbol.
@@ -36,7 +36,10 @@ const SPLIT: &[(&str, &str, u64)] = &[
 ];
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Bootstrap the fixture the way every `unlace` driver does on a non-x86-64 image
@@ -47,16 +50,22 @@ fn bootstrap() -> ConsoleProgram {
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.arch_mut().set_kuna_option("listing", "on").expect("listing flips on");
+    prog.arch_mut()
+        .set_kuna_option("listing", "on")
+        .expect("listing flips on");
     prog.arch_mut()
         .set_kuna_option("funcstart_patterns", "on")
         .expect("funcstart_patterns flips on");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
 fn entries(prog: &ConsoleProgram) -> Vec<(String, u64)> {
-    prog.function_entries_canonical().into_iter().map(|e| (e.name, e.size)).collect()
+    prog.function_entries_canonical()
+        .into_iter()
+        .map(|e| (e.name, e.size))
+        .collect()
 }
 
 fn size_of(entries: &[(String, u64)], name: &str) -> Option<u64> {
@@ -81,4 +90,3 @@ fn named_functions_span_their_whole_body() {
         );
     }
 }
-

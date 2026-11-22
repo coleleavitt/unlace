@@ -17,9 +17,9 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_decomp::decompile_drive::build_and_follow_flow;
@@ -28,29 +28,58 @@ const BIN: &str = "macho_dataslots_arm64";
 
 /// `(function VMA, slot VMA, expected off, expected on)`.
 const READS: [(u64, u64, &str, &str); 4] = [
-    (0x100000510, 0x100004000, "return *dat_100004000;", "return OBJC_CLASS_$_NSObject;"),
-    (0x100000520, 0x100004008, "return *dat_100004008;", "return Swift.String.type_metadata;"),
-    (0x100000530, 0x100004010, "return *dat_100004010;", "return id;"),
-    (0x100000540, 0x100004018, "return *dat_100004018;", "return imported_counter;"),
+    (
+        0x100000510,
+        0x100004000,
+        "return *dat_100004000;",
+        "return OBJC_CLASS_$_NSObject;",
+    ),
+    (
+        0x100000520,
+        0x100004008,
+        "return *dat_100004008;",
+        "return Swift.String.type_metadata;",
+    ),
+    (
+        0x100000530,
+        0x100004010,
+        "return *dat_100004010;",
+        "return id;",
+    ),
+    (
+        0x100000540,
+        0x100004018,
+        "return *dat_100004018;",
+        "return imported_counter;",
+    ),
 ];
 const IMPORTED_CALL_STUB: u64 = 0x100000554;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn boot() -> ConsoleProgram {
     let root = repo_root();
     let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
-    let path = root.join("decompiler/crates/unlace-analysis/tests/fixtures").join(BIN);
+    let path = root
+        .join("decompiler/crates/unlace-analysis/tests/fixtures")
+        .join(BIN);
     assert!(path.exists(), "missing fixture {path:?}");
     bootstrap_from_object(path.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs")
 }
 
 fn name_at(prog: &ConsoleProgram, vma: u64) -> String {
-    let code_space =
-        prog.arch().manage().get_default_code_space().expect("a default code space").clone();
+    let code_space = prog
+        .arch()
+        .manage()
+        .get_default_code_space()
+        .expect("a default code space")
+        .clone();
     let addr = Address::new(Rc::clone(&code_space), vma);
     match prog.arch().symboltab.find_function_across_scopes(&addr) {
         Some((sid, _)) => prog.arch().symboltab.symbol(sid).get_name().to_string(),
@@ -64,15 +93,25 @@ fn render(vma: u64, on: bool) -> String {
     prog.arch_mut()
         .set_kuna_option("importdata", if on { "on" } else { "off" })
         .expect("importdata flips");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
     let name = name_at(&prog, vma);
-    let code_space =
-        prog.arch().manage().get_default_code_space().expect("a default code space").clone();
+    let code_space = prog
+        .arch()
+        .manage()
+        .get_default_code_space()
+        .expect("a default code space")
+        .clone();
     let fd = {
         let arch = prog.arch_mut();
-        build_and_follow_flow(arch, &name, Address::new(code_space, vma), unlace_console::engine::UNBOUNDED_SIZE)
-            .expect("the funcdata builds")
+        build_and_follow_flow(
+            arch,
+            &name,
+            Address::new(code_space, vma),
+            unlace_console::engine::UNBOUNDED_SIZE,
+        )
+        .expect("the funcdata builds")
     };
     let cmds: Vec<String> = ["decompile".into(), "print C".into()].to_vec();
     let count = cmds.len();
@@ -93,23 +132,43 @@ fn render(vma: u64, on: bool) -> String {
 #[test]
 fn data_import_slots_are_not_function_entries() {
     let mut prog = boot();
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
-    let entries: Vec<u64> =
-        prog.function_entries_canonical().iter().map(|e| e.addr.get_offset()).collect();
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
+    let entries: Vec<u64> = prog
+        .function_entries_canonical()
+        .iter()
+        .map(|e| e.addr.get_offset())
+        .collect();
     for &(_, slot, _, _) in &READS[..3] {
-        assert!(!entries.contains(&slot), "data-import slot 0x{slot:x} must not be an entry: {entries:x?}");
+        assert!(
+            !entries.contains(&slot),
+            "data-import slot 0x{slot:x} must not be an entry: {entries:x?}"
+        );
     }
     let (_, counter_slot, _, _) = READS[3];
-    assert!(entries.contains(&counter_slot), "the plain C import slot stays an entry: {entries:x?}");
-    assert!(entries.contains(&IMPORTED_CALL_STUB), "the stub stays an entry: {entries:x?}");
+    assert!(
+        entries.contains(&counter_slot),
+        "the plain C import slot stays an entry: {entries:x?}"
+    );
+    assert!(
+        entries.contains(&IMPORTED_CALL_STUB),
+        "the stub stays an entry: {entries:x?}"
+    );
 }
 
 #[test]
 fn data_import_slot_names_select_the_slot_as_data() {
     let mut prog = boot();
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
-    assert_eq!(prog.lookup_data_alias("OBJC_CLASS_$_NSObject"), Some(0x100004000));
-    assert_eq!(prog.lookup_data_alias("Swift.String.type_metadata"), Some(0x100004008));
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
+    assert_eq!(
+        prog.lookup_data_alias("OBJC_CLASS_$_NSObject"),
+        Some(0x100004000)
+    );
+    assert_eq!(
+        prog.lookup_data_alias("Swift.String.type_metadata"),
+        Some(0x100004008)
+    );
 }
 
 #[test]
@@ -117,7 +176,13 @@ fn data_import_slot_reads_render_the_import_only_when_on() {
     for &(vma, _, off_line, on_line) in &READS {
         let off = render(vma, false);
         let on = render(vma, true);
-        assert!(off.contains(off_line), "0x{vma:x} importdata off must read `{off_line}`:\n{off}");
-        assert!(on.contains(on_line), "0x{vma:x} importdata on must read `{on_line}`:\n{on}");
+        assert!(
+            off.contains(off_line),
+            "0x{vma:x} importdata off must read `{off_line}`:\n{off}"
+        );
+        assert!(
+            on.contains(on_line),
+            "0x{vma:x} importdata on must read `{on_line}`:\n{on}"
+        );
     }
 }

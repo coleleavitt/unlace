@@ -9,6 +9,6 @@
 
 pub mod float;
 pub mod multiprecision;
+pub mod opbehavior;
 pub mod opcodes;
 pub mod pcoderaw;
-pub mod opbehavior;

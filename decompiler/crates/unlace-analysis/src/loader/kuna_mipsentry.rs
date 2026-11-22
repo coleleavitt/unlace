@@ -93,20 +93,32 @@ mod tests {
             bytes.copy_from_slice(&self.0[..bytes.len()]);
             0
         }
-        fn mapped_covers(&self, _: u64, _: u64) -> bool { true }
+        fn mapped_covers(&self, _: u64, _: u64) -> bool {
+            true
+        }
     }
 
     #[test]
     fn elf32_entry_seeds_sign_extend_high_addresses() {
         for little in [false, true] {
             let mut bytes = [0; 64];
-            for (raw, word) in bytes.chunks_exact_mut(4).zip([0x3c1c0002u32, 0x279c8000, 0x0399e021]) {
-                raw.copy_from_slice(&if little { word.to_le_bytes() } else { word.to_be_bytes() });
+            for (raw, word) in
+                bytes
+                    .chunks_exact_mut(4)
+                    .zip([0x3c1c0002u32, 0x279c8000, 0x0399e021])
+            {
+                raw.copy_from_slice(&if little {
+                    word.to_le_bytes()
+                } else {
+                    word.to_be_bytes()
+                });
             }
             let image = Image(bytes);
             for offset in [0x1000, 0x80001000, 0xffff1000] {
-                assert_eq!(value(&image, offset, true, little),
-                    Some((offset as u32 as i32 as i64) as u64));
+                assert_eq!(
+                    value(&image, offset, true, little),
+                    Some((offset as u32 as i32 as i64) as u64)
+                );
                 assert_eq!(value(&image, offset, false, little), Some(offset));
             }
             assert_eq!(value(&image, 0x1002, true, little), None);
@@ -118,8 +130,12 @@ mod tests {
         #[derive(Debug)]
         struct Unmapped;
         impl ImageBytes for Unmapped {
-            fn fill_span(&self, bytes: &mut [u8], _: u64) -> usize { bytes.len() }
-            fn mapped_covers(&self, _: u64, _: u64) -> bool { false }
+            fn fill_span(&self, bytes: &mut [u8], _: u64) -> usize {
+                bytes.len()
+            }
+            fn mapped_covers(&self, _: u64, _: u64) -> bool {
+                false
+            }
         }
         assert_eq!(value(&Unmapped, 0x1000, false, false), None);
     }

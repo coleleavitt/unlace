@@ -42,29 +42,32 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::marshal::IdRegistry;
-use unlace_base::space::{spacetype, AddrSpaceManager};
-use unlace_num::opcodes::{get_opname, OpCode};
+use unlace_base::space::{AddrSpaceManager, spacetype};
+use unlace_num::opcodes::{OpCode, get_opname};
 use unlace_num::pcoderaw::VarnodeData;
 
+use unlace_decomp::context::{ArchContext as IrArch, TypeOp};
 use unlace_decomp::flow::{FlowEnvironment, FlowInfo};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::op::pcodeop_flags;
-use unlace_decomp::context::{ArchContext as IrArch, TypeOp};
-use unlace_decomp::sleigh_arch::{register_sleigh_arch_ids, LanguageDatabase};
+use unlace_decomp::sleigh_arch::{LanguageDatabase, register_sleigh_arch_ids};
 use unlace_decomp::xml_arch::{XmlArchitecture, XmlArchitectureCapability};
 
 use unlace_base::xml::{DocumentStorage, Element};
 use unlace_sleigh::loadimage::LoadImage;
 use unlace_sleigh::loadimage_xml::register_loadimage_xml_ids;
 use unlace_sleigh::sleigh::Sleigh;
-use unlace_sleigh::translate::{register_translate_ids, PcodeEmit, Translate, UniqueLayout};
+use unlace_sleigh::translate::{PcodeEmit, Translate, UniqueLayout, register_translate_ids};
 
 // ===========================================================================
 // Repo / fixture plumbing  (mirrors tests/corpus_bootstrap.rs)
 // ===========================================================================
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// The pinned lift fixtures this gate drives, across architectures (>= 5).  Each
@@ -130,7 +133,13 @@ fn parse_fixture(text: &str) -> Fixture {
         if let Some(rest) = line.strip_prefix("# corpus:") {
             corpus = rest.trim().to_string();
         } else if let Some(rest) = line.strip_prefix("# sla:") {
-            sla_rel = rest.trim().split(" (relative").next().unwrap().trim().to_string();
+            sla_rel = rest
+                .trim()
+                .split(" (relative")
+                .next()
+                .unwrap()
+                .trim()
+                .to_string();
         } else if line.starts_with("# lift-points") {
             let after = line.split("): ").nth(1).unwrap_or("");
             for tok in after.split_whitespace() {
@@ -154,7 +163,13 @@ fn parse_fixture(text: &str) -> Fixture {
             in_body = false;
         }
     }
-    Fixture { corpus, sla_rel, lift_points, context, body }
+    Fixture {
+        corpus,
+        sla_rel,
+        lift_points,
+        context,
+        body,
+    }
 }
 
 fn find_binaryimage(el: &Rc<Element>) -> Option<Rc<Element>> {
@@ -204,7 +219,10 @@ fn bootstrap(fix: &Fixture) -> Result<Bootstrap, String> {
     let corpus_path = root.join(&fix.corpus);
     let sla_path = root.join("specs").join(&fix.sla_rel);
     if !sla_path.is_file() {
-        return Err(format!("{} not built (run `make specs`)", sla_path.display()));
+        return Err(format!(
+            "{} not built (run `make specs`)",
+            sla_path.display()
+        ));
     }
 
     let registry = build_registry();
@@ -215,18 +233,24 @@ fn bootstrap(fix: &Fixture) -> Result<Bootstrap, String> {
 
     let xml = std::fs::read(&corpus_path).map_err(|e| format!("read corpus: {e}"))?;
     let mut store = DocumentStorage::new();
-    let doc_root =
-        store.parse_document(&xml).map_err(|e| format!("parse corpus: {e}"))?.get_root().clone();
+    let doc_root = store
+        .parse_document(&xml)
+        .map_err(|e| format!("parse corpus: {e}"))?
+        .get_root()
+        .clone();
     let bi = find_binaryimage(&doc_root).ok_or("corpus has no <binaryimage>")?;
-    arch.build_loader(Rc::clone(&bi)).map_err(|e| format!("build_loader: {e}"))?;
+    arch.build_loader(Rc::clone(&bi))
+        .map_err(|e| format!("build_loader: {e}"))?;
 
     let mut db = LanguageDatabase::new();
     let specs_root = root.join("specs");
     db.scan_for_sleigh_directories(specs_root.to_str().unwrap());
-    db.get_descriptions(&registry).map_err(|e| format!("collect ldefs: {e}"))?;
+    db.get_descriptions(&registry)
+        .map_err(|e| format!("collect ldefs: {e}"))?;
 
-    let archattr =
-        bi.get_attribute_value("arch").map_err(|e| format!("binaryimage arch: {e}"))?;
+    let archattr = bi
+        .get_attribute_value("arch")
+        .map_err(|e| format!("binaryimage arch: {e}"))?;
     let arch_id = String::from_utf8_lossy(archattr).into_owned();
     arch.sleigh_mut().set_archid(&arch_id);
 
@@ -238,8 +262,13 @@ fn bootstrap(fix: &Fixture) -> Result<Bootstrap, String> {
         return Err("language index unresolved".to_string());
     }
 
-    let specs = arch.sleigh().build_spec_file(&db).map_err(|e| format!("build_spec_file: {e}"))?;
-    let resolved_sla = specs.slafile.ok_or("build_spec_file did not resolve a .sla")?;
+    let specs = arch
+        .sleigh()
+        .build_spec_file(&db)
+        .map_err(|e| format!("build_spec_file: {e}"))?;
+    let resolved_sla = specs
+        .slafile
+        .ok_or("build_spec_file did not resolve a .sla")?;
 
     let sla = std::fs::read(&resolved_sla).map_err(|e| format!("read resolved sla: {e}"))?;
     arch.sleigh_mut()
@@ -247,7 +276,10 @@ fn bootstrap(fix: &Fixture) -> Result<Bootstrap, String> {
         .map_err(|e| format!("build_translator: {e}"))?;
 
     {
-        let base = arch.sleigh_mut().base_mut().ok_or("translator base missing")?;
+        let base = arch
+            .sleigh_mut()
+            .base_mut()
+            .ok_or("translator base missing")?;
         for (name, val) in &fix.context {
             base.translate_mut().set_context_default(name, *val);
         }
@@ -260,7 +292,11 @@ fn bootstrap(fix: &Fixture) -> Result<Bootstrap, String> {
         .map_err(|e| format!("open_image: {e}"))?;
 
     let img = arch.take_loader().ok_or("loader vanished after open")?;
-    arch.sleigh_mut().base_mut().unwrap().translate_mut().set_loader(Box::new(img));
+    arch.sleigh_mut()
+        .base_mut()
+        .unwrap()
+        .translate_mut()
+        .set_loader(Box::new(img));
 
     let _ = registry;
     Ok(Bootstrap { arch })
@@ -306,8 +342,11 @@ impl FlowEnvironment for BootstrapEnv<'_> {
 
 fn build_funcdata(bs: &Bootstrap, name: &str, space_name: &str, off: u64) -> Funcdata {
     let base = bs.arch.sleigh().base().unwrap();
-    let engine_space =
-        Rc::clone(base.manage().get_space_by_name(space_name).expect("entry space"));
+    let engine_space = Rc::clone(
+        base.manage()
+            .get_space_by_name(space_name)
+            .expect("entry space"),
+    );
     let entry = Address::new(engine_space, off);
     let uniq_start = base.translate().get_unique_start(UniqueLayout::ANALYSIS);
     let ir_arch = Rc::new(IrArch::new(ir_boundary_manager(base.manage())));
@@ -320,13 +359,18 @@ fn build_funcdata(bs: &Bootstrap, name: &str, space_name: &str, off: u64) -> Fun
 /// lift-emitted varnodes carry their own (engine) spaces, so the two coexist.
 fn ir_boundary_manager(src: &AddrSpaceManager) -> AddrSpaceManager {
     use unlace_base::space::{
-        addrspace_flags, AddrSpace, ConstantSpace, FspecSpace, IopSpace, UniqueSpace,
+        AddrSpace, ConstantSpace, FspecSpace, IopSpace, UniqueSpace, addrspace_flags,
     };
     let mut m = AddrSpaceManager::new();
-    m.insert_space(Rc::new(ConstantSpace::new())).expect("const");
-    let big_end = src.get_default_code_space().map(|s| s.is_big_endian()).unwrap_or(false);
+    m.insert_space(Rc::new(ConstantSpace::new()))
+        .expect("const");
+    let big_end = src
+        .get_default_code_space()
+        .map(|s| s.is_big_endian())
+        .unwrap_or(false);
     let uniq_index = m.num_spaces();
-    m.insert_space(Rc::new(UniqueSpace::new(uniq_index, 0, big_end))).expect("unique");
+    m.insert_space(Rc::new(UniqueSpace::new(uniq_index, 0, big_end)))
+        .expect("unique");
     if let Some(code) = src.get_default_code_space() {
         let ram = AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
@@ -402,14 +446,25 @@ fn drive_real_flow_and_render(
     max_insn: usize,
 ) -> Vec<String> {
     let env = BootstrapEnv {
-        sleigh: bs.arch.sleigh().base().unwrap().translate().as_sleigh().expect("standalone Sleigh"),
+        sleigh: bs
+            .arch
+            .sleigh()
+            .base()
+            .unwrap()
+            .translate()
+            .as_sleigh()
+            .expect("standalone Sleigh"),
     };
     let engine_manager: *const AddrSpaceManager = bs.arch.sleigh().base().unwrap().manage();
     let fd = build_funcdata(bs, "entry", space_name, start_off);
     let mut flow = FlowInfo::new(fd, &env);
 
     let base = bs.arch.sleigh().base().unwrap();
-    let space = Rc::clone(base.manage().get_space_by_name(space_name).expect("lift space"));
+    let space = Rc::clone(
+        base.manage()
+            .get_space_by_name(space_name)
+            .expect("lift space"),
+    );
     let mut addr = Address::new(Rc::clone(&space), start_off);
 
     // Record the (address, op-line vec) per driven instruction so the output can
@@ -462,7 +517,11 @@ fn drive_real_flow_and_render(
 ///   `  OPNAME <out> <in0> <in1> ...`
 /// where varnodes render as `(space,0x<offset>,size)`, a missing output is `-`,
 /// and the LOAD/STORE slot-0 spaceid constant renders by space NAME.
-fn render_op(fd: &Funcdata, op: unlace_decomp::context::OpId, manager: *const AddrSpaceManager) -> String {
+fn render_op(
+    fd: &Funcdata,
+    op: unlace_decomp::context::OpId,
+    manager: *const AddrSpaceManager,
+) -> String {
     let o = fd.obank().get(op).expect("stale op");
     let opc = o.code();
     let mut s = format!("  {} ", get_opname(opc));
@@ -475,8 +534,7 @@ fn render_op(fd: &Funcdata, op: unlace_decomp::context::OpId, manager: *const Ad
         s.push(' ');
         let vn = o.get_in(i).expect("input slot is set");
         // Slot 0 of LOAD/STORE is a spaceid constant (rendered by name).
-        let spaceid =
-            i == 0 && (opc == OpCode::CPUI_LOAD || opc == OpCode::CPUI_STORE);
+        let spaceid = i == 0 && (opc == OpCode::CPUI_LOAD || opc == OpCode::CPUI_STORE);
         s.push_str(&render_vn(fd, vn, spaceid, manager));
     }
     s.trim_end().to_string()
@@ -497,10 +555,22 @@ fn render_vn(
         // SAFETY: the engine manager outlives this render (it lives in the engine,
         // which the Bootstrap owns for the whole test).
         let m = unsafe { &*manager };
-        let pointed = m.get_space(v.get_offset() as i32).expect("spaceid resolves");
-        format!("({},{},{})", spc.get_name(), pointed.get_name(), v.get_size())
+        let pointed = m
+            .get_space(v.get_offset() as i32)
+            .expect("spaceid resolves");
+        format!(
+            "({},{},{})",
+            spc.get_name(),
+            pointed.get_name(),
+            v.get_size()
+        )
     } else {
-        format!("({},0x{:x},{})", spc.get_name(), v.get_offset(), v.get_size())
+        format!(
+            "({},0x{:x},{})",
+            spc.get_name(),
+            v.get_offset(),
+            v.get_size()
+        )
     }
 }
 
@@ -579,7 +649,11 @@ fn normalize_coderef_size(line: &str) -> String {
     // Varnode (`(fspec,<handle>,1)`).  Both forms denote "the callee"; collapse the
     // slot-0 input to a single `(callee)` token so the real-flow output (post
     // call-spec) and the raw-lift fixture compare equal on this column.
-    let in0_norm = if opname == "CALL" { "(callee)".to_string() } else { rewrite_triple_size_to_one(in0) };
+    let in0_norm = if opname == "CALL" {
+        "(callee)".to_string()
+    } else {
+        rewrite_triple_size_to_one(in0)
+    };
     let mut s = format!("  {opname} {out} {in0_norm}");
     for tok in &rest[2..] {
         s.push(' ');
@@ -610,7 +684,11 @@ fn first_n_op_opcodes(body: &[String], n: usize) -> Vec<String> {
 /// The first `n` op lines verbatim (no normalization) — used to inspect the raw
 /// IR varnode sizes the real flow built.
 fn raw_op_lines(body: &[String], n: usize) -> Vec<String> {
-    body.iter().filter(|l| l.starts_with("  ")).take(n).map(|l| l.trim_end().to_string()).collect()
+    body.iter()
+        .filter(|l| l.starts_with("  "))
+        .take(n)
+        .map(|l| l.trim_end().to_string())
+        .collect()
 }
 
 /// The size field of a `(space,offset,size)` triple, if parseable.
@@ -660,7 +738,10 @@ fn real_flow_links_ops_matching_lift_fixtures() {
         // every op + its output/input Varnodes via the now-real
         // newVarnodeOut/newCodeRef/opSetInput.
         let got_body = drive_real_flow_and_render(&bs, &space_name, off, DRIVE_INSN);
-        assert!(!got_body.is_empty(), "{fixture}: real flow produced no body");
+        assert!(
+            !got_body.is_empty(),
+            "{fixture}: real flow produced no body"
+        );
 
         // The number of op lines to compare: the whole straight-line range the real
         // flow built (entry through the first terminator), capped, and never beyond

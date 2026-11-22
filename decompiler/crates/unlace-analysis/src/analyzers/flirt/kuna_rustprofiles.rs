@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use flirt_sig::{Endian, Matcher, Signature};
 use object::{BinaryFormat, Object};
 
-use super::{accepted_matches, applies_to, Image};
+use super::{Image, accepted_matches, applies_to};
 use crate::listing::Listing;
 
 mod kuna_application;

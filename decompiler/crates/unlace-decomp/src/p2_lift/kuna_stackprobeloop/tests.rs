@@ -9,10 +9,10 @@
 
 use std::rc::Rc;
 
-use unlace_base::address::{calc_mask, Address};
+use unlace_base::address::{Address, calc_mask};
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, SpacebaseSpace,
-    UniqueSpace, VarnodeStorage,
+    AddrSpace, AddrSpaceManager, ConstantSpace, SpacebaseSpace, UniqueSpace, VarnodeStorage,
+    addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
@@ -34,7 +34,8 @@ const PAGE: u64 = 0x1000;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     // The processor register space (index 2) — holds the SP base register and
     // contains the "stack" spacebase.
     let regspc = Rc::new(AddrSpace::new(
@@ -52,8 +53,10 @@ fn build_manager() -> AddrSpaceManager {
     // The "stack" spacebase space (index 3, contained in "register") — becomes
     // get_stack_space().  SpacebaseSpace::new yields the AddrSpaceKind::Spacebase
     // that set_base_register/get_spacebase require.
-    m.insert_space(Rc::new(SpacebaseSpace::new("stack", 3, 8, &regspc, 1, true, false)))
-        .unwrap();
+    m.insert_space(Rc::new(SpacebaseSpace::new(
+        "stack", 3, 8, &regspc, 1, true, false,
+    )))
+    .unwrap();
     m
 }
 
@@ -67,9 +70,15 @@ fn build_fd() -> Funcdata {
     let manage = build_manager();
     let regspc = register_space(&manage);
     let stackspc = Rc::clone(manage.get_stack_space().unwrap());
-    let sp_data = VarnodeStorage { space: Some(regspc), offset: SP_OFF, size: SP_SIZE as u32 };
+    let sp_data = VarnodeStorage {
+        space: Some(regspc),
+        offset: SP_OFF,
+        size: SP_SIZE as u32,
+    };
     // addSpacebasePointer(stack, sp_data, SP_SIZE, stack_growth=true)
-    manage.add_spacebase_pointer(&stackspc, &sp_data, SP_SIZE, true).unwrap();
+    manage
+        .add_spacebase_pointer(&stackspc, &sp_data, SP_SIZE, true)
+        .unwrap();
 
     let glb = Rc::new(ArchContext::new(manage));
     let code = Rc::clone(glb.manage().get_space_by_name("register").unwrap());

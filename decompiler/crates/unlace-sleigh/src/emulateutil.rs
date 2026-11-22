@@ -16,12 +16,12 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use unlace_base::address::{calc_mask, Address};
+use unlace_base::address::{Address, calc_mask};
 use unlace_base::error::{KunaError, KunaResult};
-use unlace_base::space::{spacetype, AddrSpace, AddrSpaceManager};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, spacetype};
 use unlace_base::types::Wrap;
 use unlace_num::opbehavior::OpBehavior;
-use unlace_num::opcodes::{get_opname, OpCode};
+use unlace_num::opcodes::{OpCode, get_opname};
 use unlace_num::pcoderaw::{PcodeOpRaw, VarnodeData};
 
 use crate::emulate::{Emulate, EmulateCore, PcodeEmitCache};
@@ -255,7 +255,9 @@ impl EmulateSnippet {
             return match self.temp_values.get(&vn.offset) {
                 // We have seen this varnode before
                 Some(val) => Ok(*val),
-                None => Err(KunaError::lowlevel("Read before write in snippet emulation")),
+                None => Err(KunaError::lowlevel(
+                    "Read before write in snippet emulation",
+                )),
             };
         }
 
@@ -294,7 +296,9 @@ impl Emulate for EmulateSnippet {
                 .expect("EmulateSnippet: currentBehave not set (C++ would dereference null)"),
         );
         let in1 = self.get_varnode_value(op.get_input(0))?;
-        let out_vn = op.get_output().expect("executeUnary: op without output (C++ UB)");
+        let out_vn = op
+            .get_output()
+            .expect("executeUnary: op without output (C++ UB)");
         let out = behave.evaluate_unary(
             out_vn.size as i32,          // cast: uint4 size as the C++ int4 param
             op.get_input(0).size as i32, // cast: uint4 size as the C++ int4 param
@@ -314,7 +318,9 @@ impl Emulate for EmulateSnippet {
         );
         let in1 = self.get_varnode_value(op.get_input(0))?;
         let in2 = self.get_varnode_value(op.get_input(1))?;
-        let out_vn = op.get_output().expect("executeBinary: op without output (C++ UB)");
+        let out_vn = op
+            .get_output()
+            .expect("executeBinary: op without output (C++ UB)");
         let out = behave.evaluate_binary(
             out_vn.size as i32,          // cast: uint4 size as the C++ int4 param
             op.get_input(0).size as i32, // cast: uint4 size as the C++ int4 param
@@ -334,7 +340,10 @@ impl Emulate for EmulateSnippet {
             .get_space_from_const(&self.manage)
             .expect("executeLoad: <spaceid> constant does not resolve (C++ pointer always valid)");
         let off = AddrSpace::address_to_byte(off, spc.get_word_size());
-        let sz = op.get_output().expect("executeLoad: op without output (C++ UB)").size as i32; // cast: uint4 as int4
+        let sz = op
+            .get_output()
+            .expect("executeLoad: op without output (C++ UB)")
+            .size as i32; // cast: uint4 as int4
         let res = self.get_load_image_value(&spc, off, sz)?;
         let out_offset = op.get_output().expect("just checked").offset;
         self.set_varnode_value(out_offset, res);
@@ -444,12 +453,12 @@ impl Emulate for EmulateSnippet {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::emulate::test_support::{
-        cst, ram_vn, reg, spaceid_vn, test_manager, uvn, TestLoader, TestTranslator,
-    };
     use crate::emulate::TranslateFloatFormats;
+    use crate::emulate::test_support::{
+        TestLoader, TestTranslator, cst, ram_vn, reg, spaceid_vn, test_manager, uvn,
+    };
     use crate::translate::{PcodeEmit, Translate};
-    use unlace_num::opbehavior::{register_instructions, FloatFormatProvider};
+    use unlace_num::opbehavior::{FloatFormatProvider, register_instructions};
 
     /// Coerce the concrete test loader handle to the trait-object handle.
     fn dyn_loader(l: &Rc<RefCell<TestLoader>>) -> Rc<RefCell<dyn LoadImage>> {
@@ -476,7 +485,12 @@ mod tests {
         let provider: Rc<dyn FloatFormatProvider> = Rc::new(TranslateFloatFormats(trans));
         register_instructions(&mut inst, &provider);
         let ram = Rc::clone(manager.get_space_by_name("ram").unwrap());
-        SnippetEnv { manager, loader, inst, ram }
+        SnippetEnv {
+            manager,
+            loader,
+            inst,
+            ram,
+        }
     }
 
     fn run(snippet: &mut EmulateSnippet) -> KunaResult<()> {
@@ -507,7 +521,12 @@ mod tests {
         let m = &env.manager;
         {
             let mut emit = snippet.build_emitter(&env.inst, 0x200);
-            emit.dump(&addr, OpCode::CPUI_COPY, Some(&uvn(m, 0x80, 8)), &[cst(m, 4, 8)]);
+            emit.dump(
+                &addr,
+                OpCode::CPUI_COPY,
+                Some(&uvn(m, 0x80, 8)),
+                &[cst(m, 4, 8)],
+            );
             emit.dump(
                 &addr,
                 OpCode::CPUI_INT_MULT,
@@ -526,8 +545,18 @@ mod tests {
                 Some(&uvn(m, 0x98, 8)),
                 &[uvn(m, 0x88, 8), uvn(m, 0x90, 8)],
             );
-            emit.dump(&addr, OpCode::CPUI_CBRANCH, None, &[cst(m, 2, 8), cst(m, 1, 1)]);
-            emit.dump(&addr, OpCode::CPUI_COPY, Some(&uvn(m, 0x98, 8)), &[cst(m, 0, 8)]);
+            emit.dump(
+                &addr,
+                OpCode::CPUI_CBRANCH,
+                None,
+                &[cst(m, 2, 8), cst(m, 1, 1)],
+            );
+            emit.dump(
+                &addr,
+                OpCode::CPUI_COPY,
+                Some(&uvn(m, 0x98, 8)),
+                &[cst(m, 0, 8)],
+            );
             emit.dump(
                 &addr,
                 OpCode::CPUI_INT_SUB,
@@ -588,7 +617,10 @@ mod tests {
         snippet.reset_memory();
         assert_eq!(
             snippet.execute_current_op().unwrap_err().explain(),
-            format!("Illegal p-code operation in snippet: {}", get_opname(OpCode::CPUI_STORE))
+            format!(
+                "Illegal p-code operation in snippet: {}",
+                get_opname(OpCode::CPUI_STORE)
+            )
         );
 
         // absolute BRANCH: illegal code, and an execution-time error
@@ -626,7 +658,12 @@ mod tests {
         let mut snippet = EmulateSnippet::new(dyn_loader(&env.loader), Rc::clone(&env.manager));
         {
             let mut emit = snippet.build_emitter(&env.inst, 0x200);
-            emit.dump(&addr, OpCode::CPUI_COPY, Some(&uvn(m, 0x80, 8)), &[reg(m, 0)]);
+            emit.dump(
+                &addr,
+                OpCode::CPUI_COPY,
+                Some(&uvn(m, 0x80, 8)),
+                &[reg(m, 0)],
+            );
         }
         assert!(!snippet.check_for_legal_code());
 
@@ -657,10 +694,20 @@ mod tests {
         let mut snippet = EmulateSnippet::new(dyn_loader(&env.loader), Rc::clone(&env.manager));
         {
             let mut emit = snippet.build_emitter(&env.inst, 0x200);
-            emit.dump(&addr, OpCode::CPUI_COPY, Some(&uvn(m, 0x80, 8)), &[cst(m, 1, 8)]);
+            emit.dump(
+                &addr,
+                OpCode::CPUI_COPY,
+                Some(&uvn(m, 0x80, 8)),
+                &[cst(m, 1, 8)],
+            );
             // BRANCH +2 from index 1 lands exactly one past the end: halt
             emit.dump(&addr, OpCode::CPUI_BRANCH, None, &[cst(m, 2, 8)]);
-            emit.dump(&addr, OpCode::CPUI_COPY, Some(&uvn(m, 0x80, 8)), &[cst(m, 99, 8)]);
+            emit.dump(
+                &addr,
+                OpCode::CPUI_COPY,
+                Some(&uvn(m, 0x80, 8)),
+                &[cst(m, 99, 8)],
+            );
         }
         run(&mut snippet).unwrap();
         assert!(snippet.get_halt());

@@ -52,8 +52,8 @@ use unlace_base::xml::{DocumentStorage, Element};
 
 use unlace_console::engine::bootstrap_program;
 use unlace_console::ifacedecomp::{
-    execute, mainloop, register_console_commands, register_decomp_commands, IfaceDecompData,
-    DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, mainloop, register_console_commands,
+    register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_console::interface::{FileOut, IfaceError, IfaceStatus};
@@ -196,7 +196,7 @@ impl FunctionTestProperty {
             // A newline in the pattern indicates a multi-line regex.
             let nextpos = memchr_nl(line, pos);
             let (n, next): (Option<usize>, Option<usize>) = match nextpos {
-                None => (None, None),              // take all remaining chars
+                None => (None, None),                       // take all remaining chars
                 Some(nl) => (Some(nl - pos), Some(nl + 1)), // upto newline, skip it
             };
             let end = match n {
@@ -238,7 +238,10 @@ impl FunctionTestProperty {
 
 /// Find the next `\n` at or after `from` (C++ `line.find('\n', pos)`).
 fn memchr_nl(bytes: &[u8], from: usize) -> Option<usize> {
-    bytes[from..].iter().position(|&b| b == b'\n').map(|i| from + i)
+    bytes[from..]
+        .iter()
+        .position(|&b| b == b'\n')
+        .map(|i| from + i)
 }
 
 /// Translate the one ECMAScript-vs-`regex`-crate dialect divergence that matters
@@ -283,7 +286,9 @@ fn ecmascript_identity_escapes(p: &str) -> String {
 fn compile_pattern(p: &str) -> TestResult<Regex> {
     let translated = ecmascript_identity_escapes(p);
     Regex::new(&translated).map_err(|e| {
-        TestError::Parse(format!("stringmatch pattern {p:?} not supported by the regex crate: {e}"))
+        TestError::Parse(format!(
+            "stringmatch pattern {p:?} not supported by the regex crate: {e}"
+        ))
     })
 }
 
@@ -414,7 +419,8 @@ impl FunctionTestCollection {
                 Ok(_) => return Err(TestError::Parse("expecterror must be true or false".into())),
             };
             self.expected_errors.push(expected);
-            self.commands.push(Self::strip_newlines(subel.get_content()));
+            self.commands
+                .push(Self::strip_newlines(subel.get_content()));
         }
         Ok(())
     }
@@ -492,7 +498,8 @@ impl FunctionTestCollection {
                 }
                 "stringmatch" => {
                     saw_tests = true;
-                    self.test_list.push(FunctionTestProperty::restore_xml(subel)?);
+                    self.test_list
+                        .push(FunctionTestProperty::restore_xml(subel)?);
                 }
                 "binaryimage" => {
                     saw_program = true;
@@ -502,7 +509,7 @@ impl FunctionTestCollection {
                 other => {
                     return Err(TestError::Parse(format!(
                         "Unknown tag in <decompilertest>: {other}"
-                    )))
+                    )));
                 }
             }
         }
@@ -527,7 +534,9 @@ impl FunctionTestCollection {
     /// C++ `restoreXmlOldForm`: the legacy binaryimage-comment format, which the
     /// upstream throws on.
     pub fn restore_xml_old_form(&mut self, _el: &Rc<Element>) -> TestResult<()> {
-        Err(TestError::Parse("Old format test not supported".to_string()))
+        Err(TestError::Parse(
+            "Old format test not supported".to_string(),
+        ))
     }
 
     /// C++ `startTests()`: initialize each property.
@@ -648,7 +657,10 @@ impl FunctionTestCollection {
         }
 
         if self.console.is_in_error() {
-            results.push_str(&format!("Error: Did not apply tests in {}\n", self.file_name));
+            results.push_str(&format!(
+                "Error: Did not apply tests in {}\n",
+                self.file_name
+            ));
             results.push_str(&mid_buffer);
             results.push('\n');
             late_stream.push(format!("Execution failed for {}", self.file_name));
@@ -838,7 +850,9 @@ fn istream_read_int(s: &str) -> int4 {
     let start = i;
     let mut val: i64 = 0;
     while i < bytes.len() && bytes[i].is_ascii_digit() {
-        val = val.saturating_mul(10).saturating_add((bytes[i] - b'0') as i64);
+        val = val
+            .saturating_mul(10)
+            .saturating_add((bytes[i] - b'0') as i64);
         i += 1;
     }
     if i == start {

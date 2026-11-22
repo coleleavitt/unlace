@@ -10,14 +10,20 @@ use crate::action::{ActionGroupList, Rule};
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 
-pub const USEROP_NAMES: [&[u8]; 3] = [b"x87_float_to_int16", b"x87_float_to_int32", b"x87_float_to_int64"];
+pub const USEROP_NAMES: [&[u8]; 3] = [
+    b"x87_float_to_int16",
+    b"x87_float_to_int32",
+    b"x87_float_to_int64",
+];
 
 const ROUND_TOWARD_ZERO: u64 = 0x0c00;
 
 /// Bits of `vn` that are 1 on every path through bit operations, copies and joins;
 /// `budget` bounds the definitions visited.
 fn known_ones(data: &Funcdata, vn: VarnodeId, budget: &mut u32) -> u64 {
-    let Some(v) = data.vbank().get(vn) else { return 0 };
+    let Some(v) = data.vbank().get(vn) else {
+        return 0;
+    };
     let size = v.get_size();
     if !(1..=8).contains(&size) {
         return 0;
@@ -30,9 +36,15 @@ fn known_ones(data: &Funcdata, vn: VarnodeId, budget: &mut u32) -> u64 {
         return 0;
     }
     *budget -= 1;
-    let Some(op) = v.get_def().and_then(|id| data.obank().get(id)) else { return 0 };
+    let Some(op) = v.get_def().and_then(|id| data.obank().get(id)) else {
+        return 0;
+    };
     let mut input = |slot: int4| op.get_in(slot).map_or(0, |i| known_ones(data, i, budget));
-    let size_of = |slot: int4| op.get_in(slot).and_then(|i| data.vbank().get(i)).map_or(0, |i| i.get_size());
+    let size_of = |slot: int4| {
+        op.get_in(slot)
+            .and_then(|i| data.vbank().get(i))
+            .map_or(0, |i| i.get_size())
+    };
     let ones = match op.code() {
         OpCode::CPUI_COPY | OpCode::CPUI_INT_ZEXT => input(0),
         OpCode::CPUI_INT_OR => input(0) | input(1),
@@ -45,7 +57,10 @@ fn known_ones(data: &Funcdata, vn: VarnodeId, budget: &mut u32) -> u64 {
             input(0) << (low * 8) | input(1)
         }
         OpCode::CPUI_SUBPIECE => {
-            let shift = op.get_in(1).and_then(|i| data.vbank().get(i)).map_or(8, |i| i.get_offset());
+            let shift = op
+                .get_in(1)
+                .and_then(|i| data.vbank().get(i))
+                .map_or(8, |i| i.get_offset());
             if shift >= 8 {
                 return 0;
             }
@@ -64,7 +79,9 @@ pub struct RuleX87Truncate {
 
 impl RuleX87Truncate {
     pub fn new(group: &str) -> RuleX87Truncate {
-        RuleX87Truncate { group: group.to_string() }
+        RuleX87Truncate {
+            group: group.to_string(),
+        }
     }
 }
 
@@ -74,23 +91,34 @@ impl Rule for RuleX87Truncate {
     }
 
     fn clone_rule(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Rule>> {
-        grouplist.contains(&self.group).then(|| Box::new(RuleX87Truncate::new(&self.group)) as Box<dyn Rule>)
+        grouplist
+            .contains(&self.group)
+            .then(|| Box::new(RuleX87Truncate::new(&self.group)) as Box<dyn Rule>)
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         if data.get_arch().x87_float_to_int_userops.is_empty() {
             return 0;
         }
-        let Some(o) = data.obank().get(op) else { return 0 };
+        let Some(o) = data.obank().get(op) else {
+            return 0;
+        };
         if o.num_input() != 3 {
             return 0;
         }
         let used = o.get_out().is_some();
-        let (Some(id), Some(control)) = (o.get_in(0), o.get_in(2)) else { return 0 };
+        let (Some(id), Some(control)) = (o.get_in(0), o.get_in(2)) else {
+            return 0;
+        };
         let selected = data.vbank().get(id).is_some_and(|v| {
-            v.is_constant() && data.get_arch().x87_float_to_int_userops.contains(&(v.get_offset() as uint4))
+            v.is_constant()
+                && data
+                    .get_arch()
+                    .x87_float_to_int_userops
+                    .contains(&(v.get_offset() as uint4))
         });
-        if !selected || known_ones(data, control, &mut 32) & ROUND_TOWARD_ZERO != ROUND_TOWARD_ZERO {
+        if !selected || known_ones(data, control, &mut 32) & ROUND_TOWARD_ZERO != ROUND_TOWARD_ZERO
+        {
             return 0;
         }
         if !used {

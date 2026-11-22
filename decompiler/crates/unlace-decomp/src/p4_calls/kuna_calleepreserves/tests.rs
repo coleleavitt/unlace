@@ -10,11 +10,11 @@ use super::*;
 use std::rc::Rc;
 
 use unlace_base::space::{
-    addrspace_flags, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags,
 };
 
 use crate::context::{ArchContext, TypeOp};
-use crate::fspec::{effect_type, EffectRecord, ProtoModel};
+use crate::fspec::{EffectRecord, ProtoModel, effect_type};
 use crate::kuna_rustabi::CalleeReturnWrites;
 use unlace_num::opcodes::OpCode;
 
@@ -25,7 +25,10 @@ use unlace_num::opcodes::OpCode;
 fn with_convention(fd: &Funcdata, fc: &mut FuncCallSpecs) {
     let ram = space(fd, "ram");
     let mut model = ProtoModel::new(fd.get_arch().manage());
-    for (off, ty) in [(0x10u64, effect_type::UNAFFECTED), (0x08, effect_type::KILLEDBYCALL)] {
+    for (off, ty) in [
+        (0x10u64, effect_type::UNAFFECTED),
+        (0x08, effect_type::KILLEDBYCALL),
+    ] {
         let mut vd = unlace_num::pcoderaw::VarnodeData::default();
         vd.space = Some(std::rc::Rc::clone(&ram));
         vd.offset = off;
@@ -40,7 +43,8 @@ fn with_convention(fd: &Funcdata, fc: &mut FuncCallSpecs) {
 fn build_fd() -> Funcdata {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -83,8 +87,10 @@ fn build_call(fd: &mut Funcdata, entry_off: u64) -> (FuncCallSpecs, Address) {
     let bl = fd.bblocks_mut().new_block_basic(root);
     fd.bblocks_mut().set_start_block(root, bl);
     let call = fd.new_op(1, Address::new(Rc::clone(&ram), 0x1010));
-    fd.obank_mut()
-        .change_opcode(call, TypeOp::new(OpCode::CPUI_CALL, 0, "CPUI_CALL".to_string()));
+    fd.obank_mut().change_opcode(
+        call,
+        TypeOp::new(OpCode::CPUI_CALL, 0, "CPUI_CALL".to_string()),
+    );
     let entry = Address::new(Rc::clone(&ram), entry_off);
     let target = fd.new_code_ref(&entry);
     let _ = fd.op_set_input(call, target, 0);
@@ -104,12 +110,19 @@ fn a_complete_probe_proves_an_unwritten_register_preserved() {
     // The get-PC thunk writes EBX (here 0x10) and nothing else.
     fd.kuna_set_callee_ret_writes(
         &entry,
-        Rc::new(CalleeReturnWrites::from_parts(vec![(ram, 0x10, 4)], Vec::new(), true)),
+        Rc::new(CalleeReturnWrites::from_parts(
+            vec![(ram, 0x10, 4)],
+            Vec::new(),
+            true,
+        )),
     );
     let edx = Address::new(space(&fd, "ram"), 0x08);
     assert!(callee_preserves_range(&fd, &fc, &edx, 4));
     let ebx = Address::new(space(&fd, "ram"), 0x10);
-    assert!(!callee_preserves_range(&fd, &fc, &ebx, 4), "the register it DOES write is not narrowed");
+    assert!(
+        !callee_preserves_range(&fd, &fc, &ebx, 4),
+        "the register it DOES write is not narrowed"
+    );
 }
 
 /// The claim is one-sided: a walk that could not finish proves nothing, and a
@@ -119,12 +132,22 @@ fn an_incomplete_or_missing_probe_narrows_nothing() {
     let mut fd = build_fd();
     let (fc, entry) = build_call(&mut fd, 0x2000);
     let edx = Address::new(space(&fd, "ram"), 0x08);
-    assert!(!callee_preserves_range(&fd, &fc, &edx, 4), "no probe recorded");
+    assert!(
+        !callee_preserves_range(&fd, &fc, &edx, 4),
+        "no probe recorded"
+    );
     fd.kuna_set_callee_ret_writes(
         &entry,
-        Rc::new(CalleeReturnWrites::from_parts(Vec::new(), Vec::new(), false)),
+        Rc::new(CalleeReturnWrites::from_parts(
+            Vec::new(),
+            Vec::new(),
+            false,
+        )),
     );
-    assert!(!callee_preserves_range(&fd, &fc, &edx, 4), "an incomplete walk proves nothing");
+    assert!(
+        !callee_preserves_range(&fd, &fc, &edx, 4),
+        "an incomplete walk proves nothing"
+    );
 }
 
 /// Only a register is answered. A stack range keeps the ABI's effect even when
@@ -136,7 +159,11 @@ fn a_stack_range_is_never_narrowed() {
     let (fc, entry) = build_call(&mut fd, 0x2000);
     fd.kuna_set_callee_ret_writes(
         &entry,
-        Rc::new(CalleeReturnWrites::from_parts(vec![(space(&fd, "ram").get_index(), 0x10, 4)], Vec::new(), true)),
+        Rc::new(CalleeReturnWrites::from_parts(
+            vec![(space(&fd, "ram").get_index(), 0x10, 4)],
+            Vec::new(),
+            true,
+        )),
     );
     let slot = Address::new(space(&fd, "stack"), 0xfffffff0);
     assert!(!callee_preserves_range(&fd, &fc, &slot, 4));
@@ -150,7 +177,11 @@ fn an_explicit_effect_override_wins() {
     let (mut fc, entry) = build_call(&mut fd, 0x2000);
     fd.kuna_set_callee_ret_writes(
         &entry,
-        Rc::new(CalleeReturnWrites::from_parts(vec![(space(&fd, "ram").get_index(), 0x10, 4)], Vec::new(), true)),
+        Rc::new(CalleeReturnWrites::from_parts(
+            vec![(space(&fd, "ram").get_index(), 0x10, 4)],
+            Vec::new(),
+            true,
+        )),
     );
     let edx = Address::new(space(&fd, "ram"), 0x08);
     assert!(callee_preserves_range(&fd, &fc, &edx, 4));
@@ -186,7 +217,11 @@ fn a_body_that_departs_from_nothing_narrows_nothing() {
     // EAX (0x00) -- the return register a bare `ret` leaves alone.
     fd.kuna_set_callee_ret_writes(
         &entry,
-        Rc::new(CalleeReturnWrites::from_parts(vec![(ram, 0x20, 4), (ram, 0x00, 4)], Vec::new(), true)),
+        Rc::new(CalleeReturnWrites::from_parts(
+            vec![(ram, 0x20, 4), (ram, 0x00, 4)],
+            Vec::new(),
+            true,
+        )),
     );
     let edx = Address::new(space(&fd, "ram"), 0x08);
     assert!(!callee_preserves_range(&fd, &fc, &edx, 4));
@@ -234,11 +269,15 @@ fn a_mode_switched_walk_keeps_no_argument_register() {
         model.push_effect(EffectRecord::from_varnode(vd, ty));
     }
     fc.proto_mut().set_model(Some(Rc::new(model)));
-    let body = || CalleeReturnWrites::from_parts(vec![(ram.get_index(), 0x10, 4)], Vec::new(), true);
+    let body =
+        || CalleeReturnWrites::from_parts(vec![(ram.get_index(), 0x10, 4)], Vec::new(), true);
     let argument = Address::new(Rc::clone(&ram), 0x08);
     let scratch = Address::new(Rc::clone(&ram), 0x0c);
     fd.kuna_set_callee_ret_writes(&entry, Rc::new(body()));
-    assert!(callee_preserves_range(&fd, &fc, &argument, 4), "a walk that needed no switch");
+    assert!(
+        callee_preserves_range(&fd, &fc, &argument, 4),
+        "a walk that needed no switch"
+    );
     fd.kuna_set_callee_ret_writes(&entry, Rc::new(body().through_a_mode_switch()));
     assert!(!callee_preserves_range(&fd, &fc, &argument, 4));
     assert!(callee_preserves_range(&fd, &fc, &scratch, 4));
@@ -253,7 +292,10 @@ fn the_program_counter_a_return_writes_is_no_departure() {
     let ram = space(&fd, "ram").get_index();
     fd.kuna_set_callee_ret_writes(
         &entry,
-        Rc::new(CalleeReturnWrites::from_parts(vec![(ram, 0x10, 4)], Vec::new(), true).returning_through(ram, 0x10, 4)),
+        Rc::new(
+            CalleeReturnWrites::from_parts(vec![(ram, 0x10, 4)], Vec::new(), true)
+                .returning_through(ram, 0x10, 4),
+        ),
     );
     let edx = Address::new(space(&fd, "ram"), 0x08);
     assert!(!callee_preserves_range(&fd, &fc, &edx, 4));

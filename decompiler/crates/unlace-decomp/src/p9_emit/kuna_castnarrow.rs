@@ -53,17 +53,29 @@ use std::rc::Rc;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::kuna_castimplied::{through_copies, trusted_param, CType, ImpliedCasts, PrintedForms};
+use crate::kuna_castimplied::{CType, ImpliedCasts, PrintedForms, through_copies, trusted_param};
 use crate::kuna_castwiden::{operand_set, plain_int, store_pointee};
 
 /// Leave out the truncation or sign change `op` prints, read by `read_op`
 /// (`None` at the top of a statement)?
-pub(crate) fn drops(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, op: OpId, read_op: Option<OpId>) -> bool {
-    let Some(o) = fd.obank().get(op) else { return false };
-    let (Some(invn), Some(outvn)) = (o.get_in(0), o.get_out()) else { return false };
-    let Some(outv) = fd.vbank().get(outvn) else { return false };
+pub(crate) fn drops(
+    ic: &ImpliedCasts,
+    p: &dyn PrintedForms,
+    fd: &Funcdata,
+    op: OpId,
+    read_op: Option<OpId>,
+) -> bool {
+    let Some(o) = fd.obank().get(op) else {
+        return false;
+    };
+    let (Some(invn), Some(outvn)) = (o.get_in(0), o.get_out()) else {
+        return false;
+    };
+    let Some(outv) = fd.vbank().get(outvn) else {
+        return false;
+    };
     let target = outv.get_type_def_facing().clone();
     if !plain_int(&target) {
         return false;
@@ -74,7 +86,9 @@ pub(crate) fn drops(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, op: 
         _ => return false,
     }
     let dest = match through_copies(fd, read_op, outvn) {
-        (None, _) => plain_statement(p, fd, op).then(|| ic.declared_spelling(p, fd, outvn)).flatten(),
+        (None, _) => plain_statement(p, fd, op)
+            .then(|| ic.declared_spelling(p, fd, outvn))
+            .flatten(),
         (Some(r), value) => destination(ic, p, fd, r, value),
     };
     dest.is_some_and(|d| d == p.spell(&target)) && integer_operand(ic, p, fd, invn, op)
@@ -96,30 +110,47 @@ pub(crate) fn drops_partial(
     whole: &Rc<Datatype>,
     name: &str,
 ) -> bool {
-    if !plain_int(piece) || !c_integer(whole) || ic.declared_named(name) != Some(p.spell(whole).as_str()) {
+    if !plain_int(piece)
+        || !c_integer(whole)
+        || ic.declared_named(name) != Some(p.spell(whole).as_str())
+    {
         return false;
     }
-    let (Some(r), value) = through_copies(fd, Some(op), vn) else { return false };
+    let (Some(r), value) = through_copies(fd, Some(op), vn) else {
+        return false;
+    };
     destination(ic, p, fd, r, value).is_some_and(|d| d == p.spell(piece))
 }
 
 /// The spelling of the type C converts `value` to where `r` reads it, when that
 /// is an assignment, a store, a trusted argument or a `return`.
-fn destination(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, r: OpId, value: VarnodeId) -> Option<String> {
+fn destination(
+    ic: &ImpliedCasts,
+    p: &dyn PrintedForms,
+    fd: &Funcdata,
+    r: OpId,
+    value: VarnodeId,
+) -> Option<String> {
     let ro = fd.obank().get(r)?;
     match ro.code() {
         OpCode::CPUI_CALL => trusted_param(fd, r, value).map(|t| p.spell(&t)),
         OpCode::CPUI_RETURN if ro.get_slot(value) == 1 => ic.return_spelling().map(str::to_string),
         OpCode::CPUI_COPY if plain_statement(p, fd, r) => {
             let lhs = ro.get_out()?;
-            fd.vbank().get(lhs)?.is_explicit().then(|| ic.declared_spelling(p, fd, lhs)).flatten()
+            fd.vbank()
+                .get(lhs)?
+                .is_explicit()
+                .then(|| ic.declared_spelling(p, fd, lhs))
+                .flatten()
         }
         OpCode::CPUI_STORE
             if ro.get_slot(value) == 2
                 && !ro.does_special_printing()
                 && crate::kuna_stackmem::access(fd, r).is_none() =>
         {
-            store_pointee(ic, p, fd, r).filter(|t| c_integer(t)).map(|t| p.spell(&t))
+            store_pointee(ic, p, fd, r)
+                .filter(|t| c_integer(t))
+                .map(|t| p.spell(&t))
         }
         _ => None,
     }
@@ -135,8 +166,16 @@ fn plain_statement(p: &dyn PrintedForms, fd: &Funcdata, op: OpId) -> bool {
 
 /// Does `vn`, as printed where `op` reads it, have an integer C type?  A shift
 /// has the promoted type of its left operand (C11 6.5.7p3).
-fn integer_operand(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, vn: VarnodeId, op: OpId) -> bool {
-    let Some(v) = fd.vbank().get(vn) else { return false };
+fn integer_operand(
+    ic: &ImpliedCasts,
+    p: &dyn PrintedForms,
+    fd: &Funcdata,
+    vn: VarnodeId,
+    op: OpId,
+) -> bool {
+    let Some(v) = fd.vbank().get(vn) else {
+        return false;
+    };
     if v.is_constant() {
         return false;
     }
@@ -147,9 +186,14 @@ fn integer_operand(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, vn: V
             operand_set(ic, p, fd, vn, op, 0).is_some()
                 || v.get_def().is_some_and(|def| {
                     fd.obank().get(def).is_some_and(|d| {
-                        matches!(d.code(), OpCode::CPUI_INT_LEFT | OpCode::CPUI_INT_RIGHT | OpCode::CPUI_INT_SRIGHT)
-                            && plain_int(v.get_type_def_facing())
-                            && d.get_in(0).is_some_and(|x| operand_set(ic, p, fd, x, def, 1).is_some())
+                        matches!(
+                            d.code(),
+                            OpCode::CPUI_INT_LEFT
+                                | OpCode::CPUI_INT_RIGHT
+                                | OpCode::CPUI_INT_SRIGHT
+                        ) && plain_int(v.get_type_def_facing())
+                            && d.get_in(0)
+                                .is_some_and(|x| operand_set(ic, p, fd, x, def, 1).is_some())
                     })
                 })
         }
@@ -160,5 +204,7 @@ fn integer_operand(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, vn: V
 /// type of an integer's width, which prints as `unsigned long` or `undefined8`?
 fn c_integer(t: &Datatype) -> bool {
     plain_int(t)
-        || (t.get_metatype() == type_metatype::TYPE_UNKNOWN && !t.is_enum_type() && matches!(t.get_size(), 1 | 2 | 4 | 8))
+        || (t.get_metatype() == type_metatype::TYPE_UNKNOWN
+            && !t.is_enum_type()
+            && matches!(t.get_size(), 1 | 2 | 4 | 8))
 }

@@ -146,7 +146,12 @@ const ACCESSORS: &[(&str, Slot)] = &[
 /// but that is luck rather than reasoning: on an image where the following call
 /// landed on a local function the match would stand. Naming the shim's own
 /// accessors and bailing on them is the guard that actually holds.
-const REJECTORS: &[&str] = &["__p__environ", "__p__wenviron", "__getmainargs", "__wgetmainargs"];
+const REJECTORS: &[&str] = &[
+    "__p__environ",
+    "__p__wenviron",
+    "__getmainargs",
+    "__wgetmainargs",
+];
 
 /// Which `main` parameter an accessor call supplies.
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -178,7 +183,10 @@ fn entry_main_prototype(ctx: &AnalysisCtx) -> Option<(u64, PrototypePieces)> {
         return None;
     }
     // A named entry function has a better signature coming from whatever named it.
-    if super::existing_function_addrs(ctx.file, ctx.bytes).binary_search(&main).is_ok() {
+    if super::existing_function_addrs(ctx.file, ctx.bytes)
+        .binary_search(&main)
+        .is_ok()
+    {
         return None;
     }
     Some((main, prototype_for(ctx.arch, main, &slots)?))

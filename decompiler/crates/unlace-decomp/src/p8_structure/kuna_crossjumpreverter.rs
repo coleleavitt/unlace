@@ -70,10 +70,10 @@ use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
-use crate::block::{block_flags, BlockType};
+use crate::block::{BlockType, block_flags};
+use crate::context::BlockId;
 use crate::funcdata::Funcdata;
 use crate::options::on_or_off;
-use crate::context::BlockId;
 
 use unlace_base::marshal::ElementId;
 
@@ -97,7 +97,9 @@ pub struct ActionCrossJumpReverter {
 impl ActionCrossJumpReverter {
     /// Construct in group `g`.
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionCrossJumpReverter { base: ActionBase::new(0, "crossjumprevert", g) })
+        Box::new(ActionCrossJumpReverter {
+            base: ActionBase::new(0, "crossjumprevert", g),
+        })
     }
 }
 
@@ -112,7 +114,9 @@ impl Action for ActionCrossJumpReverter {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionCrossJumpReverter { base: self.base.clone() }))
+        Some(Box::new(ActionCrossJumpReverter {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // P0 assertion `option crossjumprevert on|off`, carried on the Architecture boundary.
@@ -127,8 +131,12 @@ impl Action for ActionCrossJumpReverter {
         // Find every `BlockGoto` node `<body>; goto T` whose target T is a
         // duplicable, convergent non-return cross-jump tail.
         // (goto_node, bbchain, target_sblock, warn_addr)
-        let mut conversions: Vec<(BlockId, Vec<BlockId>, BlockId, unlace_base::address::Address)> =
-            Vec::new();
+        let mut conversions: Vec<(
+            BlockId,
+            Vec<BlockId>,
+            BlockId,
+            unlace_base::address::Address,
+        )> = Vec::new();
         let nodes = collect_nodes(data, root);
         for &n in &nodes {
             let blk = data.sblocks_ref().block(n);
@@ -187,8 +195,12 @@ impl Action for ActionCrossJumpReverter {
             // the node to a plain BlockList (the goto/label vanish).  Sound for the
             // fall-through case because the convergence precondition above proved
             // both paths reach the same successor S.
-            data.sblocks_mut().kuna_inline_crossjump_tail(*goto_id, chain);
-            data.warning("crossjumprevert: duplicated cross-jump tail to remove goto", warn_addr);
+            data.sblocks_mut()
+                .kuna_inline_crossjump_tail(*goto_id, chain);
+            data.warning(
+                "crossjumprevert: duplicated cross-jump tail to remove goto",
+                warn_addr,
+            );
             converted_targets.push(*target);
             count += 1;
         }

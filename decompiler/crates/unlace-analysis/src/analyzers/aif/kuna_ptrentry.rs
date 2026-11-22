@@ -134,10 +134,7 @@ pub(crate) enum Guard {
 /// into an executable range. Scanning *all* allocated sections — not just the
 /// non-executable ones — is what reaches the literal pools and vector tables that
 /// bare-metal firmware links inside `.text`.
-fn code_pointer_sites(
-    file: &object::File,
-    exec_ranges: &[(u64, u64)],
-) -> BTreeMap<u64, Vec<u64>> {
+fn code_pointer_sites(file: &object::File, exec_ranges: &[(u64, u64)]) -> BTreeMap<u64, Vec<u64>> {
     use object::read::{Object, ObjectSection};
     let little = file.is_little_endian();
     let in_exec = |vma: u64| exec_ranges.iter().any(|&(lo, hi)| vma >= lo && vma < hi);
@@ -182,13 +179,18 @@ fn probe_target(
         if matches!(listing.code_unit_at(site), CodeUnit::Instruction(_)) {
             return Err(Guard::SiteIsInstruction);
         }
-        if let (Some(a), Some(b)) = (listing.function_containing(site).map(|f| f.entry), target_fn) {
+        if let (Some(a), Some(b)) = (
+            listing.function_containing(site).map(|f| f.entry),
+            target_fn,
+        ) {
             if a == b {
                 return Err(Guard::SameFunction);
             }
         }
     }
-    let gap_hi = listing.next_instruction_start_after(target).unwrap_or(u64::MAX);
+    let gap_hi = listing
+        .next_instruction_start_after(target)
+        .unwrap_or(u64::MAX);
     check_terminating_routine(decoder, listing, target, gap_hi).ok_or(Guard::NotTerminating)
 }
 
@@ -330,8 +332,16 @@ mod tests {
         );
         // An even word, a zero slot, and a word pointing outside the executable
         // range are not code pointers.
-        assert_eq!(sites.get(&0x2000_1000), None, "the initial SP is not a code pointer");
-        assert_eq!(sites.len(), 3, "no other word in the image qualifies: {sites:?}");
+        assert_eq!(
+            sites.get(&0x2000_1000),
+            None,
+            "the initial SP is not a code pointer"
+        );
+        assert_eq!(
+            sites.len(),
+            3,
+            "no other word in the image qualifies: {sites:?}"
+        );
     }
 
     /// The in-executable predicate, on the same bytes with a narrowed executable
@@ -342,7 +352,10 @@ mod tests {
         let file = object::File::parse(bytes.as_slice()).expect("parse fixture");
         let sites = code_pointer_sites(&file, &[(0x0800_0000, 0x0800_0050)]);
         assert!(sites.contains_key(&0x0800_0048));
-        assert!(!sites.contains_key(&0x0800_005c), "0x800005c is now outside the code");
+        assert!(
+            !sites.contains_key(&0x0800_005c),
+            "0x800005c is now outside the code"
+        );
     }
 
     /// Strict no-op off ARM: Thumb code pointers are an ARM-only notion, so
@@ -356,7 +369,11 @@ mod tests {
         bytes[18] = 62; // EM_X86_64
         bytes[19] = 0;
         let file = object::File::parse(bytes.as_slice()).expect("parse");
-        assert_ne!(file.architecture(), object::Architecture::Arm, "the gate fires");
+        assert_ne!(
+            file.architecture(),
+            object::Architecture::Arm,
+            "the gate fires"
+        );
         assert!(
             !code_pointer_sites(&file, &[(0x0800_0000, 0x0800_0060)]).is_empty(),
             "the scan itself is architecture-blind, so the gate is load-bearing"

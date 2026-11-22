@@ -15,18 +15,27 @@
 //! `minimizeContainer`), iteration-order / comparator totality (`compare`), and
 //! the C++-UB-vs-Rust-shift seam in `getMask`.
 
-use unlace_decomp::bitfield::{BitFieldNodeState, BitRange};
-use unlace_decomp::dtype::{type_metatype, Datatype, TypeBitField};
-use unlace_decomp::context::VarnodeId;
 use std::rc::Rc;
+use unlace_decomp::bitfield::{BitFieldNodeState, BitRange};
+use unlace_decomp::context::VarnodeId;
+use unlace_decomp::dtype::{Datatype, TypeBitField, type_metatype};
 
 /// Build a `TypeBitField` whose `bits()` matches `field_bits`, with the given
 /// underlying metatype (TYPE_INT for signed, else unsigned).  The transforms read
 /// only `field->type->getMetatype()` and the field's range.
 fn bf(field_bits: &BitRange, is_int: bool) -> TypeBitField {
-    let meta = if is_int { type_metatype::TYPE_INT } else { type_metatype::TYPE_UINT };
-    let mut f = TypeBitField::new(0, field_bits.num_bits, field_bits.is_big_endian, "f",
-        Rc::new(Datatype::new(field_bits.byte_size.max(1), meta)));
+    let meta = if is_int {
+        type_metatype::TYPE_INT
+    } else {
+        type_metatype::TYPE_UINT
+    };
+    let mut f = TypeBitField::new(
+        0,
+        field_bits.num_bits,
+        field_bits.is_big_endian,
+        "f",
+        Rc::new(Datatype::new(field_bits.byte_size.max(1), meta)),
+    );
     f.byte_offset = field_bits.byte_offset;
     f.byte_size = field_bits.byte_size;
     f.least_sig_bit = field_bits.least_sig_bit;
@@ -50,22 +59,38 @@ fn vn() -> VarnodeId {
 fn shift_signed_underflow_and_high_clamp() {
     let mut a = BitRange::new(0, 8, 4, 8, false);
     a.shift(-6);
-    assert_eq!((a.least_sig_bit, a.num_bits), (0, 6), "negative shift must drop low bits");
+    assert_eq!(
+        (a.least_sig_bit, a.num_bits),
+        (0, 6),
+        "negative shift must drop low bits"
+    );
 
     let mut a2 = BitRange::new(0, 8, 4, 8, false);
     a2.shift(-4);
-    assert_eq!((a2.least_sig_bit, a2.num_bits), (0, 8), "exact down-shift loses nothing");
+    assert_eq!(
+        (a2.least_sig_bit, a2.num_bits),
+        (0, 8),
+        "exact down-shift loses nothing"
+    );
 
     let mut a3 = BitRange::new(0, 8, 2, 4, false);
     a3.shift(-10);
-    assert_eq!((a3.least_sig_bit, a3.num_bits), (0, 0), "shifted entirely off the low end => empty");
+    assert_eq!(
+        (a3.least_sig_bit, a3.num_bits),
+        (0, 0),
+        "shifted entirely off the low end => empty"
+    );
 
     // High-end clamp: lsb stays >= 0, most exceeds container, numBits trimmed.
     // [60,4) in an 8-byte (64-bit) container, shift left by 2 -> [62, ...] most
     // would be 66 > 64, so numBits drops to 2.
     let mut a4 = BitRange::new(0, 8, 60, 4, false);
     a4.shift(2);
-    assert_eq!((a4.least_sig_bit, a4.num_bits), (62, 2), "high-end overflow trims numBits");
+    assert_eq!(
+        (a4.least_sig_bit, a4.num_bits),
+        (62, 2),
+        "high-end overflow trims numBits"
+    );
 }
 
 /// `intersectMask` with a *non-contiguous* mask collapses to the minimal cover
@@ -76,7 +101,11 @@ fn shift_signed_underflow_and_high_clamp() {
 fn intersect_mask_noncontiguous_minimal_cover() {
     let mut b = BitRange::new(0, 8, 0, 64, false);
     b.intersect_mask(0x0100_0000_0000_0081);
-    assert_eq!((b.least_sig_bit, b.num_bits), (0, 57), "minimal cover spans lowest..highest set bit");
+    assert_eq!(
+        (b.least_sig_bit, b.num_bits),
+        (0, 57),
+        "minimal cover spans lowest..highest set bit"
+    );
 
     // A mask whose lowest set bit is above the current lsb and highest set bit is
     // below current most, so both clamp branches fire.
@@ -146,7 +175,11 @@ fn overlap_test_big_endian_containment() {
 
     let be1 = BitRange::new(0, 4, 0, 8, true);
     let be2 = BitRange::new(0, 4, 8, 8, true);
-    assert_eq!(be1.overlap_test(&be2), 1, "BE: this after op2 (no intersection)");
+    assert_eq!(
+        be1.overlap_test(&be2),
+        1,
+        "BE: this after op2 (no intersection)"
+    );
     assert_eq!(be1.overlap_test(&be1), 0, "identical");
 }
 
@@ -156,12 +189,24 @@ fn overlap_test_big_endian_containment() {
 /// C++ oracle: those exact values.
 #[test]
 fn get_mask_high_shift_and_wrapping() {
-    assert_eq!(BitRange::new(0, 8, 60, 4, false).get_mask(), 0xf000_0000_0000_0000);
-    assert_eq!(BitRange::new(0, 8, 0, 63, false).get_mask(), 0x7fff_ffff_ffff_ffff);
+    assert_eq!(
+        BitRange::new(0, 8, 60, 4, false).get_mask(),
+        0xf000_0000_0000_0000
+    );
+    assert_eq!(
+        BitRange::new(0, 8, 0, 63, false).get_mask(),
+        0x7fff_ffff_ffff_ffff
+    );
     // numBits >= 64 takes the res=0 branch, wrapping_sub(1) => all ones, then
     // shifted by lsb.
-    assert_eq!(BitRange::new(0, 8, 0, 64, false).get_mask(), 0xffff_ffff_ffff_ffff);
-    assert_eq!(BitRange::new(0, 8, 8, 64, false).get_mask(), 0xffff_ffff_ffff_ff00);
+    assert_eq!(
+        BitRange::new(0, 8, 0, 64, false).get_mask(),
+        0xffff_ffff_ffff_ffff
+    );
+    assert_eq!(
+        BitRange::new(0, 8, 8, 64, false).get_mask(),
+        0xffff_ffff_ffff_ff00
+    );
 }
 
 /// `compare` is a *total order* and ignores `isBigEndian` (matching C++).
@@ -170,10 +215,22 @@ fn get_mask_high_shift_and_wrapping() {
 #[test]
 fn compare_total_order_antisymmetry() {
     let pairs = [
-        (BitRange::new(1, 2, 3, 4, false), BitRange::new(2, 2, 3, 4, false)),
-        (BitRange::new(1, 2, 3, 4, false), BitRange::new(1, 3, 3, 4, false)),
-        (BitRange::new(1, 2, 3, 4, false), BitRange::new(1, 2, 5, 4, false)),
-        (BitRange::new(1, 2, 3, 4, false), BitRange::new(1, 2, 3, 9, false)),
+        (
+            BitRange::new(1, 2, 3, 4, false),
+            BitRange::new(2, 2, 3, 4, false),
+        ),
+        (
+            BitRange::new(1, 2, 3, 4, false),
+            BitRange::new(1, 3, 3, 4, false),
+        ),
+        (
+            BitRange::new(1, 2, 3, 4, false),
+            BitRange::new(1, 2, 5, 4, false),
+        ),
+        (
+            BitRange::new(1, 2, 3, 4, false),
+            BitRange::new(1, 2, 3, 9, false),
+        ),
     ];
     for (a, b) in pairs.iter() {
         assert_eq!(a.compare(b), -1, "a < b in declared field priority");
@@ -197,22 +254,40 @@ fn node_state_follow_field_signext_matrix() {
     let used = BitRange::byte_range(0, 8, false);
 
     // Field at byteOffset 2 (LE) -> translateLSB 16, not top of 64-bit container.
-    let mid = BitFieldNodeState::follow_field(&used, vn(), &bf(&BitRange::new(2, 2, 0, 16, false), true));
-    assert_eq!((mid.bits_field.least_sig_bit, mid.bits_field.num_bits), (16, 16));
+    let mid =
+        BitFieldNodeState::follow_field(&used, vn(), &bf(&BitRange::new(2, 2, 0, 16, false), true));
+    assert_eq!(
+        (mid.bits_field.least_sig_bit, mid.bits_field.num_bits),
+        (16, 16)
+    );
     assert_eq!(mid.orig_least_sig_bit, 16);
-    assert!(!mid.is_sign_extended, "not most-significant => no sign extension");
-    assert!(!mid.does_sign_extension_match(), "false == true(is_int) => mismatch");
+    assert!(
+        !mid.is_sign_extended,
+        "not most-significant => no sign extension"
+    );
+    assert!(
+        !mid.does_sign_extension_match(),
+        "false == true(is_int) => mismatch"
+    );
 
     // Field at byteOffset 6 (LE) -> translateLSB 48, top of the 64-bit container.
-    let top = BitFieldNodeState::follow_field(&used, vn(), &bf(&BitRange::new(6, 2, 0, 16, false), true));
+    let top =
+        BitFieldNodeState::follow_field(&used, vn(), &bf(&BitRange::new(6, 2, 0, 16, false), true));
     assert!(top.bits_field.is_most_significant());
     assert!(top.is_sign_extended, "int field at the top sign-extends");
     assert!(top.does_sign_extension_match());
 
     // Same top field but unsigned: never sign-extends; match is true (false==false).
-    let topu = BitFieldNodeState::follow_field(&used, vn(), &bf(&BitRange::new(6, 2, 0, 16, false), false));
+    let topu = BitFieldNodeState::follow_field(
+        &used,
+        vn(),
+        &bf(&BitRange::new(6, 2, 0, 16, false), false),
+    );
     assert!(!topu.is_sign_extended);
-    assert_eq!(topu.field().unwrap().field_type.get_metatype(), type_metatype::TYPE_UINT);
+    assert_eq!(
+        topu.field().unwrap().field_type.get_metatype(),
+        type_metatype::TYPE_UINT
+    );
     assert!(topu.does_sign_extension_match());
 
     // A hole carries no field; does_sign_extension_match is defensively false.
@@ -230,7 +305,13 @@ fn in_container_big_endian_translate_provenance() {
     let be_field = BitRange::new(2, 2, 0, 16, true);
     let be = BitRange::in_container(&be_field, 0, 8);
     assert_eq!(
-        (be.byte_offset, be.byte_size, be.least_sig_bit, be.num_bits, be.is_big_endian),
+        (
+            be.byte_offset,
+            be.byte_size,
+            be.least_sig_bit,
+            be.num_bits,
+            be.is_big_endian
+        ),
         (0, 8, 32, 16, true)
     );
 

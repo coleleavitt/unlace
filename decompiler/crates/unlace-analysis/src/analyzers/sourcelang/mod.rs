@@ -86,17 +86,19 @@
 
 mod kuna_dwarfproducer;
 pub use kuna_dwarfproducer::dwarf_compiler;
-mod kuna_rustversion;
 mod kuna_legacy_llvm;
+mod kuna_rustversion;
 pub use kuna_rustversion::{fmt_pieces_layout, rustc_version_label, stable_rustc_version};
-mod kuna_rustreleases;
 mod kuna_rustcrates;
+mod kuna_rustreleases;
 pub use kuna_rustcrates::registry_crates;
-mod kuna_rustformatters;
+mod kuna_rustfmtio;
 mod kuna_rustfmtstr;
 mod kuna_rustfmtwrite;
-mod kuna_rustfmtio;
-pub use kuna_rustformatters::{formatter_metadata, integer_formatters, primitive_display_formatters, FormatterMetadata};
+mod kuna_rustformatters;
+pub use kuna_rustformatters::{
+    FormatterMetadata, formatter_metadata, integer_formatters, primitive_display_formatters,
+};
 
 use object::macho::{MachHeader32, MachHeader64};
 use object::read::macho::{
@@ -383,8 +385,14 @@ pub fn detect_compiler_pe(file: &object::File, bytes: &[u8]) -> Compiler {
     // The toolchain `GCC:`/`clang version`/`rustc version` records: MinGW puts
     // them NUL-delimited in `.rdata` (no `.comment` section in a PE); a Clang
     // -direct PE may carry `.comment`. Read both and treat as one record stream.
-    let comment = file.section_by_name(".comment").and_then(|s| s.data().ok()).unwrap_or(&[]);
-    let rdata = file.section_by_name(".rdata").and_then(|s| s.data().ok()).unwrap_or(&[]);
+    let comment = file
+        .section_by_name(".comment")
+        .and_then(|s| s.data().ok())
+        .unwrap_or(&[]);
+    let rdata = file
+        .section_by_name(".rdata")
+        .and_then(|s| s.data().ok())
+        .unwrap_or(&[]);
     let records = ToolchainRecords::scan_joined(comment, rdata);
 
     if records.rust || symbols_indicate_rust(file) || rodata_indicates_rust(file) {
@@ -434,7 +442,10 @@ pub fn detect_compiler_macho(file: &object::File, bytes: &[u8]) -> Compiler {
         .map(<[u8]>::to_vec)
         .unwrap_or_default();
 
-    if comment_indicates_rust(&toolchain) || symbols_indicate_rust(file) || rodata_indicates_rust(file) {
+    if comment_indicates_rust(&toolchain)
+        || symbols_indicate_rust(file)
+        || rodata_indicates_rust(file)
+    {
         return Compiler::Rustc;
     }
     // Swift — before the Apple-platform fallback: every Swift Mach-O carries
@@ -526,7 +537,9 @@ impl ToolchainRecords {
         let head = second.iter().position(|&b| b == 0).unwrap_or(second.len());
         let mut joined = first[tail..].to_vec();
         joined.extend_from_slice(&second[..head]);
-        Self::scan(&first[..tail]).or(Self::scan(&joined)).or(Self::scan(&second[head..]))
+        Self::scan(&first[..tail])
+            .or(Self::scan(&joined))
+            .or(Self::scan(&second[head..]))
     }
 
     fn scan(blob: &[u8]) -> ToolchainRecords {
@@ -642,7 +655,9 @@ fn is_rust_legacy(name: &str) -> bool {
     let Some(pos) = name.rfind("17h") else {
         return false;
     };
-    name[pos + 3..].strip_suffix('E').is_some_and(is_legacy_rust_hash_digits)
+    name[pos + 3..]
+        .strip_suffix('E')
+        .is_some_and(is_legacy_rust_hash_digits)
         || kuna_legacy_llvm::stem(name).is_some()
 }
 
@@ -666,7 +681,11 @@ fn rodata_indicates_rust(file: &object::File) -> bool {
     file.sections()
         .filter(|s| s.name().is_ok_and(|n| names.contains(&n)))
         .filter_map(|s| s.data().ok())
-        .any(|data| RUST_SIGNATURES.iter().any(|sig| contains_subslice(data, sig)))
+        .any(|data| {
+            RUST_SIGNATURES
+                .iter()
+                .any(|sig| contains_subslice(data, sig))
+        })
 }
 
 /// `true` if any section name in the iterator is a Golang marker section
@@ -701,10 +720,19 @@ pub fn is_swift_mangled(name: &str) -> bool {
     if let Some(rest) = bare.strip_prefix("$s").or_else(|| bare.strip_prefix("$S")) {
         // Any operator may open the body (`$sx…` a generic parameter, `$sy…`
         // the empty list); the demangler itself rejects what is not Swift.
-        return rest.bytes().next().is_some_and(|b| b.is_ascii_alphanumeric() || b == b'_');
+        return rest
+            .bytes()
+            .next()
+            .is_some_and(|b| b.is_ascii_alphanumeric() || b == b'_');
     }
-    if let Some(rest) = bare.strip_prefix("_T0").or_else(|| name.strip_prefix("_T0")) {
-        return rest.bytes().next().is_some_and(|b| b.is_ascii_digit() || b.is_ascii_uppercase());
+    if let Some(rest) = bare
+        .strip_prefix("_T0")
+        .or_else(|| name.strip_prefix("_T0"))
+    {
+        return rest
+            .bytes()
+            .next()
+            .is_some_and(|b| b.is_ascii_digit() || b.is_ascii_uppercase());
     }
     if let Some(rest) = name.strip_prefix("_Tt") {
         // A type kind (class, struct, enum, protocol, bound generic) followed by
@@ -712,7 +740,10 @@ pub fn is_swift_mangled(name: &str) -> bool {
         // substitution / stdlib contraction.
         let mut b = rest.bytes();
         return matches!(b.next(), Some(b'C' | b'V' | b'O' | b'P' | b'G'))
-            && b.next().is_some_and(|c| c.is_ascii_digit() || matches!(c, b'C' | b'V' | b'O' | b'P' | b'G' | b'S' | b's' | b'E'));
+            && b.next().is_some_and(|c| {
+                c.is_ascii_digit()
+                    || matches!(c, b'C' | b'V' | b'O' | b'P' | b'G' | b'S' | b's' | b'E')
+            });
     }
     false
 }
@@ -773,7 +804,8 @@ fn detect_rich_header(bytes: &[u8]) -> RichVerdict {
     if bytes.len() < 0x40 {
         return RichVerdict::None;
     }
-    let e_lfanew = u32::from_le_bytes([bytes[0x3c], bytes[0x3d], bytes[0x3e], bytes[0x3f]]) as usize;
+    let e_lfanew =
+        u32::from_le_bytes([bytes[0x3c], bytes[0x3d], bytes[0x3e], bytes[0x3f]]) as usize;
     // The `Rich` block lives between the DOS stub and the PE header. Bound the
     // search to that window (clamp to the buffer to stay total).
     let end = e_lfanew.min(bytes.len());
@@ -959,8 +991,12 @@ mod tests {
     #[test]
     fn rust_mangled_name_recognition() {
         // legacy `_ZN...17h<hex16>E`
-        assert!(is_rust_mangled("_ZN4core9panicking5panic17h0123456789abcdefE"));
-        assert!(is_rust_mangled("_ZN5nostd1m12rusty_helper17h76f46bb3af543e7bE"));
+        assert!(is_rust_mangled(
+            "_ZN4core9panicking5panic17h0123456789abcdefE"
+        ));
+        assert!(is_rust_mangled(
+            "_ZN5nostd1m12rusty_helper17h76f46bb3af543e7bE"
+        ));
         // v0 `_R`
         assert!(is_rust_mangled("_RNvCs1234_4core5panic"));
         // a plain C++ `_ZN...` (no `17h<hex>E` hash) is NOT Rust
@@ -994,9 +1030,18 @@ mod tests {
     fn v0_names_must_parse_as_v0_paths() {
         // a path tag is one of `C M X Y N I B`; anything else ends it.
         for c_name in [
-            "_Run", "_Read", "_Runtime", "_Rename", "_RSA_new", "_RAND_bytes", "_Rabbit",
+            "_Run",
+            "_Read",
+            "_Runtime",
+            "_Rename",
+            "_RSA_new",
+            "_RAND_bytes",
+            "_Rabbit",
         ] {
-            assert!(!is_rust_mangled(c_name), "{c_name} is a C name, not a v0 symbol");
+            assert!(
+                !is_rust_mangled(c_name),
+                "{c_name} is a C name, not a v0 symbol"
+            );
         }
         // `C` then a digit LOOKS like a crate-root identifier, so the tag alone is
         // not enough: `RC4_set_key` declares a 4-byte crate named `set_` and then
@@ -1032,13 +1077,27 @@ mod tests {
     #[test]
     fn swift_section_predicate() {
         // Mach-O, ELF and PE spellings of the Swift 5 metadata namespace.
-        for name in ["__swift5_types", "__swift5_proto", "swift5_typeref", "swift5_fieldmd", ".sw5tymd", ".sw5prt"] {
-            assert!(swift_section_present([".text", name].iter().copied()), "{name}");
+        for name in [
+            "__swift5_types",
+            "__swift5_proto",
+            "swift5_typeref",
+            "swift5_fieldmd",
+            ".sw5tymd",
+            ".sw5prt",
+        ] {
+            assert!(
+                swift_section_present([".text", name].iter().copied()),
+                "{name}"
+            );
         }
-        assert!(!swift_section_present([".text", ".comment", ".go.buildinfo"].iter().copied()));
+        assert!(!swift_section_present(
+            [".text", ".comment", ".go.buildinfo"].iter().copied()
+        ));
         assert!(!swift_section_present(std::iter::empty()));
         // A name merely containing (not opening) the namespace is not a marker.
-        assert!(!swift_section_present([".debug_swift5_typeref"].iter().copied()));
+        assert!(!swift_section_present(
+            [".debug_swift5_typeref"].iter().copied()
+        ));
     }
 
     #[test]
@@ -1064,7 +1123,19 @@ mod tests {
             assert!(is_swift_mangled(name), "{name} is Swift-mangled");
         }
         // Assembler locals, plain C names, and `$`/`_T0`/`_Tt` with no mangling body.
-        for name in ["$LN3", "_$LN3", "main", "_Runtime", "$", "_T0", "_T0mumble", "_RNvCs1234_4core5panic", "_Tt", "_TtX", "_Ttable"] {
+        for name in [
+            "$LN3",
+            "_$LN3",
+            "main",
+            "_Runtime",
+            "$",
+            "_T0",
+            "_T0mumble",
+            "_RNvCs1234_4core5panic",
+            "_Tt",
+            "_TtX",
+            "_Ttable",
+        ] {
             assert!(!is_swift_mangled(name), "{name} is not Swift-mangled");
         }
     }
@@ -1084,8 +1155,11 @@ mod tests {
             let text = obj.add_section(vec![], b".text".to_vec(), object::SectionKind::Text);
             obj.append_section_data(text, &[0xc3], 1);
             if with_swift {
-                let s =
-                    obj.add_section(vec![], b"swift5_typeref".to_vec(), object::SectionKind::ReadOnlyData);
+                let s = obj.add_section(
+                    vec![],
+                    b"swift5_typeref".to_vec(),
+                    object::SectionKind::ReadOnlyData,
+                );
                 obj.append_section_data(s, b"\x00", 1);
             }
             obj.write().expect("write synthetic ELF")
@@ -1127,7 +1201,9 @@ mod tests {
         assert!(golang_section_present(
             [".note.go.buildid", ".text"].iter().copied()
         ));
-        assert!(!golang_section_present([".text", ".comment"].iter().copied()));
+        assert!(!golang_section_present(
+            [".text", ".comment"].iter().copied()
+        ));
         assert!(!golang_section_present(std::iter::empty()));
     }
 
@@ -1216,11 +1292,19 @@ mod tests {
         let file = object::File::parse(bytes.as_slice()).expect("parse PE fixture");
         assert_eq!(file.format(), BinaryFormat::Pe, "fixture must be a PE");
         let c = detect_compiler(&file, &bytes);
-        assert_eq!(c, Compiler::Gcc, "MinGW PE should detect as Gcc (.rdata GCC: record)");
+        assert_eq!(
+            c,
+            Compiler::Gcc,
+            "MinGW PE should detect as Gcc (.rdata GCC: record)"
+        );
         assert!(!c.is_rust());
         assert!(!c.is_golang());
         // It is specifically the `GCC:` toolchain path — no `Rich` header on a MinGW PE.
-        assert_eq!(detect_rich_header(&bytes), RichVerdict::None, "MinGW PE has no Rich header");
+        assert_eq!(
+            detect_rich_header(&bytes),
+            RichVerdict::None,
+            "MinGW PE has no Rich header"
+        );
     }
 
     /// Mach-O: the x86-64 and arm64 `macho_imports` fixtures carry an
@@ -1233,11 +1317,18 @@ mod tests {
             let file = object::File::parse(bytes.as_slice()).expect("parse Mach-O fixture");
             assert_eq!(file.format(), BinaryFormat::MachO, "{f} must be a Mach-O");
             let c = detect_compiler(&file, &bytes);
-            assert_eq!(c, Compiler::Clang, "{f} should detect as Clang (LC_BUILD_VERSION)");
+            assert_eq!(
+                c,
+                Compiler::Clang,
+                "{f} should detect as Clang (LC_BUILD_VERSION)"
+            );
             assert!(!c.is_rust());
             assert!(!c.is_golang());
             // the load-command fingerprint is what fires.
-            assert!(macho_build_version_is_apple(&bytes), "{f}: LC_BUILD_VERSION present");
+            assert!(
+                macho_build_version_is_apple(&bytes),
+                "{f}: LC_BUILD_VERSION present"
+            );
         }
     }
 
@@ -1305,12 +1396,24 @@ mod tests {
     #[test]
     fn rich_header_msvc_vs_clang() {
         // MSVC: a single (@comp.id, count) pair with a non-LLVM product id.
-        assert_eq!(detect_rich_header(&synth_pe_with_rich(&[0x00FF])), RichVerdict::Msvc);
+        assert_eq!(
+            detect_rich_header(&synth_pe_with_rich(&[0x00FF])),
+            RichVerdict::Msvc
+        );
         // clang-cl: a product id in the LLVM set.
-        assert_eq!(detect_rich_header(&synth_pe_with_rich(&[0x0105])), RichVerdict::Clang);
-        assert_eq!(detect_rich_header(&synth_pe_with_rich(&[0x00FF, 0x0103])), RichVerdict::Clang);
+        assert_eq!(
+            detect_rich_header(&synth_pe_with_rich(&[0x0105])),
+            RichVerdict::Clang
+        );
+        assert_eq!(
+            detect_rich_header(&synth_pe_with_rich(&[0x00FF, 0x0103])),
+            RichVerdict::Clang
+        );
         // No `Rich` block at all ⇒ None.
-        assert_eq!(detect_rich_header(b"MZ\x00\x00 not a real pe, no rich"), RichVerdict::None);
+        assert_eq!(
+            detect_rich_header(b"MZ\x00\x00 not a real pe, no rich"),
+            RichVerdict::None
+        );
         // a stray `"Rich"` substring without a decodable `DanS` start ⇒ None.
         let mut junk = vec![0u8; 0x80];
         junk[0x3c..0x40].copy_from_slice(&0x80u32.to_le_bytes());

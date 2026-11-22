@@ -72,8 +72,15 @@ fn decode(bytes: &[u8]) -> Decoded {
 fn decode_in(longmode: bool, bytes: &[u8]) -> Decoded {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let sla = if longmode { "x86-64.sla" } else { "x86.sla" };
-    let sla = std::fs::read(root.join("specs/Ghidra/Processors/x86/data/languages").join(sla)).unwrap();
-    let mut sleigh = Sleigh::new(Box::new(Bytes(bytes.to_vec())), Box::new(ContextInternal::new()));
+    let sla = std::fs::read(
+        root.join("specs/Ghidra/Processors/x86/data/languages")
+            .join(sla),
+    )
+    .unwrap();
+    let mut sleigh = Sleigh::new(
+        Box::new(Bytes(bytes.to_vec())),
+        Box::new(ContextInternal::new()),
+    );
     sleigh.initialize_from_sla(&sla).unwrap();
     sleigh.set_context_default("addrsize", if longmode { 2 } else { 1 });
     sleigh.set_context_default("opsize", 1);
@@ -84,10 +91,17 @@ fn decode_in(longmode: bool, bytes: &[u8]) -> Decoded {
     let addr = Address::new(ram, BASE);
     let mut ops = Ops::default();
     let mut text = Text::default();
-    let length = sleigh.one_instruction_with_assembly(&mut ops, &mut text, &addr).unwrap();
+    let length = sleigh
+        .one_instruction_with_assembly(&mut ops, &mut text, &addr)
+        .unwrap();
     let mut userops = Vec::new();
     sleigh.get_user_op_names(&mut userops);
-    Decoded { length, text: text.0, ops: ops.0, userops }
+    Decoded {
+        length,
+        text: text.0,
+        ops: ops.0,
+        userops,
+    }
 }
 
 fn callother_names(d: &Decoded) -> Vec<&str> {
@@ -99,7 +113,10 @@ fn callother_names(d: &Decoded) -> Vec<&str> {
 }
 
 fn loads(d: &Decoded) -> usize {
-    d.ops.iter().filter(|(op, _, _)| *op == OpCode::CPUI_LOAD).count()
+    d.ops
+        .iter()
+        .filter(|(op, _, _)| *op == OpCode::CPUI_LOAD)
+        .count()
 }
 
 #[test]
@@ -151,8 +168,14 @@ fn prefetchit_is_the_rip_relative_form_only() {
     assert!(d.ops.is_empty(), "{:?}", d.ops);
     let d = decode(&[0x0f, 0x18, 0x35, 0x40, 0x00, 0x00, 0x00]);
     assert_eq!(d.text, "PREFETCHIT1 byte ptr [0x1047]");
-    assert_eq!(decode(&[0x0f, 0x18, 0x38]).text, "NOP/reserved dword ptr [RAX]");
-    assert_eq!(decode(&[0x0f, 0x18, 0x30]).text, "NOP/reserved dword ptr [RAX]");
+    assert_eq!(
+        decode(&[0x0f, 0x18, 0x38]).text,
+        "NOP/reserved dword ptr [RAX]"
+    );
+    assert_eq!(
+        decode(&[0x0f, 0x18, 0x30]).text,
+        "NOP/reserved dword ptr [RAX]"
+    );
 }
 
 #[test]
@@ -186,7 +209,9 @@ fn gather_prefetches_index_with_a_zmm_register_and_load_nothing() {
         assert_eq!(callother_names(&d), [userop]);
         assert_eq!(loads(&d), 0, "a prefetch loads nothing: {:?}", d.ops);
         assert!(
-            d.ops.iter().any(|(op, _, ins)| *op == OpCode::CPUI_INT_MULT && ins[1].offset == 4),
+            d.ops
+                .iter()
+                .any(|(op, _, ins)| *op == OpCode::CPUI_INT_MULT && ins[1].offset == 4),
             "the ZMM index is scaled into the address: {:?}",
             d.ops
         );
@@ -196,9 +221,18 @@ fn gather_prefetches_index_with_a_zmm_register_and_load_nothing() {
 #[test]
 fn gather_prefetches_keep_their_vector_index_in_32_bit_mode() {
     for (bytes, text) in [
-        (&[0x62, 0xf2, 0x7d, 0x49, 0xc6, 0x0c, 0x88][..], "VGATHERPF0DPS zmmword ptr [EAX + ZMM1*0x4]{K1}"),
-        (&[0x62, 0xf2, 0x7d, 0x49, 0xc7, 0x0c, 0x88][..], "VGATHERPF0QPS zmmword ptr [EAX + ZMM1*0x4]{K1}"),
-        (&[0x62, 0xf2, 0xfd, 0x4f, 0xc7, 0x54, 0xf9, 0x08][..], "VGATHERPF1QPD zmmword ptr [ECX + ZMM7*0x8 + 0x40]{K7}"),
+        (
+            &[0x62, 0xf2, 0x7d, 0x49, 0xc6, 0x0c, 0x88][..],
+            "VGATHERPF0DPS zmmword ptr [EAX + ZMM1*0x4]{K1}",
+        ),
+        (
+            &[0x62, 0xf2, 0x7d, 0x49, 0xc7, 0x0c, 0x88][..],
+            "VGATHERPF0QPS zmmword ptr [EAX + ZMM1*0x4]{K1}",
+        ),
+        (
+            &[0x62, 0xf2, 0xfd, 0x4f, 0xc7, 0x54, 0xf9, 0x08][..],
+            "VGATHERPF1QPD zmmword ptr [ECX + ZMM7*0x8 + 0x40]{K7}",
+        ),
     ] {
         let d = decode_in(false, bytes);
         assert_eq!(d.length as usize, bytes.len(), "{bytes:02x?}");

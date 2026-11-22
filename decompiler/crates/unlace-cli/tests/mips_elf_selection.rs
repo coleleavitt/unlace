@@ -404,10 +404,16 @@ fn o32_aggregate_returns_keep_the_hidden_pointer_and_argument_slots() {
             "sub_1000(&result,-7) != &result || result.value != -7",
         ),
         (
-            &[0xac850000, 0xac860004, 0xac870008, 0x00801021, 0x03e00008, 0],
+            &[
+                0xac850000, 0xac860004, 0xac870008, 0x00801021, 0x03e00008, 0,
+            ],
             "typedef struct Result { int x; int y; int z; } Result;",
             "Result f(int x,int y,int z)",
-            &["rethidden->x = x;", "rethidden->y = y;", "rethidden->z = z;"],
+            &[
+                "rethidden->x = x;",
+                "rethidden->y = y;",
+                "rethidden->z = z;",
+            ],
             "sub_1000(&result,-7,17,0x12345678) != &result || result.x != -7 || result.y != 17 || result.z != 0x12345678",
         ),
         (
@@ -596,7 +602,12 @@ fn o32_call_results_extend_words_without_widening_return_slots() {
                 );
                 assert!(!text.contains("; //"), "{text}");
                 assert!(text.contains("callee()") && text.contains("< 0"), "{text}");
-                check_emitted_c(&format!("static {ty} result;\n{ty} callee(void) {{ return result; }}\n{text}\nstatic int check(void) {{ {ty} values[] = {{{values}}}; for (int i=0;i<5;i++) {{ result=values[i]; if (caller() != ((int)result < 0)) return 1; }} return 0; }}"), "check()");
+                check_emitted_c(
+                    &format!(
+                        "static {ty} result;\n{ty} callee(void) {{ return result; }}\n{text}\nstatic int check(void) {{ {ty} values[] = {{{values}}}; for (int i=0;i<5;i++) {{ result=values[i]; if (caller() != ((int)result < 0)) return 1; }} return 0; }}"
+                    ),
+                    "check()",
+                );
             }
             for (ops, return_type, expected) in [
                 (&[][..], "unsigned long long", "result"),
@@ -628,7 +639,12 @@ fn o32_call_results_extend_words_without_widening_return_slots() {
                     ],
                 );
                 assert!(!text.contains("; //"), "{text}");
-                check_emitted_c(&format!("static unsigned long long result;\nunsigned long long callee(void) {{ return result; }}\n{text}\nstatic int check(void) {{ unsigned long long values[] = {{0,0xffffffffffffffffull,0x9abcdef012345678ull,0x123456789abcdef0ull}}; for (int i=0;i<4;i++) {{ result=values[i]; if (caller() != {expected}) return 1; }} return 0; }}"), "check()");
+                check_emitted_c(
+                    &format!(
+                        "static unsigned long long result;\nunsigned long long callee(void) {{ return result; }}\n{text}\nstatic int check(void) {{ unsigned long long values[] = {{0,0xffffffffffffffffull,0x9abcdef012345678ull,0x123456789abcdef0ull}}; for (int i=0;i<4;i++) {{ result=values[i]; if (caller() != {expected}) return 1; }} return 0; }}"
+                    ),
+                    "check()",
+                );
             }
         }
     }
@@ -892,7 +908,9 @@ fn o32_aggregate_arguments_keep_memory_order_with_wide_registers() {
                                 "{little} {fpr} {kind} {size} {padding} {index}: {text}"
                             );
                             let values = "11,".repeat(padding);
-                            let replay = format!("{typedef}\n{text}\nstatic int check(void) {{ T x = {{0}}; for (unsigned int i = 0; i < 256; ++i) {{ x.m{index} = i; if (sub_1000({values}x) != i) return 1; }} return 0; }}");
+                            let replay = format!(
+                                "{typedef}\n{text}\nstatic int check(void) {{ T x = {{0}}; for (unsigned int i = 0; i < 256; ++i) {{ x.m{index} = i; if (sub_1000({values}x) != i) return 1; }} return 0; }}"
+                            );
                             if size == 1 {
                                 assert!(!text.contains(">>"), "{text}");
                                 check_emitted_c(&replay, "check()");
@@ -992,7 +1010,8 @@ fn release6_fpxx_and_mips32_fp64_images_keep_loading() {
             assert!(text.contains("return a0 >> 0x1f;"), "{target}: {text}");
             let stderr = String::from_utf8(actual.stderr).unwrap();
             assert_eq!(
-                stderr.contains("[kuna target]") && stderr.contains("64-bit floating-point registers"),
+                stderr.contains("[kuna target]")
+                    && stderr.contains("64-bit floating-point registers"),
                 note,
                 "{target}: {stderr}"
             );
@@ -1045,7 +1064,9 @@ fn o32_wide_calls_pass_stack_arguments() {
         0x8fbf001c, 0x03e00008, 0x27bd0020,
     ];
     words.resize(16, 0);
-    words.extend([0x00851021, 0x00461021, 0x00471021, 0x8fa30010, 0x03e00008, 0x00431021]);
+    words.extend([
+        0x00851021, 0x00461021, 0x00471021, 0x8fa30010, 0x03e00008, 0x00431021,
+    ]);
     for little in [false, true] {
         let endian = if little { "LE" } else { "BE" };
         for (fpr, abi, variant) in [(1, 1, "64-32addr-fp32"), (2, 6, "64-32addr")] {

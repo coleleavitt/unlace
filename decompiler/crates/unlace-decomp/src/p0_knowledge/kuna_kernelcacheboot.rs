@@ -52,7 +52,9 @@ impl KernelcacheBoot {
     /// The choice [`KERNELCACHE_BOOT_ENV`] states; unset is `auto`. Reads only
     /// the environment; a load in progress reads [`Self::in_force`].
     pub fn from_env() -> Self {
-        std::env::var(KERNELCACHE_BOOT_ENV).map(|v| Self::parse(&v)).unwrap_or_default()
+        std::env::var(KERNELCACHE_BOOT_ENV)
+            .map(|v| Self::parse(&v))
+            .unwrap_or_default()
     }
 }
 

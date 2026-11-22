@@ -120,6 +120,10 @@ pub trait TypeSpeller {
 
     /// Real name for a residual unknown of `size` bytes, or `None` when the
     /// language has no natural single type of that width.
-    fn unknown_base(&self, size: int4, under_pointer: bool, long_is_8: bool)
-        -> Option<Cow<'static, str>>;
+    fn unknown_base(
+        &self,
+        size: int4,
+        under_pointer: bool,
+        long_is_8: bool,
+    ) -> Option<Cow<'static, str>>;
 }

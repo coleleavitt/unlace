@@ -117,7 +117,8 @@ fn default_target_matches_automatic_elf_and_pe_loading() {
         .collect();
     let elf = common::scratch_file("default-target", "elf");
     std::fs::write(&elf, arm_images::elf(&code, &[], &[(0, "entry", 8)])).unwrap();
-    let pe = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/armv4t_thumb_pe.exe");
+    let pe =
+        repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/armv4t_thumb_pe.exe");
     for (path, address) in [(&elf, "0x10000"), (&pe, "0x401000")] {
         for (command, args) in [
             ("functions", vec!["--json"]),

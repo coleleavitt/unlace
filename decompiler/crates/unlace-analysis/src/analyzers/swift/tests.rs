@@ -147,7 +147,13 @@ fn folded_functions_are_named_without_a_false_owner() {
     claim(0x1060, "M.G.vtable#10.getter", "M.G", None, true);
     claim(0x1060, "M.G.vtable#2.getter", "M.G", None, true);
     let local = |addr: u64, name: Option<&str>, owner: u64| {
-        namer.claim(addr, name.map(str::to_string), &Owner::Local(owner), None, true);
+        namer.claim(
+            addr,
+            name.map(str::to_string),
+            &Owner::Local(owner),
+            None,
+            true,
+        );
     };
     local(0x1070, Some("M.H.vtable#0.getter"), 0x10);
     local(0x1070, None, 0x20);
@@ -178,8 +184,14 @@ fn folded_functions_are_named_without_a_false_owner() {
     assert!(namer.ambiguous_self(0x1040));
     assert!(!namer.ambiguous_self(0x1050), "two getters of one class");
     assert!(!namer.ambiguous_self(0x3000), "not code: never claimed");
-    assert!(namer.ambiguous_self(0x1070), "a type with no nameable path shares the body");
-    assert!(namer.ambiguous_self(0x1080), "two private types print one path");
+    assert!(
+        namer.ambiguous_self(0x1070),
+        "a type with no nameable path shares the body"
+    );
+    assert!(
+        namer.ambiguous_self(0x1080),
+        "two private types print one path"
+    );
 }
 
 /// A record that points strictly inside a function body the image states,
@@ -201,7 +213,13 @@ fn a_claim_needs_a_plausible_function_start() {
             budget: std::cell::Cell::new(usize::MAX),
         };
         for (k, addr) in [0x1000u64, 0x1008, 0x1022, 0x1040].into_iter().enumerate() {
-            namer.claim(addr, Some(format!("M.A.vtable#{k}.getter")), &Owner::Imported("M.A".into()), None, true);
+            namer.claim(
+                addr,
+                Some(format!("M.A.vtable#{k}.getter")),
+                &Owner::Imported("M.A".into()),
+                None,
+                true,
+            );
         }
         let mut out = AnalysisOutput::default();
         namer.resolve_claims(&mut out);
@@ -244,10 +262,18 @@ fn fixture_claims_are_outside_stated_bodies() {
     };
     let checked = names(&bytes, usize::MAX);
     let functions = |o: &AnalysisOutput| {
-        o.symbols.iter().filter(|s| s.kind == SymKind::Function).map(|s| (s.addr, s.name.clone())).collect::<Vec<_>>()
+        o.symbols
+            .iter()
+            .filter(|s| s.kind == SymKind::Function)
+            .map(|s| (s.addr, s.name.clone()))
+            .collect::<Vec<_>>()
     };
     assert_eq!(functions(&checked), functions(&unchecked));
-    assert!(functions(&checked).iter().all(|(a, _)| !crate::analyzers::entry::inside_body(&bodies, *a)));
+    assert!(
+        functions(&checked)
+            .iter()
+            .all(|(a, _)| !crate::analyzers::entry::inside_body(&bodies, *a))
+    );
 }
 
 /// A repeated name takes the first free `.k`, with names that already
@@ -267,7 +293,13 @@ fn repeated_names_take_the_next_free_suffix() {
         budget: std::cell::Cell::new(usize::MAX),
     };
     let one = |addr: u64, name: &str| {
-        namer.claim(addr, Some(name.to_string()), &Owner::Imported("M.A".to_string()), None, false)
+        namer.claim(
+            addr,
+            Some(name.to_string()),
+            &Owner::Imported("M.A".to_string()),
+            None,
+            false,
+        )
     };
     one(0x1000, "X");
     one(0x1010, "X.2");

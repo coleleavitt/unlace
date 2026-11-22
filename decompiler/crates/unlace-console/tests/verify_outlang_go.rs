@@ -1,13 +1,13 @@
 //! Go parses across statement forms and executes the supported scalar surface.
 
 use crate::common;
-use unlace_console::engine::bootstrap_from_file;
-use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
-};
-use unlace_console::ifaceterm::ConsoleCommands;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use unlace_console::engine::bootstrap_from_file;
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
+use unlace_console::ifaceterm::ConsoleCommands;
 
 const FUNCTIONS: &[&str] = &[
     "add",
@@ -154,12 +154,15 @@ fn parse(directory: &Path, code: &[String]) {
 
 #[test]
 fn internal_byte_strings_compile_and_preserve_bytes() {
-    if !go_available() { return; }
+    if !go_available() {
+        return;
+    }
     let code = decompile(
         &root().join("tests/stages/ghangr-go-string-pointers.xml"),
         &["plain", "escaped", "unicode"],
         &[
-            "option outlang go", "option fatstr always",
+            "option outlang go",
+            "option fatstr always",
             "map prototype sink void sink(void *p, unsigned long n);",
             "map prototype plain void plain(void);",
             "map prototype escaped void escaped(void);",
@@ -176,7 +179,14 @@ func sink(p unsafe.Pointer, n uint64) {
 }
 func main() { plain(); escaped(); unicode(); if len(expected)!=0 { panic("missing call") } }
 "#;
-    std::fs::write(&file, format!("package main\nimport \"unsafe\"\n{}\n{check}", code.join("\n"))).unwrap();
+    std::fs::write(
+        &file,
+        format!(
+            "package main\nimport \"unsafe\"\n{}\n{check}",
+            code.join("\n")
+        ),
+    )
+    .unwrap();
     run(Command::new("go").arg("run").arg(file));
 }
 
@@ -258,8 +268,16 @@ fn go_syntax_survives_brace_preferences() {
         &["sub_7110"],
         &["option outlang go"],
     );
-    assert!(!constants[0].contains("int64(0xffffffffffffffff)"), "{}", constants[0]);
-    assert!(constants[0].matches("return -1").count() >= 3, "{}", constants[0]);
+    assert!(
+        !constants[0].contains("int64(0xffffffffffffffff)"),
+        "{}",
+        constants[0]
+    );
+    assert!(
+        constants[0].matches("return -1").count() >= 3,
+        "{}",
+        constants[0]
+    );
     bodies.extend(constants);
     parse(&directory, &bodies);
 }
@@ -294,15 +312,28 @@ fn native_go_uses_the_same_output_plane() {
     let bodies = decompile(&binary, &names, &["option outlang go"]);
     assert!(bodies[0].contains("func add(") && bodies[0].contains("int64"));
     parse(&directory, &bodies);
-    let source = format!("package main\n{}\nfunc main() {{ if add(2,3)!=5 || choose(11,2)!=3 || extend(-7)!=-7 || number(7)!=7 {{ panic(\"native Go scalars\") }} }}\n", [bodies[0].as_str(), bodies[1].as_str(), bodies[12].as_str(), bodies[13].as_str()].join("\n"));
+    let source = format!(
+        "package main\n{}\nfunc main() {{ if add(2,3)!=5 || choose(11,2)!=3 || extend(-7)!=-7 || number(7)!=7 {{ panic(\"native Go scalars\") }} }}\n",
+        [
+            bodies[0].as_str(),
+            bodies[1].as_str(),
+            bodies[12].as_str(),
+            bodies[13].as_str()
+        ]
+        .join("\n")
+    );
     let file = &directory.join("recovered.go");
     std::fs::write(&file, source).unwrap();
     run(Command::new("go").arg("run").arg(file));
 
-    for body in decompile(&binary, &[
-        "runtime.(*pallocData).findScavengeCandidate",
-        "runtime.(*pallocBits).findSmallN",
-    ], &["option outlang go"]) {
+    for body in decompile(
+        &binary,
+        &[
+            "runtime.(*pallocData).findScavengeCandidate",
+            "runtime.(*pallocBits).findSmallN",
+        ],
+        &["option outlang go"],
+    ) {
         assert!(!body.contains("uint64(-1)"), "{body}");
         assert!(body.contains("0xffffffffffffffff"), "{body}");
     }
@@ -324,9 +355,12 @@ fn native_go_uses_the_same_output_plane() {
         "double number(int8 a)",
     ];
     let mut options = vec!["option outlang go".to_string()];
-    options.extend(names.iter().zip(declarations).map(|(name, declaration)| {
-        format!("map prototype {name} {declaration};")
-    }));
+    options.extend(
+        names
+            .iter()
+            .zip(declarations)
+            .map(|(name, declaration)| format!("map prototype {name} {declaration};")),
+    );
     let options = options.iter().map(String::as_str).collect::<Vec<_>>();
     let bodies = decompile(&binary, &names, &options);
     let check = r#"
@@ -340,7 +374,14 @@ func main() {
   if narrow(0x123456789)!=0x23456789 || extend(-3)!=-3 || number(7)!=7 { panic("conversions") }
 }
 "#;
-    std::fs::write(&file, format!("package main\nimport \"unsafe\"\n{}\n{check}", bodies.join("\n"))).unwrap();
+    std::fs::write(
+        &file,
+        format!(
+            "package main\nimport \"unsafe\"\n{}\n{check}",
+            bodies.join("\n")
+        ),
+    )
+    .unwrap();
     run(Command::new("go").arg("run").arg(file));
 }
 

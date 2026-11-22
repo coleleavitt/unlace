@@ -115,7 +115,9 @@ mod tests {
 
     /// A trace's footprint is its root and what it reached.
     fn read(root: VarnodeId, reached: &[VarnodeId]) -> FxHashSet<VarnodeId> {
-        std::iter::once(root).chain(reached.iter().copied()).collect()
+        std::iter::once(root)
+            .chain(reached.iter().copied())
+            .collect()
     }
 
     fn fail(failed: &mut FailedTraces, root: u64, reached: &[u64]) {

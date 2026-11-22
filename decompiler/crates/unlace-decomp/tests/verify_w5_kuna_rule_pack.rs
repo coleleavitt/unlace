@@ -24,29 +24,30 @@
 
 use std::rc::Rc;
 
-use unlace_base::address::{calc_mask, Address};
-use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace,
-    UniqueSpace,
-};
+use unlace_base::address::{Address, calc_mask};
 use unlace_base::error::KunaResult;
+use unlace_base::space::{
+    AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace, addrspace_flags,
+    spacetype,
+};
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use unlace_decomp::action::Rule;
-use unlace_decomp::dtype::{type_metatype, Datatype};
+use unlace_decomp::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
+use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::kuna_addcarrychain::RuleAddCarryChain;
 use unlace_decomp::kuna_arraystride::RuleArrayStride;
 use unlace_decomp::kuna_booleanmask::RuleBoolSignShift;
 use unlace_decomp::kuna_ovlesssimplify::RuleOvLessSimplify;
-use unlace_decomp::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
 use unlace_decomp::varnode::{DefOpInfo, VarnodeBank};
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(IopSpace::new(2))).unwrap();
     m.insert_space(Rc::new(FspecSpace::new(3))).unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
@@ -96,7 +97,8 @@ fn mk_op_dead(fd: &mut Funcdata, off: u64, inputs: int4, opc: OpCode) -> OpId {
     let r = ram(fd);
     let pc = Address::new(r, off);
     let op = fd.obank_mut().create_at(inputs, pc);
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
     op
 }
 
@@ -110,7 +112,10 @@ fn mk_op_live(fd: &mut Funcdata, off: u64, inputs: int4, opc: OpCode) -> OpId {
 
 fn set_def(fd: &mut Funcdata, vn: VarnodeId, defop: OpId) -> VarnodeId {
     let seq = fd.obank().get(defop).unwrap().get_seq_num().clone();
-    let info = DefOpInfo { id: defop, seqnum: seq };
+    let info = DefOpInfo {
+        id: defop,
+        seqnum: seq,
+    };
     let vn = fd.vbank_mut().set_def(vn, info, &mut no_replace()).unwrap();
     fd.obank_mut().get_mut(defop).unwrap().set_output(Some(vn));
     vn
@@ -118,7 +123,10 @@ fn set_def(fd: &mut Funcdata, vn: VarnodeId, defop: OpId) -> VarnodeId {
 
 fn wire(fd: &mut Funcdata, vn: VarnodeId, op: OpId, slot: int4) {
     fd.vbank_mut().add_descend(vn, op).unwrap();
-    fd.obank_mut().get_mut(op).unwrap().set_input(Some(vn), slot);
+    fd.obank_mut()
+        .get_mut(op)
+        .unwrap()
+        .set_input(Some(vn), slot);
 }
 
 fn mk_byte(fd: &mut Funcdata, off: u64) -> VarnodeId {
@@ -193,7 +201,10 @@ fn w5_arraystride_swapped_sibling_edges_decline() {
         "misaligned sibling edges must NOT fold (kuna_arraystride.cc:118)"
     );
     // The phi survives unchanged and the reader still reads the accumulator.
-    assert_eq!(fd.obank().get(acc_phi).unwrap().code(), OpCode::CPUI_MULTIEQUAL);
+    assert_eq!(
+        fd.obank().get(acc_phi).unwrap().code(),
+        OpCode::CPUI_MULTIEQUAL
+    );
     assert_eq!(fd.obank().get(reader).unwrap().get_in(0), Some(acc_out));
 }
 
@@ -204,8 +215,9 @@ fn w5_arraystride_commuted_back_edge_add_folds() {
     // must still recognize the induction shape and fold acc -> cnt*stride.
     let mut fd = build_fd();
     let bl = mk_block(&mut fd);
-    let (acc_phi, acc_out) =
-        mk_induction_phi(&mut fd, bl, 0x100, 4, 0x10, 0, 1, /*self_first=*/ false);
+    let (acc_phi, acc_out) = mk_induction_phi(
+        &mut fd, bl, 0x100, 4, 0x10, 0, 1, /*self_first=*/ false,
+    );
     let reader = mk_op_dead(&mut fd, 0x130, 1, OpCode::CPUI_COPY);
     wire(&mut fd, acc_out, reader, 0);
     let rout = fd.new_unique(4, Some(unk(4)));
@@ -292,7 +304,10 @@ fn w5_addcarrychain_commuted_int_carry_operands_fold() {
     // index operand is `a` (zext'd): in1 def is INT_ZEXT(a).
     let zext_out = fd.obank().get(op).unwrap().get_in(1).unwrap();
     let zextop = fd.vbank().get(zext_out).unwrap().get_def().unwrap();
-    assert_eq!(fd.obank().get(zextop).unwrap().code(), OpCode::CPUI_INT_ZEXT);
+    assert_eq!(
+        fd.obank().get(zextop).unwrap().code(),
+        OpCode::CPUI_INT_ZEXT
+    );
     assert_eq!(fd.obank().get(zextop).unwrap().get_in(0), Some(a));
 }
 
@@ -343,18 +358,32 @@ fn w5_addcarrychain_carryelim_const_baselo_dedups_and_completes() {
     fd.op_insert(op, bl, None);
 
     let mut rule = RuleAddCarryChain::new();
-    assert_eq!(rule.apply_op(op, &mut fd), 1, "const-folded carry now fuses (dedup guard)");
+    assert_eq!(
+        rule.apply_op(op, &mut fd),
+        1,
+        "const-folded carry now fuses (dedup guard)"
+    );
     // op fused to INT_ADD; its index operand is the ZEXT of the constant `a`.
     assert_eq!(fd.obank().get(op).unwrap().code(), OpCode::CPUI_INT_ADD);
     let zext_out = fd.obank().get(op).unwrap().get_in(1).unwrap();
     let zextop = fd.vbank().get(zext_out).unwrap().get_def().unwrap();
-    assert_eq!(fd.obank().get(zextop).unwrap().code(), OpCode::CPUI_INT_ZEXT);
+    assert_eq!(
+        fd.obank().get(zextop).unwrap().code(),
+        OpCode::CPUI_INT_ZEXT
+    );
     let zext_in = fd.obank().get(zextop).unwrap().get_in(0).unwrap();
     let zin = fd.vbank().get(zext_in).unwrap();
-    assert!(zin.is_constant() && zin.get_offset() == cval, "ZEXT reads the (re-dup'd) constant a");
+    assert!(
+        zin.is_constant() && zin.get_offset() == cval,
+        "ZEXT reads the (re-dup'd) constant a"
+    );
     // The original constant still has exactly its one (loadd) descendant — the
     // ZEXT read a fresh duplicate.
-    assert_eq!(fd.vbank().get(a_const).unwrap().num_descend(), 1, "original constant not over-shared");
+    assert_eq!(
+        fd.vbank().get(a_const).unwrap().num_descend(),
+        1,
+        "original constant not over-shared"
+    );
 }
 
 #[test]
@@ -460,7 +489,10 @@ fn w5_ovlesssimplify_mone_not_minus_one_declines() {
         0,
         "SLESS-hi limb whose first operand is not -1 must NOT collapse (kuna_ovlesssimplify.cc:79)"
     );
-    assert_eq!(fd.obank().get(op).unwrap().code(), OpCode::CPUI_INT_NOTEQUAL);
+    assert_eq!(
+        fd.obank().get(op).unwrap().code(),
+        OpCode::CPUI_INT_NOTEQUAL
+    );
 }
 
 // ===========================================================================
@@ -477,7 +509,10 @@ fn w5_booleanmask_byte_aligned_shift_declines() {
     let boolvn = fd.new_constant(2, 1);
     let leftshift = mk_op_dead(&mut fd, 0x100, 2, OpCode::CPUI_INT_LEFT);
     let sa = fd.new_constant(2, 8);
-    fd.obank_mut().get_mut(leftshift).unwrap().set_input(Some(boolvn), 0); // shared const
+    fd.obank_mut()
+        .get_mut(leftshift)
+        .unwrap()
+        .set_input(Some(boolvn), 0); // shared const
     wire(&mut fd, sa, leftshift, 1);
     let shiftout = fd.new_unique(2, Some(unk(2)));
     let shiftout = set_def(&mut fd, shiftout, leftshift);
@@ -498,4 +533,3 @@ fn w5_booleanmask_byte_aligned_shift_declines() {
     );
     assert_eq!(fd.obank().get(op).unwrap().code(), OpCode::CPUI_INT_SRIGHT);
 }
-

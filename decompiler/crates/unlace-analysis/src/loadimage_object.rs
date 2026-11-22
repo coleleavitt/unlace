@@ -66,10 +66,12 @@ use unlace_base::types::Wrap;
 
 use unlace_sleigh::kuna_sharedbytes::{restore_window, windowed_load_fill};
 use unlace_sleigh::loadimage::{
-    section_flags, ImageBytes, LoadImage, LoadImageFunc, LoadImageSection, IMAGE_WINDOW_BYTES,
+    IMAGE_WINDOW_BYTES, ImageBytes, LoadImage, LoadImageFunc, LoadImageSection, section_flags,
 };
 
-use unlace_decomp::kuna_symbolnamechars::{sanitize_symbol_name_bytes, symbolnamechars_mode, NameChars};
+use unlace_decomp::kuna_symbolnamechars::{
+    NameChars, sanitize_symbol_name_bytes, symbolnamechars_mode,
+};
 
 /// Default read-buffer size (C++ `LoadImageBfd::bufsize`, `loadimage_bfd.cc:36`).
 const BUFSIZE: usize = IMAGE_WINDOW_BYTES;
@@ -79,7 +81,10 @@ const BUFSIZE: usize = IMAGE_WINDOW_BYTES;
 fn distinct_aliases(primary: &[FuncSym], aliases: Vec<FuncSym>) -> Vec<FuncSym> {
     let mut known: HashSet<(u64, Vec<u8>)> =
         primary.iter().map(|s| (s.addr, s.name.clone())).collect();
-    aliases.into_iter().filter(|s| known.insert((s.addr, s.name.clone()))).collect()
+    aliases
+        .into_iter()
+        .filter(|s| known.insert((s.addr, s.name.clone())))
+        .collect()
 }
 
 /// Demangle a loader funcsym name (the kuna analog of Ghidra's
@@ -117,16 +122,20 @@ fn demangle_funcsym_name(name: Vec<u8>, mode: NameChars) -> Vec<u8> {
 #[derive(Debug)]
 enum SegmentData {
     Owned(Vec<u8>),
-    Shared { image: crate::image_bytes::ImageBytes, start: usize, end: usize },
+    Shared {
+        image: crate::image_bytes::ImageBytes,
+        start: usize,
+        end: usize,
+    },
 }
 
 impl SegmentData {
     fn from_slice(data: &[u8], image: Option<&crate::image_bytes::ImageBytes>) -> Self {
         if let Some(image) = image {
             let start = (data.as_ptr() as usize).checked_sub(image.as_ptr() as usize);
-            if let Some(start) = start.filter(|&start| {
-                start <= image.len() && data.len() <= image.len() - start
-            }) {
+            if let Some(start) =
+                start.filter(|&start| start <= image.len() && data.len() <= image.len() - start)
+            {
                 return Self::Shared {
                     image: image.clone(),
                     start,
@@ -148,7 +157,9 @@ impl SegmentData {
         if let Self::Shared { .. } = self {
             *self = Self::Owned(self.as_slice().to_vec());
         }
-        let Self::Owned(data) = self else { unreachable!() };
+        let Self::Owned(data) = self else {
+            unreachable!()
+        };
         data
     }
 
@@ -184,7 +195,11 @@ impl Segment {
     /// A segment whose file data is its whole RAM footprint.
     fn file_backed(vma: u64, data: Vec<u8>) -> Segment {
         let memsz = data.len() as u64; // cast: segment byte count
-        Segment { vma, data: data.into(), memsz }
+        Segment {
+            vma,
+            data: data.into(),
+            memsz,
+        }
     }
 
     /// The mapped extent at [`Self::vma`] — the file data plus any zero-filled
@@ -319,7 +334,6 @@ impl ImageBytes for SegmentBytes {
         cursize
     }
 
-
     fn mapped_covers(&self, lo: u64, hi: u64) -> bool {
         let mut cur = lo;
         while cur < hi {
@@ -356,12 +370,17 @@ fn segment_bits(flags: SegmentFlags) -> u32 {
     let (exec, write) = match flags {
         SegmentFlags::Elf { p_flags, .. } => (p_flags & 1 != 0, p_flags & 2 != 0),
         SegmentFlags::MachO { initprot, .. } => (initprot & 4 != 0, initprot & 2 != 0),
-        SegmentFlags::Coff { characteristics } => {
-            (characteristics & 0x2000_0000 != 0, characteristics & 0x8000_0000 != 0)
-        }
+        SegmentFlags::Coff { characteristics } => (
+            characteristics & 0x2000_0000 != 0,
+            characteristics & 0x8000_0000 != 0,
+        ),
         _ => return 0,
     };
-    let mut bits = if exec { section_flags::CODE } else { section_flags::DATA };
+    let mut bits = if exec {
+        section_flags::CODE
+    } else {
+        section_flags::DATA
+    };
     if !write {
         bits |= section_flags::READONLY;
     }
@@ -637,7 +656,11 @@ fn collect_data_sym<'a>(
     // (kuna `symbolnamechars`, GH-340) A data symbol's name reaches emitted C
     // exactly as a function symbol's does, so it is sanitized at the same mint.
     // Defer identifier folding until all data names can be reserved together.
-    let data_mode = if mode == NameChars::Ident { NameChars::Safe } else { mode };
+    let data_mode = if mode == NameChars::Ident {
+        NameChars::Safe
+    } else {
+        mode
+    };
     let name = sanitize_symbol_name_bytes(&name, data_mode).into_owned();
     if seen.insert(addr) {
         out.push(DataSym { addr, name, size });
@@ -740,13 +763,7 @@ impl ObjectLoadImage {
         bytes: crate::image_bytes::ImageBytes,
         target: &str,
     ) -> KunaResult<ObjectLoadImage> {
-        Self::from_bytes_with_diagnostics(
-            filename,
-            &bytes,
-            true,
-            Some(target),
-            Some(bytes.clone()),
-        )
+        Self::from_bytes_with_diagnostics(filename, &bytes, true, Some(target), Some(bytes.clone()))
     }
 
     fn from_bytes_with_diagnostics(
@@ -774,30 +791,37 @@ impl ObjectLoadImage {
         let target = target.and_then(explicit_language_target);
         if emit_diagnostics {
             if let Some(note) = target.and_then(|t| target_endian_note(&file, t)) {
-                unlace_base::notes::say_once(filename, &format!("[kuna target] {filename}: {note}"));
+                unlace_base::notes::say_once(
+                    filename,
+                    &format!("[kuna target] {filename}: {note}"),
+                );
             }
         }
         let effective_arch = effective_architecture(&file, bytes);
-        let archtype = language_id_for(
-            &file,
-            fmt.as_ref(),
-            bytes,
-            filename,
-            effective_arch,
-            target,
-        )?;
+        let archtype =
+            language_id_for(&file, fmt.as_ref(), bytes, filename, effective_arch, target)?;
         if emit_diagnostics {
             for note in crate::loader::kuna_ppcaputarget::notes(
-                &file, &String::from_utf8_lossy(&archtype), target.is_some(),
+                &file,
+                &String::from_utf8_lossy(&archtype),
+                target.is_some(),
             ) {
-                unlace_base::notes::say_once(filename, &format!("[kuna target] {filename}: {note}"));
+                unlace_base::notes::say_once(
+                    filename,
+                    &format!("[kuna target] {filename}: {note}"),
+                );
             }
         }
         if emit_diagnostics {
             for note in crate::loader::kuna_mipstarget::notes(
-                &file, &String::from_utf8_lossy(&archtype), target.is_some(),
+                &file,
+                &String::from_utf8_lossy(&archtype),
+                target.is_some(),
             ) {
-                unlace_base::notes::say_once(filename, &format!("[kuna target] {filename}: {note}"));
+                unlace_base::notes::say_once(
+                    filename,
+                    &format!("[kuna target] {filename}: {note}"),
+                );
             }
         }
         // (kuna §2.2) The default-model fallback id: the same arch/endian stem
@@ -860,7 +884,11 @@ impl ObjectLoadImage {
             // backs it, so a `.bss` tail still reads as mapped.
             let bits = segment_bits(seg.flags());
             if seg.size() != 0 {
-                segment_info.push(SectionInfo { vma, size: seg.size(), flags: bits });
+                segment_info.push(SectionInfo {
+                    vma,
+                    size: seg.size(),
+                    flags: bits,
+                });
             }
             // (kuna, `pe-zero-filled-data`) The RAM footprint is what the tail
             // is zero-filled to — but only where the image says the region holds
@@ -869,7 +897,11 @@ impl ObjectLoadImage {
             // its file-time contents are not its run-time contents, so handing
             // out zeroes there would put 36 KB of `add [eax],al` into the
             // instruction stream in place of the honest "unpack first".
-            let memsz = if bits & section_flags::CODE != 0 { 0 } else { seg.size() };
+            let memsz = if bits & section_flags::CODE != 0 {
+                0
+            } else {
+                seg.size()
+            };
             if data.is_empty() && memsz == 0 {
                 continue;
             }
@@ -892,8 +924,11 @@ impl ObjectLoadImage {
         let header = fmt.header_region(&file, bytes).map(|region| SectionInfo {
             vma: region.vma,
             size: region.len as u64, // cast: clamped to the file length
-            flags: if region.code { section_flags::CODE } else { section_flags::DATA }
-                | section_flags::READONLY,
+            flags: if region.code {
+                section_flags::CODE
+            } else {
+                section_flags::DATA
+            } | section_flags::READONLY,
         });
         if let Some(region) = &header {
             segments.push(Segment::file_backed(
@@ -917,7 +952,11 @@ impl ObjectLoadImage {
         let mut data_object_rows: Vec<(u64, u64)> = Vec::new();
         for sec in file.sections() {
             let flags = fmt.section_bits(sec.name().unwrap_or(""), sec.kind(), sec.flags());
-            sections.push(SectionInfo { vma: sec.address(), size: sec.size(), flags });
+            sections.push(SectionInfo {
+                vma: sec.address(),
+                size: sec.size(),
+                flags,
+            });
             if flags & section_flags::UNALLOC == 0
                 && crate::loader::kuna_globalref::holds_program_objects(
                     sec.name().unwrap_or(""),
@@ -941,7 +980,9 @@ impl ObjectLoadImage {
         let arm32_decoder = is_arm32_language(&String::from_utf8_lossy(&archtype));
         let dynamic_pointers = if file.architecture() == object::Architecture::PowerPc64 {
             crate::analyzers::entry::dynamic_function_pointers(&file)
-        } else { Vec::new() };
+        } else {
+            Vec::new()
+        };
         let elfv1 = crate::loader::elfv1::Descriptors::read_at(&file, &dynamic_pointers);
         let image_entry = crate::analyzers::entry::image_entry_vma(&file, bytes)
             .map(|vma| elfv1.code_address(vma))
@@ -996,7 +1037,13 @@ impl ObjectLoadImage {
         //    COFF object's defined-at-0 function (design §3.6 object-vs-image).
         for sym in file.symbols() {
             if sym.kind() == SymbolKind::Data {
-                collect_data_sym(&sym, sym.address(), &mut datasyms, &mut seen_data, namechars);
+                collect_data_sym(
+                    &sym,
+                    sym.address(),
+                    &mut datasyms,
+                    &mut seen_data,
+                    namechars,
+                );
                 continue;
             }
             if sym.kind() != SymbolKind::Text {
@@ -1009,7 +1056,11 @@ impl ObjectLoadImage {
             if outside_code(addr) {
                 continue;
             }
-            if is_elf { elf_functions.definitions.insert(if arm32_decoder { addr & !1 } else { addr }); }
+            if is_elf {
+                elf_functions
+                    .definitions
+                    .insert(if arm32_decoder { addr & !1 } else { addr });
+            }
             let name = match sym.name_bytes() {
                 Ok(n) if !n.is_empty() => crate::loader::elf_plt::strip_version(n),
                 _ => continue,
@@ -1032,9 +1083,17 @@ impl ObjectLoadImage {
         for (addr, name) in crate::loader::macho_stubs::trie_functions(&file) {
             let name = demangle_funcsym_name(name, namechars);
             if seen.insert(addr) {
-                funcsyms.push(FuncSym { addr, name, size: 0 });
+                funcsyms.push(FuncSym {
+                    addr,
+                    name,
+                    size: 0,
+                });
             } else {
-                aliases.push(FuncSym { addr, name, size: 0 });
+                aliases.push(FuncSym {
+                    addr,
+                    name,
+                    size: 0,
+                });
             }
         }
 
@@ -1042,11 +1101,18 @@ impl ObjectLoadImage {
         // the next symbol of its section, capped at 8 bytes. Demangled as the
         // function stream's names are.
         for (addr, name, size) in crate::loader::macho_stubs::data_symbols(&file) {
-            let name = match std::str::from_utf8(&name).ok().and_then(crate::demangle::demangle_name) {
+            let name = match std::str::from_utf8(&name)
+                .ok()
+                .and_then(crate::demangle::demangle_name)
+            {
                 Some(demangled) => demangled.into_bytes(),
                 None => name,
             };
-            let data_mode = if namechars == NameChars::Ident { NameChars::Safe } else { namechars };
+            let data_mode = if namechars == NameChars::Ident {
+                NameChars::Safe
+            } else {
+                namechars
+            };
             let name = sanitize_symbol_name_bytes(&name, data_mode).into_owned();
             if !name.is_empty() && seen_data.insert(addr) {
                 datasyms.push(DataSym { addr, name, size });
@@ -1057,33 +1123,55 @@ impl ObjectLoadImage {
         // (F) Per-format import resolution goes through the boundary; for ELF
         // `ElfFormat::resolve_imports` just calls the unchanged
         // `elf_plt::resolve_plt_imports`.
-        let import_names: std::collections::HashMap<_, _> = funcsyms.iter().enumerate()
-            .filter(|(_, s)| is_elf && (file.architecture() == Architecture::PowerPc
-                || (crate::loader::kuna_mipsabi::is_mips(file.architecture())
-                    && s.name == b"_MIPS_STUBS_")))
-            .map(|(i, s)| (s.addr, i)).collect();
+        let import_names: std::collections::HashMap<_, _> = funcsyms
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| {
+                is_elf
+                    && (file.architecture() == Architecture::PowerPc
+                        || (crate::loader::kuna_mipsabi::is_mips(file.architecture())
+                            && s.name == b"_MIPS_STUBS_"))
+            })
+            .map(|(i, s)| (s.addr, i))
+            .collect();
         // A Mach-O export the symbol table already named is that name in its C
         // spelling (`audit_export_a` for `_audit_export_a`), which lookup accepts
         // anyway; it is a second name only where this stream named the address.
         let mut named_by_imports: HashSet<u64> = HashSet::new();
         for p in fmt.resolve_imports(&file, bytes) {
-            if is_elf { elf_functions.imports.insert(if arm32_decoder { p.addr & !1 } else { p.addr }); }
+            if is_elf {
+                elf_functions
+                    .imports
+                    .insert(if arm32_decoder { p.addr & !1 } else { p.addr });
+            }
             if seen.insert(p.addr) {
                 if is_macho {
                     named_by_imports.insert(p.addr);
                 }
                 let name = demangle_funcsym_name(p.name, namechars);
-                funcsyms.push(FuncSym { addr: p.addr, name, size: 0 });
+                funcsyms.push(FuncSym {
+                    addr: p.addr,
+                    name,
+                    size: 0,
+                });
             } else if let Some(&i) = import_names.get(&p.addr) {
                 let name = demangle_funcsym_name(p.name, namechars);
                 let previous = std::mem::replace(&mut funcsyms[i].name, name);
-                aliases.push(FuncSym { addr: p.addr, name: previous, size: 0 });
+                aliases.push(FuncSym {
+                    addr: p.addr,
+                    name: previous,
+                    size: 0,
+                });
             } else if !is_macho
                 || p.kind != crate::loader::format::ImportSymKind::Export
                 || named_by_imports.contains(&p.addr)
             {
                 let name = demangle_funcsym_name(p.name, namechars);
-                aliases.push(FuncSym { addr: p.addr, name, size: 0 });
+                aliases.push(FuncSym {
+                    addr: p.addr,
+                    name,
+                    size: 0,
+                });
             }
         }
 
@@ -1092,7 +1180,13 @@ impl ObjectLoadImage {
         //    functions in `.dynsym`.
         for sym in file.dynamic_symbols() {
             if sym.kind() == SymbolKind::Data {
-                collect_data_sym(&sym, sym.address(), &mut datasyms, &mut seen_data, namechars);
+                collect_data_sym(
+                    &sym,
+                    sym.address(),
+                    &mut datasyms,
+                    &mut seen_data,
+                    namechars,
+                );
                 continue;
             }
             if sym.kind() != SymbolKind::Text {
@@ -1102,7 +1196,11 @@ impl ObjectLoadImage {
                 continue; // UND import placeholder (mirrors source #1)
             }
             let addr = elfv1.code_address(sym.address());
-            if is_elf { elf_functions.definitions.insert(if arm32_decoder { addr & !1 } else { addr }); }
+            if is_elf {
+                elf_functions
+                    .definitions
+                    .insert(if arm32_decoder { addr & !1 } else { addr });
+            }
             let name = match sym.name_bytes() {
                 Ok(n) if !n.is_empty() => crate::loader::elf_plt::strip_version(n),
                 _ => continue,
@@ -1154,8 +1252,11 @@ impl ObjectLoadImage {
                 applied.insert(w.vma);
             }
         }
-        let dynreloc_const: Vec<(u64, u64)> =
-            dynrelocs.const_ranges.into_iter().filter(|(lo, _)| applied.contains(lo)).collect();
+        let dynreloc_const: Vec<(u64, u64)> = dynrelocs
+            .const_ranges
+            .into_iter()
+            .filter(|(lo, _)| applied.contains(lo))
+            .collect();
         // (kuna `debuglink`) A stripped ELF's function names from its debug
         // companion (build-id / `.gnu_debuglink`) or its `.gnu_debugdata`.
         if unlace_decomp::kuna_debuglink::debuglink_enabled() {
@@ -1166,7 +1267,11 @@ impl ObjectLoadImage {
             let mut added = 0usize;
             for (addr, name) in symbols {
                 if seen.insert(addr) {
-                    funcsyms.push(FuncSym { addr, name, size: 0 });
+                    funcsyms.push(FuncSym {
+                        addr,
+                        name,
+                        size: 0,
+                    });
                     added += 1;
                 }
             }
@@ -1188,9 +1293,17 @@ impl ObjectLoadImage {
         // (kuna `dynrelocs`) An `IRELATIVE` resolver is code only the dynamic
         // loader calls; name the unnamed ones, as IDA's `ifunc_<addr>` does.
         for &resolver in &dynrelocs.ifunc_resolvers {
-            let addr = if file.architecture() == object::Architecture::Arm { resolver & !1 } else { resolver };
+            let addr = if file.architecture() == object::Architecture::Arm {
+                resolver & !1
+            } else {
+                resolver
+            };
             if seen.insert(addr) {
-                funcsyms.push(FuncSym { addr, name: format!("ifunc_{addr:x}").into_bytes(), size: 0 });
+                funcsyms.push(FuncSym {
+                    addr,
+                    name: format!("ifunc_{addr:x}").into_bytes(),
+                    size: 0,
+                });
             }
         }
 
@@ -1262,7 +1375,11 @@ impl ObjectLoadImage {
             layout
                 .opd
                 .iter()
-                .map(|&(address, entry, toc)| crate::loader::elfv1::Descriptor { address, entry, toc })
+                .map(|&(address, entry, toc)| crate::loader::elfv1::Descriptor {
+                    address,
+                    entry,
+                    toc,
+                })
                 .collect(),
         );
         let reloc_sections = layout.section_info.clone();
@@ -1276,10 +1393,7 @@ impl ObjectLoadImage {
         let fpconst = crate::loader::kuna_msvcfpconst::plan(file, &layout);
         let got_range = layout.got_range;
         for w in &fpconst.warnings {
-            unlace_base::notes::say_once(
-                filename,
-                &format!("[kuna msvcfpconst] {filename}: {w}"),
-            );
+            unlace_base::notes::say_once(filename, &format!("[kuna msvcfpconst] {filename}: {w}"));
         }
 
         // One bounded report per loader construction. Analysis-side consumers
@@ -1299,7 +1413,10 @@ impl ObjectLoadImage {
             .map(|(vma, data)| Segment::file_backed(vma, data))
             .collect();
         segments.extend(
-            fpconst.writes.into_iter().map(|(vma, data)| Segment::file_backed(vma, data)),
+            fpconst
+                .writes
+                .into_iter()
+                .map(|(vma, data)| Segment::file_backed(vma, data)),
         );
         segments.sort_by_key(|s| s.vma);
 
@@ -1328,11 +1445,18 @@ impl ObjectLoadImage {
         // Common symbols have allocated storage but no input section. Include
         // that storage without treating unresolved external slots as objects.
         let common_objects = layout.common_range.map(|(lo, hi)| (lo, hi - lo));
-        let data_objects = crate::loader::kuna_globalref::merged_ranges(file.sections().filter_map(|sec| {
-            let vma = *layout.section_vma.get(&sec.index())?;
-            crate::loader::kuna_globalref::holds_program_objects(sec.name().ok()?, sec.kind())
-                .then_some((vma, sec.size()))
-        }).chain(common_objects));
+        let data_objects = crate::loader::kuna_globalref::merged_ranges(
+            file.sections()
+                .filter_map(|sec| {
+                    let vma = *layout.section_vma.get(&sec.index())?;
+                    crate::loader::kuna_globalref::holds_program_objects(
+                        sec.name().ok()?,
+                        sec.kind(),
+                    )
+                    .then_some((vma, sec.size()))
+                })
+                .chain(common_objects),
+        );
 
         // Defined functions (rebased) + extern call targets, demangled + deduped
         // by address — the same `seen`/`demangle_funcsym_name` discipline the
@@ -1411,7 +1535,11 @@ impl ObjectLoadImage {
             dynreloc_const: fpconst
                 .const_ranges
                 .into_iter()
-                .chain(got_range.into_iter().flat_map(|range| outside(range, &import_slots)))
+                .chain(
+                    got_range
+                        .into_iter()
+                        .flat_map(|range| outside(range, &import_slots)),
+                )
                 .collect(),
             // A pre-link object has no Import Address Table: its external calls
             // are relocations, resolved by the layout pass. A MIPS object's
@@ -1457,7 +1585,10 @@ impl ObjectLoadImage {
     /// without re-parsing the object. The flags are
     /// `unlace_sleigh::loadimage::section_flags::*`.
     pub fn section_snapshot(&self) -> Vec<(u64, u64, u32)> {
-        self.sections.iter().map(|s| (s.vma, s.size, s.flags)).collect()
+        self.sections
+            .iter()
+            .map(|s| (s.vma, s.size, s.flags))
+            .collect()
     }
 
     /// The named sections as export metadata (see [`ObjectSectionMetadata`]).
@@ -1534,7 +1665,9 @@ impl ObjectLoadImage {
     /// holds a pointer the run-time loader writes. The engine reports these
     /// ranges so its whole-binary enumeration can decompile the image's code
     /// without inventing a body for every import.
-    pub fn nullable_relocations(&self) -> &[unlace_decomp::kuna_nullable_reloc::NullableRelocation] {
+    pub fn nullable_relocations(
+        &self,
+    ) -> &[unlace_decomp::kuna_nullable_reloc::NullableRelocation] {
         &self.nullable_relocations
     }
 
@@ -1622,7 +1755,13 @@ impl ObjectLoadImage {
     pub fn data_symbols(&self) -> Vec<(u64, String, u64)> {
         self.datasyms
             .iter()
-            .map(|s| (s.addr, String::from_utf8_lossy(&s.name).into_owned(), s.size))
+            .map(|s| {
+                (
+                    s.addr,
+                    String::from_utf8_lossy(&s.name).into_owned(),
+                    s.size,
+                )
+            })
             .collect()
     }
 
@@ -1674,17 +1813,24 @@ impl ObjectLoadImage {
         *self.bufoffset.borrow_mut() = !0u64;
         Ok(())
     }
-
 }
 
 impl LoadImage for ObjectLoadImage {
-    fn arm_vfp_args(&self) -> bool { self.arm_vfp_args }
+    fn arm_vfp_args(&self) -> bool {
+        self.arm_vfp_args
+    }
 
-    fn float_arg_registers(&self) -> Option<bool> { self.float_arg_registers }
+    fn float_arg_registers(&self) -> Option<bool> {
+        self.float_arg_registers
+    }
 
-    fn float_hardware(&self) -> Option<bool> { self.float_hardware }
+    fn float_hardware(&self) -> Option<bool> {
+        self.float_hardware
+    }
 
-    fn callee_extends_returns(&self) -> Option<bool> { self.callee_extends_returns }
+    fn callee_extends_returns(&self) -> Option<bool> {
+        self.callee_extends_returns
+    }
 
     fn get_file_name(&self) -> &str {
         &self.filename
@@ -1761,7 +1907,10 @@ impl LoadImage for ObjectLoadImage {
     }
 
     fn get_segments(&self) -> Vec<(u64, u64, u32)> {
-        self.segment_info.iter().map(|s| (s.vma, s.size, s.flags)).collect()
+        self.segment_info
+            .iter()
+            .map(|s| (s.vma, s.size, s.flags))
+            .collect()
     }
 
     fn inaccessible_segments(&self) -> Vec<(u64, u64)> {
@@ -1781,7 +1930,8 @@ impl LoadImage for ObjectLoadImage {
                 )));
             }
         }
-        self.overlay_span(addr.get_offset(), data).map_err(KunaError::data_unavail)
+        self.overlay_span(addr.get_offset(), data)
+            .map_err(KunaError::data_unavail)
     }
 
     fn get_readonly(&self, list: &mut RangeList) {
@@ -1835,14 +1985,26 @@ impl LoadImage for ObjectLoadImage {
         for s in &mut self.segment_info {
             s.vma = s.vma.wadd(badjust);
         }
-        for (vma, _) in self.executable_segments.iter_mut().chain(&mut self.inaccessible_segments) {
+        for (vma, _) in self
+            .executable_segments
+            .iter_mut()
+            .chain(&mut self.inaccessible_segments)
+        {
             *vma = vma.wadd(badjust);
         }
         self.elfv1.adjust_vma(badjust);
-        self.elf_functions.definitions = self.elf_functions.definitions.drain()
-            .map(|addr| addr.wadd(badjust)).collect();
-        self.elf_functions.imports = self.elf_functions.imports.drain()
-            .map(|addr| addr.wadd(badjust)).collect();
+        self.elf_functions.definitions = self
+            .elf_functions
+            .definitions
+            .drain()
+            .map(|addr| addr.wadd(badjust))
+            .collect();
+        self.elf_functions.imports = self
+            .elf_functions
+            .imports
+            .drain()
+            .map(|addr| addr.wadd(badjust))
+            .collect();
         for s in self.funcsyms.iter_mut().chain(&mut self.funcsym_aliases) {
             s.addr = s.addr.wadd(badjust);
         }
@@ -1863,9 +2025,15 @@ impl LoadImage for ObjectLoadImage {
         for r in &mut self.nullable_relocations {
             r.field = r.field.wadd(badjust);
             r.symbol = r.symbol.wadd(badjust);
-            if r.slot != 0 { r.slot = r.slot.wadd(badjust); }
+            if r.slot != 0 {
+                r.slot = r.slot.wadd(badjust);
+            }
         }
-        for r in self.function_address_aliases.iter_mut().chain(&mut self.import_slots) {
+        for r in self
+            .function_address_aliases
+            .iter_mut()
+            .chain(&mut self.import_slots)
+        {
             r.0 = r.0.wadd(badjust);
             r.1 = r.1.wadd(badjust);
         }
@@ -1917,9 +2085,11 @@ fn language_id_for(
     if let Some(target) = target {
         return Ok(target.as_bytes().to_vec());
     }
-    if let Some(id) = crate::loader::kuna_mipsocteon::language_id(file)
-        .map_err(|error| KunaError::lowlevel(format!("File: {filename}: {error}; pass an explicit --target")))?
-    {
+    if let Some(id) = crate::loader::kuna_mipsocteon::language_id(file).map_err(|error| {
+        KunaError::lowlevel(format!(
+            "File: {filename}: {error}; pass an explicit --target"
+        ))
+    })? {
         return Ok(id.into_bytes());
     }
     if let Some(id) = crate::loader::kuna_ppcaputarget::language_id(file) {
@@ -1931,9 +2101,11 @@ fn language_id_for(
     if let Some(id) = crate::loader::kuna_mipstarget::language_id(file)? {
         return Ok(id.into_bytes());
     }
-    if let Some(id) = crate::loader::kuna_riscvzc::language_id(file)
-        .map_err(|error| KunaError::lowlevel(format!("File: {filename}: {error}; pass an explicit --target")))?
-    {
+    if let Some(id) = crate::loader::kuna_riscvzc::language_id(file).map_err(|error| {
+        KunaError::lowlevel(format!(
+            "File: {filename}: {error}; pass an explicit --target"
+        ))
+    })? {
         return Ok(id.into_bytes());
     }
     let little = file.is_little_endian();
@@ -1962,7 +2134,10 @@ fn language_id_for(
     // the engine's default-model retry covers a spec that fails to load.
     let model = if unlace_decomp::kuna_goabi::goabi_env_enabled()
         && little
-        && matches!(arch, Architecture::X86_64 | Architecture::I386 | Architecture::Aarch64)
+        && matches!(
+            arch,
+            Architecture::X86_64 | Architecture::I386 | Architecture::Aarch64
+        )
         && crate::sourcelang::effective_compiler(file, bytes).is_golang()
     {
         Some("golang")
@@ -2001,7 +2176,10 @@ fn fallback_language_id(
         return None;
     }
     if file.format() == object::BinaryFormat::Elf
-        && matches!(arch, Architecture::Mips | Architecture::Mips64 | Architecture::Mips64_N32)
+        && matches!(
+            arch,
+            Architecture::Mips | Architecture::Mips64 | Architecture::Mips64_N32
+        )
     {
         return None;
     }
@@ -2169,12 +2347,18 @@ fn target_endian_note(file: &object::File, target: &str) -> Option<String> {
 /// `.sla` stem for. The single source of truth for the id string shape, shared
 /// by [`language_id_for`] and [`elf_language_ids`] so the resolves-in-the-DB
 /// test cannot drift from the producer.
-pub(crate) fn compose_language_id(arch: Architecture, endian: &str, model: Option<&str>) -> Option<String> {
+pub(crate) fn compose_language_id(
+    arch: Architecture,
+    endian: &str,
+    model: Option<&str>,
+) -> Option<String> {
     Some(match arch {
         Architecture::X86_64 => format!("x86:LE:64:default:{}", model.unwrap_or("gcc")),
         Architecture::I386 => format!("x86:LE:32:default:{}", model.unwrap_or("gcc")),
         Architecture::Aarch64 => format!("AARCH64:{endian}:64:v8A:{}", model.unwrap_or("default")),
-        Architecture::Aarch64_Ilp32 => format!("AARCH64:{endian}:32:ilp32:{}", model.unwrap_or("default")),
+        Architecture::Aarch64_Ilp32 => {
+            format!("AARCH64:{endian}:32:ilp32:{}", model.unwrap_or("default"))
+        }
         Architecture::Arm => format!("ARM:{endian}:32:v8:{}", model.unwrap_or("default")),
         Architecture::Mips => format!("MIPS:{endian}:32:default:{}", model.unwrap_or("default")),
         Architecture::PowerPc => {
@@ -2188,7 +2372,9 @@ pub(crate) fn compose_language_id(arch: Architecture, endian: &str, model: Optio
         Architecture::Sparc | Architecture::Sparc32Plus => {
             format!("sparc:{endian}:32:default:{}", model.unwrap_or("default"))
         }
-        Architecture::Sparc64 => format!("sparc:{endian}:64:default:{}", model.unwrap_or("default")),
+        Architecture::Sparc64 => {
+            format!("sparc:{endian}:64:default:{}", model.unwrap_or("default"))
+        }
         Architecture::Bpf => format!("eBPF:{endian}:64:default:{}", model.unwrap_or("default")),
         _ => return None,
     })
@@ -2197,7 +2383,11 @@ pub(crate) fn compose_language_id(arch: Architecture, endian: &str, model: Optio
 /// The inclusive pieces of the half-open `range` that none of the half-open
 /// `holes` covers.
 fn outside((lo, hi): (u64, u64), holes: &[(u64, u64)]) -> Vec<(u64, u64)> {
-    let mut holes: Vec<_> = holes.iter().copied().filter(|&(a, b)| a < hi && b > lo).collect();
+    let mut holes: Vec<_> = holes
+        .iter()
+        .copied()
+        .filter(|&(a, b)| a < hi && b > lo)
+        .collect();
     holes.sort_unstable();
     let mut out = Vec::new();
     let mut at = lo;
@@ -2222,8 +2412,8 @@ fn outside((lo, hi): (u64, u64), holes: &[(u64, u64)]) -> Vec<(u64, u64)> {
 /// the same [`compose_language_id`] + [`crate::loader::format::elf::ElfFormat`]
 /// the loader uses, so it cannot drift from the producer.
 pub fn elf_language_ids() -> Vec<String> {
-    use crate::loader::format::elf::ElfFormat;
     use crate::loader::format::ObjectFormat;
+    use crate::loader::format::elf::ElfFormat;
     let fmt = ElfFormat;
     // Per arch, the endiannesses a real ELF actually carries *and* the vendored
     // `.ldefs` declare a stem for (so each enumerated id is one a real binary
@@ -2256,7 +2446,11 @@ pub fn elf_language_ids() -> Vec<String> {
     // (kuna `goabi`) The golang-model ids a Go ELF composes on the three
     // architectures that vendor a golang cspec (LE only — Go has no big-endian
     // target among them), so the resolves-in-the-DB gate proves them too.
-    for arch in [Architecture::X86_64, Architecture::I386, Architecture::Aarch64] {
+    for arch in [
+        Architecture::X86_64,
+        Architecture::I386,
+        Architecture::Aarch64,
+    ] {
         if let Some(id) = compose_language_id(arch, "LE", Some("golang")) {
             out.push(id);
         }
@@ -2293,8 +2487,7 @@ pub fn format_language_ids(
             if let Some(primary) = compose_language_id(arch, endian, fmt.compiler_model(arch)) {
                 // The §2.2 fallback for the same stem: the default-model id, if it
                 // differs from the primary.
-                let fallback = compose_language_id(arch, endian, None)
-                    .filter(|fb| *fb != primary);
+                let fallback = compose_language_id(arch, endian, None).filter(|fb| *fb != primary);
                 out.push((primary, fallback));
             }
         }
@@ -2359,7 +2552,7 @@ mod alias_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use unlace_base::space::{addrspace_flags, spacetype, AddrSpaceManager, ConstantSpace};
+    use unlace_base::space::{AddrSpaceManager, ConstantSpace, addrspace_flags, spacetype};
 
     /// (kuna `goabi`) A Go-marked image composes the `:golang` compiler field;
     /// the same image without the marker keeps the platform model; a Go image
@@ -2368,11 +2561,7 @@ mod tests {
     fn go_image_composes_the_golang_language_id() {
         use object::write::Object as WObject;
         let build = |arch: object::Architecture, go: bool| -> Vec<u8> {
-            let mut obj = WObject::new(
-                object::BinaryFormat::Elf,
-                arch,
-                object::Endianness::Little,
-            );
+            let mut obj = WObject::new(object::BinaryFormat::Elf, arch, object::Endianness::Little);
             let text = obj.add_section(vec![], b".text".to_vec(), object::SectionKind::Text);
             obj.append_section_data(text, &[0xc3], 1);
             if go {
@@ -2434,7 +2623,11 @@ mod tests {
                 .expect("id");
             assert_eq!(String::from_utf8(id).expect("utf8"), expected);
         }
-        assert!(elf_language_ids().iter().any(|id| id == "eBPF:LE:64:default:default"));
+        assert!(
+            elf_language_ids()
+                .iter()
+                .any(|id| id == "eBPF:LE:64:default:default")
+        );
     }
 
     #[test]
@@ -2507,7 +2700,8 @@ mod tests {
             .expect("object images publish immutable bytes");
         assert!(shared.mapped_covers(0x1000, 0x1000 + payload.len() as u64));
         assert!(!shared.mapped_covers(0x0fff, 0x1001));
-        let mut reader = unlace_sleigh::kuna_sharedbytes::SharedBytesImage::new("synthetic", shared);
+        let mut reader =
+            unlace_sleigh::kuna_sharedbytes::SharedBytesImage::new("synthetic", shared);
         reader.attach_to_space(Rc::clone(&ram));
 
         for (off, len) in [(0x1000, 8), (0x1004, 17), (0x11f8, 40), (0x1000, 600)] {
@@ -2516,10 +2710,7 @@ mod tests {
             let mut got = vec![0; len];
             owner.load_fill(&mut want, &addr).unwrap();
             reader.load_fill(&mut got, &addr).unwrap();
-            assert_eq!(
-                got, want,
-                "shared read differs at {off:#x} for {len} bytes"
-            );
+            assert_eq!(got, want, "shared read differs at {off:#x} for {len} bytes");
         }
 
         let err = owner
@@ -2532,19 +2723,24 @@ mod tests {
     fn shared_input_segments_copy_only_when_written() {
         let object: Arc<[u8]> = build_elf64(0x1000, &[0x90, 0xc3], None).into();
         let original = object.to_vec();
-        let mut image = ObjectLoadImage::from_shared_bytes_with_target(
-            "synthetic",
-            Arc::clone(&object),
-            "",
-        )
-        .unwrap();
-        assert!(matches!(image.bytes.segments[0].data, SegmentData::Shared { .. }));
+        let mut image =
+            ObjectLoadImage::from_shared_bytes_with_target("synthetic", Arc::clone(&object), "")
+                .unwrap();
+        assert!(matches!(
+            image.bytes.segments[0].data,
+            SegmentData::Shared { .. }
+        ));
         let ram = Rc::clone(manager().get_default_code_space().unwrap());
         image.attach_to_space(Rc::clone(&ram));
         image.overlay_span(0x1000, &[0xcc]).unwrap();
-        assert!(matches!(image.bytes.segments[0].data, SegmentData::Owned(_)));
+        assert!(matches!(
+            image.bytes.segments[0].data,
+            SegmentData::Owned(_)
+        ));
         let mut got = [0];
-        image.load_fill(&mut got, &Address::new(ram, 0x1000)).unwrap();
+        image
+            .load_fill(&mut got, &Address::new(ram, 0x1000))
+            .unwrap();
         assert_eq!(got, [0xcc]);
         assert_eq!(&*object, original, "copy-on-write changed the shared input");
     }
@@ -2555,18 +2751,25 @@ mod tests {
             .join("tests/fixtures/macho_imports_arm64");
         let original = std::fs::read(&path).unwrap();
         let input = crate::image_bytes::ImageBytes::map_thin_macho(path.to_str().unwrap())
-            .unwrap().unwrap();
+            .unwrap()
+            .unwrap();
         assert!(matches!(input, crate::image_bytes::ImageBytes::Mapped(_)));
         let file = parse_object(&input).unwrap();
-        let text = file.sections().find(|section| section.name() == Ok("__text")).unwrap();
+        let text = file
+            .sections()
+            .find(|section| section.name() == Ok("__text"))
+            .unwrap();
         let address = text.address();
         let byte = text.data().unwrap()[0] ^ 0xff;
-        let mut image = ObjectLoadImage::from_image_bytes_with_target("mapped", input.clone(), "").unwrap();
+        let mut image =
+            ObjectLoadImage::from_image_bytes_with_target("mapped", input.clone(), "").unwrap();
         let ram = Rc::clone(manager().get_default_code_space().unwrap());
         image.attach_to_space(Rc::clone(&ram));
         image.overlay_span(address, &[byte]).unwrap();
         let mut got = [0];
-        image.load_fill(&mut got, &Address::new(ram, address)).unwrap();
+        image
+            .load_fill(&mut got, &Address::new(ram, address))
+            .unwrap();
         assert_eq!(got, [byte]);
         assert_eq!(&*input, original.as_slice());
         assert_eq!(std::fs::read(path).unwrap(), original);
@@ -2708,11 +2911,44 @@ mod tests {
             0,
         );
         // 2: .shstrtab (SHT_STRTAB)
-        push_shdr(&mut buf, off_shstrtab, 3, 0, 0, shstr_off, shstr.len() as u64, 0, 0, 0);
+        push_shdr(
+            &mut buf,
+            off_shstrtab,
+            3,
+            0,
+            0,
+            shstr_off,
+            shstr.len() as u64,
+            0,
+            0,
+            0,
+        );
         // 3: .symtab (SHT_SYMTAB, link=.strtab(4), entsize=24)
-        push_shdr(&mut buf, off_symtab, 2, 0, 0, symtab_off, symtab.len() as u64, 4, 1, 24);
+        push_shdr(
+            &mut buf,
+            off_symtab,
+            2,
+            0,
+            0,
+            symtab_off,
+            symtab.len() as u64,
+            4,
+            1,
+            24,
+        );
         // 4: .strtab (SHT_STRTAB)
-        push_shdr(&mut buf, off_strtab, 3, 0, 0, strtab_off, strtab.len() as u64, 0, 0, 0);
+        push_shdr(
+            &mut buf,
+            off_strtab,
+            3,
+            0,
+            0,
+            strtab_off,
+            strtab.len() as u64,
+            0,
+            0,
+            0,
+        );
 
         buf
     }
@@ -2735,15 +2971,21 @@ mod tests {
         img.attach_to_space(Rc::clone(&ram));
 
         // Exact read of the mapped bytes.
-        let got = img.load(4, &Address::new(Rc::clone(&ram), 0x401000)).unwrap();
+        let got = img
+            .load(4, &Address::new(Rc::clone(&ram), 0x401000))
+            .unwrap();
         assert_eq!(got, vec![0x55, 0x48, 0x89, 0xe5]);
 
         // Read straddling the segment tail: mapped bytes, then zero fill.
-        let got = img.load(8, &Address::new(Rc::clone(&ram), 0x401000)).unwrap();
+        let got = img
+            .load(8, &Address::new(Rc::clone(&ram), 0x401000))
+            .unwrap();
         assert_eq!(got, vec![0x55, 0x48, 0x89, 0xe5, 0, 0, 0, 0]);
 
         // Initial address entirely unmapped -> DataUnavailError (BFD contract).
-        let err = img.load(4, &Address::new(Rc::clone(&ram), 0x1000)).unwrap_err();
+        let err = img
+            .load(4, &Address::new(Rc::clone(&ram), 0x1000))
+            .unwrap_err();
         match &err {
             KunaError::DataUnavail { explain } => {
                 assert!(explain.starts_with("Unable to load"), "got {explain}");
@@ -2767,13 +3009,15 @@ mod tests {
         // Warm the 512-byte read window first: an overlay that did not drop it
         // would be invisible to exactly the reads most likely to follow one.
         assert_eq!(
-            img.load(4, &Address::new(Rc::clone(&ram), 0x401000)).unwrap(),
+            img.load(4, &Address::new(Rc::clone(&ram), 0x401000))
+                .unwrap(),
             vec![0x55, 0x48, 0x89, 0xe5]
         );
         img.kuna_overlay_bytes(&Address::new(Rc::clone(&ram), 0x401001), &[0x31, 0xc0])
             .expect("inside the segment");
         assert_eq!(
-            img.load(4, &Address::new(Rc::clone(&ram), 0x401000)).unwrap(),
+            img.load(4, &Address::new(Rc::clone(&ram), 0x401000))
+                .unwrap(),
             vec![0x55, 0x31, 0xc0, 0xe5]
         );
 
@@ -2792,7 +3036,10 @@ mod tests {
         }
         // A wrong-space overlay is the loadFill contract, not a panic.
         let other = Rc::clone(m.get_space_by_name("const").unwrap());
-        assert!(img.kuna_overlay_bytes(&Address::new(other, 0), &[0x90]).is_err());
+        assert!(
+            img.kuna_overlay_bytes(&Address::new(other, 0), &[0x90])
+                .is_err()
+        );
     }
 
     /// A writable segment's zero-filled RAM tail is real mapped memory, so an
@@ -2812,13 +3059,15 @@ mod tests {
         img.kuna_overlay_bytes(&Address::new(Rc::clone(&ram), 0x401020), &[0xde, 0xad])
             .expect("inside the p_memsz tail");
         assert_eq!(
-            img.load(4, &Address::new(Rc::clone(&ram), 0x40101f)).unwrap(),
+            img.load(4, &Address::new(Rc::clone(&ram), 0x40101f))
+                .unwrap(),
             vec![0x00, 0xde, 0xad, 0x00]
         );
         // Past p_memsz is not mapped at all.
-        assert!(img
-            .kuna_overlay_bytes(&Address::new(Rc::clone(&ram), 0x401040), &[0x90])
-            .is_err());
+        assert!(
+            img.kuna_overlay_bytes(&Address::new(Rc::clone(&ram), 0x401040), &[0x90])
+                .is_err()
+        );
     }
 
     #[test]
@@ -2858,14 +3107,19 @@ mod tests {
         img.attach_to_space(Rc::clone(&ram));
         img.adjust_vma(0x1000);
         // The bytes now live at 0x402000.
-        let got = img.load(4, &Address::new(Rc::clone(&ram), 0x402000)).unwrap();
+        let got = img
+            .load(4, &Address::new(Rc::clone(&ram), 0x402000))
+            .unwrap();
         assert_eq!(got, vec![0x11, 0x22, 0x33, 0x44]);
         // And the symbol moved too.
         img.open_symbols();
         let mut rec = LoadImageFunc::default();
         assert!(img.get_next_symbol(&mut rec));
         assert_eq!(rec.address, Address::new(Rc::clone(&ram), 0x402000));
-        assert_eq!(img.elf_function_provenance().definitions, HashSet::from([0x402000]));
+        assert_eq!(
+            img.elf_function_provenance().definitions,
+            HashSet::from([0x402000])
+        );
     }
 
     #[test]
@@ -2884,7 +3138,10 @@ mod tests {
                 pe_arm_mode_policy(IMAGE_FILE_MACHINE_ARMNT, uefi_te),
                 Some(ArmModePolicy::WholeImageThumb)
             );
-            assert_eq!(pe_arm_mode_policy(IMAGE_FILE_MACHINE_ARM, uefi_te), Some(ArmModePolicy::EntryBit));
+            assert_eq!(
+                pe_arm_mode_policy(IMAGE_FILE_MACHINE_ARM, uefi_te),
+                Some(ArmModePolicy::EntryBit)
+            );
             assert_eq!(pe_arm_mode_policy(IMAGE_FILE_MACHINE_AMD64, uefi_te), None);
         }
         assert_eq!(
@@ -2900,7 +3157,10 @@ mod tests {
 
         // A PE whose machine word is ARM loads as 32-bit ARM with no whole-image
         // claim, and its odd entry is the walk's seed.
-        let path = format!("{}/tests/fixtures/armv4t_thumb_pe.exe", env!("CARGO_MANIFEST_DIR"));
+        let path = format!(
+            "{}/tests/fixtures/armv4t_thumb_pe.exe",
+            env!("CARGO_MANIFEST_DIR")
+        );
         let mut bytes = std::fs::read(&path).expect("read synthetic ARM PE fixture");
         let pe = u32::from_le_bytes(bytes[0x3c..0x40].try_into().unwrap()) as usize;
         bytes[pe + 4..pe + 6].copy_from_slice(&IMAGE_FILE_MACHINE_ARM.to_le_bytes());
@@ -2908,9 +3168,14 @@ mod tests {
         assert_eq!(effective_architecture(&file, &bytes), Architecture::Arm);
         assert_eq!(arm_isa_hint(&file, &bytes), None);
         assert_eq!(arm_entry_thumb_hint(&file, &bytes), Some(0x401000));
-        let image = ObjectLoadImage::from_bytes("arm-machine.exe", &bytes).expect("loads without a target");
+        let image =
+            ObjectLoadImage::from_bytes("arm-machine.exe", &bytes).expect("loads without a target");
         assert_eq!(image.arch_id(), b"ARM:LE:32:v8:windows");
-        assert_eq!(image.image_entry(), Some(0x401000), "the retained entry is a code address");
+        assert_eq!(
+            image.image_entry(),
+            Some(0x401000),
+            "the retained entry is a code address"
+        );
     }
 
     #[test]
@@ -2925,12 +3190,9 @@ mod tests {
         assert_eq!(effective_architecture(&file, &bytes), Architecture::Arm);
         assert_eq!(arm_isa_hint(&file, &bytes), Some(true));
 
-        let mut image = ObjectLoadImage::from_bytes_with_target(
-            &path,
-            &bytes,
-            "ARM:LE:32:v4t:default",
-        )
-        .expect("explicit language must not discard PE mappings");
+        let mut image =
+            ObjectLoadImage::from_bytes_with_target(&path, &bytes, "ARM:LE:32:v4t:default")
+                .expect("explicit language must not discard PE mappings");
         assert_eq!(image.get_arch_type(), b"ARM:LE:32:v4t:default");
         let m = manager();
         let ram = Rc::clone(m.get_space_by_name("ram").unwrap());
@@ -3015,8 +3277,10 @@ mod tests {
         );
         let bytes = std::fs::read(&path).expect("read synthetic ARM PE fixture");
         let file = object::File::parse(bytes.as_slice()).unwrap();
-        assert!(target_endian_note(&file, "ARM:BE:32:v4t:default")
-            .is_some_and(|note| note.contains("BE-endian") && note.contains("LE-endian")));
+        assert!(
+            target_endian_note(&file, "ARM:BE:32:v4t:default")
+                .is_some_and(|note| note.contains("BE-endian") && note.contains("LE-endian"))
+        );
         assert!(target_endian_note(&file, "ARM:LE:32:v4t:default").is_none());
         assert!(target_endian_note(&file, "ARM").is_none());
     }
@@ -3024,23 +3288,35 @@ mod tests {
     #[test]
     fn thumb_coff_typed_parser_preserves_machine_and_mapping() {
         use object::{BinaryFormat, Endianness, SectionKind};
-        let mut obj = object::write::Object::new(BinaryFormat::Coff, Architecture::Arm, Endianness::Little);
+        let mut obj =
+            object::write::Object::new(BinaryFormat::Coff, Architecture::Arm, Endianness::Little);
         let text = obj.add_section(Vec::new(), b".text".to_vec(), SectionKind::Text);
         obj.append_section_data(text, &[0x07, 0x20, 0x70, 0x47], 4);
         let mut bytes = obj.write().unwrap();
         bytes[..2].copy_from_slice(&IMAGE_FILE_MACHINE_THUMB.to_le_bytes());
         let file = parse_object(&bytes).unwrap();
         assert_eq!(file.format(), BinaryFormat::Coff);
-        assert_eq!(container_machine(&file, &bytes), Some(IMAGE_FILE_MACHINE_THUMB));
+        assert_eq!(
+            container_machine(&file, &bytes),
+            Some(IMAGE_FILE_MACHINE_THUMB)
+        );
         assert_eq!(effective_architecture(&file, &bytes), Architecture::Arm);
         assert_eq!(arm_isa_hint(&file, &bytes), Some(true));
         let mut image = ObjectLoadImage::from_bytes("thumb.obj", &bytes).unwrap();
         assert!(image.get_arch_type().starts_with(b"ARM:LE:32:"));
-        let start = image.section_snapshot().iter().find(|(_, _, flags)| flags & section_flags::CODE != 0).unwrap().0;
+        let start = image
+            .section_snapshot()
+            .iter()
+            .find(|(_, _, flags)| flags & section_flags::CODE != 0)
+            .unwrap()
+            .0;
         let m = manager();
         let ram = Rc::clone(m.get_space_by_name("ram").unwrap());
         image.attach_to_space(Rc::clone(&ram));
-        assert_eq!(image.load(4, &Address::new(ram, start)).unwrap(), [0x07, 0x20, 0x70, 0x47]);
+        assert_eq!(
+            image.load(4, &Address::new(ram, start)).unwrap(),
+            [0x07, 0x20, 0x70, 0x47]
+        );
     }
 
     #[test]
@@ -3077,7 +3353,10 @@ mod tests {
             if !img.get_next_symbol(&mut rec) {
                 break;
             }
-            out.insert(rec.address.get_offset(), String::from_utf8_lossy(&rec.name).into_owned());
+            out.insert(
+                rec.address.get_offset(),
+                String::from_utf8_lossy(&rec.name).into_owned(),
+            );
         }
         out
     }
@@ -3088,10 +3367,16 @@ mod tests {
     #[test]
     fn segments_carry_the_load_permissions_of_a_sectionless_image() {
         use unlace_sleigh::loadimage::LoadImage;
-        let path = format!("{}/tests/fixtures/noshdr_x86_64", env!("CARGO_MANIFEST_DIR"));
+        let path = format!(
+            "{}/tests/fixtures/noshdr_x86_64",
+            env!("CARGO_MANIFEST_DIR")
+        );
         let bytes = std::fs::read(&path).expect("fixture");
         let img = ObjectLoadImage::from_bytes(&path, &bytes).expect("load sectionless PIE");
-        assert!(img.section_snapshot().is_empty(), "e_shoff is zero — no section table");
+        assert!(
+            img.section_snapshot().is_empty(),
+            "e_shoff is zero — no section table"
+        );
         assert_eq!(
             img.get_segments(),
             vec![
@@ -3114,7 +3399,9 @@ mod tests {
         let segments = img.get_segments();
         assert!(!img.section_snapshot().is_empty(), "fauxware has sections");
         assert!(
-            segments.iter().any(|&(_, _, flags)| flags & section_flags::CODE != 0),
+            segments
+                .iter()
+                .any(|&(_, _, flags)| flags & section_flags::CODE != 0),
             "one PT_LOAD is executable; got {segments:?}"
         );
         assert!(
@@ -3142,7 +3429,11 @@ mod tests {
         let mut img = ObjectLoadImage::from_bytes(&path, &bytes).expect("load the PE");
         img.attach_to_space(Rc::clone(&ram));
 
-        let header = (0x40_0000u64, 0x200u64, section_flags::CODE | section_flags::READONLY);
+        let header = (
+            0x40_0000u64,
+            0x200u64,
+            section_flags::CODE | section_flags::READONLY,
+        );
         assert!(
             img.get_segments().contains(&header),
             "SizeOfHeaders bytes are mapped at ImageBase; got {:?}",
@@ -3155,7 +3446,8 @@ mod tests {
 
         // The declared entry sits at RVA 0x154, one byte past the section table.
         let mut code = [0u8; 3];
-        img.load_fill(&mut code, &Address::new(Rc::clone(&ram), 0x40_0154)).expect("entry is mapped");
+        img.load_fill(&mut code, &Address::new(Rc::clone(&ram), 0x40_0154))
+            .expect("entry is mapped");
         assert_eq!(code, [0x55, 0x89, 0xe5], "push ebp; mov ebp,esp");
     }
 
@@ -3163,7 +3455,10 @@ mod tests {
     /// starts, so nothing it publishes can shadow real content.
     #[test]
     fn the_header_page_never_overlaps_a_section() {
-        let path = format!("{}/tests/fixtures/pe_imports.exe", env!("CARGO_MANIFEST_DIR"));
+        let path = format!(
+            "{}/tests/fixtures/pe_imports.exe",
+            env!("CARGO_MANIFEST_DIR")
+        );
         let bytes = std::fs::read(&path).expect("fixture");
         let img = ObjectLoadImage::from_bytes(&path, &bytes).expect("load the PE");
         let sections = img.section_snapshot();
@@ -3171,12 +3466,19 @@ mod tests {
             .iter()
             .min_by_key(|&&(vma, _, _)| vma)
             .expect("a PE has sections");
-        assert_eq!(hflags, section_flags::DATA | section_flags::READONLY, "the header page sorts first");
+        assert_eq!(
+            hflags,
+            section_flags::DATA | section_flags::READONLY,
+            "the header page sorts first"
+        );
         for &(vma, size, _) in &sections {
             if vma == hvma {
                 continue;
             }
-            assert!(vma >= hvma + hsize, "section 0x{vma:x}+0x{size:x} overlaps the header page");
+            assert!(
+                vma >= hvma + hsize,
+                "section 0x{vma:x}+0x{size:x} overlaps the header page"
+            );
         }
     }
 
@@ -3192,8 +3494,20 @@ mod tests {
         assert_eq!(aliases.len(), 1);
         image.attach_to_space(Rc::clone(manager().get_default_code_space().unwrap()));
         image.adjust_vma(0x2000);
-        assert_eq!(image.import_slot_ranges(), slots.iter().map(|&(lo, hi)| (lo + 0x2000, hi + 0x2000)).collect::<Vec<_>>());
-        assert_eq!(image.function_address_aliases(), aliases.iter().map(|&(a, c)| (a + 0x2000, c + 0x2000)).collect::<Vec<_>>());
+        assert_eq!(
+            image.import_slot_ranges(),
+            slots
+                .iter()
+                .map(|&(lo, hi)| (lo + 0x2000, hi + 0x2000))
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            image.function_address_aliases(),
+            aliases
+                .iter()
+                .map(|&(a, c)| (a + 0x2000, c + 0x2000))
+                .collect::<Vec<_>>()
+        );
     }
 
     /// A MIPS object's foldable GOT pieces exclude its import slots, which
@@ -3201,9 +3515,18 @@ mod tests {
     #[test]
     fn got_ranges_leave_out_import_slots() {
         assert_eq!(outside((0x100, 0x120), &[]), [(0x100, 0x11f)]);
-        assert_eq!(outside((0x100, 0x120), &[(0x108, 0x10c)]), [(0x100, 0x107), (0x10c, 0x11f)]);
-        assert_eq!(outside((0x100, 0x120), &[(0x11c, 0x120), (0x100, 0x104)]), [(0x104, 0x11b)]);
-        assert_eq!(outside((0x100, 0x108), &[(0x100, 0x104), (0x104, 0x108)]), []);
+        assert_eq!(
+            outside((0x100, 0x120), &[(0x108, 0x10c)]),
+            [(0x100, 0x107), (0x10c, 0x11f)]
+        );
+        assert_eq!(
+            outside((0x100, 0x120), &[(0x11c, 0x120), (0x100, 0x104)]),
+            [(0x104, 0x11b)]
+        );
+        assert_eq!(
+            outside((0x100, 0x108), &[(0x100, 0x104), (0x104, 0x108)]),
+            []
+        );
         assert_eq!(outside((0x100, 0x108), &[(0x200, 0x208)]), [(0x100, 0x107)]);
     }
 
@@ -3220,11 +3543,15 @@ mod tests {
             let bytes = std::fs::read(&path).expect("fixture");
             let img = ObjectLoadImage::from_bytes(&path, &bytes).expect("load the PE");
             assert!(
-                img.import_slot_ranges().iter().any(|&(lo, hi)| slot >= lo && slot < hi),
+                img.import_slot_ranges()
+                    .iter()
+                    .any(|&(lo, hi)| slot >= lo && slot < hi),
                 "{fixture}: missing import slot at {slot:#x}"
             );
             assert!(
-                img.func_symbols().iter().any(|(addr, found)| *addr == slot && found == name),
+                img.func_symbols()
+                    .iter()
+                    .any(|(addr, found)| *addr == slot && found == name),
                 "{fixture}: the slot FunctionSymbol must remain installed"
             );
             let section_is_code = img
@@ -3232,7 +3559,10 @@ mod tests {
                 .iter()
                 .find(|&&(start, size, _)| slot >= start && slot - start < size)
                 .is_some_and(|&(_, _, flags)| flags & section_flags::CODE != 0);
-            assert_eq!(section_is_code, executable, "{fixture}: wrong section control");
+            assert_eq!(
+                section_is_code, executable,
+                "{fixture}: wrong section control"
+            );
         }
     }
 
@@ -3266,12 +3596,17 @@ mod tests {
         );
 
         let mut buf = [0u8; 8];
-        img.load_fill(&mut buf, &at(0x1_4000_21f8)).expect("the file extent is mapped");
+        img.load_fill(&mut buf, &at(0x1_4000_21f8))
+            .expect("the file extent is mapped");
         assert_eq!(buf, [0xaa; 8], "the last eight bytes SizeOfRawData backs");
 
         let mut tail = [0xffu8; 64];
-        img.load_fill(&mut tail, &at(0x1_4000_2740)).expect("the virtual tail is mapped");
-        assert_eq!(tail, [0u8; 64], "past SizeOfRawData the tail reads as zeroes");
+        img.load_fill(&mut tail, &at(0x1_4000_2740))
+            .expect("the virtual tail is mapped");
+        assert_eq!(
+            tail, [0u8; 64],
+            "past SizeOfRawData the tail reads as zeroes"
+        );
     }
 
     /// The same for an ELF `.bss`: `p_memsz` past `p_filesz` is mapped memory,
@@ -3290,17 +3625,28 @@ mod tests {
         img.attach_to_space(Rc::clone(&ram));
 
         // Cold, so the 512-byte read window cannot answer it (see the PE case).
-        let err = img.load(4, &Address::new(Rc::clone(&ram), 0x401040)).unwrap_err();
-        assert!(matches!(err, KunaError::DataUnavail { .. }), "p_memsz bounds it: {err:?}");
-        let got = img.load(8, &Address::new(Rc::clone(&ram), 0x401000)).expect("mapped");
+        let err = img
+            .load(4, &Address::new(Rc::clone(&ram), 0x401040))
+            .unwrap_err();
+        assert!(
+            matches!(err, KunaError::DataUnavail { .. }),
+            "p_memsz bounds it: {err:?}"
+        );
+        let got = img
+            .load(8, &Address::new(Rc::clone(&ram), 0x401000))
+            .expect("mapped");
         assert_eq!(got, vec![0x55, 0x48, 0x89, 0xe5, 0, 0, 0, 0]);
-        let got = img.load(4, &Address::new(Rc::clone(&ram), 0x401030)).expect("bss tail");
+        let got = img
+            .load(4, &Address::new(Rc::clone(&ram), 0x401030))
+            .expect("bss tail");
         assert_eq!(got, vec![0, 0, 0, 0], "wholly inside the .bss tail");
 
         bytes[68..72].copy_from_slice(&(object::elf::PF_R | object::elf::PF_X).to_le_bytes());
         let mut img = ObjectLoadImage::from_bytes("t.elf", &bytes).expect("load the ELF");
         img.attach_to_space(Rc::clone(&ram));
-        let err = img.load(4, &Address::new(Rc::clone(&ram), 0x401030)).unwrap_err();
+        let err = img
+            .load(4, &Address::new(Rc::clone(&ram), 0x401030))
+            .unwrap_err();
         assert!(
             matches!(err, KunaError::DataUnavail { .. }),
             "an executable segment's tail is not materialised as code; got {err:?}"
@@ -3322,15 +3668,25 @@ mod tests {
         img.attach_to_space(Rc::clone(&ram));
         let past = Address::new(Rc::clone(&ram), 0x401040);
         let cold = img.read_window().expect("a windowed image");
-        assert!(img.load(4, &past).is_err(), "a cold read past the segment fails");
-        img.load(4, &Address::new(Rc::clone(&ram), 0x401000)).expect("mapped");
+        assert!(
+            img.load(4, &past).is_err(),
+            "a cold read past the segment fails"
+        );
+        img.load(4, &Address::new(Rc::clone(&ram), 0x401000))
+            .expect("mapped");
         let warm = img.read_window().expect("a windowed image");
         assert_eq!(warm, 0x401000);
-        assert_eq!(img.load(4, &past).expect("inside the window"), vec![0, 0, 0, 0]);
+        assert_eq!(
+            img.load(4, &past).expect("inside the window"),
+            vec![0, 0, 0, 0]
+        );
         img.restore_read_window(cold);
         assert!(img.load(4, &past).is_err(), "the empty window is back");
         img.restore_read_window(warm);
-        assert_eq!(img.load(4, &past).expect("the window is back"), vec![0, 0, 0, 0]);
+        assert_eq!(
+            img.load(4, &past).expect("the window is back"),
+            vec![0, 0, 0, 0]
+        );
     }
 
     /// (kuna) A read longer than the 512-byte staging buffer is served straight
@@ -3353,8 +3709,16 @@ mod tests {
 
         // The size out of the crash report, then the buffer seam either side of
         // it, then spans that start and end off the buffer's own boundaries.
-        for (off, len) in [(0usize, 667usize), (0, 512), (0, 513), (3, 1021), (500, 524)] {
-            let got = img.load(len as i32, &at(0x401000 + off as u64)).expect("mapped");
+        for (off, len) in [
+            (0usize, 667usize),
+            (0, 512),
+            (0, 513),
+            (3, 1021),
+            (500, 524),
+        ] {
+            let got = img
+                .load(len as i32, &at(0x401000 + off as u64))
+                .expect("mapped");
             assert_eq!(got, payload[off..off + len], "{len} bytes at +{off}");
         }
 
@@ -3362,7 +3726,11 @@ mod tests {
         // small read is being served from exactly as it found it.
         let warm = img.load(8, &at(0x401000)).expect("mapped");
         img.load(667, &at(0x401100)).expect("mapped");
-        assert_eq!(img.load(8, &at(0x401000)).expect("mapped"), warm, "window poisoned");
+        assert_eq!(
+            img.load(8, &at(0x401000)).expect("mapped"),
+            warm,
+            "window poisoned"
+        );
     }
 
     /// A big read gets the same answers at the edges of mapped memory that the
@@ -3379,14 +3747,29 @@ mod tests {
         img.attach_to_space(Rc::clone(&ram));
         let at = |o: u64| Address::new(Rc::clone(&ram), o);
 
-        let got = img.load(700, &at(0x401000)).expect("the first byte is mapped");
-        assert_eq!(got[..600], payload[..], "the mapped bytes come back verbatim");
-        assert!(got[600..].iter().all(|&b| b == 0), "the unmapped tail reads as zeroes");
+        let got = img
+            .load(700, &at(0x401000))
+            .expect("the first byte is mapped");
+        assert_eq!(
+            got[..600],
+            payload[..],
+            "the mapped bytes come back verbatim"
+        );
+        assert!(
+            got[600..].iter().all(|&b| b == 0),
+            "the unmapped tail reads as zeroes"
+        );
 
         let err = img.load(667, &at(0x900000)).unwrap_err();
-        assert!(matches!(err, KunaError::DataUnavail { .. }), "unmapped start: {err:?}");
+        assert!(
+            matches!(err, KunaError::DataUnavail { .. }),
+            "unmapped start: {err:?}"
+        );
         let err = img.load(667, &at(0x401000 - 8)).unwrap_err();
-        assert!(matches!(err, KunaError::DataUnavail { .. }), "starts below the map: {err:?}");
+        assert!(
+            matches!(err, KunaError::DataUnavail { .. }),
+            "starts below the map: {err:?}"
+        );
     }
 
     /// A zero-filled tail is trimmed at the next segment, and only the tail is:
@@ -3395,19 +3778,39 @@ mod tests {
     #[test]
     fn a_virtual_tail_stops_at_the_next_segment() {
         let mut segs = vec![
-            Segment { vma: 0x1000, data: vec![1, 2, 3, 4].into(), memsz: 0x4000 },
-            Segment { vma: 0x2000, data: vec![9].into(), memsz: 0x10 },
+            Segment {
+                vma: 0x1000,
+                data: vec![1, 2, 3, 4].into(),
+                memsz: 0x4000,
+            },
+            Segment {
+                vma: 0x2000,
+                data: vec![9].into(),
+                memsz: 0x10,
+            },
         ];
         clamp_virtual_tails(&mut segs);
-        assert_eq!(segs[0].mapped_size(), 0x1000, "trimmed to where the next segment starts");
-        assert_eq!(segs[1].mapped_size(), 0x10, "the last segment keeps its whole tail");
+        assert_eq!(
+            segs[0].mapped_size(),
+            0x1000,
+            "trimmed to where the next segment starts"
+        );
+        assert_eq!(
+            segs[1].mapped_size(),
+            0x10,
+            "the last segment keeps its whole tail"
+        );
 
         let mut stacked = vec![
             Segment::file_backed(0, vec![1, 2, 3, 4]),
             Segment::file_backed(0, vec![5, 6]),
         ];
         clamp_virtual_tails(&mut stacked);
-        assert_eq!(stacked[0].mapped_size(), 4, "a file extent is never trimmed away");
+        assert_eq!(
+            stacked[0].mapped_size(),
+            4,
+            "a file extent is never trimmed away"
+        );
     }
 
     #[test]
@@ -3424,7 +3827,11 @@ mod tests {
             (0x400560, "open"),
             (0x400570, "exit"),
         ] {
-            assert_eq!(syms.get(&addr).map(String::as_str), Some(want), "PLT import at {addr:#x}");
+            assert_eq!(
+                syms.get(&addr).map(String::as_str),
+                Some(want),
+                "PLT import at {addr:#x}"
+            );
         }
         // The pre-existing `.symtab` defined-function path still works.
         for (addr, want) in [
@@ -3433,12 +3840,22 @@ mod tests {
             (0x4006fd, "rejected"),
             (0x40071d, "main"),
         ] {
-            assert_eq!(syms.get(&addr).map(String::as_str), Some(want), "defined fn at {addr:#x}");
+            assert_eq!(
+                syms.get(&addr).map(String::as_str),
+                Some(want),
+                "defined fn at {addr:#x}"
+            );
         }
         // No symbol at address 0 (the old UND-import-at-0x0 bug) and no
         // `@VERSION` suffix leaks through.
-        assert!(!syms.contains_key(&0), "no function should be registered at 0x0");
-        assert!(syms.values().all(|n| !n.contains('@')), "no @VERSION in names");
+        assert!(
+            !syms.contains_key(&0),
+            "no function should be registered at 0x0"
+        );
+        assert!(
+            syms.values().all(|n| !n.contains('@')),
+            "no @VERSION in names"
+        );
     }
 
     /// (kuna `dynrelocs`) A real PIE: the three `R_X86_64_RELATIVE` slots are
@@ -3449,7 +3866,10 @@ mod tests {
     #[test]
     fn pie_dynamic_relocations_are_applied_and_relro_slots_are_constant() {
         use unlace_sleigh::loadimage::LoadImage;
-        let path = format!("{}/tests/fixtures/cet_pie_x86_64", env!("CARGO_MANIFEST_DIR"));
+        let path = format!(
+            "{}/tests/fixtures/cet_pie_x86_64",
+            env!("CARGO_MANIFEST_DIR")
+        );
         let bytes = std::fs::read(&path).expect("fixture");
         let mut img = ObjectLoadImage::from_bytes(&path, &bytes).expect("load PIE");
         let m = manager();
@@ -3458,14 +3878,27 @@ mod tests {
 
         let read_u64 = |img: &mut ObjectLoadImage, vma: u64| -> u64 {
             let mut buf = [0u8; 8];
-            img.load_fill(&mut buf, &Address::new(Rc::clone(&ram), vma)).expect("mapped");
+            img.load_fill(&mut buf, &Address::new(Rc::clone(&ram), vma))
+                .expect("mapped");
             u64::from_le_bytes(buf)
         };
-        assert_eq!(read_u64(&mut img, 0x3d78), 0x1240, ".init_array RELATIVE slot");
-        assert_eq!(read_u64(&mut img, 0x3d80), 0x1200, ".fini_array RELATIVE slot");
+        assert_eq!(
+            read_u64(&mut img, 0x3d78),
+            0x1240,
+            ".init_array RELATIVE slot"
+        );
+        assert_eq!(
+            read_u64(&mut img, 0x3d80),
+            0x1200,
+            ".fini_array RELATIVE slot"
+        );
         assert_eq!(read_u64(&mut img, 0x4008), 0x4008, ".data RELATIVE slot");
         // The undefined GLOB_DAT / JUMP_SLOT imports keep the linker's bytes.
-        assert_eq!(read_u64(&mut img, 0x3fd8), 0, "__libc_start_main GLOB_DAT untouched");
+        assert_eq!(
+            read_u64(&mut img, 0x3fd8),
+            0,
+            "__libc_start_main GLOB_DAT untouched"
+        );
 
         assert_eq!(
             img.dynreloc_const_ranges(),
@@ -3486,9 +3919,15 @@ mod tests {
             let ram = Rc::clone(m.get_space_by_name("ram").unwrap());
             let mut img = ObjectLoadImage::from_bytes(&path, &bytes).unwrap();
             img.attach_to_space(Rc::clone(&ram));
-            let words = img.load(24, &Address::new(Rc::clone(&ram), 0x100004000)).unwrap();
+            let words = img
+                .load(24, &Address::new(Rc::clone(&ram), 0x100004000))
+                .unwrap();
             let read = |i: usize| u64::from_le_bytes(words[i * 8..i * 8 + 8].try_into().unwrap());
-            assert_eq!((read(0), read(1), read(2)), (0x100000440, 0x1000003c8, 0), "{name}");
+            assert_eq!(
+                (read(0), read(1), read(2)),
+                (0x100000440, 0x1000003c8, 0),
+                "{name}"
+            );
         }
     }
 
@@ -3524,7 +3963,11 @@ mod tests {
         // names each import's `.MIPS.stubs` stub address (= the dynsym `st_value`).
         let syms = fixture_funcsyms("plt_mips32");
         // The linker label at the section start is an alias of the first import.
-        for (addr, want) in [(0x400800u64, "puts"), (0x4007f0, "printf"), (0x4007e0, "__libc_start_main")] {
+        for (addr, want) in [
+            (0x400800u64, "puts"),
+            (0x4007f0, "printf"),
+            (0x4007e0, "__libc_start_main"),
+        ] {
             assert_eq!(
                 syms.get(&addr).map(String::as_str),
                 Some(want),
@@ -3534,8 +3977,14 @@ mod tests {
         // The defined `.symtab`/`.dynsym` `main` still resolves.
         assert_eq!(syms.get(&0x400700u64).map(String::as_str), Some("main"));
         // No symbol at 0x0 and no `@VERSION` leakage.
-        assert!(!syms.contains_key(&0), "no function should be registered at 0x0");
-        assert!(syms.values().all(|n| !n.contains('@')), "no @VERSION in names");
+        assert!(
+            !syms.contains_key(&0),
+            "no function should be registered at 0x0"
+        );
+        assert!(
+            syms.values().all(|n| !n.contains('@')),
+            "no @VERSION in names"
+        );
     }
 
     #[test]
@@ -3549,11 +3998,23 @@ mod tests {
         let file = object::File::parse(&*bytes).unwrap();
         let ranges = crate::loader::elf_plt::mips_got_const_ranges(&file);
         // Each range is a single 4-byte pointer slot.
-        assert!(ranges.iter().all(|&(a, b)| b == a + 3), "4-byte slot ranges: {ranges:?}");
+        assert!(
+            ranges.iter().all(|&(a, b)| b == a + 3),
+            "4-byte slot ranges: {ranges:?}"
+        );
         let starts: std::collections::HashSet<u64> = ranges.iter().map(|&(a, _)| a).collect();
-        assert!(starts.contains(&0x411040), "puts GOT slot 0x411040 in {ranges:?}");
-        assert!(starts.contains(&0x411044), "printf GOT slot 0x411044 in {ranges:?}");
-        assert!(!starts.contains(&0x41103c), "__gmon_start__ has no stub: {ranges:?}");
+        assert!(
+            starts.contains(&0x411040),
+            "puts GOT slot 0x411040 in {ranges:?}"
+        );
+        assert!(
+            starts.contains(&0x411044),
+            "printf GOT slot 0x411044 in {ranges:?}"
+        );
+        assert!(
+            !starts.contains(&0x41103c),
+            "__gmon_start__ has no stub: {ranges:?}"
+        );
     }
 
     #[test]
@@ -3587,7 +4048,10 @@ mod tests {
         let mut img = ObjectLoadImage::from_bytes(&path, &bytes).unwrap();
         img.attach_to_space(Rc::clone(&ram));
         let got = img.load(4, &Address::new(Rc::clone(&ram), 0x400660));
-        assert!(got.is_ok(), "fix_output_parameters bytes must load: {got:?}");
+        assert!(
+            got.is_ok(),
+            "fix_output_parameters bytes must load: {got:?}"
+        );
     }
 
     /// (GH #1339) A Mach-O export outside every code section names data: the
@@ -3598,17 +4062,27 @@ mod tests {
     #[test]
     fn macho_data_exports_are_not_function_entries() {
         let syms = fixture_funcsyms("macho_datasyms_arm64");
-        let mut entries: Vec<(u64, &str)> =
-            syms.iter().map(|(addr, name)| (*addr, name.as_str())).collect();
+        let mut entries: Vec<(u64, &str)> = syms
+            .iter()
+            .map(|(addr, name)| (*addr, name.as_str()))
+            .collect();
         entries.sort_unstable();
-        assert_eq!(entries, vec![(0x1000003c8, "_audit_read"), (0x1000003d4, "_main")]);
+        assert_eq!(
+            entries,
+            vec![(0x1000003c8, "_audit_read"), (0x1000003d4, "_main")]
+        );
 
-        let path =
-            format!("{}/tests/fixtures/macho_datasyms_arm64", env!("CARGO_MANIFEST_DIR"));
+        let path = format!(
+            "{}/tests/fixtures/macho_datasyms_arm64",
+            env!("CARGO_MANIFEST_DIR")
+        );
         let bytes = std::fs::read(&path).unwrap_or_else(|e| panic!("read {path}: {e}"));
         let img = ObjectLoadImage::from_bytes(&path, &bytes).unwrap();
         let data = img.data_symbols();
-        for want in [(0x100004000u64, "_audit_global", 8), (0x100004008, "_audit_message", 8)] {
+        for want in [
+            (0x100004000u64, "_audit_global", 8),
+            (0x100004008, "_audit_message", 8),
+        ] {
             assert!(
                 data.contains(&(want.0, want.1.to_string(), want.2)),
                 "{want:?} must be a data symbol of that extent: {data:?}"
@@ -3634,14 +4108,25 @@ mod tests {
     /// alias.
     #[test]
     fn macho_trie_names_fill_a_partial_symbol_table() {
-        let path =
-            format!("{}/tests/fixtures/macho_trie_partial_arm64", env!("CARGO_MANIFEST_DIR"));
+        let path = format!(
+            "{}/tests/fixtures/macho_trie_partial_arm64",
+            env!("CARGO_MANIFEST_DIR")
+        );
         let bytes = std::fs::read(&path).unwrap_or_else(|e| panic!("read {path}: {e}"));
         let img = ObjectLoadImage::from_bytes(&path, &bytes).unwrap();
         let mut primary = img.func_symbols();
         primary.sort_unstable();
-        assert_eq!(primary, vec![(0x240, "_audit_export_a".into()), (0x248, "_audit_caller".into())]);
-        assert_eq!(img.func_symbol_aliases(), vec![(0x240, "_audit_export_b".to_string())]);
+        assert_eq!(
+            primary,
+            vec![
+                (0x240, "_audit_export_a".into()),
+                (0x248, "_audit_caller".into())
+            ]
+        );
+        assert_eq!(
+            img.func_symbol_aliases(),
+            vec![(0x240, "_audit_export_b".to_string())]
+        );
     }
 
     /// (GH #1349) A dylib stripped of every `nlist` entry still exports its
@@ -3655,13 +4140,20 @@ mod tests {
             entries.sort_unstable();
             assert_eq!(
                 entries,
-                vec![(0x328, "_audit_exported_function".into()), (0x340, "_audit_caller".into())],
+                vec![
+                    (0x328, "_audit_exported_function".into()),
+                    (0x340, "_audit_caller".into())
+                ],
                 "{fixture}"
             );
             let path = format!("{}/tests/fixtures/{}", env!("CARGO_MANIFEST_DIR"), fixture);
             let bytes = std::fs::read(&path).unwrap_or_else(|e| panic!("read {path}: {e}"));
             let img = ObjectLoadImage::from_bytes(&path, &bytes).unwrap();
-            assert_eq!(img.data_symbols(), vec![(0x4000, "_audit_exported_data".to_string(), 4)], "{fixture}");
+            assert_eq!(
+                img.data_symbols(),
+                vec![(0x4000, "_audit_exported_data".to_string(), 4)],
+                "{fixture}"
+            );
             for name in ["audit_exported_data", "_audit_exported_data"] {
                 assert!(
                     img.data_exports().contains(&(0x4000, name.to_string())),
@@ -3682,8 +4174,10 @@ mod tests {
         // (`__fprintf_chk(dat_61a0,...)` where every other decompiler prints
         // `stderr`). The `st_size` is load-bearing: an 8-byte load's
         // `queryContainer(addr, 8)` misses a size-1 install.
-        let path =
-            format!("{}/tests/fixtures/datasyms_faillog_x86_64", env!("CARGO_MANIFEST_DIR"));
+        let path = format!(
+            "{}/tests/fixtures/datasyms_faillog_x86_64",
+            env!("CARGO_MANIFEST_DIR")
+        );
         let bytes = std::fs::read(&path).unwrap_or_else(|e| panic!("read {path}: {e}"));
         let img = ObjectLoadImage::from_bytes(&path, &bytes).unwrap();
         let syms = img.data_symbols();
@@ -3705,8 +4199,15 @@ mod tests {
         // (`__bss_start`, `_edata`, `_end` are sizeless and must be dropped), no
         // UND import placeholders, no `@VERSION` leakage (`stderr@GLIBC_2.2.5`
         // strips to `stderr`).
-        assert_eq!(syms.len(), 4, "exactly the four copy-reloc externs: {syms:?}");
-        assert!(syms.iter().all(|(_, n, _)| !n.contains('@')), "no @VERSION in names");
+        assert_eq!(
+            syms.len(),
+            4,
+            "exactly the four copy-reloc externs: {syms:?}"
+        );
+        assert!(
+            syms.iter().all(|(_, n, _)| !n.contains('@')),
+            "no @VERSION in names"
+        );
         assert!(syms.iter().all(|(_, _, s)| *s > 0), "no zero-size entries");
     }
 

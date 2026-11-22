@@ -23,15 +23,22 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture(name: &str) -> PathBuf {
-    repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(name)
+    repo_root()
+        .join("decompiler/crates/unlace-analysis/tests/fixtures")
+        .join(name)
 }
 
 /// Bootstrap `bin`, commit the (default-on) DWARF facts, decompile `func`, and return the
@@ -41,13 +48,21 @@ fn decompile(bin: &str, func: &str) -> String {
     let specs = root.join("specs");
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
 
-    let path = fixture(bin).to_str().expect("UTF-8 fixture path").to_string();
+    let path = fixture(bin)
+        .to_str()
+        .expect("UTF-8 fixture path")
+        .to_string();
     let mut prog = bootstrap_from_object(&path, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
-    let cmds: Vec<String> =
-        [format!("load function {func}"), "decompile".into(), "print C".into()].to_vec();
+    let cmds: Vec<String> = [
+        format!("load function {func}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .to_vec();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -130,7 +145,10 @@ fn minimal_rust_dwarf_does_not_erase_call_arguments() {
     let code = decompile("rust_minimal_dwarf_x86_64", "call_input");
     assert!(!code.contains("call_input(void)"), "{code}");
     assert!(!code.contains("add_input()"), "{code}");
-    assert!(code.contains(" * 3)"), "the computed argument must survive: {code}");
+    assert!(
+        code.contains(" * 3)"),
+        "the computed argument must survive: {code}"
+    );
 }
 
 #[test]
@@ -145,6 +163,9 @@ fn minimal_rust_names_cannot_borrow_a_libc_signature() {
     let code = decompile("rust_minimal_dwarf_names_x86_64", "call_write");
     assert!(code.contains("rust_writer::write("), "{code}");
     for expression in ["+ 1", "+ 2", "+ 3", "+ 4"] {
-        assert!(code.contains(expression), "all four computed arguments must survive: {code}");
+        assert!(
+            code.contains(expression),
+            "all four computed arguments must survive: {code}"
+        );
     }
 }

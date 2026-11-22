@@ -67,14 +67,22 @@ pub(crate) fn call_slot(data: &Funcdata, op: OpId) -> Option<(Address, int4)> {
 /// within `op`'s own instruction: a `COPY` of a memory varnode (the form a
 /// constant-address load takes once SLEIGH folds it) or a `LOAD` through a
 /// constant pointer, through any chain of temporary `COPY`s.
-pub(crate) fn loaded_slot(data: &Funcdata, op: OpId, mut addr: Address, mut size: int4) -> Option<Address> {
+pub(crate) fn loaded_slot(
+    data: &Funcdata,
+    op: OpId,
+    mut addr: Address,
+    mut size: int4,
+) -> Option<Address> {
     let insn = data.obank().get(op)?.get_addr().clone();
     let mut cur = op;
     loop {
         if data.obank().get(cur)?.is_instruction_start() {
             return None;
         }
-        cur = data.obank().dead_prev(cur).or_else(|| data.obank().op_before(cur))?;
+        cur = data
+            .obank()
+            .dead_prev(cur)
+            .or_else(|| data.obank().op_before(cur))?;
         let prev = data.obank().get(cur)?;
         if prev.get_addr() != &insn {
             return None;
@@ -91,7 +99,9 @@ pub(crate) fn loaded_slot(data: &Funcdata, op: OpId, mut addr: Address, mut size
                 let src = data.vbank().get(prev.get_in(0)?)?;
                 match src.get_space().get_type() {
                     spacetype::IPTR_PROCESSOR => return Some(src.get_addr().clone()),
-                    spacetype::IPTR_INTERNAL => (addr, size) = (src.get_addr().clone(), src.get_size()),
+                    spacetype::IPTR_INTERNAL => {
+                        (addr, size) = (src.get_addr().clone(), src.get_size())
+                    }
                     _ => return None,
                 }
             }

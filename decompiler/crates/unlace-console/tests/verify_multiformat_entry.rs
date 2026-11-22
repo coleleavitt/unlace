@@ -33,14 +33,17 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixtures() -> PathBuf {
@@ -59,7 +62,8 @@ fn boot_committed(name: &str) -> ConsoleProgram {
         .expect("bootstrap fixture with built processor specs");
     // The discovered entries are committed at `read symbols`, gated by the per-pass
     // `--option` flags — a direct `bootstrap_from_object` consumer must trigger it.
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
@@ -107,15 +111,24 @@ fn pe_stripped_discovers_main_without_addr() {
 
     // A real decompilation of a discovered, never-symboled function: it names the
     // function and emits a C body — not the "no function" error.
-    assert!(out.contains("main("), "expected a body for main, got:\n{out}");
-    assert!(out.contains('{') && out.contains('}'), "expected a C body, got:\n{out}");
+    assert!(
+        out.contains("main("),
+        "expected a body for main, got:\n{out}"
+    );
+    assert!(
+        out.contains('{') && out.contains('}'),
+        "expected a C body, got:\n{out}"
+    );
     assert!(
         !out.contains("Unknown function") && !out.contains("no function"),
         "main should resolve to a function, got:\n{out}"
     );
     // Bonus: the discovered `main` calls the IAT-named `puts` (PR-4) — a stripped
     // PE recovers BOTH the function (PR-12) and its import name (PR-4).
-    assert!(out.contains("puts("), "expected the IAT-named puts call, got:\n{out}");
+    assert!(
+        out.contains("puts("),
+        "expected the IAT-named puts call, got:\n{out}"
+    );
 }
 
 /// PR-13: a **stripped Mach-O** finds the file-local `helper` via
@@ -135,8 +148,14 @@ fn macho_stripped_discovers_helper_via_function_starts() {
 
     let out = decompile_func(prog, "load function sub_100000590");
 
-    assert!(out.contains("sub_100000590"), "expected a body for sub_100000590, got:\n{out}");
-    assert!(out.contains('{') && out.contains('}'), "expected a C body, got:\n{out}");
+    assert!(
+        out.contains("sub_100000590"),
+        "expected a body for sub_100000590, got:\n{out}"
+    );
+    assert!(
+        out.contains('{') && out.contains('}'),
+        "expected a C body, got:\n{out}"
+    );
     assert!(
         !out.contains("Unknown function") && !out.contains("no function"),
         "sub_100000590 should resolve to a function, got:\n{out}"

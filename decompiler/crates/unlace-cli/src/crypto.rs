@@ -18,9 +18,9 @@ use object::{Object, ObjectSection, ObjectSegment, SectionKind};
 
 use crate::args::take_value as take;
 use crate::cryptosig::{self, Hit, Kind, Region};
-use crate::decompile_all::{load_program, mode_options_for_binary, Args, DriverDefaults};
+use crate::decompile_all::{Args, DriverDefaults, load_program, mode_options_for_binary};
 use crate::function_info::function_json;
-use crate::jsonfmt::{dumps_indent2, Json};
+use crate::jsonfmt::{Json, dumps_indent2};
 
 pub(crate) struct CryptoArgs {
     binary: String,
@@ -84,9 +84,12 @@ fn is_exec_section(sec: &object::Section) -> bool {
         return true;
     }
     match sec.flags() {
-        object::SectionFlags::Elf { sh_flags } => sh_flags & u64::from(object::elf::SHF_EXECINSTR) != 0,
+        object::SectionFlags::Elf { sh_flags } => {
+            sh_flags & u64::from(object::elf::SHF_EXECINSTR) != 0
+        }
         object::SectionFlags::Coff { characteristics } => {
-            characteristics & (object::pe::IMAGE_SCN_MEM_EXECUTE | object::pe::IMAGE_SCN_CNT_CODE) != 0
+            characteristics & (object::pe::IMAGE_SCN_MEM_EXECUTE | object::pe::IMAGE_SCN_CNT_CODE)
+                != 0
         }
         _ => false,
     }
@@ -105,7 +108,11 @@ fn regions<'d>(file: &'d object::File<'d>) -> (Vec<Region<'d>>, bool) {
             continue;
         }
         out.push(Region {
-            name: sec.name().ok().filter(|n| !n.is_empty()).map(str::to_string),
+            name: sec
+                .name()
+                .ok()
+                .filter(|n| !n.is_empty())
+                .map(str::to_string),
             vma: sec.address(),
             data,
             executable: is_exec_section(&sec),
@@ -121,10 +128,17 @@ fn regions<'d>(file: &'d object::File<'d>) -> (Vec<Region<'d>>, bool) {
         }
         let executable = match seg.flags() {
             object::SegmentFlags::Elf { p_flags } => p_flags & object::elf::PF_X != 0,
-            object::SegmentFlags::MachO { initprot, .. } => initprot & object::macho::VM_PROT_EXECUTE != 0,
+            object::SegmentFlags::MachO { initprot, .. } => {
+                initprot & object::macho::VM_PROT_EXECUTE != 0
+            }
             _ => true,
         };
-        out.push(Region { name: None, vma: seg.address(), data, executable });
+        out.push(Region {
+            name: None,
+            vma: seg.address(),
+            data,
+            executable,
+        });
     }
     (out, true)
 }
@@ -136,7 +150,10 @@ fn section_matches(name: Option<&str>, want: &str) -> bool {
 pub(crate) fn query(args: &CryptoArgs) -> Result<String, String> {
     let bytes = args.raw.image(
         &args.binary,
-        unlace_analysis::loader::macho_fat::slice_pref(args.slice.as_deref(), args.target.as_deref()),
+        unlace_analysis::loader::macho_fat::slice_pref(
+            args.slice.as_deref(),
+            args.target.as_deref(),
+        ),
         args.target.as_deref(),
     )?;
     let file = unlace_analysis::loadimage_object::parse_object(&bytes)
@@ -146,7 +163,11 @@ pub(crate) fn query(args: &CryptoArgs) -> Result<String, String> {
         let names: Vec<String> = regs.iter().filter_map(|r| r.name.clone()).collect();
         regs.retain(|r| section_matches(r.name.as_deref(), want));
         if regs.is_empty() {
-            let have = if names.is_empty() { "the image has no named sections".into() } else { format!("have: {}", names.join(", ")) };
+            let have = if names.is_empty() {
+                "the image has no named sections".into()
+            } else {
+                format!("have: {}", names.join(", "))
+            };
             return Err(format!("no section named {want:?} ({have})"));
         }
     }
@@ -156,12 +177,21 @@ pub(crate) fn query(args: &CryptoArgs) -> Result<String, String> {
         hits.retain(|h| h.algorithm.to_ascii_lowercase().contains(&want));
     }
     let rows = if args.no_xrefs || hits.is_empty() {
-        hits.into_iter().map(|hit| Row { hit, xrefs_count: 0, functions: Vec::new() }).collect()
+        hits.into_iter()
+            .map(|hit| Row {
+                hit,
+                xrefs_count: 0,
+                functions: Vec::new(),
+            })
+            .collect()
     } else {
         attribute(args, &file, hits)?
     };
     Ok(if args.json {
-        format!("{}\n", dumps_indent2(&result_json(args, from_segments, &rows)))
+        format!(
+            "{}\n",
+            dumps_indent2(&result_json(args, from_segments, &rows))
+        )
     } else {
         render_text(args, from_segments, &rows)
     })
@@ -171,7 +201,8 @@ pub(crate) fn query(args: &CryptoArgs) -> Result<String, String> {
 /// (or of a literal-pool word), or else the function whose decoded instruction
 /// encodes the immediate (the nearest instruction start up to 15 bytes before it).
 fn attribute(args: &CryptoArgs, file: &object::File, hits: Vec<Hit>) -> Result<Vec<Row>, String> {
-    let options = mode_options_for_binary(args.mode.as_deref(), &args.binary, args.options.clone())?;
+    let options =
+        mode_options_for_binary(args.mode.as_deref(), &args.binary, args.options.clone())?;
     let load = Args {
         binary: args.binary.clone(),
         json: args.json,
@@ -200,7 +231,8 @@ fn attribute(args: &CryptoArgs, file: &object::File, hits: Vec<Hit>) -> Result<V
         .map(|e| (e.addr.get_offset(), e.name))
         .collect();
     let seeds: Vec<u64> = inventory.keys().copied().collect();
-    let index = unlace_analysis::listing::xrefs::build(file, prog.arch(), prog.arch().translate(), &seeds);
+    let index =
+        unlace_analysis::listing::xrefs::build(file, prog.arch(), prog.arch().translate(), &seeds);
     let mut names: BTreeMap<u64, String> = BTreeMap::new();
     let mut name_of = |entry: u64| {
         names
@@ -215,14 +247,18 @@ fn attribute(args: &CryptoArgs, file: &object::File, hits: Vec<Hit>) -> Result<V
             let mut functions: Vec<(u64, String)> = Vec::new();
             let inline = hit.kind == Kind::Immediate && index.refs_to(hit.addr).is_empty();
             if inline {
-                if let Some(entry) = (1..=15u64).find_map(|k| index.function_containing(hit.addr.checked_sub(k)?)) {
+                if let Some(entry) =
+                    (1..=15u64).find_map(|k| index.function_containing(hit.addr.checked_sub(k)?))
+                {
                     functions.push((entry, name_of(entry)));
                 }
             } else {
                 for vma in hit.addr..hit.addr + hit.byte_len as u64 {
                     for r in index.refs_to(vma) {
                         xrefs_count += 1;
-                        let Some(entry) = crate::function_info::owning_function(&prog, &index, r.from) else {
+                        let Some(entry) =
+                            crate::function_info::owning_function(&prog, &index, r.from)
+                        else {
                             continue;
                         };
                         if !functions.iter().any(|(e, _)| *e == entry) {
@@ -232,7 +268,11 @@ fn attribute(args: &CryptoArgs, file: &object::File, hits: Vec<Hit>) -> Result<V
                 }
                 functions.sort();
             }
-            Row { hit, xrefs_count, functions }
+            Row {
+                hit,
+                xrefs_count,
+                functions,
+            }
         })
         .collect())
 }
@@ -256,10 +296,18 @@ fn result_json(args: &CryptoArgs, from_segments: bool, rows: &[Row]) -> Json {
                     ("byte_length".into(), Json::Number(h.byte_len.to_string())),
                     ("section".into(), optional_str(h.section.as_deref())),
                     ("text".into(), optional_str(h.text.as_deref())),
-                    ("xrefs_count".into(), Json::Number(row.xrefs_count.to_string())),
+                    (
+                        "xrefs_count".into(),
+                        Json::Number(row.xrefs_count.to_string()),
+                    ),
                     (
                         "functions".into(),
-                        Json::Array(row.functions.iter().map(|(a, n)| function_json(n, *a)).collect()),
+                        Json::Array(
+                            row.functions
+                                .iter()
+                                .map(|(a, n)| function_json(n, *a))
+                                .collect(),
+                        ),
                     ),
                 ])
             })
@@ -269,7 +317,17 @@ fn result_json(args: &CryptoArgs, from_segments: bool, rows: &[Row]) -> Json {
         ("binary".into(), Json::Str(args.binary.clone())),
         ("algorithm".into(), optional_str(args.algorithm.as_deref())),
         ("section".into(), optional_str(args.section.as_deref())),
-        ("scanned".into(), Json::Str(if from_segments { "segments" } else { "sections" }.into())),
+        (
+            "scanned".into(),
+            Json::Str(
+                if from_segments {
+                    "segments"
+                } else {
+                    "sections"
+                }
+                .into(),
+            ),
+        ),
         ("xrefs".into(), Json::Bool(!args.no_xrefs)),
         ("count".into(), Json::Number(rows.len().to_string())),
         ("constants".into(), constants),
@@ -281,20 +339,32 @@ fn result_json(args: &CryptoArgs, from_segments: bool, rows: &[Row]) -> Json {
 fn render_text(args: &CryptoArgs, from_segments: bool, rows: &[Row]) -> String {
     use std::fmt::Write as _;
     let mut out = String::new();
-    let plural = if rows.len() == 1 { "constant" } else { "constants" };
+    let plural = if rows.len() == 1 {
+        "constant"
+    } else {
+        "constants"
+    };
     let _ = writeln!(
         out,
         "# {} crypto {plural} in {} (scanned by {})",
         rows.len(),
         args.binary,
-        if from_segments { "segments" } else { "sections" }
+        if from_segments {
+            "segments"
+        } else {
+            "sections"
+        }
     );
     for row in rows {
         let h = &row.hit;
         let functions = if row.functions.is_empty() {
             "-".to_string()
         } else {
-            row.functions.iter().map(|(_, n)| n.as_str()).collect::<Vec<_>>().join(",")
+            row.functions
+                .iter()
+                .map(|(_, n)| n.as_str())
+                .collect::<Vec<_>>()
+                .join(",")
         };
         let name = match &h.text {
             Some(t) if h.kind == Kind::Alphabet => format!("{} {t}", h.name),
@@ -366,7 +436,20 @@ pub(crate) fn parse_args(argv: &[String]) -> Result<CryptoArgs, String> {
     if raw.on && slice.is_some() {
         return Err("--slice does not apply to --raw-image input".into());
     }
-    Ok(CryptoArgs { binary, json, algorithm, section, no_xrefs, options, mode, slice, target, sleighpath, isa, raw })
+    Ok(CryptoArgs {
+        binary,
+        json,
+        algorithm,
+        section,
+        no_xrefs,
+        options,
+        mode,
+        slice,
+        target,
+        sleighpath,
+        isa,
+        raw,
+    })
 }
 
 fn usage() {
@@ -400,4 +483,3 @@ fn usage() {
          functions}}]}}; without it, one tab-separated row each."
     );
 }
-

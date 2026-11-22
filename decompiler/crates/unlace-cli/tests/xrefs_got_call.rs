@@ -24,7 +24,10 @@ fn rows(binary: &str, direction: &str, target: &str) -> Vec<(String, String, u64
         .map(|r| {
             (
                 r["kind"].as_str().unwrap().to_owned(),
-                r["from_function"]["name"].as_str().unwrap_or("-").to_owned(),
+                r["from_function"]["name"]
+                    .as_str()
+                    .unwrap_or("-")
+                    .to_owned(),
                 r["from_address"].as_u64().unwrap(),
                 r["to_address"].as_u64().unwrap(),
             )
@@ -33,7 +36,8 @@ fn rows(binary: &str, direction: &str, target: &str) -> Vec<(String, String, u64
 }
 
 fn at(rows: &[(String, String, u64, u64)], kind: &str, from: u64, to: u64) -> bool {
-    rows.iter().any(|(k, _, f, t)| k == kind && *f == from && *t == to)
+    rows.iter()
+        .any(|(k, _, f, t)| k == kind && *f == from && *t == to)
 }
 
 /// The `(caller, callee, kind)` edges of the graph document.
@@ -69,19 +73,35 @@ fn an_arm64_macho_got_load_reads_the_slot_and_the_blr_calls_it() {
         assert!(at(&to, "read", 0x131c, 0x4000), "--to {target}: {to:?}");
         assert!(at(&to, "call", 0x1320, 0x4000), "--to {target}: {to:?}");
     }
-    assert_eq!(edges(bin), [(0x1310, 0x4000, "call".to_owned())], "_audit_import_call -> malloc");
+    assert_eq!(
+        edges(bin),
+        [(0x1310, 0x4000, "call".to_owned())],
+        "_audit_import_call -> malloc"
+    );
 }
 
 #[test]
 fn both_x86_64_macho_spellings_call_the_slot() {
     let bin = "gotcall_macho_x86_64";
     let to = rows(bin, "--to", "malloc");
-    assert!(at(&to, "call", 0x301, 0x1000), "call *_malloc@GOTPCREL(%rip): {to:?}");
-    assert!(at(&to, "read", 0x30a, 0x1000), "mov _malloc@GOTPCREL(%rip),%rax: {to:?}");
+    assert!(
+        at(&to, "call", 0x301, 0x1000),
+        "call *_malloc@GOTPCREL(%rip): {to:?}"
+    );
+    assert!(
+        at(&to, "read", 0x30a, 0x1000),
+        "mov _malloc@GOTPCREL(%rip),%rax: {to:?}"
+    );
     assert!(at(&to, "call", 0x311, 0x1000), "call *%rax: {to:?}");
     let mut graph = edges(bin);
     graph.sort();
-    assert_eq!(graph, [(0x300, 0x1000, "call".to_owned()), (0x309, 0x1000, "call".to_owned())]);
+    assert_eq!(
+        graph,
+        [
+            (0x300, 0x1000, "call".to_owned()),
+            (0x309, 0x1000, "call".to_owned())
+        ]
+    );
 }
 
 /// The ELF controls name no import at the slot, but the rows are the same.
@@ -103,9 +123,20 @@ fn an_elf_got_load_and_call_read_and_call_the_slot() {
 fn an_adrp_page_completed_elsewhere_names_nothing_on_the_page() {
     let bin = "xrefpairs_macho_arm64";
     let global = rows(bin, "--to", "_audit_global");
-    assert!(!global.iter().any(|(_, f, _, _)| f == "_audit_indirect_call"), "{global:?}");
-    assert!(at(&global, "data", 0x1_0000_0410, 0x1_0000_4000), "{global:?}");
-    assert!(at(&global, "read", 0x1_0000_0414, 0x1_0000_4000), "{global:?}");
+    assert!(
+        !global
+            .iter()
+            .any(|(_, f, _, _)| f == "_audit_indirect_call"),
+        "{global:?}"
+    );
+    assert!(
+        at(&global, "data", 0x1_0000_0410, 0x1_0000_4000),
+        "{global:?}"
+    );
+    assert!(
+        at(&global, "read", 0x1_0000_0414, 0x1_0000_4000),
+        "{global:?}"
+    );
     let slot = rows(bin, "--to", "_audit_func_ptr");
     assert!(at(&slot, "call", 0x1_0000_03c0, 0x1_0000_4010), "{slot:?}");
 }

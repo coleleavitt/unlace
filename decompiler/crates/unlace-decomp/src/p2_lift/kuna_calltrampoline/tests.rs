@@ -4,8 +4,8 @@
 use std::rc::Rc;
 
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
-    VarnodeStorage,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, VarnodeStorage, addrspace_flags,
+    spacetype,
 };
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
@@ -16,7 +16,8 @@ use super::*;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -61,7 +62,11 @@ fn spaces(m: &AddrSpaceManager) -> Spaces {
 }
 
 fn vn(space: &Rc<AddrSpace>, offset: u64, size: u32) -> VarnodeData {
-    VarnodeData { space: Some(Rc::clone(space)), offset, size }
+    VarnodeData {
+        space: Some(Rc::clone(space)),
+        offset,
+        size,
+    }
 }
 
 /// ESP: register space, offset 0, 4 bytes.
@@ -70,7 +75,11 @@ fn esp(s: &Spaces) -> VarnodeData {
 }
 
 fn sp_storage(s: &Spaces) -> VarnodeStorage {
-    VarnodeStorage { space: Some(Rc::clone(&s.reg)), offset: 0, size: 4 }
+    VarnodeStorage {
+        space: Some(Rc::clone(&s.reg)),
+        offset: 0,
+        size: 4,
+    }
 }
 
 fn op(code: OpCode, out: Option<VarnodeData>, ins: Vec<VarnodeData>) -> RawOp {
@@ -82,7 +91,11 @@ fn op(code: OpCode, out: Option<VarnodeData>, ins: Vec<VarnodeData>) -> RawOp {
 fn lea_form(s: &Spaces) -> Vec<RawOp> {
     let tmp = vn(&s.uniq, 0x100, 4);
     vec![
-        op(OpCode::CPUI_INT_ADD, Some(tmp.clone()), vec![esp(s), vn(&s.cnst, 4, 4)]),
+        op(
+            OpCode::CPUI_INT_ADD,
+            Some(tmp.clone()),
+            vec![esp(s), vn(&s.cnst, 4, 4)],
+        ),
         op(OpCode::CPUI_COPY, Some(esp(s)), vec![tmp]),
         op(OpCode::CPUI_BRANCH, None, vec![vn(&s.ram, 0x40d1b4, 1)]),
     ]
@@ -101,7 +114,11 @@ fn add_esp_4_then_jump_matches() {
     let m = build_manager();
     let s = spaces(&m);
     let ops = vec![
-        op(OpCode::CPUI_INT_ADD, Some(esp(&s)), vec![esp(&s), vn(&s.cnst, 4, 4)]),
+        op(
+            OpCode::CPUI_INT_ADD,
+            Some(esp(&s)),
+            vec![esp(&s), vn(&s.cnst, 4, 4)],
+        ),
         op(OpCode::CPUI_BRANCH, None, vec![vn(&s.ram, 0x2000, 1)]),
     ];
     assert_eq!(
@@ -120,7 +137,11 @@ fn allocation_after_the_discard_still_matches() {
     let mut ops = lea_form(&s);
     ops.insert(
         2,
-        op(OpCode::CPUI_INT_SUB, Some(esp(&s)), vec![esp(&s), vn(&s.cnst, 0xcfc, 4)]),
+        op(
+            OpCode::CPUI_INT_SUB,
+            Some(esp(&s)),
+            vec![esp(&s), vn(&s.cnst, 0xcfc, 4)],
+        ),
     );
     assert!(kuna_trampoline_branch_target(&ops, &sp_storage(&s)).is_some());
 }
@@ -133,8 +154,16 @@ fn pop_then_jump_matches() {
     let s = spaces(&m);
     let ecx = vn(&s.reg, 8, 4);
     let ops = vec![
-        op(OpCode::CPUI_LOAD, Some(ecx), vec![vn(&s.cnst, 2, 4), esp(&s)]),
-        op(OpCode::CPUI_INT_ADD, Some(esp(&s)), vec![esp(&s), vn(&s.cnst, 4, 4)]),
+        op(
+            OpCode::CPUI_LOAD,
+            Some(ecx),
+            vec![vn(&s.cnst, 2, 4), esp(&s)],
+        ),
+        op(
+            OpCode::CPUI_INT_ADD,
+            Some(esp(&s)),
+            vec![esp(&s), vn(&s.cnst, 4, 4)],
+        ),
         op(OpCode::CPUI_BRANCH, None, vec![vn(&s.ram, 0x2000, 1)]),
     ];
     assert!(kuna_trampoline_branch_target(&ops, &sp_storage(&s)).is_some());
@@ -155,7 +184,11 @@ fn wrong_sized_discard_declines() {
     let m = build_manager();
     let s = spaces(&m);
     let ops = vec![
-        op(OpCode::CPUI_INT_ADD, Some(esp(&s)), vec![esp(&s), vn(&s.cnst, 8, 4)]),
+        op(
+            OpCode::CPUI_INT_ADD,
+            Some(esp(&s)),
+            vec![esp(&s), vn(&s.cnst, 8, 4)],
+        ),
         op(OpCode::CPUI_BRANCH, None, vec![vn(&s.ram, 0x2000, 1)]),
     ];
     assert_eq!(kuna_trampoline_branch_target(&ops, &sp_storage(&s)), None);
@@ -166,7 +199,11 @@ fn a_return_declines() {
     let m = build_manager();
     let s = spaces(&m);
     let ops = vec![
-        op(OpCode::CPUI_INT_ADD, Some(esp(&s)), vec![esp(&s), vn(&s.cnst, 4, 4)]),
+        op(
+            OpCode::CPUI_INT_ADD,
+            Some(esp(&s)),
+            vec![esp(&s), vn(&s.cnst, 4, 4)],
+        ),
         op(OpCode::CPUI_RETURN, None, vec![vn(&s.cnst, 0, 4)]),
     ];
     assert_eq!(kuna_trampoline_branch_target(&ops, &sp_storage(&s)), None);
@@ -177,8 +214,16 @@ fn a_conditional_branch_declines() {
     let m = build_manager();
     let s = spaces(&m);
     let ops = vec![
-        op(OpCode::CPUI_INT_ADD, Some(esp(&s)), vec![esp(&s), vn(&s.cnst, 4, 4)]),
-        op(OpCode::CPUI_CBRANCH, None, vec![vn(&s.ram, 0x2000, 1), vn(&s.reg, 0x20, 1)]),
+        op(
+            OpCode::CPUI_INT_ADD,
+            Some(esp(&s)),
+            vec![esp(&s), vn(&s.cnst, 4, 4)],
+        ),
+        op(
+            OpCode::CPUI_CBRANCH,
+            None,
+            vec![vn(&s.ram, 0x2000, 1), vn(&s.reg, 0x20, 1)],
+        ),
     ];
     assert_eq!(kuna_trampoline_branch_target(&ops, &sp_storage(&s)), None);
 }
@@ -188,7 +233,11 @@ fn an_indirect_branch_declines() {
     let m = build_manager();
     let s = spaces(&m);
     let ops = vec![
-        op(OpCode::CPUI_INT_ADD, Some(esp(&s)), vec![esp(&s), vn(&s.cnst, 4, 4)]),
+        op(
+            OpCode::CPUI_INT_ADD,
+            Some(esp(&s)),
+            vec![esp(&s), vn(&s.cnst, 4, 4)],
+        ),
         op(OpCode::CPUI_BRANCHIND, None, vec![vn(&s.reg, 0, 4)]),
     ];
     assert_eq!(kuna_trampoline_branch_target(&ops, &sp_storage(&s)), None);
@@ -201,7 +250,11 @@ fn a_relative_branch_declines() {
     let m = build_manager();
     let s = spaces(&m);
     let ops = vec![
-        op(OpCode::CPUI_INT_ADD, Some(esp(&s)), vec![esp(&s), vn(&s.cnst, 4, 4)]),
+        op(
+            OpCode::CPUI_INT_ADD,
+            Some(esp(&s)),
+            vec![esp(&s), vn(&s.cnst, 4, 4)],
+        ),
         op(OpCode::CPUI_BRANCH, None, vec![vn(&s.cnst, 2, 4)]),
     ];
     assert_eq!(kuna_trampoline_branch_target(&ops, &sp_storage(&s)), None);
@@ -215,7 +268,11 @@ fn an_opaque_stack_pointer_write_declines() {
     let ebp = vn(&s.reg, 0x14, 4);
     let ops = vec![
         op(OpCode::CPUI_COPY, Some(esp(&s)), vec![ebp]),
-        op(OpCode::CPUI_INT_ADD, Some(esp(&s)), vec![esp(&s), vn(&s.cnst, 4, 4)]),
+        op(
+            OpCode::CPUI_INT_ADD,
+            Some(esp(&s)),
+            vec![esp(&s), vn(&s.cnst, 4, 4)],
+        ),
         op(OpCode::CPUI_BRANCH, None, vec![vn(&s.ram, 0x2000, 1)]),
     ];
     assert_eq!(kuna_trampoline_branch_target(&ops, &sp_storage(&s)), None);
@@ -228,8 +285,16 @@ fn a_partial_stack_pointer_write_declines() {
     let m = build_manager();
     let s = spaces(&m);
     let ops = vec![
-        op(OpCode::CPUI_INT_ADD, Some(esp(&s)), vec![esp(&s), vn(&s.cnst, 4, 4)]),
-        op(OpCode::CPUI_COPY, Some(vn(&s.reg, 0, 2)), vec![vn(&s.cnst, 0, 2)]),
+        op(
+            OpCode::CPUI_INT_ADD,
+            Some(esp(&s)),
+            vec![esp(&s), vn(&s.cnst, 4, 4)],
+        ),
+        op(
+            OpCode::CPUI_COPY,
+            Some(vn(&s.reg, 0, 2)),
+            vec![vn(&s.cnst, 0, 2)],
+        ),
         op(OpCode::CPUI_BRANCH, None, vec![vn(&s.ram, 0x2000, 1)]),
     ];
     assert_eq!(kuna_trampoline_branch_target(&ops, &sp_storage(&s)), None);
@@ -242,7 +307,11 @@ fn an_inner_call_declines() {
     let m = build_manager();
     let s = spaces(&m);
     let ops = vec![
-        op(OpCode::CPUI_INT_ADD, Some(esp(&s)), vec![esp(&s), vn(&s.cnst, 4, 4)]),
+        op(
+            OpCode::CPUI_INT_ADD,
+            Some(esp(&s)),
+            vec![esp(&s), vn(&s.cnst, 4, 4)],
+        ),
         op(OpCode::CPUI_CALL, None, vec![vn(&s.ram, 0x3000, 1)]),
     ];
     assert_eq!(kuna_trampoline_branch_target(&ops, &sp_storage(&s)), None);

@@ -9,7 +9,10 @@ pub(super) fn tiny() -> Signature {
 }
 
 pub(super) fn tiny_bytes() -> Vec<u8> {
-    (0..TINY.len()).step_by(2).map(|i| u8::from_str_radix(&TINY[i..i + 2], 16).unwrap()).collect()
+    (0..TINY.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&TINY[i..i + 2], 16).unwrap())
+        .collect()
 }
 
 pub(super) fn code() -> Vec<u8> {
@@ -33,11 +36,20 @@ fn parses_the_header_and_the_one_module() {
 fn startup_and_foreign_file_type_signatures_do_not_apply() {
     let mut h = vec![0u8; 41];
     h[..6].copy_from_slice(b"IDASGN");
-    assert!(applies_to(&h, Some(18)), "an unset file-type mask applies to every file");
+    assert!(
+        applies_to(&h, Some(18)),
+        "an unset file-type mask applies to every file"
+    );
     h[8..12].copy_from_slice(&(1u32 << 11).to_le_bytes());
-    assert!(applies_to(&h, Some(11)) && !applies_to(&h, Some(18)), "a PE-only library is not tried on an ELF");
+    assert!(
+        applies_to(&h, Some(11)) && !applies_to(&h, Some(18)),
+        "a PE-only library is not tried on an ELF"
+    );
     h[16] = 1;
-    assert!(!applies_to(&h, Some(11)), "a startup signature names no function");
+    assert!(
+        !applies_to(&h, Some(11)),
+        "a startup signature names no function"
+    );
 }
 
 #[test]
@@ -54,7 +66,10 @@ fn trie_crc_and_length_decide_the_match() {
     let mut bad_prefix = good.clone();
     bad_prefix[1] = 0x00;
     assert!(matcher.match_at(&bad_prefix).is_empty());
-    assert!(matcher.match_at(&good[..36]).is_empty(), "shorter than the module");
+    assert!(
+        matcher.match_at(&good[..36]).is_empty(),
+        "shorter than the module"
+    );
 }
 
 #[test]
@@ -75,7 +90,9 @@ fn a_return_behind_a_landing_pad_is_a_bare_return() {
         operands: String::new(),
         pcode: None,
     };
-    let bytes = [0xf3, 0x0f, 0x1e, 0xfa, 0xc3, 0xc3, 0xf3, 0x0f, 0x1e, 0xfa, 0x31, 0xc0, 0xc3];
+    let bytes = [
+        0xf3, 0x0f, 0x1e, 0xfa, 0xc3, 0xc3, 0xf3, 0x0f, 0x1e, 0xfa, 0x31, 0xc0, 0xc3,
+    ];
     let listing = Listing::from_insns_for_test(
         vec![
             insn(0x1000, 4, FlowKind::Fallthrough),
@@ -87,12 +104,26 @@ fn a_return_behind_a_landing_pad_is_a_bare_return() {
         ],
         false,
     );
-    let image = Image { spans: vec![(0x1000, &bytes)], x86_fields: true, pads: X86_PADS };
+    let image = Image {
+        spans: vec![(0x1000, &bytes)],
+        x86_fields: true,
+        pads: X86_PADS,
+    };
     assert!(bare_return(&listing, &image, 0x1000), "endbr64; ret");
     assert!(bare_return(&listing, &image, 0x1005), "ret");
-    assert!(!bare_return(&listing, &image, 0x1006), "endbr64; xor eax, eax; ret");
-    let other = Image { spans: vec![(0x1000, &bytes)], x86_fields: false, pads: &[] };
-    assert!(!bare_return(&listing, &other, 0x1000), "no landing pads off x86 and AArch64");
+    assert!(
+        !bare_return(&listing, &image, 0x1006),
+        "endbr64; xor eax, eax; ret"
+    );
+    let other = Image {
+        spans: vec![(0x1000, &bytes)],
+        x86_fields: false,
+        pads: &[],
+    };
+    assert!(
+        !bare_return(&listing, &other, 0x1000),
+        "no landing pads off x86 and AArch64"
+    );
 }
 
 #[test]
@@ -107,18 +138,57 @@ fn reports_existing_matches_without_changing_rename_results() {
     let signature = tiny();
     let matcher = Matcher::new(&signature, Endian::Little);
     let bytes = code();
-    let image = Image { spans: vec![(0x1000, &bytes)], x86_fields: true, pads: X86_PADS };
+    let image = Image {
+        spans: vec![(0x1000, &bytes)],
+        x86_fields: true,
+        pads: X86_PADS,
+    };
     let listing = Listing::from_insns_for_test(Vec::new(), false);
     let matchers = [matcher];
     let expected = BTreeMap::from([(0x1000, "myfunc".into())]);
     for sites in [false, true] {
-        assert_eq!(match_all(&matchers, &image, &listing, &[0x1000], HashMap::new(), sites), expected);
-        assert_eq!(accepted_matches(&matchers, &image, &listing, &[0x1000], HashMap::new(), sites), expected);
+        assert_eq!(
+            match_all(
+                &matchers,
+                &image,
+                &listing,
+                &[0x1000],
+                HashMap::new(),
+                sites
+            ),
+            expected
+        );
+        assert_eq!(
+            accepted_matches(
+                &matchers,
+                &image,
+                &listing,
+                &[0x1000],
+                HashMap::new(),
+                sites
+            ),
+            expected
+        );
         let existing = HashMap::from([(0x1000, "myfunc".into())]);
-        assert!(match_all(&matchers, &image, &listing, &[0x1000], existing.clone(), sites).is_empty());
-        assert_eq!(accepted_matches(&matchers, &image, &listing, &[0x1000], existing, sites), expected);
+        assert!(
+            match_all(
+                &matchers,
+                &image,
+                &listing,
+                &[0x1000],
+                existing.clone(),
+                sites
+            )
+            .is_empty()
+        );
+        assert_eq!(
+            accepted_matches(&matchers, &image, &listing, &[0x1000], existing, sites),
+            expected
+        );
         let elsewhere = HashMap::from([(0x2000, "myfunc".into())]);
-        assert!(accepted_matches(&matchers, &image, &listing, &[0x1000], elsewhere, sites).is_empty());
+        assert!(
+            accepted_matches(&matchers, &image, &listing, &[0x1000], elsewhere, sites).is_empty()
+        );
     }
 }
 
@@ -127,10 +197,34 @@ fn reporting_does_not_resolve_identical_names_at_two_entries() {
     let signature = tiny();
     let matchers = [Matcher::new(&signature, Endian::Little)];
     let bytes = code();
-    let image = Image { spans: vec![(0x1000, &bytes), (0x2000, &bytes)], x86_fields: true, pads: X86_PADS };
+    let image = Image {
+        spans: vec![(0x1000, &bytes), (0x2000, &bytes)],
+        x86_fields: true,
+        pads: X86_PADS,
+    };
     let listing = Listing::from_insns_for_test(Vec::new(), false);
     for sites in [false, true] {
-        assert!(match_all(&matchers, &image, &listing, &[0x1000, 0x2000], HashMap::new(), sites).is_empty());
-        assert!(accepted_matches(&matchers, &image, &listing, &[0x1000, 0x2000], HashMap::new(), sites).is_empty());
+        assert!(
+            match_all(
+                &matchers,
+                &image,
+                &listing,
+                &[0x1000, 0x2000],
+                HashMap::new(),
+                sites
+            )
+            .is_empty()
+        );
+        assert!(
+            accepted_matches(
+                &matchers,
+                &image,
+                &listing,
+                &[0x1000, 0x2000],
+                HashMap::new(),
+                sites
+            )
+            .is_empty()
+        );
     }
 }

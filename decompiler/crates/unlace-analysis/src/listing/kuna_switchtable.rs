@@ -81,7 +81,7 @@
 
 use std::rc::Rc;
 
-use unlace_base::space::{spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::fspec::effect_type;
 use unlace_num::opcodes::OpCode;
@@ -89,7 +89,7 @@ use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::translate::Translate;
 
 use super::kuna_poolref::PoolImage;
-use super::xrefs::{decode, in_range, FullCapture, FullOp};
+use super::xrefs::{FullCapture, FullOp, decode, in_range};
 
 /// Below this an accepted run is a coincidence rather than a table: a compiler
 /// does not lower a one-case switch through a jump table.
@@ -120,7 +120,9 @@ pub(super) fn targets(
     let stride = u64::from(pool.ptr_width());
     let mut out = Vec::new();
     for i in 0..cases.unwrap_or(max_entries).min(max_entries) as u64 {
-        let Some(at) = base.checked_add(i * stride) else { break };
+        let Some(at) = base.checked_add(i * stride) else {
+            break;
+        };
         let Some(word) = pool.word_at(at) else { break };
         if !in_range(&[section], word) {
             break;
@@ -159,8 +161,12 @@ pub(super) fn delta_targets(
     };
     let mut out = Vec::new();
     for i in 0..cases.unwrap_or(max_entries).min(max_entries) as u64 {
-        let Some(at) = table.checked_add(i * 4) else { break };
-        let Some(delta) = pool.word32_at(at) else { break };
+        let Some(at) = table.checked_add(i * 4) else {
+            break;
+        };
+        let Some(delta) = pool.word32_at(at) else {
+            break;
+        };
         let word = base.wrapping_add(delta as i64 as u64);
         if !in_range(&[section], word) {
             break;
@@ -254,8 +260,12 @@ pub(super) fn register_targets(
     // Nothing is read for a jump whose target is not in a register or a
     // temporary: `jmp qword ptr [__imp_X]` branches on a data-space varnode and
     // is a forwarding veneer, which is the shape this must never walk back from.
-    let Some(want) = key_of(branch, data_space) else { return TableRead::default() };
-    let (slice, gap) = dispatch_slice(translate, code_space, data_space, decoded, from, want, reach);
+    let Some(want) = key_of(branch, data_space) else {
+        return TableRead::default();
+    };
+    let (slice, gap) = dispatch_slice(
+        translate, code_space, data_space, decoded, from, want, reach,
+    );
 
     let mut vals: Vec<(Key, Val)> = Vec::new();
     let mut dispatch = None;
@@ -264,7 +274,10 @@ pub(super) fn register_targets(
     'slice: for (vma, ops) in &slice {
         for (i, op) in ops.iter().enumerate() {
             if matches!(op.opcode, OpCode::CPUI_BRANCHIND | OpCode::CPUI_CALLIND) && *vma == from {
-                dispatch = op.ins.first().and_then(|vn| value_of(vn, &vals, data_space));
+                dispatch = op
+                    .ins
+                    .first()
+                    .and_then(|vn| value_of(vn, &vals, data_space));
                 call = op.opcode == OpCode::CPUI_CALLIND;
                 break 'slice;
             }
@@ -273,7 +286,10 @@ pub(super) fn register_targets(
             }
             let folded = fold(op, &vals, data_space, pool);
             if op.opcode == OpCode::CPUI_INT_ADD && matches!(folded, Some(Val::Indexed(_))) {
-                let unknown = op.ins.iter().find(|vn| value_of(vn, &vals, data_space).is_none());
+                let unknown = op
+                    .ins
+                    .iter()
+                    .find(|vn| value_of(vn, &vals, data_space).is_none());
                 if let Some(key) = unknown.and_then(|vn| key_of(vn, data_space)) {
                     index = Some((*vma, i, key));
                 }
@@ -290,46 +306,107 @@ pub(super) fn register_targets(
     }
     let shape = match dispatch {
         Some(Val::Case { table, base }) => Shape::Delta { table, base },
-        Some(Val::Entry { table, width, .. }) if width == pool.ptr_width() => Shape::Pointer { table },
-        Some(Val::Relative { table, width, signed, shift, base }) => {
-            Shape::Relative { table, width, signed, shift, base }
+        Some(Val::Entry { table, width, .. }) if width == pool.ptr_width() => {
+            Shape::Pointer { table }
         }
-        _ => return TableRead { gap, ..TableRead::default() },
+        Some(Val::Relative {
+            table,
+            width,
+            signed,
+            shift,
+            base,
+        }) => Shape::Relative {
+            table,
+            width,
+            signed,
+            shift,
+            base,
+        },
+        _ => {
+            return TableRead {
+                gap,
+                ..TableRead::default()
+            };
+        }
     };
     // Read only now, on a jump that really does index a table: without the
     // switch's own case count there is nothing to stop the scan at the end of
     // it, and a delta table's neighbour reads as more cases.
     let read = |limit: usize| match shape {
-        Shape::Delta { table, base } => delta_targets(table, base, from, pool, exec, Some(limit), max_entries),
-        Shape::Pointer { table } => targets(table, from, pool, exec, Some(limit), max_entries),
-        Shape::Relative { table, width, signed, shift, base } => {
-            relative_targets(table, width, signed, shift, base, from, pool, exec, limit.min(max_entries))
+        Shape::Delta { table, base } => {
+            delta_targets(table, base, from, pool, exec, Some(limit), max_entries)
         }
+        Shape::Pointer { table } => targets(table, from, pool, exec, Some(limit), max_entries),
+        Shape::Relative {
+            table,
+            width,
+            signed,
+            shift,
+            base,
+        } => relative_targets(
+            table,
+            width,
+            signed,
+            shift,
+            base,
+            from,
+            pool,
+            exec,
+            limit.min(max_entries),
+        ),
     };
     // A masked index bounds the table whatever the nearest check compares:
     // clang guards `switch (x & 3)` under `if (y <= 200)` with the `cmp $0xc8`,
     // and a mask tighter than the check is the table's size.
     let masked = index.and_then(|at| {
-        mask_limit(translate, code_space, data_space, decoded, from, at, max_entries)
+        mask_limit(
+            translate,
+            code_space,
+            data_space,
+            decoded,
+            from,
+            at,
+            max_entries,
+        )
     });
-    match (guard_limit(translate, code_space, data_space, decoded, from, reach), masked) {
+    match (
+        guard_limit(translate, code_space, data_space, decoded, from, reach),
+        masked,
+    ) {
         (Ok(limit), masked) => {
             let limit = masked.map_or(limit, |n| n.min(limit));
-            TableRead { cases: read(limit), stated: Some(limit), gap: None, unbounded: false }
+            TableRead {
+                cases: read(limit),
+                stated: Some(limit),
+                gap: None,
+                unbounded: false,
+            }
         }
         (Err(gap), None) => match shape {
             // (kuna `calltable`) A pointer table with no count runs to the
             // first word that is not code of the section the transfer is in,
             // or to the first word code names, where another table starts.
             Shape::Pointer { table } if call || reach.settled || gap.is_none() => {
-                let mut cases = targets(table, from, pool, exec, None, max_entries.min(CALL_TABLE_MAX));
+                let mut cases = targets(
+                    table,
+                    from,
+                    pool,
+                    exec,
+                    None,
+                    max_entries.min(CALL_TABLE_MAX),
+                );
                 let stride = u64::from(pool.ptr_width());
                 if let Some(named) = reach.named.filter(|_| cases.len() > 1) {
                     if let Some(at) = (1..cases.len()).find(|&i| named(table + i as u64 * stride)) {
                         cases.truncate(at);
                     }
                 }
-                TableRead { cases, stated: None, gap: None, unbounded: !call }
+                TableRead {
+                    cases,
+                    stated: None,
+                    gap: None,
+                    unbounded: !call,
+                }
             }
             // (kuna `switchextent`) A relative table with no range check ends
             // where the function's next jump table begins.
@@ -337,20 +414,39 @@ pub(super) fn register_targets(
                 let count = reach
                     .next_table
                     .and_then(|next| next(from, table))
-                    .and_then(|next| usize::try_from(next.checked_sub(table)? / u64::from(width)).ok())
+                    .and_then(|next| {
+                        usize::try_from(next.checked_sub(table)? / u64::from(width)).ok()
+                    })
                     .filter(|&n| n >= MIN_ENTRIES && n <= max_entries);
                 match count.map(|n| (n, read(n))) {
-                    Some((n, cases)) if cases.len() == n => {
-                        TableRead { cases, stated: Some(n), gap: None, unbounded: false }
-                    }
-                    _ => TableRead { gap, ..TableRead::default() },
+                    Some((n, cases)) if cases.len() == n => TableRead {
+                        cases,
+                        stated: Some(n),
+                        gap: None,
+                        unbounded: false,
+                    },
+                    _ => TableRead {
+                        gap,
+                        ..TableRead::default()
+                    },
                 }
             }
-            _ => TableRead { gap, ..TableRead::default() },
+            _ => TableRead {
+                gap,
+                ..TableRead::default()
+            },
         },
         (Err(gap), masked) => match masked.map(|n| (n, read(n))) {
-            Some((n, cases)) if cases.len() == n => TableRead { cases, stated: Some(n), gap: None, unbounded: false },
-            _ => TableRead { gap, ..TableRead::default() },
+            Some((n, cases)) if cases.len() == n => TableRead {
+                cases,
+                stated: Some(n),
+                gap: None,
+                unbounded: false,
+            },
+            _ => TableRead {
+                gap,
+                ..TableRead::default()
+            },
         },
     }
 }
@@ -364,7 +460,13 @@ enum Shape {
     Delta { table: u64, base: u64 },
     /// `width`-byte entries, `signed` or not, shifted left by `shift` and
     /// measured from `base`.
-    Relative { table: u64, width: u32, signed: bool, shift: u32, base: u64 },
+    Relative {
+        table: u64,
+        width: u32,
+        signed: bool,
+        shift: u32,
+        base: u64,
+    },
 }
 
 /// The case bodies of a relative table: the first `cases` entries at `table`,
@@ -387,8 +489,12 @@ pub(super) fn relative_targets(
     };
     let mut out = Vec::new();
     for i in 0..cases as u64 {
-        let Some(at) = table.checked_add(i * u64::from(width)) else { break };
-        let Some(entry) = pool.sword_at(at, width, signed) else { break };
+        let Some(at) = table.checked_add(i * u64::from(width)) else {
+            break;
+        };
+        let Some(entry) = pool.sword_at(at, width, signed) else {
+            break;
+        };
         let word = base.wrapping_add((entry as u64) << shift);
         if !in_range(&[section], word) {
             break;
@@ -409,7 +515,10 @@ fn leaving_branch(ops: &[FullOp], at: u64, len: u32) -> Option<usize> {
     let next = at.wrapping_add(u64::from(len));
     ops.iter().rposition(|op| {
         op.opcode == OpCode::CPUI_CBRANCH
-            && op.ins.first().is_some_and(|dest| !is_constant(dest) && !(at..=next).contains(&dest.offset))
+            && op
+                .ins
+                .first()
+                .is_some_and(|dest| !is_constant(dest) && !(at..=next).contains(&dest.offset))
     })
 }
 
@@ -449,9 +558,15 @@ fn mask_limit(
             return None;
         }
         reached |= cur == site;
-        let ops = if cur == site { &ops[..upto.min(ops.len())] } else { ops };
+        let ops = if cur == site {
+            &ops[..upto.min(ops.len())]
+        } else {
+            ops
+        };
         for op in ops.iter().rev().filter(|_| reached) {
-            let Some(out) = op.out.as_ref().and_then(|vn| key_of(vn, data)) else { continue };
+            let Some(out) = op.out.as_ref().and_then(|vn| key_of(vn, data)) else {
+                continue;
+            };
             if !keys_overlap(out, key) {
                 continue;
             }
@@ -463,13 +578,20 @@ fn mask_limit(
                 }
                 return None;
             }
-            let constant = |i: usize| op.ins.get(i).filter(|vn| is_constant(vn)).map(|vn| vn.offset);
+            let constant = |i: usize| {
+                op.ins
+                    .get(i)
+                    .filter(|vn| is_constant(vn))
+                    .map(|vn| vn.offset)
+            };
             key = match op.opcode {
                 OpCode::CPUI_COPY | OpCode::CPUI_INT_ZEXT => input?,
                 OpCode::CPUI_INT_MULT | OpCode::CPUI_INT_LEFT if constant(1).is_some() => input?,
                 OpCode::CPUI_INT_AND => {
                     let mask = constant(1)?;
-                    return usize::try_from(mask.checked_add(1)?).ok().filter(|&n| n <= max_entries);
+                    return usize::try_from(mask.checked_add(1)?)
+                        .ok()
+                        .filter(|&n| n <= max_entries);
                 }
                 _ => return None,
             };
@@ -541,7 +663,9 @@ fn guard_limit(
             // The dispatch's block is entered only by branches: the range check
             // may be the one that branches into it.
             return match (guard, ends_at) {
-                (None, Some(head)) => entering_guard(translate, code_space, data, decoded, head, max_entries),
+                (None, Some(head)) => {
+                    entering_guard(translate, code_space, data, decoded, head, max_entries)
+                }
                 _ => Err(None),
             };
         }
@@ -549,21 +673,34 @@ fn guard_limit(
         match &guard {
             None => {
                 if let Some(at) = leaving_branch(ops, cur, len) {
-                    let want: Vec<Key> = ops[at].ins.get(1).and_then(|vn| key_of(vn, data)).into_iter().collect();
+                    let want: Vec<Key> = ops[at]
+                        .ins
+                        .get(1)
+                        .and_then(|vn| key_of(vn, data))
+                        .into_iter()
+                        .collect();
                     let (reads, feeding) = feeders(&ops[..at], want, data);
                     if let Some(n) = guard_cases(&[], &feeding, ops, at, data, max_entries, false) {
                         return Ok(n);
                     }
-                    let reads = reads.into_iter().filter(|k| matches!(k, Key::Reg(..))).collect();
+                    let reads = reads
+                        .into_iter()
+                        .filter(|k| matches!(k, Key::Reg(..)))
+                        .collect();
                     guard = Some((ops.to_vec(), at, reads));
                 }
             }
             Some((branch, at, reads)) => {
-                let writes = ops.iter().filter_map(|op| op.out.as_ref().and_then(|vn| key_of(vn, data)));
-                let written: Vec<Key> = writes.filter(|w| reads.iter().any(|r| keys_overlap(*r, *w))).collect();
+                let writes = ops
+                    .iter()
+                    .filter_map(|op| op.out.as_ref().and_then(|vn| key_of(vn, data)));
+                let written: Vec<Key> = writes
+                    .filter(|w| reads.iter().any(|r| keys_overlap(*r, *w)))
+                    .collect();
                 if !written.is_empty() {
                     let (_, feeding) = feeders(ops, written, data);
-                    return guard_cases(ops, &feeding, branch, *at, data, max_entries, false).ok_or(None);
+                    return guard_cases(ops, &feeding, branch, *at, data, max_entries, false)
+                        .ok_or(None);
                 }
             }
         }
@@ -601,16 +738,27 @@ fn entering_guard(
         let ops = cap.ops();
         let Some(at) = ops.iter().rposition(|op| {
             op.opcode == OpCode::CPUI_CBRANCH
-                && op.ins.first().is_some_and(|dest| !is_constant(dest) && dest.offset == head)
+                && op
+                    .ins
+                    .first()
+                    .is_some_and(|dest| !is_constant(dest) && dest.offset == head)
         }) else {
             continue;
         };
-        let want: Vec<Key> = ops[at].ins.get(1).and_then(|vn| key_of(vn, data)).into_iter().collect();
+        let want: Vec<Key> = ops[at]
+            .ins
+            .get(1)
+            .and_then(|vn| key_of(vn, data))
+            .into_iter()
+            .collect();
         let (reads, feeding) = feeders(&ops[..at], want, data);
         if let Some(n) = guard_cases(&[], &feeding, ops, at, data, max_entries, true) {
             return Ok(n);
         }
-        let reads: Vec<Key> = reads.into_iter().filter(|k| matches!(k, Key::Reg(..))).collect();
+        let reads: Vec<Key> = reads
+            .into_iter()
+            .filter(|k| matches!(k, Key::Reg(..)))
+            .collect();
         let branch = ops.to_vec();
         let mut ends_at = cur;
         let mut above = cur;
@@ -622,11 +770,16 @@ fn entering_guard(
                 return Err(None);
             }
             let ops = writer.ops();
-            let writes = ops.iter().filter_map(|op| op.out.as_ref().and_then(|vn| key_of(vn, data)));
-            let written: Vec<Key> = writes.filter(|w| reads.iter().any(|r| keys_overlap(*r, *w))).collect();
+            let writes = ops
+                .iter()
+                .filter_map(|op| op.out.as_ref().and_then(|vn| key_of(vn, data)));
+            let written: Vec<Key> = writes
+                .filter(|w| reads.iter().any(|r| keys_overlap(*r, *w)))
+                .collect();
             if !written.is_empty() {
                 let (_, feeding) = feeders(ops, written, data);
-                return guard_cases(ops, &feeding, &branch, at, data, max_entries, true).ok_or(None);
+                return guard_cases(ops, &feeding, &branch, at, data, max_entries, true)
+                    .ok_or(None);
             }
             ends_at = above;
         }
@@ -669,8 +822,13 @@ fn guard_cases(
             OpCode::CPUI_INT_SLESS | OpCode::CPUI_INT_SLESSEQUAL => true,
             _ => continue,
         };
-        let (Some(a), Some(b)) = (op.ins.first(), op.ins.get(1)) else { continue };
-        let (sel, c, above) = match (constant_in(&ops[..i], a, data), constant_in(&ops[..i], b, data)) {
+        let (Some(a), Some(b)) = (op.ins.first(), op.ins.get(1)) else {
+            continue;
+        };
+        let (sel, c, above) = match (
+            constant_in(&ops[..i], a, data),
+            constant_in(&ops[..i], b, data),
+        ) {
             (None, Some(c)) => (a, c, 0),
             (Some(c), None) => (b, c, 1),
             _ => continue,
@@ -699,8 +857,14 @@ fn constant_in(ops: &[FullOp], vn: &VarnodeData, data: Option<&Rc<AddrSpace>>) -
         return Some(vn.offset);
     }
     let key = key_of(vn, data).filter(|k| matches!(k, Key::Tmp(..)))?;
-    let def = ops.iter().rev().find(|op| op.out.as_ref().and_then(|o| key_of(o, data)) == Some(key))?;
-    let src = def.ins.first().filter(|_| def.opcode == OpCode::CPUI_COPY)?;
+    let def = ops
+        .iter()
+        .rev()
+        .find(|op| op.out.as_ref().and_then(|o| key_of(o, data)) == Some(key))?;
+    let src = def
+        .ins
+        .first()
+        .filter(|_| def.opcode == OpCode::CPUI_COPY)?;
     is_constant(src).then_some(src.offset)
 }
 
@@ -718,13 +882,21 @@ fn condition_when(
 ) -> Option<bool> {
     let mut env: Vec<(Key, u64)> = Vec::new();
     let in_branch = writer.is_empty();
-    let phases: [(&[FullOp], bool, Option<usize>); 2] =
-        [(writer, false, Some(set)), (&branch[..at], true, in_branch.then_some(set))];
+    let phases: [(&[FullOp], bool, Option<usize>); 2] = [
+        (writer, false, Some(set)),
+        (&branch[..at], true, in_branch.then_some(set)),
+    ];
     for (ops, clear, set) in phases {
         for (i, op) in ops.iter().enumerate() {
             let Some(out) = op.out.as_ref() else { continue };
-            let Some(key) = key_of(out, data) else { continue };
-            let val = if set == Some(i) { Some(x) } else { evaluate(op, &env, clear, data) };
+            let Some(key) = key_of(out, data) else {
+                continue;
+            };
+            let val = if set == Some(i) {
+                Some(x)
+            } else {
+                evaluate(op, &env, clear, data)
+            };
             env.retain(|(k, _)| !keys_overlap(*k, key));
             if let Some(v) = val {
                 env.push((key, v & mask(out.size)));
@@ -736,7 +908,12 @@ fn condition_when(
 }
 
 /// `vn`'s value in `env`; with `clear`, a register nothing set reads as zero.
-fn known(vn: &VarnodeData, env: &[(Key, u64)], clear: bool, data: Option<&Rc<AddrSpace>>) -> Option<u64> {
+fn known(
+    vn: &VarnodeData,
+    env: &[(Key, u64)],
+    clear: bool,
+    data: Option<&Rc<AddrSpace>>,
+) -> Option<u64> {
     if is_constant(vn) {
         return Some(vn.offset & mask(vn.size));
     }
@@ -749,7 +926,12 @@ fn known(vn: &VarnodeData, env: &[(Key, u64)], clear: bool, data: Option<&Rc<Add
 }
 
 /// The boolean and bitwise ops a branch condition is spelled in.
-fn evaluate(op: &FullOp, env: &[(Key, u64)], clear: bool, data: Option<&Rc<AddrSpace>>) -> Option<u64> {
+fn evaluate(
+    op: &FullOp,
+    env: &[(Key, u64)],
+    clear: bool,
+    data: Option<&Rc<AddrSpace>>,
+) -> Option<u64> {
     let get = |i: usize| known(op.ins.get(i)?, env, clear, data);
     Some(match op.opcode {
         OpCode::CPUI_COPY | OpCode::CPUI_INT_ZEXT => get(0)?,
@@ -770,7 +952,9 @@ fn evaluate(op: &FullOp, env: &[(Key, u64)], clear: bool, data: Option<&Rc<AddrS
 /// overlap, so anything further back either ends before `cur` or is not an
 /// instruction start at all.
 fn previous(decoded: &dyn Fn(u64) -> bool, cur: u64) -> Option<u64> {
-    (1..=MAX_INSN_BYTES).filter_map(|d| cur.checked_sub(d)).find(|&at| decoded(at))
+    (1..=MAX_INSN_BYTES)
+        .filter_map(|d| cur.checked_sub(d))
+        .find(|&at| decoded(at))
 }
 
 /// Does control reach the next instruction from this one? The walk's own rule
@@ -779,16 +963,25 @@ fn previous(decoded: &dyn Fn(u64) -> bool, cur: u64) -> Option<u64> {
 /// block for code that never runs ahead of the dispatch.
 fn falls_through(ops: &[FullOp]) -> bool {
     !ops.last().is_some_and(|op| {
-        matches!(op.opcode, OpCode::CPUI_BRANCH | OpCode::CPUI_BRANCHIND | OpCode::CPUI_RETURN)
+        matches!(
+            op.opcode,
+            OpCode::CPUI_BRANCH | OpCode::CPUI_BRANCHIND | OpCode::CPUI_RETURN
+        )
     })
 }
 
 /// Within one instruction's `ops`, the ops that compute any of `want`, by index,
 /// and the varnodes that computation reads from outside the instruction.
-fn feeders(ops: &[FullOp], mut want: Vec<Key>, data: Option<&Rc<AddrSpace>>) -> (Vec<Key>, Vec<usize>) {
+fn feeders(
+    ops: &[FullOp],
+    mut want: Vec<Key>,
+    data: Option<&Rc<AddrSpace>>,
+) -> (Vec<Key>, Vec<usize>) {
     let mut feeding = Vec::new();
     for (i, op) in ops.iter().enumerate().rev() {
-        let Some(out) = op.out.as_ref().and_then(|vn| key_of(vn, data)) else { continue };
+        let Some(out) = op.out.as_ref().and_then(|vn| key_of(vn, data)) else {
+            continue;
+        };
         if !want.iter().any(|w| keys_overlap(*w, out)) {
             continue;
         }
@@ -804,7 +997,9 @@ fn feeders(ops: &[FullOp], mut want: Vec<Key>, data: Option<&Rc<AddrSpace>>) -> 
 }
 
 pub(super) fn is_constant(vn: &VarnodeData) -> bool {
-    vn.space.as_ref().is_some_and(|s| s.get_type() == spacetype::IPTR_CONSTANT)
+    vn.space
+        .as_ref()
+        .is_some_and(|s| s.get_type() == spacetype::IPTR_CONSTANT)
 }
 
 /// The instructions that actually feed the dispatch, in address order, each with
@@ -835,7 +1030,9 @@ fn dispatch_slice(
     let mut ends_at: Option<u64> = None;
     let mut gap = None;
     for step in 0..reach.slice_insns() {
-        let Some(len) = decode(translate, cur, code_space, &mut cap) else { break };
+        let Some(len) = decode(translate, cur, code_space, &mut cap) else {
+            break;
+        };
         // The step back trusted the closest decoded address below the previous
         // instruction; this is where that is confirmed, at no cost, by requiring
         // the two to be contiguous.
@@ -851,7 +1048,9 @@ fn dispatch_slice(
         for op in cap.ops().iter().rev() {
             stop |= leaves_registers_unknown(op.opcode);
             let Some(vn) = &op.out else { continue };
-            let Some(key) = key_of(vn, data) else { continue };
+            let Some(key) = key_of(vn, data) else {
+                continue;
+            };
             if !need.iter().any(|n| keys_overlap(*n, key)) {
                 continue;
             }
@@ -861,7 +1060,9 @@ fn dispatch_slice(
                 continue;
             }
             for input in &op.ins {
-                let Some(k) = key_of(input, data) else { continue };
+                let Some(k) = key_of(input, data) else {
+                    continue;
+                };
                 if !need.contains(&k) && need.len() < MAX_TRACKED {
                     need.push(k);
                 }
@@ -906,7 +1107,10 @@ fn models(op: &FullOp) -> bool {
         | OpCode::CPUI_LOAD => true,
         OpCode::CPUI_INT_MULT => op.ins.iter().any(|vn| is_constant(vn) && vn.offset == 1),
         // An AArch64 compact table's entry reaches the branch through `lsl #2`.
-        OpCode::CPUI_INT_LEFT => op.ins.get(1).is_some_and(|vn| is_constant(vn) && (1..=3).contains(&vn.offset)),
+        OpCode::CPUI_INT_LEFT => op
+            .ins
+            .get(1)
+            .is_some_and(|vn| is_constant(vn) && (1..=3).contains(&vn.offset)),
         _ => false,
     }
 }
@@ -927,17 +1131,32 @@ pub(super) enum Val {
     Indexed(u64),
     /// A `width`-byte word read out of the array at `table`; `signed` once a
     /// sign extension from its own width ran over it.
-    Entry { table: u64, width: u32, signed: bool },
+    Entry {
+        table: u64,
+        width: u32,
+        signed: bool,
+    },
     /// A table entry added back to the base it is measured from: the case
     /// address itself.
     Case { table: u64, base: u64 },
     /// A byte, halfword or word entry shifted left by `shift`: a Thumb
     /// `tbb`/`tbh` offset doubled, or an AArch64 compact-table entry scaled to
     /// instructions (`add x10, x10, x11, lsl #2`).
-    Scaled { table: u64, width: u32, signed: bool, shift: u32 },
+    Scaled {
+        table: u64,
+        width: u32,
+        signed: bool,
+        shift: u32,
+    },
     /// `base` plus a scaled entry: the case address of a `tbb`/`tbh` or of an
     /// AArch64 compact table (`adr` base, `ldrb`/`ldrh`/`ldrsw` entry).
-    Relative { table: u64, width: u32, signed: bool, shift: u32, base: u64 },
+    Relative {
+        table: u64,
+        width: u32,
+        signed: bool,
+        shift: u32,
+        base: u64,
+    },
 }
 
 /// A varnode's identity, in the two classes the fold models — the same split
@@ -964,7 +1183,11 @@ pub(super) fn key_of(vn: &VarnodeData, data: Option<&Rc<AddrSpace>>) -> Option<K
 /// the wider register that holds it. x86-64 writes `rax = zext(eax)` after
 /// every 32-bit load, and that write is what retires `eax`'s own entry, so
 /// the `cltq` reading `eax` back would otherwise see nothing.
-pub(super) fn value_of(vn: &VarnodeData, vals: &[(Key, Val)], data: Option<&Rc<AddrSpace>>) -> Option<Val> {
+pub(super) fn value_of(
+    vn: &VarnodeData,
+    vals: &[(Key, Val)],
+    data: Option<&Rc<AddrSpace>>,
+) -> Option<Val> {
     let space = vn.space.as_ref()?;
     if space.get_type() == spacetype::IPTR_CONSTANT {
         return Some(Val::Const(vn.offset & mask(vn.size)));
@@ -980,7 +1203,11 @@ pub(super) fn value_of(vn: &VarnodeData, vals: &[(Key, Val)], data: Option<&Rc<A
         if c != class || s <= size {
             return None;
         }
-        let low = if big { o.checked_add(u64::from(s - size)) == Some(off) } else { o == off };
+        let low = if big {
+            o.checked_add(u64::from(s - size)) == Some(off)
+        } else {
+            o == off
+        };
         if !low {
             return None;
         }
@@ -1008,7 +1235,9 @@ fn leaves_registers_unknown(opcode: OpCode) -> bool {
 /// %eax,%eax; movslq 0(%r13,%rax,4),%rax`), and the compiler relied on the
 /// callee keeping it.
 fn survives(key: Key, preserved: &[(u64, u64)]) -> bool {
-    let Key::Reg(off, size) = key else { return false };
+    let Key::Reg(off, size) = key else {
+        return false;
+    };
     let end = off.saturating_add(u64::from(size));
     preserved.iter().any(|&(lo, hi)| off >= lo && end <= hi)
 }
@@ -1016,7 +1245,9 @@ fn survives(key: Key, preserved: &[(u64, u64)]) -> bool {
 /// The register ranges `[lo, hi)` the default calling convention leaves
 /// unaffected by a call.
 pub(super) fn preserved_registers(arch: &Architecture) -> Vec<(u64, u64)> {
-    let Some(model) = arch.default_fp() else { return Vec::new() };
+    let Some(model) = arch.default_fp() else {
+        return Vec::new();
+    };
     let data = arch.manage().get_default_data_space();
     model
         .effect_list()
@@ -1056,7 +1287,11 @@ pub(super) fn fold(
             Val::Entry { table, width, .. }
                 if op.opcode == OpCode::CPUI_INT_SEXT && op.ins.first()?.size == width =>
             {
-                Some(Val::Entry { table, width, signed: true })
+                Some(Val::Entry {
+                    table,
+                    width,
+                    signed: true,
+                })
             }
             v @ (Val::Entry { .. } | Val::Case { .. } | Val::Scaled { .. }) => Some(v),
             Val::Indexed(_) | Val::Relative { .. } => None,
@@ -1074,14 +1309,42 @@ pub(super) fn fold(
                 // The dispatch's own composition: an entry plus the base it is
                 // measured from. Only a 32-bit entry, which is the width every
                 // delta table is emitted at.
-                (Some(Val::Entry { table, width: 4, .. }), Some(Val::Const(base)))
-                | (Some(Val::Const(base)), Some(Val::Entry { table, width: 4, .. })) => {
-                    Some(Val::Case { table, base })
-                }
-                (Some(Val::Scaled { table, width, signed, shift }), Some(Val::Const(base)))
-                | (Some(Val::Const(base)), Some(Val::Scaled { table, width, signed, shift })) => {
-                    Some(Val::Relative { table, width, signed, shift, base })
-                }
+                (
+                    Some(Val::Entry {
+                        table, width: 4, ..
+                    }),
+                    Some(Val::Const(base)),
+                )
+                | (
+                    Some(Val::Const(base)),
+                    Some(Val::Entry {
+                        table, width: 4, ..
+                    }),
+                ) => Some(Val::Case { table, base }),
+                (
+                    Some(Val::Scaled {
+                        table,
+                        width,
+                        signed,
+                        shift,
+                    }),
+                    Some(Val::Const(base)),
+                )
+                | (
+                    Some(Val::Const(base)),
+                    Some(Val::Scaled {
+                        table,
+                        width,
+                        signed,
+                        shift,
+                    }),
+                ) => Some(Val::Relative {
+                    table,
+                    width,
+                    signed,
+                    shift,
+                    base,
+                }),
                 (Some(Val::Const(a) | Val::Indexed(a)), Some(Val::Entry { width: 1 | 2, .. }))
                 | (Some(Val::Entry { width: 1 | 2, .. }), Some(Val::Const(a) | Val::Indexed(a))) => {
                     Some(Val::Indexed(a))
@@ -1097,19 +1360,46 @@ pub(super) fn fold(
         }
         OpCode::CPUI_INT_MULT => match (get(0)?, get(1)?) {
             (v, Val::Const(1)) | (Val::Const(1), v) => Some(v),
-            (Val::Entry { table, width: width @ (1 | 2), signed }, Val::Const(2))
-            | (Val::Const(2), Val::Entry { table, width: width @ (1 | 2), signed }) => {
-                Some(Val::Scaled { table, width, signed, shift: 1 })
-            }
+            (
+                Val::Entry {
+                    table,
+                    width: width @ (1 | 2),
+                    signed,
+                },
+                Val::Const(2),
+            )
+            | (
+                Val::Const(2),
+                Val::Entry {
+                    table,
+                    width: width @ (1 | 2),
+                    signed,
+                },
+            ) => Some(Val::Scaled {
+                table,
+                width,
+                signed,
+                shift: 1,
+            }),
             _ => None,
         },
         // The AArch64 compact table's entry scaled to instructions: `lsl #2` on
         // a byte, halfword or word entry. The selector's own `lsl #1` reaches
         // the table address through an unknown and is not an entry.
         OpCode::CPUI_INT_LEFT => match (get(0)?, get(1)?) {
-            (Val::Entry { table, width: width @ (1 | 2 | 4), signed }, Val::Const(shift @ 1..=3)) => {
-                Some(Val::Scaled { table, width, signed, shift: shift as u32 })
-            }
+            (
+                Val::Entry {
+                    table,
+                    width: width @ (1 | 2 | 4),
+                    signed,
+                },
+                Val::Const(shift @ 1..=3),
+            ) => Some(Val::Scaled {
+                table,
+                width,
+                signed,
+                shift: shift as u32,
+            }),
             _ => None,
         },
         OpCode::CPUI_INT_SUB => match (get(0)?, get(1)?) {
@@ -1132,7 +1422,11 @@ pub(super) fn fold(
                 Val::Indexed(table) | Val::Relative { base: table, .. }
                     if matches!(width, 1 | 2 | 4) || width == pool.ptr_width() =>
                 {
-                    Some(Val::Entry { table, width, signed: false })
+                    Some(Val::Entry {
+                        table,
+                        width,
+                        signed: false,
+                    })
                 }
                 _ => None,
             }
@@ -1263,7 +1557,15 @@ mod tests {
     #[test]
     fn a_delta_table_composes_every_entry_with_its_base() {
         assert_eq!(
-            delta_targets(0x3000, 0x3000, 0x2008, &delta_image(), &DELTA_EXEC, Some(3), DEFAULT_MAX_ENTRIES),
+            delta_targets(
+                0x3000,
+                0x3000,
+                0x2008,
+                &delta_image(),
+                &DELTA_EXEC,
+                Some(3),
+                DEFAULT_MAX_ENTRIES
+            ),
             vec![0x2010, 0x2020, 0x2030]
         );
     }
@@ -1275,12 +1577,19 @@ mod tests {
     fn a_delta_table_reads_from_a_base_that_is_not_the_table() {
         const RVA: [u8; 12] = [
             0x10, 0x20, 0x00, 0x00, // -> 0x1000 + 0x2010
-            0x20, 0x20, 0x00, 0x00,
-            0x30, 0x20, 0x00, 0x00,
+            0x20, 0x20, 0x00, 0x00, 0x30, 0x20, 0x00, 0x00,
         ];
         let image = PoolImage::from_ranges(vec![(0x5000, 0x500c, &RVA[..])], 8, true).unwrap();
         assert_eq!(
-            delta_targets(0x5000, 0x1000, 0x3020, &image, &[(0x3000, 0x3100)], Some(3), DEFAULT_MAX_ENTRIES),
+            delta_targets(
+                0x5000,
+                0x1000,
+                0x3020,
+                &image,
+                &[(0x3000, 0x3100)],
+                Some(3),
+                DEFAULT_MAX_ENTRIES
+            ),
             vec![0x3010, 0x3020, 0x3030]
         );
     }
@@ -1290,7 +1599,15 @@ mod tests {
     /// whose entries are equally good code addresses.
     #[test]
     fn the_case_count_stops_the_scan_at_the_end_of_the_table() {
-        let t = delta_targets(0x3000, 0x3000, 0x2008, &delta_image(), &DELTA_EXEC, Some(3), DEFAULT_MAX_ENTRIES);
+        let t = delta_targets(
+            0x3000,
+            0x3000,
+            0x2008,
+            &delta_image(),
+            &DELTA_EXEC,
+            Some(3),
+            DEFAULT_MAX_ENTRIES,
+        );
         assert!(!t.contains(&0x2040));
         assert_eq!(t.len(), 3);
     }
@@ -1312,7 +1629,11 @@ mod tests {
     }
 
     fn vn(space: &Rc<AddrSpace>, offset: u64, size: u32) -> VarnodeData {
-        VarnodeData { space: Some(Rc::clone(space)), offset, size }
+        VarnodeData {
+            space: Some(Rc::clone(space)),
+            offset,
+            size,
+        }
     }
 
     fn op(opcode: OpCode, out: Option<VarnodeData>, ins: Vec<VarnodeData>) -> FullOp {
@@ -1324,20 +1645,46 @@ mod tests {
     #[test]
     fn a_register_reads_as_the_low_part_of_the_wider_one_holding_it() {
         let (reg, _, _) = spaces();
-        let entry = Val::Entry { table: 0x2000, width: 4, signed: false };
+        let entry = Val::Entry {
+            table: 0x2000,
+            width: 4,
+            signed: false,
+        };
         let vals = vec![(Key::Reg(0, 8), entry)];
         assert_eq!(value_of(&vn(&reg, 0, 4), &vals, None), Some(entry));
-        assert_eq!(value_of(&vn(&reg, 4, 4), &vals, None), None, "the high half is not the entry");
+        assert_eq!(
+            value_of(&vn(&reg, 4, 4), &vals, None),
+            None,
+            "the high half is not the entry"
+        );
         let wide = vec![(Key::Reg(0, 8), Val::Const(0x1_0000_0002))];
         assert_eq!(value_of(&vn(&reg, 0, 4), &wide, None), Some(Val::Const(2)));
     }
 
     /// `cmp $c,sel` as x86 SLEIGH lifts it: CF and ZF for the guard to read.
-    fn x86_cmp(reg: &Rc<AddrSpace>, uniq: &Rc<AddrSpace>, cst: &Rc<AddrSpace>, c: u64) -> Vec<FullOp> {
-        let (eax, cf, zf, diff) = (vn(reg, 0, 4), vn(reg, 0x200, 1), vn(reg, 0x206, 1), vn(uniq, 0x100, 4));
+    fn x86_cmp(
+        reg: &Rc<AddrSpace>,
+        uniq: &Rc<AddrSpace>,
+        cst: &Rc<AddrSpace>,
+        c: u64,
+    ) -> Vec<FullOp> {
+        let (eax, cf, zf, diff) = (
+            vn(reg, 0, 4),
+            vn(reg, 0x200, 1),
+            vn(reg, 0x206, 1),
+            vn(uniq, 0x100, 4),
+        );
         vec![
-            op(OpCode::CPUI_INT_LESS, Some(cf), vec![eax.clone(), vn(cst, c, 4)]),
-            op(OpCode::CPUI_INT_SUB, Some(diff.clone()), vec![eax, vn(cst, c, 4)]),
+            op(
+                OpCode::CPUI_INT_LESS,
+                Some(cf),
+                vec![eax.clone(), vn(cst, c, 4)],
+            ),
+            op(
+                OpCode::CPUI_INT_SUB,
+                Some(diff.clone()),
+                vec![eax, vn(cst, c, 4)],
+            ),
             op(OpCode::CPUI_INT_EQUAL, Some(zf), vec![diff, vn(cst, 0, 4)]),
         ]
     }
@@ -1346,9 +1693,17 @@ mod tests {
     /// `branch` whose last op is the `CBRANCH`.
     fn guarded(writer: &[FullOp], branch: &[FullOp], max: usize) -> Option<usize> {
         let at = branch.len() - 1;
-        let want: Vec<Key> = branch[at].ins.get(1).and_then(|v| key_of(v, None)).into_iter().collect();
+        let want: Vec<Key> = branch[at]
+            .ins
+            .get(1)
+            .and_then(|v| key_of(v, None))
+            .into_iter()
+            .collect();
         let (reads, _) = feeders(&branch[..at], want, None);
-        let reads: Vec<Key> = reads.into_iter().filter(|k| matches!(k, Key::Reg(..))).collect();
+        let reads: Vec<Key> = reads
+            .into_iter()
+            .filter(|k| matches!(k, Key::Reg(..)))
+            .collect();
         let written: Vec<Key> = writer
             .iter()
             .filter_map(|o| o.out.as_ref().and_then(|v| key_of(v, None)))
@@ -1367,7 +1722,11 @@ mod tests {
             op(OpCode::CPUI_BOOL_NEGATE, Some(t(0x10)), vec![cf]),
             op(OpCode::CPUI_BOOL_NEGATE, Some(t(0x11)), vec![zf]),
             op(OpCode::CPUI_BOOL_AND, Some(t(0x12)), vec![t(0x10), t(0x11)]),
-            op(OpCode::CPUI_CBRANCH, None, vec![vn(&reg, 0x9000, 8), t(0x12)]),
+            op(
+                OpCode::CPUI_CBRANCH,
+                None,
+                vec![vn(&reg, 0x9000, 8), t(0x12)],
+            ),
         ];
         assert_eq!(guarded(&x86_cmp(&reg, &uniq, &cst, 5), &ja, 1024), Some(6));
     }
@@ -1378,8 +1737,15 @@ mod tests {
     #[test]
     fn a_jb_guard_bounds_the_table_from_below() {
         let (reg, uniq, cst) = spaces();
-        let jb = vec![op(OpCode::CPUI_CBRANCH, None, vec![vn(&reg, 0x9000, 8), vn(&reg, 0x200, 1)])];
-        assert_eq!(guarded(&x86_cmp(&reg, &uniq, &cst, 0xffff_fffb), &jb, 1024), Some(5));
+        let jb = vec![op(
+            OpCode::CPUI_CBRANCH,
+            None,
+            vec![vn(&reg, 0x9000, 8), vn(&reg, 0x200, 1)],
+        )];
+        assert_eq!(
+            guarded(&x86_cmp(&reg, &uniq, &cst, 0xffff_fffb), &jb, 1024),
+            Some(5)
+        );
         assert_eq!(guarded(&x86_cmp(&reg, &uniq, &cst, 5), &jb, 1024), None);
     }
 
@@ -1387,7 +1753,11 @@ mod tests {
     #[test]
     fn a_compare_that_does_not_reach_the_condition_is_no_bound() {
         let (reg, uniq, cst) = spaces();
-        let je = vec![op(OpCode::CPUI_CBRANCH, None, vec![vn(&reg, 0x9000, 8), vn(&reg, 0x206, 1)])];
+        let je = vec![op(
+            OpCode::CPUI_CBRANCH,
+            None,
+            vec![vn(&reg, 0x9000, 8), vn(&reg, 0x206, 1)],
+        )];
         assert_eq!(guarded(&x86_cmp(&reg, &uniq, &cst, 5), &je, 1024), None);
     }
 
@@ -1396,17 +1766,34 @@ mod tests {
     #[test]
     fn an_aarch64_guard_reads_the_constant_on_the_left() {
         let (reg, uniq, cst) = spaces();
-        let (x8, tmp_cy, cy, zr) = (vn(&reg, 0x4040, 8), vn(&reg, 0x105, 1), vn(&reg, 0x102, 1), vn(&reg, 0x101, 1));
+        let (x8, tmp_cy, cy, zr) = (
+            vn(&reg, 0x4040, 8),
+            vn(&reg, 0x105, 1),
+            vn(&reg, 0x102, 1),
+            vn(&reg, 0x101, 1),
+        );
         let six = vn(&uniq, 0x20, 8);
         let subs = vec![
             op(OpCode::CPUI_COPY, Some(six.clone()), vec![vn(&cst, 6, 8)]),
-            op(OpCode::CPUI_INT_LESSEQUAL, Some(tmp_cy.clone()), vec![six, x8]),
+            op(
+                OpCode::CPUI_INT_LESSEQUAL,
+                Some(tmp_cy.clone()),
+                vec![six, x8],
+            ),
             op(OpCode::CPUI_COPY, Some(cy.clone()), vec![tmp_cy]),
         ];
         let hi = vec![
             op(OpCode::CPUI_BOOL_NEGATE, Some(vn(&uniq, 0x30, 1)), vec![zr]),
-            op(OpCode::CPUI_BOOL_AND, Some(vn(&uniq, 0x31, 1)), vec![cy, vn(&uniq, 0x30, 1)]),
-            op(OpCode::CPUI_CBRANCH, None, vec![vn(&reg, 0x9000, 8), vn(&uniq, 0x31, 1)]),
+            op(
+                OpCode::CPUI_BOOL_AND,
+                Some(vn(&uniq, 0x31, 1)),
+                vec![cy, vn(&uniq, 0x30, 1)],
+            ),
+            op(
+                OpCode::CPUI_CBRANCH,
+                None,
+                vec![vn(&reg, 0x9000, 8), vn(&uniq, 0x31, 1)],
+            ),
         ];
         assert_eq!(guarded(&subs, &hi, 1024), Some(7));
     }
@@ -1416,9 +1803,22 @@ mod tests {
     #[test]
     fn only_a_branch_out_of_its_own_instruction_is_a_guard() {
         let (reg, _, cst) = spaces();
-        let cbranch = |dest: VarnodeData| op(OpCode::CPUI_CBRANCH, None, vec![dest, vn(&reg, 0x200, 1)]);
-        assert_eq!(leaving_branch(&[cbranch(vn(&reg, 0x1004, 8))], 0x1000, 4), None, "cmov");
-        assert_eq!(leaving_branch(&[cbranch(vn(&cst, 2, 8))], 0x1000, 4), None, "rep");
-        assert_eq!(leaving_branch(&[cbranch(vn(&reg, 0x2000, 8))], 0x1000, 4), Some(0), "jcc");
+        let cbranch =
+            |dest: VarnodeData| op(OpCode::CPUI_CBRANCH, None, vec![dest, vn(&reg, 0x200, 1)]);
+        assert_eq!(
+            leaving_branch(&[cbranch(vn(&reg, 0x1004, 8))], 0x1000, 4),
+            None,
+            "cmov"
+        );
+        assert_eq!(
+            leaving_branch(&[cbranch(vn(&cst, 2, 8))], 0x1000, 4),
+            None,
+            "rep"
+        );
+        assert_eq!(
+            leaving_branch(&[cbranch(vn(&reg, 0x2000, 8))], 0x1000, 4),
+            Some(0),
+            "jcc"
+        );
     }
 }

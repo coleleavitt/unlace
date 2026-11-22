@@ -75,7 +75,10 @@ pub struct KernelBugSite {
 
 /// The parked site at `addr`, if any; `sites` is sorted by address.
 pub fn site_at(sites: &[KernelBugSite], addr: u64) -> Option<&KernelBugSite> {
-    sites.binary_search_by_key(&addr, |s| s.addr).ok().map(|i| &sites[i])
+    sites
+        .binary_search_by_key(&addr, |s| s.addr)
+        .ok()
+        .map(|i| &sites[i])
 }
 
 /// The CALLOTHER whose output the BRANCHIND `op` jumps through, when both
@@ -99,7 +102,10 @@ pub fn site_producer(
     if prev.num_input() != 1 {
         return None;
     }
-    let index = prev.get_in(0).and_then(|v| data.vbank().get(v)).filter(|v| v.is_constant())?;
+    let index = prev
+        .get_in(0)
+        .and_then(|v| data.vbank().get(v))
+        .filter(|v| v.is_constant())?;
     (index.get_offset() == invalid as u64).then_some(id)
 }
 
@@ -107,18 +113,31 @@ pub fn site_producer(
 /// index becomes the built-in's, the trap's own inputs go, and a `WARN` site
 /// gains its file (a pointer constant as wide as the jump target the BRANCHIND
 /// `branch` reads) and line.
-pub fn rewrite(data: &mut Funcdata, branch: OpId, callother: OpId, site: &KernelBugSite) -> KunaResult<()> {
+pub fn rewrite(
+    data: &mut Funcdata,
+    branch: OpId,
+    callother: OpId,
+    site: &KernelBugSite,
+) -> KunaResult<()> {
     let ptr_size: int4 = data
         .obank()
         .get(branch)
         .and_then(|o| o.get_in(0))
         .and_then(|v| data.vbank().get(v))
         .map_or(8, |v| v.get_size());
-    let n = data.obank().get(callother).expect("kernelbug: stale callother").num_input();
+    let n = data
+        .obank()
+        .get(callother)
+        .expect("kernelbug: stale callother")
+        .num_input();
     for slot in (1..n).rev() {
         data.op_remove_input(callother, slot);
     }
-    let builtin = if site.warning { BUILTIN_KERNEL_WARN } else { BUILTIN_KERNEL_BUG };
+    let builtin = if site.warning {
+        BUILTIN_KERNEL_WARN
+    } else {
+        BUILTIN_KERNEL_BUG
+    };
     let index = data.new_constant(4, builtin as u64);
     data.op_set_input(callother, index, 0)?;
     if site.warning {
@@ -127,7 +146,11 @@ pub fn rewrite(data: &mut Funcdata, branch: OpId, callother: OpId, site: &Kernel
             data.op_insert_input(callother, vn, 1)?;
         }
         if let Some(line) = site.line {
-            let slot = data.obank().get(callother).expect("kernelbug: stale callother").num_input();
+            let slot = data
+                .obank()
+                .get(callother)
+                .expect("kernelbug: stale callother")
+                .num_input();
             let vn = data.new_constant(4, line as u64);
             data.op_insert_input(callother, vn, slot)?;
         }

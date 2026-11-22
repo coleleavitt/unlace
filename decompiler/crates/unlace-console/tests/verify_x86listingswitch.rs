@@ -4,10 +4,10 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use crate::common;
+use object::{Object, ObjectSection};
 use unlace_analysis::listing::model::{DiscoveredFunction, FlowType, RefKind};
 use unlace_analysis::listing::{Listing, ListingDetail, WalkPlan};
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
-use object::{Object, ObjectSection};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 const DISPATCH: u64 = 0x100400;
 const BRANCH: u64 = 0x10040d;
@@ -256,10 +256,12 @@ fn assert_coverage(listing: &Listing, enabled: bool, independent_seed: bool) {
         targets, expected,
         "the callback word must never become a fifth case"
     );
-    assert!(!listing
-        .refs_from(BRANCH)
-        .iter()
-        .any(|r| r.to == INDEPENDENT));
+    assert!(
+        !listing
+            .refs_from(BRANCH)
+            .iter()
+            .any(|r| r.to == INDEPENDENT)
+    );
 }
 
 #[test]
@@ -625,7 +627,7 @@ fn sixteen_nested_tables_publish_and_a_seventeenth_discards_every_expansion() {
 
 fn decompiled_fixture_function(address: u64, enabled: bool) -> String {
     use unlace_console::ifacedecomp::{
-        execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+        DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
     };
     use unlace_console::ifaceterm::ConsoleCommands;
 

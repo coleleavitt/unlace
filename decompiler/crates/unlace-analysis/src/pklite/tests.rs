@@ -2,7 +2,10 @@ use super::synth::{self, Layout, Program};
 use super::*;
 
 fn packed(name: &str) -> (Program, Layout, Vec<u8>) {
-    let (_, layout, relocs) = synth::layouts().into_iter().find(|(n, ..)| *n == name).unwrap();
+    let (_, layout, relocs) = synth::layouts()
+        .into_iter()
+        .find(|(n, ..)| *n == name)
+        .unwrap();
     let mut p = synth::program(0x1288, 12_000, relocs, &[]);
     p.overlay = vec![0x02, 0x70, 0xe2, 0xaa, 0x28, 0x10, 0x27];
     let bytes = synth::pack(&p, &layout);
@@ -15,7 +18,11 @@ fn packed(name: &str) -> (Program, Layout, Vec<u8>) {
 #[test]
 fn every_layout_round_trips_to_the_original_program() {
     for (seed, (name, layout, relocs)) in synth::layouts().into_iter().enumerate() {
-        let stored: &[usize] = if layout.mode.large { &[5000, 9100] } else { &[] };
+        let stored: &[usize] = if layout.mode.large {
+            &[5000, 9100]
+        } else {
+            &[]
+        };
         let mut p = synth::program(seed as u32 * 7919 + 1, 12_000, relocs, stored);
         p.overlay = b"overlay".to_vec();
         let image = synth::pack(&p, &layout);
@@ -25,29 +32,50 @@ fn every_layout_round_trips_to_the_original_program() {
         assert!(
             out.bytes == want,
             "{name}: first difference at {:#x}",
-            out.bytes.iter().zip(&want).position(|(a, b)| a != b).unwrap_or(0)
+            out.bytes
+                .iter()
+                .zip(&want)
+                .position(|(a, b)| a != b)
+                .unwrap_or(0)
         );
 
         assert_eq!(out.container, Container::Exe, "{name}");
         assert_eq!(out.large, layout.mode.large, "{name}");
         assert_eq!(out.v120, layout.mode.v120, "{name}");
         assert_eq!(out.extra != Extra::None, layout.mode.extra != 0, "{name}");
-        assert_eq!(out.scrambled, layout.scramble != synth::Scramble::None, "{name}");
+        assert_eq!(
+            out.scrambled,
+            layout.scramble != synth::Scramble::None,
+            "{name}"
+        );
         assert_eq!(out.relocations, p.relocs.len(), "{name}");
         assert_eq!(out.load_module, p.code.len(), "{name}");
         assert_eq!(out.overlay, p.overlay.len(), "{name}");
-        assert_eq!((out.cs, out.ip, out.ss, out.sp), (p.cs, p.ip, p.ss, p.sp), "{name}");
+        assert_eq!(
+            (out.cs, out.ip, out.ss, out.sp),
+            (p.cs, p.ip, p.ss, p.sp),
+            "{name}"
+        );
         match out.header {
             HeaderSource::Original(at) => {
                 assert_eq!(layout.mode.extra, 0, "{name}");
                 assert_eq!(at, 0x50, "{name}");
-                assert_eq!((out.min_alloc, out.max_alloc), (p.min_alloc, p.max_alloc), "{name}");
+                assert_eq!(
+                    (out.min_alloc, out.max_alloc),
+                    (p.min_alloc, p.max_alloc),
+                    "{name}"
+                );
             }
             HeaderSource::Reconstructed => assert_ne!(layout.mode.extra, 0, "{name}"),
             HeaderSource::None => panic!("{name}: an EXE has a header"),
         }
         let expect_warnings = usize::from(layout.psp_sig) + usize::from(!stored.is_empty());
-        assert_eq!(out.warnings.len(), expect_warnings, "{name}: {:?}", out.warnings);
+        assert_eq!(
+            out.warnings.len(),
+            expect_warnings,
+            "{name}: {:?}",
+            out.warnings
+        );
     }
 }
 
@@ -85,7 +113,10 @@ fn files_without_a_stub_are_not_packed() {
     let plain = p.image();
     assert!(!detect(&plain));
     assert_eq!(unpack(&plain).err(), Some(PkliteError::NotPacked));
-    assert_eq!(unpack(b"\x7fELF\x02\x01\x01").err(), Some(PkliteError::NotPacked));
+    assert_eq!(
+        unpack(b"\x7fELF\x02\x01\x01").err(),
+        Some(PkliteError::NotPacked)
+    );
     assert_eq!(unpack(b"").err(), Some(PkliteError::NotPacked));
     assert_eq!(unpack(b"MZ").err(), Some(PkliteError::NotPacked));
     // A COM-shaped start without the rest of the stub or the copyright text
@@ -188,7 +219,11 @@ fn a_header_copy_that_disagrees_with_the_footer_is_not_used() {
     let out = unpack(&image).unwrap();
     assert_eq!(out.header, HeaderSource::Reconstructed);
     assert_eq!((out.cs, out.ip), (p.cs, p.ip));
-    assert!(out.warnings.iter().any(|w| w.contains("footer")), "{:?}", out.warnings);
+    assert!(
+        out.warnings.iter().any(|w| w.contains("footer")),
+        "{:?}",
+        out.warnings
+    );
 }
 
 #[test]
@@ -208,13 +243,23 @@ fn dump_synthetic_files_for_an_external_check() {
     let dir =
         std::path::PathBuf::from(std::env::var("KUNA_PKLITE_DUMP").expect("KUNA_PKLITE_DUMP"));
     for (seed, (name, layout, relocs)) in synth::layouts().into_iter().enumerate() {
-        let stored: &[usize] = if layout.mode.large { &[5000, 9100] } else { &[] };
+        let stored: &[usize] = if layout.mode.large {
+            &[5000, 9100]
+        } else {
+            &[]
+        };
         let mut p = synth::program(seed as u32 * 7919 + 1, 12_000, relocs, stored);
         p.overlay = b"overlay".to_vec();
-        let stem: String =
-            name.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
+        let stem: String = name
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+            .collect();
         std::fs::write(dir.join(format!("{stem}.exe")), synth::pack(&p, &layout)).unwrap();
-        std::fs::write(dir.join(format!("{stem}.want")), synth::expected(&p, &layout)).unwrap();
+        std::fs::write(
+            dir.join(format!("{stem}.want")),
+            synth::expected(&p, &layout),
+        )
+        .unwrap();
     }
     let code = synth::program(5, 9_000, Vec::new(), &[]).code;
     std::fs::write(dir.join("com.com"), synth::pack_com(&code, 0x010e)).unwrap();
@@ -228,8 +273,18 @@ fn dump_synthetic_files_for_an_external_check() {
 #[test]
 fn the_generator_exercises_every_token_kind() {
     let p = synth::program(77, 30_000, Vec::new(), &[24_000, 28_000]);
-    let m = |large, v120| synth::Mode { large, v120, extra: 0, offset_xor: 0 };
-    for mode in [m(true, false), m(false, false), m(true, true), m(false, true)] {
+    let m = |large, v120| synth::Mode {
+        large,
+        v120,
+        extra: 0,
+        offset_xor: 0,
+    };
+    for mode in [
+        m(true, false),
+        m(false, false),
+        m(true, true),
+        m(false, true),
+    ] {
         let stored: &[(usize, usize)] = if mode.large { &p.stored } else { &[] };
         let seps = if mode.large { vec![6_000] } else { Vec::new() };
         let (_, c) = synth::compress_with_coverage(&p.code, &mode, stored, &seps);
@@ -259,7 +314,12 @@ fn mutated_files_never_panic() {
         s ^= s << 5;
         s
     };
-    for name in ["v1.00 large", "v1.14 XOR-scrambled large extra", "May 1990 beta", "startup patch"] {
+    for name in [
+        "v1.00 large",
+        "v1.14 XOR-scrambled large extra",
+        "May 1990 beta",
+        "startup patch",
+    ] {
         let (_, _, image) = packed(name);
         for round in 0..400 {
             let mut m = image.clone();

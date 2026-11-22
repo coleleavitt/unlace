@@ -46,8 +46,12 @@ pub fn protocols(img: &MachoImage, file: &object::File) -> Vec<Protocol> {
     let ps = img.ptr_size();
     let mut out = Vec::new();
     for slot in section_slots(file, SEC_PROTOLIST, ps) {
-        let Some(addr) = img.rebase_ptr(slot) else { continue };
-        let Some(name) = protocol_name(img, addr) else { continue };
+        let Some(addr) = img.rebase_ptr(slot) else {
+            continue;
+        };
+        let Some(name) = protocol_name(img, addr) else {
+            continue;
+        };
         let mut methods = Vec::new();
         for off in protocol_t::METHOD_LISTS {
             if let Some(list) = img.rebase_ptr(addr.wrapping_add(off)) {
@@ -58,20 +62,29 @@ pub fn protocols(img: &MachoImage, file: &object::File) -> Vec<Protocol> {
             .rebase_ptr(addr.wrapping_add(protocol_t::INSTANCE_PROPERTIES))
             .map(|list| super::kuna_objcprops::declarations(img, list))
             .unwrap_or_default();
-        let size = img.read_u32(addr.wrapping_add(protocol_t::SIZE)).unwrap_or(0) as u64;
+        let size = img
+            .read_u32(addr.wrapping_add(protocol_t::SIZE))
+            .unwrap_or(0) as u64;
         if size > protocol_t::CLASS_PROPERTIES {
             if let Some(list) = img.rebase_ptr(addr.wrapping_add(protocol_t::CLASS_PROPERTIES)) {
                 properties.extend(super::kuna_objcprops::declarations(img, list));
             }
         }
-        out.push(Protocol { addr, name, methods, properties });
+        out.push(Protocol {
+            addr,
+            name,
+            methods,
+            properties,
+        });
     }
     out
 }
 
 /// The name of the `protocol_t` at `addr`, if readable and non-empty.
 pub fn protocol_name(img: &MachoImage, addr: u64) -> Option<String> {
-    img.rebase_ptr(addr.wrapping_add(protocol_t::NAME)).and_then(|p| img.read_cstr(p)).filter(|n| !n.is_empty())
+    img.rebase_ptr(addr.wrapping_add(protocol_t::NAME))
+        .and_then(|p| img.read_cstr(p))
+        .filter(|n| !n.is_empty())
 }
 
 #[cfg(test)]
@@ -83,26 +96,42 @@ mod tests {
     /// optional `wave`, both IMP-less and typed.
     #[test]
     fn walks_macho_objc_meta_protocols() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/macho_objc_meta_arm64");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/macho_objc_meta_arm64"
+        );
         let bytes = std::fs::read(path).expect("read fixture");
         let file = object::File::parse(bytes.as_slice()).expect("parse Mach-O");
         let img = MachoImage::with_fixups(&file, resolve_chained_fixups(&file, &bytes));
         let protos = protocols(&img, &file);
         assert_eq!(protos.len(), 1);
         assert_eq!(protos[0].name, "Greeter");
-        let decls: Vec<(&str, Option<&str>, u64)> =
-            protos[0].methods.iter().map(|m| (m.selector.as_str(), m.types.as_deref(), m.imp)).collect();
-        assert_eq!(decls, [("greet:", Some("i20@0:8i16"), 0), ("wave", Some("v16@0:8"), 0)]);
+        let decls: Vec<(&str, Option<&str>, u64)> = protos[0]
+            .methods
+            .iter()
+            .map(|m| (m.selector.as_str(), m.types.as_deref(), m.imp))
+            .collect();
+        assert_eq!(
+            decls,
+            [
+                ("greet:", Some("i20@0:8i16"), 0),
+                ("wave", Some("v16@0:8"), 0)
+            ]
+        );
     }
 
     /// A `__objc_protolist` header claiming far more bytes than the file holds
     /// is walked only over the bytes present, not once per claimed slot.
     #[test]
     fn oversized_protolist_header_is_bounded_by_file_data() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/macho_objc_meta_arm64");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/macho_objc_meta_arm64"
+        );
         let bytes = std::fs::read(path).expect("read fixture");
         for size in [0x0800_0000_0000_0000u64, u64::MAX] {
-            let patched = super::super::kuna_objcrefs::with_section_size(bytes.clone(), SEC_PROTOLIST, size);
+            let patched =
+                super::super::kuna_objcrefs::with_section_size(bytes.clone(), SEC_PROTOLIST, size);
             let file = object::File::parse(patched.as_slice()).expect("parse Mach-O");
             let img = MachoImage::with_fixups(&file, resolve_chained_fixups(&file, &patched));
             assert!(protocols(&img, &file).len() <= 1, "size {size:#x}");

@@ -11,8 +11,8 @@
 use std::io::{BufRead, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use unlace_console::engine::{EntryProvenance, ObjectLocation};
@@ -24,11 +24,11 @@ mod synth;
 mod type_blocks;
 mod wire;
 
-use scratch::{pool_scratch, ScratchDir};
-use synth::{name_structs_serially, Named};
+use scratch::{ScratchDir, pool_scratch};
+use synth::{Named, name_structs_serially};
 pub(crate) use type_blocks::merge_type_definitions;
+pub(crate) use wire::{ResultWriter, decode_result, encode_result, read_spec};
 use wire::{decode_results, encode_spec};
-pub(crate) use wire::{decode_result, encode_result, read_spec, ResultWriter};
 
 /// Ceiling on an automatically planned chunk, when `--jobs-chunk` is omitted.
 /// A chunk is only a scheduling unit here, so this exists to keep the tail of a
@@ -74,7 +74,6 @@ const ACK_PREFIX: &str = "done ";
 /// The parent's word for "install the replayed structures and answer from now
 /// on" ([`Worker::force`]).
 const SYNTH_LINE: &str = "synth";
-
 
 /// A worker's exit code when it outlived its parent.  Distinct from anything the
 /// engine returns, and it never reaches a user: whoever would have read it is the
@@ -242,7 +241,9 @@ pub(crate) trait PoolWatch: Sync {
 /// up to the same cap.
 pub(crate) fn decode_lanes(args: &crate::decompile_all::Args) -> usize {
     if args.jobs_auto {
-        let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
+        let cores = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1);
         return cores.clamp(1, MAX_DECODE_LANES);
     }
     args.jobs.min(MAX_DECODE_LANES)
@@ -256,15 +257,18 @@ pub(crate) fn decode_lanes(args: &crate::decompile_all::Args) -> usize {
 pub(crate) fn parse_jobs(value: &str) -> Result<(usize, bool), String> {
     let v = value.trim();
     if v.eq_ignore_ascii_case("auto") {
-        let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
+        let cores = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1);
         return Ok((cores.clamp(1, MAX_AUTO_JOBS), true));
     }
     match v.parse::<usize>() {
         Ok(n) if n >= 1 => Ok((n, false)),
-        _ => Err(format!("invalid --jobs value {value:?} (expected a positive integer or `auto`)")),
+        _ => Err(format!(
+            "invalid --jobs value {value:?} (expected a positive integer or `auto`)"
+        )),
     }
 }
-
 
 // --- the pool ----------------------------------------------------------------
 
@@ -320,12 +324,19 @@ pub(crate) fn run_pool(
 ) -> Result<PoolOutput, String> {
     let total = targets.len();
     if total == 0 {
-        return Ok(PoolOutput { results: Vec::new(), types: None });
+        return Ok(PoolOutput {
+            results: Vec::new(),
+            types: None,
+        });
     }
     let jobs = affordable_jobs(cfg, JOBS_TAG);
     let session = Session::open(cfg, inventory)?;
     let first = Phase {
-        synth: if cfg.synth_base.is_some() { SynthWorker::Record } else { SynthWorker::Off },
+        synth: if cfg.synth_base.is_some() {
+            SynthWorker::Record
+        } else {
+            SynthWorker::Off
+        },
         table: None,
         watch: cfg.watch,
     };
@@ -344,7 +355,10 @@ pub(crate) fn run_pool(
     let mut run = run_planned(cfg, &session, jobs, targets, plan, &first, &banner)?;
     let named = match &cfg.synth_base {
         Some(base) => name_structs_serially(cfg, &session, jobs, targets, base.clone(), &mut run)?,
-        None => Named { kind: first.synth, table: None },
+        None => Named {
+            kind: first.synth,
+            table: None,
+        },
     };
     let blocks = session.close(cfg, &named);
     let PlannedRun { results, retries } = run;
@@ -380,7 +394,10 @@ fn run_planned(
         watch.workers(workers);
     }
     let banner = banner(&plan, workers);
-    let source = PlannedChunks { plan, cursor: AtomicUsize::new(0) };
+    let source = PlannedChunks {
+        plan,
+        cursor: AtomicUsize::new(0),
+    };
     let slots: Mutex<Vec<Option<FuncResult>>> = Mutex::new((0..total).map(|_| None).collect());
     let retries = run_pool_with(
         cfg,
@@ -388,7 +405,12 @@ fn run_planned(
         phase,
         targets,
         &source,
-        &PoolReport { tag: JOBS_TAG, banner, workers, finish_delivered: false },
+        &PoolReport {
+            tag: JOBS_TAG,
+            banner,
+            workers,
+            finish_delivered: false,
+        },
         &|indices: &[usize], produced: Vec<FuncResult>| {
             if let Some(watch) = phase.watch {
                 watch.landed(&produced);
@@ -450,13 +472,28 @@ pub(crate) fn run_pool_streaming(
     let retries = run_pool_with(
         cfg,
         &session,
-        &Phase { synth: SynthWorker::Off, table: None, watch: None },
+        &Phase {
+            synth: SynthWorker::Off,
+            table: None,
+            watch: None,
+        },
         targets,
         source,
-        &PoolReport { tag: STREAM_TAG, banner, workers, finish_delivered: true },
+        &PoolReport {
+            tag: STREAM_TAG,
+            banner,
+            workers,
+            finish_delivered: true,
+        },
         sink,
     )?;
-    let blocks = session.close(cfg, &Named { kind: SynthWorker::Off, table: None });
+    let blocks = session.close(
+        cfg,
+        &Named {
+            kind: SynthWorker::Off,
+            table: None,
+        },
+    );
     Ok((blocks, retries))
 }
 
@@ -490,12 +527,17 @@ impl Session {
         let scratch = ScratchDir::create()?;
         if !cfg.full_load {
             let path = scratch.path().join(INVENTORY_FILE);
-            std::fs::write(&path, encode_spec(inventory))
-                .map_err(|e| format!("cannot write the worker inventory {}: {e}", path.display()))?;
+            std::fs::write(&path, encode_spec(inventory)).map_err(|e| {
+                format!("cannot write the worker inventory {}: {e}", path.display())
+            })?;
             if let Some(record) = &cfg.arm_frames {
                 let path = scratch.path().join(ARM_FRAMES_FILE);
-                std::fs::write(&path, record)
-                    .map_err(|e| format!("cannot write the worker frame record {}: {e}", path.display()))?;
+                std::fs::write(&path, record).map_err(|e| {
+                    format!(
+                        "cannot write the worker frame record {}: {e}",
+                        path.display()
+                    )
+                })?;
             }
         }
         Ok(Session {
@@ -520,8 +562,12 @@ impl Session {
             return Ok(held.0);
         }
         let path = self.path().join(SYNTH_TABLE_FILE);
-        std::fs::write(&path, table)
-            .map_err(|e| format!("cannot write the synthesized structures {}: {e}", path.display()))?;
+        std::fs::write(&path, table).map_err(|e| {
+            format!(
+                "cannot write the synthesized structures {}: {e}",
+                path.display()
+            )
+        })?;
         *held = (held.0 + 1, table.to_vec());
         Ok(held.0)
     }
@@ -539,10 +585,21 @@ impl Session {
 
     /// Does a live or retired worker hold `table`?
     fn holds_table(&self, table: &[u8]) -> bool {
-        let Some(id) = self.table_id(table) else { return false };
+        let Some(id) = self.table_id(table) else {
+            return false;
+        };
         let holds = |kind: SynthWorker, t: usize| kind == SynthWorker::Force && t == id;
-        self.idle.lock().unwrap_or_else(|e| e.into_inner()).iter().any(|w| holds(w.synth, w.table))
-            || self.blocks.lock().unwrap_or_else(|e| e.into_inner()).iter().any(|b| holds(b.kind, b.table))
+        self.idle
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .any(|w| holds(w.synth, w.table))
+            || self
+                .blocks
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .iter()
+                .any(|b| holds(b.kind, b.table))
     }
 
     /// Retiring a worker is where its type blocks come from.
@@ -550,7 +607,15 @@ impl Session {
         let token = self.retired.fetch_add(1, Ordering::SeqCst);
         let (kind, table) = (w.synth, w.table);
         if let Some((full, rest)) = w.quit(cfg, self.path(), token) {
-            self.blocks.lock().unwrap_or_else(|e| e.into_inner()).push(RetiredBlocks { kind, table, full, rest });
+            self.blocks
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push(RetiredBlocks {
+                    kind,
+                    table,
+                    full,
+                    rest,
+                });
         }
     }
 
@@ -571,7 +636,8 @@ impl Session {
             b.kind == named.kind && (named.kind != SynthWorker::Force || Some(b.table) == table)
         };
         let blocks = std::mem::take(&mut *self.blocks.lock().unwrap_or_else(|e| e.into_inner()));
-        let (full, other): (Vec<RetiredBlocks>, Vec<RetiredBlocks>) = blocks.into_iter().partition(speaks);
+        let (full, other): (Vec<RetiredBlocks>, Vec<RetiredBlocks>) =
+            blocks.into_iter().partition(speaks);
         // A worker that numbered structures of its own and could not say what
         // it held without them says nothing.
         let rest = other.into_iter().filter_map(|b| match b.kind {
@@ -617,9 +683,10 @@ fn run_pool_with(
     }
     eprintln!("{}", report.banner);
     if phase.synth == SynthWorker::Off
-        && let Some(note) = structsynth_shard_note(cfg, report.tag) {
-            eprintln!("{note}");
-        }
+        && let Some(note) = structsynth_shard_note(cfg, report.tag)
+    {
+        eprintln!("{note}");
+    }
 
     let pool = Pool {
         cfg,
@@ -657,21 +724,35 @@ fn run_pool_with(
                     // Recycling returns a worker to the memory floor a process
                     // cannot reach on its own; it costs a whole program load, so
                     // it is a ceiling rather than a rhythm.
-                    if worker.as_ref().is_some_and(|w| w.functions_done >= RECYCLE_AFTER)
-                        && let Some(w) = worker.take() {
-                            session.retire(cfg, w);
-                        }
+                    if worker
+                        .as_ref()
+                        .is_some_and(|w| w.functions_done >= RECYCLE_AFTER)
+                        && let Some(w) = worker.take()
+                    {
+                        session.retire(cfg, w);
+                    }
                 }
                 // Parked for the run's next pool; [`Session::close`] retires it.
                 if let Some(w) = worker.take() {
-                    session.idle.lock().unwrap_or_else(|e| e.into_inner()).push(w);
+                    session
+                        .idle
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .push(w);
                 }
             });
         }
     });
 
     let delivered = completed.load(Ordering::SeqCst);
-    progress.finish(if report.finish_delivered { delivered } else { total }, start);
+    progress.finish(
+        if report.finish_delivered {
+            delivered
+        } else {
+            total
+        },
+        start,
+    );
     Ok(pool.retries())
 }
 
@@ -733,7 +814,9 @@ impl Pool<'_> {
         let mut stopped: Option<String> = None;
         let mut tally = ChunkReruns::default();
         for (p, suspect) in order {
-            let Some(original) = results[p].take() else { continue };
+            let Some(original) = results[p].take() else {
+                continue;
+            };
             if let Some(why) = &stopped {
                 kept.push(indices[p]);
                 kept_results.push(not_rerun(original, why));
@@ -770,7 +853,9 @@ impl Pool<'_> {
                 self.gate.failed();
             }
             let stalled = matches!(solo.ending, Ending::Died { stalled: true, .. });
-            stopped = tally.record(suspect, recovered, stalled).map(str::to_string);
+            stopped = tally
+                .record(suspect, recovered, stalled)
+                .map(str::to_string);
             deliver(&[indices[p]], solo.results);
         }
         if !kept.is_empty() {
@@ -793,10 +878,9 @@ impl Pool<'_> {
             } else {
                 w.synth == self.synth
             };
-            if !usable
-                && let Some(w) = worker.take() {
-                    self.session.retire(self.cfg, w);
-                }
+            if !usable && let Some(w) = worker.take() {
+                self.session.retire(self.cfg, w);
+            }
         }
         if let Err(e) = std::fs::write(self.scratch.join(spec_name(idx)), encode_spec(chunk)) {
             return Served::not_run(chunk, &format!("{SPEC_WRITE_FAILED}: {e}"));
@@ -816,14 +900,21 @@ impl Pool<'_> {
             *worker = None;
         }
         let (results, delivered) = merge_chunk(chunk, produced, &reason);
-        self.gate.delivered(delivered.iter().filter(|&&d| d).count());
-        Served { results, delivered, ending }
+        self.gate
+            .delivered(delivered.iter().filter(|&&d| d).count());
+        Served {
+            results,
+            delivered,
+            ending,
+        }
     }
 
     fn spawn(&self) -> std::io::Result<Worker> {
         let n = self.spawned.fetch_add(1, Ordering::SeqCst);
         if self.faults.refuses_spawn(n) {
-            return Err(std::io::Error::other(format!("{JOBS_FAULT_ENV} refused spawn {n}")));
+            return Err(std::io::Error::other(format!(
+                "{JOBS_FAULT_ENV} refused spawn {n}"
+            )));
         }
         let mut w = Worker::spawn(self.cfg, self.synth, self.exe, self.scratch)?;
         if self.synth == SynthWorker::Force {
@@ -861,7 +952,11 @@ enum Ending {
     /// its spec and its rehydration, just before its first target.  `running`:
     /// the chunk position it last said it was starting, from a worker that
     /// holds its records back ([`SynthWorker::Serial`]).
-    Died { stalled: bool, started: bool, running: Option<usize> },
+    Died {
+        stalled: bool,
+        started: bool,
+        running: Option<usize>,
+    },
 }
 
 impl Ending {
@@ -936,15 +1031,30 @@ impl Reruns {
 /// workers load at once), and a load that fails every time is bounded by the
 /// re-run gate instead.
 fn retry_order(ending: Ending, delivered: &[bool]) -> Reruns {
-    let Ending::Died { stalled, started, running } = ending else { return Reruns::default() };
+    let Ending::Died {
+        stalled,
+        started,
+        running,
+    } = ending
+    else {
+        return Reruns::default();
+    };
     let missing: Vec<usize> = (0..delivered.len()).filter(|&p| !delivered[p]).collect();
-    let on = running.filter(|&p| delivered.get(p) == Some(&false)).or_else(|| missing.first().copied());
+    let on = running
+        .filter(|&p| delivered.get(p) == Some(&false))
+        .or_else(|| missing.first().copied());
     let (suspect, rest): (Option<usize>, Vec<usize>) = match (started, on) {
         (false, _) => (None, missing),
         (true, None) => return Reruns::default(),
-        (true, Some(on)) => ((!stalled).then_some(on), missing.into_iter().filter(|&p| p != on).collect()),
+        (true, Some(on)) => (
+            (!stalled).then_some(on),
+            missing.into_iter().filter(|&p| p != on).collect(),
+        ),
     };
-    Reruns { suspect, bystanders: spread(rest.len()).into_iter().map(|k| rest[k]).collect() }
+    Reruns {
+        suspect,
+        bystanders: spread(rest.len()).into_iter().map(|k| rest[k]).collect(),
+    }
 }
 
 /// `0..count` in bit-reversed order, so every prefix of it is spread across the
@@ -955,7 +1065,13 @@ fn spread(count: usize) -> Vec<usize> {
     let span = count.next_power_of_two();
     let bits = span.trailing_zeros();
     (0..span)
-        .map(|k| if bits == 0 { k } else { k.reverse_bits() >> (usize::BITS - bits) })
+        .map(|k| {
+            if bits == 0 {
+                k
+            } else {
+                k.reverse_bits() >> (usize::BITS - bits)
+            }
+        })
         .filter(|&k| k < count)
         .collect()
 }
@@ -1140,7 +1256,9 @@ impl Worker {
         cmd.env(unlace_analysis::listing::kuna_pdecode::DECODE_JOBS_ENV, "1");
         // stdin carries the assignments AND the liveness signal; stdout carries
         // the acknowledgements; stderr is the user's, shared with the parent.
-        cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::inherit());
+        cmd.stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit());
 
         let mut child = cmd.spawn()?;
         let stdin = child.stdin.take().expect("stdin was piped");
@@ -1149,20 +1267,33 @@ impl Worker {
         // A line the engine itself printed is not an acknowledgement: only the
         // exact `done <n>` shape counts, so nothing on stdout can fake progress.
         std::thread::spawn(move || {
-            for line in std::io::BufReader::new(stdout).lines().map_while(Result::ok) {
+            for line in std::io::BufReader::new(stdout)
+                .lines()
+                .map_while(Result::ok)
+            {
                 if let Some(rest) = line.strip_prefix(ACK_PREFIX)
                     && let Ok(idx) = rest.trim().parse::<usize>()
-                        && tx.send(idx).is_err() {
-                            return;
-                        }
+                    && tx.send(idx).is_err()
+                {
+                    return;
+                }
             }
         });
-        Ok(Self { child, stdin, acks, functions_done: 0, warm: false, synth, table: 0 })
+        Ok(Self {
+            child,
+            stdin,
+            acks,
+            functions_done: 0,
+            warm: false,
+            synth,
+            table: 0,
+        })
     }
 
     /// Does this worker lack table `table` for a forced chunk?
     fn stale_for(&self, table: usize) -> bool {
-        self.synth == SynthWorker::Record || (self.synth == SynthWorker::Force && self.table != table)
+        self.synth == SynthWorker::Record
+            || (self.synth == SynthWorker::Force && self.table != table)
     }
 
     /// Make this worker a forcing one holding table `table`: it forgets the
@@ -1170,7 +1301,9 @@ impl Worker {
     /// directory before its next chunk. `false` when the pipe is gone, which
     /// leaves the worker for the caller to replace.
     fn force(&mut self, table: usize) -> bool {
-        let sent = writeln!(self.stdin, "{SYNTH_LINE}").and_then(|()| self.stdin.flush()).is_ok();
+        let sent = writeln!(self.stdin, "{SYNTH_LINE}")
+            .and_then(|()| self.stdin.flush())
+            .is_ok();
         if sent {
             self.synth = SynthWorker::Force;
             self.table = table;
@@ -1211,17 +1344,29 @@ impl Worker {
         match outcome {
             Wait::Done => {
                 self.warm = true;
-                (produced, format!("{NO_RECORD} for this function"), Ending::Finished)
+                (
+                    produced,
+                    format!("{NO_RECORD} for this function"),
+                    Ending::Finished,
+                )
             }
             Wait::Stalled => (
                 produced,
                 format!("{STALLED} ({}s); the worker was killed", cfg.max_fn_seconds),
-                Ending::Died { stalled: true, started, running },
+                Ending::Died {
+                    stalled: true,
+                    started,
+                    running,
+                },
             ),
             Wait::Failed(why) => (
                 produced,
                 format!("{CHUNK_FAILED} ({why})"),
-                Ending::Died { stalled: false, started, running },
+                Ending::Died {
+                    stalled: false,
+                    started,
+                    running,
+                },
             ),
         }
     }
@@ -1261,7 +1406,9 @@ impl Worker {
                 saw_record = true;
                 last_progress = Instant::now();
             }
-            let Some(allowed) = stall_deadline(cfg, self.warm || saw_record) else { continue };
+            let Some(allowed) = stall_deadline(cfg, self.warm || saw_record) else {
+                continue;
+            };
             if last_progress.elapsed() > allowed {
                 let _ = self.child.kill();
                 let _ = self.child.wait();
@@ -1278,8 +1425,17 @@ impl Worker {
     /// the token names the file it leaves it in.  Per WORKER, not per chunk: a
     /// worker's type factory accumulates over every chunk it served, so its final
     /// rendering is the only one that speaks for all of them.
-    fn quit(self, cfg: &PoolConfig, scratch: &Path, token: usize) -> Option<(String, Option<String>)> {
-        let Self { mut child, mut stdin, .. } = self;
+    fn quit(
+        self,
+        cfg: &PoolConfig,
+        scratch: &Path,
+        token: usize,
+    ) -> Option<(String, Option<String>)> {
+        let Self {
+            mut child,
+            mut stdin,
+            ..
+        } = self;
         let _ = writeln!(stdin, "{QUIT_PREFIX}{token}");
         let _ = stdin.flush();
         drop(stdin);
@@ -1343,7 +1499,11 @@ fn stall_deadline(cfg: &PoolConfig, warm: bool) -> Option<Duration> {
 /// workers can each define a different `struct_0`: one document would use a name
 /// for two layouts, and one `.h` cannot declare both.
 fn structsynth_shard_note(cfg: &PoolConfig, tag: &str) -> Option<String> {
-    let explicit = cfg.options.iter().rev().find(|(name, _)| name == "structsynth");
+    let explicit = cfg
+        .options
+        .iter()
+        .rev()
+        .find(|(name, _)| name == "structsynth");
     if explicit.is_some_and(|(_, value)| value == "off") {
         return None;
     }
@@ -1375,9 +1535,15 @@ fn count_error_anomalies<'a>(errors: impl Iterator<Item = &'a str>) -> (usize, u
         if e.contains("budget exceeded") {
             tripped += 1;
         }
-        if [NO_RECORD, CHUNK_FAILED, SPAWN_FAILED, SPEC_WRITE_FAILED, STALLED]
-            .iter()
-            .any(|m| e.starts_with(m))
+        if [
+            NO_RECORD,
+            CHUNK_FAILED,
+            SPAWN_FAILED,
+            SPEC_WRITE_FAILED,
+            STALLED,
+        ]
+        .iter()
+        .any(|m| e.starts_with(m))
         {
             lost += 1;
         }
@@ -1466,9 +1632,10 @@ fn anomaly_lines(
 /// [`unlace_decomp::kuna_hostmem::available`]: under a cgroup v2 `memory.max`
 /// it is that cap's headroom when the cap is the tighter bound.
 fn affordable_jobs(cfg: &PoolConfig, tag: &str) -> usize {
-    let (Some(per_worker), Some(free)) =
-        (worker_estimate(cfg.full_load), unlace_decomp::kuna_hostmem::available())
-    else {
+    let (Some(per_worker), Some(free)) = (
+        worker_estimate(cfg.full_load),
+        unlace_decomp::kuna_hostmem::available(),
+    ) else {
         return cfg.jobs;
     };
     let available = free.bytes;
@@ -1479,7 +1646,11 @@ fn affordable_jobs(cfg: &PoolConfig, tag: &str) -> usize {
         return cfg.jobs;
     }
     let gb = |b: u64| b as f64 / (1024.0 * 1024.0 * 1024.0);
-    let capped = if free.cgroup { " under a cgroup's memory.max" } else { "" };
+    let capped = if free.cgroup {
+        " under a cgroup's memory.max"
+    } else {
+        ""
+    };
     if cfg.jobs_auto {
         eprintln!(
             "[kuna {tag}] auto: {affordable} worker(s), not {} — one worker needs about {:.1} GB \
@@ -1490,7 +1661,11 @@ fn affordable_jobs(cfg: &PoolConfig, tag: &str) -> usize {
         );
         return affordable;
     }
-    let place = if free.cgroup { capped } else { " on this machine" };
+    let place = if free.cgroup {
+        capped
+    } else {
+        " on this machine"
+    };
     eprintln!(
         "[kuna {tag}] warning: {} workers at about {:.1} GB each is more than the {:.1} GB free\
          {place}; expect swapping or an OOM kill. {affordable} would fit.",
@@ -1551,7 +1726,10 @@ fn plan_chunks(targets: &[TargetSpec], explicit: Option<usize>, jobs: usize) -> 
     if total == 0 {
         return Vec::new();
     }
-    let cost: Vec<u64> = targets.iter().map(|t| t.size.clamp(1, EXTENT_CAP)).collect();
+    let cost: Vec<u64> = targets
+        .iter()
+        .map(|t| t.size.clamp(1, EXTENT_CAP))
+        .collect();
     let mut order: Vec<usize> = (0..total).collect();
     order.sort_by(|&a, &b| cost[b].cmp(&cost[a]).then(a.cmp(&b)));
 
@@ -1595,7 +1773,10 @@ fn merge_chunk(
     produced: Vec<FuncResult>,
     reason: &str,
 ) -> (Vec<FuncResult>, Vec<bool>) {
-    #[expect(clippy::disallowed_types, reason = "Lookup only; chunk order determines output and duplicate targets consume once.")]
+    #[expect(
+        clippy::disallowed_types,
+        reason = "Lookup only; chunk order determines output and duplicate targets consume once."
+    )]
     let mut by_addr: std::collections::HashMap<u64, FuncResult> =
         produced.into_iter().map(|r| (r.byte_address, r)).collect();
     chunk
@@ -1670,7 +1851,10 @@ pub(crate) fn listen_for_assignments(scratch: &str) -> std::sync::mpsc::Receiver
     let dir = pool_scratch(scratch);
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
-        for line in std::io::BufReader::new(std::io::stdin()).lines().map_while(Result::ok) {
+        for line in std::io::BufReader::new(std::io::stdin())
+            .lines()
+            .map_while(Result::ok)
+        {
             let line = line.trim();
             if line == SYNTH_LINE {
                 if tx.send(Assignment::Force).is_err() {
@@ -1731,7 +1915,12 @@ fn types_name(token: usize, rest: bool) -> String {
 /// Leave this worker's rendered user-defined type definitions where the parent's
 /// `quit` said to (see [`merge_type_definitions`]); `rest` is the rendering
 /// without the synthesized structures ([`Session::close`]).
-pub(crate) fn write_type_block(scratch: &str, token: usize, rest: bool, text: &str) -> Result<(), String> {
+pub(crate) fn write_type_block(
+    scratch: &str,
+    token: usize,
+    rest: bool,
+    text: &str,
+) -> Result<(), String> {
     let path = Path::new(scratch).join(types_name(token, rest));
     std::fs::write(&path, text)
         .map_err(|e| format!("cannot write the worker type block {}: {e}", path.display()))
@@ -1751,8 +1940,12 @@ pub(crate) const SYNTH_TABLE_FILE: &str = "synth.table";
 /// Read the table [`name_structs_serially`] left for a forced worker.
 pub(crate) fn read_synth_table(scratch: &str) -> Result<Vec<(String, SynthRequest)>, String> {
     let path = Path::new(scratch).join(SYNTH_TABLE_FILE);
-    let bytes = std::fs::read(&path)
-        .map_err(|e| format!("cannot read the synthesized structures {}: {e}", path.display()))?;
+    let bytes = std::fs::read(&path).map_err(|e| {
+        format!(
+            "cannot read the synthesized structures {}: {e}",
+            path.display()
+        )
+    })?;
     shard::decode_table(&bytes)
         .ok_or_else(|| format!("malformed synthesized-structure table {}", path.display()))
 }
@@ -1796,13 +1989,17 @@ enum Fault {
 
 impl Faults {
     pub(crate) fn from_env() -> Faults {
-        std::env::var(JOBS_FAULT_ENV).map(|raw| Faults::parse(&raw).0).unwrap_or_default()
+        std::env::var(JOBS_FAULT_ENV)
+            .map(|raw| Faults::parse(&raw).0)
+            .unwrap_or_default()
     }
 
     /// The parent's copy, which also says which directives it could not read,
     /// once, so a mistyped fault cannot pass for a test that injected nothing.
     fn from_env_reporting(tag: &str) -> Faults {
-        let Ok(raw) = std::env::var(JOBS_FAULT_ENV) else { return Faults::default() };
+        let Ok(raw) = std::env::var(JOBS_FAULT_ENV) else {
+            return Faults::default();
+        };
         let (faults, rejected) = Faults::parse(&raw);
         for directive in rejected {
             eprintln!(
@@ -1824,7 +2021,11 @@ impl Faults {
                         return Some(());
                     }
                     "load-abort" => {
-                        faults.load_aborts = if arg == "*" { usize::MAX } else { arg.parse().ok()? };
+                        faults.load_aborts = if arg == "*" {
+                            usize::MAX
+                        } else {
+                            arg.parse().ok()?
+                        };
                         return Some(());
                     }
                     "synth" if arg == "serial" => {
@@ -1866,7 +2067,11 @@ impl Faults {
     pub(crate) fn before_target(&self, scratch: &Path, addr: u64) {
         let first = |kind: &str| {
             let marker = scratch.join(format!("fault-{kind}-{addr:x}"));
-            std::fs::OpenOptions::new().write(true).create_new(true).open(marker).is_ok()
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(marker)
+                .is_ok()
         };
         for &(fault, at) in &self.at {
             if at.is_some_and(|at| at != addr) {
@@ -1874,13 +2079,17 @@ impl Faults {
             }
             let stall = match fault {
                 Fault::Panic => panic!("{JOBS_FAULT_ENV}: injected panic at {addr:#x}"),
-                Fault::PanicOnce if first("once") => panic!("{JOBS_FAULT_ENV}: injected panic at {addr:#x}"),
+                Fault::PanicOnce if first("once") => {
+                    panic!("{JOBS_FAULT_ENV}: injected panic at {addr:#x}")
+                }
                 Fault::PanicOnce => false,
                 Fault::Stall => true,
                 Fault::StallAgain => !first("again"),
             };
             if stall {
-                fault_line(format_args!("{JOBS_FAULT_ENV}: injected stall at {addr:#x}"));
+                fault_line(format_args!(
+                    "{JOBS_FAULT_ENV}: injected stall at {addr:#x}"
+                ));
                 loop {
                     std::thread::sleep(Duration::from_secs(3600));
                 }
@@ -1895,7 +2104,11 @@ impl Faults {
         let fire = self.load_aborts == usize::MAX
             || (0..self.load_aborts).any(|k| {
                 let marker = scratch.join(format!("fault-load-{k}"));
-                std::fs::OpenOptions::new().write(true).create_new(true).open(marker).is_ok()
+                std::fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(marker)
+                    .is_ok()
             });
         if fire {
             fault_line(format_args!("{JOBS_FAULT_ENV}: injected load abort"));
@@ -1919,7 +2132,9 @@ impl Faults {
 /// their lines together on the shared pipe, and a test counting the lines
 /// would miss one.
 fn fault_line(line: std::fmt::Arguments) {
-    let _ = std::io::stderr().lock().write_all(format!("{line}\n").as_bytes());
+    let _ = std::io::stderr()
+        .lock()
+        .write_all(format!("{line}\n").as_bytes());
 }
 
 // --- progress ----------------------------------------------------------------
@@ -2022,12 +2237,7 @@ impl Progress {
     }
 }
 
-fn progress_eta(
-    total: usize,
-    done: usize,
-    sample_done: usize,
-    sample_seconds: f64,
-) -> Option<f64> {
+fn progress_eta(total: usize, done: usize, sample_done: usize, sample_seconds: f64) -> Option<f64> {
     if sample_done == 0 || !sample_seconds.is_finite() || sample_seconds <= 0.0 {
         return None;
     }
@@ -2047,8 +2257,8 @@ fn hms(seconds: f64) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::wire::{RESULT_MAGIC, decode_spec};
     use super::*;
-    use super::wire::{decode_spec, RESULT_MAGIC};
     use unlace_decomp::decompile_drive::{GlobalInfo, LineMapping, TypeInfo, VarInfo};
 
     pub(super) fn sample_result() -> FuncResult {
@@ -2065,8 +2275,11 @@ mod tests {
             emitted_c_name: Some("main_linkage".into()),
             call_declarations: vec!["int external_value(int value);".into()],
             callwide_prototypes: vec![unlace_decomp::kuna_callwide::ExportPrototype {
-                name: "proved".into(), entry: 0x401020, signed: true,
-                inputs: vec![true, false], definition: false,
+                name: "proved".into(),
+                entry: 0x401020,
+                signed: true,
+                inputs: vec![true, false],
+                definition: false,
             }],
             variables: vec![
                 VarInfo {
@@ -2148,7 +2361,10 @@ mod tests {
                     declaration: None,
                 },
             ],
-            line_mappings: vec![LineMapping { line_number: 3, addresses: vec![0x401004] }],
+            line_mappings: vec![LineMapping {
+                line_number: 3,
+                addresses: vec![0x401004],
+            }],
             aliases: vec!["_main".into()],
             object_location: Some(ObjectLocation {
                 section_index: 2,
@@ -2185,9 +2401,10 @@ mod tests {
             && a.globals == b.globals
             && a.stack_objects == b.stack_objects
             && a.types.len() == b.types.len()
-            && a.types.iter().zip(&b.types).all(|(x, y)| {
-                x.name == y.name && x.definition == y.definition && x.size == y.size
-            })
+            && a.types
+                .iter()
+                .zip(&b.types)
+                .all(|(x, y)| x.name == y.name && x.definition == y.definition && x.size == y.size)
             && a.variables.len() == b.variables.len()
             && a.variables.iter().zip(&b.variables).all(|(x, y)| {
                 x.name == y.name
@@ -2208,10 +2425,22 @@ mod tests {
         let start = Instant::now();
         let mut state = ProgressState::new(3, start);
 
-        assert_eq!(state.observe(0, 10, start + Duration::from_secs(10)).1, None);
-        assert_eq!(state.observe(0, 20, start + Duration::from_secs(12)).1, None);
-        assert_eq!(state.observe(1, 30, start + Duration::from_secs(20)).1, None);
-        assert_eq!(state.observe(0, 40, start + Duration::from_secs(22)).1, None);
+        assert_eq!(
+            state.observe(0, 10, start + Duration::from_secs(10)).1,
+            None
+        );
+        assert_eq!(
+            state.observe(0, 20, start + Duration::from_secs(12)).1,
+            None
+        );
+        assert_eq!(
+            state.observe(1, 30, start + Duration::from_secs(20)).1,
+            None
+        );
+        assert_eq!(
+            state.observe(0, 40, start + Duration::from_secs(22)).1,
+            None
+        );
 
         let (done, sample) = state.observe(2, 50, start + Duration::from_secs(40));
         assert_eq!((done, sample), (50, None));
@@ -2228,18 +2457,26 @@ mod tests {
         a.synth = Some(Default::default());
         a.pointerargs = Some(unlace_decomp::kuna_pointerargs::Record {
             entry: ("ram".into(), a.byte_address),
-            parameters: vec![None, Some(unlace_decomp::kuna_pointerargs::Parameter {
-                storage: (("register".into(), 0x38), 8), spelling: "unsigned char *".into(),
-            })],
+            parameters: vec![
+                None,
+                Some(unlace_decomp::kuna_pointerargs::Parameter {
+                    storage: (("register".into(), 0x38), 8),
+                    spelling: "unsigned char *".into(),
+                }),
+            ],
             calls: vec![unlace_decomp::kuna_pointerargs::Call {
-                callee: ("ram".into(), 0x1000), index: 1,
-                storage: (("register".into(), 0x38), 8), actual: "unsigned long *".into(),
+                callee: ("ram".into(), 0x1000),
+                index: 1,
+                storage: (("register".into(), 0x38), 8),
+                actual: "unsigned long *".into(),
                 position: unlace_decomp::kuna_pointerargs::Position { line: 3, column: 7 },
                 expression: "&v1".into(),
             }],
         });
-        let warning = |address, text: &str, line| {
-            unlace_decomp::kuna_functionwarnings::Warning { address, text: text.into(), line }
+        let warning = |address, text: &str, line| unlace_decomp::kuna_functionwarnings::Warning {
+            address,
+            text: text.into(),
+            line,
         };
         a.warnings = vec![
             warning(Some(0x401000), "WARNING: Subroutine does not return", 2),
@@ -2277,8 +2514,13 @@ mod tests {
             w.push(&b).unwrap();
         }
         let full = std::fs::read(&path).unwrap();
-        let first_end = RESULT_MAGIC.len() + 5
-            + u32::from_le_bytes(full[RESULT_MAGIC.len() + 1..RESULT_MAGIC.len() + 5].try_into().unwrap()) as usize;
+        let first_end = RESULT_MAGIC.len()
+            + 5
+            + u32::from_le_bytes(
+                full[RESULT_MAGIC.len() + 1..RESULT_MAGIC.len() + 5]
+                    .try_into()
+                    .unwrap(),
+            ) as usize;
         for cut in RESULT_MAGIC.len()..first_end {
             assert!(decode_results(&full[..cut]).unwrap().results.is_empty());
         }
@@ -2332,7 +2574,7 @@ mod tests {
             b"\x10\0\0\0\0\0\0\0\x20\0\0\0\0\0\0\0",
             b"\xff\xff\xff\xff\xff\xff\xff\xff",
             b"\x01\0\0\0f\0\x01\x01\0\0\0e\0\0",
-            b"\0", // emitted C name
+            b"\0",       // emitted C name
             b"\0\0\0\0", // aliases
             b"\0\0\0\0", // line mappings
             b"\0\0\0\0", // variables
@@ -2341,7 +2583,7 @@ mod tests {
             b"\0\0\0\0", // globals
             b"\0\0\0\0", // field calls
             b"\0\0\0\0", // callee hints
-            b"\0\0", // synth and pointer arguments
+            b"\0\0",     // synth and pointer arguments
             b"\0\0\0\0", // warnings
             b"\0\0\0\0", // call declarations
             b"\0\0\0\0", // callwide prototypes
@@ -2366,12 +2608,20 @@ mod tests {
         assert_eq!(decoded.len(), 1);
         assert!(same(&decoded[0], &record));
         let mut malformed = full;
-        let at = malformed.windows(6).position(|bytes| bytes == b"proved").unwrap();
+        let at = malformed
+            .windows(6)
+            .position(|bytes| bytes == b"proved")
+            .unwrap();
         malformed[at + 6 + 8] = 2;
         assert!(decode_results(&malformed).unwrap().results.is_empty());
         record.callwide_prototypes[0].inputs = vec![false; 33];
         ResultWriter::create(&path).unwrap().push(&record).unwrap();
-        assert!(decode_results(&std::fs::read(&path).unwrap()).unwrap().results.is_empty());
+        assert!(
+            decode_results(&std::fs::read(&path).unwrap())
+                .unwrap()
+                .results
+                .is_empty()
+        );
     }
 
     #[test]
@@ -2393,8 +2643,11 @@ mod tests {
             b"\x03\x04\x05\x06\x07\x08\x09\x0a",
         ]
         .concat();
-        let shell_bytes =
-            [b"\0\x12\0\0\0WARNING: blocks \xc3\xa9".as_slice(), b"\x15\x16\x17\x18\x19\x1a\x1b\x1c"].concat();
+        let shell_bytes = [
+            b"\0\x12\0\0\0WARNING: blocks \xc3\xa9".as_slice(),
+            b"\x15\x16\x17\x18\x19\x1a\x1b\x1c",
+        ]
+        .concat();
         let pointerargs = unlace_decomp::kuna_pointerargs::Record {
             entry: ("ram".into(), 0x401000),
             parameters: vec![Some(unlace_decomp::kuna_pointerargs::Parameter {
@@ -2404,8 +2657,16 @@ mod tests {
             calls: Vec::new(),
         };
         for (before, warnings, records) in [
-            (None, vec![at.clone(), shell.clone()], [at_bytes.as_slice(), &shell_bytes]),
-            (Some(pointerargs), vec![shell.clone(), at.clone()], [shell_bytes.as_slice(), &at_bytes]),
+            (
+                None,
+                vec![at.clone(), shell.clone()],
+                [at_bytes.as_slice(), &shell_bytes],
+            ),
+            (
+                Some(pointerargs),
+                vec![shell.clone(), at.clone()],
+                [shell_bytes.as_slice(), &at_bytes],
+            ),
         ] {
             let mut record = sample_result();
             record.pointerargs = before;
@@ -2428,7 +2689,10 @@ mod tests {
                 decode_result(&bad)
             };
             for count in [0u32, 1, 3, u32::MAX] {
-                assert!(patched(start, &count.to_le_bytes()).is_none(), "count {count}");
+                assert!(
+                    patched(start, &count.to_le_bytes()).is_none(),
+                    "count {count}"
+                );
             }
             let mut tag = start + 4;
             for bytes in records {
@@ -2437,9 +2701,15 @@ mod tests {
                 }
                 let length = tag + if bytes[0] == 1 { 9 } else { 1 };
                 for oversized in [(body.len() - length - 3) as u32, u32::MAX] {
-                    assert!(patched(length, &oversized.to_le_bytes()).is_none(), "text length {oversized}");
+                    assert!(
+                        patched(length, &oversized.to_le_bytes()).is_none(),
+                        "text length {oversized}"
+                    );
                 }
-                assert!(patched(bytes.len() + tag - 9, &[0xff]).is_none(), "text that is not UTF-8");
+                assert!(
+                    patched(bytes.len() + tag - 9, &[0xff]).is_none(),
+                    "text that is not UTF-8"
+                );
                 tag += bytes.len();
             }
             for cut in start..end {
@@ -2462,7 +2732,10 @@ mod tests {
             seen.extend(chunk);
         }
         assert_eq!(seen, (0..6).collect::<Vec<_>>());
-        assert!(source.next_chunk().is_none(), "a drained source stays drained");
+        assert!(
+            source.next_chunk().is_none(),
+            "a drained source stays drained"
+        );
     }
 
     #[test]
@@ -2478,7 +2751,10 @@ mod tests {
         let full = std::fs::read(&path).unwrap();
         for cut in [full.len() - 1, full.len() / 2, RESULT_MAGIC.len() + 3] {
             let decoded = decode_results(&full[..cut]).unwrap().results;
-            assert!(decoded.len() < 2, "a truncated tail must be dropped, not guessed");
+            assert!(
+                decoded.len() < 2,
+                "a truncated tail must be dropped, not guessed"
+            );
             for r in &decoded {
                 assert!(same(r, &a));
             }
@@ -2550,8 +2826,10 @@ mod tests {
     /// so the surrounding run is unaffected.
     #[test]
     fn a_dead_worker_degrades_only_its_own_missing_functions() {
-        let chunk: Vec<TargetSpec> =
-            [0x1000u64, 0x2000, 0x3000].iter().map(|&a| target(a)).collect();
+        let chunk: Vec<TargetSpec> = [0x1000u64, 0x2000, 0x3000]
+            .iter()
+            .map(|&a| target(a))
+            .collect();
         let mut survived = sample_result();
         survived.address = 0x2000;
         survived.byte_address = 0x2000;
@@ -2560,16 +2838,26 @@ mod tests {
         let (merged, delivered) =
             merge_chunk(&chunk, vec![survived], "worker chunk failed (signal: 11)");
         assert_eq!(merged.len(), 3);
-        assert_eq!(delivered, vec![false, true, false], "only the flushed record is the worker's");
+        assert_eq!(
+            delivered,
+            vec![false, true, false],
+            "only the flushed record is the worker's"
+        );
         assert_eq!(
             merged.iter().map(|r| r.address).collect::<Vec<_>>(),
             vec![0x1000, 0x2000, 0x3000],
             "target order must survive a crashed worker"
         );
-        assert!(merged[1].code.is_some() && merged[1].error.is_none(), "flushed record kept");
+        assert!(
+            merged[1].code.is_some() && merged[1].error.is_none(),
+            "flushed record kept"
+        );
         for lost in [&merged[0], &merged[2]] {
             assert!(lost.code.is_none());
-            assert_eq!(lost.error.as_deref(), Some("worker chunk failed (signal: 11)"));
+            assert_eq!(
+                lost.error.as_deref(),
+                Some("worker chunk failed (signal: 11)")
+            );
             // The parent's own inventory facts still describe the function.
             assert_eq!(lost.size, 0x20);
         }
@@ -2588,7 +2876,10 @@ mod tests {
             result.name = name.into();
             result
         }
-        let chunk: Vec<_> = [0x3000, 0x1000, 0x3000, 0x2000].into_iter().map(target).collect();
+        let chunk: Vec<_> = [0x3000, 0x1000, 0x3000, 0x2000]
+            .into_iter()
+            .map(target)
+            .collect();
         for reverse in [false, true] {
             let mut produced = vec![
                 record(0x3000, "first"),
@@ -2601,8 +2892,10 @@ mod tests {
             }
             let (merged, delivered) = merge_chunk(&chunk, produced, "missing");
             assert_eq!(delivered, [true, true, false, false]);
-            assert_eq!(merged.iter().map(|r| r.byte_address).collect::<Vec<_>>(),
-                       [0x3000, 0x1000, 0x3000, 0x2000]);
+            assert_eq!(
+                merged.iter().map(|r| r.byte_address).collect::<Vec<_>>(),
+                [0x3000, 0x1000, 0x3000, 0x2000]
+            );
             assert_eq!(merged[0].name, if reverse { "first" } else { "last" });
             assert_eq!(merged[1].name, "one");
             for missing in &merged[2..] {
@@ -2613,11 +2906,18 @@ mod tests {
     }
 
     fn died(stalled: bool, started: bool) -> Ending {
-        Ending::Died { stalled, started, running: None }
+        Ending::Died {
+            stalled,
+            started,
+            running: None,
+        }
     }
 
     fn reruns(suspect: Option<usize>, bystanders: &[usize]) -> Reruns {
-        Reruns { suspect, bystanders: bystanders.to_vec() }
+        Reruns {
+            suspect,
+            bystanders: bystanders.to_vec(),
+        }
     }
 
     /// The re-run policy, case by case.  A crash re-runs the function it
@@ -2627,7 +2927,10 @@ mod tests {
     #[test]
     fn a_dead_worker_reruns_its_suspect_first_and_its_bystanders_after() {
         let prefix = [true, true, false, false, false];
-        assert_eq!(retry_order(died(false, true), &prefix), reruns(Some(2), &[3, 4]));
+        assert_eq!(
+            retry_order(died(false, true), &prefix),
+            reruns(Some(2), &[3, 4])
+        );
         assert_eq!(
             retry_order(died(true, true), &prefix),
             reruns(None, &[3, 4]),
@@ -2650,7 +2953,10 @@ mod tests {
         assert_eq!(retry_order(died(true, false), &untouched), everything);
 
         for ending in [Ending::Finished, Ending::NotRun] {
-            assert!(retry_order(ending, &untouched).is_empty(), "{ending:?} re-runs nothing");
+            assert!(
+                retry_order(ending, &untouched).is_empty(),
+                "{ending:?} re-runs nothing"
+            );
         }
         assert!(retry_order(died(false, true), &[true; 4]).is_empty());
 
@@ -2669,16 +2975,36 @@ mod tests {
     /// already delivered, changes nothing.
     #[test]
     fn a_held_chunk_blames_the_function_its_worker_said_it_was_on() {
-        let on = |stalled, running| Ending::Died { stalled, started: true, running: Some(running) };
+        let on = |stalled, running| Ending::Died {
+            stalled,
+            started: true,
+            running: Some(running),
+        };
         let held = [false; 5];
         assert_eq!(retry_order(on(true, 3), &held), reruns(None, &[0, 2, 1, 4]));
-        assert_eq!(retry_order(on(false, 3), &held), reruns(Some(3), &[0, 2, 1, 4]));
+        assert_eq!(
+            retry_order(on(false, 3), &held),
+            reruns(Some(3), &[0, 2, 1, 4])
+        );
         assert_eq!(retry_order(on(true, 0), &held), reruns(None, &[1, 3, 2, 4]));
         let prefix = [true, true, false, false, false];
-        assert_eq!(retry_order(on(true, 1), &prefix), retry_order(died(true, true), &prefix));
-        assert_eq!(retry_order(on(false, 9), &prefix), retry_order(died(false, true), &prefix));
         assert_eq!(
-            retry_order(Ending::Died { stalled: true, started: false, running: Some(3) }, &held),
+            retry_order(on(true, 1), &prefix),
+            retry_order(died(true, true), &prefix)
+        );
+        assert_eq!(
+            retry_order(on(false, 9), &prefix),
+            retry_order(died(false, true), &prefix)
+        );
+        assert_eq!(
+            retry_order(
+                Ending::Died {
+                    stalled: true,
+                    started: false,
+                    running: Some(3)
+                },
+                &held
+            ),
             retry_order(died(true, false), &held),
         );
     }
@@ -2703,7 +3029,11 @@ mod tests {
         assert!(same(&frames.results[0], &a));
         assert_eq!(frames.running, Some(300_000));
         let frames = decode_results(&full[..full.len() - 1]).unwrap();
-        assert_eq!((frames.results.len(), frames.running), (1, Some(7)), "a torn frame is dropped");
+        assert_eq!(
+            (frames.results.len(), frames.running),
+            (1, Some(7)),
+            "a torn frame is dropped"
+        );
         assert_eq!(decode_results(RESULT_MAGIC).unwrap().running, None);
     }
 
@@ -2716,11 +3046,18 @@ mod tests {
             let order = spread(count);
             let mut sorted = order.clone();
             sorted.sort_unstable();
-            assert_eq!(sorted, (0..count).collect::<Vec<_>>(), "a permutation of {count}");
+            assert_eq!(
+                sorted,
+                (0..count).collect::<Vec<_>>(),
+                "a permutation of {count}"
+            );
         }
         assert_eq!(spread(8), vec![0, 4, 2, 6, 1, 5, 3, 7]);
         let first: Vec<usize> = spread(219).into_iter().take(16).collect();
-        assert!(first.iter().filter(|&&k| k < 16).count() <= 2, "the first 16 re-runs: {first:?}");
+        assert!(
+            first.iter().filter(|&&k| k < 16).count() <= 2,
+            "the first 16 re-runs: {first:?}"
+        );
     }
 
     /// A chunk stops once enough of its bystanders failed and they outnumber
@@ -2730,29 +3067,52 @@ mod tests {
     #[test]
     fn a_chunk_stops_rerunning_only_when_failures_dominate() {
         let mut adjacent = ChunkReruns::default();
-        assert_eq!(adjacent.record(true, false, false), None, "the suspect does not count");
+        assert_eq!(
+            adjacent.record(true, false, false),
+            None,
+            "the suspect does not count"
+        );
         for _ in 0..CHUNK_RERUN_FAILURES - 1 {
             assert_eq!(adjacent.record(false, false, false), None);
         }
-        assert_eq!(adjacent.record(false, false, false), Some(NOT_RERUN_CRASHING));
+        assert_eq!(
+            adjacent.record(false, false, false),
+            Some(NOT_RERUN_CRASHING)
+        );
 
         let mut alternating = ChunkReruns::default();
         for _ in 0..100 {
             assert_eq!(alternating.record(false, true, false), None);
-            assert_eq!(alternating.record(false, false, false), None, "a tie never stops");
+            assert_eq!(
+                alternating.record(false, false, false),
+                None,
+                "a tie never stops"
+            );
         }
 
         let mut mostly_failing = ChunkReruns::default();
-        let stops: Vec<_> =
-            (0..30).map(|i| mostly_failing.record(false, i % 3 == 0, false)).collect();
-        assert!(stops.contains(&Some(NOT_RERUN_CRASHING)), "two failures per recovery stop it");
+        let stops: Vec<_> = (0..30)
+            .map(|i| mostly_failing.record(false, i % 3 == 0, false))
+            .collect();
+        assert!(
+            stops.contains(&Some(NOT_RERUN_CRASHING)),
+            "two failures per recovery stop it"
+        );
 
         let mut stalls = ChunkReruns::default();
-        assert_eq!(stalls.record(true, false, true), None, "one stall is a function");
+        assert_eq!(
+            stalls.record(true, false, true),
+            None,
+            "one stall is a function"
+        );
         for _ in 0..20 {
             assert_eq!(stalls.record(false, true, false), None);
         }
-        assert_eq!(stalls.record(false, false, true), Some(NOT_RERUN_STALLED), "the second stall");
+        assert_eq!(
+            stalls.record(false, false, true),
+            Some(NOT_RERUN_STALLED),
+            "the second stall"
+        );
     }
 
     /// The run-wide check needs both a floor of failed re-runs and more failures
@@ -2767,10 +3127,16 @@ mod tests {
         }
         assert!(gate.allows(), "below the floor");
         gate.failed();
-        assert!(!gate.allows(), "{RUN_RERUN_FAILURES} failures against 3 records");
+        assert!(
+            !gate.allows(),
+            "{RUN_RERUN_FAILURES} failures against 3 records"
+        );
         assert!(gate.first_refusal() && !gate.first_refusal(), "warned once");
         gate.delivered(RUN_RERUN_FAILURES - 3);
-        assert!(gate.allows(), "as many records as failures: re-running resumes");
+        assert!(
+            gate.allows(),
+            "as many records as failures: re-running resumes"
+        );
         gate.failed();
         assert!(!gate.allows());
 
@@ -2779,7 +3145,10 @@ mod tests {
         for _ in 0..40 {
             working.failed();
         }
-        assert!(working.allows(), "workers that deliver as much as fails keep re-running");
+        assert!(
+            working.allows(),
+            "workers that deliver as much as fails keep re-running"
+        );
         working.failed();
         assert!(!working.allows());
     }
@@ -2789,9 +3158,13 @@ mod tests {
         assert_eq!(Faults::parse(""), (Faults::default(), Vec::new()));
         let (none, rejected) = Faults::parse("nonsense,panic:,stall:0xzz,spawn:x,boom:0x1");
         assert_eq!(none, Faults::default());
-        assert_eq!(rejected, vec!["nonsense", "panic:", "stall:0xzz", "spawn:x", "boom:0x1"]);
-        let (f, rejected) =
-            Faults::parse(" panic:0x40071d , panic-once:4196064,stall:*,spawn:2,panic:0X10,stall-again:0x14ea");
+        assert_eq!(
+            rejected,
+            vec!["nonsense", "panic:", "stall:0xzz", "spawn:x", "boom:0x1"]
+        );
+        let (f, rejected) = Faults::parse(
+            " panic:0x40071d , panic-once:4196064,stall:*,spawn:2,panic:0X10,stall-again:0x14ea",
+        );
         assert!(rejected.is_empty(), "{rejected:?}");
         assert_eq!(
             f.at,
@@ -2811,16 +3184,28 @@ mod tests {
 
         let dir = ScratchDir::create().unwrap();
         Faults::default().before_target(dir.path(), 0x1000);
-        Faults::parse("panic:0x2000").0.before_target(dir.path(), 0x1000);
+        Faults::parse("panic:0x2000")
+            .0
+            .before_target(dir.path(), 0x1000);
         let once = Faults::parse("panic-once:0x1000").0;
         assert!(std::panic::catch_unwind(|| once.before_target(dir.path(), 0x1000)).is_err());
         once.before_target(dir.path(), 0x1000);
 
-        let lost = lost_result(&target(0x1000), "worker stalled past the per-function watchdog");
+        let lost = lost_result(
+            &target(0x1000),
+            "worker stalled past the per-function watchdog",
+        );
         let marked = not_rerun(lost, NOT_RERUN_STALLED);
         let error = marked.error.as_deref().unwrap();
-        assert!(error.ends_with(&format!("; not re-run: {NOT_RERUN_STALLED}")), "{error}");
-        assert_eq!(count_error_anomalies(std::iter::once(error)), (0, 1), "still classified");
+        assert!(
+            error.ends_with(&format!("; not re-run: {NOT_RERUN_STALLED}")),
+            "{error}"
+        );
+        assert_eq!(
+            count_error_anomalies(std::iter::once(error)),
+            (0, 1),
+            "still classified"
+        );
     }
 
     /// The closing lines say how many functions the re-runs recovered and how
@@ -2831,14 +3216,31 @@ mod tests {
         let none = Retries::default();
         assert!(anomaly_lines((0, 0), 10, JOBS_TAG, none).is_empty());
 
-        let all_back =
-            anomaly_lines((0, 0), 10, JOBS_TAG, Retries { recovered: 20, failed_alone: 0 });
+        let all_back = anomaly_lines(
+            (0, 0),
+            10,
+            JOBS_TAG,
+            Retries {
+                recovered: 20,
+                failed_alone: 0,
+            },
+        );
         assert_eq!(all_back.len(), 1);
         assert!(all_back[0].starts_with("[kuna --jobs] 20 function(s) left unfinished"));
-        assert!(!all_back[0].contains("warning"), "nothing is missing: {all_back:?}");
+        assert!(
+            !all_back[0].contains("warning"),
+            "nothing is missing: {all_back:?}"
+        );
 
-        let mixed =
-            anomaly_lines((1, 3), 10, STREAM_TAG, Retries { recovered: 18, failed_alone: 2 });
+        let mixed = anomaly_lines(
+            (1, 3),
+            10,
+            STREAM_TAG,
+            Retries {
+                recovered: 18,
+                failed_alone: 2,
+            },
+        );
         assert_eq!(mixed.len(), 3, "{mixed:?}");
         assert!(mixed[0].contains("1 function(s) hit the 10s per-function watchdog"));
         assert!(mixed[1].starts_with("[kuna --stream] 18 function(s)"));
@@ -2847,7 +3249,10 @@ mod tests {
 
         let unretried = anomaly_lines((0, 5), 0, JOBS_TAG, none);
         assert_eq!(unretried.len(), 1);
-        assert!(!unretried[0].contains("re-run on their own"), "{unretried:?}");
+        assert!(
+            !unretried[0].contains("re-run on their own"),
+            "{unretried:?}"
+        );
     }
 
     /// Both silent-difference classes are counted, and an ordinary decompile
@@ -2930,14 +3335,26 @@ mod tests {
     #[test]
     fn structsynth_shard_note_for_every_run_that_would_synthesize() {
         let note = structsynth_shard_note(&cfg(0, 0.0), JOBS_TAG).expect("default param");
-        assert!(note.starts_with("[kuna --jobs] note: structsynth is off"), "{note}");
-        let project = PoolConfig { want_types: true, ..cfg(0, 0.0) };
+        assert!(
+            note.starts_with("[kuna --jobs] note: structsynth is off"),
+            "{note}"
+        );
+        let project = PoolConfig {
+            want_types: true,
+            ..cfg(0, 0.0)
+        };
         assert!(structsynth_shard_note(&project, STREAM_TAG).is_some());
         let off = [("structsynth".to_string(), "off".to_string())];
-        let turned_off = PoolConfig { options: &off, ..cfg(0, 0.0) };
+        let turned_off = PoolConfig {
+            options: &off,
+            ..cfg(0, 0.0)
+        };
         assert!(structsynth_shard_note(&turned_off, JOBS_TAG).is_none());
         let param = [("structsynth".to_string(), "param".to_string())];
-        let asked = PoolConfig { options: &param, ..cfg(0, 0.0) };
+        let asked = PoolConfig {
+            options: &param,
+            ..cfg(0, 0.0)
+        };
         assert!(structsynth_shard_note(&asked, JOBS_TAG).is_some());
     }
 
@@ -2947,12 +3364,20 @@ mod tests {
     /// absent entirely when the budget itself is off.
     #[test]
     fn the_stall_window_allows_a_load_then_tightens() {
-        assert_eq!(stall_deadline(&cfg(0, 70.0), false), None, "no budget, no stall kill");
+        assert_eq!(
+            stall_deadline(&cfg(0, 70.0), false),
+            None,
+            "no budget, no stall kill"
+        );
         assert_eq!(stall_deadline(&cfg(0, 70.0), true), None);
 
         let cold = stall_deadline(&cfg(10, 70.0), false).unwrap();
         let warm = stall_deadline(&cfg(10, 70.0), true).unwrap();
-        assert_eq!(warm, Duration::from_secs(40), "4x the budget once the worker is loaded");
+        assert_eq!(
+            warm,
+            Duration::from_secs(40),
+            "4x the budget once the worker is loaded"
+        );
         assert!(
             cold > warm + Duration::from_secs(200),
             "a cold worker still has to load: {cold:?}"
@@ -2972,8 +3397,14 @@ mod tests {
         assert_eq!(parse_jobs("1").unwrap(), (1, false));
         assert_eq!(parse_jobs(" 32 ").unwrap(), (32, false));
         let (auto, is_auto) = parse_jobs("auto").unwrap();
-        assert!(is_auto, "`auto` must be reported as auto, so the memory trim may lower it");
-        assert!((1..=MAX_AUTO_JOBS).contains(&auto), "auto must stay inside the cap: {auto}");
+        assert!(
+            is_auto,
+            "`auto` must be reported as auto, so the memory trim may lower it"
+        );
+        assert!(
+            (1..=MAX_AUTO_JOBS).contains(&auto),
+            "auto must stay inside the cap: {auto}"
+        );
         assert_eq!(parse_jobs("AUTO").unwrap(), (auto, true));
         for bad in ["0", "-4", "", "many"] {
             assert!(parse_jobs(bad).is_err(), "{bad:?} must be rejected");
@@ -2990,7 +3421,11 @@ mod tests {
     fn auto_yields_to_free_memory_and_an_explicit_count_does_not() {
         let mut c = cfg(0, 0.0);
         c.jobs = 1;
-        assert_eq!(affordable_jobs(&c, JOBS_TAG), 1, "one worker fits on any machine that can run this");
+        assert_eq!(
+            affordable_jobs(&c, JOBS_TAG),
+            1,
+            "one worker fits on any machine that can run this"
+        );
 
         // Far past what any machine holds, so the trim is reached wherever this
         // runs rather than only on a loaded box.
@@ -2998,7 +3433,10 @@ mod tests {
         c.jobs_auto = true;
         let trimmed = affordable_jobs(&c, JOBS_TAG);
         assert!(trimmed >= 1, "the trim must still leave a pool: {trimmed}");
-        assert!(trimmed < c.jobs, "`auto` must come down to what fits: {trimmed}");
+        assert!(
+            trimmed < c.jobs,
+            "`auto` must come down to what fits: {trimmed}"
+        );
 
         c.jobs_auto = false;
         assert_eq!(
@@ -3050,18 +3488,29 @@ mod tests {
             targets.push(t);
         }
         let plan = plan_chunks(&targets, None, 16);
-        let whales: Vec<usize> =
-            (0..targets.len()).filter(|&i| targets[i].size >= 0x8000).collect();
+        let whales: Vec<usize> = (0..targets.len())
+            .filter(|&i| targets[i].size >= 0x8000)
+            .collect();
         assert!(whales.len() >= 2, "fixture must contain whales");
 
         let first_chunk_of = |i: usize| plan.iter().position(|c| c.contains(&i)).unwrap();
         for &w in &whales {
-            assert!(first_chunk_of(w) < whales.len(), "whale {w} dispatched late");
+            assert!(
+                first_chunk_of(w) < whales.len(),
+                "whale {w} dispatched late"
+            );
             assert_eq!(plan[first_chunk_of(w)].len(), 1, "whale {w} shares a chunk");
         }
         let tail: Vec<usize> = plan[whales.len()..].iter().map(Vec::len).collect();
-        assert!(tail.iter().all(|&n| n > 1), "cheap functions must batch: {tail:?}");
-        assert_eq!(plan, plan_chunks(&targets, None, 16), "planning is deterministic");
+        assert!(
+            tail.iter().all(|&n| n > 1),
+            "cheap functions must batch: {tail:?}"
+        );
+        assert_eq!(
+            plan,
+            plan_chunks(&targets, None, 16),
+            "planning is deterministic"
+        );
 
         let fixed = plan_chunks(&targets, Some(7), 16);
         assert!(fixed[..fixed.len() - 1].iter().all(|c| c.len() == 7));
@@ -3076,15 +3525,24 @@ mod tests {
         let a = "typedef struct s s;\n\nstruct s {\n    int x;\n};\n".to_string();
         assert_eq!(merge_type_definitions(&[a.clone(), a.clone()], JOBS_TAG), a);
         assert_eq!(merge_type_definitions(&[], JOBS_TAG), "");
-        assert_eq!(merge_type_definitions(std::slice::from_ref(&a), JOBS_TAG), a);
+        assert_eq!(
+            merge_type_definitions(std::slice::from_ref(&a), JOBS_TAG),
+            a
+        );
 
         // A worker's block without its structures holds nothing the full one
         // lacks, wherever it comes.
         let full = "typedef struct s s;\ntypedef struct struct_0 struct_0;\n\nstruct s {\n    int x;\n};\n\n\
                     struct struct_0 {\n    int x;\n};\n"
             .to_string();
-        assert_eq!(merge_type_definitions(&[a.clone(), full.clone()], JOBS_TAG), full);
-        assert_eq!(merge_type_definitions(&[full.clone(), a.clone(), String::new()], JOBS_TAG), full);
+        assert_eq!(
+            merge_type_definitions(&[a.clone(), full.clone()], JOBS_TAG),
+            full
+        );
+        assert_eq!(
+            merge_type_definitions(&[full.clone(), a.clone(), String::new()], JOBS_TAG),
+            full
+        );
 
         // Two blocks that each hold a type the other does not.
         let t = "typedef struct t t;\n\nstruct t {\n    int x;\n};\n".to_string();
@@ -3094,8 +3552,16 @@ mod tests {
             format!("{full}typedef struct t t;\n\nstruct t {{\n    int x;\n}};\n"),
             "one blank line before a spaced definition, none repeated"
         );
-        for item in ["struct s {\n    int x;\n};", "struct t {\n    int x;\n};", "struct struct_0 {\n    int x;\n};"] {
-            assert_eq!(merged.matches(item).count(), 1, "{item} must appear exactly once");
+        for item in [
+            "struct s {\n    int x;\n};",
+            "struct t {\n    int x;\n};",
+            "struct struct_0 {\n    int x;\n};",
+        ] {
+            assert_eq!(
+                merged.matches(item).count(),
+                1,
+                "{item} must appear exactly once"
+            );
         }
     }
 
@@ -3108,8 +3574,15 @@ mod tests {
         let gb = |n: u64| n * 1024 * 1024 * 1024;
         let serial = worker_estimate_from(6_167_417_856, 0, false);
         let laned = worker_estimate_from(9_305_874_432, 3_138_456_576, false);
-        assert_eq!(laned, serial, "a laned load must estimate a worker as a serial one does");
-        assert_eq!(worker_estimate_from(gb(8), gb(2), true), gb(6), "--jobs-full-load too");
+        assert_eq!(
+            laned, serial,
+            "a laned load must estimate a worker as a serial one does"
+        );
+        assert_eq!(
+            worker_estimate_from(gb(8), gb(2), true),
+            gb(6),
+            "--jobs-full-load too"
+        );
         // The floor still holds, and nothing underflows when the excess is stale
         // and larger than this load's peak.
         assert_eq!(worker_estimate_from(gb(1), gb(4), false), 256 * 1024 * 1024);
@@ -3138,6 +3611,9 @@ mod tests {
         // within a tenth of the serial one.
         let bounded = worker_estimate_from(kb(17_727_772), kb(4_257_000), false);
         let ratio = bounded as f64 / serial as f64;
-        assert!(ratio > 0.85 && ratio < 1.15, "bounded estimate is {ratio:.2}x the serial one");
+        assert!(
+            ratio > 0.85 && ratio < 1.15,
+            "bounded estimate is {ratio:.2}x the serial one"
+        );
     }
 }

@@ -45,7 +45,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use unlace_analysis::passes::passes_for;
-use unlace_analysis::sourcelang::{detect_compiler, Compiler};
+use unlace_analysis::sourcelang::{Compiler, detect_compiler};
 
 fn fixtures() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -65,7 +65,10 @@ fn pass_ids(compiler: Compiler) -> Vec<&'static str> {
     // independent of the loader format; the ELF format keeps them unaffected by both
     // the PE-only `rtti` pass gate and the Mach-O-only `objc` pass gate (`objc` is
     // exercised by `verify_objc.rs`, `rtti` by `verify_rtti.rs`).
-    passes_for(compiler, object::BinaryFormat::Elf).iter().map(|p| p.id()).collect()
+    passes_for(compiler, object::BinaryFormat::Elf)
+        .iter()
+        .map(|p| p.id())
+        .collect()
 }
 
 /// PE: a MinGW PE detects as `Gcc` via its `.rdata` `GCC:` records.
@@ -73,13 +76,21 @@ fn pass_ids(compiler: Compiler) -> Vec<&'static str> {
 fn pe_mingw_detects_as_gcc() {
     let bytes = read_fixture("pe_imports.exe");
     let file = object::File::parse(bytes.as_slice()).expect("parse PE");
-    assert_eq!(file.format(), object::BinaryFormat::Pe, "fixture must be a PE");
+    assert_eq!(
+        file.format(),
+        object::BinaryFormat::Pe,
+        "fixture must be a PE"
+    );
 
     let t = Instant::now();
     let c = detect_compiler(&file, &bytes);
     let elapsed = t.elapsed();
 
-    assert_eq!(c, Compiler::Gcc, "MinGW pe_imports.exe should detect as Gcc");
+    assert_eq!(
+        c,
+        Compiler::Gcc,
+        "MinGW pe_imports.exe should detect as Gcc"
+    );
     assert!(!c.is_rust());
     assert!(!c.is_golang());
     eprintln!("PR-14 e2e: PE detect_compiler -> {c:?} in {elapsed:?}");
@@ -92,13 +103,21 @@ fn macho_detects_as_clang() {
     for f in ["macho_imports", "macho_imports_arm64"] {
         let bytes = read_fixture(f);
         let file = object::File::parse(bytes.as_slice()).expect("parse Mach-O");
-        assert_eq!(file.format(), object::BinaryFormat::MachO, "{f} must be a Mach-O");
+        assert_eq!(
+            file.format(),
+            object::BinaryFormat::MachO,
+            "{f} must be a Mach-O"
+        );
 
         let t = Instant::now();
         let c = detect_compiler(&file, &bytes);
         let elapsed = t.elapsed();
 
-        assert_eq!(c, Compiler::Clang, "{f} should detect as Clang (LC_BUILD_VERSION)");
+        assert_eq!(
+            c,
+            Compiler::Clang,
+            "{f} should detect as Clang (LC_BUILD_VERSION)"
+        );
         assert!(!c.is_rust());
         assert!(!c.is_golang());
         eprintln!("PR-14 e2e: Mach-O {f} detect_compiler -> {c:?} in {elapsed:?}");
@@ -112,11 +131,19 @@ fn macho_detects_as_clang() {
 fn elf_detection_unchanged() {
     let rust = read_fixture("rust_hello_x86_64");
     let rfile = object::File::parse(rust.as_slice()).unwrap();
-    assert_eq!(detect_compiler(&rfile, &rust), Compiler::Rustc, "rust ELF still Rustc");
+    assert_eq!(
+        detect_compiler(&rfile, &rust),
+        Compiler::Rustc,
+        "rust ELF still Rustc"
+    );
 
     let c = read_fixture("fauxware");
     let cfile = object::File::parse(c.as_slice()).unwrap();
-    assert_eq!(detect_compiler(&cfile, &c), Compiler::Gcc, "C ELF still Gcc");
+    assert_eq!(
+        detect_compiler(&cfile, &c),
+        Compiler::Gcc,
+        "C ELF still Gcc"
+    );
 }
 
 /// The payoff: once detection reports `Rustc`/`Go` (on ANY format), the pass set
@@ -127,12 +154,31 @@ fn elf_detection_unchanged() {
 fn rust_go_compiler_value_drives_language_passes() {
     // Go appends the pclntab pass; no other compiler carries it.
     let go = pass_ids(Compiler::Go);
-    assert_eq!(go.last(), Some(&"gopclntab"), "Go compiler value appends gopclntab");
-    assert!(go.contains(&"gonoreturn"), "Go compiler value carries gonoreturn");
-    for c in [Compiler::Gcc, Compiler::Clang, Compiler::Rustc, Compiler::Swift, Compiler::Unknown] {
+    assert_eq!(
+        go.last(),
+        Some(&"gopclntab"),
+        "Go compiler value appends gopclntab"
+    );
+    assert!(
+        go.contains(&"gonoreturn"),
+        "Go compiler value carries gonoreturn"
+    );
+    for c in [
+        Compiler::Gcc,
+        Compiler::Clang,
+        Compiler::Rustc,
+        Compiler::Swift,
+        Compiler::Unknown,
+    ] {
         let set = pass_ids(c);
-        assert!(!set.contains(&"gopclntab"), "{c:?} must not carry gopclntab");
-        assert!(!set.contains(&"gonoreturn"), "{c:?} must not carry gonoreturn");
+        assert!(
+            !set.contains(&"gopclntab"),
+            "{c:?} must not carry gopclntab"
+        );
+        assert!(
+            !set.contains(&"gonoreturn"),
+            "{c:?} must not carry gonoreturn"
+        );
     }
 
     // The no-return pass is present for every compiler (its body widens for
@@ -140,7 +186,10 @@ fn rust_go_compiler_value_drives_language_passes() {
     // set is well-formed for the Rust/Go values that PE/Mach-O detection can now
     // produce.
     for c in [Compiler::Rustc, Compiler::Go] {
-        assert!(pass_ids(c).contains(&"noreturn_known"), "{c:?} carries noreturn_known");
+        assert!(
+            pass_ids(c).contains(&"noreturn_known"),
+            "{c:?} carries noreturn_known"
+        );
     }
 }
 
@@ -153,7 +202,9 @@ fn rust_go_compiler_value_drives_language_passes() {
 fn rust_symbol_path_is_format_neutral() {
     use unlace_analysis::sourcelang::is_rust_mangled;
     // legacy + v0 rustc manglings
-    assert!(is_rust_mangled("_ZN4core9panicking5panic17h0123456789abcdefE"));
+    assert!(is_rust_mangled(
+        "_ZN4core9panicking5panic17h0123456789abcdefE"
+    ));
     assert!(is_rust_mangled("_RNvCs1234_4core5panic"));
     // a plain C++ / C symbol is not Rust (so a non-Rust PE/Mach-O won't false-fire)
     assert!(!is_rust_mangled("_ZN3foo3Bar3bazEi"));

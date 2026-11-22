@@ -45,12 +45,30 @@ fn element_size(data: &Funcdata, p: VarnodeId) -> Option<u64> {
 /// added to it selects another field, not an element.
 fn scalar_field(data: &Funcdata, p: VarnodeId) -> bool {
     use crate::dtype::type_metatype::{TYPE_ARRAY, TYPE_STRUCT};
-    let Some(d) = data.vbank().get(p).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d)) else { return false };
+    let Some(d) = data
+        .vbank()
+        .get(p)
+        .and_then(|v| v.get_def())
+        .and_then(|d| data.obank().get(d))
+    else {
+        return false;
+    };
     if d.code() != OpCode::CPUI_PTRSUB {
         return false;
     }
-    let (Some(base), Some(off)) = (d.get_in(0).and_then(|b| data.vbank().get(b)), d.get_in(1).and_then(|o| data.vbank().get(o))) else { return false };
-    let Some(record) = base.get_type().get_ptr_to().filter(|t| t.get_metatype() == TYPE_STRUCT) else { return false };
+    let (Some(base), Some(off)) = (
+        d.get_in(0).and_then(|b| data.vbank().get(b)),
+        d.get_in(1).and_then(|o| data.vbank().get(o)),
+    ) else {
+        return false;
+    };
+    let Some(record) = base
+        .get_type()
+        .get_ptr_to()
+        .filter(|t| t.get_metatype() == TYPE_STRUCT)
+    else {
+        return false;
+    };
     match record.get_sub_type(off.get_offset() as i64) {
         Ok((Some(field), _)) => field.get_metatype() != TYPE_ARRAY,
         _ => true,
@@ -66,7 +84,8 @@ fn constant(data: &Funcdata, v: VarnodeId) -> Option<(u64, int4)> {
 fn divide(c: u64, size: int4, k: u64) -> Option<u64> {
     let bits = 8 * size.clamp(1, 8) as u32;
     let signed = ((c << (64 - bits)) as i64) >> (64 - bits);
-    (signed % k as i64 == 0).then(|| ((signed / k as i64) as u64) & crate::kuna_strlenscan::mask(size))
+    (signed % k as i64 == 0)
+        .then(|| ((signed / k as i64) as u64) & crate::kuna_strlenscan::mask(size))
 }
 
 /// What a reader of a web member does with it.
@@ -101,9 +120,11 @@ fn classify(data: &Funcdata, op: OpId, w: VarnodeId, k: u64) -> Option<Use> {
                 divide(c, s, k)?;
                 return out.map(Use::Member);
             }
-            (element_size(data, other) == Some(k)).then(|| Use::Address(op, if a == w { 1 } else { 0 }))
+            (element_size(data, other) == Some(k))
+                .then(|| Use::Address(op, if a == w { 1 } else { 0 }))
         }
-        CPUI_INT_EQUAL | CPUI_INT_NOTEQUAL | CPUI_INT_LESS | CPUI_INT_LESSEQUAL | CPUI_INT_SLESS | CPUI_INT_SLESSEQUAL => {
+        CPUI_INT_EQUAL | CPUI_INT_NOTEQUAL | CPUI_INT_LESS | CPUI_INT_LESSEQUAL
+        | CPUI_INT_SLESS | CPUI_INT_SLESSEQUAL => {
             let slot = if o.get_in(0) == Some(w) { 1 } else { 0 };
             let (c, s) = constant(data, o.get_in(slot)?)?;
             divide(c, s, k)?;
@@ -115,9 +136,18 @@ fn classify(data: &Funcdata, op: OpId, w: VarnodeId, k: u64) -> Option<Use> {
 
 /// Is `op`, the def of a member, a write the web allows? Its constant slot,
 /// if any, is recorded.
-fn writer(data: &Funcdata, op: OpId, members: &BTreeSet<VarnodeId>, k: u64, constants: &mut Vec<(OpId, int4)>, frontier: &mut Vec<VarnodeId>) -> bool {
+fn writer(
+    data: &Funcdata,
+    op: OpId,
+    members: &BTreeSet<VarnodeId>,
+    k: u64,
+    constants: &mut Vec<(OpId, int4)>,
+    frontier: &mut Vec<VarnodeId>,
+) -> bool {
     use OpCode::*;
-    let Some(o) = data.obank().get(op) else { return false };
+    let Some(o) = data.obank().get(op) else {
+        return false;
+    };
     let ins: Vec<VarnodeId> = (0..o.num_input()).filter_map(|i| o.get_in(i)).collect();
     match o.code() {
         CPUI_COPY => match constant(data, ins[0]) {
@@ -200,19 +230,33 @@ fn collect(data: &Funcdata, start: VarnodeId, k: u64) -> Option<Web> {
     constants.dedup();
     addresses.sort();
     addresses.dedup();
-    Some(Web { members, k, constants, addresses })
+    Some(Web {
+        members,
+        k,
+        constants,
+        addresses,
+    })
 }
 
 fn rewrite(data: &mut Funcdata, web: &Web) -> unlace_base::error::KunaResult<()> {
     for &(op, slot) in &web.constants {
-        let Some(v) = data.obank().get(op).and_then(|o| o.get_in(slot)) else { continue };
-        let Some((c, s)) = constant(data, v) else { continue };
-        let Some(q) = divide(c, s, web.k) else { continue };
+        let Some(v) = data.obank().get(op).and_then(|o| o.get_in(slot)) else {
+            continue;
+        };
+        let Some((c, s)) = constant(data, v) else {
+            continue;
+        };
+        let Some(q) = divide(c, s, web.k) else {
+            continue;
+        };
         let nc = data.new_constant(s, q as uintb);
         data.op_set_input(op, nc, slot)?;
     }
     for &(op, base_slot) in &web.addresses {
-        let (Some(p), Some(w)) = (data.obank().get(op).and_then(|o| o.get_in(base_slot)), data.obank().get(op).and_then(|o| o.get_in(1 - base_slot))) else {
+        let (Some(p), Some(w)) = (
+            data.obank().get(op).and_then(|o| o.get_in(base_slot)),
+            data.obank().get(op).and_then(|o| o.get_in(1 - base_slot)),
+        ) else {
             continue;
         };
         let size = data.vbank().get(w).map_or(8, |v| v.get_size());
@@ -231,7 +275,9 @@ pub struct ActionIndexRescale {
 
 impl ActionIndexRescale {
     pub fn boxed(g: &str) -> Box<dyn Action> {
-        Box::new(ActionIndexRescale { base: ActionBase::new(0, "indexrescale", g) })
+        Box::new(ActionIndexRescale {
+            base: ActionBase::new(0, "indexrescale", g),
+        })
     }
 }
 
@@ -243,7 +289,11 @@ impl Action for ActionIndexRescale {
         &mut self.base
     }
     fn clone_filtered(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Action>> {
-        grouplist.contains(self.get_group()).then(|| Box::new(ActionIndexRescale { base: self.base.clone() }) as Box<dyn Action>)
+        grouplist.contains(self.get_group()).then(|| {
+            Box::new(ActionIndexRescale {
+                base: self.base.clone(),
+            }) as Box<dyn Action>
+        })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data.get_arch().index_rescale {
@@ -252,11 +302,15 @@ impl Action for ActionIndexRescale {
         let ops: Vec<OpId> = data.obank().iter_alive().collect();
         let mut done: BTreeSet<VarnodeId> = BTreeSet::new();
         for op in ops {
-            let Some(o) = data.obank().get(op) else { continue };
+            let Some(o) = data.obank().get(op) else {
+                continue;
+            };
             if o.code() != OpCode::CPUI_INT_ADD || o.get_parent().is_none() {
                 continue;
             }
-            let (Some(a), Some(b)) = (o.get_in(0), o.get_in(1)) else { continue };
+            let (Some(a), Some(b)) = (o.get_in(0), o.get_in(1)) else {
+                continue;
+            };
             let (w, k) = match (element_size(data, a), element_size(data, b)) {
                 (Some(k), None) => (b, k),
                 (None, Some(k)) => (a, k),

@@ -21,12 +21,11 @@
 //! computation — deleted basic blocks.  `docs/features/callsite-stack-args/`
 //! carries the two decbench cases, the minimal witnesses and the corpus numbers.
 
+use std::rc::Rc;
 use unlace_base::address::{Address, RangeList};
 use unlace_base::marshal::ElementId;
 use unlace_base::space::AddrSpace;
 use unlace_base::types::uintb;
-use std::rc::Rc;
-
 
 /// Marshaling element `<callsitestackargs>` (kuna 4000+ range; 4117 = warnstyle).
 pub const ELEM_CALLSITESTACKARGS: ElementId = ElementId::new("callsitestackargs", 4118);

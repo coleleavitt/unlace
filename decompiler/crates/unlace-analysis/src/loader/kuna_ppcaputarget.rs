@@ -89,7 +89,12 @@ pub(super) fn language_id_when(file: &object::File<'_>, enabled: bool) -> Option
 }
 
 pub(crate) fn notes(file: &object::File<'_>, language: &str, explicit: bool) -> Vec<String> {
-    notes_when(file, language, explicit, unlace_decomp::kuna_ppcapu::ppcapu_enabled())
+    notes_when(
+        file,
+        language,
+        explicit,
+        unlace_decomp::kuna_ppcapu::ppcapu_enabled(),
+    )
 }
 
 pub(super) fn notes_when(
@@ -101,5 +106,7 @@ pub(super) fn notes_when(
     if explicit || !enabled || !applies(file) || powerpc_variant(file).is_ok() {
         return Vec::new();
     }
-    vec![format!("PowerPC APU note is malformed or names an APU kuna does not classify; using {language}; use --target to specify another language")]
+    vec![format!(
+        "PowerPC APU note is malformed or names an APU kuna does not classify; using {language}; use --target to specify another language"
+    )]
 }

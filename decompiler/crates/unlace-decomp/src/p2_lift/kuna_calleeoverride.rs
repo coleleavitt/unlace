@@ -24,7 +24,8 @@ pub fn seed(arch: &Architecture, fd: &mut Funcdata) {
         return;
     };
     for (site, callee) in sites {
-        fd.get_override_mut().insert_indirect_override(site.clone(), callee.clone());
+        fd.get_override_mut()
+            .insert_indirect_override(site.clone(), callee.clone());
     }
 }
 
@@ -54,6 +55,9 @@ fn calls_directly(fd: &Funcdata, site: &Address, callee: &Address) -> bool {
     (0..fd.num_calls()).any(|i| {
         let spec = fd.get_call_specs(i);
         (spec.get_entry_address() == callee || spec.plt_stub() == Some(callee))
-            && fd.obank().get(spec.get_op()).is_some_and(|op| op.get_addr() == site)
+            && fd
+                .obank()
+                .get(spec.get_op())
+                .is_some_and(|op| op.get_addr() == site)
     })
 }

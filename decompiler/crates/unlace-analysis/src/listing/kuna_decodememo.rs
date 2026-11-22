@@ -19,8 +19,8 @@ use unlace_base::address::Address;
 use unlace_base::space::AddrSpace;
 use unlace_sleigh::translate::Translate;
 
-use super::classify::{classify, Classified};
-use super::decode::{decode_one_listing, DecodedListing};
+use super::classify::{Classified, classify};
+use super::decode::{DecodedListing, decode_one_listing};
 use super::kuna_decodereuse::ReusableDecode;
 use super::model::{FlowKind, FlowType, Mnemonic};
 use super::walk::StepCtx;
@@ -81,10 +81,22 @@ const KINDS: [FlowKind; 9] = [
 const FALLS: u16 = 1 << 15;
 
 fn pack(flow: FlowType, falls: bool) -> u16 {
-    let kind = KINDS.iter().position(|&k| k == flow.kind).unwrap_or_default() as u16;
-    let bits = [flow.is_call, flow.is_jump, flow.is_terminal, flow.is_computed, flow.is_indirect,
-        flow.is_conditional, flow.has_fallthrough];
-    bits.iter().enumerate().fold(kind, |acc, (i, &on)| acc | (u16::from(on) << (4 + i)))
+    let kind = KINDS
+        .iter()
+        .position(|&k| k == flow.kind)
+        .unwrap_or_default() as u16;
+    let bits = [
+        flow.is_call,
+        flow.is_jump,
+        flow.is_terminal,
+        flow.is_computed,
+        flow.is_indirect,
+        flow.is_conditional,
+        flow.has_fallthrough,
+    ];
+    bits.iter()
+        .enumerate()
+        .fold(kind, |acc, (i, &on)| acc | (u16::from(on) << (4 + i)))
         | if falls { FALLS } else { 0 }
 }
 
@@ -126,7 +138,10 @@ impl DecodeMemo {
         if vma % 2 != 0 {
             return None;
         }
-        let range = self.ranges.iter().position(|&(lo, hi)| lo <= vma && vma < hi)?;
+        let range = self
+            .ranges
+            .iter()
+            .position(|&(lo, hi)| lo <= vma && vma < hi)?;
         Some((range, ((vma - self.ranges[range].0) / 2) as usize))
     }
 
@@ -140,7 +155,9 @@ impl DecodeMemo {
         f: impl FnOnce(Recalled<'_>) -> R,
     ) -> Option<R> {
         let (range, at) = self.slot(vma)?;
-        let memo = *self.slots.borrow()[range].get(at).filter(|memo| memo.len != 0)?;
+        let memo = *self.slots.borrow()[range]
+            .get(at)
+            .filter(|memo| memo.len != 0)?;
         let contexts = self.contexts.borrow();
         let reusable = &contexts.reuse[usize::from(memo.context)];
         if !reusable.matches(translate, &Address::new(Rc::clone(space), vma)) {
@@ -212,7 +229,9 @@ impl DecodeMemo {
             slots.resize(hi.saturating_sub(lo).div_ceil(2) as usize, Memo::default());
         }
         slots[at] = memo;
-        Some(Rc::clone(&self.contexts.borrow().reuse[usize::from(context)]))
+        Some(Rc::clone(
+            &self.contexts.borrow().reuse[usize::from(context)],
+        ))
     }
 
     fn context_id(&self, context: &[u32]) -> Option<u8> {
@@ -221,7 +240,9 @@ impl DecodeMemo {
             return Some(id);
         }
         let id = u8::try_from(contexts.reuse.len()).ok()?;
-        contexts.reuse.push(Rc::new(ReusableDecode::context_only(context.to_vec())));
+        contexts
+            .reuse
+            .push(Rc::new(ReusableDecode::context_only(context.to_vec())));
         contexts.ids.insert(context.into(), id);
         Some(id)
     }
@@ -234,10 +255,18 @@ pub(super) fn decode(
     vma: u64,
     intern: &mut impl FnMut(&str) -> Mnemonic,
 ) -> Option<(DecodedListing, Classified)> {
-    let memo = ctx.memo.filter(|_| ctx.detail.assembly && !ctx.policy.stack_callbacks);
+    let memo = ctx
+        .memo
+        .filter(|_| ctx.detail.assembly && !ctx.policy.stack_callbacks);
     let Some(memo) = memo else {
         let decoded = decode_one_listing(
-            ctx.translate, vma, ctx.code_space, ctx.detail.assembly, ctx.policy.stack_callbacks, intern, None,
+            ctx.translate,
+            vma,
+            ctx.code_space,
+            ctx.detail.assembly,
+            ctx.policy.stack_callbacks,
+            intern,
+            None,
         )
         .ok()
         .filter(|d| d.len != 0)?;
@@ -253,20 +282,43 @@ pub(super) fn decode(
             operands: m.operands.to_string(),
             stored_scalar_values: Vec::new(),
         };
-        (decoded, Classified { flow: m.flow, flows: m.flows.to_vec(), fall_through: m.fall_through })
+        (
+            decoded,
+            Classified {
+                flow: m.flow,
+                flows: m.flows.to_vec(),
+                fall_through: m.fall_through,
+            },
+        )
     });
     if recalled.is_some() {
         memo.reused.set(true);
         return recalled;
     }
     let mut key = None;
-    let decoded =
-        decode_one_listing(ctx.translate, vma, ctx.code_space, true, false, intern, Some(&mut key))
-            .ok()
-            .filter(|d| d.len != 0)?;
+    let decoded = decode_one_listing(
+        ctx.translate,
+        vma,
+        ctx.code_space,
+        true,
+        false,
+        intern,
+        Some(&mut key),
+    )
+    .ok()
+    .filter(|d| d.len != 0)?;
     let c = classify(&decoded.ops, vma, decoded.len);
     if let Some(context) = key {
-        memo.keep(vma, &context, decoded.len, c.flow, c.fall_through, &c.flows, &decoded.mnemonic, &decoded.operands);
+        memo.keep(
+            vma,
+            &context,
+            decoded.len,
+            c.flow,
+            c.fall_through,
+            &c.flows,
+            &decoded.mnemonic,
+            &decoded.operands,
+        );
     }
     Some((decoded, c))
 }

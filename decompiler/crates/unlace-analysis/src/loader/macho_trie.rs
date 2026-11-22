@@ -23,8 +23,8 @@ use object::macho::{
     EXPORT_SYMBOL_FLAGS_KIND_REGULAR, EXPORT_SYMBOL_FLAGS_KIND_THREAD_LOCAL,
     EXPORT_SYMBOL_FLAGS_REEXPORT, EXPORT_SYMBOL_FLAGS_STUB_AND_RESOLVER,
 };
-use object::read::macho::{LoadCommandVariant, MachHeader, MachOFile, Segment};
 use object::read::ReadRef;
+use object::read::macho::{LoadCommandVariant, MachHeader, MachOFile, Segment};
 
 /// What an export's value means (`EXPORT_SYMBOL_FLAGS_KIND_*`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -131,11 +131,17 @@ where
             let count = u64::from(symtab.nsyms.get(endian));
             symbols = file
                 .data()
-                .read_bytes_at(symtab.symoff.get(endian).into(), count.saturating_mul(width))
+                .read_bytes_at(
+                    symtab.symoff.get(endian).into(),
+                    count.saturating_mul(width),
+                )
                 .unwrap_or(&[]);
             strings = file
                 .data()
-                .read_bytes_at(symtab.stroff.get(endian).into(), symtab.strsize.get(endian).into())
+                .read_bytes_at(
+                    symtab.stroff.get(endian).into(),
+                    symtab.strsize.get(endian).into(),
+                )
                 .unwrap_or(&[]);
         }
     }
@@ -170,7 +176,10 @@ where
                 trie = Some((d.dataoff.get(endian).into(), d.datasize.get(endian).into()));
             }
             Ok(LoadCommandVariant::DyldInfo(d)) => {
-                info = Some((d.export_off.get(endian).into(), d.export_size.get(endian).into()));
+                info = Some((
+                    d.export_off.get(endian).into(),
+                    d.export_size.get(endian).into(),
+                ));
             }
             _ => {}
         }

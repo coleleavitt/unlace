@@ -1,13 +1,13 @@
 //! Execute recovered Go register results and byte-array views without editing their bodies.
 
 use crate::common;
-use unlace_console::engine::{bootstrap_from_file, bootstrap_from_object, ConsoleProgram};
-use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
-};
-use unlace_console::ifaceterm::ConsoleCommands;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_file, bootstrap_from_object};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
+use unlace_console::ifaceterm::ConsoleCommands;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
@@ -82,12 +82,18 @@ fn run(command: &mut Command) {
 
 fn execute_body(body: &str, name: &str) {
     let source = common::scratch_file("gobyteview", "go");
-    let header = body.lines().find(|l| l.starts_with("func ")).unwrap_or_default();
+    let header = body
+        .lines()
+        .find(|l| l.starts_with("func "))
+        .unwrap_or_default();
     let imports = |mut packages: Vec<&str>| {
         if body.contains("unsafe.") {
             packages.push("unsafe");
         }
-        packages.iter().map(|p| format!("import \"{p}\"\n")).collect::<String>()
+        packages
+            .iter()
+            .map(|p| format!("import \"{p}\"\n"))
+            .collect::<String>()
     };
     let program = if header.contains(") (") {
         // A recovered multi-result signature: both words come back as results.
@@ -100,7 +106,10 @@ func check[P ~int64 | ~uint64, R ~int64 | ~uint64](f func(P) (R, R)) {
 }
 func main() { check(recovered) }
 "#;
-        format!("package main\n{}{body}\nvar recovered = {name}\n{check}", imports(vec![]))
+        format!(
+            "package main\n{}{body}\nvar recovered = {name}\n{check}",
+            imports(vec![])
+        )
     } else {
         // The byte-view carrier: both words live in one 16-byte result.
         let check = r#"
@@ -112,7 +121,10 @@ func main() {
   }
 }
 "#;
-        format!("package main\n{}{body}\nvar recovered = {name}\n{check}", imports(vec!["encoding/binary"]))
+        format!(
+            "package main\n{}{body}\nvar recovered = {name}\n{check}",
+            imports(vec!["encoding/binary"])
+        )
     };
     std::fs::write(&source, program).unwrap();
     run(Command::new("go").arg("run").arg(source));

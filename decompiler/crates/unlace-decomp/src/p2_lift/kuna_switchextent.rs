@@ -71,10 +71,15 @@ pub fn function_tables(
     entry: &Address,
     end: Option<u64>,
 ) -> Vec<u64> {
-    let Some(space) = entry.get_space().cloned() else { return Vec::new() };
+    let Some(space) = entry.get_space().cloned() else {
+        return Vec::new();
+    };
     let lo = entry.get_offset();
     let end = end.unwrap_or(u64::MAX).min(lo.saturating_add(MAX_EXTENT));
-    let mut fold = Fold { vals: Vec::new(), tables: BTreeSet::new() };
+    let mut fold = Fold {
+        vals: Vec::new(),
+        tables: BTreeSet::new(),
+    };
     let mut at = lo;
     while at < end {
         let addr = Address::new(std::rc::Rc::clone(&space), at);
@@ -107,11 +112,18 @@ pub fn later_tables(
     above: u64,
     next_entry: impl Fn(u64) -> Option<u64>,
 ) -> Vec<u64> {
-    let Some(space) = entry.get_space().cloned() else { return Vec::new() };
+    let Some(space) = entry.get_space().cloned() else {
+        return Vec::new();
+    };
     let mut lo = end;
     for _ in 0..MAX_LATER_FUNCTIONS {
         let hi = next_entry(lo);
-        let tables = function_tables(translate, image, &Address::new(std::rc::Rc::clone(&space), lo), hi);
+        let tables = function_tables(
+            translate,
+            image,
+            &Address::new(std::rc::Rc::clone(&space), lo),
+            hi,
+        );
         if tables.iter().any(|&t| t > above) {
             return tables;
         }
@@ -149,23 +161,36 @@ struct Fold {
 }
 
 impl PcodeEmit for Fold {
-    fn dump(&mut self, _addr: &Address, opc: OpCode, outvar: Option<&VarnodeData>, vars: &[VarnodeData]) {
+    fn dump(
+        &mut self,
+        _addr: &Address,
+        opc: OpCode,
+        outvar: Option<&VarnodeData>,
+        vars: &[VarnodeData],
+    ) {
         if opc == OpCode::CPUI_BRANCHIND {
             match vars.first().and_then(|vn| self.value_of(vn)) {
                 Some(Val::Relative { table }) => {
                     self.tables.insert(table);
                 }
-                Some(Val::Entry { table, width }) if vars.first().is_some_and(|vn| vn.size == width) => {
+                Some(Val::Entry { table, width })
+                    if vars.first().is_some_and(|vn| vn.size == width) =>
+                {
                     self.tables.insert(table);
                 }
                 _ => {}
             }
         }
-        if matches!(opc, OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_CALLOTHER) {
+        if matches!(
+            opc,
+            OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_CALLOTHER
+        ) {
             self.vals.clear();
         }
         let folded = self.fold(opc, outvar, vars);
-        let Some(key) = outvar.and_then(key_of) else { return };
+        let Some(key) = outvar.and_then(key_of) else {
+            return;
+        };
         self.vals.retain(|(k, _)| !overlap(*k, key));
         if let Some(val) = folded {
             if self.vals.len() < MAX_TRACKED {
@@ -191,7 +216,11 @@ impl Fold {
             if s != key.0 || z <= key.2 {
                 return None;
             }
-            let low = if big { o + u64::from(z - key.2) == key.1 } else { o == key.1 };
+            let low = if big {
+                o + u64::from(z - key.2) == key.1
+            } else {
+                o == key.1
+            };
             match v {
                 Val::Const(c) if low => Some(Val::Const(c & mask(key.2))),
                 Val::Entry { width, .. } if low && width <= key.2 => Some(v),
@@ -208,48 +237,81 @@ impl Fold {
             OpCode::CPUI_INT_ZEXT | OpCode::CPUI_INT_SEXT => match get(0)? {
                 Val::Const(c) => {
                     let width = vars.first()?.size;
-                    Some(Val::Const(if opc == OpCode::CPUI_INT_SEXT { sign_extend(c, width) } else { c }))
+                    Some(Val::Const(if opc == OpCode::CPUI_INT_SEXT {
+                        sign_extend(c, width)
+                    } else {
+                        c
+                    }))
                 }
                 v @ (Val::Entry { .. } | Val::Scaled { .. }) => Some(v),
                 Val::Indexed(_) | Val::Relative { .. } => None,
             },
             OpCode::CPUI_INT_ADD => match (get(0), get(1)) {
-                (Some(Val::Const(a)), Some(Val::Const(b))) => Some(Val::Const(a.wrapping_add(b) & mask(out_size))),
-                (Some(Val::Const(a)), Some(Val::Indexed(b))) | (Some(Val::Indexed(a)), Some(Val::Const(b))) => {
+                (Some(Val::Const(a)), Some(Val::Const(b))) => {
+                    Some(Val::Const(a.wrapping_add(b) & mask(out_size)))
+                }
+                (Some(Val::Const(a)), Some(Val::Indexed(b)))
+                | (Some(Val::Indexed(a)), Some(Val::Const(b))) => {
                     Some(Val::Indexed(a.wrapping_add(b)))
                 }
                 (Some(Val::Entry { table, width: 4 }), Some(Val::Const(_)))
                 | (Some(Val::Const(_)), Some(Val::Entry { table, width: 4 }))
                 | (Some(Val::Scaled { table }), Some(Val::Const(_)))
-                | (Some(Val::Const(_)), Some(Val::Scaled { table })) => Some(Val::Relative { table }),
+                | (Some(Val::Const(_)), Some(Val::Scaled { table })) => {
+                    Some(Val::Relative { table })
+                }
                 // A pointer-wide entry in a pointer-wide add: not a dispatch;
                 // a narrower one added to an unknown base is dropped too.
                 (Some(Val::Const(a) | Val::Indexed(a)), Some(Val::Entry { width: 1 | 2, .. }))
                 | (Some(Val::Entry { width: 1 | 2, .. }), Some(Val::Const(a) | Val::Indexed(a))) => {
                     Some(Val::Indexed(a))
                 }
-                (Some(Val::Const(a) | Val::Indexed(a)), None) | (None, Some(Val::Const(a) | Val::Indexed(a))) => {
-                    Some(Val::Indexed(a))
-                }
+                (Some(Val::Const(a) | Val::Indexed(a)), None)
+                | (None, Some(Val::Const(a) | Val::Indexed(a))) => Some(Val::Indexed(a)),
                 _ => None,
             },
             OpCode::CPUI_INT_SUB => match (get(0)?, get(1)?) {
-                (Val::Const(a), Val::Const(b)) => Some(Val::Const(a.wrapping_sub(b) & mask(out_size))),
+                (Val::Const(a), Val::Const(b)) => {
+                    Some(Val::Const(a.wrapping_sub(b) & mask(out_size)))
+                }
                 _ => None,
             },
             OpCode::CPUI_INT_MULT => match (get(0)?, get(1)?) {
                 (v, Val::Const(1)) | (Val::Const(1), v) => Some(v),
-                (Val::Entry { table, width: 1 | 2 | 4 }, Val::Const(2 | 4))
-                | (Val::Const(2 | 4), Val::Entry { table, width: 1 | 2 | 4 }) => Some(Val::Scaled { table }),
+                (
+                    Val::Entry {
+                        table,
+                        width: 1 | 2 | 4,
+                    },
+                    Val::Const(2 | 4),
+                )
+                | (
+                    Val::Const(2 | 4),
+                    Val::Entry {
+                        table,
+                        width: 1 | 2 | 4,
+                    },
+                ) => Some(Val::Scaled { table }),
                 _ => None,
             },
             OpCode::CPUI_INT_LEFT => match (get(0)?, get(1)?) {
-                (Val::Entry { table, width: 1 | 2 | 4 }, Val::Const(1..=3)) => Some(Val::Scaled { table }),
+                (
+                    Val::Entry {
+                        table,
+                        width: 1 | 2 | 4,
+                    },
+                    Val::Const(1..=3),
+                ) => Some(Val::Scaled { table }),
                 _ => None,
             },
             OpCode::CPUI_LOAD => match get(1)? {
-                Val::Indexed(table) | Val::Relative { table } if matches!(out_size, 1 | 2 | 4 | 8) => {
-                    Some(Val::Entry { table, width: out_size })
+                Val::Indexed(table) | Val::Relative { table }
+                    if matches!(out_size, 1 | 2 | 4 | 8) =>
+                {
+                    Some(Val::Entry {
+                        table,
+                        width: out_size,
+                    })
                 }
                 _ => None,
             },
@@ -261,17 +323,25 @@ impl Fold {
 fn key_of(vn: &VarnodeData) -> Option<Key> {
     let space = vn.space.as_ref()?;
     match space.get_type() {
-        spacetype::IPTR_INTERNAL | spacetype::IPTR_PROCESSOR => Some((space.get_index(), vn.offset, vn.size)),
+        spacetype::IPTR_INTERNAL | spacetype::IPTR_PROCESSOR => {
+            Some((space.get_index(), vn.offset, vn.size))
+        }
         _ => None,
     }
 }
 
 fn overlap(a: Key, b: Key) -> bool {
-    a.0 == b.0 && a.1 < b.1.saturating_add(u64::from(b.2)) && b.1 < a.1.saturating_add(u64::from(a.2))
+    a.0 == b.0
+        && a.1 < b.1.saturating_add(u64::from(b.2))
+        && b.1 < a.1.saturating_add(u64::from(a.2))
 }
 
 fn mask(size: u32) -> u64 {
-    if size == 0 || size >= 8 { u64::MAX } else { (1u64 << (8 * size)) - 1 }
+    if size == 0 || size >= 8 {
+        u64::MAX
+    } else {
+        (1u64 << (8 * size)) - 1
+    }
 }
 
 fn sign_extend(v: u64, size: u32) -> u64 {
@@ -279,7 +349,11 @@ fn sign_extend(v: u64, size: u32) -> u64 {
         return v;
     }
     let v = v & mask(size);
-    if v >> (8 * size - 1) == 1 { v | !mask(size) } else { v }
+    if v >> (8 * size - 1) == 1 {
+        v | !mask(size)
+    } else {
+        v
+    }
 }
 
 /// The `(table, stride, index)` of a LOAD whose address is `table + index *
@@ -300,10 +374,14 @@ pub(crate) fn table_read(fd: &Funcdata, load: OpId) -> Option<(u64, u64, Varnode
     let mut index = scaled;
     let mut stride = 1;
     loop {
-        let Some(def) = fd.vbank().get(index)?.get_def() else { break };
+        let Some(def) = fd.vbank().get(index)?.get_def() else {
+            break;
+        };
         let op = fd.obank().get(def)?;
         match op.code() {
-            OpCode::CPUI_COPY | OpCode::CPUI_INT_ZEXT | OpCode::CPUI_INT_SEXT => index = op.get_in(0)?,
+            OpCode::CPUI_COPY | OpCode::CPUI_INT_ZEXT | OpCode::CPUI_INT_SEXT => {
+                index = op.get_in(0)?
+            }
             OpCode::CPUI_INT_LEFT if stride == 1 => {
                 stride = 1u64.checked_shl(u32::try_from(constant(fd, op.get_in(1)?)?).ok()?)?;
                 index = op.get_in(0)?;

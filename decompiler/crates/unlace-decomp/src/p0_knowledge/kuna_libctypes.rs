@@ -93,9 +93,29 @@ pub fn libctypes_enabled() -> bool {
 /// debug info defines and the table adopts. Kept in step with the widths in
 /// `unlace_analysis`'s `NAMED_AGGREGATES` by a test there.
 pub const AGGREGATE_NAMES: &[&str] = &[
-    "DIR", "FILE", "_IO_FILE", "dirent", "group", "lconv", "mbstate_t", "obstack",
-    "option", "passwd", "pthread_mutex_t", "re_pattern_buffer", "sigaction", "sigset_t",
-    "sockaddr", "spwd", "stat", "statfs", "termios", "timespec", "timeval", "tm", "utmp",
+    "DIR",
+    "FILE",
+    "_IO_FILE",
+    "dirent",
+    "group",
+    "lconv",
+    "mbstate_t",
+    "obstack",
+    "option",
+    "passwd",
+    "pthread_mutex_t",
+    "re_pattern_buffer",
+    "sigaction",
+    "sigset_t",
+    "sockaddr",
+    "spwd",
+    "stat",
+    "statfs",
+    "termios",
+    "timespec",
+    "timeval",
+    "tm",
+    "utmp",
     "utmpx",
 ];
 
@@ -105,14 +125,16 @@ pub const AGGREGATE_NAMES: &[&str] = &[
 /// the subprocess directly).
 pub fn set_libctypes_env_layout(layout: LibcTypesLayout) {
     // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::set_var(
-        LIBCTYPES_ENV,
-        match layout {
-            LibcTypesLayout::Off => "off",
-            LibcTypesLayout::Opaque => "opaque",
-            LibcTypesLayout::Glibc => "glibc",
-        },
-    ) };
+    unsafe {
+        std::env::set_var(
+            LIBCTYPES_ENV,
+            match layout {
+                LibcTypesLayout::Off => "off",
+                LibcTypesLayout::Opaque => "opaque",
+                LibcTypesLayout::Glibc => "glibc",
+            },
+        )
+    };
 }
 
 #[cfg(test)]
@@ -127,7 +149,11 @@ mod tests {
         // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::remove_var(LIBCTYPES_ENV) };
         assert!(libctypes_enabled(), "unset => default-on");
-        assert_eq!(libctypes_layout(), LibcTypesLayout::Opaque, "unset => opaque");
+        assert_eq!(
+            libctypes_layout(),
+            LibcTypesLayout::Opaque,
+            "unset => opaque"
+        );
         for off in ["off", "0", "false", "OFF", " off "] {
             // FIXME: Audit that the environment access only happens in single-threaded code.
             unsafe { std::env::set_var(LIBCTYPES_ENV, off) };
@@ -138,13 +164,21 @@ mod tests {
             // FIXME: Audit that the environment access only happens in single-threaded code.
             unsafe { std::env::set_var(LIBCTYPES_ENV, on) };
             assert!(libctypes_enabled(), "`{on}` should enable");
-            assert_eq!(libctypes_layout(), LibcTypesLayout::Opaque, "`{on}` is not a layout");
+            assert_eq!(
+                libctypes_layout(),
+                LibcTypesLayout::Opaque,
+                "`{on}` is not a layout"
+            );
         }
         for g in ["glibc", "GLIBC", " glibc "] {
             // FIXME: Audit that the environment access only happens in single-threaded code.
             unsafe { std::env::set_var(LIBCTYPES_ENV, g) };
             assert!(libctypes_enabled(), "`{g}` should enable");
-            assert_eq!(libctypes_layout(), LibcTypesLayout::Glibc, "`{g}` asks for layouts");
+            assert_eq!(
+                libctypes_layout(),
+                LibcTypesLayout::Glibc,
+                "`{g}` asks for layouts"
+            );
         }
         for (layout, want) in [
             (LibcTypesLayout::Off, LibcTypesLayout::Off),

@@ -14,7 +14,7 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_num::opcodes::OpCode;
 
@@ -341,7 +341,7 @@ fn detect_recovers_lowered_switch() {
     assert_eq!(off(&rec.case_targets[0]), 0x2000); // case 0 -> A
     assert_eq!(off(&rec.case_targets[1]), 0x2100); // case 2 -> B
     assert_eq!(off(&rec.case_targets[2]), 0x2000); // case 3 -> A
-                                                   // Default is the most-voted common sink (DEFAULT, voted by B1 and B3).
+    // Default is the most-voted common sink (DEFAULT, voted by B1 and B3).
     assert_eq!(off(&rec.default_target), 0x3000);
     // The synthetic BRANCHIND will host at the head's CBRANCH address (0x1001).
     assert_eq!(off(&rec.branch_addr), 0x1001);
@@ -655,7 +655,7 @@ fn linear_equality_chain_is_not_a_switch() {
     append_cmp_cbranch(&mut fd, b0, 0x1000, OpCode::CPUI_INT_EQUAL, v, 0);
     fd.bblocks_mut().add_edge(b0, b1); // false = cont
     fd.bblocks_mut().add_edge(b0, case_a); // true = match
-                                           // B1: if (V == 1) -> B else B2
+    // B1: if (V == 1) -> B else B2
     append_cmp_cbranch(&mut fd, b1, 0x1100, OpCode::CPUI_INT_EQUAL, v, 1);
     fd.bblocks_mut().add_edge(b1, b2);
     fd.bblocks_mut().add_edge(b1, case_b);
@@ -689,7 +689,7 @@ fn too_few_cases_rejected() {
     append_cmp_cbranch(&mut fd, b0, 0x1000, OpCode::CPUI_INT_LESS, v, 1);
     fd.bblocks_mut().add_edge(b0, b1); // false = contB
     fd.bblocks_mut().add_edge(b0, case_a); // true  = contA (a non-cascade sink)
-                                           // B1: equal  if (V == 2)  -> false: DEFAULT, true: B
+    // B1: equal  if (V == 2)  -> false: DEFAULT, true: B
     append_cmp_cbranch(&mut fd, b1, 0x1100, OpCode::CPUI_INT_EQUAL, v, 2);
     fd.bblocks_mut().add_edge(b1, default);
     fd.bblocks_mut().add_edge(b1, case_b);

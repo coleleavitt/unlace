@@ -11,8 +11,14 @@ fn default_is_off_byte_identical() {
 #[test]
 fn apply_toggles_and_reports() {
     let mut opt = StackAliasOption::default();
-    assert_eq!(opt.apply(true), "Stack-alias dead-store preservation turned on");
+    assert_eq!(
+        opt.apply(true),
+        "Stack-alias dead-store preservation turned on"
+    );
     assert!(opt.is_enabled());
-    assert_eq!(opt.apply(false), "Stack-alias dead-store preservation turned off");
+    assert_eq!(
+        opt.apply(false),
+        "Stack-alias dead-store preservation turned off"
+    );
     assert!(!opt.is_enabled());
 }

@@ -19,13 +19,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use unlace_base::address::{calc_int_min, calc_mask, sign_extend_sized, Address};
+use unlace_base::address::{Address, calc_int_min, calc_mask, sign_extend_sized};
 use unlace_base::marshal::ElementId;
 use unlace_base::space::spacetype;
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
-use crate::block::{block_get_start, BlockType};
+use crate::block::{BlockType, block_get_start};
 use crate::context::{BlockId, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::p2_lift::kuna_loweredswitch::KunaLoweredSwitchRecord;
@@ -43,13 +43,18 @@ pub(crate) fn record_is_exact(
     rec: &KunaLoweredSwitchRecord,
 ) -> bool {
     let mut targets: Vec<BlockId> = Vec::with_capacity(rec.case_targets.len() + 1);
-    for addr in rec.case_targets.iter().chain(std::iter::once(&rec.default_target)) {
+    for addr in rec
+        .case_targets
+        .iter()
+        .chain(std::iter::once(&rec.default_target))
+    {
         match block_at_start(data, addr) {
             Some(b) => targets.push(b),
             None => return false,
         }
     }
-    switch_routes_like_cascade(data, head, spine, swvar, rec) && install_keeps_statements(data, head, &targets)
+    switch_routes_like_cascade(data, head, spine, swvar, rec)
+        && install_keeps_statements(data, head, &targets)
 }
 
 /// One compare block, decoded for evaluation.
@@ -152,7 +157,9 @@ fn decode_node(data: &Funcdata, bl: BlockId) -> Option<Node> {
         return None;
     }
     let flip = cbop.is_boolean_flip();
-    let cmpop = data.obank().get(data.vbank().get(cbop.get_in(1)?)?.get_def()?)?;
+    let cmpop = data
+        .obank()
+        .get(data.vbank().get(cbop.get_in(1)?)?.get_def()?)?;
     let cmp = cmpop.code();
     if !matches!(
         cmp,
@@ -176,11 +183,26 @@ fn decode_node(data: &Funcdata, bl: BlockId) -> Option<Node> {
     let block = data.bblocks_ref().block(bl);
     let (t, f) = (block.get_true_out(), block.get_false_out());
     let (on_true, on_false) = if flip { (f, t) } else { (t, f) };
-    Some(Node { cmp, var_on_left, operand, cval: cvn.get_offset() & calc_mask(width), width, on_true, on_false })
+    Some(Node {
+        cmp,
+        var_on_left,
+        operand,
+        cval: cvn.get_offset() & calc_mask(width),
+        width,
+        on_true,
+        on_false,
+    })
 }
 
 /// Follow the compare tree for switch value `v` until it leaves the tree.
-fn walk(data: &Funcdata, head: BlockId, nodes: &BTreeMap<BlockId, Node>, swvar: VarnodeId, size: int4, v: uintb) -> Option<BlockId> {
+fn walk(
+    data: &Funcdata,
+    head: BlockId,
+    nodes: &BTreeMap<BlockId, Node>,
+    swvar: VarnodeId,
+    size: int4,
+    v: uintb,
+) -> Option<BlockId> {
     let mut bl = head;
     for _ in 0..=nodes.len() {
         let n = match nodes.get(&bl) {
@@ -188,7 +210,11 @@ fn walk(data: &Funcdata, head: BlockId, nodes: &BTreeMap<BlockId, Node>, swvar: 
             None => return Some(bl),
         };
         let x = operand_value(data, n.operand, swvar, size, v)? & calc_mask(n.width);
-        let (a, b) = if n.var_on_left { (x, n.cval) } else { (n.cval, x) };
+        let (a, b) = if n.var_on_left {
+            (x, n.cval)
+        } else {
+            (n.cval, x)
+        };
         let sa = sign_extend_sized(a, n.width, 8) as i64;
         let sb = sign_extend_sized(b, n.width, 8) as i64;
         let holds = match n.cmp {
@@ -206,7 +232,13 @@ fn walk(data: &Funcdata, head: BlockId, nodes: &BTreeMap<BlockId, Node>, swvar: 
 
 /// The value of `vn` when the switch variable holds `v`, through the copies,
 /// casts, zero-offset same-width pieces and extensions between them.
-fn operand_value(data: &Funcdata, mut vn: VarnodeId, swvar: VarnodeId, size: int4, v: uintb) -> Option<uintb> {
+fn operand_value(
+    data: &Funcdata,
+    mut vn: VarnodeId,
+    swvar: VarnodeId,
+    size: int4,
+    v: uintb,
+) -> Option<uintb> {
     let mut chain: Vec<(OpCode, int4, int4)> = Vec::new();
     for _ in 0..8 {
         if vn == swvar {
@@ -229,7 +261,10 @@ fn operand_value(data: &Funcdata, mut vn: VarnodeId, swvar: VarnodeId, size: int
             OpCode::CPUI_INT_ZEXT | OpCode::CPUI_INT_SEXT => insize < outsize,
             OpCode::CPUI_SUBPIECE => {
                 insize == outsize
-                    && def.get_in(1).and_then(|c| data.vbank().get(c)).is_some_and(|c| c.is_constant() && c.get_offset() == 0)
+                    && def
+                        .get_in(1)
+                        .and_then(|c| data.vbank().get(c))
+                        .is_some_and(|c| c.is_constant() && c.get_offset() == 0)
             }
             _ => false,
         };
@@ -250,7 +285,11 @@ fn operand_value(data: &Funcdata, mut vn: VarnodeId, swvar: VarnodeId, size: int
 /// values read only by other removed blocks; a store, a call, a return, an
 /// indirect branch, or a value read anywhere else is a statement the switch
 /// would lose.
-pub(crate) fn install_keeps_statements(data: &Funcdata, head: BlockId, targets: &[BlockId]) -> bool {
+pub(crate) fn install_keeps_statements(
+    data: &Funcdata,
+    head: BlockId,
+    targets: &[BlockId],
+) -> bool {
     let removed = removed_blocks(data, head, targets);
     for &b in &removed {
         for op in data.bb_ops(b) {
@@ -287,7 +326,11 @@ pub(crate) fn install_keeps_statements(data: &Funcdata, head: BlockId, targets: 
 /// again (by an op, or by a call when the prototype model says calls kill it)
 /// before an op reads it, before a call or tail call that may take it as a
 /// parameter, and before a return that may return it.
-pub(crate) fn raw_install_keeps_values(data: &Funcdata, head: BlockId, targets: &[BlockId]) -> bool {
+pub(crate) fn raw_install_keeps_values(
+    data: &Funcdata,
+    head: BlockId,
+    targets: &[BlockId],
+) -> bool {
     let removed = removed_blocks(data, head, targets);
     let mut written: Vec<(Address, int4)> = Vec::new();
     for &b in &removed {
@@ -312,12 +355,20 @@ pub(crate) fn raw_install_keeps_values(data: &Funcdata, head: BlockId, targets: 
             }
         }
     }
-    written.iter().all(|(addr, size)| !read_before_written(data, &removed, targets, addr, *size))
+    written
+        .iter()
+        .all(|(addr, size)| !read_before_written(data, &removed, targets, addr, *size))
 }
 
 /// True when some path from `targets` that avoids `removed` reads the `size`
 /// bytes at `addr` before writing all of them.
-fn read_before_written(data: &Funcdata, removed: &BTreeSet<BlockId>, targets: &[BlockId], addr: &Address, size: int4) -> bool {
+fn read_before_written(
+    data: &Funcdata,
+    removed: &BTreeSet<BlockId>,
+    targets: &[BlockId],
+    addr: &Address,
+    size: int4,
+) -> bool {
     let space = match addr.get_space() {
         Some(s) => s.get_index(),
         None => return true,
@@ -328,7 +379,8 @@ fn read_before_written(data: &Funcdata, removed: &BTreeSet<BlockId>, targets: &[
     let modelled = proto.has_model();
     let param = !modelled || proto.possible_input_param(addr, size);
     let result = !modelled || proto.possible_output_param(addr, size);
-    let killed = modelled && proto.has_effect(addr, size) == crate::fspec::effect_type::KILLEDBYCALL;
+    let killed =
+        modelled && proto.has_effect(addr, size) == crate::fspec::effect_type::KILLEDBYCALL;
     let mut seen: BTreeSet<BlockId> = BTreeSet::new();
     let mut stack: Vec<BlockId> = targets.to_vec();
     while let Some(b) = stack.pop() {
@@ -403,13 +455,24 @@ fn deleted_op_is_statement(code: OpCode) -> bool {
 
 /// The basic blocks the install deletes: reachable from an entry now, and not once
 /// `head` branches straight to `targets`.
-pub(crate) fn removed_blocks(data: &Funcdata, head: BlockId, targets: &[BlockId]) -> BTreeSet<BlockId> {
+pub(crate) fn removed_blocks(
+    data: &Funcdata,
+    head: BlockId,
+    targets: &[BlockId],
+) -> BTreeSet<BlockId> {
     let n = data.bblocks_get_size();
     let blocks: Vec<BlockId> = (0..n).map(|i| data.bblocks_get_block(i)).collect();
-    let mut roots: Vec<BlockId> =
-        blocks.iter().copied().filter(|&b| data.bblocks_ref().block(b).is_entry_point()).collect();
+    let mut roots: Vec<BlockId> = blocks
+        .iter()
+        .copied()
+        .filter(|&b| data.bblocks_ref().block(b).is_entry_point())
+        .collect();
     if roots.is_empty() {
-        roots = blocks.iter().copied().filter(|&b| data.bblocks_ref().block(b).size_in() == 0).collect();
+        roots = blocks
+            .iter()
+            .copied()
+            .filter(|&b| data.bblocks_ref().block(b).size_in() == 0)
+            .collect();
     }
     let reach = |rewire: bool| -> BTreeSet<BlockId> {
         let mut reached: BTreeSet<BlockId> = BTreeSet::new();
@@ -430,15 +493,20 @@ pub(crate) fn removed_blocks(data: &Funcdata, head: BlockId, targets: &[BlockId]
     let after = reach(true);
     reach(false)
         .into_iter()
-        .filter(|b| !after.contains(b) && data.bblocks_ref().block(*b).get_type() == BlockType::Basic)
+        .filter(|b| {
+            !after.contains(b) && data.bblocks_ref().block(*b).get_type() == BlockType::Basic
+        })
         .collect()
 }
 
 /// The basic block whose first address is `addr`.
 pub(crate) fn block_at_start(data: &Funcdata, addr: &Address) -> Option<BlockId> {
-    (0..data.bblocks_get_size()).map(|i| data.bblocks_get_block(i)).find(|&b| {
-        data.bblocks_ref().block(b).get_type() == BlockType::Basic && block_get_start(&data.bblocks_ref().arena, b) == *addr
-    })
+    (0..data.bblocks_get_size())
+        .map(|i| data.bblocks_get_block(i))
+        .find(|&b| {
+            data.bblocks_ref().block(b).get_type() == BlockType::Basic
+                && block_get_start(&data.bblocks_ref().arena, b) == *addr
+        })
 }
 
 #[cfg(test)]

@@ -8,18 +8,31 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn decompile(on: bool) -> String {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap();
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap();
     let bin = root.join("decompiler/crates/unlace-analysis/tests/fixtures/fdeflowbound_x86_64.so");
     let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.arch_mut().set_kuna_option("fdeflowbound", if on { "on" } else { "off" }).expect("fdeflowbound flips");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
-    let cmds: Vec<String> = ["load function f".to_string(), "decompile".into(), "print C".into()].to_vec();
+    prog.arch_mut()
+        .set_kuna_option("fdeflowbound", if on { "on" } else { "off" })
+        .expect("fdeflowbound flips");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
+    let cmds: Vec<String> = [
+        "load function f".to_string(),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .to_vec();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -37,12 +50,18 @@ fn decompile(on: bool) -> String {
 #[test]
 fn flow_walks_past_the_fde_with_the_option_off() {
     let off = decompile(false);
-    assert!(off.contains("return 7;"), "the bytes after f's FDE are decoded as f, got:\n{off}");
+    assert!(
+        off.contains("return 7;"),
+        "the bytes after f's FDE are decoded as f, got:\n{off}"
+    );
 }
 
 #[test]
 fn flow_stops_at_the_end_of_the_fde() {
     let on = decompile(true);
     assert!(!on.contains("return 7;"), "got:\n{on}");
-    assert!(on.contains("fdeflowbound"), "the truncation is reported, got:\n{on}");
+    assert!(
+        on.contains("fdeflowbound"),
+        "the truncation is reported, got:\n{on}"
+    );
 }

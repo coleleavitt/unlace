@@ -1,7 +1,7 @@
 use crate::common;
+use std::process::Command;
 use unlace_analysis::analyzers::entry::kuna_fdeinterior::{eligible_fde_bodies, scan_fde_bodies};
 use unlace_analysis::analyzers::entry::{scan_eh_frame_landing_pads, scan_eh_frame_starts};
-use std::process::Command;
 #[path = "fixtures/elf_unwind_fixture.rs"]
 mod fixture;
 
@@ -53,9 +53,12 @@ fn pc_read_keeps_the_complete_body_and_result() {
         let c = common::scratch_file("elf-pc-read", "c");
         let exe = common::scratch_file("elf-pc-read", "out");
         std::fs::write(&c, format!("{code}\nint main(void) {{ for(int x=-10;x<=10;x++) if(bump(x)!=x*3+7) return 1; return 0; }}\n")).unwrap();
-        common::process::required_output(
-            Command::new("cc").args(["-O2", c.to_str().unwrap(), "-o", exe.to_str().unwrap()]),
-        );
+        common::process::required_output(Command::new("cc").args([
+            "-O2",
+            c.to_str().unwrap(),
+            "-o",
+            exe.to_str().unwrap(),
+        ]));
         assert!(Command::new(&exe).status().unwrap().success());
         for file in [c, exe] {
             std::fs::remove_file(file).unwrap();
@@ -71,7 +74,13 @@ fn pc_read_needs_an_owned_body_without_a_named_inner_entry() {
         assert!(eligible_fde_bodies(&file, &bytes).is_empty());
         let path = common::scratch_file("elf-pc-read-call", "elf");
         std::fs::write(&path, bytes).unwrap();
-        let args = vec!["decompile", path.to_str().unwrap(), "bump", "--mode", "fast"];
+        let args = vec![
+            "decompile",
+            path.to_str().unwrap(),
+            "bump",
+            "--mode",
+            "fast",
+        ];
         let (code, err, status) = common::run_kuna(&args);
         assert_eq!(status, 0, "{code}\n{err}");
         assert!(code.contains("inner("), "{code}");
@@ -192,9 +201,18 @@ fn with_text(little: bool, code: &[u32]) -> Vec<u8> {
     use object::{Object, ObjectSection};
     let mut bytes = fixture::image(little, false, true, false);
     let file = object::File::parse(bytes.as_slice()).unwrap();
-    let offset = file.section_by_name(".text").unwrap().file_range().unwrap().0 as usize;
+    let offset = file
+        .section_by_name(".text")
+        .unwrap()
+        .file_range()
+        .unwrap()
+        .0 as usize;
     for (i, &w) in code.iter().enumerate() {
-        let word = if little { w.to_le_bytes() } else { w.to_be_bytes() };
+        let word = if little {
+            w.to_le_bytes()
+        } else {
+            w.to_be_bytes()
+        };
         bytes[offset + i * 4..offset + i * 4 + 4].copy_from_slice(&word);
     }
     bytes
@@ -245,11 +263,23 @@ fn bcl_to_a_returning_helper_remains_a_call() {
         ];
         let path = common::scratch_file("elf-bcl-helper", "elf");
         std::fs::write(&path, with_text(little, &code)).unwrap();
-        let (out, err, status) = common::run_kuna(&["decompile", path.to_str().unwrap(), "bump", "--mode", "fast"]);
+        let (out, err, status) = common::run_kuna(&[
+            "decompile",
+            path.to_str().unwrap(),
+            "bump",
+            "--mode",
+            "fast",
+        ]);
         std::fs::remove_file(path).unwrap();
         assert_eq!(status, 0, "{out}\n{err}");
-        assert!(out.contains("+ 1") && out.contains("1014"), "little={little}: {out}");
-        assert!(!out.contains("return a0 * 3 + 7;"), "little={little}: {out}");
+        assert!(
+            out.contains("+ 1") && out.contains("1014"),
+            "little={little}: {out}"
+        );
+        assert!(
+            !out.contains("return a0 * 3 + 7;"),
+            "little={little}: {out}"
+        );
     }
 }
 
@@ -259,7 +289,7 @@ fn bcl_to_a_returning_helper_remains_a_call() {
 #[test]
 fn bcl_to_a_helper_without_a_literal_load_remains_a_call() {
     let helpers: [&[u32]; 5] = [
-        &[0x7c88_02a6, 0x4e80_0020], // mflr r4; blr
+        &[0x7c88_02a6, 0x4e80_0020],              // mflr r4; blr
         &[0x7c88_02a6, 0x7c88_03a6, 0x4e80_0020], // mflr r4; mtlr r4; blr
         &[
             0x7c08_02a6, // mflr r0
@@ -290,10 +320,19 @@ fn bcl_to_a_helper_without_a_literal_load_remains_a_call() {
         for little in [false, true] {
             let path = common::scratch_file("elf-bcl-lr-helper", "elf");
             std::fs::write(&path, fixture::image_with_code(little, &code)).unwrap();
-            let (out, err, status) = common::run_kuna(&["decompile", path.to_str().unwrap(), "bump", "--mode", "fast"]);
+            let (out, err, status) = common::run_kuna(&[
+                "decompile",
+                path.to_str().unwrap(),
+                "bump",
+                "--mode",
+                "fast",
+            ]);
             std::fs::remove_file(path).unwrap();
             assert_eq!(status, 0, "{out}\n{err}");
-            assert!(out.contains("sub_1010(") && out.contains("+ 1"), "little={little} helper={helper:x?}: {out}");
+            assert!(
+                out.contains("sub_1010(") && out.contains("+ 1"),
+                "little={little} helper={helper:x?}: {out}"
+            );
         }
     }
 }
@@ -305,9 +344,15 @@ fn bcl_to_a_helper_without_a_literal_load_remains_a_call() {
 fn bcl_to_a_helper_that_returns_into_the_skipped_words_remains_a_call() {
     let helpers: [&[u32]; 4] = [
         &[0x7c88_02a6, 0x80a4_0000, 0x7c88_03a6, 0x4e80_0020], // mflr r4; lwz r5,0(r4); mtlr r4; blr
-        &[0x7c88_02a6, 0x80a4_0000, 0x4e80_0020], // mflr r4; lwz r5,0(r4); blr
-        &[0x7c88_02a6, 0x80a4_0000, 0x3884_0004, 0x7c88_03a6, 0x4e80_0020], // ...; addi r4,r4,4; mtlr r4; blr
-        &[0x7c08_02a6, 0x80a0_0000, 0x4e80_0020], // mflr r0; lwz r5,0(0); blr
+        &[0x7c88_02a6, 0x80a4_0000, 0x4e80_0020],              // mflr r4; lwz r5,0(r4); blr
+        &[
+            0x7c88_02a6,
+            0x80a4_0000,
+            0x3884_0004,
+            0x7c88_03a6,
+            0x4e80_0020,
+        ], // ...; addi r4,r4,4; mtlr r4; blr
+        &[0x7c08_02a6, 0x80a0_0000, 0x4e80_0020],              // mflr r0; lwz r5,0(0); blr
     ];
     for helper in helpers {
         let tail = 0x10 + 4 * helper.len() as u32;
@@ -325,10 +370,19 @@ fn bcl_to_a_helper_that_returns_into_the_skipped_words_remains_a_call() {
         for little in [false, true] {
             let path = common::scratch_file("elf-bcl-lr-resume", "elf");
             std::fs::write(&path, fixture::image_with_code(little, &code)).unwrap();
-            let (out, err, status) = common::run_kuna(&["decompile", path.to_str().unwrap(), "bump", "--mode", "fast"]);
+            let (out, err, status) = common::run_kuna(&[
+                "decompile",
+                path.to_str().unwrap(),
+                "bump",
+                "--mode",
+                "fast",
+            ]);
             std::fs::remove_file(path).unwrap();
             assert_eq!(status, 0, "{out}\n{err}");
-            assert!(out.contains("sub_1010(") && out.contains("+ 1"), "little={little} helper={helper:x?}: {out}");
+            assert!(
+                out.contains("sub_1010(") && out.contains("+ 1"),
+                "little={little} helper={helper:x?}: {out}"
+            );
         }
     }
 }
@@ -354,10 +408,19 @@ fn pc_read_literal_load_may_follow_other_instructions() {
     for little in [false, true] {
         let path = common::scratch_file("elf-pc-read-scheduled", "elf");
         std::fs::write(&path, fixture::image_with_code(little, &code)).unwrap();
-        let (out, err, status) = common::run_kuna(&["decompile", path.to_str().unwrap(), "bump", "--mode", "fast"]);
+        let (out, err, status) = common::run_kuna(&[
+            "decompile",
+            path.to_str().unwrap(),
+            "bump",
+            "--mode",
+            "fast",
+        ]);
         std::fs::remove_file(path).unwrap();
         assert_eq!(status, 0, "{out}\n{err}");
-        assert!(out.contains("return a0 * 3 + 7;") && !out.contains("halt_baddata"), "little={little}: {out}");
+        assert!(
+            out.contains("return a0 * 3 + 7;") && !out.contains("halt_baddata"),
+            "little={little}: {out}"
+        );
     }
 }
 
@@ -381,9 +444,18 @@ fn pc_read_through_a_branch_to_a_shared_lr_read() {
     for little in [false, true] {
         let path = common::scratch_file("elf-pc-read-branch", "elf");
         std::fs::write(&path, fixture::image_with_code(little, &code)).unwrap();
-        let (out, err, status) = common::run_kuna(&["decompile", path.to_str().unwrap(), "bump", "--mode", "fast"]);
+        let (out, err, status) = common::run_kuna(&[
+            "decompile",
+            path.to_str().unwrap(),
+            "bump",
+            "--mode",
+            "fast",
+        ]);
         std::fs::remove_file(path).unwrap();
         assert_eq!(status, 0, "{out}\n{err}");
-        assert!(out.contains("return a0 * 3 + 7;") && !out.contains("halt_baddata"), "little={little}: {out}");
+        assert!(
+            out.contains("return a0 * 3 + 7;") && !out.contains("halt_baddata"),
+            "little={little}: {out}"
+        );
     }
 }

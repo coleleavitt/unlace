@@ -61,9 +61,10 @@ impl FileManage {
     /// non-UTF-8 cwd).
     pub fn add_current_dir(&mut self) {
         if let Ok(dir) = std::env::current_dir()
-            && let Some(filename) = dir.to_str() {
-                self.add_dir_2_path(filename);
-            }
+            && let Some(filename) = dir.to_str()
+        {
+            self.add_dir_2_path(filename);
+        }
     }
 
     /// Search through paths to find a file with the given name, resolving the
@@ -185,7 +186,9 @@ impl FileManage {
                     } else if ft.is_symlink() {
                         // C++ ignores a stat failure, leaving stbuf garbage;
                         // practically a dangling link is "not a directory"
-                        fs::metadata(entry.path()).map(|m| m.is_dir()).unwrap_or(false)
+                        fs::metadata(entry.path())
+                            .map(|m| m.is_dir())
+                            .unwrap_or(false)
                     } else {
                         false
                     }
@@ -265,7 +268,9 @@ impl FileManage {
         } else {
             (bytes.len() - 1, bytes.len())
         };
-        let pos = bytes[..=search_end].iter().rposition(|&c| Self::is_separator(c as char));
+        let pos = bytes[..=search_end]
+            .iter()
+            .rposition(|&c| Self::is_separator(c as char));
         match pos {
             None => {
                 // Didn't find any separator
@@ -427,8 +432,11 @@ mod tests {
 
     impl TempTree {
         fn new(tag: &str) -> Self {
-            let root = std::env::temp_dir()
-                .join(format!("kuna_filemanage_{}_{}", tag, std::process::id()));
+            let root = std::env::temp_dir().join(format!(
+                "kuna_filemanage_{}_{}",
+                tag,
+                std::process::id()
+            ));
             let _ = fs::remove_dir_all(&root);
             fs::create_dir_all(&root).unwrap();
             TempTree { root }
@@ -473,7 +481,10 @@ mod tests {
         FileManage::match_list_dir(&mut res, ".sla", true, t.path(), false);
         assert_eq!(
             sorted(res),
-            vec![format!("{}/arm.sla", t.path()), format!("{}/x86.sla", t.path())]
+            vec![
+                format!("{}/arm.sla", t.path()),
+                format!("{}/x86.sla", t.path())
+            ]
         );
 
         // allowdot picks up the dot file
@@ -498,12 +509,24 @@ mod tests {
 
         // a trailing separator on dirname is not doubled
         let mut res: Vec<String> = Vec::new();
-        FileManage::match_list_dir(&mut res, "notes.txt", false, &format!("{}/", t.path()), false);
+        FileManage::match_list_dir(
+            &mut res,
+            "notes.txt",
+            false,
+            &format!("{}/", t.path()),
+            false,
+        );
         assert_eq!(res, vec![format!("{}/notes.txt", t.path())]);
 
         // unreadable directory contributes nothing
         let mut res: Vec<String> = Vec::new();
-        FileManage::match_list_dir(&mut res, ".sla", true, &format!("{}/nosuch", t.path()), false);
+        FileManage::match_list_dir(
+            &mut res,
+            ".sla",
+            true,
+            &format!("{}/nosuch", t.path()),
+            false,
+        );
         assert!(res.is_empty());
     }
 
@@ -523,7 +546,10 @@ mod tests {
         fm.match_list(&mut res, ".ldefs", true);
         assert_eq!(
             sorted(res),
-            vec![format!("{}/a/one.ldefs", t.path()), format!("{}/b/two.ldefs", t.path())]
+            vec![
+                format!("{}/a/one.ldefs", t.path()),
+                format!("{}/b/two.ldefs", t.path())
+            ]
         );
     }
 
@@ -598,7 +624,10 @@ mod tests {
         FileManage::scan_directory_recursive(&mut res, "data", t.path(), 2);
         assert_eq!(
             sorted(res),
-            vec![format!("{}/data", t.path()), format!("{}/other/data", t.path())]
+            vec![
+                format!("{}/data", t.path()),
+                format!("{}/other/data", t.path())
+            ]
         );
 
         let mut res: Vec<String> = Vec::new();
@@ -739,7 +768,10 @@ mod tests {
         t.mkdir("inst/server/server.conf");
 
         let argv0 = format!("{}/inst/Ghidra/bin/decomp", t.path());
-        assert_eq!(FileManage::discover_ghidra_root(&argv0), format!("{}/inst", t.path()));
+        assert_eq!(
+            FileManage::discover_ghidra_root(&argv0),
+            format!("{}/inst", t.path())
+        );
     }
 
     #[test]

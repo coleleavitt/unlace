@@ -124,7 +124,11 @@ impl PatternBlock {
                 self.valvec[n - 1] = self.valvec[n - 1].wshl((suboff * 8) as u32);
             }
 
-            let end = self.maskvec.iter().rposition(|&word| word != 0).map_or(0, |i| i + 1);
+            let end = self
+                .maskvec
+                .iter()
+                .rposition(|&word| word != 0)
+                .map_or(0, |i| i + 1);
             self.maskvec.truncate(end);
             self.valvec.truncate(end);
         }
@@ -268,7 +272,11 @@ impl PatternBlock {
         let shift = (ustart % 32) as i32;
         let wordnum2 = ((startbit + size - 1) as i64 as u64 / 32) as i32;
 
-        let mut res = words.get(wordnum1 as usize).copied().unwrap_or(0).wshl(shift as u32);
+        let mut res = words
+            .get(wordnum1 as usize)
+            .copied()
+            .unwrap_or(0)
+            .wshl(shift as u32);
         if wordnum1 != wordnum2 {
             let next = words.get(wordnum2 as usize).copied().unwrap_or(0);
             res |= next.wshr((32 - shift) as u32);
@@ -306,7 +314,10 @@ impl PatternBlock {
     }
 
     /// C++ `PatternBlock::isContextMatch`.
-    pub fn is_context_match(&self, walker: &(impl PatternExpressionContext + ?Sized)) -> KunaResult<bool> {
+    pub fn is_context_match(
+        &self,
+        walker: &(impl PatternExpressionContext + ?Sized),
+    ) -> KunaResult<bool> {
         if self.nonzerosize <= 0 {
             return Ok(self.nonzerosize == 0);
         }
@@ -720,7 +731,11 @@ impl DisjointPattern {
     /// C++ `DisjointPattern::resolvesIntersect`: equal to the intersection of `op1` and `op2`.
     pub fn resolves_intersect(&self, op1: &DisjointPattern, op2: &DisjointPattern) -> bool {
         [false, true].into_iter().all(|context| {
-            resolve_intersect_block(op1.get_block(context), op2.get_block(context), self.get_block(context))
+            resolve_intersect_block(
+                op1.get_block(context),
+                op2.get_block(context),
+                self.get_block(context),
+            )
         })
     }
 
@@ -872,7 +887,9 @@ impl OrPattern {
     /// Require every alternative to leave instruction bits unconstrained
     /// (`OrPattern::alwaysInstructionTrue`).
     pub fn always_instruction_true(&self) -> bool {
-        self.orlist.iter().all(DisjointPattern::always_instruction_true)
+        self.orlist
+            .iter()
+            .all(DisjointPattern::always_instruction_true)
     }
 
     /// C++ `OrPattern::simplifyClone`: look for alwaysTrue, eliminate
@@ -1037,7 +1054,9 @@ fn do_and_view(a: PatView<'_>, b: PatView<'_>, sa: i32) -> Pattern {
             // C++ falls through to `(const InstructionPattern *)b`
             let b4 = match b {
                 PatView::Instruction(x) => x,
-                _ => panic!("InstructionPattern::doAnd: operand is not an InstructionPattern (C++ UB cast)"),
+                _ => panic!(
+                    "InstructionPattern::doAnd: operand is not an InstructionPattern (C++ UB cast)"
+                ),
             };
             let respattern = if sa == 0 {
                 a_ip.maskvalue.intersect(&b4.maskvalue)
@@ -1070,17 +1089,29 @@ fn do_and_view(a: PatView<'_>, b: PatView<'_>, sa: i32) -> Pattern {
             }
             if let PatView::Combine(b2) = b {
                 let c = expect_context(
-                    do_and_view(PatView::Context(&a_cb.context), PatView::Context(&b2.context), 0),
+                    do_and_view(
+                        PatView::Context(&a_cb.context),
+                        PatView::Context(&b2.context),
+                        0,
+                    ),
                     "CombinePattern::doAnd",
                 );
                 let i = expect_instruction(
-                    do_and_view(PatView::Instruction(&a_cb.instr), PatView::Instruction(&b2.instr), sa),
+                    do_and_view(
+                        PatView::Instruction(&a_cb.instr),
+                        PatView::Instruction(&b2.instr),
+                        sa,
+                    ),
                     "CombinePattern::doAnd",
                 );
                 Pattern::Disjoint(DisjointPattern::Combine(CombinePattern::new(c, i)))
             } else if let PatView::Instruction(b3) = b {
                 let i = expect_instruction(
-                    do_and_view(PatView::Instruction(&a_cb.instr), PatView::Instruction(b3), sa),
+                    do_and_view(
+                        PatView::Instruction(&a_cb.instr),
+                        PatView::Instruction(b3),
+                        sa,
+                    ),
                     "CombinePattern::doAnd",
                 );
                 Pattern::Disjoint(DisjointPattern::Combine(CombinePattern::new(
@@ -1145,7 +1176,9 @@ fn common_sub_view(a: PatView<'_>, b: PatView<'_>, sa: i32) -> Pattern {
             }
             let b4 = match b {
                 PatView::Instruction(x) => x,
-                _ => panic!("InstructionPattern::commonSubPattern: operand is not an InstructionPattern (C++ UB cast)"),
+                _ => panic!(
+                    "InstructionPattern::commonSubPattern: operand is not an InstructionPattern (C++ UB cast)"
+                ),
             };
             let respattern = if sa == 0 {
                 a_ip.maskvalue.common_sub_pattern(&b4.maskvalue)
@@ -1211,7 +1244,8 @@ fn common_sub_view(a: PatView<'_>, b: PatView<'_>, sa: i32) -> Pattern {
                 sa = 0;
             }
             for pat in &a_or.orlist[1..] {
-                let next = common_sub_view(PatView::of_disjoint(pat), PatView::of_pattern(&res), sa);
+                let next =
+                    common_sub_view(PatView::of_disjoint(pat), PatView::of_pattern(&res), sa);
                 res = next;
             }
             res
@@ -1391,11 +1425,11 @@ impl Pattern {
 
 #[cfg(test)]
 mod tests {
+    use std::rc::Rc;
     use unlace_base::address::Address;
     use unlace_base::error::KunaError;
     use unlace_base::marshal::{Decoder, PackedDecode, PackedEncode};
     use unlace_base::space::{AddrSpaceManager, ConstantSpace};
-    use std::rc::Rc;
 
     use super::*;
 
@@ -1499,7 +1533,10 @@ mod tests {
                 mask[4 + last / 8] |= 0x80 >> (last % 8);
                 let values: Vec<u8> = (0..16).map(|i| i * 13 + 7).collect();
                 let words = |bytes: &[u8]| {
-                    bytes.chunks_exact(4).map(|b| u32::from_be_bytes(b.try_into().unwrap())).collect::<Vec<_>>()
+                    bytes
+                        .chunks_exact(4)
+                        .map(|b| u32::from_be_bytes(b.try_into().unwrap()))
+                        .collect::<Vec<_>>()
                 };
                 let start = 4 + first / 8;
                 let span = last / 8 - first / 8 + 1;
@@ -1516,7 +1553,11 @@ mod tests {
                 assert_eq!(block.offset, 7 + start as i32, "{first}/{last}");
                 assert_eq!(block.nonzerosize, span as i32, "{first}/{last}");
                 assert_eq!(block.maskvec, words(&expected_mask), "{first}/{last}");
-                assert_eq!(block.valvec, words(&values[start..start + count]), "{first}/{last}");
+                assert_eq!(
+                    block.valvec,
+                    words(&values[start..start + count]),
+                    "{first}/{last}"
+                );
                 let normalized = block.clone();
                 block.normalize();
                 assert_eq!(format!("{block:?}"), format!("{normalized:?}"));
@@ -1616,25 +1657,38 @@ mod tests {
     #[test]
     fn patternblock_instruction_and_context_match() {
         let blk = PatternBlock::new(0, 0xff00_0000, 0xab00_0000);
-        assert!(blk
-            .is_instruction_match(&ByteWalker::instr(&[0xab, 1, 2, 3]))
-            .unwrap());
-        assert!(!blk
-            .is_instruction_match(&ByteWalker::instr(&[0xac, 1, 2, 3]))
-            .unwrap());
-        assert!(blk
-            .is_context_match(&ByteWalker::ctx(&[0xab12_3456]))
-            .unwrap());
-        assert!(!blk.is_context_match(&ByteWalker::ctx(&[0x0b12_3456])).unwrap());
+        assert!(
+            blk.is_instruction_match(&ByteWalker::instr(&[0xab, 1, 2, 3]))
+                .unwrap()
+        );
+        assert!(
+            !blk.is_instruction_match(&ByteWalker::instr(&[0xac, 1, 2, 3]))
+                .unwrap()
+        );
+        assert!(
+            blk.is_context_match(&ByteWalker::ctx(&[0xab12_3456]))
+                .unwrap()
+        );
+        assert!(
+            !blk.is_context_match(&ByteWalker::ctx(&[0x0b12_3456]))
+                .unwrap()
+        );
         // alwaysTrue/alwaysFalse short-circuit without touching the walker
-        assert!(PatternBlock::new_always(true)
-            .is_instruction_match(&ByteWalker::instr(&[]))
-            .unwrap());
-        assert!(!PatternBlock::new_always(false)
-            .is_instruction_match(&ByteWalker::instr(&[]))
-            .unwrap());
+        assert!(
+            PatternBlock::new_always(true)
+                .is_instruction_match(&ByteWalker::instr(&[]))
+                .unwrap()
+        );
+        assert!(
+            !PatternBlock::new_always(false)
+                .is_instruction_match(&ByteWalker::instr(&[]))
+                .unwrap()
+        );
         // walker errors propagate (C++ BadDataError)
-        assert!(blk.is_instruction_match(&ByteWalker::instr(&[0xab])).is_err());
+        assert!(
+            blk.is_instruction_match(&ByteWalker::instr(&[0xab]))
+                .is_err()
+        );
     }
 
     #[test]
@@ -1722,11 +1776,20 @@ mod tests {
         let a = Pattern::Disjoint(DisjointPattern::Instruction(ip_byte(0, 0xab)));
         let b = Pattern::Disjoint(DisjointPattern::Instruction(ip_byte(0, 0xcd)));
         let res = a.do_and(&b, 1);
-        assert!(res.is_match(&ByteWalker::instr(&[0xab, 0xcd, 0, 0, 0])).unwrap());
-        assert!(!res.is_match(&ByteWalker::instr(&[0xab, 0xab, 0, 0, 0])).unwrap());
+        assert!(
+            res.is_match(&ByteWalker::instr(&[0xab, 0xcd, 0, 0, 0]))
+                .unwrap()
+        );
+        assert!(
+            !res.is_match(&ByteWalker::instr(&[0xab, 0xab, 0, 0, 0]))
+                .unwrap()
+        );
         // negative sa shifts self instead
         let res2 = a.do_and(&b, -1);
-        assert!(res2.is_match(&ByteWalker::instr(&[0xcd, 0xab, 0, 0, 0])).unwrap());
+        assert!(
+            res2.is_match(&ByteWalker::instr(&[0xcd, 0xab, 0, 0, 0]))
+                .unwrap()
+        );
     }
 
     #[test]
@@ -1738,9 +1801,18 @@ mod tests {
         let req = Pattern::Disjoint(DisjointPattern::Instruction(ip_byte(1, 0x33)));
         let res = or.do_and(&req, 0);
         assert_eq!(res.num_disjoint(), 2);
-        assert!(res.is_match(&ByteWalker::instr(&[0x11, 0x33, 0, 0, 0])).unwrap());
-        assert!(res.is_match(&ByteWalker::instr(&[0x22, 0x33, 0, 0, 0])).unwrap());
-        assert!(!res.is_match(&ByteWalker::instr(&[0x11, 0x44, 0, 0, 0])).unwrap());
+        assert!(
+            res.is_match(&ByteWalker::instr(&[0x11, 0x33, 0, 0, 0]))
+                .unwrap()
+        );
+        assert!(
+            res.is_match(&ByteWalker::instr(&[0x22, 0x33, 0, 0, 0]))
+                .unwrap()
+        );
+        assert!(
+            !res.is_match(&ByteWalker::instr(&[0x11, 0x44, 0, 0, 0]))
+                .unwrap()
+        );
     }
 
     #[test]
@@ -1756,7 +1828,10 @@ mod tests {
         let mut a2 = Pattern::Disjoint(DisjointPattern::Instruction(ip_byte(0, 0x11)));
         let mut b2 = Pattern::Disjoint(DisjointPattern::Instruction(ip_byte(0, 0x22)));
         let res2 = a2.do_or(&mut b2, 1);
-        assert!(res2.is_match(&ByteWalker::instr(&[0x00, 0x22, 0, 0, 0])).unwrap());
+        assert!(
+            res2.is_match(&ByteWalker::instr(&[0x00, 0x22, 0, 0, 0]))
+                .unwrap()
+        );
     }
 
     #[test]
@@ -1772,12 +1847,24 @@ mod tests {
         let res = a.do_or(&mut b, -1);
         // result holds the UNSHIFTED clones plus b's clone
         assert_eq!(res.num_disjoint(), 3);
-        assert!(res.is_match(&ByteWalker::instr(&[0x11, 0, 0, 0, 0])).unwrap());
-        assert!(res.is_match(&ByteWalker::instr(&[0x33, 0, 0, 0, 0])).unwrap());
+        assert!(
+            res.is_match(&ByteWalker::instr(&[0x11, 0, 0, 0, 0]))
+                .unwrap()
+        );
+        assert!(
+            res.is_match(&ByteWalker::instr(&[0x33, 0, 0, 0, 0]))
+                .unwrap()
+        );
         // the ORIGINAL OrPattern was mutated: its byte-0 requirements moved
         // to byte 1
-        assert!(a.is_match(&ByteWalker::instr(&[0x00, 0x11, 0, 0, 0])).unwrap());
-        assert!(!a.is_match(&ByteWalker::instr(&[0x11, 0x00, 0, 0, 0])).unwrap());
+        assert!(
+            a.is_match(&ByteWalker::instr(&[0x00, 0x11, 0, 0, 0]))
+                .unwrap()
+        );
+        assert!(
+            !a.is_match(&ByteWalker::instr(&[0x11, 0x00, 0, 0, 0]))
+                .unwrap()
+        );
     }
 
     #[test]
@@ -1864,12 +1951,11 @@ mod tests {
             0xf000_0000,
             0x3000_0000,
         )));
-        let comb = match Pattern::Disjoint(coarse.clone())
-            .do_and(&Pattern::Disjoint(ctx.clone()), 0)
-        {
-            Pattern::Disjoint(d) => d,
-            other => panic!("expected disjoint, got {other:?}"),
-        };
+        let comb =
+            match Pattern::Disjoint(coarse.clone()).do_and(&Pattern::Disjoint(ctx.clone()), 0) {
+                Pattern::Disjoint(d) => d,
+                other => panic!("expected disjoint, got {other:?}"),
+            };
         assert!(comb.specializes(&coarse));
         assert!(comb.specializes(&ctx));
         // and resolves the intersection of its two pieces
@@ -1962,8 +2048,16 @@ mod tests {
         dec.ingest_stream(&buf).unwrap();
         let rt = OrPattern::decode(&mut dec).unwrap();
         assert_eq!(rt.num_disjoint(), 2);
-        assert!(rt.get_disjoint(0).unwrap().identical(or.get_disjoint(0).unwrap()));
-        assert!(rt.get_disjoint(1).unwrap().identical(or.get_disjoint(1).unwrap()));
+        assert!(
+            rt.get_disjoint(0)
+                .unwrap()
+                .identical(or.get_disjoint(0).unwrap())
+        );
+        assert!(
+            rt.get_disjoint(1)
+                .unwrap()
+                .identical(or.get_disjoint(1).unwrap())
+        );
         let mut buf2 = Vec::new();
         {
             let mut enc = PackedEncode::new(&mut buf2);

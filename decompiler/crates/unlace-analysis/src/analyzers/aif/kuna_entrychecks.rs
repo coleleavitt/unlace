@@ -30,8 +30,9 @@ pub(crate) fn run(
     memo: Option<&Rc<crate::listing::kuna_decodememo::DecodeMemo>>,
 ) -> CheckedAif {
     let mut straight_line = std::collections::BTreeSet::new();
-    let poolslide = (arch.analysis_aifpoolslide && crate::loadimage_object::is_arm32_language(&arch.archid))
-        .then_some(arch);
+    let poolslide = (arch.analysis_aifpoolslide
+        && crate::loadimage_object::is_arm32_language(&arch.archid))
+    .then_some(arch);
     let mut entries = if let Some(prior) = pre_frame {
         super::run_aif_after_frames(
             listing,

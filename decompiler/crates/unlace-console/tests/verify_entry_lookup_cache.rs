@@ -8,19 +8,23 @@
 use std::path::PathBuf;
 
 use unlace_console::assertions::{self, Body, Directive};
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram, EntrySelector};
+use unlace_console::engine::{ConsoleProgram, EntrySelector, bootstrap_from_object};
 use unlace_console::project::decompile_targets;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn load() -> ConsoleProgram {
     let root = repo_root();
     let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
     let bin = root.join("decompiler/crates/unlace-analysis/tests/fixtures/fauxware");
-    let mut prog = bootstrap_from_object(bin.to_str().expect("UTF-8 fixture path"), "", &spec_roots)
-        .expect("bootstrap fixture with built processor specs");
+    let mut prog =
+        bootstrap_from_object(bin.to_str().expect("UTF-8 fixture path"), "", &spec_roots)
+            .expect("bootstrap fixture with built processor specs");
     prog.commit_pending_analysis().expect("analysis commit");
     prog
 }
@@ -37,7 +41,10 @@ fn lookups_after_a_declaration_see_the_declared_name() {
     let mut prog = load();
     let before = named(&prog, "authenticate");
     assert_eq!(before.name, "authenticate");
-    assert!(prog.resolve_entry(&EntrySelector::Name("checked_login".into())).is_err());
+    assert!(
+        prog.resolve_entry(&EntrySelector::Name("checked_login".into()))
+            .is_err()
+    );
 
     prog.declare_function(before.addr.clone(), Some("checked_login"), 0)
         .expect("declare a second name at authenticate's entry");
@@ -46,7 +53,10 @@ fn lookups_after_a_declaration_see_the_declared_name() {
     assert_eq!(declared.addr, before.addr);
     let old = named(&prog, "authenticate");
     assert_eq!(old.addr, before.addr);
-    assert_eq!(old.name, "checked_login", "the declared name did not become the entry's name");
+    assert_eq!(
+        old.name, "checked_login",
+        "the declared name did not become the entry's name"
+    );
 }
 
 /// A symbol spelled exactly like an address still wins over the address form:
@@ -67,7 +77,11 @@ fn a_symbol_spelled_like_an_address_takes_the_prototype() {
     }]);
     assertions::apply_program_scoped(&mut prog);
     for outcome in prog.assertion_outcomes() {
-        assert_eq!(outcome.status, "applied", "{:?}: {:?}", outcome.directive, outcome.detail);
+        assert_eq!(
+            outcome.status, "applied",
+            "{:?}: {:?}",
+            outcome.directive, outcome.detail
+        );
     }
     let authenticate = named(&prog, "authenticate");
     let funcs = decompile_targets(&mut prog, vec![authenticate], false, false, false);
@@ -94,5 +108,9 @@ fn an_extent_declared_after_a_listing_reaches_the_next_listing() {
     };
     assert_ne!(size_of(&prog), 3);
     prog.declare_extent(vma, 3);
-    assert_eq!(size_of(&prog), 3, "the listing kept the extent from before the declaration");
+    assert_eq!(
+        size_of(&prog),
+        3,
+        "the listing kept the extent from before the declaration"
+    );
 }

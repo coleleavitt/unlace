@@ -5,22 +5,23 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
-use crate::dtype::{type_metatype, Datatype};
-use crate::op::pcodeop_flags;
-use crate::funcdata::Funcdata;
 use crate::context::{ArchContext, OpId, TypeOp};
+use crate::dtype::{Datatype, type_metatype};
+use crate::funcdata::Funcdata;
+use crate::op::pcodeop_flags;
 
 use super::*;
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -63,7 +64,10 @@ fn make_op(fd: &mut Funcdata, opc: OpCode, pc_off: u64, ninputs: int4, start: bo
     let op = fd.obank_mut().create_at(ninputs, pc);
     fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, "op"));
     if start {
-        fd.obank_mut().get_mut(op).unwrap().set_flag(pcodeop_flags::startmark);
+        fd.obank_mut()
+            .get_mut(op)
+            .unwrap()
+            .set_flag(pcodeop_flags::startmark);
     }
     op
 }
@@ -74,7 +78,10 @@ fn set_const_input(fd: &mut Funcdata, op: OpId, slot: int4, value: uintb) {
     let vn = fd
         .vbank_mut()
         .create(4, Address::new(cspace, value), unk_type(4));
-    fd.obank_mut().get_mut(op).unwrap().set_input(Some(vn), slot);
+    fd.obank_mut()
+        .get_mut(op)
+        .unwrap()
+        .set_input(Some(vn), slot);
 }
 
 /// The canonical SPARC `unimp` idiom in one instruction:
@@ -134,7 +141,13 @@ fn neutralized_marker_keeps_its_instruction_start_without_a_trap_effect() {
     assert_eq!(marker.code(), OpCode::CPUI_COPY);
     assert!(marker.is_instruction_start());
     assert_eq!(marker.num_input(), 1);
-    assert_eq!(fd.vbank().get(marker.get_in(0).unwrap()).unwrap().get_offset(), 0);
+    assert_eq!(
+        fd.vbank()
+            .get(marker.get_in(0).unwrap())
+            .unwrap()
+            .get_offset(),
+        0
+    );
 }
 
 #[test]
@@ -156,7 +169,10 @@ fn neutralization_without_output_preserves_drop_only_fallback() {
     fd.op_set_input(branch, destination, 0).unwrap();
     fd.op_destroy_raw(branch).unwrap();
     assert!(!fd.obank().on_dead_list(branch));
-    assert_eq!(fd.obank().get(producer).unwrap().code(), OpCode::CPUI_CALLOTHER);
+    assert_eq!(
+        fd.obank().get(producer).unwrap().code(),
+        OpCode::CPUI_CALLOTHER
+    );
 }
 
 #[test]
@@ -165,7 +181,10 @@ fn neutralization_leaves_a_non_trap_opcode_unchanged() {
     let producer = make_op(&mut fd, OpCode::CPUI_INT_ADD, 0x1000, 2, true);
     fd.new_unique_out(4, producer).unwrap();
     neutralize_trap_producer(&mut fd, producer).unwrap();
-    assert_eq!(fd.obank().get(producer).unwrap().code(), OpCode::CPUI_INT_ADD);
+    assert_eq!(
+        fd.obank().get(producer).unwrap().code(),
+        OpCode::CPUI_INT_ADD
+    );
 }
 
 #[test]
@@ -181,7 +200,10 @@ fn shared_destination_does_not_override_the_userop_name() {
     let branch = make_op(&mut fd, OpCode::CPUI_BRANCHIND, 0x1000, 1, false);
     let destination = fd.new_varnode(4, &address, None);
     fd.op_set_input(branch, destination, 0).unwrap();
-    assert_eq!(kuna_sparc_struct_ret_trap_producer(&fd, branch, true, resolver), Some(trap));
+    assert_eq!(
+        kuna_sparc_struct_ret_trap_producer(&fd, branch, true, resolver),
+        Some(trap)
+    );
 }
 
 #[test]
@@ -209,7 +231,10 @@ fn non_constant_userop_input_returns_false() {
     let reg = fd
         .vbank_mut()
         .create(4, Address::new(ram_space, 0x40), unk_type(4));
-    fd.obank_mut().get_mut(callother).unwrap().set_input(Some(reg), 0);
+    fd.obank_mut()
+        .get_mut(callother)
+        .unwrap()
+        .set_input(Some(reg), 0);
     let branchind = make_op(&mut fd, OpCode::CPUI_BRANCHIND, 0x1000, 1, false);
     assert!(!kuna_sparc_struct_ret_trap_producer(&fd, branchind, true, resolver).is_some());
 }

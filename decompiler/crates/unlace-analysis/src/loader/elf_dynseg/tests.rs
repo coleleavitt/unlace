@@ -17,8 +17,14 @@ fn names_both_got_slots_from_pt_dynamic() {
     let bytes = fixture("dynseg_plt_x86_64");
     let imports = dynamic_imports(&bytes).expect("PT_DYNAMIC present");
     assert_eq!(imports.pltgot, Some(0x300));
-    assert_eq!(imports.got_to_name.get(&0x318).map(Vec::as_slice), Some(&b"puts"[..]));
-    assert_eq!(imports.got_to_name.get(&0x320).map(Vec::as_slice), Some(&b"memcpy"[..]));
+    assert_eq!(
+        imports.got_to_name.get(&0x318).map(Vec::as_slice),
+        Some(&b"puts"[..])
+    );
+    assert_eq!(
+        imports.got_to_name.get(&0x320).map(Vec::as_slice),
+        Some(&b"memcpy"[..])
+    );
     assert_eq!(imports.got_to_name.len(), 2);
 }
 
@@ -53,9 +59,14 @@ fn resolves_stub_names_without_naming_the_code_after_them() {
     let file = object::File::parse(&*bytes).expect("parses");
     let mut syms = super::super::elf_plt::resolve_plt_imports(&file, &bytes);
     syms.sort_by_key(|s| s.addr);
-    let got: Vec<(u64, String)> =
-        syms.iter().map(|s| (s.addr, String::from_utf8_lossy(&s.name).into_owned())).collect();
-    assert_eq!(got, vec![(0x240, "puts".to_string()), (0x250, "memcpy".to_string())]);
+    let got: Vec<(u64, String)> = syms
+        .iter()
+        .map(|s| (s.addr, String::from_utf8_lossy(&s.name).into_owned()))
+        .collect();
+    assert_eq!(
+        got,
+        vec![(0x240, "puts".to_string()), (0x250, "memcpy".to_string())]
+    );
 }
 
 /// A sectionless *static* image has no `PT_DYNAMIC` at all: no tags, no names,
@@ -91,7 +102,10 @@ fn oversized_relocation_table_size_is_bounded() {
     assert_eq!(u64::from_le_bytes(bytes[at..at + 8].try_into().unwrap()), 2);
     bytes[at + 8..at + 16].copy_from_slice(&u64::MAX.to_le_bytes());
     let imports = dynamic_imports(&bytes).expect("PT_DYNAMIC present");
-    assert_eq!(imports.got_to_name.get(&0x318).map(Vec::as_slice), Some(&b"puts"[..]));
+    assert_eq!(
+        imports.got_to_name.get(&0x318).map(Vec::as_slice),
+        Some(&b"puts"[..])
+    );
 }
 
 /// A non-ELF input is not this module's business and is refused up front.

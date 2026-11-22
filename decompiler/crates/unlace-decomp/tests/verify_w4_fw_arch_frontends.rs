@@ -93,10 +93,12 @@ fn adjustvma_negative_zero_and_plus_prefix() {
 // ---------------------------------------------------------------------------
 
 fn write_temp(name: &str, bytes: &[u8]) -> std::path::PathBuf {
-    let dir =
-        std::env::temp_dir().join(format!("kuna_w4fwarch_{}_{}", std::process::id(), name));
+    let dir = std::env::temp_dir().join(format!("kuna_w4fwarch_{}_{}", std::process::id(), name));
     let _ = std::fs::create_dir_all(dir.parent().unwrap());
-    std::fs::File::create(&dir).unwrap().write_all(bytes).unwrap();
+    std::fs::File::create(&dir)
+        .unwrap()
+        .write_all(bytes)
+        .unwrap();
     dir
 }
 
@@ -109,7 +111,10 @@ fn is_file_match_skips_classic_whitespace_then_matches_bi() {
         let mut buf = ws.to_vec();
         buf.extend_from_slice(b"<binaryimage>");
         let p = write_temp("ws_yes", &buf);
-        assert!(cap.is_file_match(p.to_str().unwrap()), "ws {ws:?} should be skipped");
+        assert!(
+            cap.is_file_match(p.to_str().unwrap()),
+            "ws {ws:?} should be skipped"
+        );
         let _ = std::fs::remove_file(&p);
     }
     // A clean <bi... matches; a non-bi prefix does not.
@@ -149,7 +154,10 @@ fn normalize_architecture_five_fields_extra_colon_keeps_tail() {
     // 5+ colons: the loop performs 4 successful finds (pos[0..3]) then exits with
     // i==4.  `compile = nm.substr(pos[3]+1)` takes EVERYTHING after the 4th colon,
     // including any further colons.  C++ oracle: "a:b:c:d:e:f" -> "a:b:c:d:e:f".
-    assert_eq!(normalize_architecture("a:b:c:d:e:f").unwrap(), "a:b:c:d:e:f");
+    assert_eq!(
+        normalize_architecture("a:b:c:d:e:f").unwrap(),
+        "a:b:c:d:e:f"
+    );
     // exactly 5 fields round-trips.
     assert_eq!(
         normalize_architecture("x86:LE:64:default:gcc").unwrap(),
@@ -169,7 +177,10 @@ fn normalize_architecture_leading_colon_is_skipped_and_can_throw() {
     // find(':',5)=6, find(':',7)=8 -> i==4.  processor = substr(0,2) = ":a".
     // (The leading colon is absorbed into the processor field.)  Oracle:
     // ":a:b:c:d" -> ":a:b:c:d:default" (normalizeProcessor(":a")==":a").
-    assert_eq!(normalize_architecture(":a:b:c:d").unwrap(), ":a:b:c:d:default");
+    assert_eq!(
+        normalize_architecture(":a:b:c:d").unwrap(),
+        ":a:b:c:d:default"
+    );
 
     // Fewer than 4 colons -> error.
     assert!(normalize_architecture("x86:LE:64").is_err());
@@ -180,7 +191,10 @@ fn normalize_architecture_leading_colon_is_skipped_and_can_throw() {
 fn normalize_architecture_three_fields_appends_default_compiler() {
     // exactly 4 colon-separated fields (3 colons) -> compiler defaults to
     // "default".  C++ oracle: "ARM:LE:32:v8" -> "ARM:LE:32:v8:default".
-    assert_eq!(normalize_architecture("ARM:LE:32:v8").unwrap(), "ARM:LE:32:v8:default");
+    assert_eq!(
+        normalize_architecture("ARM:LE:32:v8").unwrap(),
+        "ARM:LE:32:v8:default"
+    );
     // The variant field can be empty (trailing colon then nothing).
     // "a:b:c:" -> colons at 1,3,5; find(':',6) past end -> i==3 -> variant =
     // substr(pos[2]+1) = "" ; compile="default".  Oracle: "a:b:c::default".
@@ -195,7 +209,7 @@ fn normalize_architecture_three_fields_appends_default_compiler() {
 #[test]
 fn get_compiler_default_in_middle_is_preferred_over_first() {
     use unlace_base::marshal::IdRegistry;
-    use unlace_decomp::sleigh_arch::{register_sleigh_arch_ids, LanguageDatabase};
+    use unlace_decomp::sleigh_arch::{LanguageDatabase, register_sleigh_arch_ids};
     use unlace_sleigh::translate::register_translate_ids;
 
     let mut r = IdRegistry::with_base_ids();

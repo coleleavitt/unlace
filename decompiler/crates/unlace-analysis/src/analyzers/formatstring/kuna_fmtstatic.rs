@@ -62,7 +62,7 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::types::{int4, uintb};
 use unlace_decomp::architecture::Architecture;
-use unlace_decomp::fspec::{ParameterPieces, PrototypePieces, ProtoModel};
+use unlace_decomp::fspec::{ParameterPieces, ProtoModel, PrototypePieces};
 use unlace_decomp::kuna_formatstring::{self, ImageFamily, VarargAbi};
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
@@ -81,12 +81,19 @@ const WINDOW_INSNS: usize = 48;
 
 /// The `gettext` family, by the parameter index holding the msgid — the format
 /// string the returned translation shares.
-const GETTEXT_FAMILY: &[(&str, usize)] =
-    &[("gettext", 0), ("dgettext", 1), ("dcgettext", 1), ("__gettext", 0)];
+const GETTEXT_FAMILY: &[(&str, usize)] = &[
+    ("gettext", 0),
+    ("dgettext", 1),
+    ("dcgettext", 1),
+    ("__gettext", 0),
+];
 
 /// Which parameter of the `gettext`-family function `name` is its msgid.
 pub fn gettext_msgid_slot(name: &str) -> Option<usize> {
-    GETTEXT_FAMILY.iter().find(|(n, _)| *n == name).map(|&(_, slot)| slot)
+    GETTEXT_FAMILY
+        .iter()
+        .find(|(n, _)| *n == name)
+        .map(|&(_, slot)| slot)
 }
 
 /// `KUNA_FMTSTATIC_DEBUG`: trace every call site the resolver considered and what
@@ -111,7 +118,9 @@ impl AnalysisPass for FormatStringStaticPass {
 
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
         let mut out = AnalysisOutput::default();
-        let Some(listing) = ctx.listing else { return out };
+        let Some(listing) = ctx.listing else {
+            return out;
+        };
         if !listing.has_refs() {
             return out;
         }
@@ -126,7 +135,9 @@ impl AnalysisPass for FormatStringStaticPass {
         if abi == VarargAbi::Nothing {
             return out;
         }
-        let Some(model) = ctx.arch.default_fp().cloned() else { return out };
+        let Some(model) = ctx.arch.default_fp().cloned() else {
+            return out;
+        };
         let types = ctx.arch.types();
         let (_addr_size, word_size) = ctx.arch.data_org();
         // The same layout decision `LibcTypesPass` makes, so an override's fixed
@@ -143,13 +154,17 @@ impl AnalysisPass for FormatStringStaticPass {
         // return storage).
         let mut gettext: HashMap<u64, (Key, Key)> = HashMap::new();
         for (name, addr) in &imports {
-            let Some(slot) = gettext_msgid_slot(name) else { continue };
+            let Some(slot) = gettext_msgid_slot(name) else {
+                continue;
+            };
             let Some(pieces) =
                 crate::protos::declared_libc_prototype(name, types, word_size, layout)
             else {
                 continue;
             };
-            let Some(assigned) = assign(&model, &pieces, ctx.arch) else { continue };
+            let Some(assigned) = assign(&model, &pieces, ctx.arch) else {
+                continue;
+            };
             // `assigned[0]` is the return storage; the parameters follow.
             let (Some(ret), Some(msgid)) = (assigned.first(), assigned.get(slot + 1)) else {
                 continue;
@@ -169,8 +184,12 @@ impl AnalysisPass for FormatStringStaticPass {
             if dbg {
                 eprintln!("fmtstatic: callee {name} @ {addr:#x}, format at parameter {slot}");
             }
-            let Some(assigned) = assign(&model, &callee, ctx.arch) else { continue };
-            let Some(store) = assigned.get(slot + 1).and_then(storage_key) else { continue };
+            let Some(assigned) = assign(&model, &callee, ctx.arch) else {
+                continue;
+            };
+            let Some(store) = assigned.get(slot + 1).and_then(storage_key) else {
+                continue;
+            };
             // `isOutputType = !name.contains("scanf")` — Ghidra
             // `FormatStringAnalyzer.parseParameters` (`:273`), widened to the
             // families the substring test never named (`err`/`warn`/`syslog`),
@@ -195,7 +214,9 @@ impl AnalysisPass for FormatStringStaticPass {
                         if tail_jump { " (tail jump)" } else { "" }
                     );
                 }
-                let Some(func) = listing.function_containing(edge.from) else { continue };
+                let Some(func) = listing.function_containing(edge.from) else {
+                    continue;
+                };
                 let entry = func.entry;
                 let Some(vma) =
                     resolve_at(ctx, listing, edge.from, &store, &gettext, &mut lifts, dbg)
@@ -208,7 +229,9 @@ impl AnalysisPass for FormatStringStaticPass {
                 if dbg {
                     eprintln!("fmtstatic:   resolved {vma:#x}");
                 }
-                let Some(fmt) = read_cstring(ctx.arch, vma) else { continue };
+                let Some(fmt) = read_cstring(ctx.arch, vma) else {
+                    continue;
+                };
                 if !fmt.contains('%') {
                     continue;
                 }
@@ -263,10 +286,13 @@ impl AnalysisPass for FormatStringStaticPass {
                 imports: &imports,
                 dbg,
             };
-            out.format_sites.extend(super::kuna_fmtcallee::infer(&inputs, &mut lifts));
+            out.format_sites
+                .extend(super::kuna_fmtcallee::infer(&inputs, &mut lifts));
         }
-        out.format_sites.sort_by(|a, b| (a.func, a.callpoint).cmp(&(b.func, b.callpoint)));
-        out.format_sites.dedup_by(|a, b| a.func == b.func && a.callpoint == b.callpoint);
+        out.format_sites
+            .sort_by(|a, b| (a.func, a.callpoint).cmp(&(b.func, b.callpoint)));
+        out.format_sites
+            .dedup_by(|a, b| a.func == b.func && a.callpoint == b.callpoint);
         out
     }
 }
@@ -301,7 +327,11 @@ pub(super) fn read_cstring(arch: &Architecture, vma: uintb) -> Option<String> {
         let addr = Address::new(Rc::clone(&space), vma.wrapping_add(i));
         let b = arch.read_loadimage_value(&addr, 1).ok()? as u8;
         if b == 0 {
-            return if bytes.is_empty() { None } else { String::from_utf8(bytes).ok() };
+            return if bytes.is_empty() {
+                None
+            } else {
+                String::from_utf8(bytes).ok()
+            };
         }
         bytes.push(b);
     }
@@ -350,7 +380,9 @@ pub(super) fn written_width(
     for vma in backward_block(listing, call_site) {
         let lifted = lift(ctx, vma, lifts)?;
         for (opc, out, ins) in &lifted.ops {
-            let Some((s, o, sz)) = out.as_ref().and_then(key_of) else { continue };
+            let Some((s, o, sz)) = out.as_ref().and_then(key_of) else {
+                continue;
+            };
             if s != space || o >= hi || off >= o.wrapping_add(u64::from(sz)) {
                 continue;
             }
@@ -387,8 +419,12 @@ fn backward_block(listing: &Listing, call_site: u64) -> Vec<u64> {
         {
             break;
         }
-        let Some(prev) = previous_instruction(listing, cur) else { break };
-        let Some(insn) = listing.instruction_at(prev) else { break };
+        let Some(prev) = previous_instruction(listing, cur) else {
+            break;
+        };
+        let Some(insn) = listing.instruction_at(prev) else {
+            break;
+        };
         // Only a plain fall-through links the two: a conditional branch to the
         // next instruction, or a call, does not carry a register value forward
         // we may rely on (the call case is handled by the fold itself).
@@ -405,7 +441,9 @@ fn backward_block(listing: &Listing, call_site: u64) -> Vec<u64> {
 /// Does the instruction at `from` fall through into `to` (as opposed to
 /// branching there)?
 pub(super) fn falls_into(listing: &Listing, from: u64, to: u64) -> bool {
-    listing.instruction_at(from).is_some_and(|i| i.fall_through == Some(to))
+    listing
+        .instruction_at(from)
+        .is_some_and(|i| i.fall_through == Some(to))
         && from + u64::from(listing.instruction_at(from).map_or(0, |i| i.len)) == to
 }
 
@@ -479,7 +517,9 @@ fn fold(
             }
             continue;
         }
-        apply_ops(&lifted.ops, &mut known, &|at, size| read_const(ctx, at, size));
+        apply_ops(&lifted.ops, &mut known, &|at, size| {
+            read_const(ctx, at, size)
+        });
     }
     known.get(store).copied()
 }
@@ -491,15 +531,25 @@ pub(super) fn lift(ctx: &AnalysisCtx, vma: u64, lifts: &mut LiftCache) -> Option
         return Some(Rc::clone(l));
     }
     let space = Rc::clone(ctx.arch.manage().get_default_code_space()?);
-    let mut l = Lifted { ops: Vec::new(), ok: true };
-    l.ok = ctx.arch.translate().one_instruction(&mut l, &Address::new(space, vma)).is_ok();
+    let mut l = Lifted {
+        ops: Vec::new(),
+        ok: true,
+    };
+    l.ok = ctx
+        .arch
+        .translate()
+        .one_instruction(&mut l, &Address::new(space, vma))
+        .is_ok();
     Some(Rc::clone(lifts.entry(vma).or_insert(Rc::new(l))))
 }
 
 /// Does a call instruction write `k` before it transfers? A MIPS or SPARC call
 /// runs its delay slot first, so `jal printf` with `addiu a0,a0,%lo(fmt)` in the
 /// slot passes a value the window before the call never sees.
-fn writes_before_transfer(ops: &[(OpCode, Option<VarnodeData>, Vec<VarnodeData>)], k: &Key) -> bool {
+fn writes_before_transfer(
+    ops: &[(OpCode, Option<VarnodeData>, Vec<VarnodeData>)],
+    k: &Key,
+) -> bool {
     let (space, off, size) = *k;
     let hi = off.wrapping_add(u64::from(size));
     ops.iter()
@@ -549,7 +599,10 @@ fn apply_ops(
 ) {
     let mut conditional = false;
     for (opc, outvar, vars) in ops {
-        if matches!(opc, OpCode::CPUI_CBRANCH | OpCode::CPUI_BRANCH | OpCode::CPUI_BRANCHIND) {
+        if matches!(
+            opc,
+            OpCode::CPUI_CBRANCH | OpCode::CPUI_BRANCH | OpCode::CPUI_BRANCHIND
+        ) {
             conditional = true;
             continue;
         }
@@ -575,7 +628,9 @@ fn step(
             sign_extend(v, bits)
         }),
         OpCode::CPUI_INT_XOR | OpCode::CPUI_INT_SUB
-            if vars.len() == 2 && key_of(&vars[0]).is_some() && key_of(&vars[0]) == key_of(&vars[1]) =>
+            if vars.len() == 2
+                && key_of(&vars[0]).is_some()
+                && key_of(&vars[0]) == key_of(&vars[1]) =>
         {
             Some(0)
         }
@@ -684,9 +739,7 @@ fn sign_extend(v: u64, bits: u32) -> u64 {
 fn kill_overlapping(known: &mut HashMap<Key, u64>, k: &Key) {
     let (space, off, size) = *k;
     let hi = off.wrapping_add(u64::from(size));
-    known.retain(|(s, o, sz), _| {
-        *s != space || o.wrapping_add(u64::from(*sz)) <= off || *o >= hi
-    });
+    known.retain(|(s, o, sz), _| *s != space || o.wrapping_add(u64::from(*sz)) <= off || *o >= hi);
 }
 
 /// Is `[vma, vma + len)` inside one section the image initializes and does not
@@ -712,7 +765,9 @@ fn read_const(ctx: &AnalysisCtx, vma: u64, size: u32) -> Option<u64> {
         return None;
     }
     let space = Rc::clone(ctx.arch.manage().get_default_code_space()?);
-    ctx.arch.read_loadimage_value(&Address::new(space, vma), size as int4).ok()
+    ctx.arch
+        .read_loadimage_value(&Address::new(space, vma), size as int4)
+        .ok()
 }
 
 /// The object-file family of the image in `bytes`: whether an AArch64 target is
@@ -763,19 +818,28 @@ mod tests {
 
     #[test]
     fn piece_concatenates_at_the_low_input_width_and_wide_shifts_are_zero() {
-        assert_eq!(arith(OpCode::CPUI_PIECE, 0x1234, 0x5678, 2), Some(0x1234_5678));
+        assert_eq!(
+            arith(OpCode::CPUI_PIECE, 0x1234, 0x5678, 2),
+            Some(0x1234_5678)
+        );
         assert_eq!(arith(OpCode::CPUI_PIECE, 0x12, 0x34, 1), Some(0x1234));
         assert_eq!(arith(OpCode::CPUI_PIECE, 0x1, 0x2, 4), Some(0x1_0000_0002));
         assert_eq!(arith(OpCode::CPUI_INT_LEFT, 1, 64, 1), Some(0));
         assert_eq!(arith(OpCode::CPUI_INT_RIGHT, u64::MAX, 70, 1), Some(0));
         assert_eq!(arith(OpCode::CPUI_INT_LEFT, 1, 63, 1), Some(1 << 63));
-        assert_eq!(arith(OpCode::CPUI_SUBPIECE, 0x1122_3344_5566_7788, 4, 4), Some(0x1122_3344));
+        assert_eq!(
+            arith(OpCode::CPUI_SUBPIECE, 0x1122_3344_5566_7788, 4, 4),
+            Some(0x1122_3344)
+        );
         assert_eq!(arith(OpCode::CPUI_SUBPIECE, 0x11, 8, 4), Some(0));
         assert_eq!(arith(OpCode::CPUI_COPY, 1, 2, 4), None);
     }
 
-    fn spaces() -> (Rc<unlace_base::space::AddrSpace>, Rc<unlace_base::space::AddrSpace>) {
-        use unlace_base::space::{spacetype, AddrSpace};
+    fn spaces() -> (
+        Rc<unlace_base::space::AddrSpace>,
+        Rc<unlace_base::space::AddrSpace>,
+    ) {
+        use unlace_base::space::{AddrSpace, spacetype};
         (
             Rc::new(AddrSpace::new_for_decode(spacetype::IPTR_CONSTANT)),
             Rc::new(AddrSpace::new_for_decode(spacetype::IPTR_PROCESSOR)),
@@ -783,7 +847,11 @@ mod tests {
     }
 
     fn vn(space: &Rc<unlace_base::space::AddrSpace>, offset: u64, size: u32) -> VarnodeData {
-        VarnodeData { space: Some(Rc::clone(space)), offset, size }
+        VarnodeData {
+            space: Some(Rc::clone(space)),
+            offset,
+            size,
+        }
     }
 
     #[test]
@@ -795,8 +863,16 @@ mod tests {
         // RSI = 0x7500; RAX = 0x70bc
         apply_ops(
             &[
-                (OpCode::CPUI_COPY, Some(rsi.clone()), vec![vn(&k, 0x7500, 8)]),
-                (OpCode::CPUI_COPY, Some(rax.clone()), vec![vn(&k, 0x70bc, 8)]),
+                (
+                    OpCode::CPUI_COPY,
+                    Some(rsi.clone()),
+                    vec![vn(&k, 0x7500, 8)],
+                ),
+                (
+                    OpCode::CPUI_COPY,
+                    Some(rax.clone()),
+                    vec![vn(&k, 0x70bc, 8)],
+                ),
             ],
             &mut known,
             &no_load,
@@ -805,7 +881,11 @@ mod tests {
         // cmove rsi,rax: if (!ZF) goto inst_next; RSI = RAX;
         apply_ops(
             &[
-                (OpCode::CPUI_CBRANCH, None, vec![vn(&k, 0x2835, 8), vn(&r, 0x206, 1)]),
+                (
+                    OpCode::CPUI_CBRANCH,
+                    None,
+                    vec![vn(&k, 0x2835, 8), vn(&r, 0x206, 1)],
+                ),
                 (OpCode::CPUI_COPY, Some(rsi.clone()), vec![rax.clone()]),
             ],
             &mut known,
@@ -841,14 +921,26 @@ mod tests {
         let a0_key = key_of(&a0).unwrap();
         // jal printf / addiu a0,a0,0x1234: ra = next; a0 = a0 + 0x1234; call printf
         let jal_with_slot = [
-            (OpCode::CPUI_COPY, Some(ra.clone()), vec![vn(&k, 0x400108, 4)]),
-            (OpCode::CPUI_INT_ADD, Some(a0.clone()), vec![a0.clone(), vn(&k, 0x1234, 4)]),
+            (
+                OpCode::CPUI_COPY,
+                Some(ra.clone()),
+                vec![vn(&k, 0x400108, 4)],
+            ),
+            (
+                OpCode::CPUI_INT_ADD,
+                Some(a0.clone()),
+                vec![a0.clone(), vn(&k, 0x1234, 4)],
+            ),
             (OpCode::CPUI_CALL, None, vec![vn(&r, 0x400200, 4)]),
         ];
         assert!(writes_before_transfer(&jal_with_slot, &a0_key));
         // x86 `call`: the return address goes on the stack, the argument register is untouched.
         let call = [
-            (OpCode::CPUI_COPY, Some(ra.clone()), vec![vn(&k, 0x400108, 4)]),
+            (
+                OpCode::CPUI_COPY,
+                Some(ra.clone()),
+                vec![vn(&k, 0x400108, 4)],
+            ),
             (OpCode::CPUI_CALL, None, vec![vn(&r, 0x400200, 4)]),
             (OpCode::CPUI_COPY, Some(a0.clone()), vec![vn(&k, 0, 4)]),
         ];
@@ -861,8 +953,29 @@ mod tests {
     #[test]
     fn the_gettext_family_names_the_msgid_slot() {
         // `_()` is `dcgettext(NULL, msgid, LC_MESSAGES)`; `gettext(msgid)`.
-        assert_eq!(GETTEXT_FAMILY.iter().find(|(n, _)| *n == "gettext").unwrap().1, 0);
-        assert_eq!(GETTEXT_FAMILY.iter().find(|(n, _)| *n == "dgettext").unwrap().1, 1);
-        assert_eq!(GETTEXT_FAMILY.iter().find(|(n, _)| *n == "dcgettext").unwrap().1, 1);
+        assert_eq!(
+            GETTEXT_FAMILY
+                .iter()
+                .find(|(n, _)| *n == "gettext")
+                .unwrap()
+                .1,
+            0
+        );
+        assert_eq!(
+            GETTEXT_FAMILY
+                .iter()
+                .find(|(n, _)| *n == "dgettext")
+                .unwrap()
+                .1,
+            1
+        );
+        assert_eq!(
+            GETTEXT_FAMILY
+                .iter()
+                .find(|(n, _)| *n == "dcgettext")
+                .unwrap()
+                .1,
+            1
+        );
     }
 }

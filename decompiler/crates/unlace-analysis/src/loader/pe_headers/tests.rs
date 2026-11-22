@@ -129,7 +129,10 @@ fn with_entry(mut bytes: Vec<u8>, rva: u32) -> Vec<u8> {
 fn a_compiler_header_page_is_data() {
     let bytes = pe(FILE_ALIGN, 0x1000);
     let region = region_of(&bytes).expect("a PE has a header page");
-    assert!(!region.code, "no entry in the header page, so no code in it");
+    assert!(
+        !region.code,
+        "no entry in the header page, so no code in it"
+    );
     let file = object::File::parse(bytes.as_slice()).expect("fixture parses");
     assert_eq!(header_entry(&file, &bytes), None);
 }

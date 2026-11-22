@@ -26,7 +26,10 @@ use std::path::PathBuf;
 use unlace_console::engine::bootstrap_from_object;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture(name: &str) -> String {
@@ -45,11 +48,15 @@ fn load_function_names(bin: &str) -> Result<Vec<String>, String> {
     let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
     let prog = bootstrap_from_object(bin, "", &spec_roots);
     let prog = prog.map_err(|e| e.explain().to_string())?;
-    Ok(prog.function_entries().map(|(name, _)| name.to_string()).collect())
+    Ok(prog
+        .function_entries()
+        .map(|(name, _)| name.to_string())
+        .collect())
 }
 
 fn require_specs() {
-    load_function_names(&fixture("anon_namespace_x86_64")).expect("load required fixture with built processor specs");
+    load_function_names(&fixture("anon_namespace_x86_64"))
+        .expect("load required fixture with built processor specs");
 }
 
 /// The root-cause gate: an ordinary unstripped C++ binary whose definitions live
@@ -70,13 +77,19 @@ fn anonymous_namespace_binary_loads() {
         assert!(
             names.iter().any(|n| n == expected),
             "missing {expected:?}; got {:?}",
-            names.iter().filter(|n| n.contains("anonymous")).collect::<Vec<_>>()
+            names
+                .iter()
+                .filter(|n| n.contains("anonymous"))
+                .collect::<Vec<_>>()
         );
     }
     // The pre-fix shape must be gone entirely: no name may carry an empty
     // `::`-component, which is what aborted the load.
     for n in &names {
-        assert!(!n.split("::").any(|c| c.is_empty()), "empty scope component survived: {n}");
+        assert!(
+            !n.split("::").any(|c| c.is_empty()),
+            "empty scope component survived: {n}"
+        );
     }
 }
 

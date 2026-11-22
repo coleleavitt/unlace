@@ -22,13 +22,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::rc::Rc;
 
-use crate::address::{calc_mask, Address, AddrSpacePtr};
+use crate::address::{AddrSpacePtr, Address, calc_mask};
 use crate::error::{KunaError, KunaResult};
 use crate::marshal::{
-    cxx_strtoul, AttributeId, Decoder, ElementId, Encoder, ATTRIB_BIGENDIAN, ATTRIB_INDEX,
-    ATTRIB_NAME, ATTRIB_OFFSET, ATTRIB_SIZE, ATTRIB_SPACE, ATTRIB_UNKNOWN, ATTRIB_WORDSIZE,
+    ATTRIB_BIGENDIAN, ATTRIB_INDEX, ATTRIB_NAME, ATTRIB_OFFSET, ATTRIB_SIZE, ATTRIB_SPACE,
+    ATTRIB_UNKNOWN, ATTRIB_WORDSIZE, AttributeId, Decoder, ElementId, Encoder, cxx_strtoul,
 };
-use crate::types::{Wrap, HOST_ENDIAN};
+use crate::types::{HOST_ENDIAN, Wrap};
 
 /// \brief Fundemental address space types
 ///
@@ -379,7 +379,8 @@ impl JoinRecord {
             return None;
         }
         let mut small_off = offset.wsub(self.unified.offset) as i32;
-        let big_endian = self.unified
+        let big_endian = self
+            .unified
             .space
             .as_ref()
             .expect("JoinRecord::get_equivalent_address: null join space")
@@ -413,7 +414,9 @@ impl JoinRecord {
             }
         }
         let piece = &self.pieces[*pos as usize];
-        let space = piece.space.as_ref()
+        let space = piece
+            .space
+            .as_ref()
             .expect("JoinRecord::get_equivalent_address: null piece space (C++ UB)");
         let offset = if space.get_type() == spacetype::IPTR_CONSTANT && piece.offset == 0 {
             0
@@ -447,7 +450,11 @@ impl JoinRecord {
         }
         let mut res: Vec<VarnodeStorage> = Vec::new();
         i = 1;
-        res.push(seq.first().expect("mergeSequence on empty sequence (C++ UB)").clone());
+        res.push(
+            seq.first()
+                .expect("mergeSequence on empty sequence (C++ UB)")
+                .clone(),
+        );
         let mut last_is_informal = false;
         while i < seq.len() {
             let lo = seq[i].clone();
@@ -457,13 +464,17 @@ impl JoinRecord {
                     .space
                     .as_ref()
                     .expect("mergeSequence: null space pointer (C++ UB)");
-                hi.offset = if hi_space.is_big_endian() { hi.offset } else { lo.offset };
+                hi.offset = if hi_space.is_big_endian() {
+                    hi.offset
+                } else {
+                    lo.offset
+                };
                 hi.size = hi.size.wadd(lo.size);
                 if hi_space.get_type() != spacetype::IPTR_SPACEBASE {
                     let hi_space = Rc::clone(hi_space);
-                    last_is_informal =
-                        trans.get_exact_register_name(&hi_space, hi.offset, hi.size as i32) // cast: uint4 size -> int4 parameter
-                            .is_empty();
+                    last_is_informal = trans
+                        .get_exact_register_name(&hi_space, hi.offset, hi.size as i32) // cast: uint4 size -> int4 parameter
+                        .is_empty();
                 }
             } else {
                 if last_is_informal {
@@ -748,9 +759,11 @@ impl AddrSpace {
             // These are the flags we allow to be set from constructor;
             // heritaged/does_deadcode are always on unless explicitly turned
             // off in a derived constructor
-            flags: Cell::new((flags & fl::hasphysical)
-                | if big_end { fl::big_endian } else { 0 }
-                | (fl::heritaged | fl::does_deadcode)),
+            flags: Cell::new(
+                (flags & fl::hasphysical)
+                    | if big_end { fl::big_endian } else { 0 }
+                    | (fl::heritaged | fl::does_deadcode),
+            ),
             highest: Cell::new(0),
             pointer_lower_bound: Cell::new(0),
             pointer_upper_bound: Cell::new(0),
@@ -799,9 +812,15 @@ impl AddrSpace {
     fn calc_scale_mask(&self) {
         let mut highest = calc_mask(self.address_size.get() as i32); // Maximum address
         // Maximum byte address (wrapping like the C++ unsigned arithmetic)
-        highest = highest.wmul(self.wordsize as u64).wadd((self.wordsize as u64).wsub(1));
+        highest = highest
+            .wmul(self.wordsize as u64)
+            .wadd((self.wordsize as u64).wsub(1));
         self.highest.set(highest);
-        let buffer_size: u64 = if self.address_size.get() < 3 { 0x100 } else { 0x1000 };
+        let buffer_size: u64 = if self.address_size.get() < 3 {
+            0x100
+        } else {
+            0x1000
+        };
         self.pointer_lower_bound.set(buffer_size);
         self.pointer_upper_bound.set(highest.wsub(buffer_size));
     }
@@ -1267,8 +1286,7 @@ impl AddrSpace {
                 }
                 // pointOff + pointSkip - offset: int4 pointSkip sign-extends
                 // to uintb in the C++ arithmetic
-                let dist =
-                    self.wrap_offset(point_off.wadd(point_skip as i64 as u64).wsub(offset));
+                let dist = self.wrap_offset(point_off.wadd(point_skip as i64 as u64).wsub(offset));
                 // mixed comparison: uintb dist vs int4 size (size converted
                 // up, sign-extended)
                 if dist >= size as i64 as u64 {
@@ -1466,7 +1484,7 @@ impl AddrSpace {
                                 None => {
                                     return Err(KunaError::lowlevel(
                                         "join address piece attribute is malformed",
-                                    ))
+                                    ));
                                 }
                             };
                             let spcname = String::from_utf8_lossy(&attr_val[..offpos]);
@@ -1488,7 +1506,11 @@ impl AddrSpace {
                             } else {
                                 size64 as u32 // cast: checked above
                             };
-                            VarnodeStorage { space, offset, size }
+                            VarnodeStorage {
+                                space,
+                                offset,
+                                size,
+                            }
                         }
                     };
                     _sizesum = _sizesum.wadd(vdat.size);
@@ -1656,16 +1678,11 @@ impl AddrSpace {
                         let try_shortcut = token.first().copied().unwrap_or(0);
                         let spc = match manage.get_space_by_shortcut(try_shortcut) {
                             Some(spc) => Rc::clone(spc),
-                            None => {
-                                return Err(KunaError::lowlevel("Could not parse join string"))
-                            }
+                            None => return Err(KunaError::lowlevel("Could not parse join string")),
                         };
                         let mut subsize: i32 = 0;
-                        let offset = spc.read(
-                            &String::from_utf8_lossy(&token[1..]),
-                            &mut subsize,
-                            manage,
-                        )?;
+                        let offset =
+                            spc.read(&String::from_utf8_lossy(&token[1..]), &mut subsize, manage)?;
                         VarnodeStorage {
                             space: Some(spc),
                             offset,
@@ -1751,7 +1768,8 @@ impl AddrSpace {
             } else if attrib_id == ATTRIB_DELAY {
                 self.delay = decoder.read_signed_integer()? as i32;
             } else if attrib_id == ATTRIB_DEADCODEDELAY {
-                self.deadcodedelay.set(decoder.read_signed_integer()? as i32);
+                self.deadcodedelay
+                    .set(decoder.read_signed_integer()? as i32);
             } else if attrib_id == ATTRIB_PHYSICAL {
                 if decoder.read_bool()? {
                     self.flags.set(self.flags.get() | fl::hasphysical);
@@ -1772,18 +1790,18 @@ impl AddrSpace {
         match &self.kind {
             // As the ConstantSpace is never saved, it should never get
             // decoded either.
-            AddrSpaceKind::Constant => {
-                Err(KunaError::lowlevel("Should never decode the constant space"))
-            }
+            AddrSpaceKind::Constant => Err(KunaError::lowlevel(
+                "Should never decode the constant space",
+            )),
             AddrSpaceKind::Join { .. } => {
                 Err(KunaError::lowlevel("Should never decode join space"))
             }
-            AddrSpaceKind::Fspec => {
-                Err(KunaError::lowlevel("Should never decode fspec space from stream"))
-            }
-            AddrSpaceKind::Iop => {
-                Err(KunaError::lowlevel("Should never decode iop space from stream"))
-            }
+            AddrSpaceKind::Fspec => Err(KunaError::lowlevel(
+                "Should never decode fspec space from stream",
+            )),
+            AddrSpaceKind::Iop => Err(KunaError::lowlevel(
+                "Should never decode iop space from stream",
+            )),
             AddrSpaceKind::Overlay { .. } => self.decode_overlay(decoder),
             AddrSpaceKind::Spacebase { .. } => self.decode_spacebase(decoder),
             _ => {
@@ -1828,7 +1846,9 @@ impl AddrSpace {
         if base_space.has_physical() {
             self.set_flags(fl::hasphysical);
         }
-        self.kind = AddrSpaceKind::Overlay { base_space: Some(base_space) };
+        self.kind = AddrSpaceKind::Overlay {
+            base_space: Some(base_space),
+        };
         Ok(())
     }
 
@@ -2051,7 +2071,9 @@ impl JoinSpace {
             0,
             0,
         );
-        space.kind = AddrSpaceKind::Join { state: RefCell::new(JoinState::default()) };
+        space.kind = AddrSpaceKind::Join {
+            state: RefCell::new(JoinState::default()),
+        };
         // This is a virtual space; never heritaged, but does dead-code
         // analysis
         space.clear_flags(fl::heritaged);
@@ -2108,7 +2130,7 @@ impl SpacebaseSpace {
         space.kind = AddrSpaceKind::Spacebase {
             contain: Some(Rc::clone(base)),
             state: RefCell::new(SpacebaseState {
-                hasbaseregister: false, // No base register assigned yet
+                hasbaseregister: false,  // No base register assigned yet
                 is_negative_stack: true, // default stack growth
                 baseloc: VarnodeStorage::default(),
                 base_orig: VarnodeStorage::default(),
@@ -2320,7 +2342,9 @@ struct RegisterLookupSlot(Option<Rc<dyn RegisterLookup>>);
 
 impl fmt::Debug for RegisterLookupSlot {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("RegisterLookupSlot").field(&self.0.is_some()).finish()
+        f.debug_tuple("RegisterLookupSlot")
+            .field(&self.0.is_some())
+            .finish()
     }
 }
 
@@ -2493,7 +2517,8 @@ impl AddrSpaceManager {
                 spc.get_name()
             )));
         }
-        self.name2space.insert(spc.get_name().to_string(), Rc::clone(&spc));
+        self.name2space
+            .insert(spc.get_name().to_string(), Rc::clone(&spc));
 
         self.baselist[index] = Some(Rc::clone(&spc));
         spc.refcount.set(spc.refcount.get() + 1);
@@ -2711,7 +2736,11 @@ impl AddrSpaceManager {
     /// has not been registered — C++ would build an Address around null).
     pub fn get_constant(&self, val: u64) -> Address {
         Address::new(
-            Rc::clone(self.constantspace.as_ref().expect("constant space not registered")),
+            Rc::clone(
+                self.constantspace
+                    .as_ref()
+                    .expect("constant space not registered"),
+            ),
             val,
         )
     }
@@ -2726,7 +2755,11 @@ impl AddrSpaceManager {
     /// `unlace_num::pcoderaw` (losses ledger LOSS-015).
     pub fn create_const_from_space(&self, spc: &Rc<AddrSpace>) -> Address {
         Address::new(
-            Rc::clone(self.constantspace.as_ref().expect("constant space not registered")),
+            Rc::clone(
+                self.constantspace
+                    .as_ref()
+                    .expect("constant space not registered"),
+            ),
             spc.get_index() as u64, // cast: non-negative space index (LOSS-015)
         )
     }
@@ -2886,7 +2919,10 @@ impl AddrSpaceManager {
     /// \param rsolv is the new resolver object
     pub fn insert_resolver(&mut self, spc: &AddrSpace, rsolv: Box<dyn AddressResolver>) {
         // A negative index would index out of bounds in C++ (UB) => panic
-        assert!(spc.get_index() >= 0, "insertResolver: AddrSpace with negative index");
+        assert!(
+            spc.get_index() >= 0,
+            "insertResolver: AddrSpace with negative index"
+        );
         let ind = spc.get_index() as usize;
         while self.resolvelist.0.len() <= ind {
             self.resolvelist.0.push(None);
@@ -2923,10 +2959,12 @@ impl AddrSpaceManager {
         let ind = spc.get_index();
         // mixed comparison: int4 ind vs size_t list length (C++ converts ind
         // up; negative ind never enters the branch there or here)
-        if ind >= 0 && (ind as usize) < self.resolvelist.0.len()
-            && let Some(resolve) = &self.resolvelist.0[ind as usize] {
-                return resolve.resolve(val, sz, point, full_encoding);
-            }
+        if ind >= 0
+            && (ind as usize) < self.resolvelist.0.len()
+            && let Some(resolve) = &self.resolvelist.0[ind as usize]
+        {
+            return resolve.resolve(val, sz, point, full_encoding);
+        }
         *full_encoding = val;
         let val = AddrSpace::address_to_byte(val, spc.get_word_size());
         let val = spc.wrap_offset(val);
@@ -2996,7 +3034,11 @@ impl AddrSpaceManager {
             pieces: pieces.to_vec(),
             // C++ leaves testnode.unified.space/offset default; only the
             // size participates in the comparator
-            unified: VarnodeStorage { space: None, offset: 0, size: totalsize },
+            unified: VarnodeStorage {
+                space: None,
+                offset: 0,
+                size: totalsize,
+            },
         };
         if let Some(rec) = state.borrow().splitset.get(&testnode) {
             // If already in the set
@@ -3104,7 +3146,9 @@ impl AddrSpaceManager {
             || ((lotp != spacetype::IPTR_SPACEBASE) && (lotp != spacetype::IPTR_PROCESSOR))
         {
             // (sic: the C++ message reads "in appropriate")
-            return Err(KunaError::lowlevel("Trying to join in appropriate locations"));
+            return Err(KunaError::lowlevel(
+                "Trying to join in appropriate locations",
+            ));
         }
         let default_code_eq = |spc: &Rc<AddrSpace>| -> bool {
             match self.get_default_code_space() {
@@ -3180,7 +3224,9 @@ impl AddrSpaceManager {
         let join_record = match self.find_join_internal(addr.get_offset())? {
             Some(rec) => rec,
             None => {
-                return Err(KunaError::lowlevel("Join address not covered by a JoinRecord"))
+                return Err(KunaError::lowlevel(
+                    "Join address not covered by a JoinRecord",
+                ));
             }
         };
         // size == unified.size: int4 converts up to uint4 in C++
@@ -3190,7 +3236,8 @@ impl AddrSpaceManager {
             return Ok(()); // JoinRecord matches perfectly, no change necessary
         }
         let mut pos1: i32 = 0;
-        let (addr1, size_trunc1) = join_record.equivalent_location(addr.get_offset(), &mut pos1)
+        let (addr1, size_trunc1) = join_record
+            .equivalent_location(addr.get_offset(), &mut pos1)
             .ok_or_else(|| KunaError::lowlevel("Join address range not covered"))?;
         let mut pos2: i32 = 0;
         // addr.getOffset() + (size-1): int4 sign-extends to uintb
@@ -3263,7 +3310,9 @@ impl AddrSpaceManager {
             start = 0;
             end = join.num_pieces() - 2;
         } else {
-            return Err(KunaError::lowlevel("Stripping middle piece from JoinRecord"));
+            return Err(KunaError::lowlevel(
+                "Stripping middle piece from JoinRecord",
+            ));
         }
         if start == end {
             return Ok(join.get_piece(start).clone());
@@ -3308,7 +3357,7 @@ impl AddrSpaceManager {
                     None => {
                         return Err(KunaError::lowlevel(format!(
                             "Unknown address space: {spc_name}"
-                        )))
+                        )));
                     }
                 };
                 col + 1
@@ -3385,7 +3434,7 @@ impl AddrSpaceManager {
             None => {
                 return Err(KunaError::lowlevel(format!(
                     "Bad 'defaultspace' attribute: {defname}"
-                )))
+                )));
             }
         };
         self.set_default_code_space(spc.get_index())
@@ -3436,11 +3485,7 @@ fn cxx_istream_hex_u64(bytes: &[u8]) -> u64 {
     if overflow {
         return u64::MAX;
     }
-    if negative {
-        val.wneg()
-    } else {
-        val
-    }
+    if negative { val.wneg() } else { val }
 }
 
 // ---------------------------------------------------------------------------
@@ -3452,7 +3497,17 @@ mod tests {
     use super::*;
 
     fn ram_space(ind: i32) -> AddrSpace {
-        AddrSpace::new(spacetype::IPTR_PROCESSOR, "ram", false, 8, 1, ind, fl::hasphysical, 1, 1)
+        AddrSpace::new(
+            spacetype::IPTR_PROCESSOR,
+            "ram",
+            false,
+            8,
+            1,
+            ind,
+            fl::hasphysical,
+            1,
+            1,
+        )
     }
 
     #[test]
@@ -3485,7 +3540,9 @@ mod tests {
         let mut manager = AddrSpaceManager::new();
         manager.insert_space(Rc::new(ConstantSpace::new())).unwrap();
         manager.insert_space(Rc::new(OtherSpace::new(1))).unwrap();
-        manager.insert_space(Rc::new(UniqueSpace::new(2, 0, false))).unwrap();
+        manager
+            .insert_space(Rc::new(UniqueSpace::new(2, 0, false)))
+            .unwrap();
         manager.insert_space(Rc::new(ram_space(3))).unwrap();
         manager
             .insert_space(Rc::new(AddrSpace::new(
@@ -3502,7 +3559,9 @@ mod tests {
             .unwrap();
         manager.insert_space(Rc::new(FspecSpace::new(5))).unwrap();
         manager.insert_space(Rc::new(IopSpace::new(6))).unwrap();
-        manager.insert_space(Rc::new(JoinSpace::new(7, false))).unwrap();
+        manager
+            .insert_space(Rc::new(JoinSpace::new(7, false)))
+            .unwrap();
         manager.set_default_code_space(3).unwrap();
 
         assert_eq!(manager.num_spaces(), 8);
@@ -3637,7 +3696,11 @@ mod tests {
         };
         let rec = |pieces: Vec<VarnodeStorage>, usize_: u32| JoinRecord {
             pieces,
-            unified: VarnodeStorage { space: None, offset: 0, size: usize_ },
+            unified: VarnodeStorage {
+                space: None,
+                offset: 0,
+                size: usize_,
+            },
         };
         // unified size compares first (floats: same piece, different size)
         assert!(rec(vec![vn(0, 8)], 4) < rec(vec![vn(0, 8)], 8));
@@ -3646,7 +3709,10 @@ mod tests {
         // prefix: fewer pieces sorts Less, same pieces Equal
         assert!(rec(vec![vn(0, 4)], 8) < rec(vec![vn(0, 4), vn(8, 4)], 8));
         assert!(rec(vec![vn(0, 4), vn(8, 4)], 8) > rec(vec![vn(0, 4)], 8));
-        assert_eq!(rec(vec![vn(0, 4), vn(8, 4)], 8), rec(vec![vn(0, 4), vn(8, 4)], 8));
+        assert_eq!(
+            rec(vec![vn(0, 4), vn(8, 4)], 8),
+            rec(vec![vn(0, 4), vn(8, 4)], 8)
+        );
     }
 
     #[test]
@@ -3656,38 +3722,96 @@ mod tests {
                 let mut manager = AddrSpaceManager::new();
                 let constant = Rc::new(ConstantSpace::new());
                 let ram = Rc::new(AddrSpace::new(
-                    spacetype::IPTR_PROCESSOR, "ram", big_endian, 8, 1, 1, 0, 0, 0,
+                    spacetype::IPTR_PROCESSOR,
+                    "ram",
+                    big_endian,
+                    8,
+                    1,
+                    1,
+                    0,
+                    0,
+                    0,
                 ));
                 manager.insert_space(constant.clone()).unwrap();
                 manager.insert_space(ram.clone()).unwrap();
-                manager.insert_space(Rc::new(JoinSpace::new(2, big_endian))).unwrap();
+                manager
+                    .insert_space(Rc::new(JoinSpace::new(2, big_endian)))
+                    .unwrap();
                 let mut pieces = vec![
-                    VarnodeStorage { space: Some(ram.clone()), offset: 0x40, size: 4 },
-                    VarnodeStorage { space: Some(ram.clone()), offset: 0x80, size: 8 },
+                    VarnodeStorage {
+                        space: Some(ram.clone()),
+                        offset: 0x40,
+                        size: 4,
+                    },
+                    VarnodeStorage {
+                        space: Some(ram.clone()),
+                        offset: 0x80,
+                        size: 8,
+                    },
                 ];
-                pieces.insert(padding_slot, VarnodeStorage { space: Some(constant.clone()), offset: 0, size: 4 });
-                let expected: Vec<_> = pieces.iter().flat_map(|piece| {
-                    let space = piece.space.clone().unwrap();
-                    (0..piece.size).map(move |offset| Address::new(space.clone(),
-                        if space.get_type() == spacetype::IPTR_CONSTANT { 0 }
-                        else { piece.offset + u64::from(offset) }))
-                }).collect();
-                if !big_endian { pieces.reverse(); }
+                pieces.insert(
+                    padding_slot,
+                    VarnodeStorage {
+                        space: Some(constant.clone()),
+                        offset: 0,
+                        size: 4,
+                    },
+                );
+                let expected: Vec<_> = pieces
+                    .iter()
+                    .flat_map(|piece| {
+                        let space = piece.space.clone().unwrap();
+                        (0..piece.size).map(move |offset| {
+                            Address::new(
+                                space.clone(),
+                                if space.get_type() == spacetype::IPTR_CONSTANT {
+                                    0
+                                } else {
+                                    piece.offset + u64::from(offset)
+                                },
+                            )
+                        })
+                    })
+                    .collect();
+                if !big_endian {
+                    pieces.reverse();
+                }
                 let join = manager.find_add_join(&pieces, 0).unwrap();
                 let unified = join.get_unified();
                 for start in 0..16usize {
                     for size in 1..=16 - start {
-                        let mut address = Address::new(unified.space.clone().unwrap(), unified.offset + start as u64);
+                        let mut address = Address::new(
+                            unified.space.clone().unwrap(),
+                            unified.offset + start as u64,
+                        );
                         address.renormalize(size as i32, &manager).unwrap();
                         let slice = if address.is_join() {
                             let record = manager.find_join(address.get_offset()).unwrap();
                             assert_eq!(record.get_unified().size, size as u32);
-                            (0..size).map(|offset| record.get_equivalent_address(address.get_offset() + offset as u64, &mut 0)).collect::<Vec<_>>()
+                            (0..size)
+                                .map(|offset| {
+                                    record.get_equivalent_address(
+                                        address.get_offset() + offset as u64,
+                                        &mut 0,
+                                    )
+                                })
+                                .collect::<Vec<_>>()
                         } else {
-                            (0..size).map(|offset| if address.is_constant() { address.clone() }
-                                else { &address + offset as i64 }).collect()
+                            (0..size)
+                                .map(|offset| {
+                                    if address.is_constant() {
+                                        address.clone()
+                                    } else {
+                                        &address + offset as i64
+                                    }
+                                })
+                                .collect()
                         };
-                        assert_eq!(slice, expected[start..start + size], "endian={big_endian} padding={padding_slot} start={start} size={size}");
+                        assert_eq!(
+                            slice,
+                            expected[start..start + size],
+                            "endian={big_endian} padding={padding_slot} start={start} size={size}"
+                        );
                     }
                 }
             }

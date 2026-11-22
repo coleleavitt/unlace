@@ -40,8 +40,8 @@
 //!   [`RangeMap::find_begin`]/[`RangeMap::find_end`] returning opaque
 //!   positions consumed by [`RangeMap::iter_between`].
 
-use std::collections::btree_map;
 use std::collections::BTreeMap;
+use std::collections::btree_map;
 use std::ops::Bound::{Excluded, Included, Unbounded};
 
 /// Contract of the C++ `linetype`: elements of the linear domain.
@@ -145,9 +145,9 @@ pub struct RecordIdx(usize);
 /// Publicly this is an opaque position token (see [`RangeMap::find_begin`]).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SubRangeKey<L, S> {
-    last: L,     // End of the disjoint sub-range
-    subsort: S,  // How this should be sub-sorted
-    seq: u64, // kuna: multiset duplicate tiebreak (gap-allocated, see hinted_seq)
+    last: L,    // End of the disjoint sub-range
+    subsort: S, // How this should be sub-sorted
+    seq: u64,   // kuna: multiset duplicate tiebreak (gap-allocated, see hinted_seq)
 }
 
 /// The mutable (non-ordering) half of the C++ `AddrRange`.
@@ -288,7 +288,10 @@ impl<R: RangeRecord> RangeMap<R> {
 
     /// Iterate records in list order (C++ `begin_list()`/`end_list()`).
     pub fn records(&self) -> RecordListIter<'_, R> {
-        RecordListIter { map: self, cur: self.head }
+        RecordListIter {
+            map: self,
+            cur: self.head,
+        }
     }
 
     /// First record in list order (C++ `begin_list()`), or `None`.
@@ -308,20 +311,30 @@ impl<R: RangeRecord> RangeMap<R> {
 
     /// Iterate over all sub-ranges (C++ `begin()`/`end()`).
     pub fn iter(&self) -> SubRangeIter<'_, R> {
-        SubRangeIter { inner: Some(self.tree.range(..)) }
+        SubRangeIter {
+            inner: Some(self.tree.range(..)),
+        }
     }
 
     // ---- internal helpers -------------------------------------------------
 
     /// `AddrRange(l)` search key: lower_bound sentinel `(l, minimal, 0)`.
     fn min_key(l: LineOf<R>) -> SubRangeKey<LineOf<R>, SubsortOf<R>> {
-        SubRangeKey { last: l, subsort: SubsortOf::<R>::minimal(), seq: 0 }
+        SubRangeKey {
+            last: l,
+            subsort: SubsortOf::<R>::minimal(),
+            seq: 0,
+        }
     }
 
     /// `AddrRange(l,s)` upper_bound sentinel `(l, s, u64::MAX)`: every real
     /// element comparing equal on `(last, subsort)` sorts strictly below it.
     fn max_key(l: LineOf<R>, s: SubsortOf<R>) -> SubRangeKey<LineOf<R>, SubsortOf<R>> {
-        SubRangeKey { last: l, subsort: s, seq: u64::MAX }
+        SubRangeKey {
+            last: l,
+            subsort: s,
+            seq: u64::MAX,
+        }
     }
 
     /// First element with key >= `k` (C++ `tree.lower_bound`).
@@ -361,8 +374,16 @@ impl<R: RangeRecord> RangeMap<R> {
     fn group_min(&self, last: LineOf<R>, subsort: &SubsortOf<R>) -> Option<u64> {
         self.tree
             .range((
-                Included(SubRangeKey { last, subsort: subsort.clone(), seq: 0 }),
-                Included(SubRangeKey { last, subsort: subsort.clone(), seq: u64::MAX }),
+                Included(SubRangeKey {
+                    last,
+                    subsort: subsort.clone(),
+                    seq: 0,
+                }),
+                Included(SubRangeKey {
+                    last,
+                    subsort: subsort.clone(),
+                    seq: u64::MAX,
+                }),
             ))
             .next()
             .map(|(k, _)| k.seq)
@@ -372,8 +393,16 @@ impl<R: RangeRecord> RangeMap<R> {
     fn group_max(&self, last: LineOf<R>, subsort: &SubsortOf<R>) -> Option<u64> {
         self.tree
             .range((
-                Included(SubRangeKey { last, subsort: subsort.clone(), seq: 0 }),
-                Included(SubRangeKey { last, subsort: subsort.clone(), seq: u64::MAX }),
+                Included(SubRangeKey {
+                    last,
+                    subsort: subsort.clone(),
+                    seq: 0,
+                }),
+                Included(SubRangeKey {
+                    last,
+                    subsort: subsort.clone(),
+                    seq: u64::MAX,
+                }),
             ))
             .next_back()
             .map(|(k, _)| k.seq)
@@ -388,8 +417,16 @@ impl<R: RangeRecord> RangeMap<R> {
         let old: Vec<(KeyOf<R>, SubRange<LineOf<R>>)> = self
             .tree
             .range((
-                Included(SubRangeKey { last, subsort: subsort.clone(), seq: 0 }),
-                Included(SubRangeKey { last, subsort: subsort.clone(), seq: u64::MAX }),
+                Included(SubRangeKey {
+                    last,
+                    subsort: subsort.clone(),
+                    seq: 0,
+                }),
+                Included(SubRangeKey {
+                    last,
+                    subsort: subsort.clone(),
+                    seq: u64::MAX,
+                }),
             ))
             .map(|(k, d)| (k.clone(), d.clone()))
             .collect();
@@ -398,8 +435,14 @@ impl<R: RangeRecord> RangeMap<R> {
             self.tree.remove(&k);
             let new_seq = SEQ_START + (i as u64) * SEQ_GAP;
             map.insert(k.seq, new_seq);
-            self.tree
-                .insert(SubRangeKey { last: k.last, subsort: k.subsort, seq: new_seq }, d);
+            self.tree.insert(
+                SubRangeKey {
+                    last: k.last,
+                    subsort: k.subsort,
+                    seq: new_seq,
+                },
+                d,
+            );
         }
         map
     }
@@ -502,13 +545,11 @@ impl<R: RangeRecord> RangeMap<R> {
                                 match (in_group(&bk), in_group(h)) {
                                     (true, true) => self.seq_mid(last, subsort, bk.seq, h.seq),
                                     (true, false) => self.seq_append(last, subsort),
-                                    (false, true) => {
-                                        Self::seq_below(h.seq).unwrap_or_else(|| {
-                                            let map = self.renumber_group(last, subsort);
-                                            Self::seq_below(map[&h.seq])
-                                                .expect("rangemap: renumber left no gap")
-                                        })
-                                    }
+                                    (false, true) => Self::seq_below(h.seq).unwrap_or_else(|| {
+                                        let map = self.renumber_group(last, subsort);
+                                        Self::seq_below(map[&h.seq])
+                                            .expect("rangemap: renumber left no gap")
+                                    }),
                                     (false, false) => SEQ_START,
                                 }
                             } else {
@@ -573,7 +614,11 @@ impl<R: RangeRecord> RangeMap<R> {
     }
 
     fn alloc_record(&mut self, rec: R) -> RecordIdx {
-        let node = RecordNode { rec, prev: None, next: None };
+        let node = RecordNode {
+            rec,
+            prev: None,
+            next: None,
+        };
         match self.free.pop() {
             Some(i) => {
                 debug_assert!(self.records[i].is_none());
@@ -728,7 +773,12 @@ impl<R: RangeRecord> RangeMap<R> {
             }
             let f = d.first;
             d.first = plus1;
-            let copy = SubRange { first: f, a: d.a, b: d.b, value: d.value };
+            let copy = SubRange {
+                first: f,
+                a: d.a,
+                b: d.b,
+                value: d.value,
+            };
             let subsort = k.subsort.clone();
             // new sub-range [f, i] sorts strictly before the cursor (last = i
             // < k.last), so forward iteration never revisits it
@@ -762,7 +812,11 @@ impl<R: RangeRecord> RangeMap<R> {
         let spot_value = self
             .tree
             .range((
-                Included(SubRangeKey { last: b, subsort: subsort.clone(), seq: 0 }),
+                Included(SubRangeKey {
+                    last: b,
+                    subsort: subsort.clone(),
+                    seq: 0,
+                }),
                 Unbounded,
             ))
             .next()
@@ -787,7 +841,12 @@ impl<R: RangeRecord> RangeMap<R> {
                         Some(&lk),
                         lfirst.minus1(),
                         subsort.clone(),
-                        SubRange { first: f, a, b, value: idx },
+                        SubRange {
+                            first: f,
+                            a,
+                            b,
+                            value: idx,
+                        },
                     );
                     f = lfirst;
                 }
@@ -797,7 +856,12 @@ impl<R: RangeRecord> RangeMap<R> {
                         Some(&lk),
                         llast,
                         subsort.clone(),
-                        SubRange { first: f, a, b, value: idx },
+                        SubRange {
+                            first: f,
+                            a,
+                            b,
+                            value: idx,
+                        },
                     );
                     if llast == b {
                         // Did we manage to insert it all
@@ -819,7 +883,16 @@ impl<R: RangeRecord> RangeMap<R> {
             low = self.next_key(&lk);
         }
         if f <= b {
-            self.tree_insert(b, subsort, SubRange { first: f, a, b, value: idx });
+            self.tree_insert(
+                b,
+                subsort,
+                SubRange {
+                    first: f,
+                    a,
+                    b,
+                    value: idx,
+                },
+            );
         }
         idx
     }
@@ -865,10 +938,7 @@ impl<R: RangeRecord> RangeMap<R> {
             // (dereferencing end here is C++ UB; we panic per ADR 0004).
             let k = low.expect("rangemap: erased record has no sub-range in tree");
             let nxt = self.next_key(&k);
-            let d = self
-                .tree
-                .get(&k)
-                .expect("rangemap: erase cursor vanished");
+            let d = self.tree.get(&k).expect("rangemap: erase cursor vanished");
             if d.value == v {
                 self.tree.remove(&k);
             } else {
@@ -890,9 +960,10 @@ impl<R: RangeRecord> RangeMap<R> {
             }
         }
         if let Some(k2) = &low
-            && self.tree[k2].a.minus1() == b {
-                rightsew = false;
-            }
+            && self.tree[k2].a.minus1() == b
+        {
+            rightsew = false;
+        }
         if leftsew && leftoverlap {
             let start = self
                 .lower_bound_key(Self::min_key(aminus1))
@@ -925,7 +996,9 @@ impl<R: RangeRecord> RangeMap<R> {
             Some((k, _)) => {
                 let lo = Included(k.clone());
                 let hi = Included(Self::max_key(k.last, SubsortOf::<R>::maximal()));
-                SubRangeIter { inner: Some(self.tree.range((lo, hi))) }
+                SubRangeIter {
+                    inner: Some(self.tree.range((lo, hi))),
+                }
             }
         }
     }
@@ -941,7 +1014,11 @@ impl<R: RangeRecord> RangeMap<R> {
         let first = self
             .tree
             .range((
-                Included(SubRangeKey { last: point, subsort: sub1, seq: 0 }),
+                Included(SubRangeKey {
+                    last: point,
+                    subsort: sub1,
+                    seq: 0,
+                }),
                 Unbounded,
             ))
             .next();
@@ -954,7 +1031,9 @@ impl<R: RangeRecord> RangeMap<R> {
                 if Self::bound_inverted(&lo, &hi) {
                     return SubRangeIter { inner: None };
                 }
-                SubRangeIter { inner: Some(self.tree.range((lo, hi))) }
+                SubRangeIter {
+                    inner: Some(self.tree.range((lo, hi))),
+                }
             }
         }
     }
@@ -1000,11 +1079,7 @@ impl<R: RangeRecord> RangeMap<R> {
             .tree
             .range((Included(Self::min_key(point)), Unbounded))
             .next()?;
-        if d.first <= end {
-            Some(d.value)
-        } else {
-            None
-        }
+        if d.first <= end { Some(d.value) } else { None }
     }
 
     /// Iterate the sub-ranges in `[begin, end)` — the C++
@@ -1026,7 +1101,9 @@ impl<R: RangeRecord> RangeMap<R> {
         if Self::bound_inverted(&lo, &hi) {
             return SubRangeIter { inner: None };
         }
-        SubRangeIter { inner: Some(self.tree.range((lo, hi))) }
+        SubRangeIter {
+            inner: Some(self.tree.range((lo, hi))),
+        }
     }
 
     /// `true` when a (lo, hi) bound pair would panic `BTreeMap::range`
@@ -1068,7 +1145,12 @@ mod tests {
         type InitType = (u32, u64); // (tag, subsort)
 
         fn create(data: (u32, u64), a: u64, b: u64) -> Self {
-            TestRecord { a, b, subsort: data.1, tag: data.0 }
+            TestRecord {
+                a,
+                b,
+                subsort: data.1,
+                tag: data.0,
+            }
         }
         fn get_first(&self) -> u64 {
             self.a
@@ -1159,10 +1241,7 @@ mod tests {
             .iter()
             .map(|(k, d)| (d.first, k.last, rm.record(d.value).tag))
             .collect();
-        assert_eq!(
-            cells,
-            vec![(0, 4, 1), (5, 10, 1), (5, 10, 2), (11, 15, 2)]
-        );
+        assert_eq!(cells, vec![(0, 4, 1), (5, 10, 1), (5, 10, 2), (11, 15, 2)]);
     }
 
     #[test]
@@ -1238,10 +1317,11 @@ mod tests {
         let fe = rm.find_end(7);
         assert_eq!(tags(&rm, rm.iter_between(&fb, &fe)), vec![3, 3, 1, 2, 2]);
         assert_eq!(rm.find_begin(11), rm.find_end(11));
-        assert!(rm
-            .iter_between(&rm.find_begin(11), &rm.find_end(11))
-            .next()
-            .is_none());
+        assert!(
+            rm.iter_between(&rm.find_begin(11), &rm.find_end(11))
+                .next()
+                .is_none()
+        );
         // reverse walk (`--res.second` in database.cc) via DoubleEnded
         let walked_back: Vec<u32> = rm
             .iter_between(&fb, &fe)
@@ -1275,7 +1355,10 @@ mod tests {
         assert_eq!(tags(&rm, rm.find(u64::MAX)), vec![1, 2, 2]);
         assert_eq!(tags(&rm, rm.find(0)), vec![2]);
         assert_eq!(tags(&rm, rm.find(u64::MAX - 6)), vec![2]);
-        assert_eq!(rm.record(rm.find_overlap(u64::MAX, u64::MAX).unwrap()).tag, 1);
+        assert_eq!(
+            rm.record(rm.find_overlap(u64::MAX, u64::MAX).unwrap()).tag,
+            1
+        );
         rm.erase(b); // exercises aminus1 wraparound (a == 0) in erase
         assert_eq!(tags(&rm, rm.iter()), vec![1]);
         assert_eq!(tags(&rm, rm.find(u64::MAX)), vec![1]);

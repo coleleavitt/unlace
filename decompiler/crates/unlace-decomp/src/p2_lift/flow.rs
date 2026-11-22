@@ -76,17 +76,17 @@
 //! default-false predicate on [`FlowEnvironment`] (and the SPARC struct-return
 //! `// STUB` anchor of `flow.cc:326` likewise).
 
+use std::collections::BTreeMap;
 use unlace_base::address::{Address, SeqNum};
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::types::{int4, uint4, uintb, uintm};
 use unlace_num::opcodes::OpCode;
 use unlace_sleigh::translate::{PcodeEmit, Translate};
-use std::collections::BTreeMap;
 
+use crate::context::{BlockId, OpId, TypeOp};
 use crate::funcdata::Funcdata;
 use crate::jumptable::RecoveryMode;
 use crate::op::pcodeop_flags;
-use crate::context::{BlockId, OpId, TypeOp};
 
 /// Boolean options for flow following (C++ anonymous `enum` in `class FlowInfo`,
 /// `flow.hh:60-74`).  Verbatim transcription of the bit values.
@@ -200,14 +200,20 @@ pub trait FlowEnvironment {
     /// p-code, returning the instruction length in bytes.
     fn translate(&self) -> &dyn Translate;
 
-    fn arm_decode_mode(&self, _addr: &Address) -> Option<super::kuna_armflowcontext::ArmDecodeMode> {
+    fn arm_decode_mode(
+        &self,
+        _addr: &Address,
+    ) -> Option<super::kuna_armflowcontext::ArmDecodeMode> {
         None
     }
 
     fn preserve_arm_decode_mode(
-        &self, _addr: &Address,
-        _mode: super::kuna_armflowcontext::ArmDecodeMode, _entry: bool,
-    ) {}
+        &self,
+        _addr: &Address,
+        _mode: super::kuna_armflowcontext::ArmDecodeMode,
+        _entry: bool,
+    ) {
+    }
 
     /// Resolve an [`OpCode`] to its behavioral-class [`TypeOp`]
     /// (C++ `glb->inst[opc]`).  // STUB(W6)
@@ -276,7 +282,9 @@ pub trait FlowEnvironment {
         _context: &mut crate::pcodeinject::InjectContext,
         _emit: &mut dyn unlace_sleigh::translate::PcodeEmit,
     ) -> KunaResult<()> {
-        Err(KunaError::lowlevel("inject_userop: no inject engine in this FlowEnvironment"))
+        Err(KunaError::lowlevel(
+            "inject_userop: no inject engine in this FlowEnvironment",
+        ))
     }
 
     /// Is the \e injected user-op `userop_index`'s callother-fixup payload marked
@@ -343,7 +351,9 @@ pub trait FlowEnvironment {
     }
 
     /// A PC-capture transfer to an interior the loader assigned to this function.
-    fn is_ppc_pc_capture(&self, _fd: &Funcdata, _op: OpId) -> bool { false }
+    fn is_ppc_pc_capture(&self, _fd: &Funcdata, _op: OpId) -> bool {
+        false
+    }
 
     /// (kuna) GH-8817: is `op` a V850 `jmp [reg]` CALLIND to reclassify as
     /// BRANCHIND? (C++ `kunaIsV850IndirectJmp`).
@@ -421,11 +431,7 @@ pub trait FlowEnvironment {
     /// [`kuna_int3pad`](crate::kuna_int3pad).  The default shell reports `None`
     /// (upstream behavior: the pad prints as an indirect call through the `swi`
     /// userop and nothing says control ran into it).
-    fn int3_pad_site(
-        &self,
-        _fd: &Funcdata,
-        _op: OpId,
-    ) -> Option<crate::kuna_int3pad::Int3PadSite> {
+    fn int3_pad_site(&self, _fd: &Funcdata, _op: OpId) -> Option<crate::kuna_int3pad::Int3PadSite> {
         None
     }
 
@@ -455,12 +461,7 @@ pub trait FlowEnvironment {
     ///
     /// // STUB(W4): ArchOption tailcalljump — gated on `option tailcalljump
     /// on|off`, default \b false (default-pipeline byte-identical).
-    fn is_tail_call_branch(
-        &self,
-        _fd: &Funcdata,
-        _op: OpId,
-        _dest: &Address,
-    ) -> bool {
+    fn is_tail_call_branch(&self, _fd: &Funcdata, _op: OpId, _dest: &Address) -> bool {
         false
     }
 
@@ -536,7 +537,10 @@ pub trait FlowEnvironment {
 
     /// The model the register inputs of the function at the direct-call `entry`
     /// select. See [`crate::p4_calls::kuna_calleereginputs`].
-    fn query_call_register_model(&self, _entry: &Address) -> Option<std::rc::Rc<crate::fspec::ProtoModel>> {
+    fn query_call_register_model(
+        &self,
+        _entry: &Address,
+    ) -> Option<std::rc::Rc<crate::fspec::ProtoModel>> {
         None
     }
 
@@ -608,7 +612,12 @@ pub trait FlowEnvironment {
     /// is not? See
     /// [`is_proxy_no_return_at`](crate::p4_calls::kuna_calleenoreturn::is_proxy_no_return_at).
     /// The default shell reports `false`.
-    fn query_call_no_return_at(&self, _entry: &Address, _call: &Address, _fallthrough: &Address) -> bool {
+    fn query_call_no_return_at(
+        &self,
+        _entry: &Address,
+        _call: &Address,
+        _fallthrough: &Address,
+    ) -> bool {
         false
     }
 
@@ -868,7 +877,10 @@ pub struct FlowInfo<'a, E: FlowEnvironment> {
     eh_records_seen: std::collections::BTreeSet<u64>,
     /// (kuna `javatry`) The DEX model of a method decoded with the option on,
     /// and its try items.
-    java_try: Option<(crate::kuna_javatry::JavaTryPlan, std::rc::Rc<crate::kuna_dex::DexModel>)>,
+    java_try: Option<(
+        crate::kuna_javatry::JavaTryPlan,
+        std::rc::Rc<crate::kuna_dex::DexModel>,
+    )>,
 }
 
 /// Apply explicit-flow and declared-extent precedence before consulting either
@@ -905,20 +917,29 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
     /// reads `flowoverride_present` from the override.
     pub fn new(data: Funcdata, env: &'a E) -> FlowInfo<'a, E> {
         let entry = data.get_address().clone();
-        let space = entry.get_space().expect("FlowInfo: entry has no space").clone();
+        let space = entry
+            .get_space()
+            .expect("FlowInfo: entry has no space")
+            .clone();
         let baddr = Address::new(space.clone(), 0);
         let byte_addressed = space.get_word_size() == 1;
         let eaddr = Address::new(space, !0u64);
         // The per-function Override lives on the Funcdata (`localoverride`); the
         // env-routed `has_flow_override` is the W2-era boundary default (always false)
         // and is OR'd in only for back-compat with envs that still carry it.
-        let flowoverride_present = data.get_override().has_flow_override() || env.has_flow_override();
+        let flowoverride_present =
+            data.get_override().has_flow_override() || env.has_flow_override();
         let java_try = data
             .get_arch()
             .dex
             .as_ref()
             .filter(|_| data.get_arch().java_try)
-            .map(|model| (crate::kuna_javatry::JavaTryPlan::new(model, entry.get_offset()), std::rc::Rc::clone(model)));
+            .map(|model| {
+                (
+                    crate::kuna_javatry::JavaTryPlan::new(model, entry.get_offset()),
+                    std::rc::Rc::clone(model),
+                )
+            });
         let loader_transfers_present = crate::kuna_stubtailcall::active(data.get_arch());
         FlowInfo {
             data,
@@ -975,11 +996,7 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
     /// `generateBlocks` (fillinBranchStubs / fallthru-edge resolution) sees the
     /// same instruction boundaries.
     #[allow(clippy::mutable_key_type)]
-    pub fn new_seeded(
-        data: Funcdata,
-        env: &'a E,
-        visited: VisitedMap,
-    ) -> FlowInfo<'a, E> {
+    pub fn new_seeded(data: Funcdata, env: &'a E, visited: VisitedMap) -> FlowInfo<'a, E> {
         let mut flow = FlowInfo::new(data, env);
         flow.visited = visited;
         flow
@@ -1063,7 +1080,9 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
     /// Get the number of bytes covered by the flow (C++ `getSize`).
     pub fn get_size(&self) -> int4 {
         // (int4)(maxaddr.getOffset() - minaddr.getOffset())
-        self.maxaddr.get_offset().wrapping_sub(self.minaddr.get_offset()) as int4
+        self.maxaddr
+            .get_offset()
+            .wrapping_sub(self.minaddr.get_offset()) as int4
     }
 
     /// Clear any discovered flow properties (C++ `clearProperties`, `flow.cc:80`).
@@ -1086,12 +1105,24 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
     fn fallthru_op(&self, op: OpId) -> Option<OpId> {
         if let Some(retop) = self.dead_next(op) {
             // same instruction
-            if !self.data.obank().get(retop).expect("fallthru_op: stale op").is_instruction_start() {
+            if !self
+                .data
+                .obank()
+                .get(retop)
+                .expect("fallthru_op: stale op")
+                .is_instruction_start()
+            {
                 return Some(retop);
             }
         }
         // Find address of instruction containing this op.
-        let opaddr = self.data.obank().get(op).expect("fallthru_op: stale op").get_addr().clone();
+        let opaddr = self
+            .data
+            .obank()
+            .get(op)
+            .expect("fallthru_op: stale op")
+            .get_addr()
+            .clone();
         let (first, size) = self.visited_last_le_owned(&opaddr)?;
         let endaddr = &first + size as i64;
         if endaddr <= opaddr {
@@ -1147,10 +1178,21 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
     /// fall-thru address passed back in `res` when the relative branch is really to
     /// the next instruction, and `Err` otherwise (C++ `LowlevelError`).
     fn find_rel_target(&self, op: OpId, res: &mut Address) -> KunaResult<Option<OpId>> {
-        let o = self.data.obank().get(op).expect("find_rel_target: stale op");
-        let in0 = o.get_in(0).expect("findRelTarget: BRANCH null in0 (C++ UB)");
-        let addr =
-            self.data.vbank().get(in0).expect("find_rel_target: stale vn").get_addr().clone();
+        let o = self
+            .data
+            .obank()
+            .get(op)
+            .expect("find_rel_target: stale op");
+        let in0 = o
+            .get_in(0)
+            .expect("findRelTarget: BRANCH null in0 (C++ UB)");
+        let addr = self
+            .data
+            .vbank()
+            .get(in0)
+            .expect("find_rel_target: stale vn")
+            .get_addr()
+            .clone();
         let id: uintm = o.get_time().wrapping_add(addr.get_offset() as uintm);
         let opaddr = o.get_addr().clone();
         let seqnum = SeqNum::new(opaddr.clone(), id);
@@ -1198,8 +1240,13 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
             .expect("branch_target: stale op")
             .get_in(0)
             .expect("branchTarget: null in0 (C++ UB)");
-        let addr =
-            self.data.vbank().get(in0).expect("branch_target: stale vn").get_addr().clone();
+        let addr = self
+            .data
+            .vbank()
+            .get(in0)
+            .expect("branch_target: stale vn")
+            .get_addr()
+            .clone();
         if addr.is_constant() {
             // relative sequence number.  `Address res;` — default/invalid; the C++
             // only reads it back on the `Ok(None)` path, which always writes it
@@ -1219,12 +1266,27 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
     /// Public in C++ (`flow.hh:150`): used by `doInjection` (W4) to repoint the
     /// target map after an inlined op replaces a call.
     pub fn update_target(&mut self, old_op: OpId, new_op: OpId) {
-        let oldaddr =
-            self.data.obank().get(old_op).expect("update_target: stale old").get_addr().clone();
-        let oldseq =
-            self.data.obank().get(old_op).expect("update_target").get_seq_num().clone();
-        let newseq =
-            self.data.obank().get(new_op).expect("update_target: stale new").get_seq_num().clone();
+        let oldaddr = self
+            .data
+            .obank()
+            .get(old_op)
+            .expect("update_target: stale old")
+            .get_addr()
+            .clone();
+        let oldseq = self
+            .data
+            .obank()
+            .get(old_op)
+            .expect("update_target")
+            .get_seq_num()
+            .clone();
+        let newseq = self
+            .data
+            .obank()
+            .get(new_op)
+            .expect("update_target: stale new")
+            .get_seq_num()
+            .clone();
         if let Some(stat) = self.visited.get_mut(&oldaddr) {
             if stat.seqnum == oldseq {
                 stat.seqnum = newseq;
@@ -1235,8 +1297,13 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
     /// Register a new (non fall-thru) flow target (C++ `newAddress`, `flow.cc:221`).
     fn new_address(&mut self, from: OpId, to: &Address) -> KunaResult<()> {
         if to < &self.baddr || &self.eaddr < to {
-            let fromaddr =
-                self.data.obank().get(from).expect("new_address: stale from").get_addr().clone();
+            let fromaddr = self
+                .data
+                .obank()
+                .get(from)
+                .expect("new_address: stale from")
+                .get_addr()
+                .clone();
             self.handle_out_of_bounds(&fromaddr, to)?;
             self.unprocessed.push(to.clone());
             self.outofbounds.insert(to.clone());
@@ -1257,8 +1324,13 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
             |image| crate::kuna_mappedflowboundary::mapped_start(image, to),
         );
         if !mapped {
-            let fromaddr =
-                self.data.obank().get(from).expect("new_address: stale from").get_addr().clone();
+            let fromaddr = self
+                .data
+                .obank()
+                .get(from)
+                .expect("new_address: stale from")
+                .get_addr()
+                .clone();
             self.handle_unmapped_target(&fromaddr, to);
             self.unprocessed.push(to.clone());
             self.outofbounds.insert(to.clone());
@@ -1300,7 +1372,10 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
     /// visited entry with key `<= addr`.  Returns an owned `(key, size)` to avoid
     /// holding a borrow across the surrounding `&self` reads.
     fn visited_last_le_owned(&self, addr: &Address) -> Option<(Address, int4)> {
-        self.visited.range(..=addr.clone()).next_back().map(|(k, v)| (k.clone(), v.size))
+        self.visited
+            .range(..=addr.clone())
+            .next_back()
+            .map(|(k, v)| (k.clone(), v.size))
     }
 
     /// The successor of `op` in the global \e dead list (C++ `++op->getInsertIter()`
@@ -1364,7 +1439,8 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
         self.data.warning(msg, addr);
         if !self.has_unmapped_target() {
             self.flags |= flow_flags::unmappedtarget_present;
-            self.data.warning_header("Function flows into unmapped memory");
+            self.data
+                .warning_header("Function flows into unmapped memory");
         }
     }
 
@@ -1480,8 +1556,11 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
         // `start`.  A `start` that is no longer on the list deletes nothing (the
         // bank's dead-list navigation reports non-membership as `None`).
         let mut victims: Vec<OpId> = Vec::new();
-        let mut cur =
-            if self.data.obank().on_dead_list(start) { Some(start) } else { None };
+        let mut cur = if self.data.obank().on_dead_list(start) {
+            Some(start)
+        } else {
+            None
+        };
         while let Some(op) = cur {
             victims.push(op);
             cur = self.data.obank().dead_next(op);
@@ -1506,7 +1585,14 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
     ) -> KunaResult<()> {
         self.data.op_set_opcode_code(curop, OpCode::CPUI_BRANCH);
         self.new_address(curop, dest)?;
-        if self.data.obank().get(curop).expect("call-transfer: stale call op").get_time() >= maxtime {
+        if self
+            .data
+            .obank()
+            .get(curop)
+            .expect("call-transfer: stale call op")
+            .get_time()
+            >= maxtime
+        {
             self.delete_remaining_ops(*cursor)?;
             *cursor = None;
         }
@@ -1565,15 +1651,25 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
                 let branchind = self.env.resolve_typeop(OpCode::CPUI_BRANCHIND);
                 self.data.op_set_opcode(curop, branchind);
             }
-            match self.data.obank().get(curop).expect("xref_control_flow: stale op").code() {
+            match self
+                .data
+                .obank()
+                .get(curop)
+                .expect("xref_control_flow: stale op")
+                .code()
+            {
                 OpCode::CPUI_CBRANCH => {
                     let destaddr = self.branch_in0_addr(curop);
                     if destaddr.is_constant() {
                         let mut fall_thru = Address::default(); // unused in CBRANCH/BRANCH
                         if let Some(destop) = self.find_rel_target(curop, &mut fall_thru)? {
                             self.op_mark_start_basic(destop); // target starts a block
-                            let newtime =
-                                self.data.obank().get(destop).expect("xref: stale destop").get_time();
+                            let newtime = self
+                                .data
+                                .obank()
+                                .get(destop)
+                                .expect("xref: stale destop")
+                                .get_time();
                             if newtime > maxtime {
                                 maxtime = newtime;
                             }
@@ -1601,8 +1697,12 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
                         let mut fall_thru = Address::default(); // unused in CBRANCH/BRANCH
                         if let Some(destop) = self.find_rel_target(curop, &mut fall_thru)? {
                             self.op_mark_start_basic(destop);
-                            let newtime =
-                                self.data.obank().get(destop).expect("xref: stale destop").get_time();
+                            let newtime = self
+                                .data
+                                .obank()
+                                .get(destop)
+                                .expect("xref: stale destop")
+                                .get_time();
                             if newtime > maxtime {
                                 maxtime = newtime;
                             }
@@ -1637,16 +1737,26 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
                 }
                 OpCode::CPUI_BRANCHIND => {
                     // (kuna) GH-6882: SPARC struct-return `unimp` after a call.
-                    if let Some(producer) = self.env.sparc_struct_ret_trap_producer(&self.data, curop) {
-                        crate::kuna_sparcstructret::neutralize_trap_producer(&mut self.data, producer)?;
+                    if let Some(producer) =
+                        self.env.sparc_struct_ret_trap_producer(&self.data, curop)
+                    {
+                        crate::kuna_sparcstructret::neutralize_trap_producer(
+                            &mut self.data,
+                            producer,
+                        )?;
                         self.data.op_destroy_raw(curop)?;
                         op = None;
                         *isfallthru = true;
                         break;
                     }
                     if let Some((callother, site)) = self.env.kernel_bug_site(&self.data, curop) {
-                        let addr =
-                            self.data.obank().get(curop).expect("kernelbug: stale op").get_addr().clone();
+                        let addr = self
+                            .data
+                            .obank()
+                            .get(curop)
+                            .expect("kernelbug: stale op")
+                            .get_addr()
+                            .clone();
                         crate::kuna_kernelbug::rewrite(&mut self.data, curop, callother, &site)?;
                         self.data.op_destroy_raw(curop)?;
                         if site.warning {
@@ -1662,8 +1772,13 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
                         if let Some(code) = &trap.code {
                             crate::kuna_brktrap::read_code(&mut self.data, trap.callother, code)?;
                         }
-                        let addr =
-                            self.data.obank().get(curop).expect("brktrap: stale op").get_addr().clone();
+                        let addr = self
+                            .data
+                            .obank()
+                            .get(curop)
+                            .expect("brktrap: stale op")
+                            .get_addr()
+                            .clone();
                         let halt = self.artificial_halt(&addr, pcodeop_flags::noreturn)?;
                         self.data.op_dead_insert_after(halt, curop);
                         self.data.op_destroy_raw(curop)?;
@@ -1686,10 +1801,15 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
                 }
                 OpCode::CPUI_CALL => {
                     let destaddr = self.branch_in0_addr(curop);
-                    let popret = !destaddr.is_constant()
-                        && self.env.pops_return_address(&destaddr);
+                    let popret = !destaddr.is_constant() && self.env.pops_return_address(&destaddr);
                     if self.env.is_ppc_pc_capture(&self.data, curop) {
-                        self.follow_call_as_branch(curop, &destaddr, maxtime, &mut cursor, startbasic)?;
+                        self.follow_call_as_branch(
+                            curop,
+                            &destaddr,
+                            maxtime,
+                            &mut cursor,
+                            startbasic,
+                        )?;
                     } else if !destaddr.is_constant()
                         && (popret || self.env.is_return_discarding_trampoline(&destaddr))
                     {
@@ -1714,7 +1834,11 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
                             .clone();
                         let mut destbuf = String::new();
                         let _ = destaddr.print_raw(&mut destbuf);
-                        let kind = if popret { "callpopret" } else { "calltrampoline" };
+                        let kind = if popret {
+                            "callpopret"
+                        } else {
+                            "calltrampoline"
+                        };
                         self.data.warning(
                             &format!(
                                 "{kind}: {destbuf} discards the return address -- \
@@ -1722,7 +1846,13 @@ following this call as a branch"
                             ),
                             &site,
                         );
-                        self.follow_call_as_branch(curop, &destaddr, maxtime, &mut cursor, startbasic)?;
+                        self.follow_call_as_branch(
+                            curop,
+                            &destaddr,
+                            maxtime,
+                            &mut cursor,
+                            startbasic,
+                        )?;
                     } else if self.setup_call_specs(curop)? {
                         // The C++ `--oiter` backs up to the op *after* the call —
                         // the noreturn halt `checkForFlowModification` just inserted
@@ -1745,7 +1875,12 @@ following this call as a branch"
                         .expect("xref")
                         .get_in(0)
                         .expect("CALLOTHER null in0 (C++ UB)");
-                    let index = self.data.vbank().get(in0).expect("xref: stale vn").get_offset();
+                    let index = self
+                        .data
+                        .vbank()
+                        .get(in0)
+                        .expect("xref: stale vn")
+                        .get_offset();
                     if self.env.is_injected_userop(index) {
                         self.injectlist.push(curop);
                     }
@@ -1761,11 +1896,15 @@ following this call as a branch"
             match op {
                 None => *isfallthru = true, // No ops at all means a fallthru
                 Some(lastop) => {
-                    match self.data.obank().get(lastop).expect("xref: stale lastop").code() {
-                        OpCode::CPUI_BRANCH
-                        | OpCode::CPUI_BRANCHIND
-                        | OpCode::CPUI_RETURN => {} // branch: no fallthru
-                        _ => *isfallthru = true,    // otherwise a fallthru
+                    match self
+                        .data
+                        .obank()
+                        .get(lastop)
+                        .expect("xref: stale lastop")
+                        .code()
+                    {
+                        OpCode::CPUI_BRANCH | OpCode::CPUI_BRANCHIND | OpCode::CPUI_RETURN => {} // branch: no fallthru
+                        _ => *isfallthru = true, // otherwise a fallthru
                     }
                 }
             }
@@ -1782,7 +1921,12 @@ following this call as a branch"
             .expect("branch_in0_addr: stale op")
             .get_in(0)
             .expect("branch in0 is null (C++ UB)");
-        self.data.vbank().get(in0).expect("branch_in0_addr: stale vn").get_addr().clone()
+        self.data
+            .vbank()
+            .get(in0)
+            .expect("branch_in0_addr: stale vn")
+            .get_addr()
+            .clone()
     }
 
     /// (kuna) Rewrite the jump `op` to `destaddr` as a tail call: a CALL with a
@@ -1798,8 +1942,13 @@ following this call as a branch"
         tailkind: &str,
     ) -> KunaResult<()> {
         self.data.op_set_opcode_code(op, OpCode::CPUI_CALL);
-        let site =
-            self.data.obank().get(op).expect("tail-call: stale call op").get_addr().clone();
+        let site = self
+            .data
+            .obank()
+            .get(op)
+            .expect("tail-call: stale call op")
+            .get_addr()
+            .clone();
         let mut destbuf = String::new();
         let _ = destaddr.print_raw(&mut destbuf);
         self.data.warning(
@@ -1819,10 +1968,24 @@ following this call as a branch"
         let (skip, taken, call) =
             crate::kuna_tailcalljump::conditional_tail_branches(&mut self.data, branch, dest)?;
         self.recover_tail_call(call, dest, "tailcalljump")?;
-        let halt = self.dead_next(call).expect("conditional tail: missing return");
-        let end = self.data.obank().get(halt).expect("conditional tail: stale return").get_time();
-        let from = self.data.obank().get(skip).expect("conditional tail: stale skip").get_time();
-        let target = self.data.new_constant(4, end.wrapping_add(1).wrapping_sub(from) as u64);
+        let halt = self
+            .dead_next(call)
+            .expect("conditional tail: missing return");
+        let end = self
+            .data
+            .obank()
+            .get(halt)
+            .expect("conditional tail: stale return")
+            .get_time();
+        let from = self
+            .data
+            .obank()
+            .get(skip)
+            .expect("conditional tail: stale skip")
+            .get_time();
+        let target = self
+            .data
+            .new_constant(4, end.wrapping_add(1).wrapping_sub(from) as u64);
         self.data.op_set_input(skip, target, 0)?;
         self.op_mark_start_basic(skip);
         self.op_mark_start_basic(taken);
@@ -1840,7 +2003,9 @@ following this call as a branch"
             return None;
         }
         let outside = dest < self.baddr || self.eaddr < dest;
-        self.env.is_tail_call_table(&self.data, op, &dest, outside).then_some(dest)
+        self.env
+            .is_tail_call_table(&self.data, op, &dest, outside)
+            .then_some(dest)
     }
 
     /// (kuna `tailcalljump`) Turn the computed jump `op` into a tail call to its
@@ -1866,7 +2031,9 @@ following this call as a branch"
         }
         self.recover_tail_call(op, dest, "tailcalljump")?;
         if let (Some(storage), Some(idx)) = (carrier, self.data.get_call_specs_index(op)) {
-            self.data.get_call_specs_mut(idx).set_jump_target_storage(storage);
+            self.data
+                .get_call_specs_mut(idx)
+                .set_jump_target_storage(storage);
         }
         Ok(())
     }
@@ -1879,8 +2046,11 @@ following this call as a branch"
     fn jump_target_carrier(&self, op: OpId) -> Option<(Address, int4)> {
         let (obank, vbank) = (self.data.obank(), self.data.vbank());
         let seq = obank.get(op)?.get_seq_num().clone();
-        let earlier: Vec<OpId> =
-            obank.iter_at(seq.get_addr()).filter(|(s, _)| **s < seq).map(|(_, id)| id).collect();
+        let earlier: Vec<OpId> = obank
+            .iter_at(seq.get_addr())
+            .filter(|(s, _)| **s < seq)
+            .map(|(_, id)| id)
+            .collect();
         let mut want = vbank.get(obank.get(op)?.get_in(0)?)?;
         let mut limit = earlier.len();
         loop {
@@ -1957,7 +2127,9 @@ following this call as a branch"
         let entry = self.data.get_address().get_offset();
         let extents = &arch.kuna_fde_extents;
         let i = extents.partition_point(|&(start, _)| start < entry);
-        extents.get(i).is_some_and(|&(start, end)| start == entry && next.get_offset() >= end)
+        extents
+            .get(i)
+            .is_some_and(|&(start, end)| start == entry && next.get_offset() >= end)
     }
 
     fn is_inside_declared_extent(&self, addr: &Address) -> bool {
@@ -1989,7 +2161,9 @@ following this call as a branch"
 
         if self.insn_count >= self.insn_max {
             if (self.flags & flow_flags::error_toomanyinstructions) != 0 {
-                return Err(KunaError::lowlevel("Flow exceeded maximum allowable instructions"));
+                return Err(KunaError::lowlevel(
+                    "Flow exceeded maximum allowable instructions",
+                ));
             }
             // (kuna) Truncate and STOP.  The C++ plants the halt and then decodes
             // `curaddr` anyway, so the next address is queued and the next call
@@ -2005,9 +2179,20 @@ following this call as a branch"
             let halt = self.artificial_halt(curaddr, pcodeop_flags::badinstruction)?;
             self.op_mark_start_basic(halt);
             self.op_mark_start_instruction(halt);
-            let seq =
-                self.data.obank().get(halt).expect("truncate: stale halt").get_seq_num().clone();
-            self.visited.insert(curaddr.clone(), VisitStat { seqnum: seq, size: 1 });
+            let seq = self
+                .data
+                .obank()
+                .get(halt)
+                .expect("truncate: stale halt")
+                .get_seq_num()
+                .clone();
+            self.visited.insert(
+                curaddr.clone(),
+                VisitStat {
+                    seqnum: seq,
+                    size: 1,
+                },
+            );
             // Once per function, not once per cut: every address still queued
             // truncates here too, and on a function this size that is thousands of
             // them.  The header names the knob, because an agent reading a
@@ -2021,7 +2206,8 @@ following this call as a branch"
 `--option errortoomanyinstructions on`)",
                     self.insn_max
                 ));
-                self.data.warning("Too many instructions -- truncating flow here", curaddr);
+                self.data
+                    .warning("Too many instructions -- truncating flow here", curaddr);
             }
             return Ok(false);
         }
@@ -2052,19 +2238,33 @@ following this call as a branch"
             }
         }
 
-        if let Some((plan, model)) = self.java_try.as_ref().filter(|_| !self.is_flow_for_inline()) {
-            if let Some(first) = crate::kuna_javatry::before_instruction(&mut self.data, plan, model, curaddr)? {
+        if let Some((plan, model)) = self
+            .java_try
+            .as_ref()
+            .filter(|_| !self.is_flow_for_inline())
+        {
+            if let Some(first) =
+                crate::kuna_javatry::before_instruction(&mut self.data, plan, model, curaddr)?
+            {
                 self.op_mark_start_basic(first);
             }
         }
 
-        let mode = self.arm_context.then(|| self.env.arm_decode_mode(curaddr)).flatten();
+        let mode = self
+            .arm_context
+            .then(|| self.env.arm_decode_mode(curaddr))
+            .flatten();
         if curaddr == self.data.get_address() {
-            if let Some(mode) = mode { self.env.preserve_arm_decode_mode(curaddr, mode, true); }
+            if let Some(mode) = mode {
+                self.env.preserve_arm_decode_mode(curaddr, mode, true);
+            }
         }
         let mut emit = FlowEmit::new(&mut self.data, self.env);
         let decoded = match self.env.mapped_flow_image() {
-            Some(image) => self.env.translate().one_instruction_checked(&mut emit, curaddr, image),
+            Some(image) => self
+                .env
+                .translate()
+                .one_instruction_checked(&mut emit, curaddr, image),
             None => self.env.translate().one_instruction(&mut emit, curaddr),
         };
         match decoded {
@@ -2158,10 +2358,19 @@ truncating the fall-through here"
         // return recovery gives it no value.
         if let Some((_, model)) = self.java_try.as_ref() {
             if model.bytes_at(curaddr.get_offset(), 1) == Some(&[0x27]) {
-                let mut cur = if emptyflag { self.dead_head() } else { marker.and_then(|m| self.dead_next(m)) };
+                let mut cur = if emptyflag {
+                    self.dead_head()
+                } else {
+                    marker.and_then(|m| self.dead_next(m))
+                };
                 while let Some(op) = cur {
                     cur = self.dead_next(op);
-                    if self.data.obank().get(op).is_some_and(|o| o.code() == OpCode::CPUI_RETURN) {
+                    if self
+                        .data
+                        .obank()
+                        .get(op)
+                        .is_some_and(|o| o.code() == OpCode::CPUI_RETURN)
+                    {
                         self.data.op_mark_halt(op, pcodeop_flags::noreturn)?;
                     }
                 }
@@ -2171,7 +2380,10 @@ truncating the fall-through here"
         // (Insert with an INVALID seqnum; the first-op seqnum is filled in below.)
         self.visited.insert(
             curaddr.clone(),
-            VisitStat { seqnum: invalid_seqnum(), size: step },
+            VisitStat {
+                seqnum: invalid_seqnum(),
+                size: step,
+            },
         );
 
         // Update min/max address.
@@ -2184,10 +2396,17 @@ truncating the fall-through here"
         }
 
         if !self.data.get_arch().nullable_relocations.is_empty() {
-            let first = if emptyflag { self.dead_head() } else { marker.and_then(|op| self.dead_next(op)) };
+            let first = if emptyflag {
+                self.dead_head()
+            } else {
+                marker.and_then(|op| self.dead_next(op))
+            };
             let mut ops = Vec::new();
             let mut cursor = first;
-            while let Some(op) = cursor { ops.push(op); cursor = self.dead_next(op); }
+            while let Some(op) = cursor {
+                ops.push(op);
+                cursor = self.dead_next(op);
+            }
             crate::kuna_nullable_reloc::materialize(&mut self.data, curaddr, step, &ops);
         }
 
@@ -2213,7 +2432,13 @@ truncating the fall-through here"
                 super::kuna_atomicxadd::observe(&mut self.data, &insn_ops);
             }
             ends_in_call = self.pool_bound && self.ends_in_unconditional_call(&insn_ops);
-            let seq = self.data.obank().get(firstop).expect("process: stale firstop").get_seq_num().clone();
+            let seq = self
+                .data
+                .obank()
+                .get(firstop)
+                .expect("process: stale firstop")
+                .get_seq_num()
+                .clone();
             if let Some(stat) = self.visited.get_mut(curaddr) {
                 stat.seqnum = seq;
             }
@@ -2228,31 +2453,49 @@ truncating the fall-through here"
                 let mut head = [0u8; 4];
                 let has_lanes = ops.iter().any(|&op| {
                     self.data.obank().get(op).is_some_and(|o| {
-                        matches!(o.code(), OpCode::CPUI_FLOAT_ADD | OpCode::CPUI_FLOAT_SUB | OpCode::CPUI_FLOAT_MULT
-                            | OpCode::CPUI_FLOAT_DIV | OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB | OpCode::CPUI_INT_MULT
-                            | OpCode::CPUI_CALLOTHER)
+                        matches!(
+                            o.code(),
+                            OpCode::CPUI_FLOAT_ADD
+                                | OpCode::CPUI_FLOAT_SUB
+                                | OpCode::CPUI_FLOAT_MULT
+                                | OpCode::CPUI_FLOAT_DIV
+                                | OpCode::CPUI_INT_ADD
+                                | OpCode::CPUI_INT_SUB
+                                | OpCode::CPUI_INT_MULT
+                                | OpCode::CPUI_CALLOTHER
+                        )
                     })
                 });
-                let fetched = has_lanes && self.data.get_arch().loader_fill(&mut head, curaddr).is_ok();
+                let fetched =
+                    has_lanes && self.data.get_arch().loader_fill(&mut head, curaddr).is_ok();
                 if has_lanes {
-                let vex = fetched && matches!(head[0], 0xc4 | 0xc5 | 0x62) || self.data.get_arch().lane_fuse_all;
-                if !self.data.kuna_vector_code && crate::kuna_lanefuse::has_vector_run(&self.data, &ops) {
-                    self.data.kuna_vector_code = true;
-                }
-                crate::kuna_lanefuse::fuse(&mut self.data, &ops, vex)?;
-                if !self.data.kuna_vector_code {
-                    let vector = &self.data.get_arch().vector_userops;
-                    self.data.kuna_vector_code = ops.iter().any(|&op| {
-                        self.data.obank().get(op).is_some_and(|o| {
-                            o.code() == OpCode::CPUI_CALLOTHER
-                                && o.get_in(0).and_then(|v| self.data.vbank().get(v)).is_some_and(|v| {
-                                    u32::try_from(v.get_offset()).is_ok_and(|id| vector.binary_search_by_key(&id, |(i, _)| *i).is_ok())
-                                })
-                        })
-                    });
-                }
-                let evex_z = fetched && head[0] == 0x62 && head[3] & 0x80 != 0;
-                crate::kuna_lanefuse::fold_mask(&mut self.data, &ops, evex_z)?;
+                    let vex = fetched && matches!(head[0], 0xc4 | 0xc5 | 0x62)
+                        || self.data.get_arch().lane_fuse_all;
+                    if !self.data.kuna_vector_code
+                        && crate::kuna_lanefuse::has_vector_run(&self.data, &ops)
+                    {
+                        self.data.kuna_vector_code = true;
+                    }
+                    crate::kuna_lanefuse::fuse(&mut self.data, &ops, vex)?;
+                    if !self.data.kuna_vector_code {
+                        let vector = &self.data.get_arch().vector_userops;
+                        self.data.kuna_vector_code = ops.iter().any(|&op| {
+                            self.data.obank().get(op).is_some_and(|o| {
+                                o.code() == OpCode::CPUI_CALLOTHER
+                                    && o.get_in(0)
+                                        .and_then(|v| self.data.vbank().get(v))
+                                        .is_some_and(|v| {
+                                            u32::try_from(v.get_offset()).is_ok_and(|id| {
+                                                vector
+                                                    .binary_search_by_key(&id, |(i, _)| *i)
+                                                    .is_ok()
+                                            })
+                                        })
+                            })
+                        });
+                    }
+                    let evex_z = fetched && head[0] == 0x62 && head[3] & 0x80 != 0;
+                    crate::kuna_lanefuse::fold_mask(&mut self.data, &ops, evex_z)?;
                 }
             }
             if self.data.get_arch().vex_zero_upper {
@@ -2266,15 +2509,26 @@ truncating the fall-through here"
                     crate::kuna_vexzeroupper::split(&mut self.data, op, &insn)?;
                 }
             }
-            if let Some(site) = eh_table.as_deref().and_then(|t| t.site_at(curaddr.get_offset())) {
+            if let Some(site) = eh_table
+                .as_deref()
+                .and_then(|t| t.site_at(curaddr.get_offset()))
+            {
                 // One edge per landing pad: the first covered call reaches the
                 // pad, and later calls that unwind to it print inside the same
                 // `try` without their own edge. `itaniumeh catch` keeps only the
                 // pads with a catch clause.
-                if !self.is_flow_for_inline() && self.eh_records_seen.insert(site.pad)
-                    && (!self.data.get_arch().itanium_eh_catch_only || site.clauses.iter().any(|c| *c != crate::kuna_itaniumeh::EhClause::Cleanup))
+                if !self.is_flow_for_inline()
+                    && self.eh_records_seen.insert(site.pad)
+                    && (!self.data.get_arch().itanium_eh_catch_only
+                        || site
+                            .clauses
+                            .iter()
+                            .any(|c| *c != crate::kuna_itaniumeh::EhClause::Cleanup))
                 {
-                    let pad = Address::new(curaddr.get_space().expect("eh: code space").clone(), site.pad);
+                    let pad = Address::new(
+                        curaddr.get_space().expect("eh: code space").clone(),
+                        site.pad,
+                    );
                     let mut cursor = Some(firstop);
                     while let Some(op) = cursor {
                         cursor = self.dead_next(op);
@@ -2358,7 +2612,13 @@ truncating the fall-through here"
                     .map(|stat| stat.seqnum.get_addr().is_invalid())
                     .unwrap_or(true);
                 if needs_halt {
-                    self.visited.insert(next.clone(), VisitStat { seqnum: seq, size: 1 });
+                    self.visited.insert(
+                        next.clone(),
+                        VisitStat {
+                            seqnum: seq,
+                            size: 1,
+                        },
+                    );
                 }
                 let text = if self.leaves_own_fde(&next) {
                     "fdeflowbound: fall-through left the function's unwind extent; truncating flow here"
@@ -2434,7 +2694,9 @@ truncating the fall-through here"
         let mut last = None;
         let mut conditional = false;
         for &op in ops {
-            let Some(o) = self.data.obank().get(op) else { continue };
+            let Some(o) = self.data.obank().get(op) else {
+                continue;
+            };
             last = Some(o.code());
             conditional |= o.code() == OpCode::CPUI_CBRANCH;
         }
@@ -2499,7 +2761,9 @@ truncating the fall-through here"
     /// branches and the ignore/error/truncate policy bits are transcribed.
     fn handle_decode_error(&mut self, curaddr: &Address, err: KunaError) -> KunaResult<int4> {
         match &err {
-            KunaError::Unimpl { instruction_length, .. } => {
+            KunaError::Unimpl {
+                instruction_length, ..
+            } => {
                 let reports = self.env.decode_halt_reports();
                 if (self.flags & flow_flags::ignore_unimplemented) != 0 {
                     let step = *instruction_length;
@@ -2579,7 +2843,11 @@ truncating the fall-through here"
     /// Passes back the first already-seen address in `bound`; returns `false` if
     /// the top address has already been visited (it is popped).
     fn set_fallthru_bound(&mut self, bound: &mut Address) -> KunaResult<bool> {
-        let addr = self.addrlist.last().expect("set_fallthru_bound: empty addrlist").clone();
+        let addr = self
+            .addrlist
+            .last()
+            .expect("set_fallthru_bound: empty addrlist")
+            .clone();
         // We compute the predecessor (last <= addr) and its successor.
         let le = self.visited_last_le_owned(&addr);
         if let Some((first, size)) = le {
@@ -2595,7 +2863,14 @@ truncating the fall-through here"
             }
         }
         // ++iter: the first visited key strictly greater than addr.
-        let next_key = self.visited.range((std::ops::Bound::Excluded(addr.clone()), std::ops::Bound::Unbounded)).next().map(|(k, _)| k.clone());
+        let next_key = self
+            .visited
+            .range((
+                std::ops::Bound::Excluded(addr.clone()),
+                std::ops::Bound::Unbounded,
+            ))
+            .next()
+            .map(|(k, _)| k.clone());
         match next_key {
             Some(k) => *bound = k,
             None => *bound = self.eaddr.clone(),
@@ -2620,11 +2895,13 @@ truncating the fall-through here"
             if self.addrlist.is_empty() {
                 break;
             }
-            let backaddr = self.addrlist.last().expect("fallthru: addrlist back").clone();
+            let backaddr = self
+                .addrlist
+                .last()
+                .expect("fallthru: addrlist back")
+                .clone();
             if bound <= backaddr {
-                if bound == backaddr
-                    && (bound != self.eaddr || self.seen_instruction(&backaddr))
-                {
+                if bound == backaddr && (bound != self.eaddr || self.seen_instruction(&backaddr)) {
                     if startbasic {
                         let op = self.target(&backaddr)?;
                         self.op_mark_start_basic(op);
@@ -2734,7 +3011,13 @@ truncating the fall-through here"
             .expect("missing halt: stale op")
             .get_seq_num()
             .clone();
-        self.visited.insert(addr.clone(), VisitStat { seqnum: seq, size: 1 });
+        self.visited.insert(
+            addr.clone(),
+            VisitStat {
+                seqnum: seq,
+                size: 1,
+            },
+        );
         Ok(())
     }
 
@@ -2744,10 +3027,19 @@ truncating the fall-through here"
     /// destination cannot be represented and must be dropped.
     fn kuna_return_stub(&mut self, addr: &Address) -> KunaResult<bool> {
         if let Some(stat) = self.visited.get(addr) {
-            let planted = self.data.obank().find_op(&stat.seqnum).and_then(|op| self.data.obank().get(op))
-                .is_some_and(|op| op.code() == OpCode::CPUI_RETURN && op.get_in(0)
-                    .and_then(|v| self.data.vbank().get(v)).is_some_and(|v| v.is_constant() && v.get_offset() == 0)
-                    && stat.size == 1);
+            let planted = self
+                .data
+                .obank()
+                .find_op(&stat.seqnum)
+                .and_then(|op| self.data.obank().get(op))
+                .is_some_and(|op| {
+                    op.code() == OpCode::CPUI_RETURN
+                        && op
+                            .get_in(0)
+                            .and_then(|v| self.data.vbank().get(v))
+                            .is_some_and(|v| v.is_constant() && v.get_offset() == 0)
+                        && stat.size == 1
+                });
             return Ok(planted);
         }
         let op = self.data.new_op(1, addr.clone());
@@ -2757,8 +3049,15 @@ truncating the fall-through here"
         self.data.op_set_input(op, zero, 0)?;
         self.op_mark_start_basic(op);
         self.op_mark_start_instruction(op);
-        let seqnum = self.data.obank().get(op).expect("return stub").get_seq_num().clone();
-        self.visited.insert(addr.clone(), VisitStat { seqnum, size: 1 });
+        let seqnum = self
+            .data
+            .obank()
+            .get(op)
+            .expect("return stub")
+            .get_seq_num()
+            .clone();
+        self.visited
+            .insert(addr.clone(), VisitStat { seqnum, size: 1 });
         Ok(true)
     }
 
@@ -2815,11 +3114,20 @@ truncating the fall-through here"
         for (idx, &op) in order.iter().enumerate() {
             let nextstart = match order.get(idx + 1) {
                 None => true,
-                Some(&next) => {
-                    self.data.obank().get(next).expect("collect_edges: stale next").is_block_start()
-                }
+                Some(&next) => self
+                    .data
+                    .obank()
+                    .get(next)
+                    .expect("collect_edges: stale next")
+                    .is_block_start(),
             };
-            match self.data.obank().get(op).expect("collect_edges: stale op").code() {
+            match self
+                .data
+                .obank()
+                .get(op)
+                .expect("collect_edges: stale op")
+                .code()
+            {
                 OpCode::CPUI_BRANCH => {
                     let targ = self.branch_target(op)?;
                     self.block_edge1.push(op);
@@ -2851,8 +3159,10 @@ truncating the fall-through here"
                         let edge_start = self.block_edge1.len();
                         let mut skipped = 0u32;
                         for i in 0..num {
-                            let addr =
-                                self.data.get_jump_table(jt_idx as int4).get_address_by_index(i);
+                            let addr = self
+                                .data
+                                .get_jump_table(jt_idx as int4)
+                                .get_address_by_index(i);
                             let targ = if tolerate_missing {
                                 match self.target(&addr) {
                                     Ok(t) => t,
@@ -2866,7 +3176,13 @@ truncating the fall-through here"
                             } else {
                                 self.target(&addr)?
                             };
-                            if self.data.obank().get(targ).expect("collect_edges: targ").is_mark() {
+                            if self
+                                .data
+                                .obank()
+                                .get(targ)
+                                .expect("collect_edges: targ")
+                                .is_mark()
+                            {
                                 continue; // Already a link between these blocks
                             }
                             self.data.obank_mut().get_mut(targ).unwrap().set_mark();
@@ -2944,24 +3260,54 @@ truncating the fall-through here"
             Some(o) => o,
             None => return Ok(()),
         };
-        if !self.data.obank().get(first).expect("split_basic: stale first").is_block_start() {
+        if !self
+            .data
+            .obank()
+            .get(first)
+            .expect("split_basic: stale first")
+            .is_block_start()
+        {
             return Err(KunaError::lowlevel("First op not marked as entry point"));
         }
         let root = self.bblocks_root();
         let mut cur = self.data.bblocks_mut().new_block_basic(root);
         self.data.op_insert(first, cur, None); // insert at end of cur
         self.data.bblocks_mut().set_start_block(root, cur);
-        let mut start = self.data.obank().get(first).expect("split_basic").get_addr().clone();
+        let mut start = self
+            .data
+            .obank()
+            .get(first)
+            .expect("split_basic")
+            .get_addr()
+            .clone();
         let mut stop = start.clone();
         for op in it {
-            if self.data.obank().get(op).expect("split_basic: stale op").is_block_start() {
+            if self
+                .data
+                .obank()
+                .get(op)
+                .expect("split_basic: stale op")
+                .is_block_start()
+            {
                 self.data.set_basic_block_range(cur, &start, &stop);
                 cur = self.data.bblocks_mut().new_block_basic(root); // next block
-                start = self.data.obank().get(op).expect("split_basic").get_seq_num().get_addr().clone();
+                start = self
+                    .data
+                    .obank()
+                    .get(op)
+                    .expect("split_basic")
+                    .get_seq_num()
+                    .get_addr()
+                    .clone();
                 stop = start.clone();
             } else {
-                let next_addr =
-                    self.data.obank().get(op).expect("split_basic").get_addr().clone();
+                let next_addr = self
+                    .data
+                    .obank()
+                    .get(op)
+                    .expect("split_basic")
+                    .get_addr()
+                    .clone();
                 if stop < next_addr {
                     stop = next_addr;
                 }
@@ -2978,15 +3324,30 @@ truncating the fall-through here"
         for i in 0..n {
             let op = self.block_edge1[i];
             let targ_op = self.block_edge2[i];
-            let bs = self.data.obank().get(op).expect("connect_basic: stale op").get_parent().expect("connect_basic: op has no parent");
-            let targ_bs = self.data.obank().get(targ_op).expect("connect_basic: stale targ").get_parent().expect("connect_basic: targ has no parent");
+            let bs = self
+                .data
+                .obank()
+                .get(op)
+                .expect("connect_basic: stale op")
+                .get_parent()
+                .expect("connect_basic: op has no parent");
+            let targ_bs = self
+                .data
+                .obank()
+                .get(targ_op)
+                .expect("connect_basic: stale targ")
+                .get_parent()
+                .expect("connect_basic: targ has no parent");
             self.data.bblocks_mut().add_edge(bs, targ_bs);
         }
     }
 
     /// The root graph node of `bblocks`.
     fn bblocks_root(&self) -> BlockId {
-        self.data.bblocks_ref().root.expect("FlowInfo: bblocks root not constructed")
+        self.data
+            .bblocks_ref()
+            .root
+            .expect("FlowInfo: bblocks root not constructed")
     }
 
     // -----------------------------------------------------------------------
@@ -3058,24 +3419,53 @@ truncating the fall-through here"
                         Some(op) => op,
                         None => continue,
                     };
-                    if let Some(stub) = self.data.get_jump_table(jt_idx as int4).kuna_return_default().cloned() {
+                    if let Some(stub) = self
+                        .data
+                        .get_jump_table(jt_idx as int4)
+                        .kuna_return_default()
+                        .cloned()
+                    {
                         if !self.kuna_return_stub(&stub)? {
-                            self.data.get_jump_table_mut(jt_idx as int4).kuna_drop_return_default();
-                            let address = self.data.obank().get(indop).expect("dispatch op").get_addr().clone();
-                            self.data.warning("Indirect jump caller return overlaps decoded code", &address);
+                            self.data
+                                .get_jump_table_mut(jt_idx as int4)
+                                .kuna_drop_return_default();
+                            let address = self
+                                .data
+                                .obank()
+                                .get(indop)
+                                .expect("dispatch op")
+                                .get_addr()
+                                .clone();
+                            self.data.warning(
+                                "Indirect jump caller return overlaps decoded code",
+                                &address,
+                            );
                         }
                     }
                     let num = self.data.get_jump_table(jt_idx as int4).num_entries();
                     for i in 0..num {
-                        let addr = self.data.get_jump_table(jt_idx as int4).get_address_by_index(i);
-                        if !self.data.get_jump_table(jt_idx as int4).kuna_is_reentered() || followed.insert((
-                            indop,
-                            addr.get_space().map(|s| s.get_index()),
-                            addr.get_offset(),
-                        )) {
-                            if reentry && self.seen_instruction(&addr)
-                                && self.data.get_jump_table(jt_idx as int4).kuna_return_default() != Some(&addr) {
-                                if let Ok(to) = self.target(&addr) { new_edges.push((indop, to)); }
+                        let addr = self
+                            .data
+                            .get_jump_table(jt_idx as int4)
+                            .get_address_by_index(i);
+                        if !self.data.get_jump_table(jt_idx as int4).kuna_is_reentered()
+                            || followed.insert((
+                                indop,
+                                addr.get_space().map(|s| s.get_index()),
+                                addr.get_offset(),
+                            ))
+                        {
+                            if reentry
+                                && self.seen_instruction(&addr)
+                                && self
+                                    .data
+                                    .get_jump_table(jt_idx as int4)
+                                    .kuna_return_default()
+                                    != Some(&addr)
+                            {
+                                if let Ok(to) = self.target(&addr) {
+                                    new_edges.push((indop, to));
+                                }
                             }
                             self.new_address(indop, &addr)?;
                         }
@@ -3087,7 +3477,10 @@ truncating the fall-through here"
                         && num == 1
                         && !self.data.get_jump_table(jt_idx as int4).is_override()
                         && !self.outofbounds.contains(
-                            &self.data.get_jump_table(jt_idx as int4).get_address_by_index(0),
+                            &self
+                                .data
+                                .get_jump_table(jt_idx as int4)
+                                .get_address_by_index(0),
                         )
                     {
                         provisional.insert(indop);
@@ -3095,20 +3488,38 @@ truncating the fall-through here"
                 }
                 if reentry {
                     new_edges.extend(crate::kuna_indirectreturn::reentry_edges(
-                        &self.data, mark, |to| self.target(to).ok(), |op| self.fallthru_op(op)));
+                        &self.data,
+                        mark,
+                        |to| self.target(to).ok(),
+                        |op| self.fallthru_op(op),
+                    ));
                 }
-                let dispatches: std::collections::BTreeSet<OpId> = provisional.iter().copied()
-                    .filter(|&op| self.data.obank().get(op).is_some_and(|o| o.code() == OpCode::CPUI_BRANCHIND)
-                        && self.data.find_jump_table_index(op).is_some())
+                let dispatches: std::collections::BTreeSet<OpId> = provisional
+                    .iter()
+                    .copied()
+                    .filter(|&op| {
+                        self.data
+                            .obank()
+                            .get(op)
+                            .is_some_and(|o| o.code() == OpCode::CPUI_BRANCHIND)
+                            && self.data.find_jump_table_index(op).is_some()
+                    })
                     .collect();
                 let relevant = if new_edges.is_empty() || dispatches.is_empty() {
                     Default::default()
                 } else {
-                    crate::kuna_indirectreturn::reaching_edges(&self.data, &dispatches, &new_edges,
-                        |to| self.target(to).ok(), |op| self.fallthru_op(op))
+                    crate::kuna_indirectreturn::reaching_edges(
+                        &self.data,
+                        &dispatches,
+                        &new_edges,
+                        |to| self.target(to).ok(),
+                        |op| self.fallthru_op(op),
+                    )
                 };
                 for (op, edges) in relevant {
-                    let Some(idx) = self.data.find_jump_table_index(op) else { continue };
+                    let Some(idx) = self.data.find_jump_table_index(op) else {
+                        continue;
+                    };
                     let address = self.data.obank().get(op).unwrap().get_addr().clone();
                     let mut exact = true;
                     let mut added = false;
@@ -3118,31 +3529,54 @@ truncating the fall-through here"
                             continue;
                         }
                         let value = crate::kuna_returnbranch::target_on_edge(
-                            &self.data, from, op, |index| self.env.is_isa_mode_switch(index));
+                            &self.data,
+                            from,
+                            op,
+                            |index| self.env.is_isa_mode_switch(index),
+                        );
                         let result = value.and_then(|value| {
                             let target = Address::new(address.get_space()?.clone(), value);
                             if self.outofbounds.contains(&target)
-                                || self.data.get_arch().get_load_image_value(&target, 1).is_err()
-                            { return None; }
+                                || self
+                                    .data
+                                    .get_arch()
+                                    .get_load_image_value(&target, 1)
+                                    .is_err()
+                            {
+                                return None;
+                            }
                             let limit = self.data.get_arch().max_jumptable_size as usize;
-                            self.data.get_jump_table_mut(idx as int4)
+                            self.data
+                                .get_jump_table_mut(idx as int4)
                                 .kuna_extend_flow_target(target, limit)
                         });
-                        match result { Some(new) => added |= new, None => exact = false }
+                        match result {
+                            Some(new) => added |= new,
+                            None => exact = false,
+                        }
                     }
-                    if !exact { pending_retry.insert(op); }
-                    if added { self.tablelist.push(op); }
+                    if !exact {
+                        pending_retry.insert(op);
+                    }
+                    if added {
+                        self.tablelist.push(op);
+                    }
                 }
                 if self.tablelist.is_empty() {
                     for op in std::mem::take(&mut pending_retry) {
-                        let Some(idx) = self.data.find_jump_table_index(op) else { continue };
+                        let Some(idx) = self.data.find_jump_table_index(op) else {
+                            continue;
+                        };
                         if stages < KUNA_MAX_REENTRY_STAGES {
                             stages += 1;
                             self.data.get_jump_table_mut(idx as int4).kuna_retry_flow();
                             self.tablelist.push(op);
                         } else if exhausted.insert(op) {
                             let address = self.data.obank().get(op).unwrap().get_addr().clone();
-                            self.data.warning("Re-entered indirect jump may have more targets", &address);
+                            self.data.warning(
+                                "Re-entered indirect jump may have more targets",
+                                &address,
+                            );
                         }
                     }
                 }
@@ -3260,13 +3694,26 @@ truncating the fall-through here"
         }
         // (kuna `objcresolve`) A send whose method a first decompile resolved
         // goes to the IMP.
-        if let Some(target) = self.data.obank().get(op).map(|o| o.get_addr().clone()).and_then(|at| self.env.query_call_retarget(&at)) {
+        if let Some(target) = self
+            .data
+            .obank()
+            .get(op)
+            .map(|o| o.get_addr().clone())
+            .and_then(|at| self.env.query_call_retarget(&at))
+        {
             entry = target;
         }
-        let numeric = self.data.obank().get(op).and_then(|o| o.get_in(0))
-            .and_then(|vn| self.data.vbank().get(vn)).is_some_and(|v| v.is_synthetic_literal());
+        let numeric = self
+            .data
+            .obank()
+            .get(op)
+            .and_then(|o| o.get_in(0))
+            .and_then(|vn| self.data.vbank().get(vn))
+            .is_some_and(|v| v.is_synthetic_literal());
         if numeric {
-            let target = self.data.new_constant(entry.get_addr_size() as i32, entry.get_offset());
+            let target = self
+                .data
+                .new_constant(entry.get_addr_size() as i32, entry.get_offset());
             self.data.op_set_input(op, target, 0)?;
             self.data.op_set_opcode_code(op, OpCode::CPUI_CALLIND);
             return self.setup_callind_specs(op);
@@ -3277,7 +3724,10 @@ truncating the fall-through here"
         // fixup entry must NOT re-inject (cycle break; C++ cancelInjectId).
         if self.injecting_entry.as_ref() == Some(&entry) {
             if let Some(idx) = self.data.get_call_specs_index(op) {
-                self.data.get_call_specs_mut(idx).proto_mut().cancel_inject_id();
+                self.data
+                    .get_call_specs_mut(idx)
+                    .proto_mut()
+                    .cancel_inject_id();
             }
         }
         self.check_for_flow_modification(op, &entry)
@@ -3317,7 +3767,10 @@ truncating the fall-through here"
         if !no_return && self.trap_follows_call(op) {
             if !entry.is_invalid() {
                 if let Some(idx) = self.data.get_call_specs_index(op) {
-                    self.data.get_call_specs_mut(idx).proto_mut().set_no_return(true);
+                    self.data
+                        .get_call_specs_mut(idx)
+                        .proto_mut()
+                        .set_no_return(true);
                 }
             }
             no_return = true;
@@ -3336,7 +3789,9 @@ truncating the fall-through here"
             if !is_inline {
                 let text = if self.data.ppc32_pic_calls.contains_key(&addr.get_offset()) {
                     crate::kuna_ppc32piccalls::WARNING
-                } else { "Subroutine does not return" };
+                } else {
+                    "Subroutine does not return"
+                };
                 self.data.warning(text, &addr);
             }
             return Ok(true);
@@ -3356,12 +3811,21 @@ truncating the fall-through here"
         if !self.data.get_arch().trap_after_call {
             return false;
         }
-        let Some(addr) = self.data.obank().get(op).map(|o| o.get_addr().clone()) else { return false };
-        let Some(size) = self.visited.get(&addr).map(|v| v.size) else { return false };
+        let Some(addr) = self.data.obank().get(op).map(|o| o.get_addr().clone()) else {
+            return false;
+        };
+        let Some(size) = self.visited.get(&addr).map(|v| v.size) else {
+            return false;
+        };
         let next = &addr + i64::from(size);
-        let byte = |at: &Address, k: i64| self.data.get_arch().get_load_image_value(&(at + k), 1).ok();
+        let byte =
+            |at: &Address, k: i64| self.data.get_arch().get_load_image_value(&(at + k), 1).ok();
         let mut first = 0;
-        while matches!(byte(&addr, first), Some(0x40..=0x4f | 0x66 | 0x2e | 0x3e | 0xf2)) && first < 4 {
+        while matches!(
+            byte(&addr, first),
+            Some(0x40..=0x4f | 0x66 | 0x2e | 0x3e | 0xf2)
+        ) && first < 4
+        {
             first += 1;
         }
         let is_call = match byte(&addr, first) {
@@ -3396,12 +3860,17 @@ truncating the fall-through here"
     /// The op a no-return halt planted after the call `op` must follow: the
     /// CBRANCH of its `itaniumeh` unwind edge when it has one, else `op` itself.
     fn unwind_edge_end(&self, op: OpId) -> OpId {
-        let Some(test) = self.dead_next(op) else { return op };
+        let Some(test) = self.dead_next(op) else {
+            return op;
+        };
         let is_edge = self.data.obank().get(test).is_some_and(|o| {
             o.code() == OpCode::CPUI_CALLOTHER
-                && o.get_in(0).and_then(|v| self.data.vbank().get(v)).is_some_and(|v| {
-                    v.is_constant() && v.get_offset() == crate::userop::BUILTIN_EH_UNWINDING as u64
-                })
+                && o.get_in(0)
+                    .and_then(|v| self.data.vbank().get(v))
+                    .is_some_and(|v| {
+                        v.is_constant()
+                            && v.get_offset() == crate::userop::BUILTIN_EH_UNWINDING as u64
+                    })
         });
         match self.dead_next(test) {
             Some(branch) if is_edge => branch,
@@ -3420,7 +3889,11 @@ truncating the fall-through here"
             .get(op)
             .map(|o| o.get_addr().clone())
             .unwrap_or_default();
-        let mut direct = self.data.get_override().find_indirect_override(&op_addr).cloned();
+        let mut direct = self
+            .data
+            .get_override()
+            .find_indirect_override(&op_addr)
+            .cloned();
         let carrier = direct
             .as_ref()
             .filter(|_| self.data.get_arch().vtable_types)
@@ -3455,7 +3928,9 @@ truncating the fall-through here"
             self.data.op_set_opcode_code(op, OpCode::CPUI_CALL);
             self.build_call_specs(op, entry.clone(), false)?;
             if let (Some(storage), Some(idx)) = (carrier, self.data.get_call_specs_index(op)) {
-                self.data.get_call_specs_mut(idx).set_jump_target_storage(storage);
+                self.data
+                    .get_call_specs_mut(idx)
+                    .set_jump_target_storage(storage);
             }
             self.qlst_count += 1;
             return self.check_for_flow_modification(op, &entry);
@@ -3472,7 +3947,10 @@ truncating the fall-through here"
         // definitional, not a surprise, and a function can hold a dozen sites.
         if self.env.is_fastfail_callind(&self.data, op) {
             if let Some(idx) = self.data.get_call_specs_index(op) {
-                self.data.get_call_specs_mut(idx).proto_mut().set_no_return(true);
+                self.data
+                    .get_call_specs_mut(idx)
+                    .proto_mut()
+                    .set_no_return(true);
             }
             let addr = self
                 .data
@@ -3490,7 +3968,10 @@ truncating the fall-through here"
         // AH, which the C does not show.
         if self.env.is_dos_exit_callind(&self.data, op) {
             if let Some(idx) = self.data.get_call_specs_index(op) {
-                self.data.get_call_specs_mut(idx).proto_mut().set_no_return(true);
+                self.data
+                    .get_call_specs_mut(idx)
+                    .proto_mut()
+                    .set_no_return(true);
             }
             return self.check_for_flow_modification(op, &Address::default());
         }
@@ -3506,10 +3987,14 @@ truncating the fall-through here"
                 .expect("int3pad: stale call op")
                 .get_addr()
                 .clone();
-            self.data.warning(&crate::kuna_int3pad::warning_text(site.run), &addr);
+            self.data
+                .warning(&crate::kuna_int3pad::warning_text(site.run), &addr);
             if site.halt {
                 if let Some(idx) = self.data.get_call_specs_index(op) {
-                    self.data.get_call_specs_mut(idx).proto_mut().set_no_return(true);
+                    self.data
+                        .get_call_specs_mut(idx)
+                        .proto_mut()
+                        .set_no_return(true);
                 }
                 let haltop = self.artificial_halt(&addr, pcodeop_flags::noreturn)?;
                 self.data.op_dead_insert_after(haltop, op);
@@ -3567,25 +4052,40 @@ truncating the fall-through here"
         // matching the C++ `applyPrototype` → `queryCall` order, which is what lets
         // an injected CALLIND carry BOTH the override args and the fixup injection.
         {
-            let op_addr =
-                self.data.obank().get(op).map(|o| o.get_addr().clone()).unwrap_or_default();
+            let op_addr = self
+                .data
+                .obank()
+                .get(op)
+                .map(|o| o.get_addr().clone())
+                .unwrap_or_default();
             let ov = self.data.get_override().find_proto_override(&op_addr);
             if let Some(proto) = ov.and_then(|ov| ov.prototype()) {
                 fc.proto_mut().copy(proto);
-            } else { match ov.and_then(|ov| ov.pieces()).cloned().or_else(|| self.env.query_call_site_pieces(&op_addr)) { Some(pieces) => {
-                if let Some(proto) = self.env.build_override_proto(&pieces)? {
-                    fc.proto_mut().copy(&proto);
-                    if self.data.get_override().is_format_call(&op_addr) {
-                        fc.set_format_arity(Some(pieces.intypes.len() as int4));
+            } else {
+                match ov
+                    .and_then(|ov| ov.pieces())
+                    .cloned()
+                    .or_else(|| self.env.query_call_site_pieces(&op_addr))
+                {
+                    Some(pieces) => {
+                        if let Some(proto) = self.env.build_override_proto(&pieces)? {
+                            fc.proto_mut().copy(&proto);
+                            if self.data.get_override().is_format_call(&op_addr) {
+                                fc.set_format_arity(Some(pieces.intypes.len() as int4));
+                            }
+                        }
                     }
+                    _ => {}
                 }
-            } _ => {}}}
+            }
         }
         // queryCall: resolve the direct callee symbol's name (W4 proto copy
         // postponed to ActionDefaultParams).
         if !indirect && !entry.is_invalid() {
-            if let Some(name) =
-                self.env.query_call(&entry).or_else(|| self.env.query_call_label(&entry))
+            if let Some(name) = self
+                .env
+                .query_call(&entry)
+                .or_else(|| self.env.query_call_label(&entry))
             {
                 let _ = fc.set_funcdata(callee.clone(), &name);
             }
@@ -3635,14 +4135,21 @@ truncating the fall-through here"
             // calls the C++ ActionDefaultParams copy arm actually reaches.
             // (kuna `armfloatreturn`) A declared AEABI helper is laid out under
             // the core-register model by ActionDefaultParams instead.
-            let helper = crate::kuna_armfloatreturn::declared_helper_model(self.data.get_arch(), fc.get_name()).is_some();
+            let helper = crate::kuna_armfloatreturn::declared_helper_model(
+                self.data.get_arch(),
+                fc.get_name(),
+            )
+            .is_some();
             if !is_inline_call && !fc.proto().has_model() && !helper {
                 let callee_proto = if entry.is_invalid() {
                     None
                 } else {
                     let arch = self.data.get_arch();
-                    arch.query_callee_proto(&entry)
-                        .or_else(|| (callee != entry).then(|| arch.query_callee_proto(&callee)).flatten())
+                    arch.query_callee_proto(&entry).or_else(|| {
+                        (callee != entry)
+                            .then(|| arch.query_callee_proto(&callee))
+                            .flatten()
+                    })
                 };
                 if let Some(callee_proto) = callee_proto {
                     fc.proto_mut().copy(&callee_proto);
@@ -3707,11 +4214,17 @@ truncating the fall-through here"
             self.inline_head = Some(self.data.get_address().clone());
         }
         // Insert current function
-        self.inline_recursion.insert(self.data.get_address().clone());
+        self.inline_recursion
+            .insert(self.data.get_address().clone());
         if self.inline_recursion.contains(inlinefd.get_address()) {
             // This function has already been included with current inlining.
-            let opaddr =
-                self.data.obank().get(op).expect("inlineSubFunction: stale call op").get_addr().clone();
+            let opaddr = self
+                .data
+                .obank()
+                .get(op)
+                .expect("inlineSubFunction: stale call op")
+                .get_addr()
+                .clone();
             self.data.warning("Could not inline here", &opaddr);
             return Ok(false);
         }
@@ -3752,7 +4265,9 @@ truncating the fall-through here"
     fn inline_flow(&mut self, inlinefd: &mut Funcdata, callop: OpId) -> KunaResult<int4> {
         // inlinefd->getArch()->clearAnalysis(inlinefd): the callee Funcdata is
         // built fresh (no prior analysis to clear).
-        inlinefd.obank_mut().set_uniq_id(self.data.obank().get_uniq_id());
+        inlinefd
+            .obank_mut()
+            .set_uniq_id(self.data.obank().get_uniq_id());
 
         // Build a nested FlowInfo over the callee Funcdata using a placeholder
         // swap (the same move-out / move-back idiom as `build_partial_blocks`).
@@ -3812,8 +4327,12 @@ truncating the fall-through here"
                 None => self.dead_head(),
             };
             if let Some(firstop) = firstop {
-                let lastop = self.dead_tail().expect("inlineFlow EZ: dead list non-empty");
-                self.data.obank_mut().move_sequence_dead(firstop, lastop, callop);
+                let lastop = self
+                    .dead_tail()
+                    .expect("inlineFlow EZ: dead list non-empty");
+                self.data
+                    .obank_mut()
+                    .move_sequence_dead(firstop, lastop, callop);
                 let callop_block_start = self
                     .data
                     .obank()
@@ -3853,7 +4372,12 @@ truncating the fall-through here"
 
             // Convert the CALL op to a jump.
             loop {
-                let n = self.data.obank().get(callop).expect("inlineFlow: stale callop").num_input();
+                let n = self
+                    .data
+                    .obank()
+                    .get(callop)
+                    .expect("inlineFlow: stale callop")
+                    .num_input();
                 if n <= 1 {
                     break;
                 }
@@ -3869,7 +4393,9 @@ truncating the fall-through here"
         self.data.obank_mut().set_uniq_id(inline_uniq);
         // Move the (now spent) callee data back out.
         *inlinefd = inlineflow.data;
-        self.data.kuna_fspec_handles.append(&mut inlinefd.kuna_fspec_handles);
+        self.data
+            .kuna_fspec_handles
+            .append(&mut inlinefd.kuna_fspec_handles);
         Ok(res)
     }
 
@@ -3878,7 +4404,13 @@ truncating the fall-through here"
     /// CALL or BRANCH ops.
     fn check_ez_model(&self) -> bool {
         for op in self.data.obank().iter_dead() {
-            if self.data.obank().get(op).expect("checkEZModel: stale op").is_call_or_branch() {
+            if self
+                .data
+                .obank()
+                .get(op)
+                .expect("checkEZModel: stale op")
+                .is_call_or_branch()
+            {
                 return false;
             }
         }
@@ -3909,16 +4441,35 @@ truncating the fall-through here"
             let nextop = match self.dead_next(op) {
                 Some(n) => n,
                 None => {
-                    let opaddr =
-                        self.data.obank().get(op).expect("testHardInline: stale op").get_addr().clone();
-                    self.data.warning("No fallthrough prevents inlining here", &opaddr);
+                    let opaddr = self
+                        .data
+                        .obank()
+                        .get(op)
+                        .expect("testHardInline: stale op")
+                        .get_addr()
+                        .clone();
+                    self.data
+                        .warning("No fallthrough prevents inlining here", &opaddr);
                     return Ok(false);
                 }
             };
-            *retaddr = self.data.obank().get(nextop).expect("testHardInline: stale nextop").get_addr().clone();
-            let opaddr = self.data.obank().get(op).expect("testHardInline: stale op").get_addr().clone();
+            *retaddr = self
+                .data
+                .obank()
+                .get(nextop)
+                .expect("testHardInline: stale nextop")
+                .get_addr()
+                .clone();
+            let opaddr = self
+                .data
+                .obank()
+                .get(op)
+                .expect("testHardInline: stale op")
+                .get_addr()
+                .clone();
             if &opaddr == retaddr {
-                self.data.warning("Return address prevents inlining here", &opaddr);
+                self.data
+                    .warning("Return address prevents inlining here", &opaddr);
                 return Ok(false);
             }
             // If the inlining "jumps back" this starts a new basic block.
@@ -3939,8 +4490,11 @@ truncating the fall-through here"
         {
             return false;
         }
-        let Some(next) = self.dead_next(op) else { return true };
-        let (Some(call), Some(next)) = (self.data.obank().get(op), self.data.obank().get(next)) else {
+        let Some(next) = self.dead_next(op) else {
+            return true;
+        };
+        let (Some(call), Some(next)) = (self.data.obank().get(op), self.data.obank().get(next))
+        else {
             return false;
         };
         next.code() == OpCode::CPUI_RETURN && next.get_addr() == call.get_addr()
@@ -3949,7 +4503,13 @@ truncating the fall-through here"
     /// If the given injected op is a CALL, CALLIND, or BRANCHIND, add references to
     /// it in other flow tables (C++ `FlowInfo::xrefInlinedBranch`, `flow.cc:1055`).
     fn xref_inlined_branch(&mut self, op: OpId) -> KunaResult<()> {
-        match self.data.obank().get(op).expect("xrefInlinedBranch: stale op").code() {
+        match self
+            .data
+            .obank()
+            .get(op)
+            .expect("xrefInlinedBranch: stale op")
+            .code()
+        {
             OpCode::CPUI_CALL => {
                 self.setup_call_specs(op)?;
             }
@@ -3980,8 +4540,17 @@ truncating the fall-through here"
         let src = &inlineflow.data;
         let src_ops: Vec<OpId> = src.obank().iter_dead().collect();
         for op in src_ops {
-            let opc = src.obank().get(op).expect("inlineClone: stale src op").code();
-            let seq = src.obank().get(op).expect("inlineClone: stale src op").get_seq_num().clone();
+            let opc = src
+                .obank()
+                .get(op)
+                .expect("inlineClone: stale src op")
+                .code();
+            let seq = src
+                .obank()
+                .get(op)
+                .expect("inlineClone: stale src op")
+                .get_seq_num()
+                .clone();
             let cloneop = if opc == OpCode::CPUI_RETURN && !retaddr.is_invalid() {
                 let cloneop = self.data.new_op_seq(1, seq);
                 self.data.op_set_opcode_code(cloneop, OpCode::CPUI_BRANCH);
@@ -3991,19 +4560,29 @@ truncating the fall-through here"
             } else {
                 self.data.clone_op_from(src, op, seq)?
             };
-            if self.data.obank().get(cloneop).expect("inlineClone: stale clone").is_call_or_branch() {
+            if self
+                .data
+                .obank()
+                .get(cloneop)
+                .expect("inlineClone: stale clone")
+                .is_call_or_branch()
+            {
                 self.xref_inlined_branch(cloneop)?;
             }
         }
         // Copy in the cross-referencing.
-        self.unprocessed.extend(inlineflow.unprocessed.iter().cloned());
-        self.outofbounds.extend(inlineflow.outofbounds.iter().cloned());
+        self.unprocessed
+            .extend(inlineflow.unprocessed.iter().cloned());
+        self.outofbounds
+            .extend(inlineflow.outofbounds.iter().cloned());
         self.funcbound_cutoffs
             .extend(inlineflow.funcbound_cutoffs.iter().cloned());
         self.addrlist.extend(inlineflow.addrlist.iter().cloned());
         for (addr, stat) in inlineflow.visited.iter() {
             // std::map::insert does NOT overwrite an existing key — match it.
-            self.visited.entry(addr.clone()).or_insert_with(|| stat.clone());
+            self.visited
+                .entry(addr.clone())
+                .or_insert_with(|| stat.clone());
         }
         // We don't copy inline_recursion or inline_head here.
         Ok(())
@@ -4015,14 +4594,29 @@ truncating the fall-through here"
     /// Individual PcodeOps from the in-lined Funcdata are cloned into \b this flow
     /// but reassigned a new fixed address (`calladdr`), and the RETURN op is
     /// eliminated.
-    fn inline_ez_clone(&mut self, inlineflow: &FlowInfo<'a, E>, calladdr: &Address) -> KunaResult<()> {
+    fn inline_ez_clone(
+        &mut self,
+        inlineflow: &FlowInfo<'a, E>,
+        calladdr: &Address,
+    ) -> KunaResult<()> {
         let src = &inlineflow.data;
         let src_ops: Vec<OpId> = src.obank().iter_dead().collect();
         for op in src_ops {
-            if src.obank().get(op).expect("inlineEZClone: stale src op").code() == OpCode::CPUI_RETURN {
+            if src
+                .obank()
+                .get(op)
+                .expect("inlineEZClone: stale src op")
+                .code()
+                == OpCode::CPUI_RETURN
+            {
                 break;
             }
-            let time = src.obank().get(op).expect("inlineEZClone: stale src op").get_seq_num().get_time();
+            let time = src
+                .obank()
+                .get(op)
+                .expect("inlineEZClone: stale src op")
+                .get_seq_num()
+                .get_time();
             let myseq = SeqNum::new(calladdr.clone(), time);
             self.data.clone_op_from(src, op, myseq)?;
         }
@@ -4092,7 +4686,8 @@ truncating the fall-through here"
                     self.data.delete_call_spec(idx);
                 }
             } else if self.inline_sub_function(op, &entry)? {
-                self.data.warning_header(&format!("Inlined function: {name}"));
+                self.data
+                    .warning_header(&format!("Inlined function: {name}"));
                 // Remove the now-inlined call from qlst.
                 self.data.delete_call_spec(idx);
             }
@@ -4116,23 +4711,48 @@ truncating the fall-through here"
             .expect("injectUserOp: stale op")
             .get_in(0)
             .expect("injectUserOp: CALLOTHER has no in0 (C++ UB)");
-        let userop_index =
-            self.data.vbank().get(in0).expect("injectUserOp: stale in0").get_offset() as uintb;
+        let userop_index = self
+            .data
+            .vbank()
+            .get(in0)
+            .expect("injectUserOp: stale in0")
+            .get_offset() as uintb;
 
         // Build the InjectContext from the op's operands (C++ icontext setup).
         let mut icontext = crate::pcodeinject::InjectContext::default();
-        let baseaddr = self.data.obank().get(op).expect("injectUserOp: stale op").get_addr().clone();
+        let baseaddr = self
+            .data
+            .obank()
+            .get(op)
+            .expect("injectUserOp: stale op")
+            .get_addr()
+            .clone();
         icontext.nextaddr = Some(baseaddr.clone());
         icontext.baseaddr = Some(baseaddr);
 
         // Skip the inject-id annotation in slot 0.
-        let n = self.data.obank().get(op).expect("injectUserOp: stale op").num_input();
+        let n = self
+            .data
+            .obank()
+            .get(op)
+            .expect("injectUserOp: stale op")
+            .num_input();
         for i in 1..n {
-            let vn = match self.data.obank().get(op).expect("injectUserOp: stale op").get_in(i) {
+            let vn = match self
+                .data
+                .obank()
+                .get(op)
+                .expect("injectUserOp: stale op")
+                .get_in(i)
+            {
                 Some(v) => v,
                 None => continue,
             };
-            let v = self.data.vbank().get(vn).expect("injectUserOp: stale input vn");
+            let v = self
+                .data
+                .vbank()
+                .get(vn)
+                .expect("injectUserOp: stale input vn");
             let addr = v.get_addr();
             icontext.inputlist.push(unlace_num::pcoderaw::VarnodeData {
                 space: addr.get_space().cloned(),
@@ -4141,8 +4761,18 @@ truncating the fall-through here"
             });
         }
         // output (rare for a CALLOTHER fixup; setISAMode has none).
-        if let Some(outvn) = self.data.obank().get(op).expect("injectUserOp: stale op").get_out() {
-            let v = self.data.vbank().get(outvn).expect("injectUserOp: stale out vn");
+        if let Some(outvn) = self
+            .data
+            .obank()
+            .get(op)
+            .expect("injectUserOp: stale op")
+            .get_out()
+        {
+            let v = self
+                .data
+                .vbank()
+                .get(outvn)
+                .expect("injectUserOp: stale out vn");
             let addr = v.get_addr();
             icontext.output.push(unlace_num::pcoderaw::VarnodeData {
                 space: addr.get_space().cloned(),
@@ -4170,7 +4800,13 @@ truncating the fall-through here"
         let fc = self.data.get_call_specs(idx);
         let inject_id = fc.proto().get_inject_id();
         let entry = fc.get_entry_address().clone();
-        let baseaddr = self.data.obank().get(op).expect("injectSubFunction: stale op").get_addr().clone();
+        let baseaddr = self
+            .data
+            .obank()
+            .get(op)
+            .expect("injectSubFunction: stale op")
+            .get_addr()
+            .clone();
 
         // No inputlist/output (unlike the user-op path).
         let mut icontext = crate::pcodeinject::InjectContext::default();
@@ -4193,7 +4829,9 @@ truncating the fall-through here"
         if param_shift != 0 {
             let n = self.data.num_calls();
             if n > 0 {
-                self.data.get_call_specs_mut(n - 1).set_paramshift(param_shift);
+                self.data
+                    .get_call_specs_mut(n - 1)
+                    .set_paramshift(param_shift);
             }
         }
         Ok(true)
@@ -4226,7 +4864,8 @@ truncating the fall-through here"
                     self.env.inject_userop(userop_index, icontext, &mut emit)?;
                 }
                 InjectSource::CallFixup(inject_id) => {
-                    self.env.inject_call_fixup_payload(inject_id, icontext, &mut emit)?;
+                    self.env
+                        .inject_call_fixup_payload(inject_id, icontext, &mut emit)?;
                 }
             }
             if let Some(err) = emit.error.take() {
@@ -4234,8 +4873,12 @@ truncating the fall-through here"
             }
         }
 
-        let mut startbasic =
-            self.data.obank().get(op).expect("doInjection: stale op").is_block_start();
+        let mut startbasic = self
+            .data
+            .obank()
+            .get(op)
+            .expect("doInjection: stale op")
+            .is_block_start();
         // First op in the injection.
         let firstop = match marker {
             Some(m) => self.dead_next(m),
@@ -4269,7 +4912,9 @@ truncating the fall-through here"
             self.data.obank_mut().mark_incidental_copy(firstop, lastop);
         }
         // Move the injection after op.
-        self.data.obank_mut().move_sequence_dead(firstop, lastop, op);
+        self.data
+            .obank_mut()
+            .move_sequence_dead(firstop, lastop, op);
         // Repoint the target map.
         self.update_target(op, firstop);
         // Drop the original CALLOTHER.
@@ -4306,14 +4951,20 @@ truncating the fall-through here"
         // `None` and rebuilt per table when `option jtsharepartial` is off.
         let mut shared_partial: Option<Funcdata> = None;
         for op in table_ops {
-            let at = self.data.obank().get(op).map_or(0, |o| o.get_addr().get_offset());
+            let at = self
+                .data
+                .obank()
+                .get(op)
+                .map_or(0, |o| o.get_addr().get_offset());
             let _scope = crate::decompile_drive::JumpTableScope::enter(at);
             if !for_inline && self.is_stated_tail_call(op) {
                 self.stated_tail_call(op)?;
                 continue;
             }
             let retried = self.data.find_jump_table_index(op).filter(|&idx| {
-                self.data.get_jump_table(idx as int4).kuna_keeps_recovered_targets()
+                self.data
+                    .get_jump_table(idx as int4)
+                    .kuna_keeps_recovered_targets()
             });
             let mut mode = if crate::decompile_drive::deadline_passed_in("jump-table recovery") {
                 Ok(None)
@@ -4349,7 +5000,10 @@ truncating the fall-through here"
                 let mut bounded = false;
                 if self.data.kuna_extent_tables.is_none() {
                     let tables = std::rc::Rc::new(super::kuna_switchextent::function_tables(
-                        self.env.translate(), self.env.mapped_flow_image(), &entry, end,
+                        self.env.translate(),
+                        self.env.mapped_flow_image(),
+                        &entry,
+                        end,
                     ));
                     if let Some(partial) = shared_partial.as_mut() {
                         partial.kuna_extent_tables = Some(std::rc::Rc::clone(&tables));
@@ -4366,7 +5020,12 @@ truncating the fall-through here"
                     };
                     let later = std::rc::Rc::new(end.map_or_else(Vec::new, |end| {
                         super::kuna_switchextent::later_tables(
-                            self.env.translate(), self.env.mapped_flow_image(), &entry, end, table, next_entry,
+                            self.env.translate(),
+                            self.env.mapped_flow_image(),
+                            &entry,
+                            end,
+                            table,
+                            next_entry,
                         )
                     }));
                     if let Some(partial) = shared_partial.as_mut() {
@@ -4390,8 +5049,15 @@ truncating the fall-through here"
                 (Ok(Some(idx)), _) => Ok(Some(idx)),
                 (_, Some(idx)) => {
                     self.data.get_jump_table_mut(idx as int4).mark_complete();
-                    let addr = self.data.obank().get(op).expect("dispatch op").get_addr().clone();
-                    self.data.warning("Re-entered indirect jump may have more targets", &addr);
+                    let addr = self
+                        .data
+                        .obank()
+                        .get(op)
+                        .expect("dispatch op")
+                        .get_addr()
+                        .clone();
+                    self.data
+                        .warning("Re-entered indirect jump may have more targets", &addr);
                     continue;
                 }
                 (failed, None) => failed,
@@ -4448,7 +5114,13 @@ truncating the fall-through here"
         if self.setup_callind_specs(op)? {
             return Ok(());
         }
-        let addr = self.data.obank().get(op).expect("stated tail call: stale op").get_addr().clone();
+        let addr = self
+            .data
+            .obank()
+            .get(op)
+            .expect("stated tail call: stale op")
+            .get_addr()
+            .clone();
         let truncop = self.artificial_halt(&addr, 0)?;
         self.data.op_dead_insert_after(truncop, op);
         Ok(())
@@ -4459,7 +5131,7 @@ truncating the fall-through here"
     fn truncate_indirect_jump(&mut self, op: OpId, mode: RecoveryMode) -> KunaResult<()> {
         if mode == RecoveryMode::FailReturn {
             self.data.op_set_opcode_code(op, OpCode::CPUI_RETURN);
-                let addr = self.data.obank().get(op).unwrap().get_addr().clone();
+            let addr = self.data.obank().get(op).unwrap().get_addr().clone();
             self.data.warning("Treating indirect jump as return", &addr);
             return Ok(());
         }
@@ -4506,7 +5178,8 @@ truncating the fall-through here"
     /// Seed a `visited` entry (C++ `visited[addr] = {seqnum,size}`; the inline
     /// clone family copies the whole map).  Verification / W4-driver support.
     pub fn seed_visited(&mut self, addr: &Address, seqnum: SeqNum, size: int4) {
-        self.visited.insert(addr.clone(), VisitStat { seqnum, size });
+        self.visited
+            .insert(addr.clone(), VisitStat { seqnum, size });
     }
 
     /// Has the given instruction address been visited (C++ `seenInstruction`).
@@ -4631,7 +5304,12 @@ pub struct FlowEmit<'f, 'e, E: FlowEnvironment> {
 
 impl<'f, 'e, E: FlowEnvironment> FlowEmit<'f, 'e, E> {
     fn new(fd: &'f mut Funcdata, env: &'e E) -> FlowEmit<'f, 'e, E> {
-        FlowEmit { fd, env, emitted: Vec::new(), error: None }
+        FlowEmit {
+            fd,
+            env,
+            emitted: Vec::new(),
+            error: None,
+        }
     }
 }
 
@@ -4650,15 +5328,25 @@ impl<E: FlowEnvironment> PcodeEmit for FlowEmit<'_, '_, E> {
         }
         // A proved PIC tail transfer is a call only in this entry's second flow.
         let opc = if opc == OpCode::CPUI_BRANCHIND
-            && self.fd.ppc32_pic_calls.get(&addr.get_offset()).is_some_and(|b| b.tail) {
+            && self
+                .fd
+                .ppc32_pic_calls
+                .get(&addr.get_offset())
+                .is_some_and(|b| b.tail)
+        {
             OpCode::CPUI_CALLIND
-        } else { opc };
+        } else {
+            opc
+        };
         // Convert template data into a real PcodeOp (C++ PcodeEmitFd::dump).
         let isize = vars.len() as int4;
         let op = if let Some(out) = outvar {
             let op = self.fd.new_op(isize, addr.clone());
-            let ospace =
-                out.space.as_ref().expect("FlowEmit::dump: output varnode has no space").clone();
+            let ospace = out
+                .space
+                .as_ref()
+                .expect("FlowEmit::dump: output varnode has no space")
+                .clone();
             let oaddr = Address::new(ospace, out.offset);
             if let Err(e) = self.fd.new_varnode_out(out.size as int4, &oaddr, op) {
                 self.error = Some(e);
@@ -4672,10 +5360,18 @@ impl<E: FlowEnvironment> PcodeEmit for FlowEmit<'_, '_, E> {
         let t_op = self.env.resolve_typeop(opc);
         self.fd.op_set_opcode(op, t_op);
         let mut i = 0usize;
-        let is_code_ref = self.fd.obank().get(op).expect("FlowEmit::dump: stale op").is_code_ref();
+        let is_code_ref = self
+            .fd
+            .obank()
+            .get(op)
+            .expect("FlowEmit::dump: stale op")
+            .is_code_ref();
         if is_code_ref {
-            let cspace =
-                vars[0].space.as_ref().expect("FlowEmit::dump: code-ref varnode has no space").clone();
+            let cspace = vars[0]
+                .space
+                .as_ref()
+                .expect("FlowEmit::dump: code-ref varnode has no space")
+                .clone();
             let addrcode = Address::new(cspace, vars[0].offset);
             let cref = self.fd.new_code_ref(&addrcode);
             // opSetInput is fallible only on the constant-share guard; an
@@ -4696,8 +5392,14 @@ impl<E: FlowEnvironment> PcodeEmit for FlowEmit<'_, '_, E> {
         // offset, built through the same factory.
         while i < vars.len() {
             let vd = &vars[i];
-            let space = vd.space.as_ref().expect("FlowEmit::dump: varnode has no space").clone();
-            let vn = self.fd.new_varnode_space_off(vd.size as int4, space, vd.offset);
+            let space = vd
+                .space
+                .as_ref()
+                .expect("FlowEmit::dump: varnode has no space")
+                .clone();
+            let vn = self
+                .fd
+                .new_varnode_space_off(vd.size as int4, space, vd.offset);
             // opSetInput is fallible only on the constant-share guard (single
             // descendant); a freshly created varnode has none, so it never errors.
             if let Err(e) = self.fd.op_set_input(op, vn, i as int4) {
@@ -4717,11 +5419,7 @@ impl<E: FlowEnvironment> PcodeEmit for FlowEmit<'_, '_, E> {
 /// starting its instruction's basic block, following no-p-code fall-thru.  Used
 /// by `switchOverJumpTables` after the FlowInfo's `data` has been moved out.
 #[allow(clippy::mutable_key_type)]
-pub fn target_in(
-    fd: &Funcdata,
-    visited: &VisitedMap,
-    addr: &Address,
-) -> KunaResult<OpId> {
+pub fn target_in(fd: &Funcdata, visited: &VisitedMap, addr: &Address) -> KunaResult<OpId> {
     let mut cur = addr.clone();
     while let Some(stat) = visited.get(&cur) {
         if !stat.seqnum.get_addr().is_invalid() {

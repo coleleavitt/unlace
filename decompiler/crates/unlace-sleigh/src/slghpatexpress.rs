@@ -15,15 +15,15 @@
 //! an operand's defining expression without symbol state and still returns an
 //! error. This limitation does not mean the equation compiler is absent.
 
-use unlace_base::address::{sign_extend, zero_extend, Address};
+use std::sync::OnceLock;
+use unlace_base::address::{Address, sign_extend, zero_extend};
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::marshal::{Decoder, Encoder};
 use unlace_base::space::AddrSpace;
 use unlace_base::types::Wrap;
-use std::sync::OnceLock;
 
 use crate::slghpattern::{
-    sla, ContextPattern, DisjointPattern, InstructionPattern, Pattern, PatternBlock,
+    ContextPattern, DisjointPattern, InstructionPattern, Pattern, PatternBlock, sla,
 };
 
 // ---------------------------------------------------------------------------
@@ -184,7 +184,10 @@ impl TokenField {
         bend: i32,
     ) -> TokenField {
         let (bytestart, byteend) = if tok_bigendian {
-            ((tok_size * 8 - bend - 1) / 8, (tok_size * 8 - bstart - 1) / 8)
+            (
+                (tok_size * 8 - bend - 1) / 8,
+                (tok_size * 8 - bstart - 1) / 8,
+            )
         } else {
             (bstart / 8, bend / 8)
         };
@@ -870,7 +873,10 @@ pub struct UnaryExpression {
 impl UnaryExpression {
     /// C++ `UnaryExpression(PatternExpression *u)`.
     pub fn new(u: PatternExpression) -> UnaryExpression {
-        UnaryExpression { unary: Box::new(u), prepared: OnceLock::from(None) }
+        UnaryExpression {
+            unary: Box::new(u),
+            prepared: OnceLock::from(None),
+        }
     }
 
     /// C++ `UnaryExpression::getUnary`.
@@ -941,15 +947,20 @@ impl PatternExpression {
             return value.get_value(walker);
         }
         let prepared = match self {
-            Self::Plus(b) | Self::Sub(b) | Self::Mult(b) | Self::LeftShift(b)
-            | Self::RightShift(b) | Self::And(b) | Self::Or(b) | Self::Xor(b)
+            Self::Plus(b)
+            | Self::Sub(b)
+            | Self::Mult(b)
+            | Self::LeftShift(b)
+            | Self::RightShift(b)
+            | Self::And(b)
+            | Self::Or(b)
+            | Self::Xor(b)
             | Self::Div(b) => &b.prepared,
             Self::Minus(u) | Self::Not(u) => &u.prepared,
             Self::Value(_) => unreachable!(),
         };
-        let prepared = prepared.get_or_init(|| {
-            crate::kuna_expressionplan::ExpressionPlan::new(self).map(Box::new)
-        });
+        let prepared = prepared
+            .get_or_init(|| crate::kuna_expressionplan::ExpressionPlan::new(self).map(Box::new));
         if let Some(plan) = prepared {
             if plan.applies_to(self) {
                 return plan.get_value(walker);
@@ -962,8 +973,14 @@ impl PatternExpression {
     pub(crate) fn prepare_runtime(&mut self) {
         match self {
             Self::Value(_) => {}
-            Self::Plus(b) | Self::Sub(b) | Self::Mult(b) | Self::LeftShift(b)
-            | Self::RightShift(b) | Self::And(b) | Self::Or(b) | Self::Xor(b)
+            Self::Plus(b)
+            | Self::Sub(b)
+            | Self::Mult(b)
+            | Self::LeftShift(b)
+            | Self::RightShift(b)
+            | Self::And(b)
+            | Self::Or(b)
+            | Self::Xor(b)
             | Self::Div(b) => b.prepared = OnceLock::new(),
             Self::Minus(u) | Self::Not(u) => u.prepared = OnceLock::new(),
         }
@@ -1372,7 +1389,9 @@ impl TokenPattern {
             build_little_block(tok.size, bitstart, bitend, value)
         };
         TokenPattern {
-            pattern: Pattern::Disjoint(DisjointPattern::Instruction(InstructionPattern::new(block))),
+            pattern: Pattern::Disjoint(DisjointPattern::Instruction(InstructionPattern::new(
+                block,
+            ))),
             toklist: vec![tok],
             leftellipsis: false,
             rightellipsis: false,
@@ -1449,11 +1468,7 @@ impl TokenPattern {
     /// C++ `TokenPattern::resolveTokens`: decide how `tok1`/`tok2` align,
     /// returning the shift `tok2` needs and storing the resulting token list
     /// and ellipses into `self`.
-    fn resolve_tokens(
-        &mut self,
-        tok1: &TokenPattern,
-        tok2: &TokenPattern,
-    ) -> KunaResult<i32> {
+    fn resolve_tokens(&mut self, tok1: &TokenPattern, tok2: &TokenPattern) -> KunaResult<i32> {
         let mut reversedirection = false;
         self.leftellipsis = false;
         self.rightellipsis = false;
@@ -1490,7 +1505,9 @@ impl TokenPattern {
                     l1, minsize
                 )));
             } else if l1 == l2 {
-                return Err(KunaError::sleigh("Pattern size cannot vary (missing '...'?)"));
+                return Err(KunaError::sleigh(
+                    "Pattern size cannot vary (missing '...'?)",
+                ));
             }
         } else if tok1.rightellipsis {
             if tok2.leftellipsis {
@@ -1503,7 +1520,9 @@ impl TokenPattern {
                     l1, minsize
                 )));
             } else if l1 == l2 {
-                return Err(KunaError::sleigh("Pattern size cannot vary (missing '...'?)"));
+                return Err(KunaError::sleigh(
+                    "Pattern size cannot vary (missing '...'?)",
+                ));
             }
         } else if tok2.leftellipsis {
             reversedirection = true;
@@ -1513,7 +1532,9 @@ impl TokenPattern {
                     l2, minsize
                 )));
             } else if l1 == l2 {
-                return Err(KunaError::sleigh("Pattern size cannot vary (missing '...'?)"));
+                return Err(KunaError::sleigh(
+                    "Pattern size cannot vary (missing '...'?)",
+                ));
             }
         } else if tok2.rightellipsis {
             if l2 != minsize {
@@ -1522,7 +1543,9 @@ impl TokenPattern {
                     l2, minsize
                 )));
             } else if l1 == l2 {
-                return Err(KunaError::sleigh("Pattern size cannot vary (missing '...'?)"));
+                return Err(KunaError::sleigh(
+                    "Pattern size cannot vary (missing '...'?)",
+                ));
             }
         } else if l2 != l1 {
             return Err(KunaError::sleigh(format!(
@@ -1619,7 +1642,10 @@ impl TokenPattern {
         if res.rightellipsis && res.leftellipsis {
             return Err(KunaError::sleigh("Double ellipsis in pattern"));
         }
-        res.pattern = self.pattern.do_and(&tokpat.pattern, sa.max(0)).simplify_clone();
+        res.pattern = self
+            .pattern
+            .do_and(&tokpat.pattern, sa.max(0))
+            .simplify_clone();
         Ok(res)
     }
 
@@ -1720,7 +1746,12 @@ fn build_big_block(size: i32, bitstart: i32, bitend: i32, mut value: i64) -> Pat
 /// C++ static `TokenPattern::buildLittleBlock(int4 size,int4 bitstart,int4
 /// bitend,intb value)`: pattern block for a littleendian contiguous bit
 /// range.
-fn build_little_block(size: i32, mut bitstart: i32, mut bitend: i32, mut value: i64) -> PatternBlock {
+fn build_little_block(
+    size: i32,
+    mut bitstart: i32,
+    mut bitend: i32,
+    mut value: i64,
+) -> PatternBlock {
     let _ = size; // C++ takes size but never reads it in this branch
     let mut startbit = (bitstart / 8) * 8;
     let endbit = (bitend / 8) * 8;
@@ -1840,17 +1871,35 @@ pub enum PatternEquation {
     /// C++ `UnconstrainedEquation(PatternExpression*)`.
     Unconstrained { patex: PatternExpression },
     /// C++ `EqualEquation(PatternValue*, PatternExpression*)`.
-    Equal { lhs: PatternValue, rhs: PatternExpression },
+    Equal {
+        lhs: PatternValue,
+        rhs: PatternExpression,
+    },
     /// C++ `NotEqualEquation`.
-    NotEqual { lhs: PatternValue, rhs: PatternExpression },
+    NotEqual {
+        lhs: PatternValue,
+        rhs: PatternExpression,
+    },
     /// C++ `LessEquation`.
-    Less { lhs: PatternValue, rhs: PatternExpression },
+    Less {
+        lhs: PatternValue,
+        rhs: PatternExpression,
+    },
     /// C++ `LessEqualEquation`.
-    LessEqual { lhs: PatternValue, rhs: PatternExpression },
+    LessEqual {
+        lhs: PatternValue,
+        rhs: PatternExpression,
+    },
     /// C++ `GreaterEquation`.
-    Greater { lhs: PatternValue, rhs: PatternExpression },
+    Greater {
+        lhs: PatternValue,
+        rhs: PatternExpression,
+    },
     /// C++ `GreaterEqualEquation`.
-    GreaterEqual { lhs: PatternValue, rhs: PatternExpression },
+    GreaterEqual {
+        lhs: PatternValue,
+        rhs: PatternExpression,
+    },
     /// C++ `EquationAnd(left,right)`.
     And { left: EqId, right: EqId },
     /// C++ `EquationOr(left,right)`.
@@ -1909,15 +1958,11 @@ impl EquationArena {
             PatternEquation::Unconstrained { patex } => patex
                 .gen_min_pattern(ops)
                 .ok_or_else(|| KunaError::sleigh("Operand used before its pattern is known")),
-            PatternEquation::Equal { lhs, rhs } => {
-                gen_comparison(lhs, rhs, ops, Comparison::Equal)
-            }
+            PatternEquation::Equal { lhs, rhs } => gen_comparison(lhs, rhs, ops, Comparison::Equal),
             PatternEquation::NotEqual { lhs, rhs } => {
                 gen_comparison(lhs, rhs, ops, Comparison::NotEqual)
             }
-            PatternEquation::Less { lhs, rhs } => {
-                gen_comparison(lhs, rhs, ops, Comparison::Less)
-            }
+            PatternEquation::Less { lhs, rhs } => gen_comparison(lhs, rhs, ops, Comparison::Less),
             PatternEquation::LessEqual { lhs, rhs } => {
                 gen_comparison(lhs, rhs, ops, Comparison::LessEqual)
             }
@@ -2193,7 +2238,7 @@ mod tests {
     use std::rc::Rc;
 
     use unlace_base::marshal::{Decoder, PackedDecode, PackedEncode};
-    use unlace_base::space::{addrspace_flags, spacetype, AddrSpaceManager, ConstantSpace};
+    use unlace_base::space::{AddrSpaceManager, ConstantSpace, addrspace_flags, spacetype};
 
     use super::*;
 
@@ -2729,7 +2774,10 @@ mod tests {
             lhs: op8_field(0, 3),
             rhs: cexpr(0x5),
         });
-        let and = arena.alloc(PatternEquation::And { left: hi, right: lo });
+        let and = arena.alloc(PatternEquation::And {
+            left: hi,
+            right: lo,
+        });
         let tp = arena.gen_pattern(and, &[]).unwrap();
         // single instruction pattern with mask 0xff, value 0xa5
         let pat = tp.get_pattern();
@@ -2807,7 +2855,11 @@ mod tests {
         // right: operand 0 sets (0,-1,0); the Cat advances offset by operand
         // 0's minimum length (1) before resolving operand 1.
         assert!(sink.offsets.contains(&(0, -1, 0)));
-        assert!(sink.offsets.iter().any(|&(i, b, o)| i == 1 && b == -1 && o == 1));
+        assert!(
+            sink.offsets
+                .iter()
+                .any(|&(i, b, o)| i == 1 && b == -1 && o == 1)
+        );
     }
 
     #[test]

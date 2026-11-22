@@ -18,7 +18,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 static TEMP_ID: AtomicU64 = AtomicU64::new(0);
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// A checked-in x86-64 ELF with real code and real symbols — the fixture both
@@ -50,7 +53,10 @@ fn run_kuna(args: &[&str]) -> (String, String, Option<i32>) {
 
 fn json_field(doc: &str, key: &str) -> Option<String> {
     let document: serde_json::Value = serde_json::from_str(doc).expect("valid CLI JSON");
-    document.get(key).and_then(serde_json::Value::as_str).map(str::to_owned)
+    document
+        .get(key)
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned)
 }
 
 /// Write `bytes` to a private scratch file and return its path.
@@ -128,7 +134,15 @@ fn data_only_object() -> Vec<u8> {
     }
     // `.data`: SHT_PROGBITS, SHF_ALLOC|SHF_WRITE — allocated, never executed.
     shdr(&mut out, shoff + SHDR, 1, 1, 0x3, data_off as u64, 4);
-    shdr(&mut out, shoff + 2 * SHDR, 7, 3, 0, names_off as u64, names.len() as u64);
+    shdr(
+        &mut out,
+        shoff + 2 * SHDR,
+        7,
+        3,
+        0,
+        names_off as u64,
+        names.len() as u64,
+    );
     out
 }
 
@@ -138,21 +152,42 @@ fn data_only_object() -> Vec<u8> {
 /// single-function call answers exit 0 with the `decompile-all` record shape.
 #[test]
 fn decompile_json_emits_the_record_shape_for_one_function() {
-    let (stdout, stderr, code) =
-        run_kuna(&["decompile", &fixture(), "_DT_INIT", "--json", "--sleighpath", &specs()]);
+    let (stdout, stderr, code) = run_kuna(&[
+        "decompile",
+        &fixture(),
+        "_DT_INIT",
+        "--json",
+        "--sleighpath",
+        &specs(),
+    ]);
     if code != Some(0) {
         panic!("unlace decompile --json failed: {stderr}");
     }
-    assert!(stdout.trim_start().starts_with('{'), "not a JSON object:\n{stdout}");
+    assert!(
+        stdout.trim_start().starts_with('{'),
+        "not a JSON object:\n{stdout}"
+    );
     assert!(stdout.contains("\"functions\": ["), "{stdout}");
     assert!(stdout.contains("\"name\": \"_DT_INIT\""), "{stdout}");
-    assert!(stdout.contains("\"code\": \""), "the record must carry code:\n{stdout}");
+    assert!(
+        stdout.contains("\"code\": \""),
+        "the record must carry code:\n{stdout}"
+    );
     // The fields the text surface could never report: they are the reason the
     // flag exists, so their absence is a regression even with valid JSON.
-    for field in ["\"address\":", "\"address_hex\":", "\"size\":", "\"line_mappings\":", "\"variables\":"] {
+    for field in [
+        "\"address\":",
+        "\"address_hex\":",
+        "\"size\":",
+        "\"line_mappings\":",
+        "\"variables\":",
+    ] {
         assert!(stdout.contains(field), "missing {field} in:\n{stdout}");
     }
-    assert!(stdout.contains("\"error\": null"), "a healthy run reports no error:\n{stdout}");
+    assert!(
+        stdout.contains("\"error\": null"),
+        "a healthy run reports no error:\n{stdout}"
+    );
 }
 
 /// One shape, one emitter: `decompile --json <f>` and
@@ -169,7 +204,14 @@ fn decompile_json_is_byte_identical_to_decompile_all_for_one_function() {
         &["--option", "outlang", "go"][..],
         &["--language", "rust", "--option", "outlang", "go"][..],
         &["--option", "outlang", "go", "--language", "c"][..],
-        &["--option", "setlanguage", "rust-language", "--option", "setlanguage", "c-language"][..],
+        &[
+            "--option",
+            "setlanguage",
+            "rust-language",
+            "--option",
+            "setlanguage",
+            "c-language",
+        ][..],
     ] {
         let mut one_args = vec!["decompile", &bin, "_DT_INIT", "--json", "--sleighpath", &sp];
         one_args.extend_from_slice(options);
@@ -178,12 +220,25 @@ fn decompile_json_is_byte_identical_to_decompile_all_for_one_function() {
             panic!("unlace decompile --json failed: {stderr}");
         }
         let mut all_args = vec![
-            "decompile-all", &bin, "--functions", "_DT_INIT", "--json", "--sleighpath", &sp,
+            "decompile-all",
+            &bin,
+            "--functions",
+            "_DT_INIT",
+            "--json",
+            "--sleighpath",
+            &sp,
         ];
         all_args.extend_from_slice(options);
         let (all, stderr, code) = run_kuna(&all_args);
-        assert_eq!(code, Some(0), "unlace decompile-all --json failed: {stderr}");
-        assert_eq!(one, all, "the two surfaces must emit one document: {options:?}");
+        assert_eq!(
+            code,
+            Some(0),
+            "unlace decompile-all --json failed: {stderr}"
+        );
+        assert_eq!(
+            one, all,
+            "the two surfaces must emit one document: {options:?}"
+        );
     }
 }
 
@@ -193,15 +248,30 @@ fn decompile_json_is_byte_identical_to_decompile_all_for_one_function() {
 fn decompile_json_selects_by_address_too() {
     let bin = fixture();
     let sp = specs();
-    let (auto, stderr, code) = run_kuna(&["decompile", &bin, "0x1000", "--json", "--sleighpath", &sp]);
+    let (auto, stderr, code) =
+        run_kuna(&["decompile", &bin, "0x1000", "--json", "--sleighpath", &sp]);
     if code != Some(0) {
         panic!("unlace decompile 0x1000 --json failed: {stderr}");
     }
     assert!(auto.contains("\"address_hex\": \"0x1000\""), "{auto}");
-    let (explicit, stderr, code) =
-        run_kuna(&["decompile", &bin, "1000", "--addr", "--json", "--sleighpath", &sp]);
-    assert_eq!(code, Some(0), "unlace decompile --addr --json failed: {stderr}");
-    assert_eq!(auto, explicit, "the two ways of naming an address must agree");
+    let (explicit, stderr, code) = run_kuna(&[
+        "decompile",
+        &bin,
+        "1000",
+        "--addr",
+        "--json",
+        "--sleighpath",
+        &sp,
+    ]);
+    assert_eq!(
+        code,
+        Some(0),
+        "unlace decompile --addr --json failed: {stderr}"
+    );
+    assert_eq!(
+        auto, explicit,
+        "the two ways of naming an address must agree"
+    );
 }
 
 /// The `decomp_dbg`-only flags are REFUSED, not ignored: the `--json` path loads
@@ -230,10 +300,23 @@ fn json_refuses_the_flags_it_cannot_honor() {
 /// `error`, so a caller never has to reconcile empty stdout with prose stderr.
 #[test]
 fn an_unresolved_selector_answers_with_an_error_envelope() {
-    let (stdout, stderr, code) =
-        run_kuna(&["decompile", &fixture(), "nosuchfunction", "--json", "--sleighpath", &specs()]);
-    assert_eq!(code, Some(1), "an unresolved selector is not a success: {stderr}");
-    assert!(stdout.trim_start().starts_with('{'), "still JSON:\n{stdout}");
+    let (stdout, stderr, code) = run_kuna(&[
+        "decompile",
+        &fixture(),
+        "nosuchfunction",
+        "--json",
+        "--sleighpath",
+        &specs(),
+    ]);
+    assert_eq!(
+        code,
+        Some(1),
+        "an unresolved selector is not a success: {stderr}"
+    );
+    assert!(
+        stdout.trim_start().starts_with('{'),
+        "still JSON:\n{stdout}"
+    );
     assert!(stdout.contains("\"count\": 0"), "{stdout}");
     let error = json_field(&stdout, "error").expect("the envelope carries the reason");
     assert!(error.contains("nosuchfunction"), "{error}");
@@ -259,7 +342,11 @@ fn a_total_discovery_failure_is_reported_as_a_failure() {
         let mut argv = surface.clone();
         argv.extend_from_slice(&["--sleighpath", sp.as_str()]);
         let (stdout, stderr, code) = run_kuna(&argv);
-        assert_ne!(code, Some(0), "{surface:?} must not report success: {stderr}");
+        assert_ne!(
+            code,
+            Some(0),
+            "{surface:?} must not report success: {stderr}"
+        );
         assert!(
             stderr.to_lowercase().contains("no functions"),
             "{surface:?} must say why on stderr, got: {stderr}"
@@ -280,14 +367,28 @@ fn a_total_discovery_failure_is_reported_as_a_failure() {
 #[test]
 fn a_packed_image_is_named_as_packed() {
     let image = temp_image("upx", &stripped_executable(b"UPX!\x00\x00\x00\x00"));
-    let (stdout, stderr, code) =
-        run_kuna(&["functions", image.to_str().unwrap(), "--json", "--sleighpath", &specs()]);
+    let (stdout, stderr, code) = run_kuna(&[
+        "functions",
+        image.to_str().unwrap(),
+        "--json",
+        "--sleighpath",
+        &specs(),
+    ]);
     let _ = std::fs::remove_file(&image);
     assert_ne!(code, Some(0), "{stderr}");
-    assert!(stderr.contains("UPX-packed"), "the packer must be named: {stderr}");
-    assert!(stderr.contains("unlace unpack"), "the recovery must be named: {stderr}");
+    assert!(
+        stderr.contains("UPX-packed"),
+        "the packer must be named: {stderr}"
+    );
+    assert!(
+        stderr.contains("unlace unpack"),
+        "the recovery must be named: {stderr}"
+    );
     let error = json_field(&stdout, "error").expect("the document carries it too");
-    assert!(error.contains("UPX-packed") && error.contains("unlace unpack"), "{error}");
+    assert!(
+        error.contains("UPX-packed") && error.contains("unlace unpack"),
+        "{error}"
+    );
 }
 
 /// The legitimate empty case, which the loud failure must NOT break: an image
@@ -296,10 +397,19 @@ fn a_packed_image_is_named_as_packed() {
 #[test]
 fn an_image_with_no_code_keeps_its_empty_success() {
     let image = temp_image("dataonly", &data_only_object());
-    let (stdout, stderr, code) =
-        run_kuna(&["functions", image.to_str().unwrap(), "--json", "--sleighpath", &specs()]);
+    let (stdout, stderr, code) = run_kuna(&[
+        "functions",
+        image.to_str().unwrap(),
+        "--json",
+        "--sleighpath",
+        &specs(),
+    ]);
     let _ = std::fs::remove_file(&image);
-    assert_eq!(code, Some(0), "a data-only object is not a failed run: {stderr}");
+    assert_eq!(
+        code,
+        Some(0),
+        "a data-only object is not a failed run: {stderr}"
+    );
     assert!(stdout.contains("\"count\": 0"), "{stdout}");
     assert!(stdout.contains("\"error\": null"), "{stdout}");
     assert!(!stderr.to_lowercase().contains("no functions"), "{stderr}");
@@ -309,11 +419,15 @@ fn an_image_with_no_code_keeps_its_empty_success() {
 /// the inventory it always had.
 #[test]
 fn a_run_that_finds_functions_still_exits_zero() {
-    let (stdout, stderr, code) = run_kuna(&["functions", &fixture(), "--json", "--sleighpath", &specs()]);
+    let (stdout, stderr, code) =
+        run_kuna(&["functions", &fixture(), "--json", "--sleighpath", &specs()]);
     if code != Some(0) {
         panic!("unlace functions failed: {stderr}");
     }
-    assert!(!stdout.contains("\"count\": 0"), "the fixture has functions:\n{stdout}");
+    assert!(
+        !stdout.contains("\"count\": 0"),
+        "the fixture has functions:\n{stdout}"
+    );
     assert!(stdout.contains("\"error\": null"), "{stdout}");
     assert!(stdout.contains("\"name\": \"_DT_INIT\""), "{stdout}");
     assert!(stderr.is_empty(), "a healthy run says nothing: {stderr}");

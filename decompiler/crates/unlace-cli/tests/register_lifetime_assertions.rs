@@ -374,10 +374,13 @@ fn equal_width_renames_survive_separate_decompiles() {
                         })
                 })
                 .collect();
-            let transcript = console(&format!(
-            "{}\nload function {function}\ndecompile\n{first}\ndecompile\n{second}\ndecompile\nprint C",
-            declarations.join("\n")
-        ), "lifetimes_x86_64");
+            let transcript = console(
+                &format!(
+                    "{}\nload function {function}\ndecompile\n{first}\ndecompile\n{second}\ndecompile\nprint C",
+                    declarations.join("\n")
+                ),
+                "lifetimes_x86_64",
+            );
             assert!(!transcript.contains("Execution error:"), "{transcript}");
             assert!(
                 transcript.contains("uint8 recovered_number;"),

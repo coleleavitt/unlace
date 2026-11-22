@@ -60,7 +60,8 @@ use object::read::{Object, ObjectSymbol};
 use object::{SymbolFlags, SymbolKind};
 
 use crate::pass::{
-    AnalysisCtx, AnalysisOutput, AnalysisPass, ContextPaint, Phase, SymFact, SymKind, TrackedRegFact,
+    AnalysisCtx, AnalysisOutput, AnalysisPass, ContextPaint, Phase, SymFact, SymKind,
+    TrackedRegFact,
 };
 
 /// The MIPS PIC global-pointer setup register. A function is reached via
@@ -149,7 +150,11 @@ fn scan_mips_markers(file: &object::File, t9_size: u32) -> AnalysisOutput {
         } else {
             addr
         };
-        out.tracked_regs.push(TrackedRegFact { func_addr: addr, reg: T9, value });
+        out.tracked_regs.push(TrackedRegFact {
+            func_addr: addr,
+            reg: T9,
+            value,
+        });
     }
 
     out
@@ -265,7 +270,11 @@ pub(crate) fn scan_mips_isa_markers(file: &object::File) -> AnalysisOutput {
             (addr & !1, true, true)
         } else {
             // (2) st_other marker; the symbol value is already the even entry.
-            (addr, mips_mode == STO_MIPS_MIPS16 || mips_mode == STO_MIPS_MICROMIPS, false)
+            (
+                addr,
+                mips_mode == STO_MIPS_MIPS16 || mips_mode == STO_MIPS_MICROMIPS,
+                false,
+            )
         };
 
         if !enable_isa {
@@ -274,7 +283,12 @@ pub(crate) fn scan_mips_isa_markers(file: &object::File) -> AnalysisOutput {
 
         // setValue(ISA_MODE, address, address, 1): paint the alternate-ISA bit at
         // the even entry. REUSES the context-paint commit arm (no new arm).
-        out.context_paints.push(ContextPaint { addr: even, end: None, var: ISA_MODE, value: 1 });
+        out.context_paints.push(ContextPaint {
+            addr: even,
+            end: None,
+            var: ISA_MODE,
+            value: 1,
+        });
 
         // MIPS16-FUNC re-home (only for the LSB-set form): emit the FunctionSymbol
         // at the EVEN entry so `load function <name>` / a CALL resolves at the
@@ -328,20 +342,38 @@ mod tests {
             (Architecture::Mips64, 0x808e0000, Architecture::Mips64),
         ] {
             let mut object = Writer::new(BinaryFormat::Elf, arch, Endianness::Big);
-            object.flags = FileFlags::Elf { os_abi: 0, abi_version: 0, e_flags };
+            object.flags = FileFlags::Elf {
+                os_abi: 0,
+                abi_version: 0,
+                e_flags,
+            };
             let section = object.add_section(Vec::new(), b".text".to_vec(), SectionKind::Text);
             object.append_section_data(section, &[0; 4], 4);
-            for (name, address) in [(b"low".as_slice(), 0x1000), (b"high".as_slice(), 0x81234560)] {
-                object.add_symbol(Symbol { name: name.to_vec(), value: address, size: 4,
-                    kind: SymbolKind::Text, scope: SymbolScope::Linkage, weak: false,
-                    section: SymbolSection::Section(section), flags: SymbolFlags::None });
+            for (name, address) in [
+                (b"low".as_slice(), 0x1000),
+                (b"high".as_slice(), 0x81234560),
+            ] {
+                object.add_symbol(Symbol {
+                    name: name.to_vec(),
+                    value: address,
+                    size: 4,
+                    kind: SymbolKind::Text,
+                    scope: SymbolScope::Linkage,
+                    weak: false,
+                    section: SymbolSection::Section(section),
+                    flags: SymbolFlags::None,
+                });
             }
             let bytes = object.write().unwrap();
             let file = object::File::parse(bytes.as_slice()).unwrap();
             assert_eq!(file.architecture(), expected);
             let out = scan_mips_markers(&file, 8);
             assert_eq!(t9_seed_at(&out, 0x1000), Some(0x1000));
-            let high = if file.is_64() { 0x81234560 } else { 0xffffffff81234560 };
+            let high = if file.is_64() {
+                0x81234560
+            } else {
+                0xffffffff81234560
+            };
             assert_eq!(t9_seed_at(&out, 0x81234560), Some(high), "{expected:?}");
         }
     }
@@ -436,19 +468,37 @@ mod tests {
         let file = object::File::parse(bytes.as_slice()).expect("parse mips_gp_le32");
         let out = scan_mips_markers(&file, 4);
 
-        assert!(!out.tracked_regs.is_empty(), "must emit at least one t9 seed");
+        assert!(
+            !out.tracked_regs.is_empty(),
+            "must emit at least one t9 seed"
+        );
         // Every fact seeds t9 to its own func_addr (t9 == entry).
         for t in &out.tracked_regs {
             assert_eq!(t.reg, T9, "only t9 is seeded");
-            assert_eq!(t.value, t.func_addr, "t9 == function entry (PIC convention)");
+            assert_eq!(
+                t.value, t.func_addr,
+                "t9 == function entry (PIC convention)"
+            );
             assert_ne!(t.func_addr, 0, "no UND/zero-address function is seeded");
         }
 
         // Pin the load-bearing entries: `_init`@0x4004cc (PIC `addu gp,gp,t9`),
         // `main`@0x400704, `bump`@0x4006f0.
-        assert_eq!(t9_seed_at(&out, 0x4004cc), Some(0x4004cc), "_init t9 = entry");
-        assert_eq!(t9_seed_at(&out, 0x400704), Some(0x400704), "main t9 = entry");
-        assert_eq!(t9_seed_at(&out, 0x4006f0), Some(0x4006f0), "bump t9 = entry");
+        assert_eq!(
+            t9_seed_at(&out, 0x4004cc),
+            Some(0x4004cc),
+            "_init t9 = entry"
+        );
+        assert_eq!(
+            t9_seed_at(&out, 0x400704),
+            Some(0x400704),
+            "main t9 = entry"
+        );
+        assert_eq!(
+            t9_seed_at(&out, 0x4006f0),
+            Some(0x4006f0),
+            "bump t9 = entry"
+        );
     }
 
     /// `_gp` recovery cross-check (the global GP, used for documentation, not the
@@ -461,7 +511,11 @@ mod tests {
         let gp = recover_gp_value(&file).expect("fixture carries a _gp symbol");
         assert_eq!(gp, 0x419030, "_gp value from the symbol table");
         // _gp = .got + 0x7ff0 (the MIPS GP-bias convention).
-        assert_eq!(gp, 0x411040 + MIPS_GP_BIAS, "_gp == .got + 0x7ff0 (GP bias)");
+        assert_eq!(
+            gp,
+            0x411040 + MIPS_GP_BIAS,
+            "_gp == .got + 0x7ff0 (GP bias)"
+        );
     }
 
     #[test]
@@ -480,7 +534,10 @@ mod tests {
         let actual = scan_mips_markers(&n32, 8).tracked_regs;
         assert_eq!(actual.len(), seeds.len());
         for (actual, expected) in actual.iter().zip(&seeds) {
-            assert_eq!((actual.func_addr, actual.reg, actual.value), (expected.func_addr, expected.reg, expected.value));
+            assert_eq!(
+                (actual.func_addr, actual.reg, actual.value),
+                (expected.func_addr, expected.reg, expected.value)
+            );
         }
         let actual = crate::loader::elf_plt::resolve_plt_imports(&n32, &bytes);
         assert_eq!(actual.len(), imports.len());
@@ -535,7 +592,10 @@ mod tests {
         let file = object::File::parse(bytes.as_slice()).expect("parse mips16_le32");
         let out = scan_mips_isa_markers(&file);
 
-        assert!(!out.context_paints.is_empty(), "must emit at least one ISA_MODE paint");
+        assert!(
+            !out.context_paints.is_empty(),
+            "must emit at least one ISA_MODE paint"
+        );
         // Every paint is ISA_MODE=1 at an even address (LSB always masked off).
         for p in &out.context_paints {
             assert_eq!(p.var, ISA_MODE, "only ISA_MODE is painted");
@@ -550,8 +610,14 @@ mod tests {
             "m16_square@0x400130 must paint ISA_MODE=1"
         );
         // The MIPS32 functions are NOT painted (default ISA_MODE=0 decode).
-        assert!(isa_paints_at(&out, 0x400138).is_empty(), "m32_caller must not be painted");
-        assert!(isa_paints_at(&out, 0x400158).is_empty(), "_start must not be painted");
+        assert!(
+            isa_paints_at(&out, 0x400138).is_empty(),
+            "m32_caller must not be painted"
+        );
+        assert!(
+            isa_paints_at(&out, 0x400158).is_empty(),
+            "_start must not be painted"
+        );
     }
 
     /// The LSB-set form re-homes the FUNC symbol to the even entry (the MIPS analog

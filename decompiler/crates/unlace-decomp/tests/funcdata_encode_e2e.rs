@@ -23,13 +23,13 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use unlace_base::address::{Address, ELEM_ADDR, ATTRIB_UNIQ, ELEM_RANGELIST, ELEM_SEQNUM};
+use unlace_base::address::{ATTRIB_UNIQ, Address, ELEM_ADDR, ELEM_RANGELIST, ELEM_SEQNUM};
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::marshal::{
-    Decoder, IdRegistry, PackedDecode, PackedEncode, ATTRIB_NAME, ATTRIB_REF, ATTRIB_SIZE,
-    ELEM_VOID,
+    ATTRIB_NAME, ATTRIB_REF, ATTRIB_SIZE, Decoder, ELEM_VOID, IdRegistry, PackedDecode,
+    PackedEncode,
 };
-use unlace_base::space::{spacetype, AddrSpaceManager};
+use unlace_base::space::{AddrSpaceManager, spacetype};
 use unlace_base::types::int4;
 use unlace_base::xml::{DocumentStorage, Element};
 
@@ -38,15 +38,15 @@ use unlace_decomp::block::ELEM_BLOCK;
 use unlace_decomp::decompile_drive::decompile_func;
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::funcdata_encode::{ELEM_AST, ELEM_FUNCTION, ELEM_IOP, ELEM_VARNODES};
-use unlace_decomp::options::{register_option_elements, OptionDatabase};
+use unlace_decomp::options::{OptionDatabase, register_option_elements};
 use unlace_decomp::prettyprint::ids::{ATTRIB_OPREF, ATTRIB_VARREF};
-use unlace_decomp::sleigh_arch::{register_sleigh_arch_ids, LanguageDatabase};
+use unlace_decomp::sleigh_arch::{LanguageDatabase, register_sleigh_arch_ids};
 use unlace_decomp::xml_arch::{XmlArchitecture, XmlArchitectureCapability};
 
 use unlace_num::pcoderaw::{ATTRIB_CODE, ELEM_SPACEID};
 use unlace_sleigh::loadimage::LoadImage;
 use unlace_sleigh::loadimage_xml::register_loadimage_xml_ids;
-use unlace_sleigh::translate::{register_translate_ids, ELEM_OP};
+use unlace_sleigh::translate::{ELEM_OP, register_translate_ids};
 
 // ===========================================================================
 // Fixture selection (same as decompile_e2e.rs).
@@ -55,7 +55,10 @@ use unlace_sleigh::translate::{register_translate_ids, ELEM_OP};
 const FIXTURES: &[&str] = &["boolless", "ccmp", "gp", "lzcount", "condexesub"];
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 // ===========================================================================
@@ -94,7 +97,9 @@ fn find_named(el: &Rc<Element>, name: &str, out: &mut Vec<Rc<Element>>) {
 }
 
 fn attr(el: &Element, name: &str) -> Option<String> {
-    el.get_attribute_value(name).ok().map(|b| String::from_utf8_lossy(b).into_owned())
+    el.get_attribute_value(name)
+        .ok()
+        .map(|b| String::from_utf8_lossy(b).into_owned())
 }
 
 fn parse_option_com(text: &str) -> Option<(String, String, String, String)> {
@@ -110,7 +115,9 @@ fn parse_option_com(text: &str) -> Option<(String, String, String, String)> {
 }
 
 fn parse_datatest(stem: &str) -> Result<DataTest, String> {
-    let path = repo_root().join("tests/datatests").join(format!("{stem}.xml"));
+    let path = repo_root()
+        .join("tests/datatests")
+        .join(format!("{stem}.xml"));
     let xml = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
     let mut store = DocumentStorage::new();
     let root = store
@@ -144,7 +151,12 @@ fn parse_datatest(stem: &str) -> Result<DataTest, String> {
         .filter_map(|c| parse_option_com(&String::from_utf8_lossy(c.get_content())))
         .collect();
 
-    Ok(DataTest { binaryimage, arch_id, symbols, options })
+    Ok(DataTest {
+        binaryimage,
+        arch_id,
+        symbols,
+        options,
+    })
 }
 
 // ===========================================================================
@@ -181,11 +193,13 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
     let capability = XmlArchitectureCapability::new();
     let mut arch = capability.build_architecture("datatest", "");
 
-    arch.build_loader(Rc::clone(&dt.binaryimage)).map_err(|e| format!("build_loader: {e}"))?;
+    arch.build_loader(Rc::clone(&dt.binaryimage))
+        .map_err(|e| format!("build_loader: {e}"))?;
 
     let mut db = LanguageDatabase::new();
     db.scan_for_sleigh_directories(root.join("specs").to_str().unwrap());
-    db.get_descriptions(&registry).map_err(|e| format!("collect ldefs: {e}"))?;
+    db.get_descriptions(&registry)
+        .map_err(|e| format!("collect ldefs: {e}"))?;
 
     arch.sleigh_mut().set_archid(&dt.arch_id);
     arch.sleigh_mut()
@@ -195,7 +209,10 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
         return Err("language index unresolved".to_string());
     }
 
-    let specs = arch.sleigh().build_spec_file(&db).map_err(|e| format!("build_spec_file: {e}"))?;
+    let specs = arch
+        .sleigh()
+        .build_spec_file(&db)
+        .map_err(|e| format!("build_spec_file: {e}"))?;
     let resolved_sla = specs.slafile.ok_or("build_spec_file resolved no .sla")?;
     let sla = std::fs::read(&resolved_sla).map_err(|e| format!("read sla: {e}"))?;
     arch.sleigh_mut()
@@ -215,7 +232,10 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
     arch.open_image(unsafe { &*manager_ptr }, &registry)
         .map_err(|e| format!("open_image: {e}"))?;
     let img = arch.take_loader().ok_or("loader vanished after open")?;
-    arch.sleigh_mut().base_mut().unwrap().set_loader(Box::new(img));
+    arch.sleigh_mut()
+        .base_mut()
+        .unwrap()
+        .set_loader(Box::new(img));
 
     Ok(arch)
 }
@@ -291,7 +311,8 @@ fn decode_ast(dec: &mut PackedDecode, obs: &mut Observed) -> KunaResult<()> {
                 }
                 assert_eq!(a, ELEM_ADDR.get_id(), "<varnodes> child is not <addr>");
                 let aid = dec.open_element()?;
-                obs.varnode_refs.insert(dec.read_unsigned_integer_id(&ATTRIB_REF)?);
+                obs.varnode_refs
+                    .insert(dec.read_unsigned_integer_id(&ATTRIB_REF)?);
                 dec.close_element(aid)?;
             }
             dec.close_element(vid)?;
@@ -327,7 +348,8 @@ fn decode_block(dec: &mut PackedDecode, obs: &mut Observed) -> KunaResult<()> {
                 if first {
                     assert_eq!(oc, ELEM_SEQNUM.get_id(), "first <op> child is not <seqnum>");
                     let sid = dec.open_element()?;
-                    obs.op_uniqs.insert(dec.read_unsigned_integer_id(&ATTRIB_UNIQ)?);
+                    obs.op_uniqs
+                        .insert(dec.read_unsigned_integer_id(&ATTRIB_UNIQ)?);
                     dec.close_element(sid)?;
                     first = false;
                 } else {
@@ -388,13 +410,21 @@ fn encode_and_verify(fd: &mut Funcdata) -> Observed {
 
     let obs = decode_function(fd.get_arch().manage(), &bytes).expect("decode round-trip");
 
-    assert_eq!(obs.name, fd.get_name().as_bytes(), "<function name> mismatch");
+    assert_eq!(
+        obs.name,
+        fd.get_name().as_bytes(),
+        "<function name> mismatch"
+    );
     assert_eq!(obs.size, fd.get_size() as i64, "<function size> mismatch");
     assert!(obs.block_count >= 1, "no <block> encoded");
     assert!(obs.op_count >= 1, "no <op> encoded");
 
     // The load-bearing invariant.
-    assert_eq!(obs.varnode_refs, expected_refs(fd), "<varnodes> refs != create indices");
+    assert_eq!(
+        obs.varnode_refs,
+        expected_refs(fd),
+        "<varnodes> refs != create indices"
+    );
     assert_eq!(obs.op_uniqs, expected_uniqs(fd), "<op> uniqs != op times");
 
     obs
@@ -472,8 +502,14 @@ fn corpus_functions_encode_and_roundtrip() {
         verified >= 3,
         "expected >= 3 corpus functions to encode + round-trip, got {verified} (notes: {errors:?})"
     );
-    assert!(agg.saw_bare_ref, "no bare <addr ref> observed across real functions");
-    assert!(agg.saw_void, "no <void> slot observed across real functions");
+    assert!(
+        agg.saw_bare_ref,
+        "no bare <addr ref> observed across real functions"
+    );
+    assert!(
+        agg.saw_void,
+        "no <void> slot observed across real functions"
+    );
 }
 
 // ===========================================================================
@@ -530,7 +566,11 @@ fn decode_markup_refs(
     // The markup root is the clang <function> (EmitMarkup::begin_function opens
     // ELEM_FUNCTION, the same numeric id as the encoder's <function>).
     let root = dec.peek_element()?;
-    assert_eq!(root, ELEM_FUNCTION.get_id(), "markup root is not <function>");
+    assert_eq!(
+        root,
+        ELEM_FUNCTION.get_id(),
+        "markup root is not <function>"
+    );
     let mut oprefs = BTreeSet::new();
     let mut varrefs = BTreeSet::new();
     walk_markup(&mut dec, &mut oprefs, &mut varrefs)?;
@@ -693,7 +733,16 @@ fn markup_emits_nonempty_refs() {
         }
     }
 
-    assert!(saw_op, "doc_function_markup emitted no <opref> — MarkupRef never populated");
-    assert!(saw_var, "doc_function_markup emitted no <varref> — MarkupRef never populated");
-    assert!(found_both, "no single function's markup carried both an opref and a varref");
+    assert!(
+        saw_op,
+        "doc_function_markup emitted no <opref> — MarkupRef never populated"
+    );
+    assert!(
+        saw_var,
+        "doc_function_markup emitted no <varref> — MarkupRef never populated"
+    );
+    assert!(
+        found_both,
+        "no single function's markup carried both an opref and a varref"
+    );
 }

@@ -295,7 +295,12 @@ fn walk_procedure(
             Some((vma, *hi))
         })
         .collect();
-    ProcedureWalk { start, end, reach, calls }
+    ProcedureWalk {
+        start,
+        end,
+        reach,
+        calls,
+    }
 }
 
 /// The procedure extents the PDB and the image agree on, sorted: a start whose
@@ -306,10 +311,12 @@ fn vouched_extents(procs: &[PdbProcedure], exec: &[(u64, u64)]) -> Vec<(u64, u64
     sorted.dedup();
     let mut out = Vec::new();
     for group in sorted.chunk_by(|a, b| a.start == b.start) {
-        let [PdbProcedure {
-            start,
-            end: Some(end),
-        }] = *group
+        let [
+            PdbProcedure {
+                start,
+                end: Some(end),
+            },
+        ] = *group
         else {
             continue;
         };
@@ -420,19 +427,32 @@ mod tests {
                     fall_through: Some(next(3)),
                     ..Default::default()
                 }),
-                [0xE8, r0, r1, r2, r3, ..] => Some(InsnFlow {
-                    len: 5,
-                    fall_through: Some(next(5)),
-                    calls: vec![next(5)
-                        .wrapping_add_signed(i64::from(i32::from_le_bytes([*r0, *r1, *r2, *r3])))],
+                [0xE8, r0, r1, r2, r3, ..] => {
+                    Some(InsnFlow {
+                        len: 5,
+                        fall_through: Some(next(5)),
+                        calls: vec![next(5).wrapping_add_signed(i64::from(i32::from_le_bytes([
+                            *r0, *r1, *r2, *r3,
+                        ])))],
+                        is_call: true,
+                        ..Default::default()
+                    })
+                }
+                // FF 15 disp32: an indirect call through a memory slot -- a call
+                // with no static target (the s1b IAT no-return shape).
+                [0xFF, 0x15, ..] => Some(InsnFlow {
+                    len: 6,
+                    fall_through: Some(next(6)),
                     is_call: true,
                     ..Default::default()
                 }),
-                // FF 15 disp32: an indirect call through a memory slot -- a call
-                // with no static target (the s1b IAT no-return shape).
-                [0xFF, 0x15, ..] => Some(InsnFlow { len: 6, fall_through: Some(next(6)), is_call: true, ..Default::default() }),
                 // CD 29: int 0x29, the fastfail userop-call, also targetless.
-                [0xCD, 0x29, ..] => Some(InsnFlow { len: 2, fall_through: Some(next(2)), is_call: true, ..Default::default() }),
+                [0xCD, 0x29, ..] => Some(InsnFlow {
+                    len: 2,
+                    fall_through: Some(next(2)),
+                    is_call: true,
+                    ..Default::default()
+                }),
                 [0xC3, ..] => Some(InsnFlow {
                     len: 1,
                     ..Default::default()
@@ -645,7 +665,9 @@ mod tests {
     }
 
     /// A synthetic procedure: each tuple is `(vma, len, falls through, jumps, calls)`.
-    fn program(insns: &[(u64, u32, bool, &[u64], &[u64])]) -> impl FnMut(u64) -> Option<InsnFlow> + use<> {
+    fn program(
+        insns: &[(u64, u32, bool, &[u64], &[u64])],
+    ) -> impl FnMut(u64) -> Option<InsnFlow> + use<> {
         let map: BTreeMap<u64, InsnFlow> = insns
             .iter()
             .map(|&(vma, len, falls, jumps, calls)| {
@@ -769,22 +791,47 @@ mod tests {
             }
         };
         let mut entries = vec![0x1000, 0x100c];
-        let dropped =
-            suppress_owned_interior_entries(&mut entries, &[(0x1000, 0x1020)], |_| false, |_| false, targetless_call);
+        let dropped = suppress_owned_interior_entries(
+            &mut entries,
+            &[(0x1000, 0x1020)],
+            |_| false,
+            |_| false,
+            targetless_call,
+        );
         assert_eq!((dropped, entries), (vec![], vec![0x1000, 0x100c]));
         // With the call spelled as a plain fall-through instruction (not a call),
         // the walk reaches the interior and drops it — proving the guard is what
         // keeps it above.
         let plain = |vma: u64| match vma {
-            0x1000 => Some(InsnFlow { len: 6, fall_through: Some(0x1006), ..Default::default() }),
-            0x1006 => Some(InsnFlow { len: 6, fall_through: Some(0x100c), ..Default::default() }),
-            0x100c => Some(InsnFlow { len: 5, fall_through: Some(0x1011), ..Default::default() }),
-            0x1011 => Some(InsnFlow { len: 1, ..Default::default() }),
+            0x1000 => Some(InsnFlow {
+                len: 6,
+                fall_through: Some(0x1006),
+                ..Default::default()
+            }),
+            0x1006 => Some(InsnFlow {
+                len: 6,
+                fall_through: Some(0x100c),
+                ..Default::default()
+            }),
+            0x100c => Some(InsnFlow {
+                len: 5,
+                fall_through: Some(0x1011),
+                ..Default::default()
+            }),
+            0x1011 => Some(InsnFlow {
+                len: 1,
+                ..Default::default()
+            }),
             _ => None,
         };
         let mut entries = vec![0x1000, 0x100c];
-        let dropped =
-            suppress_owned_interior_entries(&mut entries, &[(0x1000, 0x1020)], |_| false, |_| false, plain);
+        let dropped = suppress_owned_interior_entries(
+            &mut entries,
+            &[(0x1000, 0x1020)],
+            |_| false,
+            |_| false,
+            plain,
+        );
         assert_eq!((dropped, entries), (vec![0x100c], vec![0x1000]));
     }
 
@@ -819,14 +866,16 @@ mod tests {
     #[test]
     fn only_owned_bodies_reject_their_interior() {
         let mut entries = vec![0x1008, 0x1018];
-        assert!(suppress_owned_interior_entries(
-            &mut entries,
-            &[(0x1000, 0x1040)],
-            |_| false,
-            |_| false,
-            shaped()
-        )
-        .is_empty());
+        assert!(
+            suppress_owned_interior_entries(
+                &mut entries,
+                &[(0x1000, 0x1040)],
+                |_| false,
+                |_| false,
+                shaped()
+            )
+            .is_empty()
+        );
         let mut entries = vec![0x1008, 0x1018];
         let dropped = suppress_owned_interior_entries(
             &mut entries,

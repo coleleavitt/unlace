@@ -26,12 +26,16 @@ fn decompile(fixture: &str, function: &str, extra: &[&str]) -> String {
     args.extend(extra);
     let (doc, stderr, status) = common::run_kuna(&args);
     assert_eq!(status, 0, "{fixture} {extra:?}: {stderr}");
-    let parsed: serde_json::Value = serde_json::from_str(&doc).unwrap_or_else(|e| panic!("{e}: {stderr}\n{doc}"));
+    let parsed: serde_json::Value =
+        serde_json::from_str(&doc).unwrap_or_else(|e| panic!("{e}: {stderr}\n{doc}"));
     let code = parsed
         .pointer("/functions/0/code")
         .and_then(serde_json::Value::as_str)
         .unwrap_or_else(|| panic!("{fixture} {function}: no code: {stderr}\n{doc}"));
-    assert!(!code.trim().is_empty(), "{fixture} {function}: empty code: {stderr}");
+    assert!(
+        !code.trim().is_empty(),
+        "{fixture} {function}: empty code: {stderr}"
+    );
     code.to_string()
 }
 
@@ -39,11 +43,24 @@ fn decompile(fixture: &str, function: &str, extra: &[&str]) -> String {
 fn a_call_followed_by_its_literal_pool_ends_the_function() {
     for fixture in ["poolfallthru_arm_le32", "poolfallthru_arm_be32"] {
         let code = decompile(fixture, "probe", &[]);
-        assert!(!code.contains("halt_baddata") && !code.contains("Bad instruction"), "{fixture}:\n{code}");
-        let last = code.lines().rev().find(|line| line.trim() != "}").unwrap_or_default();
-        assert!(last.contains("();") && last.contains(BOUND), "{fixture}:\n{code}");
+        assert!(
+            !code.contains("halt_baddata") && !code.contains("Bad instruction"),
+            "{fixture}:\n{code}"
+        );
+        let last = code
+            .lines()
+            .rev()
+            .find(|line| line.trim() != "}")
+            .unwrap_or_default();
+        assert!(
+            last.contains("();") && last.contains(BOUND),
+            "{fixture}:\n{code}"
+        );
         let off = decompile(fixture, "probe", &["--option", "funcboundflow", "off"]);
-        assert!(off.contains("halt_baddata(); // warn: Bad instruction - Truncating control flow here"), "{fixture}:\n{off}");
+        assert!(
+            off.contains("halt_baddata(); // warn: Bad instruction - Truncating control flow here"),
+            "{fixture}:\n{off}"
+        );
     }
 }
 
@@ -56,9 +73,15 @@ fn disassemble_lists_the_same_words_as_data() {
     let (text, stderr, status) = common::run_kuna(&["disassemble", binary.as_str(), "probe"]);
     assert_eq!(status, 0, "{stderr}");
     let rows: Vec<&str> = text.lines().filter(|line| line.starts_with("0x")).collect();
-    let call = rows.iter().rposition(|row| row.contains(" bl ")).expect("a call");
+    let call = rows
+        .iter()
+        .rposition(|row| row.contains(" bl "))
+        .expect("a call");
     assert_eq!(rows[call + 1..].len(), 5, "{text}");
-    assert!(rows[call + 1..].iter().all(|row| row.contains(".word")), "{text}");
+    assert!(
+        rows[call + 1..].iter().all(|row| row.contains(".word")),
+        "{text}"
+    );
 }
 
 /// `u_pool`'s `a4 == 5` path ends at `hi`; read through its pool, it printed
@@ -66,9 +89,23 @@ fn disassemble_lists_the_same_words_as_data() {
 #[test]
 fn a_call_ahead_of_its_pool_does_not_run_into_the_other_path() {
     let code = decompile("bejoin_unreach_arm32_be_O2", "u_pool", &[]);
-    let call = code.lines().position(|line| line.trim_start().starts_with("hi(")).expect("the call");
-    assert!(code.lines().nth(call).is_some_and(|line| line.contains(BOUND)), "{code}");
-    assert!(!code.lines().skip(call + 1).any(|line| line.contains("return") || line.contains("\"other\"")), "{code}");
+    let call = code
+        .lines()
+        .position(|line| line.trim_start().starts_with("hi("))
+        .expect("the call");
+    assert!(
+        code.lines()
+            .nth(call)
+            .is_some_and(|line| line.contains(BOUND)),
+        "{code}"
+    );
+    assert!(
+        !code
+            .lines()
+            .skip(call + 1)
+            .any(|line| line.contains("return") || line.contains("\"other\"")),
+        "{code}"
+    );
     let thumb = decompile("bejoin_unreach_thumb_be_O2", "u_pool", &[]);
     assert!(thumb.contains(BOUND), "{thumb}");
 }
@@ -101,15 +138,36 @@ fn a_function_that_violates_one_condition_keeps_its_fall_through() {
             let code = decompile(fixture, function, &[]);
             assert!(!code.contains(BOUND), "{fixture} {function}:\n{code}");
         }
-        for function in ["bounded_call", "pad_call", "indirect_call", "wide_literal", "ordered_loads"] {
+        for function in [
+            "bounded_call",
+            "pad_call",
+            "indirect_call",
+            "wide_literal",
+            "ordered_loads",
+        ] {
             let code = decompile(fixture, function, &[]);
-            assert_eq!(code.matches(BOUND).count(), 1, "{fixture} {function}:\n{code}");
+            assert_eq!(
+                code.matches(BOUND).count(),
+                1,
+                "{fixture} {function}:\n{code}"
+            );
         }
         let code = decompile(fixture, "two_pools", &[]);
-        assert_eq!(code.matches(BOUND).count(), 2, "{fixture} two_pools:\n{code}");
+        assert_eq!(
+            code.matches(BOUND).count(),
+            2,
+            "{fixture} two_pools:\n{code}"
+        );
         let code = decompile(fixture, "junk_pointer", &[]);
-        assert_eq!(code.matches(BOUND).count(), 1, "{fixture} junk_pointer:\n{code}");
-        assert!(code.contains("+ 1"), "{fixture} junk_pointer keeps the live code after the returning call:\n{code}");
+        assert_eq!(
+            code.matches(BOUND).count(),
+            1,
+            "{fixture} junk_pointer:\n{code}"
+        );
+        assert!(
+            code.contains("+ 1"),
+            "{fixture} junk_pointer keeps the live code after the returning call:\n{code}"
+        );
     }
 }
 
@@ -136,5 +194,8 @@ fn a_load_decoded_past_a_user_operation_witnesses_nothing() {
 fn a_case_table_after_a_call_is_no_code() {
     let code = decompile("poolcase_thumb1_le32", "dispatch", &[]);
     assert!(!code.contains(BOUND), "{code}");
-    assert!(code.contains("return (*a1)(") && code.contains("+ 7;"), "{code}");
+    assert!(
+        code.contains("return (*a1)(") && code.contains("+ 7;"),
+        "{code}"
+    );
 }

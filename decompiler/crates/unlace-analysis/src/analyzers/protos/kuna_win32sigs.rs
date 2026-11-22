@@ -51,7 +51,7 @@
 //! import provenance remains safe even if the image exports the same spelling;
 //! this pass emits no ambiguous global by-name stream.
 
-use super::{resolved_import_addrs, seed_resolved_prototypes, Sig, Ty};
+use super::{Sig, Ty, resolved_import_addrs, seed_resolved_prototypes};
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
 /// Seed the built-in Win32 API signatures onto a PE's imported API names.
@@ -63,166 +63,1262 @@ pub struct Win32SigsPass;
 /// and from the CRT entirely: every entry is a `WINAPI` export.
 pub(super) const WIN32: &[(&str, Sig)] = &[
     // --- process / thread (kernel32) ---
-    ("CreateThread", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr, Ty::Size, Ty::VoidPtr, Ty::VoidPtr, Ty::UInt, Ty::UIntPtr], vararg: -1 }),
-    ("CreateToolhelp32Snapshot", Sig { ret: Ty::VoidPtr, params: &[Ty::UInt, Ty::UInt], vararg: -1 }),
-    ("ExitProcess", Sig { ret: Ty::Void, params: &[Ty::UInt], vararg: -1 }),
-    ("GetCurrentProcess", Sig { ret: Ty::VoidPtr, params: &[], vararg: -1 }),
-    ("GetCurrentProcessId", Sig { ret: Ty::UInt, params: &[], vararg: -1 }),
-    ("GetCurrentThread", Sig { ret: Ty::VoidPtr, params: &[], vararg: -1 }),
-    ("GetCurrentThreadId", Sig { ret: Ty::UInt, params: &[], vararg: -1 }),
-    ("GetExitCodeProcess", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::UIntPtr], vararg: -1 }),
-    ("GetStartupInfoA", Sig { ret: Ty::Void, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("GetStartupInfoW", Sig { ret: Ty::Void, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("OpenProcess", Sig { ret: Ty::VoidPtr, params: &[Ty::UInt, Ty::Int, Ty::UInt], vararg: -1 }),
-    ("ResumeThread", Sig { ret: Ty::UInt, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("Sleep", Sig { ret: Ty::Void, params: &[Ty::UInt], vararg: -1 }),
-    ("SuspendThread", Sig { ret: Ty::UInt, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("TerminateProcess", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::UInt], vararg: -1 }),
-    ("TerminateThread", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::UInt], vararg: -1 }),
-    ("WaitForSingleObject", Sig { ret: Ty::UInt, params: &[Ty::VoidPtr, Ty::UInt], vararg: -1 }),
+    (
+        "CreateThread",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[
+                Ty::VoidPtr,
+                Ty::Size,
+                Ty::VoidPtr,
+                Ty::VoidPtr,
+                Ty::UInt,
+                Ty::UIntPtr,
+            ],
+            vararg: -1,
+        },
+    ),
+    (
+        "CreateToolhelp32Snapshot",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::UInt, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "ExitProcess",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetCurrentProcess",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetCurrentProcessId",
+        Sig {
+            ret: Ty::UInt,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetCurrentThread",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetCurrentThreadId",
+        Sig {
+            ret: Ty::UInt,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetExitCodeProcess",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::UIntPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetStartupInfoA",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetStartupInfoW",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "OpenProcess",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::UInt, Ty::Int, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "ResumeThread",
+        Sig {
+            ret: Ty::UInt,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "Sleep",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "SuspendThread",
+        Sig {
+            ret: Ty::UInt,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "TerminateProcess",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "TerminateThread",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "WaitForSingleObject",
+        Sig {
+            ret: Ty::UInt,
+            params: &[Ty::VoidPtr, Ty::UInt],
+            vararg: -1,
+        },
+    ),
     // --- module / loader (kernel32) ---
-    ("FreeLibrary", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("GetModuleFileNameA", Sig { ret: Ty::UInt, params: &[Ty::VoidPtr, Ty::CharPtr, Ty::UInt], vararg: -1 }),
-    ("GetModuleFileNameW", Sig { ret: Ty::UInt, params: &[Ty::VoidPtr, Ty::WCharPtr, Ty::UInt], vararg: -1 }),
-    ("GetModuleHandleA", Sig { ret: Ty::VoidPtr, params: &[Ty::CharPtr], vararg: -1 }),
-    ("GetModuleHandleExW", Sig { ret: Ty::Int, params: &[Ty::UInt, Ty::WCharPtr, Ty::VoidPtr], vararg: -1 }),
-    ("GetModuleHandleW", Sig { ret: Ty::VoidPtr, params: &[Ty::WCharPtr], vararg: -1 }),
-    ("GetProcAddress", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr, Ty::CharPtr], vararg: -1 }),
-    ("LoadLibraryA", Sig { ret: Ty::VoidPtr, params: &[Ty::CharPtr], vararg: -1 }),
-    ("LoadLibraryExA", Sig { ret: Ty::VoidPtr, params: &[Ty::CharPtr, Ty::VoidPtr, Ty::UInt], vararg: -1 }),
-    ("LoadLibraryExW", Sig { ret: Ty::VoidPtr, params: &[Ty::WCharPtr, Ty::VoidPtr, Ty::UInt], vararg: -1 }),
-    ("LoadLibraryW", Sig { ret: Ty::VoidPtr, params: &[Ty::WCharPtr], vararg: -1 }),
+    (
+        "FreeLibrary",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetModuleFileNameA",
+        Sig {
+            ret: Ty::UInt,
+            params: &[Ty::VoidPtr, Ty::CharPtr, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetModuleFileNameW",
+        Sig {
+            ret: Ty::UInt,
+            params: &[Ty::VoidPtr, Ty::WCharPtr, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetModuleHandleA",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetModuleHandleExW",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt, Ty::WCharPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetModuleHandleW",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::WCharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetProcAddress",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "LoadLibraryA",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "LoadLibraryExA",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::CharPtr, Ty::VoidPtr, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "LoadLibraryExW",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::WCharPtr, Ty::VoidPtr, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "LoadLibraryW",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::WCharPtr],
+            vararg: -1,
+        },
+    ),
     // --- resource loading (kernel32).  Below the >= 5-image bar; admitted
     //     because it is the family the RE need was filed against.
-    ("EnumResourceNamesW", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::WCharPtr, Ty::VoidPtr, Ty::Long], vararg: -1 }),
-    ("EnumResourceTypesW", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::Long], vararg: -1 }),
-    ("FindResourceA", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr, Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("FindResourceW", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr, Ty::WCharPtr, Ty::WCharPtr], vararg: -1 }),
-    ("FreeResource", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("LoadResource", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("LockResource", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("SizeofResource", Sig { ret: Ty::UInt, params: &[Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
+    (
+        "EnumResourceNamesW",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::WCharPtr, Ty::VoidPtr, Ty::Long],
+            vararg: -1,
+        },
+    ),
+    (
+        "EnumResourceTypesW",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::Long],
+            vararg: -1,
+        },
+    ),
+    (
+        "FindResourceA",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "FindResourceW",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::WCharPtr, Ty::WCharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "FreeResource",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "LoadResource",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "LockResource",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "SizeofResource",
+        Sig {
+            ret: Ty::UInt,
+            params: &[Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
     // --- heap / virtual memory (kernel32) ---
-    ("GetProcessHeap", Sig { ret: Ty::VoidPtr, params: &[], vararg: -1 }),
-    ("HeapAlloc", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr, Ty::UInt, Ty::Size], vararg: -1 }),
-    ("HeapCreate", Sig { ret: Ty::VoidPtr, params: &[Ty::UInt, Ty::Size, Ty::Size], vararg: -1 }),
-    ("HeapDestroy", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("HeapFree", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::UInt, Ty::VoidPtr], vararg: -1 }),
-    ("HeapReAlloc", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr, Ty::UInt, Ty::VoidPtr, Ty::Size], vararg: -1 }),
-    ("HeapSize", Sig { ret: Ty::Size, params: &[Ty::VoidPtr, Ty::UInt, Ty::VoidPtr], vararg: -1 }),
-    ("VirtualAlloc", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr, Ty::Size, Ty::UInt, Ty::UInt], vararg: -1 }),
-    ("VirtualFree", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::Size, Ty::UInt], vararg: -1 }),
-    ("VirtualProtect", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::Size, Ty::UInt, Ty::UIntPtr], vararg: -1 }),
-    ("VirtualQuery", Sig { ret: Ty::Size, params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::Size], vararg: -1 }),
+    (
+        "GetProcessHeap",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "HeapAlloc",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::UInt, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "HeapCreate",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::UInt, Ty::Size, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "HeapDestroy",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "HeapFree",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::UInt, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "HeapReAlloc",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::UInt, Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "HeapSize",
+        Sig {
+            ret: Ty::Size,
+            params: &[Ty::VoidPtr, Ty::UInt, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "VirtualAlloc",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::Size, Ty::UInt, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "VirtualFree",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::Size, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "VirtualProtect",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::Size, Ty::UInt, Ty::UIntPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "VirtualQuery",
+        Sig {
+            ret: Ty::Size,
+            params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
     // --- files / handles / console (kernel32) ---
-    ("CloseHandle", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("CreateFileW", Sig { ret: Ty::VoidPtr, params: &[Ty::WCharPtr, Ty::UInt, Ty::UInt, Ty::VoidPtr, Ty::UInt, Ty::UInt, Ty::VoidPtr], vararg: -1 }),
-    ("DuplicateHandle", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::VoidPtr, Ty::VoidPtr, Ty::UInt, Ty::Int, Ty::UInt], vararg: -1 }),
-    ("FindClose", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("FindFirstFileExW", Sig { ret: Ty::VoidPtr, params: &[Ty::WCharPtr, Ty::Int, Ty::VoidPtr, Ty::Int, Ty::VoidPtr, Ty::UInt], vararg: -1 }),
-    ("FindNextFileW", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("FlushFileBuffers", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("GetConsoleMode", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::UIntPtr], vararg: -1 }),
-    ("GetConsoleOutputCP", Sig { ret: Ty::UInt, params: &[], vararg: -1 }),
-    ("GetFileSizeEx", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("GetFileType", Sig { ret: Ty::UInt, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("GetStdHandle", Sig { ret: Ty::VoidPtr, params: &[Ty::UInt], vararg: -1 }),
-    ("ReadConsoleW", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::UInt, Ty::UIntPtr, Ty::VoidPtr], vararg: -1 }),
-    ("ReadFile", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::UInt, Ty::UIntPtr, Ty::VoidPtr], vararg: -1 }),
-    ("SetFilePointer", Sig { ret: Ty::UInt, params: &[Ty::VoidPtr, Ty::Int, Ty::IntPtr, Ty::UInt], vararg: -1 }),
-    ("SetStdHandle", Sig { ret: Ty::Int, params: &[Ty::UInt, Ty::VoidPtr], vararg: -1 }),
-    ("WriteConsoleW", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::UInt, Ty::UIntPtr, Ty::VoidPtr], vararg: -1 }),
-    ("WriteFile", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::UInt, Ty::UIntPtr, Ty::VoidPtr], vararg: -1 }),
+    (
+        "CloseHandle",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "CreateFileW",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[
+                Ty::WCharPtr,
+                Ty::UInt,
+                Ty::UInt,
+                Ty::VoidPtr,
+                Ty::UInt,
+                Ty::UInt,
+                Ty::VoidPtr,
+            ],
+            vararg: -1,
+        },
+    ),
+    (
+        "DuplicateHandle",
+        Sig {
+            ret: Ty::Int,
+            params: &[
+                Ty::VoidPtr,
+                Ty::VoidPtr,
+                Ty::VoidPtr,
+                Ty::VoidPtr,
+                Ty::UInt,
+                Ty::Int,
+                Ty::UInt,
+            ],
+            vararg: -1,
+        },
+    ),
+    (
+        "FindClose",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "FindFirstFileExW",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[
+                Ty::WCharPtr,
+                Ty::Int,
+                Ty::VoidPtr,
+                Ty::Int,
+                Ty::VoidPtr,
+                Ty::UInt,
+            ],
+            vararg: -1,
+        },
+    ),
+    (
+        "FindNextFileW",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "FlushFileBuffers",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetConsoleMode",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::UIntPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetConsoleOutputCP",
+        Sig {
+            ret: Ty::UInt,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetFileSizeEx",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetFileType",
+        Sig {
+            ret: Ty::UInt,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetStdHandle",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "ReadConsoleW",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::UInt, Ty::UIntPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "ReadFile",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::UInt, Ty::UIntPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "SetFilePointer",
+        Sig {
+            ret: Ty::UInt,
+            params: &[Ty::VoidPtr, Ty::Int, Ty::IntPtr, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "SetStdHandle",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "WriteConsoleW",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::UInt, Ty::UIntPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "WriteFile",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::UInt, Ty::UIntPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
     // --- environment / command line (kernel32) ---
-    ("FreeEnvironmentStringsA", Sig { ret: Ty::Int, params: &[Ty::CharPtr], vararg: -1 }),
-    ("FreeEnvironmentStringsW", Sig { ret: Ty::Int, params: &[Ty::WCharPtr], vararg: -1 }),
-    ("GetCommandLineA", Sig { ret: Ty::CharPtr, params: &[], vararg: -1 }),
-    ("GetCommandLineW", Sig { ret: Ty::WCharPtr, params: &[], vararg: -1 }),
-    ("GetEnvironmentStrings", Sig { ret: Ty::CharPtr, params: &[], vararg: -1 }),
-    ("GetEnvironmentStringsW", Sig { ret: Ty::WCharPtr, params: &[], vararg: -1 }),
-    ("GetEnvironmentVariableW", Sig { ret: Ty::UInt, params: &[Ty::WCharPtr, Ty::WCharPtr, Ty::UInt], vararg: -1 }),
-    ("SetEnvironmentVariableW", Sig { ret: Ty::Int, params: &[Ty::WCharPtr, Ty::WCharPtr], vararg: -1 }),
+    (
+        "FreeEnvironmentStringsA",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "FreeEnvironmentStringsW",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::WCharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetCommandLineA",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetCommandLineW",
+        Sig {
+            ret: Ty::WCharPtr,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetEnvironmentStrings",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetEnvironmentStringsW",
+        Sig {
+            ret: Ty::WCharPtr,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetEnvironmentVariableW",
+        Sig {
+            ret: Ty::UInt,
+            params: &[Ty::WCharPtr, Ty::WCharPtr, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "SetEnvironmentVariableW",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::WCharPtr, Ty::WCharPtr],
+            vararg: -1,
+        },
+    ),
     // --- locale / code pages (kernel32) ---
-    ("CompareStringW", Sig { ret: Ty::Int, params: &[Ty::UInt, Ty::UInt, Ty::WCharPtr, Ty::Int, Ty::WCharPtr, Ty::Int], vararg: -1 }),
-    ("EnumSystemLocalesW", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::UInt], vararg: -1 }),
-    ("GetACP", Sig { ret: Ty::UInt, params: &[], vararg: -1 }),
-    ("GetCPInfo", Sig { ret: Ty::Int, params: &[Ty::UInt, Ty::VoidPtr], vararg: -1 }),
-    ("GetLocaleInfoW", Sig { ret: Ty::Int, params: &[Ty::UInt, Ty::UInt, Ty::WCharPtr, Ty::Int], vararg: -1 }),
-    ("GetOEMCP", Sig { ret: Ty::UInt, params: &[], vararg: -1 }),
-    ("GetStringTypeA", Sig { ret: Ty::Int, params: &[Ty::UInt, Ty::UInt, Ty::CharPtr, Ty::Int, Ty::VoidPtr], vararg: -1 }),
-    ("GetStringTypeW", Sig { ret: Ty::Int, params: &[Ty::UInt, Ty::WCharPtr, Ty::Int, Ty::VoidPtr], vararg: -1 }),
-    ("GetUserDefaultLCID", Sig { ret: Ty::UInt, params: &[], vararg: -1 }),
-    ("IsValidCodePage", Sig { ret: Ty::Int, params: &[Ty::UInt], vararg: -1 }),
-    ("IsValidLocale", Sig { ret: Ty::Int, params: &[Ty::UInt, Ty::UInt], vararg: -1 }),
-    ("LCMapStringA", Sig { ret: Ty::Int, params: &[Ty::UInt, Ty::UInt, Ty::CharPtr, Ty::Int, Ty::CharPtr, Ty::Int], vararg: -1 }),
-    ("LCMapStringW", Sig { ret: Ty::Int, params: &[Ty::UInt, Ty::UInt, Ty::WCharPtr, Ty::Int, Ty::WCharPtr, Ty::Int], vararg: -1 }),
-    ("MultiByteToWideChar", Sig { ret: Ty::Int, params: &[Ty::UInt, Ty::UInt, Ty::CharPtr, Ty::Int, Ty::WCharPtr, Ty::Int], vararg: -1 }),
-    ("WideCharToMultiByte", Sig { ret: Ty::Int, params: &[Ty::UInt, Ty::UInt, Ty::WCharPtr, Ty::Int, Ty::CharPtr, Ty::Int, Ty::CharPtr, Ty::IntPtr], vararg: -1 }),
+    (
+        "CompareStringW",
+        Sig {
+            ret: Ty::Int,
+            params: &[
+                Ty::UInt,
+                Ty::UInt,
+                Ty::WCharPtr,
+                Ty::Int,
+                Ty::WCharPtr,
+                Ty::Int,
+            ],
+            vararg: -1,
+        },
+    ),
+    (
+        "EnumSystemLocalesW",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetACP",
+        Sig {
+            ret: Ty::UInt,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetCPInfo",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetLocaleInfoW",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt, Ty::UInt, Ty::WCharPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetOEMCP",
+        Sig {
+            ret: Ty::UInt,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetStringTypeA",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt, Ty::UInt, Ty::CharPtr, Ty::Int, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetStringTypeW",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt, Ty::WCharPtr, Ty::Int, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetUserDefaultLCID",
+        Sig {
+            ret: Ty::UInt,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "IsValidCodePage",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "IsValidLocale",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "LCMapStringA",
+        Sig {
+            ret: Ty::Int,
+            params: &[
+                Ty::UInt,
+                Ty::UInt,
+                Ty::CharPtr,
+                Ty::Int,
+                Ty::CharPtr,
+                Ty::Int,
+            ],
+            vararg: -1,
+        },
+    ),
+    (
+        "LCMapStringW",
+        Sig {
+            ret: Ty::Int,
+            params: &[
+                Ty::UInt,
+                Ty::UInt,
+                Ty::WCharPtr,
+                Ty::Int,
+                Ty::WCharPtr,
+                Ty::Int,
+            ],
+            vararg: -1,
+        },
+    ),
+    (
+        "MultiByteToWideChar",
+        Sig {
+            ret: Ty::Int,
+            params: &[
+                Ty::UInt,
+                Ty::UInt,
+                Ty::CharPtr,
+                Ty::Int,
+                Ty::WCharPtr,
+                Ty::Int,
+            ],
+            vararg: -1,
+        },
+    ),
+    (
+        "WideCharToMultiByte",
+        Sig {
+            ret: Ty::Int,
+            params: &[
+                Ty::UInt,
+                Ty::UInt,
+                Ty::WCharPtr,
+                Ty::Int,
+                Ty::CharPtr,
+                Ty::Int,
+                Ty::CharPtr,
+                Ty::IntPtr,
+            ],
+            vararg: -1,
+        },
+    ),
     // --- synchronization / TLS (kernel32) ---
-    ("AcquireSRWLockExclusive", Sig { ret: Ty::Void, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("DeleteCriticalSection", Sig { ret: Ty::Void, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("EnterCriticalSection", Sig { ret: Ty::Void, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("FlsAlloc", Sig { ret: Ty::UInt, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("FlsFree", Sig { ret: Ty::Int, params: &[Ty::UInt], vararg: -1 }),
-    ("FlsGetValue", Sig { ret: Ty::VoidPtr, params: &[Ty::UInt], vararg: -1 }),
-    ("FlsSetValue", Sig { ret: Ty::Int, params: &[Ty::UInt, Ty::VoidPtr], vararg: -1 }),
-    ("InitializeCriticalSection", Sig { ret: Ty::Void, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("InitializeCriticalSectionAndSpinCount", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::UInt], vararg: -1 }),
-    ("InitializeCriticalSectionEx", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::UInt, Ty::UInt], vararg: -1 }),
-    ("InitializeSListHead", Sig { ret: Ty::Void, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("LeaveCriticalSection", Sig { ret: Ty::Void, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("ReleaseSRWLockExclusive", Sig { ret: Ty::Void, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("SleepConditionVariableSRW", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::UInt, Ty::UInt], vararg: -1 }),
-    ("TlsAlloc", Sig { ret: Ty::UInt, params: &[], vararg: -1 }),
-    ("TlsFree", Sig { ret: Ty::Int, params: &[Ty::UInt], vararg: -1 }),
-    ("TlsGetValue", Sig { ret: Ty::VoidPtr, params: &[Ty::UInt], vararg: -1 }),
-    ("TlsSetValue", Sig { ret: Ty::Int, params: &[Ty::UInt, Ty::VoidPtr], vararg: -1 }),
-    ("WakeAllConditionVariable", Sig { ret: Ty::Void, params: &[Ty::VoidPtr], vararg: -1 }),
+    (
+        "AcquireSRWLockExclusive",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "DeleteCriticalSection",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "EnterCriticalSection",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "FlsAlloc",
+        Sig {
+            ret: Ty::UInt,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "FlsFree",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "FlsGetValue",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "FlsSetValue",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "InitializeCriticalSection",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "InitializeCriticalSectionAndSpinCount",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "InitializeCriticalSectionEx",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::UInt, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "InitializeSListHead",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "LeaveCriticalSection",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "ReleaseSRWLockExclusive",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "SleepConditionVariableSRW",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::UInt, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "TlsAlloc",
+        Sig {
+            ret: Ty::UInt,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "TlsFree",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "TlsGetValue",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "TlsSetValue",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "WakeAllConditionVariable",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
     // --- diagnostics / errors / timing (kernel32) ---
-    ("CheckRemoteDebuggerPresent", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::IntPtr], vararg: -1 }),
-    ("DecodePointer", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("EncodePointer", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("GetLastError", Sig { ret: Ty::UInt, params: &[], vararg: -1 }),
-    ("GetSystemTimeAsFileTime", Sig { ret: Ty::Void, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("GetTickCount", Sig { ret: Ty::UInt, params: &[], vararg: -1 }),
-    ("IsDebuggerPresent", Sig { ret: Ty::Int, params: &[], vararg: -1 }),
-    ("IsProcessorFeaturePresent", Sig { ret: Ty::Int, params: &[Ty::UInt], vararg: -1 }),
-    ("OutputDebugStringA", Sig { ret: Ty::Void, params: &[Ty::CharPtr], vararg: -1 }),
-    ("QueryPerformanceCounter", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("QueryPerformanceFrequency", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("RaiseException", Sig { ret: Ty::Void, params: &[Ty::UInt, Ty::UInt, Ty::UInt, Ty::VoidPtr], vararg: -1 }),
-    ("SetLastError", Sig { ret: Ty::Void, params: &[Ty::UInt], vararg: -1 }),
-    ("SetUnhandledExceptionFilter", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("UnhandledExceptionFilter", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
+    (
+        "CheckRemoteDebuggerPresent",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::IntPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "DecodePointer",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "EncodePointer",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetLastError",
+        Sig {
+            ret: Ty::UInt,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetSystemTimeAsFileTime",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetTickCount",
+        Sig {
+            ret: Ty::UInt,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "IsDebuggerPresent",
+        Sig {
+            ret: Ty::Int,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "IsProcessorFeaturePresent",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "OutputDebugStringA",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "QueryPerformanceCounter",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "QueryPerformanceFrequency",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "RaiseException",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::UInt, Ty::UInt, Ty::UInt, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "SetLastError",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "SetUnhandledExceptionFilter",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "UnhandledExceptionFilter",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
     // --- thread context (kernel32) ---
-    ("GetThreadContext", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("SetThreadContext", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
+    (
+        "GetThreadContext",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "SetThreadContext",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
     // --- OLE Automation BSTR / VARIANT / SAFEARRAY (oleaut32) ---
-    ("SafeArrayAccessData", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("SafeArrayDestroy", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("SafeArrayUnaccessData", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("SysAllocString", Sig { ret: Ty::WCharPtr, params: &[Ty::WCharPtr], vararg: -1 }),
-    ("SysAllocStringByteLen", Sig { ret: Ty::WCharPtr, params: &[Ty::CharPtr, Ty::UInt], vararg: -1 }),
-    ("SysAllocStringLen", Sig { ret: Ty::WCharPtr, params: &[Ty::WCharPtr, Ty::UInt], vararg: -1 }),
-    ("SysFreeString", Sig { ret: Ty::Void, params: &[Ty::WCharPtr], vararg: -1 }),
-    ("SysReAllocString", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::WCharPtr], vararg: -1 }),
-    ("SysReAllocStringLen", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::WCharPtr, Ty::UInt], vararg: -1 }),
-    ("SysStringByteLen", Sig { ret: Ty::UInt, params: &[Ty::WCharPtr], vararg: -1 }),
-    ("SysStringLen", Sig { ret: Ty::UInt, params: &[Ty::WCharPtr], vararg: -1 }),
-    ("VariantClear", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("VariantCopy", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("VariantInit", Sig { ret: Ty::Void, params: &[Ty::VoidPtr], vararg: -1 }),
+    (
+        "SafeArrayAccessData",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "SafeArrayDestroy",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "SafeArrayUnaccessData",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "SysAllocString",
+        Sig {
+            ret: Ty::WCharPtr,
+            params: &[Ty::WCharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "SysAllocStringByteLen",
+        Sig {
+            ret: Ty::WCharPtr,
+            params: &[Ty::CharPtr, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "SysAllocStringLen",
+        Sig {
+            ret: Ty::WCharPtr,
+            params: &[Ty::WCharPtr, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "SysFreeString",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::WCharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "SysReAllocString",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::WCharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "SysReAllocStringLen",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::WCharPtr, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "SysStringByteLen",
+        Sig {
+            ret: Ty::UInt,
+            params: &[Ty::WCharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "SysStringLen",
+        Sig {
+            ret: Ty::UInt,
+            params: &[Ty::WCharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "VariantClear",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "VariantCopy",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "VariantInit",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
     // --- WinSock-only exports (ws2_32 / wsock32) ---
-    ("WSACleanup", Sig { ret: Ty::Int, params: &[], vararg: -1 }),
-    ("WSAGetLastError", Sig { ret: Ty::Int, params: &[], vararg: -1 }),
-    ("WSASetLastError", Sig { ret: Ty::Void, params: &[Ty::Int], vararg: -1 }),
-    ("closesocket", Sig { ret: Ty::Int, params: &[Ty::Size], vararg: -1 }),
-    ("ioctlsocket", Sig { ret: Ty::Int, params: &[Ty::Size, Ty::Int, Ty::UIntPtr], vararg: -1 }),
+    (
+        "WSACleanup",
+        Sig {
+            ret: Ty::Int,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "WSAGetLastError",
+        Sig {
+            ret: Ty::Int,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "WSASetLastError",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "closesocket",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "ioctlsocket",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Size, Ty::Int, Ty::UIntPtr],
+            vararg: -1,
+        },
+    ),
     // --- user32 / gdi32 / advapi32 ---
-    ("CryptReleaseContext", Sig { ret: Ty::Int, params: &[Ty::Size, Ty::UInt], vararg: -1 }),
-    ("GetDC", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("MessageBoxA", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::CharPtr, Ty::CharPtr, Ty::UInt], vararg: -1 }),
-    ("MessageBoxW", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::WCharPtr, Ty::WCharPtr, Ty::UInt], vararg: -1 }),
+    (
+        "CryptReleaseContext",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Size, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "GetDC",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "MessageBoxA",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::CharPtr, Ty::CharPtr, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "MessageBoxW",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::WCharPtr, Ty::WCharPtr, Ty::UInt],
+            vararg: -1,
+        },
+    ),
 ];
 
 /// Every address the import resolver names as a genuine import.
@@ -246,7 +1342,10 @@ impl AnalysisPass for Win32SigsPass {
 
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
         let mut out = AnalysisOutput::default();
-        if !matches!(ctx.file.format(), object::BinaryFormat::Pe | object::BinaryFormat::Coff) {
+        if !matches!(
+            ctx.file.format(),
+            object::BinaryFormat::Pe | object::BinaryFormat::Coff
+        ) {
             return out;
         }
         let types = ctx.arch.types();
@@ -272,7 +1371,9 @@ mod tests {
                 "{name} is already in the base libc table"
             );
             assert!(
-                !super::super::kuna_libcsigs::LIBC_EXT.iter().any(|(n, _)| n == name),
+                !super::super::kuna_libcsigs::LIBC_EXT
+                    .iter()
+                    .any(|(n, _)| n == name),
                 "{name} is already in the libcsigs table"
             );
         }
@@ -292,7 +1393,10 @@ mod tests {
         // in the libc tables: the x86 PE default model is __stdcall with
         // extrapop="unknown", so the fixed arity is also the callee's stack pop.
         for (name, sig) in WIN32 {
-            assert_eq!(sig.vararg, -1, "{name}: this table carries no variadic export");
+            assert_eq!(
+                sig.vararg, -1,
+                "{name}: this table carries no variadic export"
+            );
         }
     }
 
@@ -302,12 +1406,34 @@ mod tests {
         // load-bearing field: it is what makes the call stop rendering
         // `LoadLibraryExW()` and what the __stdcall model turns into `extrapop`.
         let get = |want: &str| &WIN32.iter().find(|(n, _)| *n == want).expect(want).1;
-        assert_eq!(get("LoadLibraryExW").params.len(), 3, "lpLibFileName, hFile, dwFlags");
-        assert!(matches!(get("LoadLibraryExW").params[0], Ty::WCharPtr), "the W form takes LPCWSTR");
-        assert!(matches!(get("LoadLibraryExA").params[0], Ty::CharPtr), "the A form takes LPCSTR");
-        assert_eq!(get("EnumResourceTypesW").params.len(), 3, "hModule, lpEnumFunc, lParam");
-        assert_eq!(get("EnumResourceNamesW").params.len(), 4, "hModule, lpszType, lpEnumFunc, lParam");
-        assert_eq!(get("FindResourceW").params.len(), 3, "hModule, lpName, lpType");
+        assert_eq!(
+            get("LoadLibraryExW").params.len(),
+            3,
+            "lpLibFileName, hFile, dwFlags"
+        );
+        assert!(
+            matches!(get("LoadLibraryExW").params[0], Ty::WCharPtr),
+            "the W form takes LPCWSTR"
+        );
+        assert!(
+            matches!(get("LoadLibraryExA").params[0], Ty::CharPtr),
+            "the A form takes LPCSTR"
+        );
+        assert_eq!(
+            get("EnumResourceTypesW").params.len(),
+            3,
+            "hModule, lpEnumFunc, lParam"
+        );
+        assert_eq!(
+            get("EnumResourceNamesW").params.len(),
+            4,
+            "hModule, lpszType, lpEnumFunc, lParam"
+        );
+        assert_eq!(
+            get("FindResourceW").params.len(),
+            3,
+            "hModule, lpName, lpType"
+        );
         assert_eq!(get("LoadResource").params.len(), 2, "hModule, hResInfo");
         assert_eq!(get("SizeofResource").params.len(), 2, "hModule, hResInfo");
         assert_eq!(get("FreeLibrary").params.len(), 1, "hLibModule");
@@ -317,7 +1443,10 @@ mod tests {
     fn the_ordinal_imported_oleaut32_family_carries_its_documented_arity() {
         let get = |want: &str| &WIN32.iter().find(|(n, _)| *n == want).expect(want).1;
         assert_eq!(get("SysAllocString").params.len(), 1, "psz");
-        assert!(matches!(get("SysAllocString").ret, Ty::WCharPtr), "returns a BSTR");
+        assert!(
+            matches!(get("SysAllocString").ret, Ty::WCharPtr),
+            "returns a BSTR"
+        );
         assert_eq!(get("SysAllocStringLen").params.len(), 2, "strIn, ui");
         assert_eq!(get("SysFreeString").params.len(), 1, "bstrString");
         assert_eq!(get("VariantInit").params.len(), 1, "pvarg");
@@ -330,7 +1459,16 @@ mod tests {
         // Every entry is a callee-cleans WINAPI export. A __cdecl msvcrt name
         // here would be given the wrong stack cleanup on i386, so the two worlds
         // are kept apart by construction rather than by review.
-        for crt in ["malloc", "free", "memcpy", "memset", "printf", "exit", "_initterm", "wcslen"] {
+        for crt in [
+            "malloc",
+            "free",
+            "memcpy",
+            "memset",
+            "printf",
+            "exit",
+            "_initterm",
+            "wcslen",
+        ] {
             assert!(
                 !WIN32.iter().any(|(n, _)| *n == crt),
                 "{crt} is a CRT (__cdecl) name and belongs to the libc tables"
@@ -343,12 +1481,18 @@ mod tests {
         // The address key is the whole point: on a PE the resolver names both the
         // IAT slot and the `FF 25` thunk veneer, and the prototype has to land on
         // the thunk because that is the address a direct `call` resolves to.
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/win32sigs_pe_i386.exe");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/win32sigs_pe_i386.exe"
+        );
         let bytes = std::fs::read(path).expect("read win32sigs fixture");
         let file = object::File::parse(bytes.as_slice()).expect("parse win32sigs fixture");
         let pairs = imported_addrs_by_name(&file, &bytes);
-        let addrs: Vec<u64> =
-            pairs.iter().filter(|(n, _)| n == "LoadLibraryExW").map(|(_, a)| *a).collect();
+        let addrs: Vec<u64> = pairs
+            .iter()
+            .filter(|(n, _)| n == "LoadLibraryExW")
+            .map(|(_, a)| *a)
+            .collect();
         assert!(
             addrs.len() >= 2,
             "the resolver must name the IAT slot AND the thunk veneer: {addrs:x?}"

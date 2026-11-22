@@ -61,9 +61,11 @@ fn canonical_items_borrow_their_original_spans() {
     let block = "struct a;\n\nstruct b {\n    int x;\n};\n";
     let items = super::type_items(block);
     assert_eq!(items.len(), 2);
-    assert!(items
-        .iter()
-        .all(|(_, text)| matches!(text, std::borrow::Cow::Borrowed(_))));
+    assert!(
+        items
+            .iter()
+            .all(|(_, text)| matches!(text, std::borrow::Cow::Borrowed(_)))
+    );
     assert_eq!(items[0], (false, std::borrow::Cow::Borrowed("struct a;\n")));
     assert_eq!(
         items[1],
@@ -73,9 +75,11 @@ fn canonical_items_borrow_their_original_spans() {
         )
     );
     let normalized = super::type_items("struct a;\r\nstruct b;");
-    assert!(normalized
-        .iter()
-        .all(|(_, text)| matches!(text, std::borrow::Cow::Owned(_))));
+    assert!(
+        normalized
+            .iter()
+            .all(|(_, text)| matches!(text, std::borrow::Cow::Owned(_)))
+    );
     assert_eq!(normalized[0].1, "struct a;\n");
     assert_eq!(normalized[1].1, "struct b;\n");
 }

@@ -27,16 +27,16 @@
 
 use std::rc::Rc;
 
-use unlace_base::address::{sign_extend, Address};
+use unlace_base::address::{Address, sign_extend};
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::space::AddrSpace;
 use unlace_base::types::{int4, intb, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::context::VarnodeId;
-use crate::dtype::{type_metatype, Datatype, TypeFactory};
+use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::varmap::{MapState, RangeHint, RangeType, COPY_CONSTANT};
+use crate::varmap::{COPY_CONSTANT, MapState, RangeHint, RangeType};
 
 /// Upstream's four-element assumption only.
 pub const LEVEL_OFF: int4 = 0;
@@ -60,7 +60,10 @@ impl OptionArrayExtent {
     /// `Architecture::array_extent`.
     pub fn apply(&self, p1: &str) -> KunaResult<(int4, String)> {
         match p1 {
-            "off" => Ok((LEVEL_OFF, "Indexed stack array extent turned off".to_string())),
+            "off" => Ok((
+                LEVEL_OFF,
+                "Indexed stack array extent turned off".to_string(),
+            )),
             "bound" => Ok((
                 LEVEL_BOUND,
                 "Indexed stack array extent turned on, known-bits bound only".to_string(),
@@ -205,7 +208,10 @@ pub(crate) fn extend_unbounded(
         let (sstart, highind, ty) = (open.sstart, open.highind, Rc::clone(&open.type_));
         let elem = base.elem as intb;
         let same = |e: &Extended| e.start == base.start && e.elem == base.elem;
-        let first = extended.iter().find(|e| same(e)).map_or(highind, |e| e.from);
+        let first = extended
+            .iter()
+            .find(|e| same(e))
+            .map_or(highind, |e| e.from);
         let mut reach = highind;
         while reach < first + MAX_FOLLOW {
             let slot = sstart + (reach as intb + 1) * elem;
@@ -225,7 +231,13 @@ pub(crate) fn extend_unbounded(
         }
         match extended.iter_mut().find(|e| same(e)) {
             Some(e) => e.to = reach,
-            None => extended.push(Extended { start: base.start, sstart, elem: base.elem, from: highind, to: reach }),
+            None => extended.push(Extended {
+                start: base.start,
+                sstart,
+                elem: base.elem,
+                from: highind,
+                to: reach,
+            }),
         }
     }
     state.set_extended(extended);
@@ -352,8 +364,13 @@ fn locked_guard_over(fd: &Funcdata, start: uintb) -> bool {
             && g.get_minimum() <= start
             && start <= g.get_maximum()
     };
-    fd.get_load_guards().iter().any(|g| covers(g, OpCode::CPUI_LOAD))
-        || fd.get_store_guards().iter().any(|g| covers(g, OpCode::CPUI_STORE))
+    fd.get_load_guards()
+        .iter()
+        .any(|g| covers(g, OpCode::CPUI_LOAD))
+        || fd
+            .get_store_guards()
+            .iter()
+            .any(|g| covers(g, OpCode::CPUI_STORE))
 }
 
 /// Does a fixed hint starting in `[from, slot)` run past `slot`?
@@ -407,11 +424,14 @@ fn joinable(a: &Rc<Datatype>, b: &Rc<Datatype>) -> bool {
     }
     let int = |m| matches!(m, type_metatype::TYPE_INT | type_metatype::TYPE_UINT);
     let (am, bm) = (a.get_metatype(), b.get_metatype());
-    if bm == type_metatype::TYPE_UNKNOWN || (int(bm) && (int(am) || am == type_metatype::TYPE_UNKNOWN)) {
+    if bm == type_metatype::TYPE_UNKNOWN
+        || (int(bm) && (int(am) || am == type_metatype::TYPE_UNKNOWN))
+    {
         return true;
     }
     let (mut a, mut b) = (Rc::clone(a), Rc::clone(b));
-    while a.get_metatype() == type_metatype::TYPE_PTR && b.get_metatype() == type_metatype::TYPE_PTR {
+    while a.get_metatype() == type_metatype::TYPE_PTR && b.get_metatype() == type_metatype::TYPE_PTR
+    {
         match (a.get_ptr_to(), b.get_ptr_to()) {
             (Some(an), Some(bn)) => (a, b) = (an, bn),
             _ => break,

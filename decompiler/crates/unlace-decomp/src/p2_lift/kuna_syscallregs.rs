@@ -84,17 +84,17 @@
 //! A `CALLOTHER` a compiler spec has specialized with its own
 //! `<callotherfixup>` is left alone.
 
+use std::collections::HashMap;
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::types::{int4, uint4};
 use unlace_num::opcodes::OpCode;
-use std::collections::HashMap;
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
 use crate::context::{BlockId, OpId};
 use crate::funcdata::Funcdata;
 use crate::kuna_x64syscall::overlaps;
-use crate::op::{pcodeop_flags, PcodeOpBank};
+use crate::op::{PcodeOpBank, pcodeop_flags};
 use crate::userop::BUILTIN_SYSCALL_ERROR;
 use crate::varnode::VarnodeBank;
 
@@ -157,7 +157,7 @@ impl OptionSyscallRegs {
             other => {
                 return Err(KunaError::parse(format!(
                     "Unknown syscallregs value: {other} (expected off|auto|on)"
-                )))
+                )));
             }
         };
         Ok((mode, format!("System-call register effects set to {p1}")))
@@ -255,7 +255,12 @@ fn resolve(data: &Funcdata, family: SyscallFamily) -> Option<SyscallStorage> {
         .map(|nm| reg(nm))
         .collect::<Option<Vec<_>>>()?;
     let error = family.error_flag().and_then(reg);
-    Some(SyscallStorage { family, result, inputs, error })
+    Some(SyscallStorage {
+        family,
+        result,
+        inputs,
+        error,
+    })
 }
 
 /// Is `op` a `CALLOTHER` of the family's system-call user-op?
@@ -331,7 +336,11 @@ fn scan_back(
             if overlaps(&regs.result.0, regs.result.1, reg, size) {
                 return Scan::Written;
             }
-            if regs.error.as_ref().is_some_and(|(a, s)| overlaps(a, *s, reg, size)) {
+            if regs
+                .error
+                .as_ref()
+                .is_some_and(|(a, s)| overlaps(a, *s, reg, size))
+            {
                 return Scan::Clobbered;
             }
             continue;
@@ -572,7 +581,10 @@ fn read_set(data: &Funcdata, op: OpId, regs: &SyscallStorage) -> Vec<(Address, i
             count += 1;
         }
     }
-    std::iter::once(number).chain(&args[..count]).cloned().collect()
+    std::iter::once(number)
+        .chain(&args[..count])
+        .cloned()
+        .collect()
 }
 
 /// Give one matched `CALLOTHER` its register effects.

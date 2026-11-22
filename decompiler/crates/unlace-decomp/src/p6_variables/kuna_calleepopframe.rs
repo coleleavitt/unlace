@@ -54,7 +54,7 @@ use unlace_num::opcodes::OpCode;
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::p6_variables::kuna_calleepop::{
-    at_address, const_signed, decompose, MAX_ARG_BYTES, RETURN_ADDRESS_ONLY,
+    MAX_ARG_BYTES, RETURN_ADDRESS_ONLY, at_address, const_signed, decompose,
 };
 
 /// The extrapop a fixed-frame caller states for the callee of `call`, or `None`
@@ -129,12 +129,16 @@ enum Instruction {
 /// its return-address push), a push (it stores through `op`'s result), or
 /// anything else.
 fn instruction_kind(data: &Funcdata, op: OpId) -> Instruction {
-    let Some(o) = data.obank().get(op) else { return Instruction::Other };
+    let Some(o) = data.obank().get(op) else {
+        return Instruction::Other;
+    };
     let (at, sp) = (o.get_addr().clone(), o.get_out());
     let mut cur = op;
     let mut stored = false;
     while let Some(next) = data.obank().get(cur).and_then(|o| o.basic_neighbours().1) {
-        let Some(o) = data.obank().get(next) else { break };
+        let Some(o) = data.obank().get(next) else {
+            break;
+        };
         if o.get_addr() != &at {
             break;
         }
@@ -167,15 +171,22 @@ fn stores_cover(
     let mut cur = call;
     while let Some(prev) = data.obank().get(cur).and_then(|o| o.basic_neighbours().0) {
         cur = prev;
-        let Some(o) = data.obank().get(cur) else { break };
+        let Some(o) = data.obank().get(cur) else {
+            break;
+        };
         if o.is_call() {
             break;
         }
         if o.code() != OpCode::CPUI_STORE {
             continue;
         }
-        let at = o.get_in(1).and_then(|a| offset_from(data, spacebase, base, a));
-        let width = o.get_in(2).and_then(|v| data.vbank().get(v)).map(|v| v.get_size());
+        let at = o
+            .get_in(1)
+            .and_then(|a| offset_from(data, spacebase, base, a));
+        let width = o
+            .get_in(2)
+            .and_then(|v| data.vbank().get(v))
+            .map(|v| v.get_size());
         if let (Some(at), Some(width)) = (at, width) {
             let start = i64::from(at) - i64::from(first);
             let end = start + i64::from(width.max(0));
@@ -184,12 +195,19 @@ fn stores_cover(
             covered[lo..hi].fill(true);
         }
     }
-    covered[..size as usize].chunks(step as usize).all(|slot| slot.contains(&true))
+    covered[..size as usize]
+        .chunks(step as usize)
+        .all(|slot| slot.contains(&true))
 }
 
 /// The offset from `base` of the address `addr`: a stack-pointer reference at
 /// `base + #c`, or such a reference plus a constant.
-fn offset_from(data: &Funcdata, spacebase: &Address, base: VarnodeId, addr: VarnodeId) -> Option<int4> {
+fn offset_from(
+    data: &Funcdata,
+    spacebase: &Address,
+    base: VarnodeId,
+    addr: VarnodeId,
+) -> Option<int4> {
     if at_address(data, Some(addr), spacebase) {
         return sp_offset(data, spacebase, base, addr);
     }

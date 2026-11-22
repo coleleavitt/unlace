@@ -112,7 +112,11 @@ pub struct Directive {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Body {
     /// `function <start>[-<end>][=<name>]` — the `--define-function` alias.
-    Function { start: u64, end: Option<u64>, name: Option<String> },
+    Function {
+        start: u64,
+        end: Option<u64>,
+        name: Option<String>,
+    },
     /// `typedef <C declaration>` — intern a type so later directives can name it.
     Typedef { decl: String },
     /// `prototype <func> <C declaration>` — the function's signature.
@@ -120,29 +124,70 @@ pub enum Body {
     /// `data <addr> <C typedeclaration>` — a named, typed global.
     Data { addr: u64, decl: String },
     /// `param [<func>::]<i> <storage> <C typedeclaration>` — a locked input.
-    Param { func: Option<String>, index: int4, storage: String, decl: String },
+    Param {
+        func: Option<String>,
+        index: int4,
+        storage: String,
+        decl: String,
+    },
     /// `return [<func>::]<storage> <C typedeclaration>` — a locked return.
-    Return { func: Option<String>, storage: String, decl: String },
+    Return {
+        func: Option<String>,
+        storage: String,
+        decl: String,
+    },
     /// `comment [<func>::]<addr> <text>` — a comment at an instruction.
-    Comment { func: Option<String>, addr: u64, text: String },
+    Comment {
+        func: Option<String>,
+        addr: u64,
+        text: String,
+    },
     /// `flow [<func>::]<addr> branch|call|callreturn|return` — the flow out of
     /// this instruction is not what kuna decided it was.
-    Flow { func: Option<String>, addr: u64, kind: String },
+    Flow {
+        func: Option<String>,
+        addr: u64,
+        kind: String,
+    },
     /// `callee [<func>::]<callsite> <name|address>` — the indirect call at this
     /// instruction goes to this function.
-    Callee { func: Option<String>, addr: u64, callee: String },
+    Callee {
+        func: Option<String>,
+        addr: u64,
+        callee: String,
+    },
     /// `callproto [<func>::]<callsite> <C declaration>` — the prototype of the
     /// one call made by the instruction at this address.
-    CallProto { func: Option<String>, addr: u64, decl: String },
+    CallProto {
+        func: Option<String>,
+        addr: u64,
+        decl: String,
+    },
     /// `name [<func>::]<symbol> <newname>` — rename a local.
-    Name { func: Option<String>, symbol: String, newname: String },
+    Name {
+        func: Option<String>,
+        symbol: String,
+        newname: String,
+    },
     /// `type [<func>::]<symbol> <C type>` — retype a local.
-    Type { func: Option<String>, symbol: String, decl: String },
+    Type {
+        func: Option<String>,
+        symbol: String,
+        decl: String,
+    },
     /// `format [<func>::]<addr> hex|dec|oct|bin|char [<value>]` — the constant
     /// the instruction at `addr` reads is printed in this form.
-    Format { func: Option<String>, addr: u64, format: String, value: Option<u64> },
+    Format {
+        func: Option<String>,
+        addr: u64,
+        format: String,
+        value: Option<u64>,
+    },
     /// `isolate [<func>::]<symbol>` — this local is not merged with others.
-    Isolate { func: Option<String>, symbol: String },
+    Isolate {
+        func: Option<String>,
+        symbol: String,
+    },
     /// `readonly <addr>+<size>` — the bytes in this range never change at run
     /// time, so a load from it is its initialiser.
     Readonly { addr: u64, size: int4 },
@@ -155,7 +200,11 @@ pub enum Body {
     /// `register <name> <value> [<addr>+<size>]` -- the register holds this
     /// value on entry to any function in the range (everywhere without one):
     /// a tracked register, as a processor spec's `tracked_set` states.
-    Register { name: String, value: u64, range: Option<(u64, int4)> },
+    Register {
+        name: String,
+        value: u64,
+        range: Option<(u64, int4)>,
+    },
 }
 
 /// What became of one directive.  `status` is `applied` or `rejected`; a
@@ -258,7 +307,10 @@ impl Body {
     /// Is this directive one that can only be applied to an already-decompiled
     /// function (because the symbol it names does not exist before)?
     fn is_symbol_scoped(&self) -> bool {
-        matches!(self, Body::Name { .. } | Body::Type { .. } | Body::Format { .. } | Body::Isolate { .. })
+        matches!(
+            self,
+            Body::Name { .. } | Body::Type { .. } | Body::Format { .. } | Body::Isolate { .. }
+        )
     }
 }
 
@@ -292,7 +344,10 @@ impl Directive {
     /// The outcome of a directive the pipeline took and then refused
     /// (see [`Outcome::fatal`]).
     fn refused(&self, detail: impl Into<String>) -> Outcome {
-        Outcome { fatal: true, ..self.rejected(detail) }
+        Outcome {
+            fatal: true,
+            ..self.rejected(detail)
+        }
     }
 }
 
@@ -311,12 +366,17 @@ fn binds_to(body: &Body, name: &str, single: bool) -> bool {
 /// The console-side data organisation of the loaded program.
 fn data_org(prog: &ConsoleProgram) -> DataOrg {
     let (addr_size, word_size) = prog.arch().data_org();
-    DataOrg { addr_size, word_size }
+    DataOrg {
+        addr_size,
+        word_size,
+    }
 }
 
 /// Convert a user-facing address and build it in the default code space.
 fn code_addr(prog: &ConsoleProgram, vma: u64) -> Result<Address, String> {
-    let vma = prog.input_code_offset(vma).map_err(|e| e.explain().to_string())?;
+    let vma = prog
+        .input_code_offset(vma)
+        .map_err(|e| e.explain().to_string())?;
     let space = prog
         .arch()
         .manage()
@@ -328,7 +388,9 @@ fn code_addr(prog: &ConsoleProgram, vma: u64) -> Result<Address, String> {
 
 /// Scale a user address without treating its low bit as a function state bit.
 fn data_addr(prog: &ConsoleProgram, vma: u64) -> Result<Address, String> {
-    let vma = prog.input_address_offset(vma).map_err(|e| e.explain().to_string())?;
+    let vma = prog
+        .input_address_offset(vma)
+        .map_err(|e| e.explain().to_string())?;
     let space = prog
         .arch()
         .manage()
@@ -352,7 +414,10 @@ fn parse_storage(prog: &ConsoleProgram, tok: &str) -> Result<Address, String> {
 /// One grammar for both surfaces — the `--assert` flag and the console's
 /// `override bytes` — so a directive means the same thing however it arrives.
 pub fn parse_hex_bytes(tok: &str) -> Result<Vec<u8>, String> {
-    let digits = tok.strip_prefix("0x").or_else(|| tok.strip_prefix("0X")).unwrap_or(tok);
+    let digits = tok
+        .strip_prefix("0x")
+        .or_else(|| tok.strip_prefix("0X"))
+        .unwrap_or(tok);
     if digits.is_empty() {
         return Err("bytes needs at least one byte of hex".into());
     }
@@ -404,7 +469,9 @@ fn overlay_bytes(prog: &mut ConsoleProgram, vma: u64, data: &[u8]) -> Result<(),
     let mut loader = loader_rc
         .try_borrow_mut()
         .map_err(|_| "the load image is already borrowed".to_string())?;
-    loader.kuna_overlay_bytes(&addr, data).map_err(|e| e.explain().to_string())?;
+    loader
+        .kuna_overlay_bytes(&addr, data)
+        .map_err(|e| e.explain().to_string())?;
     drop(loader);
     prog.note_materialized_bytes(&addr, data.len());
     Ok(())
@@ -473,8 +540,9 @@ fn apply_one_program_scoped(prog: &mut ConsoleProgram, body: &Body) -> Result<()
                             "function end must be above start after target address conversion"
                                 .to_string()
                         })?;
-                    int4::try_from(size)
-                        .map_err(|_| "function byte extent exceeds the supported range".to_string())?
+                    int4::try_from(size).map_err(|_| {
+                        "function byte extent exceeds the supported range".to_string()
+                    })?
                 }
             };
             prog.declare_function(addr, name.as_deref(), size)
@@ -490,12 +558,18 @@ fn apply_one_program_scoped(prog: &mut ConsoleProgram, body: &Body) -> Result<()
         }
         Body::Prototype { func, decl } => apply_prototype(prog, func, decl),
         Body::Data { addr, decl } => apply_data(prog, *addr, decl),
-        Body::Readonly { addr, size } => {
-            paint_property(prog, *addr, *size, unlace_decomp::varnode::varnode_flags::readonly)
-        }
-        Body::Volatile { addr, size } => {
-            paint_property(prog, *addr, *size, unlace_decomp::varnode::varnode_flags::volatil)
-        }
+        Body::Readonly { addr, size } => paint_property(
+            prog,
+            *addr,
+            *size,
+            unlace_decomp::varnode::varnode_flags::readonly,
+        ),
+        Body::Volatile { addr, size } => paint_property(
+            prog,
+            *addr,
+            *size,
+            unlace_decomp::varnode::varnode_flags::volatil,
+        ),
         Body::Register { name, value, range } => apply_register(prog, name, *value, *range),
         // Handled by the decompile loop.
         _ => Err("internal: not a program-scoped directive".into()),
@@ -503,17 +577,30 @@ fn apply_one_program_scoped(prog: &mut ConsoleProgram, body: &Body) -> Result<()
 }
 
 /// `register` -- the in-process twin of the console's `set track`.
-fn apply_register(prog: &mut ConsoleProgram, name: &str, value: u64, range: Option<(u64, int4)>) -> Result<(), String> {
-    let loc = prog.arch().get_register_varnode(name.as_bytes()).map_err(|e| e.explain().to_string())?;
+fn apply_register(
+    prog: &mut ConsoleProgram,
+    name: &str,
+    value: u64,
+    range: Option<(u64, int4)>,
+) -> Result<(), String> {
+    let loc = prog
+        .arch()
+        .get_register_varnode(name.as_bytes())
+        .map_err(|e| e.explain().to_string())?;
     let tracked = unlace_sleigh::globalcontext::TrackedContext { loc, val: value };
     match range {
-        None => prog.arch().with_context_db_mut(|db| db.get_tracked_default().push(tracked)),
+        None => prog
+            .arch()
+            .with_context_db_mut(|db| db.get_tracked_default().push(tracked)),
         Some((addr, size)) => {
             if size <= 0 {
                 return Err("a range needs a size of at least one byte".into());
             }
             let first = code_addr(prog, addr)?;
-            let space = first.get_space().cloned().ok_or("the loaded program has no default code space")?;
+            let space = first
+                .get_space()
+                .cloned()
+                .ok_or("the loaded program has no default code space")?;
             let last = Address::new(space, first.get_offset() + size as u64);
             prog.arch().with_context_db_mut(|db| {
                 let def = db.get_tracked_default().clone();
@@ -558,7 +645,9 @@ fn paint_property(
         .checked_add(size as u64)
         .ok_or_else(|| "the range wraps past the end of the address space".to_string())?;
     let last_open = Address::new(Rc::clone(&space), end);
-    prog.arch_mut().symboltab.set_property_range(flag, &first, &last_open);
+    prog.arch_mut()
+        .symboltab
+        .set_property_range(flag, &first, &last_open);
     repaint_covered_symbols(prog, &space, first.get_offset(), end, flag);
     Ok(())
 }
@@ -692,7 +781,11 @@ pub(crate) fn resolve_proto_target(
     };
     if let Some(vma) = vma {
         let addr = code_addr(prog, vma)?;
-        if let Some(name) = prog.arch().symboltab.function_display_name_across_scopes(&addr) {
+        if let Some(name) = prog
+            .arch()
+            .symboltab
+            .function_display_name_across_scopes(&addr)
+        {
             return Ok(ProtoTarget::At(addr, name));
         }
         if explicit {
@@ -717,12 +810,12 @@ pub(crate) fn park_proto_pieces(
 ) {
     pieces.name = target.name().to_string();
     match target {
-        ProtoTarget::Named(name) => {
-            prog.arch_mut().set_function_prototype_pieces(name, pieces.clone())
-        }
-        ProtoTarget::At(addr, _) => {
-            prog.arch_mut().set_function_prototype_pieces_at(addr, pieces.clone())
-        }
+        ProtoTarget::Named(name) => prog
+            .arch_mut()
+            .set_function_prototype_pieces(name, pieces.clone()),
+        ProtoTarget::At(addr, _) => prog
+            .arch_mut()
+            .set_function_prototype_pieces_at(addr, pieces.clone()),
     }
 }
 
@@ -771,8 +864,13 @@ fn apply_prototype(prog: &mut ConsoleProgram, func: &str, decl: &str) -> Result<
     let target = resolve_proto_target(prog, func)?;
     let model = declared_model(prog, &model);
     park_prototype(prog, &target, &mut pieces, model.as_ref());
-    crate::kuna_callwide::target_declaration(prog, &target, &pieces, model,
-        unlace_decomp::kuna_callwide::DeclarationSource::Assertion);
+    crate::kuna_callwide::target_declaration(
+        prog,
+        &target,
+        &pieces,
+        model,
+        unlace_decomp::kuna_callwide::DeclarationSource::Assertion,
+    );
     prog.set_pending_prototype(target.name(), pieces);
     Ok(())
 }
@@ -780,7 +878,10 @@ fn apply_prototype(prog: &mut ConsoleProgram, func: &str, decl: &str) -> Result<
 /// The prototype-model names the loaded program's architecture has registered,
 /// as the C declaration parser needs them (`glb->hasModel`).
 pub(crate) fn model_names(prog: &ConsoleProgram) -> Vec<String> {
-    prog.arch().proto_model_names().map(str::to_string).collect()
+    prog.arch()
+        .proto_model_names()
+        .map(str::to_string)
+        .collect()
 }
 
 /// The calling convention a declaration named, resolved against the loaded
@@ -808,7 +909,8 @@ pub(crate) fn park_proto_model(
 ) {
     let Some(m) = model else { return };
     let name = target.name().to_string();
-    prog.arch_mut().set_function_prototype_model(&name, Rc::clone(m));
+    prog.arch_mut()
+        .set_function_prototype_model(&name, Rc::clone(m));
 }
 
 /// Lock the parsed prototype onto the target's `FunctionSymbol` by retyping it
@@ -866,21 +968,25 @@ pub(crate) fn lock_prototype_on_symbol(
 /// `FuncProto::set_pieces` honors.  Parking it also covers the case where the named
 /// function IS the one under decompile: `function_seed` seeds `pending_proto`
 /// from the same store.
-fn apply_cross_function(
-    prog: &mut ConsoleProgram,
-    func: &str,
-    body: &Body,
-) -> Result<(), String> {
+fn apply_cross_function(prog: &mut ConsoleProgram, func: &str, body: &Body) -> Result<(), String> {
     use unlace_decomp::fspec::parameter_pieces_flags;
     let org = data_org(prog);
     let target = resolve_proto_target(prog, func)?;
-    let mut pieces = prog.pending_prototype(target.name()).cloned().unwrap_or(PrototypePieces {
-        name: target.name().to_string(),
-        first_var_arg_slot: -1,
-        ..Default::default()
-    });
+    let mut pieces = prog
+        .pending_prototype(target.name())
+        .cloned()
+        .unwrap_or(PrototypePieces {
+            name: target.name().to_string(),
+            first_var_arg_slot: -1,
+            ..Default::default()
+        });
     match body {
-        Body::Param { index, storage, decl, .. } => {
+        Body::Param {
+            index,
+            storage,
+            decl,
+            ..
+        } => {
             if *index < 0 {
                 return Err("a parameter index must not be negative".into());
             }
@@ -1033,10 +1139,14 @@ pub fn function_seed(
         };
         prog.set_assertion_outcome(i, outcome);
     }
-    if directives.iter().any(|d| matches!(d.body, Body::CallProto { .. })) {
+    if directives
+        .iter()
+        .any(|d| matches!(d.body, Body::CallProto { .. }))
+    {
         let outcomes = prog.assertion_outcomes();
         let applied = |i: usize| outcomes.get(i).is_some_and(|o| o.status == "applied");
-        for i in restated_call_prototypes(&directives, applied, |d| binds_to(&d.body, name, single)) {
+        for i in restated_call_prototypes(&directives, applied, |d| binds_to(&d.body, name, single))
+        {
             prog.set_assertion_outcome(i, restated(&directives[i]));
         }
     }
@@ -1060,7 +1170,9 @@ pub fn restated_call_prototypes(
             _ => None,
         })
         .collect();
-    (0..sites.len()).filter(|&i| sites[i].is_some() && sites[i + 1..].contains(&sites[i])).collect()
+    (0..sites.len())
+        .filter(|&i| sites[i].is_some() && sites[i + 1..].contains(&sites[i]))
+        .collect()
 }
 
 /// The outcome of a `callproto` a later one for the same call replaced.
@@ -1089,12 +1201,16 @@ pub fn record_rejected_flow_overrides(
     }
     let directives = prog.assertions().to_vec();
     for (i, directive) in directives.iter().enumerate() {
-        let Body::Flow { addr, kind, .. } = &directive.body else { continue };
+        let Body::Flow { addr, kind, .. } = &directive.body else {
+            continue;
+        };
         if !binds_to(&directive.body, name, single) {
             continue;
         }
         let type_ = unlace_decomp::overrides::Override::string_to_type(kind.as_bytes());
-        let Ok(at) = code_addr(prog, *addr) else { continue };
+        let Ok(at) = code_addr(prog, *addr) else {
+            continue;
+        };
         let Some((_, _, reason)) = refused.iter().find(|(a, t, _)| a == &at && *t == type_) else {
             continue;
         };
@@ -1113,7 +1229,11 @@ pub fn record_rejected_callee_overrides(
     single: bool,
     fd: &Funcdata,
 ) {
-    if !prog.assertions().iter().any(|d| matches!(d.body, Body::Callee { .. })) {
+    if !prog
+        .assertions()
+        .iter()
+        .any(|d| matches!(d.body, Body::Callee { .. }))
+    {
         return;
     }
     let directives = prog.assertions().to_vec();
@@ -1123,14 +1243,18 @@ pub fn record_rejected_callee_overrides(
     let restated = restated_callees(&directives, applied, binds);
     let refused = fd.kuna_rejected_callee_overrides();
     for (i, directive) in directives.iter().enumerate() {
-        let Body::Callee { addr, .. } = &directive.body else { continue };
+        let Body::Callee { addr, .. } = &directive.body else {
+            continue;
+        };
         if !applied(i) || !binds(directive) {
             continue;
         }
         let outcome = if restated.contains(&i) {
             restated_callee(directive)
         } else {
-            let Ok(at) = code_addr(prog, *addr) else { continue };
+            let Ok(at) = code_addr(prog, *addr) else {
+                continue;
+            };
             let Some((_, _, reason)) = refused.iter().find(|(site, _, _)| site == &at) else {
                 continue;
             };
@@ -1156,7 +1280,9 @@ pub fn restated_callees(
             _ => None,
         })
         .collect();
-    (0..sites.len()).filter(|&i| sites[i].is_some() && sites[i + 1..].contains(&sites[i])).collect()
+    (0..sites.len())
+        .filter(|&i| sites[i].is_some() && sites[i + 1..].contains(&sites[i]))
+        .collect()
 }
 
 /// The outcome of a `callee` a later one for the same call site replaced.
@@ -1173,18 +1299,29 @@ pub fn record_unbound_call_prototypes(
     single: bool,
     fd: &Funcdata,
 ) {
-    if !prog.assertions().iter().any(|d| matches!(d.body, Body::CallProto { .. })) {
+    if !prog
+        .assertions()
+        .iter()
+        .any(|d| matches!(d.body, Body::CallProto { .. }))
+    {
         return;
     }
     let directives = prog.assertions().to_vec();
     for (i, directive) in directives.iter().enumerate() {
-        let Body::CallProto { addr, .. } = &directive.body else { continue };
+        let Body::CallProto { addr, .. } = &directive.body else {
+            continue;
+        };
         if !binds_to(&directive.body, name, single)
-            || prog.assertion_outcomes().get(i).is_none_or(|o| o.status != "applied")
+            || prog
+                .assertion_outcomes()
+                .get(i)
+                .is_none_or(|o| o.status != "applied")
         {
             continue;
         }
-        let Ok(at) = code_addr(prog, *addr) else { continue };
+        let Ok(at) = code_addr(prog, *addr) else {
+            continue;
+        };
         if !crate::kuna_callproto::has_call_at(fd, &at) {
             let outcome = directive.rejected(crate::kuna_callproto::NO_CALL);
             prog.set_assertion_outcome(i, outcome);
@@ -1202,7 +1339,12 @@ fn seed_one(
     use unlace_decomp::fspec::parameter_pieces_flags;
     let org = data_org(prog);
     match body {
-        Body::Param { index, storage, decl, .. } => {
+        Body::Param {
+            index,
+            storage,
+            decl,
+            ..
+        } => {
             let addr = parse_storage(prog, storage)?;
             let (ct, pname) = crate::grammar::parse_type(decl, prog.arch().types(), org)
                 .map_err(|e| e.explain().to_string())?;
@@ -1315,7 +1457,11 @@ pub fn apply_symbol_scoped(
     let _load = prog.arch().load_scope();
     let directives = prog.assertions().to_vec();
     let mut applied_any = false;
-    let mut touched: Vec<(usize, unlace_decomp::database::SymbolId, Option<Rc<Datatype>>)> = Vec::new();
+    let mut touched: Vec<(
+        usize,
+        unlace_decomp::database::SymbolId,
+        Option<Rc<Datatype>>,
+    )> = Vec::new();
     for (i, directive) in directives.iter().enumerate() {
         if !directive.body.is_symbol_scoped() || !binds_to(&directive.body, name, single) {
             continue;
@@ -1337,19 +1483,48 @@ fn apply_one_symbol_scoped(
     prog: &ConsoleProgram,
     fd: &mut Funcdata,
     body: &Body,
-) -> Result<(Option<unlace_decomp::database::SymbolId>, Option<Rc<Datatype>>), String> {
+) -> Result<
+    (
+        Option<unlace_decomp::database::SymbolId>,
+        Option<Rc<Datatype>>,
+    ),
+    String,
+> {
     let maxduplicates = unlace_decomp::kuna_dynamichashmax::MAX_DUPLICATES;
     match body {
-        Body::Name { symbol, newname, .. } => {
-            Ok((crate::kuna_hightarget::apply_local(fd, symbol, newname, None, maxduplicates, Some(prog.arch()))?, None))
-        }
+        Body::Name {
+            symbol, newname, ..
+        } => Ok((
+            crate::kuna_hightarget::apply_local(
+                fd,
+                symbol,
+                newname,
+                None,
+                maxduplicates,
+                Some(prog.arch()),
+            )?,
+            None,
+        )),
         Body::Type { symbol, decl, .. } => {
-            let (ct, newname) = crate::grammar::parse_type(decl, prog.arch().types(), data_org(prog))
-                .map_err(|e| e.explain().to_string())?;
-            let applied = crate::kuna_hightarget::apply_local(fd, symbol, &newname, Some(ct.clone()), maxduplicates, Some(prog.arch()))?;
+            let (ct, newname) =
+                crate::grammar::parse_type(decl, prog.arch().types(), data_org(prog))
+                    .map_err(|e| e.explain().to_string())?;
+            let applied = crate::kuna_hightarget::apply_local(
+                fd,
+                symbol,
+                &newname,
+                Some(ct.clone()),
+                maxduplicates,
+                Some(prog.arch()),
+            )?;
             Ok((applied, Some(ct)))
         }
-        Body::Format { addr, format, value, .. } => {
+        Body::Format {
+            addr,
+            format,
+            value,
+            ..
+        } => {
             let at = code_addr(prog, *addr)?;
             crate::kuna_constformat::apply(fd, prog.arch(), &at, format, *value, maxduplicates)?;
             Ok((None, None))
@@ -1377,15 +1552,27 @@ pub struct Expected {
 /// retype) left on `fd`'s scope.
 pub fn expected_locals(
     fd: &Funcdata,
-    touched: &[(usize, unlace_decomp::database::SymbolId, Option<Rc<Datatype>>)],
+    touched: &[(
+        usize,
+        unlace_decomp::database::SymbolId,
+        Option<Rc<Datatype>>,
+    )],
 ) -> Vec<Expected> {
-    let Some(lm) = fd.get_scope_local() else { return Vec::new() };
+    let Some(lm) = fd.get_scope_local() else {
+        return Vec::new();
+    };
     let mut out: Vec<(unlace_decomp::database::SymbolId, Expected)> = Vec::new();
     for (index, symbol, retype) in touched {
-        let Some(directive) = fd.kuna_directive_symbols().iter().find(|d| d.symbol == *symbol) else {
+        let Some(directive) = fd
+            .kuna_directive_symbols()
+            .iter()
+            .find(|d| d.symbol == *symbol)
+        else {
             continue;
         };
-        let Some(record) = lm.database().try_symbol(*symbol) else { continue };
+        let Some(record) = lm.database().try_symbol(*symbol) else {
+            continue;
+        };
         let name = if record.is_name_undefined() || record.name.is_empty() {
             directive.printed.clone()
         } else {
@@ -1406,7 +1593,8 @@ pub fn expected_locals(
                     printed: directive.printed.clone(),
                     name,
                     retype: retype.clone(),
-                    parameter: lm.symbol_category(*symbol) == unlace_decomp::database::symbol_category::FUNCTION_PARAMETER,
+                    parameter: lm.symbol_category(*symbol)
+                        == unlace_decomp::database::symbol_category::FUNCTION_PARAMETER,
                 },
             )),
         }
@@ -1428,10 +1616,15 @@ pub enum Shown {
 pub fn verify_printed(prog: &mut ConsoleProgram, fd: &Funcdata, code: &str, expected: &[Expected]) {
     let directives = prog.assertions().to_vec();
     for (i, shown) in check_printed(prog.arch(), fd, code, expected) {
-        let Some(directive) = directives.get(i) else { continue };
+        let Some(directive) = directives.get(i) else {
+            continue;
+        };
         let outcome = match shown {
             Shown::Refused(reason) => directive.refused(reason),
-            Shown::AppliedAs(note) => Outcome { detail: Some(note), ..directive.applied() },
+            Shown::AppliedAs(note) => Outcome {
+                detail: Some(note),
+                ..directive.applied()
+            },
         };
         prog.set_assertion_outcome(i, outcome);
     }
@@ -1444,11 +1637,26 @@ pub fn verify_printed(prog: &mut ConsoleProgram, fd: &Funcdata, code: &str, expe
 pub fn verify_formats(prog: &mut ConsoleProgram, fd: &Funcdata, name: &str, single: bool) {
     let directives = prog.assertions().to_vec();
     for (i, directive) in directives.iter().enumerate() {
-        let Body::Format { addr, format, value, .. } = &directive.body else { continue };
-        if !binds_to(&directive.body, name, single) || prog.assertion_outcomes().get(i).is_none_or(|o| o.status != "applied") {
+        let Body::Format {
+            addr,
+            format,
+            value,
+            ..
+        } = &directive.body
+        else {
+            continue;
+        };
+        if !binds_to(&directive.body, name, single)
+            || prog
+                .assertion_outcomes()
+                .get(i)
+                .is_none_or(|o| o.status != "applied")
+        {
             continue;
         }
-        let Ok(at) = code_addr(prog, *addr) else { continue };
+        let Ok(at) = code_addr(prog, *addr) else {
+            continue;
+        };
         if !crate::kuna_constformat::holds(fd, &at, format, *value) {
             let outcome = directive.refused(crate::kuna_constformat::NOT_REPLAYED);
             prog.set_assertion_outcome(i, outcome);
@@ -1475,16 +1683,30 @@ pub fn check_printed(
     }
     let print = arch.print();
     let declared = print.declared_locals();
-    let mut taken: std::collections::HashSet<unlace_decomp::context::HighVariableId> = std::collections::HashSet::new();
+    let mut taken: std::collections::HashSet<unlace_decomp::context::HighVariableId> =
+        std::collections::HashSet::new();
     let mut found: Vec<Option<(String, String)>> = vec![None; expected.len()];
     // A local printed under its library name (`unlace_decomp::kuna_libcnames`)
     // is declared under that name and answers to its number too.
     let declares = |base: &str, name: &str| {
-        base == name || fd.kuna_library_aliases().iter().any(|a| a.shown && a.number == name && a.alias == base)
+        base == name
+            || fd
+                .kuna_library_aliases()
+                .iter()
+                .any(|a| a.shown && a.number == name && a.alias == base)
     };
-    for (slot, local) in expected.iter().enumerate().filter(|(_, local)| !local.parameter) {
-        let target = fd.kuna_directive_targets().get(&local.printed).and_then(|&high| print.declared_local(high));
-        if let Some(decl) = target.filter(|decl| declares(&decl.base, &local.name) && taken.insert(decl.high)) {
+    for (slot, local) in expected
+        .iter()
+        .enumerate()
+        .filter(|(_, local)| !local.parameter)
+    {
+        let target = fd
+            .kuna_directive_targets()
+            .get(&local.printed)
+            .and_then(|&high| print.declared_local(high));
+        if let Some(decl) =
+            target.filter(|decl| declares(&decl.base, &local.name) && taken.insert(decl.high))
+        {
             found[slot] = Some((decl.name.clone(), decl.decl.clone()));
         }
     }
@@ -1507,9 +1729,15 @@ pub fn check_printed(
     let mut out = Vec::new();
     for (local, found) in expected.iter().zip(found) {
         let shown = match found {
-            None => Some(Shown::Refused(format!("nothing is declared as `{}` after it", local.name))),
+            None => Some(Shown::Refused(format!(
+                "nothing is declared as `{}` after it",
+                local.name
+            ))),
             Some((name, decl)) => {
-                let spelled = local.retype.as_ref().map(|ct| unlace_decomp::printc::type_to_c_string(arch, ct));
+                let spelled = local
+                    .retype
+                    .as_ref()
+                    .map(|ct| unlace_decomp::printc::type_to_c_string(arch, ct));
                 match spelled.filter(|spelled| squeeze(spelled) != squeeze(&decl)) {
                     Some(spelled) => Some(Shown::Refused(format!(
                         "`{name}` is declared as `{}`, not `{}`",
@@ -1555,7 +1783,12 @@ fn signature_declaration(code: &str, name: &str) -> Option<String> {
         let (head, tail) = text.split_at(end);
         let head = head.trim_end();
         let before = head.strip_suffix(name)?;
-        if before.chars().last().is_some_and(|c| c.is_ascii_alphanumeric() || c == '_') || before.trim().is_empty() {
+        if before
+            .chars()
+            .last()
+            .is_some_and(|c| c.is_ascii_alphanumeric() || c == '_')
+            || before.trim().is_empty()
+        {
             return None;
         }
         Some(format!("{}{tail}", before))
@@ -1564,18 +1797,21 @@ fn signature_declaration(code: &str, name: &str) -> Option<String> {
     let signature = signature.split("//").next().unwrap_or(signature);
     let stop = signature.rfind(')')?;
     let mut depth = 0;
-    let start = signature[..stop].char_indices().rev().find_map(|(i, c)| match c {
-        ')' => {
-            depth += 1;
-            None
-        }
-        '(' if depth == 0 => Some(i),
-        '(' => {
-            depth -= 1;
-            None
-        }
-        _ => None,
-    })?;
+    let start = signature[..stop]
+        .char_indices()
+        .rev()
+        .find_map(|(i, c)| match c {
+            ')' => {
+                depth += 1;
+                None
+            }
+            '(' if depth == 0 => Some(i),
+            '(' => {
+                depth -= 1;
+                None
+            }
+            _ => None,
+        })?;
     let mut depth = 0;
     let mut piece = String::new();
     for c in signature[start + 1..stop].chars() {
@@ -1611,7 +1847,9 @@ fn squeeze(text: &str) -> String {
 /// wins; asserting the range is a statement about the range, not an override of
 /// a switch the caller set by hand.
 pub fn implies_readonly_propagation(directives: &[Directive]) -> bool {
-    directives.iter().any(|d| matches!(d.body, Body::Readonly { .. }))
+    directives
+        .iter()
+        .any(|d| matches!(d.body, Body::Readonly { .. }))
 }
 
 /// The outcome of a directive nothing claimed -- the load never reached the
@@ -1641,7 +1879,8 @@ pub fn carried_usepoint_symbols(
     fd: &Funcdata,
 ) -> Vec<(String, Rc<Datatype>, Address, uint4, Address, bool)> {
     let renamed = name_only_renames(fd);
-    let mut specs = crate::kuna_paramasserts::exclude_from_usepoints(fd, fd.usepoint_symbol_specs());
+    let mut specs =
+        crate::kuna_paramasserts::exclude_from_usepoints(fd, fd.usepoint_symbol_specs());
     specs.retain(|(name, ..)| !renamed.contains(name));
     specs
 }
@@ -1662,7 +1901,9 @@ pub fn carried_dynamic_symbols(fd: &Funcdata) -> Vec<unlace_decomp::database::Dy
 /// over one definition of a merged variable split it on the next decompile, and
 /// a type lock retyped what it did not cover.
 fn name_only_renames(fd: &Funcdata) -> Vec<String> {
-    let Some(lm) = fd.get_scope_local() else { return Vec::new() };
+    let Some(lm) = fd.get_scope_local() else {
+        return Vec::new();
+    };
     fd.kuna_directive_symbols()
         .iter()
         .filter(|d| unlace_decomp::kuna_stablenames::is_carried_as_name(fd, d.symbol))

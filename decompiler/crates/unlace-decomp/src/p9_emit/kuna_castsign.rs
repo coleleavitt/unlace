@@ -76,10 +76,10 @@ use std::collections::{HashMap, HashSet};
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
-use unlace_base::address::Address;
 use crate::context::{HighVariableId, OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
+use unlace_base::address::Address;
 
 /// How many highs in `fd` print each name.
 pub(crate) fn name_counts(fd: &Funcdata) -> HashMap<String, u32> {
@@ -101,14 +101,19 @@ pub(crate) fn whole_slot_local(
     names: &HashMap<String, u32>,
     is_plain_integer: impl Fn(&Datatype) -> bool,
 ) -> bool {
-    let Some(h) = fd.high_bank().get(high) else { return false };
+    let Some(h) = fd.high_bank().get(high) else {
+        return false;
+    };
     if h.kuna_symbol_offset() != 0 {
         return false;
     }
-    if h.kuna_symbol_type().is_some_and(|t| !is_plain_integer(t) || t.get_size() != width) {
+    if h.kuna_symbol_type()
+        .is_some_and(|t| !is_plain_integer(t) || t.get_size() != width)
+    {
         return false;
     }
-    h.kuna_name().is_some_and(|n| names.get(n).copied() == Some(1))
+    h.kuna_name()
+        .is_some_and(|n| names.get(n).copied() == Some(1))
 }
 
 /// Is `high` bound to a Symbol whose type is locked: a `--assert type`, a DWARF
@@ -117,8 +122,12 @@ pub(crate) fn whole_slot_local(
 /// naming pass's bind, a dynamic Symbol, and the Symbol containing each
 /// address-tied member.
 pub(crate) fn symbol_type_locked(fd: &Funcdata, high: HighVariableId) -> bool {
-    let Some(h) = fd.high_bank().get(high) else { return true };
-    let Some(lm) = fd.get_scope_local() else { return false };
+    let Some(h) = fd.high_bank().get(high) else {
+        return true;
+    };
+    let Some(lm) = fd.get_scope_local() else {
+        return false;
+    };
     let db = lm.database();
     if [h.kuna_link_symbol(), h.kuna_dynamic_symbol()]
         .into_iter()
@@ -141,8 +150,12 @@ pub(crate) fn symbol_type_locked(fd: &Funcdata, high: HighVariableId) -> bool {
 /// signed: a same-width conversion to a pointer, or the index of a pointer-width
 /// `PTRADD`.
 pub(crate) fn neutral_reader(fd: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
-    let Some(o) = fd.obank().get(op) else { return false };
-    let Some(size) = fd.vbank().get(vn).map(|v| v.get_size()) else { return false };
+    let Some(o) = fd.obank().get(op) else {
+        return false;
+    };
+    let Some(size) = fd.vbank().get(vn).map(|v| v.get_size()) else {
+        return false;
+    };
     match o.code() {
         OpCode::CPUI_CAST => o
             .get_out()
@@ -167,7 +180,10 @@ pub(crate) fn neutral_reader(fd: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
 /// is defined; over a signed one each is undefined on overflow.
 pub(crate) fn can_overflow(opc: OpCode, slot: int4) -> bool {
     match opc {
-        OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB | OpCode::CPUI_INT_MULT | OpCode::CPUI_INT_2COMP => true,
+        OpCode::CPUI_INT_ADD
+        | OpCode::CPUI_INT_SUB
+        | OpCode::CPUI_INT_MULT
+        | OpCode::CPUI_INT_2COMP => true,
         OpCode::CPUI_INT_LEFT => slot == 0,
         _ => false,
     }
@@ -187,7 +203,9 @@ pub(crate) fn wide_literal(fd: &Funcdata, other: VarnodeId) -> bool {
         if !seen.insert(vn) {
             continue;
         }
-        let Some(v) = fd.vbank().get(vn) else { continue };
+        let Some(v) = fd.vbank().get(vn) else {
+            continue;
+        };
         if v.is_constant() {
             let bits = v.get_size() * 8;
             if (1..=64).contains(&bits) && (v.get_offset() >> (bits - 1)) & 1 == 1 {
@@ -198,7 +216,9 @@ pub(crate) fn wide_literal(fd: &Funcdata, other: VarnodeId) -> bool {
         if !v.is_implied() {
             continue;
         }
-        let Some(o) = v.get_def().and_then(|d| fd.obank().get(d)) else { continue };
+        let Some(o) = v.get_def().and_then(|d| fd.obank().get(d)) else {
+            continue;
+        };
         let inputs = match o.code() {
             OpCode::CPUI_INT_ADD
             | OpCode::CPUI_INT_SUB
@@ -228,8 +248,12 @@ pub(crate) fn wide_literal(fd: &Funcdata, other: VarnodeId) -> bool {
 /// preserves the value, so `castimplied` keeps it there.
 pub(crate) fn drops_printed_cast(fd: &Funcdata, casts: &[OpId], newty: &Datatype) -> bool {
     casts.iter().any(|&op| {
-        let Some(out) = fd.obank().get(op).and_then(|o| o.get_out()) else { return false };
-        let Some(v) = fd.vbank().get(out) else { return false };
+        let Some(out) = fd.obank().get(op).and_then(|o| o.get_out()) else {
+            return false;
+        };
+        let Some(v) = fd.vbank().get(out) else {
+            return false;
+        };
         let t = v.get_type_def_facing();
         if t.get_size() != newty.get_size()
             || t.get_metatype() != newty.get_metatype()

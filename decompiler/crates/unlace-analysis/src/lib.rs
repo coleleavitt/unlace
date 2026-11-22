@@ -49,19 +49,19 @@
 //!
 //! Lints are inherited from the workspace (`[lints] workspace = true`).
 
-pub mod pass;
-pub mod passes;
-pub mod loadimage_object;
+pub mod analyzers;
 pub mod image_bytes;
-pub mod loadimage_te;
+pub mod listing;
+pub mod loader;
 pub mod loadimage_dex;
 pub mod loadimage_mz;
-pub mod loader;
-pub mod analyzers;
-pub mod listing;
-pub mod upx;
+pub mod loadimage_object;
+pub mod loadimage_te;
 pub mod neolite;
+pub mod pass;
+pub mod passes;
 pub mod pklite;
+pub mod upx;
 
 // Flat re-export: analyzer paths stay `unlace_analysis::<analyzer>` (the
 // `analyzers/` folder is a layout grouping, not an API namespace).

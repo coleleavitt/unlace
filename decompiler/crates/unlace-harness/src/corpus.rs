@@ -41,22 +41,22 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::marshal::IdRegistry;
-use unlace_base::space::{spacetype, AddrSpaceManager};
+use unlace_base::space::{AddrSpaceManager, spacetype};
 use unlace_base::xml::{DocumentStorage, Element};
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
+use unlace_decomp::context::{ArchContext as IrArch, TypeOp};
 use unlace_decomp::flow::{FlowEnvironment, FlowInfo};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::op::pcodeop_flags;
-use unlace_decomp::context::{ArchContext as IrArch, TypeOp};
-use unlace_decomp::sleigh_arch::{register_sleigh_arch_ids, LanguageDatabase};
+use unlace_decomp::sleigh_arch::{LanguageDatabase, register_sleigh_arch_ids};
 use unlace_decomp::xml_arch::{XmlArchitecture, XmlArchitectureCapability};
 
 use unlace_sleigh::loadimage::LoadImage;
 use unlace_sleigh::loadimage_xml::register_loadimage_xml_ids;
 use unlace_sleigh::sleigh::Sleigh;
-use unlace_sleigh::translate::{register_translate_ids, PcodeEmit, Translate, UniqueLayout};
+use unlace_sleigh::translate::{PcodeEmit, Translate, UniqueLayout, register_translate_ids};
 
 use crate::liftdiff::{self, BlockRec, DiffResult, OpClass, OpRec, StructModel};
 
@@ -294,7 +294,10 @@ pub const CASES: &[Case] = &[
 
 /// The repo root (the worktree containing `specs/`, `decompiler/`, `tests/`).
 pub fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn find_binaryimage(el: &Rc<Element>) -> Option<Rc<Element>> {
@@ -347,7 +350,10 @@ pub fn bootstrap(c: &Case) -> Result<Bootstrap, String> {
     let corpus_path = root.join(c.corpus);
     let sla_path = root.join("specs").join(c.sla_rel);
     if !sla_path.is_file() {
-        return Err(format!("not built: {} (run `make specs`)", sla_path.display()));
+        return Err(format!(
+            "not built: {} (run `make specs`)",
+            sla_path.display()
+        ));
     }
 
     let registry = build_registry();
@@ -356,16 +362,23 @@ pub fn bootstrap(c: &Case) -> Result<Bootstrap, String> {
 
     let xml = std::fs::read(&corpus_path).map_err(|e| format!("read corpus: {e}"))?;
     let mut store = DocumentStorage::new();
-    let doc_root =
-        store.parse_document(&xml).map_err(|e| format!("parse corpus: {e}"))?.get_root().clone();
+    let doc_root = store
+        .parse_document(&xml)
+        .map_err(|e| format!("parse corpus: {e}"))?
+        .get_root()
+        .clone();
     let bi = find_binaryimage(&doc_root).ok_or("corpus has no <binaryimage>")?;
-    arch.build_loader(Rc::clone(&bi)).map_err(|e| format!("build_loader: {e}"))?;
+    arch.build_loader(Rc::clone(&bi))
+        .map_err(|e| format!("build_loader: {e}"))?;
 
     let mut db = LanguageDatabase::new();
     db.scan_for_sleigh_directories(root.join("specs").to_str().unwrap());
-    db.get_descriptions(&registry).map_err(|e| format!("collect ldefs: {e}"))?;
+    db.get_descriptions(&registry)
+        .map_err(|e| format!("collect ldefs: {e}"))?;
 
-    let archattr = bi.get_attribute_value("arch").map_err(|e| format!("binaryimage arch: {e}"))?;
+    let archattr = bi
+        .get_attribute_value("arch")
+        .map_err(|e| format!("binaryimage arch: {e}"))?;
     let arch_id = String::from_utf8_lossy(archattr).into_owned();
     arch.sleigh_mut().set_archid(&arch_id);
     arch.sleigh_mut()
@@ -375,8 +388,13 @@ pub fn bootstrap(c: &Case) -> Result<Bootstrap, String> {
         return Err("language index unresolved".to_string());
     }
 
-    let specs = arch.sleigh().build_spec_file(&db).map_err(|e| format!("build_spec_file: {e}"))?;
-    let resolved_sla = specs.slafile.ok_or("build_spec_file did not resolve a .sla")?;
+    let specs = arch
+        .sleigh()
+        .build_spec_file(&db)
+        .map_err(|e| format!("build_spec_file: {e}"))?;
+    let resolved_sla = specs
+        .slafile
+        .ok_or("build_spec_file did not resolve a .sla")?;
     let sla = std::fs::read(&resolved_sla).map_err(|e| format!("read resolved sla: {e}"))?;
     arch.sleigh_mut()
         .build_translator(Box::new(DummyImg), &sla)
@@ -390,7 +408,10 @@ pub fn bootstrap(c: &Case) -> Result<Bootstrap, String> {
     // to 4 so a `void *` is a 32-bit pointer despite the 64-bit GPR model.
     {
         let langindex = arch.sleigh().language_index();
-        let base = arch.sleigh_mut().base_mut().ok_or("translator base missing")?;
+        let base = arch
+            .sleigh_mut()
+            .base_mut()
+            .ok_or("translator base missing")?;
         db.modify_spaces(langindex, base.manage())
             .map_err(|e| format!("modify_spaces: {e}"))?;
     }
@@ -402,7 +423,10 @@ pub fn bootstrap(c: &Case) -> Result<Bootstrap, String> {
     let pspec_ctx = parse_pspec_context(&specs.processorfile)
         .map_err(|e| format!("parse pspec context: {e}"))?;
     {
-        let base = arch.sleigh_mut().base_mut().ok_or("translator base missing")?;
+        let base = arch
+            .sleigh_mut()
+            .base_mut()
+            .ok_or("translator base missing")?;
         for (name, val) in &pspec_ctx {
             base.translate_mut().set_context_default(name, *val);
         }
@@ -416,7 +440,11 @@ pub fn bootstrap(c: &Case) -> Result<Bootstrap, String> {
     arch.open_image(unsafe { &*manager_ptr }, &registry)
         .map_err(|e| format!("open_image: {e}"))?;
     let img = arch.take_loader().ok_or("loader vanished after open")?;
-    arch.sleigh_mut().base_mut().unwrap().translate_mut().set_loader(Box::new(img));
+    arch.sleigh_mut()
+        .base_mut()
+        .unwrap()
+        .translate_mut()
+        .set_loader(Box::new(img));
 
     let _ = registry;
     Ok(Bootstrap { arch })
@@ -432,7 +460,11 @@ fn parse_pspec_context(pspec_path: &str) -> Result<Vec<(String, u32)>, String> {
     }
     let bytes = std::fs::read(pspec_path).map_err(|e| format!("read {pspec_path}: {e}"))?;
     let mut store = DocumentStorage::new();
-    let root = store.parse_document(&bytes).map_err(|e| format!("{e}"))?.get_root().clone();
+    let root = store
+        .parse_document(&bytes)
+        .map_err(|e| format!("{e}"))?
+        .get_root()
+        .clone();
     let mut out = Vec::new();
     collect_context_sets(&root, false, &mut out)?;
     Ok(out)
@@ -447,11 +479,18 @@ fn collect_context_sets(
     let name = el.get_name();
     let now_in = in_context_set || name == "context_set";
     if now_in && name == "set" {
-        let n = el.get_attribute_value("name").map_err(|e| format!("set@name: {e}"))?;
-        let v = el.get_attribute_value("val").map_err(|e| format!("set@val: {e}"))?;
+        let n = el
+            .get_attribute_value("name")
+            .map_err(|e| format!("set@name: {e}"))?;
+        let v = el
+            .get_attribute_value("val")
+            .map_err(|e| format!("set@val: {e}"))?;
         let name_s = String::from_utf8_lossy(n).into_owned();
         let val_s = String::from_utf8_lossy(v).into_owned();
-        let val: u32 = val_s.trim().parse().map_err(|e| format!("set val {val_s:?}: {e}"))?;
+        let val: u32 = val_s
+            .trim()
+            .parse()
+            .map_err(|e| format!("set val {val_s:?}: {e}"))?;
         out.push((name_s, val));
     }
     for c in el.get_children() {
@@ -493,13 +532,18 @@ impl FlowEnvironment for DiffEnv<'_> {
 
 fn ir_boundary_manager(src: &AddrSpaceManager) -> AddrSpaceManager {
     use unlace_base::space::{
-        addrspace_flags, AddrSpace, ConstantSpace, FspecSpace, IopSpace, UniqueSpace,
+        AddrSpace, ConstantSpace, FspecSpace, IopSpace, UniqueSpace, addrspace_flags,
     };
     let mut m = AddrSpaceManager::new();
-    m.insert_space(Rc::new(ConstantSpace::new())).expect("const");
-    let big_end = src.get_default_code_space().map(|s| s.is_big_endian()).unwrap_or(false);
+    m.insert_space(Rc::new(ConstantSpace::new()))
+        .expect("const");
+    let big_end = src
+        .get_default_code_space()
+        .map(|s| s.is_big_endian())
+        .unwrap_or(false);
     let uniq_index = m.num_spaces();
-    m.insert_space(Rc::new(UniqueSpace::new(uniq_index, 0, big_end))).expect("unique");
+    m.insert_space(Rc::new(UniqueSpace::new(uniq_index, 0, big_end)))
+        .expect("unique");
     if let Some(code) = src.get_default_code_space() {
         let ram = AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
@@ -539,7 +583,9 @@ impl PcodeEmit for NullEmit {
 pub fn extract_rust_model(bs: &Bootstrap, c: &Case) -> Result<StructModel, String> {
     let base = bs.arch.sleigh().base().unwrap();
     let space = Rc::clone(
-        base.manage().get_space_by_name(c.entry_space).ok_or("entry space missing")?,
+        base.manage()
+            .get_space_by_name(c.entry_space)
+            .ok_or("entry space missing")?,
     );
     let entry = Address::new(Rc::clone(&space), c.entry_off);
     let uniq_start = base.translate().get_unique_start(UniqueLayout::ANALYSIS);
@@ -548,10 +594,14 @@ pub fn extract_rust_model(bs: &Bootstrap, c: &Case) -> Result<StructModel, Strin
         .map_err(|e| format!("Funcdata::new: {e}"))?;
 
     let env = DiffEnv {
-        sleigh: base.translate().as_sleigh().expect("diff harness: standalone Sleigh engine"),
+        sleigh: base
+            .translate()
+            .as_sleigh()
+            .expect("diff harness: standalone Sleigh engine"),
     };
     let mut flow = FlowInfo::new(fd, &env);
-    flow.generate_ops().map_err(|e| format!("EXCLUDED: generate_ops {}", exclusion_reason(&e)))?;
+    flow.generate_ops()
+        .map_err(|e| format!("EXCLUDED: generate_ops {}", exclusion_reason(&e)))?;
     flow.generate_blocks()
         .map_err(|e| format!("EXCLUDED: generate_blocks {}", exclusion_reason(&e)))?;
     flow.data.structure_reset();
@@ -608,7 +658,13 @@ pub fn extract_rust_model(bs: &Bootstrap, c: &Case) -> Result<StructModel, Strin
         out_indices.sort_unstable();
         out_indices.dedup();
 
-        blocks.push(BlockRec { index: index as i64, start, stop, ops, out_indices });
+        blocks.push(BlockRec {
+            index: index as i64,
+            start,
+            stop,
+            ops,
+            out_indices,
+        });
     }
 
     Ok(StructModel { blocks })
@@ -623,7 +679,10 @@ fn block_cover_range(fd: &Funcdata, bl: unlace_decomp::context::BlockId) -> (u64
         _ => return (0, 0),
     };
     let start = cover.get_first_range().map(|r| r.get_first()).unwrap_or(0);
-    let stop = cover.get_last_range().map(|r| r.get_last()).unwrap_or(start);
+    let stop = cover
+        .get_last_range()
+        .map(|r| r.get_last())
+        .unwrap_or(start);
     (start, stop)
 }
 
@@ -651,10 +710,21 @@ fn exclusion_reason(e: &KunaError) -> String {
 /// The outcome of running one corpus case.
 #[derive(Debug)]
 pub enum Outcome {
-    Pass { excluded_tracked: usize, blocks: usize, ops: usize },
-    Divergent { detail: String, excluded_tracked: usize },
-    Excluded { reason: String },
-    Skipped { reason: String },
+    Pass {
+        excluded_tracked: usize,
+        blocks: usize,
+        ops: usize,
+    },
+    Divergent {
+        detail: String,
+        excluded_tracked: usize,
+    },
+    Excluded {
+        reason: String,
+    },
+    Skipped {
+        reason: String,
+    },
 }
 
 /// Run one corpus case end-to-end: parse the committed C++ B2 fixture, bootstrap +
@@ -697,10 +767,15 @@ pub fn run_case(c: &Case) -> Result<Outcome, String> {
     };
 
     Ok(match liftdiff::diff(&rust, &cpp) {
-        DiffResult::Pass => {
-            Outcome::Pass { excluded_tracked, blocks: cpp.blocks.len(), ops: cpp.total_ops() }
-        }
-        DiffResult::Divergent(detail) => Outcome::Divergent { detail, excluded_tracked },
+        DiffResult::Pass => Outcome::Pass {
+            excluded_tracked,
+            blocks: cpp.blocks.len(),
+            ops: cpp.total_ops(),
+        },
+        DiffResult::Divergent(detail) => Outcome::Divergent {
+            detail,
+            excluded_tracked,
+        },
     })
 }
 
@@ -744,14 +819,21 @@ impl SelfTestReport {
         );
         for (stem, expect, outcome) in &self.rows {
             match outcome {
-                Outcome::Pass { excluded_tracked, blocks, ops } => {
+                Outcome::Pass {
+                    excluded_tracked,
+                    blocks,
+                    ops,
+                } => {
                     let _ = writeln!(
                         s,
                         "{stem:<20} {:<10} {blocks:>6} {ops:>6} {excluded_tracked:>10}",
                         "PASS"
                     );
                 }
-                Outcome::Divergent { detail, excluded_tracked } => {
+                Outcome::Divergent {
+                    detail,
+                    excluded_tracked,
+                } => {
                     let note = match expect {
                         Expect::DivergentBy(n) => *n,
                         _ => "UNEXPECTED divergence",
@@ -774,8 +856,11 @@ impl SelfTestReport {
                     );
                 }
                 Outcome::Skipped { reason } => {
-                    let _ =
-                        writeln!(s, "{stem:<20} {:<10} {:>6} {:>6} {:>10}  {reason}", "SKIP", "-", "-", "-");
+                    let _ = writeln!(
+                        s,
+                        "{stem:<20} {:<10} {:>6} {:>6} {:>10}  {reason}",
+                        "SKIP", "-", "-", "-"
+                    );
                 }
             }
         }
@@ -831,5 +916,10 @@ pub fn run_self_test() -> Result<SelfTestReport, String> {
         rows.push((c.stem, c.expect, outcome));
     }
 
-    Ok(SelfTestReport { rows, npass, nskip, mismatches })
+    Ok(SelfTestReport {
+        rows,
+        npass,
+        nskip,
+        mismatches,
+    })
 }

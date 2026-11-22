@@ -18,7 +18,11 @@ fn every_signature_has_a_distinct_hash() {
 fn an_anchor_without_the_object_is_no_match() {
     for sig in SIGNATURES {
         let code = object_of(sig, 0xcc);
-        assert!(scan_bytes(&code, 0x400000, SIGNATURES).is_empty(), "{}", sig.intrinsic);
+        assert!(
+            scan_bytes(&code, 0x400000, SIGNATURES).is_empty(),
+            "{}",
+            sig.intrinsic
+        );
     }
 }
 
@@ -29,8 +33,14 @@ fn the_hash_ignores_relocated_bytes_only() {
     let base = masked_hash(&a, sig.wild);
     let r = sig.wild[0].clone();
     a[r.start] ^= 0xff;
-    assert_eq!(masked_hash(&a, sig.wild), base, "a relocated byte does not count");
-    let fixed = (0..sig.len).find(|i| !sig.wild.iter().any(|r| r.contains(i))).unwrap();
+    assert_eq!(
+        masked_hash(&a, sig.wild),
+        base,
+        "a relocated byte does not count"
+    );
+    let fixed = (0..sig.len)
+        .find(|i| !sig.wild.iter().any(|r| r.contains(i)))
+        .unwrap();
     a[fixed] ^= 0xff;
     assert_ne!(masked_hash(&a, sig.wild), base, "any other byte does");
 }
@@ -38,7 +48,11 @@ fn the_hash_ignores_relocated_bytes_only() {
 #[test]
 fn every_named_intrinsic_has_the_model() {
     for sig in SIGNATURES {
-        assert!(unlace_decomp::kuna_x87intrinsic::is_intrinsic(sig.intrinsic), "{}", sig.intrinsic);
+        assert!(
+            unlace_decomp::kuna_x87intrinsic::is_intrinsic(sig.intrinsic),
+            "{}",
+            sig.intrinsic
+        );
     }
 }
 
@@ -52,17 +66,27 @@ fn only_a_stub_jumping_to_the_dispatcher_is_found() {
     };
     let mut code = stub(0x100);
     code.extend(stub(0x200 - 10));
-    assert_eq!(table_stubs(&code, 0x1000, 0x1000 + 10 + 0x100), vec![(0x1000, 0x1122_3344)]);
-    assert_eq!(table_stubs(&code, 0x1000, 0x1000 + 20 + 0x200 - 10), vec![(0x100a, 0x1122_3344)]);
+    assert_eq!(
+        table_stubs(&code, 0x1000, 0x1000 + 10 + 0x100),
+        vec![(0x1000, 0x1122_3344)]
+    );
+    assert_eq!(
+        table_stubs(&code, 0x1000, 0x1000 + 20 + 0x200 - 10),
+        vec![(0x100a, 0x1122_3344)]
+    );
     assert!(table_stubs(&code, 0x1000, 0x9999).is_empty());
 }
 
 #[test]
 fn the_dispatcher_is_not_an_intrinsic() {
-    assert!(!unlace_decomp::kuna_x87intrinsic::is_intrinsic(DISPATCHER.intrinsic));
+    assert!(!unlace_decomp::kuna_x87intrinsic::is_intrinsic(
+        DISPATCHER.intrinsic
+    ));
     let binary = SIGNATURES
         .iter()
-        .filter(|s| unlace_decomp::kuna_x87intrinsic::model_for(s.intrinsic).is_some_and(|m| m.1.len() == 2))
+        .filter(|s| {
+            unlace_decomp::kuna_x87intrinsic::model_for(s.intrinsic).is_some_and(|m| m.1.len() == 2)
+        })
         .count();
     assert_eq!(binary, 2, "pow and fmod");
 }
@@ -70,8 +94,15 @@ fn the_dispatcher_is_not_an_intrinsic() {
 #[test]
 fn every_wild_list_is_ascending_disjoint_and_inside_its_object() {
     for sig in SIGNATURES.iter().chain(std::iter::once(&DISPATCHER)) {
-        assert!(sig.wild.windows(2).all(|w| w[0].end <= w[1].start), "{}", sig.intrinsic);
-        assert!(sig.wild.iter().all(|r| r.start < r.end && r.end <= sig.len), "{}", sig.intrinsic);
+        assert!(
+            sig.wild.windows(2).all(|w| w[0].end <= w[1].start),
+            "{}",
+            sig.intrinsic
+        );
+        assert!(
+            sig.wild.iter().all(|r| r.start < r.end && r.end <= sig.len),
+            "{}",
+            sig.intrinsic
+        );
     }
 }
-

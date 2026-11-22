@@ -20,9 +20,9 @@
 use std::rc::Rc;
 
 use unlace_base::address::{Address, SeqNum};
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, ConstantSpace};
+use unlace_base::space::{AddrSpace, ConstantSpace, addrspace_flags, spacetype};
 
-use unlace_decomp::dtype::{flags as dtype_flags, type_metatype, Datatype};
+use unlace_decomp::dtype::{Datatype, flags as dtype_flags, type_metatype};
 
 fn ram() -> Rc<AddrSpace> {
     // wordsize 1 so AddrSpace::printRaw never appends a `+cut` suffix.
@@ -81,7 +81,9 @@ fn seqnum_uniq_is_hex_not_decimal() {
 fn constant_space_address_is_hex() {
     let cst = Rc::new(ConstantSpace::new());
     let mut s = String::new();
-    Address::new(cst, 0x64).print_raw(&mut s).expect("const Address::print_raw");
+    Address::new(cst, 0x64)
+        .print_raw(&mut s)
+        .expect("const Address::print_raw");
     assert_eq!(s, "0x64", "constant offset 0x64 must be hex, got {s:?}");
 }
 
@@ -118,7 +120,11 @@ fn display_format_bit_math_round_trips_and_replaces() {
     let mut dt = Datatype::new_with_align(4, 4, type_metatype::TYPE_INT);
     dt.set_display_format(1); // hex
     dt.set_display_format(5); // char
-    assert_eq!(dt.get_display_format(), 5, "second set_display_format must replace, not accumulate");
+    assert_eq!(
+        dt.get_display_format(),
+        5,
+        "second set_display_format must replace, not accumulate"
+    );
     assert_eq!(dt.flags & dtype_flags::force_format, 5 << 12);
 }
 

@@ -96,19 +96,28 @@ pub fn declines(data: &mut Funcdata, op: OpId, vn: VarnodeId, invn: VarnodeId) -
     let (Some(v), Some(iv)) = (data.vbank().get(vn), data.vbank().get(invn)) else {
         return false;
     };
-    if !v.is_persist() || iv.is_persist() || iv.is_addr_tied() || iv.is_constant() || iv.is_input() {
+    if !v.is_persist() || iv.is_persist() || iv.is_addr_tied() || iv.is_constant() || iv.is_input()
+    {
         return false;
     }
     let Some(reader) = data.obank().get(op) else {
         return false;
     };
     let out = reader.get_out();
-    let (vspace, voff, vsize) = (v.get_addr().get_space().map(|s| s.get_index()), v.get_offset(), v.get_size() as u64);
+    let (vspace, voff, vsize) = (
+        v.get_addr().get_space().map(|s| s.get_index()),
+        v.get_offset(),
+        v.get_size() as u64,
+    );
     let writes = |same: bool| {
         out.and_then(|o| data.vbank().get(o)).is_some_and(|o| {
             let (ooff, osize) = (o.get_offset(), o.get_size() as u64);
             o.get_addr().get_space().map(|s| s.get_index()) == vspace
-                && if same { ooff == voff && osize == vsize } else { ooff <= voff && voff + vsize <= ooff + osize }
+                && if same {
+                    ooff == voff && osize == vsize
+                } else {
+                    ooff <= voff && voff + vsize <= ooff + osize
+                }
         })
     };
     if reader.code() == OpCode::CPUI_PIECE && writes(false) {
@@ -164,7 +173,9 @@ pub(crate) fn old_value_read_after(data: &Funcdata, vn: VarnodeId) -> bool {
     };
     let succ = |b| {
         let blk = data.bblocks_ref().block(b);
-        (0..blk.size_out()).map(|i| blk.get_out(i)).collect::<Vec<_>>()
+        (0..blk.size_out())
+            .map(|i| blk.get_out(i))
+            .collect::<Vec<_>>()
     };
     let mut later = Vec::new();
     let mut cur = data.obank().get(store).and_then(|s| s.basic_neighbours().1);
@@ -193,7 +204,9 @@ pub(crate) fn old_value_read_after(data: &Funcdata, vn: VarnodeId) -> bool {
             continue;
         }
         let def = wv.get_def();
-        let def_block = def.and_then(|d| data.obank().get(d)).and_then(|d| d.get_parent());
+        let def_block = def
+            .and_then(|d| data.obank().get(d))
+            .and_then(|d| d.get_parent());
         if def_block.is_some_and(|db| db != sb && !data.bblocks_ref().dominates(db, Some(sb))) {
             continue;
         }
@@ -205,10 +218,16 @@ pub(crate) fn old_value_read_after(data: &Funcdata, vn: VarnodeId) -> bool {
             .filter_map(|&o| data.obank().get(o).and_then(|x| x.get_parent()))
             .chain(ends.iter().copied())
             .collect();
-        if !blocks.iter().any(|b| reach.contains(b)) && !ends.contains(&sb) && !later.iter().any(|o| ops.contains(o)) {
+        if !blocks.iter().any(|b| reach.contains(b))
+            && !ends.contains(&sb)
+            && !later.iter().any(|o| ops.contains(o))
+        {
             continue;
         }
-        if let Some(i) = later.iter().position(|&o| Some(o) == def || ops.contains(&o)) {
+        if let Some(i) = later
+            .iter()
+            .position(|&o| Some(o) == def || ops.contains(&o))
+        {
             if Some(later[i]) == def {
                 continue;
             }
@@ -368,13 +387,22 @@ fn melds(data: &Funcdata, op: OpId) -> bool {
         let size = |a: VarnodeId| data.vbank().get(a).map_or(0, |v| v.get_size());
         return size(a1) != size(a2);
     }
-    let combined = if and { r1.intersect(&r2) } else { r1.circle_union(&r2) };
+    let combined = if and {
+        r1.intersect(&r2)
+    } else {
+        r1.circle_union(&r2)
+    };
     if combined != 0 {
         return false;
     }
     let (mut code, mut c, mut cslot) = (OpCode::CPUI_COPY, 0, 0);
     r1.translate2_op(&mut code, &mut c, &mut cslot) == 0
-        && reads_signedness(code, 1 - cslot, data.vbank().get(a1).map_or(0, |v| v.get_size()), Some(c))
+        && reads_signedness(
+            code,
+            1 - cslot,
+            data.vbank().get(a1).map_or(0, |v| v.get_size()),
+            Some(c),
+        )
 }
 
 /// Does a rule move a compare's constant across an operation with opcode
@@ -412,7 +440,11 @@ pub const WALK_BOUND: usize = 256;
 fn value_read_sign_sensitively(data: &Funcdata, start: VarnodeId) -> bool {
     let mut stack = vec![(start, Reach::Member)];
     let mut seen = BTreeSet::new();
-    let carries = |x: VarnodeId| data.vbank().get(x).is_some_and(|v| !v.is_persist() && !v.is_constant());
+    let carries = |x: VarnodeId| {
+        data.vbank()
+            .get(x)
+            .is_some_and(|v| !v.is_persist() && !v.is_constant())
+    };
     while let Some((x, reach)) = stack.pop() {
         if !seen.insert((x, reach)) {
             continue;
@@ -430,7 +462,12 @@ fn value_read_sign_sensitively(data: &Funcdata, start: VarnodeId) -> bool {
                     OpCode::CPUI_MULTIEQUAL => def.num_input(),
                     _ => 0,
                 };
-                stack.extend((0..joined).filter_map(|i| def.get_in(i)).filter(|&i| carries(i)).map(|i| (i, Reach::Member)));
+                stack.extend(
+                    (0..joined)
+                        .filter_map(|i| def.get_in(i))
+                        .filter(|&i| carries(i))
+                        .map(|i| (i, Reach::Member)),
+                );
             }
         }
         let size = xv.get_size();
@@ -444,7 +481,9 @@ fn value_read_sign_sensitively(data: &Funcdata, start: VarnodeId) -> bool {
             let code = dop.code();
             let out = dop.get_out().filter(|&o| carries(o));
             match code {
-                OpCode::CPUI_COPY | OpCode::CPUI_MULTIEQUAL => stack.extend(out.map(|o| (o, reach))),
+                OpCode::CPUI_COPY | OpCode::CPUI_MULTIEQUAL => {
+                    stack.extend(out.map(|o| (o, reach)))
+                }
                 OpCode::CPUI_INDIRECT => {
                     if dop.get_in(0) == Some(x) {
                         stack.extend(out.map(|o| (o, reach)));
@@ -476,7 +515,11 @@ fn value_read_sign_sensitively(data: &Funcdata, start: VarnodeId) -> bool {
                             return true;
                         }
                         if passes_signedness(code, slot) {
-                            let next = reach.max(if moves_constants(code) { Reach::Folded } else { Reach::Derived });
+                            let next = reach.max(if moves_constants(code) {
+                                Reach::Folded
+                            } else {
+                                Reach::Derived
+                            });
                             stack.extend(out.map(|o| (o, next)));
                         }
                     }

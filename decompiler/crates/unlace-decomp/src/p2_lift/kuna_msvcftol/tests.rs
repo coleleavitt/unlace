@@ -69,11 +69,23 @@ fn sse_body_converts_into_eax_only() {
 #[test]
 fn body_pops_the_return_address_and_converts_at_64_bits() {
     let xml = payload_xml();
-    assert!(xml.contains("ESP = ESP + 4;"), "the CALL's pushed return address must be popped");
-    assert!(xml.contains("ftol_res:8 = trunc(ST0);"), "conversion is a 64-bit truncation");
+    assert!(
+        xml.contains("ESP = ESP + 4;"),
+        "the CALL's pushed return address must be popped"
+    );
+    assert!(
+        xml.contains("ftol_res:8 = trunc(ST0);"),
+        "conversion is a 64-bit truncation"
+    );
     assert!(xml.contains("EAX = ftol_res:4;"), "low half returns in EAX");
-    assert!(xml.contains("EDX = ftol_res(4);"), "high half returns in EDX");
-    assert!(xml.contains("ST6 = ST7;"), "the x87 stack must be popped (`fpop()`)");
+    assert!(
+        xml.contains("EDX = ftol_res(4);"),
+        "high half returns in EDX"
+    );
+    assert!(
+        xml.contains("ST6 = ST7;"),
+        "the x87 stack must be popped (`fpop()`)"
+    );
 }
 
 /// x86-32 admits; x86-64 does not (it resolves the same sub-registers but its
@@ -85,5 +97,8 @@ fn guard_admits_x86_32_only() {
     let no_x87 = |n: &[u8]| !n.starts_with(b"ST");
     assert!(language_is_x86_32(x86, 4), "x86-32 is the target");
     assert!(!language_is_x86_32(x86, 8), "x86-64 has no _ftol helper");
-    assert!(!language_is_x86_32(no_x87, 4), "a language without x87 cannot run this body");
+    assert!(
+        !language_is_x86_32(no_x87, 4),
+        "a language without x87 cannot run this body"
+    );
 }

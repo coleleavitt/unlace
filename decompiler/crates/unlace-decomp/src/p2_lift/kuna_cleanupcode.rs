@@ -218,7 +218,10 @@ fn unescape_legacy(name: &str) -> String {
             continue;
         }
         // Not an escape: copy one whole UTF-8 character.
-        let ch = name[i..].chars().next().expect("unescape_legacy: char boundary");
+        let ch = name[i..]
+            .chars()
+            .next()
+            .expect("unescape_legacy: char boundary");
         out.push(ch);
         i += ch.len_utf8();
     }
@@ -276,7 +279,10 @@ fn collapse_generics(mut s: String) -> String {
             Some((_, trait_path)) => (o, trait_path.trim().to_string()),
             // A plain generic argument list: delete it, and the `::` of a
             // turbofish `::<A>` with it.
-            None => (if s[..o].ends_with("::") { o - 2 } else { o }, String::new()),
+            None => (
+                if s[..o].ends_with("::") { o - 2 } else { o },
+                String::new(),
+            ),
         };
         s.replace_range(start..close + 1, &replacement);
     }
@@ -313,14 +319,20 @@ fn cleanup_call_ops(data: &Funcdata) -> Vec<OpId> {
             continue;
         }
         let op = fc.get_op();
-        let Some(o) = data.obank().get(op) else { continue };
+        let Some(o) = data.obank().get(op) else {
+            continue;
+        };
         if o.get_parent().is_none() {
             continue;
         }
         // A read output would be left dangling by destroyVarnode; a cleanup
         // routine returns `()`, so declining here costs nothing.
         if let Some(out) = o.get_out() {
-            let live = data.vbank().get(out).map(|v| !v.has_no_descend()).unwrap_or(true);
+            let live = data
+                .vbank()
+                .get(out)
+                .map(|v| !v.has_no_descend())
+                .unwrap_or(true);
             if live {
                 continue;
             }
@@ -339,7 +351,9 @@ pub struct ActionRemoveCleanupCode {
 impl ActionRemoveCleanupCode {
     /// Construct the action in the given group (`deadcode`).
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionRemoveCleanupCode { base: ActionBase::new(0, "cleanupcode", g) })
+        Box::new(ActionRemoveCleanupCode {
+            base: ActionBase::new(0, "cleanupcode", g),
+        })
     }
 }
 
@@ -354,7 +368,9 @@ impl Action for ActionRemoveCleanupCode {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionRemoveCleanupCode { base: self.base.clone() }))
+        Some(Box::new(ActionRemoveCleanupCode {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data.get_arch().remove_cleanup_code {

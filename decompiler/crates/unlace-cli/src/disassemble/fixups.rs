@@ -12,11 +12,11 @@
 //! the listed bytes are there: the file's, the loader's statically known value,
 //! or kuna's zero placeholder.
 
+use object::read::{Object, ObjectSegment};
 use unlace_analysis::loader::kuna_dataptrs::Coverage;
 use unlace_analysis::loader::kuna_dynrelocs::{FixupKind, FixupSite};
 use unlace_console::disasm::hex;
 use unlace_console::engine::ConsoleProgram;
-use object::read::{Object, ObjectSegment};
 
 use crate::jsonfmt::Json;
 
@@ -69,12 +69,23 @@ pub(super) struct Fixups {
 ///
 /// An image whose object view cannot be read again lists none, under
 /// `coverage` `none`, as does one whose fixups kuna does not read.
-pub(super) fn overlapping(view: Option<(&[u8], &object::File)>, prog: &ConsoleProgram, start: u64, end: u64) -> Fixups {
-    let none = Fixups { coverage: Coverage::None, reason: None, slots: Vec::new() };
+pub(super) fn overlapping(
+    view: Option<(&[u8], &object::File)>,
+    prog: &ConsoleProgram,
+    start: u64,
+    end: u64,
+) -> Fixups {
+    let none = Fixups {
+        coverage: Coverage::None,
+        reason: None,
+        slots: Vec::new(),
+    };
     if end <= start {
         return none;
     }
-    let Some((bytes, file)) = view else { return none };
+    let Some((bytes, file)) = view else {
+        return none;
+    };
     let listed = unlace_analysis::loader::kuna_dynrelocs::fixup_sites(file, bytes);
     let le = file.is_little_endian();
     let mut slots = Vec::new();
@@ -83,31 +94,57 @@ pub(super) fn overlapping(view: Option<(&[u8], &object::File)>, prog: &ConsolePr
         if site.vma >= end || site.vma.saturating_add(width) <= start {
             continue;
         }
-        let Some(image) = prog.read_bytes(site.vma, usize::from(site.width)) else { continue };
+        let Some(image) = prog.read_bytes(site.vma, usize::from(site.width)) else {
+            continue;
+        };
         let file_bytes = file_bytes(file, site.vma, width);
         let unchanged = file_bytes.as_deref().unwrap_or(&vec![0; image.len()])[..] == image[..];
         let returned = if unchanged {
             Returned::File
-        } else if site.kind == FixupKind::Bind && site.target.is_none() && image.iter().all(|&b| b == 0) {
+        } else if site.kind == FixupKind::Bind
+            && site.target.is_none()
+            && image.iter().all(|&b| b == 0)
+        {
             Returned::Placeholder
         } else {
             Returned::Applied
         };
-        let holds_target = site.target.is_some_and(|t| encode(t, image.len(), le) == image);
-        slots.push(Slot { site, file: file_bytes, image, returned, holds_target });
+        let holds_target = site
+            .target
+            .is_some_and(|t| encode(t, image.len(), le) == image);
+        slots.push(Slot {
+            site,
+            file: file_bytes,
+            image,
+            returned,
+            holds_target,
+        });
     }
-    Fixups { coverage: listed.coverage, reason: listed.reason, slots }
+    Fixups {
+        coverage: listed.coverage,
+        reason: listed.reason,
+        slots,
+    }
 }
 
 /// `value` as a `width`-byte word in the image's byte order.
 fn encode(value: u64, width: usize, le: bool) -> Vec<u8> {
     let width = width.min(8);
-    if le { value.to_le_bytes()[..width].to_vec() } else { value.to_be_bytes()[8 - width..].to_vec() }
+    if le {
+        value.to_le_bytes()[..width].to_vec()
+    } else {
+        value.to_be_bytes()[8 - width..].to_vec()
+    }
 }
 
 /// The file's `width` bytes at `vma`, from the segment holding them.
 fn file_bytes(file: &object::File, vma: u64, width: u64) -> Option<Vec<u8>> {
-    file.segments().find_map(|seg| seg.data_range(vma, width).ok().flatten().map(<[u8]>::to_vec))
+    file.segments().find_map(|seg| {
+        seg.data_range(vma, width)
+            .ok()
+            .flatten()
+            .map(<[u8]>::to_vec)
+    })
 }
 
 impl Fixups {
@@ -118,16 +155,26 @@ impl Fixups {
         let flagged: Vec<&Slot> = self
             .slots
             .iter()
-            .filter(|s| s.returned != Returned::File || s.site.kind != FixupKind::Rebase || !s.holds_target)
+            .filter(|s| {
+                s.returned != Returned::File || s.site.kind != FixupKind::Rebase || !s.holds_target
+            })
             .collect();
         if flagged.is_empty() {
             return None;
         }
-        let mut parts: Vec<String> = flagged.iter().take(NOTE_SLOTS).map(|s| s.describe()).collect();
+        let mut parts: Vec<String> = flagged
+            .iter()
+            .take(NOTE_SLOTS)
+            .map(|s| s.describe())
+            .collect();
         if flagged.len() > NOTE_SLOTS {
             parts.push(format!("and {} more", flagged.len() - NOTE_SLOTS));
         }
-        let what = if flagged.len() == 1 { "a load-time fixup slot" } else { "load-time fixup slots" };
+        let what = if flagged.len() == 1 {
+            "a load-time fixup slot"
+        } else {
+            "load-time fixup slots"
+        };
         Some(format!(
             "these bytes overlap {what}: {} -- `--json` lists each in `fixups`",
             parts.join("; ")
@@ -144,22 +191,47 @@ impl Fixups {
             .map(|s| {
                 Json::Object(vec![
                     ("address".into(), number(s.site.vma)),
-                    ("address_hex".into(), Json::Str(format!("0x{:x}", s.site.vma))),
+                    (
+                        "address_hex".into(),
+                        Json::Str(format!("0x{:x}", s.site.vma)),
+                    ),
                     ("size".into(), number(u64::from(s.site.width))),
                     ("kind".into(), Json::Str(s.site.kind.as_str().into())),
-                    ("symbol".into(), s.site.symbol.clone().map_or(Json::Null, Json::Str)),
-                    ("addend".into(), s.site.addend.map_or(Json::Null, |a| Json::Number(a.to_string()))),
+                    (
+                        "symbol".into(),
+                        s.site.symbol.clone().map_or(Json::Null, Json::Str),
+                    ),
+                    (
+                        "addend".into(),
+                        s.site
+                            .addend
+                            .map_or(Json::Null, |a| Json::Number(a.to_string())),
+                    ),
                     ("target".into(), s.site.target.map_or(Json::Null, number)),
-                    ("target_hex".into(), s.site.target.map_or(Json::Null, |t| Json::Str(format!("0x{t:x}")))),
-                    ("file_bytes".into(), s.file.as_deref().map_or(Json::Null, |b| Json::Str(hex(b)))),
+                    (
+                        "target_hex".into(),
+                        s.site
+                            .target
+                            .map_or(Json::Null, |t| Json::Str(format!("0x{t:x}"))),
+                    ),
+                    (
+                        "file_bytes".into(),
+                        s.file.as_deref().map_or(Json::Null, |b| Json::Str(hex(b))),
+                    ),
                     ("image_bytes".into(), Json::Str(hex(&s.image))),
                     ("returned".into(), Json::Str(s.returned.as_str().into())),
                 ])
             })
             .collect();
         vec![
-            ("fixups_coverage".into(), Json::Str(self.coverage.as_str().into())),
-            ("fixups_reason".into(), self.reason.clone().map_or(Json::Null, Json::Str)),
+            (
+                "fixups_coverage".into(),
+                Json::Str(self.coverage.as_str().into()),
+            ),
+            (
+                "fixups_reason".into(),
+                self.reason.clone().map_or(Json::Null, Json::Str),
+            ),
             ("fixups".into(), Json::Array(rows)),
         ]
     }
@@ -176,15 +248,23 @@ impl Slot {
         let file = self.file.as_deref().map_or("zero fill".to_string(), hex);
         let what = match (self.returned, site.target) {
             (Returned::Placeholder, _) => {
-                format!("kuna's zero placeholder for an address the loader looks up at run time; the file holds {file}")
+                format!(
+                    "kuna's zero placeholder for an address the loader looks up at run time; the file holds {file}"
+                )
             }
-            (Returned::Applied, Some(t)) => format!("the pointer the loader stores, 0x{t:x}; the file holds {file}"),
-            (Returned::Applied, None) => format!("the value the loader stores; the file holds {file}"),
+            (Returned::Applied, Some(t)) => {
+                format!("the pointer the loader stores, 0x{t:x}; the file holds {file}")
+            }
+            (Returned::Applied, None) => {
+                format!("the value the loader stores; the file holds {file}")
+            }
             (Returned::File, Some(_)) if self.holds_target => {
                 "the file's bytes, already the value the loader stores".to_string()
             }
             (Returned::File, Some(t)) => format!("the file's bytes; the loader stores 0x{t:x}"),
-            (Returned::File, None) => "the file's bytes; the loader rewrites them at run time".to_string(),
+            (Returned::File, None) => {
+                "the file's bytes; the loader rewrites them at run time".to_string()
+            }
         };
         format!("{head} ({what})")
     }

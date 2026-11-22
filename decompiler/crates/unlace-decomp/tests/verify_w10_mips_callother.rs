@@ -29,7 +29,7 @@ use unlace_base::xml::{DocumentStorage, Element};
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::decompile_drive::{decompile_func, print_c};
 use unlace_decomp::options::register_option_elements;
-use unlace_decomp::sleigh_arch::{register_sleigh_arch_ids, LanguageDatabase};
+use unlace_decomp::sleigh_arch::{LanguageDatabase, register_sleigh_arch_ids};
 use unlace_decomp::xml_arch::{XmlArchitecture, XmlArchitectureCapability};
 
 use unlace_sleigh::loadimage::LoadImage;
@@ -37,7 +37,10 @@ use unlace_sleigh::loadimage_xml::register_loadimage_xml_ids;
 use unlace_sleigh::translate::register_translate_ids;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 struct SymbolFn {
@@ -71,11 +74,15 @@ fn find_named(el: &Rc<Element>, name: &str, out: &mut Vec<Rc<Element>>) {
 }
 
 fn attr(el: &Element, name: &str) -> Option<String> {
-    el.get_attribute_value(name).ok().map(|b| String::from_utf8_lossy(b).into_owned())
+    el.get_attribute_value(name)
+        .ok()
+        .map(|b| String::from_utf8_lossy(b).into_owned())
 }
 
 fn parse_datatest(stem: &str) -> Result<DataTest, String> {
-    let path = repo_root().join("tests/datatests").join(format!("{stem}.xml"));
+    let path = repo_root()
+        .join("tests/datatests")
+        .join(format!("{stem}.xml"));
     let xml = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
     let mut store = DocumentStorage::new();
     let root = store
@@ -102,7 +109,11 @@ fn parse_datatest(stem: &str) -> Result<DataTest, String> {
         })
         .collect();
 
-    Ok(DataTest { binaryimage, arch_id, symbols })
+    Ok(DataTest {
+        binaryimage,
+        arch_id,
+        symbols,
+    })
 }
 
 struct DummyImg;
@@ -135,11 +146,13 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
     let capability = XmlArchitectureCapability::new();
     let mut arch = capability.build_architecture("datatest", "");
 
-    arch.build_loader(Rc::clone(&dt.binaryimage)).map_err(|e| format!("build_loader: {e}"))?;
+    arch.build_loader(Rc::clone(&dt.binaryimage))
+        .map_err(|e| format!("build_loader: {e}"))?;
 
     let mut db = LanguageDatabase::new();
     db.scan_for_sleigh_directories(root.join("specs").to_str().unwrap());
-    db.get_descriptions(&registry).map_err(|e| format!("collect ldefs: {e}"))?;
+    db.get_descriptions(&registry)
+        .map_err(|e| format!("collect ldefs: {e}"))?;
 
     arch.sleigh_mut().set_archid(&dt.arch_id);
     arch.sleigh_mut()
@@ -149,7 +162,10 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
         return Err("language index unresolved".to_string());
     }
 
-    let specs = arch.sleigh().build_spec_file(&db).map_err(|e| format!("build_spec_file: {e}"))?;
+    let specs = arch
+        .sleigh()
+        .build_spec_file(&db)
+        .map_err(|e| format!("build_spec_file: {e}"))?;
     let resolved_sla = specs.slafile.ok_or("build_spec_file resolved no .sla")?;
     let sla = std::fs::read(&resolved_sla).map_err(|e| format!("read sla: {e}"))?;
     arch.sleigh_mut()
@@ -164,7 +180,9 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
         .base_mut()
         .ok_or("no Architecture base after build_translator")?
         .translate_mut()
-        .as_sleigh_mut().expect("standalone Sleigh engine").install_register_lookup()
+        .as_sleigh_mut()
+        .expect("standalone Sleigh engine")
+        .install_register_lookup()
         .map_err(|e| format!("install_register_lookup: {e}"))?;
     if !specs.compilerfile.is_empty() {
         if let Ok(cspec) = std::fs::read(&specs.compilerfile) {
@@ -188,7 +206,10 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
     arch.open_image(unsafe { &*manager_ptr }, &registry)
         .map_err(|e| format!("open_image: {e}"))?;
     let img = arch.take_loader().ok_or("loader vanished after open")?;
-    arch.sleigh_mut().base_mut().unwrap().set_loader(Box::new(img));
+    arch.sleigh_mut()
+        .base_mut()
+        .unwrap()
+        .set_loader(Box::new(img));
 
     Ok(arch)
 }
@@ -235,7 +256,11 @@ fn w10_mips_callother_dosomething_eliminates_the_callother() {
     let mut xarch = bootstrap(&dt).expect("bootstrap bitfields2 (MIPS)");
     let arch = xarch.sleigh_mut().base_mut().expect("Architecture base");
 
-    let sym = dt.symbols.iter().find(|s| s.name == "dosomething").expect("dosomething symbol");
+    let sym = dt
+        .symbols
+        .iter()
+        .find(|s| s.name == "dosomething")
+        .expect("dosomething symbol");
     let c = decompile_one(arch, sym).expect("decompile dosomething");
     eprintln!("--- dosomething ---\n{c}\n--- end ---");
 
@@ -247,7 +272,10 @@ fn w10_mips_callother_dosomething_eliminates_the_callother() {
         "dosomething still shows the eliminated CALLOTHER:\n{c}"
     );
     // The surrounding real stores still render (the function is not gutted).
-    assert!(c.contains('='), "dosomething body lost its assignments:\n{c}");
+    assert!(
+        c.contains('='),
+        "dosomething body lost its assignments:\n{c}"
+    );
 }
 
 #[test]
@@ -256,7 +284,11 @@ fn w10_mips_callother_increment_eliminates_the_callother() {
     let mut xarch = bootstrap(&dt).expect("bootstrap bitfields2 (MIPS)");
     let arch = xarch.sleigh_mut().base_mut().expect("Architecture base");
 
-    let sym = dt.symbols.iter().find(|s| s.name == "increment").expect("increment symbol");
+    let sym = dt
+        .symbols
+        .iter()
+        .find(|s| s.name == "increment")
+        .expect("increment symbol");
     let c = decompile_one(arch, sym).expect("decompile increment");
     eprintln!("--- increment ---\n{c}\n--- end ---");
 
@@ -357,7 +389,10 @@ fn w10_mips_callother_non_fixed_up_userop_is_not_injected() {
     // The MIPS table has exactly one `<callotherfixup>` (setISAMode), and many
     // plain userops left unspecialized — the elimination is selective on the
     // declared type, not blanket.
-    assert!(injected >= 1, "expected the setISAMode fixup to mark >=1 injected op");
+    assert!(
+        injected >= 1,
+        "expected the setISAMode fixup to mark >=1 injected op"
+    );
     assert!(
         unspecialized >= 1,
         "expected most MIPS userops to remain unspecialized (not blanket-injected)"

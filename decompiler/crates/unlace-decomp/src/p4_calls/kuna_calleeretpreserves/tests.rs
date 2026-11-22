@@ -16,12 +16,12 @@ use super::*;
 use std::rc::Rc;
 
 use unlace_base::space::{
-    addrspace_flags, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags,
 };
 
 use crate::context::{ArchContext, TypeOp};
-use crate::dtype::{type_class, type_metatype, Datatype};
-use crate::fspec::{effect_type, EffectRecord, ParamEntry, ProtoModel};
+use crate::dtype::{Datatype, type_class, type_metatype};
+use crate::fspec::{EffectRecord, ParamEntry, ProtoModel, effect_type};
 use crate::kuna_rustabi::CalleeReturnWrites;
 use unlace_num::opcodes::OpCode;
 
@@ -85,7 +85,8 @@ fn with_convention(fd: &Funcdata, fc: &mut FuncCallSpecs) {
 fn build_fd() -> Funcdata {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -128,8 +129,10 @@ fn build_call(fd: &mut Funcdata, entry_off: u64) -> (FuncCallSpecs, Address) {
     let bl = fd.bblocks_mut().new_block_basic(root);
     fd.bblocks_mut().set_start_block(root, bl);
     let call = fd.new_op(1, Address::new(Rc::clone(&ram), 0x1010));
-    fd.obank_mut()
-        .change_opcode(call, TypeOp::new(OpCode::CPUI_CALL, 0, "CPUI_CALL".to_string()));
+    fd.obank_mut().change_opcode(
+        call,
+        TypeOp::new(OpCode::CPUI_CALL, 0, "CPUI_CALL".to_string()),
+    );
     let entry = Address::new(Rc::clone(&ram), entry_off);
     let target = fd.new_code_ref(&entry);
     let _ = fd.op_set_input(call, target, 0);
@@ -160,9 +163,16 @@ fn an_incomplete_or_missing_probe_narrows_nothing() {
     let ram = space(&fd, "ram").get_index();
     fd.kuna_set_callee_ret_writes(
         &entry,
-        Rc::new(CalleeReturnWrites::from_parts(vec![(ram, 0x20, 8)], Vec::new(), false)),
+        Rc::new(CalleeReturnWrites::from_parts(
+            vec![(ram, 0x20, 8)],
+            Vec::new(),
+            false,
+        )),
     );
-    assert!(!callee_never_writes(&fd, &fc, &rax, 8), "an incomplete walk proves nothing");
+    assert!(
+        !callee_never_writes(&fd, &fc, &rax, 8),
+        "an incomplete walk proves nothing"
+    );
 }
 
 #[test]
@@ -201,8 +211,12 @@ fn a_wide_killed_range_resolves_only_the_exact_locked_void_output_slice() {
     );
     assert!(callee_preserves_return_storage(&fd, &fc, &whole_xmm, 8));
     assert!(!callee_preserves_return_storage(&fd, &fc, &whole_xmm, 16));
-    assert!(exact_cookie_preserves_return_storage(&fd, &fc, &whole_xmm, 8));
-    assert!(!exact_cookie_preserves_return_storage(&fd, &fc, &whole_xmm, 16));
+    assert!(exact_cookie_preserves_return_storage(
+        &fd, &fc, &whole_xmm, 8
+    ));
+    assert!(!exact_cookie_preserves_return_storage(
+        &fd, &fc, &whole_xmm, 16
+    ));
     assert_eq!(
         characterize_preserved_output(&fc, &refined_high_half, 4),
         Containment::ContainsUnjustified
@@ -217,7 +231,12 @@ fn a_wide_killed_range_resolves_only_the_exact_locked_void_output_slice() {
         &refined_high_half,
         4,
     ));
-    assert!(!exact_cookie_preserves_return_storage(&fd, &fc, &upper_scratch, 8));
+    assert!(!exact_cookie_preserves_return_storage(
+        &fd,
+        &fc,
+        &upper_scratch,
+        8
+    ));
     assert!(!exact_cookie_preserves_unjustified_return_slice(
         &fd,
         &fc,
@@ -437,7 +456,11 @@ fn a_second_return_register_the_body_never_writes_keeps_the_callers_value() {
     let ram = space(&fd, "ram").get_index();
     fd.kuna_set_callee_ret_writes(
         &entry,
-        Rc::new(CalleeReturnWrites::from_parts(vec![(ram, 0x00, 8), (ram, 0x80, 8)], Vec::new(), true)),
+        Rc::new(CalleeReturnWrites::from_parts(
+            vec![(ram, 0x00, 8), (ram, 0x80, 8)],
+            Vec::new(),
+            true,
+        )),
     );
     let second = Address::new(space(&fd, "ram"), 0x08);
     let first = Address::new(space(&fd, "ram"), 0x00);
@@ -456,7 +479,11 @@ fn a_second_return_register_that_carries_arguments_stays_killed() {
     let ram = space(&fd, "ram").get_index();
     fd.kuna_set_callee_ret_writes(
         &entry,
-        Rc::new(CalleeReturnWrites::from_parts(vec![(ram, 0x00, 8), (ram, 0x80, 8)], Vec::new(), true)),
+        Rc::new(CalleeReturnWrites::from_parts(
+            vec![(ram, 0x00, 8), (ram, 0x80, 8)],
+            Vec::new(),
+            true,
+        )),
     );
     let second = Address::new(space(&fd, "ram"), 0x20);
     assert!(!callee_preserves_return_storage(&fd, &fc, &second, 8));
@@ -474,11 +501,21 @@ fn a_one_instruction_value_returning_body_still_answers_for_the_second_register(
     fd.kuna_set_callee_ret_writes(
         &entry,
         Rc::new(
-            CalleeReturnWrites::from_parts_sized(vec![(ram.get_index(), 0x00, 8)], Vec::new(), true, 1)
-                .through_a_mode_switch(),
+            CalleeReturnWrites::from_parts_sized(
+                vec![(ram.get_index(), 0x00, 8)],
+                Vec::new(),
+                true,
+                1,
+            )
+            .through_a_mode_switch(),
         ),
     );
-    assert!(callee_preserves_return_storage(&fd, &fc, &Address::new(Rc::clone(&ram), 0x08), 8));
+    assert!(callee_preserves_return_storage(
+        &fd,
+        &fc,
+        &Address::new(Rc::clone(&ram), 0x08),
+        8
+    ));
 }
 
 /// A walk that only finished by reading through an ARM or MIPS `setISAMode`
@@ -490,11 +527,15 @@ fn a_mode_switched_void_body_answers_only_for_non_argument_return_storage() {
     let (mut fc, entry) = build_call(&mut fd, 0x2000);
     with_two_return_registers(&fd, &mut fc, 0x20);
     let ram = space(&fd, "ram");
-    let body = || CalleeReturnWrites::from_parts(vec![(ram.get_index(), 0x10, 8)], Vec::new(), true);
+    let body =
+        || CalleeReturnWrites::from_parts(vec![(ram.get_index(), 0x10, 8)], Vec::new(), true);
     let argument = Address::new(Rc::clone(&ram), 0x20);
     let first = Address::new(Rc::clone(&ram), 0x00);
     fd.kuna_set_callee_ret_writes(&entry, Rc::new(body()));
-    assert!(callee_preserves_return_storage(&fd, &fc, &argument, 8), "a walk that needed no switch");
+    assert!(
+        callee_preserves_return_storage(&fd, &fc, &argument, 8),
+        "a walk that needed no switch"
+    );
     fd.kuna_set_callee_ret_writes(&entry, Rc::new(body().through_a_mode_switch()));
     assert!(!callee_preserves_return_storage(&fd, &fc, &argument, 8));
     assert!(callee_preserves_return_storage(&fd, &fc, &first, 8));
@@ -517,15 +558,26 @@ fn a_locked_int_declaration_leaves_the_second_register_to_the_value_arm() {
     });
     fc.proto_mut().set_output_lock(true);
     let second = Address::new(Rc::clone(&ram), 0x08);
-    assert_eq!(characterize_preserved_output(&fc, &second, 8), Containment::NoContainment);
+    assert_eq!(
+        characterize_preserved_output(&fc, &second, 8),
+        Containment::NoContainment
+    );
     fd.kuna_set_callee_ret_writes(
         &entry,
-        Rc::new(CalleeReturnWrites::from_parts(vec![(ram.get_index(), 0x00, 8)], Vec::new(), true)),
+        Rc::new(CalleeReturnWrites::from_parts(
+            vec![(ram.get_index(), 0x00, 8)],
+            Vec::new(),
+            true,
+        )),
     );
     assert!(callee_preserves_return_storage(&fd, &fc, &second, 8));
     fd.kuna_set_callee_ret_writes(
         &entry,
-        Rc::new(CalleeReturnWrites::from_parts(vec![(ram.get_index(), 0x10, 8)], Vec::new(), true)),
+        Rc::new(CalleeReturnWrites::from_parts(
+            vec![(ram.get_index(), 0x10, 8)],
+            Vec::new(),
+            true,
+        )),
     );
     assert!(!callee_preserves_return_storage(&fd, &fc, &second, 8));
 }

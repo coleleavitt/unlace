@@ -47,12 +47,10 @@
 //! receives an exact address-keyed prototype, including when a same-named export
 //! exists, so an IAT slot and its veneer remain typed without retyping the export.
 
-use super::{
-    seed_named_prototypes, seed_resolved_prototypes, Sig, Ty,
-};
+use super::{Sig, Ty, seed_named_prototypes, seed_resolved_prototypes};
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
-use unlace_decomp::kuna_typedcallabi;
 use object::Object;
+use unlace_decomp::kuna_typedcallabi;
 
 /// Seed the measured libc signature extension onto imported functions.
 pub struct LibcSigsPass;
@@ -61,223 +59,1693 @@ pub struct LibcSigsPass;
 /// construction (`table_is_disjoint_from_base`).
 pub(super) const LIBC_EXT: &[(&str, Sig)] = &[
     // stdio.h
-    ("__fpending", Sig { ret: Ty::Size, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("__fpurge", Sig { ret: Ty::Void, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("__freading", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("__isoc99_fscanf", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::CharPtr], vararg: 2 }),
-    ("__isoc99_scanf", Sig { ret: Ty::Int, params: &[Ty::CharPtr], vararg: 1 }),
-    ("__isoc99_sscanf", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtr], vararg: 2 }),
-    ("__overflow", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::Int], vararg: -1 }),
-    ("asprintf", Sig { ret: Ty::Int, params: &[Ty::CharPtrPtr, Ty::CharPtr], vararg: 2 }),
-    ("clearerr_unlocked", Sig { ret: Ty::Void, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("fclose", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("fdopen", Sig { ret: Ty::VoidPtr, params: &[Ty::Int, Ty::CharPtr], vararg: -1 }),
-    ("feof", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("ferror", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("ferror_unlocked", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("fflush", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("fflush_unlocked", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("fgets", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::Int, Ty::VoidPtr], vararg: -1 }),
-    ("fileno", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("fputc", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::VoidPtr], vararg: -1 }),
-    ("fputs_unlocked", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::VoidPtr], vararg: -1 }),
-    ("fread", Sig { ret: Ty::Size, params: &[Ty::VoidPtr, Ty::Size, Ty::Size, Ty::VoidPtr], vararg: -1 }),
-    ("fscanf", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::CharPtr], vararg: 2 }),
-    ("fseek", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::Long, Ty::Int], vararg: -1 }),
-    ("ftell", Sig { ret: Ty::Long, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("fwrite", Sig { ret: Ty::Size, params: &[Ty::VoidPtr, Ty::Size, Ty::Size, Ty::VoidPtr], vararg: -1 }),
-    ("fwrite_unlocked", Sig { ret: Ty::Size, params: &[Ty::VoidPtr, Ty::Size, Ty::Size, Ty::VoidPtr], vararg: -1 }),
-    ("getc", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("getc_unlocked", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("getline", Sig { ret: Ty::Long, params: &[Ty::CharPtrPtr, Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("putc", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::VoidPtr], vararg: -1 }),
-    ("putc_unlocked", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::VoidPtr], vararg: -1 }),
-    ("putchar_unlocked", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("rename", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("setvbuf", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::CharPtr, Ty::Int, Ty::Size], vararg: -1 }),
-    ("ungetc", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::VoidPtr], vararg: -1 }),
-    ("vasprintf", Sig { ret: Ty::Int, params: &[Ty::CharPtrPtr, Ty::CharPtr, Ty::VoidPtr], vararg: -1 }),
-    ("vsnprintf", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::Size, Ty::CharPtr, Ty::VoidPtr], vararg: -1 }),
+    (
+        "__fpending",
+        Sig {
+            ret: Ty::Size,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "__fpurge",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "__freading",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "__isoc99_fscanf",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::CharPtr],
+            vararg: 2,
+        },
+    ),
+    (
+        "__isoc99_scanf",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr],
+            vararg: 1,
+        },
+    ),
+    (
+        "__isoc99_sscanf",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: 2,
+        },
+    ),
+    (
+        "__overflow",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "asprintf",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtrPtr, Ty::CharPtr],
+            vararg: 2,
+        },
+    ),
+    (
+        "clearerr_unlocked",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "fclose",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "fdopen",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Int, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "feof",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "ferror",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "ferror_unlocked",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "fflush",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "fflush_unlocked",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "fgets",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::Int, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "fileno",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "fputc",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "fputs_unlocked",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "fread",
+        Sig {
+            ret: Ty::Size,
+            params: &[Ty::VoidPtr, Ty::Size, Ty::Size, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "fscanf",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::CharPtr],
+            vararg: 2,
+        },
+    ),
+    (
+        "fseek",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::Long, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "ftell",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "fwrite",
+        Sig {
+            ret: Ty::Size,
+            params: &[Ty::VoidPtr, Ty::Size, Ty::Size, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "fwrite_unlocked",
+        Sig {
+            ret: Ty::Size,
+            params: &[Ty::VoidPtr, Ty::Size, Ty::Size, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "getc",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "getc_unlocked",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "getline",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::CharPtrPtr, Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "putc",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "putc_unlocked",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "putchar_unlocked",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "rename",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "setvbuf",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::CharPtr, Ty::Int, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "ungetc",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "vasprintf",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtrPtr, Ty::CharPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "vsnprintf",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::Size, Ty::CharPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
     // the FORTIFY (`_chk`) and glibc-internal ABI entry points
-    ("__asprintf_chk", Sig { ret: Ty::Int, params: &[Ty::CharPtrPtr, Ty::Int, Ty::CharPtr], vararg: 3 }),
-    ("__assert_fail", Sig { ret: Ty::Void, params: &[Ty::CharPtr, Ty::CharPtr, Ty::UInt, Ty::CharPtr], vararg: -1 }),
-    ("__explicit_bzero_chk", Sig { ret: Ty::Void, params: &[Ty::VoidPtr, Ty::Size, Ty::Size], vararg: -1 }),
-    ("__fprintf_chk", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::Int, Ty::CharPtr], vararg: 3 }),
-    ("__memcpy_chk", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::Size, Ty::Size], vararg: -1 }),
-    ("__memmove_chk", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::Size, Ty::Size], vararg: -1 }),
-    ("__mempcpy_chk", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::Size, Ty::Size], vararg: -1 }),
-    ("__memset_chk", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr, Ty::Int, Ty::Size, Ty::Size], vararg: -1 }),
-    ("__printf_chk", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::CharPtr], vararg: 2 }),
-    ("__snprintf_chk", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::Size, Ty::Int, Ty::Size, Ty::CharPtr], vararg: 5 }),
-    ("__sprintf_chk", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::Int, Ty::Size, Ty::CharPtr], vararg: 4 }),
-    ("__stack_chk_fail", Sig { ret: Ty::Void, params: &[], vararg: -1 }),
-    ("__stack_chk_fail_local", Sig { ret: Ty::Void, params: &[], vararg: -1 }),
-    ("__stpcpy_chk", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size], vararg: -1 }),
-    ("__strcat_chk", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size], vararg: -1 }),
-    ("__strcpy_chk", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size], vararg: -1 }),
-    ("__strncat_chk", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size, Ty::Size], vararg: -1 }),
-    ("__strncpy_chk", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size, Ty::Size], vararg: -1 }),
-    ("__syslog_chk", Sig { ret: Ty::Void, params: &[Ty::Int, Ty::Int, Ty::CharPtr], vararg: 3 }),
-    ("__vasprintf_chk", Sig { ret: Ty::Int, params: &[Ty::CharPtrPtr, Ty::Int, Ty::CharPtr, Ty::VoidPtr], vararg: -1 }),
-    ("__vfprintf_chk", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::Int, Ty::CharPtr, Ty::VoidPtr], vararg: -1 }),
-    ("__vsnprintf_chk", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::Size, Ty::Int, Ty::Size, Ty::CharPtr, Ty::VoidPtr], vararg: -1 }),
+    (
+        "__asprintf_chk",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtrPtr, Ty::Int, Ty::CharPtr],
+            vararg: 3,
+        },
+    ),
+    (
+        "__assert_fail",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::UInt, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "__explicit_bzero_chk",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr, Ty::Size, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "__fprintf_chk",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::Int, Ty::CharPtr],
+            vararg: 3,
+        },
+    ),
+    (
+        "__memcpy_chk",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::Size, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "__memmove_chk",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::Size, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "__mempcpy_chk",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::Size, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "__memset_chk",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::Int, Ty::Size, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "__printf_chk",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::CharPtr],
+            vararg: 2,
+        },
+    ),
+    (
+        "__snprintf_chk",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::Size, Ty::Int, Ty::Size, Ty::CharPtr],
+            vararg: 5,
+        },
+    ),
+    (
+        "__sprintf_chk",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::Int, Ty::Size, Ty::CharPtr],
+            vararg: 4,
+        },
+    ),
+    (
+        "__stack_chk_fail",
+        Sig {
+            ret: Ty::Void,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "__stack_chk_fail_local",
+        Sig {
+            ret: Ty::Void,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "__stpcpy_chk",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "__strcat_chk",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "__strcpy_chk",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "__strncat_chk",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "__strncpy_chk",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "__syslog_chk",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::Int, Ty::Int, Ty::CharPtr],
+            vararg: 3,
+        },
+    ),
+    (
+        "__vasprintf_chk",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtrPtr, Ty::Int, Ty::CharPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "__vfprintf_chk",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::Int, Ty::CharPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "__vsnprintf_chk",
+        Sig {
+            ret: Ty::Int,
+            params: &[
+                Ty::CharPtr,
+                Ty::Size,
+                Ty::Int,
+                Ty::Size,
+                Ty::CharPtr,
+                Ty::VoidPtr,
+            ],
+            vararg: -1,
+        },
+    ),
     // string.h / strings.h
-    ("bzero", Sig { ret: Ty::Void, params: &[Ty::VoidPtr, Ty::Size], vararg: -1 }),
-    ("explicit_bzero", Sig { ret: Ty::Void, params: &[Ty::VoidPtr, Ty::Size], vararg: -1 }),
-    ("index", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::Int], vararg: -1 }),
-    ("memchr", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr, Ty::Int, Ty::Size], vararg: -1 }),
-    ("memcmp", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::Size], vararg: -1 }),
-    ("mempcpy", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::Size], vararg: -1 }),
-    ("rawmemchr", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr, Ty::Int], vararg: -1 }),
-    ("rindex", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::Int], vararg: -1 }),
-    ("stpcpy", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("stpncpy", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size], vararg: -1 }),
-    ("strcasecmp", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("strcasestr", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("strcoll", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("strcspn", Sig { ret: Ty::Size, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("strdup", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr], vararg: -1 }),
-    ("strerror", Sig { ret: Ty::CharPtr, params: &[Ty::Int], vararg: -1 }),
-    ("strncasecmp", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size], vararg: -1 }),
-    ("strndup", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::Size], vararg: -1 }),
-    ("strnlen", Sig { ret: Ty::Size, params: &[Ty::CharPtr, Ty::Size], vararg: -1 }),
-    ("strpbrk", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("strrchr", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::Int], vararg: -1 }),
-    ("strsep", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtrPtr, Ty::CharPtr], vararg: -1 }),
-    ("strspn", Sig { ret: Ty::Size, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("strtok", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("strtok_r", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::CharPtr, Ty::CharPtrPtr], vararg: -1 }),
+    (
+        "bzero",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "explicit_bzero",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "index",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "memchr",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::Int, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "memcmp",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "mempcpy",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "rawmemchr",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "rindex",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "stpcpy",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "stpncpy",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "strcasecmp",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "strcasestr",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "strcoll",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "strcspn",
+        Sig {
+            ret: Ty::Size,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "strdup",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "strerror",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "strncasecmp",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "strndup",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "strnlen",
+        Sig {
+            ret: Ty::Size,
+            params: &[Ty::CharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "strpbrk",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "strrchr",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "strsep",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtrPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "strspn",
+        Sig {
+            ret: Ty::Size,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "strtok",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "strtok_r",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::CharPtrPtr],
+            vararg: -1,
+        },
+    ),
     // stdlib.h
-    ("_exit", Sig { ret: Ty::Void, params: &[Ty::Int], vararg: -1 }),
-    ("abort", Sig { ret: Ty::Void, params: &[], vararg: -1 }),
-    ("abs", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("atol", Sig { ret: Ty::Long, params: &[Ty::CharPtr], vararg: -1 }),
-    ("canonicalize_file_name", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr], vararg: -1 }),
-    ("exit", Sig { ret: Ty::Void, params: &[Ty::Int], vararg: -1 }),
-    ("getenv", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr], vararg: -1 }),
-    ("getopt_long", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::CharPtrPtr, Ty::CharPtr, Ty::VoidPtr, Ty::IntPtr], vararg: -1 }),
-    ("labs", Sig { ret: Ty::Long, params: &[Ty::Long], vararg: -1 }),
-    ("reallocarray", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr, Ty::Size, Ty::Size], vararg: -1 }),
-    ("realpath", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("setenv", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtr, Ty::Int], vararg: -1 }),
-    ("strtol", Sig { ret: Ty::Long, params: &[Ty::CharPtr, Ty::CharPtrPtr, Ty::Int], vararg: -1 }),
-    ("strtoul", Sig { ret: Ty::Size, params: &[Ty::CharPtr, Ty::CharPtrPtr, Ty::Int], vararg: -1 }),
-    ("unsetenv", Sig { ret: Ty::Int, params: &[Ty::CharPtr], vararg: -1 }),
+    (
+        "_exit",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "abort",
+        Sig {
+            ret: Ty::Void,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "abs",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "atol",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "canonicalize_file_name",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "exit",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "getenv",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "getopt_long",
+        Sig {
+            ret: Ty::Int,
+            params: &[
+                Ty::Int,
+                Ty::CharPtrPtr,
+                Ty::CharPtr,
+                Ty::VoidPtr,
+                Ty::IntPtr,
+            ],
+            vararg: -1,
+        },
+    ),
+    (
+        "labs",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::Long],
+            vararg: -1,
+        },
+    ),
+    (
+        "reallocarray",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::Size, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "realpath",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "setenv",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "strtol",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::CharPtr, Ty::CharPtrPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "strtoul",
+        Sig {
+            ret: Ty::Size,
+            params: &[Ty::CharPtr, Ty::CharPtrPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "unsetenv",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
     // ctype.h / wctype.h
-    ("__ctype_b_loc", Sig { ret: Ty::VoidPtr, params: &[], vararg: -1 }),
-    ("__ctype_get_mb_cur_max", Sig { ret: Ty::Size, params: &[], vararg: -1 }),
-    ("__ctype_tolower_loc", Sig { ret: Ty::VoidPtr, params: &[], vararg: -1 }),
-    ("__ctype_toupper_loc", Sig { ret: Ty::VoidPtr, params: &[], vararg: -1 }),
-    ("iswprint", Sig { ret: Ty::Int, params: &[Ty::UInt], vararg: -1 }),
-    ("iswspace", Sig { ret: Ty::Int, params: &[Ty::UInt], vararg: -1 }),
-    ("tolower", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("toupper", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("towlower", Sig { ret: Ty::UInt, params: &[Ty::UInt], vararg: -1 }),
-    ("wcwidth", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
+    (
+        "__ctype_b_loc",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "__ctype_get_mb_cur_max",
+        Sig {
+            ret: Ty::Size,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "__ctype_tolower_loc",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "__ctype_toupper_loc",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "iswprint",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "iswspace",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "tolower",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "toupper",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "towlower",
+        Sig {
+            ret: Ty::UInt,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "wcwidth",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
     // libintl.h / locale.h / time.h / wchar.h
-    ("bindtextdomain", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("dcgettext", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::CharPtr, Ty::Int], vararg: -1 }),
-    ("dgettext", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("gettext", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr], vararg: -1 }),
-    ("localtime", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("localtime_r", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("mbrlen", Sig { ret: Ty::Size, params: &[Ty::CharPtr, Ty::Size, Ty::VoidPtr], vararg: -1 }),
-    ("mbrtowc", Sig { ret: Ty::Size, params: &[Ty::VoidPtr, Ty::CharPtr, Ty::Size, Ty::VoidPtr], vararg: -1 }),
-    ("mbsinit", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("nl_langinfo", Sig { ret: Ty::CharPtr, params: &[Ty::Int], vararg: -1 }),
-    ("strftime", Sig { ret: Ty::Size, params: &[Ty::CharPtr, Ty::Size, Ty::CharPtr, Ty::VoidPtr], vararg: -1 }),
-    ("textdomain", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr], vararg: -1 }),
+    (
+        "bindtextdomain",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "dcgettext",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "dgettext",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "gettext",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "localtime",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "localtime_r",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "mbrlen",
+        Sig {
+            ret: Ty::Size,
+            params: &[Ty::CharPtr, Ty::Size, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "mbrtowc",
+        Sig {
+            ret: Ty::Size,
+            params: &[Ty::VoidPtr, Ty::CharPtr, Ty::Size, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "mbsinit",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "nl_langinfo",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "strftime",
+        Sig {
+            ret: Ty::Size,
+            params: &[Ty::CharPtr, Ty::Size, Ty::CharPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "textdomain",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
     // unistd.h
-    ("access", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::Int], vararg: -1 }),
-    ("alarm", Sig { ret: Ty::UInt, params: &[Ty::UInt], vararg: -1 }),
-    ("chdir", Sig { ret: Ty::Int, params: &[Ty::CharPtr], vararg: -1 }),
-    ("close", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("dup2", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::Int], vararg: -1 }),
-    ("execlp", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtr], vararg: 2 }),
-    ("execve", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtrPtr, Ty::CharPtrPtr], vararg: -1 }),
-    ("fchdir", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("fchmod", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::UInt], vararg: -1 }),
-    ("fchown", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::UInt, Ty::UInt], vararg: -1 }),
-    ("fork", Sig { ret: Ty::Int, params: &[], vararg: -1 }),
-    ("fsync", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("getcwd", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::Size], vararg: -1 }),
-    ("geteuid", Sig { ret: Ty::UInt, params: &[], vararg: -1 }),
-    ("getgid", Sig { ret: Ty::UInt, params: &[], vararg: -1 }),
-    ("getpagesize", Sig { ret: Ty::Int, params: &[], vararg: -1 }),
-    ("getpid", Sig { ret: Ty::Int, params: &[], vararg: -1 }),
-    ("getuid", Sig { ret: Ty::UInt, params: &[], vararg: -1 }),
-    ("isatty", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("link", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("pipe", Sig { ret: Ty::Int, params: &[Ty::IntPtr], vararg: -1 }),
-    ("read", Sig { ret: Ty::Long, params: &[Ty::Int, Ty::VoidPtr, Ty::Size], vararg: -1 }),
-    ("readlink", Sig { ret: Ty::Long, params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size], vararg: -1 }),
-    ("sleep", Sig { ret: Ty::UInt, params: &[Ty::UInt], vararg: -1 }),
-    ("sysconf", Sig { ret: Ty::Long, params: &[Ty::Int], vararg: -1 }),
-    ("umask", Sig { ret: Ty::UInt, params: &[Ty::UInt], vararg: -1 }),
-    ("unlink", Sig { ret: Ty::Int, params: &[Ty::CharPtr], vararg: -1 }),
-    ("unlinkat", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::CharPtr, Ty::Int], vararg: -1 }),
-    ("write", Sig { ret: Ty::Long, params: &[Ty::Int, Ty::VoidPtr, Ty::Size], vararg: -1 }),
+    (
+        "access",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "alarm",
+        Sig {
+            ret: Ty::UInt,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "chdir",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "close",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "dup2",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "execlp",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: 2,
+        },
+    ),
+    (
+        "execve",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtrPtr, Ty::CharPtrPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "fchdir",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "fchmod",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "fchown",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::UInt, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "fork",
+        Sig {
+            ret: Ty::Int,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "fsync",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "getcwd",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "geteuid",
+        Sig {
+            ret: Ty::UInt,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "getgid",
+        Sig {
+            ret: Ty::UInt,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "getpagesize",
+        Sig {
+            ret: Ty::Int,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "getpid",
+        Sig {
+            ret: Ty::Int,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "getuid",
+        Sig {
+            ret: Ty::UInt,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "isatty",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "link",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "pipe",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::IntPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "read",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::Int, Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "readlink",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "sleep",
+        Sig {
+            ret: Ty::UInt,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "sysconf",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "umask",
+        Sig {
+            ret: Ty::UInt,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "unlink",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "unlinkat",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::CharPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "write",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::Int, Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
     // fcntl.h / sys/stat.h / dirent.h
-    ("closedir", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("dirfd", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("dirname", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr], vararg: -1 }),
-    ("fcntl", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::Int], vararg: 2 }),
-    ("fdopendir", Sig { ret: Ty::VoidPtr, params: &[Ty::Int], vararg: -1 }),
-    ("fnmatch", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtr, Ty::Int], vararg: -1 }),
-    ("fstat", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::VoidPtr], vararg: -1 }),
-    ("fstatat", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::CharPtr, Ty::VoidPtr, Ty::Int], vararg: -1 }),
-    ("ioctl", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::Size], vararg: 2 }),
-    ("lstat", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::VoidPtr], vararg: -1 }),
-    ("mkdir", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::UInt], vararg: -1 }),
-    ("munmap", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::Size], vararg: -1 }),
-    ("open", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::Int], vararg: 2 }),
-    ("openat", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::CharPtr, Ty::Int], vararg: 3 }),
-    ("opendir", Sig { ret: Ty::VoidPtr, params: &[Ty::CharPtr], vararg: -1 }),
-    ("readdir", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("stat", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::VoidPtr], vararg: -1 }),
+    (
+        "closedir",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "dirfd",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "dirname",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "fcntl",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::Int],
+            vararg: 2,
+        },
+    ),
+    (
+        "fdopendir",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "fnmatch",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "fstat",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "fstatat",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::CharPtr, Ty::VoidPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "ioctl",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::Size],
+            vararg: 2,
+        },
+    ),
+    (
+        "lstat",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "mkdir",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "munmap",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "open",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::Int],
+            vararg: 2,
+        },
+    ),
+    (
+        "openat",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::CharPtr, Ty::Int],
+            vararg: 3,
+        },
+    ),
+    (
+        "opendir",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "readdir",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "stat",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
     // signal.h / sys/wait.h
-    ("kill", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::Int], vararg: -1 }),
-    ("raise", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("sigaction", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("sigaddset", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::Int], vararg: -1 }),
-    ("sigemptyset", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("sigprocmask", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("waitpid", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::IntPtr, Ty::Int], vararg: -1 }),
+    (
+        "kill",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "raise",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "sigaction",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "sigaddset",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "sigemptyset",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "sigprocmask",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "waitpid",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::IntPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
     // sys/socket.h / netdb.h / arpa/inet.h
-    ("freeaddrinfo", Sig { ret: Ty::Void, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("getaddrinfo", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtr, Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("getnameinfo", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::UInt, Ty::CharPtr, Ty::UInt, Ty::CharPtr, Ty::UInt, Ty::Int], vararg: -1 }),
-    ("getsockopt", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::Int, Ty::Int, Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("htonl", Sig { ret: Ty::UInt, params: &[Ty::UInt], vararg: -1 }),
-    ("ntohl", Sig { ret: Ty::UInt, params: &[Ty::UInt], vararg: -1 }),
-    ("send", Sig { ret: Ty::Long, params: &[Ty::Int, Ty::VoidPtr, Ty::Size, Ty::Int], vararg: -1 }),
-    ("setsockopt", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::Int, Ty::Int, Ty::VoidPtr, Ty::UInt], vararg: -1 }),
-    ("socket", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::Int, Ty::Int], vararg: -1 }),
+    (
+        "freeaddrinfo",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "getaddrinfo",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "getnameinfo",
+        Sig {
+            ret: Ty::Int,
+            params: &[
+                Ty::VoidPtr,
+                Ty::UInt,
+                Ty::CharPtr,
+                Ty::UInt,
+                Ty::CharPtr,
+                Ty::UInt,
+                Ty::Int,
+            ],
+            vararg: -1,
+        },
+    ),
+    (
+        "getsockopt",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::Int, Ty::Int, Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "htonl",
+        Sig {
+            ret: Ty::UInt,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "ntohl",
+        Sig {
+            ret: Ty::UInt,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "send",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::Int, Ty::VoidPtr, Ty::Size, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "setsockopt",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::Int, Ty::Int, Ty::VoidPtr, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "socket",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::Int, Ty::Int],
+            vararg: -1,
+        },
+    ),
     // the rest
-    ("__errno_location", Sig { ret: Ty::IntPtr, params: &[], vararg: -1 }),
-    ("clock_gettime", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::VoidPtr], vararg: -1 }),
-    ("closelog", Sig { ret: Ty::Void, params: &[], vararg: -1 }),
-    ("dlclose", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("dlerror", Sig { ret: Ty::CharPtr, params: &[], vararg: -1 }),
-    ("dlsym", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr, Ty::CharPtr], vararg: -1 }),
-    ("endpwent", Sig { ret: Ty::Void, params: &[], vararg: -1 }),
-    ("err", Sig { ret: Ty::Void, params: &[Ty::Int, Ty::CharPtr], vararg: 2 }),
-    ("error", Sig { ret: Ty::Void, params: &[Ty::Int, Ty::Int, Ty::CharPtr], vararg: 3 }),
-    ("errx", Sig { ret: Ty::Void, params: &[Ty::Int, Ty::CharPtr], vararg: 2 }),
-    ("getgrgid", Sig { ret: Ty::VoidPtr, params: &[Ty::UInt], vararg: -1 }),
-    ("getgrnam", Sig { ret: Ty::VoidPtr, params: &[Ty::CharPtr], vararg: -1 }),
-    ("getpwnam", Sig { ret: Ty::VoidPtr, params: &[Ty::CharPtr], vararg: -1 }),
-    ("getpwuid", Sig { ret: Ty::VoidPtr, params: &[Ty::UInt], vararg: -1 }),
-    ("gettimeofday", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("openlog", Sig { ret: Ty::Void, params: &[Ty::CharPtr, Ty::Int, Ty::Int], vararg: -1 }),
-    ("pthread_mutex_lock", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("pthread_mutex_unlock", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("syslog", Sig { ret: Ty::Void, params: &[Ty::Int, Ty::CharPtr], vararg: 2 }),
-    ("tcsetattr", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::Int, Ty::VoidPtr], vararg: -1 }),
-    ("verr", Sig { ret: Ty::Void, params: &[Ty::Int, Ty::CharPtr, Ty::VoidPtr], vararg: -1 }),
-    ("vwarn", Sig { ret: Ty::Void, params: &[Ty::CharPtr, Ty::VoidPtr], vararg: -1 }),
-    ("warn", Sig { ret: Ty::Void, params: &[Ty::CharPtr], vararg: 1 }),
-    ("warnx", Sig { ret: Ty::Void, params: &[Ty::CharPtr], vararg: 1 }),
+    (
+        "__errno_location",
+        Sig {
+            ret: Ty::IntPtr,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "clock_gettime",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "closelog",
+        Sig {
+            ret: Ty::Void,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "dlclose",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "dlerror",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "dlsym",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "endpwent",
+        Sig {
+            ret: Ty::Void,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "err",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::Int, Ty::CharPtr],
+            vararg: 2,
+        },
+    ),
+    (
+        "error",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::Int, Ty::Int, Ty::CharPtr],
+            vararg: 3,
+        },
+    ),
+    (
+        "errx",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::Int, Ty::CharPtr],
+            vararg: 2,
+        },
+    ),
+    (
+        "getgrgid",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "getgrnam",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "getpwnam",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "getpwuid",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "gettimeofday",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "openlog",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::CharPtr, Ty::Int, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_mutex_lock",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_mutex_unlock",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "syslog",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::Int, Ty::CharPtr],
+            vararg: 2,
+        },
+    ),
+    (
+        "tcsetattr",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::Int, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "verr",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::Int, Ty::CharPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "vwarn",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::CharPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "warn",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::CharPtr],
+            vararg: 1,
+        },
+    ),
+    (
+        "warnx",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::CharPtr],
+            vararg: 1,
+        },
+    ),
     //
     // ---- the widened set (docs/features/libcwiden/) ----
     //
@@ -287,352 +1755,2716 @@ pub(super) const LIBC_EXT: &[(&str, Sig)] = &[
     // linked binaries, not already carried here, whose platform declaration
     // reduces WHOLE to the width-stable `Ty` vocabulary.
     // stdio.h
-    ("__fgets_chk", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::Size, Ty::Int, Ty::VoidPtr], vararg: -1 }),
-    ("clearerr", Sig { ret: Ty::Void, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("fopen64", Sig { ret: Ty::VoidPtr, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("freopen64", Sig { ret: Ty::VoidPtr, params: &[Ty::CharPtr, Ty::CharPtr, Ty::VoidPtr], vararg: -1 }),
-    ("getchar", Sig { ret: Ty::Int, params: &[], vararg: -1 }),
-    ("putchar", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("remove", Sig { ret: Ty::Int, params: &[Ty::CharPtr], vararg: -1 }),
-    ("renameat", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::CharPtr, Ty::Int, Ty::CharPtr], vararg: -1 }),
-    ("renameat2", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::CharPtr, Ty::Int, Ty::CharPtr, Ty::UInt], vararg: -1 }),
-    ("vprintf", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::VoidPtr], vararg: -1 }),
+    (
+        "__fgets_chk",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::Size, Ty::Int, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "clearerr",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "fopen64",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "freopen64",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "getchar",
+        Sig {
+            ret: Ty::Int,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "putchar",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "remove",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "renameat",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::CharPtr, Ty::Int, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "renameat2",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::CharPtr, Ty::Int, Ty::CharPtr, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "vprintf",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
     // string.h
-    ("basename", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr], vararg: -1 }),
-    ("ffs", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("memmem", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr, Ty::Size, Ty::VoidPtr, Ty::Size], vararg: -1 }),
-    ("memrchr", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr, Ty::Int, Ty::Size], vararg: -1 }),
-    ("strchrnul", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::Int], vararg: -1 }),
-    ("strerror_r", Sig { ret: Ty::CharPtr, params: &[Ty::Int, Ty::CharPtr, Ty::Size], vararg: -1 }),
-    ("strncat", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size], vararg: -1 }),
-    ("strsignal", Sig { ret: Ty::CharPtr, params: &[Ty::Int], vararg: -1 }),
-    ("strverscmp", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("strxfrm", Sig { ret: Ty::Size, params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size], vararg: -1 }),
+    (
+        "basename",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "ffs",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "memmem",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::Size, Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "memrchr",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::Int, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "strchrnul",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "strerror_r",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::Int, Ty::CharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "strncat",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "strsignal",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "strverscmp",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "strxfrm",
+        Sig {
+            ret: Ty::Size,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
     // stdlib.h
-    ("__mbstowcs_chk", Sig { ret: Ty::Size, params: &[Ty::WCharPtr, Ty::CharPtr, Ty::Size, Ty::Size], vararg: -1 }),
-    ("__realpath_chk", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size], vararg: -1 }),
-    ("aligned_alloc", Sig { ret: Ty::VoidPtr, params: &[Ty::Size, Ty::Size], vararg: -1 }),
-    ("clearenv", Sig { ret: Ty::Int, params: &[], vararg: -1 }),
-    ("getloadavg", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::Int], vararg: -1 }),
-    ("mblen", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::Size], vararg: -1 }),
-    ("mbstowcs", Sig { ret: Ty::Size, params: &[Ty::WCharPtr, Ty::CharPtr, Ty::Size], vararg: -1 }),
-    ("mbtowc", Sig { ret: Ty::Int, params: &[Ty::WCharPtr, Ty::CharPtr, Ty::Size], vararg: -1 }),
-    ("mkdtemp", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr], vararg: -1 }),
-    ("mkostemp", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::Int], vararg: -1 }),
-    ("mkstemp", Sig { ret: Ty::Int, params: &[Ty::CharPtr], vararg: -1 }),
-    ("mktemp", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr], vararg: -1 }),
-    ("posix_memalign", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::Size, Ty::Size], vararg: -1 }),
-    ("putenv", Sig { ret: Ty::Int, params: &[Ty::CharPtr], vararg: -1 }),
-    ("random", Sig { ret: Ty::Long, params: &[], vararg: -1 }),
-    ("rpmatch", Sig { ret: Ty::Int, params: &[Ty::CharPtr], vararg: -1 }),
-    ("secure_getenv", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr], vararg: -1 }),
-    ("srandom", Sig { ret: Ty::Void, params: &[Ty::UInt], vararg: -1 }),
-    ("system", Sig { ret: Ty::Int, params: &[Ty::CharPtr], vararg: -1 }),
-    ("wcstombs", Sig { ret: Ty::Size, params: &[Ty::CharPtr, Ty::WCharPtr, Ty::Size], vararg: -1 }),
+    (
+        "__mbstowcs_chk",
+        Sig {
+            ret: Ty::Size,
+            params: &[Ty::WCharPtr, Ty::CharPtr, Ty::Size, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "__realpath_chk",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "aligned_alloc",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Size, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "clearenv",
+        Sig {
+            ret: Ty::Int,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "getloadavg",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "mblen",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "mbstowcs",
+        Sig {
+            ret: Ty::Size,
+            params: &[Ty::WCharPtr, Ty::CharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "mbtowc",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::WCharPtr, Ty::CharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "mkdtemp",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "mkostemp",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "mkstemp",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "mktemp",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "posix_memalign",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::Size, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "putenv",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "random",
+        Sig {
+            ret: Ty::Long,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "rpmatch",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "secure_getenv",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "srandom",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "system",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "wcstombs",
+        Sig {
+            ret: Ty::Size,
+            params: &[Ty::CharPtr, Ty::WCharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
     // ctype.h / wctype.h / wchar.h
-    ("__mbsrtowcs_chk", Sig { ret: Ty::Size, params: &[Ty::WCharPtr, Ty::CharPtrPtr, Ty::Size, Ty::VoidPtr, Ty::Size], vararg: -1 }),
-    ("btowc", Sig { ret: Ty::UInt, params: &[Ty::Int], vararg: -1 }),
-    ("fgetwc", Sig { ret: Ty::UInt, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("isalnum", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("isalpha", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("isblank", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("iscntrl", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("isdigit", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("isgraph", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("islower", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("isprint", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("ispunct", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("isspace", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("isupper", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("iswalnum", Sig { ret: Ty::Int, params: &[Ty::UInt], vararg: -1 }),
-    ("iswalpha", Sig { ret: Ty::Int, params: &[Ty::UInt], vararg: -1 }),
-    ("iswcntrl", Sig { ret: Ty::Int, params: &[Ty::UInt], vararg: -1 }),
-    ("iswdigit", Sig { ret: Ty::Int, params: &[Ty::UInt], vararg: -1 }),
-    ("iswgraph", Sig { ret: Ty::Int, params: &[Ty::UInt], vararg: -1 }),
-    ("iswlower", Sig { ret: Ty::Int, params: &[Ty::UInt], vararg: -1 }),
-    ("iswupper", Sig { ret: Ty::Int, params: &[Ty::UInt], vararg: -1 }),
-    ("isxdigit", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("mbsnrtowcs", Sig { ret: Ty::Size, params: &[Ty::WCharPtr, Ty::CharPtrPtr, Ty::Size, Ty::Size, Ty::VoidPtr], vararg: -1 }),
-    ("mbsrtowcs", Sig { ret: Ty::Size, params: &[Ty::WCharPtr, Ty::CharPtrPtr, Ty::Size, Ty::VoidPtr], vararg: -1 }),
-    ("towupper", Sig { ret: Ty::UInt, params: &[Ty::UInt], vararg: -1 }),
-    ("wcscmp", Sig { ret: Ty::Int, params: &[Ty::WCharPtr, Ty::WCharPtr], vararg: -1 }),
-    ("wcscoll", Sig { ret: Ty::Int, params: &[Ty::WCharPtr, Ty::WCharPtr], vararg: -1 }),
-    ("wcscspn", Sig { ret: Ty::Size, params: &[Ty::WCharPtr, Ty::WCharPtr], vararg: -1 }),
-    ("wcsdup", Sig { ret: Ty::WCharPtr, params: &[Ty::WCharPtr], vararg: -1 }),
-    ("wcslen", Sig { ret: Ty::Size, params: &[Ty::WCharPtr], vararg: -1 }),
-    ("wcsncmp", Sig { ret: Ty::Int, params: &[Ty::WCharPtr, Ty::WCharPtr, Ty::Size], vararg: -1 }),
-    ("wcsncpy", Sig { ret: Ty::WCharPtr, params: &[Ty::WCharPtr, Ty::WCharPtr, Ty::Size], vararg: -1 }),
-    ("wcsrtombs", Sig { ret: Ty::Size, params: &[Ty::CharPtr, Ty::VoidPtr, Ty::Size, Ty::VoidPtr], vararg: -1 }),
-    ("wcsstr", Sig { ret: Ty::WCharPtr, params: &[Ty::WCharPtr, Ty::WCharPtr], vararg: -1 }),
-    ("wcstol", Sig { ret: Ty::Long, params: &[Ty::WCharPtr, Ty::VoidPtr, Ty::Int], vararg: -1 }),
-    ("wcswidth", Sig { ret: Ty::Int, params: &[Ty::WCharPtr, Ty::Size], vararg: -1 }),
-    ("wctob", Sig { ret: Ty::Int, params: &[Ty::UInt], vararg: -1 }),
+    (
+        "__mbsrtowcs_chk",
+        Sig {
+            ret: Ty::Size,
+            params: &[
+                Ty::WCharPtr,
+                Ty::CharPtrPtr,
+                Ty::Size,
+                Ty::VoidPtr,
+                Ty::Size,
+            ],
+            vararg: -1,
+        },
+    ),
+    (
+        "btowc",
+        Sig {
+            ret: Ty::UInt,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "fgetwc",
+        Sig {
+            ret: Ty::UInt,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "isalnum",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "isalpha",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "isblank",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "iscntrl",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "isdigit",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "isgraph",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "islower",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "isprint",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "ispunct",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "isspace",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "isupper",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "iswalnum",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "iswalpha",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "iswcntrl",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "iswdigit",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "iswgraph",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "iswlower",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "iswupper",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "isxdigit",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "mbsnrtowcs",
+        Sig {
+            ret: Ty::Size,
+            params: &[
+                Ty::WCharPtr,
+                Ty::CharPtrPtr,
+                Ty::Size,
+                Ty::Size,
+                Ty::VoidPtr,
+            ],
+            vararg: -1,
+        },
+    ),
+    (
+        "mbsrtowcs",
+        Sig {
+            ret: Ty::Size,
+            params: &[Ty::WCharPtr, Ty::CharPtrPtr, Ty::Size, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "towupper",
+        Sig {
+            ret: Ty::UInt,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "wcscmp",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::WCharPtr, Ty::WCharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "wcscoll",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::WCharPtr, Ty::WCharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "wcscspn",
+        Sig {
+            ret: Ty::Size,
+            params: &[Ty::WCharPtr, Ty::WCharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "wcsdup",
+        Sig {
+            ret: Ty::WCharPtr,
+            params: &[Ty::WCharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "wcslen",
+        Sig {
+            ret: Ty::Size,
+            params: &[Ty::WCharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "wcsncmp",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::WCharPtr, Ty::WCharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "wcsncpy",
+        Sig {
+            ret: Ty::WCharPtr,
+            params: &[Ty::WCharPtr, Ty::WCharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "wcsrtombs",
+        Sig {
+            ret: Ty::Size,
+            params: &[Ty::CharPtr, Ty::VoidPtr, Ty::Size, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "wcsstr",
+        Sig {
+            ret: Ty::WCharPtr,
+            params: &[Ty::WCharPtr, Ty::WCharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "wcstol",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::WCharPtr, Ty::VoidPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "wcswidth",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::WCharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "wctob",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
     // time.h / locale.h / libintl.h
-    ("clock_nanosleep", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::Int, Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("ctime", Sig { ret: Ty::CharPtr, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("ctime_r", Sig { ret: Ty::CharPtr, params: &[Ty::VoidPtr, Ty::CharPtr], vararg: -1 }),
-    ("dcngettext", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::CharPtr, Ty::CharPtr, Ty::Size, Ty::Int], vararg: -1 }),
-    ("dngettext", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::CharPtr, Ty::CharPtr, Ty::Size], vararg: -1 }),
-    ("futimes", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::VoidPtr], vararg: -1 }),
-    ("futimesat", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::CharPtr, Ty::VoidPtr], vararg: -1 }),
-    ("lutimes", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::VoidPtr], vararg: -1 }),
-    ("ngettext", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size], vararg: -1 }),
-    ("settimeofday", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("strptime", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::CharPtr, Ty::VoidPtr], vararg: -1 }),
-    ("timer_create", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("tzset", Sig { ret: Ty::Void, params: &[], vararg: -1 }),
-    ("utime", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::VoidPtr], vararg: -1 }),
-    ("utimes", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::VoidPtr], vararg: -1 }),
+    (
+        "clock_nanosleep",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::Int, Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "ctime",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "ctime_r",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::VoidPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "dcngettext",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::CharPtr, Ty::Size, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "dngettext",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::CharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "futimes",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "futimesat",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::CharPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "lutimes",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "ngettext",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "settimeofday",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "strptime",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "timer_create",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "tzset",
+        Sig {
+            ret: Ty::Void,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "utime",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "utimes",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
     // unistd.h
-    ("__getgroups_chk", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::UIntPtr, Ty::Size], vararg: -1 }),
-    ("chown", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::UInt, Ty::UInt], vararg: -1 }),
-    ("chroot", Sig { ret: Ty::Int, params: &[Ty::CharPtr], vararg: -1 }),
-    ("close_range", Sig { ret: Ty::Int, params: &[Ty::UInt, Ty::UInt, Ty::Int], vararg: -1 }),
-    ("confstr", Sig { ret: Ty::Size, params: &[Ty::Int, Ty::CharPtr, Ty::Size], vararg: -1 }),
-    ("copy_file_range", Sig { ret: Ty::Long, params: &[Ty::Int, Ty::VoidPtr, Ty::Int, Ty::VoidPtr, Ty::Size, Ty::UInt], vararg: -1 }),
-    ("daemon", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::Int], vararg: -1 }),
-    ("dup", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("eaccess", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::Int], vararg: -1 }),
-    ("endusershell", Sig { ret: Ty::Void, params: &[], vararg: -1 }),
-    ("euidaccess", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::Int], vararg: -1 }),
-    ("execl", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtr], vararg: 2 }),
-    ("execle", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtr], vararg: 2 }),
-    ("execv", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtrPtr], vararg: -1 }),
-    ("execvp", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtrPtr], vararg: -1 }),
-    ("execvpe", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtrPtr, Ty::CharPtrPtr], vararg: -1 }),
-    ("faccessat", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::CharPtr, Ty::Int, Ty::Int], vararg: -1 }),
-    ("fchownat", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::CharPtr, Ty::UInt, Ty::UInt, Ty::Int], vararg: -1 }),
-    ("fdatasync", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("fpathconf", Sig { ret: Ty::Long, params: &[Ty::Int, Ty::Int], vararg: -1 }),
-    ("get_current_dir_name", Sig { ret: Ty::CharPtr, params: &[], vararg: -1 }),
-    ("getdtablesize", Sig { ret: Ty::Int, params: &[], vararg: -1 }),
-    ("getegid", Sig { ret: Ty::UInt, params: &[], vararg: -1 }),
-    ("getentropy", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::Size], vararg: -1 }),
-    ("getgroups", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::UIntPtr], vararg: -1 }),
-    ("gethostid", Sig { ret: Ty::Long, params: &[], vararg: -1 }),
-    ("gethostname", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::Size], vararg: -1 }),
-    ("getlogin", Sig { ret: Ty::CharPtr, params: &[], vararg: -1 }),
-    ("getpass", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr], vararg: -1 }),
-    ("getpgid", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("getpgrp", Sig { ret: Ty::Int, params: &[], vararg: -1 }),
-    ("getppid", Sig { ret: Ty::Int, params: &[], vararg: -1 }),
-    ("getsid", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("gettid", Sig { ret: Ty::Int, params: &[], vararg: -1 }),
-    ("getusershell", Sig { ret: Ty::CharPtr, params: &[], vararg: -1 }),
-    ("lchown", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::UInt, Ty::UInt], vararg: -1 }),
-    ("linkat", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::CharPtr, Ty::Int, Ty::CharPtr, Ty::Int], vararg: -1 }),
-    ("pathconf", Sig { ret: Ty::Long, params: &[Ty::CharPtr, Ty::Int], vararg: -1 }),
-    ("pause", Sig { ret: Ty::Int, params: &[], vararg: -1 }),
-    ("pipe2", Sig { ret: Ty::Int, params: &[Ty::IntPtr, Ty::Int], vararg: -1 }),
-    ("readlinkat", Sig { ret: Ty::Long, params: &[Ty::Int, Ty::CharPtr, Ty::CharPtr, Ty::Size], vararg: -1 }),
-    ("rmdir", Sig { ret: Ty::Int, params: &[Ty::CharPtr], vararg: -1 }),
-    ("sbrk", Sig { ret: Ty::VoidPtr, params: &[Ty::Long], vararg: -1 }),
-    ("setegid", Sig { ret: Ty::Int, params: &[Ty::UInt], vararg: -1 }),
-    ("seteuid", Sig { ret: Ty::Int, params: &[Ty::UInt], vararg: -1 }),
-    ("setgid", Sig { ret: Ty::Int, params: &[Ty::UInt], vararg: -1 }),
-    ("setpgid", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::Int], vararg: -1 }),
-    ("setpgrp", Sig { ret: Ty::Int, params: &[], vararg: -1 }),
-    ("setregid", Sig { ret: Ty::Int, params: &[Ty::UInt, Ty::UInt], vararg: -1 }),
-    ("setresgid", Sig { ret: Ty::Int, params: &[Ty::UInt, Ty::UInt, Ty::UInt], vararg: -1 }),
-    ("setresuid", Sig { ret: Ty::Int, params: &[Ty::UInt, Ty::UInt, Ty::UInt], vararg: -1 }),
-    ("setreuid", Sig { ret: Ty::Int, params: &[Ty::UInt, Ty::UInt], vararg: -1 }),
-    ("setsid", Sig { ret: Ty::Int, params: &[], vararg: -1 }),
-    ("setuid", Sig { ret: Ty::Int, params: &[Ty::UInt], vararg: -1 }),
-    ("setusershell", Sig { ret: Ty::Void, params: &[], vararg: -1 }),
-    ("symlink", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("symlinkat", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::Int, Ty::CharPtr], vararg: -1 }),
-    ("sync", Sig { ret: Ty::Void, params: &[], vararg: -1 }),
-    ("syncfs", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("syscall", Sig { ret: Ty::Long, params: &[Ty::Long], vararg: 1 }),
-    ("tcgetpgrp", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("tcsetpgrp", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::Int], vararg: -1 }),
-    ("ttyname", Sig { ret: Ty::CharPtr, params: &[Ty::Int], vararg: -1 }),
-    ("usleep", Sig { ret: Ty::Int, params: &[Ty::UInt], vararg: -1 }),
-    ("vfork", Sig { ret: Ty::Int, params: &[], vararg: -1 }),
+    (
+        "__getgroups_chk",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::UIntPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "chown",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::UInt, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "chroot",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "close_range",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt, Ty::UInt, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "confstr",
+        Sig {
+            ret: Ty::Size,
+            params: &[Ty::Int, Ty::CharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "copy_file_range",
+        Sig {
+            ret: Ty::Long,
+            params: &[
+                Ty::Int,
+                Ty::VoidPtr,
+                Ty::Int,
+                Ty::VoidPtr,
+                Ty::Size,
+                Ty::UInt,
+            ],
+            vararg: -1,
+        },
+    ),
+    (
+        "daemon",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "dup",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "eaccess",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "endusershell",
+        Sig {
+            ret: Ty::Void,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "euidaccess",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "execl",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: 2,
+        },
+    ),
+    (
+        "execle",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: 2,
+        },
+    ),
+    (
+        "execv",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtrPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "execvp",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtrPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "execvpe",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtrPtr, Ty::CharPtrPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "faccessat",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::CharPtr, Ty::Int, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "fchownat",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::CharPtr, Ty::UInt, Ty::UInt, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "fdatasync",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "fpathconf",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::Int, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "get_current_dir_name",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "getdtablesize",
+        Sig {
+            ret: Ty::Int,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "getegid",
+        Sig {
+            ret: Ty::UInt,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "getentropy",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "getgroups",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::UIntPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "gethostid",
+        Sig {
+            ret: Ty::Long,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "gethostname",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "getlogin",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "getpass",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "getpgid",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "getpgrp",
+        Sig {
+            ret: Ty::Int,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "getppid",
+        Sig {
+            ret: Ty::Int,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "getsid",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "gettid",
+        Sig {
+            ret: Ty::Int,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "getusershell",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "lchown",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::UInt, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "linkat",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::CharPtr, Ty::Int, Ty::CharPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "pathconf",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::CharPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "pause",
+        Sig {
+            ret: Ty::Int,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "pipe2",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::IntPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "readlinkat",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::Int, Ty::CharPtr, Ty::CharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "rmdir",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "sbrk",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Long],
+            vararg: -1,
+        },
+    ),
+    (
+        "setegid",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "seteuid",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "setgid",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "setpgid",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "setpgrp",
+        Sig {
+            ret: Ty::Int,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "setregid",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "setresgid",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt, Ty::UInt, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "setresuid",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt, Ty::UInt, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "setreuid",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "setsid",
+        Sig {
+            ret: Ty::Int,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "setuid",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "setusershell",
+        Sig {
+            ret: Ty::Void,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "symlink",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "symlinkat",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::Int, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "sync",
+        Sig {
+            ret: Ty::Void,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "syncfs",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "syscall",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::Long],
+            vararg: 1,
+        },
+    ),
+    (
+        "tcgetpgrp",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "tcsetpgrp",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "ttyname",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "usleep",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "vfork",
+        Sig {
+            ret: Ty::Int,
+            params: &[],
+            vararg: -1,
+        },
+    ),
     // fcntl.h / sys/stat.h / dirent.h
-    ("__open_2", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::Int], vararg: -1 }),
-    ("__openat_2", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::CharPtr, Ty::Int], vararg: -1 }),
-    ("alphasort", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("chmod", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::UInt], vararg: -1 }),
-    ("creat", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::UInt], vararg: -1 }),
-    ("fchmodat", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::CharPtr, Ty::UInt, Ty::Int], vararg: -1 }),
-    ("fcntl64", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::Int], vararg: 2 }),
-    ("fstat64", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::VoidPtr], vararg: -1 }),
-    ("fstatvfs", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::VoidPtr], vararg: -1 }),
-    ("futimens", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::VoidPtr], vararg: -1 }),
-    ("lchmod", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::UInt], vararg: -1 }),
-    ("lstat64", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::VoidPtr], vararg: -1 }),
-    ("mkdirat", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::CharPtr, Ty::UInt], vararg: -1 }),
-    ("mkfifo", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::UInt], vararg: -1 }),
-    ("mkfifoat", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::CharPtr, Ty::UInt], vararg: -1 }),
-    ("name_to_handle_at", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::CharPtr, Ty::VoidPtr, Ty::IntPtr, Ty::Int], vararg: -1 }),
-    ("open64", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::Int], vararg: 2 }),
-    ("open_by_handle_at", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::VoidPtr, Ty::Int], vararg: -1 }),
-    ("readdir64", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("seekdir", Sig { ret: Ty::Void, params: &[Ty::VoidPtr, Ty::Long], vararg: -1 }),
-    ("splice", Sig { ret: Ty::Long, params: &[Ty::Int, Ty::VoidPtr, Ty::Int, Ty::VoidPtr, Ty::Size, Ty::UInt], vararg: -1 }),
-    ("stat64", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::VoidPtr], vararg: -1 }),
-    ("statvfs", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::VoidPtr], vararg: -1 }),
-    ("statvfs64", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::VoidPtr], vararg: -1 }),
-    ("statx", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::CharPtr, Ty::Int, Ty::UInt, Ty::VoidPtr], vararg: -1 }),
-    ("telldir", Sig { ret: Ty::Long, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("utimensat", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::CharPtr, Ty::VoidPtr, Ty::Int], vararg: -1 }),
+    (
+        "__open_2",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "__openat_2",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::CharPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "alphasort",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "chmod",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "creat",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "fchmodat",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::CharPtr, Ty::UInt, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "fcntl64",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::Int],
+            vararg: 2,
+        },
+    ),
+    (
+        "fstat64",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "fstatvfs",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "futimens",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "lchmod",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "lstat64",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "mkdirat",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::CharPtr, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "mkfifo",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "mkfifoat",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::CharPtr, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "name_to_handle_at",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::CharPtr, Ty::VoidPtr, Ty::IntPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "open64",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::Int],
+            vararg: 2,
+        },
+    ),
+    (
+        "open_by_handle_at",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::VoidPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "readdir64",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "seekdir",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr, Ty::Long],
+            vararg: -1,
+        },
+    ),
+    (
+        "splice",
+        Sig {
+            ret: Ty::Long,
+            params: &[
+                Ty::Int,
+                Ty::VoidPtr,
+                Ty::Int,
+                Ty::VoidPtr,
+                Ty::Size,
+                Ty::UInt,
+            ],
+            vararg: -1,
+        },
+    ),
+    (
+        "stat64",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "statvfs",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "statvfs64",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "statx",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::CharPtr, Ty::Int, Ty::UInt, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "telldir",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "utimensat",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::CharPtr, Ty::VoidPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
     // signal.h / sys/wait.h / setjmp.h
-    ("__libc_current_sigrtmax", Sig { ret: Ty::Int, params: &[], vararg: -1 }),
-    ("__libc_current_sigrtmin", Sig { ret: Ty::Int, params: &[], vararg: -1 }),
-    ("__sigsetjmp", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::Int], vararg: -1 }),
-    ("_setjmp", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("killpg", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::Int], vararg: -1 }),
-    ("longjmp", Sig { ret: Ty::Void, params: &[Ty::VoidPtr, Ty::Int], vararg: -1 }),
-    ("pthread_sigmask", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("sigaltstack", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("sigdelset", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::Int], vararg: -1 }),
-    ("sigfillset", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("sigismember", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::Int], vararg: -1 }),
-    ("siglongjmp", Sig { ret: Ty::Void, params: &[Ty::VoidPtr, Ty::Int], vararg: -1 }),
-    ("sigpending", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("sigsetmask", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("sigsuspend", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("sigwait", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::IntPtr], vararg: -1 }),
-    ("wait", Sig { ret: Ty::Int, params: &[Ty::IntPtr], vararg: -1 }),
-    ("wait3", Sig { ret: Ty::Int, params: &[Ty::IntPtr, Ty::Int, Ty::VoidPtr], vararg: -1 }),
+    (
+        "__libc_current_sigrtmax",
+        Sig {
+            ret: Ty::Int,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "__libc_current_sigrtmin",
+        Sig {
+            ret: Ty::Int,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "__sigsetjmp",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "_setjmp",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "killpg",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "longjmp",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_sigmask",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "sigaltstack",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "sigdelset",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "sigfillset",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "sigismember",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "siglongjmp",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "sigpending",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "sigsetmask",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "sigsuspend",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "sigwait",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::IntPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "wait",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::IntPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "wait3",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::IntPtr, Ty::Int, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
     // sys/socket.h / netdb.h / arpa/inet.h
-    ("__cmsg_nxthdr", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("__fdelt_chk", Sig { ret: Ty::Long, params: &[Ty::Long], vararg: -1 }),
-    ("__h_errno_location", Sig { ret: Ty::IntPtr, params: &[], vararg: -1 }),
-    ("endservent", Sig { ret: Ty::Void, params: &[], vararg: -1 }),
-    ("gai_strerror", Sig { ret: Ty::CharPtr, params: &[Ty::Int], vararg: -1 }),
-    ("gethostbyaddr", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr, Ty::UInt, Ty::Int], vararg: -1 }),
-    ("gethostbyname", Sig { ret: Ty::VoidPtr, params: &[Ty::CharPtr], vararg: -1 }),
-    ("getprotobyname", Sig { ret: Ty::VoidPtr, params: &[Ty::CharPtr], vararg: -1 }),
-    ("getprotobynumber", Sig { ret: Ty::VoidPtr, params: &[Ty::Int], vararg: -1 }),
-    ("getservbyname", Sig { ret: Ty::VoidPtr, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("getservbyport", Sig { ret: Ty::VoidPtr, params: &[Ty::Int, Ty::CharPtr], vararg: -1 }),
-    ("getservent", Sig { ret: Ty::VoidPtr, params: &[], vararg: -1 }),
-    ("inet_ntop", Sig { ret: Ty::CharPtr, params: &[Ty::Int, Ty::VoidPtr, Ty::CharPtr, Ty::UInt], vararg: -1 }),
-    ("inet_pton", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::CharPtr, Ty::VoidPtr], vararg: -1 }),
-    ("innetgr", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtr, Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("listen", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::Int], vararg: -1 }),
-    ("pselect", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::VoidPtr, Ty::VoidPtr, Ty::VoidPtr, Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("readv", Sig { ret: Ty::Long, params: &[Ty::Int, Ty::VoidPtr, Ty::Int], vararg: -1 }),
-    ("recv", Sig { ret: Ty::Long, params: &[Ty::Int, Ty::VoidPtr, Ty::Size, Ty::Int], vararg: -1 }),
-    ("recvmsg", Sig { ret: Ty::Long, params: &[Ty::Int, Ty::VoidPtr, Ty::Int], vararg: -1 }),
-    ("select", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::VoidPtr, Ty::VoidPtr, Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("sendmsg", Sig { ret: Ty::Long, params: &[Ty::Int, Ty::VoidPtr, Ty::Int], vararg: -1 }),
-    ("sethostent", Sig { ret: Ty::Void, params: &[Ty::Int], vararg: -1 }),
-    ("setservent", Sig { ret: Ty::Void, params: &[Ty::Int], vararg: -1 }),
-    ("shutdown", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::Int], vararg: -1 }),
-    ("socketpair", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::Int, Ty::Int, Ty::IntPtr], vararg: -1 }),
-    ("writev", Sig { ret: Ty::Long, params: &[Ty::Int, Ty::VoidPtr, Ty::Int], vararg: -1 }),
+    (
+        "__cmsg_nxthdr",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "__fdelt_chk",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::Long],
+            vararg: -1,
+        },
+    ),
+    (
+        "__h_errno_location",
+        Sig {
+            ret: Ty::IntPtr,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "endservent",
+        Sig {
+            ret: Ty::Void,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "gai_strerror",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "gethostbyaddr",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::UInt, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "gethostbyname",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "getprotobyname",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "getprotobynumber",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "getservbyname",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "getservbyport",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Int, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "getservent",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "inet_ntop",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::Int, Ty::VoidPtr, Ty::CharPtr, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "inet_pton",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::CharPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "innetgr",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "listen",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "pselect",
+        Sig {
+            ret: Ty::Int,
+            params: &[
+                Ty::Int,
+                Ty::VoidPtr,
+                Ty::VoidPtr,
+                Ty::VoidPtr,
+                Ty::VoidPtr,
+                Ty::VoidPtr,
+            ],
+            vararg: -1,
+        },
+    ),
+    (
+        "readv",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::Int, Ty::VoidPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "recv",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::Int, Ty::VoidPtr, Ty::Size, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "recvmsg",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::Int, Ty::VoidPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "select",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::VoidPtr, Ty::VoidPtr, Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "sendmsg",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::Int, Ty::VoidPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "sethostent",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "setservent",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "shutdown",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "socketpair",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::Int, Ty::Int, Ty::IntPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "writev",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::Int, Ty::VoidPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
     // pwd.h / grp.h / shadow.h / crypt.h / utmp.h
-    ("crypt", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("crypt_gensalt", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr, Ty::Size, Ty::CharPtr, Ty::Int], vararg: -1 }),
-    ("endgrent", Sig { ret: Ty::Void, params: &[], vararg: -1 }),
-    ("endspent", Sig { ret: Ty::Void, params: &[], vararg: -1 }),
-    ("endutent", Sig { ret: Ty::Void, params: &[], vararg: -1 }),
-    ("endutxent", Sig { ret: Ty::Void, params: &[], vararg: -1 }),
-    ("getgrouplist", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::UInt, Ty::UIntPtr, Ty::IntPtr], vararg: -1 }),
-    ("initgroups", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::UInt], vararg: -1 }),
-    ("lckpwdf", Sig { ret: Ty::Int, params: &[], vararg: -1 }),
-    ("login", Sig { ret: Ty::Void, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("logout", Sig { ret: Ty::Int, params: &[Ty::CharPtr], vararg: -1 }),
-    ("logwtmp", Sig { ret: Ty::Void, params: &[Ty::CharPtr, Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("setgrent", Sig { ret: Ty::Void, params: &[], vararg: -1 }),
-    ("setgroups", Sig { ret: Ty::Int, params: &[Ty::Size, Ty::UIntPtr], vararg: -1 }),
-    ("setpwent", Sig { ret: Ty::Void, params: &[], vararg: -1 }),
-    ("setutent", Sig { ret: Ty::Void, params: &[], vararg: -1 }),
-    ("setutxent", Sig { ret: Ty::Void, params: &[], vararg: -1 }),
-    ("ulckpwdf", Sig { ret: Ty::Int, params: &[], vararg: -1 }),
-    ("updwtmp", Sig { ret: Ty::Void, params: &[Ty::CharPtr, Ty::VoidPtr], vararg: -1 }),
-    ("utmpname", Sig { ret: Ty::Int, params: &[Ty::CharPtr], vararg: -1 }),
-    ("utmpxname", Sig { ret: Ty::Int, params: &[Ty::CharPtr], vararg: -1 }),
+    (
+        "crypt",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "crypt_gensalt",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::Size, Ty::CharPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "endgrent",
+        Sig {
+            ret: Ty::Void,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "endspent",
+        Sig {
+            ret: Ty::Void,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "endutent",
+        Sig {
+            ret: Ty::Void,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "endutxent",
+        Sig {
+            ret: Ty::Void,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "getgrouplist",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::UInt, Ty::UIntPtr, Ty::IntPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "initgroups",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::UInt],
+            vararg: -1,
+        },
+    ),
+    (
+        "lckpwdf",
+        Sig {
+            ret: Ty::Int,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "login",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "logout",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "logwtmp",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "setgrent",
+        Sig {
+            ret: Ty::Void,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "setgroups",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Size, Ty::UIntPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "setpwent",
+        Sig {
+            ret: Ty::Void,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "setutent",
+        Sig {
+            ret: Ty::Void,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "setutxent",
+        Sig {
+            ret: Ty::Void,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "ulckpwdf",
+        Sig {
+            ret: Ty::Int,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "updwtmp",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::CharPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "utmpname",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "utmpxname",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
     // selinux/selinux.h
-    ("fgetfilecon", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::CharPtrPtr], vararg: -1 }),
-    ("freecon", Sig { ret: Ty::Void, params: &[Ty::CharPtr], vararg: -1 }),
-    ("fsetfilecon", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::CharPtr], vararg: -1 }),
-    ("getcon", Sig { ret: Ty::Int, params: &[Ty::CharPtrPtr], vararg: -1 }),
-    ("getfilecon", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtrPtr], vararg: -1 }),
-    ("getfscreatecon", Sig { ret: Ty::Int, params: &[Ty::CharPtrPtr], vararg: -1 }),
-    ("is_selinux_enabled", Sig { ret: Ty::Int, params: &[], vararg: -1 }),
-    ("lgetfilecon", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtrPtr], vararg: -1 }),
-    ("lsetfilecon", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("lsetfilecon_raw", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("security_check_context", Sig { ret: Ty::Int, params: &[Ty::CharPtr], vararg: -1 }),
-    ("security_getenforce", Sig { ret: Ty::Int, params: &[], vararg: -1 }),
-    ("setexeccon", Sig { ret: Ty::Int, params: &[Ty::CharPtr], vararg: -1 }),
-    ("setexecfilecon", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("setfilecon", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("setfscreatecon", Sig { ret: Ty::Int, params: &[Ty::CharPtr], vararg: -1 }),
-    ("setfscreatecon_raw", Sig { ret: Ty::Int, params: &[Ty::CharPtr], vararg: -1 }),
+    (
+        "fgetfilecon",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::CharPtrPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "freecon",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "fsetfilecon",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "getcon",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtrPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "getfilecon",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtrPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "getfscreatecon",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtrPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "is_selinux_enabled",
+        Sig {
+            ret: Ty::Int,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "lgetfilecon",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtrPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "lsetfilecon",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "lsetfilecon_raw",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "security_check_context",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "security_getenforce",
+        Sig {
+            ret: Ty::Int,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "setexeccon",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "setexecfilecon",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "setfilecon",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "setfscreatecon",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "setfscreatecon_raw",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
     // pthread.h / sched.h
-    ("__pthread_register_cancel", Sig { ret: Ty::Void, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("__pthread_unregister_cancel", Sig { ret: Ty::Void, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("__pthread_unwind_next", Sig { ret: Ty::Void, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("__sched_cpucount", Sig { ret: Ty::Int, params: &[Ty::Size, Ty::VoidPtr], vararg: -1 }),
-    ("pthread_attr_destroy", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("pthread_attr_init", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("pthread_attr_setinheritsched", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::Int], vararg: -1 }),
-    ("pthread_attr_setschedparam", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("pthread_attr_setschedpolicy", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::Int], vararg: -1 }),
-    ("pthread_attr_setstacksize", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::Size], vararg: -1 }),
-    ("pthread_cond_broadcast", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("pthread_cond_destroy", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("pthread_cond_init", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("pthread_cond_signal", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("pthread_cond_timedwait", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("pthread_cond_wait", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("pthread_exit", Sig { ret: Ty::Void, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("pthread_mutex_destroy", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("pthread_mutex_timedlock", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("pthread_mutex_trylock", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("pthread_mutexattr_init", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("pthread_mutexattr_settype", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::Int], vararg: -1 }),
-    ("pthread_rwlock_destroy", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("pthread_rwlock_init", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("pthread_rwlock_rdlock", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("pthread_rwlock_tryrdlock", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("pthread_rwlock_unlock", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("pthread_rwlock_wrlock", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("pthread_rwlockattr_init", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("pthread_rwlockattr_setkind_np", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::Int], vararg: -1 }),
-    ("pthread_setcancelstate", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::IntPtr], vararg: -1 }),
-    ("sched_getaffinity", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::Size, Ty::VoidPtr], vararg: -1 }),
-    ("sched_yield", Sig { ret: Ty::Int, params: &[], vararg: -1 }),
-    ("setns", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::Int], vararg: -1 }),
-    ("unshare", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
+    (
+        "__pthread_register_cancel",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "__pthread_unregister_cancel",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "__pthread_unwind_next",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "__sched_cpucount",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Size, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_attr_destroy",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_attr_init",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_attr_setinheritsched",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_attr_setschedparam",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_attr_setschedpolicy",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_attr_setstacksize",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_cond_broadcast",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_cond_destroy",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_cond_init",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_cond_signal",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_cond_timedwait",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_cond_wait",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_exit",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_mutex_destroy",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_mutex_timedlock",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_mutex_trylock",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_mutexattr_init",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_mutexattr_settype",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_rwlock_destroy",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_rwlock_init",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_rwlock_rdlock",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_rwlock_tryrdlock",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_rwlock_unlock",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_rwlock_wrlock",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_rwlockattr_init",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_rwlockattr_setkind_np",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "pthread_setcancelstate",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::IntPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "sched_getaffinity",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::Size, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "sched_yield",
+        Sig {
+            ret: Ty::Int,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "setns",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "unshare",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
     // sys/xattr.h / sys/mman.h / mntent.h
-    ("endmntent", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("fgetxattr", Sig { ret: Ty::Long, params: &[Ty::Int, Ty::CharPtr, Ty::VoidPtr, Ty::Size], vararg: -1 }),
-    ("flistxattr", Sig { ret: Ty::Long, params: &[Ty::Int, Ty::CharPtr, Ty::Size], vararg: -1 }),
-    ("fsetxattr", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::CharPtr, Ty::VoidPtr, Ty::Size, Ty::Int], vararg: -1 }),
-    ("getmntent", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("getxattr", Sig { ret: Ty::Long, params: &[Ty::CharPtr, Ty::CharPtr, Ty::VoidPtr, Ty::Size], vararg: -1 }),
-    ("hasmntopt", Sig { ret: Ty::CharPtr, params: &[Ty::VoidPtr, Ty::CharPtr], vararg: -1 }),
-    ("lgetxattr", Sig { ret: Ty::Long, params: &[Ty::CharPtr, Ty::CharPtr, Ty::VoidPtr, Ty::Size], vararg: -1 }),
-    ("listxattr", Sig { ret: Ty::Long, params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size], vararg: -1 }),
-    ("llistxattr", Sig { ret: Ty::Long, params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size], vararg: -1 }),
-    ("lsetxattr", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtr, Ty::VoidPtr, Ty::Size, Ty::Int], vararg: -1 }),
-    ("mincore", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::Size, Ty::CharPtr], vararg: -1 }),
-    ("mlockall", Sig { ret: Ty::Int, params: &[Ty::Int], vararg: -1 }),
-    ("mremap", Sig { ret: Ty::VoidPtr, params: &[Ty::VoidPtr, Ty::Size, Ty::Size, Ty::Int], vararg: 4 }),
-    ("msync", Sig { ret: Ty::Int, params: &[Ty::VoidPtr, Ty::Size, Ty::Int], vararg: -1 }),
-    ("removexattr", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("setmntent", Sig { ret: Ty::VoidPtr, params: &[Ty::CharPtr, Ty::CharPtr], vararg: -1 }),
-    ("setxattr", Sig { ret: Ty::Int, params: &[Ty::CharPtr, Ty::CharPtr, Ty::VoidPtr, Ty::Size, Ty::Int], vararg: -1 }),
+    (
+        "endmntent",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "fgetxattr",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::Int, Ty::CharPtr, Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "flistxattr",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::Int, Ty::CharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "fsetxattr",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::CharPtr, Ty::VoidPtr, Ty::Size, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "getmntent",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "getxattr",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "hasmntopt",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::VoidPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "lgetxattr",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "listxattr",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "llistxattr",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "lsetxattr",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::VoidPtr, Ty::Size, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "mincore",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::Size, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "mlockall",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "mremap",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::Size, Ty::Size, Ty::Int],
+            vararg: 4,
+        },
+    ),
+    (
+        "msync",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::Size, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "removexattr",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "setmntent",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "setxattr",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::VoidPtr, Ty::Size, Ty::Int],
+            vararg: -1,
+        },
+    ),
     // the rest
-    ("__xpg_basename", Sig { ret: Ty::CharPtr, params: &[Ty::CharPtr], vararg: -1 }),
-    ("dlopen", Sig { ret: Ty::VoidPtr, params: &[Ty::CharPtr, Ty::Int], vararg: -1 }),
-    ("error_at_line", Sig { ret: Ty::Void, params: &[Ty::Int, Ty::Int, Ty::CharPtr, Ty::UInt, Ty::CharPtr], vararg: 5 }),
-    ("flock", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::Int], vararg: -1 }),
-    ("getopt", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::CharPtrPtr, Ty::CharPtr], vararg: -1 }),
-    ("globfree", Sig { ret: Ty::Void, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("globfree64", Sig { ret: Ty::Void, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("obstack_free", Sig { ret: Ty::Void, params: &[Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("sysinfo", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
-    ("tcflow", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::Int], vararg: -1 }),
-    ("tcflush", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::Int], vararg: -1 }),
-    ("tcsendbreak", Sig { ret: Ty::Int, params: &[Ty::Int, Ty::Int], vararg: -1 }),
-    ("uname", Sig { ret: Ty::Int, params: &[Ty::VoidPtr], vararg: -1 }),
+    (
+        "__xpg_basename",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "dlopen",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::CharPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "error_at_line",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::Int, Ty::Int, Ty::CharPtr, Ty::UInt, Ty::CharPtr],
+            vararg: 5,
+        },
+    ),
+    (
+        "flock",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "getopt",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::CharPtrPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "globfree",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "globfree64",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "obstack_free",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "sysinfo",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "tcflow",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "tcflush",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "tcsendbreak",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::Int, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "uname",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
     // ---- floating point (docs/features/floatret/) ----
     // The same corpus rule with `float` and `double` in the vocabulary: every
     // slot is a 4- or 8-byte IEEE value on every target these tables apply to.
@@ -641,18 +4473,74 @@ pub(super) const LIBC_EXT: &[(&str, Sig)] = &[
     // image once `armfloatreturn` applies: without it ARM recovers a function
     // returning a `double` from these at half its width (hard-float) or beside
     // callers holding `r0:r1` as an integer (soft-float, softfp).
-    ("ceil", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("log2", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("modf", Sig { ret: Ty::Double, params: &[Ty::Double, Ty::VoidPtr], vararg: -1 }),
-    ("pow", Sig { ret: Ty::Double, params: &[Ty::Double, Ty::Double], vararg: -1 }),
-    ("sqrt", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("strtod", Sig { ret: Ty::Double, params: &[Ty::CharPtr, Ty::CharPtrPtr], vararg: -1 }),
+    (
+        "ceil",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "log2",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "modf",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "pow",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double, Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "sqrt",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "strtod",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::CharPtr, Ty::CharPtrPtr],
+            vararg: -1,
+        },
+    ),
     // `locale_t` is glibc's `struct __locale_struct *`, a typedef the reduction
     // does not see through. Without the row gnulib's `c_strtod` (a tail call to
     // `strtod_l`) returns an integer beside `xstrtod`'s `double`, which then
     // converts `c_strtod`'s result by value.
-    ("strtod_l", Sig { ret: Ty::Double, params: &[Ty::CharPtr, Ty::CharPtrPtr, Ty::VoidPtr], vararg: -1 }),
-    ("strtof", Sig { ret: Ty::Float, params: &[Ty::CharPtr, Ty::CharPtrPtr], vararg: -1 }),
+    (
+        "strtod_l",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::CharPtr, Ty::CharPtrPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "strtof",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::CharPtr, Ty::CharPtrPtr],
+            vararg: -1,
+        },
+    ),
 ];
 
 /// (kuna `armfloatreturn`) The C99 `<math.h>` functions (and glibc's `sincos`)
@@ -663,97 +4551,734 @@ pub(super) const LIBC_EXT: &[(&str, Sig)] = &[
 /// redo of the PLT stub and of every reader. `double *` slots are `void *`, as
 /// in `modf`.
 pub(super) const LIBM_VFP: &[(&str, Sig)] = &[
-    ("acos", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("acosf", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("acosh", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("acoshf", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("asin", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("asinf", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("asinh", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("asinhf", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("atan", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("atan2", Sig { ret: Ty::Double, params: &[Ty::Double, Ty::Double], vararg: -1 }),
-    ("atan2f", Sig { ret: Ty::Float, params: &[Ty::Float, Ty::Float], vararg: -1 }),
-    ("atanf", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("atanh", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("atanhf", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("cbrt", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("cbrtf", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("ceilf", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("copysign", Sig { ret: Ty::Double, params: &[Ty::Double, Ty::Double], vararg: -1 }),
-    ("copysignf", Sig { ret: Ty::Float, params: &[Ty::Float, Ty::Float], vararg: -1 }),
-    ("cos", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("cosf", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("cosh", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("coshf", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("erf", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("erfc", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("erfcf", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("erff", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("exp", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("exp2", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("exp2f", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("expf", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("expm1", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("expm1f", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("fabs", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("fabsf", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("fdim", Sig { ret: Ty::Double, params: &[Ty::Double, Ty::Double], vararg: -1 }),
-    ("fdimf", Sig { ret: Ty::Float, params: &[Ty::Float, Ty::Float], vararg: -1 }),
-    ("floor", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("floorf", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("fmax", Sig { ret: Ty::Double, params: &[Ty::Double, Ty::Double], vararg: -1 }),
-    ("fmaxf", Sig { ret: Ty::Float, params: &[Ty::Float, Ty::Float], vararg: -1 }),
-    ("fmin", Sig { ret: Ty::Double, params: &[Ty::Double, Ty::Double], vararg: -1 }),
-    ("fminf", Sig { ret: Ty::Float, params: &[Ty::Float, Ty::Float], vararg: -1 }),
-    ("fmod", Sig { ret: Ty::Double, params: &[Ty::Double, Ty::Double], vararg: -1 }),
-    ("fmodf", Sig { ret: Ty::Float, params: &[Ty::Float, Ty::Float], vararg: -1 }),
-    ("frexp", Sig { ret: Ty::Double, params: &[Ty::Double, Ty::IntPtr], vararg: -1 }),
-    ("frexpf", Sig { ret: Ty::Float, params: &[Ty::Float, Ty::IntPtr], vararg: -1 }),
-    ("hypot", Sig { ret: Ty::Double, params: &[Ty::Double, Ty::Double], vararg: -1 }),
-    ("hypotf", Sig { ret: Ty::Float, params: &[Ty::Float, Ty::Float], vararg: -1 }),
-    ("ldexp", Sig { ret: Ty::Double, params: &[Ty::Double, Ty::Int], vararg: -1 }),
-    ("ldexpf", Sig { ret: Ty::Float, params: &[Ty::Float, Ty::Int], vararg: -1 }),
-    ("lgamma", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("lgammaf", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("log", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("log10", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("log10f", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("log1p", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("log1pf", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("log2f", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("logf", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("lrint", Sig { ret: Ty::Long, params: &[Ty::Double], vararg: -1 }),
-    ("lrintf", Sig { ret: Ty::Long, params: &[Ty::Float], vararg: -1 }),
-    ("lround", Sig { ret: Ty::Long, params: &[Ty::Double], vararg: -1 }),
-    ("lroundf", Sig { ret: Ty::Long, params: &[Ty::Float], vararg: -1 }),
-    ("modff", Sig { ret: Ty::Float, params: &[Ty::Float, Ty::VoidPtr], vararg: -1 }),
-    ("nearbyint", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("nearbyintf", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("powf", Sig { ret: Ty::Float, params: &[Ty::Float, Ty::Float], vararg: -1 }),
-    ("remainder", Sig { ret: Ty::Double, params: &[Ty::Double, Ty::Double], vararg: -1 }),
-    ("remainderf", Sig { ret: Ty::Float, params: &[Ty::Float, Ty::Float], vararg: -1 }),
-    ("rint", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("rintf", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("round", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("roundf", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("scalbn", Sig { ret: Ty::Double, params: &[Ty::Double, Ty::Int], vararg: -1 }),
-    ("scalbnf", Sig { ret: Ty::Float, params: &[Ty::Float, Ty::Int], vararg: -1 }),
-    ("sin", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("sincos", Sig { ret: Ty::Void, params: &[Ty::Double, Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("sincosf", Sig { ret: Ty::Void, params: &[Ty::Float, Ty::VoidPtr, Ty::VoidPtr], vararg: -1 }),
-    ("sinf", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("sinh", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("sinhf", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("sqrtf", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("tan", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("tanf", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("tanh", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("tanhf", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("tgamma", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("tgammaf", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
-    ("trunc", Sig { ret: Ty::Double, params: &[Ty::Double], vararg: -1 }),
-    ("truncf", Sig { ret: Ty::Float, params: &[Ty::Float], vararg: -1 }),
+    (
+        "acos",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "acosf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "acosh",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "acoshf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "asin",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "asinf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "asinh",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "asinhf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "atan",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "atan2",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double, Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "atan2f",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float, Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "atanf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "atanh",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "atanhf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "cbrt",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "cbrtf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "ceilf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "copysign",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double, Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "copysignf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float, Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "cos",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "cosf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "cosh",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "coshf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "erf",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "erfc",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "erfcf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "erff",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "exp",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "exp2",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "exp2f",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "expf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "expm1",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "expm1f",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "fabs",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "fabsf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "fdim",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double, Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "fdimf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float, Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "floor",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "floorf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "fmax",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double, Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "fmaxf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float, Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "fmin",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double, Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "fminf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float, Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "fmod",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double, Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "fmodf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float, Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "frexp",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double, Ty::IntPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "frexpf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float, Ty::IntPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "hypot",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double, Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "hypotf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float, Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "ldexp",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "ldexpf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "lgamma",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "lgammaf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "log",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "log10",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "log10f",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "log1p",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "log1pf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "log2f",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "logf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "lrint",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "lrintf",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "lround",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "lroundf",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "modff",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "nearbyint",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "nearbyintf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "powf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float, Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "remainder",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double, Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "remainderf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float, Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "rint",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "rintf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "round",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "roundf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "scalbn",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "scalbnf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "sin",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "sincos",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::Double, Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "sincosf",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::Float, Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "sinf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "sinh",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "sinhf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "sqrtf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "tan",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "tanf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "tanh",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "tanhf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "tgamma",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "tgammaf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
+    (
+        "trunc",
+        Sig {
+            ret: Ty::Double,
+            params: &[Ty::Double],
+            vararg: -1,
+        },
+    ),
+    (
+        "truncf",
+        Sig {
+            ret: Ty::Float,
+            params: &[Ty::Float],
+            vararg: -1,
+        },
+    ),
 ];
 
 impl AnalysisPass for LibcSigsPass {
@@ -775,7 +5300,15 @@ impl AnalysisPass for LibcSigsPass {
         let imported = super::loaded_function_names(ctx.file, ctx.bytes, &reloc_imports, true);
         let types = ctx.arch.types();
         let (_addr_size, word_size) = ctx.arch.data_org();
-        seed_named_prototypes(&mut out, &imported, LIBC_EXT, types, word_size, super::L, ctx.arch.analysis_nameladder);
+        seed_named_prototypes(
+            &mut out,
+            &imported,
+            LIBC_EXT,
+            types,
+            word_size,
+            super::L,
+            ctx.arch.analysis_nameladder,
+        );
         seed_resolved_prototypes(&mut out, &resolved, LIBC_EXT, types, word_size, super::L);
         let complex_max = crate::analyzers::dwarf::kuna_dwarfcomplex::max_size(
             ctx.file.format(),
@@ -783,19 +5316,48 @@ impl AnalysisPass for LibcSigsPass {
             &ctx.arch.archid,
         );
         let complex: Vec<_> = [
-            (8, ("cexpf", Sig { ret: Ty::Complex(8), params: &[Ty::Complex(8)], vararg: -1 })),
-            (16, ("cexp", Sig { ret: Ty::Complex(16), params: &[Ty::Complex(16)], vararg: -1 })),
+            (
+                8,
+                (
+                    "cexpf",
+                    Sig {
+                        ret: Ty::Complex(8),
+                        params: &[Ty::Complex(8)],
+                        vararg: -1,
+                    },
+                ),
+            ),
+            (
+                16,
+                (
+                    "cexp",
+                    Sig {
+                        ret: Ty::Complex(16),
+                        params: &[Ty::Complex(16)],
+                        vararg: -1,
+                    },
+                ),
+            ),
         ]
         .into_iter()
         .filter(|(size, _)| *size <= complex_max)
         .map(|(_, row)| row)
         .collect();
-        seed_named_prototypes(&mut out, &imported, &complex, types, word_size, super::L, ctx.arch.analysis_nameladder);
+        seed_named_prototypes(
+            &mut out,
+            &imported,
+            &complex,
+            types,
+            word_size,
+            super::L,
+            ctx.arch.analysis_nameladder,
+        );
         seed_resolved_prototypes(&mut out, &resolved, &complex, types, word_size, super::L);
         let arm = ctx.arch.archid.starts_with("ARM:");
         if arm || !kuna_typedcallabi::returns_doubles_whole(ctx.arch) {
-            let (float, kept): (Vec<_>, Vec<_>) =
-                std::mem::take(&mut out.prototypes).into_iter().partition(kuna_typedcallabi::declares_a_float);
+            let (float, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut out.prototypes)
+                .into_iter()
+                .partition(kuna_typedcallabi::declares_a_float);
             out.prototypes = kept;
             let (float_at, kept_at): (Vec<_>, Vec<_>) = std::mem::take(&mut out.prototypes_at)
                 .into_iter()
@@ -803,10 +5365,28 @@ impl AnalysisPass for LibcSigsPass {
             out.prototypes_at = kept_at;
             if arm {
                 let mut libm = AnalysisOutput::default();
-                seed_named_prototypes(&mut libm, &imported, LIBM_VFP, types, word_size, super::L, ctx.arch.analysis_nameladder);
-                seed_resolved_prototypes(&mut libm, &resolved, LIBM_VFP, types, word_size, super::L);
+                seed_named_prototypes(
+                    &mut libm,
+                    &imported,
+                    LIBM_VFP,
+                    types,
+                    word_size,
+                    super::L,
+                    ctx.arch.analysis_nameladder,
+                );
+                seed_resolved_prototypes(
+                    &mut libm,
+                    &resolved,
+                    LIBM_VFP,
+                    types,
+                    word_size,
+                    super::L,
+                );
                 let float = float.into_iter().chain(libm.prototypes).map(|p| (None, p));
-                let float_at = float_at.into_iter().chain(libm.prototypes_at).map(|(at, p)| (Some(at), p));
+                let float_at = float_at
+                    .into_iter()
+                    .chain(libm.prototypes_at)
+                    .map(|(at, p)| (Some(at), p));
                 out.arm_float_prototypes.extend(float.chain(float_at));
             }
         }
@@ -822,8 +5402,21 @@ mod tests {
     #[test]
     fn libm_table_is_disjoint_and_declares_a_float() {
         for (name, sig) in LIBM_VFP {
-            assert!(!super::super::LIBC.iter().chain(LIBC_EXT).any(|(n, _)| n == name), "{name}");
-            assert!(matches!(sig.ret, Ty::Float | Ty::Double) || sig.params.iter().any(|p| matches!(p, Ty::Float | Ty::Double)), "{name}");
+            assert!(
+                !super::super::LIBC
+                    .iter()
+                    .chain(LIBC_EXT)
+                    .any(|(n, _)| n == name),
+                "{name}"
+            );
+            assert!(
+                matches!(sig.ret, Ty::Float | Ty::Double)
+                    || sig
+                        .params
+                        .iter()
+                        .any(|p| matches!(p, Ty::Float | Ty::Double)),
+                "{name}"
+            );
         }
         assert!(LIBM_VFP.windows(2).all(|w| w[0].0 < w[1].0));
     }
@@ -865,10 +5458,25 @@ mod tests {
         // takes an extra `int flag` (and `__snprintf_chk` two extra `size_t`s), so
         // the format string sits at a different slot. Getting this wrong would
         // shift every argument of the corpus's highest-frequency printf call.
-        let get = |want: &str| LIBC_EXT.iter().find(|(n, _)| *n == want).expect(want).1.vararg;
+        let get = |want: &str| {
+            LIBC_EXT
+                .iter()
+                .find(|(n, _)| *n == want)
+                .expect(want)
+                .1
+                .vararg
+        };
         assert_eq!(get("__printf_chk"), 2, "int flag, const char *fmt, ...");
-        assert_eq!(get("__fprintf_chk"), 3, "FILE *, int flag, const char *fmt, ...");
-        assert_eq!(get("__sprintf_chk"), 4, "char *, int flag, size_t, const char *fmt, ...");
+        assert_eq!(
+            get("__fprintf_chk"),
+            3,
+            "FILE *, int flag, const char *fmt, ..."
+        );
+        assert_eq!(
+            get("__sprintf_chk"),
+            4,
+            "char *, int flag, size_t, const char *fmt, ..."
+        );
         assert_eq!(
             get("__snprintf_chk"),
             5,
@@ -886,18 +5494,43 @@ mod tests {
     fn the_widened_entries_keep_the_declared_slot_order() {
         let get = |want: &str| &LIBC_EXT.iter().find(|(n, _)| *n == want).expect(want).1;
         let faccessat = get("faccessat");
-        assert_eq!(faccessat.params.len(), 4, "int faccessat(int, const char *, int, int)");
-        assert!(matches!(faccessat.params[0], Ty::Int), "the directory fd is first");
-        assert!(matches!(faccessat.params[1], Ty::CharPtr), "the path is second");
+        assert_eq!(
+            faccessat.params.len(),
+            4,
+            "int faccessat(int, const char *, int, int)"
+        );
+        assert!(
+            matches!(faccessat.params[0], Ty::Int),
+            "the directory fd is first"
+        );
+        assert!(
+            matches!(faccessat.params[1], Ty::CharPtr),
+            "the path is second"
+        );
         let renameat = get("renameat");
-        assert_eq!(renameat.params.len(), 4, "int renameat(int, const char *, int, const char *)");
-        assert!(matches!(renameat.params[1], Ty::CharPtr) && matches!(renameat.params[3], Ty::CharPtr));
+        assert_eq!(
+            renameat.params.len(),
+            4,
+            "int renameat(int, const char *, int, const char *)"
+        );
+        assert!(
+            matches!(renameat.params[1], Ty::CharPtr) && matches!(renameat.params[3], Ty::CharPtr)
+        );
         let fgets = get("__fgets_chk");
-        assert!(matches!(fgets.ret, Ty::CharPtr), "char *__fgets_chk(char *, size_t, int, FILE *)");
+        assert!(
+            matches!(fgets.ret, Ty::CharPtr),
+            "char *__fgets_chk(char *, size_t, int, FILE *)"
+        );
         assert!(matches!(fgets.params[0], Ty::CharPtr) && matches!(fgets.params[3], Ty::VoidPtr));
         let eal = get("error_at_line");
-        assert_eq!(eal.vararg, 5, "int, int, const char *file, unsigned line, const char *fmt, ...");
-        assert!(matches!(eal.params[4], Ty::CharPtr), "the format is slot 4, not slot 2");
+        assert_eq!(
+            eal.vararg, 5,
+            "int, int, const char *file, unsigned line, const char *fmt, ..."
+        );
+        assert!(
+            matches!(eal.params[4], Ty::CharPtr),
+            "the format is slot 4, not slot 2"
+        );
     }
 
     /// The width rule is the table's whole safety argument, so the names it
@@ -920,11 +5553,23 @@ mod tests {
     #[test]
     fn the_float_entries_are_the_measured_ones() {
         let get = |want: &str| &LIBC_EXT.iter().find(|(n, _)| *n == want).expect(want).1;
-        assert!(matches!(get("strtod").ret, Ty::Double), "double strtod(const char *, char **)");
-        assert!(matches!(get("strtof").ret, Ty::Float), "float strtof(const char *, char **)");
+        assert!(
+            matches!(get("strtod").ret, Ty::Double),
+            "double strtod(const char *, char **)"
+        );
+        assert!(
+            matches!(get("strtof").ret, Ty::Float),
+            "float strtof(const char *, char **)"
+        );
         assert!(matches!(get("strtod").params[1], Ty::CharPtrPtr));
-        assert!(matches!(get("strtod_l").ret, Ty::Double), "double strtod_l(const char *, char **, locale_t)");
-        assert!(matches!(get("strtod_l").params[..], [Ty::CharPtr, Ty::CharPtrPtr, Ty::VoidPtr]));
+        assert!(
+            matches!(get("strtod_l").ret, Ty::Double),
+            "double strtod_l(const char *, char **, locale_t)"
+        );
+        assert!(matches!(
+            get("strtod_l").params[..],
+            [Ty::CharPtr, Ty::CharPtrPtr, Ty::VoidPtr]
+        ));
         assert!(matches!(get("pow").params[..], [Ty::Double, Ty::Double]));
         for name in ["strtold", "nanf", "fabsf", "sqrtf"] {
             assert!(
@@ -959,11 +5604,20 @@ mod tests {
         let file = object::File::parse(bytes.as_slice()).expect("parse fauxware");
         let imported = super::super::loaded_function_names(&file, &bytes, &[], true);
         for want in ["read", "open", "exit"] {
-            assert!(imported.contains(want), "fauxware imports {want}: {imported:?}");
-            assert!(LIBC_EXT.iter().any(|(n, _)| n == &want), "table should know {want}");
+            assert!(
+                imported.contains(want),
+                "fauxware imports {want}: {imported:?}"
+            );
+            assert!(
+                LIBC_EXT.iter().any(|(n, _)| n == &want),
+                "table should know {want}"
+            );
         }
         for defined in ["main", "authenticate"] {
-            assert!(!imported.contains(defined), "{defined} is defined, not imported");
+            assert!(
+                !imported.contains(defined),
+                "{defined} is defined, not imported"
+            );
         }
     }
 }

@@ -6,14 +6,17 @@
 use std::path::PathBuf;
 
 use unlace_base::error::KunaResult;
-use unlace_console::engine::{language_database, Bootstrap, ConsoleProgram};
-use unlace_console::project::{decompile_entry, DecompileOptions};
+use unlace_console::engine::{Bootstrap, ConsoleProgram, language_database};
+use unlace_console::project::{DecompileOptions, decompile_entry};
 use unlace_decomp::kuna_loadoptions::LoadOptions;
 use unlace_decomp::kuna_memoryspecs::SpecRoot;
 use unlace_decomp::sleigh_arch::LanguageDatabase;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn specs() -> [SpecRoot; 1] {
@@ -21,18 +24,25 @@ fn specs() -> [SpecRoot; 1] {
 }
 
 fn fixture(name: &str) -> String {
-    let path = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(name);
+    let path = repo_root()
+        .join("decompiler/crates/unlace-analysis/tests/fixtures")
+        .join(name);
     path.to_str().unwrap().to_string()
 }
 
 /// Two images in different languages, with the functions each decompiles.
 const IMAGES: [(&str, &str, &[&str]); 2] = [
     ("fauxware", "x86:LE:64:default", &["authenticate", "main"]),
-    ("adrnext_aarch64", "AARCH64:LE:64:v8A", &["audit_calls", "main"]),
+    (
+        "adrnext_aarch64",
+        "AARCH64:LE:64:v8A",
+        &["audit_calls", "main"],
+    ),
 ];
 
 fn decompile(mut prog: ConsoleProgram, funcs: &[&str]) -> (String, Vec<String>) {
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     let c = funcs
         .iter()
         .map(|func| {
@@ -57,7 +67,10 @@ fn each_image(
                 scope.spawn(move || decompile(load(&fixture(name)).expect("bootstrap"), funcs))
             })
             .collect();
-        threads.into_iter().map(|thread| thread.join().unwrap()).collect()
+        threads
+            .into_iter()
+            .map(|thread| thread.join().unwrap())
+            .collect()
     })
 }
 
@@ -70,7 +83,11 @@ fn one_database_serves_images_of_two_languages() {
     for ((name, language, _), (archid, _)) in IMAGES.iter().zip(&shared) {
         assert!(archid.starts_with(language), "{name} loaded as {archid}");
     }
-    assert!(shared[0].1[1].contains("authenticate"), "{}", shared[0].1[1]);
+    assert!(
+        shared[0].1[1].contains("authenticate"),
+        "{}",
+        shared[0].1[1]
+    );
     assert_eq!(shared, rescanned);
 }
 
@@ -87,7 +104,10 @@ fn the_image_dispatch_takes_a_database() {
 fn a_database_without_the_language_refuses_the_image() {
     let db = language_database(&[repo_root().join("no-such-specs")]).expect("an empty root scans");
     let path = fixture("fauxware");
-    let err = match Bootstrap::new(&db).options(&LoadOptions::default()).object(&path) {
+    let err = match Bootstrap::new(&db)
+        .options(&LoadOptions::default())
+        .object(&path)
+    {
         Ok(_) => panic!("bootstrapped from an empty database"),
         Err(err) => err.to_string(),
     };
@@ -116,7 +136,11 @@ fn a_bootstrap_over_a_database_does_not_rescan_the_roots() {
     let loaded = Bootstrap::new(&db).options(&options).object(&path);
     let rescanned = Bootstrap::new(&roots).options(&options).object(&path);
     std::fs::remove_dir_all(&root).unwrap();
-    let archid = loaded.expect("bootstrap over the database").arch().archid.clone();
+    let archid = loaded
+        .expect("bootstrap over the database")
+        .arch()
+        .archid
+        .clone();
     assert!(archid.starts_with("x86:LE:64:default"), "{archid}");
     let err = match rescanned {
         Ok(_) => panic!("bootstrapped without x86.ldefs"),

@@ -6,21 +6,9 @@
 
 use super::node::{Kind, Node, NodeRef};
 use super::parse::{
-    BOX_TO_STACK,
-    BOX_TO_VALUE,
-    CLOSURE_PROP,
-    CP_FLOAT,
-    CP_FUNCTION,
-    CP_GLOBAL,
-    CP_INTEGER,
-    CP_KEYPATH,
-    CP_STRING,
-    DEAD,
-    EXISTENTIAL_TO_GENERIC,
-    GUARANTEED_TO_OWNED,
-    INOUT_TO_OUT,
-    OWNED_TO_GUARANTEED,
-    SROA,
+    BOX_TO_STACK, BOX_TO_VALUE, CLOSURE_PROP, CP_FLOAT, CP_FUNCTION, CP_GLOBAL, CP_INTEGER,
+    CP_KEYPATH, CP_STRING, DEAD, EXISTENTIAL_TO_GENERIC, GUARANTEED_TO_OWNED, INOUT_TO_OUT,
+    OWNED_TO_GUARANTEED, SROA,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -1918,7 +1906,9 @@ impl Printer {
             ImplParameter | ImplResult => {
                 self.print_child(n, 0);
                 self.s(" ");
-                let diff = n.child_of_kind(ImplParameterResultDifferentiability).cloned();
+                let diff = n
+                    .child_of_kind(ImplParameterResultDifferentiability)
+                    .cloned();
                 let attrs: Vec<NodeRef> = n
                     .children
                     .iter()

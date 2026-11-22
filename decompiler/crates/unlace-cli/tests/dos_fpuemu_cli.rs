@@ -53,13 +53,20 @@ fn thunk_table() -> Vec<u8> {
 }
 
 fn kuna(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_unlace")).args(args).output().expect("run kuna")
+    Command::new(env!("CARGO_BIN_EXE_unlace"))
+        .args(args)
+        .output()
+        .expect("run kuna")
 }
 
 fn stdout(args: &[&str]) -> String {
     let out = kuna(args);
     let text = String::from_utf8_lossy(&out.stdout).into_owned();
-    assert!(out.status.success(), "{args:?}: {text}\n{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{args:?}: {text}\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     text
 }
 
@@ -91,10 +98,24 @@ fn an_emulator_program_decodes_its_interrupts_as_x87_instructions() {
     ] {
         assert!(code.contains(line), "missing {line:?}: {code}");
     }
-    let off = stdout(&["disassemble", exe, "0x10025-0x10040", "--option", "fpuemu", "off"]);
+    let off = stdout(&[
+        "disassemble",
+        exe,
+        "0x10025-0x10040",
+        "--option",
+        "fpuemu",
+        "off",
+    ]);
     assert!(off.contains("INT 0x35") && !off.contains("FLD1"), "{off}");
 
-    let c = stdout(&["decompile-all", exe, "--addr", "0x10025", "--addr", "0x10040"]);
+    let c = stdout(&[
+        "decompile-all",
+        exe,
+        "--addr",
+        "0x10025",
+        "--addr",
+        "0x10040",
+    ]);
     assert!(c.contains("void sub_10025(double a0)"), "{c}");
     assert!(
         c.contains("*(double *)0x70 = (double)((long double)1 + (long double)a0 * (long double)*(double *)0x68);"),
@@ -102,7 +123,15 @@ fn an_emulator_program_decodes_its_interrupts_as_x87_instructions() {
     );
     assert!(c.contains("*(double *)0x70 = (double)*a0;"), "{c}");
     assert!(!c.contains("swi(0x3"), "{c}");
-    let c_off = stdout(&["decompile-all", exe, "--addr", "0x10025", "--option", "fpuemu", "off"]);
+    let c_off = stdout(&[
+        "decompile-all",
+        exe,
+        "--addr",
+        "0x10025",
+        "--option",
+        "fpuemu",
+        "off",
+    ]);
     assert!(c_off.contains("swi(0x39)"), "{c_off}");
     std::fs::remove_file(&path).unwrap();
 }
@@ -113,7 +142,14 @@ fn an_interrupt_thunk_table_is_not_emulator_code() {
     let exe = path.to_str().unwrap();
     let auto = stdout(&["disassemble", exe, "0x1001f-0x10022"]);
     assert!(auto.contains("INT 0x35"), "{auto}");
-    let on = stdout(&["disassemble", exe, "0x1001f-0x10022", "--option", "fpuemu", "on"]);
+    let on = stdout(&[
+        "disassemble",
+        exe,
+        "0x1001f-0x10022",
+        "--option",
+        "fpuemu",
+        "on",
+    ]);
     assert!(on.contains("FLD ST3"), "{on}");
     std::fs::remove_file(&path).unwrap();
 }

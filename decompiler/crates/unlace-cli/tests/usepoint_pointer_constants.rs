@@ -98,7 +98,17 @@ __asm__("leaq blob+3(%rip),%rcx\nmovq %rcx,(%rdi)\nmovq (%rdi),%rax\nmovzbl (%ra
     .expect("authored address instruction");
     let pc = entry + offset as u64;
     let c = root.join("body.c");
-    let script=format!("load file \"{}\"\nread symbols\noption ctypes on\nmap prototype 0x{:x} unsigned int emit(volatile {} *slot)\nmap address 0x{:x} unsigned char blob[16]\nload addr 0x{:x}\ntype varnode %{}(0x{:x}) unsigned char *address\ndecompile\nopenfile write \"{}\"\nprint C\nclosefile\nquit\n",binary.display(),address(b"emit"),word,blob_address,address(b"emit"),register,pc,c.display());
+    let script = format!(
+        "load file \"{}\"\nread symbols\noption ctypes on\nmap prototype 0x{:x} unsigned int emit(volatile {} *slot)\nmap address 0x{:x} unsigned char blob[16]\nload addr 0x{:x}\ntype varnode %{}(0x{:x}) unsigned char *address\ndecompile\nopenfile write \"{}\"\nprint C\nclosefile\nquit\n",
+        binary.display(),
+        address(b"emit"),
+        word,
+        blob_address,
+        address(b"emit"),
+        register,
+        pc,
+        c.display()
+    );
     render(&script);
     let body = std::fs::read_to_string(&c).unwrap();
     assert!(
@@ -256,7 +266,17 @@ __asm__("movl %esi,%esi\nleaq blob+128(%rip),%rcx\nleaq (%rcx,%rsi,4),%rcx\nmovq
     .expect("authored address instruction");
     let pc = entry + offset as u64;
     let c = root.join("body.c");
-    let script=format!("load file \"{}\"\nread symbols\noption ctypes on\nmap prototype 0x{:x} unsigned int emit({} *slot,unsigned int index)\nmap address 0x{:x} unsigned char blob[512]\nload addr 0x{:x}\ntype varnode %{}(0x{:x}) unsigned char *address\ndecompile\nopenfile write \"{}\"\nprint C\nclosefile\nquit\n",binary.display(),address(b"emit"),word,blob_address,address(b"emit"),register,pc,c.display());
+    let script = format!(
+        "load file \"{}\"\nread symbols\noption ctypes on\nmap prototype 0x{:x} unsigned int emit({} *slot,unsigned int index)\nmap address 0x{:x} unsigned char blob[512]\nload addr 0x{:x}\ntype varnode %{}(0x{:x}) unsigned char *address\ndecompile\nopenfile write \"{}\"\nprint C\nclosefile\nquit\n",
+        binary.display(),
+        address(b"emit"),
+        word,
+        blob_address,
+        address(b"emit"),
+        register,
+        pc,
+        c.display()
+    );
     render(&script);
     let body = std::fs::read_to_string(&c).unwrap();
     assert!(

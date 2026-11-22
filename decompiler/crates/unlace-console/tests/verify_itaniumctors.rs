@@ -8,7 +8,7 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 /// `zoo::Animal::Animal(int)` and its copy constructor.
 const ANIMAL_CTORS: [u64; 2] = [0x1384, 0x13ae];
@@ -26,20 +26,28 @@ const COUNTER_CTOR_AND_DTOR: [u64; 2] = [0x1598, 0x15c2];
 const ANIMAL_SPEAK: u64 = 0x13e0;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn bootstrap(fixture: &str, rtti: bool) -> ConsoleProgram {
-    let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(fixture);
+    let bin = repo_root()
+        .join("decompiler/crates/unlace-analysis/tests/fixtures")
+        .join(fixture);
     let specs = repo_root().join("specs");
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.arch_mut().set_kuna_option("listing", "on").expect("listing flips");
+    prog.arch_mut()
+        .set_kuna_option("listing", "on")
+        .expect("listing flips");
     prog.arch_mut()
         .set_kuna_option("itaniumrtti", if rtti { "on" } else { "off" })
         .expect("itaniumrtti flips");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
@@ -51,10 +59,18 @@ fn name_at(prog: &ConsoleProgram, vma: u64) -> String {
 fn constructors_and_destructors_are_named_from_their_vptr_stores() {
     let prog = bootstrap("itaniumctors_O0_x86_64.so", true);
     for vma in ANIMAL_CTORS {
-        assert_eq!(name_at(&prog, vma), "Animal", "{vma:#x} is zoo::Animal::Animal");
+        assert_eq!(
+            name_at(&prog, vma),
+            "Animal",
+            "{vma:#x} is zoo::Animal::Animal"
+        );
     }
     for vma in ANIMAL_DTORS {
-        assert_eq!(name_at(&prog, vma), "~Animal", "{vma:#x} is zoo::Animal::~Animal");
+        assert_eq!(
+            name_at(&prog, vma),
+            "~Animal",
+            "{vma:#x} is zoo::Animal::~Animal"
+        );
     }
     for vma in DOG_CTORS {
         assert_eq!(name_at(&prog, vma), "Dog", "{vma:#x} is zoo::Dog::Dog");
@@ -76,10 +92,16 @@ fn constructors_and_destructors_are_named_from_their_vptr_stores() {
 fn a_virtual_method_and_an_ambiguous_class_are_left_alone() {
     let prog = bootstrap("itaniumctors_O0_x86_64.so", true);
     let speak = name_at(&prog, ANIMAL_SPEAK);
-    assert!(speak.ends_with("_0") && !speak.contains("Animal"), "slot 0 keeps its slot name, got {speak}");
+    assert!(
+        speak.ends_with("_0") && !speak.contains("Animal"),
+        "slot 0 keeps its slot name, got {speak}"
+    );
     for vma in COUNTER_CTOR_AND_DTOR {
         let name = name_at(&prog, vma);
-        assert!(!name.contains("Counter"), "{vma:#x} must stay unnamed, got {name}");
+        assert!(
+            !name.contains("Counter"),
+            "{vma:#x} must stay unnamed, got {name}"
+        );
     }
 }
 
@@ -87,7 +109,10 @@ fn a_virtual_method_and_an_ambiguous_class_are_left_alone() {
 fn an_inlining_factory_is_not_a_constructor() {
     let prog = bootstrap("itaniumctors_O2_x86_64.so", true);
     for name in ["zoo::Dog::Dog", "zoo::Cat::Cat"] {
-        assert!(!prog.has_symbol_named(name), "-O2 inlines every constructor; {name} names a factory");
+        assert!(
+            !prog.has_symbol_named(name),
+            "-O2 inlines every constructor; {name} names a factory"
+        );
     }
     assert!(prog.lookup_symbol("make_dog").is_some());
 }
@@ -97,7 +122,10 @@ fn nothing_is_named_with_the_option_off() {
     let prog = bootstrap("itaniumctors_O0_x86_64.so", false);
     for vma in DOG_CTORS.into_iter().chain(DOG_DTORS) {
         let name = name_at(&prog, vma);
-        assert!(!name.contains("Dog"), "{vma:#x} is named {name} with itaniumrtti off");
+        assert!(
+            !name.contains("Dog"),
+            "{vma:#x} is named {name} with itaniumrtti off"
+        );
     }
 }
 
@@ -115,11 +143,18 @@ const WRAP_HOLDER_CTOR_O0: u64 = 0x1222;
 fn an_optimized_helper_that_stores_a_vptr_is_not_a_constructor() {
     let prog = bootstrap("itaniumctors_wrap_O2_x86_64.so", true);
     for vma in WRAP_GADGET_DTORS {
-        assert_eq!(name_at(&prog, vma), "~Gadget", "{vma:#x} is kit::Gadget::~Gadget");
+        assert_eq!(
+            name_at(&prog, vma),
+            "~Gadget",
+            "{vma:#x} is kit::Gadget::~Gadget"
+        );
     }
     for vma in WRAP_HELPERS {
         let name = name_at(&prog, vma);
-        assert!(name.starts_with("sub_"), "{vma:#x} must stay unnamed, got {name}");
+        assert!(
+            name.starts_with("sub_"),
+            "{vma:#x} must stay unnamed, got {name}"
+        );
     }
     assert!(!prog.has_symbol_named("kit::Gadget::Gadget"));
 }
@@ -152,7 +187,10 @@ fn a_destructor_or_an_inlined_constructor_is_not_a_constructor() {
     assert_eq!(name_at(&prog, IMPOSTOR_MID_CTOR_O0), "Mid");
     for vma in IMPOSTOR_NOT_CTORS_O0 {
         let name = name_at(&prog, vma);
-        assert!(name.starts_with("sub_"), "{vma:#x} must stay unnamed, got {name}");
+        assert!(
+            name.starts_with("sub_"),
+            "{vma:#x} must stay unnamed, got {name}"
+        );
     }
 }
 
@@ -164,7 +202,10 @@ fn a_method_that_inlined_a_destructor_is_not_one() {
     }
     for vma in IMPOSTOR_NOT_DTORS_O2 {
         let name = name_at(&prog, vma);
-        assert!(!name.starts_with('~'), "{vma:#x} must keep its slot name, got {name}");
+        assert!(
+            !name.starts_with('~'),
+            "{vma:#x} must keep its slot name, got {name}"
+        );
     }
 }
 
@@ -184,16 +225,31 @@ const REBUILD_IFACE_DTOR_CLANG: u64 = 0x1780;
 #[test]
 fn a_method_that_rebuilds_this_is_not_a_destructor() {
     for (fixture, not_dtors, base) in [
-        ("itaniumctors_rebuild_O2_x86_64.so", REBUILD_NOT_DTORS_GCC, REBUILD_BASE_DTORS_GCC),
-        ("itaniumctors_rebuild_clang_O2_x86_64.so", REBUILD_NOT_DTORS_CLANG, REBUILD_BASE_DTORS_CLANG),
+        (
+            "itaniumctors_rebuild_O2_x86_64.so",
+            REBUILD_NOT_DTORS_GCC,
+            REBUILD_BASE_DTORS_GCC,
+        ),
+        (
+            "itaniumctors_rebuild_clang_O2_x86_64.so",
+            REBUILD_NOT_DTORS_CLANG,
+            REBUILD_BASE_DTORS_CLANG,
+        ),
     ] {
         let prog = bootstrap(fixture, true);
         for vma in not_dtors {
             let name = name_at(&prog, vma);
-            assert!(!name.starts_with('~'), "{fixture} {vma:#x} must keep its slot name, got {name}");
+            assert!(
+                !name.starts_with('~'),
+                "{fixture} {vma:#x} must keep its slot name, got {name}"
+            );
         }
         for vma in base {
-            assert_eq!(name_at(&prog, vma), "~Base", "{fixture} {vma:#x} is rb::Base::~Base");
+            assert_eq!(
+                name_at(&prog, vma),
+                "~Base",
+                "{fixture} {vma:#x} is rb::Base::~Base"
+            );
         }
     }
     let prog = bootstrap("itaniumctors_rebuild_clang_O2_x86_64.so", true);
@@ -219,22 +275,40 @@ const BYVALUE_COLLECT_X64: u64 = 0x1430;
 #[test]
 fn a_method_returning_its_class_by_value_is_not_a_destructor() {
     for (fixture, not_dtors, pair) in [
-        ("itaniumctors_byvalue_O2_x86_64.so", &BYVALUE_NOT_DTORS_X64[..], BYVALUE_PAIR_DTORS_X64),
-        ("itaniumctors_byvalue_O2_i386.so", &BYVALUE_NOT_DTORS_I386[..], BYVALUE_PAIR_DTORS_I386),
+        (
+            "itaniumctors_byvalue_O2_x86_64.so",
+            &BYVALUE_NOT_DTORS_X64[..],
+            BYVALUE_PAIR_DTORS_X64,
+        ),
+        (
+            "itaniumctors_byvalue_O2_i386.so",
+            &BYVALUE_NOT_DTORS_I386[..],
+            BYVALUE_PAIR_DTORS_I386,
+        ),
     ] {
         let prog = bootstrap(fixture, true);
         for &vma in not_dtors {
             let name = name_at(&prog, vma);
-            assert!(!name.starts_with('~'), "{fixture} {vma:#x} must keep its slot name, got {name}");
+            assert!(
+                !name.starts_with('~'),
+                "{fixture} {vma:#x} must keep its slot name, got {name}"
+            );
         }
         for vma in pair {
-            assert_eq!(name_at(&prog, vma), "~Pair", "{fixture} {vma:#x} is bv::Pair::~Pair");
+            assert_eq!(
+                name_at(&prog, vma),
+                "~Pair",
+                "{fixture} {vma:#x} is bv::Pair::~Pair"
+            );
         }
     }
     let prog = bootstrap("itaniumctors_byvalue_O2_x86_64.so", true);
     for vma in BYVALUE_ZERO_X64 {
         let name = name_at(&prog, vma);
-        assert!(!name.starts_with('~'), "{vma:#x} must keep its slot name, got {name}");
+        assert!(
+            !name.starts_with('~'),
+            "{vma:#x} must keep its slot name, got {name}"
+        );
     }
 }
 
@@ -242,5 +316,8 @@ fn a_method_returning_its_class_by_value_is_not_a_destructor() {
 fn a_by_value_return_slot_is_not_a_constructor() {
     let prog = bootstrap("itaniumctors_byvalue_O2_x86_64.so", true);
     let name = name_at(&prog, BYVALUE_COLLECT_X64);
-    assert!(name.starts_with("sub_"), "bv::Pager::collect must stay unnamed, got {name}");
+    assert!(
+        name.starts_with("sub_"),
+        "bv::Pager::collect must stay unnamed, got {name}"
+    );
 }

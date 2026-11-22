@@ -33,9 +33,13 @@ use crate::p5_types::prefersplit::PreferSplitRecord;
 /// big-endian.  The range must therefore stay inside ONE piece; an access that
 /// crosses the split is not a scalar the split creates.
 pub fn is_split_storage(records: &[PreferSplitRecord], addr: &Address, size: int4) -> bool {
-    let Some(space) = addr.get_space() else { return false };
+    let Some(space) = addr.get_space() else {
+        return false;
+    };
     records.iter().any(|record| {
-        let Some(rec_space) = record.storage.space.as_ref() else { return false };
+        let Some(rec_space) = record.storage.space.as_ref() else {
+            return false;
+        };
         if rec_space.get_index() != space.get_index() {
             return false;
         }
@@ -46,7 +50,9 @@ pub fn is_split_storage(records: &[PreferSplitRecord], addr: &Address, size: int
             return false;
         }
         let off = addr.get_offset();
-        let Some(rel) = off.checked_sub(start) else { return false };
+        let Some(rel) = off.checked_sub(start) else {
+            return false;
+        };
         if rel > (total - size) as u64 {
             return false;
         }
@@ -93,7 +99,9 @@ mod tests {
     use std::rc::Rc;
 
     use unlace_base::address::Address;
-    use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace};
+    use unlace_base::space::{
+        AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
+    };
     use unlace_num::pcoderaw::VarnodeData;
 
     use super::*;
@@ -101,7 +109,8 @@ mod tests {
     fn manager() -> AddrSpaceManager {
         let mut m = AddrSpaceManager::new();
         m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+            .unwrap();
         m.insert_space(Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
             "register",
@@ -120,7 +129,11 @@ mod tests {
     fn records(manage: &AddrSpaceManager) -> Vec<PreferSplitRecord> {
         let reg = Rc::clone(manage.get_space_by_name("register").unwrap());
         vec![PreferSplitRecord {
-            storage: VarnodeData { space: Some(reg), size: 16, offset: 0 },
+            storage: VarnodeData {
+                space: Some(reg),
+                size: 16,
+                offset: 0,
+            },
             splitoffset: 8,
         }]
     }
@@ -130,9 +143,21 @@ mod tests {
         let manage = manager();
         let recs = records(&manage);
         let reg = Rc::clone(manage.get_space_by_name("register").unwrap());
-        assert!(is_split_storage(&recs, &Address::new(Rc::clone(&reg), 0), 16));
-        assert!(is_split_storage(&recs, &Address::new(Rc::clone(&reg), 0), 8));
-        assert!(is_split_storage(&recs, &Address::new(Rc::clone(&reg), 8), 8));
+        assert!(is_split_storage(
+            &recs,
+            &Address::new(Rc::clone(&reg), 0),
+            16
+        ));
+        assert!(is_split_storage(
+            &recs,
+            &Address::new(Rc::clone(&reg), 0),
+            8
+        ));
+        assert!(is_split_storage(
+            &recs,
+            &Address::new(Rc::clone(&reg), 8),
+            8
+        ));
     }
 
     #[test]
@@ -141,10 +166,26 @@ mod tests {
         let recs = records(&manage);
         let reg = Rc::clone(manage.get_space_by_name("register").unwrap());
         // Little-endian `s0` is the low word of `d0`; big-endian is the high one.
-        assert!(is_split_storage(&recs, &Address::new(Rc::clone(&reg), 0), 4));
-        assert!(is_split_storage(&recs, &Address::new(Rc::clone(&reg), 4), 4));
-        assert!(is_split_storage(&recs, &Address::new(Rc::clone(&reg), 8), 4));
-        assert!(is_split_storage(&recs, &Address::new(Rc::clone(&reg), 12), 4));
+        assert!(is_split_storage(
+            &recs,
+            &Address::new(Rc::clone(&reg), 0),
+            4
+        ));
+        assert!(is_split_storage(
+            &recs,
+            &Address::new(Rc::clone(&reg), 4),
+            4
+        ));
+        assert!(is_split_storage(
+            &recs,
+            &Address::new(Rc::clone(&reg), 8),
+            4
+        ));
+        assert!(is_split_storage(
+            &recs,
+            &Address::new(Rc::clone(&reg), 12),
+            4
+        ));
     }
 
     #[test]
@@ -153,11 +194,27 @@ mod tests {
         let recs = records(&manage);
         let reg = Rc::clone(manage.get_space_by_name("register").unwrap());
         // The next argument register is not part of the split container.
-        assert!(!is_split_storage(&recs, &Address::new(Rc::clone(&reg), 0x10), 8));
+        assert!(!is_split_storage(
+            &recs,
+            &Address::new(Rc::clone(&reg), 0x10),
+            8
+        ));
         // An access that crosses the split is not a scalar the split creates.
-        assert!(!is_split_storage(&recs, &Address::new(Rc::clone(&reg), 4), 8));
+        assert!(!is_split_storage(
+            &recs,
+            &Address::new(Rc::clone(&reg), 4),
+            8
+        ));
         // A register window that runs past the container.
-        assert!(!is_split_storage(&recs, &Address::new(Rc::clone(&reg), 12), 8));
-        assert!(!is_split_storage(&recs, &Address::new(Rc::clone(&reg), 0), 20));
+        assert!(!is_split_storage(
+            &recs,
+            &Address::new(Rc::clone(&reg), 12),
+            8
+        ));
+        assert!(!is_split_storage(
+            &recs,
+            &Address::new(Rc::clone(&reg), 0),
+            20
+        ));
     }
 }

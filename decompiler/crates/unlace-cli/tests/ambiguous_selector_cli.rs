@@ -6,7 +6,10 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture(name: &str) -> String {
@@ -62,7 +65,10 @@ fn a_linked_image_ambiguity_offers_the_address_form() {
 fn the_offered_address_selects_one_candidate() {
     let (stdout, stderr, ok) = decompile("macho_dup_main", &["0x1000005a0", "--addr"]);
     assert!(ok, "the offered selector must work: {stderr}");
-    assert!(stdout.contains("_main("), "no body for the chosen candidate:\n{stdout}");
+    assert!(
+        stdout.contains("_main("),
+        "no body for the chosen candidate:\n{stdout}"
+    );
 }
 
 /// A relocatable object keeps the section-qualified form, which is the one that

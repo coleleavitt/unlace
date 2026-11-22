@@ -1,10 +1,10 @@
 //! Recover the contiguous spill beside a joined struct parameter's stack tail.
 
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use unlace_base::address::Address;
-use unlace_base::space::{spacetype, AddrSpace};
 use std::rc::Rc;
+use unlace_base::address::Address;
+use unlace_base::space::{AddrSpace, spacetype};
 
 pub(super) fn map(
     fd: &mut Funcdata,

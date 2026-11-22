@@ -46,7 +46,12 @@ fn with_id(size: int4, m: type_metatype, id: u64) -> Rc<Datatype> {
 fn pointer_to(ptrto: Rc<Datatype>, size: int4, wordsize: u32) -> Rc<Datatype> {
     let mut p = Datatype::new(size, type_metatype::TYPE_PTR);
     p.submeta = sub_metatype::SUB_PTR;
-    p.kind = DatatypeKind::Pointer { ptrto, spaceid: None, truncate: None, wordsize };
+    p.kind = DatatypeKind::Pointer {
+        ptrto,
+        spaceid: None,
+        truncate: None,
+        wordsize,
+    };
     Rc::new(p)
 }
 
@@ -81,7 +86,10 @@ fn resolve_edge_signed_encoding_orders_output_before_inputs() {
     let in1 = ResolveEdge::new_op(&int_t, 1000, 1);
 
     // Signed: -1 < 0 < 1.  (Unsigned would invert the first pair.)
-    assert!(out_edge < in0, "output edge (enc -1) must sort before input slot 0");
+    assert!(
+        out_edge < in0,
+        "output edge (enc -1) must sort before input slot 0"
+    );
     assert!(in0 < in1);
     assert!(out_edge < in1);
 
@@ -117,17 +125,34 @@ fn resolve_edge_addr_optime_truncates_u64_to_u32() {
 
     // Same low 32 bits, different high 32 bits -> identical edges after truncation.
     let a = ResolveEdge::new_addr(&int_t, &Address::new(Rc::clone(&space), low), 99);
-    let b =
-        ResolveEdge::new_addr(&int_t, &Address::new(Rc::clone(&space), 0xffff_ffff_0000_0000 | low), 0);
-    assert_eq!(a, b, "high-bit-only differences truncate away (opTime is u32)");
+    let b = ResolveEdge::new_addr(
+        &int_t,
+        &Address::new(Rc::clone(&space), 0xffff_ffff_0000_0000 | low),
+        0,
+    );
+    assert_eq!(
+        a, b,
+        "high-bit-only differences truncate away (opTime is u32)"
+    );
 
     // A full u64 that is numerically *larger* but whose low 32 bits are *smaller*
     // must sort BEFORE: the compare sees only the truncated low word.
     //   big_u64  = 0xFFFF_FFFF_0000_0001 -> opTime 0x0000_0001
     //   small_u64= 0x0000_0000_0000_0002 -> opTime 0x0000_0002
-    let big = ResolveEdge::new_addr(&int_t, &Address::new(Rc::clone(&space), 0xffff_ffff_0000_0001), 0);
-    let small = ResolveEdge::new_addr(&int_t, &Address::new(Rc::clone(&space), 0x0000_0000_0000_0002), 0);
-    assert!(big < small, "ordering uses the truncated low-32 opTime, not the full u64");
+    let big = ResolveEdge::new_addr(
+        &int_t,
+        &Address::new(Rc::clone(&space), 0xffff_ffff_0000_0001),
+        0,
+    );
+    let small = ResolveEdge::new_addr(
+        &int_t,
+        &Address::new(Rc::clone(&space), 0x0000_0000_0000_0002),
+        0,
+    );
+    assert!(
+        big < small,
+        "ordering uses the truncated low-32 opTime, not the full u64"
+    );
 }
 
 // =============================================================================
@@ -157,7 +182,10 @@ fn score_truncation_int_branch_signed_offset_window() {
     // offset 5: 8 >= 4 + 5 == 9 -> FALSE -> fall through; plain int has no
     // subtype -> ct becomes null -> final score -10.
     let (s5, recurse5) = score_truncation(&int8_t, 4, 5, None).unwrap();
-    assert_eq!(s5, -10, "offset past the int width yields the null/-10 path");
+    assert_eq!(
+        s5, -10,
+        "offset past the int width yields the null/-10 path"
+    );
     assert!(recurse5.is_none());
 }
 
@@ -217,8 +245,16 @@ fn score_constant_fit_float_exponent_strict_bounds() {
     assert_eq!(score_constant_fit(8, 1, TYPE_FLOAT, &mk(-3)), 2);
     assert_eq!(score_constant_fit(8, 1, TYPE_FLOAT, &mk(0)), 2);
     // On the exclusive boundary: 7 and -4 are OUT -> -1.
-    assert_eq!(score_constant_fit(8, 1, TYPE_FLOAT, &mk(7)), -1, "exp == 7 is excluded");
-    assert_eq!(score_constant_fit(8, 1, TYPE_FLOAT, &mk(-4)), -1, "exp == -4 is excluded");
+    assert_eq!(
+        score_constant_fit(8, 1, TYPE_FLOAT, &mk(7)),
+        -1,
+        "exp == 7 is excluded"
+    );
+    assert_eq!(
+        score_constant_fit(8, 1, TYPE_FLOAT, &mk(-4)),
+        -1,
+        "exp == -4 is excluded"
+    );
     // Far outside -> -1.
     assert_eq!(score_constant_fit(8, 1, TYPE_FLOAT, &mk(100)), -1);
 }
@@ -274,13 +310,19 @@ fn resolved_union_update_pointer_identity_semantics() {
     let mut res = ResolvedUnion::new(Rc::clone(&union_t));
     let mut op = ResolvedUnion::new(Rc::clone(&union_t));
     op.set_resolve(Rc::clone(&int_a));
-    assert!(res.update(&op), "distinct resolve object with same fieldNum is a change");
+    assert!(
+        res.update(&op),
+        "distinct resolve object with same fieldNum is a change"
+    );
     assert!(Rc::ptr_eq(res.get_datatype(), &int_a));
 
     // Now updating to a *pointer-identical* resolve with the same fieldNum -> no change.
     let mut op_same = ResolvedUnion::new(Rc::clone(&union_t));
     op_same.set_resolve(Rc::clone(&int_a));
-    assert!(!res.update(&op_same), "pointer-identical resolve + same fieldNum -> no change");
+    assert!(
+        !res.update(&op_same),
+        "pointer-identical resolve + same fieldNum -> no change"
+    );
 
     // Locked, differing fieldNum -> rejected outright even with a new resolve.
     // Build an op with fieldNum 0 via the public field constructor (a plain
@@ -289,8 +331,15 @@ fn resolved_union_update_pointer_identity_semantics() {
     res.set_lock(true);
     let factory = TypeFactoryImpl::new();
     let op_field0 = ResolvedUnion::new_field(Rc::clone(&union_t), 0, &factory).unwrap();
-    assert_eq!(op_field0.get_field_num(), 0, "constructed op has fieldNum 0");
+    assert_eq!(
+        op_field0.get_field_num(),
+        0,
+        "constructed op has fieldNum 0"
+    );
     // res still has fieldNum -1; locked + differing fieldNum -> no change.
-    assert!(!res.update(&op_field0), "locked + differing fieldNum -> rejected");
+    assert!(
+        !res.update(&op_field0),
+        "locked + differing fieldNum -> rejected"
+    );
     let _ = int_b;
 }

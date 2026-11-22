@@ -35,7 +35,11 @@ pub(crate) type Interiors = BTreeMap<u64, Interior>;
 /// Note each explicitly selected target (`--addr`/`--functions`, already
 /// resolved and deduplicated) that lands inside another function. An
 /// unfiltered run selects inventory entries only, so it asks nothing.
-pub(crate) fn selections(prog: &ConsoleProgram, args: &Args, targets: &[FunctionEntry]) -> Interiors {
+pub(crate) fn selections(
+    prog: &ConsoleProgram,
+    args: &Args,
+    targets: &[FunctionEntry],
+) -> Interiors {
     let mut found = Interiors::new();
     if args.addrs.is_empty() && args.names.is_none() {
         return found;
@@ -78,7 +82,11 @@ pub(crate) fn note(i: &Interior) -> String {
 /// MS-DOS program's data after a function's code is in no function.
 fn past_flow_note(prog: &ConsoleProgram, byte: u64) -> Option<String> {
     let (owner, end) = prog.flow_ended_before(byte)?;
-    Some(past_flow_line(prog.output_code_offset(byte), &owner.name, prog.output_code_offset(end)))
+    Some(past_flow_line(
+        prog.output_code_offset(byte),
+        &owner.name,
+        prog.output_code_offset(end),
+    ))
 }
 
 fn past_flow_line(at: u64, owner: &str, end: u64) -> String {
@@ -108,7 +116,10 @@ pub(crate) fn json(i: &Interior) -> Json {
         ("name".into(), Json::Str(i.owner.clone())),
         ("address".into(), Json::Number(i.entry.to_string())),
         ("address_hex".into(), Json::Str(format!("{:#x}", i.entry))),
-        ("offset".into(), Json::Number((i.addr - i.entry).to_string())),
+        (
+            "offset".into(),
+            Json::Number((i.addr - i.entry).to_string()),
+        ),
     ])
 }
 
@@ -121,7 +132,11 @@ pub(crate) fn from_transcript(transcript: &str) -> Option<Interior> {
         let (addr, rest) = line.split_once(" is interior to ")?;
         let (rest, _) = rest.strip_suffix(')')?.rsplit_once(" (+")?;
         let (owner, entry) = rest.rsplit_once(" at ")?;
-        Some(Interior { addr: hex(addr)?, owner: owner.to_string(), entry: hex(entry)? })
+        Some(Interior {
+            addr: hex(addr)?,
+            owner: owner.to_string(),
+            entry: hex(entry)?,
+        })
     })
 }
 
@@ -142,7 +157,11 @@ mod tests {
         let interior = from_transcript(transcript).expect("parsed");
         assert_eq!(
             interior,
-            Interior { addr: 0x140001040, owner: "sub_140001030".into(), entry: 0x140001030 }
+            Interior {
+                addr: 0x140001040,
+                owner: "sub_140001030".into(),
+                entry: 0x140001030
+            }
         );
         assert_eq!(
             note(&interior),

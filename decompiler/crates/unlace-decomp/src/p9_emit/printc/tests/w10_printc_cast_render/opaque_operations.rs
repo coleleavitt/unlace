@@ -86,7 +86,10 @@ fn unicode_operations_keep_distinct_bindings_and_all_four_operands() {
     let mut arch = bare_arch();
     for (index, name) in ["é", "e\u{301}", "__kuna_userop_0__"].iter().enumerate() {
         arch.userops
-            .register_op(UserPcodeOp::new_unspecialized(name.as_bytes(), index as int4))
+            .register_op(UserPcodeOp::new_unspecialized(
+                name.as_bytes(),
+                index as int4,
+            ))
             .unwrap();
     }
     let args = ["first", "second", "third", "fourth"];
@@ -103,8 +106,14 @@ fn unicode_operations_keep_distinct_bindings_and_all_four_operands() {
         "__kuna_userop_2___kuna_userop_0__(first,second,third,fourth)"
     );
     for lang in ["c", "go"] {
-        assert_eq!(render(&arch, lang, 0, &args), "é(first,second,third,fourth)");
-        assert_eq!(render(&arch, lang, 1, &args), "e\u{301}(first,second,third,fourth)");
+        assert_eq!(
+            render(&arch, lang, 0, &args),
+            "é(first,second,third,fourth)"
+        );
+        assert_eq!(
+            render(&arch, lang, 1, &args),
+            "e\u{301}(first,second,third,fourth)"
+        );
     }
 }
 

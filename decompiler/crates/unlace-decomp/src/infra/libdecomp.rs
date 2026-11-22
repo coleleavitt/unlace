@@ -78,7 +78,11 @@ pub fn start_decompiler_library(
         spec_paths.push(p.clone());
     }
 
-    DecompilerLibrary { registry, capabilities, spec_paths }
+    DecompilerLibrary {
+        registry,
+        capabilities,
+        spec_paths,
+    }
 }
 
 /// Release library resources (C++ `shutdownDecompilerLibrary`).

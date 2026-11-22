@@ -8,7 +8,12 @@ const FRAME_CALL: &[u32] = &[
 ];
 
 fn decompile(words: &[u32], little: bool, variant: &str, overlap: Option<&str>) -> String {
-    decompile_with(words, little, variant, overlap.map(|level| ("calloverlap", level)).as_slice())
+    decompile_with(
+        words,
+        little,
+        variant,
+        overlap.map(|level| ("calloverlap", level)).as_slice(),
+    )
 }
 
 fn decompile_with(words: &[u32], little: bool, variant: &str, options: &[(&str, &str)]) -> String {
@@ -111,8 +116,10 @@ fn e500_call_result_is_defined_by_the_call() {
         let code = decompile(&words, little, "e500", None);
         assert!(code.contains("(*a0)(a1)"), "{code}");
         assert!(!code.contains("// _r3"), "{code}");
-        execute(&code.replace("void *a0", "int (*a0)(int)"),
-            "static int cb(int x) { return x * 3; }\nint main(void) { for (int x=-10;x<=10;++x) if (sub_1000(cb,x)!=x*3+1) return 1; return 0; }");
+        execute(
+            &code.replace("void *a0", "int (*a0)(int)"),
+            "static int cb(int x) { return x * 3; }\nint main(void) { for (int x=-10;x<=10;++x) if (sub_1000(cb,x)!=x*3+1) return 1; return 0; }",
+        );
     }
 }
 
@@ -145,10 +152,11 @@ fn conditional_callback_keeps_the_callers_return_value() {
                 assert!(code.contains("(*a0)(a2)"), "{code}");
                 assert!(code.contains("return (*a1)(a2);"), "{code}");
                 execute(
-                &code.replace("void *a0", "int (*a0)(int)")
-                    .replace("void *a1", "int (*a1)(int)"),
-                "static int count;\nstatic int zero(int x) { (void)x; return 0; }\nstatic int yes(int x) { (void)x; return 1; }\nstatic int cb(int x) { ++count; return x*5+2; }\nint main(void) { for(int x=-10;x<=10;++x) { count=0; if((int)sub_1000(zero,cb,x)!=x || count) return 1; if((int)sub_1000(yes,cb,x)!=x*5+2 || count!=1) return 2; } return 0; }",
-            );
+                    &code
+                        .replace("void *a0", "int (*a0)(int)")
+                        .replace("void *a1", "int (*a1)(int)"),
+                    "static int count;\nstatic int zero(int x) { (void)x; return 0; }\nstatic int yes(int x) { (void)x; return 1; }\nstatic int cb(int x) { ++count; return x*5+2; }\nint main(void) { for(int x=-10;x<=10;++x) { count=0; if((int)sub_1000(zero,cb,x)!=x || count) return 1; if((int)sub_1000(yes,cb,x)!=x*5+2 || count!=1) return 2; } return 0; }",
+                );
             }
         }
     }
@@ -184,7 +192,9 @@ fn spe_values_keep_both_words_across_a_scalar_call() {
         assert!(code.contains("(*a0)(7);"), "{code}");
         assert!(code.contains("*a2 = v1;"), "{code}");
         assert!(!code.contains("CONCAT"), "{code}");
-        execute(&code.replace("void *a0", "void (*a0)(int)"),
-            "static unsigned long long input,output; static int calls;\nstatic void cb(int x) { calls+=x; input=0; }\nint main(void) { const unsigned long long values[]={0x1234567887654321ULL,0xffffffff00000000ULL,0x76543210ffffffffULL}; for(int i=0;i<3;++i) { input=values[i]; output=0; calls=0; sub_1000(cb,&input,&output); if(output!=values[i]||input!=0||calls!=7) return 1; } return 0; }");
+        execute(
+            &code.replace("void *a0", "void (*a0)(int)"),
+            "static unsigned long long input,output; static int calls;\nstatic void cb(int x) { calls+=x; input=0; }\nint main(void) { const unsigned long long values[]={0x1234567887654321ULL,0xffffffff00000000ULL,0x76543210ffffffffULL}; for(int i=0;i<3;++i) { input=values[i]; output=0; calls=0; sub_1000(cb,&input,&output); if(output!=values[i]||input!=0||calls!=7) return 1; } return 0; }",
+        );
     }
 }

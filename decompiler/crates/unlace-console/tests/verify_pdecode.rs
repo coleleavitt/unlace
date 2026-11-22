@@ -21,18 +21,23 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use object::{Object, ObjectSymbol};
+use unlace_analysis::listing::kuna_pdecode::Refusal;
 use unlace_analysis::listing::model::{DiscoveredFunction, FlowType, RefKind};
 use unlace_analysis::listing::{Listing, ListingDetail, WalkPlan};
-use unlace_analysis::listing::kuna_pdecode::Refusal;
 use unlace_console::engine::bootstrap_from_object;
-use object::{Object, ObjectSymbol};
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture(name: &str) -> PathBuf {
-    repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(name)
+    repo_root()
+        .join("decompiler/crates/unlace-analysis/tests/fixtures")
+        .join(name)
 }
 
 fn spec_roots() -> Vec<String> {
@@ -76,17 +81,43 @@ fn partition(listing: &Listing) -> Partition {
     // reachable without adding a query nothing else wants.
     let refs_from: Vec<(u64, Vec<(u64, u64, RefKind)>)> = listing
         .ref_source_iter()
-        .map(|a| (a, listing.refs_from(a).iter().map(|r| (r.from, r.to, r.kind)).collect()))
+        .map(|a| {
+            (
+                a,
+                listing
+                    .refs_from(a)
+                    .iter()
+                    .map(|r| (r.from, r.to, r.kind))
+                    .collect(),
+            )
+        })
         .collect();
-    let mut targets: Vec<u64> =
-        refs_from.iter().flat_map(|(_, b)| b.iter().map(|&(_, to, _)| to)).collect();
+    let mut targets: Vec<u64> = refs_from
+        .iter()
+        .flat_map(|(_, b)| b.iter().map(|&(_, to, _)| to))
+        .collect();
     targets.sort_unstable();
     targets.dedup();
     let refs_to: Vec<(u64, Vec<(u64, u64, RefKind)>)> = targets
         .into_iter()
-        .map(|a| (a, listing.refs_to(a).iter().map(|r| (r.from, r.to, r.kind)).collect()))
+        .map(|a| {
+            (
+                a,
+                listing
+                    .refs_to(a)
+                    .iter()
+                    .map(|r| (r.from, r.to, r.kind))
+                    .collect(),
+            )
+        })
         .collect();
-    (insns, funcs, refs_to, refs_from, listing.exec_ranges().to_vec())
+    (
+        insns,
+        funcs,
+        refs_to,
+        refs_from,
+        listing.exec_ranges().to_vec(),
+    )
 }
 
 struct Loaded {
@@ -114,7 +145,12 @@ fn load(name: &str) -> Loaded {
     }
     seeds.sort_unstable();
     seeds.dedup();
-    Loaded { prog, bytes, path, seeds }
+    Loaded {
+        prog,
+        bytes,
+        path,
+        seeds,
+    }
 }
 
 /// Walk `name` serially, then on every (lanes, intervals-per-lane, detail) cell,
@@ -193,8 +229,13 @@ fn lanes_agree_everywhere(name: &str) -> usize {
 fn decode_lanes_produce_the_serial_listing() {
     // fauxware (a small non-PIE ELF), a CET PIE whose GOT slots the loader
     // patches, a PE, and the two largest in-repo x86-64 images.
-    let fixtures =
-        ["fauxware", "cet_pie_x86_64", "pe_imports.exe", "mcount_x86_64", "regglobal_fmt_x86_64"];
+    let fixtures = [
+        "fauxware",
+        "cet_pie_x86_64",
+        "pe_imports.exe",
+        "mcount_x86_64",
+        "regglobal_fmt_x86_64",
+    ];
     let mut total = 0usize;
     for name in fixtures {
         let n = lanes_agree_everywhere(name);
@@ -250,7 +291,10 @@ fn repeated_lane_runs_are_identical() {
     };
     let first = build();
     for round in 0..4 {
-        assert!(partition(&build()) == partition(&first), "run {round} differed from the first");
+        assert!(
+            partition(&build()) == partition(&first),
+            "run {round} differed from the first"
+        );
     }
     assert_eq!(plan.engaged(), 5, "every run must have been a lane run");
     eprintln!(
@@ -269,8 +313,11 @@ fn seed_names_survive_the_merge() {
         unlace_analysis::loadimage_object::ObjectLoadImage::from_bytes(&loaded.path, &loaded.bytes)
             .expect("open throwaway loadimage");
     let arch = loaded.prog.arch();
-    let names: Vec<(u64, String)> =
-        loaded.seeds.iter().map(|&a| (a, format!("seed_{a:x}"))).collect();
+    let names: Vec<(u64, String)> = loaded
+        .seeds
+        .iter()
+        .map(|&a| (a, format!("seed_{a:x}")))
+        .collect();
     let build = |plan: &WalkPlan| {
         Listing::build_with_meta_planned(
             &file,
@@ -284,11 +331,15 @@ fn seed_names_survive_the_merge() {
             plan,
         )
     };
-    let want: BTreeMap<u64, DiscoveredFunction> =
-        build(&WalkPlan::serial()).functions().map(|(&a, f)| (a, f.clone())).collect();
+    let want: BTreeMap<u64, DiscoveredFunction> = build(&WalkPlan::serial())
+        .functions()
+        .map(|(&a, f)| (a, f.clone()))
+        .collect();
     let plan = WalkPlan::for_lanes(arch, 4, 32, NO_SIZE_FLOOR);
-    let got: BTreeMap<u64, DiscoveredFunction> =
-        build(&plan).functions().map(|(&a, f)| (a, f.clone())).collect();
+    let got: BTreeMap<u64, DiscoveredFunction> = build(&plan)
+        .functions()
+        .map(|(&a, f)| (a, f.clone()))
+        .collect();
     assert_eq!(plan.engaged(), 1, "the lanes must have run at all");
     assert!(
         want.values().any(|f| f.from_symbol && f.name.is_some()),
@@ -313,5 +364,9 @@ fn every_refusal_reason_is_documented_in_the_cli_reference() {
             refusal.reason()
         );
     }
-    assert_eq!(Refusal::ALL.len(), Refusal::COUNT, "every variant must be in ALL");
+    assert_eq!(
+        Refusal::ALL.len(),
+        Refusal::COUNT,
+        "every variant must be in ALL"
+    );
 }

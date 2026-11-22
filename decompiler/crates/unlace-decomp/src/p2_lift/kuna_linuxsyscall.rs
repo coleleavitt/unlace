@@ -171,7 +171,7 @@ impl OptionLinuxSyscall {
             other => {
                 return Err(KunaError::parse(format!(
                     "Unknown linuxsyscall value: {other} (expected off|auto|on)"
-                )))
+                )));
             }
         };
         Ok((mode, format!("Linux int 0x80 syscall naming set to {p1}")))
@@ -600,7 +600,11 @@ pub fn resolve_abi(data: &Funcdata) -> Option<SyscallAbi> {
     for nm in arg_names {
         args.push(reg(nm)?);
     }
-    Some(SyscallAbi { num, args, full_register_size: register_size as int4 })
+    Some(SyscallAbi {
+        num,
+        args,
+        full_register_size: register_size as int4,
+    })
 }
 
 /// One recognized `int 0x80` site.
@@ -712,8 +716,12 @@ fn sites(data: &Funcdata, abi: &SyscallAbi) -> Vec<Site> {
     let mut found = Vec::new();
     let callothers: Vec<OpId> = data.obank().iter_code(OpCode::CPUI_CALLOTHER).collect();
     for other in callothers {
-        let Some(oth) = data.obank().get(other) else { continue };
-        let Some(block) = oth.get_parent() else { continue };
+        let Some(oth) = data.obank().get(other) else {
+            continue;
+        };
+        let Some(block) = oth.get_parent() else {
+            continue;
+        };
         if oth.num_input() != 2 {
             continue;
         }
@@ -727,24 +735,40 @@ fn sites(data: &Funcdata, abi: &SyscallAbi) -> Vec<Site> {
             continue;
         }
         let Some(outvn) = oth.get_out() else { continue };
-        let Some(callind) = data.op_next_op(other) else { continue };
-        let Some(call) = data.obank().get(callind) else { continue };
+        let Some(callind) = data.op_next_op(other) else {
+            continue;
+        };
+        let Some(call) = data.obank().get(callind) else {
+            continue;
+        };
         if call.code() != OpCode::CPUI_CALLIND
             || call.get_parent() != Some(block)
             || call.get_addr() != &addr
         {
             continue;
         }
-        let same_storage = match (data.vbank().get(outvn), call.get_in(0).and_then(|v| data.vbank().get(v))) {
+        let same_storage = match (
+            data.vbank().get(outvn),
+            call.get_in(0).and_then(|v| data.vbank().get(v)),
+        ) {
             (Some(o), Some(t)) => o.get_addr() == t.get_addr() && o.get_size() == t.get_size(),
             _ => false,
         };
         if !same_storage {
             continue;
         }
-        let Some(num) = syscall_number_before(data, other, abi) else { continue };
-        let Some((name, argc)) = syscall_entry(num) else { continue };
-        found.push(Site { callind, callother: other, name, argc });
+        let Some(num) = syscall_number_before(data, other, abi) else {
+            continue;
+        };
+        let Some((name, argc)) = syscall_entry(num) else {
+            continue;
+        };
+        found.push(Site {
+            callind,
+            callother: other,
+            name,
+            argc,
+        });
     }
     found
 }
@@ -754,18 +778,26 @@ fn rewrite(data: &mut Funcdata, site: &Site, abi: &SyscallAbi) -> bool {
     use crate::dtype::type_metatype;
     use crate::fspec::ParameterPieces;
 
-    let Some(idx) = data.get_call_specs_index(site.callind) else { return false };
+    let Some(idx) = data.get_call_specs_index(site.callind) else {
+        return false;
+    };
     if data.get_call_specs(idx).has_funcdata() {
         return false;
     }
-    let Some(types) = data.get_arch().types() else { return false };
-    let (Ok(void_ty), Ok(word_ty)) =
-        (types.get_type_void(), types.get_base(4, type_metatype::TYPE_UNKNOWN))
-    else {
+    let Some(types) = data.get_arch().types() else {
         return false;
     };
-    let Some(model) =
-        data.get_arch().eval_fp_called().or_else(|| data.get_arch().default_fp()).cloned()
+    let (Ok(void_ty), Ok(word_ty)) = (
+        types.get_type_void(),
+        types.get_base(4, type_metatype::TYPE_UNKNOWN),
+    ) else {
+        return false;
+    };
+    let Some(model) = data
+        .get_arch()
+        .eval_fp_called()
+        .or_else(|| data.get_arch().default_fp())
+        .cloned()
     else {
         return false;
     };
@@ -777,12 +809,19 @@ fn rewrite(data: &mut Funcdata, site: &Site, abi: &SyscallAbi) -> bool {
     // `int 0x80` pushes no return address, so the call restores nothing.
     fc.proto_mut().set_extra_pop(0);
     for (slot, reg) in abi.args.iter().take(site.argc).enumerate() {
-        let piece =
-            ParameterPieces { addr: reg.clone(), type_: Some(word_ty.clone()), flags: 0 };
+        let piece = ParameterPieces {
+            addr: reg.clone(),
+            type_: Some(word_ty.clone()),
+            flags: 0,
+        };
         fc.proto_mut().set_param(slot as int4, "", &piece);
     }
     fc.proto_mut().set_input_lock(true);
-    let out = ParameterPieces { addr: abi.num.clone(), type_: Some(word_ty), flags: 0 };
+    let out = ParameterPieces {
+        addr: abi.num.clone(),
+        type_: Some(word_ty),
+        flags: 0,
+    };
     fc.proto_mut().set_output(&out);
     fc.proto_mut().set_output_lock(true);
     if fc.set_funcdata(entry, &name).is_err() {
@@ -792,7 +831,8 @@ fn rewrite(data: &mut Funcdata, site: &Site, abi: &SyscallAbi) -> bool {
     data.op_set_opcode_code(site.callind, OpCode::CPUI_CALL);
     let handle = crate::flow::next_fspec_handle();
     let style = data.get_arch().kuna_name_style();
-    data.get_call_specs(idx).register_in_fspec_space(handle, style);
+    data.get_call_specs(idx)
+        .register_in_fspec_space(handle, style);
     let fspecvn = data.new_varnode_call_specs(handle);
     if data.op_set_input(site.callind, fspecvn, 0).is_err() {
         return false;
@@ -831,13 +871,17 @@ impl Action for ActionLinuxSyscall {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionLinuxSyscall { base: self.base.clone() }))
+        Some(Box::new(ActionLinuxSyscall {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data.get_arch().linux_syscall || data.num_calls() == 0 {
             return 0;
         }
-        let Some(abi) = resolve_abi(data) else { return 0 };
+        let Some(abi) = resolve_abi(data) else {
+            return 0;
+        };
         let found = sites(data, &abi);
         if found.is_empty() {
             return 0;
@@ -848,11 +892,7 @@ impl Action for ActionLinuxSyscall {
                 changed += 1;
             }
         }
-        if changed != 0 {
-            1
-        } else {
-            0
-        }
+        if changed != 0 { 1 } else { 0 }
     }
 }
 

@@ -153,7 +153,9 @@ end function sample
             assert!(body.contains("counter_3_1"), "{body}");
             format!("unsigned {normalized}=5;\nunsigned counter_3_1=11;")
         } else {
-            format!("int {normalized}=0;\nvoid gfortran_runtime_error_at(const char *where, ...) {{ (void)where; abort(); }}")
+            format!(
+                "int {normalized}=0;\nvoid gfortran_runtime_error_at(const char *where, ...) {{ (void)where; abort(); }}"
+            )
         };
         let regenerated = input.with_extension("regenerated.c");
         let executable = input.with_extension("exe");
@@ -239,7 +241,11 @@ fn shared_data_spelling_resolves_to_its_lowest_address_in_both_modes() {
         sources.push(source);
     }
     let built = command.arg("-o").arg(&binary).output().unwrap();
-    assert!(built.status.success(), "{}", String::from_utf8_lossy(&built.stderr));
+    assert!(
+        built.status.success(),
+        "{}",
+        String::from_utf8_lossy(&built.stderr)
+    );
     let image = std::fs::read(&binary).unwrap();
     let lowest = object::File::parse(&*image)
         .unwrap()
@@ -275,7 +281,11 @@ fn shared_data_spelling_resolves_to_its_lowest_address_in_both_modes() {
         ]);
         assert_eq!(status, 0, "{mode}: {error}");
         let document: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(document["target"]["address"].as_u64(), Some(lowest), "{mode}: {text}");
+        assert_eq!(
+            document["target"]["address"].as_u64(),
+            Some(lowest),
+            "{mode}: {text}"
+        );
     }
     for path in sources.into_iter().chain([binary]) {
         std::fs::remove_file(path).unwrap();

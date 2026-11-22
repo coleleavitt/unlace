@@ -14,8 +14,8 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::space::AddrSpace;
 use unlace_base::error::KunaResult;
+use unlace_base::space::AddrSpace;
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::translate::{AssemblyEmit, PcodeEmit, Translate};
@@ -58,13 +58,22 @@ impl OpCapture {
     ) {
         let Some(out) = outvar else { return };
         self.scalar_origins.retain(|(defined, _)| defined != out);
-        if !matches!(opc, OpCode::CPUI_COPY | OpCode::CPUI_INT_ZEXT | OpCode::CPUI_INT_SEXT) {
+        if !matches!(
+            opc,
+            OpCode::CPUI_COPY | OpCode::CPUI_INT_ZEXT | OpCode::CPUI_INT_SEXT
+        ) {
             return;
         }
         let Some(input) = vars.first() else { return };
-        let Some(mut value) = self.scalar_origin(input) else { return };
+        let Some(mut value) = self.scalar_origin(input) else {
+            return;
+        };
         let bits = input.size.saturating_mul(8).min(64);
-        let mask = if bits == 64 { u64::MAX } else { (1u64 << bits) - 1 };
+        let mask = if bits == 64 {
+            u64::MAX
+        } else {
+            (1u64 << bits) - 1
+        };
         value &= mask;
         if opc == OpCode::CPUI_INT_SEXT && bits != 0 && value & (1u64 << (bits - 1)) != 0 {
             value |= !mask;
@@ -81,7 +90,10 @@ impl PcodeEmit for OpCapture {
         outvar: Option<&VarnodeData>,
         vars: &[VarnodeData],
     ) {
-        self.ops.push(RawOp { opcode: opc, in0: vars.first().cloned() });
+        self.ops.push(RawOp {
+            opcode: opc,
+            in0: vars.first().cloned(),
+        });
         if !self.want_stored_scalars {
             return;
         }
@@ -243,7 +255,10 @@ fn capture_instruction(
 ) -> KunaResult<CapturedInstruction> {
     let addr = Address::new(Rc::clone(code_space), vma);
 
-    let mut cap = OpCapture { want_stored_scalars, ..OpCapture::default() };
+    let mut cap = OpCapture {
+        want_stored_scalars,
+        ..OpCapture::default()
+    };
     let len = if let Some(key) = key.filter(|_| want_assembly) {
         translate.one_instruction_reusable(&mut cap, asm, &addr, key)?
     } else if want_assembly {
@@ -303,7 +318,10 @@ pub(crate) fn decode_one_with_assembly(
     decoded.ops.clear();
     decoded.mnemonic.clear();
     decoded.operands.clear();
-    let mut cap = OpCapture { ops: std::mem::take(&mut decoded.ops), ..Default::default() };
+    let mut cap = OpCapture {
+        ops: std::mem::take(&mut decoded.ops),
+        ..Default::default()
+    };
     let mut asm = AsmCapture {
         mnemonic: std::mem::take(&mut decoded.mnemonic),
         operands: std::mem::take(&mut decoded.operands),
@@ -394,7 +412,10 @@ mod tests {
     }
 
     fn repo_root() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../..")
+            .canonicalize()
+            .unwrap()
     }
 
     fn x86_with(bytes: &[u8], fail: bool) -> (Sleigh, Rc<AddrSpace>, Rc<Cell<usize>>) {
@@ -402,7 +423,9 @@ mod tests {
         let sla = std::fs::read(&path)
             .unwrap_or_else(|error| panic!("required compiled spec {}: {error}", path.display()));
         let mut sleigh = Sleigh::new(Box::new(DummyImage), Box::new(ContextInternal::new()));
-        sleigh.initialize_from_sla(&sla).expect("initialize x86.sla");
+        sleigh
+            .initialize_from_sla(&sla)
+            .expect("initialize x86.sla");
         sleigh.set_context_default("addrsize", 1);
         sleigh.set_context_default("opsize", 1);
         let reads = Rc::new(Cell::new(0));
@@ -412,7 +435,13 @@ mod tests {
             reads: Rc::clone(&reads),
             fail,
         }));
-        let ram = Rc::clone(sleigh.base().manager().get_space_by_name("ram").expect("ram space"));
+        let ram = Rc::clone(
+            sleigh
+                .base()
+                .manager()
+                .get_space_by_name("ram")
+                .expect("ram space"),
+        );
         (sleigh, ram, reads)
     }
 
@@ -483,9 +512,15 @@ mod tests {
         assert_eq!(decoded.stored_scalar_values, vec![0x2000]);
 
         let mut pool = super::super::model::MnemonicPool::default();
-        let listed = decode_one_listing(&sleigh, 0x1000, &ram, true, true, &mut |text| {
-            pool.intern(text)
-        }, None)
+        let listed = decode_one_listing(
+            &sleigh,
+            0x1000,
+            &ram,
+            true,
+            true,
+            &mut |text| pool.intern(text),
+            None,
+        )
         .unwrap();
         assert_eq!(listed.len, decoded.len);
         assert_eq!(listed.mnemonic.as_str(), decoded.mnemonic.as_str());
@@ -510,17 +545,29 @@ mod tests {
         let (sleigh, ram, reads) = x86_with(&[0x68, 0x00, 0x20, 0x00, 0x00], false);
         let decoded = decode_one(&sleigh, 0x1000, &ram, true, true).unwrap();
         assert_eq!(decoded.mnemonic, "PUSH");
-        assert_eq!(reads.get(), 1, "SLEIGH should share the p-code parse with text rendering");
+        assert_eq!(
+            reads.get(),
+            1,
+            "SLEIGH should share the p-code parse with text rendering"
+        );
 
         let (sleigh, ram, reads) = x86_with(&[0x68, 0x00, 0x20, 0x00, 0x00], false);
         let decoded = decode_one(&sleigh, 0x1000, &ram, false, true).unwrap();
         assert!(decoded.mnemonic.is_empty());
         assert!(decoded.operands.is_empty());
-        assert_eq!(reads.get(), 1, "assembly-disabled capture should only lift once");
+        assert_eq!(
+            reads.get(),
+            1,
+            "assembly-disabled capture should only lift once"
+        );
 
         let (sleigh, ram, reads) = x86_with(&[0x68, 0x00, 0x20, 0x00, 0x00], true);
         assert!(decode_one(&sleigh, 0x1000, &ram, true, true).is_err());
-        assert_eq!(reads.get(), 1, "a failed lift must not attempt assembly capture");
+        assert_eq!(
+            reads.get(),
+            1,
+            "a failed lift must not attempt assembly capture"
+        );
     }
 
     #[test]
@@ -538,6 +585,10 @@ mod tests {
         assert!(decoded.mnemonic.is_empty());
         assert!(decoded.operands.is_empty());
         assert_eq!(calls.get(), 1);
-        assert_eq!(reads.get(), 1, "the generic fallback must not reparse after failed rendering");
+        assert_eq!(
+            reads.get(),
+            1,
+            "the generic fallback must not reparse after failed rendering"
+        );
     }
 }

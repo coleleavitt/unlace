@@ -51,8 +51,14 @@ fn explicit_extended_prototypes_round_trip_through_native_i386_calls() {
     let specs = common::repo_root().join("specs");
     let mut code = String::new();
     for (name, prototype) in [
-        ("sample", "prototype sample long double sample(long double input)"),
-        ("sample_choice", "prototype sample_choice long double sample_choice(int choice,long double left,long double right)"),
+        (
+            "sample",
+            "prototype sample long double sample(long double input)",
+        ),
+        (
+            "sample_choice",
+            "prototype sample_choice long double sample_choice(int choice,long double left,long double right)",
+        ),
     ] {
         let (body, error, status) = common::run_kuna(&[
             "decompile",

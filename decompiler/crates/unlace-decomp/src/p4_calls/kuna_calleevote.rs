@@ -34,7 +34,7 @@ use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::context::VarnodeId;
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::infra::architecture::Architecture;
 
@@ -88,10 +88,13 @@ impl OptionCalleeVote {
             other => {
                 return Err(unlace_base::error::KunaError::parse(format!(
                     "Unknown calleevote value: {other} (expected off|types|fields)"
-                )))
+                )));
             }
         };
-        Ok((mode, format!("Caller-to-callee parameter typing set to {}", mode.as_str())))
+        Ok((
+            mode,
+            format!("Caller-to-callee parameter typing set to {}", mode.as_str()),
+        ))
     }
 }
 
@@ -136,7 +139,9 @@ pub struct CallerTypes {
 impl CallerTypes {
     /// The statement for an input in exactly this storage.
     pub fn at(&self, addr: &Address, size: int4) -> Option<&Typed> {
-        self.inputs.iter().find(|t| t.size == size && &t.addr == addr)
+        self.inputs
+            .iter()
+            .find(|t| t.size == size && &t.addr == addr)
     }
 }
 
@@ -225,9 +230,17 @@ impl Ledger {
         let names_one = |t: &Typed| crate::kuna_protoorder::names_type(&t.ct, names);
         for stated in self.stated.values_mut() {
             if stated.inputs.iter().any(names_one) {
-                let inputs: Vec<Typed> = stated.inputs.iter().filter(|t| !names_one(t)).cloned().collect();
+                let inputs: Vec<Typed> = stated
+                    .inputs
+                    .iter()
+                    .filter(|t| !names_one(t))
+                    .cloned()
+                    .collect();
                 let pointers_only = stated.pointers_only && inputs.iter().any(|t| t.by_class);
-                *stated = Rc::new(CallerTypes { inputs, pointers_only });
+                *stated = Rc::new(CallerTypes {
+                    inputs,
+                    pointers_only,
+                });
             }
         }
         self.stated.retain(|_, stated| !stated.inputs.is_empty());
@@ -236,7 +249,8 @@ impl Ledger {
 
 /// Is `ct` a pointer to a pointer?
 fn points_at_a_pointer(ct: &Datatype) -> bool {
-    ct.get_ptr_to().is_some_and(|p| p.get_metatype() == type_metatype::TYPE_PTR)
+    ct.get_ptr_to()
+        .is_some_and(|p| p.get_metatype() == type_metatype::TYPE_PTR)
 }
 
 /// Is `ct` a pointer to the `go.typedesc` shell (the `internal/abi.Type` base
@@ -257,7 +271,8 @@ fn points_at_a_pointer(ct: &Datatype) -> bool {
 /// shell is refused.) Measured on the vet corpus: 19 functions commit a
 /// `go.typedesc *` parameter, every one wrong, with no legitimate use.
 pub(crate) fn is_go_typedesc_pointer(ct: &Datatype) -> bool {
-    ct.get_ptr_to().is_some_and(|p| p.get_name() == "go.typedesc")
+    ct.get_ptr_to()
+        .is_some_and(|p| p.get_name() == "go.typedesc")
 }
 
 fn key_of(a: &Address) -> Option<(int4, uintb)> {
@@ -272,13 +287,19 @@ pub fn committed(ct: &Datatype) -> bool {
     if ct.get_metatype() != type_metatype::TYPE_PTR {
         return false;
     }
-    let Some(pt) = ct.get_ptr_to() else { return false };
+    let Some(pt) = ct.get_ptr_to() else {
+        return false;
+    };
     match pt.get_metatype() {
         type_metatype::TYPE_STRUCT | type_metatype::TYPE_UNION => {
             !pt.get_name().is_empty() && !pt.is_incomplete()
         }
-        type_metatype::TYPE_INT | type_metatype::TYPE_UINT => pt.get_size() == 1 && pt.is_char_print(),
-        type_metatype::TYPE_PTR => pt.get_ptr_to().is_some_and(|c| c.get_size() == 1 && c.is_char_print()),
+        type_metatype::TYPE_INT | type_metatype::TYPE_UINT => {
+            pt.get_size() == 1 && pt.is_char_print()
+        }
+        type_metatype::TYPE_PTR => pt
+            .get_ptr_to()
+            .is_some_and(|c| c.get_size() == 1 && c.is_char_print()),
         _ => false,
     }
 }
@@ -300,7 +321,10 @@ pub fn uncommitted_under(ct: &Datatype, ptr_size: int4, headless: bool) -> bool 
     match ct.get_metatype() {
         type_metatype::TYPE_PTR => {
             ct.get_ptr_to().is_some_and(|p| {
-                matches!(p.get_metatype(), type_metatype::TYPE_VOID | type_metatype::TYPE_UNKNOWN)
+                matches!(
+                    p.get_metatype(),
+                    type_metatype::TYPE_VOID | type_metatype::TYPE_UNKNOWN
+                )
             }) || crate::kuna_structsynth::points_at_lone_record(ct)
                 || (headless && crate::kuna_structsynth::points_at_headless_record(ct))
         }
@@ -334,7 +358,10 @@ fn same_but_character_sign(a: &Datatype, b: &Datatype) -> bool {
         (None, None) => [a, b].iter().all(|t| {
             t.get_size() == 1
                 && t.is_char_print()
-                && matches!(t.get_metatype(), type_metatype::TYPE_INT | type_metatype::TYPE_UINT)
+                && matches!(
+                    t.get_metatype(),
+                    type_metatype::TYPE_INT | type_metatype::TYPE_UINT
+                )
         }),
         _ => false,
     }
@@ -351,9 +378,16 @@ fn points_at_plain_char(ct: &Datatype) -> bool {
 /// Is `ct`, the type the function input `vn` carries, the one its callers
 /// stated for it?
 pub fn took_stated_type(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
-    let Some(stated) = data.kuna_calleevote_inputs() else { return false };
-    let Some(v) = data.vbank().get(vn) else { return false };
-    v.is_input() && stated.at(v.get_addr(), v.get_size()).is_some_and(|t| same_type(&t.ct, ct))
+    let Some(stated) = data.kuna_calleevote_inputs() else {
+        return false;
+    };
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
+    v.is_input()
+        && stated
+            .at(v.get_addr(), v.get_size())
+            .is_some_and(|t| same_type(&t.ct, ct))
 }
 
 /// Record a finished decompile: every direct call it makes, replacing what an
@@ -365,17 +399,27 @@ pub fn took_stated_type(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
 pub fn record(arch: &mut Architecture, entry: &Address, fd: &mut Funcdata) {
     let Some(me) = key_of(entry) else { return };
     let prove = arch.caller_ptr;
-    let own = if arch.kuna_calleevote.own.contains_key(&me) { None } else { own_params(arch, entry, fd) };
+    let own = if arch.kuna_calleevote.own.contains_key(&me) {
+        None
+    } else {
+        own_params(arch, entry, fd)
+    };
     let mut calls: Vec<(Address, CallSite)> = Vec::new();
     for i in 0..fd.num_calls() {
         let (callee, op, storage) = {
             let fc = fd.get_call_specs(i);
-            (fc.get_entry_address().clone(), fc.get_op(), fc.final_input_storage().to_vec())
+            (
+                fc.get_entry_address().clone(),
+                fc.get_op(),
+                fc.final_input_storage().to_vec(),
+            )
         };
         if callee.is_invalid() {
             continue;
         }
-        let Some(o) = fd.obank().get(op) else { continue };
+        let Some(o) = fd.obank().get(op) else {
+            continue;
+        };
         if o.code() != OpCode::CPUI_CALL {
             continue;
         }
@@ -387,17 +431,38 @@ pub fn record(arch: &mut Architecture, entry: &Address, fd: &mut Funcdata) {
                 args.push(None);
                 continue;
             };
-            let ct = fd.high_get_type(vn).or_else(|| fd.vbank().get(vn).map(|v| Rc::clone(v.get_type())));
-            let null = fd.vbank().get(vn).is_some_and(|v| v.is_constant() && v.get_offset() == 0);
+            let ct = fd
+                .high_get_type(vn)
+                .or_else(|| fd.vbank().get(vn).map(|v| Rc::clone(v.get_type())));
+            let null = fd
+                .vbank()
+                .get(vn)
+                .is_some_and(|v| v.is_constant() && v.get_offset() == 0);
             args.push(ct.map(|ct| {
-                let frame = points_at_a_pointer(&ct) && crate::kuna_protoorder::addresses_a_frame_object(fd, vn);
+                let frame = points_at_a_pointer(&ct)
+                    && crate::kuna_protoorder::addresses_a_frame_object(fd, vn);
                 let proven = prove
                     && ct.get_metatype() == type_metatype::TYPE_PTR
                     && crate::kuna_callerptr::provably_a_pointer(fd, vn);
-                Typed { addr, size, ct, frame, null, proven, by_class: false }
+                Typed {
+                    addr,
+                    size,
+                    ct,
+                    frame,
+                    null,
+                    proven,
+                    by_class: false,
+                }
             }));
         }
-        calls.push((callee, CallSite { caller: me.1, at, args }));
+        calls.push((
+            callee,
+            CallSite {
+                caller: me.1,
+                at,
+                args,
+            },
+        ));
     }
     let ledger = &mut arch.kuna_calleevote;
     for sites in ledger.sites.values_mut() {
@@ -418,7 +483,11 @@ pub fn record(arch: &mut Architecture, entry: &Address, fd: &mut Funcdata) {
 /// slots are not its parameters, and a hidden or `this` parameter moves the
 /// slot numbering.
 fn own_params(arch: &Architecture, entry: &Address, fd: &Funcdata) -> Option<Vec<Typed>> {
-    if arch.symboltab.function_proto_pieces_across_scopes(entry).is_some() {
+    if arch
+        .symboltab
+        .function_proto_pieces_across_scopes(entry)
+        .is_some()
+    {
         return None;
     }
     let proto = fd.get_func_proto();
@@ -428,14 +497,26 @@ fn own_params(arch: &Architecture, entry: &Address, fd: &Funcdata) -> Option<Vec
     let mut out = Vec::new();
     for i in 0..proto.num_params() {
         let p = proto.get_param(i)?;
-        if p.is_hidden_return() || p.is_indirect_storage() || p.is_this_pointer() || p.is_type_locked() {
+        if p.is_hidden_return()
+            || p.is_indirect_storage()
+            || p.is_this_pointer()
+            || p.is_type_locked()
+        {
             return None;
         }
         let addr = p.get_address();
         if addr.is_invalid() || p.get_size() <= 0 {
             return None;
         }
-        out.push(Typed { addr, size: p.get_size(), ct: Rc::clone(p.get_type()?), frame: false, null: false, proven: false, by_class: false });
+        out.push(Typed {
+            addr,
+            size: p.get_size(),
+            ct: Rc::clone(p.get_type()?),
+            frame: false,
+            null: false,
+            proven: false,
+            by_class: false,
+        });
     }
     Some(out)
 }
@@ -457,7 +538,13 @@ pub fn decide(
     let ptr_size = arch.types().get_size_of_pointer();
     let headless = arch.struct_headless.fires();
     let pointers = crate::kuna_callerptr::void_pointer(arch);
-    let decided = decide_ledger_with(&arch.kuna_calleevote, ptr_size, headless, pointers.as_ref(), expected);
+    let decided = decide_ledger_with(
+        &arch.kuna_calleevote,
+        ptr_size,
+        headless,
+        pointers.as_ref(),
+        expected,
+    );
     let changed = decided.iter().map(|(k, _)| *k).collect();
     for (key, stated) in decided {
         arch.kuna_calleevote.stated.insert(key, Rc::new(stated));
@@ -500,16 +587,27 @@ pub fn decide_ledger_with(
     keys.sort_unstable();
     for key in keys {
         let own = &ledger.own[key];
-        if !own.iter().any(|p| uncommitted_under(&p.ct, ptr_size, headless)) {
+        if !own
+            .iter()
+            .any(|p| uncommitted_under(&p.ct, ptr_size, headless))
+        {
             continue;
         }
         let trace = trace();
         let Some(mut want) = expected(*key) else {
-            if trace { eprintln!("[calleevote] 0x{:x} escapes", key.1); }
+            if trace {
+                eprintln!("[calleevote] 0x{:x} escapes", key.1);
+            }
             continue;
         };
         let Some(sites) = ledger.sites.get(key) else {
-            if trace { eprintln!("[calleevote] 0x{:x} no recorded calls (want {})", key.1, want.len()); }
+            if trace {
+                eprintln!(
+                    "[calleevote] 0x{:x} no recorded calls (want {})",
+                    key.1,
+                    want.len()
+                );
+            }
             continue;
         };
         let sites: Vec<&CallSite> = sites.iter().filter(|s| s.caller != key.1).collect();
@@ -518,7 +616,12 @@ pub fn decide_ledger_with(
         want.dedup();
         got.sort_unstable();
         if got.is_empty() || got != want {
-            if trace { eprintln!("[calleevote] 0x{:x} calls differ: recorded {:x?} graph {:x?}", key.1, got, want); }
+            if trace {
+                eprintln!(
+                    "[calleevote] 0x{:x} calls differ: recorded {:x?} graph {:x?}",
+                    key.1, got, want
+                );
+            }
             continue;
         }
         let mut inputs: Vec<Typed> = Vec::new();
@@ -530,7 +633,9 @@ pub fn decide_ledger_with(
             let mut frame = false;
             let mut mixed = false;
             let all = sites.iter().all(|s| {
-                let Some(Some(a)) = s.args.get(j) else { return false };
+                let Some(Some(a)) = s.args.get(j) else {
+                    return false;
+                };
                 if a.addr != p.addr || a.size != p.size || !committed(&a.ct) {
                     return false;
                 }
@@ -553,56 +658,95 @@ pub fn decide_ledger_with(
             });
             let all = all && !(mixed && !agreed.as_deref().is_some_and(points_at_plain_char));
             if trace {
-                let seen: Vec<String> = sites.iter().map(|s| match s.args.get(j) {
-                    Some(Some(a)) => {
-                        format!(
-                            "{}@{:x}:{}{}{}{}",
-                            spell(&a.ct),
-                            a.addr.get_offset(),
-                            a.size,
-                            if a.frame { " frame" } else { "" },
-                            if a.null { " null" } else { "" },
-                            if a.proven { " proven" } else { "" }
-                        )
-                    }
-                    Some(None) => "unread".into(),
-                    None => "absent".into(),
-                }).collect();
-                eprintln!("[calleevote] 0x{:x} param {j} ({}@{:x}:{}) callers {:?} -> {}", key.1, spell(&p.ct), p.addr.get_offset(), p.size, seen, all && agreed.is_some());
+                let seen: Vec<String> = sites
+                    .iter()
+                    .map(|s| match s.args.get(j) {
+                        Some(Some(a)) => {
+                            format!(
+                                "{}@{:x}:{}{}{}{}",
+                                spell(&a.ct),
+                                a.addr.get_offset(),
+                                a.size,
+                                if a.frame { " frame" } else { "" },
+                                if a.null { " null" } else { "" },
+                                if a.proven { " proven" } else { "" }
+                            )
+                        }
+                        Some(None) => "unread".into(),
+                        None => "absent".into(),
+                    })
+                    .collect();
+                eprintln!(
+                    "[calleevote] 0x{:x} param {j} ({}@{:x}:{}) callers {:?} -> {}",
+                    key.1,
+                    spell(&p.ct),
+                    p.addr.get_offset(),
+                    p.size,
+                    seen,
+                    all && agreed.is_some()
+                );
             }
-            match (all, agreed) { (true, Some(ct)) => {
-                if uncommitted(&p.ct, ptr_size) || crate::kuna_structheadless::gives_a_pointee(&ct) {
-                    inputs.push(Typed { addr: p.addr.clone(), size: p.size, ct, frame, null: false, proven: false, by_class: false });
+            match (all, agreed) {
+                (true, Some(ct)) => {
+                    if uncommitted(&p.ct, ptr_size)
+                        || crate::kuna_structheadless::gives_a_pointee(&ct)
+                    {
+                        inputs.push(Typed {
+                            addr: p.addr.clone(),
+                            size: p.size,
+                            ct,
+                            frame,
+                            null: false,
+                            proven: false,
+                            by_class: false,
+                        });
+                    }
                 }
-            } _ => if let Some(void_ptr) = pointers {
-                if let Some(t) = crate::kuna_callerptr::pointer_vote(&sites, j, p, void_ptr) {
-                    inputs.push(t);
+                _ => {
+                    if let Some(void_ptr) = pointers {
+                        if let Some(t) = crate::kuna_callerptr::pointer_vote(&sites, j, p, void_ptr)
+                        {
+                            inputs.push(t);
+                        }
+                    }
                 }
-            }}
+            }
         }
         if inputs.is_empty() {
             continue;
         }
         let noop = inputs.iter().all(|t| {
-            own.iter().any(|p| p.addr == t.addr && p.size == t.size && same_type(&p.ct, &t.ct))
+            own.iter()
+                .any(|p| p.addr == t.addr && p.size == t.size && same_type(&p.ct, &t.ct))
         });
         if noop && !ledger.stated.contains_key(key) {
             continue;
         }
-        let unchanged = ledger.stated.get(key).is_some_and(|old| {
-            old.inputs.len() == inputs.len()
-                && old.inputs.iter().zip(&inputs).all(|(a, b)| {
-                    a.addr == b.addr && a.frame == b.frame && same_type(&a.ct, &b.ct)
-                })
-        });
-        if !unchanged {
-            let pointers_only = inputs.iter().any(|t| t.by_class) && inputs.iter().filter(|t| !t.by_class).all(|t| {
-                own.iter().any(|p| p.addr == t.addr && p.size == t.size && same_type(&p.ct, &t.ct))
-                    || ledger.stated.get(key).is_some_and(|old| {
-                        old.inputs.iter().any(|o| o.addr == t.addr && o.frame == t.frame && same_type(&o.ct, &t.ct))
+        let unchanged =
+            ledger.stated.get(key).is_some_and(|old| {
+                old.inputs.len() == inputs.len()
+                    && old.inputs.iter().zip(&inputs).all(|(a, b)| {
+                        a.addr == b.addr && a.frame == b.frame && same_type(&a.ct, &b.ct)
                     })
             });
-            decided.push((*key, CallerTypes { inputs, pointers_only }));
+        if !unchanged {
+            let pointers_only = inputs.iter().any(|t| t.by_class)
+                && inputs.iter().filter(|t| !t.by_class).all(|t| {
+                    own.iter()
+                        .any(|p| p.addr == t.addr && p.size == t.size && same_type(&p.ct, &t.ct))
+                        || ledger.stated.get(key).is_some_and(|old| {
+                            old.inputs.iter().any(|o| {
+                                o.addr == t.addr && o.frame == t.frame && same_type(&o.ct, &t.ct)
+                            })
+                        })
+                });
+            decided.push((
+                *key,
+                CallerTypes {
+                    inputs,
+                    pointers_only,
+                },
+            ));
         }
     }
     decided
@@ -640,7 +784,9 @@ pub fn seed(arch: &Architecture, data: &mut Funcdata) {
     if !arch.calleevote.is_on() {
         return;
     }
-    let Some(key) = key_of(data.get_address()) else { return };
+    let Some(key) = key_of(data.get_address()) else {
+        return;
+    };
     let ledger = &arch.kuna_calleevote;
     if let Some(stated) = ledger.stated.get(&key) {
         data.kuna_set_calleevote_inputs(Some(Rc::clone(stated)));
@@ -674,7 +820,11 @@ pub fn input_vote(data: &Funcdata, vn: VarnodeId, ct: &Rc<Datatype>) -> Option<R
     if is_go_typedesc_pointer(&want.ct) {
         return None;
     }
-    let ptr_size = data.get_arch().types().map(|t| t.get_size_of_pointer()).unwrap_or(8);
+    let ptr_size = data
+        .get_arch()
+        .types()
+        .map(|t| t.get_size_of_pointer())
+        .unwrap_or(8);
     let open = uncommitted(ct, ptr_size)
         || (uncommitted_under(ct, ptr_size, data.get_arch().struct_headless.fires())
             && crate::kuna_structheadless::gives_a_pointee(&want.ct));
@@ -712,7 +862,10 @@ const DERIVED_BUDGET: usize = 2048;
 /// (`kuna_charptr::constant_is_string`), or adds the negation of one to
 /// (`p - (long)table`). A walk that runs out of [`DERIVED_BUDGET`] refuses too.
 pub(crate) fn prints_a_table_as_a_literal(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
-    if !ct.get_ptr_to().is_some_and(|p| p.get_size() == 1 && p.is_char_print()) {
+    if !ct
+        .get_ptr_to()
+        .is_some_and(|p| p.get_size() == 1 && p.is_char_print())
+    {
         return false;
     }
     let family = crate::kuna_protoorder::value_family(data, vn);
@@ -722,10 +875,21 @@ pub(crate) fn prints_a_table_as_a_literal(data: &Funcdata, vn: VarnodeId, ct: &D
 /// Does some member of `family` take a non-zero constant: copied from one, or
 /// the engine's `PTRSUB` off the constant zero?
 fn merged_with_a_constant(data: &Funcdata, family: &[VarnodeId]) -> bool {
-    let nonzero = |v: Option<VarnodeId>| v.and_then(|v| data.vbank().get(v)).is_some_and(|c| c.is_constant() && c.get_offset() != 0);
-    let zero = |v: Option<VarnodeId>| v.and_then(|v| data.vbank().get(v)).is_some_and(|c| c.is_constant() && c.get_offset() == 0);
+    let nonzero = |v: Option<VarnodeId>| {
+        v.and_then(|v| data.vbank().get(v))
+            .is_some_and(|c| c.is_constant() && c.get_offset() != 0)
+    };
+    let zero = |v: Option<VarnodeId>| {
+        v.and_then(|v| data.vbank().get(v))
+            .is_some_and(|c| c.is_constant() && c.get_offset() == 0)
+    };
     family.iter().any(|&v| {
-        let Some(def) = data.vbank().get(v).and_then(|n| n.get_def()).and_then(|d| data.obank().get(d)) else {
+        let Some(def) = data
+            .vbank()
+            .get(v)
+            .and_then(|n| n.get_def())
+            .and_then(|d| data.obank().get(d))
+        else {
             return false;
         };
         match def.code() {
@@ -741,18 +905,27 @@ fn merged_with_a_constant(data: &Funcdata, family: &[VarnodeId]) -> bool {
 /// string literal kuna recovered?
 fn table_address(data: &Funcdata, op: crate::context::OpId, off: uintb, size: int4) -> bool {
     let glb = data.get_arch();
-    let Some(spc) = glb.manage().get_default_data_space() else { return false };
+    let Some(spc) = glb.manage().get_default_data_space() else {
+        return false;
+    };
     if off < spc.get_pointer_lower_bound() || off > spc.get_pointer_upper_bound() {
         return false;
     }
     if crate::p5_types::kuna_charptr::value_is_string(data, op, off, size) {
         return false;
     }
-    let Some(point) = data.obank().get(op).map(|o| o.get_addr().clone()) else { return false };
+    let Some(point) = data.obank().get(op).map(|o| o.get_addr().clone()) else {
+        return false;
+    };
     let mut full = 0;
-    glb.resolve_constant(spc, off, size, &point, &mut full).ok().filter(|a| !a.is_invalid()).is_some_and(|ram| {
-        glb.query_global_properties(&ram, 1, &Address::new_invalid()) & crate::varnode::varnode_flags::readonly != 0
-    })
+    glb.resolve_constant(spc, off, size, &point, &mut full)
+        .ok()
+        .filter(|a| !a.is_invalid())
+        .is_some_and(|ram| {
+            glb.query_global_properties(&ram, 1, &Address::new_invalid())
+                & crate::varnode::varnode_flags::readonly
+                != 0
+        })
 }
 
 /// Is a member of `family`, or an address derived from one, compared with,
@@ -769,7 +942,11 @@ fn meets_an_address_constant(data: &Funcdata, family: &[VarnodeId]) -> bool {
             node.get_def()
                 .and_then(|d| data.obank().get(d))
                 .filter(|o| o.code() == OpCode::CPUI_PTRSUB)
-                .filter(|o| o.get_in(0).and_then(|b| data.vbank().get(b)).is_some_and(|b| b.is_constant() && b.get_offset() == 0))
+                .filter(|o| {
+                    o.get_in(0)
+                        .and_then(|b| data.vbank().get(b))
+                        .is_some_and(|b| b.is_constant() && b.get_offset() == 0)
+                })
                 .and_then(|o| o.get_in(1))
                 .and_then(|c| data.vbank().get(c))
                 .filter(|c| c.is_constant())?
@@ -782,14 +959,28 @@ fn meets_an_address_constant(data: &Funcdata, family: &[VarnodeId]) -> bool {
         if seen.len() > DERIVED_BUDGET {
             return true;
         }
-        let Some(node) = data.vbank().get(v) else { continue };
+        let Some(node) = data.vbank().get(v) else {
+            continue;
+        };
         for r in node.descend_iter() {
-            let Some(o) = data.obank().get(r) else { continue };
-            let other = if o.get_in(0) == Some(v) { o.get_in(1) } else { o.get_in(0) };
+            let Some(o) = data.obank().get(r) else {
+                continue;
+            };
+            let other = if o.get_in(0) == Some(v) {
+                o.get_in(1)
+            } else {
+                o.get_in(0)
+            };
             let meets = |negated: bool| {
                 constant_of(other).is_some_and(|(off, size)| {
                     table_address(data, r, off, size)
-                        || (negated && table_address(data, r, off.wrapping_neg() & unlace_base::address::calc_mask(size), size))
+                        || (negated
+                            && table_address(
+                                data,
+                                r,
+                                off.wrapping_neg() & unlace_base::address::calc_mask(size),
+                                size,
+                            ))
                 })
             };
             let carries = match o.code() {
@@ -814,9 +1005,14 @@ fn meets_an_address_constant(data: &Funcdata, family: &[VarnodeId]) -> bool {
                     if meets(false) {
                         return true;
                     }
-                    o.get_in(0) == Some(v) && other.and_then(|c| data.vbank().get(c)).is_some_and(|c| c.is_constant())
+                    o.get_in(0) == Some(v)
+                        && other
+                            .and_then(|c| data.vbank().get(c))
+                            .is_some_and(|c| c.is_constant())
                 }
-                OpCode::CPUI_PTRADD | OpCode::CPUI_PTRSUB | OpCode::CPUI_INDIRECT => o.get_in(0) == Some(v),
+                OpCode::CPUI_PTRADD | OpCode::CPUI_PTRSUB | OpCode::CPUI_INDIRECT => {
+                    o.get_in(0) == Some(v)
+                }
                 OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_MULTIEQUAL => true,
                 _ => false,
             };

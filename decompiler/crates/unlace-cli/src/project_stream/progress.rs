@@ -11,19 +11,19 @@
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use unlace_console::engine::ConsoleProgram;
-use unlace_console::project::{render_c, AsmPhase, FuncResult, ReadmeFacts, StreamPhase};
+use unlace_console::project::{AsmPhase, FuncResult, ReadmeFacts, StreamPhase, render_c};
 
 use super::{
-    create, index_line, write_atomic, Layout, StreamRun, CLOCK_GRANULARITY, INDEX_FILE,
-    README_EVERY, STATUS_FILE, TICK,
+    CLOCK_GRANULARITY, INDEX_FILE, Layout, README_EVERY, STATUS_FILE, StreamRun, TICK, create,
+    index_line, write_atomic,
 };
-use crate::decompile_all::{load_program, Args, DriverDefaults};
-use crate::decompile_project::{decompile_project, ExportWatch, ProjectCompletion};
+use crate::decompile_all::{Args, DriverDefaults, load_program};
+use crate::decompile_project::{ExportWatch, ProjectCompletion, decompile_project};
 use crate::jobs::PoolWatch;
 
 /// The export, watched; `.streaming` is removed once every artifact is final.
@@ -33,10 +33,16 @@ pub(super) fn export(
     layout: &Layout,
     run: &StreamRun,
 ) -> Result<ProjectCompletion, String> {
-    let watch = ProgressWatch { run, layout, readme_gate: Mutex::new(()), feed: Mutex::new(Feed::default()) };
+    let watch = ProgressWatch {
+        run,
+        layout,
+        readme_gate: Mutex::new(()),
+        feed: Mutex::new(Feed::default()),
+    };
     let completion = watch.with_clock(|| decompile_project(args, output, Some(&watch)))?;
     let status = run.dir.join(STATUS_FILE);
-    std::fs::remove_file(&status).map_err(|e| format!("cannot remove {}: {e}", status.display()))?;
+    std::fs::remove_file(&status)
+        .map_err(|e| format!("cannot remove {}: {e}", status.display()))?;
     Ok(completion)
 }
 
@@ -105,7 +111,11 @@ impl ProgressWatch<'_> {
     fn open_feed(&self) -> Result<(), String> {
         let name = &self.layout.file_name;
         self.run.artifacts.store(true, Ordering::SeqCst);
-        for artifact in [format!("{name}.c"), format!("{name}.h"), format!("{name}.asm")] {
+        for artifact in [
+            format!("{name}.c"),
+            format!("{name}.h"),
+            format!("{name}.asm"),
+        ] {
             let path = self.run.dir.join(artifact);
             match std::fs::remove_file(&path) {
                 Ok(()) => {}
@@ -114,7 +124,10 @@ impl ProgressWatch<'_> {
             }
         }
         let file = create(&self.run.dir.join(INDEX_FILE))?;
-        *self.feed.lock().unwrap_or_else(|e| e.into_inner()) = Feed { file: Some(file), seq: 0 };
+        *self.feed.lock().unwrap_or_else(|e| e.into_inner()) = Feed {
+            file: Some(file),
+            seq: 0,
+        };
         Ok(())
     }
 

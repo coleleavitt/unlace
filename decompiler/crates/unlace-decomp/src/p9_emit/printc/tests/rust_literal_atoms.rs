@@ -1,11 +1,11 @@
 use super::*;
 use crate::context::{ArchContext, TypeOp};
 use crate::printlanguage::{Atom, SyntaxHighlight as Highlight, TagType};
+use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
-use std::rc::Rc;
 
 fn render(tag: TagType, highlight: Highlight, value: &str) -> String {
     let mut print = PrintC::new();

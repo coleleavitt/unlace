@@ -5,12 +5,12 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
-use unlace_base::space::{spacetype, AddrSpaceManager};
+use unlace_base::space::{AddrSpaceManager, spacetype};
 
-use crate::dtype::{type_class, TypeFactory};
+use crate::dtype::{TypeFactory, type_class};
 use crate::fspec::{
-    parameter_pieces_flags, AssignActionResponse, ParamListStandard, ParameterPieces,
-    PrototypePieces,
+    AssignActionResponse, ParamListStandard, ParameterPieces, PrototypePieces,
+    parameter_pieces_flags,
 };
 
 #[derive(Clone)]

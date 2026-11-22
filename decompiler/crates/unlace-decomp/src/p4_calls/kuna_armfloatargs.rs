@@ -1,9 +1,9 @@
 //! Scalar VFP input recovery from typed reads and proven callee contracts.
 
-use crate::action::{ruleflags, Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
+use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult, ruleflags};
 use crate::{
     context::VarnodeId,
-    dtype::{type_class, type_metatype, Datatype},
+    dtype::{Datatype, type_class, type_metatype},
     fspec::{FuncCallSpecs, ParameterPieces, PrototypePieces},
     funcdata::Funcdata,
     infra::architecture::Architecture,
@@ -220,7 +220,11 @@ pub fn written_inputs(call: &FuncCallSpecs, data: &Funcdata) -> Vec<(Address, i3
 /// contract skips is dropped. Another unstated input goes only where the callee
 /// neither reads nor forwards it. A stated input the scoring released and the
 /// callee reads, or one held in part, leaves the call as recovered.
-pub fn cap_stated_inputs(call: &mut FuncCallSpecs, data: &mut Funcdata, written: &[(Address, i32)]) {
+pub fn cap_stated_inputs(
+    call: &mut FuncCallSpecs,
+    data: &mut Funcdata,
+    written: &[(Address, i32)],
+) {
     if !data.get_arch().arm_float_args || call.is_input_locked() || !call.proto().has_model() {
         return;
     }
@@ -301,7 +305,9 @@ fn plan_stated_inputs(
     written: &[(Address, i32)],
 ) -> Option<StatedPlan> {
     let entry = call.get_entry_address().clone();
-    let stated = data.kuna_protoorder_types(&entry).filter(|s| s.arity_sound)?;
+    let stated = data
+        .kuna_protoorder_types(&entry)
+        .filter(|s| s.arity_sound)?;
     let entries = call.proto().model().input().get_entry();
     let vfp = |addr: &Address, size: i32| {
         entries.iter().any(|e| {
@@ -389,7 +395,14 @@ fn plan_stated_inputs(
         } else {
             return None;
         };
-        Some(WordJoin { lo, hi, addr: addr.clone(), size, entry: entry_of(addr, size)?, zero })
+        Some(WordJoin {
+            lo,
+            hi,
+            addr: addr.clone(),
+            size,
+            entry: entry_of(addr, size)?,
+            zero,
+        })
     };
     let pairs: Vec<WordJoin> = wanted.iter().filter_map(|(a, s)| words(a, *s)).collect();
     let taken = |i: i32| {
@@ -462,8 +475,9 @@ fn plan_stated_inputs(
                 zeros.push(*i);
             } else if let [Some(lo), Some(hi)] = parts.as_slice() {
                 let half = size / 2;
-                let unread =
-                    |vn: VarnodeId, at: &Address| leftover(vn) && never_reads(data, &entry, at, half);
+                let unread = |vn: VarnodeId, at: &Address| {
+                    leftover(vn) && never_reads(data, &entry, at, half)
+                };
                 let mask = [unread(*lo, addr), unread(*hi, &(addr + i64::from(half)))];
                 if mask[0] != mask[1] {
                     halves.push((*i, mask));
@@ -493,7 +507,15 @@ fn plan_stated_inputs(
             },
         }
     }
-    Some(StatedPlan { drop, bind, zeros, halves, joins, missing, partial })
+    Some(StatedPlan {
+        drop,
+        bind,
+        zeros,
+        halves,
+        joins,
+        missing,
+        partial,
+    })
 }
 
 /// Does the callee's body read the high word of a d-register parameter slot
@@ -510,7 +532,11 @@ fn reads_unstated(
         .filter(|e| e.get_type() == type_class::TYPECLASS_FLOAT && e.get_size() == 4)
         .map(|e| Address::new(e.get_space().clone(), e.get_base()))
         .collect();
-    let stated = |w: &Address| inputs.iter().any(|(a, s, _)| a.justified_contain(*s, w, 4, false) >= 0);
+    let stated = |w: &Address| {
+        inputs
+            .iter()
+            .any(|(a, s, _)| a.justified_contain(*s, w, 4, false) >= 0)
+    };
     singles.chunks_exact(2).any(|pair| {
         let (lo, hi) = (&pair[0], &pair[1]);
         dead.proves_read(hi, 4) && !stated(hi) && !dead.proves_read(lo, 4) && !stated(lo)
@@ -571,9 +597,11 @@ fn result_written(
     let start = addr.get_offset().max(out.get_offset());
     let end = (addr.get_offset() + size as u64).min(out.get_offset() + *out_size as u64);
     start >= end
-        || dead.proves_dead_firmly(&(addr + (start - addr.get_offset()) as i64), (end - start) as i32)
+        || dead.proves_dead_firmly(
+            &(addr + (start - addr.get_offset()) as i64),
+            (end - start) as i32,
+        )
 }
-
 
 /// Pass a stated double held as two word trials as one argument: a PIECE of
 /// the two words, or zero for a double the callee ignores, takes the low word's
@@ -582,7 +610,10 @@ fn join_words(call: &mut FuncCallSpecs, data: &mut Funcdata, join: &WordJoin) {
     let op = call.get_op();
     let (lo_slot, hi_slot) = {
         let active = call.active_input();
-        (active.get_trial(join.lo).get_slot(), active.get_trial(join.hi).get_slot())
+        (
+            active.get_trial(join.lo).get_slot(),
+            active.get_trial(join.hi).get_slot(),
+        )
     };
     let Some(call_op) = data.obank().get(op) else {
         return;
@@ -617,16 +648,26 @@ fn zero_halves(call: &FuncCallSpecs, data: &mut Funcdata, i: i32, mask: [bool; 2
     let Some(vn) = data.obank().get(op).and_then(|o| o.get_in(slot)) else {
         return;
     };
-    let Some((size, big)) =
-        data.vbank().get(vn).map(|v| (v.get_size(), v.get_addr().is_big_endian()))
+    let Some((size, big)) = data
+        .vbank()
+        .get(vn)
+        .map(|v| (v.get_size(), v.get_addr().is_big_endian()))
     else {
         return;
     };
     let [Some(lo), Some(hi)] = pieces(data, vn)[..] else {
         return;
     };
-    let lo = if mask[0] { data.new_constant(size / 2, 0) } else { lo };
-    let hi = if mask[1] { data.new_constant(size / 2, 0) } else { hi };
+    let lo = if mask[0] {
+        data.new_constant(size / 2, 0)
+    } else {
+        lo
+    };
+    let hi = if mask[1] {
+        data.new_constant(size / 2, 0)
+    } else {
+        hi
+    };
     let (most, least) = if big { (lo, hi) } else { (hi, lo) };
     if let Some(whole) = piece_before(data, op, most, least, size) {
         let _ = data.op_set_input(op, whole, slot);
@@ -679,7 +720,10 @@ fn widens_entry(data: &Funcdata, parts: &[VarnodeId], op: crate::context::OpId) 
         return true;
     }
     let readers = |vn: VarnodeId| -> Vec<crate::context::OpId> {
-        data.descend_snapshot(vn).into_iter().filter(|&r| r != op).collect()
+        data.descend_snapshot(vn)
+            .into_iter()
+            .filter(|&r| r != op)
+            .collect()
     };
     if parts.iter().all(|&p| readers(p).is_empty()) {
         return false;
@@ -748,7 +792,7 @@ fn split_input(data: &mut Funcdata, vn: VarnodeId) -> Option<()> {
     let whole = data.new_varnode_out(8, &addr, piece).ok()?;
     data.op_insert_begin(piece, block);
     data.total_replace(vn, whole).ok()?;
-        data.delete_varnode(vn).ok()?;
+    data.delete_varnode(vn).ok()?;
     let lo = data.new_varnode(4, &lo_addr, None);
     let lo = data.set_input_varnode(lo).ok()?;
     let hi = data.new_varnode(4, &hi_addr, None);
@@ -809,7 +853,10 @@ fn read_words(data: &mut Funcdata, vn: VarnodeId, words: [VarnodeId; 2], shift: 
 
 /// Is `v` a single-precision register?
 fn s_register(data: &Funcdata, v: &crate::varnode::Varnode) -> bool {
-    let (Some(space), Some(lookup)) = (v.get_addr().get_space(), data.get_arch().manage().register_lookup()) else {
+    let (Some(space), Some(lookup)) = (
+        v.get_addr().get_space(),
+        data.get_arch().manage().register_lookup(),
+    ) else {
         return false;
     };
     let name = lookup.get_register_name(space, v.get_offset(), v.get_size());
@@ -822,12 +869,16 @@ fn single_move(data: &Funcdata, op: &crate::op::PcodeOp) -> Option<(Address, i32
     let stack = |vn: VarnodeId| {
         data.vbank().get(vn).is_some_and(|v| {
             v.get_size() == 4
-                && v.get_addr().get_space().is_some_and(|s| s.get_type() == unlace_base::space::spacetype::IPTR_SPACEBASE)
+                && v.get_addr()
+                    .get_space()
+                    .is_some_and(|s| s.get_type() == unlace_base::space::spacetype::IPTR_SPACEBASE)
         })
     };
     let (moved, register_copy) = match op.code() {
         OpCode::CPUI_STORE => (op.get_in(2)?, false),
-        OpCode::CPUI_COPY | OpCode::CPUI_INDIRECT if op.get_out().is_some_and(stack) => (op.get_in(0)?, false),
+        OpCode::CPUI_COPY | OpCode::CPUI_INDIRECT if op.get_out().is_some_and(stack) => {
+            (op.get_in(0)?, false)
+        }
         OpCode::CPUI_COPY | OpCode::CPUI_SUBPIECE | OpCode::CPUI_CAST => (op.get_out()?, true),
         _ => return None,
     };
@@ -945,23 +996,43 @@ pub fn stray_vector_input(data: &Funcdata, vn: VarnodeId) -> bool {
     if !data.get_arch().arm_float_args {
         return false;
     }
-    let Some(value) = data.vbank().get(vn).filter(|v| v.get_size() == 8) else { return false };
-    let vfp = data.get_func_proto().model().input().get_entry().iter().any(|e| {
-        e.get_type() == type_class::TYPECLASS_FLOAT && e.justified_contain(value.get_addr(), 8) == 0
-    });
+    let Some(value) = data.vbank().get(vn).filter(|v| v.get_size() == 8) else {
+        return false;
+    };
+    let vfp = data
+        .get_func_proto()
+        .model()
+        .input()
+        .get_entry()
+        .iter()
+        .any(|e| {
+            e.get_type() == type_class::TYPECLASS_FLOAT
+                && e.justified_contain(value.get_addr(), 8) == 0
+        });
     if !vfp || value.has_no_descend() {
         return false;
     }
     let mut todo = vec![vn];
     let mut seen = vec![vn];
     while let Some(cur) = todo.pop() {
-        let Some(node) = data.vbank().get(cur) else { return false };
+        let Some(node) = data.vbank().get(cur) else {
+            return false;
+        };
         for id in node.descend_iter() {
-            let Some(op) = data.obank().get(id) else { return false };
-            let out = op.get_out().and_then(|o| data.vbank().get(o).map(|v| (o, v.get_size())));
+            let Some(op) = data.obank().get(id) else {
+                return false;
+            };
+            let out = op
+                .get_out()
+                .and_then(|o| data.vbank().get(o).map(|v| (o, v.get_size())));
             let follow = match op.code() {
-                OpCode::CPUI_MULTIEQUAL | OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_INDIRECT => true,
-                OpCode::CPUI_INT_AND | OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR => out.is_some_and(|(_, size)| size == 8),
+                OpCode::CPUI_MULTIEQUAL
+                | OpCode::CPUI_COPY
+                | OpCode::CPUI_CAST
+                | OpCode::CPUI_INDIRECT => true,
+                OpCode::CPUI_INT_AND | OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR => {
+                    out.is_some_and(|(_, size)| size == 8)
+                }
                 OpCode::CPUI_CALLOTHER => false,
                 OpCode::CPUI_SUBPIECE => {
                     let low = op

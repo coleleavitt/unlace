@@ -19,14 +19,14 @@
 //!   `peekElement()` and no-arg `openElement()` both return 0
 //!   (marshal.cc:126-133 XML / :719-731 packed).
 
-use unlace_base::marshal::{
-    Decoder, Encoder, IdRegistry, PackedDecode, PackedEncode, XmlDecode, XmlEncode, ATTRIB_ALIGN,
-    ATTRIB_BIGENDIAN, ATTRIB_CONSTRUCTOR, ATTRIB_CONTENT, ATTRIB_DESTRUCTOR, ATTRIB_EXTRAPOP,
-    ATTRIB_FORMAT, ATTRIB_ID, ELEM_DATA, ELEM_INPUT, ELEM_OFF, ELEM_OUTPUT, ELEM_SYMBOL,
-    ELEM_TARGET,
-};
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager};
 use std::rc::Rc;
+use unlace_base::marshal::{
+    ATTRIB_ALIGN, ATTRIB_BIGENDIAN, ATTRIB_CONSTRUCTOR, ATTRIB_CONTENT, ATTRIB_DESTRUCTOR,
+    ATTRIB_EXTRAPOP, ATTRIB_FORMAT, ATTRIB_ID, Decoder, ELEM_DATA, ELEM_INPUT, ELEM_OFF,
+    ELEM_OUTPUT, ELEM_SYMBOL, ELEM_TARGET, Encoder, IdRegistry, PackedDecode, PackedEncode,
+    XmlDecode, XmlEncode,
+};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, addrspace_flags, spacetype};
 
 /// Same fixture as the ported harness (`testmarshal.cc:50-66`).
 fn the_environ_build() -> AddrSpaceManager {
@@ -80,7 +80,11 @@ fn verify_bufferpad_off_by_one_and_two_buffer_cells() {
             assert_eq!(val, (i & 1) == 0, "bool value N={n} i={i}");
         }
         // C++ peekElement at the ELEMENT_END byte returns 0 (marshal.cc:719)
-        assert_eq!(decoder.peek_element().unwrap(), 0, "peek before close N={n}");
+        assert_eq!(
+            decoder.peek_element().unwrap(),
+            0,
+            "peek before close N={n}"
+        );
         decoder.close_element(el).unwrap();
     }
 }

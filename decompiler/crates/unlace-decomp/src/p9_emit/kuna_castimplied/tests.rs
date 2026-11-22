@@ -15,15 +15,27 @@ fn factory() -> TypeFactoryImpl {
     let f = TypeFactoryImpl::new();
     f.set_default_alignment_map();
     f.set_max_basetype_size(8);
-    f.set_core_type("bool", 1, type_metatype::TYPE_BOOL, false).unwrap();
-    for (size, u, i) in [(1, "uint1", "int1"), (2, "uint2", "int2"), (4, "uint4", "int4"), (8, "uint8", "int8")] {
-        f.set_core_type(u, size, type_metatype::TYPE_UINT, false).unwrap();
-        f.set_core_type(i, size, type_metatype::TYPE_INT, false).unwrap();
+    f.set_core_type("bool", 1, type_metatype::TYPE_BOOL, false)
+        .unwrap();
+    for (size, u, i) in [
+        (1, "uint1", "int1"),
+        (2, "uint2", "int2"),
+        (4, "uint4", "int4"),
+        (8, "uint8", "int8"),
+    ] {
+        f.set_core_type(u, size, type_metatype::TYPE_UINT, false)
+            .unwrap();
+        f.set_core_type(i, size, type_metatype::TYPE_INT, false)
+            .unwrap();
     }
-    f.set_core_type("char", 1, type_metatype::TYPE_INT, true).unwrap();
-    f.set_core_type("float4", 4, type_metatype::TYPE_FLOAT, false).unwrap();
-    f.set_core_type("float8", 8, type_metatype::TYPE_FLOAT, false).unwrap();
-    f.set_core_type("xunknown4", 4, type_metatype::TYPE_UNKNOWN, false).unwrap();
+    f.set_core_type("char", 1, type_metatype::TYPE_INT, true)
+        .unwrap();
+    f.set_core_type("float4", 4, type_metatype::TYPE_FLOAT, false)
+        .unwrap();
+    f.set_core_type("float8", 8, type_metatype::TYPE_FLOAT, false)
+        .unwrap();
+    f.set_core_type("xunknown4", 4, type_metatype::TYPE_UNKNOWN, false)
+        .unwrap();
     f.cache_core_types().unwrap();
     f
 }
@@ -56,10 +68,19 @@ fn the_ranges_are_the_c_ranges() {
     assert_eq!(int_range(&uint(&f, 1)), Some((0, 255)));
     assert_eq!(int_range(&int(&f, 2)), Some((-32768, 32767)));
     assert_eq!(int_range(&uint(&f, 4)), Some((0, 0xffff_ffff)));
-    assert_eq!(int_range(&int(&f, 8)), Some((i64::MIN as i128, i64::MAX as i128)));
+    assert_eq!(
+        int_range(&int(&f, 8)),
+        Some((i64::MIN as i128, i64::MAX as i128))
+    );
     assert_eq!(int_range(&uint(&f, 8)), Some((0, u64::MAX as i128)));
-    assert_eq!(int_range(&f.get_base(1, type_metatype::TYPE_BOOL).unwrap()), Some((0, 1)));
-    assert_eq!(int_range(&f.get_base(1, type_metatype::TYPE_INT).unwrap()), Some((-128, 127)));
+    assert_eq!(
+        int_range(&f.get_base(1, type_metatype::TYPE_BOOL).unwrap()),
+        Some((0, 1))
+    );
+    assert_eq!(
+        int_range(&f.get_base(1, type_metatype::TYPE_INT).unwrap()),
+        Some((-128, 127))
+    );
 }
 
 #[test]
@@ -98,7 +119,12 @@ fn widenings_that_keep_the_value_are_accepted() {
         (uint(&f, 4), uint(&f, 8)),
         (int(&f, 4), int(&f, 4)),
     ] {
-        assert!(preserves(&src, &dst), "{} -> {}", src.get_name(), dst.get_name());
+        assert!(
+            preserves(&src, &dst),
+            "{} -> {}",
+            src.get_name(),
+            dst.get_name()
+        );
     }
 }
 
@@ -115,7 +141,12 @@ fn sign_changes_and_narrowings_are_refused() {
         (uint(&f, 4), uint(&f, 2)),
         (uint(&f, 1), int(&f, 1)),
     ] {
-        assert!(!preserves(&src, &dst), "{} -> {}", src.get_name(), dst.get_name());
+        assert!(
+            !preserves(&src, &dst),
+            "{} -> {}",
+            src.get_name(),
+            dst.get_name()
+        );
     }
 }
 
@@ -131,7 +162,21 @@ fn preserves_is_exactly_every_value_surviving_c_conversion() {
     }
     for src in &all {
         let (lo, hi) = int_range(src).unwrap();
-        let samples = [lo, lo + 1, -1, 0, 1, hi - 1, hi, 127, 128, 255, 256, 65535, 65536];
+        let samples = [
+            lo,
+            lo + 1,
+            -1,
+            0,
+            1,
+            hi - 1,
+            hi,
+            127,
+            128,
+            255,
+            256,
+            65535,
+            65536,
+        ];
         for dst in &all {
             if dst.get_metatype() == type_metatype::TYPE_BOOL {
                 continue;
@@ -140,7 +185,13 @@ fn preserves_is_exactly_every_value_surviving_c_conversion() {
                 .iter()
                 .filter(|&&v| lo <= v && v <= hi)
                 .all(|&v| c_convert(v, dst) == v);
-            assert_eq!(preserves(src, dst), survives, "{} -> {}", src.get_name(), dst.get_name());
+            assert_eq!(
+                preserves(src, dst),
+                survives,
+                "{} -> {}",
+                src.get_name(),
+                dst.get_name()
+            );
         }
     }
 }

@@ -23,21 +23,22 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace,
-    UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace, addrspace_flags,
+    spacetype,
 };
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
-use unlace_decomp::dtype::{type_metatype, Datatype, DatatypeKind, TypeFactoryImpl, TypeField};
-use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
+use unlace_decomp::dtype::{Datatype, DatatypeKind, TypeFactoryImpl, TypeField, type_metatype};
+use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::unionresolve_run::ScoreUnionFields;
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(IopSpace::new(2))).unwrap();
     m.insert_space(Rc::new(FspecSpace::new(3))).unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
@@ -63,7 +64,10 @@ fn build_fd() -> (Funcdata, Rc<TypeFactoryImpl>) {
     let glb = Rc::new(arch);
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
     let addr = Address::new(ram, 0x1000);
-    (Funcdata::new("func", "func", glb, addr, 0x10000000, 0x40).unwrap(), tf)
+    (
+        Funcdata::new("func", "func", glb, addr, 0x10000000, 0x40).unwrap(),
+        tf,
+    )
 }
 
 fn ram(fd: &Funcdata) -> Rc<AddrSpace> {
@@ -77,7 +81,12 @@ fn base(size: int4, m: type_metatype) -> Rc<Datatype> {
 /// A pointer data-type (TYPE_PTR, 8 bytes) to `ptrto`, align_size = 8.
 fn ptr_to(ptrto: Rc<Datatype>) -> Rc<Datatype> {
     let mut p = Datatype::new_with_align(8, 8, type_metatype::TYPE_PTR);
-    p.kind = DatatypeKind::Pointer { ptrto, spaceid: None, truncate: None, wordsize: 1 };
+    p.kind = DatatypeKind::Pointer {
+        ptrto,
+        spaceid: None,
+        truncate: None,
+        wordsize: 1,
+    };
     Rc::new(p)
 }
 

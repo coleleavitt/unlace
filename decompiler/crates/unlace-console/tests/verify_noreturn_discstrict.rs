@@ -28,11 +28,16 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture() -> PathBuf {
@@ -52,12 +57,21 @@ fn decompile(func: &str) -> String {
 
     // The live-CLI ordering: every `option` line precedes `read symbols` (the
     // deferred analysis commit), so the Listing build + the consumer see the flags.
-    prog.arch_mut().set_kuna_option("listing", "on").expect("listing flips on");
-    prog.arch_mut().set_kuna_option("noreturn_disc", "on").expect("noreturn_disc flips on");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.arch_mut()
+        .set_kuna_option("listing", "on")
+        .expect("listing flips on");
+    prog.arch_mut()
+        .set_kuna_option("noreturn_disc", "on")
+        .expect("noreturn_disc flips on");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
-    let cmds: Vec<String> =
-        [format!("load function {func}"), "decompile".into(), "print C".into()].to_vec();
+    let cmds: Vec<String> = [
+        format!("load function {func}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .to_vec();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -91,7 +105,10 @@ fn decode_gap_does_not_forge_a_noreturn_verdict() {
 #[test]
 fn the_victim_returns_a_value() {
     let out = decompile("retseven");
-    assert!(out.contains("return 7"), "retseven must decompile to `return 7`:\n{out}");
+    assert!(
+        out.contains("return 7"),
+        "retseven must decompile to `return 7`:\n{out}"
+    );
 }
 
 /// No forged fact propagates: `_start` keeps its whole call chain.
@@ -100,7 +117,10 @@ fn the_whole_call_chain_survives() {
     let out = decompile("_start");
     eprintln!("---- _start ----\n{out}");
     for callee in ["gap1", "gap2", "gap3", "usesret"] {
-        assert!(out.contains(callee), "_start must still call {callee}:\n{out}");
+        assert!(
+            out.contains(callee),
+            "_start must still call {callee}:\n{out}"
+        );
     }
 }
 
@@ -121,17 +141,26 @@ fn a_genuine_noreturn_wrapper_is_still_discovered() {
         .to_string();
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.arch_mut().set_kuna_option("listing", "on").expect("listing flips on");
-    prog.arch_mut().set_kuna_option("noreturn_disc", "on").expect("noreturn_disc flips on");
+    prog.arch_mut()
+        .set_kuna_option("listing", "on")
+        .expect("listing flips on");
+    prog.arch_mut()
+        .set_kuna_option("noreturn_disc", "on")
+        .expect("noreturn_disc flips on");
     // Isolate the discovered-no-return tally from the propagation consumer, so the
     // conclusion below can only have come from the evidence tally.
     prog.arch_mut()
         .set_kuna_option("noreturn_propagate", "off")
         .expect("noreturn_propagate flips off");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
-    let cmds: Vec<String> =
-        ["load function compute_a".into(), "decompile".into(), "print C".into()].to_vec();
+    let cmds: Vec<String> = [
+        "load function compute_a".into(),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .to_vec();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);

@@ -236,11 +236,13 @@ fn leaf_marking_propagates_through_call_and_trap_wrappers() {
 #[test]
 fn propagation_keeps_returning_unknown_and_incomplete_paths() {
     let Some(fixture) = fixture() else { return };
-    let specs = vec![common::repo_root()
-        .join("specs")
-        .to_str()
-        .unwrap()
-        .to_owned()];
+    let specs = vec![
+        common::repo_root()
+            .join("specs")
+            .to_str()
+            .unwrap()
+            .to_owned(),
+    ];
     let mut program =
         unlace_console::engine::bootstrap_from_object(fixture.image.to_str().unwrap(), "", &specs)
             .unwrap();

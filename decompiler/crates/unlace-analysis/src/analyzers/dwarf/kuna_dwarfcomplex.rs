@@ -1,6 +1,6 @@
 //! Complex float/double values use pair layouts on explicitly supported ABIs.
-use unlace_decomp::dtype::{type_metatype, Datatype, TypeFactory, TypeField};
 use std::rc::Rc;
+use unlace_decomp::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
 
 /// Widest complex value, in bytes, this target ABI passes like its pair
 /// structure; 0 when no complex value uses the pair layout.

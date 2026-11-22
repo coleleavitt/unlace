@@ -74,17 +74,17 @@
 
 #![allow(clippy::needless_range_loop)] // C++ indexes by edge slot; preserve it
 
+use slotmap::SlotMap;
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::marshal::{
-    AttributeId, Decoder, ElementId, Encoder, ATTRIB_INDEX, ATTRIB_TYPE, ELEM_TARGET,
+    ATTRIB_INDEX, ATTRIB_TYPE, AttributeId, Decoder, ELEM_TARGET, ElementId, Encoder,
 };
 use unlace_base::types::{int4, uint4};
-use unlace_num::opcodes::{get_opname, OpCode};
-use slotmap::SlotMap;
+use unlace_num::opcodes::{OpCode, get_opname};
 
-use crate::op::PcodeOp;
 use crate::context::BlockId;
+use crate::op::PcodeOp;
 
 // ---------------------------------------------------------------------------
 // Marshaling ids (block-local in C++ `block.cc:22-31`)
@@ -245,7 +245,11 @@ impl BlockEdge {
     /// Construct an edge (C++ `BlockEdge(FlowBlock*,uint4,int4)`,
     /// `block.hh:62`).
     pub fn new(pt: BlockId, lab: uint4, rev: int4) -> BlockEdge {
-        BlockEdge { label: lab, point: Some(pt), reverse_index: rev }
+        BlockEdge {
+            label: lab,
+            point: Some(pt),
+            reverse_index: rev,
+        }
     }
 
     /// Encode \b this edge to a stream (C++ `BlockEdge::encode`, `block.cc:35`).
@@ -336,15 +340,24 @@ pub enum BlockKind {
     /// `t_copy` — mirrors a leaf block (C++ `BlockCopy::copy`).
     Copy { copy: Option<BlockId> },
     /// `t_goto` — unstructured branch (C++ `BlockGoto`).
-    Goto { gototarget: Option<BlockId>, gototype: uint4 },
+    Goto {
+        gototarget: Option<BlockId>,
+        gototype: uint4,
+    },
     /// `t_multigoto` — multiple-exit with some unstructured edges.
-    MultiGoto { gotoedges: Vec<BlockId>, defaultswitch: bool },
+    MultiGoto {
+        gotoedges: Vec<BlockId>,
+        defaultswitch: bool,
+    },
     /// `t_ls` — a BlockList (components only).
     Ls,
     /// `t_condition` — two conditions glued by BOOL_AND/BOOL_OR.
     Condition { opc: OpCode },
     /// `t_if` — a formal "if" structure.
-    If { gototype: uint4, gototarget: Option<BlockId> },
+    If {
+        gototype: uint4,
+        gototarget: Option<BlockId>,
+    },
     /// `t_whiledo` — top-tested loop.  STUB(W7): the `initializeOp`/`iterateOp`/
     /// `loopDef` (for-loop detection) are filled by the structuring wave.
     WhileDo {
@@ -362,7 +375,10 @@ pub enum BlockKind {
     /// keeps the owning function's slot index so the printer can reach the
     /// table's labels via `Funcdata::get_jump_table`).  The case structure is
     /// carried in `caseblocks`.
-    Switch { caseblocks: Vec<CaseOrder>, jt_index: usize },
+    Switch {
+        caseblocks: Vec<CaseOrder>,
+        jt_index: usize,
+    },
 }
 
 /// The BlockBasic-specific data (C++ `BlockBasic` non-edge members).
@@ -441,7 +457,10 @@ impl FlowBlock {
 
     /// Construct a block with the given subtype payload.
     pub fn new_kind(kind: BlockKind) -> FlowBlock {
-        FlowBlock { kind, ..FlowBlock::new() }
+        FlowBlock {
+            kind,
+            ..FlowBlock::new()
+        }
     }
 
     // --- flag accessors (C++ inline) ---------------------------------------
@@ -637,7 +656,9 @@ impl FlowBlock {
     }
     /// Get the i-th output FlowBlock (C++ `getOut`).
     pub fn get_out(&self, i: int4) -> BlockId {
-        self.outofthis[i as usize].point.expect("getOut: unresolved edge")
+        self.outofthis[i as usize]
+            .point
+            .expect("getOut: unresolved edge")
     }
     /// Get the input index of the i-th output FlowBlock (C++ `getOutRevIndex`).
     pub fn get_out_rev_index(&self, i: int4) -> int4 {
@@ -645,7 +666,9 @@ impl FlowBlock {
     }
     /// Get the i-th input FlowBlock (C++ `getIn`).
     pub fn get_in(&self, i: int4) -> BlockId {
-        self.intothis[i as usize].point.expect("getIn: unresolved edge")
+        self.intothis[i as usize]
+            .point
+            .expect("getIn: unresolved edge")
     }
     /// Get the output index of the i-th input FlowBlock (C++ `getInRevIndex`).
     pub fn get_in_rev_index(&self, i: int4) -> int4 {
@@ -982,7 +1005,11 @@ pub struct DominatesMemo {
 impl DominatesMemo {
     /// No answers yet for dominator `top`.
     pub fn new(top: BlockId) -> Self {
-        DominatesMemo { top, known: slotmap::SecondaryMap::new(), path: Vec::new() }
+        DominatesMemo {
+            top,
+            known: slotmap::SecondaryMap::new(),
+            path: Vec::new(),
+        }
     }
 }
 
@@ -1004,7 +1031,10 @@ pub struct BlockGraph {
 impl BlockGraph {
     /// Construct an empty graph.
     pub fn new() -> BlockGraph {
-        BlockGraph { arena: BlockArena::with_key(), root: None }
+        BlockGraph {
+            arena: BlockArena::with_key(),
+            root: None,
+        }
     }
 
     /// Borrow a block (panics on stale handle, per ADR 0001).
@@ -1025,8 +1055,12 @@ impl BlockGraph {
     fn add_in_edge(&mut self, this_id: BlockId, b: BlockId, lab: uint4) {
         let ourrev = self.arena[b].outofthis.len() as int4;
         let brev = self.arena[this_id].intothis.len() as int4;
-        self.arena[this_id].intothis.push(BlockEdge::new(b, lab, ourrev));
-        self.arena[b].outofthis.push(BlockEdge::new(this_id, lab, brev));
+        self.arena[this_id]
+            .intothis
+            .push(BlockEdge::new(b, lab, ourrev));
+        self.arena[b]
+            .outofthis
+            .push(BlockEdge::new(this_id, lab, brev));
     }
 
     /// Delete the \e in half of an edge, correcting indices
@@ -1061,7 +1095,9 @@ impl BlockGraph {
 
     /// Remove an incoming edge (C++ `FlowBlock::removeInEdge`, `block.cc:130`).
     fn remove_in_edge(&mut self, this_id: BlockId, slot: int4) {
-        let b = self.arena[this_id].intothis[slot as usize].point.expect("removeInEdge");
+        let b = self.arena[this_id].intothis[slot as usize]
+            .point
+            .expect("removeInEdge");
         let rev = self.arena[this_id].intothis[slot as usize].reverse_index;
         self.half_delete_in_edge(this_id, slot);
         self.half_delete_out_edge(b, rev);
@@ -1069,7 +1105,9 @@ impl BlockGraph {
 
     /// Remove an outgoing edge (C++ `FlowBlock::removeOutEdge`, `block.cc:144`).
     fn remove_out_edge(&mut self, this_id: BlockId, slot: int4) {
-        let b = self.arena[this_id].outofthis[slot as usize].point.expect("removeOutEdge");
+        let b = self.arena[this_id].outofthis[slot as usize]
+            .point
+            .expect("removeOutEdge");
         let rev = self.arena[this_id].outofthis[slot as usize].reverse_index;
         self.half_delete_out_edge(this_id, slot);
         self.half_delete_in_edge(b, rev);
@@ -1078,35 +1116,47 @@ impl BlockGraph {
     /// Make an incoming edge flow from a given block
     /// (C++ `FlowBlock::replaceInEdge`, `block.cc:160`).
     fn replace_in_edge(&mut self, this_id: BlockId, num: int4, b: BlockId) {
-        let oldb = self.arena[this_id].intothis[num as usize].point.expect("replaceInEdge");
+        let oldb = self.arena[this_id].intothis[num as usize]
+            .point
+            .expect("replaceInEdge");
         let old_rev = self.arena[this_id].intothis[num as usize].reverse_index;
         self.half_delete_out_edge(oldb, old_rev);
         let label = self.arena[this_id].intothis[num as usize].label;
         let new_rev = self.arena[b].outofthis.len() as int4;
         self.arena[this_id].intothis[num as usize].point = Some(b);
         self.arena[this_id].intothis[num as usize].reverse_index = new_rev;
-        self.arena[b].outofthis.push(BlockEdge::new(this_id, label, num));
+        self.arena[b]
+            .outofthis
+            .push(BlockEdge::new(this_id, label, num));
     }
 
     /// Make an outgoing edge flow to a given block
     /// (C++ `FlowBlock::replaceOutEdge`, `block.cc:178`).
     fn replace_out_edge(&mut self, this_id: BlockId, num: int4, b: BlockId) {
-        let oldb = self.arena[this_id].outofthis[num as usize].point.expect("replaceOutEdge");
+        let oldb = self.arena[this_id].outofthis[num as usize]
+            .point
+            .expect("replaceOutEdge");
         let old_rev = self.arena[this_id].outofthis[num as usize].reverse_index;
         self.half_delete_in_edge(oldb, old_rev);
         let label = self.arena[this_id].outofthis[num as usize].label;
         let new_rev = self.arena[b].intothis.len() as int4;
         self.arena[this_id].outofthis[num as usize].point = Some(b);
         self.arena[this_id].outofthis[num as usize].reverse_index = new_rev;
-        self.arena[b].intothis.push(BlockEdge::new(this_id, label, num));
+        self.arena[b]
+            .intothis
+            .push(BlockEdge::new(this_id, label, num));
     }
 
     /// Remove \b this from flow between two blocks
     /// (C++ `FlowBlock::replaceEdgesThru`, `block.cc:198`).
     fn replace_edges_thru(&mut self, this_id: BlockId, in_slot: int4, out_slot: int4) {
-        let inb = self.arena[this_id].intothis[in_slot as usize].point.expect("replaceEdgesThru");
+        let inb = self.arena[this_id].intothis[in_slot as usize]
+            .point
+            .expect("replaceEdgesThru");
         let inblock_outslot = self.arena[this_id].intothis[in_slot as usize].reverse_index;
-        let outb = self.arena[this_id].outofthis[out_slot as usize].point.expect("replaceEdgesThru");
+        let outb = self.arena[this_id].outofthis[out_slot as usize]
+            .point
+            .expect("replaceEdgesThru");
         let outblock_inslot = self.arena[this_id].outofthis[out_slot as usize].reverse_index;
         self.arena[inb].outofthis[inblock_outslot as usize].point = Some(outb);
         self.arena[inb].outofthis[inblock_outslot as usize].reverse_index = outblock_inslot;
@@ -1132,7 +1182,9 @@ impl BlockGraph {
     /// Apply an \e out edge label (C++ `FlowBlock::setOutEdgeFlag`,
     /// `block.cc:240`).
     pub fn set_out_edge_flag(&mut self, this_id: BlockId, i: int4, lab: uint4) {
-        let bbout = self.arena[this_id].outofthis[i as usize].point.expect("setOutEdgeFlag");
+        let bbout = self.arena[this_id].outofthis[i as usize]
+            .point
+            .expect("setOutEdgeFlag");
         let rev = self.arena[this_id].outofthis[i as usize].reverse_index;
         self.arena[this_id].outofthis[i as usize].label |= lab;
         self.arena[bbout].intothis[rev as usize].label |= lab;
@@ -1141,7 +1193,9 @@ impl BlockGraph {
     /// Remove an \e out edge label (C++ `FlowBlock::clearOutEdgeFlag`,
     /// `block.cc:250`).
     pub fn clear_out_edge_flag(&mut self, this_id: BlockId, i: int4, lab: uint4) {
-        let bbout = self.arena[this_id].outofthis[i as usize].point.expect("clearOutEdgeFlag");
+        let bbout = self.arena[this_id].outofthis[i as usize]
+            .point
+            .expect("clearOutEdgeFlag");
         let rev = self.arena[this_id].outofthis[i as usize].reverse_index;
         self.arena[this_id].outofthis[i as usize].label &= !lab;
         self.arena[bbout].intothis[rev as usize].label &= !lab;
@@ -1170,10 +1224,14 @@ impl BlockGraph {
         if i >= 0 && i < self.arena[this_id].outofthis.len() as int4 {
             self.set_out_edge_flag(this_id, i, edge_flags::f_goto_edge);
         } else {
-            return Err(KunaError::lowlevel("Could not find block edge to mark unstructured"));
+            return Err(KunaError::lowlevel(
+                "Could not find block edge to mark unstructured",
+            ));
         }
         self.arena[this_id].flags |= block_flags::f_interior_gotoout;
-        let target = self.arena[this_id].outofthis[i as usize].point.expect("setGotoBranch");
+        let target = self.arena[this_id].outofthis[i as usize]
+            .point
+            .expect("setGotoBranch");
         self.arena[target].flags |= block_flags::f_interior_gotoin;
         Ok(())
     }
@@ -1212,13 +1270,17 @@ impl BlockGraph {
     fn replace_using_map(&mut self, this_id: BlockId) {
         let n_in = self.arena[this_id].intothis.len();
         for i in 0..n_in {
-            let p = self.arena[this_id].intothis[i].point.expect("replaceEdgeMap in");
+            let p = self.arena[this_id].intothis[i]
+                .point
+                .expect("replaceEdgeMap in");
             let mapped = self.arena[p].copymap;
             self.arena[this_id].intothis[i].point = mapped;
         }
         let n_out = self.arena[this_id].outofthis.len();
         for i in 0..n_out {
-            let p = self.arena[this_id].outofthis[i].point.expect("replaceEdgeMap out");
+            let p = self.arena[this_id].outofthis[i]
+                .point
+                .expect("replaceEdgeMap out");
             let mapped = self.arena[p].copymap;
             self.arena[this_id].outofthis[i].point = mapped;
         }
@@ -1373,7 +1435,12 @@ impl BlockGraph {
         self.next_flow_after_impl(this_id, bl, true)
     }
 
-    fn next_flow_after_impl(&self, this_id: BlockId, bl: BlockId, case_fallthru: bool) -> Option<BlockId> {
+    fn next_flow_after_impl(
+        &self,
+        this_id: BlockId,
+        bl: BlockId,
+        case_fallthru: bool,
+    ) -> Option<BlockId> {
         match self.arena[this_id].get_type() {
             BlockType::Goto => {
                 let target = self.arena[this_id].get_goto_target()?;
@@ -1407,7 +1474,9 @@ impl BlockGraph {
                     return None;
                 };
                 // Fall-thru must be a goto block (else there is a break).
-                if self.arena[bl].get_type() != BlockType::Goto && !(case_fallthru && !cases[idx].isexit) {
+                if self.arena[bl].get_type() != BlockType::Goto
+                    && !(case_fallthru && !cases[idx].isexit)
+                {
                     return None;
                 }
                 let next = idx + 1;
@@ -1457,8 +1526,7 @@ impl BlockGraph {
         match self.arena[this_id].get_parent() {
             Some(parent) => {
                 let nextbl = self.next_flow_after(parent, this_id);
-                let gotobl = self
-                    .arena[this_id]
+                let gotobl = self.arena[this_id]
                     .get_goto_target()
                     .and_then(|t| self.get_front_leaf(t));
                 gotobl != nextbl
@@ -1795,7 +1863,9 @@ impl BlockGraph {
             while !self.arena[cur].is_mark() {
                 self.arena[cur].set_mark();
                 marked_set.push(cur);
-                cur = self.arena[cur].immed_dom.expect("findCommonBlock: walked off root");
+                cur = self.arena[cur]
+                    .immed_dom
+                    .expect("findCommonBlock: walked off root");
             }
             if self.arena[cur].index < best_index {
                 res = cur;
@@ -1865,7 +1935,9 @@ impl BlockGraph {
             // walk outofthis
             let mut i = 0;
             while i < self.arena[mybl].outofthis.len() {
-                let otherbl = self.arena[mybl].outofthis[i].point.expect("selfIdentify out");
+                let otherbl = self.arena[mybl].outofthis[i]
+                    .point
+                    .expect("selfIdentify out");
                 if self.arena[otherbl].parent == Some(graph_id) {
                     i += 1;
                 } else {
@@ -2249,11 +2321,11 @@ impl BlockGraph {
             None => {
                 return Err(KunaError::lowlevel(
                     "Can only splice a block with 1 output to a block with 1 input",
-                ))
+                ));
             }
         };
-        let fl1 = self.arena[bl].flags
-            & (block_flags::f_unstructured_targ | block_flags::f_entry_point);
+        let fl1 =
+            self.arena[bl].flags & (block_flags::f_unstructured_targ | block_flags::f_entry_point);
         let fl2 = self.arena[outbl].flags & block_flags::f_switch_out;
         self.remove_out_edge(bl, 0);
         let szout = self.arena[outbl].size_out();
@@ -2318,8 +2390,9 @@ impl BlockGraph {
     /// STUB(W7): the C++ takes `Funcdata *fd`; here the funcdata back-pointer is
     /// implicit (the function owns the arena), so we only build the basic data.
     pub fn new_block_basic(&mut self, graph_id: BlockId) -> BlockId {
-        let ret =
-            self.arena.insert(FlowBlock::new_kind(BlockKind::Basic(BasicData::default())));
+        let ret = self
+            .arena
+            .insert(FlowBlock::new_kind(BlockKind::Basic(BasicData::default())));
         self.add_block(graph_id, ret);
         ret
     }
@@ -2403,7 +2476,13 @@ impl BlockGraph {
     /// with one new node of `kind` holding them in order, and return it.  A
     /// print-tree edit like [`kuna_flatten_ifelse`](Self::kuna_flatten_ifelse):
     /// list and parent links only.
-    pub fn kuna_wrap_components(&mut self, parent: BlockId, start: usize, end: usize, kind: BlockKind) -> BlockId {
+    pub fn kuna_wrap_components(
+        &mut self,
+        parent: BlockId,
+        start: usize,
+        end: usize,
+        kind: BlockKind,
+    ) -> BlockId {
         let members: Vec<BlockId> = self.arena[parent].list[start..=end].to_vec();
         let node = self.arena.insert(FlowBlock::new_kind(kind));
         for &m in &members {
@@ -2421,14 +2500,17 @@ impl BlockGraph {
     /// first member, which is where it lands.  A pure print-tree edit: a nested list prints exactly its
     /// members in order.
     pub fn kuna_flatten_lists(&mut self, root: BlockId) {
-        let mut moved: std::collections::BTreeMap<BlockId, BlockId> = std::collections::BTreeMap::new();
+        let mut moved: std::collections::BTreeMap<BlockId, BlockId> =
+            std::collections::BTreeMap::new();
         let mut stack = vec![root];
         while let Some(id) = stack.pop() {
             if matches!(self.arena[id].get_type(), BlockType::Ls | BlockType::Graph) {
                 let mut i = 0;
                 while i < self.arena[id].list.len() {
                     let child = self.arena[id].list[i];
-                    if self.arena[child].get_type() == BlockType::Ls && !self.arena[child].list.is_empty() {
+                    if self.arena[child].get_type() == BlockType::Ls
+                        && !self.arena[child].list.is_empty()
+                    {
                         let members = std::mem::take(&mut self.arena[child].list);
                         moved.insert(child, members[0]);
                         for &m in &members {
@@ -2457,7 +2539,14 @@ impl BlockGraph {
         let mut walk = vec![root];
         while let Some(id) = walk.pop() {
             match &mut self.arena[id].kind {
-                BlockKind::Goto { gototarget: Some(t), .. } | BlockKind::If { gototarget: Some(t), .. } => *t = resolve(*t),
+                BlockKind::Goto {
+                    gototarget: Some(t),
+                    ..
+                }
+                | BlockKind::If {
+                    gototarget: Some(t),
+                    ..
+                } => *t = resolve(*t),
                 BlockKind::MultiGoto { gotoedges, .. } => {
                     for t in gotoedges.iter_mut() {
                         *t = resolve(*t);
@@ -2768,12 +2857,10 @@ impl BlockGraph {
     /// (C++ `BlockGraph::newBlockGoto`, `block.cc:1705`).
     pub fn new_block_goto(&mut self, graph_id: BlockId, bl: BlockId) -> BlockId {
         let target = self.arena[bl].get_out(0);
-        let ret = self
-            .arena
-            .insert(FlowBlock::new_kind(BlockKind::Goto {
-                gototarget: Some(target),
-                gototype: block_flags::f_goto_goto,
-            }));
+        let ret = self.arena.insert(FlowBlock::new_kind(BlockKind::Goto {
+            gototarget: Some(target),
+            gototype: block_flags::f_goto_goto,
+        }));
         self.identify_internal(graph_id, ret, &[bl]);
         self.add_block(graph_id, ret);
         self.force_output_num(ret, 1);
@@ -2864,7 +2951,9 @@ impl BlockGraph {
         } else {
             OpCode::CPUI_INT_AND
         };
-        let ret = self.arena.insert(FlowBlock::new_kind(BlockKind::Condition { opc }));
+        let ret = self
+            .arena
+            .insert(FlowBlock::new_kind(BlockKind::Condition { opc }));
         self.identify_internal(graph_id, ret, &[b1, b2]);
         self.add_block(graph_id, ret);
         self.force_output_num(ret, 2); // All conditions must have two outputs
@@ -3117,7 +3206,9 @@ impl BlockGraph {
         // resolve `(outindex, isdefault)` from the precomputed **bblocks** edge map
         // (keyed by the switch's and this case's underlying bblocks blocks).  The
         // switch root's bblocks block is its exit-leaf copy's `copy` pointer.
-        let switch_bb = self.get_exit_leaf(switch_root).and_then(|leaf| self.arena[leaf].get_copy());
+        let switch_bb = self
+            .get_exit_leaf(switch_root)
+            .and_then(|leaf| self.arena[leaf].get_copy());
         let resolved = match (switch_bb, basicblock) {
             (Some(sbb), Some(cbb)) => switch_case_edges.get(&(sbb, cbb)).copied(),
             _ => None,
@@ -3142,7 +3233,11 @@ impl BlockGraph {
                 }
             }
         };
-        let isexit = if gt != 0 { false } else { self.arena[bl].size_out() == 1 };
+        let isexit = if gt != 0 {
+            false
+        } else {
+            self.arena[bl].size_out() == 1
+        };
         CaseOrder {
             block: bl,
             basicblock,
@@ -3222,12 +3317,16 @@ impl BlockGraph {
         for it in dstlist {
             let n_in = self.arena[it].intothis.len();
             for i in 0..n_in {
-                let p = self.arena[it].intothis[i].point.expect("build_copy_from in");
+                let p = self.arena[it].intothis[i]
+                    .point
+                    .expect("build_copy_from in");
                 self.arena[it].intothis[i].point = copymap.get(&p).copied();
             }
             let n_out = self.arena[it].outofthis.len();
             for i in 0..n_out {
-                let p = self.arena[it].outofthis[i].point.expect("build_copy_from out");
+                let p = self.arena[it].outofthis[i]
+                    .point
+                    .expect("build_copy_from out");
                 self.arena[it].outofthis[i].point = copymap.get(&p).copied();
             }
             if let Some(idom) = self.arena[it].immed_dom {
@@ -3447,18 +3546,16 @@ impl BlockGraph {
             rootlist.swap(lastpos, 0);
         }
 
-        let rpost: Vec<BlockId> =
-            rpostorder.into_iter().map(|x| x.expect("rpostorder hole")).collect();
+        let rpost: Vec<BlockId> = rpostorder
+            .into_iter()
+            .map(|x| x.expect("rpostorder hole"))
+            .collect();
         self.arena[graph_id].list = rpost;
     }
 
     /// Identify irreducible edges (C++ `BlockGraph::findIrreducible`,
     /// `block.cc:1147`).  Returns `true` if the spanning tree needs rebuilding.
-    pub fn find_irreducible(
-        &mut self,
-        preorder: &[BlockId],
-        irreduciblecount: &mut int4,
-    ) -> bool {
+    pub fn find_irreducible(&mut self, preorder: &[BlockId], irreduciblecount: &mut int4) -> bool {
         let mut reachunder: Vec<BlockId> = Vec::new();
         let mut needrebuild = false;
         let mut xi = preorder.len() as int4 - 1;
@@ -3694,7 +3791,8 @@ impl BlockGraph {
                         j += 1;
                     }
                     j += 1;
-                    let mut new_idom = new_idom.expect("calcForwardDominator: no processed in-edge");
+                    let mut new_idom =
+                        new_idom.expect("calcForwardDominator: no processed in-edge");
                     while j < self.arena[bb].size_in() {
                         let rho = self.arena[bb].get_in(j);
                         if self.arena[rho].immed_dom.is_some() {
@@ -3889,7 +3987,10 @@ impl BlockGraph {
     /// elements of BlockGoto/BlockMultiGoto/BlockIf-goto), block.cc:2953/2986/3185.
     fn encode_body_extra(&self, this_id: BlockId, encoder: &mut dyn Encoder) {
         match &self.arena[this_id].kind {
-            BlockKind::Goto { gototarget, gototype } => {
+            BlockKind::Goto {
+                gototarget,
+                gototype,
+            } => {
                 let gt = gototarget.expect("BlockGoto::encodeBody: no target");
                 let leaf = self.get_front_leaf(gt).expect("BlockGoto leaf");
                 let depth = self.calc_depth(gt, Some(leaf));
@@ -3911,7 +4012,10 @@ impl BlockGraph {
                     encoder.close_element(&ELEM_TARGET);
                 }
             }
-            BlockKind::If { gototype, gototarget } => {
+            BlockKind::If {
+                gototype,
+                gototarget,
+            } => {
                 // BlockIf::encodeBody: only the ifgoto case (getSize()==1)
                 if self.arena[this_id].get_size() == 1 {
                     let gt = gototarget.expect("BlockIf::encodeBody: no target");
@@ -4147,7 +4251,10 @@ pub struct BlockMap {
 impl BlockMap {
     /// Construct an empty resolver.
     pub fn new() -> BlockMap {
-        BlockMap { sortlist: Vec::new(), index_cache: Vec::new() }
+        BlockMap {
+            sortlist: Vec::new(),
+            index_cache: Vec::new(),
+        }
     }
 
     /// Construct a FlowBlock of the given type (C++ `BlockMap::resolveBlock`,
@@ -4208,8 +4315,11 @@ impl BlockMap {
                 std::cmp::Ordering::Greater
             }
         });
-        self.index_cache =
-            self.sortlist.iter().map(|&id| (id, arena[id].get_index())).collect();
+        self.index_cache = self
+            .sortlist
+            .iter()
+            .map(|&id| (id, arena[id].get_index()))
+            .collect();
     }
 
     /// Build a FlowBlock from a `<bhead>` name and register it

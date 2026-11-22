@@ -1,5 +1,5 @@
-use super::{only_types_are_renamed, serial_run, shard, PoolConfig, SynthPlan, SynthRequest};
 use super::super::tests::{cfg, sample_result};
+use super::{PoolConfig, SynthPlan, SynthRequest, only_types_are_renamed, serial_run, shard};
 
 fn plan() -> SynthPlan {
     SynthPlan {
@@ -110,8 +110,14 @@ fn a_rename_covering_a_symbol_name_is_refused() {
 #[test]
 fn the_report_names_the_serial_run_it_can_actually_replay() {
     assert_eq!(serial_run(&cfg(0, 0.0)), "--jobs 1");
-    let callee_first = PoolConfig { serial_callee_first: true, ..cfg(0, 0.0) };
-    assert_eq!(serial_run(&callee_first), "--jobs 1 --option protoorder off");
+    let callee_first = PoolConfig {
+        serial_callee_first: true,
+        ..cfg(0, 0.0)
+    };
+    assert_eq!(
+        serial_run(&callee_first),
+        "--jobs 1 --option protoorder off"
+    );
 }
 
 #[test]
@@ -120,11 +126,18 @@ fn a_structure_rename_rebases_recorded_pointer_arguments() {
     let mut r = sample_result();
     r.code = Some("struct_3 *p; sink(&v1);".into());
     r.pointerargs = Some(Record {
-        entry: ("ram".into(), 0x2000), parameters: vec![],
+        entry: ("ram".into(), 0x2000),
+        parameters: vec![],
         calls: vec![Call {
-            callee: ("ram".into(), 0x1000), index: 0,
-            storage: (("register".into(), 0x38), 8), actual: "long *".into(),
-            position: Position { line: 1, column: 17 }, expression: "&v1".into(),
+            callee: ("ram".into(), 0x1000),
+            index: 0,
+            storage: (("register".into(), 0x38), 8),
+            actual: "long *".into(),
+            position: Position {
+                line: 1,
+                column: 17,
+            },
+            expression: "&v1".into(),
         }],
     });
     let own = [Some(("struct_3".into(), Some(request(4))))];

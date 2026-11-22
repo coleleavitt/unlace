@@ -38,6 +38,7 @@ pub fn paint_volatile(arch: &mut Architecture, space: &Rc<AddrSpace>, mapped: &[
         }
         let first = Address::new(Rc::clone(space), start);
         let last_open = Address::new(Rc::clone(space), end);
-        arch.symboltab.set_property_range(varnode_flags::volatil, &first, &last_open);
+        arch.symboltab
+            .set_property_range(varnode_flags::volatil, &first, &last_open);
     }
 }

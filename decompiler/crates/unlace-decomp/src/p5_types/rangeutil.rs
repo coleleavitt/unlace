@@ -50,13 +50,13 @@
 //!     `IrValueSetGraph` (descendant-op edges plus the simulated root), and
 //!     the self-contained ordering tests keep exercising the walk directly.
 
+use std::collections::{HashMap, HashSet};
 use unlace_base::address::{
     bit_transitions, calc_mask, count_leading_zeros, leastsigbit_set, mostsigbit_set, sign_extend,
     sign_extend_sized,
 };
-use unlace_base::types::{int4, intb, uint4, uintb, Wrap};
+use unlace_base::types::{Wrap, int4, intb, uint4, uintb};
 use unlace_num::opcodes::OpCode;
-use std::collections::{HashMap, HashSet};
 
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
@@ -70,8 +70,7 @@ use crate::funcdata::Funcdata;
 ///
 /// The literal is exactly 64 printable chars; the 6-bit overlap code indexes
 /// 0..=63 so no terminator byte is ever read.
-const ARRANGE: &[u8; 64] =
-    b"gcgbegdagggggggeggggcgbggggggggcdfgggggggegdggggbgggfggggcgbegda";
+const ARRANGE: &[u8; 64] = b"gcgbegdagggggggeggggcgbggggggggcdfgggggggegdggggbgggfggggcgbegda";
 
 /// A class for manipulating integer value ranges (C++ `CircleRange`,
 /// `rangeutil.hh:50`).
@@ -97,7 +96,13 @@ pub struct CircleRange {
 impl Default for CircleRange {
     /// Construct an empty range (C++ `CircleRange(void) { isempty=true; }`).
     fn default() -> Self {
-        CircleRange { left: 0, right: 0, mask: 0, isempty: true, step: 1 }
+        CircleRange {
+            left: 0,
+            right: 0,
+            mask: 0,
+            isempty: true,
+            step: 1,
+        }
     }
 }
 
@@ -115,7 +120,13 @@ impl CircleRange {
     /// (C++ `CircleRange(uintb lft,uintb rgt,int4 size,int4 stp)`,
     /// `rangeutil.cc:179`).
     pub fn new(lft: uintb, rgt: uintb, size: int4, stp: int4) -> CircleRange {
-        CircleRange { mask: calc_mask(size), step: stp, left: lft, right: rgt, isempty: false }
+        CircleRange {
+            mask: calc_mask(size),
+            step: stp,
+            left: lft,
+            right: rgt,
+            isempty: false,
+        }
     }
 
     /// Construct a boolean range (C++ `CircleRange(bool val)`, `rangeutil.cc:191`).
@@ -134,7 +145,13 @@ impl CircleRange {
     /// `rangeutil.cc:205`).
     pub fn new_value(val: uintb, size: int4) -> CircleRange {
         let mask = calc_mask(size);
-        CircleRange { mask, step: 1, left: val, right: val.wadd(1) & mask, isempty: false }
+        CircleRange {
+            mask,
+            step: 1,
+            left: val,
+            right: val.wadd(1) & mask,
+            isempty: false,
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -350,8 +367,17 @@ impl CircleRange {
 
     /// Make a range fit in a new domain (C++ `newDomain`, `rangeutil.cc:143`).
     /// Returns `true` if the truncated domain is empty.
-    fn new_domain(new_mask: uintb, new_step: int4, myleft: &mut uintb, myright: &mut uintb) -> bool {
-        let rem = if new_step != 1 { *myleft % (new_step as uintb) } else { 0 };
+    fn new_domain(
+        new_mask: uintb,
+        new_step: int4,
+        myleft: &mut uintb,
+        myright: &mut uintb,
+    ) -> bool {
+        let rem = if new_step != 1 {
+            *myleft % (new_step as uintb)
+        } else {
+            0
+        };
         if *myleft > new_mask {
             if *myright > new_mask {
                 // Both bounds out of range of newMask
@@ -445,7 +471,11 @@ impl CircleRange {
             count_leading_zeros(!self.right & self.mask)
         };
         8 * (std::mem::size_of::<uintb>() as int4)
-            - (if size_right < size_left { size_right } else { size_left })
+            - (if size_right < size_left {
+                size_right
+            } else {
+                size_left
+            })
     }
 
     // -----------------------------------------------------------------------
@@ -481,7 +511,8 @@ impl CircleRange {
             return true;
         }
 
-        let overlap_code = CircleRange::encode_range_overlaps(self.left, self.right, op2.left, op2.right);
+        let overlap_code =
+            CircleRange::encode_range_overlaps(self.left, self.right, op2.left, op2.right);
 
         if overlap_code == b'c' {
             return true;
@@ -572,7 +603,8 @@ impl CircleRange {
             return 0;
         }
 
-        let overlap_code = CircleRange::encode_range_overlaps(self.left, a_right, op2.left, b_right);
+        let overlap_code =
+            CircleRange::encode_range_overlaps(self.left, a_right, op2.left, b_right);
         match overlap_code {
             b'a' | b'f' => {
                 // order (l r op2.l op2.r) | (op2.l op2.r l r)
@@ -642,7 +674,9 @@ impl CircleRange {
             };
             let diff = max.wsub(min);
             // C++ nests these (rangeutil.cc:468-469); collapsed (same semantics).
-            if diff > 0 && diff <= (max_step as uintb) && leastsigbit_set(diff) == mostsigbit_set(diff)
+            if diff > 0
+                && diff <= (max_step as uintb)
+                && leastsigbit_set(diff) == mostsigbit_set(diff)
             {
                 self.step = diff as int4;
                 self.left = min;
@@ -659,7 +693,8 @@ impl CircleRange {
         let vacant_size1;
         let vacant_size2;
 
-        let overlap_code = CircleRange::encode_range_overlaps(self.left, a_right, op2.left, b_right);
+        let overlap_code =
+            CircleRange::encode_range_overlaps(self.left, a_right, op2.left, b_right);
         match overlap_code {
             b'a' => {
                 // order (l r op2.l op2.r)
@@ -746,14 +781,28 @@ impl CircleRange {
         if self.step < op2.step {
             new_step = op2.step;
             let rem = (op2left % (new_step as uintb)) as uint4;
-            if CircleRange::new_stride(self.mask, new_step, self.step, rem, &mut myleft, &mut myright) {
+            if CircleRange::new_stride(
+                self.mask,
+                new_step,
+                self.step,
+                rem,
+                &mut myleft,
+                &mut myright,
+            ) {
                 self.isempty = true;
                 return 0;
             }
         } else if op2.step < self.step {
             new_step = self.step;
             let rem = (myleft % (new_step as uintb)) as uint4;
-            if CircleRange::new_stride(op2.mask, new_step, op2.step, rem, &mut op2left, &mut op2right) {
+            if CircleRange::new_stride(
+                op2.mask,
+                new_step,
+                op2.step,
+                rem,
+                &mut op2left,
+                &mut op2right,
+            ) {
                 self.isempty = true;
                 return 0;
             }
@@ -783,7 +832,8 @@ impl CircleRange {
             self.right = myright;
             retval = 0;
         } else {
-            let overlap_code = CircleRange::encode_range_overlaps(myleft, myright, op2left, op2right);
+            let overlap_code =
+                CircleRange::encode_range_overlaps(myleft, myright, op2left, op2right);
             match overlap_code {
                 b'a' | b'f' => {
                     // order (l r op2.l op2.r) | (op2.l op2.r l r)
@@ -1273,8 +1323,11 @@ impl CircleRange {
                     self.right = self.right.wadd(1).wadd(rem);
                 } else {
                     self.left = sign_extend_sized(in1.left, in_size, out_size);
-                    self.right =
-                        sign_extend_sized(in1.right.wsub(in1.step as uintb) & in1.mask, in_size, out_size);
+                    self.right = sign_extend_sized(
+                        in1.right.wsub(in1.step as uintb) & in1.mask,
+                        in_size,
+                        out_size,
+                    );
                     if (self.right as intb) < (self.left as intb) {
                         return false; // Extending causes 2 pieces
                     }
@@ -1330,7 +1383,11 @@ impl CircleRange {
                 self.isempty = false;
                 self.mask = in1.mask | in2.mask;
                 if in1.left == in1.right || in2.left == in2.right {
-                    self.step = if in1.step < in2.step { in1.step } else { in2.step }; // Smaller step
+                    self.step = if in1.step < in2.step {
+                        in1.step
+                    } else {
+                        in2.step
+                    }; // Smaller step
                     self.left = in1.left.wadd(in2.left) % (self.step as uintb);
                     self.right = self.left;
                 } else if in2.is_single() {
@@ -1342,11 +1399,17 @@ impl CircleRange {
                     self.left = in2.left.wadd(in1.left) & self.mask;
                     self.right = in2.right.wadd(in1.left) & self.mask;
                 } else {
-                    self.step = if in1.step < in2.step { in1.step } else { in2.step }; // Smaller step
+                    self.step = if in1.step < in2.step {
+                        in1.step
+                    } else {
+                        in2.step
+                    }; // Smaller step
                     let size1 = if in1.left < in1.right {
                         in1.right.wsub(in1.left)
                     } else {
-                        in1.mask.wsub(in1.left.wsub(in1.right)).wadd(in1.step as uintb)
+                        in1.mask
+                            .wsub(in1.left.wsub(in1.right))
+                            .wadd(in1.step as uintb)
                     };
                     self.left = in1.left.wadd(in2.left) & self.mask;
                     self.right = in1
@@ -1359,7 +1422,9 @@ impl CircleRange {
                     let sizenew = if self.left < self.right {
                         self.right.wsub(self.left)
                     } else {
-                        self.mask.wsub(self.left.wsub(self.right)).wadd(self.step as uintb)
+                        self.mask
+                            .wsub(self.left.wsub(self.right))
+                            .wadd(self.step as uintb)
                     };
                     if sizenew < size1 {
                         self.right = self.left; // Over-flow, we covered everything
@@ -1398,7 +1463,8 @@ impl CircleRange {
                 }
                 if (const_val & (self.mask ^ (self.mask >> 1))) != 0 {
                     // Multiplying by a negative number
-                    self.left = (in1.right.wsub(in1.step as uintb)).wmul(in2.right.wsub(in2.step as uintb))
+                    self.left = (in1.right.wsub(in1.step as uintb))
+                        .wmul(in2.right.wsub(in2.step as uintb))
                         & self.mask;
                     self.right = (in1.left.wmul(in2.left)).wadd(self.step as uintb) & self.mask;
                 } else {
@@ -1444,8 +1510,11 @@ impl CircleRange {
                 let sa = (in2.left as int4).wmul(8);
                 self.mask = calc_mask(out_size);
                 self.step = if sa == 0 { in1.step } else { 1 };
-                let range =
-                    if in1.left < in1.right { in1.right.wsub(in1.left) } else { in1.left.wsub(in1.right) };
+                let range = if in1.left < in1.right {
+                    in1.right.wsub(in1.left)
+                } else {
+                    in1.left.wsub(in1.right)
+                };
 
                 // sa is a non-negative int4; x86 masks the shift count mod 64
                 // (rangeutil.cc:1288), so use wshr (a SUBPIECE offset 8 gives sa=64).
@@ -1454,7 +1523,9 @@ impl CircleRange {
                     self.right = 0; // We cover everything
                 } else {
                     self.left = in1.left.wshr(sa as u32); // x86 shift mod 64 (rangeutil.cc:1292/1308)
-                    self.right = (in1.right.wsub(in1.step as uintb)).wshr(sa as u32).wadd(self.step as uintb); // rangeutil.cc:1293 (x86 shift mod 64)
+                    self.right = (in1.right.wsub(in1.step as uintb))
+                        .wshr(sa as u32)
+                        .wadd(self.step as uintb); // rangeutil.cc:1293 (x86 shift mod 64)
                     self.left &= self.mask;
                     self.right &= self.mask;
                     self.normalize();
@@ -1501,7 +1572,9 @@ impl CircleRange {
                 // left = (valLeft >> sa) & mask  (intb arithmetic shift)
                 self.left = ((val_left.wshr(sa as u32)) as uintb) & self.mask; // rangeutil.cc:1334 (arithmetic shr, x86 mod 64)
                 // right = (((valRight - in1.step) >> sa) + 1) & mask
-                self.right = (((val_right.wsub(in1.step as intb)).wshr(sa as u32).wadd(1)) as uintb) & self.mask; // rangeutil.cc:1335 (arithmetic shr, x86 mod 64)
+                self.right = (((val_right.wsub(in1.step as intb)).wshr(sa as u32).wadd(1))
+                    as uintb)
+                    & self.mask; // rangeutil.cc:1335 (arithmetic shr, x86 mod 64)
                 if self.left == self.right {
                     self.right = (self.left.wadd(1)) & self.mask;
                 }
@@ -1553,10 +1626,24 @@ impl CircleRange {
             return false;
         }
         let mut tmp_range = CircleRange::new_empty();
-        if !tmp_range.push_forward_binary(OpCode::CPUI_INT_MULT, in2, in3, in_size, in_size, max_step) {
+        if !tmp_range.push_forward_binary(
+            OpCode::CPUI_INT_MULT,
+            in2,
+            in3,
+            in_size,
+            in_size,
+            max_step,
+        ) {
             return false;
         }
-        self.push_forward_binary(OpCode::CPUI_INT_ADD, in1, &tmp_range, in_size, out_size, max_step)
+        self.push_forward_binary(
+            OpCode::CPUI_INT_ADD,
+            in1,
+            &tmp_range,
+            in_size,
+            out_size,
+            max_step,
+        )
     }
 
     // -----------------------------------------------------------------------
@@ -1661,8 +1748,12 @@ pub trait Widener {
     /// ValueSet (C++ `doWidening`).  `range` is the previous form (and the
     /// storage for the widened result), `new_range` is the current iteration.
     /// Returns `true` if widening succeeded.
-    fn do_widening(&self, value_set: &ValueSet, range: &mut CircleRange, new_range: &CircleRange)
-        -> bool;
+    fn do_widening(
+        &self,
+        value_set: &ValueSet,
+        range: &mut CircleRange,
+        new_range: &CircleRange,
+    ) -> bool;
 }
 
 /// Normal widening (C++ `WidenerFull`, `rangeutil.hh:236`).
@@ -1674,7 +1765,10 @@ pub struct WidenerFull {
 impl Default for WidenerFull {
     /// C++ default constructor: `widenIteration = 2; fullIteration = 5;`.
     fn default() -> Self {
-        WidenerFull { widen_iteration: 2, full_iteration: 5 }
+        WidenerFull {
+            widen_iteration: 2,
+            full_iteration: 5,
+        }
     }
 }
 
@@ -1686,7 +1780,10 @@ impl WidenerFull {
 
     /// Constructor specifying iterations (C++ `WidenerFull(int4,int4)`).
     pub fn with_iterations(wide: int4, full: int4) -> WidenerFull {
-        WidenerFull { widen_iteration: wide, full_iteration: full }
+        WidenerFull {
+            widen_iteration: wide,
+            full_iteration: full,
+        }
     }
 }
 
@@ -1746,7 +1843,9 @@ pub struct WidenerNone {
 impl Default for WidenerNone {
     /// C++ default constructor: `freezeIteration = 3;`.
     fn default() -> Self {
-        WidenerNone { freeze_iteration: 3 }
+        WidenerNone {
+            freeze_iteration: 3,
+        }
     }
 }
 
@@ -1808,7 +1907,11 @@ pub struct Equation {
 impl Equation {
     /// Construct an equation (C++ `Equation(int4,int4,const CircleRange &)`).
     pub fn new(slot: int4, type_code: int4, range: CircleRange) -> Equation {
-        Equation { slot, type_code, range }
+        Equation {
+            slot,
+            type_code,
+            range,
+        }
     }
 }
 
@@ -1928,7 +2031,8 @@ impl ValueSet {
             }
             pos += 1;
         }
-        self.equations.insert(pos, Equation::new(slot, type_code, constraint));
+        self.equations
+            .insert(pos, Equation::new(slot, type_code, constraint));
     }
 
     /// Add a widening landmark (C++ `addLandmark`).
@@ -2193,7 +2297,13 @@ impl ValueSetSolver {
         let idx = self.alloc_value_set();
         let (size, is_written, is_constant, offset, def) = {
             let v = fd.vbank().get(vn).expect("newValueSet: stale varnode");
-            (v.get_size(), v.is_written(), v.is_constant(), v.get_offset(), v.get_def())
+            (
+                v.get_size(),
+                v.is_written(),
+                v.is_constant(),
+                v.get_offset(),
+                v.get_def(),
+            )
         };
         let (op_code, num_params) = match def {
             Some(d) if is_written => {
@@ -2444,7 +2554,13 @@ impl ValueSetSolver {
                     Some(v) => v,
                     None => continue,
                 };
-                (v.is_written(), v.is_constant(), v.is_spacebase(), v.get_def(), v.get_size())
+                (
+                    v.is_written(),
+                    v.is_constant(),
+                    v.is_spacebase(),
+                    v.get_def(),
+                    v.get_size(),
+                )
             };
             if !is_written {
                 if is_constant {
@@ -2477,8 +2593,11 @@ impl ValueSetSolver {
             // Distinguish ops where we can never predict an integer range.
             match opc {
                 OpCode::CPUI_INDIRECT => {
-                    let ind_store =
-                        fd.obank().get(op).map(|o| o.is_indirect_store()).unwrap_or(false);
+                    let ind_store = fd
+                        .obank()
+                        .get(op)
+                        .map(|o| o.is_indirect_store())
+                        .unwrap_or(false);
                     if indirect_as_copy || ind_store {
                         if let Some(in_vn) = fd.obank().get(op).and_then(|o| o.get_in(0)) {
                             if !self.value_set_map.contains_key(&in_vn) {
@@ -2523,8 +2642,11 @@ impl ValueSetSolver {
                             Some(v) => v,
                             None => continue,
                         };
-                        let is_annotation =
-                            fd.vbank().get(in_vn).map(|v| v.is_annotation()).unwrap_or(true);
+                        let is_annotation = fd
+                            .vbank()
+                            .get(in_vn)
+                            .map(|v| v.is_annotation())
+                            .unwrap_or(true);
                         if self.value_set_map.contains_key(&in_vn) || is_annotation {
                             continue;
                         }
@@ -2580,11 +2702,12 @@ impl ValueSetSolver {
         match node {
             Some(i) => self.value_nodes[i].add_equation(slot, type_code, range.clone()),
             // Special read site.
-            None => self.read_nodes.entry(op).or_default().add_equation(
-                slot,
-                type_code,
-                range.clone(),
-            ),
+            None => {
+                self.read_nodes
+                    .entry(op)
+                    .or_default()
+                    .add_equation(slot, type_code, range.clone())
+            }
         }
     }
 
@@ -2603,11 +2726,12 @@ impl ValueSetSolver {
         match node {
             Some(i) => self.value_nodes[i].add_equation(slot, type_code, false_range),
             // Special read site.
-            None => self.read_nodes.entry(op).or_default().add_equation(
-                slot,
-                type_code,
-                false_range,
-            ),
+            None => {
+                self.read_nodes
+                    .entry(op)
+                    .or_default()
+                    .add_equation(slot, type_code, false_range)
+            }
         }
     }
 
@@ -2637,18 +2761,33 @@ impl ValueSetSolver {
         cbranch: OpId,
         read_marked: &HashSet<OpId>,
     ) {
-        let Some(value) = fd.vbank().get(vn) else { return };
+        let Some(value) = fd.vbank().get(vn) else {
+            return;
+        };
         for op in value.descend_iter() {
-            let Some(op) = fd.obank().get(op).filter(|op| op.code() == OpCode::CPUI_INT_ZEXT) else { continue };
+            let Some(op) = fd
+                .obank()
+                .get(op)
+                .filter(|op| op.code() == OpCode::CPUI_INT_ZEXT)
+            else {
+                continue;
+            };
             // The backward walk already constrained its preceding value.
-            let Some(output) = op.get_out().filter(|out| {
-                Some(*out) != previous && self.value_set_map.contains_key(out)
-            }) else { continue };
-            let Some(out_size) = fd.vbank().get(output).map(|out| out.get_size()) else { continue };
+            let Some(output) = op
+                .get_out()
+                .filter(|out| Some(*out) != previous && self.value_set_map.contains_key(out))
+            else {
+                continue;
+            };
+            let Some(out_size) = fd.vbank().get(output).map(|out| out.get_size()) else {
+                continue;
+            };
             if out_size <= value.get_size() {
                 continue;
             }
-            let Some(extended) = Self::zext_constraint(range, value.get_size(), out_size) else { continue };
+            let Some(extended) = Self::zext_constraint(range, value.get_size(), out_size) else {
+                continue;
+            };
             self.apply_constraints(fd, output, 0, &extended, cbranch, read_marked);
         }
     }
@@ -2672,11 +2811,21 @@ impl ValueSetSolver {
         if bb.block(split_point).size_out() != 2 {
             return; // defensive: C++ guarantees a CBRANCH block has 2 out-edges
         }
-        let flip = fd.obank().get(cbranch).map(|o| o.is_boolean_flip()).unwrap_or(false);
+        let flip = fd
+            .obank()
+            .get(cbranch)
+            .map(|o| o.is_boolean_flip())
+            .unwrap_or(false);
         let (true_block, false_block) = if flip {
-            (bb.block(split_point).get_false_out(), bb.block(split_point).get_true_out())
+            (
+                bb.block(split_point).get_false_out(),
+                bb.block(split_point).get_true_out(),
+            )
         } else {
-            (bb.block(split_point).get_true_out(), bb.block(split_point).get_false_out())
+            (
+                bb.block(split_point).get_true_out(),
+                bb.block(split_point).get_false_out(),
+            )
         };
         // Check if the only path to trueBlock or falseBlock is via a splitPoint
         // out-edge induced by the condition.
@@ -2691,8 +2840,11 @@ impl ValueSetSolver {
                 }
             }
         }
-        let descend: Vec<OpId> =
-            fd.vbank().get(vn).map(|v| v.descend_iter().collect()).unwrap_or_default();
+        let descend: Vec<OpId> = fd
+            .vbank()
+            .get(vn)
+            .map(|v| v.descend_iter().collect())
+            .unwrap_or_default();
         for op in descend {
             // The output node in the system, or None for a special read site.
             let mut out_node: Option<usize> = None;
@@ -2804,7 +2956,11 @@ impl ValueSetSolver {
                 Some(d) => d,
                 None => break,
             };
-            let stop = fd.obank().get(op).map(|o| o.is_call() || o.is_marker()).unwrap_or(true);
+            let stop = fd
+                .obank()
+                .get(op)
+                .map(|o| o.is_call() || o.is_marker())
+                .unwrap_or(true);
             if stop {
                 break;
             }

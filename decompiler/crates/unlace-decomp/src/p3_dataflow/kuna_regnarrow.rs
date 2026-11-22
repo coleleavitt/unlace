@@ -23,7 +23,7 @@ use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::context::VarnodeId;
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 
 /// How many times one function's webs are narrowed; each later run only sees
@@ -33,7 +33,9 @@ const MAX_RUNS: u8 = 2;
 /// The narrowest of 1, 2 and 4 bytes, below `size`, whose low part holds every
 /// bit of `nz` and whose top bit `nz` can set.
 fn narrow_width(nz: uintb, size: int4) -> Option<int4> {
-    let w = [1, 2, 4].into_iter().find(|&w| w < size && nz & !calc_mask(w) == 0)?;
+    let w = [1, 2, 4]
+        .into_iter()
+        .find(|&w| w < size && nz & !calc_mask(w) == 0)?;
     ((nz >> (8 * w - 1)) & 1 == 1).then_some(w)
 }
 
@@ -42,7 +44,9 @@ fn narrow_width(nz: uintb, size: int4) -> Option<int4> {
 /// nor type-locked? A pointer whose values happen to be small (string
 /// addresses in a small image) is no narrow value.
 fn plain_container(data: &Funcdata, vn: VarnodeId) -> bool {
-    let Some(v) = data.vbank().get(vn) else { return false };
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
     if !matches!(v.get_size(), 2 | 4 | 8)
         || !v.is_written()
         || v.is_addr_tied()
@@ -52,7 +56,9 @@ fn plain_container(data: &Funcdata, vn: VarnodeId) -> bool {
     {
         return false;
     }
-    v.get_addr().get_space().is_some_and(|s| s.get_type() == spacetype::IPTR_PROCESSOR)
+    v.get_addr()
+        .get_space()
+        .is_some_and(|s| s.get_type() == spacetype::IPTR_PROCESSOR)
         && matches!(
             v.get_type().get_metatype(),
             type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN
@@ -62,7 +68,9 @@ fn plain_container(data: &Funcdata, vn: VarnodeId) -> bool {
 /// Do `vn`'s possibly nonzero bits fit the low half of it, the widest part a
 /// web holding it can narrow to?
 fn fits_low_half(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).is_some_and(|v| v.get_nz_mask() & !calc_mask(v.get_size() / 2) == 0)
+    data.vbank()
+        .get(vn)
+        .is_some_and(|v| v.get_nz_mask() & !calc_mask(v.get_size() / 2) == 0)
 }
 
 fn def_code(data: &Funcdata, vn: VarnodeId) -> Option<OpCode> {
@@ -77,7 +85,9 @@ fn web_of(data: &Funcdata, seed: VarnodeId) -> Vec<VarnodeId> {
     while i < web.len() && web.len() <= 256 {
         let cur = web[i];
         i += 1;
-        let Some(v) = data.vbank().get(cur) else { continue };
+        let Some(v) = data.vbank().get(cur) else {
+            continue;
+        };
         let mut next = Vec::new();
         if let Some(o) = v.get_def().and_then(|d| data.obank().get(d)) {
             if o.code() == OpCode::CPUI_MULTIEQUAL {
@@ -85,7 +95,11 @@ fn web_of(data: &Funcdata, seed: VarnodeId) -> Vec<VarnodeId> {
             }
         }
         for op in v.descend_iter() {
-            if let Some(o) = data.obank().get(op).filter(|o| o.code() == OpCode::CPUI_MULTIEQUAL) {
+            if let Some(o) = data
+                .obank()
+                .get(op)
+                .filter(|o| o.code() == OpCode::CPUI_MULTIEQUAL)
+            {
                 next.extend(o.get_out());
             }
         }
@@ -104,19 +118,26 @@ fn web_of(data: &Funcdata, seed: VarnodeId) -> Vec<VarnodeId> {
 fn narrowing_defs(data: &Funcdata, web: &[VarnodeId], w: int4) -> bool {
     let low = calc_mask(w);
     web.iter().all(|&vn| {
-        let Some(o) = data.vbank().get(vn).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d)) else {
+        let Some(o) = data
+            .vbank()
+            .get(vn)
+            .and_then(|v| v.get_def())
+            .and_then(|d| data.obank().get(d))
+        else {
             return false;
         };
         let input = |k: int4| o.get_in(k).and_then(|x| data.vbank().get(x));
         match o.code() {
             OpCode::CPUI_MULTIEQUAL => true,
             OpCode::CPUI_COPY => input(0).is_some_and(|c| {
-                !c.is_constant() || (c.get_offset() & !low == 0 && !image_address(data, c.get_offset()))
+                !c.is_constant()
+                    || (c.get_offset() & !low == 0 && !image_address(data, c.get_offset()))
             }),
-            OpCode::CPUI_INT_ZEXT => input(0).is_some_and(|x| x.get_size() <= w && !x.is_addr_tied()),
-            OpCode::CPUI_INT_AND => {
-                (0..2).any(|k| input(k).is_some_and(|c| c.is_constant() && c.get_offset() & !low == 0))
+            OpCode::CPUI_INT_ZEXT => {
+                input(0).is_some_and(|x| x.get_size() <= w && !x.is_addr_tied())
             }
+            OpCode::CPUI_INT_AND => (0..2)
+                .any(|k| input(k).is_some_and(|c| c.is_constant() && c.get_offset() & !low == 0)),
             _ => false,
         }
     })
@@ -136,11 +157,18 @@ fn image_address(data: &Funcdata, c: uintb) -> bool {
     if c < 0x1000 {
         return false;
     }
-    let Some(loader) = data.get_arch().loader.as_ref() else { return false };
-    let Ok(image) = loader.try_borrow() else { return true };
+    let Some(loader) = data.get_arch().loader.as_ref() else {
+        return false;
+    };
+    let Ok(image) = loader.try_borrow() else {
+        return true;
+    };
     match image.shared_bytes() {
         Some(bytes) => bytes.mapped_covers(c, c + 1),
-        None => image.get_segments().iter().any(|&(lo, hi, _)| lo <= c && c < hi),
+        None => image
+            .get_segments()
+            .iter()
+            .any(|&(lo, hi, _)| lo <= c && c < hi),
     }
 }
 
@@ -148,7 +176,10 @@ fn image_address(data: &Funcdata, c: uintb) -> bool {
 /// how many webs were rebuilt. A web whose flow did not close is not traced
 /// again from the same seed in a later `fullloop` pass.
 pub fn narrow_locals(data: &mut Funcdata) -> int4 {
-    if !data.get_arch().narrow_locals || data.bblocks_get_size() == 0 || data.kuna_regnarrow_runs >= MAX_RUNS {
+    if !data.get_arch().narrow_locals
+        || data.bblocks_get_size() == 0
+        || data.kuna_regnarrow_runs >= MAX_RUNS
+    {
         return 0;
     }
     let signed = data.get_arch().narrow_signed;
@@ -157,10 +188,17 @@ pub fn narrow_locals(data: &mut Funcdata) -> int4 {
         .iter_loc()
         .filter(|&vn| {
             (fits_low_half(data, vn)
-                || (signed && matches!(def_code(data, vn), Some(OpCode::CPUI_INT_SEXT | OpCode::CPUI_MULTIEQUAL))))
+                || (signed
+                    && matches!(
+                        def_code(data, vn),
+                        Some(OpCode::CPUI_INT_SEXT | OpCode::CPUI_MULTIEQUAL)
+                    )))
                 && plain_container(data, vn)
                 && (def_code(data, vn) == Some(OpCode::CPUI_MULTIEQUAL)
-                    || data.vbank().get(vn).is_some_and(|v| v.descend_iter().nth(1).is_some()))
+                    || data
+                        .vbank()
+                        .get(vn)
+                        .is_some_and(|v| v.descend_iter().nth(1).is_some()))
         })
         .collect();
     let mut seen: BTreeSet<VarnodeId> = BTreeSet::new();
@@ -171,13 +209,21 @@ pub fn narrow_locals(data: &mut Funcdata) -> int4 {
         }
         let web = web_of(data, seed);
         seen.extend(web.iter().copied());
-        let Some(size) = data.vbank().get(seed).map(|v| v.get_size()) else { continue };
+        let Some(size) = data.vbank().get(seed).map(|v| v.get_size()) else {
+            continue;
+        };
         if web.len() > 256
-            || !web.iter().all(|&vn| plain_container(data, vn) && data.vbank().get(vn).is_some_and(|v| v.get_size() == size))
+            || !web.iter().all(|&vn| {
+                plain_container(data, vn)
+                    && data.vbank().get(vn).is_some_and(|v| v.get_size() == size)
+            })
         {
             continue;
         }
-        let nz = web.iter().filter_map(|&vn| data.vbank().get(vn)).fold(0, |m, v| m | v.get_nz_mask());
+        let nz = web
+            .iter()
+            .filter_map(|&vn| data.vbank().get(vn))
+            .fold(0, |m, v| m | v.get_nz_mask());
         let Some(w) = narrow_width(nz, size) else {
             if signed {
                 if let Some(w) = signed_width(data, &web, size) {
@@ -225,11 +271,18 @@ fn signed_width(data: &Funcdata, web: &[VarnodeId], size: int4) -> Option<int4> 
     let mut phi = false;
     let mut of_inputs = true;
     for &vn in web {
-        let o = data.vbank().get(vn).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d))?;
+        let o = data
+            .vbank()
+            .get(vn)
+            .and_then(|v| v.get_def())
+            .and_then(|d| data.obank().get(d))?;
         let input = |k: int4| o.get_in(k).and_then(|x| data.vbank().get(x));
         match o.code() {
             OpCode::CPUI_MULTIEQUAL => phi = true,
-            OpCode::CPUI_INT_AND | OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR | OpCode::CPUI_INT_NEGATE => {
+            OpCode::CPUI_INT_AND
+            | OpCode::CPUI_INT_OR
+            | OpCode::CPUI_INT_XOR
+            | OpCode::CPUI_INT_NEGATE => {
                 of_inputs = false;
             }
             OpCode::CPUI_COPY => {
@@ -249,7 +302,12 @@ fn signed_width(data: &Funcdata, web: &[VarnodeId], size: int4) -> Option<int4> 
             _ => return None,
         }
     }
-    if w == 0 || w >= size || (of_inputs && !phi) || wide_frame_home(data, web, w) || feeds_switch(data, web) {
+    if w == 0
+        || w >= size
+        || (of_inputs && !phi)
+        || wide_frame_home(data, web, w)
+        || feeds_switch(data, web)
+    {
         return None;
     }
     let fits = |c: uintb| unlace_base::address::sign_extend_sized(c & calc_mask(w), w, size) == c;
@@ -266,9 +324,13 @@ fn feeds_switch(data: &Funcdata, web: &[VarnodeId]) -> bool {
     for _ in 0..8 {
         let mut next = Vec::new();
         for vn in frontier {
-            let Some(v) = data.vbank().get(vn) else { continue };
+            let Some(v) = data.vbank().get(vn) else {
+                continue;
+            };
             for op in v.descend_iter() {
-                let Some(o) = data.obank().get(op) else { continue };
+                let Some(o) = data.obank().get(op) else {
+                    continue;
+                };
                 if o.code() == OpCode::CPUI_BRANCHIND {
                     return true;
                 }
@@ -291,16 +353,26 @@ fn feeds_switch(data: &Funcdata, web: &[VarnodeId]) -> bool {
 /// simplification removed the slot? The program's own home for it is wide: the
 /// `-O0` spill of `int v = c;`.
 fn wide_frame_home(data: &Funcdata, web: &[VarnodeId], w: int4) -> bool {
-    let Some(stack) = data.get_arch().manage().get_stack_space() else { return false };
+    let Some(stack) = data.get_arch().manage().get_stack_space() else {
+        return false;
+    };
     web.iter().any(|&vn| {
-        data.kuna_storage_sources(vn)
-            .iter()
-            .any(|s| s.size > w && s.address.get_space().is_some_and(|sp| sp.get_index() == stack.get_index()))
+        data.kuna_storage_sources(vn).iter().any(|s| {
+            s.size > w
+                && s.address
+                    .get_space()
+                    .is_some_and(|sp| sp.get_index() == stack.get_index())
+        })
     })
 }
 
 /// Rebuild the sign-extended web of `seed` at `w` bytes; 1 when it was.
-fn narrow_signed_web(data: &mut Funcdata, seed: VarnodeId, w: int4, seen: &mut BTreeSet<VarnodeId>) -> int4 {
+fn narrow_signed_web(
+    data: &mut Funcdata,
+    seed: VarnodeId,
+    w: int4,
+    seen: &mut BTreeSet<VarnodeId>,
+) -> int4 {
     match crate::subflow::run_sext_uses(data, seed, calc_mask(w)) {
         Some((flow, narrow)) => {
             seen.extend(flow);
@@ -312,7 +384,10 @@ fn narrow_signed_web(data: &mut Funcdata, seed: VarnodeId, w: int4, seen: &mut B
         }
         None => {
             if trace() {
-                eprintln!("[regsigned-fail] 0x{:x} -> {w}", data.get_address().get_offset());
+                eprintln!(
+                    "[regsigned-fail] 0x{:x} -> {w}",
+                    data.get_address().get_offset()
+                );
             }
             data.kuna_regnarrow_failed.insert(seed);
             0
@@ -329,10 +404,18 @@ fn trace() -> bool {
 /// more specific than its size: the zero-extended low part of a register is
 /// unsigned. The sign-extended low part is signed, also over the `uint` a
 /// bitwise op votes for its output (the program sign-extends it).
-pub fn unsigned_vote(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> Option<std::rc::Rc<Datatype>> {
+pub fn unsigned_vote(
+    data: &Funcdata,
+    vn: VarnodeId,
+    ct: &Datatype,
+) -> Option<std::rc::Rc<Datatype>> {
     let meta = match ct.get_metatype() {
-        type_metatype::TYPE_UNKNOWN if data.kuna_regnarrow_values.contains(&vn) => type_metatype::TYPE_UINT,
-        type_metatype::TYPE_UNKNOWN | type_metatype::TYPE_UINT if data.kuna_regsigned_values.contains(&vn) => {
+        type_metatype::TYPE_UNKNOWN if data.kuna_regnarrow_values.contains(&vn) => {
+            type_metatype::TYPE_UINT
+        }
+        type_metatype::TYPE_UNKNOWN | type_metatype::TYPE_UINT
+            if data.kuna_regsigned_values.contains(&vn) =>
+        {
             type_metatype::TYPE_INT
         }
         _ => return None,

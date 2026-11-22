@@ -34,7 +34,7 @@
 
 use std::rc::Rc;
 
-use crate::dtype::{type_metatype, Datatype, TypeFactory};
+use crate::dtype::{Datatype, TypeFactory, type_metatype};
 
 /// Deepest pointer nesting the propagation may adopt over a concrete base type.
 /// Upstream `getTypePointerNoDepth` enforces the same value implicitly: it
@@ -60,7 +60,9 @@ pub fn cap_pointer_depth(tlst: &dyn TypeFactory, dt: &Rc<Datatype>) -> Option<Rc
         // depth >= 3 over anything: collapse the whole tail to one pointer to an
         // opaque word (C++ `pt = getBase(pt->getSize(), TYPE_UNKNOWN)`).
         type_metatype::TYPE_PTR => {
-            let base = tlst.get_base(target.get_size(), type_metatype::TYPE_UNKNOWN).ok()?;
+            let base = tlst
+                .get_base(target.get_size(), type_metatype::TYPE_UNKNOWN)
+                .ok()?;
             let ws = dt.get_word_size().unwrap_or(1);
             tlst.get_type_pointer(dt.get_size(), base, ws).ok()
         }

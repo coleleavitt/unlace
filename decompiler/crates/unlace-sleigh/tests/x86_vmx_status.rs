@@ -71,8 +71,15 @@ struct Decoded {
 fn decode(longmode: bool, bytes: &[u8]) -> Decoded {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let sla = if longmode { "x86-64.sla" } else { "x86.sla" };
-    let sla = std::fs::read(root.join("specs/Ghidra/Processors/x86/data/languages").join(sla)).unwrap();
-    let mut sleigh = Sleigh::new(Box::new(Bytes(bytes.to_vec())), Box::new(ContextInternal::new()));
+    let sla = std::fs::read(
+        root.join("specs/Ghidra/Processors/x86/data/languages")
+            .join(sla),
+    )
+    .unwrap();
+    let mut sleigh = Sleigh::new(
+        Box::new(Bytes(bytes.to_vec())),
+        Box::new(ContextInternal::new()),
+    );
     sleigh.initialize_from_sla(&sla).unwrap();
     sleigh.set_context_default("addrsize", if longmode { 2 } else { 1 });
     sleigh.set_context_default("opsize", 1);
@@ -84,30 +91,50 @@ fn decode(longmode: bool, bytes: &[u8]) -> Decoded {
     let addr = Address::new(ram, BASE);
     let mut ops = Ops::default();
     let mut text = Text::default();
-    let length = sleigh.one_instruction_with_assembly(&mut ops, &mut text, &addr).unwrap();
+    let length = sleigh
+        .one_instruction_with_assembly(&mut ops, &mut text, &addr)
+        .unwrap();
     let mut userops = Vec::new();
     sleigh.get_user_op_names(&mut userops);
     let cf = sleigh.get_register_varnode(b"CF").unwrap();
     let zf = sleigh.get_register_varnode(b"ZF").unwrap();
-    Decoded { length, text: text.0, ops: ops.0, userops, cf, zf }
+    Decoded {
+        length,
+        text: text.0,
+        ops: ops.0,
+        userops,
+        cf,
+        zf,
+    }
 }
 
 fn callothers(d: &Decoded) -> Vec<(&str, Option<u32>)> {
     d.ops
         .iter()
         .filter(|(op, _, _)| *op == OpCode::CPUI_CALLOTHER)
-        .map(|(_, out, ins)| (d.userops[ins[0].offset as usize].as_str(), out.as_ref().map(|v| v.size)))
+        .map(|(_, out, ins)| {
+            (
+                d.userops[ins[0].offset as usize].as_str(),
+                out.as_ref().map(|v| v.size),
+            )
+        })
         .collect()
 }
 
 /// CF and ZF are each written exactly once, after the last user-op, and the
 /// status that feeds them is the output of `userop`.
 fn assert_status_flags(d: &Decoded, userop: &str) {
-    let last_call = d.ops.iter().rposition(|(op, _, _)| *op == OpCode::CPUI_CALLOTHER).unwrap();
+    let last_call = d
+        .ops
+        .iter()
+        .rposition(|(op, _, _)| *op == OpCode::CPUI_CALLOTHER)
+        .unwrap();
     let status = d
         .ops
         .iter()
-        .find(|(op, _, ins)| *op == OpCode::CPUI_CALLOTHER && d.userops[ins[0].offset as usize] == userop)
+        .find(|(op, _, ins)| {
+            *op == OpCode::CPUI_CALLOTHER && d.userops[ins[0].offset as usize] == userop
+        })
         .and_then(|(_, out, _)| out.clone())
         .unwrap_or_else(|| panic!("{userop} returns a status: {:?}", d.ops));
     assert_eq!(status.size, 4, "{userop} status is a 4-byte value");
@@ -119,10 +146,20 @@ fn assert_status_flags(d: &Decoded, userop: &str) {
             .filter(|(_, (_, out, _))| out.as_ref() == Some(flag))
             .map(|(i, _)| i)
             .collect();
-        assert_eq!(writes.len(), 1, "{name} written once by {userop}: {:?}", d.ops);
+        assert_eq!(
+            writes.len(),
+            1,
+            "{name} written once by {userop}: {:?}",
+            d.ops
+        );
         assert!(writes[0] > last_call, "{name} is written after the user-op");
         let (op, _, ins) = &d.ops[writes[0]];
-        assert_eq!(*op, OpCode::CPUI_INT_EQUAL, "{name} is a status compare: {:?}", d.ops);
+        assert_eq!(
+            *op,
+            OpCode::CPUI_INT_EQUAL,
+            "{name} is a status compare: {:?}",
+            d.ops
+        );
         assert_eq!(ins[0], status, "{name} compares the {userop} status");
         assert_eq!(ins[1].offset, value, "{name} is status == {value}");
     }
@@ -151,7 +188,13 @@ fn vmread_and_vmwrite_decode_without_rex_w_in_64_bit_mode() {
 fn vmread_keeps_its_value_and_takes_the_status_from_vmx_status() {
     for longmode in [true, false] {
         let d = decode(longmode, &[0x0f, 0x78, 0xf9]);
-        assert_eq!(callothers(&d), [("vmread", Some(if longmode { 8 } else { 4 })), ("vmx_status", Some(4))]);
+        assert_eq!(
+            callothers(&d),
+            [
+                ("vmread", Some(if longmode { 8 } else { 4 })),
+                ("vmx_status", Some(4))
+            ]
+        );
         assert_status_flags(&d, "vmx_status");
     }
 }
@@ -163,11 +206,23 @@ fn vmx_instructions_set_cf_and_zf_from_their_status() {
         (&[0x0f, 0x01, 0xc3], "VMRESUME", "vmresume"),
         (&[0x0f, 0x01, 0xc4], "VMXOFF", "vmxoff"),
         (&[0x0f, 0x79, 0xfe], "VMWRITE RDI, RSI", "vmwrite"),
-        (&[0x66, 0x0f, 0xc7, 0x37], "VMCLEAR qword ptr [RDI]", "vmclear"),
+        (
+            &[0x66, 0x0f, 0xc7, 0x37],
+            "VMCLEAR qword ptr [RDI]",
+            "vmclear",
+        ),
         (&[0x0f, 0xc7, 0x37], "VMPTRLD qword ptr [RDI]", "vmptrld"),
         (&[0xf3, 0x0f, 0xc7, 0x37], "VMXON qword ptr [RDI]", "vmxon"),
-        (&[0x66, 0x0f, 0x38, 0x80, 0x07], "INVEPT RAX, xmmword ptr [RDI]", "invept"),
-        (&[0x66, 0x0f, 0x38, 0x81, 0x07], "INVVPID RAX, xmmword ptr [RDI]", "invvpid"),
+        (
+            &[0x66, 0x0f, 0x38, 0x80, 0x07],
+            "INVEPT RAX, xmmword ptr [RDI]",
+            "invept",
+        ),
+        (
+            &[0x66, 0x0f, 0x38, 0x81, 0x07],
+            "INVVPID RAX, xmmword ptr [RDI]",
+            "invvpid",
+        ),
     ];
     for (bytes, text, userop) in cases {
         for longmode in [true, false] {
@@ -190,12 +245,29 @@ fn vmptrst_stores_the_vmcs_pointer_and_succeeds() {
     let d = decode(true, &[0x0f, 0xc7, 0x3f]);
     assert_eq!(d.text, "VMPTRST qword ptr [RDI]");
     assert_eq!(callothers(&d), [("vmptrst", Some(8))]);
-    let store = d.ops.iter().find(|(op, _, _)| *op == OpCode::CPUI_STORE).expect("VMPTRST stores");
+    let store = d
+        .ops
+        .iter()
+        .find(|(op, _, _)| *op == OpCode::CPUI_STORE)
+        .expect("VMPTRST stores");
     let (_, pointer, _) = &d.ops[0];
-    assert_eq!(store.2[2], pointer.clone().unwrap(), "the stored value is the user-op result: {:?}", d.ops);
-    assert!(d.ops.iter().all(|(op, _, _)| *op != OpCode::CPUI_LOAD), "VMPTRST loads nothing: {:?}", d.ops);
+    assert_eq!(
+        store.2[2],
+        pointer.clone().unwrap(),
+        "the stored value is the user-op result: {:?}",
+        d.ops
+    );
+    assert!(
+        d.ops.iter().all(|(op, _, _)| *op != OpCode::CPUI_LOAD),
+        "VMPTRST loads nothing: {:?}",
+        d.ops
+    );
     for flag in [&d.cf, &d.zf] {
-        let (op, _, ins) = d.ops.iter().find(|(_, out, _)| out.as_ref() == Some(flag)).unwrap();
+        let (op, _, ins) = d
+            .ops
+            .iter()
+            .find(|(_, out, _)| out.as_ref() == Some(flag))
+            .unwrap();
         assert_eq!(*op, OpCode::CPUI_COPY);
         assert_eq!(ins[0].offset, 0, "VMPTRST always succeeds");
     }

@@ -49,4 +49,3 @@ fn every_thunk_target_is_a_function_in_every_mode() {
         assert_eq!(inventory(mode, &[]), expected, "--mode {mode}");
     }
 }
-

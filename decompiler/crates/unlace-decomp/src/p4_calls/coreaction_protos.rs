@@ -94,7 +94,7 @@ use unlace_base::types::{int4, uintb};
 
 use unlace_num::opcodes::OpCode;
 
-use crate::action::{ruleflags, Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
+use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult, ruleflags};
 use crate::funcdata::Funcdata;
 
 #[cfg(test)]
@@ -132,7 +132,12 @@ fn indirect_target_slot(
             return None;
         }
         if target_vn.get_space().get_type() == unlace_base::space::spacetype::IPTR_INTERNAL {
-            let slot = crate::kuna_msvcimportcall::loaded_slot(data, call_op, target_vn.get_addr().clone(), target_vn.get_size())?;
+            let slot = crate::kuna_msvcimportcall::loaded_slot(
+                data,
+                call_op,
+                target_vn.get_addr().clone(),
+                target_vn.get_size(),
+            )?;
             return Some((slot, target_vn.get_size(), true));
         }
         return Some((target_vn.get_addr().clone(), target_vn.get_size(), false));
@@ -189,7 +194,9 @@ impl Action for ActionPrototypeTypes {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionPrototypeTypes { base: self.base.clone() }))
+        Some(Box::new(ActionPrototypeTypes {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         let evalfp = crate::kuna_callmechanisms::evaluation_model(data);
@@ -198,7 +205,10 @@ impl Action for ActionPrototypeTypes {
         let evalfp = match (evalfp, data.get_arch().vector_fp.clone()) {
             (Some(e), Some(v))
                 if data.kuna_vector_code
-                    && data.get_arch().default_fp().is_some_and(|d| Rc::ptr_eq(d, &e)) =>
+                    && data
+                        .get_arch()
+                        .default_fp()
+                        .is_some_and(|d| Rc::ptr_eq(d, &e)) =>
             {
                 Some(v)
             }
@@ -251,13 +261,18 @@ impl Action for ActionPrototypeTypes {
 
         // Strip the indirect register from all RETURN ops (so the compiler's
         // return-address mechanism does not appear in the high-level output).
-        let return_ops: Vec<crate::context::OpId> = data.obank().iter_code(OpCode::CPUI_RETURN).collect();
+        let return_ops: Vec<crate::context::OpId> =
+            data.obank().iter_code(OpCode::CPUI_RETURN).collect();
         for op in &return_ops {
             let in0 = match data.obank().get(*op).and_then(|o| o.get_in(0)) {
                 Some(v) => v,
                 None => continue,
             };
-            let is_const = data.vbank().get(in0).map(|v| v.is_constant()).unwrap_or(false);
+            let is_const = data
+                .vbank()
+                .get(in0)
+                .map(|v| v.is_constant())
+                .unwrap_or(false);
             if !is_const {
                 let sz = data.vbank().get(in0).map(|v| v.get_size()).unwrap_or(1);
                 let c = data.new_constant(sz, 0);
@@ -322,14 +337,19 @@ impl Action for ActionPrototypeTypes {
                     } else {
                         &full.get_addr() + i64::from(narrow.size)
                     };
-                    let high = data.new_varnode((full.size - narrow.size) as int4, &high_addr, None);
-                    let high = data.set_input_varnode(high).expect("physical stack upper input");
+                    let high =
+                        data.new_varnode((full.size - narrow.size) as int4, &high_addr, None);
+                    let high = data
+                        .set_input_varnode(high)
+                        .expect("physical stack upper input");
                     let op = data.new_op(2, data.bblocks_block_start(top));
                     data.new_varnode_out(full.size as int4, &full.get_addr(), op)
                         .expect("full stack base output");
                     data.op_set_opcode_code(op, OpCode::CPUI_PIECE);
-                    data.op_set_input(op, high, 0).expect("physical stack upper bits");
-                    data.op_set_input(op, input, 1).expect("logical stack address");
+                    data.op_set_input(op, high, 0)
+                        .expect("physical stack upper bits");
+                    data.op_set_input(op, input, 1)
+                        .expect("logical stack address");
                     data.op_insert_begin(op, top);
                     self.base.count += 1;
                 }
@@ -339,7 +359,10 @@ impl Action for ActionPrototypeTypes {
         // Force locked inputs to exist as Varnodes.  Needed so a big locked input
         // exists even when only part is used (SUBPIECE can then be built off it).
         if data.get_func_proto().is_input_locked() {
-            let ptr_size = data.get_arch().manage().get_default_code_space()
+            let ptr_size = data
+                .get_arch()
+                .manage()
+                .get_default_code_space()
                 .filter(|s| s.is_truncated())
                 .map(|s| s.get_addr_size() as int4);
             let topbl = if data.bblocks_get_size() > 0 {
@@ -354,7 +377,11 @@ impl Action for ActionPrototypeTypes {
                         Some(p) => p,
                         None => continue,
                     };
-                    (param.get_size(), param.get_address(), param.get_type().cloned())
+                    (
+                        param.get_size(),
+                        param.get_address(),
+                        param.get_type().cloned(),
+                    )
                 };
                 // Varnode *vn = data.newVarnode(size,addr); vn = setInputVarnode(vn);
                 let vn = data.new_varnode(psize, &paddr, None);
@@ -482,7 +509,9 @@ impl Action for ActionDefaultParams {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionDefaultParams { base: self.base.clone() }))
+        Some(Box::new(ActionDefaultParams {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:2369 — ActionDefaultParams::apply: give every
@@ -536,7 +565,10 @@ impl Action for ActionDefaultParams {
                     }
                     _ => None,
                 };
-                let own_slot = matches!(indirect_slot, Some((_, crate::context::IndirectSlotType::FunctionCode, true)));
+                let own_slot = matches!(
+                    indirect_slot,
+                    Some((_, crate::context::IndirectSlotType::FunctionCode, true))
+                );
                 let pieces_entry = if has_funcdata {
                     Some(data.get_call_specs(i).get_entry_address().clone())
                 } else {
@@ -553,7 +585,11 @@ impl Action for ActionDefaultParams {
                     // on the standalone path, keeping the default-model seed.
                     let pieces = arch.callee_proto_pieces(&entry);
                     (
-                        if own_slot { pieces.map(crate::p4_calls::kuna_slotargs::input_only) } else { pieces },
+                        if own_slot {
+                            pieces.map(crate::p4_calls::kuna_slotargs::input_only)
+                        } else {
+                            pieces
+                        },
                         arch.callee_proto_model(&entry),
                         arch.bound_proto_model(&entry),
                     )
@@ -572,7 +608,11 @@ impl Action for ActionDefaultParams {
                         let out_only = pieces.intypes.is_empty()
                             && pieces.outtype.is_none()
                             && pieces.output_storage.is_some();
-                        if out_only { pieces.output_storage.clone() } else { None }
+                        if out_only {
+                            pieces.output_storage.clone()
+                        } else {
+                            None
+                        }
                     }
                     None => None,
                 };
@@ -590,12 +630,23 @@ impl Action for ActionDefaultParams {
                             let seed_model = callee_model
                                 .clone()
                                 .or_else(|| {
-                                    crate::kuna_armfloatreturn::declared_helper_model(&arch, &pieces.name).or_else(|| {
-                                        crate::kuna_armfloatreturn::declared_helper_model(&arch, data.get_call_specs(i).get_name())
+                                    crate::kuna_armfloatreturn::declared_helper_model(
+                                        &arch,
+                                        &pieces.name,
+                                    )
+                                    .or_else(|| {
+                                        crate::kuna_armfloatreturn::declared_helper_model(
+                                            &arch,
+                                            data.get_call_specs(i).get_name(),
+                                        )
                                     })
                                 })
-                                .or_else(|| crate::kuna_typedcallabi::undeclared_model(&arch, &pieces))
-                                .or_else(|| crate::kuna_armfloatreturn::helper_model(&arch, &pieces.name))
+                                .or_else(|| {
+                                    crate::kuna_typedcallabi::undeclared_model(&arch, &pieces)
+                                })
+                                .or_else(|| {
+                                    crate::kuna_armfloatreturn::helper_model(&arch, &pieces.name)
+                                })
                                 .unwrap_or(dfp);
                             match fp.seed_locked_from_pieces(
                                 &pieces,
@@ -613,8 +664,9 @@ impl Action for ActionDefaultParams {
                                         &mut fp,
                                     );
                                     let op = data.get_call_specs(i).get_op();
-                                    (!own_slot || crate::p4_calls::kuna_slotargs::backed(data, op, &fp))
-                                        .then(|| Rc::new(fp))
+                                    (!own_slot
+                                        || crate::p4_calls::kuna_slotargs::backed(data, op, &fp))
+                                    .then(|| Rc::new(fp))
                                 }
                                 // The callee storage assignment hit an un-ported boundary: fall
                                 // back to the default-model recovery for this call site.
@@ -626,12 +678,17 @@ impl Action for ActionDefaultParams {
                 };
                 match callee_proto {
                     Some(calleeproto) => {
-                        let model = crate::kuna_armfloatreturn::helper_model(&arch, data.get_call_specs(i).get_name())
-                            .unwrap_or_else(|| evalfp.clone());
+                        let model = crate::kuna_armfloatreturn::helper_model(
+                            &arch,
+                            data.get_call_specs(i).get_name(),
+                        )
+                        .unwrap_or_else(|| evalfp.clone());
                         data.get_call_specs_mut(i).proto_mut().copy(&calleeproto);
                         let fc = data.get_call_specs(i);
                         if !fc.proto().is_model_locked() && !fc.proto().has_matching_model(&model) {
-                            data.get_call_specs_mut(i).proto_mut().set_model(Some(model));
+                            data.get_call_specs_mut(i)
+                                .proto_mut()
+                                .set_model(Some(model));
                         }
                     }
                     None => {
@@ -641,18 +698,40 @@ impl Action for ActionDefaultParams {
                         // throwing Swift call, or a callee the analysis tier
                         // bound to a model without a signature, has its
                         // arguments recovered under that model.
-                        let virtual_model = crate::kuna_calleereginputs::virtual_call(data, data.get_call_specs(i).get_op());
-                        let model = crate::kuna_armfloatreturn::helper_model(&arch, data.get_call_specs(i).get_name())
-                            .or_else(|| crate::kuna_swiftcall::throwing_call(data, data.get_call_specs(i).get_op()))
-                            .or(bound_model)
-                            .or_else(|| crate::kuna_swiftcall::indirect_call(data, data.get_call_specs(i).get_op()))
-                            .or_else(|| virtual_model.clone())
-                            .or_else(|| data.get_call_specs(i).callee_reg_model().cloned())
-                            .unwrap_or_else(|| evalfp.clone());
-                        if virtual_model.as_ref().is_some_and(|v| Rc::ptr_eq(v, &model)) {
-                            data.get_call_specs_mut(i).set_callee_reg_model(virtual_model);
+                        let virtual_model = crate::kuna_calleereginputs::virtual_call(
+                            data,
+                            data.get_call_specs(i).get_op(),
+                        );
+                        let model = crate::kuna_armfloatreturn::helper_model(
+                            &arch,
+                            data.get_call_specs(i).get_name(),
+                        )
+                        .or_else(|| {
+                            crate::kuna_swiftcall::throwing_call(
+                                data,
+                                data.get_call_specs(i).get_op(),
+                            )
+                        })
+                        .or(bound_model)
+                        .or_else(|| {
+                            crate::kuna_swiftcall::indirect_call(
+                                data,
+                                data.get_call_specs(i).get_op(),
+                            )
+                        })
+                        .or_else(|| virtual_model.clone())
+                        .or_else(|| data.get_call_specs(i).callee_reg_model().cloned())
+                        .unwrap_or_else(|| evalfp.clone());
+                        if virtual_model
+                            .as_ref()
+                            .is_some_and(|v| Rc::ptr_eq(v, &model))
+                        {
+                            data.get_call_specs_mut(i)
+                                .set_callee_reg_model(virtual_model);
                         }
-                        data.get_call_specs_mut(i).proto_mut().set_internal(model, void_ty.clone());
+                        data.get_call_specs_mut(i)
+                            .proto_mut()
+                            .set_internal(model, void_ty.clone());
                         // (kuna) A console `map return <addr>`-only callee: keep the
                         // model-driven input recovery just established, but lock the
                         // custom return storage on top (the C++ `map return` locks
@@ -671,11 +750,16 @@ impl Action for ActionDefaultParams {
                 // C++ `fc->copy(otherfunc->getFuncProto())` carries the callee's
                 // own extrapop, which `option extrapop <n> <name>` may have set.
                 if has_funcdata {
-                    if let Some(expop) = arch.query_function_extra_pop(data.get_call_specs(i).get_entry_address()) {
+                    if let Some(expop) =
+                        arch.query_function_extra_pop(data.get_call_specs(i).get_entry_address())
+                    {
                         data.get_call_specs_mut(i).proto_mut().set_extra_pop(expop);
                     }
                 }
-            } else if arch.callee_proto_model(data.get_call_specs(i).get_entry_address()).is_some() {
+            } else if arch
+                .callee_proto_model(data.get_call_specs(i).get_entry_address())
+                .is_some()
+            {
                 crate::p4_calls::kuna_calleeprotostack::resolve_declared_extra_pop(
                     data.get_call_specs_mut(i).proto_mut(),
                 );
@@ -893,8 +977,13 @@ impl ActionFuncLink {
                     let p = fc.proto().get_param(i).expect("funcLinkInput: param index");
                     (p.get_address().clone(), p.get_size())
                 };
-                data.get_call_specs_mut(idx).get_active_input().register_trial(&paddr, psize);
-                data.get_call_specs_mut(idx).get_active_input().get_trial_mut(i).mark_active();
+                data.get_call_specs_mut(idx)
+                    .get_active_input()
+                    .register_trial(&paddr, psize);
+                data.get_call_specs_mut(idx)
+                    .get_active_input()
+                    .get_trial_mut(i)
+                    .mark_active();
                 if varargs {
                     data.get_call_specs_mut(idx)
                         .get_active_input()
@@ -986,8 +1075,7 @@ impl ActionFuncLink {
                                     Err(_) => continue,
                                 };
                                 // remainval = newVarnode(remain.size, remain.space, remain.offset)
-                                let remain_addr =
-                                    Address::new(remain_space, remain.offset);
+                                let remain_addr = Address::new(remain_space, remain.offset);
                                 let remainval =
                                     data.new_varnode(remain.size as int4, &remain_addr, None);
                                 // concatOp = newOp(2,op->getAddr()); opSetOpcode(CPUI_PIECE)
@@ -1018,8 +1106,7 @@ impl ActionFuncLink {
                                 // opInsertBefore(concatOp, op)
                                 data.op_insert_before(concat_op, op);
                                 // opInsertInput(op, outvn, op->numInput())
-                                let nin =
-                                    data.obank().get(op).map(|o| o.num_input()).unwrap_or(0);
+                                let nin = data.obank().get(op).map(|o| o.num_input()).unwrap_or(0);
                                 let _ = data.op_insert_input(op, outvn, nin);
                                 continue;
                             }
@@ -1127,7 +1214,11 @@ impl ActionFuncLink {
                 if res != OpCode::CPUI_COPY {
                     // The (small-size) output is extended to a full register;
                     // create the extension op immediately after the call.
-                    let pc = data.obank().get(callop).map(|o| o.get_addr().clone()).unwrap();
+                    let pc = data
+                        .obank()
+                        .get(callop)
+                        .map(|o| o.get_addr().clone())
+                        .unwrap();
                     let op = data.new_op(1, pc);
                     let ext_addr = vdata.get_addr();
                     let ext_size = vdata.size as int4;
@@ -1164,7 +1255,9 @@ impl Action for ActionFuncLink {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionFuncLink { base: self.base.clone() }))
+        Some(Box::new(ActionFuncLink {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:1619 — ActionFuncLink::apply: per sub-function, set up
@@ -1221,7 +1314,9 @@ impl Action for ActionFuncLinkOutOnly {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionFuncLinkOutOnly { base: self.base.clone() }))
+        Some(Box::new(ActionFuncLinkOutOnly {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:1632 — ActionFuncLinkOutOnly::apply: only the output
@@ -1251,7 +1346,9 @@ pub struct ActionParamDouble {
 impl ActionParamDouble {
     /// Construct in group `g` (C++ `ActionParamDouble::ActionParamDouble`).
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionParamDouble { base: ActionBase::new(0, "paramdouble", g) })
+        Box::new(ActionParamDouble {
+            base: ActionBase::new(0, "paramdouble", g),
+        })
     }
 }
 
@@ -1266,7 +1363,9 @@ impl Action for ActionParamDouble {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionParamDouble { base: self.base.clone() }))
+        Some(Box::new(ActionParamDouble {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, _data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:1641 — ActionParamDouble::apply. Over each call spec:
@@ -1334,36 +1433,52 @@ impl ActionActiveParam {
         let op_ok = data
             .obank()
             .get(op)
-            .map(|o| {
-                !o.is_dead()
-                    && matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND)
-            })
+            .map(|o| !o.is_dead() && matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND))
             .unwrap_or(false);
         if !op_ok {
             return false;
         }
         // trimmable = numPasses>0 || op->code() != CPUI_CALLIND.
-        let is_callind =
-            data.obank().get(op).map(|o| o.code() == OpCode::CPUI_CALLIND).unwrap_or(false);
-        let trimmable =
-            data.get_call_specs_mut(idx).get_active_input().get_num_passes() > 0 || !is_callind;
+        let is_callind = data
+            .obank()
+            .get(op)
+            .map(|o| o.code() == OpCode::CPUI_CALLIND)
+            .unwrap_or(false);
+        let trimmable = data
+            .get_call_specs_mut(idx)
+            .get_active_input()
+            .get_num_passes()
+            > 0
+            || !is_callind;
 
-        if !data.get_call_specs_mut(idx).get_active_input().is_fully_checked() {
+        if !data
+            .get_call_specs_mut(idx)
+            .get_active_input()
+            .is_fully_checked()
+        {
             if let Some(ac) = aliascheck.as_mut() {
                 check_input_trial_use(idx, data, ac, held);
             }
         }
-        data.get_call_specs_mut(idx).get_active_input().finish_pass();
+        data.get_call_specs_mut(idx)
+            .get_active_input()
+            .finish_pass();
         let (passes, maxpass) = {
             let ai = data.get_call_specs_mut(idx).get_active_input();
             (ai.get_num_passes(), ai.get_max_pass())
         };
         if passes > maxpass {
-            data.get_call_specs_mut(idx).get_active_input().mark_fully_checked();
+            data.get_call_specs_mut(idx)
+                .get_active_input()
+                .mark_fully_checked();
         } else {
             self.base.count += 1; // still have work to do
         }
-        trimmable && data.get_call_specs_mut(idx).get_active_input().is_fully_checked()
+        trimmable
+            && data
+                .get_call_specs_mut(idx)
+                .get_active_input()
+                .is_fully_checked()
     }
 }
 
@@ -1444,7 +1559,8 @@ impl Action for ActionActiveParam {
                         if let Some(entry) =
                             crate::p4_calls::kuna_calleetrial::split_trial_callee(data, idx)
                         {
-                            if let Some(key) = crate::p4_calls::kuna_protoorder::stated_key(&entry) {
+                            if let Some(key) = crate::p4_calls::kuna_protoorder::stated_key(&entry)
+                            {
                                 if self.contract_requested.insert(key) {
                                     data.kuna_queue_callee_split_call(entry);
                                     pause = true;
@@ -1462,11 +1578,19 @@ impl Action for ActionActiveParam {
         } else {
             Vec::new()
         };
-        let count = if bootstrap { ready_calls.len() } else { data.num_calls() as usize };
+        let count = if bootstrap {
+            ready_calls.len()
+        } else {
+            data.num_calls() as usize
+        };
         let mut ready = ready_calls.into_iter();
         let mut finalized = false;
         for position in 0..count {
-            let idx = if bootstrap { ready.next().expect("checked call") } else { position as int4 };
+            let idx = if bootstrap {
+                ready.next().expect("checked call")
+            } else {
+                position as int4
+            };
             if !bootstrap && !self.check_call_trials(data, &mut aliascheck, &mut held, idx) {
                 continue;
             }
@@ -1499,7 +1623,9 @@ impl Action for ActionActiveParam {
                 // the next slot is on the stack -- the ABI reaches the stack
                 // only past a full register file.
                 fc.get_active_input().set_stack_arg_gap(true);
-                let reads = fc.callee_reg_model().is_some_and(|m| fc.proto().has_matching_model(m));
+                let reads = fc
+                    .callee_reg_model()
+                    .is_some_and(|m| fc.proto().has_matching_model(m));
                 fc.get_active_input().set_callee_reads_registers(reads);
                 crate::kuna_armfloatargs::mark_single_floats(&mut fc, data);
                 // (kuna) `calleefilledarg`: an unfilled register the callee
@@ -1533,7 +1659,9 @@ impl Action for ActionActiveParam {
                 fc.clear_active_input();
                 data.restore_call_specs_at(idx, fc);
                 if let (Some(ac), Some(before)) = (aliascheck.as_mut(), before) {
-                    crate::p4_calls::kuna_directalias::refresh_rewritten(data, ac, call_op, &before);
+                    crate::p4_calls::kuna_directalias::refresh_rewritten(
+                        data, ac, call_op, &before,
+                    );
                 }
                 self.base.count += 1;
                 finalized = true;
@@ -1580,7 +1708,9 @@ pub struct ActionActiveReturn {
 impl ActionActiveReturn {
     /// Construct in group `g` (C++ `ActionActiveReturn::ActionActiveReturn`).
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionActiveReturn { base: ActionBase::new(0, "activereturn", g) })
+        Box::new(ActionActiveReturn {
+            base: ActionBase::new(0, "activereturn", g),
+        })
     }
 }
 
@@ -1595,7 +1725,9 @@ impl Action for ActionActiveReturn {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionActiveReturn { base: self.base.clone() }))
+        Some(Box::new(ActionActiveReturn {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:1817 — ActionActiveReturn::apply: per sub-function with
@@ -1614,8 +1746,7 @@ impl Action for ActionActiveReturn {
                 .obank()
                 .get(fc.get_op())
                 .map(|o| {
-                    !o.is_dead()
-                        && matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND)
+                    !o.is_dead() && matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND)
                 })
                 .unwrap_or(false);
             if !op_ok {
@@ -1651,7 +1782,9 @@ impl ActionReturnRecovery {
     /// Construct in group `g` (C++
     /// `ActionReturnRecovery::ActionReturnRecovery`).
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionReturnRecovery { base: ActionBase::new(0, "returnrecovery", g) })
+        Box::new(ActionReturnRecovery {
+            base: ActionBase::new(0, "returnrecovery", g),
+        })
     }
 
     /// Rewrite a CPUI_RETURN op to reflect the recovered output parameter (C++
@@ -1683,7 +1816,11 @@ impl ActionReturnRecovery {
             if trial.get_slot() >= num_input {
                 break;
             }
-            if let Some(vn) = data.obank().get(retop).and_then(|o| o.get_in(trial.get_slot())) {
+            if let Some(vn) = data
+                .obank()
+                .get(retop)
+                .and_then(|o| o.get_in(trial.get_slot()))
+            {
                 newparam.push(vn);
             }
         }
@@ -1707,13 +1844,19 @@ impl ActionReturnRecovery {
             let (lo, hi) = order;
             let lovn = newparam[1 + lo as usize];
             let hivn = newparam[1 + hi as usize];
-            let (lo_addr, lo_size) =
-                (active.get_trial(lo).get_address().clone(), active.get_trial(lo).get_size());
-            let (hi_addr, hi_size) =
-                (active.get_trial(hi).get_address().clone(), active.get_trial(hi).get_size());
+            let (lo_addr, lo_size) = (
+                active.get_trial(lo).get_address().clone(),
+                active.get_trial(lo).get_size(),
+            );
+            let (hi_addr, hi_size) = (
+                active.get_trial(hi).get_address().clone(),
+                active.get_trial(hi).get_size(),
+            );
             let retaddr = data.obank().get(retop).map(|o| o.get_addr().clone());
             let join = retaddr.as_ref().and_then(|at| {
-                crate::kuna_rustabi::pair_join_address(data, &hi_addr, hi_size, &lo_addr, lo_size, at)
+                crate::kuna_rustabi::pair_join_address(
+                    data, &hi_addr, hi_size, &lo_addr, lo_size, at,
+                )
             });
             match join {
                 Some(joinaddr) => {
@@ -1780,8 +1923,12 @@ impl ActionReturnRecovery {
                         let v = data.vbank().get(pre).expect("buildReturnOutput: pre");
                         (v.get_addr().clone(), v.get_size())
                     };
-                    let vn_addr =
-                        data.vbank().get(vn).expect("buildReturnOutput: vn").get_addr().clone();
+                    let vn_addr = data
+                        .vbank()
+                        .get(vn)
+                        .expect("buildReturnOutput: vn")
+                        .get_addr()
+                        .clone();
                     let addr = if vn_addr.cmp(&pre_addr) == std::cmp::Ordering::Less {
                         vn_addr
                     } else {
@@ -1791,9 +1938,7 @@ impl ActionReturnRecovery {
                     if let Some(retaddr) = retaddr {
                         let newop = data.new_op(2, retaddr);
                         data.op_set_opcode_code(newop, OpCode::CPUI_PIECE);
-                        if let Ok(newout) =
-                            data.new_varnode_out(pre_size + tsize, &addr, newop)
-                        {
+                        if let Ok(newout) = data.new_varnode_out(pre_size + tsize, &addr, newop) {
                             if let Some(v) = data.vbank_mut().get_mut(newout) {
                                 v.set_write_mask();
                             }
@@ -1829,7 +1974,9 @@ impl Action for ActionReturnRecovery {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionReturnRecovery { base: self.base.clone() }))
+        Some(Box::new(ActionReturnRecovery {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:1954 — ActionReturnRecovery::apply.  Gather the active
@@ -1853,7 +2000,8 @@ impl Action for ActionReturnRecovery {
                 Some(o) => o,
                 None => continue,
             };
-            if o.is_dead() || o.get_halt_type() != 0 || crate::kuna_bejoin::never_reached(data, op) {
+            if o.is_dead() || o.get_halt_type() != 0 || crate::kuna_bejoin::never_reached(data, op)
+            {
                 continue;
             }
             for i in 0..active.get_num_trials() {
@@ -1902,7 +2050,14 @@ impl Action for ActionReturnRecovery {
                     .input_fail_reader()
                     .filter(|_| remembering && !realistic)
                     .and_then(|m| {
-                        crate::p4_calls::kuna_condexeret::remember(data, i, active.get_trial(i), op, slot, m)
+                        crate::p4_calls::kuna_condexeret::remember(
+                            data,
+                            i,
+                            active.get_trial(i),
+                            op,
+                            slot,
+                            m,
+                        )
                     })
                 {
                     cond_failed.push(r);
@@ -1945,12 +2100,19 @@ impl Action for ActionReturnRecovery {
                     active.get_trial_mut(index).mark_active();
                 }
             }
-            let handed_back =
-                whole_pair.is_none() && crate::p4_calls::kuna_bejoinpass::settle_return(data, &mut active, &return_ops);
+            let handed_back = whole_pair.is_none()
+                && crate::p4_calls::kuna_bejoinpass::settle_return(data, &mut active, &return_ops);
             let manager_rc = data.get_arch().manage.clone();
-            let _ = data.get_func_proto().derive_output_map(&mut active, &manager_rc);
+            let _ = data
+                .get_func_proto()
+                .derive_output_map(&mut active, &manager_rc);
             crate::p4_calls::kuna_voidret::whole_or_none(data, &mut active);
-            crate::kuna_retinputhalf::note_moved_back_returns(data, &active, &return_ops, own_input);
+            crate::kuna_retinputhalf::note_moved_back_returns(
+                data,
+                &active,
+                &return_ops,
+                own_input,
+            );
             let order = if (whole_pair.is_some() || handed_back) && crate::kuna_bejoin::live(data) {
                 active.join_pair_order()
             } else {
@@ -1996,7 +2158,9 @@ pub struct ActionRestrictLocal {
 impl ActionRestrictLocal {
     /// Construct in group `g` (C++ `ActionRestrictLocal::ActionRestrictLocal`).
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionRestrictLocal { base: ActionBase::new(0, "restrictlocal", g) })
+        Box::new(ActionRestrictLocal {
+            base: ActionBase::new(0, "restrictlocal", g),
+        })
     }
 }
 
@@ -2011,7 +2175,9 @@ impl Action for ActionRestrictLocal {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionRestrictLocal { base: self.base.clone() }))
+        Some(Box::new(ActionRestrictLocal {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:2003 — ActionRestrictLocal::apply.
@@ -2058,7 +2224,9 @@ impl Action for ActionInputPrototype {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionInputPrototype { base: self.base.clone() }))
+        Some(Box::new(ActionInputPrototype {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:4941 — ActionInputPrototype::apply: the function's OWN
@@ -2077,8 +2245,7 @@ impl Action for ActionInputPrototype {
         // `ActionOutputPrototype` internal store; with neither (a model-less
         // fixture) there is no model to derive a map from, so the recovery cannot
         // run — leave the (empty) proto untouched, only running clearDeadVarnodes.
-        let recoverable =
-            data.get_func_proto().has_model() && data.get_func_proto().has_store();
+        let recoverable = data.get_func_proto().has_model() && data.get_func_proto().has_store();
         if recoverable && !data.get_func_proto().is_input_locked() {
             // Gather trials over the function's input Varnodes (registers/stack
             // the heritage collected).  `triallist[i]` is the i-th registered
@@ -2091,8 +2258,10 @@ impl Action for ActionInputPrototype {
             // [`crate::p4_calls::kuna_inputparamgap`].
             active.set_own_input_gap(true);
             let mut triallist: Vec<crate::context::VarnodeId> = Vec::new();
-            let input_vns: Vec<crate::context::VarnodeId> =
-                data.vbank().iter_def_flag(crate::varnode::varnode_flags::input).collect();
+            let input_vns: Vec<crate::context::VarnodeId> = data
+                .vbank()
+                .iter_def_flag(crate::varnode::varnode_flags::input)
+                .collect();
             for vn in input_vns {
                 let (addr, size, no_descend) = {
                     let v = match data.vbank().get(vn) {
@@ -2117,7 +2286,9 @@ impl Action for ActionInputPrototype {
             crate::kuna_armfloatargs::mark_own_reads(&mut active, data);
             let manager = data.get_arch().manage.clone();
             let _ = data.get_func_proto_mut().resolve_model(&active);
-            let _ = data.get_func_proto().derive_input_map(&mut active, &manager);
+            let _ = data
+                .get_func_proto()
+                .derive_input_map(&mut active, &manager);
 
             // Create any unreferenced-but-used input Varnodes (or markNoUse if
             // something already occupies the slot).
@@ -2125,7 +2296,12 @@ impl Action for ActionInputPrototype {
             for i in 0..numtrials {
                 let (is_unref, is_used, tsize, taddr) = {
                     let t = active.get_trial(i);
-                    (t.is_unref(), t.is_used(), t.get_size(), t.get_address().clone())
+                    (
+                        t.is_unref(),
+                        t.is_used(),
+                        t.get_size(),
+                        t.get_address().clone(),
+                    )
                 };
                 if is_unref && is_used {
                     let intersects = data.has_input_intersection(tsize, &taddr).unwrap_or(false);
@@ -2187,11 +2363,20 @@ fn update_input_types(
         // (the isPersist/findDisjointCover global-input branch is the W4 persist
         // surface — function-input registers/stack are never persistent here, so
         // it is a narrow STUB(W4 findDisjointCover) that does not fire).
-        let is_persist = data.vbank().get(vn).map(|v| v.is_persist()).unwrap_or(false);
+        let is_persist = data
+            .vbank()
+            .get(vn)
+            .map(|v| v.is_persist())
+            .unwrap_or(false);
         let addr = active.get_trial(i).get_address().clone();
         let ty = crate::kuna_armfloatreturn::unused_vfp_type(data, active, triallist, i)
             .or_else(|| data.high_get_type(vn))
-            .unwrap_or_else(|| Rc::new(crate::dtype::Datatype::new(1, crate::dtype::type_metatype::TYPE_UNKNOWN)));
+            .unwrap_or_else(|| {
+                Rc::new(crate::dtype::Datatype::new(
+                    1,
+                    crate::dtype::type_metatype::TYPE_UNKNOWN,
+                ))
+            });
         // (kuna `gonewtype`) A `go.typedesc *` parameter type is the interface
         // type word of an `any` argument mislabeled with the descriptor it points
         // at: a `&type:T` descriptor global flows into a runtime/stdlib
@@ -2218,10 +2403,18 @@ fn update_input_types(
         let name = crate::kuna_elfmaindecl::param_name(data, &addr, ty.get_size())
             .or_else(|| crate::kuna_inputhints::param_name(data, &addr, ty.get_size()))
             .unwrap_or_default();
-        let pieces = crate::fspec::ParameterPieces { addr, type_: Some(ty), flags: 0 };
-        data.get_func_proto_mut().store_set_input(count, &name, &pieces);
+        let pieces = crate::fspec::ParameterPieces {
+            addr,
+            type_: Some(ty),
+            flags: 0,
+        };
+        data.get_func_proto_mut()
+            .store_set_input(count, &name, &pieces);
         count += 1;
-        data.vbank_mut().get_mut(vn).expect("update_input_types: stale trial").set_mark();
+        data.vbank_mut()
+            .get_mut(vn)
+            .expect("update_input_types: stale trial")
+            .set_mark();
     }
     for &vn in triallist {
         if let Some(v) = data.vbank_mut().get_mut(vn) {
@@ -2256,11 +2449,22 @@ fn update_input_no_types(
         }
         let addr = active.get_trial(i).get_address().clone();
         let sz = data.vbank().get(vn).map(|v| v.get_size()).unwrap_or(1);
-        let ty = Rc::new(crate::dtype::Datatype::new(sz, crate::dtype::type_metatype::TYPE_UNKNOWN));
-        let pieces = crate::fspec::ParameterPieces { addr, type_: Some(ty), flags: 0 };
-        data.get_func_proto_mut().store_set_input(count, "", &pieces);
+        let ty = Rc::new(crate::dtype::Datatype::new(
+            sz,
+            crate::dtype::type_metatype::TYPE_UNKNOWN,
+        ));
+        let pieces = crate::fspec::ParameterPieces {
+            addr,
+            type_: Some(ty),
+            flags: 0,
+        };
+        data.get_func_proto_mut()
+            .store_set_input(count, "", &pieces);
         count += 1;
-        data.vbank_mut().get_mut(vn).expect("update_input_no_types: stale trial").set_mark();
+        data.vbank_mut()
+            .get_mut(vn)
+            .expect("update_input_no_types: stale trial")
+            .set_mark();
     }
     for &vn in triallist {
         if let Some(v) = data.vbank_mut().get_mut(vn) {
@@ -2300,7 +2504,9 @@ impl Action for ActionOutputPrototype {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionOutputPrototype { base: self.base.clone() }))
+        Some(Box::new(ActionOutputPrototype {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:4999 — ActionOutputPrototype::apply.
@@ -2320,7 +2526,10 @@ impl Action for ActionOutputPrototype {
         // the boundary `Architecture` does not expose it; the formal void type is the
         // size-0 `TYPE_VOID` base (its name renders "void", `dtype.rs:277`), which
         // is the same interned datatype `getTypeVoid` returns.
-        let void_type = Rc::new(crate::dtype::Datatype::new(0, crate::dtype::type_metatype::TYPE_VOID));
+        let void_type = Rc::new(crate::dtype::Datatype::new(
+            0,
+            crate::dtype::type_metatype::TYPE_VOID,
+        ));
         data.get_func_proto_mut().attach_internal_store(void_type);
         // C++ guard: proceed only if the output is not type-locked, or is merely
         // size-type-locked.  The freshly-attached internal store seeds an unlocked
@@ -2351,22 +2560,29 @@ impl Action for ActionOutputPrototype {
         };
         // vnlist = retop inputs [1..]; the first is the trial output.
         let trial0 = {
-            let o = data.obank().get(retop).expect("outputprototype: stale return op");
-            if o.num_input() < 2 {
-                None
-            } else {
-                o.get_in(1)
-            }
+            let o = data
+                .obank()
+                .get(retop)
+                .expect("outputprototype: stale return op");
+            if o.num_input() < 2 { None } else { o.get_in(1) }
         };
         let trial0 = match trial0 {
             Some(vn) => vn,
             None => return 0, // empty trial list: leave output void
         };
-        let out_addr = data.vbank().get(trial0).expect("outputprototype: stale trial").get_addr().clone();
+        let out_addr = data
+            .vbank()
+            .get(trial0)
+            .expect("outputprototype: stale trial")
+            .get_addr()
+            .clone();
         // pieces.type = triallist[0]->getHigh()->getType()  (high-on path).
-        let out_type = data
-            .high_get_type(trial0)
-            .unwrap_or_else(|| Rc::new(crate::dtype::Datatype::new(1, crate::dtype::type_metatype::TYPE_UNKNOWN)));
+        let out_type = data.high_get_type(trial0).unwrap_or_else(|| {
+            Rc::new(crate::dtype::Datatype::new(
+                1,
+                crate::dtype::type_metatype::TYPE_UNKNOWN,
+            ))
+        });
         // (kuna vectorabi) A vector result keeps its producer's vector type.
         let out_type = if matches!(
             out_type.get_metatype(),
@@ -2376,7 +2592,11 @@ impl Action for ActionOutputPrototype {
         } else {
             out_type
         };
-        let pieces = crate::fspec::ParameterPieces { addr: out_addr, type_: Some(out_type), flags: 0 };
+        let pieces = crate::fspec::ParameterPieces {
+            addr: out_addr,
+            type_: Some(out_type),
+            flags: 0,
+        };
         data.get_func_proto_mut().set_output(&pieces);
         0
     }
@@ -2416,7 +2636,9 @@ impl Action for ActionPrototypeWarnings {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionPrototypeWarnings { base: self.base.clone() }))
+        Some(Box::new(ActionPrototypeWarnings {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, _data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:5140 — ActionPrototypeWarnings::apply. Generate override
@@ -2487,20 +2709,21 @@ mod tests {
 
     use unlace_base::address::Address;
     use unlace_base::space::{
-        addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+        AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
     };
     use unlace_base::types::int4;
 
     use super::*;
     use crate::action::ruleflags;
     use crate::context::ArchContext;
-    use crate::dtype::{type_metatype, Datatype};
+    use crate::dtype::{Datatype, type_metatype};
 
     // Mirrors the coreaction_early.rs test harness (funcdata_block fixtures).
     fn build_manager() -> AddrSpaceManager {
         let mut m = AddrSpaceManager::new();
         m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+            .unwrap();
         m.insert_space(Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
             "ram",
@@ -2582,9 +2805,14 @@ mod tests {
         let ram = Rc::clone(fd.get_arch().manage().get_space_by_name("ram").unwrap());
         let copy = fd.new_op(1, Address::new(Rc::clone(&ram), at));
         fd.op_set_opcode_code(copy, OpCode::CPUI_COPY);
-        fd.obank_mut().get_mut(copy).unwrap().set_flag(crate::op::pcodeop_flags::startmark);
+        fd.obank_mut()
+            .get_mut(copy)
+            .unwrap()
+            .set_flag(crate::op::pcodeop_flags::startmark);
         let ty = Rc::new(Datatype::new(8, type_metatype::TYPE_UNKNOWN));
-        let word = fd.vbank_mut().create(8, Address::new(ram, 0x3000), Rc::clone(&ty));
+        let word = fd
+            .vbank_mut()
+            .create(8, Address::new(ram, 0x3000), Rc::clone(&ty));
         fd.op_set_input(copy, word, 0).unwrap();
         let temp = fd.new_unique_out(8, copy).unwrap();
         let addr = fd.vbank().get(temp).unwrap().get_addr().clone();

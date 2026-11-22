@@ -37,16 +37,25 @@ const SAVE_AREA: u64 = 176;
 type Write = (u64, int4, OpId);
 
 fn stack_writes(data: &Funcdata) -> Vec<Write> {
-    let Some(stack) = data.get_arch().manage().get_stack_space() else { return Vec::new() };
+    let Some(stack) = data.get_arch().manage().get_stack_space() else {
+        return Vec::new();
+    };
     let mut out = Vec::new();
     let ops: Vec<OpId> = data.obank().iter_alive().collect();
     for op in ops {
-        let Some(o) = data.obank().get(op) else { continue };
+        let Some(o) = data.obank().get(op) else {
+            continue;
+        };
         if o.get_parent().is_none() || o.code() == OpCode::CPUI_MULTIEQUAL {
             continue;
         }
-        let Some(v) = o.get_out().and_then(|v| data.vbank().get(v)) else { continue };
-        if v.get_addr().get_space().is_some_and(|s| s.get_index() == stack.get_index()) {
+        let Some(v) = o.get_out().and_then(|v| data.vbank().get(v)) else {
+            continue;
+        };
+        if v.get_addr()
+            .get_space()
+            .is_some_and(|s| s.get_index() == stack.get_index())
+        {
             out.push((v.get_offset(), v.get_size(), op));
         }
     }
@@ -73,7 +82,8 @@ fn stack_address(data: &Funcdata, mut vn: VarnodeId) -> Option<(VarnodeId, u64, 
             code @ (OpCode::CPUI_PTRSUB | OpCode::CPUI_INT_ADD) => {
                 let sb = d.get_in(0)?;
                 let off = data.vbank().get(d.get_in(1)?)?;
-                return (data.vbank().get(sb)?.is_spacebase() && off.is_constant()).then(|| (sb, off.get_offset(), code));
+                return (data.vbank().get(sb)?.is_spacebase() && off.is_constant())
+                    .then(|| (sb, off.get_offset(), code));
             }
             _ => return None,
         }
@@ -112,14 +122,23 @@ struct VaStart {
 
 fn find(data: &Funcdata) -> Option<VaStart> {
     let writes = stack_writes(data);
-    let at = |off: u64, size: int4| writes.iter().filter(move |w| w.0 == off && w.1 == size).map(|w| w.2);
+    let at = |off: u64, size: int4| {
+        writes
+            .iter()
+            .filter(move |w| w.0 == off && w.1 == size)
+            .map(|w| w.2)
+    };
     let gp_ok = |gp: u64| gp % 8 == 0 && gp <= 48;
     let fp_ok = |fp: u64| (48..=SAVE_AREA).contains(&fp) && (fp - 48) % 16 == 0;
     for &(x, size, op) in &writes {
         let (offsets, gp, fp) = match (size, copied(data, op)) {
-            (8, Some(v)) if gp_ok(v & 0xffff_ffff) && fp_ok(v >> 32) => (vec![op], v & 0xffff_ffff, v >> 32),
+            (8, Some(v)) if gp_ok(v & 0xffff_ffff) && fp_ok(v >> 32) => {
+                (vec![op], v & 0xffff_ffff, v >> 32)
+            }
             (4, Some(gp)) if gp_ok(gp) => {
-                let Some((fop, fp)) = at(x.wrapping_add(4), 4).find_map(|f| copied(data, f).filter(|&fp| fp_ok(fp)).map(|fp| (f, fp))) else {
+                let Some((fop, fp)) = at(x.wrapping_add(4), 4)
+                    .find_map(|f| copied(data, f).filter(|&fp| fp_ok(fp)).map(|fp| (f, fp)))
+                else {
                     continue;
                 };
                 (vec![op, fop], gp, fp)
@@ -127,15 +146,31 @@ fn find(data: &Funcdata) -> Option<VaStart> {
             _ => continue,
         };
         let block = data.obank().get(op)?.get_parent()?;
-        let same = |o: &OpId| data.obank().get(*o).and_then(|p| p.get_parent()) == Some(block) && written(data, *o).is_some();
-        let Some(overflow) = at(x.wrapping_add(8), 8).find(same) else { continue };
-        let Some((save, spacebase, save_area, address_op)) = at(x.wrapping_add(16), 8).filter(same).find_map(|s| {
-            stack_address(data, written(data, s)?).map(|(sb, off, code)| (s, sb, off, code))
-        }) else {
+        let same = |o: &OpId| {
+            data.obank().get(*o).and_then(|p| p.get_parent()) == Some(block)
+                && written(data, *o).is_some()
+        };
+        let Some(overflow) = at(x.wrapping_add(8), 8).find(same) else {
+            continue;
+        };
+        let Some((save, spacebase, save_area, address_op)) =
+            at(x.wrapping_add(16), 8).filter(same).find_map(|s| {
+                stack_address(data, written(data, s)?).map(|(sb, off, code)| (s, sb, off, code))
+            })
+        else {
             continue;
         };
         let named = (gp / 8 + (fp - 48) / 16) as int4;
-        return Some(VaStart { list: x, offsets, pointers: vec![overflow, save], spacebase, address_op, save_area, named, gp: (gp / 8) as int4 });
+        return Some(VaStart {
+            list: x,
+            offsets,
+            pointers: vec![overflow, save],
+            spacebase,
+            address_op,
+            save_area,
+            named,
+            gp: (gp / 8) as int4,
+        });
     }
     None
 }
@@ -156,16 +191,34 @@ pub(crate) fn last_named(data: &Funcdata, named: int4, gp: int4) -> Option<Varno
         return None;
     }
     let name = ["RDI", "RSI", "RDX", "RCX", "R8", "R9"].get(usize::try_from(gp - 1).ok()?)?;
-    let st = data.get_arch().manage().register_lookup()?.probe_register(name)?;
+    let st = data
+        .get_arch()
+        .manage()
+        .register_lookup()?
+        .probe_register(name)?;
     let addr = Address::new(st.space.clone()?, st.offset);
-    [8, 4].into_iter().find_map(|size| data.vbank().find_input(size, &addr))
+    [8, 4]
+        .into_iter()
+        .find_map(|size| data.vbank().find_input(size, &addr))
 }
 
 fn rewrite(data: &mut Funcdata, m: &VaStart) -> unlace_base::error::KunaResult<()> {
     use unlace_base::error::KunaError;
-    let block = data.obank().get(m.offsets[0]).and_then(|o| o.get_parent()).ok_or_else(|| KunaError::lowlevel("vastart: stale op"))?;
-    let first = data.bb_ops(block).into_iter().find(|o| m.offsets.contains(o)).ok_or_else(|| KunaError::lowlevel("vastart: no first"))?;
-    let at = data.obank().get(first).map(|o| o.get_addr().clone()).ok_or_else(|| KunaError::lowlevel("vastart: stale op"))?;
+    let block = data
+        .obank()
+        .get(m.offsets[0])
+        .and_then(|o| o.get_parent())
+        .ok_or_else(|| KunaError::lowlevel("vastart: stale op"))?;
+    let first = data
+        .bb_ops(block)
+        .into_iter()
+        .find(|o| m.offsets.contains(o))
+        .ok_or_else(|| KunaError::lowlevel("vastart: no first"))?;
+    let at = data
+        .obank()
+        .get(first)
+        .map(|o| o.get_addr().clone())
+        .ok_or_else(|| KunaError::lowlevel("vastart: stale op"))?;
     let sb_size = data.vbank().get(m.spacebase).map_or(8, |v| v.get_size());
     let ptr = data.new_op(2, at.clone());
     data.op_set_opcode_code(ptr, m.address_op);
@@ -185,7 +238,12 @@ fn rewrite(data: &mut Funcdata, m: &VaStart) -> unlace_base::error::KunaResult<(
     }
     data.op_insert_after(call, ptr);
     for &op in &m.offsets {
-        let size = data.obank().get(op).and_then(|o| o.get_out()).and_then(|v| data.vbank().get(v)).map_or(8, |v| v.get_size());
+        let size = data
+            .obank()
+            .get(op)
+            .and_then(|o| o.get_out())
+            .and_then(|v| data.vbank().get(v))
+            .map_or(8, |v| v.get_size());
         data.op_uninsert(op);
         let zero = data.new_constant(size, 0);
         let iop = data.new_varnode_iop(call);
@@ -197,10 +255,20 @@ fn rewrite(data: &mut Funcdata, m: &VaStart) -> unlace_base::error::KunaResult<(
         data.op_insert_before(op, call);
     }
     for &op in &m.pointers {
-        let Some(out) = data.obank().get(op).and_then(|o| o.get_out()) else { continue };
-        let (addr, size) = data.vbank().get(out).map(|v| (v.get_addr().clone(), v.get_size())).ok_or_else(|| KunaError::lowlevel("vastart: stale out"))?;
+        let Some(out) = data.obank().get(op).and_then(|o| o.get_out()) else {
+            continue;
+        };
+        let (addr, size) = data
+            .vbank()
+            .get(out)
+            .map(|v| (v.get_addr().clone(), v.get_size()))
+            .ok_or_else(|| KunaError::lowlevel("vastart: stale out"))?;
         let created = data.new_indirect_creation(call, &addr, size, false);
-        let value = data.obank().get(created).and_then(|o| o.get_out()).ok_or_else(|| KunaError::lowlevel("vastart: no creation"))?;
+        let value = data
+            .obank()
+            .get(created)
+            .and_then(|o| o.get_out())
+            .ok_or_else(|| KunaError::lowlevel("vastart: no creation"))?;
         data.op_set_input(op, value, 0)?;
     }
     if let Some(stack) = data.get_arch().manage().get_stack_space().cloned() {
@@ -210,7 +278,9 @@ fn rewrite(data: &mut Funcdata, m: &VaStart) -> unlace_base::error::KunaResult<(
             .iter_loc()
             .filter(|&v| {
                 data.vbank().get(v).is_some_and(|n| {
-                    n.get_addr().get_space().is_some_and(|s| s.get_index() == stack.get_index())
+                    n.get_addr()
+                        .get_space()
+                        .is_some_and(|s| s.get_index() == stack.get_index())
                         && (m.save_area..end).contains(&n.get_offset())
                 })
             })
@@ -237,7 +307,9 @@ pub struct ActionVaStart {
 
 impl ActionVaStart {
     pub fn boxed(g: &str) -> Box<dyn Action> {
-        Box::new(ActionVaStart { base: ActionBase::new(0, "vastart", g) })
+        Box::new(ActionVaStart {
+            base: ActionBase::new(0, "vastart", g),
+        })
     }
 }
 
@@ -249,7 +321,11 @@ impl Action for ActionVaStart {
         &mut self.base
     }
     fn clone_filtered(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Action>> {
-        grouplist.contains(self.get_group()).then(|| Box::new(ActionVaStart { base: self.base.clone() }) as Box<dyn Action>)
+        grouplist.contains(self.get_group()).then(|| {
+            Box::new(ActionVaStart {
+                base: self.base.clone(),
+            }) as Box<dyn Action>
+        })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data.get_arch().va_start {

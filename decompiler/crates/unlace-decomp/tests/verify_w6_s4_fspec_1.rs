@@ -25,7 +25,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::space::{spacetype, AddrSpace, AddrSpaceManager};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, spacetype};
 use unlace_base::types::int4;
 
 use unlace_decomp::dtype::type_class;
@@ -208,8 +208,20 @@ fn sort_stress_null_vs_real_invariant_w6s4() {
 
     // Several adversarial interleavings of 2 reals and N nulls.
     let layouts: Vec<Vec<ParamTrial>> = vec![
-        vec![null(0x50), null(0x51), real(0x20, 1), null(0x52), real(0x10, 0)],
-        vec![real(0x20, 1), null(0x50), null(0x51), null(0x52), real(0x10, 0)],
+        vec![
+            null(0x50),
+            null(0x51),
+            real(0x20, 1),
+            null(0x52),
+            real(0x10, 0),
+        ],
+        vec![
+            real(0x20, 1),
+            null(0x50),
+            null(0x51),
+            null(0x52),
+            real(0x10, 0),
+        ],
         vec![
             null(0x50),
             real(0x10, 0),
@@ -516,11 +528,7 @@ fn cmp_is_total_strict_weak_order_exhaustive_w6s4() {
 
     // (1) reflexivity: every element Equal to itself.
     for i in 0..pop.len() {
-        assert_eq!(
-            cmp(i, i),
-            Ordering::Equal,
-            "cmp not reflexive at {i}"
-        );
+        assert_eq!(cmp(i, i), Ordering::Equal, "cmp not reflexive at {i}");
     }
     // (2) antisymmetry: cmp(i,j) == cmp(j,i).reverse() for ALL pairs.
     for i in 0..pop.len() {
@@ -584,11 +592,14 @@ fn fixed_position_compare_is_total_order_w6s4() {
         mk(0x20, Some(1), 0),  // same fixed pos as #0 -> Equal on fixedPosition
     ];
 
-    let fc =
-        |i: usize, j: usize| ParamTrial::fixed_position_compare(&pop[i], &pop[j], entries);
+    let fc = |i: usize, j: usize| ParamTrial::fixed_position_compare(&pop[i], &pop[j], entries);
 
     for i in 0..pop.len() {
-        assert_eq!(fc(i, i), Ordering::Equal, "fixedPositionCompare not reflexive at {i}");
+        assert_eq!(
+            fc(i, i),
+            Ordering::Equal,
+            "fixedPositionCompare not reflexive at {i}"
+        );
         for j in 0..pop.len() {
             assert_eq!(
                 fc(i, j),
@@ -598,7 +609,11 @@ fn fixed_position_compare_is_total_order_w6s4() {
         }
     }
     // The two unfixed null trials must be Equal (delegated (None,None) -> Equal).
-    assert_eq!(fc(3, 4), Ordering::Equal, "unfixed null trials must be Equal");
+    assert_eq!(
+        fc(3, 4),
+        Ordering::Equal,
+        "unfixed null trials must be Equal"
+    );
     // An unfixed trial sorts AFTER any fixed one (C++ returns false for a<b when
     // a.fixedPosition == -1 and b is fixed): cmp(unfixed, fixed) == Greater.
     assert_eq!(fc(2, 0), Ordering::Greater, "unfixed must sort after fixed");
@@ -650,7 +665,10 @@ fn split_then_join_round_trips_slots_w6s4() {
     // throws "Size mismatch"); verify Result parity (no panic, Err).
     active.split_trial(1, 4).expect("split again");
     let bad = active.join_trial(2, &addr(&reg, 0x20), 7); // 4+4 != 7
-    assert!(bad.is_err(), "join with size mismatch must be Err (C++ throws)");
+    assert!(
+        bad.is_err(),
+        "join with size mismatch must be Err (C++ throws)"
+    );
 }
 
 /// `ParamEntry::getSlot` reverse-stack slot mapping (fspec.cc:411).  For a
@@ -686,7 +704,11 @@ fn get_slot_reverse_stack_mapping_w6s4() {
     // baseslot at offset 4 = 1 => slot = 3 - 1 = 2.
     assert_eq!(e.get_slot(&addr(&stk, 0x4), 0), 2, "offset 4 => slot 2");
     // skip advances within the same call: offset 0 + skip 12 => baseslot 3 => slot 0.
-    assert_eq!(e.get_slot(&addr(&stk, 0x0), 12), 0, "offset 0 skip 12 => slot 0");
+    assert_eq!(
+        e.get_slot(&addr(&stk, 0x0), 12),
+        0,
+        "offset 0 skip 12 => slot 0"
+    );
     // offset 8 => baseslot 2 => slot 1.
     assert_eq!(e.get_slot(&addr(&stk, 0x8), 0), 1, "offset 8 => slot 1");
 }

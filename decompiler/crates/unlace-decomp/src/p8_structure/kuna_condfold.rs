@@ -810,7 +810,8 @@ impl CondFoldSets {
 fn is_loop_latch(data: &Funcdata, bb: BlockId) -> bool {
     let graph = data.bblocks_ref();
     let block = graph.block(bb);
-    (0..block.size_out()).any(|k| block.is_back_edge_out(k) || graph.dominates(block.get_out(k), Some(bb)))
+    (0..block.size_out())
+        .any(|k| block.is_back_edge_out(k) || graph.dominates(block.get_out(k), Some(bb)))
 }
 
 /// Precompute both admission rules' verdicts for every `BlockBasic` in the function.
@@ -951,7 +952,10 @@ mod tests {
         //   1. the scored cap is NOT a width cap and is far below the width budget;
         //   2. the budget an operator sets is the width one.
         assert!(MAX_SHAPE_STMTS < MAX_PREFIX_STMTS_ANGR);
-        assert_eq!(OptionCondFold.apply("on").expect("on").0, MAX_PREFIX_STMTS_ANGR);
+        assert_eq!(
+            OptionCondFold.apply("on").expect("on").0,
+            MAX_PREFIX_STMTS_ANGR
+        );
         assert_eq!(
             OptionCondFold.apply("wide").expect("wide").0,
             MAX_PREFIX_STMTS_WIDE
@@ -1022,7 +1026,7 @@ mod tests {
 
     use unlace_base::address::Address;
     use unlace_base::space::{
-        addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+        AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
     };
 
     use crate::context::{ArchContext, VarnodeId};
@@ -1031,7 +1035,8 @@ mod tests {
     fn scorer_fd() -> Funcdata {
         let mut m = AddrSpaceManager::new();
         m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+        m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+            .unwrap();
         m.insert_space(Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
             "ram",
@@ -1153,7 +1158,10 @@ mod tests {
         let cb = push_cbranch(&mut fd, bl, 0x200c, v);
         push_before(&mut fd, bl, 0x2004, OpCode::CPUI_BRANCH, 1, cb);
         let shape = printed_shape(&fd, &fd.bb_ops(bl)).expect("renders as an expression");
-        assert_eq!(shape.stmts, 2, "only the assignment and the condition print");
+        assert_eq!(
+            shape.stmts, 2,
+            "only the assignment and the condition print"
+        );
     }
 
     #[test]

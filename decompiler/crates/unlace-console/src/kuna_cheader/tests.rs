@@ -13,7 +13,10 @@ fn typedef(decl: &str) -> Body {
 }
 
 fn prototype(func: &str, decl: &str) -> Body {
-    Body::Prototype { func: func.into(), decl: decl.into() }
+    Body::Prototype {
+        func: func.into(),
+        decl: decl.into(),
+    }
 }
 
 #[test]
@@ -28,7 +31,13 @@ fn declarations_keep_their_line_and_kind() {
         vec![
             (2, typedef("typedef void CURL")),
             (4, prototype("curl_easy_init", "CURL *curl_easy_init(void)")),
-            (5, prototype("curl_easy_setopt", "int curl_easy_setopt(CURL *h, int opt, ...)")),
+            (
+                5,
+                prototype(
+                    "curl_easy_setopt",
+                    "int curl_easy_setopt(CURL *h, int opt, ...)"
+                )
+            ),
             (8, typedef("struct pt{int x;int y;}")),
         ]
     );
@@ -75,7 +84,10 @@ fn constant_expressions_fold_to_values() {
     assert_eq!(
         got,
         vec![
-            (1, typedef("typedef enum{A, B = 19, C, D = 35, E = -2, F = sizeof(int), G}e_t")),
+            (
+                1,
+                typedef("typedef enum{A, B = 19, C, D = 35, E = -2, F = sizeof(int), G}e_t")
+            ),
             (2, typedef("struct buf{char data[32];char raw[16];}")),
         ]
     );
@@ -83,7 +95,9 @@ fn constant_expressions_fold_to_values() {
 
 #[test]
 fn variables_and_function_pointers_state_nothing() {
-    assert!(bodies("int counter = 3;\nvoid (*hook)(int);\nextern const char version[];\n").is_empty());
+    assert!(
+        bodies("int counter = 3;\nvoid (*hook)(int);\nextern const char version[];\n").is_empty()
+    );
 }
 
 #[test]
@@ -138,12 +152,18 @@ fn constants_compilers_disagree_on_are_not_folded() {
     );
     assert_eq!(
         got,
-        vec![(1, typedef("enum h{A = 0xFFFFFFFFFFFFFFFFLL>>32, B = (-2147483647-1)%-1, C = 1}"))]
+        vec![(
+            1,
+            typedef("enum h{A = 0xFFFFFFFFFFFFFFFFLL>>32, B = (-2147483647-1)%-1, C = 1}")
+        )]
     );
 }
 
 #[test]
 fn a_line_marker_at_the_top_of_the_range_does_not_overflow() {
-    let chunks = split_declarations("t.h", "# 18446744073709551615 \"x.h\"\ntypedef int a;\ntypedef int b;\n");
+    let chunks = split_declarations(
+        "t.h",
+        "# 18446744073709551615 \"x.h\"\ntypedef int a;\ntypedef int b;\n",
+    );
     assert_eq!(chunks.len(), 2);
 }

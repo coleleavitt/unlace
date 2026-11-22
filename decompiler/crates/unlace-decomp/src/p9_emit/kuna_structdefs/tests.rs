@@ -3,7 +3,7 @@
 //! `doc_type_definitions` renderer tests use — no `Architecture` needed).
 
 use super::*;
-use crate::dtype::{flags, type_metatype, TypeField};
+use crate::dtype::{TypeField, flags, type_metatype};
 use crate::printc::RealTypeCtx;
 
 fn named(size: i32, m: type_metatype, nm: &str) -> Rc<Datatype> {
@@ -25,7 +25,12 @@ fn core(size: i32, m: type_metatype, nm: &str) -> Rc<Datatype> {
 
 fn ptr_to(ptrto: Rc<Datatype>) -> Rc<Datatype> {
     let mut p = Datatype::new_with_align(8, -1, type_metatype::TYPE_PTR);
-    p.kind = DatatypeKind::Pointer { ptrto, spaceid: None, truncate: None, wordsize: 1 };
+    p.kind = DatatypeKind::Pointer {
+        ptrto,
+        spaceid: None,
+        truncate: None,
+        wordsize: 1,
+    };
     Rc::new(p)
 }
 
@@ -51,7 +56,10 @@ fn opaque(nm: &str) -> Rc<Datatype> {
     s.display_name = nm.to_string();
     s.id = Datatype::hash_name(nm);
     s.flags |= flags::type_incomplete;
-    s.kind = DatatypeKind::Struct { field: vec![], bitfield: vec![] };
+    s.kind = DatatypeKind::Struct {
+        field: vec![],
+        bitfield: vec![],
+    };
     Rc::new(s)
 }
 
@@ -79,8 +87,15 @@ fn a_pointer_parameter_pulls_in_its_pointee_struct() {
 fn a_nested_struct_is_ordered_before_the_struct_that_holds_it() {
     let i4 = core(4, type_metatype::TYPE_INT, "int4");
     let inner = struct_of("inner", 4, &[(0, "a", Rc::clone(&i4))]);
-    let outer = struct_of("outer", 16, &[(0, "in", Rc::clone(&inner)), (8, "p", ptr_to(inner))]);
-    assert_eq!(walk(&[outer]), vec!["inner".to_string(), "outer".to_string()]);
+    let outer = struct_of(
+        "outer",
+        16,
+        &[(0, "in", Rc::clone(&inner)), (8, "p", ptr_to(inner))],
+    );
+    assert_eq!(
+        walk(&[outer]),
+        vec!["inner".to_string(), "outer".to_string()]
+    );
 }
 
 /// A self-referential struct terminates and appears once.
@@ -115,7 +130,10 @@ fn core_and_unnamed_types_are_never_defined() {
 fn an_incomplete_struct_defines_as_the_opaque_forward_declaration() {
     let f = opaque("FILE");
     assert!(is_definable(&f));
-    assert_eq!(definition_text(&f, RealTypeCtx::OFF), "typedef struct FILE FILE; /* opaque */\n");
+    assert_eq!(
+        definition_text(&f, RealTypeCtx::OFF),
+        "typedef struct FILE FILE; /* opaque */\n"
+    );
 }
 
 /// A complete struct defines as its body — the text `structscore.py`'s layout
@@ -127,7 +145,10 @@ fn a_complete_struct_defines_as_its_body() {
     let s = struct_of(
         "struct_0",
         12,
-        &[(0, "field_0x0", ptr_to(u1)), (8, "field_0x8", Rc::clone(&i4))],
+        &[
+            (0, "field_0x0", ptr_to(u1)),
+            (8, "field_0x8", Rc::clone(&i4)),
+        ],
     );
     assert_eq!(
         definition_text(&s, RealTypeCtx::OFF),

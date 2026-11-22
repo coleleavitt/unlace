@@ -15,9 +15,9 @@
 
 use std::rc::Rc;
 
+use object::read::Object;
 use unlace_decomp::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
 use unlace_decomp::fspec::PrototypePieces;
-use object::read::Object;
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 

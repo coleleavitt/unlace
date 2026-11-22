@@ -6,7 +6,7 @@ use crate::dtype::TypeFactoryImpl;
 use crate::varnode::varnode_flags;
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 
 struct Fixture {

@@ -108,7 +108,12 @@ impl ResolvedUnion {
                 .unwrap_or_else(|| Rc::clone(&unres_type)),
             _ => Rc::clone(&unres_type),
         };
-        ResolvedUnion { resolve: Rc::clone(&unres_type), base_type, field_num: -1, lock: false }
+        ResolvedUnion {
+            resolve: Rc::clone(&unres_type),
+            base_type,
+            field_num: -1,
+            lock: false,
+        }
     }
 
     /// Construct a resolution with a specific field number (C++
@@ -150,18 +155,16 @@ impl ResolvedUnion {
                         Some(piece) => resolve = piece,
                         None => {
                             resolve = unres_type.get_stripped().ok_or_else(|| {
-                                KunaError::lowlevel(
-                                    "ResolvedUnion: partial union missing stripped",
-                                )
+                                KunaError::lowlevel("ResolvedUnion: partial union missing stripped")
                             })?;
                         }
                     }
                 }
             }
             type_metatype::TYPE_PTR => {
-                base_type = unres_type.get_ptr_to().ok_or_else(|| {
-                    KunaError::lowlevel("ResolvedUnion: pointer missing ptrto")
-                })?;
+                base_type = unres_type
+                    .get_ptr_to()
+                    .ok_or_else(|| KunaError::lowlevel("ResolvedUnion: pointer missing ptrto"))?;
                 if fld_num < 0 {
                     resolve = Rc::clone(&unres_type);
                 } else {
@@ -171,21 +174,29 @@ impl ResolvedUnion {
                     let wordsize = unres_type.get_word_size().ok_or_else(|| {
                         KunaError::lowlevel("ResolvedUnion: pointer missing wordsize")
                     })?;
-                    resolve =
-                        typegrp.get_type_pointer_strip_array(unres_type.get_size(), field, wordsize)?;
+                    resolve = typegrp.get_type_pointer_strip_array(
+                        unres_type.get_size(),
+                        field,
+                        wordsize,
+                    )?;
                 }
             }
             _ => {
                 if fld_num < 0 {
                     resolve = Rc::clone(&unres_type);
                 } else {
-                    resolve = unres_type.get_depend(fld_num).ok_or_else(|| {
-                        KunaError::lowlevel("ResolvedUnion: field out of range")
-                    })?;
+                    resolve = unres_type
+                        .get_depend(fld_num)
+                        .ok_or_else(|| KunaError::lowlevel("ResolvedUnion: field out of range"))?;
                 }
             }
         }
-        Ok(ResolvedUnion { resolve, base_type, field_num, lock })
+        Ok(ResolvedUnion {
+            resolve,
+            base_type,
+            field_num,
+            lock,
+        })
     }
 
     /// Copy constructor with updated resolve data-type (C++
@@ -310,7 +321,11 @@ impl ResolveEdge {
                 .unwrap_or_else(|| unres_type.get_id()),
             _ => unres_type.get_id(),
         };
-        ResolveEdge { type_id, op_time, encoding }
+        ResolveEdge {
+            type_id,
+            op_time,
+            encoding,
+        }
     }
 
     /// Construct an address-based resolve (C++
@@ -335,7 +350,11 @@ impl ResolveEdge {
                 .unwrap_or_else(|| unres_type.get_id()),
             _ => unres_type.get_id(),
         };
-        ResolveEdge { type_id, op_time, encoding }
+        ResolveEdge {
+            type_id,
+            op_time,
+            encoding,
+        }
     }
 }
 
@@ -541,18 +560,30 @@ pub fn deref_pointer(
         }
         if let Some(st) = &sub_type {
             if st.get_size() == vn_size {
-                return Ok(DerefResult { score: 10, res_type: Some(Rc::clone(st)) });
+                return Ok(DerefResult {
+                    score: 10,
+                    res_type: Some(Rc::clone(st)),
+                });
             }
         }
         if max_length != 0 && ptrto.get_size() != 0 && (vn_size % ptrto.get_size()) == 0 {
             let arr = typegrp.get_type_array(vn_size / ptrto.get_size(), ptrto)?;
-            return Ok(DerefResult { score: -4, res_type: Some(arr) });
+            return Ok(DerefResult {
+                score: -4,
+                res_type: Some(arr),
+            });
         }
         // score = -5;  // Score to something but it doesn't fit
-        Ok(DerefResult { score: -5, res_type: None })
+        Ok(DerefResult {
+            score: -5,
+            res_type: None,
+        })
     } else {
         // score = -10;  // Dereferencing something that isn't even a pointer
-        Ok(DerefResult { score: -10, res_type: None })
+        Ok(DerefResult {
+            score: -10,
+            res_type: None,
+        })
     }
 }
 
@@ -703,7 +734,11 @@ pub fn score_constant_fit(
             None => -1,
             Some(FloatConstFact::Zero) => 2,
             Some(FloatConstFact::Normalized { exponent }) => {
-                if exponent < 7 && exponent > -4 { 2 } else { -1 }
+                if exponent < 7 && exponent > -4 {
+                    2
+                } else {
+                    -1
+                }
             }
             Some(FloatConstFact::Other) => -1,
         }
@@ -1049,10 +1084,22 @@ pub mod score_tables {
                     -10
                 }
             }
-            CPUI_FLOAT_EQUAL | CPUI_FLOAT_NOTEQUAL | CPUI_FLOAT_LESS | CPUI_FLOAT_LESSEQUAL
-            | CPUI_FLOAT_NAN | CPUI_FLOAT_ADD | CPUI_FLOAT_DIV | CPUI_FLOAT_MULT
-            | CPUI_FLOAT_SUB | CPUI_FLOAT_NEG | CPUI_FLOAT_ABS | CPUI_FLOAT_SQRT
-            | CPUI_FLOAT_FLOAT2FLOAT | CPUI_FLOAT_TRUNC | CPUI_FLOAT_CEIL | CPUI_FLOAT_FLOOR
+            CPUI_FLOAT_EQUAL
+            | CPUI_FLOAT_NOTEQUAL
+            | CPUI_FLOAT_LESS
+            | CPUI_FLOAT_LESSEQUAL
+            | CPUI_FLOAT_NAN
+            | CPUI_FLOAT_ADD
+            | CPUI_FLOAT_DIV
+            | CPUI_FLOAT_MULT
+            | CPUI_FLOAT_SUB
+            | CPUI_FLOAT_NEG
+            | CPUI_FLOAT_ABS
+            | CPUI_FLOAT_SQRT
+            | CPUI_FLOAT_FLOAT2FLOAT
+            | CPUI_FLOAT_TRUNC
+            | CPUI_FLOAT_CEIL
+            | CPUI_FLOAT_FLOOR
             | CPUI_FLOAT_ROUND => {
                 if meta == TYPE_FLOAT {
                     10
@@ -1269,9 +1316,18 @@ pub mod score_tables {
                     0
                 }
             }
-            CPUI_FLOAT_ADD | CPUI_FLOAT_DIV | CPUI_FLOAT_MULT | CPUI_FLOAT_SUB | CPUI_FLOAT_NEG
-            | CPUI_FLOAT_ABS | CPUI_FLOAT_SQRT | CPUI_FLOAT_FLOAT2FLOAT | CPUI_FLOAT_CEIL
-            | CPUI_FLOAT_FLOOR | CPUI_FLOAT_ROUND | CPUI_FLOAT_INT2FLOAT => {
+            CPUI_FLOAT_ADD
+            | CPUI_FLOAT_DIV
+            | CPUI_FLOAT_MULT
+            | CPUI_FLOAT_SUB
+            | CPUI_FLOAT_NEG
+            | CPUI_FLOAT_ABS
+            | CPUI_FLOAT_SQRT
+            | CPUI_FLOAT_FLOAT2FLOAT
+            | CPUI_FLOAT_CEIL
+            | CPUI_FLOAT_FLOOR
+            | CPUI_FLOAT_ROUND
+            | CPUI_FLOAT_INT2FLOAT => {
                 if meta == TYPE_FLOAT {
                     10
                 } else {
@@ -1295,9 +1351,9 @@ pub mod score_tables {
                 }
             }
             // Arms the driver handles itself (propagation / live varnode):
-            CPUI_COPY | CPUI_MULTIEQUAL | CPUI_INDIRECT | CPUI_LOAD | CPUI_CALL | CPUI_CALLOTHER
-            | CPUI_CALLIND | CPUI_INT_ADD | CPUI_INT_SUB | CPUI_PTRSUB | CPUI_SUBPIECE
-            | CPUI_PTRADD => return None,
+            CPUI_COPY | CPUI_MULTIEQUAL | CPUI_INDIRECT | CPUI_LOAD | CPUI_CALL
+            | CPUI_CALLOTHER | CPUI_CALLIND | CPUI_INT_ADD | CPUI_INT_SUB | CPUI_PTRSUB
+            | CPUI_SUBPIECE | CPUI_PTRADD => return None,
             _ => -10, // default: Datatype doesn't fit
         };
         Some(score)
@@ -1347,7 +1403,9 @@ impl ResolveRecord {
 impl ResolveCache {
     /// Construct an empty cache (C++ `ResolveCache(Funcdata&)`).
     pub fn new() -> ResolveCache {
-        ResolveCache { records: Vec::new() }
+        ResolveCache {
+            records: Vec::new(),
+        }
     }
 
     /// Look up the in-context resolution for the given data-type (C++
@@ -1393,7 +1451,12 @@ mod tests {
     fn pointer_to(ptrto: Rc<Datatype>, size: int4, wordsize: u32) -> Rc<Datatype> {
         let mut p = Datatype::new(size, type_metatype::TYPE_PTR);
         p.submeta = sub_metatype::SUB_PTR;
-        p.kind = DatatypeKind::Pointer { ptrto, spaceid: None, truncate: None, wordsize };
+        p.kind = DatatypeKind::Pointer {
+            ptrto,
+            spaceid: None,
+            truncate: None,
+            wordsize,
+        };
         Rc::new(p)
     }
 
@@ -1404,9 +1467,7 @@ mod tests {
         let field: Vec<TypeField> = fields
             .iter()
             .enumerate()
-            .map(|(i, (off, ct))| {
-                TypeField::new(i as int4, *off, format!("f{i}"), Rc::clone(ct))
-            })
+            .map(|(i, (off, ct))| TypeField::new(i as int4, *off, format!("f{i}"), Rc::clone(ct)))
             .collect();
         u.kind = DatatypeKind::Union { field };
         Rc::new(u)
@@ -1581,7 +1642,10 @@ mod tests {
     #[test]
     fn score_constant_fit_matrix() {
         use type_metatype::*;
-        let no_facts = ConstantFitFacts { float_fact: None, looks_like_pointer: false };
+        let no_facts = ConstantFitFacts {
+            float_fact: None,
+            looks_like_pointer: false,
+        };
         // bool: size 1, val<2 -> 2; else -2.
         assert_eq!(score_constant_fit(1, 1, TYPE_BOOL, &no_facts), 2);
         assert_eq!(score_constant_fit(1, 5, TYPE_BOOL, &no_facts), -2);
@@ -1589,8 +1653,10 @@ mod tests {
         // float, no format -> -1.
         assert_eq!(score_constant_fit(4, 0, TYPE_FLOAT, &no_facts), -1);
         // float, zero class -> 2.
-        let zero_facts =
-            ConstantFitFacts { float_fact: Some(FloatConstFact::Zero), looks_like_pointer: false };
+        let zero_facts = ConstantFitFacts {
+            float_fact: Some(FloatConstFact::Zero),
+            looks_like_pointer: false,
+        };
         assert_eq!(score_constant_fit(4, 0, TYPE_FLOAT, &zero_facts), 2);
         // float, normalized in range -> 2, out of range -> -1.
         let norm_in = ConstantFitFacts {
@@ -1607,7 +1673,10 @@ mod tests {
         assert_eq!(score_constant_fit(4, 0, TYPE_INT, &no_facts), 2);
         assert_eq!(score_constant_fit(4, 0, TYPE_PTR, &no_facts), 2);
         // nonzero ptr, looks like pointer -> 2, else -2.
-        let ptrish = ConstantFitFacts { float_fact: None, looks_like_pointer: true };
+        let ptrish = ConstantFitFacts {
+            float_fact: None,
+            looks_like_pointer: true,
+        };
         assert_eq!(score_constant_fit(4, 0x401000, TYPE_PTR, &ptrish), 2);
         assert_eq!(score_constant_fit(4, 0x401000, TYPE_PTR, &no_facts), -2);
         // nonzero int, looks like pointer -> 1, else -> 2.

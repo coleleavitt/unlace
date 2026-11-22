@@ -34,7 +34,7 @@ use object::read::{Object, ObjectSection};
 
 use crate::pass::StringFact;
 
-use super::{is_loaded_initialized, is_string_char, Run, Termination};
+use super::{Run, Termination, is_loaded_initialized, is_string_char};
 
 /// Mirror of the 1-byte [`super::scan_runs`] over 2-byte little-endian code
 /// units: a run of units whose high byte is zero and whose low byte is in
@@ -58,7 +58,11 @@ pub(crate) fn scan_utf16_runs(
     let close = |out: &mut Vec<Run>, start: usize, end: usize, nul: bool| {
         let visible_len = end - start;
         if visible_len / 2 >= min_len && (nul || term == Termination::Any) {
-            out.push(Run { addr: vma + start as u64, visible_len, nul_terminated: nul });
+            out.push(Run {
+                addr: vma + start as u64,
+                visible_len,
+                nul_terminated: nul,
+            });
         }
     };
     while i + 1 < data.len() {
@@ -88,7 +92,10 @@ pub(crate) fn scan_utf16_runs(
 pub(crate) fn scan_utf16_run(data: &[u8], vma: u64, min_len: usize) -> Vec<StringFact> {
     scan_utf16_runs(data, vma, min_len, Termination::Nul)
         .into_iter()
-        .map(|r| StringFact { addr: r.addr, len: (r.visible_len + 2) as u32 })
+        .map(|r| StringFact {
+            addr: r.addr,
+            len: (r.visible_len + 2) as u32,
+        })
         .collect()
 }
 
@@ -112,8 +119,8 @@ pub fn scan_wide_strings(file: &object::File, min_len: usize) -> Vec<StringFact>
 
 #[cfg(test)]
 mod tests {
+    use super::super::{DEFAULT_WIDE_MIN_LEN, scan_run};
     use super::*;
-    use super::super::{scan_run, DEFAULT_WIDE_MIN_LEN};
 
     #[test]
     fn utf16_run_is_the_ascii_matcher_widened() {
@@ -124,7 +131,13 @@ mod tests {
             data.push(0);
         }
         data.extend_from_slice(&[0, 0]);
-        assert_eq!(scan_utf16_run(&data, 0x1000, 5), vec![StringFact { addr: 0x1000, len: 20 }]);
+        assert_eq!(
+            scan_utf16_run(&data, 0x1000, 5),
+            vec![StringFact {
+                addr: 0x1000,
+                len: 20
+            }]
+        );
         // The defect the width exists to fix: at 1-byte width the same bytes are a
         // one-character run, which the pass rejects outright.
         assert!(scan_run(&data, 0x1000, 5).is_empty());
@@ -181,13 +194,18 @@ mod tests {
     fn scan_wide_strings_over_the_pe_fixture() {
         // End-to-end: the widened scan must surface the wide `ntdll.dll` the 1-byte
         // pass cannot see, at its `.rdata` address (9 units + terminator = 20 bytes).
-        let path =
-            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/widestrings_x86_64.exe");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/widestrings_x86_64.exe"
+        );
         let bytes = std::fs::read(path).expect("read widestrings_x86_64.exe");
         let file = object::File::parse(bytes.as_slice()).expect("parse widestrings_x86_64.exe");
         let wide = scan_wide_strings(&file, DEFAULT_WIDE_MIN_LEN);
         assert!(
-            wide.contains(&StringFact { addr: 0x140002100, len: 20 }),
+            wide.contains(&StringFact {
+                addr: 0x140002100,
+                len: 20
+            }),
             "wide ntdll.dll @ 0x140002100 len 20 not detected: {wide:?}"
         );
         // And the 1-byte pass still sees nothing there — the gap this closes.

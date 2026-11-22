@@ -18,11 +18,12 @@
 
 mod types;
 
-use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase, FidMatch, SymFact, SymKind, TypedDataFact};
+use crate::pass::{
+    AnalysisCtx, AnalysisOutput, AnalysisPass, FidMatch, Phase, SymFact, SymKind, TypedDataFact,
+};
 use object::{Object, ObjectSection, SectionKind};
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
-
 
 /// The UEFI module pass.
 pub struct UefiPass;
@@ -37,8 +38,16 @@ const SIGNATURES: &[(&[u8; 8], &str, &str)] = &[
 
 const PEI_GETTERS: &[(&[u8], u64, &str)] = &[
     (&[0x1d, 0xee, 0x50, 0x0f, 0x70, 0x47], 2, "ArmReadTpidrurw"),
-    (&[0x50, 0x0f, 0x1d, 0xee, 0x1e, 0xff, 0x2f, 0xe1], 4, "ArmReadTpidrurw"),
-    (&[0x40, 0xd0, 0x3b, 0xd5, 0xc0, 0x03, 0x5f, 0xd6], 4, "ArmReadTpidrurw"),
+    (
+        &[0x50, 0x0f, 0x1d, 0xee, 0x1e, 0xff, 0x2f, 0xe1],
+        4,
+        "ArmReadTpidrurw",
+    ),
+    (
+        &[0x40, 0xd0, 0x3b, 0xd5, 0xc0, 0x03, 0x5f, 0xd6],
+        4,
+        "ArmReadTpidrurw",
+    ),
 ];
 
 /// GUID bytes (in memory order) to the EDK2 name.
@@ -63,7 +72,11 @@ pub fn guid_names() -> &'static BTreeMap<[u8; 16], &'static str> {
 
 /// The PE optional-header `Subsystem` of `bytes`, when it is a PE image.
 pub fn pe_subsystem(bytes: &[u8]) -> Option<u16> {
-    let u16_at = |at: usize| bytes.get(at..at + 2).map(|b| u16::from_le_bytes([b[0], b[1]]));
+    let u16_at = |at: usize| {
+        bytes
+            .get(at..at + 2)
+            .map(|b| u16::from_le_bytes([b[0], b[1]]))
+    };
     if bytes.get(0..2) != Some(b"MZ") {
         return None;
     }
@@ -95,15 +108,25 @@ impl AnalysisPass for UefiPass {
             return out;
         }
         let ptr = if ctx.file.is_64() { 8 } else { 4 };
-        let Some(efi) = types::EfiTypes::build(ctx.arch.types(), ptr) else { return out };
+        let Some(efi) = types::EfiTypes::build(ctx.arch.types(), ptr) else {
+            return out;
+        };
 
         let thumb_bit = u64::from(ctx.file.architecture() == object::Architecture::Arm);
         let entry = ctx.file.entry() & !thumb_bit;
         let decl = "EFI_STATUS(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable)";
         if entry != 0 {
             if let Some(pieces) = efi.pieces("_ModuleEntryPoint", decl) {
-                out.symbols.push(SymFact { addr: entry, name: "_ModuleEntryPoint".to_string(), kind: SymKind::Function });
-                out.fid_names.push(FidMatch { addr: entry, name: "_ModuleEntryPoint".to_string(), by_signature: false });
+                out.symbols.push(SymFact {
+                    addr: entry,
+                    name: "_ModuleEntryPoint".to_string(),
+                    kind: SymKind::Function,
+                });
+                out.fid_names.push(FidMatch {
+                    addr: entry,
+                    name: "_ModuleEntryPoint".to_string(),
+                    by_signature: false,
+                });
                 out.prototypes_at.push((entry, pieces));
             }
         }
@@ -113,16 +136,26 @@ impl AnalysisPass for UefiPass {
         let mut unique = |name: &str| {
             let n = used_names.entry(name.to_string()).or_insert(0);
             *n += 1;
-            if *n == 1 { name.to_string() } else { format!("{name}_{}", *n - 1) }
+            if *n == 1 {
+                name.to_string()
+            } else {
+                format!("{name}_{}", *n - 1)
+            }
         };
         for section in ctx.file.sections() {
-            if !matches!(section.kind(), SectionKind::Data | SectionKind::ReadOnlyData) {
+            if !matches!(
+                section.kind(),
+                SectionKind::Data | SectionKind::ReadOnlyData
+            ) {
                 continue;
             }
             let Ok(data) = section.data() else { continue };
             let base = section.address();
             for off in (0..data.len().saturating_sub(7)).step_by(8) {
-                let Some((_, ty, name)) = SIGNATURES.iter().find(|(sig, ..)| &data[off..off + 8] == *sig) else {
+                let Some((_, ty, name)) = SIGNATURES
+                    .iter()
+                    .find(|(sig, ..)| &data[off..off + 8] == *sig)
+                else {
                     continue;
                 };
                 let Some(t) = efi.get(ty) else { continue };
@@ -131,9 +164,15 @@ impl AnalysisPass for UefiPass {
                     continue;
                 }
                 claimed.push((base + off as u64, base + off as u64 + size));
-                out.typed_data.push(TypedDataFact { addr: base + off as u64, name: unique(name), type_: t });
+                out.typed_data.push(TypedDataFact {
+                    addr: base + off as u64,
+                    name: unique(name),
+                    type_: t,
+                });
             }
-            let Some(guid) = efi.get("EFI_GUID") else { continue };
+            let Some(guid) = efi.get("EFI_GUID") else {
+                continue;
+            };
             let db = guid_names();
             let mut off = 0usize;
             while off + 16 <= data.len() {
@@ -141,7 +180,11 @@ impl AnalysisPass for UefiPass {
                 let raw: [u8; 16] = data[off..off + 16].try_into().expect("16 bytes");
                 match db.get(&raw) {
                     Some(name) if !claimed.iter().any(|&(lo, hi)| addr < hi && addr + 16 > lo) => {
-                        out.typed_data.push(TypedDataFact { addr, name: unique(name), type_: guid.clone() });
+                        out.typed_data.push(TypedDataFact {
+                            addr,
+                            name: unique(name),
+                            type_: guid.clone(),
+                        });
                         off += 16;
                     }
                     _ => off += 4,
@@ -149,13 +192,20 @@ impl AnalysisPass for UefiPass {
             }
         }
 
-        if let Some(getter) = efi.pointer_to("EFI_PEI_SERVICES").and_then(|p| {
-            ctx.arch.types().get_type_pointer(ptr, p, 1).ok()
-        }) {
-            for section in ctx.file.sections().filter(|s| s.kind() == SectionKind::Text) {
+        if let Some(getter) = efi
+            .pointer_to("EFI_PEI_SERVICES")
+            .and_then(|p| ctx.arch.types().get_type_pointer(ptr, p, 1).ok())
+        {
+            for section in ctx
+                .file
+                .sections()
+                .filter(|s| s.kind() == SectionKind::Text)
+            {
                 let Ok(data) = section.data() else { continue };
                 for (pattern, step, name) in PEI_GETTERS {
-                    for off in (0..data.len().saturating_sub(pattern.len() - 1)).step_by(*step as usize) {
+                    for off in
+                        (0..data.len().saturating_sub(pattern.len() - 1)).step_by(*step as usize)
+                    {
                         if &data[off..off + pattern.len()] != *pattern {
                             continue;
                         }
@@ -166,8 +216,16 @@ impl AnalysisPass for UefiPass {
                             ..Default::default()
                         };
                         pieces.outtype = Some(getter.clone());
-                        out.symbols.push(SymFact { addr, name: (*name).to_string(), kind: SymKind::Function });
-                        out.fid_names.push(FidMatch { addr, name: (*name).to_string(), by_signature: false });
+                        out.symbols.push(SymFact {
+                            addr,
+                            name: (*name).to_string(),
+                            kind: SymKind::Function,
+                        });
+                        out.fid_names.push(FidMatch {
+                            addr,
+                            name: (*name).to_string(),
+                            by_signature: false,
+                        });
                         out.prototypes_at.push((addr, pieces));
                     }
                 }
@@ -186,7 +244,8 @@ mod tests {
         let db = guid_names();
         assert!(db.len() > 900);
         let loaded_image = [
-            0xa1, 0x31, 0x1b, 0x5b, 0x62, 0x95, 0xd2, 0x11, 0x8e, 0x3f, 0x00, 0xa0, 0xc9, 0x69, 0x72, 0x3b,
+            0xa1, 0x31, 0x1b, 0x5b, 0x62, 0x95, 0xd2, 0x11, 0x8e, 0x3f, 0x00, 0xa0, 0xc9, 0x69,
+            0x72, 0x3b,
         ];
         assert_eq!(db.get(&loaded_image), Some(&"gEfiLoadedImageProtocolGuid"));
     }

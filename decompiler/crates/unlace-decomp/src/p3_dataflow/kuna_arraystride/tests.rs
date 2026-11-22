@@ -6,8 +6,8 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace,
-    UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace, addrspace_flags,
+    spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
@@ -19,7 +19,8 @@ use crate::varnode::DefOpInfo;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(IopSpace::new(2))).unwrap();
     m.insert_space(Rc::new(FspecSpace::new(3))).unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
@@ -49,9 +50,11 @@ fn ram(fd: &Funcdata) -> Rc<AddrSpace> {
     Rc::clone(fd.get_arch().manage().get_space_by_name("ram").unwrap())
 }
 
-fn no_replace(
-) -> impl FnMut(&mut crate::varnode::VarnodeBank, VarnodeId, VarnodeId) -> unlace_base::error::KunaResult<()>
-{
+fn no_replace() -> impl FnMut(
+    &mut crate::varnode::VarnodeBank,
+    VarnodeId,
+    VarnodeId,
+) -> unlace_base::error::KunaResult<()> {
     |_, _, _| Ok(())
 }
 
@@ -65,13 +68,17 @@ fn mk_op(fd: &mut Funcdata, off: u64, inputs: int4, opc: OpCode) -> OpId {
     let r = ram(fd);
     let pc = Address::new(r, off);
     let op = fd.obank_mut().create_at(inputs, pc);
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
     op
 }
 
 fn set_def(fd: &mut Funcdata, vn: VarnodeId, defop: OpId) -> VarnodeId {
     let seq = fd.obank().get(defop).unwrap().get_seq_num().clone();
-    let info = DefOpInfo { id: defop, seqnum: seq };
+    let info = DefOpInfo {
+        id: defop,
+        seqnum: seq,
+    };
     let vn = fd.vbank_mut().set_def(vn, info, &mut no_replace()).unwrap();
     fd.obank_mut().get_mut(defop).unwrap().set_output(Some(vn));
     vn
@@ -79,12 +86,19 @@ fn set_def(fd: &mut Funcdata, vn: VarnodeId, defop: OpId) -> VarnodeId {
 
 fn wire(fd: &mut Funcdata, vn: VarnodeId, op: OpId, slot: int4) {
     fd.vbank_mut().add_descend(vn, op).unwrap();
-    fd.obank_mut().get_mut(op).unwrap().set_input(Some(vn), slot);
+    fd.obank_mut()
+        .get_mut(op)
+        .unwrap()
+        .set_input(Some(vn), slot);
 }
 
 /// Build the two-sibling-phi loop header.  Returns (acc_phi, acc_out, cnt_out,
 /// external_reader_op, bl).
-fn build_two_phis(fd: &mut Funcdata, sz: int4, stride: u64) -> (OpId, VarnodeId, VarnodeId, OpId, BlockId) {
+fn build_two_phis(
+    fd: &mut Funcdata,
+    sz: int4,
+    stride: u64,
+) -> (OpId, VarnodeId, VarnodeId, OpId, BlockId) {
     let bl = mk_block(fd);
 
     // --- accumulator phi: acc = MULTIEQUAL(#0, acc + stride) ---
@@ -144,7 +158,10 @@ fn rewrites_accumulator_as_counter_times_stride() {
 
         // The external reader now reads `INT_MULT(cnt, 0x10)`.
         let multout = fd.obank().get(reader).unwrap().get_in(0).unwrap();
-        assert_eq!(fd.vbank().get(multout).unwrap().get_high().is_some(), high_level);
+        assert_eq!(
+            fd.vbank().get(multout).unwrap().get_high().is_some(),
+            high_level
+        );
         let multop = fd.vbank().get(multout).unwrap().get_def().unwrap();
         let mo = fd.obank().get(multop).unwrap();
         assert_eq!(mo.code(), OpCode::CPUI_INT_MULT);
@@ -158,7 +175,13 @@ fn rewrites_accumulator_as_counter_times_stride() {
         assert!(fd.obank().get(acc_phi).unwrap().is_dead());
         assert!(fd.obank().get(acc_phi).unwrap().get_out().is_none());
         // acc_out has no readers left (all redirected to the multiply output).
-        assert_eq!(fd.vbank().get(acc_out).map(|v| v.num_descend()).unwrap_or(0), 0);
+        assert_eq!(
+            fd.vbank()
+                .get(acc_out)
+                .map(|v| v.num_descend())
+                .unwrap_or(0),
+            0
+        );
     }
 }
 
@@ -170,7 +193,10 @@ fn gate_off_is_noop() {
     assert_eq!(rule.apply_op(acc_phi, &mut fd), 0);
     // phi still alive, reader still reads the accumulator output.
     assert!(fd.obank().get(acc_phi).is_some());
-    assert_eq!(fd.obank().get(acc_phi).unwrap().code(), OpCode::CPUI_MULTIEQUAL);
+    assert_eq!(
+        fd.obank().get(acc_phi).unwrap().code(),
+        OpCode::CPUI_MULTIEQUAL
+    );
     assert!(fd.obank().get(reader).unwrap().get_in(0).is_some());
 }
 

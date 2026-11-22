@@ -101,7 +101,11 @@ fn indirect_writer_keeps_its_declared_function_pointer() {
     for optimization in ["-O0", "-O2"] {
         let binary = source.with_extension(&optimization[1..]);
         common::process::required_output(
-            Command::new("clang").args(["-std=c11", optimization]).arg(&source).arg("-o").arg(&binary),
+            Command::new("clang")
+                .args(["-std=c11", optimization])
+                .arg(&source)
+                .arg("-o")
+                .arg(&binary),
         );
         common::process::required_output(&mut Command::new(binary));
     }

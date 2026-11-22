@@ -24,19 +24,20 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::{int4, uint8};
 use unlace_num::opcodes::OpCode;
 
-use crate::dtype::{type_metatype, Datatype};
-use crate::funcdata::Funcdata;
 use crate::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
+use crate::dtype::{Datatype, type_metatype};
+use crate::funcdata::Funcdata;
 
 fn build_manager(big: bool) -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -71,7 +72,8 @@ fn unk(size: int4) -> Rc<Datatype> {
 fn mk_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
     let r = ram(fd);
     let op = fd.new_op(inputs, Address::new(r, off));
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
     op
 }
 
@@ -107,7 +109,14 @@ fn binop(
 }
 
 /// `out = COPY(a)` (used to make a written input that may have many readers).
-fn copy(fd: &mut Funcdata, bl: BlockId, off: u64, a: VarnodeId, out_off: u64, size: int4) -> VarnodeId {
+fn copy(
+    fd: &mut Funcdata,
+    bl: BlockId,
+    off: u64,
+    a: VarnodeId,
+    out_off: u64,
+    size: int4,
+) -> VarnodeId {
     let op = mk_op(fd, 1, off, OpCode::CPUI_COPY);
     fd.op_set_input(op, a, 0).unwrap();
     let out = mk_vn(fd, out_off, size);
@@ -257,7 +266,10 @@ fn calc_hash_distinguishes_distinct_roots() {
     dh.clear();
     dh.calc_hash(a, 0, &mut fd);
     let ha = dh.get_hash();
-    assert_ne!(hc, ha, "distinct roots in distinct positions hash differently");
+    assert_ne!(
+        hc, ha,
+        "distinct roots in distinct positions hash differently"
+    );
 }
 
 #[test]
@@ -306,7 +318,10 @@ fn calc_hash_invariant_under_interposed_cast() {
     dh2.calc_hash(c2, 0, &mut fd2);
     let with_cast = dh2.get_hash();
 
-    assert_eq!(no_cast, with_cast, "CAST on the read path is invisible to the hash");
+    assert_eq!(
+        no_cast, with_cast,
+        "CAST on the read path is invisible to the hash"
+    );
 }
 
 // =============================================================================
@@ -327,7 +342,10 @@ fn unique_hash_then_find_roundtrips() {
     let method = DynamicHash::get_method_from_hash(h);
     assert!(method < 4, "varnode hashes use methods 0..3");
     let total = DynamicHash::get_total_from_hash(h);
-    assert!((1..=8).contains(&total), "collision total within the budget");
+    assert!(
+        (1..=8).contains(&total),
+        "collision total within the budget"
+    );
 
     // findVarnode must recover exactly `c`.
     let mut finder = DynamicHash::new();
@@ -344,8 +362,16 @@ fn unique_hash_position_zero_for_singleton() {
     dh.unique_hash(c, 8, &mut fd);
     let h = dh.get_hash();
     assert_ne!(h, 0);
-    assert_eq!(DynamicHash::get_total_from_hash(h), 1, "singleton => total 1");
-    assert_eq!(DynamicHash::get_position_from_hash(h), 0, "singleton => pos 0");
+    assert_eq!(
+        DynamicHash::get_total_from_hash(h),
+        1,
+        "singleton => total 1"
+    );
+    assert_eq!(
+        DynamicHash::get_position_from_hash(h),
+        0,
+        "singleton => pos 0"
+    );
 }
 
 #[test]
@@ -405,12 +431,18 @@ fn colliding_roots_get_distinct_positions() {
         hashes.push((vn, h, dh.get_address().clone()));
     }
     // The formal (comparable) hashes collide, but position fields differ.
-    let positions: Vec<u32> =
-        hashes.iter().map(|(_, h, _)| DynamicHash::get_position_from_hash(*h)).collect();
+    let positions: Vec<u32> = hashes
+        .iter()
+        .map(|(_, h, _)| DynamicHash::get_position_from_hash(*h))
+        .collect();
     let mut sorted = positions.clone();
     sorted.sort_unstable();
     sorted.dedup();
-    assert_eq!(sorted.len(), positions.len(), "distinct positions per colliding root");
+    assert_eq!(
+        sorted.len(),
+        positions.len(),
+        "distinct positions per colliding root"
+    );
     // total reflects the collision-list size (3).
     for (_, h, _) in &hashes {
         assert_eq!(DynamicHash::get_total_from_hash(*h), 3);

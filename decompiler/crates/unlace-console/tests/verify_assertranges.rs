@@ -21,7 +21,7 @@
 use std::path::PathBuf;
 
 use unlace_console::assertions::{self, Body, Directive, Outcome};
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram, EntrySelector};
+use unlace_console::engine::{ConsoleProgram, EntrySelector, bootstrap_from_object};
 use unlace_console::project::decompile_targets;
 
 /// `bias` (4 bytes) then `scale` (4 bytes), contiguous in `.data`.
@@ -32,7 +32,10 @@ const MMIO: u64 = 0x5000_0000;
 const LATCH_MMIO: u64 = 0x5000_0004;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Bootstrap the fixture and run the analysis commit.
@@ -40,22 +43,32 @@ fn load() -> ConsoleProgram {
     let root = repo_root();
     let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
     let bin = root.join("decompiler/crates/unlace-analysis/tests/fixtures/assertranges_x86_64");
-    let mut prog = bootstrap_from_object(bin.to_str().expect("UTF-8 fixture path"), "", &spec_roots)
-        .expect("bootstrap fixture with built processor specs");
+    let mut prog =
+        bootstrap_from_object(bin.to_str().expect("UTF-8 fixture path"), "", &spec_roots)
+            .expect("bootstrap fixture with built processor specs");
     prog.commit_pending_analysis().expect("analysis commit");
     prog
 }
 
 fn directive(spec: &str, body: Body) -> Directive {
-    Directive { raw: spec.to_string(), body }
+    Directive {
+        raw: spec.to_string(),
+        body,
+    }
 }
 
 fn readonly(addr: u64, size: i32) -> Directive {
-    directive(&format!("readonly {addr:#x}+{size}"), Body::Readonly { addr, size })
+    directive(
+        &format!("readonly {addr:#x}+{size}"),
+        Body::Readonly { addr, size },
+    )
 }
 
 fn volatile(addr: u64, size: i32) -> Directive {
-    directive(&format!("volatile {addr:#x}+{size}"), Body::Volatile { addr, size })
+    directive(
+        &format!("volatile {addr:#x}+{size}"),
+        Body::Volatile { addr, size },
+    )
 }
 
 /// Decompile `target` under `directives`, returning `(C, report)`.
@@ -97,8 +110,14 @@ fn all_applied(report: &[Outcome]) {
 fn the_baseline_reads_both_globals_and_merges_the_two_device_reads() {
     let (code, report) = decompile_with("sample", Vec::new());
     assert!(report.is_empty(), "no directives ⇒ no report rows");
-    assert!(code.contains("scale"), "baseline lost the .data load:\n{code}");
-    assert!(code.contains("bias"), "baseline lost the .data load:\n{code}");
+    assert!(
+        code.contains("scale"),
+        "baseline lost the .data load:\n{code}"
+    );
+    assert!(
+        code.contains("bias"),
+        "baseline lost the .data load:\n{code}"
+    );
     assert!(
         code.contains("dat_50000000 * 2"),
         "baseline no longer merges the two device reads:\n{code}"
@@ -130,8 +149,14 @@ fn read_only_propagation_without_the_range_changes_nothing() {
         .expect("the fixture has `sample`");
     let funcs = decompile_targets(&mut prog, vec![entry], false, false, false);
     let code = funcs[0].code.clone().unwrap_or_default();
-    assert!(code.contains("scale"), "the option alone folded a .data load:\n{code}");
-    assert!(code.contains("bias"), "the option alone folded a .data load:\n{code}");
+    assert!(
+        code.contains("scale"),
+        "the option alone folded a .data load:\n{code}"
+    );
+    assert!(
+        code.contains("bias"),
+        "the option alone folded a .data load:\n{code}"
+    );
 }
 
 /// `volatile` — two reads of a device register are two reads. Without the
@@ -156,12 +181,17 @@ fn a_volatile_range_keeps_both_device_reads() {
 /// `.data` pair folds and the device reads split, in one decompile.
 #[test]
 fn readonly_and_volatile_compose_on_one_run() {
-    let (code, report) =
-        decompile_with("sample", vec![readonly(DATA_PAIR, 8), volatile(MMIO, 4)]);
+    let (code, report) = decompile_with("sample", vec![readonly(DATA_PAIR, 8), volatile(MMIO, 4)]);
     all_applied(&report);
     assert_eq!(report.len(), 2);
-    assert!(code.contains("* 7") && code.contains("+ 100"), "the fold was lost:\n{code}");
-    assert!(!code.contains("dat_50000000 * 2"), "the split was lost:\n{code}");
+    assert!(
+        code.contains("* 7") && code.contains("+ 100"),
+        "the fold was lost:\n{code}"
+    );
+    assert!(
+        !code.contains("dat_50000000 * 2"),
+        "the split was lost:\n{code}"
+    );
 }
 
 /// A range property has to be painted before the symbols over it are mapped —
@@ -174,7 +204,10 @@ fn readonly_and_volatile_compose_on_one_run() {
 fn the_property_reaches_a_range_the_loader_already_named() {
     let (code, _) = decompile_with("sample", vec![readonly(DATA_PAIR, 8)]);
     // `scale` and `bias` are ELF symbols: the baseline prints them by name.
-    assert!(code.contains("* 7"), "a named global did not take the property:\n{code}");
+    assert!(
+        code.contains("* 7"),
+        "a named global did not take the property:\n{code}"
+    );
 }
 
 /// A range with no size is rejected with a reason, not accepted and dropped.
@@ -184,7 +217,11 @@ fn a_zero_length_range_is_rejected_with_a_reason() {
     assert_eq!(report.len(), 1);
     assert_eq!(report[0].status, "rejected");
     assert!(
-        report[0].detail.as_deref().unwrap_or_default().contains("size"),
+        report[0]
+            .detail
+            .as_deref()
+            .unwrap_or_default()
+            .contains("size"),
         "the rejection does not say why: {:?}",
         report[0].detail
     );
@@ -195,16 +232,14 @@ fn a_zero_length_range_is_rejected_with_a_reason() {
 #[test]
 fn a_range_directive_reports_the_code_data_partition_subphase() {
     let (_, report) = decompile_with("sample", vec![readonly(DATA_PAIR, 8), volatile(MMIO, 4)]);
-    assert_eq!((report[0].kind, report[0].phase, report[0].subphase), (
-        "readonly",
-        "P1",
-        "code-data-partition"
-    ));
-    assert_eq!((report[1].kind, report[1].phase, report[1].subphase), (
-        "volatile",
-        "P1",
-        "code-data-partition"
-    ));
+    assert_eq!(
+        (report[0].kind, report[0].phase, report[0].subphase),
+        ("readonly", "P1", "code-data-partition")
+    );
+    assert_eq!(
+        (report[1].kind, report[1].phase, report[1].subphase),
+        ("volatile", "P1", "code-data-partition")
+    );
 }
 
 /// `global remove` / `global add` — the pair `phases.toml` names as the exposure
@@ -295,8 +330,9 @@ fn a_range_command_rejects_a_bad_explicit_size() {
 /// Drive `commands` through a console wired like the datatest runner, with the fixture
 /// installed as the current program.
 fn drive_console(commands: &[&str]) -> String {
-    use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData,
-                                    DECOMPILE_MODULE};
+    use unlace_console::ifacedecomp::{
+        DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+    };
     use unlace_console::ifaceterm::ConsoleCommands;
 
     let program = load();
@@ -305,7 +341,9 @@ fn drive_console(commands: &[&str]) -> String {
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
     {
-        let data = status.get_data_mut(DECOMPILE_MODULE).expect("decompile module data");
+        let data = status
+            .get_data_mut(DECOMPILE_MODULE)
+            .expect("decompile module data");
         let dcp = data
             .as_any_mut()
             .downcast_mut::<IfaceDecompData>()

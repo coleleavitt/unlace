@@ -3,8 +3,8 @@
 
 use super::*;
 use crate::loader::format::macho::ChainedFixups;
-use unlace_decomp::dtype::TypeFactoryImpl;
 use object::read::{Object, ObjectSection, ObjectSymbol, ObjectSymbolTable};
+use unlace_decomp::dtype::TypeFactoryImpl;
 
 use super::super::descriptors::ELF_SECTIONS;
 
@@ -156,13 +156,23 @@ fn a_witness_self_follows_the_protocols_class_constraint() {
         };
         let sprite = *types.by_path.get("typefix.Sprite").unwrap();
         let point = *types.by_path.get("typefix.Point").unwrap();
-        let witness = |addr, path, bound| {
-            level(types.witness_self(addr, path, bound).unwrap())
-        };
-        assert_eq!(witness(sprite, "typefix.Sprite", false), (2, "typefix.Sprite".into()));
-        assert_eq!(witness(sprite, "typefix.Sprite", true), (1, "typefix.Sprite".into()));
-        assert_eq!(witness(point, "typefix.Point", false), (1, "typefix.Point".into()));
-        assert_eq!(witness(point, "typefix.Point", true), (1, "typefix.Point".into()));
+        let witness = |addr, path, bound| level(types.witness_self(addr, path, bound).unwrap());
+        assert_eq!(
+            witness(sprite, "typefix.Sprite", false),
+            (2, "typefix.Sprite".into())
+        );
+        assert_eq!(
+            witness(sprite, "typefix.Sprite", true),
+            (1, "typefix.Sprite".into())
+        );
+        assert_eq!(
+            witness(point, "typefix.Point", false),
+            (1, "typefix.Point".into())
+        );
+        assert_eq!(
+            witness(point, "typefix.Point", true),
+            (1, "typefix.Point".into())
+        );
     });
 }
 
@@ -174,14 +184,21 @@ fn a_class_with_a_resilient_superclass_is_not_located() {
         with_edited_types(
             |md| {
                 if resilient {
-                    for ctx in md.contexts.values_mut().filter(|c| c.kind == ContextKind::Class) {
+                    for ctx in md
+                        .contexts
+                        .values_mut()
+                        .filter(|c| c.kind == ContextKind::Class)
+                    {
                         ctx.flags |= CLASS_HAS_RESILIENT_SUPERCLASS << 16;
                     }
                 }
             },
             |types| {
-                let kinds: Vec<ContextKind> =
-                    types.metadata.keys().map(|a| types.md.contexts[a].kind).collect();
+                let kinds: Vec<ContextKind> = types
+                    .metadata
+                    .keys()
+                    .map(|a| types.md.contexts[a].kind)
+                    .collect();
                 (
                     kinds.iter().filter(|k| **k == ContextKind::Class).count(),
                     kinds.iter().filter(|k| **k == ContextKind::Struct).count(),

@@ -1,7 +1,7 @@
 //! Spell an exact-width zero store as a value of its integer byte-array type.
 
 use crate::context::VarnodeId;
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::printc::PrintC;
 use crate::printlanguage::{Atom, SyntaxHighlight, TagType};

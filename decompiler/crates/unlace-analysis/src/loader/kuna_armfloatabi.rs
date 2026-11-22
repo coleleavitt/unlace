@@ -463,6 +463,9 @@ mod tests {
             attributes(&tagged(&[7, b'M', 28, 1], true), true),
             Some(Some(true))
         );
-        assert_eq!(attributes(&tagged(&[7, b'M'], true), true), Some(Some(false)));
+        assert_eq!(
+            attributes(&tagged(&[7, b'M'], true), true),
+            Some(Some(false))
+        );
     }
 }

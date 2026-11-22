@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::space::{spacetype, AddrSpaceManager, JoinRecord, JoinSpace};
+use unlace_base::space::{AddrSpaceManager, JoinRecord, JoinSpace, spacetype};
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::translate::PcodeEmit;
@@ -163,7 +163,15 @@ fn return_mode(
     userop: u64,
 ) -> bool {
     let Some(
-        [(OpCode::CPUI_INT_AND, Some(bit), mask), (OpCode::CPUI_INT_NOTEQUAL, Some(output), compare), (OpCode::CPUI_CALLOTHER, None, arguments), (OpCode::CPUI_INT_2COMP, Some(alignment), two), (OpCode::CPUI_INT_AND, Some(target), aligned), (OpCode::CPUI_COPY, Some(destination), copy), rest @ ..],
+        [
+            (OpCode::CPUI_INT_AND, Some(bit), mask),
+            (OpCode::CPUI_INT_NOTEQUAL, Some(output), compare),
+            (OpCode::CPUI_CALLOTHER, None, arguments),
+            (OpCode::CPUI_INT_2COMP, Some(alignment), two),
+            (OpCode::CPUI_INT_AND, Some(target), aligned),
+            (OpCode::CPUI_COPY, Some(destination), copy),
+            rest @ ..,
+        ],
     ) = ops.0.get(..)
     else {
         return false;
@@ -1014,7 +1022,7 @@ mod tests {
 
     #[test]
     fn proof_join_allocation_does_not_change_the_original_pool() {
-        use unlace_base::space::{addrspace_flags, AddrSpace, ConstantSpace, VarnodeStorage};
+        use unlace_base::space::{AddrSpace, ConstantSpace, VarnodeStorage, addrspace_flags};
         let mut original = AddrSpaceManager::new();
         original
             .insert_space(Rc::new(ConstantSpace::new()))
@@ -1091,7 +1099,7 @@ mod tests {
     }
 
     fn mode_bundle() -> (Collect, VarnodeData, VarnodeData, VarnodeData) {
-        use unlace_base::space::{addrspace_flags, AddrSpace, ConstantSpace, UniqueSpace};
+        use unlace_base::space::{AddrSpace, ConstantSpace, UniqueSpace, addrspace_flags};
         let register = Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
             "register",
@@ -1103,7 +1111,8 @@ mod tests {
             1,
             1,
         ));
-        let unique: Rc<unlace_base::space::AddrSpace> = Rc::new(UniqueSpace::new(2, 0, true)).into();
+        let unique: Rc<unlace_base::space::AddrSpace> =
+            Rc::new(UniqueSpace::new(2, 0, true)).into();
         let constants: Rc<unlace_base::space::AddrSpace> = Rc::new(ConstantSpace::new()).into();
         let vn = |space: &Rc<unlace_base::space::AddrSpace>, offset, size| VarnodeData {
             space: Some(space.clone()),

@@ -15,21 +15,37 @@ use std::process::{Command, Output};
 fn extent_module() -> Vec<u8> {
     let mut module = vec![0u8; 0xd0];
     let code: [(usize, &[u8]); 9] = [
-        (0x00, &[0xe8, 0x0d, 0x00, 0xe8, 0x3a, 0x00, 0xe8, 0x97, 0x00, 0xe8, 0xa4, 0x00, 0xe8, 0x71, 0x00]),
+        (
+            0x00,
+            &[
+                0xe8, 0x0d, 0x00, 0xe8, 0x3a, 0x00, 0xe8, 0x97, 0x00, 0xe8, 0xa4, 0x00, 0xe8, 0x71,
+                0x00,
+            ],
+        ),
         (0x10, &[0xa1, 0x00, 0x02, 0xc3]),
         (0x14, b"DGROUP data: not code, 0123456789abcdefghijk"),
         (
             0x40,
             &[
-                0x83, 0xfb, 0x02, 0x77, 0x0d, 0xd1, 0xe3, 0x2e, 0xff, 0xa7, 0x4c, 0x00, 0x53, 0x00, 0x56, 0x00,
-                0x59, 0x00, 0xc3, 0xb0, 0x01, 0xc3, 0xb0, 0x02, 0xc3, 0xb0, 0x03, 0xc3,
+                0x83, 0xfb, 0x02, 0x77, 0x0d, 0xd1, 0xe3, 0x2e, 0xff, 0xa7, 0x4c, 0x00, 0x53, 0x00,
+                0x56, 0x00, 0x59, 0x00, 0xc3, 0xb0, 0x01, 0xc3, 0xb0, 0x02, 0xc3, 0xb0, 0x03, 0xc3,
             ],
         ),
         (0x5c, b"strings after the switch cases..!"),
         (0x80, &[0xe8, 0x0d, 0x00]),
         (0x90, &[0xb4, 0x4c, 0xcd, 0x21]),
-        (0xa0, &[0xa1, 0x00, 0x03, 0xff, 0xe0, b'm', b'o', b'r', b'e', b' ', b't', b'e', b'x', b't']),
-        (0xb0, &[0xff, 0x26, 0xf2, 0x2e, b't', b'a', b'i', b'l', b' ', b't', b'e', b'x', b't']),
+        (
+            0xa0,
+            &[
+                0xa1, 0x00, 0x03, 0xff, 0xe0, b'm', b'o', b'r', b'e', b' ', b't', b'e', b'x', b't',
+            ],
+        ),
+        (
+            0xb0,
+            &[
+                0xff, 0x26, 0xf2, 0x2e, b't', b'a', b'i', b'l', b' ', b't', b'e', b'x', b't',
+            ],
+        ),
     ];
     for (at, bytes) in code {
         module[at..at + bytes.len()].copy_from_slice(bytes);
@@ -57,13 +73,18 @@ fn dos_image(module: &[u8]) -> Vec<u8> {
 }
 
 fn kuna(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_unlace")).args(args).output().expect("run kuna")
+    Command::new(env!("CARGO_BIN_EXE_unlace"))
+        .args(args)
+        .output()
+        .expect("run kuna")
 }
 
 fn run(args: &[&str]) -> (String, String) {
     let out = kuna(args);
-    let (stdout, stderr) =
-        (String::from_utf8_lossy(&out.stdout).into_owned(), String::from_utf8_lossy(&out.stderr).into_owned());
+    let (stdout, stderr) = (
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    );
     assert!(out.status.success(), "{args:?}: {stdout}\n{stderr}");
     (stdout, stderr)
 }
@@ -80,7 +101,12 @@ fn sizes(json: &str) -> Vec<(String, u64)> {
         .as_array()
         .unwrap()
         .iter()
-        .map(|f| (f["name"].as_str().unwrap().to_string(), f["size"].as_u64().unwrap()))
+        .map(|f| {
+            (
+                f["name"].as_str().unwrap().to_string(),
+                f["size"].as_u64().unwrap(),
+            )
+        })
         .collect()
 }
 
@@ -105,7 +131,10 @@ fn a_dos_function_ends_where_its_flow_does() {
     assert_eq!(sizes(&inventory), expected, "{inventory}");
 
     let (listing, notes) = run(&["disassemble", exe, "sub_10010"]);
-    assert!(listing.starts_with("# 2 instructions at sub_10010 @ 0x10010 (0x10010..0x10014, 4 bytes)"), "{listing}");
+    assert!(
+        listing.starts_with("# 2 instructions at sub_10010 @ 0x10010 (0x10010..0x10014, 4 bytes)"),
+        "{listing}"
+    );
     assert!(
         notes.contains(
             "note: sub_10010 ends at 0x10014, after the last instruction its flow reaches; its flow reaches none \
@@ -114,17 +143,26 @@ fn a_dos_function_ends_where_its_flow_does() {
         "{notes}"
     );
     let (_, notes) = run(&["disassemble", exe, "0x10013"]);
-    assert!(notes.contains("note: 0x10013 is in sub_10010, which ends at 0x10014, after"), "{notes}");
+    assert!(
+        notes.contains("note: 0x10013 is in sub_10010, which ends at 0x10014, after"),
+        "{notes}"
+    );
     let (range, _) = run(&["disassemble", exe, "0x10010-0x10040"]);
     assert!(
         range.contains("\n0x10014 ") && range.contains("\n0x10039 "),
         "an explicit range lists what it asks for: {range}"
     );
     let (switch, _) = run(&["disassemble", exe, "sub_10040"]);
-    assert!(switch.contains("(0x10040..0x1005c, 28 bytes)") && switch.contains("0x10059 "), "{switch}");
+    assert!(
+        switch.contains("(0x10040..0x1005c, 28 bytes)") && switch.contains("0x10059 "),
+        "{switch}"
+    );
 
     let (_, past) = run(&["decompile", exe, "0x10020", "--addr"]);
-    assert!(!past.contains("interior to"), "text after a function's end is not its interior: {past}");
+    assert!(
+        !past.contains("interior to"),
+        "text after a function's end is not its interior: {past}"
+    );
     assert!(
         past.contains(
             "note: 0x10020 is past the end of sub_10010 at 0x10014, after the last instruction its flow reaches, \
@@ -133,7 +171,10 @@ fn a_dos_function_ends_where_its_flow_does() {
         "{past}"
     );
     let (_, inside) = run(&["decompile", exe, "0x10013", "--addr"]);
-    assert!(inside.contains("0x10013 is interior to sub_10010 (0x10010+0x3)"), "{inside}");
+    assert!(
+        inside.contains("0x10013 is interior to sub_10010 (0x10010+0x3)"),
+        "{inside}"
+    );
 
     let project = common::scratch_file("dos-extent-project", "d");
     run(&["decompile-project", exe, "-o", project.to_str().unwrap()]);
@@ -141,7 +182,10 @@ fn a_dos_function_ends_where_its_flow_does() {
     let asm = std::fs::read_to_string(project.join(asm_name)).unwrap();
     let tail = asm.split("\nsub_10010:").nth(1).expect("sub_10010 label");
     let end = "  ; end of sub_10010: its flow reaches none of the 44 bytes from here to 0x10040\n";
-    assert!(tail.contains(&format!("RET\n{end}")), "the .asm marks where sub_10010's flow ends: {tail}");
+    assert!(
+        tail.contains(&format!("RET\n{end}")),
+        "the .asm marks where sub_10010's flow ends: {tail}"
+    );
     std::fs::remove_dir_all(&project).unwrap();
     std::fs::remove_file(&path).unwrap();
 }
@@ -152,9 +196,17 @@ fn a_dos_function_ends_where_its_flow_does() {
 fn branch_into_entry_module() -> Vec<u8> {
     let mut module = vec![0u8; 0x40];
     let code: [(usize, &[u8]); 4] = [
-        (0x00, &[0xe8, 0x0d, 0x00, 0xe8, 0x1a, 0x00, 0xb8, 0x00, 0x4c, 0xcd, 0x21]),
+        (
+            0x00,
+            &[
+                0xe8, 0x0d, 0x00, 0xe8, 0x1a, 0x00, 0xb8, 0x00, 0x4c, 0xcd, 0x21,
+            ],
+        ),
         (0x10, &[0xb8, 0x01, 0x00, 0xeb, 0x13]),
-        (0x20, &[0x85, 0xc0, 0x75, 0xec, 0xc3, b'g', b'a', b'p', 0x40, 0xc3]),
+        (
+            0x20,
+            &[0x85, 0xc0, 0x75, 0xec, 0xc3, b'g', b'a', b'p', 0x40, 0xc3],
+        ),
         (0x2a, b"trailing text"),
     ];
     for (at, bytes) in code {
@@ -165,14 +217,23 @@ fn branch_into_entry_module() -> Vec<u8> {
 
 #[test]
 fn a_conditional_branch_into_another_entry_is_followed_as_the_decompiler_follows_it() {
-    let path = written("dos-extent-cbranch", "exe", &dos_image(&branch_into_entry_module()));
+    let path = written(
+        "dos-extent-cbranch",
+        "exe",
+        &dos_image(&branch_into_entry_module()),
+    );
     let exe = path.to_str().unwrap();
     let (inventory, _) = run(&["functions", exe, "--json"]);
-    let expected: Vec<(String, u64)> =
-        [("sub_10000", 11), ("sub_10010", 5), ("sub_10020", 10)].iter().map(|&(n, s)| (n.to_string(), s)).collect();
+    let expected: Vec<(String, u64)> = [("sub_10000", 11), ("sub_10010", 5), ("sub_10020", 10)]
+        .iter()
+        .map(|&(n, s)| (n.to_string(), s))
+        .collect();
     assert_eq!(sizes(&inventory), expected, "{inventory}");
     let (c, _) = run(&["decompile", exe, "sub_10020", "--raw"]);
-    assert!(c.contains("\n0x00010028:"), "the decompiler's flow reaches the tail too: {c}");
+    assert!(
+        c.contains("\n0x00010028:"),
+        "the decompiler's flow reaches the tail too: {c}"
+    );
     std::fs::remove_file(&path).unwrap();
 }
 
@@ -181,12 +242,25 @@ fn a_com_program_ends_before_its_string() {
     // org 100h: `mov ah,9; mov dx,110h; int 21h; test al,al; jz L; int 20h;
     // L: xor ah,ah; int 21h; db 'hi$'`.
     let com = [
-        0xb4, 0x09, 0xba, 0x10, 0x01, 0xcd, 0x21, 0x84, 0xc0, 0x74, 0x02, 0xcd, 0x20, 0x32, 0xe4, 0xcd, 0x21, 0x68,
-        0x69, 0x24,
+        0xb4, 0x09, 0xba, 0x10, 0x01, 0xcd, 0x21, 0x84, 0xc0, 0x74, 0x02, 0xcd, 0x20, 0x32, 0xe4,
+        0xcd, 0x21, 0x68, 0x69, 0x24,
     ];
     let path = written("dos-extent", "com", &com);
-    let raw = ["--raw-image", "--target", "x86:LE:16:Real Mode:default", "--base", "0x100", "--entry", "0x100"];
-    let (inventory, _) = run(&[&["functions", path.to_str().unwrap(), "--json"][..], &raw].concat());
-    assert_eq!(sizes(&inventory), vec![("sub_100".to_string(), 17)], "{inventory}");
+    let raw = [
+        "--raw-image",
+        "--target",
+        "x86:LE:16:Real Mode:default",
+        "--base",
+        "0x100",
+        "--entry",
+        "0x100",
+    ];
+    let (inventory, _) =
+        run(&[&["functions", path.to_str().unwrap(), "--json"][..], &raw].concat());
+    assert_eq!(
+        sizes(&inventory),
+        vec![("sub_100".to_string(), 17)],
+        "{inventory}"
+    );
     std::fs::remove_file(&path).unwrap();
 }

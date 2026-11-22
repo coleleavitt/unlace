@@ -3,7 +3,7 @@ use crate::context::ArchContext;
 use crate::dtype::{TypeFactory, TypeFactoryImpl};
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 
 fn function() -> Funcdata {

@@ -197,10 +197,16 @@ fn a_volatile_data_assertion_keeps_each_read_in_decompile_all() {
     let path = common::scratch_file("volatile-data-all", "bin");
     std::fs::write(
         &path,
-        [0x8b, 0x04, 0x25, 0x00, 0x10, 0x60, 0x00, 0x03, 0x04, 0x25, 0x00, 0x10, 0x60, 0x00, 0xc3],
+        [
+            0x8b, 0x04, 0x25, 0x00, 0x10, 0x60, 0x00, 0x03, 0x04, 0x25, 0x00, 0x10, 0x60, 0x00,
+            0xc3,
+        ],
     )
     .unwrap();
-    for declaration in ["data 0x601000 volatile int cursor", "data 0x601000 int volatile cursor"] {
+    for declaration in [
+        "data 0x601000 volatile int cursor",
+        "data 0x601000 int volatile cursor",
+    ] {
         let (out, err, code) = common::run_kuna(&[
             "decompile-all",
             path.to_str().unwrap(),
@@ -240,9 +246,8 @@ fn volatile_typedef_data_preserves_scalar_and_array_reads() {
         std::fs::write(
             &path,
             [
-                0x8b, 0x04, 0x25, offset, 0x10, 0x60, 0x00,
-                0x8b, 0x14, 0x25, offset, 0x10, 0x60, 0x00,
-                0x01, 0xd0, 0xc3,
+                0x8b, 0x04, 0x25, offset, 0x10, 0x60, 0x00, 0x8b, 0x14, 0x25, offset, 0x10, 0x60,
+                0x00, 0x01, 0xd0, 0xc3,
             ],
         )
         .unwrap();
@@ -294,9 +299,8 @@ fn volatile_struct_data_reads_name_the_covered_field() {
         std::fs::write(
             &path,
             [
-                0x8b, 0x04, 0x25, offset, 0x10, 0x60, 0x00,
-                0x8b, 0x14, 0x25, offset, 0x10, 0x60, 0x00,
-                0x01, 0xd0, 0xc3,
+                0x8b, 0x04, 0x25, offset, 0x10, 0x60, 0x00, 0x8b, 0x14, 0x25, offset, 0x10, 0x60,
+                0x00, 0x01, 0xd0, 0xc3,
             ],
         )
         .unwrap();
@@ -326,17 +330,31 @@ fn volatile_struct_data_reads_name_the_covered_field() {
 }
 
 fn mapped_volatile_access(command: &str, hex: &str, declaration: &str) -> String {
-    let image: Vec<u8> = (0..hex.len()).step_by(2)
-        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap()).collect();
+    let image: Vec<u8> = (0..hex.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
+        .collect();
     let path = common::scratch_file("volatile-access-width", "bin");
     std::fs::write(&path, image).unwrap();
     let (out, err, code) = common::run_kuna(&[
-        command, path.to_str().unwrap(), "--addr", "0x400000", "--raw-image",
-        "--base", "0x400000", "--target", "x86:LE:64:default:gcc", "--assert-strict",
-        "--assert", "typedef struct One { int value; };",
-        "--assert", "typedef typedef volatile struct One VolOne;",
-        "--assert", "typedef union OneUnion { int value; unsigned int bits; };",
-        "--assert", &format!("data 0x601000 {declaration}"),
+        command,
+        path.to_str().unwrap(),
+        "--addr",
+        "0x400000",
+        "--raw-image",
+        "--base",
+        "0x400000",
+        "--target",
+        "x86:LE:64:default:gcc",
+        "--assert-strict",
+        "--assert",
+        "typedef struct One { int value; };",
+        "--assert",
+        "typedef typedef volatile struct One VolOne;",
+        "--assert",
+        "typedef union OneUnion { int value; unsigned int bits; };",
+        "--assert",
+        &format!("data 0x601000 {declaration}"),
     ]);
     std::fs::remove_file(path).unwrap();
     assert_eq!(code, 0, "{declaration}: {err}");
@@ -363,13 +381,41 @@ fn volatile_whole_aggregates_name_the_scalar_access() {
 fn volatile_array_accesses_keep_the_operation_width() {
     for command in ["decompile", "decompile-all"] {
         for (hex, declaration, access) in [
-            ("8b0425001060008b14250010600001d0c3", "volatile char cursor[8]", "*(volatile unsigned int *)cursor"),
-            ("8b0425041060008b14250410600001d0c3", "volatile char cursor[8]", "*(volatile unsigned int *)&cursor[4]"),
-            ("8b0425001060008b14250010600001d0c3", "volatile long long cursor[2]", "*(volatile unsigned int *)&cursor[0]"),
-            ("8b0425001060008b14250010600001d0c3", "volatile union OneUnion cursor", "*(volatile unsigned int *)&cursor"),
-            ("c704250010600078563412c704250010600021436587c3", "volatile char cursor[8]", "*(volatile unsigned int *)cursor"),
-            ("f30f10042500106000f30f10142500106000f30f58c2c3", "volatile char cursor[8]", "*(volatile unsigned int *)cursor"),
-            ("660f6f042500106000660f6f142500106000660ffcc2660f7ec0c3", "volatile char cursor[32]", "*(volatile unsigned __int128 *)cursor"),
+            (
+                "8b0425001060008b14250010600001d0c3",
+                "volatile char cursor[8]",
+                "*(volatile unsigned int *)cursor",
+            ),
+            (
+                "8b0425041060008b14250410600001d0c3",
+                "volatile char cursor[8]",
+                "*(volatile unsigned int *)&cursor[4]",
+            ),
+            (
+                "8b0425001060008b14250010600001d0c3",
+                "volatile long long cursor[2]",
+                "*(volatile unsigned int *)&cursor[0]",
+            ),
+            (
+                "8b0425001060008b14250010600001d0c3",
+                "volatile union OneUnion cursor",
+                "*(volatile unsigned int *)&cursor",
+            ),
+            (
+                "c704250010600078563412c704250010600021436587c3",
+                "volatile char cursor[8]",
+                "*(volatile unsigned int *)cursor",
+            ),
+            (
+                "f30f10042500106000f30f10142500106000f30f58c2c3",
+                "volatile char cursor[8]",
+                "*(volatile unsigned int *)cursor",
+            ),
+            (
+                "660f6f042500106000660f6f142500106000660ffcc2660f7ec0c3",
+                "volatile char cursor[32]",
+                "*(volatile unsigned __int128 *)cursor",
+            ),
         ] {
             let out = mapped_volatile_access(command, hex, declaration);
             assert_eq!(out.matches(access).count(), 2, "{declaration}:\n{out}");
@@ -424,13 +470,22 @@ fn inferred_simd_temporaries_have_scalar_declarations() {
 #[test]
 fn loaded_simd_temporaries_keep_array_declarations() {
     let hex = "f30f6f0766480f7ec0660f7ec1660f3a16c2014801c84801d0c3";
-    let image: Vec<u8> = (0..hex.len()).step_by(2)
-        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap()).collect();
+    let image: Vec<u8> = (0..hex.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
+        .collect();
     let path = common::scratch_file("simd-loaded-declaration", "bin");
     std::fs::write(&path, image).unwrap();
     let (out, err, code) = common::run_kuna(&[
-        "decompile", path.to_str().unwrap(), "--addr", "0x400000", "--raw-image",
-        "--base", "0x400000", "--target", "x86:LE:64:default:gcc",
+        "decompile",
+        path.to_str().unwrap(),
+        "--addr",
+        "0x400000",
+        "--raw-image",
+        "--base",
+        "0x400000",
+        "--target",
+        "x86:LE:64:default:gcc",
     ]);
     std::fs::remove_file(path).unwrap();
     assert_eq!(code, 0, "{err}");

@@ -22,9 +22,9 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_decomp::decompile_drive::build_and_follow_flow;
@@ -36,18 +36,35 @@ const GUARD_BIN: &str = "macho_cstringconst_guard_arm64";
 const CASES: [(&str, u64, &str, &str); 5] = [
     (BIN, 0x508, "(a0,0x610,0);", "(a0,\" (\",0);"),
     (BIN, 0x55c, "v1 = 0x613;", "v1 = \".SH\";"),
-    (GUARD_BIN, 0x510, "setvbuf(a0,NULL,0,0x58b);", "setvbuf(a0,NULL,0,0x58b);"),
+    (
+        GUARD_BIN,
+        0x510,
+        "setvbuf(a0,NULL,0,0x58b);",
+        "setvbuf(a0,NULL,0,0x58b);",
+    ),
     (GUARD_BIN, 0x520, "(a0,0x58d,0);", "(a0,0x58d,0);"),
-    (GUARD_BIN, 0x538, "(a0,0x588,0x58b);", "(a0,\"id\",\"hello world\");"),
+    (
+        GUARD_BIN,
+        0x538,
+        "(a0,0x588,0x58b);",
+        "(a0,\"id\",\"hello world\");",
+    ),
 ];
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn name_at(prog: &ConsoleProgram, vma: u64) -> String {
-    let code_space =
-        prog.arch().manage().get_default_code_space().expect("a default code space").clone();
+    let code_space = prog
+        .arch()
+        .manage()
+        .get_default_code_space()
+        .expect("a default code space")
+        .clone();
     let addr = Address::new(Rc::clone(&code_space), vma);
     match prog.arch().symboltab.find_function_across_scopes(&addr) {
         Some((sid, _)) => prog.arch().symboltab.symbol(sid).get_name().to_string(),
@@ -59,7 +76,9 @@ fn name_at(prog: &ConsoleProgram, vma: u64) -> String {
 fn render(bin: &str, vma: u64, on: bool) -> String {
     let root = repo_root();
     let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
-    let path = root.join("decompiler/crates/unlace-analysis/tests/fixtures").join(bin);
+    let path = root
+        .join("decompiler/crates/unlace-analysis/tests/fixtures")
+        .join(bin);
     assert!(path.exists(), "missing fixture {path:?}");
 
     let mut prog = bootstrap_from_object(path.to_str().unwrap(), "", &spec_roots)
@@ -67,15 +86,25 @@ fn render(bin: &str, vma: u64, on: bool) -> String {
     prog.arch_mut()
         .set_kuna_option("cstringconst", if on { "on" } else { "off" })
         .expect("cstringconst flips");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
     let name = name_at(&prog, vma);
-    let code_space =
-        prog.arch().manage().get_default_code_space().expect("a default code space").clone();
+    let code_space = prog
+        .arch()
+        .manage()
+        .get_default_code_space()
+        .expect("a default code space")
+        .clone();
     let fd = {
         let arch = prog.arch_mut();
-        build_and_follow_flow(arch, &name, Address::new(code_space, vma), unlace_console::engine::UNBOUNDED_SIZE)
-            .expect("the funcdata builds")
+        build_and_follow_flow(
+            arch,
+            &name,
+            Address::new(code_space, vma),
+            unlace_console::engine::UNBOUNDED_SIZE,
+        )
+        .expect("the funcdata builds")
     };
     let cmds: Vec<String> = ["decompile".into(), "print C".into()].to_vec();
     let count = cmds.len();
@@ -98,7 +127,13 @@ fn literal_section_constants_print_as_literals_only_when_on() {
     for &(bin, vma, off_line, on_line) in &CASES {
         let off = render(bin, vma, false);
         let on = render(bin, vma, true);
-        assert!(off.contains(off_line), "{bin} 0x{vma:x} cstringconst off must print `{off_line}`:\n{off}");
-        assert!(on.contains(on_line), "{bin} 0x{vma:x} cstringconst on must print `{on_line}`:\n{on}");
+        assert!(
+            off.contains(off_line),
+            "{bin} 0x{vma:x} cstringconst off must print `{off_line}`:\n{off}"
+        );
+        assert!(
+            on.contains(on_line),
+            "{bin} 0x{vma:x} cstringconst on must print `{on_line}`:\n{on}"
+        );
     }
 }

@@ -2,9 +2,9 @@ use std::rc::Rc;
 
 use unlace_base::address::{Address, RangeList};
 use unlace_base::partmap::PartMap;
-use unlace_base::space::{spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, spacetype};
 
-use crate::dtype::{type_metatype, Datatype, DatatypeKind};
+use crate::dtype::{Datatype, DatatypeKind, type_metatype};
 
 use super::{GlobalEntry, GlobalQuery, IndirectSlotType};
 
@@ -66,7 +66,10 @@ fn global_symbol_name_snapshot_exposes_names_reserved_from_local_suffixes() {
         entry(&ram, 0x1000, 4, 0, "value_1", true, RangeList::new()),
         entry(&ram, 0x2000, 1, 0, "callee_1", true, RangeList::new()),
     ]);
-    assert_eq!(globals.symbol_names().collect::<Vec<_>>(), ["value_1", "callee_1"]);
+    assert_eq!(
+        globals.symbol_names().collect::<Vec<_>>(),
+        ["value_1", "callee_1"]
+    );
 }
 
 #[test]
@@ -243,7 +246,9 @@ fn usepoint_limited_data_shadows_only_where_it_is_active() {
         false,
     );
     limited.addrtied = false;
-    limited.uselimit.insert_range(Rc::clone(&code), 0x400, 0x4ff);
+    limited
+        .uselimit
+        .insert_range(Rc::clone(&code), 0x400, 0x4ff);
     let query = query(vec![
         typed_entry(&data, 0x100, 1, "target", code_noproto(), true),
         limited,
@@ -275,9 +280,11 @@ fn indirect_slot_does_not_reinterpret_an_interior_aggregate_address() {
         query.indirect_slot_type(&addr(&data, 0x108), 8, &Address::new_invalid()),
         Some(IndirectSlotType::Untyped)
     ));
-    assert!(query
-        .indirect_slot_type(&addr(&data, 0x200), 8, &Address::new_invalid())
-        .is_none());
+    assert!(
+        query
+            .indirect_slot_type(&addr(&data, 0x200), 8, &Address::new_invalid())
+            .is_none()
+    );
 }
 
 fn linear_container_flags(
@@ -292,10 +299,7 @@ fn linear_container_flags(
     let mut best = None;
     let mut oldsize = -1;
     for candidate in entries {
-        if candidate.space_index != space_index
-            || candidate.first > start
-            || candidate.last < end
-        {
+        if candidate.space_index != space_index || candidate.first > start || candidate.last < end {
             continue;
         }
         if candidate.size >= oldsize && oldsize != -1 {
@@ -422,8 +426,24 @@ fn in_use_filter_still_selects_the_smallest_active_entry() {
 fn interval_order_does_not_replace_original_order_for_equal_sizes() {
     let data = space(3);
     let query = query(vec![
-        entry(&data, 0x108, 16, 0x11, "original-first", true, RangeList::new()),
-        entry(&data, 0x100, 16, 0x22, "offset-first", true, RangeList::new()),
+        entry(
+            &data,
+            0x108,
+            16,
+            0x11,
+            "original-first",
+            true,
+            RangeList::new(),
+        ),
+        entry(
+            &data,
+            0x100,
+            16,
+            0x22,
+            "offset-first",
+            true,
+            RangeList::new(),
+        ),
     ]);
 
     assert_eq!(
@@ -472,7 +492,15 @@ fn interval_index_matches_linear_overlap_and_usepoint_semantics() {
     use_500.insert_range(Rc::clone(&code), 0x500, 0x5ff);
 
     let entries = vec![
-        entry(&data, 0x108, 16, 0x11, "original-first", true, RangeList::new()),
+        entry(
+            &data,
+            0x108,
+            16,
+            0x11,
+            "original-first",
+            true,
+            RangeList::new(),
+        ),
         entry(
             &other_data,
             0x100,
@@ -483,7 +511,15 @@ fn interval_index_matches_linear_overlap_and_usepoint_semantics() {
             RangeList::new(),
         ),
         entry(&data, 0x80, 192, 0x12, "outer", true, RangeList::new()),
-        entry(&data, 0x100, 16, 0x13, "offset-first", true, RangeList::new()),
+        entry(
+            &data,
+            0x100,
+            16,
+            0x13,
+            "offset-first",
+            true,
+            RangeList::new(),
+        ),
         entry(&data, 0x104, 12, 0x14, "limited-400", false, use_400),
         entry(&data, 0x104, 12, 0x15, "limited-500", false, use_500),
         entry(&data, 0x108, 4, 0x16, "exact", false, {
@@ -525,7 +561,13 @@ fn interval_index_matches_linear_overlap_and_usepoint_semantics() {
         }
     }
 
-    for offset in [u64::MAX - 4, u64::MAX - 3, u64::MAX - 2, u64::MAX - 1, u64::MAX] {
+    for offset in [
+        u64::MAX - 4,
+        u64::MAX - 3,
+        u64::MAX - 2,
+        u64::MAX - 1,
+        u64::MAX,
+    ] {
         for size in [1, 2, 3, 4, 8] {
             for usepoint in &usepoints {
                 let address = addr(&data, offset);
@@ -550,7 +592,9 @@ fn function_owner_counts_the_entries_lazyfuncs_left_as_names() {
     let mut ctx = super::ArchContext::new(unlace_base::space::AddrSpaceManager::new());
     ctx.global_query = Some(Rc::new(query(vec![function(0x1000), function(0x1300)])));
     ctx.lazy_entry_starts = Rc::new(vec![0x1100, 0x1200]);
-    let owner = ctx.function_owner(&addr(&ram, 0x1000)).expect("a global snapshot");
+    let owner = ctx
+        .function_owner(&addr(&ram, 0x1000))
+        .expect("a global snapshot");
     assert_eq!(owner(0x0800), None);
     assert_eq!(owner(0x1010), Some(0x1000));
     assert_eq!(owner(0x1110), Some(0x1100));
@@ -568,7 +612,11 @@ impl unlace_sleigh::loadimage::LoadImage for Sections {
     fn get_file_name(&self) -> &str {
         "sections"
     }
-    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> unlace_base::error::KunaResult<()> {
+    fn load_fill(
+        &mut self,
+        _ptr: &mut [u8],
+        _addr: &Address,
+    ) -> unlace_base::error::KunaResult<()> {
         Ok(())
     }
     fn get_arch_type(&self) -> Vec<u8> {
@@ -579,7 +627,9 @@ impl unlace_sleigh::loadimage::LoadImage for Sections {
         self.at.set(0);
     }
     fn get_next_section(&self, record: &mut unlace_sleigh::loadimage::LoadImageSection) -> bool {
-        let Some(&(start, size)) = self.sections.get(self.at.get()) else { return false };
+        let Some(&(start, size)) = self.sections.get(self.at.get()) else {
+            return false;
+        };
         record.address = addr(&self.space, start);
         record.size = size;
         self.at.set(self.at.get() + 1);
@@ -591,7 +641,10 @@ impl unlace_sleigh::loadimage::LoadImage for Sections {
 fn in_section_of_reads_the_section_that_holds_the_first_address() {
     let ram = space(2);
     let mut ctx = super::ArchContext::new(unlace_base::space::AddrSpaceManager::new());
-    assert!(ctx.in_section_of(&addr(&ram, 0x1010), &addr(&ram, 0x9000)), "no image, no evidence");
+    assert!(
+        ctx.in_section_of(&addr(&ram, 0x1010), &addr(&ram, 0x9000)),
+        "no image, no evidence"
+    );
     let image = Sections {
         space: Rc::clone(&ram),
         sections: vec![(0x1000, 0x1000), (0x8000, 0x2000)],
@@ -601,7 +654,10 @@ fn in_section_of_reads_the_section_that_holds_the_first_address() {
     assert!(ctx.in_section_of(&addr(&ram, 0x1010), &addr(&ram, 0x1ff0)));
     assert!(!ctx.in_section_of(&addr(&ram, 0x1010), &addr(&ram, 0x9000)));
     assert!(!ctx.in_section_of(&addr(&ram, 0x9000), &addr(&ram, 0x1010)));
-    assert!(ctx.in_section_of(&addr(&ram, 0x4000), &addr(&ram, 0x9000)), "no section holds it");
+    assert!(
+        ctx.in_section_of(&addr(&ram, 0x4000), &addr(&ram, 0x9000)),
+        "no section holds it"
+    );
 }
 
 #[test]

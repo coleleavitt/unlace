@@ -166,10 +166,16 @@ impl BeJoinMode {
             other => {
                 return Err(unlace_base::error::KunaError::parse(format!(
                     "Unknown bejoin value: {other} (expected off|evidence|callers|on)"
-                )))
+                )));
             }
         };
-        Ok((mode, format!("High-word-first register pair join set to {}", mode.as_str())))
+        Ok((
+            mode,
+            format!(
+                "High-word-first register pair join set to {}",
+                mode.as_str()
+            ),
+        ))
     }
 }
 
@@ -182,14 +188,12 @@ pub fn join_order(active: &ParamActive, data: &Funcdata, return_ops: &[OpId]) ->
     let wide = abi != (0, 1)
         && match mode(data) {
             BeJoinMode::Off => false,
-            BeJoinMode::Evidence | BeJoinMode::Callers => evidence::proven(data, data.get_address()),
+            BeJoinMode::Evidence | BeJoinMode::Callers => {
+                evidence::proven(data, data.get_address())
+            }
             BeJoinMode::On => low_word_returned(active, data, return_ops),
         };
-    if wide {
-        abi
-    } else {
-        (0, 1)
-    }
+    if wide { abi } else { (0, 1) }
 }
 
 /// Keep both registers of a pair [`evidence::proven`] finds one value as the
@@ -213,13 +217,22 @@ pub fn keep_proven_pair(data: &Funcdata, active: &mut ParamActive, return_ops: &
 /// function wrote; with `computed`, not when either holds what a call left
 /// there (an indirect creation, which the output model never joins) or, on
 /// some path, the register's own entry value ([`written_on_every_path`]).
-pub(crate) fn mark_written_pair(data: &Funcdata, active: &mut ParamActive, return_ops: &[OpId], pair: &WidePair, computed: bool) {
+pub(crate) fn mark_written_pair(
+    data: &Funcdata,
+    active: &mut ParamActive,
+    return_ops: &[OpId],
+    pair: &WidePair,
+    computed: bool,
+) {
     let mut indices = Vec::new();
     for (address, size) in [&pair.hi, &pair.lo] {
         let matching: Vec<int4> = (0..active.get_num_trials())
             .filter(|&i| {
                 let trial = active.get_trial(i);
-                trial.get_address() == address && trial.get_size() == *size && trial.get_slot() > 0 && !trial.is_unref()
+                trial.get_address() == address
+                    && trial.get_size() == *size
+                    && trial.get_slot() > 0
+                    && !trial.is_unref()
             })
             .collect();
         let [index] = matching[..] else { return };
@@ -233,16 +246,25 @@ pub(crate) fn mark_written_pair(data: &Funcdata, active: &mut ParamActive, retur
     }
     let mut live = 0;
     for &op in return_ops {
-        let Some(ret) = data.obank().get(op) else { return };
+        let Some(ret) = data.obank().get(op) else {
+            return;
+        };
         if ret.is_dead() || ret.get_halt_type() != 0 || never_reached(data, op) {
             continue;
         }
         live += 1;
         for &index in &indices {
             let trial = active.get_trial(index);
-            let Some(vn) = ret.get_in(trial.get_slot()) else { return };
-            let Some(value) = data.vbank().get(vn) else { return };
-            if value.get_addr() != trial.get_address() || value.get_size() != trial.get_size() || !value.is_written() {
+            let Some(vn) = ret.get_in(trial.get_slot()) else {
+                return;
+            };
+            let Some(value) = data.vbank().get(vn) else {
+                return;
+            };
+            if value.get_addr() != trial.get_address()
+                || value.get_size() != trial.get_size()
+                || !value.is_written()
+            {
                 return;
             }
             if computed && !written_on_every_path(data, vn) {
@@ -271,10 +293,16 @@ fn written_on_every_path(data: &Funcdata, vn: VarnodeId) -> bool {
         if seen.len() > MAX_NODES {
             return false;
         }
-        let Some(v) = data.vbank().get(cur) else { return false };
-        let Some(op) = v.get_def().and_then(|d| data.obank().get(d)) else { return false };
+        let Some(v) = data.vbank().get(cur) else {
+            return false;
+        };
+        let Some(op) = v.get_def().and_then(|d| data.obank().get(d)) else {
+            return false;
+        };
         match op.code() {
-            OpCode::CPUI_MULTIEQUAL => work.extend((0..op.num_input()).filter_map(|i| op.get_in(i))),
+            OpCode::CPUI_MULTIEQUAL => {
+                work.extend((0..op.num_input()).filter_map(|i| op.get_in(i)))
+            }
             OpCode::CPUI_INDIRECT if op.is_indirect_creation() => return false,
             OpCode::CPUI_INDIRECT => work.extend(op.get_in(0)),
             _ => {}
@@ -313,11 +341,17 @@ pub fn live(data: &Funcdata) -> bool {
 /// its pair as one value ([`evidence::proven`]), the same verdict the
 /// callee's own RETURN joins by, whatever the calling function returns.
 /// First register low otherwise.
-pub fn call_join_order(data: &Funcdata, active: &ParamActive, callee: Option<&Address>) -> (int4, int4) {
+pub fn call_join_order(
+    data: &Funcdata,
+    active: &ParamActive,
+    callee: Option<&Address>,
+) -> (int4, int4) {
     let abi = match mode(data) {
         BeJoinMode::Off => false,
         BeJoinMode::On => !data.kuna_pairs_first_low(),
-        BeJoinMode::Evidence | BeJoinMode::Callers => callee.is_some_and(|e| evidence::proven(data, e)),
+        BeJoinMode::Evidence | BeJoinMode::Callers => {
+            callee.is_some_and(|e| evidence::proven(data, e))
+        }
     };
     if abi {
         active.join_pair_order()
@@ -331,7 +365,9 @@ pub fn call_join_order(data: &Funcdata, active: &ParamActive, callee: Option<&Ad
 /// calls then join their own pairs the same way, so a pair a call hands back
 /// and the function returns stays one value.
 pub fn joins_first_low(active: &ParamActive, order: (int4, int4)) -> bool {
-    let used = (0..active.get_num_trials()).take_while(|&i| active.get_trial(i).is_used()).count();
+    let used = (0..active.get_num_trials())
+        .take_while(|&i| active.get_trial(i).is_used())
+        .count();
     used == 2 && order == (0, 1) && active.join_pair_order() != (0, 1)
 }
 
@@ -376,7 +412,9 @@ enum LowWord {
 /// Is the low word of the pair `active` joins returned on purpose at the live
 /// RETURNs of `data` (see the module header)?
 fn low_word_returned(active: &ParamActive, data: &Funcdata, return_ops: &[OpId]) -> bool {
-    let used = (0..active.get_num_trials()).take_while(|&i| active.get_trial(i).is_used()).count();
+    let used = (0..active.get_num_trials())
+        .take_while(|&i| active.get_trial(i).is_used())
+        .count();
     if used != 2 {
         return false;
     }
@@ -386,7 +424,10 @@ fn low_word_returned(active: &ParamActive, data: &Funcdata, return_ops: &[OpId])
         .iter()
         .copied()
         .filter(|&r| {
-            data.obank().get(r).is_some_and(|o| !o.is_dead() && o.get_halt_type() == 0) && !never_reached(data, r)
+            data.obank()
+                .get(r)
+                .is_some_and(|o| !o.is_dead() && o.get_halt_type() == 0)
+                && !never_reached(data, r)
         })
         .collect();
     let first_literals: BTreeSet<u64> = live
@@ -441,17 +482,30 @@ fn hidden_readers(data: &Funcdata) -> Vec<BlockId> {
         let op = data.obank().get(r)?;
         let artificial = !op.is_dead()
             && op.get_halt_type() == 0
-            && op.get_in(0).and_then(|x| data.vbank().get(x)).is_some_and(|x| x.is_constant());
+            && op
+                .get_in(0)
+                .and_then(|x| data.vbank().get(x))
+                .is_some_and(|x| x.is_constant());
         let bl = op.get_parent().filter(|_| artificial)?;
         let ops = data.bb_ops(bl);
         let at = ops.iter().position(|&o| o == r)?.checked_sub(1)?;
-        data.obank().get(ops[at]).filter(|prev| prev.code() == OpCode::CPUI_CALLIND).map(|_| bl)
+        data.obank()
+            .get(ops[at])
+            .filter(|prev| prev.code() == OpCode::CPUI_CALLIND)
+            .map(|_| bl)
     });
-    let opaque = data.obank().iter_code(OpCode::CPUI_CALLOTHER).filter_map(|c| {
-        let op = data.obank().get(c).filter(|op| !op.is_dead())?;
-        let blind = (1..op.num_input()).all(|i| op.get_in(i).and_then(|x| data.vbank().get(x)).is_some_and(|x| x.is_constant()));
-        op.get_parent().filter(|_| blind)
-    });
+    let opaque = data
+        .obank()
+        .iter_code(OpCode::CPUI_CALLOTHER)
+        .filter_map(|c| {
+            let op = data.obank().get(c).filter(|op| !op.is_dead())?;
+            let blind = (1..op.num_input()).all(|i| {
+                op.get_in(i)
+                    .and_then(|x| data.vbank().get(x))
+                    .is_some_and(|x| x.is_constant())
+            });
+            op.get_parent().filter(|_| blind)
+        });
     jumps.chain(opaque).collect()
 }
 
@@ -462,12 +516,22 @@ fn hidden_readers(data: &Funcdata) -> Vec<BlockId> {
 /// and the default path returns with the copy still there; a value made
 /// after the switch, on the path that returns it, is out of the cases' reach.
 fn reaches_jump(data: &Funcdata, retop: OpId, pair: &Pair, jumps: &[BlockId]) -> bool {
-    let Some(low) = data.obank().get(retop).and_then(|o| o.get_in(pair.lo_slot)) else { return true };
+    let Some(low) = data.obank().get(retop).and_then(|o| o.get_in(pair.lo_slot)) else {
+        return true;
+    };
     let ends = ends_of(data, low, &pair.own, pair.lo_size);
     ends.values.iter().any(|&(v, _)| {
-        match data.vbank().get(v).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d)).and_then(|op| op.get_parent()) {
+        match data
+            .vbank()
+            .get(v)
+            .and_then(|v| v.get_def())
+            .and_then(|d| data.obank().get(d))
+            .and_then(|op| op.get_parent())
+        {
             None => true,
-            Some(made) => jumps.iter().any(|&j| data.bblocks_ref().dominates(made, Some(j))),
+            Some(made) => jumps
+                .iter()
+                .any(|&j| data.bblocks_ref().dominates(made, Some(j))),
         }
     })
 }
@@ -487,7 +551,9 @@ struct Pair {
 
 /// Classify the second register `retop` returns.
 fn classify(data: &Funcdata, retop: OpId, pair: &Pair) -> LowWord {
-    let Some(o) = data.obank().get(retop) else { return LowWord::Scratch };
+    let Some(o) = data.obank().get(retop) else {
+        return LowWord::Scratch;
+    };
     let (Some(low), Some(high)) = (o.get_in(pair.lo_slot), o.get_in(pair.hi_slot)) else {
         return LowWord::Scratch;
     };
@@ -502,7 +568,11 @@ fn classify(data: &Funcdata, retop: OpId, pair: &Pair) -> LowWord {
     if ends.overflow {
         return LowWord::Scratch;
     }
-    if ends.values.iter().any(|&(v, off)| !only_returned(data, v, off, pair)) {
+    if ends
+        .values
+        .iter()
+        .any(|&(v, off)| !only_returned(data, v, off, pair))
+    {
         return LowWord::Scratch;
     }
     if ends.entry {
@@ -512,21 +582,38 @@ fn classify(data: &Funcdata, retop: OpId, pair: &Pair) -> LowWord {
         return LowWord::Nothing;
     }
     let word = |(v, off): (VarnodeId, int4)| {
-        literal_value(data, v, LITERAL_DEPTH).map(|k| k.checked_shr(8 * off as u32).unwrap_or(0) & ones(pair.lo_size))
+        literal_value(data, v, LITERAL_DEPTH)
+            .map(|k| k.checked_shr(8 * off as u32).unwrap_or(0) & ones(pair.lo_size))
     };
     if ends.values.iter().all(|&e| word(e) == Some(0)) {
         return LowWord::Zero;
     }
-    if ends.values.iter().any(|&(v, off)| off == 0 && divided_down(data, v, high, pair.lo_size)) {
+    if ends
+        .values
+        .iter()
+        .any(|&(v, off)| off == 0 && divided_down(data, v, high, pair.lo_size))
+    {
         return LowWord::Quotient;
     }
-    if ends.values.iter().any(|&(v, off)| off == 0 && shifts_into_first(data, v, high)) {
+    if ends
+        .values
+        .iter()
+        .any(|&(v, off)| off == 0 && shifts_into_first(data, v, high))
+    {
         return LowWord::ShiftedOut;
     }
-    if int_sized && pair.chosen_flag && matches!(literal_value(data, high, LITERAL_DEPTH), Some(0 | 1)) {
+    if int_sized
+        && pair.chosen_flag
+        && matches!(literal_value(data, high, LITERAL_DEPTH), Some(0 | 1))
+    {
         return LowWord::Compared;
     }
-    if int_sized && ends.values.iter().any(|&(v, off)| off == 0 && sum_or_difference(data, v)) && carry_free(data, high, low, &ends)
+    if int_sized
+        && ends
+            .values
+            .iter()
+            .any(|&(v, off)| off == 0 && sum_or_difference(data, v))
+        && carry_free(data, high, low, &ends)
     {
         return LowWord::Compared;
     }
@@ -545,7 +632,8 @@ fn classify(data: &Funcdata, retop: OpId, pair: &Pair) -> LowWord {
     }
     if int_sized
         && ends.values.iter().any(|&(v, off)| {
-            product_high_half(data, v, off, pair.lo_size).is_some_and(|p| reads_low_half(data, high, p, pair.lo_size))
+            product_high_half(data, v, off, pair.lo_size)
+                .is_some_and(|p| reads_low_half(data, high, p, pair.lo_size))
         })
     {
         return LowWord::ProductHigh;
@@ -570,12 +658,24 @@ fn classify(data: &Funcdata, retop: OpId, pair: &Pair) -> LowWord {
 /// its own, which a saturated `long long` puts in its low word beside the
 /// high word it came from.
 fn shifts_into_first(data: &Funcdata, low: VarnodeId, high: VarnodeId) -> bool {
-    let def = |vn: VarnodeId| data.vbank().get(vn).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d));
-    let shift_by = |op: &crate::op::PcodeOp| op.get_in(1).and_then(|k| literal_value(data, k, LITERAL_DEPTH));
-    let Some(op) = def(low).filter(|op| matches!(op.code(), OpCode::CPUI_INT_RIGHT | OpCode::CPUI_INT_SRIGHT)) else {
+    let def = |vn: VarnodeId| {
+        data.vbank()
+            .get(vn)
+            .and_then(|v| v.get_def())
+            .and_then(|d| data.obank().get(d))
+    };
+    let shift_by = |op: &crate::op::PcodeOp| {
+        op.get_in(1)
+            .and_then(|k| literal_value(data, k, LITERAL_DEPTH))
+    };
+    let Some(op) =
+        def(low).filter(|op| matches!(op.code(), OpCode::CPUI_INT_RIGHT | OpCode::CPUI_INT_SRIGHT))
+    else {
         return false;
     };
-    let (Some(src), Some(c)) = (op.get_in(0), shift_by(op)) else { return false };
+    let (Some(src), Some(c)) = (op.get_in(0), shift_by(op)) else {
+        return false;
+    };
     let bits = data.vbank().get(src).map_or(0, |v| 8 * v.get_size() as u64);
     if c == 0 || c + 1 >= bits {
         return false;
@@ -592,7 +692,12 @@ fn shifts_into_first(data: &Funcdata, low: VarnodeId, high: VarnodeId) -> bool {
         if op.code() == OpCode::CPUI_LOAD {
             if let Some(slot) = stack_load(data, cur) {
                 let stores = stored.get_or_insert_with(|| stack_stores(data));
-                work.extend(stores.iter().filter(|(at, _)| *at == slot).map(|&(_, value)| value));
+                work.extend(
+                    stores
+                        .iter()
+                        .filter(|(at, _)| *at == slot)
+                        .map(|&(_, value)| value),
+                );
             }
             continue;
         }
@@ -657,9 +762,15 @@ fn reworked(data: &Funcdata, high: VarnodeId, low: VarnodeId, pair: &Pair) -> bo
         if !seen.insert((h, l)) || seen.len() > MAX_NODES {
             continue;
         }
-        let inputs = |op: &crate::op::PcodeOp| (0..op.num_input()).filter_map(|i| op.get_in(i)).collect::<Vec<_>>();
+        let inputs = |op: &crate::op::PcodeOp| {
+            (0..op.num_input())
+                .filter_map(|i| op.get_in(i))
+                .collect::<Vec<_>>()
+        };
         match (phi(h), phi(l)) {
-            (Some(a), Some(b)) if a.get_parent() == b.get_parent() && a.num_input() == b.num_input() => {
+            (Some(a), Some(b))
+                if a.get_parent() == b.get_parent() && a.num_input() == b.num_input() =>
+            {
                 work.extend(inputs(a).into_iter().zip(inputs(b)));
             }
             (Some(a), _) => work.extend(inputs(a).into_iter().map(|x| (x, l))),
@@ -678,14 +789,18 @@ fn reworked(data: &Funcdata, high: VarnodeId, low: VarnodeId, pair: &Pair) -> bo
                         None => {}
                     }
                 }
-                let computed = ends.values.iter().any(|&(v, _)| literal_value(data, v, LITERAL_DEPTH).is_none());
+                let computed = ends
+                    .values
+                    .iter()
+                    .any(|&(v, _)| literal_value(data, v, LITERAL_DEPTH).is_none());
                 if !carried && computed && works_over(data, h, l) {
                     return true;
                 }
             }
         }
     }
-    let mut verdicts: std::collections::BTreeMap<VarnodeId, (bool, bool)> = std::collections::BTreeMap::new();
+    let mut verdicts: std::collections::BTreeMap<VarnodeId, (bool, bool)> =
+        std::collections::BTreeMap::new();
     for &(h, l) in &mixed {
         let mut carried = false;
         for sum in low_sums(data, l) {
@@ -699,7 +814,10 @@ fn reworked(data: &Funcdata, high: VarnodeId, low: VarnodeId, pair: &Pair) -> bo
             }
         }
         let ends = ends_of(data, l, &pair.own, pair.lo_size);
-        let computed = ends.values.iter().any(|&(v, _)| literal_value(data, v, LITERAL_DEPTH).is_none());
+        let computed = ends
+            .values
+            .iter()
+            .any(|&(v, _)| literal_value(data, v, LITERAL_DEPTH).is_none());
         if !carried && computed && works_over(data, h, l) {
             return true;
         }
@@ -731,7 +849,13 @@ fn carried_into(data: &Funcdata, sum: VarnodeId, high: VarnodeId) -> Option<bool
         .get(sum)
         .and_then(|v| v.get_def())
         .and_then(|d| data.obank().get(d))
-        .is_some_and(|op| (0..op.num_input()).any(|i| op.get_in(i).and_then(|x| literal_value(data, x, LITERAL_DEPTH)).is_some()));
+        .is_some_and(|op| {
+            (0..op.num_input()).any(|i| {
+                op.get_in(i)
+                    .and_then(|x| literal_value(data, x, LITERAL_DEPTH))
+                    .is_some()
+            })
+        });
     let mut reached = None;
     let mut seen: BTreeSet<VarnodeId> = BTreeSet::new();
     let mut work = vec![high];
@@ -743,7 +867,11 @@ fn carried_into(data: &Funcdata, sum: VarnodeId, high: VarnodeId) -> Option<bool
             work.push(x);
             continue;
         }
-        let op = data.vbank().get(cur).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d));
+        let op = data
+            .vbank()
+            .get(cur)
+            .and_then(|v| v.get_def())
+            .and_then(|d| data.obank().get(d));
         if let Some(phi) = op.filter(|op| op.code() == OpCode::CPUI_MULTIEQUAL) {
             work.extend((0..phi.num_input()).filter_map(|i| phi.get_in(i)));
             continue;
@@ -751,7 +879,12 @@ fn carried_into(data: &Funcdata, sum: VarnodeId, high: VarnodeId) -> Option<bool
         if !tainted.contains(&cur) {
             continue;
         }
-        let terms = Terms { data, signs: &signs, tainted: &tainted, literal };
+        let terms = Terms {
+            data,
+            signs: &signs,
+            tainted: &tainted,
+            literal,
+        };
         match terms.walk(cur, 1, 12, &mut BTreeSet::new()) {
             Err(Off::Reworked) => return Some(true),
             Ok(true) => reached = Some(false),
@@ -775,7 +908,12 @@ fn carried_into(data: &Funcdata, sum: VarnodeId, high: VarnodeId) -> Option<bool
 /// slot stored once (-O0 keeps a result in a local; a slot stored more than
 /// once is an accumulator whose earlier values were not returned).
 fn works_over(data: &Funcdata, high: VarnodeId, low: VarnodeId) -> bool {
-    let def = |x: VarnodeId| data.vbank().get(x).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d));
+    let def = |x: VarnodeId| {
+        data.vbank()
+            .get(x)
+            .and_then(|v| v.get_def())
+            .and_then(|d| data.obank().get(d))
+    };
     let sums = low_sums(data, low);
     let mut stored: Option<Vec<((u64, i64), VarnodeId)>> = None;
     let mut seen: BTreeSet<VarnodeId> = BTreeSet::new();
@@ -790,22 +928,35 @@ fn works_over(data: &Funcdata, high: VarnodeId, low: VarnodeId) -> bool {
         }
         let Some(op) = def(cur) else { continue };
         match op.code() {
-            OpCode::CPUI_MULTIEQUAL => work.extend((0..op.num_input()).filter_map(|i| op.get_in(i))),
+            OpCode::CPUI_MULTIEQUAL => {
+                work.extend((0..op.num_input()).filter_map(|i| op.get_in(i)))
+            }
             OpCode::CPUI_LOAD => {
                 if let Some(slot) = stack_load(data, cur) {
                     let stores = stored.get_or_insert_with(|| stack_stores(data));
-                    let values: Vec<VarnodeId> = stores.iter().filter(|(at, _)| *at == slot).map(|&(_, value)| value).collect();
+                    let values: Vec<VarnodeId> = stores
+                        .iter()
+                        .filter(|(at, _)| *at == slot)
+                        .map(|&(_, value)| value)
+                        .collect();
                     if let [value] = values[..] {
                         work.push(value);
                     }
                 }
             }
             _ => {
-                if sums.iter().any(|&sum| carried_into(data, sum, cur) == Some(false)) {
+                if sums
+                    .iter()
+                    .any(|&sum| carried_into(data, sum, cur) == Some(false))
+                {
                     continue;
                 }
                 if let Some(worked) = worked_operand(data, op) {
-                    if !parallel(data, op, low) && !sources(data, worked).into_iter().any(|x| reads(data, low, x)) {
+                    if !parallel(data, op, low)
+                        && !sources(data, worked)
+                            .into_iter()
+                            .any(|x| reads(data, low, x))
+                    {
                         return true;
                     }
                 }
@@ -820,12 +971,24 @@ fn works_over(data: &Funcdata, high: VarnodeId, low: VarnodeId) -> bool {
 /// rotates by literals (PowerPC's `srwi` is `rlwinm`, a rotate then a mask)
 /// and stack reloads, what those read.
 fn sources(data: &Funcdata, vn: VarnodeId) -> Vec<VarnodeId> {
-    let def = |x: VarnodeId| data.vbank().get(x).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d));
-    let literal = |op: &crate::op::PcodeOp, i: int4| op.get_in(i).and_then(|x| literal_value(data, x, LITERAL_DEPTH)).is_some();
+    let def = |x: VarnodeId| {
+        data.vbank()
+            .get(x)
+            .and_then(|v| v.get_def())
+            .and_then(|d| data.obank().get(d))
+    };
+    let literal = |op: &crate::op::PcodeOp, i: int4| {
+        op.get_in(i)
+            .and_then(|x| literal_value(data, x, LITERAL_DEPTH))
+            .is_some()
+    };
     let shifted = |x: VarnodeId| {
         def(x)
             .filter(|op| {
-                matches!(op.code(), OpCode::CPUI_INT_LEFT | OpCode::CPUI_INT_RIGHT | OpCode::CPUI_INT_SRIGHT) && literal(op, 1)
+                matches!(
+                    op.code(),
+                    OpCode::CPUI_INT_LEFT | OpCode::CPUI_INT_RIGHT | OpCode::CPUI_INT_SRIGHT
+                ) && literal(op, 1)
             })
             .and_then(|op| op.get_in(0))
             .map(|x| moved_from(data, x))
@@ -850,7 +1013,10 @@ fn sources(data: &Funcdata, vn: VarnodeId) -> Vec<VarnodeId> {
         match op.code() {
             OpCode::CPUI_INT_SRIGHT if literal(op, 1) => work.extend(op.get_in(0)),
             OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR | OpCode::CPUI_INT_ADD => {
-                let (a, b) = (op.get_in(0).and_then(shifted), op.get_in(1).and_then(shifted));
+                let (a, b) = (
+                    op.get_in(0).and_then(shifted),
+                    op.get_in(1).and_then(shifted),
+                );
                 if a.is_some() && a == b {
                     work.extend(a);
                 }
@@ -858,7 +1024,12 @@ fn sources(data: &Funcdata, vn: VarnodeId) -> Vec<VarnodeId> {
             OpCode::CPUI_LOAD => {
                 if let Some(slot) = stack_load(data, cur) {
                     let stores = stored.get_or_insert_with(|| stack_stores(data));
-                    work.extend(stores.iter().filter(|(at, _)| *at == slot).map(|&(_, value)| value));
+                    work.extend(
+                        stores
+                            .iter()
+                            .filter(|(at, _)| *at == slot)
+                            .map(|&(_, value)| value),
+                    );
                 }
             }
             _ => {}
@@ -878,10 +1049,21 @@ fn parallel(data: &Funcdata, op: &crate::op::PcodeOp, low: VarnodeId) -> bool {
             None => break,
         }
     }
-    let Some(other) = data.vbank().get(cur).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d)) else {
+    let Some(other) = data
+        .vbank()
+        .get(cur)
+        .and_then(|v| v.get_def())
+        .and_then(|d| data.obank().get(d))
+    else {
         return false;
     };
-    let literal = |o: &crate::op::PcodeOp| (0..o.num_input()).any(|i| o.get_in(i).and_then(|x| literal_value(data, x, LITERAL_DEPTH)).is_some());
+    let literal = |o: &crate::op::PcodeOp| {
+        (0..o.num_input()).any(|i| {
+            o.get_in(i)
+                .and_then(|x| literal_value(data, x, LITERAL_DEPTH))
+                .is_some()
+        })
+    };
     other.code() == op.code()
         && match op.code() {
             OpCode::CPUI_INT_NEGATE => true,
@@ -907,13 +1089,27 @@ fn low_sums(data: &Funcdata, low: VarnodeId) -> Vec<VarnodeId> {
             work.push(x);
             continue;
         }
-        let Some(op) = data.vbank().get(cur).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d)) else { continue };
+        let Some(op) = data
+            .vbank()
+            .get(cur)
+            .and_then(|v| v.get_def())
+            .and_then(|d| data.obank().get(d))
+        else {
+            continue;
+        };
         match op.code() {
-            OpCode::CPUI_MULTIEQUAL => work.extend((0..op.num_input()).filter_map(|i| op.get_in(i))),
+            OpCode::CPUI_MULTIEQUAL => {
+                work.extend((0..op.num_input()).filter_map(|i| op.get_in(i)))
+            }
             OpCode::CPUI_LOAD => {
                 if let Some(slot) = stack_load(data, cur) {
                     let stores = stored.get_or_insert_with(|| stack_stores(data));
-                    work.extend(stores.iter().filter(|(at, _)| *at == slot).map(|&(_, value)| value));
+                    work.extend(
+                        stores
+                            .iter()
+                            .filter(|(at, _)| *at == slot)
+                            .map(|&(_, value)| value),
+                    );
                 }
             }
             _ if sum_or_difference(data, cur) => sums.push(cur),
@@ -927,8 +1123,14 @@ fn low_sums(data: &Funcdata, low: VarnodeId) -> Vec<VarnodeId> {
 /// (short of a sign fill), a mask, an offset, a product, an `or` or `xor`
 /// with a literal, a subtraction from or of one, or a negation.
 fn worked_operand(data: &Funcdata, op: &crate::op::PcodeOp) -> Option<VarnodeId> {
-    let literal = |i: int4| op.get_in(i).and_then(|x| literal_value(data, x, LITERAL_DEPTH));
-    let size = op.get_out().and_then(|x| data.vbank().get(x)).map_or(4, |x| x.get_size());
+    let literal = |i: int4| {
+        op.get_in(i)
+            .and_then(|x| literal_value(data, x, LITERAL_DEPTH))
+    };
+    let size = op
+        .get_out()
+        .and_then(|x| data.vbank().get(x))
+        .map_or(4, |x| x.get_size());
     let bits = 8 * size as u64;
     let other = |k: Option<u64>| match (literal(0), literal(1)) {
         (None, Some(c)) if k.is_none_or(|k| c != k) => op.get_in(0),
@@ -944,13 +1146,17 @@ fn worked_operand(data: &Funcdata, op: &crate::op::PcodeOp) -> Option<VarnodeId>
             _ => None,
         },
         OpCode::CPUI_INT_MULT => other(Some(1)),
-        OpCode::CPUI_INT_LEFT | OpCode::CPUI_INT_RIGHT => {
-            literal(1).filter(|&c| c > 0 && c < bits).and_then(|_| op.get_in(0)).filter(|_| literal(0).is_none())
+        OpCode::CPUI_INT_LEFT | OpCode::CPUI_INT_RIGHT => literal(1)
+            .filter(|&c| c > 0 && c < bits)
+            .and_then(|_| op.get_in(0))
+            .filter(|_| literal(0).is_none()),
+        OpCode::CPUI_INT_SRIGHT => literal(1)
+            .filter(|&c| c > 0 && c + 1 < bits)
+            .and_then(|_| op.get_in(0))
+            .filter(|_| literal(0).is_none()),
+        OpCode::CPUI_INT_2COMP | OpCode::CPUI_INT_NEGATE => {
+            op.get_in(0).filter(|_| literal(0).is_none())
         }
-        OpCode::CPUI_INT_SRIGHT => {
-            literal(1).filter(|&c| c > 0 && c + 1 < bits).and_then(|_| op.get_in(0)).filter(|_| literal(0).is_none())
-        }
-        OpCode::CPUI_INT_2COMP | OpCode::CPUI_INT_NEGATE => op.get_in(0).filter(|_| literal(0).is_none()),
         _ => None,
     }
 }
@@ -972,12 +1178,24 @@ fn reads(data: &Funcdata, from: VarnodeId, target: VarnodeId) -> bool {
         if cur == target || moved_from(data, cur) == goal {
             return true;
         }
-        let Some(op) = data.vbank().get(cur).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d)) else { continue };
+        let Some(op) = data
+            .vbank()
+            .get(cur)
+            .and_then(|v| v.get_def())
+            .and_then(|d| data.obank().get(d))
+        else {
+            continue;
+        };
         let inputs = match op.code() {
             OpCode::CPUI_LOAD => {
                 if let Some(slot) = stack_load(data, cur) {
                     let stores = stored.get_or_insert_with(|| stack_stores(data));
-                    work.extend(stores.iter().filter(|(at, _)| *at == slot).map(|&(_, value)| value));
+                    work.extend(
+                        stores
+                            .iter()
+                            .filter(|(at, _)| *at == slot)
+                            .map(|&(_, value)| value),
+                    );
                 }
                 continue;
             }
@@ -995,12 +1213,22 @@ fn reads(data: &Funcdata, from: VarnodeId, target: VarnodeId) -> bool {
 /// `and` of a value with itself (PowerPC's `mr 3,5` is `or 3,5,5`).
 fn moved(data: &Funcdata, vn: VarnodeId) -> Option<VarnodeId> {
     let op = data.obank().get(data.vbank().get(vn)?.get_def()?)?;
-    let zero = |i: int4| op.get_in(i).is_some_and(|x| data.vbank().get(x).is_some_and(|x| x.is_constant() && x.get_offset() == 0));
+    let zero = |i: int4| {
+        op.get_in(i).is_some_and(|x| {
+            data.vbank()
+                .get(x)
+                .is_some_and(|x| x.is_constant() && x.get_offset() == 0)
+        })
+    };
     match op.code() {
         OpCode::CPUI_COPY => op.get_in(0),
         OpCode::CPUI_INDIRECT if !op.is_indirect_creation() => op.get_in(0),
-        OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR | OpCode::CPUI_INT_ADD if zero(1) => op.get_in(0),
-        OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR | OpCode::CPUI_INT_ADD if zero(0) => op.get_in(1),
+        OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR | OpCode::CPUI_INT_ADD if zero(1) => {
+            op.get_in(0)
+        }
+        OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR | OpCode::CPUI_INT_ADD if zero(0) => {
+            op.get_in(1)
+        }
         OpCode::CPUI_INT_OR | OpCode::CPUI_INT_AND if op.get_in(0) == op.get_in(1) => op.get_in(0),
         _ => None,
     }
@@ -1044,9 +1272,20 @@ impl Terms<'_> {
     /// `Ok(false)` for a term no flag reaches, `Err` for a flag reaching it
     /// any other way ([`Off`]). A choice met again on the way round a loop (a
     /// 64-bit accumulator) adds nothing.
-    fn walk(&self, vn: VarnodeId, sign: i8, depth: u32, open: &mut BTreeSet<(VarnodeId, i8)>) -> Result<bool, Off> {
+    fn walk(
+        &self,
+        vn: VarnodeId,
+        sign: i8,
+        depth: u32,
+        open: &mut BTreeSet<(VarnodeId, i8)>,
+    ) -> Result<bool, Off> {
         let data = self.data;
-        let def = |x: VarnodeId| data.vbank().get(x).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d));
+        let def = |x: VarnodeId| {
+            data.vbank()
+                .get(x)
+                .and_then(|v| v.get_def())
+                .and_then(|d| data.obank().get(d))
+        };
         let (mut cur, mut s) = (vn, sign);
         for _ in 0..8 {
             if let Some(&(_, want)) = self.signs.iter().find(|&&(f, _)| f == cur) {
@@ -1061,11 +1300,15 @@ impl Terms<'_> {
                 continue;
             }
             let at_zero = |op: &crate::op::PcodeOp| {
-                op.get_in(1).and_then(|k| data.vbank().get(k)).is_some_and(|k| k.is_constant() && k.get_offset() == 0)
+                op.get_in(1)
+                    .and_then(|k| data.vbank().get(k))
+                    .is_some_and(|k| k.is_constant() && k.get_offset() == 0)
             };
             match def(cur).map(|op| (op.code(), op)) {
                 Some((OpCode::CPUI_INT_ZEXT, op)) => cur = op.get_in(0).ok_or(Off::Unknown)?,
-                Some((OpCode::CPUI_SUBPIECE, op)) if at_zero(op) => cur = op.get_in(0).ok_or(Off::Unknown)?,
+                Some((OpCode::CPUI_SUBPIECE, op)) if at_zero(op) => {
+                    cur = op.get_in(0).ok_or(Off::Unknown)?
+                }
                 Some((OpCode::CPUI_BOOL_NEGATE, op)) => {
                     cur = op.get_in(0).ok_or(Off::Unknown)?;
                     s = -s;
@@ -1105,12 +1348,20 @@ impl Terms<'_> {
                     return true;
                 }
                 x = moved(data, v).or_else(|| {
-                    def(v).filter(|d| matches!(d.code(), OpCode::CPUI_INT_ZEXT | OpCode::CPUI_BOOL_NEGATE)).and_then(|d| d.get_in(0))
+                    def(v)
+                        .filter(|d| {
+                            matches!(d.code(), OpCode::CPUI_INT_ZEXT | OpCode::CPUI_BOOL_NEGATE)
+                        })
+                        .and_then(|d| d.get_in(0))
                 });
             }
             false
         };
-        let nonzero = |i: int4| op.get_in(i).and_then(|x| literal_value(data, x, LITERAL_DEPTH)).is_some_and(|k| k != 0);
+        let nonzero = |i: int4| {
+            op.get_in(i)
+                .and_then(|x| literal_value(data, x, LITERAL_DEPTH))
+                .is_some_and(|k| k != 0)
+        };
         let looped = |i: int4| {
             let mut x = op.get_in(i);
             for _ in 0..8 {
@@ -1127,7 +1378,11 @@ impl Terms<'_> {
         };
         match op.code() {
             OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB => {
-                let down = if op.code() == OpCode::CPUI_INT_SUB { -s } else { s };
+                let down = if op.code() == OpCode::CPUI_INT_SUB {
+                    -s
+                } else {
+                    s
+                };
                 let (a, b) = (term(0, s), term(1, down));
                 if on_top(a, 0, 1) || on_top(b, 1, 0) {
                     Err(Off::Reworked)
@@ -1163,8 +1418,15 @@ impl Terms<'_> {
 /// register pair heritage splits and joins (SPARC -O0 reloads a `long long`
 /// with `ldd` and adds its halves out of `%i2:%i3`).
 fn carry_signs(data: &Funcdata, sum: VarnodeId) -> Vec<(VarnodeId, i8)> {
-    let def = |x: VarnodeId| data.vbank().get(x).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d));
-    let Some(op) = def(sum) else { return Vec::new() };
+    let def = |x: VarnodeId| {
+        data.vbank()
+            .get(x)
+            .and_then(|v| v.get_def())
+            .and_then(|d| data.obank().get(d))
+    };
+    let Some(op) = def(sum) else {
+        return Vec::new();
+    };
     let (a, b) = match op.code() {
         OpCode::CPUI_INT_2COMP => (None, op.get_in(0)),
         _ => (op.get_in(0), op.get_in(1)),
@@ -1174,7 +1436,8 @@ fn carry_signs(data: &Funcdata, sum: VarnodeId) -> Vec<(VarnodeId, i8)> {
     let same = |x: VarnodeId, k: &Option<Value>| k.is_some() && value_key(data, x) == *k;
     let zero = |k: &Option<Value>| matches!(k, Some(Value::Literal(0, _)));
     let operand = |x: VarnodeId| same(x, &ka) || same(x, &kb);
-    let negation = op.code() == OpCode::CPUI_INT_2COMP || (op.code() == OpCode::CPUI_INT_SUB && zero(&ka));
+    let negation =
+        op.code() == OpCode::CPUI_INT_2COMP || (op.code() == OpCode::CPUI_INT_SUB && zero(&ka));
     let mut flags: Vec<VarnodeId> = Vec::new();
     let mut seen: BTreeSet<VarnodeId> = BTreeSet::new();
     let mut work: Vec<VarnodeId> = [a, b, Some(sum)]
@@ -1189,15 +1452,22 @@ fn carry_signs(data: &Funcdata, sum: VarnodeId) -> Vec<(VarnodeId, i8)> {
         if !seen.insert(cur) || seen.len() > 256 {
             continue;
         }
-        let Some(v) = data.vbank().get(cur) else { continue };
+        let Some(v) = data.vbank().get(cur) else {
+            continue;
+        };
         if v.is_constant() {
             continue;
         }
         for d in v.descend_iter() {
-            let Some(next) = data.obank().get(d).filter(|o| !o.is_dead()) else { continue };
+            let Some(next) = data.obank().get(d).filter(|o| !o.is_dead()) else {
+                continue;
+            };
             let Some(out) = next.get_out() else { continue };
             match next.code() {
-                OpCode::CPUI_COPY | OpCode::CPUI_SUBPIECE | OpCode::CPUI_PIECE | OpCode::CPUI_INT_ZEXT => work.push(out),
+                OpCode::CPUI_COPY
+                | OpCode::CPUI_SUBPIECE
+                | OpCode::CPUI_PIECE
+                | OpCode::CPUI_INT_ZEXT => work.push(out),
                 OpCode::CPUI_INDIRECT if next.get_in(0) == Some(cur) => work.push(out),
                 OpCode::CPUI_INT_CARRY
                 | OpCode::CPUI_INT_SCARRY
@@ -1214,8 +1484,12 @@ fn carry_signs(data: &Funcdata, sum: VarnodeId) -> Vec<(VarnodeId, i8)> {
                 }
                 OpCode::CPUI_INT_EQUAL | OpCode::CPUI_INT_NOTEQUAL if negation => {
                     let (x, y) = (next.get_in(0), next.get_in(1));
-                    let tests = |v: Option<VarnodeId>| v.is_some_and(|v| same(v, &kb) || same(v, &ks));
-                    let nil = |v: Option<VarnodeId>| v.and_then(|v| value_key(data, v)).is_some_and(|k| matches!(k, Value::Literal(0, _)));
+                    let tests =
+                        |v: Option<VarnodeId>| v.is_some_and(|v| same(v, &kb) || same(v, &ks));
+                    let nil = |v: Option<VarnodeId>| {
+                        v.and_then(|v| value_key(data, v))
+                            .is_some_and(|k| matches!(k, Value::Literal(0, _)))
+                    };
                     if ((tests(x) && nil(y)) || (nil(x) && tests(y))) && !flags.contains(&out) {
                         flags.push(out);
                     }
@@ -1228,19 +1502,30 @@ fn carry_signs(data: &Funcdata, sum: VarnodeId) -> Vec<(VarnodeId, i8)> {
         .into_iter()
         .map(|f| {
             let Some(flag) = def(f) else { return (f, 0) };
-            let (Some(x), Some(y)) = (flag.get_in(0), flag.get_in(1)) else { return (f, 0) };
+            let (Some(x), Some(y)) = (flag.get_in(0), flag.get_in(1)) else {
+                return (f, 0);
+            };
             let sign = match (op.code(), flag.code()) {
                 (OpCode::CPUI_INT_ADD, OpCode::CPUI_INT_CARRY) if operand(x) && operand(y) => 1,
                 (OpCode::CPUI_INT_ADD, OpCode::CPUI_INT_LESS) if same(x, &ks) && operand(y) => 1,
-                (OpCode::CPUI_INT_ADD, OpCode::CPUI_INT_LESSEQUAL) if operand(x) && same(y, &ks) => -1,
-                (OpCode::CPUI_INT_SUB, OpCode::CPUI_INT_LESS) if same(x, &ka) && (same(y, &kb) || same(y, &ks)) => -1,
+                (OpCode::CPUI_INT_ADD, OpCode::CPUI_INT_LESSEQUAL)
+                    if operand(x) && same(y, &ks) =>
+                {
+                    -1
+                }
+                (OpCode::CPUI_INT_SUB, OpCode::CPUI_INT_LESS)
+                    if same(x, &ka) && (same(y, &kb) || same(y, &ks)) =>
+                {
+                    -1
+                }
                 (OpCode::CPUI_INT_SUB, OpCode::CPUI_INT_LESSEQUAL)
                     if (same(x, &kb) && same(y, &ka)) || (same(x, &ks) && same(y, &ka)) =>
                 {
                     1
                 }
                 (OpCode::CPUI_INT_SUB | OpCode::CPUI_INT_2COMP, OpCode::CPUI_INT_LESS)
-                    if (zero(&ka) || a.is_none()) && matches!(value_key(data, x), Some(Value::Literal(0, _)))
+                    if (zero(&ka) || a.is_none())
+                        && matches!(value_key(data, x), Some(Value::Literal(0, _)))
                         && (same(y, &kb) || same(y, &ks)) =>
                 {
                     -1
@@ -1276,13 +1561,23 @@ fn value_key(data: &Funcdata, vn: VarnodeId) -> Option<Value> {
             let k = v.get_offset().checked_shr(8 * off as u32).unwrap_or(0) & ones(size);
             return Some(Value::Literal(k, size));
         }
-        let Some(op) = v.get_def().and_then(|d| data.obank().get(d)) else { break };
-        let in_size = |i: int4| op.get_in(i).and_then(|x| data.vbank().get(x)).map_or(0, |x| x.get_size());
+        let Some(op) = v.get_def().and_then(|d| data.obank().get(d)) else {
+            break;
+        };
+        let in_size = |i: int4| {
+            op.get_in(i)
+                .and_then(|x| data.vbank().get(x))
+                .map_or(0, |x| x.get_size())
+        };
         match op.code() {
             OpCode::CPUI_COPY => cur = op.get_in(0)?,
             OpCode::CPUI_INDIRECT if !op.is_indirect_creation() => cur = op.get_in(0)?,
             OpCode::CPUI_SUBPIECE => {
-                let k = op.get_in(1).and_then(|x| data.vbank().get(x)).filter(|x| x.is_constant())?.get_offset();
+                let k = op
+                    .get_in(1)
+                    .and_then(|x| data.vbank().get(x))
+                    .filter(|x| x.is_constant())?
+                    .get_offset();
                 off += k as int4;
                 cur = op.get_in(0)?;
             }
@@ -1312,9 +1607,16 @@ fn descendants(data: &Funcdata, roots: impl Iterator<Item = VarnodeId>) -> BTree
         if !seen.insert(cur) || seen.len() > MAX_NODES {
             continue;
         }
-        let Some(v) = data.vbank().get(cur) else { continue };
+        let Some(v) = data.vbank().get(cur) else {
+            continue;
+        };
         for d in v.descend_iter() {
-            if let Some(out) = data.obank().get(d).filter(|op| !op.is_dead()).and_then(|op| op.get_out()) {
+            if let Some(out) = data
+                .obank()
+                .get(d)
+                .filter(|op| !op.is_dead())
+                .and_then(|op| op.get_out())
+            {
                 work.push(out);
             }
         }
@@ -1326,11 +1628,17 @@ fn descendants(data: &Funcdata, roots: impl Iterator<Item = VarnodeId>) -> BTree
 /// high half of, through a stack reload of it: an INT_MULT at least twice
 /// `lo_size` wide read at `lo_size` bytes or above (MIPS's `mfhi`, spilled
 /// and reloaded at -O0).
-fn product_high_half(data: &Funcdata, end: VarnodeId, off: int4, lo_size: int4) -> Option<VarnodeId> {
+fn product_high_half(
+    data: &Funcdata,
+    end: VarnodeId,
+    off: int4,
+    lo_size: int4,
+) -> Option<VarnodeId> {
     let product = |vn: VarnodeId, k: u64| {
         let v = data.vbank().get(vn)?;
         let op = data.obank().get(v.get_def()?)?;
-        (op.code() == OpCode::CPUI_INT_MULT && v.get_size() >= 2 * lo_size && k >= lo_size as u64).then_some(vn)
+        (op.code() == OpCode::CPUI_INT_MULT && v.get_size() >= 2 * lo_size && k >= lo_size as u64)
+            .then_some(vn)
     };
     if let Some(p) = product(end, off.max(0) as u64) {
         return Some(p);
@@ -1363,15 +1671,31 @@ fn reads_low_half(data: &Funcdata, high: VarnodeId, product: VarnodeId, lo_size:
         if !seen.insert(cur) || seen.len() > MAX_NODES {
             continue;
         }
-        let Some(op) = data.vbank().get(cur).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d)) else { continue };
+        let Some(op) = data
+            .vbank()
+            .get(cur)
+            .and_then(|v| v.get_def())
+            .and_then(|d| data.obank().get(d))
+        else {
+            continue;
+        };
         if op.code() == OpCode::CPUI_LOAD {
             if let Some(slot) = stack_load(data, cur) {
                 let stores = stored.get_or_insert_with(|| stack_stores(data));
-                work.extend(stores.iter().filter(|(at, _)| *at == slot).map(|&(_, value)| value));
+                work.extend(
+                    stores
+                        .iter()
+                        .filter(|(at, _)| *at == slot)
+                        .map(|&(_, value)| value),
+                );
             }
             continue;
         }
-        let amount = op.get_in(1).and_then(|x| data.vbank().get(x)).filter(|x| x.is_constant()).map(|x| x.get_offset());
+        let amount = op
+            .get_in(1)
+            .and_then(|x| data.vbank().get(x))
+            .filter(|x| x.is_constant())
+            .map(|x| x.get_offset());
         let inputs = match op.code() {
             OpCode::CPUI_INDIRECT if op.is_indirect_creation() => 0,
             OpCode::CPUI_INDIRECT => 1,
@@ -1386,7 +1710,9 @@ fn reads_low_half(data: &Funcdata, high: VarnodeId, product: VarnodeId, lo_size:
             let high_half = i == 0
                 && match op.code() {
                     OpCode::CPUI_SUBPIECE => amount.is_some_and(|k| k >= lo_size as u64),
-                    OpCode::CPUI_INT_RIGHT | OpCode::CPUI_INT_SRIGHT => amount.is_some_and(|c| c >= bits),
+                    OpCode::CPUI_INT_RIGHT | OpCode::CPUI_INT_SRIGHT => {
+                        amount.is_some_and(|c| c >= bits)
+                    }
                     _ => false,
                 };
             if !high_half {
@@ -1414,11 +1740,21 @@ fn stack_stores(data: &Funcdata) -> Vec<((u64, i64), VarnodeId)> {
 /// Varnode before any moves, or the whole and offset of a truncation of one.
 fn same_value_key(data: &Funcdata, vn: VarnodeId) -> (VarnodeId, Option<u64>) {
     let at = moved_from(data, vn);
-    let piece = data.vbank().get(at).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d)).and_then(|op| {
-        (op.code() == OpCode::CPUI_SUBPIECE)
-            .then(|| Some((moved_from(data, op.get_in(0)?), data.vbank().get(op.get_in(1)?)?.get_offset())))
-            .flatten()
-    });
+    let piece = data
+        .vbank()
+        .get(at)
+        .and_then(|v| v.get_def())
+        .and_then(|d| data.obank().get(d))
+        .and_then(|op| {
+            (op.code() == OpCode::CPUI_SUBPIECE)
+                .then(|| {
+                    Some((
+                        moved_from(data, op.get_in(0)?),
+                        data.vbank().get(op.get_in(1)?)?.get_offset(),
+                    ))
+                })
+                .flatten()
+        });
     match piece {
         Some((whole, k)) => (whole, Some(k)),
         None => (at, None),
@@ -1435,7 +1771,9 @@ fn same_value_key(data: &Funcdata, vn: VarnodeId) -> (VarnodeId, Option<u64>) {
 fn divided_down(data: &Funcdata, product: VarnodeId, high: VarnodeId, lo_size: int4) -> bool {
     let wide_product = data.vbank().get(product).is_some_and(|v| {
         v.get_size() >= 2 * lo_size
-            && v.get_def().and_then(|d| data.obank().get(d)).is_some_and(|op| op.code() == OpCode::CPUI_INT_MULT)
+            && v.get_def()
+                .and_then(|d| data.obank().get(d))
+                .is_some_and(|op| op.code() == OpCode::CPUI_INT_MULT)
     });
     if !wide_product {
         return false;
@@ -1447,10 +1785,19 @@ fn divided_down(data: &Funcdata, product: VarnodeId, high: VarnodeId, lo_size: i
         if depth > 16 || !seen.insert((cur, shifted)) || seen.len() > MAX_NODES {
             continue;
         }
-        let Some(op) = data.vbank().get(cur).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d)) else {
+        let Some(op) = data
+            .vbank()
+            .get(cur)
+            .and_then(|v| v.get_def())
+            .and_then(|d| data.obank().get(d))
+        else {
             continue;
         };
-        let amount = op.get_in(1).and_then(|x| data.vbank().get(x)).filter(|x| x.is_constant()).map(|x| x.get_offset());
+        let amount = op
+            .get_in(1)
+            .and_then(|x| data.vbank().get(x))
+            .filter(|x| x.is_constant())
+            .map(|x| x.get_offset());
         let inputs = match op.code() {
             OpCode::CPUI_SUBPIECE if op.get_in(0) == Some(product) => {
                 if shifted && amount.is_some_and(|k| 8 * k >= bits) {
@@ -1486,7 +1833,11 @@ fn divided_down(data: &Funcdata, product: VarnodeId, high: VarnodeId, lo_size: i
             | OpCode::CPUI_INT_XOR => op.num_input(),
             _ => 0,
         };
-        work.extend((0..inputs).filter_map(|i| op.get_in(i)).map(|x| (x, shifted, depth + 1)));
+        work.extend(
+            (0..inputs)
+                .filter_map(|i| op.get_in(i))
+                .map(|x| (x, shifted, depth + 1)),
+        );
     }
     false
 }
@@ -1499,14 +1850,25 @@ fn divided_down(data: &Funcdata, product: VarnodeId, high: VarnodeId, lo_size: i
 /// (clang -O0 `((u64)a << 32) | b` reloads `a` and `b` from their homes, `b`
 /// below `a`) are two values, not one object.
 fn loads_low_word_first(data: &Funcdata, high: VarnodeId, low: VarnodeId, pair: &Pair) -> bool {
-    let (Some((space, h)), Some((space2, l))) = (stack_load(data, high), stack_load(data, low)) else {
+    let (Some((space, h)), Some((space2, l))) = (stack_load(data, high), stack_load(data, low))
+    else {
         return false;
     };
     let manage = data.get_arch().manage();
-    let big_endian = space < manage.num_spaces() as u64 && manage.get_space(space as i32).is_some_and(|s| s.is_big_endian());
+    let big_endian = space < manage.num_spaces() as u64
+        && manage
+            .get_space(space as i32)
+            .is_some_and(|s| s.is_big_endian());
     let size = pair.lo_size as i64;
-    let reversed = space == space2 && if big_endian { h == l + size } else { h + size == l };
-    reversed && !(argument_home(data, space, h, &pair.hi_own) && argument_home(data, space, l, &pair.own))
+    let reversed = space == space2
+        && if big_endian {
+            h == l + size
+        } else {
+            h + size == l
+        };
+    reversed
+        && !(argument_home(data, space, h, &pair.hi_own)
+            && argument_home(data, space, l, &pair.own))
 }
 
 /// Is the stack word at `offset` written only with the entry value of the
@@ -1515,12 +1877,18 @@ fn loads_low_word_first(data: &Funcdata, high: VarnodeId, low: VarnodeId, pair: 
 fn argument_home(data: &Funcdata, space: u64, offset: i64, reg: &Address) -> bool {
     let mut stores = 0;
     for st in data.obank().iter_code(OpCode::CPUI_STORE) {
-        let Some(op) = data.obank().get(st) else { continue };
+        let Some(op) = data.obank().get(st) else {
+            continue;
+        };
         if op.is_dead() {
             continue;
         }
-        let (Some(sp), Some(at), Some(value)) = (op.get_in(0), op.get_in(1), op.get_in(2)) else { return false };
-        if data.vbank().get(sp).map(|v| v.get_offset()) != Some(space) || stack_offset(data, at) != Some(offset) {
+        let (Some(sp), Some(at), Some(value)) = (op.get_in(0), op.get_in(1), op.get_in(2)) else {
+            return false;
+        };
+        if data.vbank().get(sp).map(|v| v.get_offset()) != Some(space)
+            || stack_offset(data, at) != Some(offset)
+        {
             continue;
         }
         if !entry_value_of(data, value, reg) {
@@ -1543,7 +1911,9 @@ fn entry_value_of(data: &Funcdata, vn: VarnodeId, reg: &Address) -> bool {
 fn entry_value_within(data: &Funcdata, vn: VarnodeId, reg: &Address, choices: u32) -> bool {
     let mut cur = vn;
     for _ in 0..64 {
-        let Some(v) = data.vbank().get(cur) else { return false };
+        let Some(v) = data.vbank().get(cur) else {
+            return false;
+        };
         let Some(op) = v.get_def().and_then(|d| data.obank().get(d)) else {
             return v.is_input() && v.get_addr() == reg;
         };
@@ -1597,24 +1967,40 @@ fn stack_offset_within(data: &Funcdata, vn: VarnodeId, choices: u32) -> Option<i
     for _ in 0..64 {
         let v = data.vbank().get(at)?;
         let Some(def) = v.get_def() else {
-            let sp = data.get_arch().manage().get_stack_space()?.get_spacebase(0).ok()?;
+            let sp = data
+                .get_arch()
+                .manage()
+                .get_stack_space()?
+                .get_spacebase(0)
+                .ok()?;
             let a = v.get_addr();
             let is_sp = v.is_input()
-                && a.get_space().zip(sp.space.as_ref()).is_some_and(|(x, y)| Rc::ptr_eq(x, y))
+                && a.get_space()
+                    .zip(sp.space.as_ref())
+                    .is_some_and(|(x, y)| Rc::ptr_eq(x, y))
                 && a.get_offset() == sp.offset
                 && v.get_size() as u32 == sp.size;
             return is_sp.then_some(offset);
         };
         let op = data.obank().get(def)?;
         let literal = |i: int4| {
-            op.get_in(i).and_then(|x| data.vbank().get(x)).filter(|x| x.is_constant()).map(|x| signed(x.get_offset(), x.get_size()))
+            op.get_in(i)
+                .and_then(|x| data.vbank().get(x))
+                .filter(|x| x.is_constant())
+                .map(|x| signed(x.get_offset(), x.get_size()))
         };
         match op.code() {
             OpCode::CPUI_COPY => at = op.get_in(0)?,
             OpCode::CPUI_INDIRECT if !op.is_indirect_creation() => at = op.get_in(0)?,
-            OpCode::CPUI_INT_OR | OpCode::CPUI_INT_AND if op.get_in(0) == op.get_in(1) => at = op.get_in(0)?,
-            OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR if literal(1) == Some(0) => at = op.get_in(0)?,
-            OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR if literal(0) == Some(0) => at = op.get_in(1)?,
+            OpCode::CPUI_INT_OR | OpCode::CPUI_INT_AND if op.get_in(0) == op.get_in(1) => {
+                at = op.get_in(0)?
+            }
+            OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR if literal(1) == Some(0) => {
+                at = op.get_in(0)?
+            }
+            OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR if literal(0) == Some(0) => {
+                at = op.get_in(1)?
+            }
             OpCode::CPUI_INT_ADD => match (literal(0), literal(1)) {
                 (None, Some(k)) => {
                     offset = offset.wrapping_add(k);
@@ -1659,7 +2045,11 @@ fn signed(value: u64, size: int4) -> i64 {
 
 /// The size of the target's `int` (4 when the type factory is not built yet).
 fn int_size(data: &Funcdata) -> int4 {
-    data.get_arch().types().map(|t| t.get_size_of_int()).filter(|&s| s > 0).unwrap_or(4)
+    data.get_arch()
+        .types()
+        .map(|t| t.get_size_of_int())
+        .filter(|&s| s > 0)
+        .unwrap_or(4)
 }
 
 /// Is `vn` 0 or 1 by construction -- a comparison, a carry or borrow, a sign
@@ -1669,26 +2059,42 @@ fn int_size(data: &Funcdata) -> int4 {
 /// is always 0 (the sign of a small positive `int`, a zero extension) is the
 /// high word of a zero- or sign-extended value, not a flag.
 fn computed_flag(data: &Funcdata, vn: VarnodeId) -> bool {
-    nonzero_bits(data, vn, 12, &mut Vec::new()) == 1 && literal_value(data, vn, LITERAL_DEPTH).is_none()
+    nonzero_bits(data, vn, 12, &mut Vec::new()) == 1
+        && literal_value(data, vn, LITERAL_DEPTH).is_none()
 }
 
 /// The bits of `vn` that can be nonzero, as far as `depth` operations show
 /// (C++ `Varnode::nzm`, worked out here because return recovery runs before
 /// the masks settle); every bit for anything it cannot follow.
 fn nonzero_bits(data: &Funcdata, vn: VarnodeId, depth: u32, path: &mut Vec<VarnodeId>) -> u64 {
-    let Some(v) = data.vbank().get(vn) else { return u64::MAX };
+    let Some(v) = data.vbank().get(vn) else {
+        return u64::MAX;
+    };
     let all = ones(v.get_size());
     if v.is_constant() {
         return v.get_offset() & all;
     }
-    let Some(op) = v.get_def().and_then(|d| data.obank().get(d)) else { return all };
+    let Some(op) = v.get_def().and_then(|d| data.obank().get(d)) else {
+        return all;
+    };
     if depth == 0 || path.contains(&vn) {
         return all;
     }
     path.push(vn);
-    let mut arg = |i: int4| op.get_in(i).map_or(u64::MAX, |x| nonzero_bits(data, x, depth - 1, path));
-    let shift = |i: int4| op.get_in(i).and_then(|x| literal_value(data, x, LITERAL_DEPTH)).and_then(|c| u32::try_from(c).ok());
-    let size_of = |i: int4| op.get_in(i).and_then(|x| data.vbank().get(x)).map_or(8, |x| x.get_size());
+    let mut arg = |i: int4| {
+        op.get_in(i)
+            .map_or(u64::MAX, |x| nonzero_bits(data, x, depth - 1, path))
+    };
+    let shift = |i: int4| {
+        op.get_in(i)
+            .and_then(|x| literal_value(data, x, LITERAL_DEPTH))
+            .and_then(|c| u32::try_from(c).ok())
+    };
+    let size_of = |i: int4| {
+        op.get_in(i)
+            .and_then(|x| data.vbank().get(x))
+            .map_or(8, |x| x.get_size())
+    };
     let r = match op.code() {
         OpCode::CPUI_COPY | OpCode::CPUI_INT_ZEXT => arg(0),
         OpCode::CPUI_INDIRECT if !op.is_indirect_creation() => arg(0),
@@ -1702,14 +2108,13 @@ fn nonzero_bits(data: &Funcdata, vn: VarnodeId, depth: u32, path: &mut Vec<Varno
             }
         }
         OpCode::CPUI_INT_AND | OpCode::CPUI_BOOL_AND => arg(0) & arg(1),
-        OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR | OpCode::CPUI_BOOL_OR | OpCode::CPUI_BOOL_XOR => arg(0) | arg(1),
+        OpCode::CPUI_INT_OR
+        | OpCode::CPUI_INT_XOR
+        | OpCode::CPUI_BOOL_OR
+        | OpCode::CPUI_BOOL_XOR => arg(0) | arg(1),
         OpCode::CPUI_INT_ADD => {
             let (a, b) = (arg(0), arg(1));
-            if a & b == 0 {
-                a | b
-            } else {
-                all
-            }
+            if a & b == 0 { a | b } else { all }
         }
         OpCode::CPUI_INT_MULT => {
             if arg(0) == 0 || arg(1) == 0 {
@@ -1738,14 +2143,19 @@ fn nonzero_bits(data: &Funcdata, vn: VarnodeId, depth: u32, path: &mut Vec<Varno
             None => all,
         },
         OpCode::CPUI_SUBPIECE => match shift(1) {
-            Some(k) => k.checked_mul(8).and_then(|b| arg(0).checked_shr(b)).unwrap_or(0),
+            Some(k) => k
+                .checked_mul(8)
+                .and_then(|b| arg(0).checked_shr(b))
+                .unwrap_or(0),
             None => all,
         },
         OpCode::CPUI_PIECE => {
             let lo_bits = 8 * size_of(1) as u32;
             arg(0).checked_shl(lo_bits).unwrap_or(0) | arg(1)
         }
-        OpCode::CPUI_LZCOUNT | OpCode::CPUI_POPCOUNT => (8 * size_of(0) as u64 + 1).next_power_of_two() - 1,
+        OpCode::CPUI_LZCOUNT | OpCode::CPUI_POPCOUNT => {
+            (8 * size_of(0) as u64 + 1).next_power_of_two() - 1
+        }
         code if is_flag_op(code) => 1,
         _ => all,
     };
@@ -1779,19 +2189,26 @@ fn is_flag_op(code: OpCode) -> bool {
 /// a move spelled as adding or subtracting zero (SPARC's `restore
 /// %i0,%g0,%o1`)? `0 - x` is a negation, not a move.
 fn sum_or_difference(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d)).is_some_and(|op| {
-        let zero = |i: int4| op.get_in(i).is_some_and(|x| literal_value(data, x, LITERAL_DEPTH) == Some(0));
-        let moved = match op.code() {
-            OpCode::CPUI_INT_ADD => zero(0) || zero(1),
-            OpCode::CPUI_INT_SUB => zero(1),
-            OpCode::CPUI_INT_2COMP => false,
-            _ => return false,
-        };
-        !moved
-            && (0..op.num_input())
-                .filter_map(|i| op.get_in(i))
-                .any(|x| data.vbank().get(x).is_some_and(|x| !x.is_constant()))
-    })
+    data.vbank()
+        .get(vn)
+        .and_then(|v| v.get_def())
+        .and_then(|d| data.obank().get(d))
+        .is_some_and(|op| {
+            let zero = |i: int4| {
+                op.get_in(i)
+                    .is_some_and(|x| literal_value(data, x, LITERAL_DEPTH) == Some(0))
+            };
+            let moved = match op.code() {
+                OpCode::CPUI_INT_ADD => zero(0) || zero(1),
+                OpCode::CPUI_INT_SUB => zero(1),
+                OpCode::CPUI_INT_2COMP => false,
+                _ => return false,
+            };
+            !moved
+                && (0..op.num_input())
+                    .filter_map(|i| op.get_in(i))
+                    .any(|x| data.vbank().get(x).is_some_and(|x| !x.is_constant()))
+        })
 }
 
 /// Is the first register `high` built with no carry or borrow out of the low
@@ -1804,7 +2221,12 @@ fn carry_free(data: &Funcdata, high: VarnodeId, low: VarnodeId, ends: &Ends) -> 
     if literal_value(data, high, LITERAL_DEPTH).is_some() {
         return false;
     }
-    let lows: BTreeSet<VarnodeId> = ends.values.iter().map(|&(v, _)| v).chain(std::iter::once(low)).collect();
+    let lows: BTreeSet<VarnodeId> = ends
+        .values
+        .iter()
+        .map(|&(v, _)| v)
+        .chain(std::iter::once(low))
+        .collect();
     let mut seen: BTreeSet<VarnodeId> = BTreeSet::new();
     let mut work = vec![high];
     while let Some(cur) = work.pop() {
@@ -1814,13 +2236,22 @@ fn carry_free(data: &Funcdata, high: VarnodeId, low: VarnodeId, ends: &Ends) -> 
         if seen.len() > MAX_NODES || lows.contains(&cur) {
             return false;
         }
-        let Some(op) = data.vbank().get(cur).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d)) else {
+        let Some(op) = data
+            .vbank()
+            .get(cur)
+            .and_then(|v| v.get_def())
+            .and_then(|d| data.obank().get(d))
+        else {
             continue;
         };
         if is_flag_op(op.code()) {
             return false;
         }
-        let inputs = if op.code() == OpCode::CPUI_INDIRECT { 1 } else { op.num_input() };
+        let inputs = if op.code() == OpCode::CPUI_INDIRECT {
+            1
+        } else {
+            op.num_input()
+        };
         work.extend((0..inputs).filter_map(|i| op.get_in(i)));
     }
     true
@@ -1846,10 +2277,19 @@ fn of_flags(data: &Funcdata, vn: VarnodeId, carries: &[VarnodeId]) -> bool {
         if done.contains(&vn) {
             return true;
         }
-        if depth == 0 || path.contains(&vn) || done.len() > MAX_NODES || carries.contains(&moved_from(data, vn)) {
+        if depth == 0
+            || path.contains(&vn)
+            || done.len() > MAX_NODES
+            || carries.contains(&moved_from(data, vn))
+        {
             return false;
         }
-        let Some(op) = data.vbank().get(vn).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d)) else {
+        let Some(op) = data
+            .vbank()
+            .get(vn)
+            .and_then(|v| v.get_def())
+            .and_then(|d| data.obank().get(d))
+        else {
             return data.vbank().get(vn).is_some_and(|v| v.is_constant());
         };
         let leaf = literal_value(data, vn, LITERAL_DEPTH).is_some()
@@ -1881,7 +2321,8 @@ fn of_flags(data: &Funcdata, vn: VarnodeId, carries: &[VarnodeId]) -> bool {
                 let phi = op.code() == OpCode::CPUI_MULTIEQUAL;
                 let all = (0..inputs).all(|i| {
                     op.get_in(i).is_some_and(|x| {
-                        (phi && pinned(data, op.get_parent(), i, x)) || walk(data, x, depth - 1, carries, done, path)
+                        (phi && pinned(data, op.get_parent(), i, x))
+                            || walk(data, x, depth - 1, carries, done, path)
                     })
                 });
                 path.pop();
@@ -1900,7 +2341,14 @@ fn of_flags(data: &Funcdata, vn: VarnodeId, carries: &[VarnodeId]) -> bool {
 fn moved_from(data: &Funcdata, vn: VarnodeId) -> VarnodeId {
     let mut cur = vn;
     for _ in 0..64 {
-        let Some(op) = data.vbank().get(cur).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d)) else { break };
+        let Some(op) = data
+            .vbank()
+            .get(cur)
+            .and_then(|v| v.get_def())
+            .and_then(|d| data.obank().get(d))
+        else {
+            break;
+        };
         match (op.code(), op.get_in(0)) {
             (OpCode::CPUI_COPY | OpCode::CPUI_INT_ZEXT, Some(x)) => cur = x,
             (OpCode::CPUI_INDIRECT, Some(x)) if !op.is_indirect_creation() => cur = x,
@@ -1920,13 +2368,23 @@ fn pinned(data: &Funcdata, block: Option<BlockId>, slot: int4, vn: VarnodeId) ->
         return false;
     }
     let (from, edge) = (block.get_in(slot), block.get_in_rev_index(slot));
-    let Some(cbranch) = data.bb_op_tail(from).and_then(|t| data.obank().get(t)) else { return false };
+    let Some(cbranch) = data.bb_op_tail(from).and_then(|t| data.obank().get(t)) else {
+        return false;
+    };
     if cbranch.code() != OpCode::CPUI_CBRANCH {
         return false;
     }
-    let Some(cond) = cbranch.get_in(1) else { return false };
+    let Some(cond) = cbranch.get_in(1) else {
+        return false;
+    };
     let mut facts = Vec::new();
-    equal_along(data, cond, (edge == 1) != cbranch.is_boolean_flip(), 8, &mut facts);
+    equal_along(
+        data,
+        cond,
+        (edge == 1) != cbranch.is_boolean_flip(),
+        8,
+        &mut facts,
+    );
     let at = moved_from(data, vn);
     facts.iter().any(|&f| moved_from(data, f) == at)
 }
@@ -1934,8 +2392,21 @@ fn pinned(data: &Funcdata, block: Option<BlockId>, slot: int4, vn: VarnodeId) ->
 /// The values the condition `cond` pins to a literal when it is `holds`:
 /// `x == k` true, `x != k` false, through boolean negations and comparisons
 /// of a 0-or-1 value with 0 or 1.
-fn equal_along(data: &Funcdata, cond: VarnodeId, holds: bool, depth: u32, facts: &mut Vec<VarnodeId>) {
-    let Some(op) = data.vbank().get(cond).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d)) else { return };
+fn equal_along(
+    data: &Funcdata,
+    cond: VarnodeId,
+    holds: bool,
+    depth: u32,
+    facts: &mut Vec<VarnodeId>,
+) {
+    let Some(op) = data
+        .vbank()
+        .get(cond)
+        .and_then(|v| v.get_def())
+        .and_then(|d| data.obank().get(d))
+    else {
+        return;
+    };
     if depth == 0 {
         return;
     }
@@ -1952,8 +2423,13 @@ fn equal_along(data: &Funcdata, cond: VarnodeId, holds: bool, depth: u32, facts:
         }
         OpCode::CPUI_INT_EQUAL | OpCode::CPUI_INT_NOTEQUAL => {
             let equal = op.code() == OpCode::CPUI_INT_EQUAL;
-            let (Some(a), Some(b)) = (op.get_in(0), op.get_in(1)) else { return };
-            let (x, k) = match (literal_value(data, a, LITERAL_DEPTH), literal_value(data, b, LITERAL_DEPTH)) {
+            let (Some(a), Some(b)) = (op.get_in(0), op.get_in(1)) else {
+                return;
+            };
+            let (x, k) = match (
+                literal_value(data, a, LITERAL_DEPTH),
+                literal_value(data, b, LITERAL_DEPTH),
+            ) {
                 (None, Some(k)) => (a, k),
                 (Some(k), None) => (b, k),
                 _ => return,
@@ -1976,12 +2452,20 @@ fn equal_along(data: &Funcdata, cond: VarnodeId, holds: bool, depth: u32, facts:
 /// the sum alone is not one: it compares against a literal the sum does not
 /// add.
 fn carries_of(data: &Funcdata, sum: VarnodeId) -> Vec<VarnodeId> {
-    let Some(op) = data.vbank().get(sum).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d)) else {
+    let Some(op) = data
+        .vbank()
+        .get(sum)
+        .and_then(|v| v.get_def())
+        .and_then(|d| data.obank().get(d))
+    else {
         return Vec::new();
     };
     let root = |x: VarnodeId| flag_root(data, x);
-    let operands: Vec<VarnodeId> =
-        (0..op.num_input()).filter_map(|i| op.get_in(i)).chain(std::iter::once(sum)).map(root).collect();
+    let operands: Vec<VarnodeId> = (0..op.num_input())
+        .filter_map(|i| op.get_in(i))
+        .chain(std::iter::once(sum))
+        .map(root)
+        .collect();
     let constants: Vec<u64> = operands
         .iter()
         .filter_map(|&x| data.vbank().get(x))
@@ -1993,16 +2477,24 @@ fn carries_of(data: &Funcdata, sum: VarnodeId) -> Vec<VarnodeId> {
         let r = root(x);
         operands.contains(&r)
             || data.vbank().get(r).is_some_and(|r| {
-                r.is_constant() && constants.iter().any(|&k| k & ones(size) == r.get_offset() & ones(size))
+                r.is_constant()
+                    && constants
+                        .iter()
+                        .any(|&k| k & ones(size) == r.get_offset() & ones(size))
             })
     };
-    let mut aliases: Vec<VarnodeId> =
-        operands.iter().copied().filter(|&x| data.vbank().get(x).is_some_and(|v| !v.is_constant())).collect();
+    let mut aliases: Vec<VarnodeId> = operands
+        .iter()
+        .copied()
+        .filter(|&x| data.vbank().get(x).is_some_and(|v| !v.is_constant()))
+        .collect();
     let mut i = 0;
     while i < aliases.len() && aliases.len() < 64 {
         if let Some(v) = data.vbank().get(aliases[i]) {
             for d in v.descend_iter() {
-                let Some(next) = data.obank().get(d) else { continue };
+                let Some(next) = data.obank().get(d) else {
+                    continue;
+                };
                 let moves = matches!(next.code(), OpCode::CPUI_COPY | OpCode::CPUI_SUBPIECE);
                 if moves && next.get_out().is_some_and(|o| root(o) == root(aliases[i])) {
                     aliases.extend(next.get_out().filter(|o| !aliases.contains(o)));
@@ -2013,9 +2505,13 @@ fn carries_of(data: &Funcdata, sum: VarnodeId) -> Vec<VarnodeId> {
     }
     let mut flags: Vec<VarnodeId> = Vec::new();
     for &x in &aliases {
-        let Some(v) = data.vbank().get(x) else { continue };
+        let Some(v) = data.vbank().get(x) else {
+            continue;
+        };
         for d in v.descend_iter() {
-            let Some(f) = data.obank().get(d) else { continue };
+            let Some(f) = data.obank().get(d) else {
+                continue;
+            };
             let carry = matches!(
                 f.code(),
                 OpCode::CPUI_INT_CARRY
@@ -2026,7 +2522,10 @@ fn carries_of(data: &Funcdata, sum: VarnodeId) -> Vec<VarnodeId> {
                     | OpCode::CPUI_INT_SLESS
                     | OpCode::CPUI_INT_SLESSEQUAL
             );
-            if !f.is_dead() && carry && (0..f.num_input()).all(|i| f.get_in(i).is_some_and(is_operand)) {
+            if !f.is_dead()
+                && carry
+                && (0..f.num_input()).all(|i| f.get_in(i).is_some_and(is_operand))
+            {
                 flags.extend(f.get_out().filter(|o| !flags.contains(o)));
             }
         }
@@ -2039,10 +2538,18 @@ fn carries_of(data: &Funcdata, sum: VarnodeId) -> Vec<VarnodeId> {
 fn flag_root(data: &Funcdata, vn: VarnodeId) -> VarnodeId {
     let mut cur = vn;
     for _ in 0..4 {
-        let Some(d) = data.vbank().get(cur).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d)) else {
+        let Some(d) = data
+            .vbank()
+            .get(cur)
+            .and_then(|v| v.get_def())
+            .and_then(|d| data.obank().get(d))
+        else {
             break;
         };
-        let at_zero = d.get_in(1).and_then(|k| data.vbank().get(k)).is_some_and(|k| k.is_constant() && k.get_offset() == 0);
+        let at_zero = d
+            .get_in(1)
+            .and_then(|k| data.vbank().get(k))
+            .is_some_and(|k| k.is_constant() && k.get_offset() == 0);
         match (d.code(), d.get_in(0)) {
             (OpCode::CPUI_COPY, Some(x)) => cur = x,
             (OpCode::CPUI_SUBPIECE, Some(x)) if at_zero => cur = x,
@@ -2064,9 +2571,13 @@ fn tests_carry(data: &Funcdata, carries: &[VarnodeId], high: VarnodeId) -> bool 
         if !seen.insert(cur) || seen.len() > MAX_NODES {
             continue;
         }
-        let Some(v) = data.vbank().get(cur) else { continue };
+        let Some(v) = data.vbank().get(cur) else {
+            continue;
+        };
         for d in v.descend_iter() {
-            let Some(next) = data.obank().get(d) else { continue };
+            let Some(next) = data.obank().get(d) else {
+                continue;
+            };
             if next.is_dead() {
                 continue;
             }
@@ -2095,13 +2606,18 @@ fn piece_of(data: &Funcdata, vn: VarnodeId) -> Option<(VarnodeId, u64)> {
                     return None;
                 }
                 let whole = op.get_in(0)?;
-                let shifted = data.vbank().get(whole)?.get_def().and_then(|d| data.obank().get(d)).and_then(|sh| {
-                    let by = data.vbank().get(sh.get_in(1)?)?;
-                    (matches!(sh.code(), OpCode::CPUI_INT_RIGHT | OpCode::CPUI_INT_SRIGHT)
-                        && by.is_constant()
-                        && by.get_offset() % 8 == 0)
-                        .then(|| (sh.get_in(0), by.get_offset() / 8))
-                });
+                let shifted = data
+                    .vbank()
+                    .get(whole)?
+                    .get_def()
+                    .and_then(|d| data.obank().get(d))
+                    .and_then(|sh| {
+                        let by = data.vbank().get(sh.get_in(1)?)?;
+                        (matches!(sh.code(), OpCode::CPUI_INT_RIGHT | OpCode::CPUI_INT_SRIGHT)
+                            && by.is_constant()
+                            && by.get_offset() % 8 == 0)
+                            .then(|| (sh.get_in(0), by.get_offset() / 8))
+                    });
                 return match shifted {
                     Some((Some(w), bytes)) => Some((w, at.get_offset() + bytes)),
                     _ => Some((whole, at.get_offset())),
@@ -2121,12 +2637,19 @@ fn piece_of(data: &Funcdata, vn: VarnodeId) -> Option<(VarnodeId, u64)> {
 /// `std` use elsewhere in the function) holds two values, not one.
 fn halves_of_one_value(data: &Funcdata, low: VarnodeId, high: VarnodeId, lo_size: int4) -> bool {
     let made_wide = |w: VarnodeId| {
-        data.vbank().get(w).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d)).is_some_and(|op| {
-            !matches!(
-                op.code(),
-                OpCode::CPUI_PIECE | OpCode::CPUI_MULTIEQUAL | OpCode::CPUI_COPY | OpCode::CPUI_INDIRECT
-            )
-        })
+        data.vbank()
+            .get(w)
+            .and_then(|v| v.get_def())
+            .and_then(|d| data.obank().get(d))
+            .is_some_and(|op| {
+                !matches!(
+                    op.code(),
+                    OpCode::CPUI_PIECE
+                        | OpCode::CPUI_MULTIEQUAL
+                        | OpCode::CPUI_COPY
+                        | OpCode::CPUI_INDIRECT
+                )
+            })
     };
     match (piece_of(data, low), piece_of(data, high)) {
         (Some((w, 0)), Some((w2, k))) => w == w2 && k == lo_size as u64 && made_wide(w),
@@ -2167,7 +2690,9 @@ fn ends_of(data: &Funcdata, low: VarnodeId, own: &Address, lo_size: int4) -> End
             ends.overflow = true;
             break;
         }
-        let Some(v) = data.vbank().get(cur) else { continue };
+        let Some(v) = data.vbank().get(cur) else {
+            continue;
+        };
         if v.is_constant() {
             ends.values.push((cur, off));
             continue;
@@ -2176,23 +2701,42 @@ fn ends_of(data: &Funcdata, low: VarnodeId, own: &Address, lo_size: int4) -> End
             if !v.is_input() {
                 continue;
             }
-            if !moved && within(slice_address(v.get_addr(), v.get_size(), off, len), len, own, lo_size) {
+            if !moved
+                && within(
+                    slice_address(v.get_addr(), v.get_size(), off, len),
+                    len,
+                    own,
+                    lo_size,
+                )
+            {
                 ends.entry = true;
             } else {
                 ends.values.push((cur, off));
             }
             continue;
         };
-        let Some(op) = data.obank().get(def) else { continue };
-        let input = |i: int4| op.get_in(i).and_then(|x| data.vbank().get(x).map(|v| (x, v)));
+        let Some(op) = data.obank().get(def) else {
+            continue;
+        };
+        let input = |i: int4| {
+            op.get_in(i)
+                .and_then(|x| data.vbank().get(x).map(|v| (x, v)))
+        };
         match op.code() {
             OpCode::CPUI_COPY if !input(0).is_some_and(|(_, x)| x.is_constant()) => {
-                work.extend(op.get_in(0).map(|x| (x, off, len, moved || !moves_register_window(data, def))));
+                work.extend(
+                    op.get_in(0)
+                        .map(|x| (x, off, len, moved || !moves_register_window(data, def))),
+                );
             }
             OpCode::CPUI_INDIRECT if op.is_indirect_creation() => {}
             OpCode::CPUI_INDIRECT => work.extend(op.get_in(0).map(|x| (x, off, len, moved))),
             OpCode::CPUI_MULTIEQUAL => {
-                work.extend((0..op.num_input()).filter_map(|i| op.get_in(i)).map(|x| (x, off, len, moved)));
+                work.extend(
+                    (0..op.num_input())
+                        .filter_map(|i| op.get_in(i))
+                        .map(|x| (x, off, len, moved)),
+                );
             }
             OpCode::CPUI_PIECE => match (input(0), input(1)) {
                 (Some((hi, _)), Some((lo_id, lo))) => {
@@ -2222,7 +2766,9 @@ fn ends_of(data: &Funcdata, low: VarnodeId, own: &Address, lo_size: int4) -> End
 /// Do the `len` bytes at `at` lie inside the `size`-byte register at `own`?
 fn within(at: Option<Address>, len: int4, own: &Address, size: int4) -> bool {
     at.is_some_and(|a| {
-        a.get_space().zip(own.get_space()).is_some_and(|(x, y)| Rc::ptr_eq(x, y))
+        a.get_space()
+            .zip(own.get_space())
+            .is_some_and(|(x, y)| Rc::ptr_eq(x, y))
             && a.get_offset() >= own.get_offset()
             && a.get_offset() + len as u64 <= own.get_offset() + size as u64
     })
@@ -2232,8 +2778,17 @@ fn within(at: Option<Address>, len: int4, own: &Address, size: int4) -> bool {
 /// `whole`-byte value at `addr` are stored.
 fn slice_address(addr: &Address, whole: int4, off: int4, size: int4) -> Option<Address> {
     let space = addr.get_space()?;
-    let rel = if space.is_big_endian() { whole - off - size } else { off };
-    (rel >= 0).then(|| Address::new(Rc::clone(space), space.wrap_offset(addr.get_offset().wrapping_add(rel as u64))))
+    let rel = if space.is_big_endian() {
+        whole - off - size
+    } else {
+        off
+    };
+    (rel >= 0).then(|| {
+        Address::new(
+            Rc::clone(space),
+            space.wrap_offset(addr.get_offset().wrapping_add(rel as u64)),
+        )
+    })
 }
 
 /// Is every use of `value` -- and of everything computed from it -- one of the
@@ -2252,17 +2807,34 @@ fn only_returned(data: &Funcdata, value: VarnodeId, off: int4, pair: &Pair) -> b
         Changed,
         Excused,
     }
-    let bump = |via: Via| if via == Via::Excused { Via::Excused } else { Via::Changed };
-    let stack_pointer = data.get_arch().manage().get_stack_space().and_then(|s| s.get_spacebase(0).ok());
+    let bump = |via: Via| {
+        if via == Via::Excused {
+            Via::Excused
+        } else {
+            Via::Changed
+        }
+    };
+    let stack_pointer = data
+        .get_arch()
+        .manage()
+        .get_stack_space()
+        .and_then(|s| s.get_spacebase(0).ok());
     let sets_stack_pointer = |out: VarnodeId| {
-        let (Some(v), Some(sp)) = (data.vbank().get(out), stack_pointer.as_ref()) else { return false };
+        let (Some(v), Some(sp)) = (data.vbank().get(out), stack_pointer.as_ref()) else {
+            return false;
+        };
         let a = v.get_addr();
-        a.get_space().zip(sp.space.as_ref()).is_some_and(|(x, y)| Rc::ptr_eq(x, y))
+        a.get_space()
+            .zip(sp.space.as_ref())
+            .is_some_and(|(x, y)| Rc::ptr_eq(x, y))
             && a.get_offset() < sp.offset + sp.size as u64
             && sp.offset < a.get_offset() + v.get_size() as u64
     };
     let constant = |op: &crate::op::PcodeOp, i: int4| {
-        op.get_in(i).and_then(|k| data.vbank().get(k)).filter(|k| k.is_constant()).map(|k| k.get_offset())
+        op.get_in(i)
+            .and_then(|k| data.vbank().get(k))
+            .filter(|k| k.is_constant())
+            .map(|k| k.get_offset())
     };
     let lo = pair.lo_size as u64;
     let mut seen: BTreeSet<(VarnodeId, Via, int4)> = BTreeSet::new();
@@ -2274,12 +2846,16 @@ fn only_returned(data: &Funcdata, value: VarnodeId, off: int4, pair: &Pair) -> b
         if seen.len() > MAX_NODES {
             return false;
         }
-        let Some(v) = data.vbank().get(cur) else { continue };
+        let Some(v) = data.vbank().get(cur) else {
+            continue;
+        };
         let bits = 8 * v.get_size() as u64;
         let whole = matches!(via, Via::Same | Via::Extended);
         let low_at = off as u64;
         for d in v.descend_iter() {
-            let Some(op) = data.obank().get(d) else { continue };
+            let Some(op) = data.obank().get(d) else {
+                continue;
+            };
             if op.is_dead() {
                 continue;
             }
@@ -2295,8 +2871,10 @@ fn only_returned(data: &Funcdata, value: VarnodeId, off: int4, pair: &Pair) -> b
                     }
                     continue;
                 }
-                OpCode::CPUI_CALL | OpCode::CPUI_CALLIND if cur == value && v.get_def().is_none() && undecided_input(data, d) => {
-                    continue
+                OpCode::CPUI_CALL | OpCode::CPUI_CALLIND
+                    if cur == value && v.get_def().is_none() && undecided_input(data, d) =>
+                {
+                    continue;
                 }
                 OpCode::CPUI_CALL
                 | OpCode::CPUI_CALLIND
@@ -2330,7 +2908,9 @@ fn only_returned(data: &Funcdata, value: VarnodeId, off: int4, pair: &Pair) -> b
                         _ => (bump(via), 0),
                     }
                 }
-                OpCode::CPUI_INT_SEXT | OpCode::CPUI_INT_ZEXT if via == Via::Same && off == 0 => (Via::Extended, 0),
+                OpCode::CPUI_INT_SEXT | OpCode::CPUI_INT_ZEXT if via == Via::Same && off == 0 => {
+                    (Via::Extended, 0)
+                }
                 OpCode::CPUI_INT_EQUAL
                 | OpCode::CPUI_INT_NOTEQUAL
                 | OpCode::CPUI_INT_LESS
@@ -2364,7 +2944,8 @@ fn only_returned(data: &Funcdata, value: VarnodeId, off: int4, pair: &Pair) -> b
 /// prototype might read -- rather than its settled arguments? The function's
 /// own input passing through such a call is not yet an argument of it.
 fn undecided_input(data: &Funcdata, call: OpId) -> bool {
-    data.get_call_specs_index(call).is_some_and(|i| data.get_call_specs(i).is_input_active())
+    data.get_call_specs_index(call)
+        .is_some_and(|i| data.get_call_specs(i).is_input_active())
 }
 
 /// Every bit of a `size`-byte value set.
@@ -2381,7 +2962,13 @@ fn ones(size: int4) -> u64 {
 pub(crate) fn literal_value(data: &Funcdata, vn: VarnodeId, depth: u32) -> Option<u64> {
     let v = data.vbank().get(vn)?;
     let size = v.get_size();
-    let mask = |x: u64, sz: int4| if sz >= 8 { x } else { x & ((1u64 << (8 * sz)) - 1) };
+    let mask = |x: u64, sz: int4| {
+        if sz >= 8 {
+            x
+        } else {
+            x & ((1u64 << (8 * sz)) - 1)
+        }
+    };
     if v.is_constant() {
         return Some(mask(v.get_offset(), size));
     }
@@ -2390,7 +2977,11 @@ pub(crate) fn literal_value(data: &Funcdata, vn: VarnodeId, depth: u32) -> Optio
     }
     let op = data.obank().get(v.get_def()?)?;
     let arg = |i: int4| op.get_in(i).and_then(|x| literal_value(data, x, depth - 1));
-    let arg_size = |i: int4| op.get_in(i).and_then(|x| data.vbank().get(x)).map_or(0, |x| x.get_size());
+    let arg_size = |i: int4| {
+        op.get_in(i)
+            .and_then(|x| data.vbank().get(x))
+            .map_or(0, |x| x.get_size())
+    };
     let r = match op.code() {
         OpCode::CPUI_COPY | OpCode::CPUI_INT_ZEXT => arg(0)?,
         OpCode::CPUI_INT_SEXT => {
@@ -2432,23 +3023,34 @@ pub(crate) fn literal_value(data: &Funcdata, vn: VarnodeId, depth: u32) -> Optio
 /// than three argument registers, where "every" says too little.
 fn moves_register_window(data: &Funcdata, copy: OpId) -> bool {
     fn is_register(a: &Address) -> bool {
-        a.get_space().is_some_and(|sp| sp.get_type() == spacetype::IPTR_PROCESSOR)
+        a.get_space()
+            .is_some_and(|sp| sp.get_type() == spacetype::IPTR_PROCESSOR)
     }
     fn reassembled(data: &Funcdata, src: &crate::varnode::Varnode, depth: u32) -> bool {
         depth > 0
-            && src.get_def().and_then(|d| data.obank().get(d)).is_some_and(|piece| {
-                piece.code() == OpCode::CPUI_PIECE
-                    && (0..piece.num_input()).all(|i| {
-                        piece
-                            .get_in(i)
-                            .and_then(|x| data.vbank().get(x))
-                            .is_some_and(|x| is_register(x.get_addr()) || reassembled(data, x, depth - 1))
-                    })
-            })
+            && src
+                .get_def()
+                .and_then(|d| data.obank().get(d))
+                .is_some_and(|piece| {
+                    piece.code() == OpCode::CPUI_PIECE
+                        && (0..piece.num_input()).all(|i| {
+                            piece
+                                .get_in(i)
+                                .and_then(|x| data.vbank().get(x))
+                                .is_some_and(|x| {
+                                    is_register(x.get_addr()) || reassembled(data, x, depth - 1)
+                                })
+                        })
+                })
     }
-    let Some(op) = data.obank().get(copy) else { return false };
+    let Some(op) = data.obank().get(copy) else {
+        return false;
+    };
     let one_register = op.code() == OpCode::CPUI_COPY
-        && match (op.get_out().and_then(|x| data.vbank().get(x)), op.get_in(0).and_then(|x| data.vbank().get(x))) {
+        && match (
+            op.get_out().and_then(|x| data.vbank().get(x)),
+            op.get_in(0).and_then(|x| data.vbank().get(x)),
+        ) {
             (Some(out), Some(src)) => {
                 is_register(out.get_addr())
                     && out.get_addr() != src.get_addr()
@@ -2463,18 +3065,23 @@ fn moves_register_window(data: &Funcdata, copy: OpId) -> bool {
     if !proto.has_model() {
         return false;
     }
-    let Some(input) = proto.model().input_opt() else { return false };
+    let Some(input) = proto.model().input_opt() else {
+        return false;
+    };
     let at = op.get_addr().clone();
     let mut into: Vec<(Address, i32)> = Vec::new();
     let mut from: Vec<(Address, i32)> = Vec::new();
     for (_, id) in data.obank().iter_at(&at) {
-        let Some(op) = data.obank().get(id) else { continue };
+        let Some(op) = data.obank().get(id) else {
+            continue;
+        };
         if op.is_dead() || op.code() != OpCode::CPUI_COPY {
             continue;
         }
-        let (Some(out), Some(src)) =
-            (op.get_out().and_then(|x| data.vbank().get(x)), op.get_in(0).and_then(|x| data.vbank().get(x)))
-        else {
+        let (Some(out), Some(src)) = (
+            op.get_out().and_then(|x| data.vbank().get(x)),
+            op.get_in(0).and_then(|x| data.vbank().get(x)),
+        ) else {
             continue;
         };
         if src.get_addr() == out.get_addr() {
@@ -2500,7 +3107,8 @@ fn moves_register_window(data: &Funcdata, copy: OpId) -> bool {
             moved.iter().any(|(a, size)| {
                 *size == e.get_size()
                     && a.get_offset() == e.get_base()
-                    && a.get_space().is_some_and(|sp| Rc::ptr_eq(sp, e.get_space()))
+                    && a.get_space()
+                        .is_some_and(|sp| Rc::ptr_eq(sp, e.get_space()))
             })
         })
     };
@@ -2513,19 +3121,29 @@ fn moves_register_window(data: &Funcdata, copy: OpId) -> bool {
 /// goto next; return [o7]`), and return recovery settles the prototype before
 /// the rule pool folds it away, so its `%o1` is whatever the call was passed.
 pub(crate) fn never_reached(data: &Funcdata, retop: OpId) -> bool {
-    let Some(bl) = data.obank().get(retop).and_then(|o| o.get_parent()) else { return false };
+    let Some(bl) = data.obank().get(retop).and_then(|o| o.get_parent()) else {
+        return false;
+    };
     let block = data.bblocks_ref().block(bl);
     if block.size_in() == 0 {
         return false;
     }
     (0..block.size_in()).all(|k| {
         let (from, edge) = (block.get_in(k), block.get_in_rev_index(k));
-        let Some(cbranch) = data.bb_op_tail(from).and_then(|t| data.obank().get(t)) else { return false };
+        let Some(cbranch) = data.bb_op_tail(from).and_then(|t| data.obank().get(t)) else {
+            return false;
+        };
         if cbranch.code() != OpCode::CPUI_CBRANCH {
             return false;
         }
-        let Some(val) = cbranch.get_in(1).and_then(|c| decided(data, c, 8)) else { return false };
-        let taken = if (val != 0) != cbranch.is_boolean_flip() { 1 } else { 0 };
+        let Some(val) = cbranch.get_in(1).and_then(|c| decided(data, c, 8)) else {
+            return false;
+        };
+        let taken = if (val != 0) != cbranch.is_boolean_flip() {
+            1
+        } else {
+            0
+        };
         taken != edge
     })
 }
@@ -2558,8 +3176,10 @@ fn decided(data: &Funcdata, vn: VarnodeId, depth: u32) -> Option<u64> {
 /// does not list, or a pair joined first register low.
 pub(crate) fn first_register_holds_high(data: &Funcdata, whole: VarnodeId) -> bool {
     live(data)
-        && pair_halves(data, whole)
-        .is_some_and(|(hi, hi_size, lo, lo_size)| data.get_func_proto().output_holds_high_first(&hi, hi_size, &lo, lo_size))
+        && pair_halves(data, whole).is_some_and(|(hi, hi_size, lo, lo_size)| {
+            data.get_func_proto()
+                .output_holds_high_first(&hi, hi_size, &lo, lo_size)
+        })
 }
 
 /// The storage of `whole`'s most and least significant halves -- two pieces of
@@ -2568,16 +3188,24 @@ fn pair_halves(data: &Funcdata, whole: VarnodeId) -> Option<(Address, i32, Addre
     use crate::kuna_returnuncomputed::{slot_storage, storage_pieces};
     let pieces = storage_pieces(data, whole)?;
     match pieces.as_slice() {
-        [(hs, ho, hz), (ls, lo, lz)] => {
-            Some((Address::new(Rc::clone(hs), *ho), *hz, Address::new(Rc::clone(ls), *lo), *lz))
-        }
+        [(hs, ho, hz), (ls, lo, lz)] => Some((
+            Address::new(Rc::clone(hs), *ho),
+            *hz,
+            Address::new(Rc::clone(ls), *lo),
+            *lz,
+        )),
         [_] => {
             let size = data.vbank().get(whole).map(|v| v.get_size()).unwrap_or(0);
             if size < 2 || size % 2 != 0 {
                 return None;
             }
             let half = size / 2;
-            Some((slot_storage(data, whole, half, half)?, half, slot_storage(data, whole, 0, half)?, half))
+            Some((
+                slot_storage(data, whole, half, half)?,
+                half,
+                slot_storage(data, whole, 0, half)?,
+                half,
+            ))
         }
         _ => None,
     }
@@ -2587,13 +3215,19 @@ fn pair_halves(data: &Funcdata, whole: VarnodeId) -> Option<(Address, i32, Addre
 /// `.gcc_except_table*`, `.ARM.exidx*`, `.ARM.extab*`)? The object bootstrap
 /// hands those to [`crate::architecture::Architecture::eh_sections`].
 pub fn is_exception_table(name: &str) -> bool {
-    name == ".eh_frame" || name.starts_with(".gcc_except_table") || name.starts_with(".ARM.exidx") || name.starts_with(".ARM.extab")
+    name == ".eh_frame"
+        || name.starts_with(".gcc_except_table")
+        || name.starts_with(".ARM.exidx")
+        || name.starts_with(".ARM.extab")
 }
 
 #[path = "kuna_bejoin/evidence.rs"]
 mod evidence;
 
-pub(crate) use evidence::{build_high_read, missed_proven as wide_callee_missed, seed as seed_wide_returns, wide_pair, WideCache, WidePair, WideView};
+pub(crate) use evidence::{
+    WideCache, WidePair, WideView, build_high_read, missed_proven as wide_callee_missed,
+    seed as seed_wide_returns, wide_pair,
+};
 
 #[cfg(test)]
 #[path = "kuna_bejoin/tests.rs"]

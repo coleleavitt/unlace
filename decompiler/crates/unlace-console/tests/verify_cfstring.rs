@@ -30,9 +30,9 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_decomp::decompile_drive::build_and_follow_flow;
@@ -43,12 +43,20 @@ use unlace_decomp::decompile_drive::build_and_follow_flow;
 /// inside its own entry.
 const ENTRIES: [(u64, &str, u64, &str); 3] = [
     (0x100000538, "&_kGreeting", 0x100004008, "cfstring hello"),
-    (0x100000544, "&_kLong", 0x100004028, "a constant string longer than one entry"),
+    (
+        0x100000544,
+        "&_kLong",
+        0x100004028,
+        "a constant string longer than one entry",
+    ),
     (0x100000550, "&_kAfter", 0x100004048, "after the long one"),
 ];
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixtures() -> PathBuf {
@@ -63,8 +71,12 @@ enum Mode {
 }
 
 fn name_at(prog: &ConsoleProgram, vma: u64) -> String {
-    let code_space =
-        prog.arch().manage().get_default_code_space().expect("a default code space").clone();
+    let code_space = prog
+        .arch()
+        .manage()
+        .get_default_code_space()
+        .expect("a default code space")
+        .clone();
     let addr = Address::new(Rc::clone(&code_space), vma);
     match prog.arch().symboltab.find_function_across_scopes(&addr) {
         Some((sid, _)) => prog.arch().symboltab.symbol(sid).get_name().to_string(),
@@ -80,7 +92,12 @@ fn run(fixture: &str, mode: Mode, vma: u64) -> String {
 
 /// [`run`], with a data symbol of type `ty` named `planted` already mapped at
 /// the first entry before the commit, as a debug or analysis symbol would be.
-fn run_with(fixture: &str, mode: Mode, vma: u64, planted: Option<(&str, unlace_decomp::dtype::type_metatype)>) -> String {
+fn run_with(
+    fixture: &str,
+    mode: Mode,
+    vma: u64,
+    planted: Option<(&str, unlace_decomp::dtype::type_metatype)>,
+) -> String {
     let root = repo_root();
     let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
     let bin = fixtures().join(fixture);
@@ -94,20 +111,33 @@ fn run_with(fixture: &str, mode: Mode, vma: u64, planted: Option<(&str, unlace_d
         Mode::On => "on",
         Mode::Annotate => "annotate",
     };
-    prog.arch_mut().set_kuna_option("cfstrings", value).expect("cfstrings takes the value");
+    prog.arch_mut()
+        .set_kuna_option("cfstrings", value)
+        .expect("cfstrings takes the value");
     if let Some((name, meta)) = planted {
         let arch = prog.arch_mut();
-        let space = arch.manage().get_default_code_space().expect("a default code space").clone();
+        let space = arch
+            .manage()
+            .get_default_code_space()
+            .expect("a default code space")
+            .clone();
         let entry = Address::new(space, ENTRIES[0].2);
         let ty = arch.types().get_base(8, meta).expect("an 8-byte base type");
         let global = arch.symboltab.get_global_scope().expect("a global scope");
-        arch.symboltab.add_symbol_mapped(global, name, ty, &entry, &Address::new_invalid()).expect("map the symbol");
+        arch.symboltab
+            .add_symbol_mapped(global, name, ty, &entry, &Address::new_invalid())
+            .expect("map the symbol");
     }
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
     let name = name_at(&prog, vma);
-    let code_space =
-        prog.arch().manage().get_default_code_space().expect("a default code space").clone();
+    let code_space = prog
+        .arch()
+        .manage()
+        .get_default_code_space()
+        .expect("a default code space")
+        .clone();
     let addr = Address::new(Rc::clone(&code_space), vma);
     let fd = {
         let arch = prog.arch_mut();
@@ -145,14 +175,22 @@ fn cfstring_renders_as_literal_only_when_on() {
             off.contains(&format!("return {symbol};")),
             "cfstrings off must render the __cfstring entry {symbol}:\n{off}"
         );
-        assert!(!off.contains(text), "cfstrings off must not render {text:?}:\n{off}");
+        assert!(
+            !off.contains(text),
+            "cfstrings off must not render {text:?}:\n{off}"
+        );
         assert!(
             on.contains(&format!("return CFSTR(\"{text}\");")),
             "cfstrings on must render CFSTR({text:?}):\n{on}"
         );
-        assert!(!on.contains("cfstring@"), "cfstrings on must not annotate:\n{on}");
         assert!(
-            annotated.contains(&format!("return CFSTR(\"{text}\") /* cfstring@0x{entry:x} */;")),
+            !on.contains("cfstring@"),
+            "cfstrings on must not annotate:\n{on}"
+        );
+        assert!(
+            annotated.contains(&format!(
+                "return CFSTR(\"{text}\") /* cfstring@0x{entry:x} */;"
+            )),
             "cfstrings annotate must name the entry 0x{entry:x}:\n{annotated}"
         );
         assert!(
@@ -163,7 +201,10 @@ fn cfstring_renders_as_literal_only_when_on() {
             annotated.contains("CFStringRef "),
             "cfstrings annotate types the constant a CFStringRef:\n{annotated}"
         );
-        assert!(!off.contains("CFStringRef"), "cfstrings off leaves the type alone:\n{off}");
+        assert!(
+            !off.contains("CFStringRef"),
+            "cfstrings off leaves the type alone:\n{off}"
+        );
     }
 }
 
@@ -175,11 +216,20 @@ fn chained_utf16_and_call_argument_cfstrings() {
     const FIXTURE: &str = "macho_cfstring_chained_arm64";
     let on = |vma| run(FIXTURE, Mode::On, vma);
     let hello = on(0x100000508);
-    assert!(hello.contains("return CFSTR(\"chained hello\");"), "{hello}");
+    assert!(
+        hello.contains("return CFSTR(\"chained hello\");"),
+        "{hello}"
+    );
     let utf16 = on(0x100000514);
-    assert!(utf16.contains("return CFSTR(\"café \u{2192} ok\");"), "{utf16}");
+    assert!(
+        utf16.contains("return CFSTR(\"café \u{2192} ok\");"),
+        "{utf16}"
+    );
     let nul = on(0x100000520);
-    assert!(nul.contains("return 0x100004048;") && !nul.contains("before"), "{nul}");
+    assert!(
+        nul.contains("return 0x100004048;") && !nul.contains("before"),
+        "{nul}"
+    );
     let call = on(0x10000052c);
     assert!(call.contains("consume(CFSTR(\"chained hello\"))"), "{call}");
     let off = run(FIXTURE, Mode::Off, 0x10000052c);
@@ -194,7 +244,15 @@ fn cfstring_under_an_existing_symbol_still_renders() {
     use unlace_decomp::dtype::type_metatype;
     let (vma, _, _, text) = ENTRIES[0];
     for meta in [type_metatype::TYPE_UNKNOWN, type_metatype::TYPE_INT] {
-        let on = run_with("macho_cfstring", Mode::On, vma, Some(("kGreetingDebug", meta)));
-        assert!(on.contains(&format!("CFSTR(\"{text}\")")), "an entry under a symbol must render CFSTR({text:?}):\n{on}");
+        let on = run_with(
+            "macho_cfstring",
+            Mode::On,
+            vma,
+            Some(("kGreetingDebug", meta)),
+        );
+        assert!(
+            on.contains(&format!("CFSTR(\"{text}\")")),
+            "an entry under a symbol must render CFSTR({text:?}):\n{on}"
+        );
     }
 }

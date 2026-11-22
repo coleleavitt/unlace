@@ -61,7 +61,9 @@ fn zero_division_preserves_outputs_on_both_failure_paths() {
         }));
         if numer[1] == 0 {
             let payload = result.expect_err("narrow zero division must panic");
-            let message = payload.downcast_ref::<String>().map(String::as_str)
+            let message = payload
+                .downcast_ref::<String>()
+                .map(String::as_str)
                 .or_else(|| payload.downcast_ref::<&str>().copied());
             assert_eq!(message, Some("attempt to divide by zero"));
         } else {

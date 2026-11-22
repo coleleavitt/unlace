@@ -9,9 +9,9 @@
 use std::fmt::Write as _;
 use std::path::Path;
 
-use unlace_analysis::loader::kuna_dyldcache::{read_selected_image, DyldCache};
+use unlace_analysis::loader::kuna_dyldcache::{DyldCache, read_selected_image};
 
-use crate::jsonfmt::{dumps_indent2, Json};
+use crate::jsonfmt::{Json, dumps_indent2};
 
 fn num(v: u64) -> Json {
     Json::Number(v.to_string())
@@ -32,20 +32,30 @@ pub(super) fn run(binary: &str, output: Option<&str>, list: bool, json: bool) ->
         Some(Ok(image)) => image,
         Some(Err(e)) => {
             eprintln!("error: {binary}: {e}");
-            return if e.contains("choose one with --image") || e.contains("image name") { 2 } else { 1 };
+            return if e.contains("choose one with --image") || e.contains("image name") {
+                2
+            } else {
+                1
+            };
         }
         None => {
             eprintln!("error: {binary}: not a dyld shared cache");
             return 1;
         }
     };
-    let mut name = std::env::var(unlace_decomp::kuna_dyldcache::DYLDIMAGE_ENV).unwrap_or_default().trim().to_string();
+    let mut name = std::env::var(unlace_decomp::kuna_dyldcache::DYLDIMAGE_ENV)
+        .unwrap_or_default()
+        .trim()
+        .to_string();
     if name.is_empty()
         && let Ok(cache) = DyldCache::open(path)
-            && let [only] = cache.images() {
-                name = only.path.clone();
-            }
-    let out_path = output.map(str::to_string).unwrap_or_else(|| format!("{binary}.{}.unpacked", output_stem(&name)));
+        && let [only] = cache.images()
+    {
+        name = only.path.clone();
+    }
+    let out_path = output
+        .map(str::to_string)
+        .unwrap_or_else(|| format!("{binary}.{}.unpacked", output_stem(&name)));
     if let Err(e) = std::fs::write(&out_path, &image) {
         eprintln!("error: could not write {out_path}: {e}");
         return 1;
@@ -60,14 +70,20 @@ pub(super) fn run(binary: &str, output: Option<&str>, list: bool, json: bool) ->
         ]);
         format!("{}\n", dumps_indent2(&v))
     } else {
-        format!("unpacked {binary} image {name} -> {out_path} ({} bytes)\n", image.len())
+        format!(
+            "unpacked {binary} image {name} -> {out_path} ({} bytes)\n",
+            image.len()
+        )
     };
     crate::output::emit_with_status(&text, 0)
 }
 
 /// The image's file name for the default output path, `image` when it has none.
 fn output_stem(name: &str) -> &str {
-    name.rsplit('/').next().filter(|s| !s.is_empty()).unwrap_or("image")
+    name.rsplit('/')
+        .next()
+        .filter(|s| !s.is_empty())
+        .unwrap_or("image")
 }
 
 fn render_list(binary: &str, cache: &DyldCache, json: bool) -> String {
@@ -80,7 +96,10 @@ fn render_list(binary: &str, cache: &DyldCache, json: bool) -> String {
                 Json::Object(vec![
                     ("index".into(), num(i as u64)),
                     ("address".into(), num(image.address)),
-                    ("address_hex".into(), Json::Str(format!("{:#x}", image.address))),
+                    (
+                        "address_hex".into(),
+                        Json::Str(format!("{:#x}", image.address)),
+                    ),
                     ("path".into(), Json::Str(image.path.clone())),
                 ])
             })

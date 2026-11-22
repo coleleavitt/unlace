@@ -4,8 +4,8 @@
 //! address-name helpers.
 
 use super::*;
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager};
 use std::rc::Rc;
+use unlace_base::space::{AddrSpace, AddrSpaceManager, addrspace_flags, spacetype};
 
 // --- kuna_is_generated_name ------------------------------------------------
 

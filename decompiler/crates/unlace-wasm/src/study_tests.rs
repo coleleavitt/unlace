@@ -12,7 +12,7 @@ use std::path::PathBuf;
 
 use unlace_console::disasm::hex;
 
-use crate::{run_request, Request};
+use crate::{Request, run_request};
 use serde_json::Value;
 
 fn fixture() -> (String, String) {
@@ -128,10 +128,12 @@ fn inspect_is_decompile_plus_a_consistent_map_of_the_function() {
     );
     let read = read.expect("read");
     let first_bytes = first["bytes"].as_str().expect("bytes");
-    assert!(read["bytes"]
-        .as_str()
-        .expect("bytes")
-        .starts_with(first_bytes));
+    assert!(
+        read["bytes"]
+            .as_str()
+            .expect("bytes")
+            .starts_with(first_bytes)
+    );
     assert_eq!(read["size"].as_u64(), Some(16));
     assert_eq!(read["file_offset"], first["file_offset"]);
 }
@@ -163,11 +165,13 @@ fn a_function_rename_reaches_the_inventory_and_qualifies_later_directives() {
         list["assertions"].as_array().expect("array")[0]["status"].as_str(),
         Some("applied")
     );
-    assert!(list["sections"]
-        .as_array()
-        .expect("array")
-        .iter()
-        .any(|s| s["name"].as_str() == Some(".text")));
+    assert!(
+        list["sections"]
+            .as_array()
+            .expect("array")
+            .iter()
+            .any(|s| s["name"].as_str() == Some(".text"))
+    );
 
     let inspected = run(
         "inspect",
@@ -191,7 +195,12 @@ fn a_function_rename_reaches_the_inventory_and_qualifies_later_directives() {
 
 /// `inspect`'s C for `function` of `binary` under `asserts`, as sorted lines
 /// with each `(from, to)` identifier swapped.
-fn inspected_lines(binary: &str, function: &str, asserts: &[&str], renames: &[(&str, &str)]) -> Vec<String> {
+fn inspected_lines(
+    binary: &str,
+    function: &str,
+    asserts: &[&str],
+    renames: &[(&str, &str)],
+) -> Vec<String> {
     let inspected = run_on(binary, "inspect", &[function], asserts).expect("inspect");
     let code = inspected["function"]["code"].as_str().expect("code");
     let word = |c: char| c.is_ascii_alphanumeric() || c == '_';
@@ -220,10 +229,27 @@ fn inspected_lines(binary: &str, function: &str, asserts: &[&str], renames: &[(&
 #[test]
 fn a_local_rename_moves_no_other_local_number() {
     let plain = inspected_lines("crackme.elf", "check", &[], &[]);
-    assert!(plain.iter().any(|line| line.contains(" len; // ")), "{plain:?}");
-    assert!(plain.iter().any(|line| line.contains(" v1; // ")), "{plain:?}");
-    assert_eq!(inspected_lines("crackme.elf", "check", &["name v1 ok"], &[("ok", "v1")]), plain);
-    assert_eq!(inspected_lines("crackme.elf", "check", &["name len size"], &[("size", "len")]), plain);
+    assert!(
+        plain.iter().any(|line| line.contains(" len; // ")),
+        "{plain:?}"
+    );
+    assert!(
+        plain.iter().any(|line| line.contains(" v1; // ")),
+        "{plain:?}"
+    );
+    assert_eq!(
+        inspected_lines("crackme.elf", "check", &["name v1 ok"], &[("ok", "v1")]),
+        plain
+    );
+    assert_eq!(
+        inspected_lines(
+            "crackme.elf",
+            "check",
+            &["name len size"],
+            &[("size", "len")]
+        ),
+        plain
+    );
 }
 
 /// The C of `check` in crackme under `asserts`, in `mode`.
@@ -243,7 +269,9 @@ fn check_in_mode(mode: Option<&str>, asserts: &[&str]) -> String {
     .expect("inspect check");
     let doc: Value = serde_json::from_str(&out).expect("valid JSON");
     assert!(
-        doc["assertions"].as_array().is_none_or(|a| a.iter().all(|o| o["status"] == "applied")),
+        doc["assertions"]
+            .as_array()
+            .is_none_or(|a| a.iter().all(|o| o["status"] == "applied")),
         "{mode:?} {asserts:?}: {}",
         doc["assertions"]
     );
@@ -257,7 +285,10 @@ fn a_rename_reaches_the_same_local_after_a_mode_switch() {
     for asserts in [["name len size"], ["name v2 size"]] {
         for mode in [None, Some("reliable"), Some("aggressive")] {
             let code = check_in_mode(mode, &asserts);
-            assert!(code.contains("  size = strlen(input);\n"), "{mode:?} {asserts:?}:\n{code}");
+            assert!(
+                code.contains("  size = strlen(input);\n"),
+                "{mode:?} {asserts:?}:\n{code}"
+            );
         }
     }
 }
@@ -267,7 +298,10 @@ fn a_rename_reaches_the_same_local_after_a_mode_switch() {
 #[test]
 fn a_number_shaped_rename_of_a_library_name_is_kept() {
     let code = check_in_mode(None, &["name len v7"]);
-    assert!(code.contains("  v7 = strlen(input);\n") && !code.contains(" len;"), "{code}");
+    assert!(
+        code.contains("  v7 = strlen(input);\n") && !code.contains(" len;"),
+        "{code}"
+    );
     let code = check_in_mode(None, &["name len v7", "name v7 size"]);
     assert!(code.contains("  size = strlen(input);\n"), "{code}");
 }
@@ -277,9 +311,15 @@ fn a_number_shaped_rename_of_a_library_name_is_kept() {
 #[test]
 fn a_rename_onto_a_library_name_leaves_the_other_local_addressable() {
     let code = check_in_mode(None, &["name v1 len"]);
-    assert!(code.contains("  v2 = strlen(input);\n") && code.contains("  len = 0;\n"), "{code}");
+    assert!(
+        code.contains("  v2 = strlen(input);\n") && code.contains("  len = 0;\n"),
+        "{code}"
+    );
     let code = check_in_mode(None, &["name v1 len", "name v2 size"]);
-    assert!(code.contains("  size = strlen(input);\n") && code.contains("  len = 0;\n"), "{code}");
+    assert!(
+        code.contains("  size = strlen(input);\n") && code.contains("  len = 0;\n"),
+        "{code}"
+    );
 }
 
 /// Two renames in turn, the second naming the local the page showed as `v7`
@@ -305,7 +345,11 @@ fn a_rename_names_the_whole_variable() {
     let plain = inspected_lines("long.elf", "main", &[], &[]);
     for (from, to, printed) in [("v2", "count", "v2"), ("v3", "input", "fp")] {
         let directive = format!("name main::{from} {to}");
-        assert_eq!(inspected_lines("long.elf", "main", &[&directive], &[(to, printed)]), plain, "{directive}");
+        assert_eq!(
+            inspected_lines("long.elf", "main", &[&directive], &[(to, printed)]),
+            plain,
+            "{directive}"
+        );
     }
 }
 
@@ -318,7 +362,11 @@ fn a_same_width_retype_types_the_whole_variable() {
     let uncast = |lines: Vec<String>| -> Vec<String> {
         let mut out: Vec<String> = lines
             .into_iter()
-            .map(|line| line.replace("(unsigned int)", "").replace("(int)", "").replace("  unsigned int v2;", "  int v2;"))
+            .map(|line| {
+                line.replace("(unsigned int)", "")
+                    .replace("(int)", "")
+                    .replace("  unsigned int v2;", "  int v2;")
+            })
             .collect();
         out.sort();
         out
@@ -329,7 +377,12 @@ fn a_same_width_retype_types_the_whole_variable() {
         &["type main::v2 unsigned int"][..],
         &["name main::v2 count", "type main::count unsigned int count"][..],
     ] {
-        let retyped = uncast(inspected_lines("long.elf", "main", asserts, &[("count", "v2")]));
+        let retyped = uncast(inspected_lines(
+            "long.elf",
+            "main",
+            asserts,
+            &[("count", "v2")],
+        ));
         assert_eq!(retyped, plain, "{asserts:?}");
     }
 }
@@ -339,11 +392,20 @@ fn a_same_width_retype_types_the_whole_variable() {
 /// a refusal.
 #[test]
 fn a_rename_the_printer_suffixes_is_applied() {
-    let inspected = run_on("long.elf", "inspect", &["main"], &["name main::v7 score"]).expect("inspect");
-    assert!(inspected["function"]["code"].as_str().expect("code").contains("  int score_1;"));
+    let inspected =
+        run_on("long.elf", "inspect", &["main"], &["name main::v7 score"]).expect("inspect");
+    assert!(
+        inspected["function"]["code"]
+            .as_str()
+            .expect("code")
+            .contains("  int score_1;")
+    );
     let row = &inspected["assertions"].as_array().expect("array")[0];
     assert_eq!(row["status"].as_str(), Some("applied"));
-    assert_eq!(row["detail"].as_str(), Some("applied as `score_1`: `score` is already another identifier here"));
+    assert_eq!(
+        row["detail"].as_str(),
+        Some("applied as `score_1`: `score` is already another identifier here")
+    );
 }
 
 /// The page edits a local by the name it shows: after `score` printed as
@@ -355,16 +417,49 @@ fn a_local_is_edited_by_its_suffixed_name() {
             .as_array()
             .expect("array")
             .iter()
-            .map(|row| (row["status"].as_str().unwrap_or_default().to_string(), row["detail"].as_str().map(str::to_string)))
+            .map(|row| {
+                (
+                    row["status"].as_str().unwrap_or_default().to_string(),
+                    row["detail"].as_str().map(str::to_string),
+                )
+            })
             .collect()
     };
-    let renamed = run_on("long.elf", "inspect", &["main"], &["name main::v7 score", "name main::score_1 total"]).expect("inspect");
-    assert!(renamed["function"]["code"].as_str().expect("code").contains("  int total;"));
-    assert_eq!(rows(&renamed), vec![("applied".to_string(), None), ("applied".to_string(), None)]);
-    let retyped =
-        run_on("long.elf", "inspect", &["main"], &["name main::v7 score", "type main::score_1 unsigned int"]).expect("inspect");
-    assert!(retyped["function"]["code"].as_str().expect("code").contains("  unsigned int score_1;"));
-    assert!(rows(&retyped).iter().all(|(status, _)| status == "applied"), "{:?}", rows(&retyped));
+    let renamed = run_on(
+        "long.elf",
+        "inspect",
+        &["main"],
+        &["name main::v7 score", "name main::score_1 total"],
+    )
+    .expect("inspect");
+    assert!(
+        renamed["function"]["code"]
+            .as_str()
+            .expect("code")
+            .contains("  int total;")
+    );
+    assert_eq!(
+        rows(&renamed),
+        vec![("applied".to_string(), None), ("applied".to_string(), None)]
+    );
+    let retyped = run_on(
+        "long.elf",
+        "inspect",
+        &["main"],
+        &["name main::v7 score", "type main::score_1 unsigned int"],
+    )
+    .expect("inspect");
+    assert!(
+        retyped["function"]["code"]
+            .as_str()
+            .expect("code")
+            .contains("  unsigned int score_1;")
+    );
+    assert!(
+        rows(&retyped).iter().all(|(status, _)| status == "applied"),
+        "{:?}",
+        rows(&retyped)
+    );
 }
 
 /// A `bytes` overlay is what every later read of the image sees.
@@ -401,9 +496,10 @@ fn a_rejected_directive_is_a_row_and_a_malformed_one_an_error() {
     assert!(row["detail"].as_str().is_some());
 
     let bad = run("inspect", &["main"], &["bogus directive"]);
-    assert!(bad
-        .expect_err("unparsable")
-        .starts_with("--assert \"bogus directive\""));
+    assert!(
+        bad.expect_err("unparsable")
+            .starts_with("--assert \"bogus directive\"")
+    );
     let two_lines = run("inspect", &["main"], &["name v1 a\nname v2 b"]);
     assert!(two_lines.is_err());
 }
@@ -445,11 +541,13 @@ fn xrefs_names_both_ends_of_every_reference() {
         .filter_map(|r| r["name"].as_str())
         .collect();
     assert_eq!(callees, vec!["add", "sum_to", "printf"]);
-    assert!(main["callees"]
-        .as_array()
-        .expect("array")
-        .iter()
-        .all(|r| r["kind"].as_str() == Some("call")));
+    assert!(
+        main["callees"]
+            .as_array()
+            .expect("array")
+            .iter()
+            .all(|r| r["kind"].as_str() == Some("call"))
+    );
     let data = main["data_refs"].as_array().expect("array");
     assert!(
         data.iter()
@@ -511,8 +609,14 @@ fn strings_names_who_uses_each_literal_including_through_a_pointer() {
         assert_eq!(u["kind"].as_str(), Some("read"));
         assert_eq!(u["via"]["name"].as_str(), Some("secret"));
         let slot = u["via"]["address_hex"].as_str().expect("pointer address");
-        assert!(u["instruction"].as_str().expect("text").contains(slot), "{u:?}");
-        assert!(sites.contains(&u["at_hex"].as_str().expect("site")), "{u:?} is an instruction of check");
+        assert!(
+            u["instruction"].as_str().expect("text").contains(slot),
+            "{u:?}"
+        );
+        assert!(
+            sites.contains(&u["at_hex"].as_str().expect("site")),
+            "{u:?} is an instruction of check"
+        );
     }
 }
 
@@ -522,17 +626,28 @@ fn strings_names_who_uses_each_literal_including_through_a_pointer() {
 /// default, and the token map and line mappings follow the shifted lines.
 #[test]
 fn inspect_defines_the_types_a_function_uses_above_it() {
-    let inspected = run_on("structs.elf", "inspect", &["make_item"], &[]).expect("inspect make_item");
+    let inspected =
+        run_on("structs.elf", "inspect", &["make_item"], &[]).expect("inspect make_item");
     let f = &inspected["function"];
     let code = f["code"].as_str().expect("code");
-    let plain = run_on("structs.elf", "decompile", &["make_item"], &[]).expect("decompile make_item");
+    let plain =
+        run_on("structs.elf", "decompile", &["make_item"], &[]).expect("decompile make_item");
     let body = plain["functions"][0]["code"].as_str().expect("code");
-    assert!(!body.contains("struct struct_0 {"), "decompile keeps the CLI's default: {body}");
+    assert!(
+        !body.contains("struct struct_0 {"),
+        "decompile keeps the CLI's default: {body}"
+    );
     let preamble = code
         .strip_suffix(body)
         .unwrap_or_else(|| panic!("inspect is the definitions plus the decompile text:\n{code}"));
-    assert!(preamble.starts_with("typedef struct struct_0 struct_0;\n"), "{preamble}");
-    assert!(preamble.contains("\nstruct struct_0 {\n") && preamble.ends_with("};\n\n"), "{preamble}");
+    assert!(
+        preamble.starts_with("typedef struct struct_0 struct_0;\n"),
+        "{preamble}"
+    );
+    assert!(
+        preamble.contains("\nstruct struct_0 {\n") && preamble.ends_with("};\n\n"),
+        "{preamble}"
+    );
     let types = f["types"].as_array().expect("types");
     assert_eq!(types.len(), 1, "{types:?}");
     assert_eq!(types[0]["name"].as_str(), Some("struct_0"));
@@ -543,9 +658,18 @@ fn inspect_defines_the_types_a_function_uses_above_it() {
         .as_array()
         .expect("instructions")
         .iter()
-        .flat_map(|i| i["lines"].as_array().expect("lines").iter().filter_map(Value::as_u64))
+        .flat_map(|i| {
+            i["lines"]
+                .as_array()
+                .expect("lines")
+                .iter()
+                .filter_map(Value::as_u64)
+        })
         .collect();
-    assert!(!lines.is_empty() && lines.iter().all(|&l| l > shift + 1), "{shift} {lines:?}");
+    assert!(
+        !lines.is_empty() && lines.iter().all(|&l| l > shift + 1),
+        "{shift} {lines:?}"
+    );
 }
 
 fn token_globals(doc: &Value) -> Vec<(String, Option<String>)> {
@@ -553,8 +677,17 @@ fn token_globals(doc: &Value) -> Vec<(String, Option<String>)> {
         .as_array()
         .expect("tokens")
         .iter()
-        .filter(|t| t["kind"].as_str() == Some("variable") && t.get("var").is_none() && t.get("decl").is_none())
-        .map(|t| (t["text"].as_str().unwrap().to_string(), t["global_hex"].as_str().map(str::to_string)))
+        .filter(|t| {
+            t["kind"].as_str() == Some("variable")
+                && t.get("var").is_none()
+                && t.get("decl").is_none()
+        })
+        .map(|t| {
+            (
+                t["text"].as_str().unwrap().to_string(),
+                t["global_hex"].as_str().map(str::to_string),
+            )
+        })
         .collect()
 }
 
@@ -566,7 +699,12 @@ fn token_globals(doc: &Value) -> Vec<(String, Option<String>)> {
 fn inspect_puts_the_address_of_global_data_on_its_tokens() {
     let named = run_on("globals.elf", "inspect", &["main"], &[]).expect("inspect main");
     let tokens = token_globals(&named);
-    let at = |name: &str| tokens.iter().find(|(t, _)| t == name).and_then(|(_, g)| g.clone());
+    let at = |name: &str| {
+        tokens
+            .iter()
+            .find(|(t, _)| t == name)
+            .and_then(|(_, g)| g.clone())
+    };
     assert_eq!(at("primes").as_deref(), Some("0x4040"), "{tokens:?}");
     assert_eq!(at("greeting").as_deref(), Some("0x4020"));
     assert_eq!(at("scratch").as_deref(), Some("0x40c0"));
@@ -574,22 +712,57 @@ fn inspect_puts_the_address_of_global_data_on_its_tokens() {
     assert_eq!(at("op").as_deref(), Some("0x4078"));
     assert_eq!(at("favorite").as_deref(), Some("0x4080"));
     assert_eq!(at("banner").as_deref(), Some("0x4070"));
-    assert!(tokens.iter().filter(|(t, _)| t.starts_with('v')).all(|(_, g)| g.is_none()), "{tokens:?}");
+    assert!(
+        tokens
+            .iter()
+            .filter(|(t, _)| t.starts_with('v'))
+            .all(|(_, g)| g.is_none()),
+        "{tokens:?}"
+    );
     let globals = named["function"]["globals"].as_array().expect("globals");
-    let primes = globals.iter().find(|g| g["name"].as_str() == Some("primes")).expect("primes listed");
+    let primes = globals
+        .iter()
+        .find(|g| g["name"].as_str() == Some("primes"))
+        .expect("primes listed");
     assert_eq!(primes["address_hex"].as_str(), Some("0x4040"));
     assert_eq!(primes["size"].as_u64(), Some(32));
 
-    let retyped = run_on("globals.elf", "inspect", &["main"], &["data 0x4060 point origin"]).expect("inspect main");
-    assert!(retyped["function"]["code"].as_str().unwrap().contains("(*op)(origin.x)"));
-    assert!(token_globals(&retyped).iter().any(|(t, g)| t == "origin" && g.as_deref() == Some("0x4060")));
+    let retyped = run_on(
+        "globals.elf",
+        "inspect",
+        &["main"],
+        &["data 0x4060 point origin"],
+    )
+    .expect("inspect main");
+    assert!(
+        retyped["function"]["code"]
+            .as_str()
+            .unwrap()
+            .contains("(*op)(origin.x)")
+    );
+    assert!(
+        token_globals(&retyped)
+            .iter()
+            .any(|(t, g)| t == "origin" && g.as_deref() == Some("0x4060"))
+    );
 
     let stripped = run_on("globals-stripped.elf", "inspect", &["main"], &[]).expect("inspect main");
     let tokens = token_globals(&stripped);
-    assert!(tokens.iter().any(|(t, g)| t == "dat_4040" && g.as_deref() == Some("0x4040")), "{tokens:?}");
+    assert!(
+        tokens
+            .iter()
+            .any(|(t, g)| t == "dat_4040" && g.as_deref() == Some("0x4040")),
+        "{tokens:?}"
+    );
     let globals = stripped["function"]["globals"].as_array().expect("globals");
-    let minted = globals.iter().find(|g| g["name"].as_str() == Some("dat_4078")).expect("dat_4078 listed");
-    assert_eq!(minted["declaration"].as_str(), Some("int (*dat_4078)(unsigned int)"));
+    let minted = globals
+        .iter()
+        .find(|g| g["name"].as_str() == Some("dat_4078"))
+        .expect("dat_4078 listed");
+    assert_eq!(
+        minted["declaration"].as_str(),
+        Some("int (*dat_4078)(unsigned int)")
+    );
 }
 
 fn item<'a>(doc: &'a Value, name: &str) -> &'a Value {
@@ -613,12 +786,19 @@ fn data_shows_the_typed_items_around_a_global() {
     let start = doc["start"].as_u64().expect("start");
     assert!(start <= 0x4020, "{doc:?}");
     let bytes = doc["bytes"].as_str().expect("bytes");
-    let at = |addr: u64, len: usize| &bytes[(addr - start) as usize * 2..(addr - start) as usize * 2 + len * 2];
+    let at = |addr: u64, len: usize| {
+        &bytes[(addr - start) as usize * 2..(addr - start) as usize * 2 + len * 2]
+    };
     assert_eq!(at(0x4040, 8), "0200000003000000");
     assert_eq!(at(0x4020, 12), hex(b"hello, data\0"));
     assert_eq!(item(&doc, "primes")["size"].as_u64(), Some(32));
     let targets = doc["targets"].as_array().expect("targets");
-    let to = |at: &str| targets.iter().find(|t| t["at_hex"].as_str() == Some(at)).unwrap_or_else(|| panic!("{at}: {targets:?}"));
+    let to = |at: &str| {
+        targets
+            .iter()
+            .find(|t| t["at_hex"].as_str() == Some(at))
+            .unwrap_or_else(|| panic!("{at}: {targets:?}"))
+    };
     assert_eq!(to("0x4078")["name"].as_str(), Some("twice"));
     assert_eq!(to("0x4080")["name"].as_str(), Some("primes"));
     assert_eq!(to("0x4080")["offset"].as_u64(), Some(12));
@@ -628,7 +808,11 @@ fn data_shows_the_typed_items_around_a_global() {
         "globals.elf",
         "data",
         &["0x4060"],
-        &["data 0x4040 int primes[8]", "data 0x4060 point origin", "data 0x4078 int (*op)(int)"],
+        &[
+            "data 0x4040 int primes[8]",
+            "data 0x4060 point origin",
+            "data 0x4078 int (*op)(int)",
+        ],
     )
     .expect("data");
     let primes = &item(&typed, "primes")["layout"];
@@ -641,11 +825,26 @@ fn data_shows_the_typed_items_around_a_global() {
         .as_array()
         .expect("fields")
         .iter()
-        .map(|f| (f["name"].as_str().unwrap(), f["offset"].as_u64().unwrap(), f["type"]["kind"].as_str().unwrap()))
+        .map(|f| {
+            (
+                f["name"].as_str().unwrap(),
+                f["offset"].as_u64().unwrap(),
+                f["type"]["kind"].as_str().unwrap(),
+            )
+        })
         .collect();
-    assert_eq!(fields, vec![("x", 0, "int"), ("y", 4, "int"), ("label", 8, "pointer")]);
-    assert_eq!(item(&typed, "op")["declaration"].as_str(), Some("int (*op)(int)"));
-    assert_eq!(item(&typed, "op")["layout"]["to"]["kind"].as_str(), Some("code"));
+    assert_eq!(
+        fields,
+        vec![("x", 0, "int"), ("y", 4, "int"), ("label", 8, "pointer")]
+    );
+    assert_eq!(
+        item(&typed, "op")["declaration"].as_str(),
+        Some("int (*op)(int)")
+    );
+    assert_eq!(
+        item(&typed, "op")["layout"]["to"]["kind"].as_str(),
+        Some("code")
+    );
 
     let bss = run_on("globals.elf", "data", &["0x40c0"], &[]).expect("data");
     assert_eq!(bss["section"]["name"].as_str(), Some(".bss"));
@@ -657,7 +856,8 @@ fn data_shows_the_typed_items_around_a_global() {
     assert_eq!(exact["bytes"].as_str(), Some("e803000000000000"));
     assert_eq!(exact["section"]["name"].as_str(), Some(".rodata"));
     assert!(run_on("globals.elf", "data", &["0x4040", "0"], &[]).is_err());
-    let nowhere = run_on("globals.elf", "data", &["0xfffffffffffffff8"], &[]).expect("data at the top of memory");
+    let nowhere = run_on("globals.elf", "data", &["0xfffffffffffffff8"], &[])
+        .expect("data at the top of memory");
     assert_eq!(nowhere["size"].as_u64(), Some(0));
     assert_eq!(nowhere["section"], Value::Null);
 }
@@ -668,10 +868,19 @@ fn data_shows_the_typed_items_around_a_global() {
 fn uses_names_the_instructions_that_use_the_data() {
     let doc = run_on("globals.elf", "uses", &["0x4040", "0x48"], &[]).expect("uses");
     let uses = doc["uses"].as_array().expect("uses");
-    let first = |to: &str| uses.iter().find(|u| u["to_hex"].as_str() == Some(to)).unwrap_or_else(|| panic!("{to}: {uses:?}"));
+    let first = |to: &str| {
+        uses.iter()
+            .find(|u| u["to_hex"].as_str() == Some(to))
+            .unwrap_or_else(|| panic!("{to}: {uses:?}"))
+    };
     assert_eq!(first("0x4040")["name"].as_str(), Some("main"));
     assert_eq!(first("0x4040")["kind"].as_str(), Some("data"));
-    assert!(first("0x4040")["instruction"].as_str().unwrap().contains("0x4040"));
+    assert!(
+        first("0x4040")["instruction"]
+            .as_str()
+            .unwrap()
+            .contains("0x4040")
+    );
     assert_eq!(first("0x4078")["kind"].as_str(), Some("read"));
     let main = run_on("globals.elf", "inspect", &["main"], &[]).expect("inspect main");
     let sites: Vec<&str> = main["function"]["instructions"]
@@ -689,9 +898,14 @@ fn uses_names_the_instructions_that_use_the_data() {
 }
 
 fn frame_of(name: &str, function: &str) -> (Value, Value, Value) {
-    let doc = run_on(name, "inspect", &[function], &[]).unwrap_or_else(|e| panic!("inspect {function}: {e}"));
+    let doc = run_on(name, "inspect", &[function], &[])
+        .unwrap_or_else(|e| panic!("inspect {function}: {e}"));
     let frame = &doc["function"]["frame"];
-    (frame["frame_pointer"].clone(), frame["stack_pointer"].clone(), frame["base"].clone())
+    (
+        frame["frame_pointer"].clone(),
+        frame["stack_pointer"].clone(),
+        frame["base"].clone(),
+    )
 }
 
 fn reg(register: &str, offset: i64) -> Value {
@@ -711,19 +925,64 @@ fn reg(register: &str, offset: i64) -> Value {
 #[test]
 fn inspect_reports_the_frame_pointer_and_the_stack_pointer() {
     let (fp, sp) = (Value::from("frame_pointer"), Value::from("stack_pointer"));
-    assert_eq!(frame_of("sample.elf", "main"), (reg("rbp", -8), reg("rsp", -0x28), fp.clone()));
-    assert_eq!(frame_of("sample.elf", "add"), (reg("rbp", -8), reg("rsp", -8), fp.clone()));
-    assert_eq!(frame_of("frames-O2.elf", "read_name"), (Value::Null, reg("rsp", -0x58), sp.clone()));
-    assert_eq!(frame_of("frames-asm.elf", "shrink_wrapped"), (Value::Null, reg("rsp", -0x28), sp.clone()));
-    assert_eq!(frame_of("frames-asm.elf", "probed"), (Value::Null, Value::Null, Value::Null));
-    assert_eq!(frame_of("frames-asm.elf", "rotated"), (Value::Null, Value::Null, Value::Null));
-    assert_eq!(frame_of("frames-asm.elf", "interleaved"), (Value::Null, reg("rsp", -0x20), sp.clone()));
-    assert_eq!(frame_of("frames-asm.elf", "tail_first"), (Value::Null, reg("rsp", -0x28), sp.clone()));
-    assert_eq!(frame_of("frames-i386.o", "pic"), (Value::Null, reg("esp", -0x44), sp.clone()));
-    assert_eq!(frame_of("frames-i386.o", "padded"), (Value::Null, reg("esp", -0x1c), sp.clone()));
-    for (function, depth) in [("condcall", -0x30), ("condret", -0x30), ("condpop", -0x40), ("tcondcall", -0x40)] {
-        assert_eq!(frame_of("frames-arm.o", function), (Value::Null, reg("sp", depth), sp.clone()), "{function}");
+    assert_eq!(
+        frame_of("sample.elf", "main"),
+        (reg("rbp", -8), reg("rsp", -0x28), fp.clone())
+    );
+    assert_eq!(
+        frame_of("sample.elf", "add"),
+        (reg("rbp", -8), reg("rsp", -8), fp.clone())
+    );
+    assert_eq!(
+        frame_of("frames-O2.elf", "read_name"),
+        (Value::Null, reg("rsp", -0x58), sp.clone())
+    );
+    assert_eq!(
+        frame_of("frames-asm.elf", "shrink_wrapped"),
+        (Value::Null, reg("rsp", -0x28), sp.clone())
+    );
+    assert_eq!(
+        frame_of("frames-asm.elf", "probed"),
+        (Value::Null, Value::Null, Value::Null)
+    );
+    assert_eq!(
+        frame_of("frames-asm.elf", "rotated"),
+        (Value::Null, Value::Null, Value::Null)
+    );
+    assert_eq!(
+        frame_of("frames-asm.elf", "interleaved"),
+        (Value::Null, reg("rsp", -0x20), sp.clone())
+    );
+    assert_eq!(
+        frame_of("frames-asm.elf", "tail_first"),
+        (Value::Null, reg("rsp", -0x28), sp.clone())
+    );
+    assert_eq!(
+        frame_of("frames-i386.o", "pic"),
+        (Value::Null, reg("esp", -0x44), sp.clone())
+    );
+    assert_eq!(
+        frame_of("frames-i386.o", "padded"),
+        (Value::Null, reg("esp", -0x1c), sp.clone())
+    );
+    for (function, depth) in [
+        ("condcall", -0x30),
+        ("condret", -0x30),
+        ("condpop", -0x40),
+        ("tcondcall", -0x40),
+    ] {
+        assert_eq!(
+            frame_of("frames-arm.o", function),
+            (Value::Null, reg("sp", depth), sp.clone()),
+            "{function}"
+        );
     }
-    assert_eq!(frame_of("sample_aarch64.o", "_start"), (reg("x29", -0x10), reg("sp", -0x30), sp.clone()));
-    assert_eq!(frame_of("sample_aarch64.o", "sum_to"), (Value::Null, reg("sp", -0x20), sp));
+    assert_eq!(
+        frame_of("sample_aarch64.o", "_start"),
+        (reg("x29", -0x10), reg("sp", -0x30), sp.clone())
+    );
+    assert_eq!(
+        frame_of("sample_aarch64.o", "sum_to"),
+        (Value::Null, reg("sp", -0x20), sp)
+    );
 }

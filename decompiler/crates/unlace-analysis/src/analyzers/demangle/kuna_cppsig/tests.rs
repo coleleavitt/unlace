@@ -50,10 +50,17 @@ fn plain_nested_member_is_ambiguous() {
     let d = decl("_ZN7leveldb12TableBuilder10WriteBlockEPNS_12BlockBuilderEPNS_11BlockHandleE");
     assert_eq!(d.this_kind, ThisKind::Ambiguous);
     assert_eq!(d.class, "TableBuilder");
-    assert_eq!(d.params, vec!["leveldb::BlockBuilder*", "leveldb::BlockHandle*"]);
+    assert_eq!(
+        d.params,
+        vec!["leveldb::BlockBuilder*", "leveldb::BlockHandle*"]
+    );
 
     let s = decl("_ZN7leveldb6Status2OKEv");
-    assert_eq!(s.this_kind, ThisKind::Ambiguous, "a static member must not be proven");
+    assert_eq!(
+        s.this_kind,
+        ThisKind::Ambiguous,
+        "a static member must not be proven"
+    );
 }
 
 #[test]
@@ -82,7 +89,10 @@ fn overloaded_operators_are_refused() {
     // `operator<`/`operator>`/`operator()` put UNBALANCED brackets into the
     // demangled text, which the depth-tracking parse cannot survive, and the free
     // operator templates are the densest source of false `this` positives.
-    assert!(try_decl("_ZN9__gnu_cxxltIPmSt6vectorImSaImEEEEbRKNS_17__normal_iteratorIT_T0_EESA_").is_none());
+    assert!(
+        try_decl("_ZN9__gnu_cxxltIPmSt6vectorImSaImEEEEbRKNS_17__normal_iteratorIT_T0_EESA_")
+            .is_none()
+    );
     assert!(try_decl("_ZNSt6vectorIiSaIiEEixEm").is_none());
 }
 
@@ -183,7 +193,10 @@ fn qualifier_word_strip_respects_identifier_boundaries() {
 
 #[test]
 fn strip_template_args_leaves_the_bare_name() {
-    assert_eq!(strip_template_args("basic_string<char, traits<char> >"), "basic_string");
+    assert_eq!(
+        strip_template_args("basic_string<char, traits<char> >"),
+        "basic_string"
+    );
     assert_eq!(strip_template_args("Cache"), "Cache");
     assert_eq!(strip_template_args("~Cache"), "~Cache");
 }
@@ -233,7 +246,12 @@ fn msvc_gate_picks_one_reading_of_an_msvc_name() {
         msvc_builders: Vec::new(),
     };
     let on = select(facts(), false);
-    assert_eq!(on.iter().map(|s| s.pieces.name.as_str()).collect::<Vec<_>>(), ["itanium", "msvc"]);
+    assert_eq!(
+        on.iter()
+            .map(|s| s.pieces.name.as_str())
+            .collect::<Vec<_>>(),
+        ["itanium", "msvc"]
+    );
     assert_eq!(on[1].model, Some("__thiscall"));
     assert!(on[1].msvc && !on[0].msvc);
 }
@@ -256,7 +274,10 @@ fn allocation_operators_parse_as_static_pointer_returning() {
 fn std_namespace_functions_take_no_this() {
     let d = decl("_ZSt20__throw_length_errorPKc");
     assert_eq!(d.this_kind, ThisKind::ProvenNone);
-    assert_eq!(decl("_ZN9__gnu_cxx27__verbose_terminate_handlerEv").this_kind, ThisKind::ProvenNone);
+    assert_eq!(
+        decl("_ZN9__gnu_cxx27__verbose_terminate_handlerEv").this_kind,
+        ThisKind::ProvenNone
+    );
 }
 
 #[test]

@@ -250,8 +250,16 @@ mod nomarkup {
         assert_eq!(
             e.take_statement_provenance().associations,
             vec![
-                MarkupAssociation { line_number: 1, opref: Some(7), varref: None },
-                MarkupAssociation { line_number: 2, opref: Some(9), varref: None },
+                MarkupAssociation {
+                    line_number: 1,
+                    opref: Some(7),
+                    varref: None
+                },
+                MarkupAssociation {
+                    line_number: 2,
+                    opref: Some(9),
+                    varref: None
+                },
             ]
         );
         e.set_output_stream();
@@ -544,7 +552,10 @@ mod markup {
         // header) carrying the content bytes — distinct from the raw text the
         // no-markup back-end produces.
         let mut e = EmitMarkup::new();
-        let markup = MarkupRef { varref: Some(42), ..MarkupRef::none() };
+        let markup = MarkupRef {
+            varref: Some(42),
+            ..MarkupRef::none()
+        };
         e.tag_variable("v", SyntaxHighlight::VarColor, &markup);
         let bytes = e.take_output();
         assert!(!bytes.is_empty());
@@ -563,7 +574,11 @@ mod markup {
         e.tag_line();
         let statement = MarkupRef::op(Some(7));
         e.begin_statement(&statement);
-        let variable = MarkupRef { opref: Some(7), varref: Some(42), ..MarkupRef::none() };
+        let variable = MarkupRef {
+            opref: Some(7),
+            varref: Some(42),
+            ..MarkupRef::none()
+        };
         e.tag_variable("local_8", SyntaxHighlight::VarColor, &variable);
         e.tag_line();
         e.tag_op("+", SyntaxHighlight::NoColor, &MarkupRef::op(Some(9)));
@@ -637,7 +652,11 @@ mod capture {
         e.tag_line();
         let p = e.begin_func_proto();
         let r = e.begin_return_type(&MarkupRef::none());
-        e.tag_type("unsigned long *", SyntaxHighlight::TypeColor, &MarkupRef::none());
+        e.tag_type(
+            "unsigned long *",
+            SyntaxHighlight::TypeColor,
+            &MarkupRef::none(),
+        );
         e.end_return_type(r);
         e.spaces(1, 0);
         e.tag_func_name("f", SyntaxHighlight::FuncnameColor, &MarkupRef::op(Some(1)));
@@ -652,7 +671,11 @@ mod capture {
         let d = e.begin_var_decl(&MarkupRef::none());
         e.tag_type("char", SyntaxHighlight::TypeColor, &MarkupRef::none());
         e.spaces(1, 0);
-        e.tag_variable("\u{e9}t\u{e9}", SyntaxHighlight::VarColor, &MarkupRef::none());
+        e.tag_variable(
+            "\u{e9}t\u{e9}",
+            SyntaxHighlight::VarColor,
+            &MarkupRef::none(),
+        );
         e.print(";", SyntaxHighlight::NoColor);
         e.end_var_decl(d);
         e.tag_line();
@@ -690,7 +713,12 @@ mod capture {
             }
             let line = &mut lines[t.line];
             let have = line.encode_utf16().count();
-            assert!(t.col >= have, "token {:?} overlaps: col {} < {have}", t.text, t.col);
+            assert!(
+                t.col >= have,
+                "token {:?} overlaps: col {} < {have}",
+                t.text,
+                t.col
+            );
             line.push_str(&" ".repeat(t.col - have));
             line.push_str(&t.text);
         }
@@ -698,7 +726,10 @@ mod capture {
     }
 
     fn trimmed_lines(text: &str) -> String {
-        text.split('\n').map(|l| l.trim_end_matches(' ')).collect::<Vec<_>>().join("\n")
+        text.split('\n')
+            .map(|l| l.trim_end_matches(' '))
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     #[test]
@@ -712,7 +743,11 @@ mod capture {
         let tokens = markup.take_tokens();
         let want = trimmed_lines(plain.output());
         assert_eq!(rebuild(&tokens), want.trim_end_matches('\n'));
-        assert!(tokens.iter().all(|t| !t.text.trim().is_empty() && t.text.trim() == t.text));
+        assert!(
+            tokens
+                .iter()
+                .all(|t| !t.text.trim().is_empty() && t.text.trim() == t.text)
+        );
     }
 
     #[test]
@@ -722,22 +757,46 @@ mod capture {
         markup.set_capture_tokens(true);
         drive(&mut markup, &spc);
         let tokens = markup.take_tokens();
-        let ret = tokens.iter().find(|t| t.text == "unsigned long *").expect("one type token");
-        assert_eq!((ret.kind, ret.in_return_type, ret.in_proto), (TokenKind::Type, true, true));
+        let ret = tokens
+            .iter()
+            .find(|t| t.text == "unsigned long *")
+            .expect("one type token");
+        assert_eq!(
+            (ret.kind, ret.in_return_type, ret.in_proto),
+            (TokenKind::Type, true, true)
+        );
         let param = tokens.iter().find(|t| t.text == "a0").expect("param");
         assert!(param.in_proto && !param.in_return_type);
-        let local = tokens.iter().find(|t| t.text == "\u{e9}t\u{e9}").expect("local");
+        let local = tokens
+            .iter()
+            .find(|t| t.text == "\u{e9}t\u{e9}")
+            .expect("local");
         assert!(local.in_var_decl && !local.in_proto);
         let zero = tokens.iter().find(|t| t.text == "0").expect("constant");
         assert_eq!((zero.kind, zero.opref), (TokenKind::Value, Some(2)));
-        let op = tokens.iter().find(|t| t.text == "!=").expect("operator trimmed");
+        let op = tokens
+            .iter()
+            .find(|t| t.text == "!=")
+            .expect("operator trimmed");
         assert_eq!(op.kind, TokenKind::Op);
-        let note = tokens.iter().find(|t| t.kind == TokenKind::Comment).expect("comment");
-        assert_eq!((note.text.as_str(), note.at), ("// note", Some((spc.get_index(), 0x40))));
-        let string = tokens.iter().find(|t| t.text.contains('\u{1f600}')).expect("string");
+        let note = tokens
+            .iter()
+            .find(|t| t.kind == TokenKind::Comment)
+            .expect("comment");
+        assert_eq!(
+            (note.text.as_str(), note.at),
+            ("// note", Some((spc.get_index(), 0x40)))
+        );
+        let string = tokens
+            .iter()
+            .find(|t| t.text.contains('\u{1f600}'))
+            .expect("string");
         let x = tokens.iter().find(|t| t.text == "x").expect("x");
         assert_eq!(string.line, x.line);
-        assert_eq!(note.col, string.col + string.text.encode_utf16().count() + 1);
+        assert_eq!(
+            note.col,
+            string.col + string.text.encode_utf16().count() + 1
+        );
     }
 
     #[test]

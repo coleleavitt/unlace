@@ -22,8 +22,11 @@
 //! counts. A name offset points into the trailing string blob. Loading checks
 //! lengths, offsets and UTF-8 and reports malformed input as `KunaError`.
 
-#[expect(clippy::disallowed_types, reason = "lookup indices; output ordering is explicit")]
-use std::collections::{hash_map::Entry, HashMap};
+#[expect(
+    clippy::disallowed_types,
+    reason = "lookup indices; output ordering is explicit"
+)]
+use std::collections::{HashMap, hash_map::Entry};
 
 use unlace_base::error::{KunaError, KunaResult};
 
@@ -89,7 +92,10 @@ pub struct FidDb {
     /// The `FULL_HASH_COL` index: `full_hash -> records sharing it`. A full hash
     /// can map to several functions (a genuine collision, or the same function
     /// under several names).
-    #[expect(clippy::disallowed_types, reason = "records sorts hashes before serialization")]
+    #[expect(
+        clippy::disallowed_types,
+        reason = "records sorts hashes before serialization"
+    )]
     by_full_hash: HashMap<u64, Vec<FidRecord>>,
     /// The number of records (the `by_full_hash` buckets may merge collisions, so
     /// this is tracked separately for a faithful round-trip count).
@@ -109,13 +115,21 @@ impl FidDb {
         cspec_id: impl Into<String>,
         records: Vec<FidRecord>,
     ) -> Self {
-        #[expect(clippy::disallowed_types, reason = "insertion order is retained inside each hash bucket")]
+        #[expect(
+            clippy::disallowed_types,
+            reason = "insertion order is retained inside each hash bucket"
+        )]
         let mut by_full_hash: HashMap<u64, Vec<FidRecord>> = HashMap::new();
         let n_records = records.len();
         for rec in records {
             by_full_hash.entry(rec.full_hash).or_default().push(rec);
         }
-        Self { lang_id: lang_id.into(), cspec_id: cspec_id.into(), by_full_hash, n_records }
+        Self {
+            lang_id: lang_id.into(),
+            cspec_id: cspec_id.into(),
+            by_full_hash,
+            n_records,
+        }
     }
 
     /// Every record, in a deterministic order (sorted by `full_hash`, then by the
@@ -139,7 +153,10 @@ impl FidDb {
 
         // Intern names into the blob, mapping each distinct name to its offset.
         let mut blob: Vec<u8> = Vec::new();
-        #[expect(clippy::disallowed_types, reason = "lookup only; blob order follows sorted records")]
+        #[expect(
+            clippy::disallowed_types,
+            reason = "lookup only; blob order follows sorted records"
+        )]
         let mut name_off: HashMap<&str, u32> = HashMap::new();
         for rec in &records {
             if let Entry::Vacant(entry) = name_off.entry(rec.name.as_str()) {
@@ -230,7 +247,10 @@ impl FidDatabase for FidDb {
         &self.cspec_id
     }
     fn find_by_full_hash(&self, h: u64) -> &[FidRecord] {
-        self.by_full_hash.get(&h).map(Vec::as_slice).unwrap_or(NO_RECORDS)
+        self.by_full_hash
+            .get(&h)
+            .map(Vec::as_slice)
+            .unwrap_or(NO_RECORDS)
     }
     fn record_count(&self) -> usize {
         self.n_records
@@ -286,7 +306,10 @@ impl<'a> Reader<'a> {
     }
 
     fn take(&mut self, n: usize) -> KunaResult<&'a [u8]> {
-        let end = self.pos.checked_add(n).ok_or_else(|| KunaError::bad_data("fid: length overflow"))?;
+        let end = self
+            .pos
+            .checked_add(n)
+            .ok_or_else(|| KunaError::bad_data("fid: length overflow"))?;
         if end > self.buf.len() {
             return Err(KunaError::bad_data(format!(
                 "fid: truncated (need {n} bytes at {}, have {})",
@@ -310,7 +333,9 @@ impl<'a> Reader<'a> {
 
     fn u64(&mut self) -> KunaResult<u64> {
         let b = self.take(8)?;
-        Ok(u64::from_le_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]]))
+        Ok(u64::from_le_bytes([
+            b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
+        ]))
     }
 
     fn i16(&mut self) -> KunaResult<i16> {
@@ -382,10 +407,7 @@ mod tests {
     fn collision_bucket_keeps_all_records() {
         // Two functions sharing a full hash both land in the same bucket and both
         // survive the round-trip.
-        let records = vec![
-            rec(0x4242, 0x1, 6, 2, "foo"),
-            rec(0x4242, 0x2, 6, 2, "bar"),
-        ];
+        let records = vec![rec(0x4242, 0x1, 6, 2, "foo"), rec(0x4242, 0x2, 6, 2, "bar")];
         let db = FidDb::from_records("L", "C", records);
         let back = FidDb::load(&db.serialize()).unwrap();
         assert_eq!(back.record_count(), 2);
@@ -397,20 +419,32 @@ mod tests {
 
     #[test]
     fn serialization_interns_names_in_sorted_record_order() {
-        let db = FidDb::from_records("L", "C", vec![
-            rec(9, 40, 2, 1, "shared"),
-            rec(1, 20, -2, 3, "z"),
-            rec(1, 30, i16::MAX, 4, "shared"),
-            rec(7, 50, 0, 0, ""),
-        ]);
+        let db = FidDb::from_records(
+            "L",
+            "C",
+            vec![
+                rec(9, 40, 2, 1, "shared"),
+                rec(1, 20, -2, 3, "z"),
+                rec(1, 30, i16::MAX, 4, "shared"),
+                rec(7, 50, 0, 0, ""),
+            ],
+        );
         let bytes = db.serialize();
-        assert_eq!(&bytes[..22], b"KFID\x01\0\0\0\x01\0\0\0L\x01\0\0\0C\x04\0\0\0");
+        assert_eq!(
+            &bytes[..22],
+            b"KFID\x01\0\0\0\x01\0\0\0L\x01\0\0\0C\x04\0\0\0"
+        );
         let table = &bytes[22..22 + 4 * 24];
-        let fields: Vec<_> = table.chunks_exact(24).map(|record| (
-            u64::from_le_bytes(record[..8].try_into().unwrap()),
-            u64::from_le_bytes(record[8..16].try_into().unwrap()),
-            u32::from_le_bytes(record[20..24].try_into().unwrap()),
-        )).collect();
+        let fields: Vec<_> = table
+            .chunks_exact(24)
+            .map(|record| {
+                (
+                    u64::from_le_bytes(record[..8].try_into().unwrap()),
+                    u64::from_le_bytes(record[8..16].try_into().unwrap()),
+                    u32::from_le_bytes(record[20..24].try_into().unwrap()),
+                )
+            })
+            .collect();
         assert_eq!(fields, [(1, 20, 0), (1, 30, 2), (7, 50, 9), (9, 40, 2)]);
         assert_eq!(&bytes[22 + 4 * 24..], b"z\0shared\0\0");
         assert_eq!(db.serialize(), bytes);

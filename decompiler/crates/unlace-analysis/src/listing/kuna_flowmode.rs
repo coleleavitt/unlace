@@ -61,18 +61,18 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
+use object::{Object, ObjectKind, ObjectSymbol, SymbolKind};
 use unlace_base::address::Address;
 use unlace_base::space::AddrSpace;
 use unlace_decomp::architecture::Architecture;
 use unlace_num::opcodes::OpCode;
 use unlace_sleigh::translate::{ContextCommitRecord, Translate};
-use object::{Object, ObjectKind, ObjectSymbol, SymbolKind};
 
 use super::classify::classify;
 use super::context::ContextPainter;
 use super::decode::decode_one;
 use super::model::FlowKind;
-use super::walk::{in_exec, StepCtx};
+use super::walk::{StepCtx, in_exec};
 
 const TMODE: &[u8] = b"TMode";
 
@@ -355,7 +355,11 @@ impl Proof<'_, '_> {
                 calls,
                 branches,
                 fall_through: class.fall_through,
-                next: if decoded.ops.iter().any(|op| op.opcode == OpCode::CPUI_CALLOTHER) {
+                next: if decoded
+                    .ops
+                    .iter()
+                    .any(|op| op.opcode == OpCode::CPUI_CALLOTHER)
+                {
                     Next::Unproven
                 } else if class.flow.is_call && !class.flow.is_conditional {
                     Next::AfterCall

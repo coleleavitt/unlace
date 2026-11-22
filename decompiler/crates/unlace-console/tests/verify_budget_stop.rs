@@ -20,25 +20,31 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_console::interface::IfaceStatus;
 use unlace_console::kuna_console::register_kuna_commands;
 use unlace_decomp::decompile_drive::{
-    build_and_follow_flow_within_budget, decompile_func_full_with_override_dyn_prefollowed, is_budget_stop,
-    set_default_fn_budget_secs, DrivePurpose,
+    DrivePurpose, build_and_follow_flow_within_budget,
+    decompile_func_full_with_override_dyn_prefollowed, is_budget_stop, set_default_fn_budget_secs,
 };
 
 const BUDGET: Duration = Duration::from_secs(600);
 
 fn load() -> ConsoleProgram {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap();
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap();
     let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
     let bin = root.join("decompiler/crates/unlace-analysis/tests/fixtures/fmt_x86_64");
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
@@ -51,11 +57,19 @@ fn main_entry(prog: &ConsoleProgram) -> unlace_base::address::Address {
 }
 
 fn dcp(status: &mut IfaceStatus) -> &mut IfaceDecompData {
-    status.get_data_mut(DECOMPILE_MODULE).unwrap().as_any_mut().downcast_mut::<IfaceDecompData>().unwrap()
+    status
+        .get_data_mut(DECOMPILE_MODULE)
+        .unwrap()
+        .as_any_mut()
+        .downcast_mut::<IfaceDecompData>()
+        .unwrap()
 }
 
 /// Run `cmds` one at a time, calling `between(i, dcp)` before command `i`.
-fn drive(cmds: &[&str], mut between: impl FnMut(usize, &mut IfaceDecompData)) -> (String, IfaceStatus) {
+fn drive(
+    cmds: &[&str],
+    mut between: impl FnMut(usize, &mut IfaceDecompData),
+) -> (String, IfaceStatus) {
     let prog = load();
     let cmds: Vec<String> = cmds.iter().map(|s| s.to_string()).collect();
     let count = cmds.len();
@@ -74,12 +88,27 @@ fn drive(cmds: &[&str], mut between: impl FnMut(usize, &mut IfaceDecompData)) ->
 /// closing brace, with its reason replaced, and what the transcript printed
 /// after it.
 fn shell(transcript: &str) -> (String, &str) {
-    let warn = transcript.rfind("/* WARNING: decompilation failed: ").expect("the shell names the failure");
-    let proto = transcript[..warn].rfind("main(").expect("the shell prints the prototype");
+    let warn = transcript
+        .rfind("/* WARNING: decompilation failed: ")
+        .expect("the shell names the failure");
+    let proto = transcript[..warn]
+        .rfind("main(")
+        .expect("the shell prints the prototype");
     let line = transcript[..proto].rfind('\n').map_or(0, |i| i + 1);
     let end = warn + transcript[warn..].find("*/").unwrap() + 2;
-    let close = end + transcript[end..].find("\n}").expect("the shell closes its brace") + 2;
-    (format!("{}<reason>{}", &transcript[line..warn], &transcript[end..close]), transcript[close..].trim())
+    let close = end
+        + transcript[end..]
+            .find("\n}")
+            .expect("the shell closes its brace")
+        + 2;
+    (
+        format!(
+            "{}<reason>{}",
+            &transcript[line..warn],
+            &transcript[end..close]
+        ),
+        transcript[close..].trim(),
+    )
 }
 
 #[test]
@@ -89,8 +118,12 @@ fn a_drive_charges_the_follow_it_adopts_to_its_budget() {
     let arch = prog.arch_mut();
     arch.kuna_fn_budget = Some(BUDGET);
     let drive = |arch: &mut unlace_decomp::architecture::Architecture, spent: Option<Duration>| {
-        let mut fd = build_and_follow_flow_within_budget(arch, "main", entry.clone(), 0, &[]).expect("main follows");
-        assert!(fd.flow_spent() > Duration::ZERO, "the follow records how long it took");
+        let mut fd = build_and_follow_flow_within_budget(arch, "main", entry.clone(), 0, &[])
+            .expect("main follows");
+        assert!(
+            fd.flow_spent() > Duration::ZERO,
+            "the follow records how long it took"
+        );
         if let Some(spent) = spent {
             fd.set_flow_spent(spent);
         }
@@ -110,12 +143,21 @@ fn a_drive_charges_the_follow_it_adopts_to_its_budget() {
             DrivePurpose::SingleFunction,
         )
     };
-    assert!(drive(arch, None).is_ok(), "a quick follow leaves the drive its budget");
+    assert!(
+        drive(arch, None).is_ok(),
+        "a quick follow leaves the drive its budget"
+    );
     let Err(error) = drive(arch, Some(BUDGET)) else {
         panic!("a follow that used the budget leaves the drive none");
     };
     assert!(is_budget_stop(&error), "{}", error.explain());
-    assert!(error.explain().starts_with("per-function decompile budget exceeded (600 s)"), "{}", error.explain());
+    assert!(
+        error
+            .explain()
+            .starts_with("per-function decompile budget exceeded (600 s)"),
+        "{}",
+        error.explain()
+    );
 }
 
 #[test]
@@ -123,34 +165,100 @@ fn a_budget_stopped_decompile_keeps_its_shell_without_following_again() {
     set_default_fn_budget_secs(BUDGET.as_secs());
     let spend = |i: usize, dcp: &mut IfaceDecompData| {
         if i == 1 {
-            dcp.fd.as_mut().expect("main is loaded").set_flow_spent(BUDGET);
+            dcp.fd
+                .as_mut()
+                .expect("main is loaded")
+                .set_flow_spent(BUDGET);
         }
     };
     let (adopted, mut status) = drive(&["load function main", "decompile", "print C"], spend);
-    assert_eq!(dcp(&mut status).adopted_flows, 1, "the decompile adopts the loaded IR:\n{adopted}");
-    assert!(adopted.contains("per-function decompile budget exceeded (600 s)"), "{adopted}");
+    assert_eq!(
+        dcp(&mut status).adopted_flows,
+        1,
+        "the decompile adopts the loaded IR:\n{adopted}"
+    );
     assert!(
-        dcp(&mut status).fd.as_ref().expect("a shell is kept for print C").obank().empty(),
+        adopted.contains("per-function decompile budget exceeded (600 s)"),
+        "{adopted}"
+    );
+    assert!(
+        dcp(&mut status)
+            .fd
+            .as_ref()
+            .expect("a shell is kept for print C")
+            .obank()
+            .empty(),
         "the shell is not followed again"
     );
-    let (rebuilt, mut status) = drive(&["load function main", "echo x", "decompile", "print C", "print raw"], |i, dcp| {
-        if i == 2 {
-            dcp.conf.as_mut().unwrap().arch_mut().kuna_fn_budget = Some(Duration::ZERO);
-        }
-    });
-    assert_eq!(dcp(&mut status).adopted_flows, 0, "a command in between rebuilds the flow");
-    assert!(rebuilt.contains("per-function decompile budget exceeded (0 s)"), "{rebuilt}");
-    assert_eq!(shell(&adopted).0, shell(&rebuilt).0, "the stop prints the shell the loaded IR prints");
-    let (followed, _) = drive(&["load function main", "decompile", "print C", "print raw"], spend);
+    let (rebuilt, mut status) = drive(
+        &[
+            "load function main",
+            "echo x",
+            "decompile",
+            "print C",
+            "print raw",
+        ],
+        |i, dcp| {
+            if i == 2 {
+                dcp.conf.as_mut().unwrap().arch_mut().kuna_fn_budget = Some(Duration::ZERO);
+            }
+        },
+    );
+    assert_eq!(
+        dcp(&mut status).adopted_flows,
+        0,
+        "a command in between rebuilds the flow"
+    );
+    assert!(
+        rebuilt.contains("per-function decompile budget exceeded (0 s)"),
+        "{rebuilt}"
+    );
+    assert_eq!(
+        shell(&adopted).0,
+        shell(&rebuilt).0,
+        "the stop prints the shell the loaded IR prints"
+    );
+    let (followed, _) = drive(
+        &["load function main", "decompile", "print C", "print raw"],
+        spend,
+    );
     assert!(shell(&rebuilt).1.contains("Basic Block"), "{rebuilt}");
-    assert_eq!(shell(&followed), shell(&rebuilt), "print raw follows the flow the shell skipped");
-    let (regions, _) = drive(&["load function main", "decompile", "print C", "region blocks"], spend);
-    assert!(regions.contains("Regions for main: "), "the region commands follow it too:\n{regions}");
-    let (again, _) = drive(&["load function main", "decompile", "decompile", "print C", "print raw"], |i, dcp| {
-        spend(i, dcp);
-        if i == 2 {
-            dcp.conf.as_mut().unwrap().arch_mut().kuna_fn_budget = Some(Duration::ZERO);
-        }
-    });
-    assert_eq!(shell(&again), shell(&rebuilt), "a second stopped decompile keeps the flow to follow");
+    assert_eq!(
+        shell(&followed),
+        shell(&rebuilt),
+        "print raw follows the flow the shell skipped"
+    );
+    let (regions, _) = drive(
+        &[
+            "load function main",
+            "decompile",
+            "print C",
+            "region blocks",
+        ],
+        spend,
+    );
+    assert!(
+        regions.contains("Regions for main: "),
+        "the region commands follow it too:\n{regions}"
+    );
+    let (again, _) = drive(
+        &[
+            "load function main",
+            "decompile",
+            "decompile",
+            "print C",
+            "print raw",
+        ],
+        |i, dcp| {
+            spend(i, dcp);
+            if i == 2 {
+                dcp.conf.as_mut().unwrap().arch_mut().kuna_fn_budget = Some(Duration::ZERO);
+            }
+        },
+    );
+    assert_eq!(
+        shell(&again),
+        shell(&rebuilt),
+        "a second stopped decompile keeps the flow to follow"
+    );
 }

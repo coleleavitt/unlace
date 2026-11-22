@@ -41,7 +41,14 @@ struct Case {
 }
 
 const fn case(body: u64, load: u64, slot: u64, callback: u64, forms: u64, string: u64) -> Case {
-    Case { body, load, slot, callback, forms, string }
+    Case {
+        body,
+        load,
+        slot,
+        callback,
+        forms,
+        string,
+    }
 }
 
 /// `add` form: the cases are the `b caseN` slots after `b default`.
@@ -81,7 +88,10 @@ const EARLY_SLOTS: [u64; 5] = [0x1041c, 0x10420, 0x10424, 0x10428, 0x1042c];
 const LDR_TABLE: [u64; 5] = [0x102a4, 0x102a8, 0x102ac, 0x102b0, 0x102b4];
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// The fixture's reference index under the default options, built once for
@@ -97,23 +107,32 @@ fn build(configure: fn(&mut Architecture)) -> XrefIndex {
 }
 
 fn build_fixture(name: &str, configure: fn(&mut Architecture)) -> XrefIndex {
-    let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(name);
+    let bin = repo_root()
+        .join("decompiler/crates/unlace-analysis/tests/fixtures")
+        .join(name);
     let specs = repo_root().join("specs");
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     configure(prog.arch_mut());
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
     let bytes = std::fs::read(&bin).expect("fixture readable");
     let file = object::File::parse(&*bytes).expect("fixture parses");
-    let seeds: Vec<u64> =
-        prog.function_entries_canonical().iter().map(|e| e.addr.get_offset()).collect();
+    let seeds: Vec<u64> = prog
+        .function_entries_canonical()
+        .iter()
+        .map(|e| e.addr.get_offset())
+        .collect();
     xrefs::build(&file, prog.arch(), prog.arch().translate(), &seeds)
 }
 
 fn from(idx: &XrefIndex, at: u64) -> Vec<(u64, XrefKind)> {
-    idx.refs_from_instruction(at).iter().map(|r| (r.to, r.kind)).collect()
+    idx.refs_from_instruction(at)
+        .iter()
+        .map(|r| (r.to, r.kind))
+        .collect()
 }
 
 /// Every case reads its callback's slot through the base the dispatch holds,
@@ -122,11 +141,28 @@ fn from(idx: &XrefIndex, at: u64) -> Vec<(u64, XrefKind)> {
 fn assert_cases_walked(idx: &XrefIndex, sw: &Switch) {
     for c in &sw.cases {
         let load = from(idx, c.load);
-        assert!(load.contains(&(c.callback, XrefKind::Data)), "{:#x}: {load:?}", c.load);
-        assert!(load.contains(&(c.slot, XrefKind::Read)), "{:#x}: {load:?}", c.load);
+        assert!(
+            load.contains(&(c.callback, XrefKind::Data)),
+            "{:#x}: {load:?}",
+            c.load
+        );
+        assert!(
+            load.contains(&(c.slot, XrefKind::Read)),
+            "{:#x}: {load:?}",
+            c.load
+        );
         let forms = from(idx, c.forms);
-        assert!(forms.contains(&(c.string, XrefKind::Data)), "{:#x}: {forms:?}", c.forms);
-        assert_eq!(idx.function_containing(c.load), Some(sw.function), "{:#x}", c.load);
+        assert!(
+            forms.contains(&(c.string, XrefKind::Data)),
+            "{:#x}: {forms:?}",
+            c.forms
+        );
+        assert_eq!(
+            idx.function_containing(c.load),
+            Some(sw.function),
+            "{:#x}",
+            c.load
+        );
     }
     let calls = idx
         .refs_from_function(sw.function)
@@ -148,12 +184,25 @@ fn assert_dispatch_rows(idx: &XrefIndex, sw: &Switch) {
     let mut bodies: Vec<u64> = sw.cases.iter().map(|c| c.body).collect();
     bodies.sort_unstable();
     assert_eq!(jumps, bodies);
-    assert!(idx.refs_to(sw.dispatch + 4).is_empty(), "{:?}", idx.refs_to(sw.dispatch + 4));
+    assert!(
+        idx.refs_to(sw.dispatch + 4).is_empty(),
+        "{:?}",
+        idx.refs_to(sw.dispatch + 4)
+    );
     for c in &sw.cases {
         assert!(!idx.is_function_entry(c.body), "{:#x}", c.body);
-        assert_eq!(idx.function_containing(c.body), Some(sw.function), "{:#x}", c.body);
+        assert_eq!(
+            idx.function_containing(c.body),
+            Some(sw.function),
+            "{:#x}",
+            c.body
+        );
     }
-    let table = idx.switch_tables().iter().find(|t| t.dispatch == sw.dispatch).expect("switch read");
+    let table = idx
+        .switch_tables()
+        .iter()
+        .find(|t| t.dispatch == sw.dispatch)
+        .expect("switch read");
     assert_eq!((table.cases, table.read), (Some(5), 5));
 }
 
@@ -176,7 +225,11 @@ fn an_ldr_pc_word_table_walks_every_case_with_the_dispatch_base() {
 fn an_ldr_pc_table_word_is_neither_code_nor_a_pointer() {
     let idx = index();
     for word in LDR_TABLE {
-        assert!(idx.refs_to(word).is_empty(), "{word:#x}: {:?}", idx.refs_to(word));
+        assert!(
+            idx.refs_to(word).is_empty(),
+            "{word:#x}: {:?}",
+            idx.refs_to(word)
+        );
         assert!(idx.refs_from_instruction(word).is_empty(), "{word:#x}");
     }
 }
@@ -193,11 +246,19 @@ fn an_a32_dispatch_reached_before_its_guard_walks_every_case() {
         .collect();
     jumps.sort_unstable();
     assert_eq!(jumps, EARLY_SLOTS);
-    let table = idx.switch_tables().iter().find(|t| t.dispatch == EARLY_DISPATCH).expect("switch read");
+    let table = idx
+        .switch_tables()
+        .iter()
+        .find(|t| t.dispatch == EARLY_DISPATCH)
+        .expect("switch read");
     assert_eq!((table.cases, table.read), (Some(5), 5));
     for slot in EARLY_SLOTS {
         assert!(!idx.is_function_entry(slot), "{slot:#x}");
-        assert_eq!(idx.function_containing(slot), Some(EARLY_FUNCTION), "{slot:#x}");
+        assert_eq!(
+            idx.function_containing(slot),
+            Some(EARLY_FUNCTION),
+            "{slot:#x}"
+        );
     }
 }
 
@@ -207,8 +268,17 @@ fn an_a32_dispatch_reached_before_its_guard_walks_every_case() {
 fn a_clamped_a32_table_states_its_guard_count() {
     let idx = build(|arch| arch.max_jumptable_size = 3);
     for sw in [&ADD, &LDR] {
-        let table = idx.switch_tables().iter().find(|t| t.dispatch == sw.dispatch).expect("switch read");
-        assert_eq!((table.cases, table.read, table.truncated), (Some(5), 3, true), "{:#x}", sw.dispatch);
+        let table = idx
+            .switch_tables()
+            .iter()
+            .find(|t| t.dispatch == sw.dispatch)
+            .expect("switch read");
+        assert_eq!(
+            (table.cases, table.read, table.truncated),
+            (Some(5), 3, true),
+            "{:#x}",
+            sw.dispatch
+        );
     }
 }
 
@@ -217,9 +287,19 @@ fn a_clamped_a32_table_states_its_guard_count() {
 #[test]
 fn an_unreadable_a32_table_states_no_count() {
     let idx = build(|arch| arch.max_jumptable_size = 1);
-    assert!(idx.switch_tables().iter().all(|t| t.dispatch != LDR.dispatch), "{:?}", idx.switch_tables());
+    assert!(
+        idx.switch_tables()
+            .iter()
+            .all(|t| t.dispatch != LDR.dispatch),
+        "{:?}",
+        idx.switch_tables()
+    );
     for c in &LDR.cases {
-        assert!(idx.refs_to(c.body).iter().all(|r| r.from != LDR.dispatch), "{:#x}", c.body);
+        assert!(
+            idx.refs_to(c.body).iter().all(|r| r.from != LDR.dispatch),
+            "{:#x}",
+            c.body
+        );
     }
 }
 
@@ -229,17 +309,39 @@ fn an_unreadable_a32_table_states_no_count() {
 #[test]
 fn armframes_off_reads_no_a32_table() {
     let idx = build(|arch| {
-        arch.set_kuna_option("armframes", "off").expect("armframes flips off");
+        arch.set_kuna_option("armframes", "off")
+            .expect("armframes flips off");
     });
     for sw in [&ADD, &LDR] {
-        let jumps: Vec<(u64, XrefKind)> =
-            from(&idx, sw.dispatch).into_iter().filter(|&(_, kind)| kind == XrefKind::Jump).collect();
+        let jumps: Vec<(u64, XrefKind)> = from(&idx, sw.dispatch)
+            .into_iter()
+            .filter(|&(_, kind)| kind == XrefKind::Jump)
+            .collect();
         assert!(jumps.is_empty(), "{:#x}: {jumps:?}", sw.dispatch);
-        assert!(idx.function_containing(sw.dispatch).is_some(), "{:#x}", sw.dispatch);
-        assert_eq!(idx.function_containing(sw.dispatch + 4), idx.function_containing(sw.dispatch), "{:#x}", sw.dispatch);
-        assert!(idx.switch_tables().iter().all(|t| t.dispatch != sw.dispatch), "{:#x}", sw.dispatch);
+        assert!(
+            idx.function_containing(sw.dispatch).is_some(),
+            "{:#x}",
+            sw.dispatch
+        );
+        assert_eq!(
+            idx.function_containing(sw.dispatch + 4),
+            idx.function_containing(sw.dispatch),
+            "{:#x}",
+            sw.dispatch
+        );
+        assert!(
+            idx.switch_tables()
+                .iter()
+                .all(|t| t.dispatch != sw.dispatch),
+            "{:#x}",
+            sw.dispatch
+        );
         for c in &sw.cases {
-            assert!(idx.refs_to(c.body).iter().all(|r| r.from != sw.dispatch), "{:#x}", c.body);
+            assert!(
+                idx.refs_to(c.body).iter().all(|r| r.from != sw.dispatch),
+                "{:#x}",
+                c.body
+            );
         }
     }
 }
@@ -251,7 +353,11 @@ fn fp_index() -> &'static XrefIndex {
 }
 
 fn jumps_from(idx: &XrefIndex, at: u64) -> Vec<u64> {
-    from(idx, at).into_iter().filter(|&(_, kind)| kind == XrefKind::Jump).map(|(to, _)| to).collect()
+    from(idx, at)
+        .into_iter()
+        .filter(|&(_, kind)| kind == XrefKind::Jump)
+        .map(|(to, _)| to)
+        .collect()
 }
 
 /// A pool word after a call decodes as a predicated computed jump; the pool
@@ -260,7 +366,11 @@ fn jumps_from(idx: &XrefIndex, at: u64) -> Vec<u64> {
 fn a_pool_word_read_as_a_predicated_jump_reads_no_table() {
     let idx = fp_index();
     assert_eq!(jumps_from(idx, 0xff020), Vec::<u64>::new());
-    assert!(idx.switch_tables().iter().all(|t| t.dispatch != 0xff020), "{:?}", idx.switch_tables());
+    assert!(
+        idx.switch_tables().iter().all(|t| t.dispatch != 0xff020),
+        "{:?}",
+        idx.switch_tables()
+    );
 }
 
 /// An `addls pc,pc,r0,lsl #3` dispatch has 8-byte slots and an unscaled
@@ -269,8 +379,15 @@ fn a_pool_word_read_as_a_predicated_jump_reads_no_table() {
 fn a_dispatch_not_scaled_by_four_reads_no_slots() {
     let idx = fp_index();
     for dispatch in [0xff02c, 0xff064] {
-        assert_eq!(jumps_from(idx, dispatch), Vec::<u64>::new(), "{dispatch:#x}");
-        assert!(idx.switch_tables().iter().all(|t| t.dispatch != dispatch), "{dispatch:#x}");
+        assert_eq!(
+            jumps_from(idx, dispatch),
+            Vec::<u64>::new(),
+            "{dispatch:#x}"
+        );
+        assert!(
+            idx.switch_tables().iter().all(|t| t.dispatch != dispatch),
+            "{dispatch:#x}"
+        );
     }
 }
 

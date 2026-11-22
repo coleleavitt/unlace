@@ -20,23 +20,24 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 
-use unlace_decomp::action::{ruleflags, Action, ActionContext, ActionGroupList};
+use unlace_decomp::action::{Action, ActionContext, ActionGroupList, ruleflags};
+use unlace_decomp::context::ArchContext;
 use unlace_decomp::coreaction_cleanup::{
-    merge_actions, ActionAssignHigh, ActionCopyMarker, ActionDominantCopy, ActionHideShadow,
-    ActionMarkExplicit, ActionMarkImplied, ActionMarkIndirectOnly, ActionMergeAdjacent,
-    ActionMergeCopy, ActionMergeMultiEntry, ActionMergeRequired, ActionMergeType, ActionNameVars,
-    ActionSetCasts,
+    ActionAssignHigh, ActionCopyMarker, ActionDominantCopy, ActionHideShadow, ActionMarkExplicit,
+    ActionMarkImplied, ActionMarkIndirectOnly, ActionMergeAdjacent, ActionMergeCopy,
+    ActionMergeMultiEntry, ActionMergeRequired, ActionMergeType, ActionNameVars, ActionSetCasts,
+    merge_actions,
 };
 use unlace_decomp::funcdata::Funcdata;
-use unlace_decomp::context::ArchContext;
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -67,10 +68,16 @@ fn all_leaves(g: &str) -> Vec<(Box<dyn Action>, &'static str)> {
         (ActionMergeRequired::boxed(g.to_string()), "mergerequired"),
         (ActionMarkExplicit::boxed(g.to_string()), "markexplicit"),
         (ActionMarkImplied::boxed(g.to_string()), "markimplied"),
-        (ActionMergeMultiEntry::boxed(g.to_string()), "mergemultientry"),
+        (
+            ActionMergeMultiEntry::boxed(g.to_string()),
+            "mergemultientry",
+        ),
         (ActionMergeCopy::boxed(g.to_string()), "mergecopy"),
         (ActionDominantCopy::boxed(g.to_string()), "dominantcopy"),
-        (ActionMarkIndirectOnly::boxed(g.to_string()), "markindirectonly"),
+        (
+            ActionMarkIndirectOnly::boxed(g.to_string()),
+            "markindirectonly",
+        ),
         (ActionMergeAdjacent::boxed(g.to_string()), "mergeadjacent"),
         (ActionMergeType::boxed(g.to_string()), "mergetype"),
         (ActionHideShadow::boxed(g.to_string()), "hideshadow"),
@@ -122,30 +129,37 @@ fn w7_s37_merge_actions_exact_schedule_and_groups() {
     let acts = merge_actions();
     // Exact (name, group) pairs in C++ schedule order.
     let expect: Vec<(&str, &str)> = vec![
-        ("assignhigh", "merge"),     // cc:6002
-        ("mergerequired", "merge"),  // cc:6003
-        ("markexplicit", "merge"),   // cc:6004
-        ("markimplied", "merge"),    // cc:6005 (BEFORE general merging)
-        ("mergemultientry", "merge"), // cc:6006
-        ("mergecopy", "merge"),      // cc:6007
-        ("dominantcopy", "merge"),   // cc:6008
+        ("assignhigh", "merge"),       // cc:6002
+        ("mergerequired", "merge"),    // cc:6003
+        ("markexplicit", "merge"),     // cc:6004
+        ("markimplied", "merge"),      // cc:6005 (BEFORE general merging)
+        ("mergemultientry", "merge"),  // cc:6006
+        ("mergecopy", "merge"),        // cc:6007
+        ("dominantcopy", "merge"),     // cc:6008
         ("markindirectonly", "merge"), // cc:6010 (after required, before speculative)
-        ("mergeadjacent", "merge"),  // cc:6011
-        ("mergetype", "merge"),      // cc:6012
-        ("hideshadow", "merge"),     // cc:6013
-        ("copymarker", "merge"),     // cc:6014
-        ("namevars", "merge"),       // cc:6027
-        ("setcasts", "casts"),       // cc:6028 — the only non-"merge" group
+        ("mergeadjacent", "merge"),    // cc:6011
+        ("mergetype", "merge"),        // cc:6012
+        ("hideshadow", "merge"),       // cc:6013
+        ("copymarker", "merge"),       // cc:6014
+        ("namevars", "merge"),         // cc:6027
+        ("setcasts", "casts"),         // cc:6028 — the only non-"merge" group
     ];
     let got: Vec<(&str, &str)> = acts.iter().map(|a| (a.get_name(), a.get_group())).collect();
-    assert_eq!(got, expect, "merge_actions must mirror universalAction 6002-6028");
+    assert_eq!(
+        got, expect,
+        "merge_actions must mirror universalAction 6002-6028"
+    );
     // Exactly one leaf is in the "casts" group, and it is the last one.
     let casts: Vec<&str> = acts
         .iter()
         .filter(|a| a.get_group() == "casts")
         .map(|a| a.get_name())
         .collect();
-    assert_eq!(casts, vec!["setcasts"], "ActionSetCasts is the sole casts-group leaf");
+    assert_eq!(
+        casts,
+        vec!["setcasts"],
+        "ActionSetCasts is the sole casts-group leaf"
+    );
 }
 
 /// (c) Stub totality: EVERY stubbed `apply` is a pure no-op that leaves
@@ -167,7 +181,11 @@ fn w7_s37_stub_bodies_are_total_noops_under_repetition() {
     let mut assign = ActionAssignHigh::boxed("merge");
     assert!(!fd.is_high_on());
     assert_eq!(assign.apply(&mut fd, &mut ctx), 0);
-    assert_eq!(assign.base().count, 0, "setHighLevel signals no change (C++ return 0)");
+    assert_eq!(
+        assign.base().count,
+        0,
+        "setHighLevel signals no change (C++ return 0)"
+    );
     assert!(fd.is_high_on(), "high layer on after assignhigh");
     // Idempotent: re-apply changes nothing and never signals.
     assert_eq!(assign.apply(&mut fd, &mut ctx), 0);
@@ -205,7 +223,11 @@ fn w7_s37_stub_bodies_are_total_noops_under_repetition() {
         );
     }
     // No stub touched the one observable flag we can read here.
-    assert_eq!(fd.is_high_on(), high_before, "stubs must not alter Funcdata state");
+    assert_eq!(
+        fd.is_high_on(),
+        high_before,
+        "stubs must not alter Funcdata state"
+    );
 }
 
 /// (d) `clone_filtered` is the C++ `clone(grouplist)` group filter: present iff
@@ -227,14 +249,20 @@ fn w7_s37_clone_filtered_group_filter_and_independence() {
     let mr = ActionMergeRequired::boxed("merge");
     assert!(mr.clone_filtered(&only_merge).is_some());
     assert!(mr.clone_filtered(&both).is_some());
-    assert!(mr.clone_filtered(&only_casts).is_none(), "merge leaf dropped by casts-only list");
+    assert!(
+        mr.clone_filtered(&only_casts).is_none(),
+        "merge leaf dropped by casts-only list"
+    );
     assert!(mr.clone_filtered(&neither).is_none());
 
     // The lone "casts"-group leaf: the mirror image.
     let sc = ActionSetCasts::boxed("casts");
     assert!(sc.clone_filtered(&only_casts).is_some());
     assert!(sc.clone_filtered(&both).is_some());
-    assert!(sc.clone_filtered(&only_merge).is_none(), "casts leaf dropped by merge-only list");
+    assert!(
+        sc.clone_filtered(&only_merge).is_none(),
+        "casts leaf dropped by merge-only list"
+    );
 
     // Independence: the clone carries the original's name+group, and bumping the
     // clone's counter (via apply on the realized action) leaves the original at 0.
@@ -247,5 +275,9 @@ fn w7_s37_clone_filtered_group_filter_and_independence() {
     let _ = cl.apply(&mut fd, &mut ctx); // assignhigh signals 0 anyway, but mutate the clone path
     cl.base_mut().count += 7; // forcibly diverge the clone's state
     assert_eq!(cl.base().count, 7);
-    assert_eq!(orig.base().count, 0, "clone state must not leak back to the original");
+    assert_eq!(
+        orig.base().count,
+        0,
+        "clone state must not leak back to the original"
+    );
 }

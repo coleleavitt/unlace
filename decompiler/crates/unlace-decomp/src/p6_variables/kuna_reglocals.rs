@@ -35,18 +35,28 @@ fn frame_object(
     stack_space: Option<&Rc<AddrSpace>>,
     rows: &[(i64, i64)],
 ) -> bool {
-    let Some(h) = fd.high_bank().get(high) else { return true };
+    let Some(h) = fd.high_bank().get(high) else {
+        return true;
+    };
     let in_stack = |address: &unlace_base::address::Address| {
-        stack_space.is_some_and(|stack| address.get_space().map(|s| s.get_index()) == Some(stack.get_index()))
+        stack_space.is_some_and(|stack| {
+            address.get_space().map(|s| s.get_index()) == Some(stack.get_index())
+        })
     };
     if let (Some(scope), Some(symbol)) = (fd.get_scope_local(), h.kuna_link_symbol()) {
-        if scope.symbol_storage(symbol).iter().any(|(address, _)| in_stack(address)) {
+        if scope
+            .symbol_storage(symbol)
+            .iter()
+            .any(|(address, _)| in_stack(address))
+        {
             return true;
         }
     }
     let mut off_stack = false;
     for i in 0..h.num_instances() {
-        let Some(v) = fd.vbank().get(h.get_instance(i)) else { continue };
+        let Some(v) = fd.vbank().get(h.get_instance(i)) else {
+            continue;
+        };
         if v.is_constant() {
             continue;
         }
@@ -71,7 +81,9 @@ fn stack_homes_only(
     highs: &[HighVariableId],
     stack_space: Option<&Rc<AddrSpace>>,
 ) -> bool {
-    let Some(stack) = stack_space else { return false };
+    let Some(stack) = stack_space else {
+        return false;
+    };
     let mut homes = highs
         .iter()
         .filter_map(|&high| crate::kuna_varsources::high_homes(fd, arch, high))
@@ -81,7 +93,9 @@ fn stack_homes_only(
 }
 
 fn widest_instance(fd: &Funcdata, high: HighVariableId) -> i64 {
-    let Some(h) = fd.high_bank().get(high) else { return 0 };
+    let Some(h) = fd.high_bank().get(high) else {
+        return 0;
+    };
     (0..h.num_instances())
         .filter_map(|i| fd.vbank().get(h.get_instance(i)))
         .map(|v| i64::from(v.get_size()))
@@ -172,7 +186,9 @@ impl DeclarationHighs {
     pub fn varrefs(&self, fd: &Funcdata, name: &str) -> BTreeSet<u64> {
         let mut out = BTreeSet::new();
         for &high in self.0.get(name).into_iter().flatten() {
-            let Some(h) = fd.high_bank().get(high) else { continue };
+            let Some(h) = fd.high_bank().get(high) else {
+                continue;
+            };
             for i in 0..h.num_instances() {
                 if let Some(v) = fd.vbank().get(h.get_instance(i)) {
                     out.insert(v.get_create_index() as u64);

@@ -1,4 +1,5 @@
 //! Synthetic MD- and MDS-form encodings, checked against rotation and architectural bit numbering.
+use std::{cell::RefCell, path::PathBuf, rc::Rc};
 use unlace_base::{address::Address, error::KunaResult};
 use unlace_sleigh::{
     emulate::{BreakTableCallBack, Emulate, EmulatePcodeCache},
@@ -8,7 +9,6 @@ use unlace_sleigh::{
     sleigh::Sleigh,
     translate::Translate,
 };
-use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
 struct Bytes(Vec<u8>);
 impl LoadImage for Bytes {
@@ -113,7 +113,13 @@ fn nested_rotate_operands_preserve_values_and_record_flags() {
                 .iter()
                 .map(|case| case.word)
                 .chain([0x60000000])
-                .flat_map(|w| if endian == "be" { w.to_be_bytes() } else { w.to_le_bytes() })
+                .flat_map(|w| {
+                    if endian == "be" {
+                        w.to_be_bytes()
+                    } else {
+                        w.to_le_bytes()
+                    }
+                })
                 .collect();
             let mut sleigh = Sleigh::new(Box::new(Bytes(bytes)), Box::new(ContextInternal::new()));
             sleigh.initialize_from_sla(&sla).unwrap();
@@ -134,7 +140,8 @@ fn nested_rotate_operands_preserve_values_and_record_flags() {
             }
             let memory = Rc::new(RefCell::new(memory));
             let breaks = Rc::new(RefCell::new(BreakTableCallBack::new(Rc::clone(&translate))));
-            let mut emulator = EmulatePcodeCache::new(translate, manager, Rc::clone(&memory), breaks);
+            let mut emulator =
+                EmulatePcodeCache::new(translate, manager, Rc::clone(&memory), breaks);
             for (i, case) in cases.iter().enumerate() {
                 let word = case.word;
                 for value in [0u64, u64::MAX, 0x8000000000000001, 0x123456789abcdef0] {
@@ -145,7 +152,9 @@ fn nested_rotate_operands_preserve_values_and_record_flags() {
                         let mut state = memory.borrow_mut();
                         state.set_value_by_name("r3", old).unwrap();
                         state.set_value_by_name("r4", value).unwrap();
-                        state.set_value_by_name("r5", 0xffc0 | u64::from(case.shift)).unwrap();
+                        state
+                            .set_value_by_name("r5", 0xffc0 | u64::from(case.shift))
+                            .unwrap();
                         state.set_value_by_name("cr0", 0xa).unwrap();
                         state.set_value_by_name("xer_so", 1).unwrap();
                     }

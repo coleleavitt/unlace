@@ -36,14 +36,14 @@
 //!   otherwise reports "uncorrelated".  // STUB(W5-expression) — recorded as a
 //!   loss.
 
-use unlace_base::address::{calc_mask, leastsigbit_set, signbit_negative, Address};
-use unlace_base::types::{int4, uintb, Wrap};
+use unlace_base::address::{Address, calc_mask, leastsigbit_set, signbit_negative};
+use unlace_base::types::{Wrap, int4, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{ActionGroupList, Rule, RuleSpec};
+use crate::context::{OpId, TypeOp, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::op::is_cse_match;
-use crate::context::{OpId, TypeOp, VarnodeId};
 use crate::varnode::DefOpInfo;
 
 // =============================================================================
@@ -97,11 +97,23 @@ fn new_varnode_out(data: &mut Funcdata, s: int4, m: &Address, op: OpId) -> Varno
 /// `op_set_output` once `Funcdata::banks_mut()` exists.
 fn set_fresh_output(data: &mut Funcdata, op: OpId, vn: VarnodeId) {
     debug_assert!(
-        data.vbank().get(vn).expect("set_fresh_output: stale vn").num_descend() == 0,
+        data.vbank()
+            .get(vn)
+            .expect("set_fresh_output: stale vn")
+            .num_descend()
+            == 0,
         "set_fresh_output called on a varnode with readers (would need replace_reads)"
     );
-    let seq = data.obank().get(op).expect("set_fresh_output: stale op").get_seq_num().clone();
-    let info = DefOpInfo { id: op, seqnum: seq };
+    let seq = data
+        .obank()
+        .get(op)
+        .expect("set_fresh_output: stale op")
+        .get_seq_num()
+        .clone();
+    let info = DefOpInfo {
+        id: op,
+        seqnum: seq,
+    };
     // No reader can exist on a fresh varnode, so replace is never invoked.
     let mut no_replace =
         |_b: &mut crate::varnode::VarnodeBank, _a: VarnodeId, _c: VarnodeId| Ok(());
@@ -109,7 +121,10 @@ fn set_fresh_output(data: &mut Funcdata, op: OpId, vn: VarnodeId) {
         .vbank_mut()
         .set_def(vn, info, &mut no_replace)
         .expect("set_fresh_output: set_def on fresh varnode");
-    data.obank_mut().get_mut(op).expect("set_fresh_output: stale op").set_output(Some(vn));
+    data.obank_mut()
+        .get_mut(op)
+        .expect("set_fresh_output: stale op")
+        .set_output(Some(vn));
 }
 
 /// `Funcdata::opBoolNegate(vn, op, insertafter)` (`funcdata_op.cc:560`).
@@ -118,11 +133,17 @@ fn set_fresh_output(data: &mut Funcdata, op: OpId, vn: VarnodeId) {
 /// the negated output.  Implemented locally because it only needs the op
 /// factories (the wider `funcdata_op` port has not lifted it).  // STUB(W3)
 fn op_bool_negate(data: &mut Funcdata, vn: VarnodeId, op: OpId, insertafter: bool) -> VarnodeId {
-    let addr = data.obank().get(op).expect("opBoolNegate: stale op").get_addr().clone();
+    let addr = data
+        .obank()
+        .get(op)
+        .expect("opBoolNegate: stale op")
+        .get_addr()
+        .clone();
     let negateop = data.new_op(1, addr);
     op_set_opcode(data, negateop, OpCode::CPUI_BOOL_NEGATE);
     let resvn = new_unique_out(data, 1, negateop);
-    data.op_set_input(negateop, vn, 0).expect("opBoolNegate: set input");
+    data.op_set_input(negateop, vn, 0)
+        .expect("opBoolNegate: set input");
     if insertafter {
         data.op_insert_after(negateop, op);
     } else {
@@ -143,11 +164,19 @@ fn op_code(data: &Funcdata, op: OpId) -> OpCode {
 }
 #[inline]
 fn op_in(data: &Funcdata, op: OpId, slot: int4) -> VarnodeId {
-    data.obank().get(op).expect("stale op").get_in(slot).expect("null input (C++ UB)")
+    data.obank()
+        .get(op)
+        .expect("stale op")
+        .get_in(slot)
+        .expect("null input (C++ UB)")
 }
 #[inline]
 fn op_out(data: &Funcdata, op: OpId) -> VarnodeId {
-    data.obank().get(op).expect("stale op").get_out().expect("null output (C++ UB)")
+    data.obank()
+        .get(op)
+        .expect("stale op")
+        .get_out()
+        .expect("null output (C++ UB)")
 }
 #[inline]
 fn op_num_input(data: &Funcdata, op: OpId) -> int4 {
@@ -218,8 +247,18 @@ fn varnodes_equiv(data: &Funcdata, a: VarnodeId, b: VarnodeId) -> bool {
     if va.is_written() {
         let da = va.get_def().expect("written varnode has no def (C++ UB)");
         let db = vb.get_def().expect("written varnode has no def (C++ UB)");
-        let sa = data.obank().get(da).expect("stale def op").get_seq_num().clone();
-        let sb = data.obank().get(db).expect("stale def op").get_seq_num().clone();
+        let sa = data
+            .obank()
+            .get(da)
+            .expect("stale def op")
+            .get_seq_num()
+            .clone();
+        let sb = data
+            .obank()
+            .get(db)
+            .expect("stale def op")
+            .get_seq_num()
+            .clone();
         if sa != sb {
             return false;
         }
@@ -499,7 +538,11 @@ impl Rule for RuleAndCommute {
         op_set_opcode(
             data,
             newop1,
-            if opc == OpCode::CPUI_INT_LEFT { OpCode::CPUI_INT_RIGHT } else { OpCode::CPUI_INT_LEFT },
+            if opc == OpCode::CPUI_INT_LEFT {
+                OpCode::CPUI_INT_RIGHT
+            } else {
+                OpCode::CPUI_INT_LEFT
+            },
         );
         data.op_set_input(newop1, othervn, 0).expect("set input");
         data.op_set_input(newop1, savn, 1).expect("set input");
@@ -822,7 +865,11 @@ pub struct RuleDoubleShift;
 
 impl Rule for RuleDoubleShift {
     fn get_op_list(&self) -> Vec<OpCode> {
-        vec![OpCode::CPUI_INT_LEFT, OpCode::CPUI_INT_RIGHT, OpCode::CPUI_INT_MULT]
+        vec![
+            OpCode::CPUI_INT_LEFT,
+            OpCode::CPUI_INT_RIGHT,
+            OpCode::CPUI_INT_MULT,
+        ]
     }
     fn clone_rule(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Rule>> {
         // (kuna) C++ `new RuleDoubleShift("analysis")` — the rule's runtime group
@@ -1604,7 +1651,11 @@ pub struct RuleTrivialBool;
 
 impl Rule for RuleTrivialBool {
     fn get_op_list(&self) -> Vec<OpCode> {
-        vec![OpCode::CPUI_BOOL_AND, OpCode::CPUI_BOOL_OR, OpCode::CPUI_BOOL_XOR]
+        vec![
+            OpCode::CPUI_BOOL_AND,
+            OpCode::CPUI_BOOL_OR,
+            OpCode::CPUI_BOOL_XOR,
+        ]
     }
     fn clone_rule(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Rule>> {
         if !grouplist.contains("analysis") && !grouplist.contains("trivialbool") {
@@ -1624,15 +1675,27 @@ impl Rule for RuleTrivialBool {
         match op_code(data, op) {
             OpCode::CPUI_BOOL_XOR => {
                 vn = op_in(data, op, 0);
-                opc = if val == 1 { OpCode::CPUI_BOOL_NEGATE } else { OpCode::CPUI_COPY };
+                opc = if val == 1 {
+                    OpCode::CPUI_BOOL_NEGATE
+                } else {
+                    OpCode::CPUI_COPY
+                };
             }
             OpCode::CPUI_BOOL_AND => {
                 opc = OpCode::CPUI_COPY;
-                vn = if val == 1 { op_in(data, op, 0) } else { data.new_constant(1, 0) }; // Copy false
+                vn = if val == 1 {
+                    op_in(data, op, 0)
+                } else {
+                    data.new_constant(1, 0)
+                }; // Copy false
             }
             OpCode::CPUI_BOOL_OR => {
                 opc = OpCode::CPUI_COPY;
-                vn = if val == 1 { data.new_constant(1, 1) } else { op_in(data, op, 0) };
+                vn = if val == 1 {
+                    data.new_constant(1, 1)
+                } else {
+                    op_in(data, op, 0)
+                };
             }
             _ => return 0,
         }
@@ -1835,7 +1898,11 @@ pub struct RuleBitUndistribute;
 
 impl Rule for RuleBitUndistribute {
     fn get_op_list(&self) -> Vec<OpCode> {
-        vec![OpCode::CPUI_INT_AND, OpCode::CPUI_INT_OR, OpCode::CPUI_INT_XOR]
+        vec![
+            OpCode::CPUI_INT_AND,
+            OpCode::CPUI_INT_OR,
+            OpCode::CPUI_INT_XOR,
+        ]
     }
     fn clone_rule(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Rule>> {
         if !grouplist.contains("analysis") && !grouplist.contains("bitundistribute") {
@@ -1961,7 +2028,12 @@ impl RuleBooleanUndistribute {
     /// `RuleBooleanUndistribute::isMatch` (`ruleaction.cc:2717`): test if the two
     /// Varnodes are matching boolean expressions; `right_flip` is toggled when
     /// they are complementary.
-    fn is_match(data: &Funcdata, left_vn: VarnodeId, right_vn: VarnodeId, right_flip: &mut bool) -> bool {
+    fn is_match(
+        data: &Funcdata,
+        left_vn: VarnodeId,
+        right_vn: VarnodeId,
+        right_flip: &mut bool,
+    ) -> bool {
         let val = boolean_match_evaluate(data, left_vn, right_vn, 1);
         if val == boolean_match::SAME {
             return true;
@@ -2003,8 +2075,12 @@ impl Rule for RuleBooleanUndistribute {
         if opc1 != OpCode::CPUI_BOOL_AND && opc1 != OpCode::CPUI_BOOL_OR {
             return 0;
         }
-        let ins: [VarnodeId; 4] =
-            [op_in(data, op0, 0), op_in(data, op0, 1), op_in(data, op1, 0), op_in(data, op1, 1)];
+        let ins: [VarnodeId; 4] = [
+            op_in(data, op0, 0),
+            op_in(data, op0, 1),
+            op_in(data, op1, 0),
+            op_in(data, op1, 1),
+        ];
         if vn_free(data, ins[0])
             || vn_free(data, ins[1])
             || vn_free(data, ins[2])
@@ -2068,7 +2144,11 @@ impl Rule for RuleBooleanUndistribute {
         op_set_opcode(
             data,
             eq_op,
-            if central_equal { OpCode::CPUI_INT_EQUAL } else { OpCode::CPUI_INT_NOTEQUAL },
+            if central_equal {
+                OpCode::CPUI_INT_EQUAL
+            } else {
+                OpCode::CPUI_INT_NOTEQUAL
+            },
         );
         let tmp1 = new_unique_out(data, 1, eq_op);
         data.op_set_input(eq_op, final_b, 0).expect("set input");
@@ -2091,30 +2171,90 @@ impl Rule for RuleBooleanUndistribute {
 /// argument), matched against [`ActionGroupList`] in `clone_rule`.
 pub fn specs() -> Vec<RuleSpec> {
     vec![
-        RuleSpec { group: "floatrange", ctor: || Box::new(RuleFloatRange) },
-        RuleSpec { group: "andcommute", ctor: || Box::new(RuleAndCommute) },
-        RuleSpec { group: "andpiece", ctor: || Box::new(RuleAndPiece) },
-        RuleSpec { group: "andzext", ctor: || Box::new(RuleAndZext) },
-        RuleSpec { group: "andcompare", ctor: || Box::new(RuleAndCompare) },
-        RuleSpec { group: "doublesub", ctor: || Box::new(RuleDoubleSub) },
-        RuleSpec { group: "doubleshift", ctor: || Box::new(RuleDoubleShift) },
-        RuleSpec { group: "doublearithshift", ctor: || Box::new(RuleDoubleArithShift) },
-        RuleSpec { group: "concatshift", ctor: || Box::new(RuleConcatShift) },
-        RuleSpec { group: "leftright", ctor: || Box::new(RuleLeftRight) },
-        RuleSpec { group: "shiftcompare", ctor: || Box::new(RuleShiftCompare) },
-        RuleSpec { group: "lessequal", ctor: || Box::new(RuleLessEqual) },
-        RuleSpec { group: "lessnotequal", ctor: || Box::new(RuleLessNotEqual) },
+        RuleSpec {
+            group: "floatrange",
+            ctor: || Box::new(RuleFloatRange),
+        },
+        RuleSpec {
+            group: "andcommute",
+            ctor: || Box::new(RuleAndCommute),
+        },
+        RuleSpec {
+            group: "andpiece",
+            ctor: || Box::new(RuleAndPiece),
+        },
+        RuleSpec {
+            group: "andzext",
+            ctor: || Box::new(RuleAndZext),
+        },
+        RuleSpec {
+            group: "andcompare",
+            ctor: || Box::new(RuleAndCompare),
+        },
+        RuleSpec {
+            group: "doublesub",
+            ctor: || Box::new(RuleDoubleSub),
+        },
+        RuleSpec {
+            group: "doubleshift",
+            ctor: || Box::new(RuleDoubleShift),
+        },
+        RuleSpec {
+            group: "doublearithshift",
+            ctor: || Box::new(RuleDoubleArithShift),
+        },
+        RuleSpec {
+            group: "concatshift",
+            ctor: || Box::new(RuleConcatShift),
+        },
+        RuleSpec {
+            group: "leftright",
+            ctor: || Box::new(RuleLeftRight),
+        },
+        RuleSpec {
+            group: "shiftcompare",
+            ctor: || Box::new(RuleShiftCompare),
+        },
+        RuleSpec {
+            group: "lessequal",
+            ctor: || Box::new(RuleLessEqual),
+        },
+        RuleSpec {
+            group: "lessnotequal",
+            ctor: || Box::new(RuleLessNotEqual),
+        },
         // C++ `new RuleTrivialArith("analysis")` (coreaction.cc:5786): the group
         // is "analysis", NOT the rule name -- `clone_rule` now gates on it so the
         // rule survives the "decompile"/"jumptable" grouplists (which list
         // "analysis" but never the literal "trivialarith").
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleTrivialArith) },
-        RuleSpec { group: "trivialbool", ctor: || Box::new(RuleTrivialBool) },
-        RuleSpec { group: "zexteliminate", ctor: || Box::new(RuleZextEliminate) },
-        RuleSpec { group: "slesstoless", ctor: || Box::new(RuleSlessToLess) },
-        RuleSpec { group: "zextsless", ctor: || Box::new(RuleZextSless) },
-        RuleSpec { group: "bitundistribute", ctor: || Box::new(RuleBitUndistribute) },
-        RuleSpec { group: "booleanundistribute", ctor: || Box::new(RuleBooleanUndistribute) },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleTrivialArith),
+        },
+        RuleSpec {
+            group: "trivialbool",
+            ctor: || Box::new(RuleTrivialBool),
+        },
+        RuleSpec {
+            group: "zexteliminate",
+            ctor: || Box::new(RuleZextEliminate),
+        },
+        RuleSpec {
+            group: "slesstoless",
+            ctor: || Box::new(RuleSlessToLess),
+        },
+        RuleSpec {
+            group: "zextsless",
+            ctor: || Box::new(RuleZextSless),
+        },
+        RuleSpec {
+            group: "bitundistribute",
+            ctor: || Box::new(RuleBitUndistribute),
+        },
+        RuleSpec {
+            group: "booleanundistribute",
+            ctor: || Box::new(RuleBooleanUndistribute),
+        },
     ]
 }
 

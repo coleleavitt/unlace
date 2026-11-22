@@ -79,22 +79,36 @@ pub fn discover(
     mz: Option<&MzEvidence>,
 ) -> RawDiscovery {
     if seeds.is_empty() || exec_ranges.is_empty() {
-        return RawDiscovery { entries: seeds.to_vec(), dos_exits: DosExits::default(), flow_ends: None };
+        return RawDiscovery {
+            entries: seeds.to_vec(),
+            dos_exits: DosExits::default(),
+            flow_ends: None,
+        };
     }
     let mut roots: Vec<u64> = seeds.to_vec();
-    roots.extend(crate::loader::kuna_realmodecs::without_commits(arch, translate, || {
-        let swept = sweep_call_targets(translate, code_space, exec_ranges, mz);
-        match mz {
-            Some(mz) => swept
-                .into_iter()
-                .filter(|&target| {
-                    seeds.contains(&target)
-                        || kuna_mzsweep::opens_as_code(translate, code_space, exec_ranges, mz, target)
-                })
-                .collect(),
-            None => swept,
-        }
-    }));
+    roots.extend(crate::loader::kuna_realmodecs::without_commits(
+        arch,
+        translate,
+        || {
+            let swept = sweep_call_targets(translate, code_space, exec_ranges, mz);
+            match mz {
+                Some(mz) => swept
+                    .into_iter()
+                    .filter(|&target| {
+                        seeds.contains(&target)
+                            || kuna_mzsweep::opens_as_code(
+                                translate,
+                                code_space,
+                                exec_ranges,
+                                mz,
+                                target,
+                            )
+                    })
+                    .collect(),
+                None => swept,
+            }
+        },
+    ));
     roots.sort_unstable();
     roots.dedup();
 
@@ -115,8 +129,13 @@ pub fn discover(
     out.sort_unstable();
     out.dedup();
     let dos_exits = kuna_dosexit::analyze(arch, translate, code_space, &listing);
-    let flow_ends = kuna_rawextent::measure(arch, translate, code_space, &listing, &out, &dos_exits);
-    RawDiscovery { entries: out, dos_exits, flow_ends }
+    let flow_ends =
+        kuna_rawextent::measure(arch, translate, code_space, &listing, &out, &dos_exits);
+    RawDiscovery {
+        entries: out,
+        dos_exits,
+        flow_ends,
+    }
 }
 
 /// Decode `exec_ranges` end to end and return the target of every direct call.
@@ -169,7 +188,10 @@ fn sweep_call_targets(
             };
             if counts {
                 out.extend(
-                    c.flows.iter().copied().filter(|t| in_ranges(exec_ranges, *t)),
+                    c.flows
+                        .iter()
+                        .copied()
+                        .filter(|t| in_ranges(exec_ranges, *t)),
                 );
             }
             vma = vma.saturating_add(u64::from(decoded.len));

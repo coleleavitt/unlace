@@ -18,10 +18,10 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::error::KunaError;
 use unlace_base::marshal::IdRegistry;
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, ConstantSpace, addrspace_flags, spacetype};
 use unlace_base::xml::xml_tree;
 use unlace_sleigh::loadimage::{LoadImage, LoadImageFunc, RawLoadImage};
-use unlace_sleigh::loadimage_xml::{register_loadimage_xml_ids, LoadImageXml};
+use unlace_sleigh::loadimage_xml::{LoadImageXml, register_loadimage_xml_ids};
 
 /// const(0) + processor spaces named `names`, little endian, `addr_size`-byte
 /// addresses, wordsize 1.
@@ -60,7 +60,12 @@ fn image_from_str(xml: &str, m: &AddrSpaceManager, registry: &IdRegistry) -> Loa
 }
 
 /// A single-chunk image whose <bytechunk> text is exactly `content`.
-fn single_chunk(content: &str, offset: u64, m: &AddrSpaceManager, reg: &IdRegistry) -> LoadImageXml {
+fn single_chunk(
+    content: &str,
+    offset: u64,
+    m: &AddrSpaceManager,
+    reg: &IdRegistry,
+) -> LoadImageXml {
     image_from_str(
         &format!(
             "<binaryimage arch=\"test\"><bytechunk space=\"ram\" offset=\"{offset:#x}\">{content}</bytechunk></binaryimage>"
@@ -74,13 +79,19 @@ fn single_chunk(content: &str, offset: u64, m: &AddrSpaceManager, reg: &IdRegist
 /// bytes, the final byte of the 512-byte pad, and the first unmapped byte.
 fn assert_chunk_bytes(img: &mut LoadImageXml, ram: &Rc<AddrSpace>, offset: u64, expect: &[u8]) {
     if !expect.is_empty() {
-        let got = img.load(expect.len() as i32, &Address::new(Rc::clone(ram), offset)).unwrap();
+        let got = img
+            .load(expect.len() as i32, &Address::new(Rc::clone(ram), offset))
+            .unwrap();
         assert_eq!(got, expect, "chunk bytes at {offset:#x}");
     }
     let pad_end = offset + expect.len() as u64 + 512;
-    let got = img.load(1, &Address::new(Rc::clone(ram), pad_end - 1)).unwrap();
+    let got = img
+        .load(1, &Address::new(Rc::clone(ram), pad_end - 1))
+        .unwrap();
     assert_eq!(got, vec![0], "last pad byte at {:#x}", pad_end - 1);
-    let err = img.load(1, &Address::new(Rc::clone(ram), pad_end)).unwrap_err();
+    let err = img
+        .load(1, &Address::new(Rc::clone(ram), pad_end))
+        .unwrap_err();
     assert!(
         matches!(err, KunaError::DataUnavail { .. }),
         "first unmapped byte at {pad_end:#x}"
@@ -147,10 +158,14 @@ fn verify_w2loadimage_pad_empty_chunk_at_zero_wrapping_erase() {
     // Pad covers exactly [0x0, 0x200)
     let got = img.load(1, &Address::new(Rc::clone(&ram), 0x1ff)).unwrap();
     assert_eq!(got, vec![0]);
-    let err = img.load(1, &Address::new(Rc::clone(&ram), 0x200)).unwrap_err();
+    let err = img
+        .load(1, &Address::new(Rc::clone(&ram), 0x200))
+        .unwrap_err();
     assert!(matches!(err, KunaError::DataUnavail { .. }));
     // The 0xdd chunk was erased too (nothing mapped at 0x9000)
-    let err = img.load(1, &Address::new(Rc::clone(&ram), 0x9000)).unwrap_err();
+    let err = img
+        .load(1, &Address::new(Rc::clone(&ram), 0x9000))
+        .unwrap_err();
     assert!(matches!(err, KunaError::DataUnavail { .. }));
 }
 
@@ -179,7 +194,9 @@ fn verify_w2loadimage_pad_exact_end_tie_chain_and_empty_gap_chunk() {
         &m,
         &reg,
     );
-    let got = img.load(0x10, &Address::new(Rc::clone(&ram), 0x100)).unwrap();
+    let got = img
+        .load(0x10, &Address::new(Rc::clone(&ram), 0x100))
+        .unwrap();
     let mut expect = vec![0x11u8; 8]; // erased 0x22/0x33 never show
     expect.extend([0, 0, 0, 0]); // 4-byte pad clamped to next chunk
     expect.extend([0x44, 0x44]);
@@ -188,7 +205,9 @@ fn verify_w2loadimage_pad_exact_end_tie_chain_and_empty_gap_chunk() {
     // trailing pad covers exactly [0x10e, 0x30e)
     let got = img.load(1, &Address::new(Rc::clone(&ram), 0x30d)).unwrap();
     assert_eq!(got, vec![0]);
-    let err = img.load(1, &Address::new(Rc::clone(&ram), 0x30e)).unwrap_err();
+    let err = img
+        .load(1, &Address::new(Rc::clone(&ram), 0x30e))
+        .unwrap_err();
     assert!(matches!(err, KunaError::DataUnavail { .. }));
 
     // caseB: empty chunk in the gap survives and self-pads
@@ -200,11 +219,15 @@ fn verify_w2loadimage_pad_exact_end_tie_chain_and_empty_gap_chunk() {
         &m,
         &reg,
     );
-    let got = img.load(0x300, &Address::new(Rc::clone(&ram), 0x100)).unwrap();
+    let got = img
+        .load(0x300, &Address::new(Rc::clone(&ram), 0x100))
+        .unwrap();
     let mut expect = vec![0xaa, 0xbb, 0xcc, 0xdd];
     expect.extend(vec![0u8; 0x2fc]); // 0xfc clamped pad + 0x200 self-pad
     assert_eq!(got, expect);
-    let err = img.load(1, &Address::new(Rc::clone(&ram), 0x400)).unwrap_err();
+    let err = img
+        .load(1, &Address::new(Rc::clone(&ram), 0x400))
+        .unwrap_err();
     assert!(matches!(err, KunaError::DataUnavail { .. }));
 }
 
@@ -234,14 +257,18 @@ fn verify_w2loadimage_pad_cross_space_no_clamp() {
     assert_eq!(got, vec![0]);
     let got = img.load(1, &Address::new(Rc::clone(&ram1), 0x303)).unwrap();
     assert_eq!(got, vec![0]);
-    let err = img.load(1, &Address::new(Rc::clone(&ram1), 0x304)).unwrap_err();
+    let err = img
+        .load(1, &Address::new(Rc::clone(&ram1), 0x304))
+        .unwrap_err();
     assert!(matches!(err, KunaError::DataUnavail { .. }));
 
     // ram2's chunk survived (not erased by the cross-space comparison)
     let got = img.load(4, &Address::new(Rc::clone(&ram2), 0x110)).unwrap();
     assert_eq!(got, vec![0x66; 4]);
     // and below it ram2 is unmapped (the begin()-stays iterator path)
-    let err = img.load(1, &Address::new(Rc::clone(&ram2), 0x10f)).unwrap_err();
+    let err = img
+        .load(1, &Address::new(Rc::clone(&ram2), 0x10f))
+        .unwrap_err();
     match &err {
         KunaError::DataUnavail { explain } => {
             assert_eq!(explain, "Bytes at 0x0000010f are not mapped");
@@ -268,7 +295,9 @@ fn verify_w2loadimage_space_end_wrap_chunk_no_pad_and_wrapped_overlap() {
     );
 
     // The whole 0x18-byte chunk reads back from its key address
-    let got = img.load(0x18, &Address::new(Rc::clone(&ram), 0xfff0)).unwrap();
+    let got = img
+        .load(0x18, &Address::new(Rc::clone(&ram), 0xfff0))
+        .unwrap();
     let expect: Vec<u8> = (0u8..0x18).collect();
     assert_eq!(got, expect);
 
@@ -279,10 +308,14 @@ fn verify_w2loadimage_space_end_wrap_chunk_no_pad_and_wrapped_overlap() {
 
     // Just past the wrapped image: dist 0x18 >= chunk size -> unmapped,
     // proving NO pad chunk was inserted after the wrapping chunk
-    let err = img.load(1, &Address::new(Rc::clone(&ram), 0x8)).unwrap_err();
+    let err = img
+        .load(1, &Address::new(Rc::clone(&ram), 0x8))
+        .unwrap_err();
     assert!(matches!(err, KunaError::DataUnavail { .. }));
     // And just below the chunk: dist wraps to 0xffff -> unmapped
-    let err = img.load(1, &Address::new(Rc::clone(&ram), 0xffef)).unwrap_err();
+    let err = img
+        .load(1, &Address::new(Rc::clone(&ram), 0xffef))
+        .unwrap_err();
     assert!(matches!(err, KunaError::DataUnavail { .. }));
 }
 
@@ -306,14 +339,18 @@ fn verify_w2loadimage_zero_length_reads_and_adjust_vma_int4_truncation() {
     );
 
     // Zero-length read at an unmapped address succeeds (empty result)
-    let got = img.load(0, &Address::new(Rc::clone(&ram), 0xdead_0000)).unwrap();
+    let got = img
+        .load(0, &Address::new(Rc::clone(&ram), 0xdead_0000))
+        .unwrap();
     assert_eq!(got, Vec::<u8>::new());
 
     // adjust = 0x1_0000_0010: int4 off = (int4)addressToByte(...) = 0x10
     img.adjust_vma(0x1_0000_0010);
     let got = img.load(4, &Address::new(Rc::clone(&ram), 0x110)).unwrap();
     assert_eq!(got, vec![0xa1, 0xb2, 0xc3, 0xd4]);
-    let err = img.load(4, &Address::new(Rc::clone(&ram), 0x100)).unwrap_err();
+    let err = img
+        .load(4, &Address::new(Rc::clone(&ram), 0x100))
+        .unwrap_err();
     assert!(matches!(err, KunaError::DataUnavail { .. }));
     let mut rec = LoadImageFunc::default();
     img.open_symbols();
@@ -327,7 +364,9 @@ fn verify_w2loadimage_zero_length_reads_and_adjust_vma_int4_truncation() {
 
     // Wrap below zero: 0xf0 - 0x200 wraps (mod 2^32) to 0xffff_fef0
     img.adjust_vma(-0x200);
-    let got = img.load(4, &Address::new(Rc::clone(&ram), 0xffff_fef0)).unwrap();
+    let got = img
+        .load(4, &Address::new(Rc::clone(&ram), 0xffff_fef0))
+        .unwrap();
     assert_eq!(got, vec![0xa1, 0xb2, 0xc3, 0xd4]);
 
     // RawLoadImage: zero-length read far past EOF also succeeds
@@ -337,7 +376,9 @@ fn verify_w2loadimage_zero_length_reads_and_adjust_vma_int4_truncation() {
     let mut raw = RawLoadImage::new(path.to_str().unwrap());
     raw.attach_to_space(Rc::clone(&ram));
     raw.open().unwrap();
-    let got = raw.load(0, &Address::new(Rc::clone(&ram), 0x9999_9999)).unwrap();
+    let got = raw
+        .load(0, &Address::new(Rc::clone(&ram), 0x9999_9999))
+        .unwrap();
     assert_eq!(got, Vec::<u8>::new());
     std::fs::remove_file(&path).unwrap();
 }

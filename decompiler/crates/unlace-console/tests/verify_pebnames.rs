@@ -18,12 +18,17 @@ use crate::common;
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, bootstrap_from_raw, ConsoleProgram};
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object, bootstrap_from_raw};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// `mov rax,gs:[0x60]; movzx ecx,byte [rax+2]; test ecx,ecx; jne dbg;
@@ -41,7 +46,10 @@ const EH_FRAME32: &str = "6aff680013400064a100000000505156a11020400031e0508d4424
 c744241400000000c7060021400089f08b4c240c64890d00000000595e83c410c3";
 
 fn hex(s: &str) -> Vec<u8> {
-    (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
+    (0..s.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap())
+        .collect()
 }
 
 /// A single-section PE whose `.text` at RVA 0x1000 is `code` and is the entry.
@@ -55,8 +63,11 @@ fn pe_image(bits: u32, subsystem: u16, code: &[u8]) -> Vec<u8> {
     b[0..2].copy_from_slice(b"MZ");
     b[0x3c..0x40].copy_from_slice(&0x40u32.to_le_bytes());
     b.extend_from_slice(b"PE\0\0");
-    let (machine, opt_size, characteristics): (u16, u16, u16) =
-        if bits == 64 { (0x8664, 0xf0, 0x22) } else { (0x14c, 0xe0, 0x10f) };
+    let (machine, opt_size, characteristics): (u16, u16, u16) = if bits == 64 {
+        (0x8664, 0xf0, 0x22)
+    } else {
+        (0x14c, 0xe0, 0x10f)
+    };
     for v in [machine, 1] {
         b.extend_from_slice(&v.to_le_bytes());
     }
@@ -64,8 +75,10 @@ fn pe_image(bits: u32, subsystem: u16, code: &[u8]) -> Vec<u8> {
     b.extend_from_slice(&opt_size.to_le_bytes());
     b.extend_from_slice(&characteristics.to_le_bytes());
     let mut opt: Vec<u8> = Vec::new();
-    let u16s = |o: &mut Vec<u8>, v: &[u16]| v.iter().for_each(|x| o.extend_from_slice(&x.to_le_bytes()));
-    let u32s = |o: &mut Vec<u8>, v: &[u32]| v.iter().for_each(|x| o.extend_from_slice(&x.to_le_bytes()));
+    let u16s =
+        |o: &mut Vec<u8>, v: &[u16]| v.iter().for_each(|x| o.extend_from_slice(&x.to_le_bytes()));
+    let u32s =
+        |o: &mut Vec<u8>, v: &[u32]| v.iter().for_each(|x| o.extend_from_slice(&x.to_le_bytes()));
     u16s(&mut opt, &[if bits == 64 { 0x20b } else { 0x10b }]);
     opt.extend_from_slice(&[14, 0]);
     u32s(&mut opt, &[text.len() as u32, 0, 0, TEXT, TEXT]);
@@ -77,7 +90,10 @@ fn pe_image(bits: u32, subsystem: u16, code: &[u8]) -> Vec<u8> {
     u32s(&mut opt, &[SA, FA]);
     u16s(&mut opt, &[6, 0, 0, 0, 6, 0]);
     u32s(&mut opt, &[0, TEXT + SA, FA, 0]);
-    u16s(&mut opt, &[subsystem, if bits == 64 { 0x8160 } else { 0x8140 }]);
+    u16s(
+        &mut opt,
+        &[subsystem, if bits == 64 { 0x8160 } else { 0x8140 }],
+    );
     for _ in 0..4 {
         if bits == 64 {
             opt.extend_from_slice(&0x1000u64.to_le_bytes());
@@ -89,7 +105,10 @@ fn pe_image(bits: u32, subsystem: u16, code: &[u8]) -> Vec<u8> {
     opt.resize(opt_size as usize, 0);
     b.extend_from_slice(&opt);
     b.extend_from_slice(b".text\0\0\0");
-    u32s(&mut b, &[code.len() as u32, TEXT, text.len() as u32, FA, 0, 0]);
+    u32s(
+        &mut b,
+        &[code.len() as u32, TEXT, text.len() as u32, FA, 0, 0],
+    );
     u16s(&mut b, &[0, 0]);
     u32s(&mut b, &[0x6000_0020]);
     b.resize(FA as usize, 0);
@@ -116,15 +135,26 @@ fn decompile_raw(stem: &str, code: &[u8], target: &str, options: &[&str]) -> Str
     let path = common::scratch_file(stem, "bin");
     std::fs::write(&path, code).unwrap();
     {
-        let prog = bootstrap_from_raw(path.to_str().unwrap(), target, 0x1000, &[0x1000], None, &spec_roots())
-            .expect("bootstrap fixture with built processor specs");
+        let prog = bootstrap_from_raw(
+            path.to_str().unwrap(),
+            target,
+            0x1000,
+            &[0x1000],
+            None,
+            &spec_roots(),
+        )
+        .expect("bootstrap fixture with built processor specs");
         transcript(prog, options, "load addr 0x1000")
     }
 }
 
 fn transcript(mut prog: ConsoleProgram, options: &[&str], select: &str) -> String {
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
-    let mut cmds: Vec<String> = options.iter().map(|o| format!("option pebnames {o}")).collect();
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
+    let mut cmds: Vec<String> = options
+        .iter()
+        .map(|o| format!("option pebnames {o}"))
+        .collect();
     cmds.extend([select.to_string(), "decompile".into(), "print C".into()]);
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
@@ -150,13 +180,28 @@ fn write_pe(stem: &str, bits: u32, subsystem: u16, code: &str) -> String {
 fn a_console_pe32_plus_is_named_at_the_shipped_default() {
     let path = write_pe("pebnames-cui64", 64, 3, CODE64);
     let out = decompile(&path, &[], "load addr 0x140001000");
-    assert!(out.contains("TEB *teb; // gs_offset"), "the GS base must be the TEB:\n{out}");
-    assert!(out.contains("!teb->ProcessEnvironmentBlock->BeingDebugged"), "{out}");
-    assert!(out.contains("teb->ProcessEnvironmentBlock->NtGlobalFlag & 0x70"), "{out}");
-    assert!(out.contains("teb->Self->ProcessEnvironmentBlock->ProcessHeap"), "{out}");
+    assert!(
+        out.contains("TEB *teb; // gs_offset"),
+        "the GS base must be the TEB:\n{out}"
+    );
+    assert!(
+        out.contains("!teb->ProcessEnvironmentBlock->BeingDebugged"),
+        "{out}"
+    );
+    assert!(
+        out.contains("teb->ProcessEnvironmentBlock->NtGlobalFlag & 0x70"),
+        "{out}"
+    );
+    assert!(
+        out.contains("teb->Self->ProcessEnvironmentBlock->ProcessHeap"),
+        "{out}"
+    );
 
     let off = decompile(&path, &["off"], "load addr 0x140001000");
-    assert!(!off.contains("teb->"), "off must restore the untyped register:\n{off}");
+    assert!(
+        !off.contains("teb->"),
+        "off must restore the untyped register:\n{off}"
+    );
     assert!(off.contains("; // gs_offset"), "{off}");
 }
 
@@ -164,9 +209,18 @@ fn a_console_pe32_plus_is_named_at_the_shipped_default() {
 fn a_gui_pe32_is_named_at_the_shipped_default() {
     let path = write_pe("pebnames-gui32", 32, 2, CODE32);
     let out = decompile(&path, &[], "load addr 0x401000");
-    assert!(out.contains("TEB *teb; // fs_offset"), "the FS base must be the TEB:\n{out}");
-    assert!(out.contains("teb->ProcessEnvironmentBlock->BeingDebugged"), "{out}");
-    assert!(out.contains("teb->Self->ProcessEnvironmentBlock->ProcessHeap"), "{out}");
+    assert!(
+        out.contains("TEB *teb; // fs_offset"),
+        "the FS base must be the TEB:\n{out}"
+    );
+    assert!(
+        out.contains("teb->ProcessEnvironmentBlock->BeingDebugged"),
+        "{out}"
+    );
+    assert!(
+        out.contains("teb->Self->ProcessEnvironmentBlock->ProcessHeap"),
+        "{out}"
+    );
 }
 
 #[test]
@@ -174,18 +228,33 @@ fn a_function_that_writes_through_the_base_stays_untyped_at_the_shipped_default(
     let path = write_pe("pebnames-ehframe32", 32, 2, EH_FRAME32);
     let auto = decompile(&path, &[], "load addr 0x401000");
     let off = decompile(&path, &["off"], "load addr 0x401000");
-    assert!(!auto.contains("teb"), "a function linking an SEH record must stay untyped:\n{auto}");
+    assert!(
+        !auto.contains("teb"),
+        "a function linking an SEH record must stay untyped:\n{auto}"
+    );
     assert!(
         auto.lines().any(|line| {
             line.trim()
                 .strip_prefix("int4 v")
-                .and_then(|rest| rest.trim_start_matches(|c: char| c.is_ascii_digit()).strip_prefix(" [3]; // "))
+                .and_then(|rest| {
+                    rest.trim_start_matches(|c: char| c.is_ascii_digit())
+                        .strip_prefix(" [3]; // ")
+                })
                 .is_some_and(|sources| sources.split(" | ").any(|source| source == "stack - 0xc"))
         }),
         "the registration record keeps its extent and stack home:\n{auto}"
     );
-    let without_option = |t: &str| t.lines().filter(|l| !l.contains("segment-base typing set to")).collect::<Vec<_>>().join("\n");
-    assert_eq!(without_option(&off), without_option(&auto), "the default must render exactly as off");
+    let without_option = |t: &str| {
+        t.lines()
+            .filter(|l| !l.contains("segment-base typing set to"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    assert_eq!(
+        without_option(&off),
+        without_option(&auto),
+        "the default must render exactly as off"
+    );
 }
 
 #[test]
@@ -193,10 +262,16 @@ fn a_driver_or_efi_image_is_left_alone_unless_forced() {
     for (stem, subsystem) in [("pebnames-native64", 1u16), ("pebnames-efi64", 10)] {
         let path = write_pe(stem, 64, subsystem, CODE64);
         let auto = decompile(&path, &[], "load addr 0x140001000");
-        assert!(!auto.contains("teb->"), "subsystem {subsystem} must not be typed under auto:\n{auto}");
+        assert!(
+            !auto.contains("teb->"),
+            "subsystem {subsystem} must not be typed under auto:\n{auto}"
+        );
         assert!(auto.contains("; // gs_offset"), "{auto}");
         let on = decompile(&path, &["on"], "load addr 0x140001000");
-        assert!(on.contains("TEB *teb; // gs_offset"), "`on` trusts the compiler spec:\n{on}");
+        assert!(
+            on.contains("TEB *teb; // gs_offset"),
+            "`on` trusts the compiler spec:\n{on}"
+        );
     }
 }
 
@@ -209,7 +284,10 @@ fn a_non_windows_compiler_spec_is_never_typed_even_when_forced() {
         ("pebnames-gcc32", FS32, "x86:LE:32:default", "fs_offset"),
     ] {
         let gcc = decompile_raw(stem, code, &format!("{target}:gcc"), &["on"]);
-        assert!(!gcc.contains("teb"), "a {target}:gcc image must never be typed:\n{gcc}");
+        assert!(
+            !gcc.contains("teb"),
+            "a {target}:gcc image must never be typed:\n{gcc}"
+        );
         assert!(gcc.contains(&format!("; // {reg}")), "{gcc}");
         let win = decompile_raw(stem, code, &format!("{target}:windows"), &["on"]);
         assert!(

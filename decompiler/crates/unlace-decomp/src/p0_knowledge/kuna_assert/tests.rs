@@ -115,14 +115,38 @@ fn minimal_rewind_matrix() {
 #[test]
 fn dispatch_routes_each_store() {
     // (substage, latent?, expected dispatch) -- the C++ IfcKunaAssert::execute order.
-    assert_eq!(Dispatch::for_substage("edge-virtualization", false), Dispatch::ForceGoto);
-    assert_eq!(Dispatch::for_substage("dead-definition-gate", false), Dispatch::DeadcodeDelay);
-    assert_eq!(Dispatch::for_substage("switch-model", false), Dispatch::MultistageJump);
-    assert_eq!(Dispatch::for_substage("flow-classification", false), Dispatch::FlowOverride);
-    assert_eq!(Dispatch::for_substage("prototype-source", false), Dispatch::ProtoLock);
-    assert_eq!(Dispatch::for_substage("type-propagation", false), Dispatch::Retype);
-    assert_eq!(Dispatch::for_substage("merge-aggressiveness", false), Dispatch::Isolate);
-    assert_eq!(Dispatch::for_substage("naming-policy", false), Dispatch::Rename);
+    assert_eq!(
+        Dispatch::for_substage("edge-virtualization", false),
+        Dispatch::ForceGoto
+    );
+    assert_eq!(
+        Dispatch::for_substage("dead-definition-gate", false),
+        Dispatch::DeadcodeDelay
+    );
+    assert_eq!(
+        Dispatch::for_substage("switch-model", false),
+        Dispatch::MultistageJump
+    );
+    assert_eq!(
+        Dispatch::for_substage("flow-classification", false),
+        Dispatch::FlowOverride
+    );
+    assert_eq!(
+        Dispatch::for_substage("prototype-source", false),
+        Dispatch::ProtoLock
+    );
+    assert_eq!(
+        Dispatch::for_substage("type-propagation", false),
+        Dispatch::Retype
+    );
+    assert_eq!(
+        Dispatch::for_substage("merge-aggressiveness", false),
+        Dispatch::Isolate
+    );
+    assert_eq!(
+        Dispatch::for_substage("naming-policy", false),
+        Dispatch::Rename
+    );
     assert_eq!(
         Dispatch::for_substage("comparison-canonicalization", false),
         Dispatch::Option("compareform")
@@ -139,17 +163,29 @@ fn dispatch_routes_each_store() {
         Dispatch::for_substage("readability-rewrites", false),
         Dispatch::Option("analyzeforloops")
     );
-    assert_eq!(Dispatch::for_substage("extrapop", false), Dispatch::Option("extrapop"));
-    assert_eq!(Dispatch::for_substage("pipeline-variant", false), Dispatch::Option("setaction"));
+    assert_eq!(
+        Dispatch::for_substage("extrapop", false),
+        Dispatch::Option("extrapop")
+    );
+    assert_eq!(
+        Dispatch::for_substage("pipeline-variant", false),
+        Dispatch::Option("setaction")
+    );
 }
 
 #[test]
 fn dispatch_latent_vs_unroutable() {
     // The C++ else branch distinguishes latent (no surface yet) from merely-
     // unroutable (use the native surface). assertion-admission is LATENT.
-    assert_eq!(Dispatch::for_substage("assertion-admission", true), Dispatch::Latent);
+    assert_eq!(
+        Dispatch::for_substage("assertion-admission", true),
+        Dispatch::Latent
+    );
     // A non-latent sub-stage with no kassert route is Unroutable.
-    assert_eq!(Dispatch::for_substage("const-pointer", false), Dispatch::Unroutable);
+    assert_eq!(
+        Dispatch::for_substage("const-pointer", false),
+        Dispatch::Unroutable
+    );
 }
 
 #[test]

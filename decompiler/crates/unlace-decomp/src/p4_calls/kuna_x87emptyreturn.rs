@@ -1,8 +1,8 @@
 //! Do not infer an x87 result when every returning path explicitly freed ST0.
 use crate::{context::OpId, fspec::ParamActive, funcdata::Funcdata};
+use std::collections::{HashMap, VecDeque};
 use unlace_base::address::Address;
 use unlace_num::{opcodes::OpCode, pcoderaw::VarnodeData};
-use std::collections::{HashMap, VecDeque};
 
 #[derive(Clone)]
 pub struct Storage {
@@ -237,7 +237,10 @@ pub fn capture(data: &mut Funcdata) {
             }
         }
     }
-    for addr in returns.into_iter().filter_map(|(addr, empty)| empty.then_some(addr)) {
+    for addr in returns
+        .into_iter()
+        .filter_map(|(addr, empty)| empty.then_some(addr))
+    {
         if !data.kuna_x87_empty_returns.contains(&addr) {
             data.kuna_x87_empty_returns.push(addr);
         }

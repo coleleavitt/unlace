@@ -18,14 +18,17 @@
 use std::path::PathBuf;
 
 use unlace_analysis::loadimage_object::ObjectLoadImage;
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn fixture() -> PathBuf {
@@ -47,7 +50,11 @@ fn load() -> ObjectLoadImage {
 const CONSTANTS: &[(&str, f64, usize)] = &[
     ("__real@3fb999999999999a", 0.1, 8),
     ("__real@3f000000", 0.5, 4),
-    ("__real@8@3ffec90fdaa22168c000", std::f64::consts::FRAC_PI_4, 8),
+    (
+        "__real@8@3ffec90fdaa22168c000",
+        std::f64::consts::FRAC_PI_4,
+        8,
+    ),
     ("__real@4@3fff8000000000000000", 1.0, 4),
 ];
 
@@ -92,7 +99,10 @@ fn both_halves_are_reported_foldable() {
     sizes.sort_unstable();
     let mut want = widths.clone();
     want.sort_unstable();
-    assert_eq!(sizes, want, "each range must span exactly its storage width");
+    assert_eq!(
+        sizes, want,
+        "each range must span exactly its storage width"
+    );
 }
 
 /// The undefined half gains real bytes. Before this, a synthetic extern slot had
@@ -101,7 +111,7 @@ fn both_halves_are_reported_foldable() {
 #[test]
 fn the_undefined_slots_read_back_as_their_decoded_values() {
     use unlace_base::address::Address;
-    use unlace_base::space::{addrspace_flags, spacetype, AddrSpace};
+    use unlace_base::space::{AddrSpace, addrspace_flags, spacetype};
     use unlace_sleigh::loadimage::LoadImage;
 
     let mut image = load();
@@ -133,7 +143,9 @@ fn the_undefined_slots_read_back_as_their_decoded_values() {
             f64::from_le_bytes(buf[..8].try_into().unwrap())
         };
         assert!(
-            CONSTANTS.iter().any(|(_, want, w)| *w == size && *want == value),
+            CONSTANTS
+                .iter()
+                .any(|(_, want, w)| *w == size && *want == value),
             "the datum at {lo:#x} ({size} bytes) reads {value}, which is none of the \
              fixture's constants"
         );
@@ -152,9 +164,13 @@ fn boot() -> ConsoleProgram {
 
 /// Run `load function <name>` -> `decompile` -> `print C` and return the C.
 fn decompile_func(prog: ConsoleProgram, name: &str) -> String {
-    let cmds: Vec<String> = [format!("load function {name}"), "decompile".into(), "print C".into()]
-        .into_iter()
-        .collect();
+    let cmds: Vec<String> = [
+        format!("load function {name}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .into_iter()
+    .collect();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);

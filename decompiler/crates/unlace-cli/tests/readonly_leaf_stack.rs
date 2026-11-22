@@ -77,7 +77,9 @@ fn conditional_store_remains_associated_with_its_return_load() {
         common::run_kuna(&["decompile", binary.to_str().unwrap(), "frame_choice"]);
     assert_eq!(status, 0, "{err}");
     assert!(body.contains("0x11"), "{body}");
-    let code = format!("unsigned char Stackfffffffc;\nunsigned int frame_helper(void *frame, unsigned int continuation) {{ (void)frame; (void)continuation; return 29; }}\n{body}\nint main(void) {{ return frame_choice(0)!=17 || frame_choice(1)!=29 || frame_choice(-1)!=29; }}\n");
+    let code = format!(
+        "unsigned char Stackfffffffc;\nunsigned int frame_helper(void *frame, unsigned int continuation) {{ (void)frame; (void)continuation; return 29; }}\n{body}\nint main(void) {{ return frame_choice(0)!=17 || frame_choice(1)!=29 || frame_choice(-1)!=29; }}\n"
+    );
     let regenerated = source.with_extension("c");
     let executable = source.with_extension("exe");
     std::fs::write(&regenerated, &code).unwrap();
@@ -110,22 +112,26 @@ fn conditional_store_remains_associated_with_its_return_load() {
         "ret",
     ] {
         std::fs::write(&source, SOURCE.replace("mov $29,%eax\n ret", helper)).unwrap();
-        assert!(Command::new("as")
-            .arg("--32")
-            .arg(&source)
-            .arg("-o")
-            .arg(&object)
-            .status()
-            .unwrap()
-            .success());
-        assert!(Command::new("ld")
-            .args(["-m", "elf_i386", "-e", "frame_choice"])
-            .arg(&object)
-            .arg("-o")
-            .arg(&binary)
-            .status()
-            .unwrap()
-            .success());
+        assert!(
+            Command::new("as")
+                .arg("--32")
+                .arg(&source)
+                .arg("-o")
+                .arg(&object)
+                .status()
+                .unwrap()
+                .success()
+        );
+        assert!(
+            Command::new("ld")
+                .args(["-m", "elf_i386", "-e", "frame_choice"])
+                .arg(&object)
+                .arg("-o")
+                .arg(&binary)
+                .status()
+                .unwrap()
+                .success()
+        );
         let (body, err, status) =
             common::run_kuna(&["decompile", binary.to_str().unwrap(), "frame_choice"]);
         assert_eq!(status, 0, "{err}");

@@ -13,7 +13,7 @@
 use super::*;
 
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 
 use crate::context::ArchContext;
@@ -22,7 +22,8 @@ use crate::fspec::FuncCallSpecs;
 fn build_fd(go_new_type: bool) -> Funcdata {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -55,8 +56,14 @@ fn newobject_call(data: &mut Funcdata, pc: u64, name: &str, arg: crate::context:
     data.op_set_input(op, arg, 1).unwrap();
     data.new_unique_out(8, op).unwrap();
     let mut fc = FuncCallSpecs::new(op, Address::new(ram, 0x2000));
-    fc.set_funcdata(Address::new(Rc::clone(data.get_arch().manage().get_space_by_name("ram").unwrap()), 0x2000), name)
-        .unwrap();
+    fc.set_funcdata(
+        Address::new(
+            Rc::clone(data.get_arch().manage().get_space_by_name("ram").unwrap()),
+            0x2000,
+        ),
+        name,
+    )
+    .unwrap();
     data.push_call_specs(fc);
 }
 
@@ -64,7 +71,10 @@ fn newobject_call(data: &mut Funcdata, pc: u64, name: &str, arg: crate::context:
 fn descriptor_slot_names_the_allocator_family() {
     assert_eq!(descriptor_slot("runtime.newobject"), Some(1));
     assert_eq!(descriptor_slot("runtime.mallocgc"), Some(2));
-    assert_eq!(descriptor_slot("runtime.mallocgcSmallScanNoHeaderSC4"), Some(2));
+    assert_eq!(
+        descriptor_slot("runtime.mallocgcSmallScanNoHeaderSC4"),
+        Some(2)
+    );
     assert_eq!(descriptor_slot("runtime.mallocgcTiny"), Some(2));
     assert_eq!(descriptor_slot("runtime.mallocgcLarge"), Some(2));
     assert_eq!(descriptor_slot("runtime.newarray"), None);
@@ -132,7 +142,13 @@ fn harvest_spelling_drops_only_a_named_types_directory() {
         harvest_spelling("example.com/p/geom.Box[*example.com/q/store.T]"),
         "geom.Box[*example.com/q/store.T]"
     );
-    for composite in ["*internal/poll.FD", "[]*a/store.T", "[4]a/store.T", "map[string]a/store.T", "func(a/store.T)"] {
+    for composite in [
+        "*internal/poll.FD",
+        "[]*a/store.T",
+        "[4]a/store.T",
+        "map[string]a/store.T",
+        "func(a/store.T)",
+    ] {
         assert_eq!(harvest_spelling(composite), composite);
     }
 }

@@ -30,10 +30,10 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, addrspace_flags, spacetype};
 
-use unlace_decomp::database::{symbol_category, SymbolKind};
-use unlace_decomp::dtype::{type_metatype, Datatype, DatatypeKind, TypeField};
+use unlace_decomp::database::{SymbolKind, symbol_category};
+use unlace_decomp::dtype::{Datatype, DatatypeKind, TypeField, type_metatype};
 use unlace_decomp::varmap::ScopeLocal;
 use unlace_decomp::varnode::varnode_flags;
 
@@ -70,7 +70,12 @@ fn base(size: int4, meta: type_metatype) -> Rc<Datatype> {
 fn union_with_fields(n: usize) -> Rc<Datatype> {
     let mut field = Vec::new();
     for i in 0..n {
-        field.push(TypeField::new(i as int4, 0, format!("f{i}"), base(4, type_metatype::TYPE_INT)));
+        field.push(TypeField::new(
+            i as int4,
+            0,
+            format!("f{i}"),
+            base(4, type_metatype::TYPE_INT),
+        ));
     }
     // Union size == max field size (4 here); override the Base payload with the
     // Union kind so `num_depend()` walks the field list.
@@ -99,19 +104,41 @@ fn union_facet_whole_union_minus_one_roundtrips() {
         .expect("addUnionFacetSymbol");
 
     let sym = sl.database().symbol(sid);
-    assert_eq!(sym.category, symbol_category::UNION_FACET, "category must be UNION_FACET");
+    assert_eq!(
+        sym.category,
+        symbol_category::UNION_FACET,
+        "category must be UNION_FACET"
+    );
     match sym.kind {
-        SymbolKind::UnionFacet { field_num, addr_based } => {
+        SymbolKind::UnionFacet {
+            field_num,
+            addr_based,
+        } => {
             assert_eq!(field_num, -1, "whole-union sentinel -1 must round-trip");
             assert!(!addr_based, "C++ addrBased defaults false");
         }
         ref other => panic!("expected UnionFacet kind, got {other:?}"),
     }
-    let dt = sym.dtype.as_ref().expect("union-facet symbol keeps its data-type");
-    assert_eq!(dt.get_metatype(), type_metatype::TYPE_UNION, "must keep the union type");
-    assert_eq!(dt.num_depend(), 3, "the union carried through has its 3 fields");
+    let dt = sym
+        .dtype
+        .as_ref()
+        .expect("union-facet symbol keeps its data-type");
+    assert_eq!(
+        dt.get_metatype(),
+        type_metatype::TYPE_UNION,
+        "must keep the union type"
+    );
+    assert_eq!(
+        dt.num_depend(),
+        3,
+        "the union carried through has its 3 fields"
+    );
     // The dynamic mapping was registered (a hash-based entry, not a stack slot).
-    assert_eq!(sym.mapentry.len(), 1, "exactly one dynamic entry for the hashed op");
+    assert_eq!(
+        sym.mapentry.len(),
+        1,
+        "exactly one dynamic entry for the hashed op"
+    );
 }
 
 // --- F2: field_num == 0 boundary (first real field) ------------------------
@@ -147,14 +174,19 @@ fn dynamic_symbol_size_from_type_and_lock_flags() {
     let ct = base(7, type_metatype::TYPE_UNKNOWN);
     let space = Rc::clone(sl.get_space_id());
     let addr = Address::new(space, 0x402000);
-    let sid =
-        sl.add_dynamic_symbol("hv", Rc::clone(&ct), &addr, 0x55).expect("addDynamicSymbol");
+    let sid = sl
+        .add_dynamic_symbol("hv", Rc::clone(&ct), &addr, 0x55)
+        .expect("addDynamicSymbol");
     sl.set_attribute(sid, varnode_flags::namelock | varnode_flags::typelock);
 
     let sym = sl.database().symbol(sid);
     assert_eq!(sym.name, "hv");
     let dt = sym.dtype.as_ref().expect("dynamic symbol keeps its type");
-    assert_eq!(dt.get_size(), 7, "size must derive from the declared type, not a constant");
+    assert_eq!(
+        dt.get_size(),
+        7,
+        "size must derive from the declared type, not a constant"
+    );
     assert_eq!(sym.mapentry.len(), 1, "one dynamic entry");
     assert_eq!(
         sym.flags & (varnode_flags::namelock | varnode_flags::typelock),
@@ -181,7 +213,11 @@ fn dynamic_symbol_invalid_address_skips_range_but_keeps_symbol() {
     assert_eq!(sym.name, "noaddr");
     // The symbol exists with no spatial range, but its dynamic (hash) entry is
     // present (addDynamicMapInternal runs regardless of address validity).
-    assert_eq!(sym.mapentry.len(), 1, "the dynamic hash entry is created even with no address");
+    assert_eq!(
+        sym.mapentry.len(),
+        1,
+        "the dynamic hash entry is created even with no address"
+    );
 }
 
 // --- F5: opflags arms — the four newly-filled W6 entries match typeop.cc ----
@@ -195,8 +231,16 @@ fn opflags_constants_match_cpp_pcodeop_enum() {
     // edit that renumbered them (and thus silently changed every transcribed
     // arm) is caught.  These are the exact bit values the C++ PcodeOp enum uses.
     use unlace_decomp::op::pcodeop_flags;
-    assert_eq!(pcodeop_flags::booloutput, 0x80, "PcodeOp::booloutput (op.hh:82)");
-    assert_eq!(pcodeop_flags::commutative, 0x4000, "PcodeOp::commutative (op.hh:89)");
+    assert_eq!(
+        pcodeop_flags::booloutput,
+        0x80,
+        "PcodeOp::booloutput (op.hh:82)"
+    );
+    assert_eq!(
+        pcodeop_flags::commutative,
+        0x4000,
+        "PcodeOp::commutative (op.hh:89)"
+    );
     assert_eq!(pcodeop_flags::unary, 0x8000, "PcodeOp::unary (op.hh:90)");
     assert_eq!(pcodeop_flags::binary, 0x10000, "PcodeOp::binary (op.hh:91)");
     // The composite words the new arms produce:

@@ -33,8 +33,8 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, JoinSpace,
-    OtherSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, JoinSpace, OtherSpace,
+    UniqueSpace, spacetype,
 };
 
 /// Build the manager mirroring the pinned x86:LE:64 architecture's space set
@@ -42,8 +42,12 @@ use unlace_base::space::{
 fn build_pinned_spaces() -> AddrSpaceManager {
     let mut manager = AddrSpaceManager::new();
     manager.insert_space(Rc::new(ConstantSpace::new())).unwrap(); // 0 const
-    manager.insert_space(Rc::new(OtherSpace::new(OtherSpace::INDEX))).unwrap(); // 1 OTHER
-    manager.insert_space(Rc::new(UniqueSpace::new(2, 0, false))).unwrap(); // 2 unique
+    manager
+        .insert_space(Rc::new(OtherSpace::new(OtherSpace::INDEX)))
+        .unwrap(); // 1 OTHER
+    manager
+        .insert_space(Rc::new(UniqueSpace::new(2, 0, false)))
+        .unwrap(); // 2 unique
     manager
         .insert_space(Rc::new(AddrSpace::new(
             spacetype::IPTR_PROCESSOR,
@@ -72,7 +76,9 @@ fn build_pinned_spaces() -> AddrSpaceManager {
         .unwrap(); // 4 register
     manager.insert_space(Rc::new(FspecSpace::new(5))).unwrap(); // 5 fspec
     manager.insert_space(Rc::new(IopSpace::new(6))).unwrap(); // 6 iop
-    manager.insert_space(Rc::new(JoinSpace::new(7, false))).unwrap(); // 7 join
+    manager
+        .insert_space(Rc::new(JoinSpace::new(7, false)))
+        .unwrap(); // 7 join
     manager
         .insert_space(Rc::new(AddrSpace::new(
             spacetype::IPTR_SPACEBASE,
@@ -92,7 +98,9 @@ fn build_pinned_spaces() -> AddrSpaceManager {
 
 /// Parse a `0x`-prefixed lower-case hex literal (goldenHex format).
 fn parse_hex(s: &str) -> u64 {
-    let hex = s.strip_prefix("0x").unwrap_or_else(|| panic!("bad hex literal: {s}"));
+    let hex = s
+        .strip_prefix("0x")
+        .unwrap_or_else(|| panic!("bad hex literal: {s}"));
     u64::from_str_radix(hex, 16).unwrap_or_else(|_| panic!("bad hex literal: {s}"))
 }
 

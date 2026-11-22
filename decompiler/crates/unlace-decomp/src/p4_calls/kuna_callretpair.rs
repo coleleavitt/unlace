@@ -129,7 +129,11 @@ const READ_DEPTH: u32 = 8;
 /// unused trials are still present. `trialvn` holds each trial's INDIRECT
 /// creation, by original slot. Returns `false`, changing nothing, unless the
 /// pair is built.
-pub fn build_partial_pair(fc: &mut FuncCallSpecs, data: &mut Funcdata, trialvn: &[Option<VarnodeId>]) -> bool {
+pub fn build_partial_pair(
+    fc: &mut FuncCallSpecs,
+    data: &mut Funcdata,
+    trialvn: &[Option<VarnodeId>],
+) -> bool {
     if !fc.proto().has_model() {
         return false;
     }
@@ -152,9 +156,14 @@ pub fn build_partial_pair(fc: &mut FuncCallSpecs, data: &mut Funcdata, trialvn: 
         .filter(|(_, _, vn)| !trialvn.contains(&Some(*vn)))
         .map(|(addr, size, vn)| (addr, size, vn, false))
         .collect();
-    let Some(list) = fc.proto().model().output_list() else { return false };
-    let Some((first, second)) =
-        reads.iter().chain(&killed).filter(|r| !r.3).find_map(|r| pair_of(list, &r.0, r.1))
+    let Some(list) = fc.proto().model().output_list() else {
+        return false;
+    };
+    let Some((first, second)) = reads
+        .iter()
+        .chain(&killed)
+        .filter(|r| !r.3)
+        .find_map(|r| pair_of(list, &r.0, r.1))
     else {
         return false;
     };
@@ -175,7 +184,12 @@ pub fn build_partial_pair(fc: &mut FuncCallSpecs, data: &mut Funcdata, trialvn: 
     if order != probe.join_pair_order() {
         return false;
     }
-    let piece = |i: int4| (probe.get_trial(i).get_address().clone(), probe.get_trial(i).get_size());
+    let piece = |i: int4| {
+        (
+            probe.get_trial(i).get_address().clone(),
+            probe.get_trial(i).get_size(),
+        )
+    };
     let ((lo_addr, lo_size), (hi_addr, hi_size)) = (piece(order.0), piece(order.1));
     let offset = |addr: &Address, size: int4| {
         let lo = lo_addr.justified_contain(lo_size, addr, size, false);
@@ -193,31 +207,50 @@ pub fn build_partial_pair(fc: &mut FuncCallSpecs, data: &mut Funcdata, trialvn: 
     else {
         return false;
     };
-    let killed: Vec<(Address, int4, VarnodeId, bool)> =
-        killed.into_iter().filter(|(addr, size, _, _)| offset(addr, *size).is_some()).collect();
-    pieces.extend(killed.iter().filter_map(|(addr, size, vn, _)| offset(addr, *size).map(|off| (*vn, off))));
-    let orphans: Vec<&(Address, int4, VarnodeId, bool)> = reads.iter().chain(&killed).filter(|r| !r.3).collect();
+    let killed: Vec<(Address, int4, VarnodeId, bool)> = killed
+        .into_iter()
+        .filter(|(addr, size, _, _)| offset(addr, *size).is_some())
+        .collect();
+    pieces.extend(
+        killed
+            .iter()
+            .filter_map(|(addr, size, vn, _)| offset(addr, *size).map(|off| (*vn, off))),
+    );
+    let orphans: Vec<&(Address, int4, VarnodeId, bool)> =
+        reads.iter().chain(&killed).filter(|r| !r.3).collect();
     let read_regs: Vec<&(Address, int4)> = orphans
         .iter()
         .map(|(addr, size, _, _)| {
-            if first.0.justified_contain(first.1, addr, *size, false) >= 0 { &first } else { &second }
+            if first.0.justified_contain(first.1, addr, *size, false) >= 0 {
+                &first
+            } else {
+                &second
+            }
         })
         .collect();
     let entry = fc.get_entry_address();
-    let Some(callee) = data.kuna_callee_ret_writes(entry) else { return false };
+    let Some(callee) = data.kuna_callee_ret_writes(entry) else {
+        return false;
+    };
     if !read_regs.iter().all(|reg| writes(callee, &reg.0, reg.1))
         || !callee_returns_cover(data, entry, &read_regs)
-        || !orphans.iter().any(|r| read_by_the_function(data, r.2, READ_DEPTH))
+        || !orphans
+            .iter()
+            .any(|r| read_by_the_function(data, r.2, READ_DEPTH))
     {
         return false;
     }
-    let Some(call_addr) = data.obank().get(op).map(|o| o.get_addr().clone()) else { return false };
-    let Some(joinaddr) =
-        crate::kuna_rustabi::pair_join_address(data, &hi_addr, hi_size, &lo_addr, lo_size, &call_addr)
-    else {
+    let Some(call_addr) = data.obank().get(op).map(|o| o.get_addr().clone()) else {
         return false;
     };
-    let Ok(whole) = data.new_varnode_out(lo_size + hi_size, &joinaddr, op) else { return false };
+    let Some(joinaddr) = crate::kuna_rustabi::pair_join_address(
+        data, &hi_addr, hi_size, &lo_addr, lo_size, &call_addr,
+    ) else {
+        return false;
+    };
+    let Ok(whole) = data.new_varnode_out(lo_size + hi_size, &joinaddr, op) else {
+        return false;
+    };
     if let Some(v) = data.vbank_mut().get_mut(whole) {
         v.set_write_mask();
     }
@@ -245,10 +278,19 @@ fn killed_reads(data: &Funcdata, callop: OpId) -> Vec<(Address, int4, VarnodeId)
     let mut found = Vec::new();
     let mut cur = data.op_previous_op(callop);
     while let Some(io) = cur {
-        let Some(o) = data.obank().get(io).filter(|o| o.code() == OpCode::CPUI_INDIRECT) else { break };
+        let Some(o) = data
+            .obank()
+            .get(io)
+            .filter(|o| o.code() == OpCode::CPUI_INDIRECT)
+        else {
+            break;
+        };
         let created = o.get_out().filter(|_| o.is_indirect_creation());
         if let Some((vn, v)) = created.and_then(|vn| data.vbank().get(vn).map(|v| (vn, v))) {
-            let register = v.get_addr().get_space().is_some_and(|s| s.get_type() == spacetype::IPTR_PROCESSOR);
+            let register = v
+                .get_addr()
+                .get_space()
+                .is_some_and(|s| s.get_type() == spacetype::IPTR_PROCESSOR);
             if register && v.num_descend() > 0 {
                 found.push((v.get_addr().clone(), v.get_size(), vn));
             }
@@ -262,14 +304,24 @@ fn killed_reads(data: &Funcdata, callop: OpId) -> Vec<(Address, int4, VarnodeId)
 /// lies in, when it lies in a register the model never returns a value in on
 /// its own: the pieces of a two-piece join entry, or a register entry that is
 /// not first in its class together with the first-in-class entry of that class.
-fn pair_of(list: &ParamListStandard, addr: &Address, size: int4) -> Option<((Address, int4), (Address, int4))> {
+fn pair_of(
+    list: &ParamListStandard,
+    addr: &Address,
+    size: int4,
+) -> Option<((Address, int4), (Address, int4))> {
     let entries = list.get_entry();
     let general = |e: &crate::fspec::ParamEntry| e.get_type() == type_class::TYPECLASS_GENERAL;
-    let register = |e: &crate::fspec::ParamEntry| (Address::new(e.get_space().clone(), e.get_base()), e.get_size());
-    if entries
-        .iter()
-        .any(|e| e.get_join_record().is_none() && e.is_first_in_class() && e.justified_contain(addr, size) >= 0)
-    {
+    let register = |e: &crate::fspec::ParamEntry| {
+        (
+            Address::new(e.get_space().clone(), e.get_base()),
+            e.get_size(),
+        )
+    };
+    if entries.iter().any(|e| {
+        e.get_join_record().is_none()
+            && e.is_first_in_class()
+            && e.justified_contain(addr, size) >= 0
+    }) {
         return None;
     }
     for e in entries.iter().filter(|e| general(e)) {
@@ -283,7 +335,10 @@ fn pair_of(list: &ParamListStandard, addr: &Address, size: int4) -> Option<((Add
             }
         } else if e.justified_contain(addr, size) >= 0 {
             let first = entries.iter().find(|f| {
-                general(f) && f.get_join_record().is_none() && f.is_first_in_class() && f.get_group() + 1 == e.get_group()
+                general(f)
+                    && f.get_join_record().is_none()
+                    && f.is_first_in_class()
+                    && f.get_group() + 1 == e.get_group()
             })?;
             return Some((register(first), register(e)));
         }
@@ -297,31 +352,45 @@ fn pair_of(list: &ParamListStandard, addr: &Address, size: int4) -> Option<((Add
 /// returning only its first register (an `int` whose `idiv` leaves the
 /// remainder in `EDX`), does not hand the caller what it reads there.
 fn callee_returns_cover(data: &Funcdata, entry: &Address, regs: &[&(Address, int4)]) -> bool {
-    let Some(sp) = entry.get_space() else { return false };
+    let Some(sp) = entry.get_space() else {
+        return false;
+    };
     let k = (sp.get_index(), entry.get_offset());
     match data.kuna_callee_returns(k) {
         None => true,
         Some(crate::kuna_voidret::Returns::Void) => false,
-        Some(_) => data.kuna_callee_return_storage(k).is_some_and(|(addr, size)| {
-            let pieces: Vec<(Address, int4)> = if addr.is_join() {
-                match data.get_arch().manage.find_join(addr.get_offset()) {
-                    Ok(jr) => (0..jr.num_pieces()).map(|i| (jr.get_piece(i).get_addr(), jr.get_piece(i).size as int4)).collect(),
-                    Err(_) => return false,
-                }
-            } else {
-                vec![(addr.clone(), *size)]
-            };
-            regs.iter().all(|reg| pieces.iter().any(|(a, s)| a.justified_contain(*s, &reg.0, reg.1, false) >= 0))
-        }),
+        Some(_) => data
+            .kuna_callee_return_storage(k)
+            .is_some_and(|(addr, size)| {
+                let pieces: Vec<(Address, int4)> = if addr.is_join() {
+                    match data.get_arch().manage.find_join(addr.get_offset()) {
+                        Ok(jr) => (0..jr.num_pieces())
+                            .map(|i| (jr.get_piece(i).get_addr(), jr.get_piece(i).size as int4))
+                            .collect(),
+                        Err(_) => return false,
+                    }
+                } else {
+                    vec![(addr.clone(), *size)]
+                };
+                regs.iter().all(|reg| {
+                    pieces
+                        .iter()
+                        .any(|(a, s)| a.justified_contain(*s, &reg.0, reg.1, false) >= 0)
+                })
+            }),
     }
 }
 
 /// Did the decoded callee body write any byte of `[addr, addr+size)` on the
 /// paths the bounded decode covered?
 fn writes(w: &crate::kuna_rustabi::CalleeReturnWrites, addr: &Address, size: int4) -> bool {
-    let Some(sp) = addr.get_space() else { return false };
+    let Some(sp) = addr.get_space() else {
+        return false;
+    };
     let (start, end) = (addr.get_offset(), addr.get_offset() + size as u64);
-    w.written_ranges().iter().any(|&(idx, off, sz)| idx == sp.get_index() && off < end && start < off + sz as u64)
+    w.written_ranges()
+        .iter()
+        .any(|&(idx, off, sz)| idx == sp.get_index() && off < end && start < off + sz as u64)
 }
 
 /// Does an op of the function itself read `vn`: anything but a CALL, CALLIND
@@ -329,19 +398,26 @@ fn writes(w: &crate::kuna_rustabi::CalleeReturnWrites, addr: &Address, size: int
 /// joins a returned pair with, and the no-op copies a return's mode switch
 /// injects?
 fn read_by_the_function(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
-    let Some(v) = data.vbank().get(vn) else { return false };
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
     v.descend_iter().any(|op| {
-        let Some(o) = data.obank().get(op) else { return false };
+        let Some(o) = data.obank().get(op) else {
+            return false;
+        };
         match o.code() {
             OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_RETURN => false,
             OpCode::CPUI_MULTIEQUAL | OpCode::CPUI_INDIRECT | OpCode::CPUI_PIECE => {
-                depth > 0 && o.get_out().is_some_and(|out| out != vn && read_by_the_function(data, out, depth - 1))
+                depth > 0
+                    && o.get_out()
+                        .is_some_and(|out| out != vn && read_by_the_function(data, out, depth - 1))
             }
             OpCode::CPUI_COPY if crate::kuna_passthrough::is_injected_noop(data, op) => {
-                depth > 0 && o.get_out().is_some_and(|out| read_by_the_function(data, out, depth - 1))
+                depth > 0
+                    && o.get_out()
+                        .is_some_and(|out| read_by_the_function(data, out, depth - 1))
             }
             _ => true,
         }
     })
 }
-

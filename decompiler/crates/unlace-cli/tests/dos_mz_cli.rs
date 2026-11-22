@@ -68,7 +68,9 @@ fn segmented_dos_image() -> Vec<u8> {
 /// 0x11000.
 fn two_segment_dos_image() -> Vec<u8> {
     let mut module = vec![0u8; 0x11004];
-    module[..12].copy_from_slice(&[0x9a, 0x00, 0x0a, 0x00, 0x0b, 0xb8, 0x9a, 0x10, 0xba, 0x00, 0x00, 0xcb]);
+    module[..12].copy_from_slice(&[
+        0x9a, 0x00, 0x0a, 0x00, 0x0b, 0xb8, 0x9a, 0x10, 0xba, 0x00, 0x00, 0xcb,
+    ]);
     module[0x1000] = 0xc3;
     module[0xba00..0xba20].fill(0x40);
     module[0xba20..0xba24].copy_from_slice(&[0xe8, 0xdd, 0x55, 0xcb]);
@@ -105,7 +107,9 @@ fn data_segment_dos_image() -> Vec<u8> {
     let mut module = vec![0x90u8; 0x100];
     module[..9].copy_from_slice(&[0xe8, 0x1d, 0x00, 0xb8, 0x00, 0x4c, 0xcd, 0x21, 0xcb]);
     module[0x20..0x24].copy_from_slice(&[0xb8, 0x01, 0x00, 0xc3]);
-    module[0x40..0x4d].copy_from_slice(&[0x55, 0x8b, 0xec, 0xe8, 0x1a, 0x00, 0x9a, 0x00, 0x00, 0x07, 0x00, 0x5d, 0xc3]);
+    module[0x40..0x4d].copy_from_slice(&[
+        0x55, 0x8b, 0xec, 0xe8, 0x1a, 0x00, 0x9a, 0x00, 0x00, 0x07, 0x00, 0x5d, 0xc3,
+    ]);
     module[0x60..0x64].copy_from_slice(&[0xb8, 0x02, 0x00, 0xc3]);
     module[0x70..0x74].copy_from_slice(&[0xb8, 0x03, 0x00, 0xcb]);
     module.resize(0x410, 0);
@@ -145,7 +149,9 @@ fn unrelocated_dos_image() -> Vec<u8> {
     let mut module = vec![0x90u8; 0x80];
     module[..6].copy_from_slice(&[0xb8, 0x00, 0x4c, 0xcd, 0x21, 0xcb]);
     module[0x40..0x48].copy_from_slice(&[0x55, 0x8b, 0xec, 0xe8, 0x1a, 0x00, 0x5d, 0xc3]);
-    module[0x60..0x6d].copy_from_slice(&[0x55, 0x8b, 0xec, 0xb8, 0x06, 0x00, 0x9a, 0x80, 0x00, 0x00, 0x00, 0x5d, 0xc3]);
+    module[0x60..0x6d].copy_from_slice(&[
+        0x55, 0x8b, 0xec, 0xb8, 0x06, 0x00, 0x9a, 0x80, 0x00, 0x00, 0x00, 0x5d, 0xc3,
+    ]);
     let mut header = vec![0u8; 0x20];
     header[..2].copy_from_slice(b"MZ");
     let total = header.len() + module.len();
@@ -164,7 +170,10 @@ fn unrelocated_dos_image() -> Vec<u8> {
 }
 
 fn kuna(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_unlace")).args(args).output().expect("run kuna")
+    Command::new(env!("CARGO_BIN_EXE_unlace"))
+        .args(args)
+        .output()
+        .expect("run kuna")
 }
 
 fn written(stem: &str, bytes: &[u8]) -> std::path::PathBuf {
@@ -180,21 +189,35 @@ fn a_dos_executable_loads_at_its_entry_with_relocated_far_calls() {
 
     let functions = kuna(&["functions", exe, "--json"]);
     let listing = String::from_utf8_lossy(&functions.stdout);
-    assert!(functions.status.success(), "{listing}\n{}", String::from_utf8_lossy(&functions.stderr));
+    assert!(
+        functions.status.success(),
+        "{listing}\n{}",
+        String::from_utf8_lossy(&functions.stderr)
+    );
     for name in ["\"sub_10000\"", "\"sub_10020\""] {
         assert!(listing.contains(name), "missing {name}: {listing}");
     }
 
-    for args in [vec!["decompile", exe, "sub_10020"], vec!["decompile-all", exe, "--addr", "0x10020"]] {
+    for args in [
+        vec!["decompile", exe, "sub_10020"],
+        vec!["decompile-all", exe, "--addr", "0x10020"],
+    ] {
         let out = kuna(&args);
         let text = String::from_utf8_lossy(&out.stdout);
-        assert!(out.status.success(), "{args:?}: {text}\n{}", String::from_utf8_lossy(&out.stderr));
+        assert!(
+            out.status.success(),
+            "{args:?}: {text}\n{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
         assert!(text.contains("return 9;"), "{args:?}: {text}");
     }
 
     let strings = kuna(&["strings", exe]);
     assert!(!strings.status.success());
-    assert!(String::from_utf8_lossy(&strings.stderr).contains("MS-DOS MZ input has no object-file view"));
+    assert!(
+        String::from_utf8_lossy(&strings.stderr)
+            .contains("MS-DOS MZ input has no object-file view")
+    );
     std::fs::remove_file(&path).unwrap();
 }
 
@@ -202,9 +225,16 @@ fn a_dos_executable_loads_at_its_entry_with_relocated_far_calls() {
 fn a_pklite_stub_is_named_on_load() {
     let path = written("dos-mz-pklite", &dos_image(b"PKLITE Copr. 1990"));
     let out = kuna(&["functions", path.to_str().unwrap()]);
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(stderr.contains("PKLITE-compressed") && stderr.contains("run `unlace unpack`"), "{stderr}");
+    assert!(
+        stderr.contains("PKLITE-compressed") && stderr.contains("run `unlace unpack`"),
+        "{stderr}"
+    );
     std::fs::remove_file(&path).unwrap();
 }
 
@@ -215,13 +245,27 @@ fn a_near_call_wraps_inside_the_entry_code_segment() {
 
     let functions = kuna(&["functions", exe, "--json"]);
     let listing = String::from_utf8_lossy(&functions.stdout);
-    assert!(functions.status.success(), "{listing}\n{}", String::from_utf8_lossy(&functions.stderr));
-    assert!(listing.contains("\"sub_20000\""), "the wrapped call target is missing: {listing}");
-    assert!(!listing.contains("\"sub_10000\""), "the linear sum is not the target: {listing}");
+    assert!(
+        functions.status.success(),
+        "{listing}\n{}",
+        String::from_utf8_lossy(&functions.stderr)
+    );
+    assert!(
+        listing.contains("\"sub_20000\""),
+        "the wrapped call target is missing: {listing}"
+    );
+    assert!(
+        !listing.contains("\"sub_10000\""),
+        "the linear sum is not the target: {listing}"
+    );
 
     let out = kuna(&["decompile-all", exe, "--addr", "0x11000"]);
     let text = String::from_utf8_lossy(&out.stdout);
-    assert!(out.status.success(), "{text}\n{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{text}\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert!(text.contains("sub_20000();"), "{text}");
     std::fs::remove_file(&path).unwrap();
 }
@@ -233,13 +277,27 @@ fn a_relocated_far_call_states_its_segment_and_a_far_pointer_load_does_not() {
 
     let functions = kuna(&["functions", exe, "--json"]);
     let listing = String::from_utf8_lossy(&functions.stdout);
-    assert!(functions.status.success(), "{listing}\n{}", String::from_utf8_lossy(&functions.stderr));
-    assert!(listing.contains("\"sub_21000\""), "the callee in segment 0x1B00 is missing: {listing}");
-    assert!(!listing.contains("\"sub_11000\""), "the call wrapped in segment 0x1000: {listing}");
+    assert!(
+        functions.status.success(),
+        "{listing}\n{}",
+        String::from_utf8_lossy(&functions.stderr)
+    );
+    assert!(
+        listing.contains("\"sub_21000\""),
+        "the callee in segment 0x1B00 is missing: {listing}"
+    );
+    assert!(
+        !listing.contains("\"sub_11000\""),
+        "the call wrapped in segment 0x1000: {listing}"
+    );
 
     let out = kuna(&["decompile-all", exe, "--addr", "0x1ba00"]);
     let text = String::from_utf8_lossy(&out.stdout);
-    assert!(out.status.success(), "{text}\n{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{text}\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert!(text.contains("sub_21000();"), "{text}");
     std::fs::remove_file(&path).unwrap();
 }
@@ -251,16 +309,28 @@ fn the_call_sweep_keeps_code_calls_and_drops_calls_decoded_from_data() {
     let list = |extra: &[&str]| {
         let out = kuna(&[&["functions", exe, "--json"][..], extra].concat());
         let text = String::from_utf8_lossy(&out.stdout).into_owned();
-        assert!(out.status.success(), "{text}\n{}", String::from_utf8_lossy(&out.stderr));
+        assert!(
+            out.status.success(),
+            "{text}\n{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
         text
     };
 
     let kept = list(&[]);
-    for name in ["\"sub_10000\"", "\"sub_10020\"", "\"sub_10060\"", "\"sub_10070\""] {
+    for name in [
+        "\"sub_10000\"",
+        "\"sub_10020\"",
+        "\"sub_10060\"",
+        "\"sub_10070\"",
+    ] {
         assert!(kept.contains(name), "missing {name}: {kept}");
     }
     for name in ["\"sub_10200\"", "\"sub_10300\"", "\"sub_10400\""] {
-        assert!(!kept.contains(name), "{name} is a call decoded from data: {kept}");
+        assert!(
+            !kept.contains(name),
+            "{name} is a call decoded from data: {kept}"
+        );
     }
 
     std::fs::remove_file(&path).unwrap();
@@ -272,7 +342,14 @@ fn without_relocations_an_unrelocated_far_call_does_not_refuse_the_function_it_o
     let exe = path.to_str().unwrap();
     let out = kuna(&["functions", exe, "--json"]);
     let text = String::from_utf8_lossy(&out.stdout);
-    assert!(out.status.success(), "{text}\n{}", String::from_utf8_lossy(&out.stderr));
-    assert!(text.contains("\"sub_10060\""), "a function opening with a far call is code: {text}");
+    assert!(
+        out.status.success(),
+        "{text}\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        text.contains("\"sub_10060\""),
+        "a function opening with a far call is code: {text}"
+    );
     std::fs::remove_file(&path).unwrap();
 }

@@ -78,14 +78,18 @@ fn only_verified_probes_change_in_every_output_language() {
         let always = records("always", language);
         assert_eq!(auto["functions"], always["functions"]);
         for name in POSITIVE {
-            assert!(function(&off, name)["code"]
-                .as_str()
-                .unwrap()
-                .contains("__rust_probestack"));
-            assert!(!function(&auto, name)["code"]
-                .as_str()
-                .unwrap()
-                .contains("__rust_probestack"));
+            assert!(
+                function(&off, name)["code"]
+                    .as_str()
+                    .unwrap()
+                    .contains("__rust_probestack")
+            );
+            assert!(
+                !function(&auto, name)["code"]
+                    .as_str()
+                    .unwrap()
+                    .contains("__rust_probestack")
+            );
         }
         for name in CONTROLS {
             assert_eq!(function(&off, name), function(&auto, name));
@@ -278,9 +282,11 @@ fn defaults_and_presets_keep_the_summary_explicit() {
             "--json",
         ]));
         let doc: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-        assert!(doc["functions"][0]["code"]
-            .as_str()
-            .unwrap()
-            .contains("__rust_probestack();"));
+        assert!(
+            doc["functions"][0]["code"]
+                .as_str()
+                .unwrap()
+                .contains("__rust_probestack();")
+        );
     }
 }

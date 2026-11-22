@@ -30,7 +30,11 @@ fn warnings(stderr: &str) -> usize {
 
 #[test]
 fn an_unmapped_declaration_is_listed_marked_and_warned_once() {
-    for fixture in ["protoorder_narrowvote_x86_64", "macho_imports_arm64", "pe_addrtaken_x86_64.exe"] {
+    for fixture in [
+        "protoorder_narrowvote_x86_64",
+        "macho_imports_arm64",
+        "pe_addrtaken_x86_64.exe",
+    ] {
         let bin = common::fixture(fixture);
         let (stdout, stderr, code) =
             common::run_kuna(&["functions", &bin, "--json", "--define-function", UNMAPPED]);
@@ -40,8 +44,14 @@ fn an_unmapped_declaration_is_listed_marked_and_warned_once() {
         let notes = doc["notes"].as_array().expect("notes");
         assert_eq!(notes.len(), 1, "{fixture}: {doc}");
         let sentence = &UNMAPPED_WARNING["warning: ".len()..];
-        assert!(notes[0].as_str().unwrap().starts_with(sentence), "{fixture}: {doc}");
-        assert_eq!(record(&doc, "asserted_unmapped")["declared"]["bytes"], "unmapped");
+        assert!(
+            notes[0].as_str().unwrap().starts_with(sentence),
+            "{fixture}: {doc}"
+        );
+        assert_eq!(
+            record(&doc, "asserted_unmapped")["declared"]["bytes"],
+            "unmapped"
+        );
         let marked = doc["functions"]
             .as_array()
             .unwrap()
@@ -71,8 +81,20 @@ fn a_partial_and_a_mapped_declaration_are_told_apart() {
     assert_eq!(record(&doc, "inside")["declared"]["bytes"], "mapped");
     let notes = doc["notes"].as_array().expect("notes");
     assert_eq!(notes.len(), 1, "{doc}");
-    assert!(notes[0].as_str().unwrap().contains("the first unmapped byte is 0x1231"), "{doc}");
-    assert_eq!(stderr.matches("warning: declared function past_end").count(), 1, "{stderr}");
+    assert!(
+        notes[0]
+            .as_str()
+            .unwrap()
+            .contains("the first unmapped byte is 0x1231"),
+        "{doc}"
+    );
+    assert_eq!(
+        stderr
+            .matches("warning: declared function past_end")
+            .count(),
+        1,
+        "{stderr}"
+    );
     assert!(!stderr.contains("inside"), "{stderr}");
 }
 
@@ -98,7 +120,11 @@ fn an_inaccessible_segment_is_unmapped() {
     assert_eq!(record(&doc, "into_text")["declared"]["bytes"], "unmapped");
     assert_eq!(record(&doc, "mach_header")["declared"]["bytes"], "mapped");
     assert_eq!(doc["notes"].as_array().map(Vec::len), Some(2), "{doc}");
-    assert_eq!(stderr.matches("warning: declared function").count(), 2, "{stderr}");
+    assert_eq!(
+        stderr.matches("warning: declared function").count(),
+        2,
+        "{stderr}"
+    );
 }
 
 /// The last byte of the address space ends no half-open extent, so it is not
@@ -114,8 +140,15 @@ fn the_top_byte_of_the_address_space_is_unmapped() {
         "0xffffffffffffffff=at_top",
     ]);
     assert_eq!(code, 0, "{stderr}");
-    assert_eq!(record(&json(&stdout), "at_top")["declared"]["bytes"], "unmapped");
-    assert_eq!(stderr.matches("warning: declared function at_top").count(), 1, "{stderr}");
+    assert_eq!(
+        record(&json(&stdout), "at_top")["declared"]["bytes"],
+        "unmapped"
+    );
+    assert_eq!(
+        stderr.matches("warning: declared function at_top").count(),
+        1,
+        "{stderr}"
+    );
 }
 
 #[test]
@@ -125,7 +158,13 @@ fn an_inventory_without_declarations_gains_no_key() {
     assert_eq!(code, 0, "{stderr}");
     let doc = json(&stdout);
     assert!(doc.get("notes").is_none(), "{doc}");
-    assert!(doc["functions"].as_array().unwrap().iter().all(|row| row.get("declared").is_none()));
+    assert!(
+        doc["functions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|row| row.get("declared").is_none())
+    );
 }
 
 #[test]
@@ -141,7 +180,11 @@ fn every_surface_that_takes_the_flag_warns_once() {
     let (stdout, stderr, code) = run(&["decompile", &bin, "main"]);
     assert_eq!(code, 0, "{stderr}");
     assert!(stdout.contains("main("), "{stdout}");
-    assert_eq!(warnings(&stderr), 1, "the script surface relays it once: {stderr}");
+    assert_eq!(
+        warnings(&stderr),
+        1,
+        "the script surface relays it once: {stderr}"
+    );
 
     let (stdout, stderr, code) = run(&["decompile", &bin, "main", "--json"]);
     assert_eq!(code, 0, "{stderr}");
@@ -150,12 +193,19 @@ fn every_surface_that_takes_the_flag_warns_once() {
 
     let (stdout, stderr, code) = run(&["decompile-all", &bin, "--json", "--jobs", "2"]);
     assert_eq!(code, 0, "{stderr}");
-    assert_eq!(warnings(&stderr), 1, "a worker does not repeat it: {stderr}");
+    assert_eq!(
+        warnings(&stderr),
+        1,
+        "a worker does not repeat it: {stderr}"
+    );
     let doc = json(&stdout);
     assert_eq!(doc["notes"].as_array().map(Vec::len), Some(1));
     let row = record(&doc, "asserted_unmapped");
     assert_eq!(row["declared"]["bytes"], "unmapped");
-    assert!(row["error"].as_str().unwrap_or("").contains("not mapped"), "{row}");
+    assert!(
+        row["error"].as_str().unwrap_or("").contains("not mapped"),
+        "{row}"
+    );
 
     let (stdout, stderr, code) = run(&["disassemble", &bin, "main", "--json"]);
     assert_eq!(code, 0, "{stderr}");
@@ -166,7 +216,10 @@ fn every_surface_that_takes_the_flag_warns_once() {
     let (_, stderr, code) = run(&["decompile", &bin, "0x999999999", "--addr"]);
     assert_eq!(code, 1);
     assert_eq!(warnings(&stderr), 1, "{stderr}");
-    assert!(stderr.contains("error: address 0x999999999 is not mapped in this input"), "{stderr}");
+    assert!(
+        stderr.contains("error: address 0x999999999 is not mapped in this input"),
+        "{stderr}"
+    );
 }
 
 /// The reason an unmapped declaration is kept rather than refused: it names
@@ -193,7 +246,9 @@ fn an_unmapped_declaration_still_names_its_call_sites() {
     assert_eq!(code, 0, "{stderr}");
     assert!(stdout.contains("rom_memcpy();"), "{stdout}");
     assert_eq!(
-        stderr.matches("warning: declared function rom_memcpy at 0x50000: its entry 0x50000").count(),
+        stderr
+            .matches("warning: declared function rom_memcpy at 0x50000: its entry 0x50000")
+            .count(),
         1,
         "{stderr}"
     );

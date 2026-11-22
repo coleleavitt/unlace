@@ -26,21 +26,22 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use unlace_decomp::action::Rule;
-use unlace_decomp::double::{RuleDoubleIn, SplitVarnode};
-use unlace_decomp::dtype::{type_metatype, Datatype};
-use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
+use unlace_decomp::double::{RuleDoubleIn, SplitVarnode};
+use unlace_decomp::dtype::{Datatype, type_metatype};
+use unlace_decomp::funcdata::Funcdata;
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -99,9 +100,7 @@ fn mk_block(fd: &mut Funcdata) -> BlockId {
 /// Returns `(whole, lo, hi, subhi_op)`.  The hi SUBPIECE is NOT marked precisHi
 /// (so `RuleDoubleIn::apply_op` enters the `attemptMarking` arm, not the
 /// already-marked early-out).
-fn build_subpieces_off_written_add(
-    fd: &mut Funcdata,
-) -> (VarnodeId, VarnodeId, VarnodeId, OpId) {
+fn build_subpieces_off_written_add(fd: &mut Funcdata) -> (VarnodeId, VarnodeId, VarnodeId, OpId) {
     let bl = mk_block(fd);
     let r = ram(fd);
 

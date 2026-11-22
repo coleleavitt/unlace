@@ -21,7 +21,15 @@ fn read(binary: &str, start: &str, bytes: &str, extra: &[&str]) -> serde_json::V
 }
 
 /// `(address, kind, symbol, target, file_bytes, image_bytes, returned)`.
-type Row = (u64, String, Option<String>, Option<u64>, Option<String>, String, String);
+type Row = (
+    u64,
+    String,
+    Option<String>,
+    Option<u64>,
+    Option<String>,
+    String,
+    String,
+);
 
 fn fixups(doc: &serde_json::Value) -> Vec<Row> {
     let text = |v: &serde_json::Value| v.as_str().map(str::to_owned);
@@ -43,7 +51,15 @@ fn fixups(doc: &serde_json::Value) -> Vec<Row> {
         .collect()
 }
 
-fn row(at: u64, kind: &str, symbol: Option<&str>, target: Option<u64>, file: &str, image: &str, returned: &str) -> Row {
+fn row(
+    at: u64,
+    kind: &str,
+    symbol: Option<&str>,
+    target: Option<u64>,
+    file: &str,
+    image: &str,
+    returned: &str,
+) -> Row {
     (
         at,
         kind.to_owned(),
@@ -61,18 +77,51 @@ fn row(at: u64, kind: &str, symbol: Option<&str>, target: Option<u64>, file: &st
 #[test]
 fn a_chained_bind_is_a_placeholder_and_a_rebase_the_loaders_pointer() {
     let doc = read("macho_ptrslots_arm64", "0x100004000", "24", &[]);
-    assert_eq!(doc["hex"], "4004000001000000c8030000010000000000000000000000", "the listed bytes are the load image's");
+    assert_eq!(
+        doc["hex"], "4004000001000000c8030000010000000000000000000000",
+        "the listed bytes are the load image's"
+    );
     assert_eq!(doc["fixups_coverage"], "chained-fixups");
     assert_eq!(
         fixups(&doc),
         [
-            row(0x100004000, "rebase", None, Some(0x100000440), "4004000001001000", "4004000001000000", "applied"),
-            row(0x100004008, "rebase", None, Some(0x1000003c8), "c803000001001000", "c803000001000000", "applied"),
-            row(0x100004010, "bind", Some("_audit_imported"), None, "0000000000000080", "0000000000000000", "placeholder"),
+            row(
+                0x100004000,
+                "rebase",
+                None,
+                Some(0x100000440),
+                "4004000001001000",
+                "4004000001000000",
+                "applied"
+            ),
+            row(
+                0x100004008,
+                "rebase",
+                None,
+                Some(0x1000003c8),
+                "c803000001001000",
+                "c803000001000000",
+                "applied"
+            ),
+            row(
+                0x100004010,
+                "bind",
+                Some("_audit_imported"),
+                None,
+                "0000000000000080",
+                "0000000000000000",
+                "placeholder"
+            ),
         ]
     );
     let notes = doc["notes"].as_array().unwrap();
-    assert!(notes.iter().any(|n| n.as_str().unwrap().contains("0x100004010 bind _audit_imported")), "{notes:?}");
+    assert!(
+        notes.iter().any(|n| n
+            .as_str()
+            .unwrap()
+            .contains("0x100004010 bind _audit_imported")),
+        "{notes:?}"
+    );
 }
 
 /// A span that starts inside a slot lists the whole slot.
@@ -82,7 +131,10 @@ fn a_slot_the_span_only_overlaps_is_listed_whole() {
     assert_eq!(doc["hex"], "00000000");
     let rows = fixups(&doc);
     assert_eq!(rows.len(), 1, "{rows:?}");
-    assert_eq!((rows[0].0, rows[0].6.as_str()), (0x100004010, "placeholder"));
+    assert_eq!(
+        (rows[0].0, rows[0].6.as_str()),
+        (0x100004010, "placeholder")
+    );
     assert_eq!(doc["fixups"][0]["size"], 8);
 }
 
@@ -96,10 +148,42 @@ fn elf_dynamic_relocations_say_which_slots_kuna_applied() {
     assert_eq!(
         fixups(&doc),
         [
-            row(0x3ff8, "bind", Some("exported_tab"), Some(0x4030), "0000000000000000", "3040000000000000", "applied"),
-            row(0x4020, "rebase", None, Some(0x2000), "0020000000000000", "0020000000000000", "file"),
-            row(0x4030, "relocation", Some("audit_target"), Some(0x1000), "0000000000000000", "0010000000000000", "applied"),
-            row(0x4038, "rebase", None, Some(0x1010), "1010000000000000", "1010000000000000", "file"),
+            row(
+                0x3ff8,
+                "bind",
+                Some("exported_tab"),
+                Some(0x4030),
+                "0000000000000000",
+                "3040000000000000",
+                "applied"
+            ),
+            row(
+                0x4020,
+                "rebase",
+                None,
+                Some(0x2000),
+                "0020000000000000",
+                "0020000000000000",
+                "file"
+            ),
+            row(
+                0x4030,
+                "relocation",
+                Some("audit_target"),
+                Some(0x1000),
+                "0000000000000000",
+                "0010000000000000",
+                "applied"
+            ),
+            row(
+                0x4038,
+                "rebase",
+                None,
+                Some(0x1010),
+                "1010000000000000",
+                "1010000000000000",
+                "file"
+            ),
         ]
     );
 }
@@ -114,13 +198,47 @@ fn relr_slots_are_listed_as_rebases() {
     assert_eq!(
         fixups(&doc),
         [
-            row(0x4020, "rebase", None, Some(0x2000), "0020000000000000", "0020000000000000", "file"),
-            row(0x4030, "relocation", Some("audit_target"), Some(0x1000), "0000000000000000", "0010000000000000", "applied"),
-            row(0x4038, "rebase", None, Some(0x1010), "1010000000000000", "1010000000000000", "file"),
+            row(
+                0x4020,
+                "rebase",
+                None,
+                Some(0x2000),
+                "0020000000000000",
+                "0020000000000000",
+                "file"
+            ),
+            row(
+                0x4030,
+                "relocation",
+                Some("audit_target"),
+                Some(0x1000),
+                "0000000000000000",
+                "0010000000000000",
+                "applied"
+            ),
+            row(
+                0x4038,
+                "rebase",
+                None,
+                Some(0x1010),
+                "1010000000000000",
+                "1010000000000000",
+                "file"
+            ),
         ]
     );
-    let notes: Vec<&str> = doc["notes"].as_array().unwrap().iter().map(|n| n.as_str().unwrap()).collect();
-    assert!(notes.iter().all(|n| !n.contains("0x4020") && !n.contains("0x4038")), "{notes:?}");
+    let notes: Vec<&str> = doc["notes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|n| n.as_str().unwrap())
+        .collect();
+    assert!(
+        notes
+            .iter()
+            .all(|n| !n.contains("0x4020") && !n.contains("0x4038")),
+        "{notes:?}"
+    );
 }
 
 /// Bytes no fixup touches carry an empty list and no note; an image whose
@@ -130,7 +248,11 @@ fn bytes_no_fixup_touches_list_none() {
     let code = read("macho_ptrslots_arm64", "0x1000003c8", "8", &[]);
     assert_eq!(code["fixups_coverage"], "chained-fixups");
     assert!(fixups(&code).is_empty());
-    assert!(code["notes"].as_array().unwrap().is_empty(), "{}", code["notes"]);
+    assert!(
+        code["notes"].as_array().unwrap().is_empty(),
+        "{}",
+        code["notes"]
+    );
     let pe = read("aifbracket_pe_i386.exe", "0x401000", "8", &[]);
     assert_eq!(pe["fixups_coverage"], "none");
     assert!(fixups(&pe).is_empty());
@@ -144,16 +266,27 @@ fn an_unread_relocation_table_makes_the_fixups_partial() {
     let mut bytes = std::fs::read(common::fixture("dataptrs_so_x86_64.so")).unwrap();
     let shoff = u64::from_le_bytes(bytes[0x28..0x30].try_into().unwrap()) as usize;
     let rela_dyn_link = shoff + 4 * 0x40 + 0x28;
-    assert_eq!(bytes[rela_dyn_link..rela_dyn_link + 4], 2u32.to_le_bytes(), "section 4's sh_link is .dynsym");
+    assert_eq!(
+        bytes[rela_dyn_link..rela_dyn_link + 4],
+        2u32.to_le_bytes(),
+        "section 4's sh_link is .dynsym"
+    );
     bytes[rela_dyn_link..rela_dyn_link + 4].copy_from_slice(&999u32.to_le_bytes());
     let path = common::scratch_file("read-fixups-unread-table", "so");
     std::fs::write(&path, &bytes).unwrap();
     let path = path.to_str().unwrap();
-    let (stdout, stderr, rc) = common::run_kuna(&["read", path, "0x3ff8", "--addr", "--bytes", "72", "--json"]);
+    let (stdout, stderr, rc) =
+        common::run_kuna(&["read", path, "0x3ff8", "--addr", "--bytes", "72", "--json"]);
     assert_eq!(rc, 0, "{stderr}");
     let doc: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     assert_eq!(doc["fixups_coverage"], "partial", "{doc}");
-    assert_eq!(doc["fixups_reason"], ".rela.dyn (section 4): sh_link 999 is not the dynamic symbol table");
+    assert_eq!(
+        doc["fixups_reason"],
+        ".rela.dyn (section 4): sh_link 999 is not the dynamic symbol table"
+    );
     assert!(fixups(&doc).is_empty(), "{doc}");
-    assert_eq!(read("dataptrs_so_x86_64.so", "0x3ff8", "8", &[])["fixups_reason"], serde_json::Value::Null);
+    assert_eq!(
+        read("dataptrs_so_x86_64.so", "0x3ff8", "8", &[])["fixups_reason"],
+        serde_json::Value::Null
+    );
 }

@@ -20,9 +20,9 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::rc::Rc;
 
-use unlace_base::address::Address;
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
 use object::read::{Object, ObjectSection};
+use unlace_base::address::Address;
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 /// The first entry of the fixture's runtime-indexed table — 21 bytes, no NUL.
 const WITNESS: &[u8] = b"kuna fatstr witness, ";
@@ -43,7 +43,10 @@ fn main() {
 "#;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// `true` if a runnable `rustc` is on PATH.
@@ -155,9 +158,12 @@ fn committed_extent(bin: &str, vma: u64, option: Option<&str>) -> Option<i32> {
     let mut prog: ConsoleProgram = bootstrap_from_object(bin, "", &spec_roots)
         .expect("bootstrap rust fixture with built processor specs");
     if let Some(v) = option {
-        prog.arch_mut().set_kuna_option("fatstr", v).expect("fatstr option applies");
+        prog.arch_mut()
+            .set_kuna_option("fatstr", v)
+            .expect("fatstr option applies");
     }
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     let space = prog
         .arch()
         .manage()
@@ -167,7 +173,9 @@ fn committed_extent(bin: &str, vma: u64, option: Option<&str>) -> Option<i32> {
     let addr = Address::new(Rc::clone(&space), vma);
     let arch = prog.arch();
     let global = arch.symboltab.get_global_scope()?;
-    let eref = arch.symboltab.find_container(global, &addr, 1, &Address::new_invalid())?;
+    let eref = arch
+        .symboltab
+        .find_container(global, &addr, 1, &Address::new_invalid())?;
     Some(arch.symboltab.entry(global, eref).get_size())
 }
 

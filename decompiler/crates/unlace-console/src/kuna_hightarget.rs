@@ -68,7 +68,7 @@ use unlace_base::space::spacetype::{IPTR_CONSTANT, IPTR_INTERNAL, IPTR_JOIN, IPT
 use unlace_base::types::int4;
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::context::{HighVariableId, VarnodeId};
-use unlace_decomp::database::{symbol_category, SymbolId};
+use unlace_decomp::database::{SymbolId, symbol_category};
 use unlace_decomp::dtype::Datatype;
 use unlace_decomp::funcdata::{DirectiveSymbol, Funcdata};
 use unlace_decomp::varnode::varnode_flags;
@@ -113,8 +113,11 @@ fn resolve_local(
     maxduplicates: u32,
 ) -> Result<LocalTarget, String> {
     let touched = fd.kuna_directive_symbols().to_vec();
-    let mut printed: Vec<SymbolId> =
-        touched.iter().filter(|d| d.printed == name).map(|d| d.symbol).collect();
+    let mut printed: Vec<SymbolId> = touched
+        .iter()
+        .filter(|d| d.printed == name)
+        .map(|d| d.symbol)
+        .collect();
     if let Some(lm) = fd.get_scope_local() {
         printed.extend(
             lm.query_by_name(name)
@@ -123,7 +126,10 @@ fn resolve_local(
         );
     }
     if printed.len() > 1 {
-        return Err(format!("More than one symbol named: {name} ({})", printed.len()));
+        return Err(format!(
+            "More than one symbol named: {name} ({})",
+            printed.len()
+        ));
     }
     // The name a Symbol carries now; `None` for one a bare `type` left for the
     // naming pass to number, which the caller has not renamed.
@@ -170,7 +176,9 @@ fn resolve_local(
 fn printed_by_pass(fd: &Funcdata, name: &str, touched: &[DirectiveSymbol]) -> bool {
     touched.iter().any(|d| d.printed == name)
         || fd.get_scope_local().is_some_and(|lm| {
-            lm.query_by_name(name).iter().any(|sym| !touched.iter().any(|d| d.symbol == *sym))
+            lm.query_by_name(name)
+                .iter()
+                .any(|sym| !touched.iter().any(|d| d.symbol == *sym))
         })
         || printed_highs(fd, name)
             .into_iter()
@@ -183,7 +191,9 @@ fn printed_by_pass(fd: &Funcdata, name: &str, touched: &[DirectiveSymbol]) -> bo
 fn printed_highs(fd: &Funcdata, name: &str) -> Vec<HighVariableId> {
     fd.high_bank()
         .iter()
-        .filter(|(id, h)| unlace_decomp::kuna_libcnames::shown_number(fd, *id).or(h.kuna_name()) == Some(name))
+        .filter(|(id, h)| {
+            unlace_decomp::kuna_libcnames::shown_number(fd, *id).or(h.kuna_name()) == Some(name)
+        })
         // A CONCAT piece shares its root's name and carries the root's in-symbol
         // offset; the root (offset -1) is the declaration and the only nameable
         // target, exactly as the printer's decl loop decides it.
@@ -191,8 +201,11 @@ fn printed_highs(fd: &Funcdata, name: &str) -> Vec<HighVariableId> {
         // A high all of whose instances are constants is a `&symbol` reference
         // the printer renders inline, not storage anything can be mapped over.
         .filter(|(_, h)| {
-            (0..h.num_instances())
-                .any(|i| fd.vbank().get(h.get_instance(i)).is_some_and(|v| !v.is_constant()))
+            (0..h.num_instances()).any(|i| {
+                fd.vbank()
+                    .get(h.get_instance(i))
+                    .is_some_and(|v| !v.is_constant())
+            })
         })
         .map(|(id, _)| id)
         .collect()
@@ -232,10 +245,16 @@ fn resolve_shown(
     let renamed = batch_renames(fd);
     let saved: Vec<(HighVariableId, String)> = renamed
         .iter()
-        .filter_map(|(_, high, _)| Some((*high, fd.high_bank().get(*high)?.kuna_name()?.to_string())))
+        .filter_map(|(_, high, _)| {
+            Some((*high, fd.high_bank().get(*high)?.kuna_name()?.to_string()))
+        })
         .collect();
     for (_, high, name) in &renamed {
-        if let Some(h) = fd.high_bank_mut().get_mut(*high).filter(|h| h.kuna_name().is_some()) {
+        if let Some(h) = fd
+            .high_bank_mut()
+            .get_mut(*high)
+            .filter(|h| h.kuna_name().is_some())
+        {
             h.set_kuna_name(name.clone());
         }
     }
@@ -249,13 +268,19 @@ fn resolve_shown(
         }
     }
     let print = print?;
-    let mut found = print.declared_locals().iter().filter(|local| local.name == shown);
+    let mut found = print
+        .declared_locals()
+        .iter()
+        .filter(|local| local.name == shown);
     let local = found.next()?.clone();
     if found.next().is_some() {
         return None;
     }
     let owner = |high: HighVariableId| print.declared_local(high).map(|local| local.high);
-    let mut owners = renamed.iter().filter(|(_, high, _)| owner(*high) == Some(local.high)).map(|(sym, ..)| *sym);
+    let mut owners = renamed
+        .iter()
+        .filter(|(_, high, _)| owner(*high) == Some(local.high))
+        .map(|(sym, ..)| *sym);
     if let Some(sym) = owners.next() {
         if owners.any(|other| other != sym) {
             return None;
@@ -264,7 +289,11 @@ fn resolve_shown(
     }
     let h = fd.high_bank().get(local.high)?;
     let linked = h.kuna_link_symbol().or(h.kuna_ref_symbol()).filter(|sym| {
-        fd.get_scope_local().is_some_and(|lm| lm.database().try_symbol(*sym).is_some_and(|s| !s.is_name_undefined()))
+        fd.get_scope_local().is_some_and(|lm| {
+            lm.database()
+                .try_symbol(*sym)
+                .is_some_and(|s| !s.is_name_undefined())
+        })
     });
     if let Some(sym) = linked {
         return Some(Ok((LocalTarget::Symbol(sym), shown.to_string())));
@@ -274,7 +303,12 @@ fn resolve_shown(
         .iter()
         .find(|alias| alias.shown && alias.alias == local.base)
         .map_or_else(|| local.base.clone(), |alias| alias.number.clone());
-    let shared = print.declared_locals().iter().filter(|other| other.base == local.base).count() > 1;
+    let shared = print
+        .declared_locals()
+        .iter()
+        .filter(|other| other.base == local.base)
+        .count()
+        > 1;
     let target = match printed_local(fd, local.high, shown, maxduplicates) {
         Ok(Some(target)) => target,
         Ok(None) => return None,
@@ -292,10 +326,14 @@ fn resolve_shown(
 /// print the Symbol (its storage, or a reference to it, as `&v2` or a stack
 /// array) or the identifier the pass printed for it.
 fn batch_renames(fd: &Funcdata) -> Vec<(SymbolId, HighVariableId, String)> {
-    let Some(lm) = fd.get_scope_local() else { return Vec::new() };
+    let Some(lm) = fd.get_scope_local() else {
+        return Vec::new();
+    };
     let mut out = Vec::new();
     for d in fd.kuna_directive_symbols() {
-        let Some(symbol) = lm.database().try_symbol(d.symbol) else { continue };
+        let Some(symbol) = lm.database().try_symbol(d.symbol) else {
+            continue;
+        };
         if symbol.is_name_undefined() || symbol.name.is_empty() || symbol.name == d.printed {
             continue;
         }
@@ -305,13 +343,24 @@ fn batch_renames(fd: &Funcdata) -> Vec<(SymbolId, HighVariableId, String)> {
                 let linked: Vec<HighVariableId> = fd
                     .high_bank()
                     .iter()
-                    .filter(|(_, h)| h.kuna_link_symbol() == Some(d.symbol) || h.kuna_ref_symbol() == Some(d.symbol))
+                    .filter(|(_, h)| {
+                        h.kuna_link_symbol() == Some(d.symbol)
+                            || h.kuna_ref_symbol() == Some(d.symbol)
+                    })
                     .map(|(id, _)| id)
                     .collect();
-                if linked.is_empty() { printed_highs(fd, &d.printed) } else { linked }
+                if linked.is_empty() {
+                    printed_highs(fd, &d.printed)
+                } else {
+                    linked
+                }
             }
         };
-        out.extend(highs.into_iter().map(|high| (d.symbol, high, symbol.name.clone())));
+        out.extend(
+            highs
+                .into_iter()
+                .map(|high| (d.symbol, high, symbol.name.clone())),
+        );
     }
     out
 }
@@ -329,7 +378,12 @@ fn stack_storage(fd: &Funcdata, sym: SymbolId) -> Option<(Address, Vec<int4>)> {
     let (addr, size) = lm
         .named_symbol_storage()
         .into_iter()
-        .filter(|(s, addr, ..)| *s == sym && addr.get_space().is_some_and(|space| space.get_type() == IPTR_SPACEBASE))
+        .filter(|(s, addr, ..)| {
+            *s == sym
+                && addr
+                    .get_space()
+                    .is_some_and(|space| space.get_type() == IPTR_SPACEBASE)
+        })
         .map(|(_, addr, size, _)| (addr, size))
         .max_by_key(|(_, size)| *size)?;
     let mut widths = vec![size];
@@ -340,8 +394,15 @@ fn stack_storage(fd: &Funcdata, sym: SymbolId) -> Option<(Address, Vec<int4>)> {
             return Some((addr, widths));
         }
     }
-    for (_, h) in fd.high_bank().iter().filter(|(_, h)| h.kuna_link_symbol() == Some(sym)) {
-        widths.extend((0..h.num_instances()).filter_map(|i| fd.vbank().get(h.get_instance(i)).map(|v| v.get_size())));
+    for (_, h) in fd
+        .high_bank()
+        .iter()
+        .filter(|(_, h)| h.kuna_link_symbol() == Some(sym))
+    {
+        widths.extend(
+            (0..h.num_instances())
+                .filter_map(|i| fd.vbank().get(h.get_instance(i)).map(|v| v.get_size())),
+        );
     }
     Some((addr, widths))
 }
@@ -358,10 +419,19 @@ fn check_stack_width(addr: &Address, widths: &[int4], ct: &Datatype) -> Result<(
     let size = widths.iter().copied().max().unwrap_or(0);
     let composite = matches!(ct.get_metatype(), TYPE_ARRAY | TYPE_STRUCT | TYPE_UNION);
     if !composite && !widths.contains(&ct.get_size()) {
-        return Err(format!("Storage is {size} bytes, the stated type is {}", ct.get_size()));
+        return Err(format!(
+            "Storage is {size} bytes, the stated type is {}",
+            ct.get_size()
+        ));
     }
-    let end = (ct.get_size() as u64).checked_sub(1).and_then(|last| addr.get_offset().checked_add(last));
-    if ct.get_size() > size && addr.get_space().is_some_and(|space| end.is_none_or(|end| end > space.get_highest())) {
+    let end = (ct.get_size() as u64)
+        .checked_sub(1)
+        .and_then(|last| addr.get_offset().checked_add(last));
+    if ct.get_size() > size
+        && addr
+            .get_space()
+            .is_some_and(|space| end.is_none_or(|end| end > space.get_highest()))
+    {
         return Err(format!(
             "Storage is {size} bytes, the stated type is {} and runs past the end of the stack",
             ct.get_size()
@@ -379,15 +449,30 @@ fn check_stack_retype_overlap(
     address: &Address,
     size: int4,
 ) -> Result<(), String> {
-    if !address.get_space().is_some_and(|space| space.get_type() == IPTR_SPACEBASE) {
+    if !address
+        .get_space()
+        .is_some_and(|space| space.get_type() == IPTR_SPACEBASE)
+    {
         return Ok(());
     }
-    let Some(scope) = fd.get_scope_local() else { return Ok(()) };
+    let Some(scope) = fd.get_scope_local() else {
+        return Ok(());
+    };
     // Definition-scoped bindings may describe distinct incarnations of a slot.
     // This guard concerns independent whole-frame declarations only.
-    if scope.database().symbol(target).mapentry.iter().any(|&entry| {
-        !scope.database().entry(scope.scope_id(), entry).uselimit.empty()
-    }) {
+    if scope
+        .database()
+        .symbol(target)
+        .mapentry
+        .iter()
+        .any(|&entry| {
+            !scope
+                .database()
+                .entry(scope.scope_id(), entry)
+                .uselimit
+                .empty()
+        })
+    {
         return Ok(());
     }
     let start = address.get_offset() as u128;
@@ -441,13 +526,20 @@ pub fn apply_local(
     if unlace_decomp::kuna_stackobjectasserts::apply(fd, name, newname, retype.clone())? {
         return Ok(None);
     }
-    let (target, name) = resolve_target(fd, name, retype.is_none().then_some(newname), maxduplicates, arch)?;
+    let (target, name) = resolve_target(
+        fd,
+        name,
+        retype.is_none().then_some(newname),
+        maxduplicates,
+        arch,
+    )?;
     let name = name.as_str();
     let sym = match target {
         LocalTarget::Printed(target) => {
             let lock_type = retype.is_some();
-            let unit_type =
-                retype.as_ref().and_then(|ct| unlace_decomp::kuna_stablenames::unit_retype(&target.dtype, ct));
+            let unit_type = retype
+                .as_ref()
+                .and_then(|ct| unlace_decomp::kuna_stablenames::unit_retype(&target.dtype, ct));
             let ct = retype.unwrap_or_else(|| target.dtype.clone());
             let symbol = bind_printed_local(fd, &target, newname, ct, lock_type)?;
             fd.kuna_record_directive_symbol(DirectiveSymbol {
@@ -469,7 +561,9 @@ pub fn apply_local(
     let has_instances = bound_size.is_some() || symbol_storage_has_varnodes(fd, sym);
     let unit_type = fd
         .get_scope_local()
-        .filter(|lm| has_instances && lm.symbol_category(sym) != symbol_category::FUNCTION_PARAMETER)
+        .filter(|lm| {
+            has_instances && lm.symbol_category(sym) != symbol_category::FUNCTION_PARAMETER
+        })
         .and_then(|lm| lm.database().symbol(sym).dtype.clone())
         .zip(retype.as_ref())
         .and_then(|(from, to)| unlace_decomp::kuna_stablenames::unit_retype(&from, to));
@@ -486,9 +580,14 @@ pub fn apply_local(
     let parameter = crate::kuna_paramasserts::prepare(fd, sym, retype.as_ref())?;
     // A parameter's storage is model-derived; locking its name or type locks the
     // input side of the prototype too (C++ `IfcRename`/`IfcRetype`).
-    let lm = fd.get_scope_local().ok_or_else(|| "Function has no local scope".to_string())?;
+    let lm = fd
+        .get_scope_local()
+        .ok_or_else(|| "Function has no local scope".to_string())?;
     let current = lm.database().symbol(sym).name.clone();
-    let aliased = fd.kuna_library_aliases().iter().any(|a| a.shown && a.number == current);
+    let aliased = fd
+        .kuna_library_aliases()
+        .iter()
+        .any(|a| a.shown && a.number == current);
     if lm.symbol_category(sym) == symbol_category::FUNCTION_PARAMETER {
         fd.get_func_proto_mut().set_input_lock(true);
     }
@@ -499,10 +598,12 @@ pub fn apply_local(
         None => {
             let symbol = lm.database().symbol(sym);
             let dynamic = !symbol.mapentry.is_empty()
-                && symbol.mapentry.iter().all(|entry| {
-                    matches!(entry, unlace_decomp::database::EntryRef::Dynamic(_))
-                });
-            lm.rename_symbol(sym, newname).map_err(|e| e.explain().to_string())?;
+                && symbol
+                    .mapentry
+                    .iter()
+                    .all(|entry| matches!(entry, unlace_decomp::database::EntryRef::Dynamic(_)));
+            lm.rename_symbol(sym, newname)
+                .map_err(|e| e.explain().to_string())?;
             if bound_size.is_some() || (!dynamic && !lm.database().symbol(sym).is_type_locked()) {
                 lm.set_attribute(sym, varnode_flags::namelock);
             } else if dynamic {
@@ -515,13 +616,15 @@ pub fn apply_local(
             }
         }
         Some(ct) => {
-            lm.retype_symbol(sym, ct).map_err(|e| e.explain().to_string())?;
+            lm.retype_symbol(sym, ct)
+                .map_err(|e| e.explain().to_string())?;
             lm.set_attribute(sym, varnode_flags::typelock);
             if bound_size.is_some() {
                 lm.set_symbol_isolated(sym, true);
             }
             if !newname.is_empty() && (newname != current || aliased) {
-                lm.rename_symbol(sym, newname).map_err(|e| e.explain().to_string())?;
+                lm.rename_symbol(sym, newname)
+                    .map_err(|e| e.explain().to_string())?;
                 lm.set_attribute(sym, varnode_flags::namelock);
             }
         }
@@ -529,7 +632,13 @@ pub fn apply_local(
     if let Some(parameter) = parameter {
         crate::kuna_paramasserts::apply(fd, sym, parameter);
     }
-    fd.kuna_record_directive_symbol(DirectiveSymbol { symbol: sym, printed: current, bound: None, retyped: false, unit_type: None });
+    fd.kuna_record_directive_symbol(DirectiveSymbol {
+        symbol: sym,
+        printed: current,
+        bound: None,
+        retyped: false,
+        unit_type: None,
+    });
     if retype_given {
         fd.kuna_set_directive_retype(sym, unit_type);
     }
@@ -585,15 +694,26 @@ pub fn isolate_local(
             Ok(symbol)
         }
         LocalTarget::Symbol(sym) => {
-            let bound = fd.kuna_directive_symbols().iter().any(|d| d.symbol == sym && d.bound.is_some());
-            let lm = fd.get_scope_local_mut().ok_or_else(|| "Function has no local scope".to_string())?;
+            let bound = fd
+                .kuna_directive_symbols()
+                .iter()
+                .any(|d| d.symbol == sym && d.bound.is_some());
+            let lm = fd
+                .get_scope_local_mut()
+                .ok_or_else(|| "Function has no local scope".to_string())?;
             if bound {
                 lm.set_symbol_isolated(sym, true);
                 return Ok(sym);
             }
             lm.set_symbol_identity_isolated(sym);
             let printed = lm.database().symbol(sym).name.clone();
-            fd.kuna_record_directive_symbol(DirectiveSymbol { symbol: sym, printed, bound: None, retyped: false, unit_type: None });
+            fd.kuna_record_directive_symbol(DirectiveSymbol {
+                symbol: sym,
+                printed,
+                bound: None,
+                retyped: false,
+                unit_type: None,
+            });
             Ok(sym)
         }
     }
@@ -604,7 +724,9 @@ pub fn isolate_local(
 /// retype to and its Symbol takes the type, as its storage is the variable's
 /// whole identity.
 fn symbol_storage_has_varnodes(fd: &Funcdata, sym: SymbolId) -> bool {
-    let Some(lm) = fd.get_scope_local() else { return false };
+    let Some(lm) = fd.get_scope_local() else {
+        return false;
+    };
     let storage: Vec<(Address, int4)> = lm
         .named_symbol_storage()
         .into_iter()
@@ -616,9 +738,11 @@ fn symbol_storage_has_varnodes(fd: &Funcdata, sym: SymbolId) -> bool {
             !v.is_constant()
                 && !v.is_annotation()
                 && storage.iter().any(|(addr, size)| {
-                    v.get_addr().get_space().map(|s| s.get_index()) == addr.get_space().map(|s| s.get_index())
+                    v.get_addr().get_space().map(|s| s.get_index())
+                        == addr.get_space().map(|s| s.get_index())
                         && v.get_addr().get_offset() < addr.get_offset().wrapping_add(*size as u64)
-                        && addr.get_offset() < v.get_addr().get_offset().wrapping_add(v.get_size() as u64)
+                        && addr.get_offset()
+                            < v.get_addr().get_offset().wrapping_add(v.get_size() as u64)
                 })
         })
     })
@@ -653,11 +777,21 @@ fn printed_local(
         .high_name_representative(ids[0])
         .ok_or_else(|| format!("No storage for: {name}"))?;
     let (addr, size, dtype, written, def) = {
-        let v = fd.vbank().get(rep).ok_or_else(|| format!("No storage for: {name}"))?;
-        (v.get_addr().clone(), v.get_size(), v.get_type().clone(), v.is_written(), v.get_def())
+        let v = fd
+            .vbank()
+            .get(rep)
+            .ok_or_else(|| format!("No storage for: {name}"))?;
+        (
+            v.get_addr().clone(),
+            v.get_size(),
+            v.get_type().clone(),
+            v.is_written(),
+            v.get_def(),
+        )
     };
-    let stable = addr.get_space().is_some_and(|space|
-        !matches!(space.get_type(), IPTR_INTERNAL | IPTR_JOIN | IPTR_CONSTANT));
+    let stable = addr.get_space().is_some_and(|space| {
+        !matches!(space.get_type(), IPTR_INTERNAL | IPTR_JOIN | IPTR_CONSTANT)
+    });
     if !stable {
         return dynamic_target(fd, ids[0], rep, addr, size, dtype, maxduplicates).map(Some);
     }
@@ -670,7 +804,9 @@ fn printed_local(
         None => &fd.get_address().clone() + -1,
     };
     let ambiguous = fd.vbank().iter_loc().any(|vn| {
-        let Some(v) = fd.vbank().get(vn) else { return false };
+        let Some(v) = fd.vbank().get(vn) else {
+            return false;
+        };
         if v.get_addr() != &addr || v.get_size() != size || v.get_high() == Some(ids[0]) {
             return false;
         }
@@ -722,26 +858,86 @@ fn dynamic_target(
 ) -> Result<PrintedLocal, String> {
     let (hash, usepoint) = unlace_decomp::dynamic::dynamic_unique_hash(rep, maxduplicates, fd)
         .map_err(|error| error.explain().to_string())?;
-    let found = (hash != 0).then(|| {
-        unlace_decomp::dynamic::DynamicHash::new().find_varnode(fd, &usepoint, hash)
-    }).flatten();
-    if !found.and_then(|id| fd.vbank().get(id))
+    let found = (hash != 0)
+        .then(|| unlace_decomp::dynamic::DynamicHash::new().find_varnode(fd, &usepoint, hash))
+        .flatten();
+    if !found
+        .and_then(|id| fd.vbank().get(id))
         .is_some_and(|v| v.get_high() == Some(high) && v.get_size() == size)
     {
         return Err("Unable to identify the selected variable uniquely for replay".to_string());
     }
-    Ok(PrintedLocal { high, addr, size, usepoint, dtype, dynamic_hash: Some(hash) })
+    Ok(PrintedLocal {
+        high,
+        addr,
+        size,
+        usepoint,
+        dtype,
+        dynamic_hash: Some(hash),
+    })
 }
 
 /// The words C reserves, which no declaration can use as a variable's name.
 const C_KEYWORDS: &[&str] = &[
-    "alignas", "alignof", "auto", "bool", "break", "case", "char", "const", "constexpr", "continue",
-    "default", "do", "double", "else", "enum", "extern", "false", "float", "for", "goto", "if",
-    "inline", "int", "long", "nullptr", "register", "restrict", "return", "short", "signed",
-    "sizeof", "static", "static_assert", "struct", "switch", "thread_local", "true", "typedef",
-    "typeof", "typeof_unqual", "union", "unsigned", "void", "volatile", "while", "_Alignas",
-    "_Alignof", "_Atomic", "_BitInt", "_Bool", "_Complex", "_Decimal128", "_Decimal32",
-    "_Decimal64", "_Generic", "_Imaginary", "_Noreturn", "_Static_assert", "_Thread_local",
+    "alignas",
+    "alignof",
+    "auto",
+    "bool",
+    "break",
+    "case",
+    "char",
+    "const",
+    "constexpr",
+    "continue",
+    "default",
+    "do",
+    "double",
+    "else",
+    "enum",
+    "extern",
+    "false",
+    "float",
+    "for",
+    "goto",
+    "if",
+    "inline",
+    "int",
+    "long",
+    "nullptr",
+    "register",
+    "restrict",
+    "return",
+    "short",
+    "signed",
+    "sizeof",
+    "static",
+    "static_assert",
+    "struct",
+    "switch",
+    "thread_local",
+    "true",
+    "typedef",
+    "typeof",
+    "typeof_unqual",
+    "union",
+    "unsigned",
+    "void",
+    "volatile",
+    "while",
+    "_Alignas",
+    "_Alignof",
+    "_Atomic",
+    "_BitInt",
+    "_Bool",
+    "_Complex",
+    "_Decimal128",
+    "_Decimal32",
+    "_Decimal64",
+    "_Generic",
+    "_Imaginary",
+    "_Noreturn",
+    "_Static_assert",
+    "_Thread_local",
 ];
 
 /// Refuse a new local name the declaration could not print as a name: a C
@@ -751,7 +947,9 @@ fn check_local_name(fd: &Funcdata, newname: &str) -> Result<(), String> {
         return Ok(());
     }
     if C_KEYWORDS.contains(&newname) {
-        return Err(format!("`{newname}` is a C keyword, not a usable local name"));
+        return Err(format!(
+            "`{newname}` is a C keyword, not a usable local name"
+        ));
     }
     let is_type = fd
         .get_arch()
@@ -809,7 +1007,8 @@ fn bind_printed_local(
     let sym = match target.dynamic_hash {
         Some(hash) => scope.add_dynamic_symbol(name, ct, &target.usepoint, hash),
         None => scope.add_symbol(name, ct, &target.addr, &target.usepoint),
-    }.map_err(|error| error.explain().to_string())?;
+    }
+    .map_err(|error| error.explain().to_string())?;
     if lock_type {
         scope.set_attribute(sym, varnode_flags::typelock);
         scope.set_symbol_isolated(sym, true);

@@ -57,10 +57,7 @@ pub(super) fn global_name_ok(name: &str) -> bool {
 /// Get-or-create the `go.typedesc` shell: the `internal/abi.Type` base record
 /// at the harvest's own decode offsets (`word_size`-scaled, 48 bytes on
 /// 64-bit, 32 on 32-bit). An already-completed struct of that name is reused.
-pub(super) fn typedesc_shell(
-    tf: &dyn TypeFactory,
-    width: int4,
-) -> Option<std::rc::Rc<Datatype>> {
+pub(super) fn typedesc_shell(tf: &dyn TypeFactory, width: int4) -> Option<std::rc::Rc<Datatype>> {
     let ct = shell(tf, "go.typedesc").ok()?;
     if ct.get_size() != 0 {
         return Some(ct);
@@ -95,7 +92,8 @@ pub(super) fn typedesc_shell(
             field_type: ty,
         })
         .collect();
-    tf.set_fields_struct_raw(&ct, fields, Vec::new(), 4 * w + 16, w, 0).ok()
+    tf.set_fields_struct_raw(&ct, fields, Vec::new(), 4 * w + 16, w, 0)
+        .ok()
 }
 
 /// The most descriptors one image's graph walk visits. The walk reaches every
@@ -105,15 +103,21 @@ const WALK_MAX: usize = 200_000;
 
 /// The descriptor at `vma`, when it lies inside the type blob.
 fn descriptor_at(img: &GoImage, meta: &TypeMeta, vma: u64) -> Option<GoType> {
-    let in_blob =
-        vma >= meta.types && vma.checked_add(img.type_base()).is_some_and(|end| end <= meta.etypes);
-    in_blob.then(|| read_type(img, meta.types, meta.etypes, (vma - meta.types) as u32)).flatten()
+    let in_blob = vma >= meta.types
+        && vma
+            .checked_add(img.type_base())
+            .is_some_and(|end| end <= meta.etypes);
+    in_blob
+        .then(|| read_type(img, meta.types, meta.etypes, (vma - meta.types) as u32))
+        .flatten()
 }
 
 /// The descriptor a 32-bit `typeOff` at `at` names (`0` is "none").
 fn descriptor_off(img: &GoImage, meta: &TypeMeta, at: u64) -> Option<u64> {
     let off = i32::from_le_bytes(img.read(at, 4)?.try_into().ok()?);
-    (off > 0).then(|| meta.types.checked_add(off as u64)).flatten()
+    (off > 0)
+        .then(|| meta.types.checked_add(off as u64))
+        .flatten()
 }
 
 /// The descriptors `t` refers to: `ptrToThis`, then per kind the element and
@@ -123,13 +127,21 @@ fn edges(img: &GoImage, meta: &TypeMeta, t: &GoType) -> Vec<u64> {
     let (w, base) = (img.word_size, t.vma + img.type_base());
     let mut next: Vec<u64> = descriptor_off(img, meta, base - 4).into_iter().collect();
     match t.kind {
-        KIND_ARRAY | KIND_MAP => next.extend([word(img, base), word(img, base + w)].into_iter().flatten()),
+        KIND_ARRAY | KIND_MAP => {
+            next.extend([word(img, base), word(img, base + w)].into_iter().flatten())
+        }
         KIND_CHAN | KIND_POINTER | KIND_SLICE => next.extend(word(img, base)),
         KIND_FUNC => {
             if let Some(b) = img.read(base, 4) {
                 let n = u64::from(u16::from_le_bytes([b[0], b[1]]))
                     + u64::from(u16::from_le_bytes([b[2], b[3]]) & 0x7fff);
-                let params = base + w + if t.tflag & TFLAG_UNCOMMON != 0 { UNCOMMON_SIZE } else { 0 };
+                let params = base
+                    + w
+                    + if t.tflag & TFLAG_UNCOMMON != 0 {
+                        UNCOMMON_SIZE
+                    } else {
+                        0
+                    };
                 next.extend((0..n.min(512)).filter_map(|k| word(img, params + k * w)));
             }
         }
@@ -156,12 +168,18 @@ fn edges(img: &GoImage, meta: &TypeMeta, t: &GoType) -> Vec<u64> {
 /// often, and the walk is what reaches them.
 pub(super) fn reachable(img: &GoImage, meta: &TypeMeta) -> BTreeMap<u64, GoType> {
     let mut records: BTreeMap<u64, GoType> = BTreeMap::new();
-    let mut queue: VecDeque<u64> = meta.offsets.iter().map(|&o| meta.types + u64::from(o)).collect();
+    let mut queue: VecDeque<u64> = meta
+        .offsets
+        .iter()
+        .map(|&o| meta.types + u64::from(o))
+        .collect();
     while let Some(vma) = queue.pop_front() {
         if records.len() >= WALK_MAX || records.contains_key(&vma) {
             continue;
         }
-        let Some(t) = descriptor_at(img, meta, vma) else { continue };
+        let Some(t) = descriptor_at(img, meta, vma) else {
+            continue;
+        };
         queue.extend(edges(img, meta, &t));
         records.insert(vma, t);
     }
@@ -210,13 +228,19 @@ fn linker_name_depth(img: &GoImage, meta: &TypeMeta, t: &GoType, depth: u32) -> 
         let composed = match t.kind {
             KIND_POINTER => child(base).map(|e| format!("*{e}")),
             KIND_SLICE => child(base).map(|e| format!("[]{e}")),
-            KIND_ARRAY => word(img, base + 2 * img.word_size).zip(child(base)).map(|(n, e)| format!("[{n}]{e}")),
-            KIND_MAP => child(base).zip(child(base + img.word_size)).map(|(k, e)| format!("map[{k}]{e}")),
+            KIND_ARRAY => word(img, base + 2 * img.word_size)
+                .zip(child(base))
+                .map(|(n, e)| format!("[{n}]{e}")),
+            KIND_MAP => child(base)
+                .zip(child(base + img.word_size))
+                .map(|(k, e)| format!("map[{k}]{e}")),
             _ => None,
         };
         return composed.unwrap_or_else(|| t.name.clone());
     }
-    let Some(path) = pkg_path(img, meta, t) else { return t.name.clone() };
+    let Some(path) = pkg_path(img, meta, t) else {
+        return t.name.clone();
+    };
     let short = path.rsplit('/').next().unwrap_or(&path);
     match t.name.strip_prefix(short).and_then(|r| r.strip_prefix('.')) {
         Some(rest) if path != short => format!("{path}.{rest}"),

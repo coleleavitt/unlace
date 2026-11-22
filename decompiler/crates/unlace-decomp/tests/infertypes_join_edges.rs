@@ -5,19 +5,22 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace};
+use unlace_base::space::{
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
+};
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
 use unlace_decomp::coreaction_infertypes::propagate_type_pub;
-use unlace_decomp::dtype::{type_metatype, Datatype};
+use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::funcdata::Funcdata;
 
 fn build_fd() -> Funcdata {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -32,7 +35,15 @@ fn build_fd() -> Funcdata {
     .unwrap();
     let glb = Rc::new(ArchContext::new(m));
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
-    Funcdata::new("func", "func", glb, Address::new(ram, 0x1000), 0x10000000, 0x40).unwrap()
+    Funcdata::new(
+        "func",
+        "func",
+        glb,
+        Address::new(ram, 0x1000),
+        0x10000000,
+        0x40,
+    )
+    .unwrap()
 }
 
 fn ram(fd: &Funcdata) -> Rc<AddrSpace> {
@@ -43,12 +54,22 @@ fn ram(fd: &Funcdata) -> Rc<AddrSpace> {
 fn mk_join(fd: &mut Funcdata, opc: OpCode, n: int4) -> (OpId, Vec<VarnodeId>, VarnodeId) {
     let r = ram(fd);
     let op = fd.new_op(n, Address::new(Rc::clone(&r), 0x100));
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
     let unk = Rc::new(Datatype::new(4, type_metatype::TYPE_UNKNOWN));
     let ins: Vec<VarnodeId> = (0..n)
         .map(|i| {
-            let vn = fd.vbank_mut().create(4, Address::new(Rc::clone(&r), 0x10 * (i as u64 + 1)), Rc::clone(&unk));
-            let vn = fd.vbank_mut().set_input(vn, &mut |_: &mut unlace_decomp::varnode::VarnodeBank, _, _| Ok(())).unwrap();
+            let vn = fd.vbank_mut().create(
+                4,
+                Address::new(Rc::clone(&r), 0x10 * (i as u64 + 1)),
+                Rc::clone(&unk),
+            );
+            let vn = fd
+                .vbank_mut()
+                .set_input(vn, &mut |_: &mut unlace_decomp::varnode::VarnodeBank,
+                                     _,
+                                     _| Ok(()))
+                .unwrap();
             fd.op_set_input(op, vn, i).unwrap();
             vn
         })
@@ -72,13 +93,24 @@ fn joins_carry_an_input_only_to_their_output() {
             for i in 0..n {
                 for j in 0..n {
                     if i != j {
-                        let got = propagate_type_pub(&mut fd, Rc::clone(ty), op, ins[i as usize], ins[j as usize], i, j);
+                        let got = propagate_type_pub(
+                            &mut fd,
+                            Rc::clone(ty),
+                            op,
+                            ins[i as usize],
+                            ins[j as usize],
+                            i,
+                            j,
+                        );
                         assert!(got.is_none(), "{opc:?} carried input {i} to input {j}");
                     }
                 }
             }
             let to_out = propagate_type_pub(&mut fd, Rc::clone(ty), op, ins[0], out, 0, -1);
-            assert!(to_out.is_some(), "{opc:?} no longer carries an input to its output");
+            assert!(
+                to_out.is_some(),
+                "{opc:?} no longer carries an input to its output"
+            );
         }
     }
 }

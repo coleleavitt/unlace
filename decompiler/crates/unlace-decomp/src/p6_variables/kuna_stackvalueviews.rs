@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use crate::dtype::{type_metatype, TypeFactory};
+use crate::dtype::{TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::unionresolve::ResolvedUnion;
 

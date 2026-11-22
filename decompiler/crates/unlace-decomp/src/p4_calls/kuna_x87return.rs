@@ -98,15 +98,15 @@ mod tests {
         dtype::{Datatype, TypeFactoryImpl},
         fspec::{ParamEntry, ProtoModel},
     };
+    use std::rc::Rc;
     use unlace_base::{
         address::Address,
         error::{KunaError, KunaResult},
         space::{
-            spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, RegisterLookup, UniqueSpace,
-            VarnodeStorage,
+            AddrSpace, AddrSpaceManager, ConstantSpace, RegisterLookup, UniqueSpace,
+            VarnodeStorage, spacetype,
         },
     };
-    use std::rc::Rc;
 
     struct Lookup(Rc<AddrSpace>);
     impl RegisterLookup for Lookup {

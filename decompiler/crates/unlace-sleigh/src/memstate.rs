@@ -21,9 +21,9 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use unlace_base::address::{byte_swap, calc_mask, Address};
+use unlace_base::address::{Address, byte_swap, calc_mask};
 use unlace_base::error::{KunaError, KunaResult};
-use unlace_base::space::{spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::Wrap;
 use unlace_num::pcoderaw::VarnodeData;
 
@@ -118,7 +118,11 @@ impl MemoryBankCore {
     /// \param ws is the number of bytes in the preferred wordsize
     /// \param ps is the number of bytes in a page
     pub fn new(spc: Rc<AddrSpace>, ws: i32, ps: i32) -> MemoryBankCore {
-        MemoryBankCore { space: spc, wordsize: ws, pagesize: ps }
+        MemoryBankCore {
+            space: spc,
+            wordsize: ws,
+            pagesize: ps,
+        }
     }
 
     /// Get the number of bytes in a word for this memory bank
@@ -556,7 +560,10 @@ impl MemoryImage {
     /// \param ps is the number of bytes in a page (must be power of 2)
     /// \param ld is the underlying LoadImage
     pub fn new(spc: Rc<AddrSpace>, ws: i32, ps: i32, ld: Rc<RefCell<dyn LoadImage>>) -> Self {
-        MemoryImage { core: MemoryBankCore::new(spc, ws, ps), loader: ld }
+        MemoryImage {
+            core: MemoryBankCore::new(spc, ws, ps),
+            loader: ld,
+        }
     }
 }
 
@@ -585,11 +592,10 @@ impl MemoryBank for MemoryImage {
         // C++ writes through (uint1 *)&res (the low wordsize bytes on the
         // little-endian oracle host; HOST_ENDIAN pinned, module docs)
         let mut buf = [0u8; 8];
-        match self
-            .loader
-            .borrow_mut()
-            .load_fill(&mut buf[..wordsize as usize], &Address::new(Rc::clone(spc), addr))
-        {
+        match self.loader.borrow_mut().load_fill(
+            &mut buf[..wordsize as usize],
+            &Address::new(Rc::clone(spc), addr),
+        ) {
             Ok(()) => {}
             Err(KunaError::DataUnavail { .. }) => {
                 // Pages not mapped in the load image, are assumed to be zero
@@ -706,7 +712,10 @@ impl MemoryBank for MemoryPageOverlay {
         let pageoffset = (addr & ((pagesize - 1) as i64 as u64)) as usize; // cast: < pagesize
         let wordsize = self.core.wordsize;
         let bigendian = self.core.space.is_big_endian();
-        let pageptr = self.page.get_mut(&pageaddr).expect("page just ensured present");
+        let pageptr = self
+            .page
+            .get_mut(&pageaddr)
+            .expect("page just ensured present");
         deconstruct_value(
             &mut pageptr[pageoffset..pageoffset + wordsize as usize],
             val,
@@ -959,7 +968,10 @@ impl MemoryState {
     /// convert register names into varnodes
     /// \param t is the translator
     pub fn new(t: Rc<dyn Translate>) -> Self {
-        MemoryState { trans: t, memspace: Vec::new() }
+        MemoryState {
+            trans: t,
+            memspace: Vec::new(),
+        }
     }
 
     /// Get the Translate object.
@@ -996,7 +1008,9 @@ impl MemoryState {
     /// \param spc is the address space of the desired MemoryBank
     /// \return the MemoryBank or `None` if no bank is associated with \e spc
     pub fn get_memory_bank(&self, spc: &Rc<AddrSpace>) -> Option<&Rc<RefCell<dyn MemoryBank>>> {
-        self.memspace.get(spc.get_index() as usize).and_then(Option::as_ref)
+        self.memspace
+            .get(spc.get_index() as usize)
+            .and_then(Option::as_ref)
     }
 
     /// Set a value on the memory state.
@@ -1159,7 +1173,7 @@ impl MemoryState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::emulate::test_support::{test_manager, TestLoader, TestTranslator};
+    use crate::emulate::test_support::{TestLoader, TestTranslator, test_manager};
     use unlace_base::space::AddrSpaceManager;
 
     /// A loader with 16 mapped bytes at 0x2000:
@@ -1167,7 +1181,10 @@ mod tests {
     fn test_loader() -> Rc<RefCell<TestLoader>> {
         let mut bytes = vec![0x11u8, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88];
         bytes.extend_from_slice(&[0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7, 0xa8]);
-        Rc::new(RefCell::new(TestLoader { start: 0x2000, bytes }))
+        Rc::new(RefCell::new(TestLoader {
+            start: 0x2000,
+            bytes,
+        }))
     }
 
     fn ram(manager: &AddrSpaceManager) -> Rc<AddrSpace> {
@@ -1238,8 +1255,12 @@ mod tests {
     fn test_memstate_page_overlay_little_endian() {
         let manager = test_manager(false);
         let r = ram(&manager);
-        let image: Rc<RefCell<dyn MemoryBank>> =
-            Rc::new(RefCell::new(MemoryImage::new(Rc::clone(&r), 8, 16, test_loader())));
+        let image: Rc<RefCell<dyn MemoryBank>> = Rc::new(RefCell::new(MemoryImage::new(
+            Rc::clone(&r),
+            8,
+            16,
+            test_loader(),
+        )));
         let mut overlay = MemoryPageOverlay::new(Rc::clone(&r), 8, 16, Some(Rc::clone(&image)));
 
         // read-through to the underlying image (no page cached)
@@ -1269,7 +1290,9 @@ mod tests {
         assert_eq!(&res[8..], &[0u8; 8]);
 
         // chunk write across pages (the second page is created copy-on-write)
-        overlay.set_chunk(0x200e, &[0xDE, 0xAD, 0xBE, 0xEF]).unwrap();
+        overlay
+            .set_chunk(0x200e, &[0xDE, 0xAD, 0xBE, 0xEF])
+            .unwrap();
         assert_eq!(overlay.get_value(0x200e, 2).unwrap(), 0xADDE);
         assert_eq!(overlay.get_value(0x2010, 2).unwrap(), 0xEFBE);
 
@@ -1313,8 +1336,12 @@ mod tests {
     fn test_memstate_hash_overlay() {
         let manager = test_manager(false);
         let r = ram(&manager);
-        let image: Rc<RefCell<dyn MemoryBank>> =
-            Rc::new(RefCell::new(MemoryImage::new(Rc::clone(&r), 8, 16, test_loader())));
+        let image: Rc<RefCell<dyn MemoryBank>> = Rc::new(RefCell::new(MemoryImage::new(
+            Rc::clone(&r),
+            8,
+            16,
+            test_loader(),
+        )));
         let mut hash = MemoryHashOverlay::new(Rc::clone(&r), 8, 16, 16, Some(Rc::clone(&image)));
 
         // unwritten addresses fall through to the underlying bank
@@ -1338,7 +1365,9 @@ mod tests {
         hash.get_chunk(0x100, &mut res).unwrap();
         assert_eq!(
             res,
-            [0x2A, 0, 0, 0, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 0, 0, 0, 0]
+            [
+                0x2A, 0, 0, 0, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 0, 0, 0, 0
+            ]
         );
         hash.set_chunk(0x110, &[1, 2, 3, 4, 5, 6, 7, 8]).unwrap();
         assert_eq!(hash.get_value(0x110, 8).unwrap(), 0x0807060504030201);
@@ -1373,10 +1402,18 @@ mod tests {
         let trans: Rc<dyn Translate> =
             Rc::new(TestTranslator::new(&manager, BTreeMap::new(), Vec::new()));
 
-        let image: Rc<RefCell<dyn MemoryBank>> =
-            Rc::new(RefCell::new(MemoryImage::new(Rc::clone(&r), 8, 16, test_loader())));
-        let ramstate: Rc<RefCell<dyn MemoryBank>> =
-            Rc::new(RefCell::new(MemoryPageOverlay::new(Rc::clone(&r), 8, 16, Some(image))));
+        let image: Rc<RefCell<dyn MemoryBank>> = Rc::new(RefCell::new(MemoryImage::new(
+            Rc::clone(&r),
+            8,
+            16,
+            test_loader(),
+        )));
+        let ramstate: Rc<RefCell<dyn MemoryBank>> = Rc::new(RefCell::new(MemoryPageOverlay::new(
+            Rc::clone(&r),
+            8,
+            16,
+            Some(image),
+        )));
         let registerstate: Rc<RefCell<dyn MemoryBank>> = Rc::new(RefCell::new(
             MemoryHashOverlay::new(Rc::clone(&register), 8, 16, 64, None),
         ));
@@ -1397,11 +1434,19 @@ mod tests {
         assert_eq!(state.get_value(&r, 0x3000, 8).unwrap(), 0x1234);
         state.set_value_by_name("r0", 99).unwrap();
         assert_eq!(state.get_value_by_name("r0").unwrap(), 99);
-        assert_eq!(state.get_value(&register, 0, 8).unwrap(), 99, "r0 lives at register:0");
+        assert_eq!(
+            state.get_value(&register, 0, 8).unwrap(),
+            99,
+            "r0 lives at register:0"
+        );
         assert!(state.get_value_by_name("nope").is_err());
 
         // varnode interface
-        let vn = VarnodeData { space: Some(Rc::clone(&register)), offset: 8, size: 8 };
+        let vn = VarnodeData {
+            space: Some(Rc::clone(&register)),
+            offset: 8,
+            size: 8,
+        };
         state.set_value_data(&vn, 0xfeed).unwrap();
         assert_eq!(state.get_value_data(&vn).unwrap(), 0xfeed);
 

@@ -44,7 +44,7 @@
 use std::collections::BTreeSet;
 
 use super::filter;
-use super::{adler32, Block, PackInfo, UpxError};
+use super::{Block, PackInfo, UpxError, adler32};
 
 /// `IMAGE_SIZEOF_SECTION_HEADER`.
 const SECTION_HEADER_SIZE: usize = 40;
@@ -90,18 +90,26 @@ fn unsupported(what: impl Into<String>) -> UpxError {
 }
 
 fn le16(b: &[u8], off: usize) -> Result<u16, UpxError> {
-    let s = b.get(off..off + 2).ok_or_else(|| corrupt(format!("read past end at {off:#x}")))?;
+    let s = b
+        .get(off..off + 2)
+        .ok_or_else(|| corrupt(format!("read past end at {off:#x}")))?;
     Ok(u16::from_le_bytes([s[0], s[1]]))
 }
 
 fn le32(b: &[u8], off: usize) -> Result<u32, UpxError> {
-    let s = b.get(off..off + 4).ok_or_else(|| corrupt(format!("read past end at {off:#x}")))?;
+    let s = b
+        .get(off..off + 4)
+        .ok_or_else(|| corrupt(format!("read past end at {off:#x}")))?;
     Ok(u32::from_le_bytes([s[0], s[1], s[2], s[3]]))
 }
 
 fn le64(b: &[u8], off: usize) -> Result<u64, UpxError> {
-    let s = b.get(off..off + 8).ok_or_else(|| corrupt(format!("read past end at {off:#x}")))?;
-    Ok(u64::from_le_bytes([s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7]]))
+    let s = b
+        .get(off..off + 8)
+        .ok_or_else(|| corrupt(format!("read past end at {off:#x}")))?;
+    Ok(u64::from_le_bytes([
+        s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7],
+    ]))
 }
 
 /// PE32 or PE32+: everything the two rebuilds disagree on is the word size.
@@ -237,7 +245,9 @@ impl PeHeader {
         // UPX reads at most sixteen directories and ignores a larger count.
         let ndirs = (le32(b, opt + dirs_at - 4)? as usize).min(16);
         if opt_size < dirs_at + 8 * ndirs {
-            return Err(corrupt(format!("optional header declares {ndirs} data directories")));
+            return Err(corrupt(format!(
+                "optional header declares {ndirs} data directories"
+            )));
         }
         let mut dirs = Vec::with_capacity(ndirs);
         for i in 0..ndirs {
@@ -293,7 +303,11 @@ impl<'a> Image<'a> {
 
     /// The file offset holding image address `rva`, if any section maps it.
     fn file_offset(&self, rva: u32) -> Option<usize> {
-        self.hdr.sections.iter().find_map(|s| s.file_offset(rva)).map(|o| o as usize)
+        self.hdr
+            .sections
+            .iter()
+            .find_map(|s| s.file_offset(rva))
+            .map(|o| o as usize)
     }
 
     /// Read `len` bytes of the packed image at image address `rva`.
@@ -352,7 +366,9 @@ pub(super) fn find_pack_header(bytes: &[u8]) -> Option<usize> {
         let c_adler = u32::from_le_bytes([p[12], p[13], p[14], p[15]]);
         let at = base + i;
         let data = at + super::PACK_HEADER_SIZE;
-        let Some(stream) = bytes.get(data..data + c_len) else { continue };
+        let Some(stream) = bytes.get(data..data + c_len) else {
+            continue;
+        };
         if adler32(1, stream) == c_adler {
             return Some(at);
         }
@@ -375,7 +391,7 @@ fn target_width(img: &Image<'_>, info: &PackInfo) -> Result<Width, UpxError> {
             return Err(unsupported(format!(
                 "target format {f} ({}) -- only win32/pe and win64/pe (amd64) are implemented",
                 super::format_name(f)
-            )))
+            )));
         }
     };
     if img.hdr.width != width {
@@ -419,12 +435,19 @@ pub(super) fn unpack(img: &Image<'_>, info: &PackInfo) -> Result<(Vec<u8>, Vec<B
 
     // Data past the last packed section is the original's overlay, which UPX
     // carries through verbatim and its unpacker appends again.
-    let last = img.hdr.sections.last().expect("parse rejects an empty section table");
+    let last = img
+        .hdr
+        .sections
+        .last()
+        .expect("parse rejects an empty section table");
     let packed_end = last.rawptr as usize + last.rawsize as usize;
     if packed_end > img.bytes.len() {
         return Err(corrupt("packed file is shorter than its last section"));
     }
-    let tail = img.bytes.get(align_up(packed_end, img.hdr.file_align)..).unwrap_or(&[]);
+    let tail = img
+        .bytes
+        .get(align_up(packed_end, img.hdr.file_align)..)
+        .unwrap_or(&[]);
 
     // The one compressed block, immediately after the PackHeader.
     let data = info.pack_header_offset + super::PACK_HEADER_SIZE;
@@ -457,22 +480,31 @@ pub(super) fn unpack(img: &Image<'_>, info: &PackInfo) -> Result<(Vec<u8>, Vec<B
     let rvamin = oh.sections[0].vaddr;
     let extra = oh.table_at + oh.sections.len() * SECTION_HEADER_SIZE;
     if extra > trailer_end {
-        return Err(corrupt("recovered section table overruns the compressed block"));
+        return Err(corrupt(
+            "recovered section table overruns the compressed block",
+        ));
     }
 
     // UPX filters only the code, and biases every rewritten target by the
     // code's distance from the image's first section.
     if info.filter != 0 {
-        let start =
-            oh.code_base.checked_sub(rvamin).ok_or_else(|| {
-                corrupt(format!("code base {:#x} lies below the image", oh.code_base))
-            })? as usize;
+        let start = oh.code_base.checked_sub(rvamin).ok_or_else(|| {
+            corrupt(format!(
+                "code base {:#x} lies below the image",
+                oh.code_base
+            ))
+        })? as usize;
         let end = start
             .checked_add(oh.code_size as usize)
             .filter(|e| *e <= obuf.len())
             .ok_or_else(|| corrupt("filtered code runs past the recovered image"))?;
-        filter::unfilter_at(info.filter, info.filter_cto, start as u32, &mut obuf[start..end])
-            .map_err(|e| UpxError::Unsupported(e.to_string()))?;
+        filter::unfilter_at(
+            info.filter,
+            info.filter_cto,
+            start as u32,
+            &mut obuf[start..end],
+        )
+        .map_err(|e| UpxError::Unsupported(e.to_string()))?;
     }
 
     let records = trailer_records(trailer_end - extra).ok_or_else(|| {
@@ -483,7 +515,14 @@ pub(super) fn unpack(img: &Image<'_>, info: &PackInfo) -> Result<(Vec<u8>, Vec<B
     })?;
     let mut trailer = extra;
     rebuild_imports(img, &mut obuf, &oh, rvamin, records.imports, &mut trailer)?;
-    rebuild_relocs(&mut obuf, &mut oh, img.hdr.flags, rvamin, records.relocs, &mut trailer)?;
+    rebuild_relocs(
+        &mut obuf,
+        &mut oh,
+        img.hdr.flags,
+        rvamin,
+        records.relocs,
+        &mut trailer,
+    )?;
     rebuild_exports(img, &mut obuf, &oh, rvamin)?;
     rebuild_resources(img, &mut obuf, &oh, rvamin, records.resources, &mut trailer)?;
     if trailer != trailer_end {
@@ -491,7 +530,15 @@ pub(super) fn unpack(img: &Image<'_>, info: &PackInfo) -> Result<(Vec<u8>, Vec<B
     }
     finish_header(&mut obuf, &mut oh);
 
-    let bytes = assemble(img, &obuf, &oh, rvamin, skip, tail, info.u_file_size as usize)?;
+    let bytes = assemble(
+        img,
+        &obuf,
+        &oh,
+        rvamin,
+        skip,
+        tail,
+        info.u_file_size as usize,
+    )?;
     check_length(&bytes, &oh, info)?;
     let block = Block {
         offset: data,
@@ -520,7 +567,11 @@ struct Records {
 /// alone says which records are there.
 fn trailer_records(len: usize) -> Option<Records> {
     (0u8..8)
-        .map(|m| Records { imports: m & 1 != 0, relocs: m & 2 != 0, resources: m & 4 != 0 })
+        .map(|m| Records {
+            imports: m & 1 != 0,
+            relocs: m & 2 != 0,
+            resources: m & 4 != 0,
+        })
         .find(|r| {
             8 * usize::from(r.imports) + 5 * usize::from(r.relocs) + 2 * usize::from(r.resources)
                 == len
@@ -619,7 +670,9 @@ fn rebuild_imports(
     let (imp_rva, imp_size) = oh.dir(DIR_IMPORT);
     let expected = imp_rva != 0 && imp_size as usize > IMPORT_DESC_SIZE;
     if present && !expected {
-        return Err(corrupt("trailer carries imports for an image with no import directory"));
+        return Err(corrupt(
+            "trailer carries imports for an image with no import directory",
+        ));
     }
     // A directory naming no DLL gives the packer nothing to record, and the
     // original's empty table is still in the image.
@@ -665,17 +718,23 @@ fn rebuild_imports(
             le32(obuf, rva_off(rvamin, imp_rva)? + k * IMPORT_DESC_SIZE + 12)?
         };
         write_at(obuf, rvamin, this_name, name)?;
-        write_at(obuf, rvamin, this_name.saturating_add(name.len() as u32), &[0])?;
+        write_at(
+            obuf,
+            rvamin,
+            this_name.saturating_add(name.len() as u32),
+            &[0],
+        )?;
 
         let mut thunk = d.iat;
         for t in &d.thunks {
             let value = match t {
                 Thunk::Ordinal(ord) => u64::from(*ord) | width.ordinal_flag(),
                 Thunk::LoaderSlot(off) => {
-                    let slot =
-                        img.at_rva(desc_base.saturating_add(*off), width.word()).ok_or_else(
-                            || corrupt("KERNEL32 ordinal slot is outside the loader table"),
-                        )?;
+                    let slot = img
+                        .at_rva(desc_base.saturating_add(*off), width.word())
+                        .ok_or_else(|| {
+                            corrupt("KERNEL32 ordinal slot is outside the loader table")
+                        })?;
                     let v = read_word(slot, 0, width)?;
                     if v & width.ordinal_flag() == 0 {
                         return Err(corrupt("KERNEL32 ordinal slot does not hold an ordinal"));
@@ -699,7 +758,12 @@ fn rebuild_imports(
                     }
                     write_at(obuf, rvamin, imported, &[0, 0])?;
                     write_at(obuf, rvamin, imported.saturating_add(2), n)?;
-                    write_at(obuf, rvamin, imported.saturating_add(2 + n.len() as u32), &[0])?;
+                    write_at(
+                        obuf,
+                        rvamin,
+                        imported.saturating_add(2 + n.len() as u32),
+                        &[0],
+                    )?;
                     let at = imported;
                     imported = imported.saturating_add(2 + n.len() as u32 + 1);
                     u64::from(at)
@@ -749,7 +813,9 @@ fn parse_import_block(obuf: &[u8], mut at: usize, rvamin: u32) -> Result<Vec<Imp
         at += 8;
         let mut thunks = Vec::new();
         loop {
-            let tag = *obuf.get(at).ok_or_else(|| corrupt("import block runs past the block"))?;
+            let tag = *obuf
+                .get(at)
+                .ok_or_else(|| corrupt("import block runs past the block"))?;
             match tag {
                 0 => {
                     at += 1;
@@ -774,7 +840,11 @@ fn parse_import_block(obuf: &[u8], mut at: usize, rvamin: u32) -> Result<Vec<Imp
                 }
             }
         }
-        dlls.push(ImportDll { name_off, iat, thunks });
+        dlls.push(ImportDll {
+            name_off,
+            iat,
+            thunks,
+        });
     }
 }
 
@@ -786,7 +856,11 @@ fn parse_import_block(obuf: &[u8], mut at: usize, rvamin: u32) -> Result<Vec<Imp
 /// `KERNEL32.DLL` descriptor is not part of `table`; see [`loader_import_table`].
 fn table_names_dlls(table: &[u32], base: u32, wanted: &BTreeSet<u32>) -> bool {
     !table.is_empty()
-        && table.iter().map(|n| n.checked_sub(base)).collect::<Option<BTreeSet<u32>>>().as_ref()
+        && table
+            .iter()
+            .map(|n| n.checked_sub(base))
+            .collect::<Option<BTreeSet<u32>>>()
+            .as_ref()
             == Some(wanted)
 }
 
@@ -825,9 +899,9 @@ fn loader_import_table(img: &Image<'_>, dlls: &[ImportDll]) -> Result<u32, UpxEr
         let mut names = Vec::new();
         let mut stub_kernel32 = false;
         for k in 0..=MAX_LOADER_DLLS {
-            reads = reads
-                .checked_sub(1)
-                .ok_or_else(|| corrupt("packed image holds too many candidate loader tables to scan"))?;
+            reads = reads.checked_sub(1).ok_or_else(|| {
+                corrupt("packed image holds too many candidate loader tables to scan")
+            })?;
             let Some(at) = base.checked_add((k * IMPORT_DESC_SIZE) as u32) else {
                 return Ok(false);
             };
@@ -841,8 +915,9 @@ fn loader_import_table(img: &Image<'_>, dlls: &[ImportDll]) -> Result<u32, UpxEr
             // Nearly every position a scan tries fails on its first descriptor;
             // the set comparison alone would walk each one on to a terminator.
             if !name.checked_sub(base).is_some_and(|o| wanted.contains(&o)) {
-                let kernel32 =
-                    img.cstr_at_rva(name).is_ok_and(|n| n.eq_ignore_ascii_case(b"KERNEL32.DLL"));
+                let kernel32 = img
+                    .cstr_at_rva(name)
+                    .is_ok_and(|n| n.eq_ignore_ascii_case(b"KERNEL32.DLL"));
                 if stub_kernel32 || !kernel32 {
                     return Ok(false);
                 }
@@ -866,7 +941,9 @@ fn loader_import_table(img: &Image<'_>, dlls: &[ImportDll]) -> Result<u32, UpxEr
             let at = rva as u32;
             if agrees(at)? {
                 if found.is_some_and(|f| f != at) {
-                    return Err(corrupt("packed image has more than one loader import table"));
+                    return Err(corrupt(
+                        "packed image has more than one loader import table",
+                    ));
                 }
                 found = Some(at);
             }
@@ -906,7 +983,9 @@ fn rebuild_relocs(
     let (rva, size) = oh.dir(DIR_BASERELOC);
     let expected = rva != 0 && size != 0 && size != 8 && oh.flags & IMAGE_FILE_RELOCS_STRIPPED == 0;
     if present && !expected {
-        return Err(corrupt("trailer carries relocations for an image that keeps none"));
+        return Err(corrupt(
+            "trailer carries relocations for an image that keeps none",
+        ));
     }
     if rva == 0 || size == 0 || oh.flags & IMAGE_FILE_RELOCS_STRIPPED != 0 {
         return Ok(());
@@ -935,7 +1014,11 @@ fn rebuild_relocs(
     // position lists: `LOW` first when the record says so, then `HIGH`.
     if big & 6 != 0 {
         let first = if big & 4 != 0 { REL_LOW } else { REL_HIGH };
-        let lists: &[u16] = if big & 6 == 6 { &[first, REL_HIGH] } else { &[first] };
+        let lists: &[u16] = if big & 6 == 6 {
+            &[first, REL_HIGH]
+        } else {
+            &[first]
+        };
         for &ty in lists {
             loop {
                 let pos = le32(obuf, at)?;
@@ -978,7 +1061,9 @@ fn unoptimize_relocs(
     let mut at = crelocs;
     let mut pc = u32::MAX - 3;
     loop {
-        let b = *obuf.get(at).ok_or_else(|| corrupt("relocation stream runs past the block"))?;
+        let b = *obuf
+            .get(at)
+            .ok_or_else(|| corrupt("relocation stream runs past the block"))?;
         if b == 0 {
             return Ok((relocs, at + 1));
         }
@@ -1002,7 +1087,9 @@ fn unoptimize_relocs(
         pc = pc.wrapping_add(delta);
         let p = pc as usize;
         if p.checked_add(word).is_none_or(|e| e > crelocs) {
-            return Err(corrupt(format!("relocation at {pc:#x} lies outside the image")));
+            return Err(corrupt(format!(
+                "relocation at {pc:#x} lies outside the image"
+            )));
         }
         let slot = &mut obuf[p..p + word];
         slot.reverse();
@@ -1016,8 +1103,9 @@ fn unoptimize_relocs(
             Width::Pe32Plus => {
                 let mut w = [0u8; 8];
                 w.copy_from_slice(slot);
-                let v =
-                    u64::from_le_bytes(w).wrapping_add(image_base).wrapping_add(u64::from(rvamin));
+                let v = u64::from_le_bytes(w)
+                    .wrapping_add(image_base)
+                    .wrapping_add(u64::from(rvamin));
                 slot.copy_from_slice(&v.to_le_bytes());
             }
         }
@@ -1098,7 +1186,11 @@ fn rebuild_export_dir(
     let local = |rva: u32, len: usize| -> Result<usize, UpxError> {
         let off = rva.checked_sub(base).map(|o| o as usize);
         off.filter(|o| o.checked_add(len).is_some_and(|e| e <= dir.len()))
-            .ok_or_else(|| corrupt(format!("export table at {rva:#x} runs outside its directory")))
+            .ok_or_else(|| {
+                corrupt(format!(
+                    "export table at {rva:#x} runs outside its directory"
+                ))
+            })
     };
     let cstr = |rva: u32| -> Result<&[u8], UpxError> {
         let off = local(rva, 1)?;
@@ -1109,7 +1201,9 @@ fn rebuild_export_dir(
         Ok(&dir[off..off + n])
     };
     if dir.len() < EXPORT_DIR_SIZE {
-        return Err(corrupt("packed export directory is shorter than its header"));
+        return Err(corrupt(
+            "packed export directory is shorter than its header",
+        ));
     }
     let mut edir = dir[..EXPORT_DIR_SIZE].to_vec();
     let ename = cstr(le32(&edir, 12)?)?;
@@ -1127,8 +1221,9 @@ fn rebuild_export_dir(
         Ok(())
     };
     grow(ename)?;
-    let mut funcs: Vec<u32> =
-        (0..nfuncs).map(|i| le32(dir, funcs_at + 4 * i)).collect::<Result<_, _>>()?;
+    let mut funcs: Vec<u32> = (0..nfuncs)
+        .map(|i| le32(dir, funcs_at + 4 * i))
+        .collect::<Result<_, _>>()?;
     let mut names = Vec::with_capacity(nnames);
     for i in 0..nnames {
         let n = cstr(le32(dir, names_at + 4 * i)?)?;
@@ -1138,7 +1233,11 @@ fn rebuild_export_dir(
     let end = base.saturating_add(dir.len() as u32);
     let mut forwarders: Vec<Option<&[u8]>> = Vec::with_capacity(nfuncs);
     for &f in &funcs {
-        let fw = if f >= base && f < end { Some(cstr(f)?) } else { None };
+        let fw = if f >= base && f < end {
+            Some(cstr(f)?)
+        } else {
+            None
+        };
         if let Some(s) = fw {
             grow(s)?;
         }
@@ -1205,10 +1304,14 @@ fn rebuild_resources(
 ) -> Result<(), UpxError> {
     let expected = oh.dir(DIR_RESOURCE).1 != 0 && img.hdr.dir(DIR_RESOURCE).1 != 0;
     if present && !expected {
-        return Err(corrupt("trailer carries resources for an image with no resource directory"));
+        return Err(corrupt(
+            "trailer carries resources for an image with no resource directory",
+        ));
     }
     if !present && expected {
-        return Err(corrupt("trailer has no resource record for an image with resources"));
+        return Err(corrupt(
+            "trailer has no resource record for an image with resources",
+        ));
     }
     if !present {
         return Ok(());
@@ -1227,7 +1330,11 @@ fn rebuild_resources(
     let mut walk = ResourceWalk::default();
     walk_resource_dir(&tree, 0, 0, 0, &mut walk)?;
     let padded = walk.extent.saturating_add(3) & !3;
-    let dir_len = if padded as usize <= tree.len() { padded } else { walk.extent };
+    let dir_len = if padded as usize <= tree.len() {
+        padded
+    } else {
+        walk.extent
+    };
     confine_to_section(oh, res_rva, dir_len, "rebuilt resource directory")?;
 
     let mut icondir_count = icondir_count;
@@ -1249,7 +1356,9 @@ fn rebuild_resources(
         )?;
         moved = moved.saturating_add(size as usize);
         if moved > img.bytes.len() {
-            return Err(corrupt("moved resources add up to more than the packed file"));
+            return Err(corrupt(
+                "moved resources add up to more than the packed file",
+            ));
         }
         let body = img
             .at_rva(data_rva, size as usize)
@@ -1257,7 +1366,12 @@ fn rebuild_resources(
         tree[at..at + 4].copy_from_slice(&orig.to_le_bytes());
         write_at(obuf, rvamin, orig, body)?;
         if icondir_count != 0 && ty == RT_GROUP_ICON {
-            write_at(obuf, rvamin, orig.saturating_add(4), &icondir_count.to_le_bytes())?;
+            write_at(
+                obuf,
+                rvamin,
+                orig.saturating_add(4),
+                &icondir_count.to_le_bytes(),
+            )?;
             icondir_count = 0;
         }
     }
@@ -1321,7 +1435,9 @@ fn walk_resource_dir(
             if !walk.seen.insert(child) {
                 return Err(corrupt("resource directory reaches one data entry twice"));
             }
-            walk.extent = walk.extent.max(child.saturating_add(RESOURCE_DATA_ENTRY_SIZE));
+            walk.extent = walk
+                .extent
+                .max(child.saturating_add(RESOURCE_DATA_ENTRY_SIZE));
             walk.leaves.push((child, ty));
         }
     }
@@ -1347,7 +1463,9 @@ fn write_at(obuf: &mut [u8], rvamin: u32, rva: u32, data: &[u8]) -> Result<(), U
 /// owns it; a rebuild that spills into the next one would look plausible and
 /// disassemble wrong.
 fn confine_to_section(oh: &PeHeader, rva: u32, len: u32, what: &str) -> Result<(), UpxError> {
-    let end = rva.checked_add(len).ok_or_else(|| corrupt(format!("{what} overflows")))?;
+    let end = rva
+        .checked_add(len)
+        .ok_or_else(|| corrupt(format!("{what} overflows")))?;
     let ok = oh
         .sections
         .iter()
@@ -1355,7 +1473,9 @@ fn confine_to_section(oh: &PeHeader, rva: u32, len: u32, what: &str) -> Result<(
     if ok {
         Ok(())
     } else {
-        Err(corrupt(format!("{what} at {rva:#x}..{end:#x} spans no single section")))
+        Err(corrupt(format!(
+            "{what} at {rva:#x}..{end:#x} spans no single section"
+        )))
     }
 }
 
@@ -1436,7 +1556,10 @@ fn assemble(
         }
         let (ptr, size) = (s.rawptr as usize, s.rawsize as usize);
         let src = (s.vaddr.checked_sub(rvamin).ok_or_else(|| {
-            corrupt(format!("section at {:#x} lies below the image base", s.vaddr))
+            corrupt(format!(
+                "section at {:#x} lies below the image base",
+                s.vaddr
+            ))
         })?) as usize;
         // The image content must not reach into the trailer: that region is
         // UPX's own bookkeeping, never a section's bytes.
@@ -1447,7 +1570,9 @@ fn assemble(
             )));
         }
         if ptr.checked_add(size).is_none() || ptr + size > 512 * 1024 * 1024 {
-            return Err(corrupt(format!("section raw range at {ptr:#x} is not credible")));
+            return Err(corrupt(format!(
+                "section raw range at {ptr:#x} is not credible"
+            )));
         }
         end = end.max(ptr + size);
         raw.push((ptr, &obuf[src..src + size]));
@@ -1484,7 +1609,9 @@ fn assemble(
     if le32(&out, 0x3c)? as usize != img.pe_off
         || out.get(img.pe_off..img.pe_off + 4) != Some(b"PE\0\0")
     {
-        return Err(corrupt("rebuilt file's headers were overwritten by a section's raw data"));
+        return Err(corrupt(
+            "rebuilt file's headers were overwritten by a section's raw data",
+        ));
     }
     Ok(out)
 }
@@ -1496,7 +1623,11 @@ mod tests {
     fn dlls(name_offs: &[u32]) -> Vec<ImportDll> {
         name_offs
             .iter()
-            .map(|&name_off| ImportDll { name_off, iat: 0, thunks: Vec::new() })
+            .map(|&name_off| ImportDll {
+                name_off,
+                iat: 0,
+                thunks: Vec::new(),
+            })
             .collect()
     }
 
@@ -1512,9 +1643,13 @@ mod tests {
     #[test]
     fn a_dll_imported_by_several_descriptors_still_matches_its_loader_table() {
         let base = 0x73a0c;
-        let table: Vec<u32> =
-            [224, 237, 250, 263, 273, 286, 297].iter().map(|o| base + o).collect();
-        let repeated = dlls(&[224, 224, 224, 224, 237, 237, 250, 263, 273, 273, 286, 286, 297]);
+        let table: Vec<u32> = [224, 237, 250, 263, 273, 286, 297]
+            .iter()
+            .map(|o| base + o)
+            .collect();
+        let repeated = dlls(&[
+            224, 224, 224, 224, 237, 237, 250, 263, 273, 273, 286, 286, 297,
+        ]);
         assert!(table_names_dlls(&table, base, &offsets(&repeated)));
     }
 
@@ -1522,7 +1657,11 @@ mod tests {
     fn one_descriptor_per_dll_still_matches() {
         let base = 0x1000;
         let table: Vec<u32> = [16, 32, 48].iter().map(|o| base + o).collect();
-        assert!(table_names_dlls(&table, base, &offsets(&dlls(&[16, 32, 48]))));
+        assert!(table_names_dlls(
+            &table,
+            base,
+            &offsets(&dlls(&[16, 32, 48]))
+        ));
     }
 
     /// Set equality both ways: a table naming a DLL the trailer never asks for
@@ -1532,7 +1671,11 @@ mod tests {
         let base = 0x1000;
         let table: Vec<u32> = [16, 32, 48].iter().map(|o| base + o).collect();
         assert!(!table_names_dlls(&table, base, &offsets(&dlls(&[16, 32]))));
-        assert!(!table_names_dlls(&table, base, &offsets(&dlls(&[16, 32, 48, 64]))));
+        assert!(!table_names_dlls(
+            &table,
+            base,
+            &offsets(&dlls(&[16, 32, 48, 64]))
+        ));
         assert!(!table_names_dlls(&[], base, &offsets(&dlls(&[16]))));
     }
 
@@ -1621,9 +1764,16 @@ mod tests {
         let mut trailer = record;
         rebuild_relocs(&mut b, &mut oh, 0, rvamin, true, &mut trailer)
             .expect("kept relocations rebuild");
-        assert_eq!(trailer, record + 5, "the relocation record is five trailer bytes");
+        assert_eq!(
+            trailer,
+            record + 5,
+            "the relocation record is five trailer bytes"
+        );
         for (at, target) in targets {
-            assert_eq!(u64::from_le_bytes(b[at..at + 8].try_into().unwrap()), target);
+            assert_eq!(
+                u64::from_le_bytes(b[at..at + 8].try_into().unwrap()),
+                target
+            );
         }
         let table = &b[0x1800..0x1818];
         assert_eq!(
@@ -1665,8 +1815,9 @@ mod tests {
             u32::from_le_bytes(b[0x20..0x24].try_into().unwrap()),
             0x40_0000 + 0x1000 + 0xabc
         );
-        let entries: Vec<u16> =
-            (0..3).map(|i| u16::from_le_bytes([b[0x1808 + 2 * i], b[0x1809 + 2 * i]])).collect();
+        let entries: Vec<u16> = (0..3)
+            .map(|i| u16::from_le_bytes([b[0x1808 + 2 * i], b[0x1809 + 2 * i]]))
+            .collect();
         assert_eq!(entries, [0x3020, 0x2040, 0x1044]);
         assert_eq!(oh.dir(DIR_BASERELOC).1, 16);
     }
@@ -1692,7 +1843,10 @@ mod tests {
                         + 2 * usize::from(r.resources),
                     len
                 );
-                assert!(seen.insert((r.imports, r.relocs, r.resources)), "two lengths for one set");
+                assert!(
+                    seen.insert((r.imports, r.relocs, r.resources)),
+                    "two lengths for one set"
+                );
             }
         }
         assert_eq!(seen.len(), 8);
@@ -1762,7 +1916,11 @@ mod tests {
             body[0x90..0x90 + extra.len()].copy_from_slice(extra);
             tiny_pe(&body)
         };
-        let wanted = vec![ImportDll { name_off: 0x80, iat: 0, thunks: Vec::new() }];
+        let wanted = vec![ImportDll {
+            name_off: 0x80,
+            iat: 0,
+            thunks: Vec::new(),
+        }];
         let bytes = table(b"KERNEL32.DLL\0");
         let img = Image::new(&bytes).unwrap();
         assert_eq!(loader_import_table(&img, &wanted).unwrap(), 0x1000);
@@ -1818,11 +1976,25 @@ mod tests {
             String::from_utf8_lossy(&out[o..o + n]).into_owned()
         };
         assert_eq!(out.len() % 4, 0);
-        assert_eq!((rd(28), rd(32), rd(36)), (newbase + 40, newbase + 52, newbase + 60));
+        assert_eq!(
+            (rd(28), rd(32), rd(36)),
+            (newbase + 40, newbase + 52, newbase + 60)
+        );
         assert_eq!(cstr(rd(12)), "lib.dll");
-        assert_eq!((rd(40), rd(44)), (0x1100, 0x1200), "code addresses are not moved");
-        assert_eq!(cstr(rd(48)), "K32.Sleep", "the forwarder string moves with the table");
-        assert_eq!((cstr(rd(52)), cstr(rd(56))), ("alpha".to_owned(), "fwd".to_owned()));
+        assert_eq!(
+            (rd(40), rd(44)),
+            (0x1100, 0x1200),
+            "code addresses are not moved"
+        );
+        assert_eq!(
+            cstr(rd(48)),
+            "K32.Sleep",
+            "the forwarder string moves with the table"
+        );
+        assert_eq!(
+            (cstr(rd(52)), cstr(rd(56))),
+            ("alpha".to_owned(), "fwd".to_owned())
+        );
         assert_eq!(&out[60..64], &[0, 0, 2, 0]);
     }
 
@@ -1877,7 +2049,11 @@ mod tests {
     /// lies past the end of the file names nothing.
     #[test]
     fn a_hostile_packed_section_table_cannot_wrap_or_overrun_the_scan() {
-        let wanted = vec![ImportDll { name_off: 0x80, iat: 0, thunks: Vec::new() }];
+        let wanted = vec![ImportDll {
+            name_off: 0x80,
+            iat: 0,
+            thunks: Vec::new(),
+        }];
         let mut bytes = tiny_pe(&[0x11u8; 0x40]);
         let t = 0x40 + 24 + 224;
         bytes[t + 12..t + 16].copy_from_slice(&0xffff_fff0u32.to_le_bytes());
@@ -1904,7 +2080,10 @@ mod tests {
         let data = info.pack_header_offset + super::super::PACK_HEADER_SIZE;
         let obuf = super::super::elf::method_codec(info.method)
             .unwrap()
-            .decompress(&bytes[data..data + info.c_len as usize], info.u_len as usize)
+            .decompress(
+                &bytes[data..data + info.c_len as usize],
+                info.u_len as usize,
+            )
             .unwrap();
         bytes.extend_from_slice(b"overlay!");
         let img = Image::new(&bytes).unwrap();
@@ -1917,7 +2096,10 @@ mod tests {
         oh.file_align = 0xf000_0000;
         let err = assemble(&img, &obuf, &oh, rvamin, skip, tail, 3072 + 8)
             .expect_err("a 4 GB alignment is not credible");
-        assert!(format!("{err}").contains("rebuilt 4026531848 bytes"), "{err}");
+        assert!(
+            format!("{err}").contains("rebuilt 4026531848 bytes"),
+            "{err}"
+        );
     }
 
     /// The overlay is cut out of the packed file's tail by the original's
@@ -1967,11 +2149,20 @@ mod tests {
         let mut bytes = tiny_pe(tree);
         put(&mut bytes, TINY_SECTION + 12, packed_rva);
         put(&mut bytes, TINY_DIRS + 8 * DIR_RESOURCE, packed_rva);
-        put(&mut bytes, TINY_DIRS + 8 * DIR_RESOURCE + 4, tree.len() as u32);
+        put(
+            &mut bytes,
+            TINY_DIRS + 8 * DIR_RESOURCE + 4,
+            tree.len() as u32,
+        );
         let img = Image::new(&bytes).unwrap();
         let mut dirs = vec![(0, 0); 16];
         dirs[DIR_RESOURCE] = (0x1000, tree.len() as u32);
-        let rsrc = Section { vsize: 0x10000, vaddr: 0x1000, rawsize: 0x10000, rawptr: 0x400 };
+        let rsrc = Section {
+            vsize: 0x10000,
+            vaddr: 0x1000,
+            rawsize: 0x10000,
+            rawptr: 0x400,
+        };
         let oh = PeHeader {
             at: 0,
             width: Width::Pe32,
@@ -2006,7 +2197,10 @@ mod tests {
     #[test]
     fn a_resource_data_entry_past_its_packed_copy_is_refused() {
         let err = rebuild_tree(&one_leaf_tree(0, 32), 0x1000).expect_err("a truncated entry");
-        assert!(format!("{err}").contains("runs past its packed copy"), "{err}");
+        assert!(
+            format!("{err}").contains("runs past its packed copy"),
+            "{err}"
+        );
         rebuild_tree(&one_leaf_tree(0, 40), 0x1000).expect("the whole entry is there");
     }
 
@@ -2068,7 +2262,9 @@ mod tests {
     fn more_dlls_than_the_scan_follows_is_unsupported() {
         let img_bytes = tiny_pe(&[0; 0x40]);
         let img = Image::new(&img_bytes).unwrap();
-        let wanted: Vec<u32> = (0..=MAX_LOADER_DLLS as u32).map(|k| 0x40 + 20 * k).collect();
+        let wanted: Vec<u32> = (0..=MAX_LOADER_DLLS as u32)
+            .map(|k| 0x40 + 20 * k)
+            .collect();
         let err = loader_import_table(&img, &dlls(&wanted)).expect_err("too many DLLs");
         assert!(matches!(err, UpxError::Unsupported(_)), "{err}");
     }
@@ -2086,7 +2282,10 @@ mod tests {
         let img = Image::new(&img_bytes).unwrap();
         let wanted: Vec<u32> = (0..MAX_LOADER_DLLS as u32).map(|k| 0x40 + 20 * k).collect();
         let err = loader_import_table(&img, &dlls(&wanted)).expect_err("no table, many walks");
-        assert!(format!("{err}").contains("too many candidate loader tables"), "{err}");
+        assert!(
+            format!("{err}").contains("too many candidate loader tables"),
+            "{err}"
+        );
     }
 
     /// An eight-byte directory is the empty block "some tricky dlls use", which

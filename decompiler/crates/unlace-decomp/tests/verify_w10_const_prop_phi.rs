@@ -30,7 +30,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::rc::Rc;
 
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, ConstantSpace, addrspace_flags, spacetype};
 use unlace_decomp::block::{BlockGraph, BlockKind, FlowBlock};
 use unlace_decomp::context::BlockId;
 
@@ -146,7 +146,11 @@ fn w10cpp_restricted_self_loop_header_is_restricted() {
         Some(cond),
         "self-loop header is immediately dominated by its entry"
     );
-    assert_eq!(g.block(hdr).size_in(), 2, "header in-edges: [entry, self back-edge]");
+    assert_eq!(
+        g.block(hdr).size_in(),
+        2,
+        "header in-edges: [entry, self back-edge]"
+    );
     assert!(
         g.restricted_by_conditional(hdr, cond),
         "the self back-edge equals `this`, so no sibling path exists => restricted"
@@ -184,7 +188,11 @@ fn w10cpp_restricted_idom_mismatch_short_circuits_false() {
         Some(mid),
         "merge is dominated by `mid`, not the entry"
     );
-    assert_eq!(g.block(between).get_immed_dom(), Some(mid), "between is dominated by mid");
+    assert_eq!(
+        g.block(between).get_immed_dom(),
+        Some(mid),
+        "between is dominated by mid"
+    );
     // Wrong conditional block: idom(merge) != entry => early false.
     assert!(
         !g.restricted_by_conditional(merge, entry),
@@ -205,11 +213,16 @@ fn w10cpp_restricted_idom_mismatch_short_circuits_false() {
 // ===========================================================================
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn specs_root() -> PathBuf {
-    std::env::var_os("KUNA_SPECS").map(PathBuf::from).unwrap_or_else(|| repo_root().join("specs"))
+    std::env::var_os("KUNA_SPECS")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| repo_root().join("specs"))
 }
 
 fn datatests_root() -> PathBuf {
@@ -225,7 +238,10 @@ fn rust_oracle() -> Option<PathBuf> {
         return pb.exists().then_some(pb);
     }
     for profile in ["release", "debug"] {
-        let pb = repo_root().join("decompiler/target").join(profile).join("decomp_test_dbg");
+        let pb = repo_root()
+            .join("decompiler/target")
+            .join(profile)
+            .join("decomp_test_dbg");
         if pb.exists() {
             return Some(pb);
         }
@@ -248,7 +264,10 @@ fn condconst_assertions() -> Option<String> {
         .arg("condconst.xml")
         .output()
         .ok()?;
-    if !specs_root().join("Ghidra/Processors/x86/data/languages/x86-64.sla").exists() {
+    if !specs_root()
+        .join("Ghidra/Processors/x86/data/languages/x86-64.sla")
+        .exists()
+    {
         // specs not compiled in this tree
         let txt = String::from_utf8_lossy(&out.stdout);
         if txt.contains("Could not find .sla") {
@@ -259,11 +278,15 @@ fn condconst_assertions() -> Option<String> {
 }
 
 fn assertion_passed(report: &str, name: &str) -> bool {
-    report.lines().any(|l| l.trim() == format!("Success -- {name}"))
+    report
+        .lines()
+        .any(|l| l.trim() == format!("Success -- {name}"))
 }
 
 fn assertion_failed(report: &str, name: &str) -> bool {
-    report.lines().any(|l| l.trim() == format!("FAIL -- {name}"))
+    report
+        .lines()
+        .any(|l| l.trim() == format!("FAIL -- {name}"))
 }
 
 /// TEST (real phi recovery): the three named constant-propagation-through-phi

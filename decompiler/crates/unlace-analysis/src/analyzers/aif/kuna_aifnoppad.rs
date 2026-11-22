@@ -73,13 +73,23 @@ pub(super) struct PaddingRuns {
 
 impl PaddingRuns {
     pub(super) fn new(decoder: &GapDecoder) -> Self {
-        PaddingRuns { wide: decoder.code_space.get_addr_size() > 4, ends: HashMap::new() }
+        PaddingRuns {
+            wide: decoder.code_space.get_addr_size() > 4,
+            ends: HashMap::new(),
+        }
     }
 
     /// Classify the gap candidate at `entry`. A padding run is read no further
     /// than the validity walk follows a candidate.
-    pub(super) fn classify(&mut self, listing: &Listing, decoder: &mut GapDecoder, entry: u64) -> Filler {
-        let Some(first) = decoder.probe(entry) else { return Filler::No };
+    pub(super) fn classify(
+        &mut self,
+        listing: &Listing,
+        decoder: &mut GapDecoder,
+        entry: u64,
+    ) -> Filler {
+        let Some(first) = decoder.probe(entry) else {
+            return Filler::No;
+        };
         if is_zero_fill(&first) {
             return Filler::Refuse;
         }
@@ -120,7 +130,11 @@ impl PaddingRuns {
 pub(super) fn is_zero_fill(insn: &ProbedInsn) -> bool {
     let mnemonic = &*insn.mnemonic;
     let operands_are = |want: &str| {
-        insn.operands.chars().filter(|c| !c.is_whitespace()).map(|c| c.to_ascii_lowercase()).eq(want.chars())
+        insn.operands
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .map(|c| c.to_ascii_lowercase())
+            .eq(want.chars())
     };
     if mnemonic.eq_ignore_ascii_case("add") {
         operands_are("byteptr[eax],al") || operands_are("byteptr[rax],al")
@@ -135,28 +149,44 @@ pub(super) fn is_zero_fill(insn: &ProbedInsn) -> bool {
 /// register into itself, or a register self-move a function cannot open with.
 pub(super) fn is_padding(insn: &ProbedInsn, wide: bool) -> bool {
     let mnemonic = &*insn.mnemonic;
-    if ["nop", "nop.w", "int3"].iter().any(|m| mnemonic.eq_ignore_ascii_case(m)) {
+    if ["nop", "nop.w", "int3"]
+        .iter()
+        .any(|m| mnemonic.eq_ignore_ascii_case(m))
+    {
         return true;
     }
-    let moves = ["mov", "cpy", "xchg"].iter().any(|m| mnemonic.eq_ignore_ascii_case(m));
+    let moves = ["mov", "cpy", "xchg"]
+        .iter()
+        .any(|m| mnemonic.eq_ignore_ascii_case(m));
     if !(moves || mnemonic.eq_ignore_ascii_case("lea")) {
         return false;
     }
-    let Some((dst, src)) = insn.operands.split_once(',') else { return false };
+    let Some((dst, src)) = insn.operands.split_once(',') else {
+        return false;
+    };
     let dst = dst.trim();
     if moves {
         return !wide && dst.eq_ignore_ascii_case(src.trim()) && !dst.eq_ignore_ascii_case("edi");
     }
-    let Some(inner) = src.trim().strip_prefix('[').and_then(|s| s.strip_suffix(']')) else { return false };
+    let Some(inner) = src
+        .trim()
+        .strip_prefix('[')
+        .and_then(|s| s.strip_suffix(']'))
+    else {
+        return false;
+    };
     let base = match inner.split_once('+') {
         Some((base, disp)) if disp.trim() == "0x0" => base,
         Some(_) => return false,
         None => inner,
     };
-    let full_width = !wide || [
-        "RAX", "RBX", "RCX", "RDX", "RSI", "RDI", "RBP", "RSP",
-        "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15",
-    ].iter().any(|register| dst.eq_ignore_ascii_case(register));
+    let full_width = !wide
+        || [
+            "RAX", "RBX", "RCX", "RDX", "RSI", "RDI", "RBP", "RSP", "R8", "R9", "R10", "R11",
+            "R12", "R13", "R14", "R15",
+        ]
+        .iter()
+        .any(|register| dst.eq_ignore_ascii_case(register));
     full_width && base.trim().eq_ignore_ascii_case(dst)
 }
 
@@ -169,8 +199,15 @@ mod tests {
 
     fn insn(mnemonic: &str, operands: &str) -> ProbedInsn {
         ProbedInsn {
-            len: 1, kind: FlowKind::Fallthrough, is_call: false, is_terminal: false, fall_through: None,
-            flows: Vec::new(), mnemonic: Rc::from(mnemonic), operands: operands.to_string(), reusable: None,
+            len: 1,
+            kind: FlowKind::Fallthrough,
+            is_call: false,
+            is_terminal: false,
+            fall_through: None,
+            flows: Vec::new(),
+            mnemonic: Rc::from(mnemonic),
+            operands: operands.to_string(),
+            reusable: None,
         }
     }
 
@@ -189,7 +226,10 @@ mod tests {
     fn padding_forms() {
         for wide in [false, true] {
             assert!(is_padding(&insn("NOP", ""), wide));
-            assert!(is_padding(&insn("NOP", "word ptr CS:[EAX + EAX*0x1]"), wide));
+            assert!(is_padding(
+                &insn("NOP", "word ptr CS:[EAX + EAX*0x1]"),
+                wide
+            ));
             assert!(is_padding(&insn("INT3", ""), wide));
             assert!(is_padding(&insn("nop.w", ""), wide));
             assert_eq!(is_padding(&insn("LEA", "ESI,[ESI]"), wide), !wide);
@@ -212,25 +252,30 @@ mod tests {
     #[test]
     fn wide_self_lea_preserves_the_whole_register() {
         for register in [
-            "RAX", "RBX", "RCX", "RDX", "RSI", "RDI", "RBP", "RSP",
-            "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15",
+            "RAX", "RBX", "RCX", "RDX", "RSI", "RDI", "RBP", "RSP", "R8", "R9", "R10", "R11",
+            "R12", "R13", "R14", "R15",
         ] {
             for displacement in ["", " + 0x0"] {
                 let operands = format!("{register},[{register}{displacement}]");
                 assert!(is_padding(&insn("LEA", &operands), true), "{operands}");
-                assert!(is_padding(&insn("lea", &operands.to_ascii_lowercase()), true));
+                assert!(is_padding(
+                    &insn("lea", &operands.to_ascii_lowercase()),
+                    true
+                ));
             }
         }
         for register in [
-            "EAX", "EBX", "ECX", "EDX", "ESI", "EDI", "EBP", "ESP",
-            "R8D", "R9D", "R10D", "R11D", "R12D", "R13D", "R14D", "R15D",
+            "EAX", "EBX", "ECX", "EDX", "ESI", "EDI", "EBP", "ESP", "R8D", "R9D", "R10D", "R11D",
+            "R12D", "R13D", "R14D", "R15D",
         ] {
             for displacement in ["", " + 0x0"] {
                 let operands = format!("{register},[{register}{displacement}]");
                 assert!(!is_padding(&insn("LEA", &operands), true), "{operands}");
-                assert!(!is_padding(&insn("lea", &operands.to_ascii_lowercase()), true));
+                assert!(!is_padding(
+                    &insn("lea", &operands.to_ascii_lowercase()),
+                    true
+                ));
             }
         }
     }
-
 }

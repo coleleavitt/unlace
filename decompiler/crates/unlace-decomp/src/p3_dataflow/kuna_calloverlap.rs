@@ -172,18 +172,20 @@ pub(crate) fn auto_register(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dtype::{type_class, type_metatype, Datatype};
+    use crate::dtype::{Datatype, type_class, type_metatype};
     use crate::fspec::{FuncProto, ParamEntry, ProtoModel};
+    use std::rc::Rc;
     use unlace_base::address::Address;
     use unlace_base::space::{
-        spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, RegisterLookup, VarnodeStorage,
+        AddrSpace, AddrSpaceManager, ConstantSpace, RegisterLookup, VarnodeStorage, spacetype,
     };
-    use std::rc::Rc;
 
     struct Registers;
     impl RegisterLookup for Registers {
         fn get_register(&self, _: &str) -> KunaResult<VarnodeStorage> {
-            Err(unlace_base::error::KunaError::lowlevel("name lookup unused"))
+            Err(unlace_base::error::KunaError::lowlevel(
+                "name lookup unused",
+            ))
         }
         fn get_register_name(&self, space: &Rc<AddrSpace>, off: u64, size: i32) -> String {
             self.get_exact_register_name(space, off, size)

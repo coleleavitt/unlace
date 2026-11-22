@@ -25,9 +25,9 @@ use unlace_base::error::KunaResult;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
-use crate::dtype::{type_metatype, Datatype, TypeFactory};
-use crate::funcdata::Funcdata;
 use crate::context::OpId;
+use crate::dtype::{Datatype, TypeFactory, type_metatype};
+use crate::funcdata::Funcdata;
 use crate::unionresolve::{ResolveEdge, ResolvedUnion};
 
 impl Funcdata {
@@ -35,7 +35,10 @@ impl Funcdata {
     /// Panics on a stale id, mirroring the other `obank().get(...).expect(...)`
     /// accessors in [`crate::funcdata_op`] (a stale op here is a logic error).
     fn op_time(&self, op: OpId) -> unlace_base::types::uintm {
-        self.obank().get(op).expect("union edge: stale op").get_time()
+        self.obank()
+            .get(op)
+            .expect("union edge: stale op")
+            .get_time()
     }
 
     /// Build the data-flow `ResolveEdge(unresType, op, slot)`
@@ -229,7 +232,8 @@ impl Funcdata {
         // sym->isAddrBased(): build a locked resolution keyed on the first-use
         // address + the hash-encoded slot (C++ funcdata_varnode.cc:1661-1666).
         if addr_based {
-            let mut resolve = ResolvedUnion::new_field(Rc::clone(&sym_type), field_number, typegrp.as_ref())?;
+            let mut resolve =
+                ResolvedUnion::new_field(Rc::clone(&sym_type), field_number, typegrp.as_ref())?;
             resolve.set_lock(true);
             let slot = crate::dynamic::DynamicHash::get_slot_from_hash(entry.get_hash());
             let first_use = entry.get_first_use_address();
@@ -263,24 +267,37 @@ impl Funcdata {
         if let Some(dt) = self.vbank().get(vn).map(|v| Rc::clone(v.get_type())) {
             match dt.get_metatype() {
                 type_metatype::TYPE_PTR => {
-                    if dt.get_ptr_to().map(|p| Rc::ptr_eq(&p, &sym_type)).unwrap_or(false) {
+                    if dt
+                        .get_ptr_to()
+                        .map(|p| Rc::ptr_eq(&p, &sym_type))
+                        .unwrap_or(false)
+                    {
                         unres_type = dt;
                     }
                 }
                 type_metatype::TYPE_PARTIALSTRUCT => {
-                    if dt.get_partial_base().map(|p| Rc::ptr_eq(&p, &sym_type)).unwrap_or(false) {
+                    if dt
+                        .get_partial_base()
+                        .map(|p| Rc::ptr_eq(&p, &sym_type))
+                        .unwrap_or(false)
+                    {
                         unres_type = dt;
                     }
                 }
                 type_metatype::TYPE_PARTIALUNION => {
-                    if dt.get_partial_base().map(|p| Rc::ptr_eq(&p, &sym_type)).unwrap_or(false) {
+                    if dt
+                        .get_partial_base()
+                        .map(|p| Rc::ptr_eq(&p, &sym_type))
+                        .unwrap_or(false)
+                    {
                         unres_type = dt;
                     }
                 }
                 _ => {}
             }
         }
-        let mut resolve = ResolvedUnion::new_field(Rc::clone(&unres_type), field_number, typegrp.as_ref())?;
+        let mut resolve =
+            ResolvedUnion::new_field(Rc::clone(&unres_type), field_number, typegrp.as_ref())?;
         resolve.set_lock(true);
         self.set_union_field(&unres_type, op, slot, resolve);
         Ok(true)
@@ -343,7 +360,8 @@ impl Funcdata {
         let typegrp = self.get_arch().types_rc().ok_or_else(|| {
             unlace_base::error::KunaError::lowlevel("forceFacingType: TypeFactory unavailable")
         })?;
-        let resolve = ResolvedUnion::new_field(Rc::clone(&unres_type), field_num, typegrp.as_ref())?;
+        let resolve =
+            ResolvedUnion::new_field(Rc::clone(&unres_type), field_num, typegrp.as_ref())?;
         self.set_union_field(&unres_type, op, slot, resolve);
         Ok(())
     }
@@ -361,7 +379,13 @@ impl Funcdata {
         old_op: OpId,
         old_slot: int4,
     ) -> int4 {
-        let slot = if slot < 0 && self.obank().get(old_op).expect("inherit: stale op").is_marker() {
+        let slot = if slot < 0
+            && self
+                .obank()
+                .get(old_op)
+                .expect("inherit: stale op")
+                .is_marker()
+        {
             0
         } else {
             slot
@@ -390,9 +414,16 @@ impl Funcdata {
         old_slot: int4,
     ) -> KunaResult<int4> {
         let parent = unres_ptr.get_depend(0).ok_or_else(|| {
-            unlace_base::error::KunaError::lowlevel("inheritUnionFieldPtr: pointer missing depend(0)")
+            unlace_base::error::KunaError::lowlevel(
+                "inheritUnionFieldPtr: pointer missing depend(0)",
+            )
         })?;
-        let slot = if slot < 0 && self.obank().get(old_op).expect("inherit ptr: stale op").is_marker()
+        let slot = if slot < 0
+            && self
+                .obank()
+                .get(old_op)
+                .expect("inherit ptr: stale op")
+                .is_marker()
         {
             0
         } else {
@@ -406,7 +437,8 @@ impl Funcdata {
         let typegrp = self.get_arch().types_rc().ok_or_else(|| {
             unlace_base::error::KunaError::lowlevel("inheritUnionFieldPtr: TypeFactory unavailable")
         })?;
-        let ptrres = ResolvedUnion::new_field(Rc::clone(&unres_ptr), inherited_field, typegrp.as_ref())?;
+        let ptrres =
+            ResolvedUnion::new_field(Rc::clone(&unres_ptr), inherited_field, typegrp.as_ref())?;
         self.set_union_field(&unres_ptr, op, slot, ptrres);
         Ok(inherited_field)
     }

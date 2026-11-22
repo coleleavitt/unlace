@@ -25,7 +25,10 @@ fn build_fixture(dir: &std::path::Path) -> PathBuf {
     let text = obj.section_id(write::StandardSection::Text);
     // Two `ret` bodies at distinct offsets.
     obj.append_section_data(text, &[0xc3, 0x90, 0x90, 0x90, 0xc3], 4);
-    for (name, value) in [("$s4main5helloyyF", 0u64), ("$s4main5helloyyFTJfSSUpSr", 4u64)] {
+    for (name, value) in [
+        ("$s4main5helloyyF", 0u64),
+        ("$s4main5helloyyFTJfSSUpSr", 4u64),
+    ] {
         obj.add_symbol(write::Symbol {
             name: name.as_bytes().to_vec(),
             value,
@@ -75,7 +78,6 @@ fn swift_symbols_demangle_through_the_name_surfaces() {
         !on.iter().any(|n| n == "$s4main5helloyyF"),
         "the mangled spelling is replaced, not duplicated; inventory: {on:?}"
     );
-
 
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -59,12 +59,12 @@
 //! produces the raw candidate VMAs.
 
 use object::pe::{
-    ImageNtHeaders32, ImageNtHeaders64, IMAGE_FILE_MACHINE_AMD64, IMAGE_FILE_MACHINE_ARM,
-    IMAGE_FILE_MACHINE_ARM64, IMAGE_FILE_MACHINE_ARM64EC, IMAGE_FILE_MACHINE_ARM64X,
-    IMAGE_FILE_MACHINE_ARMNT, IMAGE_FILE_MACHINE_I386,
+    IMAGE_FILE_MACHINE_AMD64, IMAGE_FILE_MACHINE_ARM, IMAGE_FILE_MACHINE_ARM64,
+    IMAGE_FILE_MACHINE_ARM64EC, IMAGE_FILE_MACHINE_ARM64X, IMAGE_FILE_MACHINE_ARMNT,
+    IMAGE_FILE_MACHINE_I386, ImageNtHeaders32, ImageNtHeaders64,
 };
-use object::read::pe::{ImageNtHeaders, PeFile, PeFile32, PeFile64};
 use object::read::Object;
+use object::read::pe::{ImageNtHeaders, PeFile, PeFile32, PeFile64};
 use object::{FileKind, LittleEndian as LE};
 
 /// Collect PE function-start candidate VMAs: the entry point, every `.pdata`
@@ -150,7 +150,10 @@ fn pdata_begins<Pe: ImageNtHeaders>(
         Some(f) => f,
         None => return,
     };
-    let dir = match pe.data_directories().get(object::pe::IMAGE_DIRECTORY_ENTRY_EXCEPTION) {
+    let dir = match pe
+        .data_directories()
+        .get(object::pe::IMAGE_DIRECTORY_ENTRY_EXCEPTION)
+    {
         Some(d) => d,
         None => return,
     };
@@ -234,11 +237,7 @@ impl PdataForm {
 /// Total, like the rest of the module: a null RVA, an RVA no section covers, or
 /// an empty slice reads as "not chained", so the filter can only ever subtract a
 /// record it has positively identified.
-fn unwind_is_chained<Pe: ImageNtHeaders>(
-    pe: &PeFile<Pe>,
-    bytes: &[u8],
-    unwind_rva: u32,
-) -> bool {
+fn unwind_is_chained<Pe: ImageNtHeaders>(pe: &PeFile<Pe>, bytes: &[u8], unwind_rva: u32) -> bool {
     const UNW_FLAG_CHAININFO: u8 = 0x4;
     if unwind_rva == 0 {
         return false;
@@ -268,7 +267,10 @@ fn tls_callbacks<Pe: ImageNtHeaders>(
     out: &mut Vec<u64>,
 ) {
     let image_base = pe.relative_address_base();
-    let dir = match pe.data_directories().get(object::pe::IMAGE_DIRECTORY_ENTRY_TLS) {
+    let dir = match pe
+        .data_directories()
+        .get(object::pe::IMAGE_DIRECTORY_ENTRY_TLS)
+    {
         Some(d) => d,
         None => return,
     };
@@ -343,11 +345,21 @@ mod tests {
     fn pe_stripped_pdata_recovers_functions() {
         let bytes = fixture("pe_imports_stripped.exe");
         let file = object::File::parse(bytes.as_slice()).expect("parse stripped PE");
-        let cands = pe_entry_candidates(&file, bytes.as_slice(), &super::super::executable_sections(&file));
+        let cands = pe_entry_candidates(
+            &file,
+            bytes.as_slice(),
+            &super::super::executable_sections(&file),
+        );
         // The entry point (oracle 1).
-        assert!(cands.contains(&0x1400014f0), "entry 0x1400014f0 missing from {cands:#x?}");
+        assert!(
+            cands.contains(&0x1400014f0),
+            "entry 0x1400014f0 missing from {cands:#x?}"
+        );
         // `.pdata`-covered functions (oracle 2), incl. `main`.
-        assert!(cands.contains(&0x140001592), "main 0x140001592 missing (.pdata)");
+        assert!(
+            cands.contains(&0x140001592),
+            "main 0x140001592 missing (.pdata)"
+        );
         // The richest source: dozens of records in this binary.
         assert!(
             cands.len() >= 50,
@@ -365,9 +377,19 @@ mod tests {
     fn pdata_chained_record_is_not_a_function_start() {
         let bytes = fixture("pe_chainedunwind_x86_64.exe");
         let file = object::File::parse(bytes.as_slice()).expect("parse chained-unwind PE");
-        let cands = pe_entry_candidates(&file, bytes.as_slice(), &super::super::executable_sections(&file));
-        assert!(cands.contains(&0x140001000), "primary missing from {cands:#x?}");
-        assert!(cands.contains(&0x140001040), "entry point missing from {cands:#x?}");
+        let cands = pe_entry_candidates(
+            &file,
+            bytes.as_slice(),
+            &super::super::executable_sections(&file),
+        );
+        assert!(
+            cands.contains(&0x140001000),
+            "primary missing from {cands:#x?}"
+        );
+        assert!(
+            cands.contains(&0x140001040),
+            "entry point missing from {cands:#x?}"
+        );
         assert!(
             !cands.contains(&0x140001020),
             "chained chunk 0x140001020 claimed as a function in {cands:#x?}"
@@ -382,7 +404,11 @@ mod tests {
     fn pdata_arm64_uses_the_eight_byte_record() {
         let bytes = fixture("pe_pdata_arm64.exe");
         let file = object::File::parse(bytes.as_slice()).expect("parse arm64 PE");
-        let cands = pe_entry_candidates(&file, bytes.as_slice(), &super::super::executable_sections(&file));
+        let cands = pe_entry_candidates(
+            &file,
+            bytes.as_slice(),
+            &super::super::executable_sections(&file),
+        );
         for vma in [0x140001000u64, 0x140001010, 0x140001020, 0x140001030] {
             assert!(cands.contains(&vma), "{vma:#x} missing from {cands:#x?}");
         }
@@ -417,7 +443,10 @@ mod tests {
         // IA64, MIPS R4000, SH-4, PowerPC: each has its own record layout (a
         // MIPS one is 20 bytes), so none of them is read.
         for other in [0x0200u16, 0x0166, 0x01a6, 0x01f0, 0] {
-            assert!(PdataForm::for_machine(other).is_none(), "machine {other:#x}");
+            assert!(
+                PdataForm::for_machine(other).is_none(),
+                "machine {other:#x}"
+            );
         }
     }
 
@@ -429,18 +458,36 @@ mod tests {
     fn pdata_unsupported_machine_is_not_parsed() {
         let mut bytes = fixture("pe_pdata_arm64.exe");
         let file = object::File::parse(bytes.as_slice()).expect("parse arm64 PE");
-        let before = pe_entry_candidates(&file, bytes.as_slice(), &super::super::executable_sections(&file));
-        assert!(before.contains(&0x140001000), "fixture lost its .pdata: {before:#x?}");
+        let before = pe_entry_candidates(
+            &file,
+            bytes.as_slice(),
+            &super::super::executable_sections(&file),
+        );
+        assert!(
+            before.contains(&0x140001000),
+            "fixture lost its .pdata: {before:#x?}"
+        );
 
         let nt = u32::from_le_bytes([bytes[0x3c], bytes[0x3d], bytes[0x3e], bytes[0x3f]]) as usize;
         bytes[nt + 4..nt + 6].copy_from_slice(&0x0166u16.to_le_bytes());
         let file = object::File::parse(bytes.as_slice()).expect("parse retyped PE");
-        let after = pe_entry_candidates(&file, bytes.as_slice(), &super::super::executable_sections(&file));
+        let after = pe_entry_candidates(
+            &file,
+            bytes.as_slice(),
+            &super::super::executable_sections(&file),
+        );
         for vma in [0x140001000u64, 0x140001010, 0x140001020] {
-            assert!(!after.contains(&vma), "{vma:#x} still parsed in {after:#x?}");
+            assert!(
+                !after.contains(&vma),
+                "{vma:#x} still parsed in {after:#x?}"
+            );
         }
         // 0x140001030 is `AddressOfEntryPoint`, which oracle 1 still supplies.
-        assert_eq!(after, vec![0x140001030], "only the entry point survives: {after:#x?}");
+        assert_eq!(
+            after,
+            vec![0x140001030],
+            "only the entry point survives: {after:#x?}"
+        );
     }
 
     /// The header page is no section, so no section flag ever spoke for the
@@ -454,7 +501,11 @@ mod tests {
         let bytes = fixture("pe_headercode_i386.exe");
         let file = object::File::parse(bytes.as_slice()).expect("parse packed PE");
         let entries = super::super::collect_entries(&file, bytes.as_slice());
-        assert_eq!(entries, vec![0x40_0154], "the declared entry is the only function");
+        assert_eq!(
+            entries,
+            vec![0x40_0154],
+            "the declared entry is the only function"
+        );
     }
 
     /// The other half of that rule: an entry inside a section the image flags
@@ -467,6 +518,9 @@ mod tests {
         let bytes = fixture("pe_datasection_entry_i386.exe");
         let file = object::File::parse(bytes.as_slice()).expect("parse data-section PE");
         let entries = super::super::collect_entries(&file, bytes.as_slice());
-        assert!(entries.is_empty(), "0x402001 is in a section flagged data: {entries:#x?}");
+        assert!(
+            entries.is_empty(),
+            "0x402001 is in a section flagged data: {entries:#x?}"
+        );
     }
 }

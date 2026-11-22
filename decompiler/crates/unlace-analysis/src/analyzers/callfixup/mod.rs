@@ -62,8 +62,8 @@
 //! and is likewise out of scope. This is the same tier constraint already
 //! documented for `FindNoReturnFunctionsAnalyzer` (see `loader/noreturn.rs`).
 
-use object::read::{Object, ObjectSymbol};
 use object::SymbolKind;
+use object::read::{Object, ObjectSymbol};
 
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::inject_sleigh::SleighPayload;
@@ -104,7 +104,9 @@ pub fn target_fixup_map(arch: &Architecture) -> Vec<(String, String)> {
         let Ok(fixup_name) = std::str::from_utf8(&cf.payload.core.name) else {
             continue;
         };
-        if fixup_name.starts_with(unlace_decomp::kuna_arithhelpers::FIXUP_PREFIX) && !arch.arith_helpers {
+        if fixup_name.starts_with(unlace_decomp::kuna_arithhelpers::FIXUP_PREFIX)
+            && !arch.arith_helpers
+        {
             continue;
         }
         if fixup_name.starts_with(unlace_decomp::kuna_objcarc::FIXUP_PREFIX) && !arch.objc_arc {
@@ -132,7 +134,9 @@ pub fn call_fixup_name_for_function<'a>(
     func_name: &str,
     map: &'a [(String, String)],
 ) -> Option<&'a str> {
-    let name = func_name.strip_prefix(LIB_CONFLICT_PREFIX).unwrap_or(func_name);
+    let name = func_name
+        .strip_prefix(LIB_CONFLICT_PREFIX)
+        .unwrap_or(func_name);
     // Probe order: bare name, then one leading underscore, then two — faithful to
     // the Java retries (a cspec `<target name="__fentry__">` must match a function
     // installed as `fentry` or `_fentry` or `__fentry__`).
@@ -175,12 +179,14 @@ fn scan_call_fixups(file: &object::File, bytes: &[u8], arch: &Architecture) -> A
             continue;
         }
         let Ok(n) = sym.name() else { continue };
-        let Ok(n) = String::from_utf8(crate::loader::elf_plt::strip_version(n.as_bytes()))
-        else {
+        let Ok(n) = String::from_utf8(crate::loader::elf_plt::strip_version(n.as_bytes())) else {
             continue;
         };
         if call_fixup_name_for_function(&n, &map).is_some() && seen.insert(n.clone()) {
-            out.call_fixups.push(crate::pass::CallFixupFact { func_name: n, addr: None });
+            out.call_fixups.push(crate::pass::CallFixupFact {
+                func_name: n,
+                addr: None,
+            });
         }
     }
     // A Mach-O import is a `__stubs` entry (and a pointer slot) the loader names
@@ -191,9 +197,14 @@ fn scan_call_fixups(file: &object::File, bytes: &[u8], arch: &Architecture) -> A
             if imp.kind != crate::loader::format::ImportSymKind::Import {
                 continue;
             }
-            let Ok(n) = String::from_utf8(imp.name) else { continue };
+            let Ok(n) = String::from_utf8(imp.name) else {
+                continue;
+            };
             if call_fixup_name_for_function(&n, &map).is_some() {
-                out.call_fixups.push(crate::pass::CallFixupFact { func_name: n, addr: Some(imp.addr) });
+                out.call_fixups.push(crate::pass::CallFixupFact {
+                    func_name: n,
+                    addr: Some(imp.addr),
+                });
             }
         }
     }
@@ -234,7 +245,10 @@ mod tests {
         vec![
             ("mcount".to_string(), "mcount".to_string()),
             ("__fentry__".to_string(), "fentry".to_string()),
-            ("__x86_indirect_thunk_rax".to_string(), "x86_indirect_thunk_rax".to_string()),
+            (
+                "__x86_indirect_thunk_rax".to_string(),
+                "x86_indirect_thunk_rax".to_string(),
+            ),
         ]
     }
 
@@ -245,7 +259,10 @@ mod tests {
         assert_eq!(call_fixup_name_for_function("mcount", &m), Some("mcount"));
         // `__fentry__` is a `__`-prefixed target: a function named `__fentry__`
         // matches directly (the bare probe).
-        assert_eq!(call_fixup_name_for_function("__fentry__", &m), Some("fentry"));
+        assert_eq!(
+            call_fixup_name_for_function("__fentry__", &m),
+            Some("fentry")
+        );
     }
 
     #[test]
@@ -271,7 +288,11 @@ mod tests {
     fn unrelated_names_do_not_match() {
         let m = synthetic_map();
         for n in ["main", "puts", "read", "entry", "count", "fentry_helper"] {
-            assert_eq!(call_fixup_name_for_function(n, &m), None, "{n} must not match");
+            assert_eq!(
+                call_fixup_name_for_function(n, &m),
+                None,
+                "{n} must not match"
+            );
         }
     }
 
@@ -280,7 +301,10 @@ mod tests {
         let m = synthetic_map();
         // A `libID_conflict_mcount` resolves to `mcount` after the prefix strip
         // (CallFixupAnalyzer.java:207-209), then matches the `mcount` target.
-        assert_eq!(call_fixup_name_for_function("libID_conflict_mcount", &m), Some("mcount"));
+        assert_eq!(
+            call_fixup_name_for_function("libID_conflict_mcount", &m),
+            Some("mcount")
+        );
     }
 
     /// Drive the full scan over the vendored `mcount_x86_64` fixture against a
@@ -305,8 +329,7 @@ mod tests {
                 continue;
             }
             let Ok(n) = sym.name() else { continue };
-            let Ok(n) =
-                String::from_utf8(crate::loader::elf_plt::strip_version(n.as_bytes()))
+            let Ok(n) = String::from_utf8(crate::loader::elf_plt::strip_version(n.as_bytes()))
             else {
                 continue;
             };
@@ -320,7 +343,10 @@ mod tests {
             "the -pg profiling target (mcount/__fentry__) must be flagged; hits={hits:?}"
         );
         // Ordinary functions are never flagged.
-        assert!(!hits.iter().any(|n| n == "main"), "main must not be flagged");
+        assert!(
+            !hits.iter().any(|n| n == "main"),
+            "main must not be flagged"
+        );
         assert!(
             !hits.iter().any(|n| n == "__libc_start_main"),
             "__libc_start_main must not be flagged"
@@ -356,6 +382,9 @@ mod tests {
                 flagged = true;
             }
         }
-        assert!(flagged, "the PE FUNC-symbol scan must reach the matcher (no ELF early return)");
+        assert!(
+            flagged,
+            "the PE FUNC-symbol scan must reach the matcher (no ELF early return)"
+        );
     }
 }

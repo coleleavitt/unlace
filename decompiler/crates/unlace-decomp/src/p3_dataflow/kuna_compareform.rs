@@ -59,9 +59,9 @@ use unlace_base::types::{int4, intb, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
+use crate::context::{OpId, TypeOp, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::op::pcodeop_flags;
-use crate::context::{OpId, TypeOp, VarnodeId};
 
 /// (kuna GH-558) Restore canonicalized comparisons to their original LESSEQUAL
 /// form for presentation (C++ `ActionPresentCompareForm`).
@@ -76,7 +76,10 @@ impl ActionPresentCompareForm {
     /// Construct in group `g` with the resolved gate
     /// (C++ `ActionPresentCompareForm::ActionPresentCompareForm(const string &g)`).
     pub fn new(enabled: bool, g: impl Into<String>) -> ActionPresentCompareForm {
-        ActionPresentCompareForm { base: ActionBase::new(0, "presentcompareform", g), enabled }
+        ActionPresentCompareForm {
+            base: ActionBase::new(0, "presentcompareform", g),
+            enabled,
+        }
     }
 
     /// Box the action (parallels the `ActionXxx::boxed` constructors in
@@ -100,7 +103,10 @@ impl Action for ActionPresentCompareForm {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionPresentCompareForm { base: self.base.clone(), enabled: self.enabled }))
+        Some(Box::new(ActionPresentCompareForm {
+            base: self.base.clone(),
+            enabled: self.enabled,
+        }))
     }
 
     /// C++ `ActionPresentCompareForm::apply` (`kuna_compareform.cc:67`) —
@@ -127,7 +133,12 @@ impl Action for ActionPresentCompareForm {
             if opc != OpCode::CPUI_INT_LESS && opc != OpCode::CPUI_INT_SLESS {
                 continue;
             }
-            if !data.obank().get(op).expect("op live").is_canonical_lessequal() {
+            if !data
+                .obank()
+                .get(op)
+                .expect("op live")
+                .is_canonical_lessequal()
+            {
                 continue;
             }
             if restore_lessequal(op, data) {
@@ -197,15 +208,21 @@ fn restore_lessequal(op: OpId, data: &mut Funcdata) -> bool {
     // otherwise be re-typed `char` by `ActionSetCasts` (getBase(1,TYPE_INT)
     // returns char) and mis-render `'a'` instead of `0x61`.  The mapentry/Symbol
     // copy stays a W4 STUB (no mapentry link in the merged tree).
-    let src_info =
-        data.vbank().get(vn).map(|s| (std::rc::Rc::clone(s.get_type()), s.get_flags()));
+    let src_info = data
+        .vbank()
+        .get(vn)
+        .map(|s| (std::rc::Rc::clone(s.get_type()), s.get_flags()));
     if let Some((src_type, src_flags)) = src_info {
         if let Some(dst) = data.vbank_mut().get_mut(newvn) {
             dst.copy_symbol_fields(src_type, src_flags);
         }
     }
-    data.op_set_input(op, newvn, i).expect("restore_lessequal: opSetInput");
-    data.obank_mut().get_mut(op).expect("restore_lessequal: stale op").clear_canonical_lessequal();
+    data.op_set_input(op, newvn, i)
+        .expect("restore_lessequal: opSetInput");
+    data.obank_mut()
+        .get_mut(op)
+        .expect("restore_lessequal: stale op")
+        .clear_canonical_lessequal();
     true
 }
 
@@ -298,7 +315,10 @@ fn op_code(data: &Funcdata, op: OpId) -> OpCode {
     data.obank().get(op).expect("op_code: stale op").code()
 }
 fn vn_is_constant(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).map(|v| v.is_constant()).unwrap_or(false)
+    data.vbank()
+        .get(vn)
+        .map(|v| v.is_constant())
+        .unwrap_or(false)
 }
 fn vn_offset(data: &Funcdata, vn: VarnodeId) -> uintb {
     data.vbank().get(vn).map(|v| v.get_offset()).unwrap_or(0)

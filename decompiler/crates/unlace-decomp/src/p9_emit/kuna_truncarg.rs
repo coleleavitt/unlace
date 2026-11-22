@@ -36,7 +36,7 @@ use unlace_num::opcodes::OpCode;
 use crate::cast::{CastStrategy, CastStrategyC, IntPromotionCode};
 use crate::context::{OpId, VarnodeId};
 use crate::coreaction_casts::FuncdataCastContext;
-use crate::dtype::{type_metatype, Datatype, TypeFactory};
+use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
 
 /// The cast a narrowed argument in `slot` of the CALL/CALLIND `op` needs so its C
@@ -134,7 +134,10 @@ fn int_arg_cast(
     if !signed {
         return None;
     }
-    data.get_arch().types_rc()?.get_base(size, type_metatype::TYPE_UINT).ok()
+    data.get_arch()
+        .types_rc()?
+        .get_base(size, type_metatype::TYPE_UINT)
+        .ok()
 }
 
 /// Does the callee's own recovery (stated by `protoorder`) read argument `slot`
@@ -142,12 +145,18 @@ fn int_arg_cast(
 /// Without that statement the parameter may be no wider than the argument,
 /// which C then converts to exactly, so nothing is assumed.
 fn callee_reads_wider(data: &Funcdata, op: OpId, slot: int4, size: int4) -> bool {
-    let Some(i) = data.get_call_specs_index(op) else { return false };
+    let Some(i) = data.get_call_specs_index(op) else {
+        return false;
+    };
     let fc = data.get_call_specs(i);
-    let Some(stated) = data.kuna_protoorder_types(fc.get_entry_address()) else { return false };
+    let Some(stated) = data.kuna_protoorder_types(fc.get_entry_address()) else {
+        return false;
+    };
     let index = (slot - 1) as usize;
-    let (Some((addr, _)), Some((paddr, psize, _))) = (fc.final_input_storage().get(index), stated.inputs.get(index))
-    else {
+    let (Some((addr, _)), Some((paddr, psize, _))) = (
+        fc.final_input_storage().get(index),
+        stated.inputs.get(index),
+    ) else {
         return false;
     };
     *psize > size
@@ -158,22 +167,34 @@ fn callee_reads_wider(data: &Funcdata, op: OpId, slot: int4, size: int4) -> bool
 /// Was input `slot` of the call `op` trimmed from a register the binary
 /// zero-extended it into, for a callee that reads that register wider?
 pub(crate) fn zext_trimmed_arg(data: &Funcdata, op: OpId, slot: int4) -> bool {
-    let Some(o) = data.obank().get(op) else { return false };
+    let Some(o) = data.obank().get(op) else {
+        return false;
+    };
     if !matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND) || slot < 1 {
         return false;
     }
-    let Some(size) = o.get_in(slot).and_then(|v| data.vbank().get(v)).map(|v| v.get_size()) else {
+    let Some(size) = o
+        .get_in(slot)
+        .and_then(|v| data.vbank().get(v))
+        .map(|v| v.get_size())
+    else {
         return false;
     };
     let ninputs = o.num_input();
-    data.get_call_specs_index(op).is_some_and(|i| data.get_call_specs(i).is_zext_trimmed_input(slot, size, ninputs))
-        && callee_reads_wider(data, op, slot, size)
+    data.get_call_specs_index(op).is_some_and(|i| {
+        data.get_call_specs(i)
+            .is_zext_trimmed_input(slot, size, ninputs)
+    }) && callee_reads_wider(data, op, slot, size)
 }
 
 /// Did narrowing the call input `vn` to the logical value under `mask` drop only
 /// bits known to be zero?  Then the binary passed that value zero-extended.
 pub(crate) fn drops_only_zero_bits(data: &Funcdata, vn: VarnodeId, mask: u64) -> bool {
-    mask & 1 != 0 && data.vbank().get(vn).is_some_and(|v| v.get_nz_mask() & !mask == 0)
+    mask & 1 != 0
+        && data
+            .vbank()
+            .get(vn)
+            .is_some_and(|v| v.get_nz_mask() & !mask == 0)
 }
 
 /// Record on the call's spec that input `slot` of `op` was just trimmed, and
@@ -186,13 +207,18 @@ pub(crate) fn note_trimmed_arg(data: &mut Funcdata, op: OpId, slot: int4, zext: 
         return;
     }
     let ninputs = o.num_input();
-    let Some(size) = o.get_in(slot).and_then(|v| data.vbank().get(v)).map(|v| v.get_size()) else {
+    let Some(size) = o
+        .get_in(slot)
+        .and_then(|v| data.vbank().get(v))
+        .map(|v| v.get_size())
+    else {
         return;
     };
     let Some(i) = data.get_call_specs_index(op) else {
         return;
     };
-    data.get_call_specs_mut(i).note_trimmed_input(slot, size, ninputs, zext);
+    data.get_call_specs_mut(i)
+        .note_trimmed_input(slot, size, ninputs, zext);
 }
 
 /// Retype an argument that already prints as a truncating cast (`(char)v2`) to
@@ -236,11 +262,14 @@ fn retype_truncation(
     let off = data.vbank().get(in1).map(|v| v.get_offset()).unwrap_or(0) as uint4;
     let intype = data.vn_high_type_read_facing(in0, def);
     let outtype = data.vn_high_type_def_facing(invn);
-    if !strat.is_subpiece_cast(&outtype, &intype, off) || !strat.is_subpiece_cast(ct, &intype, off) {
+    if !strat.is_subpiece_cast(&outtype, &intype, off) || !strat.is_subpiece_cast(ct, &intype, off)
+    {
         return false;
     }
     data.vn_update_type(invn, Rc::clone(ct));
-    data.vbank().get(invn).is_some_and(|v| Rc::ptr_eq(v.get_type(), ct))
+    data.vbank()
+        .get(invn)
+        .is_some_and(|v| Rc::ptr_eq(v.get_type(), ct))
 }
 
 /// Is parameter `slot` of the call fixed by a declared prototype?

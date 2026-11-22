@@ -147,7 +147,11 @@ pub fn unpack(image: &[u8]) -> Result<Unpacked, UpxError> {
     if pe::is_pe_format(info.format) {
         let img = pe::Image::new(image)?;
         let (bytes, blocks) = pe::unpack(&img, &info)?;
-        return Ok(Unpacked { info, bytes, blocks });
+        return Ok(Unpacked {
+            info,
+            bytes,
+            blocks,
+        });
     }
     if !is_elf_format(info.format) {
         return Err(UpxError::Unsupported(format!(
@@ -161,7 +165,11 @@ pub fn unpack(image: &[u8]) -> Result<Unpacked, UpxError> {
     elf::method_codec(info.method)?;
     let img = elf::Image::new(image)?;
     let (bytes, blocks) = elf::unpack(&img, &info)?;
-    Ok(Unpacked { info, bytes, blocks })
+    Ok(Unpacked {
+        info,
+        bytes,
+        blocks,
+    })
 }
 
 /// Locate and decode the `PackHeader`. A PE keeps it in the header padding
@@ -281,7 +289,10 @@ fn pack_header_checksum(after_magic: &[u8]) -> u8 {
 }
 
 fn is_elf_format(format: u8) -> bool {
-    matches!(format, 12 | 20 | 22 | 23 | 25 | 30 | 39 | 42 | 45 | 132 | 133 | 137 | 140)
+    matches!(
+        format,
+        12 | 20 | 22 | 23 | 25 | 30 | 39 | 42 | 45 | 132 | 133 | 137 | 140
+    )
 }
 
 /// `UPX_F_*` names, from UPX's `src/conf.h`. Unknown ids report as such rather
@@ -422,8 +433,14 @@ mod tests {
         assert_eq!(filtered[0].filter, 0x49);
         // `_start` at 0x2580 begins `endbr64; xor ebp,ebp` and its `call *rip+..`
         // resolves only if the ctok unfilter ran.
-        assert_eq!(&out.bytes[0x2580..0x2586], &[0xf3, 0x0f, 0x1e, 0xfa, 0x31, 0xed]);
-        assert_eq!(&out.bytes[0x2598..0x259f], &[0x48, 0x8d, 0x3d, 0xb5, 0x24, 0x00, 0x00]);
+        assert_eq!(
+            &out.bytes[0x2580..0x2586],
+            &[0xf3, 0x0f, 0x1e, 0xfa, 0x31, 0xed]
+        );
+        assert_eq!(
+            &out.bytes[0x2598..0x259f],
+            &[0x48, 0x8d, 0x3d, 0xb5, 0x24, 0x00, 0x00]
+        );
     }
 
     /// The LZMA witness (see its `.provenance` sidecar) is the *same* original
@@ -453,7 +470,10 @@ mod tests {
         let lzma = unpack(&lzma_fixture()).expect("the LZMA fixture unpacks");
         let nrv = unpack(&fixture()).expect("the NRV fixture unpacks");
         assert_eq!(lzma.bytes.len(), 31640);
-        assert_eq!(lzma.bytes, nrv.bytes, "the two packings disagree on the original file");
+        assert_eq!(
+            lzma.bytes, nrv.bytes,
+            "the two packings disagree on the original file"
+        );
 
         // Every block really went through the LZMA path, and the one filtered
         // block was unfiltered after it -- a decoder that produced the right
@@ -547,7 +567,12 @@ mod tests {
                     (rd(o + 12), rd(o + 16), rd(o + 20))
                 })
                 .collect();
-            PeView { image, pe, pe64, secs }
+            PeView {
+                image,
+                pe,
+                pe64,
+                secs,
+            }
         }
 
         fn rd(&self, o: usize) -> u32 {
@@ -570,7 +595,9 @@ mod tests {
             (0..self.secs.len())
                 .map(|i| {
                     let o = table + 40 * i;
-                    String::from_utf8_lossy(&self.image[o..o + 8]).trim_end_matches('\0').to_owned()
+                    String::from_utf8_lossy(&self.image[o..o + 8])
+                        .trim_end_matches('\0')
+                        .to_owned()
                 })
                 .collect()
         }
@@ -602,7 +629,11 @@ mod tests {
         /// `DLL!name` (or `DLL!#ordinal`) for every thunk. A rebuild that
         /// produced descriptors nothing can follow is the failure this guards.
         fn imports(&self) -> Vec<String> {
-            let (flag, step) = if self.pe64 { (1u64 << 63, 8) } else { (1u64 << 31, 4) };
+            let (flag, step) = if self.pe64 {
+                (1u64 << 63, 8)
+            } else {
+                (1u64 << 31, 4)
+            };
             let mut out = Vec::new();
             let mut d = self.off(self.dir(1).0);
             while self.rd(d + 12) != 0 {
@@ -702,8 +733,17 @@ mod tests {
         assert_eq!(info.format_name(), "win64/pe");
         assert_eq!(info.overlay_offset, 0);
         let err = unpack(&image).expect_err("a four-byte block is no stream");
-        assert!(matches!(&err, UpxError::Corrupt(m) if m.contains("compressed block at")), "{err}");
-        assert_eq!(unpack(&win64_fixture()).expect("a real win64/pe unpacks").bytes.len(), 3072);
+        assert!(
+            matches!(&err, UpxError::Corrupt(m) if m.contains("compressed block at")),
+            "{err}"
+        );
+        assert_eq!(
+            unpack(&win64_fixture())
+                .expect("a real win64/pe unpacks")
+                .bytes
+                .len(),
+            3072
+        );
     }
 
     #[test]
@@ -734,7 +774,9 @@ mod tests {
         let names: Vec<String> = (0..4)
             .map(|i| {
                 let o = table + 40 * i;
-                String::from_utf8_lossy(&img[o..o + 8]).trim_end_matches('\0').to_owned()
+                String::from_utf8_lossy(&img[o..o + 8])
+                    .trim_end_matches('\0')
+                    .to_owned()
             })
             .collect();
         assert_eq!(names, [".text", ".rdata", ".data", ".rsrc"]);
@@ -754,15 +796,28 @@ mod tests {
         let imports = pe_imports(img);
         assert_eq!(imports.len(), 79);
         assert_eq!(imports[0], "KERNEL32.DLL!DebugBreak");
-        assert!(imports.contains(&"COMCTL32.dll!InitCommonControlsEx".to_string()), "{imports:?}");
-        assert!(imports.contains(&"USER32.dll!DialogBoxParamA".to_string()), "{imports:?}");
-        assert!(imports.contains(&"KERNEL32.DLL!GetVersion".to_string()), "{imports:?}");
+        assert!(
+            imports.contains(&"COMCTL32.dll!InitCommonControlsEx".to_string()),
+            "{imports:?}"
+        );
+        assert!(
+            imports.contains(&"USER32.dll!DialogBoxParamA".to_string()),
+            "{imports:?}"
+        );
+        assert!(
+            imports.contains(&"KERNEL32.DLL!GetVersion".to_string()),
+            "{imports:?}"
+        );
 
         // The resource directory is back at the original image's address, with
         // the two leaves UPX moved repointed into the recovered .rsrc.
         let (res_rva, res_size) = (rd(pe + 24 + 96 + 16), rd(pe + 24 + 100 + 16));
         assert_eq!((res_rva, res_size), (0xc000, 0x5b8));
-        assert_eq!(u16::from_le_bytes([img[0xb00e], img[0xb00f]]), 3, "three resource types");
+        assert_eq!(
+            u16::from_le_bytes([img[0xb00e], img[0xb00f]]),
+            3,
+            "three resource types"
+        );
         // The icon leaf UPX moved out of the image is repointed at the address
         // the original had, and its bitmap header is there.
         assert_eq!((rd(0xb058), rd(0xb05c)), (0xc2b8, 0x2e8));
@@ -818,7 +873,12 @@ mod tests {
         let (_, table) = pe_sections(&bytes);
         put32(&mut bytes, table + 12, 0xffff_fff0);
         put32(&mut bytes, table + 16, 0xf);
-        assert_eq!(unpack(&bytes).expect("a hostile empty section is not fatal").bytes, good);
+        assert_eq!(
+            unpack(&bytes)
+                .expect("a hostile empty section is not fatal")
+                .bytes,
+            good
+        );
     }
 
     /// Five resource directories of 300 entries that all name the next one:
@@ -834,7 +894,11 @@ mod tests {
             tree[o + 14..o + 16].copy_from_slice(&(n as u16).to_le_bytes());
             for i in 0..n {
                 put32(&mut tree, o + 16 + 8 * i, i as u32 + 1);
-                put32(&mut tree, o + 20 + 8 * i, 0x8000_0000 | ((k + 1) * dsz) as u32);
+                put32(
+                    &mut tree,
+                    o + 20 + 8 * i,
+                    0x8000_0000 | ((k + 1) * dsz) as u32,
+                );
             }
         }
         // Grow the last packed section (it ends the file) by the tree, and
@@ -877,7 +941,12 @@ mod tests {
                 self.out[self.word_at..self.word_at + 4].copy_from_slice(&self.word.to_le_bytes());
             }
         }
-        let mut w = Bits { out: Vec::new(), word_at: 0, word: 0, left: 0 };
+        let mut w = Bits {
+            out: Vec::new(),
+            word_at: 0,
+            word: 0,
+            left: 0,
+        };
         for &x in data {
             w.bit(1);
             w.out.push(x);
@@ -940,7 +1009,12 @@ mod tests {
     #[test]
     fn a_trailer_missing_its_resource_record_is_refused() {
         let good = unpack(&pe_fixture()).expect("fixture unpacks").bytes;
-        assert_eq!(unpack(&repacked_pe_fixture(|_| {})).expect("an identity repack").bytes, good);
+        assert_eq!(
+            unpack(&repacked_pe_fixture(|_| {}))
+                .expect("an identity repack")
+                .bytes,
+            good
+        );
         let short = repacked_pe_fixture(|obuf| {
             let end = obuf.len();
             obuf.copy_within(end - 4.., end - 6);
@@ -956,7 +1030,10 @@ mod tests {
     fn a_corrupted_pe_literal_is_caught_by_the_checksum() {
         let mut bytes = pe_fixture();
         bytes[0x800] ^= 0xff;
-        assert!(detect(&bytes).is_some(), "a corrupt stream is still a UPX file");
+        assert!(
+            detect(&bytes).is_some(),
+            "a corrupt stream is still a UPX file"
+        );
         let err = unpack(&bytes).expect_err("a corrupted stream must not unpack");
         assert!(format!("{err}").contains("checksum mismatch"), "{err}");
     }
@@ -973,7 +1050,9 @@ mod tests {
     }
 
     fn fixture_named(name: &str) -> Vec<u8> {
-        let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures").join(name);
+        let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures")
+            .join(name);
         std::fs::read(&p).unwrap_or_else(|e| panic!("read {}: {e}", p.display()))
     }
 
@@ -986,7 +1065,9 @@ mod tests {
 
     /// Rewrite the PackHeader's version byte and re-seal its checksum.
     fn with_version(mut bytes: Vec<u8>, version: u8) -> Vec<u8> {
-        let at = detect(&bytes).expect("fixture is UPX-packed").pack_header_offset;
+        let at = detect(&bytes)
+            .expect("fixture is UPX-packed")
+            .pack_header_offset;
         bytes[at + 4] = version;
         bytes[at + PACK_HEADER_SIZE - 1] =
             pack_header_checksum(&bytes[at..at + PACK_HEADER_SIZE - 1]);
@@ -1017,10 +1098,17 @@ mod tests {
         assert_eq!(out.blocks.len(), 1);
         let pe = PeView::new(&out.bytes);
         assert!(pe.pe64, "PE32+ magic survives");
-        assert_eq!(u16::from_le_bytes([out.bytes[pe.pe + 4], out.bytes[pe.pe + 5]]), 0x8664);
+        assert_eq!(
+            u16::from_le_bytes([out.bytes[pe.pe + 4], out.bytes[pe.pe + 5]]),
+            0x8664
+        );
         assert_eq!(pe.section_names(), [".text", ".rdata", ".data", ".pdata"]);
         assert_eq!(pe.opt(16), 0x1060, "entry is the reporter's `entry`");
-        assert_eq!(pe.dir(3), (0x4000, 0x24), "the .pdata exception directory is back");
+        assert_eq!(
+            pe.dir(3),
+            (0x4000, 0x24),
+            "the .pdata exception directory is back"
+        );
         // `select_value` calls `increment` and `entry` calls `select_value`;
         // both calls only read as these rel32s once the ctok filter (0x49) is
         // reversed with the code's bias from the first section.
@@ -1048,7 +1136,10 @@ mod tests {
     fn a_corrupted_win64_literal_is_caught_by_the_checksum() {
         let mut bytes = win64_fixture();
         bytes[0x280] ^= 0xff;
-        assert!(detect(&bytes).is_some(), "a corrupt stream is still a UPX file");
+        assert!(
+            detect(&bytes).is_some(),
+            "a corrupt stream is still a UPX file"
+        );
         let err = unpack(&bytes).expect_err("a corrupted stream must not unpack");
         assert!(
             format!("{err}").contains("checksum mismatch") || format!("{err}").contains("block at"),
@@ -1070,7 +1161,9 @@ mod tests {
         assert_eq!(pe.opt(16), 0x13b0);
         assert_eq!(
             pe.section_names(),
-            [".text", ".rdata", ".data", ".pdata", ".tls", ".rsrc", ".reloc"]
+            [
+                ".text", ".rdata", ".data", ".pdata", ".tls", ".rsrc", ".reloc"
+            ]
         );
 
         let imports = pe.imports();
@@ -1083,7 +1176,10 @@ mod tests {
             "USER32.dll!MessageBoxA",
             "api-ms-win-crt-stdio-l1-1-0.dll!__stdio_common_vfprintf",
         ] {
-            assert!(imports.iter().any(|i| i == want), "no {want} in {imports:?}");
+            assert!(
+                imports.iter().any(|i| i == want),
+                "no {want} in {imports:?}"
+            );
         }
 
         // Every relocation comes back as DIR64, and each pointer it covers
@@ -1127,12 +1223,19 @@ mod tests {
         let e = pe.off(exp);
         assert_eq!(pe.cstr(pe.rd(e + 12)), "lib.dll");
         assert_eq!((pe.rd(e + 16), pe.rd(e + 20), pe.rd(e + 24)), (1, 4, 3));
-        let names: Vec<String> =
-            (0..3).map(|i| pe.cstr(pe.rd(pe.off(pe.rd(e + 32)) + 4 * i))).collect();
+        let names: Vec<String> = (0..3)
+            .map(|i| pe.cstr(pe.rd(pe.off(pe.rd(e + 32)) + 4 * i)))
+            .collect();
         assert_eq!(names, ["lib_add", "lib_fwd", "lib_unused"]);
-        let funcs: Vec<u32> = (0..4).map(|i| pe.rd(pe.off(pe.rd(e + 28)) + 4 * i)).collect();
+        let funcs: Vec<u32> = (0..4)
+            .map(|i| pe.rd(pe.off(pe.rd(e + 28)) + 4 * i))
+            .collect();
         assert_eq!(&funcs[..3], &[0x13a0, 0x13c0, 0x13e0]);
-        assert_eq!(pe.cstr(funcs[3]), "KERNEL32.GetTickCount", "the forwarder string is back");
+        assert_eq!(
+            pe.cstr(funcs[3]),
+            "KERNEL32.GetTickCount",
+            "the forwarder string is back"
+        );
 
         let relocs = pe.relocs();
         assert_eq!(relocs.len(), 20);
@@ -1150,7 +1253,10 @@ mod tests {
         assert_eq!(info.format, 43);
         assert_eq!(info.format_name(), "win64/arm64");
         let err = unpack(&bytes).expect_err("win64/arm64 is not rebuilt");
-        assert!(matches!(&err, UpxError::Unsupported(m) if m.contains("win64/arm64")), "{err}");
+        assert!(
+            matches!(&err, UpxError::Unsupported(m) if m.contains("win64/arm64")),
+            "{err}"
+        );
     }
 
     /// PackHeader version 14 is UPX's exact-layout PE mode, which stores the
@@ -1160,10 +1266,16 @@ mod tests {
     fn the_exact_layout_pe_version_is_refused_by_name() {
         let err =
             unpack(&with_version(win64_fixture(), 14)).expect_err("version 14 is not rebuilt");
-        assert!(matches!(&err, UpxError::Unsupported(m) if m.contains("exact-layout")), "{err}");
+        assert!(
+            matches!(&err, UpxError::Unsupported(m) if m.contains("exact-layout")),
+            "{err}"
+        );
         let err =
             unpack(&with_version(win64_fixture(), 11)).expect_err("version 11 is not rebuilt");
-        assert!(matches!(&err, UpxError::Unsupported(m) if m.contains("version 11")), "{err}");
+        assert!(
+            matches!(&err, UpxError::Unsupported(m) if m.contains("version 11")),
+            "{err}"
+        );
     }
 
     #[test]

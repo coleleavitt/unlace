@@ -27,14 +27,14 @@
 //! and in-symbol offset off the high exactly where the C++ reads them off the
 //! Symbol.  // STUB(W4 symbol) — mirrors `printc::push_vn_explicit_ir`.
 
+use std::rc::Rc;
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
-use std::rc::Rc;
 
 use super::BitRange;
-use crate::dtype::{type_metatype, Datatype, TypeBitField};
-use crate::funcdata::Funcdata;
 use crate::context::{OpId, VarnodeId};
+use crate::dtype::{Datatype, TypeBitField, type_metatype};
+use crate::funcdata::Funcdata;
 
 /// `sizeof(uintb)` — the C++ `uintb` is `uint8`, i.e. 8 bytes.
 const SIZEOF_UINTB: int4 = 8;
@@ -73,7 +73,13 @@ impl BitFieldExpression {
     /// given data-type, then — given the least significant bit of the bitfield —
     /// descend into the structure immediately containing the bitfield (which may
     /// be a different, nested structure).
-    fn get_structures(&mut self, dt: &Rc<Datatype>, init_byte_off: int4, least_bit_off: int4, is_big_endian: bool) {
+    fn get_structures(
+        &mut self,
+        dt: &Rc<Datatype>,
+        init_byte_off: int4,
+        least_bit_off: int4,
+        is_big_endian: bool,
+    ) {
         self.the_struct = None;
         self.byte_range_offset = if init_byte_off < 0 { 0 } else { init_byte_off };
         let encompass_struct: Rc<Datatype> = match dt.get_metatype() {
@@ -125,7 +131,12 @@ impl BitFieldExpression {
     /// offset.  If the access is already at offset 0 and the pointer's size
     /// matches the structure, the pointer is returned as-is; otherwise a PTRSUB
     /// writing the pointer at the matching offset is unwrapped.
-    fn recover_structure_pointer(&self, data: &Funcdata, vn: VarnodeId, offset: int4) -> Option<VarnodeId> {
+    fn recover_structure_pointer(
+        &self,
+        data: &Funcdata,
+        vn: VarnodeId,
+        offset: int4,
+    ) -> Option<VarnodeId> {
         let v = data.vbank().get(vn)?;
         let struct_size = self.the_struct.as_ref().map(|s| s.get_size()).unwrap_or(-1);
         if offset == 0 && struct_size == v.get_size() {
@@ -206,7 +217,12 @@ impl InsertExpression {
             let least_bit_off = data.vbank().get(o.get_in(2)?)?.get_offset() as int4;
             let bit_size = data.vbank().get(o.get_in(3)?)?.get_offset() as int4;
             let sym_type = Rc::clone(sym_type);
-            expr.get_structures(&sym_type, hb.kuna_symbol_offset(), least_bit_off, spc.is_big_endian());
+            expr.get_structures(
+                &sym_type,
+                hb.kuna_symbol_offset(),
+                least_bit_off,
+                spc.is_big_endian(),
+            );
             let the_struct = expr.the_struct.as_ref()?;
             let range = BitRange::new(
                 expr.byte_range_offset - expr.offset_to_bit_struct,
@@ -219,7 +235,10 @@ impl InsertExpression {
             Some(())
         })();
         let _ = recovered;
-        InsertExpression { expr, symbol_offset }
+        InsertExpression {
+            expr,
+            symbol_offset,
+        }
     }
 
     /// Get a mask representing the INSERTed range of bits (C++
@@ -308,14 +327,17 @@ impl InsertStoreExpression {
         let least_bit_off = data.vbank().get(io.get_in(2)?)?.get_offset() as int4;
         let bit_size = data.vbank().get(io.get_in(3)?)?.get_offset() as int4;
         let def_facing = data.vn_type_def_facing(value);
-        self.expr.get_structures(&def_facing, 0, least_bit_off, spc.is_big_endian());
+        self.expr
+            .get_structures(&def_facing, 0, least_bit_off, spc.is_big_endian());
         let the_struct = match &self.expr.the_struct {
             Some(s) => Rc::clone(s),
             None => return None,
         };
         // structPtr = recoverStructurePointer(store->getIn(1), byteRangeOffset);
         let store_ptr = data.obank().get(store)?.get_in(1)?;
-        self.struct_ptr = self.expr.recover_structure_pointer(data, store_ptr, self.expr.byte_range_offset);
+        self.struct_ptr =
+            self.expr
+                .recover_structure_pointer(data, store_ptr, self.expr.byte_range_offset);
         self.struct_ptr?;
         let range = BitRange::new(
             self.expr.byte_range_offset - self.expr.offset_to_bit_struct,
@@ -396,7 +418,8 @@ impl PullExpression {
         }
         let least_bit_off = data.vbank().get(po.get_in(1)?)?.get_offset() as int4;
         let bit_size = data.vbank().get(po.get_in(2)?)?.get_offset() as int4;
-        self.expr.get_structures(&dt, offset, least_bit_off, spc.is_big_endian());
+        self.expr
+            .get_structures(&dt, offset, least_bit_off, spc.is_big_endian());
         let the_struct = match &self.expr.the_struct {
             Some(s) => Rc::clone(s),
             None => return None,
@@ -404,7 +427,8 @@ impl PullExpression {
         if let Some(load_op) = self.load_op {
             let load_ptr = data.obank().get(load_op)?.get_in(1)?;
             self.struct_ptr =
-                self.expr.recover_structure_pointer(data, load_ptr, self.expr.byte_range_offset);
+                self.expr
+                    .recover_structure_pointer(data, load_ptr, self.expr.byte_range_offset);
             self.struct_ptr?;
         }
         let in_size = data.vbank().get(in_vn)?.get_size();
@@ -428,7 +452,11 @@ impl PullExpression {
 /// C++ `op->getIn(slot)->getSpaceFromConst()`: resolve the address space whose
 /// manager index is the constant offset in the given input slot (the LOSS-015
 /// model, same resolution as `coreaction_casts::load_store_space`).
-fn space_from_const(data: &Funcdata, op: OpId, slot: int4) -> Option<Rc<unlace_base::space::AddrSpace>> {
+fn space_from_const(
+    data: &Funcdata,
+    op: OpId,
+    slot: int4,
+) -> Option<Rc<unlace_base::space::AddrSpace>> {
     let cvn = data.obank().get(op)?.get_in(slot)?;
     let idx = data.vbank().get(cvn)?.get_offset();
     let manage = data.get_arch().manage();

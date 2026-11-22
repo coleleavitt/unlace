@@ -4,12 +4,12 @@ use crate::{
     funcdata::Funcdata,
     varnode::varnode_flags,
 };
+use std::collections::{BTreeMap, BTreeSet};
 use unlace_base::{
-    address::{calc_mask, Address},
+    address::{Address, calc_mask},
     space::AddrSpace,
 };
 use unlace_num::opcodes::OpCode;
-use std::collections::{BTreeMap, BTreeSet};
 
 /// Values proven for written varnodes: `Some` is the constant, `None` a
 /// varnode proven not to be one. Valid while the op graph is unchanged.
@@ -134,14 +134,17 @@ pub(crate) fn is_volatile(data: &Funcdata, id: OpId) -> bool {
 
 /// [`is_volatile`] sharing `memo` across the LOADs of one unchanged op graph.
 pub(crate) fn is_volatile_with(data: &Funcdata, id: OpId, memo: &mut Memo) -> bool {
-    if let Some(pointer) = data.get_arch().types()
+    if let Some(pointer) = data
+        .get_arch()
+        .types()
         .filter(|types| types.has_volatile_types())
         .and(data.obank().get(id))
         .filter(|op| op.code() == OpCode::CPUI_LOAD)
         .and_then(|op| op.get_in(1))
     {
         let node = data.vbank().get(pointer);
-        if node.and_then(|node| node.get_type().get_ptr_to())
+        if node
+            .and_then(|node| node.get_type().get_ptr_to())
             .is_some_and(|ty| crate::kuna_typequal::is_volatile(&ty))
         {
             return true;
@@ -189,14 +192,22 @@ pub(crate) fn rereads(
             } else {
                 o.code() == OpCode::CPUI_LOAD
                     && o.get_in(1) == op.get_in(1)
-                    && o.get_in(0).and_then(|vn| data.vbank().get(vn)).map(|vn| vn.get_offset())
-                        == op.get_in(0).and_then(|vn| data.vbank().get(vn)).map(|vn| vn.get_offset())
-                    && o.get_out().and_then(|vn| data.vbank().get(vn)).map(|vn| vn.get_size())
-                        == op.get_out().and_then(|vn| data.vbank().get(vn)).map(|vn| vn.get_size())
+                    && o.get_in(0)
+                        .and_then(|vn| data.vbank().get(vn))
+                        .map(|vn| vn.get_offset())
+                        == op
+                            .get_in(0)
+                            .and_then(|vn| data.vbank().get(vn))
+                            .map(|vn| vn.get_offset())
+                    && o.get_out()
+                        .and_then(|vn| data.vbank().get(vn))
+                        .map(|vn| vn.get_size())
+                        == op
+                            .get_out()
+                            .and_then(|vn| data.vbank().get(vn))
+                            .map(|vn| vn.get_size())
             };
-            !o.is_dead()
-                && same
-                && (kept(data, sibling) || o.get_time() < time)
+            !o.is_dead() && same && (kept(data, sibling) || o.get_time() < time)
         })
     })
 }
@@ -205,10 +216,10 @@ pub(crate) fn rereads(
 mod tests {
     use super::*;
     use crate::context::{ArchContext, GlobalQuery};
-    use unlace_base::space::{
-        addrspace_flags, spacetype, AddrSpaceManager, ConstantSpace, UniqueSpace,
-    };
     use std::rc::Rc;
+    use unlace_base::space::{
+        AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
+    };
 
     fn function(word_size: u32) -> Funcdata {
         let mut manager = AddrSpaceManager::new();

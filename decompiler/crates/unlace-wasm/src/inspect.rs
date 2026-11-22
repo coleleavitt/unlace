@@ -5,17 +5,19 @@
 
 use std::collections::BTreeMap;
 
+use unlace_analysis::loader::kuna_relocrebase::RebasedView;
+use unlace_analysis::strings::kuna_stringinv::{self, Termination};
 use unlace_console::assertions::Outcome;
 use unlace_console::disasm::{hex, mapped_run_end, read_upto};
 use unlace_console::engine::{ConsoleProgram, FunctionEntry};
-use unlace_analysis::loader::kuna_relocrebase::RebasedView;
-use unlace_analysis::strings::kuna_stringinv::{self, Termination};
 use unlace_console::inspect::{
-    function_rows, function_xrefs, section_rows, string_uses, SectionRow, XrefRow, FUNCTION_ROW_CAP,
+    FUNCTION_ROW_CAP, SectionRow, XrefRow, function_rows, function_xrefs, section_rows, string_uses,
 };
 use unlace_console::project::FuncResult;
 
-use crate::json::{arr, assertions_json, hex_str, json_object_location, json_str, json_str_array, Obj};
+use crate::json::{
+    Obj, arr, assertions_json, hex_str, json_object_location, json_str, json_str_array,
+};
 
 /// The largest `read` a caller may ask for.
 pub const READ_MAX: u64 = 64 * 1024;
@@ -80,7 +82,9 @@ pub fn known_types_json(prog: &ConsoleProgram) -> String {
                 TYPE_STRUCT => "struct",
                 TYPE_UNION => "union",
                 TYPE_ENUM_INT | TYPE_ENUM_UINT => "enum",
-                TYPE_INT | TYPE_UINT | TYPE_BOOL | TYPE_FLOAT | TYPE_UNKNOWN | TYPE_VOID => "scalar",
+                TYPE_INT | TYPE_UINT | TYPE_BOOL | TYPE_FLOAT | TYPE_UNKNOWN | TYPE_VOID => {
+                    "scalar"
+                }
                 _ => continue,
             }
         };
@@ -101,7 +105,12 @@ fn addresses_json(addresses: &[u64]) -> (String, String) {
     )
 }
 
-fn function_json(prog: &ConsoleProgram, f: &FuncResult, kind: &str, sections: &[SectionRow]) -> String {
+fn function_json(
+    prog: &ConsoleProgram,
+    f: &FuncResult,
+    kind: &str,
+    sections: &[SectionRow],
+) -> String {
     let line_mappings = arr(f.line_mappings.iter().map(|m| {
         let (numbers, hex) = addresses_json(&m.addresses);
         Obj::new()
@@ -119,13 +128,20 @@ fn function_json(prog: &ConsoleProgram, f: &FuncResult, kind: &str, sections: &[
             .opt_num("arg_index", v.arg_index)
             .opt_num("stack_offset", v.stack_offset)
             .num("size", v.size)
-            .raw("line_numbers", &arr(v.line_numbers.iter().map(usize::to_string)))
+            .raw(
+                "line_numbers",
+                &arr(v.line_numbers.iter().map(usize::to_string)),
+            )
             .raw("addresses", &numbers)
             .raw("addresses_hex", &hex)
             .end()
     }));
     let types = arr(f.types.iter().map(|t| {
-        Obj::new().str("name", &t.name).str("definition", &t.definition).num("size", t.size).end()
+        Obj::new()
+            .str("name", &t.name)
+            .str("definition", &t.definition)
+            .num("size", t.size)
+            .end()
     }));
     let named = f.detail.as_ref().map_or(&[][..], |d| &d.globals[..]);
     let globals = arr(f
@@ -136,7 +152,14 @@ fn function_json(prog: &ConsoleProgram, f: &FuncResult, kind: &str, sections: &[
             named
                 .iter()
                 .filter(|n| !f.globals.iter().any(|g| g.address == n.address))
-                .map(|n| (n.name.as_str(), n.address, crate::data::declare(&n.type_name, &n.name), n.size as i64)),
+                .map(|n| {
+                    (
+                        n.name.as_str(),
+                        n.address,
+                        crate::data::declare(&n.type_name, &n.name),
+                        n.size as i64,
+                    )
+                }),
         )
         .map(|(name, address, declaration, size)| {
             Obj::new()
@@ -171,23 +194,39 @@ fn function_json(prog: &ConsoleProgram, f: &FuncResult, kind: &str, sections: &[
                 if let Some(ty) = &t.type_text {
                     o = o.str("type", ty);
                 }
-                let named = detail.token_globals.get(i).copied().flatten().and_then(|g| detail.globals.get(g));
+                let named = detail
+                    .token_globals
+                    .get(i)
+                    .copied()
+                    .flatten()
+                    .and_then(|g| detail.globals.get(g));
                 let minted = || {
-                    let plain = t.kind == unlace_decomp::prettyprint::TokenKind::Variable && t.var.is_none();
+                    let plain = t.kind == unlace_decomp::prettyprint::TokenKind::Variable
+                        && t.var.is_none();
                     f.globals.iter().find(|g| plain && g.name == t.text)
                 };
-                if let Some(address) = named.map(|g| g.address).or_else(|| minted().map(|g| g.address)) {
+                if let Some(address) = named
+                    .map(|g| g.address)
+                    .or_else(|| minted().map(|g| g.address))
+                {
                     o = o.addr("global", address);
                 }
                 o.end()
             })),
             detail.tokens_error.clone(),
         ),
-        (None, Some(_)) => ("[]".to_string(), Some("no token map for this record".to_string())),
+        (None, Some(_)) => (
+            "[]".to_string(),
+            Some("no token map for this record".to_string()),
+        ),
         (None, None) => ("[]".to_string(), None),
     };
     let entry = f.byte_address;
-    let size = if f.size > 0 { f.size as u64 } else { prog.function_extent_at(entry) };
+    let size = if f.size > 0 {
+        f.size as u64
+    } else {
+        prog.function_extent_at(entry)
+    };
     let (rows, truncated) = function_rows(prog, entry, size, FUNCTION_ROW_CAP);
     let mut lines_at: BTreeMap<u64, Vec<usize>> = BTreeMap::new();
     for m in &f.line_mappings {
@@ -213,7 +252,10 @@ fn function_json(prog: &ConsoleProgram, f: &FuncResult, kind: &str, sections: &[
             .opt_str("flow", flow.as_ref().map(|f| f.kind.as_str()))
             .raw(
                 "targets_hex",
-                &arr(flow.iter().flat_map(|f| &f.targets).map(|&t| hex_str(prog.output_code_offset(t)))),
+                &arr(flow
+                    .iter()
+                    .flat_map(|f| &f.targets)
+                    .map(|&t| hex_str(prog.output_code_offset(t)))),
             )
             .end()
     }));
@@ -221,7 +263,10 @@ fn function_json(prog: &ConsoleProgram, f: &FuncResult, kind: &str, sections: &[
         .str("name", &f.name)
         .addr("address", f.address)
         .raw("aliases", &json_str_array(&f.aliases))
-        .raw("object_location", &json_object_location(f.object_location.as_ref()))
+        .raw(
+            "object_location",
+            &json_object_location(f.object_location.as_ref()),
+        )
         .str("kind", kind)
         .num("size", f.size)
         .opt_str("code", f.code.as_deref())
@@ -248,7 +293,15 @@ fn frame_json(prog: &ConsoleProgram, entry: u64, rows: &[unlace_console::disasm:
     let body: Vec<u64> = rows.iter().map(|r| r.addr).collect();
     let bases = unlace_console::kuna_framebase::frame_bases(prog, entry, &body);
     let reg = |r: Option<unlace_console::kuna_framebase::FrameRegister>| {
-        r.map_or_else(|| "null".to_string(), |r| Obj::new().str("register", &r.register).num("offset", r.offset).end())
+        r.map_or_else(
+            || "null".to_string(),
+            |r| {
+                Obj::new()
+                    .str("register", &r.register)
+                    .num("offset", r.offset)
+                    .end()
+            },
+        )
     };
     Obj::new()
         .raw("frame_pointer", &reg(bases.frame_pointer))
@@ -278,7 +331,13 @@ pub fn inspect_json(
 
 /// The `read` document: up to `len` bytes at `addr`, stopping at the end of
 /// the mapped run that holds it.
-pub fn read_json(binary: &str, prog: &ConsoleProgram, addr: u64, len: u64, assertions: &[Outcome]) -> String {
+pub fn read_json(
+    binary: &str,
+    prog: &ConsoleProgram,
+    addr: u64,
+    len: u64,
+    assertions: &[Outcome],
+) -> String {
     let mut bytes = Vec::new();
     let start = prog.input_address_offset(addr).ok();
     let got = start.map_or(0, |start| {
@@ -293,7 +352,9 @@ pub fn read_json(binary: &str, prog: &ConsoleProgram, addr: u64, len: u64, asser
     bytes.truncate(got);
     let text = hex(&bytes);
     let sections = section_rows(prog);
-    let offset = start.filter(|_| got > 0).and_then(|start| file_offset(&sections, start));
+    let offset = start
+        .filter(|_| got > 0)
+        .and_then(|start| file_offset(&sections, start));
     Obj::new()
         .str("binary", binary)
         .addr("address", addr)
@@ -377,14 +438,22 @@ pub fn strings_json(
         .filter(|s| s.kind() == SectionKind::Text)
         .map(|s| (s.address(), s.address().saturating_add(s.size())))
         .collect();
-    let extents: Vec<(u64, u64)> =
-        inv.strings.iter().map(|s| (s.addr, u64::from(s.byte_len))).collect();
+    let extents: Vec<(u64, u64)> = inv
+        .strings
+        .iter()
+        .map(|s| (s.addr, u64::from(s.byte_len)))
+        .collect();
     let uses = string_uses(prog, file, &extents);
     let rows = arr(inv.strings.iter().zip(&uses).map(|(s, uses)| {
         let uses = arr(uses.iter().map(|u| {
             let via = u.via.as_ref().map_or_else(
                 || "null".to_string(),
-                |(slot, name)| Obj::new().opt_str("name", name.as_deref()).addr("address", *slot).end(),
+                |(slot, name)| {
+                    Obj::new()
+                        .opt_str("name", name.as_deref())
+                        .addr("address", *slot)
+                        .end()
+                },
             );
             Obj::new()
                 .opt_str("name", u.row.name.as_deref())
@@ -401,13 +470,23 @@ pub fn strings_json(
             .num("length", s.char_len)
             .str("encoding", s.encoding.as_str())
             .opt_str("section", s.section.as_deref())
-            .bool("in_code", code.iter().any(|&(lo, hi)| s.addr >= lo && s.addr < hi))
+            .bool(
+                "in_code",
+                code.iter().any(|&(lo, hi)| s.addr >= lo && s.addr < hi),
+            )
             .raw("uses", &uses)
             .end()
     }));
     Obj::new()
         .str("binary", binary)
-        .str("scanned", if inv.from_segments { "segments" } else { "sections" })
+        .str(
+            "scanned",
+            if inv.from_segments {
+                "segments"
+            } else {
+                "sections"
+            },
+        )
         .num("count", inv.strings.len())
         .raw("strings", &rows)
         .raw("assertions", &assertions_json(assertions))
@@ -442,7 +521,10 @@ mod tests {
         assert_eq!(file_offset(&sections, 0x3010), None);
         assert_eq!(file_offset(&sections, 0x4000), None);
         assert_eq!(file_offset(&sections, 0x10), None);
-        let short = [SectionRow { file_size: Some(0x10), ..section(".data", 0x5000, 0x40, Some(0x3000)) }];
+        let short = [SectionRow {
+            file_size: Some(0x10),
+            ..section(".data", 0x5000, 0x40, Some(0x3000))
+        }];
         assert_eq!(file_offset(&short, 0x500f), Some(0x300f));
         assert_eq!(file_offset(&short, 0x5010), None);
     }

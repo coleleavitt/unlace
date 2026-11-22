@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::space::{spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
@@ -160,7 +160,10 @@ pub fn high_homes(
     fd: &Funcdata,
     arch: &Architecture,
     high: HighVariableId,
-) -> Option<(BTreeMap<String, (Rc<AddrSpace>, u64)>, Option<(Rc<AddrSpace>, u64)>)> {
+) -> Option<(
+    BTreeMap<String, (Rc<AddrSpace>, u64)>,
+    Option<(Rc<AddrSpace>, u64)>,
+)> {
     let mut homes = BTreeMap::new();
     let fallback = visit_homes(fd, high, &mut |address, size| {
         if let Some((text, space, offset)) = storage_comment(fd, arch, address, size) {
@@ -244,11 +247,21 @@ fn visit_homes(
 /// The stack homes of `high` among those [`high_homes`] lists: each signed
 /// frame offset with the size of the storage it was drawn from.
 pub fn high_stack_homes(fd: &Funcdata, high: HighVariableId) -> Vec<(i64, int4)> {
-    let Some(stack) = fd.get_arch().manage().get_stack_space() else { return Vec::new() };
+    let Some(stack) = fd.get_arch().manage().get_stack_space() else {
+        return Vec::new();
+    };
     let mut out = Vec::new();
     visit_homes(fd, high, &mut |address, size| {
-        let Some(space) = address.get_space().filter(|s| s.get_index() == stack.get_index()) else { return };
-        let signed = unlace_base::address::sign_extend(address.get_offset() as i64, space.get_addr_size() as int4 * 8 - 1);
+        let Some(space) = address
+            .get_space()
+            .filter(|s| s.get_index() == stack.get_index())
+        else {
+            return;
+        };
+        let signed = unlace_base::address::sign_extend(
+            address.get_offset() as i64,
+            space.get_addr_size() as int4 * 8 - 1,
+        );
         if !out.contains(&(signed, size)) {
             out.push((signed, size));
         }

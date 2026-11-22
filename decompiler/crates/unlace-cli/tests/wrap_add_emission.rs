@@ -8,7 +8,11 @@ fn decompile(image: &std::path::Path, option: Option<&str>) -> String {
     if let Some(value) = option {
         command.args(["--option", "wrapadd", value]);
     }
-    command.args(["--assert-strict", "--assert", "prototype word_wrap long long word_wrap(int value)"]);
+    command.args([
+        "--assert-strict",
+        "--assert",
+        "prototype word_wrap long long word_wrap(int value)",
+    ]);
     String::from_utf8(common::process::required_output(&mut command).stdout).unwrap()
 }
 
@@ -27,15 +31,28 @@ fn widened_word_additions_wrap_like_the_machine() {
         let source = common::scratch_file("wrap-add", "c");
         let driver = source.with_extension("driver.c");
         let executable = source.with_extension("exe");
-        std::fs::write(&source, format!("#include <stdint.h>\n#include <stdbool.h>\n{code}")).unwrap();
+        std::fs::write(
+            &source,
+            format!("#include <stdint.h>\n#include <stdbool.h>\n{code}"),
+        )
+        .unwrap();
         let declaration = code.split_once('{').unwrap().0.trim();
         std::fs::write(&driver, format!("#include <stdint.h>\n{declaration};\nint main(void){{uint32_t edges[]={{0,1,0x7fffffffu,0x80000000u,0xfffffffeu,0xffffffffu}};for(uint32_t i=0;i<10000;i++){{uint32_t word=i<6?edges[i]:i*2654435761u;if(word_wrap((int32_t)word)!=(int64_t)(int32_t)(word+1u))return 1;}}return 0;}}\n")).unwrap();
         for opt in ["-O0", "-O2"] {
             common::process::required_output(
                 Command::new("cc")
-                    .args(["-std=c11", opt, "-Wall", "-Wextra", "-Werror", "-Wno-parentheses",
-                        "-Wuninitialized", "-fno-lto", "-fsanitize=undefined",
-                        "-fno-sanitize-recover=undefined"])
+                    .args([
+                        "-std=c11",
+                        opt,
+                        "-Wall",
+                        "-Wextra",
+                        "-Werror",
+                        "-Wno-parentheses",
+                        "-Wuninitialized",
+                        "-fno-lto",
+                        "-fsanitize=undefined",
+                        "-fno-sanitize-recover=undefined",
+                    ])
                     .arg(&source)
                     .arg(&driver)
                     .arg("-o")
@@ -47,7 +64,11 @@ fn widened_word_additions_wrap_like_the_machine() {
                 std::time::Duration::from_millis(10),
             )
             .unwrap();
-            assert!(output.status.success(), "{code}\n{}", String::from_utf8_lossy(&output.stderr));
+            assert!(
+                output.status.success(),
+                "{code}\n{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
         }
         for path in [source, driver, executable] {
             std::fs::remove_file(path).unwrap();

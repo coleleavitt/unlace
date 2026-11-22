@@ -41,7 +41,7 @@ use crate::kuna_fasthash::FxHashMap as HashMap;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::space::{spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
@@ -102,14 +102,21 @@ pub fn every_pop_settled(data: &crate::funcdata::Funcdata) -> bool {
 /// makes. A parameter the callee never reads is still pushed and removed for
 /// it, so what its returns pop and what the caller removes right after the call
 /// widen the bound.
-pub fn callee_arg_bytes(arch: &Architecture, entry: &Address, call_at: &Address) -> Option<StackArgs> {
+pub fn callee_arg_bytes(
+    arch: &Architecture,
+    entry: &Address,
+    call_at: &Address,
+) -> Option<StackArgs> {
     if !applies(arch) || entry.is_invalid() {
         return None;
     }
     let s = summary(arch, entry, DEPTH);
     let read = s.arg_bytes?;
     let popped = s.ret_pops.map_or(0, |ep| (ep - 4).max(0) as u32);
-    Some(StackArgs { read, bound: read.max(popped).max(caller_cleanup(arch, call_at)) })
+    Some(StackArgs {
+        read,
+        bound: read.max(popped).max(caller_cleanup(arch, call_at)),
+    })
 }
 
 /// (`calleeargs`) For a direct callee whose extent is not stated, the stack
@@ -192,14 +199,20 @@ pub(crate) fn own_cleanup(arch: &Architecture, call_at: &Address) -> u32 {
 }
 
 fn cleanup_scan(arch: &Architecture, call_at: &Address, own: bool) -> u32 {
-    let (Some(space), Some(regs)) = (call_at.get_space().cloned(), registers(arch)) else { return 0 };
-    let Some(call) = decode(arch, &space, call_at.get_offset()) else { return 0 };
+    let (Some(space), Some(regs)) = (call_at.get_space().cloned(), registers(arch)) else {
+        return 0;
+    };
+    let Some(call) = decode(arch, &space, call_at.get_offset()) else {
+        return 0;
+    };
     let fs = arch.translate().get_register_data("FS_OFFSET").ok();
     let mut at = call_at.get_offset().wrapping_add(call.1);
     let (mut sp, mut high, mut pushed) = (0i64, 0i64, false);
     let (mut later, mut run_from) = (false, None);
     for _ in 0..CLEANUP_SCAN {
-        let Some(insn) = decode(arch, &space, at) else { break };
+        let Some(insn) = decode(arch, &space, at) else {
+            break;
+        };
         let (ops, len) = (&insn.0, insn.1);
         let mut state = State::at_entry();
         state.0[SP] = Some(Val::exact(sp));
@@ -207,17 +220,21 @@ fn cleanup_scan(arch: &Architecture, call_at: &Address, own: bool) -> u32 {
         if s.ret.is_some() || !s.targets.is_empty() || !s.falls_through {
             break;
         }
-        let Some(after) = s.state.0[SP].and_then(Val::as_exact) else { break };
+        let Some(after) = s.state.0[SP].and_then(Val::as_exact) else {
+            break;
+        };
         if after == sp && fs.as_ref().is_some_and(|fs| stores_through(ops, fs)) {
             break;
         }
         let pops = match s.call {
             None => 0,
-            Some(Call::Direct(t)) => match summary(arch, &Address::new(space.clone(), t), DEPTH).effect {
-                Effect::Balanced(ep) => ep as i64,
-                Effect::Unknown => 4,
-                _ => break,
-            },
+            Some(Call::Direct(t)) => {
+                match summary(arch, &Address::new(space.clone(), t), DEPTH).effect {
+                    Effect::Balanced(ep) => ep as i64,
+                    Effect::Unknown => 4,
+                    _ => break,
+                }
+            }
             Some(Call::Indirect(_)) => 4,
         };
         if s.call.is_none() && after > sp && s.writes == 0 {
@@ -240,14 +257,20 @@ fn cleanup_scan(arch: &Architecture, call_at: &Address, own: bool) -> u32 {
 }
 
 /// Does an instruction store through an address formed from `base`?
-fn stores_through(ops: &[(OpCode, Option<VarnodeData>, Vec<VarnodeData>)], base: &VarnodeData) -> bool {
+fn stores_through(
+    ops: &[(OpCode, Option<VarnodeData>, Vec<VarnodeData>)],
+    base: &VarnodeData,
+) -> bool {
     let mut derived: Vec<&VarnodeData> = vec![base];
     for (code, out, ins) in ops {
         if *code == OpCode::CPUI_STORE {
             if ins.get(1).is_some_and(|p| derived.contains(&p)) {
                 return true;
             }
-        } else if let Some(out) = out.as_ref().filter(|_| ins.iter().any(|i| derived.contains(&i))) {
+        } else if let Some(out) = out
+            .as_ref()
+            .filter(|_| ins.iter().any(|i| derived.contains(&i)))
+        {
             derived.push(out);
         }
     }
@@ -379,7 +402,13 @@ fn summary_at(arch: &Architecture, entry: &Address, depth: u8) -> (Summary, u8) 
         }
     }
     let found = if crate::p4_calls::kuna_calleenoreturn::is_no_return(arch, entry) {
-        (Summary { effect: Effect::NoReturn, ..UNKNOWN }, 0)
+        (
+            Summary {
+                effect: Effect::NoReturn,
+                ..UNKNOWN
+            },
+            0,
+        )
     } else if is_import(arch, entry) {
         (UNKNOWN, 0)
     } else {
@@ -403,7 +432,10 @@ fn slot_effect(arch: &Architecture, slot: &Address) -> Summary {
         return hit;
     }
     let found = if crate::p4_calls::kuna_calleenoreturn::is_no_return(arch, slot) {
-        Summary { effect: Effect::NoReturn, ..UNKNOWN }
+        Summary {
+            effect: Effect::NoReturn,
+            ..UNKNOWN
+        }
     } else {
         UNKNOWN
     };
@@ -417,7 +449,10 @@ fn decode(arch: &Architecture, space: &Rc<AddrSpace>, at: uintb) -> Option<Decod
         return Some(hit.clone());
     }
     let mut collect = Collect::default();
-    let len = arch.translate().one_instruction(&mut collect, &Address::new(space.clone(), at)).ok()?;
+    let len = arch
+        .translate()
+        .one_instruction(&mut collect, &Address::new(space.clone(), at))
+        .ok()?;
     let found: Decoded = Rc::new((collect.0, len.max(1) as uintb));
     let mut cache = arch.kuna_callee_purge.borrow_mut();
     if cache.decoded.len() >= DECODED {
@@ -429,7 +464,11 @@ fn decode(arch: &Architecture, space: &Rc<AddrSpace>, at: uintb) -> Option<Decod
 
 /// Does a function the symbol table or the lazy entry set knows start at `at`?
 fn is_entry(arch: &Architecture, space: &Rc<AddrSpace>, at: uintb) -> bool {
-    arch.is_lazy_entry(at) || arch.symboltab.find_function_across_scopes(&Address::new(space.clone(), at)).is_some()
+    arch.is_lazy_entry(at)
+        || arch
+            .symboltab
+            .find_function_across_scopes(&Address::new(space.clone(), at))
+            .is_some()
 }
 
 /// An import's address-table slot, which a resolved `call [slot]` targets:
@@ -439,7 +478,9 @@ fn is_import(arch: &Architecture, entry: &Address) -> bool {
     if arch.symboltab.get_property(entry) & externref != 0 {
         return true;
     }
-    let Some(global) = arch.symboltab.get_global_scope() else { return false };
+    let Some(global) = arch.symboltab.get_global_scope() else {
+        return false;
+    };
     arch.symboltab.query_properties(global, entry, 4, entry).1 & externref != 0
 }
 
@@ -447,7 +488,13 @@ fn is_import(arch: &Architecture, entry: &Address) -> bool {
 struct Collect(Vec<(OpCode, Option<VarnodeData>, Vec<VarnodeData>)>);
 
 impl PcodeEmit for Collect {
-    fn dump(&mut self, _at: &Address, opcode: OpCode, out: Option<&VarnodeData>, inputs: &[VarnodeData]) {
+    fn dump(
+        &mut self,
+        _at: &Address,
+        opcode: OpCode,
+        out: Option<&VarnodeData>,
+        inputs: &[VarnodeData],
+    ) {
         self.0.push((opcode, out.cloned(), inputs.to_vec()));
     }
 }
@@ -477,7 +524,11 @@ fn bound(b: i64, k: i64) -> i64 {
 
 impl Val {
     pub(crate) fn exact(o: i64) -> Val {
-        Val::Stack { lo: o, hi: o, own: false }
+        Val::Stack {
+            lo: o,
+            hi: o,
+            own: false,
+        }
     }
 
     pub(crate) fn as_exact(self) -> Option<i64> {
@@ -496,7 +547,11 @@ impl Val {
 
     fn shift(self, k: i64) -> Val {
         match self {
-            Val::Stack { lo, hi, own } => Val::Stack { lo: bound(lo, k), hi: bound(hi, k), own },
+            Val::Stack { lo, hi, own } => Val::Stack {
+                lo: bound(lo, k),
+                hi: bound(hi, k),
+                own,
+            },
             Val::CallerFrame => Val::Opaque { own: true },
             v => v,
         }
@@ -508,13 +563,29 @@ impl Val {
         match self {
             Val::Stack { lo, hi, .. } if is_sp => {
                 if plus {
-                    Val::Stack { lo, hi: INF, own: true }
+                    Val::Stack {
+                        lo,
+                        hi: INF,
+                        own: true,
+                    }
                 } else {
-                    Val::Stack { lo: -INF, hi, own: true }
+                    Val::Stack {
+                        lo: -INF,
+                        hi,
+                        own: true,
+                    }
                 }
             }
-            Val::Stack { hi, .. } if hi < 0 => Val::Stack { lo: -INF, hi: -1, own: true },
-            Val::Stack { .. } => Val::Stack { lo: -INF, hi: INF, own: true },
+            Val::Stack { hi, .. } if hi < 0 => Val::Stack {
+                lo: -INF,
+                hi: -1,
+                own: true,
+            },
+            Val::Stack { .. } => Val::Stack {
+                lo: -INF,
+                hi: INF,
+                own: true,
+            },
             _ => Val::Opaque { own: true },
         }
     }
@@ -527,11 +598,28 @@ fn join(a: Option<Val>, b: Option<Val>) -> Option<Val> {
     match (a, b) {
         (None, x) | (x, None) => x,
         (Some(x), Some(y)) if x == y => Some(x),
-        (Some(Val::Stack { lo: l1, hi: h1, own: o1 }), Some(Val::Stack { lo: l2, hi: h2, own: o2 })) => {
+        (
+            Some(Val::Stack {
+                lo: l1,
+                hi: h1,
+                own: o1,
+            }),
+            Some(Val::Stack {
+                lo: l2,
+                hi: h2,
+                own: o2,
+            }),
+        ) => {
             let differ = l1 == h1 && l2 == h2;
-            Some(Val::Stack { lo: l1.min(l2), hi: h1.max(h2), own: o1 || o2 || differ })
+            Some(Val::Stack {
+                lo: l1.min(l2),
+                hi: h1.max(h2),
+                own: o1 || o2 || differ,
+            })
         }
-        (Some(x), Some(y)) => Some(Val::Opaque { own: x.own() || y.own() }),
+        (Some(x), Some(y)) => Some(Val::Opaque {
+            own: x.own() || y.own(),
+        }),
     }
 }
 
@@ -540,14 +628,12 @@ fn join(a: Option<Val>, b: Option<Val>) -> Option<Val> {
 /// return address.
 fn widen(old: Option<Val>, joined: Option<Val>, is_sp: bool) -> Option<Val> {
     match (old, joined) {
-        (Some(Val::Stack { lo: l0, hi: h0, .. }), Some(Val::Stack { lo, hi, own })) if (lo, hi) != (l0, h0) => {
+        (Some(Val::Stack { lo: l0, hi: h0, .. }), Some(Val::Stack { lo, hi, own }))
+            if (lo, hi) != (l0, h0) =>
+        {
             let lo = if lo < l0 { -INF } else { lo };
             let hi = if hi > h0 {
-                if !is_sp && h0 < 0 {
-                    -1
-                } else {
-                    INF
-                }
+                if !is_sp && h0 < 0 { -1 } else { INF }
             } else {
                 hi
             };
@@ -594,7 +680,9 @@ pub(crate) fn slot_bit(o: i64) -> Option<u64> {
 
 /// The bits of the slots an access of `size` bytes at `at` may overlap.
 fn slots_in(at: Option<Val>, size: u32) -> u64 {
-    let Some(Val::Stack { lo, hi, .. }) = at else { return 0 };
+    let Some(Val::Stack { lo, hi, .. }) = at else {
+        return 0;
+    };
     let end = bound(hi, size as i64).min(0);
     let mut o = lo.max(-256).div_euclid(4) * 4;
     let mut bits = 0;
@@ -628,7 +716,11 @@ impl Regs {
     fn partial(&self, v: &VarnodeData) -> impl Iterator<Item = usize> + '_ + use<'_> {
         let hit = Self::space_of(v) == Some(self.space) && self.exact(v).is_none();
         let (lo, hi) = (v.offset, v.offset + v.size as u64);
-        self.offs.iter().enumerate().filter(move |&(_, &o)| hit && lo < o + 4 && o < hi).map(|(i, _)| i)
+        self.offs
+            .iter()
+            .enumerate()
+            .filter(move |&(_, &o)| hit && lo < o + 4 && o < hi)
+            .map(|(i, _)| i)
     }
 }
 
@@ -703,11 +795,18 @@ pub(crate) fn escape(v: Option<Val>, unplaced: &mut bool) {
 }
 
 fn saved_bit(r: usize) -> u8 {
-    CALLEE_SAVED.iter().position(|&s| s == r).map_or(0, |i| 1 << i)
+    CALLEE_SAVED
+        .iter()
+        .position(|&s| s == r)
+        .map_or(0, |i| 1 << i)
 }
 
 /// Summarize one instruction's p-code from `state`.
-pub(crate) fn step(ops: &[(OpCode, Option<VarnodeData>, Vec<VarnodeData>)], regs: &Regs, state: State) -> Step {
+pub(crate) fn step(
+    ops: &[(OpCode, Option<VarnodeData>, Vec<VarnodeData>)],
+    regs: &Regs,
+    state: State,
+) -> Step {
     step_with(ops, regs, state, false)
 }
 
@@ -753,7 +852,11 @@ pub(crate) fn step_with(
             }
             regs.partial(v).any(|r| s.state.lost(r))
         };
-        let lost: Vec<bool> = if track { ins.iter().map(|v| lost_of(v, &s)).collect() } else { Vec::new() };
+        let lost: Vec<bool> = if track {
+            ins.iter().map(|v| lost_of(v, &s)).collect()
+        } else {
+            Vec::new()
+        };
         let lost_at = |i: usize| lost.get(i).copied().unwrap_or(false);
         let mut out_lost = lost.iter().any(|&b| b);
         let eval = |v: &VarnodeData, s: &Step| -> Option<Val> {
@@ -761,7 +864,11 @@ pub(crate) fn step_with(
                 return s.state.0[r];
             }
             if unique(v) {
-                return temps.iter().rev().find(|(o, _)| *o == v.offset).and_then(|(_, x)| *x);
+                return temps
+                    .iter()
+                    .rev()
+                    .find(|(o, _)| *o == v.offset)
+                    .and_then(|(_, x)| *x);
             }
             None
         };
@@ -788,8 +895,14 @@ pub(crate) fn step_with(
             }
             OpCode::CPUI_INT_AND if ins.len() == 2 => {
                 let aligned = |v: Val, m: i64| match v {
-                    Val::Stack { lo, hi, .. } if (-4096..0).contains(&m) && (-m).count_ones() == 1 => {
-                        Val::Stack { lo: bound(lo, m + 1), hi, own: true }
+                    Val::Stack { lo, hi, .. }
+                        if (-4096..0).contains(&m) && (-m).count_ones() == 1 =>
+                    {
+                        Val::Stack {
+                            lo: bound(lo, m + 1),
+                            hi,
+                            own: true,
+                        }
                     }
                     _ => Val::Opaque { own: true },
                 };
@@ -821,7 +934,12 @@ pub(crate) fn step_with(
                 if track {
                     s.unplaced |= lost_at(1);
                     let carries = value.is_some() || lost_at(2);
-                    match (at, at.and_then(Val::as_exact).and_then(slot_bit).filter(|_| size == 4)) {
+                    match (
+                        at,
+                        at.and_then(Val::as_exact)
+                            .and_then(slot_bit)
+                            .filter(|_| size == 4),
+                    ) {
                         (_, Some(b)) if carries => s.state.2 |= b,
                         (_, Some(b)) => s.state.2 &= !b,
                         (Some(Val::Stack { .. }), None) => s.unplaced |= carries,
@@ -837,7 +955,10 @@ pub(crate) fn step_with(
                 None
             }
             OpCode::CPUI_RETURN => {
-                if ins.first().is_some_and(|d| kind(d) != Some(spacetype::IPTR_CONSTANT)) {
+                if ins
+                    .first()
+                    .is_some_and(|d| kind(d) != Some(spacetype::IPTR_CONSTANT))
+                {
                     let at = s.state.0[SP].unwrap_or(Val::Opaque { own: true });
                     s.ret = Some((start_sp, at));
                     s.ret_pop = Some(sp_adds);
@@ -845,24 +966,37 @@ pub(crate) fn step_with(
                 }
                 None
             }
-            OpCode::CPUI_BRANCH if ins.first().is_some_and(|d| kind(d) != Some(spacetype::IPTR_CONSTANT)) => {
+            OpCode::CPUI_BRANCH
+                if ins
+                    .first()
+                    .is_some_and(|d| kind(d) != Some(spacetype::IPTR_CONSTANT)) =>
+            {
                 s.targets.push(ins[0].offset);
                 s.falls_through = false;
                 None
             }
-            OpCode::CPUI_CBRANCH if ins.first().is_some_and(|d| kind(d) != Some(spacetype::IPTR_CONSTANT)) => {
+            OpCode::CPUI_CBRANCH
+                if ins
+                    .first()
+                    .is_some_and(|d| kind(d) != Some(spacetype::IPTR_CONSTANT)) =>
+            {
                 s.targets.push(ins[0].offset);
                 None
             }
             OpCode::CPUI_BRANCHIND => {
-                let trap = ins.first().is_some_and(|d| unique(d) && trapped.contains(&d.offset));
+                let trap = ins
+                    .first()
+                    .is_some_and(|d| unique(d) && trapped.contains(&d.offset));
                 s.unknown |= !trap;
                 s.interrupt |= trap;
                 s.falls_through = false;
                 None
             }
             OpCode::CPUI_CALL => {
-                if let Some(d) = ins.first().filter(|d| kind(d) != Some(spacetype::IPTR_CONSTANT)) {
+                if let Some(d) = ins
+                    .first()
+                    .filter(|d| kind(d) != Some(spacetype::IPTR_CONSTANT))
+                {
                     s.call = Some(Call::Direct(d.offset));
                 }
                 None
@@ -872,9 +1006,13 @@ pub(crate) fn step_with(
                 let interrupt = target.is_some_and(|d| unique(d) && trapped.contains(&d.offset));
                 s.interrupt |= interrupt;
                 if !interrupt {
-                    let slot = target
-                        .filter(|d| unique(d))
-                        .and_then(|d| loaded_from.iter().rev().find(|(o, _)| *o == d.offset).map(|(_, a)| *a));
+                    let slot = target.filter(|d| unique(d)).and_then(|d| {
+                        loaded_from
+                            .iter()
+                            .rev()
+                            .find(|(o, _)| *o == d.offset)
+                            .map(|(_, a)| *a)
+                    });
                     s.call = Some(Call::Indirect(slot));
                 }
                 None
@@ -885,7 +1023,11 @@ pub(crate) fn step_with(
         let Some(o) = out else { continue };
         if let Some(r) = regs.exact(o) {
             s.writes |= saved_bit(r);
-            s.state.0[r] = if r == SP { Some(result.unwrap_or(Val::Opaque { own: true })) } else { result };
+            s.state.0[r] = if r == SP {
+                Some(result.unwrap_or(Val::Opaque { own: true }))
+            } else {
+                result
+            };
             if out_lost && r != SP {
                 s.state.1 |= 1 << r;
             } else {
@@ -904,7 +1046,11 @@ pub(crate) fn step_with(
             }
             for r in partial {
                 s.writes |= saved_bit(r);
-                s.state.0[r] = if s.state.0[r].is_some() || r == SP { Some(Val::Opaque { own: true }) } else { None };
+                s.state.0[r] = if s.state.0[r].is_some() || r == SP {
+                    Some(Val::Opaque { own: true })
+                } else {
+                    None
+                };
                 if out_lost && r != SP {
                     s.state.1 |= 1 << r;
                 }
@@ -927,7 +1073,10 @@ fn registers(arch: &Architecture) -> Option<Regs> {
         space = Some(idx);
         offs[i] = v.offset;
     }
-    Some(Regs { space: space?, offs })
+    Some(Regs {
+        space: space?,
+        offs,
+    })
 }
 
 /// The stack pointer after a call the walk cannot read: above it by at least
@@ -935,7 +1084,11 @@ fn registers(arch: &Architecture) -> Option<Regs> {
 /// return address, unless the caller had already climbed past it.
 fn after_unread_call(sp: Val) -> Val {
     match sp {
-        Val::Stack { hi, own, .. } => Val::Stack { lo: -INF, hi: bound(hi, 4).max(0), own },
+        Val::Stack { hi, own, .. } => Val::Stack {
+            lo: -INF,
+            hi: bound(hi, 4).max(0),
+            own,
+        },
         Val::CallerFrame => Val::Opaque { own: true },
         v => v,
     }
@@ -1009,12 +1162,18 @@ fn walk(arch: &Architecture, entry: &Address, depth: u8) -> Option<(Summary, u8)
             }
         }
         strayed |= s.interrupt;
-        if s.ret.is_none() && s.state.0[SP].and_then(Val::as_exact).is_some_and(|sp| sp > 0) {
+        if s.ret.is_none()
+            && s.state.0[SP]
+                .and_then(Val::as_exact)
+                .is_some_and(|sp| sp > 0)
+        {
             unbalanced = true;
         }
         if let Some((pre, post)) = s.ret {
             returns = true;
-            returns_stack |= CALLER_SAVED.iter().any(|&r| s.state.0[r].is_some() || s.state.lost(r));
+            returns_stack |= CALLER_SAVED
+                .iter()
+                .any(|&r| s.state.0[r].is_some() || s.state.lost(r));
             match (pre.as_exact(), post.as_exact()) {
                 (Some(0), Some(ep)) => {
                     let ep = ep as int4;
@@ -1036,14 +1195,18 @@ fn walk(arch: &Architecture, entry: &Address, depth: u8) -> Option<(Summary, u8)
                 Call::Direct(t) if depth == 0 => {
                     let target = Address::new(space.clone(), t);
                     if crate::p4_calls::kuna_calleenoreturn::is_no_return(arch, &target) {
-                        Summary { effect: Effect::NoReturn, ..UNKNOWN }
+                        Summary {
+                            effect: Effect::NoReturn,
+                            ..UNKNOWN
+                        }
                     } else {
                         need = CUT;
                         UNKNOWN
                     }
                 }
                 Call::Direct(t) => {
-                    let (nested, nested_need) = summary_at(arch, &Address::new(space.clone(), t), depth - 1);
+                    let (nested, nested_need) =
+                        summary_at(arch, &Address::new(space.clone(), t), depth - 1);
                     need = need.max(nested_need.saturating_add(1));
                     nested
                 }
@@ -1098,7 +1261,17 @@ fn walk(arch: &Architecture, entry: &Address, depth: u8) -> Option<(Summary, u8)
     } else {
         Effect::NoReturn
     };
-    Some((Summary { effect, writes, arg_bytes, ret_pops, own_pop, returns_stack }, need))
+    Some((
+        Summary {
+            effect,
+            writes,
+            arg_bytes,
+            ret_pops,
+            own_pop,
+            returns_stack,
+        },
+        need,
+    ))
 }
 
 #[cfg(test)]

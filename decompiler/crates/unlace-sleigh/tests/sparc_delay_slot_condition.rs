@@ -113,7 +113,9 @@ fn check_branch(bits: u32, predicted: bool, extended: bool, annul: bool, cond: u
                 .collect();
             registers.extend([(flag, incoming), ("g1", left), ("g2", right)]);
             let next = machine.step(&registers);
-            let context = format!("SPARC{bits} predicted={predicted} extended={extended} annul={annul} {flag}={incoming} slot={slot_flag}");
+            let context = format!(
+                "SPARC{bits} predicted={predicted} extended={extended} annul={annul} {flag}={incoming} slot={slot_flag}"
+            );
             assert_eq!(
                 next,
                 if incoming == 1 { 0x1010 } else { 0x1008 },

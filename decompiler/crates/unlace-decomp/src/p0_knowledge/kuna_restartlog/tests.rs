@@ -8,18 +8,19 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 
-use crate::funcdata::Funcdata;
 use crate::context::ArchContext;
+use crate::funcdata::Funcdata;
 
 /// Build an AddrSpaceManager with constant/unique/ram spaces (mirrors the
 /// funcdata.rs test harness).
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -98,9 +99,9 @@ fn record_then_dump() {
         "Restart events for bar (mechanism c; hints persist in the Override store):\n"
     ));
     // index 0 carries its detail in [..]; index 1 has empty detail -> no [..].
-    assert!(out.contains(
-        "  0: deadcode-delay bump (S3 dead-definition gate, edge 3)  [ram:detail]\n"
-    ));
+    assert!(
+        out.contains("  0: deadcode-delay bump (S3 dead-definition gate, edge 3)  [ram:detail]\n")
+    );
     assert!(out.contains("  1: multistage jump-table hint (S2 switch model, edge 2)\n"));
     // The empty-detail line must NOT have a trailing bracket pair.
     assert!(!out.contains("edge 2)  ["));

@@ -5,7 +5,7 @@ use std::rc::Rc;
 use unlace_base::types::uint4;
 use unlace_decomp::dtype::{Datatype, TypeFactory};
 
-use super::{read_sleb128, DieSnap, Reader};
+use super::{DieSnap, Reader, read_sleb128};
 
 pub(super) fn is_fortran(language: Option<gimli::DwLang>) -> bool {
     matches!(
@@ -246,8 +246,8 @@ mod tests {
 
     #[test]
     fn register_addresses_become_pointers_unless_the_abi_may_pass_the_value_hidden() {
-        use unlace_decomp::dtype::{type_metatype::*, TypeFactoryImpl};
         use object::{Architecture::*, BinaryFormat::*};
+        use unlace_decomp::dtype::{TypeFactoryImpl, type_metatype::*};
         let types = TypeFactoryImpl::new();
         types.set_default_alignment_map();
         types.set_max_basetype_size(16);

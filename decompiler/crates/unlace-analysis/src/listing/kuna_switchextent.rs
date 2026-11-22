@@ -39,8 +39,8 @@ use unlace_num::opcodes::OpCode;
 use unlace_sleigh::translate::Translate;
 
 use super::kuna_poolref::PoolImage;
-use super::kuna_switchtable::{fold, invalidate, key_of, value_of, Key, Val, MAX_TRACKED};
-use super::xrefs::{decode, in_range, FullCapture};
+use super::kuna_switchtable::{Key, MAX_TRACKED, Val, fold, invalidate, key_of, value_of};
+use super::xrefs::{FullCapture, decode, in_range};
 
 /// How far past an entry the linear decode reaches when no known entry ends
 /// the extent sooner: a Swift copy helper runs to 13 KB, nothing to a MiB.
@@ -55,7 +55,10 @@ pub(super) struct FunctionTables<'a> {
 
 impl<'a> FunctionTables<'a> {
     pub(super) fn new(pool: &'a PoolImage<'a>) -> Self {
-        FunctionTables { pool, tables: RefCell::new(HashMap::new()) }
+        FunctionTables {
+            pool,
+            tables: RefCell::new(HashMap::new()),
+        }
     }
 
     /// The lowest jump table above `table`, in `table`'s read-only section,
@@ -78,7 +81,10 @@ impl<'a> FunctionTables<'a> {
             self.scan(translate, code_space, data, exec, lo, hi)
         });
         let at = found.partition_point(|&a| a <= table);
-        found[at..].iter().copied().find(|&a| a >= sec_lo && a < sec_hi)
+        found[at..]
+            .iter()
+            .copied()
+            .find(|&a| a >= sec_lo && a < sec_hi)
     }
 
     /// The table of every computed jump in a linear decode of `[lo, hi)` whose
@@ -97,20 +103,31 @@ impl<'a> FunctionTables<'a> {
         let mut vals: Vec<(Key, Val)> = Vec::new();
         let mut at = lo;
         while at < hi && in_range(exec, at) {
-            let Some(len) = decode(translate, at, code_space, &mut cap) else { break };
+            let Some(len) = decode(translate, at, code_space, &mut cap) else {
+                break;
+            };
             for op in cap.ops() {
                 if op.opcode == OpCode::CPUI_BRANCHIND {
                     match op.ins.first().and_then(|vn| value_of(vn, &vals, data)) {
-                        Some(Val::Relative { table, .. } | Val::Case { table, .. }) => out.push(table),
-                        Some(Val::Entry { table, width, .. }) if width == self.pool.ptr_width() => out.push(table),
+                        Some(Val::Relative { table, .. } | Val::Case { table, .. }) => {
+                            out.push(table)
+                        }
+                        Some(Val::Entry { table, width, .. }) if width == self.pool.ptr_width() => {
+                            out.push(table)
+                        }
                         _ => {}
                     }
                 }
-                if matches!(op.opcode, OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_CALLOTHER) {
+                if matches!(
+                    op.opcode,
+                    OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_CALLOTHER
+                ) {
                     vals.clear();
                 }
                 let folded = fold(op, &vals, data, self.pool);
-                let Some(key) = op.out.as_ref().and_then(|vn| key_of(vn, data)) else { continue };
+                let Some(key) = op.out.as_ref().and_then(|vn| key_of(vn, data)) else {
+                    continue;
+                };
                 invalidate(&mut vals, Some(key));
                 if let Some(val) = folded {
                     if vals.len() < MAX_TRACKED {

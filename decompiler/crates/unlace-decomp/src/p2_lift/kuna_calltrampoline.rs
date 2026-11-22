@@ -67,7 +67,7 @@
 //! [`kuna_tailcalljump`](crate::kuna_tailcalljump) to claim at its `jmp`.
 
 use unlace_base::marshal::ElementId;
-use unlace_base::space::{spacetype, VarnodeStorage};
+use unlace_base::space::{VarnodeStorage, spacetype};
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
@@ -108,12 +108,20 @@ struct VnKey {
 
 fn key_of(vn: &VarnodeData) -> Option<VnKey> {
     let space = vn.space.as_ref()?;
-    Some(VnKey { space: space.get_index(), offset: vn.offset, size: vn.size })
+    Some(VnKey {
+        space: space.get_index(),
+        offset: vn.offset,
+        size: vn.size,
+    })
 }
 
 fn key_of_storage(sp: &VarnodeStorage) -> Option<VnKey> {
     let space = sp.space.as_ref()?;
-    Some(VnKey { space: space.get_index(), offset: sp.offset, size: sp.size })
+    Some(VnKey {
+        space: space.get_index(),
+        offset: sp.offset,
+        size: sp.size,
+    })
 }
 
 /// The literal behind `vn`, sign-extended from its own width, or `None` when it
@@ -153,7 +161,10 @@ struct SpTrack {
 
 impl SpTrack {
     fn new(sp: VnKey) -> Self {
-        SpTrack { sp, known: vec![(sp, 0)] }
+        SpTrack {
+            sp,
+            known: vec![(sp, 0)],
+        }
     }
 
     fn get(&self, k: &VnKey) -> Option<i64> {
@@ -200,10 +211,7 @@ impl SpTrack {
 /// return address goes to a link register), the displacement never reaches one
 /// pointer word and the rule declines, which is the correct answer: there is no
 /// return address on the stack to discard.
-pub fn kuna_trampoline_branch_target(
-    ops: &[RawOp],
-    sp: &VarnodeStorage,
-) -> Option<VarnodeData> {
+pub fn kuna_trampoline_branch_target(ops: &[RawOp], sp: &VarnodeStorage) -> Option<VarnodeData> {
     if ops.is_empty() || ops.len() > KUNA_TRAMPOLINE_MAX_OPS {
         return None;
     }

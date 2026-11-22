@@ -70,7 +70,10 @@ fn is_protocol_type(n: &Node) -> bool {
 fn strip_param_labels(ty: &NodeRef) -> Option<NodeRef> {
     let outer = ty.first()?;
     let (sig, func) = if outer.kind == Kind::DependentGenericType {
-        (Some(Rc::clone(outer.first()?)), Rc::clone(outer.child(1)?.first()?))
+        (
+            Some(Rc::clone(outer.first()?)),
+            Rc::clone(outer.child(1)?.first()?),
+        )
     } else {
         (None, Rc::clone(outer))
     };
@@ -224,7 +227,6 @@ impl<'a> Parser<'a> {
         self.subs.push(Rc::clone(n));
     }
 
-
     /// `NATURAL ::= [1-9][0-9]*`; `None` when no digit follows (a leading
     /// `0` is not a natural) or the value exceeds `i32::MAX`, the reference
     /// demangler's limit.
@@ -260,7 +262,6 @@ impl<'a> Parser<'a> {
     fn index_node(&mut self) -> Option<NodeRef> {
         Some(Node::index(Kind::Number, self.index()?))
     }
-
 
     fn identifier(&mut self) -> Option<NodeRef> {
         let mut has_word_substs = false;
@@ -424,7 +425,6 @@ impl<'a> Parser<'a> {
         Some(Node::with(Kind::LocalDeclName, vec![discriminator, name]))
     }
 
-
     fn multi_substitutions(&mut self) -> Option<NodeRef> {
         let mut repeat: Option<u64> = None;
         loop {
@@ -506,7 +506,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-
     fn pop_context(&mut self) -> Option<NodeRef> {
         if let Some(m) = self.pop_module() {
             return Some(m);
@@ -564,7 +563,6 @@ impl<'a> Parser<'a> {
         children.extend(gen_sig);
         Some(Node::with(Kind::Extension, children))
     }
-
 
     fn clang_type(&mut self) -> Option<NodeRef> {
         let num = usize::try_from(self.natural()?).ok()?;
@@ -846,7 +844,6 @@ impl<'a> Parser<'a> {
         }
         Some(Node::with(kind, children))
     }
-
 
     fn bound_generic_type(&mut self) -> Option<NodeRef> {
         let (type_lists, retro) = self.bound_generics()?;
@@ -1265,7 +1262,6 @@ impl<'a> Parser<'a> {
         })
     }
 
-
     fn generic_param_type(depth: u64, index: u64) -> NodeRef {
         Node::with_text(
             Kind::DependentGenericParamType,
@@ -1586,7 +1582,6 @@ impl<'a> Parser<'a> {
             }
         })
     }
-
 
     fn metatype(&mut self) -> Option<NodeRef> {
         let c = self.next();
@@ -2671,7 +2666,6 @@ impl<'a> Parser<'a> {
         };
         Some(attr)
     }
-
 
     fn operator(&mut self) -> Option<NodeRef> {
         self.tick()?;

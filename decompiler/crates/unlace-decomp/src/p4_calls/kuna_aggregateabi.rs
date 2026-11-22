@@ -8,7 +8,7 @@ use unlace_base::space::AddrSpaceManager;
 use unlace_num::pcoderaw::VarnodeData;
 
 use super::modelrules::Primitive;
-use crate::dtype::{type_class, type_metatype, Datatype, DatatypeKind};
+use crate::dtype::{Datatype, DatatypeKind, type_class, type_metatype};
 use crate::fspec::{AssignActionResponse, ParamListStandard, ParameterPieces};
 
 pub(super) struct PrimitiveField {

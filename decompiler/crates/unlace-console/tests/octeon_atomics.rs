@@ -2,19 +2,25 @@
 use std::path::PathBuf;
 
 use unlace_base::xml::DocumentStorage;
-use unlace_decomp::kuna_octeoneffects::OcteonEffectsMode;
 use unlace_console::{
     assertions::{self, Body, Directive},
-    engine::{bootstrap_program, EntrySelector},
+    engine::{EntrySelector, bootstrap_program},
     project::decompile_targets,
 };
+use unlace_decomp::kuna_octeoneffects::OcteonEffectsMode;
 
 fn decompile(words: &[u32], n32: bool, prototype: &str) -> String {
     decompile_config(words, n32, Some(prototype), false)
 }
 
 fn decompile_config(words: &[u32], n32: bool, prototype: Option<&str>, readonly: bool) -> String {
-    decompile_mode(words, n32, prototype, readonly, OcteonEffectsMode::default())
+    decompile_mode(
+        words,
+        n32,
+        prototype,
+        readonly,
+        OcteonEffectsMode::default(),
+    )
 }
 
 fn decompile_mode(
@@ -40,7 +46,9 @@ fn decompile_target(
 ) -> String {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let bytes: String = words.iter().map(|w| format!("{w:08x}")).collect();
-    let xml = format!("<binaryimage arch=\"{target}\"><bytechunk space=\"ram\" offset=\"0x1000\">{bytes}</bytechunk><bytechunk space=\"ram\" offset=\"0x2000\" readonly=\"{readonly}\">1122334455667788</bytechunk><symbol space=\"ram\" offset=\"0x1000\" name=\"probe\"/></binaryimage>");
+    let xml = format!(
+        "<binaryimage arch=\"{target}\"><bytechunk space=\"ram\" offset=\"0x1000\">{bytes}</bytechunk><bytechunk space=\"ram\" offset=\"0x2000\" readonly=\"{readonly}\">1122334455667788</bytechunk><symbol space=\"ram\" offset=\"0x1000\" name=\"probe\"/></binaryimage>"
+    );
     let mut documents = DocumentStorage::new();
     let image = documents
         .parse_document(xml.as_bytes())
@@ -89,8 +97,15 @@ fn every_advertised_compiler_profile_preserves_memory_and_reservation_effects() 
                     "MIPS:BE:64:{variant}{}:{compiler}",
                     if n32 { "-32addr" } else { "" }
                 );
-                let code = decompile_target(&[0xd0880000, 0xf0850000, 0x00a0102d, 0x03e00008, 0], &target,
-                    Some("unsigned long long probe(unsigned long long *pointer, unsigned long long value)"), false, OcteonEffectsMode::default());
+                let code = decompile_target(
+                    &[0xd0880000, 0xf0850000, 0x00a0102d, 0x03e00008, 0],
+                    &target,
+                    Some(
+                        "unsigned long long probe(unsigned long long *pointer, unsigned long long value)",
+                    ),
+                    false,
+                    OcteonEffectsMode::default(),
+                );
                 assert!(code.contains("octeon_load_linked64"), "{target}: {code}");
                 assert!(
                     code.contains("octeon_store_conditional64"),
@@ -100,8 +115,15 @@ fn every_advertised_compiler_profile_preserves_memory_and_reservation_effects() 
                     continue;
                 }
                 // sd a1,0(a0); saad a2,(a0); ld v0,0(a0); jr ra; nop
-                let code = decompile_target(&[0xfc850000, 0x70860019, 0xdc820000, 0x03e00008, 0], &target,
-                    Some("unsigned long long probe(unsigned long long *pointer, unsigned long long value, unsigned long long increment)"), false, OcteonEffectsMode::default());
+                let code = decompile_target(
+                    &[0xfc850000, 0x70860019, 0xdc820000, 0x03e00008, 0],
+                    &target,
+                    Some(
+                        "unsigned long long probe(unsigned long long *pointer, unsigned long long value, unsigned long long increment)",
+                    ),
+                    false,
+                    OcteonEffectsMode::default(),
+                );
                 assert!(code.contains("octeon_fetch_add64"), "{target}: {code}");
                 assert!(code.contains("*pointer = value"), "{target}: {code}");
                 assert!(!code.contains("return value;"), "{target}: {code}");
@@ -114,14 +136,21 @@ fn every_advertised_compiler_profile_preserves_memory_and_reservation_effects() 
 fn atomics_treat_image_memory_as_stores_do_and_keep_partial_overlaps() {
     // ori a0,zero,0x2000; daddiu a1,zero,7; laad zero,(a0),a1; ld v0,0(a0)
     for n32 in [false, true] {
-        let words = [0x34042000, 0x64050007, 0x708504df, 0xdc820000, 0x03e00008, 0];
+        let words = [
+            0x34042000, 0x64050007, 0x708504df, 0xdc820000, 0x03e00008, 0,
+        ];
         let code = decompile_config(&words, n32, Some("unsigned long long probe(void)"), false);
         assert!(code.contains("octeon_fetch_add64"), "{code}");
-        assert!(!code.contains("return 0x1122334455667788"), "writable memory folded: {code}");
+        assert!(
+            !code.contains("return 0x1122334455667788"),
+            "writable memory folded: {code}"
+        );
         // Read-only image bytes fold after an atomic exactly as after `sd`.
         let atomic = decompile_config(&words, n32, Some("unsigned long long probe(void)"), true);
         let store = decompile_config(
-            &[0x34042000, 0x64050007, 0xfc850000, 0xdc820000, 0x03e00008, 0],
+            &[
+                0x34042000, 0x64050007, 0xfc850000, 0xdc820000, 0x03e00008, 0,
+            ],
             n32,
             Some("unsigned long long probe(void)"),
             true,
@@ -200,9 +229,13 @@ fn atomic_stack_read_keeps_store_even_without_a_subsequent_load() {
     // daddiu sp,sp,-32; sd a1,16(sp); daddiu a0,sp,16;
     // laad v0,(a0),a2; daddiu sp,sp,32; jr ra; nop
     for n32 in [false, true] {
-        let code = decompile(&[0x67bdffe0, 0xffa50010, 0x67a40010, 0x708614df,
-            0x67bd0020, 0x03e00008, 0], n32,
-            "unsigned long long probe(unsigned long long unused, unsigned long long value, unsigned long long increment)");
+        let code = decompile(
+            &[
+                0x67bdffe0, 0xffa50010, 0x67a40010, 0x708614df, 0x67bd0020, 0x03e00008, 0,
+            ],
+            n32,
+            "unsigned long long probe(unsigned long long unused, unsigned long long value, unsigned long long increment)",
+        );
         let compact: String = code.chars().filter(|c| !c.is_whitespace()).collect();
         assert!(code.contains("octeon_fetch_add64"), "{code}");
         assert!(
@@ -216,8 +249,11 @@ fn atomic_stack_read_keeps_store_even_without_a_subsequent_load() {
 #[test]
 fn n32_atomic_address_use_preserves_full_width_integer_comparison() {
     // laad t0,(a0),a2; xor v0,a0,a1; sltiu v0,v0,1; jr ra; nop
-    let code = decompile(&[0x708644df, 0x00851026, 0x2c420001, 0x03e00008, 0], true,
-        "unsigned long long probe(unsigned long long raw, unsigned long long expected, unsigned long long increment)");
+    let code = decompile(
+        &[0x708644df, 0x00851026, 0x2c420001, 0x03e00008, 0],
+        true,
+        "unsigned long long probe(unsigned long long raw, unsigned long long expected, unsigned long long increment)",
+    );
     let compact: String = code.chars().filter(|c| !c.is_whitespace()).collect();
     assert!(
         compact.contains("raw==expected") || compact.contains("expected==raw"),
@@ -272,7 +308,9 @@ fn a_barrier_neither_forces_a_stack_spill_nor_blocks_readonly_folding() {
         for mode in [OcteonEffectsMode::Atomic, OcteonEffectsMode::Ordered] {
             // daddiu sp,sp,-16; sd a0,8(sp); syncw; ld v0,8(sp); jr ra; daddiu sp,sp,16
             let code = decompile_mode(
-                &[0x67bdfff0, 0xffa40008, 0x10f, 0xdfa20008, 0x03e00008, 0x67bd0010],
+                &[
+                    0x67bdfff0, 0xffa40008, 0x10f, 0xdfa20008, 0x03e00008, 0x67bd0010,
+                ],
                 n32,
                 Some("unsigned long long probe(unsigned long long value)"),
                 false,
@@ -288,7 +326,10 @@ fn a_barrier_neither_forces_a_stack_spill_nor_blocks_readonly_folding() {
                 true,
                 mode,
             );
-            assert!(code.contains("return 0x1122334455667788"), "{mode:?}: {code}");
+            assert!(
+                code.contains("return 0x1122334455667788"),
+                "{mode:?}: {code}"
+            );
         }
     }
 }
@@ -296,19 +337,41 @@ fn a_barrier_neither_forces_a_stack_spill_nor_blocks_readonly_folding() {
 #[test]
 fn the_mode_decides_which_operations_guard_writable_memory() {
     // ori a0,zero,0x2000; daddiu a1,zero,7; sd a1,0(a0); OP; ld v0,0(a0); jr ra; nop
-    let program = |op: u32| [0x34042000, 0x64050007, 0xfc850000, op, 0xdc820000, 0x03e00008, 0];
+    let program = |op: u32| {
+        [
+            0x34042000, 0x64050007, 0xfc850000, op, 0xdc820000, 0x03e00008, 0,
+        ]
+    };
     let laad = 0x708504df;
     let syncw = 0x10f;
     for n32 in [false, true] {
         let reused = |op: u32, mode: OcteonEffectsMode| {
-            let code = decompile_mode(&program(op), n32, Some("unsigned long long probe(void)"), false, mode);
-            code.chars().filter(|c| !c.is_whitespace()).collect::<String>().contains("return7;")
+            let code = decompile_mode(
+                &program(op),
+                n32,
+                Some("unsigned long long probe(void)"),
+                false,
+                mode,
+            );
+            code.chars()
+                .filter(|c| !c.is_whitespace())
+                .collect::<String>()
+                .contains("return7;")
         };
-        assert!(reused(laad, OcteonEffectsMode::Off), "off leaves the atomic opaque");
+        assert!(
+            reused(laad, OcteonEffectsMode::Off),
+            "off leaves the atomic opaque"
+        );
         assert!(!reused(laad, OcteonEffectsMode::Atomic));
         assert!(!reused(laad, OcteonEffectsMode::Ordered));
-        assert!(reused(syncw, OcteonEffectsMode::Atomic), "a barrier writes nothing");
-        assert!(!reused(syncw, OcteonEffectsMode::Ordered), "ordered rereads after a barrier");
+        assert!(
+            reused(syncw, OcteonEffectsMode::Atomic),
+            "a barrier writes nothing"
+        );
+        assert!(
+            !reused(syncw, OcteonEffectsMode::Ordered),
+            "ordered rereads after a barrier"
+        );
     }
 }
 
@@ -318,14 +381,23 @@ fn a_store_read_only_by_a_load_linked_is_kept() {
     for n32 in [false, true] {
         for mode in [OcteonEffectsMode::Atomic, OcteonEffectsMode::Ordered] {
             let code = decompile_mode(
-                &[0x34042000, 0xfc850000, 0xd08c0000, 0xfc800000, 0x03e00008, 0x01801025],
+                &[
+                    0x34042000, 0xfc850000, 0xd08c0000, 0xfc800000, 0x03e00008, 0x01801025,
+                ],
                 n32,
-                Some("unsigned long long probe(unsigned long long unused, unsigned long long value)"),
+                Some(
+                    "unsigned long long probe(unsigned long long unused, unsigned long long value)",
+                ),
                 false,
                 mode,
             );
-            let stored = code.find("= value;").unwrap_or_else(|| panic!("{mode:?}: {code}"));
-            assert!(stored < code.find("octeon_load_linked64(").unwrap(), "{mode:?}: {code}");
+            let stored = code
+                .find("= value;")
+                .unwrap_or_else(|| panic!("{mode:?}: {code}"));
+            assert!(
+                stored < code.find("octeon_load_linked64(").unwrap(),
+                "{mode:?}: {code}"
+            );
         }
     }
 }
@@ -334,17 +406,27 @@ fn a_store_read_only_by_a_load_linked_is_kept() {
 fn off_lifts_reservations_and_barriers_as_upstream_does() {
     // ori a0,zero,0x2000; daddiu a1,zero,7; sd a1,0(a0); sc a2,0(a0); ld v0,0(a0); jr ra; nop
     // then the same with syncw, and with ll t0,0(a0) returned through v0
-    let store = [0x34042000, 0x64050007, 0xfc850000, 0xe0860000, 0xdc820000, 0x03e00008, 0];
-    let barrier = [0x34042000, 0x64050007, 0xfc850000, 0x10f, 0xdc820000, 0x03e00008, 0];
+    let store = [
+        0x34042000, 0x64050007, 0xfc850000, 0xe0860000, 0xdc820000, 0x03e00008, 0,
+    ];
+    let barrier = [
+        0x34042000, 0x64050007, 0xfc850000, 0x10f, 0xdc820000, 0x03e00008, 0,
+    ];
     let load = [0x34042000, 0xc0820000, 0x03e00008, 0];
     for n32 in [false, true] {
         let off = |words: &[u32]| decompile_mode(words, n32, None, false, OcteonEffectsMode::Off);
         let code = off(&store);
         let compact: String = code.chars().filter(|c| !c.is_whitespace()).collect();
         assert!(!code.contains("octeon_"), "{code}");
-        assert!(compact.contains("CONCAT44(a2,7)"), "the store-conditional stores: {code}");
+        assert!(
+            compact.contains("CONCAT44(a2,7)"),
+            "the store-conditional stores: {code}"
+        );
         let code = off(&barrier);
-        assert!(code.contains("SYNC(4);") && !code.contains("octeon_"), "{code}");
+        assert!(
+            code.contains("SYNC(4);") && !code.contains("octeon_"),
+            "{code}"
+        );
         let code = off(&load);
         assert!(!code.contains("octeon_"), "{code}");
     }
@@ -371,11 +453,15 @@ fn pointer_loads_stay_before_selected_octeon_memory_effects() {
                 let code = decompile_mode(
                     &[0xdc820000, operation, 0x03e00008, 0],
                     n32,
-                    Some("unsigned long long probe(unsigned long long *pointer, unsigned long long value)"),
+                    Some(
+                        "unsigned long long probe(unsigned long long *pointer, unsigned long long value)",
+                    ),
                     false,
                     mode,
                 );
-                let load = code.find("= *pointer;").unwrap_or_else(|| panic!("{mode:?}: {code}"));
+                let load = code
+                    .find("= *pointer;")
+                    .unwrap_or_else(|| panic!("{mode:?}: {code}"));
                 assert!(load < code.find(name).unwrap(), "{mode:?}: {code}");
                 assert!(!code.contains("return *pointer;"), "{mode:?}: {code}");
             }
@@ -388,7 +474,11 @@ fn pointer_loads_stay_before_selected_octeon_memory_effects() {
                 false,
                 OcteonEffectsMode::Ordered,
             );
-            assert!(code.find("= *pointer;").is_some_and(|p| p < code.find("octeon_sync").unwrap()), "{code}");
+            assert!(
+                code.find("= *pointer;")
+                    .is_some_and(|p| p < code.find("octeon_sync").unwrap()),
+                "{code}"
+            );
         }
         for mode in [OcteonEffectsMode::Off, OcteonEffectsMode::Atomic] {
             let code = decompile_mode(
@@ -409,11 +499,17 @@ fn a_pointer_load_cannot_sink_into_an_expression_beyond_a_conditional_atomic() {
     // done: jr ra; daddu v0,v0,a2
     for n32 in [false, true] {
         let code = decompile(
-            &[0xdc820000, 0x10c00002, 0, 0x70850019, 0x03e00008, 0x0046102d],
+            &[
+                0xdc820000, 0x10c00002, 0, 0x70850019, 0x03e00008, 0x0046102d,
+            ],
             n32,
             "unsigned long long probe(unsigned long long *pointer, unsigned long long value, unsigned long long extra)",
         );
-        assert!(code.find("= *pointer;").is_some_and(|p| p < code.find("if (").unwrap()), "{code}");
+        assert!(
+            code.find("= *pointer;")
+                .is_some_and(|p| p < code.find("if (").unwrap()),
+            "{code}"
+        );
         assert!(!code.contains("return *pointer"), "{code}");
         assert!(code.contains("extra"), "{code}");
     }
@@ -428,16 +524,30 @@ fn cache_block_zeroing_keeps_neighboring_unescaped_stack_aliases() {
                     // daddiu sp,sp,-32; sd a1,offset(sp); daddiu a0,sp,16;
                     // zcb[t] (a0); ld v0,offset(sp); jr ra; daddiu sp,sp,32
                     let code = decompile_mode(
-                        &[0x67bdffe0, 0xffa50000 | offset, 0x67a40010, operation,
-                          0xdfa20000 | offset, 0x03e00008, 0x67bd0020],
+                        &[
+                            0x67bdffe0,
+                            0xffa50000 | offset,
+                            0x67a40010,
+                            operation,
+                            0xdfa20000 | offset,
+                            0x03e00008,
+                            0x67bd0020,
+                        ],
                         n32,
-                        Some("unsigned long long probe(unsigned long long unused, unsigned long long value)"),
+                        Some(
+                            "unsigned long long probe(unsigned long long unused, unsigned long long value)",
+                        ),
                         false,
                         mode,
                     );
                     assert!(!code.contains("return value;"), "{mode:?}: {code}");
-                    let store = code.find("= value;").unwrap_or_else(|| panic!("{mode:?}: {code}"));
-                    assert!(store < code.find("octeon_zero_cache_block").unwrap(), "{mode:?}: {code}");
+                    let store = code
+                        .find("= value;")
+                        .unwrap_or_else(|| panic!("{mode:?}: {code}"));
+                    assert!(
+                        store < code.find("octeon_zero_cache_block").unwrap(),
+                        "{mode:?}: {code}"
+                    );
                 }
             }
         }
@@ -456,14 +566,26 @@ fn cache_block_zeroing_through_an_incoming_pointer_reaches_only_the_top_frame_bl
                     // daddiu sp,sp,-256; sd a1,slot(sp); zcb[t] (a0); ld v0,slot(sp);
                     // jr ra; daddiu sp,sp,256
                     let code = decompile_mode(
-                        &[0x67bdff00, 0xffa50000 | slot, operation,
-                          0xdfa20000 | slot, 0x03e00008, 0x67bd0100],
+                        &[
+                            0x67bdff00,
+                            0xffa50000 | slot,
+                            operation,
+                            0xdfa20000 | slot,
+                            0x03e00008,
+                            0x67bd0100,
+                        ],
                         n32,
-                        Some("unsigned long long probe(unsigned long long *block, unsigned long long value)"),
+                        Some(
+                            "unsigned long long probe(unsigned long long *block, unsigned long long value)",
+                        ),
                         false,
                         mode,
                     );
-                    assert_eq!(!code.contains("return value;"), kept, "{mode:?} slot {slot}: {code}");
+                    assert_eq!(
+                        !code.contains("return value;"),
+                        kept,
+                        "{mode:?} slot {slot}: {code}"
+                    );
                     assert!(code.contains("octeon_zero_cache_block"), "{mode:?}: {code}");
                 }
             }
@@ -492,17 +614,29 @@ fn cache_block_zeroing_through_transformed_inputs_keeps_deep_stack_guards() {
                     // daddiu sp,sp,-256; sd a1,8(sp); TRANSFORM; zcb[t] (a0);
                     // ld v0,8(sp); jr ra; daddiu sp,sp,256
                     let code = decompile_mode(
-                        &[0x67bdff00, 0xffa50008, transform, operation,
-                          0xdfa20008, 0x03e00008, 0x67bd0100],
+                        &[
+                            0x67bdff00, 0xffa50008, transform, operation, 0xdfa20008, 0x03e00008,
+                            0x67bd0100,
+                        ],
                         n32,
-                        Some("unsigned long long probe(unsigned long long *block, unsigned long long value, unsigned long long mask)"),
+                        Some(
+                            "unsigned long long probe(unsigned long long *block, unsigned long long value, unsigned long long mask)",
+                        ),
                         false,
                         mode,
                     );
                     assert!(!code.contains("return value;"), "{name} {mode:?}: {code}");
-                    assert!(!code.contains("return 0;"), "block alignment is unknown: {code}");
-                    let store = code.find("= value;").unwrap_or_else(|| panic!("{name}: {code}"));
-                    assert!(store < code.find("octeon_zero_cache_block").unwrap(), "{name}: {code}");
+                    assert!(
+                        !code.contains("return 0;"),
+                        "block alignment is unknown: {code}"
+                    );
+                    let store = code
+                        .find("= value;")
+                        .unwrap_or_else(|| panic!("{name}: {code}"));
+                    assert!(
+                        store < code.find("octeon_zero_cache_block").unwrap(),
+                        "{name}: {code}"
+                    );
                 }
             }
         }
@@ -518,10 +652,16 @@ fn word_results_are_signed_like_the_registers_they_extend_into() {
     for n32 in [false, true] {
         // lai v0,(a0); jr ra; nop
         let lai = decompile_config(&[0x7080109f, 0x03e00008, 0], n32, None, false);
-        assert!(lai.contains("return octeon_fetch_add32(") && !lai.contains("(int4)"), "{lai}");
+        assert!(
+            lai.contains("return octeon_fetch_add32(") && !lai.contains("(int4)"),
+            "{lai}"
+        );
         // ll t0,0(a0); dsra v0,t0,4; jr ra; nop
         let ll = decompile_config(&[0xc0880000, 0x0008113b, 0x03e00008, 0], n32, None, false);
-        assert!(ll.contains("octeon_load_linked32(") && !ll.contains("(int4)"), "{ll}");
+        assert!(
+            ll.contains("octeon_load_linked32(") && !ll.contains("(int4)"),
+            "{ll}"
+        );
         // laad v0,(a0),a1; jr ra; nop
         let laad = decompile_config(&[0x708514df, 0x03e00008, 0], n32, None, false);
         assert!(laad.contains("uint8 probe(uint8 *"), "{laad}");
@@ -540,8 +680,9 @@ fn a_scalar_atomic_still_leaves_an_unescaped_neighbor_unchanged() {
     // As zero_neighbor, with saad a2,(a0) accessing only offset 16.
     for n32 in [false, true] {
         let code = decompile(
-            &[0x67bdffe0, 0xffa50008, 0x67a40010, 0x70860019,
-              0xdfa20008, 0x03e00008, 0x67bd0020],
+            &[
+                0x67bdffe0, 0xffa50008, 0x67a40010, 0x70860019, 0xdfa20008, 0x03e00008, 0x67bd0020,
+            ],
             n32,
             "unsigned long long probe(unsigned long long unused, unsigned long long value, unsigned long long increment)",
         );
@@ -553,13 +694,19 @@ fn a_scalar_atomic_still_leaves_an_unescaped_neighbor_unchanged() {
 fn recovered_pointer_snapshots_execute_with_the_original_old_value() {
     use std::process::Command;
 
-    let compilers: Vec<_> = ["cc", "clang"].into_iter().filter(|compiler| {
-        match Command::new(compiler).arg("--version").output() {
-            Ok(result) => { assert!(result.status.success()); true }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
-            Err(error) => panic!("{compiler}: {error}"),
-        }
-    }).collect();
+    let compilers: Vec<_> = ["cc", "clang"]
+        .into_iter()
+        .filter(
+            |compiler| match Command::new(compiler).arg("--version").output() {
+                Ok(result) => {
+                    assert!(result.status.success());
+                    true
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+                Err(error) => panic!("{compiler}: {error}"),
+            },
+        )
+        .collect();
     if compilers.is_empty() {
         eprintln!("native pointer-snapshot execution requires a C compiler");
         return;
@@ -567,7 +714,9 @@ fn recovered_pointer_snapshots_execute_with_the_original_old_value() {
     for n32 in [false, true] {
         for conditional in [false, true] {
             let words: &[u32] = if conditional {
-                &[0xdc820000, 0x10c00002, 0, 0x70850019, 0x03e00008, 0x0046102d]
+                &[
+                    0xdc820000, 0x10c00002, 0, 0x70850019, 0x03e00008, 0x0046102d,
+                ]
             } else {
                 &[0xdc820000, 0x70850019, 0x03e00008, 0]
             };
@@ -577,8 +726,13 @@ fn recovered_pointer_snapshots_execute_with_the_original_old_value() {
                 "unsigned long long probe(unsigned long long *pointer, unsigned long long value)"
             };
             let code = decompile(words, n32, prototype);
-            let call = if conditional { "probe(&word,increment,extra)" } else { "probe(&word,increment)" };
-            let source = format!(r#"
+            let call = if conditional {
+                "probe(&word,increment,extra)"
+            } else {
+                "probe(&word,increment)"
+            };
+            let source = format!(
+                r#"
 #include <stdint.h>
 typedef uint64_t uint8;
 static uint8 octeon_fetch_add64(uint8 *pointer,uint8 value) {{
@@ -602,18 +756,36 @@ int main(void) {{
     }}
     return 0;
 }}
-"#, conditional = u8::from(conditional));
+"#,
+                conditional = u8::from(conditional)
+            );
             let file = crate::common::scratch_file("octeon-pointer-snapshot", "c");
             let executable = file.with_extension("exe");
             std::fs::write(&file, source).unwrap();
             for compiler in &compilers {
                 for optimization in ["-O0", "-O2"] {
                     let result = Command::new(compiler)
-                        .args(["-std=c11", optimization, "-Werror=implicit-function-declaration", "-Werror=incompatible-pointer-types"])
-                        .arg(&file).arg("-o").arg(&executable).output().unwrap();
-                    assert!(result.status.success(), "{compiler}: {}\n{code}", String::from_utf8_lossy(&result.stderr));
+                        .args([
+                            "-std=c11",
+                            optimization,
+                            "-Werror=implicit-function-declaration",
+                            "-Werror=incompatible-pointer-types",
+                        ])
+                        .arg(&file)
+                        .arg("-o")
+                        .arg(&executable)
+                        .output()
+                        .unwrap();
+                    assert!(
+                        result.status.success(),
+                        "{compiler}: {}\n{code}",
+                        String::from_utf8_lossy(&result.stderr)
+                    );
                     let result = Command::new(&executable).output().unwrap();
-                    assert!(result.status.success(), "{compiler} {optimization}: old value or updated memory differs: {code}");
+                    assert!(
+                        result.status.success(),
+                        "{compiler} {optimization}: old value or updated memory differs: {code}"
+                    );
                 }
             }
         }

@@ -63,7 +63,7 @@
 
 use unlace_base::types::{int4, uintb};
 
-use crate::fspec::{FuncProto, EXTRAPOP_UNKNOWN};
+use crate::fspec::{EXTRAPOP_UNKNOWN, FuncProto};
 
 /// Give a freshly seeded, locked callee prototype the extrapop its parameter
 /// list implies (`ActionDefaultParams`).
@@ -186,23 +186,47 @@ pub(crate) fn declared_pointer_reaches(
     address: &unlace_base::address::Address,
     size: int4,
 ) -> bool {
-    let Some(stack) = fd.get_arch().manage().get_stack_space() else { return false; };
-    if size <= 0 || !address.get_space().is_some_and(|space| space.get_index() == stack.get_index())
-        || !call.proto().has_store() || !call.proto().is_input_locked()
-    { return false; }
+    let Some(stack) = fd.get_arch().manage().get_stack_space() else {
+        return false;
+    };
+    if size <= 0
+        || !address
+            .get_space()
+            .is_some_and(|space| space.get_index() == stack.get_index())
+        || !call.proto().has_store()
+        || !call.proto().is_input_locked()
+    {
+        return false;
+    }
     for slot in 0..call.proto().num_params() {
-        let Some(ty) = call.proto().get_param(slot).and_then(|p| p.get_type()) else { continue; };
-        let Some(pointee) = ty.get_ptr_to() else { continue; };
-        let Some(input) = fd.obank().get(call.get_op()).and_then(|op| op.get_in(slot + 1)) else { continue; };
-        let Some(pointer) = crate::kuna_stackranges::frame_address(fd, input) else {
-            if fd.rebound_frame_base_seen() && depends_on_frame(fd, input) { return true; }
+        let Some(ty) = call.proto().get_param(slot).and_then(|p| p.get_type()) else {
             continue;
         };
-        let Some((first, width)) = pointer.extent(pointee.get_size().max(1)) else { continue; };
+        let Some(pointee) = ty.get_ptr_to() else {
+            continue;
+        };
+        let Some(input) = fd
+            .obank()
+            .get(call.get_op())
+            .and_then(|op| op.get_in(slot + 1))
+        else {
+            continue;
+        };
+        let Some(pointer) = crate::kuna_stackranges::frame_address(fd, input) else {
+            if fd.rebound_frame_base_seen() && depends_on_frame(fd, input) {
+                return true;
+            }
+            continue;
+        };
+        let Some((first, width)) = pointer.extent(pointee.get_size().max(1)) else {
+            continue;
+        };
         let start = address.get_offset();
         if stack.wrap_offset(first.wrapping_sub(start)) < size as uintb
             || stack.wrap_offset(start.wrapping_sub(first)) < width as uintb
-        { return true; }
+        {
+            return true;
+        }
     }
     false
 }
@@ -214,17 +238,32 @@ fn depends_on_frame(fd: &crate::funcdata::Funcdata, input: crate::context::Varno
     let mut pending = vec![input];
     let mut seen = std::collections::BTreeSet::new();
     while let Some(id) = pending.pop() {
-        if !seen.insert(id) { continue; }
-        if seen.len() > 128 { return true; }
-        let Some(value) = fd.vbank().get(id) else { continue; };
-        if value.is_spacebase() && value.is_input() { return true; }
-        let Some(op) = value.get_def().and_then(|id| fd.obank().get(id)) else { continue; };
+        if !seen.insert(id) {
+            continue;
+        }
+        if seen.len() > 128 {
+            return true;
+        }
+        let Some(value) = fd.vbank().get(id) else {
+            continue;
+        };
+        if value.is_spacebase() && value.is_input() {
+            return true;
+        }
+        let Some(op) = value.get_def().and_then(|id| fd.obank().get(id)) else {
+            continue;
+        };
         match op.code() {
             OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_INDIRECT => {
-                if let Some(input) = op.get_in(0) { pending.push(input); }
+                if let Some(input) = op.get_in(0) {
+                    pending.push(input);
+                }
             }
-            OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB | OpCode::CPUI_PTRADD
-            | OpCode::CPUI_PTRSUB | OpCode::CPUI_MULTIEQUAL => {
+            OpCode::CPUI_INT_ADD
+            | OpCode::CPUI_INT_SUB
+            | OpCode::CPUI_PTRADD
+            | OpCode::CPUI_PTRSUB
+            | OpCode::CPUI_MULTIEQUAL => {
                 pending.extend((0..op.num_input()).filter_map(|slot| op.get_in(slot)));
             }
             _ => (),

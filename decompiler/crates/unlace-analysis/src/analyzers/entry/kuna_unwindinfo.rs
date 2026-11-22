@@ -28,7 +28,7 @@ use object::macho::{MachHeader32, MachHeader64};
 use object::read::macho::{FatArch, MachHeader, MachOFatFile32, MachOFatFile64, Section, Segment};
 use object::{Architecture, Endianness, FileKind};
 
-use crate::loader::format::{detect, FormatKind};
+use crate::loader::format::{FormatKind, detect};
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
 /// (kuna `unwindstarts`) Mach-O `__unwind_info` function-start discovery: read
@@ -139,7 +139,10 @@ where
             continue;
         };
         for sec in secs {
-            if trim(sec.name()) == b"__unwind_info" && trim(sec.segment_name()) == b"__TEXT" && unwind.is_none() {
+            if trim(sec.name()) == b"__unwind_info"
+                && trim(sec.segment_name()) == b"__TEXT"
+                && unwind.is_none()
+            {
                 if let Some((off, size)) = sec.file_range(endian) {
                     unwind = Some((off, size));
                 }
@@ -151,7 +154,10 @@ where
         return;
     };
     let start = off as usize;
-    let Some(end) = start.checked_add(size as usize).filter(|&e| e <= bytes.len()) else {
+    let Some(end) = start
+        .checked_add(size as usize)
+        .filter(|&e| e <= bytes.len())
+    else {
         return;
     };
     parse_unwind_info(&bytes[start..end], base, out);
@@ -223,8 +229,13 @@ fn page_entries(buf: &[u8], page_off: usize, entry_size: usize) -> Option<(usize
     let entry_page_off = read_u16(buf, page_off.checked_add(4)?)? as usize;
     let entry_count = read_u16(buf, page_off.checked_add(6)?)? as usize;
     let first = page_off.checked_add(entry_page_off)?;
-    let end = page_off.saturating_add(SECOND_LEVEL_PAGE_SIZE).min(buf.len());
-    Some((first, entry_count.min(end.saturating_sub(first) / entry_size)))
+    let end = page_off
+        .saturating_add(SECOND_LEVEL_PAGE_SIZE)
+        .min(buf.len());
+    Some((
+        first,
+        entry_count.min(end.saturating_sub(first) / entry_size),
+    ))
 }
 
 /// Regular second-level page: a `(functionOffset, encoding)` pair per entry,
@@ -298,7 +309,11 @@ fn select_fat_arch<Fat: FatArch>(arches: &[Fat]) -> Option<&Fat> {
     arches
         .iter()
         .find(|a| a.architecture() == Architecture::X86_64)
-        .or_else(|| arches.iter().find(|a| a.architecture() == Architecture::Aarch64))
+        .or_else(|| {
+            arches
+                .iter()
+                .find(|a| a.architecture() == Architecture::Aarch64)
+        })
         .or_else(|| arches.first())
 }
 
@@ -320,13 +335,22 @@ mod tests {
         let file = object::File::parse(bytes.as_slice()).expect("parse fixture");
         let starts = unwind_info_starts(&file, &bytes);
         for a in [0x1000002e0u64, 0x100000328, 0x100000370, 0x1000003bc] {
-            assert!(starts.contains(&a), "unwind start {a:#x} missing; got {starts:#x?}");
+            assert!(
+                starts.contains(&a),
+                "unwind start {a:#x} missing; got {starts:#x?}"
+            );
         }
         // `_main` (0x10000040c) is a function symbol, so the funcsym filter drops it
         // (another oracle already names it) — the pass only ADDS new starts.
-        assert!(!starts.contains(&0x10000040c), "a funcsym start must be filtered out");
+        assert!(
+            !starts.contains(&0x10000040c),
+            "a funcsym start must be filtered out"
+        );
         // The Mach header (0x100000000) is not in an executable section.
-        assert!(!starts.contains(&0x100000000), "the mach header is not a function");
+        assert!(
+            !starts.contains(&0x100000000),
+            "the mach header is not a function"
+        );
     }
 
     /// Mach-O only: an ELF image yields nothing (the parser finds no section and
@@ -412,7 +436,12 @@ mod tests {
         let mut out = Vec::new();
         parse_unwind_info(&buf, 0, &mut out);
         assert!(!out.is_empty());
-        assert!(out.len() <= buf.len() / MIN_ENTRY_SIZE, "{} starts from {} bytes", out.len(), buf.len());
+        assert!(
+            out.len() <= buf.len() / MIN_ENTRY_SIZE,
+            "{} starts from {} bytes",
+            out.len(),
+            buf.len()
+        );
     }
 
     /// Only `__TEXT,__unwind_info` is the unwinder's table: the same bytes

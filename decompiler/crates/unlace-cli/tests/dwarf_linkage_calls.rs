@@ -254,7 +254,8 @@ fn local_linker_name_collision_does_not_retype_external_call() {
 #[test]
 fn fortran_c_binding_definition_keeps_value_and_reference_arguments_at_the_plt() {
     roundtrip(
-        "gfortran", "f90",
+        "gfortran",
+        "f90",
         r#"
 subroutine offset_sample(value, output) bind(C)
   use iso_c_binding

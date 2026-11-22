@@ -7,7 +7,7 @@
 //! values come from Rust's native u128 arithmetic.
 
 use unlace_base::error::KunaError;
-use unlace_num::float::{floatclass, FloatFormat};
+use unlace_num::float::{FloatFormat, floatclass};
 use unlace_num::multiprecision::{add128, leftshift128, subtract128, udiv128, uless128};
 
 fn to_u128(w: &[u64; 2]) -> u128 {
@@ -89,17 +89,38 @@ fn verify_denormal_rounding_grid_oracle() {
 #[test]
 fn verify_udiv128_addback_and_qhat_correction() {
     let addback: [([u64; 2], [u64; 2]); 6] = [
-        ([0x7fff_ffff_7689_1ccc, 0x8000_0000_7140_bf7e], [0xe281_7efd, 0x1]),
-        ([0x7fff_ffff_6964_999e, 0x8000_0000_02b1_402c], [0x0562_8059, 0x1]),
-        ([0x0f84_4fee_4593_cb55, 0x8000_0000_0000_6712], [0x6712_0f84_4fef, 0x8000_0000]),
-        ([0x7fff_ffff_d85f_3c29, 0x8000_0000_3e4b_3fbc], [0x7c96_7f79, 0x1]),
+        (
+            [0x7fff_ffff_7689_1ccc, 0x8000_0000_7140_bf7e],
+            [0xe281_7efd, 0x1],
+        ),
+        (
+            [0x7fff_ffff_6964_999e, 0x8000_0000_02b1_402c],
+            [0x0562_8059, 0x1],
+        ),
+        (
+            [0x0f84_4fee_4593_cb55, 0x8000_0000_0000_6712],
+            [0x6712_0f84_4fef, 0x8000_0000],
+        ),
+        (
+            [0x7fff_ffff_d85f_3c29, 0x8000_0000_3e4b_3fbc],
+            [0x7c96_7f79, 0x1],
+        ),
         ([0x71e2_1b2b_6499_4a57, 0x8000_0000], [0xe3c4_3657, 0x1]),
-        ([0x0b5c_ea69_905e_88cb, 0x8000_0000_0000_b572], [0xb572_0b5c_ea6a, 0x8000_0000]),
+        (
+            [0x0b5c_ea69_905e_88cb, 0x8000_0000_0000_b572],
+            [0xb572_0b5c_ea6a, 0x8000_0000],
+        ),
     ];
     let qhat_correction: [([u64; 2], [u64; 2]); 4] = [
-        ([0x96da_1dab_b8c8_7e70, 0x8000_0000], [0x8000_0000_96da_1dac, 0x0]),
+        (
+            [0x96da_1dab_b8c8_7e70, 0x8000_0000],
+            [0x8000_0000_96da_1dac, 0x0],
+        ),
         ([0x7fff_ffff_f4e0_6e9d, 0x8000_674f], [0x1_0000_ce9f, 0x0]),
-        ([0xffff_ffff_2509_e5da, 0x8000_0000_146d_3f30], [0x8000_0000_146d_3f31, 0x0]),
+        (
+            [0xffff_ffff_2509_e5da, 0x8000_0000_146d_3f30],
+            [0x8000_0000_146d_3f31, 0x0],
+        ),
         ([0x445e_b202_c557_f22c, 0x8000_0000], [0x88bd_6407, 0x1]),
     ];
     for (numer, denom) in addback.iter().chain(qhat_correction.iter()) {
@@ -201,7 +222,10 @@ fn verify_trunc_boundary_cpp_oracle_cells() {
     }
     assert_eq!(fmt8.op_trunc(0xc024_0000_0000_0000, 2), 0xfff6);
     // floatclass plumbing on the same encodings.
-    assert_eq!(fmt8.get_class(0x43e0_0000_0000_0000), floatclass::normalized);
+    assert_eq!(
+        fmt8.get_class(0x43e0_0000_0000_0000),
+        floatclass::normalized
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -306,5 +330,8 @@ fn verify_r2_denormal_window_sweep_hash_matches_cpp_oracle() {
         h = (h ^ enc).wrapping_mul(FNV);
         h = (h ^ cnv).wrapping_mul(FNV);
     }
-    assert_eq!(h, 0x28db_e215_fe70_2925, "sweep hash vs C++ float.cc oracle");
+    assert_eq!(
+        h, 0x28db_e215_fe70_2925,
+        "sweep hash vs C++ float.cc oracle"
+    );
 }

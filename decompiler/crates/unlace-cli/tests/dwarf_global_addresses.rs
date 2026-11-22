@@ -19,14 +19,29 @@ fn static_globals_take_their_dwarf_names() {
     std::fs::create_dir_all(&root).unwrap();
     let source = root.join("sample.c");
     std::fs::write(&source, SOURCE).unwrap();
-    for target in ["x86_64-linux-gnu", "aarch64_be-linux-gnu", "armeb-linux-gnueabi"] {
+    for target in [
+        "x86_64-linux-gnu",
+        "aarch64_be-linux-gnu",
+        "armeb-linux-gnueabi",
+    ] {
         for version in ["-gdwarf-4", "-gdwarf-5"] {
             let binary = root.join(format!("{target}{version}"));
             process::required_output(
                 Command::new("clang")
                     .arg(format!("--target={target}"))
-                    .args(["-O1", version, "-ffreestanding", "-fno-pic", "-nostdlib", "-no-pie"])
-                    .args(["-fuse-ld=lld", "-Wl,--no-dynamic-linker", "-Wl,--discard-all"])
+                    .args([
+                        "-O1",
+                        version,
+                        "-ffreestanding",
+                        "-fno-pic",
+                        "-nostdlib",
+                        "-no-pie",
+                    ])
+                    .args([
+                        "-fuse-ld=lld",
+                        "-Wl,--no-dynamic-linker",
+                        "-Wl,--discard-all",
+                    ])
                     .arg(&source)
                     .arg("-o")
                     .arg(&binary),

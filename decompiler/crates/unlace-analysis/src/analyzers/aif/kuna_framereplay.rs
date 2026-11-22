@@ -113,7 +113,11 @@ mod tests {
             recovered: true,
             frames: vec![0x8000, 0x8040],
             pointers: vec![],
-            aif: Some(AifReplay { entries: vec![0x9000], pool_entries: vec![], pointer_entries: vec![0x9100] }),
+            aif: Some(AifReplay {
+                entries: vec![0x9000],
+                pool_entries: vec![],
+                pointer_entries: vec![0x9100],
+            }),
             retained: vec![0x8100],
         };
         assert_eq!(ArmFrameReplay::decode(&replay.encode()), Ok(replay));

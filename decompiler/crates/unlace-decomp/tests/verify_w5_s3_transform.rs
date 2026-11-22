@@ -33,15 +33,15 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, IopSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, IopSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 
-use unlace_decomp::dtype::{type_metatype, Datatype};
-use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::context::{ArchContext, VarnodeId};
+use unlace_decomp::dtype::{Datatype, type_metatype};
+use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::transform::{
-    tvar_flags, tvar_type, LaneDescription, LanedRegister, TVarRef, TransformManager,
+    LaneDescription, LanedRegister, TVarRef, TransformManager, tvar_flags, tvar_type,
 };
 
 // --- harness (mirrors the in-crate transform test harness) --------------------
@@ -49,7 +49,8 @@ use unlace_decomp::transform::{
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(IopSpace::new(2))).unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
@@ -262,7 +263,8 @@ fn w5s3_apply_visits_pieces_in_create_index_order_not_insertion_order() {
     tm.new_split(&fd, hi_vn, &desc);
     tm.new_split(&fd, lo_vn, &desc);
 
-    tm.apply(&mut fd).expect("constant-only split apply should succeed (no seams)");
+    tm.apply(&mut fd)
+        .expect("constant-only split apply should succeed (no seams)");
 
     let lo_lane0 = TVarRef::Piece { key: lo_ci, idx: 0 };
     let hi_lane0 = TVarRef::Piece { key: hi_ci, idx: 0 };
@@ -352,6 +354,10 @@ fn w5s3_split_terminator_marks_only_last_lane() {
     for idx in 0..4usize {
         let r = TVarRef::Piece { key: ci, idx };
         let is_term = (tm.var(r).get_flags() & tvar_flags::split_terminator) != 0;
-        assert_eq!(is_term, idx == 3, "only lane 3 is the terminator (idx={idx})");
+        assert_eq!(
+            is_term,
+            idx == 3,
+            "only lane 3 is the terminator (idx={idx})"
+        );
     }
 }

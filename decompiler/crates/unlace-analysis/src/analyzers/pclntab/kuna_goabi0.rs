@@ -2,7 +2,7 @@
 
 use object::{BinaryFormat, Object, ObjectSection, ObjectSymbol, SectionKind, SymbolKind};
 
-use super::{End, GoFunc, PcHeader, MAGIC_GO_1_18, MAGIC_GO_1_20};
+use super::{End, GoFunc, MAGIC_GO_1_18, MAGIC_GO_1_20, PcHeader};
 use crate::pass::{AnalysisCtx, LeafStackInputs, ModelFact};
 
 const ARG_INFO: usize = 5;
@@ -283,7 +283,7 @@ pub(super) fn model_facts(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pclntab::{decode_functions, recover_go_header, ImageBytes};
+    use crate::pclntab::{ImageBytes, decode_functions, recover_go_header};
 
     #[test]
     fn complete_words_fill_the_entire_input_and_output_area() {
@@ -381,14 +381,18 @@ mod tests {
                     .address()
             };
             if authored {
-                assert!(facts.iter().any(|f| f.func_addr == addr("main.store.abi0")
-                    && f.leaf_stack_inputs
-                        .as_ref()
-                        .is_some_and(|inputs| inputs.byte_limit == 16)));
+                assert!(facts.iter().any(|f| {
+                    f.func_addr == addr("main.store.abi0")
+                        && f.leaf_stack_inputs
+                            .as_ref()
+                            .is_some_and(|inputs| inputs.byte_limit == 16)
+                }));
                 assert!(!facts.iter().any(|f| f.func_addr == addr("main.abi0")));
-                assert!(!facts
-                    .iter()
-                    .any(|f| f.func_addr == addr("runtime.sigtrampgo.abi0")));
+                assert!(
+                    !facts
+                        .iter()
+                        .any(|f| f.func_addr == addr("runtime.sigtrampgo.abi0"))
+                );
             }
             for name in [
                 "runtime.write.abi0",

@@ -33,7 +33,10 @@ pub struct Flat {
 pub enum Container {
     Flat(Flat),
     /// An object file wrapped in a vendor header.
-    Embedded { format: &'static str, bytes: Vec<u8> },
+    Embedded {
+        format: &'static str,
+        bytes: Vec<u8>,
+    },
 }
 
 /// Largest span a flattened image may cover.
@@ -79,7 +82,11 @@ fn le32(b: &[u8], at: usize) -> Option<u32> {
 /// Lay `(address, bytes)` chunks out flat from the lowest address.
 fn flatten(chunks: &[(u64, Vec<u8>)], fill: u8) -> Result<(u64, Vec<u8>), String> {
     let lo = chunks.iter().map(|c| c.0).min().ok_or("no data")?;
-    let hi = chunks.iter().map(|c| c.0 + c.1.len() as u64).max().unwrap_or(lo);
+    let hi = chunks
+        .iter()
+        .map(|c| c.0 + c.1.len() as u64)
+        .max()
+        .unwrap_or(lo);
     if hi - lo > MAX_SPAN {
         return Err(format!("loaded addresses span {:#x} bytes", hi - lo));
     }
@@ -98,7 +105,9 @@ fn uimage(b: &[u8]) -> Result<Container, String> {
     let load = u64::from(be32(b, 16).ok_or("short uImage header")?);
     let ep = u64::from(be32(b, 20).ok_or("short uImage header")?);
     let (arch, comp) = (b[29], b[31]);
-    let payload = b.get(64..64 + size).ok_or("uImage payload runs past the file")?;
+    let payload = b
+        .get(64..64 + size)
+        .ok_or("uImage payload runs past the file")?;
     let bytes = match comp {
         0 => payload.to_vec(),
         1 => {
@@ -109,7 +118,11 @@ fn uimage(b: &[u8]) -> Result<Container, String> {
                 .map_err(|e| format!("uImage gzip payload: {e}"))?;
             out
         }
-        other => return Err(format!("uImage compression {other} (bzip2/lzma/lzo/lz4/zstd) is not decoded")),
+        other => {
+            return Err(format!(
+                "uImage compression {other} (bzip2/lzma/lzo/lz4/zstd) is not decoded"
+            ));
+        }
     };
     let target = match arch {
         2 => Some("ARM:LE:32:v7".to_string()),
@@ -143,12 +156,20 @@ fn mips_endian(code: &[u8]) -> &'static str {
     let count = |be: bool| {
         code.chunks_exact(4)
             .filter(|w| {
-                let v = if be { u32::from_be_bytes([w[0], w[1], w[2], w[3]]) } else { u32::from_le_bytes([w[0], w[1], w[2], w[3]]) };
+                let v = if be {
+                    u32::from_be_bytes([w[0], w[1], w[2], w[3]])
+                } else {
+                    u32::from_le_bytes([w[0], w[1], w[2], w[3]])
+                };
                 v == 0x03e0_0008
             })
             .count()
     };
-    if count(true) >= count(false) { "BE" } else { "LE" }
+    if count(true) >= count(false) {
+        "BE"
+    } else {
+        "LE"
+    }
 }
 
 fn hex_line(line: &str) -> Option<Vec<u8>> {
@@ -156,7 +177,10 @@ fn hex_line(line: &str) -> Option<Vec<u8>> {
     if digits.len() % 2 != 0 {
         return None;
     }
-    let rec: Option<Vec<u8>> = (0..digits.len()).step_by(2).map(|i| u8::from_str_radix(&digits[i..i + 2], 16).ok()).collect();
+    let rec: Option<Vec<u8>> = (0..digits.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&digits[i..i + 2], 16).ok())
+        .collect();
     let rec = rec?;
     let n = *rec.first()? as usize;
     (rec.len() == n + 5 && rec.iter().fold(0u8, |a, &b| a.wrapping_add(b)) == 0).then_some(rec)
@@ -165,12 +189,16 @@ fn hex_line(line: &str) -> Option<Vec<u8>> {
 /// Intel HEX: data records relative to the extended segment or linear base,
 /// entry from the start-address record.
 fn ihex(b: &[u8]) -> Result<Option<Container>, String> {
-    let Ok(text) = std::str::from_utf8(b) else { return Ok(None) };
+    let Ok(text) = std::str::from_utf8(b) else {
+        return Ok(None);
+    };
     let mut chunks = Vec::new();
     let mut upper = 0u64;
     let mut entries = Vec::new();
     for line in text.lines().map(str::trim).filter(|l| !l.is_empty()) {
-        let Some(rec) = hex_line(line) else { return Ok(None) };
+        let Some(rec) = hex_line(line) else {
+            return Ok(None);
+        };
         let addr = u64::from(u16::from_be_bytes([rec[1], rec[2]]));
         let data = &rec[4..rec.len() - 1];
         match rec[3] {
@@ -182,7 +210,9 @@ fn ihex(b: &[u8]) -> Result<Option<Container>, String> {
                 entries.push((cs << 4) + u64::from(u16::from_be_bytes([data[2], data[3]])));
             }
             4 if data.len() == 2 => upper = u64::from(u16::from_be_bytes([data[0], data[1]])) << 16,
-            5 if data.len() == 4 => entries.push(u64::from(u32::from_be_bytes([data[0], data[1], data[2], data[3]]))),
+            5 if data.len() == 4 => entries.push(u64::from(u32::from_be_bytes([
+                data[0], data[1], data[2], data[3],
+            ]))),
             _ => return Ok(None),
         }
     }
@@ -190,22 +220,37 @@ fn ihex(b: &[u8]) -> Result<Option<Container>, String> {
         return Ok(None);
     }
     let (base, bytes) = flatten(&chunks, 0xff)?;
-    Ok(Some(Container::Flat(Flat { format: "Intel HEX", base, bytes, entries, ..Flat::default() })))
+    Ok(Some(Container::Flat(Flat {
+        format: "Intel HEX",
+        base,
+        bytes,
+        entries,
+        ..Flat::default()
+    })))
 }
 
 /// Motorola S-record: S1/S2/S3 data with 16/24/32-bit addresses, S7/S8/S9 entry.
 fn srec(b: &[u8]) -> Result<Option<Container>, String> {
-    let Ok(text) = std::str::from_utf8(b) else { return Ok(None) };
+    let Ok(text) = std::str::from_utf8(b) else {
+        return Ok(None);
+    };
     let mut chunks = Vec::new();
     let mut entries = Vec::new();
     for line in text.lines().map(str::trim).filter(|l| !l.is_empty()) {
-        let (Some(kind), Some(rest)) = (line.get(1..2), line.get(2..)) else { return Ok(None) };
+        let (Some(kind), Some(rest)) = (line.get(1..2), line.get(2..)) else {
+            return Ok(None);
+        };
         if line.as_bytes()[0] != b'S' || rest.len() % 2 != 0 {
             return Ok(None);
         }
-        let rec: Option<Vec<u8>> = (0..rest.len()).step_by(2).map(|i| u8::from_str_radix(&rest[i..i + 2], 16).ok()).collect();
+        let rec: Option<Vec<u8>> = (0..rest.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&rest[i..i + 2], 16).ok())
+            .collect();
         let Some(rec) = rec else { return Ok(None) };
-        if rec.first().map(|&n| n as usize + 1) != Some(rec.len()) || rec.iter().fold(0u8, |a, &x| a.wrapping_add(x)) != 0xff {
+        if rec.first().map(|&n| n as usize + 1) != Some(rec.len())
+            || rec.iter().fold(0u8, |a, &x| a.wrapping_add(x)) != 0xff
+        {
             return Ok(None);
         }
         let width = match kind {
@@ -215,7 +260,9 @@ fn srec(b: &[u8]) -> Result<Option<Container>, String> {
             "0" | "5" | "6" => continue,
             _ => return Ok(None),
         };
-        let addr = rec[1..1 + width].iter().fold(0u64, |a, &x| a << 8 | u64::from(x));
+        let addr = rec[1..1 + width]
+            .iter()
+            .fold(0u64, |a, &x| a << 8 | u64::from(x));
         match kind {
             "1" | "2" | "3" => chunks.push((addr, rec[1 + width..rec.len() - 1].to_vec())),
             _ => entries.push(addr),
@@ -225,7 +272,13 @@ fn srec(b: &[u8]) -> Result<Option<Container>, String> {
         return Ok(None);
     }
     let (base, bytes) = flatten(&chunks, 0xff)?;
-    Ok(Some(Container::Flat(Flat { format: "Motorola S-record", base, bytes, entries, ..Flat::default() })))
+    Ok(Some(Container::Flat(Flat {
+        format: "Motorola S-record",
+        base,
+        bytes,
+        entries,
+        ..Flat::default()
+    })))
 }
 
 /// ESP32-family / ESP8266 application image (esp-idf `esp_app_format.h`):
@@ -256,14 +309,25 @@ fn esp(b: &[u8]) -> Option<Container> {
         off += 8 + len;
     }
     let riscv = esp32 && matches!(chip, 5 | 0xc | 0xd | 0x10 | 0x12 | 0x14 | 0x17);
-    let target = if riscv { "RISCV:LE:32:default" } else { "Xtensa:LE:32:default" };
+    let target = if riscv {
+        "RISCV:LE:32:default"
+    } else {
+        "Xtensa:LE:32:default"
+    };
     let keep: Vec<(u64, Vec<u8>)> = match flatten(&chunks, 0) {
         Ok(_) => chunks,
-        Err(_) => chunks.into_iter().filter(|(a, _)| (a >> 24) == (entry >> 24)).collect(),
+        Err(_) => chunks
+            .into_iter()
+            .filter(|(a, _)| (a >> 24) == (entry >> 24))
+            .collect(),
     };
     let (base, bytes) = flatten(&keep, 0).ok()?;
     Some(Container::Flat(Flat {
-        format: if esp32 { "ESP32 application image" } else { "ESP8266 application image" },
+        format: if esp32 {
+            "ESP32 application image"
+        } else {
+            "ESP8266 application image"
+        },
         target: Some(target.into()),
         base,
         bytes,
@@ -281,12 +345,20 @@ fn bflt(b: &[u8]) -> Result<Container, String> {
     if field(1)? != 4 {
         return Err(format!("bFLT revision {} (only 4 is read)", field(1)?));
     }
-    let (entry, data_start, data_end, bss_end) = (field(2)?, field(3)? as usize, field(4)? as usize, field(5)? as usize);
+    let (entry, data_start, data_end, bss_end) = (
+        field(2)?,
+        field(3)? as usize,
+        field(4)? as usize,
+        field(5)? as usize,
+    );
     let (reloc_start, reloc_count, flags) = (field(7)? as usize, field(8)? as usize, field(9)?);
     if flags & 0x4 != 0 {
         return Err("gzip-compressed bFLT is not decoded".into());
     }
-    let mut image = b.get(..data_end).ok_or("bFLT data runs past the file")?.to_vec();
+    let mut image = b
+        .get(..data_end)
+        .ok_or("bFLT data runs past the file")?
+        .to_vec();
     image.resize(bss_end.max(data_end), 0);
     const HDR: u32 = 0x40;
     let mut patch = |at: usize| {
@@ -302,7 +374,9 @@ fn bflt(b: &[u8]) -> Result<Container, String> {
         }
     }
     for i in 0..reloc_count {
-        let Some(r) = be32(b, reloc_start + 4 * i) else { break };
+        let Some(r) = be32(b, reloc_start + 4 * i) else {
+            break;
+        };
         patch(r as usize + HDR as usize);
     }
     Ok(Container::Flat(Flat {
@@ -324,7 +398,8 @@ fn mbn(b: &[u8]) -> Option<Container> {
     }
     let sbl = be32(b, 0) == Some(0xd1dc_4b84) || le32(b, 0) == Some(0x844b_dcd1);
     let gpt = b.get(0x200..0x208) == Some(b"EFI PART");
-    let header = matches!(le32(b, 4), Some(3 | 5 | 6 | 7)) && le32(b, 0).is_some_and(|id| id < 0x40);
+    let header =
+        matches!(le32(b, 4), Some(3 | 5 | 6 | 7)) && le32(b, 0).is_some_and(|id| id < 0x40);
     if !(sbl || gpt || header) {
         return None;
     }
@@ -332,8 +407,14 @@ fn mbn(b: &[u8]) -> Option<Container> {
     (0..limit).step_by(4).find_map(|at| {
         let e = b.get(at..at + 0x34)?;
         let machine = u16::from_le_bytes([e[18], e[19]]);
-        (e.starts_with(b"\x7fELF") && e[4] == 1 && e[5] == 1 && matches!(machine, 0x28 | 0xa4 | 0xb7))
-            .then(|| Container::Embedded { format: "Qualcomm MBN", bytes: b[at..].to_vec() })
+        (e.starts_with(b"\x7fELF")
+            && e[4] == 1
+            && e[5] == 1
+            && matches!(machine, 0x28 | 0xa4 | 0xb7))
+        .then(|| Container::Embedded {
+            format: "Qualcomm MBN",
+            bytes: b[at..].to_vec(),
+        })
     })
 }
 
@@ -361,7 +442,10 @@ fn md1_sections(b: &[u8]) -> Option<Vec<(String, &[u8])>> {
             break;
         }
         let name_bytes = b.get(off + 8..off + 40)?;
-        let name = String::from_utf8_lossy(&name_bytes[..name_bytes.iter().position(|&c| c == 0).unwrap_or(32)]).to_string();
+        let name = String::from_utf8_lossy(
+            &name_bytes[..name_bytes.iter().position(|&c| c == 0).unwrap_or(32)],
+        )
+        .to_string();
         let data = b.get(off + hdr..off + hdr + dsize)?;
         out.push((name, data));
         off += hdr + dsize;
@@ -396,8 +480,12 @@ pub fn md1_symbols(packed: &[u8]) -> Result<Vec<(u64, String)>, String> {
     at += 8;
     let mut out = Vec::new();
     while at < end.min(data.len()) {
-        let Some(name) = cstring(&data, &mut at) else { break };
-        let (Some(start), Some(_stop)) = (le32(&data, at), le32(&data, at + 4)) else { break };
+        let Some(name) = cstring(&data, &mut at) else {
+            break;
+        };
+        let (Some(start), Some(_stop)) = (le32(&data, at), le32(&data, at + 4)) else {
+            break;
+        };
         at += 8;
         if !name.is_empty() {
             out.push((u64::from(start), name));
@@ -411,7 +499,9 @@ pub fn md1_symbols(packed: &[u8]) -> Result<Vec<(u64, String)>, String> {
 /// starts with nanoMIPS code (`c0 60`, a load-immediate) has no processor
 /// here: there is no nanoMIPS SLEIGH specification.
 fn md1img(b: &[u8]) -> Result<Option<Container>, String> {
-    let Some(sections) = md1_sections(b) else { return Ok(None) };
+    let Some(sections) = md1_sections(b) else {
+        return Ok(None);
+    };
     let Some((_, rom)) = sections.iter().find(|(n, _)| n == "md1rom") else {
         return Err("md1img has no md1rom section".into());
     };
@@ -427,7 +517,9 @@ fn md1img(b: &[u8]) -> Result<Option<Container>, String> {
         bytes: rom.to_vec(),
         entries: vec![MD1ROM_BASE],
         symbols,
-        note: nanomips.then(|| "md1rom is nanoMIPS code, which no SLEIGH specification here decodes".to_string()),
+        note: nanomips.then(|| {
+            "md1rom is nanoMIPS code, which no SLEIGH specification here decodes".to_string()
+        }),
         ..Flat::default()
     })))
 }
@@ -435,7 +527,11 @@ fn md1img(b: &[u8]) -> Result<Option<Container>, String> {
 /// The size IDA's BIOS loader reads: a size that is not 4 KiB-aligned loses
 /// its trailer to a 64 KiB boundary.
 fn bios_size(b: &[u8]) -> usize {
-    if b.len() & 0xfff != 0 { b.len() & !0xffff } else { b.len() }
+    if b.len() & 0xfff != 0 {
+        b.len() & !0xffff
+    } else {
+        b.len()
+    }
 }
 
 /// A PC BIOS / flash dump: the reset vector, the last 16 bytes, is a far jump
@@ -473,7 +569,10 @@ fn bios(b: &[u8]) -> Option<Container> {
     let base = 0x10_0000 - len as u64;
     let mut asserts = vec!["register CS 0xf000 0xf0000+0x10000".to_string()];
     if len > 0x10000 {
-        asserts.push(format!("register CS 0xe000 {base:#x}+{:#x}", 0xf0000 - base));
+        asserts.push(format!(
+            "register CS 0xe000 {base:#x}+{:#x}",
+            0xf0000 - base
+        ));
     }
     Some(Container::Flat(Flat {
         format: "PC BIOS image",
@@ -509,7 +608,9 @@ mod tests {
     #[test]
     fn intel_hex_flattens_with_the_linear_base_and_entry() {
         let hex = ":020000040800F2\n:0400000001020304F2\n:04000500AABBCCDDE9\n:0400000508000101ED\n:00000001FF\n";
-        let Some(Container::Flat(f)) = detect(hex.as_bytes()).unwrap() else { panic!() };
+        let Some(Container::Flat(f)) = detect(hex.as_bytes()).unwrap() else {
+            panic!()
+        };
         assert_eq!(f.base, 0x0800_0000);
         assert_eq!(f.bytes, [1, 2, 3, 4, 0xff, 0xaa, 0xbb, 0xcc, 0xdd]);
         assert_eq!(f.entries, [0x0800_0101]);
@@ -524,17 +625,33 @@ mod tests {
         b[20..24].copy_from_slice(&0x8001u32.to_be_bytes());
         b[29] = 2;
         b.extend([0x70, 0x47, 0, 0, 0, 0, 0, 0]);
-        let Some(Container::Flat(f)) = detect(&b).unwrap() else { panic!() };
-        assert_eq!((f.target.as_deref(), f.base, f.entries.as_slice(), f.thumb), (Some("ARM:LE:32:v7"), 0x8000, &[0x8000u64][..], true));
+        let Some(Container::Flat(f)) = detect(&b).unwrap() else {
+            panic!()
+        };
+        assert_eq!(
+            (f.target.as_deref(), f.base, f.entries.as_slice(), f.thumb),
+            (Some("ARM:LE:32:v7"), 0x8000, &[0x8000u64][..], true)
+        );
     }
 
     #[test]
     fn a_bios_image_maps_below_one_megabyte_with_tracked_segments() {
         let mut b = vec![0u8; 0x20000];
         b[0x1fff0..0x1fff5].copy_from_slice(&[0xea, 0x5b, 0xe0, 0x00, 0xf0]);
-        let Some(Container::Flat(f)) = detect(&b).unwrap() else { panic!() };
-        assert_eq!((f.base, f.entries.as_slice(), f.bytes.len()), (0xe0000, &[0xffff0u64][..], 0x20000));
-        assert_eq!(f.asserts, ["register CS 0xf000 0xf0000+0x10000", "register CS 0xe000 0xe0000+0x10000"]);
+        let Some(Container::Flat(f)) = detect(&b).unwrap() else {
+            panic!()
+        };
+        assert_eq!(
+            (f.base, f.entries.as_slice(), f.bytes.len()),
+            (0xe0000, &[0xffff0u64][..], 0x20000)
+        );
+        assert_eq!(
+            f.asserts,
+            [
+                "register CS 0xf000 0xf0000+0x10000",
+                "register CS 0xe000 0xe0000+0x10000"
+            ]
+        );
         assert_eq!(bios_flash(&b).unwrap().base, 0xfffe_0000);
         b[0x1fff0] = 0x90;
         b[0x1fff1] = 0x90;
@@ -544,7 +661,12 @@ mod tests {
     #[test]
     fn srec_reads_s3_data_and_s7_entry() {
         let text = "S30900001000DEADBEEFAE\nS70500001000EA\n";
-        let Some(Container::Flat(f)) = detect(text.as_bytes()).unwrap() else { panic!() };
-        assert_eq!((f.base, f.bytes.as_slice(), f.entries.as_slice()), (0x1000, &[0xde, 0xad, 0xbe, 0xef][..], &[0x1000u64][..]));
+        let Some(Container::Flat(f)) = detect(text.as_bytes()).unwrap() else {
+            panic!()
+        };
+        assert_eq!(
+            (f.base, f.bytes.as_slice(), f.entries.as_slice()),
+            (0x1000, &[0xde, 0xad, 0xbe, 0xef][..], &[0x1000u64][..])
+        );
     }
 }

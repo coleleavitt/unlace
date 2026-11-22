@@ -47,14 +47,14 @@ use std::rc::Rc;
 
 use unlace_base::address::{calc_mask, leastsigbit_set, pcode_left, pcode_right};
 use unlace_base::error::KunaResult;
-use unlace_base::types::{int4, uintb, Wrap};
+use unlace_base::types::{Wrap, int4, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{ActionGroupList, Rule, RuleSpec};
+use crate::context::{OpId, VarnodeId};
 use crate::expression::TermOrder;
 use crate::funcdata::Funcdata;
 use crate::p3_dataflow::kuna_volatileload;
-use crate::context::{OpId, VarnodeId};
 
 /// `sizeof(uintb)` from the C++ — the rules cap at 8-byte precision
 /// (`if (size > sizeof(uintb)) return 0`).
@@ -131,23 +131,53 @@ impl RuleEarlyRemoval {
     /// Can `op` go: nothing reads its output and nothing else keeps it?
     pub(crate) fn removable(op: OpId, data: &mut Funcdata) -> bool {
         // Functions automatically consumed
-        if data.obank().get(op).expect("RuleEarlyRemoval: stale op").is_call() {
+        if data
+            .obank()
+            .get(op)
+            .expect("RuleEarlyRemoval: stale op")
+            .is_call()
+        {
             return false;
         }
-        if data.obank().get(op).expect("RuleEarlyRemoval: stale op").is_indirect_source() {
+        if data
+            .obank()
+            .get(op)
+            .expect("RuleEarlyRemoval: stale op")
+            .is_indirect_source()
+        {
             return false;
         }
-        let vn = match data.obank().get(op).expect("RuleEarlyRemoval: stale op").get_out() {
+        let vn = match data
+            .obank()
+            .get(op)
+            .expect("RuleEarlyRemoval: stale op")
+            .get_out()
+        {
             None => return false,
             Some(v) => v,
         };
-        if !data.vbank().get(vn).expect("RuleEarlyRemoval: stale vn").has_no_descend() {
+        if !data
+            .vbank()
+            .get(vn)
+            .expect("RuleEarlyRemoval: stale vn")
+            .has_no_descend()
+        {
             return false;
         }
-        if data.vbank().get(vn).expect("RuleEarlyRemoval: stale vn").is_auto_live() {
+        if data
+            .vbank()
+            .get(vn)
+            .expect("RuleEarlyRemoval: stale vn")
+            .is_auto_live()
+        {
             return false;
         }
-        let spc = data.vbank().get(vn).expect("RuleEarlyRemoval: stale vn").get_space().clone();
+        let spc = data
+            .vbank()
+            .get(vn)
+            .expect("RuleEarlyRemoval: stale vn")
+            .get_space()
+            .clone();
         if spc.does_deadcode() {
             if !data.dead_removal_allowed_seen(&spc) {
                 return false;
@@ -194,7 +224,10 @@ impl RuleCollectTerms {
             return vn;
         }
         let testop = v.get_def().expect("getMultCoeff: written vn has no def");
-        let to = data.obank().get(testop).expect("getMultCoeff: stale def op");
+        let to = data
+            .obank()
+            .get(testop)
+            .expect("getMultCoeff: stale def op");
         // C++ short-circuits on `||`: `getIn(1)` is only evaluated once the code
         // is confirmed INT_MULT (which always has two inputs).  Preserve that
         // ordering so a single-input def op never reaches `getIn(1)`.
@@ -204,7 +237,12 @@ impl RuleCollectTerms {
         }
         let in1 = to.get_in(1);
         let in1_const = in1
-            .map(|i| data.vbank().get(i).expect("getMultCoeff: stale in1").is_constant())
+            .map(|i| {
+                data.vbank()
+                    .get(i)
+                    .expect("getMultCoeff: stale in1")
+                    .is_constant()
+            })
             .unwrap_or(false);
         if !in1_const {
             *coef = 1;
@@ -215,9 +253,11 @@ impl RuleCollectTerms {
             .get(in1.expect("getMultCoeff: in1"))
             .expect("getMultCoeff: stale in1")
             .get_offset();
-        data.obank().get(testop).expect("getMultCoeff: stale def op").get_in(0).expect(
-            "getMultCoeff: INT_MULT has no in0",
-        )
+        data.obank()
+            .get(testop)
+            .expect("getMultCoeff: stale def op")
+            .get_in(0)
+            .expect("getMultCoeff: INT_MULT has no in0")
     }
 }
 
@@ -234,13 +274,20 @@ impl Rule for RuleCollectTerms {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        let outvn = data.obank().get(op).expect("RuleCollectTerms: stale op").get_out().expect(
-            "RuleCollectTerms: INT_ADD has no output",
-        );
+        let outvn = data
+            .obank()
+            .get(op)
+            .expect("RuleCollectTerms: stale op")
+            .get_out()
+            .expect("RuleCollectTerms: INT_ADD has no output");
         let nextop = data.lone_descend(outvn);
         // Do we have the root of an ADD tree
         if let Some(no) = nextop {
-            if data.obank().get(no).expect("RuleCollectTerms: stale nextop").code()
+            if data
+                .obank()
+                .get(no)
+                .expect("RuleCollectTerms: stale nextop")
+                .code()
                 == OpCode::CPUI_INT_ADD
             {
                 return 0;
@@ -254,12 +301,22 @@ impl Rule for RuleCollectTerms {
         let mut i: usize = 0;
 
         let v0 = termorder.term(order[0]).get_varnode();
-        if !data.vbank().get(v0).expect("RuleCollectTerms: stale order[0] vn").is_constant() {
+        if !data
+            .vbank()
+            .get(v0)
+            .expect("RuleCollectTerms: stale order[0] vn")
+            .is_constant()
+        {
             i = 1;
             while i < order.len() {
                 let mut vn1 = termorder.term(order[i - 1]).get_varnode();
                 let mut vn2 = termorder.term(order[i]).get_varnode();
-                if data.vbank().get(vn2).expect("RuleCollectTerms: stale vn2").is_constant() {
+                if data
+                    .vbank()
+                    .get(vn2)
+                    .expect("RuleCollectTerms: stale vn2")
+                    .is_constant()
+                {
                     break;
                 }
                 let mut coef1: uintb = 0;
@@ -288,7 +345,11 @@ impl Rule for RuleCollectTerms {
                         };
                     }
                     // new coefficient
-                    let vn1sz = data.vbank().get(vn1).expect("RuleCollectTerms: stale vn1").get_size();
+                    let vn1sz = data
+                        .vbank()
+                        .get(vn1)
+                        .expect("RuleCollectTerms: stale vn1")
+                        .get_size();
                     coef1 = coef1.wrapping_add(coef2) & calc_mask(vn1sz);
                     let newcoeff = data.new_constant(vn1sz, coef1);
                     let zerocoeff = data.new_constant(vn1sz, 0);
@@ -306,14 +367,21 @@ impl Rule for RuleCollectTerms {
                         data.op_set_input(op_i, newcoeff, slot_i)
                             .expect("RuleCollectTerms: op_set_input newcoeff");
                     } else {
-                        let addr = data.obank().get(op_i).expect("RuleCollectTerms: stale op_i").get_addr().clone();
+                        let addr = data
+                            .obank()
+                            .get(op_i)
+                            .expect("RuleCollectTerms: stale op_i")
+                            .get_addr()
+                            .clone();
                         let nextop = data.new_op(2, addr);
                         let new_out = data
                             .new_unique_out(vn1sz, nextop)
                             .expect("RuleCollectTerms: new_unique_out");
                         set_opcode_typed(data, nextop, OpCode::CPUI_INT_MULT);
-                        data.op_set_input(nextop, vn1, 0).expect("RuleCollectTerms: mult in0");
-                        data.op_set_input(nextop, newcoeff, 1).expect("RuleCollectTerms: mult in1");
+                        data.op_set_input(nextop, vn1, 0)
+                            .expect("RuleCollectTerms: mult in0");
+                        data.op_set_input(nextop, newcoeff, 1)
+                            .expect("RuleCollectTerms: mult in1");
                         data.op_insert_before(nextop, op_i);
                         data.op_set_input(op_i, new_out, slot_i)
                             .expect("RuleCollectTerms: op_set_input new_out");
@@ -333,7 +401,11 @@ impl Rule for RuleCollectTerms {
                 continue;
             }
             let vnj = termorder.term(order[j]).get_varnode();
-            let val = data.vbank().get(vnj).expect("RuleCollectTerms: stale vnj").get_offset();
+            let val = data
+                .vbank()
+                .get(vnj)
+                .expect("RuleCollectTerms: stale vnj")
+                .get_offset();
             if val != 0 {
                 nonzerocount += 1;
                 coef1 = coef1.wrapping_add(val); // Sum up all the constants
@@ -348,7 +420,11 @@ impl Rule for RuleCollectTerms {
             return 0;
         }
         let vn1 = termorder.term(order[lastconst]).get_varnode();
-        let vn1sz = data.vbank().get(vn1).expect("RuleCollectTerms: stale lastconst vn").get_size();
+        let vn1sz = data
+            .vbank()
+            .get(vn1)
+            .expect("RuleCollectTerms: stale lastconst vn")
+            .get_size();
         coef1 &= calc_mask(vn1sz);
         // Lump all the non-zero constants into one varnode
         for &edge_idx in &order[(lastconst + 1)..] {
@@ -358,7 +434,8 @@ impl Rule for RuleCollectTerms {
                     let e = termorder.term(edge_idx);
                     (e.get_op(), e.get_slot())
                 };
-                data.op_set_input(op_j, zero, slot_j).expect("RuleCollectTerms: zero out constant");
+                data.op_set_input(op_j, zero, slot_j)
+                    .expect("RuleCollectTerms: zero out constant");
             }
         }
         let lumped = data.new_constant(vn1sz, coef1);
@@ -366,7 +443,8 @@ impl Rule for RuleCollectTerms {
             let e = termorder.term(order[lastconst]);
             (e.get_op(), e.get_slot())
         };
-        data.op_set_input(op_lc, lumped, slot_lc).expect("RuleCollectTerms: lumped constant");
+        data.op_set_input(op_lc, lumped, slot_lc)
+            .expect("RuleCollectTerms: lumped constant");
 
         1
     }
@@ -403,13 +481,30 @@ impl Rule for RuleSelectCse {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        let vn = data.obank().get(op).expect("RuleSelectCse: stale op").get_in(0).expect(
-            "RuleSelectCse: op has no in0",
-        );
-        let opc = data.obank().get(op).expect("RuleSelectCse: stale op").code();
+        let vn = data
+            .obank()
+            .get(op)
+            .expect("RuleSelectCse: stale op")
+            .get_in(0)
+            .expect("RuleSelectCse: op has no in0");
+        let opc = data
+            .obank()
+            .get(op)
+            .expect("RuleSelectCse: stale op")
+            .code();
         if crate::p3_dataflow::ruleaction_7::RulePtrFlow::is_live(data) {
-            if let Some(out) = data.obank().get(op).expect("RuleSelectCse: stale op").get_out() {
-                let addr = data.vbank().get(out).expect("RuleSelectCse: stale out").get_addr().clone();
+            if let Some(out) = data
+                .obank()
+                .get(op)
+                .expect("RuleSelectCse: stale op")
+                .get_out()
+            {
+                let addr = data
+                    .vbank()
+                    .get(out)
+                    .expect("RuleSelectCse: stale out")
+                    .get_addr()
+                    .clone();
                 if data.heritage_pass(&addr) < 0 {
                     return 0;
                 }
@@ -425,11 +520,18 @@ impl Rule for RuleSelectCse {
         // two identical `x s>> 63` ops must CSE-merge before `RuleCollectTerms`
         // can cancel them.
 
-        let descend: Vec<OpId> =
-            data.vbank().get(vn).expect("RuleSelectCse: stale vn").descend_iter().collect();
+        let descend: Vec<OpId> = data
+            .vbank()
+            .get(vn)
+            .expect("RuleSelectCse: stale vn")
+            .descend_iter()
+            .collect();
         let mut list: Vec<(unlace_base::types::uintm, OpId)> = Vec::new();
         for otherop in descend {
-            let ob = data.obank().get(otherop).expect("RuleSelectCse: stale descend op");
+            let ob = data
+                .obank()
+                .get(otherop)
+                .expect("RuleSelectCse: stale descend op");
             if ob.code() != opc {
                 continue;
             }
@@ -445,7 +547,12 @@ impl Rule for RuleSelectCse {
         let mut vlist: Vec<VarnodeId> = Vec::new();
         data.cse_eliminate_list(&mut list, &mut vlist, |fd, v| {
             // C++ `Funcdata::isHeritaged(vn) = heritage.heritagePass(vn->getAddr()) >= 0`.
-            let addr = fd.vbank().get(v).expect("RuleSelectCse: stale isHeritaged vn").get_addr().clone();
+            let addr = fd
+                .vbank()
+                .get(v)
+                .expect("RuleSelectCse: stale isHeritaged vn")
+                .get_addr()
+                .clone();
             fd.heritage_pass(&addr) >= 0
         })
         .expect("RuleSelectCse: cseEliminateList");
@@ -487,10 +594,16 @@ impl Rule for RulePiece2Zext {
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         // Constant must be most significant bits
-        let constvn = data.obank().get(op).expect("RulePiece2Zext: stale op").get_in(0).expect(
-            "RulePiece2Zext: PIECE has no in0",
-        );
-        let cv = data.vbank().get(constvn).expect("RulePiece2Zext: stale constvn");
+        let constvn = data
+            .obank()
+            .get(op)
+            .expect("RulePiece2Zext: stale op")
+            .get_in(0)
+            .expect("RulePiece2Zext: PIECE has no in0");
+        let cv = data
+            .vbank()
+            .get(constvn)
+            .expect("RulePiece2Zext: stale constvn");
         // Must append with constant
         if !cv.is_constant() {
             return 0;
@@ -536,10 +649,18 @@ impl Rule for RulePiece2Sext {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        let shiftout = data.obank().get(op).expect("RulePiece2Sext: stale op").get_in(0).expect(
-            "RulePiece2Sext: PIECE has no in0",
-        );
-        if !data.vbank().get(shiftout).expect("RulePiece2Sext: stale shiftout").is_written() {
+        let shiftout = data
+            .obank()
+            .get(op)
+            .expect("RulePiece2Sext: stale op")
+            .get_in(0)
+            .expect("RulePiece2Sext: PIECE has no in0");
+        if !data
+            .vbank()
+            .get(shiftout)
+            .expect("RulePiece2Sext: stale shiftout")
+            .is_written()
+        {
             return 0;
         }
         let shiftop = data
@@ -548,27 +669,54 @@ impl Rule for RulePiece2Sext {
             .expect("RulePiece2Sext: stale shiftout")
             .get_def()
             .expect("RulePiece2Sext: written shiftout has no def");
-        if data.obank().get(shiftop).expect("RulePiece2Sext: stale shiftop").code()
+        if data
+            .obank()
+            .get(shiftop)
+            .expect("RulePiece2Sext: stale shiftop")
+            .code()
             != OpCode::CPUI_INT_SRIGHT
         {
             return 0;
         }
-        let sh_in1 = data.obank().get(shiftop).expect("RulePiece2Sext: stale shiftop").get_in(1)
+        let sh_in1 = data
+            .obank()
+            .get(shiftop)
+            .expect("RulePiece2Sext: stale shiftop")
+            .get_in(1)
             .expect("RulePiece2Sext: SRIGHT has no in1");
-        if !data.vbank().get(sh_in1).expect("RulePiece2Sext: stale sh_in1").is_constant() {
+        if !data
+            .vbank()
+            .get(sh_in1)
+            .expect("RulePiece2Sext: stale sh_in1")
+            .is_constant()
+        {
             return 0;
         }
-        let n = data.vbank().get(sh_in1).expect("RulePiece2Sext: stale sh_in1").get_offset() as int4;
-        let x = data.obank().get(shiftop).expect("RulePiece2Sext: stale shiftop").get_in(0).expect(
-            "RulePiece2Sext: SRIGHT has no in0",
-        );
-        let op_in1 = data.obank().get(op).expect("RulePiece2Sext: stale op").get_in(1).expect(
-            "RulePiece2Sext: PIECE has no in1",
-        );
+        let n = data
+            .vbank()
+            .get(sh_in1)
+            .expect("RulePiece2Sext: stale sh_in1")
+            .get_offset() as int4;
+        let x = data
+            .obank()
+            .get(shiftop)
+            .expect("RulePiece2Sext: stale shiftop")
+            .get_in(0)
+            .expect("RulePiece2Sext: SRIGHT has no in0");
+        let op_in1 = data
+            .obank()
+            .get(op)
+            .expect("RulePiece2Sext: stale op")
+            .get_in(1)
+            .expect("RulePiece2Sext: PIECE has no in1");
         if x != op_in1 {
             return 0;
         }
-        let xsize = data.vbank().get(x).expect("RulePiece2Sext: stale x").get_size();
+        let xsize = data
+            .vbank()
+            .get(x)
+            .expect("RulePiece2Sext: stale x")
+            .get_size();
         if n != 8 * xsize - 1 {
             return 0;
         }
@@ -642,27 +790,47 @@ impl Rule for RuleOrMask {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        let outvn = data.obank().get(op).expect("RuleOrMask: stale op").get_out().expect(
-            "RuleOrMask: INT_OR has no output",
-        );
-        let size = data.vbank().get(outvn).expect("RuleOrMask: stale outvn").get_size();
+        let outvn = data
+            .obank()
+            .get(op)
+            .expect("RuleOrMask: stale op")
+            .get_out()
+            .expect("RuleOrMask: INT_OR has no output");
+        let size = data
+            .vbank()
+            .get(outvn)
+            .expect("RuleOrMask: stale outvn")
+            .get_size();
         // FIXME: uintb should be arbitrary precision
         if size > SIZEOF_UINTB {
             return 0;
         }
-        let constvn = data.obank().get(op).expect("RuleOrMask: stale op").get_in(1).expect(
-            "RuleOrMask: INT_OR has no in1",
-        );
-        if !data.vbank().get(constvn).expect("RuleOrMask: stale constvn").is_constant() {
+        let constvn = data
+            .obank()
+            .get(op)
+            .expect("RuleOrMask: stale op")
+            .get_in(1)
+            .expect("RuleOrMask: INT_OR has no in1");
+        if !data
+            .vbank()
+            .get(constvn)
+            .expect("RuleOrMask: stale constvn")
+            .is_constant()
+        {
             return 0;
         }
-        let val = data.vbank().get(constvn).expect("RuleOrMask: stale constvn").get_offset();
+        let val = data
+            .vbank()
+            .get(constvn)
+            .expect("RuleOrMask: stale constvn")
+            .get_offset();
         let mask = calc_mask(size);
         if (val & mask) != mask {
             return 0;
         }
         set_opcode_typed(data, op, OpCode::CPUI_COPY);
-        data.op_set_input(op, constvn, 0).expect("RuleOrMask: op_set_input");
+        data.op_set_input(op, constvn, 0)
+            .expect("RuleOrMask: op_set_input");
         data.op_remove_input(op, 1);
         1
     }
@@ -697,58 +865,100 @@ impl Rule for RuleAndMask {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        let outvn = data.obank().get(op).expect("RuleAndMask: stale op").get_out().expect(
-            "RuleAndMask: INT_AND has no output",
-        );
-        let size = data.vbank().get(outvn).expect("RuleAndMask: stale outvn").get_size();
+        let outvn = data
+            .obank()
+            .get(op)
+            .expect("RuleAndMask: stale op")
+            .get_out()
+            .expect("RuleAndMask: INT_AND has no output");
+        let size = data
+            .vbank()
+            .get(outvn)
+            .expect("RuleAndMask: stale outvn")
+            .get_size();
 
         // FIXME: uintb should be arbitrary precision
         if size > SIZEOF_UINTB {
             return 0;
         }
-        let in0 = data.obank().get(op).expect("RuleAndMask: stale op").get_in(0).expect(
-            "RuleAndMask: INT_AND has no in0",
-        );
-        let mask1 = data.vbank().get(in0).expect("RuleAndMask: stale in0").get_nz_mask();
+        let in0 = data
+            .obank()
+            .get(op)
+            .expect("RuleAndMask: stale op")
+            .get_in(0)
+            .expect("RuleAndMask: INT_AND has no in0");
+        let mask1 = data
+            .vbank()
+            .get(in0)
+            .expect("RuleAndMask: stale in0")
+            .get_nz_mask();
         let andmask: uintb = if mask1 == 0 {
             0
         } else {
-            let in1 = data.obank().get(op).expect("RuleAndMask: stale op").get_in(1).expect(
-                "RuleAndMask: INT_AND has no in1",
-            );
-            let mask2 = data.vbank().get(in1).expect("RuleAndMask: stale in1").get_nz_mask();
+            let in1 = data
+                .obank()
+                .get(op)
+                .expect("RuleAndMask: stale op")
+                .get_in(1)
+                .expect("RuleAndMask: INT_AND has no in1");
+            let mask2 = data
+                .vbank()
+                .get(in1)
+                .expect("RuleAndMask: stale in1")
+                .get_nz_mask();
             mask1 & mask2
         };
 
         // C++ evaluates `op->getOut()->getConsume()` only in the second branch; it
         // has no side effects so hoisting it does not change behavior.
-        let consume = data.vbank().get(outvn).expect("RuleAndMask: stale outvn").get_consume();
+        let consume = data
+            .vbank()
+            .get(outvn)
+            .expect("RuleAndMask: stale outvn")
+            .get_consume();
         let vn: VarnodeId;
         // Result of AND is always zero
         if andmask == 0 || (andmask & consume) == 0 {
             vn = data.new_constant(size, 0);
         } else if andmask == mask1 {
-            let in1 = data.obank().get(op).expect("RuleAndMask: stale op").get_in(1).expect(
-                "RuleAndMask: INT_AND has no in1",
-            );
-            if !data.vbank().get(in1).expect("RuleAndMask: stale in1").is_constant() {
+            let in1 = data
+                .obank()
+                .get(op)
+                .expect("RuleAndMask: stale op")
+                .get_in(1)
+                .expect("RuleAndMask: INT_AND has no in1");
+            if !data
+                .vbank()
+                .get(in1)
+                .expect("RuleAndMask: stale in1")
+                .is_constant()
+            {
                 return 0;
             }
             // Result of AND is equal to input(0)
-            vn = data.obank().get(op).expect("RuleAndMask: stale op").get_in(0).expect(
-                "RuleAndMask: INT_AND has no in0",
-            );
+            vn = data
+                .obank()
+                .get(op)
+                .expect("RuleAndMask: stale op")
+                .get_in(0)
+                .expect("RuleAndMask: INT_AND has no in0");
         } else {
             // else return 0;
             return 0;
         }
-        if !data.vbank().get(vn).expect("RuleAndMask: stale vn").is_heritage_known() {
+        if !data
+            .vbank()
+            .get(vn)
+            .expect("RuleAndMask: stale vn")
+            .is_heritage_known()
+        {
             return 0;
         }
 
         set_opcode_typed(data, op, OpCode::CPUI_COPY);
         data.op_remove_input(op, 1);
-        data.op_set_input(op, vn, 0).expect("RuleAndMask: op_set_input");
+        data.op_set_input(op, vn, 0)
+            .expect("RuleAndMask: op_set_input");
         1
     }
 }
@@ -783,28 +993,53 @@ impl Rule for RuleOrConsume {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        let outvn = data.obank().get(op).expect("RuleOrConsume: stale op").get_out().expect(
-            "RuleOrConsume: op has no output",
-        );
-        let size = data.vbank().get(outvn).expect("RuleOrConsume: stale outvn").get_size();
+        let outvn = data
+            .obank()
+            .get(op)
+            .expect("RuleOrConsume: stale op")
+            .get_out()
+            .expect("RuleOrConsume: op has no output");
+        let size = data
+            .vbank()
+            .get(outvn)
+            .expect("RuleOrConsume: stale outvn")
+            .get_size();
         // FIXME: uintb should be arbitrary precision
         if size > SIZEOF_UINTB {
             return 0;
         }
-        let consume = data.vbank().get(outvn).expect("RuleOrConsume: stale outvn").get_consume();
-        let in0 = data.obank().get(op).expect("RuleOrConsume: stale op").get_in(0).expect(
-            "RuleOrConsume: op has no in0",
-        );
-        let nzm0 = data.vbank().get(in0).expect("RuleOrConsume: stale in0").get_nz_mask();
+        let consume = data
+            .vbank()
+            .get(outvn)
+            .expect("RuleOrConsume: stale outvn")
+            .get_consume();
+        let in0 = data
+            .obank()
+            .get(op)
+            .expect("RuleOrConsume: stale op")
+            .get_in(0)
+            .expect("RuleOrConsume: op has no in0");
+        let nzm0 = data
+            .vbank()
+            .get(in0)
+            .expect("RuleOrConsume: stale in0")
+            .get_nz_mask();
         if (consume & nzm0) == 0 {
             data.op_remove_input(op, 0);
             set_opcode_typed(data, op, OpCode::CPUI_COPY);
             return 1;
         }
-        let in1 = data.obank().get(op).expect("RuleOrConsume: stale op").get_in(1).expect(
-            "RuleOrConsume: op has no in1",
-        );
-        let nzm1 = data.vbank().get(in1).expect("RuleOrConsume: stale in1").get_nz_mask();
+        let in1 = data
+            .obank()
+            .get(op)
+            .expect("RuleOrConsume: stale op")
+            .get_in(1)
+            .expect("RuleOrConsume: op has no in1");
+        let nzm1 = data
+            .vbank()
+            .get(in1)
+            .expect("RuleOrConsume: stale in1")
+            .get_nz_mask();
         if (consume & nzm1) == 0 {
             data.op_remove_input(op, 1);
             set_opcode_typed(data, op, OpCode::CPUI_COPY);
@@ -844,26 +1079,52 @@ impl Rule for RuleOrCollapse {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        let outvn = data.obank().get(op).expect("RuleOrCollapse: stale op").get_out().expect(
-            "RuleOrCollapse: INT_OR has no output",
-        );
-        let size = data.vbank().get(outvn).expect("RuleOrCollapse: stale outvn").get_size();
+        let outvn = data
+            .obank()
+            .get(op)
+            .expect("RuleOrCollapse: stale op")
+            .get_out()
+            .expect("RuleOrCollapse: INT_OR has no output");
+        let size = data
+            .vbank()
+            .get(outvn)
+            .expect("RuleOrCollapse: stale outvn")
+            .get_size();
 
-        let vn = data.obank().get(op).expect("RuleOrCollapse: stale op").get_in(1).expect(
-            "RuleOrCollapse: INT_OR has no in1",
-        );
-        if !data.vbank().get(vn).expect("RuleOrCollapse: stale vn").is_constant() {
+        let vn = data
+            .obank()
+            .get(op)
+            .expect("RuleOrCollapse: stale op")
+            .get_in(1)
+            .expect("RuleOrCollapse: INT_OR has no in1");
+        if !data
+            .vbank()
+            .get(vn)
+            .expect("RuleOrCollapse: stale vn")
+            .is_constant()
+        {
             return 0;
         }
         // FIXME: uintb should be arbitrary precision
         if size > SIZEOF_UINTB {
             return 0;
         }
-        let in0 = data.obank().get(op).expect("RuleOrCollapse: stale op").get_in(0).expect(
-            "RuleOrCollapse: INT_OR has no in0",
-        );
-        let mask = data.vbank().get(in0).expect("RuleOrCollapse: stale in0").get_nz_mask();
-        let val = data.vbank().get(vn).expect("RuleOrCollapse: stale vn").get_offset();
+        let in0 = data
+            .obank()
+            .get(op)
+            .expect("RuleOrCollapse: stale op")
+            .get_in(0)
+            .expect("RuleOrCollapse: INT_OR has no in0");
+        let mask = data
+            .vbank()
+            .get(in0)
+            .expect("RuleOrCollapse: stale in0")
+            .get_nz_mask();
+        let val = data
+            .vbank()
+            .get(vn)
+            .expect("RuleOrCollapse: stale vn")
+            .get_offset();
         // first param may turn on other bits
         if (mask | val) != val {
             return 0;
@@ -901,45 +1162,102 @@ impl Rule for RuleAndOrLump {
     }
 
     fn get_op_list(&self) -> Vec<OpCode> {
-        vec![OpCode::CPUI_INT_AND, OpCode::CPUI_INT_OR, OpCode::CPUI_INT_XOR]
+        vec![
+            OpCode::CPUI_INT_AND,
+            OpCode::CPUI_INT_OR,
+            OpCode::CPUI_INT_XOR,
+        ]
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        let opc = data.obank().get(op).expect("RuleAndOrLump: stale op").code();
-        let op_in1 = data.obank().get(op).expect("RuleAndOrLump: stale op").get_in(1).expect(
-            "RuleAndOrLump: op has no in1",
-        );
-        if !data.vbank().get(op_in1).expect("RuleAndOrLump: stale op_in1").is_constant() {
+        let opc = data
+            .obank()
+            .get(op)
+            .expect("RuleAndOrLump: stale op")
+            .code();
+        let op_in1 = data
+            .obank()
+            .get(op)
+            .expect("RuleAndOrLump: stale op")
+            .get_in(1)
+            .expect("RuleAndOrLump: op has no in1");
+        if !data
+            .vbank()
+            .get(op_in1)
+            .expect("RuleAndOrLump: stale op_in1")
+            .is_constant()
+        {
             return 0;
         }
-        let vn1 = data.obank().get(op).expect("RuleAndOrLump: stale op").get_in(0).expect(
-            "RuleAndOrLump: op has no in0",
-        );
-        if !data.vbank().get(vn1).expect("RuleAndOrLump: stale vn1").is_written() {
+        let vn1 = data
+            .obank()
+            .get(op)
+            .expect("RuleAndOrLump: stale op")
+            .get_in(0)
+            .expect("RuleAndOrLump: op has no in0");
+        if !data
+            .vbank()
+            .get(vn1)
+            .expect("RuleAndOrLump: stale vn1")
+            .is_written()
+        {
             return 0;
         }
-        let op2 = data.vbank().get(vn1).expect("RuleAndOrLump: stale vn1").get_def().expect(
-            "RuleAndOrLump: written vn1 has no def",
-        );
+        let op2 = data
+            .vbank()
+            .get(vn1)
+            .expect("RuleAndOrLump: stale vn1")
+            .get_def()
+            .expect("RuleAndOrLump: written vn1 has no def");
         // Must be same op
-        if data.obank().get(op2).expect("RuleAndOrLump: stale op2").code() != opc {
+        if data
+            .obank()
+            .get(op2)
+            .expect("RuleAndOrLump: stale op2")
+            .code()
+            != opc
+        {
             return 0;
         }
-        let op2_in1 = data.obank().get(op2).expect("RuleAndOrLump: stale op2").get_in(1).expect(
-            "RuleAndOrLump: op2 has no in1",
-        );
-        if !data.vbank().get(op2_in1).expect("RuleAndOrLump: stale op2_in1").is_constant() {
+        let op2_in1 = data
+            .obank()
+            .get(op2)
+            .expect("RuleAndOrLump: stale op2")
+            .get_in(1)
+            .expect("RuleAndOrLump: op2 has no in1");
+        if !data
+            .vbank()
+            .get(op2_in1)
+            .expect("RuleAndOrLump: stale op2_in1")
+            .is_constant()
+        {
             return 0;
         }
-        let basevn = data.obank().get(op2).expect("RuleAndOrLump: stale op2").get_in(0).expect(
-            "RuleAndOrLump: op2 has no in0",
-        );
-        if data.vbank().get(basevn).expect("RuleAndOrLump: stale basevn").is_free() {
+        let basevn = data
+            .obank()
+            .get(op2)
+            .expect("RuleAndOrLump: stale op2")
+            .get_in(0)
+            .expect("RuleAndOrLump: op2 has no in0");
+        if data
+            .vbank()
+            .get(basevn)
+            .expect("RuleAndOrLump: stale basevn")
+            .is_free()
+        {
             return 0;
         }
 
-        let mut val = data.vbank().get(op_in1).expect("RuleAndOrLump: stale op_in1").get_offset();
-        let val2 = data.vbank().get(op2_in1).expect("RuleAndOrLump: stale op2_in1").get_offset();
+        let mut val = data
+            .vbank()
+            .get(op_in1)
+            .expect("RuleAndOrLump: stale op_in1")
+            .get_offset();
+        let val2 = data
+            .vbank()
+            .get(op2_in1)
+            .expect("RuleAndOrLump: stale op2_in1")
+            .get_offset();
         if opc == OpCode::CPUI_INT_AND {
             val &= val2;
         } else if opc == OpCode::CPUI_INT_OR {
@@ -948,10 +1266,16 @@ impl Rule for RuleAndOrLump {
             val ^= val2;
         }
 
-        data.op_set_input(op, basevn, 0).expect("RuleAndOrLump: op_set_input basevn");
-        let basevn_size = data.vbank().get(basevn).expect("RuleAndOrLump: stale basevn").get_size();
+        data.op_set_input(op, basevn, 0)
+            .expect("RuleAndOrLump: op_set_input basevn");
+        let basevn_size = data
+            .vbank()
+            .get(basevn)
+            .expect("RuleAndOrLump: stale basevn")
+            .get_size();
         let newc = data.new_constant(basevn_size, val);
-        data.op_set_input(op, newc, 1).expect("RuleAndOrLump: op_set_input newc");
+        data.op_set_input(op, newc, 1)
+            .expect("RuleAndOrLump: op_set_input newc");
         1
     }
 }
@@ -986,31 +1310,62 @@ impl Rule for RuleNegateIdentity {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        let vn = data.obank().get(op).expect("RuleNegateIdentity: stale op").get_in(0).expect(
-            "RuleNegateIdentity: NEGATE has no in0",
-        );
-        let out_vn = data.obank().get(op).expect("RuleNegateIdentity: stale op").get_out().expect(
-            "RuleNegateIdentity: NEGATE has no output",
-        );
-        let descs: Vec<OpId> =
-            data.vbank().get(out_vn).expect("RuleNegateIdentity: stale outVn").descend_iter().collect();
+        let vn = data
+            .obank()
+            .get(op)
+            .expect("RuleNegateIdentity: stale op")
+            .get_in(0)
+            .expect("RuleNegateIdentity: NEGATE has no in0");
+        let out_vn = data
+            .obank()
+            .get(op)
+            .expect("RuleNegateIdentity: stale op")
+            .get_out()
+            .expect("RuleNegateIdentity: NEGATE has no output");
+        let descs: Vec<OpId> = data
+            .vbank()
+            .get(out_vn)
+            .expect("RuleNegateIdentity: stale outVn")
+            .descend_iter()
+            .collect();
         for logic_op in descs {
-            let opc = data.obank().get(logic_op).expect("RuleNegateIdentity: stale logicOp").code();
+            let opc = data
+                .obank()
+                .get(logic_op)
+                .expect("RuleNegateIdentity: stale logicOp")
+                .code();
             if opc != OpCode::CPUI_INT_AND
                 && opc != OpCode::CPUI_INT_OR
                 && opc != OpCode::CPUI_INT_XOR
             {
                 continue;
             }
-            let slot = data.obank().get(logic_op).expect("RuleNegateIdentity: stale logicOp").get_slot(out_vn);
-            let other = data.obank().get(logic_op).expect("RuleNegateIdentity: stale logicOp").get_in(1 - slot);
+            let slot = data
+                .obank()
+                .get(logic_op)
+                .expect("RuleNegateIdentity: stale logicOp")
+                .get_slot(out_vn);
+            let other = data
+                .obank()
+                .get(logic_op)
+                .expect("RuleNegateIdentity: stale logicOp")
+                .get_in(1 - slot);
             if other != Some(vn) {
                 continue;
             }
-            let vn_size = data.vbank().get(vn).expect("RuleNegateIdentity: stale vn").get_size();
-            let value = if opc != OpCode::CPUI_INT_AND { calc_mask(vn_size) } else { 0 };
+            let vn_size = data
+                .vbank()
+                .get(vn)
+                .expect("RuleNegateIdentity: stale vn")
+                .get_size();
+            let value = if opc != OpCode::CPUI_INT_AND {
+                calc_mask(vn_size)
+            } else {
+                0
+            };
             let newc = data.new_constant(vn_size, value);
-            data.op_set_input(logic_op, newc, 0).expect("RuleNegateIdentity: op_set_input");
+            data.op_set_input(logic_op, newc, 0)
+                .expect("RuleNegateIdentity: op_set_input");
             data.op_remove_input(logic_op, 1);
             set_opcode_typed(data, logic_op, OpCode::CPUI_COPY);
             return 1;
@@ -1055,29 +1410,56 @@ impl Rule for RuleShiftBitops {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        let constvn = data.obank().get(op).expect("RuleShiftBitops: stale op").get_in(1).expect(
-            "RuleShiftBitops: op has no in1",
-        );
+        let constvn = data
+            .obank()
+            .get(op)
+            .expect("RuleShiftBitops: stale op")
+            .get_in(1)
+            .expect("RuleShiftBitops: op has no in1");
         // Must be a constant shift
-        if !data.vbank().get(constvn).expect("RuleShiftBitops: stale constvn").is_constant() {
+        if !data
+            .vbank()
+            .get(constvn)
+            .expect("RuleShiftBitops: stale constvn")
+            .is_constant()
+        {
             return 0;
         }
-        let mut vn = data.obank().get(op).expect("RuleShiftBitops: stale op").get_in(0).expect(
-            "RuleShiftBitops: op has no in0",
-        );
-        if !data.vbank().get(vn).expect("RuleShiftBitops: stale vn").is_written() {
+        let mut vn = data
+            .obank()
+            .get(op)
+            .expect("RuleShiftBitops: stale op")
+            .get_in(0)
+            .expect("RuleShiftBitops: op has no in0");
+        if !data
+            .vbank()
+            .get(vn)
+            .expect("RuleShiftBitops: stale vn")
+            .is_written()
+        {
             return 0;
         }
         // FIXME: Can't exceed uintb precision
-        let vn_size = data.vbank().get(vn).expect("RuleShiftBitops: stale vn").get_size();
+        let vn_size = data
+            .vbank()
+            .get(vn)
+            .expect("RuleShiftBitops: stale vn")
+            .get_size();
         if vn_size > SIZEOF_UINTB {
             return 0;
         }
         let sa: int4;
         let leftshift: bool;
-        let op_code = data.obank().get(op).expect("RuleShiftBitops: stale op").code();
-        let const_off =
-            data.vbank().get(constvn).expect("RuleShiftBitops: stale constvn").get_offset();
+        let op_code = data
+            .obank()
+            .get(op)
+            .expect("RuleShiftBitops: stale op")
+            .code();
+        let const_off = data
+            .vbank()
+            .get(constvn)
+            .expect("RuleShiftBitops: stale constvn")
+            .get_offset();
         match op_code {
             OpCode::CPUI_INT_LEFT => {
                 sa = const_off as int4;
@@ -1102,10 +1484,17 @@ impl Rule for RuleShiftBitops {
             _ => return 0,
         }
 
-        let bitop = data.vbank().get(vn).expect("RuleShiftBitops: stale vn").get_def().expect(
-            "RuleShiftBitops: written vn has no def",
-        );
-        let bitop_code = data.obank().get(bitop).expect("RuleShiftBitops: stale bitop").code();
+        let bitop = data
+            .vbank()
+            .get(vn)
+            .expect("RuleShiftBitops: stale vn")
+            .get_def()
+            .expect("RuleShiftBitops: written vn has no def");
+        let bitop_code = data
+            .obank()
+            .get(bitop)
+            .expect("RuleShiftBitops: stale bitop")
+            .code();
         match bitop_code {
             // case CPUI_INT_AND: case CPUI_INT_OR: case CPUI_INT_XOR: break;
             OpCode::CPUI_INT_AND | OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR => {}
@@ -1118,16 +1507,35 @@ impl Rule for RuleShiftBitops {
             _ => return 0,
         }
 
-        let outvn = data.obank().get(op).expect("RuleShiftBitops: stale op").get_out().expect(
-            "RuleShiftBitops: op has no output",
-        );
-        let numinput = data.obank().get(bitop).expect("RuleShiftBitops: stale bitop").num_input();
+        let outvn = data
+            .obank()
+            .get(op)
+            .expect("RuleShiftBitops: stale op")
+            .get_out()
+            .expect("RuleShiftBitops: op has no output");
+        let numinput = data
+            .obank()
+            .get(bitop)
+            .expect("RuleShiftBitops: stale bitop")
+            .num_input();
         let mut i = 0;
         while i < numinput {
-            let bin = data.obank().get(bitop).expect("RuleShiftBitops: stale bitop").get_in(i)
+            let bin = data
+                .obank()
+                .get(bitop)
+                .expect("RuleShiftBitops: stale bitop")
+                .get_in(i)
                 .expect("RuleShiftBitops: bitop input null");
-            let mut nzm = data.vbank().get(bin).expect("RuleShiftBitops: stale bitop in").get_nz_mask();
-            let out_size = data.vbank().get(outvn).expect("RuleShiftBitops: stale outvn").get_size();
+            let mut nzm = data
+                .vbank()
+                .get(bin)
+                .expect("RuleShiftBitops: stale bitop in")
+                .get_nz_mask();
+            let out_size = data
+                .vbank()
+                .get(outvn)
+                .expect("RuleShiftBitops: stale outvn")
+                .get_size();
             let mask = calc_mask(out_size);
             if leftshift {
                 nzm = pcode_left(nzm, sa);
@@ -1145,18 +1553,33 @@ impl Rule for RuleShiftBitops {
         match bitop_code {
             // case CPUI_INT_MULT: case CPUI_INT_AND:
             OpCode::CPUI_INT_MULT | OpCode::CPUI_INT_AND => {
-                let vn_size = data.vbank().get(vn).expect("RuleShiftBitops: stale vn").get_size();
+                let vn_size = data
+                    .vbank()
+                    .get(vn)
+                    .expect("RuleShiftBitops: stale vn")
+                    .get_size();
                 vn = data.new_constant(vn_size, 0);
-                data.op_set_input(op, vn, 0).expect("RuleShiftBitops: op_set_input const");
+                data.op_set_input(op, vn, 0)
+                    .expect("RuleShiftBitops: op_set_input const");
             }
             // case CPUI_INT_ADD: case CPUI_INT_XOR: case CPUI_INT_OR:
             OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_XOR | OpCode::CPUI_INT_OR => {
-                vn = data.obank().get(bitop).expect("RuleShiftBitops: stale bitop").get_in(1 - i)
+                vn = data
+                    .obank()
+                    .get(bitop)
+                    .expect("RuleShiftBitops: stale bitop")
+                    .get_in(1 - i)
                     .expect("RuleShiftBitops: bitop in (1-i) null");
-                if !data.vbank().get(vn).expect("RuleShiftBitops: stale vn").is_heritage_known() {
+                if !data
+                    .vbank()
+                    .get(vn)
+                    .expect("RuleShiftBitops: stale vn")
+                    .is_heritage_known()
+                {
                     return 0;
                 }
-                data.op_set_input(op, vn, 0).expect("RuleShiftBitops: op_set_input vn");
+                data.op_set_input(op, vn, 0)
+                    .expect("RuleShiftBitops: op_set_input vn");
             }
             _ => {}
         }
@@ -1194,52 +1617,105 @@ impl Rule for RuleRightShiftAnd {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        let const_vn = data.obank().get(op).expect("RuleRightShiftAnd: stale op").get_in(1).expect(
-            "RuleRightShiftAnd: op has no in1",
-        );
-        if !data.vbank().get(const_vn).expect("RuleRightShiftAnd: stale constVn").is_constant() {
+        let const_vn = data
+            .obank()
+            .get(op)
+            .expect("RuleRightShiftAnd: stale op")
+            .get_in(1)
+            .expect("RuleRightShiftAnd: op has no in1");
+        if !data
+            .vbank()
+            .get(const_vn)
+            .expect("RuleRightShiftAnd: stale constVn")
+            .is_constant()
+        {
             return 0;
         }
-        let in_vn = data.obank().get(op).expect("RuleRightShiftAnd: stale op").get_in(0).expect(
-            "RuleRightShiftAnd: op has no in0",
-        );
-        if !data.vbank().get(in_vn).expect("RuleRightShiftAnd: stale inVn").is_written() {
+        let in_vn = data
+            .obank()
+            .get(op)
+            .expect("RuleRightShiftAnd: stale op")
+            .get_in(0)
+            .expect("RuleRightShiftAnd: op has no in0");
+        if !data
+            .vbank()
+            .get(in_vn)
+            .expect("RuleRightShiftAnd: stale inVn")
+            .is_written()
+        {
             return 0;
         }
-        let and_op = data.vbank().get(in_vn).expect("RuleRightShiftAnd: stale inVn").get_def().expect(
-            "RuleRightShiftAnd: written inVn has no def",
-        );
-        if data.obank().get(and_op).expect("RuleRightShiftAnd: stale andOp").code()
+        let and_op = data
+            .vbank()
+            .get(in_vn)
+            .expect("RuleRightShiftAnd: stale inVn")
+            .get_def()
+            .expect("RuleRightShiftAnd: written inVn has no def");
+        if data
+            .obank()
+            .get(and_op)
+            .expect("RuleRightShiftAnd: stale andOp")
+            .code()
             != OpCode::CPUI_INT_AND
         {
             return 0;
         }
-        let mask_vn = data.obank().get(and_op).expect("RuleRightShiftAnd: stale andOp").get_in(1).expect(
-            "RuleRightShiftAnd: andOp has no in1",
-        );
-        if !data.vbank().get(mask_vn).expect("RuleRightShiftAnd: stale maskVn").is_constant() {
+        let mask_vn = data
+            .obank()
+            .get(and_op)
+            .expect("RuleRightShiftAnd: stale andOp")
+            .get_in(1)
+            .expect("RuleRightShiftAnd: andOp has no in1");
+        if !data
+            .vbank()
+            .get(mask_vn)
+            .expect("RuleRightShiftAnd: stale maskVn")
+            .is_constant()
+        {
             return 0;
         }
 
-        let sa = data.vbank().get(const_vn).expect("RuleRightShiftAnd: stale constVn").get_offset() as int4;
+        let sa = data
+            .vbank()
+            .get(const_vn)
+            .expect("RuleRightShiftAnd: stale constVn")
+            .get_offset() as int4;
         // sa is a data-derived p-code shift count that can be >= 64 (or negative
         // after the (int4) truncation); the C++ raw `>>` on the x86-64 reference
         // build masks the count to 6 bits (`>> 64` behaves like `>> 0`), so use
         // wshr (wrapping_shr, count taken mod 64) to replicate that exactly.
-        let mask = data.vbank().get(mask_vn).expect("RuleRightShiftAnd: stale maskVn").get_offset().wshr(sa as u32);
-        let root_vn = data.obank().get(and_op).expect("RuleRightShiftAnd: stale andOp").get_in(0).expect(
-            "RuleRightShiftAnd: andOp has no in0",
-        );
-        let root_size = data.vbank().get(root_vn).expect("RuleRightShiftAnd: stale rootVn").get_size();
+        let mask = data
+            .vbank()
+            .get(mask_vn)
+            .expect("RuleRightShiftAnd: stale maskVn")
+            .get_offset()
+            .wshr(sa as u32);
+        let root_vn = data
+            .obank()
+            .get(and_op)
+            .expect("RuleRightShiftAnd: stale andOp")
+            .get_in(0)
+            .expect("RuleRightShiftAnd: andOp has no in0");
+        let root_size = data
+            .vbank()
+            .get(root_vn)
+            .expect("RuleRightShiftAnd: stale rootVn")
+            .get_size();
         let full = calc_mask(root_size).wshr(sa as u32);
         if full != mask {
             return 0;
         }
-        if data.vbank().get(root_vn).expect("RuleRightShiftAnd: stale rootVn").is_free() {
+        if data
+            .vbank()
+            .get(root_vn)
+            .expect("RuleRightShiftAnd: stale rootVn")
+            .is_free()
+        {
             return 0;
         }
         // Bypass the INT_AND
-        data.op_set_input(op, root_vn, 0).expect("RuleRightShiftAnd: op_set_input");
+        data.op_set_input(op, root_vn, 0)
+            .expect("RuleRightShiftAnd: op_set_input");
         1
     }
 }
@@ -1273,7 +1749,10 @@ impl Rule for RuleIntLessEqual {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if data.replace_lessequal(op).expect("RuleIntLessEqual: replace_lessequal") {
+        if data
+            .replace_lessequal(op)
+            .expect("RuleIntLessEqual: replace_lessequal")
+        {
             1
         } else {
             0
@@ -1372,14 +1851,28 @@ impl Rule for RuleTermOrder {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        let vn1 = data.obank().get(op).expect("RuleTermOrder: stale op").get_in(0).expect(
-            "RuleTermOrder: op has no in0",
-        );
-        let vn2 = data.obank().get(op).expect("RuleTermOrder: stale op").get_in(1).expect(
-            "RuleTermOrder: op has no in1",
-        );
-        let vn1_const = data.vbank().get(vn1).expect("RuleTermOrder: stale vn1").is_constant();
-        let vn2_const = data.vbank().get(vn2).expect("RuleTermOrder: stale vn2").is_constant();
+        let vn1 = data
+            .obank()
+            .get(op)
+            .expect("RuleTermOrder: stale op")
+            .get_in(0)
+            .expect("RuleTermOrder: op has no in0");
+        let vn2 = data
+            .obank()
+            .get(op)
+            .expect("RuleTermOrder: stale op")
+            .get_in(1)
+            .expect("RuleTermOrder: op has no in1");
+        let vn1_const = data
+            .vbank()
+            .get(vn1)
+            .expect("RuleTermOrder: stale vn1")
+            .is_constant();
+        let vn2_const = data
+            .vbank()
+            .get(vn2)
+            .expect("RuleTermOrder: stale vn2")
+            .is_constant();
         if vn1_const && !vn2_const {
             // Reverse the order of the terms
             data.op_swap_input(op, 0, 1);
@@ -1412,21 +1905,44 @@ impl RulePullsubMulti {
     /// Compute minimum and maximum bytes being used (C++
     /// `RulePullsubMulti::minMaxUse`).  Reads only the IR, so it is portable.
     pub fn min_max_use(data: &Funcdata, vn: VarnodeId, max_byte: &mut int4, min_byte: &mut int4) {
-        let in_size = data.vbank().get(vn).expect("minMaxUse: stale vn").get_size();
+        let in_size = data
+            .vbank()
+            .get(vn)
+            .expect("minMaxUse: stale vn")
+            .get_size();
         *max_byte = -1;
         *min_byte = in_size;
-        let descs: Vec<OpId> = data.vbank().get(vn).expect("minMaxUse: stale vn").descend_iter().collect();
+        let descs: Vec<OpId> = data
+            .vbank()
+            .get(vn)
+            .expect("minMaxUse: stale vn")
+            .descend_iter()
+            .collect();
         for op in descs {
             let opc = data.obank().get(op).expect("minMaxUse: stale op").code();
             if opc == OpCode::CPUI_SUBPIECE {
-                let in1 = data.obank().get(op).expect("minMaxUse: stale op").get_in(1).expect(
-                    "minMaxUse: SUBPIECE has no in1",
-                );
-                let min = data.vbank().get(in1).expect("minMaxUse: stale in1").get_offset() as int4;
-                let outvn = data.obank().get(op).expect("minMaxUse: stale op").get_out().expect(
-                    "minMaxUse: SUBPIECE has no output",
-                );
-                let outsize = data.vbank().get(outvn).expect("minMaxUse: stale outvn").get_size();
+                let in1 = data
+                    .obank()
+                    .get(op)
+                    .expect("minMaxUse: stale op")
+                    .get_in(1)
+                    .expect("minMaxUse: SUBPIECE has no in1");
+                let min = data
+                    .vbank()
+                    .get(in1)
+                    .expect("minMaxUse: stale in1")
+                    .get_offset() as int4;
+                let outvn = data
+                    .obank()
+                    .get(op)
+                    .expect("minMaxUse: stale op")
+                    .get_out()
+                    .expect("minMaxUse: SUBPIECE has no output");
+                let outsize = data
+                    .vbank()
+                    .get(outvn)
+                    .expect("minMaxUse: stale outvn")
+                    .get_size();
                 let max = min + outsize - 1;
                 if min < *min_byte {
                     *min_byte = min;
@@ -1467,7 +1983,10 @@ impl RulePullsubMulti {
         shift: u32,
     ) -> KunaResult<VarnodeId> {
         // Address newaddr; PcodeOp *new_op; Varnode *outvn;
-        let basev = data.vbank().get(basevn).expect("build_subpiece: stale basevn");
+        let basev = data
+            .vbank()
+            .get(basevn)
+            .expect("build_subpiece: stale basevn");
         let base_is_input = basev.is_input();
         let base_is_written = basev.is_written();
         let base_addr = basev.get_addr().clone();
@@ -1478,7 +1997,11 @@ impl RulePullsubMulti {
             data.bblocks_block_start(bb0)
         } else {
             let def = basev.get_def().expect("build_subpiece: undefined pullsub");
-            data.obank().get(def).expect("build_subpiece: stale def").get_addr().clone()
+            data.obank()
+                .get(def)
+                .expect("build_subpiece: stale def")
+                .get_addr()
+                .clone()
         };
 
         // Compute the truncated-piece address (smalladdr1) and the usetmp flag.
@@ -1551,10 +2074,12 @@ impl RulePullsubMulti {
             data.op_insert_begin(new_op, bb0);
         } else {
             debug_assert!(base_is_written);
-            let def =
-                data.vbank().get(basevn).expect("build_subpiece: stale basevn").get_def().expect(
-                    "build_subpiece: undefined pullsub",
-                );
+            let def = data
+                .vbank()
+                .get(basevn)
+                .expect("build_subpiece: stale basevn")
+                .get_def()
+                .expect("build_subpiece: undefined pullsub");
             data.op_insert_after(new_op, def);
         }
         Ok(outvn)
@@ -1568,18 +2093,26 @@ impl RulePullsubMulti {
         outsize: int4,
         shift: uintb,
     ) -> Option<VarnodeId> {
-        let basev = data.vbank().get(basevn).expect("find_subpiece: stale basevn");
+        let basev = data
+            .vbank()
+            .get(basevn)
+            .expect("find_subpiece: stale basevn");
         let base_is_input = basev.is_input();
         let base_is_written = basev.is_written();
         let base_def = basev.get_def();
         let descs: Vec<OpId> = basev.descend_iter().collect();
         for prevop in descs {
-            let pop = data.obank().get(prevop).expect("find_subpiece: stale prevop");
+            let pop = data
+                .obank()
+                .get(prevop)
+                .expect("find_subpiece: stale prevop");
             if pop.code() != OpCode::CPUI_SUBPIECE {
                 continue;
             }
             if base_is_input {
-                let par = pop.get_parent().expect("find_subpiece: prevop has no parent");
+                let par = pop
+                    .get_parent()
+                    .expect("find_subpiece: prevop has no parent");
                 if data.bblocks_ref().block(par).get_index() != 0 {
                     continue;
                 }
@@ -1588,8 +2121,11 @@ impl RulePullsubMulti {
                 continue;
             }
             let def = base_def.expect("find_subpiece: written basevn has no def");
-            let def_par =
-                data.obank().get(def).expect("find_subpiece: stale def").get_parent();
+            let def_par = data
+                .obank()
+                .get(def)
+                .expect("find_subpiece: stale def")
+                .get_parent();
             if def_par != pop.get_parent() {
                 continue;
             }
@@ -1597,8 +2133,16 @@ impl RulePullsubMulti {
             let in0 = pop.get_in(0);
             let out = pop.get_out().expect("find_subpiece: SUBPIECE has no out");
             let in1 = pop.get_in(1).expect("find_subpiece: SUBPIECE has no in1");
-            let out_size = data.vbank().get(out).expect("find_subpiece: stale out").get_size();
-            let in1_off = data.vbank().get(in1).expect("find_subpiece: stale in1").get_offset();
+            let out_size = data
+                .vbank()
+                .get(out)
+                .expect("find_subpiece: stale out")
+                .get_size();
+            let in1_off = data
+                .vbank()
+                .get(in1)
+                .expect("find_subpiece: stale in1")
+                .get_offset();
             if in0 == Some(basevn) && out_size == outsize && in1_off == shift {
                 return Some(out);
             }
@@ -1615,23 +2159,47 @@ impl RulePullsubMulti {
         _max_byte: int4,
         min_byte: int4,
     ) -> KunaResult<()> {
-        let new_size = data.vbank().get(new_vn).expect("replace_descendants: stale new_vn").get_size();
+        let new_size = data
+            .vbank()
+            .get(new_vn)
+            .expect("replace_descendants: stale new_vn")
+            .get_size();
         // Snapshot the descend list (C++ advances the iterator before mutating).
-        let descs: Vec<OpId> =
-            data.vbank().get(orig_vn).expect("replace_descendants: stale orig").descend_iter().collect();
+        let descs: Vec<OpId> = data
+            .vbank()
+            .get(orig_vn)
+            .expect("replace_descendants: stale orig")
+            .descend_iter()
+            .collect();
         for op in descs {
-            let opc = data.obank().get(op).expect("replace_descendants: stale op").code();
+            let opc = data
+                .obank()
+                .get(op)
+                .expect("replace_descendants: stale op")
+                .code();
             if opc == OpCode::CPUI_SUBPIECE {
-                let in1 = data.obank().get(op).expect("replace_descendants: stale op").get_in(1).expect(
-                    "replace_descendants: SUBPIECE has no in1",
-                );
-                let trunc_amount =
-                    data.vbank().get(in1).expect("replace_descendants: stale in1").get_offset() as int4;
+                let in1 = data
+                    .obank()
+                    .get(op)
+                    .expect("replace_descendants: stale op")
+                    .get_in(1)
+                    .expect("replace_descendants: SUBPIECE has no in1");
+                let trunc_amount = data
+                    .vbank()
+                    .get(in1)
+                    .expect("replace_descendants: stale in1")
+                    .get_offset() as int4;
                 let outsz = {
-                    let outv = data.obank().get(op).expect("replace_descendants: stale op").get_out().expect(
-                        "replace_descendants: SUBPIECE has no out",
-                    );
-                    data.vbank().get(outv).expect("replace_descendants: stale out").get_size()
+                    let outv = data
+                        .obank()
+                        .get(op)
+                        .expect("replace_descendants: stale op")
+                        .get_out()
+                        .expect("replace_descendants: SUBPIECE has no out");
+                    data.vbank()
+                        .get(outv)
+                        .expect("replace_descendants: stale out")
+                        .get_size()
                 };
                 data.op_set_input(op, new_vn, 0)?;
                 if new_size == outsz {
@@ -1676,42 +2244,70 @@ impl Rule for RulePullsubMulti {
         let mut max_byte: int4 = 0;
         let mut min_byte: int4 = 0;
 
-        let vn = data.obank().get(op).expect("RulePullsubMulti: stale op").get_in(0).expect(
-            "RulePullsubMulti: SUBPIECE has no in0",
-        );
-        if !data.vbank().get(vn).expect("RulePullsubMulti: stale vn").is_written() {
+        let vn = data
+            .obank()
+            .get(op)
+            .expect("RulePullsubMulti: stale op")
+            .get_in(0)
+            .expect("RulePullsubMulti: SUBPIECE has no in0");
+        if !data
+            .vbank()
+            .get(vn)
+            .expect("RulePullsubMulti: stale vn")
+            .is_written()
+        {
             return 0;
         }
-        let mult = data.vbank().get(vn).expect("RulePullsubMulti: stale vn").get_def().expect(
-            "RulePullsubMulti: written vn has no def",
-        );
-        if data.obank().get(mult).expect("RulePullsubMulti: stale mult").code()
+        let mult = data
+            .vbank()
+            .get(vn)
+            .expect("RulePullsubMulti: stale vn")
+            .get_def()
+            .expect("RulePullsubMulti: written vn has no def");
+        if data
+            .obank()
+            .get(mult)
+            .expect("RulePullsubMulti: stale mult")
+            .code()
             != OpCode::CPUI_MULTIEQUAL
         {
             return 0;
         }
         // We only pull up, do not pull "down" to bottom of loop
-        let parent = data.obank().get(mult).expect("RulePullsubMulti: stale mult").get_parent().expect(
-            "RulePullsubMulti: mult has no parent",
-        );
+        let parent = data
+            .obank()
+            .get(mult)
+            .expect("RulePullsubMulti: stale mult")
+            .get_parent()
+            .expect("RulePullsubMulti: mult has no parent");
         if data.bblocks_ref().block(parent).has_loop_in() {
             return 0;
         }
         // Figure out what part of -vn- is used
         RulePullsubMulti::min_max_use(data, vn, &mut max_byte, &mut min_byte);
         let new_size = max_byte - min_byte + 1;
-        let vn_size = data.vbank().get(vn).expect("RulePullsubMulti: stale vn").get_size();
+        let vn_size = data
+            .vbank()
+            .get(vn)
+            .expect("RulePullsubMulti: stale vn")
+            .get_size();
         if max_byte < min_byte || new_size >= vn_size {
             return 0;
         }
         if !RulePullsubMulti::acceptable_size(new_size) {
             return 0;
         }
-        let outvn = data.obank().get(op).expect("RulePullsubMulti: stale op").get_out().expect(
-            "RulePullsubMulti: SUBPIECE has no output",
-        );
+        let outvn = data
+            .obank()
+            .get(op)
+            .expect("RulePullsubMulti: stale op")
+            .get_out()
+            .expect("RulePullsubMulti: SUBPIECE has no output");
         // Don't pull apart double precision
-        let ov = data.vbank().get(outvn).expect("RulePullsubMulti: stale outvn");
+        let ov = data
+            .vbank()
+            .get(outvn)
+            .expect("RulePullsubMulti: stale outvn");
         if ov.is_precis_lo() || ov.is_precis_hi() {
             return 0;
         }
@@ -1727,24 +2323,55 @@ impl Rule for RulePullsubMulti {
         };
         // Check for use of bits outside of what gets truncated later
         consume = !consume;
-        let branches = data.obank().get(mult).expect("RulePullsubMulti: stale mult").num_input();
+        let branches = data
+            .obank()
+            .get(mult)
+            .expect("RulePullsubMulti: stale mult")
+            .num_input();
         for i in 0..branches {
-            let in_vn = data.obank().get(mult).expect("RulePullsubMulti: stale mult").get_in(i).expect(
-                "RulePullsubMulti: mult input null",
-            );
+            let in_vn = data
+                .obank()
+                .get(mult)
+                .expect("RulePullsubMulti: stale mult")
+                .get_in(i)
+                .expect("RulePullsubMulti: mult input null");
             // Check if bits not truncated are still used
-            let in_consume = data.vbank().get(in_vn).expect("RulePullsubMulti: stale inVn").get_consume();
+            let in_consume = data
+                .vbank()
+                .get(in_vn)
+                .expect("RulePullsubMulti: stale inVn")
+                .get_consume();
             if (consume & in_consume) != 0 {
                 // Check if there's an extension that matches the truncation
-                let in_written = data.vbank().get(in_vn).expect("RulePullsubMulti: stale inVn").is_written();
+                let in_written = data
+                    .vbank()
+                    .get(in_vn)
+                    .expect("RulePullsubMulti: stale inVn")
+                    .is_written();
                 if min_byte == 0 && in_written {
-                    let def_op = data.vbank().get(in_vn).expect("RulePullsubMulti: stale inVn").get_def()
+                    let def_op = data
+                        .vbank()
+                        .get(in_vn)
+                        .expect("RulePullsubMulti: stale inVn")
+                        .get_def()
                         .expect("RulePullsubMulti: written inVn has no def");
-                    let opc = data.obank().get(def_op).expect("RulePullsubMulti: stale defOp").code();
+                    let opc = data
+                        .obank()
+                        .get(def_op)
+                        .expect("RulePullsubMulti: stale defOp")
+                        .code();
                     if opc == OpCode::CPUI_INT_ZEXT || opc == OpCode::CPUI_INT_SEXT {
-                        let def_in0 = data.obank().get(def_op).expect("RulePullsubMulti: stale defOp").get_in(0)
+                        let def_in0 = data
+                            .obank()
+                            .get(def_op)
+                            .expect("RulePullsubMulti: stale defOp")
+                            .get_in(0)
                             .expect("RulePullsubMulti: ext has no in0");
-                        let def_in0_size = data.vbank().get(def_in0).expect("RulePullsubMulti: stale def_in0").get_size();
+                        let def_in0_size = data
+                            .vbank()
+                            .get(def_in0)
+                            .expect("RulePullsubMulti: stale def_in0")
+                            .get_size();
                         if new_size == def_in0_size {
                             // We have matching extension, so new SUBPIECE will cancel anyway
                             continue;
@@ -1756,9 +2383,18 @@ impl Rule for RulePullsubMulti {
         }
 
         // Address smalladdr2;
-        let vn_addr = data.vbank().get(vn).expect("RulePullsubMulti: stale vn").get_addr().clone();
-        let vn_space_be =
-            data.vbank().get(vn).expect("RulePullsubMulti: stale vn").get_space().is_big_endian();
+        let vn_addr = data
+            .vbank()
+            .get(vn)
+            .expect("RulePullsubMulti: stale vn")
+            .get_addr()
+            .clone();
+        let vn_space_be = data
+            .vbank()
+            .get(vn)
+            .expect("RulePullsubMulti: stale vn")
+            .get_space()
+            .is_big_endian();
         let mut smalladdr2 = if !vn_space_be {
             &vn_addr + min_byte as i64
         } else {
@@ -1768,11 +2404,19 @@ impl Rule for RulePullsubMulti {
         // vector<Varnode *> params; for each MULTIEQUAL branch build/find a SUBPIECE.
         let mut params: Vec<VarnodeId> = Vec::with_capacity(branches as usize);
         for i in 0..branches {
-            let vn_piece = data.obank().get(mult).expect("RulePullsubMulti: stale mult").get_in(i).expect(
-                "RulePullsubMulti: mult input null",
-            );
+            let vn_piece = data
+                .obank()
+                .get(mult)
+                .expect("RulePullsubMulti: stale mult")
+                .get_in(i)
+                .expect("RulePullsubMulti: mult input null");
             // We have to be wary of exponential splittings here: reuse a previous SUBPIECE.
-            let vn_sub = match RulePullsubMulti::find_subpiece(data, vn_piece, new_size, min_byte as uintb) {
+            let vn_sub = match RulePullsubMulti::find_subpiece(
+                data,
+                vn_piece,
+                new_size,
+                min_byte as uintb,
+            ) {
                 Some(s) => s,
                 None => RulePullsubMulti::build_subpiece(
                     data,
@@ -1786,10 +2430,18 @@ impl Rule for RulePullsubMulti {
         }
 
         // Build new multiequal near original multiequal.
-        let mult_addr = data.obank().get(mult).expect("RulePullsubMulti: stale mult").get_addr().clone();
-        let mult_parent = data.obank().get(mult).expect("RulePullsubMulti: stale mult").get_parent().expect(
-            "RulePullsubMulti: mult has no parent",
-        );
+        let mult_addr = data
+            .obank()
+            .get(mult)
+            .expect("RulePullsubMulti: stale mult")
+            .get_addr()
+            .clone();
+        let mult_parent = data
+            .obank()
+            .get(mult)
+            .expect("RulePullsubMulti: stale mult")
+            .get_parent()
+            .expect("RulePullsubMulti: mult has no parent");
         let new_multi = data.new_op(params.len() as int4, mult_addr);
         smalladdr2
             .renormalize(new_size, data.get_arch().manage())
@@ -1798,7 +2450,8 @@ impl Rule for RulePullsubMulti {
             .new_varnode_out(new_size, &smalladdr2, new_multi)
             .expect("RulePullsubMulti: newVarnodeOut");
         data.op_set_opcode_code(new_multi, OpCode::CPUI_MULTIEQUAL);
-        data.op_set_all_input(new_multi, &params).expect("RulePullsubMulti: opSetAllInput");
+        data.op_set_all_input(new_multi, &params)
+            .expect("RulePullsubMulti: opSetAllInput");
         data.op_insert_begin(new_multi, mult_parent);
 
         RulePullsubMulti::replace_descendants(data, vn, new_vn, max_byte, min_byte)
@@ -1840,27 +2493,49 @@ impl Rule for RulePullsubIndirect {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        let vn = data.obank().get(op).expect("RulePullsubIndirect: stale op").get_in(0).expect(
-            "RulePullsubIndirect: SUBPIECE has no in0",
-        );
-        if !data.vbank().get(vn).expect("RulePullsubIndirect: stale vn").is_written() {
+        let vn = data
+            .obank()
+            .get(op)
+            .expect("RulePullsubIndirect: stale op")
+            .get_in(0)
+            .expect("RulePullsubIndirect: SUBPIECE has no in0");
+        if !data
+            .vbank()
+            .get(vn)
+            .expect("RulePullsubIndirect: stale vn")
+            .is_written()
+        {
             return 0;
         }
-        let vn_size = data.vbank().get(vn).expect("RulePullsubIndirect: stale vn").get_size();
+        let vn_size = data
+            .vbank()
+            .get(vn)
+            .expect("RulePullsubIndirect: stale vn")
+            .get_size();
         if vn_size > SIZEOF_UINTB {
             return 0;
         }
-        let indir = data.vbank().get(vn).expect("RulePullsubIndirect: stale vn").get_def().expect(
-            "RulePullsubIndirect: written vn has no def",
-        );
-        if data.obank().get(indir).expect("RulePullsubIndirect: stale indir").code()
+        let indir = data
+            .vbank()
+            .get(vn)
+            .expect("RulePullsubIndirect: stale vn")
+            .get_def()
+            .expect("RulePullsubIndirect: written vn has no def");
+        if data
+            .obank()
+            .get(indir)
+            .expect("RulePullsubIndirect: stale indir")
+            .code()
             != OpCode::CPUI_INDIRECT
         {
             return 0;
         }
-        let indir_in1 = data.obank().get(indir).expect("RulePullsubIndirect: stale indir").get_in(1).expect(
-            "RulePullsubIndirect: INDIRECT has no in1",
-        );
+        let indir_in1 = data
+            .obank()
+            .get(indir)
+            .expect("RulePullsubIndirect: stale indir")
+            .get_in(1)
+            .expect("RulePullsubIndirect: INDIRECT has no in1");
         let in1_space_type = data
             .vbank()
             .get(indir_in1)
@@ -1881,10 +2556,20 @@ impl Rule for RulePullsubIndirect {
             .get_addr()
             .get_offset();
         let targ_op = crate::funcdata_varnode::op_iop_decode(iop_off);
-        if data.obank().get(targ_op).map(|o| o.is_dead()).unwrap_or(true) {
+        if data
+            .obank()
+            .get(targ_op)
+            .map(|o| o.is_dead())
+            .unwrap_or(true)
+        {
             return 0;
         }
-        if data.vbank().get(vn).expect("RulePullsubIndirect: stale vn").is_addr_force() {
+        if data
+            .vbank()
+            .get(vn)
+            .expect("RulePullsubIndirect: stale vn")
+            .is_addr_force()
+        {
             return 0;
         }
 
@@ -1901,31 +2586,52 @@ impl Rule for RulePullsubIndirect {
         if super::kuna_stackstoreguard::keeps_store_indirect_whole(data, vn, targ_op) {
             return 0;
         }
-        let outvn = data.obank().get(op).expect("RulePullsubIndirect: stale op").get_out().expect(
-            "RulePullsubIndirect: SUBPIECE has no output",
-        );
+        let outvn = data
+            .obank()
+            .get(op)
+            .expect("RulePullsubIndirect: stale op")
+            .get_out()
+            .expect("RulePullsubIndirect: SUBPIECE has no output");
         // Don't pull apart double precision
         {
-            let ov = data.vbank().get(outvn).expect("RulePullsubIndirect: stale outvn");
+            let ov = data
+                .vbank()
+                .get(outvn)
+                .expect("RulePullsubIndirect: stale outvn");
             if ov.is_precis_lo() || ov.is_precis_hi() {
                 return 0;
             }
         }
 
         let consume: uintb = !(calc_mask(new_size) << (8 * min_byte));
-        let indir_in0 = data.obank().get(indir).expect("RulePullsubIndirect: stale indir").get_in(0).expect(
-            "RulePullsubIndirect: INDIRECT has no in0",
-        );
-        let in0_consume =
-            data.vbank().get(indir_in0).expect("RulePullsubIndirect: stale indir_in0").get_consume();
+        let indir_in0 = data
+            .obank()
+            .get(indir)
+            .expect("RulePullsubIndirect: stale indir")
+            .get_in(0)
+            .expect("RulePullsubIndirect: INDIRECT has no in0");
+        let in0_consume = data
+            .vbank()
+            .get(indir_in0)
+            .expect("RulePullsubIndirect: stale indir_in0")
+            .get_consume();
         if (consume & in0_consume) != 0 {
             return 0;
         }
 
         // Compute the truncated-piece address (smalladdr2).
-        let vn_addr = data.vbank().get(vn).expect("RulePullsubIndirect: stale vn").get_addr().clone();
-        let vn_be =
-            data.vbank().get(vn).expect("RulePullsubIndirect: stale vn").get_space().is_big_endian();
+        let vn_addr = data
+            .vbank()
+            .get(vn)
+            .expect("RulePullsubIndirect: stale vn")
+            .get_addr()
+            .clone();
+        let vn_be = data
+            .vbank()
+            .get(vn)
+            .expect("RulePullsubIndirect: stale vn")
+            .get_space()
+            .is_big_endian();
         let smalladdr2 = if !vn_be {
             &vn_addr + min_byte as i64
         } else {
@@ -1933,36 +2639,54 @@ impl Rule for RulePullsubIndirect {
         };
 
         let small2: VarnodeId;
-        if data.obank().get(indir).expect("RulePullsubIndirect: stale indir").is_indirect_creation() {
-            let possibleout =
-                !data.vbank().get(indir_in0).expect("RulePullsubIndirect: stale indir_in0").is_indirect_zero();
+        if data
+            .obank()
+            .get(indir)
+            .expect("RulePullsubIndirect: stale indir")
+            .is_indirect_creation()
+        {
+            let possibleout = !data
+                .vbank()
+                .get(indir_in0)
+                .expect("RulePullsubIndirect: stale indir_in0")
+                .is_indirect_zero();
             let new_ind = data.new_indirect_creation(targ_op, &smalladdr2, new_size, possibleout);
-            small2 = data.obank().get(new_ind).expect("RulePullsubIndirect: stale new_ind").get_out().expect(
-                "RulePullsubIndirect: newIndirectCreation has no out",
-            );
+            small2 = data
+                .obank()
+                .get(new_ind)
+                .expect("RulePullsubIndirect: stale new_ind")
+                .get_out()
+                .expect("RulePullsubIndirect: newIndirectCreation has no out");
         } else {
             let basevn = indir_in0;
-            let small1 = match RulePullsubMulti::find_subpiece(data, basevn, new_size, min_byte as uintb) {
-                Some(s) => s,
-                None => RulePullsubMulti::build_subpiece(
-                    data,
-                    basevn,
-                    new_size as u32,
-                    min_byte as u32,
-                )
-                .expect("RulePullsubIndirect: build_subpiece"),
-            };
+            let small1 =
+                match RulePullsubMulti::find_subpiece(data, basevn, new_size, min_byte as uintb) {
+                    Some(s) => s,
+                    None => RulePullsubMulti::build_subpiece(
+                        data,
+                        basevn,
+                        new_size as u32,
+                        min_byte as u32,
+                    )
+                    .expect("RulePullsubIndirect: build_subpiece"),
+                };
             // Create new indirect near original indirect.
-            let indir_addr =
-                data.obank().get(indir).expect("RulePullsubIndirect: stale indir").get_addr().clone();
+            let indir_addr = data
+                .obank()
+                .get(indir)
+                .expect("RulePullsubIndirect: stale indir")
+                .get_addr()
+                .clone();
             let new_ind = data.new_op(2, indir_addr);
             data.op_set_opcode_code(new_ind, OpCode::CPUI_INDIRECT);
             small2 = data
                 .new_varnode_out(new_size, &smalladdr2, new_ind)
                 .expect("RulePullsubIndirect: newVarnodeOut");
-            data.op_set_input(new_ind, small1, 0).expect("RulePullsubIndirect: opSetInput 0");
+            data.op_set_input(new_ind, small1, 0)
+                .expect("RulePullsubIndirect: opSetInput 0");
             let iop = data.new_varnode_iop(targ_op);
-            data.op_set_input(new_ind, iop, 1).expect("RulePullsubIndirect: opSetInput 1");
+            data.op_set_input(new_ind, iop, 1)
+                .expect("RulePullsubIndirect: opSetInput 1");
             data.op_insert_before(new_ind, indir);
         }
 
@@ -1998,10 +2722,17 @@ impl RulePushMulti {
         bb: crate::context::BlockId,
         earliest: Option<OpId>,
     ) -> Option<OpId> {
-        let descend: Vec<OpId> =
-            data.vbank().get(in1).expect("find_substitute: stale in1").descend_iter().collect();
+        let descend: Vec<OpId> = data
+            .vbank()
+            .get(in1)
+            .expect("find_substitute: stale in1")
+            .descend_iter()
+            .collect();
         for op in descend {
-            let opref = data.obank().get(op).expect("find_substitute: stale descend op");
+            let opref = data
+                .obank()
+                .get(op)
+                .expect("find_substitute: stale descend op");
             if opref.get_parent() != Some(bb) {
                 continue;
             }
@@ -2033,13 +2764,27 @@ impl RulePushMulti {
             return None;
         }
         // in1 and in2 must be written to not be equal and pass functional equality test
-        let op1 = data.vbank().get(in1).expect("find_substitute: stale in1").get_def().expect(
-            "find_substitute: in1 not written (functionalEqualityLevel==0 implies written)",
-        );
-        let op2 = data.vbank().get(in2).expect("find_substitute: stale in2").get_def().expect(
-            "find_substitute: in2 not written (functionalEqualityLevel==0 implies written)",
-        );
-        let num = data.obank().get(op1).expect("find_substitute: stale op1").num_input();
+        let op1 = data
+            .vbank()
+            .get(in1)
+            .expect("find_substitute: stale in1")
+            .get_def()
+            .expect(
+                "find_substitute: in1 not written (functionalEqualityLevel==0 implies written)",
+            );
+        let op2 = data
+            .vbank()
+            .get(in2)
+            .expect("find_substitute: stale in2")
+            .get_def()
+            .expect(
+                "find_substitute: in2 not written (functionalEqualityLevel==0 implies written)",
+            );
+        let num = data
+            .obank()
+            .get(op1)
+            .expect("find_substitute: stale op1")
+            .num_input();
         for i in 0..num {
             let vn = data
                 .obank()
@@ -2047,10 +2792,21 @@ impl RulePushMulti {
                 .expect("find_substitute: stale op1")
                 .get_in(i)
                 .expect("find_substitute: op1 null input");
-            if data.vbank().get(vn).expect("find_substitute: stale vn").is_constant() {
+            if data
+                .vbank()
+                .get(vn)
+                .expect("find_substitute: stale vn")
+                .is_constant()
+            {
                 continue;
             }
-            if Some(vn) == data.obank().get(op2).expect("find_substitute: stale op2").get_in(i) {
+            if Some(vn)
+                == data
+                    .obank()
+                    .get(op2)
+                    .expect("find_substitute: stale op2")
+                    .get_in(i)
+            {
                 return data.cse_find_in_block(op1, vn, bb, earliest);
             }
         }
@@ -2071,25 +2827,57 @@ impl Rule for RulePushMulti {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if data.obank().get(op).expect("RulePushMulti: stale op").num_input() != 2 {
+        if data
+            .obank()
+            .get(op)
+            .expect("RulePushMulti: stale op")
+            .num_input()
+            != 2
+        {
             return 0;
         }
-        let in1 = data.obank().get(op).expect("RulePushMulti: stale op").get_in(0).expect(
-            "RulePushMulti: MULTIEQUAL has no in0",
-        );
-        let in2 = data.obank().get(op).expect("RulePushMulti: stale op").get_in(1).expect(
-            "RulePushMulti: MULTIEQUAL has no in1",
-        );
-        if !data.vbank().get(in1).expect("RulePushMulti: stale in1").is_written() {
+        let in1 = data
+            .obank()
+            .get(op)
+            .expect("RulePushMulti: stale op")
+            .get_in(0)
+            .expect("RulePushMulti: MULTIEQUAL has no in0");
+        let in2 = data
+            .obank()
+            .get(op)
+            .expect("RulePushMulti: stale op")
+            .get_in(1)
+            .expect("RulePushMulti: MULTIEQUAL has no in1");
+        if !data
+            .vbank()
+            .get(in1)
+            .expect("RulePushMulti: stale in1")
+            .is_written()
+        {
             return 0;
         }
-        if !data.vbank().get(in2).expect("RulePushMulti: stale in2").is_written() {
+        if !data
+            .vbank()
+            .get(in2)
+            .expect("RulePushMulti: stale in2")
+            .is_written()
+        {
             return 0;
         }
-        if data.vbank().get(in1).expect("RulePushMulti: stale in1").is_spacebase() {
+        if data
+            .vbank()
+            .get(in1)
+            .expect("RulePushMulti: stale in1")
+            .is_spacebase()
+        {
             return 0;
         }
-        if data.vbank().get(in2).expect("RulePushMulti: stale in2").is_spacebase() {
+        if data
+            .vbank()
+            .get(in2)
+            .expect("RulePushMulti: stale in2")
+            .is_spacebase()
+        {
             return 0;
         }
 
@@ -2109,11 +2897,20 @@ impl Rule for RulePushMulti {
         if res > 1 {
             return 0;
         }
-        let op1 = data.vbank().get(in1).expect("RulePushMulti: stale in1").get_def().expect(
-            "RulePushMulti: in1 written but no def",
-        );
+        let op1 = data
+            .vbank()
+            .get(in1)
+            .expect("RulePushMulti: stale in1")
+            .get_def()
+            .expect("RulePushMulti: in1 written but no def");
         // SUBPIECE is pulled not pushed
-        if data.obank().get(op1).expect("RulePushMulti: stale op1").code() == OpCode::CPUI_SUBPIECE {
+        if data
+            .obank()
+            .get(op1)
+            .expect("RulePushMulti: stale op1")
+            .code()
+            == OpCode::CPUI_SUBPIECE
+        {
             return 0;
         }
 
@@ -2131,7 +2928,11 @@ impl Rule for RulePushMulti {
             .expect("RulePushMulti: MULTIEQUAL has no output");
         let earliest = data.block_earliest_use(bl, outvn);
 
-        let op1_code = data.obank().get(op1).expect("RulePushMulti: stale op1").code();
+        let op1_code = data
+            .obank()
+            .get(op1)
+            .expect("RulePushMulti: stale op1")
+            .code();
         if op1_code == OpCode::CPUI_COPY {
             if res == 0 {
                 return 0;
@@ -2141,11 +2942,11 @@ impl Rule for RulePushMulti {
             if crate::p3_dataflow::kuna_pointeestorekeep::keeps_join(data, op) {
                 return 0;
             }
-            let substitute = match RulePushMulti::find_substitute(data, buf1[0], buf2[0], bl, earliest)
-            {
-                None => return 0,
-                Some(s) => s,
-            };
+            let substitute =
+                match RulePushMulti::find_substitute(data, buf1[0], buf2[0], bl, earliest) {
+                    None => return 0,
+                    Some(s) => s,
+                };
             // Eliminate this op in favor of the shadowed merge
             let subout = data
                 .obank()
@@ -2153,14 +2954,18 @@ impl Rule for RulePushMulti {
                 .expect("RulePushMulti: stale substitute")
                 .get_out()
                 .expect("RulePushMulti: substitute has no output");
-            data.total_replace(outvn, subout).expect("RulePushMulti: totalReplace (COPY case)");
+            data.total_replace(outvn, subout)
+                .expect("RulePushMulti: totalReplace (COPY case)");
             data.op_destroy(op);
             return 1;
         }
 
-        let op2 = data.vbank().get(in2).expect("RulePushMulti: stale in2").get_def().expect(
-            "RulePushMulti: in2 written but no def",
-        );
+        let op2 = data
+            .vbank()
+            .get(in2)
+            .expect("RulePushMulti: stale in2")
+            .get_def()
+            .expect("RulePushMulti: in2 written but no def");
         if data.lone_descend(in1) != Some(op) {
             return 0;
         }
@@ -2171,29 +2976,52 @@ impl Rule for RulePushMulti {
         // C++ binds outvn here; already bound above.
 
         // Move MULTIEQUAL output to op1
-        data.op_set_output(op1, outvn).expect("RulePushMulti: opSetOutput");
+        data.op_set_output(op1, outvn)
+            .expect("RulePushMulti: opSetOutput");
         // Move the unified op
         data.op_uninsert(op1);
         if res == 1 {
-            let slot1 = data.obank().get(op1).expect("RulePushMulti: stale op1").get_slot(buf1[0]);
+            let slot1 = data
+                .obank()
+                .get(op1)
+                .expect("RulePushMulti: stale op1")
+                .get_slot(buf1[0]);
             let substitute =
                 match RulePushMulti::find_substitute(data, buf1[0], buf2[0], bl, earliest) {
                     Some(s) => s,
                     None => {
-                        let op_addr =
-                            data.obank().get(op).expect("RulePushMulti: stale op").get_addr().clone();
+                        let op_addr = data
+                            .obank()
+                            .get(op)
+                            .expect("RulePushMulti: stale op")
+                            .get_addr()
+                            .clone();
                         let substitute = data.new_op(2, op_addr);
                         set_opcode_typed(data, substitute, OpCode::CPUI_MULTIEQUAL);
                         // Try to preserve the storage location if the input varnodes share it
                         // But don't propagate addrtied varnode (thru MULTIEQUAL)
-                        let b1_addr =
-                            data.vbank().get(buf1[0]).expect("RulePushMulti: stale buf1").get_addr().clone();
-                        let b2_addr =
-                            data.vbank().get(buf2[0]).expect("RulePushMulti: stale buf2").get_addr().clone();
-                        let b1_size =
-                            data.vbank().get(buf1[0]).expect("RulePushMulti: stale buf1").get_size();
-                        let b1_addrtied =
-                            data.vbank().get(buf1[0]).expect("RulePushMulti: stale buf1").is_addr_tied();
+                        let b1_addr = data
+                            .vbank()
+                            .get(buf1[0])
+                            .expect("RulePushMulti: stale buf1")
+                            .get_addr()
+                            .clone();
+                        let b2_addr = data
+                            .vbank()
+                            .get(buf2[0])
+                            .expect("RulePushMulti: stale buf2")
+                            .get_addr()
+                            .clone();
+                        let b1_size = data
+                            .vbank()
+                            .get(buf1[0])
+                            .expect("RulePushMulti: stale buf1")
+                            .get_size();
+                        let b1_addrtied = data
+                            .vbank()
+                            .get(buf1[0])
+                            .expect("RulePushMulti: stale buf1")
+                            .is_addr_tied();
                         if b1_addr == b2_addr && !b1_addrtied {
                             data.new_varnode_out(b1_size, &b1_addr, substitute)
                                 .expect("RulePushMulti: newVarnodeOut");
@@ -2215,7 +3043,8 @@ impl Rule for RulePushMulti {
                 .expect("RulePushMulti: stale substitute")
                 .get_out()
                 .expect("RulePushMulti: substitute has no output");
-            data.op_set_input(op1, subout, slot1).expect("RulePushMulti: op1 slot1 input");
+            data.op_set_input(op1, subout, slot1)
+                .expect("RulePushMulti: op1 slot1 input");
             // Complete move of unified op into merge block
             data.op_insert_after(op1, substitute);
         } else {
@@ -2259,16 +3088,27 @@ impl Rule for RuleNotDistribute {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        let in0 = data.obank().get(op).expect("RuleNotDistribute: stale op").get_in(0).expect(
-            "RuleNotDistribute: NEGATE has no in0",
-        );
-        let compop = data.vbank().get(in0).expect("RuleNotDistribute: stale in0").get_def();
+        let in0 = data
+            .obank()
+            .get(op)
+            .expect("RuleNotDistribute: stale op")
+            .get_in(0)
+            .expect("RuleNotDistribute: NEGATE has no in0");
+        let compop = data
+            .vbank()
+            .get(in0)
+            .expect("RuleNotDistribute: stale in0")
+            .get_def();
         let compop = match compop {
             None => return 0,
             Some(c) => c,
         };
         //   default: return 0; }
-        let comp_code = data.obank().get(compop).expect("RuleNotDistribute: stale compop").code();
+        let comp_code = data
+            .obank()
+            .get(compop)
+            .expect("RuleNotDistribute: stale compop")
+            .code();
         let opc = match comp_code {
             OpCode::CPUI_BOOL_AND => OpCode::CPUI_BOOL_OR,
             OpCode::CPUI_BOOL_OR => OpCode::CPUI_BOOL_AND,
@@ -2287,23 +3127,36 @@ impl Rule for RuleNotDistribute {
             .expect("RuleNotDistribute: stale compop")
             .get_in(1)
             .expect("RuleNotDistribute: compop has no in1");
-        let op_addr = data.obank().get(op).expect("RuleNotDistribute: stale op").get_addr().clone();
+        let op_addr = data
+            .obank()
+            .get(op)
+            .expect("RuleNotDistribute: stale op")
+            .get_addr()
+            .clone();
 
         let newneg1 = data.new_op(1, op_addr.clone());
-        let newout1 = data.new_unique_out(1, newneg1).expect("RuleNotDistribute: newout1");
+        let newout1 = data
+            .new_unique_out(1, newneg1)
+            .expect("RuleNotDistribute: newout1");
         set_opcode_typed(data, newneg1, OpCode::CPUI_BOOL_NEGATE);
-        data.op_set_input(newneg1, comp_in0, 0).expect("RuleNotDistribute: newneg1 in0");
+        data.op_set_input(newneg1, comp_in0, 0)
+            .expect("RuleNotDistribute: newneg1 in0");
         data.op_insert_before(newneg1, op);
 
         let newneg2 = data.new_op(1, op_addr);
-        let newout2 = data.new_unique_out(1, newneg2).expect("RuleNotDistribute: newout2");
+        let newout2 = data
+            .new_unique_out(1, newneg2)
+            .expect("RuleNotDistribute: newout2");
         set_opcode_typed(data, newneg2, OpCode::CPUI_BOOL_NEGATE);
-        data.op_set_input(newneg2, comp_in1, 0).expect("RuleNotDistribute: newneg2 in0");
+        data.op_set_input(newneg2, comp_in1, 0)
+            .expect("RuleNotDistribute: newneg2 in0");
         data.op_insert_before(newneg2, op);
 
         set_opcode_typed(data, op, opc);
-        data.op_set_input(op, newout1, 0).expect("RuleNotDistribute: op in0");
-        data.op_insert_input(op, newout2, 1).expect("RuleNotDistribute: op insert in1");
+        data.op_set_input(op, newout1, 0)
+            .expect("RuleNotDistribute: op in0");
+        data.op_insert_input(op, newout2, 1)
+            .expect("RuleNotDistribute: op insert in1");
         1
     }
 }
@@ -2338,82 +3191,165 @@ impl Rule for RuleHighOrderAnd {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        let cvn1 = data.obank().get(op).expect("RuleHighOrderAnd: stale op").get_in(1).expect(
-            "RuleHighOrderAnd: INT_AND has no in1",
-        );
-        if !data.vbank().get(cvn1).expect("RuleHighOrderAnd: stale cvn1").is_constant() {
+        let cvn1 = data
+            .obank()
+            .get(op)
+            .expect("RuleHighOrderAnd: stale op")
+            .get_in(1)
+            .expect("RuleHighOrderAnd: INT_AND has no in1");
+        if !data
+            .vbank()
+            .get(cvn1)
+            .expect("RuleHighOrderAnd: stale cvn1")
+            .is_constant()
+        {
             return 0;
         }
-        let op_in0 = data.obank().get(op).expect("RuleHighOrderAnd: stale op").get_in(0).expect(
-            "RuleHighOrderAnd: INT_AND has no in0",
-        );
-        if !data.vbank().get(op_in0).expect("RuleHighOrderAnd: stale op_in0").is_written() {
+        let op_in0 = data
+            .obank()
+            .get(op)
+            .expect("RuleHighOrderAnd: stale op")
+            .get_in(0)
+            .expect("RuleHighOrderAnd: INT_AND has no in0");
+        if !data
+            .vbank()
+            .get(op_in0)
+            .expect("RuleHighOrderAnd: stale op_in0")
+            .is_written()
+        {
             return 0;
         }
-        let addop = data.vbank().get(op_in0).expect("RuleHighOrderAnd: stale op_in0").get_def().expect(
-            "RuleHighOrderAnd: written in0 has no def",
-        );
-        if data.obank().get(addop).expect("RuleHighOrderAnd: stale addop").code()
+        let addop = data
+            .vbank()
+            .get(op_in0)
+            .expect("RuleHighOrderAnd: stale op_in0")
+            .get_def()
+            .expect("RuleHighOrderAnd: written in0 has no def");
+        if data
+            .obank()
+            .get(addop)
+            .expect("RuleHighOrderAnd: stale addop")
+            .code()
             != OpCode::CPUI_INT_ADD
         {
             return 0;
         }
 
-        let mut val = data.vbank().get(cvn1).expect("RuleHighOrderAnd: stale cvn1").get_offset();
-        let size = data.vbank().get(cvn1).expect("RuleHighOrderAnd: stale cvn1").get_size();
+        let mut val = data
+            .vbank()
+            .get(cvn1)
+            .expect("RuleHighOrderAnd: stale cvn1")
+            .get_offset();
+        let size = data
+            .vbank()
+            .get(cvn1)
+            .expect("RuleHighOrderAnd: stale cvn1")
+            .get_size();
         // Check that cvn1 is of the form    11110000
         if (val.wsub(1) | val) != calc_mask(size) {
             return 0;
         }
 
-        let cvn2 = data.obank().get(addop).expect("RuleHighOrderAnd: stale addop").get_in(1).expect(
-            "RuleHighOrderAnd: INT_ADD has no in1",
-        );
-        if data.vbank().get(cvn2).expect("RuleHighOrderAnd: stale cvn2").is_constant() {
-            let xalign = data.obank().get(addop).expect("RuleHighOrderAnd: stale addop").get_in(0).expect(
-                "RuleHighOrderAnd: INT_ADD has no in0",
-            );
-            if data.vbank().get(xalign).expect("RuleHighOrderAnd: stale xalign").is_free() {
+        let cvn2 = data
+            .obank()
+            .get(addop)
+            .expect("RuleHighOrderAnd: stale addop")
+            .get_in(1)
+            .expect("RuleHighOrderAnd: INT_ADD has no in1");
+        if data
+            .vbank()
+            .get(cvn2)
+            .expect("RuleHighOrderAnd: stale cvn2")
+            .is_constant()
+        {
+            let xalign = data
+                .obank()
+                .get(addop)
+                .expect("RuleHighOrderAnd: stale addop")
+                .get_in(0)
+                .expect("RuleHighOrderAnd: INT_ADD has no in0");
+            if data
+                .vbank()
+                .get(xalign)
+                .expect("RuleHighOrderAnd: stale xalign")
+                .is_free()
+            {
                 return 0;
             }
-            let mask1 = data.vbank().get(xalign).expect("RuleHighOrderAnd: stale xalign").get_nz_mask();
+            let mask1 = data
+                .vbank()
+                .get(xalign)
+                .expect("RuleHighOrderAnd: stale xalign")
+                .get_nz_mask();
             // addop->Input(0) must be unaffected by the AND
             if (mask1 & val) != mask1 {
                 return 0;
             }
 
             set_opcode_typed(data, op, OpCode::CPUI_INT_ADD);
-            data.op_set_input(op, xalign, 0).expect("RuleHighOrderAnd: op_set_input xalign");
-            let cvn2_off = data.vbank().get(cvn2).expect("RuleHighOrderAnd: stale cvn2").get_offset();
+            data.op_set_input(op, xalign, 0)
+                .expect("RuleHighOrderAnd: op_set_input xalign");
+            let cvn2_off = data
+                .vbank()
+                .get(cvn2)
+                .expect("RuleHighOrderAnd: stale cvn2")
+                .get_offset();
             val &= cvn2_off;
             let newc = data.new_constant(size, val);
-            data.op_set_input(op, newc, 1).expect("RuleHighOrderAnd: op_set_input newc");
+            data.op_set_input(op, newc, 1)
+                .expect("RuleHighOrderAnd: op_set_input newc");
             1
         } else {
-            let addop_out = data.obank().get(addop).expect("RuleHighOrderAnd: stale addop").get_out().expect(
-                "RuleHighOrderAnd: INT_ADD has no output",
-            );
+            let addop_out = data
+                .obank()
+                .get(addop)
+                .expect("RuleHighOrderAnd: stale addop")
+                .get_out()
+                .expect("RuleHighOrderAnd: INT_ADD has no output");
             if data.lone_descend(addop_out) != Some(op) {
                 return 0;
             }
             for i in 0..2 {
-                let zerovn = data.obank().get(addop).expect("RuleHighOrderAnd: stale addop").get_in(i).expect(
-                    "RuleHighOrderAnd: INT_ADD input null",
-                );
-                let mask2_z = data.vbank().get(zerovn).expect("RuleHighOrderAnd: stale zerovn").get_nz_mask();
+                let zerovn = data
+                    .obank()
+                    .get(addop)
+                    .expect("RuleHighOrderAnd: stale addop")
+                    .get_in(i)
+                    .expect("RuleHighOrderAnd: INT_ADD input null");
+                let mask2_z = data
+                    .vbank()
+                    .get(zerovn)
+                    .expect("RuleHighOrderAnd: stale zerovn")
+                    .get_nz_mask();
                 // zerovn must be unaffected by the AND operation
                 if (mask2_z & val) != mask2_z {
                     continue;
                 }
-                let nonzerovn = data.obank().get(addop).expect("RuleHighOrderAnd: stale addop").get_in(1 - i).expect(
-                    "RuleHighOrderAnd: INT_ADD input null",
-                );
-                if !data.vbank().get(nonzerovn).expect("RuleHighOrderAnd: stale nonzerovn").is_written() {
+                let nonzerovn = data
+                    .obank()
+                    .get(addop)
+                    .expect("RuleHighOrderAnd: stale addop")
+                    .get_in(1 - i)
+                    .expect("RuleHighOrderAnd: INT_ADD input null");
+                if !data
+                    .vbank()
+                    .get(nonzerovn)
+                    .expect("RuleHighOrderAnd: stale nonzerovn")
+                    .is_written()
+                {
                     continue;
                 }
-                let addop2 = data.vbank().get(nonzerovn).expect("RuleHighOrderAnd: stale nonzerovn").get_def()
+                let addop2 = data
+                    .vbank()
+                    .get(nonzerovn)
+                    .expect("RuleHighOrderAnd: stale nonzerovn")
+                    .get_def()
                     .expect("RuleHighOrderAnd: written nonzerovn has no def");
-                if data.obank().get(addop2).expect("RuleHighOrderAnd: stale addop2").code()
+                if data
+                    .obank()
+                    .get(addop2)
+                    .expect("RuleHighOrderAnd: stale addop2")
+                    .code()
                     != OpCode::CPUI_INT_ADD
                 {
                     continue;
@@ -2421,23 +3357,43 @@ impl Rule for RuleHighOrderAnd {
                 if data.lone_descend(nonzerovn) != Some(addop) {
                     continue;
                 }
-                let cvn2_2 = data.obank().get(addop2).expect("RuleHighOrderAnd: stale addop2").get_in(1).expect(
-                    "RuleHighOrderAnd: addop2 has no in1",
-                );
-                if !data.vbank().get(cvn2_2).expect("RuleHighOrderAnd: stale cvn2_2").is_constant() {
+                let cvn2_2 = data
+                    .obank()
+                    .get(addop2)
+                    .expect("RuleHighOrderAnd: stale addop2")
+                    .get_in(1)
+                    .expect("RuleHighOrderAnd: addop2 has no in1");
+                if !data
+                    .vbank()
+                    .get(cvn2_2)
+                    .expect("RuleHighOrderAnd: stale cvn2_2")
+                    .is_constant()
+                {
                     continue;
                 }
-                let xalign = data.obank().get(addop2).expect("RuleHighOrderAnd: stale addop2").get_in(0).expect(
-                    "RuleHighOrderAnd: addop2 has no in0",
-                );
-                let mask2_x = data.vbank().get(xalign).expect("RuleHighOrderAnd: stale xalign").get_nz_mask();
+                let xalign = data
+                    .obank()
+                    .get(addop2)
+                    .expect("RuleHighOrderAnd: stale addop2")
+                    .get_in(0)
+                    .expect("RuleHighOrderAnd: addop2 has no in0");
+                let mask2_x = data
+                    .vbank()
+                    .get(xalign)
+                    .expect("RuleHighOrderAnd: stale xalign")
+                    .get_nz_mask();
                 if (mask2_x & val) != mask2_x {
                     continue;
                 }
-                let cvn2_2_off = data.vbank().get(cvn2_2).expect("RuleHighOrderAnd: stale cvn2_2").get_offset();
+                let cvn2_2_off = data
+                    .vbank()
+                    .get(cvn2_2)
+                    .expect("RuleHighOrderAnd: stale cvn2_2")
+                    .get_offset();
                 val &= cvn2_2_off;
                 let newc = data.new_constant(size, val);
-                data.op_set_input(addop2, newc, 1).expect("RuleHighOrderAnd: op_set_input addop2");
+                data.op_set_input(addop2, newc, 1)
+                    .expect("RuleHighOrderAnd: op_set_input addop2");
                 // Convert the AND to a COPY
                 data.op_remove_input(op, 1);
                 set_opcode_typed(data, op, OpCode::CPUI_COPY);
@@ -2478,10 +3434,17 @@ impl Rule for RuleAndDistribute {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        let outvn = data.obank().get(op).expect("RuleAndDistribute: stale op").get_out().expect(
-            "RuleAndDistribute: INT_AND has no output",
-        );
-        let size = data.vbank().get(outvn).expect("RuleAndDistribute: stale outvn").get_size();
+        let outvn = data
+            .obank()
+            .get(op)
+            .expect("RuleAndDistribute: stale op")
+            .get_out()
+            .expect("RuleAndDistribute: INT_AND has no output");
+        let size = data
+            .vbank()
+            .get(outvn)
+            .expect("RuleAndDistribute: stale outvn")
+            .get_size();
         // FIXME: uintb should be arbitrary precision
         if size > SIZEOF_UINTB {
             return 0;
@@ -2489,17 +3452,32 @@ impl Rule for RuleAndDistribute {
         let fullmask = calc_mask(size);
         let mut i = 0;
         while i < 2 {
-            let othervn = data.obank().get(op).expect("RuleAndDistribute: stale op").get_in(1 - i).expect(
-                "RuleAndDistribute: INT_AND input null",
-            );
-            if !data.vbank().get(othervn).expect("RuleAndDistribute: stale othervn").is_heritage_known() {
+            let othervn = data
+                .obank()
+                .get(op)
+                .expect("RuleAndDistribute: stale op")
+                .get_in(1 - i)
+                .expect("RuleAndDistribute: INT_AND input null");
+            if !data
+                .vbank()
+                .get(othervn)
+                .expect("RuleAndDistribute: stale othervn")
+                .is_heritage_known()
+            {
                 i += 1;
                 continue;
             }
-            let orvn = data.obank().get(op).expect("RuleAndDistribute: stale op").get_in(i).expect(
-                "RuleAndDistribute: INT_AND input null",
-            );
-            let orop = data.vbank().get(orvn).expect("RuleAndDistribute: stale orvn").get_def();
+            let orvn = data
+                .obank()
+                .get(op)
+                .expect("RuleAndDistribute: stale op")
+                .get_in(i)
+                .expect("RuleAndDistribute: INT_AND input null");
+            let orop = data
+                .vbank()
+                .get(orvn)
+                .expect("RuleAndDistribute: stale orvn")
+                .get_def();
             let orop = match orop {
                 None => {
                     i += 1;
@@ -2507,27 +3485,51 @@ impl Rule for RuleAndDistribute {
                 }
                 Some(o) => o,
             };
-            if data.obank().get(orop).expect("RuleAndDistribute: stale orop").code()
+            if data
+                .obank()
+                .get(orop)
+                .expect("RuleAndDistribute: stale orop")
+                .code()
                 != OpCode::CPUI_INT_OR
             {
                 i += 1;
                 continue;
             }
-            let orop_in0 = data.obank().get(orop).expect("RuleAndDistribute: stale orop").get_in(0).expect(
-                "RuleAndDistribute: INT_OR has no in0",
-            );
-            if !data.vbank().get(orop_in0).expect("RuleAndDistribute: stale orop_in0").is_heritage_known() {
+            let orop_in0 = data
+                .obank()
+                .get(orop)
+                .expect("RuleAndDistribute: stale orop")
+                .get_in(0)
+                .expect("RuleAndDistribute: INT_OR has no in0");
+            if !data
+                .vbank()
+                .get(orop_in0)
+                .expect("RuleAndDistribute: stale orop_in0")
+                .is_heritage_known()
+            {
                 i += 1;
                 continue;
             }
-            let orop_in1 = data.obank().get(orop).expect("RuleAndDistribute: stale orop").get_in(1).expect(
-                "RuleAndDistribute: INT_OR has no in1",
-            );
-            if !data.vbank().get(orop_in1).expect("RuleAndDistribute: stale orop_in1").is_heritage_known() {
+            let orop_in1 = data
+                .obank()
+                .get(orop)
+                .expect("RuleAndDistribute: stale orop")
+                .get_in(1)
+                .expect("RuleAndDistribute: INT_OR has no in1");
+            if !data
+                .vbank()
+                .get(orop_in1)
+                .expect("RuleAndDistribute: stale orop_in1")
+                .is_heritage_known()
+            {
                 i += 1;
                 continue;
             }
-            let othermask = data.vbank().get(othervn).expect("RuleAndDistribute: stale othervn").get_nz_mask();
+            let othermask = data
+                .vbank()
+                .get(othervn)
+                .expect("RuleAndDistribute: stale othervn")
+                .get_nz_mask();
             // This case picked up by andmask
             if othermask == 0 {
                 i += 1;
@@ -2538,17 +3540,30 @@ impl Rule for RuleAndDistribute {
                 i += 1;
                 continue;
             }
-            let ormask1 = data.vbank().get(orop_in0).expect("RuleAndDistribute: stale orop_in0").get_nz_mask();
+            let ormask1 = data
+                .vbank()
+                .get(orop_in0)
+                .expect("RuleAndDistribute: stale orop_in0")
+                .get_nz_mask();
             // AND would cancel if distributed
             if (ormask1 & othermask) == 0 {
                 break;
             }
-            let ormask2 = data.vbank().get(orop_in1).expect("RuleAndDistribute: stale orop_in1").get_nz_mask();
+            let ormask2 = data
+                .vbank()
+                .get(orop_in1)
+                .expect("RuleAndDistribute: stale orop_in1")
+                .get_nz_mask();
             // AND would cancel if distributed
             if (ormask2 & othermask) == 0 {
                 break;
             }
-            if data.vbank().get(othervn).expect("RuleAndDistribute: stale othervn").is_constant() {
+            if data
+                .vbank()
+                .get(othervn)
+                .expect("RuleAndDistribute: stale othervn")
+                .is_constant()
+            {
                 // AND is trivial if distributed
                 if (ormask1 & othermask) == ormask1 {
                     break;
@@ -2601,13 +3616,25 @@ impl Rule for RuleLessOne {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        let constvn = data.obank().get(op).expect("RuleLessOne: stale op").get_in(1).expect(
-            "RuleLessOne: op has no in1",
-        );
-        if !data.vbank().get(constvn).expect("RuleLessOne: stale constvn").is_constant() {
+        let constvn = data
+            .obank()
+            .get(op)
+            .expect("RuleLessOne: stale op")
+            .get_in(1)
+            .expect("RuleLessOne: op has no in1");
+        if !data
+            .vbank()
+            .get(constvn)
+            .expect("RuleLessOne: stale constvn")
+            .is_constant()
+        {
             return 0;
         }
-        let val = data.vbank().get(constvn).expect("RuleLessOne: stale constvn").get_offset();
+        let val = data
+            .vbank()
+            .get(constvn)
+            .expect("RuleLessOne: stale constvn")
+            .get_offset();
         let op_code = data.obank().get(op).expect("RuleLessOne: stale op").code();
         if op_code == OpCode::CPUI_INT_LESS && val != 1 {
             return 0;
@@ -2618,9 +3645,14 @@ impl Rule for RuleLessOne {
 
         set_opcode_typed(data, op, OpCode::CPUI_INT_EQUAL);
         if val != 0 {
-            let constvn_size = data.vbank().get(constvn).expect("RuleLessOne: stale constvn").get_size();
+            let constvn_size = data
+                .vbank()
+                .get(constvn)
+                .expect("RuleLessOne: stale constvn")
+                .get_size();
             let newc = data.new_constant(constvn_size, 0);
-            data.op_set_input(op, newc, 1).expect("RuleLessOne: op_set_input");
+            data.op_set_input(op, newc, 1)
+                .expect("RuleLessOne: op_set_input");
         }
         1
     }
@@ -2656,28 +3688,60 @@ impl Rule for RuleRangeMeld {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        let vn1 = data.obank().get(op).expect("RuleRangeMeld: stale op").get_in(0).expect(
-            "RuleRangeMeld: op has no in0",
-        );
-        if !data.vbank().get(vn1).expect("RuleRangeMeld: stale vn1").is_written() {
+        let vn1 = data
+            .obank()
+            .get(op)
+            .expect("RuleRangeMeld: stale op")
+            .get_in(0)
+            .expect("RuleRangeMeld: op has no in0");
+        if !data
+            .vbank()
+            .get(vn1)
+            .expect("RuleRangeMeld: stale vn1")
+            .is_written()
+        {
             return 0;
         }
-        let vn2 = data.obank().get(op).expect("RuleRangeMeld: stale op").get_in(1).expect(
-            "RuleRangeMeld: op has no in1",
-        );
-        if !data.vbank().get(vn2).expect("RuleRangeMeld: stale vn2").is_written() {
+        let vn2 = data
+            .obank()
+            .get(op)
+            .expect("RuleRangeMeld: stale op")
+            .get_in(1)
+            .expect("RuleRangeMeld: op has no in1");
+        if !data
+            .vbank()
+            .get(vn2)
+            .expect("RuleRangeMeld: stale vn2")
+            .is_written()
+        {
             return 0;
         }
-        let sub1 = data.vbank().get(vn1).expect("RuleRangeMeld: stale vn1").get_def().expect(
-            "RuleRangeMeld: written vn1 has no def",
-        );
-        if !data.obank().get(sub1).expect("RuleRangeMeld: stale sub1").is_bool_output() {
+        let sub1 = data
+            .vbank()
+            .get(vn1)
+            .expect("RuleRangeMeld: stale vn1")
+            .get_def()
+            .expect("RuleRangeMeld: written vn1 has no def");
+        if !data
+            .obank()
+            .get(sub1)
+            .expect("RuleRangeMeld: stale sub1")
+            .is_bool_output()
+        {
             return 0;
         }
-        let sub2 = data.vbank().get(vn2).expect("RuleRangeMeld: stale vn2").get_def().expect(
-            "RuleRangeMeld: written vn2 has no def",
-        );
-        if !data.obank().get(sub2).expect("RuleRangeMeld: stale sub2").is_bool_output() {
+        let sub2 = data
+            .vbank()
+            .get(vn2)
+            .expect("RuleRangeMeld: stale vn2")
+            .get_def()
+            .expect("RuleRangeMeld: written vn2 has no def");
+        if !data
+            .obank()
+            .get(sub2)
+            .expect("RuleRangeMeld: stale sub2")
+            .is_bool_output()
+        {
             return 0;
         }
 
@@ -2797,31 +3861,106 @@ impl Rule for RuleRangeMeld {
 /// module docs (`RuleSpec { group, ctor }`).
 pub fn specs() -> Vec<RuleSpec> {
     vec![
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleEarlyRemoval::new("analysis")) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleCollectTerms::new("analysis")) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleSelectCse::new("analysis")) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RulePiece2Zext::new("analysis")) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RulePiece2Sext::new("analysis")) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleBxor2NotEqual::new("analysis")) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleOrMask::new("analysis")) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleAndMask::new("analysis")) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleOrConsume::new("analysis")) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleOrCollapse::new("analysis")) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleAndOrLump::new("analysis")) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleNegateIdentity::new("analysis")) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleShiftBitops::new("analysis")) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleRightShiftAnd::new("analysis")) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleIntLessEqual::new("analysis")) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleEquality::new("analysis")) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleTermOrder::new("analysis")) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RulePullsubMulti::new("analysis")) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RulePullsubIndirect::new("analysis")) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RulePushMulti::new("analysis")) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleNotDistribute::new("analysis")) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleHighOrderAnd::new("analysis")) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleAndDistribute::new("analysis")) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleLessOne::new("analysis")) },
-        RuleSpec { group: "analysis", ctor: || Box::new(RuleRangeMeld::new("analysis")) },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleEarlyRemoval::new("analysis")),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleCollectTerms::new("analysis")),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleSelectCse::new("analysis")),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RulePiece2Zext::new("analysis")),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RulePiece2Sext::new("analysis")),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleBxor2NotEqual::new("analysis")),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleOrMask::new("analysis")),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleAndMask::new("analysis")),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleOrConsume::new("analysis")),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleOrCollapse::new("analysis")),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleAndOrLump::new("analysis")),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleNegateIdentity::new("analysis")),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleShiftBitops::new("analysis")),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleRightShiftAnd::new("analysis")),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleIntLessEqual::new("analysis")),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleEquality::new("analysis")),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleTermOrder::new("analysis")),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RulePullsubMulti::new("analysis")),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RulePullsubIndirect::new("analysis")),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RulePushMulti::new("analysis")),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleNotDistribute::new("analysis")),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleHighOrderAnd::new("analysis")),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleAndDistribute::new("analysis")),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleLessOne::new("analysis")),
+        },
+        RuleSpec {
+            group: "analysis",
+            ctor: || Box::new(RuleRangeMeld::new("analysis")),
+        },
     ]
 }
 

@@ -1,10 +1,10 @@
 //! Go compiler checks fold without hiding explicit panics or preceding stores.
+use std::process::{Command, Stdio};
 use unlace_console::engine::bootstrap_from_object;
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
-use std::process::{Command, Stdio};
 
 const SOURCE: &str = r#"package main
 var sink int

@@ -62,9 +62,10 @@ impl Agent {
             return Some(PathBuf::from(v));
         }
         if self == Agent::OpenCode
-            && let Some(v) = std::env::var_os("XDG_CONFIG_HOME").filter(|v| !v.is_empty()) {
-                return Some(PathBuf::from(v).join("opencode"));
-            }
+            && let Some(v) = std::env::var_os("XDG_CONFIG_HOME").filter(|v| !v.is_empty())
+        {
+            return Some(PathBuf::from(v).join("opencode"));
+        }
         home_dir().map(|h| h.join(default))
     }
 
@@ -95,7 +96,9 @@ pub fn run(argv: &[String]) -> Result<i32, String> {
                     "opencode" => vec![Agent::OpenCode],
                     "all" => Agent::ALL.to_vec(),
                     other => {
-                        return Err(format!("unknown agent {other:?} (expected claude, codex, opencode or all)"));
+                        return Err(format!(
+                            "unknown agent {other:?} (expected claude, codex, opencode or all)"
+                        ));
                     }
                 });
             }
@@ -135,7 +138,10 @@ pub fn run(argv: &[String]) -> Result<i32, String> {
         vec![("dir", d)]
     } else {
         let chosen = agents.unwrap_or_else(|| {
-            Agent::ALL.into_iter().filter(|a| a.config_dir().is_some_and(|d| d.is_dir())).collect()
+            Agent::ALL
+                .into_iter()
+                .filter(|a| a.config_dir().is_some_and(|d| d.is_dir()))
+                .collect()
         });
         if chosen.is_empty() {
             return Err(
@@ -145,7 +151,11 @@ pub fn run(argv: &[String]) -> Result<i32, String> {
         }
         let mut targets = Vec::new();
         for a in chosen {
-            let root = if project { Some(PathBuf::from(a.project_dir())) } else { a.config_dir() };
+            let root = if project {
+                Some(PathBuf::from(a.project_dir()))
+            } else {
+                a.config_dir()
+            };
             match root {
                 Some(r) => targets.push((a.label(), r.join("skills"))),
                 None => {
@@ -194,9 +204,11 @@ fn install(path: &Path, force: bool) -> Result<&'static str, String> {
     let verdict = match std::fs::read(path) {
         Ok(existing) if existing == BODY.as_bytes() => return Ok("current"),
         Ok(_) if !force => {
-            return Err("an installed copy differs (another unlace version or local edits); \
+            return Err(
+                "an installed copy differs (another unlace version or local edits); \
                         rerun with --force to replace it"
-                .into())
+                    .into(),
+            );
         }
         Ok(_) => "updated",
         Err(_) => "installed",
@@ -232,7 +244,9 @@ fn home_dir() -> Option<PathBuf> {
 }
 
 fn on_path(program: &str) -> bool {
-    let Some(path) = std::env::var_os("PATH") else { return false };
+    let Some(path) = std::env::var_os("PATH") else {
+        return false;
+    };
     std::env::split_paths(&path).any(|d| {
         d.join(program).is_file() || (cfg!(windows) && d.join(format!("{program}.exe")).is_file())
     })
@@ -244,7 +258,11 @@ mod tests {
 
     #[test]
     fn the_embedded_skill_names_itself() {
-        assert_eq!(BODY.lines().next().map(str::trim), Some("---"), "SKILL.md lost its frontmatter");
+        assert_eq!(
+            BODY.lines().next().map(str::trim),
+            Some("---"),
+            "SKILL.md lost its frontmatter"
+        );
         assert_eq!(skill_name(), "unlace-decompiler");
     }
 }

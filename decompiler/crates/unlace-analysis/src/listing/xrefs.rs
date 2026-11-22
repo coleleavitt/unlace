@@ -69,24 +69,24 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::rc::Rc;
 use std::sync::Arc;
 
+use object::SectionKind;
+use object::read::{Object, ObjectSection, ObjectSegment, ObjectSymbol, ObjectSymbolTable};
 use unlace_base::address::Address;
-use unlace_base::space::{spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_decomp::architecture::Architecture;
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::translate::{AssemblyEmit, PcodeEmit, Translate};
-use object::read::{Object, ObjectSection, ObjectSegment, ObjectSymbol, ObjectSymbolTable};
-use object::SectionKind;
 
 use super::classify::classify;
 use super::context::ContextPainter;
+use super::kuna_calltable;
 use super::kuna_pcform::{Formed, PcForm};
 use super::kuna_picbase::{self, Ctx as PicCtx, PicBase};
 use super::kuna_picpool::{self, GotImage, Insn, PicPool};
 use super::kuna_pltstub::PltStubs;
 use super::kuna_poolref::PoolImage;
 use super::kuna_regcarry::{self, Machine as CarryMachine};
-use super::kuna_calltable;
 use super::kuna_switchtable;
 use super::model::{FlowKind, FlowType, RawOp};
 #[path = "kuna_prefixreuse.rs"]
@@ -229,11 +229,16 @@ impl FlowGraph {
                 }
                 let lo = self.jumps.partition_point(|&(from, _)| from < vma);
                 stack.extend(
-                    self.jumps[lo..].iter().take_while(|&&(from, _)| from == vma).map(|&(_, to)| to),
+                    self.jumps[lo..]
+                        .iter()
+                        .take_while(|&&(from, _)| from == vma)
+                        .map(|&(_, to)| to),
                 );
             }
         }
-        self.insns.iter().zip(owners)
+        self.insns
+            .iter()
+            .zip(owners)
             .filter_map(|(&(vma, _, _), owner)| owner.map(|entry| (vma, entry)))
             .collect()
     }
@@ -270,7 +275,10 @@ impl FlowGraph {
             }
             let lo = self.jumps.partition_point(|&(from, _)| from < vma);
             stack.extend(
-                self.jumps[lo..].iter().take_while(|&&(from, _)| from == vma).map(|&(_, to)| to),
+                self.jumps[lo..]
+                    .iter()
+                    .take_while(|&&(from, _)| from == vma)
+                    .map(|&(_, to)| to),
             );
         }
         count
@@ -299,12 +307,28 @@ impl XrefIndex {
     /// Add a call proved in one entry's register context. This does not create a
     /// veneer alias: another entry may use the same stub with a different base.
     pub fn add_scoped_call(&mut self, arch: &Architecture, function: u64, from: u64, to: u64) {
-        self.scoped_callers.entry((from, to)).or_default().insert(function);
-        let instruction = self.refs_from_instruction(from).first()
-            .map(|r| Arc::clone(&r.instruction)).filter(|text| !text.is_empty())
-            .unwrap_or_else(|| arch.manage().get_default_code_space()
-                .map(|space| assembly(arch.translate(), from, space)).unwrap_or_default().into());
-        let at = self.insert(Xref { from, to, kind: XrefKind::Call, instruction });
+        self.scoped_callers
+            .entry((from, to))
+            .or_default()
+            .insert(function);
+        let instruction = self
+            .refs_from_instruction(from)
+            .first()
+            .map(|r| Arc::clone(&r.instruction))
+            .filter(|text| !text.is_empty())
+            .unwrap_or_else(|| {
+                arch.manage()
+                    .get_default_code_space()
+                    .map(|space| assembly(arch.translate(), from, space))
+                    .unwrap_or_default()
+                    .into()
+            });
+        let at = self.insert(Xref {
+            from,
+            to,
+            kind: XrefKind::Call,
+            instruction,
+        });
         let rows = self.by_source_function.entry(function).or_default();
         if let Err(i) = rows.binary_search(&at) {
             rows.insert(i, at);
@@ -316,10 +340,17 @@ impl XrefIndex {
     /// edge added after the walk.
     fn insert(&mut self, edge: Xref) -> usize {
         let key = (edge.to, edge.from, edge.kind);
-        match self.refs.binary_search_by_key(&key, |r| (r.to, r.from, r.kind)) {
+        match self
+            .refs
+            .binary_search_by_key(&key, |r| (r.to, r.from, r.kind))
+        {
             Ok(at) => at,
             Err(at) => {
-                for i in self.by_source.iter_mut().chain(self.by_source_function.values_mut().flatten()) {
+                for i in self
+                    .by_source
+                    .iter_mut()
+                    .chain(self.by_source_function.values_mut().flatten())
+                {
                     if *i >= at {
                         *i += 1;
                     }
@@ -327,7 +358,9 @@ impl XrefIndex {
                 let source_key = (edge.from, edge.to, edge.kind);
                 self.refs.insert(at, edge);
                 let refs = &self.refs;
-                let s = self.by_source.partition_point(|&i| (refs[i].from, refs[i].to, refs[i].kind) < source_key);
+                let s = self
+                    .by_source
+                    .partition_point(|&i| (refs[i].from, refs[i].to, refs[i].kind) < source_key);
                 self.by_source.insert(s, at);
                 at
             }
@@ -393,7 +426,10 @@ impl XrefIndex {
             }
         }
         rows.sort_by(|a, b| {
-            a.from.cmp(&b.from).then_with(|| a.to.cmp(&b.to)).then_with(|| a.kind.cmp(&b.kind))
+            a.from
+                .cmp(&b.from)
+                .then_with(|| a.to.cmp(&b.to))
+                .then_with(|| a.kind.cmp(&b.kind))
         });
         rows
     }
@@ -429,7 +465,8 @@ impl XrefIndex {
     /// value, never a shared name, and an unrelocated or undefined slot adds nothing.
     pub fn export_alias_class(&self, file: &object::File, entry: u64) -> BTreeSet<u64> {
         let mut class = self.alias_class(entry);
-        let (Some(relocs), Some(symbols)) = (file.dynamic_relocations(), file.dynamic_symbol_table())
+        let (Some(relocs), Some(symbols)) =
+            (file.dynamic_relocations(), file.dynamic_symbol_table())
         else {
             return class;
         };
@@ -438,10 +475,19 @@ impl XrefIndex {
             if !self.veneers_of_slot.contains_key(&slot) || class.contains(&slot) {
                 continue;
             }
-            let object::RelocationTarget::Symbol(index) = reloc.target() else { continue };
-            let Ok(symbol) = symbols.symbol_by_index(index) else { continue };
-            let value = if thumb { symbol.address() & !1 } else { symbol.address() };
-            if symbol.is_definition() && symbol.kind() == object::SymbolKind::Text && value == entry {
+            let object::RelocationTarget::Symbol(index) = reloc.target() else {
+                continue;
+            };
+            let Ok(symbol) = symbols.symbol_by_index(index) else {
+                continue;
+            };
+            let value = if thumb {
+                symbol.address() & !1
+            } else {
+                symbol.address()
+            };
+            if symbol.is_definition() && symbol.kind() == object::SymbolKind::Text && value == entry
+            {
                 class.extend(self.alias_class(slot));
             }
         }
@@ -459,7 +505,10 @@ impl XrefIndex {
     /// an ELF fixed-slot target that the loader inventories only through its PLT
     /// entry, including the unnamed PLT0 linkage target.
     pub fn forwarding_veneers(&self) -> Vec<(u64, u64)> {
-        self.veneers.iter().map(|(&entry, veneer)| (entry, veneer.slot)).collect()
+        self.veneers
+            .iter()
+            .map(|(&entry, veneer)| (entry, veneer.slot))
+            .collect()
     }
 
     /// (kuna `addrtable`) File each slot of an absolute pointer table as a
@@ -477,7 +526,12 @@ impl XrefIndex {
         for table in tables {
             for (slot, &to) in (table.addr..).step_by(width as usize).zip(&table.elements) {
                 let instruction: Arc<str> = format!("addr 0x{to:x}").into();
-                self.refs.push(Xref { from: slot, to, kind: XrefKind::Data, instruction });
+                self.refs.push(Xref {
+                    from: slot,
+                    to,
+                    kind: XrefKind::Data,
+                    instruction,
+                });
                 added = true;
             }
         }
@@ -493,7 +547,10 @@ impl XrefIndex {
         self.by_source_function = function_rows
             .into_iter()
             .map(|(entry, keys)| {
-                let rows = keys.iter().filter_map(|k| refs.binary_search_by_key(k, key).ok()).collect();
+                let rows = keys
+                    .iter()
+                    .filter_map(|k| refs.binary_search_by_key(k, key).ok())
+                    .collect();
                 (entry, rows)
             })
             .collect();
@@ -502,7 +559,11 @@ impl XrefIndex {
     /// Everything the single instruction at `vma` references.
     pub fn refs_from_instruction(&self, vma: u64) -> Vec<&Xref> {
         let lo = self.by_source.partition_point(|&i| self.refs[i].from < vma);
-        self.by_source[lo..].iter().map(|&i| &self.refs[i]).take_while(|r| r.from == vma).collect()
+        self.by_source[lo..]
+            .iter()
+            .map(|&i| &self.refs[i])
+            .take_while(|r| r.from == vma)
+            .collect()
     }
 
     /// Everything the function entered at `entry` references: its callees, the
@@ -567,7 +628,10 @@ impl XrefIndex {
     /// the walk decoded no instruction at, in address order: code the descent was
     /// pointed at and stopped short of.
     pub fn undecoded_flow_targets(&self) -> impl Iterator<Item = u64> + '_ {
-        self.stopped.iter().copied().filter(|to| !self.decoded.contains(to))
+        self.stopped
+            .iter()
+            .copied()
+            .filter(|to| !self.decoded.contains(to))
     }
 
     /// How many distinct instructions the walk decoded.
@@ -664,7 +728,11 @@ impl PcodeEmit for FullCapture {
         vars: &[VarnodeData],
     ) {
         if self.filled == self.ops.len() {
-            self.ops.push(FullOp { opcode: opc, out: outvar.cloned(), ins: vars.to_vec() });
+            self.ops.push(FullOp {
+                opcode: opc,
+                out: outvar.cloned(),
+                ins: vars.to_vec(),
+            });
         } else {
             let slot = &mut self.ops[self.filled];
             slot.opcode = opc;
@@ -792,7 +860,15 @@ pub fn build_with_unflagged_focus(
     unflagged: &[(u64, u64)],
     declared: &[u64],
 ) -> XrefIndex {
-    descend(file, arch, translate, seeds, focus, (unflagged, declared), false)
+    descend(
+        file,
+        arch,
+        translate,
+        seeds,
+        focus,
+        (unflagged, declared),
+        false,
+    )
 }
 
 /// The walk behind every `build*`.
@@ -847,9 +923,16 @@ fn descend(
     // to classify data references against it (they would all be wrong).
     let exec_set = range_union(exec.clone());
     let sections_are_runtime = !exec.is_empty() && seeds.iter().any(|&s| in_range(&exec_set, s));
-    let stub_sites: HashSet<u64> =
-        arch.loader_transfer_sites.iter().map(Address::get_offset).collect();
-    let mapped = if sections_are_runtime { range_union(mapped_ranges(file)) } else { Vec::new() };
+    let stub_sites: HashSet<u64> = arch
+        .loader_transfer_sites
+        .iter()
+        .map(Address::get_offset)
+        .collect();
+    let mapped = if sections_are_runtime {
+        range_union(mapped_ranges(file))
+    } else {
+        Vec::new()
+    };
 
     // Paint the decode-mode context (ARM `TMode` / MIPS `ISA_MODE`) before the
     // first decode, exactly as the Listing walk does — without it a Thumb
@@ -890,12 +973,22 @@ fn descend(
     // pool word can be followed to what it points at. `None` (an image with no
     // read-only mapped section, and every relocatable object, whose sections are
     // not the runtime ones) leaves every reference below exactly as it was.
-    let pool = if mapped.is_empty() { None } else { PoolImage::new(file) };
-    let got_calls = if mapped.is_empty() { None } else {
+    let pool = if mapped.is_empty() {
+        None
+    } else {
+        PoolImage::new(file)
+    };
+    let got_calls = if mapped.is_empty() {
+        None
+    } else {
         super::kuna_gotcall::GotCalls::new(file, arch, &exec_set)
     };
     // (kuna) `picpool`: the GOT's file bytes, read through a PC-composed base.
-    let got = if mapped.is_empty() { None } else { GotImage::new(file) };
+    let got = if mapped.is_empty() {
+        None
+    } else {
+        GotImage::new(file)
+    };
     // (kuna) `pcform`: the addresses an instruction forms from its own address,
     // which the `checkOperands` floor must not drop. `None` unless the image
     // maps something below that floor. See [`super::kuna_pcform`].
@@ -906,15 +999,28 @@ fn descend(
     };
     let preserved = kuna_switchtable::preserved_registers(arch);
     let named_set = std::cell::OnceCell::new();
-    let named = |at: u64| pool.as_ref().is_some_and(|p| named_set.get_or_init(|| p.code_named(file)).contains(&at));
+    let named = |at: u64| {
+        pool.as_ref()
+            .is_some_and(|p| named_set.get_or_init(|| p.code_named(file)).contains(&at))
+    };
     // (kuna `switchextent`) A dispatch's function spans the seeds around it;
     // its jump tables bound one no range check does (`kuna_switchextent`).
-    let function_tables = pool.as_ref().map(super::kuna_switchextent::FunctionTables::new);
+    let function_tables = pool
+        .as_ref()
+        .map(super::kuna_switchextent::FunctionTables::new);
     let extent_entries = seed_set.clone();
     let next_table = |from: u64, table: u64| {
         let lo = extent_entries.range(..=from).next_back().copied()?;
         let hi = extent_entries.range(from + 1..).next().copied();
-        function_tables.as_ref()?.next_after(translate, &code_space, data_space.as_ref(), &exec, lo, hi, table)
+        function_tables.as_ref()?.next_after(
+            translate,
+            &code_space,
+            data_space.as_ref(),
+            &exec,
+            lo,
+            hi,
+            table,
+        )
     };
     let reach = kuna_switchtable::Reach {
         max_entries,
@@ -927,7 +1033,9 @@ fn descend(
     let pic_image = pool.as_ref().map(|pool| kuna_picpool::Image {
         pool,
         mapped: &mapped,
-        extended: [".got", ".got.plt", ".dynamic"].iter().any(|name| file.section_by_name(name).is_some()),
+        extended: [".got", ".got.plt", ".dynamic"]
+            .iter()
+            .any(|name| file.section_by_name(name).is_some()),
         data_space: data_space.as_ref(),
         got: got.as_ref(),
         preserved: &preserved,
@@ -951,7 +1059,9 @@ fn descend(
     // has settled so a table that runs into the next one stops at its cases.
     let mut call_sites: Vec<(u64, VarnodeData)> = Vec::new();
     let thumb_tables = sections_are_runtime
-        .then(|| super::kuna_thumbswitch::HalfwordTables::new(file, data_space.clone(), max_entries))
+        .then(|| {
+            super::kuna_thumbswitch::HalfwordTables::new(file, data_space.clone(), max_entries)
+        })
         .flatten();
     let a32_tables = pool
         .as_ref()
@@ -974,16 +1084,15 @@ fn descend(
 
     // Share the decoded partition with prologue recovery and AIF.
     let gapwalk = arch.analysis_aif.enabled();
-    let mut fingerprint_contexts = (prologues && gapwalk)
-        .then(super::kuna_fingerprintcontext::FingerprintContexts::default);
+    let mut fingerprint_contexts =
+        (prologues && gapwalk).then(super::kuna_fingerprintcontext::FingerprintContexts::default);
     let mut prologues_done = false;
     let mut pending_prologues: VecDeque<u64> = VecDeque::new();
     let mut frame_candidates = Vec::new();
     let mut frame_cache = crate::aif::ArmFrames::default();
     let mut frame_partition = None;
-    let mut walk_context = super::kuna_walkcontext::WalkContext::new(
-        prologues, translate, arch, &code_space, &exec,
-    );
+    let mut walk_context =
+        super::kuna_walkcontext::WalkContext::new(prologues, translate, arch, &code_space, &exec);
     if arch.analysis_listing && arch.input_arm_isa_override {
         if let Some(context) = &mut walk_context {
             context.seed_inventory_modes(seed_set.iter().copied(), &arch.arm_inventory_modes);
@@ -1002,15 +1111,20 @@ fn descend(
 
     // The caller-named addresses the seeded walk did not already cover, tried one
     // at a time once the queue drains (see [`build_with_focus`]).
-    let mut pending_focus: Vec<u64> =
-        focus.iter().copied().filter(|f| !seed_set.contains(f)).collect();
+    let mut pending_focus: Vec<u64> = focus
+        .iter()
+        .copied()
+        .filter(|f| !seed_set.contains(f))
+        .collect();
     pending_focus.sort_unstable();
     pending_focus.dedup();
     pending_focus.reverse();
     let mut focused: Vec<u64> = Vec::new();
     let unflagged = range_union(unflagged.to_vec());
     let forced: HashSet<u64> = if sections_are_runtime {
-        focus.iter().copied()
+        focus
+            .iter()
+            .copied()
             .filter(|&f| !in_range(&exec_set, f) && in_range(&unflagged, f))
             .collect()
     } else {
@@ -1032,12 +1146,24 @@ fn descend(
                 let mut listing = partition_listing(&partition, &st.funcs, &exec);
                 if gapwalk {
                     render_fingerprints(
-                        &mut listing, &st.funcs, arch, translate, &code_space,
-                        &partition, fingerprint_contexts.as_ref(),
+                        &mut listing,
+                        &st.funcs,
+                        arch,
+                        translate,
+                        &code_space,
+                        &partition,
+                        fingerprint_contexts.as_ref(),
                     );
                 }
                 let frames = crate::aif::raw_arm_frames(
-                    file, &listing, arch, translate, Rc::clone(&code_space), &exec, true, None,
+                    file,
+                    &listing,
+                    arch,
+                    translate,
+                    Rc::clone(&code_space),
+                    &exec,
+                    true,
+                    None,
                 );
                 let found = frames.roots.clone();
                 frame_cache = frames;
@@ -1052,9 +1178,10 @@ fn descend(
                 frame_candidates.sort_unstable();
                 continue;
             }
-            None if pending_prologues.front().is_some_and(|root| {
-                pending_focus.last().is_none_or(|focus| root <= focus)
-            }) => {
+            None if pending_prologues
+                .front()
+                .is_some_and(|root| pending_focus.last().is_none_or(|focus| root <= focus)) =>
+            {
                 let root = pending_prologues.pop_front().unwrap();
                 if st.decoded.contains(&root) || partition_covers(&recovered_spans, root) {
                     continue;
@@ -1068,8 +1195,10 @@ fn descend(
             }
             None => match pending_focus.pop() {
                 Some(f) => {
-                    let admit = forced.contains(&f) && (declared.contains(&f) || stopped.contains(&f));
-                    if st.decoded.contains(&f) || partition_covers(&recovered_spans, f)
+                    let admit =
+                        forced.contains(&f) && (declared.contains(&f) || stopped.contains(&f));
+                    if st.decoded.contains(&f)
+                        || partition_covers(&recovered_spans, f)
                         || (sections_are_runtime && !in_range(&exec_set, f) && !admit)
                     {
                         continue;
@@ -1085,30 +1214,51 @@ fn descend(
                 // (kuna, `aif`) Nothing reachable is left: run the speculative
                 // gap-walk over the partition THIS walk left behind, and take up
                 // whatever it finds as more entries to walk. See `gap_entries`.
-                None if frame_partition.is_some() && (!frame_reconciled
-                    || frame_modes.as_ref().is_some_and(|modes| !modes.stale().is_empty())) =>
+                None if frame_partition.is_some()
+                    && (!frame_reconciled
+                        || frame_modes
+                            .as_ref()
+                            .is_some_and(|modes| !modes.stale().is_empty())) =>
                 {
                     let replacements = if gapwalk {
                         let original = frame_partition.as_ref().unwrap();
-                        let candidates = frame_candidates.iter().copied()
-                            .filter(|root| st.funcs.contains(root)).collect();
+                        let candidates = frame_candidates
+                            .iter()
+                            .copied()
+                            .filter(|root| st.funcs.contains(root))
+                            .collect();
                         let mut corpus = partition_listing(&partition, &st.funcs, &exec);
                         render_fingerprints(
-                            &mut corpus, &st.funcs, arch, translate, &code_space,
-                            &partition, fingerprint_contexts.as_ref(),
+                            &mut corpus,
+                            &st.funcs,
+                            arch,
+                            translate,
+                            &code_space,
+                            &partition,
+                            fingerprint_contexts.as_ref(),
                         );
                         render_frame_flow(&mut corpus, &st);
                         crate::aif::arm_frame_prefixes(
-                            &mut frame_cache, original, &corpus, &candidates, &focused, frame_context.as_ref(),
-                            arch, translate, Rc::clone(&code_space),
+                            &mut frame_cache,
+                            original,
+                            &corpus,
+                            &candidates,
+                            &focused,
+                            frame_context.as_ref(),
+                            arch,
+                            translate,
+                            Rc::clone(&code_space),
                         )
                     } else {
                         BTreeMap::new()
                     };
                     let extendable = !replacements.is_empty()
-                        && replacements.values().all(|prefix| !st.decoded.contains(prefix))
-                        && frame_modes.as_ref().is_some_and(|modes| modes.stale().is_empty()
-                            && modes.decoded_as_arm(&replacements))
+                        && replacements
+                            .values()
+                            .all(|prefix| !st.decoded.contains(prefix))
+                        && frame_modes.as_ref().is_some_and(|modes| {
+                            modes.stale().is_empty() && modes.decoded_as_arm(&replacements)
+                        })
                         && frame_cache.preserves_frame_bodies(&replacements)
                         && frame_cache.prefixes_in_arm_context(&replacements, arch, &code_space)
                         && frame_context.as_ref().is_some_and(|context| {
@@ -1116,8 +1266,14 @@ fn descend(
                             frame_cache.prefixes_in_arm_context(&replacements, arch, &code_space)
                         });
                     if extendable {
-                        kuna_prefixreuse::discard_bodies(&mut st, &mut partition, &mut recovered_spans,
-                            &mut fingerprint_contexts, frame_modes.as_ref().unwrap(), &replacements);
+                        kuna_prefixreuse::discard_bodies(
+                            &mut st,
+                            &mut partition,
+                            &mut recovered_spans,
+                            &mut fingerprint_contexts,
+                            frame_modes.as_ref().unwrap(),
+                            &replacements,
+                        );
                         frame_candidates.retain(|root| !replacements.contains_key(root));
                         frame_candidates.extend(replacements.values().copied());
                         frame_candidates.sort_unstable();
@@ -1146,27 +1302,38 @@ fn descend(
                         BTreeSet::new()
                     };
                     if !replacements.is_empty() || !stale.is_empty() {
-                        let reconciled: BTreeSet<_> = frame_candidates.iter().copied()
-                            .filter(|root| !replacements.contains_key(root) && !stale.contains(root))
-                            .chain(replacements.values().copied()).collect();
+                        let reconciled: BTreeSet<_> = frame_candidates
+                            .iter()
+                            .copied()
+                            .filter(|root| {
+                                !replacements.contains_key(root) && !stale.contains(root)
+                            })
+                            .chain(replacements.values().copied())
+                            .collect();
                         drop(frame_context.take());
                         frame_context = translate.context_scope();
                         // Replaced bodies can invent callees as well as references.
                         // Rebuild from independent roots, then reconsider newly uncalled frames.
-                        seed_set = seeds.iter().copied().filter(|&s| {
-                            !sections_are_runtime || in_range(&exec_set, s)
-                        }).collect();
+                        seed_set = seeds
+                            .iter()
+                            .copied()
+                            .filter(|&s| !sections_are_runtime || in_range(&exec_set, s))
+                            .collect();
                         st = State::new(&seed_set, measure || preserve_bodies);
                         waiting.clear();
                         call_sites.clear();
                         func_queue = seed_set.iter().copied().collect();
                         frame_candidates = reconciled.into_iter().collect();
-                        frame_modes = Some(super::kuna_framemode::FrameModes::new(&frame_candidates));
+                        frame_modes =
+                            Some(super::kuna_framemode::FrameModes::new(&frame_candidates));
                         frame_reconciled = false;
                         gapwalk_done = false;
                         pending_prologues = frame_candidates.iter().copied().collect();
-                        pending_focus = focus.iter().copied()
-                            .filter(|f| !seed_set.contains(f)).collect();
+                        pending_focus = focus
+                            .iter()
+                            .copied()
+                            .filter(|f| !seed_set.contains(f))
+                            .collect();
                         pending_focus.sort_unstable();
                         pending_focus.dedup();
                         pending_focus.reverse();
@@ -1174,7 +1341,9 @@ fn descend(
                         admitted.clear();
                         stopped.clear();
                         walked.clear();
-                        if let Some(context) = &mut walk_context { context.reset(); }
+                        if let Some(context) = &mut walk_context {
+                            context.reset();
+                        }
                         partition.clear();
                         fingerprint_contexts = gapwalk.then(Default::default);
                         recovered_spans.clear();
@@ -1195,7 +1364,9 @@ fn descend(
                         &exec,
                         fingerprint_contexts.as_ref(),
                         frame_partition.as_ref(),
-                        Some(&crate::aif::kuna_aifbracket::BracketEvidence::from_object(file, &exec)),
+                        Some(&crate::aif::kuna_aifbracket::BracketEvidence::from_object(
+                            file, &exec,
+                        )),
                     );
                     pending_focus.extend(found.into_iter().rev());
                     continue;
@@ -1204,13 +1375,23 @@ fn descend(
                 // pointer table with no range check above it is a call table
                 // or nothing.
                 None if arch.analysis_calltable && !waiting.is_empty() && pool.is_some() => {
-                    let settled = kuna_switchtable::Reach { settled: true, ..reach };
+                    let settled = kuna_switchtable::Reach {
+                        settled: true,
+                        ..reach
+                    };
                     let mut left: Vec<_> = waiting.drain().flat_map(|(_, sites)| sites).collect();
                     left.sort_unstable_by_key(|&(vma, ..)| vma);
                     for (vma, _, branch) in left {
                         let read = kuna_switchtable::register_targets(
-                            translate, &code_space, data_space.as_ref(), &|a| st.decoded.contains(&a), vma, &branch,
-                            pool.as_ref().unwrap(), &exec, &settled,
+                            translate,
+                            &code_space,
+                            data_space.as_ref(),
+                            &|a| st.decoded.contains(&a),
+                            vma,
+                            &branch,
+                            pool.as_ref().unwrap(),
+                            &exec,
+                            &settled,
                         );
                         if !read.unbounded {
                             continue;
@@ -1234,8 +1415,15 @@ fn descend(
                 None if !call_sites.is_empty() && pool.is_some() => {
                     for (vma, callind) in std::mem::take(&mut call_sites) {
                         let read = kuna_switchtable::register_targets(
-                            translate, &code_space, data_space.as_ref(), &|a| st.decoded.contains(&a), vma, &callind,
-                            pool.as_ref().unwrap(), &exec, &reach,
+                            translate,
+                            &code_space,
+                            data_space.as_ref(),
+                            &|a| st.decoded.contains(&a),
+                            vma,
+                            &callind,
+                            pool.as_ref().unwrap(),
+                            &exec,
+                            &reach,
                         );
                         let run = kuna_calltable::call_table_run(read.cases, arm, |t| {
                             st.decoded.contains(&t) && !st.funcs.contains(&t)
@@ -1261,9 +1449,12 @@ fn descend(
         if !walked.insert(entry) {
             continue;
         }
-        let entry_mode = walk_context.as_ref().and_then(|context| context.entry(entry));
+        let entry_mode = walk_context
+            .as_ref()
+            .and_then(|context| context.entry(entry));
         let mut insn_queue = VecDeque::from([(entry, entry_mode)]);
-        let body_range = admitted.contains(&entry)
+        let body_range = admitted
+            .contains(&entry)
             .then(|| unflagged[unflagged.partition_point(|&(lo, _)| lo <= entry) - 1]);
         // (kuna) `switchtable`: the dispatches this body's decoding filled the gap
         // above, to read again once it drains.
@@ -1296,7 +1487,11 @@ fn descend(
                     read = tables.targets(translate, &code_space, &exec, &decoded, vma);
                 }
                 let predicated = a32_tables.is_some() && is_predicated(translate, &code_space, vma);
-                if read.cases.is_empty() && read.stated.is_none() && read.gap.is_none() && !predicated {
+                if read.cases.is_empty()
+                    && read.stated.is_none()
+                    && read.gap.is_none()
+                    && !predicated
+                {
                     read = branch_cases(
                         translate,
                         &code_space,
@@ -1316,7 +1511,11 @@ fn descend(
                     }
                     continue;
                 }
-                let text = if read.cases.is_empty() { String::new() } else { assembly(translate, vma, &code_space) };
+                let text = if read.cases.is_empty() {
+                    String::new()
+                } else {
+                    assembly(translate, vma, &code_space)
+                };
                 st.take_switch(vma, entry, &read.cases, read.stated, max_entries, &text);
                 picpool.cases(vma, &read.cases);
                 insn_queue.extend(read.cases.iter().map(|&target| (target, mode)));
@@ -1343,14 +1542,26 @@ fn descend(
                 st.refused.insert(vma);
                 continue;
             }
-            if sections_are_runtime && !in_range(&exec_set, vma)
+            if sections_are_runtime
+                && !in_range(&exec_set, vma)
                 && !body_range.is_some_and(|(lo, hi)| vma >= lo && vma < hi)
             {
                 continue; // out of bounds (the `flow.rs` gate)
             }
-            let selection = super::kuna_walkcontext::InstructionMode::select(arch, translate, &code_space, vma, mode);
+            let selection = super::kuna_walkcontext::InstructionMode::select(
+                arch,
+                translate,
+                &code_space,
+                vma,
+                mode,
+            );
             if let Some(contexts) = &mut fingerprint_contexts {
-                contexts.record(partition.len(), arch, &Address::new(Rc::clone(&code_space), vma), selection.as_ref());
+                contexts.record(
+                    partition.len(),
+                    arch,
+                    &Address::new(Rc::clone(&code_space), vma),
+                    selection.as_ref(),
+                );
             }
             let cached = frame_cache.replay(vma, translate, &code_space, &mut cap);
             let Some(len) = cached.or_else(|| decode(translate, vma, &code_space, &mut cap)) else {
@@ -1358,8 +1569,12 @@ fn descend(
             };
             let commits = if walk_context.is_some() && cached.is_none() {
                 translate.last_context_commits()
-            } else { Vec::new() };
-            if let Some(selection) = &selection { selection.accept(len); }
+            } else {
+                Vec::new()
+            };
+            if let Some(selection) = &selection {
+                selection.accept(len);
+            }
             if let Some(modes) = &mut frame_modes {
                 modes.record(entry, vma, len, mode);
             }
@@ -1372,33 +1587,38 @@ fn descend(
             }
 
             raw.clear();
-            raw.extend(
-                cap.ops()
-                    .iter()
-                    .map(|op| RawOp { opcode: op.opcode, in0: op.ins.first().cloned() }),
-            );
+            raw.extend(cap.ops().iter().map(|op| RawOp {
+                opcode: op.opcode,
+                in0: op.ins.first().cloned(),
+            }));
             let mut c = classify(&raw, vma, len);
             if stub_sites.contains(&vma) {
                 c.flow = FlowType {
-                    kind: FlowKind::ComputedJump, is_jump: true, is_computed: true, is_indirect: true,
+                    kind: FlowKind::ComputedJump,
+                    is_jump: true,
+                    is_computed: true,
+                    is_indirect: true,
                     ..Default::default()
                 };
                 c.fall_through = None;
                 c.flows.clear();
             }
             let proven_call = if c.flow.is_call && c.flows.is_empty() {
-                got_calls.as_ref().zip(data_space.as_ref())
+                got_calls
+                    .as_ref()
+                    .zip(data_space.as_ref())
                     .and_then(|(calls, data)| calls.target(cap.ops(), data))
             } else {
                 None
             };
-            let proven_call = proven_call.filter(|_| {
-                !super::kuna_gotcall::has_stated_callee(arch, &code_space, vma)
-            });
+            let proven_call = proven_call
+                .filter(|_| !super::kuna_gotcall::has_stated_callee(arch, &code_space, vma));
             if let Some((_, target)) = proven_call {
                 c.flows.push(target);
             }
-            let skip = a32_tables.as_ref().and_then(|_| c.predicated_skip(vma, len));
+            let skip = a32_tables
+                .as_ref()
+                .and_then(|_| c.predicated_skip(vma, len));
             let mut condition = condskip.then(|| c.condition_skip(&raw, vma, len)).flatten();
             if let Some(fall) = c.fall_through.filter(|_| !waiting.is_empty()) {
                 woken.extend(waiting.remove(&fall).into_iter().flatten());
@@ -1409,13 +1629,23 @@ fn descend(
                     flow.jumps.extend(c.flows.iter().map(|&to| (vma, to)));
                 }
             }
-            let formed = pcform.as_ref().map_or_else(Formed::default, |p| p.formed(vma, len));
+            let formed = pcform
+                .as_ref()
+                .map_or_else(Formed::default, |p| p.formed(vma, len));
             let mut drefs = if mapped.is_empty() {
                 Vec::new()
             } else {
                 let fall_through = vma.wrapping_add(len as u64);
                 let delayed = || has_delay_slot(translate, vma, &code_space, len);
-                data_refs(cap.ops(), data_space.as_ref(), &mapped, fall_through, pool.as_ref(), &formed, &delayed)
+                data_refs(
+                    cap.ops(),
+                    data_space.as_ref(),
+                    &mapped,
+                    fall_through,
+                    pool.as_ref(),
+                    &formed,
+                    &delayed,
+                )
             };
             if let Some((slot, _)) = proven_call {
                 super::kuna_gotcall::resolved_slot_reads(&mut drefs, slot);
@@ -1423,14 +1653,17 @@ fn descend(
             // (kuna) `regcarry`: the address a register pair forms across
             // instructions. See [`super::kuna_regcarry`].
             if let Some(m) = &carry_machine {
-                st.carry.step(m, kuna_regcarry::Insn {
-                    vma,
-                    ops: cap.ops(),
-                    fall: c.fall_through,
-                    branches: if c.flow.is_call { &[] } else { &c.flows },
-                    calls: c.flow.is_call,
-                    formed,
-                });
+                st.carry.step(
+                    m,
+                    kuna_regcarry::Insn {
+                        vma,
+                        ops: cap.ops(),
+                        fall: c.fall_through,
+                        branches: if c.flow.is_call { &[] } else { &c.flows },
+                        calls: c.flow.is_call,
+                        formed,
+                    },
+                );
             }
             // (kuna) `picpool`: the address a PC-relative literal-pool pair forms,
             // which is in neither of its two instructions on its own. See
@@ -1456,7 +1689,8 @@ fn descend(
                 [t] if Some(*t) == condition => true,
                 flows => flows.iter().all(|&t| Some(t) == skip),
             };
-            let mut text = if only_skip && drefs.is_empty() && pointer.is_none() && vcall.is_none() {
+            let mut text = if only_skip && drefs.is_empty() && pointer.is_none() && vcall.is_none()
+            {
                 String::new()
             } else {
                 assembly(translate, vma, &code_space)
@@ -1473,13 +1707,19 @@ fn descend(
                 }
             }
 
-            if vcall.is_none_or(|t| t.len() > 1) && cap.ops().iter().any(|op| op.opcode == OpCode::CPUI_CALLIND) {
+            if vcall.is_none_or(|t| t.len() > 1)
+                && cap.ops().iter().any(|op| op.opcode == OpCode::CPUI_CALLIND)
+            {
                 st.indirect_call_sites.insert(vma);
             }
             // (kuna `arm64evcall`) A resolved arm64e virtual call: a call edge to
             // the one method its slot holds, a `vcall` edge to each of several.
             for &target in vcall.into_iter().flatten() {
-                let kind = if vcall.is_some_and(|t| t.len() == 1) { XrefKind::Call } else { XrefKind::VirtualCall };
+                let kind = if vcall.is_some_and(|t| t.len() == 1) {
+                    XrefKind::Call
+                } else {
+                    XrefKind::VirtualCall
+                };
                 st.file(vma, target, kind, &text);
                 if !sections_are_runtime || in_range(&exec_set, target) {
                     st.funcs.insert(target);
@@ -1488,7 +1728,11 @@ fn descend(
             }
 
             for &target in &c.flows {
-                let kind = if c.flow.is_call { XrefKind::Call } else { XrefKind::Jump };
+                let kind = if c.flow.is_call {
+                    XrefKind::Call
+                } else {
+                    XrefKind::Jump
+                };
                 if condition == Some(target) {
                     condition = None;
                     if c.fall_through.is_none() {
@@ -1501,21 +1745,28 @@ fn descend(
                     stopped.insert(target);
                 }
                 if c.flow.is_call {
-                    let target_mode = walk_context.as_ref()
+                    let target_mode = walk_context
+                        .as_ref()
                         .and_then(|context| context.successor(target, mode, &commits));
-                    if let Some(context) = &mut walk_context { context.called(target, target_mode); }
-                    if let Some(modes) = &mut frame_modes { modes.called(target, target_mode); }
+                    if let Some(context) = &mut walk_context {
+                        context.called(target, target_mode);
+                    }
+                    if let Some(modes) = &mut frame_modes {
+                        modes.called(target, target_mode);
+                    }
                     st.funcs.insert(target);
                     func_queue.push_back(target);
                 } else {
-                    let target_mode = walk_context.as_ref()
+                    let target_mode = walk_context
+                        .as_ref()
                         .and_then(|context| context.successor(target, mode, &commits));
                     insn_queue.push_back((target, target_mode));
                 }
             }
             if let Some(fall) = c.fall_through {
                 // Fall-through is not a reference; it is only a walk successor.
-                let fall_mode = walk_context.as_ref()
+                let fall_mode = walk_context
+                    .as_ref()
                     .and_then(|context| context.successor(fall, mode, &commits));
                 insn_queue.push_back((fall, fall_mode));
             }
@@ -1526,12 +1777,27 @@ fn descend(
             // table the jump indexes and take its entries up as successors of
             // THIS function: a case body is the dispatcher's own code. See
             // [`super::kuna_switchtable`].
-            if c.flows.iter().all(|&t| Some(t) == skip) && c.flow.is_computed && c.flow.is_jump && !c.flow.is_call {
+            if c.flows.iter().all(|&t| Some(t) == skip)
+                && c.flow.is_computed
+                && c.flow.is_jump
+                && !c.flow.is_call
+            {
                 if let Some(p) = pool.as_ref() {
-                    let a32 = a32_tables.as_ref().map_or_else(kuna_switchtable::TableRead::default, |tables| {
-                        let decoded = |at: u64| st.decoded.contains(&at);
-                        tables.decoded_targets(translate, &code_space, &exec, &decoded, vma, cap.ops(), len)
-                    });
+                    let a32 = a32_tables.as_ref().map_or_else(
+                        kuna_switchtable::TableRead::default,
+                        |tables| {
+                            let decoded = |at: u64| st.decoded.contains(&at);
+                            tables.decoded_targets(
+                                translate,
+                                &code_space,
+                                &exec,
+                                &decoded,
+                                vma,
+                                cap.ops(),
+                                len,
+                            )
+                        },
+                    );
                     let branch = cap
                         .ops()
                         .iter()
@@ -1539,12 +1805,19 @@ fn descend(
                         .and_then(|o| o.ins.first());
                     let (mut cases, mut stated) = (a32.cases, a32.stated);
                     if let (Some(gap), Some(branch)) = (a32.gap, branch) {
-                        waiting.entry(gap).or_default().push((vma, mode, branch.clone()));
+                        waiting
+                            .entry(gap)
+                            .or_default()
+                            .push((vma, mode, branch.clone()));
                     }
                     let unpredicated = c.flows.is_empty();
                     let mut unbounded = false;
                     for &(base, kind) in &drefs {
-                        if unpredicated && kind == XrefKind::Data && stated.is_none() && a32.gap.is_none() {
+                        if unpredicated
+                            && kind == XrefKind::Data
+                            && stated.is_none()
+                            && a32.gap.is_none()
+                        {
                             cases.extend(kuna_switchtable::targets(
                                 base,
                                 vma,
@@ -1573,7 +1846,10 @@ fn descend(
                         );
                         if let (Some(gap), Some(branch)) = (read.gap, branch) {
                             if read.cases.is_empty() && read.stated.is_none() {
-                                waiting.entry(gap).or_default().push((vma, mode, branch.clone()));
+                                waiting
+                                    .entry(gap)
+                                    .or_default()
+                                    .push((vma, mode, branch.clone()));
                             }
                         }
                         (cases, stated) = (read.cases, read.stated);
@@ -1595,7 +1871,9 @@ fn descend(
                         });
                     }
                     let call_table = arch.analysis_calltable
-                        && kuna_calltable::is_call_table(&cases, stated.is_none(), |t| st.funcs.contains(&t) && t != entry);
+                        && kuna_calltable::is_call_table(&cases, stated.is_none(), |t| {
+                            st.funcs.contains(&t) && t != entry
+                        });
                     if call_table {
                         for t in cases.iter().copied().collect::<BTreeSet<u64>>() {
                             st.file(vma, t, XrefKind::Call, &text);
@@ -1612,11 +1890,24 @@ fn descend(
             }
             // (kuna `calltable`) An indexed call through a table of function
             // pointers calls every entry of the table.
-            if arch.analysis_calltable && c.flows.is_empty() && c.flow.is_computed && c.flow.is_call {
-                let callind = cap.ops().iter().find(|o| o.opcode == OpCode::CPUI_CALLIND).and_then(|o| o.ins.first());
+            if arch.analysis_calltable && c.flows.is_empty() && c.flow.is_computed && c.flow.is_call
+            {
+                let callind = cap
+                    .ops()
+                    .iter()
+                    .find(|o| o.opcode == OpCode::CPUI_CALLIND)
+                    .and_then(|o| o.ins.first());
                 if let (Some(p), Some(callind)) = (pool.as_ref(), callind) {
                     let mut read = kuna_switchtable::register_targets(
-                        translate, &code_space, data_space.as_ref(), &|a| st.decoded.contains(&a), vma, callind, p, &exec, &reach,
+                        translate,
+                        &code_space,
+                        data_space.as_ref(),
+                        &|a| st.decoded.contains(&a),
+                        vma,
+                        callind,
+                        p,
+                        &exec,
+                        &reach,
                     );
                     if read.stated.is_none() && !read.cases.is_empty() {
                         call_sites.push((vma, callind.clone()));
@@ -1739,7 +2030,13 @@ fn descend(
 
     for (from, to, entry, mode) in std::mem::take(&mut st.skips) {
         if to != entry && st.funcs.contains(&to) {
-            let _selection = super::kuna_walkcontext::InstructionMode::select(arch, translate, &code_space, from, mode);
+            let _selection = super::kuna_walkcontext::InstructionMode::select(
+                arch,
+                translate,
+                &code_space,
+                from,
+                mode,
+            );
             let text = assembly(translate, from, &code_space);
             st.file(from, to, XrefKind::Jump, &text);
         }
@@ -1756,8 +2053,7 @@ fn descend(
             if !st.decoded.contains(&entry) {
                 continue;
             }
-            if let Some(v) =
-                veneer_at(translate, &code_space, entry, data_space.as_ref(), &mapped)
+            if let Some(v) = veneer_at(translate, &code_space, entry, data_space.as_ref(), &mapped)
             {
                 veneers.insert(entry, v);
             }
@@ -1770,7 +2066,10 @@ fn descend(
     }
     if arch.analysis_addrtable && sections_are_runtime {
         let width = crate::addrtable::ptr_width(file);
-        index.file_pointer_tables(&crate::addrtable::scan_address_tables(file, 2, width), width as u64);
+        index.file_pointer_tables(
+            &crate::addrtable::scan_address_tables(file, 2, width),
+            width as u64,
+        );
     }
     index.stopped = stopped;
     index
@@ -1812,19 +2111,40 @@ fn gap_entries(
     }
     let mut listing = partition_listing(partition, funcs, exec);
     let _probe = crate::aif::arm_gap_probe_scope(translate);
-    render_fingerprints(&mut listing, funcs, arch, translate, code_space, partition, contexts);
-    let poolslide = (arch.analysis_aifpoolslide && crate::loadimage_object::is_arm32_language(&arch.archid))
-        .then_some(arch);
+    render_fingerprints(
+        &mut listing,
+        funcs,
+        arch,
+        translate,
+        code_space,
+        partition,
+        contexts,
+    );
+    let poolslide = (arch.analysis_aifpoolslide
+        && crate::loadimage_object::is_arm32_language(&arch.archid))
+    .then_some(arch);
     if let Some(prior) = frame {
         crate::aif::run_aif_after_frames(
-            &listing, prior, translate, Rc::clone(code_space),
-            arch.analysis_aif.strict(), arch.analysis_aif.corroborate(), bracket,
-            poolslide, None, None,
+            &listing,
+            prior,
+            translate,
+            Rc::clone(code_space),
+            arch.analysis_aif.strict(),
+            arch.analysis_aif.corroborate(),
+            bracket,
+            poolslide,
+            None,
+            None,
         )
     } else {
         crate::aif::run_aif(
-            &listing, translate, Rc::clone(code_space), listing.exec_ranges(),
-            arch.analysis_aif.strict(), arch.analysis_aif.corroborate(), bracket,
+            &listing,
+            translate,
+            Rc::clone(code_space),
+            listing.exec_ranges(),
+            arch.analysis_aif.strict(),
+            arch.analysis_aif.corroborate(),
+            bracket,
             poolslide,
         )
     }
@@ -1835,7 +2155,8 @@ fn render_frame_flow(listing: &mut super::Listing, state: &State) {
     if let Some(flow) = &state.flow {
         for &(at, len, falls) in &flow.insns {
             if falls {
-                listing.insns.get_mut(&at).unwrap().fall_through = Some(at.wrapping_add(u64::from(len)));
+                listing.insns.get_mut(&at).unwrap().fall_through =
+                    Some(at.wrapping_add(u64::from(len)));
             }
         }
         for &(from, to) in &flow.jumps {
@@ -1879,7 +2200,9 @@ fn render_fingerprints(
 }
 
 fn partition_covers(partition: &BTreeMap<u64, u32>, vma: u64) -> bool {
-    partition.range(..=vma).next_back()
+    partition
+        .range(..=vma)
+        .next_back()
         .is_some_and(|(&start, &len)| vma - start < u64::from(len))
 }
 
@@ -1971,18 +2294,27 @@ fn veneer_at(
         let raw: Vec<RawOp> = cap
             .ops()
             .iter()
-            .map(|op| RawOp { opcode: op.opcode, in0: op.ins.first().cloned() })
+            .map(|op| RawOp {
+                opcode: op.opcode,
+                in0: op.ins.first().cloned(),
+            })
             .collect();
         let c = classify(&raw, vma, len);
         if !c.flows.is_empty() || c.flow.is_call || c.flow.kind == FlowKind::Return {
             return None;
         }
-        if let Some(op) = cap.ops().iter().find(|o| o.opcode == OpCode::CPUI_BRANCHIND) {
+        if let Some(op) = cap
+            .ops()
+            .iter()
+            .find(|o| o.opcode == OpCode::CPUI_BRANCHIND)
+        {
             let vn = op.ins.first()?;
             let in_data = matches!((&vn.space, data_space), (Some(s), Some(d)) if Rc::ptr_eq(s, d));
             let end = vma.wrapping_add(u64::from(len));
-            return (in_data && in_range(mapped, vn.offset))
-                .then_some(Veneer { slot: vn.offset, end });
+            return (in_data && in_range(mapped, vn.offset)).then_some(Veneer {
+                slot: vn.offset,
+                end,
+            });
         }
         vma = c.fall_through?;
     }
@@ -2077,13 +2409,19 @@ impl State {
                 text
             }
         };
-        self.refs.push(Xref { from, to, kind, instruction });
+        self.refs.push(Xref {
+            from,
+            to,
+            kind,
+            instruction,
+        });
     }
 
     /// Withdraw every `Data` row whose `(from, to)` is in `pairs`, in one pass.
     fn unfile_data(&mut self, pairs: &HashSet<(u64, u64)>) {
         if !pairs.is_empty() {
-            self.refs.retain(|r| r.kind != XrefKind::Data || !pairs.contains(&(r.from, r.to)));
+            self.refs
+                .retain(|r| r.kind != XrefKind::Data || !pairs.contains(&(r.from, r.to)));
         }
     }
 
@@ -2095,12 +2433,17 @@ impl State {
             flow.insns.sort_unstable_by_key(|&(vma, _, _)| vma);
             flow.jumps.sort_unstable();
         }
-        let body_owners = self.flow.as_ref().filter(|_| preserve_bodies)
+        let body_owners = self
+            .flow
+            .as_ref()
+            .filter(|_| preserve_bodies)
             .map(|flow| flow.body_owners(&self.funcs));
-        let owner = |vma| body_owners.as_ref().map_or_else(
-            || self.funcs.range(..=vma).next_back().copied(),
-            |owners| owners.get(&vma).copied(),
-        );
+        let owner = |vma| {
+            body_owners.as_ref().map_or_else(
+                || self.funcs.range(..=vma).next_back().copied(),
+                |owners| owners.get(&vma).copied(),
+            )
+        };
         let mut refs = std::mem::take(&mut self.refs);
         refs.sort_by_key(|r| (r.to, r.from, r.kind));
         refs.dedup_by_key(|r| (r.to, r.from, r.kind));
@@ -2110,7 +2453,10 @@ impl State {
         let mut by_source_function: BTreeMap<u64, Vec<usize>> = BTreeMap::new();
         for run in by_source.chunk_by(|&a, &b| refs[a].from == refs[b].from) {
             if let Some(entry) = owner(refs[run[0]].from) {
-                by_source_function.entry(entry).or_default().extend_from_slice(run);
+                by_source_function
+                    .entry(entry)
+                    .or_default()
+                    .extend_from_slice(run);
             }
         }
         for rows in by_source_function.values_mut() {
@@ -2179,7 +2525,9 @@ fn mapping_markers(file: &object::File) -> Vec<(u64, u8)> {
 /// a character.
 fn mapping_kind(name: &str) -> Option<u8> {
     match name.as_bytes() {
-        [b'$', kind @ (b'a' | b't' | b'd')] | [b'$', kind @ (b'a' | b't' | b'd'), b'.', ..] => Some(*kind),
+        [b'$', kind @ (b'a' | b't' | b'd')] | [b'$', kind @ (b'a' | b't' | b'd'), b'.', ..] => {
+            Some(*kind)
+        }
         _ => None,
     }
 }
@@ -2273,7 +2621,6 @@ pub(super) fn decode(
 /// instructions) rendering every decode cost 0.22 s of a 1.3 s walk, and the
 /// large majority of instructions file no reference at all.
 fn assembly(translate: &dyn Translate, vma: u64, code_space: &Rc<AddrSpace>) -> String {
-
     let addr = Address::new(Rc::clone(code_space), vma);
     let mut asm = AsmCapture::default();
     let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -2438,11 +2785,14 @@ fn data_refs(
 /// instruction and transfers nothing.
 pub(super) fn links(ops: &[FullOp]) -> bool {
     ops.iter().any(|op| match op.opcode {
-        OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_BRANCHIND | OpCode::CPUI_CALLOTHER => {
-            true
-        }
+        OpCode::CPUI_CALL
+        | OpCode::CPUI_CALLIND
+        | OpCode::CPUI_BRANCHIND
+        | OpCode::CPUI_CALLOTHER => true,
         OpCode::CPUI_BRANCH => op.ins.first().is_some_and(|vn| {
-            vn.space.as_ref().is_some_and(|s| s.get_type() != spacetype::IPTR_CONSTANT)
+            vn.space
+                .as_ref()
+                .is_some_and(|s| s.get_type() != spacetype::IPTR_CONSTANT)
         }),
         _ => false,
     })
@@ -2461,7 +2811,12 @@ pub(super) fn links(ops: &[FullOp]) -> bool {
 /// instruction with no branch (`never_taken`) says it is one, on MIPS64 as on
 /// MIPS32. A delay slot behind a branch is just another instruction: SuperH
 /// `rts; mova` forms the address after it.
-fn is_return_address(op: &FullOp, slot: usize, linked: bool, never_taken: &dyn Fn() -> bool) -> bool {
+fn is_return_address(
+    op: &FullOp,
+    slot: usize,
+    linked: bool,
+    never_taken: &dyn Fn() -> bool,
+) -> bool {
     let whole = op.ins.len() == 1 || (op.opcode == OpCode::CPUI_STORE && slot == 2);
     linked || !whole || never_taken()
 }
@@ -2473,7 +2828,9 @@ fn branches(ops: &[FullOp]) -> bool {
     ops.iter().any(|op| match op.opcode {
         OpCode::CPUI_RETURN => true,
         OpCode::CPUI_CBRANCH => op.ins.first().is_some_and(|vn| {
-            vn.space.as_ref().is_some_and(|s| s.get_type() != spacetype::IPTR_CONSTANT)
+            vn.space
+                .as_ref()
+                .is_some_and(|s| s.get_type() != spacetype::IPTR_CONSTANT)
         }),
         _ => false,
     })
@@ -2482,7 +2839,12 @@ fn branches(ops: &[FullOp]) -> bool {
 /// Does the instruction at `vma` end past a delay slot? Its `len` is where it
 /// falls through to, and only a branch has a slot between its own encoding and
 /// that address.
-fn has_delay_slot(translate: &dyn Translate, vma: u64, code_space: &Rc<AddrSpace>, len: u32) -> bool {
+fn has_delay_slot(
+    translate: &dyn Translate,
+    vma: u64,
+    code_space: &Rc<AddrSpace>,
+    len: u32,
+) -> bool {
     let addr = Address::new(Rc::clone(code_space), vma);
     let own = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         translate.instruction_length(&addr)
@@ -2495,10 +2857,18 @@ fn has_delay_slot(translate: &dyn Translate, vma: u64, code_space: &Rc<AddrSpace
 /// `pc` as the same sum, and that is not a return address. See [`data_refs`].
 fn is_return_address_sum(op: &FullOp, fall_through: u64) -> bool {
     let constant = |vn: &VarnodeData| {
-        vn.space.as_ref().is_some_and(|s| s.get_type() == spacetype::IPTR_CONSTANT)
+        vn.space
+            .as_ref()
+            .is_some_and(|s| s.get_type() == spacetype::IPTR_CONSTANT)
     };
-    let (Some(out), [a, b]) = (&op.out, op.ins.as_slice()) else { return false };
-    let mask = if out.size >= 8 { u64::MAX } else { (1u64 << (8 * out.size)) - 1 };
+    let (Some(out), [a, b]) = (&op.out, op.ins.as_slice()) else {
+        return false;
+    };
+    let mask = if out.size >= 8 {
+        u64::MAX
+    } else {
+        (1u64 << (8 * out.size)) - 1
+    };
     op.opcode == OpCode::CPUI_INT_ADD
         && constant(a)
         && constant(b)
@@ -2540,7 +2910,9 @@ fn is_indirect_call_slot(ops: &[FullOp], slot: &VarnodeData) -> bool {
         else {
             return false;
         };
-        let Some(next) = def.ins.first() else { return false };
+        let Some(next) = def.ins.first() else {
+            return false;
+        };
         cur = next;
     }
     false
@@ -2642,7 +3014,7 @@ pub(super) fn range_union(mut ranges: Vec<(u64, u64)>) -> Vec<(u64, u64)> {
 mod tests {
     use std::rc::Rc;
 
-    use unlace_base::space::{spacetype, AddrSpace};
+    use unlace_base::space::{AddrSpace, spacetype};
     use unlace_num::opcodes::OpCode;
     use unlace_num::pcoderaw::VarnodeData;
 
@@ -2653,7 +3025,13 @@ mod tests {
     /// slicing through that character.
     #[test]
     fn mapping_symbol_names_are_read_by_byte() {
-        for (name, kind) in [("$a", b'a'), ("$t", b't'), ("$d", b'd'), ("$t.foo", b't'), ("$d.realdata", b'd')] {
+        for (name, kind) in [
+            ("$a", b'a'),
+            ("$t", b't'),
+            ("$d", b'd'),
+            ("$t.foo", b't'),
+            ("$d.realdata", b'd'),
+        ] {
             assert_eq!(mapping_kind(name), Some(kind), "{name}");
         }
         for name in ["$", "$x", "$é", "$\u{e9}t", "$ta", "$t_", "t", "", "é"] {
@@ -2671,7 +3049,11 @@ mod tests {
     }
 
     fn vn(space: &Rc<AddrSpace>, offset: u64) -> VarnodeData {
-        VarnodeData { space: Some(Rc::clone(space)), offset, size: 8 }
+        VarnodeData {
+            space: Some(Rc::clone(space)),
+            offset,
+            size: 8,
+        }
     }
 
     fn op(opcode: OpCode, out: Option<VarnodeData>, ins: Vec<VarnodeData>) -> FullOp {
@@ -2693,7 +3075,15 @@ mod tests {
     /// Run [`data_refs`] with `ram` as the default data space and a fall-through
     /// no op under test materializes.
     fn refs(ram: &Rc<AddrSpace>, ops: &[FullOp]) -> Vec<(u64, XrefKind)> {
-        data_refs(ops, Some(ram), &MAPPED, 0, None, &Formed::default(), &|| false)
+        data_refs(
+            ops,
+            Some(ram),
+            &MAPPED,
+            0,
+            None,
+            &Formed::default(),
+            &|| false,
+        )
     }
 
     /// The shape a constant-address memory operand actually lifts to: a direct
@@ -2715,11 +3105,41 @@ mod tests {
         let (ram, cst) = spaces();
         let low = [(0x300, 0x2000)];
         let copy = [op(OpCode::CPUI_COPY, None, vec![vn(&cst, 0x378)])];
-        let formed = data_refs(&copy, Some(&ram), &low, 0x3a4, None, &Formed::one(0x378), &|| false);
+        let formed = data_refs(
+            &copy,
+            Some(&ram),
+            &low,
+            0x3a4,
+            None,
+            &Formed::one(0x378),
+            &|| false,
+        );
         assert_eq!(formed, vec![(0x378, XrefKind::Data)]);
-        assert!(data_refs(&copy, Some(&ram), &low, 0x3a4, None, &Formed::default(), &|| false).is_empty());
+        assert!(
+            data_refs(
+                &copy,
+                Some(&ram),
+                &low,
+                0x3a4,
+                None,
+                &Formed::default(),
+                &|| false
+            )
+            .is_empty()
+        );
         let unmapped = [op(OpCode::CPUI_COPY, None, vec![vn(&cst, 0x200)])];
-        assert!(data_refs(&unmapped, Some(&ram), &low, 0x3a4, None, &Formed::one(0x200), &|| false).is_empty());
+        assert!(
+            data_refs(
+                &unmapped,
+                Some(&ram),
+                &low,
+                0x3a4,
+                None,
+                &Formed::one(0x200),
+                &|| false
+            )
+            .is_empty()
+        );
     }
 
     /// A branch/call target is also a data-space varnode, and it is already
@@ -2750,9 +3170,10 @@ mod tests {
         let (ram, _cst) = spaces();
         // `CALLIND` straight off the slot is not a shape x86 emits, but the
         // walk must not depend on which of the two it gets.
-        for (opcode, kind) in
-            [(OpCode::CPUI_BRANCHIND, XrefKind::Jump), (OpCode::CPUI_CALLIND, XrefKind::Call)]
-        {
+        for (opcode, kind) in [
+            (OpCode::CPUI_BRANCHIND, XrefKind::Jump),
+            (OpCode::CPUI_CALLIND, XrefKind::Call),
+        ] {
             assert_eq!(
                 refs(&ram, &[op(opcode, None, vec![vn(&ram, 0x1030)])]),
                 vec![(0x1030, kind)],
@@ -2774,7 +3195,11 @@ mod tests {
         let (ram, _cst) = spaces();
         let tmp = Rc::new(AddrSpace::new_for_decode(spacetype::IPTR_INTERNAL));
         let ops = [
-            op(OpCode::CPUI_COPY, Some(vn(&tmp, 0x100)), vec![vn(&ram, 0x1030)]),
+            op(
+                OpCode::CPUI_COPY,
+                Some(vn(&tmp, 0x100)),
+                vec![vn(&ram, 0x1030)],
+            ),
             op(OpCode::CPUI_CALLIND, None, vec![vn(&tmp, 0x100)]),
         ];
         assert_eq!(refs(&ram, &ops), vec![(0x1030, XrefKind::Call)]);
@@ -2782,8 +3207,16 @@ mod tests {
         // The same instruction reading an unrelated global still reads it: only
         // the operand the destination actually comes from becomes an edge.
         let ops = [
-            op(OpCode::CPUI_COPY, Some(vn(&tmp, 0x100)), vec![vn(&ram, 0x1030)]),
-            op(OpCode::CPUI_COPY, Some(vn(&tmp, 0x200)), vec![vn(&ram, 0x4010)]),
+            op(
+                OpCode::CPUI_COPY,
+                Some(vn(&tmp, 0x100)),
+                vec![vn(&ram, 0x1030)],
+            ),
+            op(
+                OpCode::CPUI_COPY,
+                Some(vn(&tmp, 0x200)),
+                vec![vn(&ram, 0x4010)],
+            ),
             op(OpCode::CPUI_CALLIND, None, vec![vn(&tmp, 0x100)]),
         ];
         assert_eq!(
@@ -2797,21 +3230,47 @@ mod tests {
         let (ram, _cst) = spaces();
         let tmp = Rc::new(AddrSpace::new_for_decode(spacetype::IPTR_INTERNAL));
         let ops = [
-            op(OpCode::CPUI_COPY, Some(vn(&tmp, 0x100)), vec![vn(&ram, 0x1030)]),
-            op(OpCode::CPUI_COPY, Some(vn(&tmp, 0x100)), vec![vn(&ram, 0x4010)]),
-            op(OpCode::CPUI_COPY, Some(vn(&ram, 0x4020)), vec![vn(&tmp, 0x200)]),
+            op(
+                OpCode::CPUI_COPY,
+                Some(vn(&tmp, 0x100)),
+                vec![vn(&ram, 0x1030)],
+            ),
+            op(
+                OpCode::CPUI_COPY,
+                Some(vn(&tmp, 0x100)),
+                vec![vn(&ram, 0x4010)],
+            ),
+            op(
+                OpCode::CPUI_COPY,
+                Some(vn(&ram, 0x4020)),
+                vec![vn(&tmp, 0x200)],
+            ),
             op(OpCode::CPUI_CALLIND, None, vec![vn(&tmp, 0x100)]),
         ];
         let mut references = refs(&ram, &ops);
-        assert_eq!(references, vec![
-            (0x1030, XrefKind::Call), (0x4010, XrefKind::Read), (0x4020, XrefKind::Write),
-        ]);
+        assert_eq!(
+            references,
+            vec![
+                (0x1030, XrefKind::Call),
+                (0x4010, XrefKind::Read),
+                (0x4020, XrefKind::Write),
+            ]
+        );
         super::super::kuna_gotcall::resolved_slot_reads(&mut references, 0x4010);
-        assert_eq!(references, vec![
-            (0x1030, XrefKind::Read), (0x4010, XrefKind::Read), (0x4020, XrefKind::Write),
-        ]);
+        assert_eq!(
+            references,
+            vec![
+                (0x1030, XrefKind::Read),
+                (0x4010, XrefKind::Read),
+                (0x4020, XrefKind::Write),
+            ]
+        );
         let outside_sections = [
-            op(OpCode::CPUI_COPY, Some(vn(&tmp, 0x100)), vec![vn(&ram, 0x3000)]),
+            op(
+                OpCode::CPUI_COPY,
+                Some(vn(&tmp, 0x100)),
+                vec![vn(&ram, 0x3000)],
+            ),
             op(OpCode::CPUI_CALLIND, None, vec![vn(&tmp, 0x100)]),
         ];
         let mut references = refs(&ram, &outside_sections);
@@ -2826,12 +3285,23 @@ mod tests {
     fn the_copy_chain_to_a_slot_is_bounded() {
         let (ram, _cst) = spaces();
         let tmp = Rc::new(AddrSpace::new_for_decode(spacetype::IPTR_INTERNAL));
-        let mut ops =
-            vec![op(OpCode::CPUI_COPY, Some(vn(&tmp, 0)), vec![vn(&ram, 0x1030)])];
+        let mut ops = vec![op(
+            OpCode::CPUI_COPY,
+            Some(vn(&tmp, 0)),
+            vec![vn(&ram, 0x1030)],
+        )];
         for i in 0..MAX_SLOT_COPIES as u64 {
-            ops.push(op(OpCode::CPUI_COPY, Some(vn(&tmp, i + 1)), vec![vn(&tmp, i)]));
+            ops.push(op(
+                OpCode::CPUI_COPY,
+                Some(vn(&tmp, i + 1)),
+                vec![vn(&tmp, i)],
+            ));
         }
-        ops.push(op(OpCode::CPUI_CALLIND, None, vec![vn(&tmp, MAX_SLOT_COPIES as u64)]));
+        ops.push(op(
+            OpCode::CPUI_CALLIND,
+            None,
+            vec![vn(&tmp, MAX_SLOT_COPIES as u64)],
+        ));
         assert_eq!(refs(&ram, &ops), vec![(0x1030, XrefKind::Read)]);
     }
 
@@ -2840,7 +3310,11 @@ mod tests {
     #[test]
     fn load_through_a_constant_pointer_is_a_read() {
         let (ram, cst) = spaces();
-        let ops = [op(OpCode::CPUI_LOAD, None, vec![vn(&cst, 0x1b), vn(&cst, 0x4010)])];
+        let ops = [op(
+            OpCode::CPUI_LOAD,
+            None,
+            vec![vn(&cst, 0x1b), vn(&cst, 0x4010)],
+        )];
         assert_eq!(refs(&ram, &ops), vec![(0x4010, XrefKind::Read)]);
     }
 
@@ -2872,9 +3346,17 @@ mod tests {
     fn a_calls_own_return_address_is_never_a_data_reference() {
         let (ram, cst) = spaces();
         let reg = Rc::new(AddrSpace::new_for_decode(spacetype::IPTR_PROCESSOR));
-        let r = |offset| VarnodeData { space: Some(Rc::clone(&reg)), offset, size: 4 };
+        let r = |offset| VarnodeData {
+            space: Some(Rc::clone(&reg)),
+            offset,
+            size: 4,
+        };
         let fall = || vn(&cst, 0x1104);
-        let push = op(OpCode::CPUI_STORE, None, vec![vn(&cst, 0x1b), r(0x10), fall()]);
+        let push = op(
+            OpCode::CPUI_STORE,
+            None,
+            vec![vn(&cst, 0x1b), r(0x10), fall()],
+        );
         let to_lr = op(OpCode::CPUI_COPY, Some(r(0x58)), vec![fall()]);
         let call = op(OpCode::CPUI_CALL, None, vec![vn(&ram, 0x1180)]);
         let to_next = op(OpCode::CPUI_BRANCH, None, vec![vn(&ram, 0x1104)]);
@@ -2897,19 +3379,60 @@ mod tests {
                     op(OpCode::CPUI_CALLOTHER, None, vec![vn(&cst, 5)]),
                 ],
             ),
-            ("A32 mov lr,pc", vec![op(OpCode::CPUI_INT_ADD, Some(r(0x58)), vec![fall(), vn(&cst, 4)])]),
+            (
+                "A32 mov lr,pc",
+                vec![op(
+                    OpCode::CPUI_INT_ADD,
+                    Some(r(0x58)),
+                    vec![fall(), vn(&cst, 4)],
+                )],
+            ),
         ];
         for (what, ops) in &links {
             let decoded = || panic!("{what}: a link needs no second decode");
-            assert!(data_refs(ops, Some(&ram), &MAPPED, 0x1104, None, &Formed::default(), &decoded).is_empty(), "{what}");
+            assert!(
+                data_refs(
+                    ops,
+                    Some(&ram),
+                    &MAPPED,
+                    0x1104,
+                    None,
+                    &Formed::default(),
+                    &decoded
+                )
+                .is_empty(),
+                "{what}"
+            );
         }
         let nal = [op(OpCode::CPUI_COPY, Some(r(0x7c)), vec![fall()])];
-        assert!(data_refs(&nal, Some(&ram), &MAPPED, 0x1104, None, &Formed::default(), &|| true).is_empty());
+        assert!(
+            data_refs(
+                &nal,
+                Some(&ram),
+                &MAPPED,
+                0x1104,
+                None,
+                &Formed::default(),
+                &|| true
+            )
+            .is_empty()
+        );
         let nal_movz = [
             op(OpCode::CPUI_COPY, Some(r(0x7c)), vec![fall()]),
             op(OpCode::CPUI_CBRANCH, None, vec![vn(&cst, 2), r(0x200)]),
         ];
-        assert!(data_refs(&nal_movz, Some(&ram), &MAPPED, 0x1104, None, &Formed::default(), &|| true).is_empty());
+        assert!(
+            data_refs(
+                &nal_movz,
+                Some(&ram),
+                &MAPPED,
+                0x1104,
+                None,
+                &Formed::default(),
+                &|| true
+            )
+            .is_empty()
+        );
     }
 
     /// A delay slot behind a branch is an ordinary instruction: SuperH `rts;
@@ -2918,15 +3441,30 @@ mod tests {
     fn an_address_formed_in_a_branchs_delay_slot_is_a_data_reference() {
         let (ram, cst) = spaces();
         let reg = Rc::new(AddrSpace::new_for_decode(spacetype::IPTR_PROCESSOR));
-        let r = |offset| VarnodeData { space: Some(Rc::clone(&reg)), offset, size: 4 };
+        let r = |offset| VarnodeData {
+            space: Some(Rc::clone(&reg)),
+            offset,
+            size: 4,
+        };
         let mova = op(OpCode::CPUI_COPY, Some(r(0)), vec![vn(&cst, 0x1104)]);
         for (what, flow) in [
             ("rts", op(OpCode::CPUI_RETURN, None, vec![r(0x188)])),
-            ("bt/s", op(OpCode::CPUI_CBRANCH, None, vec![vn(&ram, 0x1180), r(0x200)])),
+            (
+                "bt/s",
+                op(OpCode::CPUI_CBRANCH, None, vec![vn(&ram, 0x1180), r(0x200)]),
+            ),
         ] {
             let ops = [mova.clone(), flow];
             assert_eq!(
-                data_refs(&ops, Some(&ram), &MAPPED, 0x1104, None, &Formed::default(), &|| true),
+                data_refs(
+                    &ops,
+                    Some(&ram),
+                    &MAPPED,
+                    0x1104,
+                    None,
+                    &Formed::default(),
+                    &|| true
+                ),
                 vec![(0x1104, XrefKind::Data)],
                 "{what}"
             );
@@ -2942,16 +3480,34 @@ mod tests {
     fn an_address_formed_at_the_fall_through_is_a_data_reference() {
         let (ram, cst) = spaces();
         let reg = Rc::new(AddrSpace::new_for_decode(spacetype::IPTR_PROCESSOR));
-        let r = |offset| VarnodeData { space: Some(Rc::clone(&reg)), offset, size: 4 };
+        let r = |offset| VarnodeData {
+            space: Some(Rc::clone(&reg)),
+            offset,
+            size: 4,
+        };
         let fall = || vn(&cst, 0x1104);
         let formed = [
-            ("adr x0,.+4", vec![op(OpCode::CPUI_COPY, Some(r(0)), vec![fall()])]),
-            ("mov eax,offset next", vec![op(OpCode::CPUI_INT_ZEXT, Some(r(0)), vec![fall()])]),
+            (
+                "adr x0,.+4",
+                vec![op(OpCode::CPUI_COPY, Some(r(0)), vec![fall()])],
+            ),
+            (
+                "mov eax,offset next",
+                vec![op(OpCode::CPUI_INT_ZEXT, Some(r(0)), vec![fall()])],
+            ),
             (
                 "push offset next",
                 vec![
-                    op(OpCode::CPUI_INT_SUB, Some(r(0x10)), vec![r(0x10), vn(&cst, 8)]),
-                    op(OpCode::CPUI_STORE, None, vec![vn(&cst, 0x1b), r(0x10), fall()]),
+                    op(
+                        OpCode::CPUI_INT_SUB,
+                        Some(r(0x10)),
+                        vec![r(0x10), vn(&cst, 8)],
+                    ),
+                    op(
+                        OpCode::CPUI_STORE,
+                        None,
+                        vec![vn(&cst, 0x1b), r(0x10), fall()],
+                    ),
                 ],
             ),
             (
@@ -2964,7 +3520,15 @@ mod tests {
         ];
         for (what, ops) in &formed {
             assert_eq!(
-                data_refs(ops, Some(&ram), &MAPPED, 0x1104, None, &Formed::default(), &|| false),
+                data_refs(
+                    ops,
+                    Some(&ram),
+                    &MAPPED,
+                    0x1104,
+                    None,
+                    &Formed::default(),
+                    &|| false
+                ),
                 vec![(0x1104, XrefKind::Data)],
                 "{what}"
             );
@@ -2980,19 +3544,87 @@ mod tests {
     fn an_aarch64_link_value_is_never_a_data_reference() {
         let (ram, cst) = spaces();
         let reg = Rc::new(AddrSpace::new_for_decode(spacetype::IPTR_PROCESSOR));
-        let x30 = VarnodeData { space: Some(Rc::clone(&reg)), offset: 0xf0, size: 8 };
-        let x0 = VarnodeData { space: Some(Rc::clone(&reg)), offset: 0, size: 8 };
+        let x30 = VarnodeData {
+            space: Some(Rc::clone(&reg)),
+            offset: 0xf0,
+            size: 8,
+        };
+        let x0 = VarnodeData {
+            space: Some(Rc::clone(&reg)),
+            offset: 0,
+            size: 8,
+        };
         let bl = [
-            op(OpCode::CPUI_INT_ADD, Some(x30), vec![vn(&cst, 0x1100), vn(&cst, 4)]),
+            op(
+                OpCode::CPUI_INT_ADD,
+                Some(x30),
+                vec![vn(&cst, 0x1100), vn(&cst, 4)],
+            ),
             op(OpCode::CPUI_CALL, None, vec![vn(&ram, 0x1180)]),
         ];
-        assert!(data_refs(&bl, Some(&ram), &MAPPED, 0x1104, None, &Formed::default(), &|| false).is_empty());
-        let adr = [op(OpCode::CPUI_COPY, Some(x0.clone()), vec![vn(&cst, 0x1100)])];
-        assert_eq!(data_refs(&adr, Some(&ram), &MAPPED, 0x1104, None, &Formed::default(), &|| false), vec![(0x1100, XrefKind::Data)]);
-        let add_pc = [op(OpCode::CPUI_INT_ADD, Some(x0.clone()), vec![vn(&cst, 0x1100), vn(&cst, 0x10)])];
-        assert_eq!(data_refs(&add_pc, Some(&ram), &MAPPED, 0x1104, None, &Formed::default(), &|| false), vec![(0x1100, XrefKind::Data)]);
-        let pc_read = [op(OpCode::CPUI_INT_ADD, Some(x0), vec![vn(&cst, 0x1100), vn(&cst, 4)])];
-        assert_eq!(data_refs(&pc_read, Some(&ram), &MAPPED, 0x1104, None, &Formed::default(), &|| false), vec![(0x1100, XrefKind::Data)]);
+        assert!(
+            data_refs(
+                &bl,
+                Some(&ram),
+                &MAPPED,
+                0x1104,
+                None,
+                &Formed::default(),
+                &|| false
+            )
+            .is_empty()
+        );
+        let adr = [op(
+            OpCode::CPUI_COPY,
+            Some(x0.clone()),
+            vec![vn(&cst, 0x1100)],
+        )];
+        assert_eq!(
+            data_refs(
+                &adr,
+                Some(&ram),
+                &MAPPED,
+                0x1104,
+                None,
+                &Formed::default(),
+                &|| false
+            ),
+            vec![(0x1100, XrefKind::Data)]
+        );
+        let add_pc = [op(
+            OpCode::CPUI_INT_ADD,
+            Some(x0.clone()),
+            vec![vn(&cst, 0x1100), vn(&cst, 0x10)],
+        )];
+        assert_eq!(
+            data_refs(
+                &add_pc,
+                Some(&ram),
+                &MAPPED,
+                0x1104,
+                None,
+                &Formed::default(),
+                &|| false
+            ),
+            vec![(0x1100, XrefKind::Data)]
+        );
+        let pc_read = [op(
+            OpCode::CPUI_INT_ADD,
+            Some(x0),
+            vec![vn(&cst, 0x1100), vn(&cst, 4)],
+        )];
+        assert_eq!(
+            data_refs(
+                &pc_read,
+                Some(&ram),
+                &MAPPED,
+                0x1104,
+                None,
+                &Formed::default(),
+                &|| false
+            ),
+            vec![(0x1100, XrefKind::Data)]
+        );
     }
 
     /// (kuna) `poolref`: a pointer-sized read of a read-only word files the
@@ -3011,8 +3643,20 @@ mod tests {
             vec![vn(&cst, 0x1b), vn(&ram, 0x1000)],
         );
         assert_eq!(
-            data_refs(&[load], Some(&ram), &MAPPED, 0, Some(&pool), &Formed::default(), &|| false),
-            vec![(0x1000, XrefKind::Read), (0x4000, XrefKind::Data), (0x4020, XrefKind::Write)]
+            data_refs(
+                &[load],
+                Some(&ram),
+                &MAPPED,
+                0,
+                Some(&pool),
+                &Formed::default(),
+                &|| false
+            ),
+            vec![
+                (0x1000, XrefKind::Read),
+                (0x4000, XrefKind::Data),
+                (0x4020, XrefKind::Write)
+            ]
         );
     }
 
@@ -3031,7 +3675,15 @@ mod tests {
             vec![vn(&cst, 0x1b), vn(&ram, 0x1000)],
         );
         assert_eq!(
-            data_refs(&[load], Some(&ram), &MAPPED, 0, Some(&pool), &Formed::default(), &|| false),
+            data_refs(
+                &[load],
+                Some(&ram),
+                &MAPPED,
+                0,
+                Some(&pool),
+                &Formed::default(),
+                &|| false
+            ),
             vec![(0x1000, XrefKind::Read), (0x4020, XrefKind::Write)]
         );
     }
@@ -3046,7 +3698,15 @@ mod tests {
         src.size = 4;
         let copy = op(OpCode::CPUI_COPY, None, vec![src]);
         assert_eq!(
-            data_refs(&[copy], Some(&ram), &MAPPED, 0, Some(&pool), &Formed::default(), &|| false),
+            data_refs(
+                &[copy],
+                Some(&ram),
+                &MAPPED,
+                0,
+                Some(&pool),
+                &Formed::default(),
+                &|| false
+            ),
             vec![(0x1008, XrefKind::Read), (0x4010, XrefKind::Data)]
         );
     }
@@ -3078,7 +3738,10 @@ mod tests {
         let (ram, cst) = spaces();
         for value in [0x8, 0xff, 0xffff, 0xfff, 0x9000] {
             let ops = [op(OpCode::CPUI_COPY, None, vec![vn(&cst, value)])];
-            assert!(refs(&ram, &ops).is_empty(), "{value:#x} accepted as an address");
+            assert!(
+                refs(&ram, &ops).is_empty(),
+                "{value:#x} accepted as an address"
+            );
         }
     }
 
@@ -3087,7 +3750,11 @@ mod tests {
     fn varnodes_outside_the_data_and_constant_spaces_are_ignored() {
         let (ram, _cst) = spaces();
         let regs = Rc::new(AddrSpace::new_for_decode(spacetype::IPTR_INTERNAL));
-        let ops = [op(OpCode::CPUI_INT_ADD, Some(vn(&regs, 0x10)), vec![vn(&regs, 0x1040)])];
+        let ops = [op(
+            OpCode::CPUI_INT_ADD,
+            Some(vn(&regs, 0x10)),
+            vec![vn(&regs, 0x1040)],
+        )];
         assert!(refs(&ram, &ops).is_empty());
     }
 
@@ -3096,7 +3763,12 @@ mod tests {
     /// somewhere else. Both addresses must answer with both references, and
     /// neither may report the veneer's own forwarding jump as a caller.
     fn import_index() -> XrefIndex {
-        let mk = |from, to, kind| Xref { from, to, kind, instruction: "".into() };
+        let mk = |from, to, kind| Xref {
+            from,
+            to,
+            kind,
+            instruction: "".into(),
+        };
         let edges = [
             mk(0x1102, 0x1030, XrefKind::Call), // a direct call to the veneer
             mk(0x1030, 0x4008, XrefKind::Jump), // the veneer's own jmp [slot]
@@ -3118,7 +3790,16 @@ mod tests {
             st.file(e.from, e.to, e.kind, "");
         }
         // The veneer is the single 6-byte `jmp [0x4008]` at 0x1030.
-        st.finish(BTreeMap::from([(0x1030, Veneer { slot: 0x4008, end: 0x1036 })]), false)
+        st.finish(
+            BTreeMap::from([(
+                0x1030,
+                Veneer {
+                    slot: 0x4008,
+                    end: 0x1036,
+                },
+            )]),
+            false,
+        )
     }
 
     /// The alias class is the veneer plus its slot, and it is symmetric: asking
@@ -3176,8 +3857,14 @@ mod tests {
         };
         st.file(0x1188, 0x4008, XrefKind::Read, "");
         let index = st.finish(BTreeMap::new(), false);
-        assert!(index.has_indirect_calls(0x1180), "the call site lost its own function");
-        assert!(!index.has_indirect_calls(0x1030), "attributed to the preceding entry");
+        assert!(
+            index.has_indirect_calls(0x1180),
+            "the call site lost its own function"
+        );
+        assert!(
+            !index.has_indirect_calls(0x1030),
+            "attributed to the preceding entry"
+        );
         // And it lands in the same bucket the instruction's references do.
         assert_eq!(index.refs_from_function(0x1180).len(), 1);
     }
@@ -3216,12 +3903,21 @@ mod tests {
         assert_eq!(index.function_containing(0x1001), Some(0x1000));
         assert_eq!(index.function_containing(0x2004), Some(0x2000));
         assert_eq!(index.function_containing(0x3000), Some(0x3000));
-        assert_eq!(index.function_instruction_counts(&[0x2000, 0x1000, 0x3000], usize::MAX), [5, 5, 1]);
+        assert_eq!(
+            index.function_instruction_counts(&[0x2000, 0x1000, 0x3000], usize::MAX),
+            [5, 5, 1]
+        );
         assert_eq!(index.function_instruction_counts(&[0x2000], 3), [3]);
-        assert_eq!(index.function_instruction_counts(&[0x4000], usize::MAX), [0]);
+        assert_eq!(
+            index.function_instruction_counts(&[0x4000], usize::MAX),
+            [0]
+        );
 
         let unmeasured = import_index();
-        assert_eq!(unmeasured.function_instruction_counts(&[0x1000], usize::MAX), [0]);
+        assert_eq!(
+            unmeasured.function_instruction_counts(&[0x1000], usize::MAX),
+            [0]
+        );
     }
 
     /// Off an alias class, unifying is exactly `refs_to`.
@@ -3243,21 +3939,36 @@ mod tests {
     /// survived.
     #[test]
     fn mapped_ranges_falls_back_to_load_segments_without_a_section_table() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/sectionless_x86_64");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/sectionless_x86_64"
+        );
         let data = std::fs::read(path).unwrap();
         let file = object::File::parse(&*data).unwrap();
-        assert!(file.sections().next().is_none(), "fixture grew a section table");
+        assert!(
+            file.sections().next().is_none(),
+            "fixture grew a section table"
+        );
         let mapped = mapped_ranges(&file);
         assert_eq!(mapped, vec![(0x1000, 0x100d), (0x2000, 0x200e)]);
-        assert!(in_range(&mapped, 0x2000), "the string the LEA forms reads as unmapped");
+        assert!(
+            in_range(&mapped, 0x2000),
+            "the string the LEA forms reads as unmapped"
+        );
     }
 
     /// A binary search over the union answers every address exactly as the
     /// pairwise rule over the raw ranges does.
     #[test]
     fn in_range_over_the_union_matches_the_pairwise_rule() {
-        let ranges =
-            vec![(0x60, 0x40), (0x10, 0x20), (0x20, 0x30), (0x0, 0x18), (0x50, 0x50), (0x38, 0x3c)];
+        let ranges = vec![
+            (0x60, 0x40),
+            (0x10, 0x20),
+            (0x20, 0x30),
+            (0x0, 0x18),
+            (0x50, 0x50),
+            (0x38, 0x3c),
+        ];
         let union = range_union(ranges.clone());
         assert!(union.windows(2).all(|w| w[0].1 < w[1].0), "{union:x?}");
         for vma in 0..0x70 {
@@ -3278,8 +3989,10 @@ mod tests {
         let file = object::File::parse(&*data).unwrap();
         let mapped = mapped_ranges(&file);
         assert!(!mapped.is_empty());
-        let sections: Vec<(u64, u64)> =
-            file.sections().map(|s| (s.address(), s.address() + s.size())).collect();
+        let sections: Vec<(u64, u64)> = file
+            .sections()
+            .map(|s| (s.address(), s.address() + s.size()))
+            .collect();
         for r in &mapped {
             assert!(sections.contains(r), "{r:x?} is not any section's span");
         }
@@ -3290,12 +4003,22 @@ mod tests {
     /// it like every other section of a loaded segment.
     #[test]
     fn every_section_of_a_macho_segment_is_mapped() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/gotcall_macho_arm64");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/gotcall_macho_arm64"
+        );
         let data = std::fs::read(path).unwrap();
         let file = object::File::parse(&*data).unwrap();
         let got = file.section_by_name("__got").unwrap();
-        assert_eq!(got.kind(), SectionKind::Unknown, "object learned the section's kind");
-        assert!(in_range(&range_union(mapped_ranges(&file)), got.address()), "the GOT slot reads as unmapped");
+        assert_eq!(
+            got.kind(),
+            SectionKind::Unknown,
+            "object learned the section's kind"
+        );
+        assert!(
+            in_range(&range_union(mapped_ranges(&file)), got.address()),
+            "the GOT slot reads as unmapped"
+        );
     }
 
     /// `finish` collapses the `(from, to, kind)` triple: one row per site.

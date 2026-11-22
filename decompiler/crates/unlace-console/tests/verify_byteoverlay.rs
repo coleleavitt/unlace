@@ -19,7 +19,7 @@
 use std::path::PathBuf;
 
 use unlace_console::assertions::{self, Body, Directive, Outcome};
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram, EntrySelector};
+use unlace_console::engine::{ConsoleProgram, EntrySelector, bootstrap_from_object};
 use unlace_console::project::decompile_targets;
 
 /// `sample`'s entry in the fixture.
@@ -28,7 +28,10 @@ const SAMPLE: u64 = 0x401140;
 const RETURN_42: [u8; 6] = [0xb8, 0x2a, 0x00, 0x00, 0x00, 0xc3];
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Bootstrap the fixture, WITHOUT the analysis commit: a byte overlay has to be
@@ -45,7 +48,10 @@ fn bytes(addr: u64, data: &[u8]) -> Directive {
     let hex: String = data.iter().map(|b| format!("{b:02x}")).collect();
     Directive {
         raw: format!("bytes {addr:#x} {hex}"),
-        body: Body::Bytes { addr, data: data.to_vec() },
+        body: Body::Bytes {
+            addr,
+            data: data.to_vec(),
+        },
     }
 }
 
@@ -73,8 +79,14 @@ fn decompile_with(target: &str, directives: Vec<Directive>) -> (String, Vec<Outc
 fn the_baseline_computes_from_the_image_bytes() {
     let (code, report) = decompile_with("sample", Vec::new());
     assert!(report.is_empty(), "no directives ⇒ no report rows");
-    assert!(code.contains("scale"), "baseline lost the .data load:\n{code}");
-    assert!(!code.contains("0x2a"), "baseline already returns the overlay:\n{code}");
+    assert!(
+        code.contains("scale"),
+        "baseline lost the .data load:\n{code}"
+    );
+    assert!(
+        !code.contains("0x2a"),
+        "baseline already returns the overlay:\n{code}"
+    );
 }
 
 /// The headline: stated bytes are what gets lifted.
@@ -83,8 +95,14 @@ fn an_overlay_is_what_the_lifter_decodes() {
     let (code, report) = decompile_with("sample", vec![bytes(SAMPLE, &RETURN_42)]);
     assert_eq!(report[0].status, "applied", "{report:?}");
     assert_eq!(report[0].kind, "bytes");
-    assert!(code.contains("return 0x2a"), "the overlay never reached the lifter:\n{code}");
-    assert!(!code.contains("scale"), "the image bytes were lifted anyway:\n{code}");
+    assert!(
+        code.contains("return 0x2a"),
+        "the overlay never reached the lifter:\n{code}"
+    );
+    assert!(
+        !code.contains("scale"),
+        "the image bytes were lifted anyway:\n{code}"
+    );
 }
 
 /// An address no segment maps is REJECTED, with the span in the detail. A
@@ -95,15 +113,24 @@ fn an_unmapped_overlay_is_rejected_naming_the_span() {
     let (code, report) = decompile_with("sample", vec![bytes(0x9000_0000, &RETURN_42)]);
     assert_eq!(report[0].status, "rejected", "{report:?}");
     let detail = report[0].detail.clone().unwrap_or_default();
-    assert!(detail.contains("no loaded segment maps 0x90000000"), "detail: {detail:?}");
-    assert!(code.contains("scale"), "a rejected overlay still changed the C:\n{code}");
+    assert!(
+        detail.contains("no loaded segment maps 0x90000000"),
+        "detail: {detail:?}"
+    );
+    assert!(
+        code.contains("scale"),
+        "a rejected overlay still changed the C:\n{code}"
+    );
 }
 
 /// The console spelling of the same fact, from the generated script surface.
 #[test]
 fn the_console_command_overlays_and_says_so() {
     let out = drive_console(&["override bytes 0x401140 b82a000000c3"]);
-    assert!(out.contains("Successfully overlaid 6 bytes at"), "out: {out:?}");
+    assert!(
+        out.contains("Successfully overlaid 6 bytes at"),
+        "out: {out:?}"
+    );
 
     let out = drive_console(&["override bytes 0x401140 abc"]);
     assert!(out.contains("odd number of hex digits"), "out: {out:?}");
@@ -116,7 +143,7 @@ fn the_console_command_overlays_and_says_so() {
 /// installed as the current program.
 fn drive_console(commands: &[&str]) -> String {
     use unlace_console::ifacedecomp::{
-        execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+        DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
     };
     use unlace_console::ifaceterm::ConsoleCommands;
     use unlace_console::kuna_console::register_kuna_commands;
@@ -129,7 +156,9 @@ fn drive_console(commands: &[&str]) -> String {
     // `override bytes` is a kuna command, not an upstream one.
     register_kuna_commands(&mut status);
     {
-        let data = status.get_data_mut(DECOMPILE_MODULE).expect("decompile module data");
+        let data = status
+            .get_data_mut(DECOMPILE_MODULE)
+            .expect("decompile module data");
         let dcp = data
             .as_any_mut()
             .downcast_mut::<IfaceDecompData>()

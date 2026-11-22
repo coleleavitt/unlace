@@ -26,10 +26,10 @@ use unlace_base::types::{int4, int8, uint4, uintb};
 
 use unlace_num::opcodes::OpCode;
 
+use crate::context::{OpId, TypeOp, VarnodeId};
 use crate::dtype::TypeFactory;
 use crate::funcdata::Funcdata;
 use crate::op::pcodeop_flags;
-use crate::context::{OpId, TypeOp, VarnodeId};
 use crate::varnode::varnode_flags;
 
 #[cfg(test)]
@@ -72,17 +72,17 @@ impl Funcdata {
                     let types = self.get_arch().types();
                     match types {
                         Some(t) => match t.get_type_spacebase(Rc::clone(&spc), &baseaddr) {
-                            Ok(ct) => {
-                                t.get_type_pointer(point_size, ct, spc.get_word_size()).ok()
-                            }
+                            Ok(ct) => t.get_type_pointer(point_size, ct, spc.get_word_size()).ok(),
                             Err(_) => None,
                         },
                         None => None,
                     }
                 };
 
-                let vnlist: Vec<VarnodeId> =
-                    self.vbank().iter_loc_size_addr(point_size, &point_addr).collect();
+                let vnlist: Vec<VarnodeId> = self
+                    .vbank()
+                    .iter_loc_size_addr(point_size, &point_addr)
+                    .collect();
                 for vn in vnlist {
                     let (is_free, is_spacebase, is_input, def) = {
                         let v = match self.vbank().get(vn) {
@@ -160,11 +160,10 @@ impl Funcdata {
                         unlace_base::space::AddrSpace::address_to_byte_int(off, word_size);
                     // Select the symbol scope from the spacebase itself. Global
                     // references must not be checked against the local stack map.
-                    let (sub_type, new_off2) =
-                        match self.spacebase_get_sub_type(&ptrto, new_off) {
-                            Some(r) => r,
-                            None => return false,
-                        };
+                    let (sub_type, new_off2) = match self.spacebase_get_sub_type(&ptrto, new_off) {
+                        Some(r) => r,
+                        None => return false,
+                    };
                     // subType is always Some here (TypeSpacebase::getSubType never
                     // returns null), so only newoff must be zero.
                     if new_off2 != 0 {
@@ -183,7 +182,9 @@ impl Funcdata {
             }
         }
         // Non-spacebase: the pure method is fully faithful.
-        ptrtype.is_ptrsub_matching(off, extra, multiplier).unwrap_or(false)
+        ptrtype
+            .is_ptrsub_matching(off, extra, multiplier)
+            .unwrap_or(false)
     }
 
     /// C++ `TypeSpacebase::getSubType` (`type.cc:3411-3433`), resolved against the
@@ -232,7 +233,9 @@ impl Funcdata {
         match glb.query_container_global(&addr, 1, &null_point) {
             Some(entry) => {
                 // newoff = (addr - smallest.addr) + smallest.offset.
-                let newoff = (addr.get_offset().wrapping_sub(entry.entry_addr.get_offset())
+                let newoff = (addr
+                    .get_offset()
+                    .wrapping_sub(entry.entry_addr.get_offset())
                     as int8)
                     + entry.symbol_offset as int8;
                 match entry.symbol_type {
@@ -324,7 +327,10 @@ impl Funcdata {
     /// Locate the unique input Varnode that holds the incoming value of a
     /// spacebase (stack-pointer) register (C++ `Funcdata::findSpacebaseInput`,
     /// `funcdata.cc:289`).
-    pub fn find_spacebase_input(&self, id: &Rc<unlace_base::space::AddrSpace>) -> Option<VarnodeId> {
+    pub fn find_spacebase_input(
+        &self,
+        id: &Rc<unlace_base::space::AddrSpace>,
+    ) -> Option<VarnodeId> {
         let point = id.get_spacebase(0).ok()?;
         let point_space = point.space.as_ref()?;
         let addr = Address::new(Rc::clone(point_space), point.offset);
@@ -412,8 +418,7 @@ impl Funcdata {
                 match space.get_type() {
                     spacetype::IPTR_SPACEBASE => {
                         // off = space->wrapOffset(spacebaseOffset + addr.getOffset());
-                        let off = space
-                            .wrap_offset(spacebase_off.wrapping_add(addr.get_offset()));
+                        let off = space.wrap_offset(spacebase_off.wrapping_add(addr.get_offset()));
                         marks.push((space, off, psize));
                     }
                     spacetype::IPTR_JOIN => {
@@ -429,8 +434,8 @@ impl Funcdata {
                                 None => continue,
                             };
                             if pspace.get_type() == spacetype::IPTR_SPACEBASE {
-                                let off = pspace
-                                    .wrap_offset(spacebase_off.wrapping_add(piece.offset));
+                                let off =
+                                    pspace.wrap_offset(spacebase_off.wrapping_add(piece.offset));
                                 marks.push((pspace, off, piece.size as int4));
                             }
                         }
@@ -467,14 +472,21 @@ impl Funcdata {
                         return false;
                     };
                     let input = parameter.get_address();
-                    if input.get_space().is_some_and(|s| s.get_type() == spacetype::IPTR_JOIN) {
-                        let Ok(join) = self.get_arch().manage().find_join(input.get_offset()) else {
+                    if input
+                        .get_space()
+                        .is_some_and(|s| s.get_type() == spacetype::IPTR_JOIN)
+                    {
+                        let Ok(join) = self.get_arch().manage().find_join(input.get_offset())
+                        else {
                             return false;
                         };
                         return (0..join.num_pieces()).any(|piece| {
                             let piece = join.get_piece(piece);
                             piece.space.as_ref().is_some_and(|space| {
-                                overlaps_input(&Address::new(Rc::clone(space), piece.offset), piece.size as int4)
+                                overlaps_input(
+                                    &Address::new(Rc::clone(space), piece.offset),
+                                    piece.size as int4,
+                                )
                             })
                         });
                     }
@@ -487,7 +499,11 @@ impl Funcdata {
                 Some(v) => v,
                 None => continue,
             };
-            let unaffected = self.vbank().get(vn).map(|v| v.is_unaffected()).unwrap_or(false);
+            let unaffected = self
+                .vbank()
+                .get(vn)
+                .map(|v| v.is_unaffected())
+                .unwrap_or(false);
             if !unaffected {
                 continue;
             }
@@ -604,7 +620,12 @@ impl Funcdata {
             (space, rangetree, param_range, default_unknown, bounds)
         };
 
-        let mut state = MapState::new(Rc::clone(&space), &local_range, &param_range, default_unknown);
+        let mut state = MapState::new(
+            Rc::clone(&space),
+            &local_range,
+            &param_range,
+            default_unknown,
+        );
 
         // gatherVarnodes(*fd): a data-type hint per live (stack, off) Varnode.
         self.gather_varnodes(&space, &mut state);
@@ -616,14 +637,21 @@ impl Funcdata {
             None => Vec::new(),
         };
         state.gather_symbols(&hints);
-        crate::p6_variables::kuna_arrayextent::extend_unbounded(self, &mut state, &space, &unbounded);
+        crate::p6_variables::kuna_arrayextent::extend_unbounded(
+            self, &mut state, &space, &unbounded,
+        );
 
         super::kuna_callarrayextent::coalesce_delay_slot_init(self, &mut state, &space);
         super::kuna_callarrayextent::coalesce(self, &mut state, &space);
         super::kuna_arraysize::gather(self, &mut state, &space);
 
         let reach_checks = match self.get_arch().types_rc() {
-            Some(t) => crate::p6_variables::kuna_storereach::prepare_hints(self, &mut state, &space, t.as_ref()),
+            Some(t) => crate::p6_variables::kuna_storereach::prepare_hints(
+                self,
+                &mut state,
+                &space,
+                t.as_ref(),
+            ),
             None => Default::default(),
         };
 
@@ -696,7 +724,9 @@ impl Funcdata {
     /// (kuna `framelayout`) Snapshot the NO_CATEGORY stack Symbols this pass
     /// recovered into the `Funcdata`'s frame-slot union.
     fn record_frame_layout_pass(&self, space: &Rc<unlace_base::space::AddrSpace>) {
-        let Some(sl) = self.get_scope_local() else { return };
+        let Some(sl) = self.get_scope_local() else {
+            return;
+        };
         let specs = sl
             .database()
             .scope_space_local_var_specs(sl.scope_id(), space.get_index() as usize);
@@ -710,7 +740,14 @@ impl Funcdata {
                 space.get_addr_size() as i32 * 8 - 1,
             );
             let size = ct.get_size();
-            slots.push((off, crate::funcdata::FrameSlot { name, dtype: ct, size }));
+            slots.push((
+                off,
+                crate::funcdata::FrameSlot {
+                    name,
+                    dtype: ct,
+                    size,
+                },
+            ));
         }
         self.record_frame_slots(slots);
         crate::kuna_slotptr::record_pass(self, space);
@@ -794,7 +831,13 @@ impl Funcdata {
             Some(lm) => lm
                 .type_recommendations()
                 .iter()
-                .map(|tr| (tr.data_type.get_size(), tr.addr.clone(), Rc::clone(&tr.data_type)))
+                .map(|tr| {
+                    (
+                        tr.data_type.get_size(),
+                        tr.addr.clone(),
+                        Rc::clone(&tr.data_type),
+                    )
+                })
                 .collect(),
             None => return,
         };
@@ -877,7 +920,11 @@ impl Funcdata {
 
     /// C++ `MapState::gatherVarnodes` (`varmap.cc:1122`): add a data-type hint for
     /// every Varnode stored in the stack space, classified by its defining op.
-    fn gather_varnodes(&self, space: &Rc<unlace_base::space::AddrSpace>, state: &mut crate::varmap::MapState) {
+    fn gather_varnodes(
+        &self,
+        space: &Rc<unlace_base::space::AddrSpace>,
+        state: &mut crate::varmap::MapState,
+    ) {
         let types_rc = match self.get_arch().types_rc() {
             Some(t) => t,
             None => return,
@@ -918,7 +965,8 @@ impl Funcdata {
                 Some(OpCode::CPUI_INDIRECT) => {
                     let invn = self.obank().get(op).and_then(|o| o.get_in(0));
                     let vn_addr = v.get_addr().clone();
-                    let invn_addr = invn.and_then(|iv| self.vbank().get(iv).map(|x| x.get_addr().clone()));
+                    let invn_addr =
+                        invn.and_then(|iv| self.vbank().get(iv).map(|x| x.get_addr().clone()));
                     let diff = invn_addr.map(|a| !addr_eq(&vn_addr, &a)).unwrap_or(true);
                     if diff || self.is_read_active(vn) {
                         state.add_fixed_type_pub(offset, vtype, 0, types);
@@ -930,7 +978,8 @@ impl Funcdata {
                     let mut all_same = true;
                     for k in 0..n {
                         let invn = self.obank().get(op).and_then(|o| o.get_in(k));
-                        let ia = invn.and_then(|iv| self.vbank().get(iv).map(|x| x.get_addr().clone()));
+                        let ia =
+                            invn.and_then(|iv| self.vbank().get(iv).map(|x| x.get_addr().clone()));
                         if ia.map(|a| !addr_eq(&vn_addr, &a)).unwrap_or(true) {
                             all_same = false;
                             break;
@@ -945,7 +994,11 @@ impl Funcdata {
                     let is_const = in0
                         .and_then(|iv| self.vbank().get(iv).map(|x| x.is_constant()))
                         .unwrap_or(false);
-                    let fl = if is_const { crate::varmap::COPY_CONSTANT } else { 0 };
+                    let fl = if is_const {
+                        crate::varmap::COPY_CONSTANT
+                    } else {
+                        0
+                    };
                     if is_const && self.get_arch().nul_terminator {
                         let zero = in0
                             .and_then(|iv| self.vbank().get(iv).map(|x| x.get_offset() == 0))
@@ -964,17 +1017,20 @@ impl Funcdata {
                     let vn_addr = v.get_addr().clone();
                     let slot: int4 = if vn_addr.is_big_endian() { 0 } else { 1 };
                     let in_first = self.obank().get(op).and_then(|o| o.get_in(slot));
-                    let (first_addr, first_sz, first_ty) = match in_first
-                        .and_then(|iv| self.vbank().get(iv))
-                    {
-                        Some(fv) => (fv.get_addr().clone(), fv.get_size(), Rc::clone(fv.get_type())),
-                        None => {
-                            // Degenerate: fall back to the output hint (C++ would
-                            // dereference a null here; the IR never produces it).
-                            state.add_fixed_type_pub(offset, vtype, 0, types);
-                            continue;
-                        }
-                    };
+                    let (first_addr, first_sz, first_ty) =
+                        match in_first.and_then(|iv| self.vbank().get(iv)) {
+                            Some(fv) => (
+                                fv.get_addr().clone(),
+                                fv.get_size(),
+                                Rc::clone(fv.get_type()),
+                            ),
+                            None => {
+                                // Degenerate: fall back to the output hint (C++ would
+                                // dereference a null here; the IR never produces it).
+                                state.add_fixed_type_pub(offset, vtype, 0, types);
+                                continue;
+                            }
+                        };
                     if !addr_eq(&first_addr, &vn_addr) {
                         state.add_fixed_type_pub(vn_addr.get_offset(), first_ty, 0, types);
                     }
@@ -1050,7 +1106,9 @@ impl Funcdata {
                 None => continue,
             };
             if o.is_marker() {
-                let out_addr = o.get_out().and_then(|ov| self.vbank().get(ov).map(|x| x.get_addr().clone()));
+                let out_addr = o
+                    .get_out()
+                    .and_then(|ov| self.vbank().get(ov).map(|x| x.get_addr().clone()));
                 if out_addr.map(|a| !addr_eq(&vn_addr, &a)).unwrap_or(true) {
                     return true;
                 }
@@ -1104,8 +1162,13 @@ impl Funcdata {
         let extent = self.get_arch().array_extent;
         let mut unbounded = Vec::new();
         // checker.gather(&fd, spaceid, false): build the alias base/offset lists.
-        let mut access = FuncdataAliasAccess { fd: self, exempt_scramble: false };
-        state.checker_mut().gather(Rc::clone(space), bounds, false, &mut access);
+        let mut access = FuncdataAliasAccess {
+            fd: self,
+            exempt_scramble: false,
+        };
+        state
+            .checker_mut()
+            .gather(Rc::clone(space), bounds, false, &mut access);
 
         // For each AddBase, add an open range at its alias offset.
         let addbase: Vec<(uintb, Option<VarnodeId>, VarnodeId)> = {
@@ -1138,22 +1201,38 @@ impl Funcdata {
                     ct = None; // Do unknown array
                 }
             }
-            if ct.as_ref().is_some_and(|c| c.get_size() == 0) && crate::kuna_stablenames::holds_retype(self, base) {
+            if ct.as_ref().is_some_and(|c| c.get_size() == 0)
+                && crate::kuna_stablenames::holds_retype(self, base)
+            {
                 match crate::kuna_stablenames::printed_pointee(self, base) {
                     Some(pointee) => ct = Some(pointee),
                     None => continue,
                 }
             }
-            super::kuna_wrappedstackaggregate::map(self, space, offset, index.is_some(), ct.as_ref());
+            super::kuna_wrappedstackaggregate::map(
+                self,
+                space,
+                offset,
+                index.is_some(),
+                ct.as_ref(),
+            );
             // If there is an index Varnode, assume at least the 4 values [0,3].
             let mut min_items = if index.is_some() { 3 } else { -1 };
             if index.is_some() && extent >= super::kuna_arrayextent::LEVEL_BOUND {
-                let elem = ct.as_ref().map(|c| c.get_align_size()).filter(|&s| s > 0).unwrap_or(1);
+                let elem = ct
+                    .as_ref()
+                    .map(|c| c.get_align_size())
+                    .filter(|&s| s > 0)
+                    .unwrap_or(1);
                 let next = super::kuna_arrayextent::next_base(space, &base_offsets, offset);
-                match super::kuna_arrayextent::bounded_items(self, space, base, offset, next, elem) {
+                match super::kuna_arrayextent::bounded_items(self, space, base, offset, next, elem)
+                {
                     Some(items) => min_items = min_items.max(items - 1),
                     None if extent >= super::kuna_arrayextent::LEVEL_ON => {
-                        unbounded.push(super::kuna_arrayextent::OpenBase { start: offset, elem });
+                        unbounded.push(super::kuna_arrayextent::OpenBase {
+                            start: offset,
+                            elem,
+                        });
                     }
                     None => {}
                 }
@@ -1201,7 +1280,8 @@ impl Funcdata {
         }
         let op = guard.op;
         let in1 = self.obank().get(op).and_then(|o| o.get_in(1))?;
-        let mut ct: Rc<crate::dtype::Datatype> = Rc::clone(self.vbank().get(in1)?.get_type_read_facing(op));
+        let mut ct: Rc<crate::dtype::Datatype> =
+            Rc::clone(self.vbank().get(in1)?.get_type_read_facing(op));
         if ct.get_metatype() == crate::dtype::type_metatype::TYPE_PTR {
             let mut inner = ct.get_ptr_to()?;
             while inner.get_metatype() == crate::dtype::type_metatype::TYPE_ARRAY {
@@ -1214,10 +1294,18 @@ impl Funcdata {
         }
         let out_size = if opc == OpCode::CPUI_STORE {
             // The Varnode being stored.
-            self.obank().get(op).and_then(|o| o.get_in(2)).and_then(|v| self.vbank().get(v)).map(|v| v.get_size())?
+            self.obank()
+                .get(op)
+                .and_then(|o| o.get_in(2))
+                .and_then(|v| self.vbank().get(v))
+                .map(|v| v.get_size())?
         } else {
             // The Varnode being loaded.
-            self.obank().get(op).and_then(|o| o.get_out()).and_then(|v| self.vbank().get(v)).map(|v| v.get_size())?
+            self.obank()
+                .get(op)
+                .and_then(|o| o.get_out())
+                .and_then(|v| self.vbank().get(v))
+                .map(|v| v.get_size())?
         };
         if out_size != step {
             // LOAD size doesn't match step: a field in an array of structures
@@ -1234,11 +1322,18 @@ impl Funcdata {
             if step > 8 {
                 return None; // Don't manufacture primitives bigger than 8-bytes
             }
-            ct = self.get_arch().types()?.get_base(step, crate::dtype::type_metatype::TYPE_UNKNOWN).ok()?;
+            ct = self
+                .get_arch()
+                .types()?
+                .get_base(step, crate::dtype::type_metatype::TYPE_UNKNOWN)
+                .ok()?;
         }
         if guard.is_range_locked() {
             // C++ uintb arithmetic (wraps); a locked range keeps max >= min.
-            let min_items = ((guard.get_maximum().wrapping_sub(guard.get_minimum()).wrapping_add(1))
+            let min_items = ((guard
+                .get_maximum()
+                .wrapping_sub(guard.get_minimum())
+                .wrapping_add(1))
                 / (step as uintb)) as int4;
             state.add_range_pub(
                 guard.get_minimum(),
@@ -1250,8 +1345,17 @@ impl Funcdata {
             None
         } else {
             let elem = ct.get_align_size();
-            state.add_range_pub(guard.get_minimum(), Some(ct), 0, crate::varmap::RangeType::Open, 3);
-            Some(super::kuna_arrayextent::OpenBase { start: guard.get_minimum(), elem })
+            state.add_range_pub(
+                guard.get_minimum(),
+                Some(ct),
+                0,
+                crate::varmap::RangeType::Open,
+                3,
+            );
+            Some(super::kuna_arrayextent::OpenBase {
+                start: guard.get_minimum(),
+                elem,
+            })
         }
     }
 
@@ -1308,8 +1412,7 @@ impl Funcdata {
                 let vn = all[i];
                 let same = match self.vbank().get(vn) {
                     Some(v) => {
-                        v.get_size() == ex_size
-                            && v.get_addr().get_offset() == ex_addr.get_offset()
+                        v.get_size() == ex_size && v.get_addr().get_offset() == ex_addr.get_offset()
                     }
                     None => false,
                 };
@@ -1341,9 +1444,9 @@ impl Funcdata {
             let mut entry_is_join_piece = false;
             if let Some(ov) = overlap {
                 let mut flags = ov.all_flags;
-                entry_is_join_piece = (ov.extraflags
-                    & (varnode_flags::precislo | varnode_flags::precishi))
-                    != 0 && (ov.extraflags & varnode_flags::mapped) == 0;
+                entry_is_join_piece =
+                    (ov.extraflags & (varnode_flags::precislo | varnode_flags::precishi)) != 0
+                        && (ov.extraflags & varnode_flags::mapped) == 0;
                 if ov.entry_size >= ex_size {
                     if update_datatypes {
                         if let Some(t) = &ov.sized_type {
@@ -1372,11 +1475,19 @@ impl Funcdata {
                 if in_scope {
                     fl = varnode_flags::mapped | varnode_flags::addrtied;
                 } else if unmapped_alias_check {
-                    let unaliased = self.get_scope_local().and_then(|lm|
-                        ex_addr.get_space().map(|spc|
-                            lm.is_unmapped_unaliased(spc, ex_addr.get_offset())))
+                    let unaliased = self
+                        .get_scope_local()
+                        .and_then(|lm| {
+                            ex_addr
+                                .get_space()
+                                .map(|spc| lm.is_unmapped_unaliased(spc, ex_addr.get_offset()))
+                        })
                         .unwrap_or(false);
-                    fl = if unaliased { varnode_flags::nolocalalias } else { 0 };
+                    fl = if unaliased {
+                        varnode_flags::nolocalalias
+                    } else {
+                        0
+                    };
                 } else {
                     fl = 0;
                 }
@@ -1503,19 +1614,28 @@ fn addr_eq(a: &Address, b: &Address) -> bool {
 /// function reads from the slot (an unrecovered prototype has no store yet,
 /// so the entry read is the only evidence there), or an ordinary stack entry
 /// sharing its storage.
-fn local_param_range(fd: &Funcdata, space: &Rc<unlace_base::space::AddrSpace>) -> unlace_base::address::RangeList {
+fn local_param_range(
+    fd: &Funcdata,
+    space: &Rc<unlace_base::space::AddrSpace>,
+) -> unlace_base::address::RangeList {
     use crate::dtype::type_class::TYPECLASS_HIDDENRET;
     let proto = fd.get_func_proto();
     let mut range = proto.get_param_range().clone();
     let declared = proto.has_store()
         && (proto.get_output().is_indirect_storage()
-            || (0..proto.num_params()).any(|i| proto.get_param(i).is_some_and(|p| p.is_hidden_return())));
+            || (0..proto.num_params())
+                .any(|i| proto.get_param(i).is_some_and(|p| p.is_hidden_return())));
     if declared || !proto.has_model() {
         return range;
     }
     let entries = proto.model().input().get_entry();
-    let stack = |entry: &&crate::fspec::ParamEntry| entry.get_space().get_index() == space.get_index();
-    for slot in entries.iter().filter(stack).filter(|e| e.get_type() == TYPECLASS_HIDDENRET) {
+    let stack =
+        |entry: &&crate::fspec::ParamEntry| entry.get_space().get_index() == space.get_index();
+    for slot in entries
+        .iter()
+        .filter(stack)
+        .filter(|e| e.get_type() == TYPECLASS_HIDDENRET)
+    {
         let (first, size) = (slot.get_base(), slot.get_size());
         let last = first.wrapping_add((size - 1) as u64);
         let shared = entries.iter().filter(stack).any(|e| {
@@ -1523,7 +1643,9 @@ fn local_param_range(fd: &Funcdata, space: &Rc<unlace_base::space::AddrSpace>) -
                 && e.get_base() <= last
                 && first <= e.get_base().wrapping_add((e.get_size() - 1) as u64)
         });
-        let read = fd.has_input_intersection(size, &Address::new(Rc::clone(space), first)).unwrap_or(true);
+        let read = fd
+            .has_input_intersection(size, &Address::new(Rc::clone(space), first))
+            .unwrap_or(true);
         if !shared && !read {
             range.remove_range(Rc::clone(space), first, last);
         }
@@ -1545,7 +1667,10 @@ fn proto_boundaries(proto: &crate::fspec::FuncProto) -> Option<crate::varmap::Pr
     let has_local_first = local.is_some();
     let has_param_last = param.is_some();
     let param_last = param.map(|r| r.get_last()).unwrap_or(0);
-    let param_first = paramrange.get_first_range().map(|r| r.get_first()).unwrap_or(0);
+    let param_first = paramrange
+        .get_first_range()
+        .map(|r| r.get_first())
+        .unwrap_or(0);
     Some(crate::varmap::ProtoBoundaries {
         has_local_first,
         has_param_last,
@@ -1566,10 +1691,7 @@ pub(crate) struct FuncdataAliasAccess<'a> {
 }
 
 impl crate::varmap::AliasGatherAccess for FuncdataAliasAccess<'_> {
-    fn find_spacebase_input(
-        &self,
-        space: &Rc<unlace_base::space::AddrSpace>,
-    ) -> Option<VarnodeId> {
+    fn find_spacebase_input(&self, space: &Rc<unlace_base::space::AddrSpace>) -> Option<VarnodeId> {
         self.fd.find_spacebase_input(space)
     }
 
@@ -1578,7 +1700,8 @@ impl crate::varmap::AliasGatherAccess for FuncdataAliasAccess<'_> {
         startvn: VarnodeId,
         addbase: &mut Vec<crate::varmap::AddBase>,
     ) {
-        self.fd.gather_additive_base(startvn, addbase, self.exempt_scramble);
+        self.fd
+            .gather_additive_base(startvn, addbase, self.exempt_scramble);
     }
 
     fn gather_offset(&mut self, vn: VarnodeId) -> uintb {
@@ -1593,7 +1716,10 @@ impl Funcdata {
     /// `gatherAdditiveBase`/`gatherOffset`).  Used by the call-site input recovery
     /// (`checkInputTrialUse`'s spacebase branch).
     pub(crate) fn alias_gather_access(&self) -> FuncdataAliasAccess<'_> {
-        FuncdataAliasAccess { fd: self, exempt_scramble: true }
+        FuncdataAliasAccess {
+            fd: self,
+            exempt_scramble: true,
+        }
     }
 
     /// Build the deferred local-alias checker the call-site input recovery uses
@@ -1651,7 +1777,8 @@ impl Funcdata {
         exempt_scramble: bool,
     ) {
         use std::collections::BTreeSet;
-        let skip_reads = exempt_scramble && crate::p4_calls::kuna_calleereginputs::skips_read_operands(self);
+        let skip_reads =
+            exempt_scramble && crate::p4_calls::kuna_calleereginputs::skips_read_operands(self);
         // (base, index) queue.
         let mut vnqueue: Vec<(VarnodeId, Option<VarnodeId>)> = vec![(startvn, None)];
         let mut marked: BTreeSet<VarnodeId> = BTreeSet::new();
@@ -1687,7 +1814,12 @@ impl Funcdata {
                         } else {
                             let othervn = o.get_in(1);
                             if let Some(ov) = othervn {
-                                if !self.vbank().get(ov).map(|x| x.is_constant()).unwrap_or(false) {
+                                if !self
+                                    .vbank()
+                                    .get(ov)
+                                    .map(|x| x.is_constant())
+                                    .unwrap_or(false)
+                                {
                                     indexvn = Some(ov);
                                 }
                             }
@@ -1705,7 +1837,12 @@ impl Funcdata {
                             othervn = o.get_in(0);
                         }
                         if let Some(ov) = othervn {
-                            if !self.vbank().get(ov).map(|x| x.is_constant()).unwrap_or(false) {
+                            if !self
+                                .vbank()
+                                .get(ov)
+                                .map(|x| x.is_constant())
+                                .unwrap_or(false)
+                            {
                                 indexvn = Some(ov);
                             }
                         }
@@ -1730,7 +1867,9 @@ impl Funcdata {
                             exempt_scramble,
                             code,
                         ) && !(skip_reads
-                            && crate::p4_calls::kuna_calleereginputs::is_read_operand(self, op, vn));
+                            && crate::p4_calls::kuna_calleereginputs::is_read_operand(
+                                self, op, vn,
+                            ));
                     }
                 }
             }
@@ -1765,12 +1904,12 @@ impl Funcdata {
         };
         let retval: uintb = match code {
             OpCode::CPUI_COPY => self.gather_offset_opt(in0),
-            OpCode::CPUI_PTRSUB | OpCode::CPUI_INT_ADD => {
-                self.gather_offset_opt(in0).wrapping_add(self.gather_offset_opt(in1))
-            }
-            OpCode::CPUI_INT_SUB => {
-                self.gather_offset_opt(in0).wrapping_sub(self.gather_offset_opt(in1))
-            }
+            OpCode::CPUI_PTRSUB | OpCode::CPUI_INT_ADD => self
+                .gather_offset_opt(in0)
+                .wrapping_add(self.gather_offset_opt(in1)),
+            OpCode::CPUI_INT_SUB => self
+                .gather_offset_opt(in0)
+                .wrapping_sub(self.gather_offset_opt(in1)),
             OpCode::CPUI_PTRADD => {
                 let othervn_off = in2
                     .and_then(|iv| self.vbank().get(iv).map(|x| x.get_offset()))

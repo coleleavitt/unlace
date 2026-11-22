@@ -88,7 +88,7 @@ use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
-use crate::dtype::{flags, type_metatype, Datatype, TypeFactory, TypeField};
+use crate::dtype::{Datatype, TypeFactory, TypeField, flags, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::varnode::varnode_flags;
 
@@ -134,7 +134,7 @@ impl OptionPebNames {
             other => {
                 return Err(KunaError::parse(format!(
                     "Unknown pebnames value: {other} (expected off|auto|on)"
-                )))
+                )));
             }
         };
         Ok((mode, format!("TEB/PEB segment-base typing set to {p1}")))
@@ -275,16 +275,32 @@ const PEB32: &[Field] = &[
 ];
 
 /// The x86-64 layout: the TEB is at the `GS` base.
-pub const LAYOUT64: Layout =
-    Layout { register: "GS_OFFSET", ptr_size: 8, teb_size: 0x1878, teb: TEB64, peb_size: 0x7d0, peb: PEB64 };
+pub const LAYOUT64: Layout = Layout {
+    register: "GS_OFFSET",
+    ptr_size: 8,
+    teb_size: 0x1878,
+    teb: TEB64,
+    peb_size: 0x7d0,
+    peb: PEB64,
+};
 
 /// The x86 layout: the TEB is at the `FS` base.
-pub const LAYOUT32: Layout =
-    Layout { register: "FS_OFFSET", ptr_size: 4, teb_size: 0x1038, teb: TEB32, peb_size: 0x488, peb: PEB32 };
+pub const LAYOUT32: Layout = Layout {
+    register: "FS_OFFSET",
+    ptr_size: 4,
+    teb_size: 0x1038,
+    teb: TEB32,
+    peb_size: 0x488,
+    peb: PEB32,
+};
 
 impl Layout {
     fn offset_of(&self, fields: &[Field], name: &str) -> int4 {
-        fields.iter().find(|f| f.1 == name).map(|f| f.0).unwrap_or(-1)
+        fields
+            .iter()
+            .find(|f| f.1 == name)
+            .map(|f| f.0)
+            .unwrap_or(-1)
     }
 }
 
@@ -315,7 +331,9 @@ fn matches_layout(ct: &Datatype, size: int4, marker: &str, marker_off: int4) -> 
     {
         return false;
     }
-    (0..ct.num_depend()).filter_map(|i| ct.get_field(i)).any(|f| f.name == marker && f.offset == marker_off)
+    (0..ct.num_depend())
+        .filter_map(|i| ct.get_field(i))
+        .any(|f| f.name == marker && f.offset == marker_off)
 }
 
 /// Is `ct` the `TEB *` this pass builds for `layout`?
@@ -334,7 +352,13 @@ pub fn is_teb_pointer(ct: &Datatype, layout: &Layout) -> bool {
 
 /// A completed structure already in the program under `name`: `Ok(Some)` when it
 /// is this layout, `Err` when the name belongs to something else.
-fn existing(types: &dyn TypeFactory, name: &str, size: int4, marker: &str, off: int4) -> Result<Option<Rc<Datatype>>, ()> {
+fn existing(
+    types: &dyn TypeFactory,
+    name: &str,
+    size: int4,
+    marker: &str,
+    off: int4,
+) -> Result<Option<Rc<Datatype>>, ()> {
     match types.find_by_name(name) {
         Ok(None) => Ok(None),
         Ok(Some(t)) if matches_layout(&t, size, marker, off) => Ok(Some(t)),
@@ -386,7 +410,16 @@ fn build_struct(
     }
     let shell = types.get_type_struct(name).ok()?;
     let fields = fields_of(types, layout, spec, teb, peb)?;
-    types.set_fields_struct_raw(&shell, fields, Vec::new(), size, layout.ptr_size, flags::variable_length).ok()
+    types
+        .set_fields_struct_raw(
+            &shell,
+            fields,
+            Vec::new(),
+            size,
+            layout.ptr_size,
+            flags::variable_length,
+        )
+        .ok()
 }
 
 /// The `TEB *` type for `layout`, building `PEB`, `_TEB` and `TEB` on first use.
@@ -398,9 +431,36 @@ fn build_struct(
 /// therefore resolves; a second `->Self` stays an untyped value.
 pub fn teb_pointer_type(types: &dyn TypeFactory, layout: &Layout) -> Option<Rc<Datatype>> {
     let marker = "ProcessEnvironmentBlock";
-    let peb = build_struct(types, layout, "PEB", layout.peb, layout.peb_size, "BeingDebugged", None, None)?;
-    let inner = build_struct(types, layout, "_TEB", layout.teb, layout.teb_size, marker, None, Some(&peb))?;
-    let teb = build_struct(types, layout, "TEB", layout.teb, layout.teb_size, marker, Some(&inner), Some(&peb))?;
+    let peb = build_struct(
+        types,
+        layout,
+        "PEB",
+        layout.peb,
+        layout.peb_size,
+        "BeingDebugged",
+        None,
+        None,
+    )?;
+    let inner = build_struct(
+        types,
+        layout,
+        "_TEB",
+        layout.teb,
+        layout.teb_size,
+        marker,
+        None,
+        Some(&peb),
+    )?;
+    let teb = build_struct(
+        types,
+        layout,
+        "TEB",
+        layout.teb,
+        layout.teb_size,
+        marker,
+        Some(&inner),
+        Some(&peb),
+    )?;
     types.get_type_pointer(layout.ptr_size, teb, 1).ok()
 }
 
@@ -415,26 +475,38 @@ fn segment_use(data: &Funcdata, reg: &Address, size: int4) -> (bool, bool) {
     let end = reg + size as i64;
     let mut insns = std::collections::BTreeSet::new();
     for vn in data.vbank().iter_loc_addr_range(reg, &end) {
-        let Some(v) = data.vbank().get(vn) else { continue };
+        let Some(v) = data.vbank().get(vn) else {
+            continue;
+        };
         if v.get_addr() != reg || v.get_size() != size {
             continue;
         }
-        insns.extend(v.descend_iter().filter_map(|op| data.obank().get(op)).map(|o| o.get_addr().clone()));
+        insns.extend(
+            v.descend_iter()
+                .filter_map(|op| data.obank().get(op))
+                .map(|o| o.get_addr().clone()),
+        );
     }
     let storage = |vn: Option<crate::context::VarnodeId>| {
-        vn.and_then(|v| data.vbank().get(v)).map(|v| (v.get_addr().clone(), v.get_size()))
+        vn.and_then(|v| data.vbank().get(v))
+            .map(|v| (v.get_addr().clone(), v.get_size()))
     };
     for at in &insns {
         let mut derived = vec![(reg.clone(), size)];
         for (_, id) in data.obank().iter_at(at) {
-            let Some(op) = data.obank().get(id) else { continue };
-            let reads_derived = (0..op.num_input()).any(|i| storage(op.get_in(i)).is_some_and(|st| derived.contains(&st)));
+            let Some(op) = data.obank().get(id) else {
+                continue;
+            };
+            let reads_derived = (0..op.num_input())
+                .any(|i| storage(op.get_in(i)).is_some_and(|st| derived.contains(&st)));
             if !reads_derived {
                 continue;
             }
             match op.code() {
-                OpCode::CPUI_STORE if storage(op.get_in(1)).is_some_and(|st| derived.contains(&st)) => {
-                    return (true, true)
+                OpCode::CPUI_STORE
+                    if storage(op.get_in(1)).is_some_and(|st| derived.contains(&st)) =>
+                {
+                    return (true, true);
                 }
                 OpCode::CPUI_LOAD | OpCode::CPUI_STORE => {}
                 _ => {
@@ -474,10 +546,14 @@ impl Action for ActionPebNames {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionPebNames { base: self.base.clone() }))
+        Some(Box::new(ActionPebNames {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        let Some((layout, reg)) = resolve_register(data) else { return 0 };
+        let Some((layout, reg)) = resolve_register(data) else {
+            return 0;
+        };
         let size = layout.ptr_size;
         let mapped = data.get_scope_local().and_then(|lm| {
             let (sym, ty) = lm.containing_symbol_for_storage(&reg)?;
@@ -499,13 +575,25 @@ impl Action for ActionPebNames {
         if mapped.is_some() {
             return 0;
         }
-        let Some(ct) = data.get_arch().types().and_then(|t| teb_pointer_type(t, layout)) else {
+        let Some(ct) = data
+            .get_arch()
+            .types()
+            .and_then(|t| teb_pointer_type(t, layout))
+        else {
             return 0;
         };
         let usepoint = data.get_address() + -1;
-        let Some(lm) = data.get_scope_local_mut() else { return 0 };
-        let name = if lm.local_name_used(TEB_SYMBOL_NAME) { "" } else { TEB_SYMBOL_NAME };
-        let Ok(sym) = lm.add_symbol(name, ct, &reg, &usepoint) else { return 0 };
+        let Some(lm) = data.get_scope_local_mut() else {
+            return 0;
+        };
+        let name = if lm.local_name_used(TEB_SYMBOL_NAME) {
+            ""
+        } else {
+            TEB_SYMBOL_NAME
+        };
+        let Ok(sym) = lm.add_symbol(name, ct, &reg, &usepoint) else {
+            return 0;
+        };
         let mut lock = varnode_flags::typelock;
         if !name.is_empty() {
             lock |= varnode_flags::namelock;

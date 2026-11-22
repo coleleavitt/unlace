@@ -56,7 +56,11 @@ fn build_elf(is64: bool, machine: u16, secs: &[Sec], got_len: u64) -> Vec<u8> {
             while (out.len() as u64) < s.addr {
                 out.push(0);
             }
-            assert_eq!(out.len() as u64, s.addr, "section vma must be reachable by padding");
+            assert_eq!(
+                out.len() as u64,
+                s.addr,
+                "section vma must be reachable by padding"
+            );
         }
         offsets.push(out.len());
         out.extend_from_slice(&s.data);
@@ -213,12 +217,60 @@ fn image64(machine: u16, r_rel: u32, r_glob: u32, r_jmp: u32) -> Vec<u8> {
     relocs.extend(rela64(GOT_VMA + 8, 1, r_glob, 0));
     relocs.extend(rela64(GOT_VMA + 16, 2, r_jmp, 0));
     let secs = vec![
-        Sec { ty: SHT_DYNSYM, flags: 2, addr: 0, data: dynsym(true), link: 2, info: 1, entsize: 24 },
-        Sec { ty: SHT_STRTAB, flags: 2, addr: 0, data: dynstr(), link: 0, info: 0, entsize: 0 },
-        Sec { ty: SHT_RELA, flags: 2, addr: 0, data: relocs, link: 1, info: 0, entsize: 24 },
-        Sec { ty: SHT_PROGBITS, flags: 6, addr: TEXT_VMA, data: vec![0x90; 16], link: 0, info: 0, entsize: 0 },
-        Sec { ty: SHT_PROGBITS, flags: 3, addr: GOT_VMA, data: vec![0u8; 24], link: 0, info: 0, entsize: 0 },
-        Sec { ty: SHT_STRTAB, flags: 0, addr: 0, data: b"\0".to_vec(), link: 0, info: 0, entsize: 0 },
+        Sec {
+            ty: SHT_DYNSYM,
+            flags: 2,
+            addr: 0,
+            data: dynsym(true),
+            link: 2,
+            info: 1,
+            entsize: 24,
+        },
+        Sec {
+            ty: SHT_STRTAB,
+            flags: 2,
+            addr: 0,
+            data: dynstr(),
+            link: 0,
+            info: 0,
+            entsize: 0,
+        },
+        Sec {
+            ty: SHT_RELA,
+            flags: 2,
+            addr: 0,
+            data: relocs,
+            link: 1,
+            info: 0,
+            entsize: 24,
+        },
+        Sec {
+            ty: SHT_PROGBITS,
+            flags: 6,
+            addr: TEXT_VMA,
+            data: vec![0x90; 16],
+            link: 0,
+            info: 0,
+            entsize: 0,
+        },
+        Sec {
+            ty: SHT_PROGBITS,
+            flags: 3,
+            addr: GOT_VMA,
+            data: vec![0u8; 24],
+            link: 0,
+            info: 0,
+            entsize: 0,
+        },
+        Sec {
+            ty: SHT_STRTAB,
+            flags: 0,
+            addr: 0,
+            data: b"\0".to_vec(),
+            link: 0,
+            info: 0,
+            entsize: 0,
+        },
     ];
     build_elf(true, machine, &secs, 24)
 }
@@ -238,12 +290,23 @@ fn x86_64_relative_and_globdat_apply_import_is_skipped() {
     assert_eq!(
         r.writes,
         vec![
-            DynRelocWrite { vma: GOT_VMA, value: TEXT_VMA, width: 8 },
-            DynRelocWrite { vma: GOT_VMA + 8, value: TEXT_VMA, width: 8 },
+            DynRelocWrite {
+                vma: GOT_VMA,
+                value: TEXT_VMA,
+                width: 8
+            },
+            DynRelocWrite {
+                vma: GOT_VMA + 8,
+                value: TEXT_VMA,
+                width: 8
+            },
         ],
         "the undefined JUMP_SLOT import must not be written"
     );
-    assert_eq!(r.const_ranges, vec![(GOT_VMA, GOT_VMA + 7), (GOT_VMA + 8, GOT_VMA + 15)]);
+    assert_eq!(
+        r.const_ranges,
+        vec![(GOT_VMA, GOT_VMA + 7), (GOT_VMA + 8, GOT_VMA + 15)]
+    );
 }
 
 /// AArch64 uses a different `r_type` numbering for the same triple.
@@ -254,8 +317,16 @@ fn aarch64_uses_its_own_reloc_numbering() {
     assert_eq!(
         r.writes,
         vec![
-            DynRelocWrite { vma: GOT_VMA, value: TEXT_VMA, width: 8 },
-            DynRelocWrite { vma: GOT_VMA + 8, value: TEXT_VMA, width: 8 },
+            DynRelocWrite {
+                vma: GOT_VMA,
+                value: TEXT_VMA,
+                width: 8
+            },
+            DynRelocWrite {
+                vma: GOT_VMA + 8,
+                value: TEXT_VMA,
+                width: 8
+            },
         ]
     );
 }
@@ -270,23 +341,82 @@ fn i386_rel_table_reads_the_implicit_addend_from_the_slot() {
     let mut got = vec![0u8; 12];
     got[..4].copy_from_slice(&(TEXT_VMA as u32).to_le_bytes()); // the implicit addend
     let secs = vec![
-        Sec { ty: SHT_DYNSYM, flags: 2, addr: 0, data: dynsym(false), link: 2, info: 1, entsize: 16 },
-        Sec { ty: SHT_STRTAB, flags: 2, addr: 0, data: dynstr(), link: 0, info: 0, entsize: 0 },
-        Sec { ty: SHT_REL, flags: 2, addr: 0, data: relocs, link: 1, info: 0, entsize: 8 },
-        Sec { ty: SHT_PROGBITS, flags: 6, addr: TEXT_VMA, data: vec![0x90; 16], link: 0, info: 0, entsize: 0 },
-        Sec { ty: SHT_PROGBITS, flags: 3, addr: GOT_VMA, data: got, link: 0, info: 0, entsize: 0 },
-        Sec { ty: SHT_STRTAB, flags: 0, addr: 0, data: b"\0".to_vec(), link: 0, info: 0, entsize: 0 },
+        Sec {
+            ty: SHT_DYNSYM,
+            flags: 2,
+            addr: 0,
+            data: dynsym(false),
+            link: 2,
+            info: 1,
+            entsize: 16,
+        },
+        Sec {
+            ty: SHT_STRTAB,
+            flags: 2,
+            addr: 0,
+            data: dynstr(),
+            link: 0,
+            info: 0,
+            entsize: 0,
+        },
+        Sec {
+            ty: SHT_REL,
+            flags: 2,
+            addr: 0,
+            data: relocs,
+            link: 1,
+            info: 0,
+            entsize: 8,
+        },
+        Sec {
+            ty: SHT_PROGBITS,
+            flags: 6,
+            addr: TEXT_VMA,
+            data: vec![0x90; 16],
+            link: 0,
+            info: 0,
+            entsize: 0,
+        },
+        Sec {
+            ty: SHT_PROGBITS,
+            flags: 3,
+            addr: GOT_VMA,
+            data: got,
+            link: 0,
+            info: 0,
+            entsize: 0,
+        },
+        Sec {
+            ty: SHT_STRTAB,
+            flags: 0,
+            addr: 0,
+            data: b"\0".to_vec(),
+            link: 0,
+            info: 0,
+            entsize: 0,
+        },
     ];
     let bytes = build_elf(false, 3, &secs, 12);
     let r = run(&bytes);
     assert_eq!(
         r.writes,
         vec![
-            DynRelocWrite { vma: GOT_VMA, value: TEXT_VMA, width: 4 },
-            DynRelocWrite { vma: GOT_VMA + 4, value: TEXT_VMA, width: 4 },
+            DynRelocWrite {
+                vma: GOT_VMA,
+                value: TEXT_VMA,
+                width: 4
+            },
+            DynRelocWrite {
+                vma: GOT_VMA + 4,
+                value: TEXT_VMA,
+                width: 4
+            },
         ]
     );
-    assert_eq!(r.const_ranges, vec![(GOT_VMA, GOT_VMA + 3), (GOT_VMA + 4, GOT_VMA + 7)]);
+    assert_eq!(
+        r.const_ranges,
+        vec![(GOT_VMA, GOT_VMA + 3), (GOT_VMA + 4, GOT_VMA + 7)]
+    );
 }
 
 /// An architecture kuna has no triple for produces nothing rather than guessing.
@@ -305,7 +435,10 @@ fn fixup_sites_list_every_slot_with_its_kind() {
     let bytes = image64(62, 8, 6, 7);
     let file = object::File::parse(&*bytes).unwrap();
     let listed = fixup_sites(&file, &bytes);
-    assert_eq!(listed.coverage, Coverage::Complete(Source::DynamicRelocations));
+    assert_eq!(
+        listed.coverage,
+        Coverage::Complete(Source::DynamicRelocations)
+    );
     let site = |vma, kind, symbol: Option<&str>, addend, target| FixupSite {
         vma,
         width: 8,
@@ -318,7 +451,13 @@ fn fixup_sites_list_every_slot_with_its_kind() {
         listed.sites,
         vec![
             site(GOT_VMA, FixupKind::Rebase, None, None, Some(TEXT_VMA)),
-            site(GOT_VMA + 8, FixupKind::Bind, Some("func"), Some(0), Some(TEXT_VMA)),
+            site(
+                GOT_VMA + 8,
+                FixupKind::Bind,
+                Some("func"),
+                Some(0),
+                Some(TEXT_VMA)
+            ),
             site(GOT_VMA + 16, FixupKind::Bind, Some("imp"), Some(0), None),
         ]
     );
@@ -332,7 +471,14 @@ fn a_relocation_kuna_does_not_apply_is_listed_unvalued() {
     let file = object::File::parse(&*bytes).unwrap();
     let listed = fixup_sites(&file, &bytes);
     assert_eq!(listed.sites.len(), 3);
-    assert!(listed.sites.iter().all(|s| s.kind == FixupKind::Relocation && s.target.is_none()), "{:?}", listed.sites);
+    assert!(
+        listed
+            .sites
+            .iter()
+            .all(|s| s.kind == FixupKind::Relocation && s.target.is_none()),
+        "{:?}",
+        listed.sites
+    );
     assert_eq!(listed.sites[2].symbol.as_deref(), Some("imp"));
 }
 
@@ -343,9 +489,18 @@ fn a_relocation_kuna_does_not_apply_is_listed_unvalued() {
 fn relr_entries_decode_to_their_slots() {
     let decode = |entries: &[u64], width| relr_decode(entries, width, usize::MAX).0;
     assert_eq!(decode(&[0x4020, 0x9], 8), vec![0x4020, 0x4038]);
-    assert_eq!(decode(&[0x1000, 0x3, 0x3], 8), vec![0x1000, 0x1008, 0x1008 + 63 * 8]);
-    assert_eq!(decode(&[0x2000, 0x8000_0001], 4), vec![0x2000, 0x2004 + 30 * 4]);
-    assert_eq!(decode(&[0x2000, 0x8000_0001, 0x3], 4), vec![0x2000, 0x2004 + 30 * 4, 0x2004 + 31 * 4]);
+    assert_eq!(
+        decode(&[0x1000, 0x3, 0x3], 8),
+        vec![0x1000, 0x1008, 0x1008 + 63 * 8]
+    );
+    assert_eq!(
+        decode(&[0x2000, 0x8000_0001], 4),
+        vec![0x2000, 0x2004 + 30 * 4]
+    );
+    assert_eq!(
+        decode(&[0x2000, 0x8000_0001, 0x3], 4),
+        vec![0x2000, 0x2004 + 30 * 4, 0x2004 + 31 * 4]
+    );
     assert!(decode(&[], 8).is_empty());
 }
 
@@ -357,5 +512,8 @@ fn relr_decoding_stops_at_the_limit() {
     let bitmaps = vec![u64::MAX; 1 << 16];
     let (slots, overflow) = relr_decode(&bitmaps, 8, 1000);
     assert!(overflow && slots.len() == 1000, "{}", slots.len());
-    assert_eq!(relr_decode(&[0x4020, 0x9], 8, 2), (vec![0x4020, 0x4038], false));
+    assert_eq!(
+        relr_decode(&[0x4020, 0x9], 8, 2),
+        (vec![0x4020, 0x4038], false)
+    );
 }

@@ -44,7 +44,10 @@ impl OptionRetSplitLimit {
             .ok()
             .filter(|_| !field.is_empty() && field.bytes().all(|b| b.is_ascii_digit()))
             .ok_or_else(|| KunaError::parse("Must specify off or a decimal op count"))?;
-        Ok((Some(n), format!("A return block is split into at most {n} cloned ops")))
+        Ok((
+            Some(n),
+            format!("A return block is split into at most {n} cloned ops"),
+        ))
     }
 }
 

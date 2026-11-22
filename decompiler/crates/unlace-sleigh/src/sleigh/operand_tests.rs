@@ -125,11 +125,13 @@ fn invalid_and_recursive_operand_references_return_errors() {
         assert!(walker.operand_value(0, u32::MAX, 0).is_err());
         assert!(walker.operand_value(0, 0, 99).is_err());
         assert!(walker.operand_value(0, 0, 0).is_err());
-        assert!(walker
-            .operand_value(2, 0, 0)
-            .unwrap_err()
-            .to_string()
-            .contains("maximum operand expression depth"));
+        assert!(
+            walker
+                .operand_value(2, 0, 0)
+                .unwrap_err()
+                .to_string()
+                .contains("maximum operand expression depth")
+        );
     }
 }
 
@@ -140,11 +142,13 @@ fn constructor_off_the_walk_resolves_no_operands() {
     for table in [&table, &engine.base.symtab] {
         let mut walker = ParserWalker::new(&ctx, table, &engine);
         walker.base_state();
-        assert!(walker
-            .operand_value(0, 0, 1)
-            .unwrap_err()
-            .to_string()
-            .contains("outside current context"));
+        assert!(
+            walker
+                .operand_value(0, 0, 1)
+                .unwrap_err()
+                .to_string()
+                .contains("outside current context")
+        );
         let oob = OobWalker {
             ctx: &ctx,
             cross: None,
@@ -160,18 +164,20 @@ fn constructor_off_the_walk_resolves_no_operands() {
             },
             depth: 1,
         };
-        assert!(oob
-            .operand_value(1, 0, 0)
-            .unwrap_err()
-            .to_string()
-            .contains("not resolved"));
+        assert!(
+            oob.operand_value(1, 0, 0)
+                .unwrap_err()
+                .to_string()
+                .contains("not resolved")
+        );
         assert_eq!(oob.operand_value(3, 0, 0).unwrap(), 0x14);
         assert_eq!(oob.operand_value(4, 0, 1).unwrap(), 0);
-        assert!(oob
-            .operand_value(5, 0, 1)
-            .unwrap_err()
-            .to_string()
-            .contains("operand index"));
+        assert!(
+            oob.operand_value(5, 0, 1)
+                .unwrap_err()
+                .to_string()
+                .contains("operand index")
+        );
     }
 }
 
@@ -250,13 +256,25 @@ fn unlinked_children_remain_errors_after_reset() {
     {
         let mut walker = ParserWalker::new(&ctx, &table, &engine);
         walker.base_state();
-        assert!(walker.borrow_fixed_handle(2).unwrap_err().to_string().contains("not resolved"));
+        assert!(
+            walker
+                .borrow_fixed_handle(2)
+                .unwrap_err()
+                .to_string()
+                .contains("not resolved")
+        );
     }
     ctx.state[0].reset();
     assert_eq!(ctx.state[0].resolve.capacity(), capacity);
     let mut walker = ParserWalker::new(&ctx, &table, &engine);
     walker.base_state();
-    assert!(walker.borrow_fixed_handle(0).unwrap_err().to_string().contains("not resolved"));
+    assert!(
+        walker
+            .borrow_fixed_handle(0)
+            .unwrap_err()
+            .to_string()
+            .contains("not resolved")
+    );
 }
 
 #[test]

@@ -4,8 +4,8 @@ use crate::dtype::Datatype;
 use crate::fspec::ParameterPieces;
 use crate::merge::MergeContext;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, SpacebaseSpace,
-    UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, SpacebaseSpace, UniqueSpace, addrspace_flags,
+    spacetype,
 };
 
 fn frame_data() -> (Funcdata, Rc<AddrSpace>) {

@@ -14,21 +14,23 @@
 
 use std::path::PathBuf;
 
-use unlace_console::engine::{bootstrap_from_object, FunctionEntry};
+use unlace_console::engine::{FunctionEntry, bootstrap_from_object};
 use unlace_console::project::{
-    build_asm, build_readme, collect_dat_addrs, decompile_entry, decompile_pulled,
-    decompile_targets, render_readme,
-    AsmPhase, DecompileOptions, FuncResult, ReadmeCounts, ReadmeFacts, ReadmeLayout,
-    StreamPhase, StreamProgress, render_readme_streaming,
+    AsmPhase, DecompileOptions, FuncResult, ReadmeCounts, ReadmeFacts, ReadmeLayout, StreamPhase,
+    StreamProgress, build_asm, build_readme, collect_dat_addrs, decompile_entry, decompile_pulled,
+    decompile_targets, render_readme, render_readme_streaming,
 };
 use unlace_console::project_stream::{
-    asm_labels_from_entries, asm_labels_from_results, render_data_tail, render_variables_section,
-    AsmSweep,
+    AsmSweep, asm_labels_from_entries, asm_labels_from_results, render_data_tail,
+    render_variables_section,
 };
 use unlace_sleigh::loadimage::section_flags;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// The vendored fauxware fixture (shared with the unlace-analysis loader gate).
@@ -49,29 +51,39 @@ fn export_helpers_report_sections_disasm_bytes_and_globals() {
 
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("read symbols (analysis commit) must succeed");
+    prog.commit_pending_analysis()
+        .expect("read symbols (analysis commit) must succeed");
 
     // (1) sections(): the loader's section map must be non-empty and contain at
     // least one CODE-flagged range (the `.text` sweep range the `.asm` emitter
     // walks), and `main`'s entry must fall inside a CODE range.
     let sections = prog.sections();
     assert!(!sections.is_empty(), "sections() returned no sections");
-    let code_ranges: Vec<&(u64, u64, u32)> =
-        sections.iter().filter(|(_, _, f)| f & section_flags::CODE != 0).collect();
-    assert!(!code_ranges.is_empty(), "no CODE-flagged section in {sections:?}");
+    let code_ranges: Vec<&(u64, u64, u32)> = sections
+        .iter()
+        .filter(|(_, _, f)| f & section_flags::CODE != 0)
+        .collect();
+    assert!(
+        !code_ranges.is_empty(),
+        "no CODE-flagged section in {sections:?}"
+    );
     let main_vma = prog
         .function_entries()
         .find(|(n, _)| *n == "main")
         .map(|(_, a)| a.get_offset())
         .expect("main present in enumeration");
     assert!(
-        code_ranges.iter().any(|(vma, size, _)| main_vma >= *vma && main_vma < vma + size),
+        code_ranges
+            .iter()
+            .any(|(vma, size, _)| main_vma >= *vma && main_vma < vma + size),
         "main @ {main_vma:#x} not inside any CODE section: {code_ranges:?}"
     );
 
     // (2) disassemble_at(main entry): one decoded instruction with a positive
     // length and a non-empty mnemonic.
-    let (len, mnem, _body) = prog.disassemble_at(main_vma).expect("disassemble_at(main) failed");
+    let (len, mnem, _body) = prog
+        .disassemble_at(main_vma)
+        .expect("disassemble_at(main) failed");
     assert!(len > 0, "instruction length must be positive, got {len}");
     assert!(!mnem.is_empty(), "empty mnemonic at main entry");
     let mut reuse_mnem = String::with_capacity(32);
@@ -83,9 +95,13 @@ fn export_helpers_report_sections_disasm_bytes_and_globals() {
     let reuse_len = prog
         .disassemble_at_into(main_vma, &mut reuse_mnem, &mut reuse_body)
         .expect("disassemble_at_into(main) failed");
-    let (_, expected_mnem, expected_body) =
-        prog.disassemble_at(main_vma).expect("second disassemble_at(main) failed");
-    assert_eq!((reuse_len, &reuse_mnem, &reuse_body), (len, &expected_mnem, &expected_body));
+    let (_, expected_mnem, expected_body) = prog
+        .disassemble_at(main_vma)
+        .expect("second disassemble_at(main) failed");
+    assert_eq!(
+        (reuse_len, &reuse_mnem, &reuse_body),
+        (len, &expected_mnem, &expected_body)
+    );
     assert_eq!(reuse_caps, (reuse_mnem.capacity(), reuse_body.capacity()));
     assert_eq!(reuse_ptrs, (reuse_mnem.as_ptr(), reuse_body.as_ptr()));
 
@@ -93,9 +109,17 @@ fn export_helpers_report_sections_disasm_bytes_and_globals() {
     // round-trip against the fixture file at the corresponding file offset
     // (fauxware's text LOAD maps file offset 0 at LOAD_BASE).
     let n = len as usize + 8; // one instruction plus a tail
-    let got = prog.read_bytes(main_vma, n).expect("read_bytes(main) returned None");
-    assert_eq!(got.len(), n, "read_bytes returned the wrong number of bytes");
-    let again = prog.read_bytes(main_vma, n).expect("second read_bytes(main) returned None");
+    let got = prog
+        .read_bytes(main_vma, n)
+        .expect("read_bytes(main) returned None");
+    assert_eq!(
+        got.len(),
+        n,
+        "read_bytes returned the wrong number of bytes"
+    );
+    let again = prog
+        .read_bytes(main_vma, n)
+        .expect("second read_bytes(main) returned None");
     assert_eq!(got, again, "read_bytes not stable across two calls");
     let mut reuse_bytes = Vec::with_capacity(n + 16);
     reuse_bytes.extend_from_slice(b"stale bytes");
@@ -117,9 +141,15 @@ fn export_helpers_report_sections_disasm_bytes_and_globals() {
     );
     // An address far below the image is unmapped: Err maps to None (the `.bss` /
     // hole contract the `.asm` data tail relies on).
-    assert!(prog.read_bytes(0x10, 4).is_none(), "read of unmapped address must be None");
+    assert!(
+        prog.read_bytes(0x10, 4).is_none(),
+        "read of unmapped address must be None"
+    );
     assert!(!prog.read_bytes_into(0x1000, 4, &mut reuse_bytes));
-    assert!(reuse_bytes.is_empty(), "failed read_bytes_into must clear stale bytes");
+    assert!(
+        reuse_bytes.is_empty(),
+        "failed read_bytes_into must clear stale bytes"
+    );
     assert_eq!(reuse_bytes.capacity(), reuse_cap);
     assert_eq!(reuse_bytes.as_ptr(), reuse_ptr);
 
@@ -128,19 +158,34 @@ fn export_helpers_report_sections_disasm_bytes_and_globals() {
     // (fauxware's `main`/`authenticate` are FunctionSymbols in the same scope).
     let globals = prog.global_data_symbols();
     for (name, vma, size) in &globals {
-        assert!(!name.is_empty(), "global data symbol with an empty name @ {vma:#x}");
-        assert!(*size >= 1, "global data symbol {name} has non-positive size {size}");
+        assert!(
+            !name.is_empty(),
+            "global data symbol with an empty name @ {vma:#x}"
+        );
+        assert!(
+            *size >= 1,
+            "global data symbol {name} has non-positive size {size}"
+        );
     }
     assert!(
-        globals.iter().all(|(n, _, _)| n != "main" && n != "authenticate"),
+        globals
+            .iter()
+            .all(|(n, _, _)| n != "main" && n != "authenticate"),
         "function symbols leaked into global_data_symbols(): {globals:?}"
     );
     // Non-stripped fauxware carries string literals; the default-on strings
     // analysis maps each as a typed `s_<addr>` char[N] data symbol, so the set
     // is non-empty (verified empirically; keeps the exporter's data-label merge
     // honest).
-    assert!(!globals.is_empty(), "expected named global data on non-stripped fauxware");
-    eprintln!("global_data_symbols on fauxware ({}): {:?}", globals.len(), globals);
+    assert!(
+        !globals.is_empty(),
+        "expected named global data on non-stripped fauxware"
+    );
+    eprintln!(
+        "global_data_symbols on fauxware ({}): {:?}",
+        globals.len(),
+        globals
+    );
 }
 
 /// The entry named `name`, from the canonical inventory.
@@ -157,7 +202,8 @@ fn loaded_fauxware() -> unlace_console::engine::ConsoleProgram {
     let bin = fauxware().to_str().expect("UTF-8 fixture path").to_string();
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("read symbols (analysis commit) must succeed");
+    prog.commit_pending_analysis()
+        .expect("read symbols (analysis commit) must succeed");
     prog
 }
 
@@ -184,17 +230,29 @@ fn callee_hints_carry_direct_calls_and_address_taken_callees() {
     };
     let mut pending = vec![start, main].into_iter();
     let mut results: Vec<FuncResult> = Vec::new();
-    decompile_pulled(&mut prog, &opts, &mut || pending.next(), &mut |r| results.push(r));
+    decompile_pulled(&mut prog, &opts, &mut || pending.next(), &mut |r| {
+        results.push(r)
+    });
 
     assert_eq!(results.len(), 2, "one result per target, in pull order");
-    assert_eq!((results[0].byte_address, results[1].byte_address), (start_vma, main_vma));
+    assert_eq!(
+        (results[0].byte_address, results[1].byte_address),
+        (start_vma, main_vma)
+    );
     for r in &results {
-        eprintln!("{} @ {:#x} hints: {:x?}", r.name, r.byte_address, r.callee_hints);
+        eprintln!(
+            "{} @ {:#x} hints: {:x?}",
+            r.name, r.byte_address, r.callee_hints
+        );
         assert!(r.error.is_none(), "{} failed: {:?}", r.name, r.error);
         let mut sorted = r.callee_hints.clone();
         sorted.sort_unstable();
         sorted.dedup();
-        assert_eq!(sorted, r.callee_hints, "{}: hints must be sorted and deduped", r.name);
+        assert_eq!(
+            sorted, r.callee_hints,
+            "{}: hints must be sorted and deduped",
+            r.name
+        );
         assert!(
             !r.callee_hints.contains(&r.byte_address),
             "{}: a function is never its own hint",
@@ -246,14 +304,20 @@ fn resumable_asm_sweep_matches_the_one_shot_sweep() {
         let mut steps = 0;
         while !sweep.step(&prog, budget, &mut stepped).unwrap() {
             steps += 1;
-            assert!(steps < 1_000_000, "sweep made no progress at budget {budget}");
+            assert!(
+                steps < 1_000_000,
+                "sweep made no progress at budget {budget}"
+            );
         }
         assert_eq!(
             String::from_utf8(stepped).unwrap(),
             String::from_utf8(one_shot.clone()).unwrap(),
             "budget {budget} changed the sweep bytes"
         );
-        assert!(budget > 64 || steps > 1, "budget {budget} should need several steps");
+        assert!(
+            budget > 64 || steps > 1,
+            "budget {budget} should need several steps"
+        );
     }
 
     // The sweep holds no borrow of the program between steps, so a serial
@@ -263,7 +327,10 @@ fn resumable_asm_sweep_matches_the_one_shot_sweep() {
     interleaved.extend_from_slice(sweep.header_lines().as_bytes());
     while !sweep.step(&prog, 512, &mut interleaved).unwrap() {
         let again = entry_named(&prog, "main");
-        let opts = DecompileOptions { no_vars: true, ..DecompileOptions::default() };
+        let opts = DecompileOptions {
+            no_vars: true,
+            ..DecompileOptions::default()
+        };
         assert!(decompile_entry(&mut prog, again, &opts).error.is_none());
     }
     assert_eq!(
@@ -276,12 +343,19 @@ fn resumable_asm_sweep_matches_the_one_shot_sweep() {
     let dat = collect_dat_addrs(&results);
     let full = build_asm(&prog, &results, &dat, "fauxware");
     let tail = render_data_tail(&prog, &dat);
-    assert_eq!(full, format!("{}{tail}", String::from_utf8(one_shot).unwrap()));
+    assert_eq!(
+        full,
+        format!("{}{tail}", String::from_utf8(one_shot).unwrap())
+    );
 
     // Target-derived labels carry no variable comments and are address-ordered.
     let entry_labels = asm_labels_from_entries(&prog, &targets);
     assert!(entry_labels.iter().all(|l| l.header.is_empty()));
-    assert!(entry_labels.windows(2).all(|w| w[0].byte_address <= w[1].byte_address));
+    assert!(
+        entry_labels
+            .windows(2)
+            .all(|w| w[0].byte_address <= w[1].byte_address)
+    );
     let mut streamed: Vec<u8> = Vec::new();
     let mut sweep = AsmSweep::new(&prog, "fauxware", entry_labels);
     streamed.extend_from_slice(sweep.header_lines().as_bytes());
@@ -320,7 +394,11 @@ fn resumable_asm_sweep_matches_the_one_shot_sweep() {
         .lines()
         .filter(|l| l.starts_with("; arg:") || l.starts_with("; stack:"))
         .collect();
-    assert_eq!(moved.len(), original.len(), "no variable comment is lost or invented");
+    assert_eq!(
+        moved.len(),
+        original.len(),
+        "no variable comment is lost or invented"
+    );
 }
 
 /// The README a streamed export writes before its program is loaded says so,
@@ -334,7 +412,10 @@ fn streaming_readme_renders_pending_facts_then_the_streamed_layout() {
         ..StreamProgress::default()
     };
     let loading = render_readme_streaming(&facts, &progress, ReadmeLayout::Streamed);
-    assert!(loading.starts_with("# fauxware — kuna project export\n\n**This export is still streaming**"));
+    assert!(
+        loading
+            .starts_with("# fauxware — kuna project export\n\n**This export is still streaming**")
+    );
     assert!(loading.contains("| Architecture | pending |\n"));
     assert!(loading.contains("| Entry point | pending |\n"));
     assert!(loading.contains("| Functions | pending |\n"));
@@ -361,10 +442,22 @@ fn streaming_readme_renders_pending_facts_then_the_streamed_layout() {
         !failed.contains("still streaming"),
         "a failed export is not still streaming:\n{failed}"
     );
-    assert!(failed.contains("failed before it wrote anything"), "{failed}");
-    assert!(failed.contains("`.streaming`"), "it has to say what IS there:\n{failed}");
-    assert!(!failed.contains("## Files"), "nothing was written to inventory:\n{failed}");
-    assert!(!failed.contains("fauxware.c"), "no .c was created:\n{failed}");
+    assert!(
+        failed.contains("failed before it wrote anything"),
+        "{failed}"
+    );
+    assert!(
+        failed.contains("`.streaming`"),
+        "it has to say what IS there:\n{failed}"
+    );
+    assert!(
+        !failed.contains("## Files"),
+        "nothing was written to inventory:\n{failed}"
+    );
+    assert!(
+        !failed.contains("fauxware.c"),
+        "no .c was created:\n{failed}"
+    );
     assert!(
         !failed.contains("While `.streaming` exists the export is incomplete"),
         "the guide to reading a running export does not apply:\n{failed}"
@@ -450,8 +543,14 @@ fn progress_readme_describes_the_final_artifacts() {
         },
         ReadmeLayout::Progress,
     );
-    assert!(running.contains("**This export is still streaming**"), "{running}");
-    assert!(running.contains("decompile-project --progress"), "{running}");
+    assert!(
+        running.contains("**This export is still streaming**"),
+        "{running}"
+    );
+    assert!(
+        running.contains("decompile-project --progress"),
+        "{running}"
+    );
     assert!(running.contains("address-ordered"), "{running}");
     assert!(!running.contains("DECOMPILE order"), "{running}");
     assert!(!running.contains("; --- variables ---"), "{running}");

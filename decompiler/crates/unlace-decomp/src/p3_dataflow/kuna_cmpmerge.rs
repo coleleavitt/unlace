@@ -43,12 +43,22 @@ struct Relation {
 
 impl Relation {
     fn all(&self) -> u8 {
-        if self.float { LT | EQ | GT | UN } else { LT | EQ | GT }
+        if self.float {
+            LT | EQ | GT | UN
+        } else {
+            LT | EQ | GT
+        }
     }
     fn swapped(self) -> Relation {
         let m = self.mask;
-        let mask = (m & !(LT | GT)) | if m & LT != 0 { GT } else { 0 } | if m & GT != 0 { LT } else { 0 };
-        Relation { a: self.b, b: self.a, mask, ..self }
+        let mask =
+            (m & !(LT | GT)) | if m & LT != 0 { GT } else { 0 } | if m & GT != 0 { LT } else { 0 };
+        Relation {
+            a: self.b,
+            b: self.a,
+            mask,
+            ..self
+        }
     }
 }
 
@@ -61,7 +71,12 @@ fn same_value(data: &Funcdata, x: VarnodeId, y: VarnodeId) -> bool {
         return true;
     }
     match (data.vbank().get(x), data.vbank().get(y)) {
-        (Some(a), Some(b)) => a.is_constant() && b.is_constant() && a.get_offset() == b.get_offset() && a.get_size() == b.get_size(),
+        (Some(a), Some(b)) => {
+            a.is_constant()
+                && b.is_constant()
+                && a.get_offset() == b.get_offset()
+                && a.get_size() == b.get_size()
+        }
         _ => false,
     }
 }
@@ -92,7 +107,13 @@ fn relation(data: &Funcdata, bool_vn: VarnodeId) -> Option<Relation> {
         OpCode::CPUI_FLOAT_LESSEQUAL => (LT | EQ, true, None),
         _ => return None,
     };
-    Some(Relation { a, b, mask, float, signed })
+    Some(Relation {
+        a,
+        b,
+        mask,
+        float,
+        signed,
+    })
 }
 
 /// The two relations over one operand pair, the second oriented like the first.
@@ -126,8 +147,22 @@ fn single(mask: u8, float: bool, signed: Option<bool>) -> Option<(OpCode, bool)>
     };
     let ne = if float { LT | GT | UN } else { LT | GT };
     match mask {
-        m if m == EQ => Some((if float { CPUI_FLOAT_EQUAL } else { CPUI_INT_EQUAL }, false)),
-        m if m == ne => Some((if float { CPUI_FLOAT_NOTEQUAL } else { CPUI_INT_NOTEQUAL }, false)),
+        m if m == EQ => Some((
+            if float {
+                CPUI_FLOAT_EQUAL
+            } else {
+                CPUI_INT_EQUAL
+            },
+            false,
+        )),
+        m if m == ne => Some((
+            if float {
+                CPUI_FLOAT_NOTEQUAL
+            } else {
+                CPUI_INT_NOTEQUAL
+            },
+            false,
+        )),
         m if m == LT => order.map(|(lt, _)| (lt, false)),
         m if m == GT => order.map(|(lt, _)| (lt, true)),
         m if m == LT | EQ => order.map(|(_, le)| (le, false)),
@@ -141,7 +176,12 @@ enum Form {
     Constant(bool),
     /// The combination is one of the two inputs.
     Reuse(VarnodeId),
-    Compare { opc: OpCode, a: VarnodeId, b: VarnodeId, negate: bool },
+    Compare {
+        opc: OpCode,
+        a: VarnodeId,
+        b: VarnodeId,
+        negate: bool,
+    },
 }
 
 fn form_for(r: &Relation, mask: u8) -> Option<Form> {
@@ -170,7 +210,9 @@ fn constant(data: &Funcdata, vn: VarnodeId) -> Option<uintb> {
 fn range_of(data: &Funcdata, bool_vn: VarnodeId) -> Option<(VarnodeId, CircleRange)> {
     let mut vn = bool_vn;
     let mut value = true;
-    while let Some(op) = op_of(data, vn).filter(|&op| data.obank().get(op).map(|o| o.code()) == Some(OpCode::CPUI_BOOL_NEGATE)) {
+    while let Some(op) = op_of(data, vn)
+        .filter(|&op| data.obank().get(op).map(|o| o.code()) == Some(OpCode::CPUI_BOOL_NEGATE))
+    {
         value = !value;
         vn = data.obank().get(op)?.get_in(0)?;
     }
@@ -178,7 +220,12 @@ fn range_of(data: &Funcdata, bool_vn: VarnodeId) -> Option<(VarnodeId, CircleRan
     let o = data.obank().get(op)?;
     if !matches!(
         o.code(),
-        OpCode::CPUI_INT_EQUAL | OpCode::CPUI_INT_NOTEQUAL | OpCode::CPUI_INT_LESS | OpCode::CPUI_INT_LESSEQUAL | OpCode::CPUI_INT_SLESS | OpCode::CPUI_INT_SLESSEQUAL
+        OpCode::CPUI_INT_EQUAL
+            | OpCode::CPUI_INT_NOTEQUAL
+            | OpCode::CPUI_INT_LESS
+            | OpCode::CPUI_INT_LESSEQUAL
+            | OpCode::CPUI_INT_SLESS
+            | OpCode::CPUI_INT_SLESSEQUAL
     ) {
         return None;
     }
@@ -190,7 +237,9 @@ fn range_of(data: &Funcdata, bool_vn: VarnodeId) -> Option<(VarnodeId, CircleRan
     };
     let size = data.vbank().get(v)?.get_size();
     let mut range = CircleRange::new_bool(value);
-    range.pull_back_binary(o.code(), k, slot, size, 1).then_some((v, range))
+    range
+        .pull_back_binary(o.code(), k, slot, size, 1)
+        .then_some((v, range))
 }
 
 /// One comparison of `v` against a constant stating `range`, in the strict
@@ -208,17 +257,47 @@ fn range_form(data: &mut Funcdata, v: VarnodeId, range: &CircleRange) -> Option<
     let (l, r) = (range.get_min(), range.get_end() & mask);
     let k = |data: &mut Funcdata, c: uintb| data.new_constant(size, c & mask);
     let f = if r == (l + 1) & mask {
-        Form::Compare { opc: OpCode::CPUI_INT_EQUAL, a: v, b: k(data, l), negate: false }
+        Form::Compare {
+            opc: OpCode::CPUI_INT_EQUAL,
+            a: v,
+            b: k(data, l),
+            negate: false,
+        }
     } else if l == (r + 1) & mask {
-        Form::Compare { opc: OpCode::CPUI_INT_NOTEQUAL, a: v, b: k(data, r), negate: false }
+        Form::Compare {
+            opc: OpCode::CPUI_INT_NOTEQUAL,
+            a: v,
+            b: k(data, r),
+            negate: false,
+        }
     } else if l == 0 {
-        Form::Compare { opc: OpCode::CPUI_INT_LESS, a: v, b: k(data, r), negate: false }
+        Form::Compare {
+            opc: OpCode::CPUI_INT_LESS,
+            a: v,
+            b: k(data, r),
+            negate: false,
+        }
     } else if r == 0 {
-        Form::Compare { opc: OpCode::CPUI_INT_LESS, a: k(data, l.wrapping_sub(1)), b: v, negate: false }
+        Form::Compare {
+            opc: OpCode::CPUI_INT_LESS,
+            a: k(data, l.wrapping_sub(1)),
+            b: v,
+            negate: false,
+        }
     } else if l == smin {
-        Form::Compare { opc: OpCode::CPUI_INT_SLESS, a: v, b: k(data, r), negate: false }
+        Form::Compare {
+            opc: OpCode::CPUI_INT_SLESS,
+            a: v,
+            b: k(data, r),
+            negate: false,
+        }
     } else if r == smin {
-        Form::Compare { opc: OpCode::CPUI_INT_SLESS, a: k(data, l.wrapping_sub(1)), b: v, negate: false }
+        Form::Compare {
+            opc: OpCode::CPUI_INT_SLESS,
+            a: k(data, l.wrapping_sub(1)),
+            b: v,
+            negate: false,
+        }
     } else {
         return None;
     };
@@ -234,7 +313,12 @@ enum Combine {
 
 /// The form two booleans combined by `how` take, when one comparison states it.
 /// Each boolean is read as itself (`true`) or as its negation (`false`).
-fn merged(data: &mut Funcdata, (x, px): (VarnodeId, bool), (y, py): (VarnodeId, bool), how: Combine) -> Option<Form> {
+fn merged(
+    data: &mut Funcdata,
+    (x, px): (VarnodeId, bool),
+    (y, py): (VarnodeId, bool),
+    how: Combine,
+) -> Option<Form> {
     let reuse = |vn: VarnodeId, positive: bool| positive.then_some(Form::Reuse(vn));
     if let (Some((v1, mut r1)), Some((v2, mut r2))) = (range_of(data, x), range_of(data, y)) {
         if v1 == v2 && how != Combine::Xor && (px || r1.invert() == 0) && (py || r2.invert() == 0) {
@@ -297,12 +381,22 @@ fn rewrite(data: &mut Funcdata, op: OpId, form: Form) {
             data.op_set_input(op, k, 0).expect("cmpmerge: constant");
             data.op_set_opcode(op, crate::typeop::type_op_for(OpCode::CPUI_COPY));
         }
-        Form::Compare { opc, a, b, negate: false } => {
+        Form::Compare {
+            opc,
+            a,
+            b,
+            negate: false,
+        } => {
             data.op_set_opcode(op, crate::typeop::type_op_for(opc));
             data.op_set_input(op, a, 0).expect("cmpmerge: a");
             data.op_set_input(op, b, 1).expect("cmpmerge: b");
         }
-        Form::Compare { opc, a, b, negate: true } => {
+        Form::Compare {
+            opc,
+            a,
+            b,
+            negate: true,
+        } => {
             let addr = data.obank().get(op).unwrap().get_addr().clone();
             let cmp = data.new_op(2, addr);
             data.op_set_opcode(cmp, crate::typeop::type_op_for(opc));
@@ -323,7 +417,9 @@ fn rewrite(data: &mut Funcdata, op: OpId, form: Form) {
 fn lessequal_origin(data: &Funcdata, vn: VarnodeId) -> bool {
     let mut vn = vn;
     loop {
-        let Some(o) = op_of(data, vn).and_then(|op| data.obank().get(op)) else { return false };
+        let Some(o) = op_of(data, vn).and_then(|op| data.obank().get(op)) else {
+            return false;
+        };
         match o.code() {
             OpCode::CPUI_BOOL_NEGATE => match o.get_in(0) {
                 Some(v) => vn = v,
@@ -362,31 +458,47 @@ pub struct RuleCompareMerge {
 
 impl RuleCompareMerge {
     pub fn new(group: impl Into<String>) -> RuleCompareMerge {
-        RuleCompareMerge { group: group.into() }
+        RuleCompareMerge {
+            group: group.into(),
+        }
     }
 }
 
 impl Rule for RuleCompareMerge {
     fn get_op_list(&self) -> Vec<OpCode> {
-        vec![OpCode::CPUI_BOOL_OR, OpCode::CPUI_BOOL_AND, OpCode::CPUI_BOOL_XOR]
+        vec![
+            OpCode::CPUI_BOOL_OR,
+            OpCode::CPUI_BOOL_AND,
+            OpCode::CPUI_BOOL_XOR,
+        ]
     }
 
     fn clone_rule(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Rule>> {
-        grouplist.contains(&self.group).then(|| Box::new(RuleCompareMerge { group: self.group.clone() }) as Box<dyn Rule>)
+        grouplist.contains(&self.group).then(|| {
+            Box::new(RuleCompareMerge {
+                group: self.group.clone(),
+            }) as Box<dyn Rule>
+        })
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         if !data.get_arch().cmp_merge {
             return 0;
         }
-        let Some(o) = data.obank().get(op) else { return 0 };
+        let Some(o) = data.obank().get(op) else {
+            return 0;
+        };
         let how = match o.code() {
             OpCode::CPUI_BOOL_OR => Combine::Or,
             OpCode::CPUI_BOOL_AND => Combine::And,
             _ => Combine::Xor,
         };
-        let (Some(x), Some(y)) = (o.get_in(0), o.get_in(1)) else { return 0 };
-        let Some(form) = merged(data, (x, true), (y, true), how) else { return 0 };
+        let (Some(x), Some(y)) = (o.get_in(0), o.get_in(1)) else {
+            return 0;
+        };
+        let Some(form) = merged(data, (x, true), (y, true), how) else {
+            return 0;
+        };
         let lessequal = lessequal_origin(data, x) || lessequal_origin(data, y);
         rewrite(data, op, form);
         if lessequal {
@@ -406,22 +518,31 @@ fn last_op(data: &Funcdata, bl: BlockId) -> Option<OpId> {
 
 /// Does `bl` hold nothing but its CBRANCH and side-effect-free ops read only by it?
 fn bare_test(data: &Funcdata, bl: BlockId, branch: OpId) -> bool {
-    let crate::block::BlockKind::Basic(basic) = data.bblocks_ref().block(bl).kind() else { return false };
+    let crate::block::BlockKind::Basic(basic) = data.bblocks_ref().block(bl).kind() else {
+        return false;
+    };
     let mut cur = basic.op_head;
     while let Some(op) = cur {
         cur = data.bb_op_next(op);
         if op == branch {
             continue;
         }
-        let Some(o) = data.obank().get(op) else { return false };
+        let Some(o) = data.obank().get(op) else {
+            return false;
+        };
         if o.is_marker() {
             continue;
         }
         if o.is_call() || o.code() == OpCode::CPUI_STORE || o.code() == OpCode::CPUI_LOAD {
             return false;
         }
-        let Some(out) = o.get_out().and_then(|v| data.vbank().get(v)) else { return false };
-        if out.descend_iter().any(|d| data.obank().get(d).and_then(|d| d.get_parent()) != Some(bl)) {
+        let Some(out) = o.get_out().and_then(|v| data.vbank().get(v)) else {
+            return false;
+        };
+        if out
+            .descend_iter()
+            .any(|d| data.obank().get(d).and_then(|d| d.get_parent()) != Some(bl))
+        {
             return false;
         }
     }
@@ -430,7 +551,11 @@ fn bare_test(data: &Funcdata, bl: BlockId, branch: OpId) -> bool {
 
 /// The condition value that sends `bl`'s CBRANCH down out-edge `edge`.
 fn edge_value(data: &Funcdata, branch: OpId, edge: usize) -> bool {
-    (edge == 1) != data.obank().get(branch).is_some_and(|o| o.is_boolean_flip())
+    (edge == 1)
+        != data
+            .obank()
+            .get(branch)
+            .is_some_and(|o| o.is_boolean_flip())
 }
 
 /// Merge every branch with the bare second test that one of its successors is.
@@ -438,11 +563,18 @@ pub(crate) fn branchmerge_apply(data: &mut Funcdata) -> int4 {
     let mut count = 0;
     for i in 0..data.bblocks_get_size() {
         let bl = data.bblocks_get_block(i);
-        let Some(b1) = last_op(data, bl) else { continue };
-        if data.obank().get(b1).map(|o| o.code()) != Some(OpCode::CPUI_CBRANCH) || data.bblocks_ref().block(bl).size_out() != 2 {
+        let Some(b1) = last_op(data, bl) else {
+            continue;
+        };
+        if data.obank().get(b1).map(|o| o.code()) != Some(OpCode::CPUI_CBRANCH)
+            || data.bblocks_ref().block(bl).size_out() != 2
+        {
             continue;
         }
-        let outs = [data.bblocks_ref().block(bl).get_out(0), data.bblocks_ref().block(bl).get_out(1)];
+        let outs = [
+            data.bblocks_ref().block(bl).get_out(0),
+            data.bblocks_ref().block(bl).get_out(1),
+        ];
         for n_edge in 0..2 {
             let next = outs[n_edge];
             let shared = outs[1 - n_edge];
@@ -453,16 +585,30 @@ pub(crate) fn branchmerge_apply(data: &mut Funcdata) -> int4 {
             if nb.size_in() != 1 || nb.size_out() != 2 {
                 continue;
             }
-            let Some(b2) = last_op(data, next) else { continue };
-            if data.obank().get(b2).map(|o| o.code()) != Some(OpCode::CPUI_CBRANCH) || !bare_test(data, next, b2) {
+            let Some(b2) = last_op(data, next) else {
+                continue;
+            };
+            if data.obank().get(b2).map(|o| o.code()) != Some(OpCode::CPUI_CBRANCH)
+                || !bare_test(data, next, b2)
+            {
                 continue;
             }
-            let nouts = [data.bblocks_ref().block(next).get_out(0), data.bblocks_ref().block(next).get_out(1)];
-            let Some(s_edge) = nouts.iter().position(|&o| o == shared) else { continue };
+            let nouts = [
+                data.bblocks_ref().block(next).get_out(0),
+                data.bblocks_ref().block(next).get_out(1),
+            ];
+            let Some(s_edge) = nouts.iter().position(|&o| o == shared) else {
+                continue;
+            };
             if nouts[1 - s_edge] == shared {
                 continue;
             }
-            let (Some(c1), Some(c2)) = (data.obank().get(b1).and_then(|o| o.get_in(1)), data.obank().get(b2).and_then(|o| o.get_in(1))) else { continue };
+            let (Some(c1), Some(c2)) = (
+                data.obank().get(b1).and_then(|o| o.get_in(1)),
+                data.obank().get(b2).and_then(|o| o.get_in(1)),
+            ) else {
+                continue;
+            };
             // Both tests oriented to "goes to the shared target".
             let to_shared_1 = edge_value(data, b1, 1 - n_edge);
             let to_shared_2 = edge_value(data, b2, s_edge);
@@ -473,12 +619,21 @@ pub(crate) fn branchmerge_apply(data: &mut Funcdata) -> int4 {
             }
             // The merged test is computed in `bl`: everything the second test
             // compares must be defined outside `next`.
-            let inputs_ok = op_of(data, c2).and_then(|d| data.obank().get(d)).is_some_and(|d| {
-                (0..d.num_input()).all(|s| {
-                    let v = d.get_in(s).unwrap();
-                    data.vbank().get(v).is_some_and(|vv| vv.is_constant() || vv.get_def().and_then(|dd| data.obank().get(dd)).and_then(|dd| dd.get_parent()) != Some(next))
-                })
-            });
+            let inputs_ok = op_of(data, c2)
+                .and_then(|d| data.obank().get(d))
+                .is_some_and(|d| {
+                    (0..d.num_input()).all(|s| {
+                        let v = d.get_in(s).unwrap();
+                        data.vbank().get(v).is_some_and(|vv| {
+                            vv.is_constant()
+                                || vv
+                                    .get_def()
+                                    .and_then(|dd| data.obank().get(dd))
+                                    .and_then(|dd| dd.get_parent())
+                                    != Some(next)
+                        })
+                    })
+                });
             if !inputs_ok {
                 continue;
             }
@@ -507,14 +662,17 @@ pub(crate) fn branchmerge_apply(data: &mut Funcdata) -> int4 {
                     let neg = data.new_op(1, data.obank().get(b1).unwrap().get_addr().clone());
                     data.op_set_opcode(neg, crate::typeop::type_op_for(OpCode::CPUI_BOOL_NEGATE));
                     let nout = data.new_unique_out(1, neg).expect("branchmerge: negate");
-                    data.op_set_input(neg, out, 0).expect("branchmerge: negate input");
+                    data.op_set_input(neg, out, 0)
+                        .expect("branchmerge: negate input");
                     data.op_insert_before(neg, b1);
                     nout
                 };
-                data.op_set_input(b1, cond, 1).expect("branchmerge: first branch");
+                data.op_set_input(b1, cond, 1)
+                    .expect("branchmerge: first branch");
             }
             let never = data.new_constant(1, edge_value(data, b2, 1 - s_edge) as uintb);
-            data.op_set_input(b2, never, 1).expect("branchmerge: second branch");
+            data.op_set_input(b2, never, 1)
+                .expect("branchmerge: second branch");
             count += 1;
             break;
         }
@@ -530,7 +688,9 @@ pub struct ActionBranchMerge {
 
 impl ActionBranchMerge {
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionBranchMerge { base: ActionBase::new(0, "branchmerge", g) })
+        Box::new(ActionBranchMerge {
+            base: ActionBase::new(0, "branchmerge", g),
+        })
     }
 }
 
@@ -542,9 +702,11 @@ impl Action for ActionBranchMerge {
         &mut self.base
     }
     fn clone_filtered(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Action>> {
-        grouplist
-            .contains(self.get_group())
-            .then(|| Box::new(ActionBranchMerge { base: self.base.clone() }) as Box<dyn Action>)
+        grouplist.contains(self.get_group()).then(|| {
+            Box::new(ActionBranchMerge {
+                base: self.base.clone(),
+            }) as Box<dyn Action>
+        })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data.get_arch().cmp_merge {

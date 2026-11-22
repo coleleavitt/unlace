@@ -251,7 +251,11 @@ impl DexFile {
         let methods = table(0x58, 8, "method_ids")?;
         let class_defs = table(0x60, 32, "class_defs")?;
         let compact = bytes.starts_with(b"cdex");
-        let data_base = if compact { u32_at(&bytes, 0x6c)? as usize } else { 0 };
+        let data_base = if compact {
+            u32_at(&bytes, 0x6c)? as usize
+        } else {
+            0
+        };
         let mut dex = DexFile {
             bytes,
             version,
@@ -303,8 +307,16 @@ impl DexFile {
                 method_idx = method_idx.wrapping_add(uleb128(b, &mut pos)?);
                 let access_flags = uleb128(b, &mut pos)?;
                 let code_off = uleb128(b, &mut pos)? as usize;
-                let code = if code_off == 0 { None } else { Some(self.read_code_item(self.data_base + code_off)?) };
-                class.methods.push(EncodedMethod { method_idx, access_flags, code });
+                let code = if code_off == 0 {
+                    None
+                } else {
+                    Some(self.read_code_item(self.data_base + code_off)?)
+                };
+                class.methods.push(EncodedMethod {
+                    method_idx,
+                    access_flags,
+                    code,
+                });
             }
         }
         Ok(class)
@@ -325,7 +337,9 @@ impl DexFile {
             let mut insns = u32::from(count_and_flags >> 5);
             let mut pre = at;
             let mut back = || -> KunaResult<u16> {
-                pre = pre.checked_sub(2).ok_or_else(|| bad("code item preheader"))?;
+                pre = pre
+                    .checked_sub(2)
+                    .ok_or_else(|| bad("code item preheader"))?;
                 u16_at(b, pre)
             };
             if count_and_flags & 0x10 != 0 {
@@ -385,12 +399,22 @@ impl DexFile {
             for _ in 0..size.unsigned_abs().min(0xffff) {
                 let type_idx = uleb128(b, &mut pos)?;
                 let addr = uleb128(b, &mut pos)?;
-                handlers.push(CatchHandler { type_idx: Some(type_idx), addr });
+                handlers.push(CatchHandler {
+                    type_idx: Some(type_idx),
+                    addr,
+                });
             }
             if size <= 0 {
-                handlers.push(CatchHandler { type_idx: None, addr: uleb128(b, &mut pos)? });
+                handlers.push(CatchHandler {
+                    type_idx: None,
+                    addr: uleb128(b, &mut pos)?,
+                });
             }
-            out.push(TryItem { start, count, handlers });
+            out.push(TryItem {
+                start,
+                count,
+                handlers,
+            });
         }
         Ok(out)
     }
@@ -474,7 +498,10 @@ impl DexFile {
                 parameters.push(u32::from(u16_at(&self.bytes, params_off + 4 + k * 2).ok()?));
             }
         }
-        Some(ProtoId { return_type_idx, parameters })
+        Some(ProtoId {
+            return_type_idx,
+            parameters,
+        })
     }
 }
 
@@ -520,9 +547,21 @@ pub fn opcode_units(op: u8) -> u32 {
     match op {
         0x00..=0x01 | 0x04 | 0x07 | 0x0a..=0x12 | 0x1d | 0x1e | 0x21 | 0x27 | 0x28 => 1,
         0x3e..=0x43 | 0x73 | 0x79 | 0x7a | 0x7b..=0x8f | 0xb0..=0xcf | 0xe3..=0xf9 => 1,
-        0x02 | 0x05 | 0x08 | 0x13 | 0x15 | 0x16 | 0x19 | 0x1a | 0x1c | 0x1f | 0x20 | 0x22 | 0x23 | 0x29 => 2,
+        0x02 | 0x05 | 0x08 | 0x13 | 0x15 | 0x16 | 0x19 | 0x1a | 0x1c | 0x1f | 0x20 | 0x22
+        | 0x23 | 0x29 => 2,
         0x2d..=0x3d | 0x44..=0x6d | 0x90..=0xaf | 0xd0..=0xe2 | 0xfe | 0xff => 2,
-        0x03 | 0x06 | 0x09 | 0x14 | 0x17 | 0x1b | 0x24..=0x26 | 0x2a..=0x2c | 0x6e..=0x72 | 0x74..=0x78 | 0xfc | 0xfd => 3,
+        0x03
+        | 0x06
+        | 0x09
+        | 0x14
+        | 0x17
+        | 0x1b
+        | 0x24..=0x26
+        | 0x2a..=0x2c
+        | 0x6e..=0x72
+        | 0x74..=0x78
+        | 0xfc
+        | 0xfd => 3,
         0xfa | 0xfb => 4,
         0x18 => 5,
     }

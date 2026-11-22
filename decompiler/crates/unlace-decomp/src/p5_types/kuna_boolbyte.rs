@@ -55,11 +55,11 @@ use std::collections::{HashSet, VecDeque};
 use std::rc::Rc;
 
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use unlace_num::opcodes::OpCode;
 use unlace_base::address::calc_mask;
 use unlace_base::space::spacetype;
+use unlace_num::opcodes::OpCode;
 
 /// How many def-use hops the walk follows before giving up.  The same bound
 /// [`crate::kuna_ptrfromuse`] uses.
@@ -93,7 +93,11 @@ pub fn truth_value_type(
     if !data.get_arch().bool_byte {
         return None;
     }
-    let cand = data.get_arch().types()?.get_base(1, type_metatype::TYPE_BOOL).ok()?;
+    let cand = data
+        .get_arch()
+        .types()?
+        .get_base(1, type_metatype::TYPE_BOOL)
+        .ok()?;
     if !folds_over(&cand, cur) {
         return None; // the fold is already at least this specific
     }
@@ -119,7 +123,11 @@ pub fn truth_value_type(
     // `_Bool` parameter looks like from the inside" argument this rule makes for
     // an input says nothing about it.  Ask the prototype model whether the
     // storage could carry a parameter at all, as `kuna_ptrfromuse` does.
-    if v.is_input() && !data.get_func_proto().possible_input_param(&v.get_addr().clone(), 1) {
+    if v.is_input()
+        && !data
+            .get_func_proto()
+            .possible_input_param(&v.get_addr().clone(), 1)
+    {
         return None;
     }
     // A byte that is one element of a bigger declared object is not a
@@ -384,8 +392,9 @@ fn covered_by_larger_symbol(data: &Funcdata, vn: VarnodeId) -> bool {
     };
     let addr = v.get_addr().clone();
     let usepoint = data.vn_use_point(vn);
-    if let Some(entry) =
-        data.get_scope_local().and_then(|lm| lm.query_container(&addr, 1, &usepoint))
+    if let Some(entry) = data
+        .get_scope_local()
+        .and_then(|lm| lm.query_container(&addr, 1, &usepoint))
     {
         return entry.size > 1;
     }

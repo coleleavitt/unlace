@@ -19,7 +19,7 @@ use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::space::AddrSpace;
 use unlace_base::types::Wrap;
 
-use crate::loadimage::{ImageBytes, LoadImage, IMAGE_WINDOW_BYTES};
+use crate::loadimage::{IMAGE_WINDOW_BYTES, ImageBytes, LoadImage};
 
 /// (kuna) Refill the staging window of [`windowed_load_fill`] at `offset`, as
 /// a read there left it, or empty it for `!0` or an unmapped `offset`.
@@ -65,8 +65,11 @@ pub fn windowed_load_fill(
     if ptr.len() > IMAGE_WINDOW_BYTES {
         let remaining = bytes.fill_span(ptr, curaddr0);
         if remaining > 0 {
-            let mut errmsg =
-                format!("Unable to load {} bytes at {}", remaining, addr.get_shortcut());
+            let mut errmsg = format!(
+                "Unable to load {} bytes at {}",
+                remaining,
+                addr.get_shortcut()
+            );
             addr.print_raw(&mut errmsg)?;
             return Err(KunaError::data_unavail(errmsg));
         }
@@ -103,7 +106,11 @@ pub fn windowed_load_fill(
         // stale bytes, reported as a successful read, for every request
         // within the window of the one that just failed.
         *bufoffset = !0u64;
-        let mut errmsg = format!("Unable to load {} bytes at {}", cursize, addr.get_shortcut());
+        let mut errmsg = format!(
+            "Unable to load {} bytes at {}",
+            cursize,
+            addr.get_shortcut()
+        );
         addr.print_raw(&mut errmsg)?;
         return Err(KunaError::data_unavail(errmsg));
     }
@@ -238,22 +245,46 @@ mod tests {
             }
             0
         }
-        fn mapped_covers(&self, _lo: u64, _hi: u64) -> bool { true }
+        fn mapped_covers(&self, _lo: u64, _hi: u64) -> bool {
+            true
+        }
     }
 
     #[test]
     fn read_at_top_of_address_space_does_not_wrap_into_window() {
         let ram = Rc::new(AddrSpace::new(
-            spacetype::IPTR_PROCESSOR, "ram", false, 8, 1, 1, addrspace_flags::hasphysical, 1, 1,
+            spacetype::IPTR_PROCESSOR,
+            "ram",
+            false,
+            8,
+            1,
+            1,
+            addrspace_flags::hasphysical,
+            1,
+            1,
         ));
         let buffer = RefCell::new(vec![0u8; IMAGE_WINDOW_BYTES]);
         let bufoffset = RefCell::new(!0u64);
         let mut small = [0u8; 4];
-        windowed_load_fill(&AllMapped, &buffer, &bufoffset, &mut small, &Address::new(Rc::clone(&ram), 0x1000)).unwrap();
+        windowed_load_fill(
+            &AllMapped,
+            &buffer,
+            &bufoffset,
+            &mut small,
+            &Address::new(Rc::clone(&ram), 0x1000),
+        )
+        .unwrap();
         assert_eq!(*bufoffset.borrow(), 0x1000);
 
         let top = 0xffff_ffff_ffff_fffeu64;
-        windowed_load_fill(&AllMapped, &buffer, &bufoffset, &mut small, &Address::new(Rc::clone(&ram), top)).unwrap();
+        windowed_load_fill(
+            &AllMapped,
+            &buffer,
+            &bufoffset,
+            &mut small,
+            &Address::new(Rc::clone(&ram), top),
+        )
+        .unwrap();
         assert_eq!(small, [0xfe, 0xff, 0x00, 0x01]);
     }
 }

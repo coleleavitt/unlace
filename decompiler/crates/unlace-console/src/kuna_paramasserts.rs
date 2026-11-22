@@ -1,13 +1,13 @@
 //! Parameter assertions update the prototype and replay as input storage.
 
+use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::types::{int4, uint4};
-use unlace_decomp::database::{symbol_category, SymbolId};
+use unlace_decomp::database::{SymbolId, symbol_category};
 use unlace_decomp::dtype::Datatype;
-use unlace_decomp::fspec::{parameter_pieces_flags, ParameterPieces};
+use unlace_decomp::fspec::{ParameterPieces, parameter_pieces_flags};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::varmap::ScopeLocal;
-use std::rc::Rc;
 
 pub(crate) struct Binding {
     slot: int4,

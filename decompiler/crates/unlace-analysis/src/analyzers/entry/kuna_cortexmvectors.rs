@@ -78,8 +78,8 @@
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
 use super::{
-    executable_sections, harvest_vector_slots, in_executable_section, read_u32, CORTEXM_SRAM_HI,
-    CORTEXM_SRAM_LO,
+    CORTEXM_SRAM_HI, CORTEXM_SRAM_LO, executable_sections, harvest_vector_slots,
+    in_executable_section, read_u32,
 };
 
 /// (kuna) The widened Cortex-M vector-table discovery pass (`cortexmvectors`).
@@ -286,7 +286,9 @@ mod tests {
         const SHDR: u32 = 40;
         let table: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
         // `movs r0,#k ; bx lr` per body (Thumb-1: 0x20kk, 0x4770).
-        let text: Vec<u8> = (0..n_bodies).flat_map(|k| [k as u8, 0x20u8, 0x70, 0x47]).collect();
+        let text: Vec<u8> = (0..n_bodies)
+            .flat_map(|k| [k as u8, 0x20u8, 0x70, 0x47])
+            .collect();
         let ph_off = EHDR;
         let table_off = ph_off + PHDR * 2;
         let text_off = table_off + table.len() as u32;
@@ -340,8 +342,24 @@ mod tests {
         };
         assert_eq!(b.len() as u32, sh_off);
         shdr(&mut b, 0, 0, 0, 0, 0, 0);
-        shdr(&mut b, n_table, 1, table_flags, table_vma, table_off, table.len() as u32);
-        shdr(&mut b, n_text, 1, 0x2 | 0x4, text_vma, text_off, text.len() as u32);
+        shdr(
+            &mut b,
+            n_table,
+            1,
+            table_flags,
+            table_vma,
+            table_off,
+            table.len() as u32,
+        );
+        shdr(
+            &mut b,
+            n_text,
+            1,
+            0x2 | 0x4,
+            text_vma,
+            text_off,
+            text.len() as u32,
+        );
         shdr(&mut b, n_shstrtab, 3, 0, 0, shstr_off, shstr.len() as u32);
         b
     }
@@ -349,7 +367,16 @@ mod tests {
     /// The shape every corpus table opens with: an initial SP, a reset vector and
     /// three handler pointers into `text_vma`, then reserved zeros.
     fn handler_words(sp: u32, text_vma: u32) -> Vec<u32> {
-        vec![sp, text_vma | 1, (text_vma + 4) | 1, (text_vma + 8) | 1, (text_vma + 12) | 1, 0, 0, 0]
+        vec![
+            sp,
+            text_vma | 1,
+            (text_vma + 4) | 1,
+            (text_vma + 8) | 1,
+            (text_vma + 12) | 1,
+            0,
+            0,
+            0,
+        ]
     }
 
     const EM_ARM: u16 = 40;
@@ -411,7 +438,16 @@ mod tests {
     #[test]
     fn ram_relocated_table_below_its_handlers_still_harvests() {
         let words = handler_words(0x1000_fff0, 0x0800_8000);
-        let bytes = build(0x2000_0000, 0x2, 0x4, &words, 0x0800_8000, 5, 0x0800_8001, EM_ARM);
+        let bytes = build(
+            0x2000_0000,
+            0x2,
+            0x4,
+            &words,
+            0x0800_8000,
+            5,
+            0x0800_8001,
+            EM_ARM,
+        );
         let file = object::File::parse(bytes.as_slice()).expect("parse");
         let execs = executable_sections(&file);
         let in_exec = |vma: u64| in_executable_section(&execs, vma);
@@ -445,8 +481,15 @@ mod tests {
             EM_ARM,
         );
         let file = object::File::parse(bytes.as_slice()).expect("parse");
-        assert!(super::super::cortexm_vector_table_shipped(&file).is_none(), "THE BUG");
-        assert_eq!(vector_table(&file, true).map(|t| t.0), Some(0x0800_0000), "THE FIX");
+        assert!(
+            super::super::cortexm_vector_table_shipped(&file).is_none(),
+            "THE BUG"
+        );
+        assert_eq!(
+            vector_table(&file, true).map(|t| t.0),
+            Some(0x0800_0000),
+            "THE FIX"
+        );
     }
 
     /// Precision floor: a `.data`-shaped section whose first word happens to land
@@ -457,18 +500,70 @@ mod tests {
         // A plausible `.data` head: a self-referential SRAM pointer, a zero, then
         // even (non-Thumb) pointers — the run ends at slot 2 with 0 handlers.
         let datalike = vec![0x2000_0004u32, 0, 0x2000_2530, 0x2000_2598, 0, 0, 0, 0];
-        let bytes =
-            build(0x2000_0000, 0x2 | 0x1, 0x4 | 0x2, &datalike, 0x0800_8000, 5, 0x0800_8001, EM_ARM);
+        let bytes = build(
+            0x2000_0000,
+            0x2 | 0x1,
+            0x4 | 0x2,
+            &datalike,
+            0x0800_8000,
+            5,
+            0x0800_8001,
+            EM_ARM,
+        );
         let file = object::File::parse(bytes.as_slice()).expect("parse");
-        assert_eq!(vector_table(&file, true), None, "a .data struct must not arm the oracle");
+        assert_eq!(
+            vector_table(&file, true),
+            None,
+            "a .data struct must not arm the oracle"
+        );
 
-        let two = vec![0x2000_4000u32, 0x0800_8001, 0x0800_8005, 0x1234_5678, 0, 0, 0, 0];
-        let bytes = build(0x0800_0000, 0x2, 0x4, &two, 0x0800_8000, 5, 0x0800_8001, EM_ARM);
+        let two = vec![
+            0x2000_4000u32,
+            0x0800_8001,
+            0x0800_8005,
+            0x1234_5678,
+            0,
+            0,
+            0,
+            0,
+        ];
+        let bytes = build(
+            0x0800_0000,
+            0x2,
+            0x4,
+            &two,
+            0x0800_8000,
+            5,
+            0x0800_8001,
+            EM_ARM,
+        );
         let file = object::File::parse(bytes.as_slice()).expect("parse");
-        assert_eq!(vector_table(&file, true), None, "two conforming slots is not a run");
+        assert_eq!(
+            vector_table(&file, true),
+            None,
+            "two conforming slots is not a run"
+        );
 
-        let three = vec![0x2000_4000u32, 0x0800_8001, 0x0800_8005, 0x0800_8009, 0x1234_5678, 0, 0, 0];
-        let bytes = build(0x0800_0000, 0x2, 0x4, &three, 0x0800_8000, 5, 0x0800_8001, EM_ARM);
+        let three = vec![
+            0x2000_4000u32,
+            0x0800_8001,
+            0x0800_8005,
+            0x0800_8009,
+            0x1234_5678,
+            0,
+            0,
+            0,
+        ];
+        let bytes = build(
+            0x0800_0000,
+            0x2,
+            0x4,
+            &three,
+            0x0800_8000,
+            5,
+            0x0800_8001,
+            EM_ARM,
+        );
         let file = object::File::parse(bytes.as_slice()).expect("parse");
         assert_eq!(
             vector_table(&file, true).map(|t| t.0),
@@ -514,8 +609,16 @@ mod tests {
         );
         let file = object::File::parse(bytes.as_slice()).expect("parse");
         let shipped = super::super::cortexm_vector_table_shipped(&file).map(|t| t.0);
-        assert_eq!(shipped, Some(0x0800_0000), "precondition: the shipped signature matches");
-        assert_eq!(vector_table(&file, true).map(|t| t.0), shipped, "same section either way");
+        assert_eq!(
+            shipped,
+            Some(0x0800_0000),
+            "precondition: the shipped signature matches"
+        );
+        assert_eq!(
+            vector_table(&file, true).map(|t| t.0),
+            shipped,
+            "same section either way"
+        );
         assert_eq!(
             super::super::cortexm_vector_entries(&file, true),
             super::super::cortexm_vector_entries(&file, false),

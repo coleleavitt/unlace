@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use unlace_base::address::calc_mask;
-use unlace_base::space::{spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{OpId, VarnodeId};

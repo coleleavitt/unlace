@@ -67,7 +67,13 @@ fn held(data: &Funcdata, outvn: crate::context::VarnodeId) -> Option<Held> {
     let arithmetic = out.is_implied()
         && out.descend_iter().any(|r| {
             data.obank().get(r).is_some_and(|o| {
-                matches!(o.code(), OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB | OpCode::CPUI_PTRADD | OpCode::CPUI_PTRSUB)
+                matches!(
+                    o.code(),
+                    OpCode::CPUI_INT_ADD
+                        | OpCode::CPUI_INT_SUB
+                        | OpCode::CPUI_PTRADD
+                        | OpCode::CPUI_PTRSUB
+                )
             })
         });
     Some(Held {
@@ -95,17 +101,23 @@ fn signed_use(data: &Funcdata, outvn: crate::context::VarnodeId, inline: bool) -
         if !seen.insert((v, carried)) || seen.len() > 64 {
             continue;
         }
-        let Some(node) = data.vbank().get(v) else { continue };
+        let Some(node) = data.vbank().get(v) else {
+            continue;
+        };
         if inline && v != outvn && !node.is_implied() {
             continue;
         }
         let sign = 1u64 << (node.get_size().clamp(1, 8) * 8 - 1);
         for r in node.descend_iter() {
-            let Some(o) = data.obank().get(r).filter(|o| !o.is_dead()) else { continue };
+            let Some(o) = data.obank().get(r).filter(|o| !o.is_dead()) else {
+                continue;
+            };
             match o.code() {
-                CPUI_INT_SEXT | CPUI_INT_LESS | CPUI_INT_LESSEQUAL | CPUI_INT_SLESS | CPUI_INT_SLESSEQUAL
-                | CPUI_INT_RIGHT | CPUI_INT_SRIGHT | CPUI_INT_DIV | CPUI_INT_SDIV | CPUI_INT_REM | CPUI_INT_SREM
-                | CPUI_FLOAT_INT2FLOAT => return Some(false),
+                CPUI_INT_SEXT | CPUI_INT_LESS | CPUI_INT_LESSEQUAL | CPUI_INT_SLESS
+                | CPUI_INT_SLESSEQUAL | CPUI_INT_RIGHT | CPUI_INT_SRIGHT | CPUI_INT_DIV
+                | CPUI_INT_SDIV | CPUI_INT_REM | CPUI_INT_SREM | CPUI_FLOAT_INT2FLOAT => {
+                    return Some(false);
+                }
                 CPUI_INT_ZEXT if carried => return Some(true),
                 CPUI_INT_EQUAL | CPUI_INT_NOTEQUAL => {
                     let widened = (0..2)
@@ -117,11 +129,12 @@ fn signed_use(data: &Funcdata, outvn: crate::context::VarnodeId, inline: bool) -
                         return Some(false);
                     }
                 }
-                CPUI_COPY | CPUI_MULTIEQUAL | CPUI_INDIRECT | CPUI_CAST | CPUI_SUBPIECE | CPUI_PIECE => {
-                    work.extend(o.get_out().map(|n| (n, carried)))
+                CPUI_COPY | CPUI_MULTIEQUAL | CPUI_INDIRECT | CPUI_CAST | CPUI_SUBPIECE
+                | CPUI_PIECE => work.extend(o.get_out().map(|n| (n, carried))),
+                CPUI_INT_ADD | CPUI_INT_SUB | CPUI_INT_MULT | CPUI_INT_AND | CPUI_INT_OR
+                | CPUI_INT_XOR | CPUI_INT_NEGATE | CPUI_INT_2COMP | CPUI_INT_LEFT => {
+                    work.extend(o.get_out().map(|n| (n, true)))
                 }
-                CPUI_INT_ADD | CPUI_INT_SUB | CPUI_INT_MULT | CPUI_INT_AND | CPUI_INT_OR | CPUI_INT_XOR
-                | CPUI_INT_NEGATE | CPUI_INT_2COMP | CPUI_INT_LEFT => work.extend(o.get_out().map(|n| (n, true))),
                 _ => {}
             }
         }
@@ -210,10 +223,15 @@ fn key(entry: &Address) -> Option<(int4, uintb)> {
 pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
     let Some(own) = key(entry) else { return };
     let proto = data.get_func_proto();
-    let declared = arch.symboltab.function_proto_pieces_across_scopes(entry).is_some();
+    let declared = arch
+        .symboltab
+        .function_proto_pieces_across_scopes(entry)
+        .is_some();
     let returns = match proto.get_output_type().map(|t| t.get_metatype()) {
         _ if declared || !proto.has_store() || proto.is_output_locked() => None,
-        None | Some(crate::dtype::type_metatype::TYPE_VOID) => proto.has_model().then_some(Returns::Void),
+        None | Some(crate::dtype::type_metatype::TYPE_VOID) => {
+            proto.has_model().then_some(Returns::Void)
+        }
         Some(crate::dtype::type_metatype::TYPE_FLOAT) => Some(Returns::Float),
         Some(_) => Some(Returns::Other),
     };
@@ -232,7 +250,10 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
     let word = stored.as_ref().and_then(|(addr, size)| {
         let &(ref noted, width, sign) = data.kuna_zext_word()?;
         let signed = proto.get_output_type().is_some_and(|t| {
-            matches!(t.get_metatype(), crate::dtype::type_metatype::TYPE_INT | crate::dtype::type_metatype::TYPE_UNKNOWN)
+            matches!(
+                t.get_metatype(),
+                crate::dtype::type_metatype::TYPE_INT | crate::dtype::type_metatype::TYPE_UNKNOWN
+            )
         });
         (noted == addr && width == *size).then(|| (addr.clone(), *size, sign && signed))
     });
@@ -251,11 +272,15 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
         let params = (0..proto.num_params())
             .map(|i| {
                 use crate::dtype::type_metatype::*;
-                proto.get_param(i).and_then(|p| p.get_type()).and_then(|t| match t.get_metatype() {
-                    TYPE_FLOAT => Some(true),
-                    TYPE_INT | TYPE_UINT | TYPE_BOOL | TYPE_UNKNOWN | TYPE_PTR | TYPE_ENUM_INT | TYPE_ENUM_UINT => Some(false),
-                    _ => None,
-                })
+                proto
+                    .get_param(i)
+                    .and_then(|p| p.get_type())
+                    .and_then(|t| match t.get_metatype() {
+                        TYPE_FLOAT => Some(true),
+                        TYPE_INT | TYPE_UINT | TYPE_BOOL | TYPE_UNKNOWN | TYPE_PTR
+                        | TYPE_ENUM_INT | TYPE_ENUM_UINT => Some(false),
+                        _ => None,
+                    })
             })
             .collect();
         arch.kuna_voidret.params.insert(own, params);
@@ -264,14 +289,26 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
         refused.remove(&own);
     }
     arch.kuna_voidret.displacing.remove(&own);
-    arch.kuna_voidret.ops.insert(own, data.obank().iter_alive().count());
+    arch.kuna_voidret
+        .ops
+        .insert(own, data.obank().iter_alive().count());
     if returns == Some(Returns::Float) && converts_its_return(data) {
-        arch.kuna_voidret.float_refused.entry(own).or_default().insert(own);
+        arch.kuna_voidret
+            .float_refused
+            .entry(own)
+            .or_default()
+            .insert(own);
     }
     let float = returns == Some(Returns::Float);
     for (set, member) in [
-        (&mut arch.kuna_voidret.float_bits, float && data.kuna_float_bits_return()),
-        (&mut arch.kuna_voidret.own_float, float && returns_its_own_float(data)),
+        (
+            &mut arch.kuna_voidret.float_bits,
+            float && data.kuna_float_bits_return(),
+        ),
+        (
+            &mut arch.kuna_voidret.own_float,
+            float && returns_its_own_float(data),
+        ),
     ] {
         if member {
             set.insert(own);
@@ -279,7 +316,11 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
             set.remove(&own);
         }
     }
-    let sources = if returns == Some(Returns::Float) { float_sources(data) } else { BTreeSet::new() };
+    let sources = if returns == Some(Returns::Float) {
+        float_sources(data)
+    } else {
+        BTreeSet::new()
+    };
     if sources.is_empty() {
         arch.kuna_voidret.float_sources.remove(&own);
     } else {
@@ -291,14 +332,25 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
     let mut handed = BTreeSet::new();
     for i in 0..data.num_calls() {
         let fc = data.get_call_specs(i);
-        let Some(callee) = key(fc.get_entry_address()) else { continue };
+        let Some(callee) = key(fc.get_entry_address()) else {
+            continue;
+        };
         if callee == own || fc.proto().is_output_locked() {
             continue;
         }
         if arch.kuna_voidret.float_bits.contains(&callee) {
-            arch.kuna_voidret.bits_callers.entry(callee).or_default().insert(own);
+            arch.kuna_voidret
+                .bits_callers
+                .entry(callee)
+                .or_default()
+                .insert(own);
         }
-        let Some(outvn) = data.obank().get(fc.get_op()).filter(|o| !o.is_dead()).and_then(|o| o.get_out()) else {
+        let Some(outvn) = data
+            .obank()
+            .get(fc.get_op())
+            .filter(|o| !o.is_dead())
+            .and_then(|o| o.get_out())
+        else {
             continue;
         };
         let before = data.kuna_narrowret_read(fc.get_op()).cloned();
@@ -309,23 +361,37 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
         }
         if arch.kuna_voidret.returns.get(&callee) == Some(&Returns::Float)
             && !wider_than_return(arch, callee, data, outvn)
-            && !(arch.kuna_voidret.float_bits.contains(&callee) && elsewhere_than_return(arch, callee, data, result))
+            && !(arch.kuna_voidret.float_bits.contains(&callee)
+                && elsewhere_than_return(arch, callee, data, result))
             && !held_as_float(data, outvn, result)
             && !arch
                 .kuna_voidret
                 .storage
                 .get(&callee)
-                .is_some_and(|(addr, size)| crate::kuna_armfloatreturn::convention_float_storage(data, addr, *size))
+                .is_some_and(|(addr, size)| {
+                    crate::kuna_armfloatreturn::convention_float_storage(data, addr, *size)
+                })
         {
-            arch.kuna_voidret.float_refused.entry(callee).or_default().insert(own);
+            arch.kuna_voidret
+                .float_refused
+                .entry(callee)
+                .or_default()
+                .insert(own);
         }
         if let Some(h) = held(data, result) {
             arch.kuna_voidret.held.insert((own, callee), h);
         }
-        arch.kuna_voidret.readers.entry(callee).or_default().insert(own);
+        arch.kuna_voidret
+            .readers
+            .entry(callee)
+            .or_default()
+            .insert(own);
         let (used, read) = match before {
             Some(b) => (b.used, b.read),
-            None => (used_storage(data, result), data.vbank().get(result).and_then(read_storage)),
+            None => (
+                used_storage(data, result),
+                data.vbank().get(result).and_then(read_storage),
+            ),
         };
         if let Some(used) = used {
             file_use(arch, callee, used);
@@ -349,7 +415,12 @@ fn file_handed(arch: &mut Architecture, own: (int4, uintb), handed: BTreeSet<(in
         arch.kuna_voidret.handed.remove(&own);
         return;
     }
-    let uses = arch.kuna_voidret.used.get(&own).cloned().unwrap_or_default();
+    let uses = arch
+        .kuna_voidret
+        .used
+        .get(&own)
+        .cloned()
+        .unwrap_or_default();
     for &callee in &handed {
         for storage in &uses {
             file_use(arch, callee, storage.clone());
@@ -379,9 +450,18 @@ fn holder(data: &Funcdata, outvn: crate::context::VarnodeId) -> crate::context::
 /// `q0` read whole after a call that returns a double in `d0`?  The caller
 /// keeps the register, not the callee's value, which says nothing about the
 /// type it holds the result as.
-fn wider_than_return(arch: &Architecture, callee: (int4, uintb), data: &Funcdata, outvn: crate::context::VarnodeId) -> bool {
-    let Some((_, size)) = arch.kuna_voidret.storage.get(&callee) else { return false };
-    data.vbank().get(outvn).is_some_and(|v| v.get_size() > *size)
+fn wider_than_return(
+    arch: &Architecture,
+    callee: (int4, uintb),
+    data: &Funcdata,
+    outvn: crate::context::VarnodeId,
+) -> bool {
+    let Some((_, size)) = arch.kuna_voidret.storage.get(&callee) else {
+        return false;
+    };
+    data.vbank()
+        .get(outvn)
+        .is_some_and(|v| v.get_size() > *size)
 }
 
 /// (kuna `floatbits`) Does the caller hold the call's result, `result`
@@ -390,9 +470,19 @@ fn wider_than_return(arch: &Architecture, callee: (int4, uintb), data: &Funcdata
 /// `bl fabsf; vcmpe.f32 s0, s15; .. pop {r4, pc}` hands back the `r0` the call
 /// left, which says nothing about the type the caller holds the bits of
 /// `fabsf`'s float as.
-fn elsewhere_than_return(arch: &Architecture, callee: (int4, uintb), data: &Funcdata, result: crate::context::VarnodeId) -> bool {
-    let Some((addr, _)) = arch.kuna_voidret.storage.get(&callee) else { return false };
-    data.vbank().get(result).and_then(read_storage).is_some_and(|(read, _)| read != *addr)
+fn elsewhere_than_return(
+    arch: &Architecture,
+    callee: (int4, uintb),
+    data: &Funcdata,
+    result: crate::context::VarnodeId,
+) -> bool {
+    let Some((addr, _)) = arch.kuna_voidret.storage.get(&callee) else {
+        return false;
+    };
+    data.vbank()
+        .get(result)
+        .and_then(read_storage)
+        .is_some_and(|(read, _)| read != *addr)
 }
 
 /// Does the caller keep the call result `outvn` as a float: typed one, and
@@ -407,52 +497,92 @@ fn elsewhere_than_return(arch: &Architecture, callee: (int4, uintb), data: &Func
 /// untyped value only cast to a float holds one, and a same-width cast to an
 /// integer is the float's bits moved to an integer register (`fmov x0,d0`),
 /// which the C prints as a reinterpretation, not a conversion.
-fn held_as_float(data: &Funcdata, outvn: crate::context::VarnodeId, result: crate::context::VarnodeId) -> bool {
+fn held_as_float(
+    data: &Funcdata,
+    outvn: crate::context::VarnodeId,
+    result: crate::context::VarnodeId,
+) -> bool {
     use unlace_num::opcodes::OpCode;
-    let float_ty = |t: &crate::dtype::Datatype| t.get_metatype() == crate::dtype::type_metatype::TYPE_FLOAT;
-    let float = |v: crate::context::VarnodeId| data.vbank().get(v).is_some_and(|n| float_ty(&n.get_type()));
+    let float_ty =
+        |t: &crate::dtype::Datatype| t.get_metatype() == crate::dtype::type_metatype::TYPE_FLOAT;
+    let float =
+        |v: crate::context::VarnodeId| data.vbank().get(v).is_some_and(|n| float_ty(&n.get_type()));
     let family = crate::kuna_protoorder::value_family(data, result);
     let reinterpreted = |o: &crate::op::PcodeOp| {
         o.code() == OpCode::CPUI_CAST
-            && o.get_in(0).and_then(|i| data.vbank().get(i)).is_some_and(|i| float_ty(&i.get_type()))
-            && o.get_out().and_then(|x| data.vbank().get(x)).is_some_and(|x| {
-                use crate::dtype::type_metatype::*;
-                matches!(x.get_type().get_metatype(), TYPE_INT | TYPE_UINT | TYPE_UNKNOWN)
-                    && Some(x.get_size()) == o.get_in(0).and_then(|i| data.vbank().get(i)).map(|i| i.get_size())
-            })
+            && o.get_in(0)
+                .and_then(|i| data.vbank().get(i))
+                .is_some_and(|i| float_ty(&i.get_type()))
+            && o.get_out()
+                .and_then(|x| data.vbank().get(x))
+                .is_some_and(|x| {
+                    use crate::dtype::type_metatype::*;
+                    matches!(
+                        x.get_type().get_metatype(),
+                        TYPE_INT | TYPE_UINT | TYPE_UNKNOWN
+                    ) && Some(x.get_size())
+                        == o.get_in(0)
+                            .and_then(|i| data.vbank().get(i))
+                            .map(|i| i.get_size())
+                })
     };
-    family.iter().filter(|&&v| result == outvn || v != outvn).all(|&v| {
-        let Some(node) = data.vbank().get(v) else { return true };
-        if node.get_def().and_then(|d| data.obank().get(d)).is_some_and(|o| reinterpreted(o)) {
-            return true;
-        }
-        let untyped_into_float = node.get_type().get_metatype() == crate::dtype::type_metatype::TYPE_UNKNOWN
-            && node.descend_iter().all(|r| {
-                data.obank().get(r).is_some_and(|o| o.code() == OpCode::CPUI_CAST && o.get_out().is_some_and(float))
-            });
-        (node.is_constant() || float(v) || untyped_into_float)
-            && node.descend_iter().all(|r| {
-                let Some(o) = data.obank().get(r).filter(|o| !o.is_dead()) else { return true };
-                match o.code() {
-                    OpCode::CPUI_CAST => o.get_out().is_some_and(float) || reinterpreted(o),
-                    OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => (1..o.num_input())
-                        .filter(|&s| o.get_in(s) == Some(v))
-                        .all(|s| !crate::kuna_protoorder::reads_other_than_a_float(data, r, s)),
-                    OpCode::CPUI_STORE if o.get_in(2) == Some(v) => {
-                        let pointee = o.get_in(1).and_then(|p| data.vbank().get(p)).and_then(|p| p.get_type().get_ptr_to());
-                        !pointee.is_some_and(|t| {
-                            use crate::dtype::type_metatype::*;
-                            matches!(t.get_metatype(), TYPE_INT | TYPE_UINT | TYPE_BOOL | TYPE_PTR | TYPE_ENUM_INT | TYPE_ENUM_UINT)
-                        })
+    family
+        .iter()
+        .filter(|&&v| result == outvn || v != outvn)
+        .all(|&v| {
+            let Some(node) = data.vbank().get(v) else {
+                return true;
+            };
+            if node
+                .get_def()
+                .and_then(|d| data.obank().get(d))
+                .is_some_and(|o| reinterpreted(o))
+            {
+                return true;
+            }
+            let untyped_into_float = node.get_type().get_metatype()
+                == crate::dtype::type_metatype::TYPE_UNKNOWN
+                && node.descend_iter().all(|r| {
+                    data.obank().get(r).is_some_and(|o| {
+                        o.code() == OpCode::CPUI_CAST && o.get_out().is_some_and(float)
+                    })
+                });
+            (node.is_constant() || float(v) || untyped_into_float)
+                && node.descend_iter().all(|r| {
+                    let Some(o) = data.obank().get(r).filter(|o| !o.is_dead()) else {
+                        return true;
+                    };
+                    match o.code() {
+                        OpCode::CPUI_CAST => o.get_out().is_some_and(float) || reinterpreted(o),
+                        OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => (1..o.num_input())
+                            .filter(|&s| o.get_in(s) == Some(v))
+                            .all(|s| !crate::kuna_protoorder::reads_other_than_a_float(data, r, s)),
+                        OpCode::CPUI_STORE if o.get_in(2) == Some(v) => {
+                            let pointee = o
+                                .get_in(1)
+                                .and_then(|p| data.vbank().get(p))
+                                .and_then(|p| p.get_type().get_ptr_to());
+                            !pointee.is_some_and(|t| {
+                                use crate::dtype::type_metatype::*;
+                                matches!(
+                                    t.get_metatype(),
+                                    TYPE_INT
+                                        | TYPE_UINT
+                                        | TYPE_BOOL
+                                        | TYPE_PTR
+                                        | TYPE_ENUM_INT
+                                        | TYPE_ENUM_UINT
+                                )
+                            })
+                        }
+                        OpCode::CPUI_RETURN => {
+                            let proto = data.get_func_proto();
+                            proto.get_output_type().is_some_and(|t| float_ty(t))
+                        }
+                        _ => true,
                     }
-                    OpCode::CPUI_RETURN => {
-                        let proto = data.get_func_proto();
-                        proto.get_output_type().is_some_and(|t| float_ty(t))
-                    }
-                    _ => true,
-                }
-            })
-    })
+                })
+        })
 }
 
 /// Does a live RETURN of `data` hand back, on some path, what a call left in a
@@ -465,20 +595,41 @@ fn returns_a_call_clobber(data: &Funcdata) -> bool {
     let mut work: Vec<crate::context::VarnodeId> = data
         .obank()
         .iter_code(OpCode::CPUI_RETURN)
-        .filter_map(|r| data.obank().get(r).filter(|o| !o.is_dead() && o.get_halt_type() == 0))
-        .flat_map(|o| (1..o.num_input()).filter_map(|s| o.get_in(s)).collect::<Vec<_>>())
+        .filter_map(|r| {
+            data.obank()
+                .get(r)
+                .filter(|o| !o.is_dead() && o.get_halt_type() == 0)
+        })
+        .flat_map(|o| {
+            (1..o.num_input())
+                .filter_map(|s| o.get_in(s))
+                .collect::<Vec<_>>()
+        })
         .collect();
     let mut seen = BTreeSet::new();
     while let Some(v) = work.pop() {
         if !seen.insert(v) || seen.len() > 256 {
             continue;
         }
-        let Some(def) = data.vbank().get(v).and_then(|n| n.get_def()).and_then(|d| data.obank().get(d)) else { continue };
+        let Some(def) = data
+            .vbank()
+            .get(v)
+            .and_then(|n| n.get_def())
+            .and_then(|d| data.obank().get(d))
+        else {
+            continue;
+        };
         match def.code() {
             OpCode::CPUI_INDIRECT if def.is_indirect_creation() => return true,
-            OpCode::CPUI_COPY | OpCode::CPUI_INDIRECT | OpCode::CPUI_SUBPIECE | OpCode::CPUI_CAST | OpCode::CPUI_INT_ZEXT
+            OpCode::CPUI_COPY
+            | OpCode::CPUI_INDIRECT
+            | OpCode::CPUI_SUBPIECE
+            | OpCode::CPUI_CAST
+            | OpCode::CPUI_INT_ZEXT
             | OpCode::CPUI_INT_SEXT => work.extend(def.get_in(0)),
-            OpCode::CPUI_MULTIEQUAL | OpCode::CPUI_PIECE => work.extend((0..def.num_input()).filter_map(|k| def.get_in(k))),
+            OpCode::CPUI_MULTIEQUAL | OpCode::CPUI_PIECE => {
+                work.extend((0..def.num_input()).filter_map(|k| def.get_in(k)))
+            }
             _ => {}
         }
     }
@@ -496,14 +647,26 @@ fn converts_its_return(data: &Funcdata) -> bool {
     let mut work: Vec<crate::context::VarnodeId> = data
         .obank()
         .iter_code(OpCode::CPUI_RETURN)
-        .filter_map(|r| data.obank().get(r).filter(|o| !o.is_dead() && o.get_halt_type() == 0).and_then(|o| o.get_in(1)))
+        .filter_map(|r| {
+            data.obank()
+                .get(r)
+                .filter(|o| !o.is_dead() && o.get_halt_type() == 0)
+                .and_then(|o| o.get_in(1))
+        })
         .collect();
     let mut seen = BTreeSet::new();
     while let Some(v) = work.pop() {
         if !seen.insert(v) || seen.len() > 64 {
             continue;
         }
-        let Some(def) = data.vbank().get(v).and_then(|n| n.get_def()).and_then(|d| data.obank().get(d)) else { continue };
+        let Some(def) = data
+            .vbank()
+            .get(v)
+            .and_then(|n| n.get_def())
+            .and_then(|d| data.obank().get(d))
+        else {
+            continue;
+        };
         match def.code() {
             OpCode::CPUI_CAST => {
                 let from = def.get_in(0).and_then(|i| data.vbank().get(i));
@@ -517,7 +680,9 @@ fn converts_its_return(data: &Funcdata) -> bool {
                 }
             }
             OpCode::CPUI_COPY | OpCode::CPUI_INDIRECT => work.extend(def.get_in(0)),
-            OpCode::CPUI_MULTIEQUAL => work.extend((0..def.num_input()).filter_map(|k| def.get_in(k))),
+            OpCode::CPUI_MULTIEQUAL => {
+                work.extend((0..def.num_input()).filter_map(|k| def.get_in(k)))
+            }
             _ => {}
         }
     }
@@ -546,11 +711,20 @@ struct Leaves {
 
 impl Default for Leaves {
     fn default() -> Self {
-        Leaves { float: false, integer: false, complete: true }
+        Leaves {
+            float: false,
+            integer: false,
+            complete: true,
+        }
     }
 }
 
-fn bit_leaves(data: &Funcdata, vn: crate::context::VarnodeId, seen: &mut Vec<crate::context::VarnodeId>, leaves: &mut Leaves) {
+fn bit_leaves(
+    data: &Funcdata,
+    vn: crate::context::VarnodeId,
+    seen: &mut Vec<crate::context::VarnodeId>,
+    leaves: &mut Leaves,
+) {
     use unlace_num::opcodes::OpCode;
     if seen.contains(&vn) {
         return;
@@ -589,7 +763,13 @@ fn bit_leaves(data: &Funcdata, vn: crate::context::VarnodeId, seen: &mut Vec<cra
             | OpCode::CPUI_PIECE
             | OpCode::CPUI_SUBPIECE
             | OpCode::CPUI_MULTIEQUAL,
-        ) => def.map(|o| (0..o.num_input()).filter_map(|k| o.get_in(k)).collect::<Vec<_>>()).unwrap_or_default(),
+        ) => def
+            .map(|o| {
+                (0..o.num_input())
+                    .filter_map(|k| o.get_in(k))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default(),
         Some(OpCode::CPUI_INDIRECT) if def.is_some_and(|o| !o.is_indirect_creation()) => {
             def.and_then(|o| o.get_in(0)).into_iter().collect()
         }
@@ -607,13 +787,23 @@ fn bit_leaves(data: &Funcdata, vn: crate::context::VarnodeId, seen: &mut Vec<cra
 /// left in `d0`, which no integer use gave a type to read it as?  Where the call
 /// writes a temporary only the cast reads, the cast's output `held` holds the
 /// register.
-fn float_register_call_result(data: &Funcdata, node: &crate::varnode::Varnode, held: crate::context::VarnodeId) -> bool {
+fn float_register_call_result(
+    data: &Funcdata,
+    node: &crate::varnode::Varnode,
+    held: crate::context::VarnodeId,
+) -> bool {
     use unlace_num::opcodes::OpCode;
     if node.get_type().get_metatype() != crate::dtype::type_metatype::TYPE_UNKNOWN {
         return false;
     }
-    let Some(d) = node.get_def() else { return false };
-    if !data.obank().get(d).is_some_and(|o| matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND)) {
+    let Some(d) = node.get_def() else {
+        return false;
+    };
+    if !data
+        .obank()
+        .get(d)
+        .is_some_and(|o| matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND))
+    {
         return false;
     }
     let storage = if node.get_space().get_type() == spacetype::IPTR_INTERNAL {
@@ -625,7 +815,13 @@ fn float_register_call_result(data: &Funcdata, node: &crate::varnode::Varnode, h
         node
     };
     let proto = data.get_func_proto();
-    let Some(out) = proto.has_model().then(|| proto.model().output_list()).flatten() else { return false };
+    let Some(out) = proto
+        .has_model()
+        .then(|| proto.model().output_list())
+        .flatten()
+    else {
+        return false;
+    };
     out.get_entry().iter().any(|e| {
         e.get_type() == crate::dtype::type_class::TYPECLASS_FLOAT
             && e.justified_contain(storage.get_addr(), storage.get_size()) >= 0
@@ -636,14 +832,24 @@ fn float_register_call_result(data: &Funcdata, node: &crate::varnode::Varnode, h
 /// output, or a float return the callee was last recovered with?
 fn float_call_result(data: &Funcdata, node: &crate::varnode::Varnode) -> bool {
     use unlace_num::opcodes::OpCode;
-    let Some(d) = node.get_def() else { return false };
-    if !data.obank().get(d).is_some_and(|o| matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND)) {
+    let Some(d) = node.get_def() else {
+        return false;
+    };
+    if !data
+        .obank()
+        .get(d)
+        .is_some_and(|o| matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND))
+    {
         return false;
     }
-    let Some(fc) = data.get_call_specs_index(d).map(|i| data.get_call_specs(i)) else { return false };
+    let Some(fc) = data.get_call_specs_index(d).map(|i| data.get_call_specs(i)) else {
+        return false;
+    };
     let proto = fc.proto();
     if proto.is_output_locked() {
-        return proto.get_output_type().is_some_and(|t| t.get_metatype() == crate::dtype::type_metatype::TYPE_FLOAT);
+        return proto
+            .get_output_type()
+            .is_some_and(|t| t.get_metatype() == crate::dtype::type_metatype::TYPE_FLOAT);
     }
     key(fc.get_entry_address()).is_some_and(|k| data.kuna_callee_returns(k) == Some(Returns::Float))
 }
@@ -671,17 +877,30 @@ fn float_call_result(data: &Funcdata, node: &crate::varnode::Varnode) -> bool {
 pub fn withdrawals(arch: &mut Architecture) -> BTreeSet<(int4, uintb)> {
     let vfp = crate::kuna_armfloatreturn::applies(arch);
     let ledger = &mut arch.kuna_voidret;
-    let bounded = |k: &(int4, uintb)| vfp && ledger.ops.get(k).is_some_and(|&n| n > crate::kuna_callrettype::AUDIT_MAX_OPS);
+    let bounded = |k: &(int4, uintb)| {
+        vfp && ledger
+            .ops
+            .get(k)
+            .is_some_and(|&n| n > crate::kuna_callrettype::AUDIT_MAX_OPS)
+    };
     let float = |k: &(int4, uintb)| ledger.returns.get(k) == Some(&Returns::Float);
     let refused: Vec<(int4, uintb)> = ledger
         .float_refused
         .iter()
-        .filter(|(k, readers)| !readers.is_empty() && float(k) && !ledger.displacing.contains(k) && !bounded(k))
+        .filter(|(k, readers)| {
+            !readers.is_empty() && float(k) && !ledger.displacing.contains(k) && !bounded(k)
+        })
         .map(|(k, _)| *k)
         .collect();
-    let bits = |s: &(int4, uintb)| ledger.float_bits.contains(s) || ledger.bits_withdrawn.contains(s);
-    let hands_on_bits =
-        |k: &(int4, uintb)| !ledger.own_float.contains(k) && ledger.float_sources.get(k).is_some_and(|s| !s.is_empty() && s.iter().all(bits));
+    let bits =
+        |s: &(int4, uintb)| ledger.float_bits.contains(s) || ledger.bits_withdrawn.contains(s);
+    let hands_on_bits = |k: &(int4, uintb)| {
+        !ledger.own_float.contains(k)
+            && ledger
+                .float_sources
+                .get(k)
+                .is_some_and(|s| !s.is_empty() && s.iter().all(bits))
+    };
     let mut out: BTreeSet<(int4, uintb)> = refused
         .iter()
         .filter(|k| !hands_on_bits(k))
@@ -695,15 +914,26 @@ pub fn withdrawals(arch: &mut Architecture) -> BTreeSet<(int4, uintb)> {
         if !seen.insert(k) {
             continue;
         }
-        let kept = |s: &(int4, uintb)| ledger.float_bits.contains(s) && ledger.own_float.contains(&k);
-        for s in ledger.float_sources.get(&k).into_iter().flatten().filter(|s| float(s) && !kept(s) && !bounded(s)) {
+        let kept =
+            |s: &(int4, uintb)| ledger.float_bits.contains(s) && ledger.own_float.contains(&k);
+        for s in ledger
+            .float_sources
+            .get(&k)
+            .into_iter()
+            .flatten()
+            .filter(|s| float(s) && !kept(s) && !bounded(s))
+        {
             if !ledger.withdrawn.contains(s) {
                 out.insert(*s);
             }
             work.push(*s);
         }
     }
-    let bits_now: Vec<(int4, uintb)> = out.iter().filter(|k| ledger.float_bits.contains(k)).copied().collect();
+    let bits_now: Vec<(int4, uintb)> = out
+        .iter()
+        .filter(|k| ledger.float_bits.contains(k))
+        .copied()
+        .collect();
     ledger.bits_withdrawn.extend(bits_now);
     ledger.withdrawn.extend(out.iter().copied());
     out
@@ -718,19 +948,36 @@ fn returns_its_own_float(data: &Funcdata) -> bool {
     let mut work: Vec<crate::context::VarnodeId> = data
         .obank()
         .iter_code(OpCode::CPUI_RETURN)
-        .filter_map(|r| data.obank().get(r).filter(|o| !o.is_dead() && o.get_halt_type() == 0))
-        .flat_map(|o| (1..o.num_input()).filter_map(|s| o.get_in(s)).collect::<Vec<_>>())
+        .filter_map(|r| {
+            data.obank()
+                .get(r)
+                .filter(|o| !o.is_dead() && o.get_halt_type() == 0)
+        })
+        .flat_map(|o| {
+            (1..o.num_input())
+                .filter_map(|s| o.get_in(s))
+                .collect::<Vec<_>>()
+        })
         .collect();
     let mut seen = BTreeSet::new();
     while let Some(v) = work.pop() {
         if !seen.insert(v) || seen.len() > 256 {
             continue;
         }
-        let Some(def) = data.vbank().get(v).and_then(|n| n.get_def()).and_then(|d| data.obank().get(d)) else { continue };
+        let Some(def) = data
+            .vbank()
+            .get(v)
+            .and_then(|n| n.get_def())
+            .and_then(|d| data.obank().get(d))
+        else {
+            continue;
+        };
         match def.code() {
             OpCode::CPUI_COPY => work.extend(def.get_in(0)),
             OpCode::CPUI_INDIRECT if !def.is_indirect_creation() => work.extend(def.get_in(0)),
-            OpCode::CPUI_MULTIEQUAL => work.extend((0..def.num_input()).filter_map(|k| def.get_in(k))),
+            OpCode::CPUI_MULTIEQUAL => {
+                work.extend((0..def.num_input()).filter_map(|k| def.get_in(k)))
+            }
             code if crate::kuna_floatreg::makes_a_float(code) => return true,
             _ => {}
         }
@@ -746,8 +993,16 @@ fn float_sources(data: &Funcdata) -> BTreeSet<(int4, uintb)> {
     let mut work: Vec<crate::context::VarnodeId> = data
         .obank()
         .iter_code(OpCode::CPUI_RETURN)
-        .filter_map(|r| data.obank().get(r).filter(|o| !o.is_dead() && o.get_halt_type() == 0))
-        .flat_map(|o| (1..o.num_input()).filter_map(|s| o.get_in(s)).collect::<Vec<_>>())
+        .filter_map(|r| {
+            data.obank()
+                .get(r)
+                .filter(|o| !o.is_dead() && o.get_halt_type() == 0)
+        })
+        .flat_map(|o| {
+            (1..o.num_input())
+                .filter_map(|s| o.get_in(s))
+                .collect::<Vec<_>>()
+        })
         .collect();
     let mut out = BTreeSet::new();
     let mut seen = BTreeSet::new();
@@ -755,14 +1010,23 @@ fn float_sources(data: &Funcdata) -> BTreeSet<(int4, uintb)> {
         if !seen.insert(v) || seen.len() > 256 {
             continue;
         }
-        let Some((d, def)) = data.vbank().get(v).and_then(|n| n.get_def()).and_then(|d| Some((d, data.obank().get(d)?)))
+        let Some((d, def)) = data
+            .vbank()
+            .get(v)
+            .and_then(|n| n.get_def())
+            .and_then(|d| Some((d, data.obank().get(d)?)))
         else {
             continue;
         };
         let fc = match def.code() {
-            OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => data.get_call_specs_index(d).map(|i| data.get_call_specs(i)),
+            OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => {
+                data.get_call_specs_index(d).map(|i| data.get_call_specs(i))
+            }
             OpCode::CPUI_INDIRECT if def.is_indirect_creation() => call_of(data, def),
-            OpCode::CPUI_COPY | OpCode::CPUI_INDIRECT | OpCode::CPUI_CAST | OpCode::CPUI_SUBPIECE => {
+            OpCode::CPUI_COPY
+            | OpCode::CPUI_INDIRECT
+            | OpCode::CPUI_CAST
+            | OpCode::CPUI_SUBPIECE => {
                 work.extend(def.get_in(0));
                 continue;
             }
@@ -772,8 +1036,12 @@ fn float_sources(data: &Funcdata) -> BTreeSet<(int4, uintb)> {
             }
             _ => continue,
         };
-        let Some(fc) = fc.filter(|fc| !fc.proto().is_output_locked()) else { continue };
-        let Some(k) = key(fc.get_entry_address()) else { continue };
+        let Some(fc) = fc.filter(|fc| !fc.proto().is_output_locked()) else {
+            continue;
+        };
+        let Some(k) = key(fc.get_entry_address()) else {
+            continue;
+        };
         if data.kuna_callee_returns(k) == Some(Returns::Float) {
             out.insert(k);
         }
@@ -782,12 +1050,21 @@ fn float_sources(data: &Funcdata) -> BTreeSet<(int4, uintb)> {
 }
 
 /// File that `reader` reads `storage` of what `callee` returns.
-fn file_claim(arch: &mut Architecture, reader: (int4, uintb), callee: (int4, uintb), storage: (Address, int4)) {
+fn file_claim(
+    arch: &mut Architecture,
+    reader: (int4, uintb),
+    callee: (int4, uintb),
+    storage: (Address, int4),
+) {
     let claims = arch.kuna_voidret.read.entry(callee).or_default();
     if !claims.contains(&storage) {
         claims.push(storage);
     }
-    arch.kuna_voidret.readers.entry(callee).or_default().insert(reader);
+    arch.kuna_voidret
+        .readers
+        .entry(callee)
+        .or_default()
+        .insert(reader);
 }
 
 /// File that a call to `callee` computes with `storage` of its result, and so
@@ -819,9 +1096,13 @@ fn hands_on(data: &Funcdata, out: crate::context::VarnodeId) -> bool {
         if !seen.insert(v) || seen.len() > 64 {
             continue;
         }
-        let Some(node) = data.vbank().get(v) else { continue };
+        let Some(node) = data.vbank().get(v) else {
+            continue;
+        };
         for r in node.descend_iter() {
-            let Some(o) = data.obank().get(r).filter(|o| !o.is_dead()) else { continue };
+            let Some(o) = data.obank().get(r).filter(|o| !o.is_dead()) else {
+                continue;
+            };
             match o.code() {
                 CPUI_RETURN if o.get_halt_type() == 0 && o.get_in(0) != Some(v) => return true,
                 CPUI_COPY | CPUI_MULTIEQUAL | CPUI_INDIRECT | CPUI_CAST => work.extend(o.get_out()),
@@ -841,7 +1122,11 @@ fn file_word(arch: &mut Architecture, own: (int4, uintb), word: Option<(Address,
         ledger.words.remove(&own);
         return;
     };
-    if ledger.used.get(&own).is_some_and(|uses| uses.iter().any(|u| widens(u, &word))) {
+    if ledger
+        .used
+        .get(&own)
+        .is_some_and(|uses| uses.iter().any(|u| widens(u, &word)))
+    {
         ledger.wide_due.insert(own);
     }
     ledger.words.insert(own, word);
@@ -852,7 +1137,8 @@ fn file_word(arch: &mut Architecture, own: (int4, uintb), word: Option<(Address,
 /// more than four bytes, which keeps the register whole, or up to four of a
 /// word the unsigned vote retypes.
 fn widens(storage: &(Address, int4), word: &(Address, int4, bool)) -> bool {
-    crate::kuna_zextreturn::wider_over(&storage.0, storage.1, &word.0, word.1) && (storage.1 > 4 || word.2)
+    crate::kuna_zextreturn::wider_over(&storage.0, storage.1, &word.0, word.1)
+        && (storage.1 > 4 || word.2)
 }
 
 /// The storage of the call result `out` that an operation of `data` computes
@@ -863,7 +1149,10 @@ fn widens(storage: &(Address, int4), word: &(Address, int4, bool)) -> bool {
 /// function was not narrowed to, but computes only with `eax`. A shift on the
 /// way moves the upper bits where the RETURN or the argument takes them:
 /// `return (long)z6(x) >> 1` hands on bit 32 of the result.
-pub(crate) fn used_storage(data: &Funcdata, out: crate::context::VarnodeId) -> Option<(Address, int4)> {
+pub(crate) fn used_storage(
+    data: &Funcdata,
+    out: crate::context::VarnodeId,
+) -> Option<(Address, int4)> {
     let node = data.vbank().get(out)?;
     let addr = node.get_addr();
     let size = node.get_size();
@@ -876,7 +1165,11 @@ pub(crate) fn used_storage(data: &Funcdata, out: crate::context::VarnodeId) -> O
     }
     let bytes = (64 - bits.leading_zeros() as int4 + 7) / 8;
     let width = (bytes as u32).next_power_of_two().min(size as u32) as int4;
-    let low = if addr.is_big_endian() { addr + ((size - width) as i64) } else { addr.clone() };
+    let low = if addr.is_big_endian() {
+        addr + ((size - width) as i64)
+    } else {
+        addr.clone()
+    };
     Some((low, width))
 }
 
@@ -888,7 +1181,13 @@ pub(crate) fn used_storage(data: &Funcdata, out: crate::context::VarnodeId) -> O
 fn operated_bits(data: &Funcdata, out: crate::context::VarnodeId, size: int4) -> u64 {
     use unlace_base::address::calc_mask;
     use unlace_num::opcodes::OpCode::*;
-    let covering = |x: u64| if x == 0 { 0 } else { u64::MAX >> x.leading_zeros() };
+    let covering = |x: u64| {
+        if x == 0 {
+            0
+        } else {
+            u64::MAX >> x.leading_zeros()
+        }
+    };
     let to_result = |bits: u64, shift: i32| match shift {
         0..=63 => bits << shift,
         -63..=-1 => bits >> -shift,
@@ -901,18 +1200,31 @@ fn operated_bits(data: &Funcdata, out: crate::context::VarnodeId, size: int4) ->
         if valid == 0 || !seen.insert((v, shift)) || seen.len() > 64 {
             continue;
         }
-        let Some(node) = data.vbank().get(v) else { continue };
+        let Some(node) = data.vbank().get(v) else {
+            continue;
+        };
         for r in node.descend_iter() {
-            let Some(o) = data.obank().get(r).filter(|o| !o.is_dead()) else { continue };
+            let Some(o) = data.obank().get(r).filter(|o| !o.is_dead()) else {
+                continue;
+            };
             let Some(next) = o.get_out() else {
-                if shift != 0 || !matches!(o.code(), CPUI_RETURN | CPUI_CALL | CPUI_CALLIND | CPUI_CALLOTHER) {
+                if shift != 0
+                    || !matches!(
+                        o.code(),
+                        CPUI_RETURN | CPUI_CALL | CPUI_CALLIND | CPUI_CALLOTHER
+                    )
+                {
                     bits |= to_result(valid, shift);
                 }
                 continue;
             };
             let out_size = data.vbank().get(next).map_or(0, |n| n.get_size());
             let constant = |k: int4| {
-                o.get_in(k).filter(|&i| i != v).and_then(|i| data.vbank().get(i)).filter(|i| i.is_constant()).map(|i| i.get_offset())
+                o.get_in(k)
+                    .filter(|&i| i != v)
+                    .and_then(|i| data.vbank().get(i))
+                    .filter(|i| i.is_constant())
+                    .map(|i| i.get_offset())
             };
             let used = match o.code() {
                 CPUI_CALL | CPUI_CALLIND | CPUI_CALLOTHER if shift == 0 => continue,
@@ -922,12 +1234,18 @@ fn operated_bits(data: &Funcdata, out: crate::context::VarnodeId, size: int4) ->
                     continue;
                 }
                 CPUI_SUBPIECE => {
-                    let c = o.get_in(1).and_then(|c| data.vbank().get(c)).map_or(0, |c| c.get_offset() as i32 * 8);
+                    let c = o
+                        .get_in(1)
+                        .and_then(|c| data.vbank().get(c))
+                        .map_or(0, |c| c.get_offset() as i32 * 8);
                     work.push((next, shift + c, to_result(valid, -c) & calc_mask(out_size)));
                     continue;
                 }
                 CPUI_PIECE => {
-                    let lo = o.get_in(1).and_then(|l| data.vbank().get(l)).map_or(0, |l| l.get_size() * 8);
+                    let lo = o
+                        .get_in(1)
+                        .and_then(|l| data.vbank().get(l))
+                        .map_or(0, |l| l.get_size() * 8);
                     if o.get_in(1) == Some(v) {
                         work.push((next, shift, valid));
                     } else {
@@ -941,7 +1259,9 @@ fn operated_bits(data: &Funcdata, out: crate::context::VarnodeId, size: int4) ->
                     work.push((next, shift + c, to_result(valid, -c) & calc_mask(out_size)));
                     continue;
                 }
-                CPUI_INT_AND | CPUI_INT_OR | CPUI_INT_XOR if constant(0).or(constant(1)).is_some() => {
+                CPUI_INT_AND | CPUI_INT_OR | CPUI_INT_XOR
+                    if constant(0).or(constant(1)).is_some() =>
+                {
                     let c = constant(0).or(constant(1)).unwrap_or(0);
                     let kept = match o.code() {
                         CPUI_INT_AND => c,
@@ -951,8 +1271,8 @@ fn operated_bits(data: &Funcdata, out: crate::context::VarnodeId, size: int4) ->
                     work.push((next, shift, valid & kept));
                     continue;
                 }
-                CPUI_INT_ADD | CPUI_INT_SUB | CPUI_INT_MULT | CPUI_INT_AND | CPUI_INT_OR | CPUI_INT_XOR
-                | CPUI_INT_NEGATE | CPUI_INT_2COMP | CPUI_INT_LEFT => {
+                CPUI_INT_ADD | CPUI_INT_SUB | CPUI_INT_MULT | CPUI_INT_AND | CPUI_INT_OR
+                | CPUI_INT_XOR | CPUI_INT_NEGATE | CPUI_INT_2COMP | CPUI_INT_LEFT => {
                     covering(data.vbank().get(next).map_or(0, |n| n.get_consume()))
                 }
                 _ => u64::MAX,
@@ -979,9 +1299,15 @@ pub(crate) fn read_storage(out: &crate::varnode::Varnode) -> Option<(Address, in
     let width = if consume == 0 || (size > 8 && consume == u64::MAX) {
         size
     } else {
-        (((bits + 7) / 8).max(1) as u32).next_power_of_two().min(size as u32) as int4
+        (((bits + 7) / 8).max(1) as u32)
+            .next_power_of_two()
+            .min(size as u32) as int4
     };
-    let low = if addr.is_big_endian() { addr + ((size - width) as i64) } else { addr.clone() };
+    let low = if addr.is_big_endian() {
+        addr + ((size - width) as i64)
+    } else {
+        addr.clone()
+    };
     Some((low, width))
 }
 
@@ -1000,12 +1326,22 @@ pub fn due(arch: &mut Architecture) -> BTreeSet<(int4, uintb)> {
     let mut withdraw: Vec<(int4, uintb)> = Vec::new();
     let mut displace: Vec<(int4, uintb)> = Vec::new();
     for (callee, claims) in &ledger.read {
-        let Some(first) = claims.first() else { continue };
+        let Some(first) = claims.first() else {
+            continue;
+        };
         let space = |a: &Address| a.get_space().map(|s| s.get_index());
-        let agree = claims.iter().all(|(a, _)| space(a) == space(&first.0) && a.get_offset() == first.0.get_offset());
-        let widest = claims.iter().max_by_key(|(_, s)| *s).cloned().unwrap_or_else(|| first.clone());
+        let agree = claims
+            .iter()
+            .all(|(a, _)| space(a) == space(&first.0) && a.get_offset() == first.0.get_offset());
+        let widest = claims
+            .iter()
+            .max_by_key(|(_, s)| *s)
+            .cloned()
+            .unwrap_or_else(|| first.clone());
         match ledger.forced.get(callee) {
-            None if agree && ledger.returns.get(callee) == Some(&Returns::Void) => force.push((*callee, widest)),
+            None if agree && ledger.returns.get(callee) == Some(&Returns::Void) => {
+                force.push((*callee, widest))
+            }
             None if agree && displaced(ledger, callee, &widest) => {
                 displace.push(*callee);
                 force.push((*callee, widest));
@@ -1027,9 +1363,16 @@ pub fn due(arch: &mut Architecture) -> BTreeSet<(int4, uintb)> {
         out.insert(callee);
     }
     for callee in std::mem::take(&mut ledger.wide_due) {
-        let Some(word) = ledger.words.get(&callee) else { continue };
-        let widest = ledger.used.get(&callee).and_then(|u| u.iter().filter(|u| widens(u, word)).max_by_key(|u| u.1));
-        let Some(read) = widest.cloned() else { continue };
+        let Some(word) = ledger.words.get(&callee) else {
+            continue;
+        };
+        let widest = ledger
+            .used
+            .get(&callee)
+            .and_then(|u| u.iter().filter(|u| widens(u, word)).max_by_key(|u| u.1));
+        let Some(read) = widest.cloned() else {
+            continue;
+        };
         if ledger.wide.get(&callee).is_some_and(|w| w.1 >= read.1) {
             continue;
         }
@@ -1045,10 +1388,16 @@ pub fn due(arch: &mut Architecture) -> BTreeSet<(int4, uintb)> {
 /// so `pxor %xmm0,%xmm0` made `put` return the constant `0.0` its callers never
 /// read; to them it returns nothing, and it is forced like a `void` one.
 fn displaced(ledger: &Ledger, callee: &(int4, uintb), read: &(Address, int4)) -> bool {
-    let register = |a: &Address| a.get_space().is_some_and(|s| s.get_type() == spacetype::IPTR_PROCESSOR);
+    let register = |a: &Address| {
+        a.get_space()
+            .is_some_and(|s| s.get_type() == spacetype::IPTR_PROCESSOR)
+    };
     !ledger.withdrawn.contains(callee)
         && register(&read.0)
-        && matches!(ledger.returns.get(callee), Some(Returns::Float | Returns::Other))
+        && matches!(
+            ledger.returns.get(callee),
+            Some(Returns::Float | Returns::Other)
+        )
         && ledger
             .storage
             .get(callee)
@@ -1114,8 +1463,15 @@ pub fn stale_readers(
                 })
         });
         if arch.kuna_voidret.bits_withdrawn.contains(callee) {
-            let callers = arch.kuna_voidret.bits_callers.get(callee).into_iter().flatten();
-            out.extend(callers.filter(|c| *c != callee && stamp_of.get(*c).is_some_and(|&s| s < at)));
+            let callers = arch
+                .kuna_voidret
+                .bits_callers
+                .get(callee)
+                .into_iter()
+                .flatten();
+            out.extend(
+                callers.filter(|c| *c != callee && stamp_of.get(*c).is_some_and(|&s| s < at)),
+            );
         }
         for reader in arch.kuna_voidret.readers.get(callee).into_iter().flatten() {
             if reader == callee || stamp_of.get(reader).is_none_or(|&s| s >= at) {
@@ -1126,7 +1482,11 @@ pub fn stale_readers(
             if !states && !waiting && !widened {
                 continue;
             }
-            let large = arch.kuna_voidret.ops.get(reader).is_some_and(|&n| n > crate::kuna_callrettype::AUDIT_MAX_OPS);
+            let large = arch
+                .kuna_voidret
+                .ops
+                .get(reader)
+                .is_some_and(|&n| n > crate::kuna_callrettype::AUDIT_MAX_OPS);
             let wrong = arch
                 .kuna_voidret
                 .held
@@ -1160,7 +1520,10 @@ pub fn narrowed_call_result(
     op: crate::context::OpId,
 ) -> Option<(std::rc::Rc<crate::dtype::Datatype>, bool)> {
     let o = data.obank().get(op)?;
-    if !matches!(o.code(), unlace_num::opcodes::OpCode::CPUI_CALL | unlace_num::opcodes::OpCode::CPUI_CALLIND) {
+    if !matches!(
+        o.code(),
+        unlace_num::opcodes::OpCode::CPUI_CALL | unlace_num::opcodes::OpCode::CPUI_CALLIND
+    ) {
         return None;
     }
     let out = data.vbank().get(o.get_out()?)?;
@@ -1176,15 +1539,26 @@ pub fn narrowed_call_result(
         return None;
     }
     let (addr, size) = data.kuna_callee_return_storage(k)?.clone();
-    let register = addr.get_space().is_some_and(|s| s.get_type() == spacetype::IPTR_PROCESSOR);
-    if !register || size > 8 || !crate::kuna_zextreturn::wider_over(&addr, size, out.get_addr(), out.get_size()) {
+    let register = addr
+        .get_space()
+        .is_some_and(|s| s.get_type() == spacetype::IPTR_PROCESSOR);
+    if !register
+        || size > 8
+        || !crate::kuna_zextreturn::wider_over(&addr, size, out.get_addr(), out.get_size())
+    {
         return None;
     }
     let unsigned = signed_use(data, o.get_out()?, true)?;
-    let stated = data.kuna_callret_stated(k).filter(|s| s.size == size && s.ct.get_size() == size);
+    let stated = data
+        .kuna_callret_stated(k)
+        .filter(|s| s.size == size && s.ct.get_size() == size);
     let wide = match stated {
         Some(s) => std::rc::Rc::clone(&s.ct),
-        None => data.get_arch().types()?.get_base(size, crate::dtype::type_metatype::TYPE_UINT).ok()?,
+        None => data
+            .get_arch()
+            .types()?
+            .get_base(size, crate::dtype::type_metatype::TYPE_UINT)
+            .ok()?,
     };
     Some((wide, unsigned))
 }
@@ -1209,7 +1583,12 @@ pub fn return_storage(arch: &Architecture, k: (int4, uintb)) -> Option<(Address,
 /// a decompile the run then discarded. A forced decompile that displaced its
 /// return is over either way, so a float return its callers refuse is withdrawn
 /// as before.
-pub fn restore(arch: &mut Architecture, k: (int4, uintb), returns: Option<Returns>, storage: Option<(Address, int4)>) {
+pub fn restore(
+    arch: &mut Architecture,
+    k: (int4, uintb),
+    returns: Option<Returns>,
+    storage: Option<(Address, int4)>,
+) {
     arch.kuna_voidret.displacing.remove(&k);
     match returns {
         Some(r) => {
@@ -1257,11 +1636,16 @@ pub fn seed(arch: &Architecture, data: &mut Funcdata) {
     data.kuna_set_wide_return(own.and_then(|k| arch.kuna_voidret.wide.get(&k).cloned()));
     let withdrawn = own.is_some_and(|k| arch.kuna_voidret.withdrawn.contains(&k));
     data.kuna_set_float_return_withdrawn(withdrawn);
-    let Some((addr, size)) = own.filter(|_| !withdrawn).and_then(|k| arch.kuna_voidret.forced.get(&k).cloned()) else {
+    let Some((addr, size)) = own
+        .filter(|_| !withdrawn)
+        .and_then(|k| arch.kuna_voidret.forced.get(&k).cloned())
+    else {
         data.kuna_set_forced_return(Vec::new());
         return;
     };
-    let joined = addr.get_space().is_some_and(|s| s.get_type() == unlace_base::space::spacetype::IPTR_JOIN);
+    let joined = addr
+        .get_space()
+        .is_some_and(|s| s.get_type() == unlace_base::space::spacetype::IPTR_JOIN);
     let pieces = if !joined {
         vec![(addr, size)]
     } else {
@@ -1269,7 +1653,10 @@ pub fn seed(arch: &Architecture, data: &mut Funcdata) {
             Ok(join) => (0..join.num_pieces())
                 .filter_map(|i| {
                     let p = join.get_piece(i);
-                    Some((Address::new(std::rc::Rc::clone(p.space.as_ref()?), p.offset), p.size as int4))
+                    Some((
+                        Address::new(std::rc::Rc::clone(p.space.as_ref()?), p.offset),
+                        p.size as int4,
+                    ))
                 })
                 .collect(),
             Err(_) => Vec::new(),
@@ -1301,9 +1688,16 @@ pub(crate) fn plant_piece(data: &mut Funcdata, addr: Address, size: int4) {
     let rets: Vec<crate::context::OpId> = data
         .obank()
         .iter_code(unlace_num::opcodes::OpCode::CPUI_RETURN)
-        .filter(|&r| data.obank().get(r).is_some_and(|o| !o.is_dead() && o.get_halt_type() == 0))
+        .filter(|&r| {
+            data.obank()
+                .get(r)
+                .is_some_and(|o| !o.is_dead() && o.get_halt_type() == 0)
+        })
         .collect();
-    let nins: Vec<int4> = rets.iter().filter_map(|&r| data.obank().get(r).map(|o| o.num_input())).collect();
+    let nins: Vec<int4> = rets
+        .iter()
+        .filter_map(|&r| data.obank().get(r).map(|o| o.num_input()))
+        .collect();
     if rets.is_empty() || nins.len() != rets.len() || nins.iter().any(|&n| n != nins[0]) {
         return;
     }
@@ -1328,14 +1722,19 @@ pub(crate) fn plant_piece(data: &mut Funcdata, addr: Address, size: int4) {
 /// it (the `eax` of an earlier call's result beside a `rax` its callers read)
 /// would make the trial as narrow as that name.
 fn touched_beyond(data: &Funcdata, addr: &Address, size: int4) -> bool {
-    let Some(space) = addr.get_space() else { return true };
+    let Some(space) = addr.get_space() else {
+        return true;
+    };
     let off = addr.get_offset();
     let end = off.wrapping_add(size as u64);
     let lo = Address::new(std::rc::Rc::clone(space), off.saturating_sub(64));
     let hi = addr + size as i64;
     data.vbank().iter_loc_addr_range(&lo, &hi).any(|id| {
         data.vbank().get(id).is_some_and(|v| {
-            let (voff, vend) = (v.get_offset(), v.get_offset().wrapping_add(v.get_size() as u64));
+            let (voff, vend) = (
+                v.get_offset(),
+                v.get_offset().wrapping_add(v.get_size() as u64),
+            );
             voff < end && off < vend && (voff < off || vend > end)
         })
     })
@@ -1345,11 +1744,15 @@ fn touched_beyond(data: &Funcdata, addr: &Address, size: int4) -> bool {
 /// because [`plant`] made the trial itself?  Only the pieces it planted: the
 /// `edx` of `call zsum; or $0xff,%edx` beside a planted `eax` keeps its trial.
 pub fn planted_overlaps(data: &Funcdata, addr: &Address, size: int4) -> bool {
-    data.kuna_forced_return_planted().iter().any(|(paddr, psize)| overlaps(addr, size, paddr, *psize))
+    data.kuna_forced_return_planted()
+        .iter()
+        .any(|(paddr, psize)| overlaps(addr, size, paddr, *psize))
 }
 
 fn overlaps(addr: &Address, size: int4, other: &Address, osize: int4) -> bool {
-    let (Some(a), Some(b)) = (addr.get_space(), other.get_space()) else { return false };
+    let (Some(a), Some(b)) = (addr.get_space(), other.get_space()) else {
+        return false;
+    };
     let (off, ooff) = (addr.get_offset(), other.get_offset());
     a.get_index() == b.get_index()
         && off < ooff.wrapping_add(osize.max(0) as u64)
@@ -1380,7 +1783,11 @@ pub fn score_forced(
     let live: Vec<crate::context::OpId> = return_ops
         .iter()
         .copied()
-        .filter(|&r| data.obank().get(r).is_some_and(|o| !o.is_dead() && o.get_halt_type() == 0))
+        .filter(|&r| {
+            data.obank()
+                .get(r)
+                .is_some_and(|o| !o.is_dead() && o.get_halt_type() == 0)
+        })
         .collect();
     for anchored in [true, false] {
         let beside = (0..active.get_num_trials()).any(|i| {
@@ -1408,7 +1815,11 @@ pub fn whole_or_none(data: &Funcdata, active: &mut crate::fspec::ParamActive) {
     let live: Vec<crate::context::OpId> = data
         .obank()
         .iter_code(unlace_num::opcodes::OpCode::CPUI_RETURN)
-        .filter(|&r| data.obank().get(r).is_some_and(|o| !o.is_dead() && o.get_halt_type() == 0))
+        .filter(|&r| {
+            data.obank()
+                .get(r)
+                .is_some_and(|o| !o.is_dead() && o.get_halt_type() == 0)
+        })
         .collect();
     let trials: Vec<int4> = (0..active.get_num_trials())
         .filter(|&i| {
@@ -1426,7 +1837,9 @@ pub fn whole_or_none(data: &Funcdata, active: &mut crate::fspec::ParamActive) {
                     .is_some_and(|vn| defined_width(data, vn, &mut BTreeSet::new()) > 0)
             })
     };
-    let left = trials.iter().any(|&i| !active.get_trial(i).is_used() && set(active.get_trial(i).get_slot()));
+    let left = trials
+        .iter()
+        .any(|&i| !active.get_trial(i).is_used() && set(active.get_trial(i).get_slot()));
     if left && trials.iter().any(|&i| active.get_trial(i).is_used()) {
         for &i in &trials {
             active.get_trial_mut(i).mark_no_use();
@@ -1445,7 +1858,10 @@ pub fn void_unless_returned(data: &mut Funcdata) {
     if data.kuna_forced_return().is_empty()
         || !data.get_func_proto().has_store()
         || data.get_func_proto().is_output_locked()
-        || data.get_first_return_op().and_then(|r| data.obank().get(r)).is_some_and(|o| o.num_input() > 1)
+        || data
+            .get_first_return_op()
+            .and_then(|r| data.obank().get(r))
+            .is_some_and(|o| o.num_input() > 1)
     {
         return;
     }
@@ -1497,12 +1913,18 @@ fn score_trial(
         }
         return false;
     }
-    if hands_on_unstated(data, &addr, size, width, live, slot) || merges_in_pieces(data, live, slot) {
+    if hands_on_unstated(data, &addr, size, width, live, slot) || merges_in_pieces(data, live, slot)
+    {
         return false;
     }
     let every = live.iter().all(|&r| {
-        let Some(vn) = data.obank().get(r).and_then(|o| o.get_in(slot)) else { return false };
-        let (killed, cond) = (active.get_trial(i).is_killed_by_call(), active.get_trial(i).has_cond_exe_effect());
+        let Some(vn) = data.obank().get(r).and_then(|o| o.get_in(slot)) else {
+            return false;
+        };
+        let (killed, cond) = (
+            active.get_trial(i).is_killed_by_call(),
+            active.get_trial(i).has_cond_exe_effect(),
+        );
         let mut ancestor = crate::funcdata_varnode::AncestorRealistic::new();
         let (realistic, solid) = ancestor.execute(data, r, slot, size, cond, killed, false);
         if !(realistic || solid) {
@@ -1530,12 +1952,23 @@ fn score_trial(
 /// each path.  The function stays as it was.
 fn merges_in_pieces(data: &Funcdata, live: &[crate::context::OpId], slot: int4) -> bool {
     use unlace_num::opcodes::OpCode;
-    let def = |vn: crate::context::VarnodeId| data.vbank().get(vn).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d));
+    let def = |vn: crate::context::VarnodeId| {
+        data.vbank()
+            .get(vn)
+            .and_then(|v| v.get_def())
+            .and_then(|d| data.obank().get(d))
+    };
     live.iter().any(|&r| {
-        data.obank().get(r).and_then(|o| o.get_in(slot)).and_then(def).is_some_and(|p| {
-            p.code() == OpCode::CPUI_PIECE
-                && (0..p.num_input()).filter_map(|k| p.get_in(k)).any(|i| def(i).is_some_and(|d| d.code() == OpCode::CPUI_MULTIEQUAL))
-        })
+        data.obank()
+            .get(r)
+            .and_then(|o| o.get_in(slot))
+            .and_then(def)
+            .is_some_and(|p| {
+                p.code() == OpCode::CPUI_PIECE
+                    && (0..p.num_input())
+                        .filter_map(|k| p.get_in(k))
+                        .any(|i| def(i).is_some_and(|d| d.code() == OpCode::CPUI_MULTIEQUAL))
+            })
     })
 }
 
@@ -1556,16 +1989,24 @@ fn callee_return(data: &Funcdata, fc: &crate::p4_calls::fspec::FuncCallSpecs) ->
     let proto = fc.proto();
     if proto.is_output_locked() {
         let out = proto.get_output();
-        if out.get_type().is_some_and(|t| t.get_metatype() == crate::dtype::type_metatype::TYPE_VOID) {
+        if out
+            .get_type()
+            .is_some_and(|t| t.get_metatype() == crate::dtype::type_metatype::TYPE_VOID)
+        {
             return CalleeReturn::Stored(out.get_address(), 0);
         }
         return CalleeReturn::Stored(out.get_address(), out.get_size());
     }
-    let Some(k) = key(fc.get_entry_address()) else { return CalleeReturn::Unknown };
+    let Some(k) = key(fc.get_entry_address()) else {
+        return CalleeReturn::Unknown;
+    };
     if let Some(stated) = data.kuna_callret_stated(k) {
         return CalleeReturn::Stored(stated.addr.clone(), stated.size);
     }
-    match (data.kuna_callee_returns(k), data.kuna_callee_return_storage(k)) {
+    match (
+        data.kuna_callee_returns(k),
+        data.kuna_callee_return_storage(k),
+    ) {
         (Some(Returns::Void), _) => CalleeReturn::Stored(Address::new_invalid(), 0),
         (Some(_), Some((addr, size))) => CalleeReturn::Stored(addr.clone(), *size),
         (Some(Returns::Float), None) => CalleeReturn::Float,
@@ -1600,17 +2041,28 @@ fn hands_on_unstated(
     if !cut && !float {
         return false;
     }
-    let low = if addr.is_big_endian() { addr + (size - 1) as i64 } else { addr.clone() };
+    let low = if addr.is_big_endian() {
+        addr + (size - 1) as i64
+    } else {
+        addr.clone()
+    };
     live.iter().any(|&r| {
-        let Some(vn) = data.obank().get(r).and_then(|o| o.get_in(slot)) else { return true };
-        let Some(calls) = result_calls(data, vn) else { return true };
-        calls.into_iter().filter_map(|c| data.get_call_specs_index(c).map(|i| data.get_call_specs(i))).any(|fc| {
-            match callee_return(data, fc) {
-                CalleeReturn::Stored(raddr, rsize) => cut && covered_from(&low, &raddr, rsize).is_none_or(|n| n > width),
+        let Some(vn) = data.obank().get(r).and_then(|o| o.get_in(slot)) else {
+            return true;
+        };
+        let Some(calls) = result_calls(data, vn) else {
+            return true;
+        };
+        calls
+            .into_iter()
+            .filter_map(|c| data.get_call_specs_index(c).map(|i| data.get_call_specs(i)))
+            .any(|fc| match callee_return(data, fc) {
+                CalleeReturn::Stored(raddr, rsize) => {
+                    cut && covered_from(&low, &raddr, rsize).is_none_or(|n| n > width)
+                }
                 CalleeReturn::Float | CalleeReturn::Other => cut,
                 CalleeReturn::Unknown => cut || (float && key(fc.get_entry_address()).is_some()),
-            }
-        })
+            })
     })
 }
 
@@ -1623,11 +2075,19 @@ fn covered_from(low: &Address, raddr: &Address, rsize: int4) -> Option<int4> {
     if low.get_space().map(|s| s.get_index()) != raddr.get_space().map(|s| s.get_index()) {
         return None;
     }
-    let (off, roff, rend) = (low.get_offset(), raddr.get_offset(), raddr.get_offset().wrapping_add(rsize as u64));
+    let (off, roff, rend) = (
+        low.get_offset(),
+        raddr.get_offset(),
+        raddr.get_offset().wrapping_add(rsize as u64),
+    );
     if off < roff || off >= rend {
         return Some(0);
     }
-    Some(if low.is_big_endian() { off + 1 - roff } else { rend - off } as int4)
+    Some(if low.is_big_endian() {
+        off + 1 - roff
+    } else {
+        rend - off
+    } as int4)
 }
 
 /// The widest storage the callers read anchored at the trial's least
@@ -1645,8 +2105,15 @@ fn callers_width(data: &Funcdata, addr: &Address, size: int4) -> int4 {
 }
 
 fn same_low_end(a: &Address, asize: int4, b: &Address, bsize: int4) -> bool {
-    let low_end = |x: &Address, s: int4| if x.is_big_endian() { x.get_offset().wrapping_add(s as u64) } else { x.get_offset() };
-    a.get_space().map(|s| s.get_index()) == b.get_space().map(|s| s.get_index()) && low_end(a, asize) == low_end(b, bsize)
+    let low_end = |x: &Address, s: int4| {
+        if x.is_big_endian() {
+            x.get_offset().wrapping_add(s as u64)
+        } else {
+            x.get_offset()
+        }
+    };
+    a.get_space().map(|s| s.get_index()) == b.get_space().map(|s| s.get_index())
+        && low_end(a, asize) == low_end(b, bsize)
 }
 
 /// The storage a wrapper asks a `void` callee to return in: all of what its
@@ -1656,7 +2123,9 @@ fn same_low_end(a: &Address, asize: int4, b: &Address, bsize: int4) -> bool {
 /// asked for each, and the callee, asked for two registers, stayed `void`.
 fn as_wide_as(storage: (Address, int4), callers: Option<&(Address, int4)>) -> (Address, int4) {
     match callers {
-        Some((fa, fs)) if *fs > storage.1 && within(&storage.0, storage.1, fa, *fs) => (fa.clone(), *fs),
+        Some((fa, fs)) if *fs > storage.1 && within(&storage.0, storage.1, fa, *fs) => {
+            (fa.clone(), *fs)
+        }
         _ => storage,
     }
 }
@@ -1664,7 +2133,8 @@ fn as_wide_as(storage: (Address, int4), callers: Option<&(Address, int4)>) -> (A
 fn within(addr: &Address, size: int4, outer: &Address, osize: int4) -> bool {
     addr.get_space().map(|s| s.get_index()) == outer.get_space().map(|s| s.get_index())
         && outer.get_offset() <= addr.get_offset()
-        && addr.get_offset().wrapping_add(size.max(0) as u64) <= outer.get_offset().wrapping_add(osize.max(0) as u64)
+        && addr.get_offset().wrapping_add(size.max(0) as u64)
+            <= outer.get_offset().wrapping_add(osize.max(0) as u64)
 }
 
 /// Can `[addr, addr+size)` hold a float a callee returns: a floating-point
@@ -1677,7 +2147,8 @@ fn may_carry_a_float(data: &Funcdata, addr: &Address, size: int4) -> bool {
     let proto = data.get_func_proto();
     proto.has_model()
         && proto.model().output().get_entry().iter().any(|e| {
-            e.get_type() == crate::dtype::type_class::TYPECLASS_FLOAT && e.justified_contain(addr, size) >= 0
+            e.get_type() == crate::dtype::type_class::TYPECLASS_FLOAT
+                && e.justified_contain(addr, size) >= 0
         })
 }
 
@@ -1686,7 +2157,10 @@ fn may_carry_a_float(data: &Funcdata, addr: &Address, size: int4) -> bool {
 /// A call an INDIRECT guards may replace the value it carries past the call,
 /// and a piece of a register the function returns whole keeps the rest of the
 /// call's result beside it (`s0` of a `d0` a call set).
-fn result_calls(data: &Funcdata, vn: crate::context::VarnodeId) -> Option<Vec<crate::context::OpId>> {
+fn result_calls(
+    data: &Funcdata,
+    vn: crate::context::VarnodeId,
+) -> Option<Vec<crate::context::OpId>> {
     use unlace_num::opcodes::OpCode;
     let mut out = Vec::new();
     let mut stack = vec![vn];
@@ -1696,7 +2170,11 @@ fn result_calls(data: &Funcdata, vn: crate::context::VarnodeId) -> Option<Vec<cr
             .and_then(|i| data.vbank().get(i))
             .filter(|i| i.get_space().get_type() == spacetype::IPTR_IOP)
             .map(|i| crate::context::OpId::from(slotmap::KeyData::from_ffi(i.get_offset())))
-            .filter(|&c| data.obank().get(c).is_some_and(|o| matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND)))
+            .filter(|&c| {
+                data.obank()
+                    .get(c)
+                    .is_some_and(|o| matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND))
+            })
     };
     while let Some(v) = stack.pop() {
         if !seen.insert(v) {
@@ -1705,7 +2183,11 @@ fn result_calls(data: &Funcdata, vn: crate::context::VarnodeId) -> Option<Vec<cr
         if seen.len() > 256 {
             return None;
         }
-        let Some((d, def)) = data.vbank().get(v).and_then(|n| n.get_def()).and_then(|d| Some((d, data.obank().get(d)?)))
+        let Some((d, def)) = data
+            .vbank()
+            .get(v)
+            .and_then(|n| n.get_def())
+            .and_then(|d| Some((d, data.obank().get(d)?)))
         else {
             continue;
         };
@@ -1739,22 +2221,42 @@ fn read_width(data: &Funcdata, addr: &Address, size: int4) -> Option<int4> {
 /// parameter arrives in; a `PIECE` holds its low piece, and its high one too
 /// when the low piece is whole.  A value met again around a loop is taken as
 /// set, the answer the first path decides.
-fn defined_width(data: &Funcdata, vn: crate::context::VarnodeId, seen: &mut BTreeSet<crate::context::VarnodeId>) -> int4 {
+fn defined_width(
+    data: &Funcdata,
+    vn: crate::context::VarnodeId,
+    seen: &mut BTreeSet<crate::context::VarnodeId>,
+) -> int4 {
     use unlace_num::opcodes::OpCode;
-    let Some(node) = data.vbank().get(vn) else { return 0 };
+    let Some(node) = data.vbank().get(vn) else {
+        return 0;
+    };
     let size = node.get_size();
     if node.is_constant() || !seen.insert(vn) || seen.len() > 256 {
         return size;
     }
     let Some(def) = node.get_def().and_then(|d| data.obank().get(d)) else {
-        return if node.is_input() && !parameter_register(data, node) { 0 } else { size };
+        return if node.is_input() && !parameter_register(data, node) {
+            0
+        } else {
+            size
+        };
     };
-    let from = |k: int4, seen: &mut BTreeSet<_>| def.get_in(k).map_or(0, |v| defined_width(data, v, seen));
-    let piece_size = |k: int4| def.get_in(k).and_then(|v| data.vbank().get(v)).map_or(0, |v| v.get_size());
+    let from =
+        |k: int4, seen: &mut BTreeSet<_>| def.get_in(k).map_or(0, |v| defined_width(data, v, seen));
+    let piece_size = |k: int4| {
+        def.get_in(k)
+            .and_then(|v| data.vbank().get(v))
+            .map_or(0, |v| v.get_size())
+    };
     let set = match def.code() {
         OpCode::CPUI_INDIRECT if def.is_indirect_creation() => {
-            if def.get_in(0).and_then(|v| data.vbank().get(v)).is_some_and(|v| v.is_indirect_zero())
-                || !node.get_def().is_some_and(|d| becomes_the_calls_output(data, d))
+            if def
+                .get_in(0)
+                .and_then(|v| data.vbank().get(v))
+                .is_some_and(|v| v.is_indirect_zero())
+                || !node
+                    .get_def()
+                    .is_some_and(|d| becomes_the_calls_output(data, d))
             {
                 0
             } else {
@@ -1762,13 +2264,23 @@ fn defined_width(data: &Funcdata, vn: crate::context::VarnodeId, seen: &mut BTre
             }
         }
         OpCode::CPUI_COPY | OpCode::CPUI_INDIRECT => from(0, seen),
-        OpCode::CPUI_MULTIEQUAL => (0..def.num_input()).map(|k| from(k, seen)).min().unwrap_or(0),
+        OpCode::CPUI_MULTIEQUAL => (0..def.num_input())
+            .map(|k| from(k, seen))
+            .min()
+            .unwrap_or(0),
         OpCode::CPUI_PIECE => {
             let low = from(1, seen);
-            if low < piece_size(1) { low } else { low + from(0, seen) }
+            if low < piece_size(1) {
+                low
+            } else {
+                low + from(0, seen)
+            }
         }
         OpCode::CPUI_SUBPIECE => {
-            let skip = def.get_in(1).and_then(|v| data.vbank().get(v)).map_or(0, |v| v.get_offset() as int4);
+            let skip = def
+                .get_in(1)
+                .and_then(|v| data.vbank().get(v))
+                .map_or(0, |v| v.get_offset() as int4);
             from(0, seen) - skip
         }
         OpCode::CPUI_INT_ZEXT | OpCode::CPUI_INT_SEXT => {
@@ -1803,7 +2315,11 @@ fn becomes_the_calls_output(data: &Funcdata, ind: crate::context::OpId) -> bool 
         if o == ind {
             return true;
         }
-        if data.obank().get(o).is_none_or(|op| op.code() != OpCode::CPUI_INDIRECT) {
+        if data
+            .obank()
+            .get(o)
+            .is_none_or(|op| op.code() != OpCode::CPUI_INDIRECT)
+        {
             return false;
         }
         at = data.op_previous_op(o);
@@ -1817,19 +2333,33 @@ fn becomes_the_calls_output(data: &Funcdata, ind: crate::context::OpId) -> bool 
 /// `node`'s least significant byte (the rest of `xmm0` beside a `float`) or the
 /// callee was recovered `void`, and all of it when the callee's return is
 /// unknown.
-fn returned_by_the_call(data: &Funcdata, ind: &crate::op::PcodeOp, node: &crate::varnode::Varnode) -> int4 {
+fn returned_by_the_call(
+    data: &Funcdata,
+    ind: &crate::op::PcodeOp,
+    node: &crate::varnode::Varnode,
+) -> int4 {
     let size = node.get_size();
-    let Some(fc) = call_of(data, ind) else { return size };
+    let Some(fc) = call_of(data, ind) else {
+        return size;
+    };
     let proto = fc.proto();
     let (raddr, rsize) = if proto.is_output_locked() {
         let out = proto.get_output();
-        if out.get_type().is_some_and(|t| t.get_metatype() == crate::dtype::type_metatype::TYPE_VOID) {
+        if out
+            .get_type()
+            .is_some_and(|t| t.get_metatype() == crate::dtype::type_metatype::TYPE_VOID)
+        {
             return 0;
         }
         (out.get_address(), out.get_size())
     } else {
         let entry = fc.get_entry_address();
-        let Some(k) = entry.get_space().map(|s| (s.get_index(), entry.get_offset())) else { return size };
+        let Some(k) = entry
+            .get_space()
+            .map(|s| (s.get_index(), entry.get_offset()))
+        else {
+            return size;
+        };
         match data.kuna_callret_stated(k) {
             Some(stated) => (stated.addr.clone(), stated.size),
             None if data.kuna_callee_returns(k) == Some(Returns::Void) => return 0,
@@ -1840,19 +2370,34 @@ fn returned_by_the_call(data: &Funcdata, ind: &crate::op::PcodeOp, node: &crate:
     if a.get_space().map(|s| s.get_index()) != r.get_space().map(|s| s.get_index()) {
         return size;
     }
-    let (off, roff, rend) = (a.get_offset(), r.get_offset(), r.get_offset().wrapping_add(rsize as u64));
-    let low = if a.is_big_endian() { off + size as u64 - 1 } else { off };
+    let (off, roff, rend) = (
+        a.get_offset(),
+        r.get_offset(),
+        r.get_offset().wrapping_add(rsize as u64),
+    );
+    let low = if a.is_big_endian() {
+        off + size as u64 - 1
+    } else {
+        off
+    };
     if low < roff || low >= rend {
         return 0;
     }
-    let covered = if a.is_big_endian() { low + 1 - roff } else { rend - low };
+    let covered = if a.is_big_endian() {
+        low + 1 - roff
+    } else {
+        rend - low
+    };
     (covered as int4).min(size)
 }
 
 /// The results of `void` callees the value `vn` would be, by callee: a wrapper
 /// of such a callee returns nothing until the callee does, and asks for it
 /// ([`record`] files these as the wrapper's reads).
-fn void_results(data: &Funcdata, vn: crate::context::VarnodeId) -> Vec<((int4, uintb), (Address, int4))> {
+fn void_results(
+    data: &Funcdata,
+    vn: crate::context::VarnodeId,
+) -> Vec<((int4, uintb), (Address, int4))> {
     use unlace_num::opcodes::OpCode;
     let mut out = Vec::new();
     let mut stack = vec![vn];
@@ -1861,19 +2406,36 @@ fn void_results(data: &Funcdata, vn: crate::context::VarnodeId) -> Vec<((int4, u
         if !seen.insert(v) || seen.len() > 256 {
             continue;
         }
-        let Some(node) = data.vbank().get(v) else { continue };
-        let Some(def) = node.get_def().and_then(|d| data.obank().get(d)) else { continue };
+        let Some(node) = data.vbank().get(v) else {
+            continue;
+        };
+        let Some(def) = node.get_def().and_then(|d| data.obank().get(d)) else {
+            continue;
+        };
         match def.code() {
             OpCode::CPUI_INDIRECT if def.is_indirect_creation() => {
-                let Some(fc) = call_of(data, def) else { continue };
+                let Some(fc) = call_of(data, def) else {
+                    continue;
+                };
                 let entry = fc.get_entry_address();
-                let Some(k) = entry.get_space().map(|s| (s.get_index(), entry.get_offset())) else { continue };
-                if !fc.proto().is_output_locked() && data.kuna_callee_returns(k) == Some(Returns::Void) {
+                let Some(k) = entry
+                    .get_space()
+                    .map(|s| (s.get_index(), entry.get_offset()))
+                else {
+                    continue;
+                };
+                if !fc.proto().is_output_locked()
+                    && data.kuna_callee_returns(k) == Some(Returns::Void)
+                {
                     out.push((k, (node.get_addr().clone(), node.get_size())));
                 }
             }
-            OpCode::CPUI_COPY | OpCode::CPUI_INDIRECT | OpCode::CPUI_SUBPIECE => stack.extend(def.get_in(0)),
-            OpCode::CPUI_MULTIEQUAL | OpCode::CPUI_PIECE => stack.extend((0..def.num_input()).filter_map(|k| def.get_in(k))),
+            OpCode::CPUI_COPY | OpCode::CPUI_INDIRECT | OpCode::CPUI_SUBPIECE => {
+                stack.extend(def.get_in(0))
+            }
+            OpCode::CPUI_MULTIEQUAL | OpCode::CPUI_PIECE => {
+                stack.extend((0..def.num_input()).filter_map(|k| def.get_in(k)))
+            }
             _ => {}
         }
     }
@@ -1881,13 +2443,17 @@ fn void_results(data: &Funcdata, vn: crate::context::VarnodeId) -> Vec<((int4, u
 }
 
 /// The call an INDIRECT creation guards.
-fn call_of<'a>(data: &'a Funcdata, ind: &crate::op::PcodeOp) -> Option<&'a crate::p4_calls::fspec::FuncCallSpecs> {
+fn call_of<'a>(
+    data: &'a Funcdata,
+    ind: &crate::op::PcodeOp,
+) -> Option<&'a crate::p4_calls::fspec::FuncCallSpecs> {
     let call = ind
         .get_in(1)
         .and_then(|i| data.vbank().get(i))
         .map(|i| crate::context::OpId::from(slotmap::KeyData::from_ffi(i.get_offset())))
         .filter(|&c| data.obank().get(c).is_some())?;
-    data.get_call_specs_index(call).map(|i| data.get_call_specs(i))
+    data.get_call_specs_index(call)
+        .map(|i| data.get_call_specs(i))
 }
 
 /// Could a parameter arrive in `node`'s storage?  Its entry value is then an
@@ -1896,10 +2462,10 @@ fn call_of<'a>(data: &'a Funcdata, ind: &crate::op::PcodeOp) -> Option<&'a crate
 fn parameter_register(data: &Funcdata, node: &crate::varnode::Varnode) -> bool {
     let proto = data.get_func_proto();
     proto.has_model()
-        && proto
-            .model()
-            .input_opt()
-            .is_some_and(|l| l.find_entry(node.get_addr(), node.get_size(), true).is_some())
+        && proto.model().input_opt().is_some_and(|l| {
+            l.find_entry(node.get_addr(), node.get_size(), true)
+                .is_some()
+        })
 }
 
 /// Return the least significant `width` bytes of trial `i` at every live
@@ -1917,19 +2483,30 @@ fn narrow(
         let t = active.get_trial(i);
         (t.get_address().clone(), t.get_size())
     };
-    let low = if addr.is_big_endian() { &addr + ((size - width) as i64) } else { addr.clone() };
+    let low = if addr.is_big_endian() {
+        &addr + ((size - width) as i64)
+    } else {
+        addr.clone()
+    };
     if !active.test_shrink(i, &low, width)
-        || data.get_func_proto().characterize_as_output(&low, width) != crate::fspec::Containment::ContainsJustified
+        || data.get_func_proto().characterize_as_output(&low, width)
+            != crate::fspec::Containment::ContainsJustified
     {
         return false;
     }
     for &r in live {
-        let Some((vn, at)) = data.obank().get(r).and_then(|o| Some((o.get_in(slot)?, o.get_addr().clone()))) else {
+        let Some((vn, at)) = data
+            .obank()
+            .get(r)
+            .and_then(|o| Some((o.get_in(slot)?, o.get_addr().clone())))
+        else {
             return false;
         };
         let op = data.new_op(2, at);
         data.op_set_opcode_code(op, unlace_num::opcodes::OpCode::CPUI_SUBPIECE);
-        let Ok(out) = data.new_varnode_out(width, &low, op) else { return false };
+        let Ok(out) = data.new_varnode_out(width, &low, op) else {
+            return false;
+        };
         if let Some(v) = data.vbank_mut().get_mut(out) {
             v.set_write_mask();
         }
@@ -1946,7 +2523,9 @@ fn narrow(
 /// Is the return trial `[addr, addr+size)` on the storage the function's
 /// callers read?
 pub fn forced(data: &Funcdata, addr: &Address, size: int4) -> bool {
-    data.kuna_forced_return().iter().any(|(faddr, fsize)| overlaps(addr, size, faddr, *fsize))
+    data.kuna_forced_return()
+        .iter()
+        .any(|(faddr, fsize)| overlaps(addr, size, faddr, *fsize))
 }
 
 /// Is `opmatch` a RETURN whose forced return trial [`score_forced`] is scoring?
@@ -1955,7 +2534,10 @@ pub fn forced(data: &Funcdata, addr: &Address, size: int4) -> bool {
 /// `only_op_use` lets it be stored and branched on as well ([`returned_use`]).
 pub fn scoring_return(data: &Funcdata, opmatch: crate::context::OpId) -> bool {
     data.kuna_forced_scoring()
-        && data.obank().get(opmatch).is_some_and(|o| o.code() == unlace_num::opcodes::OpCode::CPUI_RETURN)
+        && data
+            .obank()
+            .get(opmatch)
+            .is_some_and(|o| o.code() == unlace_num::opcodes::OpCode::CPUI_RETURN)
 }
 
 /// Is `op`'s use of `vn` one a returned value may also have: a branch on it
@@ -1967,7 +2549,11 @@ pub fn scoring_return(data: &Funcdata, opmatch: crate::context::OpId) -> bool {
 /// sit there. A load or store through the value, and a call reading it (the
 /// stream pointer of a `getc` loop, the message of an `error` call), still
 /// refuse it.
-pub fn returned_use(data: &Funcdata, op: crate::context::OpId, vn: crate::context::VarnodeId) -> bool {
+pub fn returned_use(
+    data: &Funcdata,
+    op: crate::context::OpId,
+    vn: crate::context::VarnodeId,
+) -> bool {
     use unlace_num::opcodes::OpCode;
     data.obank().get(op).is_some_and(|o| match o.code() {
         OpCode::CPUI_CBRANCH | OpCode::CPUI_RETURN => true,

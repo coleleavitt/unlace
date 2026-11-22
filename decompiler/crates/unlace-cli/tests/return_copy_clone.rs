@@ -120,19 +120,36 @@ fn split_return_writes_each_global_once() {
         ("auto", &[]),
         ("reliable", &["--mode", "reliable"]),
         ("fast", &["--mode", "fast"]),
-        ("upstream", &["--mode", "reliable", "--option", "returndup", "off"]),
+        (
+            "upstream",
+            &["--mode", "reliable", "--option", "returndup", "off"],
+        ),
     ];
     for (label, extra) in runs {
         let code = decompile(&image, extra);
-        for (function, global) in FUNCTIONS.iter().zip(["audit_recorded", "audit_recorded", "audit_count"]) {
+        for (function, global) in
+            FUNCTIONS
+                .iter()
+                .zip(["audit_recorded", "audit_recorded", "audit_count"])
+        {
             let text = &code[FUNCTIONS.iter().position(|f| f == function).unwrap()];
-            assert_eq!(text.matches(&format!("{global} = ")).count(), 1, "{label}:\n{text}");
+            assert_eq!(
+                text.matches(&format!("{global} = ")).count(),
+                1,
+                "{label}:\n{text}"
+            );
         }
         let printed = code.join("\n");
         let source = dir.join(format!("printed-{label}.c"));
         std::fs::write(&source, format!("{PRELUDE}\n{printed}\n{DRIVER}")).unwrap();
         let executable = source.with_extension("");
-        process::required_output(Command::new(cc).args(["-O0", "-w"]).arg(&source).arg("-o").arg(&executable));
+        process::required_output(
+            Command::new(cc)
+                .args(["-O0", "-w"])
+                .arg(&source)
+                .arg("-o")
+                .arg(&executable),
+        );
         let run = Command::new(&executable).output().unwrap();
         assert!(
             run.status.success(),

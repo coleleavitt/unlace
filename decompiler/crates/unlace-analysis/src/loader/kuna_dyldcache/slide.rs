@@ -32,10 +32,22 @@ pub struct SlideInfo {
 #[derive(Clone, Debug)]
 enum Kind {
     V1,
-    V2 { extras: Vec<u16>, delta_mask: u64, value_add: u64 },
-    V4 { extras: Vec<u16>, delta_mask: u32, value_add: u32 },
-    V3 { auth_value_add: u64 },
-    V5 { value_add: u64 },
+    V2 {
+        extras: Vec<u16>,
+        delta_mask: u64,
+        value_add: u64,
+    },
+    V4 {
+        extras: Vec<u16>,
+        delta_mask: u32,
+        value_add: u32,
+    },
+    V3 {
+        auth_value_add: u64,
+    },
+    V5 {
+        value_add: u64,
+    },
 }
 
 const V2_NO_REBASE: u16 = 0x4000;
@@ -54,8 +66,13 @@ const MAX_PAGE_SIZE: u32 = 1 << 16;
 
 fn u16s(raw: &[u8], offset: usize, count: usize) -> Result<Vec<u16>, String> {
     let end = offset + count * 2;
-    let bytes = raw.get(offset..end).ok_or("slide info page table runs past its blob")?;
-    Ok(bytes.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect())
+    let bytes = raw
+        .get(offset..end)
+        .ok_or("slide info page table runs past its blob")?;
+    Ok(bytes
+        .chunks_exact(2)
+        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+        .collect())
 }
 
 fn u32_at(b: &[u8], off: usize) -> u32 {
@@ -76,7 +93,11 @@ impl SlideInfo {
         let version = u32_at(raw, 0);
         let page_size = u32_at(raw, 4);
         let info = match version {
-            1 => SlideInfo { page_size: 4096, starts: Vec::new(), kind: Kind::V1 },
+            1 => SlideInfo {
+                page_size: 4096,
+                starts: Vec::new(),
+                kind: Kind::V1,
+            },
             2 if raw.len() >= 40 => SlideInfo {
                 page_size,
                 starts: u16s(raw, u32_at(raw, 8) as usize, u32_at(raw, 12) as usize)?,
@@ -98,20 +119,30 @@ impl SlideInfo {
             3 => SlideInfo {
                 page_size,
                 starts: u16s(raw, 24, u32_at(raw, 8) as usize)?,
-                kind: Kind::V3 { auth_value_add: u64_at(raw, 16) },
+                kind: Kind::V3 {
+                    auth_value_add: u64_at(raw, 16),
+                },
             },
             5 => SlideInfo {
                 page_size,
                 starts: u16s(raw, 24, u32_at(raw, 8) as usize)?,
-                kind: Kind::V5 { value_add: u64_at(raw, 16) },
+                kind: Kind::V5 {
+                    value_add: u64_at(raw, 16),
+                },
             },
-            other => return Err(format!("dyld cache slide info version {other} is not supported")),
+            other => {
+                return Err(format!(
+                    "dyld cache slide info version {other} is not supported"
+                ));
+            }
         };
         if matches!(info.kind, Kind::V1) {
             return Ok(None);
         }
         if !info.page_size.is_power_of_two() || info.page_size > MAX_PAGE_SIZE {
-            return Err(format!("slide info page size {page_size:#x} is not a power of two up to {MAX_PAGE_SIZE:#x}"));
+            return Err(format!(
+                "slide info page size {page_size:#x} is not a power of two up to {MAX_PAGE_SIZE:#x}"
+            ));
         }
         Ok(Some(info))
     }
@@ -126,31 +157,67 @@ impl SlideInfo {
             };
             match &self.kind {
                 Kind::V1 => {}
-                Kind::V2 { extras, delta_mask, value_add } => {
+                Kind::V2 {
+                    extras,
+                    delta_mask,
+                    value_add,
+                } => {
                     if start == V2_NO_REBASE {
                         continue;
                     }
                     if start & V2_EXTRA == 0 {
-                        v2_chain(page, (start & V2_INDEX) as usize * 4, *delta_mask, *value_add);
+                        v2_chain(
+                            page,
+                            (start & V2_INDEX) as usize * 4,
+                            *delta_mask,
+                            *value_add,
+                        );
                         continue;
                     }
-                    for &extra in extras.iter().skip((start & V2_INDEX) as usize).take(MAX_CHAIN) {
-                        v2_chain(page, (extra & V2_INDEX) as usize * 4, *delta_mask, *value_add);
+                    for &extra in extras
+                        .iter()
+                        .skip((start & V2_INDEX) as usize)
+                        .take(MAX_CHAIN)
+                    {
+                        v2_chain(
+                            page,
+                            (extra & V2_INDEX) as usize * 4,
+                            *delta_mask,
+                            *value_add,
+                        );
                         if extra & V2_END != 0 {
                             break;
                         }
                     }
                 }
-                Kind::V4 { extras, delta_mask, value_add } => {
+                Kind::V4 {
+                    extras,
+                    delta_mask,
+                    value_add,
+                } => {
                     if start == V4_NO_REBASE {
                         continue;
                     }
                     if start & V4_USE_EXTRA == 0 {
-                        v4_chain(page, (start & V4_INDEX) as usize * 4, *delta_mask, *value_add);
+                        v4_chain(
+                            page,
+                            (start & V4_INDEX) as usize * 4,
+                            *delta_mask,
+                            *value_add,
+                        );
                         continue;
                     }
-                    for &extra in extras.iter().skip((start & V4_INDEX) as usize).take(MAX_CHAIN) {
-                        v4_chain(page, (extra & V4_INDEX) as usize * 4, *delta_mask, *value_add);
+                    for &extra in extras
+                        .iter()
+                        .skip((start & V4_INDEX) as usize)
+                        .take(MAX_CHAIN)
+                    {
+                        v4_chain(
+                            page,
+                            (extra & V4_INDEX) as usize * 4,
+                            *delta_mask,
+                            *value_add,
+                        );
                         if extra & V4_EXTRA_END != 0 {
                             break;
                         }
@@ -158,7 +225,9 @@ impl SlideInfo {
                 }
                 Kind::V3 { auth_value_add } => {
                     if start != V3_NO_REBASE {
-                        chain64(page, start as usize, 51, |raw| v3_target(raw, *auth_value_add));
+                        chain64(page, start as usize, 51, |raw| {
+                            v3_target(raw, *auth_value_add)
+                        });
                     }
                 }
                 Kind::V5 { value_add } => {
@@ -280,7 +349,9 @@ mod tests {
         header.extend(0u32.to_le_bytes());
         header.extend(0x1_8000_0000u64.to_le_bytes());
         header.extend(0x10u16.to_le_bytes());
-        let info = SlideInfo::parse(&blob(3, 0x1000, &header)).unwrap().unwrap();
+        let info = SlideInfo::parse(&blob(3, 0x1000, &header))
+            .unwrap()
+            .unwrap();
         let plain = (2u64 << 51) | 0x1_8000_1234;
         let auth = (1u64 << 63) | (1 << 48) | (0x1234 << 32) | 0x5_1234;
         let mut page = page_with(&[(0x10, plain), (0x20, auth)]);
@@ -307,13 +378,11 @@ mod tests {
         header.extend(0x8000u16.to_le_bytes());
         header.extend(0x0002u16.to_le_bytes());
         header.extend((0x8000u16 | 0x0040).to_le_bytes());
-        let info = SlideInfo::parse(&blob(2, 0x1000, &header)).unwrap().unwrap();
+        let info = SlideInfo::parse(&blob(2, 0x1000, &header))
+            .unwrap()
+            .unwrap();
         let link = |bytes: u64| bytes << 38;
-        let mut page = page_with(&[
-            (0x08, link(8) | 0x1000),
-            (0x10, 0),
-            (0x100, 0x2000),
-        ]);
+        let mut page = page_with(&[(0x08, link(8) | 0x1000), (0x10, 0), (0x100, 0x2000)]);
         info.apply(&mut page, 0);
         assert_eq!(slot(&page, 0x08), 0x1010);
         assert_eq!(slot(&page, 0x10), 0);
@@ -330,17 +399,27 @@ mod tests {
         header.extend(delta_mask.to_le_bytes());
         header.extend(0x1A00_0000u64.to_le_bytes());
         header.extend(0u16.to_le_bytes());
-        let info = SlideInfo::parse(&blob(4, 0x1000, &header)).unwrap().unwrap();
+        let info = SlideInfo::parse(&blob(4, 0x1000, &header))
+            .unwrap()
+            .unwrap();
         let link = |bytes: u32| (bytes / 4) << 30;
         let mut page = vec![0u8; 0x1000];
-        for (off, raw) in [(0usize, link(4) | 0x0012_3450), (4, link(4) | 0x7FF0), (8, 0x3FFF_FFF0)] {
+        for (off, raw) in [
+            (0usize, link(4) | 0x0012_3450),
+            (4, link(4) | 0x7FF0),
+            (8, 0x3FFF_FFF0),
+        ] {
             page[off..off + 4].copy_from_slice(&raw.to_le_bytes());
         }
         info.apply(&mut page, 0);
         let word = |off: usize| u32::from_le_bytes(page[off..off + 4].try_into().unwrap());
         assert_eq!(word(0), 0x1A12_3450, "a pointer gets value_add");
         assert_eq!(word(4), 0x7FF0, "a small positive value is kept");
-        assert_eq!(word(8), 0xFFFF_FFF0, "a small negative value is sign-extended");
+        assert_eq!(
+            word(8),
+            0xFFFF_FFF0,
+            "a small negative value is sign-extended"
+        );
     }
 
     #[test]
@@ -350,7 +429,9 @@ mod tests {
         header.extend(0u32.to_le_bytes());
         header.extend(0x1_8000_0000u64.to_le_bytes());
         header.extend(0u16.to_le_bytes());
-        let info = SlideInfo::parse(&blob(5, 0x1000, &header)).unwrap().unwrap();
+        let info = SlideInfo::parse(&blob(5, 0x1000, &header))
+            .unwrap()
+            .unwrap();
         let plain = (1u64 << 52) | (0x7f << 34) | 0x4000;
         let auth = (1 << 63) | (0xbeef << 34) | 0x8000;
         let mut page = page_with(&[(0, plain), (8, auth)]);

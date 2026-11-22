@@ -1,8 +1,8 @@
 //! The resolved call target is discovered even when it is not a walk seed.
-use unlace_analysis::listing::xrefs::{self, XrefKind};
-use unlace_console::engine::bootstrap_from_object;
 use object::{Object, ObjectSymbol};
 use std::path::PathBuf;
+use unlace_analysis::listing::xrefs::{self, XrefKind};
+use unlace_console::engine::bootstrap_from_object;
 
 #[test]
 fn an_immutable_slot_call_discovers_its_unseeded_target() {
@@ -35,18 +35,20 @@ fn an_immutable_slot_call_discovers_its_unseeded_target() {
         .find(|s| s.name().ok() == Some("callback_slot"))
         .unwrap()
         .address();
-    assert!(index
-        .refs_from_function(caller)
-        .iter()
-        .any(|r| r.kind == XrefKind::Read && r.to == slot));
+    assert!(
+        index
+            .refs_from_function(caller)
+            .iter()
+            .any(|r| r.kind == XrefKind::Read && r.to == slot)
+    );
     assert!(index.has_indirect_calls(caller));
 }
 
 #[test]
 fn a_stated_callee_excludes_its_physical_site_from_got_proof() {
-    use unlace_base::address::Address;
-    use unlace_base::space::{spacetype, AddrSpace};
     use std::rc::Rc;
+    use unlace_base::address::Address;
+    use unlace_base::space::{AddrSpace, spacetype};
 
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let path =
@@ -84,8 +86,13 @@ fn a_stated_callee_excludes_its_physical_site_from_got_proof() {
                     )
                     .unwrap();
                 }
-                unlace_console::kuna_calleeoverride::plant(&mut program, &caller, &site, "alternate")
-                    .unwrap();
+                unlace_console::kuna_calleeoverride::plant(
+                    &mut program,
+                    &caller,
+                    &site,
+                    "alternate",
+                )
+                .unwrap();
                 slot
             }
             2 => {

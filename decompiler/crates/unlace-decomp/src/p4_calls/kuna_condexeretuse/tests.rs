@@ -5,11 +5,13 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace};
+use unlace_base::space::{
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
+};
 use unlace_base::types::int4;
 
 use crate::context::{ArchContext, TypeOp};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::fspec::ParamTrial;
 
 use super::*;
@@ -17,7 +19,8 @@ use super::*;
 fn build_fd() -> Funcdata {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -63,10 +66,15 @@ fn out(fd: &mut Funcdata, o: OpId, off: u64, size: int4) -> VarnodeId {
 
 fn input(fd: &mut Funcdata, off: u64, size: int4) -> VarnodeId {
     let r = ram(fd);
-    let vn = fd.vbank_mut().create(size, Address::new(r, off), Rc::new(Datatype::new(size, type_metatype::TYPE_UNKNOWN)));
-    let mut keep = |_: &mut crate::varnode::VarnodeBank, _: VarnodeId, _: VarnodeId| -> unlace_base::error::KunaResult<()> {
-        panic!("input collision")
-    };
+    let vn = fd.vbank_mut().create(
+        size,
+        Address::new(r, off),
+        Rc::new(Datatype::new(size, type_metatype::TYPE_UNKNOWN)),
+    );
+    let mut keep = |_: &mut crate::varnode::VarnodeBank,
+                    _: VarnodeId,
+                    _: VarnodeId|
+     -> unlace_base::error::KunaResult<()> { panic!("input collision") };
     fd.vbank_mut().set_input(vn, &mut keep).unwrap()
 }
 
@@ -107,7 +115,14 @@ fn retest(fd: &mut Funcdata) -> Retest {
     let merged = out(fd, phi, 0x68, 4);
     let tgt2 = code(fd, 0x200);
     let cbranch = op(fd, c, 0x110, OpCode::CPUI_CBRANCH, &[tgt2, cond]);
-    Retest { merged, b, c, t, f, cbranch }
+    Retest {
+        merged,
+        b,
+        c,
+        t,
+        f,
+        cbranch,
+    }
 }
 
 fn ret(fd: &mut Funcdata, bl: BlockId, off: u64, vn: VarnodeId) -> OpId {
@@ -135,17 +150,32 @@ fn pick() -> bool {
 fn the_in_edge_fixes_the_out_block() {
     let mut fd = build_fd();
     let m = retest(&mut fd);
-    assert_eq!(ConditionalExecution::forced_out_block(&fd, m.c, 1), Some(m.t));
-    assert_eq!(ConditionalExecution::forced_out_block(&fd, m.c, 0), Some(m.f));
+    assert_eq!(
+        ConditionalExecution::forced_out_block(&fd, m.c, 1),
+        Some(m.t)
+    );
+    assert_eq!(
+        ConditionalExecution::forced_out_block(&fd, m.c, 0),
+        Some(m.f)
+    );
 }
 
 #[test]
 fn a_complemented_retest_swaps_the_out_block() {
     let mut fd = build_fd();
     let m = retest(&mut fd);
-    fd.obank_mut().get_mut(m.cbranch).unwrap().set_flag(crate::op::pcodeop_flags::boolean_flip);
-    assert_eq!(ConditionalExecution::forced_out_block(&fd, m.c, 1), Some(m.f));
-    assert_eq!(ConditionalExecution::forced_out_block(&fd, m.c, 0), Some(m.t));
+    fd.obank_mut()
+        .get_mut(m.cbranch)
+        .unwrap()
+        .set_flag(crate::op::pcodeop_flags::boolean_flip);
+    assert_eq!(
+        ConditionalExecution::forced_out_block(&fd, m.c, 1),
+        Some(m.f)
+    );
+    assert_eq!(
+        ConditionalExecution::forced_out_block(&fd, m.c, 0),
+        Some(m.t)
+    );
 }
 
 #[test]
@@ -163,7 +193,13 @@ fn a_value_forced_away_from_the_return_never_passes() {
     fd.bblocks_mut().add_edge(m.t, m.t);
     let a1 = input(&mut fd, 0x24, 4);
     let spc = fd.new_constant(4, 0);
-    op(&mut fd, m.f, 0x200, OpCode::CPUI_STORE, &[spc, a1, m.merged]);
+    op(
+        &mut fd,
+        m.f,
+        0x200,
+        OpCode::CPUI_STORE,
+        &[spc, a1, m.merged],
+    );
     let r = ret(&mut fd, m.f, 0x204, m.merged);
     assert!(!scored(&mut fd, r, m.merged));
 }
@@ -174,7 +210,13 @@ fn a_use_on_the_returning_path_still_competes() {
     let m = retest(&mut fd);
     let a1 = input(&mut fd, 0x24, 4);
     let spc = fd.new_constant(4, 0);
-    op(&mut fd, m.t, 0x114, OpCode::CPUI_STORE, &[spc, a1, m.merged]);
+    op(
+        &mut fd,
+        m.t,
+        0x114,
+        OpCode::CPUI_STORE,
+        &[spc, a1, m.merged],
+    );
     let r = ret(&mut fd, m.t, 0x118, m.merged);
     let tgt = code(&mut fd, 0x4000);
     op(&mut fd, m.f, 0x200, OpCode::CPUI_CALL, &[tgt, m.merged]);

@@ -24,4 +24,3 @@ fn a_range_reaching_past_the_object_is_not() {
     assert!(!within(u64::MAX - 1, 4, 8));
     assert!(!within(0, 0, 4));
 }
-

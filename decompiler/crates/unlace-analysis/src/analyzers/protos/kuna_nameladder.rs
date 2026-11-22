@@ -48,7 +48,11 @@ pub fn fallbacks(name: &str) -> Vec<String> {
 fn strip_at_decoration(name: &str) -> &str {
     let body = name.strip_prefix('@').unwrap_or(name);
     match body.rsplit_once('@') {
-        Some((base, n)) if !base.is_empty() && !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()) => base,
+        Some((base, n))
+            if !base.is_empty() && !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()) =>
+        {
+            base
+        }
         _ => name,
     }
 }
@@ -68,11 +72,17 @@ mod tests {
         assert_eq!(fallbacks("j_printf"), vec!["printf"]);
         assert_eq!(fallbacks("j_j_exit"), vec!["exit"]);
         assert_eq!(fallbacks("__imp_CreateFileW"), vec!["CreateFileW"]);
-        assert_eq!(fallbacks("_CreateFileW@28"), vec!["_CreateFileW", "CreateFileW"]);
+        assert_eq!(
+            fallbacks("_CreateFileW@28"),
+            vec!["_CreateFileW", "CreateFileW"]
+        );
         assert_eq!(fallbacks("@f@8"), vec!["f"]);
         assert_eq!(fallbacks("_memcpy"), vec!["memcpy"]);
         assert_eq!(fallbacks("memcpy_0"), vec!["memcpy"]);
-        assert_eq!(fallbacks("j___imp__strlen_12"), vec!["__imp__strlen_12", "strlen_12", "strlen"]);
+        assert_eq!(
+            fallbacks("j___imp__strlen_12"),
+            vec!["__imp__strlen_12", "strlen_12", "strlen"]
+        );
         assert_eq!(fallbacks("__Znwm"), vec!["_Znwm", "Znwm"]);
         assert!(fallbacks("printf").is_empty());
     }

@@ -37,7 +37,7 @@ use unlace_base::xml::{DocumentStorage, Element};
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::decompile_drive::build_and_follow_flow;
 use unlace_decomp::funcdata::Funcdata;
-use unlace_decomp::sleigh_arch::{register_sleigh_arch_ids, LanguageDatabase};
+use unlace_decomp::sleigh_arch::{LanguageDatabase, register_sleigh_arch_ids};
 use unlace_decomp::xml_arch::{XmlArchitecture, XmlArchitectureCapability};
 
 use unlace_sleigh::loadimage::LoadImage;
@@ -49,7 +49,10 @@ use unlace_sleigh::translate::register_translate_ids;
 // ===========================================================================
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 struct SymbolFn {
@@ -83,11 +86,15 @@ fn find_named(el: &Rc<Element>, name: &str, out: &mut Vec<Rc<Element>>) {
 }
 
 fn attr(el: &Element, name: &str) -> Option<String> {
-    el.get_attribute_value(name).ok().map(|b| String::from_utf8_lossy(b).into_owned())
+    el.get_attribute_value(name)
+        .ok()
+        .map(|b| String::from_utf8_lossy(b).into_owned())
 }
 
 fn parse_datatest(stem: &str) -> Result<DataTest, String> {
-    let path = repo_root().join("tests/datatests").join(format!("{stem}.xml"));
+    let path = repo_root()
+        .join("tests/datatests")
+        .join(format!("{stem}.xml"));
     let xml = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
     let mut store = DocumentStorage::new();
     let root = store
@@ -111,7 +118,11 @@ fn parse_datatest(stem: &str) -> Result<DataTest, String> {
             })
         })
         .collect();
-    Ok(DataTest { binaryimage, arch_id, symbols })
+    Ok(DataTest {
+        binaryimage,
+        arch_id,
+        symbols,
+    })
 }
 
 struct DummyImg;
@@ -141,10 +152,12 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
     let registry = build_registry();
     let capability = XmlArchitectureCapability::new();
     let mut arch = capability.build_architecture("datatest", "");
-    arch.build_loader(Rc::clone(&dt.binaryimage)).map_err(|e| format!("build_loader: {e}"))?;
+    arch.build_loader(Rc::clone(&dt.binaryimage))
+        .map_err(|e| format!("build_loader: {e}"))?;
     let mut db = LanguageDatabase::new();
     db.scan_for_sleigh_directories(root.join("specs").to_str().unwrap());
-    db.get_descriptions(&registry).map_err(|e| format!("collect ldefs: {e}"))?;
+    db.get_descriptions(&registry)
+        .map_err(|e| format!("collect ldefs: {e}"))?;
     arch.sleigh_mut().set_archid(&dt.arch_id);
     arch.sleigh_mut()
         .resolve_architecture(&db, &dt.arch_id)
@@ -152,7 +165,10 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
     if arch.sleigh().language_index() < 0 {
         return Err("language index unresolved".to_string());
     }
-    let specs = arch.sleigh().build_spec_file(&db).map_err(|e| format!("build_spec_file: {e}"))?;
+    let specs = arch
+        .sleigh()
+        .build_spec_file(&db)
+        .map_err(|e| format!("build_spec_file: {e}"))?;
     let resolved_sla = specs.slafile.ok_or("build_spec_file resolved no .sla")?;
     let sla = std::fs::read(&resolved_sla).map_err(|e| format!("read sla: {e}"))?;
     arch.sleigh_mut()
@@ -170,7 +186,10 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
     arch.open_image(unsafe { &*manager_ptr }, &registry)
         .map_err(|e| format!("open_image: {e}"))?;
     let img = arch.take_loader().ok_or("loader vanished after open")?;
-    arch.sleigh_mut().base_mut().unwrap().set_loader(Box::new(img));
+    arch.sleigh_mut()
+        .base_mut()
+        .unwrap()
+        .set_loader(Box::new(img));
     Ok(arch)
 }
 
@@ -187,7 +206,11 @@ struct VnIdentity(String);
 /// Render a Varnode exactly as `Varnode::printRawNoMarkup` + `printRaw`
 /// (`varnode.cc:730`/`760`): register name (or shortcut + `printRaw` offset),
 /// optional `:size`, then the `(i)` / `(<defseq>)` / `(free)` class suffix.
-fn render_vn(arch: &Architecture, fd: &Funcdata, vn: unlace_decomp::context::VarnodeId) -> VnIdentity {
+fn render_vn(
+    arch: &Architecture,
+    fd: &Funcdata,
+    vn: unlace_decomp::context::VarnodeId,
+) -> VnIdentity {
     let v = fd.vbank().get(vn).expect("render_vn: stale vn");
     let loc = v.get_addr().clone();
     let size = v.get_size();
@@ -198,7 +221,9 @@ fn render_vn(arch: &Architecture, fd: &Funcdata, vn: unlace_decomp::context::Var
     let (mut tok, expect) = if !regname.is_empty() {
         // off = loc - point.offset; appended as "+off" when nonzero — for the
         // exact-named registers in our corpus off is always 0.
-        let reg = trans.get_register_data(&regname).expect("render_vn: register data");
+        let reg = trans
+            .get_register_data(&regname)
+            .expect("render_vn: register data");
         let off = loc.get_offset().wrapping_sub(reg.offset);
         let mut s = regname.clone();
         if off != 0 {
@@ -210,7 +235,8 @@ fn render_vn(arch: &Architecture, fd: &Funcdata, vn: unlace_decomp::context::Var
         // shortcut + Address::printRaw (constant => "#0x..", others => "0x..").
         let mut s = String::new();
         s.push(spc.get_shortcut());
-        loc.print_raw(&mut s).expect("render_vn: Address::print_raw");
+        loc.print_raw(&mut s)
+            .expect("render_vn: Address::print_raw");
         // expect = trans->getDefaultSize() (the AddrSpaceManager default size).
         (s, arch.manage().get_default_size())
     };
@@ -247,7 +273,8 @@ fn render_seqnum(fd: &Funcdata, op: unlace_decomp::context::OpId) -> String {
     let sq: &SeqNum = o.get_seq_num();
     let pc = sq.get_addr();
     let mut s = String::new();
-    pc.print_raw(&mut s).expect("render_seqnum: Address::print_raw");
+    pc.print_raw(&mut s)
+        .expect("render_seqnum: Address::print_raw");
     s.push(':');
     s.push_str(&format!("{:x}", sq.get_time()));
     s
@@ -350,7 +377,10 @@ fn run_to_b3(stem: &str, which: usize) -> Result<(XmlArchitecture, Funcdata), St
     let space_name = sym.space.clone();
     let off = sym.offset;
     let name = sym.name.clone();
-    let arch = xarch.sleigh_mut().base_mut().ok_or("no Architecture base")?;
+    let arch = xarch
+        .sleigh_mut()
+        .base_mut()
+        .ok_or("no Architecture base")?;
     let space = arch
         .manage()
         .get_space_by_name(&space_name)
@@ -361,8 +391,7 @@ fn run_to_b3(stem: &str, which: usize) -> Result<(XmlArchitecture, Funcdata), St
     // The pre-heritage actions (ActionStart / ActionDefaultParams /
     // ActionPrototypeTypes) are seam no-ops in the merged tree, so driving the
     // single op_heritage directly reproduces the C++ "first heritage" boundary.
-    let mut fd =
-        build_and_follow_flow(arch, &name, entry, 0).map_err(|e| format!("flow: {e}"))?;
+    let mut fd = build_and_follow_flow(arch, &name, entry, 0).map_err(|e| format!("flow: {e}"))?;
     fd.op_heritage().unwrap();
     Ok((xarch, fd))
 }
@@ -391,7 +420,14 @@ fn glb_covers_varnode_spaces(fd: &Funcdata) -> (bool, usize) {
     let mut all_covered = true;
     let mut reachable = 0usize;
     for vn in fd.vbank().iter_def() {
-        let s = fd.vbank().get(vn).unwrap().get_addr().get_space().unwrap().clone();
+        let s = fd
+            .vbank()
+            .get(vn)
+            .unwrap()
+            .get_addr()
+            .get_space()
+            .unwrap()
+            .clone();
         // A Varnode space is "covered" iff glb holds the *same* Rc — the identity
         // heritage's `loc_space_ids`/`build_info_list` keys on.
         let covered = glb_spaces.iter().any(|(ptr, _, _)| *ptr == Rc::as_ptr(&s));
@@ -428,13 +464,26 @@ fn normalize_identity(id: &VnIdentity) -> VnIdentity {
     }
     // Strip trailing proto/symbol attribute words.
     const ATTRS: &[&str] = &[
-        "unaff", "unsigned", "mapped", "persistent", "addrtied", "tied", "volatile",
-        "nolocalalias", "tlock", "nlock", "input", "indirect",
+        "unaff",
+        "unsigned",
+        "mapped",
+        "persistent",
+        "addrtied",
+        "tied",
+        "volatile",
+        "nolocalalias",
+        "tlock",
+        "nlock",
+        "input",
+        "indirect",
     ];
     loop {
         let trimmed = tok.trim_end();
         let stripped = ATTRS.iter().find_map(|a| {
-            trimmed.strip_suffix(a).filter(|p| p.ends_with(' ')).map(|p| p.to_string())
+            trimmed
+                .strip_suffix(a)
+                .filter(|p| p.ends_with(' '))
+                .map(|p| p.to_string())
         });
         match stripped {
             Some(p) => tok = p,
@@ -486,7 +535,10 @@ fn run_b3_gate(stem: &str, which: usize, expect_phi_blocks: &[i32]) {
     // is no longer a no-op stub.  Prove the IR is non-trivial (the flow lifted
     // real ops) so we are exercising heritage, not an empty function.
     let nvn = fd.vbank().iter_def().count();
-    assert!(nvn > 0, "{stem}: flow produced no Varnodes (nothing for heritage to do)");
+    assert!(
+        nvn > 0,
+        "{stem}: flow produced no Varnodes (nothing for heritage to do)"
+    );
 
     let (glb_covers, reachable) = glb_covers_varnode_spaces(&fd);
     let rust_phis = rust_phi_blocks(&fd);
@@ -518,7 +570,10 @@ fn run_b3_gate(stem: &str, which: usize, expect_phi_blocks: &[i32]) {
         rust_phis, expect_phi_blocks,
         "{stem}: MULTIEQUAL phi placement must match the C++ B3"
     );
-    assert_eq!(rust_phis, cpp_phis, "{stem}: phi placement must match the parsed C++ B3");
+    assert_eq!(
+        rust_phis, cpp_phis,
+        "{stem}: phi placement must match the parsed C++ B3"
+    );
 
     // (3) SSA-identity parity (modulo the documented proto/symbol/spaceptr seam
     // attributes).  The ONLY tolerated Rust-only identity is the
@@ -536,8 +591,7 @@ fn run_b3_gate(stem: &str, which: usize, expect_phi_blocks: &[i32]) {
             None => id.0.clone(),
         }
     }
-    let cpp_bases: std::collections::BTreeSet<String> =
-        cpp_norm.iter().map(base_storage).collect();
+    let cpp_bases: std::collections::BTreeSet<String> = cpp_norm.iter().map(base_storage).collect();
     let unexplained: Vec<&&VnIdentity> = only_rust
         .iter()
         .filter(|id| !cpp_bases.contains(&base_storage(id)))
@@ -560,12 +614,20 @@ fn boolless_b3_ssa_parity() {
 fn lzcount_b3_ssa_parity() {
     // Generality #1: a small PowerPC corpus function (a different architecture
     // / byte structure than the 8051 boolless).  Phi blocks from its C++ B3.
-    run_b3_gate("lzcount", 0, &cpp_phi_blocks(&b3_snapshot("lzcount").unwrap_or_default()));
+    run_b3_gate(
+        "lzcount",
+        0,
+        &cpp_phi_blocks(&b3_snapshot("lzcount").unwrap_or_default()),
+    );
 }
 
 #[test]
 fn stackspill_b3_ssa_parity() {
     // Generality #2: a small stack-spill corpus function (a third structure,
     // exercising stack-space Varnodes).
-    run_b3_gate("stackspill", 0, &cpp_phi_blocks(&b3_snapshot("stackspill").unwrap_or_default()));
+    run_b3_gate(
+        "stackspill",
+        0,
+        &cpp_phi_blocks(&b3_snapshot("stackspill").unwrap_or_default()),
+    );
 }

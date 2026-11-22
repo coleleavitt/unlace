@@ -29,10 +29,26 @@ fn a_32_bit_segment_and_its_sections_are_read_at_their_offsets() {
         seg.extend(v.to_le_bytes());
     }
     let layout = layout(NARROW, seg);
-    let [seg] = layout.segments.as_slice() else { panic!("{:?}", layout.segments) };
-    assert_eq!((seg.name.as_str(), seg.vmaddr, seg.vmsize, seg.filesize), ("__TEXT", 0x1000, 0x2000, 0x2000));
-    let [sec] = seg.sections.as_slice() else { panic!("{:?}", seg.sections) };
-    assert_eq!((sec.sectname.as_str(), sec.addr, sec.size, sec.flags, sec.reserved1), ("__text", 0x1100, 0x40, 0x8000_0400, 7));
+    let [seg] = layout.segments.as_slice() else {
+        panic!("{:?}", layout.segments)
+    };
+    assert_eq!(
+        (seg.name.as_str(), seg.vmaddr, seg.vmsize, seg.filesize),
+        ("__TEXT", 0x1000, 0x2000, 0x2000)
+    );
+    let [sec] = seg.sections.as_slice() else {
+        panic!("{:?}", seg.sections)
+    };
+    assert_eq!(
+        (
+            sec.sectname.as_str(),
+            sec.addr,
+            sec.size,
+            sec.flags,
+            sec.reserved1
+        ),
+        ("__text", 0x1100, 0x40, 0x8000_0400, 7)
+    );
 }
 
 #[test]

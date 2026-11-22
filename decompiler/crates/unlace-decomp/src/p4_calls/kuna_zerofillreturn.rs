@@ -53,7 +53,11 @@ const MAX_STEPS: usize = 32;
 /// the default model before the function has one.
 fn wide_entries(fd: &Funcdata) -> Vec<ParamEntry> {
     let proto = fd.get_func_proto();
-    let model = if proto.has_model() { Some(proto.model()) } else { fd.get_arch().defaultfp.as_ref() };
+    let model = if proto.has_model() {
+        Some(proto.model())
+    } else {
+        fd.get_arch().defaultfp.as_ref()
+    };
     let Some(out) = model.and_then(|m| m.output_list()) else {
         return Vec::new();
     };
@@ -80,8 +84,12 @@ pub fn seed(fd: &mut Funcdata) {
         if !is_zero_copy(fd, id) {
             continue;
         }
-        let Some(op) = fd.obank().get(id) else { continue };
-        let Some(out) = op.get_out().and_then(|v| fd.vbank().get(v)) else { continue };
+        let Some(op) = fd.obank().get(id) else {
+            continue;
+        };
+        let Some(out) = op.get_out().and_then(|v| fd.vbank().get(v)) else {
+            continue;
+        };
         let Some((e, _)) = wide
             .iter()
             .enumerate()
@@ -112,7 +120,9 @@ pub fn seed(fd: &mut Funcdata) {
 
 /// Is `id` a COPY of the constant zero into a register?
 fn is_zero_copy(fd: &Funcdata, id: OpId) -> bool {
-    let Some(op) = fd.obank().get(id).filter(|o| o.code() == OpCode::CPUI_COPY) else { return false };
+    let Some(op) = fd.obank().get(id).filter(|o| o.code() == OpCode::CPUI_COPY) else {
+        return false;
+    };
     let reg = op
         .get_out()
         .and_then(|v| fd.vbank().get(v))
@@ -131,10 +141,15 @@ fn is_zero_copy(fd: &Funcdata, id: OpId) -> bool {
 fn fill_start(fd: &Funcdata, at: &Address, entry: &ParamEntry) -> Option<i32> {
     let mut writes: Vec<(i32, i32, bool)> = Vec::new();
     for (_, id) in fd.obank().iter_at(at) {
-        let Some(op) = fd.obank().get(id) else { continue };
-        let Some(out) = op.get_out().and_then(|v| fd.vbank().get(v)) else { continue };
+        let Some(op) = fd.obank().get(id) else {
+            continue;
+        };
+        let Some(out) = op.get_out().and_then(|v| fd.vbank().get(v)) else {
+            continue;
+        };
         let (addr, size) = (out.get_addr(), out.get_size());
-        if out.get_space().get_type() != spacetype::IPTR_PROCESSOR || !entry.intersects(addr, size) {
+        if out.get_space().get_type() != spacetype::IPTR_PROCESSOR || !entry.intersects(addr, size)
+        {
             continue;
         }
         let off = entry.justified_contain(addr, size);
@@ -161,7 +176,13 @@ fn lane_end(writes: &[(i32, i32, bool)]) -> Option<i32> {
     let low = writes
         .iter()
         .filter(|w| w.0 < LOW_LANE)
-        .all(|&(off, size, zero)| if off < end { off + size <= end } else { zero && off + size <= LOW_LANE });
+        .all(|&(off, size, zero)| {
+            if off < end {
+                off + size <= end
+            } else {
+                zero && off + size <= LOW_LANE
+            }
+        });
     let mut high = writes.iter().filter(|w| w.0 >= LOW_LANE).peekable();
     let fill = high.peek().is_some() && high.all(|w| *w == (LOW_LANE, LOW_LANE, true));
     (end <= LOW_LANE && low && fill).then_some(end)
@@ -190,7 +211,11 @@ pub fn drop_zero_fill(data: &Funcdata, active: &mut ParamActive, returns: &[OpId
     let live: Vec<OpId> = returns
         .iter()
         .copied()
-        .filter(|&id| data.obank().get(id).is_some_and(|o| !o.is_dead() && o.get_halt_type() == 0))
+        .filter(|&id| {
+            data.obank()
+                .get(id)
+                .is_some_and(|o| !o.is_dead() && o.get_halt_type() == 0)
+        })
         .collect();
     if live.is_empty() {
         return;
@@ -201,7 +226,10 @@ pub fn drop_zero_fill(data: &Funcdata, active: &mut ParamActive, returns: &[OpId
         if !trial.is_active() {
             continue;
         }
-        if !wide.iter().any(|e| e.justified_contain(trial.get_address(), trial.get_size()) >= LOW_LANE) {
+        if !wide
+            .iter()
+            .any(|e| e.justified_contain(trial.get_address(), trial.get_size()) >= LOW_LANE)
+        {
             continue;
         }
         let slot = trial.get_slot();
@@ -217,9 +245,14 @@ pub fn drop_zero_fill(data: &Funcdata, active: &mut ParamActive, returns: &[OpId
             fills.push(i);
         }
     }
-    let elsewhere = (0..active.get_num_trials()).map(|i| active.get_trial(i)).any(|t| {
-        t.is_active() && !wide.iter().any(|e| e.justified_contain(t.get_address(), t.get_size()) >= 0)
-    });
+    let elsewhere = (0..active.get_num_trials())
+        .map(|i| active.get_trial(i))
+        .any(|t| {
+            t.is_active()
+                && !wide
+                    .iter()
+                    .any(|e| e.justified_contain(t.get_address(), t.get_size()) >= 0)
+        });
     if fills.is_empty() || elsewhere {
         return;
     }
@@ -228,7 +261,9 @@ pub fn drop_zero_fill(data: &Funcdata, active: &mut ParamActive, returns: &[OpId
         .map(|e| {
             (0..active.get_num_trials())
                 .map(|i| active.get_trial(i))
-                .filter(|t| t.is_active() && e.justified_contain(t.get_address(), t.get_size()) == 0)
+                .filter(|t| {
+                    t.is_active() && e.justified_contain(t.get_address(), t.get_size()) == 0
+                })
                 .map(|t| (t.get_size(), t.get_slot()))
                 .max()
         })
@@ -269,15 +304,24 @@ fn returned_alone(data: &Funcdata, vn: VarnodeId, entry: &ParamEntry, steps: &mu
         return false;
     }
     *steps -= 1;
-    let Some(value) = data.vbank().get(vn).filter(|v| v.num_descend() == 1) else { return false };
-    let Some(op) = value.get_def().and_then(|d| data.obank().get(d)) else { return false };
+    let Some(value) = data.vbank().get(vn).filter(|v| v.num_descend() == 1) else {
+        return false;
+    };
+    let Some(op) = value.get_def().and_then(|d| data.obank().get(d)) else {
+        return false;
+    };
     match op.code() {
         OpCode::CPUI_MULTIEQUAL => {
             op.num_input() > 0
-                && (0..op.num_input()).all(|k| op.get_in(k).is_some_and(|v| returned_alone(data, v, entry, steps)))
+                && (0..op.num_input()).all(|k| {
+                    op.get_in(k)
+                        .is_some_and(|v| returned_alone(data, v, entry, steps))
+                })
         }
         OpCode::CPUI_INDIRECT | OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => false,
-        OpCode::CPUI_COPY => op.get_in(0).is_some_and(|v| produced_here(data, v, entry, steps)),
+        OpCode::CPUI_COPY => op
+            .get_in(0)
+            .is_some_and(|v| produced_here(data, v, entry, steps)),
         OpCode::CPUI_LOAD => reloads_produced(data, op, entry, steps),
         _ => true,
     }
@@ -292,19 +336,28 @@ fn produced_here(data: &Funcdata, vn: VarnodeId, entry: &ParamEntry, steps: &mut
         return false;
     }
     *steps -= 1;
-    let Some(value) = data.vbank().get(vn) else { return false };
+    let Some(value) = data.vbank().get(vn) else {
+        return false;
+    };
     if value.is_constant() {
         return true;
     }
     if value.is_input() {
         return !entry.intersects(value.get_addr(), value.get_size());
     }
-    let Some(op) = value.get_def().and_then(|d| data.obank().get(d)) else { return false };
+    let Some(op) = value.get_def().and_then(|d| data.obank().get(d)) else {
+        return false;
+    };
     match op.code() {
-        OpCode::CPUI_COPY => op.get_in(0).is_some_and(|v| produced_here(data, v, entry, steps)),
+        OpCode::CPUI_COPY => op
+            .get_in(0)
+            .is_some_and(|v| produced_here(data, v, entry, steps)),
         OpCode::CPUI_MULTIEQUAL => {
             op.num_input() > 0
-                && (0..op.num_input()).all(|k| op.get_in(k).is_some_and(|v| produced_here(data, v, entry, steps)))
+                && (0..op.num_input()).all(|k| {
+                    op.get_in(k)
+                        .is_some_and(|v| produced_here(data, v, entry, steps))
+                })
         }
         OpCode::CPUI_INDIRECT | OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => false,
         OpCode::CPUI_LOAD => reloads_produced(data, op, entry, steps),
@@ -320,23 +373,51 @@ fn produced_here(data: &Funcdata, vn: VarnodeId, entry: &ParamEntry, steps: &mut
 /// or none at all, refuses, and so does a store through an address that is
 /// not an incoming register plus a constant: gcc `-O0` writes `*pr = get(p)`
 /// through a pointer to the slot it reloads from the frame.
-fn reloads_produced(data: &Funcdata, op: &crate::op::PcodeOp, entry: &ParamEntry, steps: &mut usize) -> bool {
-    let Some(size) = op.get_out().and_then(|o| data.vbank().get(o)).map(|o| i64::from(o.get_size())) else {
+fn reloads_produced(
+    data: &Funcdata,
+    op: &crate::op::PcodeOp,
+    entry: &ParamEntry,
+    steps: &mut usize,
+) -> bool {
+    let Some(size) = op
+        .get_out()
+        .and_then(|o| data.vbank().get(o))
+        .map(|o| i64::from(o.get_size()))
+    else {
         return false;
     };
-    let Some((base, off)) = op.get_in(1).and_then(|a| frame_slot(data, a)) else { return false };
-    let space_of = |o: &crate::op::PcodeOp| o.get_in(0).and_then(|c| data.vbank().get(c)).map(|c| c.get_offset());
+    let Some((base, off)) = op.get_in(1).and_then(|a| frame_slot(data, a)) else {
+        return false;
+    };
+    let space_of = |o: &crate::op::PcodeOp| {
+        o.get_in(0)
+            .and_then(|c| data.vbank().get(c))
+            .map(|c| c.get_offset())
+    };
     let space = space_of(op);
     let mut stored = false;
     for id in data.obank().iter_code(OpCode::CPUI_STORE) {
-        let Some(store) = data.obank().get(id).filter(|s| !s.is_dead()) else { continue };
-        let Some((b, o)) = store.get_in(1).and_then(|a| frame_slot(data, a)) else { return false };
-        let Some(value) = store.get_in(2) else { return false };
-        let width = data.vbank().get(value).map_or(0, |v| i64::from(v.get_size()));
+        let Some(store) = data.obank().get(id).filter(|s| !s.is_dead()) else {
+            continue;
+        };
+        let Some((b, o)) = store.get_in(1).and_then(|a| frame_slot(data, a)) else {
+            return false;
+        };
+        let Some(value) = store.get_in(2) else {
+            return false;
+        };
+        let width = data
+            .vbank()
+            .get(value)
+            .map_or(0, |v| i64::from(v.get_size()));
         if b != base || o.wrapping_add(width) <= off || off.wrapping_add(size) <= o {
             continue;
         }
-        if o != off || width != size || space_of(store) != space || !produced_here(data, value, entry, steps) {
+        if o != off
+            || width != size
+            || space_of(store) != space
+            || !produced_here(data, value, entry, steps)
+        {
             return false;
         }
         stored = true;
@@ -375,7 +456,10 @@ fn constant(data: &Funcdata, mut vn: VarnodeId) -> Option<i64> {
     for _ in 0..4 {
         let v = data.vbank().get(vn)?;
         if v.is_constant() {
-            return Some(unlace_base::address::sign_extend(v.get_offset() as i64, v.get_size() * 8 - 1));
+            return Some(unlace_base::address::sign_extend(
+                v.get_offset() as i64,
+                v.get_size() * 8 - 1,
+            ));
         }
         let op = data.obank().get(v.get_def()?)?;
         if op.code() != OpCode::CPUI_COPY {
@@ -392,12 +476,16 @@ fn zero_fill(data: &Funcdata, vn: VarnodeId, seen: &mut Vec<OpId>, steps: &mut u
         return false;
     }
     *steps -= 1;
-    let Some(def) = data.vbank().get(vn).and_then(|v| v.get_def()) else { return false };
+    let Some(def) = data.vbank().get(vn).and_then(|v| v.get_def()) else {
+        return false;
+    };
     if seen.contains(&def) {
         return true;
     }
     seen.push(def);
-    let Some(op) = data.obank().get(def) else { return false };
+    let Some(op) = data.obank().get(def) else {
+        return false;
+    };
     match op.code() {
         OpCode::CPUI_COPY => {
             op.get_addlflags() & kuna_zerofill != 0
@@ -407,7 +495,8 @@ fn zero_fill(data: &Funcdata, vn: VarnodeId, seen: &mut Vec<OpId>, steps: &mut u
                     .is_some_and(|c| c.is_constant() && c.get_offset() == 0)
         }
         OpCode::CPUI_MULTIEQUAL if op.num_input() > 0 => {
-            let inputs: Vec<Option<VarnodeId>> = (0..op.num_input()).map(|k| op.get_in(k)).collect();
+            let inputs: Vec<Option<VarnodeId>> =
+                (0..op.num_input()).map(|k| op.get_in(k)).collect();
             inputs
                 .into_iter()
                 .all(|v| v.is_some_and(|v| zero_fill(data, v, seen, steps)))

@@ -22,7 +22,9 @@ pub(super) fn seeds(
             if is_thumb_lr_prologue(&data, off) {
                 let vma = sec_addr + off as u64;
                 if listing.is_undefined(vma) && !claimed.contains(&vma) {
-                    let gap_hi = listing.next_instruction_start_after(vma).unwrap_or(u64::MAX);
+                    let gap_hi = listing
+                        .next_instruction_start_after(vma)
+                        .unwrap_or(u64::MAX);
                     if let Some(body) =
                         check_valid_subroutine(&mut decoder, listing, vma, vma, gap_hi)
                     {

@@ -24,7 +24,9 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 // Load-bearing VMAs, pinned from the linked fixture (objdump/readelf):
@@ -35,7 +37,10 @@ const PUTS_PLT: &str = "sub_4004d0";
 const PRINTF_PLT: &str = "sub_4004e0";
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// The linked AArch64 PLT fixture (shared with the unlace-analysis loader gates).
@@ -57,12 +62,18 @@ fn aarch64_plt_calls_are_named_in_decompiled_c() {
 
     // The PLT imports are resolvable as functions (the loader markup), and the
     // local `.symtab` `main` still resolves.
-    assert!(prog.lookup_symbol("puts").is_some(), "PLT import `puts` not resolved by the loader");
+    assert!(
+        prog.lookup_symbol("puts").is_some(),
+        "PLT import `puts` not resolved by the loader"
+    );
     assert!(
         prog.lookup_symbol("printf").is_some(),
         "PLT import `printf` not resolved by the loader"
     );
-    assert!(prog.lookup_symbol("main").is_some(), "defined `main` not resolved by the loader");
+    assert!(
+        prog.lookup_symbol("main").is_some(),
+        "defined `main` not resolved by the loader"
+    );
 
     // Drive `load function main` → `decompile` → `print C`.
     let cmds: Vec<String> = ["load function main", "decompile", "print C"]
@@ -83,8 +94,14 @@ fn aarch64_plt_calls_are_named_in_decompiled_c() {
     let out = status.optr.clone();
 
     // The library calls are named...
-    assert!(out.contains("puts("), "expected a `puts(` call, got:\n{out}");
-    assert!(out.contains("printf("), "expected a `printf(` call, got:\n{out}");
+    assert!(
+        out.contains("puts("),
+        "expected a `puts(` call, got:\n{out}"
+    );
+    assert!(
+        out.contains("printf("),
+        "expected a `printf(` call, got:\n{out}"
+    );
     // ...and the old PLT-stub placeholders are gone for those call sites — proof
     // the AArch64 veneer decode mapped the `bl 0x4004d0`/`bl 0x4004e0` targets to
     // their imported names rather than falling back to `sub_<addr>`.

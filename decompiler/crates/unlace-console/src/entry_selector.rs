@@ -156,11 +156,9 @@ impl fmt::Display for EntryLookupError {
                     return write!(f, ", not code -- `unlace read` shows its bytes");
                 }
                 match suggestion {
-                    Some(near) => write!(
-                        f,
-                        "; did you mean {:?} (0x{:x})?",
-                        near.name, near.address
-                    ),
+                    Some(near) => {
+                        write!(f, "; did you mean {:?} (0x{:x})?", near.name, near.address)
+                    }
                     // Nothing is appended for a stripped image: a front-end's
                     // own advice (`--addr`) is the only thing left to say, and
                     // it says it.
@@ -222,7 +220,10 @@ impl fmt::Display for EntryLookupError {
                     }
                 }
                 if *relocatable {
-                    return write!(f, "use a section-qualified selector to choose one candidate");
+                    return write!(
+                        f,
+                        "use a section-qualified selector to choose one candidate"
+                    );
                 }
                 // A linked image has no section coordinates to qualify with, so
                 // the address is the only selector that separates these.

@@ -31,19 +31,27 @@ const ACCESSES: [(u64, u64, XrefKind); 9] = [
 const ADDRESS_LOADS: [(u64, u64); 2] = [(0x10100, 0x111d8), (0x10134, 0x111d8)];
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn build() -> XrefIndex {
-    let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/armderef_arm_le32");
+    let bin =
+        repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/armderef_arm_le32");
     let spec_roots = vec![repo_root().join("specs").to_str().unwrap().to_string()];
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     let bytes = std::fs::read(&bin).expect("fixture readable");
     let file = object::File::parse(&*bytes).expect("fixture parses");
-    let seeds: Vec<u64> =
-        prog.function_entries_canonical().iter().map(|e| e.addr.get_offset()).collect();
+    let seeds: Vec<u64> = prog
+        .function_entries_canonical()
+        .iter()
+        .map(|e| e.addr.get_offset())
+        .collect();
     xrefs::build(&file, prog.arch(), prog.arch().translate(), &seeds)
 }
 
@@ -53,7 +61,10 @@ fn index() -> &'static XrefIndex {
 }
 
 fn from(idx: &XrefIndex, at: u64) -> Vec<(u64, XrefKind)> {
-    idx.refs_from_instruction(at).iter().map(|r| (r.to, r.kind)).collect()
+    idx.refs_from_instruction(at)
+        .iter()
+        .map(|r| (r.to, r.kind))
+        .collect()
 }
 
 /// Every access through a GOT slot's word or a pool word files its address,
@@ -70,12 +81,20 @@ fn an_access_through_a_held_address_files_it() {
 #[test]
 fn the_global_lists_its_accesses() {
     let idx = index();
-    let mut got: Vec<(u64, XrefKind)> =
-        idx.refs_to(0x111d8).iter().map(|r| (r.from, r.kind)).filter(|r| r.1 != XrefKind::Data).collect();
+    let mut got: Vec<(u64, XrefKind)> = idx
+        .refs_to(0x111d8)
+        .iter()
+        .map(|r| (r.from, r.kind))
+        .filter(|r| r.1 != XrefKind::Data)
+        .collect();
     got.sort_unstable_by_key(|r| r.0);
     assert_eq!(
         got,
-        vec![(0x100dc, XrefKind::Write), (0x10104, XrefKind::Read), (0x1014c, XrefKind::Write)]
+        vec![
+            (0x100dc, XrefKind::Write),
+            (0x10104, XrefKind::Read),
+            (0x1014c, XrefKind::Write)
+        ]
     );
 }
 

@@ -45,9 +45,14 @@ fn character_code_arrays_round_trip_beside_one_character_literals() {
             );
         }
         for want in ["pair(\"x\",\"y\")", "pair(\"x\",v"] {
-            assert!(printed.contains(want), "{fixture}: missing `{want}`:\n{printed}");
+            assert!(
+                printed.contains(want),
+                "{fixture}: missing `{want}`:\n{printed}"
+            );
         }
-        let wide = printed.find("// Function: wide @").expect("wide is printed");
+        let wide = printed
+            .find("// Function: wide @")
+            .expect("wide is printed");
         let compiled = &printed[..wide];
         let src = common::scratch_file(fixture, "c");
         let exe = common::scratch_file(fixture, "exe");
@@ -86,18 +91,27 @@ fn character_code_arrays_round_trip_beside_one_character_literals() {
 /// second element is no character, so only its symbol told it apart.
 #[test]
 fn stripped_character_code_arrays_are_not_one_character_strings() {
-    for fixture in ["widecodes_gcc_O1_stripped_x86_64", "widecodes_clang_O2_stripped_x86_64"] {
+    for fixture in [
+        "widecodes_gcc_O1_stripped_x86_64",
+        "widecodes_clang_O2_stripped_x86_64",
+    ] {
         let (printed, stderr, code) =
             common::run_kuna(&["decompile-all", &common::fixture(fixture)]);
         assert_eq!(code, 0, "{fixture}: {stderr}");
-        assert!(!printed.contains("\"h\""), "{fixture}: an array prints as \"h\":\n{printed}");
+        assert!(
+            !printed.contains("\"h\""),
+            "{fixture}: an array prints as \"h\":\n{printed}"
+        );
         assert_eq!(
             printed.matches("(\"A\",").count(),
             1,
             "{fixture}: only `mixed` may still print as \"A\":\n{printed}"
         );
         for want in ["(\"x\",\"y\")", "(\"x\",v"] {
-            assert!(printed.contains(want), "{fixture}: missing `{want}`:\n{printed}");
+            assert!(
+                printed.contains(want),
+                "{fixture}: missing `{want}`:\n{printed}"
+            );
         }
     }
 }
@@ -109,14 +123,29 @@ fn stripped_character_code_arrays_are_not_one_character_strings() {
 #[test]
 fn literals_beside_a_lookup_table_or_an_int_table_keep_their_strings() {
     for (fixture, funcs, want) in [
-        ("widecodes_switch_clang_O2_x86_64", "usea,usee", ["settag(\"a\")", "settag(\"e\")"]),
-        ("widecodes_tail_gcc_O2_x86_64", "fa,get", ["sink(\"A\")", "return t[a0];"]),
+        (
+            "widecodes_switch_clang_O2_x86_64",
+            "usea,usee",
+            ["settag(\"a\")", "settag(\"e\")"],
+        ),
+        (
+            "widecodes_tail_gcc_O2_x86_64",
+            "fa,get",
+            ["sink(\"A\")", "return t[a0];"],
+        ),
     ] {
-        let (printed, stderr, code) =
-            common::run_kuna(&["decompile-all", &common::fixture(fixture), "--functions", funcs]);
+        let (printed, stderr, code) = common::run_kuna(&[
+            "decompile-all",
+            &common::fixture(fixture),
+            "--functions",
+            funcs,
+        ]);
         assert_eq!(code, 0, "{fixture}: {stderr}");
         for want in want {
-            assert!(printed.contains(want), "{fixture}: missing `{want}`:\n{printed}");
+            assert!(
+                printed.contains(want),
+                "{fixture}: missing `{want}`:\n{printed}"
+            );
         }
     }
 }

@@ -66,9 +66,9 @@
 use unlace_base::error::KunaResult;
 use unlace_base::types::uint4;
 
-use crate::block::{block_flags, BlockGraph, BlockKind, BlockType};
-use crate::options::on_or_off;
+use crate::block::{BlockGraph, BlockKind, BlockType, block_flags};
 use crate::context::BlockId;
+use crate::options::on_or_off;
 
 use unlace_base::marshal::ElementId;
 

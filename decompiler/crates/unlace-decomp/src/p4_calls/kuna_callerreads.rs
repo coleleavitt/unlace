@@ -38,22 +38,28 @@ pub fn read(arch: &Architecture, data: &Funcdata) -> Option<(Address, int4)> {
         return None;
     }
     let entry = data.get_address();
-    let code = entry.get_space().filter(|s| s.get_type() == spacetype::IPTR_PROCESSOR)?;
+    let code = entry
+        .get_space()
+        .filter(|s| s.get_type() == spacetype::IPTR_PROCESSOR)?;
     let proto = data.get_func_proto();
     if !proto.has_model()
         || !proto.has_store()
         || proto.is_output_locked()
-        || arch.symboltab.function_proto_pieces_across_scopes(entry).is_some()
+        || arch
+            .symboltab
+            .function_proto_pieces_across_scopes(entry)
+            .is_some()
         || proto
             .get_output_type()
             .is_some_and(|t| t.get_metatype() != crate::dtype::type_metatype::TYPE_VOID)
     {
         return None;
     }
-    let returns = data
-        .obank()
-        .iter_code(OpCode::CPUI_RETURN)
-        .any(|r| data.obank().get(r).is_some_and(|o| !o.is_dead() && o.get_halt_type() == 0));
+    let returns = data.obank().iter_code(OpCode::CPUI_RETURN).any(|r| {
+        data.obank()
+            .get(r)
+            .is_some_and(|o| !o.is_dead() && o.get_halt_type() == 0)
+    });
     if !returns {
         return None;
     }
@@ -64,24 +70,44 @@ pub fn read(arch: &Architecture, data: &Funcdata) -> Option<(Address, int4)> {
         .get_entry()
         .iter()
         .filter(|e| e.get_space().get_index() == reg.get_index() && e.get_size() > 0)
-        .map(|e| (Address::new(std::rc::Rc::clone(e.get_space()), e.get_base()), e.get_size()))
+        .map(|e| {
+            (
+                Address::new(std::rc::Rc::clone(e.get_space()), e.get_base()),
+                e.get_size(),
+            )
+        })
         .collect();
     if outputs.is_empty() {
         return None;
     }
     let off = entry.get_offset();
-    let lo = arch.kuna_call_returns.partition_point(|&(callee, _)| callee < off);
+    let lo = arch
+        .kuna_call_returns
+        .partition_point(|&(callee, _)| callee < off);
     let mut found: Option<(usize, int4)> = None;
     let x87 = crate::p4_calls::kuna_x87emptyreturn::storage(arch).filter(|_| arch.x87_depth);
-    let sites = arch.kuna_call_returns[lo..].iter().take_while(|&&(callee, _)| callee == off);
+    let sites = arch.kuna_call_returns[lo..]
+        .iter()
+        .take_while(|&&(callee, _)| callee == off);
     for &(_, back) in sites.take(MAX_CALL_SITES) {
         let at = Address::new(std::rc::Rc::clone(code), back);
-        let probe = crate::p4_calls::kuna_calleedeadarg::probe_entry(arch.translate(), &at, reg.get_index(), false);
-        let leaves = x87.as_ref().and_then(|s| crate::p4_calls::kuna_x87depth::call_leaves(arch.translate(), &at, s, s.free));
+        let probe = crate::p4_calls::kuna_calleedeadarg::probe_entry(
+            arch.translate(),
+            &at,
+            reg.get_index(),
+            false,
+        );
+        let leaves = x87.as_ref().and_then(|s| {
+            crate::p4_calls::kuna_x87depth::call_leaves(arch.translate(), &at, s, s.free)
+        });
         let read = outputs.iter().enumerate().find_map(|(k, (addr, size))| {
             let top = x87.as_ref().is_some_and(|s| {
-                addr.get_space().is_some_and(|sp| s.top.space.as_ref().is_some_and(|t| t.get_index() == sp.get_index()))
-                    && addr.get_offset() == s.top.offset
+                addr.get_space().is_some_and(|sp| {
+                    s.top
+                        .space
+                        .as_ref()
+                        .is_some_and(|t| t.get_index() == sp.get_index())
+                }) && addr.get_offset() == s.top.offset
                     && *size == s.top.size as int4
             });
             match leaves {
@@ -99,7 +125,11 @@ pub fn read(arch: &Architecture, data: &Funcdata) -> Option<(Address, int4)> {
     }
     let (k, width) = found?;
     let (addr, size) = &outputs[k];
-    let low = if addr.is_big_endian() { addr + i64::from(size - width) } else { addr.clone() };
+    let low = if addr.is_big_endian() {
+        addr + i64::from(size - width)
+    } else {
+        addr.clone()
+    };
     Some((low, width))
 }
 
@@ -107,14 +137,18 @@ pub fn read(arch: &Architecture, data: &Funcdata) -> Option<(Address, int4)> {
 /// `storage`, as `kuna_voidret` does for a function whose callers read it.
 pub fn force(arch: &mut Architecture, entry: &Address, storage: (Address, int4)) {
     if let Some(space) = entry.get_space() {
-        arch.kuna_voidret.forced.insert((space.get_index(), entry.get_offset()), storage);
+        arch.kuna_voidret
+            .forced
+            .insert((space.get_index(), entry.get_offset()), storage);
     }
 }
 
 /// Undo [`force`].
 pub fn release(arch: &mut Architecture, entry: &Address) {
     if let Some(space) = entry.get_space() {
-        arch.kuna_voidret.forced.remove(&(space.get_index(), entry.get_offset()));
+        arch.kuna_voidret
+            .forced
+            .remove(&(space.get_index(), entry.get_offset()));
     }
 }
 

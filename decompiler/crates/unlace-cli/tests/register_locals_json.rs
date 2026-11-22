@@ -26,7 +26,11 @@ fn run_on(fixture: &str, functions: &str, jobs: &str) -> Value {
         .arg(common::repo_root().join("specs"))
         .output()
         .expect("spawn kuna");
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     serde_json::from_slice(&output.stdout).expect("decompile-all --json")
 }
 
@@ -40,7 +44,12 @@ fn function<'a>(doc: &'a Value, name: &str) -> &'a Value {
 }
 
 fn rows<'a>(f: &'a Value, kind: &str) -> Vec<&'a Value> {
-    f["variables"].as_array().expect("variables").iter().filter(|v| v["kind"] == kind).collect()
+    f["variables"]
+        .as_array()
+        .expect("variables")
+        .iter()
+        .filter(|v| v["kind"] == kind)
+        .collect()
 }
 
 #[test]
@@ -54,23 +63,34 @@ fn a_register_local_is_reported_under_its_declaration_with_its_uses() {
     let v = registers[0];
     let (name, ty) = (v["name"].as_str().unwrap(), v["type"].as_str().unwrap());
     assert!(
-        lines.iter().any(|l| l.trim_start().strip_prefix(ty).is_some_and(|rest| rest.trim_start().starts_with(&format!("{name};")))),
+        lines.iter().any(|l| l
+            .trim_start()
+            .strip_prefix(ty)
+            .is_some_and(|rest| rest.trim_start().starts_with(&format!("{name};")))),
         "no `{ty} {name};` declaration in:\n{code}"
     );
-    assert!(v["stack_offset"].is_null() && v["arg_index"].is_null(), "{v}");
+    assert!(
+        v["stack_offset"].is_null() && v["arg_index"].is_null(),
+        "{v}"
+    );
     assert_eq!(v["size"], 4, "{v}");
 
     let uses = v["line_numbers"].as_array().unwrap();
     assert!(!uses.is_empty(), "{v}");
     for line in uses {
         let text = lines[line.as_u64().unwrap() as usize - 1];
-        assert!(text.contains(name), "line {line} `{text}` does not use {name}");
+        assert!(
+            text.contains(name),
+            "line {line} `{text}` does not use {name}"
+        );
     }
     let (start, size) = (f["address"].as_u64().unwrap(), f["size"].as_u64().unwrap());
     let addresses = v["addresses"].as_array().unwrap();
     assert!(!addresses.is_empty(), "{v}");
     assert!(
-        addresses.iter().all(|a| (start..start + size).contains(&a.as_u64().unwrap())),
+        addresses
+            .iter()
+            .all(|a| (start..start + size).contains(&a.as_u64().unwrap())),
         "{v} outside {start:#x}+{size:#x}"
     );
 }
@@ -79,7 +99,11 @@ fn a_register_local_is_reported_under_its_declaration_with_its_uses() {
 fn a_worker_process_reports_the_same_register_rows() {
     let (serial, workers) = (run("1"), run("2"));
     for name in ["inside", "indexed"] {
-        assert_eq!(function(&serial, name)["variables"], function(&workers, name)["variables"], "{name}");
+        assert_eq!(
+            function(&serial, name)["variables"],
+            function(&workers, name)["variables"],
+            "{name}"
+        );
     }
 }
 
@@ -102,5 +126,8 @@ fn a_declaration_the_c_places_on_the_stack_is_not_a_register_row() {
     let code = f["code"].as_str().expect("code");
     assert!(code.contains("char v1 [16]; // stack - 0x38"), "{code}");
     assert!(rows(f, "register").is_empty(), "{f}");
-    assert!(rows(f, "stack").iter().any(|v| v["stack_offset"] == -0x38), "{f}");
+    assert!(
+        rows(f, "stack").iter().any(|v| v["stack_offset"] == -0x38),
+        "{f}"
+    );
 }

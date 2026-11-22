@@ -19,10 +19,10 @@
 use std::rc::Rc;
 
 use unlace_base::address::RangeList;
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace};
+use unlace_base::space::{AddrSpace, addrspace_flags, spacetype};
 
-use unlace_decomp::dtype::{type_metatype, Datatype, TypeFactory, TypeFactoryImpl};
-use unlace_decomp::varmap::{MapState, RangeHint, RangeType, COPY_CONSTANT, TYPELOCK};
+use unlace_decomp::dtype::{Datatype, TypeFactory, TypeFactoryImpl, type_metatype};
+use unlace_decomp::varmap::{COPY_CONSTANT, MapState, RangeHint, RangeType, TYPELOCK};
 
 // --- builders -------------------------------------------------------------
 
@@ -89,7 +89,13 @@ fn verify_addrange_sstart_scale_wordsize2() {
     let mut state = MapState::new(Rc::clone(&space), &rn, &pm, dflt);
 
     // Single 2-byte hint at byte offset 0x10.
-    state.add_range_pub(0x10, Some(base(2, type_metatype::TYPE_INT)), 0, RangeType::Fixed, -1);
+    state.add_range_pub(
+        0x10,
+        Some(base(2, type_metatype::TYPE_INT)),
+        0,
+        RangeType::Fixed,
+        -1,
+    );
     assert!(state.initialize().unwrap());
 
     let got = state.next().sstart;
@@ -118,7 +124,13 @@ fn verify_sstart_oracle_is_word_rounding_not_divide() {
 
     // 0x11: C++ (0x11/2)*2 = 0x8*2 = 0x10 (low bit dropped, scale preserved).
     // ported divide: (0x11/2)/2 = 0x8/2 = 0x4.
-    state.add_range_pub(0x11, Some(base(2, type_metatype::TYPE_INT)), 0, RangeType::Fixed, -1);
+    state.add_range_pub(
+        0x11,
+        Some(base(2, type_metatype::TYPE_INT)),
+        0,
+        RangeType::Fixed,
+        -1,
+    );
     assert!(state.initialize().unwrap());
     assert_eq!(
         state.next().sstart,
@@ -138,7 +150,15 @@ fn verify_sstart_oracle_is_word_rounding_not_divide() {
 fn verify_compare_total_order_with_negative_sstarts() {
     // sstart from i64::MIN region up through a positive value.
     let mk = |sstart: i64, size: i32, rt: RangeType| {
-        RangeHint::new(sstart as u64, size, sstart, base(size, type_metatype::TYPE_INT), 0, rt, -1)
+        RangeHint::new(
+            sstart as u64,
+            size,
+            sstart,
+            base(size, type_metatype::TYPE_INT),
+            0,
+            rt,
+            -1,
+        )
     };
     let items = [
         mk(i64::MIN, 4, RangeType::Fixed),
@@ -224,7 +244,10 @@ fn verify_reconcile_collapses_many_equal_keyed_to_one() {
             at_0x20 += 1;
         }
     }
-    assert_eq!(at_0x20, 1, "all compare()-equal hints collapse to a single entry");
+    assert_eq!(
+        at_0x20, 1,
+        "all compare()-equal hints collapse to a single entry"
+    );
     // The artificial endpoint at last+1 = 0x101 must still be present.
     assert_eq!(*starts.last().unwrap(), 0x101);
     // The kept entry must carry a concrete (non-UNKNOWN) most-specific type.
@@ -264,8 +287,24 @@ fn verify_merge_confuse_size_boundary() {
 
     // Case A: grown size == 8 (a power of two) -> stays fixed, UNKNOWN(8).
     // a at 0, size 4; b at sstart 4, size 4 -> diff=4, 4+4=8 > 4 -> size 8.
-    let mut a = RangeHint::new(0, 4, 0, base(4, type_metatype::TYPE_INT), 0, RangeType::Fixed, -1);
-    let b = RangeHint::new(4, 4, 4, base(4, type_metatype::TYPE_UINT), 0, RangeType::Fixed, -1);
+    let mut a = RangeHint::new(
+        0,
+        4,
+        0,
+        base(4, type_metatype::TYPE_INT),
+        0,
+        RangeType::Fixed,
+        -1,
+    );
+    let b = RangeHint::new(
+        4,
+        4,
+        4,
+        base(4, type_metatype::TYPE_UINT),
+        0,
+        RangeType::Fixed,
+        -1,
+    );
     let ret = a.merge(&b, &space, &factory).unwrap();
     assert!(!ret);
     assert_eq!(a.size, 8, "8 is a power of two: size stays grown");
@@ -273,8 +312,24 @@ fn verify_merge_confuse_size_boundary() {
     assert_eq!(a.type_.get_metatype(), type_metatype::TYPE_UNKNOWN);
 
     // Case B: grown size == 6 (not a power of two) -> collapses to size 1/open.
-    let mut a2 = RangeHint::new(0, 4, 0, base(4, type_metatype::TYPE_INT), 0, RangeType::Fixed, -1);
-    let b2 = RangeHint::new(2, 4, 2, base(4, type_metatype::TYPE_UINT), 0, RangeType::Fixed, -1);
+    let mut a2 = RangeHint::new(
+        0,
+        4,
+        0,
+        base(4, type_metatype::TYPE_INT),
+        0,
+        RangeType::Fixed,
+        -1,
+    );
+    let b2 = RangeHint::new(
+        2,
+        4,
+        2,
+        base(4, type_metatype::TYPE_UINT),
+        0,
+        RangeType::Fixed,
+        -1,
+    );
     let ret2 = a2.merge(&b2, &space, &factory).unwrap();
     assert!(!ret2);
     assert_eq!(a2.size, 1, "6 is not a power of two: collapses to 1");
@@ -296,12 +351,32 @@ fn verify_merge_prefers_locked_b() {
     // a unlocked 8-byte contains b locked 4-byte at the same start.
     // contain==true (same start); reconcile likely false; b is typelocked and a
     // is not -> preferred(b) returns false -> resType 1 -> adopt b.
-    let mut a = RangeHint::new(0x10, 8, 0x10, base(8, type_metatype::TYPE_INT), 0, RangeType::Fixed, -1);
-    let b = RangeHint::new(0x10, 4, 0x10, base(4, type_metatype::TYPE_UINT), TYPELOCK, RangeType::Fixed, -1);
+    let mut a = RangeHint::new(
+        0x10,
+        8,
+        0x10,
+        base(8, type_metatype::TYPE_INT),
+        0,
+        RangeType::Fixed,
+        -1,
+    );
+    let b = RangeHint::new(
+        0x10,
+        4,
+        0x10,
+        base(4, type_metatype::TYPE_UINT),
+        TYPELOCK,
+        RangeType::Fixed,
+        -1,
+    );
     a.merge(&b, &space, &factory).unwrap();
     assert!(a.is_type_lock(), "adopted b's locked flags");
     assert_eq!(a.size, 4, "adopted b's size");
-    assert_eq!(a.type_.get_metatype(), type_metatype::TYPE_UINT, "adopted b's type");
+    assert_eq!(
+        a.type_.get_metatype(),
+        type_metatype::TYPE_UINT,
+        "adopted b's type"
+    );
 }
 
 // ===========================================================================
@@ -312,16 +387,46 @@ fn verify_merge_prefers_locked_b() {
 #[test]
 fn verify_const_absorbable_highind_end_boundary() {
     // this: open int (align 4), sstart 0x10, highind 2 -> end = 0x10 + 2*4 = 0x18.
-    let mut this = RangeHint::new(0x10, 4, 0x10, base(4, type_metatype::TYPE_INT), 0, RangeType::Open, 2);
+    let mut this = RangeHint::new(
+        0x10,
+        4,
+        0x10,
+        base(4, type_metatype::TYPE_INT),
+        0,
+        RangeType::Open,
+        2,
+    );
     this.highind = 2;
 
     // b exactly at end (0x18): absorbable.
-    let mut b_at = RangeHint::new(0x18, 4, 0x18, base(4, type_metatype::TYPE_UNKNOWN), COPY_CONSTANT, RangeType::Fixed, -1);
+    let mut b_at = RangeHint::new(
+        0x18,
+        4,
+        0x18,
+        base(4, type_metatype::TYPE_UNKNOWN),
+        COPY_CONSTANT,
+        RangeType::Fixed,
+        -1,
+    );
     b_at.flags = COPY_CONSTANT;
-    assert!(this.is_const_absorbable(&b_at), "b at end is absorbable (<=)");
+    assert!(
+        this.is_const_absorbable(&b_at),
+        "b at end is absorbable (<=)"
+    );
 
     // b one byte past end (0x19): NOT absorbable.
-    let mut b_past = RangeHint::new(0x19, 4, 0x19, base(4, type_metatype::TYPE_UNKNOWN), COPY_CONSTANT, RangeType::Fixed, -1);
+    let mut b_past = RangeHint::new(
+        0x19,
+        4,
+        0x19,
+        base(4, type_metatype::TYPE_UNKNOWN),
+        COPY_CONSTANT,
+        RangeType::Fixed,
+        -1,
+    );
     b_past.flags = COPY_CONSTANT;
-    assert!(!this.is_const_absorbable(&b_past), "b past end is not absorbable");
+    assert!(
+        !this.is_const_absorbable(&b_past),
+        "b past end is not absorbable"
+    );
 }

@@ -16,9 +16,7 @@ use std::process::Command;
 fn storage_transfers_preserve_float_bits_and_numeric_conversions_keep_their_values() {
     let compilers: Vec<_> = ["gcc", "clang"]
         .into_iter()
-        .filter(|cc| {
-            process::optional_output(Command::new(cc).arg("--version")).is_some()
-        })
+        .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
     assert!(
         !compilers.is_empty(),
@@ -286,8 +284,7 @@ int main(void) {{
     .unwrap();
     let mut compilers = 0;
     for cc in ["gcc", "clang"] {
-        if !process::optional_output(Command::new(cc).arg("--version")).is_some()
-        {
+        if !process::optional_output(Command::new(cc).arg("--version")).is_some() {
             continue;
         }
         compilers += 1;

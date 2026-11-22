@@ -28,8 +28,8 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_console::decompile_step::{decompile_one, DecompileSeed};
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::decompile_step::{DecompileSeed, decompile_one};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 /// The indirect-only callback: `on_key`, reached only through `listener[0]`.
 const CALLBACK: u64 = 0x11b0;
@@ -40,7 +40,10 @@ const RENDERER: u64 = 0x1170;
 const RENDERER_BODY: &str = "* 7 + 3";
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Bootstrap the fixture with `tailcallframe` in the requested state.
@@ -48,17 +51,24 @@ fn load(tailcallframe: bool) -> ConsoleProgram {
     let root = repo_root();
     let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
     let bin = root.join("decompiler/crates/unlace-analysis/tests/fixtures/tailcallframe_x86_64");
-    let mut prog = bootstrap_from_object(bin.to_str().expect("UTF-8 fixture path"), "", &spec_roots)
-        .expect("bootstrap fixture with built processor specs");
+    let mut prog =
+        bootstrap_from_object(bin.to_str().expect("UTF-8 fixture path"), "", &spec_roots)
+            .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
         .set_kuna_option("tailcallframe", if tailcallframe { "on" } else { "off" })
         .expect("tailcallframe flips");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
 fn code_addr(prog: &ConsoleProgram, vma: u64) -> Address {
-    let space = prog.arch().manage().get_default_code_space().expect("code space").clone();
+    let space = prog
+        .arch()
+        .manage()
+        .get_default_code_space()
+        .expect("code space")
+        .clone();
     Address::new(Rc::clone(&space), vma)
 }
 
@@ -83,8 +93,11 @@ fn callback_body(prog: &mut ConsoleProgram) -> String {
 #[test]
 fn the_tail_jump_target_is_not_a_discovered_function() {
     let prog = load(true);
-    let entries: Vec<u64> =
-        prog.function_entries_canonical().iter().map(|e| e.addr.get_offset()).collect();
+    let entries: Vec<u64> = prog
+        .function_entries_canonical()
+        .iter()
+        .map(|e| e.addr.get_offset())
+        .collect();
     assert!(
         !entries.contains(&RENDERER),
         "the fixture only reproduces the defect while {RENDERER:#x} is undiscovered; \

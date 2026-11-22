@@ -11,7 +11,7 @@ use super::*;
 use std::rc::Rc;
 
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 
 use crate::context::{ArchContext, TypeOp};
@@ -19,7 +19,8 @@ use crate::context::{ArchContext, TypeOp};
 fn build_fd() -> Funcdata {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -45,11 +46,13 @@ fn ram(fd: &Funcdata) -> Rc<AddrSpace> {
 fn mk_def(fd: &mut Funcdata, opc: OpCode, inputs: &[VarnodeId], out_off: u64) -> OpId {
     let r = ram(fd);
     let op = fd.new_op(inputs.len() as int4, Address::new(Rc::clone(&r), out_off));
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
     for (i, &vn) in inputs.iter().enumerate() {
         fd.op_set_input(op, vn, i as int4).expect("wire input");
     }
-    fd.new_varnode_out(8, &Address::new(r, out_off), op).expect("varnode out");
+    fd.new_varnode_out(8, &Address::new(r, out_off), op)
+        .expect("varnode out");
     op
 }
 
@@ -74,7 +77,10 @@ fn a_copy_and_a_mask_hand_the_value_on_but_arithmetic_does_not() {
     let copy = mk_def(&mut fd, OpCode::CPUI_COPY, &[vn], 0x3100);
     let mask = mk_def(&mut fd, OpCode::CPUI_INT_AND, &[vn, k], 0x3200);
     let sum = mk_def(&mut fd, OpCode::CPUI_INT_ADD, &[vn, vn], 0x3300);
-    assert!(moves_the_value(&fd, copy, vn, OpCode::CPUI_COPY), "a copy is the same value");
+    assert!(
+        moves_the_value(&fd, copy, vn, OpCode::CPUI_COPY),
+        "a copy is the same value"
+    );
     assert!(
         moves_the_value(&fd, mask, vn, OpCode::CPUI_INT_AND),
         "`mode & 0xffffffff` is open_safer's va_arg read, still the parameter",

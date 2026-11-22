@@ -29,7 +29,9 @@ use std::fs;
 use std::path::PathBuf;
 
 fn data_file(name: &str) -> String {
-    let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/data").join(name);
+    let p = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/data")
+        .join(name);
     fs::read_to_string(p).unwrap()
 }
 
@@ -41,7 +43,9 @@ fn oracle_line<'a>(oracle: &'a str, prefix: &str) -> &'a str {
 }
 
 fn from_hex(s: &str) -> Vec<u8> {
-    (0..s.len() / 2).map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).unwrap()).collect()
+    (0..s.len() / 2)
+        .map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).unwrap())
+        .collect()
 }
 
 fn to_hex(v: &[u8]) -> String {
@@ -50,7 +54,9 @@ fn to_hex(v: &[u8]) -> String {
 
 /// The 5000-byte payload used by the C++ compression oracle.
 fn payload(n: usize) -> Vec<u8> {
-    (0..n).map(|i| (((i * 7) & 0xff) ^ (i / 253)) as u8).collect()
+    (0..n)
+        .map(|i| (((i * 7) & 0xff) ^ (i / 253)) as u8)
+        .collect()
 }
 
 // ---------------------------------------------------------------- crc32
@@ -75,7 +81,11 @@ fn verify_crc32_raw_register_vectors_match_cpp_oracle() {
     assert_eq!(reg, 0x3861c1d2, "K1000 oracle");
 
     // val wider than 8 bits participates only via (reg^val)&0xff
-    assert_eq!(crc_update(0x12345678, 0xdeadbeef), 0x6e7932b1, "VALWIDE oracle");
+    assert_eq!(
+        crc_update(0x12345678, 0xdeadbeef),
+        0x6e7932b1,
+        "VALWIDE oracle"
+    );
     // all-ones register
     assert_eq!(crc_update(0xffffffff, 0xff), 0x00ffffff, "WRAPREG oracle");
 }
@@ -106,20 +116,29 @@ fn verify_compression_inflate_trace_matches_cpp_zlib_oracle() {
         loop {
             let avail = dec.inflate(&mut buf).unwrap();
             plain.extend_from_slice(&buf[..64 - avail as usize]);
-            btrace.push_str(&format!(" {}{}", avail, if dec.is_finished() { "F" } else { "" }));
+            btrace.push_str(&format!(
+                " {}{}",
+                avail,
+                if dec.is_finished() { "F" } else { "" }
+            ));
             if avail != 0 || dec.is_finished() {
                 break;
             }
         }
     }
-    assert_eq!(btrace, expect_btrace, "per-call inflate return values diverge from C++ zlib");
+    assert_eq!(
+        btrace, expect_btrace,
+        "per-call inflate return values diverge from C++ zlib"
+    );
     assert_eq!(plain, data, "decompressed payload diverges");
     assert!(dec.is_finished());
 
     // C: line — inflate called AGAIN after stream end: C++ zlib returns
     // Z_STREAM_END again (no error), avail_out untouched (=64), finished
     // stays true. flate2 must do the same, not Err.
-    let again = dec.inflate(&mut buf).expect("inflate after stream end must not error (C++ C: line)");
+    let again = dec
+        .inflate(&mut buf)
+        .expect("inflate after stream end must not error (C++ C: line)");
     assert_eq!(again, 64, "C: oracle line says 64");
     assert!(dec.is_finished());
 }
@@ -149,7 +168,11 @@ fn verify_compression_deflate_byte_parity_edges_match_cpp_oracle() {
             break;
         }
     }
-    assert_eq!(to_hex(&out), d_expect, "empty-stream deflate bytes diverge from C zlib");
+    assert_eq!(
+        to_hex(&out),
+        d_expect,
+        "empty-stream deflate bytes diverge from C zlib"
+    );
 
     // E: deflate again after completion — C++ oracle prints "E:ret 64"
     // (no LowlevelError). The port must not error either.
@@ -187,8 +210,16 @@ fn verify_compression_deflate_byte_parity_edges_match_cpp_oracle() {
                 break;
             }
         }
-        assert_eq!(calls, expect_calls, "level {} single-byte deflate call count", level);
-        assert_eq!(out, expect_bytes, "level {} deflate bytes diverge from C zlib", level);
+        assert_eq!(
+            calls, expect_calls,
+            "level {} single-byte deflate call count",
+            level
+        );
+        assert_eq!(
+            out, expect_bytes,
+            "level {} deflate bytes diverge from C zlib",
+            level
+        );
     }
 }
 
@@ -219,7 +250,11 @@ fn verify_compression_default_level_stream_interop_loss010() {
             }
         }
     }
-    assert_eq!(&abytes[..2], &[0x78, 0x9c], "default-level zlib header must match C zlib");
+    assert_eq!(
+        &abytes[..2],
+        &[0x78, 0x9c],
+        "default-level zlib header must match C zlib"
+    );
     if abytes != zlib_abytes {
         // the documented LOSS-010 state: streams differ; both must decode to
         // the same payload (zlib->rust direction proven in the trace test,
@@ -321,8 +356,16 @@ fn verify_filemanage_component_walk_matches_cpp_oracle() {
         };
         let expect_skip: i32 = skip_s.parse().unwrap();
         let (elems, skip) = walk(argv0);
-        assert_eq!(elems, expect_elems, "component walk of {:?} diverges", argv0);
-        assert_eq!(skip, expect_skip, "skiplevel after walk of {:?} diverges", argv0);
+        assert_eq!(
+            elems, expect_elems,
+            "component walk of {:?} diverges",
+            argv0
+        );
+        assert_eq!(
+            skip, expect_skip,
+            "skiplevel after walk of {:?} diverges",
+            argv0
+        );
         count += 1;
     }
     assert!(count >= 15, "oracle file truncated? saw {} W-lines", count);
@@ -362,8 +405,14 @@ fn verify_filemanage_fs_layouts_match_cpp_oracle() {
 
     // D| lines: end-to-end discoverGhidraRoot
     for (tag, argv0) in [
-        ("D|dev|", format!("{}/devroot/ghidra.master.git/Ghidra/bin/decomp", r)),
-        ("D|dotted|", format!("{}/devroot/ghidra.master.git/./Ghidra/bin/decomp", r)),
+        (
+            "D|dev|",
+            format!("{}/devroot/ghidra.master.git/Ghidra/bin/decomp", r),
+        ),
+        (
+            "D|dotted|",
+            format!("{}/devroot/ghidra.master.git/./Ghidra/bin/decomp", r),
+        ),
         ("D|install|", format!("{}/inst/Ghidra/bin/decomp", r)),
         ("D|none|", format!("{}/plain/Ghidra/bin/decomp", r)),
     ] {
@@ -389,7 +438,11 @@ fn verify_filemanage_fs_layouts_match_cpp_oracle() {
         let mut res: Vec<String> = Vec::new();
         FileManage::scan_directory_recursive(&mut res, "data", &format!("{}/scan", r), depth);
         res.sort();
-        assert_eq!(res, expect, "scanDirectoryRecursive depth {} diverges", depth);
+        assert_eq!(
+            res, expect,
+            "scanDirectoryRecursive depth {} diverges",
+            depth
+        );
     }
 
     // M| line: matchListDir(match="", suffix, allowdot=true). C++ saw
@@ -400,9 +453,14 @@ fn verify_filemanage_fs_layouts_match_cpp_oracle() {
     let cpp: Vec<String> = expect_s.split(',').map(str::to_string).collect();
     let dot = format!("{}/mdir/.", r);
     let dotdot = format!("{}/mdir/..", r);
-    assert!(cpp.contains(&dot) && cpp.contains(&dotdot), "C++ oracle must list . and ..");
-    let cpp_minus: Vec<String> =
-        cpp.into_iter().filter(|e| *e != dot && *e != dotdot).collect();
+    assert!(
+        cpp.contains(&dot) && cpp.contains(&dotdot),
+        "C++ oracle must list . and .."
+    );
+    let cpp_minus: Vec<String> = cpp
+        .into_iter()
+        .filter(|e| *e != dot && *e != dotdot)
+        .collect();
     let mut res: Vec<String> = Vec::new();
     FileManage::match_list_dir(&mut res, "", true, &format!("{}/mdir", r), true);
     res.sort();

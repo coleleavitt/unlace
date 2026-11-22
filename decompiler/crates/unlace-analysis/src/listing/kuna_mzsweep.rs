@@ -34,9 +34,9 @@ use std::rc::Rc;
 use unlace_base::space::AddrSpace;
 use unlace_sleigh::translate::Translate;
 
+use crate::listing::FlowType;
 use crate::listing::classify::classify;
 use crate::listing::decode::decode_one;
-use crate::listing::FlowType;
 
 /// The instructions [`opens_as_code`] decodes before it accepts a target
 /// whose run has not reached a control transfer.
@@ -55,7 +55,11 @@ impl MzEvidence {
     pub fn new(base: u64, module: Vec<u8>, mut relocated_words: Vec<u64>) -> MzEvidence {
         relocated_words.sort_unstable();
         relocated_words.dedup();
-        MzEvidence { base, module, relocated_words }
+        MzEvidence {
+            base,
+            module,
+            relocated_words,
+        }
     }
 
     fn bytes(&self, vma: u64, len: u32) -> Option<&[u8]> {
@@ -65,7 +69,8 @@ impl MzEvidence {
 
     /// Whether the instruction of `len` bytes at `vma` is all zero bytes.
     pub(super) fn is_zero_fill(&self, vma: u64, len: u32) -> bool {
-        self.bytes(vma, len).is_some_and(|bytes| bytes.iter().all(|&byte| byte == 0))
+        self.bytes(vma, len)
+            .is_some_and(|bytes| bytes.iter().all(|&byte| byte == 0))
     }
 
     /// The instruction's bytes past its prefixes.
@@ -73,7 +78,12 @@ impl MzEvidence {
         let bytes = self.bytes(vma, len).unwrap_or_default();
         let prefixes = bytes
             .iter()
-            .take_while(|byte| matches!(byte, 0x26 | 0x2e | 0x36 | 0x3e | 0x64 | 0x65 | 0x66 | 0x67 | 0xf0 | 0xf2 | 0xf3))
+            .take_while(|byte| {
+                matches!(
+                    byte,
+                    0x26 | 0x2e | 0x36 | 0x3e | 0x64 | 0x65 | 0x66 | 0x67 | 0xf0 | 0xf2 | 0xf3
+                )
+            })
             .count();
         &bytes[prefixes..]
     }
@@ -91,7 +101,10 @@ impl MzEvidence {
         let opcode = self.opcode(vma, len);
         opcode.len() == 5
             && matches!(opcode[0], 0x9a | 0xea)
-            && self.relocated_words.binary_search(&(vma + u64::from(len) - 2)).is_err()
+            && self
+                .relocated_words
+                .binary_search(&(vma + u64::from(len) - 2))
+                .is_err()
     }
 
     /// Whether the far branch of `len` bytes at `vma` that ends a target's
@@ -156,7 +169,11 @@ pub(super) fn opens_as_code(
         if decoded.len == 0 || mz.is_zero_fill(vma, decoded.len) {
             return false;
         }
-        if mz.ends_run(vma, decoded.len, &classify(&decoded.ops, vma, decoded.len).flow) {
+        if mz.ends_run(
+            vma,
+            decoded.len,
+            &classify(&decoded.ops, vma, decoded.len).flow,
+        ) {
             return !mz.refuses_opening(vma, decoded.len);
         }
         vma = vma.saturating_add(u64::from(decoded.len));
@@ -179,7 +196,10 @@ mod tests {
     }
 
     fn call() -> FlowType {
-        FlowType { is_call: true, ..FlowType::default() }
+        FlowType {
+            is_call: true,
+            ..FlowType::default()
+        }
     }
 
     #[test]
@@ -187,8 +207,14 @@ mod tests {
         let mz = evidence();
         assert!(!mz.is_unrelocated_far_branch(0x10000, 5));
         assert!(mz.is_unrelocated_far_branch(0x10005, 5));
-        assert!(mz.is_unrelocated_far_branch(0x1000c, 6), "a prefixed far jump");
-        assert!(!mz.is_unrelocated_far_branch(0x10012, 1), "not a far branch");
+        assert!(
+            mz.is_unrelocated_far_branch(0x1000c, 6),
+            "a prefixed far jump"
+        );
+        assert!(
+            !mz.is_unrelocated_far_branch(0x10012, 1),
+            "not a far branch"
+        );
     }
 
     #[test]
@@ -196,13 +222,26 @@ mod tests {
         let mz = evidence();
         let mut run = SweepRun::default();
         assert!(run.step(&mz, 0x10000, 5, &call()));
-        assert!(!run.step(&mz, 0x10005, 5, &call()), "an unrelocated far call does not count");
+        assert!(
+            !run.step(&mz, 0x10005, 5, &call()),
+            "an unrelocated far call does not count"
+        );
         assert!(!run.step(&mz, 0x1000a, 2, &FlowType::default()));
-        assert!(!run.step(&mz, 0x10000, 5, &call()), "a call after zero fill does not count");
-        assert!(run.step(&mz, 0x10000, 5, &call()), "the transfer ended the dirty run");
+        assert!(
+            !run.step(&mz, 0x10000, 5, &call()),
+            "a call after zero fill does not count"
+        );
+        assert!(
+            run.step(&mz, 0x10000, 5, &call()),
+            "the transfer ended the dirty run"
+        );
         run.undecodable();
         assert!(!run.step(&mz, 0x10000, 5, &call()));
-        assert!(mz.is_zero_fill(0x1000a, 2) && !mz.is_zero_fill(0x10012, 1) && !mz.is_zero_fill(0x10040, 2));
+        assert!(
+            mz.is_zero_fill(0x1000a, 2)
+                && !mz.is_zero_fill(0x10012, 1)
+                && !mz.is_zero_fill(0x10040, 2)
+        );
     }
 
     #[test]
@@ -212,15 +251,27 @@ mod tests {
         assert!(mz.refuses_opening(0x10005, 5));
         let unrelocated = MzEvidence::new(0x10000, mz.module.clone(), Vec::new());
         assert!(unrelocated.is_unrelocated_far_branch(0x10000, 5));
-        assert!(!unrelocated.refuses_opening(0x10000, 5), "a module with no relocation table fixes its own far calls");
+        assert!(
+            !unrelocated.refuses_opening(0x10000, 5),
+            "a module with no relocation table fixes its own far calls"
+        );
     }
 
     #[test]
     fn halt_does_not_end_a_run() {
         let mz = evidence();
-        let spin = FlowType { is_jump: true, ..FlowType::default() };
-        assert!(!mz.ends_run(0x10012, 1, &spin), "HLT resumes after an interrupt");
-        assert!(mz.ends_run(0x10013, 2, &spin), "an instruction whose last byte is f4 is not HLT");
+        let spin = FlowType {
+            is_jump: true,
+            ..FlowType::default()
+        };
+        assert!(
+            !mz.ends_run(0x10012, 1, &spin),
+            "HLT resumes after an interrupt"
+        );
+        assert!(
+            mz.ends_run(0x10013, 2, &spin),
+            "an instruction whose last byte is f4 is not HLT"
+        );
         let mut run = SweepRun::default();
         run.undecodable();
         run.step(&mz, 0x10012, 1, &spin);

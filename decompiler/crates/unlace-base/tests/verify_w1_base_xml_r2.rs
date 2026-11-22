@@ -22,7 +22,7 @@
 
 use std::rc::Rc;
 
-use unlace_base::xml::{xml_tree, Document, DocumentStorage, Element};
+use unlace_base::xml::{Document, DocumentStorage, Element, xml_tree};
 
 /// `<a><a>...x...</a></a>` nested `depth` deep (same shape as round 1).
 fn nested_doc(depth: usize) -> Vec<u8> {
@@ -68,7 +68,11 @@ fn verify_xml_r2_shared_subtree_survives_parent_drop_then_drops_safely() {
         kept = next;
     }
     drop(doc); // must free levels 0..KEEP_AT without touching the survivor
-    assert_eq!(Rc::strong_count(&kept), 1, "survivor must now be sole-owned");
+    assert_eq!(
+        Rc::strong_count(&kept),
+        1,
+        "survivor must now be sole-owned"
+    );
     let (levels, content) = walk_chain(&kept);
     assert_eq!(levels, DEPTH - KEEP_AT, "shared subtree must be intact");
     assert_eq!(content, b"x");

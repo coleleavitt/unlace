@@ -95,7 +95,9 @@ pub fn callable(arch: &Architecture, data: &Funcdata, dest: &Address) -> bool {
     if !ledger.recording {
         return false;
     }
-    let (Some(k), Some(own)) = (key(dest), key(data.get_address())) else { return false };
+    let (Some(k), Some(own)) = (key(dest), key(data.get_address())) else {
+        return false;
+    };
     let ok = match ledger.callable.get(&k) {
         Some(c) => {
             !ledger.refused.contains(&(own, k))
@@ -130,7 +132,9 @@ fn returns_on_its_own(data: &Funcdata) -> bool {
         let Some(o) = obank.get(r) else { return false };
         o.get_halt_type() == 0
             && !obank.iter_at(o.get_addr()).any(|(_, id)| {
-                obank.get(id).is_some_and(|c| matches!(c.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND))
+                obank
+                    .get(id)
+                    .is_some_and(|c| matches!(c.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND))
             })
     })
 }
@@ -149,14 +153,25 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
     let Some(own) = key(entry) else { return };
     let taken: Vec<Key> = {
         let mut t = arch.kuna_gottailcall.taken.borrow_mut();
-        let mine: Vec<Key> = t.iter().filter(|(c, _)| *c == own).map(|(_, k)| *k).collect();
+        let mine: Vec<Key> = t
+            .iter()
+            .filter(|(c, _)| *c == own)
+            .map(|(_, k)| *k)
+            .collect();
         t.retain(|(c, _)| *c != own);
         mine
     };
-    let lost: Vec<Key> = taken.into_iter().filter(|k| loses(arch, data, *k)).collect();
+    let lost: Vec<Key> = taken
+        .into_iter()
+        .filter(|k| loses(arch, data, *k))
+        .collect();
     for k in &lost {
         arch.kuna_gottailcall.refused.insert((own, *k));
-        arch.kuna_gottailcall.waiting.entry(*k).or_default().insert(own);
+        arch.kuna_gottailcall
+            .waiting
+            .entry(*k)
+            .or_default()
+            .insert(own);
     }
     match callable_by_recovery(arch, entry, data).filter(|_| lost.is_empty()) {
         Some(stated) => arch.kuna_gottailcall.callable.insert(own, stated),
@@ -164,13 +179,21 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
     };
     let followed: Vec<Key> = {
         let mut f = arch.kuna_gottailcall.followed.borrow_mut();
-        let mine: Vec<Key> = f.iter().filter(|(c, k)| *c == own && *k != own).map(|(_, k)| *k).collect();
+        let mine: Vec<Key> = f
+            .iter()
+            .filter(|(c, k)| *c == own && *k != own)
+            .map(|(_, k)| *k)
+            .collect();
         f.retain(|(c, _)| *c != own);
         mine
     };
     for k in followed {
         if !arch.kuna_gottailcall.callable.contains_key(&k) {
-            arch.kuna_gottailcall.waiting.entry(k).or_default().insert(own);
+            arch.kuna_gottailcall
+                .waiting
+                .entry(k)
+                .or_default()
+                .insert(own);
         }
     }
 }
@@ -179,39 +202,67 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
 /// callee returns a value and the caller came out returning nothing, or a call
 /// to it passes fewer arguments than its statement names?
 fn loses(arch: &Architecture, data: &Funcdata, callee: Key) -> bool {
-    let Some(c) = arch.kuna_gottailcall.callable.get(&callee) else { return false };
-    let own_void = data.get_func_proto().get_output_type().is_none_or(|t| t.get_metatype() == type_metatype::TYPE_VOID);
+    let Some(c) = arch.kuna_gottailcall.callable.get(&callee) else {
+        return false;
+    };
+    let own_void = data
+        .get_func_proto()
+        .get_output_type()
+        .is_none_or(|t| t.get_metatype() == type_metatype::TYPE_VOID);
     if c.returns && own_void {
         return true;
     }
-    let wanted = arch.kuna_protoorder_types.get(&callee).map_or(0, |s| s.inputs.len() as int4);
+    let wanted = arch
+        .kuna_protoorder_types
+        .get(&callee)
+        .map_or(0, |s| s.inputs.len() as int4);
     (0..data.num_calls()).any(|i| {
         let fc = data.get_call_specs(i);
         key(fc.get_entry_address()) == Some(callee)
-            && data.obank().get(fc.get_op()).is_some_and(|o| o.num_input() - 1 < wanted)
+            && data
+                .obank()
+                .get(fc.get_op())
+                .is_some_and(|o| o.num_input() - 1 < wanted)
     })
 }
 
 /// `Some(stated)` when a tail call to this function loses nothing: it takes
 /// and returns nothing (`false`), or its statement fixes what it takes and
 /// what it returns (`true`).
-fn callable_by_recovery(arch: &mut Architecture, entry: &Address, data: &Funcdata) -> Option<Callee> {
-    if arch.symboltab.function_proto_pieces_across_scopes(entry).is_some() {
+fn callable_by_recovery(
+    arch: &mut Architecture,
+    entry: &Address,
+    data: &Funcdata,
+) -> Option<Callee> {
+    if arch
+        .symboltab
+        .function_proto_pieces_across_scopes(entry)
+        .is_some()
+    {
         return None;
     }
     let proto = data.get_func_proto();
-    if !proto.has_store() || !proto.has_model() || proto.is_model_unknown() || proto.is_dotdotdot() {
+    if !proto.has_store() || !proto.has_model() || proto.is_model_unknown() || proto.is_dotdotdot()
+    {
         return None;
     }
-    let returns = proto.get_output_type().is_some_and(|t| t.get_metatype() != type_metatype::TYPE_VOID);
+    let returns = proto
+        .get_output_type()
+        .is_some_and(|t| t.get_metatype() != type_metatype::TYPE_VOID);
     if proto.num_params() == 0 && !returns {
-        return Some(Callee { stated: false, returns });
+        return Some(Callee {
+            stated: false,
+            returns,
+        });
     }
     let stated = Rc::clone(arch.kuna_protoorder_types.get(&key(entry)?)?);
     if (returns && stated.output.is_none()) || !takes_every_input(arch, entry, &stated) {
         return None;
     }
-    Some(Callee { stated: true, returns })
+    Some(Callee {
+        stated: true,
+        returns,
+    })
 }
 
 /// Does the callee's body take every parameter its statement names, as
@@ -225,14 +276,25 @@ fn takes_every_input(
     stated: &crate::p4_calls::kuna_protoorder::RecoveredTypes,
 ) -> bool {
     use crate::p4_calls::kuna_entryreads::overlaps;
-    if stated.inputs.iter().any(|(a, _, _)| !crate::p4_calls::kuna_calleearitybody::is_register(a)) {
+    if stated
+        .inputs
+        .iter()
+        .any(|(a, _, _)| !crate::p4_calls::kuna_calleearitybody::is_register(a))
+    {
         return false;
     }
     if stated.inputs.is_empty() {
         return true;
     }
-    let Some(reg_idx) = arch.manage().get_space_by_name("register").map(|s| s.get_index()) else { return false };
-    let facts = crate::p4_calls::kuna_calleedeadarg::probe_cached(arch, entry, reg_idx).filter(|f| f.is_complete());
+    let Some(reg_idx) = arch
+        .manage()
+        .get_space_by_name("register")
+        .map(|s| s.get_index())
+    else {
+        return false;
+    };
+    let facts = crate::p4_calls::kuna_calleedeadarg::probe_cached(arch, entry, reg_idx)
+        .filter(|f| f.is_complete());
     stated.inputs.iter().all(|(a, s, _)| {
         overlaps(&stated.passes, a, *s)
             || match &facts {
@@ -247,15 +309,23 @@ fn takes_every_input(
 /// a callee-first run does not raise again (`pending`). A redo can refuse a
 /// tail call the first decompile took, and the stale `// tail-call` would
 /// print on the body the redo copies in.
-pub(crate) fn clear_stale_warnings(arch: &mut Architecture, entry: &Address, pending: &[(uint4, Address, String)]) {
+pub(crate) fn clear_stale_warnings(
+    arch: &mut Architecture,
+    entry: &Address,
+    pending: &[(uint4, Address, String)],
+) {
     if !arch.kuna_gottailcall.recording {
         return;
     }
     arch.commentdb.retain_comments(|c| {
         &c.func_addr != entry
             || c.tp != crate::architecture::comment_type::warning
-            || !c.text.contains(": recovered tail call -> introduced call to ")
-            || pending.iter().any(|(tp, ad, txt)| *tp == c.tp && *ad == c.addr && *txt == c.text)
+            || !c
+                .text
+                .contains(": recovered tail call -> introduced call to ")
+            || pending
+                .iter()
+                .any(|(tp, ad, txt)| *tp == c.tp && *ad == c.addr && *txt == c.text)
     });
 }
 
@@ -286,7 +356,8 @@ impl Ledger {
         let out: BTreeSet<Key> = awaits
             .into_iter()
             .filter(|(c, ks)| {
-                ks.iter().any(|k| filed(k) && self.refused.contains(&(*c, *k)))
+                ks.iter()
+                    .any(|k| filed(k) && self.refused.contains(&(*c, *k)))
                     || (ks.iter().any(filed) && ks.iter().all(settled))
             })
             .map(|(c, _)| c)

@@ -119,7 +119,9 @@ pub(crate) fn witness_storage(data: &Funcdata, fc: &FuncCallSpecs) -> Option<Vec
         return None;
     }
     if storage.iter().any(|(a, _)| {
-        a.get_space().map(|s| s.get_type() == spacetype::IPTR_SPACEBASE).unwrap_or(true)
+        a.get_space()
+            .map(|s| s.get_type() == spacetype::IPTR_SPACEBASE)
+            .unwrap_or(true)
     }) {
         return None;
     }
@@ -241,7 +243,8 @@ pub fn unify_with_sibling_call(fc: &mut FuncCallSpecs, data: &Funcdata) -> int4 
                 addr: t.get_address().clone(),
                 size: t.get_size(),
                 // (kuna `swiftcall`) A Swift `self` alone is no recovered list.
-                used: t.is_used() && !crate::kuna_swiftcall::is_self_storage(data, t.get_address(), t.get_size()),
+                used: t.is_used()
+                    && !crate::kuna_swiftcall::is_self_storage(data, t.get_address(), t.get_size()),
                 definitely_not_used: t.is_definitely_not_used(),
                 unref: t.is_unref(),
                 has_value,
@@ -249,7 +252,9 @@ pub fn unify_with_sibling_call(fc: &mut FuncCallSpecs, data: &Funcdata) -> int4 
         })
         .collect();
 
-    let Some(promote) = plan_promotions(&witness, &trials) else { return 0 };
+    let Some(promote) = plan_promotions(&witness, &trials) else {
+        return 0;
+    };
     for i in &promote {
         fc.get_active_input().get_trial_mut(*i).mark_used();
     }

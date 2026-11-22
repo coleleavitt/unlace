@@ -103,23 +103,32 @@ const PE_MSVC: Delta = Delta {
 };
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Bootstrap the named fixture and build the index `unlace xrefs` / `unlace strings` answer out
 /// of.
 fn index_of(name: &str) -> XrefIndex {
-    let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(name);
+    let bin = repo_root()
+        .join("decompiler/crates/unlace-analysis/tests/fixtures")
+        .join(name);
     let specs = repo_root().join("specs");
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
     let bytes = std::fs::read(&bin).expect("fixture readable");
     let file = object::File::parse(&*bytes).expect("fixture parses");
-    let seeds: Vec<u64> =
-        prog.function_entries_canonical().iter().map(|e| e.addr.get_offset()).collect();
+    let seeds: Vec<u64> = prog
+        .function_entries_canonical()
+        .iter()
+        .map(|e| e.addr.get_offset())
+        .collect();
     xrefs::build(&file, prog.arch(), prog.arch().translate(), &seeds)
 }
 
@@ -200,17 +209,29 @@ fn the_table_scan_stops_at_the_end_of_the_table() {
 fn the_table_is_still_data_and_the_default_arm_is_unchanged() {
     for fx in [I386, X86_64] {
         let idx = index_of(fx.name);
-        let table: Vec<(u64, XrefKind)> =
-            idx.refs_to(fx.table).iter().map(|r| (r.from, r.kind)).collect();
+        let table: Vec<(u64, XrefKind)> = idx
+            .refs_to(fx.table)
+            .iter()
+            .map(|r| (r.from, r.kind))
+            .collect();
         assert_eq!(
             table,
             vec![(fx.branch, XrefKind::Data)],
             "{}: the table base is the address the branch materializes",
             fx.name
         );
-        let refs: Vec<u64> = idx.refs_to(fx.default_literal).iter().map(|r| r.from).collect();
+        let refs: Vec<u64> = idx
+            .refs_to(fx.default_literal)
+            .iter()
+            .map(|r| r.from)
+            .collect();
         assert_eq!(refs.len(), 1, "{}: got {refs:?}", fx.name);
-        assert_eq!(idx.function_containing(refs[0]), Some(fx.dispatch), "{}", fx.name);
+        assert_eq!(
+            idx.function_containing(refs[0]),
+            Some(fx.dispatch),
+            "{}",
+            fx.name
+        );
     }
 }
 
@@ -367,8 +388,12 @@ const GCC: [Gcc; 8] = [
 const DUFF: Gcc8 = Gcc8 {
     dispatch: 0x1001f8,
     branch: 0x10021e,
-    cases: [0x100220, 0x100222, 0x100224, 0x100226, 0x100228, 0x10022a, 0x10022c, 0x10022e],
-    callees: [0x100256, 0x100259, 0x10025c, 0x10025f, 0x100262, 0x100265, 0x100268, 0x10026b],
+    cases: [
+        0x100220, 0x100222, 0x100224, 0x100226, 0x100228, 0x10022a, 0x10022c, 0x10022e,
+    ],
+    callees: [
+        0x100256, 0x100259, 0x10025c, 0x10025f, 0x100262, 0x100265, 0x100268, 0x10026b,
+    ],
 };
 
 struct Gcc8 {
@@ -392,8 +417,11 @@ fn a_cmov_between_the_mask_and_the_jump_is_no_guard() {
     jumps.sort_unstable();
     assert_eq!(jumps, DUFF.cases);
     for callee in DUFF.callees {
-        let owners: Vec<Option<u64>> =
-            idx.refs_to(callee).iter().map(|r| idx.function_containing(r.from)).collect();
+        let owners: Vec<Option<u64>> = idx
+            .refs_to(callee)
+            .iter()
+            .map(|r| idx.function_containing(r.from))
+            .collect();
         assert_eq!(owners, [Some(DUFF.dispatch)], "{callee:#x}");
     }
 }
@@ -417,7 +445,11 @@ fn every_gcc_dispatch_reaches_exactly_its_cases() {
             wrong.push(format!("{}: {jumps:#x?}", fx.shape));
         }
     }
-    assert!(wrong.is_empty(), "dispatches that do not reach exactly their cases:\n{}", wrong.join("\n"));
+    assert!(
+        wrong.is_empty(),
+        "dispatches that do not reach exactly their cases:\n{}",
+        wrong.join("\n")
+    );
 }
 
 /// The call edge the bug report is about: a function called only from a case
@@ -435,9 +467,16 @@ fn a_function_called_only_from_a_case_body_has_its_dispatcher_as_caller() {
                 .map(|r| idx.function_containing(r.from))
                 .collect();
             if owners != [Some(fx.dispatch)] {
-                wrong.push(format!("{}: {callee:#x} reached from {owners:#x?}", fx.shape));
+                wrong.push(format!(
+                    "{}: {callee:#x} reached from {owners:#x?}",
+                    fx.shape
+                ));
             }
         }
     }
-    assert!(wrong.is_empty(), "case-body callees without their dispatcher:\n{}", wrong.join("\n"));
+    assert!(
+        wrong.is_empty(),
+        "case-body callees without their dispatcher:\n{}",
+        wrong.join("\n")
+    );
 }

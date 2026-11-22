@@ -34,7 +34,7 @@ use unlace_decomp::coreaction_infertypes::run_infer_types;
 use unlace_decomp::decompile_drive::decompile_func;
 use unlace_decomp::dtype::type_metatype;
 use unlace_decomp::funcdata::Funcdata;
-use unlace_decomp::sleigh_arch::{register_sleigh_arch_ids, LanguageDatabase};
+use unlace_decomp::sleigh_arch::{LanguageDatabase, register_sleigh_arch_ids};
 use unlace_decomp::xml_arch::{XmlArchitecture, XmlArchitectureCapability};
 
 use unlace_sleigh::loadimage::LoadImage;
@@ -46,7 +46,10 @@ use unlace_sleigh::translate::register_translate_ids;
 // ===========================================================================
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 struct SymbolFn {
@@ -80,11 +83,15 @@ fn find_named(el: &Rc<Element>, name: &str, out: &mut Vec<Rc<Element>>) {
 }
 
 fn attr(el: &Element, name: &str) -> Option<String> {
-    el.get_attribute_value(name).ok().map(|b| String::from_utf8_lossy(b).into_owned())
+    el.get_attribute_value(name)
+        .ok()
+        .map(|b| String::from_utf8_lossy(b).into_owned())
 }
 
 fn parse_datatest(stem: &str) -> Result<DataTest, String> {
-    let path = repo_root().join("tests/datatests").join(format!("{stem}.xml"));
+    let path = repo_root()
+        .join("tests/datatests")
+        .join(format!("{stem}.xml"));
     let xml = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
     let mut store = DocumentStorage::new();
     let root = store
@@ -108,7 +115,11 @@ fn parse_datatest(stem: &str) -> Result<DataTest, String> {
             })
         })
         .collect();
-    Ok(DataTest { binaryimage, arch_id, symbols })
+    Ok(DataTest {
+        binaryimage,
+        arch_id,
+        symbols,
+    })
 }
 
 struct DummyImg;
@@ -138,10 +149,12 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
     let registry = build_registry();
     let capability = XmlArchitectureCapability::new();
     let mut arch = capability.build_architecture("datatest", "");
-    arch.build_loader(Rc::clone(&dt.binaryimage)).map_err(|e| format!("build_loader: {e}"))?;
+    arch.build_loader(Rc::clone(&dt.binaryimage))
+        .map_err(|e| format!("build_loader: {e}"))?;
     let mut db = LanguageDatabase::new();
     db.scan_for_sleigh_directories(root.join("specs").to_str().unwrap());
-    db.get_descriptions(&registry).map_err(|e| format!("collect ldefs: {e}"))?;
+    db.get_descriptions(&registry)
+        .map_err(|e| format!("collect ldefs: {e}"))?;
     arch.sleigh_mut().set_archid(&dt.arch_id);
     arch.sleigh_mut()
         .resolve_architecture(&db, &dt.arch_id)
@@ -149,7 +162,10 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
     if arch.sleigh().language_index() < 0 {
         return Err("language index unresolved".to_string());
     }
-    let specs = arch.sleigh().build_spec_file(&db).map_err(|e| format!("build_spec_file: {e}"))?;
+    let specs = arch
+        .sleigh()
+        .build_spec_file(&db)
+        .map_err(|e| format!("build_spec_file: {e}"))?;
     let resolved_sla = specs.slafile.ok_or("build_spec_file resolved no .sla")?;
     let sla = std::fs::read(&resolved_sla).map_err(|e| format!("read sla: {e}"))?;
     arch.sleigh_mut()
@@ -164,7 +180,9 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
         .base_mut()
         .ok_or("no Architecture base after build_translator")?
         .translate_mut()
-        .as_sleigh_mut().expect("standalone Sleigh engine").install_register_lookup()
+        .as_sleigh_mut()
+        .expect("standalone Sleigh engine")
+        .install_register_lookup()
         .map_err(|e| format!("install_register_lookup: {e}"))?;
     // Hand the resolved cspec XML to the architecture so build_default_proto
     // decodes the real <default_proto> input/output param lists (proto recovery).
@@ -186,7 +204,10 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
     arch.open_image(unsafe { &*manager_ptr }, &registry)
         .map_err(|e| format!("open_image: {e}"))?;
     let img = arch.take_loader().ok_or("loader vanished after open")?;
-    arch.sleigh_mut().base_mut().unwrap().set_loader(Box::new(img));
+    arch.sleigh_mut()
+        .base_mut()
+        .unwrap()
+        .set_loader(Box::new(img));
     Ok(arch)
 }
 
@@ -257,7 +278,10 @@ fn run_full(stem: &str, which: usize) -> Result<(XmlArchitecture, Funcdata), Str
     let space_name = sym.space.clone();
     let off = sym.offset;
     let name = sym.name.clone();
-    let arch = xarch.sleigh_mut().base_mut().ok_or("no Architecture base")?;
+    let arch = xarch
+        .sleigh_mut()
+        .base_mut()
+        .ok_or("no Architecture base")?;
     let space = arch
         .manage()
         .get_space_by_name(&space_name)
@@ -302,7 +326,10 @@ fn zz_dump_boolless_cfg() {
             let o = fd.obank().get(op).unwrap();
             let flip = o.is_boolean_flip();
             let ft = o.is_fallthru_true();
-            eprintln!("    {} flip={flip} fallthru_true={ft}", render_op(arch, &fd, op));
+            eprintln!(
+                "    {} flip={flip} fallthru_true={ft}",
+                render_op(arch, &fd, op)
+            );
         }
     }
     eprintln!("=== sblocks size: {} ===", fd.sblocks_get_size());
@@ -314,7 +341,7 @@ fn zz_dump_boolless_cfg() {
 }
 
 /// The committed C++ B5 oracle for boolless (tests/golden/snapshots/cpp/...).
-    // (Header gap adjusted for the kuna DIV-34 brace-placement default.)
+// (Header gap adjusted for the kuna DIV-34 brace-placement default.)
 const CPP_B5_ORACLE: &str = "\nuint1 boolless(void)\n{\n  uint1 v1; // acc\n  \n  v1 = dat_52;\n  if (dat_52 <= 10) {\n    v1 = 1;\n  }\n  return v1;\n}\n";
 
 #[test]
@@ -376,7 +403,10 @@ fn boolless_print_c_emits_structured_body() {
         rust.matches('}').count(),
         "braces must balance, got:\n{rust}"
     );
-    assert!(rust.matches('{').count() >= 2, "if-body + function body braces, got:\n{rust}");
+    assert!(
+        rust.matches('{').count() >= 2,
+        "if-body + function body braces, got:\n{rust}"
+    );
 
     // The comparison renders inside parentheses (the opCbranch ( ) wrap).
     assert!(
@@ -504,13 +534,31 @@ fn w10_boolless_full_byte_parity_modulo_type_inference() {
 
     // The merge/naming/output-storage layer is real: a named `v1` local, the
     // `v1 = dat_52;` trim COPY, the `uint1 v1; // acc` decl, and `return v1`.
-    assert!(rust.contains("v1 = dat_52;"), "trim-COPY initial assignment missing:\n{rust}");
-    assert!(has_decl_source(&rust, "v1", "acc"), "decl + storage comment missing:\n{rust}");
-    assert!(rust.contains("    v1 = 1;"), "if-body assignment must use the merged name:\n{rust}");
-    assert!(rust.contains("return v1;"), "return must use the merged name:\n{rust}");
+    assert!(
+        rust.contains("v1 = dat_52;"),
+        "trim-COPY initial assignment missing:\n{rust}"
+    );
+    assert!(
+        has_decl_source(&rust, "v1", "acc"),
+        "decl + storage comment missing:\n{rust}"
+    );
+    assert!(
+        rust.contains("    v1 = 1;"),
+        "if-body assignment must use the merged name:\n{rust}"
+    );
+    assert!(
+        rust.contains("return v1;"),
+        "return must use the merged name:\n{rust}"
+    );
     // i0x52 (the global) must STILL render as `dat_52` (NOT absorbed into v1).
-    assert!(rust.contains("dat_52"), "the global must stay dat_52 (no over-merge):\n{rust}");
-    assert!(!rust.contains("dat_52 = "), "dat_52 must not be assigned (it is read-only here):\n{rust}");
+    assert!(
+        rust.contains("dat_52"),
+        "the global must stay dat_52 (no over-merge):\n{rust}"
+    );
+    assert!(
+        !rust.contains("dat_52 = "),
+        "dat_52 must not be assigned (it is read-only here):\n{rust}"
+    );
 
     // The W8 type lattice inferred `uint1` (the oracle name) — NOT `undefined1`.
     assert!(
@@ -524,7 +572,8 @@ fn w10_boolless_full_byte_parity_modulo_type_inference() {
 
     // Preserve exact body and type parity after removing source diagnostics.
     assert_eq!(
-        normalize_sources(&rust), normalize_sources(CPP_B5_ORACLE),
+        normalize_sources(&rust),
+        normalize_sources(CPP_B5_ORACLE),
         "boolless print C must byte-match the C++ B5 oracle after source diagnostics \
          are normalized (no type-name substitution).\n--- rust ---\n{rust}\n--- oracle ---\n{CPP_B5_ORACLE}"
     );
@@ -553,20 +602,25 @@ fn w10_boolless_if_body_contains_assignment() {
     // The if introduces a brace; the assignment (`= 1`) sits between that open
     // brace and its matching close brace (real nesting, not a flat list).
     let if_pos = rust.find("if (").expect("structured if present");
-    let open = rust[if_pos..].find('{').map(|o| if_pos + o).expect("if open brace");
-    let close = rust[open..].find('}').map(|c| open + c).expect("if close brace");
+    let open = rust[if_pos..]
+        .find('{')
+        .map(|o| if_pos + o)
+        .expect("if open brace");
+    let close = rust[open..]
+        .find('}')
+        .map(|c| open + c)
+        .expect("if close brace");
     let body = &rust[open..close];
     assert!(
         body.contains("= 1"),
         "the `= 1` assignment must be nested inside the if-body braces, got body:\n{body}\nfull:\n{rust}"
     );
     // And a return after the if (real function tail).
-    assert!(rust.contains("return"), "function must emit a return, got:\n{rust}");
+    assert!(
+        rust.contains("return"),
+        "function must emit a return, got:\n{rust}"
+    );
 }
-
-
-
-
 
 // ===========================================================================
 // VERIFIER adversarial tests (item: w10-unseam-merge-types — Round 1).
@@ -633,8 +687,8 @@ fn w10_merge_trim_copy_is_real_ir_artifact() {
             _ => {}
         }
     }
-    let trim_out = trim_copy_out
-        .expect("merge must have inserted a COPY into a fresh unique (the trim COPY)");
+    let trim_out =
+        trim_copy_out.expect("merge must have inserted a COPY into a fresh unique (the trim COPY)");
     assert!(
         multiequal_inputs.contains(&trim_out),
         "the trim COPY's unique output must feed the ACC MULTIEQUAL (the real merge join)"
@@ -646,7 +700,10 @@ fn w10_merge_trim_copy_is_real_ir_artifact() {
     // single-statement if-body form; reset braceelide for the comparison.
     arch.print_mut().options.set_brace_elide(false);
     let rust = print_c(arch, &fd);
-    assert!(rust.contains("v1 = dat_52;"), "trim COPY must render as `v1 = dat_52;`, got:\n{rust}");
+    assert!(
+        rust.contains("v1 = dat_52;"),
+        "trim COPY must render as `v1 = dat_52;`, got:\n{rust}"
+    );
 }
 
 /// (2) REAL MERGE + STORAGE-REPRESENTATIVE: ACC's HighVariable must carry MORE
@@ -679,7 +736,10 @@ fn w10_merged_high_has_multiple_instances_and_acc_storage() {
     }
     let h = v1_high.expect("a high named v1 must exist after ActionNameVars");
     let n = fd.high_bank().get(h).unwrap().num_instances();
-    assert!(n > 1, "the merged v1 high must hold >1 instance (real merge), got {n}");
+    assert!(
+        n > 1,
+        "the merged v1 high must hold >1 instance (real merge), got {n}"
+    );
 
     // At least one instance is the addr-tied ACC register (an INTERNAL unique is
     // never addr-tied); the storage comment derives from it.
@@ -691,12 +751,22 @@ fn w10_merged_high_has_multiple_instances_and_acc_storage() {
         if v.is_addr_tied() {
             has_addr_tied = true;
         }
-        if v.get_addr().get_space().map(|s| s.get_type() == unlace_base::space::spacetype::IPTR_INTERNAL).unwrap_or(false) {
+        if v.get_addr()
+            .get_space()
+            .map(|s| s.get_type() == unlace_base::space::spacetype::IPTR_INTERNAL)
+            .unwrap_or(false)
+        {
             has_unique = true;
         }
     }
-    assert!(has_addr_tied, "v1 high must contain the addr-tied ACC storage member");
-    assert!(has_unique, "v1 high must contain the merged trim-COPY unique member");
+    assert!(
+        has_addr_tied,
+        "v1 high must contain the addr-tied ACC storage member"
+    );
+    assert!(
+        has_unique,
+        "v1 high must contain the merged trim-COPY unique member"
+    );
 
     // The decl + storage comment render from the ACC register (lowercased) — not
     // from the unique (which has no register name).
@@ -704,7 +774,10 @@ fn w10_merged_high_has_multiple_instances_and_acc_storage() {
     // single-statement if-body form; reset braceelide for the comparison.
     arch.print_mut().options.set_brace_elide(false);
     let rust = print_c(arch, &fd);
-    assert!(has_decl_source(&rust, "v1", "acc"), "storage comment must include the ACC reg name lowercased, got:\n{rust}");
+    assert!(
+        has_decl_source(&rust, "v1", "acc"),
+        "storage comment must include the ACC reg name lowercased, got:\n{rust}"
+    );
 }
 
 /// (3) NAMING IS DATA-DRIVEN PER FUNCTION (anti-hardcode): a different function
@@ -738,8 +811,14 @@ fn w10_naming_conditional_other_function_gets_no_vn_name() {
     // functions — condconst recovers its own storage, never boolless's.  These
     // are the assertions a "smuggled the oracle string" implementation would
     // fail; they remain the ground truth of this test.
-    assert!(!rust.contains("dat_52"), "boolless's `dat_52` must not appear in condconst:\n{rust}");
-    assert!(!has_source(&rust, "acc"), "boolless's `// acc` must not appear in condconst:\n{rust}");
+    assert!(
+        !rust.contains("dat_52"),
+        "boolless's `dat_52` must not appear in condconst:\n{rust}"
+    );
+    assert!(
+        !has_source(&rust, "acc"),
+        "boolless's `// acc` must not appear in condconst:\n{rust}"
+    );
 
     // Whatever name condconst recovers must be tied to ITS OWN storage, not a
     // constant smuggled from boolless.  If naming fired, the storage comment is
@@ -886,12 +965,19 @@ fn verify_w10_infertypes_is_settled_fixpoint_refining_the_seed() {
         .map(|v| (v.get_type().get_metatype(), v.get_type().get_size()))
         .collect();
 
-    assert_eq!(before.len(), after.len(), "varnode set changed under a pure type pass");
+    assert_eq!(
+        before.len(),
+        after.len(),
+        "varnode set changed under a pure type pass"
+    );
     let mut refined = 0usize;
     for (i, (b, a)) in before.iter().zip(after.iter()).enumerate() {
         // Sizes are an absolute property of the varnode; type recovery must never
         // change a size.
-        assert_eq!(b.1, a.1, "varnode #{i} size changed across an inference pass: {b:?}->{a:?}");
+        assert_eq!(
+            b.1, a.1,
+            "varnode #{i} size changed across an inference pass: {b:?}->{a:?}"
+        );
         if b.0 == a.0 {
             continue;
         }
@@ -907,8 +993,14 @@ fn verify_w10_infertypes_is_settled_fixpoint_refining_the_seed() {
     }
     // Every UINT-1 recovered before the extra pass is still UINT-1 after (no
     // recovered type was lost).
-    let uint1_before = before.iter().filter(|(m, s)| *m == type_metatype::TYPE_UINT && *s == 1).count();
-    let uint1_after = after.iter().filter(|(m, s)| *m == type_metatype::TYPE_UINT && *s == 1).count();
+    let uint1_before = before
+        .iter()
+        .filter(|(m, s)| *m == type_metatype::TYPE_UINT && *s == 1)
+        .count();
+    let uint1_after = after
+        .iter()
+        .filter(|(m, s)| *m == type_metatype::TYPE_UINT && *s == 1)
+        .count();
     assert!(
         uint1_after >= uint1_before && uint1_before >= 2,
         "UINT-1 recovery regressed across a pass: before={uint1_before} after={uint1_after} \
@@ -946,5 +1038,8 @@ fn verify_w10_infertypes_no_uint1_acc_leak_into_condconst() {
          boolless's inferred type, not running condconst's own lattice:\n{rust}"
     );
     // It also must carry no `dat_52` (boolless's global) — cross-function purity.
-    assert!(!rust.contains("dat_52"), "boolless global leaked into condconst:\n{rust}");
+    assert!(
+        !rust.contains("dat_52"),
+        "boolless global leaked into condconst:\n{rust}"
+    );
 }

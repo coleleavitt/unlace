@@ -32,7 +32,10 @@ impl OptionArrayNotation {
     pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
-        Ok((val, format!("Array notation for pointer arithmetic turned {prop}")))
+        Ok((
+            val,
+            format!("Array notation for pointer arithmetic turned {prop}"),
+        ))
     }
 }
 

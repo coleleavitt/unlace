@@ -33,9 +33,9 @@
 
 use std::rc::Rc;
 
-use unlace_base::address::{calc_mask, Address};
+use unlace_base::address::{Address, calc_mask};
 use unlace_base::error::{KunaError, KunaResult};
-use unlace_base::marshal::{Decoder, ATTRIB_CONTENT, ATTRIB_NAME, ATTRIB_TYPE, ELEM_TARGET};
+use unlace_base::marshal::{ATTRIB_CONTENT, ATTRIB_NAME, ATTRIB_TYPE, Decoder, ELEM_TARGET};
 use unlace_base::space::AddrSpace;
 use unlace_base::types::{int4, uint4};
 use unlace_num::opcodes::OpCode;
@@ -49,10 +49,10 @@ use unlace_sleigh::slghsymbol::{ConstructorRef, SymbolWalker};
 use unlace_sleigh::translate::PcodeEmit;
 
 use crate::pcodeinject::{
-    InjectArchitecture, InjectContext, InjectEngine, InjectPayload, InjectPayloadCore,
-    PcodeInjectLibraryBase, ATTRIB_TARGETOP, CALLFIXUP_TYPE, CALLOTHERFIXUP_TYPE, ELEM_ADDR_PCODE,
-    ELEM_BODY, ELEM_CALLFIXUP, ELEM_CALLOTHERFIXUP, ELEM_CASE_PCODE, ELEM_DEFAULT_PCODE, ELEM_PCODE,
-    ELEM_SIZE_PCODE, EXECUTABLEPCODE_TYPE,
+    ATTRIB_TARGETOP, CALLFIXUP_TYPE, CALLOTHERFIXUP_TYPE, ELEM_ADDR_PCODE, ELEM_BODY,
+    ELEM_CALLFIXUP, ELEM_CALLOTHERFIXUP, ELEM_CASE_PCODE, ELEM_DEFAULT_PCODE, ELEM_PCODE,
+    ELEM_SIZE_PCODE, EXECUTABLEPCODE_TYPE, InjectArchitecture, InjectContext, InjectEngine,
+    InjectPayload, InjectPayloadCore, PcodeInjectLibraryBase,
 };
 
 // ---------------------------------------------------------------------------
@@ -184,7 +184,8 @@ impl InjectPayloadCallfixup {
                 self.payload.decode_body(decoder)?;
                 pcode_subtag = true;
             } else if sub_id == ELEM_TARGET {
-                self.target_symbol_names.push(decoder.read_string_id(&ATTRIB_NAME)?);
+                self.target_symbol_names
+                    .push(decoder.read_string_id(&ATTRIB_NAME)?);
             }
             decoder.close_element(sub_id)?;
         }
@@ -241,7 +242,9 @@ impl InjectPayloadCallother {
         self.payload.core.name = decoder.read_string_id(&ATTRIB_TARGETOP)?;
         let sub_id = decoder.open_element()?;
         if sub_id != ELEM_PCODE {
-            return Err(KunaError::lowlevel("<callotherfixup> does not contain a <pcode> tag"));
+            return Err(KunaError::lowlevel(
+                "<callotherfixup> does not contain a <pcode> tag",
+            ));
         }
         self.payload.core.decode_payload_attributes(decoder)?;
         self.payload.core.decode_payload_params(decoder)?;
@@ -547,7 +550,9 @@ impl PcodeInjectLibrarySleigh {
         decoder: &mut dyn Decoder,
     ) -> KunaResult<int4> {
         let injectid = self.allocate_inject(src, nm, tp);
-        self.injection[injectid as usize].as_payload_mut().decode(decoder)?;
+        self.injection[injectid as usize]
+            .as_payload_mut()
+            .decode(decoder)?;
         self.register_inject(injectid)?;
         Ok(injectid)
     }
@@ -612,10 +617,16 @@ impl PcodeInjectLibrarySleigh {
         // casts it to InjectPayloadSleigh and pushes params directly.
         if let SleighPayload::Callother(p) = &mut self.injection[injectid as usize] {
             for nm in inname.iter() {
-                p.payload.core.inputlist.push(crate::pcodeinject::InjectParameter::new(nm, 0));
+                p.payload
+                    .core
+                    .inputlist
+                    .push(crate::pcodeinject::InjectParameter::new(nm, 0));
             }
             if !outname.is_empty() {
-                p.payload.core.output.push(crate::pcodeinject::InjectParameter::new(outname, 0));
+                p.payload
+                    .core
+                    .output
+                    .push(crate::pcodeinject::InjectParameter::new(outname, 0));
             }
             p.payload.core.order_parameters();
             p.payload.parsestring = snippet.to_vec();
@@ -642,7 +653,10 @@ impl<L: SnippetLanguage> crate::pcodeinject::SnippetLanguageProvider for L {
         payload: &dyn InjectPayload,
         parsestring: &[u8],
         tempbase: unlace_base::types::uint4,
-    ) -> KunaResult<(unlace_sleigh::semantics::ConstructTpl, unlace_base::types::uint4)> {
+    ) -> KunaResult<(
+        unlace_sleigh::semantics::ConstructTpl,
+        unlace_base::types::uint4,
+    )> {
         parse_inject(self, payload, parsestring, tempbase)
     }
 }
@@ -670,7 +684,10 @@ pub fn parse_inject<L: SnippetLanguage>(
     payload: &dyn InjectPayload,
     parsestring: &[u8],
     tempbase: unlace_base::types::uint4,
-) -> KunaResult<(unlace_sleigh::semantics::ConstructTpl, unlace_base::types::uint4)> {
+) -> KunaResult<(
+    unlace_sleigh::semantics::ConstructTpl,
+    unlace_base::types::uint4,
+)> {
     let mut compiler = PcodeSnippet::new(slgh);
     let core = payload.core();
     for i in 0..core.size_input() {
@@ -814,13 +831,21 @@ impl PcodeCacher {
     /// C++ `allocateInstruction`: append a cleared op; returns its `issued`
     /// index.
     fn allocate_instruction(&mut self) -> usize {
-        self.issued.push(IssuedOp { outvar: None, invar: None, opc: OpCode::CPUI_COPY, isize: 0 });
+        self.issued.push(IssuedOp {
+            outvar: None,
+            invar: None,
+            opc: OpCode::CPUI_COPY,
+            isize: 0,
+        });
         self.issued.len() - 1
     }
 
     /// C++ `addLabelRef`.
     fn add_label_ref(&mut self, ptr: usize) {
-        self.label_refs.push(RelativeRecord { dataptr: ptr, calling_index: self.issued.len() });
+        self.label_refs.push(RelativeRecord {
+            dataptr: ptr,
+            calling_index: self.issued.len(),
+        });
     }
 
     /// C++ `resolveRelatives`.
@@ -829,7 +854,9 @@ impl PcodeCacher {
             let ptr = rec.dataptr;
             let id = self.pool[ptr].offset;
             if id >= self.labels.len() as u64 || self.labels[id as usize] == 0x0badbeef {
-                return Err(KunaError::lowlevel("Reference to non-existant sleigh label"));
+                return Err(KunaError::lowlevel(
+                    "Reference to non-existant sleigh label",
+                ));
             }
             let res = self.labels[id as usize].wrapping_sub(rec.calling_index as u64);
             let res = res & calc_mask(self.pool[ptr].size as i32);
@@ -874,7 +901,9 @@ struct InjectWalker {
 
 impl PatternExpressionContext for InjectWalker {
     fn get_instruction_bytes(&self, _byteoff: i32, _numbytes: i32) -> KunaResult<u32> {
-        Err(KunaError::lowlevel("inject snippet has no instruction stream"))
+        Err(KunaError::lowlevel(
+            "inject snippet has no instruction stream",
+        ))
     }
     fn get_context_bytes(&self, _byteoff: i32, _numbytes: i32) -> KunaResult<u32> {
         Err(KunaError::lowlevel("inject snippet has no context"))
@@ -886,19 +915,27 @@ impl PatternExpressionContext for InjectWalker {
         self.nextaddr.clone()
     }
     fn get_n2addr(&self) -> KunaResult<Address> {
-        Err(KunaError::lowlevel("inst_next2 not available in inject context"))
+        Err(KunaError::lowlevel(
+            "inst_next2 not available in inject context",
+        ))
     }
     fn operand_value(&self, _index: i32, _table_id: u32, _ct_id: u32) -> KunaResult<i64> {
-        Err(KunaError::lowlevel("inject snippet has no operand expressions"))
+        Err(KunaError::lowlevel(
+            "inject snippet has no operand expressions",
+        ))
     }
 }
 
 impl SymbolWalker for InjectWalker {
     fn push_operand(&mut self, _i: i32) -> KunaResult<()> {
-        Err(KunaError::lowlevel("inject snippet build does not descend operands"))
+        Err(KunaError::lowlevel(
+            "inject snippet build does not descend operands",
+        ))
     }
     fn pop_operand(&mut self) -> KunaResult<()> {
-        Err(KunaError::lowlevel("inject snippet build does not descend operands"))
+        Err(KunaError::lowlevel(
+            "inject snippet build does not descend operands",
+        ))
     }
     fn get_constructor(&self) -> KunaResult<ConstructorRef> {
         Err(KunaError::lowlevel("inject snippet has no constructor"))
@@ -923,10 +960,14 @@ impl SymbolWalker for InjectWalker {
             .ok_or_else(|| KunaError::lowlevel("inject: no call address in context"))
     }
     fn get_ref_addr(&self) -> KunaResult<Address> {
-        Err(KunaError::lowlevel("inject snippet has no cross-reference address"))
+        Err(KunaError::lowlevel(
+            "inject snippet has no cross-reference address",
+        ))
     }
     fn get_instruction_bits(&self, _startbit: i32, _size: i32) -> KunaResult<u32> {
-        Err(KunaError::lowlevel("inject snippet has no instruction bits"))
+        Err(KunaError::lowlevel(
+            "inject snippet has no instruction bits",
+        ))
     }
     fn get_context_bits(&self, _startbit: i32, _size: i32) -> KunaResult<u32> {
         Err(KunaError::lowlevel("inject snippet has no context bits"))
@@ -971,7 +1012,9 @@ impl InjectBuilder<'_> {
         vntpl: &VarnodeTpl,
         vn: &mut VarnodeData,
     ) -> KunaResult<Rc<AddrSpace>> {
-        let hand = self.walker.get_fixed_handle(vntpl.get_offset().get_handle_index())?;
+        let hand = self
+            .walker
+            .get_fixed_handle(vntpl.get_offset().get_handle_index())?;
         let space = hand
             .offset_space
             .clone()
@@ -985,7 +1028,8 @@ impl InjectBuilder<'_> {
             vn.offset = space.wrap_offset(hand.offset_offset);
         }
         vn.space = Some(space);
-        hand.space.ok_or_else(|| KunaError::lowlevel("generatePointer: null pointed-to space"))
+        hand.space
+            .ok_or_else(|| KunaError::lowlevel("generatePointer: null pointed-to space"))
     }
 
     /// C++ `SleighBuilder::generatePointerAdd`.
@@ -1069,8 +1113,9 @@ impl PcodeBuilder for InjectBuilder<'_> {
             }
         }
         if isize > 0 && op.get_in(0).is_relative() {
-            self.cache.pool[invars].offset =
-                self.cache.pool[invars].offset.wrapping_add(u64::from(self.get_label_base()));
+            self.cache.pool[invars].offset = self.cache.pool[invars]
+                .offset
+                .wrapping_add(u64::from(self.get_label_base()));
             self.cache.add_label_ref(invars);
         }
         let thisop = self.cache.allocate_instruction();
@@ -1112,11 +1157,15 @@ impl PcodeBuilder for InjectBuilder<'_> {
     /// C++ `SleighBuilder::appendBuild`: snippets contain no BUILD directives
     /// (`parseInject` rejects nested subconstructors), so this is unreachable.
     fn append_build(&mut self, _bld: &OpTpl, _secnum: i32) -> KunaResult<()> {
-        Err(KunaError::lowlevel("BUILD directive not allowed in inject snippet"))
+        Err(KunaError::lowlevel(
+            "BUILD directive not allowed in inject snippet",
+        ))
     }
     /// C++ `SleighBuilder::delaySlot`: snippets contain no delay slots.
     fn delay_slot(&mut self, _op: &OpTpl) -> KunaResult<()> {
-        Err(KunaError::lowlevel("delay slot directive not allowed in inject snippet"))
+        Err(KunaError::lowlevel(
+            "delay slot directive not allowed in inject snippet",
+        ))
     }
     /// C++ `SleighBuilder::setLabel`.
     fn set_label(&mut self, op: &OpTpl) -> KunaResult<()> {
@@ -1131,7 +1180,9 @@ impl PcodeBuilder for InjectBuilder<'_> {
     }
     /// C++ `SleighBuilder::appendCrossBuild`: snippets contain no crossbuild.
     fn append_cross_build(&mut self, _bld: &OpTpl, _secnum: i32) -> KunaResult<()> {
-        Err(KunaError::lowlevel("crossbuild directive not allowed in inject snippet"))
+        Err(KunaError::lowlevel(
+            "crossbuild directive not allowed in inject snippet",
+        ))
     }
 }
 
@@ -1142,7 +1193,10 @@ impl PcodeBuilder for InjectBuilder<'_> {
 /// Inputs come first (by `getIndex`), then outputs; the handle's `(space,offset,
 /// size)` are taken from the matching `InjectContext` storage entry, exactly as
 /// the C++ fills `walker.getParentHandle()`.
-fn setup_handles(core: &InjectPayloadCore, context: &InjectContext) -> KunaResult<Vec<FixedHandle>> {
+fn setup_handles(
+    core: &InjectPayloadCore,
+    context: &InjectContext,
+) -> KunaResult<Vec<FixedHandle>> {
     // checkParameterRestrictions: the storage counts must match the payload spec.
     if core.size_input() as usize != context.inputlist.len() {
         return Err(KunaError::lowlevel(
@@ -1223,12 +1277,19 @@ impl SleighInjectEngine {
         uniq_space: Rc<AddrSpace>,
         code_space: Rc<AddrSpace>,
     ) -> SleighInjectEngine {
-        SleighInjectEngine { const_space, uniq_space, code_space }
+        SleighInjectEngine {
+            const_space,
+            uniq_space,
+            code_space,
+        }
     }
 
     /// Construct from an [`InjectArchitecture`] (unique + default-code spaces)
     /// plus the constant space.
-    pub fn from_arch(arch: &dyn InjectArchitecture, const_space: Rc<AddrSpace>) -> SleighInjectEngine {
+    pub fn from_arch(
+        arch: &dyn InjectArchitecture,
+        const_space: Rc<AddrSpace>,
+    ) -> SleighInjectEngine {
         SleighInjectEngine {
             const_space,
             uniq_space: arch.get_unique_space(),

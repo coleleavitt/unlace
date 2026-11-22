@@ -170,15 +170,15 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use unlace_base::types::{int4, intb, uintb};
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::space::spacetype;
+use unlace_base::types::{int4, intb, uintb};
 
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
 use crate::context::VarnodeId;
-use crate::dtype::{type_metatype, Datatype, DatatypeKind, TypeFactory, TypeField};
+use crate::dtype::{Datatype, DatatypeKind, TypeFactory, TypeField, type_metatype};
 use crate::funcdata::Funcdata;
 
 /// (kuna `structsynth`) The program-wide layout ledger: which minted `struct_N`
@@ -192,7 +192,6 @@ pub mod shard;
 /// (kuna `structsynth nest`) A field loaded and dereferenced in turn is a
 /// pointer to a record of its own, or to the record that holds it.
 mod nest;
-
 
 /// The largest constant offset that is still believed to be a field.
 const MAX_FIELD_OFFSET: intb = 0x8000;
@@ -260,7 +259,7 @@ impl OptionStructSynth {
             other => {
                 return Err(KunaError::parse(format!(
                     "Unknown structsynth value: {other} (expected off|param|locals|nest|all)"
-                )))
+                )));
             }
         };
         Ok((mode, format!("Structure synthesis set to {p1}")))
@@ -371,7 +370,13 @@ impl Evidence {
     /// bits the binary reinterprets (`movsd 0x8(%rdi)`), where a byte array makes
     /// every access cast the address instead. An access with a value is kept, so
     /// [`crate::kuna_fieldtype`] can read what every access of the widest width says.
-    fn record_access(&mut self, off: intb, width: int4, ctype: Option<Rc<Datatype>>, value: Option<VarnodeId>) {
+    fn record_access(
+        &mut self,
+        off: intb,
+        width: int4,
+        ctype: Option<Rc<Datatype>>,
+        value: Option<VarnodeId>,
+    ) {
         let slot = self.slots.entry(off).or_default();
         if width < slot.width {
             return;
@@ -422,7 +427,10 @@ impl Evidence {
         self.other_access |= other.other_access;
         self.derived_walk |= other.derived_walk;
         for (off, vs) in other.loads.iter() {
-            self.loads.entry(*off).or_default().extend(vs.iter().copied());
+            self.loads
+                .entry(*off)
+                .or_default()
+                .extend(vs.iter().copied());
         }
     }
 
@@ -480,8 +488,14 @@ impl Evidence {
 
     /// Where the last byte this function accessed through the base ends.
     fn extent(&self) -> intb {
-        let fields = self.slots.iter().map(|(o, s)| o.saturating_add(s.width as intb));
-        let dropped = self.unclaimed.iter().map(|(o, w)| o.saturating_add(*w as intb));
+        let fields = self
+            .slots
+            .iter()
+            .map(|(o, s)| o.saturating_add(s.width as intb));
+        let dropped = self
+            .unclaimed
+            .iter()
+            .map(|(o, w)| o.saturating_add(*w as intb));
         fields.chain(dropped).max().unwrap_or(0)
     }
 
@@ -491,8 +505,17 @@ impl Evidence {
     /// Offsets beyond `int4` are clamped; they lie past every member either way.
     fn unclaimed_ranges(&self) -> Vec<(int4, int4)> {
         let clamp = |v: intb| v.clamp(int4::MIN as intb, int4::MAX as intb) as int4;
-        let raw = self.slots.iter().filter(|(_, s)| s.reinterpreted()).map(|(o, s)| (*o, s.width));
-        self.unclaimed.iter().copied().chain(raw).map(|(o, w)| (clamp(o), w)).collect()
+        let raw = self
+            .slots
+            .iter()
+            .filter(|(_, s)| s.reinterpreted())
+            .map(|(o, s)| (*o, s.width));
+        self.unclaimed
+            .iter()
+            .copied()
+            .chain(raw)
+            .map(|(o, w)| (clamp(o), w))
+            .collect()
     }
 }
 
@@ -583,10 +606,16 @@ pub(crate) fn peel_base_stride(
                 let index = data.vbank().get(op.get_in(1)?)?;
                 let scale = data.vbank().get(op.get_in(2)?)?;
                 if !index.is_constant() || !scale.is_constant() {
-                    let term = scale.is_constant()
+                    let term = scale
+                        .is_constant()
                         .then(|| int4::try_from(scale.get_offset()).ok())
-                        .flatten().filter(|size| *size > 0);
-                    stride = if !indexed || stride == term { term } else { None };
+                        .flatten()
+                        .filter(|size| *size > 0);
+                    stride = if !indexed || stride == term {
+                        term
+                    } else {
+                        None
+                    };
                     indexed = true;
                 }
             }
@@ -621,13 +650,17 @@ pub(crate) fn every_access_through(data: &Funcdata, base: VarnodeId, width: int4
         if !seen.insert(vn) {
             continue;
         }
-        let Some(v) = data.vbank().get(vn) else { return false };
+        let Some(v) = data.vbank().get(vn) else {
+            return false;
+        };
         for use_id in v.descend_iter() {
             steps += 1;
             if steps > MAX_ACCESS_USES {
                 return false;
             }
-            let Some(op) = data.obank().get(use_id) else { continue };
+            let Some(op) = data.obank().get(use_id) else {
+                continue;
+            };
             if op.is_dead() {
                 continue;
             }
@@ -636,9 +669,14 @@ pub(crate) fn every_access_through(data: &Funcdata, base: VarnodeId, width: int4
                     if op.get_in(1) != Some(vn) {
                         continue;
                     }
-                    let value = if op.code() == OpCode::CPUI_LOAD { op.get_out() } else { op.get_in(2) };
-                    let Some(access_width) =
-                        value.and_then(|x| data.vbank().get(x)).map(|x| x.get_size())
+                    let value = if op.code() == OpCode::CPUI_LOAD {
+                        op.get_out()
+                    } else {
+                        op.get_in(2)
+                    };
+                    let Some(access_width) = value
+                        .and_then(|x| data.vbank().get(x))
+                        .map(|x| x.get_size())
                     else {
                         return false;
                     };
@@ -709,14 +747,28 @@ fn collect(data: &mut Funcdata) -> BTreeMap<VarnodeId, Evidence> {
     for opc in [OpCode::CPUI_LOAD, OpCode::CPUI_STORE] {
         let ops: Vec<_> = data.obank().iter_code(opc).collect();
         for id in ops {
-            let Some(op) = data.obank().get(id) else { continue };
+            let Some(op) = data.obank().get(id) else {
+                continue;
+            };
             let Some(addr) = op.get_in(1) else { continue };
-            let value = if opc == OpCode::CPUI_LOAD { op.get_out() } else { op.get_in(2) };
+            let value = if opc == OpCode::CPUI_LOAD {
+                op.get_out()
+            } else {
+                op.get_in(2)
+            };
             let Some(value) = value else { continue };
-            let Some((base, off)) = peel(data, addr, &mut ev, MAX_PEEL_DEPTH) else { continue };
-            let Some(width) = data.vbank().get(value).map(|v| v.get_size()) else { continue };
+            let Some((base, off)) = peel(data, addr, &mut ev, MAX_PEEL_DEPTH) else {
+                continue;
+            };
+            let Some(width) = data.vbank().get(value).map(|v| v.get_size()) else {
+                continue;
+            };
             let ctype = vn_type(data, value);
-            let stored = if opc == OpCode::CPUI_STORE { stored_text(data, value, width) } else { None };
+            let stored = if opc == OpCode::CPUI_STORE {
+                stored_text(data, value, width)
+            } else {
+                None
+            };
             let e = ev.entry(base).or_default();
             e.record_access(off, width, ctype, keep_values.then_some(value));
             match stored {
@@ -748,11 +800,20 @@ fn stored_text(data: &Funcdata, value: VarnodeId, width: int4) -> Option<Option<
     let v = data.vbank().get(root)?;
     if v.is_constant() {
         let n = width.clamp(0, 8) as u32;
-        let bytes: Vec<u8> = (0..n).map(|i| ((v.get_offset() >> (8 * i)) & 0xff) as u8).collect();
+        let bytes: Vec<u8> = (0..n)
+            .map(|i| ((v.get_offset() >> (8 * i)) & 0xff) as u8)
+            .collect();
         return Some(bytes_text(&bytes));
     }
-    let clobber = v.get_def().and_then(|d| data.obank().get(d)).is_some_and(|o| o.code() == OpCode::CPUI_INDIRECT);
-    if (v.is_written() && !clobber) || !v.is_read_only() || v.get_size() != width || !(1..=MAX_LITERAL).contains(&width) {
+    let clobber = v
+        .get_def()
+        .and_then(|d| data.obank().get(d))
+        .is_some_and(|o| o.code() == OpCode::CPUI_INDIRECT);
+    if (v.is_written() && !clobber)
+        || !v.is_read_only()
+        || v.get_size() != width
+        || !(1..=MAX_LITERAL).contains(&width)
+    {
         return None;
     }
     if v.get_addr().get_space()?.get_type() != spacetype::IPTR_PROCESSOR {
@@ -775,7 +836,9 @@ pub(crate) fn bytes_text(bytes: &[u8]) -> Option<bool> {
     }
     let printable = |b: &u8| (0x20..0x7f).contains(b);
     Some(
-        bytes.iter().all(|b| *b == 0 || *b == b'\t' || *b == b'\n' || printable(b))
+        bytes
+            .iter()
+            .all(|b| *b == 0 || *b == b'\t' || *b == b'\n' || printable(b))
             && bytes.iter().filter(|b| printable(b)).count() * 2 >= bytes.len().max(1),
     )
 }
@@ -783,10 +846,14 @@ pub(crate) fn bytes_text(bytes: &[u8]) -> Option<bool> {
 /// Negative evidence that is not about an address: the base used as a plain
 /// integer, as an index, or flowing into a phi (an induction variable).
 fn note_uses(data: &Funcdata, base: VarnodeId, e: &mut Evidence) {
-    let Some(v) = data.vbank().get(base) else { return };
+    let Some(v) = data.vbank().get(base) else {
+        return;
+    };
     let uses: Vec<_> = v.descend_iter().collect();
     for u in uses {
-        let Some(op) = data.obank().get(u) else { continue };
+        let Some(op) = data.obank().get(u) else {
+            continue;
+        };
         match op.code() {
             OpCode::CPUI_MULTIEQUAL | OpCode::CPUI_INDIRECT => e.phi_reached = true,
             // `p + n` for a non-constant `n` is an index, whether or not
@@ -852,11 +919,18 @@ fn note_uses(data: &Funcdata, base: VarnodeId, e: &mut Evidence) {
 /// (kuna `calleevote fields`) Does the address `vn` reach a phi through copies,
 /// casts and further constant offsets?
 fn address_walks(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
-    let Some(v) = data.vbank().get(vn) else { return false };
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
     v.descend_iter().any(|u| {
-        let Some(op) = data.obank().get(u) else { return false };
+        let Some(op) = data.obank().get(u) else {
+            return false;
+        };
         let onward = |data: &Funcdata| {
-            depth < MAX_PEEL_DEPTH && op.get_out().is_some_and(|o| address_walks(data, o, depth + 1))
+            depth < MAX_PEEL_DEPTH
+                && op
+                    .get_out()
+                    .is_some_and(|o| address_walks(data, o, depth + 1))
         };
         match op.code() {
             OpCode::CPUI_MULTIEQUAL => true,
@@ -867,7 +941,9 @@ fn address_walks(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
                 } else {
                     op.get_in(0)
                 };
-                term.and_then(|t| data.vbank().get(t)).is_some_and(|t| t.is_constant()) && onward(data)
+                term.and_then(|t| data.vbank().get(t))
+                    .is_some_and(|t| t.is_constant())
+                    && onward(data)
             }
             _ => false,
         }
@@ -877,7 +953,9 @@ fn address_walks(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
 /// Is `ct` a pointer whose pointee is a named aggregate a person or a named-type
 /// pass supplied?  Such a type always wins over a synthesized one.
 pub(crate) fn points_at_named_composite(ct: &Datatype) -> bool {
-    let Some(pt) = ct.get_ptr_to() else { return false };
+    let Some(pt) = ct.get_ptr_to() else {
+        return false;
+    };
     matches!(
         pt.get_metatype(),
         type_metatype::TYPE_STRUCT | type_metatype::TYPE_UNION | type_metatype::TYPE_ARRAY
@@ -964,10 +1042,7 @@ fn spells_its_own_width(ct: &Datatype) -> bool {
 /// back puts there. Past the last field there is no member and no invented name:
 /// the printer spells the address as an element of the structure array plus a
 /// byte offset, which is still the address the access meant.
-fn fields_for(
-    types: &dyn TypeFactory,
-    ev: &Evidence,
-) -> Option<(Vec<TypeField>, int4)> {
+fn fields_for(types: &dyn TypeFactory, ev: &Evidence) -> Option<(Vec<TypeField>, int4)> {
     let (plan, size) = layout_plan(&ev.slots)?;
     let byte = types.get_base(1, type_metatype::TYPE_UNKNOWN).ok()?;
     let mut fields: Vec<TypeField> = Vec::with_capacity(plan.len());
@@ -985,7 +1060,12 @@ fn fields_for(
                 _ => types.get_base(*width, type_metatype::TYPE_UNKNOWN).ok()?,
             }
         };
-        fields.push(TypeField::new(i as int4, *off, format!("field_0x{off:x}"), ct));
+        fields.push(TypeField::new(
+            i as int4,
+            *off,
+            format!("field_0x{off:x}"),
+            ct,
+        ));
     }
     Some((fields, size))
 }
@@ -1026,7 +1106,9 @@ fn layout_plan(slots: &BTreeMap<intb, Slot>) -> Option<(Vec<(int4, int4, bool)>,
 /// The one pass: decide every candidate base and install the accepted ones.
 /// Returns whether anything was installed.
 fn synthesize(data: &mut Funcdata) -> bool {
-    let Some(types) = data.get_arch().types_rc() else { return false };
+    let Some(types) = data.get_arch().types_rc() else {
+        return false;
+    };
     let raw = collect(data);
     let nests = data.get_arch().struct_synth.nests();
     let ptrsize = types.get_size_of_pointer();
@@ -1039,28 +1121,49 @@ fn synthesize(data: &mut Funcdata) -> bool {
         }
         if field_type {
             let chosen = {
-                let fields: Vec<_> = e.slots.values().map(|s| (s.width, s.ctype.as_ref(), s.accesses.as_slice())).collect();
+                let fields: Vec<_> = e
+                    .slots
+                    .values()
+                    .map(|s| (s.width, s.ctype.as_ref(), s.accesses.as_slice()))
+                    .collect();
                 crate::kuna_fieldtype::pointer_fields(data, *base, &fields)
             };
             for (slot, p) in e.slots.values_mut().zip(chosen) {
                 slot.pointer = p;
             }
         }
-        let Some((mut fields, size)) = fields_for(types.as_ref(), &e) else { continue };
+        let Some((mut fields, size)) = fields_for(types.as_ref(), &e) else {
+            continue;
+        };
         if crate::kuna_fieldtype::trace_on() {
             let rows: Vec<_> = fields
                 .iter()
-                .filter_map(|f| e.slots.get(&(f.offset as intb)).map(|s| (f, s.width, s.accesses.as_slice())))
+                .filter_map(|f| {
+                    e.slots
+                        .get(&(f.offset as intb))
+                        .map(|s| (f, s.width, s.accesses.as_slice()))
+                })
                 .collect();
             crate::kuna_fieldtype::trace(data, *base, &rows);
         }
         let selfs = if nests {
-            let cx = nest::Nesting { ev: &raw, types: types.as_ref(), ptr_size: ptrsize };
+            let cx = nest::Nesting {
+                ev: &raw,
+                types: types.as_ref(),
+                ptr_size: ptrsize,
+            };
             nest::nest_fields(data, &cx, &e, &mut fields, size, 0)
         } else {
             Vec::new()
         };
-        asks.push((*base, e.slots.len(), fields, size, e.unclaimed_ranges(), selfs));
+        asks.push((
+            *base,
+            e.slots.len(),
+            fields,
+            size,
+            e.unclaimed_ranges(),
+            selfs,
+        ));
     }
     // A function whose own later layout contains its earlier one would see its
     // earlier answer superseded, which a `--jobs` replay cannot reproduce; asked
@@ -1078,7 +1181,9 @@ fn synthesize(data: &mut Funcdata) -> bool {
         // The pointer is taken only once the structure is COMPLETE: completing a
         // structure mints a fresh `Rc`, and merge compares high types by `Rc`
         // identity, so a pointer to the incomplete shell would never match.
-        let Ok(ptr) = types.get_type_pointer(ptrsize, st, 1) else { continue };
+        let Ok(ptr) = types.get_type_pointer(ptrsize, st, 1) else {
+            continue;
+        };
         installs.push((base, ptr));
     }
 
@@ -1094,7 +1199,10 @@ fn synthesize(data: &mut Funcdata) -> bool {
 /// The bases in the order their Varnodes were created. A Varnode's id is the
 /// arena slot it happened to reuse, so the layouts a function asks for, and the
 /// structure numbers they are answered with, must not follow it.
-fn by_creation<'a>(data: &Funcdata, raw: &'a BTreeMap<VarnodeId, Evidence>) -> Vec<(&'a VarnodeId, &'a Evidence)> {
+fn by_creation<'a>(
+    data: &Funcdata,
+    raw: &'a BTreeMap<VarnodeId, Evidence>,
+) -> Vec<(&'a VarnodeId, &'a Evidence)> {
     let mut bases: Vec<_> = raw.iter().collect();
     bases.sort_by_key(|(vn, _)| data.vbank().get(**vn).map(|v| v.get_create_index()));
     bases
@@ -1162,7 +1270,9 @@ pub(crate) fn answer_frame(
 
 /// Every decline condition for a base, in one place.
 fn accepts(data: &mut Funcdata, base: VarnodeId, e: &Evidence) -> bool {
-    let Some(v) = data.vbank().get(base) else { return false };
+    let Some(v) = data.vbank().get(base) else {
+        return false;
+    };
 
     // A record is synthesized over a parameter, under `locals` over a pointer a
     // call returned, and under `nest` over what a record's pointer fields hold
@@ -1179,7 +1289,9 @@ fn accepts(data: &mut Funcdata, base: VarnodeId, e: &Evidence) -> bool {
     if v.is_spacebase() || v.is_persist() || v.get_space().get_type() == spacetype::IPTR_SPACEBASE {
         return false;
     }
-    let Some(ct) = vn_type(data, base) else { return false };
+    let Some(ct) = vn_type(data, base) else {
+        return false;
+    };
     // (kuna `elfmain`) A `main`'s runtime `argv`/`envp` is the vector, however
     // few of its elements the body reads.
     if crate::kuna_elfmaindecl::took_runtime_type(data, base, &ct) {
@@ -1191,7 +1303,8 @@ fn accepts(data: &mut Funcdata, base: VarnodeId, e: &Evidence) -> bool {
     let lone = data.kuna_calleevote_closed() && !pointee_is_given(data, base, &ct, e);
     let headless = lone
         && crate::kuna_structheadless::admits(data, base, &ct)
-        && !(crate::kuna_structheadless::is_headless(e.slots.keys()) && points_past(data, &[base], e.extent()));
+        && !(crate::kuna_structheadless::is_headless(e.slots.keys())
+            && points_past(data, &[base], e.extent()));
     accepts_record(data, &ct, e, lone, headless)
 }
 
@@ -1203,7 +1316,9 @@ fn is_local_base(data: &Funcdata, base: VarnodeId, e: &Evidence) -> bool {
         return false;
     }
     let rets = returned_values(data);
-    let Some(copies) = copies_alone(data, base, &rets) else { return false };
+    let Some(copies) = copies_alone(data, base, &rets) else {
+        return false;
+    };
     !returned_beside_others(data, &copies, &rets) && !points_past(data, &copies, e.extent())
 }
 
@@ -1212,19 +1327,31 @@ fn is_local_base(data: &Funcdata, base: VarnodeId, e: &Evidence) -> bool {
 /// local's only definition; a declared `char *` or `struct stat *` return is
 /// what the pointer is, and only `void *` (an allocator) says nothing.
 pub(crate) fn is_call_return(data: &Funcdata, vn: VarnodeId) -> bool {
-    let Some(def) = data.vbank().get(vn).and_then(|v| v.get_def()) else { return false };
-    let Some(op) = data.obank().get(def) else { return false };
+    let Some(def) = data.vbank().get(vn).and_then(|v| v.get_def()) else {
+        return false;
+    };
+    let Some(op) = data.obank().get(def) else {
+        return false;
+    };
     if !matches!(op.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND) || op.get_out() != Some(vn) {
         return false;
     }
-    let Some(i) = data.get_call_specs_index(def) else { return true };
+    let Some(i) = data.get_call_specs_index(def) else {
+        return true;
+    };
     let proto = data.get_call_specs(i).proto();
     if !proto.is_output_locked() {
         return true;
     }
-    proto.get_output_type().and_then(|t| t.get_ptr_to()).is_some_and(|p| {
-        matches!(p.get_metatype(), type_metatype::TYPE_VOID | type_metatype::TYPE_UNKNOWN)
-    })
+    proto
+        .get_output_type()
+        .and_then(|t| t.get_ptr_to())
+        .is_some_and(|p| {
+            matches!(
+                p.get_metatype(),
+                type_metatype::TYPE_VOID | type_metatype::TYPE_UNKNOWN
+            )
+        })
 }
 
 /// The most copies of one returned value [`joins_other_values`] follows.
@@ -1241,7 +1368,11 @@ const MAX_COPIES: usize = 64;
 /// `tar`'s `wordsplit_add_segm` keeps a record from `calloc` in the `rax` it
 /// returns its status in, and typing the record would declare the status a
 /// `struct_N *` too.
-pub(crate) fn copies_alone(data: &Funcdata, vn: VarnodeId, rets: &[VarnodeId]) -> Option<Vec<VarnodeId>> {
+pub(crate) fn copies_alone(
+    data: &Funcdata,
+    vn: VarnodeId,
+    rets: &[VarnodeId],
+) -> Option<Vec<VarnodeId>> {
     let mut seen = vec![vn];
     let mut i = 0;
     while i < seen.len() {
@@ -1252,7 +1383,9 @@ pub(crate) fn copies_alone(data: &Funcdata, vn: VarnodeId, rets: &[VarnodeId]) -
         }
         let v = data.vbank().get(cur)?;
         for u in v.descend_iter() {
-            let Some(op) = data.obank().get(u) else { continue };
+            let Some(op) = data.obank().get(u) else {
+                continue;
+            };
             match op.code() {
                 OpCode::CPUI_MULTIEQUAL | OpCode::CPUI_INDIRECT => return None,
                 OpCode::CPUI_COPY | OpCode::CPUI_CAST => {
@@ -1277,22 +1410,34 @@ pub(crate) fn copies_alone(data: &Funcdata, vn: VarnodeId, rets: &[VarnodeId]) -
 /// wider than this function's accesses show, and a record measured on them
 /// would type `&node[1]` -- the mutex, the tail -- as a record too.
 fn points_past(data: &Funcdata, copies: &[VarnodeId], extent: intb) -> bool {
-    copies.iter().filter_map(|&c| data.vbank().get(c).map(|v| (c, v))).any(|(c, v)| {
-        v.descend_iter().filter_map(|u| data.obank().get(u)).any(|op| {
-            let term = |slot: int4| op.get_in(slot).and_then(|t| data.vbank().get(t)).filter(|t| t.is_constant());
-            let off = match op.code() {
-                OpCode::CPUI_INT_ADD | OpCode::CPUI_PTRSUB => {
-                    let other = if op.get_in(0) == Some(c) { 1 } else { 0 };
-                    term(other).map(|t| sign_extend(t.get_offset(), t.get_size()))
-                }
-                OpCode::CPUI_PTRADD if op.get_in(0) == Some(c) => term(1).zip(term(2)).map(|(i, s)| {
-                    sign_extend(i.get_offset(), i.get_size()).wrapping_mul(s.get_offset() as intb)
-                }),
-                _ => None,
-            };
-            off.is_some_and(|k| k >= extent)
+    copies
+        .iter()
+        .filter_map(|&c| data.vbank().get(c).map(|v| (c, v)))
+        .any(|(c, v)| {
+            v.descend_iter()
+                .filter_map(|u| data.obank().get(u))
+                .any(|op| {
+                    let term = |slot: int4| {
+                        op.get_in(slot)
+                            .and_then(|t| data.vbank().get(t))
+                            .filter(|t| t.is_constant())
+                    };
+                    let off = match op.code() {
+                        OpCode::CPUI_INT_ADD | OpCode::CPUI_PTRSUB => {
+                            let other = if op.get_in(0) == Some(c) { 1 } else { 0 };
+                            term(other).map(|t| sign_extend(t.get_offset(), t.get_size()))
+                        }
+                        OpCode::CPUI_PTRADD if op.get_in(0) == Some(c) => {
+                            term(1).zip(term(2)).map(|(i, s)| {
+                                sign_extend(i.get_offset(), i.get_size())
+                                    .wrapping_mul(s.get_offset() as intb)
+                            })
+                        }
+                        _ => None,
+                    };
+                    off.is_some_and(|k| k >= extent)
+                })
         })
-    })
 }
 
 /// The value every live `RETURN` returns.
@@ -1309,21 +1454,33 @@ pub(crate) fn returned_values(data: &Funcdata) -> Vec<VarnodeId> {
 /// A function has one return type, so a value returned on one path types what
 /// every other path returns: a record returned where another path returns a
 /// name or a count declines. A constant zero is the null every pointer can be.
-pub(crate) fn returned_beside_others(data: &Funcdata, copies: &[VarnodeId], rets: &[VarnodeId]) -> bool {
+pub(crate) fn returned_beside_others(
+    data: &Funcdata,
+    copies: &[VarnodeId],
+    rets: &[VarnodeId],
+) -> bool {
     if !rets.iter().any(|r| copies.contains(r)) {
         return false;
     }
     rets.iter().any(|&r| {
         let root = copy_root(data, r);
         !copies.contains(&root)
-            && !data.vbank().get(root).is_some_and(|v| v.is_constant() && v.get_offset() == 0)
+            && !data
+                .vbank()
+                .get(root)
+                .is_some_and(|v| v.is_constant() && v.get_offset() == 0)
     })
 }
 
 /// The value `vn` copies, through any chain of `COPY` and `CAST`.
 fn copy_root(data: &Funcdata, mut vn: VarnodeId) -> VarnodeId {
     for _ in 0..MAX_COPIES {
-        let Some(op) = data.vbank().get(vn).and_then(|v| v.get_def()).and_then(|d| data.obank().get(d)) else {
+        let Some(op) = data
+            .vbank()
+            .get(vn)
+            .and_then(|v| v.get_def())
+            .and_then(|d| data.obank().get(d))
+        else {
             break;
         };
         if !matches!(op.code(), OpCode::CPUI_COPY | OpCode::CPUI_CAST) {
@@ -1342,17 +1499,23 @@ fn copy_root(data: &Funcdata, mut vn: VarnodeId) -> VarnodeId {
 /// (`mark_output_storage_addr_tied`), long after this pass has run, and a
 /// `rax` value is merged with the `eax` an `int` function returns.
 fn storage_is_tied(data: &Funcdata, vn: VarnodeId, rets: &[VarnodeId]) -> bool {
-    let Some(v) = data.vbank().get(vn) else { return true };
+    let Some(v) = data.vbank().get(vn) else {
+        return true;
+    };
     if v.is_addr_tied() {
         return true;
     }
-    let Some(spc) = v.get_addr().get_space().cloned() else { return false };
+    let Some(spc) = v.get_addr().get_space().cloned() else {
+        return false;
+    };
     if spc.get_type() == spacetype::IPTR_INTERNAL {
         return false;
     }
     let (off, size) = (v.get_offset(), v.get_size());
     let joined_return = rets.iter().filter_map(|&r| data.vbank().get(r)).any(|r| {
-        r.get_addr().get_space().is_some_and(|s| s.get_index() == spc.get_index())
+        r.get_addr()
+            .get_space()
+            .is_some_and(|s| s.get_index() == spc.get_index())
             && overlaps(off, size, r.get_offset(), r.get_size())
             && overlapping(data, &spc, r.get_offset(), r.get_size()).any(|id| {
                 let def = data.vbank().get(id).and_then(|w| w.get_def());
@@ -1362,7 +1525,8 @@ fn storage_is_tied(data: &Funcdata, vn: VarnodeId, rets: &[VarnodeId]) -> bool {
             })
     });
     joined_return
-        || overlapping(data, &spc, off, size).any(|id| data.vbank().get(id).is_some_and(|w| w.is_addr_tied()))
+        || overlapping(data, &spc, off, size)
+            .any(|id| data.vbank().get(id).is_some_and(|w| w.is_addr_tied()))
 }
 
 /// Do the byte ranges `[a, a+asize)` and `[b, b+bsize)` intersect?
@@ -1377,11 +1541,16 @@ fn overlapping<'a>(
     off: uintb,
     size: int4,
 ) -> impl Iterator<Item = VarnodeId> + 'a + use<'a> {
-    let lo = unlace_base::address::Address::new(Rc::clone(spc), off.saturating_sub(MAX_OVERLAP_BACK));
+    let lo =
+        unlace_base::address::Address::new(Rc::clone(spc), off.saturating_sub(MAX_OVERLAP_BACK));
     let hi = unlace_base::address::Address::new(Rc::clone(spc), off.saturating_add(size as uintb));
     data.vbank()
         .iter_loc_addr_range(&lo, &hi)
-        .filter(move |&id| data.vbank().get(id).is_some_and(|w| overlaps(w.get_offset(), w.get_size(), off, size)))
+        .filter(move |&id| {
+            data.vbank()
+                .get(id)
+                .is_some_and(|w| overlaps(w.get_offset(), w.get_size(), off, size))
+        })
 }
 
 /// How far below a value's storage an overlapping wider value may start.
@@ -1392,7 +1561,13 @@ const MAX_OVERLAP_BACK: uintb = 16;
 /// parameter read at one constant offset other than zero ([`is_lone_field`]),
 /// `headless` one read at two or more with none of them zero
 /// ([`crate::kuna_structheadless`]).
-fn accepts_record(data: &Funcdata, ct: &Datatype, e: &Evidence, lone: bool, headless: bool) -> bool {
+fn accepts_record(
+    data: &Funcdata,
+    ct: &Datatype,
+    e: &Evidence,
+    lone: bool,
+    headless: bool,
+) -> bool {
     // Pointer-ness is not invented here.
     if ct.get_metatype() != type_metatype::TYPE_PTR {
         return false;
@@ -1404,7 +1579,10 @@ fn accepts_record(data: &Funcdata, ct: &Datatype, e: &Evidence, lone: bool, head
     if e.dynamic_offset || e.integer_use || e.phi_reached {
         return false;
     }
-    if e.slots.keys().any(|off| *off < 0 || *off >= MAX_FIELD_OFFSET) {
+    if e.slots
+        .keys()
+        .any(|off| *off < 0 || *off >= MAX_FIELD_OFFSET)
+    {
         return false;
     }
     if lone && is_lone_field(e) {
@@ -1418,7 +1596,11 @@ fn accepts_record(data: &Funcdata, ct: &Datatype, e: &Evidence, lone: bool, head
     if !e.slots.contains_key(&0) && !headless {
         return false;
     }
-    let ptr_size = data.get_arch().types().map(|t| t.get_size_of_pointer()).unwrap_or(8);
+    let ptr_size = data
+        .get_arch()
+        .types()
+        .map(|t| t.get_size_of_pointer())
+        .unwrap_or(8);
     if is_array_shaped(&e.slots, ptr_size) {
         return false;
     }
@@ -1439,7 +1621,9 @@ fn accepts_record(data: &Funcdata, ct: &Datatype, e: &Evidence, lone: bool, head
 fn is_lone_field(e: &Evidence) -> bool {
     e.slots.len() == 1
         && !e.derived_walk
-        && e.slots.iter().all(|(off, s)| *off > 0 && s.width >= LONE_FIELD_MIN_WIDTH)
+        && e.slots
+            .iter()
+            .all(|(off, s)| *off > 0 && s.width >= LONE_FIELD_MIN_WIDTH)
 }
 
 /// (kuna `calleevote fields`) Did something outside the function's own reading
@@ -1452,8 +1636,13 @@ fn is_lone_field(e: &Evidence) -> bool {
 /// against its callers. A pointee the recovery guessed (a callee's `int *` for
 /// a record whose first member is an enum) gives way too.
 fn pointee_is_given(data: &Funcdata, base: VarnodeId, ct: &Datatype, e: &Evidence) -> bool {
-    let Some(pointee) = ct.get_ptr_to() else { return false };
-    if matches!(pointee.get_metatype(), type_metatype::TYPE_VOID | type_metatype::TYPE_UNKNOWN) {
+    let Some(pointee) = ct.get_ptr_to() else {
+        return false;
+    };
+    if matches!(
+        pointee.get_metatype(),
+        type_metatype::TYPE_VOID | type_metatype::TYPE_UNKNOWN
+    ) {
         return false;
     }
     if crate::kuna_protoorder::handed_to_a_declared_pointer(data, base) {
@@ -1462,7 +1651,12 @@ fn pointee_is_given(data: &Funcdata, base: VarnodeId, ct: &Datatype, e: &Evidenc
     let width = pointee.get_size() as intb;
     let fits = match pointee.get_metatype() {
         type_metatype::TYPE_STRUCT | type_metatype::TYPE_UNION => true,
-        type_metatype::TYPE_PTR => width > 0 && e.slots.iter().all(|(off, s)| s.width as intb == width && off % width == 0),
+        type_metatype::TYPE_PTR => {
+            width > 0
+                && e.slots
+                    .iter()
+                    .all(|(off, s)| s.width as intb == width && off % width == 0)
+        }
         _ => false,
     };
     fits && crate::kuna_calleevote::took_stated_type(data, base, ct)
@@ -1472,21 +1666,28 @@ fn pointee_is_given(data: &Funcdata, base: VarnodeId, ct: &Datatype, e: &Evidenc
 /// claims exactly one field -- what a lone field read mints? Such a record
 /// gives way to the one every caller of the function passes.
 pub fn points_at_lone_record(ct: &Datatype) -> bool {
-    let Some(pt) = ct.get_ptr_to() else { return false };
-    ledger::minted_number(&pt).is_some() && ledger::layout_of(&pt).is_some_and(|l| l.fields.len() == 1)
+    let Some(pt) = ct.get_ptr_to() else {
+        return false;
+    };
+    ledger::minted_number(&pt).is_some()
+        && ledger::layout_of(&pt).is_some_and(|l| l.fields.len() == 1)
 }
 
 /// (kuna `structheadless`) Is `ct` a pointer to a record this pass minted?
 pub fn points_at_synthesized_record(ct: &Datatype) -> bool {
-    ct.get_ptr_to().is_some_and(|pt| ledger::minted_number(&pt).is_some())
+    ct.get_ptr_to()
+        .is_some_and(|pt| ledger::minted_number(&pt).is_some())
 }
 
 /// (kuna `structheadless`) Is `ct` a pointer to a record this pass minted with
 /// two or more claims and none at offset 0 -- what only a headless read mints?
 pub fn points_at_headless_record(ct: &Datatype) -> bool {
-    let Some(pt) = ct.get_ptr_to() else { return false };
+    let Some(pt) = ct.get_ptr_to() else {
+        return false;
+    };
     ledger::minted_number(&pt).is_some()
-        && ledger::layout_of(&pt).is_some_and(|l| l.fields.len() >= 2 && l.fields.first().is_some_and(|f| f.offset > 0))
+        && ledger::layout_of(&pt)
+            .is_some_and(|l| l.fields.len() >= 2 && l.fields.first().is_some_and(|f| f.offset > 0))
 }
 
 /// (kuna `structsynth nest`) The completed record a pointer to its own shell
@@ -1500,7 +1701,13 @@ pub fn points_at_headless_record(ct: &Datatype) -> bool {
 /// completed synthesized record itself points at is resolved; a DWARF forward
 /// declaration, or any other incomplete type, is left alone.
 pub fn resolve_self_pointer(types: &dyn TypeFactory, ct: &Datatype) -> Option<Rc<Datatype>> {
-    let DatatypeKind::Pointer { ptrto, spaceid: None, truncate: None, wordsize } = &ct.kind else {
+    let DatatypeKind::Pointer {
+        ptrto,
+        spaceid: None,
+        truncate: None,
+        wordsize,
+    } = &ct.kind
+    else {
         return None;
     };
     if !ptrto.is_incomplete()
@@ -1515,7 +1722,11 @@ pub fn resolve_self_pointer(types: &dyn TypeFactory, ct: &Datatype) -> Option<Rc
     }
     let holds = (0..full.num_depend())
         .filter_map(|i| full.get_field(i))
-        .any(|f| f.field_type.get_ptr_to().is_some_and(|p| Rc::ptr_eq(&p, ptrto)));
+        .any(|f| {
+            f.field_type
+                .get_ptr_to()
+                .is_some_and(|p| Rc::ptr_eq(&p, ptrto))
+        });
     if !holds {
         return None;
     }
@@ -1535,7 +1746,11 @@ pub struct ActionStructSynth {
 impl ActionStructSynth {
     /// Construct the action in the given group.
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionStructSynth { base: ActionBase::new(0, "structsynth", g), fired: false, requested: false })
+        Box::new(ActionStructSynth {
+            base: ActionBase::new(0, "structsynth", g),
+            fired: false,
+            requested: false,
+        })
     }
 }
 
@@ -1550,7 +1765,11 @@ impl Action for ActionStructSynth {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionStructSynth { base: self.base.clone(), fired: false, requested: false }))
+        Some(Box::new(ActionStructSynth {
+            base: self.base.clone(),
+            fired: false,
+            requested: false,
+        }))
     }
     fn reset(&mut self, _data: &mut Funcdata) {
         self.fired = false;

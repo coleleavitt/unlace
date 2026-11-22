@@ -79,6 +79,8 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
   Sanctioned re-pins (upstream sync / deliberate default change) say so in the message
   (`unlace test --save-baseline`). Adding a stage test re-records `docs/baseline-stages.json`
   and bumps the corpus count in `unlace-base/src/xml.rs`.
+- **Edition 2024 and rustfmt**: the workspace is edition 2024; run `cd decompiler && cargo fmt --all`
+  (2024 style, `decompiler/rustfmt.toml`) before committing. CI and the `fast` gate check it.
 - **Comments are rare**: file header or function header only; inline only for a genuinely
   confusing hack. New functionality → new modules matching surrounding conventions (ported
   files name methods after their C++ originals).

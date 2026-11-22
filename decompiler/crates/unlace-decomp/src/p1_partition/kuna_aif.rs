@@ -60,7 +60,10 @@ pub fn parse_aif_mode(p1: &str) -> KunaResult<(AifMode, String)> {
         "precise" => AifMode::Precise,
         _ => return Err(KunaError::parse("Must specify off, on, strict or precise")),
     };
-    Ok((mode, format!("Aggressive Instruction Finder gap walk set to {p1}")))
+    Ok((
+        mode,
+        format!("Aggressive Instruction Finder gap walk set to {p1}"),
+    ))
 }
 
 #[cfg(test)]
@@ -78,7 +81,10 @@ mod tests {
         for (token, enabled, strict, corroborate) in table {
             let (mode, _) = parse_aif_mode(token).unwrap();
             assert_eq!(mode.as_str(), token);
-            assert_eq!((mode.enabled(), mode.strict(), mode.corroborate()), (enabled, strict, corroborate));
+            assert_eq!(
+                (mode.enabled(), mode.strict(), mode.corroborate()),
+                (enabled, strict, corroborate)
+            );
         }
         assert!(parse_aif_mode("corroborate").is_err());
         assert_eq!(AifMode::default(), AifMode::Off);

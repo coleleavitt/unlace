@@ -88,7 +88,9 @@ pub struct ActionSwitchReturn {
 impl ActionSwitchReturn {
     /// Construct in group `g`.
     pub fn boxed(g: impl Into<String>) -> Box<dyn Action> {
-        Box::new(ActionSwitchReturn { base: ActionBase::new(0, "switchreturn", g) })
+        Box::new(ActionSwitchReturn {
+            base: ActionBase::new(0, "switchreturn", g),
+        })
     }
 }
 
@@ -103,7 +105,9 @@ impl Action for ActionSwitchReturn {
         if !grouplist.contains(self.get_group()) {
             return None;
         }
-        Some(Box::new(ActionSwitchReturn { base: self.base.clone() }))
+        Some(Box::new(ActionSwitchReturn {
+            base: self.base.clone(),
+        }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // P0 assertion `option switchreturn on|off`, carried on the Architecture boundary.
@@ -139,6 +143,9 @@ impl OptionSwitchReturn {
     pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
-        Ok((val, format!("Switch const-case return hoisting turned {prop}")))
+        Ok((
+            val,
+            format!("Switch const-case return hoisting turned {prop}"),
+        ))
     }
 }

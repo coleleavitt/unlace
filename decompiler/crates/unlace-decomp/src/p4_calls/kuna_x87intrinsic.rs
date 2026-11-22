@@ -28,14 +28,28 @@ pub const BINARY_MODEL_NAME: &str = "__kuna_x87binary";
 
 /// The one-operand intrinsics of the MSVC CRT.
 pub const INTRINSICS: [&str; 13] = [
-    "__CIsqrt", "__CIsin", "__CIcos", "__CItan", "__CIexp", "__CIlog", "__CIlog10", "__CIasin",
-    "__CIacos", "__CIatan", "__CIsinh", "__CIcosh", "__CItanh",
+    "__CIsqrt",
+    "__CIsin",
+    "__CIcos",
+    "__CItan",
+    "__CIexp",
+    "__CIlog",
+    "__CIlog10",
+    "__CIasin",
+    "__CIacos",
+    "__CIatan",
+    "__CIsinh",
+    "__CIcosh",
+    "__CItanh",
 ];
 
 /// The two-operand intrinsics of the MSVC CRT, with their operand names in
 /// `ST1, ST0` order.
-pub const BINARY_INTRINSICS: [(&str, [&str; 2]); 3] =
-    [("__CIpow", ["x", "y"]), ("__CIatan2", ["y", "x"]), ("__CIfmod", ["x", "y"])];
+pub const BINARY_INTRINSICS: [(&str, [&str; 2]); 3] = [
+    ("__CIpow", ["x", "y"]),
+    ("__CIatan2", ["y", "x"]),
+    ("__CIfmod", ["x", "y"]),
+];
 
 fn bare(name: &str) -> &str {
     name.trim_start_matches('_')

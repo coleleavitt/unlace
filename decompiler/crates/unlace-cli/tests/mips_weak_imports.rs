@@ -12,10 +12,16 @@ fn declared_weak_calls_preserve_null_guards_arguments_and_results() {
     let mut images = Vec::new();
     for compiler in ["47", "73"] {
         for abi in ["n32", "64"] {
-            images.push((format!("octeon-relocations/pic-gcc{compiler}-{abi}.o"), None));
+            images.push((
+                format!("octeon-relocations/pic-gcc{compiler}-{abi}.o"),
+                None,
+            ));
         }
     }
-    for (abi, little) in [("n32", "MIPS:LE:64:64-32addr"), ("64", "MIPS:LE:64:default")] {
+    for (abi, little) in [
+        ("n32", "MIPS:LE:64:64-32addr"),
+        ("64", "MIPS:LE:64:default"),
+    ] {
         images.push((format!("mips-weak-imports/page-{abi}-be.o"), None));
         images.push((format!("mips-weak-imports/page-{abi}-le.o"), Some(little)));
     }

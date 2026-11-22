@@ -33,11 +33,14 @@ use std::rc::Rc;
 
 use unlace_analysis::listing::Listing;
 use unlace_base::address::Address;
-use unlace_console::engine::{bootstrap_from_object, ConsoleProgram};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_sleigh::translate::{AssemblyEmit, PcodeEmit};
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn spec_roots() -> Vec<String> {
@@ -131,7 +134,10 @@ fn build_listing(prog: &ConsoleProgram, bin: &str, seed: u64) -> Listing {
 /// the painted decode DIFFERS from the un-painted A32 control.
 #[test]
 fn arm_thumb_seed_decodes_in_thumb_mode_in_listing() {
-    let bin = arm_thumb_linked().to_str().expect("UTF-8 fixture path").to_string();
+    let bin = arm_thumb_linked()
+        .to_str()
+        .expect("UTF-8 fixture path")
+        .to_string();
     let prog = boot(&bin);
 
     // Control: the un-painted (default A32) decode of `compute`'s entry. Built on a
@@ -141,14 +147,19 @@ fn arm_thumb_seed_decodes_in_thumb_mode_in_listing() {
     let (a32_len, a32_mnem) = raw_decode(&prog_ctrl, COMPUTE_EVEN_ENTRY)
         .expect("the A32 control decodes the bytes as a 4-byte word");
     // A32 is always a 4-byte word.
-    assert_eq!(a32_len, 4, "the un-painted control must decode `compute` as a fixed 4-byte A32 word");
+    assert_eq!(
+        a32_len, 4,
+        "the un-painted control must decode `compute` as a fixed 4-byte A32 word"
+    );
 
     // The Listing builds with the context paint: `compute` decodes as Thumb.
     let listing = build_listing(&prog, &bin, COMPUTE_EVEN_ENTRY);
 
     let seed = listing
         .instruction_at(COMPUTE_EVEN_ENTRY)
-        .unwrap_or_else(|| panic!("the Listing decoded no instruction at compute ({COMPUTE_EVEN_ENTRY:#x})"));
+        .unwrap_or_else(|| {
+            panic!("the Listing decoded no instruction at compute ({COMPUTE_EVEN_ENTRY:#x})")
+        });
 
     eprintln!(
         "verify_listing_context(arm): seed {:#x} thumb=`{}`(len {}) vs control a32=`{}`(len {})",
@@ -169,7 +180,10 @@ fn arm_thumb_seed_decodes_in_thumb_mode_in_listing() {
         seed.len != a32_len || seed.mnemonic.as_str() != a32_mnem.as_str(),
         "the painted Thumb decode must differ from the un-painted A32 control \
          (thumb len={}/mnem=`{}` vs a32 len={}/mnem=`{}`)",
-        seed.len, seed.mnemonic, a32_len, a32_mnem
+        seed.len,
+        seed.mnemonic,
+        a32_len,
+        a32_mnem
     );
 
     // (3) Sane Thumb mnemonic: `compute` opens with `push {r7}`.
@@ -187,7 +201,11 @@ fn arm_thumb_seed_decodes_in_thumb_mode_in_listing() {
         .instructions()
         .filter(|&(&a, _)| (COMPUTE_EVEN_ENTRY..COMPUTE_EVEN_ENTRY + 30).contains(&a))
         .collect();
-    assert!(body.len() >= 3, "expected several Thumb instructions in `compute`, got {}", body.len());
+    assert!(
+        body.len() >= 3,
+        "expected several Thumb instructions in `compute`, got {}",
+        body.len()
+    );
     for &(&a, ref insn) in &body {
         assert!(
             insn.len == 2 || insn.len == 4,
@@ -202,7 +220,9 @@ fn arm_thumb_seed_decodes_in_thumb_mode_in_listing() {
     assert!(
         has_shift,
         "the Thumb decode of `x*3+7` must include a shift (the `*3 = (x<<1)+x`); body = {:#x?}",
-        body.iter().map(|(a, i)| (**a, i.mnemonic.clone())).collect::<Vec<_>>()
+        body.iter()
+            .map(|(a, i)| (**a, i.mnemonic.clone()))
+            .collect::<Vec<_>>()
     );
 }
 
@@ -225,9 +245,9 @@ fn mips16_seed_decodes_in_mips16_mode_in_listing() {
     // The Listing builds with the context paint: `m16_square` decodes as MIPS16.
     let listing = build_listing(&prog, &bin, M16_SQUARE_ENTRY);
 
-    let seed = listing
-        .instruction_at(M16_SQUARE_ENTRY)
-        .unwrap_or_else(|| panic!("the Listing decoded no instruction at m16_square ({M16_SQUARE_ENTRY:#x})"));
+    let seed = listing.instruction_at(M16_SQUARE_ENTRY).unwrap_or_else(|| {
+        panic!("the Listing decoded no instruction at m16_square ({M16_SQUARE_ENTRY:#x})")
+    });
 
     eprintln!(
         "verify_listing_context(mips16): seed {:#x} mips16=`{}`(len {}) vs control mips32={:?}",
@@ -251,7 +271,10 @@ fn mips16_seed_decodes_in_mips16_mode_in_listing() {
             seed.len != m32_len || seed.mnemonic.as_str() != m32_mnem.as_str(),
             "the painted MIPS16 decode must differ from the un-painted MIPS32 control \
              (mips16 len={}/mnem=`{}` vs mips32 len={}/mnem=`{}`)",
-            seed.len, seed.mnemonic, m32_len, m32_mnem
+            seed.len,
+            seed.mnemonic,
+            m32_len,
+            m32_mnem
         ),
     }
 
@@ -268,13 +291,18 @@ fn mips16_seed_decodes_in_mips16_mode_in_listing() {
     assert!(
         body.iter().all(|(_, i)| i.len == 2 || i.len == 4),
         "MIPS16 ops are 2 bytes (4 with a folded delay slot); `m16_square`'s body = {:#x?}",
-        body.iter().map(|(a, i)| (**a, i.len, i.mnemonic.clone())).collect::<Vec<_>>()
+        body.iter()
+            .map(|(a, i)| (**a, i.len, i.mnemonic.clone()))
+            .collect::<Vec<_>>()
     );
     // The seed op is decisively a 2-byte MIPS16 `mult` (asserted above); the body
     // begins with a self-multiply (the `n*n`), a MIPS16-only shape.
     assert!(
-        body.iter().any(|(_, i)| i.mnemonic.to_lowercase().contains("mult")),
+        body.iter()
+            .any(|(_, i)| i.mnemonic.to_lowercase().contains("mult")),
         "the MIPS16 decode of `n*n+3` must include a `mult`; body = {:#x?}",
-        body.iter().map(|(a, i)| (**a, i.mnemonic.clone())).collect::<Vec<_>>()
+        body.iter()
+            .map(|(a, i)| (**a, i.mnemonic.clone()))
+            .collect::<Vec<_>>()
     );
 }

@@ -31,7 +31,10 @@ fn safe_rewrites_exactly_the_structural_set() {
     assert_eq!(safe(b"a/*/b"), "a_x2f_x2a_x2fb");
     assert_eq!(safe(b"a**/b"), "a*_x2a_x2fb");
     for out in [safe(b"a*/b"), safe(b"a/*b"), safe(b"a//b"), safe(b"a/*/b")] {
-        assert!(!out.contains("*/") && !out.contains("/*") && !out.contains("//"), "{out}");
+        assert!(
+            !out.contains("*/") && !out.contains("/*") && !out.contains("//"),
+            "{out}"
+        );
     }
 }
 
@@ -68,7 +71,10 @@ fn safe_is_a_no_op_on_every_real_toolchain_name() {
     ] {
         assert_eq!(safe(name.as_bytes()), name, "safe must not touch {name:?}");
         assert!(
-            matches!(sanitize_symbol_name_bytes(name.as_bytes(), NameChars::Safe), Cow::Borrowed(_)),
+            matches!(
+                sanitize_symbol_name_bytes(name.as_bytes(), NameChars::Safe),
+                Cow::Borrowed(_)
+            ),
             "and must not even allocate for {name:?}"
         );
     }
@@ -81,7 +87,11 @@ fn safe_is_a_no_op_on_every_real_toolchain_name() {
 fn distinct_invalid_utf8_names_stay_distinct() {
     let a = b"a\x80b";
     let b = b"a\x81b";
-    assert_eq!(String::from_utf8_lossy(a), String::from_utf8_lossy(b), "the bug");
+    assert_eq!(
+        String::from_utf8_lossy(a),
+        String::from_utf8_lossy(b),
+        "the bug"
+    );
     assert_ne!(safe(a), safe(b), "the fix");
     assert_eq!(safe(a), "a_x80b");
     assert_eq!(safe(b), "a_x81b");
@@ -128,7 +138,10 @@ fn ident_folds_the_clone_suffixes_safe_leaves_alone() {
     assert_eq!(ident(b"err_fatal.constprop.0"), "err_fatal_constprop_0");
     assert_eq!(ident(b"main.part.1"), "main_part_1");
     assert_eq!(ident(b"add_fdes.cold"), "add_fdes_cold");
-    assert_eq!(ident(b"0000001b.plt_call.printf@@GLIBC_2.17"), "0000001b_plt_call_printf_GLIBC_2_17");
+    assert_eq!(
+        ident(b"0000001b.plt_call.printf@@GLIBC_2.17"),
+        "0000001b_plt_call_printf_GLIBC_2_17"
+    );
     // `::` survives as scope structure in both modes.
     assert_eq!(ident(b"a::b::c::Deep"), "a::b::c::Deep");
     assert_eq!(safe(b"a::b::c::Deep"), "a::b::c::Deep");
@@ -171,7 +184,10 @@ fn sanitize_ident_chain_matches_the_rtti_class_name_contract() {
     assert_eq!(sanitize_ident_chain("leveldb::Env"), "leveldb::Env");
     assert_eq!(sanitize_ident_chain("Vec<int>"), "Vec_int");
     assert_eq!(sanitize_ident_chain("Vec<double>"), "Vec_double");
-    assert_ne!(sanitize_ident_chain("Vec<int>"), sanitize_ident_chain("Vec<double>"));
+    assert_ne!(
+        sanitize_ident_chain("Vec<int>"),
+        sanitize_ident_chain("Vec<double>")
+    );
     assert_eq!(
         sanitize_ident_chain("(anonymous namespace)::Hidden"),
         "anonymous_namespace::Hidden"
@@ -230,8 +246,14 @@ fn str_entry_point_agrees_with_the_byte_one() {
     for mode in [NameChars::Off, NameChars::Safe, NameChars::Ident] {
         for name in ["main", "a*/b", "err_fatal.constprop.0", "a::b"] {
             let via_bytes = sanitize_symbol_name_bytes(name.as_bytes(), mode).into_owned();
-            assert_eq!(sanitize_symbol_name(name, mode).as_bytes(), via_bytes.as_slice());
+            assert_eq!(
+                sanitize_symbol_name(name, mode).as_bytes(),
+                via_bytes.as_slice()
+            );
         }
     }
-    assert!(matches!(sanitize_symbol_name("main", NameChars::Safe), Cow::Borrowed(_)));
+    assert!(matches!(
+        sanitize_symbol_name("main", NameChars::Safe),
+        Cow::Borrowed(_)
+    ));
 }

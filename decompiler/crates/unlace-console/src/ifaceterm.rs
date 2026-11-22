@@ -27,7 +27,7 @@
 //!   the source the XML datatest runner (`decomp_test_dbg`) uses, so its
 //!   "return the next command, empty when exhausted" contract is exact.
 
-use crate::interface::{words_to_string, CommandStream, IfaceStatus, LineSource};
+use crate::interface::{CommandStream, IfaceStatus, LineSource, words_to_string};
 use unlace_base::types::int4;
 
 // ---------------------------------------------------------------------------
@@ -46,7 +46,11 @@ struct CharStream {
 
 impl CharStream {
     fn new(bytes: Vec<u8>) -> Self {
-        CharStream { buf: bytes, pos: 0, eof: false }
+        CharStream {
+            buf: bytes,
+            pos: 0,
+            eof: false,
+        }
     }
 
     /// C++ `sptr->get()`: read one byte, latching eof at end-of-stream.  The
@@ -87,7 +91,10 @@ impl IfaceTerm {
     /// Construct over the given base input bytes (C++ `IfaceTerm(prmpt, is,
     /// os)`; the `__TERMINAL__` raw-mode setup is the documented loss).
     pub fn new(base_input: &[u8]) -> Self {
-        IfaceTerm { sptr: CharStream::new(base_input.to_vec()), inputstack: Vec::new() }
+        IfaceTerm {
+            sptr: CharStream::new(base_input.to_vec()),
+            inputstack: Vec::new(),
+        }
     }
 
     /// Build an [`IfaceStatus`] driven by an `IfaceTerm` over `base_input`,
@@ -332,7 +339,10 @@ impl LineSource for IfaceTerm {
 
     fn pop_input(&mut self) {
         // C++ popScript.
-        self.sptr = self.inputstack.pop().expect("IfaceTerm::popScript: empty input stack");
+        self.sptr = self
+            .inputstack
+            .pop()
+            .expect("IfaceTerm::popScript: empty input stack");
     }
 
     fn current_stream_finished(&self) -> bool {
@@ -654,7 +664,11 @@ mod tests {
         // The redraw echoes the rebuilt line; it must contain the collapsed
         // "load file extra" with the multiple spaces between params collapsed
         // to one (C++ reads token, appends single space).
-        assert!(st.optr.contains("load file extra"), "optr was {:?}", st.optr);
+        assert!(
+            st.optr.contains("load file extra"),
+            "optr was {:?}",
+            st.optr
+        );
         // It must NOT have listed candidates or said "Command is complete"
         // (the line grew, so doCompletion early-returns the expansion).
         assert!(!st.optr.contains("Command is complete"));
@@ -674,7 +688,11 @@ mod tests {
         let ran = st.run_command().unwrap();
         assert!(ran, "edited line 'ac' should execute");
         // The non-onecharecho redraw path emits a carriage return.
-        assert!(st.optr.contains('\r'), "redraw must emit CR; optr={:?}", st.optr);
+        assert!(
+            st.optr.contains('\r'),
+            "redraw must emit CR; optr={:?}",
+            st.optr
+        );
         // The prompt is rewritten on the redraw line.
         assert!(st.optr.contains("[decomp]> "), "redraw must rewrite prompt");
     }

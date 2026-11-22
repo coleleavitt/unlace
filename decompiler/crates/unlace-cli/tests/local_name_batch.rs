@@ -18,11 +18,7 @@ fn decompile(function: &str, directives: &[&str]) -> (String, Vec<String>) {
     decompile_fixture("localnamebatch_x86_64", function, directives)
 }
 
-fn decompile_fixture(
-    fixture: &str,
-    function: &str,
-    directives: &[&str],
-) -> (String, Vec<String>) {
+fn decompile_fixture(fixture: &str, function: &str, directives: &[&str]) -> (String, Vec<String>) {
     let binary = common::fixture(fixture);
     let mut args = vec!["decompile", &binary, function, "--mode", "reliable"];
     for directive in directives {
@@ -70,7 +66,10 @@ fn applies(function: &str, directives: &[&str], declarations: &[&str]) -> String
         "{directives:?} rejected {rejected:?}:\n{code}"
     );
     for decl in declarations {
-        assert!(contains_declaration(&code, decl), "{directives:?}: no `{decl}`:\n{code}");
+        assert!(
+            contains_declaration(&code, decl),
+            "{directives:?}: no `{decl}`:\n{code}"
+        );
     }
     code
 }
@@ -80,9 +79,11 @@ fn contains_declaration(code: &str, expected: &str) -> bool {
         return code.contains(expected);
     };
     code.lines().any(|line| {
-        line.trim().split_once(" // ").is_some_and(|(actual, sources)| {
-            actual == declaration && sources.split(" | ").any(|source| source == home)
-        })
+        line.trim()
+            .split_once(" // ")
+            .is_some_and(|(actual, sources)| {
+                actual == declaration && sources.split(" | ").any(|source| source == home)
+            })
     })
 }
 
@@ -165,7 +166,11 @@ fn a_swap_exchanges_the_two_names() {
         applies(
             "mixed_pair",
             &swap,
-            &["int4 v1; // stack - 0xc", "int4 v2; // ebx", "observe(v2,v1);"],
+            &[
+                "int4 v1; // stack - 0xc",
+                "int4 v2; // ebx",
+                "observe(v2,v1);",
+            ],
         );
     }
 }
@@ -219,8 +224,14 @@ fn a_printed_name_given_to_another_local_is_ambiguous() {
                  local printed as {from} (now {to})\""
             );
             assert_eq!(rejected, [detail], "{function}:\n{code}");
-            assert!(contains_declaration(&code, declared), "{function} {second}:\n{code}");
-            assert!(!code.contains("uint4") && !code.contains("foo"), "{function}:\n{code}");
+            assert!(
+                contains_declaration(&code, declared),
+                "{function} {second}:\n{code}"
+            );
+            assert!(
+                !code.contains("uint4") && !code.contains("foo"),
+                "{function}:\n{code}"
+            );
         }
     }
 }
@@ -236,7 +247,10 @@ fn a_later_directive_keeps_the_width_and_reads_the_shown_name() {
         rejected,
         ["\"type i char *\": \"Storage is 4 bytes, the stated type is 8\""]
     );
-    for (third, declared) in [("type x unsigned int", "uint4 x; // ebx"), ("type x_1 unsigned int", "uint4 x_1; // r12d")] {
+    for (third, declared) in [
+        ("type x unsigned int", "uint4 x; // ebx"),
+        ("type x_1 unsigned int", "uint4 x_1; // r12d"),
+    ] {
         let (code, rejected) = decompile("two_locals", &["name v1 x", "name v2 x", third]);
         assert!(rejected.is_empty(), "{third}: {rejected:?}");
         assert!(contains_declaration(&code, declared), "{third}:\n{code}");
@@ -255,7 +269,11 @@ fn mixed_width_register_locals_keep_both_assertions() {
     let flag = "name v1 flag";
     for order in [[text, flag], [flag, text]] {
         let directives: Vec<&str> = prototypes.iter().copied().chain(order).collect();
-        let code = applies("pick_flag", &directives, &["char *text; // rax", "uint4 flag; // eax"]);
+        let code = applies(
+            "pick_flag",
+            &directives,
+            &["char *text; // rax", "uint4 flag; // eax"],
+        );
         assert!(code.contains("if (text)"), "{code}");
         assert!(code.contains("flag = probe(text) != 0;"), "{code}");
         assert!(!code.contains("_0_4_"), "{code}");
@@ -272,8 +290,14 @@ fn a_name_renamed_away_and_given_to_another_local_is_ambiguous() {
                   (now tmp) and the local printed as v1 (now v2)\"";
     let (code, rejected) = decompile("stack_pair", &directives);
     assert_eq!(rejected, [detail], "{code}");
-    assert!(contains_declaration(&code, "int4 v2; // stack - 0x10"), "{code}");
-    assert!(contains_declaration(&code, "int4 tmp [3]; // stack - 0xc"), "{code}");
+    assert!(
+        contains_declaration(&code, "int4 v2; // stack - 0x10"),
+        "{code}"
+    );
+    assert!(
+        contains_declaration(&code, "int4 tmp [3]; // stack - 0xc"),
+        "{code}"
+    );
     let (code, rejected) = decompile("two_locals", &directives);
     assert_eq!(rejected, [detail], "{code}");
     assert!(!code.contains("uint4"), "{code}");
@@ -309,17 +333,27 @@ fn a_swap_among_three_locals_keeps_every_name() {
 #[test]
 fn a_source_name_of_the_default_form_keeps_it() {
     for (function, declarations) in [
-        ("same_kind", &["int4 same_kind(item *v1,item *v2)", "int4 v3; // eax"][..]),
+        (
+            "same_kind",
+            &["int4 same_kind(item *v1,item *v2)", "int4 v3; // eax"][..],
+        ),
         (
             "widest",
-            &["int8 v1; // stack - 0x18", "int4 i; // stack - 0x1c", "v1 = *values;"][..],
+            &[
+                "int8 v1; // stack - 0x18",
+                "int4 i; // stack - 0x1c",
+                "v1 = *values;",
+            ][..],
         ),
     ] {
         let (code, rejected) = decompile_fixture("dwarfvnames_x86_64", function, &[]);
         assert!(rejected.is_empty(), "{rejected:?}");
         assert!(!code.contains("v1_1"), "{code}");
         for decl in declarations {
-            assert!(contains_declaration(&code, decl), "{function}: no `{decl}`:\n{code}");
+            assert!(
+                contains_declaration(&code, decl),
+                "{function}: no `{decl}`:\n{code}"
+            );
         }
     }
 }

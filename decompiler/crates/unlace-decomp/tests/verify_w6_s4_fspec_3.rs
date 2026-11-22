@@ -30,16 +30,14 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
-use unlace_base::space::{spacetype, AddrSpace, AddrSpaceManager};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, spacetype};
 use unlace_base::types::int4;
 
-use unlace_decomp::dtype::{type_metatype, Datatype};
-use unlace_decomp::fspec::{
-    FuncCallSpecs, FuncProto, ParameterPieces, ProtoModel, OFFSET_UNKNOWN,
-};
+use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
+use unlace_decomp::dtype::{Datatype, type_metatype};
+use unlace_decomp::fspec::{FuncCallSpecs, FuncProto, OFFSET_UNKNOWN, ParameterPieces, ProtoModel};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::op::pcodeop_flags;
-use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
 use unlace_decomp::varnode::DefOpInfo;
 use unlace_num::opcodes::OpCode;
 
@@ -49,7 +47,8 @@ fn fcs_manager() -> AddrSpaceManager {
     use unlace_base::space::{ConstantSpace, UniqueSpace};
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -106,7 +105,12 @@ fn fcs_stack(fd: &Funcdata) -> Rc<AddrSpace> {
     Rc::clone(fd.get_arch().manage().get_space_by_name("stack").unwrap())
 }
 fn fcs_reg(fd: &Funcdata) -> Rc<AddrSpace> {
-    Rc::clone(fd.get_arch().manage().get_space_by_name("register").unwrap())
+    Rc::clone(
+        fd.get_arch()
+            .manage()
+            .get_space_by_name("register")
+            .unwrap(),
+    )
 }
 
 fn fcs_new_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
@@ -117,14 +121,18 @@ fn fcs_new_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
     } else {
         0
     };
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, flags, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, flags, format!("{opc:?}")));
     op
 }
 
 /// A varnode in `space` at `off`/`size` defined by `op` (sets `written`).
 fn fcs_out(fd: &mut Funcdata, op: OpId, space: Rc<AddrSpace>, off: u64, size: int4) -> VarnodeId {
     let seq = fd.obank().get(op).unwrap().get_seq_num().clone();
-    let def = DefOpInfo { id: op, seqnum: seq };
+    let def = DefOpInfo {
+        id: op,
+        seqnum: seq,
+    };
     let vn = {
         let mut noop = |_b: &mut unlace_decomp::varnode::VarnodeBank,
                         _o: VarnodeId,
@@ -234,19 +242,34 @@ fn fspec3_trial_for_input_varnode_placeholder_equal_boundary() {
     pa.register_trial(&addr(&stk, 0x18), 8); // slot 4, idx 3
 
     // No placeholder yet (stackplaceholder == -1): subtract 1 everywhere.
-    assert_eq!(pa.get_trial_for_input_varnode(1).get_address().get_offset(), 0x0);
-    assert_eq!(pa.get_trial_for_input_varnode(4).get_address().get_offset(), 0x18);
+    assert_eq!(
+        pa.get_trial_for_input_varnode(1).get_address().get_offset(),
+        0x0
+    );
+    assert_eq!(
+        pa.get_trial_for_input_varnode(4).get_address().get_offset(),
+        0x18
+    );
 
     // Establish the placeholder at slotbase (now 5 after four registrations).
     pa.set_placeholder_slot(); // stackplaceholder = 5
     // slot < placeholder(5): subtract 1.
-    assert_eq!(pa.get_trial_for_input_varnode(3).get_address().get_offset(), 0x10); // idx 2
-    assert_eq!(pa.get_trial_for_input_varnode(4).get_address().get_offset(), 0x18); // idx 3
+    assert_eq!(
+        pa.get_trial_for_input_varnode(3).get_address().get_offset(),
+        0x10
+    ); // idx 2
+    assert_eq!(
+        pa.get_trial_for_input_varnode(4).get_address().get_offset(),
+        0x18
+    ); // idx 3
     // slot == placeholder(5): the BOUNDARY — must take `else 2`, NOT `1`.
     //   5 - 2 = idx 3 (0x18).  A buggy `<=` (`slot <= sp ? 1 : 2`) would take
     //   `-1` here and read idx 4 (out of bounds / wrong), so the `<` boundary is
     //   load-bearing.  With the correct `<`, slot 5 == slot 4's value (0x18).
-    assert_eq!(pa.get_trial_for_input_varnode(5).get_address().get_offset(), 0x18); // idx 3
+    assert_eq!(
+        pa.get_trial_for_input_varnode(5).get_address().get_offset(),
+        0x18
+    ); // idx 3
 }
 
 // ---------------------------------------------------------------------------
@@ -287,7 +310,10 @@ fn fspec3_resolve_spacebase_relative_locked_wrap_underflow() {
     fd.op_set_input(load, refvn, 0).unwrap();
     let uniq = Rc::clone(fd.get_arch().manage().get_space(1).unwrap());
     let phvn = fcs_out(&mut fd, load, uniq, 0x0, 8);
-    fd.vbank_mut().get_mut(phvn).unwrap().set_spacebase_placeholder();
+    fd.vbank_mut()
+        .get_mut(phvn)
+        .unwrap()
+        .set_spacebase_placeholder();
     fd.op_set_input(call, phvn, 1).unwrap();
 
     // fc: standard model, then a LOCKED input prototype with one stack param at
@@ -308,7 +334,10 @@ fn fspec3_resolve_spacebase_relative_locked_wrap_underflow() {
     // stack param).  spacebase matches, so the wrap branch runs:
     //   stackoffset(0) - 0x20  ==  2^64 - 0x20  (wrapped), then wrapOffset.
     let r = fc.resolve_spacebase_relative(&mut fd, phvn);
-    assert!(r.is_ok(), "input-locked stack param should resolve, got {r:?}");
+    assert!(
+        r.is_ok(),
+        "input-locked stack param should resolve, got {r:?}"
+    );
     let expected = 0u64.wrapping_sub(stack_param_off); // wrap_offset on a 8-byte space is identity
     assert_eq!(
         fc.get_spacebase_offset(),
@@ -357,7 +386,8 @@ fn fspec3_late_restriction_locked_register_reuse() {
     // param address whose slot is 1 (the live CALL input).
     let mut fc = FuncCallSpecs::new(call, Address::default());
     let voidt = Rc::new(Datatype::new(1, type_metatype::TYPE_VOID));
-    fc.proto_mut().set_internal(Rc::clone(&model), Rc::clone(&voidt));
+    fc.proto_mut()
+        .set_internal(Rc::clone(&model), Rc::clone(&voidt));
     {
         let pa = fc.get_active_input();
         pa.register_trial(&addr(&reg, 0x0), 4); // slotbase 0
@@ -383,7 +413,10 @@ fn fspec3_late_restriction_locked_register_reuse() {
     let ok = fc
         .late_restriction(&fd, &restricted, &mut newinput, &mut newoutput)
         .expect("late_restriction over a register-locked proto");
-    assert!(ok, "register reuse should succeed (no stack placeholder needed)");
+    assert!(
+        ok,
+        "register reuse should succeed (no stack placeholder needed)"
+    );
 
     // newinput == [dest (slot 0), reused regvn (slot 1)].
     assert_eq!(newinput.len(), 2);

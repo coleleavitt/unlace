@@ -107,8 +107,14 @@ fn sub_float_widths_have_no_spelling() {
 #[test]
 fn metatype_dispatch() {
     assert_eq!(core_type_spelling(&LP64, TYPE_INT, 4, false), Some("int"));
-    assert_eq!(core_type_spelling(&LP64, TYPE_UINT, 4, false), Some("unsigned int"));
-    assert_eq!(core_type_spelling(&LP64, TYPE_FLOAT, 8, false), Some("double"));
+    assert_eq!(
+        core_type_spelling(&LP64, TYPE_UINT, 4, false),
+        Some("unsigned int")
+    );
+    assert_eq!(
+        core_type_spelling(&LP64, TYPE_FLOAT, 8, false),
+        Some("double")
+    );
     assert_eq!(core_type_spelling(&LP64, TYPE_CODE, 1, false), Some("void"));
     // TYPE_BOOL already spells `bool`; TYPE_UNKNOWN belongs to the older
     // `realtypes` relabel, which answers a different question and keeps its own
@@ -125,9 +131,15 @@ fn metatype_dispatch() {
 #[test]
 fn character_types_track_the_target_wchar() {
     assert_eq!(core_type_spelling(&LP64, TYPE_INT, 1, true), Some("char"));
-    assert_eq!(core_type_spelling(&LP64, TYPE_INT, 4, true), Some("wchar_t"));
+    assert_eq!(
+        core_type_spelling(&LP64, TYPE_INT, 4, true),
+        Some("wchar_t")
+    );
     assert_eq!(core_type_spelling(&LP64, TYPE_INT, 2, true), Some("short"));
-    assert_eq!(core_type_spelling(&LLP64, TYPE_INT, 2, true), Some("wchar_t"));
+    assert_eq!(
+        core_type_spelling(&LLP64, TYPE_INT, 2, true),
+        Some("wchar_t")
+    );
     assert_eq!(core_type_spelling(&LLP64, TYPE_INT, 4, true), Some("int"));
 }
 
@@ -138,12 +150,32 @@ fn character_types_track_the_target_wchar() {
 #[test]
 fn no_spelling_is_ever_a_ghidra_name() {
     const VALID: &[&str] = &[
-        "char", "signed char", "unsigned char", "short", "unsigned short", "int", "unsigned int",
-        "long", "unsigned long", "long long", "unsigned long long", "wchar_t", "float", "double",
-        "long double", "void",
+        "char",
+        "signed char",
+        "unsigned char",
+        "short",
+        "unsigned short",
+        "int",
+        "unsigned int",
+        "long",
+        "unsigned long",
+        "long long",
+        "unsigned long long",
+        "wchar_t",
+        "float",
+        "double",
+        "long double",
+        "void",
     ];
     for m in [&LP64, &ILP32, &LLP64] {
-        for meta in [TYPE_INT, TYPE_UINT, TYPE_FLOAT, TYPE_CODE, TYPE_BOOL, TYPE_UNKNOWN] {
+        for meta in [
+            TYPE_INT,
+            TYPE_UINT,
+            TYPE_FLOAT,
+            TYPE_CODE,
+            TYPE_BOOL,
+            TYPE_UNKNOWN,
+        ] {
             for size in 1..=16 {
                 for is_char in [false, true] {
                     if let Some(s) = core_type_spelling(m, meta, size, is_char) {

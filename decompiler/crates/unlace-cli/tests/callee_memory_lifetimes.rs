@@ -88,11 +88,17 @@ int callee_const_write(const struct CalleePair *p) { ((struct CalleePair *)p)->f
             "long a, long b, long c, long d, long e, long f, "
         };
         (
-            format!("int stack_read_pair(const struct CalleePair *);\nint stack_read_second({args}const struct CalleePair *p);\nint stack_hidden_read({args}const struct CalleePair *p);\nint stack_const_write({args}const struct CalleePair *p);\nstruct CalleePair *stack_return_pointer({args}const struct CalleePair *p);"),
-            format!("int stack_read_pair(const struct CalleePair *p) {{ return p->first + p->second; }}\nint stack_read_second({args}const struct CalleePair *p) {{ return p->second; }}\nint stack_hidden_read({args}const struct CalleePair *p) {{ return p->first; }}\nint stack_const_write({args}const struct CalleePair *p) {{ ((struct CalleePair *)p)->first = 9; return 0; }}\nstruct CalleePair *stack_return_pointer({args}const struct CalleePair *p) {{ return stack_saved_pointer; }}"),
+            format!(
+                "int stack_read_pair(const struct CalleePair *);\nint stack_read_second({args}const struct CalleePair *p);\nint stack_hidden_read({args}const struct CalleePair *p);\nint stack_const_write({args}const struct CalleePair *p);\nstruct CalleePair *stack_return_pointer({args}const struct CalleePair *p);"
+            ),
+            format!(
+                "int stack_read_pair(const struct CalleePair *p) {{ return p->first + p->second; }}\nint stack_read_second({args}const struct CalleePair *p) {{ return p->second; }}\nint stack_hidden_read({args}const struct CalleePair *p) {{ return p->first; }}\nint stack_const_write({args}const struct CalleePair *p) {{ ((struct CalleePair *)p)->first = 9; return 0; }}\nstruct CalleePair *stack_return_pointer({args}const struct CalleePair *p) {{ return stack_saved_pointer; }}"
+            ),
             if is32 {
                 r#"void _start(void) { int status = main(); __asm__ volatile("int $0x80" : : "a"(1), "b"(status) : "memory"); __builtin_unreachable(); }"#
-            } else { "" },
+            } else {
+                ""
+            },
         )
     } else {
         (String::new(), String::new(), "")

@@ -13,14 +13,16 @@ const LENGTHS_LARGE: [u16; 24] = [
     0x2003, 0x3000, 0x4002, 0x4003, 0x4004, 0x500a, 0x500b, 0x500c, 0x601a, 0x601b, 0x703a, 0x703b,
     0x703c, 0x807a, 0x807b, 0x807c, 0x90fa, 0x90fb, 0x90fc, 0x90fd, 0x90fe, 0x90ff, 0x601c, 0x2002,
 ];
-const LENGTHS_SMALL: [u16; 9] =
-    [0x2000, 0x3004, 0x3005, 0x400c, 0x400d, 0x400e, 0x400f, 0x3003, 0x3002];
+const LENGTHS_SMALL: [u16; 9] = [
+    0x2000, 0x3004, 0x3005, 0x400c, 0x400d, 0x400e, 0x400f, 0x3003, 0x3002,
+];
 const LENGTHS_V120_LARGE: [u16; 21] = [
     0x2003, 0x3000, 0x4005, 0x4006, 0x5006, 0x5007, 0x6008, 0x6009, 0x7020, 0x7021, 0x7022, 0x7023,
     0x8048, 0x8049, 0x804a, 0x9096, 0x9097, 0x6013, 0x2002, 0x4007, 0x5005,
 ];
-const LENGTHS_V120_SMALL: [u16; 11] =
-    [0x2003, 0x3000, 0x4004, 0x4005, 0x500e, 0x601e, 0x601f, 0x4006, 0x2002, 0x4003, 0x4002];
+const LENGTHS_V120_SMALL: [u16; 11] = [
+    0x2003, 0x3000, 0x4004, 0x4005, 0x500e, 0x601e, 0x601f, 0x4006, 0x2002, 0x4003, 0x4002,
+];
 const OFFSETS: [u16; 32] = [
     0x1001, 0x4000, 0x4001, 0x5004, 0x5005, 0x5006, 0x5007, 0x6010, 0x6011, 0x6012, 0x6013, 0x6014,
     0x6015, 0x6016, 0x702e, 0x702f, 0x7030, 0x7031, 0x7032, 0x7033, 0x7034, 0x7035, 0x7036, 0x7037,
@@ -101,7 +103,11 @@ struct Writer {
 
 impl Writer {
     fn new() -> Writer {
-        Writer { out: vec![0, 0], word: 0, used: 0 }
+        Writer {
+            out: vec![0, 0],
+            word: 0,
+            used: 0,
+        }
     }
 
     fn bit(&mut self, b: bool) {
@@ -276,7 +282,10 @@ pub fn compress_with_coverage(
         let step = len.max(1);
         for k in i..i + step {
             if k + 3 <= data.len() {
-                heads.entry([data[k], data[k + 1], data[k + 2]]).or_default().push(k);
+                heads
+                    .entry([data[k], data[k + 1], data[k + 2]])
+                    .or_default()
+                    .push(k);
             }
         }
         i += step;
@@ -340,7 +349,15 @@ impl Program {
             end,
             self.relocs.len(),
             self.header_paras,
-            [self.min_alloc, self.max_alloc, self.ss, self.sp, self.ip, self.cs, 0],
+            [
+                self.min_alloc,
+                self.max_alloc,
+                self.ss,
+                self.sp,
+                self.ip,
+                self.cs,
+                0,
+            ],
             self.reloc_pos(),
         );
         f.extend_from_slice(&self.stamp);
@@ -574,17 +591,29 @@ fn stub(l: &Layout) -> Vec<u8> {
         Intro::Beta | Intro::BetaLoadHigh => unreachable!(),
     };
 
-    let copier_pos = if l.scramble == Scramble::None { position2 } else { position2 + 64 };
+    let copier_pos = if l.scramble == Scramble::None {
+        position2
+    } else {
+        position2 + 64
+    };
     let copier_at = copier_pos + 8;
     let d = copier_pos + 48;
     match l.copier {
         Copier::Common | Copier::Scr150 => {
             place(&mut ep, copier_at, b"\xb9??\x33\xff\x57\xbe??\xfc\xf3\xa5");
-            ep[copier_at + 12] = if l.copier == Copier::Common { 0xcb } else { 0xca };
+            ep[copier_at + 12] = if l.copier == Copier::Common {
+                0xcb
+            } else {
+                0xca
+            };
             put_word(&mut ep, copier_at + 7, ip(d));
         }
         Copier::Pklite201 => {
-            place(&mut ep, copier_at, b"\xb9??\x33\xff\x57\xfc\xbe??\xf3\xa5\xcb");
+            place(
+                &mut ep,
+                copier_at,
+                b"\xb9??\x33\xff\x57\xfc\xbe??\xf3\xa5\xcb",
+            );
             put_word(&mut ep, copier_at + 8, ip(d));
         }
         Copier::V120Small => {
@@ -592,11 +621,19 @@ fn stub(l: &Layout) -> Vec<u8> {
             put_word(&mut ep, copier_at + 5, ip(d));
         }
         Copier::Megalite => {
-            place(&mut ep, copier_at, b"\xb9??\x33\xff\x56\xbe??\xfc\xf2\xa5\xca");
+            place(
+                &mut ep,
+                copier_at,
+                b"\xb9??\x33\xff\x56\xbe??\xfc\xf2\xa5\xca",
+            );
             put_word(&mut ep, copier_at + 7, ip(d));
         }
         Copier::Un2Pack => {
-            place(&mut ep, copier_at, b"\xb9??\x2b\xff\x57\xbe??\xfc\xf3\xa5\xcb");
+            place(
+                &mut ep,
+                copier_at,
+                b"\xb9??\x2b\xff\x57\xbe??\xfc\xf3\xa5\xcb",
+            );
             put_word(&mut ep, copier_at + 7, ip(d));
         }
     }
@@ -612,11 +649,19 @@ fn stub(l: &Layout) -> Vec<u8> {
             put_word(&mut ep, d + 6, ((STUB_LEN + 0x100) / 16) as u16);
         }
         Decompressor::V120Small => {
-            place(&mut ep, d, b"\xfd\x5f\xc7\x85????\x4f\x4f\xbe??\x03\xf2\x8b\xca\xd1\xe9\xf3");
+            place(
+                &mut ep,
+                d,
+                b"\xfd\x5f\xc7\x85????\x4f\x4f\xbe??\x03\xf2\x8b\xca\xd1\xe9\xf3",
+            );
             put_word(&mut ep, d + 11, ip(STUB_LEN - 2));
         }
         Decompressor::V120SmallOld => {
-            place(&mut ep, d, b"\xfd\x5f\x4f\x4f\xbe??\x03\xf2\x8b\xca\xd1\xe9\xf3");
+            place(
+                &mut ep,
+                d,
+                b"\xfd\x5f\x4f\x4f\xbe??\x03\xf2\x8b\xca\xd1\xe9\xf3",
+            );
             put_word(&mut ep, d + 5, ip(STUB_LEN - 2));
         }
     }
@@ -679,8 +724,16 @@ fn stub(l: &Layout) -> Vec<u8> {
 fn decompressor_body(ep: &mut [u8], l: &Layout, at: usize) {
     match l.mode.extra {
         0 => place(ep, at, b"\xad\x95\xb2\x10\x72\x08\xa4\xd1\xed\x4a\x74"),
-        1 => place(ep, at, b"\xad\x95\xb2\x10\x72\x0b\xac\x32\xc2\xaa\xd1\xed\x4a\x74"),
-        _ => place(ep, at, b"\xad\x95\xb2\x10\x72\x0b\xac\xf6\xd0\xaa\xd1\xed\x4a\x74"),
+        1 => place(
+            ep,
+            at,
+            b"\xad\x95\xb2\x10\x72\x0b\xac\x32\xc2\xaa\xd1\xed\x4a\x74",
+        ),
+        _ => place(
+            ep,
+            at,
+            b"\xad\x95\xb2\x10\x72\x0b\xac\xf6\xd0\xaa\xd1\xed\x4a\x74",
+        ),
     }
     if l.psp_sig {
         place(ep, at + 20, b"\xc7\x06\x5c\x00\x50\x4b");
@@ -689,9 +742,16 @@ fn decompressor_body(ep: &mut [u8], l: &Layout, at: usize) {
         place(ep, at + 200, b"\xac\x34?\x8a");
         ep[at + 202] = l.mode.offset_xor;
     }
-    let small_v120 = matches!(l.decompressor, Decompressor::V120Small | Decompressor::V120SmallOld);
+    let small_v120 = matches!(
+        l.decompressor,
+        Decompressor::V120Small | Decompressor::V120SmallOld
+    );
     if l.mode.v120 && l.mode.large {
-        place(ep, STUB_LEN - 20, b"\x33\xc0\x8b\xd8\x8b\xc8\x8b\xd0\x8b\xe8\x8b\xf0\x8b");
+        place(
+            ep,
+            STUB_LEN - 20,
+            b"\x33\xc0\x8b\xd8\x8b\xc8\x8b\xd0\x8b\xe8\x8b\xf0\x8b",
+        );
     } else if !small_v120 {
         ep[STUB_LEN - 31] = if l.mode.large { 0x18 } else { 0x09 };
         place(
@@ -708,7 +768,11 @@ fn reloc_table(p: &Program, l: &Layout) -> Vec<u8> {
         let mut i = 0;
         while i < p.relocs.len() {
             let seg = p.relocs[i].1;
-            let n = p.relocs[i..].iter().take(255).take_while(|r| r.1 == seg).count();
+            let n = p.relocs[i..]
+                .iter()
+                .take(255)
+                .take_while(|r| r.1 == seg)
+                .count();
             t.push(n as u8);
             put16(&mut t, seg);
             for r in &p.relocs[i..i + n] {
@@ -718,13 +782,26 @@ fn reloc_table(p: &Program, l: &Layout) -> Vec<u8> {
         }
         t.push(0);
     } else {
-        let groups = p.relocs.iter().map(|r| usize::from(r.1) / 0x0fff + 1).max().unwrap_or(0);
+        let groups = p
+            .relocs
+            .iter()
+            .map(|r| usize::from(r.1) / 0x0fff + 1)
+            .max()
+            .unwrap_or(0);
         for g in 0..groups {
-            let offs: Vec<u16> =
-                p.relocs.iter().filter(|r| usize::from(r.1) == g * 0x0fff).map(|r| r.0).collect();
+            let offs: Vec<u16> = p
+                .relocs
+                .iter()
+                .filter(|r| usize::from(r.1) == g * 0x0fff)
+                .map(|r| r.0)
+                .collect();
             put16(&mut t, offs.len() as u16);
             for o in offs {
-                let o = if l.scramble == Scramble::Add150 { o.swap_bytes() } else { o };
+                let o = if l.scramble == Scramble::Add150 {
+                    o.swap_bytes()
+                } else {
+                    o
+                };
                 put16(&mut t, o);
             }
         }
@@ -743,7 +820,11 @@ fn footer(p: &Program) -> Vec<u8> {
 
 /// Pack `p` the way `l` describes.
 pub fn pack(p: &Program, l: &Layout) -> Vec<u8> {
-    let separators = if l.mode.large { vec![p.code.len() / 2] } else { Vec::new() };
+    let separators = if l.mode.large {
+        vec![p.code.len() / 2]
+    } else {
+        Vec::new()
+    };
     let stream = compress(&p.code, &l.mode, &p.stored, &separators);
     let tail = [reloc_table(p, l), footer(p)].concat();
     let copy: Vec<u8> = if l.mode.extra == 0 {
@@ -773,15 +854,23 @@ pub fn pack(p: &Program, l: &Layout) -> Vec<u8> {
         patch[12] = 0xb8;
         patch[13..15].copy_from_slice(&0x0100u16.to_le_bytes());
         body.extend_from_slice(&patch);
-        (((at >> 4) as u16).wrapping_sub(16), (at & 15) as u16 + 0x100)
+        (
+            ((at >> 4) as u16).wrapping_sub(16),
+            (at & 15) as u16 + 0x100,
+        )
     } else if l.data_before_decoder() {
         (((entry_rel as i64 - 0x100) / 16) as u16, 0x100)
     } else {
         (0xfff0, 0x100)
     };
     let end = start + body.len();
-    let mut f =
-        mz_header(end, 0, (start / 16) as u16, [0x0200, 0xffff, 0x1000, 0x0200, ip, cs, 0], 0x50);
+    let mut f = mz_header(
+        end,
+        0,
+        (start / 16) as u16,
+        [0x0200, 0xffff, 0x1000, 0x0200, ip, cs, 0],
+        0x50,
+    );
     put16(&mut f, l.version_word);
     f.extend_from_slice(b"PKLITE-format test image, synthetic stub");
     f.resize(0x50, 0);
@@ -839,7 +928,12 @@ pub fn pack_com(code: &[u8], version_word: u16) -> Vec<u8> {
     place(&mut f, d, b"\xfd\x8b\xf8\x4f\x4f\xbe");
     put_word(&mut f, d + 6, (data - 2 + 0x100) as u16);
     f[260] = 0x1d;
-    let mode = Mode { large: false, v120: false, extra: 0, offset_xor: 0 };
+    let mode = Mode {
+        large: false,
+        v120: false,
+        extra: 0,
+        offset_xor: 0,
+    };
     f.extend_from_slice(&compress(code, &mode, &[], &[]));
     f
 }
@@ -849,22 +943,65 @@ pub type Case = (&'static str, Layout, Vec<(u16, u16)>);
 
 /// Every layout the unpacker is expected to handle, with a name for messages.
 pub fn layouts() -> Vec<Case> {
-    let m = |large, v120, extra, offset_xor| Mode { large, v120, extra, offset_xor };
+    let m = |large, v120, extra, offset_xor| Mode {
+        large,
+        v120,
+        extra,
+        offset_xor,
+    };
     let short_relocs: Vec<(u16, u16)> = (0..58u16)
-        .map(|k| (0x017d + 0x4d * (k % 7), [0x1b58, 0x0000, 0x0d2a][usize::from(k % 3)]))
+        .map(|k| {
+            (
+                0x017d + 0x4d * (k % 7),
+                [0x1b58, 0x0000, 0x0d2a][usize::from(k % 3)],
+            )
+        })
         .collect();
     let long_relocs: Vec<(u16, u16)> = (0..40u16)
-        .map(|k| (0x0100 + k * 9, [0x0000, 0x0fff, 0x1ffe][usize::from(k / 14)]))
+        .map(|k| {
+            (
+                0x0100 + k * 9,
+                [0x0000, 0x0fff, 0x1ffe][usize::from(k / 14)],
+            )
+        })
         .collect();
     let mut out = Vec::new();
     let mut add = |name, l: Layout, extra: bool| {
-        out.push((name, l, if extra { long_relocs.clone() } else { short_relocs.clone() }));
+        out.push((
+            name,
+            l,
+            if extra {
+                long_relocs.clone()
+            } else {
+                short_relocs.clone()
+            },
+        ));
     };
-    add("v1.00 large", Layout::new(Intro::V100, m(true, false, 0, 0)), false);
-    add("v1.00 small", Layout::new(Intro::V100, m(false, false, 0, 0)), false);
-    add("v1.00 small extra", Layout::new(Intro::V100, m(false, false, 1, 0)), true);
-    add("v1.00 large extra", Layout::new(Intro::V100, m(true, false, 1, 0)), true);
-    add("v1.23 complement", Layout::new(Intro::V100, m(true, false, 2, 0)), true);
+    add(
+        "v1.00 large",
+        Layout::new(Intro::V100, m(true, false, 0, 0)),
+        false,
+    );
+    add(
+        "v1.00 small",
+        Layout::new(Intro::V100, m(false, false, 0, 0)),
+        false,
+    );
+    add(
+        "v1.00 small extra",
+        Layout::new(Intro::V100, m(false, false, 1, 0)),
+        true,
+    );
+    add(
+        "v1.00 large extra",
+        Layout::new(Intro::V100, m(true, false, 1, 0)),
+        true,
+    );
+    add(
+        "v1.23 complement",
+        Layout::new(Intro::V100, m(true, false, 2, 0)),
+        true,
+    );
     add(
         "v1.12 small, v1.15 decompressor",
         Layout {
@@ -875,7 +1012,10 @@ pub fn layouts() -> Vec<Case> {
     );
     add(
         "v1.14 XOR-scrambled large extra",
-        Layout { scramble: Scramble::Xor114, ..Layout::new(Intro::V114, m(true, false, 1, 0)) },
+        Layout {
+            scramble: Scramble::Xor114,
+            ..Layout::new(Intro::V114, m(true, false, 1, 0))
+        },
         true,
     );
     add(
@@ -899,7 +1039,10 @@ pub fn layouts() -> Vec<Case> {
     );
     add(
         "v1.50 IBM-scrambled small extra",
-        Layout { scramble: Scramble::Ibm150, ..Layout::new(Intro::V150, m(false, false, 1, 0)) },
+        Layout {
+            scramble: Scramble::Ibm150,
+            ..Layout::new(Intro::V150, m(false, false, 1, 0))
+        },
         true,
     );
     add(
@@ -920,27 +1063,51 @@ pub fn layouts() -> Vec<Case> {
         },
         true,
     );
-    add("v1.20 large, offset key", Layout::new(Intro::V112, m(true, true, 1, 0xa7)), true);
+    add(
+        "v1.20 large, offset key",
+        Layout::new(Intro::V112, m(true, true, 1, 0xa7)),
+        true,
+    );
     add(
         "Megalite",
-        Layout { copier: Copier::Megalite, ..Layout::new(Intro::Megalite, m(true, false, 0, 0)) },
+        Layout {
+            copier: Copier::Megalite,
+            ..Layout::new(Intro::Megalite, m(true, false, 0, 0))
+        },
         false,
     );
     add(
         "UN2PACK",
-        Layout { copier: Copier::Un2Pack, ..Layout::new(Intro::Un2Pack, m(false, false, 0, 0)) },
+        Layout {
+            copier: Copier::Un2Pack,
+            ..Layout::new(Intro::Un2Pack, m(false, false, 0, 0))
+        },
         false,
     );
-    add("May 1990 beta", Layout::new(Intro::Beta, m(true, false, 0, 0)), false);
-    add("beta, load-high", Layout::new(Intro::BetaLoadHigh, m(false, false, 1, 0)), true);
+    add(
+        "May 1990 beta",
+        Layout::new(Intro::Beta, m(true, false, 0, 0)),
+        false,
+    );
+    add(
+        "beta, load-high",
+        Layout::new(Intro::BetaLoadHigh, m(false, false, 1, 0)),
+        true,
+    );
     add(
         "startup patch",
-        Layout { startup_patch: true, ..Layout::new(Intro::V100, m(true, false, 0, 0)) },
+        Layout {
+            startup_patch: true,
+            ..Layout::new(Intro::V100, m(true, false, 0, 0))
+        },
         false,
     );
     add(
         "tamper check",
-        Layout { psp_sig: true, ..Layout::new(Intro::V100, m(false, false, 0, 0)) },
+        Layout {
+            psp_sig: true,
+            ..Layout::new(Intro::V100, m(false, false, 0, 0))
+        },
         false,
     );
     out

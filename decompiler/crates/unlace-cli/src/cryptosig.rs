@@ -26,7 +26,10 @@
 //! the AES, DES and CRC tables are derived here from their definitions, and the
 //! unit tests pin each against its published first entries.
 
-#[expect(clippy::disallowed_types, reason = "The signature index is lookup-only; scan order determines hits.")]
+#[expect(
+    clippy::disallowed_types,
+    reason = "The signature index is lookup-only; scan order determines hits."
+)]
 use std::collections::HashMap;
 
 /// What a signature matched.
@@ -86,18 +89,27 @@ enum Values<'a> {
 }
 
 fn words32(vals: impl Iterator<Item = u32>, be: bool) -> Vec<u8> {
-    vals.flat_map(|v| if be { v.to_be_bytes() } else { v.to_le_bytes() }).collect()
+    vals.flat_map(|v| if be { v.to_be_bytes() } else { v.to_le_bytes() })
+        .collect()
 }
 
 fn words64(vals: &[u64], be: bool) -> Vec<u8> {
-    vals.iter().flat_map(|v| if be { v.to_be_bytes() } else { v.to_le_bytes() }).collect()
+    vals.iter()
+        .flat_map(|v| if be { v.to_be_bytes() } else { v.to_le_bytes() })
+        .collect()
 }
 
 /// Every stored layout of a table.
 fn table(out: &mut Vec<Pattern>, algorithm: &'static str, name: &str, values: Values) {
     let mut push = |bytes: Vec<u8>, layout: &'static str| {
         if !out.iter().any(|p| p.bytes == bytes) {
-            out.push(Pattern { bytes, algorithm, name: name.to_string(), kind: Kind::Table, layout });
+            out.push(Pattern {
+                bytes,
+                algorithm,
+                name: name.to_string(),
+                kind: Kind::Table,
+                layout,
+            });
         }
     };
     match values {
@@ -120,9 +132,20 @@ fn table(out: &mut Vec<Pattern>, algorithm: &'static str, name: &str, values: Va
     }
 }
 
-fn immediate(out: &mut Vec<Pattern>, algorithm: &'static str, name: &str, value: u64, width: usize, be: bool) {
+fn immediate(
+    out: &mut Vec<Pattern>,
+    algorithm: &'static str,
+    name: &str,
+    value: u64,
+    width: usize,
+    be: bool,
+) {
     let bytes = if width == 8 {
-        if be { value.to_be_bytes().to_vec() } else { value.to_le_bytes().to_vec() }
+        if be {
+            value.to_be_bytes().to_vec()
+        } else {
+            value.to_le_bytes().to_vec()
+        }
     } else if be {
         (value as u32).to_be_bytes().to_vec()
     } else {
@@ -134,7 +157,13 @@ fn immediate(out: &mut Vec<Pattern>, algorithm: &'static str, name: &str, value:
         (_, false) => "u32le",
         (_, true) => "u32be",
     };
-    out.push(Pattern { bytes, algorithm, name: name.to_string(), kind: Kind::Immediate, layout });
+    out.push(Pattern {
+        bytes,
+        algorithm,
+        name: name.to_string(),
+        kind: Kind::Immediate,
+        layout,
+    });
 }
 
 fn xtime(x: u8) -> u8 {
@@ -159,8 +188,17 @@ pub(crate) fn aes_sbox() -> [u8; 256] {
     let mut s = [0u8; 256];
     for (x, slot) in s.iter_mut().enumerate() {
         let x = x as u8;
-        let inv = if x == 0 { 0 } else { (1..=255u8).find(|&y| gmul(x, y) == 1).unwrap_or(0) };
-        *slot = inv ^ inv.rotate_left(1) ^ inv.rotate_left(2) ^ inv.rotate_left(3) ^ inv.rotate_left(4) ^ 0x63;
+        let inv = if x == 0 {
+            0
+        } else {
+            (1..=255u8).find(|&y| gmul(x, y) == 1).unwrap_or(0)
+        };
+        *slot = inv
+            ^ inv.rotate_left(1)
+            ^ inv.rotate_left(2)
+            ^ inv.rotate_left(3)
+            ^ inv.rotate_left(4)
+            ^ 0x63;
     }
     s
 }
@@ -203,7 +241,11 @@ pub(crate) fn crc32_normal(poly: u32) -> [u32; 256] {
     for (i, slot) in t.iter_mut().enumerate() {
         let mut c = (i as u32) << 24;
         for _ in 0..8 {
-            c = if c & 0x8000_0000 != 0 { (c << 1) ^ poly } else { c << 1 };
+            c = if c & 0x8000_0000 != 0 {
+                (c << 1) ^ poly
+            } else {
+                c << 1
+            };
         }
         *slot = c;
     }
@@ -211,7 +253,10 @@ pub(crate) fn crc32_normal(poly: u32) -> [u32; 256] {
 }
 
 fn des_ip() -> Vec<u8> {
-    [58u8, 60, 62, 64, 57, 59, 61, 63].iter().flat_map(|&s| (0..8).map(move |j| s - 8 * j)).collect()
+    [58u8, 60, 62, 64, 57, 59, 61, 63]
+        .iter()
+        .flat_map(|&s| (0..8).map(move |j| s - 8 * j))
+        .collect()
 }
 
 fn patterns(little_endian: bool) -> Vec<Pattern> {
@@ -234,30 +279,117 @@ fn patterns(little_endian: bool) -> Vec<Pattern> {
     table(&mut out, "AES", "rcon", Values::U32(&rcon_words));
 
     table(&mut out, "DES", "S-box S1", Values::Bytes(&DES_S1));
-    table(&mut out, "DES", "initial permutation IP", Values::Bytes(&des_ip()));
-    table(&mut out, "DES", "permuted choice PC-1", Values::Bytes(&DES_PC1));
+    table(
+        &mut out,
+        "DES",
+        "initial permutation IP",
+        Values::Bytes(&des_ip()),
+    );
+    table(
+        &mut out,
+        "DES",
+        "permuted choice PC-1",
+        Values::Bytes(&DES_PC1),
+    );
 
     table(&mut out, "MD5", "T sine table", Values::U32(&MD5_T));
-    table(&mut out, "SHA-1", "initial hash values H0..H4", Values::U32(&SHA1_H0));
-    table(&mut out, "MD5/SHA-1", "initial state A..D", Values::U32(&SHA1_H0[..4]));
-    table(&mut out, "SHA-256", "round constants K", Values::U32(&SHA256_K));
-    table(&mut out, "SHA-256/BLAKE2s", "initial hash values H0 (= BLAKE2s IV)", Values::U32(&SHA256_H0));
-    table(&mut out, "SHA-224", "initial hash values H0", Values::U32(&SHA224_H0));
-    table(&mut out, "SHA-512", "round constants K", Values::U64(&SHA512_K));
-    table(&mut out, "SHA-512/BLAKE2b", "initial hash values H0 (= BLAKE2b IV)", Values::U64(&SHA512_H0));
-    table(&mut out, "SHA-384", "initial hash values H0", Values::U64(&SHA384_H0));
+    table(
+        &mut out,
+        "SHA-1",
+        "initial hash values H0..H4",
+        Values::U32(&SHA1_H0),
+    );
+    table(
+        &mut out,
+        "MD5/SHA-1",
+        "initial state A..D",
+        Values::U32(&SHA1_H0[..4]),
+    );
+    table(
+        &mut out,
+        "SHA-256",
+        "round constants K",
+        Values::U32(&SHA256_K),
+    );
+    table(
+        &mut out,
+        "SHA-256/BLAKE2s",
+        "initial hash values H0 (= BLAKE2s IV)",
+        Values::U32(&SHA256_H0),
+    );
+    table(
+        &mut out,
+        "SHA-224",
+        "initial hash values H0",
+        Values::U32(&SHA224_H0),
+    );
+    table(
+        &mut out,
+        "SHA-512",
+        "round constants K",
+        Values::U64(&SHA512_K),
+    );
+    table(
+        &mut out,
+        "SHA-512/BLAKE2b",
+        "initial hash values H0 (= BLAKE2b IV)",
+        Values::U64(&SHA512_H0),
+    );
+    table(
+        &mut out,
+        "SHA-384",
+        "initial hash values H0",
+        Values::U64(&SHA384_H0),
+    );
 
-    table(&mut out, "CRC-32", "table (reflected, poly 0xEDB88320)", Values::U32(&crc32_reflected(0xEDB8_8320)));
-    table(&mut out, "CRC-32", "table (normal, poly 0x04C11DB7)", Values::U32(&crc32_normal(0x04C1_1DB7)));
-    table(&mut out, "CRC-32C", "table (reflected, poly 0x82F63B78)", Values::U32(&crc32_reflected(0x82F6_3B78)));
+    table(
+        &mut out,
+        "CRC-32",
+        "table (reflected, poly 0xEDB88320)",
+        Values::U32(&crc32_reflected(0xEDB8_8320)),
+    );
+    table(
+        &mut out,
+        "CRC-32",
+        "table (normal, poly 0x04C11DB7)",
+        Values::U32(&crc32_normal(0x04C1_1DB7)),
+    );
+    table(
+        &mut out,
+        "CRC-32C",
+        "table (reflected, poly 0x82F63B78)",
+        Values::U32(&crc32_reflected(0x82F6_3B78)),
+    );
 
     table(&mut out, "Blowfish", "P-array", Values::U32(&BLOWFISH_P));
-    for (i, head) in [BLOWFISH_S0_HEAD, BLOWFISH_S1_HEAD, BLOWFISH_S2_HEAD, BLOWFISH_S3_HEAD].iter().enumerate() {
-        table(&mut out, "Blowfish", &format!("S-box S{i} (first 16 words)"), Values::U32(head));
+    for (i, head) in [
+        BLOWFISH_S0_HEAD,
+        BLOWFISH_S1_HEAD,
+        BLOWFISH_S2_HEAD,
+        BLOWFISH_S3_HEAD,
+    ]
+    .iter()
+    .enumerate()
+    {
+        table(
+            &mut out,
+            "Blowfish",
+            &format!("S-box S{i} (first 16 words)"),
+            Values::U32(head),
+        );
     }
 
-    for (text, name) in [(&b"expand 32-byte k"[..], "sigma \"expand 32-byte k\""), (&b"expand 16-byte k"[..], "tau \"expand 16-byte k\"")] {
-        out.push(Pattern { bytes: text.to_vec(), algorithm: "ChaCha/Salsa20", name: name.into(), kind: Kind::Table, layout: "text" });
+    for (text, name) in [
+        (&b"expand 32-byte k"[..], "sigma \"expand 32-byte k\""),
+        (&b"expand 16-byte k"[..], "tau \"expand 16-byte k\""),
+    ] {
+        out.push(Pattern {
+            bytes: text.to_vec(),
+            algorithm: "ChaCha/Salsa20",
+            name: name.into(),
+            kind: Kind::Table,
+            layout: "text",
+        });
     }
 
     let be = !little_endian;
@@ -271,15 +403,27 @@ fn patterns(little_endian: bool) -> Vec<Pattern> {
 }
 
 const IMMEDIATES32: &[(&str, &str, u64)] = &[
-    ("TEA/XTEA", "delta 0x9E3779B9 (golden ratio; also RC5/RC6 Q32)", 0x9E37_79B9),
+    (
+        "TEA/XTEA",
+        "delta 0x9E3779B9 (golden ratio; also RC5/RC6 Q32)",
+        0x9E37_79B9,
+    ),
     ("TEA/XTEA", "negated delta 0x61C88647", 0x61C8_8647),
     ("TEA", "decrypt sum 0xC6EF3720 (32 * delta)", 0xC6EF_3720),
     ("RC5/RC6", "P32 0xB7E15163", 0xB7E1_5163),
     ("CRC-32", "polynomial 0xEDB88320 (reflected)", 0xEDB8_8320),
     ("CRC-32", "polynomial 0x04C11DB7", 0x04C1_1DB7),
     ("CRC-32C", "polynomial 0x82F63B78 (reflected)", 0x82F6_3B78),
-    ("SHA-1", "round constant K0 0x5A827999 (also MD4)", 0x5A82_7999),
-    ("SHA-1", "round constant K1 0x6ED9EBA1 (also MD4)", 0x6ED9_EBA1),
+    (
+        "SHA-1",
+        "round constant K0 0x5A827999 (also MD4)",
+        0x5A82_7999,
+    ),
+    (
+        "SHA-1",
+        "round constant K1 0x6ED9EBA1 (also MD4)",
+        0x6ED9_EBA1,
+    ),
     ("SHA-1", "round constant K2 0x8F1BBCDC", 0x8F1B_BCDC),
     ("SHA-1", "round constant K3 0xCA62C1D6", 0xCA62_C1D6),
     ("MD5/SHA-1", "initial state A 0x67452301", 0x6745_2301),
@@ -288,11 +432,19 @@ const IMMEDIATES32: &[(&str, &str, u64)] = &[
     ("SHA-256/BLAKE2s", "H0[0] 0x6A09E667", 0x6A09_E667),
     ("SHA-256", "K[0] 0x428A2F98", 0x428A_2F98),
     ("SHA-224", "H0[0] 0xC1059ED8", 0xC105_9ED8),
-    ("ChaCha/Salsa20", "sigma word \"expa\" 0x61707865", 0x6170_7865),
+    (
+        "ChaCha/Salsa20",
+        "sigma word \"expa\" 0x61707865",
+        0x6170_7865,
+    ),
 ];
 
 const IMMEDIATES64: &[(&str, &str, u64)] = &[
-    ("SHA-512/BLAKE2b", "H0[0] 0x6A09E667F3BCC908", 0x6A09_E667_F3BC_C908),
+    (
+        "SHA-512/BLAKE2b",
+        "H0[0] 0x6A09E667F3BCC908",
+        0x6A09_E667_F3BC_C908,
+    ),
     ("SHA-512", "K[0] 0x428A2F98D728AE22", 0x428A_2F98_D728_AE22),
     ("SHA-384", "H0[0] 0xCBBB9D5DC1059ED8", 0xCBBB_9D5D_C105_9ED8),
 ];
@@ -320,7 +472,11 @@ fn alphabets(region: &Region, out: &mut Vec<Hit>) {
             _ => continue,
         };
         let mut seen = [false; 256];
-        if body.iter().any(|&b| std::mem::replace(&mut seen[b as usize], true)) || seen[b'=' as usize] && run.len() == 65 {
+        if body
+            .iter()
+            .any(|&b| std::mem::replace(&mut seen[b as usize], true))
+            || seen[b'=' as usize] && run.len() == 65
+        {
             continue;
         }
         if body.iter().filter(|b| b.is_ascii_alphanumeric()).count() < 48 {
@@ -350,7 +506,10 @@ fn alphabets(region: &Region, out: &mut Vec<Hit>) {
 /// match wholly inside a longer one dropped.
 pub(crate) fn scan(regions: &[Region], little_endian: bool) -> Vec<Hit> {
     let pats = patterns(little_endian);
-    #[expect(clippy::disallowed_types, reason = "Lookup only; each bucket preserves pattern order and hits are sorted.")]
+    #[expect(
+        clippy::disallowed_types,
+        reason = "Lookup only; each bucket preserves pattern order and hits are sorted."
+    )]
     let mut by_key: HashMap<[u8; 4], Vec<usize>> = HashMap::new();
     for (i, p) in pats.iter().enumerate() {
         let key = [p.bytes[0], p.bytes[1], p.bytes[2], p.bytes[3]];
@@ -361,7 +520,9 @@ pub(crate) fn scan(regions: &[Region], little_endian: bool) -> Vec<Hit> {
         let data = region.data;
         for off in 0..data.len().saturating_sub(3) {
             let key = [data[off], data[off + 1], data[off + 2], data[off + 3]];
-            let Some(ids) = by_key.get(&key) else { continue };
+            let Some(ids) = by_key.get(&key) else {
+                continue;
+            };
             for &id in ids {
                 let p = &pats[id];
                 if p.kind == Kind::Immediate && !region.executable {
@@ -398,17 +559,15 @@ pub(crate) fn scan(regions: &[Region], little_endian: bool) -> Vec<Hit> {
 }
 
 const DES_S1: [u8; 64] = [
-    14, 4, 13, 1, 2, 15, 11, 8, 3, 10, 6, 12, 5, 9, 0, 7,
-    0, 15, 7, 4, 14, 2, 13, 1, 10, 6, 12, 11, 9, 5, 3, 8,
-    4, 1, 14, 8, 13, 6, 2, 11, 15, 12, 9, 7, 3, 10, 5, 0,
-    15, 12, 8, 2, 4, 9, 1, 7, 5, 11, 3, 14, 10, 0, 6, 13,
+    14, 4, 13, 1, 2, 15, 11, 8, 3, 10, 6, 12, 5, 9, 0, 7, 0, 15, 7, 4, 14, 2, 13, 1, 10, 6, 12, 11,
+    9, 5, 3, 8, 4, 1, 14, 8, 13, 6, 2, 11, 15, 12, 9, 7, 3, 10, 5, 0, 15, 12, 8, 2, 4, 9, 1, 7, 5,
+    11, 3, 14, 10, 0, 6, 13,
 ];
 
 const DES_PC1: [u8; 56] = [
-    57, 49, 41, 33, 25, 17, 9, 1, 58, 50, 42, 34, 26, 18,
-    10, 2, 59, 51, 43, 35, 27, 19, 11, 3, 60, 52, 44, 36,
-    63, 55, 47, 39, 31, 23, 15, 7, 62, 54, 46, 38, 30, 22,
-    14, 6, 61, 53, 45, 37, 29, 21, 13, 5, 28, 20, 12, 4,
+    57, 49, 41, 33, 25, 17, 9, 1, 58, 50, 42, 34, 26, 18, 10, 2, 59, 51, 43, 35, 27, 19, 11, 3, 60,
+    52, 44, 36, 63, 55, 47, 39, 31, 23, 15, 7, 62, 54, 46, 38, 30, 22, 14, 6, 61, 53, 45, 37, 29,
+    21, 13, 5, 28, 20, 12, 4,
 ];
 
 const SHA1_H0: [u32; 5] = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0];
@@ -430,34 +589,106 @@ const SHA224_H0: [u32; 8] = [
     0xc1059ed8, 0x367cd507, 0x3070dd17, 0xf70e5939, 0xffc00b31, 0x68581511, 0x64f98fa7, 0xbefa4fa4,
 ];
 const SHA512_K: [u64; 80] = [
-    0x428a2f98d728ae22, 0x7137449123ef65cd, 0xb5c0fbcfec4d3b2f, 0xe9b5dba58189dbbc,
-    0x3956c25bf348b538, 0x59f111f1b605d019, 0x923f82a4af194f9b, 0xab1c5ed5da6d8118,
-    0xd807aa98a3030242, 0x12835b0145706fbe, 0x243185be4ee4b28c, 0x550c7dc3d5ffb4e2,
-    0x72be5d74f27b896f, 0x80deb1fe3b1696b1, 0x9bdc06a725c71235, 0xc19bf174cf692694,
-    0xe49b69c19ef14ad2, 0xefbe4786384f25e3, 0x0fc19dc68b8cd5b5, 0x240ca1cc77ac9c65,
-    0x2de92c6f592b0275, 0x4a7484aa6ea6e483, 0x5cb0a9dcbd41fbd4, 0x76f988da831153b5,
-    0x983e5152ee66dfab, 0xa831c66d2db43210, 0xb00327c898fb213f, 0xbf597fc7beef0ee4,
-    0xc6e00bf33da88fc2, 0xd5a79147930aa725, 0x06ca6351e003826f, 0x142929670a0e6e70,
-    0x27b70a8546d22ffc, 0x2e1b21385c26c926, 0x4d2c6dfc5ac42aed, 0x53380d139d95b3df,
-    0x650a73548baf63de, 0x766a0abb3c77b2a8, 0x81c2c92e47edaee6, 0x92722c851482353b,
-    0xa2bfe8a14cf10364, 0xa81a664bbc423001, 0xc24b8b70d0f89791, 0xc76c51a30654be30,
-    0xd192e819d6ef5218, 0xd69906245565a910, 0xf40e35855771202a, 0x106aa07032bbd1b8,
-    0x19a4c116b8d2d0c8, 0x1e376c085141ab53, 0x2748774cdf8eeb99, 0x34b0bcb5e19b48a8,
-    0x391c0cb3c5c95a63, 0x4ed8aa4ae3418acb, 0x5b9cca4f7763e373, 0x682e6ff3d6b2b8a3,
-    0x748f82ee5defb2fc, 0x78a5636f43172f60, 0x84c87814a1f0ab72, 0x8cc702081a6439ec,
-    0x90befffa23631e28, 0xa4506cebde82bde9, 0xbef9a3f7b2c67915, 0xc67178f2e372532b,
-    0xca273eceea26619c, 0xd186b8c721c0c207, 0xeada7dd6cde0eb1e, 0xf57d4f7fee6ed178,
-    0x06f067aa72176fba, 0x0a637dc5a2c898a6, 0x113f9804bef90dae, 0x1b710b35131c471b,
-    0x28db77f523047d84, 0x32caab7b40c72493, 0x3c9ebe0a15c9bebc, 0x431d67c49c100d4c,
-    0x4cc5d4becb3e42b6, 0x597f299cfc657e2a, 0x5fcb6fab3ad6faec, 0x6c44198c4a475817,
+    0x428a2f98d728ae22,
+    0x7137449123ef65cd,
+    0xb5c0fbcfec4d3b2f,
+    0xe9b5dba58189dbbc,
+    0x3956c25bf348b538,
+    0x59f111f1b605d019,
+    0x923f82a4af194f9b,
+    0xab1c5ed5da6d8118,
+    0xd807aa98a3030242,
+    0x12835b0145706fbe,
+    0x243185be4ee4b28c,
+    0x550c7dc3d5ffb4e2,
+    0x72be5d74f27b896f,
+    0x80deb1fe3b1696b1,
+    0x9bdc06a725c71235,
+    0xc19bf174cf692694,
+    0xe49b69c19ef14ad2,
+    0xefbe4786384f25e3,
+    0x0fc19dc68b8cd5b5,
+    0x240ca1cc77ac9c65,
+    0x2de92c6f592b0275,
+    0x4a7484aa6ea6e483,
+    0x5cb0a9dcbd41fbd4,
+    0x76f988da831153b5,
+    0x983e5152ee66dfab,
+    0xa831c66d2db43210,
+    0xb00327c898fb213f,
+    0xbf597fc7beef0ee4,
+    0xc6e00bf33da88fc2,
+    0xd5a79147930aa725,
+    0x06ca6351e003826f,
+    0x142929670a0e6e70,
+    0x27b70a8546d22ffc,
+    0x2e1b21385c26c926,
+    0x4d2c6dfc5ac42aed,
+    0x53380d139d95b3df,
+    0x650a73548baf63de,
+    0x766a0abb3c77b2a8,
+    0x81c2c92e47edaee6,
+    0x92722c851482353b,
+    0xa2bfe8a14cf10364,
+    0xa81a664bbc423001,
+    0xc24b8b70d0f89791,
+    0xc76c51a30654be30,
+    0xd192e819d6ef5218,
+    0xd69906245565a910,
+    0xf40e35855771202a,
+    0x106aa07032bbd1b8,
+    0x19a4c116b8d2d0c8,
+    0x1e376c085141ab53,
+    0x2748774cdf8eeb99,
+    0x34b0bcb5e19b48a8,
+    0x391c0cb3c5c95a63,
+    0x4ed8aa4ae3418acb,
+    0x5b9cca4f7763e373,
+    0x682e6ff3d6b2b8a3,
+    0x748f82ee5defb2fc,
+    0x78a5636f43172f60,
+    0x84c87814a1f0ab72,
+    0x8cc702081a6439ec,
+    0x90befffa23631e28,
+    0xa4506cebde82bde9,
+    0xbef9a3f7b2c67915,
+    0xc67178f2e372532b,
+    0xca273eceea26619c,
+    0xd186b8c721c0c207,
+    0xeada7dd6cde0eb1e,
+    0xf57d4f7fee6ed178,
+    0x06f067aa72176fba,
+    0x0a637dc5a2c898a6,
+    0x113f9804bef90dae,
+    0x1b710b35131c471b,
+    0x28db77f523047d84,
+    0x32caab7b40c72493,
+    0x3c9ebe0a15c9bebc,
+    0x431d67c49c100d4c,
+    0x4cc5d4becb3e42b6,
+    0x597f299cfc657e2a,
+    0x5fcb6fab3ad6faec,
+    0x6c44198c4a475817,
 ];
 const SHA512_H0: [u64; 8] = [
-    0x6a09e667f3bcc908, 0xbb67ae8584caa73b, 0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1,
-    0x510e527fade682d1, 0x9b05688c2b3e6c1f, 0x1f83d9abfb41bd6b, 0x5be0cd19137e2179,
+    0x6a09e667f3bcc908,
+    0xbb67ae8584caa73b,
+    0x3c6ef372fe94f82b,
+    0xa54ff53a5f1d36f1,
+    0x510e527fade682d1,
+    0x9b05688c2b3e6c1f,
+    0x1f83d9abfb41bd6b,
+    0x5be0cd19137e2179,
 ];
 const SHA384_H0: [u64; 8] = [
-    0xcbbb9d5dc1059ed8, 0x629a292a367cd507, 0x9159015a3070dd17, 0x152fecd8f70e5939,
-    0x67332667ffc00b31, 0x8eb44a8768581511, 0xdb0c2e0d64f98fa7, 0x47b5481dbefa4fa4,
+    0xcbbb9d5dc1059ed8,
+    0x629a292a367cd507,
+    0x9159015a3070dd17,
+    0x152fecd8f70e5939,
+    0x67332667ffc00b31,
+    0x8eb44a8768581511,
+    0xdb0c2e0d64f98fa7,
+    0x47b5481dbefa4fa4,
 ];
 const MD5_T: [u32; 64] = [
     0xd76aa478, 0xe8c7b756, 0x242070db, 0xc1bdceee, 0xf57c0faf, 0x4787c62a, 0xa8304613, 0xfd469501,
@@ -496,7 +727,12 @@ mod tests {
     use super::*;
 
     fn region(data: &[u8], executable: bool) -> Region<'_> {
-        Region { name: Some(".x".into()), vma: 0x1000, data, executable }
+        Region {
+            name: Some(".x".into()),
+            vma: 0x1000,
+            data,
+            executable,
+        }
     }
 
     #[test]
@@ -517,7 +753,10 @@ mod tests {
     #[test]
     fn generated_tables_match_their_published_entries() {
         assert_eq!((SHA256_K[0], SHA256_K[63]), (0x428a2f98, 0xc67178f2));
-        assert_eq!((SHA512_K[0], SHA512_K[79]), (0x428a2f98d728ae22, 0x6c44198c4a475817));
+        assert_eq!(
+            (SHA512_K[0], SHA512_K[79]),
+            (0x428a2f98d728ae22, 0x6c44198c4a475817)
+        );
         assert_eq!(SHA256_H0[7], 0x5be0cd19);
         assert_eq!(SHA512_H0[0], 0x6a09e667f3bcc908);
         assert_eq!(SHA384_H0[0], 0xcbbb9d5dc1059ed8);
@@ -525,7 +764,12 @@ mod tests {
         assert_eq!((MD5_T[0], MD5_T[63]), (0xd76aa478, 0xeb86d391));
         assert_eq!((BLOWFISH_P[0], BLOWFISH_P[17]), (0x243f6a88, 0x8979fb1b));
         assert_eq!(
-            (BLOWFISH_S0_HEAD[0], BLOWFISH_S1_HEAD[0], BLOWFISH_S2_HEAD[0], BLOWFISH_S3_HEAD[0]),
+            (
+                BLOWFISH_S0_HEAD[0],
+                BLOWFISH_S1_HEAD[0],
+                BLOWFISH_S2_HEAD[0],
+                BLOWFISH_S3_HEAD[0]
+            ),
             (0xd1310ba6, 0x4b7a70e9, 0xe93d5a68, 0x3a39ce37)
         );
     }
@@ -537,8 +781,19 @@ mod tests {
         data.extend(SHA256_K.iter().flat_map(|v| v.to_be_bytes()));
         let hits = scan(&[region(&data, false)], true);
         assert_eq!(hits.len(), 2, "{hits:?}");
-        assert_eq!((hits[0].addr, hits[0].algorithm, hits[0].layout, hits[0].byte_len), (0x1003, "AES", "u8", 256));
-        assert_eq!((hits[1].addr, hits[1].name.as_str(), hits[1].layout), (0x1103, "round constants K", "u32be"));
+        assert_eq!(
+            (
+                hits[0].addr,
+                hits[0].algorithm,
+                hits[0].layout,
+                hits[0].byte_len
+            ),
+            (0x1003, "AES", "u8", 256)
+        );
+        assert_eq!(
+            (hits[1].addr, hits[1].name.as_str(), hits[1].layout),
+            (0x1103, "round constants K", "u32be")
+        );
     }
 
     #[test]
@@ -554,19 +809,36 @@ mod tests {
         let code = [0x05u8, 0xb9, 0x79, 0x37, 0x9e, 0xc3];
         let hits = scan(&[region(&code, true)], true);
         assert_eq!(hits.len(), 1);
-        assert_eq!((hits[0].addr, hits[0].kind, hits[0].algorithm), (0x1001, Kind::Immediate, "TEA/XTEA"));
+        assert_eq!(
+            (hits[0].addr, hits[0].kind, hits[0].algorithm),
+            (0x1001, Kind::Immediate, "TEA/XTEA")
+        );
         assert!(scan(&[region(&code, false)], true).is_empty());
-        assert!(scan(&[region(&code, true)], false).is_empty(), "a big-endian image reads the word the other way");
+        assert!(
+            scan(&[region(&code, true)], false).is_empty(),
+            "a big-endian image reads the word the other way"
+        );
     }
 
     #[test]
     fn base64_alphabets_standard_and_custom() {
-        let mut data = b"\0ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/\0".to_vec();
-        data.extend_from_slice(b"ZYXWVUTSRQPONMLKJIHGFEDCBAzyxwvutsrqponmlkjihgfedcba9876543210+/=\0");
-        data.extend_from_slice(b"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\0");
+        let mut data =
+            b"\0ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/\0".to_vec();
+        data.extend_from_slice(
+            b"ZYXWVUTSRQPONMLKJIHGFEDCBAzyxwvutsrqponmlkjihgfedcba9876543210+/=\0",
+        );
+        data.extend_from_slice(
+            b"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\0",
+        );
         let hits = scan(&[region(&data, false)], true);
         assert_eq!(hits.len(), 2, "{hits:?}");
-        assert_eq!((hits[0].addr, hits[0].name.as_str()), (0x1001, "alphabet (standard)"));
-        assert_eq!((hits[1].name.as_str(), hits[1].byte_len), ("alphabet (custom)", 65));
+        assert_eq!(
+            (hits[0].addr, hits[0].name.as_str()),
+            (0x1001, "alphabet (standard)")
+        );
+        assert_eq!(
+            (hits[1].name.as_str(), hits[1].byte_len),
+            ("alphabet (custom)", 65)
+        );
     }
 }

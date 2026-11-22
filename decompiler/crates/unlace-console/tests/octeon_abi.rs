@@ -1,14 +1,14 @@
 //! Compiler-derived BE N32/N64 storage contracts, including register exhaustion.
+use std::path::PathBuf;
 use unlace_base::address::Address;
 use unlace_base::xml::DocumentStorage;
 use unlace_console::{
-    engine::{bootstrap_from_object, bootstrap_program, ConsoleProgram, EntrySelector},
-    grammar::{parse_c, DataOrg},
+    engine::{ConsoleProgram, EntrySelector, bootstrap_from_object, bootstrap_program},
+    grammar::{DataOrg, parse_c},
     project::decompile_targets,
 };
 use unlace_decomp::dtype::type_metatype;
 use unlace_decomp::fspec::ParameterPieces;
-use std::path::PathBuf;
 
 fn program(variant: &str, n32: bool) -> ConsoleProgram {
     program_with_model(variant, n32, "default")
@@ -302,18 +302,34 @@ fn direct_float_fields_use_fprs_but_nested_fields_use_gprs() {
             assert_eq!(storage(&prog, &assigned[0]), vec![reg(&prog, "v0", 0, 8)]);
         }
         for (ty, input, output) in [
-            ("struct FloatDouble",
+            (
+                "struct FloatDouble",
                 vec![reg(&prog, "a0", 0, 8), reg(&prog, "f13", 0, 8)],
-                vec![reg(&prog, "f0", 4, 4), ("const".into(), 0, 4), reg(&prog, "f2", 0, 8)]),
-            ("struct DoubleFloat",
+                vec![
+                    reg(&prog, "f0", 4, 4),
+                    ("const".into(), 0, 4),
+                    reg(&prog, "f2", 0, 8),
+                ],
+            ),
+            (
+                "struct DoubleFloat",
                 vec![reg(&prog, "f12", 0, 8), reg(&prog, "a1", 0, 8)],
-                vec![reg(&prog, "f0", 0, 8), reg(&prog, "f2", 4, 4), ("const".into(), 0, 4)]),
-            ("struct DoubleBit",
+                vec![
+                    reg(&prog, "f0", 0, 8),
+                    reg(&prog, "f2", 4, 4),
+                    ("const".into(), 0, 4),
+                ],
+            ),
+            (
+                "struct DoubleBit",
                 vec![reg(&prog, "f12", 0, 8), reg(&prog, "a1", 0, 8)],
-                vec![reg(&prog, "v0", 0, 8), reg(&prog, "v1", 0, 8)]),
-            ("struct BitDouble",
+                vec![reg(&prog, "v0", 0, 8), reg(&prog, "v1", 0, 8)],
+            ),
+            (
+                "struct BitDouble",
                 vec![reg(&prog, "a0", 0, 8), reg(&prog, "f13", 0, 8)],
-                vec![reg(&prog, "v0", 0, 8), reg(&prog, "v1", 0, 8)]),
+                vec![reg(&prog, "v0", 0, 8), reg(&prog, "v1", 0, 8)],
+            ),
         ] {
             let assigned = allocate(&prog, ty, 0);
             assert_eq!(storage(&prog, &assigned[1]), input, "{n32} {ty}");
@@ -324,25 +340,57 @@ fn direct_float_fields_use_fprs_but_nested_fields_use_gprs() {
             params.extend(["struct QuadDouble x".into(), "long long after".into()]);
             let mut assigned = Vec::new();
             let (addr_size, word_size) = prog.arch().data_org();
-            parse_c(&format!("extern void f({});", params.join(",")), prog.arch().types(),
-                DataOrg { addr_size, word_size }, &[], |proto, _| {
+            parse_c(
+                &format!("extern void f({});", params.join(",")),
+                prog.arch().types(),
+                DataOrg {
+                    addr_size,
+                    word_size,
+                },
+                &[],
+                |proto, _| {
                     prog.arch().default_fp().unwrap().assign_parameter_storage(
-                        &proto, &mut assigned, false, prog.arch().types(), prog.arch().manage())
-                }).unwrap();
+                        &proto,
+                        &mut assigned,
+                        false,
+                        prog.arch().types(),
+                        prog.arch().manage(),
+                    )
+                },
+            )
+            .unwrap();
             let first = (before + 1) & !1;
             let expected = if first >= 8 {
                 vec![("stack".into(), ((first - 8) * 8) as u64, 32)]
             } else if first == 6 {
-                vec![slot(&prog, 6, 8), slot(&prog, 7, 8), ("stack".into(), 0, 16)]
+                vec![
+                    slot(&prog, 6, 8),
+                    slot(&prog, 7, 8),
+                    ("stack".into(), 0, 16),
+                ]
             } else {
-                vec![slot(&prog, first, 8), slot(&prog, first + 1, 8),
-                    reg(&prog, &format!("f{}", first + 14), 0, 8), slot(&prog, first + 3, 8)]
+                vec![
+                    slot(&prog, first, 8),
+                    slot(&prog, first + 1, 8),
+                    reg(&prog, &format!("f{}", first + 14), 0, 8),
+                    slot(&prog, first + 3, 8),
+                ]
             };
-            assert_eq!(storage(&prog, &assigned[before + 1]), expected, "{n32} after {before}");
-            assert_eq!(storage(&prog, assigned.last().unwrap()), vec![slot(&prog, first + 4, 8)]);
+            assert_eq!(
+                storage(&prog, &assigned[before + 1]),
+                expected,
+                "{n32} after {before}"
+            );
+            assert_eq!(
+                storage(&prog, assigned.last().unwrap()),
+                vec![slot(&prog, first + 4, 8)]
+            );
         }
         let assigned = allocate(&prog, "struct TwoQuads", 0);
-        assert!(assigned[0].flags & unlace_decomp::fspec::parameter_pieces_flags::INDIRECTSTORAGE != 0, "large floating structs require a hidden return pointer");
+        assert!(
+            assigned[0].flags & unlace_decomp::fspec::parameter_pieces_flags::INDIRECTSTORAGE != 0,
+            "large floating structs require a hidden return pointer"
+        );
     }
 }
 
@@ -394,25 +442,69 @@ fn floating_structs_with_bitfields_return_through_gprs() {
                 } else {
                     format!("{adjust}ffe000a018{move_op}f7ac0010dfa2001003e00008{adjust}0020")
                 };
-                let target = format!("MIPS:BE:64:octeon3{}:hard", if n32 { "-32addr" } else { "" });
-                let xml = format!("<binaryimage arch=\"{target}\"><bytechunk space=\"ram\" offset=\"0x1000\">{body}</bytechunk><symbol space=\"ram\" offset=\"0x1000\" name=\"probe\"/></binaryimage>");
+                let target = format!(
+                    "MIPS:BE:64:octeon3{}:hard",
+                    if n32 { "-32addr" } else { "" }
+                );
+                let xml = format!(
+                    "<binaryimage arch=\"{target}\"><bytechunk space=\"ram\" offset=\"0x1000\">{body}</bytechunk><symbol space=\"ram\" offset=\"0x1000\" name=\"probe\"/></binaryimage>"
+                );
                 let mut docs = DocumentStorage::new();
-                let image = docs.parse_document(xml.as_bytes()).unwrap().get_root().clone();
-                let mut prog = bootstrap_program(image, &target, &[root.join("specs").to_string_lossy().into_owned()]).unwrap();
+                let image = docs
+                    .parse_document(xml.as_bytes())
+                    .unwrap()
+                    .get_root()
+                    .clone();
+                let mut prog = bootstrap_program(
+                    image,
+                    &target,
+                    &[root.join("specs").to_string_lossy().into_owned()],
+                )
+                .unwrap();
                 prog.arch_mut().set_kuna_option("ctypes", "on").unwrap();
                 let (addr_size, word_size) = prog.arch().data_org();
-                let fields = if bits_first { "unsigned b:1; double d;" } else { "double d; unsigned b:1;" };
-                parse_c(&format!("struct Bits {{ {fields} }};"), prog.arch().types(),
-                    DataOrg { addr_size, word_size }, &[], |_, _| Ok(())).unwrap();
+                let fields = if bits_first {
+                    "unsigned b:1; double d;"
+                } else {
+                    "double d; unsigned b:1;"
+                };
+                parse_c(
+                    &format!("struct Bits {{ {fields} }};"),
+                    prog.arch().types(),
+                    DataOrg {
+                        addr_size,
+                        word_size,
+                    },
+                    &[],
+                    |_, _| Ok(()),
+                )
+                .unwrap();
                 let mut proto = None;
-                parse_c("extern struct Bits probe(struct Bits x);", prog.arch().types(),
-                    DataOrg { addr_size, word_size }, &[], |pieces, _| { proto = Some(pieces); Ok(()) }).unwrap();
+                parse_c(
+                    "extern struct Bits probe(struct Bits x);",
+                    prog.arch().types(),
+                    DataOrg {
+                        addr_size,
+                        word_size,
+                    },
+                    &[],
+                    |pieces, _| {
+                        proto = Some(pieces);
+                        Ok(())
+                    },
+                )
+                .unwrap();
                 prog.set_pending_prototype("probe", proto.unwrap());
-                let entry = prog.resolve_entry(&EntrySelector::Name("probe".into())).unwrap();
+                let entry = prog
+                    .resolve_entry(&EntrySelector::Name("probe".into()))
+                    .unwrap();
                 let result = decompile_targets(&mut prog, vec![entry], false, false, false);
                 assert!(result[0].error.is_none(), "{:?}", result[0].error);
-                assert!(result[0].code.as_ref().unwrap().contains("return x;"),
-                    "n32={n32} gcc47={gcc47} bits_first={bits_first}: {:?}", result[0].code);
+                assert!(
+                    result[0].code.as_ref().unwrap().contains("return x;"),
+                    "n32={n32} gcc47={gcc47} bits_first={bits_first}: {:?}",
+                    result[0].code
+                );
             }
         }
     }
@@ -475,10 +567,14 @@ fn aligned_float_aggregates_skip_the_same_slots_in_both_register_classes() {
 
 #[test]
 fn octeon_integer_promotions_keep_type_sign_and_the_32_bit_abi_exception() {
-    use unlace_decomp::kuna_narrowext::{extension, rules, Widen};
+    use unlace_decomp::kuna_narrowext::{Widen, extension, rules};
     use unlace_num::{opcodes::OpCode, pcoderaw::VarnodeData};
     for n32 in [true, false] {
-        for model in if n32 { vec!["default", "hard", "n32"] } else { vec!["default", "hard"] } {
+        for model in if n32 {
+            vec!["default", "hard", "n32"]
+        } else {
+            vec!["default", "hard"]
+        } {
             let prog = program_with_model("octeon3", n32, model);
             assert_eq!(
                 unlace_decomp::kuna_typedcallabi::image_evidence(prog.arch()),
@@ -556,10 +652,20 @@ fn independent_hard_float_images_select_and_recover_the_declared_values() {
                 let arch = prog.arch();
                 let (addr_size, word_size) = arch.data_org();
                 let mut pieces = None;
-                parse_c(declaration, arch.types(), DataOrg { addr_size, word_size }, &[], |proto, _| {
-                    pieces = Some(proto);
-                    Ok(())
-                }).unwrap();
+                parse_c(
+                    declaration,
+                    arch.types(),
+                    DataOrg {
+                        addr_size,
+                        word_size,
+                    },
+                    &[],
+                    |proto, _| {
+                        pieces = Some(proto);
+                        Ok(())
+                    },
+                )
+                .unwrap();
                 let pieces = pieces.unwrap();
                 prog.set_pending_prototype(&pieces.name.clone(), pieces);
             }
@@ -596,9 +702,11 @@ fn independent_hard_float_images_select_and_recover_the_declared_values() {
                     result[0].error
                 );
                 let code = result[0].code.as_ref().unwrap();
-                assert!(code.contains(expected)
-                    || (abi == "64" && name == "narrow_s8" && code.contains("return (long)x;")),
-                    "{compiler} {abi} {name}: {code}");
+                assert!(
+                    code.contains(expected)
+                        || (abi == "64" && name == "narrow_s8" && code.contains("return (long)x;")),
+                    "{compiler} {abi} {name}: {code}"
+                );
             }
         }
     }
@@ -611,9 +719,15 @@ fn independent_compilers_recover_direct_nested_and_padded_float_fields() {
     for compiler in ["gcc73", "gcc47"] {
         for abi in ["n32", "64"] {
             let mut prog = bootstrap_from_object(
-                root.join(format!("tests/fixtures/octeon-elf-abi/fields-{compiler}-{abi}.elf"))
-                    .to_str().unwrap(), "", &[root.join("specs").to_string_lossy().into_owned()],
-            ).unwrap();
+                root.join(format!(
+                    "tests/fixtures/octeon-elf-abi/fields-{compiler}-{abi}.elf"
+                ))
+                .to_str()
+                .unwrap(),
+                "",
+                &[root.join("specs").to_string_lossy().into_owned()],
+            )
+            .unwrap();
             prog.arch_mut().set_kuna_option("ctypes", "on").unwrap();
             prog.commit_pending_analysis().unwrap();
             for (name, expected) in [
@@ -628,18 +742,35 @@ fn independent_compilers_recover_direct_nested_and_padded_float_fields() {
                 ("quad_double_split", "return x.d;"),
                 ("float_double_split", "x.a;"),
             ] {
-                let entry = prog.resolve_entry(&EntrySelector::Name(name.into())).unwrap();
+                let entry = prog
+                    .resolve_entry(&EntrySelector::Name(name.into()))
+                    .unwrap();
                 let result = decompile_targets(&mut prog, vec![entry], false, false, false);
-                assert!(result[0].error.is_none(), "{compiler} {abi} {name}: {:?}", result[0].error);
+                assert!(
+                    result[0].error.is_none(),
+                    "{compiler} {abi} {name}: {:?}",
+                    result[0].error
+                );
                 let code = result[0].code.as_ref().unwrap();
-                let aggregate = matches!(name, "float_double" | "double_float" | "float_double_split");
-                let returned = code.lines().find_map(|line|
-                    line.trim().strip_prefix("return ").and_then(|line| line.strip_suffix(';')));
+                let aggregate =
+                    matches!(name, "float_double" | "double_float" | "float_double_split");
+                let returned = code.lines().find_map(|line| {
+                    line.trim()
+                        .strip_prefix("return ")
+                        .and_then(|line| line.strip_suffix(';'))
+                });
                 let identity = aggregate && returned == Some("x");
-                assert!(!aggregate || !code.contains("undefined4 "), "dead padding local: {code}");
-                let both_fields = !aggregate || identity || (returned.is_some_and(|value|
-                    code.contains(&format!("{value}.a = ")) && code.contains(&format!("{value}.b = ")))
-                    && !code.contains("0 = 0;") && !code.contains("._"));
+                assert!(
+                    !aggregate || !code.contains("undefined4 "),
+                    "dead padding local: {code}"
+                );
+                let both_fields = !aggregate
+                    || identity
+                    || (returned.is_some_and(|value| {
+                        code.contains(&format!("{value}.a = "))
+                            && code.contains(&format!("{value}.b = "))
+                    }) && !code.contains("0 = 0;")
+                        && !code.contains("._"));
                 if (!code.contains(expected) && !identity) || !both_fields {
                     failures.push(format!("{compiler} {abi} {name}: {code}"));
                 }
@@ -657,27 +788,42 @@ fn soft_float_aliases_preserve_unsigned_argument_extension_with_explicit_selecti
             let mut codes = Vec::new();
             for model in ["default", alias] {
                 let mut prog = bootstrap_from_object(
-                    root.join(format!("tests/fixtures/octeon-elf-abi/abi-{compiler}-{abi}.elf"))
-                        .to_str().unwrap(), &format!("MIPS:BE:64:{variant}:{model}"),
+                    root.join(format!(
+                        "tests/fixtures/octeon-elf-abi/abi-{compiler}-{abi}.elf"
+                    ))
+                    .to_str()
+                    .unwrap(),
+                    &format!("MIPS:BE:64:{variant}:{model}"),
                     &[root.join("specs").to_string_lossy().into_owned()],
-                ).unwrap();
-                assert_eq!(unlace_decomp::kuna_typedcallabi::image_evidence(prog.arch()), Some(false),
-                    "{compiler} {variant}:{model}");
+                )
+                .unwrap();
+                assert_eq!(
+                    unlace_decomp::kuna_typedcallabi::image_evidence(prog.arch()),
+                    Some(false),
+                    "{compiler} {variant}:{model}"
+                );
                 prog.arch_mut().set_kuna_option("ctypes", "on").unwrap();
                 prog.commit_pending_analysis().unwrap();
                 let mut code = Vec::new();
                 for name in ["narrow_u8", "narrow_u16", "narrow_u32", "indirect"] {
-                    let entry = prog.resolve_entry(&EntrySelector::Name(name.into())).unwrap();
+                    let entry = prog
+                        .resolve_entry(&EntrySelector::Name(name.into()))
+                        .unwrap();
                     let result = decompile_targets(&mut prog, vec![entry], false, false, false);
                     assert!(result[0].error.is_none());
                     let text = result[0].code.clone().unwrap();
-                    assert!(name == "indirect" || text.contains("return x;"),
-                        "{compiler} {variant}:{model} {name}: {text}");
+                    assert!(
+                        name == "indirect" || text.contains("return x;"),
+                        "{compiler} {variant}:{model} {name}: {text}"
+                    );
                     code.push(text);
                 }
                 codes.push(code);
             }
-            assert_eq!(codes[0], codes[1], "{compiler} {variant}: default and {alias} share one model");
+            assert_eq!(
+                codes[0], codes[1],
+                "{compiler} {variant}: default and {alias} share one model"
+            );
         }
     }
 }
@@ -857,48 +1003,109 @@ fn seeded_entries_never_reach_the_t9_probe() {
     use std::{cell::Cell, rc::Rc};
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let mut prog = bootstrap_from_object(
-        root.join("tests/fixtures/octeon-elf-abi/abi-gcc73-64.elf").to_str().unwrap(), "",
-        &[root.join("specs").to_string_lossy().into_owned()]).unwrap();
+        root.join("tests/fixtures/octeon-elf-abi/abi-gcc73-64.elf")
+            .to_str()
+            .unwrap(),
+        "",
+        &[root.join("specs").to_string_lossy().into_owned()],
+    )
+    .unwrap();
     prog.commit_pending_analysis().unwrap();
     let (loc, _) = prog.arch().loader_mips_t9.clone().unwrap();
     let calls = Rc::new(Cell::new(0));
     let counter = Rc::clone(&calls);
-    prog.arch_mut().loader_mips_t9 = Some((loc.clone(), Rc::new(move |_: &Address| {
-        counter.set(counter.get() + 1);
-        Some(0x1234)
-    })));
-    let code = prog.arch().manage().get_default_code_space().unwrap().clone();
+    prog.arch_mut().loader_mips_t9 = Some((
+        loc.clone(),
+        Rc::new(move |_: &Address| {
+            counter.set(counter.get() + 1);
+            Some(0x1234)
+        }),
+    ));
+    let code = prog
+        .arch()
+        .manage()
+        .get_default_code_space()
+        .unwrap()
+        .clone();
     let seeded = Address::new(code.clone(), 0x100000);
-    let fd = prog.arch_mut().new_funcdata("seeded", seeded.clone(), 4).unwrap();
+    let fd = prog
+        .arch_mut()
+        .new_funcdata("seeded", seeded.clone(), 4)
+        .unwrap();
     assert_eq!(calls.get(), 0, "a symbol seed already supplies t9");
-    assert_eq!(fd.get_arch().tracked_sets.get_value(&seeded).iter()
-        .find(|t| t.loc == loc).map(|t| t.val), Some(0x100000));
+    assert_eq!(
+        fd.get_arch()
+            .tracked_sets
+            .get_value(&seeded)
+            .iter()
+            .find(|t| t.loc == loc)
+            .map(|t| t.val),
+        Some(0x100000)
+    );
     let unseeded = Address::new(code, 0x100004);
-    let fd = prog.arch_mut().new_funcdata("unseeded", unseeded.clone(), 4).unwrap();
+    let fd = prog
+        .arch_mut()
+        .new_funcdata("unseeded", unseeded.clone(), 4)
+        .unwrap();
     assert_eq!(calls.get(), 1);
-    assert_eq!(fd.get_arch().tracked_sets.get_value(&unseeded).iter()
-        .find(|t| t.loc == loc).map(|t| t.val), Some(0x1234));
+    assert_eq!(
+        fd.get_arch()
+            .tracked_sets
+            .get_value(&unseeded)
+            .iter()
+            .find(|t| t.loc == loc)
+            .map(|t| t.val),
+        Some(0x1234)
+    );
 }
 
 #[test]
 fn o32_entry_tracking_follows_the_selected_register_width() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let path = root.join("tests/fixtures/mips-import-flow/flow-mips32r2-be-local-plain.so");
-    for (target, wide) in [("MIPS:BE:32:default:default", false), ("MIPS:BE:64:64-32addr:o32", true)] {
-        let mut prog = bootstrap_from_object(path.to_str().unwrap(), target,
-            &[root.join("specs").to_string_lossy().into_owned()]).unwrap();
+    for (target, wide) in [
+        ("MIPS:BE:32:default:default", false),
+        ("MIPS:BE:64:64-32addr:o32", true),
+    ] {
+        let mut prog = bootstrap_from_object(
+            path.to_str().unwrap(),
+            target,
+            &[root.join("specs").to_string_lossy().into_owned()],
+        )
+        .unwrap();
         prog.commit_pending_analysis().unwrap();
         let loc = prog.arch().get_register_varnode(b"t9").unwrap();
         assert_eq!(loc.size, if wide { 8 } else { 4 });
-        let code = prog.arch().manage().get_default_code_space().unwrap().clone();
+        let code = prog
+            .arch()
+            .manage()
+            .get_default_code_space()
+            .unwrap()
+            .clone();
         let delta = 0x8123_0000u64;
-        prog.arch().translate().loader_rc().borrow_mut().adjust_vma(delta as i64);
+        prog.arch()
+            .translate()
+            .loader_rc()
+            .borrow_mut()
+            .adjust_vma(delta as i64);
         for raw in [0x1000, 0x1000 + delta] {
             let entry = Address::new(code.clone(), raw);
-            let fd = prog.arch_mut().new_funcdata("duplicate", entry.clone(), 4).unwrap();
-            let seeded = fd.get_arch().tracked_sets.get_value(&entry).iter()
-                .find(|t| t.loc == loc).map(|t| t.val);
-            let expected = if wide { (raw as u32 as i32 as i64) as u64 } else { raw };
+            let fd = prog
+                .arch_mut()
+                .new_funcdata("duplicate", entry.clone(), 4)
+                .unwrap();
+            let seeded = fd
+                .get_arch()
+                .tracked_sets
+                .get_value(&entry)
+                .iter()
+                .find(|t| t.loc == loc)
+                .map(|t| t.val);
+            let expected = if wide {
+                (raw as u32 as i32 as i64) as u64
+            } else {
+                raw
+            };
             assert_eq!(seeded, Some(expected), "{target} {raw:#x}");
         }
     }
@@ -933,11 +1140,16 @@ fn an_interior_block_does_not_replace_an_incoming_indirect_target_with_itself() 
         0x400f04,
     );
     assert!(prog.arch().loader_mips_t9.as_ref().unwrap().1(&entry).is_none());
-    let entry = prog.resolve_entry(&EntrySelector::Numeric(0x40057c)).unwrap();
+    let entry = prog
+        .resolve_entry(&EntrySelector::Numeric(0x40057c))
+        .unwrap();
     let result = decompile_targets(&mut prog, vec![entry], false, false, false);
     assert!(result[0].error.is_none(), "{:?}", result[0].error);
     let code = result[0].code.as_ref().unwrap();
-    assert!(code.contains("if (") && code.contains("41208c"), "unresolved weak call was folded away: {code}");
+    assert!(
+        code.contains("if (") && code.contains("41208c"),
+        "unresolved weak call was folded away: {code}"
+    );
 }
 
 #[test]
@@ -959,11 +1171,13 @@ fn explicit_octeon_targets_override_conflicting_or_missing_elf_profiles() {
         let flags = u32::from_be_bytes(conflict[offset..offset + 4].try_into().unwrap());
         conflict[offset..offset + 4]
             .copy_from_slice(&((flags & !0xff0000) | 0x8d0000).to_be_bytes());
-        assert!(ObjectLoadImage::from_bytes_silent("conflict", &conflict)
-            .err()
-            .unwrap()
-            .to_string()
-            .contains("conflicting Octeon"));
+        assert!(
+            ObjectLoadImage::from_bytes_silent("conflict", &conflict)
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("conflicting Octeon")
+        );
         let selected =
             ObjectLoadImage::from_bytes_with_target("conflict", &conflict, &target).unwrap();
         assert_eq!(selected.get_arch_type(), target.as_bytes());
@@ -978,11 +1192,13 @@ fn explicit_octeon_targets_override_conflicting_or_missing_elf_profiles() {
             legacy[40..48].fill(0);
             legacy[60..64].fill(0);
         }
-        assert!(ObjectLoadImage::from_bytes_silent("missing", &legacy)
-            .err()
-            .unwrap()
-            .to_string()
-            .contains("floating-point ABI is missing"));
+        assert!(
+            ObjectLoadImage::from_bytes_silent("missing", &legacy)
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("floating-point ABI is missing")
+        );
         let selected =
             ObjectLoadImage::from_bytes_with_target("missing", &legacy, &target).unwrap();
         assert_eq!(selected.get_arch_type(), target.as_bytes());

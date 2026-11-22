@@ -20,7 +20,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use unlace_decomp::dtype::{type_metatype, Datatype, TypeField};
+use unlace_decomp::dtype::{Datatype, TypeField, type_metatype};
 
 use super::classt::{self, Ivar};
 use super::encoding::{self, TypeCtx};
@@ -39,7 +39,9 @@ pub struct Layout {
 /// `class_ro_t` extent is unreadable.
 pub fn layout(img: &MachoImage, class: &classt::ClassT, name: &str) -> Option<Layout> {
     let (instance_start, instance_size) = classt::instance_extent(img, class.ro)?;
-    let ivars = classt::base_ivars(img, class.ro).map(|l| classt::walk_ivar_list(img, l)).unwrap_or_default();
+    let ivars = classt::base_ivars(img, class.ro)
+        .map(|l| classt::walk_ivar_list(img, l))
+        .unwrap_or_default();
     Some(Layout {
         name: name.to_string(),
         superclass: classt::superclass_name(img, class.addr),
@@ -62,7 +64,9 @@ const MAX_CLASSES: usize = 1 << 15;
 
 impl Structs {
     pub(super) fn build(tctx: &TypeCtx, layouts: &HashMap<String, Layout>) -> Structs {
-        let mut structs = Structs { built: HashMap::new() };
+        let mut structs = Structs {
+            built: HashMap::new(),
+        };
         let mut names: Vec<&String> = layouts.keys().collect();
         names.sort();
         for name in names.into_iter().take(MAX_CLASSES) {
@@ -76,7 +80,10 @@ impl Structs {
     /// layout — one of another image, or one with no field of its own.
     pub(super) fn self_type(&self, tctx: &TypeCtx, class: &str) -> Option<Rc<Datatype>> {
         match self.built.get(class) {
-            Some(st) => tctx.types.get_type_pointer(tctx.ptr_size, Rc::clone(st), tctx.word_size).ok(),
+            Some(st) => tctx
+                .types
+                .get_type_pointer(tctx.ptr_size, Rc::clone(st), tctx.word_size)
+                .ok(),
             None => tctx.opaque_ptr(class),
         }
     }
@@ -123,7 +130,10 @@ impl Structs {
                 fields.push(TypeField::new(0, 0, "super".to_string(), sup));
             }
         }
-        let mut end = fields.first().map(|f| f.field_type.get_size() as u32).unwrap_or(0);
+        let mut end = fields
+            .first()
+            .map(|f| f.field_type.get_size() as u32)
+            .unwrap_or(0);
         let mut ivars: Vec<&Ivar> = layout.ivars.iter().collect();
         ivars.sort_by_key(|iv| iv.offset);
         for iv in ivars {
@@ -140,7 +150,12 @@ impl Structs {
                 continue;
             }
             end = iv.offset + ty.get_size() as u32;
-            fields.push(TypeField::new(iv.offset as i32, iv.offset as i32, iv.name.clone(), ty));
+            fields.push(TypeField::new(
+                iv.offset as i32,
+                iv.offset as i32,
+                iv.name.clone(),
+                ty,
+            ));
         }
         if fields.is_empty() {
             // No field of its own and no local parent: the declared record stays,

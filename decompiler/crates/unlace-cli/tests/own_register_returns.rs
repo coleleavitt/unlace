@@ -90,7 +90,11 @@ const THUMB: Image = Image {
 /// clang -O2 of `u128 own(unsigned long a, unsigned long b) { ext(); return
 /// (u128)b << 64 | a; }`, `own3`, which returns `(u128)c << 64 | a`, and `long
 /// keep_long(long a, long b, long c) { ext(); return a; }`.
-const FUNCS64: &[(&str, u64, u64)] = &[("own", 0x00, 0x2c), ("own3", 0x2c, 0x2c), ("keep_long", 0x58, 0x24)];
+const FUNCS64: &[(&str, u64, u64)] = &[
+    ("own", 0x00, 0x2c),
+    ("own3", 0x2c, 0x2c),
+    ("keep_long", 0x58, 0x24),
+];
 
 const A64: Image = Image {
     arch: Architecture::Aarch64,
@@ -116,7 +120,11 @@ const X64: Image = Image {
            c366662e0f1f8400000000000f1f0041554989fd41544989d44883ec08e8000000\
            004883c4084c89e84c89e2415c415dc366662e0f1f8400000000000f1f00415449\
            89fce8000000004c89e0415cc3",
-    functions: &[("own", 0x00, 0x22), ("own3", 0x30, 0x22), ("keep_long", 0x60, 0x10)],
+    functions: &[
+        ("own", 0x00, 0x22),
+        ("own3", 0x30, 0x22),
+        ("keep_long", 0x60, 0x10),
+    ],
     calls: &[0x0f, 0x3f, 0x66],
     r_type: object::elf::R_X86_64_PLT32,
     addend: -4,
@@ -207,7 +215,13 @@ fn decompile(stem: &str, image: &Image) -> String {
     std::fs::write(&path, object(image)).unwrap();
     let names: Vec<&str> = image.functions.iter().map(|f| f.0).collect();
     let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
-        .args(["decompile-all", path.to_str().unwrap(), "--mode", "aggressive", "--functions"])
+        .args([
+            "decompile-all",
+            path.to_str().unwrap(),
+            "--mode",
+            "aggressive",
+            "--functions",
+        ])
         .arg(names.join(","))
         .output()
         .unwrap();
@@ -237,23 +251,48 @@ fn arm_pairs_moved_back_into_their_own_registers_round_trip_through_the_printed_
         .into_iter()
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
-    assert!(!compilers.is_empty(), "the round trip requires a C compiler");
-    for (stem, image, two) in [("own-return-arm", &ARM, true), ("own-return-thumb", &THUMB, false)] {
+    assert!(
+        !compilers.is_empty(),
+        "the round trip requires a C compiler"
+    );
+    for (stem, image, two) in [
+        ("own-return-arm", &ARM, true),
+        ("own-return-thumb", &THUMB, false),
+    ] {
         let printed = decompile(stem, image);
         if two {
             for name in ["two_ret", "two_ret_hi"] {
-                let decl = format!("unsigned long long {name}(unsigned int a0,unsigned int a1,int a2)");
-                assert!(function(&printed, name).contains(&decl), "{stem}: `{decl}`\n{printed}");
+                let decl =
+                    format!("unsigned long long {name}(unsigned int a0,unsigned int a1,int a2)");
+                assert!(
+                    function(&printed, name).contains(&decl),
+                    "{stem}: `{decl}`\n{printed}"
+                );
             }
         }
         for (name, decl) in [
-            ("own", "unsigned long long own(unsigned int a0,unsigned int a1)"),
-            ("own_cond", "unsigned long long own_cond(unsigned int a0,unsigned int a1,int a2)"),
-            ("own_loop", "unsigned long long own_loop(unsigned int a0,unsigned int a1,int a2)"),
-            ("swapd", "unsigned long long swapd(unsigned int a0,unsigned int a1)"),
+            (
+                "own",
+                "unsigned long long own(unsigned int a0,unsigned int a1)",
+            ),
+            (
+                "own_cond",
+                "unsigned long long own_cond(unsigned int a0,unsigned int a1,int a2)",
+            ),
+            (
+                "own_loop",
+                "unsigned long long own_loop(unsigned int a0,unsigned int a1,int a2)",
+            ),
+            (
+                "swapd",
+                "unsigned long long swapd(unsigned int a0,unsigned int a1)",
+            ),
             ("keep_int", "unsigned int keep_int(unsigned int a0)"),
         ] {
-            assert!(function(&printed, name).contains(decl), "{stem}: `{decl}`\n{printed}");
+            assert!(
+                function(&printed, name).contains(decl),
+                "{stem}: `{decl}`\n{printed}"
+            );
         }
         let src = common::scratch_file(stem, "c");
         let exe = common::scratch_file(stem, "exe");
@@ -326,9 +365,18 @@ fn a_128_bit_pair_keeps_the_argument_returned_in_its_own_register() {
             } else {
                 "unsigned long a0,unsigned long a1,unsigned long a2"
             };
-            assert!(body.contains(&format!("undefined16 {name}({params})")), "{stem}\n{printed}");
-            assert!(body.contains(&format!("*(unsigned long *)&v1[8] = {high};")), "{stem}\n{printed}");
-            assert!(body.contains("*(unsigned long *)v1 = a0;"), "{stem}\n{printed}");
+            assert!(
+                body.contains(&format!("undefined16 {name}({params})")),
+                "{stem}\n{printed}"
+            );
+            assert!(
+                body.contains(&format!("*(unsigned long *)&v1[8] = {high};")),
+                "{stem}\n{printed}"
+            );
+            assert!(
+                body.contains("*(unsigned long *)v1 = a0;"),
+                "{stem}\n{printed}"
+            );
         }
         assert!(
             function(&printed, "keep_long").contains("unsigned long keep_long(unsigned long a0)"),
@@ -345,7 +393,10 @@ fn a_shift_that_returns_its_argument_unchanged_returns_both_words() {
         .into_iter()
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
-    assert!(!compilers.is_empty(), "the round trip requires a C compiler");
+    assert!(
+        !compilers.is_empty(),
+        "the round trip requires a C compiler"
+    );
     let stem = "own-return-rv32";
     let printed = decompile(stem, &RV32);
     let body = function(&printed, "ashr");
@@ -353,7 +404,10 @@ fn a_shift_that_returns_its_argument_unchanged_returns_both_words() {
         body.contains("unsigned long long ashr(unsigned int a0,int a1,unsigned int a2)"),
         "{stem}\n{printed}"
     );
-    assert!(body.contains("return CONCAT44(a1,a0);"), "{stem}\n{printed}");
+    assert!(
+        body.contains("return CONCAT44(a1,a0);"),
+        "{stem}\n{printed}"
+    );
     let src = common::scratch_file(stem, "c");
     let exe = common::scratch_file(stem, "exe");
     std::fs::write(

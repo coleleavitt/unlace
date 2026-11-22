@@ -69,7 +69,7 @@ use unlace_base::types::{int4, intb};
 
 use crate::dtype::type_metatype;
 use crate::p0_knowledge::options::on_or_off;
-use crate::varmap::{MapState, RangeHint, RangeType, COPY_CONSTANT};
+use crate::varmap::{COPY_CONSTANT, MapState, RangeHint, RangeType};
 
 /// Marshalling element id for the option (kuna 4000+ range; 4167 = the
 /// previous high-water mark).
@@ -83,7 +83,10 @@ impl OptionNulTerminator {
     pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
-        Ok((val, format!("Stack array terminator absorption turned {prop}")))
+        Ok((
+            val,
+            format!("Stack array terminator absorption turned {prop}"),
+        ))
     }
 }
 

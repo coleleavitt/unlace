@@ -18,7 +18,9 @@ use std::collections::BTreeMap;
 
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
-use unlace_base::marshal::{AttributeId, Decoder, ElementId, IdRegistry, ATTRIB_SIZE, ATTRIB_SPACE};
+use unlace_base::marshal::{
+    ATTRIB_SIZE, ATTRIB_SPACE, AttributeId, Decoder, ElementId, IdRegistry,
+};
 use unlace_base::xml::DocumentStorage;
 use unlace_num::float::FloatFormat;
 use unlace_num::opcodes::{OpCode, OpcodeDecoder};
@@ -33,8 +35,8 @@ pub use unlace_base::space::{
 // Marshal ids from translate.cc.  Those needed by unlace-base/unlace-num decode
 // paths are defined (and documented) there; the rest are defined here.
 pub use unlace_base::space::{
-    ATTRIB_CONTAIN, ATTRIB_DEFAULTSPACE, ELEM_SPACES, ELEM_SPACE_BASE, ELEM_SPACE_OTHER,
-    ELEM_SPACE_OVERLAY, ELEM_SPACE_UNIQUE,
+    ATTRIB_CONTAIN, ATTRIB_DEFAULTSPACE, ELEM_SPACE_BASE, ELEM_SPACE_OTHER, ELEM_SPACE_OVERLAY,
+    ELEM_SPACE_UNIQUE, ELEM_SPACES,
 };
 pub use unlace_num::pcoderaw::{ATTRIB_CODE, ELEM_SPACEID};
 
@@ -73,12 +75,20 @@ pub fn register_translate_ids(registry: &mut IdRegistry) {
 /// Convert a unlace-base storage triple into the canonical unlace-num
 /// `VarnodeData` (both port the C++ `VarnodeData`; see module docs).
 pub fn varnode_data_from_storage(vs: &VarnodeStorage) -> VarnodeData {
-    VarnodeData { space: vs.space.clone(), offset: vs.offset, size: vs.size }
+    VarnodeData {
+        space: vs.space.clone(),
+        offset: vs.offset,
+        size: vs.size,
+    }
 }
 
 /// Convert a unlace-num `VarnodeData` into the unlace-base storage triple.
 pub fn storage_from_varnode_data(vd: &VarnodeData) -> VarnodeStorage {
-    VarnodeStorage { space: vd.space.clone(), offset: vd.offset, size: vd.size }
+    VarnodeStorage {
+        space: vd.space.clone(),
+        offset: vd.offset,
+        size: vd.size,
+    }
 }
 
 /// One context write a translated instruction committed: `mask` and `value`
@@ -507,7 +517,9 @@ pub trait Translate: RegisterLookup {
         _baseaddr: &Address,
         _image: &dyn crate::loadimage::ImageBytes,
     ) -> KunaResult<i32> {
-        Err(KunaError::lowlevel("Checked instruction translation is unsupported"))
+        Err(KunaError::lowlevel(
+            "Checked instruction translation is unsupported",
+        ))
     }
 
     /// \brief Disassemble a single machine instruction
@@ -550,7 +562,9 @@ pub trait Translate: RegisterLookup {
     }
 
     /// Check a context key returned by `one_instruction_reusable`.
-    fn matches_decode_context(&self, _addr: &Address, _context: &[u32]) -> bool { false }
+    fn matches_decode_context(&self, _addr: &Address, _context: &[u32]) -> bool {
+        false
+    }
 
     /// Disassemble into reusable caller-owned strings.
     ///
@@ -623,15 +637,15 @@ pub trait Translate: RegisterLookup {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use unlace_base::marshal::{
-        Encoder, PackedDecode, PackedEncode, XmlDecode, XmlEncode, ATTRIB_NAME,
-    };
-    use unlace_base::space::{
-        addrspace_flags, spacetype, AddrSpace, ConstantSpace, JoinSpace, OtherSpace, UniqueSpace,
-    };
-    use unlace_num::opcodes::OpcodeEncoder;
     use std::cell::RefCell;
     use std::rc::Rc;
+    use unlace_base::marshal::{
+        ATTRIB_NAME, Encoder, PackedDecode, PackedEncode, XmlDecode, XmlEncode,
+    };
+    use unlace_base::space::{
+        AddrSpace, ConstantSpace, JoinSpace, OtherSpace, UniqueSpace, addrspace_flags, spacetype,
+    };
+    use unlace_num::opcodes::OpcodeEncoder;
 
     /// A minimal RegisterLookup stub: a fixed register table over one
     /// "register" space (what the sleigh engine will derive from its symbol
@@ -684,7 +698,9 @@ mod tests {
         let mut manager = AddrSpaceManager::new();
         manager.insert_space(Rc::new(ConstantSpace::new())).unwrap();
         manager.insert_space(Rc::new(OtherSpace::new(1))).unwrap();
-        manager.insert_space(Rc::new(UniqueSpace::new(2, 0, big_end))).unwrap();
+        manager
+            .insert_space(Rc::new(UniqueSpace::new(2, 0, big_end)))
+            .unwrap();
         manager
             .insert_space(Rc::new(AddrSpace::new(
                 spacetype::IPTR_PROCESSOR,
@@ -711,7 +727,9 @@ mod tests {
                 0,
             )))
             .unwrap();
-        manager.insert_space(Rc::new(JoinSpace::new(5, big_end))).unwrap();
+        manager
+            .insert_space(Rc::new(JoinSpace::new(5, big_end)))
+            .unwrap();
         manager.set_default_code_space(3).unwrap();
         manager
     }
@@ -722,7 +740,12 @@ mod tests {
             space,
             // EAX/AX/EDX-style layout: a 2-byte subregister at 0 within the
             // 4-byte EAX, EDX at 8, and an 8-byte whole at 0
-            regs: vec![("EAX", 0, 4), ("AX", 0, 2), ("EDX", 8, 4), ("EDX_EAX", 0, 8)],
+            regs: vec![
+                ("EAX", 0, 4),
+                ("AX", 0, 2),
+                ("EDX", 8, 4),
+                ("EDX_EAX", 0, 8),
+            ],
         }));
     }
 
@@ -770,7 +793,10 @@ mod tests {
             "Cannot create a join without pieces"
         );
         assert_eq!(
-            manager.find_add_join(&[reg(&manager, 0, 4)], 0).unwrap_err().explain(),
+            manager
+                .find_add_join(&[reg(&manager, 0, 4)], 0)
+                .unwrap_err()
+                .explain(),
             "Cannot create a single piece join without a logical size"
         );
         assert_eq!(
@@ -903,7 +929,8 @@ mod tests {
         {
             let mut enc = XmlEncode::new_with_format(&mut stream, false);
             enc.open_element(&ELEM_SPACEID); // any open element carries the attributes
-            join.encode_attributes(&mut enc, rec.get_unified().offset).unwrap();
+            join.encode_attributes(&mut enc, rec.get_unified().offset)
+                .unwrap();
             enc.close_element(&ELEM_SPACEID);
         }
         let text = String::from_utf8(stream.clone()).unwrap();
@@ -939,7 +966,8 @@ mod tests {
         {
             let mut enc = XmlEncode::new_with_format(&mut stream, false);
             enc.open_element(&ELEM_SPACEID);
-            join.encode_attributes(&mut enc, rec4.get_unified().offset).unwrap();
+            join.encode_attributes(&mut enc, rec4.get_unified().offset)
+                .unwrap();
             enc.close_element(&ELEM_SPACEID);
         }
         // (writeUnsignedInteger renders hex with the 0x prefix, as in C++)
@@ -1001,7 +1029,9 @@ mod tests {
         assert!(Rc::ptr_eq(&manager.find_join(off).unwrap(), &rec));
         // unparseable piece
         assert_eq!(
-            join.read("EDX,@bogus", &mut size, &manager).unwrap_err().explain(),
+            join.read("EDX,@bogus", &mut size, &manager)
+                .unwrap_err()
+                .explain(),
             "Could not parse join string"
         );
     }
@@ -1037,8 +1067,14 @@ mod tests {
         assert_eq!(newrec.num_pieces(), 2);
         // little-endian split keeps most->least significant piece order:
         // 2 bytes of the high register, then the top 2 bytes of the low one
-        assert_eq!((newrec.get_piece(0).offset, newrec.get_piece(0).size), (8, 2));
-        assert_eq!((newrec.get_piece(1).offset, newrec.get_piece(1).size), (2, 2));
+        assert_eq!(
+            (newrec.get_piece(0).offset, newrec.get_piece(0).size),
+            (8, 2)
+        );
+        assert_eq!(
+            (newrec.get_piece(1).offset, newrec.get_piece(1).size),
+            (2, 2)
+        );
         // range past the record errs
         let mut addr = Address::new(Rc::clone(&join), 4);
         assert_eq!(
@@ -1150,7 +1186,9 @@ mod tests {
 
         // attach a truncated base register (8-byte pointer truncated to 4)
         let rsp = reg(&manager, 0x20, 8);
-        manager.add_spacebase_pointer(&stack, &rsp, 4, true).unwrap();
+        manager
+            .add_spacebase_pointer(&stack, &rsp, 4, true)
+            .unwrap();
         assert_eq!(stack.num_spacebase(), 1);
         let baseloc = stack.get_spacebase(0).unwrap();
         assert_eq!((baseloc.offset, baseloc.size), (0x20, 4)); // little endian keeps the offset
@@ -1159,12 +1197,17 @@ mod tests {
         // a second attachment compares against the (already truncated)
         // baseloc, so even the same original register errs, as in C++
         assert_eq!(
-            manager.add_spacebase_pointer(&stack, &rsp, 4, true).unwrap_err().explain(),
+            manager
+                .add_spacebase_pointer(&stack, &rsp, 4, true)
+                .unwrap_err()
+                .explain(),
             "Attempt to assign more than one base register to space: stack"
         );
         // re-attaching the exact current baseloc (post-truncation) is allowed
         let truncated = reg(&manager, 0x20, 4);
-        manager.add_spacebase_pointer(&stack, &truncated, 4, true).unwrap();
+        manager
+            .add_spacebase_pointer(&stack, &truncated, 4, true)
+            .unwrap();
         // big endian truncation moves the offset forward
         let manager_be = test_manager(true);
         let ram_be = Rc::clone(manager_be.get_space_by_name("ram").unwrap());
@@ -1174,7 +1217,9 @@ mod tests {
             offset: 0x20,
             size: 8,
         };
-        manager_be.add_spacebase_pointer(&stack_be, &rsp_be, 4, false).unwrap();
+        manager_be
+            .add_spacebase_pointer(&stack_be, &rsp_be, 4, false)
+            .unwrap();
         let baseloc = stack_be.get_spacebase(0).unwrap();
         assert_eq!((baseloc.offset, baseloc.size), (0x24, 4));
         assert!(!stack_be.stack_grows_negative());
@@ -1187,7 +1232,9 @@ mod tests {
         let mut registry = unlace_base::marshal::IdRegistry::with_base_ids();
         register_translate_ids(&mut registry);
         let mut manager2 = AddrSpaceManager::new();
-        manager2.insert_space(Rc::new(ConstantSpace::new())).unwrap();
+        manager2
+            .insert_space(Rc::new(ConstantSpace::new()))
+            .unwrap();
         let spc = {
             let mut dec = XmlDecode::new(&manager2, &registry);
             dec.ingest_stream(
@@ -1226,13 +1273,16 @@ mod tests {
         let mut registry = unlace_base::marshal::IdRegistry::with_base_ids();
         register_translate_ids(&mut registry);
         let mut dec = XmlDecode::new(&manager, &registry);
-        dec.ingest_stream(b"<truncate_space space=\"ram\" size=\"4\"/>").unwrap();
+        dec.ingest_stream(b"<truncate_space space=\"ram\" size=\"4\"/>")
+            .unwrap();
         let mut tag = TruncationTag::default();
         tag.decode(&mut dec).unwrap();
         assert_eq!(tag.get_name(), "ram");
         assert_eq!(tag.get_size(), 4);
         // C++ AddrSpaceManager::truncateSpace(tag)
-        manager.truncate_space(tag.get_name(), tag.get_size()).unwrap();
+        manager
+            .truncate_space(tag.get_name(), tag.get_size())
+            .unwrap();
         let ram = manager.get_space_by_name("ram").unwrap();
         assert!(ram.is_truncated());
         assert_eq!(ram.get_addr_size(), 4);
@@ -1256,7 +1306,10 @@ mod tests {
         ));
         assert_eq!(addr.get_offset(), 0x10); // hex with or without 0x
         assert_eq!(
-            manager.parse_address_simple("bogus:0x10").unwrap_err().explain(),
+            manager
+                .parse_address_simple("bogus:0x10")
+                .unwrap_err()
+                .explain(),
             "Unknown address space: bogus"
         );
     }
@@ -1287,12 +1340,21 @@ mod tests {
         let point = Address::new(Rc::clone(&ram), 0);
         let mut full: u64 = 0;
         // no resolver: wordsize conversion + wrap
-        let addr = manager.resolve_constant(&ram, 0x1234, 4, &point, &mut full).unwrap();
+        let addr = manager
+            .resolve_constant(&ram, 0x1234, 4, &point, &mut full)
+            .unwrap();
         assert_eq!(addr.get_offset(), 0x1234);
         assert_eq!(full, 0x1234);
         // installed resolver takes over for its space only
-        manager.insert_resolver(&ram, Box::new(PlusOneResolver { space: Rc::clone(&ram) }));
-        let addr = manager.resolve_constant(&ram, 0x1234, 4, &point, &mut full).unwrap();
+        manager.insert_resolver(
+            &ram,
+            Box::new(PlusOneResolver {
+                space: Rc::clone(&ram),
+            }),
+        );
+        let addr = manager
+            .resolve_constant(&ram, 0x1234, 4, &point, &mut full)
+            .unwrap();
         assert_eq!(addr.get_offset(), 0x1235);
         let addr = manager
             .resolve_constant(&register, 0x10, 4, &point, &mut full)
@@ -1367,7 +1429,9 @@ mod tests {
             enc.open_element(&ELEM_SPACEID);
             enc.write_space(&ATTRIB_NAME, &ram);
             enc.close_element(&ELEM_SPACEID);
-            Address::new(Rc::clone(&ram), 0x2000).encode_sized(&mut enc, 8).unwrap();
+            Address::new(Rc::clone(&ram), 0x2000)
+                .encode_sized(&mut enc, 8)
+                .unwrap();
             enc.close_element(&ELEM_OP);
         }
         let mut dec = PackedDecode::new(&manager);
@@ -1384,7 +1448,8 @@ mod tests {
 
         // negative size attribute -> DecoderError, exact C++ string
         let mut dec = XmlDecode::new(&manager, &registry);
-        dec.ingest_stream(b"<op code=\"INT_ADD\" size=\"-1\"><void/></op>").unwrap();
+        dec.ingest_stream(b"<op code=\"INT_ADD\" size=\"-1\"><void/></op>")
+            .unwrap();
         let mut emit = CollectEmit::default();
         let err = emit.decode_op(&addr, &mut dec).unwrap_err();
         assert!(matches!(err, KunaError::Decoder { .. }));
@@ -1403,9 +1468,18 @@ mod tests {
         base.set_unique_base(0x100);
         base.set_unique_base(0x80);
         assert_eq!(base.get_unique_base(), 0x100);
-        assert_eq!(base.get_unique_start(UniqueLayout::RUNTIME_BOOLEAN_INVERT), 0x100);
-        assert_eq!(base.get_unique_start(UniqueLayout::RUNTIME_RETURN_LOCATION), 0x180);
-        assert_eq!(base.get_unique_start(UniqueLayout::RUNTIME_BITRANGE_EA), 0x200);
+        assert_eq!(
+            base.get_unique_start(UniqueLayout::RUNTIME_BOOLEAN_INVERT),
+            0x100
+        );
+        assert_eq!(
+            base.get_unique_start(UniqueLayout::RUNTIME_RETURN_LOCATION),
+            0x180
+        );
+        assert_eq!(
+            base.get_unique_start(UniqueLayout::RUNTIME_BITRANGE_EA),
+            0x200
+        );
         assert_eq!(base.get_unique_start(UniqueLayout::INJECT), 0x300);
         // ANALYSIS is absolute, not offset by the unique base
         assert_eq!(base.get_unique_start(UniqueLayout::ANALYSIS), 0x10000000);
@@ -1456,7 +1530,9 @@ mod tests {
             Ok(())
         }
         fn allow_context_set(&self, val: bool) {
-            self.context_calls.borrow_mut().push(format!("allow({val})"));
+            self.context_calls
+                .borrow_mut()
+                .push(format!("allow({val})"));
         }
         #[allow(clippy::mutable_key_type)] // see the trait method's note
         fn get_all_registers(&self, reglist: &mut BTreeMap<VarnodeData, String>) {
@@ -1503,7 +1579,8 @@ mod tests {
     struct CollectAsm(Vec<(u64, String, String)>);
     impl AssemblyEmit for CollectAsm {
         fn dump(&mut self, addr: &Address, mnem: &str, body: &str) {
-            self.0.push((addr.get_offset(), mnem.to_string(), body.to_string()));
+            self.0
+                .push((addr.get_offset(), mnem.to_string(), body.to_string()));
         }
     }
 
@@ -1565,7 +1642,9 @@ mod tests {
         let mut mnemonic = String::from("stale mnemonic");
         let mut body = String::from("stale body");
         assert_eq!(
-            dyn_trans.print_assembly_into(&addr, &mut mnemonic, &mut body).unwrap(),
+            dyn_trans
+                .print_assembly_into(&addr, &mut mnemonic, &mut body)
+                .unwrap(),
             4
         );
         assert_eq!(mnemonic, "NOP");
@@ -1574,18 +1653,27 @@ mod tests {
         let error_addr = Address::new(Rc::clone(&register), 4);
         mnemonic.push_str(" stale");
         body.push_str("stale");
-        assert!(dyn_trans
-            .print_assembly_into(&error_addr, &mut mnemonic, &mut body)
-            .is_err());
+        assert!(
+            dyn_trans
+                .print_assembly_into(&error_addr, &mut mnemonic, &mut body)
+                .is_err()
+        );
         assert!(mnemonic.is_empty());
         assert!(body.is_empty());
 
         let mut combined_ops = CollectEmit::default();
         let mut combined_text = CollectAsm(Vec::new());
-        assert_eq!(dyn_trans.one_instruction_with_assembly(
-            &mut combined_ops, &mut combined_text, &error_addr).unwrap(), 4);
+        assert_eq!(
+            dyn_trans
+                .one_instruction_with_assembly(&mut combined_ops, &mut combined_text, &error_addr)
+                .unwrap(),
+            4
+        );
         assert_eq!(combined_ops.ops.len(), 1);
-        assert_eq!(combined_text.0, vec![(4, "PARTIAL".into(), "assembly".into())]);
+        assert_eq!(
+            combined_text.0,
+            vec![(4, "PARTIAL".into(), "assembly".into())]
+        );
     }
 
     /// The VarnodeStorage <-> VarnodeData conversions are exact and the two

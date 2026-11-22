@@ -11,7 +11,7 @@ use std::rc::Rc;
 
 use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
 
@@ -83,15 +83,22 @@ pub(crate) fn plan_arm_register_lsl(
 /// widens, which the guard casts and the shift reads as they are; `vn` itself
 /// otherwise. Printing the extension would cast the count a second time.
 fn unsigned_extension_source(fd: &Funcdata, vn: VarnodeId) -> VarnodeId {
-    let Some(v) = fd.vbank().get(vn) else { return vn };
+    let Some(v) = fd.vbank().get(vn) else {
+        return vn;
+    };
     if !fd.get_arch().narrow_locals || v.is_explicit() || v.get_size() != 4 {
         return vn;
     }
-    let Some(def) = v.get_def().and_then(|d| fd.obank().get(d)) else { return vn };
+    let Some(def) = v.get_def().and_then(|d| fd.obank().get(d)) else {
+        return vn;
+    };
     if def.code() != OpCode::CPUI_INT_ZEXT {
         return vn;
     }
-    match def.get_in(0).and_then(|x| fd.vbank().get(x).map(|v| (x, v))) {
+    match def
+        .get_in(0)
+        .and_then(|x| fd.vbank().get(x).map(|v| (x, v)))
+    {
         Some((x, xv)) if xv.get_type().get_metatype() == type_metatype::TYPE_UINT => x,
         _ => vn,
     }

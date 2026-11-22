@@ -22,7 +22,7 @@ use std::rc::Rc;
 
 use unlace_base::types::int4;
 
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::kuna_lang::{
     CastForm, CharForm, DeclForm, DoWhileForm, ForLoopForm, GotoForm, InfLoopForm, LabelForm,
     LangCaps, LangForms, LangProfile, MemberForm, ProtoForm, StringEscape, SwitchForm, WhileForm,
@@ -32,9 +32,11 @@ use crate::printc::{keywords, op_token, tokens};
 use crate::printlanguage::{OpToken, TokenType};
 
 /// Java's unsigned right shift.
-pub static SHIFT_RIGHT_UNSIGNED: OpToken = op_token(">>>", "", 2, 46, false, TokenType::Binary, 1, 0);
+pub static SHIFT_RIGHT_UNSIGNED: OpToken =
+    op_token(">>>", "", 2, 46, false, TokenType::Binary, 1, 0);
 /// Java's unsigned right-shift assignment.
-pub static RIGHTEQUAL_UNSIGNED: OpToken = op_token(">>>=", "", 2, 14, false, TokenType::Binary, 1, 5);
+pub static RIGHTEQUAL_UNSIGNED: OpToken =
+    op_token(">>>=", "", 2, 14, false, TokenType::Binary, 1, 5);
 /// Java's `throw`, the statement Dalvik's `throwException(x)` performs.
 pub static THROW: OpToken = op_token("throw ", "", 1, 2, false, TokenType::UnaryPrefix, 0, 0);
 /// Java's `instanceof` (`PrintJava::instanceof`).
@@ -142,7 +144,11 @@ pub fn print_unicode_java(s: &mut String, onechar: int4) {
             s.push_str(&format!("\\u{onechar:04x}"));
         } else {
             let v = (onechar - 0x10000) as u32;
-            s.push_str(&format!("\\u{:04x}\\u{:04x}", 0xd800 + (v >> 10), 0xdc00 + (v & 0x3ff)));
+            s.push_str(&format!(
+                "\\u{:04x}\\u{:04x}",
+                0xd800 + (v >> 10),
+                0xdc00 + (v & 0x3ff)
+            ));
         }
         return;
     }
@@ -158,7 +164,9 @@ pub fn is_array_type(ct: &Datatype) -> bool {
     if ct.get_metatype() != type_metatype::TYPE_PTR {
         return false;
     }
-    let Some(to) = ct.get_ptr_to() else { return false };
+    let Some(to) = ct.get_ptr_to() else {
+        return false;
+    };
     match to.get_metatype() {
         type_metatype::TYPE_UINT => to.is_char_print(),
         type_metatype::TYPE_INT
@@ -214,11 +222,20 @@ impl JavaSpeller {
 }
 
 impl TypeSpeller for JavaSpeller {
-    fn relabel(&self, _cx: &SpellCtx, dt: &Rc<Datatype>, _under_pointer: bool) -> Option<Cow<'static, str>> {
+    fn relabel(
+        &self,
+        _cx: &SpellCtx,
+        dt: &Rc<Datatype>,
+        _under_pointer: bool,
+    ) -> Option<Cow<'static, str>> {
         let size = dt.get_size();
         let name = match dt.get_metatype() {
-            type_metatype::TYPE_INT | type_metatype::TYPE_UINT if dt.is_char_print() => Some("char"),
-            type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN => int_name(size),
+            type_metatype::TYPE_INT | type_metatype::TYPE_UINT if dt.is_char_print() => {
+                Some("char")
+            }
+            type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN => {
+                int_name(size)
+            }
             type_metatype::TYPE_FLOAT if size == 4 => Some("float"),
             type_metatype::TYPE_FLOAT if size == 8 => Some("double"),
             type_metatype::TYPE_BOOL => Some("boolean"),
@@ -244,7 +261,12 @@ impl TypeSpeller for JavaSpeller {
         (self.type_expr(cx, t), String::new())
     }
 
-    fn unknown_base(&self, size: int4, _under_pointer: bool, _long_is_8: bool) -> Option<Cow<'static, str>> {
+    fn unknown_base(
+        &self,
+        size: int4,
+        _under_pointer: bool,
+        _long_is_8: bool,
+    ) -> Option<Cow<'static, str>> {
         int_name(size).map(Cow::Borrowed)
     }
 }

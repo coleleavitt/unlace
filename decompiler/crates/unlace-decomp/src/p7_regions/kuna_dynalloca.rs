@@ -25,11 +25,23 @@ fn negated_amount(data: &Funcdata, v: VarnodeId) -> Option<VarnodeId> {
         OpCode::CPUI_INT_2COMP => d.get_in(0)?,
         OpCode::CPUI_INT_MULT => {
             let (a, b) = (d.get_in(0)?, d.get_in(1)?);
-            let minus_one = |x: VarnodeId| data.vbank().get(x).is_some_and(|c| {
-                let m = if c.get_size() >= 8 { u64::MAX } else { (1u64 << (8 * c.get_size())) - 1 };
-                c.is_constant() && c.get_offset() & m == m
-            });
-            if minus_one(b) { a } else if minus_one(a) { b } else { return None }
+            let minus_one = |x: VarnodeId| {
+                data.vbank().get(x).is_some_and(|c| {
+                    let m = if c.get_size() >= 8 {
+                        u64::MAX
+                    } else {
+                        (1u64 << (8 * c.get_size())) - 1
+                    };
+                    c.is_constant() && c.get_offset() & m == m
+                })
+            };
+            if minus_one(b) {
+                a
+            } else if minus_one(a) {
+                b
+            } else {
+                return None;
+            }
         }
         _ => return None,
     };
@@ -55,7 +67,9 @@ pub struct RuleDynAlloca {
 
 impl RuleDynAlloca {
     pub fn new(group: &str) -> Self {
-        Self { group: group.to_string() }
+        Self {
+            group: group.to_string(),
+        }
     }
 }
 
@@ -65,25 +79,42 @@ impl Rule for RuleDynAlloca {
     }
 
     fn clone_rule(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Rule>> {
-        grouplist.contains(&self.group).then(|| Box::new(Self::new(&self.group)) as Box<dyn Rule>)
+        grouplist
+            .contains(&self.group)
+            .then(|| Box::new(Self::new(&self.group)) as Box<dyn Rule>)
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         if !data.get_arch().dyn_alloca {
             return 0;
         }
-        let Some(o) = data.obank().get(op) else { return 0 };
-        let (Some(base), Some(off), Some(scale)) = (o.get_in(0), o.get_in(1), o.get_in(2)) else { return 0 };
-        if data.vbank().get(scale).is_none_or(|s| !s.is_constant() || s.get_offset() != 1) {
+        let Some(o) = data.obank().get(op) else {
+            return 0;
+        };
+        let (Some(base), Some(off), Some(scale)) = (o.get_in(0), o.get_in(1), o.get_in(2)) else {
+            return 0;
+        };
+        if data
+            .vbank()
+            .get(scale)
+            .is_none_or(|s| !s.is_constant() || s.get_offset() != 1)
+        {
             return 0;
         }
         // Only a move OF the stack pointer: the result is written back to the
         // stack-pointer register itself.
-        let Some(sp) = stack_pointer(data, base) else { return 0 };
-        if o.get_out().and_then(|v| data.vbank().get(v)).is_none_or(|v| *v.get_addr() != sp) {
+        let Some(sp) = stack_pointer(data, base) else {
+            return 0;
+        };
+        if o.get_out()
+            .and_then(|v| data.vbank().get(v))
+            .is_none_or(|v| *v.get_addr() != sp)
+        {
             return 0;
         }
-        let Some(n) = negated_amount(data, off) else { return 0 };
+        let Some(n) = negated_amount(data, off) else {
+            return 0;
+        };
         let id = data.new_constant(4, BUILTIN_ALLOCA as uintb);
         if data.op_set_all_input(op, &[id, n]).is_err() {
             return 0;

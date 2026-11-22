@@ -136,7 +136,11 @@ fn pcrel_literal_target(
     } else {
         num.parse::<u64>().ok()?
     };
-    if neg { base.checked_sub(imm) } else { base.checked_add(imm) }
+    if neg {
+        base.checked_sub(imm)
+    } else {
+        base.checked_add(imm)
+    }
 }
 
 /// Does the text after an address operand's `]` index or write back the base
@@ -211,14 +215,18 @@ fn referenced_words(
         }
     }
     for &entry in speculative {
-        let gap_hi = listing.next_instruction_start_after(entry).unwrap_or(u64::MAX);
-        let body = super::check_valid_subroutine(decoder, listing, entry, entry, gap_hi)
-            .or_else(|| {
+        let gap_hi = listing
+            .next_instruction_start_after(entry)
+            .unwrap_or(u64::MAX);
+        let body =
+            super::check_valid_subroutine(decoder, listing, entry, entry, gap_hi).or_else(|| {
                 super::kuna_ptrentry::check_terminating_routine(decoder, listing, entry, gap_hi)
             });
         let Some(body) = body else { continue };
         for vma in body {
-            let Some(insn) = decoder.probe(vma) else { continue };
+            let Some(insn) = decoder.probe(vma) else {
+                continue;
+            };
             let e = ends.entry(vma + insn.len as u64).or_insert(false);
             *e |= insn.is_terminal;
             if let Some(t) = literal_target(vma, &insn.operands, mode) {
@@ -257,7 +265,9 @@ fn insert_literal(
 /// `b` the compiler emits to jump over it — which is the split shape, so the
 /// terminal class is the gate that separates them.
 fn follows_return(ends: &CodeEnds, lo: u64) -> bool {
-    [0u64, 2].iter().any(|&back| lo >= back && ends.get(&(lo - back)) == Some(&true))
+    [0u64, 2]
+        .iter()
+        .any(|&back| lo >= back && ends.get(&(lo - back)) == Some(&true))
 }
 
 /// Maximal stride-4 runs over the referenced words.
@@ -291,7 +301,10 @@ pub fn run_pool_pass(
     aif_entries: &[u64],
     other_speculative: &[u64],
 ) -> PoolResult {
-    let mode = DecodeMode { arch, code_space: Rc::clone(&code_space) };
+    let mode = DecodeMode {
+        arch,
+        code_space: Rc::clone(&code_space),
+    };
     let mut decoder = GapDecoder::new(translate, code_space, exec_ranges);
     let mut spec: Vec<u64> = aif_entries.to_vec();
     spec.extend_from_slice(other_speculative);
@@ -302,8 +315,11 @@ pub fn run_pool_pass(
     // pool (an AIF accept inside any pool is a phantom); the additive half wants
     // only pools that abut the end of a returning body, since a pool the scan found
     // in the middle of nowhere has no reason to be followed by a function.
-    let add_pools: Vec<Pool> =
-        pools.iter().copied().filter(|p| follows_return(&ends, p.lo)).collect();
+    let add_pools: Vec<Pool> = pools
+        .iter()
+        .copied()
+        .filter(|p| follows_return(&ends, p.lo))
+        .collect();
 
     let mut added = Vec::new();
     let hist = super::build_fingerprint_histogram(listing, &mut decoder);
@@ -314,11 +330,15 @@ pub fn run_pool_pass(
             if !listing.is_undefined(entry) {
                 continue;
             }
-            let Some(fp) = decoder.fingerprint(entry) else { continue };
+            let Some(fp) = decoder.fingerprint(entry) else {
+                continue;
+            };
             if hist.get(&fp).copied().unwrap_or(0) < super::FINGERPRINT_THRESHOLD {
                 continue;
             }
-            let gap_hi = listing.next_instruction_start_after(entry).unwrap_or(u64::MAX);
+            let gap_hi = listing
+                .next_instruction_start_after(entry)
+                .unwrap_or(u64::MAX);
             if super::check_valid_subroutine(&mut decoder, listing, entry, entry, gap_hi).is_some()
             {
                 accepted.insert(entry);
@@ -341,12 +361,19 @@ pub fn run_pool_pass(
         })
         .map(|p| p.hi)
         .collect();
-    let (kept_aif, suppressed): (Vec<u64>, Vec<u64>) = aif_entries
-        .iter()
-        .copied()
-        .partition(|&e| !pools.iter().any(|p| e >= p.lo && e < p.hi && replaced.contains(&p.hi)));
+    let (kept_aif, suppressed): (Vec<u64>, Vec<u64>) =
+        aif_entries.iter().copied().partition(|&e| {
+            !pools
+                .iter()
+                .any(|p| e >= p.lo && e < p.hi && replaced.contains(&p.hi))
+        });
 
-    PoolResult { pools, added, kept_aif, suppressed }
+    PoolResult {
+        pools,
+        added,
+        kept_aif,
+        suppressed,
+    }
 }
 
 #[cfg(test)]
@@ -358,7 +385,10 @@ mod tests {
         assert_eq!(absolute_literal_target("r0,[0x80001c8]"), Some(0x80001c8));
         assert_eq!(absolute_literal_target("r3,[r7,#0x4]"), None);
         assert_eq!(absolute_literal_target("r3,[r3,#0x0]"), None);
-        assert_eq!(absolute_literal_target("r0,r1,[0x8000200]"), Some(0x8000200));
+        assert_eq!(
+            absolute_literal_target("r0,r1,[0x8000200]"),
+            Some(0x8000200)
+        );
         assert_eq!(absolute_literal_target("r0,[0x]"), None);
     }
 
@@ -368,30 +398,65 @@ mod tests {
     #[test]
     fn pcrel_reads_the_immediate_form_only() {
         // Thumb: base is the word-aligned PC (addr + 4).
-        assert_eq!(pcrel_literal_target(0x8000102, "d0,[pc,#0x18]", || Some(4)), Some(0x800011c));
+        assert_eq!(
+            pcrel_literal_target(0x8000102, "d0,[pc,#0x18]", || Some(4)),
+            Some(0x800011c)
+        );
         // A32: addr + 8, already word-aligned.
-        assert_eq!(pcrel_literal_target(0x60800100, "d0,[pc,#0x20]", || Some(8)), Some(0x60800128));
-        assert_eq!(pcrel_literal_target(0x8000100, "r0,r1,[pc,#-0x10]", || Some(4)), Some(0x80000f4));
+        assert_eq!(
+            pcrel_literal_target(0x60800100, "d0,[pc,#0x20]", || Some(8)),
+            Some(0x60800128)
+        );
+        assert_eq!(
+            pcrel_literal_target(0x8000100, "r0,r1,[pc,#-0x10]", || Some(4)),
+            Some(0x80000f4)
+        );
         assert_eq!(pcrel_literal_target(0x8000100, "[pc,r3]", || Some(4)), None);
-        assert_eq!(pcrel_literal_target(0x8000100, "[pc,r3,lsl #1]", || Some(4)), None);
+        assert_eq!(
+            pcrel_literal_target(0x8000100, "[pc,r3,lsl #1]", || Some(4)),
+            None
+        );
         // Post-indexed and write-back forms (a Thumb body decoded as A32 spells
         // `ldrmi r4,[pc],-r2,lsl #0xd`) read no fixed literal.
-        assert_eq!(pcrel_literal_target(0x52ac0, "r4,[pc],-r2,lsl #0xd", || Some(8)), None);
-        assert_eq!(pcrel_literal_target(0x8000100, "r0,[pc],#0x4", || Some(4)), None);
-        assert_eq!(pcrel_literal_target(0x8000100, "r0,[pc,#0x4]!", || Some(4)), None);
+        assert_eq!(
+            pcrel_literal_target(0x52ac0, "r4,[pc],-r2,lsl #0xd", || Some(8)),
+            None
+        );
+        assert_eq!(
+            pcrel_literal_target(0x8000100, "r0,[pc],#0x4", || Some(4)),
+            None
+        );
+        assert_eq!(
+            pcrel_literal_target(0x8000100, "r0,[pc,#0x4]!", || Some(4)),
+            None
+        );
         assert_eq!(absolute_literal_target("r0,[0x8000200],#0x4"), None);
         // Off ARM there is no decode mode, so the form is disabled outright.
-        assert_eq!(pcrel_literal_target(0x8000100, "d0,[pc,#0x18]", || None), None);
+        assert_eq!(
+            pcrel_literal_target(0x8000100, "d0,[pc,#0x18]", || None),
+            None
+        );
     }
 
     /// A run breaks at the first unreferenced word — no bridging (measured: any
     /// bridging swallows short real functions).
     #[test]
     fn runs_are_exactly_adjacent() {
-        let words: BTreeSet<u64> = [0x1000, 0x1004, 0x1008, 0x1010, 0x1014].into_iter().collect();
+        let words: BTreeSet<u64> = [0x1000, 0x1004, 0x1008, 0x1010, 0x1014]
+            .into_iter()
+            .collect();
         assert_eq!(
             runs(&words),
-            vec![Pool { lo: 0x1000, hi: 0x100c }, Pool { lo: 0x1010, hi: 0x1018 }]
+            vec![
+                Pool {
+                    lo: 0x1000,
+                    hi: 0x100c
+                },
+                Pool {
+                    lo: 0x1010,
+                    hi: 0x1018
+                }
+            ]
         );
     }
 
@@ -403,8 +468,14 @@ mod tests {
         ends.insert(0x1000, true); // a `bx lr` ends here
         ends.insert(0x2000, false); // an unconditional `b` over an intra-function pool
         assert!(follows_return(&ends, 0x1000));
-        assert!(follows_return(&ends, 0x1002), "2 bytes of Thumb alignment padding");
-        assert!(!follows_return(&ends, 0x2000), "a `b` over the pool is the split shape");
+        assert!(
+            follows_return(&ends, 0x1002),
+            "2 bytes of Thumb alignment padding"
+        );
+        assert!(
+            !follows_return(&ends, 0x2000),
+            "a `b` over the pool is the split shape"
+        );
         assert!(!follows_return(&ends, 0x3000));
     }
 }

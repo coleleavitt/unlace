@@ -1,8 +1,8 @@
 use super::*;
 use crate::context::ArchContext;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, IopSpace,
-    SpacebaseSpace, UniqueSpace, VarnodeStorage,
+    AddrSpace, AddrSpaceManager, ConstantSpace, IopSpace, SpacebaseSpace, UniqueSpace,
+    VarnodeStorage, addrspace_flags, spacetype,
 };
 
 fn function(word_size: u32) -> (Funcdata, Rc<AddrSpace>, VarnodeId) {

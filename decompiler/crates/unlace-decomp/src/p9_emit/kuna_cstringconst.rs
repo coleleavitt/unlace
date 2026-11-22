@@ -31,8 +31,8 @@ use unlace_base::types::uintb;
 
 use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
-use crate::dtype::type_metatype::{TYPE_BOOL, TYPE_FLOAT, TYPE_INT, TYPE_UINT};
 use crate::dtype::Datatype;
+use crate::dtype::type_metatype::{TYPE_BOOL, TYPE_FLOAT, TYPE_INT, TYPE_UINT};
 use crate::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
 
@@ -47,7 +47,9 @@ pub fn literal_sections<'a>(
 ) -> Vec<(u64, u64)> {
     sections
         .into_iter()
-        .filter(|&(name, kind, _, size)| name == "__cstring" && kind == "ReadOnlyString" && size != 0)
+        .filter(|&(name, kind, _, size)| {
+            name == "__cstring" && kind == "ReadOnlyString" && size != 0
+        })
         .filter_map(|(_, _, vma, size)| Some((vma, vma.checked_add(size)?)))
         .collect()
 }
@@ -58,7 +60,11 @@ pub fn literal_char(arch: &Architecture, val: uintb, size: i32) -> Option<Rc<Dat
     if !arch.cstring_const || size != arch.types().get_size_of_pointer() {
         return None;
     }
-    if !arch.cstring_ranges.iter().any(|&(start, end)| start <= val && val < end) {
+    if !arch
+        .cstring_ranges
+        .iter()
+        .any(|&(start, end)| start <= val && val < end)
+    {
         return None;
     }
     arch.types().get_type_char(1).ok()
@@ -86,7 +92,9 @@ fn starts_literal(arch: &Architecture, val: uintb) -> bool {
     if arch.cstring_ranges.iter().any(|&(start, _)| start == val) {
         return true;
     }
-    let Some(spc) = arch.manage().get_default_data_space() else { return false };
+    let Some(spc) = arch.manage().get_default_data_space() else {
+        return false;
+    };
     let mut prev = [0xffu8; 1];
     let addr = Address::new(Rc::clone(spc), val - 1);
     let loader_rc = arch.translate().loader_rc();
@@ -97,13 +105,20 @@ fn starts_literal(arch: &Architecture, val: uintb) -> bool {
 /// Does the call `op`'s prototype lock argument `slot` to a scalar type? A
 /// declared `size_t` (`malloc`, `write`, `memset`) is never a literal.
 fn declared_scalar(fd: &Funcdata, op: OpId, slot: i32) -> bool {
-    let Some(index) = fd.get_call_specs_index(op) else { return false };
+    let Some(index) = fd.get_call_specs_index(op) else {
+        return false;
+    };
     fd.get_call_specs(index)
         .proto()
         .get_param(slot - 1)
         .filter(|p| p.is_type_locked())
         .and_then(|p| p.get_type())
-        .is_some_and(|t| matches!(t.get_metatype(), TYPE_INT | TYPE_UINT | TYPE_BOOL | TYPE_FLOAT))
+        .is_some_and(|t| {
+            matches!(
+                t.get_metatype(),
+                TYPE_INT | TYPE_UINT | TYPE_BOOL | TYPE_FLOAT
+            )
+        })
 }
 
 /// Is `vn`, read by `op`, an argument of a call (any input but the call
@@ -120,10 +135,14 @@ pub fn is_call_argument(fd: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
                 continue;
             }
             seen.push((op, vn));
-            let Some(o) = fd.obank().get(op) else { continue };
+            let Some(o) = fd.obank().get(op) else {
+                continue;
+            };
             match o.code() {
                 OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => {
-                    if (1..o.num_input()).any(|slot| o.get_in(slot) == Some(vn) && !declared_scalar(fd, op, slot)) {
+                    if (1..o.num_input())
+                        .any(|slot| o.get_in(slot) == Some(vn) && !declared_scalar(fd, op, slot))
+                    {
                         return true;
                     }
                 }

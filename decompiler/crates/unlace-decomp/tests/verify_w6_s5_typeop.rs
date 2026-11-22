@@ -27,14 +27,14 @@
 //!
 //! C++ oracle anchors are cited inline.
 
+use type_metatype::*;
 use unlace_base::address::calc_mask;
-use unlace_decomp::dtype::{type_metatype, TypeFactoryImpl};
+use unlace_decomp::dtype::{TypeFactoryImpl, type_metatype};
 use unlace_decomp::typeop::{
-    float_sign_manipulation, register_instructions, select_java_operators, type_op_info,
-    TypeOpClass, TypeOpInfo,
+    TypeOpClass, TypeOpInfo, float_sign_manipulation, register_instructions, select_java_operators,
+    type_op_info,
 };
 use unlace_num::opcodes::OpCode;
-use type_metatype::*;
 
 fn factory() -> TypeFactoryImpl {
     let f = TypeFactoryImpl::new();
@@ -55,7 +55,11 @@ fn factory() -> TypeFactoryImpl {
 fn v1_register_instructions_null_shape_is_exactly_the_opcode_gap() {
     let inst = register_instructions();
     // Length is CPUI_MAX (75): inst[CPUI_MAX] itself is never addressable.
-    assert_eq!(inst.len(), OpCode::CPUI_MAX as usize, "inst[] length == CPUI_MAX");
+    assert_eq!(
+        inst.len(),
+        OpCode::CPUI_MAX as usize,
+        "inst[] length == CPUI_MAX"
+    );
 
     for idx in 0..(OpCode::CPUI_MAX as i32) {
         // Reconstruct the op-code from the raw discriminant.  Discriminant 0 and
@@ -73,13 +77,19 @@ fn v1_register_instructions_null_shape_is_exactly_the_opcode_gap() {
                 );
             }
             None => {
-                assert!(slot.is_none(), "inst[{idx}] should be null (no CPUI_* at {idx})");
+                assert!(
+                    slot.is_none(),
+                    "inst[{idx}] should be null (no CPUI_* at {idx})"
+                );
             }
         }
     }
     // Spot the two specific nulls the C++ leaves: discriminant 0 and 45.
     assert!(inst[0].is_none(), "inst[0] is null (no CPUI_* == 0)");
-    assert!(inst[45].is_none(), "inst[45] is null (gap between FLOAT_LESSEQUAL and FLOAT_NAN)");
+    assert!(
+        inst[45].is_none(),
+        "inst[45] is null (gap between FLOAT_LESSEQUAL and FLOAT_NAN)"
+    );
     // ... and that the slot right after the gap (FLOAT_NAN=46) is populated.
     assert_eq!(inst[46].unwrap().opcode, OpCode::CPUI_FLOAT_NAN);
 }
@@ -208,15 +218,27 @@ fn v3_select_java_operators_blast_radius() {
 #[test]
 fn v4_local_type_overrides_metatype_rederived() {
     let f = factory();
-    let mout = |opc: OpCode, sz: i32| type_op_info(opc).get_output_local(&f, sz).unwrap().get_metatype();
+    let mout = |opc: OpCode, sz: i32| {
+        type_op_info(opc)
+            .get_output_local(&f, sz)
+            .unwrap()
+            .get_metatype()
+    };
     let min = |opc: OpCode, slot: i32, sz: i32| {
-        type_op_info(opc).get_input_local(&f, slot, sz).unwrap().get_metatype()
+        type_op_info(opc)
+            .get_input_local(&f, slot, sz)
+            .unwrap()
+            .get_metatype()
     };
 
     // PTRADD/PTRSUB: both in and out forced to INT regardless of class (Base).
     // (typeop.cc:2234-2244, 2310-2320)
     assert_eq!(mout(OpCode::CPUI_PTRADD, 8), TYPE_INT);
-    assert_eq!(min(OpCode::CPUI_PTRADD, 2, 8), TYPE_INT, "PTRADD slot 2 (the element-size operand) -> INT");
+    assert_eq!(
+        min(OpCode::CPUI_PTRADD, 2, 8),
+        TYPE_INT,
+        "PTRADD slot 2 (the element-size operand) -> INT"
+    );
     assert_eq!(mout(OpCode::CPUI_PTRSUB, 8), TYPE_INT);
     assert_eq!(min(OpCode::CPUI_PTRSUB, 0, 8), TYPE_INT);
 
@@ -225,7 +247,11 @@ fn v4_local_type_overrides_metatype_rederived() {
     // (typeop.cc:1512-1518, 1537-1543, 1602-1608)
     assert_eq!(min(OpCode::CPUI_INT_LEFT, 1, 4), TYPE_INT);
     assert_eq!(min(OpCode::CPUI_INT_LEFT, 0, 4), TYPE_INT);
-    assert_eq!(min(OpCode::CPUI_INT_RIGHT, 1, 4), TYPE_INT, "shift count is INT even though metain is UINT");
+    assert_eq!(
+        min(OpCode::CPUI_INT_RIGHT, 1, 4),
+        TYPE_INT,
+        "shift count is INT even though metain is UINT"
+    );
     assert_eq!(min(OpCode::CPUI_INT_RIGHT, 0, 4), TYPE_UINT);
     assert_eq!(min(OpCode::CPUI_INT_SRIGHT, 1, 4), TYPE_INT);
     assert_eq!(min(OpCode::CPUI_INT_SRIGHT, 0, 4), TYPE_INT);
@@ -266,8 +292,14 @@ fn v4_local_type_overrides_metatype_rederived() {
 #[test]
 fn v5_typeopclass_shape_sanity() {
     assert_eq!(type_op_info(OpCode::CPUI_COPY).class, TypeOpClass::Base);
-    assert_eq!(type_op_info(OpCode::CPUI_INT_ADD).class, TypeOpClass::Binary);
-    assert_eq!(type_op_info(OpCode::CPUI_INT_2COMP).class, TypeOpClass::Unary);
+    assert_eq!(
+        type_op_info(OpCode::CPUI_INT_ADD).class,
+        TypeOpClass::Binary
+    );
+    assert_eq!(
+        type_op_info(OpCode::CPUI_INT_2COMP).class,
+        TypeOpClass::Unary
+    );
     assert_eq!(type_op_info(OpCode::CPUI_INT_ZEXT).class, TypeOpClass::Func);
     // PIECE/SUBPIECE are Func in C++ (TypeOpFunc) despite the "binary" opflag.
     assert_eq!(type_op_info(OpCode::CPUI_PIECE).class, TypeOpClass::Func);

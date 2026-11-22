@@ -89,7 +89,10 @@ impl ArchitectureCapability for XmlArchitectureCapability {
         // Skip leading whitespace, then read the next three chars (EOF yields the
         // C++ `istream::get()` sentinel -1, which never equals a tag char —
         // modeled here by a None that fails the match).
-        let mut it = bytes.iter().copied().skip_while(|c| c.is_ascii_whitespace());
+        let mut it = bytes
+            .iter()
+            .copied()
+            .skip_while(|c| c.is_ascii_whitespace());
         let val1 = it.next();
         let val2 = it.next();
         let val3 = it.next();
@@ -212,11 +215,14 @@ impl XmlArchitecture {
     /// The opened [`LoadImageXml`] is taken out so the caller can hand it to the
     /// engine via `Sleigh::set_loader` (the C++ `loader` back-pointer the engine
     /// reads on decode).
-    pub fn open_image(&mut self, manager: &AddrSpaceManager, registry: &IdRegistry) -> KunaResult<()> {
-        let loader = self
-            .loader
-            .as_mut()
-            .ok_or_else(|| KunaError::lowlevel("XmlArchitecture::postSpecFile: loader not built"))?;
+    pub fn open_image(
+        &mut self,
+        manager: &AddrSpaceManager,
+        registry: &IdRegistry,
+    ) -> KunaResult<()> {
+        let loader = self.loader.as_mut().ok_or_else(|| {
+            KunaError::lowlevel("XmlArchitecture::postSpecFile: loader not built")
+        })?;
         loader.open(manager, registry)?;
         if self.adjustvma != 0 {
             loader.adjust_vma(self.adjustvma);
@@ -275,7 +281,10 @@ impl XmlArchitecture {
         }
         // init(store);  -- STUB(W6/W8): the type-factory/print/spec-decode flow.
         let rest = next.map(Rc::clone);
-        Ok(XmlRestore { to_register: registered, rest })
+        Ok(XmlRestore {
+            to_register: registered,
+            rest,
+        })
     }
 }
 
@@ -309,11 +318,7 @@ pub(crate) fn parse_auto_base(s: &str) -> i64 {
     } else {
         body.parse::<i64>().unwrap_or(0)
     };
-    if neg {
-        val.wrapping_neg()
-    } else {
-        val
-    }
+    if neg { val.wrapping_neg() } else { val }
 }
 
 #[cfg(test)]

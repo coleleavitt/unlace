@@ -180,9 +180,7 @@ pub(crate) fn shortcircuit_shared_targets(data: &Funcdata) -> BTreeSet<BlockId> 
             blk.size_in() > 1
                 && (0..blk.size_in())
                     .map(|k| blk.get_in(k))
-                    .filter(|t| {
-                        shared.contains(t) && data.bblocks_ref().block(*t).size_out() == 1
-                    })
+                    .filter(|t| shared.contains(t) && data.bblocks_ref().block(*t).size_out() == 1)
                     .count()
                     > 1
         })

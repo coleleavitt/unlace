@@ -5,20 +5,33 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn decompile(addr: &str, options: &[(&str, &str)]) -> String {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap();
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap();
     let bin = root.join("decompiler/crates/unlace-analysis/tests/fixtures/ehcold_x86_64");
     let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     for (name, value) in options {
-        prog.arch_mut().set_kuna_option(name, value).expect("option flips");
+        prog.arch_mut()
+            .set_kuna_option(name, value)
+            .expect("option flips");
     }
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
-    let cmds: Vec<String> = [format!("load addr {addr}"), "decompile".into(), "print C".into()].to_vec();
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
+    let cmds: Vec<String> = [
+        format!("load addr {addr}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .to_vec();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -36,9 +49,15 @@ fn decompile(addr: &str, options: &[(&str, &str)]) -> String {
 #[test]
 fn hidden_pads_are_noted_in_the_header() {
     let main = decompile("0x12d0", &[("itaniumeh", "off")]);
-    assert!(main.contains("/* eh: 1 call site unwinds to C++ landing pads (catch int); not shown */"), "got:\n{main}");
+    assert!(
+        main.contains("/* eh: 1 call site unwinds to C++ landing pads (catch int); not shown */"),
+        "got:\n{main}"
+    );
     let work = decompile("0x1410", &[("itaniumeh", "off")]);
-    assert!(work.contains("/* eh: 3 call sites unwind to C++ landing pads (3 cleanup); not shown */"), "got:\n{work}");
+    assert!(
+        work.contains("/* eh: 3 call sites unwind to C++ landing pads (3 cleanup); not shown */"),
+        "got:\n{work}"
+    );
 }
 
 #[test]

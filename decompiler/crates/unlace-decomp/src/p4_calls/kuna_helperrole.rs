@@ -64,7 +64,11 @@ pub fn role_of(data: &Funcdata, op: OpId) -> Option<HelperRole> {
             .find(|fc| fc.get_op() == op)
             .and_then(|fc| role_of_name(fc.get_name())),
         OpCode::CPUI_CALLOTHER => {
-            let id = data.vbank().get(o.get_in(0)?).filter(|v| v.is_constant())?.get_offset() as u32;
+            let id = data
+                .vbank()
+                .get(o.get_in(0)?)
+                .filter(|v| v.is_constant())?
+                .get_offset() as u32;
             Some(match id {
                 userop::BUILTIN_MEMCPY => HelperRole::Memcpy,
                 userop::BUILTIN_MEMSET => HelperRole::Memset,
@@ -86,10 +90,18 @@ pub fn role_of(data: &Funcdata, op: OpId) -> Option<HelperRole> {
 /// a register it preserves peeled off.
 fn peel(data: &Funcdata, mut v: VarnodeId) -> VarnodeId {
     for _ in 0..8 {
-        let Some(def) = data.vbank().get(v).and_then(|n| n.get_def()) else { break };
-        let Some(o) = data.obank().get(def) else { break };
+        let Some(def) = data.vbank().get(v).and_then(|n| n.get_def()) else {
+            break;
+        };
+        let Some(o) = data.obank().get(def) else {
+            break;
+        };
         match o.code() {
-            OpCode::CPUI_COPY | OpCode::CPUI_INT_ZEXT | OpCode::CPUI_INT_SEXT | OpCode::CPUI_CAST | OpCode::CPUI_INDIRECT => match o.get_in(0) {
+            OpCode::CPUI_COPY
+            | OpCode::CPUI_INT_ZEXT
+            | OpCode::CPUI_INT_SEXT
+            | OpCode::CPUI_CAST
+            | OpCode::CPUI_INDIRECT => match o.get_in(0) {
                 Some(i) => v = i,
                 None => break,
             },
@@ -101,8 +113,13 @@ fn peel(data: &Funcdata, mut v: VarnodeId) -> VarnodeId {
 
 /// A `strlen` whose length nobody reads is gone: it has no other effect.
 fn drop_unread_strlen(op: OpId, data: &mut Funcdata) -> int4 {
-    let Some(o) = data.obank().get(op) else { return 0 };
-    if o.get_out().is_some_and(|l| !data.descend_snapshot(l).is_empty()) || o.get_out().is_none() {
+    let Some(o) = data.obank().get(op) else {
+        return 0;
+    };
+    if o.get_out()
+        .is_some_and(|l| !data.descend_snapshot(l).is_empty())
+        || o.get_out().is_none()
+    {
         return 0;
     }
     forget_call(data, op);
@@ -114,7 +131,11 @@ fn drop_unread_strlen(op: OpId, data: &mut Funcdata) -> int4 {
 /// specs and (under `callpush`) its own return-address push, which
 /// `RuleCallPush` only recognises ahead of a CALL.
 fn forget_call(data: &mut Funcdata, op: OpId) {
-    if data.obank().get(op).is_none_or(|o| o.code() != OpCode::CPUI_CALL) {
+    if data
+        .obank()
+        .get(op)
+        .is_none_or(|o| o.code() != OpCode::CPUI_CALL)
+    {
         return;
     }
     let addr = data.obank().get(op).map(|o| o.get_addr().clone());
@@ -142,7 +163,9 @@ pub struct RuleStrcpyChain {
 
 impl RuleStrcpyChain {
     pub fn new(group: &str) -> Self {
-        Self { group: group.to_string() }
+        Self {
+            group: group.to_string(),
+        }
     }
 }
 
@@ -152,7 +175,9 @@ impl Rule for RuleStrcpyChain {
     }
 
     fn clone_rule(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Rule>> {
-        grouplist.contains(&self.group).then(|| Box::new(Self::new(&self.group)) as Box<dyn Rule>)
+        grouplist
+            .contains(&self.group)
+            .then(|| Box::new(Self::new(&self.group)) as Box<dyn Rule>)
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
@@ -166,28 +191,43 @@ impl Rule for RuleStrcpyChain {
         if role != Some(HelperRole::Memcpy) {
             return 0;
         }
-        let Some(o) = data.obank().get(op) else { return 0 };
+        let Some(o) = data.obank().get(op) else {
+            return 0;
+        };
         if o.num_input() < 4 {
             return 0;
         }
-        let (Some(d), Some(s), Some(n)) = (o.get_in(1), o.get_in(2), o.get_in(3)) else { return 0 };
+        let (Some(d), Some(s), Some(n)) = (o.get_in(1), o.get_in(2), o.get_in(3)) else {
+            return 0;
+        };
         // n == len + 1
-        let Some(add) = data.vbank().get(peel(data, n)).and_then(|v| v.get_def()) else { return 0 };
-        let Some(a) = data.obank().get(add) else { return 0 };
+        let Some(add) = data.vbank().get(peel(data, n)).and_then(|v| v.get_def()) else {
+            return 0;
+        };
+        let Some(a) = data.obank().get(add) else {
+            return 0;
+        };
         if a.code() != OpCode::CPUI_INT_ADD {
             return 0;
         }
-        let one = |v: Option<VarnodeId>| v.and_then(|v| data.vbank().get(v)).is_some_and(|v| v.is_constant() && v.get_offset() == 1);
+        let one = |v: Option<VarnodeId>| {
+            v.and_then(|v| data.vbank().get(v))
+                .is_some_and(|v| v.is_constant() && v.get_offset() == 1)
+        };
         let len = match (a.get_in(0), a.get_in(1)) {
             (Some(x), y) if one(y) => x,
             (x, Some(y)) if one(x) => y,
             _ => return 0,
         };
-        let Some(sl) = data.vbank().get(peel(data, len)).and_then(|v| v.get_def()) else { return 0 };
+        let Some(sl) = data.vbank().get(peel(data, len)).and_then(|v| v.get_def()) else {
+            return 0;
+        };
         if role_of(data, sl) != Some(HelperRole::Strlen) {
             return 0;
         }
-        let Some(slo) = data.obank().get(sl) else { return 0 };
+        let Some(slo) = data.obank().get(sl) else {
+            return 0;
+        };
         let arg = slo.get_in(1);
         if arg.map(|v| peel(data, v)) != Some(peel(data, s)) {
             return 0;
@@ -202,7 +242,10 @@ impl Rule for RuleStrcpyChain {
         // The strlen is dead once the copy no longer reads it.
         if let Some(l) = strlen_out {
             let dead = |data: &Funcdata, u: OpId| {
-                data.obank().get(u).and_then(|p| p.get_out()).is_some_and(|w| data.descend_snapshot(w).is_empty())
+                data.obank()
+                    .get(u)
+                    .and_then(|p| p.get_out())
+                    .is_some_and(|w| data.descend_snapshot(w).is_empty())
             };
             let users = data.descend_snapshot(l);
             if users.iter().all(|&u| dead(data, u)) {

@@ -12,14 +12,14 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 
 use crate::action::Rule;
 use crate::constseq::WriteNode;
-use crate::dtype::type_metatype;
 use crate::context::{ArchContext, BlockId, TypeOp};
+use crate::dtype::type_metatype;
 
 impl MemsetSequence {
     fn from_collected(
@@ -47,7 +47,8 @@ impl MemsetSequence {
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -88,7 +89,8 @@ fn mk_block(fd: &mut Funcdata) -> BlockId {
 fn mk_op_in_block(fd: &mut Funcdata, bl: BlockId, off: u64, opc: OpCode) -> OpId {
     let r = ram(fd);
     let op = fd.new_op(2, Address::new(r, off));
-    fd.obank_mut().change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, 0, format!("{opc:?}")));
     fd.op_insert_end(op, bl);
     op
 }
@@ -344,5 +346,8 @@ fn specs_ship_default_on() {
     // in the enabled state — exercise its op list to confirm it is RuleMemsetCopy.
     assert_eq!(rule.get_op_list(), vec![OpCode::CPUI_COPY]);
     // gate is on: clone in the analysis group survives.
-    assert!(rule.clone_rule(&ActionGroupList::from_names(["analysis"])).is_some());
+    assert!(
+        rule.clone_rule(&ActionGroupList::from_names(["analysis"]))
+            .is_some()
+    );
 }

@@ -3,10 +3,10 @@
 
 use std::io::{self, Write};
 
-use unlace_console::engine::FunctionEntry;
 use serde::ser::Error as _;
 use serde::{Serialize, Serializer};
 use serde_json::ser::{Formatter, PrettyFormatter};
+use unlace_console::engine::FunctionEntry;
 
 use crate::funcdecl::Declared;
 use crate::jsonfmt::{Json, UnicodeEscape};

@@ -281,9 +281,9 @@ fn compile(
 mod tests {
     use super::*;
     use crate::slghpatexpress::{BinaryExpression, ConstantValue, OperandValue, UnaryExpression};
+    use std::cell::RefCell;
     use unlace_base::address::Address;
     use unlace_base::error::{KunaError, KunaResult};
-    use std::cell::RefCell;
 
     struct Walker {
         values: [i64; 4],

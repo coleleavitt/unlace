@@ -53,9 +53,11 @@ fn indexing_keeps_the_original_validity_checks() {
     let live = arena.insert(12);
     assert_ne!(stale, live);
     assert!(std::panic::catch_unwind(|| arena[stale]).is_err());
-    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        arena[stale] = 1;
-    }))
-    .is_err());
+    assert!(
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            arena[stale] = 1;
+        }))
+        .is_err()
+    );
     assert_eq!(arena[live], 12);
 }

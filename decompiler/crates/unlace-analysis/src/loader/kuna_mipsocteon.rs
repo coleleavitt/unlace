@@ -1,7 +1,7 @@
 //! Octeon ELF identity from standard machine, ABI and floating-point evidence.
-use super::kuna_mipsabi::{abi_flags, fp_abi, AbiFlags};
-use unlace_decomp::kuna_octeonid::language_id as id;
+use super::kuna_mipsabi::{AbiFlags, abi_flags, fp_abi};
 use object::{Architecture, BinaryFormat, FileFlags, Object};
+use unlace_decomp::kuna_octeonid::language_id as id;
 
 const MACH_MASK: u32 = 0x00ff_0000;
 const ABI2: u32 = 0x20;
@@ -25,7 +25,6 @@ fn extension_variant(extension: u32) -> Option<&'static str> {
         _ => None,
     }
 }
-
 
 /// `None` leaves non-Octeon selection alone. Identified but unqualified or
 /// contradictory profiles require an explicit target, never an inferred ABI.
@@ -331,12 +330,14 @@ mod tests {
         for e_flags in [
             0x808e0020, 0x808e1000, 0x708e0000, 0x808f0000, 0x848e0000, 0x828e0000,
         ] {
-            assert!(select(&elf(
-                false,
-                e_flags,
-                &[(b".MIPS.abiflags", flags(19, false))]
-            ))
-            .is_err());
+            assert!(
+                select(&elf(
+                    false,
+                    e_flags,
+                    &[(b".MIPS.abiflags", flags(19, false))]
+                ))
+                .is_err()
+            );
         }
         let mut bad = flags(19, false);
         bad[4] = 1;

@@ -38,7 +38,7 @@ use std::rc::Rc;
 
 use unlace_base::address::{Address, ELEM_ADDR};
 use unlace_base::error::KunaError;
-use unlace_base::marshal::{Decoder, PackedDecode, ATTRIB_CONTENT, ATTRIB_NAME};
+use unlace_base::marshal::{ATTRIB_CONTENT, ATTRIB_NAME, Decoder, PackedDecode};
 use unlace_base::space::AddrSpaceManager;
 
 use unlace_ghidra::ids::ELEM_DOC;
@@ -769,10 +769,9 @@ pub fn parse_decompile_doc(doc: &[u8], manager: &AddrSpaceManager) -> ParsedDoc 
 
 /// The first `<function>`: name/entry + the child walk (opened by the caller).
 fn parse_first_function(dec: &mut PackedDecode, parsed: &mut ParsedDoc) {
-    parsed.name = String::from_utf8_lossy(
-        &dec.read_string_id(&ATTRIB_NAME).expect("<function name>"),
-    )
-    .into_owned();
+    parsed.name =
+        String::from_utf8_lossy(&dec.read_string_id(&ATTRIB_NAME).expect("<function name>"))
+            .into_owned();
     // The base address is the first child element.
     if dec.peek_element().expect("peek in <function>") == ELEM_ADDR.get_id() {
         let addr = Address::decode(dec).expect("<function> base <addr>");
@@ -840,7 +839,8 @@ fn parse_localdb(dec: &mut PackedDecode, parsed: &mut ParsedDoc) {
         if sid != ELEM_SCOPE_ID {
             let mut sink = BTreeMap::new();
             walk(dec, &[], &mut sink).expect("walk non-scope localdb child");
-            dec.close_element(sid).expect("close non-scope localdb child");
+            dec.close_element(sid)
+                .expect("close non-scope localdb child");
             continue;
         }
         skip_attributes(dec).expect("<scope> attributes");
@@ -905,16 +905,16 @@ fn parse_mapsym(dec: &mut PackedDecode) -> SimSymbol {
                 } else if aid == ATTRIB_INDEX_ID {
                     sym.index = Some(dec.read_unsigned_integer().expect("symbol index"));
                 } else if aid == ATTRIB_NAME.get_id() {
-                    sym.name = String::from_utf8_lossy(
-                        &dec.read_string().expect("symbol name"),
-                    )
-                    .into_owned();
+                    sym.name = String::from_utf8_lossy(&dec.read_string().expect("symbol name"))
+                        .into_owned();
                 }
             }
             // Body: the data-type child (plus <value> for an equate).
             while dec.peek_element().expect("peek <symbol> child") != 0 {
                 let b = dec.open_element().expect("open <symbol> body child");
-                if b == ELEM_TYPE_ID || b == ELEM_TYPEREF_ID || b == ELEM_DEF_ID
+                if b == ELEM_TYPE_ID
+                    || b == ELEM_TYPEREF_ID
+                    || b == ELEM_DEF_ID
                     || b == ELEM_VOID_ID
                 {
                     sym.has_type = true;
@@ -928,14 +928,11 @@ fn parse_mapsym(dec: &mut PackedDecode) -> SimSymbol {
                                 break;
                             }
                             if aid == unlace_base::marshal::ATTRIB_SIZE.get_id() {
-                                sym.type_size =
-                                    Some(dec.read_signed_integer().expect("type size"));
+                                sym.type_size = Some(dec.read_signed_integer().expect("type size"));
                             } else if aid == ATTRIB_NAME.get_id() {
                                 sym.type_name = Some(
-                                    String::from_utf8_lossy(
-                                        &dec.read_string().expect("type name"),
-                                    )
-                                    .into_owned(),
+                                    String::from_utf8_lossy(&dec.read_string().expect("type name"))
+                                        .into_owned(),
                                 );
                             }
                         }
@@ -982,8 +979,9 @@ fn parse_mapsym(dec: &mut PackedDecode) -> SimSymbol {
             if sym.first_use.is_none() {
                 let mut got = BTreeMap::new();
                 walk(dec, &[ATTRIB_FIRST_ID], &mut got).expect("walk entry rangelist");
-                sym.first_use =
-                    got.get(&ATTRIB_FIRST_ID).and_then(|s| s.iter().next().copied());
+                sym.first_use = got
+                    .get(&ATTRIB_FIRST_ID)
+                    .and_then(|s| s.iter().next().copied());
             } else {
                 let mut sink = BTreeMap::new();
                 walk(dec, &[], &mut sink).expect("walk entry rangelist");
@@ -1007,15 +1005,19 @@ fn parse_highlist(dec: &mut PackedDecode, parsed: &mut ParsedDoc) {
     while dec.peek_element().expect("peek <highlist> child") != 0 {
         let hid = dec.open_element().expect("open <high>");
         assert_eq!(hid, ELEM_HIGH_ID, "<highlist> child is not <high>");
-        let mut h = SimHigh { class: String::new(), repref: None, symref: None };
+        let mut h = SimHigh {
+            class: String::new(),
+            repref: None,
+            symref: None,
+        };
         loop {
             let aid = dec.get_next_attribute_id().expect("high attr");
             if aid == 0 {
                 break;
             }
             if aid == ATTRIB_CLASS_ID {
-                h.class = String::from_utf8_lossy(&dec.read_string().expect("high class"))
-                    .into_owned();
+                h.class =
+                    String::from_utf8_lossy(&dec.read_string().expect("high class")).into_owned();
             } else if aid == ATTRIB_REPREF_ID {
                 h.repref = Some(dec.read_unsigned_integer().expect("high repref"));
             } else if aid == ATTRIB_SYMREF_ID {
@@ -1032,7 +1034,11 @@ fn parse_highlist(dec: &mut PackedDecode, parsed: &mut ParsedDoc) {
 
 /// `<prototype>` (opened): the model/extrapop header + the `<returnsym>`.
 fn parse_prototype(dec: &mut PackedDecode, parsed: &mut ParsedDoc) {
-    let mut proto = SimProto { model: String::new(), has_extrapop: false, returnsym_ok: false };
+    let mut proto = SimProto {
+        model: String::new(),
+        has_extrapop: false,
+        returnsym_ok: false,
+    };
     loop {
         let aid = dec.get_next_attribute_id().expect("prototype attr");
         if aid == 0 {
@@ -1086,7 +1092,10 @@ fn parse_jumptablelist(dec: &mut PackedDecode, parsed: &mut ParsedDoc) {
     skip_attributes(dec).expect("<jumptablelist> attributes");
     while dec.peek_element().expect("peek <jumptablelist> child") != 0 {
         let jid = dec.open_element().expect("open <jumptable>");
-        assert_eq!(jid, ELEM_JUMPTABLE_ID, "<jumptablelist> child is not <jumptable>");
+        assert_eq!(
+            jid, ELEM_JUMPTABLE_ID,
+            "<jumptablelist> child is not <jumptable>"
+        );
         skip_attributes(dec).expect("<jumptable> attributes");
         let mut dests = 0usize;
         let mut loads = 0usize;
@@ -1164,8 +1173,8 @@ pub fn assert_phase4_traps(parsed: &ParsedDoc, label: &str) {
         let lpos = pos(ELEM_LOCALDB_ID)
             .unwrap_or_else(|| panic!("{label}: <highlist> present without <localdb>"));
         assert!(lpos < hpos, "{label}: <localdb> must precede <highlist>");
-        let apos = pos(ELEM_AST_ID)
-            .unwrap_or_else(|| panic!("{label}: <highlist> present without <ast>"));
+        let apos =
+            pos(ELEM_AST_ID).unwrap_or_else(|| panic!("{label}: <highlist> present without <ast>"));
         assert!(apos < hpos, "{label}: <ast> must precede <highlist>");
     }
     // The scope's first two children are positionally <parent> + <rangelist>.
@@ -1197,7 +1206,11 @@ pub fn assert_phase4_traps(parsed: &ParsedDoc, label: &str) {
                 "{label}: <mapsym {}> entry missing its uselimit <rangelist>",
                 s.name
             );
-            assert!(s.has_type, "{label}: <symbol {}> carries no data-type child", s.name);
+            assert!(
+                s.has_type,
+                "{label}: <symbol {}> carries no data-type child",
+                s.name
+            );
             // r5 §3 trap 4: `MappedEntry.decode` throws
             // "Invalid symbol 0-sized data-type" — a `<void/>` body or an
             // explicit size 0 is exactly that shape.
@@ -1222,7 +1235,10 @@ pub fn assert_phase4_traps(parsed: &ParsedDoc, label: &str) {
     if let Some(highs) = &parsed.highlist {
         for h in highs {
             assert!(
-                matches!(h.class.as_str(), "other" | "global" | "constant" | "param" | "local"),
+                matches!(
+                    h.class.as_str(),
+                    "other" | "global" | "constant" | "param" | "local"
+                ),
                 "{label}: unknown <high> class '{}'",
                 h.class
             );
@@ -1236,7 +1252,10 @@ pub fn assert_phase4_traps(parsed: &ParsedDoc, label: &str) {
             );
             if h.class == "local" || h.class == "param" {
                 let symref = h.symref.unwrap_or_else(|| {
-                    panic!("{label}: <high class={}> without symref (HighLocal throws)", h.class)
+                    panic!(
+                        "{label}: <high class={}> without symref (HighLocal throws)",
+                        h.class
+                    )
                 });
                 assert!(
                     localdb_ids.contains(&symref),

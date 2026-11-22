@@ -111,7 +111,9 @@ pub fn threadable_block(fd: &Funcdata, reader: OpId) -> Option<BlockId> {
 }
 
 fn ends_in_cbranch(fd: &Funcdata, bl: BlockId) -> bool {
-    fd.bb_op_tail(bl).and_then(|op| fd.obank().get(op)).map(|o| o.code())
+    fd.bb_op_tail(bl)
+        .and_then(|op| fd.obank().get(op))
+        .map(|o| o.code())
         == Some(OpCode::CPUI_CBRANCH)
 }
 
@@ -158,7 +160,12 @@ pub fn remember(
     }
     merges.sort_unstable();
     merges.dedup();
-    Some(Remembered { trial: i, ret, merges, inputs })
+    Some(Remembered {
+        trial: i,
+        ret,
+        merges,
+        inputs,
+    })
 }
 
 /// How the current pass treats trial `i` at RETURN `ret`: normally outside the

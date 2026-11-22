@@ -134,11 +134,15 @@ pub(crate) fn stack_pointer_storage(data: &Funcdata) -> Option<VarnodeStorage> {
 
 /// Is `vn` the stack-pointer register itself (any SSA version of it)?
 fn is_stack_pointer(data: &Funcdata, vn: VarnodeId, sp: &VarnodeStorage) -> bool {
-    let Some(v) = data.vbank().get(vn) else { return false };
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
     if v.is_constant() {
         return false;
     }
-    let Some(spspace) = sp.space.as_ref() else { return false };
+    let Some(spspace) = sp.space.as_ref() else {
+        return false;
+    };
     v.get_space().get_index() == spspace.get_index()
         && v.get_addr().get_offset() == sp.offset
         && v.get_size() as u32 == sp.size
@@ -149,7 +153,11 @@ fn is_stack_pointer(data: &Funcdata, vn: VarnodeId, sp: &VarnodeStorage) -> bool
 ///
 /// Walks same-width copies and constant displacements back to a particular SP
 /// value. Unknown frame registers, phi nodes, and unbounded chains are declined.
-pub(crate) fn frame_slot(data: &Funcdata, ptr: VarnodeId, sp: &VarnodeStorage) -> Option<(VarnodeId, uintb)> {
+pub(crate) fn frame_slot(
+    data: &Funcdata,
+    ptr: VarnodeId,
+    sp: &VarnodeStorage,
+) -> Option<(VarnodeId, uintb)> {
     let mask = pointer_mask(sp.size as int4)?;
     let mut base = ptr;
     let mut offset: uintb = 0;
@@ -158,9 +166,13 @@ pub(crate) fn frame_slot(data: &Funcdata, ptr: VarnodeId, sp: &VarnodeStorage) -
         v.is_constant().then(|| v.get_offset())
     };
     for _ in 0..64 {
-        if is_stack_pointer(data, base, sp) { return Some((base, offset)); }
+        if is_stack_pointer(data, base, sp) {
+            return Some((base, offset));
+        }
         let v = data.vbank().get(base)?;
-        if v.get_size() != sp.size as int4 { return None; }
+        if v.get_size() != sp.size as int4 {
+            return None;
+        }
         let op = data.obank().get(v.get_def()?)?;
         let a = op.get_in(0)?;
         match op.code() {
@@ -216,10 +228,16 @@ fn has_later_reload(
     store_addr: uintb,
 ) -> bool {
     const CAP: usize = 64;
-    let Some(width) = data.vbank().get(base).map(|v| v.get_size()) else { return false };
-    let Some(mask) = pointer_mask(width) else { return false };
+    let Some(width) = data.vbank().get(base).map(|v| v.get_size()) else {
+        return false;
+    };
+    let Some(mask) = pointer_mask(width) else {
+        return false;
+    };
     let is_reload = |ptr: VarnodeId, load: OpId| -> bool {
-        let Some(l) = data.obank().get(load) else { return false };
+        let Some(l) = data.obank().get(load) else {
+            return false;
+        };
         if l.code() != OpCode::CPUI_LOAD || l.get_in(1) != Some(ptr) {
             return false;
         }
@@ -233,7 +251,11 @@ fn has_later_reload(
     };
     let const_operand = |op: OpId, vn: VarnodeId| -> Option<uintb> {
         let o = data.obank().get(op)?;
-        let other = if o.get_in(0) == Some(vn) { o.get_in(1) } else { o.get_in(0) };
+        let other = if o.get_in(0) == Some(vn) {
+            o.get_in(1)
+        } else {
+            o.get_in(0)
+        };
         let c = data.vbank().get(other?)?;
         c.is_constant().then(|| c.get_offset())
     };
@@ -242,7 +264,9 @@ fn has_later_reload(
     while i < work.len() {
         let (vn, delta) = work[i];
         i += 1;
-        let Some(v) = data.vbank().get(vn) else { continue };
+        let Some(v) = data.vbank().get(vn) else {
+            continue;
+        };
         if delta == offset && v.descend_iter().any(|op| is_reload(vn, op)) {
             return true;
         }
@@ -250,19 +274,23 @@ fn has_later_reload(
             continue;
         }
         for op in v.descend_iter() {
-            let Some(o) = data.obank().get(op) else { continue };
+            let Some(o) = data.obank().get(op) else {
+                continue;
+            };
             let next = match o.code() {
-                OpCode::CPUI_INDIRECT | OpCode::CPUI_COPY if o.get_in(0) == Some(vn) => {
-                    Some(delta)
-                }
+                OpCode::CPUI_INDIRECT | OpCode::CPUI_COPY if o.get_in(0) == Some(vn) => Some(delta),
                 OpCode::CPUI_INT_ADD => const_operand(op, vn).map(|k| delta.wrapping_add(k)),
                 OpCode::CPUI_INT_SUB if o.get_in(0) == Some(vn) => {
                     const_operand(op, vn).map(|k| delta.wrapping_sub(k))
                 }
                 _ => None,
             };
-            let (Some(d), Some(out)) = (next, o.get_out()) else { continue };
-            if data.vbank().get(out).is_none_or(|v| v.get_size() != width) { continue; }
+            let (Some(d), Some(out)) = (next, o.get_out()) else {
+                continue;
+            };
+            if data.vbank().get(out).is_none_or(|v| v.get_size() != width) {
+                continue;
+            }
             if !work.iter().any(|(w, _)| *w == out) && work.len() < CAP {
                 work.push((out, d & mask));
             }
@@ -281,18 +309,26 @@ pub fn store_is_caller_save_spill(data: &Funcdata, store_op: OpId, vn: VarnodeId
     if level <= LEVEL_OFF {
         return false;
     }
-    let Some(o) = data.obank().get(store_op) else { return false };
+    let Some(o) = data.obank().get(store_op) else {
+        return false;
+    };
     if o.get_in(2) != Some(vn) {
         return false;
     }
     let store_addr = o.get_addr().get_offset();
     let Some(ptr) = o.get_in(1) else { return false };
-    let Some(sp) = stack_pointer_storage(data) else { return false };
-    let Some((base, offset)) = frame_slot(data, ptr, &sp) else { return false };
+    let Some(sp) = stack_pointer_storage(data) else {
+        return false;
+    };
+    let Some((base, offset)) = frame_slot(data, ptr, &sp) else {
+        return false;
+    };
     if level >= LEVEL_SPILL {
         return true;
     }
-    let Some(size) = data.vbank().get(vn).map(|v| v.get_size()) else { return false };
+    let Some(size) = data.vbank().get(vn).map(|v| v.get_size()) else {
+        return false;
+    };
     has_later_reload(data, base, offset, size, store_addr)
 }
 
@@ -315,12 +351,21 @@ mod tests {
     #[test]
     fn apply_parses_the_three_spellings() {
         assert_eq!(OptionSpillArgTrial.apply("off").expect("off").0, LEVEL_OFF);
-        assert_eq!(OptionSpillArgTrial.apply("reload").expect("reload").0, LEVEL_RELOAD);
-        assert_eq!(OptionSpillArgTrial.apply("spill").expect("spill").0, LEVEL_SPILL);
+        assert_eq!(
+            OptionSpillArgTrial.apply("reload").expect("reload").0,
+            LEVEL_RELOAD
+        );
+        assert_eq!(
+            OptionSpillArgTrial.apply("spill").expect("spill").0,
+            LEVEL_SPILL
+        );
         // `on` and the empty parameter take the CONSERVATIVE level, unlike
         // `calloverlap`, whose bare `on` is its most permissive arm.
         assert_eq!(OptionSpillArgTrial.apply("on").expect("on").0, LEVEL_RELOAD);
-        assert_eq!(OptionSpillArgTrial.apply("").expect("empty").0, LEVEL_RELOAD);
+        assert_eq!(
+            OptionSpillArgTrial.apply("").expect("empty").0,
+            LEVEL_RELOAD
+        );
         assert!(OptionSpillArgTrial.apply("paired").is_err());
     }
 }

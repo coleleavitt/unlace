@@ -6,12 +6,14 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace};
+use unlace_base::space::{
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
+};
 use unlace_base::types::int4;
 
 use unlace_decomp::action::Rule;
 use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
-use unlace_decomp::dtype::{type_metatype, Datatype};
+use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::ruleaction_3::RuleMultiCollapse;
 use unlace_decomp::varnode::DefOpInfo;
@@ -34,7 +36,8 @@ impl Rng {
 fn build_fd() -> Funcdata {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     m.insert_space(Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "ram",
@@ -49,7 +52,15 @@ fn build_fd() -> Funcdata {
     .unwrap();
     let glb = Rc::new(ArchContext::new(m));
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
-    Funcdata::new("func", "func", glb, Address::new(ram, 0x1000), 0x10000000, 0x40).unwrap()
+    Funcdata::new(
+        "func",
+        "func",
+        glb,
+        Address::new(ram, 0x1000),
+        0x10000000,
+        0x40,
+    )
+    .unwrap()
 }
 
 fn ram(fd: &Funcdata) -> Rc<AddrSpace> {
@@ -72,14 +83,21 @@ impl Web {
         self.fd.obank().get(phi).unwrap().get_out().unwrap()
     }
     fn alive(&self, phi: OpId) -> bool {
-        self.fd.obank().get(phi).is_some_and(|o| !o.is_dead() && o.code() == OpCode::CPUI_MULTIEQUAL)
+        self.fd
+            .obank()
+            .get(phi)
+            .is_some_and(|o| !o.is_dead() && o.code() == OpCode::CPUI_MULTIEQUAL)
     }
     /// A Varnode named by its place in the web, comparable across twins.
     fn label(&self, vn: VarnodeId) -> i64 {
         if let Some(r) = self.regs.iter().position(|&r| r == vn) {
             return r as i64;
         }
-        match self.phis.iter().position(|&p| self.alive(p) && self.out(p) == vn) {
+        match self
+            .phis
+            .iter()
+            .position(|&p| self.alive(p) && self.out(p) == vn)
+        {
             Some(p) => -1 - p as i64,
             None => i64::MIN,
         }
@@ -90,7 +108,12 @@ impl Web {
             .filter(|&i| self.alive(self.phis[i]))
             .map(|i| {
                 let op = self.fd.obank().get(self.phis[i]).unwrap();
-                (i, (0..op.num_input()).map(|s| self.label(op.get_in(s).unwrap())).collect())
+                (
+                    i,
+                    (0..op.num_input())
+                        .map(|s| self.label(op.get_in(s).unwrap()))
+                        .collect(),
+                )
             })
             .collect()
     }
@@ -103,7 +126,9 @@ fn build_web(seed: u64, nphis: usize, nregs: usize) -> Web {
     let r = ram(&fd);
     let regs: Vec<VarnodeId> = (0..nregs)
         .map(|i| {
-            let vn = fd.vbank_mut().create(4, Address::new(Rc::clone(&r), 0x40 + 8 * i as u64), dt());
+            let vn =
+                fd.vbank_mut()
+                    .create(4, Address::new(Rc::clone(&r), 0x40 + 8 * i as u64), dt());
             fd.vbank_mut().set_input(vn, &mut |_, _, _| Ok(())).unwrap()
         })
         .collect();
@@ -113,7 +138,10 @@ fn build_web(seed: u64, nphis: usize, nregs: usize) -> Web {
     for i in 0..nphis {
         let n = 2 + rng.below(4);
         let bl = fd.bblocks_mut().new_block_basic(root);
-        let op = fd.new_op(n as int4, Address::new(Rc::clone(&r), 0x100 + 0x10 * i as u64));
+        let op = fd.new_op(
+            n as int4,
+            Address::new(Rc::clone(&r), 0x100 + 0x10 * i as u64),
+        );
         fd.op_set_opcode(op, TypeOp::new(OpCode::CPUI_MULTIEQUAL, 0, "MULTIEQUAL"));
         fd.op_insert(op, bl, None);
         let seqnum = fd.obank().get(op).unwrap().get_seq_num().clone();
@@ -122,7 +150,10 @@ fn build_web(seed: u64, nphis: usize, nregs: usize) -> Web {
             .create_def_unique(4, dt(), DefOpInfo { id: op, seqnum }, &mut |_, _, _| Ok(()))
             .unwrap();
         fd.obank_mut().get_mut(op).unwrap().set_output(Some(vn));
-        fd.vbank_mut().get_mut(vn).unwrap().set_flags_pub(unlace_decomp::varnode::varnode_flags::insert);
+        fd.vbank_mut()
+            .get_mut(vn)
+            .unwrap()
+            .set_flags_pub(unlace_decomp::varnode::varnode_flags::insert);
         phis.push(op);
         fanin.push(n);
     }
@@ -144,7 +175,11 @@ fn build_web(seed: u64, nphis: usize, nregs: usize) -> Web {
     let mut web = Web { fd, regs, phis };
     for (i, row) in choices.iter().enumerate() {
         for (slot, &pick) in row.iter().enumerate() {
-            let vn = if pick < nphis { web.out(web.phis[pick]) } else { web.regs[pick - nphis] };
+            let vn = if pick < nphis {
+                web.out(web.phis[pick])
+            } else {
+                web.regs[pick - nphis]
+            };
             web.fd.op_set_input(web.phis[i], vn, slot as int4).unwrap();
         }
     }
@@ -164,7 +199,12 @@ fn a_rule_keeping_witnesses_answers_as_a_fresh_rule_does() {
         let mut rng = Rng(seed * 104729 + 1);
         for _ in 0..60 {
             let live: Vec<usize> = (0..nphis).filter(|&i| kept.alive(kept.phis[i])).collect();
-            assert_eq!(live, (0..nphis).filter(|&i| fresh.alive(fresh.phis[i])).collect::<Vec<_>>());
+            assert_eq!(
+                live,
+                (0..nphis)
+                    .filter(|&i| fresh.alive(fresh.phis[i]))
+                    .collect::<Vec<_>>()
+            );
             if live.is_empty() {
                 break;
             }
@@ -174,7 +214,11 @@ fn a_rule_keeping_witnesses_answers_as_a_fresh_rule_does() {
                 let slot = rng.below(n as usize) as int4;
                 let pick = rng.below(live.len() + nregs);
                 for web in [&mut kept, &mut fresh] {
-                    let vn = if pick < live.len() { web.out(web.phis[live[pick]]) } else { web.regs[pick - live.len()] };
+                    let vn = if pick < live.len() {
+                        web.out(web.phis[live[pick]])
+                    } else {
+                        web.regs[pick - live.len()]
+                    };
                     web.fd.op_set_input(web.phis[i], vn, slot).unwrap();
                 }
                 continue;
@@ -187,14 +231,27 @@ fn a_rule_keeping_witnesses_answers_as_a_fresh_rule_does() {
             let witnessed = rule.has_witness(kept.phis[i]);
             let got = rule.apply_op(kept.phis[i], &mut kept.fd);
             let want = RuleMultiCollapse::default().apply_op(fresh.phis[i], &mut fresh.fd);
-            assert_eq!(got, want, "seed {seed}: phi {i} answered {got}, a fresh walk {want}");
+            assert_eq!(
+                got, want,
+                "seed {seed}: phi {i} answered {got}, a fresh walk {want}"
+            );
             if witnessed && want == 0 {
                 fast_fails += 1;
             }
             collapses += want as usize;
-            assert_eq!(kept.shape(), fresh.shape(), "seed {seed}: the webs diverged");
+            assert_eq!(
+                kept.shape(),
+                fresh.shape(),
+                "seed {seed}: the webs diverged"
+            );
         }
     }
-    assert!(collapses > 100, "only {collapses} collapses: the webs are too hard");
-    assert!(fast_fails > 1000, "only {fast_fails} answers came from a witness");
+    assert!(
+        collapses > 100,
+        "only {collapses} collapses: the webs are too hard"
+    );
+    assert!(
+        fast_fails > 1000,
+        "only {fast_fails} answers came from a witness"
+    );
 }

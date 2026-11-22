@@ -112,7 +112,9 @@ impl AsmSweep {
         let ends = flow_ends(prog, &labels);
         let mut map: BTreeMap<u64, Vec<AsmLabel>> = BTreeMap::new();
         for label in labels {
-            map.entry(normalize(arm, label.byte_address)).or_default().push(label);
+            map.entry(normalize(arm, label.byte_address))
+                .or_default()
+                .push(label);
         }
         let mut code_secs: Vec<(u64, u64)> = prog
             .sections()
@@ -230,7 +232,10 @@ fn sweep_one(
         scratch.flush_db(out);
         for label in anchored {
             out.push('\n');
-            out.push_str(&format!("{}:  ; 0x{:x}\n", label.name, label.display_address));
+            out.push_str(&format!(
+                "{}:  ; 0x{:x}\n",
+                label.name, label.display_address
+            ));
             out.push_str(&label.header);
         }
     }
@@ -307,7 +312,9 @@ fn flow_ends(prog: &ConsoleProgram, labels: &[AsmLabel]) -> BTreeMap<u64, String
     let arm = is_arm(prog);
     let mut ends = BTreeMap::new();
     for label in labels {
-        let Some(&(extent, clip)) = cuts.get(&label.byte_address) else { continue };
+        let Some(&(extent, clip)) = cuts.get(&label.byte_address) else {
+            continue;
+        };
         if extent == 0 {
             continue;
         }
@@ -330,9 +337,5 @@ fn is_arm(prog: &ConsoleProgram) -> bool {
 }
 
 fn normalize(arm: bool, vma: u64) -> u64 {
-    if arm {
-        vma & !1
-    } else {
-        vma
-    }
+    if arm { vma & !1 } else { vma }
 }

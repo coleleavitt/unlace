@@ -8,7 +8,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::{Address, RangeList};
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace, AddrSpaceManager};
+use unlace_base::space::{AddrSpace, AddrSpaceManager, addrspace_flags, spacetype};
 
 fn proc_space(name: &str, index: i32, addr_size: u32, wordsize: u32) -> AddrSpace {
     AddrSpace::new(
@@ -117,7 +117,10 @@ fn verify_rangelist_boundary_merge_and_top_edge() {
     list.remove_range(Rc::clone(&ram), 0xffffffffffffff80, u64::MAX);
     assert_eq!(list.num_ranges(), 1);
     let r = list.get_first_range().unwrap();
-    assert_eq!((r.get_first(), r.get_last()), (0xffffffffffffff00, 0xffffffffffffff7f));
+    assert_eq!(
+        (r.get_first(), r.get_last()),
+        (0xffffffffffffff00, 0xffffffffffffff7f)
+    );
 
     // longest_fit chaining into a range ending at u64::MAX exercises the
     // C++ wrapping `(last + 1 - offset)` (last+1 == 0): the wrap yields the
@@ -172,20 +175,29 @@ fn verify_shortcut_collision_walk_and_signed_char_key() {
 
     // uppercase first letter is lowercased before the walk
     let mut manager = AddrSpaceManager::new();
-    manager.insert_space(Rc::new(proc_space("RAM", 0, 8, 1))).unwrap();
+    manager
+        .insert_space(Rc::new(proc_space("RAM", 0, 8, 1)))
+        .unwrap();
     assert_eq!(manager.get_space(0).unwrap().get_shortcut(), 'r');
     // "register" is special-cased to '%'
-    manager.insert_space(Rc::new(proc_space("register", 1, 4, 1))).unwrap();
+    manager
+        .insert_space(Rc::new(proc_space("register", 1, 4, 1)))
+        .unwrap();
     assert_eq!(manager.get_space(1).unwrap().get_shortcut(), '%');
 
     // signed-char shortcut key: "épsilon" starts with byte 0xC3; the C++
     // map key is (int4)(char)0xC3 == -61, and the byte must look the space
     // back up
     let mut manager = AddrSpaceManager::new();
-    manager.insert_space(Rc::new(proc_space("épsilon", 0, 4, 1))).unwrap();
+    manager
+        .insert_space(Rc::new(proc_space("épsilon", 0, 4, 1)))
+        .unwrap();
     let spc = Rc::clone(manager.get_space(0).unwrap());
     assert_eq!(spc.get_shortcut() as u32, 0xC3);
-    assert!(Rc::ptr_eq(manager.get_space_by_shortcut(0xC3).unwrap(), &spc));
+    assert!(Rc::ptr_eq(
+        manager.get_space_by_shortcut(0xC3).unwrap(),
+        &spc
+    ));
 }
 
 /// AddrSpace::read / get_offset_size (space.cc:224-298) strtoul-base-0 and
@@ -196,7 +208,9 @@ fn verify_shortcut_collision_walk_and_signed_char_key() {
 #[test]
 fn verify_addrspace_read_strtoul_quirks() {
     let mut manager = AddrSpaceManager::new();
-    manager.insert_space(Rc::new(proc_space("ram", 3, 8, 1))).unwrap();
+    manager
+        .insert_space(Rc::new(proc_space("ram", 3, 8, 1)))
+        .unwrap();
     manager.set_default_code_space(3).unwrap();
     let ram = Rc::clone(manager.get_space(3).unwrap());
     let mut size = 0i32;
@@ -210,7 +224,10 @@ fn verify_addrspace_read_strtoul_quirks() {
     assert_eq!(size, 4);
 
     // size suffix plus hex offset adjust (":2+0x10")
-    assert_eq!(ram.read("0x100:2+0x10", &mut size, &manager).unwrap(), 0x110);
+    assert_eq!(
+        ram.read("0x100:2+0x10", &mut size, &manager).unwrap(),
+        0x110
+    );
     assert_eq!(size, 2);
 
     // bare "0x": strtoul consumes only the "0" (endptr at 'x'), so the
@@ -227,7 +244,9 @@ fn verify_addrspace_read_strtoul_quirks() {
     // wordsize scaling: offsets are addressToByte-scaled before suffix
     // adjustment (suffix adds bytes, not words)
     let mut manager = AddrSpaceManager::new();
-    manager.insert_space(Rc::new(proc_space("wram", 0, 4, 2))).unwrap();
+    manager
+        .insert_space(Rc::new(proc_space("wram", 0, 4, 2)))
+        .unwrap();
     manager.set_default_code_space(0).unwrap();
     let wram = Rc::clone(manager.get_space(0).unwrap());
     assert_eq!(wram.read("0x10", &mut size, &manager).unwrap(), 0x20);

@@ -110,7 +110,11 @@ pub(crate) fn resolve_imports_with_got_slots(
 /// `.got` call slots.
 pub(crate) fn got_call_slot_ranges(file: &object::File, bytes: &[u8]) -> Vec<(u64, u64)> {
     let width = if file.is_64() { 8 } else { 4 };
-    resolve_imports_with_got_slots(file, bytes).1.into_iter().map(|p| (p.addr, p.addr + width)).collect()
+    resolve_imports_with_got_slots(file, bytes)
+        .1
+        .into_iter()
+        .map(|p| (p.addr, p.addr + width))
+        .collect()
 }
 
 /// The GOT slots bound to an undefined function symbol, minus `plt_slots`.
@@ -137,12 +141,18 @@ fn got_call_slots(file: &object::File, plt_slots: &HashSet<u64>) -> Vec<PltSym> 
             }
         }
     }
-    let Some(relocs) = file.dynamic_relocations() else { return Vec::new() };
+    let Some(relocs) = file.dynamic_relocations() else {
+        return Vec::new();
+    };
     let mut seen = HashSet::new();
     let mut out = Vec::new();
     for (slot, reloc) in relocs {
-        let RelocationTarget::Symbol(idx) = reloc.target() else { continue };
-        let Some(name) = funcs.get(&idx.0) else { continue };
+        let RelocationTarget::Symbol(idx) = reloc.target() else {
+            continue;
+        };
+        let Some(name) = funcs.get(&idx.0) else {
+            continue;
+        };
         if reloc.addend() != 0
             || plt_slots.contains(&slot)
             || !got.iter().any(|&(lo, hi)| (lo..hi).contains(&slot))
@@ -150,7 +160,11 @@ fn got_call_slots(file: &object::File, plt_slots: &HashSet<u64>) -> Vec<PltSym> 
             continue;
         }
         if seen.insert(slot) {
-            out.push(PltSym { addr: slot, name: name.clone(), slot: None });
+            out.push(PltSym {
+                addr: slot,
+                name: name.clone(),
+                slot: None,
+            });
         }
     }
     out
@@ -222,7 +236,15 @@ fn resolve_from_sections(file: &object::File, named_got: &mut HashSet<u64>) -> V
     };
 
     for (vma, data, _) in plt_secs {
-        decode_plt_section(file, vma, data, i386_got_base, &got_to_name, &mut out, named_got);
+        decode_plt_section(
+            file,
+            vma,
+            data,
+            i386_got_base,
+            &got_to_name,
+            &mut out,
+            named_got,
+        );
     }
 
     // (kuna ifuncfpret) Name the x86-64 `.plt.sec`/`.iplt` IFUNC (IRELATIVE) stubs
@@ -293,7 +315,9 @@ fn resolve_from_dynamic_segment(
     named_got: &mut HashSet<u64>,
 ) -> Vec<PltSym> {
     let arch = file.architecture();
-    if super::kuna_mipsabi::is_mips(arch) || matches!(arch, Architecture::PowerPc | Architecture::PowerPc64) {
+    if super::kuna_mipsabi::is_mips(arch)
+        || matches!(arch, Architecture::PowerPc | Architecture::PowerPc64)
+    {
         return Vec::new();
     }
     let Some(imports) = super::elf_dynseg::dynamic_imports(bytes) else {
@@ -425,9 +449,12 @@ fn decode_x86_64_ifunc_stubs(
             let got = insn_addr.wrapping_add(6).wrapping_add(disp as i64 as u64);
             if let Some(&resolver) = ifunc.get(&got) {
                 if !named.contains_key(&got) && named_got.insert(got) {
-                    let stub =
-                        vma + x86_stub_start(data, i, &[0xF3, 0x0F, 0x1E, 0xFA]) as u64;
-                    out.push(PltSym { addr: stub, name: format!("ifunc_{resolver:x}").into_bytes(), slot: None });
+                    let stub = vma + x86_stub_start(data, i, &[0xF3, 0x0F, 0x1E, 0xFA]) as u64;
+                    out.push(PltSym {
+                        addr: stub,
+                        name: format!("ifunc_{resolver:x}").into_bytes(),
+                        slot: None,
+                    });
                 }
             }
             i += 6;
@@ -480,9 +507,14 @@ fn decode_plt_section(
         Architecture::Riscv64 | Architecture::Riscv32 => {
             decode_riscv(vma, data, map, out, named_got)
         }
-        Architecture::Sparc | Architecture::Sparc32Plus | Architecture::Sparc64 => {
-            decode_sparc(vma, data, if file.is_64() { 32 } else { 12 }, map, out, named_got)
-        }
+        Architecture::Sparc | Architecture::Sparc32Plus | Architecture::Sparc64 => decode_sparc(
+            vma,
+            data,
+            if file.is_64() { 32 } else { 12 },
+            map,
+            out,
+            named_got,
+        ),
         // PowerPC's stubs are not in a `.plt*` *code* section (`.plt` is a NOBITS
         // data table; the call stubs live in `.text`), so they are resolved out of
         // band in [`resolve_plt_imports`] via [`decode_ppc_text`], not here.
@@ -504,7 +536,11 @@ fn record(
 ) {
     if let Some(name) = map.get(&got) {
         if named_got.insert(got) {
-            out.push(PltSym { addr: stub, name: name.clone(), slot: Some(got) });
+            out.push(PltSym {
+                addr: stub,
+                name: name.clone(),
+                slot: Some(got),
+            });
         }
     }
 }
@@ -568,7 +604,8 @@ fn decode_i386(
     while i + 6 <= data.len() {
         if data[i] == 0xFF && data[i + 1] == 0x25 {
             // Absolute (non-PIC): operand IS the GOT slot address.
-            let got = u32::from_le_bytes([data[i + 2], data[i + 3], data[i + 4], data[i + 5]]) as u64;
+            let got =
+                u32::from_le_bytes([data[i + 2], data[i + 3], data[i + 4], data[i + 5]]) as u64;
             let stub = vma + x86_stub_start(data, i, /*endbr32*/ &[0xF3, 0x0F, 0x1E, 0xFB]) as u64;
             record(stub, got, map, out, named_got);
             i += 6;
@@ -577,10 +614,10 @@ fn decode_i386(
             // Only resolvable with the derived GOT base (option-gated); without
             // it the stub is left to the `sub_<addr>` fallback (pre-fix behavior).
             if let Some(base) = i386_got_base {
-                let disp =
-                    i32::from_le_bytes([data[i + 2], data[i + 3], data[i + 4], data[i + 5]]);
+                let disp = i32::from_le_bytes([data[i + 2], data[i + 3], data[i + 4], data[i + 5]]);
                 let got = base.wrapping_add(disp as i64 as u64);
-                let stub = vma + x86_stub_start(data, i, /*endbr32*/ &[0xF3, 0x0F, 0x1E, 0xFB]) as u64;
+                let stub =
+                    vma + x86_stub_start(data, i, /*endbr32*/ &[0xF3, 0x0F, 0x1E, 0xFB]) as u64;
                 record(stub, got, map, out, named_got);
             }
             i += 6;
@@ -664,8 +701,7 @@ fn decode_aarch64(
     let mut off = 0usize;
     while off + 8 <= data.len() {
         let adrp = u32::from_le_bytes([data[off], data[off + 1], data[off + 2], data[off + 3]]);
-        let ldr =
-            u32::from_le_bytes([data[off + 4], data[off + 5], data[off + 6], data[off + 7]]);
+        let ldr = u32::from_le_bytes([data[off + 4], data[off + 5], data[off + 6], data[off + 7]]);
 
         // adrp Xd, imm: op=1 (bit31), bits[28:24]=10000; immlo=bits[30:29],
         // immhi=bits[23:5], Rd=bits[4:0].
@@ -783,7 +819,8 @@ fn decode_riscv(
     named_got: &mut HashSet<u64>,
 ) {
     let word = |off: usize| -> Option<u32> {
-        data.get(off..off + 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+        data.get(off..off + 4)
+            .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
     };
 
     let mut off = 0usize;
@@ -903,7 +940,11 @@ fn decode_ppc64_stubs(
     let word = |off: usize| -> Option<u32> {
         let b = data.get(off..off + 4)?;
         let arr = [b[0], b[1], b[2], b[3]];
-        Some(if little { u32::from_le_bytes(arr) } else { u32::from_be_bytes(arr) })
+        Some(if little {
+            u32::from_le_bytes(arr)
+        } else {
+            u32::from_be_bytes(arr)
+        })
     };
 
     // Instruction fields (big-endian instruction semantics regardless of byte
@@ -983,7 +1024,8 @@ fn decode_sparc(
     for (index, entry) in data.windows(entry_size).step_by(4).enumerate() {
         // `sethi %hi(...),%g1`: op=00, rd=1, op2=100.
         let w0 = u32::from_be_bytes([entry[0], entry[1], entry[2], entry[3]]);
-        let is_sethi_g1 = (w0 >> 30) == 0b00 && ((w0 >> 25) & 0x1f) == 1 && ((w0 >> 22) & 0x7) == 0b100;
+        let is_sethi_g1 =
+            (w0 >> 30) == 0b00 && ((w0 >> 25) & 0x1f) == 1 && ((w0 >> 22) & 0x7) == 0b100;
         if is_sethi_g1 {
             let addr = vma.wrapping_add((index * 4) as u64);
             record(addr, addr, map, out, named_got);
@@ -1042,7 +1084,11 @@ fn resolve_mips_imports(file: &object::File) -> Vec<PltSym> {
         // import's `refAddr`); this is the indirect call target the decompiler
         // resolves after $gp recovery.  Skip a 0 slot (unresolvable).
         if ext.stub_addr != 0 {
-            out.push(PltSym { addr: ext.stub_addr, name: ext.name, slot: None });
+            out.push(PltSym {
+                addr: ext.stub_addr,
+                name: ext.name,
+                slot: None,
+            });
         }
     }
     out
@@ -1119,11 +1165,20 @@ fn mips_external_got_entries(file: &object::File) -> Vec<MipsExtGot> {
             Ok(n) if !n.is_empty() => strip_version(n),
             _ => continue,
         };
-        let Some(slot_addr) = local_gotno.checked_add(idx as u64 - gotsym)
+        let Some(slot_addr) = local_gotno
+            .checked_add(idx as u64 - gotsym)
             .and_then(|index| index.checked_mul(ptr as u64))
-            .and_then(|offset| got_base.checked_add(offset)) else { continue };
+            .and_then(|offset| got_base.checked_add(offset))
+        else {
+            continue;
+        };
         let stub_addr = read_word_at_vma(file, slot_addr, ptr, le).unwrap_or(0);
-        out.push(MipsExtGot { name, slot_addr, stub_addr, symbol_index: idx as u64 });
+        out.push(MipsExtGot {
+            name,
+            slot_addr,
+            stub_addr,
+            symbol_index: idx as u64,
+        });
     }
 
     out
@@ -1149,9 +1204,15 @@ fn read_mips_dynamic_tags(file: &object::File) -> Option<(u64, u64, u64)> {
     let mut off = 0usize;
     while off + entsz <= data.len() {
         let (tag, val) = if is64 {
-            (read_u64_le(&data[off..], le), read_u64_le(&data[off + 8..], le))
+            (
+                read_u64_le(&data[off..], le),
+                read_u64_le(&data[off + 8..], le),
+            )
         } else {
-            (read_u32_le(&data[off..], le) as u64, read_u32_le(&data[off + 4..], le) as u64)
+            (
+                read_u32_le(&data[off..], le) as u64,
+                read_u32_le(&data[off + 4..], le) as u64,
+            )
         };
         off += entsz;
         if tag == DT_NULL {
@@ -1292,7 +1353,13 @@ mod tests {
         //   bctr                   4e 80 04 20
         // File is little-endian (ELFv2 LE), so each word is stored byte-reversed.
         let mut stub: Vec<u8> = Vec::new();
-        for w in [0xf8410018u32, 0x3d82ffff, 0xe98c7ff0, 0x7d8903a6, 0x4e800420] {
+        for w in [
+            0xf8410018u32,
+            0x3d82ffff,
+            0xe98c7ff0,
+            0x7d8903a6,
+            0x4e800420,
+        ] {
             stub.extend_from_slice(&w.to_le_bytes());
         }
         let mut data = vec![0u8; 16]; // a little leading `.text` padding
@@ -1309,7 +1376,9 @@ mod tests {
         map.insert(expected_slot, b"puts".to_vec());
         let mut out: Vec<PltSym> = Vec::new();
         let mut named: HashSet<u64> = HashSet::new();
-        decode_ppc64_stubs(vma, &data, /*little*/ true, toc_base, &map, &mut out, &mut named);
+        decode_ppc64_stubs(
+            vma, &data, /*little*/ true, toc_base, &map, &mut out, &mut named,
+        );
 
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].addr, stub_addr);
@@ -1318,7 +1387,13 @@ mod tests {
         // Big-endian word layout decodes identically (the stub shape is shared by
         // ELFv2 BE); a positive @ha exercises the other sign of the page offset.
         let mut data_be = vec![0u8; 0];
-        for w in [0xf8410018u32, 0x3d820002, 0xe98c0010, 0x7d8903a6, 0x4e800420] {
+        for w in [
+            0xf8410018u32,
+            0x3d820002,
+            0xe98c0010,
+            0x7d8903a6,
+            0x4e800420,
+        ] {
             data_be.extend_from_slice(&w.to_be_bytes());
         }
         let toc_be = 0x40000u64;
@@ -1327,7 +1402,15 @@ mod tests {
         map_be.insert(expected_be, b"printf".to_vec());
         let mut out_be: Vec<PltSym> = Vec::new();
         let mut named_be: HashSet<u64> = HashSet::new();
-        decode_ppc64_stubs(0x1000, &data_be, /*little*/ false, toc_be, &map_be, &mut out_be, &mut named_be);
+        decode_ppc64_stubs(
+            0x1000,
+            &data_be,
+            /*little*/ false,
+            toc_be,
+            &map_be,
+            &mut out_be,
+            &mut named_be,
+        );
         assert_eq!(out_be.len(), 1);
         assert_eq!(out_be[0].addr, 0x1000);
         assert_eq!(out_be[0].name, b"printf".to_vec());
@@ -1383,7 +1466,10 @@ mod tests {
         let base = 0x9edcu64;
         let vma = 0xe10u64;
         // PLT0: push 0x4(%ebx) = FF B3 04000000 ; jmp *0x8(%ebx) = FF A3 08000000.
-        let mut data: Vec<u8> = vec![0xFF, 0xB3, 0x04, 0x00, 0x00, 0x00, 0xFF, 0xA3, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let mut data: Vec<u8> = vec![
+            0xFF, 0xB3, 0x04, 0x00, 0x00, 0x00, 0xFF, 0xA3, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00,
+        ];
         // entry @ vma+0x30 (0xe40): `jmp *0x14(%ebx)` then push/jmp padding.
         let entry_off = 0x30usize;
         data.resize(entry_off, 0x00);
@@ -1508,7 +1594,10 @@ mod tests {
         assert_eq!(out.len(), 2);
         let mut got: Vec<(u64, Vec<u8>)> = out.iter().map(|p| (p.addr, p.name.clone())).collect();
         got.sort();
-        assert_eq!(got, vec![(entry(1), b"printf".to_vec()), (entry(2), b"puts".to_vec())]);
+        assert_eq!(
+            got,
+            vec![(entry(1), b"printf".to_vec()), (entry(2), b"puts".to_vec())]
+        );
     }
 
     #[test]
@@ -1527,11 +1616,17 @@ mod tests {
         let mut out: Vec<PltSym> = Vec::new();
         decode_sparc(vma, &data, 12, &map, &mut out, &mut HashSet::new());
         let got: Vec<(u64, Vec<u8>)> = out.iter().map(|p| (p.addr, p.name.clone())).collect();
-        assert_eq!(got, vec![(plt + 48, b"puts".to_vec()), (plt + 60, b"printf".to_vec())]);
+        assert_eq!(
+            got,
+            vec![(plt + 48, b"puts".to_vec()), (plt + 60, b"printf".to_vec())]
+        );
     }
 }
 
 /// Dynamic-symbol identities for validating lazy-binding stub instructions.
 pub(super) fn mips_stub_identities(file: &object::File<'_>) -> Vec<(u64, u64)> {
-    mips_external_got_entries(file).into_iter().map(|entry| (entry.stub_addr, entry.symbol_index)).collect()
+    mips_external_got_entries(file)
+        .into_iter()
+        .map(|entry| (entry.stub_addr, entry.symbol_index))
+        .collect()
 }

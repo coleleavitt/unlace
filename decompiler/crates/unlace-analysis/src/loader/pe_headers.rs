@@ -26,10 +26,10 @@
 //! `docs/re-needs/whole-binary-decompilation-treats.md` reporting zero functions
 //! from `unlace decompile-all`.
 
+use object::FileKind;
 use object::pe::{ImageNtHeaders32, ImageNtHeaders64};
 use object::read::pe::{ImageNtHeaders, ImageOptionalHeader, PeFile32, PeFile64};
 use object::read::{Object, ObjectSection};
-use object::FileKind;
 
 use super::format::HeaderRegion;
 
@@ -46,13 +46,22 @@ pub(crate) fn header_region(file: &object::File, bytes: &[u8]) -> Option<HeaderR
     let declared = declared_headers(bytes)?;
     let (base, size_of_headers) = declared;
     let mut len = size_of_headers.min(bytes.len() as u64);
-    if let Some(first) = file.sections().map(|sec| sec.address()).filter(|vma| *vma >= base).min() {
+    if let Some(first) = file
+        .sections()
+        .map(|sec| sec.address())
+        .filter(|vma| *vma >= base)
+        .min()
+    {
         len = len.min(first - base);
     }
     if len == 0 {
         return None;
     }
-    let mut region = HeaderRegion { vma: base, len: len as usize, code: false };
+    let mut region = HeaderRegion {
+        vma: base,
+        len: len as usize,
+        code: false,
+    };
     region.code = declared_entry_in_header(bytes, &region).is_some();
     Some(region)
 }

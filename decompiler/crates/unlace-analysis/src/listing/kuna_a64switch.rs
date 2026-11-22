@@ -37,13 +37,16 @@ use unlace_sleigh::translate::Translate;
 
 use super::kuna_poolref::PoolImage;
 use super::kuna_switchextent::FunctionTables;
-use super::kuna_switchtable::{preserved_registers, register_targets, Reach, TableRead, DEFAULT_MAX_ENTRIES};
-use super::xrefs::{decode, in_range, FullCapture};
+use super::kuna_switchtable::{
+    DEFAULT_MAX_ENTRIES, Reach, TableRead, preserved_registers, register_targets,
+};
+use super::xrefs::{FullCapture, decode, in_range};
 
 /// Whether AArch64 tables are read in `file`: a linked AArch64 image.
 pub(crate) fn applies(file: &object::File<'_>) -> bool {
     use object::Object;
-    file.architecture() == object::Architecture::Aarch64 && file.kind() != object::ObjectKind::Relocatable
+    file.architecture() == object::Architecture::Aarch64
+        && file.kind() != object::ObjectKind::Relocatable
 }
 
 /// The read-only image an AArch64 table is read from, and the seeds that
@@ -111,7 +114,15 @@ impl<'a> A64Tables<'a> {
             let at = self.entries.partition_point(|&e| e <= from);
             let lo = *self.entries.get(at.checked_sub(1)?)?;
             let hi = self.entries.get(at).copied();
-            self.tables.next_after(translate, code_space, self.data_space.as_ref(), exec, lo, hi, table)
+            self.tables.next_after(
+                translate,
+                code_space,
+                self.data_space.as_ref(),
+                exec,
+                lo,
+                hi,
+                table,
+            )
         };
         let reach = Reach {
             max_entries: self.max_entries,
@@ -121,7 +132,15 @@ impl<'a> A64Tables<'a> {
             next_table: self.extent.then_some(&next_table),
         };
         let read = register_targets(
-            translate, code_space, self.data_space.as_ref(), &decoded, from, &branch, self.pool, exec, &reach,
+            translate,
+            code_space,
+            self.data_space.as_ref(),
+            &decoded,
+            from,
+            &branch,
+            self.pool,
+            exec,
+            &reach,
         );
         if read.unbounded {
             return TableRead::default();

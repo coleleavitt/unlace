@@ -11,8 +11,8 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use super::format::java_type_name;
 use super::DexModel;
+use super::format::java_type_name;
 
 /// `(class descriptor, method name, prototype descriptor)`.
 type MethodKey = (String, String, String);
@@ -32,15 +32,26 @@ impl MethodIndex {
             for class in &model.file.classes {
                 let desc = model.descriptor(class.class_idx);
                 if class.superclass_idx != super::format::NO_INDEX {
-                    superclass.entry(desc.clone()).or_insert_with(|| model.descriptor(class.superclass_idx));
+                    superclass
+                        .entry(desc.clone())
+                        .or_insert_with(|| model.descriptor(class.superclass_idx));
                 }
                 for method in &class.methods {
-                    let (Some(code), Some(key)) = (method.code, model.method_key(method.method_idx)) else { continue };
-                    methods.entry(key).or_insert(model.base + u64::from(code.insns_off));
+                    let (Some(code), Some(key)) =
+                        (method.code, model.method_key(method.method_idx))
+                    else {
+                        continue;
+                    };
+                    methods
+                        .entry(key)
+                        .or_insert(model.base + u64::from(code.insns_off));
                 }
             }
         }
-        MethodIndex { methods, superclass }
+        MethodIndex {
+            methods,
+            superclass,
+        }
     }
 
     /// The code address the method `key` runs: its own class's definition, or
@@ -48,7 +59,10 @@ impl MethodIndex {
     pub fn resolve(&self, key: &MethodKey) -> Option<u64> {
         let (mut class, name, proto) = key.clone();
         for _ in 0..64 {
-            if let Some(&addr) = self.methods.get(&(class.clone(), name.clone(), proto.clone())) {
+            if let Some(&addr) = self
+                .methods
+                .get(&(class.clone(), name.clone(), proto.clone()))
+            {
                 return Some(addr);
             }
             class = self.superclass.get(&class)?.clone();
@@ -102,7 +116,9 @@ pub fn calls(models: &[Rc<DexModel>]) -> Vec<DexCall> {
                 let end = entry + 2 * u64::from(code.insns_units);
                 let mut at = entry;
                 while at < end {
-                    let Some(size) = model.instruction_size(at).filter(|&s| s > 0) else { break };
+                    let Some(size) = model.instruction_size(at).filter(|&s| s > 0) else {
+                        break;
+                    };
                     let mnemonic = model.bytes_at(at, 1).and_then(|b| invoke_mnemonic(b[0]));
                     if let (Some(mnemonic), Some(b)) = (mnemonic, model.bytes_at(at + 2, 2)) {
                         let method_idx = u32::from(u16::from_le_bytes([b[0], b[1]]));
@@ -132,13 +148,23 @@ mod tests {
 
     #[test]
     fn resolves_calls_into_the_same_file() {
-        let bytes = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../tests/stages/fixtures/dex/hello.dex"));
+        let bytes = include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../tests/stages/fixtures/dex/hello.dex"
+        ));
         let model = Rc::new(DexModel::parse(bytes.to_vec(), 0).unwrap());
         let functions = model.functions();
-        let many = functions.iter().find(|f| f.name == "demo::Hello::many").unwrap().addr;
+        let many = functions
+            .iter()
+            .find(|f| f.name == "demo::Hello::many")
+            .unwrap()
+            .addr;
         let all = calls(&[Rc::clone(&model)]);
         assert!(all.iter().any(|c| c.callee == Some(many) && c.instruction.starts_with("invoke-static/range")));
-        let println = all.iter().find(|c| c.callee_name == "java::io::PrintStream::println").unwrap();
+        let println = all
+            .iter()
+            .find(|c| c.callee_name == "java::io::PrintStream::println")
+            .unwrap();
         assert_eq!(println.callee, None);
     }
 }

@@ -11,12 +11,15 @@ use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// Bootstrap the committed fixture, decompile each of `funcs`, return the combined C.
@@ -30,7 +33,8 @@ fn decompile(funcs: &[&str]) -> String {
         .expect("UTF-8 fixture path")
         .to_string();
     let mut prog = bootstrap_from_object(&path, "", &spec_roots).expect("bootstrap fixture");
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
 
     let mut cmds: Vec<String> = Vec::new();
     for f in funcs {
@@ -58,10 +62,22 @@ fn decompile(funcs: &[&str]) -> String {
 fn tag_constants_take_variant_names_and_the_layout_stands_still() {
     let on = decompile(&["ret_three"]);
 
-    assert!(on.contains("rethidden->tag = A;"), "the store is named:\n{on}");
-    assert!(on.contains("Three::Discriminant"), "the synthesized enum is declared:\n{on}");
-    assert!(!on.contains("rethidden->tag = 0;"), "no bare store is left:\n{on}");
-    assert!(on.contains("(rethidden->payload).A.__0 = x;"), "the payload store is named:\n{on}");
+    assert!(
+        on.contains("rethidden->tag = A;"),
+        "the store is named:\n{on}"
+    );
+    assert!(
+        on.contains("Three::Discriminant"),
+        "the synthesized enum is declared:\n{on}"
+    );
+    assert!(
+        !on.contains("rethidden->tag = 0;"),
+        "no bare store is left:\n{on}"
+    );
+    assert!(
+        on.contains("(rethidden->payload).A.__0 = x;"),
+        "the payload store is named:\n{on}"
+    );
 }
 
 /// A tag READ names the variant too (the recursive List walker), and a niche
@@ -70,8 +86,14 @@ fn tag_constants_take_variant_names_and_the_layout_stands_still() {
 fn tag_reads_are_named_and_niche_layouts_are_untouched() {
     let on = decompile(&["list_len", "ret_niche"]);
 
-    assert!(on.contains("Cons") && on.contains("Nil"), "the walker's test is named:\n{on}");
+    assert!(
+        on.contains("Cons") && on.contains("Nil"),
+        "the walker's test is named:\n{on}"
+    );
 
     let niche = &on[on.find("ret_niche").expect("niche")..];
-    assert!(!niche.contains("Discriminant"), "a niche layout has no tag field to retype:\n{niche}");
+    assert!(
+        !niche.contains("Discriminant"),
+        "a niche layout has no tag field to retype:\n{niche}"
+    );
 }

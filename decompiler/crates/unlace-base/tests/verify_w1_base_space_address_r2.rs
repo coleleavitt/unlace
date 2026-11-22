@@ -10,10 +10,8 @@
 
 use std::rc::Rc;
 
-use unlace_base::address::{
-    sign_extend_sized, signbit_negative, Address, BitRange, RangeList,
-};
-use unlace_base::space::{addrspace_flags, spacetype, AddrSpace};
+use unlace_base::address::{Address, BitRange, RangeList, sign_extend_sized, signbit_negative};
+use unlace_base::space::{AddrSpace, addrspace_flags, spacetype};
 
 fn proc_space(name: &str, index: i32, addr_size: u32, wordsize: u32) -> AddrSpace {
     AddrSpace::new(

@@ -1,8 +1,23 @@
 use super::*;
 
 fn load(syms: &mut Syms, off: u64) -> Val {
-    let base = syms.atom(Atom::Leaf { space: 1, off: 0x20, size: 8, epoch: 0 }, 8);
-    syms.atom(Atom::Load { addr: base.plus(off), size: 8, ver: 0 }, 8)
+    let base = syms.atom(
+        Atom::Leaf {
+            space: 1,
+            off: 0x20,
+            size: 8,
+            epoch: 0,
+        },
+        8,
+    );
+    syms.atom(
+        Atom::Load {
+            addr: base.plus(off),
+            size: 8,
+            ver: 0,
+        },
+        8,
+    )
 }
 
 fn id(v: &Val) -> u32 {
@@ -69,7 +84,9 @@ fn cmova_against_fifteen_splits_small_from_heap() {
     let above = s.eval(OpCode::CPUI_BOOL_AND, vec![ncf, nzf], 1);
     let skip = s.eval(OpCode::CPUI_BOOL_NEGATE, vec![above], 1);
     // The CMOV skips its assignment (small-string path) when the branch is taken.
-    let pts = s.classify_one(&[(skip.clone(), true)], &res, &[15, 16]).unwrap();
+    let pts = s
+        .classify_one(&[(skip.clone(), true)], &res, &[15, 16])
+        .unwrap();
     assert!(pts.iter().all(|&(v, t)| t == (v <= 15)));
     let pts = s.classify_one(&[(skip, false)], &res, &[15, 16]).unwrap();
     assert!(pts.iter().all(|&(v, t)| t == (v > 15)));
@@ -98,7 +115,15 @@ fn an_offset_ordered_compare_is_rejected() {
 #[test]
 fn a_zero_extended_byte_reads_back_as_itself() {
     let mut s = Syms::default();
-    let b = s.atom(Atom::Leaf { space: 1, off: 0x88, size: 1, epoch: 0 }, 1);
+    let b = s.atom(
+        Atom::Leaf {
+            space: 1,
+            off: 0x88,
+            size: 1,
+            epoch: 0,
+        },
+        1,
+    );
     let d = s.eval(OpCode::CPUI_INT_ZEXT, vec![b.clone()], 4);
     let q = s.eval(OpCode::CPUI_INT_ZEXT, vec![d], 8);
     assert_eq!(s.subpiece(q, 0, 1), b);

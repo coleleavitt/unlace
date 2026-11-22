@@ -38,7 +38,9 @@ pub fn record(data: &mut Funcdata, sb_addr: &Address) {
     let mut last: HashMap<BlockId, (u32, OpId)> = HashMap::new();
     let mut returns = Vec::new();
     for op in data.obank().iter_alive() {
-        let Some(o) = data.obank().get(op) else { continue };
+        let Some(o) = data.obank().get(op) else {
+            continue;
+        };
         if let Some(b) = o.get_parent() {
             let order = o.get_seq_num().get_order();
             if last.get(&b).is_none_or(|&(prev, _)| order > prev) {
@@ -51,9 +53,13 @@ pub fn record(data: &mut Funcdata, sb_addr: &Address) {
     }
     let mut anchors: Vec<(OpId, int4)> = Vec::new();
     for ret in returns {
-        let Some(r) = data.obank().get(ret) else { continue };
+        let Some(r) = data.obank().get(ret) else {
+            continue;
+        };
         let ret_at = r.get_addr().clone();
-        let Some(block) = r.get_parent() else { continue };
+        let Some(block) = r.get_parent() else {
+            continue;
+        };
         let mut seen: HashSet<BlockId> = HashSet::new();
         let mut todo: Vec<(Option<OpId>, BlockId, i64)> = vec![(r.basic_neighbours().0, block, 0)];
         while let Some((mut cur, block, mut delta)) = todo.pop() {
@@ -100,7 +106,11 @@ pub fn record(data: &mut Funcdata, sb_addr: &Address) {
 /// The signed constant `op` adds to the stack pointer, when it is
 /// `sp = sp + c` or `sp = sp - c`.
 fn sp_add(data: &Funcdata, op: &crate::op::PcodeOp, sb_addr: &Address) -> Option<i64> {
-    let is_sp = |vn| data.vbank().get(vn).is_some_and(|v| v.get_addr() == sb_addr);
+    let is_sp = |vn| {
+        data.vbank()
+            .get(vn)
+            .is_some_and(|v| v.get_addr() == sb_addr)
+    };
     let constant = |vn| {
         data.vbank().get(vn).filter(|v| v.is_constant()).map(|v| {
             let size = v.get_size().clamp(1, 8) as u32;

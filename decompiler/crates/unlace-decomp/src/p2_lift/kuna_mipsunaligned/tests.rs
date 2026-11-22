@@ -17,19 +17,33 @@ fn move_(rd: u32, rs: u32) -> u32 {
 }
 
 fn pairs(words: &[u32], big: bool) -> Vec<u64> {
-    pairs_in(&[(0x1000, words.to_vec())], big, false, false, &[], &|_| false)
+    pairs_in(&[(0x1000, words.to_vec())], big, false, false, &[], &|_| {
+        false
+    })
 }
 
 #[test]
 fn big_endian_pair_has_its_left_half_first() {
-    assert_eq!(pairs(&[lwl(3, 0, 2), lwr(3, 3, 2)], true), vec![0x1000, 0x1004]);
-    assert_eq!(pairs(&[lwl(3, 3, 2), lwr(3, 0, 2)], true), Vec::<u64>::new());
+    assert_eq!(
+        pairs(&[lwl(3, 0, 2), lwr(3, 3, 2)], true),
+        vec![0x1000, 0x1004]
+    );
+    assert_eq!(
+        pairs(&[lwl(3, 3, 2), lwr(3, 0, 2)], true),
+        Vec::<u64>::new()
+    );
 }
 
 #[test]
 fn little_endian_pair_has_its_right_half_at_the_lower_address() {
-    assert_eq!(pairs(&[lwl(3, 3, 2), lwr(3, 0, 2)], false), vec![0x1000, 0x1004]);
-    assert_eq!(pairs(&[lwl(3, 0, 2), lwr(3, 3, 2)], false), Vec::<u64>::new());
+    assert_eq!(
+        pairs(&[lwl(3, 3, 2), lwr(3, 0, 2)], false),
+        vec![0x1000, 0x1004]
+    );
+    assert_eq!(
+        pairs(&[lwl(3, 0, 2), lwr(3, 3, 2)], false),
+        Vec::<u64>::new()
+    );
 }
 
 #[test]
@@ -42,7 +56,10 @@ fn halves_must_share_both_registers() {
 #[test]
 fn an_unrelated_instruction_between_keeps_the_pair() {
     let lw_ra = i(0x23, 29, 31, 36);
-    assert_eq!(pairs(&[lwl(3, 1, 17), lw_ra, lwr(3, 4, 17)], true), vec![0x1000, 0x1008]);
+    assert_eq!(
+        pairs(&[lwl(3, 1, 17), lw_ra, lwr(3, 4, 17)], true),
+        vec![0x1000, 0x1008]
+    );
 }
 
 #[test]
@@ -73,7 +90,10 @@ fn a_branch_into_the_pair_breaks_it() {
     let into = i(0x04, 4, 0, -3);
     assert!(pairs(&[lwl(3, 0, 2), lwr(3, 3, 2), 0, into, 0], true).is_empty());
     let onto_first = i(0x04, 4, 0, -4);
-    assert_eq!(pairs(&[lwl(3, 0, 2), lwr(3, 3, 2), 0, onto_first, 0], true), vec![0x1000, 0x1004]);
+    assert_eq!(
+        pairs(&[lwl(3, 0, 2), lwr(3, 3, 2), 0, onto_first, 0], true),
+        vec![0x1000, 0x1004]
+    );
 }
 
 #[test]
@@ -93,7 +113,10 @@ fn doubleword_halves_pair_only_on_a_64_bit_target() {
     let ldl = i(0x1a, 2, 3, 0);
     let ldr = i(0x1b, 2, 3, 7);
     let runs = [(0x1000, vec![ldl, ldr])];
-    assert_eq!(pairs_in(&runs, true, true, false, &[], &|_| false), vec![0x1000, 0x1004]);
+    assert_eq!(
+        pairs_in(&runs, true, true, false, &[], &|_| false),
+        vec![0x1000, 0x1004]
+    );
     assert!(pairs_in(&runs, true, false, false, &[], &|_| false).is_empty());
 }
 
@@ -107,7 +130,10 @@ fn another_instruction_set_is_left_alone() {
 fn a_function_starting_inside_the_pair_breaks_it() {
     let runs = [(0x1000, vec![lwl(3, 0, 2), lwr(3, 3, 2), 0])];
     assert!(pairs_in(&runs, true, false, false, &[0x1004], &|_| false).is_empty());
-    assert_eq!(pairs_in(&runs, true, false, false, &[0x1000], &|_| false), vec![0x1000, 0x1004]);
+    assert_eq!(
+        pairs_in(&runs, true, false, false, &[0x1000], &|_| false),
+        vec![0x1000, 0x1004]
+    );
 }
 
 #[test]
@@ -115,7 +141,10 @@ fn an_octeon_bit_branch_is_a_branch_on_octeon_alone() {
     let bbit0 = i(0x32, 5, 4, 2);
     let skips = [(0x1000, vec![lwl(3, 0, 2), bbit0, 0, lwr(3, 3, 2), 0])];
     assert!(pairs_in(&skips, true, true, true, &[], &|_| false).is_empty());
-    assert_eq!(pairs_in(&skips, true, true, false, &[], &|_| false), vec![0x1000, 0x100c]);
+    assert_eq!(
+        pairs_in(&skips, true, true, false, &[], &|_| false),
+        vec![0x1000, 0x100c]
+    );
     let lands = [(0x1000, vec![bbit0, 0, lwl(3, 0, 2), lwr(3, 3, 2), 0])];
     assert!(pairs_in(&lands, true, true, true, &[], &|_| false).is_empty());
 }

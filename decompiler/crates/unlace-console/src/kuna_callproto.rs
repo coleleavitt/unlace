@@ -11,7 +11,7 @@
 //! around those that have one.
 
 use unlace_base::address::Address;
-use unlace_decomp::fspec::{parameter_pieces_flags, ParameterPieces, PrototypePieces};
+use unlace_decomp::fspec::{ParameterPieces, PrototypePieces, parameter_pieces_flags};
 use unlace_decomp::funcdata::Funcdata;
 
 use crate::engine::ConsoleProgram;
@@ -31,9 +31,16 @@ enum Place {
 pub(crate) fn parse(prog: &ConsoleProgram, decl: &str) -> Result<PrototypePieces, String> {
     let (text, storage) = split_storage(decl)?;
     let (addr_size, word_size) = prog.arch().data_org();
-    let org = DataOrg { addr_size, word_size };
+    let org = DataOrg {
+        addr_size,
+        word_size,
+    };
     let text = text.trim();
-    let text = if text.ends_with(';') { text.to_string() } else { format!("{text};") };
+    let text = if text.ends_with(';') {
+        text.to_string()
+    } else {
+        format!("{text};")
+    };
     let models = crate::assertions::model_names(prog);
     let (mut pieces, model) =
         crate::grammar::parse_protopieces_with_model(&text, prog.arch().types(), org, &models)
@@ -42,9 +49,9 @@ pub(crate) fn parse(prog: &ConsoleProgram, decl: &str) -> Result<PrototypePieces
     let is_default = |name: &str| {
         arch.default_fp().is_some_and(|d| {
             d.get_name() == name
-                || arch
-                    .get_model(name)
-                    .is_some_and(|m| m.is_compatible(d) && m.has_this_pointer() == d.has_this_pointer())
+                || arch.get_model(name).is_some_and(|m| {
+                    m.is_compatible(d) && m.has_this_pointer() == d.has_this_pointer()
+                })
         })
     };
     if !model.is_empty() && !is_default(&model) {
@@ -93,7 +100,9 @@ pub(crate) fn parse(prog: &ConsoleProgram, decl: &str) -> Result<PrototypePieces
 /// Is a call made by the instruction at `callpoint`?
 pub(crate) fn has_call_at(fd: &Funcdata, callpoint: &Address) -> bool {
     (0..fd.num_calls()).any(|i| {
-        fd.obank().get(fd.get_call_specs(i).get_op()).is_some_and(|op| op.get_addr() == callpoint)
+        fd.obank()
+            .get(fd.get_call_specs(i).get_op())
+            .is_some_and(|op| op.get_addr() == callpoint)
     })
 }
 
@@ -110,7 +119,11 @@ fn split_storage(decl: &str) -> Result<(String, Vec<(Place, String)>), String> {
                 }
                 depth += 1;
             }
-            b')' => depth = depth.checked_sub(1).ok_or("unbalanced ')' in declaration")?,
+            b')' => {
+                depth = depth
+                    .checked_sub(1)
+                    .ok_or("unbalanced ')' in declaration")?
+            }
             _ => {}
         }
     }
@@ -169,9 +182,10 @@ mod tests {
 
     #[test]
     fn storage_annotations_are_split_by_parameter() {
-        let (text, storage) =
-            split_storage("int f(char *a @RDI, void (*cb)(int, int) @ [register,0x80,8], int c) @EAX")
-                .unwrap();
+        let (text, storage) = split_storage(
+            "int f(char *a @RDI, void (*cb)(int, int) @ [register,0x80,8], int c) @EAX",
+        )
+        .unwrap();
         assert_eq!(text, "int f(char *a , void (*cb)(int, int) , int c) ");
         assert_eq!(
             storage,

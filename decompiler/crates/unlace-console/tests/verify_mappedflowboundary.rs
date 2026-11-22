@@ -253,8 +253,12 @@ fn byte_overlays_remain_exclusive_and_repeated_flows_use_current_bytes() {
 #[test]
 fn recovered_flow_contains_no_instructions_from_unmapped_padding() {
     for data in [
-        &[0x85, 0xc0, 0x75, 6, 0xb8, 7, 0, 0, 0, 0xc3, 0xbb, 5, 0, 0, 0][..],
-        &[0x85, 0xc0, 0x75, 6, 0xb8, 7, 0, 0, 0, 0xc3, 0x85, 0xdb, 0x75, 2, 0x90, 0x90][..],
+        &[
+            0x85, 0xc0, 0x75, 6, 0xb8, 7, 0, 0, 0, 0xc3, 0xbb, 5, 0, 0, 0,
+        ][..],
+        &[
+            0x85, 0xc0, 0x75, 6, 0xb8, 7, 0, 0, 0, 0xc3, 0x85, 0xdb, 0x75, 2, 0x90, 0x90,
+        ][..],
     ] {
         let path = fixture(&[(0x10000, data, data.len() as u32)]);
         let mut prog = load(&path);
@@ -427,20 +431,29 @@ fn declared_boundary_policy_precedes_mapping_recovery() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../unlace-analysis/tests/fixtures/mapped_flow_boundary_32.elf");
     {
-        for policy in [flow_flags::error_outofbounds, 0, flow_flags::ignore_outofbounds] {
+        for policy in [
+            flow_flags::error_outofbounds,
+            0,
+            flow_flags::ignore_outofbounds,
+        ] {
             let mut prog = load(&path);
             prog.arch_mut().flowoptions |= policy;
             let entry = address(&prog, 0x10000);
             let result = build_and_follow_flow(prog.arch_mut(), "sample", entry, 15);
             if policy == flow_flags::error_outofbounds {
                 let err = result.err().expect("declared boundary must be fatal");
-                assert!(err.explain().contains("Function flow out of bounds"), "{err:?}");
+                assert!(
+                    err.explain().contains("Function flow out of bounds"),
+                    "{err:?}"
+                );
             } else {
                 result.unwrap();
             }
             let comments = prog.arch().commentdb.comments();
             assert_eq!(
-                comments.iter().any(|c| c.text.contains("Function flows out of bounds")),
+                comments
+                    .iter()
+                    .any(|c| c.text.contains("Function flows out of bounds")),
                 policy == 0,
             );
             assert!(comments.iter().all(|c| !c.text.contains("unmapped memory")));
@@ -450,9 +463,9 @@ fn declared_boundary_policy_precedes_mapping_recovery() {
 
 #[test]
 fn a_mapped_loader_failure_is_not_recovered_as_a_missing_edge() {
+    use std::sync::Arc;
     use unlace_base::error::{KunaError, KunaResult};
     use unlace_sleigh::loadimage::{ImageBytes, LoadImage};
-    use std::sync::Arc;
     struct FailingImage(Arc<dyn ImageBytes>, u64);
     impl LoadImage for FailingImage {
         fn get_file_name(&self) -> &str {
@@ -500,8 +513,12 @@ fn a_mapped_loader_failure_is_not_recovered_as_a_missing_edge() {
 #[test]
 fn a_straddling_instruction_contributes_only_its_missing_halt() {
     for data in [
-        &[0x85, 0xc0, 0x75, 6, 0xb8, 7, 0, 0, 0, 0xc3, 0xbb, 5, 0, 0, 0, 0, 0, 0][..],
-        &[0x85, 0xc0, 0x75, 6, 0xb8, 7, 0, 0, 0, 0xc3, 0x8e, 0xc8, 0, 0, 0][..],
+        &[
+            0x85, 0xc0, 0x75, 6, 0xb8, 7, 0, 0, 0, 0xc3, 0xbb, 5, 0, 0, 0, 0, 0, 0,
+        ][..],
+        &[
+            0x85, 0xc0, 0x75, 6, 0xb8, 7, 0, 0, 0, 0xc3, 0x8e, 0xc8, 0, 0, 0,
+        ][..],
     ] {
         let path = fixture(&[(0x10000, data, data.len() as u32)]);
         let mut prog = load(&path);
@@ -573,7 +590,11 @@ fn an_unmapped_first_byte_is_reported_from_the_map_even_with_a_cold_window() {
     let err = tr
         .one_instruction_checked(&mut emit, &address(&prog, 0x80000), image.as_ref())
         .unwrap_err();
-    assert!(err.explain().contains("Instruction bytes at 0x80000 are not mapped"), "{err:?}");
+    assert!(
+        err.explain()
+            .contains("Instruction bytes at 0x80000 are not mapped"),
+        "{err:?}"
+    );
     assert!(emit.0.is_empty());
     std::fs::remove_file(path).unwrap();
 }
@@ -589,9 +610,25 @@ fn a_truncated_instruction_needs_a_mapped_first_byte_even_with_a_warm_window() {
         .load_fill(&mut [0; 64], &address(&prog, 0x10000))
         .unwrap();
     let image = tr.loader_rc().borrow().shared_bytes().unwrap();
-    assert!(!truncated_instruction(image.as_ref(), tr, &address(&prog, 0x10000)));
-    assert!(truncated_instruction(image.as_ref(), tr, &address(&prog, 0x10006)));
-    assert!(!truncated_instruction(image.as_ref(), tr, &address(&prog, 0x10008)));
-    assert!(!truncated_instruction(image.as_ref(), tr, &address(&prog, 0x1000a)));
+    assert!(!truncated_instruction(
+        image.as_ref(),
+        tr,
+        &address(&prog, 0x10000)
+    ));
+    assert!(truncated_instruction(
+        image.as_ref(),
+        tr,
+        &address(&prog, 0x10006)
+    ));
+    assert!(!truncated_instruction(
+        image.as_ref(),
+        tr,
+        &address(&prog, 0x10008)
+    ));
+    assert!(!truncated_instruction(
+        image.as_ref(),
+        tr,
+        &address(&prog, 0x1000a)
+    ));
     std::fs::remove_file(path).unwrap();
 }

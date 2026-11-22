@@ -26,7 +26,7 @@
 
 use std::rc::Rc;
 
-use crate::dtype::{type_metatype, Datatype};
+use crate::dtype::{Datatype, type_metatype};
 use crate::infra::architecture::Architecture;
 
 /// A one-byte value the type system never committed to: the carrier the

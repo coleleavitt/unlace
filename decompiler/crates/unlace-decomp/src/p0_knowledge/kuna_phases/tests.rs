@@ -9,20 +9,31 @@ use super::*;
 
 #[test]
 fn catalog_matches_implemented_options() {
-    use std::collections::BTreeSet;
     use crate::options::KUNA_OPTION_NAMES;
+    use std::collections::BTreeSet;
 
     let registered: BTreeSet<_> = KUNA_OPTION_NAMES.iter().copied().collect();
     let documented: BTreeSet<_> = SETTABLE_TABLE.iter().map(|row| row.option).collect();
-    assert_eq!(registered.len(), KUNA_OPTION_NAMES.len(), "duplicate option handler");
-    assert_eq!(documented.len(), SETTABLE_TABLE.len(), "duplicate catalog option");
+    assert_eq!(
+        registered.len(),
+        KUNA_OPTION_NAMES.len(),
+        "duplicate option handler"
+    );
+    assert_eq!(
+        documented.len(),
+        SETTABLE_TABLE.len(),
+        "duplicate catalog option"
+    );
     assert_eq!(registered, documented);
 }
 
 #[test]
 fn github_anchor_matches_rendered_heading_text() {
     let cases = [
-        ("`objc` -- on | off, default `off`", "objc----on--off-default-off"),
+        (
+            "`objc` -- on | off, default `off`",
+            "objc----on--off-default-off",
+        ),
         (
             "`returnpair` -- pair | single, default `pair` (destructive opt-in)",
             "returnpair----pair--single-default-pair-destructive-opt-in",
@@ -81,8 +92,15 @@ fn tier_counts_are_63_core_153_transform_92_analysis() {
 fn noreturn_family_is_all_transform_tier() {
     // The whole family can remove code at call sites, so it sits in the
     // control-surface tier regardless of which tier mechanically hosts it.
-    for s in SETTABLE_TABLE.iter().filter(|s| s.option.starts_with("noreturn_")) {
-        assert_eq!(s.tier, "transform", "{} must sit in the transform tier", s.option);
+    for s in SETTABLE_TABLE
+        .iter()
+        .filter(|s| s.option.starts_with("noreturn_"))
+    {
+        assert_eq!(
+            s.tier, "transform",
+            "{} must sit in the transform tier",
+            s.option
+        );
     }
 }
 
@@ -206,10 +224,7 @@ fn lookup_surface_parity() {
         assert_eq!(found.surface, e.surface);
         assert_eq!(found.phase, e.phase);
     }
-    assert_eq!(
-        lookup_surface("force goto").unwrap().phase,
-        KunaPhase::P7
-    );
+    assert_eq!(lookup_surface("force goto").unwrap().phase, KunaPhase::P7);
     assert_eq!(
         lookup_surface("option compareform").unwrap().subphase,
         "comparison-canonicalization"
@@ -281,7 +296,6 @@ fn option_values_live_value_present_for_129() {
     // not the codegen `live_value`; +1 for `funcstart_patterns`, the full
     // byte-pattern function-start pass).
     const PASS_GATES: &[&str] = &[
-
         // (kuna) Separate debug files: a load-time env gate like `dynrelocs`.
         "debuglink",
         "noreturn_known",
@@ -312,7 +326,6 @@ fn option_values_live_value_present_for_129() {
         // every `option` command), so no codegen live reader. Default-ON
         // (`opaque`).
         "libctypes",
-
         // (kuna) Static TLS naming -- an analysis-pass gate read console-side. Default-ON.
         "tlsnames",
         // (kuna) DWARF lexical-block and location-list locals -- a load-time env bridge.
@@ -354,7 +367,6 @@ fn option_values_live_value_present_for_129() {
         // gate with no codegen live reader (read console-side via kuna_live_value),
         // same as `eh_frame_full` above. Default-off.
         "unwindstarts",
-
         "exporttrie",
         "machobinds",
         "machoehframe",
@@ -382,7 +394,6 @@ fn option_values_live_value_present_for_129() {
         "formatstring",
         "listing",
         "fast_funcdisc",
-
         // (kuna) The TE / raw-image object view -- an analysis-tier gate read at
         // the commit, console-side via kuna_live_value, like `rawdiscover`.
         "objectview",
@@ -449,7 +460,6 @@ fn option_values_live_value_present_for_129() {
         // no codegen live reader (read console-side via kuna_live_value), like the
         // gates around it. Default-off, Mach-O-only.
         "objc",
-
         // (kuna) Objective-C instance layouts — same commit-side gate as `objcrefconst`.
         "objcivars",
         // (kuna) The Objective-C SDK header directory — a load-time env bridge
@@ -469,7 +479,6 @@ fn option_values_live_value_present_for_129() {
         "swifttypes",
         // (kuna) Objective-C instance layouts — same commit-side gate as `objc`.
         "objcivars",
-
         // (kuna) IOKit class and vtable recovery -- an analysis-pass gate on XNU
         // images, read console-side. Default-on.
         "iokitclasses",
@@ -499,7 +508,6 @@ fn option_values_live_value_present_for_129() {
         // (PR-8) Mach-O arm64e spec selection: a load-time (pre-`option`) gate read
         // from the `KUNA_MACHO_ARM64E` env var, so it too has no codegen live_value.
         "macho-arm64e",
-
         // (kuna) DWARF DW_CC_nocall parameter drop -- the same commit-boundary
         // gate as `cppproto`, read console-side. Default-on.
         "dwarfnocall",
@@ -961,11 +969,23 @@ fn live_from_arch_matches_cpp_ternaries() {
         Some("canonical")
     );
     // returnpair = return_single ? "single" : "pair"
-    assert_eq!(OptionValues::live_from_arch("returnpair", on), Some("single"));
-    assert_eq!(OptionValues::live_from_arch("returnpair", off), Some("pair"));
+    assert_eq!(
+        OptionValues::live_from_arch("returnpair", on),
+        Some("single")
+    );
+    assert_eq!(
+        OptionValues::live_from_arch("returnpair", off),
+        Some("pair")
+    );
     // a plain on/off option
-    assert_eq!(OptionValues::live_from_arch("memsetrecover", on), Some("on"));
-    assert_eq!(OptionValues::live_from_arch("memsetrecover", off), Some("off"));
+    assert_eq!(
+        OptionValues::live_from_arch("memsetrecover", on),
+        Some("on")
+    );
+    assert_eq!(
+        OptionValues::live_from_arch("memsetrecover", off),
+        Some("off")
+    );
     // no live reader -> None even with a value-producing closure
     assert_eq!(OptionValues::live_from_arch("namestyle", on), None);
     assert_eq!(OptionValues::live_from_arch("stackguard", on), None);
@@ -992,7 +1012,9 @@ fn emit_settable_json_first_row_shape() {
     assert!(!out.contains("\"current\""));
     // ... and the tail order (issue ... change_kind ... tier ... symptoms).
     assert!(out.contains("\"strength\": \"HARD\", \"rewind\": \"P3\", \"issue\": \"GH-558\""));
-    assert!(out.contains("\"change_kind\": \"presentation-default\", \"tier\": \"core\", \"symptoms\": [\""));
+    assert!(out.contains(
+        "\"change_kind\": \"presentation-default\", \"tier\": \"core\", \"symptoms\": [\""
+    ));
     assert!(out.ends_with("\"]}"));
 }
 
@@ -1024,7 +1046,9 @@ fn emit_settable_json_includes_current_when_live() {
     let mut out = String::new();
     emit_settable_json(&mut out, st, Some("canonical"));
     // C++ inserts "current" right after "default".
-    assert!(out.contains("\"default\": \"original\", \"current\": \"canonical\", \"destructive_as_default\""));
+    assert!(out.contains(
+        "\"default\": \"original\", \"current\": \"canonical\", \"destructive_as_default\""
+    ));
 }
 
 #[test]
@@ -1150,7 +1174,7 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +1 for `variantnames`; its P5 row sits beside `dwarfvariants`.
     // +1 for `goabi`; its P1 row sits beside `sourcelang`.
     // +1 for `gowritebarrier`; its P2 row sits beside `gomorestack`.
-        // +1 for `goreg`; its P1 row sits beside `goabi`.
+    // +1 for `goreg`; its P1 row sits beside `goabi`.
     // +1 for `gobool`; its P4 row sits beside `sourcelang`.
     // +1 for `swiftdemangle`; its P1 row sits beside `sourcelang`.
     // +1 for `objcrefconst`; its P1 row sits beside `objc`.

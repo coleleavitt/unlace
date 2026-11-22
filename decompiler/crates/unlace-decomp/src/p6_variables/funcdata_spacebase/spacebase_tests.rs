@@ -9,13 +9,13 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{
-    addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, SpacebaseSpace,
-    UniqueSpace, VarnodeStorage,
+    AddrSpace, AddrSpaceManager, ConstantSpace, SpacebaseSpace, UniqueSpace, VarnodeStorage,
+    addrspace_flags, spacetype,
 };
 use unlace_base::types::int4;
 
-use crate::funcdata::Funcdata;
 use crate::context::{ArchContext, VarnodeId};
+use crate::funcdata::Funcdata;
 
 const SP_OFF: u64 = 0x20;
 const SP_SIZE: int4 = 8;
@@ -23,7 +23,8 @@ const SP_SIZE: int4 = 8;
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
     m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false))).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
     let regspc = Rc::new(AddrSpace::new(
         spacetype::IPTR_PROCESSOR,
         "register",
@@ -36,8 +37,10 @@ fn build_manager() -> AddrSpaceManager {
         1,
     ));
     m.insert_space(Rc::clone(&regspc)).unwrap();
-    m.insert_space(Rc::new(SpacebaseSpace::new("stack", 3, 8, &regspc, 1, true, false)))
-        .unwrap();
+    m.insert_space(Rc::new(SpacebaseSpace::new(
+        "stack", 3, 8, &regspc, 1, true, false,
+    )))
+    .unwrap();
     m
 }
 
@@ -45,8 +48,14 @@ pub(crate) fn build_fd() -> Funcdata {
     let manage = build_manager();
     let regspc = Rc::clone(manage.get_space_by_name("register").unwrap());
     let stackspc = Rc::clone(manage.get_stack_space().unwrap());
-    let sp_data = VarnodeStorage { space: Some(regspc), offset: SP_OFF, size: SP_SIZE as u32 };
-    manage.add_spacebase_pointer(&stackspc, &sp_data, SP_SIZE, true).unwrap();
+    let sp_data = VarnodeStorage {
+        space: Some(regspc),
+        offset: SP_OFF,
+        size: SP_SIZE as u32,
+    };
+    manage
+        .add_spacebase_pointer(&stackspc, &sp_data, SP_SIZE, true)
+        .unwrap();
     let glb = Rc::new(ArchContext::new(manage));
     let code = Rc::clone(glb.manage().get_space_by_name("register").unwrap());
     let entry = Address::new(code, 0x1000);
@@ -54,7 +63,15 @@ pub(crate) fn build_fd() -> Funcdata {
 }
 
 pub(crate) fn reg_addr(fd: &Funcdata, off: u64) -> Address {
-    Address::new(Rc::clone(fd.get_arch().manage().get_space_by_name("register").unwrap()), off)
+    Address::new(
+        Rc::clone(
+            fd.get_arch()
+                .manage()
+                .get_space_by_name("register")
+                .unwrap(),
+        ),
+        off,
+    )
 }
 
 pub(crate) fn make_sp_in(fd: &mut Funcdata) -> VarnodeId {
@@ -134,8 +151,16 @@ fn annotate_raw_stack_ptr_splices_ptrsub_zero_before_nonadditive_use() {
 
     // Post: slot 0 now reads a fresh Varnode defined by PTRSUB(sp, #0).
     let new_in1 = fd.obank().get(store).unwrap().get_in(0).unwrap();
-    assert_ne!(new_in1, sp_in, "the raw SP read must be replaced by the PTRSUB out");
-    let def = fd.vbank().get(new_in1).unwrap().get_def().expect("PTRSUB out must be written");
+    assert_ne!(
+        new_in1, sp_in,
+        "the raw SP read must be replaced by the PTRSUB out"
+    );
+    let def = fd
+        .vbank()
+        .get(new_in1)
+        .unwrap()
+        .get_def()
+        .expect("PTRSUB out must be written");
     assert_eq!(fd.obank().get(def).unwrap().code(), OpCode::CPUI_PTRSUB);
     // PTRSUB(spVn, const#0)
     assert_eq!(fd.obank().get(def).unwrap().get_in(0), Some(sp_in));
@@ -194,7 +219,9 @@ fn apply_type_recommendations_locks_input_varnode_type() {
     let dt = factory.get_base(8, type_metatype::TYPE_INT).unwrap();
 
     assert!(!fd.get_scope_local().unwrap().has_type_recommendations());
-    fd.get_scope_local_mut().unwrap().add_type_recommendation(in_addr, dt);
+    fd.get_scope_local_mut()
+        .unwrap()
+        .add_type_recommendation(in_addr, dt);
     assert!(fd.get_scope_local().unwrap().has_type_recommendations());
 
     // apply locks the recommended type onto the matching input Varnode
@@ -279,7 +306,9 @@ fn w10_stacklocal_typing_apply_type_recommendations_size_mismatch_no_lock() {
     factory.set_default_alignment_map();
     factory.set_max_basetype_size(8);
     let dt4 = factory.get_base(4, type_metatype::TYPE_INT).unwrap();
-    fd.get_scope_local_mut().unwrap().add_type_recommendation(in_addr, dt4);
+    fd.get_scope_local_mut()
+        .unwrap()
+        .add_type_recommendation(in_addr, dt4);
 
     fd.apply_type_recommendations();
 
@@ -309,7 +338,9 @@ fn w10_stacklocal_typing_apply_type_recommendations_unknown_stays_unlocked() {
     factory.set_default_alignment_map();
     factory.set_max_basetype_size(8);
     let unk = factory.get_base(4, type_metatype::TYPE_UNKNOWN).unwrap();
-    fd.get_scope_local_mut().unwrap().add_type_recommendation(in_addr, unk);
+    fd.get_scope_local_mut()
+        .unwrap()
+        .add_type_recommendation(in_addr, unk);
 
     fd.apply_type_recommendations();
 

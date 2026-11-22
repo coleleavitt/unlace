@@ -23,12 +23,15 @@ use std::process::{Command, Stdio};
 
 use unlace_console::engine::bootstrap_from_object;
 use unlace_console::ifacedecomp::{
-    execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE,
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
 }
 
 /// `true` if a runnable `go` toolchain is on PATH.
@@ -74,7 +77,13 @@ fn build_go(
     goarch: &str,
     strip: bool,
 ) -> bool {
-    build_go_flags(dir, out_bin, goos, goarch, if strip { &["-ldflags=-s -w"] } else { &[] })
+    build_go_flags(
+        dir,
+        out_bin,
+        goos,
+        goarch,
+        if strip { &["-ldflags=-s -w"] } else { &[] },
+    )
 }
 
 /// [`build_go`] with explicit `go build` flags.
@@ -118,14 +127,20 @@ fn bootstrap(bin: &str) -> unlace_console::engine::ConsoleProgram {
         .expect("bootstrap fixture with built processor specs");
     // The analysis-pass facts are committed at `read symbols` (gated by the per-pass
     // flags), not eagerly at bootstrap — trigger that commit here.
-    prog.commit_pending_analysis().expect("analysis commit succeeds");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
     prog
 }
 
 /// `load function <func>` → `decompile` → `print C` over an already-committed
 /// program, returning the console transcript (which carries the C).
 fn decompile(prog: unlace_console::engine::ConsoleProgram, func: &str) -> String {
-    let cmds: Vec<String> = [format!("load function {func}"), "decompile".into(), "print C".into()].to_vec();
+    let cmds: Vec<String> = [
+        format!("load function {func}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .to_vec();
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
@@ -195,16 +210,28 @@ fn stripped_go_pie_functions_recovered_from_pclntab() {
     let dir = std::env::temp_dir().join(format!("kuna_go_pclntab_pie_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let out_bin = dir.join("go_stripped_pie");
-    if !build_go_flags(&dir, &out_bin, "linux", "amd64", &["-buildmode=pie", "-ldflags=-s -w"]) {
+    if !build_go_flags(
+        &dir,
+        &out_bin,
+        "linux",
+        "amd64",
+        &["-buildmode=pie", "-ldflags=-s -w"],
+    ) {
         let _ = std::fs::remove_dir_all(&dir);
         panic!("installed Go compiler failed to build the PIE fixture");
     }
     let prog = bootstrap(out_bin.to_str().expect("utf8 path"));
     for name in ["main.main", "main.compute", "runtime.main"] {
-        assert!(prog.lookup_symbol(name).is_some(), "{name} not recovered from a PIE pclntab");
+        assert!(
+            prog.lookup_symbol(name).is_some(),
+            "{name} not recovered from a PIE pclntab"
+        );
     }
     let c = decompile(prog, "main.main");
-    assert!(c.contains("main.compute("), "PIE main.main must call main.compute by name:\n{c}");
+    assert!(
+        c.contains("main.compute("),
+        "PIE main.main must call main.compute by name:\n{c}"
+    );
 
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -229,10 +256,16 @@ fn stripped_go_macho_functions_recovered_from_pclntab() {
     let prog = bootstrap(out_bin.to_str().expect("utf8 path"));
 
     for name in ["main.main", "main.compute", "runtime.main"] {
-        assert!(prog.lookup_symbol(name).is_some(), "{name} not recovered from a Mach-O pclntab");
+        assert!(
+            prog.lookup_symbol(name).is_some(),
+            "{name} not recovered from a Mach-O pclntab"
+        );
     }
     let entries = prog.function_entries_canonical();
-    let main = entries.iter().find(|e| e.name == "main.main").expect("main.main in inventory");
+    let main = entries
+        .iter()
+        .find(|e| e.name == "main.main")
+        .expect("main.main in inventory");
     let (start, end) = (main.addr.get_offset(), main.addr.get_offset() + main.size);
     assert!(main.size > 32, "main.main clipped to {} bytes", main.size);
     let interior: Vec<&str> = entries
@@ -240,7 +273,10 @@ fn stripped_go_macho_functions_recovered_from_pclntab() {
         .filter(|e| e.addr.get_offset() > start && e.addr.get_offset() < end)
         .map(|e| e.name.as_str())
         .collect();
-    assert!(interior.is_empty(), "entries claimed inside main.main: {interior:?}");
+    assert!(
+        interior.is_empty(),
+        "entries claimed inside main.main: {interior:?}"
+    );
 
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -260,7 +296,10 @@ fn stripped_go_pe_functions_recovered_from_pclntab() {
         return;
     }
     for goarch in ["amd64", "386", "arm64"] {
-        let dir = std::env::temp_dir().join(format!("kuna_go_pclntab_pe_{goarch}_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "kuna_go_pclntab_pe_{goarch}_{}",
+            std::process::id()
+        ));
         let _ = std::fs::remove_dir_all(&dir);
         let out_bin = dir.join("go_stripped.exe");
         if !build_go(&dir, &out_bin, "windows", goarch, /* strip */ true) {
@@ -269,12 +308,21 @@ fn stripped_go_pe_functions_recovered_from_pclntab() {
         }
         let prog = bootstrap(out_bin.to_str().expect("utf8 path"));
         for name in ["main.main", "main.compute", "runtime.main"] {
-            assert!(prog.lookup_symbol(name).is_some(), "{name} not recovered from a windows/{goarch} pclntab");
+            assert!(
+                prog.lookup_symbol(name).is_some(),
+                "{name} not recovered from a windows/{goarch} pclntab"
+            );
         }
         let c = decompile(prog, "main.main");
-        assert!(c.contains("main.compute("), "windows/{goarch} main.main must call main.compute by name:\n{c}");
+        assert!(
+            c.contains("main.compute("),
+            "windows/{goarch} main.main must call main.compute by name:\n{c}"
+        );
         if goarch == "amd64" {
-            assert!(!c.contains("morestack"), "windows/amd64 main.main keeps its stack-growth guard:\n{c}");
+            assert!(
+                !c.contains("morestack"),
+                "windows/amd64 main.main keeps its stack-growth guard:\n{c}"
+            );
         }
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -293,7 +341,8 @@ fn fast_inventory_walk_leaves_pclntab_functions_to_the_table() {
         return;
     }
     for (goos, file) in [("linux", "go_stripped"), ("windows", "go_stripped.exe")] {
-        let dir = std::env::temp_dir().join(format!("kuna_go_walkprune_{goos}_{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("kuna_go_walkprune_{goos}_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let out_bin = dir.join(file);
         if !build_go(&dir, &out_bin, goos, "amd64", /* strip */ true) {
@@ -307,13 +356,19 @@ fn fast_inventory_walk_leaves_pclntab_functions_to_the_table() {
             let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
                 .expect("bootstrap fixture with built processor specs");
             for &(option, value) in [("fast_funcdisc", "on")].iter().chain(options) {
-                prog.arch_mut().set_kuna_option(option, value).expect("option applies");
+                prog.arch_mut()
+                    .set_kuna_option(option, value)
+                    .expect("option applies");
             }
-            prog.commit_pending_analysis().expect("analysis commit succeeds");
+            prog.commit_pending_analysis()
+                .expect("analysis commit succeeds");
             prog.function_entries_canonical()
         };
         let pruned = inventory(&[]);
-        assert!(pruned.iter().any(|e| e.name == "main.compute"), "{goos}: pclntab names recovered");
+        assert!(
+            pruned.iter().any(|e| e.name == "main.compute"),
+            "{goos}: pclntab names recovered"
+        );
         if goos == "windows" {
             // Every pclntab function with a `.pdata` record is a root, so nearly all
             // keep the alias their entry source gave them; the count says nothing here.
@@ -322,7 +377,9 @@ fn fast_inventory_walk_leaves_pclntab_functions_to_the_table() {
         }
         let aliased = pruned
             .iter()
-            .filter(|e| !e.name.starts_with("sub_") && e.aliases.iter().any(|a| a.starts_with("sub_")))
+            .filter(|e| {
+                !e.name.starts_with("sub_") && e.aliases.iter().any(|a| a.starts_with("sub_"))
+            })
             .count();
         assert!(
             aliased < pruned.len() / 2,
@@ -368,15 +425,27 @@ fn wiped_pclntab_magic_recovers_the_same_functions() {
         eprintln!("verify_go_pclntab: skipping (`go` not on PATH)");
         return;
     }
-    for (goos, goarch) in [("linux", "amd64"), ("windows", "amd64"), ("darwin", "arm64"), ("linux", "386")] {
-        let dir = std::env::temp_dir().join(format!("kuna_go_wiped_{goos}_{goarch}_{}", std::process::id()));
+    for (goos, goarch) in [
+        ("linux", "amd64"),
+        ("windows", "amd64"),
+        ("darwin", "arm64"),
+        ("linux", "386"),
+    ] {
+        let dir = std::env::temp_dir().join(format!(
+            "kuna_go_wiped_{goos}_{goarch}_{}",
+            std::process::id()
+        ));
         let _ = std::fs::remove_dir_all(&dir);
         let (intact, wiped) = (dir.join("go_stripped"), dir.join("go_wiped"));
         if !build_go(&dir, &intact, goos, goarch, /* strip */ true) {
             let _ = std::fs::remove_dir_all(&dir);
             panic!("installed Go compiler failed to build the {goos}/{goarch} fixture");
         }
-        assert_eq!(wipe_pclntab_magic(&intact, &wiped), 1, "{goos}/{goarch}: one pcHeader to wipe");
+        assert_eq!(
+            wipe_pclntab_magic(&intact, &wiped),
+            1,
+            "{goos}/{goarch}: one pcHeader to wipe"
+        );
         let inventory = |bin: &std::path::Path| {
             let prog = bootstrap(bin.to_str().expect("utf8 path"));
             let entries: Vec<(u64, String, u64)> = prog
@@ -388,11 +457,20 @@ fn wiped_pclntab_magic_recovers_the_same_functions() {
         };
         let (_, want) = inventory(&intact);
         let (prog, got) = inventory(&wiped);
-        assert!(want.iter().any(|e| e.1 == "main.compute"), "{goos}/{goarch}: intact names recovered");
+        assert!(
+            want.iter().any(|e| e.1 == "main.compute"),
+            "{goos}/{goarch}: intact names recovered"
+        );
         assert_eq!(got.len(), want.len(), "{goos}/{goarch}: function count");
-        assert!(got == want, "{goos}/{goarch}: the wiped image's inventory differs from the intact one");
+        assert!(
+            got == want,
+            "{goos}/{goarch}: the wiped image's inventory differs from the intact one"
+        );
         let c = decompile(prog, "main.main");
-        assert!(c.contains("main.compute("), "{goos}/{goarch} wiped main.main must call main.compute by name:\n{c}");
+        assert!(
+            c.contains("main.compute("),
+            "{goos}/{goarch} wiped main.main must call main.compute by name:\n{c}"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
